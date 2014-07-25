@@ -1,6 +1,6 @@
 (* ::Package:: *)
 
-(*BeginPackage["SeQuant`"]*)
+BeginPackage["SeQuant`"]
 
 (* Setting up internal things *)
 Off[General::spell];
@@ -142,7 +142,7 @@ indexType[a_particleIndex] :=
 indexSpace[a_particleIndex] :=
     Cases[a,_particleSpace][[1]];
     
-(* return particleType of a particleIndex *)
+(* return the particleType of a particleIndex *)
 indexParticle[a_particleIndex] :=
     Module[ {typeList},
         typeList = Cases[a[[2]],_particleType];
@@ -253,6 +253,9 @@ inorder = normalOrder[True];
 noorder = normalOrder[False];
 createSQS[creInds_List,annInds_List,norm_normalOrder:inorder] :=
     Module[ {},
+    	If[ SeQuantVacuum === SeQuantVacuumChoices["MultiConfiguration"],
+			Return[mSQS[norm, flattenSQS[SQS[creInds,annInds,norm]]]]
+    	];
         Return[flattenSQS[SQS[creInds,annInds,norm]]]
     ];
 SQS::wrongdepth = "Argument has wrong depth";
@@ -273,6 +276,15 @@ flattenSQS[a_SQS] :=
         result = FlattenAt[SQS[FlattenAt[{creInds,Reverse[annInds]},{{1},{2}}]],{1}];
         Return[result];
     ];
+
+
+(* SQS in MultiConfiguration case has non normal ordered form *)    
+(*
+createmultiSQS[creInds_List,annInds_List,norm_normalOrder:inorder] :=
+    Module[ {},
+        Return[multiSQS[norm, createSQS[creInds,annInds,norm]]]
+    ];
+*)
 
 (* find all index types in a *)
 indexTypesSQS[a_SQS] :=
@@ -376,7 +388,7 @@ visualizeSQE[a_^n_Integer] :=
     visualizeSQE[a]^n;
 visualizeSQE[a_+b_] :=
     visualizeSQE[a]+visualizeSQE[b];
-visualizeSQE[a_/;(Head[a]=!=SQS&&Head[a]=!=deltaIndex&&Head[a]=!=SQM)] :=
+visualizeSQE[a_/;(Head[a]=!=SQS&&Head[a]=!=deltaIndex&&Head[a]=!=SQM&&Head[a]=!=mSQS)] :=
     a;
 visualizeSQE[a_deltaIndex] :=
     Subsuperscript["\[Delta]",a[[1,1]],a[[2,1]] ];
@@ -385,8 +397,8 @@ visualizeSQE[a_SQS] :=
     Module[ {bodyLabel,nsup,nsub,inds,i},
 (* convention labels strings normal-ordered wrt to nonphysical vacuum as tilde{a} *)
         bodyLabel = If[ SeQuantVacuum==SeQuantVacuumChoices["Physical"],
-                        "a",
-                        OverTilde["a"]
+                        OverTilde["a"],
+                         "a"
                     ];
         supInds = "";
         subInds = "";
@@ -399,8 +411,30 @@ visualizeSQE[a_SQS] :=
         Return[Subsuperscript[bodyLabel,subInds,supInds]]
     ];
 
+visualizeSQE[a_mSQS] :=
+    Module[ {sqs,bodyLabel,i},
+    	If [ Length[a[[2]]] === 0,
+    		Return[a[[2]]]
+    	];
+        bodyLabel = If[ a[[1]] === normalOrder[True],
+                        OverTilde["a"],
+                        "a"
+                    ];
+        sqs = a[[2]];
+        supInds = "";
+        subInds = "";
+        Do[
+            If[ Cases[sqs[[i]],_indexType][[1,1]]===cre,
+                supInds = StringJoin[supInds,sqs[[i,1]] ],
+                subInds = StringJoin[sqs[[i,1]],subInds ]
+            ],
+            {i,1,Length[sqs] }
+        ];
+        Return[Subsuperscript[bodyLabel,subInds,supInds]]
+    ];
+    
 visualizeSQE[a_SQM] :=
-    Module[ {bodyLabel,nsup,nsub,inds,i},
+    Module[ {bodyLabel,i},
         bodyLabel = a[[1,1]];
         supInds = "";
         subInds = "";
@@ -419,8 +453,8 @@ Format[SQM[a__],TraditionalForm] :=
     visualizeSQE[SQM[a]];
 Format[SQS[a__],TraditionalForm] :=
     visualizeSQE[SQS[a]];
-
-
+Format[mSQS[a__],TraditionalForm] :=
+    visualizeSQE[mSQS[a]];
 
 (* ::Section:: *)
 (* Contraction functions *)
@@ -508,6 +542,13 @@ contractIndex[L_particleIndex,R_particleIndex] :=
 deltaQ[a_,b_deltaIndex] :=
     MemberQ[a,c_deltaIndex/;(indexQ[c,b[[1]] ]&&indexQ[c,b[[2]] ])];
 
+
+(* contraction pattern is only used in MultiConfiguration *)
+contractionPattern[n_Integer] := IntegerPartitions[n];
+
+(* multicontractIndex is only unsed in MultiConfiguration *)
+mcontractIndex[L_List, U_List] := 
+	createSQM["\[Lambda]",L,U,antisymm];
 
 
 (* ::Subsection:: *)
@@ -757,8 +798,10 @@ contractSQS[str:NCM[__SQS],ptype_particleType,contractOptions_List] :=
         ];
         Return[result];
     ];
+    
 contractSQS[NCM[],_particleType,_List] :=
     CR[1,1];
+    
 contractSQS[0,_particleType,_List] :=
     0;
 (*contractSQS is distributive*)
@@ -780,6 +823,7 @@ contractSQS[str_CR,ptype_particleType,contractOptions_List] :=
         result = factorIntoCR[str[[1]],result];
         Return[result];
     ];
+    
 (*contracting a single string is easy*)
 contractSQS[a_SQS,ptype_particleType,contractOptions_List] :=
     If[ (fullContract/.contractOptions),
@@ -819,12 +863,60 @@ contractSQSNTypes[str:NCM[__SQS],contractOptions_List] :=
         (*Remove CR heads*)
         result = Replace[result,CR->Times,-1,Heads->True];
         If[ SeQuantDebugLevel>=4,
-            Print["Normal-looking result after the final contraction is: ",result//TraditionalForm]
+            Print["Normal-looking result after the final contraction is: ",result //TraditionalForm]
         ];
         Return[result];
     ];
+    
 contractSQSNTypes[{},_particleType,_List] :=
     1;
+
+(* contraction function for MultiConfiguration *)
+
+(* contract the first n index *)
+mcontractSQS[a_mSQS, n_Integer] := 
+	Module[{sqs, result, cres, anns, pfac},
+		sqs = a[[2]];
+		cres = creIndices[sqs];
+		anns = annIndices[sqs];
+		cres = Take[cres,n];
+		anns = Take[anns,n];
+		sqs = Drop[sqs,n];
+		sqs = Drop[sqs,-n];
+		pfac = mcontractIndex[anns,cres];
+		If [ Length[sqs] === 0,
+			result = CR[pfac, 1],
+			result = CR[pfac, mSQS[inorder,sqs]]
+		];
+		Return [result];
+	];
+
+mcontractSQS[str_CR, n_Integer] :=
+	Module[{result},
+		result = mcontractSQS[str[[2]],n];
+		result = factorIntoCR[str[[1]],result];
+		Return[result];
+	];
+	
+mcontractSQS[a_mSQS, p_List] :=
+	Module[{n,nn,c,cc,tmp},
+		n = Length[p];
+		c = {};
+		Do[
+			nn = Length[p[[i]]];
+			cc = {a};
+			Do[
+				tmp = mcontractSQS[cc[[j]],p[[i]][[j]]];
+				cc = Append[cc,tmp],
+				{j,1,nn}
+			];
+			cc = Drop[cc,1];
+			c = Join[c,cc],
+			{i,1,n}
+		];
+		Return[c];
+	];
+	
 
 
 (* ::Section:: *)
@@ -892,7 +984,6 @@ normalOrderedForm[str:NCM[__SQS],ptype_particleType] :=
         		If[ SeQuantDebugLevel>=8,
             		Print["in normalOrderedForm: after append ind=",ind//TraditionalForm]
         		];
-        
         	];
        		If[ SeQuantDebugLevel>=8,
             	Print["in normalOrderedForm: moving on to next substring"]
@@ -930,6 +1021,14 @@ chomp[str:NCM[__SQS]] :=
         Return[rstr];
     ];
 
+(* normal order for MultiConfiguration *)
+(*
+multinormalOrderForm[a_SQS] := 
+	Module[{sqs,result},
+		
+		
+	]
+*)
 
 (* ::Section:: *)
 (* Wick Class  *)
@@ -1872,7 +1971,8 @@ zeroDensity[expr_] :=
 
 (* toolkit is ready *)
 Print["SeQuant is loaded and ready...\n"]
-(*EndPackage[]*)
+
+EndPackage[]
 
 
 
