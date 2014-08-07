@@ -1139,7 +1139,6 @@ normalOrderForm[a_mSQS] :=
 			,{i,1,lp}
 		];
 	    lcs = Length[contras];	
-	    Print [ contras ];
 	    result = {};
 	    Do [
 	    	contra = contras[[i]];
@@ -1155,8 +1154,8 @@ normalOrderForm[a_mSQS] :=
 	    		,{j, 1 lc}
 	    	];
 	    	result = Append[result, tmpresult];
+	    	tmpresult = {};
 	    	Do[
-	    		tmpresult = {};
 	    		tmplc = Length[contra[[j]] ] /2;
 	    		tmpcre = Take[contra[[j]], tmplc ];
 	    		tmpann = Take[contra[[j]], - tmplc];
