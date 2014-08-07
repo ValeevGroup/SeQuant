@@ -2,6 +2,9 @@
 
 BeginPackage["SeQuant`"]
 
+(* turn on Assert *)
+On[Assert];
+
 (* Setting up internal things *)
 Off[General::spell];
 Off[General::spell1];
@@ -544,7 +547,8 @@ deltaQ[a_,b_deltaIndex] :=
 
 
 (* contraction pattern is only used in MultiConfiguration *)
-contractionPattern[n_Integer] := IntegerPartitions[n];
+contractionPattern[n_Integer] := 
+			 IntegerPartitions[n]
 
 (* multicontractIndex is only unsed in MultiConfiguration *)
 mcontractIndex[L_List, U_List] := 
@@ -917,8 +921,102 @@ mcontractSQS[a_mSQS, p_List] :=
 		Return[c];
 	];
 	
+(* function to create unique contraction pattern for Multiconfiguration *)
+(*
+uniquePattern[index_List, pattern_List] := 
+	Module[{leni,sump, lenp, lenper, permutes, permute, count, sublist, tmpresult,result,fresult},
+		leni = Length[index];
+		lenp = Length[pattern];
+		sump = Total[pattern];
+		Assert[ leni === sump ];
+		If [ lenp === 1 ,
+			Return[List[index]]
+		];
+		permutes = Permutations[index];
+		lenper = Length[permutes];
+		result = {};
+		Do[
+			permute = permutes[[i]];
+			count = 1;
+			tmpresult = {};
+			Do[
+				sublist = Sort[Take[permute,{count, count - 1 + pattern[[j]]}]];
+				tmpresult = Append[tmpresult, sublist];
+				count += pattern[[j]];
+				,{j,1,lenp}
+			];
+			result = Append[result, tmpresult];
+			,{i,1,lenper}
+		];
+		result = DeleteDuplicates[result];
+	(*
+		fresult = {};
+		Do[
+			sublist = result[[i]];
+			tmpresult = {};
+			Do[
+				tmpresult = Join[tmpresult, sublist[[j]] ];
+				,{j,1,lenp}
+			];
+			fresult = Append[fresult, tmpresult];
+			,{i,1,Length[result]}
+		];
+		Return[fresult];
+	*)
+		Return[result];
+	];
 
+*)
 
+(* function to create unique contraction pattern for Multiconfiguration *)
+uniquePattern[cres_List, anns_List, pattern_List] := 
+	Module[{lc,la, lp, sump, clist, alist,  tmpresult, result},
+		lc = Length[cres];
+		la = Length[anns];
+		Assert[ lc === la ];
+		lp = Length[pattern];
+		sump = Total[pattern];
+		Assert[ lc === sump ];
+		If [ lp === 1,
+			Return[List[List[Join[cres, anns]]] ]
+		];
+		clist = Permutations[cres];
+		alist = Permutations[anns];
+		tmpresult = combinePattern[clist, alist, pattern];
+		result = DeleteDuplicates[tmpresult];
+		Return[result];
+	];
+
+combinePattern[creslist_List, annslist_List, pattern_List] :=
+	Module[{lc, la, lp, csub, asub, ctmp, atmp, rtmp, count, tmpresult, result},
+		lc = Length[creslist];
+		la = Length[annslist];
+		Assert [ lc === la ];
+		lp = Length[pattern];
+		result = {};
+		Do [
+			csub = creslist[[i]];
+			Do[
+				asub = annslist[[j]];
+				count = 1;
+				tmpresult = {};
+				Do [
+					ctmp = Sort[Take[csub, {count, count-1 + pattern[[k]]} ]];
+					atmp = Sort[Take[asub, {count, count-1 + pattern[[k]]} ]];
+					rtmp = Join[ctmp, atmp];
+					tmpresult = Append[tmpresult, rtmp];
+					count += pattern[[k]];
+					,{k,1,lp}
+				];
+				tmpresult = Sort[tmpresult];
+				result = Append[result, tmpresult];
+				,{j,1,la}
+			];
+			,{i,1,la}	
+		];
+		Return[result];
+	];
+	
 (* ::Section:: *)
 (* Normal Order *)
 
@@ -1022,13 +1120,84 @@ chomp[str:NCM[__SQS]] :=
     ];
 
 (* normal order for MultiConfiguration *)
-(*
-multinormalOrderForm[a_SQS] := 
-	Module[{sqs,result},
-		
-		
-	]
-*)
+
+normalOrderForm[a_mSQS] := 
+	Module[{sqs, n,lp, lcs, lc, contras, contra, tmplc, tmpann, tmpcre, tmpcontra, tmpresult, result},
+		If [ a[[1]] === inorder,
+			Return[a]
+		];
+		sqs = a[[2]];
+		cres = creIndices[sqs];
+		anns = annIndices[sqs];
+		n = Length[cres];
+		Assert [ n === Length[anns] ];
+		pt = contractionPattern[n];
+		lp = Length[pt];
+		contras = {};
+		Do[
+			contras = Join[ contras, uniquePattern[cres, anns, pt[[i]]] ];
+			,{i,1,lp}
+		];
+	    lcs = Length[contras];	
+	    Print [ contras ];
+	    result = {};
+	    Do [
+	    	contra = contras[[i]];
+	    	lc = Length[ contra ];
+	    	tmpresult = 1;
+			(* full contraction *)
+	    	Do [
+	    		tmplc = Length[contra[[j]] ]/2;
+	    		tmpcre = Take[contra[[j]], tmplc ];
+	    		tmpann = Take[contra[[j]], - tmplc];
+	    		tmpcontra = createSQM["\[Lambda]",tmpcre,tmpann,antisymm];
+	    		tmpresult = tmpresult * tmpcontra;
+	    		,{j, 1 lc}
+	    	];
+	    	result = Append[result, tmpresult];
+	    	Do[
+	    		tmpresult = {};
+	    		tmplc = Length[contra[[j]] ] /2;
+	    		tmpcre = Take[contra[[j]], tmplc ];
+	    		tmpann = Take[contra[[j]], - tmplc];
+	    		tmpcontra = createSQS[tmpcre, tmpann, inorder];	
+	    		Do[
+	    			If [ k =!= j,
+	    				tmplc = Length[contra[[k]] ]/2;
+	    				tmpcre = Take[contra[[k]], tmplc ];
+	    				tmpann = Take[contra[[k]], - tmplc];
+	    				tmpcontra = tmpcontra * createSQM["\[Lambda]",tmpcre,tmpann,antisymm]
+	    			]; 	
+	    			,{k,1,lc}	
+	    		];
+	    		tmpresult = Append[tmpresult, tmpcontra];
+	    		,{j,1,lc}
+	    	];
+	    	result = Join[result, tmpresult];
+	    	,{i, 1, lcs}
+	    ];
+	    
+		Return[result];
+	];
+
+(* sign rule function for MultiConfiguration *)
+signrule[original_List, new_List] := 
+ 	Module[{l1, l2, posi, diff, tdiff}, 
+  		l1 = Length[original];
+   		l2 = Length[new];
+   		Assert[l1 === l2];
+   		tdiff = 0;
+   		Do[
+   			posi = Position[new, original[[i]]];
+    		diff = Abs[posi[[1, 1]] - i];   
+    		tdiff += diff
+    		, {i, 1, l1}
+    	];
+   		Return[(-1)^(0.5*tdiff)];
+   	];
+
+
+
 
 (* ::Section:: *)
 (* Wick Class  *)
