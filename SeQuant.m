@@ -881,7 +881,7 @@ contractSQSNTypes[{},_particleType,_List] :=
 (* contraction function for MultiConfiguration *)
 
 contractmSQS[L_mSQS, R_mSQS] := 
-	Module[ {ls, rs, lu, ll, ru, rl, ui, li, n, pt, lenp, contras, lencons, contra, original, sign, lencon, tmpi, tmpleni, cross,tmpcre, tmpann, tmpcontra, tmpresult, result },
+	Module[ {ls, rs, lu, ll, ru, rl, ui, li, n, pt, lenp, contras, lencons, contra, original, sign, lencon, tmpi, tmpleni, cross, tmpcre, tmpann, tmpcontra, tmpresult, result },
     Assert [ L[[1]] === R[[1]] === noorder ];
     (* left side SQS *)
     ls = L[[2]];
@@ -971,7 +971,10 @@ contractmSQS[L_mSQS, R_mSQS] :=
                 		tmpleni = Length[contra[[k]] ]/2;
                     	tmpcre = Take[contra[[k]], tmpleni ];
                     	tmpann = Take[contra[[k]], - tmpleni];
-                   		tmpcontra = tmpcontra * createSQM["\[Lambda]",tmpann, tmpcre, antisymm],
+                    	If [ Length[ contra[[k]] ]=== 2 && Length[ Intersection[ru, contra[[k]]] ] > 0 && Length[ Intersection[ll, contra[[k]]] ] > 0 ,
+                    		tmpcontra = tmpcontra * (-1) * createSQM["\[Eta]",tmpann, tmpcre, antisymm],
+                   			tmpcontra = tmpcontra * createSQM["\[Lambda]",tmpann, tmpcre, antisymm]
+                    	],
                    		tmpcontra = tmpcontra * 0
                 	];
                 ];     
@@ -1308,7 +1311,6 @@ signrule[original_List, pattern_List] :=
   			,{i, 1, lp}
   		];
   		new = Join[cres, Reverse[anns] ];
-  		Print[new];
   		If [ new === original,
 			Return[1];  			
   		];
