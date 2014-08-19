@@ -551,9 +551,12 @@ contractionPattern[n_Integer] :=
 			 IntegerPartitions[n]
 
 (* multicontractIndex is only unsed in MultiConfiguration *)
-mcontractIndex[L_List, U_List] := 
-	createSQM["\[Lambda]",L,U,antisymm];
-
+(*
+mcontractIndex[LL_List,LU_List, RL_List, RU_List, indes_List] := 
+	Module[{},
+		
+	];
+*)
 
 (* ::Subsection:: *)
 (* CR Class *)
@@ -877,6 +880,114 @@ contractSQSNTypes[{},_particleType,_List] :=
 
 (* contraction function for MultiConfiguration *)
 
+contractmSQS[L_mSQS, R_mSQS] := 
+	Module[ {ls, rs, lu, ll, ru, rl, ui, li, n, pt, lenp, contras, lencons, contra, original, sign, lencon, tmpi, tmpleni, cross,tmpcre, tmpann, tmpcontra, tmpresult, result },
+    Assert [ L[[1]] === R[[1]] === noorder ];
+    (* left side SQS *)
+    ls = L[[2]];
+    (* right side SQS *)
+    rs = R[[2]];
+    (* left side upper indices *)
+    lu = creIndices[ls];
+    (* left side lowwer indices *)
+    ll = annIndices[ls];
+    (* right side upper indices *)
+    ru = creIndices[rs];
+    (* right side lowwer indices *)
+    rl = annIndices[rs];
+    (* upper indices *)
+    ui = Join[lu, ru];
+    (* lower indices *)
+    li = Join[ll, rl];
+    (* original sequence *)
+    original = Join[ui, Reverse[li] ];
+    n = Length[ui];
+    Assert [ n === Length[li] ];
+    pt = contractionPattern[n];
+    lenp = Length[pt];
+    (* create all possible contractin patterns *)
+    contras = {};
+    Do[
+        contras = Join[ contras, uniquePattern[ui, li, pt[[i]]] ];
+            ,{i,1,lenp}
+        ];
+    lencons = Length[contras];
+    result = {};
+    
+    (* loop over each contraction pattern *)
+    Do [
+        contra = contras[[i]];
+        sign = signrule[original, contra];
+        lencon = Length[contra];
+            (* test if cross contraction *)
+        cross = True;
+            (* first include zero-rank contraciton and full-rank contraction *)
+        If[ lencon === 1,
+            cross = True,
+            Do [
+                tmpi = contra[[j]];
+                If[ Length[ Intersection[ll, tmpi] ] > 0 && Length[ Intersection[lu, tmpi] ] > 0,
+                    cross = False
+                ];
+                If[ Length[ Intersection[rl, tmpi] ] > 0 && Length[ Intersection[ru, tmpi] ] > 0,
+                    cross = False
+                ];                
+                ,{j,1,lencon}
+            ];
+        ];
+        (* loop over each combination and create contraction*)
+            
+        (* full contraction *)
+        If[ cross === True,
+            tmpresult = 1;
+            Do [
+                tmpleni = Length[contra[[j]] ]/2;
+                tmpcre = Take[contra[[j]], tmpleni ];
+                tmpann = Take[contra[[j]], - tmpleni];
+                tmpcontra = createSQM["\[Lambda]",tmpann, tmpcre,antisymm];
+                tmpresult = tmpresult * tmpcontra;
+                ,{j,1,lencon}
+            ];
+            result = Append[result, sign * tmpresult];
+        ];
+            
+        (* partial contraction *)
+        tmpresult = {};
+        Do[
+            tmpleni = Length[contra[[j]] ] /2;
+            tmpcre = Take[contra[[j]], tmpleni ];
+            tmpann = Take[contra[[j]], - tmpleni];
+            tmpcontra = createSQS[tmpcre, tmpann, inorder];
+        	cross = True;
+            Do[
+                If[ k =!= j,  	
+              		If[ Length[ Intersection[ll, contra[[k]]] ] > 0 && Length[ Intersection[lu, contra[[k]]]] > 0,
+                    	cross = False
+                	];
+               		If[ Length[ Intersection[rl, contra[[k]] ] ] > 0 && Length[ Intersection[ru, contra[[k]]] ] > 0 ,
+                    	cross = False
+                	];             
+                	If [cross === True,
+                		tmpleni = Length[contra[[k]] ]/2;
+                    	tmpcre = Take[contra[[k]], tmpleni ];
+                    	tmpann = Take[contra[[k]], - tmpleni];
+                   		tmpcontra = tmpcontra * createSQM["\[Lambda]",tmpann, tmpcre, antisymm],
+                   		tmpcontra = tmpcontra * 0
+                	];
+                ];     
+                ,{k,1,lencon}    
+             ];
+             If [ tmpcontra =!= 0,
+            	tmpresult = Append[tmpresult, tmpcontra]
+             ];
+            ,{j,1,lencon}
+        ];
+        result = Join[result, sign * tmpresult];
+        ,{i,1,lencons}
+    ];
+    Return[result];
+];
+
 (* contract the first n index *)
 mcontractSQS[a_mSQS, n_Integer] := 
 	Module[{sqs, result, cres, anns, pfac},
@@ -1122,13 +1233,15 @@ chomp[str:NCM[__SQS]] :=
 (* normal order for MultiConfiguration *)
 
 normalOrderForm[a_mSQS] := 
-	Module[{sqs, n,lp, lcs, lc, contras, contra, tmplc, tmpann, tmpcre, tmpcontra, tmpresult, result},
+	Module[{sqs, n,lp, lcs, lc, original, sign, contras, contra, tmplc, tmpann, tmpcre, tmpcontra, tmpresult, result},
 		If [ a[[1]] === inorder,
 			Return[a]
 		];
 		sqs = a[[2]];
 		cres = creIndices[sqs];
 		anns = annIndices[sqs];
+		original = Join[cres, Reverse[anns]];
+		Print[ original ];
 		n = Length[cres];
 		Assert [ n === Length[anns] ];
 		pt = contractionPattern[n];
@@ -1142,6 +1255,9 @@ normalOrderForm[a_mSQS] :=
 	    result = {};
 	    Do [
 	    	contra = contras[[i]];
+	    	Print [contra];
+	    	sign = signrule[original, contra];
+	    	Print[sign];
 	    	lc = Length[ contra ];
 	    	tmpresult = 1;
 			(* full contraction *)
@@ -1149,11 +1265,12 @@ normalOrderForm[a_mSQS] :=
 	    		tmplc = Length[contra[[j]] ]/2;
 	    		tmpcre = Take[contra[[j]], tmplc ];
 	    		tmpann = Take[contra[[j]], - tmplc];
-	    		tmpcontra = createSQM["\[Lambda]",tmpcre,tmpann,antisymm];
+	    		tmpcontra = createSQM["\[Lambda]",tmpann, tmpcre,antisymm];
 	    		tmpresult = tmpresult * tmpcontra;
 	    		,{j, 1 lc}
 	    	];
-	    	result = Append[result, tmpresult];
+	    	result = Append[result, sign*tmpresult];
+	    	(* partial contraction *)
 	    	tmpresult = {};
 	    	Do[
 	    		tmplc = Length[contra[[j]] ] /2;
@@ -1165,23 +1282,36 @@ normalOrderForm[a_mSQS] :=
 	    				tmplc = Length[contra[[k]] ]/2;
 	    				tmpcre = Take[contra[[k]], tmplc ];
 	    				tmpann = Take[contra[[k]], - tmplc];
-	    				tmpcontra = tmpcontra * createSQM["\[Lambda]",tmpcre,tmpann,antisymm]
+	    				tmpcontra = tmpcontra * createSQM["\[Lambda]",tmpann, tmpcre, antisymm]
 	    			]; 	
 	    			,{k,1,lc}	
 	    		];
-	    		tmpresult = Append[tmpresult, tmpcontra];
+	    		tmpresult = Append[tmpresult, sign*tmpcontra];
 	    		,{j,1,lc}
 	    	];
 	    	result = Join[result, tmpresult];
 	    	,{i, 1, lcs}
 	    ];
-	    
+	    (* zeroDensity[result]; *)
 		Return[result];
 	];
 
 (* sign rule function for MultiConfiguration *)
-signrule[original_List, new_List] := 
- 	Module[{l1, l2, posi, diff, tdiff}, 
+signrule[original_List, pattern_List] := 
+ 	Module[{lp,cres, anns, new, l1, l2, posi, diff, tdiff}, 
+  		lp = Length[ pattern ];
+  		cres = {};
+  		anns = {};
+  		Do[
+  			cres = Join[cres, Take[pattern[[i]], Length[pattern[[i]]]/2  ] ];
+  			anns = Join[anns, Take[pattern[[i]], -Length[pattern[[i]]] /2  ] ];
+  			,{i, 1, lp}
+  		];
+  		new = Join[cres, Reverse[anns] ];
+  		Print[new];
+  		If [ new === original,
+			Return[1];  			
+  		];
   		l1 = Length[original];
    		l2 = Length[new];
    		Assert[l1 === l2];
@@ -1192,7 +1322,7 @@ signrule[original_List, new_List] :=
     		tdiff += diff
     		, {i, 1, l1}
     	];
-   		Return[(-1)^(0.5*tdiff)];
+   		Return[IntegerPart[(-1)^(0.5*tdiff)]];
    	];
 
 
