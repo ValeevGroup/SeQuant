@@ -881,8 +881,8 @@ contractSQSNTypes[{},_particleType,_List] :=
 (* contraction function for MultiConfiguration *)
 
 contractmSQS[L_mSQS, R_mSQS] := 
-	Module[ {ls, rs, lu, ll, ru, rl, ui, li, n, pt, lenp, contras, lencons, contra, original, sign, lencon, tmpi, tmpleni, cross, tmpcre, tmpann, tmpcontra, tmpresult, result },
-    Assert [ L[[1]] === R[[1]] === noorder ];
+	Module[ {l, r, ls, rs, lu, ll, ru, rl, ui, li, n, pt, lenp, contras, lencons, contra, original, sign, lencon, tmpi, tmpleni, cross, tmpcre, tmpann, tmpcontra, tmpresult, result },
+    Assert [ L[[1]] === R[[1]] === inorder ];
     (* left side SQS *)
     ls = L[[2]];
     (* right side SQS *)
@@ -891,10 +891,14 @@ contractmSQS[L_mSQS, R_mSQS] :=
     lu = creIndices[ls];
     (* left side lowwer indices *)
     ll = annIndices[ls];
+    
+    l = Join[lu, ll];
     (* right side upper indices *)
     ru = creIndices[rs];
     (* right side lowwer indices *)
     rl = annIndices[rs];
+    
+    r = Join[ru, rl];
     (* upper indices *)
     ui = Join[lu, ru];
     (* lower indices *)
@@ -926,12 +930,9 @@ contractmSQS[L_mSQS, R_mSQS] :=
             cross = True,
             Do [
                 tmpi = contra[[j]];
-                If[ Length[ Intersection[ll, tmpi] ] > 0 && Length[ Intersection[lu, tmpi] ] > 0,
+             	If[ Length[ Intersection[l , contra[[j]]] ] === Length [ contra[[j]] ] || Length[ Intersection[r , contra[[j]]] ] === Length [ contra[[j]] ], 
                     cross = False
                 ];
-                If[ Length[ Intersection[rl, tmpi] ] > 0 && Length[ Intersection[ru, tmpi] ] > 0,
-                    cross = False
-                ];                
                 ,{j,1,lencon}
             ];
         ];
@@ -944,7 +945,10 @@ contractmSQS[L_mSQS, R_mSQS] :=
                 tmpleni = Length[contra[[j]] ]/2;
                 tmpcre = Take[contra[[j]], tmpleni ];
                 tmpann = Take[contra[[j]], - tmpleni];
-                tmpcontra = createSQM["\[Lambda]",tmpann, tmpcre,antisymm];
+                If [ Length[ contra[[j]] ]=== 2 && Length[ Intersection[ru, contra[[j]]] ] > 0 && Length[ Intersection[ll, contra[[j]]] ] > 0 ,
+                    tmpcontra = (-1) * createSQM["\[Eta]",tmpann, tmpcre, antisymm],
+                   	tmpcontra = createSQM["\[Lambda]",tmpann, tmpcre, antisymm]
+                ];
                 tmpresult = tmpresult * tmpcontra;
                 ,{j,1,lencon}
             ];
@@ -952,6 +956,7 @@ contractmSQS[L_mSQS, R_mSQS] :=
         ];
             
         (* partial contraction *)
+        
         tmpresult = {};
         Do[
             tmpleni = Length[contra[[j]] ] /2;
@@ -961,12 +966,9 @@ contractmSQS[L_mSQS, R_mSQS] :=
         	cross = True;
             Do[
                 If[ k =!= j,  	
-              		If[ Length[ Intersection[ll, contra[[k]]] ] > 0 && Length[ Intersection[lu, contra[[k]]]] > 0,
+              		If[ Length[ Intersection[l , contra[[k]]] ] === Length [ contra[[k]] ] || Length[ Intersection[r , contra[[k]]] ] === Length [ contra[[k]] ], 
                     	cross = False
                 	];
-               		If[ Length[ Intersection[rl, contra[[k]] ] ] > 0 && Length[ Intersection[ru, contra[[k]]] ] > 0 ,
-                    	cross = False
-                	];             
                 	If [cross === True,
                 		tmpleni = Length[contra[[k]] ]/2;
                     	tmpcre = Take[contra[[k]], tmpleni ];
@@ -986,6 +988,7 @@ contractmSQS[L_mSQS, R_mSQS] :=
             ,{j,1,lencon}
         ];
         result = Join[result, sign * tmpresult];
+        
         ,{i,1,lencons}
     ];
     Return[result];
@@ -1244,7 +1247,6 @@ normalOrderForm[a_mSQS] :=
 		cres = creIndices[sqs];
 		anns = annIndices[sqs];
 		original = Join[cres, Reverse[anns]];
-		Print[ original ];
 		n = Length[cres];
 		Assert [ n === Length[anns] ];
 		pt = contractionPattern[n];
@@ -1258,9 +1260,7 @@ normalOrderForm[a_mSQS] :=
 	    result = {};
 	    Do [
 	    	contra = contras[[i]];
-	    	Print [contra];
 	    	sign = signrule[original, contra];
-	    	Print[sign];
 	    	lc = Length[ contra ];
 	    	tmpresult = 1;
 			(* full contraction *)
