@@ -381,7 +381,15 @@ flattenSQM[a_SQM] :=
 (* ::Section:: *)
 (* Visualize function *)
 
+(* these functions display particleIndex in string *)
 
+visualizeIndex[a_particleIndex] :=
+	a[[1]];
+
+Format[particleIndex[a__],TraditionalForm] :=
+    visualizeIndex[particleIndex[a]];
+    
+    
 (* these functions display SQ expressions in tensor notation *)
 visualizeSQE[a_*b_] :=
     visualizeSQE[a]*visualizeSQE[b];
@@ -459,6 +467,11 @@ Format[SQS[a__],TraditionalForm] :=
 Format[mSQS[a__],TraditionalForm] :=
     visualizeSQE[mSQS[a]];
 
+
+visualize
+
+visualizeIndex
+visualizeIndex
 (* ::Section:: *)
 (* Contraction functions *)
 
@@ -550,13 +563,6 @@ deltaQ[a_,b_deltaIndex] :=
 contractionPattern[n_Integer] := 
 			 IntegerPartitions[n]
 
-(* multicontractIndex is only unsed in MultiConfiguration *)
-(*
-mcontractIndex[LL_List,LU_List, RL_List, RU_List, indes_List] := 
-	Module[{},
-		
-	];
-*)
 
 (* ::Subsection:: *)
 (* CR Class *)
@@ -883,6 +889,9 @@ contractSQSNTypes[{},_particleType,_List] :=
 contractmSQS[L_mSQS, R_mSQS] := 
 	Module[ {l, r, ls, rs, lu, ll, ru, rl, ui, li, n, pt, lenp, contras, lencons, contra, original, sign, lencon, tmpi, tmpleni, cross, tmpcre, tmpann, tmpcontra, tmpresult, result },
     Assert [ L[[1]] === R[[1]] === inorder ];
+    If [SeQuantDebugLevel >= 5,
+    	Print [ "Contraction \n", L //TraditionalForm , R //TraditionalForm];
+    ];
     (* left side SQS *)
     ls = L[[2]];
     (* right side SQS *)
@@ -921,11 +930,21 @@ contractmSQS[L_mSQS, R_mSQS] :=
     (* loop over each contraction pattern *)
     Do [
         contra = contras[[i]];
+
+        If [ SeQuantDebugLevel >= 6,
+        	Print [ " contraction pattern \n" , contra //TraditionalForm ]
+        ];
+
         sign = signrule[original, contra];
+        
+        If [ SeQuantDebugLevel >= 7,
+        	Print [ " permutation of this pattern:    " , sign ]
+        ];
+
         lencon = Length[contra];
-            (* test if cross contraction *)
+        (* test if cross contraction *)
         cross = True;
-            (* first include zero-rank contraciton and full-rank contraction *)
+        (* first include zero-rank contraciton and full-rank contraction *)
         If[ lencon === 1,
             cross = True,
             Do [
@@ -949,20 +968,40 @@ contractmSQS[L_mSQS, R_mSQS] :=
                     tmpcontra = (-1) * createSQM["\[Eta]",tmpann, tmpcre, antisymm],
                    	tmpcontra = createSQM["\[Lambda]",tmpann, tmpcre, antisymm]
                 ];
+                
+        		If [ SeQuantDebugLevel >= 7,
+        			Print [ "       result of this contraction:  " , tmpcontra //TraditionalForm ]
+        		];
+        		
                 tmpresult = tmpresult * tmpcontra;
                 ,{j,1,lencon}
             ];
-            result = Append[result, sign * tmpresult];
+            tmpresult = sign * tmpresult;
+            
+            If [ SeQuantDebugLevel >= 6,
+            	Print[ " full contraction in this pattern:    ", tmpresult //TraditionalForm ]
+            ];
+            
+            result = Append[result,  tmpresult],
+            
+            If [ SeQuantDebugLevel >= 6,
+            	Print[ " full contraction in this pattern:    ",  0 ]
+            ];
+            
         ];
             
         (* partial contraction *)
-        
         tmpresult = {};
         Do[
             tmpleni = Length[contra[[j]] ] /2;
             tmpcre = Take[contra[[j]], tmpleni ];
             tmpann = Take[contra[[j]], - tmpleni];
             tmpcontra = createSQS[tmpcre, tmpann, inorder];
+        	
+        	If [ SeQuantDebugLevel >= 7,
+        		Print [ "       result of this operator:  " , tmpcontra //TraditionalForm ]
+        	];
+        		
         	cross = True;
             Do[
                 If[ k =!= j,  	
@@ -979,6 +1018,11 @@ contractmSQS[L_mSQS, R_mSQS] :=
                     	],
                    		tmpcontra = tmpcontra * 0
                 	];
+        			
+        			If [ SeQuantDebugLevel >= 7,
+        				Print [ "       result of this contraction:  " , tmpcontra //TraditionalForm ]
+        			];
+        		
                 ];     
                 ,{k,1,lencon}    
              ];
@@ -987,8 +1031,13 @@ contractmSQS[L_mSQS, R_mSQS] :=
              ];
             ,{j,1,lencon}
         ];
-        result = Join[result, sign * tmpresult];
         
+		tmpresult = sign * tmpresult;
+        If [ SeQuantDebugLevel >= 6,
+        	Print[ " partial contraction in this pattern:    ", tmpresult //TraditionalForm ]
+        ];
+        
+        result = Join[result,  tmpresult];
         ,{i,1,lencons}
     ];
     Return[result];
@@ -1299,9 +1348,13 @@ normalOrderForm[a_mSQS] :=
 		Return[result];
 	];
 
+(* parity of permutation for sign rule *)
+permutationSignature[perm_?PermutationCyclesQ] := 
+ Apply[Times, (-1)^(Length /@ First[perm] - 1)]
+
 (* sign rule function for MultiConfiguration *)
 signrule[original_List, pattern_List] := 
- 	Module[{lp,cres, anns, new, l1, l2, posi, diff, tdiff}, 
+ 	Module[{lp,cres, anns, new, l1, l2, sign}, 
   		lp = Length[ pattern ];
   		cres = {};
   		anns = {};
@@ -1317,14 +1370,8 @@ signrule[original_List, pattern_List] :=
   		l1 = Length[original];
    		l2 = Length[new];
    		Assert[l1 === l2];
-   		tdiff = 0;
-   		Do[
-   			posi = Position[new, original[[i]]];
-    		diff = Abs[posi[[1, 1]] - i];   
-    		tdiff += diff
-    		, {i, 1, l1}
-    	];
-   		Return[IntegerPart[(-1)^(0.5*tdiff)]];
+   		sign = permutationSignature[ FindPermutation[original, new] ];
+   		Return[sign];
    	];
 
 
