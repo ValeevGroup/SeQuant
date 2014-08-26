@@ -411,7 +411,11 @@ visualizeSQE[a_deltaIndex] :=
 visualizeSQE[a_SQS] :=
     Module[ {bodyLabel,i},
 (* convention labels strings normal-ordered wrt to nonphysical vacuum as tilde{a} *)
-        bodyLabel =  OverTilde["a"];
+       bodyLabel = If[ SeQuantVacuum==SeQuantVacuumChoices["MultiConfiguration"],
+                        OverTilde["a"],
+                         "a"
+                    ];
+
         supInds = "";
         subInds = "";
         Do[
@@ -557,9 +561,6 @@ deltaQ[a_,b_deltaIndex] :=
     MemberQ[a,c_deltaIndex/;(indexQ[c,b[[1]] ]&&indexQ[c,b[[2]] ])];
 
 
-(* contraction pattern is only used in MultiConfiguration *)
-contractionPattern[n_Integer] := 
-			 IntegerPartitions[n]
 
 
 (* ::Subsection:: *)
@@ -634,6 +635,7 @@ uniqueCR[t_Plus,c_Plus] :=
        result += normalOrderedForm[str] + contraction[i,j]*contractSQS[str/ij]
 
 *)
+
 contractSQS[str:NCM[__SQS],ptype_particleType,contractOptions_List] :=
     Module[ {result,sqsL,sqsR,indexL,indexR,indL,indR,iR,indRoff,strLoff,contr1,contr2,newstr,sqsLlast,sqsLfirst,indLfirst,indLlast,newcontrib,f,nstr},
     	
@@ -677,9 +679,17 @@ contractSQS[str:NCM[__SQS],ptype_particleType,contractOptions_List] :=
     			Return[result],
     			result = contractSQS[str[[1]],str[[2]],contractOptions];
     			newstr = Take[ str, {3,nstr}];
-    			f[a_CR] := (CR[ a[[1]], a[[2]]**newstr ]);
+    			f[a_CR] := (
+    				If[ a[[2]] === 1,
+    					CR[ a[[1]], newstr ],
+    					CR[ a[[1]], a[[2]]**newstr ]	
+    				]
+    				);
     			result = Map[f, result];
-    			Print[result//TraditionalForm];
+    			If[ SeQuantDebugLevel>=5,
+    				Print["new contraction", result//TraditionalForm];
+        		];
+    			
     			result = contractSQS[result, ptype, contractOptions]
     		];
 			Return[result];
@@ -1076,10 +1086,14 @@ contractSQS[L_SQS, R_SQS, contractOptions_List] :=
 ];
 
 
-
-
 (* functions for contraction pattern for MultiConfiguration *)
 
+
+(* contraction number pattern in MultiConfiguration *)
+contractionPattern[n_Integer] := 
+			 IntegerPartitions[n]
+			 
+			 
 (* function to create unique contraction pattern for MultiConfiguration *)
 uniquePattern[cres_List, anns_List, pattern_List] := 
 	Module[{lc,la, lp, sump, clist, alist,  tmpresult, result},
@@ -1359,6 +1373,9 @@ wick[expr_,extInds_List,wickOptions_List:defaultWickOptions] :=
         If[ SeQuantDebugLevel>=1,
             Print["External indices:",extinds//TraditionalForm];
         ];
+        
+        
+        
         result = lowwick[expr,options];
         (* New internale indices may have been generatd by lowwick -- recompute *)
         intinds = Sort[indexListOut[result,extInds]];
@@ -2254,6 +2271,15 @@ Substitutes a second quantized tensor by the corresponding density matrix elemen
 *)
 substituteSQSbyDensity[expr_] :=
     expr/.x_SQS->createSQM["\[Gamma]",annIndices[x],creIndices[x],antisymm];
+
+(* expand \eta *)
+(*
+expandEta[expr_] := 
+	Module[{},
+		
+	];
+*)
+
 
 (*
 Zeroes out density matrix elements that include indices above the Fermi level
