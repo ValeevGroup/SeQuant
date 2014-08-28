@@ -929,7 +929,7 @@ contractSQSNstr[str:NCM[___SQS], contractOptions_List] :=
 (* contraction function for MultiConfiguration *)
 
 contractSQS[L_SQS, R_SQS, contractOptions_List] := 
-	Module[ {l, r, ls, rs, lu, ll, ru, rl, ui, li, n, pt, lenp, contras, lencons, contra, original, sign, lencon, tmpi, tmpleni, cross, tmpcre, tmpann, tmpcontra, tmpop, tmpresult, result },
+	Module[ {l, r, ls, rs, lu, ll, ru, rl, ui, li, n, pt, lenp, contras, lencons, contra, original, sign, lencon, tmpi, tmpleni, cross, tmpcre, tmpann, tmpcontra, tmpop, tmpresult, ptmpresult, result },
     If [SeQuantDebugLevel >= 5,
     	Print [ "Contraction \n", L //TraditionalForm , R //TraditionalForm];
     ];
@@ -1010,9 +1010,10 @@ contractSQS[L_SQS, R_SQS, contractOptions_List] :=
                    	tmpcontra = createSQM["\[Lambda]",tmpann, tmpcre, antisymm]
                 ];
                 
-        		If [ SeQuantDebugLevel >= 7,
-        			Print [ "       result of this contraction:  " , tmpcontra //TraditionalForm ]
+	    		If [ SeQuantDebugLevel >= 7,
+        			Print [ "       result of contraction:  " , tmpcre //TraditionalForm, "  and  " , tmpann //TraditionalForm, "  =  ", tmpcontra //TraditionalForm ]
         		];
+        		
         		
                 tmpresult = tmpresult * tmpcontra;
                 ,{j,1,lencon}
@@ -1039,12 +1040,12 @@ contractSQS[L_SQS, R_SQS, contractOptions_List] :=
             tmpann = Take[contra[[j]], - tmpleni];
             tmpop = createSQS[tmpcre, tmpann];
         	
-        	If [ SeQuantDebugLevel >= 7,
-        		Print [ "       result of this operator:  " , tmpcontra //TraditionalForm ]
+	    	If [ SeQuantDebugLevel >= 7,
+        		Print [ "       result of the operator:  " , tmpcre //TraditionalForm, "  and  " , tmpann //TraditionalForm, "  =   ", tmpop //TraditionalForm ]
         	];
         		
         	cross = True;
-        	tmpcontra = 1;
+        	ptmpresult = 1;
             Do[
                 If[ k =!= j,  	
               		If[ Length[ Intersection[l , contra[[k]]] ] === Length [ contra[[k]] ] || Length[ Intersection[r , contra[[k]]] ] === Length [ contra[[k]] ], 
@@ -1055,22 +1056,25 @@ contractSQS[L_SQS, R_SQS, contractOptions_List] :=
                     	tmpcre = Take[contra[[k]], tmpleni ];
                     	tmpann = Take[contra[[k]], - tmpleni];
                     	If [ Length[ contra[[k]] ]=== 2 && Length[ Intersection[ru, contra[[k]]] ] > 0 && Length[ Intersection[ll, contra[[k]]] ] > 0 ,
-                    		tmpcontra = tmpcontra * (-1) * createSQM["\[Eta]",tmpann, tmpcre, antisymm],
-                   			tmpcontra = tmpcontra * createSQM["\[Lambda]",tmpann, tmpcre, antisymm]
+                    		tmpcontra =  (-1) * createSQM["\[Eta]",tmpann, tmpcre, antisymm],
+                   			tmpcontra =  createSQM["\[Lambda]",tmpann, tmpcre, antisymm]
                     	],
-                   		tmpcontra = tmpcontra * 0
+                   		tmpcontra =  0
                 	];
-        			
-        			If [ SeQuantDebugLevel >= 7,
-        				Print [ "       result of this contraction:  " , tmpcontra //TraditionalForm ]
+        		   	ptmpresult = ptmpresult * tmpcontra;	
+
+	    			If [ SeQuantDebugLevel >= 7,
+        				Print [ "       result of contraction:  " , tmpcre //TraditionalForm, "  and  " , tmpann //TraditionalForm, "  =  ", tmpcontra //TraditionalForm ]
         			];
         		
                 ];     
                 ,{k,1,lencon}    
              ];
-             If [ tmpcontra =!= 0,
-            	tmpresult = Plus[tmpresult, CR[sign*tmpcontra,tmpop]]
+             
+             If [ ptmpresult =!= 0,
+            	tmpresult = Plus[tmpresult, CR[sign*ptmpresult,tmpop]]
              ];
+             
             ,{j,1,lencon}
         ];
         
@@ -1081,6 +1085,9 @@ contractSQS[L_SQS, R_SQS, contractOptions_List] :=
         
         result = Plus[result,  tmpresult];
         ,{i,1,lencons}
+    ];
+    If [SeQuantDebugLevel >= 5,
+    	Print [ "contraction  result   ", result // TraditionalForm];
     ];
     Return[result];
 ];
@@ -1248,10 +1255,13 @@ chomp[str:NCM[__SQS]] :=
 
 (* normal order for MultiConfiguration *)
 normalOrderForm[a_mSQS] := 
-	Module[{sqs, n,lp, lcs, lc, original, sign, contras, contra, tmplc, tmpann, tmpcre, tmpcontra, tmpresult, result},
+	Module[{sqs, n,lp, lcs, lc, original, sign, contras, contra, tmplc, tmpann, tmpcre, tmpcontra, tmpop, tmpresult, ptmpresult, result},
 		If [ a[[1]] === inorder,
-			Return[a]
+			Return[a[[2]]]
 		];
+		If[ SeQuantDebugLevel>=8,
+            Print["normal ordering   ", a //TraditionalForm]
+        ];
 		sqs = a[[2]];
 		cres = creIndices[sqs];
 		anns = annIndices[sqs];
@@ -1266,10 +1276,20 @@ normalOrderForm[a_mSQS] :=
 			,{i,1,lp}
 		];
 	    lcs = Length[contras];	
-	    result = {};
+	    result = Plus[];
 	    Do [
 	    	contra = contras[[i]];
+	    	
+	    	If [ SeQuantDebugLevel >= 9,
+        		Print [ " contraction pattern \n" , contra //TraditionalForm ]
+        	];
+
 	    	sign = signrule[original, contra];
+	    	
+	    	If [ SeQuantDebugLevel >= 10,
+        		Print [ " permutation of this pattern:    " , sign ]
+        	];
+        	
 	    	lc = Length[ contra ];
 	    	tmpresult = 1;
 			(* full contraction *)
@@ -1278,33 +1298,63 @@ normalOrderForm[a_mSQS] :=
 	    		tmpcre = Take[contra[[j]], tmplc ];
 	    		tmpann = Take[contra[[j]], - tmplc];
 	    		tmpcontra = createSQM["\[Lambda]",tmpann, tmpcre,antisymm];
+	    		If [ SeQuantDebugLevel >= 10,
+        			Print [ "       result of contraction:  " , tmpcre //TraditionalForm, "  and  " , tmpann //TraditionalForm, "  =  ", tmpcontra //TraditionalForm ]
+        		];
+        		
 	    		tmpresult = tmpresult * tmpcontra;
 	    		,{j, 1 lc}
 	    	];
-	    	result = Append[result, sign*tmpresult];
+	    	
+	    	If [ SeQuantDebugLevel >= 9,
+            	Print[ " full contraction in this pattern:    ", sign * tmpresult //TraditionalForm ]
+            ];
+            
+	    	result = Plus[result, sign*tmpresult];
 	    	(* partial contraction *)
-	    	tmpresult = {};
+	    	tmpresult = Plus[];
 	    	Do[
 	    		tmplc = Length[contra[[j]] ] /2;
 	    		tmpcre = Take[contra[[j]], tmplc ];
 	    		tmpann = Take[contra[[j]], - tmplc];
-	    		tmpcontra = createSQS[tmpcre, tmpann];	
+	    		tmpop = createSQS[tmpcre, tmpann];	
+	    		
+	    		If [ SeQuantDebugLevel >= 10,
+        			Print [ "       result of the operator:  " , tmpcre //TraditionalForm, "  and  " , tmpann //TraditionalForm, "  =   ", tmpop //TraditionalForm ]
+        		];
+        	
+        		ptmpresult = 1;
+        		
 	    		Do[
 	    			If [ k =!= j,
 	    				tmplc = Length[contra[[k]] ]/2;
 	    				tmpcre = Take[contra[[k]], tmplc ];
 	    				tmpann = Take[contra[[k]], - tmplc];
-	    				tmpcontra = tmpcontra * createSQM["\[Lambda]",tmpann, tmpcre, antisymm]
+	    				tmpcontra = createSQM["\[Lambda]",tmpann, tmpcre, antisymm];
+	    				If [ SeQuantDebugLevel >= 10,
+        					Print [ "       result of contraction:  " , tmpcre //TraditionalForm, "  and  " , tmpann //TraditionalForm, "  =  ", tmpcontra //TraditionalForm ]
+        				];
+		    			ptmpresult = ptmpresult * tmpcontra
 	    			]; 	
 	    			,{k,1,lc}	
 	    		];
-	    		tmpresult = Append[tmpresult, sign*tmpcontra];
+        		
+	    		tmpresult = Plus[tmpresult, sign*ptmpresult*tmpop];
 	    		,{j,1,lc}
 	    	];
-	    	result = Join[result, tmpresult];
+	    	
+	    	If [ SeQuantDebugLevel >= 9,
+        		Print[ " partial contraction in this pattern:    ", tmpresult //TraditionalForm ]
+        	];
+	    	result = Plus[result, tmpresult];
 	    	,{i, 1, lcs}
 	    ];
 	    (* zeroDensity[result]; *)
+	    
+	    If[ SeQuantDebugLevel>=8,
+            Print["normal ordered form   ", result //TraditionalForm]
+        ];
+        
 		Return[result];
 	];
 	
@@ -1360,7 +1410,7 @@ defaultWickOptions = {
 Protect[defaultWickOptions];
 
 wick[expr_,extInds_List,wickOptions_List:defaultWickOptions] :=
-    Module[ {result,options,intinds,extinds},
+    Module[ {result,f,options,intinds,extinds},
         options = Cases[wickOptions,x_/;!FreeQ[x,fullContract]];
         intinds = Sort[indexListOut[expr,extInds]];
         If[ SeQuantDebugLevel>=1,
@@ -1374,7 +1424,17 @@ wick[expr_,extInds_List,wickOptions_List:defaultWickOptions] :=
             Print["External indices:",extinds//TraditionalForm];
         ];
         
-        
+        (* in MultiConfiguration, check mSQS if in normal order form *)
+        If[ SeQuantVacuum === SeQuantVacuumChoices["MultiConfiguration"],
+        	
+        	Unprotect[NonCommutativeMultiply];
+        	expr = Map[normalOrderForm,expr];
+        	Protect[NonCommutativeMultiply];
+        	
+        	If[ SeQuantDebugLevel>=1,
+            	Print ["expresion after normal ordering  ", expr //TraditionalForm ];
+        	];
+        ];
         
         result = lowwick[expr,options];
         (* New internale indices may have been generatd by lowwick -- recompute *)
@@ -1469,7 +1529,7 @@ lowwick[(str_NCM/;!FreeQ[str,Plus]),contractOptions_List] :=
     ];
 
 lowwick[str_NCM,contractOptions_List] :=
-    Module[ {result,containsSQS,f,i},
+    Module[ {result,containsSQS,f},
         Clear[containsSQS];
         Clear[f];
         If[ SeQuantDebugLevel>=6,
