@@ -645,7 +645,7 @@ uniqueCR[t_Plus,c_Plus] :=
 *)
 
 contractSQS[str:NCM[__SQS],ptype_particleType,contractOptions_List] :=
-    Module[ {result,sqsL,sqsR,indexL,indexR,indL,indR,iR,indRoff,strLoff,contr1,contr2,newstr,sqsLlast,sqsLfirst,indLfirst,indLlast,newcontrib,f,nstr},
+    Module[ {result,newcontractOptions,sqsL,sqsR,indexL,indexR,indL,indR,iR,indRoff,strLoff,contr1,contr2,newstr,sqsLlast,sqsLfirst,indLfirst,indLlast,newcontrib,f,nstr},
     	
         If[ Depth[str]==2,
             Return[CR[1,1]]
@@ -671,10 +671,16 @@ contractSQS[str:NCM[__SQS],ptype_particleType,contractOptions_List] :=
 
         (*Cannot contract single string*)
         If[ Length[str]==1,
-            result = If[ !(fullContract/.contractOptions),
+        	If [ SeQuantVacuum==SeQuantVacuumChoices["MultiConfiguration"],
+            	result = If[ !(finalfullContract/.contractOptions),
                          CR[1,str[[1]]],
                          0
-                     ];
+                     	],
+            	result = If[ !(fullContract/.contractOptions),
+                         CR[1,str[[1]]],
+                         0
+                     	]
+        	];
             Return[result]
         ];
         
@@ -686,9 +692,22 @@ contractSQS[str:NCM[__SQS],ptype_particleType,contractOptions_List] :=
     	
     	If [ SeQuantVacuum==SeQuantVacuumChoices["MultiConfiguration"],
     		If [ nstr == 2,
-    			result = contractSQS[str[[1]],str[[2]],contractOptions];
+				(* If the last contraction, do fullContraction if finalfullContraction is True  *)
+				If [ finalfullContract/. contractOptions,
+    				newcontractOptions = Cases[contractOptions, a_ /; FreeQ[a, fullContract]];
+    				newcontractOptions = Append[ newcontractOptions, fullContract->True ],
+    				newcontractOptions = Cases[contractOptions, a_ /; FreeQ[a, fullContract]];
+    				newcontractOptions = Append[ newcontractOptions, fullContract->False ]
+				];    			
+    			result = contractSQS[str[[1]],str[[2]],newcontractOptions];
     			Return[result],
-    			result = contractSQS[str[[1]],str[[2]],contractOptions];
+    			(* If not the last contraciton, do not do fullContraction *)
+    			If [ fullContract/. contractOptions,
+    				newcontractOptions = Cases[contractOptions, a_ /; FreeQ[a, fullContract]];
+    				Print [ contractOptions ];
+    				newcontractOptions = Append[ newcontractOptions, fullContract->False ]
+				];    
+    			result = contractSQS[str[[1]],str[[2]],newcontractOptions];
     			newstr = Take[ str, {3,nstr}];
     			f[a_CR] := (
     				If[ a[[2]] === 1,
@@ -702,7 +721,7 @@ contractSQS[str:NCM[__SQS],ptype_particleType,contractOptions_List] :=
     				Print["new contraction", result//TraditionalForm];
         		];
     			
-    			result = contractSQS[result, ptype, contractOptions]
+    			result = contractSQS[result, ptype, newcontractOptions]
     		];
 			Return[result];
     	];
@@ -876,17 +895,29 @@ contractSQS[str_CR,ptype_particleType,contractOptions_List] :=
     
 (*contracting a single string is easy*)
 contractSQS[a_SQS,ptype_particleType,contractOptions_List] :=
-    If[ (fullContract/.contractOptions),
-        0,
-        CR[1,a]
+    If[ SeQuantVacuum == SeQuantVacuumChoices["MultiConfiguration"],
+    	Print [ contractOptions ];
+    	If[ (finalfullContract/.contractOptions),
+        	0,
+        	CR[1,a]
+    	],
+    	If[ (fullContract/.contractOptions),
+        	0,
+        	CR[1,a]
+    	]
     ];
+
 
 (*This is a top-level string contraction routine that applies contractions to each particle type*)
 contractSQSNTypes[str:NCM[__SQS],contractOptions_List] :=
     Module[ {result,nstr,ind,ptypes,ntypes,intermedOptions},
     	
     	If[ SeQuantVacuum == SeQuantVacuumChoices["MultiConfiguration"],
-    		result = contractSQSNstr[str,contractOptions];
+    		intermedOptions = Cases[contractOptions, a_ /; MemberQ[a, fullContract]];
+    		Print[ intermedOptions ];
+    		intermedOptions = Append [ intermedOptions, finalfullContract-> fullContract/. intermedOptions];
+    		Print[ intermedOptions ];
+    		result = contractSQSNstr[str,intermedOptions];
     		Return[result];
     	];
     	
@@ -930,8 +961,7 @@ contractSQSNTypes[{},_particleType,_List] :=
 
 (* This is a top-level string contraction routine that applies contractions to MultiConfiguration *)
 contractSQSNstr[str:NCM[___SQS], contractOptions_List] :=
-	Module[ {result, nstr, ptype },
-		nstr = Length[str];
+	Module[ {result, ptype },
 		ptype = particleType[default];
 		result = contractSQS[str,ptype,contractOptions];
 		(*Remove CR heads*)
@@ -942,15 +972,16 @@ contractSQSNstr[str:NCM[___SQS], contractOptions_List] :=
 
 (* contraction function for MultiConfiguration *)
 
-(*
-contractSQS[L_SQS, R_SQS] :=
-*)
-
 contractSQS[L_SQS, R_SQS, contractOptions_List] := 
 	Module[ {l, r, ls, rs, lu, ll, ru, rl, ui, li, n, pt, lenp, contras, lencons, contra, original, sign, lencon, tmpi, tmpleni, cross, tmpcre, tmpann, tmpcontra, tmpop, tmpresult, ptmpresult, result },
-    If [SeQuantDebugLevel >= 5,
-    	Print [ "Contraction \n", L //TraditionalForm , R //TraditionalForm];
+    
+    If[ SeQuantDebugLevel >= 5,
+        Print [ "Contraction \n", L //TraditionalForm , R //TraditionalForm];
     ];
+    If[ SeQuantDebugLevel >= 6,
+    	Print [ "contraction type \n" , "fullContract   ->  ", fullContract/. contractOptions];
+    ];
+    
     (* left side SQS *)
     ls = L;
     (* right side SQS *)
@@ -959,24 +990,24 @@ contractSQS[L_SQS, R_SQS, contractOptions_List] :=
     lu = creIndices[ls];
     (* left side lowwer indices *)
     ll = annIndices[ls];
-    
     l = Join[lu, ll];
     (* right side upper indices *)
     ru = creIndices[rs];
     (* right side lowwer indices *)
     rl = annIndices[rs];
-    
     r = Join[ru, rl];
     (* upper indices *)
     ui = Join[lu, ru];
     (* lower indices *)
     li = Join[ll, rl];
+    
     (* original sequence *)
     original = Join[ui, Reverse[li] ];
     n = Length[ui];
     Assert [ n === Length[li] ];
     pt = contractionPattern[n];
     lenp = Length[pt];
+    
     (* create all possible contractin patterns *)
     contras = {};
     Do[
@@ -989,17 +1020,13 @@ contractSQS[L_SQS, R_SQS, contractOptions_List] :=
     (* loop over each contraction pattern *)
     Do [
         contra = contras[[i]];
-
-        If [ SeQuantDebugLevel >= 6,
-        	Print [ " contraction pattern \n" , contra //TraditionalForm ]
+        If[ SeQuantDebugLevel >= 6,
+            Print [ " contraction pattern \n" , contra //TraditionalForm ]
         ];
-
         sign = signrule[original, contra];
-        
-        If [ SeQuantDebugLevel >= 7,
-        	Print [ " permutation of this pattern:    " , sign ]
+        If[ SeQuantDebugLevel >= 7,
+            Print [ " permutation of this pattern:    " , sign ]
         ];
-
         lencon = Length[contra];
         (* test if cross contraction *)
         cross = True;
@@ -1008,7 +1035,7 @@ contractSQS[L_SQS, R_SQS, contractOptions_List] :=
             cross = True,
             Do [
                 tmpi = contra[[j]];
-             	If[ Length[ Intersection[l , contra[[j]]] ] === Length [ contra[[j]] ] || Length[ Intersection[r , contra[[j]]] ] === Length [ contra[[j]] ], 
+                If[ Length[ Intersection[l , contra[[j]]] ] === Length [ contra[[j]] ] || Length[ Intersection[r , contra[[j]]] ] === Length [ contra[[j]] ],
                     cross = False
                 ];
                 ,{j,1,lencon}
@@ -1023,107 +1050,108 @@ contractSQS[L_SQS, R_SQS, contractOptions_List] :=
                 tmpleni = Length[contra[[j]] ]/2;
                 tmpcre = Take[contra[[j]], tmpleni ];
                 tmpann = Take[contra[[j]], - tmpleni];
-                
-                If [ contractIndex[ contra[[j]] ],
-                	If [ Length[ contra[[j]] ]=== 2 && Length[ Intersection[ru, contra[[j]]] ] > 0 && Length[ Intersection[ll, contra[[j]]] ] > 0 ,
-                    	tmpcontra = (-1) * createSQM["\[Eta]",tmpann, tmpcre, antisymm],
-                   		tmpcontra = createSQM["\[Lambda]",tmpann, tmpcre, antisymm]
-                	],
-                	If [ Length[ contra[[j]] ]=== 2 && Length[ Intersection[ru, contra[[j]]] ] > 0 && Length[ Intersection[ll, contra[[j]]] ] > 0 ,
-                    	tmpcontra = (-1) * deltaIndex[tmpann, tmpcre],
-                   		tmpcontra = 0
-                	]
+                If[ contractIndex[ contra[[j]] ],
+                    If[ Length[ contra[[j]] ]=== 2 && Length[ Intersection[ru, contra[[j]]] ] > 0 && Length[ Intersection[ll, contra[[j]]] ] > 0,
+                        tmpcontra = (-1) * createSQM["\[Eta]",tmpann, tmpcre, antisymm],
+                        tmpcontra = createSQM["\[Lambda]",tmpann, tmpcre, antisymm]
+                    ],
+                    If[ Length[ contra[[j]] ]=== 2 && Length[ Intersection[ru, contra[[j]]] ] > 0 && Length[ Intersection[ll, contra[[j]]] ] > 0,
+                        tmpcontra = (-1) * deltaIndex[tmpann, tmpcre],
+                        tmpcontra = 0
+                    ]
                 ];
                 
-	    		If [ SeQuantDebugLevel >= 7,
-        			Print [ "       result of contraction:  " , tmpcre //TraditionalForm, "  and  " , tmpann //TraditionalForm, "  =  ", tmpcontra //TraditionalForm ]
-        		];
-        		
-        		
+                If[ SeQuantDebugLevel >= 7,
+                    Print [ "       result of contraction:  " , tmpcre //TraditionalForm, "  and  " , tmpann //TraditionalForm, "  =  ", tmpcontra //TraditionalForm ]
+                ];
+                
                 tmpresult = tmpresult * tmpcontra;
                 ,{j,1,lencon}
             ];
             
-            If [ tmpresult =!= 0,
-            	tmpresult = CR[ sign * tmpresult, 1]
+            If[ tmpresult =!= 0,
+                tmpresult = CR[ sign * tmpresult, 1]
             ];
             
-            If [ SeQuantDebugLevel >= 6,
-            	Print[ " full contraction in this pattern:    ", tmpresult //TraditionalForm ]
+            If[ SeQuantDebugLevel >= 6,
+                Print[ " full contraction in this pattern:    ", tmpresult //TraditionalForm ]
             ];
             
             result = Plus[result, tmpresult],
             
-            If [ SeQuantDebugLevel >= 6,
-            	Print[ " full contraction in this pattern:    ",  0 ]
+            If[ SeQuantDebugLevel >= 6,
+                Print[ " full contraction in this pattern:    ",  0 ]
+            ];
+        ];
+        
+        (* partial contraction *)
+        If[ !fullContract/. contractOptions,
+            tmpresult = Plus[];
+            Do[
+                tmpleni = Length[contra[[j]] ] /2;
+                tmpcre = Take[contra[[j]], tmpleni ];
+                tmpann = Take[contra[[j]], - tmpleni];
+                tmpop = createSQS[tmpcre, tmpann];
+                
+                If[ SeQuantDebugLevel >= 7,
+                    Print [ "       result of the operator:  " , tmpcre //TraditionalForm, "  and  " , tmpann //TraditionalForm, "  =   ", tmpop //TraditionalForm ]
+                ];
+                
+                cross = True;
+                ptmpresult = 1;
+                Do[
+                    If[ k =!= j,
+                        tmpleni = Length[contra[[k]] ]/2;
+                        tmpcre = Take[contra[[k]], tmpleni ];
+                        tmpann = Take[contra[[k]], - tmpleni];
+                        
+                        If[ Length[ Intersection[l , contra[[k]]] ] === Length [ contra[[k]] ] || Length[ Intersection[r , contra[[k]]] ] === Length [ contra[[k]] ],
+                            cross = False
+                        ];
+                        
+                        If[ cross === True,
+                            If[ contractIndex[ contra[[k]] ],
+                                If[ Length[ contra[[k]] ]=== 2 && Length[ Intersection[ru, contra[[k]]] ] > 0 && Length[ Intersection[ll, contra[[k]]] ] > 0,
+                                    tmpcontra =  (-1) * createSQM["\[Eta]",tmpann, tmpcre, antisymm],
+                                    tmpcontra =  createSQM["\[Lambda]",tmpann, tmpcre, antisymm]
+                                ],
+                                If[ Length[ contra[[k]] ]=== 2 && Length[ Intersection[ru, contra[[k]]] ] > 0 && Length[ Intersection[ll, contra[[k]]] ] > 0,
+                                    tmpcontra =  (-1) * deltaIndex[tmpann, tmpcre],
+                                    tmpcontra =  0
+                                ]
+                            ],
+                            tmpcontra =  0
+                        ];
+                        
+                        ptmpresult = ptmpresult * tmpcontra;
+                        
+                        If[ SeQuantDebugLevel >= 7,
+                            Print [ "       result of contraction:  " , tmpcre //TraditionalForm, "  and  " , tmpann //TraditionalForm, "  =  ", tmpcontra //TraditionalForm ]
+                        ]
+                    ];     
+                	,{k,1,lencon}    
+             	];
+             	
+                If[ ptmpresult =!= 0,
+                    tmpresult = Plus[tmpresult, CR[sign*ptmpresult,tmpop]]
+                ];
+                ,{j,1,lencon}
             ];
             
+            tmpresult = Plus[tmpresult];
+            
+            If[ SeQuantDebugLevel >= 6,
+                Print[ " partial contraction in this pattern:    ", tmpresult //TraditionalForm ]
+            ];
+            result = Plus[result,  tmpresult]
         ];
-        
-        tmpresult = Plus[];
-        (* partial contraction *)
-        Do[
-            tmpleni = Length[contra[[j]] ] /2;
-            tmpcre = Take[contra[[j]], tmpleni ];
-            tmpann = Take[contra[[j]], - tmpleni];
-            tmpop = createSQS[tmpcre, tmpann];
-        	
-	    	If [ SeQuantDebugLevel >= 7,
-        		Print [ "       result of the operator:  " , tmpcre //TraditionalForm, "  and  " , tmpann //TraditionalForm, "  =   ", tmpop //TraditionalForm ]
-        	];
-        		
-        	cross = True;
-        	ptmpresult = 1;
-            Do[
-                If[ k =!= j,  	
-                	tmpleni = Length[contra[[k]] ]/2;
-                    tmpcre = Take[contra[[k]], tmpleni ];
-                    tmpann = Take[contra[[k]], - tmpleni];
-              		If[ Length[ Intersection[l , contra[[k]]] ] === Length [ contra[[k]] ] || Length[ Intersection[r , contra[[k]]] ] === Length [ contra[[k]] ], 
-                    	cross = False
-                	];
-                	If [cross === True,
-                    	If [ contractIndex[ contra[[k]] ],
-                    		If [ Length[ contra[[k]] ]=== 2 && Length[ Intersection[ru, contra[[k]]] ] > 0 && Length[ Intersection[ll, contra[[k]]] ] > 0 ,
-                    			tmpcontra =  (-1) * createSQM["\[Eta]",tmpann, tmpcre, antisymm],
-                   				tmpcontra =  createSQM["\[Lambda]",tmpann, tmpcre, antisymm]
-                    		],
-                    		If [ Length[ contra[[k]] ]=== 2 && Length[ Intersection[ru, contra[[k]]] ] > 0 && Length[ Intersection[ll, contra[[k]]] ] > 0 ,
-                    			tmpcontra =  (-1) * deltaIndex[tmpann, tmpcre],
-                   				tmpcontra =  0 
-                    		]
-                    	],
-                   		tmpcontra =  0
-                	];
-                	
-        		   	ptmpresult = ptmpresult * tmpcontra;	
-
-	    			If [ SeQuantDebugLevel >= 7,
-        				Print [ "       result of contraction:  " , tmpcre //TraditionalForm, "  and  " , tmpann //TraditionalForm, "  =  ", tmpcontra //TraditionalForm ]
-        			]
-        		
-                ];     
-                ,{k,1,lencon}    
-             ];
-             
-             If [ ptmpresult =!= 0,
-            	tmpresult = Plus[tmpresult, CR[sign*ptmpresult,tmpop]]
-             ];
-             
-            ,{j,1,lencon}
-        ];
-        
-		tmpresult = Plus[tmpresult];
-        If [ SeQuantDebugLevel >= 6,
-        	Print[ " partial contraction in this pattern:    ", tmpresult //TraditionalForm ]
-        ];
-        
-        result = Plus[result,  tmpresult];
         ,{i,1,lencons}
     ];
-    If [SeQuantDebugLevel >= 5,
-    	Print [ "contraction  result   ", result // TraditionalForm];
+    
+    If[ SeQuantDebugLevel >= 5,
+        Print [ "contraction  result   ", result // TraditionalForm];
     ];
+    
     Return[result];
 ];
 
