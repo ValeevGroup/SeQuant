@@ -167,16 +167,6 @@ indexLight[a_particleIndex] :=
 indexEquiv[a_particleIndex,b_particleIndex] :=
     (a[[1]]===b[[1]])&&(a[[2]]===b[[2]]);
     
-(* given an index create a copy without its indexType *)
-dropIndexType[a_particleIndex] :=
-    If[ Length[a]=!=2,
-        createParticleIndex[a[[1]],a[[2]]],
-        a
-    ];
-    
-dropIndexType[any_] :=
-    any;
-
 Unprotect[Equal];
 Equal[a_particleIndex,b_particleIndex] :=
     (a[[1]]===b[[1]])&&(a[[2]]===b[[2]]);
@@ -338,11 +328,13 @@ firstIndexOfType[a_SQS,ptype_particleType] :=
         Return[ind];
     ];
 
-(* selects creation/annihilation indices from SQS *)
+(* selects creation/annihilation indices from SQS 
+	while the indexType was droped
+*)
 creIndices[a_SQS] :=
-    Cases[a,x_particleIndex/;indexCreQ[x]->createParticleIndex[x[[1]],x[[2]]] ];
+    Cases[a,x_particleIndex/;indexCreQ[x]->indexLight[x] ];
 annIndices[a_SQS] :=
-    Reverse[Cases[a,x_particleIndex/;indexAnnQ[x]->createParticleIndex[x[[1]],x[[2]]] ]];
+    Reverse[Cases[a,x_particleIndex/;indexAnnQ[x]->indexLight[x] ]];
 
 
 (* ::Section:: *)
@@ -381,12 +373,14 @@ flattenSQM[a_SQM] :=
     ];
     
     
-(* selects bra/ket indices from SQM *)
+(* selects bra/ket indices from SQM 
+	while the indexType was droped
+*)
 braIndices[a_SQM] :=
-	Cases[a,x_particleIndex/;indexBraQ[x]->createParticleIndex[x[[1]],x[[2]]] ];
+	Cases[a,x_particleIndex/;indexBraQ[x]->indexLight[x] ];
     
 ketIndices[a_SQM] :=
-	Reverse[Cases[a, x_particleIndex/;indexKetQ[x]->createParticleIndex[x[[1]],x[[2]]] ]];
+	Reverse[Cases[a, x_particleIndex/;indexKetQ[x]->indexLight[x] ]];
 
 (*
 the following two functions are used to deal with \Eta SQM in MultiConfigution
