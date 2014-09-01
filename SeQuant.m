@@ -379,8 +379,31 @@ flattenSQM[a_SQM] :=
         result = Prepend[result,OHead[a[[1]],a[[4]]]];
         Return[result];
     ];
+    
+    
+(* selects bra/ket indices from SQM *)
+braIndices[a_SQM] :=
+	Cases[a,x_particleIndex/;indexBraQ[x]->createParticleIndex[x[[1]],x[[2]]] ];
+    
+ketIndices[a_SQM] :=
+	Reverse[Cases[a, x_particleIndex/;indexKetQ[x]->createParticleIndex[x[[1]],x[[2]]] ]];
 
+(*
+the following two functions are used to deal with \Eta SQM in MultiConfigution
+*)
 
+(* expand \eta to \lamda and \delta *)
+expandEta[a_SQM] := 
+	Module[{bra, ket, result},
+   		bra = braIndices[a];
+   		ket = ketIndices[a];
+   		result = Plus[deltaIndex[bra, ket], -createSQM["\[Lambda]", bra, ket, antisymm] ];
+		Return[result];
+   ];
+
+(* expand every \eta in expr *)
+expandExp[expr_] :=
+	expr /. x_SQM /; x[[1, 1]] == "\[Eta]" -> expandEta[x]
 
 (* ::Section:: *)
 (* Visualize function *)
@@ -914,9 +937,7 @@ contractSQSNTypes[str:NCM[__SQS],contractOptions_List] :=
     	
     	If[ SeQuantVacuum == SeQuantVacuumChoices["MultiConfiguration"],
     		intermedOptions = Cases[contractOptions, a_ /; MemberQ[a, fullContract]];
-    		Print[ intermedOptions ];
     		intermedOptions = Append [ intermedOptions, finalfullContract-> fullContract/. intermedOptions];
-    		Print[ intermedOptions ];
     		result = contractSQSNstr[str,intermedOptions];
     		Return[result];
     	];
@@ -1052,7 +1073,7 @@ contractSQS[L_SQS, R_SQS, contractOptions_List] :=
                 tmpann = Take[contra[[j]], - tmpleni];
                 If[ contractIndex[ contra[[j]] ],
                     If[ Length[ contra[[j]] ]=== 2 && Length[ Intersection[ru, contra[[j]]] ] > 0 && Length[ Intersection[ll, contra[[j]]] ] > 0,
-                        tmpcontra = (-1) * createSQM["\[Eta]",tmpann, tmpcre, antisymm],
+                        tmpcontra = (-1) * createSQM["\[Eta]",tmpann, tmpcre, nonsymm],
                         tmpcontra = createSQM["\[Lambda]",tmpann, tmpcre, antisymm]
                     ],
                     If[ Length[ contra[[j]] ]=== 2 && Length[ Intersection[ru, contra[[j]]] ] > 0 && Length[ Intersection[ll, contra[[j]]] ] > 0,
@@ -1112,7 +1133,7 @@ contractSQS[L_SQS, R_SQS, contractOptions_List] :=
                         If[ cross === True,
                             If[ contractIndex[ contra[[k]] ],
                                 If[ Length[ contra[[k]] ]=== 2 && Length[ Intersection[ru, contra[[k]]] ] > 0 && Length[ Intersection[ll, contra[[k]]] ] > 0,
-                                    tmpcontra =  (-1) * createSQM["\[Eta]",tmpann, tmpcre, antisymm],
+                                    tmpcontra =  (-1) * createSQM["\[Eta]",tmpann, tmpcre, nonsymm],
                                     tmpcontra =  createSQM["\[Lambda]",tmpann, tmpcre, antisymm]
                                 ],
                                 If[ Length[ contra[[k]] ]=== 2 && Length[ Intersection[ru, contra[[k]]] ] > 0 && Length[ Intersection[ll, contra[[k]]] ] > 0,
@@ -1497,11 +1518,14 @@ wick[expr_,extInds_List,wickOptions_List:defaultWickOptions] :=
             Print["External indices:",extinds//TraditionalForm];
         ];
         
-        (* in MultiConfiguration, check mSQS if in normal order form *)
+        (* 
+        in MultiConfiguration, check mSQS if in normal order form. 
+        If not, convert it into nomal order form
+         *)
         If[ SeQuantVacuum === SeQuantVacuumChoices["MultiConfiguration"],
         	
         	If[ SeQuantDebugLevel>=1,
-            	Print ["expresion before normal ordering  ", expr //TraditionalForm ];
+            	Print ["Before normal ordering  ", expr //TraditionalForm ];
         	];
         	
         	Unprotect[NonCommutativeMultiply];
@@ -1509,7 +1533,7 @@ wick[expr_,extInds_List,wickOptions_List:defaultWickOptions] :=
         	Protect[NonCommutativeMultiply];
         	
         	If[ SeQuantDebugLevel>=1,
-            	Print ["expresion after normal ordering  ", expr //TraditionalForm ];
+            	Print ["After normal ordering  ", expr //TraditionalForm ];
         	];
         ];
         
@@ -1518,6 +1542,22 @@ wick[expr_,extInds_List,wickOptions_List:defaultWickOptions] :=
         	result = lowwick[newexpr, options],	
         	result = lowwick[expr,options]
         ];
+        
+        
+        (* expand result here*)
+        If[ SeQuantVacuum === SeQuantVacuumChoices["MultiConfiguration"],
+        	If[ SeQuantDebugLevel>=1,
+            	Print["Before Expand"];
+            	Print[result//TraditionalForm];
+        	];
+        	result = expandExp[result];
+        	result = Map[Distribute,result,{0,Infinity}];
+        	If[ SeQuantDebugLevel>=1,
+            	Print["After Expand"];
+            	Print[result//TraditionalForm];
+        	];
+        ];
+        
         
         (* New internale indices may have been generatd by lowwick -- recompute *)
         intinds = Sort[indexListOut[result,extInds]];
@@ -2409,20 +2449,12 @@ brillouinExt[expr_] :=
         Return[result];
     ];
 
+
 (*
 Substitutes a second quantized tensor by the corresponding density matrix element.
 *)
 substituteSQSbyDensity[expr_] :=
     expr/.x_SQS->createSQM["\[Gamma]",annIndices[x],creIndices[x],antisymm];
-
-(* expand \eta *)
-(*
-expandEta[expr_] := 
-	Module[{},
-		
-	];
-*)
-
 
 (*
 Zeroes out density matrix elements that include indices above the Fermi level
