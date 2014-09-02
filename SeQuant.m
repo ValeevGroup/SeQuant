@@ -706,9 +706,8 @@ contractSQS[str:NCM[__SQS],ptype_particleType,contractOptions_List] :=
         ];
 
     	nstr = Length[str];
-    	
     	If [ SeQuantVacuum==SeQuantVacuumChoices["MultiConfiguration"],
-    		If [ nstr == 2,
+    		If [ nstr === 2,
 				(* If the last contraction, do fullContraction if finalfullContraction is True  *)
 				If [ finalfullContract/. contractOptions,
     				newcontractOptions = Cases[contractOptions, a_ /; FreeQ[a, fullContract]];
@@ -718,13 +717,15 @@ contractSQS[str:NCM[__SQS],ptype_particleType,contractOptions_List] :=
 				];    			
     			result = contractSQS[str[[1]],str[[2]],newcontractOptions];
     			Return[result],
+    			
+    			
     			(* If not the last contraciton, do not do fullContraction *)
     			If [ fullContract/. contractOptions,
     				newcontractOptions = Cases[contractOptions, a_ /; FreeQ[a, fullContract]];
-    				Print [ contractOptions ];
-    				newcontractOptions = Append[ newcontractOptions, fullContract->False ]
+    				newcontractOptions = Append[ newcontractOptions, fullContract->False ],
+    				newcontractOptions = contractOptions
 				];    
-    			result = contractSQS[str[[1]],str[[2]],newcontractOptions];
+    			result = contractSQS[str[[1]],str[[2]], newcontractOptions];
     			newstr = Take[ str, {3,nstr}];
     			f[a_CR] := (
     				If[ a[[2]] === 1,
@@ -735,7 +736,7 @@ contractSQS[str:NCM[__SQS],ptype_particleType,contractOptions_List] :=
     			result = Map[f, result];
     			
     			If[ SeQuantDebugLevel>=5,
-    				Print["new contraction", result//TraditionalForm];
+    				Print["new contraction    ", result//TraditionalForm];
         		];
     			
     			result = contractSQS[result, ptype, newcontractOptions]
@@ -1332,6 +1333,21 @@ chomp[str:NCM[__SQS]] :=
     ];
 
 (* normal order for MultiConfiguration *)
+
+(*
+normalOrderedForm[str:NCM[__mSQS] ]:=
+	Map[normalOrderedForm,str];
+
+normalOrderedForm[a_+ b_ ]:=
+	normalOrderedForm[a] + normalOrderedForm[b];
+	
+normalOrderedForm[ (a_/;FreeQ[a,mSQS] && FreeQ[a,NCM] )*b_ ] :=
+	a*normalOrderedForm[b];
+*)
+
+normalOrderedForm[a_/;Head[a]=!=mSQS] :=
+	a
+
 normalOrderedForm[a_mSQS] := 
 	Module[{sqs, n,lp, lcs, lc, original, sign, contras, contra, tmplc, tmpann, tmpcre, tmpcontra, tmpop, tmpresult, ptmpresult, result},
 		If [ a[[1]] === inorder,
@@ -1523,11 +1539,11 @@ wick[expr_,extInds_List,wickOptions_List:defaultWickOptions] :=
         	];
         	
         	Unprotect[NonCommutativeMultiply];
-        	newexpr = Map[normalOrderedForm,expr];
+        	newexpr = Map[normalOrderedForm,expr,Infinity];
         	Protect[NonCommutativeMultiply];
         	
         	If[ SeQuantDebugLevel>=1,
-            	Print ["After normal ordering  ", expr //TraditionalForm ];
+            	Print ["After normal ordering  ", newexpr //TraditionalForm ];
         	];
         ];
         
@@ -1595,6 +1611,12 @@ wick[expr_,extInds_List,wickOptions_List:defaultWickOptions] :=
         Return[result];
     ];
 
+
+(* commutator
+	it is just a**b - b**a at current stage
+ *)
+commute[a_, b_] :=
+	a**b - b**a
 
 (* ::Subsection:: *)
 (* lowwick funciton *)
