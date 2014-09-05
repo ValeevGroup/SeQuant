@@ -183,7 +183,7 @@ Protect[OrderedQ];
 
 (* this functions throws out all multiple occurences of the same index from inds *)
 uniqueIndexList[inds_List] :=
-    Module[ {tmpinds,ind},
+    Module[ {tmpinds},
 
 (* Old code *)
 (*tmpinds={inds[[1]]};
@@ -391,13 +391,40 @@ expandEta[a_SQM] :=
 	Module[{bra, ket, result},
    		bra = braIndices[a];
    		ket = ketIndices[a];
-   		result = Plus[deltaIndex[bra, ket], -createSQM["\[Lambda]", bra, ket, antisymm] ];
+   		result = Plus[deltaIndex[bra[[1]], ket[[1]]], -createSQM["\[Lambda]", bra, ket, antisymm] ];
 		Return[result];
    ];
 
 (* expand every \eta in expr *)
 expandExp[expr_] :=
 	expr /. x_SQM /; x[[1, 1]] == "\[Eta]" -> expandEta[x]
+
+
+(* convert cumulant to density matricies *)
+(* this function is not universal,
+	it only works for rank 1 and 2 cumulant
+*)
+convertLambda[a_SQM] :=
+	Module[{bra, ket, result},
+		bra = braIndices[a];
+		ket = ketIndices[a];
+		Assert[ Length[bra] === Length[ket] ];
+		If [ Length[bra] === 1,	 
+			result = createSQM["\[Gamma]",bra,ket,antisymm];
+			Return[result]
+		];
+		If [Length[bra] === 2,
+			result = createSQM["\[Gamma]",bra,ket,antisymm] + createSQM["\[Gamma]",{bra[[1]]},{ket[[1]]},antisymm]*createSQM["\[Gamma]",{bra[[2]]},{ket[[2]]},antisymm] 
+			- createSQM["\[Gamma]",{bra[[1]]},{ket[[2]]},antisymm]*createSQM["\[Gamma]",{bra[[2]]},{ket[[1]]},antisymm]; 
+			Return[result]
+		];
+		If[ Length[bra] > 2 ,
+			Return[a]
+		];
+	];
+
+convertExp[expr_] :=
+	expr /. x_SQM /; x[[1,1]] == "\[Lambda]" -> convertLambda[x]
 
 (* ::Section:: *)
 (* Visualize function *)
@@ -426,7 +453,7 @@ visualizeSQE[a_deltaIndex] :=
     Subsuperscript["\[Delta]",a[[1,1]],a[[2,1]] ];
 
 visualizeSQE[a_SQS] :=
-    Module[ {bodyLabel,i},
+    Module[ {bodyLabel,i,supInds,subInds},
 (* convention labels strings normal-ordered wrt to nonphysical vacuum as tilde{a} *)
        bodyLabel = If[ SeQuantVacuum==SeQuantVacuumChoices["MultiConfiguration"],
                         OverTilde["a"],
@@ -445,7 +472,7 @@ visualizeSQE[a_SQS] :=
     ];
 
 visualizeSQE[a_mSQS] :=
-    Module[ {sqs,bodyLabel,i},
+    Module[ {sqs,bodyLabel,i,supInds,subInds},
     	If [ Length[a[[2]]] === 0,
     		Return[a[[2]]]
     	];
@@ -467,7 +494,7 @@ visualizeSQE[a_mSQS] :=
     ];
     
 visualizeSQE[a_SQM] :=
-    Module[ {bodyLabel,i},
+    Module[ {bodyLabel,i,supInds,subInds},
         bodyLabel = a[[1,1]];
         supInds = "";
         subInds = "";
@@ -504,7 +531,7 @@ contractSQS contracts a List of SQ strings of operators
 deltaIndex is our representation of Kroneker delta
 *)
 contractIndex[L_particleIndex,R_particleIndex] :=
-    Module[ {iL,iR,spaceL,spaceR,typeL,typeR, fermiL, fermiR,intIndex},
+    Module[ {typeL,typeR, fermiL, fermiR,intIndex,result},
     	(* check if particles are the same *)
         typeL = Cases[L[[2]],_particleType];
         typeR = Cases[R[[2]],_particleType];
@@ -1072,7 +1099,7 @@ contractSQS[L_SQS, R_SQS, contractOptions_List] :=
                         tmpcontra = createSQM["\[Lambda]",tmpann, tmpcre, antisymm]
                     ],
                     If[ Length[ contra[[j]] ]=== 2 && Length[ Intersection[ru, contra[[j]]] ] > 0 && Length[ Intersection[ll, contra[[j]]] ] > 0,
-                        tmpcontra = (-1) * deltaIndex[tmpann, tmpcre],
+                        tmpcontra = (-1) * deltaIndex[tmpann[[1]], tmpcre[[1]]],
                         tmpcontra = 0
                     ]
                 ];
@@ -1132,7 +1159,7 @@ contractSQS[L_SQS, R_SQS, contractOptions_List] :=
                                     tmpcontra =  createSQM["\[Lambda]",tmpann, tmpcre, antisymm]
                                 ],
                                 If[ Length[ contra[[k]] ]=== 2 && Length[ Intersection[ru, contra[[k]]] ] > 0 && Length[ Intersection[ll, contra[[k]]] ] > 0,
-                                    tmpcontra =  (-1) * deltaIndex[tmpann, tmpcre],
+                                    tmpcontra =  (-1) * deltaIndex[tmpann[[1]], tmpcre[[1]]],
                                     tmpcontra =  0
                                 ]
                             ],
@@ -1240,7 +1267,7 @@ The result is a CR of the form CR[sign,SQS]
 *)
 
 normalOrderedForm[str:NCM[__SQS],ptype_particleType] :=
-    Module[ {rstr,permfac},
+    Module[ {rstr,permfac,ninds,ind,index,},
 
 		(* single string is by definition normal ordered *)
         If[ Length[str]==1,
@@ -1334,22 +1361,12 @@ chomp[str:NCM[__SQS]] :=
 
 (* normal order for MultiConfiguration *)
 
-(*
-normalOrderedForm[str:NCM[__mSQS] ]:=
-	Map[normalOrderedForm,str];
-
-normalOrderedForm[a_+ b_ ]:=
-	normalOrderedForm[a] + normalOrderedForm[b];
-	
-normalOrderedForm[ (a_/;FreeQ[a,mSQS] && FreeQ[a,NCM] )*b_ ] :=
-	a*normalOrderedForm[b];
-*)
 
 normalOrderedForm[a_/;Head[a]=!=mSQS] :=
 	a
 
 normalOrderedForm[a_mSQS] := 
-	Module[{sqs, n,lp, lcs, lc, original, sign, contras, contra, tmplc, tmpann, tmpcre, tmpcontra, tmpop, tmpresult, ptmpresult, result},
+	Module[{sqs, cres, anns, pt, n,lp, lcs, lc, original, sign, contras, contra, tmplc, tmpann, tmpcre, tmpcontra, tmpop, tmpresult, ptmpresult, result},
 		If [ a[[1]] === inorder,
 			Return[a[[2]]]
 		];
@@ -1553,13 +1570,13 @@ wick[expr_,extInds_List,wickOptions_List:defaultWickOptions] :=
         	result = lowwick[expr,options]
         ];
         
+        If[ SeQuantDebugLevel>=1,
+            Print["After wick"];
+            Print[result//TraditionalForm];
+        ];
         
         (* expand result here*)
         If[ SeQuantVacuum === SeQuantVacuumChoices["MultiConfiguration"],
-        	If[ SeQuantDebugLevel>=1,
-            	Print["Before Expand"];
-            	Print[result//TraditionalForm];
-        	];
         	result = expandExp[result];
         	result = Map[Distribute,result,{0,Infinity}];
         	If[ SeQuantDebugLevel>=1,
@@ -1567,6 +1584,18 @@ wick[expr_,extInds_List,wickOptions_List:defaultWickOptions] :=
             	Print[result//TraditionalForm];
         	];
         ];
+        
+(*		(* convert cumulant to density
+        	only works for cumulant of rank 1 and 2
+        *)
+        If[ SeQuantVacuum === SeQuantVacuumChoices["MultiConfiguration"],
+        	result = convertExp[result];
+        	result = Map[Distribute,result,{0,Infinity}];
+        	If[ SeQuantDebugLevel>=1,
+            	Print["After Convert"];
+            	Print[result//TraditionalForm];
+        	];
+        ];*)
         
         
         (* New internale indices may have been generatd by lowwick -- recompute *)
@@ -1608,6 +1637,8 @@ wick[expr_,extInds_List,wickOptions_List:defaultWickOptions] :=
             Print["After reindex"];
             Print[result//TraditionalForm]
         ];
+
+                
         Return[result];
     ];
 
@@ -1736,7 +1767,7 @@ reduceWick[expr_,externalIndices_List:{},internalIndices_List:{},reduceOptions_L
     ];
 
 lowReduceWick[expr_,externalIndices_List,internalIndices_List,reduceOptions_List] :=
-    Module[ {deltaReplInt,deltaReplExtA,deltaReplExtB,result,indI,indJ,spaceI,spaceJ,indK,extI,ipairIJ,havedeltaIJ,havedeltaJI},
+    Module[ {deltaReplInt,deltaReplExtA,deltaReplExtB,result,indI,indJ,spaceI,spaceJ,spaceK,indK,extI,pairIJ,havedeltaIJ,havedeltaJI},
         deltaReplInt = {};
         deltaReplExtA = {};
         deltaReplExtB = {};
@@ -1780,7 +1811,7 @@ lowReduceWick[expr_,externalIndices_List,internalIndices_List,reduceOptions_List
         If[ SeQuantDebugLevel>=2,
             Print["In lowReduceWick:  int-int delta replacement = ",deltaReplInt//TraditionalForm];
         ];
-        Do[
+        Do[ (* loop over a (ext,int) pair *)
         	indI = externalIndices[[extI]];
         	spaceI = indexSpace[indI];
         	Do[
@@ -1792,12 +1823,11 @@ lowReduceWick[expr_,externalIndices_List,internalIndices_List,reduceOptions_List
             		Continue[]
         		];
         		spaceK = Intersection[spaceI,spaceJ];
-        		paceK = Intersection[spaceI,spaceJ];
-        		If[ spaceI===spaceK,
-            		indK = indI,
+        		indK = If[ spaceI===spaceK,
+            		indI,
             		If[ spaceJ===spaceK,
-                		indK = indJ,
-                		indK = createParticleIndex[spaceK]
+                		indJ,
+                		createParticleIndex[spaceK]
             		]
         		];
         		pairIJ = {indK,indI,indJ};
@@ -1832,6 +1862,7 @@ lowReduceWick[expr_,externalIndices_List,internalIndices_List,reduceOptions_List
         	indK = deltaReplExtA[[i,1]];
         	indI = deltaReplExtA[[i,2]];
         	indJ = deltaReplExtA[[i,3]];
+
         	result = result/.deltaIndex[a_,b_]/;indexEquiv[indI,a]&&indexEquiv[indJ,b] ->1;
         	result = result/.deltaIndex[b_,a_]/;indexEquiv[indI,a]&&indexEquiv[indJ,b] ->1;
         	result = result/.indII_particleIndex:>createParticleIndex[indII,indK[[1]],indK[[2]]]/;((indII[[1]]==indJ[[1]])&&(indII[[2]]==indJ[[2]]));
@@ -2150,7 +2181,7 @@ removeDisconnectedTerms[expr_,externalIndices_List:{},hamiltonianOpers_List:defa
 
 	
 lowRemoveDisconnectedTerms[expr_,externalIndices_List,hamiltonianOpers_List] :=
-    Module[ {intIndices,SQMs,tags,itag,dist,nsqm,hindex,nh,dists,result,listcopy,done,connected},
+    Module[ {intIndices,SQMs,tags,itag,nsqm,hindex,nh,result,listcopy,done,ariadna,noTags},
 (* If there are no SQMs, there are no disconnected terms *)
         If[ FreeQ[expr,SQM],
             Return[expr]
@@ -2240,7 +2271,7 @@ getSQMList[expr_] :=
     ];
 
 tagSQMInList[icurr_,SQMs_List,Tags_List,IIndices_List] :=
-    Module[ {nsqm,inext,ninds,current,iinds,niinds,iind,j,k,result,localtags,inList},
+    Module[ {nsqm,inext,ninds,current,iinds,niinds,iind,j,k,result,localtags},
 (*Print["Will tag element ",icurr," in list ",SQMs//TraditionalForm," current tags are ",Tags];*)
         nsqm = Length[SQMs];
         current = SQMs[[icurr]];
@@ -2355,7 +2386,7 @@ MatchQ[a_NCM,b_SQS] :=
     itemMatchQ[ReplacePart[a,List,0],b];
 
 listMatchQ[a_List,b_List] :=
-    Module[ {af,bf,lb,result},
+    Module[ {af,bf,lb,result,pos},
         If[ Length[b]==0,
             Return[True]
         ];
