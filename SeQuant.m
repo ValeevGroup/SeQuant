@@ -380,7 +380,7 @@ braIndices[a_SQM] :=
 	Cases[a,x_particleIndex/;indexBraQ[x]->indexLight[x] ];
     
 ketIndices[a_SQM] :=
-	Reverse[Cases[a, x_particleIndex/;indexKetQ[x]->indexLight[x] ]];
+	Cases[a,x_particleIndex/;indexKetQ[x]->indexLight[x] ];
 
 (*
 the following two functions are used to deal with \Eta SQM in MultiConfigution
@@ -414,8 +414,8 @@ convertLambda[a_SQM] :=
 			Return[result]
 		];
 		If [Length[bra] === 2,
-			result = createSQM["\[Gamma]",bra,ket,antisymm] + createSQM["\[Gamma]",{bra[[1]]},{ket[[1]]},antisymm]*createSQM["\[Gamma]",{bra[[2]]},{ket[[2]]},antisymm] 
-			- createSQM["\[Gamma]",{bra[[1]]},{ket[[2]]},antisymm]*createSQM["\[Gamma]",{bra[[2]]},{ket[[1]]},antisymm]; 
+			result = createSQM["\[Gamma]",bra,ket,antisymm] - createSQM["\[Gamma]",{bra[[1]]},{ket[[1]]},antisymm]*createSQM["\[Gamma]",{bra[[2]]},{ket[[2]]},antisymm] 
+			+ createSQM["\[Gamma]",{bra[[1]]},{ket[[2]]},antisymm]*createSQM["\[Gamma]",{bra[[2]]},{ket[[1]]},antisymm]; 
 			Return[result]
 		];
 		If[ Length[bra] > 2 ,
