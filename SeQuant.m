@@ -1,6 +1,11 @@
 (* ::Package:: *)
 
-(*BeginPackage["SeQuant`"];*)
+
+BeginPackage["SeQuant`"];
+
+(* turn on Assert *)
+On[Assert];
+
 
 (* Setting up internal things *)
 Off[General::spell];
@@ -35,6 +40,7 @@ Global SeQuant Parameters
 If[ !ValueQ[SeQuantDebugLevel],
     SeQuantDebugLevel = 0
 ];
+
 SeQuantVacuumChoices["Physical"] = 0;
 SeQuantVacuumChoices["SingleConfiguration"] = 1;
 SeQuantVacuumChoices["MultiConfiguration"] = 2;
@@ -54,7 +60,7 @@ allany = Union[occ,allvirt];
 
 
 spacesEqualIgnoreParticleType[a_particleSpace,b_particleSpace] :=
-    (Select[a,Head[#]=!=particleType&]==Select[b,Head[#]=!=particleType&]); (* particleType defined but not used *)
+    (Select[a,Head[#]=!=particleType&]==Select[b,Head[#]=!=particleType&]); 
 spacesOverlapIgnoreParticleType[a_particleSpace,b_particleSpace] :=
     (Select[Intersection[a,b],Head[#]=!=particleType&]=!=particleSpace[]);
 spacesOverlapIgnoreSpinAndParticleType[a_particleSpace,b_particleSpace] :=
@@ -138,7 +144,7 @@ indexType[a_particleIndex] :=
 indexSpace[a_particleIndex] :=
     Cases[a,_particleSpace][[1]];
     
-(* return particleType of a particleIndex *)
+(* return the particleType of a particleIndex *)
 indexParticle[a_particleIndex] :=
     Module[ {typeList},
         typeList = Cases[a[[2]],_particleType];
@@ -160,16 +166,6 @@ indexLight[a_particleIndex] :=
 indexEquiv[a_particleIndex,b_particleIndex] :=
     (a[[1]]===b[[1]])&&(a[[2]]===b[[2]]);
     
-(* given an index create a copy without its indexType *)
-dropIndexType[a_particleIndex] :=
-    If[ Length[a]=!=2,
-        createParticleIndex[a[[1]],a[[2]]],
-        a
-    ];
-    
-dropIndexType[any_] :=
-    any;
-
 Unprotect[Equal];
 Equal[a_particleIndex,b_particleIndex] :=
     (a[[1]]===b[[1]])&&(a[[2]]===b[[2]]);
@@ -186,7 +182,7 @@ Protect[OrderedQ];
 
 (* this functions throws out all multiple occurences of the same index from inds *)
 uniqueIndexList[inds_List] :=
-    Module[ {tmpinds,ind},
+    Module[ {tmpinds},
 
 (* Old code *)
 (*tmpinds={inds[[1]]};
@@ -249,8 +245,15 @@ inorder = normalOrder[True];
 noorder = normalOrder[False];
 createSQS[creInds_List,annInds_List,norm_normalOrder:inorder] :=
     Module[ {},
+    	If[ SeQuantVacuum === SeQuantVacuumChoices["MultiConfiguration"],
+			Return[mSQS[norm, flattenSQS[SQS[creInds,annInds,norm]]]]
+    	];
         Return[flattenSQS[SQS[creInds,annInds,norm]]]
     ];
+
+createSQS[creInds_List, annInds_List ] := 
+        Return[flattenSQS[SQS[creInds,annInds]]]
+
 SQS::wrongdepth = "Argument has wrong depth";
 flattenSQS[a_SQS] :=
     Module[ {nc,na,result,creInds,annInds,x},
@@ -269,6 +272,15 @@ flattenSQS[a_SQS] :=
         result = FlattenAt[SQS[FlattenAt[{creInds,Reverse[annInds]},{{1},{2}}]],{1}];
         Return[result];
     ];
+
+
+(* SQS in MultiConfiguration case has non normal ordered form *)    
+(*
+createmultiSQS[creInds_List,annInds_List,norm_normalOrder:inorder] :=
+    Module[ {},
+        Return[multiSQS[norm, createSQS[creInds,annInds,norm]]]
+    ];
+*)
 
 (* find all index types in a *)
 indexTypesSQS[a_SQS] :=
@@ -315,11 +327,13 @@ firstIndexOfType[a_SQS,ptype_particleType] :=
         Return[ind];
     ];
 
-(* selects creation/annihilation indices from SQS *)
+(* selects creation/annihilation indices from SQS 
+	while the indexType was droped
+*)
 creIndices[a_SQS] :=
-    Cases[a,x_particleIndex/;indexCreQ[x]->createParticleIndex[x[[1]],x[[2]]] ];
+    Cases[a,x_particleIndex/;indexCreQ[x]->indexLight[x] ];
 annIndices[a_SQS] :=
-    Reverse[Cases[a,x_particleIndex/;indexAnnQ[x]->createParticleIndex[x[[1]],x[[2]]] ]];
+    Reverse[Cases[a,x_particleIndex/;indexAnnQ[x]->indexLight[x] ]];
 
 
 (* ::Section:: *)
@@ -356,13 +370,73 @@ flattenSQM[a_SQM] :=
         result = Prepend[result,OHead[a[[1]],a[[4]]]];
         Return[result];
     ];
+    
+    
+(* selects bra/ket indices from SQM 
+	while the indexType was droped
+*)
+braIndices[a_SQM] :=
+	Cases[a,x_particleIndex/;indexBraQ[x]->indexLight[x] ];
+    
+ketIndices[a_SQM] :=
+	Cases[a,x_particleIndex/;indexKetQ[x]->indexLight[x] ];
+
+(*
+the following two functions are used to deal with \Eta SQM in MultiConfigution
+*)
+
+(* expand \eta to \lamda and \delta *)
+expandEta[a_SQM] := 
+	Module[{bra, ket, result},
+   		bra = braIndices[a];
+   		ket = ketIndices[a];
+   		result = Plus[deltaIndex[bra[[1]], ket[[1]]], -createSQM["\[Lambda]", bra, ket, antisymm] ];
+		Return[result];
+   ];
+
+(* expand every \eta in expr *)
+expandExp[expr_] :=
+	expr /. x_SQM /; x[[1, 1]] == "\[Eta]" -> expandEta[x]
 
 
+(* convert cumulant to density matricies *)
+(* this function is not universal,
+	it only works for rank 1 and 2 cumulant
+*)
+convertLambda[a_SQM] :=
+	Module[{bra, ket, result},
+		bra = braIndices[a];
+		ket = ketIndices[a];
+		Assert[ Length[bra] === Length[ket] ];
+		If [ Length[bra] === 1,	 
+			result = createSQM["\[Gamma]",bra,ket,antisymm];
+			Return[result]
+		];
+		If [Length[bra] === 2,
+			result = createSQM["\[Gamma]",bra,ket,antisymm] - createSQM["\[Gamma]",{bra[[1]]},{ket[[1]]},antisymm]*createSQM["\[Gamma]",{bra[[2]]},{ket[[2]]},antisymm] 
+			+ createSQM["\[Gamma]",{bra[[1]]},{ket[[2]]},antisymm]*createSQM["\[Gamma]",{bra[[2]]},{ket[[1]]},antisymm]; 
+			Return[result]
+		];
+		If[ Length[bra] > 2 ,
+			Return[a]
+		];
+	];
+
+convertExp[expr_] :=
+	expr /. x_SQM /; x[[1,1]] == "\[Lambda]" -> convertLambda[x]
 
 (* ::Section:: *)
 (* Visualize function *)
 
+(* these functions display particleIndex in string *)
 
+visualizeIndex[a_particleIndex] :=
+	a[[1]];
+
+Format[particleIndex[a__],TraditionalForm] :=
+    visualizeIndex[particleIndex[a]];
+    
+    
 (* these functions display SQ expressions in tensor notation *)
 visualizeSQE[a_*b_] :=
     visualizeSQE[a]*visualizeSQE[b];
@@ -372,18 +446,24 @@ visualizeSQE[a_^n_Integer] :=
     visualizeSQE[a]^n;
 visualizeSQE[a_+b_] :=
     visualizeSQE[a]+visualizeSQE[b];
-visualizeSQE[a_/;(Head[a]=!=SQS&&Head[a]=!=deltaIndex&&Head[a]=!=SQM)] :=
+visualizeSQE[a_/;(Head[a]=!=SQS&&Head[a]=!=deltaIndex&&Head[a]=!=SQM&&Head[a]=!=mSQS)] :=
     a;
 visualizeSQE[a_deltaIndex] :=
     Subsuperscript["\[Delta]",a[[1,1]],a[[2,1]] ];
 
 visualizeSQE[a_SQS] :=
-    Module[ {bodyLabel,nsup,nsub,inds,i},
+    Module[ {bodyLabel,i,supInds,subInds},
 (* convention labels strings normal-ordered wrt to nonphysical vacuum as tilde{a} *)
+
         bodyLabel = If[ SeQuantVacuum==SeQuantVacuumChoices["Physical"],
                         "a",
                         "\[ATilde]"
+        			];
+       bodyLabel = If[ SeQuantVacuum==SeQuantVacuumChoices["MultiConfiguration"],
+                        "\[ATilde]",
+                         "a"
                     ];
+
         supInds = "";
         subInds = "";
         Do[
@@ -395,8 +475,30 @@ visualizeSQE[a_SQS] :=
         Return[Subsuperscript[bodyLabel,subInds,supInds]]
     ];
 
+visualizeSQE[a_mSQS] :=
+    Module[ {sqs,bodyLabel,i,supInds,subInds},
+    	If [ Length[a[[2]]] === 0,
+    		Return[a[[2]]]
+    	];
+        bodyLabel = If[ a[[1]] === normalOrder[True],
+                        OverTilde["a"],
+                        "a"
+                    ];
+        sqs = a[[2]];
+        supInds = "";
+        subInds = "";
+        Do[
+            If[ Cases[sqs[[i]],_indexType][[1,1]]===cre,
+                supInds = StringJoin[supInds,sqs[[i,1]] ],
+                subInds = StringJoin[sqs[[i,1]],subInds ]
+            ],
+            {i,1,Length[sqs] }
+        ];
+        Return[Subsuperscript[bodyLabel,subInds,supInds]]
+    ];
+    
 visualizeSQE[a_SQM] :=
-    Module[ {bodyLabel,nsup,nsub,inds,i},
+    Module[ {bodyLabel,i,supInds,subInds},
         bodyLabel = a[[1,1]];
         supInds = "";
         subInds = "";
@@ -415,6 +517,8 @@ Format[SQM[a__],TraditionalForm] :=
     visualizeSQE[SQM[a]];
 Format[SQS[a__],TraditionalForm] :=
     visualizeSQE[SQS[a]];
+Format[mSQS[a__],TraditionalForm] :=
+    visualizeSQE[mSQS[a]];
 
 
 
@@ -431,7 +535,7 @@ contractSQS contracts a List of SQ strings of operators
 deltaIndex is our representation of Kroneker delta
 *)
 contractIndex[L_particleIndex,R_particleIndex] :=
-    Module[ {iL,iR,spaceL,spaceR,typeL,typeR, fermiL, fermiR,intIndex},
+    Module[ {typeL,typeR, fermiL, fermiR,intIndex,result},
     	(* check if particles are the same *)
         typeL = Cases[L[[2]],_particleType];
         typeR = Cases[R[[2]],_particleType];
@@ -499,6 +603,15 @@ contractIndex[L_particleIndex,R_particleIndex] :=
             Return[deltaIndex[Drop[R,{3}],Drop[L,{3}] ] ]
         ];
     ];
+
+
+(* contractIndex function used in MultiConfiguration
+	return True if it is nonzero contration
+	return False if it is zero contraction
+*)
+
+contractIndex[a_List] := 
+	!MemberQ[a, y_particleIndex /; spaceWRTFermiLevel[indexSpace[y]] === +1];
 
 (* if a has member deltaIndex b *)
 deltaQ[a_,b_deltaIndex] :=
@@ -578,11 +691,14 @@ uniqueCR[t_Plus,c_Plus] :=
        result += normalOrderedForm[str] + contraction[i,j]*contractSQS[str/ij]
 
 *)
+
 contractSQS[str:NCM[__SQS],ptype_particleType,contractOptions_List] :=
-    Module[ {result,sqsL,sqsR,indexL,indexR,indL,indR,iR,indRoff,strLoff,contr1,contr2,newstr,sqsLlast,sqsLfirst,indLfirst,indLlast,newcontrib},
+    Module[ {result,newcontractOptions,sqsL,sqsR,indexL,indexR,indL,indR,iR,indRoff,strLoff,contr1,contr2,newstr,sqsLlast,sqsLfirst,indLfirst,indLlast,newcontrib,f,nstr},
+    	
         If[ Depth[str]==2,
             Return[CR[1,1]]
         ];
+        
         If[ SeQuantDebugLevel>=5,
             Print["called contract SQS for str=",str//TraditionalForm," ptype=",ptype//TraditionalForm]
         ];
@@ -603,15 +719,61 @@ contractSQS[str:NCM[__SQS],ptype_particleType,contractOptions_List] :=
 
         (*Cannot contract single string*)
         If[ Length[str]==1,
-            result = If[ !(fullContract/.contractOptions),
+        	If [ SeQuantVacuum==SeQuantVacuumChoices["MultiConfiguration"],
+            	result = If[ !(finalfullContract/.contractOptions),
                          CR[1,str[[1]]],
                          0
-                     ];
+                     	],
+            	result = If[ !(fullContract/.contractOptions),
+                         CR[1,str[[1]]],
+                         0
+                     	]
+        	];
             Return[result]
         ];
+        
         If[ SeQuantDebugLevel>=7,
             Print["in contractSQS: dropped all empty strings str=",str//TraditionalForm]
         ];
+
+    	nstr = Length[str];
+    	If [ SeQuantVacuum==SeQuantVacuumChoices["MultiConfiguration"],
+    		If [ nstr === 2,
+				(* If the last contraction, do fullContraction if finalfullContraction is True  *)
+				If [ finalfullContract/. contractOptions,
+    				newcontractOptions = Cases[contractOptions, a_ /; FreeQ[a, fullContract]];
+    				newcontractOptions = Append[ newcontractOptions, fullContract->True ],
+    				newcontractOptions = Cases[contractOptions, a_ /; FreeQ[a, fullContract]];
+    				newcontractOptions = Append[ newcontractOptions, fullContract->False ]
+				];    			
+    			result = contractSQS[str[[1]],str[[2]],newcontractOptions];
+    			Return[result],
+    			
+    			
+    			(* If not the last contraciton, do not do fullContraction *)
+    			If [ fullContract/. contractOptions,
+    				newcontractOptions = Cases[contractOptions, a_ /; FreeQ[a, fullContract]];
+    				newcontractOptions = Append[ newcontractOptions, fullContract->False ],
+    				newcontractOptions = contractOptions
+				];    
+    			result = contractSQS[str[[1]],str[[2]], newcontractOptions];
+    			newstr = Take[ str, {3,nstr}];
+    			f[a_CR] := (
+    				If[ a[[2]] === 1,
+    					CR[ a[[1]], newstr ],
+    					CR[ a[[1]], a[[2]]**newstr ]	
+    				]
+    				);
+    			result = Map[f, result];
+    			
+    			If[ SeQuantDebugLevel>=5,
+    				Print["new contraction    ", result//TraditionalForm];
+        		];
+    			
+    			result = contractSQS[result, ptype, newcontractOptions]
+    		];
+			Return[result];
+    	];
 
         (*Find the first string that has an index of ptype*)
         indRoff = 0;
@@ -753,10 +915,13 @@ contractSQS[str:NCM[__SQS],ptype_particleType,contractOptions_List] :=
         ];
         Return[result];
     ];
+    
 contractSQS[NCM[],_particleType,_List] :=
     CR[1,1];
+    
 contractSQS[0,_particleType,_List] :=
     0;
+    
 (*contractSQS is distributive*)
 contractSQS[str_Plus,ptype_particleType,contractOptions_List] :=
     Module[ {result,nterms},
@@ -776,18 +941,36 @@ contractSQS[str_CR,ptype_particleType,contractOptions_List] :=
         result = factorIntoCR[str[[1]],result];
         Return[result];
     ];
+    
 (*contracting a single string is easy*)
 contractSQS[a_SQS,ptype_particleType,contractOptions_List] :=
-    If[ (fullContract/.contractOptions),
-        0,
-        CR[1,a]
+    If[ SeQuantVacuum == SeQuantVacuumChoices["MultiConfiguration"],
+    	Print [ contractOptions ];
+    	If[ (finalfullContract/.contractOptions),
+        	0,
+        	CR[1,a]
+    	],
+    	If[ (fullContract/.contractOptions),
+        	0,
+        	CR[1,a]
+    	]
     ];
+
 
 (*This is a top-level string contraction routine that applies contractions to each particle type*)
 contractSQSNTypes[str:NCM[__SQS],contractOptions_List] :=
-    Module[ {result,pfac,nstr,ind,ptypes,ntypes,intermedOptions},
+    Module[ {result,nstr,ind,ptypes,ntypes,intermedOptions},
+    	
+    	If[ SeQuantVacuum == SeQuantVacuumChoices["MultiConfiguration"],
+    		intermedOptions = Cases[contractOptions, a_ /; MemberQ[a, fullContract]];
+    		intermedOptions = Append [ intermedOptions, finalfullContract-> fullContract/. intermedOptions];
+    		result = contractSQSNstr[str,intermedOptions];
+    		Return[result];
+    	];
+    	
         nstr = Length[str];
         ptypes = {};
+        
         Do[
         	ptypes = Append[ptypes,indexTypesSQS[str[[ind]]]],
         	{ind,1,nstr}
@@ -815,14 +998,269 @@ contractSQSNTypes[str:NCM[__SQS],contractOptions_List] :=
         (*Remove CR heads*)
         result = Replace[result,CR->Times,-1,Heads->True];
         If[ SeQuantDebugLevel>=4,
-            Print["Normal-looking result after the final contraction is: ",result//TraditionalForm]
+            Print["Normal-looking result after the final contraction is: ",result //TraditionalForm]
         ];
         Return[result];
     ];
+    
 contractSQSNTypes[{},_particleType,_List] :=
     1;
 
+(* This is a top-level string contraction routine that applies contractions to MultiConfiguration *)
+contractSQSNstr[str:NCM[___SQS], contractOptions_List] :=
+	Module[ {result, ptype },
+		ptype = particleType[default];
+		result = contractSQS[str,ptype,contractOptions];
+		(*Remove CR heads*)
+        result = Replace[result,CR->Times,-1,Heads->True];
+        Return[result];
+	];
 
+
+(* contraction function for MultiConfiguration *)
+
+contractSQS[L_SQS, R_SQS, contractOptions_List] := 
+	Module[ {l, r, ls, rs, lu, ll, ru, rl, ui, li, n, pt, lenp, contras, lencons, contra, original, sign, lencon, tmpi, tmpleni, cross, tmpcre, tmpann, tmpcontra, tmpop, tmpresult, ptmpresult, result },
+    
+    If[ SeQuantDebugLevel >= 5,
+        Print [ "Contraction \n", L //TraditionalForm , R //TraditionalForm];
+    ];
+    If[ SeQuantDebugLevel >= 6,
+    	Print [ "contraction type \n" , "fullContract   ->  ", fullContract/. contractOptions];
+    ];
+    
+    (* left side SQS *)
+    ls = L;
+    (* right side SQS *)
+    rs = R;
+    (* left side upper indices *)
+    lu = creIndices[ls];
+    (* left side lowwer indices *)
+    ll = annIndices[ls];
+    l = Join[lu, ll];
+    (* right side upper indices *)
+    ru = creIndices[rs];
+    (* right side lowwer indices *)
+    rl = annIndices[rs];
+    r = Join[ru, rl];
+    (* upper indices *)
+    ui = Join[lu, ru];
+    (* lower indices *)
+    li = Join[ll, rl];
+    
+    (* original sequence *)
+    original = Join[ui, Reverse[li] ];
+    n = Length[ui];
+    Assert [ n === Length[li] ];
+    pt = contractionPattern[n];
+    lenp = Length[pt];
+    
+    (* create all possible contractin patterns *)
+    contras = {};
+    Do[
+        contras = Join[ contras, uniquePattern[ui, li, pt[[i]]] ];
+            ,{i,1,lenp}
+        ];
+    lencons = Length[contras];
+    result = Plus[];
+    
+    (* loop over each contraction pattern *)
+    Do [
+        contra = contras[[i]];
+        If[ SeQuantDebugLevel >= 6,
+            Print [ " contraction pattern \n" , contra //TraditionalForm ]
+        ];
+        sign = signrule[original, contra];
+        If[ SeQuantDebugLevel >= 7,
+            Print [ " permutation of this pattern:    " , sign ]
+        ];
+        lencon = Length[contra];
+        (* test if cross contraction *)
+        cross = True;
+        (* first include zero-rank contraciton and full-rank contraction *)
+        If[ lencon === 1,
+            cross = True,
+            Do [
+                tmpi = contra[[j]];
+                If[ Length[ Intersection[l , contra[[j]]] ] === Length [ contra[[j]] ] || Length[ Intersection[r , contra[[j]]] ] === Length [ contra[[j]] ],
+                    cross = False
+                ];
+                ,{j,1,lencon}
+            ];
+        ];
+        (* loop over each combination and create contraction*)
+            
+        (* full contraction *)
+        If[ cross === True,
+            tmpresult = 1;
+            Do [
+                tmpleni = Length[contra[[j]] ]/2;
+                tmpcre = Take[contra[[j]], tmpleni ];
+                tmpann = Take[contra[[j]], - tmpleni];
+                If[ contractIndex[ contra[[j]] ],
+                    If[ Length[ contra[[j]] ]=== 2 && Length[ Intersection[ru, contra[[j]]] ] > 0 && Length[ Intersection[ll, contra[[j]]] ] > 0,
+                        tmpcontra = (-1) * createSQM["\[Eta]",tmpann, tmpcre, nonsymm],
+                        tmpcontra = createSQM["\[Lambda]",tmpann, tmpcre, antisymm]
+                    ],
+                    If[ Length[ contra[[j]] ]=== 2 && Length[ Intersection[ru, contra[[j]]] ] > 0 && Length[ Intersection[ll, contra[[j]]] ] > 0,
+                        tmpcontra = (-1) * deltaIndex[tmpann[[1]], tmpcre[[1]]],
+                        tmpcontra = 0
+                    ]
+                ];
+                
+                If[ SeQuantDebugLevel >= 7,
+                    Print [ "       result of contraction:  " , tmpcre //TraditionalForm, "  and  " , tmpann //TraditionalForm, "  =  ", tmpcontra //TraditionalForm ]
+                ];
+                
+                tmpresult = tmpresult * tmpcontra;
+                ,{j,1,lencon}
+            ];
+            
+            If[ tmpresult =!= 0,
+                tmpresult = CR[ sign * tmpresult, 1]
+            ];
+            
+            If[ SeQuantDebugLevel >= 6,
+                Print[ " full contraction in this pattern:    ", tmpresult //TraditionalForm ]
+            ];
+            
+            result = Plus[result, tmpresult],
+            
+            If[ SeQuantDebugLevel >= 6,
+                Print[ " full contraction in this pattern:    ",  0 ]
+            ];
+        ];
+        
+        (* partial contraction *)
+        If[ !fullContract/. contractOptions,
+            tmpresult = Plus[];
+            Do[
+                tmpleni = Length[contra[[j]] ] /2;
+                tmpcre = Take[contra[[j]], tmpleni ];
+                tmpann = Take[contra[[j]], - tmpleni];
+                tmpop = createSQS[tmpcre, tmpann];
+                
+                If[ SeQuantDebugLevel >= 7,
+                    Print [ "       result of the operator:  " , tmpcre //TraditionalForm, "  and  " , tmpann //TraditionalForm, "  =   ", tmpop //TraditionalForm ]
+                ];
+                
+                cross = True;
+                ptmpresult = 1;
+                Do[
+                    If[ k =!= j,
+                        tmpleni = Length[contra[[k]] ]/2;
+                        tmpcre = Take[contra[[k]], tmpleni ];
+                        tmpann = Take[contra[[k]], - tmpleni];
+                        
+                        If[ Length[ Intersection[l , contra[[k]]] ] === Length [ contra[[k]] ] || Length[ Intersection[r , contra[[k]]] ] === Length [ contra[[k]] ],
+                            cross = False
+                        ];
+                        
+                        If[ cross === True,
+                            If[ contractIndex[ contra[[k]] ],
+                                If[ Length[ contra[[k]] ]=== 2 && Length[ Intersection[ru, contra[[k]]] ] > 0 && Length[ Intersection[ll, contra[[k]]] ] > 0,
+                                    tmpcontra =  (-1) * createSQM["\[Eta]",tmpann, tmpcre, nonsymm],
+                                    tmpcontra =  createSQM["\[Lambda]",tmpann, tmpcre, antisymm]
+                                ],
+                                If[ Length[ contra[[k]] ]=== 2 && Length[ Intersection[ru, contra[[k]]] ] > 0 && Length[ Intersection[ll, contra[[k]]] ] > 0,
+                                    tmpcontra =  (-1) * deltaIndex[tmpann[[1]], tmpcre[[1]]],
+                                    tmpcontra =  0
+                                ]
+                            ],
+                            tmpcontra =  0
+                        ];
+                        
+                        ptmpresult = ptmpresult * tmpcontra;
+                        
+                        If[ SeQuantDebugLevel >= 7,
+                            Print [ "       result of contraction:  " , tmpcre //TraditionalForm, "  and  " , tmpann //TraditionalForm, "  =  ", tmpcontra //TraditionalForm ]
+                        ]
+                    ];     
+                	,{k,1,lencon}    
+             	];
+             	
+                If[ ptmpresult =!= 0,
+                    tmpresult = Plus[tmpresult, CR[sign*ptmpresult,tmpop]]
+                ];
+                ,{j,1,lencon}
+            ];
+            
+            tmpresult = Plus[tmpresult];
+            
+            If[ SeQuantDebugLevel >= 6,
+                Print[ " partial contraction in this pattern:    ", tmpresult //TraditionalForm ]
+            ];
+            result = Plus[result,  tmpresult]
+        ];
+        ,{i,1,lencons}
+    ];
+    
+    If[ SeQuantDebugLevel >= 5,
+        Print [ "contraction  result   ", result // TraditionalForm];
+    ];
+    
+    Return[result];
+];
+
+
+(* functions for contraction pattern for MultiConfiguration *)
+
+
+(* contraction number pattern in MultiConfiguration *)
+contractionPattern[n_Integer] := 
+			 IntegerPartitions[n]
+			 
+			 
+(* function to create unique contraction pattern for MultiConfiguration *)
+uniquePattern[cres_List, anns_List, pattern_List] := 
+	Module[{lc,la, lp, sump, clist, alist,  tmpresult, result},
+		lc = Length[cres];
+		la = Length[anns];
+		Assert[ lc === la ];
+		lp = Length[pattern];
+		sump = Total[pattern];
+		Assert[ lc === sump ];
+		If [ lp === 1,
+			Return[List[List[Join[cres, anns]]] ]
+		];
+		clist = Permutations[cres];
+		alist = Permutations[anns];
+		tmpresult = combinePattern[clist, alist, pattern];
+		result = DeleteDuplicates[tmpresult];
+		Return[result];
+	];
+
+(* combine the pattern of creation indecies and annihilation indecies *) 
+combinePattern[creslist_List, annslist_List, pattern_List] :=
+	Module[{lc, la, lp, csub, asub, ctmp, atmp, rtmp, count, tmpresult, result},
+		lc = Length[creslist];
+		la = Length[annslist];
+		Assert [ lc === la ];
+		lp = Length[pattern];
+		result = {};
+		Do [
+			csub = creslist[[i]];
+			Do[
+				asub = annslist[[j]];
+				count = 1;
+				tmpresult = {};
+				Do [
+					ctmp = Sort[Take[csub, {count, count-1 + pattern[[k]]} ]];
+					atmp = Sort[Take[asub, {count, count-1 + pattern[[k]]} ]];
+					rtmp = Join[ctmp, atmp];
+					tmpresult = Append[tmpresult, rtmp];
+					count += pattern[[k]];
+					,{k,1,lp}
+				];
+				tmpresult = Sort[tmpresult];
+				result = Append[result, tmpresult];
+				,{j,1,la}
+			];
+			,{i,1,la}	
+		];
+		Return[result];
+	];
+	
 (* ::Section:: *)
 (* Normal Order *)
 
@@ -833,7 +1271,7 @@ The result is a CR of the form CR[sign,SQS]
 *)
 
 normalOrderedForm[str:NCM[__SQS],ptype_particleType] :=
-    Module[ {rstr,indL,permfac},
+    Module[ {rstr,permfac,ninds,ind,index,},
 
 		(* single string is by definition normal ordered *)
         If[ Length[str]==1,
@@ -888,7 +1326,6 @@ normalOrderedForm[str:NCM[__SQS],ptype_particleType] :=
         		If[ SeQuantDebugLevel>=8,
             		Print["in normalOrderedForm: after append ind=",ind//TraditionalForm]
         		];
-        
         	];
        		If[ SeQuantDebugLevel>=8,
             	Print["in normalOrderedForm: moving on to next substring"]
@@ -926,6 +1363,156 @@ chomp[str:NCM[__SQS]] :=
         Return[rstr];
     ];
 
+(* normal order for MultiConfiguration *)
+
+
+normalOrderedForm[a_/;Head[a]=!=mSQS] :=
+	a
+
+normalOrderedForm[a_mSQS] := 
+	Module[{sqs, cres, anns, pt, n,lp, lcs, lc, original, sign, contras, contra, tmplc, tmpann, tmpcre, tmpcontra, tmpop, tmpresult, ptmpresult, result},
+		If [ a[[1]] === inorder,
+			Return[a[[2]]]
+		];
+		If[ SeQuantDebugLevel>=8,
+            Print["normal ordering   ", a //TraditionalForm]
+        ];
+		sqs = a[[2]];
+		cres = creIndices[sqs];
+		anns = annIndices[sqs];
+		original = Join[cres, Reverse[anns]];
+		n = Length[cres];
+		Assert [ n === Length[anns] ];
+		pt = contractionPattern[n];
+		lp = Length[pt];
+		contras = {};
+		Do[
+			contras = Join[ contras, uniquePattern[cres, anns, pt[[i]]] ];
+			,{i,1,lp}
+		];
+	    lcs = Length[contras];	
+	    result = Plus[];
+	    Do [
+	    	contra = contras[[i]];
+	    	
+	    	If [ SeQuantDebugLevel >= 9,
+        		Print [ " contraction pattern \n" , contra //TraditionalForm ]
+        	];
+
+	    	sign = signrule[original, contra];
+	    	
+	    	If [ SeQuantDebugLevel >= 10,
+        		Print [ " permutation of this pattern:    " , sign ]
+        	];
+        	
+	    	lc = Length[ contra ];
+	    	tmpresult = 1;
+			(* full contraction *)
+	    	Do [
+	    		tmplc = Length[contra[[j]] ]/2;
+	    		tmpcre = Take[contra[[j]], tmplc ];
+	    		tmpann = Take[contra[[j]], - tmplc];
+	    		
+	    		If [ contractIndex[ contra[[j]] ],
+	    			tmpcontra = createSQM["\[Lambda]",tmpann, tmpcre,antisymm],
+	    			tmpcontra = 0
+	    		];
+	    		
+	    		If [ SeQuantDebugLevel >= 10,
+        			Print [ "       result of contraction:  " , tmpcre //TraditionalForm, "  and  " , tmpann //TraditionalForm, "  =  ", tmpcontra //TraditionalForm ]
+        		];
+        		
+	    		tmpresult = tmpresult * tmpcontra;
+	    		,{j, 1, lc}
+	    	];
+	    	
+	    	If [ SeQuantDebugLevel >= 9,
+            	Print[ " full contraction in this pattern:    ", sign * tmpresult //TraditionalForm ]
+            ];
+            
+	    	result = Plus[result, sign*tmpresult];
+	    	(* partial contraction *)
+	    	tmpresult = Plus[];
+	    	Do[
+	    		tmplc = Length[contra[[j]] ] /2;
+	    		tmpcre = Take[contra[[j]], tmplc ];
+	    		tmpann = Take[contra[[j]], - tmplc];
+	    		tmpop = createSQS[tmpcre, tmpann];	
+	    		
+	    		If [ SeQuantDebugLevel >= 10,
+        			Print [ "       result of the operator:  " , tmpcre //TraditionalForm, "  and  " , tmpann //TraditionalForm, "  =   ", tmpop //TraditionalForm ]
+        		];
+        	
+        		ptmpresult = 1;
+        		
+	    		Do[
+	    			If [ k =!= j,
+	    				tmplc = Length[contra[[k]] ]/2;
+	    				tmpcre = Take[contra[[k]], tmplc ];
+	    				tmpann = Take[contra[[k]], - tmplc];
+	    				If [ contractIndex[contra[[k]]],
+	    					tmpcontra = createSQM["\[Lambda]",tmpann, tmpcre, antisymm],
+	    					tmpcontra = 0
+	    				];			
+	    				
+	    				If [ SeQuantDebugLevel >= 10,
+        					Print [ "       result of contraction:  " , tmpcre //TraditionalForm, "  and  " , tmpann //TraditionalForm, "  =  ", tmpcontra //TraditionalForm ]
+        				];
+        				
+		    			ptmpresult = ptmpresult * tmpcontra
+	    			]; 	
+	    			,{k,1,lc}	
+	    		];
+        		
+	    		tmpresult = Plus[tmpresult, sign*ptmpresult*tmpop];
+	    		,{j,1,lc}
+	    	];
+	    	
+	    	If [ SeQuantDebugLevel >= 9,
+        		Print[ " partial contraction in this pattern:    ", tmpresult //TraditionalForm ]
+        	];
+	    	result = Plus[result, tmpresult];
+	    	,{i, 1, lcs}
+	    ];
+	    (* zeroDensity[result]; *)
+	    
+	    If[ SeQuantDebugLevel>=8,
+            Print["normal ordered form   ", result //TraditionalForm]
+        ];
+        
+		Return[result];
+	];
+	
+(* function to deal with the sign rule for MultiConfiguration *)
+
+(* parity of permutation for sign rule *)
+permutationSignature[perm_?PermutationCyclesQ] := 
+ Apply[Times, (-1)^(Length /@ First[perm] - 1)]
+
+(* sign rule function for MultiConfiguration *)
+signrule[original_List, pattern_List] := 
+ 	Module[{lp,cres, anns, new, l1, l2, sign}, 
+  		lp = Length[ pattern ];
+  		cres = {};
+  		anns = {};
+  		Do[
+  			cres = Join[cres, Take[pattern[[i]], Length[pattern[[i]]]/2  ] ];
+  			anns = Join[anns, Take[pattern[[i]], -Length[pattern[[i]]] /2  ] ];
+  			,{i, 1, lp}
+  		];
+  		new = Join[cres, Reverse[anns] ];
+  		If [ new === original,
+			Return[1];  			
+  		];
+  		l1 = Length[original];
+   		l2 = Length[new];
+   		Assert[l1 === l2];
+   		sign = permutationSignature[ FindPermutation[original, new] ];
+   		Return[sign];
+   	];
+
+
+
 
 (* ::Section:: *)
 (* Wick Class  *)
@@ -948,7 +1535,7 @@ defaultWickOptions = {
 Protect[defaultWickOptions];
 
 wick[expr_,extInds_List,wickOptions_List:defaultWickOptions] :=
-    Module[ {result,options,intinds,extinds},
+    Module[ {result, newexpr, options, intinds, extinds},
         options = Cases[wickOptions,x_/;!FreeQ[x,fullContract]];
         intinds = Sort[indexListOut[expr,extInds]];
         If[ SeQuantDebugLevel>=1,
@@ -961,7 +1548,60 @@ wick[expr_,extInds_List,wickOptions_List:defaultWickOptions] :=
         If[ SeQuantDebugLevel>=1,
             Print["External indices:",extinds//TraditionalForm];
         ];
-        result = lowwick[expr,options];
+        
+        (* 
+        in MultiConfiguration, check mSQS if in normal order form. 
+        If not, convert it into nomal order form
+         *)
+        If[ SeQuantVacuum === SeQuantVacuumChoices["MultiConfiguration"],
+        	
+        	If[ SeQuantDebugLevel>=1,
+            	Print ["Before normal ordering  ", expr //TraditionalForm ];
+        	];
+        	
+        	Unprotect[NonCommutativeMultiply];
+        	newexpr = Map[normalOrderedForm,expr,Infinity];
+        	Protect[NonCommutativeMultiply];
+        	
+        	If[ SeQuantDebugLevel>=1,
+            	Print ["After normal ordering  ", newexpr //TraditionalForm ];
+        	];
+        ];
+        
+        (* do wick theorem here *)
+        If[ SeQuantVacuum === SeQuantVacuumChoices["MultiConfiguration"],
+        	result = lowwick[newexpr, options],	
+        	result = lowwick[expr,options]
+        ];
+        
+        If[ SeQuantDebugLevel>=1,
+            Print["After wick"];
+            Print[result//TraditionalForm];
+        ];
+        
+        (* expand result here*)
+        If[ SeQuantVacuum === SeQuantVacuumChoices["MultiConfiguration"],
+        	result = expandExp[result];
+        	result = Map[Distribute,result,{0,Infinity}];
+        	If[ SeQuantDebugLevel>=1,
+            	Print["After Expand"];
+            	Print[result//TraditionalForm];
+        	];
+        ];
+        
+(*		(* convert cumulant to density
+        	only works for cumulant of rank 1 and 2
+        *)
+        If[ SeQuantVacuum === SeQuantVacuumChoices["MultiConfiguration"],
+        	result = convertExp[result];
+        	result = Map[Distribute,result,{0,Infinity}];
+        	If[ SeQuantDebugLevel>=1,
+            	Print["After Convert"];
+            	Print[result//TraditionalForm];
+        	];
+        ];*)
+        
+        
         (* New internale indices may have been generatd by lowwick -- recompute *)
         intinds = Sort[indexListOut[result,extInds]];
         If[ SeQuantDebugLevel>=1,
@@ -979,6 +1619,7 @@ wick[expr_,extInds_List,wickOptions_List:defaultWickOptions] :=
             Print["After reduceWick"];
             Print[result//TraditionalForm]
         ];
+        
         (* New internale indices may have been generatd by reduceWick -- recompute *)
         intinds = Sort[indexListOut[result,extInds]];
         If[ SeQuantDebugLevel>=1,
@@ -1000,9 +1641,17 @@ wick[expr_,extInds_List,wickOptions_List:defaultWickOptions] :=
             Print["After reindex"];
             Print[result//TraditionalForm]
         ];
+
+                
         Return[result];
     ];
 
+
+(* commutator
+	it is just a**b - b**a at current stage
+ *)
+commute[a_, b_] :=
+	a**b - b**a
 
 (* ::Subsection:: *)
 (* lowwick funciton *)
@@ -1031,10 +1680,8 @@ lowwick[a_+b_,contractOptions_List] :=
 lowwick[(a_/;FreeQ[a,SQS])*b_,contractOptions_List] :=
     a*lowwick[b,contractOptions];
 
-(*mtbegin*)
 lowwick[a_SQM,contractOptions_List] :=
     a;
-(*mtend*)
 
 lowwick[str_SQS,contractOptions_List] :=
     contractSQSNTypes[NCM[str],contractOptions];
@@ -1056,7 +1703,7 @@ lowwick[(str_NCM/;!FreeQ[str,Plus]),contractOptions_List] :=
     ];
 
 lowwick[str_NCM,contractOptions_List] :=
-    Module[ {result,containsSQS,f,i},
+    Module[ {result,containsSQS,f},
         Clear[containsSQS];
         Clear[f];
         If[ SeQuantDebugLevel>=6,
@@ -1124,7 +1771,7 @@ reduceWick[expr_,externalIndices_List:{},internalIndices_List:{},reduceOptions_L
     ];
 
 lowReduceWick[expr_,externalIndices_List,internalIndices_List,reduceOptions_List] :=
-    Module[ {deltaReplInt,deltaReplExtA,deltaReplExtB,result,indI,indJ,spaceI,spaceJ,indK,extI,ipairIJ,havedeltaIJ,havedeltaJI},
+    Module[ {deltaReplInt,deltaReplExtA,deltaReplExtB,result,indI,indJ,spaceI,spaceJ,spaceK,indK,extI,pairIJ,havedeltaIJ,havedeltaJI},
         deltaReplInt = {};
         deltaReplExtA = {};
         deltaReplExtB = {};
@@ -1168,7 +1815,7 @@ lowReduceWick[expr_,externalIndices_List,internalIndices_List,reduceOptions_List
         If[ SeQuantDebugLevel>=2,
             Print["In lowReduceWick:  int-int delta replacement = ",deltaReplInt//TraditionalForm];
         ];
-        Do[
+        Do[ (* loop over a (ext,int) pair *)
         	indI = externalIndices[[extI]];
         	spaceI = indexSpace[indI];
         	Do[
@@ -1180,12 +1827,11 @@ lowReduceWick[expr_,externalIndices_List,internalIndices_List,reduceOptions_List
             		Continue[]
         		];
         		spaceK = Intersection[spaceI,spaceJ];
-        		paceK = Intersection[spaceI,spaceJ];
-        		If[ spaceI===spaceK,
-            		indK = indI,
+        		indK = If[ spaceI===spaceK,
+            		indI,
             		If[ spaceJ===spaceK,
-                		indK = indJ,
-                		indK = createParticleIndex[spaceK]
+                		indJ,
+                		createParticleIndex[spaceK]
             		]
         		];
         		pairIJ = {indK,indI,indJ};
@@ -1220,6 +1866,7 @@ lowReduceWick[expr_,externalIndices_List,internalIndices_List,reduceOptions_List
         	indK = deltaReplExtA[[i,1]];
         	indI = deltaReplExtA[[i,2]];
         	indJ = deltaReplExtA[[i,3]];
+
         	result = result/.deltaIndex[a_,b_]/;indexEquiv[indI,a]&&indexEquiv[indJ,b] ->1;
         	result = result/.deltaIndex[b_,a_]/;indexEquiv[indI,a]&&indexEquiv[indJ,b] ->1;
         	result = result/.indII_particleIndex:>createParticleIndex[indII,indK[[1]],indK[[2]]]/;((indII[[1]]==indJ[[1]])&&(indII[[2]]==indJ[[2]]));
@@ -1538,7 +2185,7 @@ removeDisconnectedTerms[expr_,externalIndices_List:{},hamiltonianOpers_List:defa
 
 	
 lowRemoveDisconnectedTerms[expr_,externalIndices_List,hamiltonianOpers_List] :=
-    Module[ {intIndices,SQMs,tags,itag,dist,nsqm,hindex,nh,dists,result,listcopy,done,connected},
+    Module[ {intIndices,SQMs,tags,itag,nsqm,hindex,nh,result,listcopy,done,ariadna,noTags},
 (* If there are no SQMs, there are no disconnected terms *)
         If[ FreeQ[expr,SQM],
             Return[expr]
@@ -1628,7 +2275,7 @@ getSQMList[expr_] :=
     ];
 
 tagSQMInList[icurr_,SQMs_List,Tags_List,IIndices_List] :=
-    Module[ {nsqm,inext,ninds,current,iinds,niinds,iind,j,k,result,localtags,inList},
+    Module[ {nsqm,inext,ninds,current,iinds,niinds,iind,j,k,result,localtags},
 (*Print["Will tag element ",icurr," in list ",SQMs//TraditionalForm," current tags are ",Tags];*)
         nsqm = Length[SQMs];
         current = SQMs[[icurr]];
@@ -1743,7 +2390,7 @@ MatchQ[a_NCM,b_SQS] :=
     itemMatchQ[ReplacePart[a,List,0],b];
 
 listMatchQ[a_List,b_List] :=
-    Module[ {af,bf,lb,result},
+    Module[ {af,bf,lb,result,pos},
         If[ Length[b]==0,
             Return[True]
         ];
@@ -1853,6 +2500,7 @@ brillouinExt[expr_] :=
         Return[result];
     ];
 
+
 (*
 Substitutes a second quantized tensor by the corresponding density matrix element.
 *)
@@ -1868,7 +2516,9 @@ zeroDensity[expr_] :=
 
 (* toolkit is ready *)
 Print["SeQuant is loaded and ready...\n"];
-(*EndPackage[]*)
+
+EndPackage[]
+
 
 
 
