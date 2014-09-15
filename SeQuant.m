@@ -611,8 +611,32 @@ contractIndex[L_particleIndex,R_particleIndex] :=
 *)
 
 contractIndex[a_List] := 
-	!MemberQ[a, y_particleIndex /; spaceWRTFermiLevel[indexSpace[y]] === +1];
-
+	Module[{len, bra, ket, spinmatch, tmpresult, result},
+		If [ Depth[a] === 4,
+			result = !MemberQ[a, y_particleIndex /; spaceWRTFermiLevel[indexSpace[y]] === +1];
+			Return[result]
+		];
+		(* for spin free cases *)
+		If [ Depth[a] === 5,
+			tmpresult = !MemberQ[a, y_particleIndex /; spaceWRTFermiLevel[indexSpace[y]] === +1];
+			If[ !tmpresult,
+				Return[tmpresult];
+			];
+			len = Length[a];
+			spinmatch = True;
+			Do[
+				ket = a[[i]];
+				bra = a[[len - i + 1]];
+				If [ bra[[2,-1]] =!= ket[[2,-1]],
+					spinmatch = False;
+					Break[];
+				];
+				,{i,1,len/2}	
+			];
+			result = tmpresult && spinmatch;
+			Return[result];
+		];
+	];
 (* if a has member deltaIndex b *)
 deltaQ[a_,b_deltaIndex] :=
     MemberQ[a,c_deltaIndex/;(indexQ[c,b[[1]] ]&&indexQ[c,b[[2]] ])];
@@ -1103,7 +1127,11 @@ contractSQS[L_SQS, R_SQS, contractOptions_List] :=
                         tmpcontra = createSQM["\[Lambda]",tmpann, tmpcre, antisymm]
                     ],
                     If[ Length[ contra[[j]] ]=== 2 && Length[ Intersection[ru, contra[[j]]] ] > 0 && Length[ Intersection[ll, contra[[j]]] ] > 0,
-                        tmpcontra = (-1) * deltaIndex[tmpann[[1]], tmpcre[[1]]],
+                        (* for spinfree, delta with different spin will become zero *)
+                        If[ Depth[contra[[j]] ] === 5 && tmpann[[1]][[2,-1]] =!= tmpcre[[1]][[2,-1]],
+                        	tmpcontra = 0,
+                            tmpcontra =  (-1) * deltaIndex[tmpann[[1]], tmpcre[[1]]]
+                        ],
                         tmpcontra = 0
                     ]
                 ];
@@ -1163,8 +1191,12 @@ contractSQS[L_SQS, R_SQS, contractOptions_List] :=
                                     tmpcontra =  createSQM["\[Lambda]",tmpann, tmpcre, antisymm]
                                 ],
                                 If[ Length[ contra[[k]] ]=== 2 && Length[ Intersection[ru, contra[[k]]] ] > 0 && Length[ Intersection[ll, contra[[k]]] ] > 0,
-                                    tmpcontra =  (-1) * deltaIndex[tmpann[[1]], tmpcre[[1]]],
-                                    tmpcontra =  0
+                                	(* for spinfree, delta with different spin will become zero *)
+                                	If[ Depth[contra[[k]] ] === 5 && tmpann[[1]][[2,-1]] =!= tmpcre[[1]][[2,-1]],
+                                    	tmpcontra = 0,
+                                    	tmpcontra =  (-1) * deltaIndex[tmpann[[1]], tmpcre[[1]]]
+                                	],	
+                                    	tmpcontra =  0
                                 ]
                             ],
                             tmpcontra =  0
@@ -1271,7 +1303,7 @@ The result is a CR of the form CR[sign,SQS]
 *)
 
 normalOrderedForm[str:NCM[__SQS],ptype_particleType] :=
-    Module[ {rstr,permfac,ninds,ind,index,},
+    Module[ {rstr,permfac,ninds,ind,index},
 
 		(* single string is by definition normal ordered *)
         If[ Length[str]==1,
@@ -1526,9 +1558,11 @@ to be used in such expressions
 *)
 wick::wrongargs = "Wrong arguments given to wick";
 Unprotect[defaultWickOptions];
-defaultWickOptions = {
+defaultWickOptions = 	
+{
 	fullContract->True,
 	noCoincidences->False,
+	useDensity->True,
 	doSums->True,
 	doReindex->True
 };
@@ -1589,17 +1623,17 @@ wick[expr_,extInds_List,wickOptions_List:defaultWickOptions] :=
         	];
         ];
         
-(*		(* convert cumulant to density
+		(* convert cumulant to density
         	only works for cumulant of rank 1 and 2
         *)
-        If[ SeQuantVacuum === SeQuantVacuumChoices["MultiConfiguration"],
+        If[ SeQuantVacuum === SeQuantVacuumChoices["MultiConfiguration"] && useDensity/.wickOptions,
         	result = convertExp[result];
         	result = Map[Distribute,result,{0,Infinity}];
         	If[ SeQuantDebugLevel>=1,
             	Print["After Convert"];
             	Print[result//TraditionalForm];
         	];
-        ];*)
+        ];
         
         
         (* New internale indices may have been generatd by lowwick -- recompute *)
