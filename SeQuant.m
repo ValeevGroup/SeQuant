@@ -413,13 +413,39 @@ convertLambda[a_SQM] :=
 			Return[result]
 		];
 		If [Length[bra] === 2,
-			result = createSQM["\[Gamma]",bra,ket,antisymm] - createSQM["\[Gamma]",{bra[[1]]},{ket[[1]]},antisymm]*createSQM["\[Gamma]",{bra[[2]]},{ket[[2]]},antisymm] 
-			+ createSQM["\[Gamma]",{bra[[1]]},{ket[[2]]},antisymm]*createSQM["\[Gamma]",{bra[[2]]},{ket[[1]]},antisymm]; 
-			Return[result]
+			If [Depth[a] === 4,
+				result = createSQM["\[Gamma]",bra,ket,antisymm] - createSQM["\[Gamma]",{bra[[1]]},{ket[[1]]},antisymm]*createSQM["\[Gamma]",{bra[[2]]},{ket[[2]]},antisymm] 
+					+ createSQM["\[Gamma]",{bra[[1]]},{ket[[2]]},antisymm]*createSQM["\[Gamma]",{bra[[2]]},{ket[[1]]},antisymm]; 
+				Return[result]
+			];
+			If [Depth[a] === 5,
+				result = spinConvertGamma[bra,ket] - spinConvertGamma[{bra[[1]]},{ket[[1]]}]*spinConvertGamma[{bra[[2]]},{ket[[2]]}] 
+					+ spinConvertGamma[{bra[[1]]},{ket[[2]]}]*spinConvertGamma[{bra[[2]]},{ket[[1]]}]; 
+				Return[result]
+			];
 		];
 		If[ Length[bra] > 2 ,
 			Return[a]
 		];
+	];
+	
+spinConvertGamma[bra_List, ket_List] := 
+	Module[{len,tmpbra, tmpket, spinsame, result},
+		len = Length[bra];
+		spinsame = True;
+		Do[
+			tmpbra = bra[[i]];
+			tmpket = ket[[i]];
+			If[ tmpbra[[2,-1]] =!= tmpket[[2,-1]],
+				spinsame = False;
+			];
+			,{i,1,len}
+		];
+		If [ spinsame,
+			result = createSQM["\[Gamma]",bra,ket,antisymm],
+			result = 0;
+		];
+		Return[result];
 	];
 
 convertExp[expr_] :=
@@ -611,27 +637,25 @@ contractIndex[L_particleIndex,R_particleIndex] :=
 *)
 
 contractIndex[a_List] := 
-	Module[{len, bra, ket, spinmatch, tmpresult, result},
+	Module[{bra, ket, spinmatch, tmpresult, result},
 		If [ Depth[a] === 4,
 			result = !MemberQ[a, y_particleIndex /; spaceWRTFermiLevel[indexSpace[y]] === +1];
 			Return[result]
 		];
 		(* for spin free cases *)
+		(* only rank one cumulant will be zero if the spin is different  *)
 		If [ Depth[a] === 5,
 			tmpresult = !MemberQ[a, y_particleIndex /; spaceWRTFermiLevel[indexSpace[y]] === +1];
 			If[ !tmpresult,
 				Return[tmpresult];
 			];
-			len = Length[a];
 			spinmatch = True;
-			Do[
-				ket = a[[i]];
-				bra = a[[len - i + 1]];
+			If[ Length[a] === 2,
+				ket = a[[1]];
+				bra = a[[2]];
 				If [ bra[[2,-1]] =!= ket[[2,-1]],
 					spinmatch = False;
-					Break[];
-				];
-				,{i,1,len/2}	
+				]
 			];
 			result = tmpresult && spinmatch;
 			Return[result];
@@ -1625,6 +1649,7 @@ wick[expr_,extInds_List,wickOptions_List:defaultWickOptions] :=
         
 		(* convert cumulant to density
         	only works for cumulant of rank 1 and 2
+        	cumulant of rank higher than 2 is avoided to be caculated
         *)
         If[ SeQuantVacuum === SeQuantVacuumChoices["MultiConfiguration"] && useDensity/.wickOptions,
         	result = convertExp[result];
