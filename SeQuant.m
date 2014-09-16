@@ -724,6 +724,22 @@ uniqueCR[t_Plus,c_Plus] :=
         Return[uc];
     ];
 
+(* return the number of CR in Plus *)
+numberCR[t_Plus] := 
+	Module[ {len, num},
+		num = 0;
+		len = Length[t];
+		Do[
+			If[ Head[t[[i]] ] === CR,
+				num += 1
+			];
+			,{i,1,len}
+		];
+		Return[num]
+	];
+	
+numberCR[t_CR] := 
+	1;
 
 (* ::Subsection:: *)
 (*  Contract SQS  *)
@@ -812,13 +828,12 @@ contractSQS[str:NCM[__SQS],ptype_particleType,contractOptions_List] :=
     					CR[ a[[1]], a[[2]]**newstr ]	
     				]
     				);
-    			(* when there is only one CR[] result, map function no longer works
-    				if there is only one CR[], the Depth will be 6, otherwise 8
-    			 *)
-    			If [ Depth[result] === 6,
-    				result = f[result],
+    			(* when there is only one CR[] result, map function no longer works *)
+				If [ numberCR[result] === 1,
+					result = f[result],
     				result = Map[f, result]
-    			];
+				];
+
     			If[ SeQuantDebugLevel>=5,
     				Print["new contraction    ", result//TraditionalForm];
         		];
