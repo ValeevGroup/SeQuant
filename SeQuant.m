@@ -812,8 +812,13 @@ contractSQS[str:NCM[__SQS],ptype_particleType,contractOptions_List] :=
     					CR[ a[[1]], a[[2]]**newstr ]	
     				]
     				);
-    			result = Map[f, result];
-    			
+    			(* when there is only one CR[] result, map function no longer works
+    				if there is only one CR[], the Depth will be 6, otherwise 8
+    			 *)
+    			If [ Depth[result] === 6,
+    				result = f[result],
+    				result = Map[f, result]
+    			];
     			If[ SeQuantDebugLevel>=5,
     				Print["new contraction    ", result//TraditionalForm];
         		];
@@ -1619,6 +1624,7 @@ wick[expr_,extInds_List,wickOptions_List:defaultWickOptions] :=
         	
         	Unprotect[NonCommutativeMultiply];
         	newexpr = Map[normalOrderedForm,expr,Infinity];
+        	newexpr = Map[Distribute,newexpr,Infinity];
         	Protect[NonCommutativeMultiply];
         	
         	If[ SeQuantDebugLevel>=1,
