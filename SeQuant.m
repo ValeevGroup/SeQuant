@@ -412,14 +412,16 @@ convertLambda[a_SQM] :=
 			result = createSQM["\[Gamma]",bra,ket,antisymm];
 			Return[result]
 		];
+
 		If [Length[bra] === 2,
 			If [Depth[a] === 4,
 				result = createSQM["\[Gamma]",bra,ket,antisymm] - createSQM["\[Gamma]",{bra[[1]]},{ket[[1]]},antisymm]*createSQM["\[Gamma]",{bra[[2]]},{ket[[2]]},antisymm] 
 					+ createSQM["\[Gamma]",{bra[[1]]},{ket[[2]]},antisymm]*createSQM["\[Gamma]",{bra[[2]]},{ket[[1]]},antisymm]; 
 				Return[result]
 			];
+			(*in spin free case, the rank one density with different spin will be zero *)
 			If [Depth[a] === 5,
-				result = spinConvertGamma[bra,ket] - spinConvertGamma[{bra[[1]]},{ket[[1]]}]*spinConvertGamma[{bra[[2]]},{ket[[2]]}] 
+				result = createSQM["\[Gamma]",bra,ket,antisymm] - spinConvertGamma[{bra[[1]]},{ket[[1]]}]*spinConvertGamma[{bra[[2]]},{ket[[2]]}] 
 					+ spinConvertGamma[{bra[[1]]},{ket[[2]]}]*spinConvertGamma[{bra[[2]]},{ket[[1]]}]; 
 				Return[result]
 			];
@@ -430,16 +432,12 @@ convertLambda[a_SQM] :=
 	];
 	
 spinConvertGamma[bra_List, ket_List] := 
-	Module[{len,tmpbra, tmpket, spinsame, result},
-		len = Length[bra];
+	Module[{tmpbra, tmpket, spinsame, result},
 		spinsame = True;
-		Do[
-			tmpbra = bra[[i]];
-			tmpket = ket[[i]];
-			If[ tmpbra[[2,-1]] =!= tmpket[[2,-1]],
-				spinsame = False;
-			];
-			,{i,1,len}
+		tmpbra = bra[[1]];
+		tmpket = ket[[1]];
+		If[ tmpbra[[2,-1]] =!= tmpket[[2,-1]],
+			spinsame = False;
 		];
 		If [ spinsame,
 			result = createSQM["\[Gamma]",bra,ket,antisymm],
