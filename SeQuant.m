@@ -948,7 +948,7 @@ contractSQS[str:NCM[__SQS],ptype_particleType,contractOptions_List] :=
                 			the same term can appear multiple times if fullContract is false, hence must detect such cases reliably
             				 *)
              				If[ !(fullContract/.contractOptions),
-                 				newcontrib = orderedForm[newcontrib];
+                 				newcontrib = Map[maporder,newcontrib,2];
                 			 	If[ SeQuantDebugLevel>=5,
                      				Print["contractSQS(",str//TraditionalForm,"): result (before accumulate) = ",result//TraditionalForm]
                  			 	];
@@ -1970,28 +1970,34 @@ lowReduceWick[expr_,externalIndices_List,internalIndices_List,reduceOptions_List
 (*
 Transformation routines
 
-orderedForm puts elements of SQ expressions (SQ strings SQS and matrix elements SQM) into their "canonical " form. The canonical order of indices of each type (that belong to the same space) is alphabetical. This is where the permutational symmetry of SQM's matters.
+orderedForm puts elements of SQ expressions (SQ strings SQS and matrix elements SQM) into their "canonical " form. 
+The canonical order of indices of each type (that belong to the same space) is alphabetical. 
+This is where the permutational symmetry of SQM's matters.
 *)
 orderedForm[a_**b_,intInds_List:{}] :=
     orderedForm[a,intInds]**orderedForm[b,intInds];
+    
 orderedForm[a_*b_,intInds_List:{}] :=
     orderedForm[a,intInds]*orderedForm[b,intInds];
+    
 orderedForm[a_+b_,intInds_List:{}] :=
     orderedForm[a,intInds]+orderedForm[b,intInds];
+    
 orderedForm[a_^n_,intInds_List:{}] :=
     orderedForm[a,intInds]^n;
+    
 orderedForm[a_?NumberQ,intInds_List:{}] :=
     a;
+    
 orderedForm[x_deltaIndex,intInds_List:{}] :=
     x;
+    
 orderedForm[x_CR,intInds_List:{}] :=
     CR[orderedForm[x[[1]],intInds],orderedForm[x[[2]],intInds]];
 
 orderedForm[str_SQS,intInds_List:{}] :=
     Module[ {result,permfac,creInds,annInds},
         permfac = 1;
-        compareInds[a_,b_] :=
-            Order[a[[1]],b[[1]]];
         creInds = Cases[str,a_particleIndex/;a[[3]]==indexType[cre]];
         permfac*=Signature[creInds];
         creInds = Sort[creInds];
@@ -2011,8 +2017,6 @@ orderedForm[oper_SQM,intInds_List:{}] :=
         ];
         permfac = 1;
         operHead = Cases[oper,_OHead][[1]];
-        compareInds[a_,b_] :=
-            Order[a[[1]],b[[1]]];
         result = oper;
 
         (* 
@@ -2037,7 +2041,15 @@ orderedForm[oper_SQM,intInds_List:{}] :=
         Return[result];
     ];
 
+(* maporder function with no indecis *)
+maporder[a_SQS] := ( orderedForm[a,{}] ); 
 
+maporder[a_SQM] := ( orderedForm[a, {}] );
+
+maporder[a_/;(Head[a]=!=SQS && Head[a]=!=SQM) ] :=
+	a;
+	
+	
 (* low-level function that produces the list of unique indices from expr which are present in intInds *)
 indexListIn[expr_,intInds_List] :=
     Module[ {intIndsIn},
@@ -2078,7 +2090,7 @@ reindex is the top-level reindexing routine
 lowreindex is the low-level routine
 *)
 reindex[expr_,intInds_List:{}] :=
-    Module[ {result,ordexpr,tmpexpr,i},
+    Module[ {result, maporder, ordexpr,tmpexpr,i},
         result = 0;
 
 (* If result is a constant -- no need to reindex *)
@@ -2087,8 +2099,12 @@ reindex[expr_,intInds_List:{}] :=
         ];
 
         (* Put SQS's and SQM's in expr into their canonical form *)
-        ordexpr = orderedForm[expr,intInds];
-
+        maporder [a_SQS] := ( orderedForm[a, intInds] );
+        maporder [a_SQM] := ( orderedForm[a, intInds] );
+        maporder [a_/;(Head[a]=!=SQS && Head[a]=!=SQM) ] :=
+        	 a;
+        ordexpr = Map[maporder, expr,2];
+		
         (* Reorder SQS's and SQM's
 
         Times orders expressions automatically according to the canonical order
@@ -2131,7 +2147,7 @@ reindex[expr_,intInds_List:{}] :=
         result = result/.NCM->Times;
 
         (* In case some SQS's or SQM's are not canonicalized - canonicalize again *)
-        result = orderedForm[result,intInds];
+        result = Map[maporder, result,2];
         Return[result];
     ];
 
@@ -2506,13 +2522,18 @@ Transform expressions assuming canonical MOs
 NOTE: canonical MOs imply Brilluoin theorem
 *)
 canonMO[expr_,extInds_List] :=
-    Module[ {result,intinds,extinds},
+    Module[ {result,intinds,extinds,maporder},
         intinds = Sort[indexListOut[expr,extInds]];
         extinds = Sort[extInds];
         result = brillouin[expr];
         result = lowcanonMO[result];
         result = reduceWick[result,extinds,intinds];
-        result = orderedForm[result,intinds];
+        
+        maporder [a_SQS] := ( orderedForm[a, intInds] );
+        maporder [a_SQM] := ( orderedForm[a, intInds] );
+        maporder [a_/;(Head[a]=!=SQS && Head[a]=!=SQM) ] :=
+        	 a;
+        result = Map[maporder, result,2];
         Return[result];
     ];
 
