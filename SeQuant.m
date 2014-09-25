@@ -1974,26 +1974,6 @@ orderedForm puts elements of SQ expressions (SQ strings SQS and matrix elements 
 The canonical order of indices of each type (that belong to the same space) is alphabetical. 
 This is where the permutational symmetry of SQM's matters.
 *)
-orderedForm[a_**b_,intInds_List:{}] :=
-    orderedForm[a,intInds]**orderedForm[b,intInds];
-    
-orderedForm[a_*b_,intInds_List:{}] :=
-    orderedForm[a,intInds]*orderedForm[b,intInds];
-    
-orderedForm[a_+b_,intInds_List:{}] :=
-    orderedForm[a,intInds]+orderedForm[b,intInds];
-    
-orderedForm[a_^n_,intInds_List:{}] :=
-    orderedForm[a,intInds]^n;
-    
-orderedForm[a_?NumberQ,intInds_List:{}] :=
-    a;
-    
-orderedForm[x_deltaIndex,intInds_List:{}] :=
-    x;
-    
-orderedForm[x_CR,intInds_List:{}] :=
-    CR[orderedForm[x[[1]],intInds],orderedForm[x[[2]],intInds]];
 
 orderedForm[str_SQS,intInds_List:{}] :=
     Module[ {result,permfac,creInds,annInds},
@@ -2008,6 +1988,7 @@ orderedForm[str_SQS,intInds_List:{}] :=
         result = permfac*FlattenAt[SQS[FlattenAt[{creInds,Reverse[annInds]},{{1},{2}}]],{1}];
         Return[result];
     ];
+
 
 orderedForm[oper_SQM,intInds_List:{}] :=
     Module[ {result,symfac,permfac,operHead,braInds,ketInds},

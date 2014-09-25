@@ -3,6 +3,7 @@
 
 (* Test CCSD Energy equations *)
 Test[
+	SeQuantVacuum = SeQuantVacuumChoices["SingleConfiguration"];
     i = createParticleIndex["i", occ];
     j = createParticleIndex["j", occ];
     k = createParticleIndex["k", occ];
@@ -224,7 +225,7 @@ Test[
 
 (* Test CCSD T1 Amplitude Equations *)
 Test[
-    ClearAll["Global`*"];
+    SeQuantVacuum = SeQuantVacuumChoices["SingleConfiguration"];
     i = createParticleIndex["i", occ];
     j = createParticleIndex["j", occ];
     k = createParticleIndex["k", occ];
@@ -610,7 +611,7 @@ Test[
 
 (* Test CCSD T2 Amplitude Equations *)
 Test[
-    ClearAll["Global`*"];
+    SeQuantVacuum = SeQuantVacuumChoices["SingleConfiguration"];
     i = createParticleIndex["i", occ];
     j = createParticleIndex["j", occ];
     k = createParticleIndex["k", occ];

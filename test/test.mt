@@ -13,7 +13,6 @@ TestSuite[
 	"multi_commute_test.mt"
 	,
 	"ccsd_test.mt"
-	
 	}	
 ]
 
