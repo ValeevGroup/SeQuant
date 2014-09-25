@@ -11,6 +11,8 @@ TestSuite[
 	"multi_wick_test.mt"
 	,
 	"multi_commute_test.mt"
+	,
+	"ccsd_test.mt"
 	
 	}	
 ]

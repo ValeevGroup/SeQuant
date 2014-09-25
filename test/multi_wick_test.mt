@@ -113,5 +113,82 @@ Test[
     ,
     True
     ,
-    TestID->"SeQuantTest_Multi_wick_1_1"
+    TestID->"SeQuantTest_Multi_wick_2_2"
 ]
+
+
+(* wick between rank three and rank one operator *)
+Test[
+    SeQuantVacuum = SeQuantVacuumChoices["MultiConfiguration"];
+    SeQuantDebugLevel = 0;
+    wickopts = {
+       fullContract -> False,
+       noCoincidences -> False,
+       doSums -> True,
+       doReindex -> True
+       };
+
+    (* One-particle indices *)
+    p = createParticleIndex["p", occ];
+    q = createParticleIndex["q", occ];
+    r = createParticleIndex["r", occ];
+    s = createParticleIndex["s", occ];
+    t = createParticleIndex["t", occ];
+    u = createParticleIndex["u", occ];
+    v = createParticleIndex["v", occ];
+    w = createParticleIndex["w", occ];
+    ML1 = createSQS[{p, q, r}, {s, t, u}, noorder];
+    ML2 = createSQS[{v}, {w}, noorder];
+    ML3 = createSQS[{p, q, r}, {t, u, w}, noorder];
+    ML4 = createSQS[{p, q, r}, {s, t, w}, noorder];
+    ML5 = createSQS[{p, q, r}, {s, u, w}, noorder];
+    ML6 = createSQS[{p, q, r, v}, {s, t, u, w}, noorder];
+    res = wick[ML1 ** ML2, {p, q, r, s, t, u, v, w}, wickopts];
+    nor = normalOrderedForm[ML3]*deltaIndex[s,v] + normalOrderedForm[ML4]*deltaIndex[u,v] - normalOrderedForm[ML5]*deltaIndex[t,v] + normalOrderedForm[ML6];
+    nor = Map[Distribute, nor];
+    res === nor
+    ,
+    True
+    ,
+    TestID->"SeQuantTest_Multi_wick_3_1"
+]
+
+(* wick between rank three and rank two operator *)
+(*Test[
+    SeQuantVacuum = SeQuantVacuumChoices["MultiConfiguration"];
+    SeQuantDebugLevel = 0;
+    wickopts = {
+       fullContract -> False,
+       noCoincidences -> False,
+       doSums -> True,
+       doReindex -> True
+       };
+
+    (* One-particle indices *)
+    p = createParticleIndex["p", occ];
+    q = createParticleIndex["q", occ];
+    r = createParticleIndex["r", occ];
+    s = createParticleIndex["s", occ];
+    t = createParticleIndex["t", occ];
+    u = createParticleIndex["u", occ];
+    v = createParticleIndex["v", occ];
+    w = createParticleIndex["w", occ];
+    a = createParticleIndex["a", occ];
+	b = createParticleIndex["b", occ];
+	
+    ML1 = createSQS[{p, q, r}, {s, t, u}, noorder];
+    ML2 = createSQS[{v}, {w}, noorder];
+    
+    ML3 = createSQS[{p, q, r}, {t, u, w}, noorder];
+    ML4 = createSQS[{p, q, r}, {s, t, w}, noorder];
+    ML5 = createSQS[{p, q, r}, {s, u, w}, noorder];
+    ML6 = createSQS[{p, q, r, v}, {s, t, u, w}, noorder];
+    res = wick[ML1 ** ML2, {p, q, r, s, t, u, v, w}, wickopts];
+    nor = 
+    nor = Map[Distribute, nor];
+    res === nor
+    ,
+    True
+    ,
+    TestID->"SeQuantTest_Multi_wick_3_1"
+]*)
