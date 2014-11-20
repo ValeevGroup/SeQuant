@@ -1,0 +1,254 @@
+(* Content-type: application/vnd.wolfram.mathematica *)
+
+(*** Wolfram Notebook File ***)
+(* http://www.wolfram.com/nb *)
+
+(* CreatedBy='Mathematica 10.0' *)
+
+(*CacheID: 234*)
+(* Internal cache information:
+NotebookFileLineBreakTest
+NotebookFileLineBreakTest
+NotebookDataPosition[       158,          7]
+NotebookDataLength[      6990,        244]
+NotebookOptionsPosition[      5936,        203]
+NotebookOutlinePosition[      6293,        219]
+CellTagsIndexPosition[      6250,        216]
+WindowFrame->Normal*)
+
+(* Beginning of Notebook Content *)
+Notebook[{
+
+Cell[CellGroupData[{
+Cell["SeQuant User Guide", "Title",
+ CellChangeTimes->{{3.625434277410262*^9, 3.625434281294055*^9}}],
+
+Cell[CellGroupData[{
+
+Cell["Environment Setup", "Section",
+ CellChangeTimes->{{3.625434287305808*^9, 3.625434291404367*^9}}],
+
+Cell[CellGroupData[{
+
+Cell["Vacuum Choices", "Subsubsection",
+ CellChangeTimes->{3.625434298752434*^9}],
+
+Cell[TextData[{
+ "In SeQuant, you can choose your reference state as physical vacuum, \
+single-configuration wave-function and multi-configuration wave-function by \
+setting the ",
+ StyleBox["SeQuantVacuum",
+  FontColor->RGBColor[0, 0, 1]],
+ " variable. The Default choice is single-configuration wave-funciton.\n\nFor \
+example:"
+}], "Text",
+ CellChangeTimes->{{3.625434313102119*^9, 3.6254343376975393`*^9}}],
+
+Cell[BoxData[{
+ RowBox[{
+  RowBox[{"SeQuantVacuum", " ", "=", " ", 
+   RowBox[{"SeQuantVacuumChoices", "[", "\"\<Physical\>\"", "]"}]}], 
+  ";"}], "\n", 
+ RowBox[{
+  RowBox[{"SeQuantVacuum", " ", "=", " ", 
+   RowBox[{
+   "SeQuantVacuumChoices", "[", "\"\<SingleConfiguration\>\"", "]"}]}], 
+  ";"}], "\n", 
+ RowBox[{
+  RowBox[{"SeQuantVacuum", " ", "=", " ", 
+   RowBox[{"SeQuantVacuumChoices", "[", "\"\<MultiConfiguration\>\"", "]"}]}],
+   ";"}]}], "Input",
+ CellChangeTimes->{{3.625434340847237*^9, 3.6254344020416327`*^9}}]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell["Particle Space", "Subsection",
+ CellChangeTimes->{{3.62543441675432*^9, 3.625434421912166*^9}}],
+
+Cell[TextData[{
+ "The ",
+ StyleBox["particleSpace",
+  FontColor->RGBColor[0, 0, 1]],
+ " data type determines the space of the particle. There are six different \
+particleSpace in SeQuant. They are ",
+ StyleBox["occ",
+  FontColor->RGBColor[0, 0, 1]],
+ ", ",
+ StyleBox["virt",
+  FontColor->RGBColor[0, 0, 1]],
+ ", ",
+ StyleBox["any",
+  FontColor->RGBColor[0, 0, 1]],
+ ", ",
+ StyleBox["othervirt",
+  FontColor->RGBColor[0, 0, 1]],
+ ", ",
+ StyleBox["allvirt",
+  FontColor->RGBColor[0, 0, 1]],
+ " and ",
+ StyleBox["allany",
+  FontColor->RGBColor[0, 0, 1]],
+ ". \n",
+ StyleBox["occ",
+  FontColor->RGBColor[0, 0, 1]],
+ " stands for occupied orbitals and ",
+ StyleBox["virt",
+  FontColor->RGBColor[0, 0, 1]],
+ " stands for unoccupied virtual orbitals. ",
+ StyleBox["any",
+  FontColor->RGBColor[0, 0, 1]],
+ " is the combination of ",
+ StyleBox["occ",
+  FontColor->RGBColor[0, 0, 1]],
+ " and ",
+ StyleBox["virt",
+  FontColor->RGBColor[0, 0, 1]],
+ ", which stands for all the orbitals in the orbital basis set.\n\nIn R12 \
+theories, auxiliary basis sets will be used. ",
+ StyleBox["othervirt",
+  FontColor->RGBColor[0, 0, 1]],
+ " can be used to represent auxiliary basis sets. ",
+ StyleBox["allvirt",
+  FontColor->RGBColor[0, 0, 1]],
+ " is the combination of ",
+ StyleBox["vir",
+  FontColor->RGBColor[0, 0, 1]],
+ " and ",
+ StyleBox["othervirt",
+  FontColor->RGBColor[0, 0, 1]],
+ ", which stands for all the virtual orbitals in the complete basis set. ",
+ StyleBox["allany",
+  FontColor->RGBColor[0, 0, 1]],
+ " is the combination of ",
+ StyleBox["occ",
+  FontColor->RGBColor[0, 0, 1]],
+ " and ",
+ StyleBox["allvirt",
+  FontColor->RGBColor[0, 0, 1]],
+ ", which stands for all the orbitals in the complete basis set.\n\nHere is \
+the source code:"
+}], "Text",
+ CellChangeTimes->{3.62543444529648*^9}],
+
+Cell[BoxData[{
+ RowBox[{
+  RowBox[{"occ", "=", 
+   RowBox[{"particleSpace", "[", "occupied", "]"}]}], ";"}], "\n", 
+ RowBox[{
+  RowBox[{"virt", "=", 
+   RowBox[{"particleSpace", "[", "virtual", "]"}]}], ";"}], "\n", 
+ RowBox[{
+  RowBox[{"othervirt", "=", 
+   RowBox[{"particleSpace", "[", "othervirtual", "]"}]}], ";"}], "\n", 
+ RowBox[{
+  RowBox[{"any", "=", 
+   RowBox[{"Union", "[", 
+    RowBox[{"occ", ",", "virt"}], "]"}]}], ";"}], "\n", 
+ RowBox[{
+  RowBox[{"allvirt", "=", 
+   RowBox[{"Union", "[", 
+    RowBox[{"virt", ",", "othervirt"}], "]"}]}], ";"}], "\n", 
+ RowBox[{
+  RowBox[{"allany", "=", 
+   RowBox[{"Union", "[", 
+    RowBox[{"occ", ",", "allvirt"}], "]"}]}], ";"}]}], "Input",
+ CellChangeTimes->{{3.62543457272182*^9, 3.625434572729165*^9}}]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell["Debug Level", "Subsection",
+ CellChangeTimes->{3.625434593300684*^9}],
+
+Cell[TextData[{
+ "The variable ",
+ StyleBox["SeQuantDebugLevel",
+  FontColor->RGBColor[0, 0, 1]],
+ " controls how many details SeQuant will print out. The available value is \
+from 0 to 10. The higher the value is, the more details SeQuant will print \
+out. It will help you in debuging when doing development. The default value \
+of ",
+ StyleBox["SeQuantDebugLevel",
+  FontColor->RGBColor[0, 0, 1]],
+ " is 0. It is recommended to use a value lower than 2.\n\nFor example:"
+}], "Text",
+ CellChangeTimes->{3.625434603068089*^9}],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"SeQuantDebugLevel", " ", "=", " ", "1"}], ";"}]], "Input",
+ CellChangeTimes->{{3.625434619434505*^9, 3.625434628536193*^9}}]
+}, Open  ]]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell["User Level Functions", "Section",
+ CellChangeTimes->{3.6254346468282957`*^9}],
+
+Cell["Particle Index", "Subsection",
+ CellChangeTimes->{{3.625434659949191*^9, 3.6254346627763968`*^9}}],
+
+Cell["SQS Class", "Subsection",
+ CellChangeTimes->{{3.625434659949191*^9, 3.625434677118222*^9}}],
+
+Cell["SQM Class", "Subsection",
+ CellChangeTimes->{{3.625434659949191*^9, 3.625434680769339*^9}}],
+
+Cell["Wick option and function", "Subsection",
+ CellChangeTimes->{{3.625434659949191*^9, 3.6254346850867643`*^9}}]
+}, Open  ]]
+}, Open  ]]
+},
+WindowSize->{808, 755},
+WindowMargins->{{-1259, Automatic}, {34, Automatic}},
+FrontEndVersion->"10.0 for Mac OS X x86 (32-bit, 64-bit Kernel) (June 27, \
+2014)",
+StyleDefinitions->"Default.nb"
+]
+(* End of Notebook Content *)
+
+(* Internal cache information *)
+(*CellTagsOutline
+CellTagsIndex->{}
+*)
+(*CellTagsIndex
+CellTagsIndex->{}
+*)
+(*NotebookFileOutline
+Notebook[{
+Cell[CellGroupData[{
+Cell[580, 22, 101, 1, 92, "Title"],
+Cell[CellGroupData[{
+Cell[706, 27, 102, 1, 64, "Section"],
+Cell[CellGroupData[{
+Cell[833, 32, 81, 1, 35, "Subsubsection"],
+Cell[917, 35, 410, 9, 106, "Text"],
+Cell[1330, 46, 528, 14, 63, "Input"]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[1895, 65, 101, 1, 44, "Subsection"],
+Cell[1999, 68, 1786, 63, 201, "Text"],
+Cell[3788, 133, 760, 22, 114, "Input"]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[4585, 160, 75, 1, 44, "Subsection"],
+Cell[4663, 163, 527, 12, 125, "Text"],
+Cell[5193, 177, 159, 3, 28, "Input"]
+}, Open  ]]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[5401, 186, 83, 1, 64, "Section"],
+Cell[5487, 189, 104, 1, 44, "Subsection"],
+Cell[5594, 192, 97, 1, 36, "Subsection"],
+Cell[5694, 195, 97, 1, 36, "Subsection"],
+Cell[5794, 198, 114, 1, 36, "Subsection"]
+}, Open  ]]
+}, Open  ]]
+}
+]
+*)
+
+(* End of internal cache information *)
+

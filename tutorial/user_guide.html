@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1 plus MathML 2.0//EN"
+        "HTMLFiles/xhtml-math11-f.dtd">
+
+<!-- Created with the Wolfram Language for Students - Personal Use Only : www.wolfram.com -->
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+ <title>
+  user_guide (the Wolfram Language for Students - Personal Use Only : www.wolfram.com)
+ </title>
+ <link href="HTMLFiles/user_guide.css" rel="stylesheet" type="text/css" />
+</head>
+
+<body>
+
+<p class="Title">
+ SeQuant User Guide
+</p>
+
+
+
+<p class="Section">
+ Environment Setup
+</p>
+
+
+
+<p class="Subsubsection">
+ Vacuum Choices
+</p>
+
+
+
+<p class="Text">
+ In SeQuant, you can choose your reference state as physical vacuum, single-configuration wave-function and multi-configuration wave-function by setting the <span style='color: #0000FF;'>SeQuantVacuum</span> variable. The Default choice is single-configuration wave-funciton.<br /><br />For example:
+</p>
+
+
+
+<p class="Input">
+ <img src="HTMLFiles/user_guide_1.gif" alt="user_guide_1.gif" width="468" height="48" style="vertical-align:middle" />
+</p>
+
+<p class="Subsection">
+ Particle Space
+</p>
+
+
+
+<p class="Text">
+ The <span style='color: #0000FF;'>particleSpace</span> data type determines the space of the particle. There are six different particleSpace in SeQuant. They are <span style='color: #0000FF;'>occ</span>, <span style='color: #0000FF;'>virt</span>, <span style='color: #0000FF;'>any</span>, <span style='color: #0000FF;'>othervirt</span>, <span style='color: #0000FF;'>allvirt</span> and <span style='color: #0000FF;'>allany</span>. <br /><span style='color: #0000FF;'>occ</span> stands for occupied orbitals and <span style='color: #0000FF;'>virt</span> stands for unoccupied virtual orbitals. <span style='color: #0000FF;'>any</span> is the combination of <span style='color: #0000FF;'>occ</span> and <span style='color: #0000FF;'>virt</span>, which stands for all the orbitals in the orbital basis set.<br /><br />In R12 theories, auxiliary basis sets will be used. <span style='color: #0000FF;'>othervirt</span> can be used to represent auxiliary basis sets. <span style='color: #0000FF;'>allvirt</span> is the combination of <span style='color: #0000FF;'>vir</span> and <span style='color: #0000FF;'>othervirt</span>, which stands for all the virtual orbitals in the complete basis set. <span style='color: #0000FF;'>allany</span> is the combination of <span style='color: #0000FF;'>occ</span> and <span style='color: #0000FF;'>allvirt</span>, which stands for all the orbitals in the complete basis set.<br /><br />Here is the source code:
+</p>
+
+
+
+<p class="Input">
+ <img src="HTMLFiles/user_guide_2.gif" alt="user_guide_2.gif" width="305" height="99" style="vertical-align:middle" />
+</p>
+
+<p class="Subsection">
+ Debug Level
+</p>
+
+
+
+<p class="Text">
+ The variable <span style='color: #0000FF;'>SeQuantDebugLevel</span> controls how many details SeQuant will print out. The available value is from 0 to 10. The higher the value is, the more details SeQuant will print out. It will help you in debuging when doing development. The default value of <span style='color: #0000FF;'>SeQuantDebugLevel</span> is 0. It is recommended to use a value lower than 2.<br /><br />For example:
+</p>
+
+
+
+<p class="Input">
+ <img src="HTMLFiles/user_guide_3.png" alt="user_guide_3.png" width="171" height="13" style="vertical-align:middle" />
+</p>
+
+<p class="Section">
+ User Level Functions
+</p>
+
+
+
+<p class="Subsection">
+ Particle Index
+</p>
+
+
+
+<p class="Subsection">
+ SQS Class
+</p>
+
+
+
+<p class="Subsection">
+ SQM Class
+</p>
+
+
+
+<p class="Subsection">
+ Wick option and function
+</p>
+
+
+
+
+
+
+<div style="font-family:Helvetica; font-size:11px; width:100%; border:1px none #999999; border-top-style:solid; padding-top:2px; margin-top:20px;">
+ <a href="http://www.wolfram.com/language/" style="color:#000; text-decoration:none;">
+  <span style="color:#555555">Created with the Wolfram Language</span> 
+ </a>
+</div>
+</body>
+
+</html>
