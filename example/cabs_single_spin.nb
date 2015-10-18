@@ -1,0 +1,1707 @@
+(* Content-type: application/vnd.wolfram.mathematica *)
+
+(*** Wolfram Notebook File ***)
+(* http://www.wolfram.com/nb *)
+
+(* CreatedBy='Mathematica 10.0' *)
+
+(*CacheID: 234*)
+(* Internal cache information:
+NotebookFileLineBreakTest
+NotebookFileLineBreakTest
+NotebookDataPosition[       158,          7]
+NotebookDataLength[     58887,       1698]
+NotebookOptionsPosition[     56638,       1610]
+NotebookOutlinePosition[     56994,       1626]
+CellTagsIndexPosition[     56951,       1623]
+WindowFrame->Normal*)
+
+(* Beginning of Notebook Content *)
+Notebook[{
+
+Cell[CellGroupData[{
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"(*", " ", 
+   RowBox[{"setup", " ", "environment"}], " ", "*)"}], "\[IndentingNewLine]", 
+  
+  RowBox[{
+   RowBox[{"ClearAll", "[", "\"\<Global`*\>\"", "]"}], "\[IndentingNewLine]", 
+   
+   RowBox[{
+    RowBox[{"SeQuantVacuum", " ", "=", " ", 
+     RowBox[{
+     "SeQuantVacuumChoices", "[", "\"\<MultiConfiguration\>\"", "]"}]}], 
+    ";"}], "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"SeQuantDebugLevel", " ", "=", "0"}], ";"}], 
+   "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"wickopts", " ", "=", " ", 
+     RowBox[{"{", "\[IndentingNewLine]", 
+      RowBox[{
+       RowBox[{"fullContract", "\[Rule]", "True"}], ",", 
+       "\[IndentingNewLine]", 
+       RowBox[{"noCoincidences", "\[Rule]", "False"}], ",", 
+       "\[IndentingNewLine]", 
+       RowBox[{"useDensity", "\[Rule]", "True"}], ",", "\[IndentingNewLine]", 
+       
+       RowBox[{"doSums", "\[Rule]", "True"}], ",", "\[IndentingNewLine]", 
+       RowBox[{"doReindex", "\[Rule]", "True"}]}], "\[IndentingNewLine]", 
+      "}"}]}], ";"}], "\[IndentingNewLine]", "\[IndentingNewLine]", 
+   RowBox[{"(*", " ", 
+    RowBox[{"create", " ", "index"}], " ", "*)"}], "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"p", "=", 
+     RowBox[{"createParticleIndex", "[", 
+      RowBox[{"\"\<p\>\"", ",", "any"}], "]"}]}], ";"}], 
+   "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"q", "=", 
+     RowBox[{"createParticleIndex", "[", 
+      RowBox[{"\"\<q\>\"", ",", "any"}], "]"}]}], ";"}], 
+   "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"r", "=", 
+     RowBox[{"createParticleIndex", "[", 
+      RowBox[{"\"\<r\>\"", ",", "any"}], "]"}]}], ";"}], 
+   "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"s", "=", 
+     RowBox[{"createParticleIndex", "[", 
+      RowBox[{"\"\<s\>\"", ",", "any"}], "]"}]}], ";"}], 
+   "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"a", " ", "=", " ", 
+     RowBox[{"createParticleIndex", "[", 
+      RowBox[{"\"\<a\>\"", ",", "virt"}], "]"}]}], ";"}], 
+   "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"b", " ", "=", " ", 
+     RowBox[{"createParticleIndex", "[", 
+      RowBox[{"\"\<b\>\"", ",", "virt"}], "]"}]}], ";"}], 
+   "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"i", "=", 
+     RowBox[{"createParticleIndex", "[", 
+      RowBox[{"\"\<i\>\"", ",", "occ"}], "]"}]}], ";"}], 
+   "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"j", "=", 
+     RowBox[{"createParticleIndex", "[", 
+      RowBox[{"\"\<j\>\"", ",", "occ"}], "]"}]}], ";"}], 
+   "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{
+     SubscriptBox["x", "1"], "=", 
+     RowBox[{"createParticleIndex", "[", 
+      RowBox[{"\"\<x\>\"", ",", "occ"}], "]"}]}], ";"}], 
+   "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{
+     SubscriptBox["y", "1"], "=", 
+     RowBox[{"createParticleIndex", "[", 
+      RowBox[{"\"\<y\>\"", ",", "occ"}], "]"}]}], ";"}], 
+   "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"\[Alpha]", "=", 
+     RowBox[{"createParticleIndex", "[", 
+      RowBox[{"\"\<\[Alpha]\>\"", ",", "allvirt"}], "]"}]}], ";"}], 
+   "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"\[Beta]", "=", 
+     RowBox[{"createParticleIndex", "[", 
+      RowBox[{"\"\<\[Beta]\>\"", ",", "allvirt"}], "]"}]}], ";"}], 
+   "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{
+     SubscriptBox["\[Alpha]", "1"], " ", "=", " ", 
+     RowBox[{"createParticleIndex", "[", 
+      RowBox[{
+      "\"\<\!\(\*SubscriptBox[\(\[Alpha]\), \(1\)]\)\>\"", ",", "allvirt"}], 
+      "]"}]}], ";"}], "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{
+     SubscriptBox["\[Beta]", "1"], " ", "=", " ", 
+     RowBox[{"createParticleIndex", "[", 
+      RowBox[{
+      "\"\<\!\(\*SubscriptBox[\(\[Beta]\), \(1\)]\)\>\"", ",", "allvirt"}], 
+      "]"}]}], ";"}], "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"w", " ", "=", " ", 
+     RowBox[{"createParticleIndex", "[", 
+      RowBox[{"\"\<w\>\"", ",", "othervirt"}], "]"}]}], ";"}], 
+   "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"v", " ", "=", " ", 
+     RowBox[{"createParticleIndex", "[", 
+      RowBox[{"\"\<v\>\"", ",", "othervirt"}], "]"}]}], ";"}], 
+   "\[IndentingNewLine]", "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"L", " ", "=", " ", 
+     RowBox[{"createSQS", "[", 
+      RowBox[{
+       RowBox[{"{", 
+        SubscriptBox["x", "1"], "}"}], ",", 
+       RowBox[{"{", "\[Beta]", "}"}], ",", "inorder"}], "]"}]}], ";"}], 
+   "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"R", " ", "=", " ", 
+     RowBox[{"createSQS", "[", 
+      RowBox[{
+       RowBox[{"{", "\[Alpha]", "}"}], ",", 
+       RowBox[{"{", 
+        SubscriptBox["y", "1"], "}"}], ",", "inorder"}], "]"}]}], ";"}], 
+   "\[IndentingNewLine]", 
+   RowBox[{"Print", "[", 
+    RowBox[{"\"\<L = \>\"", ",", 
+     RowBox[{"L", "//", "TraditionalForm"}]}], "]"}], "\[IndentingNewLine]", 
+   RowBox[{"Print", "[", 
+    RowBox[{"\"\<R = \>\"", ",", 
+     RowBox[{"R", "//", "TraditionalForm"}]}], "]"}]}]}]], "Input",
+ CellChangeTimes->{{3.6187757556669064`*^9, 3.618776030567115*^9}, {
+   3.618776061943804*^9, 3.618776158893353*^9}, 3.618776342598935*^9, 
+   3.6187764336778812`*^9, {3.618776707972457*^9, 3.618776747627986*^9}, {
+   3.618776883649095*^9, 3.618776884040525*^9}, 3.618777118315482*^9, 
+   3.6187795389772167`*^9, {3.618779668399673*^9, 3.618779668956691*^9}, {
+   3.61883378550229*^9, 3.6188337898586273`*^9}, {3.6188338983523006`*^9, 
+   3.618833898487733*^9}, 3.618836257002276*^9, 3.6188453827009697`*^9, {
+   3.618845800600781*^9, 3.618845801821459*^9}, 3.618846228169176*^9, 
+   3.618847619119108*^9, 3.6188479939987297`*^9, 3.618850132067374*^9, {
+   3.6188504086430798`*^9, 3.618850423866062*^9}, {3.618850499215526*^9, 
+   3.618850501078364*^9}, {3.618850962254409*^9, 3.618850965347104*^9}, 
+   3.618851488036213*^9, 3.619188982827148*^9, 3.61919047961411*^9, {
+   3.619793057390073*^9, 3.619793072698956*^9}, 3.6197933183807287`*^9, 
+   3.61979376766605*^9, {3.619793860225174*^9, 3.6197938886214037`*^9}, 
+   3.619793970913107*^9, {3.619794703083727*^9, 3.6197947123848743`*^9}, {
+   3.6197950251176853`*^9, 3.619795030186655*^9}, {3.61979751669556*^9, 
+   3.6197975281991796`*^9}, {3.619870498790874*^9, 3.619870534264292*^9}, 
+   3.619870806952812*^9, {3.6198854880971622`*^9, 3.619885490552834*^9}, {
+   3.619885543485035*^9, 3.6198855627179956`*^9}, 3.6205796074850407`*^9, 
+   3.620579662718964*^9, 3.620580118208006*^9}],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ InterpretationBox[
+  RowBox[{"\<\"L = \"\>", "\[InvisibleSpace]", 
+   TagBox[
+    FormBox[
+     FormBox[
+      TemplateBox[{OverscriptBox["\"a\"", "~"],"\"\[Beta]\"","\"x\""},
+       "Subsuperscript"],
+      TraditionalForm],
+     TraditionalForm],
+    TraditionalForm,
+    Editable->True]}],
+  SequenceForm["L = ", 
+   TraditionalForm[
+    SeQuant`mSQS[
+     SeQuant`normalOrder[True], 
+     SeQuant`SQS[
+      SeQuant`particleIndex["x", 
+       SeQuant`particleSpace[SeQuant`occupied], 
+       SeQuant`indexType[SeQuant`cre]], 
+      SeQuant`particleIndex["\[Beta]", 
+       SeQuant`particleSpace[SeQuant`othervirtual, SeQuant`virtual], 
+       SeQuant`indexType[SeQuant`ann]]]]]],
+  Editable->False]], "Print",
+ CellChangeTimes->{{3.6187759479619017`*^9, 3.618776085711639*^9}, {
+   3.618776133247445*^9, 3.61877615975419*^9}, 3.6187763430679398`*^9, 
+   3.618776434054853*^9, {3.6187767142162437`*^9, 3.6187767480249863`*^9}, 
+   3.6187771205252132`*^9, {3.6187795885007553`*^9, 3.618779607985629*^9}, 
+   3.618779670036298*^9, {3.618782360432637*^9, 3.618782374903576*^9}, 
+   3.618782412479525*^9, {3.618782444854294*^9, 3.6187824561882763`*^9}, {
+   3.6188337810258617`*^9, 3.618833783175581*^9}, 3.6188338997367*^9, 
+   3.618836211623536*^9, 3.618836257473843*^9, 3.618845383760544*^9, 
+   3.618845803209296*^9, 3.618846229077548*^9, 3.618847619806169*^9, {
+   3.618847995407851*^9, 3.618848020668558*^9}, 3.61885013304709*^9, {
+   3.6188504094816647`*^9, 3.618850431152628*^9}, 3.618850502759757*^9, 
+   3.618850973806241*^9, {3.6188514794385023`*^9, 3.618851490080305*^9}, 
+   3.619188139263193*^9, 3.619188983892571*^9, {3.619189972894164*^9, 
+   3.619189988124009*^9}, 3.619190019722273*^9, 3.6191904806471443`*^9, {
+   3.619793066926237*^9, 3.6197930743546352`*^9}, 3.619793170487294*^9, 
+   3.619793325274246*^9, 3.619793702364624*^9, {3.61979375641812*^9, 
+   3.619793767992584*^9}, {3.6197938771895123`*^9, 3.6197939124999104`*^9}, {
+   3.619793953279413*^9, 3.6197939713981733`*^9}, {3.61979426409483*^9, 
+   3.619794283084222*^9}, 3.619794350119005*^9, 3.619794399171227*^9, 
+   3.619794706837967*^9, 3.619795030773563*^9, 3.619797524829726*^9, {
+   3.619870425383027*^9, 3.619870449622739*^9}, {3.619870499772237*^9, 
+   3.6198705353813972`*^9}, 3.619870808329691*^9, {3.61988555170263*^9, 
+   3.619885560223816*^9}, 3.6198857141067038`*^9, {3.6198862658273773`*^9, 
+   3.619886277594782*^9}, 3.620579609615687*^9, 3.620579664142551*^9, 
+   3.620580119354938*^9, 3.620652064027647*^9}],
+
+Cell[BoxData[
+ InterpretationBox[
+  RowBox[{"\<\"R = \"\>", "\[InvisibleSpace]", 
+   TagBox[
+    FormBox[
+     FormBox[
+      TemplateBox[{OverscriptBox["\"a\"", "~"],"\"y\"","\"\[Alpha]\""},
+       "Subsuperscript"],
+      TraditionalForm],
+     TraditionalForm],
+    TraditionalForm,
+    Editable->True]}],
+  SequenceForm["R = ", 
+   TraditionalForm[
+    SeQuant`mSQS[
+     SeQuant`normalOrder[True], 
+     SeQuant`SQS[
+      SeQuant`particleIndex["\[Alpha]", 
+       SeQuant`particleSpace[SeQuant`othervirtual, SeQuant`virtual], 
+       SeQuant`indexType[SeQuant`cre]], 
+      SeQuant`particleIndex["y", 
+       SeQuant`particleSpace[SeQuant`occupied], 
+       SeQuant`indexType[SeQuant`ann]]]]]],
+  Editable->False]], "Print",
+ CellChangeTimes->{{3.6187759479619017`*^9, 3.618776085711639*^9}, {
+   3.618776133247445*^9, 3.61877615975419*^9}, 3.6187763430679398`*^9, 
+   3.618776434054853*^9, {3.6187767142162437`*^9, 3.6187767480249863`*^9}, 
+   3.6187771205252132`*^9, {3.6187795885007553`*^9, 3.618779607985629*^9}, 
+   3.618779670036298*^9, {3.618782360432637*^9, 3.618782374903576*^9}, 
+   3.618782412479525*^9, {3.618782444854294*^9, 3.6187824561882763`*^9}, {
+   3.6188337810258617`*^9, 3.618833783175581*^9}, 3.6188338997367*^9, 
+   3.618836211623536*^9, 3.618836257473843*^9, 3.618845383760544*^9, 
+   3.618845803209296*^9, 3.618846229077548*^9, 3.618847619806169*^9, {
+   3.618847995407851*^9, 3.618848020668558*^9}, 3.61885013304709*^9, {
+   3.6188504094816647`*^9, 3.618850431152628*^9}, 3.618850502759757*^9, 
+   3.618850973806241*^9, {3.6188514794385023`*^9, 3.618851490080305*^9}, 
+   3.619188139263193*^9, 3.619188983892571*^9, {3.619189972894164*^9, 
+   3.619189988124009*^9}, 3.619190019722273*^9, 3.6191904806471443`*^9, {
+   3.619793066926237*^9, 3.6197930743546352`*^9}, 3.619793170487294*^9, 
+   3.619793325274246*^9, 3.619793702364624*^9, {3.61979375641812*^9, 
+   3.619793767992584*^9}, {3.6197938771895123`*^9, 3.6197939124999104`*^9}, {
+   3.619793953279413*^9, 3.6197939713981733`*^9}, {3.61979426409483*^9, 
+   3.619794283084222*^9}, 3.619794350119005*^9, 3.619794399171227*^9, 
+   3.619794706837967*^9, 3.619795030773563*^9, 3.619797524829726*^9, {
+   3.619870425383027*^9, 3.619870449622739*^9}, {3.619870499772237*^9, 
+   3.6198705353813972`*^9}, 3.619870808329691*^9, {3.61988555170263*^9, 
+   3.619885560223816*^9}, 3.6198857141067038`*^9, {3.6198862658273773`*^9, 
+   3.619886277594782*^9}, 3.620579609615687*^9, 3.620579664142551*^9, 
+   3.620580119354938*^9, 3.6206520640314713`*^9}]
+}, Open  ]]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell["Fock Hamiltonian", "Section",
+ CellChangeTimes->{{3.603718195196013*^9, 3.603718203361418*^9}, {
+  3.603718294068904*^9, 3.603718294426951*^9}}],
+
+Cell[TextData[{
+ "The expression need to expand is ",
+ Cell[BoxData[
+  FormBox[
+   StyleBox[
+    RowBox[{
+     SubsuperscriptBox["a", "\[Beta]", "x"], 
+     OverscriptBox[
+      RowBox[{"(", 
+       RowBox[{
+        SubsuperscriptBox["H", "F", "0"], "-", 
+        SubscriptBox["E", "0"]}], ")"}], "^"], 
+     SubsuperscriptBox["a", "y", "\[Alpha]"]}], "Subtitle"], 
+   TraditionalForm]], "Title"],
+ "\n",
+ Cell[BoxData[
+  FormBox[
+   OverscriptBox[
+    SubsuperscriptBox["H", "F", "0"], "^"], TraditionalForm]]],
+ " is split to ",
+ Cell[BoxData[
+  FormBox[
+   OverscriptBox[
+    SubscriptBox["H", "1"], "^"], TraditionalForm]]],
+ " +  ",
+ Cell[BoxData[
+  FormBox[
+   OverscriptBox[
+    SubscriptBox["H", "2"], "^"], TraditionalForm]]],
+ " +  ",
+ Cell[BoxData[
+  FormBox[
+   OverscriptBox[
+    SubscriptBox["H", "3"], "^"], TraditionalForm]]]
+}], "Text",
+ CellChangeTimes->{{3.603647228493367*^9, 3.603647236984726*^9}, {
+   3.603647289112734*^9, 3.603647474492031*^9}, {3.603647536036005*^9, 
+   3.603647552336994*^9}, 3.603718094542694*^9, {3.603718298488318*^9, 
+   3.6037183474798594`*^9}},
+ FontSize->18],
+
+Cell[CellGroupData[{
+
+Cell[TextData[{
+ Cell[BoxData[
+  FormBox[
+   OverscriptBox[
+    SubscriptBox["H", "1"], "^"], TraditionalForm]]],
+ "=",
+ Cell[BoxData[
+  FormBox[
+   RowBox[{" ", 
+    SubsuperscriptBox["f", 
+     RowBox[{"\[Alpha]", "'"}], 
+     RowBox[{"\[Beta]", "'"}]]}], TraditionalForm]]],
+ Cell[BoxData[
+  FormBox[
+   SubsuperscriptBox["a", 
+    RowBox[{"\[Beta]", "'"}], 
+    RowBox[{"\[Alpha]", "'"}]], TraditionalForm]]],
+ "+",
+ Cell[BoxData[
+  FormBox[
+   RowBox[{" ", 
+    SubsuperscriptBox["f", 
+     RowBox[{"\[Alpha]", "'"}], "a"]}], TraditionalForm]]],
+ Cell[BoxData[
+  FormBox[
+   SubsuperscriptBox["a", "a", 
+    RowBox[{"\[Alpha]", "'"}]], TraditionalForm]]],
+ " + ",
+ Cell[BoxData[
+  FormBox[
+   SubsuperscriptBox["f", "a", 
+    RowBox[{"\[Alpha]", "'"}]], TraditionalForm]]],
+ Cell[BoxData[
+  FormBox[
+   SubsuperscriptBox["a", 
+    RowBox[{"\[Alpha]", "'"}], "a"], TraditionalForm]]]
+}], "Subsection",
+ CellChangeTimes->{
+  3.60364678748339*^9, {3.603646827051547*^9, 3.603646991811817*^9}, {
+   3.603647270828413*^9, 3.603647283843196*^9}, {3.603647752652191*^9, 
+   3.6036477526522703`*^9}, {3.603650334204205*^9, 3.603650344445311*^9}},
+ FontSize->24],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[{
+ RowBox[{
+  RowBox[{"f1AB", " ", "=", " ", 
+   RowBox[{"createSQM", "[", 
+    RowBox[{
+     RowBox[{"defaultHamiltonianOpers", "[", 
+      RowBox[{"[", "1", "]"}], "]"}], ",", 
+     RowBox[{"{", 
+      SubscriptBox["\[Alpha]", "1"], "}"}], ",", 
+     RowBox[{"{", 
+      SubscriptBox["\[Beta]", "1"], "}"}], ",", "antisymm"}], "]"}]}], 
+  ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"ga1AB", " ", "=", " ", 
+   RowBox[{"createSQS", "[", 
+    RowBox[{
+     RowBox[{"{", 
+      SubscriptBox["\[Alpha]", "1"], "}"}], ",", 
+     RowBox[{"{", 
+      SubscriptBox["\[Beta]", "1"], "}"}]}], "]"}]}], 
+  ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"H1AB", " ", "=", " ", 
+   RowBox[{"f1AB", "*", "ga1AB"}]}], ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"f1ab", " ", "=", " ", 
+   RowBox[{"createSQM", "[", 
+    RowBox[{
+     RowBox[{"defaultHamiltonianOpers", "[", 
+      RowBox[{"[", "1", "]"}], "]"}], ",", 
+     RowBox[{"{", "a", "}"}], ",", 
+     RowBox[{"{", "b", "}"}], ",", "antisymm"}], "]"}]}], 
+  ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"ga1ab", " ", "=", " ", 
+   RowBox[{"createSQS", "[", 
+    RowBox[{
+     RowBox[{"{", "a", "}"}], ",", 
+     RowBox[{"{", "b", "}"}]}], "]"}]}], ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"H1ab", " ", "=", "  ", 
+   RowBox[{"f1ab", "*", "ga1ab"}]}], ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{
+   RowBox[{"H1", "=", 
+    RowBox[{"H1AB", "-", "H1ab"}]}], ";"}], 
+  "\[IndentingNewLine]"}], "\[IndentingNewLine]", 
+ RowBox[{"Print", "[", 
+  RowBox[{"\"\<H1 = \>\"", ",", 
+   RowBox[{"H1", "//", "TraditionalForm"}]}], "]"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"tmp1", " ", "=", " ", 
+   RowBox[{"wick", "[", 
+    RowBox[{
+     RowBox[{"L", "**", "H1", "**", "R"}], ",", 
+     RowBox[{"{", 
+      RowBox[{
+       SubscriptBox["x", "1"], ",", 
+       SubscriptBox["y", "1"], ",", "\[Alpha]", ",", "\[Beta]"}], "}"}], ",", 
+     "defaultWickOptions"}], "]"}]}], ";"}], "\[IndentingNewLine]", 
+ RowBox[{"Print", "[", 
+  RowBox[{"tmp1", "//", "TraditionalForm"}], 
+  "]"}], "\[IndentingNewLine]"}], "Input",
+ CellChangeTimes->{{3.618776181265856*^9, 3.618776222740156*^9}, 
+   3.618776260343412*^9, {3.618776386377437*^9, 3.61877639341234*^9}, {
+   3.618776894654806*^9, 3.618776897437194*^9}, {3.6187771387221413`*^9, 
+   3.618777167382092*^9}, {3.6187772267644863`*^9, 3.618777279013328*^9}, {
+   3.618833793123724*^9, 3.618833793544705*^9}, {3.618833829481271*^9, 
+   3.618833839297765*^9}, {3.61883512357858*^9, 3.618835125442277*^9}, 
+   3.61883517867197*^9, {3.618836248430839*^9, 3.618836250043446*^9}, {
+   3.619793348464857*^9, 3.6197933633476048`*^9}, 3.6197938753973217`*^9, {
+   3.61979397869562*^9, 3.619794011835417*^9}, 3.619794270254035*^9, {
+   3.619794305164627*^9, 3.619794323915414*^9}, {3.619794364884218*^9, 
+   3.619794365363442*^9}}],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ InterpretationBox[
+  RowBox[{"\<\"H1 = \"\>", "\[InvisibleSpace]", 
+   TagBox[
+    FormBox[
+     RowBox[{
+      RowBox[{
+       FormBox[
+        TemplateBox[{
+         "\"\[ATilde]\"",
+          "\"\\!\\(\\*SubscriptBox[\\(\[Beta]\\), \\(1\\)]\\)\"",
+          "\"\\!\\(\\*SubscriptBox[\\(\[Alpha]\\), \\(1\\)]\\)\""},
+         "Subsuperscript"],
+        TraditionalForm], " ", 
+       FormBox[
+        TemplateBox[{
+         "\"F\"","\"\\!\\(\\*SubscriptBox[\\(\[Alpha]\\), \\(1\\)]\\)\"",
+          "\"\\!\\(\\*SubscriptBox[\\(\[Beta]\\), \\(1\\)]\\)\""},
+         "Subsuperscript"],
+        TraditionalForm]}], "-", 
+      RowBox[{
+       FormBox[
+        TemplateBox[{"\"\[ATilde]\"","\"b\"","\"a\""},
+         "Subsuperscript"],
+        TraditionalForm], " ", 
+       FormBox[
+        TemplateBox[{"\"F\"","\"a\"","\"b\""},
+         "Subsuperscript"],
+        TraditionalForm]}]}],
+     TraditionalForm],
+    TraditionalForm,
+    Editable->True]}],
+  SequenceForm["H1 = ", 
+   TraditionalForm[-SeQuant`SQM[
+       SeQuant`OHead["F", 
+        SeQuant`indexSymm[-1]], 
+       SeQuant`particleIndex["a", 
+        SeQuant`particleSpace[SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`bra]], 
+       SeQuant`particleIndex["b", 
+        SeQuant`particleSpace[SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`ket]]] SeQuant`SQS[
+       SeQuant`particleIndex["a", 
+        SeQuant`particleSpace[SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`cre]], 
+       SeQuant`particleIndex["b", 
+        SeQuant`particleSpace[SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`ann]]] + SeQuant`SQM[
+       SeQuant`OHead["F", 
+        SeQuant`indexSymm[-1]], 
+       SeQuant`particleIndex["\!\(\*SubscriptBox[\(\[Alpha]\), \(1\)]\)", 
+        SeQuant`particleSpace[SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`bra]], 
+       SeQuant`particleIndex["\!\(\*SubscriptBox[\(\[Beta]\), \(1\)]\)", 
+        SeQuant`particleSpace[SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`ket]]] SeQuant`SQS[
+       SeQuant`particleIndex["\!\(\*SubscriptBox[\(\[Alpha]\), \(1\)]\)", 
+        SeQuant`particleSpace[SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`cre]], 
+       SeQuant`particleIndex["\!\(\*SubscriptBox[\(\[Beta]\), \(1\)]\)", 
+        SeQuant`particleSpace[SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`ann]]]]],
+  Editable->False]], "Print",
+ CellChangeTimes->{{3.618836234204969*^9, 3.618836261866425*^9}, 
+   3.6188454582155247`*^9, {3.6188457884118557`*^9, 3.61884580564042*^9}, 
+   3.618851494069254*^9, 3.6188515363656178`*^9, 3.619190511430727*^9, {
+   3.619793330484688*^9, 3.619793352623349*^9}, 3.619793706254966*^9, {
+   3.6197937602752743`*^9, 3.619793772340458*^9}, 3.619793880372302*^9, {
+   3.619793980524126*^9, 3.619794012774654*^9}, {3.6197942723848124`*^9, 
+   3.6197943801286383`*^9}, 3.619795036786221*^9, {3.619870430871434*^9, 
+   3.619870455066052*^9}, {3.619870502707518*^9, 3.6198705375275917`*^9}, 
+   3.6198706324454737`*^9, {3.619870792238326*^9, 3.619870810511701*^9}, 
+   3.6198862853837843`*^9, 3.620579613554398*^9, 3.620579667332981*^9, 
+   3.620579783453442*^9, 3.620579844619232*^9, 3.62058012364705*^9, 
+   3.620580165563817*^9, 3.620580376758739*^9, 3.620652067730283*^9}],
+
+Cell[BoxData[
+ TagBox[
+  FormBox[
+   RowBox[{
+    RowBox[{
+     FormBox[
+      TemplateBox[{"\"F\"","\"\[Beta]\"","\"\[Alpha]\""},
+       "Subsuperscript"],
+      TraditionalForm], " ", 
+     FormBox[
+      TemplateBox[{"\"\[Gamma]\"","\"y\"","\"x\""},
+       "Subsuperscript"],
+      TraditionalForm]}], "-", 
+    RowBox[{
+     FormBox[
+      TemplateBox[{"\"F\"","\"b\"","\"a\""},
+       "Subsuperscript"],
+      TraditionalForm], " ", 
+     FormBox[
+      TemplateBox[{"\"\[Delta]\"","\"a\"","\"\[Alpha]\""},
+       "Subsuperscript"],
+      TraditionalForm], " ", 
+     FormBox[
+      TemplateBox[{"\"\[Delta]\"","\"\[Beta]\"","\"b\""},
+       "Subsuperscript"],
+      TraditionalForm], " ", 
+     FormBox[
+      TemplateBox[{"\"\[Gamma]\"","\"y\"","\"x\""},
+       "Subsuperscript"],
+      TraditionalForm]}]}],
+   TraditionalForm],
+  TraditionalForm,
+  Editable->True]], "Print",
+ CellChangeTimes->{{3.618836234204969*^9, 3.618836261866425*^9}, 
+   3.6188454582155247`*^9, {3.6188457884118557`*^9, 3.61884580564042*^9}, 
+   3.618851494069254*^9, 3.6188515363656178`*^9, 3.619190511430727*^9, {
+   3.619793330484688*^9, 3.619793352623349*^9}, 3.619793706254966*^9, {
+   3.6197937602752743`*^9, 3.619793772340458*^9}, 3.619793880372302*^9, {
+   3.619793980524126*^9, 3.619794012774654*^9}, {3.6197942723848124`*^9, 
+   3.6197943801286383`*^9}, 3.619795036786221*^9, {3.619870430871434*^9, 
+   3.619870455066052*^9}, {3.619870502707518*^9, 3.6198705375275917`*^9}, 
+   3.6198706324454737`*^9, {3.619870792238326*^9, 3.619870810511701*^9}, 
+   3.6198862853837843`*^9, 3.620579613554398*^9, 3.620579667332981*^9, 
+   3.620579783453442*^9, 3.620579844619232*^9, 3.62058012364705*^9, 
+   3.620580165563817*^9, 3.620580376758739*^9, 3.620652067775732*^9}]
+}, Open  ]]
+}, Open  ]]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[TextData[{
+ Cell[BoxData[
+  FormBox[
+   OverscriptBox[
+    SubscriptBox["H", "2"], "^"], TraditionalForm]]],
+ " = ",
+ Cell[BoxData[
+  FormBox[
+   SubsuperscriptBox["f", "p", "q"], TraditionalForm]]],
+ " ",
+ Cell[BoxData[
+  FormBox[
+   SubsuperscriptBox["a", "q", "p"], TraditionalForm]]]
+}], "Subsection",
+ CellChangeTimes->{{3.603648121098971*^9, 3.6036481735448923`*^9}, {
+  3.603718443240407*^9, 3.603718445457193*^9}},
+ FontSize->24],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[{
+ RowBox[{
+  RowBox[{"f1pq", " ", "=", " ", 
+   RowBox[{"createSQM", "[", 
+    RowBox[{
+     RowBox[{"defaultHamiltonianOpers", "[", 
+      RowBox[{"[", "1", "]"}], "]"}], ",", 
+     RowBox[{"{", "p", "}"}], ",", 
+     RowBox[{"{", "q", "}"}], ",", "antisymm"}], "]"}]}], 
+  ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"apq", " ", "=", " ", 
+   RowBox[{"createSQS", "[", 
+    RowBox[{
+     RowBox[{"{", "p", "}"}], ",", 
+     RowBox[{"{", "q", "}"}], ",", "noorder"}], "]"}]}], 
+  ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{
+   RowBox[{"H2", " ", "=", " ", 
+    RowBox[{"f1pq", " ", "*", "apq"}]}], ";"}], 
+  "\[IndentingNewLine]"}], "\[IndentingNewLine]", 
+ RowBox[{"Print", "[", 
+  RowBox[{"\"\<H2 = \>\"", ",", 
+   RowBox[{"H2", "//", "TraditionalForm"}]}], "]"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"tmp2", " ", "=", " ", 
+   RowBox[{"wick", "[", 
+    RowBox[{
+     RowBox[{"L", "**", "H2", "**", "R"}], ",", 
+     RowBox[{"{", 
+      RowBox[{
+       SubscriptBox["x", "1"], ",", 
+       SubscriptBox["y", "1"], ",", "\[Alpha]", ",", "\[Beta]"}], "}"}], ",", 
+     "wickopts"}], "]"}]}], ";"}], "\[IndentingNewLine]", 
+ RowBox[{"Print", "[", 
+  RowBox[{"tmp2", "//", "TraditionalForm"}], "]"}]}], "Input",
+ CellChangeTimes->{{3.6036482823144407`*^9, 3.603648341827697*^9}, {
+  3.603648660534492*^9, 3.603648676088835*^9}, {3.6036489222206287`*^9, 
+  3.603648942500154*^9}, {3.603649935227079*^9, 3.60364993791698*^9}, {
+  3.603715137476221*^9, 3.603715141189081*^9}, {3.603715768901452*^9, 
+  3.603715769848274*^9}, {3.603718455574658*^9, 3.603718500514964*^9}, {
+  3.6039070656410513`*^9, 3.603907071489476*^9}, {3.6187773284324627`*^9, 
+  3.618777335185698*^9}, {3.618779471754821*^9, 3.618779475284952*^9}}],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ InterpretationBox[
+  RowBox[{"\<\"H2 = \"\>", "\[InvisibleSpace]", 
+   TagBox[
+    FormBox[
+     RowBox[{
+      FormBox[
+       TemplateBox[{"\"a\"","\"q\"","\"p\""},
+        "Subsuperscript"],
+       TraditionalForm], " ", 
+      FormBox[
+       TemplateBox[{"\"F\"","\"p\"","\"q\""},
+        "Subsuperscript"],
+       TraditionalForm]}],
+     TraditionalForm],
+    TraditionalForm,
+    Editable->True]}],
+  SequenceForm["H2 = ", 
+   TraditionalForm[SeQuant`mSQS[
+      SeQuant`normalOrder[False], 
+      SeQuant`SQS[
+       SeQuant`particleIndex["p", 
+        SeQuant`particleSpace[SeQuant`occupied, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`cre]], 
+       SeQuant`particleIndex["q", 
+        SeQuant`particleSpace[SeQuant`occupied, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`ann]]]] SeQuant`SQM[
+      SeQuant`OHead["F", 
+       SeQuant`indexSymm[-1]], 
+      SeQuant`particleIndex["p", 
+       SeQuant`particleSpace[SeQuant`occupied, SeQuant`virtual], 
+       SeQuant`indexType[SeQuant`bra]], 
+      SeQuant`particleIndex["q", 
+       SeQuant`particleSpace[SeQuant`occupied, SeQuant`virtual], 
+       SeQuant`indexType[SeQuant`ket]]]]],
+  Editable->False]], "Print",
+ CellChangeTimes->{3.618777335947568*^9, 3.618779476349008*^9, 
+  3.6187795490428247`*^9, 3.618779612425662*^9, 3.618779674774572*^9, 
+  3.618836265225819*^9, 3.618845344191593*^9, 3.618845387135973*^9, 
+  3.618845463855753*^9, 3.618845678632965*^9, 3.618845808224235*^9, 
+  3.618851497399721*^9, 3.618851538791235*^9, 3.619190514351923*^9, 
+  3.6197950424687443`*^9, 3.619870466488989*^9, 3.619886288058312*^9, 
+  3.620579864704631*^9, 3.6205799781863127`*^9, 3.620580098104478*^9, 
+  3.620580171974228*^9, 3.620580372537898*^9}],
+
+Cell[BoxData[
+ TagBox[
+  FormBox[
+   RowBox[{
+    RowBox[{
+     FormBox[
+      TemplateBox[{"\"F\"","\"q\"","\"p\""},
+       "Subsuperscript"],
+      TraditionalForm], " ", 
+     FormBox[
+      TemplateBox[{"\"\[Delta]\"","\"\[Beta]\"","\"\[Alpha]\""},
+       "Subsuperscript"],
+      TraditionalForm], " ", 
+     FormBox[
+      TemplateBox[{"\"\[Gamma]\"","\"yp\"","\"xq\""},
+       "Subsuperscript"],
+      TraditionalForm]}], "+", 
+    RowBox[{
+     FormBox[
+      TemplateBox[{
+       "\"F\"","\"\\!\\(TraditionalForm\\`\\\"a\\\"\\_1\\)\"",
+        "\"\\!\\(TraditionalForm\\`\\\"a\\\"\\_0\\)\""},
+       "Subsuperscript"],
+      TraditionalForm], " ", 
+     FormBox[
+      TemplateBox[{
+       "\"\[Delta]\"","\"\\!\\(TraditionalForm\\`\\\"a\\\"\\_0\\)\"",
+        "\"\[Alpha]\""},
+       "Subsuperscript"],
+      TraditionalForm], " ", 
+     FormBox[
+      TemplateBox[{
+       "\"\[Delta]\"","\"\[Beta]\"",
+        "\"\\!\\(TraditionalForm\\`\\\"a\\\"\\_1\\)\""},
+       "Subsuperscript"],
+      TraditionalForm], " ", 
+     FormBox[
+      TemplateBox[{"\"\[Gamma]\"","\"y\"","\"x\""},
+       "Subsuperscript"],
+      TraditionalForm]}]}],
+   TraditionalForm],
+  TraditionalForm,
+  Editable->True]], "Print",
+ CellChangeTimes->{3.618777335947568*^9, 3.618779476349008*^9, 
+  3.6187795490428247`*^9, 3.618779612425662*^9, 3.618779674774572*^9, 
+  3.618836265225819*^9, 3.618845344191593*^9, 3.618845387135973*^9, 
+  3.618845463855753*^9, 3.618845678632965*^9, 3.618845808224235*^9, 
+  3.618851497399721*^9, 3.618851538791235*^9, 3.619190514351923*^9, 
+  3.6197950424687443`*^9, 3.619870466488989*^9, 3.619886288058312*^9, 
+  3.620579864704631*^9, 3.6205799781863127`*^9, 3.620580098104478*^9, 
+  3.620580171974228*^9, 3.620580372598768*^9}]
+}, Open  ]]
+}, Open  ]]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[TextData[{
+ Cell[BoxData[
+  FormBox[
+   OverscriptBox[
+    SubscriptBox["H", "3"], "^"], TraditionalForm]]],
+ " = -",
+ Cell[BoxData[
+  FormBox[
+   SubsuperscriptBox["f", "p", "q"], TraditionalForm]]],
+ " ",
+ Cell[BoxData[
+  FormBox[
+   SubsuperscriptBox["\[Gamma]", "q", "p"], TraditionalForm]]]
+}], "Subsection",
+ CellChangeTimes->{{3.603648121098971*^9, 3.6036481735448923`*^9}, {
+  3.603718443240407*^9, 3.603718445457193*^9}, {3.6037185209344*^9, 
+  3.6037185245005293`*^9}, {3.603718830688031*^9, 3.603718833258459*^9}},
+ FontSize->24],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[{
+ RowBox[{
+  RowBox[{"\[Gamma]pq", " ", "=", 
+   RowBox[{"createSQM", "[", 
+    RowBox[{"\"\<\[Lambda]\>\"", ",", 
+     RowBox[{"{", "q", "}"}], ",", 
+     RowBox[{"{", "p", "}"}], ",", "antisymm"}], "]"}]}], 
+  ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{
+   RowBox[{"H3", "=", 
+    RowBox[{
+     RowBox[{"-", "f1pq"}], " ", "*", "\[Gamma]pq"}]}], ";"}], 
+  "\[IndentingNewLine]"}], "\[IndentingNewLine]", 
+ RowBox[{"Print", "[", 
+  RowBox[{"\"\<H3 = \>\"", ",", 
+   RowBox[{"H3", "//", "TraditionalForm"}]}], "]"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"tmp3", " ", "=", " ", 
+   RowBox[{"wick", "[", 
+    RowBox[{
+     RowBox[{"L", "**", "H3", "**", "R"}], ",", 
+     RowBox[{"{", 
+      RowBox[{
+       SubscriptBox["x", "1"], ",", 
+       SubscriptBox["y", "1"], ",", "\[Alpha]", ",", "\[Beta]"}], "}"}], ",", 
+     "wickopts"}], "]"}]}], ";"}], "\[IndentingNewLine]", 
+ RowBox[{"Print", "[", 
+  RowBox[{"tmp3", "//", "TraditionalForm"}], "]"}]}], "Input",
+ CellChangeTimes->{{3.603647730502706*^9, 3.6036477364375277`*^9}, {
+   3.603647791916478*^9, 3.603647798756176*^9}, {3.603648193814025*^9, 
+   3.603648210956056*^9}, {3.603648265263188*^9, 3.603648271887121*^9}, {
+   3.60364962548643*^9, 3.603649633365013*^9}, {3.603715153623958*^9, 
+   3.6037151578954287`*^9}, {3.603718536566517*^9, 3.603718599767577*^9}, 
+   3.603718836180814*^9, {3.603718868993299*^9, 3.603718870123198*^9}, {
+   3.6039070745172033`*^9, 3.603907090579104*^9}, {3.610287784154348*^9, 
+   3.6102877913042603`*^9}, {3.618777420822336*^9, 3.6187774691884527`*^9}}],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ InterpretationBox[
+  RowBox[{"\<\"H3 = \"\>", "\[InvisibleSpace]", 
+   TagBox[
+    FormBox[
+     RowBox[{
+      RowBox[{"-", 
+       FormBox[
+        TemplateBox[{"\"F\"","\"p\"","\"q\""},
+         "Subsuperscript"],
+        TraditionalForm]}], " ", 
+      FormBox[
+       TemplateBox[{"\"\[Lambda]\"","\"q\"","\"p\""},
+        "Subsuperscript"],
+       TraditionalForm]}],
+     TraditionalForm],
+    TraditionalForm,
+    Editable->True]}],
+  SequenceForm["H3 = ", 
+   TraditionalForm[-SeQuant`SQM[
+      SeQuant`OHead["F", 
+       SeQuant`indexSymm[-1]], 
+      SeQuant`particleIndex["p", 
+       SeQuant`particleSpace[SeQuant`occupied, SeQuant`virtual], 
+       SeQuant`indexType[SeQuant`bra]], 
+      SeQuant`particleIndex["q", 
+       SeQuant`particleSpace[SeQuant`occupied, SeQuant`virtual], 
+       SeQuant`indexType[SeQuant`ket]]] SeQuant`SQM[
+      SeQuant`OHead["\[Lambda]", 
+       SeQuant`indexSymm[-1]], 
+      SeQuant`particleIndex["q", 
+       SeQuant`particleSpace[SeQuant`occupied, SeQuant`virtual], 
+       SeQuant`indexType[SeQuant`bra]], 
+      SeQuant`particleIndex["p", 
+       SeQuant`particleSpace[SeQuant`occupied, SeQuant`virtual], 
+       SeQuant`indexType[SeQuant`ket]]]]],
+  Editable->False]], "Print",
+ CellChangeTimes->{
+  3.618777430521029*^9, 3.618777470320157*^9, 3.61883626746637*^9, 
+   3.618845811651866*^9, 3.618851483942039*^9, 3.618851541908614*^9, {
+   3.6191904971708527`*^9, 3.619190516962022*^9}, 3.619795047236175*^9, 
+   3.6198704690530024`*^9, 3.619886292435794*^9, 3.6205801759138308`*^9, 
+   3.6205803697511473`*^9}],
+
+Cell[BoxData[
+ TagBox[
+  FormBox[
+   RowBox[{
+    FormBox[
+     TemplateBox[{"\"F\"","\"p\"","\"q\""},
+      "Subsuperscript"],
+     TraditionalForm], " ", 
+    FormBox[
+     TemplateBox[{"\"\[Gamma]\"","\"q\"","\"p\""},
+      "Subsuperscript"],
+     TraditionalForm], " ", 
+    RowBox[{"(", 
+     RowBox[{"-", 
+      FormBox[
+       TemplateBox[{"\"\[Delta]\"","\"\[Beta]\"","\"\[Alpha]\""},
+        "Subsuperscript"],
+       TraditionalForm]}], ")"}], " ", 
+    FormBox[
+     TemplateBox[{"\"\[Gamma]\"","\"y\"","\"x\""},
+      "Subsuperscript"],
+     TraditionalForm]}],
+   TraditionalForm],
+  TraditionalForm,
+  Editable->True]], "Print",
+ CellChangeTimes->{
+  3.618777430521029*^9, 3.618777470320157*^9, 3.61883626746637*^9, 
+   3.618845811651866*^9, 3.618851483942039*^9, 3.618851541908614*^9, {
+   3.6191904971708527`*^9, 3.619190516962022*^9}, 3.619795047236175*^9, 
+   3.6198704690530024`*^9, 3.619886292435794*^9, 3.6205801759138308`*^9, 
+   3.620580369755773*^9}]
+}, Open  ]]
+}, Open  ]]
+}, Open  ]]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell["Dyall Hamiltonian", "Section",
+ CellChangeTimes->{{3.603718195196013*^9, 3.603718203361418*^9}, {
+  3.603724347853306*^9, 3.603724370397586*^9}, {3.618782278965467*^9, 
+  3.618782280882465*^9}}],
+
+Cell[TextData[{
+ "The expression need to expand is ",
+ Cell[BoxData[
+  FormBox[
+   StyleBox[
+    RowBox[{
+     SubsuperscriptBox["a", "\[Beta]", "x"], "[", 
+     RowBox[{
+      OverscriptBox[
+       SubsuperscriptBox["H", "D", "0"], "^"], ",", 
+      SubsuperscriptBox["a", "y", "\[Alpha]"]}], "]"}], "Subtitle"], 
+   TraditionalForm]], "Title"],
+ "\n",
+ Cell[BoxData[
+  FormBox[
+   OverscriptBox[
+    SubsuperscriptBox["H", "D", "0"], "^"], TraditionalForm]]],
+ " is split to ",
+ Cell[BoxData[
+  FormBox[
+   OverscriptBox[
+    SubscriptBox["H", "1"], "^"], TraditionalForm]]],
+ " +  ",
+ Cell[BoxData[
+  FormBox[
+   OverscriptBox[
+    SubscriptBox["H", "2"], "^"], TraditionalForm]]],
+ " +  ",
+ Cell[BoxData[
+  FormBox[
+   OverscriptBox[
+    SubscriptBox["H", "3"], "^"], TraditionalForm]]]
+}], "Text",
+ CellChangeTimes->{{3.603647228493367*^9, 3.603647236984726*^9}, {
+   3.603647289112734*^9, 3.603647474492031*^9}, {3.603647536036005*^9, 
+   3.603647552336994*^9}, 3.603718094542694*^9},
+ FontSize->18],
+
+Cell[CellGroupData[{
+
+Cell[TextData[{
+ Cell[BoxData[
+  FormBox[
+   OverscriptBox[
+    SubscriptBox["H", "1"], "^"], TraditionalForm]]],
+ "=",
+ Cell[BoxData[
+  FormBox[
+   RowBox[{" ", 
+    SubsuperscriptBox["f", 
+     RowBox[{"\[Alpha]", "'"}], 
+     RowBox[{"\[Beta]", "'"}]]}], TraditionalForm]]],
+ Cell[BoxData[
+  FormBox[
+   SubsuperscriptBox["a", 
+    RowBox[{"\[Beta]", "'"}], 
+    RowBox[{"\[Alpha]", "'"}]], TraditionalForm]]],
+ "+",
+ Cell[BoxData[
+  FormBox[
+   RowBox[{" ", 
+    SubsuperscriptBox["f", 
+     RowBox[{"\[Alpha]", "'"}], "a"]}], TraditionalForm]]],
+ Cell[BoxData[
+  FormBox[
+   SubsuperscriptBox["a", "a", 
+    RowBox[{"\[Alpha]", "'"}]], TraditionalForm]]],
+ " + ",
+ Cell[BoxData[
+  FormBox[
+   SubsuperscriptBox["f", "a", 
+    RowBox[{"\[Alpha]", "'"}]], TraditionalForm]]],
+ Cell[BoxData[
+  FormBox[
+   SubsuperscriptBox["a", 
+    RowBox[{"\[Alpha]", "'"}], "a"], TraditionalForm]]]
+}], "Subsection",
+ CellChangeTimes->{
+  3.60364678748339*^9, {3.603646827051547*^9, 3.603646991811817*^9}, {
+   3.603647270828413*^9, 3.603647283843196*^9}, {3.603647752652191*^9, 
+   3.6036477526522703`*^9}, {3.603650334204205*^9, 3.603650344445311*^9}},
+ FontSize->24],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[{
+ RowBox[{
+  RowBox[{"f1AB", " ", "=", " ", 
+   RowBox[{"createSQM", "[", 
+    RowBox[{
+     RowBox[{"defaultHamiltonianOpers", "[", 
+      RowBox[{"[", "1", "]"}], "]"}], ",", 
+     RowBox[{"{", 
+      SubscriptBox["\[Alpha]", "1"], "}"}], ",", 
+     RowBox[{"{", 
+      SubscriptBox["\[Beta]", "1"], "}"}], ",", "antisymm"}], "]"}]}], 
+  ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"ga1AB", " ", "=", " ", 
+   RowBox[{"createSQS", "[", 
+    RowBox[{
+     RowBox[{"{", 
+      SubscriptBox["\[Alpha]", "1"], "}"}], ",", 
+     RowBox[{"{", 
+      SubscriptBox["\[Beta]", "1"], "}"}], ",", "inorder"}], "]"}]}], 
+  ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"H1AB", " ", "=", " ", 
+   RowBox[{"f1AB", "*", "ga1AB"}]}], ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"f1ab", " ", "=", " ", 
+   RowBox[{"createSQM", "[", 
+    RowBox[{
+     RowBox[{"defaultHamiltonianOpers", "[", 
+      RowBox[{"[", "1", "]"}], "]"}], ",", 
+     RowBox[{"{", "a", "}"}], ",", 
+     RowBox[{"{", "b", "}"}], ",", "antisymm"}], "]"}]}], 
+  ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"ga1ab", " ", "=", " ", 
+   RowBox[{"createSQS", "[", 
+    RowBox[{
+     RowBox[{"{", "a", "}"}], ",", 
+     RowBox[{"{", "b", "}"}], ",", "inorder"}], "]"}]}], 
+  ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"H1ab", " ", "=", "  ", 
+   RowBox[{"f1ab", "*", "ga1ab"}]}], ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{
+   RowBox[{"H1", "=", 
+    RowBox[{"H1AB", "-", "H1ab"}]}], ";"}], 
+  "\[IndentingNewLine]"}], "\[IndentingNewLine]", 
+ RowBox[{"Print", "[", 
+  RowBox[{"\"\<H1 = \>\"", ",", 
+   RowBox[{"H1", "//", "TraditionalForm"}]}], "]"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"tmp1", " ", "=", " ", 
+   RowBox[{"wick", "[", 
+    RowBox[{
+     RowBox[{
+      RowBox[{"L", "**", "H1", "**", "R"}], "-", 
+      RowBox[{"L", "**", "R", "**", "H1"}]}], ",", 
+     RowBox[{"{", 
+      RowBox[{
+       SubscriptBox["x", "1"], ",", 
+       SubscriptBox["y", "1"], ",", "\[Alpha]", ",", "\[Beta]"}], "}"}], ",", 
+     "wickopts"}], "]"}]}], ";"}], "\[IndentingNewLine]", 
+ RowBox[{"Print", "[", 
+  RowBox[{"tmp1", "//", "TraditionalForm"}], "]"}]}], "Input",
+ CellChangeTimes->{{3.60364706564485*^9, 3.603647089300268*^9}, {
+   3.603647136604773*^9, 3.603647179259184*^9}, {3.6036483456199627`*^9, 
+   3.603648646737246*^9}, 3.603648678568901*^9, {3.603648777638598*^9, 
+   3.603648841652533*^9}, {3.603650260432314*^9, 3.6036503798921003`*^9}, {
+   3.603650419116259*^9, 3.603650439516539*^9}, {3.603650472540145*^9, 
+   3.603650486244121*^9}, {3.60365053377641*^9, 3.603650543644491*^9}, {
+   3.603664367530375*^9, 3.603664372630597*^9}, {3.603715250518065*^9, 
+   3.6037152697219467`*^9}, {3.603715633625622*^9, 3.60371564641927*^9}, {
+   3.603715682318695*^9, 3.603715752310058*^9}, {3.603718363442513*^9, 
+   3.603718365743835*^9}, {3.603906865036577*^9, 3.6039068660597353`*^9}, {
+   3.603906933246076*^9, 3.6039069520393143`*^9}, {3.618782307515113*^9, 
+   3.6187823165326357`*^9}, {3.618782469633768*^9, 3.6187824783444023`*^9}, {
+   3.618850063155225*^9, 3.618850068367931*^9}}],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ InterpretationBox[
+  RowBox[{"\<\"H1 = \"\>", "\[InvisibleSpace]", 
+   TagBox[
+    FormBox[
+     RowBox[{
+      RowBox[{
+       FormBox[
+        TemplateBox[{
+         "\"F\"","\"\\!\\(\\*SubscriptBox[\\(\[Alpha]\\), \\(1\\)]\\)\"",
+          "\"\\!\\(\\*SubscriptBox[\\(\[Beta]\\), \\(1\\)]\\)\""},
+         "Subsuperscript"],
+        TraditionalForm], " ", 
+       FormBox[
+        TemplateBox[{
+         OverscriptBox["\"a\"", "~"],
+          "\"\\!\\(\\*SubscriptBox[\\(\[Beta]\\), \\(1\\)]\\)\"",
+          "\"\\!\\(\\*SubscriptBox[\\(\[Alpha]\\), \\(1\\)]\\)\""},
+         "Subsuperscript"],
+        TraditionalForm]}], "-", 
+      RowBox[{
+       FormBox[
+        TemplateBox[{OverscriptBox["\"a\"", "~"],"\"b\"","\"a\""},
+         "Subsuperscript"],
+        TraditionalForm], " ", 
+       FormBox[
+        TemplateBox[{"\"F\"","\"a\"","\"b\""},
+         "Subsuperscript"],
+        TraditionalForm]}]}],
+     TraditionalForm],
+    TraditionalForm,
+    Editable->True]}],
+  SequenceForm["H1 = ", 
+   TraditionalForm[-SeQuant`mSQS[
+       SeQuant`normalOrder[True], 
+       SeQuant`SQS[
+        SeQuant`particleIndex["a", 
+         SeQuant`particleSpace[SeQuant`virtual], 
+         SeQuant`indexType[SeQuant`cre]], 
+        SeQuant`particleIndex["b", 
+         SeQuant`particleSpace[SeQuant`virtual], 
+         SeQuant`indexType[SeQuant`ann]]]] SeQuant`SQM[
+       SeQuant`OHead["F", 
+        SeQuant`indexSymm[-1]], 
+       SeQuant`particleIndex["a", 
+        SeQuant`particleSpace[SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`bra]], 
+       SeQuant`particleIndex["b", 
+        SeQuant`particleSpace[SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`ket]]] + SeQuant`mSQS[
+       SeQuant`normalOrder[True], 
+       SeQuant`SQS[
+        SeQuant`particleIndex["\!\(\*SubscriptBox[\(\[Alpha]\), \(1\)]\)", 
+         SeQuant`particleSpace[SeQuant`othervirtual, SeQuant`virtual], 
+         SeQuant`indexType[SeQuant`cre]], 
+        SeQuant`particleIndex["\!\(\*SubscriptBox[\(\[Beta]\), \(1\)]\)", 
+         SeQuant`particleSpace[SeQuant`othervirtual, SeQuant`virtual], 
+         SeQuant`indexType[SeQuant`ann]]]] SeQuant`SQM[
+       SeQuant`OHead["F", 
+        SeQuant`indexSymm[-1]], 
+       SeQuant`particleIndex["\!\(\*SubscriptBox[\(\[Alpha]\), \(1\)]\)", 
+        SeQuant`particleSpace[SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`bra]], 
+       SeQuant`particleIndex["\!\(\*SubscriptBox[\(\[Beta]\), \(1\)]\)", 
+        SeQuant`particleSpace[SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`ket]]]]],
+  Editable->False]], "Print",
+ CellChangeTimes->{{3.618782371096738*^9, 3.618782479074009*^9}, 
+   3.618845946680231*^9, 3.618850068796929*^9, 3.618851545524209*^9, 
+   3.619190491623024*^9, 3.619795051782621*^9, 3.6198704723232613`*^9, 
+   3.619886295432026*^9, 3.620580180650826*^9, 3.620580363949341*^9}],
+
+Cell[BoxData[
+ TagBox[
+  FormBox[
+   RowBox[{
+    RowBox[{
+     FormBox[
+      TemplateBox[{"\"F\"","\"\[Beta]\"","\"\[Alpha]\""},
+       "Subsuperscript"],
+      TraditionalForm], " ", 
+     FormBox[
+      TemplateBox[{"\"\[Gamma]\"","\"y\"","\"x\""},
+       "Subsuperscript"],
+      TraditionalForm]}], "-", 
+    RowBox[{
+     FormBox[
+      TemplateBox[{"\"F\"","\"b\"","\"a\""},
+       "Subsuperscript"],
+      TraditionalForm], " ", 
+     FormBox[
+      TemplateBox[{"\"\[Delta]\"","\"a\"","\"\[Alpha]\""},
+       "Subsuperscript"],
+      TraditionalForm], " ", 
+     FormBox[
+      TemplateBox[{"\"\[Delta]\"","\"\[Beta]\"","\"b\""},
+       "Subsuperscript"],
+      TraditionalForm], " ", 
+     FormBox[
+      TemplateBox[{"\"\[Gamma]\"","\"y\"","\"x\""},
+       "Subsuperscript"],
+      TraditionalForm]}]}],
+   TraditionalForm],
+  TraditionalForm,
+  Editable->True]], "Print",
+ CellChangeTimes->{{3.618782371096738*^9, 3.618782479074009*^9}, 
+   3.618845946680231*^9, 3.618850068796929*^9, 3.618851545524209*^9, 
+   3.619190491623024*^9, 3.619795051782621*^9, 3.6198704723232613`*^9, 
+   3.619886295432026*^9, 3.620580180650826*^9, 3.6205803640343437`*^9}]
+}, Open  ]]
+}, Open  ]]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[TextData[{
+ Cell[BoxData[
+  FormBox[
+   OverscriptBox[
+    SubscriptBox["H", "2"], "^"], TraditionalForm]]],
+ " = ",
+ Cell[BoxData[
+  FormBox[
+   SubsuperscriptBox["h", "p", "q"], TraditionalForm]]],
+ " ",
+ Cell[BoxData[
+  FormBox[
+   SubsuperscriptBox["a", "q", "p"], TraditionalForm]]]
+}], "Subsection",
+ CellChangeTimes->{{3.603648121098971*^9, 3.6036481735448923`*^9}},
+ FontSize->24],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[{
+ RowBox[{
+  RowBox[{"h1", " ", "=", " ", 
+   RowBox[{"createSQM", "[", 
+    RowBox[{"\"\<h\>\"", ",", 
+     RowBox[{"{", "p", "}"}], ",", 
+     RowBox[{"{", "q", "}"}], ",", "antisymm"}], "]"}]}], 
+  ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"ga2", " ", "=", " ", 
+   RowBox[{"createSQS", "[", 
+    RowBox[{
+     RowBox[{"{", "p", "}"}], ",", 
+     RowBox[{"{", "q", "}"}], ",", "noorder"}], "]"}]}], 
+  ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{
+   RowBox[{"H2", " ", "=", " ", 
+    RowBox[{"h1", "*", "ga2"}]}], ";"}], 
+  "\[IndentingNewLine]"}], "\[IndentingNewLine]", 
+ RowBox[{"Print", "[", 
+  RowBox[{"\"\<H2 = \>\"", ",", 
+   RowBox[{"H2", "//", "TraditionalForm"}]}], "]"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"tmp2", " ", "=", " ", 
+   RowBox[{"wick", "[", 
+    RowBox[{
+     RowBox[{
+      RowBox[{"L", "**", "H2", "**", "R"}], "-", 
+      RowBox[{"L", "**", "R", "**", "H2"}]}], ",", 
+     RowBox[{"{", 
+      RowBox[{
+       SubscriptBox["x", "1"], ",", 
+       SubscriptBox["y", "1"], ",", "\[Alpha]", ",", "\[Beta]"}], "}"}], ",", 
+     "wickopts"}], "]"}]}], ";"}], "\[IndentingNewLine]", 
+ RowBox[{"Print", "[", 
+  RowBox[{"tmp2", "//", "TraditionalForm"}], "]"}]}], "Input",
+ CellChangeTimes->{{3.6036482823144407`*^9, 3.603648341827697*^9}, {
+  3.603648660534492*^9, 3.603648676088835*^9}, {3.6036489222206287`*^9, 
+  3.603648942500154*^9}, {3.603649935227079*^9, 3.60364993791698*^9}, {
+  3.603715137476221*^9, 3.603715141189081*^9}, {3.603715768901452*^9, 
+  3.603715769848274*^9}, {3.603906965369237*^9, 3.603906970985819*^9}, {
+  3.618782324507958*^9, 3.6187823268028927`*^9}, {3.618848958465952*^9, 
+  3.6188489728234777`*^9}}],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ InterpretationBox[
+  RowBox[{"\<\"H2 = \"\>", "\[InvisibleSpace]", 
+   TagBox[
+    FormBox[
+     RowBox[{
+      FormBox[
+       TemplateBox[{"\"a\"","\"q\"","\"p\""},
+        "Subsuperscript"],
+       TraditionalForm], " ", 
+      FormBox[
+       TemplateBox[{"\"h\"","\"p\"","\"q\""},
+        "Subsuperscript"],
+       TraditionalForm]}],
+     TraditionalForm],
+    TraditionalForm,
+    Editable->True]}],
+  SequenceForm["H2 = ", 
+   TraditionalForm[SeQuant`mSQS[
+      SeQuant`normalOrder[False], 
+      SeQuant`SQS[
+       SeQuant`particleIndex["p", 
+        SeQuant`particleSpace[SeQuant`occupied, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`cre]], 
+       SeQuant`particleIndex["q", 
+        SeQuant`particleSpace[SeQuant`occupied, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`ann]]]] SeQuant`SQM[
+      SeQuant`OHead["h", 
+       SeQuant`indexSymm[-1]], 
+      SeQuant`particleIndex["p", 
+       SeQuant`particleSpace[SeQuant`occupied, SeQuant`virtual], 
+       SeQuant`indexType[SeQuant`bra]], 
+      SeQuant`particleIndex["q", 
+       SeQuant`particleSpace[SeQuant`occupied, SeQuant`virtual], 
+       SeQuant`indexType[SeQuant`ket]]]]],
+  Editable->False]], "Print",
+ CellChangeTimes->{3.619886298265579*^9, 3.6205801838667517`*^9, 
+  3.620580356574486*^9}],
+
+Cell[BoxData[
+ TagBox[
+  FormBox[
+   RowBox[{
+    RowBox[{
+     FormBox[
+      TemplateBox[{
+       "\"h\"","\"\\!\\(TraditionalForm\\`\\\"a\\\"\\_1\\)\"",
+        "\"\\!\\(TraditionalForm\\`\\\"a\\\"\\_0\\)\""},
+       "Subsuperscript"],
+      TraditionalForm], " ", 
+     FormBox[
+      TemplateBox[{
+       "\"\[Delta]\"","\"\\!\\(TraditionalForm\\`\\\"a\\\"\\_0\\)\"",
+        "\"\[Alpha]\""},
+       "Subsuperscript"],
+      TraditionalForm], " ", 
+     FormBox[
+      TemplateBox[{
+       "\"\[Delta]\"","\"\[Beta]\"",
+        "\"\\!\\(TraditionalForm\\`\\\"a\\\"\\_1\\)\""},
+       "Subsuperscript"],
+      TraditionalForm], " ", 
+     FormBox[
+      TemplateBox[{"\"\[Gamma]\"","\"y\"","\"x\""},
+       "Subsuperscript"],
+      TraditionalForm]}], "-", 
+    RowBox[{
+     FormBox[
+      TemplateBox[{"\"h\"","\"y\"","\"p\""},
+       "Subsuperscript"],
+      TraditionalForm], " ", 
+     FormBox[
+      TemplateBox[{"\"\[Gamma]\"","\"p\"","\"x\""},
+       "Subsuperscript"],
+      TraditionalForm], " ", 
+     FormBox[
+      TemplateBox[{"\"\[Delta]\"","\"\[Beta]\"","\"\[Alpha]\""},
+       "Subsuperscript"],
+      TraditionalForm]}]}],
+   TraditionalForm],
+  TraditionalForm,
+  Editable->True]], "Print",
+ CellChangeTimes->{3.619886298265579*^9, 3.6205801838667517`*^9, 
+  3.620580356660367*^9}]
+}, Open  ]]
+}, Open  ]]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[TextData[{
+ Cell[BoxData[
+  FormBox[
+   OverscriptBox[
+    SubscriptBox["H", "3"], "^"], TraditionalForm]]],
+ " = ",
+ Cell[BoxData[
+  FormBox[
+   FractionBox["1", "2"], TraditionalForm]]],
+ Cell[BoxData[
+  FormBox[
+   RowBox[{
+    SubsuperscriptBox["g", "pr", "qs"], " ", 
+    SubsuperscriptBox["a", "qs", "pr"]}], TraditionalForm]]]
+}], "Subsection",
+ CellChangeTimes->{{3.6036479909549828`*^9, 3.603648080817841*^9}, {
+  3.606146212451214*^9, 3.60614623499408*^9}, {3.606147060114854*^9, 
+  3.6061470763853693`*^9}},
+ FontSize->24],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[{
+ RowBox[{
+  RowBox[{"g1", "=", 
+   RowBox[{"createSQM", "[", 
+    RowBox[{"\"\<g\>\"", ",", 
+     RowBox[{"{", 
+      RowBox[{"p", ",", "r"}], "}"}], ",", 
+     RowBox[{"{", 
+      RowBox[{"q", ",", "s"}], "}"}], ",", "nonsymm"}], "]"}]}], 
+  ";"}], "\n", 
+ RowBox[{
+  RowBox[{"ga3", "=", 
+   RowBox[{"createSQS", "[", 
+    RowBox[{
+     RowBox[{"{", 
+      RowBox[{"p", ",", "r"}], "}"}], ",", 
+     RowBox[{"{", 
+      RowBox[{"q", ",", "s"}], "}"}], ",", "noorder"}], "]"}]}], 
+  ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{
+   RowBox[{"H3", "=", 
+    RowBox[{
+     RowBox[{"1", "/", "2"}], " ", "g1", "*", "ga3"}]}], ";"}], 
+  "\[IndentingNewLine]"}], "\[IndentingNewLine]", 
+ RowBox[{"Print", "[", 
+  RowBox[{"\"\<H3 = \>\"", ",", 
+   RowBox[{"H3", "//", "TraditionalForm"}]}], "]"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"tmp3", " ", "=", " ", 
+   RowBox[{"wick", "[", 
+    RowBox[{
+     RowBox[{
+      RowBox[{"L", "**", "H3", "**", "R"}], "-", 
+      RowBox[{"L", "**", "R", "**", "H3"}]}], ",", 
+     RowBox[{"{", 
+      RowBox[{
+       SubscriptBox["x", "1"], ",", 
+       SubscriptBox["y", "1"], ",", "\[Alpha]", ",", "\[Beta]"}], "}"}], ",", 
+     "wickopts"}], "]"}]}], ";"}], "\[IndentingNewLine]", 
+ RowBox[{"Print", "[", 
+  RowBox[{"tmp3", "//", "TraditionalForm"}], "]"}]}], "Input",
+ CellChangeTimes->{{3.603647730502706*^9, 3.6036477364375277`*^9}, {
+   3.603647791916478*^9, 3.603647798756176*^9}, {3.603648193814025*^9, 
+   3.603648210956056*^9}, {3.603648265263188*^9, 3.603648271887121*^9}, {
+   3.60364962548643*^9, 3.603649633365013*^9}, {3.603715153623958*^9, 
+   3.6037151578954287`*^9}, {3.6039069765312147`*^9, 3.60390698152531*^9}, {
+   3.606146226963933*^9, 3.6061462333648033`*^9}, {3.606146361490082*^9, 
+   3.606146396704214*^9}, {3.606146577425748*^9, 3.606146580575017*^9}, {
+   3.606146998044137*^9, 3.606147005162738*^9}, {3.606147063593772*^9, 
+   3.6061470792894583`*^9}, {3.618782331938971*^9, 3.618782334233094*^9}, {
+   3.61884896626587*^9, 3.618848982784539*^9}, {3.6191894520758333`*^9, 
+   3.619189487672134*^9}, 3.619189694996195*^9}],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ InterpretationBox[
+  RowBox[{"\<\"H3 = \"\>", "\[InvisibleSpace]", 
+   TagBox[
+    FormBox[
+     RowBox[{
+      FractionBox["1", "2"], " ", 
+      FormBox[
+       TemplateBox[{"\"a\"","\"qs\"","\"pr\""},
+        "Subsuperscript"],
+       TraditionalForm], " ", 
+      FormBox[
+       TemplateBox[{"\"g\"","\"pr\"","\"qs\""},
+        "Subsuperscript"],
+       TraditionalForm]}],
+     TraditionalForm],
+    TraditionalForm,
+    Editable->True]}],
+  SequenceForm["H3 = ", 
+   TraditionalForm[Rational[1, 2] SeQuant`mSQS[
+      SeQuant`normalOrder[False], 
+      SeQuant`SQS[
+       SeQuant`particleIndex["p", 
+        SeQuant`particleSpace[SeQuant`occupied, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`cre]], 
+       SeQuant`particleIndex["r", 
+        SeQuant`particleSpace[SeQuant`occupied, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`cre]], 
+       SeQuant`particleIndex["s", 
+        SeQuant`particleSpace[SeQuant`occupied, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`ann]], 
+       SeQuant`particleIndex["q", 
+        SeQuant`particleSpace[SeQuant`occupied, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`ann]]]] SeQuant`SQM[
+      SeQuant`OHead["g", 
+       SeQuant`indexSymm[0]], 
+      SeQuant`particleIndex["p", 
+       SeQuant`particleSpace[SeQuant`occupied, SeQuant`virtual], 
+       SeQuant`indexType[SeQuant`bra]], 
+      SeQuant`particleIndex["r", 
+       SeQuant`particleSpace[SeQuant`occupied, SeQuant`virtual], 
+       SeQuant`indexType[SeQuant`bra]], 
+      SeQuant`particleIndex["q", 
+       SeQuant`particleSpace[SeQuant`occupied, SeQuant`virtual], 
+       SeQuant`indexType[SeQuant`ket]], 
+      SeQuant`particleIndex["s", 
+       SeQuant`particleSpace[SeQuant`occupied, SeQuant`virtual], 
+       SeQuant`indexType[SeQuant`ket]]]]],
+  Editable->False]], "Print",
+ CellChangeTimes->{3.619189992596076*^9, 3.619190025988365*^9, 
+  3.619190081105794*^9, 3.619190485265552*^9, 3.619795059518449*^9, 
+  3.619870481421262*^9, 3.6198863007471*^9, 3.6205801884512873`*^9, 
+  3.620580351596242*^9}],
+
+Cell[BoxData[
+ TagBox[
+  FormBox[
+   RowBox[{
+    RowBox[{
+     FractionBox["1", "2"], " ", 
+     FormBox[
+      TemplateBox[{
+       "\"g\"","\"q\\!\\(TraditionalForm\\`\\\"a\\\"\\_1\\)\"",
+        "\"p\\!\\(TraditionalForm\\`\\\"a\\\"\\_0\\)\""},
+       "Subsuperscript"],
+      TraditionalForm], " ", 
+     FormBox[
+      TemplateBox[{
+       "\"\[Delta]\"","\"\\!\\(TraditionalForm\\`\\\"a\\\"\\_0\\)\"",
+        "\"\[Alpha]\""},
+       "Subsuperscript"],
+      TraditionalForm], " ", 
+     FormBox[
+      TemplateBox[{
+       "\"\[Delta]\"","\"\[Beta]\"",
+        "\"\\!\\(TraditionalForm\\`\\\"a\\\"\\_1\\)\""},
+       "Subsuperscript"],
+      TraditionalForm], " ", 
+     FormBox[
+      TemplateBox[{"\"\[Gamma]\"","\"yp\"","\"xq\""},
+       "Subsuperscript"],
+      TraditionalForm]}], "-", 
+    RowBox[{
+     FractionBox["1", "2"], " ", 
+     FormBox[
+      TemplateBox[{
+       "\"g\"","\"\\!\\(TraditionalForm\\`\\\"a\\\"\\_1\\)q\"",
+        "\"p\\!\\(TraditionalForm\\`\\\"a\\\"\\_0\\)\""},
+       "Subsuperscript"],
+      TraditionalForm], " ", 
+     FormBox[
+      TemplateBox[{
+       "\"\[Delta]\"","\"\\!\\(TraditionalForm\\`\\\"a\\\"\\_0\\)\"",
+        "\"\[Alpha]\""},
+       "Subsuperscript"],
+      TraditionalForm], " ", 
+     FormBox[
+      TemplateBox[{
+       "\"\[Delta]\"","\"\[Beta]\"",
+        "\"\\!\\(TraditionalForm\\`\\\"a\\\"\\_1\\)\""},
+       "Subsuperscript"],
+      TraditionalForm], " ", 
+     FormBox[
+      TemplateBox[{"\"\[Gamma]\"","\"yp\"","\"xq\""},
+       "Subsuperscript"],
+      TraditionalForm]}], "+", 
+    RowBox[{
+     FractionBox["1", "2"], " ", 
+     FormBox[
+      TemplateBox[{"\"g\"","\"py\"","\"qr\""},
+       "Subsuperscript"],
+      TraditionalForm], " ", 
+     FormBox[
+      TemplateBox[{"\"\[Gamma]\"","\"qr\"","\"xp\""},
+       "Subsuperscript"],
+      TraditionalForm], " ", 
+     FormBox[
+      TemplateBox[{"\"\[Delta]\"","\"\[Beta]\"","\"\[Alpha]\""},
+       "Subsuperscript"],
+      TraditionalForm]}], "-", 
+    RowBox[{
+     FractionBox["1", "2"], " ", 
+     FormBox[
+      TemplateBox[{"\"g\"","\"yp\"","\"qr\""},
+       "Subsuperscript"],
+      TraditionalForm], " ", 
+     FormBox[
+      TemplateBox[{"\"\[Gamma]\"","\"qr\"","\"xp\""},
+       "Subsuperscript"],
+      TraditionalForm], " ", 
+     FormBox[
+      TemplateBox[{"\"\[Delta]\"","\"\[Beta]\"","\"\[Alpha]\""},
+       "Subsuperscript"],
+      TraditionalForm]}], "-", 
+    RowBox[{
+     FractionBox["1", "2"], " ", 
+     FormBox[
+      TemplateBox[{
+       "\"g\"","\"q\\!\\(TraditionalForm\\`\\\"a\\\"\\_1\\)\"",
+        "\"\\!\\(TraditionalForm\\`\\\"a\\\"\\_0\\)p\""},
+       "Subsuperscript"],
+      TraditionalForm], " ", 
+     FormBox[
+      TemplateBox[{
+       "\"\[Delta]\"","\"\\!\\(TraditionalForm\\`\\\"a\\\"\\_0\\)\"",
+        "\"\[Alpha]\""},
+       "Subsuperscript"],
+      TraditionalForm], " ", 
+     FormBox[
+      TemplateBox[{
+       "\"\[Delta]\"","\"\[Beta]\"",
+        "\"\\!\\(TraditionalForm\\`\\\"a\\\"\\_1\\)\""},
+       "Subsuperscript"],
+      TraditionalForm], " ", 
+     FormBox[
+      TemplateBox[{"\"\[Gamma]\"","\"yp\"","\"xq\""},
+       "Subsuperscript"],
+      TraditionalForm]}], "+", 
+    RowBox[{
+     FractionBox["1", "2"], " ", 
+     FormBox[
+      TemplateBox[{
+       "\"g\"","\"\\!\\(TraditionalForm\\`\\\"a\\\"\\_1\\)q\"",
+        "\"\\!\\(TraditionalForm\\`\\\"a\\\"\\_0\\)p\""},
+       "Subsuperscript"],
+      TraditionalForm], " ", 
+     FormBox[
+      TemplateBox[{
+       "\"\[Delta]\"","\"\\!\\(TraditionalForm\\`\\\"a\\\"\\_0\\)\"",
+        "\"\[Alpha]\""},
+       "Subsuperscript"],
+      TraditionalForm], " ", 
+     FormBox[
+      TemplateBox[{
+       "\"\[Delta]\"","\"\[Beta]\"",
+        "\"\\!\\(TraditionalForm\\`\\\"a\\\"\\_1\\)\""},
+       "Subsuperscript"],
+      TraditionalForm], " ", 
+     FormBox[
+      TemplateBox[{"\"\[Gamma]\"","\"yp\"","\"xq\""},
+       "Subsuperscript"],
+      TraditionalForm]}]}],
+   TraditionalForm],
+  TraditionalForm,
+  Editable->True]], "Print",
+ CellChangeTimes->{3.619189992596076*^9, 3.619190025988365*^9, 
+  3.619190081105794*^9, 3.619190485265552*^9, 3.619795059518449*^9, 
+  3.619870481421262*^9, 3.6198863007471*^9, 3.6205801884512873`*^9, 
+  3.620580352429964*^9}]
+}, Open  ]]
+}, Open  ]]
+}, Open  ]]
+}, Open  ]]
+},
+WindowSize->{808, 752},
+WindowMargins->{{-1106, Automatic}, {9, Automatic}},
+FrontEndVersion->"10.0 for Mac OS X x86 (32-bit, 64-bit Kernel) (June 27, \
+2014)",
+StyleDefinitions->"Default.nb"
+]
+(* End of Notebook Content *)
+
+(* Internal cache information *)
+(*CellTagsOutline
+CellTagsIndex->{}
+*)
+(*CellTagsIndex
+CellTagsIndex->{}
+*)
+(*NotebookFileOutline
+Notebook[{
+Cell[CellGroupData[{
+Cell[580, 22, 6356, 158, 590, "Input"],
+Cell[CellGroupData[{
+Cell[6961, 184, 2519, 48, 26, "Print"],
+Cell[9483, 234, 2523, 48, 26, "Print"]
+}, Open  ]]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[12055, 288, 150, 2, 64, "Section"],
+Cell[12208, 292, 1108, 39, 93, "Text"],
+Cell[CellGroupData[{
+Cell[13341, 335, 1158, 41, 60, "Subsection"],
+Cell[CellGroupData[{
+Cell[14524, 380, 2861, 73, 216, "Input"],
+Cell[CellGroupData[{
+Cell[17410, 457, 3338, 74, 31, "Print"],
+Cell[20751, 533, 1752, 44, 27, "Print"]
+}, Open  ]]
+}, Open  ]]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[22564, 584, 442, 16, 58, "Subsection"],
+Cell[CellGroupData[{
+Cell[23031, 604, 1752, 43, 131, "Input"],
+Cell[CellGroupData[{
+Cell[24808, 651, 1737, 43, 25, "Print"],
+Cell[26548, 696, 1746, 50, 30, "Print"]
+}, Open  ]]
+}, Open  ]]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[28355, 753, 545, 17, 58, "Subsection"],
+Cell[CellGroupData[{
+Cell[28925, 774, 1574, 36, 114, "Input"],
+Cell[CellGroupData[{
+Cell[30524, 814, 1579, 42, 25, "Print"],
+Cell[32106, 858, 974, 30, 27, "Print"]
+}, Open  ]]
+}, Open  ]]
+}, Open  ]]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[33153, 896, 200, 3, 64, "Section"],
+Cell[33356, 901, 1005, 36, 96, "Text"],
+Cell[CellGroupData[{
+Cell[34386, 941, 1158, 41, 60, "Subsection"],
+Cell[CellGroupData[{
+Cell[35569, 986, 3106, 77, 199, "Input"],
+Cell[CellGroupData[{
+Cell[38700, 1067, 2898, 70, 31, "Print"],
+Cell[41601, 1139, 1164, 36, 27, "Print"]
+}, Open  ]]
+}, Open  ]]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[42826, 1182, 393, 15, 58, "Subsection"],
+Cell[CellGroupData[{
+Cell[43244, 1201, 1692, 43, 131, "Input"],
+Cell[CellGroupData[{
+Cell[44961, 1248, 1297, 37, 25, "Print"],
+Cell[46261, 1287, 1304, 44, 30, "Print"]
+}, Open  ]]
+}, Open  ]]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[47626, 1338, 538, 18, 58, "Subsection"],
+Cell[CellGroupData[{
+Cell[48189, 1360, 2110, 52, 131, "Input"],
+Cell[CellGroupData[{
+Cell[50324, 1416, 2056, 52, 38, "Print"],
+Cell[52383, 1470, 4203, 134, 38, "Print"]
+}, Open  ]]
+}, Open  ]]
+}, Open  ]]
+}, Open  ]]
+}
+]
+*)
+
+(* End of internal cache information *)

@@ -1,0 +1,599 @@
+(* Content-type: application/vnd.wolfram.mathematica *)
+
+(*** Wolfram Notebook File ***)
+(* http://www.wolfram.com/nb *)
+
+(* CreatedBy='Mathematica 10.0' *)
+
+(*CacheID: 234*)
+(* Internal cache information:
+NotebookFileLineBreakTest
+NotebookFileLineBreakTest
+NotebookDataPosition[       158,          7]
+NotebookDataLength[     22177,        590]
+NotebookOptionsPosition[     21654,        567]
+NotebookOutlinePosition[     22012,        583]
+CellTagsIndexPosition[     21969,        580]
+WindowFrame->Normal*)
+
+(* Beginning of Notebook Content *)
+Notebook[{
+
+Cell[CellGroupData[{
+Cell[BoxData[{
+ RowBox[{
+  RowBox[{"SeQuantVacuum", " ", "=", " ", 
+   RowBox[{"SeQuantVacuumChoices", "[", "\"\<MultiConfiguration\>\"", "]"}]}],
+   ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"SeQuantDebugLevel", " ", "=", "0"}], ";"}], "\[IndentingNewLine]", 
+
+ RowBox[{
+  RowBox[{
+   RowBox[{"wickopts", " ", "=", " ", 
+    RowBox[{"{", "\[IndentingNewLine]", 
+     RowBox[{
+      RowBox[{"fullContract", "\[Rule]", "True"}], ",", "\[IndentingNewLine]", 
+      RowBox[{"noCoincidences", "\[Rule]", "False"}], ",", 
+      "\[IndentingNewLine]", 
+      RowBox[{"doSums", "\[Rule]", "True"}], ",", "\[IndentingNewLine]", 
+      RowBox[{"doReindex", "\[Rule]", "True"}]}], "\[IndentingNewLine]", 
+     "}"}]}], ";"}], "\[IndentingNewLine]", "\[IndentingNewLine]", 
+  StyleBox[
+   RowBox[{"(*", " ", 
+    RowBox[{"One", "-", 
+     RowBox[{"particle", " ", "indices"}]}], " ", "*)"}], 
+   "Commentary"]}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"p", "=", 
+   RowBox[{"createParticleIndex", "[", 
+    RowBox[{"\"\<p\>\"", ",", "allany"}], "]"}]}], ";"}], "\n", 
+ RowBox[{
+  RowBox[{"q", "=", 
+   RowBox[{"createParticleIndex", "[", 
+    RowBox[{"\"\<q\>\"", ",", "allany"}], "]"}]}], ";"}], "\n", 
+ RowBox[{
+  RowBox[{"r", "=", 
+   RowBox[{"createParticleIndex", "[", 
+    RowBox[{"\"\<r\>\"", ",", "allany"}], "]"}]}], 
+  ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"s", "=", 
+   RowBox[{"createParticleIndex", "[", 
+    RowBox[{"\"\<s\>\"", ",", "allany"}], "]"}]}], 
+  ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"t", "=", 
+   RowBox[{"createParticleIndex", "[", 
+    RowBox[{"\"\<t\>\"", ",", "allany"}], "]"}]}], ";"}], "\n", 
+ RowBox[{
+  RowBox[{"u", "=", 
+   RowBox[{"createParticleIndex", "[", 
+    RowBox[{"\"\<u\>\"", ",", "allany"}], "]"}]}], 
+  ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"v", "=", 
+   RowBox[{"createParticleIndex", "[", 
+    RowBox[{"\"\<v\>\"", ",", "allany"}], "]"}]}], ";"}], "\n", 
+ RowBox[{
+  RowBox[{
+   RowBox[{"w", "=", 
+    RowBox[{"createParticleIndex", "[", 
+     RowBox[{"\"\<w\>\"", ",", "allany"}], "]"}]}], ";"}], 
+  "\[IndentingNewLine]"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"f", " ", "=", " ", 
+   RowBox[{"createSQM", "[", 
+    RowBox[{"\"\<f\>\"", ",", 
+     RowBox[{"{", "q", "}"}], ",", 
+     RowBox[{"{", "p", "}"}], ",", "antisymm"}], "]"}]}], 
+  ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"g", " ", "=", " ", 
+   RowBox[{"createSQM", "[", 
+    RowBox[{"\"\<g\>\"", ",", 
+     RowBox[{"{", 
+      RowBox[{"p", ",", "q"}], "}"}], ",", 
+     RowBox[{"{", 
+      RowBox[{"r", ",", "s"}], "}"}], ",", "nonsymm"}], "]"}]}], 
+  ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"H", " ", "=", " ", 
+   RowBox[{
+    RowBox[{"f", "*", 
+     RowBox[{"createSQS", "[", 
+      RowBox[{
+       RowBox[{"{", "q", "}"}], ",", 
+       RowBox[{"{", "p", "}"}], ",", "inorder"}], "]"}]}], " ", "+", " ", 
+    RowBox[{
+     FractionBox["1", "2"], "*", "g", "*", 
+     RowBox[{"createSQS", "[", 
+      RowBox[{
+       RowBox[{"{", 
+        RowBox[{"p", ",", "q"}], "}"}], ",", 
+       RowBox[{"{", 
+        RowBox[{"r", ",", "s"}], "}"}], ",", "inorder"}], "]"}]}]}]}], " ", 
+  ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"op1", " ", "=", " ", 
+   RowBox[{"createSQS", "[", 
+    RowBox[{
+     RowBox[{"{", "t", "}"}], ",", 
+     RowBox[{"{", "u", "}"}], ",", "inorder"}], "]"}]}], 
+  ";"}], "\[IndentingNewLine]", 
+ RowBox[{"Print", "[", 
+  RowBox[{"\"\<H = \>\"", ",", 
+   RowBox[{"H", "//", "TraditionalForm"}]}], "]"}], "\[IndentingNewLine]", 
+ RowBox[{"Print", "[", 
+  RowBox[{"\"\<Operator  = \>\"", ",", " ", 
+   RowBox[{"op1", " ", "//", "TraditionalForm"}]}], 
+  "]"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{
+  "Print", "[", "\"\<Formula for stationarity condition of MCSCF\>\"", "]"}], 
+  ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{
+  "Print", "[", 
+   "\"\<0 = \[LeftAngleBracket]\[CapitalPhi]|[H, \
+\!\(\*SubsuperscriptBox[\(a\), \(u\), \(t\)]\)]|\[CapitalPhi]\
+\[RightAngleBracket]\>\"", "]"}], ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"en", " ", "=", " ", 
+   RowBox[{"wick", "[", 
+    RowBox[{
+     RowBox[{"commute", "[", 
+      RowBox[{"H", ",", "op1"}], "]"}], ",", 
+     RowBox[{"{", 
+      RowBox[{"t", ",", "u"}], "}"}], ",", "wickopts"}], "]"}]}], 
+  ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"Print", "[", 
+   RowBox[{"\"\<0 =  \>\"", ",", " ", 
+    RowBox[{"en", " ", "//", "TraditionalForm"}]}], "]"}], 
+  ";"}], "\[IndentingNewLine]"}], "Input",
+ CellChangeTimes->{{3.6187436187928658`*^9, 3.618743627332114*^9}, {
+   3.618743658372691*^9, 3.6187440355948772`*^9}, {3.618744078531329*^9, 
+   3.618744107026483*^9}, 3.61874414668132*^9, 3.6187442135231524`*^9, {
+   3.618744297761776*^9, 3.6187443124293528`*^9}, {3.618744424466323*^9, 
+   3.618744445554946*^9}, {3.618744628833132*^9, 3.618744656675396*^9}, {
+   3.618745059594906*^9, 3.618745072440391*^9}, 3.618745476546129*^9, {
+   3.618746279081229*^9, 3.618746279246661*^9}, {3.618746818810812*^9, 
+   3.618746841669874*^9}, 3.618747438503387*^9, {3.61876361989193*^9, 
+   3.618763720687655*^9}, {3.618763863452504*^9, 3.61876387245998*^9}, {
+   3.618768393210217*^9, 3.6187683954076347`*^9}, {3.618768437913412*^9, 
+   3.6187684417349977`*^9}, {3.618768872367264*^9, 3.618768877684305*^9}, {
+   3.618768929823657*^9, 3.618768930496769*^9}, {3.618769091542169*^9, 
+   3.618769130599399*^9}, 3.620686901386133*^9, {3.620686950988405*^9, 
+   3.620686964976411*^9}, {3.620687010477895*^9, 3.620687042722674*^9}, {
+   3.6206872265757236`*^9, 3.620687232060953*^9}, {3.6206873057253532`*^9, 
+   3.620687507511592*^9}, {3.620687541605818*^9, 3.620687548406145*^9}}],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ InterpretationBox[
+  RowBox[{"\<\"H = \"\>", "\[InvisibleSpace]", 
+   TagBox[
+    FormBox[
+     RowBox[{
+      RowBox[{
+       FormBox[
+        TemplateBox[{"\"f\"","\"q\"","\"p\""},
+         "Subsuperscript"],
+        TraditionalForm], " ", 
+       FormBox[
+        TemplateBox[{OverscriptBox["\"a\"", "~"],"\"p\"","\"q\""},
+         "Subsuperscript"],
+        TraditionalForm]}], "+", 
+      RowBox[{
+       FractionBox["1", "2"], " ", 
+       FormBox[
+        TemplateBox[{"\"g\"","\"pq\"","\"rs\""},
+         "Subsuperscript"],
+        TraditionalForm], " ", 
+       FormBox[
+        TemplateBox[{OverscriptBox["\"a\"", "~"],"\"rs\"","\"pq\""},
+         "Subsuperscript"],
+        TraditionalForm]}]}],
+     TraditionalForm],
+    TraditionalForm,
+    Editable->True]}],
+  SequenceForm["H = ", 
+   TraditionalForm[SeQuant`mSQS[
+       SeQuant`normalOrder[True], 
+       SeQuant`SQS[
+        SeQuant`particleIndex["q", 
+         SeQuant`particleSpace[
+         SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+         SeQuant`indexType[SeQuant`cre]], 
+        SeQuant`particleIndex["p", 
+         SeQuant`particleSpace[
+         SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+         SeQuant`indexType[SeQuant`ann]]]] SeQuant`SQM[
+       SeQuant`OHead["f", 
+        SeQuant`indexSymm[-1]], 
+       SeQuant`particleIndex["q", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`bra]], 
+       SeQuant`particleIndex["p", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`ket]]] + Rational[1, 2] SeQuant`mSQS[
+       SeQuant`normalOrder[True], 
+       SeQuant`SQS[
+        SeQuant`particleIndex["p", 
+         SeQuant`particleSpace[
+         SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+         SeQuant`indexType[SeQuant`cre]], 
+        SeQuant`particleIndex["q", 
+         SeQuant`particleSpace[
+         SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+         SeQuant`indexType[SeQuant`cre]], 
+        SeQuant`particleIndex["s", 
+         SeQuant`particleSpace[
+         SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+         SeQuant`indexType[SeQuant`ann]], 
+        SeQuant`particleIndex["r", 
+         SeQuant`particleSpace[
+         SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+         SeQuant`indexType[SeQuant`ann]]]] SeQuant`SQM[
+       SeQuant`OHead["g", 
+        SeQuant`indexSymm[0]], 
+       SeQuant`particleIndex["p", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`bra]], 
+       SeQuant`particleIndex["q", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`bra]], 
+       SeQuant`particleIndex["r", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`ket]], 
+       SeQuant`particleIndex["s", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`ket]]]]],
+  Editable->False]], "Print",
+ CellChangeTimes->{{3.618769092826908*^9, 3.6187691311307297`*^9}, {
+   3.620686968376521*^9, 3.6206869781349173`*^9}, 3.620687043873721*^9, 
+   3.620687512313937*^9, 3.620687550044845*^9}],
+
+Cell[BoxData[
+ InterpretationBox[
+  RowBox[{"\<\"Operator  = \"\>", "\[InvisibleSpace]", 
+   TagBox[
+    FormBox[
+     FormBox[
+      TemplateBox[{OverscriptBox["\"a\"", "~"],"\"u\"","\"t\""},
+       "Subsuperscript"],
+      TraditionalForm],
+     TraditionalForm],
+    TraditionalForm,
+    Editable->True]}],
+  SequenceForm["Operator  = ", 
+   TraditionalForm[
+    SeQuant`mSQS[
+     SeQuant`normalOrder[True], 
+     SeQuant`SQS[
+      SeQuant`particleIndex["t", 
+       SeQuant`particleSpace[
+       SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+       SeQuant`indexType[SeQuant`cre]], 
+      SeQuant`particleIndex["u", 
+       SeQuant`particleSpace[
+       SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+       SeQuant`indexType[SeQuant`ann]]]]]],
+  Editable->False]], "Print",
+ CellChangeTimes->{{3.618769092826908*^9, 3.6187691311307297`*^9}, {
+   3.620686968376521*^9, 3.6206869781349173`*^9}, 3.620687043873721*^9, 
+   3.620687512313937*^9, 3.6206875500484877`*^9}],
+
+Cell[BoxData["\<\"Formula for stationarity condition of MCSCF\"\>"], "Print",
+ CellChangeTimes->{{3.618769092826908*^9, 3.6187691311307297`*^9}, {
+   3.620686968376521*^9, 3.6206869781349173`*^9}, 3.620687043873721*^9, 
+   3.620687512313937*^9, 3.620687550051477*^9}],
+
+Cell[BoxData["\<\"0 = \[LeftAngleBracket]\[CapitalPhi]|[H, \
+\\!\\(\\*SubsuperscriptBox[\\(a\\), \\(u\\), \\(t\\)]\\)]|\[CapitalPhi]\
+\[RightAngleBracket]\"\>"], "Print",
+ CellChangeTimes->{{3.618769092826908*^9, 3.6187691311307297`*^9}, {
+   3.620686968376521*^9, 3.6206869781349173`*^9}, 3.620687043873721*^9, 
+   3.620687512313937*^9, 3.6206875500526237`*^9}],
+
+Cell[BoxData[
+ InterpretationBox[
+  RowBox[{"\<\"0 =  \"\>", "\[InvisibleSpace]", 
+   TagBox[
+    FormBox[
+     RowBox[{
+      RowBox[{
+       RowBox[{"-", 
+        FormBox[
+         TemplateBox[{"\"f\"","\"u\"","\"p\""},
+          "Subsuperscript"],
+         TraditionalForm]}], " ", 
+       FormBox[
+        TemplateBox[{"\"\[Lambda]\"","\"p\"","\"t\""},
+         "Subsuperscript"],
+        TraditionalForm]}], "+", 
+      RowBox[{
+       FormBox[
+        TemplateBox[{"\"f\"","\"p\"","\"t\""},
+         "Subsuperscript"],
+        TraditionalForm], " ", 
+       FormBox[
+        TemplateBox[{"\"\[Lambda]\"","\"u\"","\"p\""},
+         "Subsuperscript"],
+        TraditionalForm]}], "-", 
+      RowBox[{
+       FractionBox["1", "2"], " ", 
+       FormBox[
+        TemplateBox[{"\"g\"","\"pq\"","\"rt\""},
+         "Subsuperscript"],
+        TraditionalForm], " ", 
+       FormBox[
+        TemplateBox[{"\"\[Lambda]\"","\"ur\"","\"pq\""},
+         "Subsuperscript"],
+        TraditionalForm]}], "+", 
+      RowBox[{
+       FractionBox["1", "2"], " ", 
+       FormBox[
+        TemplateBox[{"\"g\"","\"pq\"","\"tr\""},
+         "Subsuperscript"],
+        TraditionalForm], " ", 
+       FormBox[
+        TemplateBox[{"\"\[Lambda]\"","\"ur\"","\"pq\""},
+         "Subsuperscript"],
+        TraditionalForm]}], "+", 
+      RowBox[{
+       FractionBox["1", "2"], " ", 
+       FormBox[
+        TemplateBox[{"\"g\"","\"pu\"","\"qr\""},
+         "Subsuperscript"],
+        TraditionalForm], " ", 
+       FormBox[
+        TemplateBox[{"\"\[Lambda]\"","\"qr\"","\"tp\""},
+         "Subsuperscript"],
+        TraditionalForm]}], "-", 
+      RowBox[{
+       FractionBox["1", "2"], " ", 
+       FormBox[
+        TemplateBox[{"\"g\"","\"up\"","\"qr\""},
+         "Subsuperscript"],
+        TraditionalForm], " ", 
+       FormBox[
+        TemplateBox[{"\"\[Lambda]\"","\"qr\"","\"tp\""},
+         "Subsuperscript"],
+        TraditionalForm]}]}],
+     TraditionalForm],
+    TraditionalForm,
+    Editable->True]}],
+  SequenceForm["0 =  ", 
+   TraditionalForm[-SeQuant`SQM[
+       SeQuant`OHead["f", 
+        SeQuant`indexSymm[-1]], 
+       SeQuant`particleIndex["u", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`bra]], 
+       SeQuant`particleIndex["p", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`ket]]] SeQuant`SQM[
+       SeQuant`OHead["\[Lambda]", 
+        SeQuant`indexSymm[-1]], 
+       SeQuant`particleIndex["p", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`bra]], 
+       SeQuant`particleIndex["t", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`ket]]] + SeQuant`SQM[
+       SeQuant`OHead["f", 
+        SeQuant`indexSymm[-1]], 
+       SeQuant`particleIndex["p", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`bra]], 
+       SeQuant`particleIndex["t", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`ket]]] SeQuant`SQM[
+       SeQuant`OHead["\[Lambda]", 
+        SeQuant`indexSymm[-1]], 
+       SeQuant`particleIndex["u", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`bra]], 
+       SeQuant`particleIndex["p", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`ket]]] + Rational[1, 2] SeQuant`SQM[
+       SeQuant`OHead["g", 
+        SeQuant`indexSymm[0]], 
+       SeQuant`particleIndex["p", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`bra]], 
+       SeQuant`particleIndex["u", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`bra]], 
+       SeQuant`particleIndex["q", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`ket]], 
+       SeQuant`particleIndex["r", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`ket]]] SeQuant`SQM[
+       SeQuant`OHead["\[Lambda]", 
+        SeQuant`indexSymm[-1]], 
+       SeQuant`particleIndex["q", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`bra]], 
+       SeQuant`particleIndex["r", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`bra]], 
+       SeQuant`particleIndex["t", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`ket]], 
+       SeQuant`particleIndex["p", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`ket]]] + Rational[-1, 2] SeQuant`SQM[
+       SeQuant`OHead["g", 
+        SeQuant`indexSymm[0]], 
+       SeQuant`particleIndex["u", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`bra]], 
+       SeQuant`particleIndex["p", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`bra]], 
+       SeQuant`particleIndex["q", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`ket]], 
+       SeQuant`particleIndex["r", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`ket]]] SeQuant`SQM[
+       SeQuant`OHead["\[Lambda]", 
+        SeQuant`indexSymm[-1]], 
+       SeQuant`particleIndex["q", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`bra]], 
+       SeQuant`particleIndex["r", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`bra]], 
+       SeQuant`particleIndex["t", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`ket]], 
+       SeQuant`particleIndex["p", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`ket]]] + Rational[-1, 2] SeQuant`SQM[
+       SeQuant`OHead["g", 
+        SeQuant`indexSymm[0]], 
+       SeQuant`particleIndex["p", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`bra]], 
+       SeQuant`particleIndex["q", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`bra]], 
+       SeQuant`particleIndex["r", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`ket]], 
+       SeQuant`particleIndex["t", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`ket]]] SeQuant`SQM[
+       SeQuant`OHead["\[Lambda]", 
+        SeQuant`indexSymm[-1]], 
+       SeQuant`particleIndex["u", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`bra]], 
+       SeQuant`particleIndex["r", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`bra]], 
+       SeQuant`particleIndex["p", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`ket]], 
+       SeQuant`particleIndex["q", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`ket]]] + Rational[1, 2] SeQuant`SQM[
+       SeQuant`OHead["g", 
+        SeQuant`indexSymm[0]], 
+       SeQuant`particleIndex["p", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`bra]], 
+       SeQuant`particleIndex["q", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`bra]], 
+       SeQuant`particleIndex["t", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`ket]], 
+       SeQuant`particleIndex["r", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`ket]]] SeQuant`SQM[
+       SeQuant`OHead["\[Lambda]", 
+        SeQuant`indexSymm[-1]], 
+       SeQuant`particleIndex["u", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`bra]], 
+       SeQuant`particleIndex["r", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`bra]], 
+       SeQuant`particleIndex["p", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`ket]], 
+       SeQuant`particleIndex["q", 
+        SeQuant`particleSpace[
+        SeQuant`occupied, SeQuant`othervirtual, SeQuant`virtual], 
+        SeQuant`indexType[SeQuant`ket]]]]],
+  Editable->False]], "Print",
+ CellChangeTimes->{{3.618769092826908*^9, 3.6187691311307297`*^9}, {
+   3.620686968376521*^9, 3.6206869781349173`*^9}, 3.620687043873721*^9, 
+   3.620687512313937*^9, 3.620687550125928*^9}]
+}, Open  ]]
+}, Open  ]]
+},
+WindowSize->{876, 751},
+WindowMargins->{{-1072, Automatic}, {-37, Automatic}},
+FrontEndVersion->"10.0 for Mac OS X x86 (32-bit, 64-bit Kernel) (June 27, \
+2014)",
+StyleDefinitions->"Default.nb"
+]
+(* End of Notebook Content *)
+
+(* Internal cache information *)
+(*CellTagsOutline
+CellTagsIndex->{}
+*)
+(*CellTagsIndex
+CellTagsIndex->{}
+*)
+(*NotebookFileOutline
+Notebook[{
+Cell[CellGroupData[{
+Cell[580, 22, 5663, 147, 549, "Input"],
+Cell[CellGroupData[{
+Cell[6268, 173, 3476, 89, 38, "Print"],
+Cell[9747, 264, 997, 28, 25, "Print"],
+Cell[10747, 294, 267, 3, 22, "Print"],
+Cell[11017, 299, 362, 5, 25, "Print"],
+Cell[11382, 306, 10244, 257, 38, "Print"]
+}, Open  ]]
+}, Open  ]]
+}
+]
+*)
+
+(* End of internal cache information *)
