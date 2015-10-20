@@ -1,6 +1,5 @@
 (* ::Package:: *)
 
-
 BeginPackage["SeQuant`"];
 
 (* turn on Assert *)
@@ -91,9 +90,37 @@ DefaultSpaceSymbol[any] = "p";
 DefaultSpaceSymbol[allany] = "\[Kappa]";
 
 
+(* particle space with spin *)
+occA = Append[occ,particleSpin[A]];
+virtA=Append[virt,particleSpin[A]];
+othervirtA=Append[othervirt,particleSpin[A]];
+allvirtA=Append[allvirt,particleSpin[A]];
+anyA = Append[any,particleSpin[A]];
+allanyA = Append[allany,particleSpin[A]];c
+occB = Append[occ,particleSpin[B]];
+virtB=Append[virt,particleSpin[B]];
+othervirtB=Append[othervirt,particleSpin[B]];
+allvirtB=Append[allvirt,particleSpin[B]];
+anyB = Append[any,particleSpin[B]];
+allanyB = Append[allany,particleSpin[B]];
+
+
+DefaultSpaceSymbol[occA]="\!\(\*SubscriptBox[\(i\), \(\[Alpha]\)]\)";
+DefaultSpaceSymbol[virtA]="\!\(\*SubscriptBox[\(a\), \(\[Alpha]\)]\)";
+DefaultSpaceSymbol[allvirtA]="\!\(\*SubscriptBox[\(\[Alpha]\), \(\[Alpha]\)]\)";
+DefaultSpaceSymbol[othervirtA]="\!\(\*SubsuperscriptBox[\(\[Alpha]\), \(\[Alpha]\), \(,\)]\)";
+DefaultSpaceSymbol[anyA]="\!\(\*SubscriptBox[\(p\), \(\[Alpha]\)]\)";
+DefaultSpaceSymbol[allanyA]="\!\(\*SubscriptBox[\(\[Kappa]\), \(\[Alpha]\)]\)";
+DefaultSpaceSymbol[occB]="\!\(\*SubscriptBox[\(i\), \(\[Beta]\)]\)";
+DefaultSpaceSymbol[virtB]="\!\(\*SubscriptBox[\(a\), \(\[Beta]\)]\)";
+DefaultSpaceSymbol[allvirtB]="\!\(\*SubscriptBox[\(\[Alpha]\), \(\[Beta]\)]\)";
+DefaultSpaceSymbol[othervirtB]="\!\(\*SubsuperscriptBox[\(\[Alpha]\), \(\[Beta]\), \(,\)]\)";
+DefaultSpaceSymbol[anyB]="\!\(\*SubscriptBox[\(p\), \(\[Beta]\)]\)";
+DefaultSpaceSymbol[allanyB]="\!\(\*SubscriptBox[\(\[Kappa]\), \(\[Beta]\)]\)";
+
+
 (* ::Section:: *)
 (* particleIndex Class *)
-
 
 
 (* create particleIndex with space and symbol i *)
@@ -336,7 +363,7 @@ annIndices[a_SQS] :=
     Reverse[Cases[a,x_particleIndex/;indexAnnQ[x]->indexLight[x] ]];
 
 
-(* ::Section:: *)
+(* ::Section::Closed:: *)
 (*  SQM class  *)
 
 
@@ -449,8 +476,11 @@ spinConvertGamma[bra_List, ket_List] :=
 convertExp[expr_] :=
 	expr /. x_SQM /; x[[1,1]] == "\[Lambda]" -> convertLambda[x]
 
-(* ::Section:: *)
+
+
+(* ::Section::Closed:: *)
 (* Visualize function *)
+
 
 (* these functions display particleIndex in string *)
 
@@ -546,7 +576,7 @@ Format[mSQS[a__],TraditionalForm] :=
 
 
 
-(* ::Section:: *)
+(* ::Section::Closed:: *)
 (* Contraction functions *)
 
 
@@ -738,6 +768,8 @@ numberCR[t_Plus] :=
 	
 numberCR[t_CR] := 
 	1;
+
+
 
 (* ::Subsection:: *)
 (*  Contract SQS  *)
@@ -1335,7 +1367,9 @@ combinePattern[creslist_List, annslist_List, pattern_List] :=
 		Return[result];
 	];
 	
-(* ::Section:: *)
+
+
+(* ::Section::Closed:: *)
 (* Normal Order *)
 
 
@@ -1588,7 +1622,7 @@ signrule[original_List, pattern_List] :=
 
 
 
-(* ::Section:: *)
+(* ::Section::Closed:: *)
 (* Wick Class  *)
 
 
@@ -1730,6 +1764,8 @@ wick[expr_,extInds_List,wickOptions_List:defaultWickOptions] :=
  *)
 commute[a_, b_] :=
 	a**b - b**a
+
+
 
 (* ::Subsection:: *)
 (* lowwick funciton *)
