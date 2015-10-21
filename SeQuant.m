@@ -15,7 +15,7 @@ $IterationLimit = Infinity;
 NCM = NonCommutativeMultiply;
 
 
-(* ::Section:: *)
+(* ::Section::Closed:: *)
 (* Global Parameters *)
 
 
@@ -119,7 +119,7 @@ DefaultSpaceSymbol[anyB]="\!\(\*SubscriptBox[\(p\), \(\[Beta]\)]\)";
 DefaultSpaceSymbol[allanyB]="\!\(\*SubscriptBox[\(\[Kappa]\), \(\[Beta]\)]\)";
 
 
-(* ::Section:: *)
+(* ::Section::Closed:: *)
 (* particleIndex Class *)
 
 
@@ -260,7 +260,7 @@ untagIndices[expr_,inds_List] :=
     
 
 
-(* ::Section:: *)
+(* ::Section::Closed:: *)
 (* SQS Class *)
 
 
@@ -509,9 +509,7 @@ visualizeSQE[a_SQS] :=
     Module[ {bodyLabel,i,supInds,subInds},
 (* convention labels strings normal-ordered wrt to nonphysical vacuum as tilde{a} *)
 
-        bodyLabel = If[ SeQuantVacuum==SeQuantVacuumChoices["Physical"],"a"];
-		bodyLabel = If[SeQuantVacuum==SeQuantVacuumChoices["SingleConfiguration"],"\[ATilde]"];
-
+        bodyLabel = If[SeQuantVacuum==SeQuantVacuumChoices["Physical"],"a","\[ATilde]"];
         supInds = "";
         subInds = "";
         Do[
@@ -570,7 +568,7 @@ Format[mSQS[a__],TraditionalForm] :=
 
 
 
-(* ::Section::Closed:: *)
+(* ::Section:: *)
 (* Contraction functions *)
 
 
@@ -1363,7 +1361,7 @@ combinePattern[creslist_List, annslist_List, pattern_List] :=
 	
 
 
-(* ::Section::Closed:: *)
+(* ::Section:: *)
 (* Normal Order *)
 
 
@@ -2090,7 +2088,7 @@ indexListOut[expr_,intInds_List] :=
     ];
 
 
-(* ::Section:: *)
+(* ::Section::Closed:: *)
 (* Reindexing  *)
 
 
@@ -2426,7 +2424,7 @@ tagSQMInList[icurr_,SQMs_List,Tags_List,IIndices_List] :=
     ];
 
 
-(* ::Section:: *)
+(* ::Section::Closed:: *)
 (* matching SQ *)
 
 
@@ -2524,7 +2522,7 @@ listMatchQ[a_List,b_List] :=
 Protect[MatchQ];
 
 
-(* ::Section:: *)
+(* ::Section::Closed:: *)
 (* canonical MO *)
 
 
