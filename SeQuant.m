@@ -96,7 +96,7 @@ virtA=Append[virt,particleSpin[A]];
 othervirtA=Append[othervirt,particleSpin[A]];
 allvirtA=Append[allvirt,particleSpin[A]];
 anyA = Append[any,particleSpin[A]];
-allanyA = Append[allany,particleSpin[A]];c
+allanyA = Append[allany,particleSpin[A]];
 occB = Append[occ,particleSpin[B]];
 virtB=Append[virt,particleSpin[B]];
 othervirtB=Append[othervirt,particleSpin[B]];
@@ -478,7 +478,7 @@ convertExp[expr_] :=
 
 
 
-(* ::Section::Closed:: *)
+(* ::Section:: *)
 (* Visualize function *)
 
 
@@ -509,14 +509,8 @@ visualizeSQE[a_SQS] :=
     Module[ {bodyLabel,i,supInds,subInds},
 (* convention labels strings normal-ordered wrt to nonphysical vacuum as tilde{a} *)
 
-        bodyLabel = If[ SeQuantVacuum==SeQuantVacuumChoices["Physical"],
-                        "a",
-                        "\[ATilde]"
-        			];
-       bodyLabel = If[ SeQuantVacuum==SeQuantVacuumChoices["MultiConfiguration"],
-                        "\[ATilde]",
-                         "a"
-                    ];
+        bodyLabel = If[ SeQuantVacuum==SeQuantVacuumChoices["Physical"],"a"];
+		bodyLabel = If[SeQuantVacuum==SeQuantVacuumChoices["SingleConfiguration"],"\[ATilde]"];
 
         supInds = "";
         subInds = "";
