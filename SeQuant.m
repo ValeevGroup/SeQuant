@@ -1073,13 +1073,15 @@ contractSQSNTypes[str:NCM[__SQS],contractOptions_List] :=
         intermedOptions = Append[intermedOptions,fullContract->False];
         result = str;
         Do[
+			GlobalIndexCounter = 0;
         	result = contractSQS[result,ptypes[[ind]],intermedOptions];
        		If[ SeQuantDebugLevel>=4,
             	Print["Result after ",ind," contractions is: ",result//TraditionalForm]
-        	],
+        		],
         	{ind,1,ntypes-1}
         ];
 
+		GlobalIndexCounter = 0;
         (*The last contraction carried according to user's specs*)
         result = contractSQS[result,ptypes[[ntypes]],contractOptions];
         If[ SeQuantDebugLevel>=4,
