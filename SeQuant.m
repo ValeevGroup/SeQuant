@@ -1655,7 +1655,7 @@ wick[expr_,extInds_List,wickOptions_List:defaultWickOptions] :=
         
         (* 
         in MultiConfiguration, check mSQS if in normal order form. 
-        If not, convert it into nomal order form
+        If not, convert it into normal order form
          *)
         If[ SeQuantVacuum === SeQuantVacuumChoices["MultiConfiguration"],
         	
