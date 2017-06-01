@@ -2540,8 +2540,8 @@ canonMO[expr_,extInds_List] :=
         result = lowcanonMO[result];
         result = reduceWick[result,extinds,intinds];
         
-        maporder [a_SQS] := ( orderedForm[a, intInds] );
-        maporder [a_SQM] := ( orderedForm[a, intInds] );
+        maporder [a_SQS] := ( orderedForm[a, intinds] );
+        maporder [a_SQM] := ( orderedForm[a, intinds] );
         maporder [a_/;(Head[a]=!=SQS && Head[a]=!=SQM) ] :=
         	 a;
         result = Map[maporder, result,2];
