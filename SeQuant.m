@@ -505,19 +505,36 @@ visualizeSQE[a_/;(Head[a]=!=SQS&&Head[a]=!=deltaIndex&&Head[a]=!=SQM&&Head[a]=!=
 visualizeSQE[a_deltaIndex] :=
     Subsuperscript["\[Delta]",a[[1,1]],a[[2,1]] ];
 
+(* converts a list indices into a pair of merged index labels,
+   all creators are in superscript and all annihilators in subscript *)
+makeSupSubIndexStrings[indices_,SuperscriptQ_,padLeft_]:=Module[{supInds,subInds,nSupInds,nSubInds,padding},
+  supInds = "";  nSupInds = 0;
+  subInds = "";  nSubInds = 0;
+  Do[
+            If[ SuperscriptQ[indices[[i]]],
+                (supInds = StringJoin[supInds,indices[[i,1]] ]; ++nSupInds),
+                (subInds = StringJoin[indices[[i,1]],subInds ]; ++nSubInds)
+            ],{i,1,Length[indices]}
+  ];
+  
+  padding=StringPadLeft["", nSubInds-nSupInds, "\[UnderBracket]"];
+  supInds=If[nSubInds>nSupInds, If[padLeft,StringJoin[padding,supInds],StringJoin[supInds,padding]], supInds];
+  padding=StringPadLeft["", nSupInds-nSubInds, "\[UnderBracket]"];
+  subInds=If[nSubInds<nSupInds, If[padLeft,StringJoin[padding,subInds],StringJoin[subInds,padding]], subInds];
+  
+  Return[{supInds,subInds}]
+];
+
 visualizeSQE[a_SQS] :=
     Module[ {bodyLabel,i,supInds,subInds},
 (* convention labels strings normal-ordered wrt to nonphysical vacuum as tilde{a} *)
 
         bodyLabel = If[SeQuantVacuum==SeQuantVacuumChoices["Physical"],"a","\[ATilde]"];
-        supInds = "";
-        subInds = "";
-        Do[
-            If[ Cases[a[[i]],_indexType][[1,1]]===cre,
-                supInds = StringJoin[supInds,a[[i,1]] ],
-                subInds = StringJoin[a[[i,1]],subInds ]
-            ],{i,1,Length[a] }
-        ];
+        
+  (* superscript (creator) indices are right padded, i.e. a^+_p a_s a_r should be typeset as Subsuperscript[a, rs, \[SpaceIndicator]p] *) 
+  (* subscript (annihilator) indices are right padded, i.e. a^+_p a^+_q a_s should be typeset as Subsuperscript[a, \[SpaceIndicator]s, pq] *) 
+        {supInds, subInds} = makeSupSubIndexStrings[a, indexCreQ,True];
+   
         Return[Subsuperscript[bodyLabel,subInds,supInds]]
     ];
 
@@ -531,29 +548,17 @@ visualizeSQE[a_mSQS] :=
                         "a"
                     ];
         sqs = a[[2]];
-        supInds = "";
-        subInds = "";
-        Do[
-            If[ Cases[sqs[[i]],_indexType][[1,1]]===cre,
-                supInds = StringJoin[supInds,sqs[[i,1]] ],
-                subInds = StringJoin[sqs[[i,1]],subInds ]
-            ],
-            {i,1,Length[sqs] }
-        ];
+  (* superscript (creator) indices are right padded, i.e. a^+_p a_s a_r should be typeset as Subsuperscript[a, rs, \[SpaceIndicator]p] *) 
+  (* subscript (annihilator) indices are right padded, i.e. a^+_p a^+_q a_s should be typeset as Subsuperscript[a, \[SpaceIndicator]s, pq] *) 
+        {supInds, subInds} = makeSupSubIndexStrings[sqs, indexCreQ,True];
         Return[Subsuperscript[bodyLabel,subInds,supInds]]
     ];
     
 visualizeSQE[a_SQM] :=
     Module[ {bodyLabel,i,supInds,subInds},
         bodyLabel = a[[1,1]];
-        supInds = "";
-        subInds = "";
-        Do[
-            If[ indexKetQ[a[[i]]],
-                supInds = StringJoin[supInds,a[[i,1]] ],
-                subInds = StringJoin[subInds,a[[i,1]] ]
-            ],{i,2,Length[a] }
-        ];
+  (* bra and left indices are left padded *) 
+        {supInds, subInds} = makeSupSubIndexStrings[a, indexKetQ,False];
         Return[Subsuperscript[bodyLabel,subInds,supInds]]
     ];
 
