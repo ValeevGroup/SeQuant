@@ -519,13 +519,15 @@ visualizeSQE[a_deltaIndex] :=
 
 (* converts a list indices into a pair of merged index labels,
    all creators are in superscript and all annihilators in subscript *)
-makeSupSubIndexStrings[indices_,SuperscriptQ_,padLeft_]:=Module[{supInds,subInds,nSupInds,nSubInds,padding},
+makeSupSubIndexStrings[indices_,SuperscriptQ_,padLeft_Symbol,reverseSubscript_Symbol]:=Module[{supInds,subInds,nSupInds,nSubInds,padding},
   supInds = "";  nSupInds = 0;
   subInds = "";  nSubInds = 0;
   Do[
             If[ SuperscriptQ[indices[[i]]],
                 (supInds = StringJoin[supInds,visualizeIndex[indices[[i]]] ]; ++nSupInds),
-                (subInds = StringJoin[visualizeIndex[indices[[i]]],subInds ]; ++nSubInds)
+                (subInds = If[reverseSubscript, StringJoin[visualizeIndex[indices[[i]]],subInds],
+                                                 StringJoin[subInds,visualizeIndex[indices[[i]]]]
+                             ]; ++nSubInds)
             ],{i,1,Length[indices]}
   ];
   
@@ -545,7 +547,7 @@ visualizeSQE[a_SQS] :=
         
   (* superscript (creator) indices are right padded, i.e. a^+_p a_s a_r should be typeset as Subsuperscript[a, rs, \[SpaceIndicator]p] *) 
   (* subscript (annihilator) indices are right padded, i.e. a^+_p a^+_q a_s should be typeset as Subsuperscript[a, \[SpaceIndicator]s, pq] *) 
-        {supInds, subInds} = makeSupSubIndexStrings[a, indexCreQ,True];
+        {supInds, subInds} = makeSupSubIndexStrings[a, indexCreQ, True, True];
    
         Return[Subsuperscript[bodyLabel,subInds,supInds]]
     ];
@@ -562,7 +564,7 @@ visualizeSQE[a_mSQS] :=
         sqs = a[[2]];
   (* superscript (creator) indices are right padded, i.e. a^+_p a_s a_r should be typeset as Subsuperscript[a, rs, \[SpaceIndicator]p] *) 
   (* subscript (annihilator) indices are right padded, i.e. a^+_p a^+_q a_s should be typeset as Subsuperscript[a, \[SpaceIndicator]s, pq] *) 
-        {supInds, subInds} = makeSupSubIndexStrings[sqs, indexCreQ,True];
+        {supInds, subInds} = makeSupSubIndexStrings[sqs, indexCreQ, True, True];
         Return[Subsuperscript[bodyLabel,subInds,supInds]]
     ];
     
@@ -570,7 +572,7 @@ visualizeSQE[a_SQM] :=
     Module[ {bodyLabel,i,supInds,subInds},
         bodyLabel = a[[1,1]];
   (* bra and left indices are left padded *) 
-        {supInds, subInds} = makeSupSubIndexStrings[a, indexKetQ,False];
+        {supInds, subInds} = makeSupSubIndexStrings[a, indexKetQ, False, False];
         Return[Subsuperscript[bodyLabel,subInds,supInds]]
     ];
 
