@@ -2081,7 +2081,7 @@ orderedForm[oper_SQM,intInds_List:{}] :=
         Return[result];
     ];
 
-(* maporder function with no indecis *)
+(* maporder function with no indices *)
 maporder[a_SQS] := ( orderedForm[a,{}] ); 
 
 maporder[a_SQM] := ( orderedForm[a, {}] );
