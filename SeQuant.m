@@ -380,8 +380,9 @@ annIndices[a_SQS] :=
 
 
 (*
-SQM is a matrix element of an operator
-operators can be classified as antisymm, symm, and nonsymmetric, which will help in reducing expressions to their simplest form
+SQM is a matrix element of a particle-symmetric operator, i.e. it treats particles of same type are indistinguishable.
+Operators are further classified according to the permutational symmetry of equivalent indices within the bra (or, due to particle-symmetric property, within the ket)
+as antisymm, symm, and nonsymmetric. These symmetries are utilized to reduce expressions to their simplest form.
  *)
 antisymm = indexSymm[-1];
 symm = indexSymm[1];
