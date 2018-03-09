@@ -2050,11 +2050,13 @@ orderedForm[str_SQS,intInds_List:{}] :=
 
 
 orderedForm[oper_SQM,intInds_List:{}] :=
-    Module[ {result,symfac,permfac,operHead,braInds,ketInds},
+    Module[ {result,symfac,permfac,operHead,braInds,ketInds,hasParticleType,braIndsOrd,ketIndsOrd},
         symfac = Cases[oper,_indexSymm,Infinity][[1,1]];
-        If[ symfac==0,
-            Return[oper]
-        ];
+
+        (* cannot canonicalize yet operators *potentially* acting on more than 1 particle type (i.e. if any index has a particleType field) *)
+        hasParticleType = MemberQ[oper, _particleType, Infinity];
+        If[hasParticleType, Return[oper]];
+
         permfac = 1;
         operHead = Cases[oper,_OHead][[1]];
         result = oper;
@@ -2065,15 +2067,22 @@ orderedForm[oper_SQM,intInds_List:{}] :=
         *)
         result = tagIndices[oper,intInds];
         braInds = Cases[result,a_particleIndex/;a[[3]]==indexType[bra]];
+        (* canonically reorder bra indices first *)
+        braIndsOrd = Ordering[braInds];
+        braInds = braInds[[braIndsOrd]];
         If[ symfac==-1,
-            permfac*=Signature[braInds]
+            permfac *= Signature[braIndsOrd];
         ];
-        braInds = Sort[braInds];
+
         ketInds = Cases[result,a_particleIndex/;a[[3]]==indexType[ket]];
-        If[ symfac==-1,
-            permfac*=Signature[ketInds]
-        ];
-        ketInds = Sort[ketInds];
+        If[ symfac==0,
+          ketInds=ketInds[[braIndsOrd]],
+          ( ketIndsOrd = Ordering[ketInds];
+            If[ symfac==-1,
+              permfac*=Signature[ketIndsOrd]
+            ];
+            ketInds = ketInds[[ketIndsOrd]];
+          )];
         result = FlattenAt[SQM[FlattenAt[{braInds,ketInds},{{1},{2}}]],{1}];
         result = Prepend[result,operHead];
         result*=permfac;
