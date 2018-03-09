@@ -1725,7 +1725,7 @@ wick[expr_,extInds_List,wickOptions_List:defaultWickOptions] :=
         ];
         
         
-        (* New internale indices may have been generatd by lowwick -- recompute *)
+        (* New internal indices may have been generatd by lowwick -- recompute *)
         intinds = Sort[indexListOut[result,extInds]];
         If[ SeQuantDebugLevel>=1,
             Print["Internal indices after wick"];
