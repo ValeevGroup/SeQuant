@@ -515,7 +515,7 @@ visualizeSQE[a_+b_] :=
 visualizeSQE[a_/;(Head[a]=!=SQS&&Head[a]=!=deltaIndex&&Head[a]=!=SQM&&Head[a]=!=mSQS)] :=
     a;
 visualizeSQE[a_deltaIndex] :=
-    Subsuperscript["\[Delta]",a[[1,1]],a[[2,1]] ];
+    Subsuperscript["\[Delta]",visualizeIndex[a[[1]]],visualizeIndex[a[[2]]]];
 
 (* converts a list indices into a pair of merged index labels,
    all creators are in superscript and all annihilators in subscript *)
