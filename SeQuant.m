@@ -72,6 +72,8 @@ allvirtB=Append[allvirt,particleSpin[B]];
 anyB = Append[any,particleSpin[B]];
 allanyB = Append[allany,particleSpin[B]];
 
+stringAppendSpin[str_,s_particleSpin]:=If[s===particleSpin[none],str, "\!\(\*SubscriptBox[\("<>str<>"\), \("<>If[s===particleSpin[A],"\[Alpha]","\[Beta]"]<>"\)]\)"];
+
 
 spacesEqualIgnoreParticleType[a_particleSpace,b_particleSpace] :=
     (Select[a,Head[#]=!=particleType&]==Select[b,Head[#]=!=particleType&]); 
@@ -105,18 +107,18 @@ DefaultSpaceSymbol[allvirt] = "\[Alpha]";
 DefaultSpaceSymbol[othervirt] = "\[Alpha]'";
 DefaultSpaceSymbol[any] = "p";
 DefaultSpaceSymbol[allany] = "\[Kappa]";
-DefaultSpaceSymbol[occA]="\!\(\*SubscriptBox[\(i\), \(\[Alpha]\)]\)";
-DefaultSpaceSymbol[virtA]="\!\(\*SubscriptBox[\(a\), \(\[Alpha]\)]\)";
-DefaultSpaceSymbol[allvirtA]="\!\(\*SubscriptBox[\(\[Gamma]\), \(\[Alpha]\)]\)";
-DefaultSpaceSymbol[othervirtA]="\!\(\*SubsuperscriptBox[\(\[Gamma]\), \(\[Alpha]\), \(,\)]\)";
-DefaultSpaceSymbol[anyA]="\!\(\*SubscriptBox[\(p\), \(\[Alpha]\)]\)";
-DefaultSpaceSymbol[allanyA]="\!\(\*SubscriptBox[\(\[Kappa]\), \(\[Alpha]\)]\)";
-DefaultSpaceSymbol[occB]="\!\(\*SubscriptBox[\(i\), \(\[Beta]\)]\)";
-DefaultSpaceSymbol[virtB]="\!\(\*SubscriptBox[\(a\), \(\[Beta]\)]\)";
-DefaultSpaceSymbol[allvirtB]="\!\(\*SubscriptBox[\(\[Gamma]\), \(\[Beta]\)]\)";
-DefaultSpaceSymbol[othervirtB]="\!\(\*SubsuperscriptBox[\(\[Gamma]\), \(\[Beta]\), \(,\)]\)";
-DefaultSpaceSymbol[anyB]="\!\(\*SubscriptBox[\(p\), \(\[Beta]\)]\)";
-DefaultSpaceSymbol[allanyB]="\!\(\*SubscriptBox[\(\[Kappa]\), \(\[Beta]\)]\)";
+DefaultSpaceSymbol[occA]="i";
+DefaultSpaceSymbol[virtA]="a";
+DefaultSpaceSymbol[allvirtA]="\[Gamma]";
+DefaultSpaceSymbol[othervirtA]="\[Gamma]'";
+DefaultSpaceSymbol[anyA]="p";
+DefaultSpaceSymbol[allanyA]="\[Kappa]";
+DefaultSpaceSymbol[occB]="i";
+DefaultSpaceSymbol[virtB]="a";
+DefaultSpaceSymbol[allvirtB]="\[Gamma]";
+DefaultSpaceSymbol[othervirtB]="\[Gamma]'";
+DefaultSpaceSymbol[anyB]="p";
+DefaultSpaceSymbol[allanyB]="\[Kappa]";
 
 
 (* ::Section::Closed:: *)
@@ -177,6 +179,16 @@ indexParticle[a_particleIndex] :=
         typeList = Cases[a[[2]],_particleType];
         If[ typeList=={},
             Return[particleType[default]],
+            Return[typeList[[1]]]
+        ]
+    ];
+
+(* return the particleSpin of a particleIndex *)
+indexSpin[a_particleIndex] :=
+    Module[ {typeList},
+        typeList = Cases[a[[2]],_particleSpin];
+        If[ typeList=={},
+            Return[particleSpin[none]],
             Return[typeList[[1]]]
         ]
     ];
@@ -485,7 +497,7 @@ convertExp[expr_] :=
 (* these functions display particleIndex in string *)
 
 visualizeIndex[a_particleIndex] :=
-	a[[1]];
+	stringAppendSpin[a[[1]],indexSpin[a]];
 
 Format[particleIndex[a__],TraditionalForm] :=
     visualizeIndex[particleIndex[a]];
