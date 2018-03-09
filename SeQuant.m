@@ -1649,6 +1649,7 @@ defaultWickOptions =
 {
 	fullContract->True,
 	noCoincidences->False,
+	spinRestricted->False,
 	useDensity->True,
 	doSums->True,
 	doReindex->True
@@ -1723,7 +1724,14 @@ wick[expr_,extInds_List,wickOptions_List:defaultWickOptions] :=
             	Print[result//TraditionalForm];
         	];
         ];
-        
+
+        If[ spinRestricted/.wickOptions,
+            result = DeleteCases[result,_particleSpin,Infinity];
+            If[ SeQuantDebugLevel>=1,
+                Print["After eliminating spin"];
+                Print[result//TraditionalForm];
+            ];
+        ];
         
         (* New internal indices may have been generatd by lowwick -- recompute *)
         intinds = Sort[indexListOut[result,extInds]];
