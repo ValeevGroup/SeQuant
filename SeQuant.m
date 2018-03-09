@@ -1666,7 +1666,7 @@ wick[expr_,extInds_List,wickOptions_List:defaultWickOptions] :=
             Print["Internal indices before wick"];
             Print[intinds//TraditionalForm];
         ];
-        extinds = Sort[extInds];
+        extinds = Union[extInds];
         If[ SeQuantDebugLevel>=1,
             Print["External indices:",extinds//TraditionalForm];
         ];
