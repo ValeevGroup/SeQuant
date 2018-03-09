@@ -524,15 +524,15 @@ makeSupSubIndexStrings[indices_,SuperscriptQ_,padLeft_]:=Module[{supInds,subInds
   subInds = "";  nSubInds = 0;
   Do[
             If[ SuperscriptQ[indices[[i]]],
-                (supInds = StringJoin[supInds,indices[[i,1]] ]; ++nSupInds),
-                (subInds = StringJoin[indices[[i,1]],subInds ]; ++nSubInds)
+                (supInds = StringJoin[supInds,visualizeIndex[indices[[i]]] ]; ++nSupInds),
+                (subInds = StringJoin[visualizeIndex[indices[[i]]],subInds ]; ++nSubInds)
             ],{i,1,Length[indices]}
   ];
   
-  padding=StringPadLeft["", nSubInds-nSupInds, "\[UnderBracket]"];
-  supInds=If[nSubInds>nSupInds, If[padLeft,StringJoin[padding,supInds],StringJoin[supInds,padding]], supInds];
-  padding=StringPadLeft["", nSupInds-nSubInds, "\[UnderBracket]"];
-  subInds=If[nSubInds<nSupInds, If[padLeft,StringJoin[padding,subInds],StringJoin[subInds,padding]], subInds];
+  padding=If[nSubInds>nSupInds, StringPadLeft["", nSubInds-nSupInds, "\[UnderBracket]"], ""];
+  supInds=If[padLeft,StringJoin[padding,supInds],StringJoin[supInds,padding]];
+  padding=If[nSubInds<nSupInds, StringPadLeft["", nSupInds-nSubInds, "\[UnderBracket]"], ""];
+  subInds=If[padLeft,StringJoin[padding,subInds],StringJoin[subInds,padding]];
   
   Return[{supInds,subInds}]
 ];
