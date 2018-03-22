@@ -94,11 +94,7 @@ class IndexSpace {
       if (this->qns() < other.qns()) {
         return true;
       } else {
-        if (this->qns() == other.qns()) {
-          return this->type() < other.type();
-        } else {
-          return true;
-        }
+        return !(this->qns() == other.qns()) || this->type() < other.type();
       }
     }
   };
@@ -188,7 +184,7 @@ class IndexSpace {
       throw bad_key();
     const auto irreducible_key = reduce_key(key);
     keys_[attr] = to_wstring(irreducible_key);
-    instances_.insert(make_pair(attr, IndexSpace(attr)));
+    instances_.insert(std::make_pair(attr, IndexSpace(attr)));
   }
 
   /// @brief returns the instance of an IndexSpace object
@@ -215,7 +211,7 @@ class IndexSpace {
 
   Attr attr_;
   /// @brief constructs an instance of an IndexSpace object
-  IndexSpace(Attr attr) noexcept : attr_(attr) {}
+  explicit IndexSpace(Attr attr) noexcept : attr_(attr) {}
   /// @brief constructs an instance of an IndexSpace object
   IndexSpace(Type type, QuantumNumbers qns) noexcept : attr_(type, qns) {}
 

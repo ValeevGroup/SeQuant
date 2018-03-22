@@ -35,7 +35,7 @@ class Index {
 
   /// @param label the index label, does not need to be unique, but must be
   /// convertible into an IndexSpace (@sa IndexSpace::instance )
-  Index(std::wstring_view label)
+  explicit Index(std::wstring_view label)
       : Index(label, IndexSpace::instance(label), {}) {}
 
   /// @param label the label, does not need to be unique
@@ -45,7 +45,7 @@ class Index {
   /// responsibility to ensure that @c space will
   ///       outlive this object
   Index(std::wstring_view label, const IndexSpace &space) noexcept
-      : label_(label), space_(&space) {}
+      : label_(label), space_(&space), proto_indices_() {}
 
   /// @param label the label, does not need to be unique
   /// @param proto_index_labels labels of proto indices (all must be unique,
@@ -84,9 +84,9 @@ class Index {
   const std::vector<Index> &proto_indices() const { return proto_indices_; }
 
  private:
-  std::wstring label_;
-  const IndexSpace *space_;          // pointer to allow default initialization
-  std::vector<Index> proto_indices_; // an unordered set of unique indices on
+  std::wstring label_{};
+  const IndexSpace *space_{};          // pointer to allow default initialization
+  std::vector<Index> proto_indices_{}; // an unordered set of unique indices on
   // which this index depends on
 
   /// throws std::invalid_argument if have duplicates in proto_indices_
@@ -117,11 +117,7 @@ inline bool operator<(const Index &i1, const Index &i2) {
   } else if (i1.space() == i2.space()) {
     if (i1.label() < i2.label()) {
       return true;
-    } else if (i1.label() == i2.label()) {
-      return i1.proto_indices() < i2.proto_indices();
-    } else { // i1.label > i2.label
-      return false;
-    }
+    } else return i1.label() == i2.label() && i1.proto_indices() < i2.proto_indices();
   } else { // i1.space > i2.space
     return false;
   }
@@ -142,7 +138,7 @@ void Index::check_for_duplicate_proto_indices() {
   }
 }
 
-inline std::wstring to_latex(Index index) {
+inline std::wstring to_latex(const Index &index) {
   std::wstring result;
   result = L"{";
   result += index.label();

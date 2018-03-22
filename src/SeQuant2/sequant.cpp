@@ -11,7 +11,7 @@ SeQuant2 &default_context_instance() {
 
 }  // anonymous namespace
 
-const SeQuant2 &default_context() {
+const SeQuant2 &get_default_context() {
   return default_context_instance();
 }
 

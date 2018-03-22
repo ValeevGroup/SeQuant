@@ -13,11 +13,13 @@ class SeQuant2 {
   explicit SeQuant2(Vacuum vac = Vacuum::SingleDeterminant) : vacuum_(vac) {}
   ~SeQuant2() = default;
 
+  Vacuum vacuum() const { return vacuum_; }
+
  private:
   Vacuum vacuum_;
 };
 
-const SeQuant2 &default_context();
+const SeQuant2 &get_default_context();
 void set_default_context(const SeQuant2 &ctx);
 void reset_default_context();
 
