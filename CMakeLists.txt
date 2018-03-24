@@ -9,7 +9,11 @@ add_library(SeQuant2
         src/SeQuant2/index.hpp
         src/SeQuant2/space.hpp
         src/SeQuant2/op.hpp
-        src/SeQuant2/vacuum.hpp)
+        src/SeQuant2/vacuum.hpp
+        src/SeQuant2/tensor.hpp
+        src/SeQuant2/expr.hpp
+        src/SeQuant2/wick.hpp
+        )
 
 enable_testing(true)
 add_custom_target(check_unit COMMAND ${CMAKE_CTEST_COMMAND} -V)
@@ -18,7 +22,8 @@ set(utests_src
         tests/unit/test_space.cpp
         tests/unit/test_index.cpp
         tests/unit/test_op.cpp
-        )
+        tests/unit/test_wick.cpp
+        tests/unit/test_tensor.cpp tests/unit/test_expr.cpp)
 
 set(unit_test_executable unit_tests)
 add_executable(${unit_test_executable} EXCLUDE_FROM_ALL

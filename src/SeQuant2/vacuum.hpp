@@ -9,8 +9,9 @@ namespace sequant2 {
 
 enum class Vacuum {
   Physical,
-  SingleDeterminant,
-  MultiDeterminant
+  SingleProduct,
+  MultiProduct,
+  Invalid
 };
 
 }

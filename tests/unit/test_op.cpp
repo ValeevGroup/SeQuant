@@ -62,6 +62,51 @@ TEST_CASE("Op", "[elements]") {
     REQUIRE(nop2.creators()[1] == fcre(L"i_2"));
     REQUIRE(nop2.annihilators()[0] == fann(Index{L"a_1", {L"i_1", L"i_2"}}));
     REQUIRE(nop2.annihilators()[1] == fann(Index{L"a_2", {L"i_1", L"i_2"}}));
+
+    REQUIRE_NOTHROW(FNOperatorSeq({FNOperator({L"i_1"}, {L"i_2"}), FNOperator({L"i_3"}, {L"i_4"}),
+                                   FNOperator({L"i_5"}, {L"i_6"})}));
+    auto nopseq1 =
+        FNOperatorSeq({FNOperator({L"i_1"}, {L"i_2"}), FNOperator({L"i_3"}, {L"i_4"}), FNOperator({L"i_5"}, {L"i_6"})});
+    REQUIRE(nopseq1.size() == 3);
+    REQUIRE(nopseq1[0] == FNOperator({L"i_1"}, {L"i_2"}));
+    REQUIRE(nopseq1[1] == FNOperator({L"i_3"}, {L"i_4"}));
+    REQUIRE(nopseq1[2] == FNOperator({L"i_5"}, {L"i_6"}));
+
+    REQUIRE_THROWS(FNOperatorSeq({FNOperator({L"i_1"}, {L"i_2"}, Vacuum::Physical),
+                                  FNOperator({L"i_3"}, {L"i_4"}, Vacuum::SingleProduct),
+                                  FNOperator({L"i_5"}, {L"i_6"})}));
+  }
+
+  SECTION("adjoint") {
+    auto o1 = FOp(Index(L"i_1"), Action::create).adjoint();
+    REQUIRE(o1.statistics == Statistics::FermiDirac);
+    REQUIRE(o1.index() == Index(L"i_1"));
+    REQUIRE(o1.action() == Action::annihilate);
+    o1.adjoint();
+    REQUIRE(o1.action() == Action::create);
+    o1.adjoint().adjoint();
+    REQUIRE(o1.action() == Action::create);
+
+    auto oper1 = FOperator{fcre(L"i_1"), fann(L"i_2")}.adjoint();
+    REQUIRE(oper1.statistics == Statistics::FermiDirac);
+    REQUIRE(oper1.size() == 2);
+    REQUIRE(oper1[0] == fcre(L"i_2"));
+    REQUIRE(oper1[1] == fann(L"i_1"));
+
+    auto nop2 =
+        FNOperator({Index{L"i_1"}}, {Index{L"a_1", {L"i_1"}}, Index{L"a_2", {L"i_1"}}}).adjoint();
+    REQUIRE(nop2.creators().size() == 2);
+    REQUIRE(nop2.annihilators().size() == 1);
+    REQUIRE(nop2.annihilators()[0] == fann(L"i_1"));
+    REQUIRE(nop2.creators()[0] == fcre(Index{L"a_1", {L"i_1"}}));
+    REQUIRE(nop2.creators()[1] == fcre(Index{L"a_2", {L"i_1"}}));
+
+    auto nopseq1 = FNOperatorSeq({FNOperator({L"i_1"}, {L"i_2"}), FNOperator({L"i_3"}, {L"i_4"}),
+                                  FNOperator({L"i_5"}, {L"i_6"})}).adjoint();
+    REQUIRE(nopseq1.size() == 3);
+    REQUIRE(nopseq1[2] == FNOperator({L"i_1"}, {L"i_2"}).adjoint());
+    REQUIRE(nopseq1[1] == FNOperator({L"i_3"}, {L"i_4"}).adjoint());
+    REQUIRE(nopseq1[0] == FNOperator({L"i_5"}, {L"i_6"}).adjoint());
   }
 
   SECTION("conversion") {
@@ -92,6 +137,11 @@ TEST_CASE("Op", "[elements]") {
     auto nop2 =
         FNOperator({Index{L"i_1"}, Index{L"i_2"}}, {Index{L"a_1", {L"i_1", L"i_2"}}, Index{L"a_2", {L"i_1", L"i_2"}}});
     REQUIRE(to_latex(nop2) == L"{\\tilde{a}^{{i_1}{i_2}}_{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}}");
+
+    auto nopseq1 = FNOperatorSeq({nop1, nop2});
+    REQUIRE(to_latex(nopseq1)
+                == L"{{\\tilde{a}^{{i_1}{i_2}}_{{a_1}{a_2}}}{\\tilde{a}^{{i_1}{i_2}}_{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}}}");
+
   }
 
 }  // TEST_CASE("Op")

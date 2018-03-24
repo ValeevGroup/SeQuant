@@ -10,7 +10,7 @@ class SeQuant2 {
 
  public:
   /// @param vac the vacuum type
-  explicit SeQuant2(Vacuum vac = Vacuum::SingleDeterminant) : vacuum_(vac) {}
+  explicit SeQuant2(Vacuum vac = Vacuum::SingleProduct) : vacuum_(vac) {}
   ~SeQuant2() = default;
 
   Vacuum vacuum() const { return vacuum_; }

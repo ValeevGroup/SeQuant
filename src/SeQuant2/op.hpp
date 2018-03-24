@@ -5,6 +5,8 @@
 #ifndef SEQUANT2_OP_H
 #define SEQUANT2_OP_H
 
+#include <numeric>
+
 #include "index.hpp"
 #include "sequant.hpp"
 #include "vacuum.hpp"
@@ -14,6 +16,9 @@ namespace sequant2 {
 enum class Statistics { BoseEinstein, FermiDirac };
 
 enum class Action { create, annihilate };
+
+/// applies (Hermitian) adjoint to @c action
+inline Action adjoint(Action action) { return action == Action::create ? Action::annihilate : Action::create; }
 
 /// @brief Op is a creator/annihilator operator
 ///
@@ -29,6 +34,11 @@ class Op {
 
   Index index() const { return index_; }
   Action action() const { return action_; }
+  /// applies (Hermitian) adjoint to this operator
+  Op &adjoint() {
+    action_ = sequant2::adjoint(action_);
+    return *this;
+  }
 
  private:
   Index index_;
@@ -53,6 +63,7 @@ class Operator : public std::vector<Op<S>> {
  public:
   static constexpr Statistics statistics = S;
 
+  Operator() = default;
   explicit Operator(std::initializer_list<Op<S>> ops)
       : std::vector<Op<S>>(ops) {}
   explicit Operator(std::vector<Op<S>> &&ops)
@@ -61,6 +72,17 @@ class Operator : public std::vector<Op<S>> {
       : std::vector<Op<S>>(make_ops(action, indices)) {}
   Operator(Action action, std::initializer_list<std::wstring_view> index_labels)
       : std::vector<Op<S>>(make_ops(action, index_labels)) {}
+
+  operator const std::vector<Op<S>> &() const & { return *this; }
+  operator std::vector<Op<S>> &&() && { return *this; }
+
+  /// applies (Hermitian) adjoint operation to this
+  /// @return reference to @c *this , for daisy-chaining
+  Operator &adjoint() {
+    std::reverse(this->begin(), this->end());
+    std::for_each(this->begin(), this->end(), [](Op<S> &op) { op.adjoint(); });
+    return *this;
+  }
 
  private:
   std::vector<Op<S>> make_ops(Action action,
@@ -90,6 +112,8 @@ template<Statistics S = Statistics::FermiDirac>
 class NormalOperator {
  public:
   static constexpr Statistics statistics = S;
+
+  NormalOperator(Vacuum v = get_default_context().vacuum()) {}
 
   NormalOperator(std::initializer_list<Operator<S>> creators,
                  std::initializer_list<Operator<S>> annihilators,
@@ -127,18 +151,79 @@ class NormalOperator {
   const Operator<S> &creators() const { return creators_; }
   const Operator<S> &annihilators() const { return annihilators_; }
 
+  /// applies (Hermitian) adjoint operation to this
+  /// @return reference to @c *this , for daisy-chaining
+  NormalOperator &adjoint() {
+    std::swap(creators_, annihilators_);
+    std::for_each(creators_.begin(), creators_.end(), [](Op<S> &op) { op.adjoint(); });
+    std::for_each(annihilators_.begin(), annihilators_.end(), [](Op<S> &op) { op.adjoint(); });
+    return *this;
+  }
+
  private:
   Vacuum vacuum_;
   Operator<S> creators_;
   Operator<S> annihilators_;
 };
 
+template<Statistics S>
+bool operator==(const NormalOperator<S> &op1, const NormalOperator<S> &op2) {
+  return op1.vacuum() == op2.vacuum() && op1.creators() == op2.creators() && op1.annihilators() == op2.annihilators();
+}
+
+/// @brief NormalOperatorSequence is a sequence NormalOperator objects, all ordered with respect to same vacuum
+///
+/// @tparam S specifies the particle statistics
+template<Statistics S = Statistics::FermiDirac>
+class NormalOperatorSequence : public std::vector<NormalOperator<S>> {
+ public:
+  static constexpr Statistics statistics = S;
+
+  NormalOperatorSequence(std::initializer_list<NormalOperator<S>> operators)
+      : std::vector<NormalOperator<S>>(operators) {
+    check_vacuum();
+  }
+
+  Vacuum vacuum() const { return vacuum_; }
+
+  operator const std::vector<NormalOperator<S>> &() const & { return *this; }
+  operator std::vector<NormalOperator<S>> &&() && { return *this; }
+
+  /// applies (Hermitian) adjoint operation to this
+  /// @return reference to @c *this , for daisy-chaining
+  NormalOperatorSequence &adjoint() {
+    std::reverse(this->begin(), this->end());
+    std::for_each(this->begin(), this->end(), [](NormalOperator<S> &op) { op.adjoint(); });
+    return *this;
+  }
+
+ private:
+  Vacuum vacuum_ = Vacuum::Invalid;
+  /// ensures that all operators use same vacuum, and sets vacuum_
+  void check_vacuum() {
+    vacuum_ =
+        std::accumulate(this->cbegin(), this->cend(), Vacuum::Invalid, [](Vacuum v1, const NormalOperator<S> &v2) {
+          if (v1 == Vacuum::Invalid) {
+            return v2.vacuum();
+          } else {
+            if (v1 != v2.vacuum())
+              throw std::invalid_argument(
+                  "NormalOperatorSequence expects all constituent NormalOperator objects to use same vacuum");
+            else
+              return v1;
+          }
+        });
+  }
+};
+
 using BOp = Op<Statistics::BoseEinstein>;
 using BOperator = Operator<Statistics::BoseEinstein>;
 using BNOperator = NormalOperator<Statistics::BoseEinstein>;
+using BNOperatorSeq = NormalOperatorSequence<Statistics::BoseEinstein>;
 using FOp = Op<Statistics::FermiDirac>;
 using FOperator = Operator<Statistics::FermiDirac>;
 using FNOperator = NormalOperator<Statistics::FermiDirac>;
+using FNOperatorSeq = NormalOperatorSequence<Statistics::FermiDirac>;
 
 inline BOp bcre(Index i) { return BOp(i, Action::create); }
 inline BOp bcre(std::wstring_view i) { return BOp(Index{i}, Action::create); }
@@ -168,11 +253,6 @@ inline FOp fann(std::wstring_view i,
                 std::initializer_list<std::wstring_view> pi) {
   return FOp(Index(i, pi), Action::annihilate);
 }
-
-// inline FNOperator fnormop(std::initializer_list<std::wstring_view> creators,
-// std::initializer_list<std::wstring_view> annihilators) {
-//  return FNOperator{};
-//}
 
 template<Statistics S>
 std::wstring to_latex(const Op<S> &op) {
@@ -209,6 +289,16 @@ std::wstring to_latex(const NormalOperator<S> &op) {
   for (const auto &o : op.annihilators())
     result += to_latex(o.index());
   result += L"}}";
+  return result;
+}
+
+template<Statistics S>
+std::wstring to_latex(const NormalOperatorSequence<S> &opseq) {
+  std::wstring result;
+  result = L"{";
+  for (const auto &op: opseq)
+    result += to_latex(op);
+  result += L"}";
   return result;
 }
 
