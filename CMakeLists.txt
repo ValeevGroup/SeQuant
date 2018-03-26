@@ -3,6 +3,10 @@ project(SeQuant2)
 
 set(CMAKE_CXX_STANDARD 17)
 
+add_library(Range-V3 INTERFACE IMPORTED)
+set_property(TARGET Range-V3 PROPERTY
+             INTERFACE_INCLUDE_DIRECTORIES ${RANGEV3_DIR}/include)
+
 add_library(SeQuant2
         src/SeQuant2/sequant.cpp
         src/SeQuant2/sequant.hpp
@@ -13,7 +17,8 @@ add_library(SeQuant2
         src/SeQuant2/tensor.hpp
         src/SeQuant2/expr.hpp
         src/SeQuant2/wick.hpp
-        )
+        src/SeQuant2/iterator.hpp)
+target_link_libraries(SeQuant2 Range-V3)
 
 enable_testing(true)
 add_custom_target(check_unit COMMAND ${CMAKE_CTEST_COMMAND} -V)
@@ -23,7 +28,7 @@ set(utests_src
         tests/unit/test_index.cpp
         tests/unit/test_op.cpp
         tests/unit/test_wick.cpp
-        tests/unit/test_tensor.cpp tests/unit/test_expr.cpp)
+        tests/unit/test_tensor.cpp tests/unit/test_expr.cpp tests/unit/test_iterator.cpp)
 
 set(unit_test_executable unit_tests)
 add_executable(${unit_test_executable} EXCLUDE_FROM_ALL

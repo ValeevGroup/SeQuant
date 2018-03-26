@@ -19,9 +19,9 @@ TEST_CASE("WickTheorem", "[algorithms]") {
         FNOperatorSeq({FNOperator({L"i_1"}, {L"i_2"}), FNOperator({L"i_3"}, {L"i_4"}), FNOperator({L"i_5"}, {L"i_6"})});
     REQUIRE_NOTHROW(FWickTheorem{opseq1});
     auto wick1 = FWickTheorem{opseq1};
-    REQUIRE_THROWS(wick1.full_contractions(true).compute());
+    REQUIRE_THROWS(wick1.full_contractions(false).compute());
     REQUIRE_THROWS(wick1.spinfree(true).compute());
-    REQUIRE_NOTHROW(wick1.full_contractions(false).spinfree(false).compute());
+    REQUIRE_NOTHROW(wick1.full_contractions(true).spinfree(false).compute());
 
   }  // SECTION("constructors")
 

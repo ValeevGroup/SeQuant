@@ -20,6 +20,14 @@ TEST_CASE("Op", "[elements]") {
     REQUIRE(o1.index() == Index(L"i_1"));
     REQUIRE(o1.action() == Action::create);
 
+    {
+      REQUIRE_NOTHROW(FOp(L"i_1", Action::create));
+      FOp o1(L"i_1", Action::create);
+      REQUIRE(o1.statistics == Statistics::FermiDirac);
+      REQUIRE(o1.index() == Index(L"i_1"));
+      REQUIRE(o1.action() == Action::create);
+    }
+
     REQUIRE_NOTHROW(bann(Index(L"i_2")));
     auto o2 = bann(Index(L"i_2"));
     REQUIRE(o2.statistics == Statistics::BoseEinstein);
@@ -137,6 +145,12 @@ TEST_CASE("Op", "[elements]") {
     auto nop2 =
         FNOperator({Index{L"i_1"}, Index{L"i_2"}}, {Index{L"a_1", {L"i_1", L"i_2"}}, Index{L"a_2", {L"i_1", L"i_2"}}});
     REQUIRE(to_latex(nop2) == L"{\\tilde{a}^{{i_1}{i_2}}_{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}}");
+
+    auto nop3 = FNOperator({L"i_1", L"i_2"}, {L"a_1"});
+    REQUIRE(to_latex(nop3) == L"{\\tilde{a}^{{i_1}{i_2}}_{\\textvisiblespace\\,{a_1}}}");
+
+    auto nop4 = FNOperator({L"i_1"}, {L"a_1", L"a_2"});
+    REQUIRE(to_latex(nop4) == L"{\\tilde{a}^{\\textvisiblespace\\,{i_1}}_{{a_1}{a_2}}}");
 
     auto nopseq1 = FNOperatorSeq({nop1, nop2});
     REQUIRE(to_latex(nopseq1)

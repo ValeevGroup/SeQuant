@@ -7,9 +7,12 @@
 
 #include <numeric>
 
+#include <range/v3/all.hpp>
+
 #include "index.hpp"
 #include "sequant.hpp"
 #include "vacuum.hpp"
+#include "iterator.hpp"
 
 namespace sequant2 {
 
@@ -31,6 +34,7 @@ class Op {
 
   Op() = default;
   Op(Index index, Action action) noexcept : index_(index), action_(action) {}
+  Op(std::wstring_view index_label, Action action) noexcept : index_(Index{index_label}), action_(action) {}
 
   Index index() const { return index_; }
   Action action() const { return action_; }
@@ -55,7 +59,7 @@ bool operator!=(const Op<S> &op1, const Op<S> &op2) {
   return !(op1 == op2);
 }
 
-/// @brief Operator is a list of Op objects
+/// @brief Operator is a sequence of Op objects
 ///
 /// @tparam S specifies the particle statistics
 template<Statistics S = Statistics::FermiDirac>
@@ -105,70 +109,100 @@ class Operator : public std::vector<Op<S>> {
   }
 };
 
-/// @brief NormalOperator is an Operator normal-ordered with respect to vacuum
+/// @brief NormalOperator is an Operator normal-ordered with respect to vacuum.
+
+/// @note Normal ordering means all creators are to the left of all annihilators. It is natural to express
+/// at least number-conserving normal operators (i.e. those with equal number of creators and annihilators)
+/// as tensors with creators as superscripts and annihilators as subscripts. Operator
+/// cre(p1) cre(p2) ... cre(pN) ann(qN) ... ann(q2) ann(q1) is represented in such notation as a^{p1 p2 ... pN}_{q1 q2 ... qN},
+/// hence it is natural to specify annihilators in the order of their particle index (i.e. as q1 q2, etc.) which is
+/// reverse of the order of their appearance in Operator.
+///
+/// @note The tensor notation becomes less intuitive for number non-conserving operators, e.g. cre(p1) cre(p2) ann(q2) could
+/// be represented as a^{p1 p2}_{q2 ⎵} or a^{p1 p2}_{⎵ q2}. To make it explicit that ann(q2) acts on same particle as
+/// cre(p2) the latter notation is used; similarly, cre(p1) ann(q1) ann(q2) is represented as a^{⎵ p1}_{q1 q2}.
 ///
 /// @tparam S specifies the particle statistics
 template<Statistics S = Statistics::FermiDirac>
-class NormalOperator {
+class NormalOperator : public Operator<S> {
  public:
   static constexpr Statistics statistics = S;
 
+  /// constructs an identity operator
   NormalOperator(Vacuum v = get_default_context().vacuum()) {}
 
-  NormalOperator(std::initializer_list<Operator<S>> creators,
-                 std::initializer_list<Operator<S>> annihilators,
+  /// @param creators sequence of creators
+  /// @param annihilators sequence of annihilators (in order of particle indices, see the class documentation for more info).
+  NormalOperator(std::initializer_list<Op<S>> creators,
+                 std::initializer_list<Op<S>> annihilators,
                  Vacuum v = get_default_context().vacuum())
-      : vacuum_(v), creators_(creators), annihilators_(annihilators) {}
+      : Operator<S>{}, vacuum_(v), ncreators_(size(creators)) {
+    for(const auto& op: creators) {
+      assert(op.action() == Action::create);
+    }
+    for(const auto& op: annihilators) {
+      assert(op.action() == Action::annihilate);
+    }
+    this->reserve(size(creators) + size(annihilators));
+    this->insert(this->end(), cbegin(creators), cend(creators) );
+    this->insert(this->end(), crbegin(annihilators), crend(annihilators) );
+  }
 
+  /// @param creator_indices sequence of creator indices
+  /// @param annihilator_indices sequence of annihilator indices (in order of particle indices, see the class documentation for more info).
   NormalOperator(std::initializer_list<Index> creator_indices,
                  std::initializer_list<Index> annihilator_indices,
                  Vacuum v = get_default_context().vacuum())
-      : vacuum_(v), creators_(Operator<S>(Action::create, creator_indices)),
-        annihilators_(Operator<S>(Action::annihilate, annihilator_indices)) {}
+      : Operator<S>{}, vacuum_(v), ncreators_(size(creator_indices)) {
+    this->reserve(size(creator_indices) + size(annihilator_indices));
+    for(const auto& i: creator_indices) {
+      this->emplace_back(i, Action::create);
+    }
+    for(const auto& i: annihilator_indices|ranges::view::reverse) {
+      this->emplace_back(i, Action::annihilate);
+    }
+  }
 
+  /// @param creator_index_labels sequence of creator index labels
+  /// @param annihilator_index_labels sequence of annihilator index labels (in order of particle indices, see the class documentation for more info).
   NormalOperator(std::initializer_list<std::wstring_view> creator_index_labels,
                  std::initializer_list<std::wstring_view> annihilator_index_labels,
                  Vacuum v = get_default_context().vacuum())
-      : vacuum_(v), creators_(Operator<S>(Action::create, creator_index_labels)),
-        annihilators_(Operator<S>(Action::annihilate, annihilator_index_labels)) {}
-
-  operator Operator<S>() const & {
-    std::vector<Op<S>> grandlist(creators_.size() + annihilators_.size());
-    std::copy(cbegin(creators_), cend(creators_), begin(grandlist));
-    std::copy(crbegin(annihilators_), crend(annihilators_), begin(grandlist) + creators_.size());
-    return Operator<S>(std::move(grandlist));
+      : Operator<S>{}, vacuum_(v), ncreators_(size(creator_index_labels)) {
+    this->reserve(size(creator_index_labels) + size(annihilator_index_labels));
+    for(const auto& l: creator_index_labels) {
+      this->emplace_back(Index{l}, Action::create);
+    }
+    for(const auto& l: annihilator_index_labels|ranges::view::reverse) {
+      this->emplace_back(Index{l}, Action::annihilate);
+    }
   }
 
-  operator Operator<S>() && {
-    std::vector<Op<S>> grandlist(std::move(creators_));
-    const auto ncre = grandlist.size();
-    grandlist.resize(ncre + annihilators_.size());
-    std::copy(crbegin(annihilators_), crend(annihilators_), begin(grandlist) + ncre);
-    return Operator<S>(std::move(grandlist));
-  }
-
+  /// @return the vacuum state with respect to which the operator is normal-ordered.
   Vacuum vacuum() const { return vacuum_; }
-  const Operator<S> &creators() const { return creators_; }
-  const Operator<S> &annihilators() const { return annihilators_; }
+  /// @return the range of creators
+  auto creators() const { return ranges::view::counted(this->cbegin(), ncreators()); }
+  /// @return the range of annihilators
+  auto annihilators() const { return ranges::view::counted(this->crbegin(), nannihilators()); }
+  /// @return the number of creators
+  auto ncreators() const { return ncreators_; }
+  /// @return the number of annihilators
+  auto nannihilators() const { return this->size() - ncreators(); }
 
-  /// applies (Hermitian) adjoint operation to this
-  /// @return reference to @c *this , for daisy-chaining
   NormalOperator &adjoint() {
-    std::swap(creators_, annihilators_);
-    std::for_each(creators_.begin(), creators_.end(), [](Op<S> &op) { op.adjoint(); });
-    std::for_each(annihilators_.begin(), annihilators_.end(), [](Op<S> &op) { op.adjoint(); });
+    static_cast<Operator<S>&>(*this).adjoint();
+    ncreators_ = this->size() - ncreators_;
     return *this;
   }
 
  private:
   Vacuum vacuum_;
-  Operator<S> creators_;
-  Operator<S> annihilators_;
+  std::size_t ncreators_ = 0;
 };
 
 template<Statistics S>
 bool operator==(const NormalOperator<S> &op1, const NormalOperator<S> &op2) {
-  return op1.vacuum() == op2.vacuum() && op1.creators() == op2.creators() && op1.annihilators() == op2.annihilators();
+  return op1.vacuum() == op2.vacuum() && ranges::equal(op1,op2);
 }
 
 /// @brief NormalOperatorSequence is a sequence NormalOperator objects, all ordered with respect to same vacuum
@@ -283,9 +317,17 @@ std::wstring to_latex(const NormalOperator<S> &op) {
              ? (op.vacuum() == Vacuum::Physical ? L"a" : L"\\tilde{a}")
              : (op.vacuum() == Vacuum::Physical ? L"b" : L"\\tilde{b}"));
   result += L"^{";
+  const auto ncreators = op.ncreators();
+  const auto nannihilators = op.nannihilators();
+  if (ncreators < nannihilators) // pad on the left with square underbrackets, i.e. ⎵
+    for(auto i = 0; i!=(nannihilators-ncreators); ++i)
+      result += L"\\textvisiblespace\\,";
   for (const auto &o : op.creators())
     result += to_latex(o.index());
   result += L"}_{";
+  if (ncreators > nannihilators) // pad on the left with square underbrackets, i.e. ⎵
+    for(auto i = 0; i!=(ncreators-nannihilators); ++i)
+      result += L"\\textvisiblespace\\,";
   for (const auto &o : op.annihilators())
     result += to_latex(o.index());
   result += L"}}";
