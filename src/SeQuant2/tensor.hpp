@@ -5,6 +5,8 @@
 #ifndef SEQUANT2_TENSOR_HPP
 #define SEQUANT2_TENSOR_HPP
 
+#include <memory>
+
 #include "expr.hpp"
 
 namespace sequant2 {
@@ -47,6 +49,24 @@ class Tensor : public Expr {
     return bra_rank();
   }
 
+  std::wstring to_latex() const override {
+    std::wstring result;
+    result = L"{";
+    result += this->label();
+    result += L"^{";
+    for (const auto &i : this->ket())
+      result += sequant2::to_latex(i);
+    result += L"}_{";
+    for (const auto &i : this->bra())
+      result += sequant2::to_latex(i);
+    result += L"}}";
+    return result;
+  }
+
+  std::shared_ptr<Expr> canonicalize() override {
+    abort();
+  }
+
  private:
   std::wstring label_{};
   std::vector<Index> bra_{};
@@ -63,18 +83,8 @@ class Tensor : public Expr {
   }
 };
 
-inline std::wstring to_latex(const Tensor &t) {
-  std::wstring result;
-  result = L"{";
-  result += t.label();
-  result += L"^{";
-  for (const auto &i : t.ket())
-    result += to_latex(i);
-  result += L"}_{";
-  for (const auto &i : t.bra())
-    result += to_latex(i);
-  result += L"}}";
-  return result;
+inline std::shared_ptr<Expr> overlap(const Index& bra_index, const Index& ket_index) {
+  return std::make_shared<Tensor>(L"S", std::initializer_list<Index>{bra_index}, std::initializer_list<Index>{ket_index});
 }
 
 }  // namespace sequant2

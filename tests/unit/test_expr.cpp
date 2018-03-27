@@ -42,7 +42,7 @@ TEST_CASE("Expr", "[elements]") {
   SECTION("latex") {
     ScaledProduct sp0{};
     sp0.append(2.0, std::make_shared<Dummy>());
-    REQUIRE(sp0.to_latex() == L"{2.000000 \\times {\\text{Dummy}}}");
+    REQUIRE(to_latex(sp0) == L"{2.000000 \\times {\\text{Dummy}}}");
   }
 
 }

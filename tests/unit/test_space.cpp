@@ -20,7 +20,9 @@ TEST_CASE("IndexSpace", "[elements]") {
     REQUIRE_NOTHROW(IndexSpace::register_standard_instances());  // can do twice
     REQUIRE(IndexSpace::instance_exists(L"i"));
     REQUIRE(IndexSpace::instance_exists(L"m"));
+    REQUIRE(IndexSpace::instance_exists(L"p"));
     REQUIRE(IndexSpace::instance_exists(L"a_17"));
+    REQUIRE(IndexSpace::instance_exists(L"e_19"));
     REQUIRE(IndexSpace::instance_exists(L"⍺_21"));
     REQUIRE(IndexSpace::instance_exists(L"⍺'_32"));
     REQUIRE(IndexSpace::instance_exists(L"κ_48"));
@@ -62,5 +64,13 @@ TEST_CASE("IndexSpace", "[elements]") {
 
     REQUIRE(includes(IndexSpace::instance(L"κ"), IndexSpace::instance(L"m")));
     REQUIRE(!includes(IndexSpace::instance(L"m"), IndexSpace::instance(L"κ")));
+    REQUIRE(includes(IndexSpace::instance(L"⍺"), IndexSpace::instance(L"a")));
   }
+
+  SECTION("occupancy_class") {
+    REQUIRE(occupancy_class(IndexSpace::instance(L"i")) == -1);
+    REQUIRE(occupancy_class(IndexSpace::instance(L"a")) == +1);
+    REQUIRE(occupancy_class(IndexSpace::instance(L"p")) == 0);
+  }
+
 }

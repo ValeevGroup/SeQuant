@@ -129,6 +129,78 @@ TEST_CASE("Op", "[elements]") {
     REQUIRE(op1[3] == fann(Index{L"a_1", {L"i_1", L"i_2"}}));
   }
 
+  SECTION("quasiparticle character") {
+    {
+      constexpr const Vacuum V = Vacuum::SingleProduct;
+
+      REQUIRE(!is_qpcreator(fcre(L"i_1"), V));
+      REQUIRE(is_qpcreator(fcre(L"a_1"), V));
+      REQUIRE(is_qpcreator(fcre(L"p_1"), V));
+      REQUIRE(!is_pure_qpcreator(fcre(L"i_1"), V));
+      REQUIRE(is_pure_qpcreator(fcre(L"a_1"), V));
+      REQUIRE(!is_pure_qpcreator(fcre(L"p_1"), V));
+
+      REQUIRE(is_qpannihilator(fcre(L"i_1"), V));
+      REQUIRE(!is_qpannihilator(fcre(L"a_1"), V));
+      REQUIRE(is_qpannihilator(fcre(L"p_1"), V));
+      REQUIRE(is_pure_qpannihilator(fcre(L"i_1"), V));
+      REQUIRE(!is_pure_qpannihilator(fcre(L"a_1"), V));
+      REQUIRE(!is_pure_qpannihilator(fcre(L"p_1"), V));
+
+      REQUIRE(is_qpcreator(fann(L"i_1"), V));
+      REQUIRE(!is_qpcreator(fann(L"a_1"), V));
+      REQUIRE(is_qpcreator(fann(L"p_1"), V));
+      REQUIRE(is_pure_qpcreator(fann(L"i_1"), V));
+      REQUIRE(!is_pure_qpcreator(fann(L"a_1"), V));
+      REQUIRE(!is_pure_qpcreator(fann(L"p_1"), V));
+
+      REQUIRE(!is_qpannihilator(fann(L"i_1"), V));
+      REQUIRE(is_qpannihilator(fann(L"a_1"), V));
+      REQUIRE(is_qpannihilator(fann(L"p_1"), V));
+      REQUIRE(!is_pure_qpannihilator(fann(L"i_1"), V));
+      REQUIRE(is_pure_qpannihilator(fann(L"a_1"), V));
+      REQUIRE(!is_pure_qpannihilator(fann(L"p_1"), V));
+
+      REQUIRE(qpannihilator_space(fann(L"i_1"), V) == IndexSpace::null_instance());
+      REQUIRE(qpannihilator_space(fcre(L"i_1"), V) == IndexSpace::instance(IndexSpace::active_occupied));
+      REQUIRE(qpannihilator_space(fcre(L"a_1"), V) == IndexSpace::null_instance());
+      REQUIRE(qpannihilator_space(fann(L"a_1"), V) == IndexSpace::instance(IndexSpace::active_unoccupied));
+      REQUIRE(qpannihilator_space(fcre(L"p_1"), V) == IndexSpace::instance(IndexSpace::occupied));
+      REQUIRE(qpannihilator_space(fann(L"p_1"), V) == IndexSpace::instance(IndexSpace::unoccupied));
+    }
+    {
+      constexpr const Vacuum V = Vacuum::Physical;
+
+      REQUIRE(is_qpcreator(fcre(L"i_1"), V));
+      REQUIRE(is_qpcreator(fcre(L"a_1"), V));
+      REQUIRE(is_qpcreator(fcre(L"p_1"), V));
+      REQUIRE(is_pure_qpcreator(fcre(L"i_1"), V));
+      REQUIRE(is_pure_qpcreator(fcre(L"a_1"), V));
+      REQUIRE(is_pure_qpcreator(fcre(L"p_1"), V));
+
+      REQUIRE(!is_qpcreator(fann(L"i_1"), V));
+      REQUIRE(!is_qpcreator(fann(L"a_1"), V));
+      REQUIRE(!is_qpcreator(fann(L"p_1"), V));
+      REQUIRE(!is_pure_qpcreator(fann(L"i_1"), V));
+      REQUIRE(!is_pure_qpcreator(fann(L"a_1"), V));
+      REQUIRE(!is_pure_qpcreator(fann(L"p_1"), V));
+
+      REQUIRE(!is_qpannihilator(fcre(L"i_1"), V));
+      REQUIRE(!is_qpannihilator(fcre(L"a_1"), V));
+      REQUIRE(!is_qpannihilator(fcre(L"p_1"), V));
+      REQUIRE(!is_pure_qpannihilator(fcre(L"i_1"), V));
+      REQUIRE(!is_pure_qpannihilator(fcre(L"a_1"), V));
+      REQUIRE(!is_pure_qpannihilator(fcre(L"p_1"), V));
+
+      REQUIRE(is_qpannihilator(fann(L"i_1"), V));
+      REQUIRE(is_qpannihilator(fann(L"a_1"), V));
+      REQUIRE(is_qpannihilator(fann(L"p_1"), V));
+      REQUIRE(is_pure_qpannihilator(fann(L"i_1"), V));
+      REQUIRE(is_pure_qpannihilator(fann(L"a_1"), V));
+      REQUIRE(is_pure_qpannihilator(fann(L"p_1"), V));
+    }
+  }
+
   SECTION("latex") {
     FOp o1(Index(L"i_1"), Action::create);
     REQUIRE(to_latex(o1) == L"{a^{\\dagger}_{i_1}}");
@@ -136,20 +208,23 @@ TEST_CASE("Op", "[elements]") {
     BOp o2(Index(L"a_1"), Action::create);
     REQUIRE(to_latex(o2) == L"{b^{\\dagger}_{a_1}}");
 
+    auto oper0 = FOperator{};
+    REQUIRE(to_latex(oper0) == L"{}");
+
     auto oper1 = FOperator{fcre(L"i_1"), fann(L"i_1")};
     REQUIRE(to_latex(oper1) == L"{{a^{\\dagger}_{i_1}}{a_{i_1}}}");
 
-    auto nop1 = FNOperator({L"i_1", L"i_2"}, {L"a_1", L"a_2"});
+    auto nop1 = FNOperator({L"i_1", L"i_2"}, {L"a_1", L"a_2"}, Vacuum::SingleProduct);
     REQUIRE(to_latex(nop1) == L"{\\tilde{a}^{{i_1}{i_2}}_{{a_1}{a_2}}}");
 
     auto nop2 =
-        FNOperator({Index{L"i_1"}, Index{L"i_2"}}, {Index{L"a_1", {L"i_1", L"i_2"}}, Index{L"a_2", {L"i_1", L"i_2"}}});
+        FNOperator({Index{L"i_1"}, Index{L"i_2"}}, {Index{L"a_1", {L"i_1", L"i_2"}}, Index{L"a_2", {L"i_1", L"i_2"}}}, Vacuum::SingleProduct);
     REQUIRE(to_latex(nop2) == L"{\\tilde{a}^{{i_1}{i_2}}_{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}}");
 
-    auto nop3 = FNOperator({L"i_1", L"i_2"}, {L"a_1"});
+    auto nop3 = FNOperator({L"i_1", L"i_2"}, {L"a_1"}, Vacuum::SingleProduct);
     REQUIRE(to_latex(nop3) == L"{\\tilde{a}^{{i_1}{i_2}}_{\\textvisiblespace\\,{a_1}}}");
 
-    auto nop4 = FNOperator({L"i_1"}, {L"a_1", L"a_2"});
+    auto nop4 = FNOperator({L"i_1"}, {L"a_1", L"a_2"}, Vacuum::SingleProduct);
     REQUIRE(to_latex(nop4) == L"{\\tilde{a}^{\\textvisiblespace\\,{i_1}}_{{a_1}{a_2}}}");
 
     auto nopseq1 = FNOperatorSeq({nop1, nop2});

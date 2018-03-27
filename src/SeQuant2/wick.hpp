@@ -9,6 +9,7 @@
 
 #include "op.hpp"
 #include "tensor.hpp"
+#include "iterator.hpp"
 
 namespace sequant2 {
 
@@ -18,9 +19,11 @@ namespace sequant2 {
 template<Statistics S>
 class WickTheorem {
  public:
+  static constexpr const Statistics statistics = S;
   static_assert(S == Statistics::FermiDirac, "WickTheorem not yet implemented for Bose-Einstein");
 
   explicit WickTheorem(const NormalOperatorSequence<S> &input) : input_(input) {
+    assert(input.empty() || input.vacuum() != Vacuum::Invalid);
     assert(input.empty() || input.vacuum() != Vacuum::Invalid);
   }
 
@@ -56,15 +59,23 @@ class WickTheorem {
 
   /// carries state down the stack of recursive calls
   struct NontensorWickState {
-    NontensorWickState(const NormalOperatorSequence<S>& opseq) : opseq(opseq) {}
+    NontensorWickState(const NormalOperatorSequence<S>& opseq) : opseq(opseq), level(0) {
+      compute_size();
+    }
     NormalOperatorSequence<S> opseq;  //!< current state of operator sequence
     std::size_t opseq_size;  //!< current size of opseq
     ScaledProduct sp;  //!< current prefactor
+    int level;  //!< level in recursive wick call stack
 
     void compute_size() {
-      opseq_size = 1;
+      opseq_size = 0;
       for(const auto& op: opseq)
-        opseq_size *= op.size();
+        opseq_size += op.size();
+    }
+    void reset(const NormalOperatorSequence<S>& o) {
+      sp = ScaledProduct{};
+      opseq = o;
+      compute_size();
     }
   };
   /// Applies most naive version of Wick's theorem, where sign rule involves counting Ops
@@ -77,14 +88,115 @@ class WickTheorem {
 
     recursive_nontensor_wick(result_plus_mutex, state);
 
-    return result;
+    return std::move(result);
   };
 
   void recursive_nontensor_wick(std::pair<std::vector<std::pair<ScaledProduct, NormalOperator<S>>>*, std::mutex*>& result,
                                 NontensorWickState& state) const {
     // if full contractions needed, make contractions involving first index with another index, else contract any index i with index j (i<j)
-    assert(full_contractions_);
+    if (full_contractions_) {
+      using opseq_view_type = flattened_rangenest<NormalOperatorSequence<S>>;
+      auto opseq_view = opseq_view_type(&state.opseq);
+      auto opseq_view_begin = begin(opseq_view);
+      auto op_iter = opseq_view_begin;
+      ++op_iter;
+      for(; op_iter != end(opseq_view);) {
+        if (op_iter != opseq_view_begin && ranges::get_cursor(op_iter).range_iter() != ranges::get_cursor(opseq_view_begin).range_iter()) {
+          if (can_contract(*opseq_view_begin, *op_iter, input_.vacuum())) {
+//            std::wcout << "level " << state.level << ": contracting " << to_latex(*opseq_view_begin) << " with " << to_latex(*op_iter) << std::endl;
+//            std::wcout << "  current opseq = " << to_latex(state.opseq) << std::endl;
+
+            // update the phase, if needed
+            double phase = 1;
+            if (statistics == Statistics::FermiDirac) {
+              const auto
+                  distance = ranges::get_cursor(op_iter).index() - ranges::get_cursor(opseq_view_begin).index() - 1;
+              if (distance % 2) {
+                phase *= -1;
+              }
+            }
+
+            // update the prefactor and opseq
+            ScaledProduct sp_copy = state.sp;
+            state.sp.append(phase, contract(*opseq_view_begin, *op_iter, input_.vacuum()));
+            // remove from back to front
+            Op<S> right = *op_iter;
+            ranges::get_cursor(op_iter).erase();
+            --state.opseq_size;
+            Op<S> left = *opseq_view_begin;
+            ranges::get_cursor(opseq_view_begin).erase();
+            --state.opseq_size;
+
+//            std::wcout << "  opseq after contraction = " << to_latex(state.opseq) << std::endl;
+
+            // update the result if nothing left to contract and have a nonzero result
+            if (state.opseq_size == 0 && !state.sp.empty()) {
+              result.second->lock();
+//              std::wcout << "got " << to_latex(state.sp) << std::endl;
+              result.first->push_back(std::make_pair(state.sp, NormalOperator<S>{}));
+//              std::wcout << "now up to " << result.first->size() << " terms" << std::endl;
+              result.second->unlock();
+            }
+
+            if (state.opseq_size != 0) {
+              ++state.level;
+              recursive_nontensor_wick(result, state);
+              --state.level;
+            }
+
+            // restore the prefactor and opseq
+            state.sp = std::move(sp_copy);
+            // restore from front to back
+            ranges::get_cursor(opseq_view_begin).insert(std::move(left));
+            ++state.opseq_size;
+            ranges::get_cursor(op_iter).insert(std::move(right));
+            ++state.opseq_size;
+//            std::wcout << "  restored opseq = " << to_latex(state.opseq) << std::endl;
+
+          }
+          ++op_iter;
+        }
+        else
+          ++op_iter;
+      }
+    }
+    else
+      assert(false);   // full_contraction_=false not implemented yet, should result in error earlier
   }
+
+ public:
+  static bool can_contract(const Op<S>& left, const Op<S>& right, Vacuum vacuum = get_default_context().vacuum()) {
+    if (is_qpannihilator<S>(left, vacuum) && is_qpcreator<S>(right, vacuum)) {
+      const auto qpspace_left = qpannihilator_space<S>(left, vacuum);
+      const auto qpspace_right = qpcreator_space<S>(right, vacuum);
+      const auto qpspace_common = intersection(qpspace_left, qpspace_right);
+      if (qpspace_common != IndexSpace::null_instance())
+        return true;
+    }
+    return false;
+  }
+
+  static std::shared_ptr<Expr> contract(const Op<S>& left, const Op<S>& right, Vacuum vacuum = get_default_context().vacuum()) {
+    assert(can_contract(left, right, vacuum));
+    if (is_pure_qpannihilator<S>(left, vacuum) && is_pure_qpcreator<S>(right, vacuum))
+      return overlap(left.index(), right.index());
+    else {
+      const auto qpspace_left = qpannihilator_space<S>(left, vacuum);
+      const auto qpspace_right = qpcreator_space<S>(right, vacuum);
+      const auto qpspace_common = intersection(qpspace_left, qpspace_right);
+      const auto index_common = Index{IndexSpace::base_key(qpspace_common) + L"_10000"};
+      if (qpspace_common != left.index().space() && qpspace_common != right.index().space()) {  // may need 2 overlaps if neither space is pure qp creator/annihilator
+        auto result = std::make_shared<ScaledProduct>();
+        result->append(1, overlap(left.index(), index_common));
+        result->append(1, overlap(index_common, right.index()));
+        return result;
+      }
+      else {
+        return overlap(left.index(), right.index());
+      }
+    }
+  }
+
 };
 
 using BWickTheorem = WickTheorem<Statistics::BoseEinstein>;

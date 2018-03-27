@@ -22,7 +22,7 @@ class IndexSpace {
   /// The type is described as a set of (orthogonal) attributes; for simplicity it is encoded as a bitset for ease of
   /// computing.
   struct TypeAttr : std::bitset<32> {
-    explicit TypeAttr(int32_t value) noexcept : std::bitset<32>(static_cast<unsigned long long>(value)) {}
+    constexpr explicit TypeAttr(int32_t value) noexcept : std::bitset<32>(static_cast<unsigned long long>(value)) {}
     operator int64_t() const { return static_cast<int64_t>(this->to_ulong()); }
     int32_t to_int32() const { return static_cast<int32_t>(this->to_ulong()); }
     TypeAttr intersection(TypeAttr other) const { return TypeAttr(this->to_int32() & other.to_int32()); }
@@ -38,7 +38,7 @@ class IndexSpace {
   };
   /// denotes other quantum numbers (particle type, spin, etc.)
   struct QuantumNumbersAttr : std::bitset<32> {
-    explicit QuantumNumbersAttr(int32_t value) noexcept : std::bitset<32>(static_cast<unsigned long long>(value)) {}
+    constexpr explicit QuantumNumbersAttr(int32_t value) noexcept : std::bitset<32>(static_cast<unsigned long long>(value)) {}
     explicit operator int64_t() const { return static_cast<int64_t>(this->to_ulong()); }
     int32_t to_int32() const { return static_cast<int32_t>(this->to_ulong()); }
     QuantumNumbersAttr intersection(QuantumNumbersAttr other) const {
@@ -102,23 +102,34 @@ class IndexSpace {
   using QuantumNumbers = QuantumNumbersAttr;
 
   /// standard space tags are predefined that helps implement set theory of standard spaces as binary ops on bitsets
-  inline static const Type frozen_occupied = Type{0b000001};
-  inline static const Type inactive_occupied = Type{0b000010};
-  inline static const Type active_occupied = Type{0b000100};
-  inline static const Type occupied = Type{0b000111};
-  inline static const Type active_unoccupied = Type{0b001000};
-  inline static const Type inactive_unoccupied = Type{0b010000};
-  inline static const Type unoccupied = Type{0b011000};
-  inline static const Type all_active = Type{0b001100};
-  inline static const Type all = Type{0b011111};
-  inline static const Type other_unoccupied = Type{0b100000};
-  inline static const Type complete_unoccupied = Type{0b111000};
-  inline static const Type complete = Type{0b111111};
+  static Type frozen_occupied;
+  static Type inactive_occupied;
+  static Type active_occupied;
+  static Type occupied;
+  static Type active_unoccupied;
+  static Type inactive_unoccupied;
+  static Type unoccupied;
+  static Type all_active;
+  static Type all;
+  static Type other_unoccupied;
+  static Type complete_unoccupied;
+  static Type complete;
+  template <int32_t typeint> static const constexpr bool is_standard_type() {
+    const Type type{typeint};
+    return (type == frozen_occupied || type == inactive_occupied || type == active_occupied ||
+        type == occupied || type == active_unoccupied || type == inactive_unoccupied ||
+        type == unoccupied || type == all_active || type == all || type == other_unoccupied ||
+        type == complete_unoccupied || type == complete);
+  }
 
   /// standard space tags are predefined that helps implement set theory of standard spaces as binary ops on bitsets
-  inline static const QuantumNumbers nullqns = QuantumNumbers{0b000000};  //!< no quantum numbers
-  inline static const QuantumNumbers alpha = QuantumNumbers{0b000001};  //!< spin-up
-  inline static const QuantumNumbers beta = QuantumNumbers{0b000010};  //!< spin-down
+  static QuantumNumbers nullqns;  //!< no quantum numbers
+  static QuantumNumbers alpha;  //!< spin-up
+  static QuantumNumbers beta;  //!< spin-down
+  template <int32_t qnsint> static const constexpr bool is_standard_qns() {
+    const QuantumNumbers qns{qnsint};
+    return (qns == nullqns || qns == alpha || qns == beta);
+  }
 
   struct bad_key : std::invalid_argument {
     bad_key() : std::invalid_argument("bad key") {}
@@ -129,7 +140,6 @@ class IndexSpace {
 
   /// IndexSpace needs null IndexSpace
   static const IndexSpace &null_instance() {
-    static IndexSpace null_instance_{Attr::null()};
     return null_instance_;
   }
   /// the null IndexSpace is keyed by this key
@@ -194,6 +204,8 @@ class IndexSpace {
     register_instance(L"i", active_occupied, nullqns, do_not_throw);
     register_instance(L"m", occupied, nullqns, do_not_throw);
     register_instance(L"a", active_unoccupied, nullqns, do_not_throw);
+    register_instance(L"e", unoccupied, nullqns, do_not_throw);
+    register_instance(L"p", all, nullqns, do_not_throw);
     register_instance(L"⍺'", other_unoccupied, nullqns, do_not_throw);
     register_instance(L"⍺", complete_unoccupied, nullqns, do_not_throw);
     register_instance(L"κ", complete, nullqns, do_not_throw);
@@ -207,6 +219,24 @@ class IndexSpace {
   Type type() const noexcept { return attr_.type(); }
   QuantumNumbers qns() const noexcept { return attr_.qns(); }
 
+  /// @brief returns the base key for IndexSpace objects
+  /// @param space an IndexSpace object
+  /// @throw bad_key if this space has not beed registered
+  static std::wstring base_key(const IndexSpace& space) {
+    return base_key(space.attr());
+  }
+
+    /// @brief returns the base key for IndexSpace objects of the given attribute
+  /// @param attr the space attribute
+  /// @throw bad_key if this object has not beed registered
+  static std::wstring base_key(Attr attr) {
+    if (attr == Attr::null())
+      return L"";
+    if (!instance_exists(attr))
+      throw bad_attr();
+    return keys_.find(attr)->second;
+  }
+
  private:
 
   Attr attr_;
@@ -215,8 +245,9 @@ class IndexSpace {
   /// @brief constructs an instance of an IndexSpace object
   IndexSpace(Type type, QuantumNumbers qns) noexcept : attr_(type, qns) {}
 
-  inline static std::map<Attr, std::wstring> keys_;
-  inline static std::map<Attr, IndexSpace> instances_;
+  static std::map<Attr, std::wstring> keys_;
+  static std::map<Attr, IndexSpace> instances_;
+  static IndexSpace null_instance_;
 
   static std::wstring_view reduce_key(std::wstring_view key) {
     const auto underscore_position = key.find(L'_');
@@ -305,6 +336,22 @@ inline bool includes(const IndexSpace &space1, const IndexSpace &space2) {
 /// IndexSpace are ordered by their attributes (i.e. labels do not matter one bit)
 inline bool operator<(const IndexSpace &space1, const IndexSpace &space2) {
   return space1.attr() < space2.attr();
+}
+
+
+/// @return -1 if @c space includes no orbitals with zero occupancy, +1 if it includes only orbitals with zero occupancy,
+///         and 0 of it includes some orbitals with zero occupancy.
+inline int occupancy_class(const IndexSpace& space) {
+  const auto included_in_occupied = includes(IndexSpace::occupied, space.type());
+  const auto included_in_unoccupied = includes(IndexSpace::complete_unoccupied, space.type());
+  assert(!(included_in_occupied && included_in_unoccupied));
+  if (included_in_occupied && !included_in_unoccupied)
+    return -1;
+  else if (!included_in_occupied && !included_in_unoccupied)
+    return 0;
+  else if (!included_in_occupied && included_in_unoccupied)
+    return 1;
+  abort(); // unreachable
 }
 
 }

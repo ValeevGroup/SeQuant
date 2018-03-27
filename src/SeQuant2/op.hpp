@@ -44,6 +44,17 @@ class Op {
     return *this;
   }
 
+  /// @return the string representation of @c this in LaTeX format
+  std::wstring to_latex() const {
+    std::wstring result;
+    result = L"{";
+    result += (S == Statistics::FermiDirac ? L"a" : L"b");
+    result += (action() == Action::create ? L"^{\\dagger}_" : L"_");
+    result += index().to_latex();
+    result += L"}";
+    return result;
+  }
+
  private:
   Index index_;
   Action action_;
@@ -67,6 +78,10 @@ class Operator : public std::vector<Op<S>> {
  public:
   static constexpr Statistics statistics = S;
 
+  // iterate over this using the base
+  using iterator = typename std::vector<Op<S>>::iterator;
+  using const_iterator = typename std::vector<Op<S>>::const_iterator;
+
   Operator() = default;
   explicit Operator(std::initializer_list<Op<S>> ops)
       : std::vector<Op<S>>(ops) {}
@@ -86,6 +101,16 @@ class Operator : public std::vector<Op<S>> {
     std::reverse(this->begin(), this->end());
     std::for_each(this->begin(), this->end(), [](Op<S> &op) { op.adjoint(); });
     return *this;
+  }
+
+  /// @return the string representation of @c this in LaTeX format
+  std::wstring to_latex() const {
+    std::wstring result;
+    result = L"{";
+    for (const auto &o : *this)
+      result += o.to_latex();
+    result += L"}";
+    return result;
   }
 
  private:
@@ -128,6 +153,10 @@ class NormalOperator : public Operator<S> {
  public:
   static constexpr Statistics statistics = S;
 
+  // iterate over this using the base
+  using iterator = typename Operator<S>::iterator;
+  using const_iterator = typename Operator<S>::const_iterator;
+
   /// constructs an identity operator
   NormalOperator(Vacuum v = get_default_context().vacuum()) {}
 
@@ -137,15 +166,15 @@ class NormalOperator : public Operator<S> {
                  std::initializer_list<Op<S>> annihilators,
                  Vacuum v = get_default_context().vacuum())
       : Operator<S>{}, vacuum_(v), ncreators_(size(creators)) {
-    for(const auto& op: creators) {
+    for (const auto &op: creators) {
       assert(op.action() == Action::create);
     }
-    for(const auto& op: annihilators) {
+    for (const auto &op: annihilators) {
       assert(op.action() == Action::annihilate);
     }
     this->reserve(size(creators) + size(annihilators));
-    this->insert(this->end(), cbegin(creators), cend(creators) );
-    this->insert(this->end(), crbegin(annihilators), crend(annihilators) );
+    this->insert(this->end(), cbegin(creators), cend(creators));
+    this->insert(this->end(), crbegin(annihilators), crend(annihilators));
   }
 
   /// @param creator_indices sequence of creator indices
@@ -155,10 +184,10 @@ class NormalOperator : public Operator<S> {
                  Vacuum v = get_default_context().vacuum())
       : Operator<S>{}, vacuum_(v), ncreators_(size(creator_indices)) {
     this->reserve(size(creator_indices) + size(annihilator_indices));
-    for(const auto& i: creator_indices) {
+    for (const auto &i: creator_indices) {
       this->emplace_back(i, Action::create);
     }
-    for(const auto& i: annihilator_indices|ranges::view::reverse) {
+    for (const auto &i: annihilator_indices | ranges::view::reverse) {
       this->emplace_back(i, Action::annihilate);
     }
   }
@@ -170,10 +199,10 @@ class NormalOperator : public Operator<S> {
                  Vacuum v = get_default_context().vacuum())
       : Operator<S>{}, vacuum_(v), ncreators_(size(creator_index_labels)) {
     this->reserve(size(creator_index_labels) + size(annihilator_index_labels));
-    for(const auto& l: creator_index_labels) {
+    for (const auto &l: creator_index_labels) {
       this->emplace_back(Index{l}, Action::create);
     }
-    for(const auto& l: annihilator_index_labels|ranges::view::reverse) {
+    for (const auto &l: annihilator_index_labels | ranges::view::reverse) {
       this->emplace_back(Index{l}, Action::annihilate);
     }
   }
@@ -190,9 +219,47 @@ class NormalOperator : public Operator<S> {
   auto nannihilators() const { return this->size() - ncreators(); }
 
   NormalOperator &adjoint() {
-    static_cast<Operator<S>&>(*this).adjoint();
+    static_cast<Operator<S> &>(*this).adjoint();
     ncreators_ = this->size() - ncreators_;
     return *this;
+  }
+
+  std::wstring to_latex() const {
+    std::wstring result;
+    result = L"{";
+    result += (S == Statistics::FermiDirac
+               ? (vacuum() == Vacuum::Physical ? L"a" : L"\\tilde{a}")
+               : (vacuum() == Vacuum::Physical ? L"b" : L"\\tilde{b}"));
+    result += L"^{";
+    const auto ncreators = this->ncreators();
+    const auto nannihilators = this->nannihilators();
+    if (ncreators < nannihilators) // pad on the left with square underbrackets, i.e. ⎵
+      for (auto i = 0; i != (nannihilators - ncreators); ++i)
+        result += L"\\textvisiblespace\\,";
+    for (const auto &o : creators())
+      result += o.index().to_latex();
+    result += L"}_{";
+    if (ncreators > nannihilators) // pad on the left with square underbrackets, i.e. ⎵
+      for (auto i = 0; i != (ncreators - nannihilators); ++i)
+        result += L"\\textvisiblespace\\,";
+    for (const auto &o : annihilators())
+      result += o.index().to_latex();
+    result += L"}}";
+    return result;
+  }
+
+  /// overload std::vector::erase
+  iterator erase(const_iterator it) {
+    if (it->action() == Action::create)
+      --ncreators_;
+    return Operator<S>::erase(it);
+  }
+
+  /// overload std::vector::erase
+  template <typename T> iterator insert(const_iterator it, T&& value) {
+    if (value.action() == Action::create)
+      ++ncreators_;
+    return Operator<S>::insert(it, std::forward<T>(value));
   }
 
  private:
@@ -202,7 +269,7 @@ class NormalOperator : public Operator<S> {
 
 template<Statistics S>
 bool operator==(const NormalOperator<S> &op1, const NormalOperator<S> &op2) {
-  return op1.vacuum() == op2.vacuum() && ranges::equal(op1,op2);
+  return op1.vacuum() == op2.vacuum() && ranges::equal(op1, op2);
 }
 
 /// @brief NormalOperatorSequence is a sequence NormalOperator objects, all ordered with respect to same vacuum
@@ -229,6 +296,15 @@ class NormalOperatorSequence : public std::vector<NormalOperator<S>> {
     std::reverse(this->begin(), this->end());
     std::for_each(this->begin(), this->end(), [](NormalOperator<S> &op) { op.adjoint(); });
     return *this;
+  }
+
+  std::wstring to_latex() const {
+    std::wstring result;
+    result = L"{";
+    for (const auto &op: *this)
+      result += op.to_latex();
+    result += L"}";
+    return result;
   }
 
  private:
@@ -288,60 +364,116 @@ inline FOp fann(std::wstring_view i,
   return FOp(Index(i, pi), Action::annihilate);
 }
 
+/// @return true if this is a pure quasdiparticle creator with respect to the given vacuum, false otherwise
+template <Statistics S>
+bool is_pure_qpcreator(const Op<S>& op, Vacuum vacuum = get_default_context().vacuum()) {
+  switch(vacuum) {
+    case Vacuum::Physical:
+      return op.action() == Action::create;
+    case Vacuum::SingleProduct:
+    {
+      const auto occ_class = occupancy_class(op.index().space());
+      return (occ_class < 0 && op.action() == Action::annihilate) ||
+          (occ_class > 0 && op.action() == Action::create);
+    }
+    default:
+      throw std::logic_error("is_pure_qpcreator: cannot handle MultiProduct vacuum");
+  }
+};
+
+/// @return true if this is a quasdiparticle creator with respect to the given vacuum, false otherwise
+template <Statistics S>
+bool is_qpcreator(const Op<S>& op, Vacuum vacuum = get_default_context().vacuum()) {
+  switch(vacuum) {
+    case Vacuum::Physical:
+      return op.action() == Action::create;
+    case Vacuum::SingleProduct:
+    {
+      const auto occ_class = occupancy_class(op.index().space());
+      return (occ_class <= 0 && op.action() == Action::annihilate) ||
+          (occ_class >= 0 && op.action() == Action::create);
+    }
+    default:
+      throw std::logic_error("is_qpcreator: cannot handle MultiProduct vacuum");
+  }
+};
+
+template <Statistics S>
+IndexSpace qpcreator_space(const Op<S>& op, Vacuum vacuum = get_default_context().vacuum()) {
+  switch(vacuum) {
+    case Vacuum::Physical:
+      return op.action() == Action::create ? op.index().space() : IndexSpace::null_instance();
+    case Vacuum::SingleProduct:
+      return op.action() == Action::annihilate ? intersection(op.index().space(), IndexSpace::instance(IndexSpace::occupied)) : intersection(op.index().space(), IndexSpace::instance(IndexSpace::complete_unoccupied));
+    default:
+      throw std::logic_error("qpcreator_space: cannot handle MultiProduct vacuum");
+  }
+}
+
+/// @return true if this is a pure quasdiparticle annihilator with respect to the given vacuum, false otherwise
+template <Statistics S>
+bool is_pure_qpannihilator(const Op<S>& op, Vacuum vacuum = get_default_context().vacuum()) {
+  switch(vacuum) {
+    case Vacuum::Physical:
+      return op.action() == Action::annihilate;
+    case Vacuum::SingleProduct:
+    {
+      const auto occ_class = occupancy_class(op.index().space());
+      return (occ_class > 0 && op.action() == Action::annihilate) ||
+          (occ_class < 0 && op.action() == Action::create);
+    }
+    default:
+      throw std::logic_error("is_pure_qpannihilator: cannot handle MultiProduct vacuum");
+  }
+};
+
+/// @return true if this is a quasdiparticle annihilator with respect to the given vacuum, false otherwise
+template <Statistics S>
+bool is_qpannihilator(const Op<S>& op, Vacuum vacuum = get_default_context().vacuum()) {
+  switch(vacuum) {
+    case Vacuum::Physical:
+      return op.action() == Action::annihilate;
+    case Vacuum::SingleProduct:
+    {
+      const auto occ_class = occupancy_class(op.index().space());
+      return (occ_class >= 0 && op.action() == Action::annihilate) ||
+          (occ_class <= 0 && op.action() == Action::create);
+    }
+    default:
+      throw std::logic_error("is_qpannihilator: cannot handle MultiProduct vacuum");
+  }
+};
+
+template <Statistics S>
+IndexSpace qpannihilator_space(const Op<S>& op, Vacuum vacuum = get_default_context().vacuum()) {
+  switch(vacuum) {
+    case Vacuum::Physical:
+      return op.action() == Action::annihilate ? op.index().space() : IndexSpace::null_instance();
+    case Vacuum::SingleProduct:
+      return op.action() == Action::create ? intersection(op.index().space(), IndexSpace::instance(IndexSpace::occupied)) : intersection(op.index().space(), IndexSpace::instance(IndexSpace::complete_unoccupied));
+    default:
+      throw std::logic_error("qpcreator_space: cannot handle MultiProduct vacuum");
+  }
+}
+
 template<Statistics S>
 std::wstring to_latex(const Op<S> &op) {
-  std::wstring result;
-  result = L"{";
-  result += (S == Statistics::FermiDirac ? L"a" : L"b");
-  result += (op.action() == Action::create ? L"^{\\dagger}_" : L"_");
-  result += to_latex(op.index());
-  result += L"}";
-  return result;
+  return op.to_latex();
 }
 
 template<Statistics S>
 std::wstring to_latex(const Operator<S> &op) {
-  std::wstring result;
-  result = L"{";
-  for (const auto &o : op)
-    result += to_latex(o);
-  result += L"}";
-  return result;
+  return op.to_latex();
 }
 
 template<Statistics S>
 std::wstring to_latex(const NormalOperator<S> &op) {
-  std::wstring result;
-  result = L"{";
-  result += (S == Statistics::FermiDirac
-             ? (op.vacuum() == Vacuum::Physical ? L"a" : L"\\tilde{a}")
-             : (op.vacuum() == Vacuum::Physical ? L"b" : L"\\tilde{b}"));
-  result += L"^{";
-  const auto ncreators = op.ncreators();
-  const auto nannihilators = op.nannihilators();
-  if (ncreators < nannihilators) // pad on the left with square underbrackets, i.e. ⎵
-    for(auto i = 0; i!=(nannihilators-ncreators); ++i)
-      result += L"\\textvisiblespace\\,";
-  for (const auto &o : op.creators())
-    result += to_latex(o.index());
-  result += L"}_{";
-  if (ncreators > nannihilators) // pad on the left with square underbrackets, i.e. ⎵
-    for(auto i = 0; i!=(ncreators-nannihilators); ++i)
-      result += L"\\textvisiblespace\\,";
-  for (const auto &o : op.annihilators())
-    result += to_latex(o.index());
-  result += L"}}";
-  return result;
+  return op.to_latex();
 }
 
 template<Statistics S>
 std::wstring to_latex(const NormalOperatorSequence<S> &opseq) {
-  std::wstring result;
-  result = L"{";
-  for (const auto &op: opseq)
-    result += to_latex(op);
-  result += L"}";
-  return result;
+  return opseq.to_latex();
 }
 
 } // namespace sequant2

@@ -13,7 +13,7 @@ namespace sequant2 {
 /// @brief Index = label + IndexSpace
 /// @note Unlike SeQuant1's ParticleIndex, this Index supports dependencies
 /// between indices to be able to express
-///       e.g. hiearchical partitioning of index spaces or hiearchical nesting
+///       e.g. hierarchical partitioning of index spaces or hiearchical nesting
 ///       of spaces
 class Index {
  public:
@@ -83,6 +83,21 @@ class Index {
   /// @return the list of proto indices of this index
   const std::vector<Index> &proto_indices() const { return proto_indices_; }
 
+  std::wstring to_latex() const {
+    std::wstring result;
+    result = L"{";
+    result += this->label();
+    if (this->has_proto_indices()) {
+      result += L"^{";
+      for (const auto &pi: this->proto_indices()) {
+        result += pi.to_latex();
+      }
+      result += L"}";
+    }
+    result += L"}";
+    return result;
+  }
+
  private:
   std::wstring label_{};
   const IndexSpace *space_{};          // pointer to allow default initialization
@@ -139,18 +154,7 @@ void Index::check_for_duplicate_proto_indices() {
 }
 
 inline std::wstring to_latex(const Index &index) {
-  std::wstring result;
-  result = L"{";
-  result += index.label();
-  if (index.has_proto_indices()) {
-    result += L"^{";
-    for (const auto &pi: index.proto_indices()) {
-      result += to_latex(pi);
-    }
-    result += L"}";
-  }
-  result += L"}";
-  return result;
+  return index.to_latex();
 }
 
 } // namespace sequant2
