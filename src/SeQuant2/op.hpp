@@ -13,6 +13,7 @@
 #include "sequant.hpp"
 #include "vacuum.hpp"
 #include "iterator.hpp"
+#include "vector.hpp"
 
 namespace sequant2 {
 
@@ -74,26 +75,27 @@ bool operator!=(const Op<S> &op1, const Op<S> &op2) {
 ///
 /// @tparam S specifies the particle statistics
 template<Statistics S = Statistics::FermiDirac>
-class Operator : public std::vector<Op<S>> {
+class Operator : public container::svector<Op<S>> {
  public:
+  using base_type = container::svector<Op<S>>;
   static constexpr Statistics statistics = S;
 
   // iterate over this using the base
-  using iterator = typename std::vector<Op<S>>::iterator;
-  using const_iterator = typename std::vector<Op<S>>::const_iterator;
+  using iterator = typename base_type::iterator;
+  using const_iterator = typename base_type::const_iterator;
 
   Operator() = default;
   explicit Operator(std::initializer_list<Op<S>> ops)
-      : std::vector<Op<S>>(ops) {}
-  explicit Operator(std::vector<Op<S>> &&ops)
-      : std::vector<Op<S>>(std::move(ops)) {}
+      : base_type(ops) {}
+  explicit Operator(base_type &&ops)
+      : base_type(std::move(ops)) {}
   Operator(Action action, std::initializer_list<Index> indices)
-      : std::vector<Op<S>>(make_ops(action, indices)) {}
+      : base_type(make_ops(action, indices)) {}
   Operator(Action action, std::initializer_list<std::wstring_view> index_labels)
-      : std::vector<Op<S>>(make_ops(action, index_labels)) {}
+      : base_type(make_ops(action, index_labels)) {}
 
-  operator const std::vector<Op<S>> &() const & { return *this; }
-  operator std::vector<Op<S>> &&() && { return *this; }
+  operator base_type &() const & { return *this; }
+  operator base_type &&() && { return *this; }
 
   /// applies (Hermitian) adjoint operation to this
   /// @return reference to @c *this , for daisy-chaining
@@ -114,19 +116,19 @@ class Operator : public std::vector<Op<S>> {
   }
 
  private:
-  std::vector<Op<S>> make_ops(Action action,
+  base_type make_ops(Action action,
                               std::initializer_list<Index> indices) {
-    std::vector<Op<S>> result;
+    base_type result;
     result.reserve(indices.size());
     for (const auto &idx : indices)
       result.emplace_back(idx, action);
     return result;
   }
 
-  std::vector<Op<S>>
+  base_type
   make_ops(Action action,
            std::initializer_list<std::wstring_view> index_labels) {
-    std::vector<Op<S>> result;
+    base_type result;
     result.reserve(index_labels.size());
     for (const auto &idx_label : index_labels)
       result.emplace_back(Index{idx_label}, action);
@@ -248,14 +250,14 @@ class NormalOperator : public Operator<S> {
     return result;
   }
 
-  /// overload std::vector::erase
+  /// overload base_type::erase
   iterator erase(const_iterator it) {
     if (it->action() == Action::create)
       --ncreators_;
     return Operator<S>::erase(it);
   }
 
-  /// overload std::vector::erase
+  /// overload base_type::erase
   template <typename T> iterator insert(const_iterator it, T&& value) {
     if (value.action() == Action::create)
       ++ncreators_;
@@ -276,19 +278,21 @@ bool operator==(const NormalOperator<S> &op1, const NormalOperator<S> &op2) {
 ///
 /// @tparam S specifies the particle statistics
 template<Statistics S = Statistics::FermiDirac>
-class NormalOperatorSequence : public std::vector<NormalOperator<S>> {
+class NormalOperatorSequence : public container::svector<NormalOperator<S>> {
  public:
+  using base_type = container::svector<NormalOperator<S>>;
+
   static constexpr Statistics statistics = S;
 
   NormalOperatorSequence(std::initializer_list<NormalOperator<S>> operators)
-      : std::vector<NormalOperator<S>>(operators) {
+      : base_type(operators) {
     check_vacuum();
   }
 
   Vacuum vacuum() const { return vacuum_; }
 
-  operator const std::vector<NormalOperator<S>> &() const & { return *this; }
-  operator std::vector<NormalOperator<S>> &&() && { return *this; }
+  operator const base_type &() const & { return *this; }
+  operator base_type &&() && { return *this; }
 
   /// applies (Hermitian) adjoint operation to this
   /// @return reference to @c *this , for daisy-chaining

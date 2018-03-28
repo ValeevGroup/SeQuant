@@ -49,11 +49,20 @@ public:
     void compute_elem_index() const {
       // accumulate all elements before this range_iter_
       elem_index_ = std::accumulate(
-          begin(*range_), range_iter_, 0,
+          _begin(*range_), range_iter_, 0,
           [](std::size_t v, const Range &r) { return v + std::size(r); });
       // accumulate all elements before this elem_iter_
-      if (range_iter_ != end(*range_))
-        elem_index_ += elem_iter_ - begin(*range_iter_);
+      if (range_iter_ != _end(*range_))
+        elem_index_ += elem_iter_ - _begin(*range_iter_);
+    }
+
+    template <typename Range> static auto _begin(Range& rng) {
+      using std::begin;
+      return begin(rng);
+    }
+    template <typename Range> static auto _end(Range& rng) {
+      using std::end;
+      return end(rng);
     }
 
   public:
@@ -62,13 +71,13 @@ public:
     /// constructs a cursor pointing to the begin, if range is not empty
     /// @note has O(1) complexity
     cursor(RangeNest *range)
-        : range_(range), range_iter_(find_if(begin(*range_), end(*range_), [](const auto& e) { return !empty(e); } )),
-          elem_iter_(range_iter_ != end(*range_) ? begin(*range_iter_) : decltype(elem_iter_){}),
-          elem_index_{range_iter_ != end(*range_) ? 0 : -1} {}
+        : range_(range), range_iter_(find_if(_begin(*range_), _end(*range_), [](const auto& e) { using std::empty; return !empty(e); } )),
+          elem_iter_(range_iter_ != _end(*range_) ? _begin(*range_iter_) : decltype(elem_iter_){}),
+          elem_index_{range_iter_ != _end(*range_) ? 0 : -1} {}
     /// constructs a cursor pointing to the end
     /// @note has O(1) complexity
     cursor(RangeNest *range, ranges::default_sentinel)
-        : range_(range), range_iter_(end(*range_)) {}
+        : range_(range), range_iter_(_end(*range_)) {}
 
     /// constructs a cursor pointing to particular @c range_iter and @c
     /// elem_iter
@@ -81,7 +90,7 @@ public:
     const auto &read() const { return *elem_iter_; }
     bool equal(const cursor &that) const {
       if (range_ == that.range_) {  // make sure these point to same range
-        const auto end_range_iter = end(*range_);
+        const auto end_range_iter = _end(*range_);
         const auto this_is_the_end = range_iter_ == end_range_iter;
         const auto that_is_the_end = that.range_iter_ == end_range_iter;
         if (this_is_the_end && that_is_the_end)
@@ -97,14 +106,14 @@ public:
     void next() {
       ++elem_index_;
       ++elem_iter_;
-      if (elem_iter_ == end(*range_iter_)) {
+      if (elem_iter_ == _end(*range_iter_)) {
         ++range_iter_;
         // skip empty ranges
-        const auto this_is_the_end = end(*range_);
+        const auto this_is_the_end = _end(*range_);
         while (range_iter_ != this_is_the_end && ranges::empty(*range_iter_))
           ++range_iter_;
         if (range_iter_ != this_is_the_end)
-          elem_iter_ = begin(*range_iter_);
+          elem_iter_ = _begin(*range_iter_);
       }
     }
 
@@ -118,7 +127,7 @@ public:
 
     /// calls erase on the current iterator
     void erase() {
-      assert(range_iter_ != end(*range_));
+      assert(range_iter_ != _end(*range_));
       // TODO resolve the compilation issue
       //      ranges::erase(*range_iter_, elem_iter_);
       // verify that capacity does not change
@@ -128,7 +137,7 @@ public:
     }
     /// calls erase on the current iterator
     template <typename T> void insert(T &&elem) const {
-      assert(range_iter_ != end(*range_));
+      assert(range_iter_ != _end(*range_));
       // TODO resolve the compilation issue
       //      ranges::insert(*range_iter_, elem_iter_, std::forward<T>(elem));
       // verify that capacity does not change

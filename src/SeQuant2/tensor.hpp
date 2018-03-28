@@ -15,6 +15,16 @@ enum class Symmetry { symm, antisymm, nonsymm };
 
 /// @brief particle-symmetric Tensor, i.e. permuting
 class Tensor : public Expr {
+ private:
+  auto make_indices(std::initializer_list<std::wstring_view> index_labels) {
+    index_container_type result;
+    result.reserve(index_labels.size());
+    for (const auto &label: index_labels) {
+      result.push_back(Index{label});
+    }
+    return result;
+  }
+
  public:
   Tensor() = default;
   virtual ~Tensor() = default;
@@ -32,8 +42,8 @@ class Tensor : public Expr {
       : label_(label), bra_(make_indices(bra_index_labels)), ket_(make_indices(ket_index_labels)) {}
 
   std::wstring_view label() const { return label_; }
-  const std::vector<Index> &bra() const { return bra_; }
-  const std::vector<Index> &ket() const { return ket_; }
+  const auto& bra() const { return bra_; }
+  const auto& ket() const { return ket_; }
   Symmetry symmetry() const { return symmetry_; }
 
   /// @return number of bra indices
@@ -69,18 +79,10 @@ class Tensor : public Expr {
 
  private:
   std::wstring label_{};
-  std::vector<Index> bra_{};
-  std::vector<Index> ket_{};
+  using index_container_type = container::svector<Index>;
+  index_container_type bra_{};
+  index_container_type ket_{};
   Symmetry symmetry_ = Symmetry::nonsymm;
-
-  std::vector<Index> make_indices(std::initializer_list<std::wstring_view> index_labels) {
-    std::vector<Index> result;
-    result.reserve(index_labels.size());
-    for (const auto &label: index_labels) {
-      result.push_back(Index{label});
-    }
-    return result;
-  }
 };
 
 inline std::shared_ptr<Expr> overlap(const Index& bra_index, const Index& ket_index) {

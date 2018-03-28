@@ -97,7 +97,14 @@ class WickTheorem {
     if (full_contractions_) {
       using opseq_view_type = flattened_rangenest<NormalOperatorSequence<S>>;
       auto opseq_view = opseq_view_type(&state.opseq);
+      using std::begin;
+      using std::end;
       auto opseq_view_begin = begin(opseq_view);
+
+      // optimization: can't contract fully if first op is not a qp annihilator
+      if (!is_qpannihilator(*opseq_view_begin, input_.vacuum()))
+        return;
+
       auto op_iter = opseq_view_begin;
       ++op_iter;
       for(; op_iter != end(opseq_view);) {

@@ -5,8 +5,10 @@
 #ifndef SEQUANT2_INDEX_H
 #define SEQUANT2_INDEX_H
 
-#include "space.hpp"
 #include <set>
+
+#include "space.hpp"
+#include "vector.hpp"
 
 namespace sequant2 {
 
@@ -81,7 +83,7 @@ class Index {
   /// @return true if this index has proto indices
   bool has_proto_indices() const { return !proto_indices_.empty(); }
   /// @return the list of proto indices of this index
-  const std::vector<Index> &proto_indices() const { return proto_indices_; }
+  const auto& proto_indices() const { return proto_indices_; }
 
   std::wstring to_latex() const {
     std::wstring result;
@@ -101,7 +103,7 @@ class Index {
  private:
   std::wstring label_{};
   const IndexSpace *space_{};          // pointer to allow default initialization
-  std::vector<Index> proto_indices_{}; // an unordered set of unique indices on
+  container::vector<Index> proto_indices_{}; // an unordered set of unique indices on
   // which this index depends on
 
   /// throws std::invalid_argument if have duplicates in proto_indices_
@@ -139,7 +141,7 @@ inline bool operator<(const Index &i1, const Index &i2) {
 }
 
 void Index::check_for_duplicate_proto_indices() {
-  std::vector<Index const *> vp;
+  container::vector<Index const *> vp;
   vp.reserve(proto_indices_.size());
   for (size_t i = 0; i < proto_indices_.size(); ++i)
     vp.push_back(&proto_indices_[i]);

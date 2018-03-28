@@ -43,7 +43,7 @@ class ScaledProduct : public Expr {
   }
 
   const std::complex<double> &scalar() const { return scalar_; }
-  const std::vector<std::shared_ptr<Expr>> &factors() const { return factors_; }
+  const auto& factors() const { return factors_; }
 
   /// @return true if the number of factors is zero
   bool empty() const { return factors_.empty(); }
@@ -82,7 +82,7 @@ class ScaledProduct : public Expr {
 
  private:
   std::complex<double> scalar_ = {1.0, 0.0};
-  std::vector<std::shared_ptr<Expr>> factors_{};
+  container::vector<std::shared_ptr<Expr>> factors_{};
 };
 
 class ScaledSum : public Expr {
@@ -97,7 +97,7 @@ class ScaledSum : public Expr {
   }
 
   const std::complex<double> &scalar() const { return scalar_; }
-  const std::vector<std::shared_ptr<Expr>> &summands() const { return summands_; }
+  const auto& summands() const { return summands_; }
 
   /// @return true if the number of factors is zero
   bool empty() const { return summands_.empty(); }
@@ -141,7 +141,7 @@ class ScaledSum : public Expr {
 
  private:
   std::complex<double> scalar_ = {1.0, 0.0};
-  std::vector<std::shared_ptr<Expr>> summands_{};
+  container::vector<std::shared_ptr<Expr>> summands_{};
 };
 
 inline std::wstring to_latex(const Expr& expr) {

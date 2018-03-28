@@ -21,6 +21,7 @@ TEST_CASE("Iterators", "[elements]") {
 
       REQUIRE_NOTHROW(flattened_rangenest<FNOperatorSeq>{&opseq1});
       auto rng1 = flattened_rangenest<FNOperatorSeq>{&opseq1};
+      using std::begin;
       REQUIRE_NOTHROW(begin(rng1));
       auto it1 = begin(rng1);
       for (auto i = 0; i != 6; ++i) {
@@ -53,6 +54,7 @@ TEST_CASE("Iterators", "[elements]") {
         }
         REQUIRE_NOTHROW(++it1);
       }
+      using std::end;
       REQUIRE_NOTHROW(end(rng1));
       REQUIRE(it1 == end(rng1));
       REQUIRE(ranges::get_cursor(end(rng1)).index() == 6);

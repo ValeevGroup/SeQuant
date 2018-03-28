@@ -2,9 +2,10 @@
 // Created by Eduard Valeyev on 3/23/18.
 //
 
-#include "catch.hpp"
-
 #include <iostream>
+
+#include "catch.hpp"
+#include "timer.hpp"
 #include "../../src/SeQuant2/wick.hpp"
 
 TEST_CASE("WickTheorem", "[algorithms]") {
@@ -237,7 +238,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
 
 
     // 2-body ^ 2-body ^ 2-body ^ 2-body
-    {
+    SEQUANT2_PROFILE_SINGLE("wick(2^2^2^2)", {
       auto opseq =
           FNOperatorSeq({FNOperator({L"p_1", L"p_2"}, {L"p_5", L"p_6"}, V),
                          FNOperator({L"p_9", L"p_10"}, {L"p_11", L"p_12"}, V),
@@ -248,6 +249,21 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       auto result = wick.full_contractions(true).spinfree(false).compute();
       REQUIRE(result.size() == 4752);
     }
+    )
+
+    // 4-body ^ 2-body ^ 2-body ^ 2-body
+    SEQUANT2_PROFILE_SINGLE("wick(4^2^2^2)", {
+      auto opseq =
+          FNOperatorSeq({FNOperator({L"p_1", L"p_2", L"p_3", L"p_4"}, {L"p_5", L"p_6", L"p_7", L"p_8"}, V),
+                         FNOperator({L"p_9", L"p_10"}, {L"p_11", L"p_12"}, V),
+                         FNOperator({L"p_13", L"p_14"}, {L"p_15", L"p_16"}, V),
+                         FNOperator({L"p_17", L"p_18"}, {L"p_19", L"p_20"}, V)
+                        });
+      auto wick = FWickTheorem{opseq};
+      auto result = wick.full_contractions(true).spinfree(false).compute();
+      REQUIRE(result.size() == 117504);
+    }
+    )
 
     // 4-body ^ 4-body ^ 4-body ^ 4-body ^ 4-body ^ 4-body
 #if 0
@@ -265,7 +281,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       REQUIRE(result.size() == 576);
     }
 #endif
-    
+
   }
 
   }  // TEST_CASE("WickTheorem")
