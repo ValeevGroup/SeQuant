@@ -34,6 +34,10 @@ class ScaledProduct : public Expr {
  public:
   ScaledProduct() = default;
   virtual ~ScaledProduct() = default;
+  ScaledProduct(const ScaledProduct&) = default;
+  ScaledProduct(ScaledProduct&&) = default;
+  ScaledProduct& operator=(const ScaledProduct&) = default;
+  ScaledProduct& operator=(ScaledProduct&&) = default;
 
   template<typename T>
   ScaledProduct &append(T scalar, std::shared_ptr<Expr> factor) {
@@ -89,6 +93,10 @@ class ScaledSum : public Expr {
  public:
   ScaledSum() = default;
   virtual ~ScaledSum() = default;
+  ScaledSum(const ScaledSum&) = default;
+  ScaledSum(ScaledSum&&) = default;
+  ScaledSum& operator=(const ScaledSum&) = default;
+  ScaledSum& operator=(ScaledSum&&) = default;
 
   template<typename T>
   ScaledSum &append(std::shared_ptr<Expr> summand) {

@@ -8,6 +8,8 @@
 #include "timer.hpp"
 #include "../../src/SeQuant2/wick.hpp"
 
+#define SEQUANT2_SKIP_LONG_TESTS 1
+
 TEST_CASE("WickTheorem", "[algorithms]") {
 
   using namespace sequant2;
@@ -199,6 +201,18 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       REQUIRE(result.size() == 0);
     }
 
+    // 4-body ^ 4-body
+    SEQUANT2_PROFILE_SINGLE("wick(4^4)", {
+      auto opseq =
+          FNOperatorSeq({FNOperator({L"p_1", L"p_2", L"p_3", L"p_4"}, {L"p_5", L"p_6", L"p_7", L"p_8"}, V),
+                         FNOperator({L"p_21", L"p_22", L"p_23", L"p_24"}, {L"p_25", L"p_26", L"p_27", L"p_28"}, V)
+                        });
+      auto wick = FWickTheorem{opseq};
+      auto result = wick.full_contractions(true).spinfree(false).compute(true);
+      REQUIRE(result.size() == 576);
+    }
+    )
+
     // three general 1-body operators
     {
       auto opseq =
@@ -236,7 +250,6 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       REQUIRE(result.size() == 80);
     }
 
-
     // 2-body ^ 2-body ^ 2-body ^ 2-body
     SEQUANT2_PROFILE_SINGLE("wick(2^2^2^2)", {
       auto opseq =
@@ -246,7 +259,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
                          FNOperator({L"p_17", L"p_18"}, {L"p_19", L"p_20"}, V)
                         });
       auto wick = FWickTheorem{opseq};
-      auto result = wick.full_contractions(true).spinfree(false).compute();
+      auto result = wick.full_contractions(true).spinfree(false).compute(true);
       REQUIRE(result.size() == 4752);
     }
     )
@@ -260,25 +273,67 @@ TEST_CASE("WickTheorem", "[algorithms]") {
                          FNOperator({L"p_17", L"p_18"}, {L"p_19", L"p_20"}, V)
                         });
       auto wick = FWickTheorem{opseq};
-      auto result = wick.full_contractions(true).spinfree(false).compute();
+      auto result = wick.full_contractions(true).spinfree(false).compute(true);
       REQUIRE(result.size() == 117504);
     }
     )
 
-    // 4-body ^ 4-body ^ 4-body ^ 4-body ^ 4-body ^ 4-body
+    // 3-body ^ 2-body ^ 2-body ^ 3-body
+    SEQUANT2_PROFILE_SINGLE("wick(3^2^2^3)", {
+      auto opseq =
+          FNOperatorSeq({FNOperator({L"p_1", L"p_2", L"p_3"}, {L"p_5", L"p_6", L"p_7"}, V),
+                         FNOperator({L"p_9", L"p_10"}, {L"p_11", L"p_12"}, V),
+                         FNOperator({L"p_13", L"p_14"}, {L"p_15", L"p_16"}, V),
+                         FNOperator({L"p_17", L"p_18", L"p_19"}, {L"p_20", L"p_21", L"p_22"}, V)
+                        });
+      auto wick = FWickTheorem{opseq};
+      auto result = wick.full_contractions(true).spinfree(false).compute(true);
+      REQUIRE(result.size() == 202320);
+    }
+    )
+
+    // 4-body ^ 2-body ^ 4-body
+    SEQUANT2_PROFILE_SINGLE("wick(4^2^4)", {
+      auto opseq =
+          FNOperatorSeq({FNOperator({L"p_1", L"p_2", L"p_3", L"p_4"}, {L"p_5", L"p_6", L"p_7", L"p_8"}, V),
+                         FNOperator({L"p_9", L"p_10"}, {L"p_11", L"p_12"}, V),
+                         FNOperator({L"p_21", L"p_22", L"p_23", L"p_24"}, {L"p_25", L"p_26", L"p_27", L"p_28"}, V)
+                        });
+      auto wick = FWickTheorem{opseq};
+      auto result = wick.full_contractions(true).spinfree(false).compute(true);
+      REQUIRE(result.size() == 50688);
+    }
+    )
+
+    // 4-body ^ 4-body ^ 4-body
+#ifndef SEQUANT2_SKIP_LONG_TESTS
+    SEQUANT2_PROFILE_SINGLE("wick(4^4^4)", {
+      auto opseq =
+          FNOperatorSeq({FNOperator({L"p_1", L"p_2", L"p_3", L"p_4"}, {L"p_5", L"p_6", L"p_7", L"p_8"}, V),
+                         FNOperator({L"p_11", L"p_12", L"p_13", L"p_14"}, {L"p_15", L"p_16", L"p_17", L"p_18"}, V),
+                         FNOperator({L"p_21", L"p_22", L"p_23", L"p_24"}, {L"p_25", L"p_26", L"p_27", L"p_28"}, V)
+                        });
+      auto wick = FWickTheorem{opseq};
+      auto result = wick.full_contractions(true).spinfree(false).compute(true);
+      REQUIRE(result.size() == 4783104);
+    }
+    )
+#endif
+
 #if 0
+    // impossible: 4-body ^ 4-body ^ 4-body ^ 4-body ^ 4-body ^ 4-body
     {
       auto opseq =
           FNOperatorSeq({FNOperator({L"p_1", L"p_2", L"p_3", L"p_4"}, {L"p_5", L"p_6", L"p_7", L"p_8"}, V),
                          FNOperator({L"p_11", L"p_12", L"p_13", L"p_14"}, {L"p_15", L"p_16", L"p_17", L"p_18"}, V),
-//                         FNOperator({L"p_21", L"p_22", L"p_23", L"p_24"}, {L"p_25", L"p_26", L"p_27", L"p_28"}, V),
-//                         FNOperator({L"p_31", L"p_32", L"p_33", L"p_34"}, {L"p_35", L"p_36", L"p_37", L"p_38"}, V),
-//                         FNOperator({L"p_41", L"p_42", L"p_43", L"p_44"}, {L"p_45", L"p_46", L"p_47", L"p_48"}, V),
+                         FNOperator({L"p_21", L"p_22", L"p_23", L"p_24"}, {L"p_25", L"p_26", L"p_27", L"p_28"}, V),
+                         FNOperator({L"p_31", L"p_32", L"p_33", L"p_34"}, {L"p_35", L"p_36", L"p_37", L"p_38"}, V),
+                         FNOperator({L"p_41", L"p_42", L"p_43", L"p_44"}, {L"p_45", L"p_46", L"p_47", L"p_48"}, V),
                          FNOperator({L"p_51", L"p_52", L"p_53", L"p_54"}, {L"p_55", L"p_56", L"p_57", L"p_58"}, V)
                         });
       auto wick = FWickTheorem{opseq};
-      auto result = wick.full_contractions(true).spinfree(false).compute();
-      REQUIRE(result.size() == 576);
+      auto result = wick.full_contractions(true).spinfree(false).compute(true);
+      REQUIRE(result.size() == 0);
     }
 #endif
 

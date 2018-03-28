@@ -18,7 +18,8 @@ add_library(SeQuant2
         src/SeQuant2/tensor.hpp
         src/SeQuant2/expr.hpp
         src/SeQuant2/wick.hpp
-        src/SeQuant2/iterator.hpp)
+        src/SeQuant2/iterator.hpp
+        src/SeQuant2/vector.hpp)
 target_link_libraries(SeQuant2 Range-V3)
 
 enable_testing(true)
@@ -29,7 +30,10 @@ set(utests_src
         tests/unit/test_index.cpp
         tests/unit/test_op.cpp
         tests/unit/test_wick.cpp
-        tests/unit/test_tensor.cpp tests/unit/test_expr.cpp tests/unit/test_iterator.cpp)
+        tests/unit/test_tensor.cpp
+        tests/unit/test_expr.cpp
+        tests/unit/test_iterator.cpp
+        tests/unit/timer.hpp)
 
 set(unit_test_executable unit_tests)
 add_executable(${unit_test_executable} EXCLUDE_FROM_ALL

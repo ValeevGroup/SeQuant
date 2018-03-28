@@ -43,13 +43,16 @@ class WickTheorem {
     return *this;
   }
 
+  /// Computes and returns the result
+  /// @param count_only if true, will return a vector of default-initialized values, useful if only interested in the total count
+  /// @return the result of applying Wick's theorem, i.e. a sum of {prefactor, normal operator} pairs
   std::vector<std::pair<ScaledProduct, NormalOperator<S>>>
-  compute() const {
+  compute(const bool count_only = false) const {
     if (!full_contractions_)
       throw std::logic_error("WickTheorem::compute: full_contractions=false not yet supported");
     if (spinfree_)
       throw std::logic_error("WickTheorem::compute: spinfree=true not yet supported");
-    return compute_nontensor_wick();
+    return compute_nontensor_wick(count_only);
   }
 
  private:
@@ -59,13 +62,14 @@ class WickTheorem {
 
   /// carries state down the stack of recursive calls
   struct NontensorWickState {
-    NontensorWickState(const NormalOperatorSequence<S>& opseq) : opseq(opseq), level(0) {
+    NontensorWickState(const NormalOperatorSequence<S>& opseq) : opseq(opseq), level(0), count_only(false) {
       compute_size();
     }
     NormalOperatorSequence<S> opseq;  //!< current state of operator sequence
     std::size_t opseq_size;  //!< current size of opseq
     ScaledProduct sp;  //!< current prefactor
     int level;  //!< level in recursive wick call stack
+    bool count_only;  //!< if true, only update result size
 
     void compute_size() {
       opseq_size = 0;
@@ -80,11 +84,12 @@ class WickTheorem {
   };
   /// Applies most naive version of Wick's theorem, where sign rule involves counting Ops
   std::vector<std::pair<ScaledProduct, NormalOperator<S>>>
-  compute_nontensor_wick() const {
+  compute_nontensor_wick(const bool count_only) const {
     std::vector<std::pair<ScaledProduct, NormalOperator<S>>> result;  //!< current value of the result
     std::mutex mtx;  // used in critical sections updating the result
     auto result_plus_mutex = std::make_pair(&result, &mtx);
     NontensorWickState state(input_);
+    state.count_only = count_only;
 
     recursive_nontensor_wick(result_plus_mutex, state);
 
@@ -140,7 +145,10 @@ class WickTheorem {
             if (state.opseq_size == 0 && !state.sp.empty()) {
               result.second->lock();
 //              std::wcout << "got " << to_latex(state.sp) << std::endl;
-              result.first->push_back(std::make_pair(state.sp, NormalOperator<S>{}));
+              if (!state.count_only)
+                result.first->push_back(std::make_pair(std::move(state.sp), NormalOperator<S>{}));
+              else
+                result.first->resize(result.first->size() + 1);
 //              std::wcout << "now up to " << result.first->size() << " terms" << std::endl;
               result.second->unlock();
             }
