@@ -48,3 +48,14 @@ add_test(NAME unit/run
 set_tests_properties(unit/run
         PROPERTIES DEPENDS unit/build
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/unit)
+
+find_package(Doxygen)
+if (DOXYGEN_FOUND)
+    set(DOXYGEN_GENERATE_HTML YES)
+    doxygen_add_docs(
+            html
+            ${PROJECT_SOURCE_DIR}/src
+            DOXYGEN_EXCLUDE_PATTERNS "catch.hpp"
+            COMMENT "Generate html dox"
+    )
+endif(DOXYGEN_FOUND)

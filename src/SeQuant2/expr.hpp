@@ -16,10 +16,13 @@
 namespace sequant2 {
 
 /// @brief Base expression class
+
 /// Expr represents the interface needed to form expression trees. Classes that
 /// represent expressions should publicly derive from this class. Each Expr on a tree has links
 /// to its children Expr objects. The lifetime of Expr objects is expected to be managed by std::shared_ptr .
-/// Expr is an Iterable over subexpressions (each of which is an Expr itself). Specifically, iterators to subexpressions
+/// Expr is an Iterable over subexpressions (each of which is an Expr itself). More precisely,
+/// Expr meets the SizedIterable concept (see https://raw.githubusercontent.com/ericniebler/range-v3/master/doc/std/D4128.md).
+/// Specifically, iterators to subexpressions
 /// dereference to std::shared_ptr<Expr>. Since Expr is a range, it provides begin/end/etc. that can participate in overloads
 ///       with other functions in the derived class. Consider a Container class derived from a BaseContainer class:
 /// @code
