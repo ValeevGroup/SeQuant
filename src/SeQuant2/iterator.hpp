@@ -9,7 +9,9 @@
 
 namespace sequant2 {
 
-/// flattened_rangenest is a flattened view over a nest of ranges
+/// @brief a flattened view over a nest of ranges
+/// @note this is just like view::join, but its iterator provides not only elements but also their indices as well as the host ranges.
+///       this is needed to be able to iterate over pairs of elements which skipping pairs of elements from same subrange
 /// @tparam RangeNest the type of a nest of ranges; currently only a range of
 /// ranges is supported
 template <typename RangeNest>
@@ -34,7 +36,7 @@ public:
 
   friend ranges::range_access;
 
-  /// cursor (=iterator?) type
+  /// the cursor type
   struct cursor {
   private:
     RangeNest *range_;

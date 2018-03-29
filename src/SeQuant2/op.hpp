@@ -9,6 +9,7 @@
 
 #include <range/v3/all.hpp>
 
+#include "expr.hpp"
 #include "index.hpp"
 #include "sequant.hpp"
 #include "vacuum.hpp"
@@ -75,14 +76,21 @@ bool operator!=(const Op<S> &op1, const Op<S> &op2) {
 ///
 /// @tparam S specifies the particle statistics
 template<Statistics S = Statistics::FermiDirac>
-class Operator : public container::svector<Op<S>> {
+class Operator : public container::svector<Op<S>>, public Expr {
  public:
   using base_type = container::svector<Op<S>>;
   static constexpr Statistics statistics = S;
 
-  // iterate over this using the base
+  // iterate over this using the base_type
   using iterator = typename base_type::iterator;
   using const_iterator = typename base_type::const_iterator;
+
+  using base_type::begin;
+  using base_type::end;
+  using base_type::cbegin;
+  using base_type::cend;
+  using base_type::empty;
+  using base_type::size;
 
   Operator() = default;
   explicit Operator(std::initializer_list<Op<S>> ops)
@@ -106,7 +114,7 @@ class Operator : public container::svector<Op<S>> {
   }
 
   /// @return the string representation of @c this in LaTeX format
-  std::wstring to_latex() const {
+  std::wstring to_latex() const override {
     std::wstring result;
     result = L"{";
     for (const auto &o : *this)
@@ -154,10 +162,18 @@ template<Statistics S = Statistics::FermiDirac>
 class NormalOperator : public Operator<S> {
  public:
   static constexpr Statistics statistics = S;
+  using base_type = Operator<S>;
 
-  // iterate over this using the base
+  // iterate over this using the base_type
   using iterator = typename Operator<S>::iterator;
   using const_iterator = typename Operator<S>::const_iterator;
+
+  using base_type::begin;
+  using base_type::end;
+  using base_type::cbegin;
+  using base_type::cend;
+  using base_type::empty;
+  using base_type::size;
 
   /// constructs an identity operator
   NormalOperator(Vacuum v = get_default_context().vacuum()) {}
@@ -184,8 +200,8 @@ class NormalOperator : public Operator<S> {
   NormalOperator(std::initializer_list<Index> creator_indices,
                  std::initializer_list<Index> annihilator_indices,
                  Vacuum v = get_default_context().vacuum())
-      : Operator<S>{}, vacuum_(v), ncreators_(size(creator_indices)) {
-    this->reserve(size(creator_indices) + size(annihilator_indices));
+      : Operator<S>{}, vacuum_(v), ncreators_(creator_indices.size()) {
+    this->reserve(creator_indices.size() + annihilator_indices.size());
     for (const auto &i: creator_indices) {
       this->emplace_back(i, Action::create);
     }
@@ -199,8 +215,8 @@ class NormalOperator : public Operator<S> {
   NormalOperator(std::initializer_list<std::wstring_view> creator_index_labels,
                  std::initializer_list<std::wstring_view> annihilator_index_labels,
                  Vacuum v = get_default_context().vacuum())
-      : Operator<S>{}, vacuum_(v), ncreators_(size(creator_index_labels)) {
-    this->reserve(size(creator_index_labels) + size(annihilator_index_labels));
+      : Operator<S>{}, vacuum_(v), ncreators_(creator_index_labels.size()) {
+    this->reserve(creator_index_labels.size() + annihilator_index_labels.size());
     for (const auto &l: creator_index_labels) {
       this->emplace_back(Index{l}, Action::create);
     }
@@ -226,7 +242,7 @@ class NormalOperator : public Operator<S> {
     return *this;
   }
 
-  std::wstring to_latex() const {
+  std::wstring to_latex() const override {
     std::wstring result;
     result = L"{";
     result += (S == Statistics::FermiDirac
@@ -278,11 +294,17 @@ bool operator==(const NormalOperator<S> &op1, const NormalOperator<S> &op2) {
 ///
 /// @tparam S specifies the particle statistics
 template<Statistics S = Statistics::FermiDirac>
-class NormalOperatorSequence : public container::svector<NormalOperator<S>> {
+class NormalOperatorSequence : public container::svector<NormalOperator<S>>, public Expr {
  public:
   using base_type = container::svector<NormalOperator<S>>;
-
   static constexpr Statistics statistics = S;
+
+  using base_type::begin;
+  using base_type::end;
+  using base_type::cbegin;
+  using base_type::cend;
+  using base_type::empty;
+  using base_type::size;
 
   NormalOperatorSequence(std::initializer_list<NormalOperator<S>> operators)
       : base_type(operators) {
