@@ -19,7 +19,8 @@ add_library(SeQuant2
         src/SeQuant2/expr.hpp
         src/SeQuant2/wick.hpp
         src/SeQuant2/iterator.hpp
-        src/SeQuant2/vector.hpp)
+        src/SeQuant2/vector.hpp
+        src/SeQuant2/meta.hpp)
 target_link_libraries(SeQuant2 Range-V3)
 
 enable_testing(true)

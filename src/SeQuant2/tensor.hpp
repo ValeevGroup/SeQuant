@@ -77,12 +77,28 @@ class Tensor : public Expr {
     abort();
   }
 
+  type_id_type type_id() const override {
+    return get_type_id<Tensor>();
+  };
+
  private:
   std::wstring label_{};
   using index_container_type = container::svector<Index>;
   index_container_type bra_{};
   index_container_type ket_{};
   Symmetry symmetry_ = Symmetry::nonsymm;
+
+  bool static_compare(const Expr& that) const override {
+    const auto& that_cast = static_cast<const Tensor&>(that);
+    if (this->label() == that_cast.label() && this->symmetry() == that_cast.symmetry() && this->bra_rank() == that_cast.bra_rank() && this->ket_rank() == that_cast.ket_rank()) {
+      // compare hash values first
+      if (this->hash_value() == that.hash_value()) // hash values agree -> do full comparison
+        return this->bra() == that_cast.bra() && this->ket() == that_cast.ket();
+      else
+        return false;
+    } else return false;
+  }
+
 };
 
 inline std::shared_ptr<Expr> overlap(const Index& bra_index, const Index& ket_index) {

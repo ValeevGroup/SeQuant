@@ -123,6 +123,10 @@ class Operator : public container::svector<Op<S>>, public Expr {
     return result;
   }
 
+  type_id_type type_id() const override {
+    return get_type_id<Operator>();
+  };
+
  private:
   base_type make_ops(Action action,
                               std::initializer_list<Index> indices) {
@@ -142,6 +146,19 @@ class Operator : public container::svector<Op<S>>, public Expr {
       result.emplace_back(Index{idx_label}, action);
     return result;
   }
+
+  bool static_compare(const Expr& that) const override {
+    const auto& that_cast = static_cast<const Operator&>(that);
+    if (this->size() == that_cast.size()) {
+      if (this->empty()) return true;
+      // compare hash values first
+      if (this->hash_value() == that.hash_value()) // hash values agree -> do full comparison
+        return static_cast<const base_type&>(*this) == static_cast<const base_type&>(that_cast);
+      else
+        return false;
+    } else return false;
+  }
+
 };
 
 /// @brief NormalOperator is an Operator normal-ordered with respect to vacuum.
@@ -280,9 +297,21 @@ class NormalOperator : public Operator<S> {
     return Operator<S>::insert(it, std::forward<T>(value));
   }
 
+  Expr::type_id_type type_id() const override {
+    return Expr::get_type_id<NormalOperator>();
+  };
+
  private:
   Vacuum vacuum_;
   std::size_t ncreators_ = 0;
+
+  bool static_compare(const Expr& that) const override {
+    const auto& that_cast = static_cast<const NormalOperator&>(that);
+    if (this->vacuum() == that_cast.vacuum() && this->ncreators() == that_cast.ncreators()) {
+      return static_cast<const base_type&>(*this) == static_cast<const base_type&>(*this);
+    } else return false;
+  }
+
 };
 
 template<Statistics S>
@@ -324,7 +353,7 @@ class NormalOperatorSequence : public container::svector<NormalOperator<S>>, pub
     return *this;
   }
 
-  std::wstring to_latex() const {
+  std::wstring to_latex() const override {
     std::wstring result;
     result = L"{";
     for (const auto &op: *this)
@@ -332,6 +361,10 @@ class NormalOperatorSequence : public container::svector<NormalOperator<S>>, pub
     result += L"}";
     return result;
   }
+
+  Expr::type_id_type type_id() const override {
+    return Expr::get_type_id<NormalOperatorSequence>();
+  };
 
  private:
   Vacuum vacuum_ = Vacuum::Invalid;
@@ -350,6 +383,17 @@ class NormalOperatorSequence : public container::svector<NormalOperator<S>>, pub
           }
         });
   }
+
+  bool static_compare(const Expr& that) const override {
+    const auto& that_cast = static_cast<const NormalOperatorSequence&>(that);
+    if (this->vacuum() == that_cast.vacuum()) {
+      if (this->empty()) return true;
+      if (this->hash_value() == that.hash_value())
+        return static_cast<const base_type&>(*this) == static_cast<const base_type&>(*this);
+       else return false;
+    } else return false;
+  }
+
 };
 
 using BOp = Op<Statistics::BoseEinstein>;

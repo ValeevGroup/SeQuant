@@ -46,7 +46,7 @@ class WickTheorem {
   /// Computes and returns the result
   /// @param count_only if true, will return a vector of default-initialized values, useful if only interested in the total count
   /// @return the result of applying Wick's theorem, i.e. a sum of {prefactor, normal operator} pairs
-  std::vector<std::pair<ScaledProduct, NormalOperator<S>>>
+  std::vector<std::pair<Product, NormalOperator<S>>>
   compute(const bool count_only = false) const {
     if (!full_contractions_)
       throw std::logic_error("WickTheorem::compute: full_contractions=false not yet supported");
@@ -67,7 +67,7 @@ class WickTheorem {
     }
     NormalOperatorSequence<S> opseq;  //!< current state of operator sequence
     std::size_t opseq_size;  //!< current size of opseq
-    ScaledProduct sp;  //!< current prefactor
+    Product sp;  //!< current prefactor
     int level;  //!< level in recursive wick call stack
     bool count_only;  //!< if true, only update result size
 
@@ -77,15 +77,15 @@ class WickTheorem {
         opseq_size += op.size();
     }
     void reset(const NormalOperatorSequence<S>& o) {
-      sp = ScaledProduct{};
+      sp = Product{};
       opseq = o;
       compute_size();
     }
   };
   /// Applies most naive version of Wick's theorem, where sign rule involves counting Ops
-  std::vector<std::pair<ScaledProduct, NormalOperator<S>>>
+  std::vector<std::pair<Product, NormalOperator<S>>>
   compute_nontensor_wick(const bool count_only) const {
-    std::vector<std::pair<ScaledProduct, NormalOperator<S>>> result;  //!< current value of the result
+    std::vector<std::pair<Product, NormalOperator<S>>> result;  //!< current value of the result
     std::mutex mtx;  // used in critical sections updating the result
     auto result_plus_mutex = std::make_pair(&result, &mtx);
     NontensorWickState state(input_);
@@ -96,7 +96,7 @@ class WickTheorem {
     return std::move(result);
   };
 
-  void recursive_nontensor_wick(std::pair<std::vector<std::pair<ScaledProduct, NormalOperator<S>>>*, std::mutex*>& result,
+  void recursive_nontensor_wick(std::pair<std::vector<std::pair<Product, NormalOperator<S>>>*, std::mutex*>& result,
                                 NontensorWickState& state) const {
     // if full contractions needed, make contractions involving first index with another index, else contract any index i with index j (i<j)
     if (full_contractions_) {
@@ -129,7 +129,7 @@ class WickTheorem {
             }
 
             // update the prefactor and opseq
-            ScaledProduct sp_copy = state.sp;
+            Product sp_copy = state.sp;
             state.sp.append(phase, contract(*opseq_view_begin, *op_iter, input_.vacuum()));
             // remove from back to front
             Op<S> right = *op_iter;
@@ -201,7 +201,7 @@ class WickTheorem {
       const auto qpspace_common = intersection(qpspace_left, qpspace_right);
       const auto index_common = Index{IndexSpace::base_key(qpspace_common) + L"_10000"};
       if (qpspace_common != left.index().space() && qpspace_common != right.index().space()) {  // may need 2 overlaps if neither space is pure qp creator/annihilator
-        auto result = std::make_shared<ScaledProduct>();
+        auto result = std::make_shared<Product>();
         result->append(1, overlap(left.index(), index_common));
         result->append(1, overlap(index_common, right.index()));
         return result;
