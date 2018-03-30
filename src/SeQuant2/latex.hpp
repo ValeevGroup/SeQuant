@@ -21,9 +21,9 @@ std::wstring to_latex(const std::complex<T>& t) {
   std::wstring result = L"{";
   result += std::to_wstring(t.real());
   if (t.imag() > 0) {
-    result += L" + " + std::to_wstring(t.imag());
+    result += L" + i " + std::to_wstring(t.imag());
   } else if (t.imag() < 0)
-    result += L" - " + std::to_wstring(-t.imag());
+    result += L" - i " + std::to_wstring(-t.imag());
   result += L"}";
   return result;
 }
