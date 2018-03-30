@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.9)
 project(SeQuant2)
 
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_library(Range-V3 INTERFACE IMPORTED)
 set_property(TARGET Range-V3 PROPERTY
@@ -20,7 +21,8 @@ add_library(SeQuant2
         src/SeQuant2/wick.hpp
         src/SeQuant2/iterator.hpp
         src/SeQuant2/vector.hpp
-        src/SeQuant2/meta.hpp)
+        src/SeQuant2/meta.hpp
+        src/SeQuant2/latex.hpp)
 target_link_libraries(SeQuant2 Range-V3)
 
 enable_testing(true)

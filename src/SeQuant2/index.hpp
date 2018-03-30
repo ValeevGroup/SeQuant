@@ -159,6 +159,9 @@ inline std::wstring to_latex(const Index &index) {
   return index.to_latex();
 }
 
+using WstrList = std::initializer_list<std::wstring_view>;
+using IndexList = std::initializer_list<Index>;
+
 } // namespace sequant2
 
 #endif // SEQUANT2_INDEX_H

@@ -197,7 +197,7 @@ TEST_CASE("Expr", "[elements]") {
   SECTION("latex") {
     Product sp0{};
     sp0.append(2.0, std::make_shared<Dummy>());
-    REQUIRE(to_latex(sp0) == L"{2.000000 \\times {\\text{Dummy}}}");
+    REQUIRE(to_latex(sp0) == L"{{2.000000} \\times {\\text{Dummy}}}");
 
     // VecExpr<shared_ptr<Expr>>
     {

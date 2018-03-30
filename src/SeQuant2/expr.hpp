@@ -15,6 +15,7 @@
 #include <boost/functional/hash.hpp>
 #include <boost/callable_traits.hpp>
 
+#include "latex.hpp"
 #include "vector.hpp"
 
 namespace sequant2 {
@@ -334,11 +335,13 @@ class Product : public Expr {
   std::wstring to_latex() const override {
     std::wstring result;
     result = L"{";
-    assert(scalar().imag() == 0.0);
-    result += std::to_wstring(scalar().real());
-    result += L" \\times ";
-    for (const auto &i : factors())
-      result += i->to_latex();
+    if (scalar() != 0.) {
+      if (scalar() != 1.) {
+        result += sequant2::to_latex(scalar()) + L" \\times ";
+      }
+      for (const auto &i : factors())
+        result += i->to_latex();
+    }
     result += L"}";
     return result;
   }
@@ -460,8 +463,6 @@ operator*(const ExprPtr& left, const ExprPtr& right) {
   // naive version is to just make a Product
   // TODO why is ExprPtrList needed?
   auto result = std::make_shared<Product>(ExprPtrList{left,right});
-  result->append(1, left);
-  result->append(1, right);
   return result;
 }
 
@@ -475,6 +476,10 @@ operator+(const ExprPtr& left, const ExprPtr& right) {
 
 inline std::wstring to_latex(const Expr& expr) {
   return expr.to_latex();
+}
+
+inline std::wstring to_latex(const ExprPtr& exprptr) {
+  return exprptr->to_latex();
 }
 
 /// Canonicalizes an Expr and replaces it as needed
@@ -491,6 +496,14 @@ inline void canonicalize(ExprPtr& expr) {
   }
 }
 
-}  // namespace sequant2
+/// make an ExprPtr to a new object of type T
+/// @tparam T a class derived from Expr
+/// @tparam Args a parameter pack type such that T(std::forward<Args>...) is well-formed
+/// @param args a parameter pack such that T(args...) is well-formed
+template <typename T, typename ... Args> ExprPtr make(Args&& ... args) {
+  return std::make_shared<T>(std::forward<Args>(args)...);
+}
+
+};  // namespace sequant2
 
 #endif //SEQUANT2_EXPR_HPP
