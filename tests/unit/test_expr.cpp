@@ -205,7 +205,7 @@ TEST_CASE("Expr", "[elements]") {
           std::vector<std::shared_ptr<Constant>>{std::make_shared<Constant>(1.0), std::make_shared<Constant>(2.0),
                                                  std::make_shared<Constant>(3.0)};
       auto ex6 = std::make_shared<VecExpr<ExprPtr>>(begin(ex5_init), end(ex5_init));
-      REQUIRE(ex6->to_latex() == L"{\\text{VecExpr}\\{{1.000000} {2.000000} {3.000000} \\}}");
+      REQUIRE(ex6->to_latex() == L"{\\text{VecExpr}\\{{{1.000000}} {{2.000000}} {{3.000000}} \\}}");
     }
   }
 
@@ -221,7 +221,16 @@ TEST_CASE("Expr", "[elements]") {
       auto ex = ex6 + ex6;
       ex->visit(v);
 
-      REQUIRE(v.result == L"{1.000000}{2.000000}{3.000000}{\\text{VecExpr}\\{{1.000000} {2.000000} {3.000000} \\}}{\\text{VecExpr}\\{{1.000000} {2.000000} {3.000000} \\}}{1.000000}{2.000000}{3.000000}{\\text{VecExpr}\\{{1.000000} {2.000000} {3.000000} \\}}{\\text{VecExpr}\\{{1.000000} {2.000000} {3.000000} \\}}{ \\left({\\text{VecExpr}\\{{1.000000} {2.000000} {3.000000} \\}} + {\\text{VecExpr}\\{{1.000000} {2.000000} {3.000000} \\}}\\right) }");
+      REQUIRE(v.result == L"{{1.000000}}{{2.000000}}{{3.000000}}{\\text{VecExpr}\\{{{1.000000}} {{2.000000}} {{3.000000}} \\}}{\\text{VecExpr}\\{{{1.000000}} {{2.000000}} {{3.000000}} \\}}{{1.000000}}{{2.000000}}{{3.000000}}{\\text{VecExpr}\\{{{1.000000}} {{2.000000}} {{3.000000}} \\}}{\\text{VecExpr}\\{{{1.000000}} {{2.000000}} {{3.000000}} \\}}{ \\left({\\text{VecExpr}\\{{{1.000000}} {{2.000000}} {{3.000000}} \\}} + {\\text{VecExpr}\\{{{1.000000}} {{2.000000}} {{3.000000}} \\}}\\right) }");
+    }
+  }
+
+  SECTION("expand") {
+    {
+      auto ex = (make<Constant>(1.0) + make<Constant>(2.0)) * (make<Constant>(3.0) + make<Constant>(4.0));
+      REQUIRE(to_latex(ex) == L"{{ \\left({{1.000000}} + {{2.000000}}\\right) }{ \\left({{3.000000}} + {{4.000000}}\\right) }}");
+      expand(ex);
+      REQUIRE(to_latex(ex) == L"{ \\left({ \\left({{{1.000000}}{{3.000000}}} + {{{1.000000}}{{4.000000}}}\\right) } + { \\left({{{2.000000}}{{3.000000}}} + {{{2.000000}}{{4.000000}}}\\right) }\\right) }");
     }
   }
 

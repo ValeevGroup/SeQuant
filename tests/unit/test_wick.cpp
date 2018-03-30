@@ -10,6 +10,7 @@
 
 #define SEQUANT2_SKIP_LONG_TESTS 1
 
+#if 0
 TEST_CASE("WickTheorem", "[algorithms]") {
 
   using namespace sequant2;
@@ -340,3 +341,4 @@ TEST_CASE("WickTheorem", "[algorithms]") {
   }
 
   }  // TEST_CASE("WickTheorem")
+#endif

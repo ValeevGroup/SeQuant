@@ -6,6 +6,7 @@
 #define SEQUANT2_EXPR_HPP
 
 #include <complex>
+#include <iostream>
 #include <memory>
 #include <vector>
 
@@ -61,6 +62,12 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
   /// @return the string representation of @c this
   virtual std::wstring to_latex() const {
     throw std::logic_error("Expr::to_latex not implemented in this derived class");
+  }
+
+  /// @return a clone of this object
+  /// @note must be overridden in the derived class
+  virtual std::shared_ptr<Expr> clone() const {
+    throw std::logic_error("Expr::clone not implemented in this derived class");
   }
 
   /// Canonicalizes @c this and returns the biproduct of canonicalization (e.g. phase)
@@ -142,6 +149,12 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
   operator!=(const T& that) const {
      return ! operator==(that);
   }
+
+  /// @return (unique) type id of class T
+  template <typename T> static  type_id_type get_type_id() {
+    static type_id_type type_id = get_next_type_id();
+    return type_id;
+  };
 
  private:
   friend ranges::range_access;
@@ -235,12 +248,6 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
     hash_value_.reset();
   }
 
-  /// @return (unique) type id of class T
-  template <typename T> static  type_id_type get_type_id() {
-    static type_id_type type_id = get_next_type_id();
-    return type_id;
-  };
-
  private:
   /// @return returns next type id in the grand class list
   static type_id_type get_next_type_id() {
@@ -255,6 +262,15 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
 };
 
 using ExprPtr = std::shared_ptr<Expr>;
+
+/// make an ExprPtr to a new object of type T
+/// @tparam T a class derived from Expr
+/// @tparam Args a parameter pack type such that T(std::forward<Args>...) is well-formed
+/// @param args a parameter pack such that T(args...) is well-formed
+template <typename T, typename ... Args> ExprPtr make(Args&& ... args) {
+  return std::make_shared<T>(std::forward<Args>(args)...);
+}
+
 // this is needed when using std::make_shared<X>({ExprPtr,ExprPtr}), i.e. must std::make_shared<X>(ExprPtrList{ExprPtr,ExprPtr})
 using ExprPtrList = std::initializer_list<ExprPtr>;
 static auto expr_ptr_comparer = [](const auto& ptr1, const auto& ptr2) { return *ptr1 == *ptr2; };
@@ -272,7 +288,7 @@ class Constant : public Expr {
   auto value() const { return value_; }
 
   std::wstring to_latex() const override {
-    return L"{" + std::to_wstring(value_.real()) + L"}";
+    return L"{" + sequant2::to_latex(value()) + L"}";
   }
 
   virtual std::shared_ptr<Expr> canonicalize() override {
@@ -282,6 +298,10 @@ class Constant : public Expr {
   type_id_type type_id() const override {
     return get_type_id<Constant>();
   };
+
+  std::shared_ptr<Expr> clone() const override {
+    return make<Constant>(this->value());
+  }
 
  private:
   std::complex<double> value_;
@@ -313,9 +333,22 @@ class Product : public Expr {
 
   /// construct a Product out of zero or more factors multiplied by a scalar
   /// @tparam T a numeric type; it must be able to multiply std::complex<double>
+  /// @param scalar a scalar of type T
   /// @param factors an initializer list of factors
   template<typename T>
   Product(T scalar, std::initializer_list<ExprPtr> factors) : scalar_(std::move(scalar)), factors_(std::move(factors)) {}
+
+  /// construct a Product out of a range of factors
+  /// @param begin the begin iterator
+  /// @param end the end iterator
+  template <typename Iterator> Product(Iterator begin, Iterator end) : factors_(begin, end) {}
+
+  /// construct a Product out of a range of factors
+  /// @tparam T a numeric type; it must be able to multiply std::complex<double>
+  /// @param scalar a scalar of type T
+  /// @param begin the begin iterator
+  /// @param end the end iterator
+  template <typename T, typename Iterator> Product(T scalar, Iterator begin, Iterator end) : scalar_(std::move(scalar)), factors_(begin, end) {}
 
   /// multiplies the product by @c scalar times @c factor
   template<typename T>
@@ -349,6 +382,10 @@ class Product : public Expr {
   type_id_type type_id() const override {
     return get_type_id<Product>();
   };
+
+  std::shared_ptr<Expr> clone() const override {
+    return make<Product>(factors().begin(), factors().end());
+  }
 
  private:
   std::complex<double> scalar_ = {1.0, 0.0};
@@ -482,26 +519,87 @@ inline std::wstring to_latex(const ExprPtr& exprptr) {
   return exprptr->to_latex();
 }
 
-/// Canonicalizes an Expr and replaces it as needed
+/// Recursively canonicalizes an Expr and replaces it as needed
 /// @param[in,out] expr expression to be canonicalized; will be replaced if canonicalization is impure
 inline void canonicalize(ExprPtr& expr) {
   const auto biproduct = expr->canonicalize();
-  const auto& biproduct_value = *biproduct;
-  const auto& biproduct_typeid = typeid(biproduct_value);
-  if (biproduct_typeid == typeid(Constant)) {
-    const auto constant_ptr = std::dynamic_pointer_cast<Constant>(biproduct);
-    auto new_expr = std::make_shared<Product>();
-    new_expr->append(constant_ptr->value(), expr);
-    expr = new_expr;
+  if (biproduct && biproduct->type_id() == Expr::get_type_id<Constant>()) {
+    const auto constant_ptr = std::static_pointer_cast<Constant>(biproduct);
+    expr = biproduct * expr;
   }
 }
 
-/// make an ExprPtr to a new object of type T
-/// @tparam T a class derived from Expr
-/// @tparam Args a parameter pack type such that T(std::forward<Args>...) is well-formed
-/// @param args a parameter pack such that T(args...) is well-formed
-template <typename T, typename ... Args> ExprPtr make(Args&& ... args) {
-  return std::make_shared<T>(std::forward<Args>(args)...);
+namespace detail {
+  struct expand_visitor {
+    void operator()(ExprPtr& expr) {
+      if (debug) std::wcout << "expand_visitor received " << to_latex(expr) << std::endl;
+      // apply expand() iteratively until done
+      while(expand(expr)) {
+        if (debug)  std::wcout << "after 1 round of expansion have " << to_latex(expr) << std::endl;
+      }
+      if (debug) std::wcout << "expansion result = " << to_latex(expr) << std::endl;
+      // now need to flatten!
+    }
+
+    /// expands a Product
+    bool expand_product(ExprPtr& expr) {
+      auto& expr_ref = *expr;
+      std::shared_ptr<Sum> result;
+      const auto nsubexpr = ranges::size(*expr);
+      for(std::size_t i=0; i != nsubexpr; ++i) {
+        if (expr_ref[i]->type_id() == Expr::get_type_id<Sum>()) {
+          // allocate the result, if not done yet
+          if (!result)
+            result = std::make_shared<Sum>();
+          ExprPtr subexpr_to_expand = expr_ref[i];
+          for(auto& subsubexpr: *subexpr_to_expand) {
+            auto expr_clone = expr->clone();
+            (*expr_clone)[i] = subsubexpr;
+            result->append(std::move(expr_clone));
+          }
+          expr = std::static_pointer_cast<Expr>(result); // expanded one Sum, return
+          return true;
+        }
+      }
+      return false;
+    }
+
+    /// expands a Sum
+    bool expand_sum(ExprPtr& expr) {
+      bool expanded = false;
+      auto& expr_ref = *expr;
+      const auto nsubexpr = ranges::size(*expr);
+      if (debug) std::wcout << "in expand_sum: expr = " << to_latex(expr) << std::endl;
+      for(std::size_t i=0; i != nsubexpr; ++i) {
+        if (expr_ref[i]->type_id() == Expr::get_type_id<Product>()) {
+          expanded |= expand_product(expr_ref[i]);
+          if (debug) std::wcout << "in expand_sum: after expand_product(" << (expanded ? "true)" : "false)") << " expr = " << to_latex(expr) << std::endl;
+        }
+      }
+      return expanded;
+    }
+
+    // @return true if expanded Product of Sum into Sum of Product
+    bool expand(ExprPtr& expr) {
+      const auto type_id = expr->type_id();
+      if (type_id == Expr::get_type_id<Product>()) {
+        return expand_product(expr);
+      }
+      else if (type_id == Expr::get_type_id<Sum>()) {
+        return expand_sum(expr);
+      } else
+        return false;
+    }
+
+    bool debug = false;
+  };
+};  // namespace detail
+
+/// Recursively expands products of sums
+inline void expand(ExprPtr& expr) {
+  detail::expand_visitor expander{};
+  expr->visit(expander);
+  expander(expr);
 }
 
 };  // namespace sequant2
