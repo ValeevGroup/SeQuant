@@ -430,12 +430,22 @@ class Sum : public Expr {
 
   /// construct a Sum out of zero or more summands
   /// @param summands an initializer list of summands
-  Sum(std::initializer_list<ExprPtr> summands) : summands_(std::move(summands)) {}
+  Sum(std::initializer_list<ExprPtr> summands) {
+    // use append to flatten out Sum summands
+    for(auto& summand: summands) {
+      append(std::move(summand));
+    }
+  }
 
   /// append a summand to the sum
   /// @param summand the summand
   Sum &append(ExprPtr summand) {
-    summands_.push_back(std::move(summand));
+    if (summand->type_id() != Expr::get_type_id<Sum>())
+      summands_.push_back(std::move(summand));
+    else {  // this recursively flattens Sum summands
+      for(auto& subsummand: *summand)
+        this->append(subsummand);
+    }
     return *this;
   }
 
