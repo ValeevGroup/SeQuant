@@ -73,6 +73,8 @@ class Tensor : public Expr {
     return result;
   }
 
+  /// TODO implement basic canonicalizer, add ability to register custom canonicalizers looked up by tensor label
+  ///      only use basic canonicalizer if custom canonicalizer is not found
   std::shared_ptr<Expr> canonicalize() override {
     abort();
   }
