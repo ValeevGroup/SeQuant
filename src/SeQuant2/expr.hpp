@@ -85,7 +85,7 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
         subexpr_ptr->visit(visitor);
       visitor(subexpr_ptr);  // after done with expressions of this subexpression call on the subexpression itself
     }
-    if constexpr(boost::callable_traits::is_invocable<Visitor,const std::shared_ptr<Expr>&>::value)
+    if constexpr(boost::callable_traits::is_invocable_r<void,Visitor,const std::shared_ptr<Expr>&>::value)
       visitor(shared_from_this());
   }
 
