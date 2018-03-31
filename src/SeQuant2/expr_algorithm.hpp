@@ -7,6 +7,22 @@
 
 namespace sequant2 {
 
+inline ExprPtr
+operator*(const ExprPtr& left, const ExprPtr& right) {
+  // naive version is to just make a Product
+  // TODO why is ExprPtrList needed?
+  auto result = std::make_shared<Product>(ExprPtrList{left,right});
+  return result;
+}
+
+inline ExprPtr
+operator+(const ExprPtr& left, const ExprPtr& right) {
+  // naive version is to just make a Sum
+  // TODO why is ExprPtrList needed?
+  auto result = std::make_shared<Sum>(ExprPtrList{left,right});
+  return result;
+}
+
 /// Recursively canonicalizes an Expr and replaces it as needed
 /// @param[in,out] expr expression to be canonicalized; will be replaced if canonicalization is impure
 inline void canonicalize(ExprPtr& expr) {
