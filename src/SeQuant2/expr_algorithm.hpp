@@ -46,7 +46,8 @@ struct expand_visitor {
     // and simplify?! e.g. extract constants out of products, etc.
   }
 
-  /// expands a Product
+  /// expands the first Sum in a Product
+  /// @param[in,out] expr (shared_ptr to ) a Product whose first Sum gets expanded; on return @c expr contains the result
   bool expand_product(ExprPtr& expr) {
     auto& expr_ref = *expr;
     std::shared_ptr<Sum> result;
@@ -71,17 +72,31 @@ struct expand_visitor {
 
   /// expands a Sum
   bool expand_sum(ExprPtr& expr) {
-    bool expanded = false;
     auto& expr_ref = *expr;
+    std::shared_ptr<Sum> result;  // will keep the result if one or more summands is expanded
     const auto nsubexpr = ranges::size(*expr);
     if (debug) std::wcout << "in expand_sum: expr = " << to_latex(expr) << std::endl;
     for(std::size_t i=0; i != nsubexpr; ++i) {
       if (expr_ref[i]->type_id() == Expr::get_type_id<Product>()) {
-        expanded |= expand_product(expr_ref[i]);
-        if (debug) std::wcout << "in expand_sum: after expand_product(" << (expanded ? "true)" : "false)") << " expr = " << to_latex(expr) << std::endl;
+        const auto this_term_expanded = expand_product(expr_ref[i]);
+        // if this is the first term that was expanded, create a result and copy all preceeding subexpressions into it
+        if (!result && this_term_expanded) {
+          result = std::make_shared<Sum>();
+          for(std::size_t j=0; j != i; ++j)
+            result->append(expr_ref[j]);
+        }
+        // update the result with the expanded current subexpr, if needed
+        if (result && this_term_expanded)
+          result->append(expr_ref[i]);  // add to the result
+        if (debug) std::wcout << "in expand_sum: after expand_product(" << (this_term_expanded ? "true)" : "false)") << " expr = " << to_latex(expr) << std::endl;
       }
     }
-    return expanded;
+    if (result) { // if any summand was expanded, copy result into expr, else expr was unchanged, nothing to do
+      expr = std::static_pointer_cast<Expr>(result);
+      return true;
+    }
+    else
+      return false;
   }
 
   // @return true if expanded Product of Sum into Sum of Product

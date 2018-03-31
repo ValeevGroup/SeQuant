@@ -230,7 +230,7 @@ TEST_CASE("Expr", "[elements]") {
       auto ex = (make<Constant>(1.0) + make<Constant>(2.0)) * (make<Constant>(3.0) + make<Constant>(4.0));
       REQUIRE(to_latex(ex) == L"{{ \\left({{1.000000}} + {{2.000000}}\\right) }{ \\left({{3.000000}} + {{4.000000}}\\right) }}");
       expand(ex);
-      REQUIRE(to_latex(ex) == L"{ \\left({ \\left({{{1.000000}}{{3.000000}}} + {{{1.000000}}{{4.000000}}}\\right) } + { \\left({{{2.000000}}{{3.000000}}} + {{{2.000000}}{{4.000000}}}\\right) }\\right) }");
+      REQUIRE(to_latex(ex) == L"{ \\left({{{1.000000}}{{3.000000}}} + {{{1.000000}}{{4.000000}}} + {{{2.000000}}{{3.000000}}} + {{{2.000000}}{{4.000000}}}\\right) }");
     }
   }
 
