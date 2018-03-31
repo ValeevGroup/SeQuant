@@ -46,7 +46,7 @@ class WickTheorem {
   /// Computes and returns the result
   /// @param count_only if true, will return a vector of default-initialized values, useful if only interested in the total count
   /// @return the result of applying Wick's theorem, i.e. a sum of {prefactor, normal operator} pairs
-  std::vector<std::pair<Product, NormalOperator<S>>>
+  ExprPtr
   compute(const bool count_only = false) const {
     if (!full_contractions_)
       throw std::logic_error("WickTheorem::compute: full_contractions=false not yet supported");
@@ -83,7 +83,7 @@ class WickTheorem {
     }
   };
   /// Applies most naive version of Wick's theorem, where sign rule involves counting Ops
-  std::vector<std::pair<Product, NormalOperator<S>>>
+  ExprPtr
   compute_nontensor_wick(const bool count_only) const {
     std::vector<std::pair<Product, NormalOperator<S>>> result;  //!< current value of the result
     std::mutex mtx;  // used in critical sections updating the result
@@ -93,8 +93,22 @@ class WickTheorem {
 
     recursive_nontensor_wick(result_plus_mutex, state);
 
-    return std::move(result);
-  };
+    // convert result to an Expr
+    // if result.size() == 0, return null ptr
+    // TODO revise if decide to use Constant(0)
+    ExprPtr result_expr;
+    if (result.size() == 1) {  // if result.size() == 1, return Product
+      result_expr = make<Product>(std::move(result[0].first));
+    }
+    else if (result.size() > 1) {
+      auto sum = std::make_shared<Sum>();
+      for(auto& term: result) {
+        sum->append(make<Product>(std::move(term.first)));
+      }
+      result_expr = sum;
+    }
+    return result_expr;
+  }
 
   void recursive_nontensor_wick(std::pair<std::vector<std::pair<Product, NormalOperator<S>>>*, std::mutex*>& result,
                                 NontensorWickState& state) const {

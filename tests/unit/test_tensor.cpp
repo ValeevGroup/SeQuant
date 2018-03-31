@@ -37,7 +37,7 @@ TEST_CASE("Tensor", "[elements]") {
     REQUIRE(t3.symmetry() == Symmetry::nonsymm);
     REQUIRE(t3.label() == L"N");
 
-    REQUIRE_NOTHROW(Tensor(L"g", {Index{L"i_1"}, Index{L"i_2"}}, {Index{L"i_3"}, Index{L"i_4"}}));
+    REQUIRE_NOTHROW(Tensor(L"g", {Index{L"i_1"}, Index{L"i_2"}}, {Index{L"i_3"}, Index{L"i_4"}}, Symmetry::antisymm));
     auto t4 = Tensor(L"g", {Index{L"i_1"}, Index{L"i_2"}}, {Index{L"i_3"}, Index{L"i_4"}}, Symmetry::antisymm);
     REQUIRE(t4.bra_rank() == 2);
     REQUIRE(t4.ket_rank() == 2);

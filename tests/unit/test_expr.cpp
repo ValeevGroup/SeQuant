@@ -110,10 +110,10 @@ TEST_CASE("Expr", "[elements]") {
           std::make_shared<VecExpr<ExprPtr>>(ExprPtrList{
               std::make_shared<Constant>(1.0), std::make_shared<Constant>(2.0), std::make_shared<Constant>(3.0)});
 
-      REQUIRE(ex0->type_id() == 1);  // Dummy does not have a type_id
-      REQUIRE(ex1->type_id() == 2);  // Constant does
-      REQUIRE(ex4->type_id() == 3);  // so does VecExpr<double>
-      REQUIRE(ex5->type_id() == 4);  // so does VecExpr<ExprPtr>
+      REQUIRE(ex0->type_id() == 4);  // Dummy does not have a type_id
+      REQUIRE(ex1->type_id() == 5);  // Constant does
+      REQUIRE(ex4->type_id() == 6);  // so does VecExpr<double>
+      REQUIRE(ex5->type_id() == 7);  // so does VecExpr<ExprPtr>
 
       REQUIRE(*ex0 == *ex0);
       REQUIRE(*ex1 == *ex1);

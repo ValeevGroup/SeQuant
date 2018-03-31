@@ -75,7 +75,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
                          FNOperator({L"i_5"}, {L"i_6"}, V)});
       auto wick1 = FWickTheorem{opseq1};
       REQUIRE_NOTHROW(wick1.full_contractions(true).spinfree(false).compute());
-      REQUIRE(FWickTheorem{opseq1}.full_contractions(true).spinfree(false).compute().size() == 0);
+      REQUIRE(! FWickTheorem{opseq1}.full_contractions(true).spinfree(false).compute() );
     }
 
     // two 2-body operators
@@ -85,7 +85,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       auto wick = FWickTheorem{opseq};
       REQUIRE_NOTHROW(wick.full_contractions(true).spinfree(false).compute());
       auto result = wick.full_contractions(true).spinfree(false).compute();
-      REQUIRE(result.size() == 2);
+      REQUIRE(result->size() == 2);
     }
 
     // two 3-body operators
@@ -95,7 +95,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       auto wick = FWickTheorem{opseq};
       REQUIRE_NOTHROW(wick.full_contractions(true).spinfree(false).compute());
       auto result = wick.full_contractions(true).spinfree(false).compute();
-      REQUIRE(result.size() == 6);
+      REQUIRE(result->size() == 6);
     }
 
     // two 4-body operators
@@ -105,7 +105,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       auto wick = FWickTheorem{opseq};
       REQUIRE_NOTHROW(wick.full_contractions(true).spinfree(false).compute());
       auto result = wick.full_contractions(true).spinfree(false).compute();
-      REQUIRE(result.size() == 24);
+      REQUIRE(result->size() == 24);
     }
 
     // three 2-body operators
@@ -118,7 +118,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       auto wick = FWickTheorem{opseq};
       REQUIRE_NOTHROW(wick.full_contractions(true).spinfree(false).compute());
       auto result = wick.full_contractions(true).spinfree(false).compute();
-      REQUIRE(result.size() == 1);
+      REQUIRE(result->size() == 2);  // 1 term = product of 2 terms
     }
 
 
@@ -135,7 +135,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       auto wick = FWickTheorem{opseq};
       REQUIRE_NOTHROW(wick.full_contractions(true).spinfree(false).compute());
       auto result = wick.full_contractions(true).spinfree(false).compute();
-      REQUIRE(result.size() == 1);
+      REQUIRE(result->size() == 2);  // 1 term = product of 2 terms
     }
 
     // two general 1-body operators
@@ -145,7 +145,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       auto wick = FWickTheorem{opseq};
       REQUIRE_NOTHROW(wick.full_contractions(true).spinfree(false).compute());
       auto result = wick.full_contractions(true).spinfree(false).compute();
-      REQUIRE(result.size() == 1);
+      REQUIRE(result->size() == 2);  // 1 term = product of 2 terms
     }
 
     // two (pure qp) 2-body operators
@@ -155,7 +155,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       auto wick = FWickTheorem{opseq};
       REQUIRE_NOTHROW(wick.full_contractions(true).spinfree(false).compute());
       auto result = wick.full_contractions(true).spinfree(false).compute();
-      REQUIRE(result.size() == 4);
+      REQUIRE(result->size() == 4);
     }
 
     // two general 2-body operators
@@ -166,7 +166,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       auto wick = FWickTheorem{opseq};
       REQUIRE_NOTHROW(wick.full_contractions(true).spinfree(false).compute());
       auto result = wick.full_contractions(true).spinfree(false).compute();
-      REQUIRE(result.size() == 4);
+      REQUIRE(result->size() == 4);
     }
 
     // two general 3-body operators
@@ -177,7 +177,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       auto wick = FWickTheorem{opseq};
       REQUIRE_NOTHROW(wick.full_contractions(true).spinfree(false).compute());
       auto result = wick.full_contractions(true).spinfree(false).compute();
-      REQUIRE(result.size() == 36);
+      REQUIRE(result->size() == 36);
     }
 
     // two N-nonconserving operators
@@ -188,7 +188,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       auto wick = FWickTheorem{opseq};
       REQUIRE_NOTHROW(wick.full_contractions(true).spinfree(false).compute());
       auto result = wick.full_contractions(true).spinfree(false).compute();
-      REQUIRE(result.size() == 12);
+      REQUIRE(result->size() == 12);
     }
 
     // odd number of ops -> full contraction is 0
@@ -199,7 +199,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       auto wick = FWickTheorem{opseq};
       REQUIRE_NOTHROW(wick.full_contractions(true).spinfree(false).compute());
       auto result = wick.full_contractions(true).spinfree(false).compute();
-      REQUIRE(result.size() == 0);
+      REQUIRE(!result);
     }
 
     // 4-body ^ 4-body
@@ -210,7 +210,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
                         });
       auto wick = FWickTheorem{opseq};
       auto result = wick.full_contractions(true).spinfree(false).compute(true);
-      REQUIRE(result.size() == 576);
+      REQUIRE(result->size() == 576);
     }
     )
 
@@ -224,7 +224,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       auto wick = FWickTheorem{opseq};
       REQUIRE_NOTHROW(wick.full_contractions(true).spinfree(false).compute());
       auto result = wick.full_contractions(true).spinfree(false).compute();
-      REQUIRE(result.size() == 2);
+      REQUIRE(result->size() == 2);
     }
 
     // 4-body ^ 2-body ^ 2-body
@@ -236,7 +236,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
                         });
       auto wick = FWickTheorem{opseq};
       auto result = wick.full_contractions(true).spinfree(false).compute();
-      REQUIRE(result.size() == 576);
+      REQUIRE(result->size() == 576);
     }
 
     // 2-body ^ 2-body ^ 2-body
@@ -248,7 +248,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
                         });
       auto wick = FWickTheorem{opseq};
       auto result = wick.full_contractions(true).spinfree(false).compute();
-      REQUIRE(result.size() == 80);
+      REQUIRE(result->size() == 80);
     }
 
     // 2-body ^ 2-body ^ 2-body ^ 2-body
@@ -261,10 +261,11 @@ TEST_CASE("WickTheorem", "[algorithms]") {
                         });
       auto wick = FWickTheorem{opseq};
       auto result = wick.full_contractions(true).spinfree(false).compute(true);
-      REQUIRE(result.size() == 4752);
+      REQUIRE(result->size() == 4752);
     }
     )
 
+#ifndef SEQUANT2_SKIP_LONG_TESTS
     // 4-body ^ 2-body ^ 2-body ^ 2-body
     SEQUANT2_PROFILE_SINGLE("wick(4^2^2^2)", {
       auto opseq =
@@ -275,7 +276,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
                         });
       auto wick = FWickTheorem{opseq};
       auto result = wick.full_contractions(true).spinfree(false).compute(true);
-      REQUIRE(result.size() == 117504);
+      REQUIRE(result->size() == 117504);
     }
     )
 
@@ -289,7 +290,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
                         });
       auto wick = FWickTheorem{opseq};
       auto result = wick.full_contractions(true).spinfree(false).compute(true);
-      REQUIRE(result.size() == 202320);
+      REQUIRE(result->size() == 202320);
     }
     )
 
@@ -302,12 +303,11 @@ TEST_CASE("WickTheorem", "[algorithms]") {
                         });
       auto wick = FWickTheorem{opseq};
       auto result = wick.full_contractions(true).spinfree(false).compute(true);
-      REQUIRE(result.size() == 50688);
+      REQUIRE(result->size() == 50688);
     }
     )
 
     // 4-body ^ 4-body ^ 4-body
-#ifndef SEQUANT2_SKIP_LONG_TESTS
     SEQUANT2_PROFILE_SINGLE("wick(4^4^4)", {
       auto opseq =
           FNOperatorSeq({FNOperator({L"p_1", L"p_2", L"p_3", L"p_4"}, {L"p_5", L"p_6", L"p_7", L"p_8"}, V),
@@ -316,10 +316,49 @@ TEST_CASE("WickTheorem", "[algorithms]") {
                         });
       auto wick = FWickTheorem{opseq};
       auto result = wick.full_contractions(true).spinfree(false).compute(true);
-      REQUIRE(result.size() == 4783104);
+      REQUIRE(result->size() == 4783104);
     }
     )
 #endif
+
+    // 2-body ^ 2-body
+    SEQUANT2_PROFILE_SINGLE("wick(H2*T2)", {
+      auto opseq =
+          FNOperatorSeq({FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}, V),
+                         FNOperator({L"a_4", L"a_5"}, {L"i_4", L"i_5"}, V)
+                        });
+      auto wick = FWickTheorem{opseq};
+      auto wick_result = wick.full_contractions(true).spinfree(false).compute();
+      REQUIRE(wick_result->size() == 4);
+
+      // multiply tensor factors and expand
+      auto wick_result_2 = make<Tensor>(L"g", WstrList{L"p_1", L"p_2"}, WstrList{L"p_3", L"p_4"}, Symmetry::antisymm)
+          * make<Tensor>(L"t", WstrList{L"a_4", L"a_5"}, WstrList{L"i_4", L"i_5"}, Symmetry::antisymm)
+          * wick_result;
+      expand(wick_result_2);
+      REQUIRE(to_latex(wick_result_2) == L"{ \\left({{{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}}{{S^{{i_5}}_{{p_1}}}{S^{{i_4}}_{{p_2}}}{S^{{a_4}}_{{p_4}}}{S^{{a_5}}_{{p_3}}}}} + {{{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}}{{-1.000000} \\times {S^{{i_5}}_{{p_1}}}{S^{{i_4}}_{{p_2}}}{S^{{a_5}}_{{p_4}}}{S^{{a_4}}_{{p_3}}}}} + {{{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}}{{-1.000000} \\times {S^{{i_4}}_{{p_1}}}{S^{{i_5}}_{{p_2}}}{S^{{a_4}}_{{p_4}}}{S^{{a_5}}_{{p_3}}}}} + {{{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}}{{S^{{i_4}}_{{p_1}}}{S^{{i_5}}_{{p_2}}}{S^{{a_5}}_{{p_4}}}{S^{{a_4}}_{{p_3}}}}}\\right) }");
+    }
+    )
+
+    // 3-body ^ 2-body ^ 2-body ^ 3-body
+    SEQUANT2_PROFILE_SINGLE("wick(P3*H2*T2*T3)", {
+      auto opseq =
+          FNOperatorSeq({FNOperator({L"i_1", L"i_2", L"i_3"}, {L"a_1", L"a_2", L"a_3"}, V),
+                         FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}, V),
+                         FNOperator({L"a_4", L"a_5"}, {L"i_4", L"i_5"}, V),
+                         FNOperator({L"a_6", L"a_7", L"a_8"}, {L"i_6", L"i_7", L"i_8"}, V)
+                        });
+      auto wick = FWickTheorem{opseq};
+      auto wick_result = wick.full_contractions(true).spinfree(false).compute();
+      REQUIRE(wick_result->size() == 14400);
+
+      // multiply tensor factors and expand
+      auto wick_result_2 = make<Tensor>(L"g", WstrList{L"p_1", L"p_2"}, WstrList{L"p_3", L"p_4"}, Symmetry::antisymm)
+      * make<Tensor>(L"t", WstrList{L"a_4", L"a_5"}, WstrList{L"i_4", L"i_5"}, Symmetry::antisymm)
+      * make<Tensor>(L"t", WstrList{L"a_6", L"a_7", L"a_8"}, WstrList{L"i_6", L"i_7", L"i_8"}, Symmetry::antisymm)
+      * wick_result;
+    }
+    )
 
 #if 0
     // impossible: 4-body ^ 4-body ^ 4-body ^ 4-body ^ 4-body ^ 4-body
@@ -334,7 +373,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
                         });
       auto wick = FWickTheorem{opseq};
       auto result = wick.full_contractions(true).spinfree(false).compute(true);
-      REQUIRE(result.size() == 0);
+      REQUIRE(result->size() == 0);
     }
 #endif
 
