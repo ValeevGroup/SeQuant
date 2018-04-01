@@ -499,7 +499,7 @@ convertExp[expr_] :=
 
 
 
-(* ::Section:: *)
+(* ::Section::Closed:: *)
 (* Visualize function *)
 
 
@@ -596,7 +596,7 @@ Format[mSQS[a__],TraditionalForm] :=
 
 
 
-(* ::Section:: *)
+(* ::Section::Closed:: *)
 (* Contraction functions *)
 
 
@@ -1391,7 +1391,7 @@ combinePattern[creslist_List, annslist_List, pattern_List] :=
 	
 
 
-(* ::Section:: *)
+(* ::Section::Closed:: *)
 (* Normal Order *)
 
 
@@ -2576,27 +2576,41 @@ Protect[MatchQ];
 
 
 
-(* given an expression in spin-orbital basis trace out spin quantum numbers; this assumes spin-restricted spin-orbitals and particle spin = 1/2 *)
+(* given an expression in spin-orbital basis, traces out spin quantum numbers; this assumes spin-restricted spin-orbitals and particle spin = 1/2.
+extIndGroups specifies lists of groups of internal indices which share spin quantum numbers is trace, e.g. extIndGroups={{p,q}} means that indices p and q will both be m_s = +1/2 or m_s = -1/2. *)
+spintrace[expr_Plus,extIndGroups_List]:= Sum[spintrace[expr[[i]],extInds],{i,Length[expr]}];
+spintrace[expr_/;(Head[expr]=!=Plus),extIndGroups_List]:=Module[{extInds,intInds,intIndGroups,indGroups,result, mstuples,repls},
+Assert[Head[expr]=!=Plus];
 
-spintrace[expr_Plus,extInds_]:= Sum[spintrace[expr[[i]],extInds],{i,Length[expr]}];
+(* convert groups of external indices into a flat list of all external indices *)
+extInds = Flatten[extIndGroups];
 
-spintrace[expr_?(Head[#]!=Plus),extInds_]:=Module[{inds,intInds,result, mstuples,repls},
-Assert[Head[expr]!=Plus];
-(* extract all indices *)
-inds = Sort[indexListOut[expr,{}]];
+(* extract internal indices *)
+intInds = Sort[indexListOut[expr,extInds]];
 
-(* make tuple of m_s labels; A = +1/2, B = -1/2 *)
-mstuples=Tuples[{A,B},Length[inds]];
+(* combine internal indices with external index groups into a list of index group *)
+intIndGroups=Table[{intInds[[i]]},{i,Length[intInds]}];
+indGroups=Join[intIndGroups,extIndGroups];
+Print["indGroups=",indGroups//TraditionalForm];
+
+(* make tuple of m_s labels for each group of indices; A = +1/2, B = -1/2 *)
+mstuples=Tuples[{A,B},Length[indGroups]];
 result=0;
 
-(* trace out spins *)
+(* trace out spins over groups of indices *)
 Do[ (* for every combination of spins *)
-(* make a list of index replacements to apply *)
+(* make a list of index replacements to apply (groupings are omitted) *)
 repls=
-Table[particleIndex[indexSymbol[inds[[i]]],particleSpace[space_],rest_]->particleIndex[indexSymbol[inds[[i]]],particleSpace[space,particleSpin[mstuples[[t,i]]]],rest],{i,Length[inds]}];
-(* Print["{t,i}=","{",t,",",i,"}, repls=",repls//TraditionalForm," expr/.repls=",TraditionalForm[expr/.repls]]; *)
+Table[particleIndex[indexSymbol[indGroups[[g,i]]],particleSpace[space_],rest_]->particleIndex[indexSymbol[indGroups[[g,i]]],particleSpace[space,particleSpin[mstuples[[t,g]]]],rest],{g,Length[indGroups]},{i,Length[indGroups[[g]]]}];
+repls=Flatten[repls];
+If[ SeQuantDebugLevel>=3,Print["in spintrace: t=",t," repls=",repls//TraditionalForm," expr/.repls=",TraditionalForm[expr/.repls]];
+];
 result+=expr/.repls
-,{t,Length[mstuples]}];
+,{t,Length[mstuples]}
+];
+
+If[ SeQuantDebugLevel>=2,Print["in spintrace: after adding spin quantum numbers = ",TraditionalForm[result]];
+];
 
 (* convert to nonsymmetric n-body operators, e.g. Overscript[g, _] \[Rule] g *)
 (* 2-body *)
@@ -2604,6 +2618,8 @@ result=result/.SQM[OHead[label_String,indexSymm[-1]],particleIndex[bra1__],parti
 (* 3-body *)
 result=result/.SQM[OHead[label_String,indexSymm[-1]],particleIndex[bra1__],particleIndex[bra2__],particleIndex[bra3__],particleIndex[ket1__],particleIndex[ket2__],particleIndex[ket3__]]->(SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket1],particleIndex[ket2],particleIndex[ket3]]-SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket2],particleIndex[ket1],particleIndex[ket3]]-SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket1],particleIndex[ket3],particleIndex[ket2]]-SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket3],particleIndex[ket2],particleIndex[ket1]]+SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket2],particleIndex[ket3],particleIndex[ket1]]+SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket3],particleIndex[ket1],particleIndex[ket2]]);
 result=Expand[result];
+If[ SeQuantDebugLevel>=2,Print["in spintrace: after expanding antisymmetric operators = ",TraditionalForm[result]];
+];
 
 (* zero out integrals that don't conserve spin quantum numbers *)
 (* 1-body *)
@@ -2618,18 +2634,23 @@ particleIndex[bra3,particleSpace[bra3space,bra3spin],bra3rest],particleIndex[ket
 particleIndex[ket3,particleSpace[ket3space,ket3spin],ket3rest]],0];
 result=Expand[result];
 
+If[ SeQuantDebugLevel>=2,Print["in spintrace: after zeroing out spin-nonconserving integrals = ",TraditionalForm[result]];
+];
+
 (* now get rid of spin labels *)
 result = DeleteCases[result,_particleSpin,Infinity];
 
-(* extract internal indices only in preparation for canonicalization *)
-intInds = Sort[indexListOut[result,extInds]];
+If[ SeQuantDebugLevel>=2,Print["in spintrace: after dropping spin labels = ",TraditionalForm[result]];
+];
+
+(* re-canonicalization *)
 result=reindex[result,intInds];
 
 Return[result];
 ];
 
 
-(* ::Section:: *)
+(* ::Section::Closed:: *)
 (* canonical MO *)
 
 
