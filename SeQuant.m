@@ -2574,12 +2574,14 @@ Protect[MatchQ];
 (* Spin*)
 
 
-
-
-(* given an expression in spin-orbital basis, traces out spin quantum numbers; this assumes spin-restricted spin-orbitals and particle spin = 1/2.
-extIndGroups specifies lists of groups of internal indices which share spin quantum numbers is trace, e.g. extIndGroups={{p,q}} means that indices p and q will both be m_s = +1/2 or m_s = -1/2. *)
-spintrace[expr_Plus,extIndGroups_List]:= Sum[spintrace[expr[[i]],extIndGroups],{i,Length[expr]}];
-spintrace[expr_/;(Head[expr]=!=Plus),extIndGroups_List]:=Module[{extInds,intInds,intIndGroups,indGroups,result, mstuples,repls},
+(* given an expression in spin-orbital basis, traces out spin quantum numbers.
+This assumes spin-restricted spin-orbitals and particle spin = 1/2.
+Params:
+- extIndGroups specifies lists of groups of internal indices which share spin quantum numbers is trace,
+  e.g. extIndGroups={{p,q}} means that indices p and q will both be m_s = +1/2 or m_s = -1/2.
+- reindexIntInds -- if False, internal indices will not be relabeled. The default is True. *)
+spintrace[expr_Plus,extIndGroups_List,reindexIntInds_Symbol:True]:= Sum[spintrace[expr[[i]],extIndGroups,reindexIntInds],{i,Length[expr]}];
+spintrace[expr_/;(Head[expr]=!=Plus),extIndGroups_List,reindexIntInds_Symbol:True]:=Module[{extInds,intInds,intIndGroups,indGroups,result, mstuples,repls},
 Assert[Head[expr]=!=Plus];
 
 (* convert groups of external indices into a flat list of all external indices *)
@@ -2642,8 +2644,8 @@ result = DeleteCases[result,_particleSpin,Infinity];
 If[ SeQuantDebugLevel>=2,Print["in spintrace: after dropping spin labels = ",TraditionalForm[result]];
 ];
 
-(* re-canonicalization *)
-result=reindex[result,intInds];
+(* re-canonicalization, with optional reindexing of internal indices *)
+result=reindex[result,If[reindexIntInds,intInds,{}]];
 
 Return[result];
 ];
