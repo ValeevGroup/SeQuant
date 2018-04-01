@@ -2570,7 +2570,7 @@ listMatchQ[a_List,b_List] :=
 Protect[MatchQ];
 
 
-(* ::Section:: *)
+(* ::Section::Closed:: *)
 (* Spin*)
 
 
