@@ -2578,7 +2578,7 @@ Protect[MatchQ];
 
 (* given an expression in spin-orbital basis, traces out spin quantum numbers; this assumes spin-restricted spin-orbitals and particle spin = 1/2.
 extIndGroups specifies lists of groups of internal indices which share spin quantum numbers is trace, e.g. extIndGroups={{p,q}} means that indices p and q will both be m_s = +1/2 or m_s = -1/2. *)
-spintrace[expr_Plus,extIndGroups_List]:= Sum[spintrace[expr[[i]],extInds],{i,Length[expr]}];
+spintrace[expr_Plus,extIndGroups_List]:= Sum[spintrace[expr[[i]],extIndGroups],{i,Length[expr]}];
 spintrace[expr_/;(Head[expr]=!=Plus),extIndGroups_List]:=Module[{extInds,intInds,intIndGroups,indGroups,result, mstuples,repls},
 Assert[Head[expr]=!=Plus];
 
