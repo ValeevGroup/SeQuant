@@ -2570,8 +2570,8 @@ listMatchQ[a_List,b_List] :=
 Protect[MatchQ];
 
 
-(* ::Section::Closed:: *)
-(*spin*)
+(* ::Section:: *)
+(* Spin*)
 
 
 
@@ -2591,7 +2591,6 @@ intInds = Sort[indexListOut[expr,extInds]];
 (* combine internal indices with external index groups into a list of index group *)
 intIndGroups=Table[{intInds[[i]]},{i,Length[intInds]}];
 indGroups=Join[intIndGroups,extIndGroups];
-Print["indGroups=",indGroups//TraditionalForm];
 
 (* make tuple of m_s labels for each group of indices; A = +1/2, B = -1/2 *)
 mstuples=Tuples[{A,B},Length[indGroups]];
