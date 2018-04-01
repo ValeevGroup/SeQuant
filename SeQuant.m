@@ -26,6 +26,10 @@ Unprotect[defaultHamiltonianOpers];
 Unprotect[ignoreDisconnectedOpers];
 Unprotect[ignoreConnectedOpers];
 defaultHamiltonianOpers = {"F","g","\!\(\*OverscriptBox[\(g\), \(_\)]\)"};
+(* maps antisymmetric label to nonsymmetric, and vice versa *)
+antisymm2nonsymmSQMlabel[label_String]:=If[label=="\!\(\*OverscriptBox[\(g\), \(_\)]\)","g",label];
+nonsymm2antisymmSQMlabel[label_String]:=If[label=="g","\!\(\*OverscriptBox[\(g\), \(_\)]\)",label];
+
 ignoreDisconnectedOpers = {};
 ignoreConnectedOpers = {};
 Protect[ignoreConnectedOpers];
@@ -71,6 +75,10 @@ othervirtB=Append[othervirt,particleSpin[B]];
 allvirtB=Append[allvirt,particleSpin[B]];
 anyB = Append[any,particleSpin[B]];
 allanyB = Append[allany,particleSpin[B]];
+
+(* this converts spin tag into m_s *)
+Ms[particleSpin[A]]=1/2;
+Ms[particleSpin[B]]=-1/2;
 
 stringAppendSpin[str_,s_particleSpin]:=If[s===particleSpin[none],str, "\!\(\*SubscriptBox[\("<>str<>"\), \("<>If[s===particleSpin[A],"\[Alpha]","\[Beta]"]<>"\)]\)"];
 
@@ -2563,6 +2571,65 @@ Protect[MatchQ];
 
 
 (* ::Section::Closed:: *)
+(*spin*)
+
+
+
+
+(* given an expression in spin-orbital basis trace out spin quantum numbers; this assumes spin-restricted spin-orbitals and particle spin = 1/2 *)
+
+spintrace[expr_Plus,extInds_]:= Sum[spintrace[expr[[i]],extInds],{i,Length[expr]}];
+
+spintrace[expr_?(Head[#]!=Plus),extInds_]:=Module[{inds,intInds,result, mstuples,repls},
+Assert[Head[expr]!=Plus];
+(* extract all indices *)
+inds = Sort[indexListOut[expr,{}]];
+
+(* make tuple of m_s labels; A = +1/2, B = -1/2 *)
+mstuples=Tuples[{A,B},Length[inds]];
+result=0;
+
+(* trace out spins *)
+Do[ (* for every combination of spins *)
+(* make a list of index replacements to apply *)
+repls=
+Table[particleIndex[indexSymbol[inds[[i]]],particleSpace[space_],rest_]->particleIndex[indexSymbol[inds[[i]]],particleSpace[space,particleSpin[mstuples[[t,i]]]],rest],{i,Length[inds]}];
+(* Print["{t,i}=","{",t,",",i,"}, repls=",repls//TraditionalForm," expr/.repls=",TraditionalForm[expr/.repls]]; *)
+result+=expr/.repls
+,{t,Length[mstuples]}];
+
+(* convert to nonsymmetric n-body operators, e.g. Overscript[g, _] \[Rule] g *)
+(* 2-body *)
+result=result/.SQM[OHead[label_String,indexSymm[-1]],particleIndex[bra1__],particleIndex[bra2__],particleIndex[ket1__],particleIndex[ket2__]]->(SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[ket1],particleIndex[ket2]]-SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[ket2],particleIndex[ket1]]);
+(* 3-body *)
+result=result/.SQM[OHead[label_String,indexSymm[-1]],particleIndex[bra1__],particleIndex[bra2__],particleIndex[bra3__],particleIndex[ket1__],particleIndex[ket2__],particleIndex[ket3__]]->(SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket1],particleIndex[ket2],particleIndex[ket3]]-SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket2],particleIndex[ket1],particleIndex[ket3]]-SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket1],particleIndex[ket3],particleIndex[ket2]]-SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket3],particleIndex[ket2],particleIndex[ket1]]+SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket2],particleIndex[ket3],particleIndex[ket1]]+SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket3],particleIndex[ket1],particleIndex[ket2]]);
+result=Expand[result];
+
+(* zero out integrals that don't conserve spin quantum numbers *)
+(* 1-body *)
+result=result/.SQM[OHead[op__],particleIndex[bra1_String,particleSpace[bra1space_,bra1spin_],bra1rest_],particleIndex[ket1_String,particleSpace[ket1space_,ket1spin_],ket1rest_]]->If[Ms[bra1spin]==Ms[ket1spin],SQM[OHead[op],particleIndex[bra1,particleSpace[bra1space,bra1spin],bra1rest],particleIndex[ket1,particleSpace[ket1space,ket1spin],ket1rest]],0];
+(* 2-body *)
+result=result/.SQM[OHead[label_String,indexSymm[0]],particleIndex[bra1_String,particleSpace[bra1space_,bra1spin_],bra1rest_],particleIndex[bra2_String,particleSpace[bra2space_,bra2spin_],bra2rest_],particleIndex[ket1_String,particleSpace[ket1space_,ket1spin_],ket1rest_],particleIndex[ket2_String,particleSpace[ket2space_,ket2spin_],ket2rest_]]->If[Ms[bra1spin]==Ms[ket1spin]&&Ms[bra2spin]==Ms[ket2spin],SQM[OHead[label,indexSymm[0]],particleIndex[bra1,particleSpace[bra1space,bra1spin],bra1rest],particleIndex[bra2,particleSpace[bra2space,bra2spin],bra2rest],particleIndex[ket1,particleSpace[ket1space,ket1spin],ket1rest],particleIndex[ket2,particleSpace[ket2space,ket2spin],ket2rest]],0];
+(* 3-body *)
+result=result/.SQM[OHead[label_String,indexSymm[0]],particleIndex[bra1_String,particleSpace[bra1space_,bra1spin_],bra1rest_],particleIndex[bra2_String,particleSpace[bra2space_,bra2spin_],bra2rest_],
+particleIndex[bra3_String,particleSpace[bra3space_,bra3spin_],bra3rest_],particleIndex[ket1_String,particleSpace[ket1space_,ket1spin_],ket1rest_],particleIndex[ket2_String,particleSpace[ket2space_,ket2spin_],ket2rest_],
+particleIndex[ket3_String,particleSpace[ket3space_,ket3spin_],ket3rest_]]->If[Ms[bra1spin]==Ms[ket1spin]&&Ms[bra2spin]==Ms[ket2spin]&&Ms[bra3spin]==Ms[ket3spin],SQM[OHead[label,indexSymm[0]],particleIndex[bra1,particleSpace[bra1space,bra1spin],bra1rest],particleIndex[bra2,particleSpace[bra2space,bra2spin],bra2rest],
+particleIndex[bra3,particleSpace[bra3space,bra3spin],bra3rest],particleIndex[ket1,particleSpace[ket1space,ket1spin],ket1rest],particleIndex[ket2,particleSpace[ket2space,ket2spin],ket2rest],
+particleIndex[ket3,particleSpace[ket3space,ket3spin],ket3rest]],0];
+result=Expand[result];
+
+(* now get rid of spin labels *)
+result = DeleteCases[result,_particleSpin,Infinity];
+
+(* extract internal indices only in preparation for canonicalization *)
+intInds = Sort[indexListOut[result,extInds]];
+result=reindex[result,intInds];
+
+Return[result];
+];
+
+
+(* ::Section:: *)
 (* canonical MO *)
 
 
