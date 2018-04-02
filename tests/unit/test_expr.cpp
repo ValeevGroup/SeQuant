@@ -82,9 +82,7 @@ TEST_CASE("Expr", "[elements]") {
 
   using namespace sequant2;
 
-  SECTION("expr") {
-    REQUIRE_NOTHROW(std::make_shared<Dummy>());
-    const auto ex1 = std::make_shared<Dummy>();
+  SECTION("constructors") {
     REQUIRE_NOTHROW(std::make_shared<Constant>(2));
     const auto ex2 = std::make_shared<Constant>(2);
     REQUIRE_NOTHROW(std::make_shared<VecExpr<double>>());
@@ -96,12 +94,13 @@ TEST_CASE("Expr", "[elements]") {
     const auto ex5 =
         std::make_shared<VecExpr<std::shared_ptr<Constant>>>(std::initializer_list<std::shared_ptr<Constant>>{
             std::make_shared<Constant>(1.0), std::make_shared<Constant>(2.0), std::make_shared<Constant>(3.0)});
+    REQUIRE_NOTHROW(std::make_shared<Dummy>());
+    const auto ex1 = std::make_shared<Dummy>();
   }
 
   SECTION("comparison") {
 
     {
-      const auto ex0 = std::make_shared<Dummy>();
       const auto ex1 = std::make_shared<Constant>(1);
       const auto ex2 = std::make_shared<Constant>(2);
       const auto ex3 = std::make_shared<Constant>(1);
@@ -109,11 +108,13 @@ TEST_CASE("Expr", "[elements]") {
       const auto ex5 =
           std::make_shared<VecExpr<ExprPtr>>(ExprPtrList{
               std::make_shared<Constant>(1.0), std::make_shared<Constant>(2.0), std::make_shared<Constant>(3.0)});
+      const auto ex0 = std::make_shared<Dummy>();
 
-      REQUIRE(ex0->type_id() == 4);  // Dummy does not have a type_id
-      REQUIRE(ex1->type_id() == 5);  // Constant does
-      REQUIRE(ex4->type_id() == 6);  // so does VecExpr<double>
-      REQUIRE(ex5->type_id() == 7);  // so does VecExpr<ExprPtr>
+      // type ids get assigned in the order of use, which is program dependent, only check basic relations here
+      REQUIRE(ex0->type_id() == Expr::get_type_id<Dummy>());
+      REQUIRE(ex1->type_id() == Expr::get_type_id<Constant>());
+      REQUIRE(ex0->type_id() < ex1->type_id());  // Dummy::type_id called before Constant::type_id, see above
+      REQUIRE(ex4->type_id() < Expr::get_type_id<VecExpr<float>>());  // VecExpr<float> had not been used yet
 
       REQUIRE(*ex0 == *ex0);
       REQUIRE(*ex1 == *ex1);
@@ -239,7 +240,7 @@ TEST_CASE("Expr", "[elements]") {
       expand(ex);
       // TODO expand does not work correctly here ... no terms involving Constant(8) are produced
       //std::wcout << to_latex(ex) << std::endl;
-      //REQUIRE(to_latex(ex) == L"");
+      REQUIRE(to_latex(ex) == L"{ \\left({{{1.000000}}{{{5.000000}}{{6.000000}}}} + {{{1.000000}}{{{5.000000}}{{7.000000}}}} + {{{1.000000}}{{{5.000000}}{{8.000000}}}} + {{{{2.000000}}{{3.000000}}}{{{5.000000}}{{6.000000}}}} + {{{{2.000000}}{{3.000000}}}{{{5.000000}}{{7.000000}}}} + {{{{2.000000}}{{3.000000}}}{{{5.000000}}{{8.000000}}}} + {{{{2.000000}}{{-1.000000} \\times {{4.000000}}}}{{{5.000000}}{{6.000000}}}} + {{{{2.000000}}{{-1.000000} \\times {{4.000000}}}}{{{5.000000}}{{7.000000}}}} + {{{{2.000000}}{{-1.000000} \\times {{4.000000}}}}{{{5.000000}}{{8.000000}}}}\\right) }");
     }
   }
 
