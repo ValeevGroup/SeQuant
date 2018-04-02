@@ -23,7 +23,9 @@ add_library(SeQuant2
         src/SeQuant2/vector.hpp
         src/SeQuant2/meta.hpp
         src/SeQuant2/latex.hpp
-        src/SeQuant2/expr_algorithm.hpp)
+        src/SeQuant2/expr_algorithm.hpp
+        src/SeQuant2/wick.impl.hpp
+        src/SeQuant2/expr_operator.hpp)
 target_link_libraries(SeQuant2 Range-V3)
 
 enable_testing(true)

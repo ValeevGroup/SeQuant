@@ -232,6 +232,15 @@ TEST_CASE("Expr", "[elements]") {
       expand(ex);
       REQUIRE(to_latex(ex) == L"{ \\left({{{1.000000}}{{3.000000}}} + {{{1.000000}}{{4.000000}}} + {{{2.000000}}{{3.000000}}} + {{{2.000000}}{{4.000000}}}\\right) }");
     }
+    {
+      auto ex = (make<Constant>(1.0) + make<Constant>(2.0)*(make<Constant>(3.0) - make<Constant>(4.0)) ) * (make<Constant>(5.0)*(make<Constant>(6.0) + make<Constant>(7.0)) + make<Constant>(8.0));
+      //std::wcout << to_latex(ex) << std::endl;
+      REQUIRE(to_latex(ex) == L"{{ \\left({{1.000000}} + {{{2.000000}}{ \\left({{3.000000}} + {{-1.000000} \\times {{4.000000}}}\\right) }}\\right) }{ \\left({{{5.000000}}{ \\left({{6.000000}} + {{7.000000}}\\right) }} + {{8.000000}}\\right) }}");
+      expand(ex);
+      // TODO expand does not work correctly here ... no terms involving Constant(8) are produced
+      //std::wcout << to_latex(ex) << std::endl;
+      //REQUIRE(to_latex(ex) == L"");
+    }
   }
 
 }  // TEST_CASE("Expr"

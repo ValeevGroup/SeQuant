@@ -7,22 +7,6 @@
 
 namespace sequant2 {
 
-inline ExprPtr
-operator*(const ExprPtr& left, const ExprPtr& right) {
-  // naive version is to just make a Product
-  // TODO why is ExprPtrList needed?
-  auto result = std::make_shared<Product>(ExprPtrList{left,right});
-  return result;
-}
-
-inline ExprPtr
-operator+(const ExprPtr& left, const ExprPtr& right) {
-  // naive version is to just make a Sum
-  // TODO why is ExprPtrList needed?
-  auto result = std::make_shared<Sum>(ExprPtrList{left,right});
-  return result;
-}
-
 /// Recursively canonicalizes an Expr and replaces it as needed
 /// @param[in,out] expr expression to be canonicalized; will be replaced if canonicalization is impure
 inline void canonicalize(ExprPtr& expr) {
@@ -31,6 +15,12 @@ inline void canonicalize(ExprPtr& expr) {
     const auto constant_ptr = std::static_pointer_cast<Constant>(biproduct);
     expr = biproduct * expr;
   }
+}
+
+/// Simplifies an Expr by applying all known transformations (e.g. eliminating trivial math, CSE, etc.)
+/// @param[in,out] expr expression to be simplified
+inline void simplify(ExprPtr& expr) {
+  // not yet implemented
 }
 
 namespace detail {

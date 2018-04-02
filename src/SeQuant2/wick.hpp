@@ -42,6 +42,17 @@ class WickTheorem {
     spinfree_ = sf;
     return *this;
   }
+  /// Controls whether next call to compute() will reduce the result
+  /// By default compute() will not perform reduction.
+  /// @param r if true, compute() will reduce the result.
+  WickTheorem &reduce(bool r) {
+    reduce_ = r;
+    return *this;
+  }
+
+  /// Specifies the external indices; by default assume all indices are summed over
+  /// @param ext_inds external (nonsummed) indices
+  WickTheorem &set_external_indices(std::initializer_list<Index> external_indices) { external_indices_ = external_indices; return *this; }
 
   /// Computes and returns the result
   /// @param count_only if true, will return a vector of default-initialized values, useful if only interested in the total count
@@ -52,13 +63,20 @@ class WickTheorem {
       throw std::logic_error("WickTheorem::compute: full_contractions=false not yet supported");
     if (spinfree_)
       throw std::logic_error("WickTheorem::compute: spinfree=true not yet supported");
-    return compute_nontensor_wick(count_only);
+    auto result = compute_nontensor_wick(count_only);
+    if (reduce_ && !count_only) {
+      reduce(result);
+      canonicalize(result);
+    }
+    return std::move(result);
   }
 
  private:
   const NormalOperatorSequence<S> &input_;
   bool full_contractions_ = false;
   bool spinfree_ = false;
+  bool reduce_ = false;
+  container::vector<Index> external_indices_;
 
   /// carries state down the stack of recursive calls
   struct NontensorWickState {
@@ -213,6 +231,7 @@ class WickTheorem {
       const auto qpspace_left = qpannihilator_space<S>(left, vacuum);
       const auto qpspace_right = qpcreator_space<S>(right, vacuum);
       const auto qpspace_common = intersection(qpspace_left, qpspace_right);
+      //throw std::logic_error("not yet implemented");  // TODO need to be able to generate indices on the fly
       const auto index_common = Index{IndexSpace::base_key(qpspace_common) + L"_10000"};
       if (qpspace_common != left.index().space() && qpspace_common != right.index().space()) {  // may need 2 overlaps if neither space is pure qp creator/annihilator
         auto result = std::make_shared<Product>();
@@ -226,11 +245,17 @@ class WickTheorem {
     }
   }
 
+ public:  // TODO make these members private once WickTheorem can work on full expressions (not on sequences of normal operators) directly
+  /// @param[in,out] on input, Wick theorem result, on output the result of reducing the overlaps
+  void reduce(ExprPtr& expr) const;
+
 };
 
 using BWickTheorem = WickTheorem<Statistics::BoseEinstein>;
 using FWickTheorem = WickTheorem<Statistics::FermiDirac>;
 
-}
+}  // namespace sequant2
+
+#include "wick.impl.hpp"
 
 #endif //SEQUANT2_WICK_HPP

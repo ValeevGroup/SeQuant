@@ -73,7 +73,8 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
   /// Canonicalizes @c this and returns the biproduct of canonicalization (e.g. phase)
   /// @return the biproduct of canonicalization
   virtual std::shared_ptr<Expr> canonicalize() {
-    throw std::logic_error("Expr::canonicalize not implemented in this derived class");
+    //throw std::logic_error("Expr::canonicalize not implemented in this derived class");
+    return {};  // by default do nothing
   }
 
   /// recursively visit the tree, i.e. call visitor on each subexpression in depth-first fashion
@@ -513,6 +514,7 @@ inline std::wstring to_latex(const ExprPtr& exprptr) {
 
 };  // namespace sequant2
 
+#include "expr_operator.hpp"
 #include "expr_algorithm.hpp"
 
 #endif //SEQUANT2_EXPR_HPP
