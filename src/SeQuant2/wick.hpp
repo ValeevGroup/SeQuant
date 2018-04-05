@@ -225,14 +225,14 @@ class WickTheorem {
 
   static std::shared_ptr<Expr> contract(const Op<S>& left, const Op<S>& right, Vacuum vacuum = get_default_context().vacuum()) {
     assert(can_contract(left, right, vacuum));
+    assert(!left.index().has_proto_indices() && !right.index().has_proto_indices());  // I don't think the logic is correct for dependent indices
     if (is_pure_qpannihilator<S>(left, vacuum) && is_pure_qpcreator<S>(right, vacuum))
       return overlap(left.index(), right.index());
     else {
       const auto qpspace_left = qpannihilator_space<S>(left, vacuum);
       const auto qpspace_right = qpcreator_space<S>(right, vacuum);
       const auto qpspace_common = intersection(qpspace_left, qpspace_right);
-      //throw std::logic_error("not yet implemented");  // TODO need to be able to generate indices on the fly
-      const auto index_common = Index{IndexSpace::base_key(qpspace_common) + L"_10000"};
+      const auto index_common = Index::make_tmp_index(qpspace_common);
       if (qpspace_common != left.index().space() && qpspace_common != right.index().space()) {  // may need 2 overlaps if neither space is pure qp creator/annihilator
         auto result = std::make_shared<Product>();
         result->append(1, overlap(left.index(), index_common));

@@ -14,6 +14,9 @@ TEST_CASE("Index", "[elements]") {
   SECTION("constructors") {
     Index i{};
 
+    REQUIRE_NOTHROW(Index(std::wstring(L"i_") + std::to_wstring(Index::min_tmp_index())));
+    REQUIRE_THROWS(Index(std::wstring(L"i_") + std::to_wstring(Index::min_tmp_index()+1)));
+
     Index i1(L"i_1");
     REQUIRE(i1.label() == L"i_1");
     REQUIRE(i1.space() == IndexSpace::instance(IndexSpace::active_occupied));

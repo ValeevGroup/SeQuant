@@ -5,7 +5,11 @@
 #ifndef SEQUANT2_INDEX_H
 #define SEQUANT2_INDEX_H
 
+#include <atomic>
 #include <set>
+#include <string>
+
+#include <boost/optional.hpp>
 
 #include "space.hpp"
 #include "vector.hpp"
@@ -17,6 +21,8 @@ namespace sequant2 {
 /// between indices to be able to express
 ///       e.g. hierarchical partitioning of index spaces or hiearchical nesting
 ///       of spaces
+/// @note label has format "label_index" where "label" is a string of characters excluding '_', and "index"
+///       is an integer less than the value returned by min_tmp_label() .
 class Index {
  public:
   Index() = default;
@@ -33,12 +39,15 @@ class Index {
         std::initializer_list<Index> proto_indices)
       : label_(label), space_(&space), proto_indices_(proto_indices) {
     check_for_duplicate_proto_indices();
+    check_nontmp_label();
   }
 
   /// @param label the index label, does not need to be unique, but must be
   /// convertible into an IndexSpace (@sa IndexSpace::instance )
   explicit Index(std::wstring_view label)
-      : Index(label, IndexSpace::instance(label), {}) {}
+      : Index(label, IndexSpace::instance(label), {}) {
+    check_nontmp_label();
+  }
 
   /// @param label the label, does not need to be unique
   /// @param space (a const ref to) the IndexSpace object that specifies to this
@@ -47,7 +56,9 @@ class Index {
   /// responsibility to ensure that @c space will
   ///       outlive this object
   Index(std::wstring_view label, const IndexSpace &space) noexcept
-      : label_(label), space_(&space), proto_indices_() {}
+      : label_(label), space_(&space), proto_indices_() {
+    check_nontmp_label();
+  }
 
   /// @param label the label, does not need to be unique
   /// @param proto_index_labels labels of proto indices (all must be unique,
@@ -56,6 +67,7 @@ class Index {
         std::initializer_list<Index> proto_indices)
       : Index(label, IndexSpace::instance(label), proto_indices) {
     check_for_duplicate_proto_indices();
+    check_nontmp_label();
   }
 
   /// @param label the label, does not need to be unique
@@ -70,6 +82,11 @@ class Index {
         proto_indices_.push_back(Index(plabel));
     }
     check_for_duplicate_proto_indices();
+    check_nontmp_label();
+  }
+
+  static Index make_tmp_index(const IndexSpace& space) {
+    return Index(IndexSpace::base_key(space) + L'_' + std::to_wstring(Index::tmp_index()), &space);
   }
 
   /// @return the label
@@ -100,14 +117,46 @@ class Index {
     return result;
   }
 
+  /// @return the smallest index of a generated index
+  static constexpr std::size_t min_tmp_index() {
+    return 100;
+  }
+
+  /// @return a unique temporary index, its value is equal to or greater than that
+  static std::size_t tmp_index() {
+    std::atomic<std::size_t> index = min_tmp_index();
+    return ++index;
+  }
+
  private:
   std::wstring label_{};
   const IndexSpace *space_{};          // pointer to allow default initialization
   container::vector<Index> proto_indices_{}; // an unordered set of unique indices on
   // which this index depends on
 
+  Index(std::wstring_view label, const IndexSpace *space) : label_(label), space_(space) {}
+
   /// throws std::invalid_argument if have duplicates in proto_indices_
   inline void check_for_duplicate_proto_indices();
+
+  /// throws std::invalid_argument if label_ is in reserved
+  void check_nontmp_label() {
+    const auto index = label_index(label_);
+    if (index && index > min_tmp_index()) {
+      throw std::invalid_argument("Index ctor: label index must be less than the value returned by min_tmp_index()");
+    }
+  }
+
+  static boost::optional<std::size_t> label_index(std::wstring_view label) {
+    const auto underscore_position = label.find(L'_');
+    if (underscore_position != std::wstring::npos) {
+      assert(underscore_position+1 < label.size());  // check that there is at least one char past the underscore
+      return std::wcstol(label.substr(underscore_position+1, std::wstring::npos).data(), NULL, 10);
+    }
+    else
+      return {};
+  }
+
 };
 
 /// @return true if @c index1 is identical to @c index2 , i.e. they belong to
