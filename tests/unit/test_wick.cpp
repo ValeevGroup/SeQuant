@@ -146,6 +146,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       REQUIRE_NOTHROW(wick.full_contractions(true).spinfree(false).compute());
       auto result = wick.full_contractions(true).spinfree(false).compute();
       REQUIRE(result->size() == 2);  // 1 term = product of 2 terms
+      REQUIRE(to_latex(result) == L"{{{S^{{m_102}}_{{p_1}}}{S^{{p_4}}_{{m_102}}}}{{S^{{e_103}}_{{p_2}}}{S^{{p_3}}_{{e_103}}}}}");
     }
 
     // two (pure qp) 2-body operators

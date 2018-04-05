@@ -86,7 +86,7 @@ class Index {
   }
 
   static Index make_tmp_index(const IndexSpace& space) {
-    return Index(IndexSpace::base_key(space) + L'_' + std::to_wstring(Index::tmp_index()), &space);
+    return Index(IndexSpace::base_key(space) + L'_' + std::to_wstring(Index::next_tmp_index()), &space);
   }
 
   /// @return the label
@@ -123,9 +123,9 @@ class Index {
   }
 
   /// @return a unique temporary index, its value is equal to or greater than that
-  static std::size_t tmp_index() {
-    std::atomic<std::size_t> index = min_tmp_index();
-    return ++index;
+  static std::size_t next_tmp_index() {
+    static std::atomic<std::size_t> index = min_tmp_index();
+    return index++;
   }
 
  private:
