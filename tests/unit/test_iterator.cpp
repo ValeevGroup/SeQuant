@@ -4,7 +4,7 @@
 
 #include "catch.hpp"
 
-#include "../../src/SeQuant2/iterator.hpp"
+#include "../../src/SeQuant2/ranges.hpp"
 #include "../../src/SeQuant2/op.hpp"
 
 TEST_CASE("Iterators", "[elements]") {
@@ -12,8 +12,11 @@ TEST_CASE("Iterators", "[elements]") {
   using namespace sequant2;
 
   SECTION("constructor") {
-    REQUIRE_NOTHROW(flattened_rangenest<FNOperatorSeq>{});
-    auto rng0 = flattened_rangenest<FNOperatorSeq>{};
+
+    {
+      REQUIRE_NOTHROW(flattened_rangenest<FNOperatorSeq>{});
+      auto rng0 = flattened_rangenest<FNOperatorSeq>{};
+    }
 
     {
       auto opseq1 = FNOperatorSeq{{FNOperator({L"i_1", L"i_3"}, {L"i_2", L"i_4"}),

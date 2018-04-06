@@ -19,7 +19,7 @@ add_library(SeQuant2
         src/SeQuant2/tensor.hpp
         src/SeQuant2/expr.hpp
         src/SeQuant2/wick.hpp
-        src/SeQuant2/iterator.hpp
+        src/SeQuant2/ranges.hpp
         src/SeQuant2/vector.hpp
         src/SeQuant2/meta.hpp
         src/SeQuant2/latex.hpp

@@ -9,7 +9,7 @@
 
 #include "op.hpp"
 #include "tensor.hpp"
-#include "iterator.hpp"
+#include "ranges.hpp"
 
 namespace sequant2 {
 

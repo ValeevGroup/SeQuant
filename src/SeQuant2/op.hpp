@@ -13,7 +13,7 @@
 #include "index.hpp"
 #include "sequant.hpp"
 #include "vacuum.hpp"
-#include "iterator.hpp"
+#include "ranges.hpp"
 #include "vector.hpp"
 
 namespace sequant2 {
