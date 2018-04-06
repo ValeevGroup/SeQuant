@@ -28,7 +28,7 @@ TEST_CASE("Iterators", "[elements]") {
       REQUIRE_NOTHROW(begin(rng1));
       auto it1 = begin(rng1);
       for (auto i = 0; i != 6; ++i) {
-        REQUIRE(ranges::get_cursor(it1).index() == i);
+        REQUIRE(ranges::get_cursor(it1).ordinal() == i);
         switch (i) {
           case 0: {
             REQUIRE(*it1 == fcre(L"i_1"));
@@ -60,7 +60,7 @@ TEST_CASE("Iterators", "[elements]") {
       using std::end;
       REQUIRE_NOTHROW(end(rng1));
       REQUIRE(it1 == end(rng1));
-      REQUIRE(ranges::get_cursor(end(rng1)).index() == 6);
+      REQUIRE(ranges::get_cursor(end(rng1)).ordinal() == 6);
     }
 
     // flatten recursively
@@ -83,7 +83,7 @@ TEST_CASE("Iterators", "[elements]") {
       REQUIRE_NOTHROW(std::distance(begin(rng2), end(rng2)) == 10);
       auto it2 = begin(rng2);
       for (auto i = 0; i != 10; ++i) {
-        REQUIRE(ranges::get_cursor(it2).index() == i);
+        REQUIRE(ranges::get_cursor(it2).ordinal() == i);
         switch (i) {
           case 0: {
             REQUIRE(*it2 == fcre(L"i_1"));
@@ -129,7 +129,7 @@ TEST_CASE("Iterators", "[elements]") {
         REQUIRE_NOTHROW(++it2);
       }
       REQUIRE(it2 == end(rng2));
-      REQUIRE(ranges::get_cursor(end(rng2)).index() == 10);
+      REQUIRE(ranges::get_cursor(end(rng2)).ordinal() == 10);
     }
 
   }

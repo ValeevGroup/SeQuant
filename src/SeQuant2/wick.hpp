@@ -154,7 +154,7 @@ class WickTheorem {
             double phase = 1;
             if (statistics == Statistics::FermiDirac) {
               const auto
-                  distance = ranges::get_cursor(op_iter).index() - ranges::get_cursor(opseq_view_begin).index() - 1;
+                  distance = ranges::get_cursor(op_iter).ordinal() - ranges::get_cursor(opseq_view_begin).ordinal() - 1;
               if (distance % 2) {
                 phase *= -1;
               }
