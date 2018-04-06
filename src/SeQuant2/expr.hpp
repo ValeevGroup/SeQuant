@@ -59,6 +59,10 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
 
   virtual ~Expr() = default;
 
+  bool is_atom() const {
+    return ranges::empty(*this);
+  }
+
   /// @return the string representation of @c this
   virtual std::wstring to_latex() const {
     throw std::logic_error("Expr::to_latex not implemented in this derived class");
@@ -82,7 +86,7 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
   /// @param visitor the visitor object
   template <typename Visitor> void visit(Visitor& visitor) {
     for(auto& subexpr_ptr: expr()) {
-      if (!ranges::empty(*subexpr_ptr))  // if not a leaf, recur into it
+      if (!subexpr_ptr->is_atom())  // if not a leaf, recur into it
         subexpr_ptr->visit(visitor);
       visitor(subexpr_ptr);  // after done with expressions of this subexpression call on the subexpression itself
     }

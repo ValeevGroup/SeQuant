@@ -98,6 +98,21 @@ TEST_CASE("Expr", "[elements]") {
     const auto ex1 = std::make_shared<Dummy>();
   }
 
+  SECTION("accessors") {
+    {
+      const auto ex = std::make_shared<Constant>(2);
+      REQUIRE(ex->is_atom());
+    }
+    {
+      const auto ex = std::make_shared<VecExpr<double>>(std::initializer_list<double>{1.0, 2.0, 3.0});
+      REQUIRE(ex->is_atom());
+    }
+    {
+      const auto ex = make<Constant>(1) + make<Constant>(2);
+      REQUIRE(!ex->is_atom());
+    }
+  }
+
   SECTION("comparison") {
 
     {
@@ -113,7 +128,6 @@ TEST_CASE("Expr", "[elements]") {
       // type ids get assigned in the order of use, which is program dependent, only check basic relations here
       REQUIRE(ex0->type_id() == Expr::get_type_id<Dummy>());
       REQUIRE(ex1->type_id() == Expr::get_type_id<Constant>());
-      REQUIRE(ex0->type_id() < ex1->type_id());  // Dummy::type_id called before Constant::type_id, see above
       REQUIRE(ex4->type_id() < Expr::get_type_id<VecExpr<float>>());  // VecExpr<float> had not been used yet
 
       REQUIRE(*ex0 == *ex0);
