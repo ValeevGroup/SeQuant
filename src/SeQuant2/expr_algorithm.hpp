@@ -75,10 +75,10 @@ struct expand_visitor {
           for(std::size_t j=0; j != i; ++j)
             result->append(expr_ref[j]);
         }
-        // update the result with the expanded current subexpr, if needed
-        if (result && this_term_expanded)
-          result->append(expr_ref[i]);  // add to the result
-        if (debug) std::wcout << "in expand_sum: after expand_product(" << (this_term_expanded ? "true)" : "false)") << " expr = " << to_latex(expr) << std::endl;
+        // if expr != expanded result append current subexpr
+        if (result)
+          result->append(expr_ref[i]);
+        if (debug) std::wcout << "in expand_sum: after expand_product(" << (this_term_expanded ? "true)" : "false)") << " result = " << to_latex(result ? result : expr) << std::endl;
       }
     }
     if (result) { // if any summand was expanded, copy result into expr, else expr was unchanged, nothing to do
