@@ -112,8 +112,9 @@ inline void expand(ExprPtr& expr) {
   expander(expr);
 }
 
-/// @brief a depth-first view of a tree of Expr objects
+/// @brief a view of the leafs/atoms of an Expr tree
 /// @note this is just like view::join, but its iterator provides not only elements but also their indices as well as the host ranges.
+/// @note to traverse all nodes, not just the leafs, use Expr::visit @sa Expr::visit
 class expr_range
     : public ranges::view_facade<expr_range> {
  public:

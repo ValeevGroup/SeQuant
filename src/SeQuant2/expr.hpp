@@ -84,14 +84,27 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
   /// recursively visit the tree, i.e. call visitor on each subexpression in depth-first fashion
   /// @tparam Visitor a callable with (std::shared_ptr<Expr>&) or (const std::shared_ptr<Expr>&) signature
   /// @param visitor the visitor object
-  template <typename Visitor> void visit(Visitor& visitor) {
+  /// @param atoms_only if true, will visit only the leafs; the default is to visit all nodes
+  /// @return true if this object was visited
+  /// @sa expr_range
+  template <typename Visitor> bool visit(Visitor& visitor, const bool atoms_only = false) {
     for(auto& subexpr_ptr: expr()) {
-      if (!subexpr_ptr->is_atom())  // if not a leaf, recur into it
-        subexpr_ptr->visit(visitor);
-      visitor(subexpr_ptr);  // after done with expressions of this subexpression call on the subexpression itself
+      const auto subexpr_is_an_atom = subexpr_ptr->is_atom();
+      const auto need_to_visit_subexpr = !atoms_only || subexpr_is_an_atom;
+      bool visited = false;
+      if (!subexpr_is_an_atom)  // if not a leaf, recur into it
+        visited = subexpr_ptr->visit(visitor);
+      // call on the subexpression itself, if not yet done so
+      if (need_to_visit_subexpr && !visited)
+        visitor(subexpr_ptr);
     }
-    if constexpr(boost::callable_traits::is_invocable_r<void,Visitor,const std::shared_ptr<Expr>&>::value)
+    // can only visit itself here if visitor(const ExprPtr&) is valid
+    bool this_visited = false;
+    if constexpr(boost::callable_traits::is_invocable_r<void,Visitor,const std::shared_ptr<Expr>&>::value) {
       visitor(shared_from_this());
+      this_visited = true;
+    }
+    return this_visited;
   }
 
   auto begin_subexpr() {
