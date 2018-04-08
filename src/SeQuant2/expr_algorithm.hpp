@@ -178,7 +178,7 @@ class expr_range
     cursor(ExprPtr& top, ranges::default_sentinel)
         : top_(&top) {}
 
-    const auto &read() const {
+    ExprPtr& read() const {
       assert(ordinal_ != -1);
       return *element_ptr_;
     }
