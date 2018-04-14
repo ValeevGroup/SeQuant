@@ -506,7 +506,7 @@ convertExp[expr_] :=
 (* these functions display particleIndex in string *)
 
 visualizeIndex[a_particleIndex] :=
-	stringAppendSpin[a[[1]],indexSpin[a]];
+	stringAppendSpin[ToString[a[[1]]],indexSpin[a]];
 
 Format[particleIndex[a__],TraditionalForm] :=
     visualizeIndex[particleIndex[a]];
