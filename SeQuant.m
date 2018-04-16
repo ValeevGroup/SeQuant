@@ -2473,7 +2473,7 @@ tagSQMInList[icurr_,SQMs_List,Tags_List,IIndices_List] :=
 
 
 (* ::Section::Closed:: *)
-(* matching SQ *)
+(* Matching SQ *)
 
 
 (*
@@ -2652,7 +2652,7 @@ Return[result];
 
 
 (* ::Section::Closed:: *)
-(* canonical MO *)
+(* Canonical MO *)
 
 
 (*
@@ -2759,3 +2759,84 @@ EndPackage[]
 
 
 
+
+
+(* ::Section:: *)
+(* Misc*)
+
+
+(* ::Subsection:: *)
+(*Instantiates occupied indices with values*)
+
+
+equalIndexValues[bras__String]:=False;
+equalIndexValues[brafront__String,bra_Integer,braback__String]:=False;
+equalIndexValues[bras__String,bra_Integer]:=False;
+equalIndexValues[bra_Integer,bras__String]:=False;
+equalIndexValues[bra1_Integer,bra2_Integer]:=bra1==bra2;
+equalIndexValues[bra1_Integer,bra2_Integer,bra3_Integer]:=bra1==bra2||bra1==bra3||bra2==bra3;
+
+(* given an expression in spin-orbital basis, instantiates occupied spin-orbital indices with values 1 ... nocc.
+Params:
+- nocc: number of occupied spin-orbital states
+- extInds: external indices
+- reindexIntInds -- if False, internal indices will not be relabeled. The default is True. *)
+instantiateOccIndices[expr_Plus,nocc_Integer,extInds_List,reindexIntInds_Symbol:True]:= Sum[instantiateOccIndices[expr[[i]],nocc,extInds,reindexIntInds],{i,Length[expr]}];
+instantiateOccIndices[expr_/;(Head[expr]=!=Plus),nocc_Integer,extInds_List,reindexIntInds_Symbol:True]:=Module[{intInds, occIntInds, occExtInds,occInds,result, occidxtuples,extoccidxtuples, intoccidxtuples,repls},
+
+Assert[Head[expr]=!=Plus]; 
+
+(* extract internal indices *)
+intInds = Sort[indexListOut[expr,extInds]];
+
+(* extract occupied internal indices *)
+occIntInds=Select[intInds,indexSpace[#]==particleSpace[occupied]&];
+occIntInds=Sort[occIntInds];
+
+(* extract occupied external indices *)
+occExtInds=Select[extInds,indexSpace[#]==particleSpace[occupied]&];
+occExtInds=Sort[occExtInds];
+
+(* we assign all possible combinations of values in 1..n range to the internal indices, external indices are assigned values in [1,n] in canonical order *)
+
+(* make tuples of occupied external indices *)
+extoccidxtuples=Subsets[Range[nocc],{Length[occExtInds]}];
+
+(* make tuple of spinorbital indices for each occupied internal index *)
+intoccidxtuples=Tuples[Range[nocc],Length[occIntInds]];
+
+(* grand list of occupied indices has externals before internals, update the tuples with the corresponding values *)
+occInds=Join[occExtInds,occIntInds];
+occidxtuples=Flatten[Outer[Join,extoccidxtuples,intoccidxtuples,1],1];
+
+result=0;
+
+(* replace occupied index labels with index values *)
+Do[ (* for every combination of occupied index values *)
+
+(* make a list of index replacements to apply (groupings are omitted) *)
+repls=
+Table[particleIndex[indexSymbol[occInds[[i]]],rest__]->particleIndex[occidxtuples[[t,i]],rest],{i,Length[occInds]}];
+repls=Flatten[repls];
+If[ SeQuantDebugLevel>=3,Print["in instantiateOccIndices: t=",t," repls=",repls//TraditionalForm," expr/.repls=",TraditionalForm[expr/.repls]];
+];
+result+=expr/.repls
+,{t,Length[occidxtuples]}
+];
+
+If[ SeQuantDebugLevel>=2,Print["in instantiateOccIndices: after assigning values to occupied indices = ",TraditionalForm[result]];
+];
+
+(* zero out integrals that violate Pauli principle *)
+(* 2-body *)result=result/.SQM[OHead[label_String,indexSymm[-1]],particleIndex[bra1_,bra1rest__],particleIndex[bra2_,bra2rest__],particleIndex[ket1_,ket1rest__],particleIndex[ket2_,ket2rest__]]->If[!equalIndexValues[bra1,bra2]&&!equalIndexValues[ket1,ket2],SQM[OHead[label,indexSymm[-1]],particleIndex[bra1,bra1rest],particleIndex[bra2,bra2rest],particleIndex[ket1,ket1rest],particleIndex[ket2,ket2rest]],0];
+(* 3-body *)result=result/.SQM[OHead[label_String,indexSymm[-1]],particleIndex[bra1_,bra1rest__],particleIndex[bra2_,bra2rest__],particleIndex[bra3_,bra3rest__],particleIndex[ket1_,ket1rest__],particleIndex[ket2_,ket2rest__],particleIndex[ket3_,ket3rest__]]->If[!equalIndexValues[bra1,bra2,bra3]&&!equalIndexValues[ket1,ket2,ket3],SQM[OHead[label,indexSymm[-1]],particleIndex[bra1,bra1rest],particleIndex[bra2,bra2rest],particleIndex[bra3,bra3rest],particleIndex[ket1,ket1rest],particleIndex[ket2,ket2rest],particleIndex[ket3,ket3rest]],0];
+
+result=Expand[result];
+
+If[ SeQuantDebugLevel>=2,Print["in instantiateOccIndices: after zeroing out Pauli-violating SQMs = ",TraditionalForm[result]];
+];
+
+(* re-canonicalization, with optional reindexing of internal indices *)result=reindex[result,If[reindexIntInds,intInds,{}]];
+
+Return[result];
+];
