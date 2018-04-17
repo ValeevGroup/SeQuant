@@ -2761,11 +2761,11 @@ EndPackage[]
 
 
 
-(* ::Section:: *)
+(* ::Section::Closed:: *)
 (* Misc*)
 
 
-(* ::Subsection:: *)
+(* ::Subsection::Closed:: *)
 (*Instantiates occupied indices with values*)
 
 
@@ -2776,38 +2776,44 @@ equalIndexValues[bra_Integer,bras__String]:=False;
 equalIndexValues[bra1_Integer,bra2_Integer]:=bra1==bra2;
 equalIndexValues[bra1_Integer,bra2_Integer,bra3_Integer]:=bra1==bra2||bra1==bra3||bra2==bra3;
 
-(* given an expression in spin-orbital basis, instantiates occupied spin-orbital indices with values 1 ... nocc.
+(* given an expression in spin-orbital basis, instantiates
+spin-orbital indices that belong to space S, i.e. their labels get replaced with
+with values [off,off+n).
+
 Params:
-- nocc: number of occupied spin-orbital states
+- S: the orbital space whose indices will be instantiated
+- n: extent of the range of index values
+- off: start of the range of index values
 - extInds: external indices
 - reindexIntInds -- if False, internal indices will not be relabeled. The default is True. *)
-instantiateOccIndices[expr_Plus,nocc_Integer,extInds_List,reindexIntInds_Symbol:True]:= Sum[instantiateOccIndices[expr[[i]],nocc,extInds,reindexIntInds],{i,Length[expr]}];
-instantiateOccIndices[expr_/;(Head[expr]=!=Plus),nocc_Integer,extInds_List,reindexIntInds_Symbol:True]:=Module[{intInds, occIntInds, occExtInds,occInds,result, occidxtuples,extoccidxtuples, intoccidxtuples,repls},
+instantiateIndices[expr_Plus,S_particleSpace,n_Integer,off_Integer,extInds_List,reindexIntInds_Symbol:True]:= Sum[instantiateIndices[expr[[i]],S,n,off,extInds,reindexIntInds],{i,Length[expr]}];
+instantiateIndices[expr_/;(Head[expr]=!=Plus),S_particleSpace,n_Integer,off_Integer,extInds_List,reindexIntInds_Symbol:True]:=Module[{intInds, intSInds, extSInds,SInds,result, idxtuples,extidxtuples, intidxtuples,repls},
 
 Assert[Head[expr]=!=Plus]; 
+Assert[n!=0];
 
-(* extract internal indices *)
+(* extract all internal indices *)
 intInds = Sort[indexListOut[expr,extInds]];
 
-(* extract occupied internal indices *)
-occIntInds=Select[intInds,indexSpace[#]==particleSpace[occupied]&];
-occIntInds=Sort[occIntInds];
+(* extract internal indices in space S *)
+intSInds=Select[intInds,indexSpace[#]==S&];
+intSInds=Sort[intSInds];
 
-(* extract occupied external indices *)
-occExtInds=Select[extInds,indexSpace[#]==particleSpace[occupied]&];
-occExtInds=Sort[occExtInds];
+(* extract external indices in space S *)
+extSInds=Select[extInds,indexSpace[#]==S&];
+extSInds=Sort[extSInds];
 
 (* we assign all possible combinations of values in 1..n range to the internal indices, external indices are assigned values in [1,n] in canonical order *)
 
-(* make tuples of occupied external indices *)
-extoccidxtuples=Subsets[Range[nocc],{Length[occExtInds]}];
+(* make tuples of index values for each external index *)
+extidxtuples=Subsets[Range[off,off+n-1],{Length[extSInds]}];
 
-(* make tuple of spinorbital indices for each occupied internal index *)
-intoccidxtuples=Tuples[Range[nocc],Length[occIntInds]];
+(* make tuple of index values for each internal index *)
+intidxtuples=Tuples[Range[off,off+n-1],Length[intSInds]];
 
 (* grand list of occupied indices has externals before internals, update the tuples with the corresponding values *)
-occInds=Join[occExtInds,occIntInds];
-occidxtuples=Flatten[Outer[Join,extoccidxtuples,intoccidxtuples,1],1];
+SInds=Join[extSInds,intSInds];
+idxtuples=Flatten[Outer[Join,extidxtuples,intidxtuples,1],1];
 
 result=0;
 
@@ -2816,15 +2822,15 @@ Do[ (* for every combination of occupied index values *)
 
 (* make a list of index replacements to apply (groupings are omitted) *)
 repls=
-Table[particleIndex[indexSymbol[occInds[[i]]],rest__]->particleIndex[occidxtuples[[t,i]],rest],{i,Length[occInds]}];
+Table[particleIndex[indexSymbol[SInds[[i]]],rest__]->particleIndex[idxtuples[[t,i]],rest],{i,Length[SInds]}];
 repls=Flatten[repls];
-If[ SeQuantDebugLevel>=3,Print["in instantiateOccIndices: t=",t," repls=",repls//TraditionalForm," expr/.repls=",TraditionalForm[expr/.repls]];
+If[ SeQuantDebugLevel>=3,Print["in instantiateIndices: t=",t," repls=",repls//TraditionalForm," expr/.repls=",TraditionalForm[expr/.repls]];
 ];
 result+=expr/.repls
-,{t,Length[occidxtuples]}
+,{t,Length[idxtuples]}
 ];
 
-If[ SeQuantDebugLevel>=2,Print["in instantiateOccIndices: after assigning values to occupied indices = ",TraditionalForm[result]];
+If[ SeQuantDebugLevel>=2,Print["in instantiateIndices: after assigning values to indices in space ", S, " = ",TraditionalForm[result]];
 ];
 
 (* zero out integrals that violate Pauli principle *)
@@ -2833,10 +2839,16 @@ If[ SeQuantDebugLevel>=2,Print["in instantiateOccIndices: after assigning values
 
 result=Expand[result];
 
-If[ SeQuantDebugLevel>=2,Print["in instantiateOccIndices: after zeroing out Pauli-violating SQMs = ",TraditionalForm[result]];
+If[ SeQuantDebugLevel>=2,Print["in instantiateIndices: after zeroing out Pauli-violating SQMs = ",TraditionalForm[result]];
 ];
 
-(* re-canonicalization, with optional reindexing of internal indices *)result=reindex[result,If[reindexIntInds,intInds,{}]];
+(* re-canonicalization, with optional reindexing of internal indices *)
+result=reindex[result,If[reindexIntInds,intInds,{}]];
 
 Return[result];
 ];
+
+(* shortcuts *)
+instantiateOccIndices[expr_,n_Integer,extInds_List,reindexIntInds_Symbol:True]:= instantiateIndices[expr,occ,n,1,extInds,reindexIntInds];
+instantiateVirtIndices[expr_,n_Integer,nocc_Integer,extInds_List,reindexIntInds_Symbol:True]:= instantiateIndices[expr,virt,n,nocc+1,extInds,reindexIntInds];
+
