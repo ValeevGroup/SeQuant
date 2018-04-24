@@ -521,10 +521,13 @@ visualizeSQE[a_^n_Integer] :=
     visualizeSQE[a]^n;
 visualizeSQE[a_+b_] :=
     visualizeSQE[a]+visualizeSQE[b];
-visualizeSQE[a_/;(Head[a]=!=SQS&&Head[a]=!=deltaIndex&&Head[a]=!=SQM&&Head[a]=!=mSQS)] :=
+visualizeSQE[a_/;(Head[a]=!=SQS&&Head[a]=!=deltaIndex&&Head[a]=!=rhoIndex&&Head[a]=!=SQM&&Head[a]=!=mSQS)] :=
     a;
 visualizeSQE[a_deltaIndex] :=
     Subsuperscript["\[Delta]",visualizeIndex[a[[1]]],visualizeIndex[a[[2]]]];
+    (* rho^p_q = 1 - delta^p_q, i.e. a complement to the Kronecker delta (obtained by reflection) *)
+visualizeSQE[a_rhoIndex] :=
+    Subsuperscript["\[Rho]",visualizeIndex[a[[1]]],visualizeIndex[a[[2]]]];
 
 (* converts a list indices into a pair of merged index labels,
    all creators are in superscript and all annihilators in subscript *)
@@ -587,6 +590,8 @@ visualizeSQE[a_SQM] :=
 
 Format[deltaIndex[a__],TraditionalForm] :=
     visualizeSQE[deltaIndex[a]];
+Format[rhoIndex[a__],TraditionalForm] :=
+    visualizeSQE[rhoIndex[a]];
 Format[SQM[a__],TraditionalForm] :=
     visualizeSQE[SQM[a]];
 Format[SQS[a__],TraditionalForm] :=
@@ -2579,9 +2584,10 @@ This assumes spin-restricted spin-orbitals and particle spin = 1/2.
 Params:
 - extIndGroups specifies lists of groups of internal indices which share spin quantum numbers is trace,
   e.g. extIndGroups={{p,q}} means that indices p and q will both be m_s = +1/2 or m_s = -1/2.
-- reindexIntInds -- if False, internal indices will not be relabeled. The default is True. *)
-spintrace[expr_Plus,extIndGroups_List,reindexIntInds_Symbol:True]:= Sum[spintrace[expr[[i]],extIndGroups,reindexIntInds],{i,Length[expr]}];
-spintrace[expr_/;(Head[expr]=!=Plus),extIndGroups_List,reindexIntInds_Symbol:True]:=Module[{extInds,intInds,intIndGroups,indGroups,result, mstuples,repls},
+- reindexIntInds -- if False, internal indices will not be relabeled. The default is True.
+- explicitEVP -- If True, will avoid exclusion-principle violating contributions explicitly; this is needed when e.g. separating direct and exchange contributions. The default is False. *)
+spintrace[expr_Plus,extIndGroups_List,reindexIntInds_Symbol:True,explicitEVP_Symbol:False]:= Sum[spintrace[expr[[i]],extIndGroups,reindexIntInds,explicitEVP],{i,Length[expr]}];
+spintrace[expr_/;(Head[expr]=!=Plus),extIndGroups_List,reindexIntInds_Symbol:True,explicitEVP_Symbol:False]:=Module[{extInds,intInds,intIndGroups,indGroups,result, mstuples,repls},
 Assert[Head[expr]=!=Plus];
 
 (* convert groups of external indices into a flat list of all external indices *)
@@ -2615,9 +2621,11 @@ If[ SeQuantDebugLevel>=2,Print["in spintrace: after adding spin quantum numbers 
 
 (* convert to nonsymmetric n-body operators, e.g. Overscript[g, _] \[Rule] g *)
 (* 2-body *)
-result=result/.SQM[OHead[label_String,indexSymm[-1]],particleIndex[bra1__],particleIndex[bra2__],particleIndex[ket1__],particleIndex[ket2__]]->(SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[ket1],particleIndex[ket2]]-SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[ket2],particleIndex[ket1]]);
+result=result/.SQM[OHead[label_String,indexSymm[-1]],particleIndex[bra1__],particleIndex[bra2__],particleIndex[ket1__],particleIndex[ket2__]]->rhoIndex[particleIndex[bra1],particleIndex[bra2]]*rhoIndex[particleIndex[ket1],particleIndex[ket2]]*(SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[ket1],particleIndex[ket2]]-SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[ket2],particleIndex[ket1]]);
 (* 3-body *)
-result=result/.SQM[OHead[label_String,indexSymm[-1]],particleIndex[bra1__],particleIndex[bra2__],particleIndex[bra3__],particleIndex[ket1__],particleIndex[ket2__],particleIndex[ket3__]]->(SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket1],particleIndex[ket2],particleIndex[ket3]]-SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket2],particleIndex[ket1],particleIndex[ket3]]-SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket1],particleIndex[ket3],particleIndex[ket2]]-SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket3],particleIndex[ket2],particleIndex[ket1]]+SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket2],particleIndex[ket3],particleIndex[ket1]]+SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket3],particleIndex[ket1],particleIndex[ket2]]);
+result=result/.SQM[OHead[label_String,indexSymm[-1]],particleIndex[bra1__],particleIndex[bra2__],particleIndex[bra3__],particleIndex[ket1__],particleIndex[ket2__],particleIndex[ket3__]]->rhoIndex[particleIndex[bra1],particleIndex[bra2]]*rhoIndex[particleIndex[bra1],particleIndex[bra3]]*rhoIndex[particleIndex[bra2],particleIndex[bra3]]*rhoIndex[particleIndex[ket1],particleIndex[ket2]]**rhoIndex[particleIndex[ket1],particleIndex[ket3]]**rhoIndex[particleIndex[ket2],particleIndex[ket3]](SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket1],particleIndex[ket2],particleIndex[ket3]]-SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket2],particleIndex[ket1],particleIndex[ket3]]-SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket1],particleIndex[ket3],particleIndex[ket2]]-SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket3],particleIndex[ket2],particleIndex[ket1]]+SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket2],particleIndex[ket3],particleIndex[ket1]]+SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket3],particleIndex[ket1],particleIndex[ket2]]);
+(* eliminate rho's if EVP termswill be avoided implcitly, but summing multiple terms *)
+result=If[explicitEVP,result,result/.rhoIndex[__]->1];
 result=Expand[result];
 If[ SeQuantDebugLevel>=2,Print["in spintrace: after expanding antisymmetric operators = ",TraditionalForm[result]];
 ];
@@ -2625,6 +2633,7 @@ If[ SeQuantDebugLevel>=2,Print["in spintrace: after expanding antisymmetric oper
 (* zero out integrals that don't conserve spin quantum numbers *)
 (* 1-body *)
 result=result/.SQM[OHead[op__],particleIndex[bra1_String,particleSpace[bra1space_,bra1spin_],bra1rest_],particleIndex[ket1_String,particleSpace[ket1space_,ket1spin_],ket1rest_]]->If[Ms[bra1spin]==Ms[ket1spin],SQM[OHead[op],particleIndex[bra1,particleSpace[bra1space,bra1spin],bra1rest],particleIndex[ket1,particleSpace[ket1space,ket1spin],ket1rest]],0];
+result=result/.rhoIndex[particleIndex[bra1_String,particleSpace[bra1space_,bra1spin_],bra1rest_],particleIndex[ket1_String,particleSpace[ket1space_,ket1spin_],ket1rest_]]->If[Ms[bra1spin]==Ms[ket1spin],rhoIndex[particleIndex[bra1,particleSpace[bra1space,bra1spin],bra1rest],particleIndex[ket1,particleSpace[ket1space,ket1spin],ket1rest]],1];
 (* 2-body *)
 result=result/.SQM[OHead[label_String,indexSymm[0]],particleIndex[bra1_String,particleSpace[bra1space_,bra1spin_],bra1rest_],particleIndex[bra2_String,particleSpace[bra2space_,bra2spin_],bra2rest_],particleIndex[ket1_String,particleSpace[ket1space_,ket1spin_],ket1rest_],particleIndex[ket2_String,particleSpace[ket2space_,ket2spin_],ket2rest_]]->If[Ms[bra1spin]==Ms[ket1spin]&&Ms[bra2spin]==Ms[ket2spin],SQM[OHead[label,indexSymm[0]],particleIndex[bra1,particleSpace[bra1space,bra1spin],bra1rest],particleIndex[bra2,particleSpace[bra2space,bra2spin],bra2rest],particleIndex[ket1,particleSpace[ket1space,ket1spin],ket1rest],particleIndex[ket2,particleSpace[ket2space,ket2spin],ket2rest]],0];
 (* 3-body *)
