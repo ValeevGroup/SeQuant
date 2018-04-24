@@ -2794,9 +2794,11 @@ Params:
 - n: extent of the range of index values
 - off: start of the range of index values
 - extInds: external indices
-- reindexIntInds -- if False, internal indices will not be relabeled. The default is True. *)
-instantiateIndices[expr_Plus,S_particleSpace,n_Integer,off_Integer,extInds_List,reindexIntInds_Symbol:True]:= Sum[instantiateIndices[expr[[i]],S,n,off,extInds,reindexIntInds],{i,Length[expr]}];
-instantiateIndices[expr_/;(Head[expr]=!=Plus),S_particleSpace,n_Integer,off_Integer,extInds_List,reindexIntInds_Symbol:True]:=Module[{intInds, intSInds, extSInds,SInds,result, idxtuples,extidxtuples, intidxtuples,repls},
+- reindexIntInds -- if False, internal indices will not be relabeled. The default is True.
+- spinOrbital -- If True, external indices in S will be assigned distinct values. The default is True.
+*)
+instantiateIndices[expr_Plus,S_particleSpace,n_Integer,off_Integer,extInds_List,reindexIntInds_Symbol:True,spinOrbital_Symbol:True]:= Sum[instantiateIndices[expr[[i]],S,n,off,extInds,reindexIntInds,spinOrbital],{i,Length[expr]}];
+instantiateIndices[expr_/;(Head[expr]=!=Plus),S_particleSpace,n_Integer,off_Integer,extInds_List,reindexIntInds_Symbol:True,spinOrbital_Symbol:True]:=Module[{intInds, intSInds, extSInds,SInds,result, idxtuples,extidxtuples, intidxtuples,repls},
 
 Assert[Head[expr]=!=Plus]; 
 Assert[n!=0];
@@ -2815,7 +2817,7 @@ extSInds=Sort[extSInds];
 (* we assign all possible combinations of values in 1..n range to the internal indices, external indices are assigned values in [1,n] in canonical order *)
 
 (* make tuples of index values for each external index *)
-extidxtuples=Subsets[Range[off,off+n-1],{Length[extSInds]}];
+extidxtuples=If[spinOrbital,Subsets[Range[off,off+n-1],{Length[extSInds]}],Tuples[Range[off,off+n-1],Length[extSInds]]];
 
 (* make tuple of index values for each internal index *)
 intidxtuples=Tuples[Range[off,off+n-1],Length[intSInds]];
@@ -2858,6 +2860,6 @@ Return[result];
 ];
 
 (* shortcuts *)
-instantiateOccIndices[expr_,n_Integer,extInds_List,reindexIntInds_Symbol:True]:= instantiateIndices[expr,occ,n,1,extInds,reindexIntInds];
-instantiateVirtIndices[expr_,n_Integer,nocc_Integer,extInds_List,reindexIntInds_Symbol:True]:= instantiateIndices[expr,virt,n,nocc+1,extInds,reindexIntInds];
+instantiateOccIndices[expr_,n_Integer,extInds_List,reindexIntInds_Symbol:True,spinOrbital_Symbol:True]:= instantiateIndices[expr,occ,n,1,extInds,reindexIntInds,spinOrbital];
+instantiateVirtIndices[expr_,n_Integer,nocc_Integer,extInds_List,reindexIntInds_Symbol:True,spinOrbital_Symbol:True]:= instantiateIndices[expr,virt,n,nocc+1,extInds,reindexIntInds,spinOrbital];
 
