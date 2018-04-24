@@ -2585,9 +2585,9 @@ Params:
 - extIndGroups specifies lists of groups of internal indices which share spin quantum numbers is trace,
   e.g. extIndGroups={{p,q}} means that indices p and q will both be m_s = +1/2 or m_s = -1/2.
 - reindexIntInds -- if False, internal indices will not be relabeled. The default is True.
-- explicitEVP -- If True, will avoid exclusion-principle violating contributions explicitly; this is needed when e.g. separating direct and exchange contributions. The default is False. *)
-spintrace[expr_Plus,extIndGroups_List,reindexIntInds_Symbol:True,explicitEVP_Symbol:False]:= Sum[spintrace[expr[[i]],extIndGroups,reindexIntInds,explicitEVP],{i,Length[expr]}];
-spintrace[expr_/;(Head[expr]=!=Plus),extIndGroups_List,reindexIntInds_Symbol:True,explicitEVP_Symbol:False]:=Module[{extInds,intInds,intIndGroups,indGroups,result, mstuples,repls},
+- explicitEPV -- If True, will avoid exclusion-principle violating contributions explicitly; this is needed when e.g. separating direct and exchange contributions. The default is False. *)
+spintrace[expr_Plus,extIndGroups_List,reindexIntInds_Symbol:True,explicitEPV_Symbol:False]:= Sum[spintrace[expr[[i]],extIndGroups,reindexIntInds,explicitEPV],{i,Length[expr]}];
+spintrace[expr_/;(Head[expr]=!=Plus),extIndGroups_List,reindexIntInds_Symbol:True,explicitEPV_Symbol:False]:=Module[{extInds,intInds,intIndGroups,indGroups,result, mstuples,repls},
 Assert[Head[expr]=!=Plus];
 
 (* convert groups of external indices into a flat list of all external indices *)
@@ -2624,8 +2624,8 @@ If[ SeQuantDebugLevel>=2,Print["in spintrace: after adding spin quantum numbers 
 result=result/.SQM[OHead[label_String,indexSymm[-1]],particleIndex[bra1__],particleIndex[bra2__],particleIndex[ket1__],particleIndex[ket2__]]->rhoIndex[particleIndex[bra1],particleIndex[bra2]]*rhoIndex[particleIndex[ket1],particleIndex[ket2]]*(SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[ket1],particleIndex[ket2]]-SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[ket2],particleIndex[ket1]]);
 (* 3-body *)
 result=result/.SQM[OHead[label_String,indexSymm[-1]],particleIndex[bra1__],particleIndex[bra2__],particleIndex[bra3__],particleIndex[ket1__],particleIndex[ket2__],particleIndex[ket3__]]->rhoIndex[particleIndex[bra1],particleIndex[bra2]]*rhoIndex[particleIndex[bra1],particleIndex[bra3]]*rhoIndex[particleIndex[bra2],particleIndex[bra3]]*rhoIndex[particleIndex[ket1],particleIndex[ket2]]**rhoIndex[particleIndex[ket1],particleIndex[ket3]]**rhoIndex[particleIndex[ket2],particleIndex[ket3]](SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket1],particleIndex[ket2],particleIndex[ket3]]-SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket2],particleIndex[ket1],particleIndex[ket3]]-SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket1],particleIndex[ket3],particleIndex[ket2]]-SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket3],particleIndex[ket2],particleIndex[ket1]]+SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket2],particleIndex[ket3],particleIndex[ket1]]+SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket3],particleIndex[ket1],particleIndex[ket2]]);
-(* eliminate rho's if EVP termswill be avoided implcitly, but summing multiple terms *)
-result=If[explicitEVP,result,result/.rhoIndex[__]->1];
+(* eliminate rho's if EPV terms will be avoided implcitly, but summing multiple terms *)
+result=If[explicitEPV,result,(result/.rhoIndex[__]->1)];
 result=Expand[result];
 If[ SeQuantDebugLevel>=2,Print["in spintrace: after expanding antisymmetric operators = ",TraditionalForm[result]];
 ];
