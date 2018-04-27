@@ -419,6 +419,10 @@ flattenSQM[a_SQM] :=
         Return[result];
     ];
     
+(* deltaIndex, Kronecker delta, is a special SQM and has its own Head *)
+createDeltaIndex[idx1_particleIndex,idx2_particleIndex]:=deltaIndex[particleIndex[idx1[[1]],indexSpace[idx1],indexType[bra]],particleIndex[idx2[[1]],indexSpace[idx2],indexType[ket]]];
+(* rhoIndex, complement to Kronecker delta (i.e. rho^p_q = 1 - delta^p_q), is a special SQM and has its own Head *)
+createRhoIndex[idx1_particleIndex,idx2_particleIndex]:=rhoIndex[particleIndex[idx1[[1]],indexSpace[idx1],indexType[bra]],particleIndex[idx2[[1]],indexSpace[idx2],indexType[ket]]];
     
 (* selects bra/ket indices from SQM 
 	while the indexType was dropped
@@ -2587,9 +2591,11 @@ Params:
 - extIndGroups specifies lists of groups of internal indices which share spin quantum numbers is trace,
   e.g. extIndGroups={{p,q}} means that indices p and q will both be m_s = +1/2 or m_s = -1/2.
 - reindexIntInds -- if False, internal indices will not be relabeled. The default is True.
-- explicitEPV -- If True, will avoid exclusion-principle violating contributions explicitly; this is needed when e.g. separating direct and exchange contributions. The default is False. *)
-spintrace[expr_Plus,extIndGroups_List,reindexIntInds_Symbol:True,explicitEPV_Symbol:False]:= Sum[spintrace[expr[[i]],extIndGroups,reindexIntInds,explicitEPV],{i,Length[expr]}];
-spintrace[expr_/;(Head[expr]=!=Plus),extIndGroups_List,reindexIntInds_Symbol:True,explicitEPV_Symbol:False]:=Module[{extInds,intInds,intIndGroups,indGroups,result, mstuples,repls},
+- explicitEPV -- If True, will avoid exclusion-principle violating contributions explicitly; this is needed when e.g. separating direct and exchange contributions. The default is False.
+- rhoToDelta -- If True, will replace rhoIndex with 1-deltaIndex and reduce the sums. The default is False.
+*)
+spintrace[expr_Plus,extIndGroups_List,reindexIntInds_Symbol:True,explicitEPV_Symbol:False,rhoToDelta_Symbol:False]:= Sum[spintrace[expr[[i]],extIndGroups,reindexIntInds,explicitEPV,rhoToDelta],{i,Length[expr]}];
+spintrace[expr_/;(Head[expr]=!=Plus),extIndGroups_List,reindexIntInds_Symbol:True,explicitEPV_Symbol:False,rhoToDelta_Symbol:False]:=Module[{extInds,intInds,intIndGroups,indGroups,result, mstuples,repls},
 Assert[Head[expr]=!=Plus];
 
 (* convert groups of external indices into a flat list of all external indices *)
@@ -2635,7 +2641,8 @@ If[ SeQuantDebugLevel>=2,Print["in spintrace: after expanding antisymmetric oper
 (* zero out integrals that don't conserve spin quantum numbers *)
 (* 1-body *)
 result=result/.SQM[OHead[op__],particleIndex[bra1_String,particleSpace[bra1space_,bra1spin_],bra1rest_],particleIndex[ket1_String,particleSpace[ket1space_,ket1spin_],ket1rest_]]->If[Ms[bra1spin]==Ms[ket1spin],SQM[OHead[op],particleIndex[bra1,particleSpace[bra1space,bra1spin],bra1rest],particleIndex[ket1,particleSpace[ket1space,ket1spin],ket1rest]],0];
-result=result/.rhoIndex[particleIndex[bra1_String,particleSpace[bra1space_,bra1spin_],bra1rest_],particleIndex[ket1_String,particleSpace[ket1space_,ket1spin_],ket1rest_]]->If[Ms[bra1spin]==Ms[ket1spin],rhoIndex[particleIndex[bra1,particleSpace[bra1space,bra1spin],bra1rest],particleIndex[ket1,particleSpace[ket1space,ket1spin],ket1rest]],1];
+result=result/.rhoIndex[particleIndex[bra1_String,particleSpace[bra1space_,bra1spin_],bra1rest___],particleIndex[ket1_String,particleSpace[ket1space_,ket1spin_],ket1rest___]]->If[Ms[bra1spin]==Ms[ket1spin],rhoIndex[particleIndex[bra1,particleSpace[bra1space,bra1spin],bra1rest],particleIndex[ket1,particleSpace[ket1space,ket1spin],ket1rest]],1];
+result=result/.deltaIndex[particleIndex[bra1_String,particleSpace[bra1space_,bra1spin_],bra1rest___],particleIndex[ket1_String,particleSpace[ket1space_,ket1spin_],ket1rest___]]->If[Ms[bra1spin]==Ms[ket1spin],rhoIndex[particleIndex[bra1,particleSpace[bra1space,bra1spin],bra1rest],particleIndex[ket1,particleSpace[ket1space,ket1spin],ket1rest]],0];
 (* 2-body *)
 result=result/.SQM[OHead[label_String,indexSymm[0]],particleIndex[bra1_String,particleSpace[bra1space_,bra1spin_],bra1rest_],particleIndex[bra2_String,particleSpace[bra2space_,bra2spin_],bra2rest_],particleIndex[ket1_String,particleSpace[ket1space_,ket1spin_],ket1rest_],particleIndex[ket2_String,particleSpace[ket2space_,ket2spin_],ket2rest_]]->If[Ms[bra1spin]==Ms[ket1spin]&&Ms[bra2spin]==Ms[ket2spin],SQM[OHead[label,indexSymm[0]],particleIndex[bra1,particleSpace[bra1space,bra1spin],bra1rest],particleIndex[bra2,particleSpace[bra2space,bra2spin],bra2rest],particleIndex[ket1,particleSpace[ket1space,ket1spin],ket1rest],particleIndex[ket2,particleSpace[ket2space,ket2spin],ket2rest]],0];
 (* 3-body *)
@@ -2653,6 +2660,16 @@ If[ SeQuantDebugLevel>=2,Print["in spintrace: after zeroing out spin-nonconservi
 result = DeleteCases[result,_particleSpin,Infinity];
 
 If[ SeQuantDebugLevel>=2,Print["in spintrace: after dropping spin labels = ",TraditionalForm[result]];
+];
+
+(* optionally replace rhoIndex with deltaIndex ... and reduce the deltas *)
+result=If[!rhoToDelta,result,result/.rhoIndex[particleIndex[bra1_String,particleSpace[bra1space_],bra1rest___],particleIndex[ket1_String,particleSpace[ket1space_],ket1rest___]]->(1-deltaIndex[particleIndex[bra1,particleSpace[bra1space],bra1rest],particleIndex[ket1,particleSpace[ket1space],ket1rest]])];
+If[ rhoToDelta&&SeQuantDebugLevel>=2,Print["in spintrace: after replacing rhos with deltas = ",TraditionalForm[result]];
+];
+result=If[!rhoToDelta,result,reduceWick[Expand[result],extInds,intInds]];
+(* due to non-robust reduceWick, do this twice *)
+result=If[!rhoToDelta,result,reduceWick[Expand[result],extInds,intInds]];
+If[ rhoToDelta&&SeQuantDebugLevel>=2,Print["in spintrace: after reducing deltas = ",TraditionalForm[result]];
 ];
 
 (* re-canonicalization, with optional reindexing of internal indices *)
