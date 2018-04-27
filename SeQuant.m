@@ -421,7 +421,7 @@ flattenSQM[a_SQM] :=
     
     
 (* selects bra/ket indices from SQM 
-	while the indexType was droped
+	while the indexType was dropped
 *)
 braIndices[a_SQM] :=
 	Cases[a,x_particleIndex/;indexBraQ[x]->indexLight[x] ];
@@ -430,7 +430,7 @@ ketIndices[a_SQM] :=
 	Cases[a,x_particleIndex/;indexKetQ[x]->indexLight[x] ];
 
 (*
-the following two functions are used to deal with \Eta SQM in MultiConfigution
+the following two functions are used to deal with \Eta SQM in MultiConfiguration
 *)
 
 (* expand \eta to \lamda and \delta *)
@@ -438,13 +438,14 @@ expandEta[a_SQM] :=
 	Module[{bra, ket, result},
    		bra = braIndices[a];
    		ket = ketIndices[a];
+   		Assert[Length[bra]==1&&Length[ket]==1];
    		result = Plus[deltaIndex[bra[[1]], ket[[1]]], -createSQM["\[Lambda]", bra, ket, antisymm] ];
 		Return[result];
    ];
 
 (* expand every \eta in expr *)
 expandExp[expr_] :=
-	expr /. x_SQM /; x[[1, 1]] == "\[Eta]" -> expandEta[x]
+	expr /. x_SQM /; x[[1, 1]] == "\[Eta]" -> expandEta[x];
 
 
 (* convert cumulant to density matricies *)
@@ -1927,6 +1928,7 @@ lowReduceWick[expr_,externalIndices_List,internalIndices_List,reduceOptions_List
         deltaReplExtB = {};
         If[ SeQuantDebugLevel>=2,
             Print["In lowReduceWick: expr = ",expr//TraditionalForm];
+            Print["In lowReduceWick: externalIndices = ",externalIndices//TraditionalForm];
             Print["In lowReduceWick: internalIndices = ",internalIndices//TraditionalForm];
         ];
 
