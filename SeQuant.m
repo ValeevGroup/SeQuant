@@ -2885,4 +2885,5 @@ Return[result];
 (* shortcuts *)
 instantiateOccIndices[expr_,n_Integer,extInds_List,reindexIntInds_Symbol:True,spinOrbital_Symbol:True]:= instantiateIndices[expr,occ,n,1,extInds,reindexIntInds,spinOrbital];
 instantiateVirtIndices[expr_,n_Integer,nocc_Integer,extInds_List,reindexIntInds_Symbol:True,spinOrbital_Symbol:True]:= instantiateIndices[expr,virt,n,nocc+1,extInds,reindexIntInds,spinOrbital];
+instantiateOccVirtIndices[expr_,nocc_Integer,nvir_Integer,extInds_List,reindexIntInds_Symbol:True,spinOrbital_Symbol:True]:= instantiateIndices[instantiateIndices[expr,occ,nocc,1,extInds,reindexIntInds,spinOrbital],virt,nvir,nocc+1,extInds,reindexIntInds,spinOrbital];
 
