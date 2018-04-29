@@ -2093,7 +2093,11 @@ orderedForm[oper_SQM,intInds_List:{}] :=
             permfac *= Signature[braIndsOrd];
         ];
 
+        (* reorder ket indices ... ordering is independent of bra unless symfac \[Equal] 0 *)
         ketInds = Cases[result,a_particleIndex/;a[[3]]==indexType[ket]];
+        (* TODO if symfac \[Equal] 0 need to handle the case where bra indices are
+           degenerately ordered (e.g. there are duplicates in the lists so that
+           multiple permutations of the original list re ordered *)
         If[ symfac==0,
           ketInds=ketInds[[braIndsOrd]],
           ( ketIndsOrd = Ordering[ketInds];
@@ -2794,7 +2798,7 @@ EndPackage[]
 
 
 (* ::Subsection::Closed:: *)
-(*Instantiates occupied indices with values*)
+(*Instantiates indices with values*)
 
 
 equalIndexValues[bras__String]:=False;
