@@ -8,11 +8,11 @@
 #include <complex>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include <range/v3/all.hpp>
 
-#include <boost/optional.hpp>
 #include <boost/functional/hash.hpp>
 #include <boost/callable_traits.hpp>
 
@@ -256,7 +256,7 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
     return cursor{};
   }
 
-  mutable boost::optional<hash_type> hash_value_;  // not initialized by default
+  mutable std::optional<hash_type> hash_value_;  // not initialized by default
   virtual hash_type memoizing_hash() const {
     static const hash_type default_hash_value = 0;
     if (hash_value_)

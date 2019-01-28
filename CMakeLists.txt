@@ -8,6 +8,12 @@ add_library(Range-V3 INTERFACE IMPORTED)
 set_property(TARGET Range-V3 PROPERTY
              INTERFACE_INCLUDE_DIRECTORIES ${RANGEV3_DIR}/include)
 
+# need Boost.CallableTraits
+find_package(Boost 1.68 REQUIRED)
+add_library(Boost INTERFACE IMPORTED)
+set_property(TARGET Boost PROPERTY
+        INTERFACE_INCLUDE_DIRECTORIES ${Boost_INCLUDE_DIR})
+
 add_library(SeQuant2
         src/SeQuant2/sequant.cpp
         src/SeQuant2/sequant.hpp
@@ -26,10 +32,10 @@ add_library(SeQuant2
         src/SeQuant2/expr_algorithm.hpp
         src/SeQuant2/wick.impl.hpp
         src/SeQuant2/expr_operator.hpp)
-target_link_libraries(SeQuant2 Range-V3)
+target_link_libraries(SeQuant2 Range-V3 Boost)
 
 enable_testing(true)
-add_custom_target(check_unit COMMAND ${CMAKE_CTEST_COMMAND} -V)
+add_custom_target(check_unit USES_TERMINAL COMMAND ${CMAKE_CTEST_COMMAND} -V)
 
 set(utests_src
         tests/unit/test_space.cpp

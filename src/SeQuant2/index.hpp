@@ -6,10 +6,9 @@
 #define SEQUANT2_INDEX_H
 
 #include <atomic>
+#include <optional>
 #include <set>
 #include <string>
-
-#include <boost/optional.hpp>
 
 #include "space.hpp"
 #include "vector.hpp"
@@ -147,7 +146,7 @@ class Index {
     }
   }
 
-  static boost::optional<std::size_t> label_index(std::wstring_view label) {
+  static std::optional<std::size_t> label_index(std::wstring_view label) {
     const auto underscore_position = label.find(L'_');
     if (underscore_position != std::wstring::npos) {
       assert(underscore_position+1 < label.size());  // check that there is at least one char past the underscore
