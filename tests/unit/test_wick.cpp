@@ -344,6 +344,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
     }
     )
 
+#ifndef SEQUANT2_SKIP_LONG_TESTS
     // 3-body ^ 2-body ^ 2-body ^ 3-body
     SEQUANT2_PROFILE_SINGLE("wick(P3*H2*T2*T3)", {
       auto opseq =
@@ -363,6 +364,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       * wick_result;
     }
     )
+#endif
 
 #if 0
     // impossible: 4-body ^ 4-body ^ 4-body ^ 4-body ^ 4-body ^ 4-body
@@ -381,6 +383,32 @@ TEST_CASE("WickTheorem", "[algorithms]") {
     }
 #endif
 
+  }
+
+  SECTION("Expression Reduction") {
+    constexpr Vacuum V = Vacuum::SingleProduct;
+
+    // 2-body ^ 2-body
+    auto opseq =
+        FNOperatorSeq({FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}, V),
+                       FNOperator({L"a_4", L"a_5"}, {L"i_4", L"i_5"}, V)
+                      });
+    auto wick = FWickTheorem{opseq};
+    auto wick_result = wick.full_contractions(true).spinfree(false).compute();
+    REQUIRE(wick_result->size() == 4);
+
+    // multiply tensor factors and expand
+    auto wick_result_2 = make<Tensor>(L"g", WstrList{L"p_1", L"p_2"}, WstrList{L"p_3", L"p_4"}, Symmetry::antisymm)
+        * make<Tensor>(L"t", WstrList{L"a_4", L"a_5"}, WstrList{L"i_4", L"i_5"}, Symmetry::antisymm)
+        * wick_result;
+    expand(wick_result_2);
+    REQUIRE(to_latex(wick_result_2)
+                == L"{ \\left({{{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}}{{S^{{i_5}}_{{p_1}}}{S^{{i_4}}_{{p_2}}}{S^{{a_4}}_{{p_4}}}{S^{{a_5}}_{{p_3}}}}} + {{{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}}{{-1.000000} \\times {S^{{i_5}}_{{p_1}}}{S^{{i_4}}_{{p_2}}}{S^{{a_5}}_{{p_4}}}{S^{{a_4}}_{{p_3}}}}} + {{{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}}{{-1.000000} \\times {S^{{i_4}}_{{p_1}}}{S^{{i_5}}_{{p_2}}}{S^{{a_4}}_{{p_4}}}{S^{{a_5}}_{{p_3}}}}} + {{{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}}{{S^{{i_4}}_{{p_1}}}{S^{{i_5}}_{{p_2}}}{S^{{a_5}}_{{p_4}}}{S^{{a_4}}_{{p_3}}}}}\\right) }");
+    wick.reduce(wick_result_2);
+    canonicalize(wick_result_2);
+    simplify(wick_result_2);
+
+    std::wcout << L"H2*T2 = " << to_latex(wick_result_2) << std::endl;
   }
 
   }  // TEST_CASE("WickTheorem")
