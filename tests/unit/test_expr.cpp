@@ -226,18 +226,31 @@ TEST_CASE("Expr", "[elements]") {
 
   SECTION("visitor") {
     {
-      latex_visitor v{};
-
       const auto ex5_init =
           std::vector<std::shared_ptr<Constant>>{std::make_shared<Constant>(1.0), std::make_shared<Constant>(2.0),
                                                  std::make_shared<Constant>(3.0)};
       ExprPtr ex6 = std::make_shared<VecExpr<ExprPtr>>(begin(ex5_init), end(ex5_init));
 
       auto ex = ex6 + ex6;
-      ex->visit(v);
 
-      std::wcout << v.result << std::endl;
-      REQUIRE(v.result == L"{{1.000000}}{{2.000000}}{{3.000000}}{\\text{VecExpr}\\{{{1.000000}} {{2.000000}} {{3.000000}} \\}}{{1.000000}}{{2.000000}}{{3.000000}}{\\text{VecExpr}\\{{{1.000000}} {{2.000000}} {{3.000000}} \\}}{ \\left({\\text{VecExpr}\\{{{1.000000}} {{2.000000}} {{3.000000}} \\}} + {\\text{VecExpr}\\{{{1.000000}} {{2.000000}} {{3.000000}} \\}}\\right) }");
+      latex_visitor v1{};
+      ex->visit(v1);
+
+      std::wcout << v1.result << std::endl;
+      REQUIRE(v1.result ==
+              L"{{1.000000}}{{2.000000}}{{3.000000}}{\\text{VecExpr}\\{{{1."
+              L"000000}} {{2.000000}} {{3.000000}} "
+              L"\\}}{{1.000000}}{{2.000000}}{{3.000000}}{\\text{VecExpr}\\{{{1."
+              L"000000}} {{2.000000}} {{3.000000}} \\}}{ "
+              L"\\left({\\text{VecExpr}\\{{{1.000000}} {{2.000000}} "
+              L"{{3.000000}} \\}} + {\\text{VecExpr}\\{{{1.000000}} "
+              L"{{2.000000}} {{3.000000}} \\}}\\right) }");
+
+      latex_visitor v2{};
+      ex->visit(v2, /* atoms_only = */ true);
+      std::wcout << v2.result << std::endl;
+      REQUIRE(v2.result == L"{{1.000000}}{{2.000000}}{{3.000000}}{{1.000000}}{{"
+                           L"2.000000}}{{3.000000}}");
     }
   }
 

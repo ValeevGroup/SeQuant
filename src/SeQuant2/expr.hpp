@@ -93,7 +93,7 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
       const auto need_to_visit_subexpr = !atoms_only || subexpr_is_an_atom;
       bool visited = false;
       if (!subexpr_is_an_atom)  // if not a leaf, recur into it
-        visited = subexpr_ptr->visit(visitor);
+        visited = subexpr_ptr->visit(visitor, atoms_only);
       // call on the subexpression itself, if not yet done so
       if (need_to_visit_subexpr && !visited)
         visitor(subexpr_ptr);
@@ -101,8 +101,10 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
     // can only visit itself here if visitor(const ExprPtr&) is valid
     bool this_visited = false;
     if constexpr(boost::callable_traits::is_invocable_r<void,Visitor,const std::shared_ptr<Expr>&>::value) {
-      visitor(shared_from_this());
-      this_visited = true;
+      if (!atoms_only || this->is_atom()) {
+        visitor(shared_from_this());
+        this_visited = true;
+      }
     }
     return this_visited;
   }
