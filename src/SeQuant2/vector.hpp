@@ -13,8 +13,9 @@ namespace sequant2 {
 namespace container {
 
 template<typename T> using vector = std::vector<T>;
-//template<typename T, std::size_t N = 8> using svector = boost::container::small_vector<T, N>;
-template<typename T> using svector = std::vector<T>;
+template <typename T, std::size_t N = 8>
+using svector = boost::container::small_vector<T, N>;
+// template<typename T> using svector = std::vector<T>;
 
 using boost::begin;
 using boost::end;

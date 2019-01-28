@@ -264,7 +264,8 @@ TEST_CASE("Expr", "[elements]") {
     }
 
     // compares indices in address provided by cursor::address() to a list of indices
-    auto compare = [](const std::vector<std::pair<ExprPtr*,int64_t>>& address1, std::initializer_list<int> address2) {
+    auto compare = [](const container::svector<std::pair<ExprPtr*,int64_t>>& address1,
+        std::initializer_list<int> address2) {
       return address1.size() == address2.size() &&
           std::equal(begin(address1), end(address1), begin(address2), [](const auto& parent_and_index1, const auto& index2) {
             return parent_and_index1.second == index2;
