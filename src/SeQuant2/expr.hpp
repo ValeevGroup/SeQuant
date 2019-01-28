@@ -59,6 +59,7 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
 
   virtual ~Expr() = default;
 
+  /// @return true if this is a leaf
   bool is_atom() const {
     return ranges::empty(*this);
   }
@@ -75,10 +76,9 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
   }
 
   /// Canonicalizes @c this and returns the biproduct of canonicalization (e.g. phase)
-  /// @return the biproduct of canonicalization
+  /// @return the biproduct of canonicalization, or @c nullptr if no biproduct generated
   virtual std::shared_ptr<Expr> canonicalize() {
-    //throw std::logic_error("Expr::canonicalize not implemented in this derived class");
-    return {};  // by default do nothing
+    return {};  // by default do nothing and return nullptr
   }
 
   /// recursively visit the tree, i.e. call visitor on each subexpression in depth-first fashion

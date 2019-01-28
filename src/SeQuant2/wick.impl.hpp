@@ -18,6 +18,8 @@ inline std::map<Index, Index> compute_index_replacement_rules(const std::shared_
       if (tensor.label() == L"S") {
         assert(tensor.bra().size() == 1);
         assert(tensor.ket().size() == 1);
+        std::wcerr << "compute_index_replacement_rules not yet implemented" << std::endl;
+        abort();
       }
     }
   }
