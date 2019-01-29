@@ -11,16 +11,83 @@ namespace sequant2 {
 /// @param[in,out] expr expression to be canonicalized; will be replaced if canonicalization is impure
 inline void canonicalize(ExprPtr& expr) {
   const auto biproduct = expr->canonicalize();
-  if (biproduct && biproduct->type_id() == Expr::get_type_id<Constant>()) {
+  if (biproduct && biproduct->is<Constant>()) {
     const auto constant_ptr = std::static_pointer_cast<Constant>(biproduct);
     expr = biproduct * expr;
   }
 }
 
+namespace detail {
+struct simplify_visitor {
+  void operator()(ExprPtr &expr) {
+    if (debug) std::wcout << "simplify_visitor received " << to_latex(expr) << std::endl;
+    // apply simplify() iteratively until done
+    while (simplify(expr)) {
+      if (debug) std::wcout << "after 1 round of simplification have " << to_latex(expr) << std::endl;
+    }
+    if (debug) std::wcout << "simplification result = " << to_latex(expr) << std::endl;
+    // canonicalization to be done by other visitors
+  }
+
+  /// simplifies a Product
+  /// @param[in,out] expr (shared_ptr to ) a Product
+  bool simplify_product(ExprPtr &expr) {
+    auto &expr_ref = *expr;
+    std::shared_ptr<Product> result;
+    const auto nsubexpr = ranges::size(*expr);
+    for (std::size_t i = 0; i != nsubexpr; ++i) {
+      if (expr_ref[i]->is<Product>()) {
+        // allocate the result, if not done yet
+        if (!result) {
+          if (i > 0) {
+            // copy preceding factors
+            auto expr_product = std::static_pointer_cast<Product>(expr);
+            result = std::make_shared<Product>(expr_product->scalar(), begin(expr->expr()), begin(expr->expr()) + i);
+          } else
+            result = std::make_shared<Product>();
+        }
+        result->append(1, std::move(expr_ref[i]));
+      }
+    }
+    if (result) {
+      expr = std::static_pointer_cast<Expr>(result);
+      return true;
+    } else
+      return false;
+  }
+
+  /// simplifies a Sum
+  bool simplify_sum(ExprPtr &expr) {
+    auto &expr_ref = *expr;
+    std::shared_ptr<Sum> result;  // will keep the result if one or more summands is expanded
+    const auto nsubexpr = ranges::size(*expr);
+    if (result) { // if anything changed
+      expr = std::static_pointer_cast<Expr>(result);
+      return true;
+    } else
+      return false;
+  }
+
+  // @return true if any simplifications were performed
+  bool simplify(ExprPtr &expr) {
+    if (expr->is<Product>()) {
+      return simplify_product(expr);
+    } else if (expr->is<Sum>()) {
+      return simplify_sum(expr);
+    } else
+      return false;
+  }
+
+  bool debug = false;
+};
+};  // namespace detail
+
 /// Simplifies an Expr by applying all known transformations (e.g. eliminating trivial math, CSE, etc.)
 /// @param[in,out] expr expression to be simplified
 inline void simplify(ExprPtr& expr) {
-  // not yet implemented
+  detail::simplify_visitor simplifier{};
+  expr->visit(simplifier);
+  simplifier(expr);
 }
 
 namespace detail {
@@ -32,8 +99,7 @@ struct expand_visitor {
       if (debug)  std::wcout << "after 1 round of expansion have " << to_latex(expr) << std::endl;
     }
     if (debug) std::wcout << "expansion result = " << to_latex(expr) << std::endl;
-    // now need to flatten!
-    // and simplify?! e.g. extract constants out of products, etc.
+    // simplification and canonicalization are to be done by other visitors
   }
 
   /// expands the first Sum in a Product
@@ -43,7 +109,7 @@ struct expand_visitor {
     std::shared_ptr<Sum> result;
     const auto nsubexpr = ranges::size(*expr);
     for(std::size_t i=0; i != nsubexpr; ++i) {
-      if (expr_ref[i]->type_id() == Expr::get_type_id<Sum>()) {
+      if (expr_ref[i]->is<Sum>()) {
         // allocate the result, if not done yet
         if (!result)
           result = std::make_shared<Sum>();
@@ -67,7 +133,7 @@ struct expand_visitor {
     const auto nsubexpr = ranges::size(*expr);
     if (debug) std::wcout << "in expand_sum: expr = " << to_latex(expr) << std::endl;
     for(std::size_t i=0; i != nsubexpr; ++i) {
-      if (expr_ref[i]->type_id() == Expr::get_type_id<Product>()) {
+      if (expr_ref[i]->is<Product>()) {
         const auto this_term_expanded = expand_product(expr_ref[i]);
         // if this is the first term that was expanded, create a result and copy all preceeding subexpressions into it
         if (!result && this_term_expanded) {
@@ -91,11 +157,9 @@ struct expand_visitor {
 
   // @return true if expanded Product of Sum into Sum of Product
   bool expand(ExprPtr& expr) {
-    const auto type_id = expr->type_id();
-    if (type_id == Expr::get_type_id<Product>()) {
+    if (expr->is<Product>()) {
       return expand_product(expr);
-    }
-    else if (type_id == Expr::get_type_id<Sum>()) {
+    } else if (expr->is<Sum>()) {
       return expand_sum(expr);
     } else
       return false;

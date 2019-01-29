@@ -64,6 +64,12 @@ struct VecExpr : public std::vector<T>, public sequant2::Expr {
       return Expr::end_cursor();
     }
   };
+  cursor begin_cursor() override {
+    return const_cast<const VecExpr &>(*this).begin_cursor();
+  };
+  cursor end_cursor() override {
+    return const_cast<const VecExpr &>(*this).end_cursor();
+  };
 
   bool static_compare(const sequant2::Expr& that) const override {
     return static_cast<const base_type&>(*this) == static_cast<const base_type&>(static_cast<const VecExpr&>(that));
@@ -236,19 +242,13 @@ TEST_CASE("Expr", "[elements]") {
       latex_visitor v1{};
       ex->visit(v1);
 
-      std::wcout << "v1.result = " << v1.result << std::endl;
+//      std::wcout << "v1.result = " << v1.result << std::endl;
       REQUIRE(v1.result ==
-              L"{{1.000000}}{{2.000000}}{{3.000000}}{\\text{VecExpr}\\{{{1."
-              L"000000}} {{2.000000}} {{3.000000}} "
-              L"\\}}{{1.000000}}{{2.000000}}{{3.000000}}{\\text{VecExpr}\\{{{1."
-              L"000000}} {{2.000000}} {{3.000000}} \\}}{ "
-              L"\\left({\\text{VecExpr}\\{{{1.000000}} {{2.000000}} "
-              L"{{3.000000}} \\}} + {\\text{VecExpr}\\{{{1.000000}} "
-              L"{{2.000000}} {{3.000000}} \\}}\\right) }");
+          L"{{1.000000}}{{2.000000}}{{3.000000}}{\\text{VecExpr}\\{{{1.000000}} {{2.000000}} {{3.000000}} \\}}{{1.000000}}{{2.000000}}{{3.000000}}{\\text{VecExpr}\\{{{1.000000}} {{2.000000}} {{3.000000}} \\}}{ \\left({\\text{VecExpr}\\{{{1.000000}} {{2.000000}} {{3.000000}} \\}} + {\\text{VecExpr}\\{{{1.000000}} {{2.000000}} {{3.000000}} \\}}\\right) }");
 
       latex_visitor v2{};
       ex->visit(v2, /* atoms_only = */ true);
-      std::wcout << "v2.result = " << v2.result << std::endl;
+//      std::wcout << "v2.result = " << v2.result << std::endl;
       REQUIRE(v2.result == L"{{1.000000}}{{2.000000}}{{3.000000}}{{1.000000}}{{"
                            L"2.000000}}{{3.000000}}");
     }

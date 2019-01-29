@@ -145,8 +145,10 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       auto wick = FWickTheorem{opseq};
       REQUIRE_NOTHROW(wick.full_contractions(true).spinfree(false).compute());
       auto result = wick.full_contractions(true).spinfree(false).compute();
-      REQUIRE(result->size() == 2);  // 1 term = product of 2 terms
-      REQUIRE(to_latex(result) == L"{{{S^{{m_102}}_{{p_1}}}{S^{{p_4}}_{{m_102}}}}{{S^{{e_103}}_{{p_2}}}{S^{{p_3}}_{{e_103}}}}}");
+      REQUIRE(result->size() == 2
+          * 2);  // 1 product of 4 terms (since each contraction of 2 *general* indices produces 2 overlaps)
+      REQUIRE(to_latex(result)
+                  == L"{{S^{{m_102}}_{{p_1}}}{S^{{p_4}}_{{m_102}}}{S^{{e_103}}_{{p_2}}}{S^{{p_3}}_{{e_103}}}}");
     }
 
     // two (pure qp) 2-body operators
@@ -337,7 +339,8 @@ TEST_CASE("WickTheorem", "[algorithms]") {
           * make<Tensor>(L"t", WstrList{L"a_4", L"a_5"}, WstrList{L"i_4", L"i_5"}, Symmetry::antisymm)
           * wick_result;
       expand(wick_result_2);
-      REQUIRE(to_latex(wick_result_2) == L"{ \\left({{{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}}{{S^{{i_5}}_{{p_1}}}{S^{{i_4}}_{{p_2}}}{S^{{a_4}}_{{p_4}}}{S^{{a_5}}_{{p_3}}}}} + {{{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}}{{-1.000000} \\times {S^{{i_5}}_{{p_1}}}{S^{{i_4}}_{{p_2}}}{S^{{a_5}}_{{p_4}}}{S^{{a_4}}_{{p_3}}}}} + {{{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}}{{-1.000000} \\times {S^{{i_4}}_{{p_1}}}{S^{{i_5}}_{{p_2}}}{S^{{a_4}}_{{p_4}}}{S^{{a_5}}_{{p_3}}}}} + {{{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}}{{S^{{i_4}}_{{p_1}}}{S^{{i_5}}_{{p_2}}}{S^{{a_5}}_{{p_4}}}{S^{{a_4}}_{{p_3}}}}}\\right) }");
+      REQUIRE(to_latex(wick_result_2)
+                  == L"{ \\left({{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{{S^{{i_5}}_{{p_1}}}{S^{{i_4}}_{{p_2}}}{S^{{a_4}}_{{p_4}}}{S^{{a_5}}_{{p_3}}}}} + {{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{{-1.000000} \\times {S^{{i_5}}_{{p_1}}}{S^{{i_4}}_{{p_2}}}{S^{{a_5}}_{{p_4}}}{S^{{a_4}}_{{p_3}}}}} + {{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{{-1.000000} \\times {S^{{i_4}}_{{p_1}}}{S^{{i_5}}_{{p_2}}}{S^{{a_4}}_{{p_4}}}{S^{{a_5}}_{{p_3}}}}} + {{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{{S^{{i_4}}_{{p_1}}}{S^{{i_5}}_{{p_2}}}{S^{{a_5}}_{{p_4}}}{S^{{a_4}}_{{p_3}}}}}\\right) }");
       wick.reduce(wick_result_2);
       canonicalize(wick_result_2);
       simplify(wick_result_2);
@@ -403,12 +406,15 @@ TEST_CASE("WickTheorem", "[algorithms]") {
         * wick_result;
     expand(wick_result_2);
     REQUIRE(to_latex(wick_result_2)
-                == L"{ \\left({{{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}}{{S^{{i_5}}_{{p_1}}}{S^{{i_4}}_{{p_2}}}{S^{{a_4}}_{{p_4}}}{S^{{a_5}}_{{p_3}}}}} + {{{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}}{{-1.000000} \\times {S^{{i_5}}_{{p_1}}}{S^{{i_4}}_{{p_2}}}{S^{{a_5}}_{{p_4}}}{S^{{a_4}}_{{p_3}}}}} + {{{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}}{{-1.000000} \\times {S^{{i_4}}_{{p_1}}}{S^{{i_5}}_{{p_2}}}{S^{{a_4}}_{{p_4}}}{S^{{a_5}}_{{p_3}}}}} + {{{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}}{{S^{{i_4}}_{{p_1}}}{S^{{i_5}}_{{p_2}}}{S^{{a_5}}_{{p_4}}}{S^{{a_4}}_{{p_3}}}}}\\right) }");
+                == L"{ \\left({{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{{S^{{i_5}}_{{p_1}}}{S^{{i_4}}_{{p_2}}}{S^{{a_4}}_{{p_4}}}{S^{{a_5}}_{{p_3}}}}} + {{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{{-1.000000} \\times {S^{{i_5}}_{{p_1}}}{S^{{i_4}}_{{p_2}}}{S^{{a_5}}_{{p_4}}}{S^{{a_4}}_{{p_3}}}}} + {{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{{-1.000000} \\times {S^{{i_4}}_{{p_1}}}{S^{{i_5}}_{{p_2}}}{S^{{a_4}}_{{p_4}}}{S^{{a_5}}_{{p_3}}}}} + {{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{{S^{{i_4}}_{{p_1}}}{S^{{i_5}}_{{p_2}}}{S^{{a_5}}_{{p_4}}}{S^{{a_4}}_{{p_3}}}}}\\right) }");
     wick.reduce(wick_result_2);
+    simplify(wick_result_2);
     canonicalize(wick_result_2);
     simplify(wick_result_2);
 
-    std::wcout << L"H2*T2 = " << to_latex(wick_result_2) << std::endl;
+//    std::wcout << L"H2*T2 = " << to_latex(wick_result_2) << std::endl;
+    REQUIRE(to_latex(wick_result_2)
+                == L"{ \\left({{g^{{a_101}{a_100}}_{{i_100}{i_101}}}{t^{{i_101}{i_100}}_{{a_100}{a_101}}}} + {{-1.000000} \\times {g^{{a_101}{a_100}}_{{i_100}{i_101}}}{t^{{i_101}{i_100}}_{{a_100}{a_101}}}} + {{-1.000000} \\times {g^{{a_101}{a_100}}_{{i_100}{i_101}}}{t^{{i_101}{i_100}}_{{a_100}{a_101}}}} + {{g^{{a_101}{a_100}}_{{i_100}{i_101}}}{t^{{i_101}{i_100}}_{{a_100}{a_101}}}}\\right) }");
   }
 
   }  // TEST_CASE("WickTheorem")

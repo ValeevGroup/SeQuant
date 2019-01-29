@@ -25,6 +25,9 @@ class Tensor : public Expr {
     return result;
   }
 
+  /// @return view of the bra+ket index ranges
+  auto braket() { return ranges::view::concat(bra_, ket_); }
+
  public:
   Tensor() = default;
   virtual ~Tensor() = default;
@@ -44,6 +47,8 @@ class Tensor : public Expr {
   std::wstring_view label() const { return label_; }
   const auto& bra() const { return bra_; }
   const auto& ket() const { return ket_; }
+  /// @return view of the bra+ket index ranges
+  auto braket() const { return ranges::view::concat(bra_, ket_); }
   Symmetry symmetry() const { return symmetry_; }
 
   /// @return number of bra indices
@@ -81,20 +86,13 @@ class Tensor : public Expr {
 
   Tensor &transform_indices(const std::map<Index, Index> &index_map) {
     bool mutated = false;
-    for (auto &idx: bra_) {
+    ranges::for_each(braket(), [index_map, &mutated](auto &idx) {
       auto it = index_map.find(idx);
       if (it != index_map.end()) {
         idx = it->second;
         mutated = true;
       }
-    }
-    for (auto &idx: ket_) {
-      auto it = index_map.find(idx);
-      if (it != index_map.end()) {
-        idx = it->second;
-        mutated = true;
-      }
-    }
+    });
     if (mutated)
       this->reset_hash_value();
     return *this;
@@ -121,7 +119,6 @@ class Tensor : public Expr {
         return false;
     } else return false;
   }
-
 };
 
 inline std::shared_ptr<Expr> overlap(const Index& bra_index, const Index& ket_index) {

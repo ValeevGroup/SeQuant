@@ -181,6 +181,11 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
     return type_id;
   };
 
+  /// @tparam T an Expr type
+  /// @return true if this object is of type @c T
+  template<typename T>
+  bool is() const { return this->type_id() == get_type_id<T>(); }
+
  private:
   friend ranges::range_access;
 
@@ -239,23 +244,23 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
     bool const_ = false;  // assert in nonconst ops
   };
 
-  /// @return the cursor for the beginning of the range (must overridden in a derived Expr that has subexpressions)
+  /// @return the cursor for the beginning of the range (must override in a derived Expr that has subexpressions)
   virtual cursor begin_cursor()
   {
     return cursor{};
   }
-  /// @return the cursor for the end of the range (must overridden in a derived Expr that has subexpressions)
+  /// @return the cursor for the end of the range (must override in a derived Expr that has subexpressions)
   virtual cursor end_cursor()
   {
     return cursor{};
   }
 
-  /// @return the cursor for the beginning of the range (must overridden in a derived Expr that has subexpressions)
+  /// @return the cursor for the beginning of the range (must override in a derived Expr that has subexpressions)
   virtual cursor begin_cursor() const
   {
     return cursor{};
   }
-  /// @return the cursor for the end of the range (must overridden in a derived Expr that has subexpressions)
+  /// @return the cursor for the end of the range (must override in a derived Expr that has subexpressions)
   virtual cursor end_cursor() const
   {
     return cursor{};
@@ -359,14 +364,14 @@ class Product : public Expr {
 
   /// construct a Product out of zero or more factors (multiplied by 1)
   /// @param factors the factors
-  Product(std::initializer_list<ExprPtr> factors) : factors_(std::move(factors)) {}
+  Product(ExprPtrList factors) : factors_(std::move(factors)) {}
 
   /// construct a Product out of zero or more factors multiplied by a scalar
   /// @tparam T a numeric type; it must be able to multiply std::complex<double>
   /// @param scalar a scalar of type T
   /// @param factors an initializer list of factors
   template<typename T>
-  Product(T scalar, std::initializer_list<ExprPtr> factors) : scalar_(std::move(scalar)), factors_(std::move(factors)) {}
+  Product(T scalar, ExprPtrList factors) : scalar_(std::move(scalar)), factors_(std::move(factors)) {}
 
   /// construct a Product out of a range of factors
   /// @param begin the begin iterator
@@ -380,11 +385,50 @@ class Product : public Expr {
   /// @param end the end iterator
   template <typename T, typename Iterator> Product(T scalar, Iterator begin, Iterator end) : scalar_(std::move(scalar)), factors_(begin, end) {}
 
-  /// multiplies the product by @c scalar times @c factor
+  /// (post-)multiplies the product by @c scalar times @c factor
   template<typename T>
   Product &append(T scalar, ExprPtr factor) {
     scalar_ *= scalar;
-    factors_.push_back(std::move(factor));
+    if (!factor->is<Product>()) {
+      if (factor->is<Constant>()) {  // factor in Constant
+        auto factor_constant = std::static_pointer_cast<Constant>(factor);
+        scalar_ *= factor_constant->value();
+      } else
+        factors_.push_back(std::move(factor));
+    } else {  // factor is a product also ... flatten recursively
+      auto factor_product = std::static_pointer_cast<Product>(factor);
+      scalar_ *= factor_product->scalar_;
+      for (auto &subfactor: *factor_product)
+        this->append(1, subfactor);
+//      using std::end;
+//      using std::cbegin;
+//      using std::cend;
+//      factors_.insert(end(factors_), cbegin(factor_product->factors_), cend(factor_product->factors_));
+    }
+    reset_hash_value();
+    return *this;
+  }
+
+  /// (pre-)multiplies the product by @c scalar times @c factor ; less efficient than append()
+  template<typename T>
+  Product &prepend(T scalar, ExprPtr factor) {
+    scalar_ *= scalar;
+    if (!factor->is<Product>()) {
+      if (factor->is<Constant>()) {  // factor in Constant
+        auto factor_constant = std::static_pointer_cast<Constant>(factor);
+        scalar_ *= factor_constant->value();
+      } else
+        factors_.insert(factors_.begin(), std::move(factor));
+    } else {  // factor is a product also  ... flatten recursively
+      auto factor_product = std::static_pointer_cast<Product>(factor);
+      scalar_ *= factor_product->scalar_;
+      for (auto &subfactor: *factor_product)
+        this->prepend(1, subfactor);
+//      using std::begin;
+//      using std::cbegin;
+//      using std::cend;
+//      factors_.insert(begin(factors_), cbegin(factor_product->factors_), cend(factor_product->factors_));
+    }
     reset_hash_value();
     return *this;
   }
@@ -420,7 +464,7 @@ class Product : public Expr {
 
  private:
   std::complex<double> scalar_ = {1.0, 0.0};
-  container::vector<ExprPtr> factors_{};
+  container::svector<ExprPtr> factors_{};
 
   cursor begin_cursor() override {
     return factors_.empty() ? Expr::begin_cursor() : cursor{&factors_[0]};
@@ -461,7 +505,7 @@ class Sum : public Expr {
 
   /// construct a Sum out of zero or more summands
   /// @param summands an initializer list of summands
-  Sum(std::initializer_list<ExprPtr> summands) {
+  Sum(ExprPtrList summands) {
     // use append to flatten out Sum summands
     for(auto& summand: summands) {
       append(std::move(summand));
@@ -471,11 +515,32 @@ class Sum : public Expr {
   /// append a summand to the sum
   /// @param summand the summand
   Sum &append(ExprPtr summand) {
-    if (summand->type_id() != Expr::get_type_id<Sum>())
-      summands_.push_back(std::move(summand));
+    if (!summand->is<Sum>()) {
+      if (summand->is<Constant>()) {  // exclude zeros
+        auto summand_constant = std::static_pointer_cast<Constant>(summand);
+        if (summand_constant != 0) summands_.push_back(std::move(summand));
+      } else
+        summands_.push_back(std::move(summand));
+    }
     else {  // this recursively flattens Sum summands
       for(auto& subsummand: *summand)
         this->append(subsummand);
+    }
+    return *this;
+  }
+
+  /// prepend a summand to the sum
+  /// @param summand the summand
+  Sum &prepend(ExprPtr summand) {
+    if (!summand->is<Sum>()) {
+      if (summand->is<Constant>()) {  // exclude zeros
+        auto summand_constant = std::static_pointer_cast<Constant>(summand);
+        if (summand_constant != 0) summands_.push_back(std::move(summand));
+      } else
+        summands_.push_back(std::move(summand));
+    } else {  // this recursively flattens Sum summands
+      for (auto &subsummand: *summand)
+        this->prepend(subsummand);
     }
     return *this;
   }
@@ -505,7 +570,7 @@ class Sum : public Expr {
 
 
  private:
-  container::vector<ExprPtr> summands_{};
+  container::svector<ExprPtr> summands_{};
 
   cursor begin_cursor() override {
     return summands_.empty() ? Expr::begin_cursor() : cursor{&summands_[0]};

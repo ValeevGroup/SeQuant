@@ -241,11 +241,11 @@ inline void reduce_wick_impl(std::shared_ptr<Product> &expr,
     const auto replacement_rules =
         compute_index_replacement_rules(expr, external_indices);
 //    std::wcout << "reduce_wick_impl(expr, external_indices):\n  expr = " << expr->to_latex() << "\n  external_indices = ";
-    ranges::for_each(external_indices, [](auto &index) { std::wcout << index.label() << " "; });
+//    ranges::for_each(external_indices, [](auto &index) { std::wcout << index.label() << " "; });
 //    std::wcout << "\n  replrules = ";
-    ranges::for_each(replacement_rules,
-                     [](auto &index) { std::wcout << index.first.label() << "->" << index.second.label() << " "; });
-    std::wcout.flush();
+//    ranges::for_each(replacement_rules,
+//                     [](auto &index) { std::wcout << index.first.label() << "->" << index.second.label() << " "; });
+//    std::wcout.flush();
 
     apply_index_replacement_rules(expr, replacement_rules, external_indices);
 //    std::wcout << "\n  result = " << expr->to_latex() << std::endl;
