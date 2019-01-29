@@ -236,7 +236,7 @@ TEST_CASE("Expr", "[elements]") {
       latex_visitor v1{};
       ex->visit(v1);
 
-      std::wcout << v1.result << std::endl;
+      std::wcout << "v1.result = " << v1.result << std::endl;
       REQUIRE(v1.result ==
               L"{{1.000000}}{{2.000000}}{{3.000000}}{\\text{VecExpr}\\{{{1."
               L"000000}} {{2.000000}} {{3.000000}} "
@@ -248,7 +248,7 @@ TEST_CASE("Expr", "[elements]") {
 
       latex_visitor v2{};
       ex->visit(v2, /* atoms_only = */ true);
-      std::wcout << v2.result << std::endl;
+      std::wcout << "v2.result = " << v2.result << std::endl;
       REQUIRE(v2.result == L"{{1.000000}}{{2.000000}}{{3.000000}}{{1.000000}}{{"
                            L"2.000000}}{{3.000000}}");
     }

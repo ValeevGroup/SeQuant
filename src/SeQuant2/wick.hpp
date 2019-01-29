@@ -5,6 +5,7 @@
 #ifndef SEQUANT2_WICK_HPP
 #define SEQUANT2_WICK_HPP
 
+#include <mutex>
 #include <utility>
 
 #include "op.hpp"
@@ -52,7 +53,10 @@ class WickTheorem {
 
   /// Specifies the external indices; by default assume all indices are summed over
   /// @param ext_inds external (nonsummed) indices
-  WickTheorem &set_external_indices(std::initializer_list<Index> external_indices) { external_indices_ = external_indices; return *this; }
+  WickTheorem &set_external_indices(IndexList external_indices) {
+    external_indices_ = external_indices;
+    return *this;
+  }
 
   /// Computes and returns the result
   /// @param count_only if true, will return a vector of default-initialized values, useful if only interested in the total count

@@ -16,7 +16,7 @@ enum class Symmetry { symm, antisymm, nonsymm };
 /// @brief particle-symmetric Tensor, i.e. permuting
 class Tensor : public Expr {
  private:
-  auto make_indices(std::initializer_list<std::wstring_view> index_labels) {
+  auto make_indices(WstrList index_labels) {
     index_container_type result;
     result.reserve(index_labels.size());
     for (const auto &label: index_labels) {
@@ -30,14 +30,14 @@ class Tensor : public Expr {
   virtual ~Tensor() = default;
 
   Tensor(std::wstring_view label,
-         std::initializer_list<Index> bra_indices,
-         std::initializer_list<Index> ket_indices,
+         IndexList bra_indices,
+         IndexList ket_indices,
          Symmetry s = Symmetry::nonsymm)
       : label_(label), bra_(bra_indices), ket_(ket_indices), symmetry_(s) {}
 
   Tensor(std::wstring_view label,
-         std::initializer_list<std::wstring_view> bra_index_labels,
-         std::initializer_list<std::wstring_view> ket_index_labels,
+         WstrList bra_index_labels,
+         WstrList ket_index_labels,
          Symmetry s = Symmetry::nonsymm)
       : label_(label), bra_(make_indices(bra_index_labels)), ket_(make_indices(ket_index_labels)) {}
 
@@ -79,6 +79,27 @@ class Tensor : public Expr {
     return {};
   }
 
+  Tensor &transform_indices(const std::map<Index, Index> &index_map) {
+    bool mutated = false;
+    for (auto &idx: bra_) {
+      auto it = index_map.find(idx);
+      if (it != index_map.end()) {
+        idx = it->second;
+        mutated = true;
+      }
+    }
+    for (auto &idx: ket_) {
+      auto it = index_map.find(idx);
+      if (it != index_map.end()) {
+        idx = it->second;
+        mutated = true;
+      }
+    }
+    if (mutated)
+      this->reset_hash_value();
+    return *this;
+  }
+
   type_id_type type_id() const override {
     return get_type_id<Tensor>();
   };
@@ -104,7 +125,7 @@ class Tensor : public Expr {
 };
 
 inline std::shared_ptr<Expr> overlap(const Index& bra_index, const Index& ket_index) {
-  return std::make_shared<Tensor>(L"S", std::initializer_list<Index>{bra_index}, std::initializer_list<Index>{ket_index});
+  return std::make_shared<Tensor>(L"S", IndexList{bra_index}, IndexList{ket_index});
 }
 
 }  // namespace sequant2

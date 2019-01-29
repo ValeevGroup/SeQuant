@@ -97,9 +97,9 @@ class Operator : public container::svector<Op<S>>, public Expr {
       : base_type(ops) {}
   explicit Operator(base_type &&ops)
       : base_type(std::move(ops)) {}
-  Operator(Action action, std::initializer_list<Index> indices)
+  Operator(Action action, IndexList indices)
       : base_type(make_ops(action, indices)) {}
-  Operator(Action action, std::initializer_list<std::wstring_view> index_labels)
+  Operator(Action action, WstrList index_labels)
       : base_type(make_ops(action, index_labels)) {}
 
   operator base_type &() const & { return *this; }
@@ -129,7 +129,7 @@ class Operator : public container::svector<Op<S>>, public Expr {
 
  private:
   base_type make_ops(Action action,
-                              std::initializer_list<Index> indices) {
+                     IndexList indices) {
     base_type result;
     result.reserve(indices.size());
     for (const auto &idx : indices)
@@ -139,7 +139,7 @@ class Operator : public container::svector<Op<S>>, public Expr {
 
   base_type
   make_ops(Action action,
-           std::initializer_list<std::wstring_view> index_labels) {
+           WstrList index_labels) {
     base_type result;
     result.reserve(index_labels.size());
     for (const auto &idx_label : index_labels)
@@ -214,8 +214,8 @@ class NormalOperator : public Operator<S> {
 
   /// @param creator_indices sequence of creator indices
   /// @param annihilator_indices sequence of annihilator indices (in order of particle indices, see the class documentation for more info).
-  NormalOperator(std::initializer_list<Index> creator_indices,
-                 std::initializer_list<Index> annihilator_indices,
+  NormalOperator(IndexList creator_indices,
+                 IndexList annihilator_indices,
                  Vacuum v = get_default_context().vacuum())
       : Operator<S>{}, vacuum_(v), ncreators_(creator_indices.size()) {
     this->reserve(creator_indices.size() + annihilator_indices.size());
@@ -229,8 +229,8 @@ class NormalOperator : public Operator<S> {
 
   /// @param creator_index_labels sequence of creator index labels
   /// @param annihilator_index_labels sequence of annihilator index labels (in order of particle indices, see the class documentation for more info).
-  NormalOperator(std::initializer_list<std::wstring_view> creator_index_labels,
-                 std::initializer_list<std::wstring_view> annihilator_index_labels,
+  NormalOperator(WstrList creator_index_labels,
+                 WstrList annihilator_index_labels,
                  Vacuum v = get_default_context().vacuum())
       : Operator<S>{}, vacuum_(v), ncreators_(creator_index_labels.size()) {
     this->reserve(creator_index_labels.size() + annihilator_index_labels.size());
@@ -408,7 +408,7 @@ using FNOperatorSeq = NormalOperatorSequence<Statistics::FermiDirac>;
 inline BOp bcre(Index i) { return BOp(i, Action::create); }
 inline BOp bcre(std::wstring_view i) { return BOp(Index{i}, Action::create); }
 inline BOp bcre(std::wstring_view i,
-                std::initializer_list<std::wstring_view> pi) {
+                WstrList pi) {
   return BOp(Index(i, pi), Action::create);
 }
 inline BOp bann(Index i) { return BOp(i, Action::annihilate); }
@@ -416,13 +416,13 @@ inline BOp bann(std::wstring_view i) {
   return BOp(Index{i}, Action::annihilate);
 }
 inline BOp bann(std::wstring_view i,
-                std::initializer_list<std::wstring_view> pi) {
+                WstrList pi) {
   return BOp(Index(i, pi), Action::annihilate);
 }
 inline FOp fcre(Index i) { return FOp(i, Action::create); }
 inline FOp fcre(std::wstring_view i) { return FOp(Index{i}, Action::create); }
 inline FOp fcre(std::wstring_view i,
-                std::initializer_list<std::wstring_view> pi) {
+                WstrList pi) {
   return FOp(Index(i, pi), Action::create);
 }
 inline FOp fann(Index i) { return FOp(i, Action::annihilate); }
@@ -430,7 +430,7 @@ inline FOp fann(std::wstring_view i) {
   return FOp(Index{i}, Action::annihilate);
 }
 inline FOp fann(std::wstring_view i,
-                std::initializer_list<std::wstring_view> pi) {
+                WstrList pi) {
   return FOp(Index(i, pi), Action::annihilate);
 }
 

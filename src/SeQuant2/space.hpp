@@ -11,6 +11,12 @@
 
 namespace sequant2 {
 
+enum class IndexSpaceMetric {
+  Unit,
+  General,
+  Invalid
+};
+
 /// @brief space of Index objects
 ///
 /// IndexSpace is a set of attributes associated 1-to-1 with keys
@@ -310,6 +316,9 @@ inline IndexSpace::QuantumNumbers intersection(IndexSpace::QuantumNumbers v1, In
 }
 inline const IndexSpace &intersection(const IndexSpace &space1, const IndexSpace &space2) {
   return IndexSpace::instance(space1.attr().intersection(space2.attr()));
+}
+inline const IndexSpace &intersection(const IndexSpace &space1, const IndexSpace &space2, const IndexSpace &space3) {
+  return IndexSpace::instance(space1.attr().intersection(space2.attr().intersection(space3.attr())));
 }
 inline IndexSpace::Type unIon(IndexSpace::Type type1, IndexSpace::Type type2) {
   return type1.unIon(type2);

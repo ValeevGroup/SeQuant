@@ -147,7 +147,12 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
   /// @note this function must be overridden in the derived class
   /// @sa Expr::get_type_id
   /// @return the hash value for this Expr
-  virtual type_id_type type_id() const =0;
+  virtual type_id_type type_id() const
+#if __GNUG__
+  { abort(); }
+#else
+  =0;
+#endif
 
   /// @tparam T Expr or a class derived from Expr
   /// @return true if this is equal to that
@@ -278,8 +283,13 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
   /// @param that an Expr object
   /// @note @c that is guaranteed to be of same type as @c *this, hence can be statically cast
   /// @return true if @c that is equivalent to *this
-  virtual bool static_compare(const Expr& that) const =0;
-};
+  virtual bool static_compare(const Expr &that) const
+#if __GNUG__
+  { abort(); }
+#else
+  =0;
+#endif
+};  // Expr
 
 using ExprPtr = std::shared_ptr<Expr>;
 
@@ -381,6 +391,7 @@ class Product : public Expr {
 
   const std::complex<double> &scalar() const { return scalar_; }
   const auto& factors() const { return factors_; }
+  auto &factors() { return factors_; }
 
   /// @return true if the number of factors is zero
   bool empty() const { return factors_.empty(); }

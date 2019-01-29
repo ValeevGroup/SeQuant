@@ -7,6 +7,7 @@
 
 #include <atomic>
 #include <optional>
+#include <mutex>
 #include <set>
 #include <string>
 
@@ -14,6 +15,10 @@
 #include "vector.hpp"
 
 namespace sequant2 {
+
+class Index;
+using WstrList = std::initializer_list<std::wstring_view>;
+using IndexList = std::initializer_list<Index>;
 
 /// @brief Index = label + IndexSpace
 /// @note Unlike SeQuant1's ParticleIndex, this Index supports dependencies
@@ -35,7 +40,7 @@ class Index {
   /// responsibility to ensure that @c space will
   ///       outlive this object
   Index(std::wstring_view label, const IndexSpace &space,
-        std::initializer_list<Index> proto_indices)
+        IndexList proto_indices)
       : label_(label), space_(&space), proto_indices_(proto_indices) {
     check_for_duplicate_proto_indices();
     check_nontmp_label();
@@ -63,7 +68,7 @@ class Index {
   /// @param proto_index_labels labels of proto indices (all must be unique,
   /// i.e. duplicates are not allowed)
   Index(std::wstring_view label,
-        std::initializer_list<Index> proto_indices)
+        IndexList proto_indices)
       : Index(label, IndexSpace::instance(label), proto_indices) {
     check_for_duplicate_proto_indices();
     check_nontmp_label();
@@ -73,7 +78,7 @@ class Index {
   /// @param proto_index_labels labels of proto indices (all must be unique,
   /// i.e. duplicates are not allowed)
   Index(std::wstring_view label,
-        std::initializer_list<std::wstring_view> proto_index_labels)
+        WstrList proto_index_labels)
       : label_(label), space_(&IndexSpace::instance(label)) {
     if (proto_index_labels.size() != 0) {
       proto_indices_.reserve(proto_index_labels.size());
@@ -84,6 +89,12 @@ class Index {
     check_nontmp_label();
   }
 
+  /// creates a globaly-unique temporary index in space @c space . The label of the resulting index =
+  /// @c IndexSpace::base_key(space) + '_' + temporary counter.
+  /// Each call increments the current tmp counter (see next_tmp_index() ) . To make neater temporary indices
+  /// unique in a given scope (e.g. a single term in an expression) use IndexFactory.
+  /// @param space an IndexSpace object
+  /// @return a unique temporary index in space @c space
   static Index make_tmp_index(const IndexSpace& space) {
     return Index(IndexSpace::base_key(space) + L'_' + std::to_wstring(Index::next_tmp_index()), &space);
   }
@@ -123,8 +134,8 @@ class Index {
 
   /// @return a unique temporary index, its value is equal to or greater than that
   static std::size_t next_tmp_index() {
-    static std::atomic<std::size_t> index = min_tmp_index();
-    return index++;
+    static std::atomic<std::size_t> index = min_tmp_index() - 1;
+    return ++index;
   }
 
  private:
@@ -156,6 +167,7 @@ class Index {
       return {};
   }
 
+  friend class IndexFactory;
 };
 
 /// @return true if @c index1 is identical to @c index2 , i.e. they belong to
@@ -207,8 +219,32 @@ inline std::wstring to_latex(const Index &index) {
   return index.to_latex();
 }
 
-using WstrList = std::initializer_list<std::wstring_view>;
-using IndexList = std::initializer_list<Index>;
+/// Generates temporary indices
+class IndexFactory {
+ public:
+
+  /// creates a temporary index in space @c space . The label of the resulting index =
+  /// @c IndexSpace::base_key(space) + '_' + temporary counter.
+  /// Each call increments the current tmp counter (see next_tmp_index() ) . To make cleaner temporary indices
+  /// with one counter per space use IndexFactory
+  /// @param space an IndexSpace object
+  /// @return a unique temporary index in space @c space
+  Index make(const IndexSpace &space) {
+    auto counter_it = counters_.begin();
+    {  // if don't have a counter for this space
+      std::scoped_lock lock(mutex_);
+      if ((counter_it = counters_.find(space)) == counters_.end()) {
+        counters_[space] = Index::min_tmp_index() - 1;
+        counter_it = counters_.find(space);
+      }
+    }
+    return Index(IndexSpace::base_key(space) + L'_' + std::to_wstring(++(counter_it->second)), &space);
+  }
+
+ private:
+  std::mutex mutex_;
+  std::map<IndexSpace, std::atomic<std::size_t>> counters_;
+};
 
 } // namespace sequant2
 
