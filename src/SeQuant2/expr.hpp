@@ -393,8 +393,11 @@ class Product : public Expr {
       if (factor->is<Constant>()) {  // factor in Constant
         auto factor_constant = std::static_pointer_cast<Constant>(factor);
         scalar_ *= factor_constant->value();
-      } else
+        // no need to reset the hash since scalar is not hashed!
+      } else {
         factors_.push_back(std::move(factor));
+        reset_hash_value();
+      }
     } else {  // factor is a product also ... flatten recursively
       auto factor_product = std::static_pointer_cast<Product>(factor);
       scalar_ *= factor_product->scalar_;
@@ -405,7 +408,6 @@ class Product : public Expr {
 //      using std::cend;
 //      factors_.insert(end(factors_), cbegin(factor_product->factors_), cend(factor_product->factors_));
     }
-    reset_hash_value();
     return *this;
   }
 
@@ -417,8 +419,11 @@ class Product : public Expr {
       if (factor->is<Constant>()) {  // factor in Constant
         auto factor_constant = std::static_pointer_cast<Constant>(factor);
         scalar_ *= factor_constant->value();
-      } else
+        // no need to reset the hash since scalar is not hashed!
+      } else {
         factors_.insert(factors_.begin(), std::move(factor));
+        reset_hash_value();
+      }
     } else {  // factor is a product also  ... flatten recursively
       auto factor_product = std::static_pointer_cast<Product>(factor);
       scalar_ *= factor_product->scalar_;
@@ -429,7 +434,6 @@ class Product : public Expr {
 //      using std::cend;
 //      factors_.insert(begin(factors_), cbegin(factor_product->factors_), cend(factor_product->factors_));
     }
-    reset_hash_value();
     return *this;
   }
 
@@ -519,8 +523,10 @@ class Sum : public Expr {
       if (summand->is<Constant>()) {  // exclude zeros
         auto summand_constant = std::static_pointer_cast<Constant>(summand);
         if (summand_constant != 0) summands_.push_back(std::move(summand));
-      } else
+      } else {
         summands_.push_back(std::move(summand));
+      }
+      reset_hash_value();
     }
     else {  // this recursively flattens Sum summands
       for(auto& subsummand: *summand)
@@ -536,8 +542,10 @@ class Sum : public Expr {
       if (summand->is<Constant>()) {  // exclude zeros
         auto summand_constant = std::static_pointer_cast<Constant>(summand);
         if (summand_constant != 0) summands_.push_back(std::move(summand));
-      } else
+      } else {
         summands_.push_back(std::move(summand));
+      }
+      reset_hash_value();
     } else {  // this recursively flattens Sum summands
       for (auto &subsummand: *summand)
         this->prepend(subsummand);
