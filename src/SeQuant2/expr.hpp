@@ -599,6 +599,11 @@ class Sum : public Expr {
     return summands_.empty() ? Expr::end_cursor() : cursor{&summands_[0] + summands_.size()};
   };
 
+  hash_type memoizing_hash() const override {
+    hash_value_ = boost::hash_range(begin_subexpr(), end_subexpr());
+    return *hash_value_;
+  }
+
   bool static_compare(const Expr& that) const override {
     const auto& that_cast = static_cast<const Sum&>(that);
     if (summands().size() == that_cast.summands().size()) {
