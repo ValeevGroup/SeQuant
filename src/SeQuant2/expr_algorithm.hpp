@@ -49,11 +49,26 @@ struct simplify_visitor {
         result->append(1, std::move(expr_ref[i]));
       }
     }
+    bool expr_changed = false;
     if (result) {
       expr = std::static_pointer_cast<Expr>(result);
-      return true;
-    } else
-      return false;
+      expr_changed = true;
+    }
+    const auto expr_size = ranges::size(*expr);
+    auto expr_product = std::static_pointer_cast<Product>(expr);
+    if (expr_product->scalar() == 0.) {  // if scalar = 0, make it 0 (too aggressive?)
+      expr = make<Constant>(0);
+      expr_changed = true;
+    }
+    else if (expr_size == 0) {  // if product reduced to a constant make it a constant
+      expr = make<Constant>(expr_product->scalar());
+      expr_changed = true;
+    }
+    else if (expr_size == 1 && expr_product->scalar() == 1.) {  // if product has 1 term and the scalar is 1, lift the factor
+      expr = (*expr)[0];
+      expr_changed = true;
+    }
+    return expr_changed;
   }
 
   /// simplifies a Sum
@@ -147,12 +162,20 @@ struct expand_visitor {
         if (debug) std::wcout << "in expand_sum: after expand_product(" << (this_term_expanded ? "true)" : "false)") << " result = " << to_latex(result ? result : expr) << std::endl;
       }
     }
-    if (result) { // if any summand was expanded, copy result into expr, else expr was unchanged, nothing to do
+    bool expr_changed = false;
+    if (result) { // if any summand was expanded, copy result into expr
       expr = std::static_pointer_cast<Expr>(result);
-      return true;
+      expr_changed = true;
     }
-    else
-      return false;
+    if (ranges::size(*expr) == 1) {  // if sum contains 1 element, raise it
+      expr = (*expr)[0];
+      expr_changed = true;
+    }
+    else if (ranges::size(*expr) == 0) {  // if sum contains 0 elements, turn to 0
+      expr = make<Constant>(0);
+      expr_changed = true;
+    }
+    return expr_changed;
   }
 
   // @return true if expanded Product of Sum into Sum of Product
