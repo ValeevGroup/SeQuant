@@ -324,51 +324,6 @@ TEST_CASE("WickTheorem", "[algorithms]") {
     )
 #endif
 
-    // 2-body ^ 2-body
-    SEQUANT2_PROFILE_SINGLE("wick(H2*T2)", {
-      auto opseq =
-          FNOperatorSeq({FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}, V),
-                         FNOperator({L"a_4", L"a_5"}, {L"i_4", L"i_5"}, V)
-                        });
-      auto wick = FWickTheorem{opseq};
-      auto wick_result = wick.full_contractions(true).spinfree(false).compute();
-      REQUIRE(wick_result->size() == 4);
-
-      // multiply tensor factors and expand
-      auto wick_result_2 = make<Tensor>(L"g", WstrList{L"p_1", L"p_2"}, WstrList{L"p_3", L"p_4"}, Symmetry::antisymm)
-          * make<Tensor>(L"t", WstrList{L"a_4", L"a_5"}, WstrList{L"i_4", L"i_5"}, Symmetry::antisymm)
-          * wick_result;
-      expand(wick_result_2);
-      REQUIRE(to_latex(wick_result_2)
-                  == L"{ \\left({{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{{S^{{i_5}}_{{p_1}}}{S^{{i_4}}_{{p_2}}}{S^{{a_4}}_{{p_4}}}{S^{{a_5}}_{{p_3}}}}} + {{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{{-1.000000} \\times {S^{{i_5}}_{{p_1}}}{S^{{i_4}}_{{p_2}}}{S^{{a_5}}_{{p_4}}}{S^{{a_4}}_{{p_3}}}}} + {{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{{-1.000000} \\times {S^{{i_4}}_{{p_1}}}{S^{{i_5}}_{{p_2}}}{S^{{a_4}}_{{p_4}}}{S^{{a_5}}_{{p_3}}}}} + {{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{{S^{{i_4}}_{{p_1}}}{S^{{i_5}}_{{p_2}}}{S^{{a_5}}_{{p_4}}}{S^{{a_4}}_{{p_3}}}}}\\right) }");
-      wick.reduce(wick_result_2);
-      canonicalize(wick_result_2);
-      simplify(wick_result_2);
-    }
-    )
-
-#ifndef SEQUANT2_SKIP_LONG_TESTS
-    // 3-body ^ 2-body ^ 2-body ^ 3-body
-    SEQUANT2_PROFILE_SINGLE("wick(P3*H2*T2*T3)", {
-      auto opseq =
-          FNOperatorSeq({FNOperator({L"i_1", L"i_2", L"i_3"}, {L"a_1", L"a_2", L"a_3"}, V),
-                         FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}, V),
-                         FNOperator({L"a_4", L"a_5"}, {L"i_4", L"i_5"}, V),
-                         FNOperator({L"a_6", L"a_7", L"a_8"}, {L"i_6", L"i_7", L"i_8"}, V)
-                        });
-      auto wick = FWickTheorem{opseq};
-      auto wick_result = wick.full_contractions(true).spinfree(false).compute();
-      REQUIRE(wick_result->size() == 14400);
-
-      // multiply tensor factors and expand
-      auto wick_result_2 = make<Tensor>(L"g", WstrList{L"p_1", L"p_2"}, WstrList{L"p_3", L"p_4"}, Symmetry::antisymm)
-      * make<Tensor>(L"t", WstrList{L"a_4", L"a_5"}, WstrList{L"i_4", L"i_5"}, Symmetry::antisymm)
-      * make<Tensor>(L"t", WstrList{L"a_6", L"a_7", L"a_8"}, WstrList{L"i_6", L"i_7", L"i_8"}, Symmetry::antisymm)
-      * wick_result;
-    }
-    )
-#endif
-
 #if 0
     // impossible: 4-body ^ 4-body ^ 4-body ^ 4-body ^ 4-body ^ 4-body
     {
@@ -392,29 +347,65 @@ TEST_CASE("WickTheorem", "[algorithms]") {
     constexpr Vacuum V = Vacuum::SingleProduct;
 
     // 2-body ^ 2-body
-    auto opseq =
-        FNOperatorSeq({FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}, V),
-                       FNOperator({L"a_4", L"a_5"}, {L"i_4", L"i_5"}, V)
-                      });
-    auto wick = FWickTheorem{opseq};
-    auto wick_result = wick.full_contractions(true).spinfree(false).compute();
-    REQUIRE(wick_result->size() == 4);
+    SEQUANT2_PROFILE_SINGLE("wick(H2*T2)", {
+      auto opseq =
+          FNOperatorSeq({FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}, V),
+                         FNOperator({L"a_4", L"a_5"}, {L"i_4", L"i_5"}, V)
+                        });
+      auto wick = FWickTheorem{opseq};
+      auto wick_result = wick.full_contractions(true).spinfree(false).compute();
+      REQUIRE(wick_result->size() == 4);
 
-    // multiply tensor factors and expand
-    auto wick_result_2 = make<Tensor>(L"g", WstrList{L"p_1", L"p_2"}, WstrList{L"p_3", L"p_4"}, Symmetry::antisymm)
-        * make<Tensor>(L"t", WstrList{L"a_4", L"a_5"}, WstrList{L"i_4", L"i_5"}, Symmetry::antisymm)
-        * wick_result;
-    expand(wick_result_2);
-    REQUIRE(to_latex(wick_result_2)
-                == L"{ \\left({{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{{S^{{i_5}}_{{p_1}}}{S^{{i_4}}_{{p_2}}}{S^{{a_4}}_{{p_4}}}{S^{{a_5}}_{{p_3}}}}} + {{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{{-1.000000} \\times {S^{{i_5}}_{{p_1}}}{S^{{i_4}}_{{p_2}}}{S^{{a_5}}_{{p_4}}}{S^{{a_4}}_{{p_3}}}}} + {{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{{-1.000000} \\times {S^{{i_4}}_{{p_1}}}{S^{{i_5}}_{{p_2}}}{S^{{a_4}}_{{p_4}}}{S^{{a_5}}_{{p_3}}}}} + {{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{{S^{{i_4}}_{{p_1}}}{S^{{i_5}}_{{p_2}}}{S^{{a_5}}_{{p_4}}}{S^{{a_4}}_{{p_3}}}}}\\right) }");
-    wick.reduce(wick_result_2);
-    simplify(wick_result_2);
-    canonicalize(wick_result_2);
-    simplify(wick_result_2);
+      // multiply tensor factors and expand
+      auto wick_result_2 = make<Tensor>(L"g", WstrList{L"p_1", L"p_2"}, WstrList{L"p_3", L"p_4"}, Symmetry::antisymm)
+          * make<Tensor>(L"t", WstrList{L"a_4", L"a_5"}, WstrList{L"i_4", L"i_5"}, Symmetry::antisymm)
+          * wick_result;
+      expand(wick_result_2);
+      REQUIRE(to_latex(wick_result_2)
+                  == L"{ \\left({{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{{S^{{i_5}}_{{p_1}}}{S^{{i_4}}_{{p_2}}}{S^{{a_4}}_{{p_4}}}{S^{{a_5}}_{{p_3}}}}} + {{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{{-1.000000} \\times {S^{{i_5}}_{{p_1}}}{S^{{i_4}}_{{p_2}}}{S^{{a_5}}_{{p_4}}}{S^{{a_4}}_{{p_3}}}}} + {{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{{-1.000000} \\times {S^{{i_4}}_{{p_1}}}{S^{{i_5}}_{{p_2}}}{S^{{a_4}}_{{p_4}}}{S^{{a_5}}_{{p_3}}}}} + {{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{{S^{{i_4}}_{{p_1}}}{S^{{i_5}}_{{p_2}}}{S^{{a_5}}_{{p_4}}}{S^{{a_4}}_{{p_3}}}}}\\right) }");
+      wick.reduce(wick_result_2);
+      simplify(wick_result_2);
+      canonicalize(wick_result_2);
+      simplify(wick_result_2);
 
-//    std::wcout << L"H2*T2 = " << to_latex(wick_result_2) << std::endl;
-    REQUIRE(to_latex(wick_result_2)
-                == L"{ \\left({{g^{{a_101}{a_100}}_{{i_100}{i_101}}}{t^{{i_101}{i_100}}_{{a_100}{a_101}}}} + {{-1.000000} \\times {g^{{a_101}{a_100}}_{{i_100}{i_101}}}{t^{{i_101}{i_100}}_{{a_100}{a_101}}}} + {{-1.000000} \\times {g^{{a_101}{a_100}}_{{i_100}{i_101}}}{t^{{i_101}{i_100}}_{{a_100}{a_101}}}} + {{g^{{a_101}{a_100}}_{{i_100}{i_101}}}{t^{{i_101}{i_100}}_{{a_100}{a_101}}}}\\right) }");
+      std::wcout << L"H2*T2 = " << to_latex(wick_result_2) << std::endl;
+      REQUIRE(to_latex(wick_result_2)
+                  == L"{ \\left({{g^{{a_101}{a_100}}_{{i_100}{i_101}}}{t^{{i_101}{i_100}}_{{a_100}{a_101}}}} + {{-1.000000} \\times {g^{{a_101}{a_100}}_{{i_100}{i_101}}}{t^{{i_101}{i_100}}_{{a_100}{a_101}}}} + {{-1.000000} \\times {g^{{a_101}{a_100}}_{{i_100}{i_101}}}{t^{{i_101}{i_100}}_{{a_100}{a_101}}}} + {{g^{{a_101}{a_100}}_{{i_100}{i_101}}}{t^{{i_101}{i_100}}_{{a_100}{a_101}}}}\\right) }");
+    });
+
+#ifndef SEQUANT2_SKIP_LONG_TESTS
+    std::wstring result;
+    // 3-body ^ 2-body ^ 2-body ^ 3-body
+    SEQUANT2_PROFILE_SINGLE("wick(P3*H2*T2*T3)", {
+      auto opseq =
+          FNOperatorSeq({FNOperator({L"i_1", L"i_2", L"i_3"}, {L"a_1", L"a_2", L"a_3"}, V),
+                         FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}, V),
+                         FNOperator({L"a_4", L"a_5"}, {L"i_4", L"i_5"}, V),
+                         FNOperator({L"a_6", L"a_7", L"a_8"}, {L"i_6", L"i_7", L"i_8"}, V)
+                        });
+      auto wick = FWickTheorem{opseq};
+      auto wick_result = wick.full_contractions(true).spinfree(false).set_external_indices(IndexList{Index{L"i_1"}, Index{L"i_2"}, Index{L"i_3"}, Index{L"a_1"}, Index{L"a_2"}, Index{L"a_3"}}).compute();
+      REQUIRE(wick_result->size() == 14400);
+
+      // multiply tensor factors and expand
+      auto wick_result_2 = make<Tensor>(L"g", WstrList{L"p_1", L"p_2"}, WstrList{L"p_3", L"p_4"}, Symmetry::antisymm)
+          * make<Tensor>(L"t", WstrList{L"a_4", L"a_5"}, WstrList{L"i_4", L"i_5"}, Symmetry::antisymm)
+          * make<Tensor>(L"t", WstrList{L"a_6", L"a_7", L"a_8"}, WstrList{L"i_6", L"i_7", L"i_8"}, Symmetry::antisymm)
+          * wick_result;
+
+      expand(wick_result_2);
+      wick.reduce(wick_result_2);
+      simplify(wick_result_2);
+      canonicalize(wick_result_2);
+      simplify(wick_result_2);
+      REQUIRE(wick_result_2->size() == 14400);
+      result = to_latex(wick_result_2);
+    }
+    );
+
+//    std::wcout << L"P3*H2*T2*T3 = " << result << std::endl;
+#endif
+
   }
 
   }  // TEST_CASE("WickTheorem")

@@ -466,6 +466,11 @@ class Product : public Expr {
     return make<Product>(factors().begin(), factors().end());
   }
 
+  void add_identical(const std::shared_ptr<Product> &other) {
+    assert(this->hash_value() == other->hash_value());
+    scalar_ += other->scalar_;
+  }
+
  private:
   std::complex<double> scalar_ = {1.0, 0.0};
   container::svector<ExprPtr> factors_{};
@@ -488,6 +493,26 @@ class Product : public Expr {
   hash_type memoizing_hash() const override {
     hash_value_ = boost::hash_range(begin_subexpr(), end_subexpr());
     return *hash_value_;
+  }
+
+  virtual std::shared_ptr<Expr> canonicalize() override {
+    // recursively canonicalize subfactors ...
+    ranges::for_each(factors_, [this](auto &factor) {
+      auto bp = factor->canonicalize();
+      if (bp) {
+        assert(bp->template is<Constant>());
+        this->scalar_ *= std::static_pointer_cast<Constant>(bp)->value();
+      }
+    });
+    // TODO reindex products of Tensors by canonizing edges and relabeling
+
+    // ... then resort according to hash values ... TODO factorize product of Tensors
+    using std::begin;
+    using std::end;
+    std::stable_sort(begin(factors_), end(factors_), [](const auto &first, const auto &second) {
+      return first->hash_value() < second->hash_value();
+    });
+    return {};  // side effects are absorbed into the scalar_
   }
 
   bool static_compare(const Expr& that) const override {
@@ -602,6 +627,51 @@ class Sum : public Expr {
   hash_type memoizing_hash() const override {
     hash_value_ = boost::hash_range(begin_subexpr(), end_subexpr());
     return *hash_value_;
+  }
+
+  virtual std::shared_ptr<Expr> canonicalize() override {
+
+    // recursively canonicalize subfactors ...
+    const auto nsubexpr = ranges::size(*this);
+    for (std::size_t i = 0; i != nsubexpr; ++i) {
+      auto bp = summands_[i]->canonicalize();
+      if (bp) {
+        assert(bp->template is<Constant>());
+        summands_[i] = make<Product>(std::static_pointer_cast<Constant>(bp)->value(), ExprPtrList{summands_[i]});
+      }
+    };
+
+    // ... then resort according to hash values
+    using std::begin;
+    using std::end;
+    std::stable_sort(begin(summands_), end(summands_), [](const auto &first, const auto &second) {
+      return first->hash_value() < second->hash_value();
+    });
+
+    // ... then reduce terms whose hash values are identical
+    auto first_it = begin(summands_);
+    auto hash_comparer = [](const auto &first, const auto &second) {
+      return first->hash_value() != second->hash_value();
+    };
+    while ((first_it = std::adjacent_find(first_it, end(summands_), hash_comparer)) != end(summands_)) {
+      // find first element whose hash is not equal to (*first_it)->hash_value()
+      auto plast_it = std::find_if_not(first_it, end(summands_), [first_it](const auto &elem) {
+        return (*first_it)->hash_value() == elem->hash_value();
+      });
+      auto reduce_range = [first_it, this](auto &begin, auto &end) {
+        assert((*first_it)->is<Product>());
+        for (auto it = begin; it != end; ++it) {
+          if (it != first_it) {
+            assert((*it)->template is<Product>());
+            std::static_pointer_cast<Product>(*first_it)->add_identical(std::static_pointer_cast<Product>(*it));
+          }
+        }
+        this->summands_.erase(first_it + 1, end);
+      };
+      reduce_range(first_it, plast_it);
+    }
+
+    return {};  // side effects are absorbed into the scalar_
   }
 
   bool static_compare(const Expr& that) const override {
