@@ -6,6 +6,7 @@
 
 #include <iostream>
 #include "../../src/SeQuant2/wick.hpp"
+#include "../../src/SeQuant2/hash.hpp"
 
 struct Dummy : public sequant2::Expr {
   virtual ~Dummy() = default;
@@ -373,6 +374,8 @@ TEST_CASE("Expr", "[elements]") {
       expand(ex);
       REQUIRE(to_latex(ex)
                   == L"{ \\left({{{1.000000}}{{3.000000}}} + {{{1.000000}}{{4.000000}}} + {{{2.000000}}{{3.000000}}} + {{{2.000000}}{{4.000000}}}\\right) }");
+      simplify(ex);
+      std::wcout << "ex = " << to_latex(ex) << std::endl;
     }
     {
       auto ex = (make<Constant>(1.0) + make<Constant>(2.0) * (make<Constant>(3.0) - make<Constant>(4.0)))
@@ -383,6 +386,15 @@ TEST_CASE("Expr", "[elements]") {
       REQUIRE(to_latex(ex)
                   == L"{ \\left({{{1.000000}}{{{5.000000}}{{6.000000}}}} + {{{1.000000}}{{{5.000000}}{{7.000000}}}} + {{{1.000000}}{{8.000000}}} + {{{{2.000000}}{{3.000000}}}{{{5.000000}}{{6.000000}}}} + {{{{2.000000}}{{3.000000}}}{{{5.000000}}{{7.000000}}}} + {{{{2.000000}}{{3.000000}}}{{8.000000}}} + {{{{2.000000}}{{-1.000000} \\times {{4.000000}}}}{{{5.000000}}{{6.000000}}}} + {{{{2.000000}}{{-1.000000} \\times {{4.000000}}}}{{{5.000000}}{{7.000000}}}} + {{{{2.000000}}{{-1.000000} \\times {{4.000000}}}}{{8.000000}}}\\right) }");
     }
+  }
+
+  SECTION("hashing") {
+    const auto ex5_init =
+        std::vector<std::shared_ptr<Constant>>{std::make_shared<Constant>(1.0), std::make_shared<Constant>(2.0),
+                                               std::make_shared<Constant>(3.0)};
+    using boost::hash_value;
+    REQUIRE_NOTHROW(hash_value(ex5_init));
+    REQUIRE(hash_value(ex5_init) != hash_value(make<Constant>(1)));
   }
 
 }  // TEST_CASE("Expr"

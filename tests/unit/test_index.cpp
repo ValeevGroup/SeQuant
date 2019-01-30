@@ -91,6 +91,16 @@ TEST_CASE("Index", "[elements]") {
     REQUIRE(!(a1 < i1));
   }
 
+  SECTION("hashing") {
+    REQUIRE_NOTHROW(hash_value(Index{}));
+    Index i1(L"i_1");
+    Index i2(L"i_2");
+    REQUIRE_NOTHROW(hash_value(i1));
+    REQUIRE_NOTHROW(hash_value(i2));
+    REQUIRE(hash_value(i1) != hash_value(Index{}));
+    REQUIRE(hash_value(i1) != hash_value(i2));
+  }
+
   SECTION("latex") {
     Index i1(L"i_1");
     std::wstring i1_str;
