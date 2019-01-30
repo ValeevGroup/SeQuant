@@ -109,6 +109,16 @@ class Tensor : public Expr {
   index_container_type ket_{};
   Symmetry symmetry_ = Symmetry::nonsymm;
 
+  hash_type memoizing_hash() const override {
+    using std::begin;
+    using std::end;
+    auto val = boost::hash_range(begin(braket()), end(braket()));
+    boost::hash_combine(val, label_);
+    boost::hash_combine(val, symmetry_);
+    hash_value_ = val;
+    return *hash_value_;
+  }
+
   bool static_compare(const Expr& that) const override {
     const auto& that_cast = static_cast<const Tensor&>(that);
     if (this->label() == that_cast.label() && this->symmetry() == that_cast.symmetry() && this->bra_rank() == that_cast.bra_rank() && this->ket_rank() == that_cast.ket_rank()) {

@@ -484,6 +484,12 @@ class Product : public Expr {
     return factors_.empty() ? Expr::end_cursor() : cursor{&factors_[0] + factors_.size()};
   };
 
+  /// @note this hashes only the factors, not the scalar to make possible rapid finding of identical factors
+  hash_type memoizing_hash() const override {
+    hash_value_ = boost::hash_range(begin_subexpr(), end_subexpr());
+    return *hash_value_;
+  }
+
   bool static_compare(const Expr& that) const override {
     const auto& that_cast = static_cast<const Product&>(that);
     if (scalar() == that_cast.scalar() && factors().size() == that_cast.factors().size()) {
