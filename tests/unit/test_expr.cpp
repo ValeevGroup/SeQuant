@@ -375,7 +375,7 @@ TEST_CASE("Expr", "[elements]") {
       REQUIRE(to_latex(ex)
                   == L"{ \\left({{{1.000000}}{{3.000000}}} + {{{1.000000}}{{4.000000}}} + {{{2.000000}}{{3.000000}}} + {{{2.000000}}{{4.000000}}}\\right) }");
       simplify(ex);
-      std::wcout << "ex = " << to_latex(ex) << std::endl;
+//      std::wcout << "ex = " << to_latex(ex) << std::endl;
     }
     {
       auto ex = (make<Constant>(1.0) + make<Constant>(2.0) * (make<Constant>(3.0) - make<Constant>(4.0)))
