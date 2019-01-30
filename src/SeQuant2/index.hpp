@@ -11,6 +11,8 @@
 #include <set>
 #include <string>
 
+#include <boost/container_hash/hash.hpp>
+
 #include "space.hpp"
 #include "vector.hpp"
 
@@ -245,6 +247,10 @@ class IndexFactory {
   std::mutex mutex_;
   std::map<IndexSpace, std::atomic<std::size_t>> counters_;
 };
+
+inline auto hash_value(const Index &idx) {
+  return boost::hash_value(idx.label());
+}
 
 } // namespace sequant2
 
