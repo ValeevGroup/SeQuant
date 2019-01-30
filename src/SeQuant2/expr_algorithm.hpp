@@ -29,23 +29,25 @@ struct simplify_visitor {
     // canonicalization to be done by other visitors
   }
 
-  /// simplifies a Product
+  /// simplifies a Product by:
+  /// - flattening subproducts
+  /// - factoring in constants
   /// @param[in,out] expr (shared_ptr to ) a Product
   bool simplify_product(ExprPtr &expr) {
     auto &expr_ref = *expr;
     std::shared_ptr<Product> result;
     const auto nsubexpr = ranges::size(*expr);
     for (std::size_t i = 0; i != nsubexpr; ++i) {
-      if (expr_ref[i]->is<Product>()) {
+      const auto expr_i_is_product = expr_ref[i]->is<Product>();
+      const auto expr_i_is_constant = expr_ref[i]->is<Constant>();
+      if (expr_i_is_product || expr_i_is_constant) {
         // allocate the result, if not done yet
         if (!result) {
-          if (i > 0) {
-            // copy preceding factors
-            auto expr_product = std::static_pointer_cast<Product>(expr);
-            result = std::make_shared<Product>(expr_product->scalar(), begin(expr->expr()), begin(expr->expr()) + i);
-          } else
-            result = std::make_shared<Product>();
+          auto expr_product = std::static_pointer_cast<Product>(expr);
+          // copy preceding factors
+          result = std::make_shared<Product>(expr_product->scalar(), begin(expr->expr()), begin(expr->expr()) + i);
         }
+        // append correctly handles products and constants
         result->append(1, std::move(expr_ref[i]));
       }
     }
