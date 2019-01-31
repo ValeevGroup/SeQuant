@@ -1,5 +1,5 @@
-SeQuant: second quantization toolkit
-=======
+SeQuant $`^{++}`$ : second quantization toolkit
+===========================================
 
 prerequisites:
   * CMake 3.9

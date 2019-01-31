@@ -359,6 +359,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       auto wick = FWickTheorem{opseq};
       auto wick_result = wick.full_contractions(true).spinfree(false).compute();
       REQUIRE(wick_result->size() == 4);
+      std::wcout << "H2T2 tmp = " << to_latex(wick_result) << std::endl;
 
       // multiply tensor factors and expand
       auto wick_result_2 = make<Tensor>(L"g", WstrList{L"p_1", L"p_2"}, WstrList{L"p_3", L"p_4"}, Symmetry::antisymm)

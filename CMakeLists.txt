@@ -50,6 +50,10 @@ set(utests_src
         tests/unit/test_iterator.cpp
         tests/unit/timer.hpp)
 
+#set(utests_src
+#        tests/unit/test_wick.cpp
+#        tests/unit/timer.hpp)
+
 set(unit_test_executable unit_tests)
 add_executable(${unit_test_executable} EXCLUDE_FROM_ALL
         tests/unit/test_main.cpp
