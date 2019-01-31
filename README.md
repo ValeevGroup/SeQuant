@@ -1,4 +1,4 @@
-SeQuant $`^{++}`$ : second quantization toolkit
+SeQuant: second quantization toolkit in C++
 ===========================================
 
 prerequisites:
