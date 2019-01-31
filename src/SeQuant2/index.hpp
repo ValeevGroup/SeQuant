@@ -15,6 +15,7 @@
 
 #include "space.hpp"
 #include "vector.hpp"
+#include "tag.hpp"
 
 namespace sequant2 {
 
@@ -29,7 +30,7 @@ using IndexList = std::initializer_list<Index>;
 ///       of spaces
 /// @note label has format "label_index" where "label" is a string of characters excluding '_', and "index"
 ///       is an integer less than the value returned by min_tmp_label() .
-class Index {
+class Index : public Taggable {
  public:
   Index() = default;
 
@@ -115,9 +116,23 @@ class Index {
   const auto& proto_indices() const { return proto_indices_; }
 
   std::wstring to_latex() const {
+    auto protect_subscript = [](const std::wstring_view str) {
+      auto subsc_pos = str.find(L'_');
+      if (subsc_pos == std::wstring_view::npos)
+        return std::wstring(str);
+      else {
+        assert(subsc_pos + 1 < str.size());
+        if (subsc_pos + 2 == str.size())  // don't protect single character
+          return std::wstring(str);
+        std::wstring
+            result = std::wstring(str.substr(0, subsc_pos + 1)) + L"{" + std::wstring(str.substr(subsc_pos + 1)) + L"}";
+        return result;
+      }
+    };
+
     std::wstring result;
     result = L"{";
-    result += this->label();
+    result += protect_subscript(this->label());
     if (this->has_proto_indices()) {
       result += L"^{";
       for (const auto &pi: this->proto_indices()) {
@@ -219,6 +234,30 @@ void Index::check_for_duplicate_proto_indices() {
 
 inline std::wstring to_latex(const Index &index) {
   return index.to_latex();
+}
+
+class IndexSwapper {
+ public:
+  IndexSwapper() : even_num_of_swaps_(true) {}
+  static IndexSwapper &thread_instance() {
+    static thread_local IndexSwapper instance_{};
+    return instance_;
+  }
+
+  bool even_num_of_swaps() const { return even_num_of_swaps_; }
+  void reset() { even_num_of_swaps_ = true; }
+
+ private:
+  std::atomic<bool> even_num_of_swaps_;
+  void toggle() { even_num_of_swaps_ = !even_num_of_swaps_; }
+
+  friend inline void swap(Index &, Index &);
+};
+
+/// swap operator helps tracking # of swaps
+inline void swap(Index &first, Index &second) {
+  std::swap(first, second);
+  IndexSwapper::thread_instance().toggle();
 }
 
 /// Generates temporary indices

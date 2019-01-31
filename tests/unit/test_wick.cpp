@@ -148,7 +148,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       REQUIRE(result->size() == 2
           * 2);  // 1 product of 4 terms (since each contraction of 2 *general* indices produces 2 overlaps)
       REQUIRE(to_latex(result)
-                  == L"{{S^{{m_102}}_{{p_1}}}{S^{{p_4}}_{{m_102}}}{S^{{e_103}}_{{p_2}}}{S^{{p_3}}_{{e_103}}}}");
+                  == L"{{S^{{m_{102}}}_{{p_1}}}{S^{{p_4}}_{{m_{102}}}}{S^{{e_{103}}}_{{p_2}}}{S^{{p_3}}_{{e_{103}}}}}");
     }
 
     // two (pure qp) 2-body operators
@@ -343,6 +343,10 @@ TEST_CASE("WickTheorem", "[algorithms]") {
 
   }
 
+  auto print = [](const auto &lead, const auto &expr) {
+    std::wcout << lead << to_latex(expr) << std::endl;
+  };
+
   SECTION("Expression Reduction") {
     constexpr Vacuum V = Vacuum::SingleProduct;
 
@@ -365,16 +369,48 @@ TEST_CASE("WickTheorem", "[algorithms]") {
                   == L"{ \\left({{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{{S^{{i_5}}_{{p_1}}}{S^{{i_4}}_{{p_2}}}{S^{{a_4}}_{{p_4}}}{S^{{a_5}}_{{p_3}}}}} + {{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{{-1.000000} \\times {S^{{i_5}}_{{p_1}}}{S^{{i_4}}_{{p_2}}}{S^{{a_5}}_{{p_4}}}{S^{{a_4}}_{{p_3}}}}} + {{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{{-1.000000} \\times {S^{{i_4}}_{{p_1}}}{S^{{i_5}}_{{p_2}}}{S^{{a_4}}_{{p_4}}}{S^{{a_5}}_{{p_3}}}}} + {{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{{S^{{i_4}}_{{p_1}}}{S^{{i_5}}_{{p_2}}}{S^{{a_5}}_{{p_4}}}{S^{{a_4}}_{{p_3}}}}}\\right) }");
       wick.reduce(wick_result_2);
       simplify(wick_result_2);
+      TensorCanonicalizer::register_instance(std::make_shared<DefaultTensorCanonicalizer>(std::vector<Index>{}));
       canonicalize(wick_result_2);
       simplify(wick_result_2);
 
       std::wcout << L"H2*T2 = " << to_latex(wick_result_2) << std::endl;
       REQUIRE(to_latex(wick_result_2)
-                  == L"{ \\left({{g^{{a_101}{a_100}}_{{i_100}{i_101}}}{t^{{i_101}{i_100}}_{{a_100}{a_101}}}} + {{-1.000000} \\times {g^{{a_101}{a_100}}_{{i_100}{i_101}}}{t^{{i_101}{i_100}}_{{a_100}{a_101}}}} + {{-1.000000} \\times {g^{{a_101}{a_100}}_{{i_100}{i_101}}}{t^{{i_101}{i_100}}_{{a_100}{a_101}}}} + {{g^{{a_101}{a_100}}_{{i_100}{i_101}}}{t^{{i_101}{i_100}}_{{a_100}{a_101}}}}\\right) }");
+                  == L"{ \\left({{4.000000} \\times {g^{{a_{100}}{a_{101}}}_{{i_{100}}{i_{101}}}}{t^{{i_{100}}{i_{101}}}_{{a_{100}}{a_{101}}}}}\\right) }");
     });
 
-#ifndef SEQUANT2_SKIP_LONG_TESTS
-    std::wstring result;
+    // 2-body ^ 1-body ^ 1-body
+    SEQUANT2_PROFILE_SINGLE("wick(H2*T1*T1)", {
+      auto opseq =
+          FNOperatorSeq({FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}, V),
+                         FNOperator({L"a_4"}, {L"i_4"}, V),
+                         FNOperator({L"a_5"}, {L"i_5"}, V)
+                        });
+      auto wick = FWickTheorem{opseq};
+      auto ext_indices = std::vector<Index>({Index{L"i_1"}, Index{L"i_2"}, Index{L"i_3"}, Index{L"a_1"}, Index{L"a_2"},
+                                             Index{L"a_3"}});
+      auto wick_result = wick.full_contractions(true).spinfree(false).set_external_indices(ext_indices).compute();
+//      REQUIRE(wick_result->size() == 4);
+
+      // multiply tensor factors and expand
+      auto wick_result_2 = make<Tensor>(L"g", WstrList{L"p_1", L"p_2"}, WstrList{L"p_3", L"p_4"}, Symmetry::antisymm)
+          * make<Tensor>(L"t", WstrList{L"a_4"}, WstrList{L"i_4"}, Symmetry::antisymm)
+          * make<Tensor>(L"t", WstrList{L"a_5"}, WstrList{L"i_5"}, Symmetry::antisymm)
+          * wick_result;
+      expand(wick_result_2);
+//      REQUIRE(to_latex(wick_result_2)
+//                  == L"{ \\left({{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{{S^{{i_5}}_{{p_1}}}{S^{{i_4}}_{{p_2}}}{S^{{a_4}}_{{p_4}}}{S^{{a_5}}_{{p_3}}}}} + {{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{{-1.000000} \\times {S^{{i_5}}_{{p_1}}}{S^{{i_4}}_{{p_2}}}{S^{{a_5}}_{{p_4}}}{S^{{a_4}}_{{p_3}}}}} + {{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{{-1.000000} \\times {S^{{i_4}}_{{p_1}}}{S^{{i_5}}_{{p_2}}}{S^{{a_4}}_{{p_4}}}{S^{{a_5}}_{{p_3}}}}} + {{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{{S^{{i_4}}_{{p_1}}}{S^{{i_5}}_{{p_2}}}{S^{{a_5}}_{{p_4}}}{S^{{a_4}}_{{p_3}}}}}\\right) }");
+      wick.reduce(wick_result_2);
+      simplify(wick_result_2);
+      TensorCanonicalizer::register_instance(std::make_shared<DefaultTensorCanonicalizer>(std::vector<Index>{}));
+      canonicalize(wick_result_2);
+      simplify(wick_result_2);
+
+      print("H2*T1*T1 = ", wick_result_2);
+//      REQUIRE(to_latex(wick_result_2)
+//                  == L"{ \\left({{4.000000} \\times {g^{{a_100}{a_101}}_{{i_100}{i_101}}}{t^{{i_100}{i_101}}_{{a_100}{a_101}}}}\\right) }");
+    });
+
+#if 1
     // 3-body ^ 2-body ^ 2-body ^ 3-body
     SEQUANT2_PROFILE_SINGLE("wick(P3*H2*T2*T3)", {
       auto opseq =
@@ -384,7 +420,9 @@ TEST_CASE("WickTheorem", "[algorithms]") {
                          FNOperator({L"a_6", L"a_7", L"a_8"}, {L"i_6", L"i_7", L"i_8"}, V)
                         });
       auto wick = FWickTheorem{opseq};
-      auto wick_result = wick.full_contractions(true).spinfree(false).set_external_indices(IndexList{Index{L"i_1"}, Index{L"i_2"}, Index{L"i_3"}, Index{L"a_1"}, Index{L"a_2"}, Index{L"a_3"}}).compute();
+      auto ext_indices = std::vector<Index>({Index{L"i_1"}, Index{L"i_2"}, Index{L"i_3"}, Index{L"a_1"}, Index{L"a_2"},
+                                             Index{L"a_3"}});
+      auto wick_result = wick.full_contractions(true).spinfree(false).set_external_indices(ext_indices).compute();
       REQUIRE(wick_result->size() == 14400);
 
       // multiply tensor factors and expand
@@ -393,17 +431,28 @@ TEST_CASE("WickTheorem", "[algorithms]") {
           * make<Tensor>(L"t", WstrList{L"a_6", L"a_7", L"a_8"}, WstrList{L"i_6", L"i_7", L"i_8"}, Symmetry::antisymm)
           * wick_result;
 
+      std::wcout << "P3*H2*T2*T3 size before expand = " << wick_result_2->size() << std::endl;
       expand(wick_result_2);
+
+//      assert(wick_result_2->is<Sum>());
+//      auto wick_result_2_sum = std::static_pointer_cast<Sum>(wick_result_2);
+//      wick_result_2 = make<Sum>(wick_result_2_sum->summands().begin(), wick_result_2_sum->summands().begin()+2);
+      std::wcout << "P3*H2*T2*T3 size before reduce = " << wick_result_2->size() << std::endl;
+
       wick.reduce(wick_result_2);
+      std::wcout << "P3*H2*T2*T3 size before simplify = " << wick_result_2->size() << std::endl;
+
       simplify(wick_result_2);
+      std::wcout << "P3*H2*T2*T3 size before canonicalize = " << wick_result_2->size() << std::endl;
+
+      TensorCanonicalizer::register_instance(std::make_shared<DefaultTensorCanonicalizer>(ext_indices));
       canonicalize(wick_result_2);
+      std::wcout << "P3*H2*T2*T3 size after canonicalize = " << wick_result_2->size() << std::endl;
+//      std::wcout << "canon result = " << to_latex_align(wick_result_2, 20) << std::endl;
       simplify(wick_result_2);
-      REQUIRE(wick_result_2->size() == 14400);
-      result = to_latex(wick_result_2);
+      REQUIRE(wick_result_2->size() == 100);
     }
     );
-
-//    std::wcout << L"P3*H2*T2*T3 = " << result << std::endl;
 #endif
 
   }

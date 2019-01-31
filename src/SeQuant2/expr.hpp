@@ -18,6 +18,7 @@
 
 #include "latex.hpp"
 #include "vector.hpp"
+#include "hash.hpp"
 
 namespace sequant2 {
 
@@ -137,7 +138,7 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
   struct is_shared_ptr_of_expr_or_derived<std::shared_ptr<T>, std::enable_if_t<std::is_base_of<Expr,T>::value> > : std::true_type {};
 
   /// Computes and returns the memoized hash value.
-  /// @note always returns 0 unless this derived class overrides Expr::memoized_hash
+  /// @note always returns 0 unless this derived class overrides Expr::memoizing_hash
   /// @return the hash value for this Expr
   hash_type hash_value() const {
     return memoizing_hash();
@@ -463,7 +464,9 @@ class Product : public Expr {
   };
 
   std::shared_ptr<Expr> clone() const override {
-    return make<Product>(factors().begin(), factors().end());
+    auto cloned_factors =
+        factors() | ranges::view::transform([](const ExprPtr &ptr) { return ptr ? ptr->clone() : nullptr; });
+    return make<Product>(ranges::begin(cloned_factors), ranges::end(cloned_factors));
   }
 
   void add_identical(const std::shared_ptr<Product> &other) {
@@ -491,7 +494,8 @@ class Product : public Expr {
 
   /// @note this hashes only the factors, not the scalar to make possible rapid finding of identical factors
   hash_type memoizing_hash() const override {
-    hash_value_ = boost::hash_range(begin_subexpr(), end_subexpr());
+    auto deref_factors = factors() | ranges::view::transform([](const ExprPtr &ptr) { return *ptr; });
+    hash_value_ = boost::hash_range(ranges::begin(deref_factors), ranges::end(deref_factors));
     return *hash_value_;
   }
 
@@ -504,14 +508,24 @@ class Product : public Expr {
         this->scalar_ *= std::static_pointer_cast<Constant>(bp)->value();
       }
     });
-    // TODO reindex products of Tensors by canonizing edges and relabeling
+    // TODO reindex products of Tensors by canonizing vertices and relabeling internal indices in-order
 
-    // ... then resort according to hash values ... TODO factorize product of Tensors
+    // ... then resort
     using std::begin;
     using std::end;
+    // default sorts by type, then by hash
+    // TODO for same types see if that type's operator< is defined, otherwise use hashes
     std::stable_sort(begin(factors_), end(factors_), [](const auto &first, const auto &second) {
-      return first->hash_value() < second->hash_value();
+      const auto first_id = first->type_id();
+      const auto second_id = second->type_id();
+      if (first_id == second_id) {
+        return first->hash_value() < second->hash_value();
+      } else // first_id != second_id
+        return first_id < second_id;
     });
+
+    // TODO factorize product of Tensors (turn this into Products of Products
+
     return {};  // side effects are absorbed into the scalar_
   }
 
@@ -546,6 +560,12 @@ class Sum : public Expr {
       append(std::move(summand));
     }
   }
+
+  /// construct a Sum out of a range of summands
+  /// @param begin the begin iterator
+  /// @param end the end iterator
+  template<typename Iterator>
+  Sum(Iterator begin, Iterator end) : summands_(begin, end) {}
 
   /// append a summand to the sum
   /// @param summand the summand
@@ -607,6 +627,10 @@ class Sum : public Expr {
     return Expr::get_type_id<Sum>();
   };
 
+  std::shared_ptr<Expr> clone() const override {
+    auto cloned_summands = summands() | ranges::view::transform([](const ExprPtr &ptr) { return ptr->clone(); });
+    return make<Sum>(ranges::begin(cloned_summands), ranges::end(cloned_summands));
+  }
 
  private:
   container::svector<ExprPtr> summands_{};
@@ -625,13 +649,14 @@ class Sum : public Expr {
   };
 
   hash_type memoizing_hash() const override {
-    hash_value_ = boost::hash_range(begin_subexpr(), end_subexpr());
+    auto deref_summands = summands() | ranges::view::transform([](const ExprPtr &ptr) { return *ptr; });
+    hash_value_ = boost::hash_range(ranges::begin(deref_summands), ranges::end(deref_summands));
     return *hash_value_;
   }
 
   virtual std::shared_ptr<Expr> canonicalize() override {
 
-    // recursively canonicalize subfactors ...
+    // recursively canonicalize summands ...
     const auto nsubexpr = ranges::size(*this);
     for (std::size_t i = 0; i != nsubexpr; ++i) {
       auto bp = summands_[i]->canonicalize();
@@ -651,13 +676,15 @@ class Sum : public Expr {
     // ... then reduce terms whose hash values are identical
     auto first_it = begin(summands_);
     auto hash_comparer = [](const auto &first, const auto &second) {
-      return first->hash_value() != second->hash_value();
+      return first->hash_value() == second->hash_value();
     };
     while ((first_it = std::adjacent_find(first_it, end(summands_), hash_comparer)) != end(summands_)) {
+      assert((*first_it)->hash_value() == (*(first_it + 1))->hash_value());
       // find first element whose hash is not equal to (*first_it)->hash_value()
-      auto plast_it = std::find_if_not(first_it, end(summands_), [first_it](const auto &elem) {
+      auto plast_it = std::find_if_not(first_it + 1, end(summands_), [first_it](const auto &elem) {
         return (*first_it)->hash_value() == elem->hash_value();
       });
+      assert(plast_it - first_it > 1);
       auto reduce_range = [first_it, this](auto &begin, auto &end) {
         assert((*first_it)->is<Product>());
         for (auto it = begin; it != end; ++it) {
@@ -695,6 +722,40 @@ inline std::wstring to_latex(const Expr& expr) {
 inline std::wstring to_latex(const ExprPtr& exprptr) {
   return exprptr->to_latex();
 }
+
+/// splits long outer sum into a multiline align
+inline std::wstring to_latex_align(const ExprPtr &exprptr, size_t max_terms_per_align = 0) {
+  std::wstring result = to_latex(exprptr);
+  if (exprptr->is<Sum>()) {
+    result.erase(0, 7);  // remove leading  "{ \left"
+    result.replace(result.size() - 9, 9, L")");  // replace trailing "\right) }" with ")"
+    result = std::wstring(L"\\begin{align}\n") + result;
+    // assume no inner sums
+    int term_counter = 0;
+    std::wstring::size_type pos = 0;
+    while ((pos = result.find(L" + ", pos + 1)) != std::wstring::npos) {
+      ++term_counter;
+      if (max_terms_per_align > 0 && term_counter >= max_terms_per_align) {
+        result.insert(pos + 3, L"\n\\end{align}\n\\begin{align}\n");
+        term_counter = 1;
+      } else {
+        result.insert(pos + 3, L"\\\\\n");
+      }
+    }
+  } else {
+    result = std::wstring(L"\\begin{align}\n") + result;
+  }
+  result += L"\n\\end{align}";
+  return result;
+}
+
+template<typename Sequence>
+std::decay_t<Sequence> clone(Sequence &&exprseq) {
+  auto cloned_seq = exprseq | ranges::view::transform([](const ExprPtr &ptr) { return ptr ? ptr->clone() : nullptr; });
+  return std::decay_t<Sequence>(ranges::begin(cloned_seq), ranges::end(cloned_seq));
+}
+
+
 
 };  // namespace sequant2
 

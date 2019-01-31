@@ -7,11 +7,14 @@
 
 #include <memory>
 
+#include "index.hpp"
 #include "expr.hpp"
 
 namespace sequant2 {
 
 enum class Symmetry { symm, antisymm, nonsymm };
+
+class TensorCanonicalizer;
 
 /// @brief particle-symmetric Tensor, i.e. permuting
 class Tensor : public Expr {
@@ -30,7 +33,7 @@ class Tensor : public Expr {
 
  public:
   Tensor() = default;
-  virtual ~Tensor() = default;
+  virtual ~Tensor();
 
   Tensor(std::wstring_view label,
          IndexList bra_indices,
@@ -42,7 +45,7 @@ class Tensor : public Expr {
          WstrList bra_index_labels,
          WstrList ket_index_labels,
          Symmetry s = Symmetry::nonsymm)
-      : label_(label), bra_(make_indices(bra_index_labels)), ket_(make_indices(ket_index_labels)) {}
+      : label_(label), bra_(make_indices(bra_index_labels)), ket_(make_indices(ket_index_labels)), symmetry_(s) {}
 
   std::wstring_view label() const { return label_; }
   const auto& bra() const { return bra_; }
@@ -78,11 +81,7 @@ class Tensor : public Expr {
     return result;
   }
 
-  /// TODO implement basic canonicalizer, add ability to register custom canonicalizers looked up by tensor label
-  ///      only use basic canonicalizer if custom canonicalizer is not found
-  std::shared_ptr<Expr> canonicalize() override {
-    return {};
-  }
+  std::shared_ptr<Expr> canonicalize() override;
 
   Tensor &transform_indices(const std::map<Index, Index> &index_map) {
     bool mutated = false;
@@ -101,6 +100,10 @@ class Tensor : public Expr {
   type_id_type type_id() const override {
     return get_type_id<Tensor>();
   };
+
+  std::shared_ptr<Expr> clone() const override {
+    return make<Tensor>(*this);
+  }
 
  private:
   std::wstring label_{};
@@ -129,6 +132,44 @@ class Tensor : public Expr {
         return false;
     } else return false;
   }
+
+  friend class TensorCanonicalizer;
+};
+
+class TensorCanonicalizer {
+ public:
+  virtual ~TensorCanonicalizer();
+  /// returns a TensorCanonicalizer previously registered via TensorCanonicalizer::register_instance()
+  /// with @c label
+  static std::shared_ptr<TensorCanonicalizer> instance(std::wstring_view label = L"");
+  /// registers @c canonicalizer to be applied Tensor objects with label @c label ; leave the label
+  /// empty if @c canonicalizer is to apply to Tensor with any label)
+  static void register_instance(std::shared_ptr<TensorCanonicalizer> canonicalizer, std::wstring_view label = L"");
+
+  auto &bra(Tensor &t) { return t.bra_; };
+  auto &ket(Tensor &t) { return t.ket_; };
+  auto braket(Tensor &t) { return ranges::view::concat(bra(t), ket(t)); }
+
+  virtual std::shared_ptr<Expr> apply(Tensor &) = 0;
+
+ private:
+  static std::map<std::wstring, std::shared_ptr<TensorCanonicalizer>> &instance_map_accessor();
+};
+
+class DefaultTensorCanonicalizer : public TensorCanonicalizer {
+ public:
+  template<typename IndexContainer>
+  DefaultTensorCanonicalizer(IndexContainer &&external_indices) {
+    ranges::for_each(external_indices, [this](Index idx) {
+      this->external_indices_.insert(std::make_pair(std::wstring(idx.label()), idx));
+    });
+  }
+  virtual ~DefaultTensorCanonicalizer() = default;
+
+  std::shared_ptr<Expr> apply(Tensor &) override;
+
+ private:
+  std::map<std::wstring, Index> external_indices_;
 };
 
 inline std::shared_ptr<Expr> overlap(const Index& bra_index, const Index& ket_index) {

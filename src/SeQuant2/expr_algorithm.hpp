@@ -12,7 +12,6 @@ namespace sequant2 {
 inline void canonicalize(ExprPtr& expr) {
   const auto biproduct = expr->canonicalize();
   if (biproduct && biproduct->is<Constant>()) {
-    const auto constant_ptr = std::static_pointer_cast<Constant>(biproduct);
     expr = biproduct * expr;
   }
 }
@@ -127,14 +126,20 @@ struct expand_visitor {
     const auto nsubexpr = ranges::size(*expr);
     for(std::size_t i=0; i != nsubexpr; ++i) {
       if (expr_ref[i]->is<Sum>()) {
+        // make template for expr cloning to avoid cloning the Sum we are about to expand
+        auto scalar = std::static_pointer_cast<Product>(expr)->scalar();
+        auto exprseq_clone_template = container::svector<ExprPtr>(ranges::begin(*expr), ranges::end(*expr));
+        exprseq_clone_template[i].reset();
         // allocate the result, if not done yet
         if (!result)
           result = std::make_shared<Sum>();
         ExprPtr subexpr_to_expand = expr_ref[i];
         for(auto& subsubexpr: *subexpr_to_expand) {
-          auto expr_clone = expr->clone();
-          (*expr_clone)[i] = subsubexpr;
-          result->append(std::move(expr_clone));
+          auto exprseq_clone = clone(exprseq_clone_template); // clone the product factors without the expanded sum
+          exprseq_clone[i] = subsubexpr;  // scavenging summands here
+          using std::begin;
+          using std::end;
+          result->append(std::move(make<Product>(scalar, begin(exprseq_clone), end(exprseq_clone))));
         }
         expr = std::static_pointer_cast<Expr>(result); // expanded one Sum, return
         return true;
