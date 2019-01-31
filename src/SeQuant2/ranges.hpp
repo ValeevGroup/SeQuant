@@ -11,7 +11,7 @@ namespace sequant2 {
 
 /// @brief a flattened view over a nest of ranges
 /// @note this is just like view::join, but its iterator provides not only elements but also their indices as well as the host ranges.
-///       this is needed to be able to iterate over pairs of elements which skipping pairs of elements from same subrange
+///       this is needed to be able to iterate over pairs of elements while skipping pairs of elements from the same subrange
 /// @tparam RangeNest the type of a nest of ranges; use flattened_rangenest for RangeNest if you want recursive flattening.
 template <typename RangeNest>
 class flattened_rangenest

@@ -136,13 +136,15 @@ class Tensor : public Expr {
   friend class TensorCanonicalizer;
 };
 
+/// @brief Base class for Tensor canonicalizers
+/// To make custom canonicalizer make a derived class and register an instance of that class with TensorCanonicalizer::register_instance
 class TensorCanonicalizer {
  public:
   virtual ~TensorCanonicalizer();
   /// returns a TensorCanonicalizer previously registered via TensorCanonicalizer::register_instance()
   /// with @c label
   static std::shared_ptr<TensorCanonicalizer> instance(std::wstring_view label = L"");
-  /// registers @c canonicalizer to be applied Tensor objects with label @c label ; leave the label
+  /// registers @c canonicalizer to be applied to Tensor objects with label @c label ; leave the label
   /// empty if @c canonicalizer is to apply to Tensor with any label)
   static void register_instance(std::shared_ptr<TensorCanonicalizer> canonicalizer, std::wstring_view label = L"");
 
