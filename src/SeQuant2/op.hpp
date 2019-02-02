@@ -38,8 +38,8 @@ class Op {
   Op(Index index, Action action) noexcept : index_(index), action_(action) {}
   Op(std::wstring_view index_label, Action action) noexcept : index_(Index{index_label}), action_(action) {}
 
-  Index index() const { return index_; }
-  Action action() const { return action_; }
+  const Index &index() const { return index_; }
+  const Action &action() const { return action_; }
   /// applies (Hermitian) adjoint to this operator
   Op &adjoint() {
     action_ = sequant2::adjoint(action_);
