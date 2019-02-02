@@ -135,6 +135,7 @@ TEST_CASE("Expr", "[elements]") {
       // type ids get assigned in the order of use, which is program dependent, only check basic relations here
       REQUIRE(ex0->type_id() == Expr::get_type_id<Dummy>());
       REQUIRE(ex1->type_id() == Expr::get_type_id<Constant>());
+      REQUIRE(ex4->type_id() == Expr::get_type_id<VecExpr<double>>());
       REQUIRE(ex4->type_id() < Expr::get_type_id<VecExpr<float>>());  // VecExpr<float> had not been used yet
 
       REQUIRE(*ex0 == *ex0);
