@@ -48,6 +48,7 @@ set(utests_src
         tests/unit/test_tensor.cpp
         tests/unit/test_expr.cpp
         tests/unit/test_iterator.cpp
+        tests/unit/test_tensor_network.cpp
         tests/unit/timer.hpp)
 
 #set(utests_src

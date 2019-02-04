@@ -134,7 +134,9 @@ class Tensor : public Expr {
   }
 
   friend class TensorCanonicalizer;
-};
+};  // class Tensor
+
+using TensorPtr = std::shared_ptr<Tensor>;
 
 /// @brief Base class for Tensor canonicalizers
 /// To make custom canonicalizer make a derived class and register an instance of that class with TensorCanonicalizer::register_instance
