@@ -58,6 +58,7 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
   using hash_type = std::size_t;
   using type_id_type = int;   // to speed up comparisons
 
+  Expr() = default;
   virtual ~Expr() = default;
 
   /// @return true if this is a leaf
@@ -191,6 +192,11 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
   friend ranges::range_access;
 
  protected:
+  Expr(Expr &&) = default;
+  Expr(const Expr &) = default;
+  Expr &operator=(Expr &&) = default;
+  Expr &operator=(const Expr &) = default;
+
   struct cursor
   {
     using value_type = std::shared_ptr<Expr>;
@@ -494,7 +500,7 @@ class Product : public Expr {
 
   /// @note this hashes only the factors, not the scalar to make possible rapid finding of identical factors
   hash_type memoizing_hash() const override {
-    auto deref_factors = factors() | ranges::view::transform([](const ExprPtr &ptr) { return *ptr; });
+    auto deref_factors = factors() | ranges::view::transform([](const ExprPtr &ptr) -> const Expr & { return *ptr; });
     hash_value_ = boost::hash_range(ranges::begin(deref_factors), ranges::end(deref_factors));
     return *hash_value_;
   }
@@ -649,7 +655,7 @@ class Sum : public Expr {
   };
 
   hash_type memoizing_hash() const override {
-    auto deref_summands = summands() | ranges::view::transform([](const ExprPtr &ptr) { return *ptr; });
+    auto deref_summands = summands() | ranges::view::transform([](const ExprPtr &ptr) -> const Expr & { return *ptr; });
     hash_value_ = boost::hash_range(ranges::begin(deref_summands), ranges::end(deref_summands));
     return *hash_value_;
   }
