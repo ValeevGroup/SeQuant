@@ -157,20 +157,20 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
 #endif
 
   /// @tparam T Expr or a class derived from Expr
-  /// @return true if this is equal to that
-  /// @note the derived class must implement Expr::static_compare
+  /// @return true if @c *this is equal to @c that
+  /// @note the derived class must implement Expr::static_equal
   template <typename T>
   std::enable_if_t<std::is_base_of<Expr,T>::value, bool>
       operator==(const T& that) const {
     if (this->type_id() != that.type_id())
       return false;
     else
-      return this->static_compare(static_cast<const Expr&>(that));
+      return this->static_equal(static_cast<const Expr &>(that));
   }
 
   /// @tparam T Expr or a class derived from Expr
-  /// @return true if this is equal to that
-  /// @note the derived class must implement Expr::static_compare
+  /// @return true if @c *this is equal to @c that
+  /// @note the derived class must implement Expr::static_equal
   template <typename T>
   std::enable_if_t<std::is_base_of<Expr,T>::value, bool>
   operator!=(const T& that) const {
@@ -295,7 +295,7 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
   /// @param that an Expr object
   /// @note @c that is guaranteed to be of same type as @c *this, hence can be statically cast
   /// @return true if @c that is equivalent to *this
-  virtual bool static_compare(const Expr &that) const
+  virtual bool static_equal(const Expr &that) const
 #if __GNUG__
   { abort(); }
 #else
@@ -353,7 +353,7 @@ class Constant : public Expr {
     return *hash_value_;
   }
 
-  bool static_compare(const Expr& that) const override {
+  bool static_equal(const Expr &that) const override {
     return value() == static_cast<const Constant&>(that).value();
   }
 
@@ -535,7 +535,7 @@ class Product : public Expr {
     return {};  // side effects are absorbed into the scalar_
   }
 
-  bool static_compare(const Expr& that) const override {
+  bool static_equal(const Expr &that) const override {
     const auto& that_cast = static_cast<const Product&>(that);
     if (scalar() == that_cast.scalar() && factors().size() == that_cast.factors().size()) {
       if (this->empty()) return true;
@@ -707,7 +707,7 @@ class Sum : public Expr {
     return {};  // side effects are absorbed into the scalar_
   }
 
-  bool static_compare(const Expr& that) const override {
+  bool static_equal(const Expr &that) const override {
     const auto& that_cast = static_cast<const Sum&>(that);
     if (summands().size() == that_cast.summands().size()) {
       if (this->empty()) return true;

@@ -147,7 +147,7 @@ class Operator : public container::svector<Op<S>>, public Expr {
     return result;
   }
 
-  bool static_compare(const Expr& that) const override {
+  bool static_equal(const Expr &that) const override {
     const auto& that_cast = static_cast<const Operator&>(that);
     if (this->size() == that_cast.size()) {
       if (this->empty()) return true;
@@ -305,7 +305,7 @@ class NormalOperator : public Operator<S> {
   Vacuum vacuum_;
   std::size_t ncreators_ = 0;
 
-  bool static_compare(const Expr& that) const override {
+  bool static_equal(const Expr &that) const override {
     const auto& that_cast = static_cast<const NormalOperator&>(that);
     if (this->vacuum() == that_cast.vacuum() && this->ncreators() == that_cast.ncreators()) {
       return static_cast<const base_type&>(*this) == static_cast<const base_type&>(*this);
@@ -384,7 +384,7 @@ class NormalOperatorSequence : public container::svector<NormalOperator<S>>, pub
         });
   }
 
-  bool static_compare(const Expr& that) const override {
+  bool static_equal(const Expr &that) const override {
     const auto& that_cast = static_cast<const NormalOperatorSequence&>(that);
     if (this->vacuum() == that_cast.vacuum()) {
       if (this->empty()) return true;

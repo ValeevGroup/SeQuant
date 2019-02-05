@@ -122,7 +122,7 @@ class Tensor : public Expr {
     return *hash_value_;
   }
 
-  bool static_compare(const Expr& that) const override {
+  bool static_equal(const Expr &that) const override {
     const auto& that_cast = static_cast<const Tensor&>(that);
     if (this->label() == that_cast.label() && this->symmetry() == that_cast.symmetry() && this->bra_rank() == that_cast.bra_rank() && this->ket_rank() == that_cast.ket_rank()) {
       // compare hash values first

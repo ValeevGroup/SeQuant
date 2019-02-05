@@ -16,7 +16,7 @@ struct Dummy : public sequant2::Expr {
   type_id_type type_id() const override {
     return get_type_id<Dummy>();
   };
-  bool static_compare(const sequant2::Expr& that) const override {
+  bool static_equal(const sequant2::Expr &that) const override {
     return true;
   }
 };
@@ -72,7 +72,7 @@ struct VecExpr : public std::vector<T>, public sequant2::Expr {
     return const_cast<const VecExpr &>(*this).end_cursor();
   };
 
-  bool static_compare(const sequant2::Expr& that) const override {
+  bool static_equal(const sequant2::Expr &that) const override {
     return static_cast<const base_type&>(*this) == static_cast<const base_type&>(static_cast<const VecExpr&>(that));
   }
 
