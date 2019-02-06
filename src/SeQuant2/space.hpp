@@ -41,6 +41,9 @@ class IndexSpace {
     bool operator<(TypeAttr other) const {
       return this->to_int32() < other.to_int32();
     }
+
+    /// @return an invalid TypeAttr
+    static constexpr TypeAttr invalid() noexcept { return TypeAttr(0xffff); }
   };
   /// denotes other quantum numbers (particle type, spin, etc.)
   struct QuantumNumbersAttr : std::bitset<32> {
@@ -61,15 +64,20 @@ class IndexSpace {
     bool operator<(QuantumNumbersAttr other) const {
       return this->to_int32() < other.to_int32();
     }
+
+    /// @return an invalid TypeAttr
+    static constexpr QuantumNumbersAttr invalid() noexcept { return QuantumNumbersAttr(0xffff); }
   };
 
-  /// Tag describes all attibutes of a space (occupancy + quantum numbers)
+  /// @brief Attr describes all attibutes of a space (occupancy + quantum numbers)
   struct Attr : TypeAttr, QuantumNumbersAttr {
     Attr(TypeAttr type, QuantumNumbersAttr qns) noexcept : TypeAttr(type), QuantumNumbersAttr(qns) {};
     Attr(int32_t type, int32_t qns) noexcept : TypeAttr(type), QuantumNumbersAttr(qns) {};
 //    explicit Attr(int64_t value) : TypeAttr((value & 0xffffffff00000000) >> 32), QuantumNumbersAttr(value & 0x00000000ffffffff) {}
     Attr(const Attr &) = default;
     Attr(Attr &&) = default;
+    Attr &operator=(const Attr &) = default;
+    Attr &operator=(Attr &&) = default;
 
     const TypeAttr &type() const { return static_cast<const TypeAttr &>(*this); }
     TypeAttr &type() { return static_cast<TypeAttr &>(*this); }
@@ -92,8 +100,11 @@ class IndexSpace {
     }
 
     bool operator==(Attr other) const { return this->type() == other.type() && this->qns() == other.qns(); }
+    bool operator!=(Attr other) const { return !(*this == other); }
 
-    static Attr null() { return Attr{TypeAttr{0}, QuantumNumbersAttr{0}}; }
+    static Attr null() noexcept { return Attr{TypeAttr{0}, QuantumNumbersAttr{0}}; }
+    static Attr invalid() noexcept { return Attr{TypeAttr::invalid(), QuantumNumbersAttr::invalid()}; }
+    bool is_valid() const noexcept { return *this != Attr::invalid(); }
 
     /// Attr objects are ordered by quantum numbers, then by type
     bool operator<(Attr other) const {
@@ -157,6 +168,7 @@ class IndexSpace {
   /// @param attr the space attribute
   /// @throw bad_key if key not found
   static const IndexSpace &instance(Attr attr) {
+    assert(attr.is_valid());
     if (attr == Attr::null())
       return null_instance();
     if (!instance_exists(attr))
@@ -170,6 +182,7 @@ class IndexSpace {
   /// @throw bad_key if key not found
   static const IndexSpace &instance(Type type, QuantumNumbers qns = nullqns) {
     const auto attr = Attr(type, qns);
+    assert(attr.is_valid());
     if (attr == Attr::null())
       return null_instance();
     if (!instance_exists(attr))
@@ -184,6 +197,7 @@ class IndexSpace {
     if (key == null_key())
       return null_instance();
     const auto attr = to_attr(reduce_key(key));
+    assert(attr.is_valid());
     if (!instance_exists(attr))
       throw bad_key();
     return instances_.find(attr)->second;
@@ -196,11 +210,12 @@ class IndexSpace {
                                 QuantumNumbers qn = nullqns,
                                 bool throw_if_already_registered = true) {
     const auto attr = Attr(type, qn);
+    assert(attr.is_valid());
     if (instance_exists(attr) && throw_if_already_registered)
       throw bad_key();
     const auto irreducible_key = reduce_key(key);
     keys_[attr] = to_wstring(irreducible_key);
-    instances_.insert(std::make_pair(attr, IndexSpace(attr)));
+    instances_.emplace(std::make_pair(attr, IndexSpace(attr)));
   }
 
   /// @brief returns the instance of an IndexSpace object
@@ -221,9 +236,16 @@ class IndexSpace {
     return instance_exists(to_attr(reduce_key(key)));
   }
 
-  Attr attr() const noexcept { return attr_; }
-  Type type() const noexcept { return attr_.type(); }
-  QuantumNumbers qns() const noexcept { return attr_.qns(); }
+  Attr attr() const noexcept {
+    assert(attr_.is_valid());
+    return attr_;
+  }
+  Type type() const noexcept {
+    return attr().type();
+  }
+  QuantumNumbers qns() const noexcept {
+    return attr().qns();
+  }
 
   /// @brief returns the base key for IndexSpace objects
   /// @param space an IndexSpace object
@@ -232,10 +254,11 @@ class IndexSpace {
     return base_key(space.attr());
   }
 
-    /// @brief returns the base key for IndexSpace objects of the given attribute
+  /// @brief returns the base key for IndexSpace objects of the given attribute
   /// @param attr the space attribute
   /// @throw bad_key if this object has not beed registered
   static std::wstring base_key(Attr attr) {
+    assert(attr.is_valid());
     if (attr == Attr::null())
       return L"";
     if (!instance_exists(attr))
@@ -243,13 +266,43 @@ class IndexSpace {
     return keys_.find(attr)->second;
   }
 
+  /// Default ctor creates an invalid space
+  IndexSpace() : attr_(Attr::invalid()) {}
+
+  IndexSpace(const IndexSpace &other) {
+    if (!other.attr().is_valid())
+      throw std::invalid_argument("IndexSpace copy ctor received invalid argument");
+    attr_ = other.attr_;
+  }
+  IndexSpace(IndexSpace &&other) {
+    if (!other.attr().is_valid())
+      throw std::invalid_argument("IndexSpace move ctor received invalid argument");
+    attr_ = other.attr_;
+  }
+  IndexSpace &operator=(const IndexSpace &other) {
+    if (!other.attr().is_valid())
+      throw std::invalid_argument("IndexSpace copy assignment operator received invalid argument");
+    attr_ = other.attr_;
+    return *this;
+  }
+  IndexSpace &operator=(IndexSpace &&other) {
+    if (!other.attr().is_valid())
+      throw std::invalid_argument("IndexSpace move assignment operator received invalid argument");
+    attr_ = other.attr_;
+    return *this;
+  }
+
  private:
 
-  Attr attr_;
+  Attr attr_ = Attr::invalid();
   /// @brief constructs an instance of an IndexSpace object
-  explicit IndexSpace(Attr attr) noexcept : attr_(attr) {}
+  explicit IndexSpace(Attr attr) noexcept : attr_(attr) {
+    assert(attr.is_valid());
+  }
   /// @brief constructs an instance of an IndexSpace object
-  IndexSpace(Type type, QuantumNumbers qns) noexcept : attr_(type, qns) {}
+  IndexSpace(Type type, QuantumNumbers qns) noexcept : attr_(type, qns) {
+    assert(attr_.is_valid());
+  }
 
   static std::map<Attr, std::wstring> keys_;
   static std::map<Attr, IndexSpace> instances_;

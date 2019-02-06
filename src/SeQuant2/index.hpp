@@ -44,7 +44,7 @@ class Index : public Taggable {
   ///       outlive this object
   Index(std::wstring_view label, const IndexSpace &space,
         IndexList proto_indices)
-      : label_(label), space_(&space), proto_indices_(proto_indices) {
+      : label_(label), space_(space), proto_indices_(proto_indices) {
     check_for_duplicate_proto_indices();
     check_nontmp_label();
   }
@@ -63,7 +63,7 @@ class Index : public Taggable {
   /// responsibility to ensure that @c space will
   ///       outlive this object
   Index(std::wstring_view label, const IndexSpace &space) noexcept
-      : label_(label), space_(&space), proto_indices_() {
+      : label_(label), space_(space), proto_indices_() {
     check_nontmp_label();
   }
 
@@ -82,7 +82,7 @@ class Index : public Taggable {
   /// i.e. duplicates are not allowed)
   Index(std::wstring_view label,
         WstrList proto_index_labels)
-      : label_(label), space_(&IndexSpace::instance(label)) {
+      : label_(label), space_(IndexSpace::instance(label)) {
     if (proto_index_labels.size() != 0) {
       proto_indices_.reserve(proto_index_labels.size());
       for (const auto &plabel : proto_index_labels)
@@ -98,7 +98,7 @@ class Index : public Taggable {
   /// unique in a given scope (e.g. a single term in an expression) use IndexFactory.
   /// @param space an IndexSpace object
   /// @return a unique temporary index in space @c space
-  static Index make_tmp_index(const IndexSpace& space) {
+  static Index make_tmp_index(const IndexSpace &space) {
     return Index(IndexSpace::base_key(space) + L'_' + std::to_wstring(Index::next_tmp_index()), &space);
   }
 
@@ -106,14 +106,14 @@ class Index : public Taggable {
   std::wstring_view label() const { return label_; }
   /// @return the IndexSpace object
   const IndexSpace &space() const {
-    assert(space_ != nullptr);
-    return *space_;
+    assert(space_.attr().is_valid());
+    return space_;
   }
 
   /// @return true if this index has proto indices
   bool has_proto_indices() const { return !proto_indices_.empty(); }
   /// @return the list of proto indices of this index
-  const auto& proto_indices() const { return proto_indices_; }
+  const auto &proto_indices() const { return proto_indices_; }
 
   std::wstring to_latex() const {
     auto protect_subscript = [](const std::wstring_view str) {
@@ -157,11 +157,9 @@ class Index : public Taggable {
 
  private:
   std::wstring label_{};
-  const IndexSpace *space_{};          // pointer to allow default initialization
+  IndexSpace space_{};
   container::vector<Index> proto_indices_{}; // an unordered set of unique indices on
   // which this index depends on
-
-  Index(std::wstring_view label, const IndexSpace *space) : label_(label), space_(space) {}
 
   /// throws std::invalid_argument if have duplicates in proto_indices_
   inline void check_for_duplicate_proto_indices();
@@ -177,14 +175,18 @@ class Index : public Taggable {
   static std::optional<std::size_t> label_index(std::wstring_view label) {
     const auto underscore_position = label.find(L'_');
     if (underscore_position != std::wstring::npos) {
-      assert(underscore_position+1 < label.size());  // check that there is at least one char past the underscore
-      return std::wcstol(label.substr(underscore_position+1, std::wstring::npos).data(), NULL, 10);
-    }
-    else
+      assert(underscore_position + 1 < label.size());  // check that there is at least one char past the underscore
+      return std::wcstol(label.substr(underscore_position + 1, std::wstring::npos).data(), NULL, 10);
+    } else
       return {};
   }
 
   friend class IndexFactory;
+
+  // this ctor is only used by make_tmp_index and IndexFactory and bypasses check for nontmp index
+  Index(std::wstring_view label, const IndexSpace *space) noexcept
+      : label_(label), space_(*space), proto_indices_() {
+  }
 };
 
 /// @return true if @c index1 is identical to @c index2 , i.e. they belong to
@@ -203,17 +205,23 @@ inline bool operator!=(const Index &i1, const Index &i2) { return !(i1 == i2); }
 /// @brief The ordering operator
 
 /// @return true if @c i1 preceeds @c i2 in the canonical order; Index objects
-/// are ordered lexicographically,
-///         first by space, then by label, then by protoindices (if any)
+/// are ordered lexicographically, first by tags (if defined for both), then
+/// by space, then by label, then by protoindices (if any)
 inline bool operator<(const Index &i1, const Index &i2) {
-  if (i1.space() < i2.space()) {
-    return true;
-  } else if (i1.space() == i2.space()) {
-    if (i1.label() < i2.label()) {
-      return true;
-    } else return i1.label() == i2.label() && i1.proto_indices() < i2.proto_indices();
-  } else { // i1.space > i2.space
-    return false;
+  // compare tags first
+  const bool have_tags = i1.has_tag() && i2.has_tag();
+  if (!have_tags || i1.tag_equal(i2)) {
+    if (i1.space() == i2.space()) {
+      if (i1.label() == i2.label()) {
+        return i1.proto_indices() < i2.proto_indices();
+      } else {
+        return i1.label() < i2.label();
+      }
+    } else {
+      return i1.space() < i2.space();
+    }
+  } else {
+    return i1.tag_less_than(i2);
   }
 }
 
@@ -289,6 +297,15 @@ class IndexFactory {
 
 inline auto hash_value(const Index &idx) {
   return boost::hash_value(idx.label());
+}
+
+template<typename Container>
+auto make_indices(WstrList index_labels = {}) {
+  Container result;
+  for (const auto &label: index_labels) {
+    result.push_back(Index{label});
+  }
+  return result;
 }
 
 } // namespace sequant2

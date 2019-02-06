@@ -105,6 +105,12 @@ class Tensor : public Expr {
     return make<Tensor>(*this);
   }
 
+  void reset_tags() const {
+    ranges::for_each(braket(), [](const auto &idx) {
+      idx.reset_tag();
+    });
+  }
+
  private:
   std::wstring label_{};
   using index_container_type = container::svector<Index>;
@@ -131,6 +137,23 @@ class Tensor : public Expr {
       else
         return false;
     } else return false;
+  }
+
+  bool static_less_than(const Expr &that) const override {
+    const auto &that_cast = static_cast<const Tensor &>(that);
+    if (this->bra_rank() == that_cast.bra_rank()) {
+      if (this->ket_rank() == that_cast.ket_rank()) {
+        if (this->label() == that_cast.label()) {
+          return Expr::static_less_than(that);
+        } else {
+          return this->label() < that_cast.label();
+        }
+      } else {
+        return this->ket_rank() < that_cast.ket_rank();
+      }
+    } else {
+      return this->bra_rank() < that_cast.bra_rank();
+    }
   }
 
   friend class TensorCanonicalizer;
@@ -162,15 +185,115 @@ class TensorCanonicalizer {
 
 class DefaultTensorCanonicalizer : public TensorCanonicalizer {
  public:
+  DefaultTensorCanonicalizer() = default;
+
+  /// @tparam IndexContainer a Container of Index objects such that @c IndexContainer::value_type is convertible to Index (e.g. this can be std::vector or std::set , but not std::map)
+  /// @param external_indices container of external Index objects
+  /// @warning @c external_indices is assumed to be immutable during the lifetime of this object
   template<typename IndexContainer>
   DefaultTensorCanonicalizer(IndexContainer &&external_indices) {
-    ranges::for_each(external_indices, [this](Index idx) {
-      this->external_indices_.insert(std::make_pair(std::wstring(idx.label()), idx));
+    ranges::for_each(external_indices, [this](const Index &idx) {
+      this->external_indices_.emplace(std::make_pair(std::wstring(idx.label()), idx));
     });
   }
   virtual ~DefaultTensorCanonicalizer() = default;
 
-  std::shared_ptr<Expr> apply(Tensor &) override;
+  /// Implements TensorCanonicalizer::apply
+  /// @note Canonicalizes @c t by sorting its bra (if @c t.symmetry()==Symmetry::nonsymm ) or its bra and ket (if @c t.symmetry()!=Symmetry::nonsymm ),
+  ///       with the external indices
+  std::shared_ptr<Expr> apply(Tensor &t) override;
+
+  template<typename Compare>
+  std::shared_ptr<Expr> apply(Tensor &t, const Compare &comp) {
+    auto symmetry = t.symmetry();
+    auto is_antisymm = symmetry == Symmetry::antisymm;
+
+    // can only handle anisymmetric case so far
+    assert(is_antisymm);
+
+    //
+    auto sort_swappables = [](const auto &begin, const auto &end, const auto &compare) {
+      const auto len = end - begin;
+      switch (len) {
+        case 0: return;
+
+        case 1: return;
+
+        case 2: {
+          auto &elem1 = *begin;
+          auto &elem2 = *(begin + 1);
+          if (compare(elem1, elem2))
+            return;
+          else {
+            swap(elem1, elem2);
+            return;
+          }
+        }
+          break;
+
+        case 3: {
+          // bubble sort
+          // {2,3} -> [2,3]
+          {
+            auto &elem2 = *(begin + 1);
+            auto &elem3 = *(begin + 2);
+            const auto lt23 = compare(elem2, elem3);
+            if (!lt23)
+              swap(elem2, elem3);
+          }
+          // sort {1,[2,3]} -> [1, 2, 3]
+          {
+            auto &elem1 = *(begin);
+            auto &elem2 = *(begin + 1);
+            auto &elem3 = *(begin + 2);
+            const auto lt12 = compare(elem1, elem2);
+            const auto lt13 = compare(elem1, elem3);
+            if (!lt12)
+              swap(elem1, elem2);
+            if (!lt13)
+              swap(elem2, elem3);
+          }
+          return;
+        }
+          break;
+
+        default:abort();  // not yet implemented
+      }
+    };
+
+    bool even = true;
+    switch (symmetry) {
+      case Symmetry::antisymm: {
+        auto &_bra = this->bra(t);
+        auto &_ket = this->ket(t);
+        using std::begin;
+        using std::end;
+//      std::wcout << "canonicalizing " << to_latex(t);
+        IndexSwapper::thread_instance().reset();
+        // std::{stable_}sort does not necessarily use swap! so must implement sort outselves .. thankfully ranks will be low so can stick with bubble
+        sort_swappables(begin(_bra), end(_bra), comp);
+        sort_swappables(begin(_ket), end(_ket), comp);
+        even = IndexSwapper::thread_instance().even_num_of_swaps();
+//      std::wcout << " is " << (even ? "even" : "odd") << " and produces " << to_latex(t) << std::endl;
+      }
+        break;
+
+      case Symmetry::symm: {
+
+      }
+        break;
+
+      case Symmetry::nonsymm: {
+
+      }
+        break;
+
+      default:abort();
+    }
+
+    std::shared_ptr<Expr> result = is_antisymm ? (even == false ? make<Constant>(-1) : nullptr) : nullptr;
+    return result;
+  }
 
  private:
   std::map<std::wstring, Index> external_indices_;

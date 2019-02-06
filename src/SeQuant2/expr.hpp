@@ -22,6 +22,8 @@
 
 namespace sequant2 {
 
+extern bool debug_canonicalize;
+
 /// @brief Base expression class
 
 /// Expr represents the interface needed to form expression trees. Classes that
@@ -81,6 +83,13 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
   /// @return the biproduct of canonicalization, or @c nullptr if no biproduct generated
   virtual std::shared_ptr<Expr> canonicalize() {
     return {};  // by default do nothing and return nullptr
+  }
+
+  /// Performs approximate, but fast, canonicalization of @c this and returns the biproduct of canonicalization (e.g. phase)
+  /// The default is to use canonicalize(), unless overridden in the derived class.
+  /// @return the biproduct of canonicalization, or @c nullptr if no biproduct generated
+  virtual std::shared_ptr<Expr> rapid_canonicalize() {
+    return this->canonicalize();
   }
 
   /// recursively visit the tree, i.e. call visitor on each subexpression in depth-first fashion
@@ -177,6 +186,18 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
      return ! operator==(that);
   }
 
+  /// @tparam T Expr or a class derived from Expr
+  /// @return true if @c *this is less than @c that
+  /// @note the derived class must implement Expr::static_less_than
+  template<typename T>
+  std::enable_if_t<std::is_base_of<Expr, T>::value, bool>
+  operator<(const T &that) const {
+    if (type_id() == that.type_id()) { // if same type, use generic (or type-specific, if available) comparison
+      return static_less_than(static_cast<const Expr &>(that));
+    } else {  // order types by type id
+      return type_id() < that.type_id();
+    }
+  }
   /// @return (unique) type id of class T
   template <typename T> static  type_id_type get_type_id() {
     static type_id_type type_id = get_next_type_id();
@@ -187,6 +208,50 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
   /// @return true if this object is of type @c T
   template<typename T>
   bool is() const { return this->type_id() == get_type_id<T>(); }
+
+  /// @tparam T an Expr type
+  /// @return this object cast to type @c T
+  template<typename T>
+  const T &as() const {
+    assert(this->is<T>());
+    return static_cast<const T &>(*this);
+  }
+
+  /// @tparam T an Expr type
+  /// @return this object cast to type @c T
+  template<typename T>
+  T &as() {
+    assert(this->is<T>());
+    return static_cast<T &>(*this);
+  }
+
+/** @name in-place arithmetic operators
+ *  Virtual in-place arithmetic operators to be overridden in expressions for which these make sense.
+ */
+///@{
+
+  /// @brief in-place multiply @c *this by @c that
+  /// @return reference to @c *this
+  /// @throw std::logic_error if not implemented for this class, or cannot be implemented for the particular @c that
+  virtual Expr &operator*=(const Expr &that) {
+    throw std::logic_error("Expr::operator*= not implemented in this derived class");
+  }
+
+  /// @brief in-place add @c that to @c *this
+  /// @return reference to @c *this
+  /// @throw std::logic_error if not implemented for this class, or cannot be implemented for the particular @c that
+  virtual Expr &operator+=(const Expr &that) {
+    throw std::logic_error("Expr::operator+= not implemented in this derived class");
+  }
+
+  /// @brief in-place subtract @c that from @c *this
+  /// @return reference to @c *this
+  /// @throw std::logic_error if not implemented for this class, or cannot be implemented for the particular @c that
+  virtual Expr &operator-=(const Expr &that) {
+    throw std::logic_error("Expr::operator-= not implemented in this derived class");
+  }
+
+///@}
 
  private:
   friend ranges::range_access;
@@ -285,13 +350,6 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
     hash_value_.reset();
   }
 
- private:
-  /// @return returns next type id in the grand class list
-  static type_id_type get_next_type_id() {
-    static std::atomic<type_id_type> grand_type_id = 0;
-    return ++grand_type_id;
-  };
-
   /// @param that an Expr object
   /// @note @c that is guaranteed to be of same type as @c *this, hence can be statically cast
   /// @return true if @c that is equivalent to *this
@@ -301,6 +359,22 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
 #else
   =0;
 #endif
+
+  /// @param that an Expr object
+  /// @note @c that is guaranteed to be of same type as @c *this, hence can be statically cast
+  /// @note base comparison compares Expr::hash_value() , specialize to each type as needed
+  /// @return true if @c *this is less than @c that
+  virtual bool static_less_than(const Expr &that) const {
+    return this->hash_value() < that.hash_value();
+  }
+
+ private:
+  /// @return returns next type id in the grand class list
+  static type_id_type get_next_type_id() {
+    static std::atomic<type_id_type> grand_type_id = 0;
+    return ++grand_type_id;
+  };
+
 };  // Expr
 
 using ExprPtr = std::shared_ptr<Expr>;
@@ -333,16 +407,39 @@ class Constant : public Expr {
     return L"{" + sequant2::to_latex(value()) + L"}";
   }
 
-  virtual std::shared_ptr<Expr> canonicalize() override {
-    return {};
-  }
-
   type_id_type type_id() const override {
     return get_type_id<Constant>();
   };
 
   std::shared_ptr<Expr> clone() const override {
     return make<Constant>(this->value());
+  }
+
+  virtual Expr &operator*=(const Expr &that) override {
+    if (that.is<Constant>()) {
+      value_ *= that.as<Constant>().value();
+    } else {
+      throw std::logic_error("Constant::operator*=(that): not valid for that");
+    }
+    return *this;
+  }
+
+  virtual Expr &operator+=(const Expr &that) override {
+    if (that.is<Constant>()) {
+      this->value() += that.as<Constant>().value();
+    } else {
+      throw std::logic_error("Constant::operator+=(that): not valid for that");
+    }
+    return *this;
+  }
+
+  virtual Expr &operator-=(const Expr &that) override {
+    if (that.is<Constant>()) {
+      this->value() -= that.as<Constant>().value();
+    } else {
+      throw std::logic_error("Constant::operator-=(that): not valid for that");
+    }
+    return *this;
   }
 
  private:
@@ -475,6 +572,11 @@ class Product : public Expr {
     return make<Product>(ranges::begin(cloned_factors), ranges::end(cloned_factors));
   }
 
+  virtual Expr &operator*=(const Expr &that) override {
+    this->append(1, const_cast<Expr &>(that).shared_from_this());
+    return *this;
+  }
+
   void add_identical(const std::shared_ptr<Product> &other) {
     assert(this->hash_value() == other->hash_value());
     scalar_ += other->scalar_;
@@ -505,35 +607,8 @@ class Product : public Expr {
     return *hash_value_;
   }
 
-  virtual std::shared_ptr<Expr> canonicalize() override {
-    // recursively canonicalize subfactors ...
-    ranges::for_each(factors_, [this](auto &factor) {
-      auto bp = factor->canonicalize();
-      if (bp) {
-        assert(bp->template is<Constant>());
-        this->scalar_ *= std::static_pointer_cast<Constant>(bp)->value();
-      }
-    });
-    // TODO reindex products of Tensors by canonizing vertices and relabeling internal indices in-order
-
-    // ... then resort
-    using std::begin;
-    using std::end;
-    // default sorts by type, then by hash
-    // TODO for same types see if that type's operator< is defined, otherwise use hashes
-    std::stable_sort(begin(factors_), end(factors_), [](const auto &first, const auto &second) {
-      const auto first_id = first->type_id();
-      const auto second_id = second->type_id();
-      if (first_id == second_id) {
-        return first->hash_value() < second->hash_value();
-      } else // first_id != second_id
-        return first_id < second_id;
-    });
-
-    // TODO factorize product of Tensors (turn this into Products of Products
-
-    return {};  // side effects are absorbed into the scalar_
-  }
+  virtual std::shared_ptr<Expr> canonicalize() override;
+  virtual std::shared_ptr<Expr> rapid_canonicalize() override;
 
   bool static_equal(const Expr &that) const override {
     const auto& that_cast = static_cast<const Product&>(that);
@@ -638,6 +713,16 @@ class Sum : public Expr {
     return make<Sum>(ranges::begin(cloned_summands), ranges::end(cloned_summands));
   }
 
+  virtual Expr &operator+=(const Expr &that) override {
+    this->append(const_cast<Expr &>(that).shared_from_this());
+    return *this;
+  }
+
+  virtual Expr &operator-=(const Expr &that) override {
+    this->append(make<Product>(-1, ExprPtrList{const_cast<Expr &>(that).shared_from_this()}));
+    return *this;
+  }
+
  private:
   container::svector<ExprPtr> summands_{};
 
@@ -661,50 +746,61 @@ class Sum : public Expr {
   }
 
   virtual std::shared_ptr<Expr> canonicalize() override {
+    return canonicalize_<true>();
+  }
+  virtual std::shared_ptr<Expr> rapid_canonicalize() override {
+    return canonicalize_<false>();
+  }
 
-    // recursively canonicalize summands ...
-    const auto nsubexpr = ranges::size(*this);
-    for (std::size_t i = 0; i != nsubexpr; ++i) {
-      auto bp = summands_[i]->canonicalize();
-      if (bp) {
-        assert(bp->template is<Constant>());
-        summands_[i] = make<Product>(std::static_pointer_cast<Constant>(bp)->value(), ExprPtrList{summands_[i]});
-      }
-    };
+  template<bool TwoPass>
+  std::shared_ptr<Expr> canonicalize_() {
 
-    // ... then resort according to hash values
-    using std::begin;
-    using std::end;
-    std::stable_sort(begin(summands_), end(summands_), [](const auto &first, const auto &second) {
-      return first->hash_value() < second->hash_value();
-    });
-
-    // ... then reduce terms whose hash values are identical
-    auto first_it = begin(summands_);
-    auto hash_comparer = [](const auto &first, const auto &second) {
-      return first->hash_value() == second->hash_value();
-    };
-    while ((first_it = std::adjacent_find(first_it, end(summands_), hash_comparer)) != end(summands_)) {
-      assert((*first_it)->hash_value() == (*(first_it + 1))->hash_value());
-      // find first element whose hash is not equal to (*first_it)->hash_value()
-      auto plast_it = std::find_if_not(first_it + 1, end(summands_), [first_it](const auto &elem) {
-        return (*first_it)->hash_value() == elem->hash_value();
-      });
-      assert(plast_it - first_it > 1);
-      auto reduce_range = [first_it, this](auto &begin, auto &end) {
-        assert((*first_it)->is<Product>());
-        for (auto it = begin; it != end; ++it) {
-          if (it != first_it) {
-            assert((*it)->template is<Product>());
-            std::static_pointer_cast<Product>(*first_it)->add_identical(std::static_pointer_cast<Product>(*it));
-          }
+    const auto npasses = TwoPass ? 2 : 1;
+    for (auto pass = 0; pass != npasses; ++pass) {
+      // recursively canonicalize summands ...
+      const auto nsubexpr = ranges::size(*this);
+      for (std::size_t i = 0; i != nsubexpr; ++i) {
+        auto bp = (pass == 0) ? summands_[i]->rapid_canonicalize() : summands_[i]->canonicalize();
+        if (bp) {
+          assert(bp->template is<Constant>());
+          summands_[i] = make<Product>(std::static_pointer_cast<Constant>(bp)->value(), ExprPtrList{summands_[i]});
         }
-        this->summands_.erase(first_it + 1, end);
       };
-      reduce_range(first_it, plast_it);
+
+      // ... then resort according to hash values
+      using std::begin;
+      using std::end;
+      std::stable_sort(begin(summands_), end(summands_), [](const auto &first, const auto &second) {
+        return *first < *second;
+      });
+
+      // ... then reduce terms whose hash values are identical
+      auto first_it = begin(summands_);
+      auto hash_comparer = [](const auto &first, const auto &second) {
+        return first->hash_value() == second->hash_value();
+      };
+      while ((first_it = std::adjacent_find(first_it, end(summands_), hash_comparer)) != end(summands_)) {
+        assert((*first_it)->hash_value() == (*(first_it + 1))->hash_value());
+        // find first element whose hash is not equal to (*first_it)->hash_value()
+        auto plast_it = std::find_if_not(first_it + 1, end(summands_), [first_it](const auto &elem) {
+          return (*first_it)->hash_value() == elem->hash_value();
+        });
+        assert(plast_it - first_it > 1);
+        auto reduce_range = [first_it, this](auto &begin, auto &end) {
+          assert((*first_it)->is<Product>());
+          for (auto it = begin; it != end; ++it) {
+            if (it != first_it) {
+              assert((*it)->template is<Product>());
+              std::static_pointer_cast<Product>(*first_it)->add_identical(std::static_pointer_cast<Product>(*it));
+            }
+          }
+          this->summands_.erase(first_it + 1, end);
+        };
+        reduce_range(first_it, plast_it);
+      }
     }
 
-    return {};  // side effects are absorbed into the scalar_
+    return {};  // side effects are absorbed into summands
   }
 
   bool static_equal(const Expr &that) const override {
