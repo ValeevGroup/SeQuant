@@ -13,6 +13,9 @@ struct Dummy : public sequant2::Expr {
   std::wstring to_latex() const override {
     return L"{\\text{Dummy}}";
   }
+  std::wstring to_wolfram() const override {
+    return L"Dummy[]";
+  }
   type_id_type type_id() const override {
     return get_type_id<Dummy>();
   };
@@ -43,6 +46,21 @@ struct VecExpr : public std::vector<T>, public sequant2::Expr {
       }
     }
     result += L"\\}}";
+    return result;
+  }
+  std::wstring to_wolfram() const override {
+    std::wstring result = L"VecExpr[";
+    size_t count = 1;
+    for (const auto &e: *this) {
+      const auto last_it = count == this->size();
+      if constexpr (sequant2::Expr::is_shared_ptr_of_expr_or_derived<T>::value) {
+        result += e->to_wolfram() + (last_it ? L"" : L",");
+      } else {
+        result += std::to_wstring(e) + (last_it ? L"" : L",");
+      }
+      ++count;
+    }
+    result += L"]";
     return result;
   }
 
@@ -229,6 +247,21 @@ TEST_CASE("Expr", "[elements]") {
                                                  std::make_shared<Constant>(3.0)};
       auto ex6 = std::make_shared<VecExpr<ExprPtr>>(begin(ex5_init), end(ex5_init));
       REQUIRE(ex6->to_latex() == L"{\\text{VecExpr}\\{{{1.000000}} {{2.000000}} {{3.000000}} \\}}");
+    }
+  }
+
+  SECTION("wolfram") {
+    Product sp0{};
+    sp0.append(2.0, std::make_shared<Dummy>());
+    REQUIRE(to_wolfram(sp0) == L"Times[2.000000,Dummy[]]");
+
+    // VecExpr<shared_ptr<Expr>>
+    {
+      const auto ex5_init =
+          std::vector<std::shared_ptr<Constant>>{std::make_shared<Constant>(1.0), std::make_shared<Constant>(2.0),
+                                                 std::make_shared<Constant>(3.0)};
+      auto ex6 = std::make_shared<VecExpr<ExprPtr>>(begin(ex5_init), end(ex5_init));
+      REQUIRE(ex6->to_wolfram() == L"VecExpr[1.000000,2.000000,3.000000]");
     }
   }
 

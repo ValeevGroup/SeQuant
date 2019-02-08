@@ -17,6 +17,7 @@
 #include <boost/callable_traits.hpp>
 
 #include "latex.hpp"
+#include "wolfram.hpp"
 #include "vector.hpp"
 #include "hash.hpp"
 
@@ -71,6 +72,11 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
   /// @return the string representation of @c this
   virtual std::wstring to_latex() const {
     throw std::logic_error("Expr::to_latex not implemented in this derived class");
+  }
+
+  /// @return the string representation of @c this in the Wolfram Language format
+  virtual std::wstring to_wolfram() const {
+    throw std::logic_error("Expr::to_wolfram not implemented in this derived class");
   }
 
   /// @return a clone of this object
@@ -407,6 +413,10 @@ class Constant : public Expr {
     return L"{" + sequant2::to_latex(value()) + L"}";
   }
 
+  std::wstring to_wolfram() const override {
+    return sequant2::to_wolfram(value());
+  }
+
   type_id_type type_id() const override {
     return get_type_id<Constant>();
   };
@@ -562,6 +572,21 @@ class Product : public Expr {
     return result;
   }
 
+  std::wstring to_wolfram() const override {
+    std::wstring result = L"Times[";
+    if (scalar() != decltype(scalar_)(1)) {
+      result += sequant2::to_wolfram(scalar()) + L",";
+    }
+    const auto nfactors = factors().size();
+    size_t factor_count = 1;
+    for (const auto &i : factors()) {
+      result += i->to_wolfram() + (factor_count == nfactors ? L"" : L",");
+      ++factor_count;
+    }
+    result += L"]";
+    return result;
+  }
+
   type_id_type type_id() const override {
     return get_type_id<Product>();
   };
@@ -701,6 +726,20 @@ class Sum : public Expr {
         result += L" + ";
     }
     result += L"\\right) }";
+    return result;
+  }
+
+  std::wstring to_wolfram() const override {
+    std::wstring result;
+    result = L"Plus[";
+    std::size_t counter = 0;
+    for (const auto &i : summands()) {
+      result += i->to_wolfram();
+      ++counter;
+      if (counter != summands().size())
+        result += L",";
+    }
+    result += L"]";
     return result;
   }
 
@@ -849,6 +888,14 @@ inline std::wstring to_latex_align(const ExprPtr &exprptr, size_t max_terms_per_
   }
   result += L"\n\\end{align}";
   return result;
+}
+
+inline std::wstring to_wolfram(const Expr &expr) {
+  return expr.to_wolfram();
+}
+
+inline std::wstring to_wolfram(const ExprPtr &exprptr) {
+  return exprptr->to_wolfram();
 }
 
 template<typename Sequence>

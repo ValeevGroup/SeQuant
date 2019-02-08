@@ -31,6 +31,7 @@ add_library(SeQuant2
         src/SeQuant2/vector.hpp
         src/SeQuant2/meta.hpp
         src/SeQuant2/latex.hpp
+        src/SeQuant2/wolfram.hpp
         src/SeQuant2/expr_algorithm.hpp
         src/SeQuant2/wick.impl.hpp
         src/SeQuant2/expr_operator.hpp
