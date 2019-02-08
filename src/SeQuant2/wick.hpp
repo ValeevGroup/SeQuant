@@ -238,14 +238,21 @@ class WickTheorem {
       const auto qpspace_right = qpcreator_space<S>(right, vacuum);
       const auto qpspace_common = intersection(qpspace_left, qpspace_right);
       const auto index_common = Index::make_tmp_index(qpspace_common);
-      if (qpspace_common != left.index().space() && qpspace_common != right.index().space()) {  // may need 2 overlaps if neither space is pure qp creator/annihilator
+
+      // preserve bra/ket positions of left & right
+      const auto left_is_ann = left.action() == Action::annihilate;
+      assert(left_is_ann || right.action() == Action::annihilate);
+
+      if (qpspace_common != left.index().space() &&
+          qpspace_common !=
+              right.index().space()) {  // may need 2 overlaps if neither space
+        // is pure qp creator/annihilator
         auto result = std::make_shared<Product>();
-        result->append(1, overlap(left.index(), index_common));
-        result->append(1, overlap(index_common, right.index()));
+        result->append(1, left_is_ann ? overlap(left.index(), index_common) : overlap(index_common, left.index()));
+        result->append(1, left_is_ann ? overlap(index_common, right.index()) : overlap(right.index(), index_common));
         return result;
-      }
-      else {
-        return overlap(left.index(), right.index());
+      } else {
+        return left_is_ann ? overlap(left.index(), right.index()) : overlap(right.index(), left.index());
       }
     }
   }
