@@ -229,6 +229,29 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       REQUIRE(result->size() == 2);
     }
 
+    // 4 general 1-body operators
+    {
+      auto opseq =
+          FNOperatorSeq({FNOperator({L"p_1"}, {L"p_2"}, V),
+                         FNOperator({L"p_3"}, {L"p_4"}, V),
+                         FNOperator({L"p_5"}, {L"p_6"}, V),
+                         FNOperator({L"p_7"}, {L"p_8"}, V)
+                        });
+      auto ext_indices =
+          make_indices<std::vector<Index>>(WstrList{L"p_1", L"p_2", L"p_3", L"p_4", L"p_5", L"p_6", L"p_7", L"p_8"});
+      auto wick1 = FWickTheorem{opseq};
+      auto result1 = wick1.full_contractions(true).set_external_indices(ext_indices).spinfree(false).compute();
+//      std::wcout << "G1*G1*G1*G1 = " << to_latex_align(result1) << std::endl;
+      REQUIRE(result1->size() == 9);
+      auto wick2 = FWickTheorem{opseq};
+      auto result2 =
+          wick2.full_contractions(true).set_external_indices(ext_indices).set_op_connections(std::vector<std::pair<int,
+                                                                                                                   int>>{
+              {1, 2}, {1, 3}}).spinfree(false).compute();
+//      std::wcout << "G1*G1*G1*G1(1->2, 1->3) = " << to_latex_align(result2) << std::endl;
+      REQUIRE(result1->size() == 9);
+    }
+
     // 4-body ^ 2-body ^ 2-body
     {
       auto opseq =
@@ -409,6 +432,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
 #if 1
     // 3-body ^ 2-body ^ 2-body ^ 3-body
     SEQUANT2_PROFILE_SINGLE("wick(P3*H2*T2*T3)", {
+      constexpr bool connected_only = true;
       auto opseq =
           FNOperatorSeq({FNOperator({L"i_1", L"i_2", L"i_3"}, {L"a_1", L"a_2", L"a_3"}, V),
                          FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}, V),
@@ -417,9 +441,10 @@ TEST_CASE("WickTheorem", "[algorithms]") {
                         });
 //      auto ext_indices = make_indices<std::vector<Index>>(WstrList{L"i_1", L"i_2", L"i_3", L"a_1", L"a_2", L"a_3"});
       auto ext_indices = make_indices<std::vector<Index>>({});
-      auto wick = FWickTheorem{opseq};
-      auto wick_result = wick.full_contractions(true).set_external_indices(ext_indices).spinfree(false).compute();
-      REQUIRE(wick_result->size() == 14400);
+      auto wick = FWickTheorem{opseq}.full_contractions(true).set_external_indices(ext_indices).spinfree(false);
+      if (connected_only) wick.set_op_connections(std::vector<std::pair<int, int>>{{1, 2}, {1, 3}});
+      auto wick_result = wick.compute();
+      REQUIRE(wick_result->size() == (connected_only ? 12960 : 14400));
 
       // multiply tensor factors and expand
       auto wick_result_2 =
@@ -444,8 +469,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       std::wcout << "P3*H2*T2*T3 size after canonicalize = " << wick_result_2->size() << std::endl;
 
       std::wcout << "canon result = " << to_latex_align(wick_result_2, 20) << std::endl;
-      simplify(wick_result_2);
-      REQUIRE(wick_result_2->size() == 9);  // 9 = 2 disconnected + 7 connected terms
+      REQUIRE(wick_result_2->size() == (connected_only ? 7 : 9));  // 9 = 2 disconnected + 7 connected terms
     }
     );
 #endif
