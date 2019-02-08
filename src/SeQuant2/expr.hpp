@@ -787,7 +787,7 @@ class Sum : public Expr {
         });
         assert(plast_it - first_it > 1);
         auto reduce_range = [first_it, this](auto &begin, auto &end) {
-          assert((*first_it)->is<Product>());
+          assert((*first_it)->template is<Product>());
           for (auto it = begin; it != end; ++it) {
             if (it != first_it) {
               assert((*it)->template is<Product>());
