@@ -14,8 +14,8 @@ TEST_CASE("TensorNetwork", "[elements]") {
 
   SECTION("constructors") {
 
-    auto t1 = make<Tensor>(L"F", WstrList{L"i_1"}, WstrList{L"i_2"});
-    auto t2 = make<Tensor>(L"t", WstrList{L"i_2"}, WstrList{L"i_1"});
+    auto t1 = ex<Tensor>(L"F", WstrList{L"i_1"}, WstrList{L"i_2"});
+    auto t2 = ex<Tensor>(L"t", WstrList{L"i_2"}, WstrList{L"i_1"});
     auto t1_x_t2 = t1 * t2;
     REQUIRE_NOTHROW(TensorNetwork(*t1_x_t2));
 

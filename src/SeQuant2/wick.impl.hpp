@@ -219,7 +219,7 @@ inline void apply_index_replacement_rules(
         }
 
         if (erase_it) {
-          *it = make<Constant>(1);
+          *it = ex<Constant>(1);
         }
       }  // Kronecker delta
       else {

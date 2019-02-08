@@ -58,11 +58,11 @@ struct simplify_visitor {
     const auto expr_size = ranges::size(*expr);
     auto expr_product = std::static_pointer_cast<Product>(expr);
     if (expr_product->scalar() == 0.) {  // if scalar = 0, make it 0 (too aggressive?)
-      expr = make<Constant>(0);
+      expr = ex<Constant>(0);
       expr_changed = true;
     }
     else if (expr_size == 0) {  // if product reduced to a constant make it a constant
-      expr = make<Constant>(expr_product->scalar());
+      expr = ex<Constant>(expr_product->scalar());
       expr_changed = true;
     }
     else if (expr_size == 1 && expr_product->scalar() == 1.) {  // if product has 1 term and the scalar is 1, lift the factor
@@ -139,7 +139,7 @@ struct expand_visitor {
           exprseq_clone[i] = subsubexpr;  // scavenging summands here
           using std::begin;
           using std::end;
-          result->append(std::move(make<Product>(scalar, begin(exprseq_clone), end(exprseq_clone))));
+          result->append(std::move(ex<Product>(scalar, begin(exprseq_clone), end(exprseq_clone))));
         }
         expr = std::static_pointer_cast<Expr>(result); // expanded one Sum, return
         return true;
@@ -179,7 +179,7 @@ struct expand_visitor {
       expr_changed = true;
     }
     else if (ranges::size(*expr) == 0) {  // if sum contains 0 elements, turn to 0
-      expr = make<Constant>(0);
+      expr = ex<Constant>(0);
       expr_changed = true;
     }
     return expr_changed;

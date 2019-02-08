@@ -69,7 +69,7 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
     return ranges::empty(*this);
   }
 
-  /// @return the string representation of @c this
+  /// @return the string representation of @c this in the LaTeX format
   virtual std::wstring to_latex() const {
     throw std::logic_error("Expr::to_latex not implemented in this derived class");
   }
@@ -104,20 +104,23 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
   /// @param atoms_only if true, will visit only the leafs; the default is to visit all nodes
   /// @return true if this object was visited
   /// @sa expr_range
-  template <typename Visitor> bool visit(Visitor& visitor, const bool atoms_only = false) {
+  template<typename Visitor>
+  bool visit(Visitor &&visitor, const bool atoms_only = false) {
     for(auto& subexpr_ptr: expr()) {
       const auto subexpr_is_an_atom = subexpr_ptr->is_atom();
       const auto need_to_visit_subexpr = !atoms_only || subexpr_is_an_atom;
       bool visited = false;
       if (!subexpr_is_an_atom)  // if not a leaf, recur into it
-        visited = subexpr_ptr->visit(visitor, atoms_only);
+        visited = subexpr_ptr->visit(std::forward<Visitor>(visitor), atoms_only);
       // call on the subexpression itself, if not yet done so
       if (need_to_visit_subexpr && !visited)
         visitor(subexpr_ptr);
     }
     // can only visit itself here if visitor(const ExprPtr&) is valid
     bool this_visited = false;
-    if constexpr(boost::callable_traits::is_invocable_r<void,Visitor,const std::shared_ptr<Expr>&>::value) {
+    if constexpr(boost::callable_traits::is_invocable_r<void,
+                                                        std::remove_reference_t<Visitor>,
+                                                        const std::shared_ptr<Expr> &>::value) {
       if (!atoms_only || this->is_atom()) {
         visitor(shared_from_this());
         this_visited = true;
@@ -389,7 +392,8 @@ using ExprPtr = std::shared_ptr<Expr>;
 /// @tparam T a class derived from Expr
 /// @tparam Args a parameter pack type such that T(std::forward<Args>...) is well-formed
 /// @param args a parameter pack such that T(args...) is well-formed
-template <typename T, typename ... Args> ExprPtr make(Args&& ... args) {
+template<typename T, typename ... Args>
+ExprPtr ex(Args &&... args) {
   return std::make_shared<T>(std::forward<Args>(args)...);
 }
 
@@ -419,10 +423,10 @@ class Constant : public Expr {
 
   type_id_type type_id() const override {
     return get_type_id<Constant>();
-  };
+  }
 
   std::shared_ptr<Expr> clone() const override {
-    return make<Constant>(this->value());
+    return ex<Constant>(this->value());
   }
 
   virtual Expr &operator*=(const Expr &that) override {
@@ -594,7 +598,7 @@ class Product : public Expr {
   std::shared_ptr<Expr> clone() const override {
     auto cloned_factors =
         factors() | ranges::view::transform([](const ExprPtr &ptr) { return ptr ? ptr->clone() : nullptr; });
-    return make<Product>(ranges::begin(cloned_factors), ranges::end(cloned_factors));
+    return ex<Product>(ranges::begin(cloned_factors), ranges::end(cloned_factors));
   }
 
   virtual Expr &operator*=(const Expr &that) override {
@@ -749,7 +753,7 @@ class Sum : public Expr {
 
   std::shared_ptr<Expr> clone() const override {
     auto cloned_summands = summands() | ranges::view::transform([](const ExprPtr &ptr) { return ptr->clone(); });
-    return make<Sum>(ranges::begin(cloned_summands), ranges::end(cloned_summands));
+    return ex<Sum>(ranges::begin(cloned_summands), ranges::end(cloned_summands));
   }
 
   virtual Expr &operator+=(const Expr &that) override {
@@ -758,7 +762,7 @@ class Sum : public Expr {
   }
 
   virtual Expr &operator-=(const Expr &that) override {
-    this->append(make<Product>(-1, ExprPtrList{const_cast<Expr &>(that).shared_from_this()}));
+    this->append(ex<Product>(-1, ExprPtrList{const_cast<Expr &>(that).shared_from_this()}));
     return *this;
   }
 
@@ -802,7 +806,7 @@ class Sum : public Expr {
         auto bp = (pass == 0) ? summands_[i]->rapid_canonicalize() : summands_[i]->canonicalize();
         if (bp) {
           assert(bp->template is<Constant>());
-          summands_[i] = make<Product>(std::static_pointer_cast<Constant>(bp)->value(), ExprPtrList{summands_[i]});
+          summands_[i] = ex<Product>(std::static_pointer_cast<Constant>(bp)->value(), ExprPtrList{summands_[i]});
         }
       };
 

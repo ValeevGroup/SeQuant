@@ -133,8 +133,8 @@ TEST_CASE("Expr", "[elements]") {
       REQUIRE(ex->is_atom());
     }
     {
-      const auto ex = make<Constant>(1) + make<Constant>(2);
-      REQUIRE(!ex->is_atom());
+      const auto e = ex<Constant>(1) + ex<Constant>(2);
+      REQUIRE(!e->is_atom());
     }
   }
 
@@ -308,9 +308,9 @@ TEST_CASE("Expr", "[elements]") {
     };
 
     {
-      auto ex = (make<Constant>(1.0) + make<Constant>(2.0)) * (make<Constant>(3.0) + make<Constant>(4.0));
-      REQUIRE_NOTHROW(expr_range{ex});
-      expr_range exrng{ex};
+      auto x = (ex<Constant>(1.0) + ex<Constant>(2.0)) * (ex<Constant>(3.0) + ex<Constant>(4.0));
+      REQUIRE_NOTHROW(expr_range{x});
+      expr_range exrng{x};
       REQUIRE(ranges::begin(exrng) == ranges::begin(exrng));
       REQUIRE(ranges::begin(exrng) != ranges::end(exrng));
       REQUIRE(std::distance(ranges::begin(exrng), ranges::end(exrng)) == 4);
@@ -344,10 +344,10 @@ TEST_CASE("Expr", "[elements]") {
     }
 
     {
-      auto ex = (make<Constant>(1.0) + make<Constant>(2.0) * (make<Constant>(3.0) - make<Constant>(4.0)))
-          * (make<Constant>(5.0) + (make<Constant>(6.0) + make<Constant>(7.0)) * make<Constant>(8.0));
-      REQUIRE_NOTHROW(expr_range{ex});
-      expr_range exrng{ex};
+      auto x = (ex<Constant>(1.0) + ex<Constant>(2.0) * (ex<Constant>(3.0) - ex<Constant>(4.0)))
+          * (ex<Constant>(5.0) + (ex<Constant>(6.0) + ex<Constant>(7.0)) * ex<Constant>(8.0));
+      REQUIRE_NOTHROW(expr_range{x});
+      expr_range exrng{x};
       REQUIRE(std::distance(ranges::begin(exrng), ranges::end(exrng)) == 8);
 
       auto i = 0;
@@ -402,23 +402,23 @@ TEST_CASE("Expr", "[elements]") {
 
   SECTION("expand") {
     {
-      auto ex = (make<Constant>(1.0) + make<Constant>(2.0)) * (make<Constant>(3.0) + make<Constant>(4.0));
-      REQUIRE(to_latex(ex)
+      auto x = (ex<Constant>(1.0) + ex<Constant>(2.0)) * (ex<Constant>(3.0) + ex<Constant>(4.0));
+      REQUIRE(to_latex(x)
                   == L"{{ \\left({{1.000000}} + {{2.000000}}\\right) }{ \\left({{3.000000}} + {{4.000000}}\\right) }}");
-      expand(ex);
-      REQUIRE(to_latex(ex)
+      expand(x);
+      REQUIRE(to_latex(x)
                   == L"{ \\left({{{1.000000}}{{3.000000}}} + {{{1.000000}}{{4.000000}}} + {{{2.000000}}{{3.000000}}} + {{{2.000000}}{{4.000000}}}\\right) }");
-      simplify(ex);
-//      std::wcout << "ex = " << to_latex(ex) << std::endl;
+      simplify(x);
+//      std::wcout << "ex = " << to_latex(x) << std::endl;
     }
     {
-      auto ex = (make<Constant>(1.0) + make<Constant>(2.0) * (make<Constant>(3.0) - make<Constant>(4.0)))
-          * (make<Constant>(5.0) * (make<Constant>(6.0) + make<Constant>(7.0)) + make<Constant>(8.0));
-      REQUIRE(to_latex(ex)
+      auto x = (ex<Constant>(1.0) + ex<Constant>(2.0) * (ex<Constant>(3.0) - ex<Constant>(4.0)))
+          * (ex<Constant>(5.0) * (ex<Constant>(6.0) + ex<Constant>(7.0)) + ex<Constant>(8.0));
+      REQUIRE(to_latex(x)
                   == L"{{ \\left({{1.000000}} + {{{2.000000}}{ \\left({{3.000000}} + {{-1.000000} \\times {{4.000000}}}\\right) }}\\right) }{ \\left({{{5.000000}}{ \\left({{6.000000}} + {{7.000000}}\\right) }} + {{8.000000}}\\right) }}");
-      expand(ex);
-//      std::wcout << "ex = " << to_latex(ex) << std::endl;
-      REQUIRE(to_latex(ex)
+      expand(x);
+//      std::wcout << "ex = " << to_latex(x) << std::endl;
+      REQUIRE(to_latex(x)
                   == L"{ \\left({{{1.000000}}{{{5.000000}}{{6.000000}}}} + {{{1.000000}}{{{5.000000}}{{7.000000}}}} + {{{1.000000}}{{8.000000}}} + {{{{2.000000}}{{3.000000}}}{{{5.000000}}{{6.000000}}}} + {{{{2.000000}}{{3.000000}}}{{{5.000000}}{{7.000000}}}} + {{{{2.000000}}{{3.000000}}}{{8.000000}}} + {{{{2.000000}}{{{4.000000}}}}{{{5.000000}}{{6.000000}}}} + {{{{2.000000}}{{{4.000000}}}}{{{5.000000}}{{7.000000}}}} + {{{{2.000000}}{{{4.000000}}}}{{8.000000}}}\\right) }");
     }
   }
@@ -429,7 +429,7 @@ TEST_CASE("Expr", "[elements]") {
                                                std::make_shared<Constant>(3.0)};
     using boost::hash_value;
     REQUIRE_NOTHROW(hash_value(ex5_init));
-    REQUIRE(hash_value(ex5_init) != hash_value(make<Constant>(1)));
+    REQUIRE(hash_value(ex5_init) != hash_value(ex<Constant>(1)));
   }
 
 }  // TEST_CASE("Expr"

@@ -159,6 +159,16 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       auto result = wick.full_contractions(true).spinfree(false).compute();
       REQUIRE(result->size() == 4);
     }
+    // two (pure qp) 3-body operators
+    {
+      auto opseq =
+          FNOperatorSeq({FNOperator({L"i_1", L"i_2", L"i_3"}, {L"a_1", L"a_2", L"a_3"}, V),
+                         FNOperator({L"a_4", L"a_5", L"a_6"}, {L"i_4", L"i_5", L"i_6"}, V)});
+      auto wick = FWickTheorem{opseq};
+      REQUIRE_NOTHROW(wick.full_contractions(true).spinfree(false).compute());
+      auto result = wick.full_contractions(true).spinfree(false).compute();
+      REQUIRE(result->size() == 36);
+    }
 
     // two general 2-body operators
     {
@@ -384,8 +394,8 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       std::wcout << "H2T2 tmp = " << to_latex(wick_result) << std::endl;
 
       // multiply tensor factors and expand
-      auto wick_result_2 = make<Tensor>(L"g", WstrList{L"p_1", L"p_2"}, WstrList{L"p_3", L"p_4"}, Symmetry::antisymm)
-          * make<Tensor>(L"t", WstrList{L"a_4", L"a_5"}, WstrList{L"i_4", L"i_5"}, Symmetry::antisymm)
+      auto wick_result_2 = ex<Tensor>(L"g", WstrList{L"p_1", L"p_2"}, WstrList{L"p_3", L"p_4"}, Symmetry::antisymm)
+          * ex<Tensor>(L"t", WstrList{L"a_4", L"a_5"}, WstrList{L"i_4", L"i_5"}, Symmetry::antisymm)
           * wick_result;
       expand(wick_result_2);
       REQUIRE(to_latex(wick_result_2)
@@ -413,9 +423,9 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       REQUIRE(wick_result->size() == 4);
 
       // multiply tensor factors and expand
-      auto wick_result_2 = make<Tensor>(L"g", WstrList{L"p_1", L"p_2"}, WstrList{L"p_3", L"p_4"}, Symmetry::antisymm)
-          * make<Tensor>(L"t", WstrList{L"a_4"}, WstrList{L"i_4"}, Symmetry::antisymm)
-          * make<Tensor>(L"t", WstrList{L"a_5"}, WstrList{L"i_5"}, Symmetry::antisymm)
+      auto wick_result_2 = ex<Tensor>(L"g", WstrList{L"p_1", L"p_2"}, WstrList{L"p_3", L"p_4"}, Symmetry::antisymm)
+          * ex<Tensor>(L"t", WstrList{L"a_4"}, WstrList{L"i_4"}, Symmetry::antisymm)
+          * ex<Tensor>(L"t", WstrList{L"a_5"}, WstrList{L"i_5"}, Symmetry::antisymm)
           * wick_result;
       expand(wick_result_2);
       wick.reduce(wick_result_2);
@@ -448,10 +458,10 @@ TEST_CASE("WickTheorem", "[algorithms]") {
 
       // multiply tensor factors and expand
       auto wick_result_2 =
-          make<Tensor>(L"l", WstrList{L"i_1", L"i_2", L"i_3"}, WstrList{L"a_1", L"a_2", L"a_3"}, Symmetry::antisymm)
-              * make<Tensor>(L"g", WstrList{L"p_1", L"p_2"}, WstrList{L"p_3", L"p_4"}, Symmetry::antisymm)
-          * make<Tensor>(L"t", WstrList{L"a_4", L"a_5"}, WstrList{L"i_4", L"i_5"}, Symmetry::antisymm)
-          * make<Tensor>(L"t", WstrList{L"a_6", L"a_7", L"a_8"}, WstrList{L"i_6", L"i_7", L"i_8"}, Symmetry::antisymm)
+          ex<Tensor>(L"l", WstrList{L"i_1", L"i_2", L"i_3"}, WstrList{L"a_1", L"a_2", L"a_3"}, Symmetry::antisymm)
+              * ex<Tensor>(L"g", WstrList{L"p_1", L"p_2"}, WstrList{L"p_3", L"p_4"}, Symmetry::antisymm)
+              * ex<Tensor>(L"t", WstrList{L"a_4", L"a_5"}, WstrList{L"i_4", L"i_5"}, Symmetry::antisymm)
+              * ex<Tensor>(L"t", WstrList{L"a_6", L"a_7", L"a_8"}, WstrList{L"i_6", L"i_7", L"i_8"}, Symmetry::antisymm)
           * wick_result;
 
       std::wcout << "P3*H2*T2*T3 size before expand = " << wick_result_2->size() << std::endl;

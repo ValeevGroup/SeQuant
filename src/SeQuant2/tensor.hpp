@@ -102,7 +102,7 @@ class Tensor : public Expr {
   };
 
   std::shared_ptr<Expr> clone() const override {
-    return make<Tensor>(*this);
+    return ex<Tensor>(*this);
   }
 
   void reset_tags() const {
@@ -291,7 +291,7 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
       default:abort();
     }
 
-    std::shared_ptr<Expr> result = is_antisymm ? (even == false ? make<Constant>(-1) : nullptr) : nullptr;
+    std::shared_ptr<Expr> result = is_antisymm ? (even == false ? ex<Constant>(-1) : nullptr) : nullptr;
     return result;
   }
 

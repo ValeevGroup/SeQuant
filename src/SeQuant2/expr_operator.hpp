@@ -12,7 +12,7 @@ operator*(const ExprPtr &left, const ExprPtr &right) {
   auto left_is_product = left->is<Product>();
   auto right_is_product = right->is<Product>();
   if (!left_is_product && !right_is_product) {
-    return make<Product>(ExprPtrList{left, right});
+    return ex<Product>(ExprPtrList{left, right});
   } else if (left_is_product) {
     auto left_product = std::static_pointer_cast<Product>(left);
     auto result = std::make_shared<Product>(*left_product);
@@ -32,7 +32,7 @@ operator+(const ExprPtr &left, const ExprPtr &right) {
   auto left_is_sum = left->is<Sum>();
   auto right_is_sum = right->is<Sum>();
   if (!left_is_sum && !right_is_sum) {
-    return make<Sum>(ExprPtrList{left, right});
+    return ex<Sum>(ExprPtrList{left, right});
   } else if (left_is_sum) {
     auto left_sum = std::static_pointer_cast<Sum>(left);
     auto result = std::make_shared<Sum>(*left_sum);
@@ -51,11 +51,11 @@ inline ExprPtr
 operator-(const ExprPtr &left, const ExprPtr &right) {
   auto left_is_sum = left->is<Sum>();
   if (!left_is_sum) {
-    return make<Sum>(ExprPtrList{left, make<Product>(-1.0, ExprPtrList{right})});
+    return ex<Sum>(ExprPtrList{left, ex<Product>(-1.0, ExprPtrList{right})});
   } else if (left_is_sum) {
     auto left_sum = std::static_pointer_cast<Sum>(left);
     auto result = std::make_shared<Sum>(*left_sum);
-    result->append(make<Product>(-1.0, ExprPtrList{right}));
+    result->append(ex<Product>(-1.0, ExprPtrList{right}));
     return result;
   }
   abort();  // unreachable

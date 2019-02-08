@@ -265,11 +265,11 @@ class WickTheorem {
     // TODO revise if decide to use Constant(0)
     ExprPtr result_expr;
     if (result.size() == 1) {  // if result.size() == 1, return Product
-      result_expr = make<Product>(std::move(result[0].first));
+      result_expr = ex<Product>(std::move(result[0].first));
     } else if (result.size() > 1) {
       auto sum = std::make_shared<Sum>();
       for (auto &term : result) {
-        sum->append(make<Product>(std::move(term.first)));
+        sum->append(ex<Product>(std::move(term.first)));
       }
       result_expr = sum;
     }

@@ -104,7 +104,7 @@ class TensorNetwork {
   const auto &tensors() const { return tensors_; }
 
   ExprPtr canonicalize() {
-    ExprPtr canon_biproduct = make<Constant>(1);
+    ExprPtr canon_biproduct = ex<Constant>(1);
     container::svector<TensorTerminalPair> idx_terminals_sorted;  // to avoid memory allocs
 
     // TODO implement rigorous approach:
