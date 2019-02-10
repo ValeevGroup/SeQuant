@@ -14,8 +14,10 @@ TEST_CASE("Index", "[elements]") {
   SECTION("constructors") {
     Index i{};
 
-    REQUIRE_NOTHROW(Index(std::wstring(L"i_") + std::to_wstring(Index::min_tmp_index())));
-    REQUIRE_THROWS(Index(std::wstring(L"i_") + std::to_wstring(Index::min_tmp_index()+1)));
+    REQUIRE_NOTHROW(
+        Index(std::wstring(L"i_") + std::to_wstring(Index::min_tmp_index())));
+    REQUIRE_THROWS(Index(std::wstring(L"i_") +
+                         std::to_wstring(Index::min_tmp_index() + 1)));
 
     Index i1(L"i_1");
     REQUIRE(i1.label() == L"i_1");
@@ -99,6 +101,22 @@ TEST_CASE("Index", "[elements]") {
     REQUIRE_NOTHROW(hash_value(i2));
     REQUIRE(hash_value(i1) != hash_value(Index{}));
     REQUIRE(hash_value(i1) != hash_value(i2));
+  }
+
+  SECTION("transform") {
+    Index i0(L"i_0");
+    Index i1(L"i_1");
+    Index i0_13(L"i_0", {L"i_1", L"i_3"});
+    Index i1_13(L"i_1", {L"i_1", L"i_3"});
+    std::map<Index, Index> map{std::make_pair(Index{L"i_1"}, Index{L"i_2"})};
+    REQUIRE(!i0.transform(map));
+    REQUIRE(i0 == Index{L"i_0"});
+    REQUIRE(i1.transform(map));
+    REQUIRE(i1 == Index{L"i_2"});
+    REQUIRE(i0_13.transform(map));
+    REQUIRE(i0_13 == Index{L"i_0", {L"i_2", L"i_3"}});
+    REQUIRE(i1_13.transform(map));
+    REQUIRE(i1_13 == Index{L"i_1", {L"i_2", L"i_3"}});
   }
 
   SECTION("latex") {

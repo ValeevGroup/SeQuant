@@ -86,11 +86,7 @@ class Tensor : public Expr {
   Tensor &transform_indices(const std::map<Index, Index> &index_map) {
     bool mutated = false;
     ranges::for_each(braket(), [index_map, &mutated](auto &idx) {
-      auto it = index_map.find(idx);
-      if (it != index_map.end()) {
-        idx = it->second;
-        mutated = true;
-      }
+      if (idx.transform(index_map)) mutated = true;
     });
     if (mutated)
       this->reset_hash_value();

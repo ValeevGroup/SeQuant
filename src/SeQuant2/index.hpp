@@ -155,11 +155,31 @@ class Index : public Taggable {
     return ++index;
   }
 
+  /// @brief index replacement
+  /// replaces this object with its image in the Index map.
+  /// If this object was not found in the map, tries replacing its subindices.
+  /// @param index_map maps Index to Index
+  /// @return false if no replacements were made
+  bool transform(const std::map<Index, Index> &index_map) {
+    auto it = index_map.find(*this);
+    if (it != index_map.end()) {
+      *this = it->second;
+      return true;
+    } else {
+      bool mutated = false;
+      for (auto &&subidx : proto_indices_) {
+        if (subidx.transform(index_map)) mutated = true;
+      }
+      return mutated;
+    }
+  }
+
  private:
   std::wstring label_{};
   IndexSpace space_{};
-  container::vector<Index> proto_indices_{}; // an unordered set of unique indices on
-  // which this index depends on
+  container::vector<Index>
+      proto_indices_{};  // an unordered set of unique indices on which this
+                         // index depends on
 
   /// throws std::invalid_argument if have duplicates in proto_indices_
   inline void check_for_duplicate_proto_indices();
