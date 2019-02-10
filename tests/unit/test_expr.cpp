@@ -52,7 +52,7 @@ struct VecExpr : public std::vector<T>, public sequant2::Expr {
     std::wstring result = L"VecExpr[";
     size_t count = 1;
     for (const auto &e: *this) {
-      const auto last_it = count == this->size();
+      const auto last_it = count == this->std::vector<T>::size();
       if constexpr (sequant2::Expr::is_shared_ptr_of_expr_or_derived<T>::value) {
         result += e->to_wolfram() + (last_it ? L"" : L",");
       } else {
