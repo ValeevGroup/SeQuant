@@ -121,7 +121,10 @@ class TensorNetwork {
     // - reindex internal indices using ordering of TensorTerminalPair as the canonical definition of the internal index list
     init_indices();
     {
-      IndexFactory idxfac;
+      auto int_idx_validator = [this](const Index &idx) {
+        return this->ext_indices_.find(idx) == this->ext_indices_.end();
+      };
+      IndexFactory idxfac(int_idx_validator, 1);  // start reindexing from 1
       std::map<Index, Index> idxrepl;
       // resort indices_ by TensorTerminalPair ... this automatically puts external indices first
       idx_terminals_sorted.resize(indices_.size());

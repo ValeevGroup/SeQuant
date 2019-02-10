@@ -291,26 +291,48 @@ inline void swap(Index &first, Index &second) {
 /// Generates temporary indices
 class IndexFactory {
  public:
+  IndexFactory() = default;
+  /// @tparam IndexValidator IndexValidator(const Index&) -> bool is valid and
+  /// returns true generated index is valid
+  /// @param min_index start indexing indices for each space with this value;
+  /// must be greater than 0; the default is to use Index::min_tmp_index()
+  template <typename IndexValidator>
+  explicit IndexFactory(IndexValidator validator,
+                        size_t min_index = Index::min_tmp_index())
+      : min_index_(min_index), validator_(validator) {
+    assert(min_index_ > 0);
+  }
 
-  /// creates a temporary index in space @c space . The label of the resulting index =
+  /// creates a temporary index in space @c space . The label of the resulting
+  /// index =
   /// @c IndexSpace::base_key(space) + '_' + temporary counter.
-  /// Each call increments the current tmp counter (see next_tmp_index() ) . To make cleaner temporary indices
-  /// with one counter per space use IndexFactory
+  /// Each call increments the current tmp counter (see next_tmp_index() ) . To
+  /// make cleaner temporary indices with one counter per space use IndexFactory
   /// @param space an IndexSpace object
   /// @return a unique temporary index in space @c space
   Index make(const IndexSpace &space) {
-    auto counter_it = counters_.begin();
-    {  // if don't have a counter for this space
-      std::scoped_lock lock(mutex_);
-      if ((counter_it = counters_.find(space)) == counters_.end()) {
-        counters_[space] = Index::min_tmp_index() - 1;
-        counter_it = counters_.find(space);
+    Index result;
+    bool valid = false;
+    do {
+      auto counter_it = counters_.begin();
+      {  // if don't have a counter for this space
+        std::scoped_lock lock(mutex_);
+        if ((counter_it = counters_.find(space)) == counters_.end()) {
+          counters_[space] = min_index_ - 1;
+          counter_it = counters_.find(space);
+        }
       }
-    }
-    return Index(IndexSpace::base_key(space) + L'_' + std::to_wstring(++(counter_it->second)), &space);
+      result = Index(IndexSpace::base_key(space) + L'_' +
+                         std::to_wstring(++(counter_it->second)),
+                     &space);
+      valid = validator_ ? validator_(result) : true;
+    } while (!valid);
+    return result;
   }
 
  private:
+  std::size_t min_index_ = Index::min_tmp_index();
+  std::function<bool(const Index &)> validator_ = {};
   std::mutex mutex_;
   std::map<IndexSpace, std::atomic<std::size_t>> counters_;
 };
