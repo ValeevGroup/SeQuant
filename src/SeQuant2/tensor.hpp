@@ -19,7 +19,18 @@ class TensorCanonicalizer;
 /// @brief particle-symmetric Tensor, i.e. permuting
 class Tensor : public Expr {
  private:
+  auto make_indices(IndexList indices) {
+    return indices;
+  }
   auto make_indices(WstrList index_labels) {
+    index_container_type result;
+    result.reserve(index_labels.size());
+    for (const auto &label: index_labels) {
+      result.push_back(Index{label});
+    }
+    return result;
+  }
+  auto make_indices(std::initializer_list<const wchar_t*> index_labels) {
     index_container_type result;
     result.reserve(index_labels.size());
     for (const auto &label: index_labels) {
@@ -35,17 +46,19 @@ class Tensor : public Expr {
   Tensor() = default;
   virtual ~Tensor();
 
+  /// @tparam I1 any type convertible to Index)
+  /// @tparam I2 any type convertible to Index
+  /// @note  I1 and I2 default to Index to allow empty lists
+  /// @param label the tensor label
+  /// @param bra_indices list of bra indices (or objects that can be converted to indices)
+  /// @param ket_indices list of ket indices (or objects that can be converted to indices)
+  /// @param symmetry the tensor symmetry
+  template <typename I1 = Index, typename I2 = Index>
   Tensor(std::wstring_view label,
-         IndexList bra_indices,
-         IndexList ket_indices,
+         std::initializer_list<I1> bra_indices,
+         std::initializer_list<I2> ket_indices,
          Symmetry s = Symmetry::nonsymm)
-      : label_(label), bra_(bra_indices), ket_(ket_indices), symmetry_(s) {}
-
-  Tensor(std::wstring_view label,
-         WstrList bra_index_labels,
-         WstrList ket_index_labels,
-         Symmetry s = Symmetry::nonsymm)
-      : label_(label), bra_(make_indices(bra_index_labels)), ket_(make_indices(ket_index_labels)), symmetry_(s) {}
+      : label_(label), bra_(make_indices(bra_indices)), ket_(make_indices(ket_indices)), symmetry_(s) {}
 
   std::wstring_view label() const { return label_; }
   const auto& bra() const { return bra_; }
@@ -83,14 +96,17 @@ class Tensor : public Expr {
 
   std::shared_ptr<Expr> canonicalize() override;
 
-  Tensor &transform_indices(const std::map<Index, Index> &index_map) {
+  /// Replaced indices using the index map
+  /// @return true if one or more indices changed
+  bool transform_indices(const std::map<Index, Index> &index_map) {
     bool mutated = false;
     ranges::for_each(braket(), [index_map, &mutated](auto &idx) {
-      if (idx.transform(index_map)) mutated = true;
+      if (idx.transform(index_map))
+        mutated = true;
     });
     if (mutated)
       this->reset_hash_value();
-    return *this;
+    return mutated;
   }
 
   type_id_type type_id() const override {
@@ -137,18 +153,19 @@ class Tensor : public Expr {
 
   bool static_less_than(const Expr &that) const override {
     const auto &that_cast = static_cast<const Tensor &>(that);
-    if (this->bra_rank() == that_cast.bra_rank()) {
-      if (this->ket_rank() == that_cast.ket_rank()) {
-        if (this->label() == that_cast.label()) {
+    if (this->label() == that_cast.label()) {
+      if (this->bra_rank() == that_cast.bra_rank()) {
+        if (this->ket_rank() == that_cast.ket_rank()) {
           return Expr::static_less_than(that);
         } else {
-          return this->label() < that_cast.label();
+          return this->ket_rank() < that_cast.ket_rank();
         }
       } else {
-        return this->ket_rank() < that_cast.ket_rank();
+        return this->bra_rank() < that_cast.bra_rank();
       }
-    } else {
-      return this->bra_rank() < that_cast.bra_rank();
+    }
+    else {
+      return this->label() < that_cast.label();
     }
   }
 
@@ -205,7 +222,10 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
     auto is_antisymm = symmetry == Symmetry::antisymm;
 
     // can only handle anisymmetric case so far
-    assert(is_antisymm);
+#ifndef NDEBUG
+    if (t.bra_rank() > 1 || t.ket_rank() > 1)
+      assert(is_antisymm);
+#endif
 
     //
     auto sort_swappables = [](const auto &begin, const auto &end, const auto &compare) {
@@ -296,7 +316,7 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
 };
 
 inline std::shared_ptr<Expr> overlap(const Index& bra_index, const Index& ket_index) {
-  return std::make_shared<Tensor>(L"S", IndexList{bra_index}, IndexList{ket_index});
+  return ex<Tensor>(L"S", IndexList{bra_index}, IndexList{ket_index});
 }
 
 }  // namespace sequant2

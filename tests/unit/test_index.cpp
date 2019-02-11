@@ -47,8 +47,9 @@ TEST_CASE("Index", "[elements]") {
       REQUIRE(i4.proto_indices()[0] == i1);
       REQUIRE(i4.proto_indices()[1] == i2);
 
-      REQUIRE_NOTHROW(Index(L"i_5", {i2, i1}));
-      Index i5(L"i_5", {i2, i1});
+      // nonsymmetric proto indices
+      REQUIRE_NOTHROW(Index(L"i_5", {i2, i1}, false));
+      Index i5(L"i_5", {i2, i1}, false);
       REQUIRE(i5.label() == L"i_5");
       REQUIRE(i5.space() == IndexSpace::instance(IndexSpace::active_occupied));
       REQUIRE(i5.has_proto_indices());
@@ -57,8 +58,8 @@ TEST_CASE("Index", "[elements]") {
       REQUIRE(i5.proto_indices()[1] == i1);
 
       // one of the proto indices is a proto index
-      REQUIRE_NOTHROW(Index(L"i_6", {i1, i5}));
-      Index i6(L"i_6", {i1, i5});
+      REQUIRE_NOTHROW(Index(L"i_6", {i1, i5}, false));
+      Index i6(L"i_6", {i1, i5}, false);
       REQUIRE(i6.label() == L"i_6");
       REQUIRE(i6.space() == IndexSpace::instance(IndexSpace::active_occupied));
       REQUIRE(i6.has_proto_indices());
@@ -66,8 +67,21 @@ TEST_CASE("Index", "[elements]") {
       REQUIRE(i6.proto_indices()[0] == i1);
       REQUIRE(i6.proto_indices()[1] == i5);
 
-      REQUIRE_THROWS(Index(L"i_4", IndexSpace::instance(IndexSpace::active_occupied), {i1, i1}));
+      // symmetric proto indices
+      REQUIRE_NOTHROW(Index(L"i_7", {i2, i1}));
+      Index i7(L"i_7", {i2, i1});
+      REQUIRE(i7.label() == L"i_7");
+      REQUIRE(i7.space() == IndexSpace::instance(IndexSpace::active_occupied));
+      REQUIRE(i7.has_proto_indices());
+      REQUIRE(i7.proto_indices().size() == 2);
+      REQUIRE(i7.proto_indices()[0] == i1);  // !!
+      REQUIRE(i7.proto_indices()[1] == i2);  // !!
+
+#ifndef NDEBUG
+      REQUIRE_THROWS(Index(
+          L"i_4", IndexSpace::instance(IndexSpace::active_occupied), {i1, i1}));
       REQUIRE_THROWS(Index(L"i_5", {L"i_1", L"i_1"}));
+#endif
     }
   }
 
@@ -97,10 +111,14 @@ TEST_CASE("Index", "[elements]") {
     REQUIRE_NOTHROW(hash_value(Index{}));
     Index i1(L"i_1");
     Index i2(L"i_2");
+    Index i3(L"i_1", {L"i_4", L"i_5"});
     REQUIRE_NOTHROW(hash_value(i1));
     REQUIRE_NOTHROW(hash_value(i2));
+    REQUIRE_NOTHROW(hash_value(i3));
     REQUIRE(hash_value(i1) != hash_value(Index{}));
     REQUIRE(hash_value(i1) != hash_value(i2));
+    REQUIRE(i1.label() == i3.label());
+    REQUIRE(hash_value(i1) != hash_value(i3));
   }
 
   SECTION("transform") {

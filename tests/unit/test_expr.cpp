@@ -348,7 +348,7 @@ TEST_CASE("Expr", "[elements]") {
           * (ex<Constant>(5.0) + (ex<Constant>(6.0) + ex<Constant>(7.0)) * ex<Constant>(8.0));
       REQUIRE_NOTHROW(expr_range{x});
       expr_range exrng{x};
-      REQUIRE(std::distance(ranges::begin(exrng), ranges::end(exrng)) == 8);
+      REQUIRE(std::distance(ranges::begin(exrng), ranges::end(exrng)) == 6);
 
       auto i = 0;
       for(auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
@@ -359,39 +359,34 @@ TEST_CASE("Expr", "[elements]") {
             REQUIRE( ranges::get_cursor(it).ordinal() == 0 );
             break;
           case 1:
-            REQUIRE(to_latex(*it) == L"{{2.000000}}");
-            REQUIRE( compare(ranges::get_cursor(it).address(), {0,1,0}) );
-            REQUIRE( ranges::get_cursor(it).ordinal() == 1 );
+            REQUIRE(to_latex(*it) == L"{{3.000000}}");
+            //            ranges::for_each(ranges::get_cursor(it).address(),
+            //            [](const auto& addr) {
+            //              std::wcout << addr.first << " " << addr.second <<
+            //              std::endl;
+            //            });
+            REQUIRE(compare(ranges::get_cursor(it).address(), {0, 1, 0, 0}));
+            REQUIRE(ranges::get_cursor(it).ordinal() == 1);
             break;
           case 2:
-            REQUIRE(to_latex(*it) == L"{{3.000000}}");
-            REQUIRE( compare(ranges::get_cursor(it).address(), {0,1,1,0}) );
+            REQUIRE(to_latex(*it) == L"{{-4.000000}}");
+            REQUIRE(compare(ranges::get_cursor(it).address(), {0, 1, 0, 1}));
             REQUIRE( ranges::get_cursor(it).ordinal() == 2 );
             break;
           case 3:
-            REQUIRE(to_latex(*it) == L"{{4.000000}}");
-            REQUIRE( compare(ranges::get_cursor(it).address(), {0,1,1,1,0}) );
-            REQUIRE( ranges::get_cursor(it).ordinal() == 3 );
+            REQUIRE(to_latex(*it) == L"{{5.000000}}");
+            REQUIRE(compare(ranges::get_cursor(it).address(), {1, 0}));
+            REQUIRE(ranges::get_cursor(it).ordinal() == 3);
             break;
           case 4:
-            REQUIRE( to_latex(*it) == L"{{5.000000}}" );
-            REQUIRE( compare(ranges::get_cursor(it).address(), {1,0}) );
-            REQUIRE( ranges::get_cursor(it).ordinal() == 4 );
+            REQUIRE(to_latex(*it) == L"{{6.000000}}");
+            REQUIRE(compare(ranges::get_cursor(it).address(), {1, 1, 0, 0}));
+            REQUIRE(ranges::get_cursor(it).ordinal() == 4);
             break;
           case 5:
-            REQUIRE(to_latex(*it) == L"{{6.000000}}");
-            REQUIRE( compare(ranges::get_cursor(it).address(), {1,1,0,0}) );
-            REQUIRE( ranges::get_cursor(it).ordinal() == 5 );
-            break;
-          case 6:
             REQUIRE(to_latex(*it) == L"{{7.000000}}");
-            REQUIRE( compare(ranges::get_cursor(it).address(), {1,1,0,1}) );
-            REQUIRE( ranges::get_cursor(it).ordinal() == 6 );
-            break;
-          case 7:
-            REQUIRE(to_latex(*it) == L"{{8.000000}}");
-            REQUIRE( compare(ranges::get_cursor(it).address(), {1,1,1}) );
-            REQUIRE( ranges::get_cursor(it).ordinal() == 7 );
+            REQUIRE(compare(ranges::get_cursor(it).address(), {1, 1, 0, 1}));
+            REQUIRE( ranges::get_cursor(it).ordinal() == 5 );
             break;
         }
         ++i;
@@ -403,23 +398,35 @@ TEST_CASE("Expr", "[elements]") {
   SECTION("expand") {
     {
       auto x = (ex<Constant>(1.0) + ex<Constant>(2.0)) * (ex<Constant>(3.0) + ex<Constant>(4.0));
-      REQUIRE(to_latex(x)
-                  == L"{{ \\left({{1.000000}} + {{2.000000}}\\right) }{ \\left({{3.000000}} + {{4.000000}}\\right) }}");
+      REQUIRE(to_latex(x) ==
+              L"{{ \\left({{1.000000}} + {{2.000000}}\\right) }{ "
+              L"\\left({{3.000000}} + {{4.000000}}\\right) }}");
       expand(x);
-      REQUIRE(to_latex(x)
-                  == L"{ \\left({{{1.000000}}{{3.000000}}} + {{{1.000000}}{{4.000000}}} + {{{2.000000}}{{3.000000}}} + {{{2.000000}}{{4.000000}}}\\right) }");
+      REQUIRE(to_latex(x) ==
+              L"{ \\left({{3.000000} \\times } + {{4.000000} \\times } + "
+              L"{{6.000000} \\times } + {{8.000000} \\times }\\right) }");
       simplify(x);
-//      std::wcout << "ex = " << to_latex(x) << std::endl;
+//      std::wcout << "x = " << to_latex(x) << std::endl;
     }
     {
-      auto x = (ex<Constant>(1.0) + ex<Constant>(2.0) * (ex<Constant>(3.0) - ex<Constant>(4.0)))
-          * (ex<Constant>(5.0) * (ex<Constant>(6.0) + ex<Constant>(7.0)) + ex<Constant>(8.0));
-      REQUIRE(to_latex(x)
-                  == L"{{ \\left({{1.000000}} + {{{2.000000}}{ \\left({{3.000000}} + {{-1.000000} \\times {{4.000000}}}\\right) }}\\right) }{ \\left({{{5.000000}}{ \\left({{6.000000}} + {{7.000000}}\\right) }} + {{8.000000}}\\right) }}");
+      auto x = (ex<Constant>(1.0) +
+                ex<Constant>(2.0) * (ex<Constant>(3.0) - ex<Constant>(4.0))) *
+               (ex<Constant>(5.0) * (ex<Constant>(6.0) + ex<Constant>(7.0)) +
+                ex<Constant>(8.0));
+      //      std::wcout << "x = " << to_latex(x) << std::endl;
+      REQUIRE(to_latex(x) ==
+              L"{{ \\left({{1.000000}} + {{2.000000} \\times { "
+              L"\\left({{3.000000}} + {{-4.000000}}\\right) }}\\right) }{ "
+              L"\\left({{5.000000} \\times { \\left({{6.000000}} + "
+              L"{{7.000000}}\\right) }} + {{8.000000}}\\right) }}");
       expand(x);
-//      std::wcout << "ex = " << to_latex(x) << std::endl;
-      REQUIRE(to_latex(x)
-                  == L"{ \\left({{{1.000000}}{{{5.000000}}{{6.000000}}}} + {{{1.000000}}{{{5.000000}}{{7.000000}}}} + {{{1.000000}}{{8.000000}}} + {{{{2.000000}}{{3.000000}}}{{{5.000000}}{{6.000000}}}} + {{{{2.000000}}{{3.000000}}}{{{5.000000}}{{7.000000}}}} + {{{{2.000000}}{{3.000000}}}{{8.000000}}} + {{{{2.000000}}{{{4.000000}}}}{{{5.000000}}{{6.000000}}}} + {{{{2.000000}}{{{4.000000}}}}{{{5.000000}}{{7.000000}}}} + {{{{2.000000}}{{{4.000000}}}}{{8.000000}}}\\right) }");
+      //      std::wcout << "ex = " << to_latex(x) << std::endl;
+      REQUIRE(
+          to_latex(x) ==
+          L"{ \\left({{30.000000} \\times } + {{35.000000} \\times } + "
+          L"{{8.000000} \\times } + {{180.000000} \\times } + {{210.000000} "
+          L"\\times } + {{48.000000} \\times } + {{-240.000000} \\times } + "
+          L"{{-280.000000} \\times } + {{-64.000000} \\times }\\right) }");
     }
   }
 

@@ -7,8 +7,7 @@
 
 namespace sequant2 {
 
-inline ExprPtr
-operator*(const ExprPtr &left, const ExprPtr &right) {
+inline ExprPtr operator*(const ExprPtr &left, const ExprPtr &right) {
   auto left_is_product = left->is<Product>();
   auto right_is_product = right->is<Product>();
   if (!left_is_product && !right_is_product) {
@@ -27,8 +26,7 @@ operator*(const ExprPtr &left, const ExprPtr &right) {
   abort();  // unreachable
 }
 
-inline ExprPtr
-operator+(const ExprPtr &left, const ExprPtr &right) {
+inline ExprPtr operator+(const ExprPtr &left, const ExprPtr &right) {
   auto left_is_sum = left->is<Sum>();
   auto right_is_sum = right->is<Sum>();
   if (!left_is_sum && !right_is_sum) {
@@ -47,15 +45,20 @@ operator+(const ExprPtr &left, const ExprPtr &right) {
   abort();  // unreachable
 }
 
-inline ExprPtr
-operator-(const ExprPtr &left, const ExprPtr &right) {
+inline ExprPtr operator-(const ExprPtr &left, const ExprPtr &right) {
   auto left_is_sum = left->is<Sum>();
   if (!left_is_sum) {
-    return ex<Sum>(ExprPtrList{left, ex<Product>(-1.0, ExprPtrList{right})});
+    return ex<Sum>(ExprPtrList{
+        left,
+        (right->is<Constant>() ? ex<Constant>(-right->as<Constant>().value())
+                               : ex<Product>(-1.0, ExprPtrList{right}))});
   } else if (left_is_sum) {
     auto left_sum = std::static_pointer_cast<Sum>(left);
     auto result = std::make_shared<Sum>(*left_sum);
-    result->append(ex<Product>(-1.0, ExprPtrList{right}));
+    if (right->is<Constant>())
+      result->append(ex<Constant>(-right->as<Constant>().value()));
+    else
+      result->append(ex<Product>(-1.0, ExprPtrList{right}));
     return result;
   }
   abort();  // unreachable
@@ -63,4 +66,4 @@ operator-(const ExprPtr &left, const ExprPtr &right) {
 
 }  // namespace sequant2
 
-#endif //SEQUANT2_EXPR_OPERATOR_HPP
+#endif  // SEQUANT2_EXPR_OPERATOR_HPP
