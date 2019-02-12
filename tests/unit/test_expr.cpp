@@ -238,7 +238,7 @@ TEST_CASE("Expr", "[elements]") {
   SECTION("latex") {
     Product sp0{};
     sp0.append(2.0, std::make_shared<Dummy>());
-    REQUIRE(to_latex(sp0) == L"{{2.000000} \\times {\\text{Dummy}}}");
+    REQUIRE(to_latex(sp0) == L"{{2} \\times {\\text{Dummy}}}");
 
     // VecExpr<shared_ptr<Expr>>
     {
@@ -246,14 +246,14 @@ TEST_CASE("Expr", "[elements]") {
           std::vector<std::shared_ptr<Constant>>{std::make_shared<Constant>(1.0), std::make_shared<Constant>(2.0),
                                                  std::make_shared<Constant>(3.0)};
       auto ex6 = std::make_shared<VecExpr<ExprPtr>>(begin(ex5_init), end(ex5_init));
-      REQUIRE(ex6->to_latex() == L"{\\text{VecExpr}\\{{{1.000000}} {{2.000000}} {{3.000000}} \\}}");
+      REQUIRE(ex6->to_latex() == L"{\\text{VecExpr}\\{{{1}} {{2}} {{3}} \\}}");
     }
   }
 
   SECTION("wolfram") {
     Product sp0{};
     sp0.append(2.0, std::make_shared<Dummy>());
-    REQUIRE(to_wolfram(sp0) == L"Times[2.000000,Dummy[]]");
+    REQUIRE(to_wolfram(sp0) == L"Times[2,Dummy[]]");
 
     // VecExpr<shared_ptr<Expr>>
     {
@@ -261,7 +261,7 @@ TEST_CASE("Expr", "[elements]") {
           std::vector<std::shared_ptr<Constant>>{std::make_shared<Constant>(1.0), std::make_shared<Constant>(2.0),
                                                  std::make_shared<Constant>(3.0)};
       auto ex6 = std::make_shared<VecExpr<ExprPtr>>(begin(ex5_init), end(ex5_init));
-      REQUIRE(ex6->to_wolfram() == L"VecExpr[1.000000,2.000000,3.000000]");
+      REQUIRE(ex6->to_wolfram() == L"VecExpr[1,2,3]");
     }
   }
 
@@ -279,13 +279,13 @@ TEST_CASE("Expr", "[elements]") {
 
 //      std::wcout << "v1.result = " << v1.result << std::endl;
       REQUIRE(v1.result ==
-          L"{{1.000000}}{{2.000000}}{{3.000000}}{\\text{VecExpr}\\{{{1.000000}} {{2.000000}} {{3.000000}} \\}}{{1.000000}}{{2.000000}}{{3.000000}}{\\text{VecExpr}\\{{{1.000000}} {{2.000000}} {{3.000000}} \\}}{ \\left({\\text{VecExpr}\\{{{1.000000}} {{2.000000}} {{3.000000}} \\}} + {\\text{VecExpr}\\{{{1.000000}} {{2.000000}} {{3.000000}} \\}}\\right) }");
+          L"{{1}}{{2}}{{3}}{\\text{VecExpr}\\{{{1}} {{2}} {{3}} \\}}{{1}}{{2}}{{3}}{\\text{VecExpr}\\{{{1}} {{2}} {{3}} \\}}{ \\left({\\text{VecExpr}\\{{{1}} {{2}} {{3}} \\}} + {\\text{VecExpr}\\{{{1}} {{2}} {{3}} \\}}\\right) }");
 
       latex_visitor v2{};
       ex->visit(v2, /* atoms_only = */ true);
 //      std::wcout << "v2.result = " << v2.result << std::endl;
-      REQUIRE(v2.result == L"{{1.000000}}{{2.000000}}{{3.000000}}{{1.000000}}{{"
-                           L"2.000000}}{{3.000000}}");
+      REQUIRE(v2.result == L"{{1}}{{2}}{{3}}{{1}}{{"
+                           L"2}}{{3}}");
     }
   }
 
@@ -319,22 +319,22 @@ TEST_CASE("Expr", "[elements]") {
       for(auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
         switch(i) {
           case 0:
-            REQUIRE( to_latex(*it) == L"{{1.000000}}" );
+            REQUIRE( to_latex(*it) == L"{{1}}" );
             REQUIRE( compare(ranges::get_cursor(it).address(), {0,0}) );
             REQUIRE( ranges::get_cursor(it).ordinal() == 0 );
             break;
           case 1:
-            REQUIRE(to_latex(*it) == L"{{2.000000}}");
+            REQUIRE(to_latex(*it) == L"{{2}}");
             REQUIRE( compare(ranges::get_cursor(it).address(), {0,1}) );
             REQUIRE( ranges::get_cursor(it).ordinal() == 1 );
             break;
           case 2:
-            REQUIRE(to_latex(*it) == L"{{3.000000}}");
+            REQUIRE(to_latex(*it) == L"{{3}}");
             REQUIRE( compare(ranges::get_cursor(it).address(), {1,0}) );
             REQUIRE( ranges::get_cursor(it).ordinal() == 2 );
             break;
           case 3:
-            REQUIRE(to_latex(*it) == L"{{4.000000}}");
+            REQUIRE(to_latex(*it) == L"{{4}}");
             REQUIRE( compare(ranges::get_cursor(it).address(), {1,1}) );
             REQUIRE( ranges::get_cursor(it).ordinal() == 3 );
             break;
@@ -354,12 +354,12 @@ TEST_CASE("Expr", "[elements]") {
       for(auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
         switch(i) {
           case 0:
-            REQUIRE( to_latex(*it) == L"{{1.000000}}" );
+            REQUIRE( to_latex(*it) == L"{{1}}" );
             REQUIRE( compare(ranges::get_cursor(it).address(), {0,0}) );
             REQUIRE( ranges::get_cursor(it).ordinal() == 0 );
             break;
           case 1:
-            REQUIRE(to_latex(*it) == L"{{3.000000}}");
+            REQUIRE(to_latex(*it) == L"{{3}}");
             //            ranges::for_each(ranges::get_cursor(it).address(),
             //            [](const auto& addr) {
             //              std::wcout << addr.first << " " << addr.second <<
@@ -369,22 +369,22 @@ TEST_CASE("Expr", "[elements]") {
             REQUIRE(ranges::get_cursor(it).ordinal() == 1);
             break;
           case 2:
-            REQUIRE(to_latex(*it) == L"{{-4.000000}}");
+            REQUIRE(to_latex(*it) == L"{{-4}}");
             REQUIRE(compare(ranges::get_cursor(it).address(), {0, 1, 0, 1}));
             REQUIRE( ranges::get_cursor(it).ordinal() == 2 );
             break;
           case 3:
-            REQUIRE(to_latex(*it) == L"{{5.000000}}");
+            REQUIRE(to_latex(*it) == L"{{5}}");
             REQUIRE(compare(ranges::get_cursor(it).address(), {1, 0}));
             REQUIRE(ranges::get_cursor(it).ordinal() == 3);
             break;
           case 4:
-            REQUIRE(to_latex(*it) == L"{{6.000000}}");
+            REQUIRE(to_latex(*it) == L"{{6}}");
             REQUIRE(compare(ranges::get_cursor(it).address(), {1, 1, 0, 0}));
             REQUIRE(ranges::get_cursor(it).ordinal() == 4);
             break;
           case 5:
-            REQUIRE(to_latex(*it) == L"{{7.000000}}");
+            REQUIRE(to_latex(*it) == L"{{7}}");
             REQUIRE(compare(ranges::get_cursor(it).address(), {1, 1, 0, 1}));
             REQUIRE( ranges::get_cursor(it).ordinal() == 5 );
             break;
@@ -399,12 +399,12 @@ TEST_CASE("Expr", "[elements]") {
     {
       auto x = (ex<Constant>(1.0) + ex<Constant>(2.0)) * (ex<Constant>(3.0) + ex<Constant>(4.0));
       REQUIRE(to_latex(x) ==
-              L"{{ \\left({{1.000000}} + {{2.000000}}\\right) }{ "
-              L"\\left({{3.000000}} + {{4.000000}}\\right) }}");
+              L"{{ \\left({{1}} + {{2}}\\right) }{ "
+              L"\\left({{3}} + {{4}}\\right) }}");
       expand(x);
       REQUIRE(to_latex(x) ==
-              L"{ \\left({{3.000000} \\times } + {{4.000000} \\times } + "
-              L"{{6.000000} \\times } + {{8.000000} \\times }\\right) }");
+              L"{ \\left({{3} \\times } + {{4} \\times } + "
+              L"{{6} \\times } + {{8} \\times }\\right) }");
       simplify(x);
 //      std::wcout << "x = " << to_latex(x) << std::endl;
     }
@@ -415,18 +415,18 @@ TEST_CASE("Expr", "[elements]") {
                 ex<Constant>(8.0));
       //      std::wcout << "x = " << to_latex(x) << std::endl;
       REQUIRE(to_latex(x) ==
-              L"{{ \\left({{1.000000}} + {{2.000000} \\times { "
-              L"\\left({{3.000000}} + {{-4.000000}}\\right) }}\\right) }{ "
-              L"\\left({{5.000000} \\times { \\left({{6.000000}} + "
-              L"{{7.000000}}\\right) }} + {{8.000000}}\\right) }}");
+              L"{{ \\left({{1}} + {{2} \\times { "
+              L"\\left({{3}} + {{-4}}\\right) }}\\right) }{ "
+              L"\\left({{5} \\times { \\left({{6}} + "
+              L"{{7}}\\right) }} + {{8}}\\right) }}");
       expand(x);
       //      std::wcout << "ex = " << to_latex(x) << std::endl;
       REQUIRE(
           to_latex(x) ==
-          L"{ \\left({{30.000000} \\times } + {{35.000000} \\times } + "
-          L"{{8.000000} \\times } + {{180.000000} \\times } + {{210.000000} "
-          L"\\times } + {{48.000000} \\times } + {{-240.000000} \\times } + "
-          L"{{-280.000000} \\times } + {{-64.000000} \\times }\\right) }");
+          L"{ \\left({{30} \\times } + {{35} \\times } + "
+          L"{{8} \\times } + {{180} \\times } + {{210} "
+          L"\\times } + {{48} \\times } + {{-240} \\times } + "
+          L"{{-280} \\times } + {{-64} \\times }\\right) }");
     }
   }
 

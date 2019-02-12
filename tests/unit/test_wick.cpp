@@ -403,10 +403,10 @@ TEST_CASE("WickTheorem", "[algorithms]") {
               L"{ "
               L"\\left({{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_"
               L"5}}}{S^{{p_1}}_{{i_5}}}{S^{{p_2}}_{{i_4}}}{S^{{a_4}}_{{p_4}}}{"
-              L"S^{{a_5}}_{{p_3}}}} + {{-1.000000} \\times "
+              L"S^{{a_5}}_{{p_3}}}} + {{-1} \\times "
               L"{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{S^{{"
               L"p_1}}_{{i_5}}}{S^{{p_2}}_{{i_4}}}{S^{{a_5}}_{{p_4}}}{S^{{a_4}}_"
-              L"{{p_3}}}} + {{-1.000000} \\times "
+              L"{{p_3}}}} + {{-1} \\times "
               L"{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{S^{{"
               L"p_1}}_{{i_4}}}{S^{{p_2}}_{{i_5}}}{S^{{a_4}}_{{p_4}}}{S^{{a_5}}_"
               L"{{p_3}}}} + "
@@ -421,7 +421,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
 
       std::wcout << L"H2*T2 = " << to_latex(wick_result_2) << std::endl;
       REQUIRE(to_latex(wick_result_2) ==
-              L"{ \\left({{4.000000} \\times "
+              L"{ \\left({{4} \\times "
               L"{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{{a_1}{a_2}}}}"
               L"\\right) }");
     });
@@ -452,7 +452,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       print("H2*T1*T1 = ", wick_result_2);
       REQUIRE(
           to_latex(wick_result_2) ==
-          L"{ \\left({{4.000000} \\times "
+          L"{ \\left({{4} \\times "
           L"{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}}_{{a_1}}}{t^{{i_2}}_{{a_2}}}"
           L"}\\right) }");
     });
@@ -504,10 +504,10 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       std::wcout << L"P2*H1*T2(PNO) = " << to_latex_align(wick_result_2)
                  << std::endl;
       REQUIRE(to_latex(wick_result_2) ==
-              L"{ \\left({{-8.000000} \\times "
+              L"{ \\left({{-8} \\times "
               L"{L^{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}_{{i_1}{i_2}}}{f^{{a_"
               L"3^{{i_1}{i_2}}}}_{{a_1^{{i_1}{i_2}}}}}{t^{{i_1}{i_2}}_{{a_2^{{"
-              L"i_1}{i_2}}}{a_3^{{i_1}{i_2}}}}}} + {{8.000000} \\times "
+              L"i_1}{i_2}}}{a_3^{{i_1}{i_2}}}}}} + {{8} \\times "
               L"{L^{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}_{{i_1}{i_2}}}{S^{{a_"
               L"3^{{i_2}{i_3}}}}_{{a_1^{{i_1}{i_2}}}}}{S^{{a_4^{{i_2}{i_3}}}}_{"
               L"{a_2^{{i_1}{i_2}}}}}{f^{{i_1}}_{{i_3}}}{t^{{i_2}{i_3}}_{{a_3^{{"
