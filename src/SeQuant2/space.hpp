@@ -7,7 +7,8 @@
 
 #include <cassert>
 #include <bitset>
-#include <map>
+
+#include "container.hpp"
 
 namespace sequant2 {
 
@@ -416,6 +417,6 @@ inline int occupancy_class(const IndexSpace& space) {
   abort(); // unreachable
 }
 
-}
+}  // namespace sequant2
 
 #endif //SEQUANT2_SPACE_H

@@ -5,6 +5,7 @@
 #ifndef SEQUANT2_TENSOR_NETWORK_H
 #define SEQUANT2_TENSOR_NETWORK_H
 
+#include "../SeQuant2/container.hpp"
 #include "../SeQuant2/tensor.hpp"
 
 namespace sequant2 {
@@ -171,7 +172,8 @@ class TensorNetwork {
     ext_indices_.clear();
 
     assert(canon_biproduct->is<Constant>());
-    return (canon_biproduct->as<Constant>().value() == 1.) ? nullptr : canon_biproduct;
+    return (canon_biproduct->as<Constant>().value() == 1.) ? nullptr
+                                                           : canon_biproduct;
   }
 
  private:
@@ -221,13 +223,12 @@ class TensorNetwork {
     }
 
     // extract external indices
-    for (const auto &terminals: indices_) {
+    for (const auto &terminals : indices_) {
       assert(terminals.size() != 0);
       if (terminals.size() == 1) { // external?
         ext_indices_.emplace(terminals.idx());
       }
     }
-
   }
 };
 

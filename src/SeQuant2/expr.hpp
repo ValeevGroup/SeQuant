@@ -16,9 +16,7 @@
 #include <boost/functional/hash.hpp>
 #include <boost/callable_traits.hpp>
 
-#include "latex.hpp"
-#include "wolfram.hpp"
-#include "vector.hpp"
+#include "container.hpp"
 #include "hash.hpp"
 #include "latex.hpp"
 #include "wolfram.hpp"

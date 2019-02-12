@@ -15,6 +15,7 @@
 
 #include <boost/container_hash/hash.hpp>
 
+#include "container.hpp"
 #include "space.hpp"
 #include "tag.hpp"
 

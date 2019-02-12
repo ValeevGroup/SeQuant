@@ -14,7 +14,7 @@
 #include "sequant.hpp"
 #include "vacuum.hpp"
 #include "ranges.hpp"
-#include "vector.hpp"
+#include "container.hpp"
 
 namespace sequant2 {
 
