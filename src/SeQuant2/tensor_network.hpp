@@ -38,11 +38,11 @@ class TensorNetwork {
       assert(terminal_idx != 0);  // valid idx
       if (second_ == 0) {
         second_ = terminal_idx;
-      } else if (std::abs(second_) > std::abs(terminal_idx)) {
+      } else if (std::abs(second_) < std::abs(terminal_idx)) {
         assert(first_ != 0);  // there are slots left
         first_ = second_;
         second_ = terminal_idx;
-      } else { // put into first slot
+      } else {  // put into first slot
         first_ = terminal_idx;
       }
       return *this;
