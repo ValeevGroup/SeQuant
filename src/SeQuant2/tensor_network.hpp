@@ -225,8 +225,9 @@ class TensorNetwork {
     // extract external indices
     for (const auto &terminals : indices_) {
       assert(terminals.size() != 0);
-      if (terminals.size() == 1) { // external?
-        ext_indices_.emplace(terminals.idx());
+      if (terminals.size() == 1) {  // external?
+        auto insertion_result = ext_indices_.emplace(terminals.idx());
+        assert(insertion_result.second);
       }
     }
   }

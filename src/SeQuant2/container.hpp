@@ -5,11 +5,13 @@
 #ifndef SEQUANT2_CONTAINER_HPP
 #define SEQUANT2_CONTAINER_HPP
 
-#include <vector>
-#include <boost/container/small_vector.hpp>
-#include <boost/container/flat_set.hpp>
 #include <boost/container/flat_map.hpp>
+#include <boost/container/flat_set.hpp>
+#include <boost/container/small_vector.hpp>
 #include <boost/range.hpp>
+#include <map>
+#include <set>
+#include <vector>
 
 namespace sequant2 {
 

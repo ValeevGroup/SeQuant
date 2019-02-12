@@ -93,9 +93,9 @@ inline std::map<Index, Index> compute_index_replacement_rules(
         !src2.has_proto_indices() && src1.has_proto_indices() ? src1 : src2;
 
     if (!has_src1_rule && !has_src2_rule) {  // if brand new, add the rules
-      result.insert({src1, proto(dst, dst1_proto)});
+      result.insert(std::make_pair(src1, proto(dst, dst1_proto)));
       assert(!result.empty());
-      result.insert({src2, proto(dst, dst2_proto)});
+      result.insert(std::make_pair(src2, proto(dst, dst2_proto)));
       assert(!result.empty());
     } else if (has_src1_rule &&
                !has_src2_rule) {  // update the existing rule for src1
