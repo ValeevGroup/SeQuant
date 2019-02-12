@@ -232,7 +232,9 @@ class Index : public Taggable {
   /// If this object was not found in the map, tries replacing its subindices.
   /// @param index_map maps Index to Index
   /// @return false if no replacements were made
-  bool transform(const std::map<Index, Index> &index_map) {
+  template <template <typename, typename, typename... Args> class Map,
+            typename... Args>
+  bool transform(const Map<Index, Index, Args...> &index_map) {
     // first try replacing this first; if not found, try replacing protoindices
     // first, then try replacing this again
     auto it = index_map.find(*this);

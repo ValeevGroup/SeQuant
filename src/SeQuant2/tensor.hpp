@@ -98,7 +98,9 @@ class Tensor : public Expr {
 
   /// Replaced indices using the index map
   /// @return true if one or more indices changed
-  bool transform_indices(const std::map<Index, Index> &index_map) {
+  template <template <typename, typename, typename... Args> class Map,
+            typename... Args>
+  bool transform_indices(const Map<Index, Index, Args...> &index_map) {
     bool mutated = false;
     ranges::for_each(braket(), [index_map, &mutated](auto &idx) {
       if (idx.transform(index_map))
