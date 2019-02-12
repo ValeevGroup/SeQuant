@@ -529,10 +529,15 @@ TEST_CASE("WickTheorem", "[algorithms]") {
                                      Index(L"a_6", {L"i_5", L"i_6"})},
                                     IndexList{L"i_5", L"i_6"}, V)});
       auto wick = FWickTheorem{opseq};
-      auto wick_result = wick.full_contractions(true).spinfree(false).compute();
+      auto wick_result =
+          wick.full_contractions(true)
+              .spinfree(false)
+              .set_op_connections(
+                  std::vector<std::pair<int, int>>{{1, 2}, {1, 3}})
+              .compute();
       std::wcout << "P2*H2*T2*T2(PNO) tmp = " << to_latex(wick_result)
                  << std::endl;
-      REQUIRE(wick_result->size() == 576);
+      REQUIRE(wick_result->size() == 544);
 
       // multiply tensor factors and expand
       auto wick_result_2 =
@@ -552,20 +557,6 @@ TEST_CASE("WickTheorem", "[algorithms]") {
               IndexList{L"i_5", L"i_6"}, Symmetry::antisymm) *
           wick_result;
       expand(wick_result_2);
-      //      REQUIRE(to_latex(wick_result_2)
-      //                  == L"{
-      //                  \\left({{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{{S^{{p_1}}_{{i_5}}}{S^{{p_2}}_{{i_4}}}{S^{{a_4}}_{{p_4}}}{S^{{a_5}}_{{p_3}}}}}
-      //                  +
-      //                  {{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{{-1.000000}
-      //                  \\times
-      //                  {S^{{p_1}}_{{i_5}}}{S^{{p_2}}_{{i_4}}}{S^{{a_5}}_{{p_4}}}{S^{{a_4}}_{{p_3}}}}}
-      //                  +
-      //                  {{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{{-1.000000}
-      //                  \\times
-      //                  {S^{{p_1}}_{{i_4}}}{S^{{p_2}}_{{i_5}}}{S^{{a_4}}_{{p_4}}}{S^{{a_5}}_{{p_3}}}}}
-      //                  +
-      //                  {{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{{S^{{p_1}}_{{i_4}}}{S^{{p_2}}_{{i_5}}}{S^{{a_5}}_{{p_4}}}{S^{{a_4}}_{{p_3}}}}}\\right)
-      //                  }");
       wick.reduce(wick_result_2);
       std::wcout << "P2*H2*T2*T2(PNO) after reduce = "
                  << to_latex(wick_result_2) << std::endl;
@@ -579,7 +570,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
 
       std::wcout << L"P2*H2*T2*T2(PNO) = " << to_latex_align(wick_result_2, 20)
                  << std::endl;
-      REQUIRE(wick_result_2->size() == 8);
+      REQUIRE(wick_result_2->size() == 7);
     });
 
 #if 1
