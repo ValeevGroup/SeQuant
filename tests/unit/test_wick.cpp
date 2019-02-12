@@ -382,6 +382,8 @@ TEST_CASE("WickTheorem", "[algorithms]") {
   SECTION("Expression Reduction") {
     constexpr Vacuum V = Vacuum::SingleProduct;
 
+    debug_canonicalize = true;
+
 #if 1
     // 2-body ^ 2-body
     SEQUANT2_PROFILE_SINGLE("wick(H2*T2)", {

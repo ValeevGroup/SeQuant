@@ -20,6 +20,8 @@
 #include "wolfram.hpp"
 #include "vector.hpp"
 #include "hash.hpp"
+#include "latex.hpp"
+#include "wolfram.hpp"
 
 namespace sequant2 {
 
@@ -901,22 +903,23 @@ inline std::wstring to_latex_align(const ExprPtr &exprptr, size_t max_terms_per_
   std::wstring result = to_latex(exprptr);
   if (exprptr->is<Sum>()) {
     result.erase(0, 7);  // remove leading  "{ \left"
-    result.replace(result.size() - 9, 9, L")");  // replace trailing "\right) }" with ")"
-    result = std::wstring(L"\\begin{align}\n") + result;
+    result.replace(result.size() - 9, 9,
+                   L")");  // replace trailing "\right) }" with ")"
+    result = std::wstring(L"\\begin{align}\n& ") + result;
     // assume no inner sums
     int term_counter = 0;
     std::wstring::size_type pos = 0;
     while ((pos = result.find(L" + ", pos + 1)) != std::wstring::npos) {
       ++term_counter;
       if (max_terms_per_align > 0 && term_counter >= max_terms_per_align) {
-        result.insert(pos + 3, L"\n\\end{align}\n\\begin{align}\n");
+        result.insert(pos + 3, L"\n\\end{align}\n\\begin{align}\n& ");
         term_counter = 1;
       } else {
-        result.insert(pos + 3, L"\\\\\n");
+        result.insert(pos + 3, L"\\\\\n& ");
       }
     }
   } else {
-    result = std::wstring(L"\\begin{align}\n") + result;
+    result = std::wstring(L"\\begin{align}\n& ") + result;
   }
   result += L"\n\\end{align}";
   return result;

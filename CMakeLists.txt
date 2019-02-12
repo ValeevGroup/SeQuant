@@ -28,7 +28,7 @@ add_library(SeQuant2
         src/SeQuant2/expr.hpp
         src/SeQuant2/wick.hpp
         src/SeQuant2/ranges.hpp
-        src/SeQuant2/vector.hpp
+        src/SeQuant2/container.hpp
         src/SeQuant2/meta.hpp
         src/SeQuant2/latex.hpp
         src/SeQuant2/wolfram.hpp
