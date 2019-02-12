@@ -11,6 +11,8 @@
 #include <set>
 #include <string>
 
+#include <range/v3/all.hpp>
+
 #include <boost/container_hash/hash.hpp>
 
 #include "space.hpp"
@@ -157,8 +159,21 @@ class Index : public Taggable {
 
   /// @return the label
   /// @warning this does not include the proto index labels, use
-  /// Index::to_latex() instead
+  /// Index::full_label() instead
   std::wstring_view label() const { return label_; }
+  /// @return the full label
+  /// @warning this includes the proto index labels (if any), use
+  /// Index::label() instead if only want the label
+  std::wstring_view full_label() const {
+    if (!has_proto_indices()) return label();
+    if (full_label_) return *full_label_;
+    std::wstring result = label_;
+    ranges::for_each(proto_indices_, [&result](const Index &idx) {
+      result += idx.full_label();
+    });
+    full_label_ = result;
+    return *full_label_;
+  }
   /// @return the IndexSpace object
   const IndexSpace &space() const {
     assert(space_.attr().is_valid());
@@ -170,9 +185,7 @@ class Index : public Taggable {
   /// @return the list of proto indices of this index
   const auto &proto_indices() const { return proto_indices_; }
 
-  const std::wstring &to_latex() const {
-    if (latex_label_) return *latex_label_;
-
+  std::wstring to_latex() const {
     auto protect_subscript = [](const std::wstring_view str) {
       auto subsc_pos = str.find(L'_');
       if (subsc_pos == std::wstring_view::npos)
@@ -199,8 +212,7 @@ class Index : public Taggable {
       result += L"}";
     }
     result += L"}";
-    latex_label_ = result;
-    return *latex_label_;
+    return result;
   }
 
   /// @return the smallest index of a generated index
@@ -241,7 +253,7 @@ class Index : public Taggable {
         mutated = true;
       }
     }
-    if (mutated) latex_label_.reset();
+    if (mutated) full_label_.reset();
     return mutated;
   }
 
@@ -255,7 +267,7 @@ class Index : public Taggable {
   // proto_indices_ will be ordered
   bool symmetric_proto_indices_ = true;
 
-  mutable std::optional<std::wstring> latex_label_;
+  mutable std::optional<std::wstring> full_label_;
 
   /// sorts proto_indices_ if symmetric_proto_indices_
   inline void canonicalize_proto_indices();

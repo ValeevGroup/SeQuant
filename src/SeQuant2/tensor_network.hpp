@@ -182,15 +182,15 @@ class TensorNetwork {
     using is_transparent = void;
     bool operator()(const TensorTerminalPair &first,
                     const TensorTerminalPair &second) const {
-      return first.idx().to_latex() < second.idx().to_latex();
+      return first.idx().full_label() < second.idx().full_label();
     }
     bool operator()(const TensorTerminalPair &first,
-                    const std::wstring &second) const {
-      return first.idx().to_latex() < second;
+                    std::wstring_view second) const {
+      return first.idx().full_label() < second;
     }
-    bool operator()(const std::wstring &first,
+    bool operator()(std::wstring_view first,
                     const TensorTerminalPair &second) const {
-      return first < second.idx().to_latex();
+      return first < second.idx().full_label();
     }
   };
   // Index -> TensorTerminalPair, sorted by labels
@@ -201,7 +201,7 @@ class TensorNetwork {
   void init_indices() {
     auto idx_insert = [this](const Index &idx, int tensor_idx) {
       decltype(indices_) &indices = this->indices_;
-      auto it = indices.find(idx.to_latex());
+      auto it = indices.find(idx.full_label());
       if (it == indices.end()) {
         indices.emplace(TensorTerminalPair(tensor_idx, &idx));
       } else {
