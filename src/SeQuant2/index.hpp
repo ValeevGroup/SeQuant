@@ -17,7 +17,9 @@
 
 #include "space.hpp"
 #include "tag.hpp"
-#include "vector.hpp"
+
+// change to 1 to make thread-safe
+#define SEQUANT2_INDEX_THREADSAFE 0
 
 namespace sequant2 {
 
@@ -428,7 +430,9 @@ class IndexFactory {
     do {
       auto counter_it = counters_.begin();
       {  // if don't have a counter for this space
+#if SEQUANT2_INDEX_THREADSAFE
         std::scoped_lock lock(mutex_);
+#endif
         if ((counter_it = counters_.find(space)) == counters_.end()) {
           counters_[space] = min_index_ - 1;
           counter_it = counters_.find(space);
@@ -456,7 +460,9 @@ class IndexFactory {
     do {
       auto counter_it = counters_.begin();
       {  // if don't have a counter for this space
+#if SEQUANT2_INDEX_THREADSAFE
         std::scoped_lock lock(mutex_);
+#endif
         if ((counter_it = counters_.find(space)) == counters_.end()) {
           counters_[space] = min_index_ - 1;
           counter_it = counters_.find(space);
@@ -474,8 +480,15 @@ class IndexFactory {
  private:
   std::size_t min_index_ = Index::min_tmp_index();
   std::function<bool(const Index &)> validator_ = {};
+#if SEQUANT2_INDEX_THREADSAFE
   std::mutex mutex_;
+  // boost::container::flat_map needs copyable value, which std::atomic is not,
+  // so must use std::map
   std::map<IndexSpace, std::atomic<std::size_t>> counters_;
+#else
+  // until multithreaded skip atomic
+  std::map<IndexSpace, std::size_t> counters_;
+#endif
 };
 
 inline auto hash_value(const Index &idx) {
