@@ -131,7 +131,7 @@ class WickTheorem {
   bool full_contractions_ = false;
   bool spinfree_ = false;
   bool reduce_ = false;
-  container::vector<Index> external_indices_;
+  container::set<Index> external_indices_;
   // for each operator specifies the reverse bitmask of connections (0 = must
   // connect)
   container::svector<std::bitset<max_input_size>> op_connections_;

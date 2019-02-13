@@ -116,17 +116,19 @@ class TensorNetwork {
     // - resort tensors (already done in Product::canonicalize but to make this standalone do this again)
     using std::begin;
     using std::end;
-    std::stable_sort(begin(tensors_), end(tensors_), [](const TensorPtr &first, const TensorPtr &second) {
-      return *first < *second;
-    });
-    // - reindex internal indices using ordering of TensorTerminalPair as the canonical definition of the internal index list
+    std::stable_sort(begin(tensors_), end(tensors_),
+                     [](const TensorPtr &first, const TensorPtr &second) {
+                       return *first < *second;
+                     });
+    // - reindex internal indices using ordering of TensorTerminalPair as the
+    // canonical definition of the internal index list
     init_indices();
     {
       auto int_idx_validator = [this](const Index &idx) {
         return this->ext_indices_.find(idx) == this->ext_indices_.end();
       };
       IndexFactory idxfac(int_idx_validator, 1);  // start reindexing from 1
-      std::map<Index, Index> idxrepl;
+      container::map<Index, Index> idxrepl;
       // resort indices_ by TensorTerminalPair ... this automatically puts
       // external indices first
       idx_terminals_sorted.resize(indices_.size());
@@ -180,23 +182,23 @@ class TensorNetwork {
   // source tensors and indices
   container::svector<TensorPtr> tensors_;
 
-  struct LabelComparer {
+  struct FullLabelComparer {
     using is_transparent = void;
     bool operator()(const TensorTerminalPair &first,
                     const TensorTerminalPair &second) const {
       return first.idx().full_label() < second.idx().full_label();
     }
     bool operator()(const TensorTerminalPair &first,
-                    std::wstring_view second) const {
+                    const std::wstring_view &second) const {
       return first.idx().full_label() < second;
     }
-    bool operator()(std::wstring_view first,
+    bool operator()(const std::wstring_view &first,
                     const TensorTerminalPair &second) const {
       return first < second.idx().full_label();
     }
   };
   // Index -> TensorTerminalPair, sorted by labels
-  std::set<TensorTerminalPair, LabelComparer> indices_;
+  container::set<TensorTerminalPair, FullLabelComparer> indices_;
   // ext indices do not connect tensors
   // sorted by *label* (not full label) of the corresponding value (Index)
   // this ensures that proto indices are not considered and all internal indices

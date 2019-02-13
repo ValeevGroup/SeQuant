@@ -305,8 +305,8 @@ class IndexSpace {
     assert(attr_.is_valid());
   }
 
-  static std::map<Attr, std::wstring> keys_;
-  static std::map<Attr, IndexSpace> instances_;
+  static container::map<Attr, std::wstring> keys_;
+  static container::map<Attr, IndexSpace> instances_;
   static IndexSpace null_instance_;
 
   static std::wstring_view reduce_key(std::wstring_view key) {

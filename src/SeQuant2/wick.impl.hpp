@@ -24,13 +24,19 @@ struct zero_result : public std::exception {};
 ///   - if space of J is a subset of space of I, replace J with a new internal
 ///     index representing intersection of spaces of I and J, !!keep the delta!!
 /// @throw zero_result if @c product is zero
-inline std::map<Index, Index> compute_index_replacement_rules(
+inline container::map<Index, Index> compute_index_replacement_rules(
     std::shared_ptr<Product> &product,
-    const container::vector<Index> &external_indices) {
+    const container::set<Index> &external_indices,
+    const std::set<Index, Index::LabelCompare> &all_indices) {
   expr_range exrng(product);
 
-  IndexFactory idxfac;
-  std::map<Index /* src */, Index /* dst */> result;  // src->dst
+  /// this ensures that all temporary indices have unique *labels* (not just
+  /// unique *full labels*)
+  auto index_validator = [&all_indices](const Index &idx) {
+    return all_indices.find(idx) == all_indices.end();
+  };
+  IndexFactory idxfac(index_validator);
+  container::map<Index /* src */, Index /* dst */> result;  // src->dst
 
   // computes an index in intersection of space1 and space2
   auto make_intersection_index = [&idxfac](const IndexSpace &space1,
@@ -194,10 +200,11 @@ inline std::map<Index, Index> compute_index_replacement_rules(
 /// @return true if made any changes
 inline bool apply_index_replacement_rules(
     std::shared_ptr<Product> &product,
-    const std::map<Index, Index> &const_replrules,
-    const container::vector<Index> &external_indices) {
+    const container::map<Index, Index> &const_replrules,
+    const container::set<Index> &external_indices,
+    std::set<Index, Index::LabelCompare> &all_indices) {
   // to be able to use map[]
-  auto &replrules = const_cast<std::map<Index, Index> &>(const_replrules);
+  auto &replrules = const_cast<container::map<Index, Index> &>(const_replrules);
 
   expr_range exrng(product);
 
@@ -279,6 +286,16 @@ inline bool apply_index_replacement_rules(
     }
   } while (pass_mutated);  // keep replacing til fixed point
 
+  // update all_indices
+  std::set<Index, Index::LabelCompare> all_indices_new;
+  ranges::for_each(
+      all_indices, [&const_replrules, &all_indices_new](const Index &idx) {
+        auto dst_it = const_replrules.find(idx);
+        all_indices_new.insert(dst_it != const_replrules.end() ? dst_it->second
+                                                               : idx);
+      });
+  std::swap(all_indices_new, all_indices);
+
   return mutated;
 }
 
@@ -286,13 +303,25 @@ inline bool apply_index_replacement_rules(
 /// between indices in orthonormal spaces) in summations
 /// @throw zero_result if @c expr is zero
 inline void reduce_wick_impl(std::shared_ptr<Product> &expr,
-                             const container::vector<Index> &external_indices) {
+                             const container::set<Index> &external_indices) {
   if (get_default_context().metric() == IndexSpaceMetric::Unit) {
     bool pass_mutated = false;
     do {
       pass_mutated = false;
+
+      // extract current indices
+      std::set<Index, Index::LabelCompare> all_indices;
+      ranges::for_each(*expr, [&all_indices](const auto &factor) {
+        if (factor->template is<Tensor>()) {
+          ranges::for_each(factor->template as<const Tensor>().braket(),
+                           [&all_indices](const Index &idx) {
+                             auto result = all_indices.insert(idx);
+                           });
+        }
+      });
+
       const auto replacement_rules =
-          compute_index_replacement_rules(expr, external_indices);
+          compute_index_replacement_rules(expr, external_indices, all_indices);
 
       //      std::wcout << "reduce_wick_impl(expr, external_indices):\n  expr =
       //      "
@@ -309,8 +338,8 @@ inline void reduce_wick_impl(std::shared_ptr<Product> &expr,
       std::wcout.flush();
 
       if (!replacement_rules.empty()) {
-        pass_mutated = apply_index_replacement_rules(expr, replacement_rules,
-                                                     external_indices);
+        pass_mutated = apply_index_replacement_rules(
+            expr, replacement_rules, external_indices, all_indices);
       }
       //      std::wcout << "\n  result = " << expr->to_latex() << std::endl;
     } while (pass_mutated);  // keep reducing until stop changing

@@ -195,7 +195,8 @@ class TensorCanonicalizer {
   virtual std::shared_ptr<Expr> apply(Tensor &) = 0;
 
  private:
-  static std::map<std::wstring, std::shared_ptr<TensorCanonicalizer>> &instance_map_accessor();
+  static container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>>
+      &instance_map_accessor();
 };
 
 class DefaultTensorCanonicalizer : public TensorCanonicalizer {
@@ -314,7 +315,7 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
   }
 
  private:
-  std::map<std::wstring, Index> external_indices_;
+  container::map<std::wstring, Index> external_indices_;
 };
 
 inline std::shared_ptr<Expr> overlap(const Index& bra_index, const Index& ket_index) {

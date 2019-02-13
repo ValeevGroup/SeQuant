@@ -504,7 +504,7 @@ class IndexFactory {
   std::map<IndexSpace, std::atomic<std::size_t>> counters_;
 #else
   // until multithreaded skip atomic
-  std::map<IndexSpace, std::size_t> counters_;
+  container::map<IndexSpace, std::size_t> counters_;
 #endif
 };
 
