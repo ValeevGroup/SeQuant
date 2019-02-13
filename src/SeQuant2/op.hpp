@@ -236,6 +236,8 @@ class NormalOperator : public Operator<S> {
   auto ncreators() const { return ncreators_; }
   /// @return the number of annihilators
   auto nannihilators() const { return this->size() - ncreators(); }
+  /// @return view of creators and annihilators as a single range
+  auto creann() const { return ranges::view::concat(creators(), annihilators()); }
 
   NormalOperator &adjoint() {
     static_cast<Operator<S> &>(*this).adjoint();

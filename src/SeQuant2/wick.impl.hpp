@@ -55,8 +55,8 @@ inline std::map<Index, Index> compute_index_replacement_rules(
   };
 
   // adds src->dst or src->intersection(dst,current_dst)
-  auto add_rule = [&result, proto, make_intersection_index](const Index &src,
-                                                            const Index &dst) {
+  auto add_rule = [&result, &proto, &make_intersection_index](const Index &src,
+                                                              const Index &dst) {
     auto src_it = result.find(src);
     if (src_it == result.end())  // if brand new, add the rule
       result[src] = proto(dst, src);
@@ -74,7 +74,7 @@ inline std::map<Index, Index> compute_index_replacement_rules(
   // adds src1->dst and src2->dst; if src1->dst1 and/or src2->dst2 already
   // exist the existing rules are updated to map to the intersection of dst1,
   // dst2 and dst
-  auto add_rules = [&result, &idxfac, proto, make_intersection_index](
+  auto add_rules = [&result, &idxfac, &proto, &make_intersection_index](
                        const Index &src1, const Index &src2, const Index &dst) {
     // are there replacement rules already for src{1,2}?
     auto src1_it = result.find(src1);

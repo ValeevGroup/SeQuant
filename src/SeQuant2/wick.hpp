@@ -59,9 +59,18 @@ class WickTheorem {
   /// Specifies the external indices; by default assume all indices are summed
   /// over
   /// @param ext_inds external (nonsummed) indices
-  template<typename IndexContainer>
+  template <typename IndexContainer>
   WickTheorem &set_external_indices(IndexContainer &&external_indices) {
-    external_indices_ = std::forward<IndexContainer>(external_indices);
+    if constexpr (std::is_convertible_v<IndexContainer,
+                                        decltype(external_indices_)>)
+      external_indices_ = std::forward<IndexContainer>(external_indices);
+    else {
+      ranges::for_each(std::forward<IndexContainer>(external_indices),
+                       [this](auto &&v) {
+                         auto result = this->external_indices_.emplace(v);
+                         assert(result.second);
+                       });
+    }
     return *this;
   }
 
