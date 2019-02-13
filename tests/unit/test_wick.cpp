@@ -398,7 +398,6 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       auto wick = FWickTheorem{opseq};
       auto wick_result = wick.full_contractions(true).spinfree(false).compute();
       REQUIRE(wick_result->size() == 4);
-      std::wcout << "H2T2 tmp = " << to_latex(wick_result) << std::endl;
 
       // multiply tensor factors and expand
       auto wick_result_2 = ex<Tensor>(L"g", WstrList{L"p_1", L"p_2"}, WstrList{L"p_3", L"p_4"}, Symmetry::antisymm)
@@ -476,8 +475,6 @@ TEST_CASE("WickTheorem", "[algorithms]") {
                                              IndexList{L"i_3", L"i_4"}, V)});
       auto wick = FWickTheorem{opseq};
       auto wick_result = wick.full_contractions(true).spinfree(false).compute();
-      std::wcout << "P2*H1*T2(PNO) tmp = " << to_latex(wick_result)
-                 << std::endl;
       REQUIRE(wick_result->size() == 16);
 
       // multiply tensor factors and expand
@@ -495,16 +492,10 @@ TEST_CASE("WickTheorem", "[algorithms]") {
           wick_result;
       expand(wick_result_2);
       wick.reduce(wick_result_2);
-      std::wcout << "P2*H1*T2(PNO) after reduce = " << to_latex(wick_result_2)
-                 << std::endl;
       simplify(wick_result_2);
-      std::wcout << "P2*H1*T2(PNO) after simplify = " << to_latex(wick_result_2)
-                 << std::endl;
       TensorCanonicalizer::register_instance(
           std::make_shared<DefaultTensorCanonicalizer>());
       canonicalize(wick_result_2);
-      std::wcout << "P2*H1*T2(PNO) after canonicalize = "
-                 << to_latex(wick_result_2) << std::endl;
       simplify(wick_result_2);
 
       std::wcout << L"P2*H1*T2(PNO) = " << to_latex_align(wick_result_2)
@@ -564,14 +555,9 @@ TEST_CASE("WickTheorem", "[algorithms]") {
           wick_result;
       expand(wick_result_2);
       wick.reduce(wick_result_2);
-      std::wcout << "P2*H2*T2*T2(PNO) after reduce = "
-                 << to_latex(wick_result_2) << std::endl;
       simplify(wick_result_2);
-      std::wcout << "P2*H2*T2*T2(PNO) after simplify = "
-                 << to_latex(wick_result_2) << std::endl;
       TensorCanonicalizer::register_instance(std::make_shared<DefaultTensorCanonicalizer>());
       canonicalize(wick_result_2);
-      std::wcout << "P2*H2*T2*T2(PNO) after canonicalize = " << to_latex(wick_result_2) << std::endl;
       simplify(wick_result_2);
 
       std::wcout << L"P2*H2*T2*T2(PNO) = " << to_latex_align(wick_result_2, 20)
