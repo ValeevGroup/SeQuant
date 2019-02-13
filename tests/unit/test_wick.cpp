@@ -382,8 +382,6 @@ TEST_CASE("WickTheorem", "[algorithms]") {
   SECTION("Expression Reduction") {
     constexpr Vacuum V = Vacuum::SingleProduct;
 
-    debug_canonicalize = true;
-
 #if 1
     // 2-body ^ 2-body
     SEQUANT2_PROFILE_SINGLE("wick(H2*T2)", {
@@ -479,7 +477,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       // multiply tensor factors and expand
       auto wick_result_2 =
           ex<Tensor>(
-              L"L", IndexList{L"i_1", L"i_2"},
+              L"A", IndexList{L"i_1", L"i_2"},
               IndexList{{L"a_1", {L"i_1", L"i_2"}}, {L"a_2", {L"i_1", L"i_2"}}},
               Symmetry::antisymm) *
           ex<Tensor>(L"f", WstrList{L"p_1"}, WstrList{L"p_2"},
@@ -507,10 +505,10 @@ TEST_CASE("WickTheorem", "[algorithms]") {
                  << std::endl;
       REQUIRE(to_latex(wick_result_2) ==
               L"{ \\left({{-8} \\times "
-              L"{L^{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}_{{i_1}{i_2}}}{f^{{a_"
+              L"{A^{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}_{{i_1}{i_2}}}{f^{{a_"
               L"3^{{i_1}{i_2}}}}_{{a_1^{{i_1}{i_2}}}}}{t^{{i_1}{i_2}}_{{a_2^{{"
               L"i_1}{i_2}}}{a_3^{{i_1}{i_2}}}}}} + {{8} \\times "
-              L"{L^{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}_{{i_1}{i_2}}}{S^{{a_"
+              L"{A^{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}_{{i_1}{i_2}}}{S^{{a_"
               L"3^{{i_2}{i_3}}}}_{{a_1^{{i_1}{i_2}}}}}{S^{{a_4^{{i_2}{i_3}}}}_{"
               L"{a_2^{{i_1}{i_2}}}}}{f^{{i_1}}_{{i_3}}}{t^{{i_2}{i_3}}_{{a_3^{{"
               L"i_2}{i_3}}}{a_4^{{i_2}{i_3}}}}}}\\right) }");
@@ -544,7 +542,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       // multiply tensor factors and expand
       auto wick_result_2 =
           ex<Tensor>(
-              L"L", IndexList{L"i_1", L"i_2"},
+              L"A", IndexList{L"i_1", L"i_2"},
               IndexList{{L"a_1", {L"i_1", L"i_2"}}, {L"a_2", {L"i_1", L"i_2"}}},
               Symmetry::antisymm) *
           ex<Tensor>(L"g", WstrList{L"p_1", L"p_2"}, WstrList{L"p_3", L"p_4"},
@@ -572,7 +570,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
 
       std::wcout << L"P2*H2*T2*T2(PNO) = " << to_latex_align(wick_result_2, 20)
                  << std::endl;
-      REQUIRE(wick_result_2->size() == 7);
+      REQUIRE(wick_result_2->size() == 5);  // but only 4 are unique
     });
 
 #if 1
@@ -594,7 +592,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
 
       // multiply tensor factors and expand
       auto wick_result_2 =
-          ex<Tensor>(L"L", WstrList{L"i_1", L"i_2", L"i_3"},
+          ex<Tensor>(L"A", WstrList{L"i_1", L"i_2", L"i_3"},
                      WstrList{L"a_1", L"a_2", L"a_3"}, Symmetry::antisymm) *
           ex<Tensor>(L"g", WstrList{L"p_1", L"p_2"}, WstrList{L"p_3", L"p_4"},
                      Symmetry::antisymm) *
