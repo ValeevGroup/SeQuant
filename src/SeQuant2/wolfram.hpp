@@ -25,6 +25,7 @@ std::wstring to_wolfram(const std::complex<T> &t) {
     return std::wstring(L"Complex[") + to_wstring(t.real()) + L"," +
            to_wstring(t.imag()) + L"]";
 }
-}
 
-#endif //SEQUANT2_WOLFRAM_HPP
+}  // namespace sequant2
+
+#endif  // SEQUANT2_WOLFRAM_HPP

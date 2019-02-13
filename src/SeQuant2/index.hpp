@@ -15,9 +15,13 @@
 
 #include <boost/container_hash/hash.hpp>
 
+#include "attr.hpp"
+#include "container.hpp"
 #include "space.hpp"
 #include "tag.hpp"
-#include "vector.hpp"
+
+// change to 1 to make thread-safe
+#define SEQUANT2_INDEX_THREADSAFE 0
 
 namespace sequant2 {
 
@@ -215,7 +219,7 @@ class Index : public Taggable {
     return result;
   }
 
-  std::wstring to_wolfram() const {
+  template <typename ... Attrs> std::wstring to_wolfram(Attrs && ... attrs) const {
     auto protect_subscript = [](const std::wstring_view str){
       auto  subsc_pos = str.find(L'_');
       if (subsc_pos == std::wstring_view::npos)
@@ -236,20 +240,15 @@ class Index : public Taggable {
       }
     };
 
-    std::wstring result;
-    result = L"{";
-    result = protect_subscript(this->label());
+    std::wstring result = protect_subscript(this->label());
     if (this->has_proto_indices()) {
-      result += L"^{";
-      for (const auto &pi: this->proto_indices()) {
-        result += pi.to_wolfram();
-      }
-      result += L"},";
+      assert(false && "not yet supported");
     }
-//    result += L"}";
-//    result += L",";
+    using namespace std::literals;
+    using sequant2::to_wolfram;
+    ((result += ((L","s + to_wolfram(std::forward<Attrs>(attrs))))), ...);
+    result += L"]";
     return result;
-
   }
 
   /// @return the smallest index of a generated index
@@ -267,7 +266,9 @@ class Index : public Taggable {
   /// If this object was not found in the map, tries replacing its subindices.
   /// @param index_map maps Index to Index
   /// @return false if no replacements were made
-  bool transform(const std::map<Index, Index> &index_map) {
+  template <template <typename, typename, typename... Args> class Map,
+            typename... Args>
+  bool transform(const Map<Index, Index, Args...> &index_map) {
     // first try replacing this first; if not found, try replacing protoindices
     // first, then try replacing this again
     auto it = index_map.find(*this);
@@ -293,6 +294,20 @@ class Index : public Taggable {
     if (mutated) full_label_.reset();
     return mutated;
   }
+
+  /// compares Index objects using labels only
+  struct LabelCompare {
+    using is_transparent = void;
+    bool operator()(const Index &first, const Index &second) const {
+      return first.label() < second.label();
+    }
+    bool operator()(const Index &first, const std::wstring_view &second) const {
+      return first.label() < second;
+    }
+    bool operator()(const std::wstring_view &first, const Index &second) const {
+      return first < second.label();
+    }
+  };
 
  private:
   std::wstring label_{};
@@ -414,8 +429,6 @@ void Index::canonicalize_proto_indices() {
 
 inline std::wstring to_latex(const Index &index) { return index.to_latex(); }
 
-inline std::wstring to_wolfram(const Index &index) { return index.to_wolfram();}
-
 class IndexSwapper {
  public:
   IndexSwapper() : even_num_of_swaps_(true) {}
@@ -467,7 +480,9 @@ class IndexFactory {
     do {
       auto counter_it = counters_.begin();
       {  // if don't have a counter for this space
+#if SEQUANT2_INDEX_THREADSAFE
         std::scoped_lock lock(mutex_);
+#endif
         if ((counter_it = counters_.find(space)) == counters_.end()) {
           counters_[space] = min_index_ - 1;
           counter_it = counters_.find(space);
@@ -495,7 +510,9 @@ class IndexFactory {
     do {
       auto counter_it = counters_.begin();
       {  // if don't have a counter for this space
+#if SEQUANT2_INDEX_THREADSAFE
         std::scoped_lock lock(mutex_);
+#endif
         if ((counter_it = counters_.find(space)) == counters_.end()) {
           counters_[space] = min_index_ - 1;
           counter_it = counters_.find(space);
@@ -513,8 +530,15 @@ class IndexFactory {
  private:
   std::size_t min_index_ = Index::min_tmp_index();
   std::function<bool(const Index &)> validator_ = {};
+#if SEQUANT2_INDEX_THREADSAFE
   std::mutex mutex_;
+  // boost::container::flat_map needs copyable value, which std::atomic is not,
+  // so must use std::map
   std::map<IndexSpace, std::atomic<std::size_t>> counters_;
+#else
+  // until multithreaded skip atomic
+  container::map<IndexSpace, std::size_t> counters_;
+#endif
 };
 
 inline auto hash_value(const Index &idx) {
