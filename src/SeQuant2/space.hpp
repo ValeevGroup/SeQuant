@@ -8,15 +8,10 @@
 #include <cassert>
 #include <bitset>
 
+#include "attr.hpp"
 #include "container.hpp"
 
 namespace sequant2 {
-
-enum class IndexSpaceMetric {
-  Unit,
-  General,
-  Invalid
-};
 
 /// @brief space of Index objects
 ///

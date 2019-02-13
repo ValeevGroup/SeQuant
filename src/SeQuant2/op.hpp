@@ -9,21 +9,14 @@
 
 #include <range/v3/all.hpp>
 
+#include "attr.hpp"
 #include "expr.hpp"
 #include "index.hpp"
 #include "sequant.hpp"
-#include "vacuum.hpp"
 #include "ranges.hpp"
 #include "container.hpp"
 
 namespace sequant2 {
-
-enum class Statistics { BoseEinstein, FermiDirac };
-
-enum class Action { create, annihilate };
-
-/// applies (Hermitian) adjoint to @c action
-inline Action adjoint(Action action) { return action == Action::create ? Action::annihilate : Action::create; }
 
 /// @brief Op is a creator/annihilator operator
 ///

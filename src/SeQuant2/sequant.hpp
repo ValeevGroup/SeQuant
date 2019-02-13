@@ -2,7 +2,7 @@
 #define SEQUANT2_SEQUANT_H
 
 #include "space.hpp"
-#include "vacuum.hpp"
+#include "attr.hpp"
 
 namespace sequant2 {
 

@@ -7,12 +7,11 @@
 
 #include <memory>
 
-#include "index.hpp"
+#include "attr.hpp"
 #include "expr.hpp"
+#include "index.hpp"
 
 namespace sequant2 {
-
-enum class Symmetry { symm, antisymm, nonsymm };
 
 class TensorCanonicalizer;
 
