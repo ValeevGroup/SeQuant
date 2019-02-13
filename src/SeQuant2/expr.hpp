@@ -215,22 +215,24 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
 
   /// @tparam T an Expr type
   /// @return true if this object is of type @c T
-  template<typename T>
-  bool is() const { return this->type_id() == get_type_id<T>(); }
+  template <typename T>
+  bool is() const {
+    return this->type_id() == get_type_id<std::decay_t<T>>();
+  }
 
   /// @tparam T an Expr type
   /// @return this object cast to type @c T
-  template<typename T>
+  template <typename T>
   const T &as() const {
-    assert(this->is<T>());
+    assert(this->is<std::decay_t<T>>());  // so that as<const T>() works fine
     return static_cast<const T &>(*this);
   }
 
   /// @tparam T an Expr type
   /// @return this object cast to type @c T
-  template<typename T>
+  template <typename T>
   T &as() {
-    assert(this->is<T>());
+    assert(this->is<std::decay_t<T>>());  // so that as<const T>() works fine
     return static_cast<T &>(*this);
   }
 
