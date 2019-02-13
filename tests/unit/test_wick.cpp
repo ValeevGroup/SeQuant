@@ -382,6 +382,12 @@ TEST_CASE("WickTheorem", "[algorithms]") {
   SECTION("Expression Reduction") {
     constexpr Vacuum V = Vacuum::SingleProduct;
 
+    // make these Tensor labels special ...
+    // these are already lexicographically ordered, but tensors that do not
+    // appear on this list (e.g. "S") will appear after Tensors with these
+    // labels
+    TensorCanonicalizer::set_cardinal_tensor_labels({L"A", L"f", L"g", L"t"});
+
 #if 1
     // 2-body ^ 2-body
     SEQUANT2_PROFILE_SINGLE("wick(H2*T2)", {
@@ -508,10 +514,10 @@ TEST_CASE("WickTheorem", "[algorithms]") {
               L"{A^{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}_{{i_1}{i_2}}}{f^{{a_"
               L"3^{{i_1}{i_2}}}}_{{a_1^{{i_1}{i_2}}}}}{t^{{i_1}{i_2}}_{{a_2^{{"
               L"i_1}{i_2}}}{a_3^{{i_1}{i_2}}}}}} + {{8} \\times "
-              L"{A^{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}_{{i_1}{i_2}}}{S^{{a_"
-              L"3^{{i_2}{i_3}}}}_{{a_1^{{i_1}{i_2}}}}}{S^{{a_4^{{i_2}{i_3}}}}_{"
-              L"{a_2^{{i_1}{i_2}}}}}{f^{{i_1}}_{{i_3}}}{t^{{i_2}{i_3}}_{{a_3^{{"
-              L"i_2}{i_3}}}{a_4^{{i_2}{i_3}}}}}}\\right) }");
+              L"{A^{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}_{{i_1}{i_2}}}{f^{{i_"
+              L"1}}_{{i_3}}}{t^{{i_2}{i_3}}_{{a_3^{{i_2}{i_3}}}{a_4^{{i_2}{i_3}"
+              L"}}}}{S^{{a_3^{{i_2}{i_3}}}}_{{a_1^{{i_1}{i_2}}}}}{S^{{a_4^{{i_"
+              L"2}{i_3}}}}_{{a_2^{{i_1}{i_2}}}}}}\\right) }");
     });
 
     // 2=body ^ 2-body ^ 2-body ^ 2-body with dependent (PNO) indices

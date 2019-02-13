@@ -28,7 +28,8 @@ std::shared_ptr<Expr> Product::canonicalize() {
     if (debug_canonicalize)
       std::wcout << "Product canonicalization input: " << to_latex() << std::endl;
     TensorNetwork tn(factors_);
-    auto canon_factor = tn.canonicalize();
+    auto canon_factor =
+        tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels());
     const auto &tensors = tn.tensors();
     using std::size;
     assert(size(tensors) == size(factors_));

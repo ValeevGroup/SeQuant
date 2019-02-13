@@ -186,7 +186,20 @@ class TensorCanonicalizer {
   static std::shared_ptr<TensorCanonicalizer> instance(std::wstring_view label = L"");
   /// registers @c canonicalizer to be applied to Tensor objects with label @c label ; leave the label
   /// empty if @c canonicalizer is to apply to Tensor with any label)
-  static void register_instance(std::shared_ptr<TensorCanonicalizer> canonicalizer, std::wstring_view label = L"");
+  static void register_instance(
+      std::shared_ptr<TensorCanonicalizer> canonicalizer,
+      std::wstring_view label = L"");
+
+  /// @return a list of Tensor labels with lexicographic preference (in order)
+  static const auto &cardinal_tensor_labels() {
+    return cardinal_tensor_labels_accessor();
+  }
+  /// @param cardinal_tensor_labels a list of Tensor labels with lexicographic
+  /// preference (in order)
+  static void set_cardinal_tensor_labels(
+      const container::vector<std::wstring> &labels) {
+    cardinal_tensor_labels_accessor() = labels;
+  }
 
   auto &bra(Tensor &t) { return t.bra_; };
   auto &ket(Tensor &t) { return t.ket_; };
@@ -197,6 +210,7 @@ class TensorCanonicalizer {
  private:
   static container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>>
       &instance_map_accessor();
+  static container::vector<std::wstring> &cardinal_tensor_labels_accessor();
 };
 
 class DefaultTensorCanonicalizer : public TensorCanonicalizer {

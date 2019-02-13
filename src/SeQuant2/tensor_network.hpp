@@ -104,7 +104,10 @@ class TensorNetwork {
   /// @return sequence container of tensors
   const auto &tensors() const { return tensors_; }
 
-  ExprPtr canonicalize() {
+  /// @param cardinal_tensor_labels move all tensors with these labels to the
+  /// front before canonicalizing indices
+  ExprPtr canonicalize(
+      const container::vector<std::wstring> &cardinal_tensor_labels = {}) {
     ExprPtr canon_biproduct = ex<Constant>(1);
     container::svector<TensorTerminalPair> idx_terminals_sorted;  // to avoid memory allocs
 
@@ -116,10 +119,33 @@ class TensorNetwork {
     // - resort tensors (already done in Product::canonicalize but to make this standalone do this again)
     using std::begin;
     using std::end;
-    std::stable_sort(begin(tensors_), end(tensors_),
-                     [](const TensorPtr &first, const TensorPtr &second) {
-                       return *first < *second;
-                     });
+    std::stable_sort(
+        begin(tensors_), end(tensors_),
+        [&cardinal_tensor_labels](const TensorPtr &first,
+                                  const TensorPtr &second) {
+          const auto cardinal_tensor_labels_end = end(cardinal_tensor_labels);
+          const auto first_cardinal_it =
+              std::find(begin(cardinal_tensor_labels),
+                        end(cardinal_tensor_labels), first->label());
+          const auto second_cardinal_it =
+              std::find(begin(cardinal_tensor_labels),
+                        end(cardinal_tensor_labels), second->label());
+          const auto first_is_cardinal =
+              first_cardinal_it != cardinal_tensor_labels_end;
+          const auto second_is_cardinal =
+              second_cardinal_it != cardinal_tensor_labels_end;
+          if (first_is_cardinal && second_is_cardinal) {
+            if (first_cardinal_it == second_cardinal_it)
+              return *first < *second;
+            else
+              return first_cardinal_it < second_cardinal_it;
+          } else if (first_is_cardinal)
+            return true;
+          else if (second_is_cardinal)
+            return false;
+          else  // neither is cardinal
+            return *first < *second;
+        });
     // - reindex internal indices using ordering of TensorTerminalPair as the
     // canonical definition of the internal index list
     init_indices();
