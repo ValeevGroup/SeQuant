@@ -198,7 +198,10 @@ class TensorNetwork {
   // Index -> TensorTerminalPair, sorted by labels
   std::set<TensorTerminalPair, LabelComparer> indices_;
   // ext indices do not connect tensors
-  std::set<Index> ext_indices_;
+  // sorted by *label* (not full label) of the corresponding value (Index)
+  // this ensures that proto indices are not considered and all internal indices
+  // have unique labels (not full labels)
+  container::set<Index, Index::LabelCompare> ext_indices_;
 
   void init_indices() {
     auto idx_insert = [this](const Index &idx, int tensor_idx) {

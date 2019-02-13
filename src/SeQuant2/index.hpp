@@ -262,6 +262,20 @@ class Index : public Taggable {
     return mutated;
   }
 
+  /// compares Index objects using labels only
+  struct LabelCompare {
+    using is_transparent = void;
+    bool operator()(const Index &first, const Index &second) const {
+      return first.label() < second.label();
+    }
+    bool operator()(const Index &first, const std::wstring_view &second) const {
+      return first.label() < second;
+    }
+    bool operator()(const std::wstring_view &first, const Index &second) const {
+      return first < second.label();
+    }
+  };
+
  private:
   std::wstring label_{};
   IndexSpace space_{};
