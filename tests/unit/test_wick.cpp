@@ -407,6 +407,8 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       simplify(wick_result_2);
 
       std::wcout << L"H2*T2 = " << to_latex(wick_result_2) << std::endl;
+      std::wcout << L"H2*T2 = " << to_wolfram(wick_result_2) << std::endl;
+
       REQUIRE(to_latex(wick_result_2)
                   == L"{ \\left({{4.000000} \\times {g^{{a_{100}}{a_{101}}}_{{i_{100}}{i_{101}}}}{t^{{i_{100}}{i_{101}}}_{{a_{100}}{a_{101}}}}}\\right) }");
     });

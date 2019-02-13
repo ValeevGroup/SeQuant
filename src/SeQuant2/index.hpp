@@ -144,6 +144,43 @@ class Index : public Taggable {
     return result;
   }
 
+  std::wstring to_wolfram() const {
+    auto protect_subscript = [](const std::wstring_view str){
+      auto  subsc_pos = str.find(L'_');
+      if (subsc_pos == std::wstring_view::npos)
+        return std::wstring(str);
+      else{
+        assert(subsc_pos + 1 < str.size());
+        if (subsc_pos + 2 == str.size())  // don't protect single character
+          return std::wstring(str);
+        std::wstring
+            result = L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(";
+            result += std::wstring(str.substr(0, subsc_pos));
+            result += L"\\), \\(";
+            result += std::wstring(str.substr(subsc_pos + 1));
+            result += L"\\)]\\)\",";
+            std::wstring spaceName = (std::wstring(str.substr(0, subsc_pos)) == L"a") ? L"virtual" : L"occupied";
+            result += L"particleSpace[" + spaceName + L"],";
+        return result;
+      }
+    };
+
+    std::wstring result;
+    result = L"{";
+    result = protect_subscript(this->label());
+    if (this->has_proto_indices()) {
+      result += L"^{";
+      for (const auto &pi: this->proto_indices()) {
+        result += pi.to_wolfram();
+      }
+      result += L"},";
+    }
+//    result += L"}";
+//    result += L",";
+    return result;
+
+  }
+
   /// @return the smallest index of a generated index
   static constexpr std::size_t min_tmp_index() {
     return 100;
@@ -242,6 +279,10 @@ void Index::check_for_duplicate_proto_indices() {
 
 inline std::wstring to_latex(const Index &index) {
   return index.to_latex();
+}
+
+inline std::wstring to_wolfram(const Index &index) {
+  return index.to_wolfram();
 }
 
 class IndexSwapper {

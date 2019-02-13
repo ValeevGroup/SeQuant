@@ -14,6 +14,16 @@ namespace sequant2 {
 
 enum class Symmetry { symm, antisymm, nonsymm };
 
+inline std::wstring to_wolfram(const Symmetry& symmetry){
+  std::wstring result;
+  switch(symmetry) {
+    case Symmetry::symm : result = L"indexSymm[1]"; break;
+    case Symmetry::antisymm: result = L"indexSymm[-1]"; break;
+    case Symmetry::nonsymm : result = L"indexSymm[0]"; break;
+  }
+  return result;
+}
+
 class TensorCanonicalizer;
 
 /// @brief particle-symmetric Tensor, i.e. permuting
@@ -78,6 +88,29 @@ class Tensor : public Expr {
     for (const auto &i : this->bra())
       result += sequant2::to_latex(i);
     result += L"}}";
+    return result;
+  }
+
+  std::wstring to_wolfram() const override {
+    std::wstring result;
+    result = L"SQM[OHead[\"\\!\\(\\*OverscriptBox[\\(";
+    result += this->label(); // prints S,g,t
+    result += L"\\), \\(_\\)]\\)\",";
+    result += sequant2::to_wolfram(this->symmetry());
+    result += L"],";
+    for (const auto &i : this->ket()){
+      result += sequant2::to_wolfram(i);
+      result += L"indexType[ket]],";
+    }
+//    result = result.substr(0, result.size()-1);
+//    result += L",";
+    for (const auto &i : this->bra()){
+      result += sequant2::to_wolfram(i);
+      result += L"indexType[bra]],";
+    }
+    result = result.erase(result.size()-1);
+//    result += L",";
+    result += L"]";
     return result;
   }
 
