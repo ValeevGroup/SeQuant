@@ -121,11 +121,17 @@ class TensorNetwork {
     // - reindex internal indices using ordering of TensorTerminalPair as the canonical definition of the internal index list
     init_indices();
     {
-      IndexFactory idxfac;
+      auto int_idx_validator = [this](const Index &idx) {
+        return this->ext_indices_.find(idx) == this->ext_indices_.end();
+      };
+      IndexFactory idxfac(int_idx_validator, 1);  // start reindexing from 1
       std::map<Index, Index> idxrepl;
-      // resort indices_ by TensorTerminalPair ... this automatically puts external indices first
+      // resort indices_ by TensorTerminalPair ... this automatically puts
+      // external indices first
       idx_terminals_sorted.resize(indices_.size());
-      std::partial_sort_copy(begin(indices_), end(indices_), begin(idx_terminals_sorted), end(idx_terminals_sorted));
+      std::partial_sort_copy(begin(indices_), end(indices_),
+                             begin(idx_terminals_sorted),
+                             end(idx_terminals_sorted));
 
       // make index replacement list for internal indices only
       const auto num_ext_indices = ext_indices_.size();
@@ -134,18 +140,23 @@ class TensorNetwork {
                     [&idxrepl, &idxfac](const auto &terminals) {
                       const auto &idx = terminals.idx();
                       if (terminals.size() == 2) {  // internal index?
-                        idxrepl.emplace(std::make_pair(idx, idxfac.make(idx.space())));
+                        idxrepl.emplace(std::make_pair(idx, idxfac.make(idx)));
                       }
                     });
       if (debug_canonicalize) {
-        for (const auto &idxpair: idxrepl) {
-          std::wcout << "TensorNetwork::canonicalize: replacing " << idxpair.first.label() << " with "
-                     << idxpair.second.label() << std::endl;
+        for (const auto &idxpair : idxrepl) {
+          std::wcout << "TensorNetwork::canonicalize: replacing "
+                     << to_latex(idxpair.first) << " with "
+                     << to_latex(idxpair.second) << std::endl;
         }
       }
-      for (auto &tensor: tensors_) {
-        tensor->transform_indices(idxrepl);
-      }
+      bool pass_mutated = false;
+      do {
+        pass_mutated = false;
+        for (auto &tensor : tensors_) {
+          pass_mutated |= tensor->transform_indices(idxrepl);
+        }
+      } while (pass_mutated);  // transform till stops changing
     }
     // - re-canonize tensors
     {
@@ -169,25 +180,28 @@ class TensorNetwork {
 
   struct LabelComparer {
     using is_transparent = void;
-    bool operator()(const TensorTerminalPair &first, const TensorTerminalPair &second) const {
-      return first.idx().label() < second.idx().label();
+    bool operator()(const TensorTerminalPair &first,
+                    const TensorTerminalPair &second) const {
+      return first.idx().full_label() < second.idx().full_label();
     }
-    bool operator()(const TensorTerminalPair &first, const std::wstring_view &second) const {
-      return first.idx().label() < second;
+    bool operator()(const TensorTerminalPair &first,
+                    std::wstring_view second) const {
+      return first.idx().full_label() < second;
     }
-    bool operator()(const std::wstring_view &first, const TensorTerminalPair &second) const {
-      return first < second.idx().label();
+    bool operator()(std::wstring_view first,
+                    const TensorTerminalPair &second) const {
+      return first < second.idx().full_label();
     }
   };
   // Index -> TensorTerminalPair, sorted by labels
   std::set<TensorTerminalPair, LabelComparer> indices_;
-  // ext indices do no connect tensors
+  // ext indices do not connect tensors
   std::set<Index> ext_indices_;
 
   void init_indices() {
     auto idx_insert = [this](const Index &idx, int tensor_idx) {
       decltype(indices_) &indices = this->indices_;
-      auto it = indices.find(idx.label());
+      auto it = indices.find(idx.full_label());
       if (it == indices.end()) {
         indices.emplace(TensorTerminalPair(tensor_idx, &idx));
       } else {

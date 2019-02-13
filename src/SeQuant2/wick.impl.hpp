@@ -32,6 +32,7 @@ inline std::map<Index, Index> compute_index_replacement_rules(
   IndexFactory idxfac;
   std::map<Index /* src */, Index /* dst */> result;  // src->dst
 
+  // computes an index in intersection of space1 and space2
   auto make_intersection_index = [&idxfac](const IndexSpace &space1,
                                            const IndexSpace &space2) {
     const auto intersection_space = intersection(space1, space2);
@@ -39,50 +40,82 @@ inline std::map<Index, Index> compute_index_replacement_rules(
     return idxfac.make(intersection_space);
   };
 
-  /// adds src->dst or src->intersection(dst,current_dst)
-  auto add_rule = [&result, make_intersection_index](
-      const Index &src, const Index &dst) {
+  // transfers proto indices from idx (if any) to img
+  auto proto = [](const Index &img, const Index &idx) {
+    if (idx.has_proto_indices()) {
+      if (img.has_proto_indices()) {
+        assert(img.proto_indices() == idx.proto_indices());
+        return img;
+      } else
+        return Index(img, idx.proto_indices());
+    } else {
+      assert(!img.has_proto_indices());
+      return img;
+    }
+  };
+
+  // adds src->dst or src->intersection(dst,current_dst)
+  auto add_rule = [&result, proto, make_intersection_index](const Index &src,
+                                                            const Index &dst) {
     auto src_it = result.find(src);
     if (src_it == result.end())  // if brand new, add the rule
-      result[src] = dst;
+      result[src] = proto(dst, src);
     else {  // else modify the destination of the existing rule to the
       // intersection
       const auto &old_dst = src_it->second;
+      assert(old_dst.proto_indices() == src.proto_indices());
       if (dst.space() != old_dst.space()) {
-        src_it->second = make_intersection_index(old_dst.space(), dst.space());
+        src_it->second =
+            proto(make_intersection_index(old_dst.space(), dst.space()), src);
       }
     }
   };
 
-  /// adds src1->dst and src2->dst; if src1->dst1 and/or src2->dst2 already
-  /// exist existing rules are updated to map to the intersection of dst1, dst2
-  /// and dst
-  auto add_rules = [&result, &idxfac, make_intersection_index](
-      const Index &src1, const Index &src2, const Index &dst) {
+  // adds src1->dst and src2->dst; if src1->dst1 and/or src2->dst2 already
+  // exist the existing rules are updated to map to the intersection of dst1,
+  // dst2 and dst
+  auto add_rules = [&result, &idxfac, proto, make_intersection_index](
+                       const Index &src1, const Index &src2, const Index &dst) {
+    // are there replacement rules already for src{1,2}?
     auto src1_it = result.find(src1);
     auto src2_it = result.find(src2);
     const auto has_src1_rule = src1_it != result.end();
     const auto has_src2_rule = src2_it != result.end();
+
+    // which proto-indices should dst1 and dst2 inherit? a source index without
+    // proto indices will inherit its source counterpart's indices, unless it
+    // already has its own protoindices: <a_ij|p> = <a_ij|a_ij> (hence replace p
+    // with a_ij), but <a_ij|p_kl> = <a_ij|a_kl> != <a_ij|a_ij> (hence replace
+    // p_kl with a_kl)
+    const auto &dst1_proto =
+        !src1.has_proto_indices() && src2.has_proto_indices() ? src2 : src1;
+    const auto &dst2_proto =
+        !src2.has_proto_indices() && src1.has_proto_indices() ? src1 : src2;
+
     if (!has_src1_rule && !has_src2_rule) {  // if brand new, add the rules
-      result.insert({src1, dst});
+      result.insert({src1, proto(dst, dst1_proto)});
       assert(!result.empty());
-      result.insert({src2, dst});
+      result.insert({src2, proto(dst, dst2_proto)});
       assert(!result.empty());
-    } else if (has_src1_rule && !has_src2_rule) {
+    } else if (has_src1_rule &&
+               !has_src2_rule) {  // update the existing rule for src1
       const auto &old_dst1 = src1_it->second;
+      assert(old_dst1.proto_indices() == dst1_proto.proto_indices());
       if (dst.space() != old_dst1.space()) {
-        src1_it->second =
-            make_intersection_index(old_dst1.space(), dst.space());
+        src1_it->second = proto(
+            make_intersection_index(old_dst1.space(), dst.space()), dst1_proto);
       }
       result[src2] = src1_it->second;
-    } else if (!has_src1_rule && has_src2_rule) {
+    } else if (!has_src1_rule &&
+               has_src2_rule) {  // update the existing rule for src2
       const auto &old_dst2 = src2_it->second;
+      assert(old_dst2.proto_indices() == dst2_proto.proto_indices());
       if (dst.space() != old_dst2.space()) {
-        src2_it->second =
-            make_intersection_index(old_dst2.space(), dst.space());
+        src2_it->second = proto(
+            make_intersection_index(old_dst2.space(), dst.space()), dst2_proto);
       }
       result[src1] = src2_it->second;
-    } else {  //
+    } else {  // update both of the existing rules
       const auto &old_dst1 = src1_it->second;
       const auto &old_dst2 = src2_it->second;
       const auto new_dst_space =
@@ -108,8 +141,8 @@ inline std::map<Index, Index> compute_index_replacement_rules(
         new_dst = dst;
       } else
         new_dst = idxfac.make(new_dst_space);
-      result[src1] = new_dst;
-      result[src2] = new_dst;
+      result[src1] = proto(new_dst,dst1_proto);
+      result[src2] = proto(new_dst,dst2_proto);
     }
   };
 
@@ -158,7 +191,8 @@ inline std::map<Index, Index> compute_index_replacement_rules(
   return result;
 }
 
-inline void apply_index_replacement_rules(
+/// @return true if made any changes
+inline bool apply_index_replacement_rules(
     std::shared_ptr<Product> &product,
     const std::map<Index, Index> &const_replrules,
     const container::vector<Index> &external_indices) {
@@ -167,69 +201,85 @@ inline void apply_index_replacement_rules(
 
   expr_range exrng(product);
 
-  for (auto it = ranges::begin(exrng); it != ranges::end(exrng);) {
-    const auto &factor = *it;
-    if (factor->type_id() == Expr::get_type_id<Tensor>()) {
-      bool erase_it = false;
-      auto &tensor = static_cast<Tensor &>(*factor);
+  /// this recursively applies replacement rules until result does not
+  /// change removes the deltas that are no longer needed
+  bool mutated = false;
+  bool pass_mutated = false;
+  do {
+    mutated |= pass_mutated;
+    pass_mutated = false;
 
-      /// this removes the deltas that are no longer needed
-      /// this also ensures that a single pass was sufficient to construct
-      /// self-consistent replacement rules
-      if (tensor.label() == L"S") {
-        const auto &bra = tensor.bra().at(0);
-        const auto &ket = tensor.ket().at(0);
+    for (auto it = ranges::begin(exrng); it != ranges::end(exrng);) {
+      const auto &factor = *it;
+      if (factor->type_id() == Expr::get_type_id<Tensor>()) {
+        bool erase_it = false;
+        auto &tensor = static_cast<Tensor &>(*factor);
 
-        const auto bra_is_ext = ranges::find(external_indices, bra) !=
-            ranges::end(external_indices);
-        const auto ket_is_ext = ranges::find(external_indices, ket) !=
-            ranges::end(external_indices);
+        /// replace indices
+        pass_mutated &= tensor.transform_indices(const_replrules);
+
+        if (tensor.label() == L"S") {
+          const auto &bra = tensor.bra().at(0);
+          const auto &ket = tensor.ket().at(0);
+
+          if (bra.proto_indices() == ket.proto_indices()) {
+            const auto bra_is_ext = ranges::find(external_indices, bra) !=
+                                    ranges::end(external_indices);
+            const auto ket_is_ext = ranges::find(external_indices, ket) !=
+                                    ranges::end(external_indices);
 
 #ifndef NDEBUG
-        const auto intersection_space = intersection(bra.space(), ket.space());
+            const auto intersection_space =
+                intersection(bra.space(), ket.space());
 #endif
 
-        if (!bra_is_ext && !ket_is_ext) {  // int + int
+            if (!bra_is_ext && !ket_is_ext) {  // int + int
 #ifndef NDEBUG
-          assert(replrules[bra].space() == replrules[ket].space());
+              if (replrules.find(bra) != replrules.end() &&
+                  replrules.find(ket) != replrules.end())
+                assert(replrules[bra].space() == replrules[ket].space());
 #endif
-          erase_it = true;
-        } else if (bra_is_ext && !ket_is_ext) {  // ext + int
-          if (includes(bra.space(), ket.space())) {
+              erase_it = true;
+            } else if (bra_is_ext && !ket_is_ext) {  // ext + int
+              if (includes(bra.space(), ket.space())) {
 #ifndef NDEBUG
-            assert(replrules[ket].space() == bra.space());
+                if (replrules.find(ket) != replrules.end())
+                  assert(replrules[ket].space() == bra.space());
 #endif
-            erase_it = true;
-          } else {
+                erase_it = true;
+              } else {
 #ifndef NDEBUG
-            assert(replrules[ket].space() == intersection_space);
+                if (replrules.find(ket) != replrules.end())
+                  assert(replrules[ket].space() == intersection_space);
 #endif
-          }
-        } else if (!bra_is_ext && ket_is_ext) {  // int + ext
-          if (includes(ket.space(), bra.space())) {
+              }
+            } else if (!bra_is_ext && ket_is_ext) {  // int + ext
+              if (includes(ket.space(), bra.space())) {
 #ifndef NDEBUG
-            assert(replrules[bra].space() == ket.space());
+                if (replrules.find(bra) != replrules.end())
+                  assert(replrules[bra].space() == ket.space());
 #endif
-            erase_it = true;
-          } else {
+                erase_it = true;
+              } else {
 #ifndef NDEBUG
-            assert(replrules[bra].space() == intersection_space);
+                if (replrules.find(bra) != replrules.end())
+                  assert(replrules[bra].space() == intersection_space);
 #endif
-          }
-        }
+              }
+            }
 
-        if (erase_it) {
-          *it = ex<Constant>(1);
-        }
-      }  // Kronecker delta
-      else {
-        /// replace
-        tensor.transform_indices(const_replrules);
+            if (erase_it) {
+              pass_mutated = true;
+              *it = ex<Constant>(1);
+            }
+          }  // matching proto indices
+        }    // Kronecker delta
       }
-
+      ++it;
     }
-    ++it;
-  }
+  } while (pass_mutated);  // keep replacing til fixed point
+
+  return mutated;
 }
 
 /// If using orthonormal representation, resolves Kronecker deltas (=overlaps
@@ -238,17 +288,32 @@ inline void apply_index_replacement_rules(
 inline void reduce_wick_impl(std::shared_ptr<Product> &expr,
                              const container::vector<Index> &external_indices) {
   if (get_default_context().metric() == IndexSpaceMetric::Unit) {
-    const auto replacement_rules =
-        compute_index_replacement_rules(expr, external_indices);
-//    std::wcout << "reduce_wick_impl(expr, external_indices):\n  expr = " << expr->to_latex() << "\n  external_indices = ";
-//    ranges::for_each(external_indices, [](auto &index) { std::wcout << index.label() << " "; });
-//    std::wcout << "\n  replrules = ";
-//    ranges::for_each(replacement_rules,
-//                     [](auto &index) { std::wcout << index.first.label() << "->" << index.second.label() << " "; });
-//    std::wcout.flush();
+    bool pass_mutated = false;
+    do {
+      pass_mutated = false;
+      const auto replacement_rules =
+          compute_index_replacement_rules(expr, external_indices);
 
-    apply_index_replacement_rules(expr, replacement_rules, external_indices);
-//    std::wcout << "\n  result = " << expr->to_latex() << std::endl;
+      //      std::wcout << "reduce_wick_impl(expr, external_indices):\n  expr =
+      //      "
+      //                 << expr->to_latex() << "\n  external_indices = ";
+      //      ranges::for_each(external_indices,
+      //                       [](auto &index) { std::wcout << index.label() <<
+      //                       " "; });
+      //      std::wcout << "\n  replrules = ";
+      //      ranges::for_each(replacement_rules, [](auto &index) {
+      //        std::wcout << to_latex(index.first) << "\\to" <<
+      //        to_latex(index.second)
+      //                   << "\\,";
+      //      });
+      std::wcout.flush();
+
+      if (!replacement_rules.empty()) {
+        pass_mutated = apply_index_replacement_rules(expr, replacement_rules,
+                                                     external_indices);
+      }
+      //      std::wcout << "\n  result = " << expr->to_latex() << std::endl;
+    } while (pass_mutated);  // keep reducing until stop changing
   } else
     abort();  // programming error?
 }

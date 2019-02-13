@@ -482,26 +482,40 @@ class Product : public Expr {
 
   /// construct a Product out of zero or more factors (multiplied by 1)
   /// @param factors the factors
-  Product(ExprPtrList factors) : factors_(std::move(factors)) {}
+  Product(ExprPtrList factors) {
+    using std::begin;
+    using std::end;
+    for (auto it = begin(factors); it != end(factors); ++it) append(1, *it);
+  }
 
   /// construct a Product out of zero or more factors multiplied by a scalar
   /// @tparam T a numeric type; it must be able to multiply std::complex<double>
   /// @param scalar a scalar of type T
   /// @param factors an initializer list of factors
-  template<typename T>
-  Product(T scalar, ExprPtrList factors) : scalar_(std::move(scalar)), factors_(std::move(factors)) {}
+  template <typename T>
+  Product(T scalar, ExprPtrList factors) : scalar_(std::move(scalar)) {
+    using std::begin;
+    using std::end;
+    for (auto it = begin(factors); it != end(factors); ++it) append(1, *it);
+  }
 
   /// construct a Product out of a range of factors
   /// @param begin the begin iterator
   /// @param end the end iterator
-  template <typename Iterator> Product(Iterator begin, Iterator end) : factors_(begin, end) {}
+  template <typename Iterator>
+  Product(Iterator begin, Iterator end) {
+    for (auto it = begin; it != end; ++it) append(1, *it);
+  }
 
   /// construct a Product out of a range of factors
   /// @tparam T a numeric type; it must be able to multiply std::complex<double>
   /// @param scalar a scalar of type T
   /// @param begin the begin iterator
   /// @param end the end iterator
-  template <typename T, typename Iterator> Product(T scalar, Iterator begin, Iterator end) : scalar_(std::move(scalar)), factors_(begin, end) {}
+  template <typename T, typename Iterator>
+  Product(T scalar, Iterator begin, Iterator end) : scalar_(std::move(scalar)) {
+    for (auto it = begin; it != end; ++it) append(1, *it);
+  }
 
   /// (post-)multiplies the product by @c scalar times @c factor
   template<typename T>
@@ -598,7 +612,17 @@ class Product : public Expr {
   std::shared_ptr<Expr> clone() const override {
     auto cloned_factors =
         factors() | ranges::view::transform([](const ExprPtr &ptr) { return ptr ? ptr->clone() : nullptr; });
-    return ex<Product>(ranges::begin(cloned_factors), ranges::end(cloned_factors));
+    return ex<Product>(this->scalar(), ranges::begin(cloned_factors),
+                       ranges::end(cloned_factors));
+  }
+
+  Product deep_copy() const {
+    auto cloned_factors =
+        factors() | ranges::view::transform([](const ExprPtr &ptr) {
+          return ptr ? ptr->clone() : nullptr;
+        });
+    return Product(this->scalar(), ranges::begin(cloned_factors),
+                   ranges::end(cloned_factors));
   }
 
   virtual Expr &operator*=(const Expr &that) override {
@@ -762,7 +786,11 @@ class Sum : public Expr {
   }
 
   virtual Expr &operator-=(const Expr &that) override {
-    this->append(ex<Product>(-1, ExprPtrList{const_cast<Expr &>(that).shared_from_this()}));
+    if (that.is<Constant>())
+      this->append(ex<Constant>(-that.as<Constant>().value()));
+    else
+      this->append(ex<Product>(
+          -1, ExprPtrList{const_cast<Expr &>(that).shared_from_this()}));
     return *this;
   }
 

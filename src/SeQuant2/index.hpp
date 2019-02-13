@@ -6,16 +6,18 @@
 #define SEQUANT2_INDEX_H
 
 #include <atomic>
-#include <optional>
 #include <mutex>
+#include <optional>
 #include <set>
 #include <string>
+
+#include <range/v3/all.hpp>
 
 #include <boost/container_hash/hash.hpp>
 
 #include "space.hpp"
-#include "vector.hpp"
 #include "tag.hpp"
+#include "vector.hpp"
 
 namespace sequant2 {
 
@@ -28,7 +30,8 @@ using IndexList = std::initializer_list<Index>;
 /// between indices to be able to express
 ///       e.g. hierarchical partitioning of index spaces or hiearchical nesting
 ///       of spaces
-/// @note label has format "label_index" where "label" is a string of characters excluding '_', and "index"
+/// @note label has format "label_index" where "label" is a string of characters
+/// excluding '_', and "index"
 ///       is an integer less than the value returned by min_tmp_label() .
 class Index : public Taggable {
  public:
@@ -37,22 +40,41 @@ class Index : public Taggable {
   /// @param label the label, does not need to be unique
   /// @param space (a const ref to) the IndexSpace object that specifies to this
   /// space this object belongs
-  /// @param proto_index_labels labels of proto indices (all must be unique,
+  /// @param proto_index labels of proto indices (all must be unique,
   /// i.e. duplicates are not allowed)
-  /// @note Index does not manage lifetime of index spaces, so it is user's
-  /// responsibility to ensure that @c space will
-  ///       outlive this object
+  /// @param symmetric_proto_indices if true, proto_indices can be permuted at
+  /// will and will always be sorted
   Index(std::wstring_view label, const IndexSpace &space,
-        IndexList proto_indices)
-      : label_(label), space_(space), proto_indices_(proto_indices) {
+        IndexList proto_indices, bool symmetric_proto_indices = true)
+      : label_(label),
+        space_(space),
+        proto_indices_(proto_indices),
+        symmetric_proto_indices_(symmetric_proto_indices) {
+    canonicalize_proto_indices();
     check_for_duplicate_proto_indices();
     check_nontmp_label();
   }
 
   /// @param label the index label, does not need to be unique, but must be
   /// convertible into an IndexSpace (@sa IndexSpace::instance )
-  explicit Index(std::wstring_view label)
+  Index(const std::wstring_view label)
       : Index(label, IndexSpace::instance(label), {}) {
+    check_nontmp_label();
+  }
+
+  /// @param label the index label, does not need to be unique, but must be
+  /// convertible into an IndexSpace (@sa IndexSpace::instance )
+  template <size_t N>
+  Index(const wchar_t (&label)[N])
+      : Index(std::wstring_view(&label[0]), IndexSpace::instance(&label[0]),
+              {}) {
+    check_nontmp_label();
+  }
+
+  /// @param label the index label, does not need to be unique, but must be
+  /// convertible into an IndexSpace (@sa IndexSpace::instance )
+  Index(const wchar_t *label)
+      : Index(std::wstring_view(label), IndexSpace::instance(label), {}) {
     check_nontmp_label();
   }
 
@@ -68,42 +90,90 @@ class Index : public Taggable {
   }
 
   /// @param label the label, does not need to be unique
-  /// @param proto_index_labels labels of proto indices (all must be unique,
-  /// i.e. duplicates are not allowed)
-  Index(std::wstring_view label,
-        IndexList proto_indices)
-      : Index(label, IndexSpace::instance(label), proto_indices) {
+  /// @param proto_indices list of proto indices, or their labels (all must be
+  /// unique, i.e. duplicates are not allowed)
+  /// @param symmetric_proto_indices if true, proto_indices can be permuted at
+  /// will and will always be sorted
+  template <typename I1, typename I2>
+  Index(I1 &&index, std::initializer_list<I2> proto_indices,
+        bool symmetric_proto_indices = true)
+      : symmetric_proto_indices_(symmetric_proto_indices) {
+    if constexpr (!std::is_same_v<std::decay_t<I1>, Index>) {
+      label_ = index;
+      space_ = IndexSpace::instance(label_);
+    } else {
+      label_ = index.label();
+      space_ = index.space();
+    }
+    if constexpr (!std::is_same_v<std::decay_t<I2>, Index>) {
+      if (proto_indices.size() != 0) {
+        proto_indices_.reserve(proto_indices.size());
+        for (const auto &plabel : proto_indices)
+          proto_indices_.push_back(Index(plabel));
+      }
+    } else
+      proto_indices_ = proto_indices;
+    canonicalize_proto_indices();
     check_for_duplicate_proto_indices();
     check_nontmp_label();
   }
 
   /// @param label the label, does not need to be unique
-  /// @param proto_index_labels labels of proto indices (all must be unique,
+  /// @param proto_indices list of proto indices (all must be unique,
   /// i.e. duplicates are not allowed)
-  Index(std::wstring_view label,
-        WstrList proto_index_labels)
-      : label_(label), space_(IndexSpace::instance(label)) {
-    if (proto_index_labels.size() != 0) {
-      proto_indices_.reserve(proto_index_labels.size());
-      for (const auto &plabel : proto_index_labels)
-        proto_indices_.push_back(Index(plabel));
+  template <
+      typename I1, typename IndexContainer,
+      typename = std::enable_if_t<std::is_convertible_v<
+          std::remove_reference_t<IndexContainer>, container::vector<Index>>>>
+  Index(I1 &&index, IndexContainer &&proto_indices,
+        bool symmetric_proto_indices = true)
+      : proto_indices_(std::forward<IndexContainer>(proto_indices)),
+        symmetric_proto_indices_(symmetric_proto_indices) {
+    if constexpr (!std::is_same_v<std::decay_t<I1>, Index>) {
+      label_ = index;
+      check_nontmp_label();
+      space_ = IndexSpace::instance(label_);
+    } else {
+      label_ = index.label();
+      space_ = index.space();
     }
+    canonicalize_proto_indices();
     check_for_duplicate_proto_indices();
-    check_nontmp_label();
   }
 
-  /// creates a globaly-unique temporary index in space @c space . The label of the resulting index =
+  /// creates a globaly-unique temporary index in space @c space . The label of
+  /// the resulting index =
   /// @c IndexSpace::base_key(space) + '_' + temporary counter.
-  /// Each call increments the current tmp counter (see next_tmp_index() ) . To make neater temporary indices
-  /// unique in a given scope (e.g. a single term in an expression) use IndexFactory.
+  /// Each call increments the current tmp counter (see next_tmp_index() ) . To
+  /// make neater temporary indices unique in a given scope (e.g. a single term
+  /// in an expression) use IndexFactory.
   /// @param space an IndexSpace object
   /// @return a unique temporary index in space @c space
   static Index make_tmp_index(const IndexSpace &space) {
-    return Index(IndexSpace::base_key(space) + L'_' + std::to_wstring(Index::next_tmp_index()), &space);
+    Index result;
+    result.label_ = IndexSpace::base_key(space) + L'_' +
+                    std::to_wstring(Index::next_tmp_index());
+    result.space_ = space;
+    return result;
   }
 
   /// @return the label
+  /// @warning this does not include the proto index labels, use
+  /// Index::full_label() instead
   std::wstring_view label() const { return label_; }
+  /// @return the full label
+  /// @warning this includes the proto index labels (if any), use
+  /// Index::label() instead if only want the label
+  std::wstring_view full_label() const {
+    if (!has_proto_indices()) return label();
+    if (full_label_) return *full_label_;
+    std::wstring result = label_;
+    ranges::for_each(proto_indices_, [&result](const Index &idx) {
+      result += idx.full_label();
+    });
+    full_label_ = result;
+    return *full_label_;
+  }
   /// @return the IndexSpace object
   const IndexSpace &space() const {
     assert(space_.attr().is_valid());
@@ -124,8 +194,9 @@ class Index : public Taggable {
         assert(subsc_pos + 1 < str.size());
         if (subsc_pos + 2 == str.size())  // don't protect single character
           return std::wstring(str);
-        std::wstring
-            result = std::wstring(str.substr(0, subsc_pos + 1)) + L"{" + std::wstring(str.substr(subsc_pos + 1)) + L"}";
+        std::wstring result = std::wstring(str.substr(0, subsc_pos + 1)) +
+                              L"{" + std::wstring(str.substr(subsc_pos + 1)) +
+                              L"}";
         return result;
       }
     };
@@ -135,7 +206,7 @@ class Index : public Taggable {
     result += protect_subscript(this->label());
     if (this->has_proto_indices()) {
       result += L"^{";
-      for (const auto &pi: this->proto_indices()) {
+      for (const auto &pi : this->proto_indices()) {
         result += pi.to_latex();
       }
       result += L"}";
@@ -182,48 +253,95 @@ class Index : public Taggable {
   }
 
   /// @return the smallest index of a generated index
-  static constexpr std::size_t min_tmp_index() {
-    return 100;
-  }
+  static constexpr std::size_t min_tmp_index() { return 100; }
 
-  /// @return a unique temporary index, its value is equal to or greater than that
+  /// @return a unique temporary index, its value is equal to or greater than
+  /// that
   static std::size_t next_tmp_index() {
     static std::atomic<std::size_t> index = min_tmp_index() - 1;
     return ++index;
   }
 
+  /// @brief index replacement
+  /// replaces this object with its image in the Index map.
+  /// If this object was not found in the map, tries replacing its subindices.
+  /// @param index_map maps Index to Index
+  /// @return false if no replacements were made
+  bool transform(const std::map<Index, Index> &index_map) {
+    // first try replacing this first; if not found, try replacing protoindices
+    // first, then try replacing this again
+    auto it = index_map.find(*this);
+    bool mutated = false;
+    if (it != index_map.end()) {
+      *this = it->second;
+      mutated = true;
+    } else {
+      bool proto_indices_transformed = false;
+      for (auto &&subidx : proto_indices_) {
+        if (subidx.transform(index_map)) proto_indices_transformed = true;
+      }
+      if (proto_indices_transformed) {
+        mutated = true;
+        canonicalize_proto_indices();
+      }
+      auto it = index_map.find(*this);
+      if (it != index_map.end()) {
+        *this = it->second;
+        mutated = true;
+      }
+    }
+    if (mutated) full_label_.reset();
+    return mutated;
+  }
+
  private:
   std::wstring label_{};
   IndexSpace space_{};
-  container::vector<Index> proto_indices_{}; // an unordered set of unique indices on
-  // which this index depends on
+  container::vector<Index>
+      proto_indices_{};  // an unordered set of unique indices on which this
+                         // index depends on
+  // whether proto_indices_ is symmetric w.r.t. permutations; if true,
+  // proto_indices_ will be ordered
+  bool symmetric_proto_indices_ = true;
 
-  /// throws std::invalid_argument if have duplicates in proto_indices_
+  mutable std::optional<std::wstring> full_label_;
+
+  /// sorts proto_indices_ if symmetric_proto_indices_
+  inline void canonicalize_proto_indices();
+
+  /// @warning disabled if NDEBUG is defined
+  /// @throw std::invalid_argument  have duplicates in proto_indices_
   inline void check_for_duplicate_proto_indices();
 
   /// throws std::invalid_argument if label_ is in reserved
   void check_nontmp_label() {
     const auto index = label_index(label_);
     if (index && index > min_tmp_index()) {
-      throw std::invalid_argument("Index ctor: label index must be less than the value returned by min_tmp_index()");
+      throw std::invalid_argument(
+          "Index ctor: label index must be less than the value returned by "
+          "min_tmp_index()");
     }
   }
 
   static std::optional<std::size_t> label_index(std::wstring_view label) {
     const auto underscore_position = label.find(L'_');
     if (underscore_position != std::wstring::npos) {
-      assert(underscore_position + 1 < label.size());  // check that there is at least one char past the underscore
-      return std::wcstol(label.substr(underscore_position + 1, std::wstring::npos).data(), NULL, 10);
+      assert(underscore_position + 1 <
+             label.size());  // check that there is at least one char past the
+                             // underscore
+      return std::wcstol(
+          label.substr(underscore_position + 1, std::wstring::npos).data(),
+          NULL, 10);
     } else
       return {};
   }
 
   friend class IndexFactory;
 
-  // this ctor is only used by make_tmp_index and IndexFactory and bypasses check for nontmp index
+  // this ctor is only used by make_tmp_index and IndexFactory and bypasses
+  // check for nontmp index
   Index(std::wstring_view label, const IndexSpace *space) noexcept
-      : label_(label), space_(*space), proto_indices_() {
-  }
+      : label_(label), space_(*space), proto_indices_() {}
 };
 
 /// @return true if @c index1 is identical to @c index2 , i.e. they belong to
@@ -231,7 +349,7 @@ class Index : public Taggable {
 /// any)
 inline bool operator==(const Index &i1, const Index &i2) {
   return i1.space() == i2.space() && i1.label() == i2.label() &&
-      i1.proto_indices() == i2.proto_indices();
+         i1.proto_indices() == i2.proto_indices();
 }
 
 /// @return false if @c index1 is identical to @c index2 , i.e. they belong to
@@ -263,27 +381,40 @@ inline bool operator<(const Index &i1, const Index &i2) {
 }
 
 void Index::check_for_duplicate_proto_indices() {
-  container::vector<Index const *> vp;
-  vp.reserve(proto_indices_.size());
-  for (size_t i = 0; i < proto_indices_.size(); ++i)
-    vp.push_back(&proto_indices_[i]);
-  std::sort(vp.begin(), vp.end(),
-            [](Index const *l, Index const *r) { return *l < *r; });
-  if (std::adjacent_find(vp.begin(), vp.end(),
-                         [](Index const *l, Index const *r) {
-                           return *l == *r;
-                         }) != vp.end()) {
-    throw std::invalid_argument("Index ctor: duplicate proto indices detected");
+#ifndef NDEBUG
+  if (!symmetric_proto_indices_) {  // if proto indices not symmetric, sort via
+                                    // ptrs
+    container::vector<Index const *> vp;
+    vp.reserve(proto_indices_.size());
+    for (size_t i = 0; i < proto_indices_.size(); ++i)
+      vp.push_back(&proto_indices_[i]);
+    std::sort(vp.begin(), vp.end(),
+              [](Index const *l, Index const *r) { return *l < *r; });
+    if (std::adjacent_find(vp.begin(), vp.end(),
+                           [](Index const *l, Index const *r) {
+                             return *l == *r;
+                           }) != vp.end()) {
+      throw std::invalid_argument(
+          "Index ctor: duplicate proto indices detected");
+    }
+  } else {  // else search directly
+    if (std::adjacent_find(begin(proto_indices_), end(proto_indices_)) !=
+        proto_indices_.end()) {
+      throw std::invalid_argument(
+          "Index ctor: duplicate proto indices detected");
+    }
   }
+#endif
 }
 
-inline std::wstring to_latex(const Index &index) {
-  return index.to_latex();
+void Index::canonicalize_proto_indices() {
+  if (symmetric_proto_indices_)
+    std::stable_sort(begin(proto_indices_), end(proto_indices_));
 }
 
-inline std::wstring to_wolfram(const Index &index) {
-  return index.to_wolfram();
-}
+inline std::wstring to_latex(const Index &index) { return index.to_latex(); }
+
+inline std::wstring to_wolfram(const Index &index) { return index.to_wolfram();}
 
 class IndexSwapper {
  public:
@@ -312,43 +443,98 @@ inline void swap(Index &first, Index &second) {
 /// Generates temporary indices
 class IndexFactory {
  public:
+  IndexFactory() = default;
+  /// @tparam IndexValidator IndexValidator(const Index&) -> bool is valid and
+  /// returns true generated index is valid
+  /// @param min_index start indexing indices for each space with this value;
+  /// must be greater than 0; the default is to use Index::min_tmp_index()
+  template <typename IndexValidator>
+  explicit IndexFactory(IndexValidator validator,
+                        size_t min_index = Index::min_tmp_index())
+      : min_index_(min_index), validator_(validator) {
+    assert(min_index_ > 0);
+  }
 
-  /// creates a temporary index in space @c space . The label of the resulting index =
+  /// creates a temporary index in space @c space . The label of the resulting
+  /// index =
   /// @c IndexSpace::base_key(space) + '_' + temporary counter.
-  /// Each call increments the current tmp counter (see next_tmp_index() ) . To make cleaner temporary indices
-  /// with one counter per space use IndexFactory
+  /// Each call increments the current tmp counter (see next_tmp_index() ) .
   /// @param space an IndexSpace object
   /// @return a unique temporary index in space @c space
   Index make(const IndexSpace &space) {
-    auto counter_it = counters_.begin();
-    {  // if don't have a counter for this space
-      std::scoped_lock lock(mutex_);
-      if ((counter_it = counters_.find(space)) == counters_.end()) {
-        counters_[space] = Index::min_tmp_index() - 1;
-        counter_it = counters_.find(space);
+    Index result;
+    bool valid = false;
+    do {
+      auto counter_it = counters_.begin();
+      {  // if don't have a counter for this space
+        std::scoped_lock lock(mutex_);
+        if ((counter_it = counters_.find(space)) == counters_.end()) {
+          counters_[space] = min_index_ - 1;
+          counter_it = counters_.find(space);
+        }
       }
-    }
-    return Index(IndexSpace::base_key(space) + L'_' + std::to_wstring(++(counter_it->second)), &space);
+      result = Index(IndexSpace::base_key(space) + L'_' +
+                         std::to_wstring(++(counter_it->second)),
+                     &space);
+      valid = validator_ ? validator_(result) : true;
+    } while (!valid);
+    return result;
+  }
+
+  /// creates a temporary index that inherits the space and protoindices of @c
+  /// idx . The label of the resulting index =
+  /// @c IndexSpace::base_key(space) + '_' + temporary counter.
+  /// Each call increments the current tmp counter (see next_tmp_index() ) .
+  /// @param idx an Index object
+  /// @return a unique temporary index in space @c space with same protoindices
+  /// as @c idx
+  Index make(const Index &idx) {
+    const auto &space = idx.space();
+    Index result;
+    bool valid = false;
+    do {
+      auto counter_it = counters_.begin();
+      {  // if don't have a counter for this space
+        std::scoped_lock lock(mutex_);
+        if ((counter_it = counters_.find(space)) == counters_.end()) {
+          counters_[space] = min_index_ - 1;
+          counter_it = counters_.find(space);
+        }
+      }
+      result = Index(Index(IndexSpace::base_key(space) + L'_' +
+                               std::to_wstring(++(counter_it->second)),
+                           &space),
+                     idx.proto_indices());
+      valid = validator_ ? validator_(result) : true;
+    } while (!valid);
+    return result;
   }
 
  private:
+  std::size_t min_index_ = Index::min_tmp_index();
+  std::function<bool(const Index &)> validator_ = {};
   std::mutex mutex_;
   std::map<IndexSpace, std::atomic<std::size_t>> counters_;
 };
 
 inline auto hash_value(const Index &idx) {
-  return boost::hash_value(idx.label());
+  const auto &proto_indices = idx.proto_indices();
+  using std::begin;
+  using std::end;
+  auto val = boost::hash_range(begin(proto_indices), end(proto_indices));
+  boost::hash_combine(val, idx.label());
+  return val;
 }
 
-template<typename Container>
+template <typename Container>
 auto make_indices(WstrList index_labels = {}) {
   Container result;
-  for (const auto &label: index_labels) {
+  for (const auto &label : index_labels) {
     result.push_back(Index{label});
   }
   return result;
 }
 
-} // namespace sequant2
+}  // namespace sequant2
 
-#endif // SEQUANT2_INDEX_H
+#endif  // SEQUANT2_INDEX_H

@@ -346,7 +346,7 @@ class WickTheorem {
               //              std::endl;
               if (!state.count_only)
                 result.first->push_back(
-                    std::make_pair(std::move(state.sp), NormalOperator<S>{}));
+                    std::make_pair(std::move(state.sp.deep_copy()), NormalOperator<S>{}));
               else
                 result.first->resize(result.first->size() + 1);
               //              std::wcout << "now up to " << result.first->size()
@@ -397,9 +397,9 @@ class WickTheorem {
       const Op<S> &left, const Op<S> &right,
       Vacuum vacuum = get_default_context().vacuum()) {
     assert(can_contract(left, right, vacuum));
-    assert(
-        !left.index().has_proto_indices() &&
-            !right.index().has_proto_indices());  // I don't think the logic is
+//    assert(
+//        !left.index().has_proto_indices() &&
+//            !right.index().has_proto_indices());  // I don't think the logic is
     // correct for dependent indices
     if (is_pure_qpannihilator<S>(left, vacuum) &&
         is_pure_qpcreator<S>(right, vacuum))

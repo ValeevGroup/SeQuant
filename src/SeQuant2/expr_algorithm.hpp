@@ -33,26 +33,23 @@ struct simplify_visitor {
   /// - factoring in constants
   /// @param[in,out] expr (shared_ptr to ) a Product
   bool simplify_product(ExprPtr &expr) {
-    auto &expr_ref = *expr;
-    std::shared_ptr<Product> result;
+    auto& expr_ref = *expr;
+
+    // need to rebuild if any factor is a constant or product
+    bool need_to_rebuild = false;
     const auto nsubexpr = ranges::size(*expr);
     for (std::size_t i = 0; i != nsubexpr; ++i) {
       const auto expr_i_is_product = expr_ref[i]->is<Product>();
       const auto expr_i_is_constant = expr_ref[i]->is<Constant>();
       if (expr_i_is_product || expr_i_is_constant) {
-        // allocate the result, if not done yet
-        if (!result) {
-          auto expr_product = std::static_pointer_cast<Product>(expr);
-          // copy preceding factors
-          result = std::make_shared<Product>(expr_product->scalar(), begin(expr->expr()), begin(expr->expr()) + i);
-        }
-        // append correctly handles products and constants
-        result->append(1, std::move(expr_ref[i]));
+        need_to_rebuild = true;
+        break;
       }
     }
     bool expr_changed = false;
-    if (result) {
-      expr = std::static_pointer_cast<Expr>(result);
+    if (need_to_rebuild) {
+      expr = ex<Product>(expr->as<Product>().scalar(), begin(expr->expr()),
+                         end(expr->expr()));
       expr_changed = true;
     }
     const auto expr_size = ranges::size(*expr);
@@ -72,17 +69,9 @@ struct simplify_visitor {
     return expr_changed;
   }
 
-  /// simplifies a Sum
-  bool simplify_sum(ExprPtr &expr) {
-    auto &expr_ref = *expr;
-    std::shared_ptr<Sum> result;  // will keep the result if one or more summands is expanded
-    const auto nsubexpr = ranges::size(*expr);
-    if (result) { // if anything changed
-      expr = std::static_pointer_cast<Expr>(result);
-      return true;
-    } else
-      return false;
-  }
+  /// simplifies a Sum ... currently nothing to do since Sum::{ap,pre}pend
+  /// simplify automatically
+  bool simplify_sum(ExprPtr& expr) { return false; }
 
   // @return true if any simplifications were performed
   bool simplify(ExprPtr &expr) {
