@@ -9,12 +9,19 @@ namespace sequant2 {
 Tensor::~Tensor() = default;
 TensorCanonicalizer::~TensorCanonicalizer() = default;
 
-std::map<std::wstring, std::shared_ptr<TensorCanonicalizer>> &TensorCanonicalizer::instance_map_accessor() {
-  static std::map<std::wstring, std::shared_ptr<TensorCanonicalizer>> map_;
+container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>> &TensorCanonicalizer::instance_map_accessor() {
+  static container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>> map_;
   return map_;
 }
 
-std::shared_ptr<TensorCanonicalizer> TensorCanonicalizer::instance(std::wstring_view label) {
+container::vector<std::wstring>
+    &TensorCanonicalizer::cardinal_tensor_labels_accessor() {
+  static container::vector<std::wstring> ctlabels_;
+  return ctlabels_;
+}
+
+std::shared_ptr<TensorCanonicalizer> TensorCanonicalizer::instance(
+    std::wstring_view label) {
   auto &map = instance_map_accessor();
   // look for label-specific canonicalizer
   auto it = map.find(std::wstring{label});

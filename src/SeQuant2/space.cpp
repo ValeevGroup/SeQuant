@@ -4,8 +4,8 @@
 
 #include "space.hpp"
 
-std::map<sequant2::IndexSpace::Attr, std::wstring> sequant2::IndexSpace::keys_{};
-std::map<sequant2::IndexSpace::Attr, sequant2::IndexSpace> sequant2::IndexSpace::instances_{};
+sequant2::container::map<sequant2::IndexSpace::Attr, std::wstring> sequant2::IndexSpace::keys_{};
+sequant2::container::map<sequant2::IndexSpace::Attr, sequant2::IndexSpace> sequant2::IndexSpace::instances_{};
 sequant2::IndexSpace sequant2::IndexSpace::null_instance_{sequant2::IndexSpace::Attr::null()};
 
 namespace sequant2 {

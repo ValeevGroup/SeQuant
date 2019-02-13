@@ -5,6 +5,7 @@
 #ifndef SEQUANT2_TENSOR_NETWORK_H
 #define SEQUANT2_TENSOR_NETWORK_H
 
+#include "../SeQuant2/container.hpp"
 #include "../SeQuant2/tensor.hpp"
 
 namespace sequant2 {
@@ -38,11 +39,11 @@ class TensorNetwork {
       assert(terminal_idx != 0);  // valid idx
       if (second_ == 0) {
         second_ = terminal_idx;
-      } else if (std::abs(second_) > std::abs(terminal_idx)) {
-        assert(first_ != 0);  // there are slots left
+      } else if (std::abs(second_) < std::abs(terminal_idx)) {
+        assert(first_ == 0);  // there are slots left
         first_ = second_;
         second_ = terminal_idx;
-      } else { // put into first slot
+      } else {  // put into first slot
         first_ = terminal_idx;
       }
       return *this;
@@ -103,7 +104,10 @@ class TensorNetwork {
   /// @return sequence container of tensors
   const auto &tensors() const { return tensors_; }
 
-  ExprPtr canonicalize() {
+  /// @param cardinal_tensor_labels move all tensors with these labels to the
+  /// front before canonicalizing indices
+  ExprPtr canonicalize(
+      const container::vector<std::wstring> &cardinal_tensor_labels = {}) {
     ExprPtr canon_biproduct = ex<Constant>(1);
     container::svector<TensorTerminalPair> idx_terminals_sorted;  // to avoid memory allocs
 
@@ -115,17 +119,42 @@ class TensorNetwork {
     // - resort tensors (already done in Product::canonicalize but to make this standalone do this again)
     using std::begin;
     using std::end;
-    std::stable_sort(begin(tensors_), end(tensors_), [](const TensorPtr &first, const TensorPtr &second) {
-      return *first < *second;
-    });
-    // - reindex internal indices using ordering of TensorTerminalPair as the canonical definition of the internal index list
+    std::stable_sort(
+        begin(tensors_), end(tensors_),
+        [&cardinal_tensor_labels](const TensorPtr &first,
+                                  const TensorPtr &second) {
+          const auto cardinal_tensor_labels_end = end(cardinal_tensor_labels);
+          const auto first_cardinal_it =
+              std::find(begin(cardinal_tensor_labels),
+                        end(cardinal_tensor_labels), first->label());
+          const auto second_cardinal_it =
+              std::find(begin(cardinal_tensor_labels),
+                        end(cardinal_tensor_labels), second->label());
+          const auto first_is_cardinal =
+              first_cardinal_it != cardinal_tensor_labels_end;
+          const auto second_is_cardinal =
+              second_cardinal_it != cardinal_tensor_labels_end;
+          if (first_is_cardinal && second_is_cardinal) {
+            if (first_cardinal_it == second_cardinal_it)
+              return *first < *second;
+            else
+              return first_cardinal_it < second_cardinal_it;
+          } else if (first_is_cardinal)
+            return true;
+          else if (second_is_cardinal)
+            return false;
+          else  // neither is cardinal
+            return *first < *second;
+        });
+    // - reindex internal indices using ordering of TensorTerminalPair as the
+    // canonical definition of the internal index list
     init_indices();
     {
       auto int_idx_validator = [this](const Index &idx) {
         return this->ext_indices_.find(idx) == this->ext_indices_.end();
       };
       IndexFactory idxfac(int_idx_validator, 1);  // start reindexing from 1
-      std::map<Index, Index> idxrepl;
+      container::map<Index, Index> idxrepl;
       // resort indices_ by TensorTerminalPair ... this automatically puts
       // external indices first
       idx_terminals_sorted.resize(indices_.size());
@@ -171,32 +200,36 @@ class TensorNetwork {
     ext_indices_.clear();
 
     assert(canon_biproduct->is<Constant>());
-    return (canon_biproduct->as<Constant>().value() == 1.) ? nullptr : canon_biproduct;
+    return (canon_biproduct->as<Constant>().value() == 1.) ? nullptr
+                                                           : canon_biproduct;
   }
 
  private:
   // source tensors and indices
   container::svector<TensorPtr> tensors_;
 
-  struct LabelComparer {
+  struct FullLabelComparer {
     using is_transparent = void;
     bool operator()(const TensorTerminalPair &first,
                     const TensorTerminalPair &second) const {
       return first.idx().full_label() < second.idx().full_label();
     }
     bool operator()(const TensorTerminalPair &first,
-                    std::wstring_view second) const {
+                    const std::wstring_view &second) const {
       return first.idx().full_label() < second;
     }
-    bool operator()(std::wstring_view first,
+    bool operator()(const std::wstring_view &first,
                     const TensorTerminalPair &second) const {
       return first < second.idx().full_label();
     }
   };
   // Index -> TensorTerminalPair, sorted by labels
-  std::set<TensorTerminalPair, LabelComparer> indices_;
+  container::set<TensorTerminalPair, FullLabelComparer> indices_;
   // ext indices do not connect tensors
-  std::set<Index> ext_indices_;
+  // sorted by *label* (not full label) of the corresponding value (Index)
+  // this ensures that proto indices are not considered and all internal indices
+  // have unique labels (not full labels)
+  container::set<Index, Index::LabelCompare> ext_indices_;
 
   void init_indices() {
     auto idx_insert = [this](const Index &idx, int tensor_idx) {
@@ -221,13 +254,13 @@ class TensorNetwork {
     }
 
     // extract external indices
-    for (const auto &terminals: indices_) {
+    for (const auto &terminals : indices_) {
       assert(terminals.size() != 0);
-      if (terminals.size() == 1) { // external?
-        ext_indices_.emplace(terminals.idx());
+      if (terminals.size() == 1) {  // external?
+        auto insertion_result = ext_indices_.emplace(terminals.idx());
+        assert(insertion_result.second);
       }
     }
-
   }
 };
 

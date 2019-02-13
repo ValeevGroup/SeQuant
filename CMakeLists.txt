@@ -17,18 +17,18 @@ set_property(TARGET Boost PROPERTY
 add_library(SeQuant2
         src/SeQuant2/sequant.cpp
         src/SeQuant2/sequant.hpp
+        src/SeQuant2/attr.hpp
         src/SeQuant2/index.hpp
         src/SeQuant2/space.cpp
         src/SeQuant2/space.hpp
         src/SeQuant2/op.hpp
-        src/SeQuant2/vacuum.hpp
         src/SeQuant2/tensor.cpp
         src/SeQuant2/tensor.hpp
         src/SeQuant2/expr.cpp
         src/SeQuant2/expr.hpp
         src/SeQuant2/wick.hpp
         src/SeQuant2/ranges.hpp
-        src/SeQuant2/vector.hpp
+        src/SeQuant2/container.hpp
         src/SeQuant2/meta.hpp
         src/SeQuant2/latex.hpp
         src/SeQuant2/wolfram.hpp

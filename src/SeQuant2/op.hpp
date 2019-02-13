@@ -9,21 +9,14 @@
 
 #include <range/v3/all.hpp>
 
+#include "attr.hpp"
 #include "expr.hpp"
 #include "index.hpp"
 #include "sequant.hpp"
-#include "vacuum.hpp"
 #include "ranges.hpp"
-#include "vector.hpp"
+#include "container.hpp"
 
 namespace sequant2 {
-
-enum class Statistics { BoseEinstein, FermiDirac };
-
-enum class Action { create, annihilate };
-
-/// applies (Hermitian) adjoint to @c action
-inline Action adjoint(Action action) { return action == Action::create ? Action::annihilate : Action::create; }
 
 /// @brief Op is a creator/annihilator operator
 ///
@@ -236,6 +229,8 @@ class NormalOperator : public Operator<S> {
   auto ncreators() const { return ncreators_; }
   /// @return the number of annihilators
   auto nannihilators() const { return this->size() - ncreators(); }
+  /// @return view of creators and annihilators as a single range
+  auto creann() const { return ranges::view::concat(creators(), annihilators()); }
 
   NormalOperator &adjoint() {
     static_cast<Operator<S> &>(*this).adjoint();

@@ -7,15 +7,11 @@
 
 #include <cassert>
 #include <bitset>
-#include <map>
+
+#include "attr.hpp"
+#include "container.hpp"
 
 namespace sequant2 {
-
-enum class IndexSpaceMetric {
-  Unit,
-  General,
-  Invalid
-};
 
 /// @brief space of Index objects
 ///
@@ -304,8 +300,8 @@ class IndexSpace {
     assert(attr_.is_valid());
   }
 
-  static std::map<Attr, std::wstring> keys_;
-  static std::map<Attr, IndexSpace> instances_;
+  static container::map<Attr, std::wstring> keys_;
+  static container::map<Attr, IndexSpace> instances_;
   static IndexSpace null_instance_;
 
   static std::wstring_view reduce_key(std::wstring_view key) {
@@ -416,6 +412,6 @@ inline int occupancy_class(const IndexSpace& space) {
   abort(); // unreachable
 }
 
-}
+}  // namespace sequant2
 
 #endif //SEQUANT2_SPACE_H

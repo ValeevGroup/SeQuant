@@ -7,22 +7,11 @@
 
 #include <memory>
 
-#include "index.hpp"
+#include "attr.hpp"
 #include "expr.hpp"
+#include "index.hpp"
 
 namespace sequant2 {
-
-enum class Symmetry { symm, antisymm, nonsymm };
-
-inline std::wstring to_wolfram(const Symmetry& symmetry){
-  std::wstring result;
-  switch(symmetry) {
-    case Symmetry::symm : result = L"indexSymm[1]"; break;
-    case Symmetry::antisymm: result = L"indexSymm[-1]"; break;
-    case Symmetry::nonsymm : result = L"indexSymm[0]"; break;
-  }
-  return result;
-}
 
 class TensorCanonicalizer;
 
@@ -104,34 +93,13 @@ class Tensor : public Expr {
     return result;
   }
 
-  std::wstring to_wolfram() const override {
-    std::wstring result;
-    result = L"SQM[OHead[\"\\!\\(\\*OverscriptBox[\\(";
-    result += this->label(); // prints S,g,t
-    result += L"\\), \\(_\\)]\\)\",";
-    result += sequant2::to_wolfram(this->symmetry());
-    result += L"],";
-    for (const auto &i : this->ket()){
-      result += sequant2::to_wolfram(i);
-      result += L"indexType[ket]],";
-    }
-//    result = result.substr(0, result.size()-1);
-//    result += L",";
-    for (const auto &i : this->bra()){
-      result += sequant2::to_wolfram(i);
-      result += L"indexType[bra]],";
-    }
-    result = result.erase(result.size()-1);
-//    result += L",";
-    result += L"]";
-    return result;
-  }
-
   std::shared_ptr<Expr> canonicalize() override;
 
   /// Replaced indices using the index map
   /// @return true if one or more indices changed
-  bool transform_indices(const std::map<Index, Index> &index_map) {
+  template <template <typename, typename, typename... Args> class Map,
+            typename... Args>
+  bool transform_indices(const Map<Index, Index, Args...> &index_map) {
     bool mutated = false;
     ranges::for_each(braket(), [index_map, &mutated](auto &idx) {
       if (idx.transform(index_map))
@@ -217,7 +185,20 @@ class TensorCanonicalizer {
   static std::shared_ptr<TensorCanonicalizer> instance(std::wstring_view label = L"");
   /// registers @c canonicalizer to be applied to Tensor objects with label @c label ; leave the label
   /// empty if @c canonicalizer is to apply to Tensor with any label)
-  static void register_instance(std::shared_ptr<TensorCanonicalizer> canonicalizer, std::wstring_view label = L"");
+  static void register_instance(
+      std::shared_ptr<TensorCanonicalizer> canonicalizer,
+      std::wstring_view label = L"");
+
+  /// @return a list of Tensor labels with lexicographic preference (in order)
+  static const auto &cardinal_tensor_labels() {
+    return cardinal_tensor_labels_accessor();
+  }
+  /// @param cardinal_tensor_labels a list of Tensor labels with lexicographic
+  /// preference (in order)
+  static void set_cardinal_tensor_labels(
+      const container::vector<std::wstring> &labels) {
+    cardinal_tensor_labels_accessor() = labels;
+  }
 
   auto &bra(Tensor &t) { return t.bra_; };
   auto &ket(Tensor &t) { return t.ket_; };
@@ -226,7 +207,9 @@ class TensorCanonicalizer {
   virtual std::shared_ptr<Expr> apply(Tensor &) = 0;
 
  private:
-  static std::map<std::wstring, std::shared_ptr<TensorCanonicalizer>> &instance_map_accessor();
+  static container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>>
+      &instance_map_accessor();
+  static container::vector<std::wstring> &cardinal_tensor_labels_accessor();
 };
 
 class DefaultTensorCanonicalizer : public TensorCanonicalizer {
@@ -345,7 +328,7 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
   }
 
  private:
-  std::map<std::wstring, Index> external_indices_;
+  container::map<std::wstring, Index> external_indices_;
 };
 
 inline std::shared_ptr<Expr> overlap(const Index& bra_index, const Index& ket_index) {

@@ -20,9 +20,6 @@
 #include "space.hpp"
 #include "tag.hpp"
 
-// change to 1 to make thread-safe
-#define SEQUANT2_INDEX_THREADSAFE 0
-
 namespace sequant2 {
 
 class Index;
@@ -480,9 +477,7 @@ class IndexFactory {
     do {
       auto counter_it = counters_.begin();
       {  // if don't have a counter for this space
-#if SEQUANT2_INDEX_THREADSAFE
         std::scoped_lock lock(mutex_);
-#endif
         if ((counter_it = counters_.find(space)) == counters_.end()) {
           counters_[space] = min_index_ - 1;
           counter_it = counters_.find(space);
@@ -510,9 +505,7 @@ class IndexFactory {
     do {
       auto counter_it = counters_.begin();
       {  // if don't have a counter for this space
-#if SEQUANT2_INDEX_THREADSAFE
         std::scoped_lock lock(mutex_);
-#endif
         if ((counter_it = counters_.find(space)) == counters_.end()) {
           counters_[space] = min_index_ - 1;
           counter_it = counters_.find(space);

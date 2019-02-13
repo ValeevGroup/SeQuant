@@ -16,10 +16,10 @@
 #include <boost/functional/hash.hpp>
 #include <boost/callable_traits.hpp>
 
+#include "container.hpp"
+#include "hash.hpp"
 #include "latex.hpp"
 #include "wolfram.hpp"
-#include "vector.hpp"
-#include "hash.hpp"
 
 namespace sequant2 {
 
@@ -215,22 +215,24 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
 
   /// @tparam T an Expr type
   /// @return true if this object is of type @c T
-  template<typename T>
-  bool is() const { return this->type_id() == get_type_id<T>(); }
+  template <typename T>
+  bool is() const {
+    return this->type_id() == get_type_id<std::decay_t<T>>();
+  }
 
   /// @tparam T an Expr type
   /// @return this object cast to type @c T
-  template<typename T>
+  template <typename T>
   const T &as() const {
-    assert(this->is<T>());
+    assert(this->is<std::decay_t<T>>());  // so that as<const T>() works fine
     return static_cast<const T &>(*this);
   }
 
   /// @tparam T an Expr type
   /// @return this object cast to type @c T
-  template<typename T>
+  template <typename T>
   T &as() {
-    assert(this->is<T>());
+    assert(this->is<std::decay_t<T>>());  // so that as<const T>() works fine
     return static_cast<T &>(*this);
   }
 
@@ -901,22 +903,23 @@ inline std::wstring to_latex_align(const ExprPtr &exprptr, size_t max_terms_per_
   std::wstring result = to_latex(exprptr);
   if (exprptr->is<Sum>()) {
     result.erase(0, 7);  // remove leading  "{ \left"
-    result.replace(result.size() - 9, 9, L")");  // replace trailing "\right) }" with ")"
-    result = std::wstring(L"\\begin{align}\n") + result;
+    result.replace(result.size() - 9, 9,
+                   L")");  // replace trailing "\right) }" with ")"
+    result = std::wstring(L"\\begin{align}\n& ") + result;
     // assume no inner sums
     int term_counter = 0;
     std::wstring::size_type pos = 0;
     while ((pos = result.find(L" + ", pos + 1)) != std::wstring::npos) {
       ++term_counter;
       if (max_terms_per_align > 0 && term_counter >= max_terms_per_align) {
-        result.insert(pos + 3, L"\n\\end{align}\n\\begin{align}\n");
+        result.insert(pos + 3, L"\n\\end{align}\n\\begin{align}\n& ");
         term_counter = 1;
       } else {
-        result.insert(pos + 3, L"\\\\\n");
+        result.insert(pos + 3, L"\\\\\n& ");
       }
     }
   } else {
-    result = std::wstring(L"\\begin{align}\n") + result;
+    result = std::wstring(L"\\begin{align}\n& ") + result;
   }
   result += L"\n\\end{align}";
   return result;

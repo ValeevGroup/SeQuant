@@ -382,6 +382,12 @@ TEST_CASE("WickTheorem", "[algorithms]") {
   SECTION("Expression Reduction") {
     constexpr Vacuum V = Vacuum::SingleProduct;
 
+    // make these Tensor labels special ...
+    // these are already lexicographically ordered, but tensors that do not
+    // appear on this list (e.g. "S") will appear after Tensors with these
+    // labels
+    TensorCanonicalizer::set_cardinal_tensor_labels({L"A", L"f", L"g", L"t"});
+
 #if 1
     // 2-body ^ 2-body
     SEQUANT2_PROFILE_SINGLE("wick(H2*T2)", {
@@ -392,7 +398,6 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       auto wick = FWickTheorem{opseq};
       auto wick_result = wick.full_contractions(true).spinfree(false).compute();
       REQUIRE(wick_result->size() == 4);
-      std::wcout << "H2T2 tmp = " << to_latex(wick_result) << std::endl;
 
       // multiply tensor factors and expand
       auto wick_result_2 = ex<Tensor>(L"g", WstrList{L"p_1", L"p_2"}, WstrList{L"p_3", L"p_4"}, Symmetry::antisymm)
@@ -471,14 +476,12 @@ TEST_CASE("WickTheorem", "[algorithms]") {
                                              IndexList{L"i_3", L"i_4"}, V)});
       auto wick = FWickTheorem{opseq};
       auto wick_result = wick.full_contractions(true).spinfree(false).compute();
-      std::wcout << "P2*H1*T2(PNO) tmp = " << to_latex(wick_result)
-                 << std::endl;
       REQUIRE(wick_result->size() == 16);
 
       // multiply tensor factors and expand
       auto wick_result_2 =
           ex<Tensor>(
-              L"L", IndexList{L"i_1", L"i_2"},
+              L"A", IndexList{L"i_1", L"i_2"},
               IndexList{{L"a_1", {L"i_1", L"i_2"}}, {L"a_2", {L"i_1", L"i_2"}}},
               Symmetry::antisymm) *
           ex<Tensor>(L"f", WstrList{L"p_1"}, WstrList{L"p_2"},
@@ -490,29 +493,23 @@ TEST_CASE("WickTheorem", "[algorithms]") {
           wick_result;
       expand(wick_result_2);
       wick.reduce(wick_result_2);
-      std::wcout << "P2*H1*T2(PNO) after reduce = " << to_latex(wick_result_2)
-                 << std::endl;
       simplify(wick_result_2);
-      std::wcout << "P2*H1*T2(PNO) after simplify = " << to_latex(wick_result_2)
-                 << std::endl;
       TensorCanonicalizer::register_instance(
           std::make_shared<DefaultTensorCanonicalizer>());
       canonicalize(wick_result_2);
-      std::wcout << "P2*H1*T2(PNO) after canonicalize = "
-                 << to_latex(wick_result_2) << std::endl;
       simplify(wick_result_2);
 
       std::wcout << L"P2*H1*T2(PNO) = " << to_latex_align(wick_result_2)
                  << std::endl;
       REQUIRE(to_latex(wick_result_2) ==
               L"{ \\left({{-8} \\times "
-              L"{L^{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}_{{i_1}{i_2}}}{f^{{a_"
+              L"{A^{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}_{{i_1}{i_2}}}{f^{{a_"
               L"3^{{i_1}{i_2}}}}_{{a_1^{{i_1}{i_2}}}}}{t^{{i_1}{i_2}}_{{a_2^{{"
               L"i_1}{i_2}}}{a_3^{{i_1}{i_2}}}}}} + {{8} \\times "
-              L"{L^{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}_{{i_1}{i_2}}}{S^{{a_"
-              L"3^{{i_2}{i_3}}}}_{{a_1^{{i_1}{i_2}}}}}{S^{{a_4^{{i_2}{i_3}}}}_{"
-              L"{a_2^{{i_1}{i_2}}}}}{f^{{i_1}}_{{i_3}}}{t^{{i_2}{i_3}}_{{a_3^{{"
-              L"i_2}{i_3}}}{a_4^{{i_2}{i_3}}}}}}\\right) }");
+              L"{A^{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}_{{i_1}{i_2}}}{f^{{i_"
+              L"1}}_{{i_3}}}{t^{{i_2}{i_3}}_{{a_3^{{i_2}{i_3}}}{a_4^{{i_2}{i_3}"
+              L"}}}}{S^{{a_3^{{i_2}{i_3}}}}_{{a_1^{{i_1}{i_2}}}}}{S^{{a_4^{{i_"
+              L"2}{i_3}}}}_{{a_2^{{i_1}{i_2}}}}}}\\right) }");
     });
 
     // 2=body ^ 2-body ^ 2-body ^ 2-body with dependent (PNO) indices
@@ -543,7 +540,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       // multiply tensor factors and expand
       auto wick_result_2 =
           ex<Tensor>(
-              L"L", IndexList{L"i_1", L"i_2"},
+              L"A", IndexList{L"i_1", L"i_2"},
               IndexList{{L"a_1", {L"i_1", L"i_2"}}, {L"a_2", {L"i_1", L"i_2"}}},
               Symmetry::antisymm) *
           ex<Tensor>(L"g", WstrList{L"p_1", L"p_2"}, WstrList{L"p_3", L"p_4"},
@@ -559,19 +556,14 @@ TEST_CASE("WickTheorem", "[algorithms]") {
           wick_result;
       expand(wick_result_2);
       wick.reduce(wick_result_2);
-      std::wcout << "P2*H2*T2*T2(PNO) after reduce = "
-                 << to_latex(wick_result_2) << std::endl;
       simplify(wick_result_2);
-      std::wcout << "P2*H2*T2*T2(PNO) after simplify = "
-                 << to_latex(wick_result_2) << std::endl;
       TensorCanonicalizer::register_instance(std::make_shared<DefaultTensorCanonicalizer>());
       canonicalize(wick_result_2);
-      std::wcout << "P2*H2*T2*T2(PNO) after canonicalize = " << to_latex(wick_result_2) << std::endl;
       simplify(wick_result_2);
 
       std::wcout << L"P2*H2*T2*T2(PNO) = " << to_latex_align(wick_result_2, 20)
                  << std::endl;
-      REQUIRE(wick_result_2->size() == 7);
+      REQUIRE(wick_result_2->size() == 5);  // but only 4 are unique
     });
 
 #if 1
@@ -593,7 +585,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
 
       // multiply tensor factors and expand
       auto wick_result_2 =
-          ex<Tensor>(L"L", WstrList{L"i_1", L"i_2", L"i_3"},
+          ex<Tensor>(L"A", WstrList{L"i_1", L"i_2", L"i_3"},
                      WstrList{L"a_1", L"a_2", L"a_3"}, Symmetry::antisymm) *
           ex<Tensor>(L"g", WstrList{L"p_1", L"p_2"}, WstrList{L"p_3", L"p_4"},
                      Symmetry::antisymm) *
