@@ -317,7 +317,7 @@ class NormalOperator : public Operator<S> {
   /// overload base_type::erase
   iterator erase(const_iterator it) {
     if (it->action() == Action::create) --ncreators_;
-    hug_->erase(it - begin(), *it);
+    if (hug_) hug_->erase(it - begin(), *it);
     return Operator<S>::erase(it);
   }
 
@@ -326,7 +326,7 @@ class NormalOperator : public Operator<S> {
   iterator insert(const_iterator it, T &&value) {
     if (value.action() == Action::create) ++ncreators_;
     auto result = Operator<S>::insert(it, std::forward<T>(value));
-    hug_->insert(result - begin(), *result);
+    if (hug_) hug_->insert(result - begin(), *result);
     return result;
   }
 
