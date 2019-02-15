@@ -58,9 +58,6 @@ class Op {
         result = Index::TypeCompare{}(first.index(), second.index());
       } else
         result = first.action() < second.action();
-      std::wcout << "Op::TypeCompare: " << first.to_latex() << " < "
-                 << second.to_latex() << " = " << (result ? "true" : "false")
-                 << std::endl;
       return result;
     }
   };
@@ -71,9 +68,6 @@ class Op {
     bool operator()(const Op<S> &first, const Op<S> &second) {
       bool result = (first.action() == second.action()) &&
                     Index::TypeEquality{}(first.index(), second.index());
-      std::wcout << "Op::TypeEquality: " << first.to_latex()
-                 << " == " << second.to_latex() << " = "
-                 << (result ? "true" : "false") << std::endl;
       return result;
     }
   };

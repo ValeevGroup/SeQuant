@@ -36,8 +36,6 @@ class HugenholtzVertex {
           begin(groups_), end(groups_),
           [&edge, this](const Group& grp) { return equals_(grp.first, edge); });
       if (grp_it == end(groups_)) {  // no group yet? create
-        std::wcout << "HugenholtzVertex ctor: edge = " << edge.to_latex()
-                   << " is in a new group" << std::endl;
         groups_.emplace_back(
             std::make_pair(edge, typename Group::second_type{edge_idx}));
         edge_to_group_.push_back(groups_.size() - 1);
@@ -45,8 +43,6 @@ class HugenholtzVertex {
         auto result = grp_it->second.insert(edge_idx);
         assert(result.second);
         edge_to_group_.push_back(grp_it - begin(groups_));
-        std::wcout << "HugenholtzVertex ctor: edge = " << edge.to_latex()
-                   << " is group # " << edge_to_group_.back() << std::endl;
       }
       ++edge_idx;
     });
