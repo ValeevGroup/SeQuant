@@ -93,6 +93,24 @@ class Tensor : public Expr {
     return result;
   }
 
+  std::wstring to_wolfram() const override {
+    std::wstring result;
+    result = L"SQM[OHead[\"\\!\\(\\*OverscriptBox[\\(";
+    result += this->label();
+    result += L"\\), \\(_\\)]\\)\",";
+    result += sequant2::to_wolfram(this->symmetry());
+    result += L"],";
+    for (const auto &i : this->ket()) {
+      result += i.to_wolfram(BraKetPos::ket) + L",";
+    }
+    for (const auto &i : this->bra()) {
+      result += i.to_wolfram(BraKetPos::bra) + L",";
+    }
+    result = result.erase(result.size() - 1);
+    result += L"]";
+    return result;
+  }
+
   std::shared_ptr<Expr> canonicalize() override;
 
   /// Replaced indices using the index map
