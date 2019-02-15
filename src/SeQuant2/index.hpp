@@ -20,6 +20,9 @@
 #include "space.hpp"
 #include "tag.hpp"
 
+// change to 1 to make thread-safe
+#define SEQUANT2_INDEX_THREADSAFE 0
+
 namespace sequant2 {
 
 class Index;
@@ -306,6 +309,29 @@ class Index : public Taggable {
     }
   };
 
+  /// compares Index objects using type only (but since type is defined by the
+  /// *values* of proto indices those are not ignored)
+  struct TypeCompare {
+    bool operator()(const Index &first, const Index &second) const {
+      bool result;
+      if (first.space() == second.space()) {
+        result = first.proto_indices() < second.proto_indices();
+      } else
+        result = first.space() < second.space();
+      return result;
+    }
+  };
+
+  /// tests equality of Index objects using type only (but since type is defined
+  /// by the *values* of proto indices those are not ignored)
+  struct TypeEquality {
+    bool operator()(const Index &first, const Index &second) const {
+      bool result = (first.space() == second.space()) &&
+                    (first.proto_indices() == second.proto_indices());
+      return result;
+    }
+  };
+
  private:
   std::wstring label_{};
   IndexSpace space_{};
@@ -477,7 +503,9 @@ class IndexFactory {
     do {
       auto counter_it = counters_.begin();
       {  // if don't have a counter for this space
+#if SEQUANT2_INDEX_THREADSAFE
         std::scoped_lock lock(mutex_);
+#endif
         if ((counter_it = counters_.find(space)) == counters_.end()) {
           counters_[space] = min_index_ - 1;
           counter_it = counters_.find(space);
@@ -505,7 +533,9 @@ class IndexFactory {
     do {
       auto counter_it = counters_.begin();
       {  // if don't have a counter for this space
+#if SEQUANT2_INDEX_THREADSAFE
         std::scoped_lock lock(mutex_);
+#endif
         if ((counter_it = counters_.find(space)) == counters_.end()) {
           counters_[space] = min_index_ - 1;
           counter_it = counters_.find(space);

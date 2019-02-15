@@ -10,11 +10,12 @@
 #include <range/v3/all.hpp>
 
 #include "attr.hpp"
-#include "expr.hpp"
-#include "index.hpp"
-#include "sequant.hpp"
-#include "ranges.hpp"
 #include "container.hpp"
+#include "expr.hpp"
+#include "hugenholtz.hpp"
+#include "index.hpp"
+#include "ranges.hpp"
+#include "sequant.hpp"
 
 namespace sequant2 {
 
@@ -48,6 +49,34 @@ class Op {
     result += L"}";
     return result;
   }
+
+  /// compares 2 Op objects while ignoring Index label (see Index::TypeCompare)
+  struct TypeCompare {
+    bool operator()(const Op<S> &first, const Op<S> &second) {
+      bool result;
+      if (first.action() == second.action()) {
+        result = Index::TypeCompare{}(first.index(), second.index());
+      } else
+        result = first.action() < second.action();
+      std::wcout << "Op::TypeCompare: " << first.to_latex() << " < "
+                 << second.to_latex() << " = " << (result ? "true" : "false")
+                 << std::endl;
+      return result;
+    }
+  };
+
+  /// tests equality of 2 Op objects while ignoring Index label (see
+  /// Index::TypeEquality)
+  struct TypeEquality {
+    bool operator()(const Op<S> &first, const Op<S> &second) {
+      bool result = (first.action() == second.action()) &&
+                    Index::TypeEquality{}(first.index(), second.index());
+      std::wcout << "Op::TypeEquality: " << first.to_latex()
+                 << " == " << second.to_latex() << " = "
+                 << (result ? "true" : "false") << std::endl;
+      return result;
+    }
+  };
 
  private:
   Index index_;
@@ -214,9 +243,24 @@ class NormalOperator : public Operator<S> {
     for (const auto &i: creator_indices) {
       this->emplace_back(i, Action::create);
     }
-    for (const auto &i: annihilator_indices | ranges::view::reverse) {
+    for (const auto &i : annihilator_indices | ranges::view::reverse) {
       this->emplace_back(i, Action::annihilate);
     }
+  }
+
+  NormalOperator(const NormalOperator &other)
+      : Operator<S>(other),
+        vacuum_(other.vacuum_),
+        ncreators_(other.ncreators_),
+        hug_(other.hug_ ? std::make_unique<hug_type>(*other.hug_) : nullptr) {}
+  NormalOperator(NormalOperator &&) = default;
+  NormalOperator &operator=(NormalOperator &&) = default;
+  NormalOperator &operator=(const NormalOperator &other) {
+    static_cast<base_type &>(*this) = static_cast<const base_type &>(other);
+    vacuum_ = other.vacuum_;
+    ncreators_ = other.ncreators_;
+    hug_ = other.hug_ ? std::make_unique<hug_type>(*other.hug_) : nullptr;
+    return *this;
   }
 
   /// @return the vacuum state with respect to which the operator is normal-ordered.
@@ -230,11 +274,25 @@ class NormalOperator : public Operator<S> {
   /// @return the number of annihilators
   auto nannihilators() const { return this->size() - ncreators(); }
   /// @return view of creators and annihilators as a single range
-  auto creann() const { return ranges::view::concat(creators(), annihilators()); }
+  auto creann() const {
+    return ranges::view::concat(creators(), annihilators());
+  }
+
+  /// @return the representation of @c *this as a Hugenholtz vertex
+  /// @sa HugenholtzVertex
+  const auto &hug() const {
+    if (!hug_) {
+      hug_ = std::make_unique<hug_type>(
+          static_cast<const typename base_type::base_type &>(*this));
+    }
+    return hug_;
+  }
 
   NormalOperator &adjoint() {
     static_cast<Operator<S> &>(*this).adjoint();
     ncreators_ = this->size() - ncreators_;
+    // TODO rebuild the Hug
+    hug_.reset();
     return *this;
   }
 
@@ -264,16 +322,18 @@ class NormalOperator : public Operator<S> {
 
   /// overload base_type::erase
   iterator erase(const_iterator it) {
-    if (it->action() == Action::create)
-      --ncreators_;
+    if (it->action() == Action::create) --ncreators_;
+    hug_->erase(it - begin(), *it);
     return Operator<S>::erase(it);
   }
 
-  /// overload base_type::erase
-  template <typename T> iterator insert(const_iterator it, T&& value) {
-    if (value.action() == Action::create)
-      ++ncreators_;
-    return Operator<S>::insert(it, std::forward<T>(value));
+  /// overload base_type::insert
+  template <typename T>
+  iterator insert(const_iterator it, T &&value) {
+    if (value.action() == Action::create) ++ncreators_;
+    auto result = Operator<S>::insert(it, std::forward<T>(value));
+    hug_->insert(result - begin(), *result);
+    return result;
   }
 
   Expr::type_id_type type_id() const override {
@@ -283,6 +343,8 @@ class NormalOperator : public Operator<S> {
  private:
   Vacuum vacuum_;
   std::size_t ncreators_ = 0;
+  using hug_type = HugenholtzVertex<Op<S>, typename Op<S>::TypeEquality>;
+  mutable std::unique_ptr<hug_type> hug_;  // only created if needed
 
   bool static_equal(const Expr &that) const override {
     const auto& that_cast = static_cast<const NormalOperator&>(that);
@@ -521,6 +583,6 @@ std::wstring to_latex(const NormalOperatorSequence<S> &opseq) {
   return opseq.to_latex();
 }
 
-} // namespace sequant2
+}  // namespace sequant2
 
 #endif // SEQUANT2_OP_H
