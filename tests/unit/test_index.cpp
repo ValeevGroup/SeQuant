@@ -9,7 +9,6 @@
 TEST_CASE("Index", "[elements]") {
 
   using namespace sequant2;
-  IndexSpace::register_standard_instances();
 
   SECTION("constructors") {
     Index i{};

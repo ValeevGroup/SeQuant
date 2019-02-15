@@ -16,7 +16,6 @@ TEST_CASE("IndexSpace", "[elements]") {
   }
 
   SECTION("register_standard_instances") {
-    REQUIRE_NOTHROW(IndexSpace::register_standard_instances());
     REQUIRE_NOTHROW(IndexSpace::register_standard_instances());  // can do twice
     REQUIRE(IndexSpace::instance_exists(L"i"));
     REQUIRE(IndexSpace::instance_exists(L"m"));

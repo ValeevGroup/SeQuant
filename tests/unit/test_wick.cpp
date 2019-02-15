@@ -14,7 +14,6 @@
 TEST_CASE("WickTheorem", "[algorithms]") {
 
   using namespace sequant2;
-  IndexSpace::register_standard_instances();
 
   SECTION("Op contractions") {
 
