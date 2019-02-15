@@ -55,6 +55,17 @@ class WickTheorem {
     reduce_ = r;
     return *this;
   }
+  /// Controls whether Op's of the same type within each NormalOperator are
+  /// assumed topologically equivalent so that it is possible to utilize the
+  /// topology to eliminate the topologically-equivalent contractions. By
+  /// default the use of topology is not enabled.
+  /// @param sf if true, will complete full contractions only.
+  /// @warning currently is only supported if full contractions are requested
+  WickTheorem &use_topology(bool ut) {
+    assert(full_contractions_);
+    use_topology_ = ut;
+    return *this;
+  }
 
   /// Specifies the external indices; by default assume all indices are summed
   /// over
@@ -131,6 +142,7 @@ class WickTheorem {
   bool full_contractions_ = false;
   bool spinfree_ = false;
   bool reduce_ = false;
+  bool use_topology_ = false;
   container::set<Index> external_indices_;
   // for each operator specifies the reverse bitmask of connections (0 = must
   // connect)
@@ -259,7 +271,7 @@ class WickTheorem {
         op_connections[op2_idx].reset(op1_idx);
       }
     }
-  };
+  };  // NontensorWickSpace
   /// Applies most naive version of Wick's theorem, where sign rule involves
   /// counting Ops
   ExprPtr compute_nontensor_wick(const bool count_only) const {
@@ -312,9 +324,31 @@ class WickTheorem {
                 ranges::get_cursor(opseq_view_begin)
                     .range_iter()  // can't contract within same normop
         ) {
+          // topological degeneracy, if needed
+          // 0 = nonunique index
+          // n>0 = unique index in a group of n indices
+          size_t topological_degeneracy;
+
+          auto topologically_unique = [&]() {
+            if (use_topology_) {
+              auto &opseq_right = *(ranges::get_cursor(op_iter).range_iter());
+              auto &op_it = ranges::get_cursor(op_iter).elem_iter();
+              auto op_idx_in_opseq = op_it - ranges::begin(opseq_right);
+              auto &hug = opseq_right.hug();
+              auto &group = hug->group(op_idx_in_opseq);
+              if (group.second.find(op_idx_in_opseq) == group.second.begin())
+                topological_degeneracy = hug->group_size(op_idx_in_opseq);
+              else
+                topological_degeneracy = 0;
+            } else
+              topological_degeneracy = 1;
+            return topological_degeneracy > 0;
+          };
+
           // check if can contract these indices and
           // check connectivity constraints (if needed)
           if (can_contract(*opseq_view_begin, *op_iter, input_.vacuum()) &&
+              topologically_unique() &&
               state.connect(op_connections_, ranges::get_cursor(op_iter),
                             ranges::get_cursor(opseq_view_begin))) {
             //            std::wcout << "level " << state.level << ":
@@ -334,13 +368,11 @@ class WickTheorem {
               }
             }
 
-            // TODO get group size, if can represent normal operators as
-            // Hugenholtz vertices
-
             // update the prefactor and opseq
             Product sp_copy = state.sp;
             state.sp.append(
-                phase, contract(*opseq_view_begin, *op_iter, input_.vacuum()));
+                topological_degeneracy * phase,
+                contract(*opseq_view_begin, *op_iter, input_.vacuum()));
             // remove from back to front
             Op<S> right = *op_iter;
             ranges::get_cursor(op_iter).erase();
@@ -352,8 +384,8 @@ class WickTheorem {
             //            std::wcout << "  opseq after contraction = " <<
             //            to_latex(state.opseq) << std::endl;
 
-            // update the result if nothing left to contract and have a nonzero
-            // result
+            // update the result if nothing left to contract and have a
+            // nonzero result
             if (state.opseq_size == 0 && !state.sp.empty()) {
               result.second->lock();
               //              std::wcout << "got " << to_latex(state.sp) <<
@@ -363,7 +395,8 @@ class WickTheorem {
                     std::move(state.sp.deep_copy()), NormalOperator<S>{}));
               else
                 result.first->resize(result.first->size() + 1);
-              //              std::wcout << "now up to " << result.first->size()
+              //              std::wcout << "now up to " <<
+              //              result.first->size()
               //              << " terms" << std::endl;
               result.second->unlock();
             }

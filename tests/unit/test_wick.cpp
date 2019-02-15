@@ -531,10 +531,11 @@ TEST_CASE("WickTheorem", "[algorithms]") {
               .spinfree(false)
               .set_op_connections(
                   std::vector<std::pair<int, int>>{{1, 2}, {1, 3}})
+              .use_topology(true)
               .compute();
       std::wcout << "P2*H2*T2*T2(PNO) tmp = " << to_latex(wick_result)
                  << std::endl;
-      REQUIRE(wick_result->size() == 544);
+      REQUIRE(wick_result->size() == 34);
 
       // multiply tensor factors and expand
       auto wick_result_2 =
@@ -569,18 +570,28 @@ TEST_CASE("WickTheorem", "[algorithms]") {
     // 3-body ^ 2-body ^ 2-body ^ 3-body
     SEQUANT2_PROFILE_SINGLE("wick(P3*H2*T2*T3)", {
       constexpr bool connected_only = true;
-      auto opseq =
-          FNOperatorSeq({FNOperator({L"i_1", L"i_2", L"i_3"}, {L"a_1", L"a_2", L"a_3"}, V),
-                         FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}, V),
-                         FNOperator({L"a_4", L"a_5"}, {L"i_4", L"i_5"}, V),
-                         FNOperator({L"a_6", L"a_7", L"a_8"}, {L"i_6", L"i_7", L"i_8"}, V)
-                        });
-//      auto ext_indices = make_indices<std::vector<Index>>(WstrList{L"i_1", L"i_2", L"i_3", L"a_1", L"a_2", L"a_3"});
+      constexpr bool topology = true;
+      auto opseq = FNOperatorSeq(
+          {FNOperator({L"i_1", L"i_2", L"i_3"}, {L"a_1", L"a_2", L"a_3"}, V),
+           FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}, V),
+           FNOperator({L"a_4", L"a_5"}, {L"i_4", L"i_5"}, V),
+           FNOperator({L"a_6", L"a_7", L"a_8"}, {L"i_6", L"i_7", L"i_8"}, V)});
+      //      auto ext_indices =
+      //      make_indices<std::vector<Index>>(WstrList{L"i_1", L"i_2", L"i_3",
+      //      L"a_1", L"a_2", L"a_3"});
       auto ext_indices = make_indices<std::vector<Index>>({});
-      auto wick = FWickTheorem{opseq}.full_contractions(true).set_external_indices(ext_indices).spinfree(false);
-      if (connected_only) wick.set_op_connections(std::vector<std::pair<int, int>>{{1, 2}, {1, 3}});
+      auto wick = FWickTheorem{opseq}
+                      .full_contractions(true)
+                      .set_external_indices(ext_indices)
+                      .spinfree(false)
+                      .use_topology(topology);
+      if (connected_only)
+        wick.set_op_connections(
+            std::vector<std::pair<int, int>>{{1, 2}, {1, 3}});
       auto wick_result = wick.compute();
-      REQUIRE(wick_result->size() == (connected_only ? 12960 : 14400));
+      REQUIRE(wick_result->size() == (topology
+                                          ? (connected_only ? 90 : 100)
+                                          : (connected_only ? 12960 : 14400)));
 
       // multiply tensor factors and expand
       auto wick_result_2 =
@@ -610,8 +621,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
 
       std::wcout << "P3*H2*T2*T3 = " << to_latex_align(wick_result_2, 20) << std::endl;
       REQUIRE(wick_result_2->size() == (connected_only ? 7 : 9));  // 9 = 2 disconnected + 7 connected terms
-    }
-    );
+    });
 #endif
 
   }
