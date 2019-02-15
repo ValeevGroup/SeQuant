@@ -11,8 +11,10 @@ TEST_CASE("IndexSpace", "[elements]") {
   using namespace sequant2;
 
   SECTION("register_instance") {
-    REQUIRE_NOTHROW(IndexSpace::register_instance(L"p", IndexSpace::all));
-    REQUIRE_THROWS(IndexSpace::register_instance(L"p_1", IndexSpace::all));
+    REQUIRE_THROWS(IndexSpace::register_instance(
+        L"p", IndexSpace::all));  // already registered standard instances
+    REQUIRE_THROWS(
+        IndexSpace::register_instance(L"p_1", IndexSpace::all));  // ditto
   }
 
   SECTION("register_standard_instances") {
