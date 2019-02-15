@@ -27,4 +27,29 @@ IndexSpace::QuantumNumbers IndexSpace::nullqns = IndexSpace::QuantumNumbers{0b00
 IndexSpace::QuantumNumbers IndexSpace::alpha = IndexSpace::QuantumNumbers{0b000001};  //!< spin-up
 IndexSpace::QuantumNumbers IndexSpace::beta = IndexSpace::QuantumNumbers{0b000010};  //!< spin-down
 
+std::wstring to_wolfram(const IndexSpace& space) {
+  std::wstring result = L"particleSpace[";
+
+  // this is a hack due to partial representation of spaces in SeQuant
+  if (space.type() == IndexSpace::active_occupied)
+    result = L"occupied";
+  else if (space.type() == IndexSpace::active_unoccupied)
+    result = L"virtual";
+  else if (space.type() == IndexSpace::all)
+    result = L"occupied,virtual";
+  else if (space.type() == IndexSpace::other_unoccupied)
+    result = L"othervirtual";
+  else if (space.type() == IndexSpace::complete_unoccupied)
+    result = L"virtual,othervirtual";
+  else if (space.type() == IndexSpace::complete)
+    result = L"occupied,virtual,othervirtual";
+  else
+    throw std::invalid_argument(
+        "to_wolfram(IndexSpace) received a nonstandard space");
+
+  result += L"]";
+
+  return result;
 }
+
+}  // namespace sequant2
