@@ -220,27 +220,26 @@ class Index : public Taggable {
   }
 
   template <typename ... Attrs> std::wstring to_wolfram(Attrs && ... attrs) const {
-    auto protect_subscript = [](const std::wstring_view str){
-      auto  subsc_pos = str.find(L'_');
+    auto protect_subscript = [](const std::wstring_view str) {
+      auto subsc_pos = str.find(L'_');
       if (subsc_pos == std::wstring_view::npos)
         return std::wstring(str);
       else{
         assert(subsc_pos + 1 < str.size());
         if (subsc_pos + 2 == str.size())  // don't protect single character
           return std::wstring(str);
-        std::wstring
-            result = L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(";
-            result += std::wstring(str.substr(0, subsc_pos));
-            result += L"\\), \\(";
-            result += std::wstring(str.substr(subsc_pos + 1));
-            result += L"\\)]\\)\",";
-            std::wstring spaceName = (std::wstring(str.substr(0, subsc_pos)) == L"a") ? L"virtual" : L"occupied";
-            result += L"particleSpace[" + spaceName + L"],";
+        std::wstring result = L"\\!\\(\\*SubscriptBox[\\(";
+        result += std::wstring(str.substr(0, subsc_pos));
+        result += L"\\), \\(";
+        result += std::wstring(str.substr(subsc_pos + 1));
+        result += L"\\)]\\)";
         return result;
       }
     };
 
-    std::wstring result = protect_subscript(this->label());
+    using namespace std::literals;
+    std::wstring result =
+        L"particleIndex[\""s + protect_subscript(this->label()) + L"\"";
     if (this->has_proto_indices()) {
       assert(false && "not yet supported");
     }
