@@ -210,6 +210,117 @@ TEST_CASE("Op", "[elements]") {
     }
   }
 
+  SECTION("hug") {
+    auto nop1 = FNOperator(
+        {Index{L"i_1"}, Index{L"i_2"}, Index{L"i_3"}, Index{L"a_1"}},
+        {Index{L"a_1", {L"i_1", L"i_2"}}, Index{L"a_2", {L"i_1", L"i_2"}},
+         Index{L"a_1", {L"i_1", L"i_3"}}, Index{L"a_4"}});
+    REQUIRE_NOTHROW(nop1.hug());
+    auto& hug1 = nop1.hug();
+    REQUIRE(hug1->num_edges() == 8);
+    REQUIRE(hug1->num_groups() == 5);
+    REQUIRE(hug1->num_nonempty_groups() == 5);
+    using group_idxs = decltype(hug1->group(0).second);
+    REQUIRE(hug1->group(0).second == group_idxs{0, 1, 2});
+    REQUIRE(hug1->group(1).second == group_idxs{0, 1, 2});
+    REQUIRE(hug1->group(2).second == group_idxs{0, 1, 2});
+    REQUIRE(hug1->group(3).second == group_idxs{3});
+    REQUIRE(hug1->group(4).second == group_idxs{4});
+    REQUIRE(hug1->group(5).second == group_idxs{5});
+    REQUIRE(hug1->group(6).second == group_idxs{6, 7});
+    REQUIRE(hug1->group(7).second == group_idxs{6, 7});
+    REQUIRE(hug1->group_at(0).second == group_idxs{0, 1, 2});
+    REQUIRE(hug1->group_at(1).second == group_idxs{3});
+    REQUIRE(hug1->group_at(2).second == group_idxs{4});
+    REQUIRE(hug1->group_at(3).second == group_idxs{5});
+    REQUIRE(hug1->group_at(4).second == group_idxs{6, 7});
+    REQUIRE(hug1->group_size(0) == 3);
+    REQUIRE(hug1->group_size(1) == 3);
+    REQUIRE(hug1->group_size(2) == 3);
+    REQUIRE(hug1->group_size(3) == 1);
+    REQUIRE(hug1->group_size(4) == 1);
+    REQUIRE(hug1->group_size(5) == 1);
+    REQUIRE(hug1->group_size(6) == 2);
+    REQUIRE(hug1->group_size(7) == 2);
+
+    // erase
+    REQUIRE_NOTHROW(hug1->erase(0, fcre({L"i_1"})));
+    REQUIRE(hug1->num_edges() == 7);
+    REQUIRE(hug1->num_groups() == 5);
+    REQUIRE(hug1->num_nonempty_groups() == 5);
+    REQUIRE(hug1->group(0).second == group_idxs{0, 1});
+    REQUIRE(hug1->group(1).second == group_idxs{0, 1});
+    REQUIRE(hug1->group(2).second == group_idxs{2});
+    REQUIRE(hug1->group(3).second == group_idxs{3});
+    REQUIRE(hug1->group(4).second == group_idxs{4});
+    REQUIRE(hug1->group(5).second == group_idxs{5, 6});
+    REQUIRE(hug1->group(6).second == group_idxs{5, 6});
+    REQUIRE(hug1->group_at(0).second == group_idxs{0, 1});
+    REQUIRE(hug1->group_at(1).second == group_idxs{2});
+    REQUIRE(hug1->group_at(2).second == group_idxs{3});
+    REQUIRE(hug1->group_at(3).second == group_idxs{4});
+    REQUIRE(hug1->group_at(4).second == group_idxs{5, 6});
+
+    // another erase
+    REQUIRE_NOTHROW(hug1->erase(2, fcre({L"a_17"})));
+    REQUIRE(hug1->num_edges() == 6);
+    REQUIRE(hug1->num_groups() == 5);
+    REQUIRE(hug1->num_nonempty_groups() == 4);
+    REQUIRE(hug1->group(0).second == group_idxs{0, 1});
+    REQUIRE(hug1->group(1).second == group_idxs{0, 1});
+    REQUIRE(hug1->group(2).second == group_idxs{2});
+    REQUIRE(hug1->group(3).second == group_idxs{3});
+    REQUIRE(hug1->group(4).second == group_idxs{4, 5});
+    REQUIRE(hug1->group(5).second == group_idxs{4, 5});
+    REQUIRE(hug1->group_at(0).second == group_idxs{0, 1});
+    REQUIRE(hug1->group_at(1).second == group_idxs{});
+    REQUIRE(hug1->group_at(2).second == group_idxs{2});
+    REQUIRE(hug1->group_at(3).second == group_idxs{3});
+    REQUIRE(hug1->group_at(4).second == group_idxs{4, 5});
+
+    // now insert an index in new group
+    REQUIRE_NOTHROW(hug1->insert(1, fcre({L"p_17"})));
+    REQUIRE(hug1->num_edges() == 7);
+    REQUIRE(hug1->num_groups() == 6);
+    REQUIRE(hug1->num_nonempty_groups() == 5);
+    REQUIRE(hug1->group(0).second == group_idxs{0, 2});
+    REQUIRE(hug1->group(1).second == group_idxs{1});
+    REQUIRE(hug1->group(2).second == group_idxs{0, 2});
+    REQUIRE(hug1->group(3).second == group_idxs{3});
+    REQUIRE(hug1->group(4).second == group_idxs{4});
+    REQUIRE(hug1->group(5).second == group_idxs{5, 6});
+    REQUIRE(hug1->group(6).second == group_idxs{5, 6});
+    REQUIRE(hug1->group_at(0).second == group_idxs{0, 2});
+    REQUIRE(hug1->group_at(1).second == group_idxs{});
+    REQUIRE(hug1->group_at(2).second == group_idxs{3});
+    REQUIRE(hug1->group_at(3).second == group_idxs{4});
+    REQUIRE(hug1->group_at(4).second == group_idxs{5, 6});
+    REQUIRE(hug1->group_at(5).second == group_idxs{1});
+
+    // now insert an index in old group
+    REQUIRE_NOTHROW(hug1->insert(6, fcre({L"i_17"})));
+    REQUIRE(hug1->num_edges() == 8);
+    REQUIRE(hug1->num_groups() == 6);
+    REQUIRE(hug1->num_nonempty_groups() == 5);
+    REQUIRE(hug1->group(0).second == group_idxs{0, 2, 6});
+    REQUIRE(hug1->group(1).second == group_idxs{1});
+    REQUIRE(hug1->group(2).second == group_idxs{0, 2, 6});
+    REQUIRE(hug1->group(3).second == group_idxs{3});
+    REQUIRE(hug1->group(4).second == group_idxs{4});
+    REQUIRE(hug1->group(5).second == group_idxs{5, 7});
+    REQUIRE(hug1->group(6).second == group_idxs{0, 2, 6});
+    REQUIRE(hug1->group(7).second == group_idxs{5, 7});
+    REQUIRE(hug1->group_at(0).second == group_idxs{0, 2, 6});
+    REQUIRE(hug1->group_at(1).second == group_idxs{});
+    REQUIRE(hug1->group_at(2).second == group_idxs{3});
+    REQUIRE(hug1->group_at(3).second == group_idxs{4});
+    REQUIRE(hug1->group_at(4).second == group_idxs{5, 7});
+    REQUIRE(hug1->group_at(5).second == group_idxs{1});
+
+    // inserting past the end is no-no
+    REQUIRE_THROWS(hug1->insert(9, fcre({L"i_17"})));
+  }
+
   SECTION("latex") {
     FOp o1(Index(L"i_1"), Action::create);
     REQUIRE(to_latex(o1) == L"{a^{\\dagger}_{i_1}}");
@@ -239,7 +350,6 @@ TEST_CASE("Op", "[elements]") {
     auto nopseq1 = FNOperatorSeq({nop1, nop2});
     REQUIRE(to_latex(nopseq1)
                 == L"{{\\tilde{a}^{{i_1}{i_2}}_{{a_1}{a_2}}}{\\tilde{a}^{{i_1}{i_2}}_{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}}}");
-
   }
 
 }  // TEST_CASE("Op")

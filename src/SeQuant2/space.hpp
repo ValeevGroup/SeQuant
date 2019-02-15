@@ -412,6 +412,8 @@ inline int occupancy_class(const IndexSpace& space) {
   abort(); // unreachable
 }
 
+std::wstring to_wolfram(const IndexSpace &space);
+
 }  // namespace sequant2
 
 #endif //SEQUANT2_SPACE_H

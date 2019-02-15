@@ -18,7 +18,7 @@ namespace sequant2 {
 /// Applies Wick's theorem to a sequence of normal-ordered operators.
 ///
 /// @tparam S particle statistics
-template<Statistics S>
+template <Statistics S>
 class WickTheorem {
  public:
   static constexpr const Statistics statistics = S;
@@ -78,7 +78,7 @@ class WickTheorem {
   /// will not constrain connectivity
   /// @param op_index_pairs the list of pairs of op indices to be connected in
   /// the result
-  template<typename IndexPairContainer>
+  template <typename IndexPairContainer>
   WickTheorem &set_op_connections(IndexPairContainer &&op_index_pairs) {
     for (const auto &opidx_pair : op_index_pairs) {
       if (opidx_pair.first < 0 || opidx_pair.first >= input_.size()) {
@@ -161,7 +161,7 @@ class WickTheorem {
       opseq_size = 0;
       for (const auto &op : opseq) opseq_size += op.size();
     }
-    void reset(const NormalOperatorSequence<S>& o) {
+    void reset(const NormalOperatorSequence<S> &o) {
       sp = Product{};
       opseq = o;
       op_connections = decltype(op_connections)(opseq.size());
@@ -170,7 +170,7 @@ class WickTheorem {
       compute_size();
     }
 
-    template<typename T>
+    template <typename T>
     static auto lowtri_idx(T i, T j) {
       assert(i != j);
       auto ii = std::max(i, j);
@@ -182,9 +182,9 @@ class WickTheorem {
 
     /// If the target connectivity will be violated by this contraction, keep
     /// the state unchanged and return false
-    template<typename Cursor>
-    inline bool connect(const container::svector<std::bitset<max_input_size>> &
-    target_op_connections,
+    template <typename Cursor>
+    inline bool connect(const container::svector<std::bitset<max_input_size>>
+                            &target_op_connections,
                         const Cursor &op1_cursor, const Cursor &op2_cursor) {
       if (target_op_connections.empty())  // if no constraints, all is fair game
         return true;
@@ -203,7 +203,9 @@ class WickTheorem {
       }
 
       // test if op1 has enough remaining indices to satisfy
-      const auto nidx_op1_remain = op1_cursor.range_iter()->size() - 1;  // how many indices op1 has minus this index
+      const auto nidx_op1_remain =
+          op1_cursor.range_iter()->size() -
+          1;  // how many indices op1 has minus this index
       const auto nidx_op1_needs =
           (op_connections[op1_idx] | target_op_connections[op1_idx])
               .flip()
@@ -217,7 +219,9 @@ class WickTheorem {
       }
 
       // test if op2 has enough remaining indices to satisfy
-      const auto nidx_op2_remain = op2_cursor.range_iter()->size() - 1;  // how many indices op2 has minus this index
+      const auto nidx_op2_remain =
+          op2_cursor.range_iter()->size() -
+          1;  // how many indices op2 has minus this index
       const auto nidx_op2_needs =
           (op_connections[op2_idx] | target_op_connections[op2_idx])
               .flip()
@@ -235,11 +239,10 @@ class WickTheorem {
       return true;  // not yet implemented
     }
     /// @brief Updates connectivity when contraction is reversed
-    template<typename Cursor>
-    inline void disconnect(
-        const container::svector<std::bitset<max_input_size>> &
-        target_op_connections,
-        const Cursor &op1_cursor, const Cursor &op2_cursor) {
+    template <typename Cursor>
+    inline void disconnect(const container::svector<std::bitset<max_input_size>>
+                               &target_op_connections,
+                           const Cursor &op1_cursor, const Cursor &op2_cursor) {
       if (target_op_connections.empty())  // if no constraints, all is fair game
         return;
 
@@ -308,13 +311,12 @@ class WickTheorem {
             ranges::get_cursor(op_iter).range_iter() !=
                 ranges::get_cursor(opseq_view_begin)
                     .range_iter()  // can't contract within same normop
-            ) {
+        ) {
+          // check if can contract these indices and
+          // check connectivity constraints (if needed)
           if (can_contract(*opseq_view_begin, *op_iter, input_.vacuum()) &&
               state.connect(op_connections_, ranges::get_cursor(op_iter),
-                            ranges::get_cursor(
-                                opseq_view_begin))  // check connectivity
-            // constraints if needed
-              ) {
+                            ranges::get_cursor(opseq_view_begin))) {
             //            std::wcout << "level " << state.level << ":
             //            contracting " << to_latex(*opseq_view_begin) << " with
             //            " << to_latex(*op_iter) << std::endl; std::wcout << "
@@ -326,11 +328,14 @@ class WickTheorem {
             if (statistics == Statistics::FermiDirac) {
               const auto distance =
                   ranges::get_cursor(op_iter).ordinal() -
-                      ranges::get_cursor(opseq_view_begin).ordinal() - 1;
+                  ranges::get_cursor(opseq_view_begin).ordinal() - 1;
               if (distance % 2) {
                 phase *= -1;
               }
             }
+
+            // TODO get group size, if can represent normal operators as
+            // Hugenholtz vertices
 
             // update the prefactor and opseq
             Product sp_copy = state.sp;
@@ -354,8 +359,8 @@ class WickTheorem {
               //              std::wcout << "got " << to_latex(state.sp) <<
               //              std::endl;
               if (!state.count_only)
-                result.first->push_back(
-                    std::make_pair(std::move(state.sp.deep_copy()), NormalOperator<S>{}));
+                result.first->push_back(std::make_pair(
+                    std::move(state.sp.deep_copy()), NormalOperator<S>{}));
               else
                 result.first->resize(result.first->size() + 1);
               //              std::wcout << "now up to " << result.first->size()
@@ -406,9 +411,10 @@ class WickTheorem {
       const Op<S> &left, const Op<S> &right,
       Vacuum vacuum = get_default_context().vacuum()) {
     assert(can_contract(left, right, vacuum));
-//    assert(
-//        !left.index().has_proto_indices() &&
-//            !right.index().has_proto_indices());  // I don't think the logic is
+    //    assert(
+    //        !left.index().has_proto_indices() &&
+    //            !right.index().has_proto_indices());  // I don't think the
+    //            logic is
     // correct for dependent indices
     if (is_pure_qpannihilator<S>(left, vacuum) &&
         is_pure_qpcreator<S>(right, vacuum))
@@ -428,11 +434,14 @@ class WickTheorem {
               right.index().space()) {  // may need 2 overlaps if neither space
         // is pure qp creator/annihilator
         auto result = std::make_shared<Product>();
-        result->append(1, left_is_ann ? overlap(left.index(), index_common) : overlap(index_common, left.index()));
-        result->append(1, left_is_ann ? overlap(index_common, right.index()) : overlap(right.index(), index_common));
+        result->append(1, left_is_ann ? overlap(left.index(), index_common)
+                                      : overlap(index_common, left.index()));
+        result->append(1, left_is_ann ? overlap(index_common, right.index())
+                                      : overlap(right.index(), index_common));
         return result;
       } else {
-        return left_is_ann ? overlap(left.index(), right.index()) : overlap(right.index(), left.index());
+        return left_is_ann ? overlap(left.index(), right.index())
+                           : overlap(right.index(), left.index());
       }
     }
   }
@@ -441,7 +450,7 @@ class WickTheorem {
   // expressions (not on sequences of normal operators) directly
   /// @param[in,out] on input, Wick theorem result, on output the result of
   /// reducing the overlaps
-  void reduce(ExprPtr& expr) const;
+  void reduce(ExprPtr &expr) const;
 };
 
 using BWickTheorem = WickTheorem<Statistics::BoseEinstein>;

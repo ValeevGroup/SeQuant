@@ -17,7 +17,23 @@ enum class IndexSpaceMetric {
 
 enum class Symmetry { symm, antisymm, nonsymm };
 
-enum class BraKetPos { bra, ket};
+inline std::wstring to_wolfram(const Symmetry& symmetry) {
+  std::wstring result;
+  switch (symmetry) {
+    case Symmetry::symm:
+      result = L"indexSymm[1]";
+      break;
+    case Symmetry::antisymm:
+      result = L"indexSymm[-1]";
+      break;
+    case Symmetry::nonsymm:
+      result = L"indexSymm[0]";
+      break;
+  }
+  return result;
+}
+
+enum class BraKetPos { bra, ket };
 
 inline std::wstring to_wolfram(BraKetPos a) {
   using namespace std::literals;

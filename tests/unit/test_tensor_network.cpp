@@ -10,7 +10,6 @@
 TEST_CASE("TensorNetwork", "[elements]") {
 
   using namespace sequant2;
-  IndexSpace::register_standard_instances();
 
   SECTION("constructors") {
 

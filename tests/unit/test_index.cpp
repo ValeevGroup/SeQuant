@@ -9,7 +9,6 @@
 TEST_CASE("Index", "[elements]") {
 
   using namespace sequant2;
-  IndexSpace::register_standard_instances();
 
   SECTION("constructors") {
     Index i{};
@@ -151,5 +150,16 @@ TEST_CASE("Index", "[elements]") {
     std::wstring a1_str = to_latex(a1);
     REQUIRE(a1_str == L"{a_1^{{i_1}{i_2^{{i_3}{i_4}}}}}");
   }
+  //
+  //  SECTION("wolfram") {
+  //    Index i1(L"i_1");
+  //    std::wstring i1_str;
+  //    REQUIRE_NOTHROW(i1_str = i1.to_wolfram());
+  //    REQUIRE(i1_str == L"particleIndex[]");
+  //    REQUIRE(i1.to_wolfram(Action::create) ==
+  //    L"particleIndex[,indexType[cre]]");
+  //    REQUIRE(i1.to_wolfram(BraKetPos::ket) ==
+  //    L"particleIndex[,indexType[ket]]");
+  //  }
 
 }  // TEST_CASE("Index")

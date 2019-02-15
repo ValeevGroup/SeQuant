@@ -36,7 +36,8 @@ add_library(SeQuant2
         src/SeQuant2/wick.impl.hpp
         src/SeQuant2/expr_operator.hpp
         src/SeQuant2/hash.hpp
-        src/SeQuant2/tag.hpp)
+        src/SeQuant2/tag.hpp
+        src/SeQuant2/hugenholtz.hpp)
 target_link_libraries(SeQuant2 Range-V3 Boost)
 
 enable_testing(true)

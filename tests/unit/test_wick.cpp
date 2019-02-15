@@ -14,7 +14,6 @@
 TEST_CASE("WickTheorem", "[algorithms]") {
 
   using namespace sequant2;
-  IndexSpace::register_standard_instances();
 
   SECTION("Op contractions") {
 
@@ -425,6 +424,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       simplify(wick_result_2);
 
       std::wcout << L"H2*T2 = " << to_latex(wick_result_2) << std::endl;
+      std::wcout << L"H2*T2 = " << to_wolfram(wick_result_2) << std::endl;
       REQUIRE(to_latex(wick_result_2) ==
               L"{ \\left({{4} \\times "
               L"{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{{a_1}{a_2}}}}"

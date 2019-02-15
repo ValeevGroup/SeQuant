@@ -15,6 +15,7 @@
 
 #include <boost/container_hash/hash.hpp>
 
+#include "attr.hpp"
 #include "container.hpp"
 #include "space.hpp"
 #include "tag.hpp"
@@ -218,6 +219,37 @@ class Index : public Taggable {
     return result;
   }
 
+  template <typename ... Attrs> std::wstring to_wolfram(Attrs && ... attrs) const {
+    auto protect_subscript = [](const std::wstring_view str) {
+      auto subsc_pos = str.find(L'_');
+      if (subsc_pos == std::wstring_view::npos)
+        return std::wstring(str);
+      else{
+        assert(subsc_pos + 1 < str.size());
+        if (subsc_pos + 2 == str.size())  // don't protect single character
+          return std::wstring(str);
+        std::wstring result = L"\\!\\(\\*SubscriptBox[\\(";
+        result += std::wstring(str.substr(0, subsc_pos));
+        result += L"\\), \\(";
+        result += std::wstring(str.substr(subsc_pos + 1));
+        result += L"\\)]\\)";
+        return result;
+      }
+    };
+
+    using namespace std::literals;
+    std::wstring result =
+        L"particleIndex[\""s + protect_subscript(this->label()) + L"\"";
+    if (this->has_proto_indices()) {
+      assert(false && "not yet supported");
+    }
+    using namespace std::literals;
+    using sequant2::to_wolfram;
+    ((result += ((L","s + to_wolfram(std::forward<Attrs>(attrs))))), ...);
+    result += L"]";
+    return result;
+  }
+
   /// @return the smallest index of a generated index
   static constexpr std::size_t min_tmp_index() { return 100; }
 
@@ -273,6 +305,29 @@ class Index : public Taggable {
     }
     bool operator()(const std::wstring_view &first, const Index &second) const {
       return first < second.label();
+    }
+  };
+
+  /// compares Index objects using type only (but since type is defined by the
+  /// *values* of proto indices those are not ignored)
+  struct TypeCompare {
+    bool operator()(const Index &first, const Index &second) const {
+      bool result;
+      if (first.space() == second.space()) {
+        result = first.proto_indices() < second.proto_indices();
+      } else
+        result = first.space() < second.space();
+      return result;
+    }
+  };
+
+  /// tests equality of Index objects using type only (but since type is defined
+  /// by the *values* of proto indices those are not ignored)
+  struct TypeEquality {
+    bool operator()(const Index &first, const Index &second) const {
+      bool result = (first.space() == second.space()) &&
+                    (first.proto_indices() == second.proto_indices());
+      return result;
     }
   };
 
