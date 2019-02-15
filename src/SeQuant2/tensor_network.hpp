@@ -208,7 +208,7 @@ class TensorNetwork {
   // source tensors and indices
   container::svector<TensorPtr> tensors_;
 
-  struct FullLabelComparer {
+  struct FullLabelCompare {
     using is_transparent = void;
     bool operator()(const TensorTerminalPair &first,
                     const TensorTerminalPair &second) const {
@@ -224,7 +224,7 @@ class TensorNetwork {
     }
   };
   // Index -> TensorTerminalPair, sorted by labels
-  container::set<TensorTerminalPair, FullLabelComparer> indices_;
+  container::set<TensorTerminalPair, FullLabelCompare> indices_;
   // ext indices do not connect tensors
   // sorted by *label* (not full label) of the corresponding value (Index)
   // this ensures that proto indices are not considered and all internal indices
