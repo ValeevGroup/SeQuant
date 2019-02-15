@@ -159,8 +159,9 @@ public:
       range_iter_->erase(elem_iter_);
       assert(capacity == range_iter_->capacity());
     }
-    /// calls erase on the current iterator
-    template <typename T> void insert(T &&elem) {
+    /// calls insert on the current iterator
+    template <typename T>
+    void insert(T &&elem) {
       assert(range_iter_ != this->_end(*range_));
       // TODO resolve the compilation issue
       //      ranges::insert(*range_iter_, elem_iter_, std::forward<T>(elem));
