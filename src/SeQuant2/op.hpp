@@ -283,6 +283,10 @@ class Operator : public container::svector<Op<S>>, public Expr {
     return get_type_id<Operator>();
   };
 
+  std::shared_ptr<Expr> clone() const override {
+    return std::make_shared<Operator>(*this);
+  }
+
  private:
   base_type make_ops(Action action,
                      IndexList indices) {
@@ -377,6 +381,26 @@ class NormalOperator : public Operator<S> {
 
   /// @param creators sequence of creators
   /// @param annihilators sequence of annihilators (in order of particle indices, see the class documentation for more info).
+  template <
+      typename IndexContainer,
+      typename = std::enable_if_t<
+          !meta::is_initializer_list_v<std::decay_t<IndexContainer>> &&
+          std::is_same_v<typename std::decay_t<IndexContainer>::value_type, Index>>>
+  NormalOperator(IndexContainer &&creator_indices,
+                 IndexContainer &&annihilator_indices,
+                 Vacuum v = get_default_context().vacuum())
+      : Operator<S>{}, vacuum_(v), ncreators_(creator_indices.size()) {
+    this->reserve(creator_indices.size() + annihilator_indices.size());
+    for (const auto &i : creator_indices) {
+      this->emplace_back(i, Action::create);
+    }
+    for (const auto &i : annihilator_indices | ranges::view::reverse) {
+      this->emplace_back(i, Action::annihilate);
+    }
+  }
+
+  /// @param creators sequence of creators
+  /// @param annihilators sequence of annihilators (in order of particle indices, see the class documentation for more info).
   NormalOperator(std::initializer_list<Op<S>> creators,
                  std::initializer_list<Op<S>> annihilators,
                  Vacuum v = get_default_context().vacuum())
@@ -392,9 +416,9 @@ class NormalOperator : public Operator<S> {
     this->insert(this->end(), crbegin(annihilators), crend(annihilators));
   }
 
-  /// @param creator_indices sequence of creator indices
-  /// @param annihilator_indices sequence of annihilator indices (in order of particle indices, see the class documentation for more info).
-  template <typename I>
+//  /// @param creator_indices sequence of creator indices
+//  /// @param annihilator_indices sequence of annihilator indices (in order of particle indices, see the class documentation for more info).
+  template <typename I, typename = std::enable_if_t<!std::is_same_v<std::decay_t<I>,Op<S>>>>
   NormalOperator(std::initializer_list<I> creator_indices,
                  std::initializer_list<I> annihilator_indices,
                  Vacuum v = get_default_context().vacuum())
@@ -499,6 +523,10 @@ class NormalOperator : public Operator<S> {
   Expr::type_id_type type_id() const override {
     return Expr::get_type_id<NormalOperator>();
   };
+
+  std::shared_ptr<Expr> clone() const override {
+    return std::make_shared<NormalOperator>(*this);
+  }
 
  private:
   Vacuum vacuum_;

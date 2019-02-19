@@ -19,9 +19,8 @@ class TensorCanonicalizer;
 /// @brief particle-symmetric Tensor, i.e. permuting
 class Tensor : public Expr {
  private:
-  auto make_indices(IndexList indices) {
-    return indices;
-  }
+  using index_container_type = container::svector<Index>;
+  auto make_indices(IndexList indices) { return indices; }
   auto make_indices(WstrList index_labels) {
     index_container_type result;
     result.reserve(index_labels.size());
@@ -38,6 +37,15 @@ class Tensor : public Expr {
     }
     return result;
   }
+  template <typename IndexContainer>
+  index_container_type make_indices(IndexContainer &&indices) {
+    if constexpr (std::is_same_v<index_container_type,
+                                 std::decay_t<IndexContainer>>) {
+      return std::forward<IndexContainer>(indices);
+    } else {
+      return index_container_type(std::begin(indices), std::end(indices));
+    }
+  }
 
   /// @return view of the bra+ket index ranges
   auto braket() { return ranges::view::concat(bra_, ket_); }
@@ -45,6 +53,22 @@ class Tensor : public Expr {
  public:
   Tensor() = default;
   virtual ~Tensor();
+
+  /// @param label the tensor label
+  /// @param bra_indices list of bra indices (or objects that can be converted
+  /// to indices)
+  /// @param ket_indices list of ket indices (or objects that can be converted
+  /// to indices)
+  /// @param symmetry the tensor symmetry
+  template <typename IndexContainer,
+            typename = std::enable_if_t<
+                !meta::is_initializer_list_v<std::decay_t<IndexContainer>>>>
+  Tensor(std::wstring_view label, IndexContainer &&bra_indices,
+         IndexContainer &&ket_indices, Symmetry s = Symmetry::nonsymm)
+      : label_(label),
+        bra_(make_indices(bra_indices)),
+        ket_(make_indices(ket_indices)),
+        symmetry_(s) {}
 
   /// @tparam I1 any type convertible to Index)
   /// @tparam I2 any type convertible to Index
@@ -145,7 +169,6 @@ class Tensor : public Expr {
 
  private:
   std::wstring label_{};
-  using index_container_type = container::svector<Index>;
   index_container_type bra_{};
   index_container_type ket_{};
   Symmetry symmetry_ = Symmetry::nonsymm;

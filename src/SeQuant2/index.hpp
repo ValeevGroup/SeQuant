@@ -125,6 +125,8 @@ class Index : public Taggable {
   /// @param label the label, does not need to be unique
   /// @param proto_indices list of proto indices (all must be unique,
   /// i.e. duplicates are not allowed)
+  /// @param symmetric_proto_indices if true, proto_indices can be permuted at
+  ///  will and will always be sorted
   template <
       typename I1, typename IndexContainer,
       typename = std::enable_if_t<std::is_convertible_v<
@@ -145,7 +147,7 @@ class Index : public Taggable {
     check_for_duplicate_proto_indices();
   }
 
-  /// creates a globaly-unique temporary index in space @c space . The label of
+  /// creates a globally-unique temporary index in space @c space . The label of
   /// the resulting index =
   /// @c IndexSpace::base_key(space) + '_' + temporary counter.
   /// Each call increments the current tmp counter (see next_tmp_index() ) . To
@@ -158,6 +160,36 @@ class Index : public Taggable {
     result.label_ = IndexSpace::base_key(space) + L'_' +
                     std::to_wstring(Index::next_tmp_index());
     result.space_ = space;
+    return result;
+  }
+
+  /// creates a globaly-unique temporary index in space @c space . The label of
+  /// the resulting index =
+  /// @c IndexSpace::base_key(space) + '_' + temporary counter.
+  /// Each call increments the current tmp counter (see next_tmp_index() ) . To
+  /// make neater temporary indices unique in a given scope (e.g. a single term
+  /// in an expression) use IndexFactory.
+  /// @param space an IndexSpace object
+  /// @param proto_indices list of proto indices (all must be unique,
+  /// i.e. duplicates are not allowed)
+  /// @param symmetric_proto_indices if true, proto_indices can be permuted at
+  ///  will and will always be sorted
+  /// @return a unique temporary index in space @c space
+  template <
+      typename IndexContainer,
+      typename = std::enable_if_t<std::is_convertible_v<
+          std::remove_reference_t<IndexContainer>, container::vector<Index>>>>
+  static Index make_tmp_index(const IndexSpace &space,
+                              IndexContainer &&proto_indices,
+                              bool symmetric_proto_indices = true) {
+    Index result;
+    result.label_ = IndexSpace::base_key(space) + L'_' +
+                    std::to_wstring(Index::next_tmp_index());
+    result.space_ = space;
+    result.proto_indices_ = std::forward<IndexContainer>(proto_indices);
+    result.symmetric_proto_indices_ = symmetric_proto_indices;
+    result.canonicalize_proto_indices();
+    result.check_for_duplicate_proto_indices();
     return result;
   }
 
