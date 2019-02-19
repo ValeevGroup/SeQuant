@@ -642,6 +642,11 @@ std::wstring to_latex(const NormalOperatorSequence<S> &opseq) {
   return opseq.to_latex();
 }
 
+namespace detail {
+  struct OpIdRegistrar {
+    OpIdRegistrar();
+  };
+}  // namespace detail
 }  // namespace sequant2
 
 #endif // SEQUANT2_OP_H

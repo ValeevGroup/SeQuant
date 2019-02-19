@@ -265,10 +265,20 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
       return type_id() < that.type_id();
     }
   }
+
   /// @return (unique) type id of class T
-  template <typename T> static  type_id_type get_type_id() {
-    static type_id_type type_id = get_next_type_id();
-    return type_id;
+  template <typename T>
+  static type_id_type get_type_id() {
+    return type_id_accessor<T>();
+  };
+
+  /// sets (unique) type id of class T
+  /// @param id the value of type id of class T
+  /// @note since get_type_id does not check for duplicates, it's user's
+  /// responsiblity to make sure that there are no collisions between type ids
+  template <typename T>
+  static void set_type_id(type_id_type id) {
+    type_id_accessor<T>() = id;
   };
 
   /// @tparam T an Expr type
@@ -309,7 +319,8 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
 
   /// @brief in-place add @c that to @c *this
   /// @return reference to @c *this
-  /// @throw std::logic_error if not implemented for this class, or cannot be implemented for the particular @c that
+  /// @throw std::logic_error if not implemented for this class, or cannot be
+  /// implemented for the particular @c that
   virtual Expr &operator+=(const Expr &that) {
     throw std::logic_error("Expr::operator+= not implemented in this derived class");
   }
@@ -454,6 +465,14 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
   static type_id_type get_next_type_id() {
     static std::atomic<type_id_type> grand_type_id = 0;
     return ++grand_type_id;
+  };
+
+  /// sets (unique) type id of class T
+  /// @param id the value of type id of class T
+  template <typename T>
+  static type_id_type &type_id_accessor() {
+    static type_id_type type_id = get_next_type_id();
+    return type_id;
   };
 
 };  // Expr

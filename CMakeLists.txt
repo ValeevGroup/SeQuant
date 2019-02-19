@@ -21,6 +21,7 @@ add_library(SeQuant2
         src/SeQuant2/index.hpp
         src/SeQuant2/space.cpp
         src/SeQuant2/space.hpp
+        src/SeQuant2/op.cpp
         src/SeQuant2/op.hpp
         src/SeQuant2/tensor.cpp
         src/SeQuant2/tensor.hpp
