@@ -8,7 +8,7 @@
 namespace sequant2 {
 
 /// @brief HugenholtzVertex represents a sequence of edges arranged into groups
-/// by (topologically) equivalence.
+/// by (topological) equivalence.
 /// @tparam Edge the edge type; it must be EqualityComparable
 /// @tparam EdgeEquality type of equality tester for Edge objects; @code
 /// EdgeEquality(const Edge&, const Edge&) @endcode must be implicitly
