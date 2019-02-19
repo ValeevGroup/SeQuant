@@ -21,6 +21,13 @@ namespace sequant2 {
 template <Statistics S>
 class WickTheorem {
  public:
+  // see
+  // https://softwareengineering.stackexchange.com/questions/257705/unit-test-private-method-in-c-using-a-friend-class?answertab=votes#tab-top
+  template <class T>
+  struct access_by;
+  template <class T>
+  friend struct access_by;
+
   static constexpr const Statistics statistics = S;
   static_assert(S == Statistics::FermiDirac,
                 "WickTheorem not yet implemented for Bose-Einstein");
@@ -30,6 +37,8 @@ class WickTheorem {
     assert(input.empty() || input.vacuum() != Vacuum::Invalid);
     assert(input.empty() || input.vacuum() != Vacuum::Invalid);
   }
+
+  explicit WickTheorem(ExprPtr expr_input) : expr_input_(expr_input) {}
 
   /// Controls whether next call to compute() will full contractions only or all
   /// (including partial) contractions. By default compute() generates all
@@ -46,13 +55,6 @@ class WickTheorem {
   /// @param sf if true, will complete full contractions only.
   WickTheorem &spinfree(bool sf) {
     spinfree_ = sf;
-    return *this;
-  }
-  /// Controls whether next call to compute() will reduce the result
-  /// By default compute() will not perform reduction.
-  /// @param r if true, compute() will reduce the result.
-  WickTheorem &reduce(bool r) {
-    reduce_ = r;
     return *this;
   }
   /// Controls whether Op's of the same type within each NormalOperator are
@@ -91,25 +93,32 @@ class WickTheorem {
   /// the result
   template <typename IndexPairContainer>
   WickTheorem &set_op_connections(IndexPairContainer &&op_index_pairs) {
-    for (const auto &opidx_pair : op_index_pairs) {
-      if (opidx_pair.first < 0 || opidx_pair.first >= input_.size()) {
-        throw std::invalid_argument(
-            "WickTheorem::set_op_connections: op index out of range");
-      }
-      if (opidx_pair.second < 0 || opidx_pair.second >= input_.size()) {
-        throw std::invalid_argument(
-            "WickTheorem::set_op_connections: op index out of range");
-      }
-    }
-    if (!op_index_pairs.empty()) {
-      op_connections_.resize(input_.size());
-      for (auto &v : op_connections_) {
-        v.set();
-      }
+    if (expr_input_ == nullptr || !op_connections_input_.empty()) {
       for (const auto &opidx_pair : op_index_pairs) {
-        op_connections_[opidx_pair.first].reset(opidx_pair.second);
-        op_connections_[opidx_pair.second].reset(opidx_pair.first);
+        if (opidx_pair.first < 0 || opidx_pair.first >= input_.size()) {
+          throw std::invalid_argument(
+              "WickTheorem::set_op_connections: op index out of range");
+        }
+        if (opidx_pair.second < 0 || opidx_pair.second >= input_.size()) {
+          throw std::invalid_argument(
+              "WickTheorem::set_op_connections: op index out of range");
+        }
       }
+      if (!op_index_pairs.empty()) {
+        op_connections_.resize(input_.size());
+        for (auto &v : op_connections_) {
+          v.set();
+        }
+        for (const auto &opidx_pair : op_index_pairs) {
+          op_connections_[opidx_pair.first].reset(opidx_pair.second);
+          op_connections_[opidx_pair.second].reset(opidx_pair.first);
+        }
+      }
+      op_connections_input_.clear();
+    } else {
+      ranges::for_each(op_index_pairs, [this](const auto &idxpair) {
+        op_connections_input_.push_back(idxpair);
+      });
     }
 
     return *this;
@@ -121,32 +130,101 @@ class WickTheorem {
   /// @return the result of applying Wick's theorem, i.e. a sum of {prefactor,
   /// normal operator} pairs
   ExprPtr compute(const bool count_only = false) const {
+    // have an Expr as input? Apply recursively ...
+    if (expr_input_) {
+      /// expand, then apply recursively to products
+      expand(expr_input_);
+      // if sum, canonicalize and apply to each summand ...
+      if (expr_input_->is<Sum>()) {
+        canonicalize(expr_input_);
+        // for each summand spin off a wick task
+        abort();  // not yet implemented
+      }
+      // ... else if a product, find NormalOperatorSequence, if any, and compute
+      // ...
+      else if (expr_input_->is<Product>()) {
+        canonicalize(expr_input_);
+        // NormalOperators should be all at the end
+        auto first_nop_it = ranges::find_if(
+            *expr_input_,
+            [](const ExprPtr &expr) { return expr->is<NormalOperator<S>>(); });
+        // if have ops, split into prefactor and op sequence
+        if (first_nop_it != ranges::end(*expr_input_)) {
+          ExprPtr prefactor =
+              ex<CProduct>(expr_input_->as<Product>().scalar(), ExprPtrList{});
+          bool found_op = false;
+          ranges::for_each(*expr_input_, [this, &found_op,
+                                          &prefactor](const ExprPtr &factor) {
+            if (factor->is<NormalOperator<S>>()) {
+              input_.push_back(factor->as<NormalOperator<S>>());
+              found_op = true;
+            } else {
+              assert(factor->is_cnumber());
+              assert(!found_op);  // make sure that ops are at the end
+              *prefactor *= *factor;
+            }
+          });
+          if (!input_.empty()) {
+            auto result = compute_nopseq(count_only);
+            result = prefactor * result;
+            expand(result);
+            reduce(result);
+            simplify(result);
+            canonicalize(result);
+            return result;
+          }
+        } else {  // product does not include ops
+          return expr_input_;
+        }
+      }
+      // ... else if NormalOperatorSequence already (unlikely!), compute ...
+      else if (expr_input_->is<NormalOperatorSequence<S>>()) {
+        input_ = expr_input_->as<NormalOperatorSequence<S>>();
+        return compute_nopseq(count_only);
+      } else  // ... else do nothing
+        return expr_input_;
+    } else
+      return compute_nopseq(count_only);
+    abort();
+  }
+
+ private:
+  static constexpr size_t max_input_size =
+      32;  // max # of operators in the input sequence
+
+  // if nonnull, apply wick to the whole expression recursively, else input_ is
+  // set this is mutated by compute
+  mutable ExprPtr expr_input_;
+
+  mutable NormalOperatorSequence<S> input_;
+  bool full_contractions_ = false;
+  bool spinfree_ = false;
+  bool use_topology_ = false;
+  container::set<Index> external_indices_;
+  // for each operator specifies the reverse bitmask of connections (0 = must
+  // connect)
+  container::svector<std::bitset<max_input_size>> op_connections_;
+  container::vector<std::pair<size_t, size_t>>
+      op_connections_input_;  // only used to cache input to set_op_connections_
+
+  /// Evaluates wick_ theorem for a single NormalOperatorSequence
+  /// @return the result of applying Wick's theorem, i.e. a sum of {prefactor,
+  /// normal operator} pairs
+  ExprPtr compute_nopseq(const bool count_only) const {
     if (!full_contractions_)
       throw std::logic_error(
           "WickTheorem::compute: full_contractions=false not yet supported");
     if (spinfree_)
       throw std::logic_error(
           "WickTheorem::compute: spinfree=true not yet supported");
+    // process cached op_connections_input_, if needed
+    if (!op_connections_input_.empty())
+      const_cast<WickTheorem<S> &>(*this).set_op_connections(
+          op_connections_input_);
+    // now compute
     auto result = compute_nontensor_wick(count_only);
-    if (reduce_ && !count_only) {
-      reduce(result);
-      canonicalize(result);
-    }
     return std::move(result);
   }
-
- private:
-  static constexpr size_t max_input_size =
-      32;  // max # of operators in the input sequence
-  const NormalOperatorSequence<S> &input_;
-  bool full_contractions_ = false;
-  bool spinfree_ = false;
-  bool reduce_ = false;
-  bool use_topology_ = false;
-  container::set<Index> external_indices_;
-  // for each operator specifies the reverse bitmask of connections (0 = must
-  // connect)
-  container::svector<std::bitset<max_input_size>> op_connections_;
 
   /// carries state down the stack of recursive calls
   struct NontensorWickState {
@@ -271,7 +349,8 @@ class WickTheorem {
         op_connections[op2_idx].reset(op1_idx);
       }
     }
-  };  // NontensorWickSpace
+  };  // NontensorWickState
+
   /// Applies most naive version of Wick's theorem, where sign rule involves
   /// counting Ops
   ExprPtr compute_nontensor_wick(const bool count_only) const {
