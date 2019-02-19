@@ -32,17 +32,17 @@ std::wstring to_wolfram(const IndexSpace& space) {
 
   // this is a hack due to partial representation of spaces in SeQuant
   if (space.type() == IndexSpace::active_occupied)
-    result = L"occupied";
+    result += L"occupied";
   else if (space.type() == IndexSpace::active_unoccupied)
-    result = L"virtual";
+    result += L"virtual";
   else if (space.type() == IndexSpace::all)
-    result = L"occupied,virtual";
+    result += L"occupied,virtual";
   else if (space.type() == IndexSpace::other_unoccupied)
-    result = L"othervirtual";
+    result += L"othervirtual";
   else if (space.type() == IndexSpace::complete_unoccupied)
-    result = L"virtual,othervirtual";
+    result += L"virtual,othervirtual";
   else if (space.type() == IndexSpace::complete)
-    result = L"occupied,virtual,othervirtual";
+    result += L"occupied,virtual,othervirtual";
   else
     throw std::invalid_argument(
         "to_wolfram(IndexSpace) received a nonstandard space");
