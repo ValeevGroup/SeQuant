@@ -59,6 +59,21 @@ enum class Vacuum {
   Invalid
 };
 
+inline std::wstring to_string(Vacuum V) {
+  switch (V) {
+    case Vacuum::Physical:
+      return L"PhysicalVacuum";
+    case Vacuum::SingleProduct:
+      return L"SingleProductVacuum";
+    case Vacuum::MultiProduct:
+      return L"MultiProductVacuum";
+    case Vacuum::Invalid:
+      return L"InvalidVacuum";
+    default:
+      abort();
+  }
+}
+
 }  // namespace sequant2
 
 #endif //SEQUANT2_ATTR_HPP
