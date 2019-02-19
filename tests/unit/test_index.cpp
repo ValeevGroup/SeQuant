@@ -28,8 +28,10 @@ TEST_CASE("Index", "[elements]") {
 
     // examples with proto indices
     {
-      REQUIRE_NOTHROW(Index(L"i_3", IndexSpace::instance(IndexSpace::active_occupied), {i1, i2}));
-      Index i3(L"i_3", IndexSpace::instance(IndexSpace::active_occupied), {i1, i2});
+      REQUIRE_NOTHROW(Index(
+          L"i_3", IndexSpace::instance(IndexSpace::active_occupied), {i1, i2}));
+      Index i3(L"i_3", IndexSpace::instance(IndexSpace::active_occupied),
+               {i1, i2});
       REQUIRE(i3.label() == L"i_3");
       REQUIRE(i3.space() == IndexSpace::instance(IndexSpace::active_occupied));
       REQUIRE(i3.has_proto_indices());
@@ -150,16 +152,32 @@ TEST_CASE("Index", "[elements]") {
     std::wstring a1_str = to_latex(a1);
     REQUIRE(a1_str == L"{a_1^{{i_1}{i_2^{{i_3}{i_4}}}}}");
   }
-  //
-  //  SECTION("wolfram") {
-  //    Index i1(L"i_1");
-  //    std::wstring i1_str;
-  //    REQUIRE_NOTHROW(i1_str = i1.to_wolfram());
-  //    REQUIRE(i1_str == L"particleIndex[]");
-  //    REQUIRE(i1.to_wolfram(Action::create) ==
-  //    L"particleIndex[,indexType[cre]]");
-  //    REQUIRE(i1.to_wolfram(BraKetPos::ket) ==
-  //    L"particleIndex[,indexType[ket]]");
-  //  }
+
+  SECTION("wolfram") {
+    Index i1(L"i_1");
+    std::wstring i1_str;
+    REQUIRE_NOTHROW(i1_str = i1.to_wolfram());
+    REQUIRE(i1_str == L"particleIndex[\"i_1\",particleSpace[occupied]]");
+    REQUIRE(i1.to_wolfram(Action::create) ==
+            L"particleIndex[\"i_1\",particleSpace[occupied],indexType[cre]]");
+    REQUIRE(i1.to_wolfram(BraKetPos::ket) ==
+            L"particleIndex[\"i_1\",particleSpace[occupied],indexType[ket]]");
+    REQUIRE(i1.to_wolfram(Action::annihilate) ==
+            L"particleIndex[\"i_1\",particleSpace[occupied],indexType[ann]]");
+    REQUIRE(i1.to_wolfram(BraKetPos::bra) ==
+            L"particleIndex[\"i_1\",particleSpace[occupied],indexType[bra]]");
+
+    REQUIRE(Index(L"a_1").to_wolfram() ==
+            L"particleIndex[\"a_1\",particleSpace[virtual]]");
+    REQUIRE(Index(L"p_1").to_wolfram() ==
+            L"particleIndex[\"p_1\",particleSpace[occupied,virtual]]");
+    REQUIRE(Index(L"⍺'_1").to_wolfram() ==
+            L"particleIndex[\"⍺'_1\",particleSpace[othervirtual]]");
+    REQUIRE(Index(L"⍺_1").to_wolfram() ==
+            L"particleIndex[\"⍺_1\",particleSpace[virtual,othervirtual]]");
+    REQUIRE(
+        Index(L"κ_1").to_wolfram() ==
+        L"particleIndex[\"κ_1\",particleSpace[occupied,virtual,othervirtual]]");
+  }
 
 }  // TEST_CASE("Index")

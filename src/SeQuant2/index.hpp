@@ -244,8 +244,9 @@ class Index : public Taggable {
       assert(false && "not yet supported");
     }
     using namespace std::literals;
-    using sequant2::to_wolfram;
-    ((result += ((L","s + to_wolfram(std::forward<Attrs>(attrs))))), ...);
+    result += L","s + ::sequant2::to_wolfram(space());
+    ((result += ((L","s + ::sequant2::to_wolfram(std::forward<Attrs>(attrs))))),
+     ...);
     result += L"]";
     return result;
   }
