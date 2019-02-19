@@ -238,15 +238,17 @@ TEST_CASE("Expr", "[elements]") {
   SECTION("latex") {
     Product sp0{};
     sp0.append(2.0, std::make_shared<Dummy>());
-    REQUIRE(to_latex(sp0) == L"{{2} \\times {\\text{Dummy}}}");
+    REQUIRE(to_latex(sp0) == L"{{{2}} \\times {\\text{Dummy}}}");
 
     // VecExpr<shared_ptr<Expr>>
     {
       const auto ex5_init =
           std::vector<std::shared_ptr<Constant>>{std::make_shared<Constant>(1.0), std::make_shared<Constant>(2.0),
                                                  std::make_shared<Constant>(3.0)};
-      auto ex6 = std::make_shared<VecExpr<ExprPtr>>(begin(ex5_init), end(ex5_init));
-      REQUIRE(ex6->to_latex() == L"{\\text{VecExpr}\\{{{1}} {{2}} {{3}} \\}}");
+      auto ex6 =
+          std::make_shared<VecExpr<ExprPtr>>(begin(ex5_init), end(ex5_init));
+      REQUIRE(ex6->to_latex() ==
+              L"{\\text{VecExpr}\\{{{{1}}} {{{2}}} {{{3}}} \\}}");
     }
   }
 
@@ -278,14 +280,19 @@ TEST_CASE("Expr", "[elements]") {
       ex->visit(v1);
 
 //      std::wcout << "v1.result = " << v1.result << std::endl;
-      REQUIRE(v1.result ==
-          L"{{1}}{{2}}{{3}}{\\text{VecExpr}\\{{{1}} {{2}} {{3}} \\}}{{1}}{{2}}{{3}}{\\text{VecExpr}\\{{{1}} {{2}} {{3}} \\}}{ \\left({\\text{VecExpr}\\{{{1}} {{2}} {{3}} \\}} + {\\text{VecExpr}\\{{{1}} {{2}} {{3}} \\}}\\right) }");
+      REQUIRE(
+          v1.result ==
+          L"{{{1}}}{{{2}}}{{{3}}}{\\text{VecExpr}\\{{{{1}}} {{{2}}} {{{3}}} "
+          L"\\}}{{{1}}}{{{2}}}{{{3}}}{\\text{VecExpr}\\{{{{1}}} {{{2}}} "
+          L"{{{3}}} \\}}{ \\left({\\text{VecExpr}\\{{{{1}}} {{{2}}} {{{3}}} "
+          L"\\}} + {\\text{VecExpr}\\{{{{1}}} {{{2}}} {{{3}}} \\}}\\right) }");
 
       latex_visitor v2{};
       ex->visit(v2, /* atoms_only = */ true);
-//      std::wcout << "v2.result = " << v2.result << std::endl;
-      REQUIRE(v2.result == L"{{1}}{{2}}{{3}}{{1}}{{"
-                           L"2}}{{3}}");
+      //      std::wcout << "v2.result = " << v2.result << std::endl;
+      REQUIRE(v2.result ==
+              L"{{{1}}}{{{2}}}{{{3}}}{{{1}}}{{{"
+              L"2}}}{{{3}}}");
     }
   }
 
@@ -316,25 +323,25 @@ TEST_CASE("Expr", "[elements]") {
       REQUIRE(std::distance(ranges::begin(exrng), ranges::end(exrng)) == 4);
 
       auto i = 0;
-      for(auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
-        switch(i) {
+      for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
+        switch (i) {
           case 0:
-            REQUIRE( to_latex(*it) == L"{{1}}" );
+            REQUIRE(to_latex(*it) == L"{{{1}}}");
             REQUIRE( compare(ranges::get_cursor(it).address(), {0,0}) );
-            REQUIRE( ranges::get_cursor(it).ordinal() == 0 );
+            REQUIRE(ranges::get_cursor(it).ordinal() == 0);
             break;
           case 1:
-            REQUIRE(to_latex(*it) == L"{{2}}");
+            REQUIRE(to_latex(*it) == L"{{{2}}}");
             REQUIRE( compare(ranges::get_cursor(it).address(), {0,1}) );
-            REQUIRE( ranges::get_cursor(it).ordinal() == 1 );
+            REQUIRE(ranges::get_cursor(it).ordinal() == 1);
             break;
           case 2:
-            REQUIRE(to_latex(*it) == L"{{3}}");
+            REQUIRE(to_latex(*it) == L"{{{3}}}");
             REQUIRE( compare(ranges::get_cursor(it).address(), {1,0}) );
-            REQUIRE( ranges::get_cursor(it).ordinal() == 2 );
+            REQUIRE(ranges::get_cursor(it).ordinal() == 2);
             break;
           case 3:
-            REQUIRE(to_latex(*it) == L"{{4}}");
+            REQUIRE(to_latex(*it) == L"{{{4}}}");
             REQUIRE( compare(ranges::get_cursor(it).address(), {1,1}) );
             REQUIRE( ranges::get_cursor(it).ordinal() == 3 );
             break;
@@ -351,15 +358,15 @@ TEST_CASE("Expr", "[elements]") {
       REQUIRE(std::distance(ranges::begin(exrng), ranges::end(exrng)) == 6);
 
       auto i = 0;
-      for(auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
-        switch(i) {
+      for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
+        switch (i) {
           case 0:
-            REQUIRE( to_latex(*it) == L"{{1}}" );
+            REQUIRE(to_latex(*it) == L"{{{1}}}");
             REQUIRE( compare(ranges::get_cursor(it).address(), {0,0}) );
-            REQUIRE( ranges::get_cursor(it).ordinal() == 0 );
+            REQUIRE(ranges::get_cursor(it).ordinal() == 0);
             break;
           case 1:
-            REQUIRE(to_latex(*it) == L"{{3}}");
+            REQUIRE(to_latex(*it) == L"{{{3}}}");
             //            ranges::for_each(ranges::get_cursor(it).address(),
             //            [](const auto& addr) {
             //              std::wcout << addr.first << " " << addr.second <<
@@ -369,22 +376,22 @@ TEST_CASE("Expr", "[elements]") {
             REQUIRE(ranges::get_cursor(it).ordinal() == 1);
             break;
           case 2:
-            REQUIRE(to_latex(*it) == L"{{-4}}");
+            REQUIRE(to_latex(*it) == L"{{{-4}}}");
             REQUIRE(compare(ranges::get_cursor(it).address(), {0, 1, 0, 1}));
-            REQUIRE( ranges::get_cursor(it).ordinal() == 2 );
+            REQUIRE(ranges::get_cursor(it).ordinal() == 2);
             break;
           case 3:
-            REQUIRE(to_latex(*it) == L"{{5}}");
+            REQUIRE(to_latex(*it) == L"{{{5}}}");
             REQUIRE(compare(ranges::get_cursor(it).address(), {1, 0}));
             REQUIRE(ranges::get_cursor(it).ordinal() == 3);
             break;
           case 4:
-            REQUIRE(to_latex(*it) == L"{{6}}");
+            REQUIRE(to_latex(*it) == L"{{{6}}}");
             REQUIRE(compare(ranges::get_cursor(it).address(), {1, 1, 0, 0}));
             REQUIRE(ranges::get_cursor(it).ordinal() == 4);
             break;
           case 5:
-            REQUIRE(to_latex(*it) == L"{{7}}");
+            REQUIRE(to_latex(*it) == L"{{{7}}}");
             REQUIRE(compare(ranges::get_cursor(it).address(), {1, 1, 0, 1}));
             REQUIRE( ranges::get_cursor(it).ordinal() == 5 );
             break;
@@ -397,14 +404,15 @@ TEST_CASE("Expr", "[elements]") {
 
   SECTION("expand") {
     {
-      auto x = (ex<Constant>(1.0) + ex<Constant>(2.0)) * (ex<Constant>(3.0) + ex<Constant>(4.0));
+      auto x = (ex<Constant>(1.0) + ex<Constant>(2.0)) *
+               (ex<Constant>(3.0) + ex<Constant>(4.0));
       REQUIRE(to_latex(x) ==
-              L"{{ \\left({{1}} + {{2}}\\right) }{ "
-              L"\\left({{3}} + {{4}}\\right) }}");
+              L"{{ \\left({{{1}}} + {{{2}}}\\right) }{ "
+              L"\\left({{{3}}} + {{{4}}}\\right) }}");
       expand(x);
       REQUIRE(to_latex(x) ==
-              L"{ \\left({{3} \\times } + {{4} \\times } + "
-              L"{{6} \\times } + {{8} \\times }\\right) }");
+              L"{ \\left({{{3}} \\times } + {{{4}} \\times } + "
+              L"{{{6}} \\times } + {{{8}} \\times }\\right) }");
       simplify(x);
 //      std::wcout << "x = " << to_latex(x) << std::endl;
     }
@@ -415,18 +423,17 @@ TEST_CASE("Expr", "[elements]") {
                 ex<Constant>(8.0));
       //      std::wcout << "x = " << to_latex(x) << std::endl;
       REQUIRE(to_latex(x) ==
-              L"{{ \\left({{1}} + {{2} \\times { "
-              L"\\left({{3}} + {{-4}}\\right) }}\\right) }{ "
-              L"\\left({{5} \\times { \\left({{6}} + "
-              L"{{7}}\\right) }} + {{8}}\\right) }}");
+              L"{{ \\left({{{1}}} + {{{2}} \\times { "
+              L"\\left({{{3}}} + {{{-4}}}\\right) }}\\right) }{ "
+              L"\\left({{{5}} \\times { \\left({{{6}}} + "
+              L"{{{7}}}\\right) }} + {{{8}}}\\right) }}");
       expand(x);
       //      std::wcout << "ex = " << to_latex(x) << std::endl;
-      REQUIRE(
-          to_latex(x) ==
-          L"{ \\left({{30} \\times } + {{35} \\times } + "
-          L"{{8} \\times } + {{180} \\times } + {{210} "
-          L"\\times } + {{48} \\times } + {{-240} \\times } + "
-          L"{{-280} \\times } + {{-64} \\times }\\right) }");
+      REQUIRE(to_latex(x) ==
+              L"{ \\left({{{30}} \\times } + {{{35}} \\times } + "
+              L"{{{8}} \\times } + {{{180}} \\times } + {{{210}} "
+              L"\\times } + {{{48}} \\times } + {{{-240}} \\times } + "
+              L"{{{-280}} \\times } + {{{-64}} \\times }\\right) }");
     }
   }
 

@@ -316,12 +316,12 @@ TEST_CASE("WickTheorem", "[algorithms]") {
 
     // 3-body ^ 2-body ^ 2-body ^ 3-body
     SEQUANT2_PROFILE_SINGLE("wick(3^2^2^3)", {
-      auto opseq =
-          FNOperatorSeq({FNOperator({L"p_1", L"p_2", L"p_3"}, {L"p_5", L"p_6", L"p_7"}, V),
-                         FNOperator({L"p_9", L"p_10"}, {L"p_11", L"p_12"}, V),
-                         FNOperator({L"p_13", L"p_14"}, {L"p_15", L"p_16"}, V),
-                         FNOperator({L"p_17", L"p_18", L"p_19"}, {L"p_20", L"p_21", L"p_22"}, V)
-                        });
+      auto opseq = FNOperatorSeq(
+          {FNOperator({L"p_1", L"p_2", L"p_3"}, {L"p_5", L"p_6", L"p_7"}, V),
+           FNOperator({L"p_9", L"p_10"}, {L"p_11", L"p_12"}, V),
+           FNOperator({L"p_13", L"p_14"}, {L"p_15", L"p_16"}, V),
+           FNOperator({L"p_17", L"p_18", L"p_19"}, {L"p_20", L"p_21", L"p_22"},
+                      V)});
       auto wick = FWickTheorem{opseq};
       auto result = wick.full_contractions(true).spinfree(false).compute(true);
       REQUIRE(result->size() == 202320);
@@ -331,10 +331,11 @@ TEST_CASE("WickTheorem", "[algorithms]") {
     // 4-body ^ 2-body ^ 4-body
     SEQUANT2_PROFILE_SINGLE("wick(4^2^4)", {
       auto opseq =
-          FNOperatorSeq({FNOperator({L"p_1", L"p_2", L"p_3", L"p_4"}, {L"p_5", L"p_6", L"p_7", L"p_8"}, V),
+          FNOperatorSeq({FNOperator({L"p_1", L"p_2", L"p_3", L"p_4"},
+                                    {L"p_5", L"p_6", L"p_7", L"p_8"}, V),
                          FNOperator({L"p_9", L"p_10"}, {L"p_11", L"p_12"}, V),
-                         FNOperator({L"p_21", L"p_22", L"p_23", L"p_24"}, {L"p_25", L"p_26", L"p_27", L"p_28"}, V)
-                        });
+                         FNOperator({L"p_21", L"p_22", L"p_23", L"p_24"},
+                                    {L"p_25", L"p_26", L"p_27", L"p_28"}, V)});
       auto wick = FWickTheorem{opseq};
       auto result = wick.full_contractions(true).spinfree(false).compute(true);
       REQUIRE(result->size() == 50688);
@@ -344,10 +345,12 @@ TEST_CASE("WickTheorem", "[algorithms]") {
     // 4-body ^ 4-body ^ 4-body
     SEQUANT2_PROFILE_SINGLE("wick(4^4^4)", {
       auto opseq =
-          FNOperatorSeq({FNOperator({L"p_1", L"p_2", L"p_3", L"p_4"}, {L"p_5", L"p_6", L"p_7", L"p_8"}, V),
-                         FNOperator({L"p_11", L"p_12", L"p_13", L"p_14"}, {L"p_15", L"p_16", L"p_17", L"p_18"}, V),
-                         FNOperator({L"p_21", L"p_22", L"p_23", L"p_24"}, {L"p_25", L"p_26", L"p_27", L"p_28"}, V)
-                        });
+          FNOperatorSeq({FNOperator({L"p_1", L"p_2", L"p_3", L"p_4"},
+                                    {L"p_5", L"p_6", L"p_7", L"p_8"}, V),
+                         FNOperator({L"p_11", L"p_12", L"p_13", L"p_14"},
+                                    {L"p_15", L"p_16", L"p_17", L"p_18"}, V),
+                         FNOperator({L"p_21", L"p_22", L"p_23", L"p_24"},
+                                    {L"p_25", L"p_26", L"p_27", L"p_28"}, V)});
       auto wick = FWickTheorem{opseq};
       auto result = wick.full_contractions(true).spinfree(false).compute(true);
       REQUIRE(result->size() == 4783104);
@@ -399,18 +402,21 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       REQUIRE(wick_result->size() == 4);
 
       // multiply tensor factors and expand
-      auto wick_result_2 = ex<Tensor>(L"g", WstrList{L"p_1", L"p_2"}, WstrList{L"p_3", L"p_4"}, Symmetry::antisymm)
-          * ex<Tensor>(L"t", WstrList{L"a_4", L"a_5"}, WstrList{L"i_4", L"i_5"}, Symmetry::antisymm)
-          * wick_result;
+      auto wick_result_2 =
+          ex<Tensor>(L"g", WstrList{L"p_1", L"p_2"}, WstrList{L"p_3", L"p_4"},
+                     Symmetry::antisymm) *
+          ex<Tensor>(L"t", WstrList{L"a_4", L"a_5"}, WstrList{L"i_4", L"i_5"},
+                     Symmetry::antisymm) *
+          wick_result;
       expand(wick_result_2);
       REQUIRE(to_latex(wick_result_2) ==
               L"{ "
               L"\\left({{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_"
               L"5}}}{S^{{p_1}}_{{i_5}}}{S^{{p_2}}_{{i_4}}}{S^{{a_4}}_{{p_4}}}{"
-              L"S^{{a_5}}_{{p_3}}}} + {{-1} \\times "
+              L"S^{{a_5}}_{{p_3}}}} + {{{-1}} \\times "
               L"{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{S^{{"
               L"p_1}}_{{i_5}}}{S^{{p_2}}_{{i_4}}}{S^{{a_5}}_{{p_4}}}{S^{{a_4}}_"
-              L"{{p_3}}}} + {{-1} \\times "
+              L"{{p_3}}}} + {{{-1}} \\times "
               L"{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{S^{{"
               L"p_1}}_{{i_4}}}{S^{{p_2}}_{{i_5}}}{S^{{a_4}}_{{p_4}}}{S^{{a_5}}_"
               L"{{p_3}}}} + "
@@ -426,7 +432,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       std::wcout << L"H2*T2 = " << to_latex(wick_result_2) << std::endl;
       std::wcout << L"H2*T2 = " << to_wolfram(wick_result_2) << std::endl;
       REQUIRE(to_latex(wick_result_2) ==
-              L"{ \\left({{4} \\times "
+              L"{ \\left({{{4}} \\times "
               L"{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{{a_1}{a_2}}}}"
               L"\\right) }");
     });
@@ -457,7 +463,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       print("H2*T1*T1 = ", wick_result_2);
       REQUIRE(
           to_latex(wick_result_2) ==
-          L"{ \\left({{4} \\times "
+          L"{ \\left({{{4}} \\times "
           L"{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}}_{{a_1}}}{t^{{i_2}}_{{a_2}}}"
           L"}\\right) }");
     });
@@ -501,10 +507,10 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       std::wcout << L"P2*H1*T2(PNO) = " << to_latex_align(wick_result_2)
                  << std::endl;
       REQUIRE(to_latex(wick_result_2) ==
-              L"{ \\left({{-8} \\times "
+              L"{ \\left({{{-8}} \\times "
               L"{A^{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}_{{i_1}{i_2}}}{f^{{a_"
               L"3^{{i_1}{i_2}}}}_{{a_1^{{i_1}{i_2}}}}}{t^{{i_1}{i_2}}_{{a_2^{{"
-              L"i_1}{i_2}}}{a_3^{{i_1}{i_2}}}}}} + {{8} \\times "
+              L"i_1}{i_2}}}{a_3^{{i_1}{i_2}}}}}} + {{{8}} \\times "
               L"{A^{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}_{{i_1}{i_2}}}{f^{{i_"
               L"1}}_{{i_3}}}{t^{{i_2}{i_3}}_{{a_3^{{i_2}{i_3}}}{a_4^{{i_2}{i_3}"
               L"}}}}{S^{{a_3^{{i_2}{i_3}}}}_{{a_1^{{i_1}{i_2}}}}}{S^{{a_4^{{i_"
