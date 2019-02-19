@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "algorithm.hpp"
 #include "attr.hpp"
 #include "expr.hpp"
 #include "index.hpp"
@@ -261,56 +262,6 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
       assert(is_antisymm);
 #endif
 
-    //
-    auto sort_swappables = [](const auto &begin, const auto &end, const auto &compare) {
-      const auto len = end - begin;
-      switch (len) {
-        case 0: return;
-
-        case 1: return;
-
-        case 2: {
-          auto &elem1 = *begin;
-          auto &elem2 = *(begin + 1);
-          if (compare(elem1, elem2))
-            return;
-          else {
-            swap(elem1, elem2);
-            return;
-          }
-        }
-          break;
-
-        case 3: {
-          // bubble sort
-          // {2,3} -> [2,3]
-          {
-            auto &elem2 = *(begin + 1);
-            auto &elem3 = *(begin + 2);
-            const auto lt23 = compare(elem2, elem3);
-            if (!lt23)
-              swap(elem2, elem3);
-          }
-          // sort {1,[2,3]} -> [1, 2, 3]
-          {
-            auto &elem1 = *(begin);
-            auto &elem2 = *(begin + 1);
-            auto &elem3 = *(begin + 2);
-            const auto lt12 = compare(elem1, elem2);
-            const auto lt13 = compare(elem1, elem3);
-            if (!lt12)
-              swap(elem1, elem2);
-            if (!lt13)
-              swap(elem2, elem3);
-          }
-          return;
-        }
-          break;
-
-        default:abort();  // not yet implemented
-      }
-    };
-
     bool even = true;
     switch (symmetry) {
       case Symmetry::antisymm: {
@@ -320,9 +271,11 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
         using std::end;
 //      std::wcout << "canonicalizing " << to_latex(t);
         IndexSwapper::thread_instance().reset();
-        // std::{stable_}sort does not necessarily use swap! so must implement sort outselves .. thankfully ranks will be low so can stick with bubble
-        sort_swappables(begin(_bra), end(_bra), comp);
-        sort_swappables(begin(_ket), end(_ket), comp);
+        // std::{stable_}sort does not necessarily use swap! so must implement
+        // sort outselves .. thankfully ranks will be low so can stick with
+        // bubble
+        bubble_sort(begin(_bra), end(_bra), comp);
+        bubble_sort(begin(_ket), end(_ket), comp);
         even = IndexSwapper::thread_instance().even_num_of_swaps();
 //      std::wcout << " is " << (even ? "even" : "odd") << " and produces " << to_latex(t) << std::endl;
       }

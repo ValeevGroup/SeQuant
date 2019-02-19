@@ -20,24 +20,6 @@ bool Product::is_commutative() const {
   return result;
 }
 
-template <typename ForwardIter, typename Compare>
-void
-bubble_sort(ForwardIter begin, ForwardIter end, Compare comp) {
-  bool swapped;
-  do {
-    swapped = false;
-    for (auto i = begin, inext = std::next(begin); inext != end; ++i, ++inext) {
-      auto& val0 = *inext;
-      auto& val1 = *i;
-      if (comp(val0, val1)) {
-        using std::swap;
-        swap(val1, val0);
-        swapped = true;
-      }
-    }
-  } while (swapped);
-}
-
 std::shared_ptr<Expr> Product::canonicalize() {
   // recursively canonicalize subfactors ...
   ranges::for_each(factors_, [this](auto &factor) {
