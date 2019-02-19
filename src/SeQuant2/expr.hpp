@@ -103,7 +103,8 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
   /// @tparam Visitor a callable with (std::shared_ptr<Expr>&) or (const
   /// std::shared_ptr<Expr>&) signature
   /// @param visitor the visitor object
-  /// @param atoms_only if true, will visit only the leafs; the default is to visit all nodes
+  /// @param atoms_only if true, will visit only the leaves; the default is to
+  /// visit all nodes
   /// @return true if this object was visited
   /// @sa expr_range
   template<typename Visitor>
@@ -315,6 +316,15 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
   virtual Expr &operator*=(const Expr &that) {
     throw std::logic_error(
         "Expr::operator*= not implemented in this derived class");
+  }
+
+  /// @brief in-place non-commutatively-multiply @c *this by @c that
+  /// @return reference to @c *this
+  /// @throw std::logic_error if not implemented for this class, or cannot be
+  /// implemented for the particular @c that
+  virtual Expr &operator^=(const Expr &that) {
+    throw std::logic_error(
+        "Expr::operator^= not implemented in this derived class");
   }
 
   /// @brief in-place add @c that to @c *this
@@ -560,15 +570,21 @@ class Constant : public Expr {
   }
 };
 
-/// @brief generalized product, i.e. a scalar times a product of zero or more terms
+/// @brief generalized product, i.e. a scalar times a product of zero or more
+/// terms.
+///
+/// Product is distributive over addition (see Sum). It is associative and is
+/// flattened automatically. It's commutativity is checked at runtime for each
+/// factor (see CProduct and NCProduct for statically commutative and
+/// noncommutative Product, respectively)
 class Product : public Expr {
  public:
   Product() = default;
   virtual ~Product() = default;
-  Product(const Product&) = default;
-  Product(Product&&) = default;
-  Product& operator=(const Product&) = default;
-  Product& operator=(Product&&) = default;
+  Product(const Product &) = default;
+  Product(Product &&) = default;
+  Product &operator=(const Product &) = default;
+  Product &operator=(Product &&) = default;
 
   /// construct a Product out of zero or more factors (multiplied by 1)
   /// @param factors the factors
@@ -608,33 +624,34 @@ class Product : public Expr {
   }
 
   /// (post-)multiplies the product by @c scalar times @c factor
-  template<typename T>
+  template <typename T>
   Product &append(T scalar, ExprPtr factor) {
     scalar_ *= scalar;
     if (!factor->is<Product>()) {
       if (factor->is<Constant>()) {  // factor in Constant
-        auto factor_constant = std::static_pointer_cast<Constant>(factor);
-        scalar_ *= factor_constant->value();
+        auto factor_constant = factor->as<Constant>();
+        scalar_ *= factor_constant.value();
         // no need to reset the hash since scalar is not hashed!
       } else {
         factors_.push_back(std::move(factor));
         reset_hash_value();
       }
     } else {  // factor is a product also ... flatten recursively
-      auto factor_product = std::static_pointer_cast<Product>(factor);
-      scalar_ *= factor_product->scalar_;
-      for (auto &subfactor: *factor_product)
-        this->append(1, subfactor);
-//      using std::end;
-//      using std::cbegin;
-//      using std::cend;
-//      factors_.insert(end(factors_), cbegin(factor_product->factors_), cend(factor_product->factors_));
+      auto factor_product = factor->as<Product>();
+      scalar_ *= factor_product.scalar_;
+      for (auto &&subfactor : factor_product) this->append(1, subfactor);
+      //      using std::end;
+      //      using std::cbegin;
+      //      using std::cend;
+      //      factors_.insert(end(factors_), cbegin(factor_product->factors_),
+      //      cend(factor_product->factors_));
     }
     return *this;
   }
 
-  /// (pre-)multiplies the product by @c scalar times @c factor ; less efficient than append()
-  template<typename T>
+  /// (pre-)multiplies the product by @c scalar times @c factor ; less efficient
+  /// than append()
+  template <typename T>
   Product &prepend(T scalar, ExprPtr factor) {
     scalar_ *= scalar;
     if (!factor->is<Product>()) {
@@ -649,23 +666,35 @@ class Product : public Expr {
     } else {  // factor is a product also  ... flatten recursively
       auto factor_product = std::static_pointer_cast<Product>(factor);
       scalar_ *= factor_product->scalar_;
-      for (auto &subfactor: *factor_product)
-        this->prepend(1, subfactor);
-//      using std::begin;
-//      using std::cbegin;
-//      using std::cend;
-//      factors_.insert(begin(factors_), cbegin(factor_product->factors_), cend(factor_product->factors_));
+      for (auto &subfactor : *factor_product) this->prepend(1, subfactor);
+      //      using std::begin;
+      //      using std::cbegin;
+      //      using std::cend;
+      //      factors_.insert(begin(factors_), cbegin(factor_product->factors_),
+      //      cend(factor_product->factors_));
     }
     return *this;
   }
 
   const std::complex<double> &scalar() const { return scalar_; }
-  const auto& factors() const { return factors_; }
+  const auto &factors() const { return factors_; }
   auto &factors() { return factors_; }
 
   /// @return true if the number of factors is zero
   bool empty() const { return factors_.empty(); }
 
+  /// @brief checks commutativity recursively
+  /// @return true if definitely commutative, false definitely not commutative
+  /// @note this is memoizing
+  /// @sa CProduct::is_commutative() and NCProduct::is_commutative()
+  virtual bool is_commutative() const;
+
+ private:
+  /// @return true if commutativity is decidable statically
+  /// @sa CProduct::static_commutativity() and NCProduct::static_commutativity()
+  virtual bool static_commutativity() const { return false; }
+
+ public:
   std::wstring to_latex() const override {
     std::wstring result;
     result = L"{";
@@ -673,15 +702,15 @@ class Product : public Expr {
       if (scalar() != 1.) {
         result += sequant2::to_latex(scalar()) + L" \\times ";
       }
-      for (const auto &i : factors())
-        result += i->to_latex();
+      for (const auto &i : factors()) result += i->to_latex();
     }
     result += L"}";
     return result;
   }
 
   std::wstring to_wolfram() const override {
-    std::wstring result = L"Times[";
+    std::wstring result =
+        is_commutative() ? L"Times[" : L"NonCommutativeMultiply[";
     if (scalar() != decltype(scalar_)(1)) {
       result += sequant2::to_wolfram(scalar()) + L",";
     }
@@ -695,13 +724,13 @@ class Product : public Expr {
     return result;
   }
 
-  type_id_type type_id() const override {
-    return get_type_id<Product>();
-  };
+  type_id_type type_id() const override { return get_type_id<Product>(); };
 
   std::shared_ptr<Expr> clone() const override {
     auto cloned_factors =
-        factors() | ranges::view::transform([](const ExprPtr &ptr) { return ptr ? ptr->clone() : nullptr; });
+        factors() | ranges::view::transform([](const ExprPtr &ptr) {
+          return ptr ? ptr->clone() : nullptr;
+        });
     return ex<Product>(this->scalar(), ranges::begin(cloned_factors),
                        ranges::end(cloned_factors));
   }
@@ -733,20 +762,27 @@ class Product : public Expr {
     return factors_.empty() ? Expr::begin_cursor() : cursor{&factors_[0]};
   };
   cursor end_cursor() override {
-    return factors_.empty() ? Expr::end_cursor() : cursor{&factors_[0] + factors_.size()};
+    return factors_.empty() ? Expr::end_cursor()
+                            : cursor{&factors_[0] + factors_.size()};
   };
 
   cursor begin_cursor() const override {
     return factors_.empty() ? Expr::begin_cursor() : cursor{&factors_[0]};
   };
   cursor end_cursor() const override {
-    return factors_.empty() ? Expr::end_cursor() : cursor{&factors_[0] + factors_.size()};
+    return factors_.empty() ? Expr::end_cursor()
+                            : cursor{&factors_[0] + factors_.size()};
   };
 
-  /// @note this hashes only the factors, not the scalar to make possible rapid finding of identical factors
+  /// @note this hashes only the factors, not the scalar to make possible rapid
+  /// finding of identical factors
   hash_type memoizing_hash() const override {
-    auto deref_factors = factors() | ranges::view::transform([](const ExprPtr &ptr) -> const Expr & { return *ptr; });
-    hash_value_ = boost::hash_range(ranges::begin(deref_factors), ranges::end(deref_factors));
+    auto deref_factors =
+        factors() |
+        ranges::view::transform(
+            [](const ExprPtr &ptr) -> const Expr & { return *ptr; });
+    hash_value_ = boost::hash_range(ranges::begin(deref_factors),
+                                    ranges::end(deref_factors));
     return *hash_value_;
   }
 
@@ -754,19 +790,49 @@ class Product : public Expr {
   virtual std::shared_ptr<Expr> rapid_canonicalize() override;
 
   bool static_equal(const Expr &that) const override {
-    const auto& that_cast = static_cast<const Product&>(that);
-    if (scalar() == that_cast.scalar() && factors().size() == that_cast.factors().size()) {
+    const auto &that_cast = static_cast<const Product &>(that);
+    if (scalar() == that_cast.scalar() &&
+        factors().size() == that_cast.factors().size()) {
       if (this->empty()) return true;
       // compare hash values first
-      if (this->hash_value() == that.hash_value()) // hash values agree -> do full comparison
-        return std::equal(begin_subexpr(), end_subexpr(), that.begin_subexpr(), expr_ptr_comparer);
+      if (this->hash_value() ==
+          that.hash_value())  // hash values agree -> do full comparison
+        return std::equal(begin_subexpr(), end_subexpr(), that.begin_subexpr(),
+                          expr_ptr_comparer);
       else
         return false;
-    } else return false;
+    } else
+      return false;
   }
 };
 
-/// @brief generalized sum of zero or more summands
+class CProduct : public Product {
+ public:
+  using Product::Product;
+  CProduct(const Product &other) : Product(other) {}
+  CProduct(Product &&other) : Product(other) {}
+
+  bool is_commutative() const override { return true; }
+
+ private:
+  bool static_commutativity() const override { return true; }
+};
+
+class NCProduct : public Product {
+ public:
+  using Product::Product;
+  NCProduct(const Product &other) : Product(other) {}
+  NCProduct(Product &&other) : Product(other) {}
+
+  bool is_commutative() const override { return false; }
+
+ private:
+  bool static_commutativity() const override { return true; }
+};
+
+/// @brief sum of zero or more summands
+
+/// Sum is associative and is flattened automatically.
 class Sum : public Expr {
  public:
   Sum() = default;
@@ -975,7 +1041,6 @@ class Sum : public Expr {
         return false;
     } else return false;
   }
-
 };
 
 inline std::wstring to_latex(const Expr& expr) {

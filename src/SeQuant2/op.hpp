@@ -87,6 +87,148 @@ bool operator!=(const Op<S> &op1, const Op<S> &op2) {
   return !(op1 == op2);
 }
 
+using BOp = Op<Statistics::BoseEinstein>;
+using FOp = Op<Statistics::FermiDirac>;
+
+inline BOp bcre(Index i) { return BOp(i, Action::create); }
+template <typename I>
+inline BOp bcre(Index i, std::initializer_list<I> pi) {
+  return BOp(Index(i, pi), Action::create);
+}
+inline BOp bann(Index i) { return BOp(i, Action::annihilate); }
+template <typename I>
+inline BOp bann(Index i, std::initializer_list<I> pi) {
+  return BOp(Index(i, pi), Action::annihilate);
+}
+inline FOp fcre(Index i) { return FOp(i, Action::create); }
+template <typename I>
+inline FOp fcre(Index i, std::initializer_list<I> pi) {
+  return FOp(Index(i, pi), Action::create);
+}
+inline FOp fann(Index i) { return FOp(i, Action::annihilate); }
+template <typename I>
+inline FOp fann(Index i, std::initializer_list<I> pi) {
+  return FOp(Index(i, pi), Action::annihilate);
+}
+
+/// @return true if this is a pure quasdiparticle creator with respect to the
+/// given vacuum, false otherwise
+template <Statistics S>
+bool is_pure_qpcreator(const Op<S> &op,
+                       Vacuum vacuum = get_default_context().vacuum()) {
+  switch (vacuum) {
+    case Vacuum::Physical:
+      return op.action() == Action::create;
+    case Vacuum::SingleProduct: {
+      const auto occ_class = occupancy_class(op.index().space());
+      return (occ_class < 0 && op.action() == Action::annihilate) ||
+             (occ_class > 0 && op.action() == Action::create);
+    }
+    default:
+      throw std::logic_error(
+          "is_pure_qpcreator: cannot handle MultiProduct vacuum");
+  }
+};
+
+/// @return true if this is a quasdiparticle creator with respect to the given
+/// vacuum, false otherwise
+template <Statistics S>
+bool is_qpcreator(const Op<S> &op,
+                  Vacuum vacuum = get_default_context().vacuum()) {
+  switch (vacuum) {
+    case Vacuum::Physical:
+      return op.action() == Action::create;
+    case Vacuum::SingleProduct: {
+      const auto occ_class = occupancy_class(op.index().space());
+      return (occ_class <= 0 && op.action() == Action::annihilate) ||
+             (occ_class >= 0 && op.action() == Action::create);
+    }
+    default:
+      throw std::logic_error("is_qpcreator: cannot handle MultiProduct vacuum");
+  }
+};
+
+template <Statistics S>
+IndexSpace qpcreator_space(const Op<S> &op,
+                           Vacuum vacuum = get_default_context().vacuum()) {
+  switch (vacuum) {
+    case Vacuum::Physical:
+      return op.action() == Action::create ? op.index().space()
+                                           : IndexSpace::null_instance();
+    case Vacuum::SingleProduct:
+      return op.action() == Action::annihilate
+                 ? intersection(op.index().space(),
+                                IndexSpace::instance(IndexSpace::occupied))
+                 : intersection(
+                       op.index().space(),
+                       IndexSpace::instance(IndexSpace::complete_unoccupied));
+    default:
+      throw std::logic_error(
+          "qpcreator_space: cannot handle MultiProduct vacuum");
+  }
+}
+
+/// @return true if this is a pure quasdiparticle annihilator with respect to
+/// the given vacuum, false otherwise
+template <Statistics S>
+bool is_pure_qpannihilator(const Op<S> &op,
+                           Vacuum vacuum = get_default_context().vacuum()) {
+  switch (vacuum) {
+    case Vacuum::Physical:
+      return op.action() == Action::annihilate;
+    case Vacuum::SingleProduct: {
+      const auto occ_class = occupancy_class(op.index().space());
+      return (occ_class > 0 && op.action() == Action::annihilate) ||
+             (occ_class < 0 && op.action() == Action::create);
+    }
+    default:
+      throw std::logic_error(
+          "is_pure_qpannihilator: cannot handle MultiProduct vacuum");
+  }
+};
+
+/// @return true if this is a quasdiparticle annihilator with respect to the
+/// given vacuum, false otherwise
+template <Statistics S>
+bool is_qpannihilator(const Op<S> &op,
+                      Vacuum vacuum = get_default_context().vacuum()) {
+  switch (vacuum) {
+    case Vacuum::Physical:
+      return op.action() == Action::annihilate;
+    case Vacuum::SingleProduct: {
+      const auto occ_class = occupancy_class(op.index().space());
+      return (occ_class >= 0 && op.action() == Action::annihilate) ||
+             (occ_class <= 0 && op.action() == Action::create);
+    }
+    default:
+      throw std::logic_error(
+          "is_qpannihilator: cannot handle MultiProduct vacuum");
+  }
+};
+
+template <Statistics S>
+IndexSpace qpannihilator_space(const Op<S> &op,
+                               Vacuum vacuum = get_default_context().vacuum()) {
+  switch (vacuum) {
+    case Vacuum::Physical:
+      return op.action() == Action::annihilate ? op.index().space()
+                                               : IndexSpace::null_instance();
+    case Vacuum::SingleProduct:
+      return op.action() == Action::create
+                 ? intersection(op.index().space(),
+                                IndexSpace::instance(IndexSpace::occupied))
+                 : intersection(
+                       op.index().space(),
+                       IndexSpace::instance(IndexSpace::complete_unoccupied));
+    default:
+      throw std::logic_error(
+          "qpcreator_space: cannot handle MultiProduct vacuum");
+  }
+}
+
+template <Statistics S = Statistics::FermiDirac>
+class NormalOperator;
+
 /// @brief Operator is a sequence of Op objects
 ///
 /// @tparam S specifies the particle statistics
@@ -213,7 +355,7 @@ class Operator : public container::svector<Op<S>>, public Expr {
 /// ann(q1) ann(q2) is represented as a^{⎵ p1}_{q1 q2}.
 ///
 /// @tparam S specifies the particle statistics
-template<Statistics S = Statistics::FermiDirac>
+template<Statistics S>
 class NormalOperator : public Operator<S> {
  public:
   static constexpr Statistics statistics = S;
@@ -435,6 +577,9 @@ class NormalOperatorSequence : public container::svector<NormalOperator<S>>, pub
   using base_type::empty;
   using base_type::size;
 
+  /// constructs an empty sequence
+  NormalOperatorSequence() : vacuum_(get_default_context().vacuum()) {}
+
   NormalOperatorSequence(std::initializer_list<NormalOperator<S>> operators)
       : base_type(operators) {
     check_vacuum();
@@ -496,131 +641,12 @@ class NormalOperatorSequence : public container::svector<NormalOperator<S>>, pub
 
 };
 
-using BOp = Op<Statistics::BoseEinstein>;
 using BOperator = Operator<Statistics::BoseEinstein>;
 using BNOperator = NormalOperator<Statistics::BoseEinstein>;
 using BNOperatorSeq = NormalOperatorSequence<Statistics::BoseEinstein>;
-using FOp = Op<Statistics::FermiDirac>;
 using FOperator = Operator<Statistics::FermiDirac>;
 using FNOperator = NormalOperator<Statistics::FermiDirac>;
 using FNOperatorSeq = NormalOperatorSequence<Statistics::FermiDirac>;
-
-inline BOp bcre(Index i) { return BOp(i, Action::create); }
-template <typename I>
-inline BOp bcre(Index i,
-                std::initializer_list<I> pi) {
-  return BOp(Index(i, pi), Action::create);
-}
-inline BOp bann(Index i) { return BOp(i, Action::annihilate); }
-template <typename I>
-inline BOp bann(Index i,
-                std::initializer_list<I> pi) {
-  return BOp(Index(i, pi), Action::annihilate);
-}
-inline FOp fcre(Index i) { return FOp(i, Action::create); }
-template <typename I>
-inline FOp fcre(Index i,
-                std::initializer_list<I> pi) {
-  return FOp(Index(i, pi), Action::create);
-}
-inline FOp fann(Index i) { return FOp(i, Action::annihilate); }
-template <typename I>
-inline FOp fann(Index i,
-                std::initializer_list<I> pi) {
-  return FOp(Index(i, pi), Action::annihilate);
-}
-
-/// @return true if this is a pure quasdiparticle creator with respect to the given vacuum, false otherwise
-template <Statistics S>
-bool is_pure_qpcreator(const Op<S>& op, Vacuum vacuum = get_default_context().vacuum()) {
-  switch(vacuum) {
-    case Vacuum::Physical:
-      return op.action() == Action::create;
-    case Vacuum::SingleProduct:
-    {
-      const auto occ_class = occupancy_class(op.index().space());
-      return (occ_class < 0 && op.action() == Action::annihilate) ||
-          (occ_class > 0 && op.action() == Action::create);
-    }
-    default:
-      throw std::logic_error("is_pure_qpcreator: cannot handle MultiProduct vacuum");
-  }
-};
-
-/// @return true if this is a quasdiparticle creator with respect to the given vacuum, false otherwise
-template <Statistics S>
-bool is_qpcreator(const Op<S>& op, Vacuum vacuum = get_default_context().vacuum()) {
-  switch(vacuum) {
-    case Vacuum::Physical:
-      return op.action() == Action::create;
-    case Vacuum::SingleProduct:
-    {
-      const auto occ_class = occupancy_class(op.index().space());
-      return (occ_class <= 0 && op.action() == Action::annihilate) ||
-          (occ_class >= 0 && op.action() == Action::create);
-    }
-    default:
-      throw std::logic_error("is_qpcreator: cannot handle MultiProduct vacuum");
-  }
-};
-
-template <Statistics S>
-IndexSpace qpcreator_space(const Op<S>& op, Vacuum vacuum = get_default_context().vacuum()) {
-  switch(vacuum) {
-    case Vacuum::Physical:
-      return op.action() == Action::create ? op.index().space() : IndexSpace::null_instance();
-    case Vacuum::SingleProduct:
-      return op.action() == Action::annihilate ? intersection(op.index().space(), IndexSpace::instance(IndexSpace::occupied)) : intersection(op.index().space(), IndexSpace::instance(IndexSpace::complete_unoccupied));
-    default:
-      throw std::logic_error("qpcreator_space: cannot handle MultiProduct vacuum");
-  }
-}
-
-/// @return true if this is a pure quasdiparticle annihilator with respect to the given vacuum, false otherwise
-template <Statistics S>
-bool is_pure_qpannihilator(const Op<S>& op, Vacuum vacuum = get_default_context().vacuum()) {
-  switch(vacuum) {
-    case Vacuum::Physical:
-      return op.action() == Action::annihilate;
-    case Vacuum::SingleProduct:
-    {
-      const auto occ_class = occupancy_class(op.index().space());
-      return (occ_class > 0 && op.action() == Action::annihilate) ||
-          (occ_class < 0 && op.action() == Action::create);
-    }
-    default:
-      throw std::logic_error("is_pure_qpannihilator: cannot handle MultiProduct vacuum");
-  }
-};
-
-/// @return true if this is a quasdiparticle annihilator with respect to the given vacuum, false otherwise
-template <Statistics S>
-bool is_qpannihilator(const Op<S>& op, Vacuum vacuum = get_default_context().vacuum()) {
-  switch(vacuum) {
-    case Vacuum::Physical:
-      return op.action() == Action::annihilate;
-    case Vacuum::SingleProduct:
-    {
-      const auto occ_class = occupancy_class(op.index().space());
-      return (occ_class >= 0 && op.action() == Action::annihilate) ||
-          (occ_class <= 0 && op.action() == Action::create);
-    }
-    default:
-      throw std::logic_error("is_qpannihilator: cannot handle MultiProduct vacuum");
-  }
-};
-
-template <Statistics S>
-IndexSpace qpannihilator_space(const Op<S>& op, Vacuum vacuum = get_default_context().vacuum()) {
-  switch(vacuum) {
-    case Vacuum::Physical:
-      return op.action() == Action::annihilate ? op.index().space() : IndexSpace::null_instance();
-    case Vacuum::SingleProduct:
-      return op.action() == Action::create ? intersection(op.index().space(), IndexSpace::instance(IndexSpace::occupied)) : intersection(op.index().space(), IndexSpace::instance(IndexSpace::complete_unoccupied));
-    default:
-      throw std::logic_error("qpcreator_space: cannot handle MultiProduct vacuum");
-  }
-}
 
 template<Statistics S>
 std::wstring to_latex(const Op<S> &op) {

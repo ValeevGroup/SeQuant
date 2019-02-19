@@ -352,4 +352,21 @@ TEST_CASE("Op", "[elements]") {
                 == L"{{\\tilde{a}^{{i_1}{i_2}}_{{a_1}{a_2}}}{\\tilde{a}^{{i_1}{i_2}}_{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}}}");
   }
 
+  SECTION("commutativity") {
+    auto nop1 = FNOperator({L"i_1"}, {L"a_1"});
+    auto nop2 =
+        FNOperator({Index{L"i_1"}, Index{L"i_2"}}, {Index{L"a_1", {L"i_1", L"i_2"}}, Index{L"a_2", {L"i_1", L"i_2"}}});
+
+    REQUIRE(nop1.commutes_with(nop1));
+    REQUIRE(nop1.commutes_with(nop2));
+    REQUIRE(nop2.commutes_with(nop1));
+    REQUIRE(nop2.commutes_with(nop2));
+    REQUIRE(!nop1.commutes_with(FNOperator(nop1).adjoint()));
+    REQUIRE(!nop1.commutes_with(FNOperator(nop2).adjoint()));
+    REQUIRE(!nop2.commutes_with(FNOperator(nop1).adjoint()));
+    REQUIRE(!nop2.commutes_with(FNOperator(nop2).adjoint()));
+    REQUIRE(FNOperator(nop1).adjoint().commutes_with(FNOperator(nop2).adjoint()));
+    REQUIRE(FNOperator(nop2).adjoint().commutes_with(FNOperator(nop1).adjoint()));
+  }
+
 }  // TEST_CASE("Op")

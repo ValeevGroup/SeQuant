@@ -446,4 +446,21 @@ TEST_CASE("Expr", "[elements]") {
     REQUIRE(hash_value(ex5_init) != hash_value(ex<Constant>(1)));
   }
 
+  SECTION("commutativity") {
+    const auto ex1 = std::make_shared<VecExpr<std::shared_ptr<Constant>>>(
+        std::initializer_list<std::shared_ptr<Constant>>{
+            std::make_shared<Constant>(1.0), std::make_shared<Constant>(2.0),
+            std::make_shared<Constant>(3.0)});
+    const auto ex2 =
+        ex<Constant>(1.0) +
+        (ex<Constant>(2.0) + ex<Constant>(3.0)) * ex<Constant>(4.0);
+
+    REQUIRE(ex1->is_cnumber());
+    REQUIRE(ex2->is_cnumber());
+    REQUIRE(ex1->commutes_with(*ex1));
+    REQUIRE(ex1->commutes_with(*ex2));
+    REQUIRE(ex2->commutes_with(*ex1));
+    REQUIRE(ex2->commutes_with(*ex2));
+  }
+
 }  // TEST_CASE("Expr"
