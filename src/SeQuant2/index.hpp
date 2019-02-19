@@ -21,7 +21,7 @@
 #include "tag.hpp"
 
 // change to 1 to make thread-safe
-#define SEQUANT2_INDEX_THREADSAFE 0
+#define SEQUANT2_INDEX_THREADSAFE 1
 
 namespace sequant2 {
 
