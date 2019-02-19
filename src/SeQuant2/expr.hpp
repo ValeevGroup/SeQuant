@@ -98,8 +98,10 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
     return this->canonicalize();
   }
 
-  /// recursively visit the tree, i.e. call visitor on each subexpression in depth-first fashion
-  /// @tparam Visitor a callable with (std::shared_ptr<Expr>&) or (const std::shared_ptr<Expr>&) signature
+  /// recursively visit the tree, i.e. call visitor on each subexpression in
+  /// depth-first fashion
+  /// @tparam Visitor a callable with (std::shared_ptr<Expr>&) or (const
+  /// std::shared_ptr<Expr>&) signature
   /// @param visitor the visitor object
   /// @param atoms_only if true, will visit only the leafs; the default is to visit all nodes
   /// @return true if this object was visited
@@ -154,7 +156,63 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
   struct is_shared_ptr_of_expr<std::shared_ptr<T>, std::enable_if_t<std::is_same_v<Expr,T>> > : std::true_type {};
   template <typename T, typename Enabler = void> struct is_shared_ptr_of_expr_or_derived : std::false_type {};
   template <typename T>
-  struct is_shared_ptr_of_expr_or_derived<std::shared_ptr<T>, std::enable_if_t<std::is_base_of<Expr,T>::value> > : std::true_type {};
+  struct is_shared_ptr_of_expr_or_derived<
+      std::shared_ptr<T>, std::enable_if_t<std::is_base_of<Expr, T>::value>>
+      : std::true_type {};
+
+  /// @brief Reports if this is a c-number
+  /// (https://en.wikipedia.org/wiki/C-number), i.e. it commutes
+  /// multiplicatively with c-numbers and q-numbers
+  /// @return true if this is a c-number
+  /// @warning this returns true for all leaves, hence must be overridden for
+  /// leaf q-numbers
+  /// @note for leaves this has O(1) cost, for non-leaves this involves checking
+  /// subexpressions
+  virtual bool is_cnumber() const {
+    if (is_atom())
+      return true;
+    else {
+      bool result = true;
+      for (auto it = begin_subexpr(); result && it != end_subexpr(); ++it) {
+        result &= (*it)->is_cnumber();
+      }
+      return result;
+    }
+  }
+
+  /// @brief Checks if this commutes (wrt multiplication) with @c that
+  /// @return true if this commutes with @c that
+  /// @note the default implementation checks if either is c-number; if both are
+  /// q-numbers
+  ///       this checks commutativity of each subexpression with (each
+  ///       subexpression of) @c that
+  /// @note expressions are assumed to always commute with respect to additions
+  /// since
+  ///       it does not appear that +nonabelian near-rings
+  ///       (https://en.wikipedia.org/wiki/Near-ring) are commonly needed.
+  /// @note commutativity of leaves is checked by commutes_with_atom()
+  bool commutes_with(const Expr &that) const {
+    auto this_is_atom = is_atom();
+    auto that_is_atom = that.is_atom();
+    bool result = true;
+    if (this_is_atom && that_is_atom) {
+      result =
+          this->is_cnumber() || that.is_cnumber() || commutes_with_atom(that);
+    } else if (this_is_atom) {
+      if (!this->is_cnumber()) {
+        for (auto it = that.begin_subexpr(); result && it != that.end_subexpr();
+             ++it) {
+          result &= this->commutes_with(**it);
+        }
+      }
+    } else {
+      for (auto it = this->begin_subexpr(); result && it != this->end_subexpr();
+           ++it) {
+        result &= (*it)->commutes_with(that);
+      }
+    }
+    return result;
+  }
 
   /// Computes and returns the memoized hash value.
   /// @note always returns 0 unless this derived class overrides Expr::memoizing_hash
@@ -245,7 +303,8 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
   /// @return reference to @c *this
   /// @throw std::logic_error if not implemented for this class, or cannot be implemented for the particular @c that
   virtual Expr &operator*=(const Expr &that) {
-    throw std::logic_error("Expr::operator*= not implemented in this derived class");
+    throw std::logic_error(
+        "Expr::operator*= not implemented in this derived class");
   }
 
   /// @brief in-place add @c that to @c *this
@@ -372,11 +431,22 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
 #endif
 
   /// @param that an Expr object
-  /// @note @c that is guaranteed to be of same type as @c *this, hence can be statically cast
-  /// @note base comparison compares Expr::hash_value() , specialize to each type as needed
+  /// @note @c that is guaranteed to be of same type as @c *this, hence can be
+  /// statically cast
+  /// @note base comparison compares Expr::hash_value() , specialize to each
+  /// type as needed
   /// @return true if @c *this is less than @c that
   virtual bool static_less_than(const Expr &that) const {
     return this->hash_value() < that.hash_value();
+  }
+
+  /// @param that an Expr object
+  /// @note @c *this and @c that are guaranteed to be leaves, and neither is a
+  /// c-number , hence honest checking is needed
+  /// @return true if @c *this multiplicatively commutes with @c that
+  /// @note this returns true unless overridden in derived class
+  virtual bool commutes_with_atom(const Expr& that) const {
+    return true;
   }
 
  private:
@@ -467,9 +537,8 @@ class Constant : public Expr {
   }
 
   bool static_equal(const Expr &that) const override {
-    return value() == static_cast<const Constant&>(that).value();
+    return value() == static_cast<const Constant &>(that).value();
   }
-
 };
 
 /// @brief generalized product, i.e. a scalar times a product of zero or more terms

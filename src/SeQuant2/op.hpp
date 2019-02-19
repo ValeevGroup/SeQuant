@@ -162,31 +162,55 @@ class Operator : public container::svector<Op<S>>, public Expr {
   }
 
   bool static_equal(const Expr &that) const override {
-    const auto& that_cast = static_cast<const Operator&>(that);
+    const auto &that_cast = static_cast<const Operator &>(that);
     if (this->size() == that_cast.size()) {
       if (this->empty()) return true;
       // compare hash values first
-      if (this->hash_value() == that.hash_value()) // hash values agree -> do full comparison
-        return static_cast<const base_type&>(*this) == static_cast<const base_type&>(that_cast);
+      if (this->hash_value() ==
+          that.hash_value())  // hash values agree -> do full comparison
+        return static_cast<const base_type &>(*this) ==
+               static_cast<const base_type &>(that_cast);
       else
         return false;
-    } else return false;
+    } else
+      return false;
   }
 
+  bool is_cnumber() const override {
+    return false;
+  }
+
+  bool commutes_with_atom(const Expr& that) const override {
+    bool result = true;
+    /// does not commute with Operator<S>
+    /// TODO implement checks of commutativity with Operator<S>
+    if (that.is<Operator<S>>()) {
+      result = false;
+    }
+    else if (that.is<NormalOperator<S>>()) {
+      result = that.as<NormalOperator<S>>().commutes_with_atom(*this);
+    }
+    return result;
+  }
 };
 
 /// @brief NormalOperator is an Operator normal-ordered with respect to vacuum.
 
-/// @note Normal ordering means all creators are to the left of all annihilators. It is natural to express
-/// at least number-conserving normal operators (i.e. those with equal number of creators and annihilators)
-/// as tensors with creators as superscripts and annihilators as subscripts. Operator
-/// cre(p1) cre(p2) ... cre(pN) ann(qN) ... ann(q2) ann(q1) is represented in such notation as a^{p1 p2 ... pN}_{q1 q2 ... qN},
-/// hence it is natural to specify annihilators in the order of their particle index (i.e. as q1 q2, etc.) which is
-/// reverse of the order of their appearance in Operator.
+/// @note Normal ordering means all creators are to the left of all
+/// annihilators. It is natural to express at least number-conserving normal
+/// operators (i.e. those with equal number of creators and annihilators) as
+/// tensors with creators as superscripts and annihilators as subscripts.
+/// Operator cre(p1) cre(p2) ... cre(pN) ann(qN) ... ann(q2) ann(q1) is
+/// represented in such notation as a^{p1 p2 ... pN}_{q1 q2 ... qN}, hence it is
+/// natural to specify annihilators in the order of their particle index (i.e.
+/// as q1 q2, etc.) which is reverse of the order of their appearance in
+/// Operator.
 ///
-/// @note The tensor notation becomes less intuitive for number non-conserving operators, e.g. cre(p1) cre(p2) ann(q2) could
-/// be represented as a^{p1 p2}_{q2 ⎵} or a^{p1 p2}_{⎵ q2}. To make it explicit that ann(q2) acts on same particle as
-/// cre(p2) the latter notation is used; similarly, cre(p1) ann(q1) ann(q2) is represented as a^{⎵ p1}_{q1 q2}.
+/// @note The tensor notation becomes less intuitive for number non-conserving
+/// operators, e.g. cre(p1) cre(p2) ann(q2) could be represented as a^{p1
+/// p2}_{q2 ⎵} or a^{p1 p2}_{⎵ q2}. To make it explicit that ann(q2) acts on
+/// same particle as cre(p2) the latter notation is used; similarly, cre(p1)
+/// ann(q1) ann(q2) is represented as a^{⎵ p1}_{q1 q2}.
 ///
 /// @tparam S specifies the particle statistics
 template<Statistics S = Statistics::FermiDirac>
@@ -341,12 +365,52 @@ class NormalOperator : public Operator<S> {
   mutable std::unique_ptr<hug_type> hug_;  // only created if needed
 
   bool static_equal(const Expr &that) const override {
-    const auto& that_cast = static_cast<const NormalOperator&>(that);
-    if (this->vacuum() == that_cast.vacuum() && this->ncreators() == that_cast.ncreators()) {
-      return static_cast<const base_type&>(*this) == static_cast<const base_type&>(*this);
-    } else return false;
+    const auto &that_cast = static_cast<const NormalOperator &>(that);
+    if (this->vacuum() == that_cast.vacuum() &&
+        this->ncreators() == that_cast.ncreators()) {
+      return static_cast<const base_type &>(*this) ==
+             static_cast<const base_type &>(*this);
+    } else
+      return false;
   }
 
+  template <Statistics>
+  friend class Operator;
+  bool commutes_with_atom(const Expr &that) const override {
+    // same as WickTheorem::can_contract
+    auto can_contract = [this](const Op<S> &left, const Op<S> &right) {
+      if (is_qpannihilator<S>(left, vacuum_) &&
+          is_qpcreator<S>(right, vacuum_)) {
+        const auto qpspace_left = qpannihilator_space<S>(left, vacuum_);
+        const auto qpspace_right = qpcreator_space<S>(right, vacuum_);
+        const auto qpspace_common = intersection(qpspace_left, qpspace_right);
+        if (qpspace_common != IndexSpace::null_instance()) return true;
+      }
+      return false;
+    };
+
+    bool result = true;
+    /// does not commute with Operator<S>
+    /// TODO implement checks of commutativity with Operator<S>
+    if (that.is<Operator<S>>()) {
+      result = false;
+    } else if (that.is<NormalOperator<S>>()) {
+      const auto& op_that = that.as<NormalOperator<S>>();
+      if (vacuum() ==
+          op_that.vacuum()) {  // can only check commutativity for same vacua
+        for (auto &&op_l : *this) {
+          for (auto &&op_r : op_that) {
+            if (can_contract(op_l, op_r)) {
+              return false;
+            }
+          }
+        }
+      } else {  // NormalOperators for different vacua do not commute
+        result = false;
+      }
+    }
+    return result;
+  }
 };
 
 template<Statistics S>
@@ -354,7 +418,8 @@ bool operator==(const NormalOperator<S> &op1, const NormalOperator<S> &op2) {
   return op1.vacuum() == op2.vacuum() && ranges::equal(op1, op2);
 }
 
-/// @brief NormalOperatorSequence is a sequence NormalOperator objects, all ordered with respect to same vacuum
+/// @brief NormalOperatorSequence is a sequence NormalOperator objects, all
+/// ordered with respect to same vacuum
 ///
 /// @tparam S specifies the particle statistics
 template<Statistics S = Statistics::FermiDirac>
