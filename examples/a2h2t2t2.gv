@@ -1,0 +1,101 @@
+// first of the 2 equiv terms produced
+graph {
+    i1 [color = Red]
+    i2 [color = Red]
+    i3 [color = Red]
+    i4 [color = Red]
+    a1 [color = Blue]
+    a2 [color = Blue]
+    a3 [color = Blue]
+    a4 [color = Blue]
+
+    i1 -- { b1 k3 }
+    i2 -- { b1 k3 }
+    a1 -- { k1 b3 }
+    a2 -- { k1 b4 }
+    i3 -- { b2 k4 }
+    i4 -- { b2 k4 }
+    a3 -- { k2 b3 }
+    a4 -- { k2 b4 }
+
+    // see https://graphs.grevian.org/example for caveats re: subgraphs
+  subgraph cluster_A {
+    label = "A2";
+    color = aquamarine1;
+    b1 [color = chocolate1]
+    k1 [color = chartreuse1]
+    b1 -- k1
+    }
+    subgraph cluster_H2 {
+    label = "H2";
+    color = aquamarine2;
+    b2 [color = chocolate2]
+    k2 [color = chartreuse2]
+    b2 -- k2
+    }
+    subgraph cluster_T2_1 {
+    label = "T2";
+    color = aquamarine3;
+    b3 [color = chocolate3]
+    k3 [color = chartreuse3]
+    b3 -- k3
+    }
+    subgraph cluster_T2_2 {
+    label = "T2";
+    color = aquamarine3;
+    b4 [color = chocolate3]
+    k4 [color = chartreuse3]
+    b4 -- k4
+    }
+}
+
+// second of the 2 equiv terms produced
+graph {
+    i1 [color = Red]
+    i2 [color = Red]
+    i3 [color = Red]
+    i4 [color = Red]
+    a1 [color = Blue]
+    a2 [color = Blue]
+    a3 [color = Blue]
+    a4 [color = Blue]
+
+    i1 -- { b1 k4 }
+    i2 -- { b1 k4 }
+    a1 -- { k1 b3 }
+    a2 -- { k1 b4 }
+    i3 -- { b2 k3 }
+    i4 -- { b2 k3 }
+    a3 -- { k2 b3 }
+    a4 -- { k2 b4 }
+
+    // see https://graphs.grevian.org/example for caveats re: subgraphs
+  subgraph cluster_A {
+    label = "A2";
+    color = aquamarine1;
+    b1 [color = chocolate1]
+    k1 [color = chartreuse1]
+    b1 -- k1
+    }
+    subgraph cluster_H2 {
+    label = "H2";
+    color = aquamarine2;
+    b2 [color = chocolate2]
+    k2 [color = chartreuse2]
+    b2 -- k2
+    }
+    subgraph cluster_T2_1 {
+    label = "T2";
+    color = aquamarine3;
+    b3 [color = chocolate3]
+    k3 [color = chartreuse3]
+    b3 -- k3
+    }
+    subgraph cluster_T2_2 {
+    label = "T2";
+    color = aquamarine3;
+    b4 [color = chocolate3]
+    k4 [color = chartreuse3]
+    b4 -- k4
+    }
+}

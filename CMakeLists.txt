@@ -77,6 +77,28 @@ set_tests_properties(unit/run
         PROPERTIES DEPENDS unit/build
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/unit)
 
+####### Tests ########
+
+# PNO-CCSD
+set(example1 pno-ccsd)
+add_executable(${example1} EXCLUDE_FROM_ALL
+        examples/${example1}.cpp)
+target_link_libraries(${example1} SeQuant2)
+
+# Traces
+add_library(Traces INTERFACE IMPORTED)
+set_property(TARGET Traces PROPERTY
+        INTERFACE_INCLUDE_DIRECTORIES /Users/evaleev/code/build/nauty27rc1)
+set_property(TARGET Traces PROPERTY
+        PROPERTY INTERFACE_LINK_LIBRARIES /Users/evaleev/code/build/nauty27rc1/nauty.a)
+
+set(example2 traces-test)
+add_executable(${example2} EXCLUDE_FROM_ALL
+        examples/${example2}.cpp)
+target_link_libraries(${example2} Traces)
+
+####### DOCS ########
+
 find_package(Doxygen)
 if (DOXYGEN_FOUND)
     set(DOXYGEN_GENERATE_HTML YES)
