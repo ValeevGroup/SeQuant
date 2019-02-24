@@ -138,7 +138,7 @@ class Tensor : public Expr {
 
   std::shared_ptr<Expr> canonicalize() override;
 
-  /// Replaced indices using the index map
+  /// Replaces indices using the index map
   /// @return true if one or more indices changed
   template <template <typename, typename, typename... Args> class Map,
             typename... Args>
