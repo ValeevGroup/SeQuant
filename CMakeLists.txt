@@ -45,6 +45,28 @@ add_library(SeQuant2
         )
 target_link_libraries(SeQuant2 Range-V3 Boost)
 
+add_library(bliss
+        external/bliss/defs.cc
+        external/bliss/defs.hh
+        external/bliss/graph.cc
+        external/bliss/graph.hh
+        external/bliss/partition.cc
+        external/bliss/partition.hh
+        external/bliss/orbit.cc
+        external/bliss/orbit.hh
+        external/bliss/uintseqhash.cc
+        external/bliss/uintseqhash.hh
+        external/bliss/heap.cc
+        external/bliss/heap.hh
+        external/bliss/timer.cc
+        external/bliss/timer.hh
+        external/bliss/utils.cc
+        external/bliss/utils.hh
+        external/bliss/bliss_C.cc
+        external/bliss/bliss_C.h
+        )
+
+
 enable_testing(true)
 add_custom_target(check_unit USES_TERMINAL COMMAND ${CMAKE_CTEST_COMMAND} -V)
 
@@ -96,6 +118,12 @@ set(example2 traces-test)
 add_executable(${example2} EXCLUDE_FROM_ALL
         examples/${example2}.cpp)
 target_link_libraries(${example2} Traces)
+
+# Bliss
+set(example3 bliss-test)
+add_executable(${example3} EXCLUDE_FROM_ALL
+        examples/${example3}.cpp)
+target_link_libraries(${example3} bliss)
 
 ####### DOCS ########
 
