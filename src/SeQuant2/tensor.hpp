@@ -162,9 +162,7 @@ class Tensor : public Expr {
   }
 
   void reset_tags() const {
-    ranges::for_each(braket(), [](const auto &idx) {
-      idx.reset_tag();
-    });
+    ranges::for_each(braket(), [](const auto &idx) { idx.tag().reset(); });
   }
 
   hash_type bra_hash_value() const {

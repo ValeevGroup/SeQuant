@@ -224,43 +224,35 @@ class Taggable {
  public:
   using any_comparable = ::sequant2::detail::any_comparable;
 
-  Taggable() noexcept : tag_{} {
-    assert(!has_tag());
-  }
+  Taggable() noexcept : tag_{} { assert(!has_value()); }
 
   /// tags this object with tag @c t
-  template<typename T>
-  void tag(const T &t) const {
+  template <typename T>
+  void assign(const T &t) const {
     assert(!tag_.has_value());
     tag_ = t;
     assert(tag_.has_value());
   }
 
   /// returns this object's tag
-  template<typename T>
-  const T &tag() const {
+  template <typename T>
+  const T &value() const {
     assert(tag_.has_value());
     using detail::any_comparable_cast;
     return *any_comparable_cast<T>(&tag_);
   }
 
   /// @return true if tag has been assigned
-  bool has_tag() const { return tag_.has_value(); }
+  bool has_value() const { return tag_.has_value(); }
 
-  /// resets this object's tag
-  void reset_tag() const { tag_.reset(); }
+  /// resets this tag
+  void reset() const { tag_.reset(); }
 
-  bool operator<(const Taggable &other) const {
-    return tag_ < other.tag_;
-  }
-
-  bool tag_less_than(const Taggable &other) const { return *this < other; }
+  bool operator<(const Taggable &other) const { return tag_ < other.tag_; }
 
   bool operator==(const Taggable &other) const {
     return tag_ == other.tag_;
   }
-
-  bool tag_equal(const Taggable &other) const { return *this == other; }
 
  private:
   mutable any_comparable tag_;
