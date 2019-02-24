@@ -70,21 +70,21 @@ add_library(bliss
 enable_testing(true)
 add_custom_target(check_unit USES_TERMINAL COMMAND ${CMAKE_CTEST_COMMAND} -V)
 
-#set(utests_src
-#        tests/unit/test_space.cpp
-#        tests/unit/test_index.cpp
-#        tests/unit/test_op.cpp
-#        tests/unit/test_wick.cpp
-#        tests/unit/test_tensor.cpp
-#        tests/unit/test_expr.cpp
-#        tests/unit/test_iterator.cpp
-#        tests/unit/test_tensor_network.cpp
-#        tests/unit/test_mbpt.cpp
-#        tests/unit/timer.hpp)
-
 set(utests_src
+        tests/unit/test_space.cpp
+        tests/unit/test_index.cpp
+        tests/unit/test_op.cpp
         tests/unit/test_wick.cpp
+        tests/unit/test_tensor.cpp
+        tests/unit/test_expr.cpp
+        tests/unit/test_iterator.cpp
+        tests/unit/test_tensor_network.cpp
+        tests/unit/test_mbpt.cpp
         tests/unit/timer.hpp)
+
+#set(utests_src
+#        tests/unit/test_wick.cpp
+#        tests/unit/timer.hpp)
 
 set(unit_test_executable unit_tests)
 add_executable(${unit_test_executable} EXCLUDE_FROM_ALL
@@ -108,17 +108,17 @@ add_executable(${example1} EXCLUDE_FROM_ALL
         examples/${example1}.cpp)
 target_link_libraries(${example1} SeQuant2)
 
-# Traces
-add_library(Traces INTERFACE IMPORTED)
-set_property(TARGET Traces PROPERTY
-        INTERFACE_INCLUDE_DIRECTORIES /Users/evaleev/code/build/nauty27rc1)
-set_property(TARGET Traces PROPERTY
-        PROPERTY INTERFACE_LINK_LIBRARIES /Users/evaleev/code/build/nauty27rc1/nauty.a)
-
-set(example2 traces-test)
-add_executable(${example2} EXCLUDE_FROM_ALL
-        examples/${example2}.cpp)
-target_link_libraries(${example2} Traces)
+# Traces -- disabled, will remove if bliss is sufficient
+#add_library(Traces INTERFACE IMPORTED)
+#set_property(TARGET Traces PROPERTY
+#        INTERFACE_INCLUDE_DIRECTORIES /Users/evaleev/code/build/nauty27rc1)
+#set_property(TARGET Traces PROPERTY
+#        PROPERTY INTERFACE_LINK_LIBRARIES /Users/evaleev/code/build/nauty27rc1/nauty.a)
+#
+#set(example2 traces-test)
+#add_executable(${example2} EXCLUDE_FROM_ALL
+#        examples/${example2}.cpp)
+#target_link_libraries(${example2} Traces)
 
 # Bliss
 set(example3 bliss-test)
