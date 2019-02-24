@@ -75,6 +75,8 @@ class TensorNetwork {
     }
 
    private:
+    /// this assumes antisymmetric tensors ... for nonsymmetric tensors need to
+    /// know not only tensor index but also terminal index within bra/ket
     int first_ = 0;
     int second_ = 0;
     const Index *idxptr_ = nullptr;
@@ -109,11 +111,37 @@ class TensorNetwork {
   ExprPtr canonicalize(
       const container::vector<std::wstring> &cardinal_tensor_labels = {}) {
     ExprPtr canon_biproduct = ex<Constant>(1);
-    container::svector<TensorTerminalPair> idx_terminals_sorted;  // to avoid memory allocs
+    container::svector<TensorTerminalPair>
+        idx_terminals_sorted;  // to avoid memory allocs
+
+    if (debug_canonicalize) {
+      std::wcout << "TensorNetwork::canonicalize: input tensors\n";
+      size_t cnt = 0;
+      ranges::for_each(tensors_, [&](const TensorPtr &t) {
+        std::wcout << "tensor " << cnt++ << ": " << t->to_latex() << std::endl;
+      });
+    }
 
     // TODO implement rigorous approach:
     // - canonize indices
     // - canonize tensors using canonical list of indices
+    // Algorithm sketch:
+    // - to canonize indices make a graph whose vertices are the indices as well
+    // as the tensors and their terminals.
+    //   - Indices with protoindices are connected to their protoindices, either
+    //   directly or (if protoindices are symmetric) via a protoindex vertex.
+    //   - Indices are colored by their space, which in general encodes also the
+    //   space of the protoindices.
+    //   - An anti/symmetric n-body tensor has 2 terminals, each connected to
+    //   each other + to n index vertices.
+    //   - A nonsymmetric n-body tensor has n terminals, each connected to 2
+    //   indices and 1 tensor vertex which is connected to all n terminal
+    //   indices.
+    //   - Tensor vertices are colored by the label+rank+symmetry of the tensor;
+    //   terminal vertices are colored by the color of its tensor,
+    //     with the color of symm/antisymm terminals augmented by the terminal's
+    //     type (bra/ket).
+    // - canonize the graph using nauty
 
     // simpler approach that will work perfectly as long as tensors are distinguishable
     // - resort tensors (already done in Product::canonicalize but to make this standalone do this again)
@@ -242,6 +270,7 @@ class TensorNetwork {
       }
     };
 
+    /// this assumes antisymmetric tensors
     int t_idx = 1;
     for (const auto &t: tensors_) {
       for (const auto &idx: t->bra()) {
