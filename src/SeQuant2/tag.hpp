@@ -234,7 +234,9 @@ class Taggable {
     assert(tag_.has_value());
   }
 
-  /// returns this object's tag
+  /// @return this tag's value
+  /// @throw bad_any_comparable_cast if the contained value is not convertible
+  /// to T
   template <typename T>
   const T &value() const {
     assert(tag_.has_value());

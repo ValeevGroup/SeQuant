@@ -151,6 +151,14 @@ class Index : public Taggable {
   Taggable &tag() { return static_cast<Taggable &>(*this); }
   /// @return this cast to const Taggable&
   const Taggable &tag() const { return static_cast<const Taggable &>(*this); }
+  /// resets tag of this and its protoindices (if any)
+  /// @note do @c this->tag().reset() if you only want to reset tag on this (not
+  /// its protoindices)
+  void reset_tag() const {
+    this->tag().reset();
+    ranges::for_each(proto_indices_,
+                     [](const Index &idx) { idx.tag().reset(); });
+  }
 
   /// creates a globally-unique temporary index in space @c space . The label of
   /// the resulting index =
