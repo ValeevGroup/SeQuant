@@ -575,6 +575,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
 
       // multiply tensor factors and expand
       auto wick_result_2 =
+          ex<Constant>(1. / 256) *
           ex<Tensor>(
               L"A", IndexList{L"i_1", L"i_2"},
               IndexList{{L"a_1", {L"i_1", L"i_2"}}, {L"a_2", {L"i_1", L"i_2"}}},
