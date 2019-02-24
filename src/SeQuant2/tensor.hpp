@@ -167,16 +167,26 @@ class Tensor : public Expr {
     });
   }
 
+  hash_type bra_hash_value() const {
+    if (!hash_value_)  // if hash not computed, or reset, recompute
+      memoizing_hash();
+    return *bra_hash_value_;
+  }
+
  private:
   std::wstring label_{};
   index_container_type bra_{};
   index_container_type ket_{};
   Symmetry symmetry_ = Symmetry::nonsymm;
+  mutable std::optional<hash_type>
+      bra_hash_value_;  // memoized byproduct of memoizing_hash()
 
   hash_type memoizing_hash() const override {
     using std::begin;
     using std::end;
-    auto val = boost::hash_range(begin(braket()), end(braket()));
+    auto val = boost::hash_range(begin(bra()), end(bra()));
+    bra_hash_value_ = val;
+    boost::hash_range(val, begin(ket()), end(ket()));
     boost::hash_combine(val, label_);
     boost::hash_combine(val, symmetry_);
     hash_value_ = val;
@@ -196,10 +206,22 @@ class Tensor : public Expr {
 
   bool static_less_than(const Expr &that) const override {
     const auto &that_cast = static_cast<const Tensor &>(that);
+    if (this == &that) return false;
     if (this->label() == that_cast.label()) {
       if (this->bra_rank() == that_cast.bra_rank()) {
         if (this->ket_rank() == that_cast.ket_rank()) {
-          return Expr::static_less_than(that);
+          //          v1: compare hashes only
+          //          return Expr::static_less_than(that);
+          //          v2: compare fully
+          if (this->bra_hash_value() == that_cast.bra_hash_value()) {
+            return std::lexicographical_compare(
+                this->ket().begin(), this->ket().end(), that_cast.ket().begin(),
+                that_cast.ket().end());
+          } else {
+            return std::lexicographical_compare(
+                this->bra().begin(), this->bra().end(), that_cast.bra().begin(),
+                that_cast.bra().end());
+          }
         } else {
           return this->ket_rank() < that_cast.ket_rank();
         }
