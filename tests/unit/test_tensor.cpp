@@ -46,8 +46,32 @@ TEST_CASE("Tensor", "[elements]") {
     REQUIRE(t4.label() == L"g");
   }  // SECTION("constructors")
 
-  SECTION("latex") {
+  SECTION("index transformation") {
+    auto t = Tensor(L"g", {Index{L"i_1"}, Index{L"i_2"}},
+                    {Index{L"i_3"}, Index{L"i_4"}}, Symmetry::antisymm);
+    std::map<Index, Index> idxmap = {{Index{L"i_1"}, Index{L"i_2"}},
+                                     {Index{L"i_2"}, Index{L"i_1"}}};
+    REQUIRE(t.transform_indices(idxmap, true));
+    REQUIRE(t.bra()[0].tag().has_value());
+    REQUIRE(t.bra()[1].tag().has_value());
+    REQUIRE(!t.ket()[0].tag().has_value());
+    REQUIRE(!t.ket()[1].tag().has_value());
+    REQUIRE(t == Tensor(L"g", {Index{L"i_2"}, Index{L"i_1"}},
+                        {Index{L"i_3"}, Index{L"i_4"}}, Symmetry::antisymm));
+    // tagged indices are protected, so no replacements the second goaround
+    REQUIRE(!t.transform_indices(idxmap, true));
+    t.reset_tags();
+    REQUIRE(t.transform_indices(idxmap, true));
+    REQUIRE(t == Tensor(L"g", {Index{L"i_1"}, Index{L"i_2"}},
+                        {Index{L"i_3"}, Index{L"i_4"}}, Symmetry::antisymm));
+    t.reset_tags();
+    REQUIRE(!t.bra()[0].tag().has_value());
+    REQUIRE(!t.bra()[1].tag().has_value());
+    REQUIRE(!t.ket()[0].tag().has_value());
+    REQUIRE(!t.ket()[1].tag().has_value());
+  }  // SECTION("index transformation")
 
+  SECTION("latex") {
     auto t1 = Tensor(L"F", {L"i_1"}, {L"i_2"});
     REQUIRE(to_latex(t1) == L"{F^{{i_2}}_{{i_1}}}");
 

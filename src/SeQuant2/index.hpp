@@ -310,33 +310,58 @@ class Index : public Taggable {
   /// replaces this object with its image in the Index map.
   /// If this object was not found in the map, tries replacing its subindices.
   /// @param index_map maps Index to Index
+  /// @param tag_transformed_indices if true, will tag transformed indices with
+  /// integer 0 and skip any tagged indices that it encounters
   /// @return false if no replacements were made
   template <template <typename, typename, typename... Args> class Map,
             typename... Args>
-  bool transform(const Map<Index, Index, Args...> &index_map) {
-    // first try replacing this first; if not found, try replacing protoindices
-    // first, then try replacing this again
-    auto it = index_map.find(*this);
+  bool transform(const Map<Index, Index, Args...> &index_map,
+                 bool tag_transformed_index = false) {
     bool mutated = false;
-    if (it != index_map.end()) {
-      *this = it->second;
-      mutated = true;
-    } else {
+
+    // outline:
+    // - try replacing this first
+    // - if not found, try replacing protoindices
+    // - if protoindices mutated, try replacing this again
+
+    // is this tagged already? if yes, can't skip, the protoindices may need to
+    // be transformed also
+    const auto this_is_tagged = this->tag().has_value();
+    // sanity check that tag = 0
+    if (this_is_tagged) {
+      assert(this->tag().value<int>() == 0);
+    } else {  // only try replacing this if not already tagged
+      auto it = index_map.find(*this);
+      if (it != index_map.end()) {
+        *this = it->second;
+        this->tag().assign(0);
+        mutated = true;
+      }
+    }
+
+    if (!mutated) {
       bool proto_indices_transformed = false;
       for (auto &&subidx : proto_indices_) {
-        if (subidx.transform(index_map)) proto_indices_transformed = true;
+        if (subidx.transform(index_map, tag_transformed_index))
+          proto_indices_transformed = true;
       }
       if (proto_indices_transformed) {
         mutated = true;
         canonicalize_proto_indices();
-      }
-      auto it = index_map.find(*this);
-      if (it != index_map.end()) {
-        *this = it->second;
-        mutated = true;
+        if (!this_is_tagged) {  // if protoindices were mutated, try again, but
+                                // only if no tag yet
+          auto it = index_map.find(*this);
+          if (it != index_map.end()) {
+            *this = it->second;
+            this->tag().assign(0);
+            mutated = true;
+          }
+        }
       }
     }
-    if (mutated) full_label_.reset();
+    if (mutated) {
+      full_label_.reset();
+    }
     return mutated;
   }
 

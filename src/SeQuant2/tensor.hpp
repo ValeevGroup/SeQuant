@@ -89,6 +89,9 @@ class Tensor : public Expr {
   const auto& ket() const { return ket_; }
   /// @return view of the bra+ket index ranges
   auto braket() const { return ranges::view::concat(bra_, ket_); }
+  /// @return view of the bra+ket index ranges
+  /// @note this is to work around broken lookup rules
+  auto const_braket() const { return this->braket(); }
   Symmetry symmetry() const { return symmetry_; }
 
   /// @return number of bra indices
@@ -139,14 +142,17 @@ class Tensor : public Expr {
   std::shared_ptr<Expr> canonicalize() override;
 
   /// Replaces indices using the index map
+  /// @param index_map maps Index to Index
+  /// @param tag_transformed_indices if true, will tag transformed indices with
+  /// integer 0 and skip any tagged indices that it encounters
   /// @return true if one or more indices changed
   template <template <typename, typename, typename... Args> class Map,
             typename... Args>
-  bool transform_indices(const Map<Index, Index, Args...> &index_map) {
+  bool transform_indices(const Map<Index, Index, Args...> &index_map,
+                         bool tag_transformed_indices = false) {
     bool mutated = false;
-    ranges::for_each(braket(), [index_map, &mutated](auto &idx) {
-      if (idx.transform(index_map))
-        mutated = true;
+    ranges::for_each(braket(), [&](auto &idx) {
+      if (idx.transform(index_map, tag_transformed_indices)) mutated = true;
     });
     if (mutated)
       this->reset_hash_value();

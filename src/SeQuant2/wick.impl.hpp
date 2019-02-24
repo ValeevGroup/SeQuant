@@ -210,20 +210,37 @@ inline bool apply_index_replacement_rules(
 
   /// this recursively applies replacement rules until result does not
   /// change removes the deltas that are no longer needed
+  const bool tag_transformed_indices =
+      true;  // to replace indices when maps image and domain overlap, tag
+             // transformed indices
+#ifndef NDEBUG
+  // assert that tensors_ indices are not tagged if going to tag indices
+  if (tag_transformed_indices) {
+    for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
+      const auto &factor = *it;
+      if (factor->is<Tensor>()) {
+        auto &tensor = factor->as<Tensor>();
+        assert(ranges::none_of(tensor.const_braket(), [](const Index &idx) {
+          return idx.tag().has_value();
+        }));
+      }
+    }
+  }
+#endif
   bool mutated = false;
   bool pass_mutated = false;
   do {
-    mutated |= pass_mutated;
     pass_mutated = false;
 
     for (auto it = ranges::begin(exrng); it != ranges::end(exrng);) {
       const auto &factor = *it;
-      if (factor->type_id() == Expr::get_type_id<Tensor>()) {
+      if (factor->is<Tensor>()) {
         bool erase_it = false;
-        auto &tensor = static_cast<Tensor &>(*factor);
+        auto &tensor = factor->as<Tensor>();
 
         /// replace indices
-        pass_mutated &= tensor.transform_indices(const_replrules);
+        pass_mutated &=
+            tensor.transform_indices(const_replrules, tag_transformed_indices);
 
         if (tensor.label() == L"S") {
           const auto &bra = tensor.bra().at(0);
@@ -284,7 +301,18 @@ inline bool apply_index_replacement_rules(
       }
       ++it;
     }
+    mutated |= pass_mutated;
   } while (pass_mutated);  // keep replacing til fixed point
+
+  // assert that tensors_ indices are not tagged if going to tag indices
+  if (tag_transformed_indices) {
+    for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
+      const auto &factor = *it;
+      if (factor->is<Tensor>()) {
+        factor->as<Tensor>().reset_tags();
+      }
+    }
+  }
 
   // update all_indices
   std::set<Index, Index::LabelCompare> all_indices_new;
