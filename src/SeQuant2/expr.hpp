@@ -786,6 +786,7 @@ class Product : public Expr {
     return *hash_value_;
   }
 
+  std::shared_ptr<Expr> canonicalize_impl(bool rapid = false);
   virtual std::shared_ptr<Expr> canonicalize() override;
   virtual std::shared_ptr<Expr> rapid_canonicalize() override;
 
