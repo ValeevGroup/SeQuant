@@ -233,6 +233,9 @@ class Index : public Taggable {
   bool has_proto_indices() const { return !proto_indices_.empty(); }
   /// @return the list of proto indices of this index
   const auto &proto_indices() const { return proto_indices_; }
+  /// @return true if the index is symmetric with respect to the permutation of
+  /// protoindices
+  bool symmetric_proto_indices() const { return symmetric_proto_indices_; }
 
   std::wstring to_latex() const {
     auto protect_subscript = [](const std::wstring_view str) {
@@ -321,6 +324,9 @@ class Index : public Taggable {
 
     // outline:
     // - try replacing this first
+    //   - if this is replaced by an index with protoindices, the protoindices
+    //   should not be tagged since they are original and may need to be
+    //   replaced also
     // - if not found, try replacing protoindices
     // - if protoindices mutated, try replacing this again
 

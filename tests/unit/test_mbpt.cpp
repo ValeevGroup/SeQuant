@@ -12,19 +12,6 @@ TEST_CASE("MBPT", "[mbpt]") {
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
 
-  SECTION("SRSO-PNO") {
-    using namespace sequant2::mbpt::sr::so::pno;
-
-    // H2**T2**T2 -> R2
-    SEQUANT2_PROFILE_SINGLE("wick(H2**T2**T2 -> R2)", {
-      auto result = vac_av(A<2>() * H2() * T_<2>() * T_<2>(), {{1, 2}, {1, 3}});
-
-      std::wcout << "H2**T2**T2 -> R2 = " << to_latex_align(result, 20)
-                 << std::endl;
-      REQUIRE(result->size() == 5);  // but only 4 unique
-    });
-  }
-
   SECTION("SRSO") {
     using namespace sequant2::mbpt::sr::so;
 
