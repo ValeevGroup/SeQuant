@@ -27,6 +27,7 @@
  */
 
 #include <cstdio>
+#include <vector>
 
 namespace bliss {
 
@@ -63,6 +64,6 @@ bool is_permutation(const unsigned int N, const unsigned int* perm);
  */
 bool is_permutation(const std::vector<unsigned int>& perm);
 
-} // namespace bliss
+}  // namespace bliss
 
 #endif
