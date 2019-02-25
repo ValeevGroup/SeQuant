@@ -30,6 +30,7 @@ class AbstractGraph;
 }
 
 #include <cstdio>
+#include <iostream>
 #include <vector>
 #include "bignum.hh"
 #include "heap.hh"
@@ -664,6 +665,37 @@ class Graph : public AbstractGraph {
    * \copydoc AbstractGraph::write_dot(const char * const file_name)
    */
   void write_dot(const char* const file_name);
+
+  template <typename Char, typename Traits,
+            typename StringSequence = std::vector<std::basic_string<Char>>>
+  void write_dot(std::basic_ostream<Char, Traits>& os,
+                 const StringSequence& vertex_labels = StringSequence{}) {
+    using std::size;
+    const bool have_labels = size(vertex_labels) > 0;
+    std::wcout << "have_labels = " << have_labels << std::endl;
+    remove_duplicate_edges();
+
+    os << "graph g {\n";
+
+    unsigned int vnum = 0;
+    for (std::vector<Vertex>::iterator vi = vertices.begin();
+         vi != vertices.end(); vi++, vnum++) {
+      Vertex& v = *vi;
+      os << "v" << vnum << " [label=\"";
+      if (!have_labels)
+        os << vnum;
+      else
+        os << vertex_labels[vnum];
+      os << ":" << v.color << "\"];\n";
+      for (std::vector<unsigned int>::const_iterator ei = v.edges.begin();
+           ei != v.edges.end(); ei++) {
+        const unsigned int vnum2 = *ei;
+        if (vnum2 > vnum) os << "v" << vnum << " -- v" << vnum2 << "\n";
+      }
+    }
+
+    os << "}" << std::endl;
+  }
 
   /**
    * \copydoc AbstractGraph::is_automorphism(const std::vector<unsigned int>&
