@@ -30,7 +30,9 @@ class AbstractGraph;
 }
 
 #include <cstdio>
+#include <iomanip>
 #include <iostream>
+#include <optional>
 #include <vector>
 #include "bignum.hh"
 #include "heap.hh"
@@ -666,14 +668,34 @@ class Graph : public AbstractGraph {
    */
   void write_dot(const char* const file_name);
 
+  /// @brief  writes a dot file, optionally using user-supplied labels and
+  /// converting color values to colors
+  /// @tparam Char a character type
+  /// @tparam Traits a stream traits type
+  /// @param os the output stream
+  /// @param vertex_labels the optional vertex labels
+  /// @param display_colors if true, display colored vertices using color values
+  /// to RGB colors;
+  ///        if false, color value is appended to the vertex label; by default
+  ///        set to true/false if vertex_labels are given/not given
   template <typename Char, typename Traits,
             typename StringSequence = std::vector<std::basic_string<Char>>>
   void write_dot(std::basic_ostream<Char, Traits>& os,
-                 const StringSequence& vertex_labels = StringSequence{}) {
+                 const StringSequence& vertex_labels = StringSequence{},
+                 std::optional<bool> display_colors = std::nullopt) {
     using std::size;
-    const bool have_labels = size(vertex_labels) > 0;
-    std::wcout << "have_labels = " << have_labels << std::endl;
+    const auto nvertices = size(vertex_labels);
+    const bool have_labels = nvertices > 0;
+    const bool rgb_colors = display_colors.value_or(have_labels);
+
     remove_duplicate_edges();
+
+    auto int_to_rgb = [](unsigned int i) {
+      std::basic_stringstream<Char> stream;
+      stream << std::setfill(Char('0')) << std::setw(6) << std::hex
+             << ((i << 8) >> 8);
+      return stream.str();
+    };
 
     os << "graph g {\n";
 
@@ -682,11 +704,16 @@ class Graph : public AbstractGraph {
          vi != vertices.end(); vi++, vnum++) {
       Vertex& v = *vi;
       os << "v" << vnum << " [label=\"";
-      if (!have_labels)
-        os << vnum;
-      else
+      if (have_labels) {
+        assert(vnum < nvertices);
         os << vertex_labels[vnum];
-      os << ":" << v.color << "\"];\n";
+      } else
+        os << vnum;
+      if (rgb_colors) {
+        os << "\"; color=\"#" << int_to_rgb(v.color) << "\"];\n";
+      } else {
+        os << ":" << v.color << "\"];\n";
+      }
       for (std::vector<unsigned int>::const_iterator ei = v.edges.begin();
            ei != v.edges.end(); ei++) {
         const unsigned int vnum2 = *ei;
