@@ -27,7 +27,7 @@ TEST_CASE("MBPT", "[mbpt]") {
 #endif
 
     // H2**T3**T3 -> R4
-    SEQUANT2_PROFILE_SINGLE("wick(H2**T3**T3 -> R3)", {
+    SEQUANT2_PROFILE_SINGLE("wick(H2**T3**T3 -> R4)", {
       auto result = vac_av(A<4>() * H2() * T_<3>() * T_<3>(), {{1, 2}, {1, 3}});
 
       std::wcout << "H2**T3**T3 -> R4 = " << to_latex_align(result, 20)

@@ -13,9 +13,8 @@ int main( int argc, char* argv[] )
   TensorCanonicalizer::set_cardinal_tensor_labels({L"A", L"f", L"g", L"t"});
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
-  debug_canonicalize = true;
 
-  using namespace sequant2::mbpt::sr::so;
+  using namespace sequant2::mbpt::sr::so::pno;
 
   // H2**T2**T2 -> R2
   auto result = vac_av( A<2>() * H2() * T_<2>() * T_<2>(), {{1, 2}, {1, 3}} );

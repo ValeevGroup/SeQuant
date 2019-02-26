@@ -597,11 +597,13 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       TensorCanonicalizer::register_instance(
           std::make_shared<DefaultTensorCanonicalizer>());
       canonicalize(wick_result_2);
+      canonicalize(wick_result_2);
+      canonicalize(wick_result_2);
       simplify(wick_result_2);
 
       std::wcout << L"P2*H2*T2*T2(PNO) = " << to_latex_align(wick_result_2, 20)
                  << std::endl;
-      REQUIRE(wick_result_2->size() == 5);  // but only 4 are unique
+      REQUIRE(wick_result_2->size() == 4);
     });
 
 #if 1

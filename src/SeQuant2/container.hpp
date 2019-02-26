@@ -23,6 +23,7 @@ using svector = boost::container::small_vector<T, N>;
 
 template<typename Key, typename Compare = std::less<Key>> using set = boost::container::flat_set<Key,Compare>;
 template<typename Key, typename Value, typename Compare = std::less<Key>> using map = boost::container::flat_map<Key,Value,Compare>;
+template<typename Key, typename Value, typename Compare = std::less<Key>> using multimap = boost::container::flat_multimap<Key,Value,Compare>;
 
 using boost::begin;
 using boost::end;
