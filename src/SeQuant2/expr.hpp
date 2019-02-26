@@ -838,16 +838,16 @@ class Sum : public Expr {
  public:
   Sum() = default;
   virtual ~Sum() = default;
-  Sum(const Sum&) = default;
-  Sum(Sum&&) = default;
-  Sum& operator=(const Sum&) = default;
-  Sum& operator=(Sum&&) = default;
+  Sum(const Sum &) = default;
+  Sum(Sum &&) = default;
+  Sum &operator=(const Sum &) = default;
+  Sum &operator=(Sum &&) = default;
 
   /// construct a Sum out of zero or more summands
   /// @param summands an initializer list of summands
   Sum(ExprPtrList summands) {
     // use append to flatten out Sum summands
-    for(auto& summand: summands) {
+    for (auto &summand : summands) {
       append(std::move(summand));
     }
   }
@@ -855,7 +855,7 @@ class Sum : public Expr {
   /// construct a Sum out of a range of summands
   /// @param begin the begin iterator
   /// @param end the end iterator
-  template<typename Iterator>
+  template <typename Iterator>
   Sum(Iterator begin, Iterator end) : summands_(begin, end) {}
 
   /// append a summand to the sum
@@ -869,10 +869,8 @@ class Sum : public Expr {
         summands_.push_back(std::move(summand));
       }
       reset_hash_value();
-    }
-    else {  // this recursively flattens Sum summands
-      for(auto& subsummand: *summand)
-        this->append(subsummand);
+    } else {  // this recursively flattens Sum summands
+      for (auto &subsummand : *summand) this->append(subsummand);
     }
     return *this;
   }
@@ -889,13 +887,12 @@ class Sum : public Expr {
       }
       reset_hash_value();
     } else {  // this recursively flattens Sum summands
-      for (auto &subsummand: *summand)
-        this->prepend(subsummand);
+      for (auto &subsummand : *summand) this->prepend(subsummand);
     }
     return *this;
   }
 
-  const auto& summands() const { return summands_; }
+  const auto &summands() const { return summands_; }
 
   /// @return true if the number of factors is zero
   bool empty() const { return summands_.empty(); }
@@ -907,8 +904,7 @@ class Sum : public Expr {
     for (const auto &i : summands()) {
       result += i->to_latex();
       ++counter;
-      if (counter != summands().size())
-        result += L" + ";
+      if (counter != summands().size()) result += L" + ";
     }
     result += L"\\right) }";
     return result;
@@ -921,8 +917,7 @@ class Sum : public Expr {
     for (const auto &i : summands()) {
       result += i->to_wolfram();
       ++counter;
-      if (counter != summands().size())
-        result += L",";
+      if (counter != summands().size()) result += L",";
     }
     result += L"]";
     return result;
@@ -933,8 +928,11 @@ class Sum : public Expr {
   };
 
   std::shared_ptr<Expr> clone() const override {
-    auto cloned_summands = summands() | ranges::view::transform([](const ExprPtr &ptr) { return ptr->clone(); });
-    return ex<Sum>(ranges::begin(cloned_summands), ranges::end(cloned_summands));
+    auto cloned_summands =
+        summands() | ranges::view::transform(
+                         [](const ExprPtr &ptr) { return ptr->clone(); });
+    return ex<Sum>(ranges::begin(cloned_summands),
+                   ranges::end(cloned_summands));
   }
 
   virtual Expr &operator+=(const Expr &that) override {
@@ -958,95 +956,53 @@ class Sum : public Expr {
     return summands_.empty() ? Expr::begin_cursor() : cursor{&summands_[0]};
   };
   cursor end_cursor() override {
-    return summands_.empty() ? Expr::end_cursor() : cursor{&summands_[0] + summands_.size()};
+    return summands_.empty() ? Expr::end_cursor()
+                             : cursor{&summands_[0] + summands_.size()};
   };
   cursor begin_cursor() const override {
     return summands_.empty() ? Expr::begin_cursor() : cursor{&summands_[0]};
   };
   cursor end_cursor() const override {
-    return summands_.empty() ? Expr::end_cursor() : cursor{&summands_[0] + summands_.size()};
+    return summands_.empty() ? Expr::end_cursor()
+                             : cursor{&summands_[0] + summands_.size()};
   };
 
   hash_type memoizing_hash() const override {
-    auto deref_summands = summands() | ranges::view::transform([](const ExprPtr &ptr) -> const Expr & { return *ptr; });
-    hash_value_ = boost::hash_range(ranges::begin(deref_summands), ranges::end(deref_summands));
+    auto deref_summands =
+        summands() |
+        ranges::view::transform(
+            [](const ExprPtr &ptr) -> const Expr & { return *ptr; });
+    hash_value_ = boost::hash_range(ranges::begin(deref_summands),
+                                    ranges::end(deref_summands));
     return *hash_value_;
   }
 
-  virtual std::shared_ptr<Expr> canonicalize() override {
-    return canonicalize_<true>();
-  }
-  virtual std::shared_ptr<Expr> rapid_canonicalize() override {
-    return canonicalize_<false>();
-  }
+  /// @param multipass if true, will do a multipass canonicalization, with extra
+  /// cleanup pass after the deep canonization pass
+  ExprPtr canonicalize_impl(bool multipass);
 
-  template<bool TwoPass>
-  std::shared_ptr<Expr> canonicalize_() {
-
-    const auto npasses = TwoPass ? 2 : 1;
-    for (auto pass = 0; pass != npasses; ++pass) {
-      // recursively canonicalize summands ...
-      const auto nsubexpr = ranges::size(*this);
-      for (std::size_t i = 0; i != nsubexpr; ++i) {
-        auto bp = (pass == 0) ? summands_[i]->rapid_canonicalize() : summands_[i]->canonicalize();
-        if (bp) {
-          assert(bp->template is<Constant>());
-          summands_[i] = ex<Product>(std::static_pointer_cast<Constant>(bp)->value(), ExprPtrList{summands_[i]});
-        }
-      };
-
-      // ... then resort according to hash values
-      using std::begin;
-      using std::end;
-      std::stable_sort(begin(summands_), end(summands_), [](const auto &first, const auto &second) {
-        return *first < *second;
-      });
-
-      // ... then reduce terms whose hash values are identical
-      auto first_it = begin(summands_);
-      auto hash_comparer = [](const auto &first, const auto &second) {
-        return first->hash_value() == second->hash_value();
-      };
-      while ((first_it = std::adjacent_find(first_it, end(summands_), hash_comparer)) != end(summands_)) {
-        assert((*first_it)->hash_value() == (*(first_it + 1))->hash_value());
-        // find first element whose hash is not equal to (*first_it)->hash_value()
-        auto plast_it = std::find_if_not(first_it + 1, end(summands_), [first_it](const auto &elem) {
-          return (*first_it)->hash_value() == elem->hash_value();
-        });
-        assert(plast_it - first_it > 1);
-        auto reduce_range = [first_it, this](auto &begin, auto &end) {
-          assert((*first_it)->template is<Product>());
-          for (auto it = begin; it != end; ++it) {
-            if (it != first_it) {
-              assert((*it)->template is<Product>());
-              std::static_pointer_cast<Product>(*first_it)->add_identical(std::static_pointer_cast<Product>(*it));
-            }
-          }
-          this->summands_.erase(first_it + 1, end);
-        };
-        reduce_range(first_it, plast_it);
-      }
-    }
-
-    return {};  // side effects are absorbed into summands
+  virtual ExprPtr canonicalize() override { return canonicalize_impl(true); }
+  virtual ExprPtr rapid_canonicalize() override {
+    return canonicalize_impl(false);
   }
 
   bool static_equal(const Expr &that) const override {
-    const auto& that_cast = static_cast<const Sum&>(that);
+    const auto &that_cast = static_cast<const Sum &>(that);
     if (summands().size() == that_cast.summands().size()) {
       if (this->empty()) return true;
       // compare hash values first
-      if (this->hash_value() == that.hash_value()) // hash values agree -> do full comparison
-        return std::equal(begin_subexpr(), end_subexpr(), that.begin_subexpr(), expr_ptr_comparer);
+      if (this->hash_value() ==
+          that.hash_value())  // hash values agree -> do full comparison
+        return std::equal(begin_subexpr(), end_subexpr(), that.begin_subexpr(),
+                          expr_ptr_comparer);
       else
         return false;
-    } else return false;
+    } else
+      return false;
   }
 };
 
-inline std::wstring to_latex(const Expr& expr) {
-  return expr.to_latex();
-}
+inline std::wstring to_latex(const Expr &expr) { return expr.to_latex(); }
 
 inline std::wstring to_latex(const ExprPtr& exprptr) {
   return exprptr->to_latex();
