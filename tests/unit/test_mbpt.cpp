@@ -32,7 +32,7 @@ TEST_CASE("MBPT", "[mbpt]") {
 
       std::wcout << "H2**T3**T3 -> R4 = " << to_latex_align(result, 20)
                  << std::endl;
-      REQUIRE(result->size() == 7);  // 2 disconnected + 7 connected terms
+      REQUIRE(result->size() == 4);
     });
   }
 
@@ -45,7 +45,7 @@ TEST_CASE("MBPT", "[mbpt]") {
 
       std::wcout << "H2**T2**T2 -> R2 = " << to_latex_align(result, 20)
                  << std::endl;
-      REQUIRE(result->size() == 5);  // but only 4 unique
+      REQUIRE(result->size() == 4);
     });
   }
 
