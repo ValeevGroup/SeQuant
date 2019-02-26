@@ -64,7 +64,7 @@ add_library(SeQuant2
         src/SeQuant2/algorithm.hpp
         src/SeQuant2/mbpt/sr/sr.cpp
         src/SeQuant2/mbpt/sr/sr.hpp
-        )
+        src/SeQuant2/tensor_network.cpp)
 target_link_libraries(SeQuant2 Range-V3 Boost bliss)
 
 enable_testing(true)
