@@ -76,6 +76,7 @@ set(utests_src
         tests/unit/test_op.cpp
         tests/unit/test_wick.cpp
         tests/unit/test_tensor.cpp
+        tests/unit/test_bliss.cpp
         tests/unit/test_expr.cpp
         tests/unit/test_iterator.cpp
         tests/unit/test_tensor_network.cpp
@@ -119,12 +120,6 @@ target_link_libraries(${example1} SeQuant2)
 #add_executable(${example2} EXCLUDE_FROM_ALL
 #        examples/${example2}.cpp)
 #target_link_libraries(${example2} Traces)
-
-# Bliss
-set(example3 bliss-test)
-add_executable(${example3} EXCLUDE_FROM_ALL
-        examples/${example3}.cpp)
-target_link_libraries(${example3} bliss)
 
 ####### DOCS ########
 
