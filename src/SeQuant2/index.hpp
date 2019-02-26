@@ -299,6 +299,31 @@ class Index : public Taggable {
     return result;
   }
 
+  /// @return the color of the protoindices
+  /// @sa Index::color()
+  auto proto_indices_color() const {
+    auto space_attr_view =
+        proto_indices_ | ranges::view::transform([](const Index &idx) {
+          return int64_t(idx.space().attr());
+        });
+    return boost::hash_range(ranges::begin(space_attr_view),
+                             ranges::end(space_attr_view));
+  }
+
+  /// Color of an Index = hashed IndexSpace + IndexSpace objects of the
+  /// protoindices
+  /// @return the color of this object
+  auto color() const {
+    if (has_proto_indices()) {
+      auto result = proto_indices_color();
+      boost::hash_combine(result, int64_t(space().attr()));
+      return result;
+    } else {
+      auto result = boost::hash_value(int64_t(space().attr()));
+      return result;
+    }
+  }
+
   /// @return the smallest index of a generated index
   static constexpr std::size_t min_tmp_index() { return 100; }
 
