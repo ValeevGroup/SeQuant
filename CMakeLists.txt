@@ -66,7 +66,8 @@ add_library(SeQuant2
         src/SeQuant2/mbpt/sr/sr.hpp
         src/SeQuant2/tensor_network.cpp
         src/SeQuant2/tensor_network.hpp
-        src/SeQuant2/runtime.hpp)
+        src/SeQuant2/runtime.hpp
+        src/SeQuant2/mbpt/spin.hpp)
 target_link_libraries(SeQuant2 Range-V3 Boost bliss)
 
 enable_testing(true)
@@ -86,7 +87,7 @@ set(utests_src
         tests/unit/timer.hpp)
 
 #set(utests_src
-#        tests/unit/test_wick.cpp
+#        tests/unit/test_mbpt.cpp
 #        tests/unit/timer.hpp)
 
 set(unit_test_executable unit_tests)
