@@ -550,7 +550,7 @@ class Constant : public Expr {
 
   virtual Expr &operator+=(const Expr &that) override {
     if (that.is<Constant>()) {
-      this->value() += that.as<Constant>().value();
+      value_ += that.as<Constant>().value();
     } else {
       throw std::logic_error("Constant::operator+=(that): not valid for that");
     }
@@ -559,7 +559,7 @@ class Constant : public Expr {
 
   virtual Expr &operator-=(const Expr &that) override {
     if (that.is<Constant>()) {
-      this->value() -= that.as<Constant>().value();
+      value_ -= that.as<Constant>().value();
     } else {
       throw std::logic_error("Constant::operator-=(that): not valid for that");
     }
