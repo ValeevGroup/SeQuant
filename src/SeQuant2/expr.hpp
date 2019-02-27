@@ -13,8 +13,9 @@
 
 #include <range/v3/all.hpp>
 
-#include <boost/functional/hash.hpp>
 #include <boost/callable_traits.hpp>
+#include <boost/core/demangle.hpp>
+#include <boost/functional/hash.hpp>
 
 #include "container.hpp"
 #include "hash.hpp"
@@ -305,14 +306,22 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
     return static_cast<T &>(*this);
   }
 
-/** @name in-place arithmetic operators
- *  Virtual in-place arithmetic operators to be overridden in expressions for which these make sense.
- */
-///@{
+  /// @return the (demanglecd) name of this type
+  /// @note uses RTTI
+  std::string type_name() const {
+    return boost::core::demangle(typeid(*this).name());
+  }
+
+  /** @name in-place arithmetic operators
+   *  Virtual in-place arithmetic operators to be overridden in expressions for
+   * which these make sense.
+   */
+  ///@{
 
   /// @brief in-place multiply @c *this by @c that
   /// @return reference to @c *this
-  /// @throw std::logic_error if not implemented for this class, or cannot be implemented for the particular @c that
+  /// @throw std::logic_error if not implemented for this class, or cannot be
+  /// implemented for the particular @c that
   virtual Expr &operator*=(const Expr &that) {
     throw std::logic_error(
         "Expr::operator*= not implemented in this derived class");
@@ -1004,7 +1013,7 @@ class Sum : public Expr {
 
 inline std::wstring to_latex(const Expr &expr) { return expr.to_latex(); }
 
-inline std::wstring to_latex(const ExprPtr& exprptr) {
+inline std::wstring to_latex(const ExprPtr &exprptr) {
   return exprptr->to_latex();
 }
 
