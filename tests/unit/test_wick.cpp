@@ -458,9 +458,8 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       std::wcout << L"H2*T2 = " << to_latex(wick_result_2) << std::endl;
       std::wcout << L"H2*T2 = " << to_wolfram(wick_result_2) << std::endl;
       REQUIRE(to_latex(wick_result_2) ==
-              L"{ \\left({{{4}} \\times "
-              L"{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{{a_1}{a_2}}}}"
-              L"\\right) }");
+              L"{{{4}} \\times "
+              L"{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{{a_1}{a_2}}}}");
     });
 
     // 2-body ^ 1-body ^ 1-body
@@ -491,11 +490,10 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       simplify(wick_result_2);
 
       print("H2*T1*T1 = ", wick_result_2);
-      REQUIRE(
-          to_latex(wick_result_2) ==
-          L"{ \\left({{{4}} \\times "
-          L"{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}}_{{a_1}}}{t^{{i_2}}_{{a_2}}}"
-          L"}\\right) }");
+      REQUIRE(to_latex(wick_result_2) ==
+              L"{{{4}} \\times "
+              L"{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}}_{{a_1}}}{t^{{i_2}}_{{a_"
+              L"2}}}}");
     });
 #endif
 

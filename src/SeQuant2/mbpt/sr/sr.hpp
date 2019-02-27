@@ -84,8 +84,10 @@ struct make_op {
     std::vector<Index> braidxs;
     std::vector<Index> ketidxs;
     if (to_class(op) == OpClass::gen) {
-      braidxs = make_idx_vector(IndexSpace::complete);
-      ketidxs = make_idx_vector(IndexSpace::complete);
+//      braidxs = make_idx_vector(IndexSpace::complete);
+//      ketidxs = make_idx_vector(IndexSpace::complete);
+      braidxs = make_idx_vector(IndexSpace::all);
+      ketidxs = make_idx_vector(IndexSpace::all);
     }
     else {
       auto occidxs = make_idx_vector(IndexSpace::active_occupied);
@@ -121,7 +123,10 @@ inline ExprPtr vac_av(ExprPtr expr, std::initializer_list<std::pair<int,int>> op
       .spinfree(false)
       .use_topology(true);
   wick.set_op_connections(std::vector<std::pair<int, int>>{op_connections});
-  return wick.compute();
+  auto result = wick.compute();
+  if (result->is<Sum>())
+    result->canonicalize();
+  return result;
 }
 
 namespace pno {

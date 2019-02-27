@@ -16,12 +16,9 @@ struct Dummy : public sequant2::Expr {
   std::wstring to_wolfram() const override {
     return L"Dummy[]";
   }
-  type_id_type type_id() const override {
-    return get_type_id<Dummy>();
-  };
-  bool static_equal(const sequant2::Expr &that) const override {
-    return true;
-  }
+  type_id_type type_id() const override { return get_type_id<Dummy>(); };
+  sequant2::ExprPtr clone() const override { return sequant2::ex<Dummy>(); }
+  bool static_equal(const sequant2::Expr &that) const override { return true; }
 };
 
 template<typename T>
@@ -320,30 +317,20 @@ TEST_CASE("Expr", "[elements]") {
       expr_range exrng{x};
       REQUIRE(ranges::begin(exrng) == ranges::begin(exrng));
       REQUIRE(ranges::begin(exrng) != ranges::end(exrng));
-      REQUIRE(std::distance(ranges::begin(exrng), ranges::end(exrng)) == 4);
+      REQUIRE(std::distance(ranges::begin(exrng), ranges::end(exrng)) == 2);
 
       auto i = 0;
       for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
         switch (i) {
           case 0:
-            REQUIRE(to_latex(*it) == L"{{{1}}}");
-            REQUIRE( compare(ranges::get_cursor(it).address(), {0,0}) );
+            REQUIRE(to_latex(*it) == L"{{{3}}}");
+            REQUIRE(compare(ranges::get_cursor(it).address(), {0, 0}));
             REQUIRE(ranges::get_cursor(it).ordinal() == 0);
             break;
           case 1:
-            REQUIRE(to_latex(*it) == L"{{{2}}}");
-            REQUIRE( compare(ranges::get_cursor(it).address(), {0,1}) );
+            REQUIRE(to_latex(*it) == L"{{{7}}}");
+            REQUIRE(compare(ranges::get_cursor(it).address(), {1, 0}));
             REQUIRE(ranges::get_cursor(it).ordinal() == 1);
-            break;
-          case 2:
-            REQUIRE(to_latex(*it) == L"{{{3}}}");
-            REQUIRE( compare(ranges::get_cursor(it).address(), {1,0}) );
-            REQUIRE(ranges::get_cursor(it).ordinal() == 2);
-            break;
-          case 3:
-            REQUIRE(to_latex(*it) == L"{{{4}}}");
-            REQUIRE( compare(ranges::get_cursor(it).address(), {1,1}) );
-            REQUIRE( ranges::get_cursor(it).ordinal() == 3 );
             break;
         }
         ++i;
@@ -351,8 +338,10 @@ TEST_CASE("Expr", "[elements]") {
     }
 
     {
-      auto x = (ex<Constant>(1.0) + ex<Constant>(2.0) * (ex<Constant>(3.0) - ex<Constant>(4.0)))
-          * (ex<Constant>(5.0) + (ex<Constant>(6.0) + ex<Constant>(7.0)) * ex<Constant>(8.0));
+      auto x = (ex<Constant>(1.0) +
+                ex<Constant>(2.0) * (ex<Constant>(3.0) - ex<Dummy>())) *
+               (ex<Constant>(5.0) +
+                (ex<Constant>(6.0) + ex<Dummy>()) * ex<Constant>(8.0));
       REQUIRE_NOTHROW(expr_range{x});
       expr_range exrng{x};
       REQUIRE(std::distance(ranges::begin(exrng), ranges::end(exrng)) == 6);
@@ -367,17 +356,14 @@ TEST_CASE("Expr", "[elements]") {
             break;
           case 1:
             REQUIRE(to_latex(*it) == L"{{{3}}}");
-            //            ranges::for_each(ranges::get_cursor(it).address(),
-            //            [](const auto& addr) {
-            //              std::wcout << addr.first << " " << addr.second <<
-            //              std::endl;
-            //            });
             REQUIRE(compare(ranges::get_cursor(it).address(), {0, 1, 0, 0}));
             REQUIRE(ranges::get_cursor(it).ordinal() == 1);
             break;
           case 2:
-            REQUIRE(to_latex(*it) == L"{{{-4}}}");
-            REQUIRE(compare(ranges::get_cursor(it).address(), {0, 1, 0, 1}));
+            REQUIRE(to_latex(*it) == L"{\\text{Dummy}}");
+            REQUIRE(compare(
+                ranges::get_cursor(it).address(),
+                {0, 1, 0, 1, 0}));  // -1 x Dummy = Product(-1){Dummy}!!!
             REQUIRE(ranges::get_cursor(it).ordinal() == 2);
             break;
           case 3:
@@ -391,7 +377,7 @@ TEST_CASE("Expr", "[elements]") {
             REQUIRE(ranges::get_cursor(it).ordinal() == 4);
             break;
           case 5:
-            REQUIRE(to_latex(*it) == L"{{{7}}}");
+            REQUIRE(to_latex(*it) == L"{\\text{Dummy}}");
             REQUIRE(compare(ranges::get_cursor(it).address(), {1, 1, 0, 1}));
             REQUIRE( ranges::get_cursor(it).ordinal() == 5 );
             break;
@@ -399,41 +385,43 @@ TEST_CASE("Expr", "[elements]") {
         ++i;
       }
     }
-
   }
 
   SECTION("expand") {
     {
-      auto x = (ex<Constant>(1.0) + ex<Constant>(2.0)) *
-               (ex<Constant>(3.0) + ex<Constant>(4.0));
+      auto x =
+          (ex<Constant>(1.0) + ex<Dummy>()) * (ex<Constant>(3.0) + ex<Dummy>());
       REQUIRE(to_latex(x) ==
-              L"{{ \\left({{{1}}} + {{{2}}}\\right) }{ "
-              L"\\left({{{3}}} + {{{4}}}\\right) }}");
+              L"{{ \\left({{{1}}} + {\\text{Dummy}}\\right) }{ \\left({{{3}}} "
+              L"+ {\\text{Dummy}}\\right) }}");
       expand(x);
-      REQUIRE(to_latex(x) ==
-              L"{ \\left({{{3}} \\times } + {{{4}} \\times } + "
-              L"{{{6}} \\times } + {{{8}} \\times }\\right) }");
-      simplify(x);
-//      std::wcout << "x = " << to_latex(x) << std::endl;
-    }
-    {
-      auto x = (ex<Constant>(1.0) +
-                ex<Constant>(2.0) * (ex<Constant>(3.0) - ex<Constant>(4.0))) *
-               (ex<Constant>(5.0) * (ex<Constant>(6.0) + ex<Constant>(7.0)) +
-                ex<Constant>(8.0));
       //      std::wcout << "x = " << to_latex(x) << std::endl;
       REQUIRE(to_latex(x) ==
-              L"{{ \\left({{{1}}} + {{{2}} \\times { "
-              L"\\left({{{3}}} + {{{-4}}}\\right) }}\\right) }{ "
-              L"\\left({{{5}} \\times { \\left({{{6}}} + "
-              L"{{{7}}}\\right) }} + {{{8}}}\\right) }}");
+              L"{ \\left({{{3}} \\times } + {{\\text{Dummy}}} + {{{3}} \\times "
+              L"{\\text{Dummy}}} + {{\\text{Dummy}}{\\text{Dummy}}}\\right) }");
+      simplify(x);
+      //      std::wcout << "x = " << to_latex(x) << std::endl;
+    }
+    {
+      auto x =
+          (ex<Constant>(1.0) +
+           ex<Constant>(2.0) * (ex<Constant>(3.0) - ex<Dummy>())) *
+          (ex<Constant>(5.0) * (ex<Constant>(6.0) + ex<Dummy>()) + ex<Dummy>());
+      //      std::wcout << "x = " << to_latex(x) << std::endl;
+      REQUIRE(to_latex(x) ==
+              L"{{ \\left({{{1}}} + {{{2}} \\times { \\left({{{3}}} + {{{-1}} "
+              L"\\times {\\text{Dummy}}}\\right) }}\\right) }{ \\left({{{5}} "
+              L"\\times { \\left({{{6}}} + {\\text{Dummy}}\\right) }} + "
+              L"{\\text{Dummy}}\\right) }}");
       expand(x);
       //      std::wcout << "ex = " << to_latex(x) << std::endl;
       REQUIRE(to_latex(x) ==
-              L"{ \\left({{{30}} \\times } + {{{35}} \\times } + "
-              L"{{{8}} \\times } + {{{180}} \\times } + {{{210}} "
-              L"\\times } + {{{48}} \\times } + {{{-240}} \\times } + "
-              L"{{{-280}} \\times } + {{{-64}} \\times }\\right) }");
+              L"{ \\left({{{30}} \\times } + {{{5}} \\times {\\text{Dummy}}} + "
+              L"{{\\text{Dummy}}} + {{{180}} \\times } + {{{30}} \\times "
+              L"{\\text{Dummy}}} + {{{6}} \\times {\\text{Dummy}}} + {{{-60}} "
+              L"\\times {\\text{Dummy}}} + {{{-10}} \\times "
+              L"{\\text{Dummy}}{\\text{Dummy}}} + {{{-2}} \\times "
+              L"{\\text{Dummy}}{\\text{Dummy}}}\\right) }");
     }
   }
 
