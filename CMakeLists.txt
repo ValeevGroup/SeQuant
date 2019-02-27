@@ -64,7 +64,9 @@ add_library(SeQuant2
         src/SeQuant2/algorithm.hpp
         src/SeQuant2/mbpt/sr/sr.cpp
         src/SeQuant2/mbpt/sr/sr.hpp
-        src/SeQuant2/tensor_network.cpp)
+        src/SeQuant2/tensor_network.cpp
+        src/SeQuant2/tensor_network.hpp
+        src/SeQuant2/runtime.hpp)
 target_link_libraries(SeQuant2 Range-V3 Boost bliss)
 
 enable_testing(true)
@@ -103,11 +105,11 @@ set_tests_properties(unit/run
 
 ####### Tests ########
 
-# PNO-CCSD
-set(example1 pno-ccsd)
-add_executable(${example1} EXCLUDE_FROM_ALL
-        examples/${example1}.cpp)
-target_link_libraries(${example1} SeQuant2)
+# Single-Reference Coupled-Cluster
+set(example0 srcc)
+add_executable(${example0} EXCLUDE_FROM_ALL
+        examples/${example0}.cpp)
+target_link_libraries(${example0} SeQuant2)
 
 # Traces -- disabled, will remove if bliss is sufficient
 #add_library(Traces INTERFACE IMPORTED)
