@@ -5,11 +5,11 @@
 #include "catch.hpp"
 
 #include <iostream>
-#include "../../src/SeQuant2/tensor_network.hpp"
+#include "../../src/SeQuant/tensor_network.hpp"
 
 TEST_CASE("TensorNetwork", "[elements]") {
 
-  using namespace sequant2;
+  using namespace sequant;
 
   SECTION("constructors") {
 

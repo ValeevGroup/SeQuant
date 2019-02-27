@@ -4,12 +4,12 @@
 
 #include "catch.hpp"
 
-#include "../../src/SeQuant2/ranges.hpp"
-#include "../../src/SeQuant2/op.hpp"
+#include "../../src/SeQuant/ranges.hpp"
+#include "../../src/SeQuant/op.hpp"
 
 TEST_CASE("Iterators", "[elements]") {
 
-  using namespace sequant2;
+  using namespace sequant;
 
   SECTION("constructor") {
 

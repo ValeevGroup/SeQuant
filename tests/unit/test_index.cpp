@@ -4,11 +4,11 @@
 
 #include "catch.hpp"
 
-#include "../../src/SeQuant2/index.hpp"
+#include "../../src/SeQuant/index.hpp"
 
 TEST_CASE("Index", "[elements]") {
 
-  using namespace sequant2;
+  using namespace sequant;
 
   SECTION("constructors") {
     Index i{};

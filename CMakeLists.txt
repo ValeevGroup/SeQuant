@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.9)
-project(SeQuant2)
+project(SeQuant)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -36,39 +36,39 @@ add_library(bliss
         external/bliss/bliss_C.h
         )
 
-add_library(SeQuant2
-        src/SeQuant2/sequant.cpp
-        src/SeQuant2/sequant.hpp
-        src/SeQuant2/attr.hpp
-        src/SeQuant2/index.hpp
-        src/SeQuant2/space.cpp
-        src/SeQuant2/space.hpp
-        src/SeQuant2/op.cpp
-        src/SeQuant2/op.hpp
-        src/SeQuant2/tensor.cpp
-        src/SeQuant2/tensor.hpp
-        src/SeQuant2/expr.cpp
-        src/SeQuant2/expr.hpp
-        src/SeQuant2/wick.hpp
-        src/SeQuant2/ranges.hpp
-        src/SeQuant2/container.hpp
-        src/SeQuant2/meta.hpp
-        src/SeQuant2/latex.hpp
-        src/SeQuant2/wolfram.hpp
-        src/SeQuant2/expr_algorithm.hpp
-        src/SeQuant2/wick.impl.hpp
-        src/SeQuant2/expr_operator.hpp
-        src/SeQuant2/hash.hpp
-        src/SeQuant2/tag.hpp
-        src/SeQuant2/hugenholtz.hpp
-        src/SeQuant2/algorithm.hpp
-        src/SeQuant2/mbpt/sr/sr.cpp
-        src/SeQuant2/mbpt/sr/sr.hpp
-        src/SeQuant2/tensor_network.cpp
-        src/SeQuant2/tensor_network.hpp
-        src/SeQuant2/runtime.hpp
-        src/SeQuant2/mbpt/spin.hpp)
-target_link_libraries(SeQuant2 Range-V3 Boost bliss)
+add_library(SeQuant
+        src/SeQuant/sequant.cpp
+        src/SeQuant/sequant.hpp
+        src/SeQuant/attr.hpp
+        src/SeQuant/index.hpp
+        src/SeQuant/space.cpp
+        src/SeQuant/space.hpp
+        src/SeQuant/op.cpp
+        src/SeQuant/op.hpp
+        src/SeQuant/tensor.cpp
+        src/SeQuant/tensor.hpp
+        src/SeQuant/expr.cpp
+        src/SeQuant/expr.hpp
+        src/SeQuant/wick.hpp
+        src/SeQuant/ranges.hpp
+        src/SeQuant/container.hpp
+        src/SeQuant/meta.hpp
+        src/SeQuant/latex.hpp
+        src/SeQuant/wolfram.hpp
+        src/SeQuant/expr_algorithm.hpp
+        src/SeQuant/wick.impl.hpp
+        src/SeQuant/expr_operator.hpp
+        src/SeQuant/hash.hpp
+        src/SeQuant/tag.hpp
+        src/SeQuant/hugenholtz.hpp
+        src/SeQuant/algorithm.hpp
+        src/SeQuant/tensor_network.cpp
+        src/SeQuant/tensor_network.hpp
+        src/SeQuant/runtime.hpp
+        src/domain/mbpt/sr/sr.cpp
+        src/domain/mbpt/sr/sr.hpp
+        src/domain/mbpt/spin.hpp)
+target_link_libraries(SeQuant Range-V3 Boost bliss)
 
 enable_testing(true)
 add_custom_target(check_unit USES_TERMINAL COMMAND ${CMAKE_CTEST_COMMAND} -V)
@@ -91,7 +91,7 @@ add_executable(${unit_test_executable} EXCLUDE_FROM_ALL
         tests/unit/test_main.cpp
         tests/unit/catch.hpp
         ${utests_src})
-target_link_libraries(${unit_test_executable} SeQuant2)
+target_link_libraries(${unit_test_executable} SeQuant)
 add_test(unit/build "${CMAKE_COMMAND}" --build ${CMAKE_BINARY_DIR} --target ${unit_test_executable})
 
 add_test(NAME unit/run
@@ -106,7 +106,7 @@ set_tests_properties(unit/run
 set(example0 srcc)
 add_executable(${example0} EXCLUDE_FROM_ALL
         examples/${example0}.cpp)
-target_link_libraries(${example0} SeQuant2)
+target_link_libraries(${example0} SeQuant)
 
 # Traces -- disabled, will remove if bliss is sufficient
 #add_library(Traces INTERFACE IMPORTED)

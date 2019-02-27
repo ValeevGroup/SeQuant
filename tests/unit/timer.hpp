@@ -2,13 +2,13 @@
 // Created by Eduard Valeyev on 3/28/18.
 //
 
-#ifndef SEQUANT2_TIMER_HPP
-#define SEQUANT2_TIMER_HPP
+#ifndef SEQUANT_TIMER_HPP
+#define SEQUANT_TIMER_HPP
 
 #include <chrono>
 #include <iostream>
 
-namespace sequant2 {
+namespace sequant {
 
 /// TimerPool aggregates \c N C++11 "timers"; used to high-resolution profile
 /// stages of integral computation
@@ -65,11 +65,11 @@ class TimerPool {
   // adjust reported timings is you need fine-grained timing
 };
 
-}   // namespace sequant2
+}   // namespace sequant
 
-#define SEQUANT2_PROFILE_SINGLE(id, call)                                    \
+#define SEQUANT_PROFILE_SINGLE(id, call)                                    \
     {                                                                        \
-    sequant2::TimerPool<> timer;                                             \
+    sequant::TimerPool<> timer;                                             \
     timer.start();                                                           \
     { (call); }                                                              \
     timer.stop();                                                            \
@@ -79,4 +79,4 @@ class TimerPool {
     }
 
 
-#endif //SEQUANT2_TIMER_HPP
+#endif //SEQUANT_TIMER_HPP

@@ -6,12 +6,12 @@
 
 #include "catch.hpp"
 #include "timer.hpp"
-#include "../../src/SeQuant2/wick.hpp"
+#include "../../src/SeQuant/wick.hpp"
 
 // comment out if want to run long tests
-//#define SEQUANT2_SKIP_LONG_TESTS 1
+//#define SEQUANT_SKIP_LONG_TESTS 1
 
-namespace sequant2 {
+namespace sequant {
 struct WickAccessor {};
 
 template <>
@@ -27,12 +27,12 @@ auto compute_nontensor_wick(WickTheorem<Statistics::FermiDirac>& wick) {
       .compute_nontensor_wick(wick);
 }
 
-}  // namespace sequant2
+}  // namespace sequant
 
 #if 1
 TEST_CASE("WickTheorem", "[algorithms]") {
 
-  using namespace sequant2;
+  using namespace sequant;
 
   SECTION("Op contractions") {
 
@@ -233,7 +233,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
     }
 
     // 4-body ^ 4-body
-    SEQUANT2_PROFILE_SINGLE("wick(4^4)", {
+    SEQUANT_PROFILE_SINGLE("wick(4^4)", {
       auto opseq =
           FNOperatorSeq({FNOperator({L"p_1", L"p_2", L"p_3", L"p_4"}, {L"p_5", L"p_6", L"p_7", L"p_8"}, V),
                          FNOperator({L"p_21", L"p_22", L"p_23", L"p_24"}, {L"p_25", L"p_26", L"p_27", L"p_28"}, V)
@@ -305,7 +305,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
     }
 
     // 2-body ^ 2-body ^ 2-body ^ 2-body
-    SEQUANT2_PROFILE_SINGLE("wick(2^2^2^2)", {
+    SEQUANT_PROFILE_SINGLE("wick(2^2^2^2)", {
       auto opseq =
           FNOperatorSeq({FNOperator({L"p_1", L"p_2"}, {L"p_5", L"p_6"}, V),
                          FNOperator({L"p_9", L"p_10"}, {L"p_11", L"p_12"}, V),
@@ -318,9 +318,9 @@ TEST_CASE("WickTheorem", "[algorithms]") {
     }
     )
 
-#ifndef SEQUANT2_SKIP_LONG_TESTS
+#ifndef SEQUANT_SKIP_LONG_TESTS
     // 4-body ^ 2-body ^ 2-body ^ 2-body
-    SEQUANT2_PROFILE_SINGLE("wick(4^2^2^2)", {
+    SEQUANT_PROFILE_SINGLE("wick(4^2^2^2)", {
       auto opseq =
           FNOperatorSeq({FNOperator({L"p_1", L"p_2", L"p_3", L"p_4"}, {L"p_5", L"p_6", L"p_7", L"p_8"}, V),
                          FNOperator({L"p_9", L"p_10"}, {L"p_11", L"p_12"}, V),
@@ -336,7 +336,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
     })
 
     // 3-body ^ 2-body ^ 2-body ^ 3-body
-    SEQUANT2_PROFILE_SINGLE("wick(3^2^2^3)", {
+    SEQUANT_PROFILE_SINGLE("wick(3^2^2^3)", {
       auto opseq = FNOperatorSeq(
           {FNOperator({L"p_1", L"p_2", L"p_3"}, {L"p_5", L"p_6", L"p_7"}, V),
            FNOperator({L"p_9", L"p_10"}, {L"p_11", L"p_12"}, V),
@@ -352,7 +352,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
     })
 
     // 4-body ^ 2-body ^ 4-body
-    SEQUANT2_PROFILE_SINGLE("wick(4^2^4)", {
+    SEQUANT_PROFILE_SINGLE("wick(4^2^4)", {
       auto opseq =
           FNOperatorSeq({FNOperator({L"p_1", L"p_2", L"p_3", L"p_4"},
                                     {L"p_5", L"p_6", L"p_7", L"p_8"}, V),
@@ -368,7 +368,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
     })
 
     // 4-body ^ 4-body ^ 4-body
-    SEQUANT2_PROFILE_SINGLE("wick(4^4^4)", {
+    SEQUANT_PROFILE_SINGLE("wick(4^4^4)", {
       auto opseq =
           FNOperatorSeq({FNOperator({L"p_1", L"p_2", L"p_3", L"p_4"},
                                     {L"p_5", L"p_6", L"p_7", L"p_8"}, V),
@@ -418,7 +418,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
 
 #if 1
     // 2-body ^ 2-body
-    SEQUANT2_PROFILE_SINGLE("wick(H2*T2)", {
+    SEQUANT_PROFILE_SINGLE("wick(H2*T2)", {
       auto opseq =
           FNOperatorSeq({FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}, V),
                          FNOperator({L"a_4", L"a_5"}, {L"i_4", L"i_5"}, V)});
@@ -463,7 +463,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
     });
 
     // 2-body ^ 1-body ^ 1-body
-    SEQUANT2_PROFILE_SINGLE("wick(H2*T1*T1)", {
+    SEQUANT_PROFILE_SINGLE("wick(H2*T1*T1)", {
       auto opseq =
           FNOperatorSeq({FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}, V),
                          FNOperator({L"a_4"}, {L"i_4"}, V),
@@ -498,7 +498,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
 #endif
 
     // 2=body ^ 1-body ^ 2-body with dependent (PNO) indices
-    SEQUANT2_PROFILE_SINGLE("wick(P2*H1*T2)", {
+    SEQUANT_PROFILE_SINGLE("wick(P2*H1*T2)", {
       auto opseq = FNOperatorSeq({FNOperator(IndexList{L"i_1", L"i_2"},
                                              {Index(L"a_1", {L"i_1", L"i_2"}),
                                               Index(L"a_2", {L"i_1", L"i_2"})},
@@ -546,7 +546,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
     });
 
     // 2=body ^ 2-body ^ 2-body ^ 2-body with dependent (PNO) indices
-    SEQUANT2_PROFILE_SINGLE("wick(P2*H2*T2*T2)", {
+    SEQUANT_PROFILE_SINGLE("wick(P2*H2*T2*T2)", {
       auto opseq =
           FNOperatorSeq({FNOperator(IndexList{L"i_1", L"i_2"},
                                     {Index(L"a_1", {L"i_1", L"i_2"}),
@@ -606,7 +606,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
 
 #if 1
     // 3-body ^ 2-body ^ 2-body ^ 3-body
-    SEQUANT2_PROFILE_SINGLE("wick(P3*H2*T2*T3)", {
+    SEQUANT_PROFILE_SINGLE("wick(P3*H2*T2*T3)", {
       constexpr bool connected_only = true;
       constexpr bool topology = true;
       auto P3 =

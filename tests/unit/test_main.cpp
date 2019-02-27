@@ -4,8 +4,8 @@
 
 #define CATCH_CONFIG_RUNNER
 #include <clocale>
-#include "../../src/SeQuant2/op.hpp"
-#include "../../src/SeQuant2/space.hpp"
+#include "../../src/SeQuant/op.hpp"
+#include "../../src/SeQuant/space.hpp"
 #include "catch.hpp"
 
 int main( int argc, char* argv[] )
@@ -15,8 +15,8 @@ int main( int argc, char* argv[] )
   // global setup...
   std::setlocale(LC_ALL,"en_US.UTF-8");
   std::cout.precision(std::numeric_limits<double>::max_digits10);
-  sequant2::IndexSpace::register_standard_instances();
-  sequant2::detail::OpIdRegistrar op_id_registrar;
+  sequant::IndexSpace::register_standard_instances();
+  sequant::detail::OpIdRegistrar op_id_registrar;
 
   int result = session.run(argc, argv);
 

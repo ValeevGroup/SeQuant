@@ -5,11 +5,11 @@
 #include "catch.hpp"
 
 #include <iostream>
-#include "../../src/SeQuant2/op.hpp"
+#include "../../src/SeQuant/op.hpp"
 
 TEST_CASE("Op", "[elements]") {
 
-  using namespace sequant2;
+  using namespace sequant;
 
   SECTION("constructors") {
     REQUIRE_NOTHROW(FOp{});

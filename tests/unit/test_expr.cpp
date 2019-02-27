@@ -5,10 +5,10 @@
 #include "catch.hpp"
 
 #include <iostream>
-#include "../../src/SeQuant2/wick.hpp"
-#include "../../src/SeQuant2/hash.hpp"
+#include "../../src/SeQuant/wick.hpp"
+#include "../../src/SeQuant/hash.hpp"
 
-struct Dummy : public sequant2::Expr {
+struct Dummy : public sequant::Expr {
   virtual ~Dummy() = default;
   std::wstring to_latex() const override {
     return L"{\\text{Dummy}}";
@@ -17,12 +17,12 @@ struct Dummy : public sequant2::Expr {
     return L"Dummy[]";
   }
   type_id_type type_id() const override { return get_type_id<Dummy>(); };
-  sequant2::ExprPtr clone() const override { return sequant2::ex<Dummy>(); }
-  bool static_equal(const sequant2::Expr &that) const override { return true; }
+  sequant::ExprPtr clone() const override { return sequant::ex<Dummy>(); }
+  bool static_equal(const sequant::Expr &that) const override { return true; }
 };
 
 template<typename T>
-struct VecExpr : public std::vector<T>, public sequant2::Expr {
+struct VecExpr : public std::vector<T>, public sequant::Expr {
   using base_type = std::vector<T>;
   using base_type::begin;
   using base_type::end;
@@ -36,7 +36,7 @@ struct VecExpr : public std::vector<T>, public sequant2::Expr {
   std::wstring to_latex() const override {
     std::wstring result = L"{\\text{VecExpr}\\{";
     for (const auto &e: *this) {
-      if constexpr (sequant2::Expr::is_shared_ptr_of_expr_or_derived<T>::value) {
+      if constexpr (sequant::Expr::is_shared_ptr_of_expr_or_derived<T>::value) {
         result += e->to_latex() + L" ";
       } else {
         result += std::to_wstring(e) + L" ";
@@ -50,7 +50,7 @@ struct VecExpr : public std::vector<T>, public sequant2::Expr {
     size_t count = 1;
     for (const auto &e: *this) {
       const auto last_it = count == this->std::vector<T>::size();
-      if constexpr (sequant2::Expr::is_shared_ptr_of_expr_or_derived<T>::value) {
+      if constexpr (sequant::Expr::is_shared_ptr_of_expr_or_derived<T>::value) {
         result += e->to_wolfram() + (last_it ? L"" : L",");
       } else {
         result += std::to_wstring(e) + (last_it ? L"" : L",");
@@ -67,14 +67,14 @@ struct VecExpr : public std::vector<T>, public sequant2::Expr {
 
  private:
   cursor begin_cursor() const override {
-    if constexpr (sequant2::Expr::is_shared_ptr_of_expr<T>::value) {
+    if constexpr (sequant::Expr::is_shared_ptr_of_expr<T>::value) {
       return base_type::empty() ? Expr::begin_cursor() : cursor{&base_type::at(0)};
     } else {
       return Expr::begin_cursor();
     }
   };
   cursor end_cursor() const override {
-    if constexpr (sequant2::Expr::is_shared_ptr_of_expr<T>::value) {
+    if constexpr (sequant::Expr::is_shared_ptr_of_expr<T>::value) {
       return base_type::empty() ? Expr::end_cursor() : cursor{&base_type::at(0) + base_type::size()};
     } else {
       return Expr::end_cursor();
@@ -87,14 +87,14 @@ struct VecExpr : public std::vector<T>, public sequant2::Expr {
     return const_cast<const VecExpr &>(*this).end_cursor();
   };
 
-  bool static_equal(const sequant2::Expr &that) const override {
+  bool static_equal(const sequant::Expr &that) const override {
     return static_cast<const base_type&>(*this) == static_cast<const base_type&>(static_cast<const VecExpr&>(that));
   }
 
 };
 
 struct latex_visitor {
-  void operator()(const std::shared_ptr<sequant2::Expr>& expr) {
+  void operator()(const std::shared_ptr<sequant::Expr>& expr) {
     result += expr->to_latex();
   }
   std::wstring result {};
@@ -102,7 +102,7 @@ struct latex_visitor {
 
 TEST_CASE("Expr", "[elements]") {
 
-  using namespace sequant2;
+  using namespace sequant;
 
   SECTION("constructors") {
     REQUIRE_NOTHROW(std::make_shared<Constant>(2));

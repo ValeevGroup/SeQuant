@@ -5,11 +5,11 @@
 #include "catch.hpp"
 
 #include <iostream>
-#include "../../src/SeQuant2/wick.hpp"
+#include "../../src/SeQuant/wick.hpp"
 
 TEST_CASE("Tensor", "[elements]") {
 
-  using namespace sequant2;
+  using namespace sequant;
 
   SECTION("constructors") {
 

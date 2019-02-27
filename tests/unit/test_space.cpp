@@ -4,11 +4,10 @@
 
 #include "catch.hpp"
 
-#include "../../src/SeQuant2/space.hpp"
+#include "../../src/SeQuant/space.hpp"
 
 TEST_CASE("IndexSpace", "[elements]") {
-
-  using namespace sequant2;
+  using namespace sequant;
 
   SECTION("register_instance") {
     REQUIRE_THROWS(IndexSpace::register_instance(
@@ -73,5 +72,4 @@ TEST_CASE("IndexSpace", "[elements]") {
     REQUIRE(occupancy_class(IndexSpace::instance(L"a")) == +1);
     REQUIRE(occupancy_class(IndexSpace::instance(L"p")) == 0);
   }
-
 }

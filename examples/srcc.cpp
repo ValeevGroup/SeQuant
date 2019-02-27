@@ -1,16 +1,16 @@
 #include <clocale>
 #include <iostream>
-#include "../src/SeQuant2/mbpt/spin.hpp"
-#include "../src/SeQuant2/mbpt/sr/sr.hpp"
+#include "../src/domain/mbpt/spin.hpp"
+#include "../src/domain/mbpt/sr/sr.hpp"
 
-using namespace sequant2;
+using namespace sequant;
 
 namespace {
 
 template <size_t P, size_t N>
 auto ccresidual() {
-  using namespace sequant2::mbpt::sr::so;
-  // using namespace sequant2::mbpt::sr::so::pno;
+  using namespace sequant::mbpt::sr::so;
+  // using namespace sequant::mbpt::sr::so::pno;
 
   // this is clearly very wasteful since we are including many terms that are 0
   // TODO screen out zeroes
@@ -48,21 +48,24 @@ std::vector<ExprPtr> cceqvec() {
 int main(int argc, char* argv[]) {
   std::setlocale(LC_ALL, "en_US.UTF-8");
   std::cout.precision(std::numeric_limits<double>::max_digits10);
-  sequant2::IndexSpace::register_standard_instances();
-  sequant2::detail::OpIdRegistrar op_id_registrar;
+  sequant::IndexSpace::register_standard_instances();
+  sequant::detail::OpIdRegistrar op_id_registrar;
   TensorCanonicalizer::set_cardinal_tensor_labels({L"A", L"f", L"g", L"t"});
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
 
   {  // CC amplitude eqs
-    constexpr size_t N = 1;
-    constexpr size_t P = 1;
+    constexpr size_t N = 2;
+    constexpr size_t P = 2;
     constexpr size_t PMIN = 1;
     auto eqvec = cceqvec<N, P>();
     for (size_t R = PMIN; R <= P; ++R) {
       std::wcout << "R" << R << "(expS" << N << ") has " << eqvec[R]->size()
                  << " terms:\n"
                  << to_latex_align(eqvec[R], 20, 5) << std::endl;
+      // test CCSD residuals
+      if (R == 1 && N == 2)
+        assert(eqvec[R]->size() == 15);  // stray zero + 14 legit terms
       if (R == 2 && N == 2) assert(eqvec[R]->size() == 31);
     }
   }
