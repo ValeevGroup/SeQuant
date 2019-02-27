@@ -69,9 +69,44 @@ struct simplify_visitor {
     return expr_changed;
   }
 
-  /// simplifies a Sum ... currently nothing to do since Sum::{ap,pre}pend
-  /// simplify automatically
-  bool simplify_sum(ExprPtr& expr) { return false; }
+  /// simplifies a Sum ... generally Sum::{ap,pre}pend simplify automatically,
+  /// but the user code may transforms sums in a way that the same
+  /// simplifications need to be applied here
+  bool simplify_sum(ExprPtr& expr) {
+    bool mutated = false;
+    const Sum& expr_sum = expr->as<Sum>();
+
+    // simplify sums with 0 and 1 arguments
+    if (expr_sum.empty()) {
+      expr = ex<Constant>(0);
+      mutated = true;
+    } else if (expr_sum.summands().size() == 1) {
+      expr = expr_sum.summands()[0];
+      mutated = true;
+    } else {  // sums can be simplified if any of its summands are sums or two
+              // or more summands are Constants
+      size_t nconst = 0;
+      bool need_to_rebuild = false;
+      for (auto&& summand : expr_sum.summands()) {
+        if (summand->is<Sum>()) {
+          need_to_rebuild = true;
+          break;
+        } else if (summand->is<Constant>()) {
+          ++nconst;
+          if (nconst == 2) {
+            need_to_rebuild = true;
+            break;
+          }
+        }
+      }
+      if (need_to_rebuild) {  // rebuilding will automatically simplify the sum
+        auto summands = expr_sum.summands();
+        expr = ex<Sum>(begin(summands), end(summands));
+        mutated = true;
+      }
+    }
+    return mutated;
+  }
 
   // @return true if any simplifications were performed
   bool simplify(ExprPtr &expr) {
