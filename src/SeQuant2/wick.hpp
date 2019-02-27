@@ -11,6 +11,7 @@
 
 #include "op.hpp"
 #include "ranges.hpp"
+#include "runtime.hpp"
 #include "tensor.hpp"
 
 namespace sequant2 {
@@ -32,6 +33,11 @@ class WickTheorem {
   static_assert(S == Statistics::FermiDirac,
                 "WickTheorem not yet implemented for Bose-Einstein");
 
+  WickTheorem(const WickTheorem &) = default;
+  WickTheorem(WickTheorem &&) = default;
+  WickTheorem &operator=(const WickTheorem &) = default;
+  WickTheorem &operator=(WickTheorem &&) = default;
+
   explicit WickTheorem(const NormalOperatorSequence<S> &input) : input_(input) {
     assert(input.size() <= max_input_size);
     assert(input.empty() || input.vacuum() != Vacuum::Invalid);
@@ -39,6 +45,14 @@ class WickTheorem {
   }
 
   explicit WickTheorem(ExprPtr expr_input) : expr_input_(expr_input) {}
+
+  /// constructs WickTheorem from @c other with expression input set to @c
+  /// expr_input
+  WickTheorem(ExprPtr expr_input, const WickTheorem &other)
+      : WickTheorem(other) {
+    // copy ctor does not do anything useful, so this is OK
+    expr_input_ = expr_input;
+  }
 
   /// Controls whether next call to compute() will full contractions only or all
   /// (including partial) contractions. By default compute() generates all
@@ -128,65 +142,8 @@ class WickTheorem {
   /// @param count_only if true, will return a vector of default-initialized
   /// values, useful if only interested in the total count
   /// @return the result of applying Wick's theorem, i.e. a sum of {prefactor,
-  /// normal operator} pairs
-  ExprPtr compute(const bool count_only = false) const {
-    // have an Expr as input? Apply recursively ...
-    if (expr_input_) {
-      /// expand, then apply recursively to products
-      expand(expr_input_);
-      // if sum, canonicalize and apply to each summand ...
-      if (expr_input_->is<Sum>()) {
-        canonicalize(expr_input_);
-        // for each summand spin off a wick task
-        abort();  // not yet implemented
-      }
-      // ... else if a product, find NormalOperatorSequence, if any, and compute
-      // ...
-      else if (expr_input_->is<Product>()) {
-        canonicalize(expr_input_);
-        // NormalOperators should be all at the end
-        auto first_nop_it = ranges::find_if(
-            *expr_input_,
-            [](const ExprPtr &expr) { return expr->is<NormalOperator<S>>(); });
-        // if have ops, split into prefactor and op sequence
-        if (first_nop_it != ranges::end(*expr_input_)) {
-          ExprPtr prefactor =
-              ex<CProduct>(expr_input_->as<Product>().scalar(), ExprPtrList{});
-          bool found_op = false;
-          ranges::for_each(*expr_input_, [this, &found_op,
-                                          &prefactor](const ExprPtr &factor) {
-            if (factor->is<NormalOperator<S>>()) {
-              input_.push_back(factor->as<NormalOperator<S>>());
-              found_op = true;
-            } else {
-              assert(factor->is_cnumber());
-              assert(!found_op);  // make sure that ops are at the end
-              *prefactor *= *factor;
-            }
-          });
-          if (!input_.empty()) {
-            auto result = compute_nopseq(count_only);
-            result = prefactor * result;
-            expand(result);
-            reduce(result);
-            simplify(result);
-            canonicalize(result);
-            return result;
-          }
-        } else {  // product does not include ops
-          return expr_input_;
-        }
-      }
-      // ... else if NormalOperatorSequence already (unlikely!), compute ...
-      else if (expr_input_->is<NormalOperatorSequence<S>>()) {
-        input_ = expr_input_->as<NormalOperatorSequence<S>>();
-        return compute_nopseq(count_only);
-      } else  // ... else do nothing
-        return expr_input_;
-    } else
-      return compute_nopseq(count_only);
-    abort();
-  }
+  /// normal operator} pairs; nullptr is returns if the result is zero.
+  ExprPtr compute(const bool count_only = false) const;
 
  private:
   static constexpr size_t max_input_size =
@@ -365,7 +322,6 @@ class WickTheorem {
 
     // convert result to an Expr
     // if result.size() == 0, return null ptr
-    // TODO revise if decide to use Constant(0)
     ExprPtr result_expr;
     if (result.size() == 1) {  // if result.size() == 1, return Product
       result_expr = ex<Product>(std::move(result[0].first));

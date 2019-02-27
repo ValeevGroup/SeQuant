@@ -377,7 +377,92 @@ inline void reduce_wick_impl(std::shared_ptr<Product> &expr,
 
 }  // namespace detail
 
-template<Statistics S>
+template <Statistics S>
+ExprPtr WickTheorem<S>::compute(const bool count_only) const {
+  // have an Expr as input? Apply recursively ...
+  if (expr_input_) {
+    /// expand, then apply recursively to products
+    expand(expr_input_);
+    // if sum, canonicalize and apply to each summand ...
+    if (expr_input_->is<Sum>()) {
+      canonicalize(expr_input_);
+      assert(!expr_input_->as<Sum>().empty());
+
+      // parallelize over summands
+      auto result = std::make_shared<Sum>();
+      std::mutex result_mtx;  // serializes updates of result
+      auto summands = expr_input_->as<Sum>().summands();
+      auto wick_task = [&summands, &result, &result_mtx, this,
+                        &count_only](size_t task_id) {
+        auto &summand = summands[task_id];
+        WickTheorem wt(summand, *this);
+        auto task_result = wt.compute(count_only);
+        if (task_result) {
+          std::scoped_lock<std::mutex> lock(result_mtx);
+          result->append(task_result);
+        }
+      };
+      parallel_for_each(wick_task, summands.size());
+
+      // if the sum has 1 summand, return it directly
+      ExprPtr result_expr = (result->summands().size() == 1)
+                                ? std::move(result->summands()[0])
+                                : result;
+      return result_expr;
+    }
+    // ... else if a product, find NormalOperatorSequence, if any, and compute
+    // ...
+    else if (expr_input_->is<Product>()) {
+      canonicalize(expr_input_);
+      // NormalOperators should be all at the end
+      auto first_nop_it = ranges::find_if(
+          *expr_input_,
+          [](const ExprPtr &expr) { return expr->is<NormalOperator<S>>(); });
+      // if have ops, split into prefactor and op sequence
+      if (first_nop_it != ranges::end(*expr_input_)) {
+        ExprPtr prefactor =
+            ex<CProduct>(expr_input_->as<Product>().scalar(), ExprPtrList{});
+        bool found_op = false;
+        ranges::for_each(
+            *expr_input_, [this, &found_op, &prefactor](const ExprPtr &factor) {
+              if (factor->is<NormalOperator<S>>()) {
+                input_.push_back(factor->as<NormalOperator<S>>());
+                found_op = true;
+              } else {
+                assert(factor->is_cnumber());
+                assert(!found_op);  // make sure that ops are at the end
+                *prefactor *= *factor;
+              }
+            });
+        if (!input_.empty()) {
+          auto result = compute_nopseq(count_only);
+          if (result) {  // simplify if obtained nonzero ...
+            result = prefactor * result;
+            expand(result);
+            reduce(result);
+            simplify(result);
+            canonicalize(result);
+            simplify(result);  // simplify again since canonization may produce
+                               // new opportunities (e.g. terms cancel, etc.)
+          }
+          return result;
+        }
+      } else {  // product does not include ops
+        return expr_input_;
+      }
+    }
+    // ... else if NormalOperatorSequence already (unlikely!), compute ...
+    else if (expr_input_->is<NormalOperatorSequence<S>>()) {
+      input_ = expr_input_->as<NormalOperatorSequence<S>>();
+      return compute_nopseq(count_only);
+    } else  // ... else do nothing
+      return expr_input_;
+  } else
+    return compute_nopseq(count_only);
+  abort();
+}
+
+template <Statistics S>
 void WickTheorem<S>::reduce(ExprPtr &expr) const {
   // there are 2 possibilities: expr is a single Product, or it's a Sum of
   // Products
