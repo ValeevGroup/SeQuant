@@ -494,7 +494,7 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
     return type_id;
   };
 
-};  // Expr
+};  // class Expr
 
 using ExprPtr = std::shared_ptr<Expr>;
 
@@ -577,7 +577,9 @@ class Constant : public Expr {
   bool static_equal(const Expr &that) const override {
     return value() == static_cast<const Constant &>(that).value();
   }
-};
+};  // class Constant
+
+using ConstantPtr = std::shared_ptr<Constant>;
 
 /// @brief generalized product, i.e. a scalar times a product of zero or more
 /// terms.
@@ -814,7 +816,9 @@ class Product : public Expr {
     } else
       return false;
   }
-};
+};  // class Product
+
+using ProductPtr = std::shared_ptr<Product>;
 
 class CProduct : public Product {
  public:
@@ -826,7 +830,9 @@ class CProduct : public Product {
 
  private:
   bool static_commutativity() const override { return true; }
-};
+};  // class CProduct
+
+using CProductPtr = std::shared_ptr<CProduct>;
 
 class NCProduct : public Product {
  public:
@@ -838,7 +844,9 @@ class NCProduct : public Product {
 
  private:
   bool static_commutativity() const override { return true; }
-};
+};  // class NCProduct
+
+using NCProductPtr = std::shared_ptr<NCProduct>;
 
 /// @brief sum of zero or more summands
 
@@ -1009,7 +1017,9 @@ class Sum : public Expr {
     } else
       return false;
   }
-};
+};  // class Sum
+
+using SumPtr = std::shared_ptr<Sum>;
 
 inline std::wstring to_latex(const Expr &expr) { return expr.to_latex(); }
 
