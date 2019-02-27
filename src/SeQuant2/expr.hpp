@@ -1056,7 +1056,13 @@ inline std::wstring to_latex(const ExprPtr &exprptr) {
 }
 
 /// splits long outer sum into a multiline align
-inline std::wstring to_latex_align(const ExprPtr &exprptr, size_t max_terms_per_align = 0) {
+/// @param exprptr the expression to be converted to a string
+/// @param max_lines_per_align the maximum number of lines in the align before
+/// starting new align block (if zero, will produce single align block)
+/// @param max_terms_per_line the maximum number of terms per line
+inline std::wstring to_latex_align(const ExprPtr &exprptr,
+                                   size_t max_lines_per_align = 0,
+                                   size_t max_terms_per_line = 1) {
   std::wstring result = to_latex(exprptr);
   if (exprptr->is<Sum>()) {
     result.erase(0, 7);  // remove leading  "{ \left"
@@ -1064,16 +1070,22 @@ inline std::wstring to_latex_align(const ExprPtr &exprptr, size_t max_terms_per_
                    L")");  // replace trailing "\right) }" with ")"
     result = std::wstring(L"\\begin{align}\n& ") + result;
     // assume no inner sums
+    int line_counter = 0;
     int term_counter = 0;
     std::wstring::size_type pos = 0;
     while ((pos = result.find(L" + ", pos + 1)) != std::wstring::npos) {
-      ++term_counter;
-      if (max_terms_per_align > 0 && term_counter >= max_terms_per_align) {
+      if (max_lines_per_align > 0 &&
+          line_counter == max_lines_per_align) {  // start new align block?
         result.insert(pos + 3, L"\n\\end{align}\n\\begin{align}\n& ");
-        term_counter = 1;
+        line_counter = 0;
       } else {
-        result.insert(pos + 3, L"\\\\\n& ");
+        // break the line if needed
+        if ((term_counter + 1) % max_terms_per_line == 0) {
+          result.insert(pos + 3, L"\\\\\n& ");
+          ++line_counter;
+        }
       }
+      ++term_counter;
     }
   } else {
     result = std::wstring(L"\\begin{align}\n& ") + result;
