@@ -873,15 +873,29 @@ class Sum : public Expr {
   /// @param begin the begin iterator
   /// @param end the end iterator
   template <typename Iterator>
-  Sum(Iterator begin, Iterator end) : summands_(begin, end) {}
+  Sum(Iterator begin, Iterator end) {
+    // use append to flatten out Sum summands
+    for (auto it = begin; it != end; ++it) {
+      append(*it);
+    }
+  }
 
   /// append a summand to the sum
   /// @param summand the summand
   Sum &append(ExprPtr summand) {
     if (!summand->is<Sum>()) {
-      if (summand->is<Constant>()) {  // exclude zeros
+      if (summand->is<Constant>()) {  // exclude zeros, add up constants
+                                      // immediately, if possible
         auto summand_constant = std::static_pointer_cast<Constant>(summand);
-        if (summand_constant != 0) summands_.push_back(std::move(summand));
+        if (constant_summand_idx_) {
+          assert(summands_.at(*constant_summand_idx_)->is<Constant>());
+          *(summands_[*constant_summand_idx_]) += *summand;
+        } else {
+          if (summand_constant != 0) {
+            summands_.push_back(std::move(summand));
+            constant_summand_idx_ = summands_.size() - 1;
+          }
+        }
       } else {
         summands_.push_back(std::move(summand));
       }
@@ -898,9 +912,20 @@ class Sum : public Expr {
     if (!summand->is<Sum>()) {
       if (summand->is<Constant>()) {  // exclude zeros
         auto summand_constant = std::static_pointer_cast<Constant>(summand);
-        if (summand_constant != 0) summands_.push_back(std::move(summand));
+        if (constant_summand_idx_) {  // add up to the existing constant ...
+          assert(summands_.at(*constant_summand_idx_)->is<Constant>());
+          *summands_[*constant_summand_idx_] += *summand_constant;
+        } else {  // or include the nonzero constant and update
+                  // constant_summand_idx_
+          if (summand_constant != 0) {
+            summands_.insert(summands_.begin(), std::move(summand));
+            constant_summand_idx_ = 0;
+          }
+        }
       } else {
-        summands_.push_back(std::move(summand));
+        summands_.insert(summands_.begin(), std::move(summand));
+        if (constant_summand_idx_)  // if have a constant, update its position
+          ++*constant_summand_idx_;
       }
       reset_hash_value();
     } else {  // this recursively flattens Sum summands
@@ -968,6 +993,9 @@ class Sum : public Expr {
 
  private:
   container::svector<ExprPtr> summands_{};
+  std::optional<size_t>
+      constant_summand_idx_{};  // points to the constant summand, if any; used
+                                // to sum up constants in append/prepend
 
   cursor begin_cursor() override {
     return summands_.empty() ? Expr::begin_cursor() : cursor{&summands_[0]};
