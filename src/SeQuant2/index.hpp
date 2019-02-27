@@ -226,8 +226,6 @@ class Index : public Taggable {
         return std::wstring(str);
       else{
         assert(subsc_pos + 1 < str.size());
-        if (subsc_pos + 2 == str.size())  // don't protect single character
-          return std::wstring(str);
         std::wstring result = L"\\!\\(\\*SubscriptBox[\\(";
         result += std::wstring(str.substr(0, subsc_pos));
         result += L"\\), \\(";
