@@ -1110,7 +1110,8 @@ std::decay_t<Sequence> clone(Sequence &&exprseq) {
 
 };  // namespace sequant
 
-#include "expr_algorithm.hpp"
 #include "expr_operator.hpp"
 
-#endif //SEQUANT_EXPR_HPP
+#include "expr_algorithm.hpp"
+
+#endif  // SEQUANT_EXPR_HPP
