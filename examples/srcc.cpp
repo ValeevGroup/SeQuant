@@ -1,32 +1,123 @@
 #include <clocale>
 #include <iostream>
+
+#include <boost/numeric/interval.hpp>
+
 #include "../src/domain/mbpt/spin.hpp"
 #include "../src/domain/mbpt/sr/sr.hpp"
 
 using namespace sequant;
 
+using namespace sequant::mbpt::sr::so;
+// using namespace sequant::mbpt::sr::so::pno;
+
 namespace {
+
+/// computes VEE for A(P)*H*T(N)^K using excitation level screening (unless @c
+/// screen is set)
+template <size_t K>
+ExprPtr screened_vac_av(
+    const ExprPtr& expr,
+    std::initializer_list<std::pair<int, int>> op_connections,
+    bool screen = true) {
+  if (!screen) return vac_av(expr, op_connections);
+
+  ExprPtr input = expr;
+  // expand, if possible
+  if (input->is<Product>()) {
+    expand(input);
+    if (input->is<Product>()) input = ex<Sum>(ExprPtrList{input});
+  }
+  assert(input->is<Sum>());
+  auto input_sum = input->as<Sum>();
+
+  SumPtr screened_input;  // if needed
+  int term_cnt = 0;
+  for (auto&& term : input_sum.summands()) {
+    assert(term->is<Product>());
+    auto& term_prod = term->as<Product>();
+    assert(term_prod.factors().size() == 4 + 2 * K);
+
+    // locate projector
+    assert(term_prod.factor(0)->is<Tensor>());
+    assert(term_prod.factor(0)->as<Tensor>().label() == L"A");
+    const int P = term_prod.factor(0)->as<Tensor>().rank();
+
+    // locate Hamiltonian
+    assert(term_prod.factor(2)->is<Tensor>());
+    auto hlabel = term_prod.factor(2)->as<Tensor>().label();
+    assert(hlabel == L"f" || hlabel == L"g");
+    const int R = term_prod.factor(2)->as<Tensor>().rank();
+
+    using interval = boost::numeric::interval<int>;
+    auto exlev = interval(-P - R, -P + R);
+
+    for (size_t k = 0; k != K; ++k) {
+      auto p = 4 + k * 2;
+      assert(term_prod.factor(p)->is<Tensor>());
+      assert(term_prod.factor(p)->as<Tensor>().label() == L"t");
+      exlev += term_prod.factor(p)->as<Tensor>().rank();
+    }
+
+    // if VEE == 0, skip
+    if (!in(0, exlev)) {
+      // check if already skipped some ... if not, allocate the result and copy
+      // all terms prior to this one
+      if (screened_input == nullptr) {
+        screened_input =
+            std::make_shared<Sum>(input_sum.summands().begin(),
+                                  input_sum.summands().begin() + term_cnt);
+      }
+    } else {  // VEE != 0
+      if (screened_input) {
+        screened_input->append(term);
+      }
+    }
+    ++term_cnt;
+  }  // term loop
+
+  ExprPtr wick_input = (screened_input) ? screened_input : input;
+  if (wick_input->size() == 0)
+    return ex<Constant>(0);
+  else {
+    return vac_av(wick_input, op_connections);
+  }
+}
 
 template <size_t P, size_t N>
 auto ccresidual() {
-  using namespace sequant::mbpt::sr::so;
-  // using namespace sequant::mbpt::sr::so::pno;
+  auto ahbar = [](const bool screen) {
+    auto result =
+        screened_vac_av<0>(A<P>() * H(), {}, screen) +
+        screened_vac_av<1>(A<P>() * H() * T<N>(), {{1, 2}}, screen) +
+        ex<Constant>(1. / 2) *
+            screened_vac_av<2>(A<P>() * H() * T<N>() * T<N>(), {{1, 2}, {1, 3}},
+                               screen) +
+        ex<Constant>(1. / 6) *
+            screened_vac_av<3>(A<P>() * H() * T<N>() * T<N>() * T<N>(),
+                               {{1, 2}, {1, 3}, {1, 4}}, screen) +
+        ex<Constant>(1. / 24) *
+            screened_vac_av<4>(A<P>() * H() * T<N>() * T<N>() * T<N>() * T<N>(),
+                               {{1, 2}, {1, 3}, {1, 4}, {1, 5}}, screen);
+    //    std::wcout << "result (after compute) = " << to_latex_align(result) <<
+    //    std::endl;
+    expand(result);
+    //    std::wcout << "result (after expand) = " << to_latex_align(result) <<
+    //    std::endl;
+    simplify(result);
+    //    std::wcout << "result (after simplify) = " << to_latex_align(result)
+    //    << std::endl;
+    canonicalize(result);
+    //    std::wcout << "result (after canon) = " << to_latex_align(result) <<
+    //    std::endl;
+    simplify(result);
+    //    std::wcout << "result (after simplify2) = " << to_latex_align(result)
+    //    << std::endl;
 
-  // this is clearly very wasteful since we are including many terms that are 0
-  // TODO screen out zeroes
-  auto result =
-      vac_av(A<P>() * H()) + vac_av(A<P>() * H() * T<N>(), {{1, 2}}) +
-      ex<Constant>(1. / 2) *
-          vac_av(A<P>() * H() * T<N>() * T<N>(), {{1, 2}, {1, 3}}) +
-      ex<Constant>(1. / 6) * vac_av(A<P>() * H() * T<N>() * T<N>() * T<N>(),
-                                    {{1, 2}, {1, 3}, {1, 4}}) +
-      ex<Constant>(1. / 24) *
-          vac_av(A<P>() * H() * T<N>() * T<N>() * T<N>() * T<N>(),
-                 {{1, 2}, {1, 3}, {1, 4}, {1, 5}});
-  simplify(result);
-  expand(result);
-  canonicalize(result);
-  return result;
+    return result;
+  };
+
+  return ahbar(true);
 }
 
 template <size_t P, size_t PMIN, size_t N>
@@ -66,7 +157,8 @@ int main(int argc, char* argv[]) {
       // test CCSD residuals
       if (R == 1 && N == 2)
         assert(eqvec[R]->size() == 15);  // stray zero + 14 legit terms
-      if (R == 2 && N == 2) assert(eqvec[R]->size() == 31);
+      if (R == 2 && N == 2)
+        assert(eqvec[R]->size() == 31);
     }
   }
 
