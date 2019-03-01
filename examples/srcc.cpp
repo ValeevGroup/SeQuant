@@ -99,20 +99,7 @@ auto ccresidual() {
         ex<Constant>(1. / 24) *
             screened_vac_av<4>(A<P>() * H() * T<N>() * T<N>() * T<N>() * T<N>(),
                                {{1, 2}, {1, 3}, {1, 4}, {1, 5}}, screen);
-    //    std::wcout << "result (after compute) = " << to_latex_align(result) <<
-    //    std::endl;
-    expand(result);
-    //    std::wcout << "result (after expand) = " << to_latex_align(result) <<
-    //    std::endl;
     simplify(result);
-    //    std::wcout << "result (after simplify) = " << to_latex_align(result)
-    //    << std::endl;
-    canonicalize(result);
-    //    std::wcout << "result (after canon) = " << to_latex_align(result) <<
-    //    std::endl;
-    simplify(result);
-    //    std::wcout << "result (after simplify2) = " << to_latex_align(result)
-    //    << std::endl;
 
     return result;
   };
@@ -154,11 +141,12 @@ int main(int argc, char* argv[]) {
       std::wcout << "R" << R << "(expS" << N << ") has " << eqvec[R]->size()
                  << " terms:\n"
                  << to_latex_align(eqvec[R], 20, 5) << std::endl;
-      // test CCSD residuals
-      if (R == 1 && N == 2)
-        assert(eqvec[R]->size() == 15);  // stray zero + 14 legit terms
-      if (R == 2 && N == 2)
-        assert(eqvec[R]->size() == 31);
+
+      // validate known sizes of some CC residuals
+      if (R == 1 && N == 2) assert(eqvec[R]->size() == 14);
+      if (R == 2 && N == 2) assert(eqvec[R]->size() == 31);
+      if (R == 3 && N == 3) assert(eqvec[R]->size() == 47);
+      if (R == 4 && N == 4) assert(eqvec[R]->size() == 74);
     }
   }
 

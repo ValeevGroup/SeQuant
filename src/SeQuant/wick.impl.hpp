@@ -404,10 +404,14 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) const {
       };
       parallel_for_each(wick_task, summands.size());
 
+      // if the sum is empty return zero
       // if the sum has 1 summand, return it directly
-      ExprPtr result_expr = (result->summands().size() == 1)
-                                ? std::move(result->summands()[0])
-                                : result;
+      ExprPtr result_expr = result;
+      if (result->summands().size() == 0) {
+        result_expr = ex<Constant>(0);
+      }
+      if (result->summands().size() == 1)
+        result_expr = std::move(result->summands()[0]);
       return result_expr;
     }
     // ... else if a product, find NormalOperatorSequence, if any, and compute
@@ -442,9 +446,11 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) const {
             reduce(result);
             simplify(result);
             canonicalize(result);
-            simplify(result);  // simplify again since canonization may produce
-                               // new opportunities (e.g. terms cancel, etc.)
-          }
+            rapid_simplify(
+                result);  // rapid_simplify again since canonization may produce
+                          // new opportunities (e.g. terms cancel, etc.)
+          } else
+            result = ex<Constant>(0);
           return result;
         }
       } else {  // product does not include ops
@@ -457,7 +463,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) const {
       return compute_nopseq(count_only);
     } else  // ... else do nothing
       return expr_input_;
-  } else
+  } else  // given a NormalOperatorSequence instead of an expression
     return compute_nopseq(count_only);
   abort();
 }

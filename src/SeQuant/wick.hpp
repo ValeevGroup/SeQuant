@@ -141,8 +141,7 @@ class WickTheorem {
   /// Computes and returns the result
   /// @param count_only if true, will return a vector of default-initialized
   /// values, useful if only interested in the total count
-  /// @return the result of applying Wick's theorem, i.e. a sum of {prefactor,
-  /// normal operator} pairs; nullptr is returns if the result is zero.
+  /// @return the result of applying Wick's theorem
   ExprPtr compute(const bool count_only = false) const;
 
  private:
@@ -165,8 +164,7 @@ class WickTheorem {
       op_connections_input_;  // only used to cache input to set_op_connections_
 
   /// Evaluates wick_ theorem for a single NormalOperatorSequence
-  /// @return the result of applying Wick's theorem, i.e. a sum of {prefactor,
-  /// normal operator} pairs
+  /// @return the result of applying Wick's theorem
   ExprPtr compute_nopseq(const bool count_only) const {
     if (!full_contractions_)
       throw std::logic_error(
@@ -310,6 +308,7 @@ class WickTheorem {
 
   /// Applies most naive version of Wick's theorem, where sign rule involves
   /// counting Ops
+  /// @return the result, or nullptr if the result is zero
   ExprPtr compute_nontensor_wick(const bool count_only) const {
     std::vector<std::pair<Product, NormalOperator<S>>>
         result;      //!< current value of the result

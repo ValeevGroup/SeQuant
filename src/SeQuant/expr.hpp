@@ -99,8 +99,11 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
     return this->canonicalize();
   }
 
-  /// recursively visit the tree, i.e. call visitor on each subexpression in
-  /// depth-first fashion
+  /// recursively visit this expression, i.e. call visitor on each subexpression
+  /// in depth-first fashion.
+  /// @warning this will only work for tree expressions; no checking is
+  /// performed that each subexpression has only been visited once
+  /// TODO make work for graphs
   /// @tparam Visitor a callable with (std::shared_ptr<Expr>&) or (const
   /// std::shared_ptr<Expr>&) signature
   /// @param visitor the visitor object
@@ -637,6 +640,7 @@ class Product : public Expr {
   /// (post-)multiplies the product by @c scalar times @c factor
   template <typename T>
   Product &append(T scalar, ExprPtr factor) {
+    assert(factor);
     scalar_ *= scalar;
     if (!factor->is<Product>()) {
       if (factor->is<Constant>()) {  // factor in Constant
@@ -664,6 +668,7 @@ class Product : public Expr {
   /// than append()
   template <typename T>
   Product &prepend(T scalar, ExprPtr factor) {
+    assert(factor);
     scalar_ *= scalar;
     if (!factor->is<Product>()) {
       if (factor->is<Constant>()) {  // factor in Constant
@@ -888,6 +893,7 @@ class Sum : public Expr {
   /// append a summand to the sum
   /// @param summand the summand
   Sum &append(ExprPtr summand) {
+    assert(summand);
     if (!summand->is<Sum>()) {
       if (summand->is<Constant>()) {  // exclude zeros, add up constants
                                       // immediately, if possible
@@ -896,7 +902,7 @@ class Sum : public Expr {
           assert(summands_.at(*constant_summand_idx_)->is<Constant>());
           *(summands_[*constant_summand_idx_]) += *summand;
         } else {
-          if (summand_constant != 0) {
+          if (*summand_constant != Constant(0)) {
             summands_.push_back(std::move(summand));
             constant_summand_idx_ = summands_.size() - 1;
           }
@@ -914,6 +920,7 @@ class Sum : public Expr {
   /// prepend a summand to the sum
   /// @param summand the summand
   Sum &prepend(ExprPtr summand) {
+    assert(summand);
     if (!summand->is<Sum>()) {
       if (summand->is<Constant>()) {  // exclude zeros
         auto summand_constant = std::static_pointer_cast<Constant>(summand);
