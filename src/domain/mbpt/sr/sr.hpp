@@ -124,8 +124,7 @@ inline ExprPtr vac_av(ExprPtr expr, std::initializer_list<std::pair<int,int>> op
       .use_topology(true);
   wick.set_op_connections(std::vector<std::pair<int, int>>{op_connections});
   auto result = wick.compute();
-  if (result->is<Sum>())
-    result->canonicalize();
+  simplify(result);
   return result;
 }
 

@@ -443,8 +443,8 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) const {
           if (result) {  // simplify if obtained nonzero ...
             result = prefactor * result;
             expand(result);
-            reduce(result);
-            simplify(result);
+            this->reduce(result);
+            rapid_simplify(result);
             canonicalize(result);
             rapid_simplify(
                 result);  // rapid_simplify again since canonization may produce

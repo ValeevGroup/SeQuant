@@ -110,7 +110,7 @@ auto ccresidual() {
 template <size_t P, size_t PMIN, size_t N>
 void ccresidual_rec(std::vector<ExprPtr>& result) {
   result[P] = ccresidual<P, N>();
-  simplify(result[P]);
+  rapid_simplify(result[P]);
   if constexpr (P > PMIN) ccresidual_rec<P - 1, PMIN, N>(result);
 }
 

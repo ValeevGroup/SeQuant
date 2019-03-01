@@ -449,11 +449,11 @@ TEST_CASE("WickTheorem", "[algorithms]") {
               L"{p_1}}_{{i_4}}}{S^{{p_2}}_{{i_5}}}{S^{{a_5}}_{{p_4}}}{S^{{a_4}}"
               L"_{{p_3}}}}\\right) }");
       wick.reduce(wick_result_2);
-      simplify(wick_result_2);
+      rapid_simplify(wick_result_2);
       TensorCanonicalizer::register_instance(
           std::make_shared<DefaultTensorCanonicalizer>());
       canonicalize(wick_result_2);
-      simplify(wick_result_2);
+      rapid_simplify(wick_result_2);
 
       std::wcout << L"H2*T2 = " << to_latex(wick_result_2) << std::endl;
       std::wcout << L"H2*T2 = " << to_wolfram(wick_result_2) << std::endl;
@@ -483,11 +483,11 @@ TEST_CASE("WickTheorem", "[algorithms]") {
           wick_result;
       expand(wick_result_2);
       wick.reduce(wick_result_2);
-      simplify(wick_result_2);
+      rapid_simplify(wick_result_2);
       TensorCanonicalizer::register_instance(
           std::make_shared<DefaultTensorCanonicalizer>(std::vector<Index>{}));
       canonicalize(wick_result_2);
-      simplify(wick_result_2);
+      rapid_simplify(wick_result_2);
 
       print("H2*T1*T1 = ", wick_result_2);
       REQUIRE(to_latex(wick_result_2) ==
@@ -526,11 +526,11 @@ TEST_CASE("WickTheorem", "[algorithms]") {
           wick_result;
       expand(wick_result_2);
       wick.reduce(wick_result_2);
-      simplify(wick_result_2);
+      rapid_simplify(wick_result_2);
       TensorCanonicalizer::register_instance(
           std::make_shared<DefaultTensorCanonicalizer>());
       canonicalize(wick_result_2);
-      simplify(wick_result_2);
+      rapid_simplify(wick_result_2);
 
       std::wcout << L"P2*H1*T2(PNO) = " << to_latex_align(wick_result_2)
                  << std::endl;
@@ -591,13 +591,13 @@ TEST_CASE("WickTheorem", "[algorithms]") {
           wick_result;
       expand(wick_result_2);
       wick.reduce(wick_result_2);
-      simplify(wick_result_2);
+      rapid_simplify(wick_result_2);
       TensorCanonicalizer::register_instance(
           std::make_shared<DefaultTensorCanonicalizer>());
       canonicalize(wick_result_2);
       canonicalize(wick_result_2);
       canonicalize(wick_result_2);
-      simplify(wick_result_2);
+      rapid_simplify(wick_result_2);
 
       std::wcout << L"P2*H2*T2*T2(PNO) = " << to_latex_align(wick_result_2, 20)
                  << std::endl;

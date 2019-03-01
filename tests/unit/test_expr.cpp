@@ -399,7 +399,7 @@ TEST_CASE("Expr", "[elements]") {
       REQUIRE(to_latex(x) ==
               L"{ \\left({{{3}} \\times } + {{\\text{Dummy}}} + {{{3}} \\times "
               L"{\\text{Dummy}}} + {{\\text{Dummy}}{\\text{Dummy}}}\\right) }");
-      simplify(x);
+      rapid_simplify(x);
       //      std::wcout << "x = " << to_latex(x) << std::endl;
     }
     {

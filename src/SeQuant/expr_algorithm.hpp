@@ -17,120 +17,6 @@ inline void canonicalize(ExprPtr& expr) {
 }
 
 namespace detail {
-struct simplify_visitor {
-  void operator()(ExprPtr &expr) {
-    if (debug) std::wcout << "simplify_visitor received " << to_latex(expr) << std::endl;
-    // apply simplify() iteratively until done
-    while (simplify(expr)) {
-      if (debug) std::wcout << "after 1 round of simplification have " << to_latex(expr) << std::endl;
-    }
-    if (debug) std::wcout << "simplification result = " << to_latex(expr) << std::endl;
-    // canonicalization to be done by other visitors
-  }
-
-  /// simplifies a Product by:
-  /// - flattening subproducts
-  /// - factoring in constants
-  /// @param[in,out] expr (shared_ptr to ) a Product
-  bool simplify_product(ExprPtr &expr) {
-    auto& expr_ref = *expr;
-
-    // need to rebuild if any factor is a constant or product
-    bool need_to_rebuild = false;
-    const auto nsubexpr = ranges::size(*expr);
-    for (std::size_t i = 0; i != nsubexpr; ++i) {
-      const auto expr_i_is_product = expr_ref[i]->is<Product>();
-      const auto expr_i_is_constant = expr_ref[i]->is<Constant>();
-      if (expr_i_is_product || expr_i_is_constant) {
-        need_to_rebuild = true;
-        break;
-      }
-    }
-    bool expr_changed = false;
-    if (need_to_rebuild) {
-      expr = ex<Product>(expr->as<Product>().scalar(), begin(expr->expr()),
-                         end(expr->expr()));
-      expr_changed = true;
-    }
-    const auto expr_size = ranges::size(*expr);
-    auto expr_product = std::static_pointer_cast<Product>(expr);
-    if (expr_product->scalar() == 0.) {  // if scalar = 0, make it 0 (too aggressive?)
-      expr = ex<Constant>(0);
-      expr_changed = true;
-    }
-    else if (expr_size == 0) {  // if product reduced to a constant make it a constant
-      expr = ex<Constant>(expr_product->scalar());
-      expr_changed = true;
-    }
-    else if (expr_size == 1 && expr_product->scalar() == 1.) {  // if product has 1 term and the scalar is 1, lift the factor
-      expr = (*expr)[0];
-      expr_changed = true;
-    }
-    return expr_changed;
-  }
-
-  /// simplifies a Sum ... generally Sum::{ap,pre}pend simplify automatically,
-  /// but the user code may transforms sums in a way that the same
-  /// simplifications need to be applied here
-  bool simplify_sum(ExprPtr& expr) {
-    bool mutated = false;
-    const Sum& expr_sum = expr->as<Sum>();
-
-    // simplify sums with 0 and 1 arguments
-    if (expr_sum.empty()) {
-      expr = ex<Constant>(0);
-      mutated = true;
-    } else if (expr_sum.summands().size() == 1) {
-      expr = expr_sum.summands()[0];
-      mutated = true;
-    } else {  // sums can be simplified if any of its summands are sums or two
-              // or more summands are Constants
-      size_t nconst = 0;
-      bool need_to_rebuild = false;
-      for (auto&& summand : expr_sum.summands()) {
-        if (summand->is<Sum>()) {
-          need_to_rebuild = true;
-          break;
-        } else if (summand->is<Constant>()) {
-          ++nconst;
-          if (nconst == 2) {
-            need_to_rebuild = true;
-            break;
-          }
-        }
-      }
-      if (need_to_rebuild) {  // rebuilding will automatically simplify the sum
-        auto summands = expr_sum.summands();
-        expr = ex<Sum>(begin(summands), end(summands));
-        mutated = true;
-      }
-    }
-    return mutated;
-  }
-
-  // @return true if any simplifications were performed
-  bool simplify(ExprPtr &expr) {
-    if (expr->is<Product>()) {
-      return simplify_product(expr);
-    } else if (expr->is<Sum>()) {
-      return simplify_sum(expr);
-    } else
-      return false;
-  }
-
-  bool debug = false;
-};
-};  // namespace detail
-
-/// Simplifies an Expr by applying all known transformations (e.g. eliminating trivial math, CSE, etc.)
-/// @param[in,out] expr expression to be simplified
-inline void simplify(ExprPtr& expr) {
-  detail::simplify_visitor simplifier{};
-  expr->visit(simplifier);
-  simplifier(expr);
-}
-
-namespace detail {
 struct expand_visitor {
   void operator()(ExprPtr& expr) {
     if (debug) std::wcout << "expand_visitor received " << to_latex(expr) << std::endl;
@@ -367,6 +253,138 @@ class expr_range
 //  using iterator = ranges::basic_iterator<cursor>;
 };
 
+namespace detail {
+struct rapid_simplify_visitor {
+  void operator()(ExprPtr& expr) {
+    if (debug)
+      std::wcout << "rapid_simplify_visitor received " << to_latex(expr)
+                 << std::endl;
+    // apply simplify() iteratively until done
+    while (simplify(expr)) {
+      if (debug)
+        std::wcout << "after 1 round of simplification have " << to_latex(expr)
+                   << std::endl;
+    }
+    if (debug)
+      std::wcout << "simplification result = " << to_latex(expr) << std::endl;
+  }
+
+  /// simplifies a Product by:
+  /// - flattening subproducts
+  /// - factoring in constants
+  /// @param[in,out] expr (shared_ptr to ) a Product
+  bool simplify_product(ExprPtr& expr) {
+    auto& expr_ref = *expr;
+
+    // need to rebuild if any factor is a constant or product
+    bool need_to_rebuild = false;
+    const auto nsubexpr = ranges::size(*expr);
+    for (std::size_t i = 0; i != nsubexpr; ++i) {
+      const auto expr_i_is_product = expr_ref[i]->is<Product>();
+      const auto expr_i_is_constant = expr_ref[i]->is<Constant>();
+      if (expr_i_is_product || expr_i_is_constant) {
+        need_to_rebuild = true;
+        break;
+      }
+    }
+    bool expr_changed = false;
+    if (need_to_rebuild) {
+      expr = ex<Product>(expr->as<Product>().scalar(), begin(expr->expr()),
+                         end(expr->expr()));
+      expr_changed = true;
+    }
+    const auto expr_size = ranges::size(*expr);
+    auto expr_product = std::static_pointer_cast<Product>(expr);
+    if (expr_product->scalar() ==
+        0.) {  // if scalar = 0, make it 0 (too aggressive?)
+      expr = ex<Constant>(0);
+      expr_changed = true;
+    } else if (expr_size ==
+               0) {  // if product reduced to a constant make it a constant
+      expr = ex<Constant>(expr_product->scalar());
+      expr_changed = true;
+    } else if (expr_size == 1 &&
+               expr_product->scalar() == 1.) {  // if product has 1 term and the
+                                                // scalar is 1, lift the factor
+      expr = (*expr)[0];
+      expr_changed = true;
+    }
+    return expr_changed;
+  }
+
+  /// simplifies a Sum ... generally Sum::{ap,pre}pend simplify automatically,
+  /// but the user code may transforms sums in a way that the same
+  /// simplifications need to be applied here
+  bool simplify_sum(ExprPtr& expr) {
+    bool mutated = false;
+    const Sum& expr_sum = expr->as<Sum>();
+
+    // simplify sums with 0 and 1 arguments
+    if (expr_sum.empty()) {
+      expr = ex<Constant>(0);
+      mutated = true;
+    } else if (expr_sum.summands().size() == 1) {
+      expr = expr_sum.summands()[0];
+      mutated = true;
+    } else {  // sums can be simplified if any of its summands are sums or two
+      // or more summands are Constants
+      size_t nconst = 0;
+      bool need_to_rebuild = false;
+      for (auto&& summand : expr_sum.summands()) {
+        if (summand->is<Sum>()) {
+          need_to_rebuild = true;
+          break;
+        } else if (summand->is<Constant>()) {
+          ++nconst;
+          if (nconst == 2) {
+            need_to_rebuild = true;
+            break;
+          }
+        }
+      }
+      if (need_to_rebuild) {  // rebuilding will automatically simplify the sum
+        auto summands = expr_sum.summands();
+        expr = ex<Sum>(begin(summands), end(summands));
+        mutated = true;
+      }
+    }
+    return mutated;
+  }
+
+  // @return true if any simplifications were performed
+  bool simplify(ExprPtr& expr) {
+    if (expr->is<Product>()) {
+      return simplify_product(expr);
+    } else if (expr->is<Sum>()) {
+      return simplify_sum(expr);
+    } else
+      return false;
+  }
+
+  bool debug = false;
+};
+};  // namespace detail
+
+/// Simplifies an Expr by applying cheap transformations (e.g. eliminating
+/// trivial math, flattening sums and products, etc.)
+/// @param[in,out] expr expression to be simplified
+/// @sa simplify()
+inline void rapid_simplify(ExprPtr& expr) {
+  detail::rapid_simplify_visitor simplifier{};
+  expr->visit(simplifier);
+  simplifier(expr);
+}
+
+/// Simplifies an Expr by a combination of expansion, canonicalization, and
+/// rapid_simplify
+/// @param[in,out] expr expression to be simplified
+/// @sa rapid_simplify()
+inline void simplify(ExprPtr& expr) {
+  expand(expr);
+  rapid_simplify(expr);
+  canonicalize(expr);
+  rapid_simplify(expr);
+}
 
 }  // namespace sequant
 
