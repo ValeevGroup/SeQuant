@@ -691,6 +691,11 @@ class Product : public Expr {
   const auto &factors() const { return factors_; }
   auto &factors() { return factors_; }
 
+  /// Factor accessor
+  /// @param i factor index
+  /// @return ith factor
+  const ExprPtr &factor(size_t i) const { return factors_.at(i); }
+
   /// @return true if the number of factors is zero
   bool empty() const { return factors_.empty(); }
 
@@ -934,7 +939,13 @@ class Sum : public Expr {
     return *this;
   }
 
+  /// Summands accessor
   const auto &summands() const { return summands_; }
+
+  /// Summand accessor
+  /// @param i summand index
+  /// @return ith summand
+  const ExprPtr &summand(size_t i) const { return summands_.at(i); }
 
   /// @return true if the number of factors is zero
   bool empty() const { return summands_.empty(); }
