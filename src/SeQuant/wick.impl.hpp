@@ -422,6 +422,10 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) const {
       auto first_nop_it = ranges::find_if(
           *expr_input_,
           [](const ExprPtr &expr) { return expr->is<NormalOperator<S>>(); });
+      if (use_topology_) {
+        // TODO compute tensor-nop connections and topological partitions
+        //        abort(); // not yet implemented
+      }
       // if have ops, split into prefactor and op sequence
       if (first_nop_it != ranges::end(*expr_input_)) {
         ExprPtr prefactor =
@@ -460,6 +464,8 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) const {
     // ... else if NormalOperatorSequence already (unlikely!), compute ...
     else if (expr_input_->is<NormalOperatorSequence<S>>()) {
       input_ = expr_input_->as<NormalOperatorSequence<S>>();
+      // NB no simplification possible for a bare product w/ full contractions
+      // ... partial contractions will need simplification
       return compute_nopseq(count_only);
     } else  // ... else do nothing
       return expr_input_;

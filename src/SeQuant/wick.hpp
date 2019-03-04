@@ -71,12 +71,21 @@ class WickTheorem {
     spinfree_ = sf;
     return *this;
   }
-  /// Controls whether Op's of the same type within each NormalOperator are
-  /// assumed topologically equivalent so that it is possible to utilize the
-  /// topology to eliminate the topologically-equivalent contractions. By
-  /// default the use of topology is not enabled.
-  /// @param sf if true, will complete full contractions only.
+  /// Controls whether:
+  /// - Op's of the same type within each NormalOperator are
+  /// assumed topologically equivalent, and
+  /// - (<b>if an Expr is given as input</b>) NormalOperator objects attached to
+  /// Tensor objects are
+  ///   considered equivalent. (If a NormalOperatorSequence is given as input,
+  ///   such use of topological equivalence if enabled by invoking
+  ///   set_op_partitions() ).
+  ///
+  /// This is useful to to eliminate the topologically-equivalent contractions
+  /// when full contractions are sought. By default the use of topology is not
+  /// enabled.
+  /// @param sf if true, will utilize the topology to minimize work.
   /// @warning currently is only supported if full contractions are requested
+  /// @sa set_op_partitions()
   WickTheorem &use_topology(bool ut) {
     assert(full_contractions_);
     use_topology_ = ut;
@@ -105,6 +114,7 @@ class WickTheorem {
   /// will not constrain connectivity
   /// @param op_index_pairs the list of pairs of op indices to be connected in
   /// the result
+  /// TODO rename op -> nop to distinguish Op and NormalOperator
   template <typename IndexPairContainer>
   WickTheorem &set_op_connections(IndexPairContainer &&op_index_pairs) {
     if (expr_input_ == nullptr || !op_connections_input_.empty()) {
@@ -138,6 +148,41 @@ class WickTheorem {
     return *this;
   }
 
+  /// Specifies topological operator partitions; free (non-connected) operators
+  /// in the same partition are considered topologically equivalent, hence if
+  /// only full contractions are needed only contractions to the first available
+  /// operator in a partition is needed (multiplied by the degeneracy)
+  /// @param op_partitions list of operator partitions
+  /// @note if this partitions are not given, every operator is assumed to be in
+  /// its own partition
+  /// @internal this performs only the first phase of initialization of
+  /// op_topological_partition_
+  ///           since the number of operators is not guaranteed to be known
+  ///           until compute() is called (e.g. if op product is given as an
+  ///           Expr ). The second initialization phase (i.e. resizing to make
+  ///           sure every operator is assigned to a partition, including those
+  ///           not mentioned in @c op_partitions) will be completed in
+  ///           compute_nopseq().
+  /// TODO rename op -> nop to distinguish Op and NormalOperator
+  template <typename IndexListContainer>
+  WickTheorem &set_op_partitions(IndexListContainer &&op_partitions) {
+    using std::size;
+    topological_partition_size_ = container::svector<int>(size(op_partitions));
+    size_t partition_cnt = 0;
+    auto current_nops = size(op_topological_partition_);
+    for (auto &&partition : op_partitions) {
+      topological_partition_size_[partition_cnt] = size(partition);
+      for (auto &&op_idx : partition) {
+        assert(op_idx >= 0);
+        if (op_idx >= current_nops) {
+          current_nops = upsize_op_topological_partition(op_idx + 1);
+        }
+        op_topological_partition_[op_idx] = partition_cnt + 1;
+      }
+      ++partition_cnt;
+    }
+  }
+
   /// Computes and returns the result
   /// @param count_only if true, will return a vector of default-initialized
   /// values, useful if only interested in the total count
@@ -157,11 +202,43 @@ class WickTheorem {
   bool spinfree_ = false;
   bool use_topology_ = false;
   container::set<Index> external_indices_;
-  // for each operator specifies the reverse bitmask of connections (0 = must
-  // connect)
+  // for each operator specifies the reverse bitmask of target connections
+  // (0 = must connect)
+  /// TODO rename op -> nop to distinguish Op and NormalOperator
   container::svector<std::bitset<max_input_size>> op_connections_;
+  /// TODO rename op -> nop to distinguish Op and NormalOperator
   container::vector<std::pair<size_t, size_t>>
       op_connections_input_;  // only used to cache input to set_op_connections_
+
+  // for each operator specifies its topological partition (0 = topologically
+  // unique)
+  /// TODO rename op -> nop to distinguish Op and NormalOperator
+  mutable container::svector<size_t> op_topological_partition_;
+  container::svector<size_t>
+      topological_partition_size_;  // empty = assume all operators are
+                                    // topologically distinct
+
+  /// upsizes op_topological_partition_, filling new entries with zeroes
+  /// noop if current size > new_size, or if topological_partition_size_ is
+  /// empty
+  /// @return the (updated) size of op_topological_partition_
+  /// TODO rename op -> nop to distinguish Op and NormalOperator
+  size_t upsize_op_topological_partition(size_t new_size) const {
+    using std::size;
+    if (!topological_partition_size_.empty()) {
+      const auto current_size = size(op_topological_partition_);
+      if (new_size > current_size) {
+        op_topological_partition_.resize(new_size);
+        for (size_t i = current_size; i != new_size; ++i)
+          op_topological_partition_[i] = 0;
+        return new_size;
+      } else
+        return current_size;
+    } else {
+      assert(op_topological_partition_.size() == 0);
+      return 0;
+    }
+  }
 
   /// Evaluates wick_ theorem for a single NormalOperatorSequence
   /// @return the result of applying Wick's theorem
@@ -176,6 +253,8 @@ class WickTheorem {
     if (!op_connections_input_.empty())
       const_cast<WickTheorem<S> &>(*this).set_op_connections(
           op_connections_input_);
+    // size op_topological_partition_ to match input_, if needed
+    upsize_op_topological_partition(input_.size());
     // now compute
     auto result = compute_nontensor_wick(count_only);
     return std::move(result);
@@ -183,36 +262,50 @@ class WickTheorem {
 
   /// carries state down the stack of recursive calls
   struct NontensorWickState {
-    NontensorWickState(const NormalOperatorSequence<S> &opseq)
+    NontensorWickState(
+        const NormalOperatorSequence<S> &opseq,
+        /// TODO rename op -> nop to distinguish Op and NormalOperator
+        const container::svector<size_t> &op_toppart,
+        const container::svector<size_t> &toppart_size)
         : opseq(opseq),
+          opseq_size(opseq.opsize()),
           level(0),
           count_only(false),
           op_connections(opseq.size()),
-          adjacency_matrix(opseq.size() * (opseq.size() - 1) / 2, 0) {
-      compute_size();
-    }
+          adjacency_matrix(opseq.size() * (opseq.size() - 1) / 2, 0),
+          op_nconnections(opseq.size(), 0),
+          op_topological_partition(op_toppart),
+          topological_partition_size(toppart_size) {}
     NormalOperatorSequence<S> opseq;  //!< current state of operator sequence
     std::size_t opseq_size;           //!< current size of opseq
     Product sp;                       //!< current prefactor
     int level;                        //!< level in recursive wick call stack
     bool count_only;                  //!< if true, only update result size
+    /// TODO rename op -> nop to distinguish Op and NormalOperator
     container::svector<std::bitset<max_input_size>>
         op_connections;  //!< bitmask of connections for each op (1 = connected)
     container::svector<size_t>
-        adjacency_matrix;  // number of connections between each normop, only
-    // lower triangle is kept
+        adjacency_matrix;  //!< number of connections between each normop, only
+                           //!< lower triangle is kept
 
-    void compute_size() {
-      opseq_size = 0;
-      for (const auto &op : opseq) opseq_size += op.size();
-    }
+    /// for each operator specifies how many connections it currently has
+    /// TODO rename op -> nop to distinguish Op and NormalOperator
+    container::svector<size_t> op_nconnections;
+    /// maps op to its topological partition, if any (0 = no partition)
+    /// TODO rename op -> nop to distinguish Op and NormalOperator
+    const container::svector<size_t> &op_topological_partition;
+    /// current partition size
+    /// - when an operator is connected it's removed from the partition
+    /// - when it is disconnected fully it's readded to the partition
+    container::svector<size_t> topological_partition_size;
+
     void reset(const NormalOperatorSequence<S> &o) {
       sp = Product{};
       opseq = o;
       op_connections = decltype(op_connections)(opseq.size());
       adjacency_matrix =
           decltype(adjacency_matrix)(opseq.size() * (opseq.size() - 1) / 2, 0);
-      compute_size();
+      opseq_size = o.opsize();
     }
 
     template <typename T>
@@ -231,14 +324,29 @@ class WickTheorem {
     inline bool connect(const container::svector<std::bitset<max_input_size>>
                             &target_op_connections,
                         const Cursor &op1_cursor, const Cursor &op2_cursor) {
-      if (target_op_connections.empty())  // if no constraints, all is fair game
-        return true;
-
       auto result = true;
+
+      auto update_topology = [this](size_t op_idx) {
+        const auto nconnections = op_nconnections[op_idx];
+        if (!op_topological_partition.empty()) {
+          const auto partition_idx = op_topological_partition[op_idx];
+          if (nconnections == 0 && partition_idx > 0) {
+            assert(topological_partition_size[partition_idx] > 0);
+            --topological_partition_size[partition_idx - 1];
+          }
+        }
+        ++op_nconnections[op_idx];
+      };
 
       // local vars
       const auto op1_idx = op1_cursor.range_ordinal();
       const auto op2_idx = op2_cursor.range_ordinal();
+      if (target_op_connections
+              .empty()) {  // if no constraints, all is fair game
+        update_topology(op1_idx);
+        update_topology(op2_idx);
+        return true;
+      }
       const auto op1_op2_connected = op_connections[op1_idx].test(op2_idx);
 
       // update the connectivity
@@ -280,20 +388,34 @@ class WickTheorem {
       }
 
       adjacency_matrix[lowtri_idx(op1_idx, op2_idx)] += 1;
+      update_topology(op1_idx);
+      update_topology(op2_idx);
 
-      return true;  // not yet implemented
+      return true;
     }
     /// @brief Updates connectivity when contraction is reversed
     template <typename Cursor>
     inline void disconnect(const container::svector<std::bitset<max_input_size>>
                                &target_op_connections,
                            const Cursor &op1_cursor, const Cursor &op2_cursor) {
-      if (target_op_connections.empty())  // if no constraints, all is fair game
-        return;
+      auto update_topology = [this](size_t op_idx) {
+        const auto nconnections = --op_nconnections[op_idx];
+        if (!op_topological_partition.empty()) {
+          const auto partition_idx = op_topological_partition[op_idx];
+          if (nconnections == 0 && partition_idx > 0) {
+            ++topological_partition_size[partition_idx - 1];
+          }
+        }
+      };
 
       // local vars
       const auto op1_idx = op1_cursor.range_ordinal();
       const auto op2_idx = op2_cursor.range_ordinal();
+      update_topology(op1_idx);
+      update_topology(op2_idx);
+      if (target_op_connections.empty())  // if no constraints, we don't keep
+                                          // track of individual connections
+        return;
       assert(op_connections[op1_idx].test(op2_idx));
 
       auto &adjval = adjacency_matrix[lowtri_idx(op1_idx, op2_idx)];
@@ -314,7 +436,8 @@ class WickTheorem {
         result;      //!< current value of the result
     std::mutex mtx;  // used in critical sections updating the result
     auto result_plus_mutex = std::make_pair(&result, &mtx);
-    NontensorWickState state(input_);
+    NontensorWickState state(input_, op_topological_partition_,
+                             topological_partition_size_);
     state.count_only = count_only;
 
     recursive_nontensor_wick(result_plus_mutex, state);
@@ -358,12 +481,11 @@ class WickTheorem {
                 ranges::get_cursor(opseq_view_begin)
                     .range_iter()  // can't contract within same normop
         ) {
-          // topological degeneracy, if needed
+          // computes topological degeneracy:
           // 0 = nonunique index
           // n>0 = unique index in a group of n indices
-          size_t topological_degeneracy;
-
-          auto topologically_unique = [&]() {
+          auto topological_degeneracy = [&]() {
+            size_t result = 1;
             if (use_topology_) {
               auto &opseq_right = *(ranges::get_cursor(op_iter).range_iter());
               auto &op_it = ranges::get_cursor(op_iter).elem_iter();
@@ -371,18 +493,22 @@ class WickTheorem {
               auto &hug = opseq_right.hug();
               auto &group = hug->group(op_idx_in_opseq);
               if (group.second.find(op_idx_in_opseq) == group.second.begin())
-                topological_degeneracy = hug->group_size(op_idx_in_opseq);
+                result = hug->group_size(op_idx_in_opseq);
               else
-                topological_degeneracy = 0;
-            } else
-              topological_degeneracy = 1;
-            return topological_degeneracy > 0;
+                result = 0;
+            }
+            // account for topology of normal operators
+            if (result > 0 && !topological_partition_size_.empty()) {
+              abort();
+            }
+            return result;
           };
 
           // check if can contract these indices and
           // check connectivity constraints (if needed)
+          size_t top_degen;
           if (can_contract(*opseq_view_begin, *op_iter, input_.vacuum()) &&
-              topologically_unique() &&
+              (top_degen = topological_degeneracy()) > 0 &&
               state.connect(op_connections_, ranges::get_cursor(op_iter),
                             ranges::get_cursor(opseq_view_begin))) {
             //            std::wcout << "level " << state.level << ":
@@ -405,7 +531,7 @@ class WickTheorem {
             // update the prefactor and opseq
             Product sp_copy = state.sp;
             state.sp.append(
-                topological_degeneracy * phase,
+                top_degen * phase,
                 contract(*opseq_view_begin, *op_iter, input_.vacuum()));
             // remove from back to front
             Op<S> right = *op_iter;
