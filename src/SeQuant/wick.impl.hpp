@@ -5,6 +5,11 @@
 #ifndef SEQUANT_WICK_IMPL_HPP
 #define SEQUANT_WICK_IMPL_HPP
 
+#if __has_include(<execution>)
+#include <execution>
+#define SEQUANT_HAS_EXECUTION_HEADER
+#endif
+
 namespace sequant {
 
 namespace detail {
@@ -392,6 +397,20 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) const {
       auto result = std::make_shared<Sum>();
       std::mutex result_mtx;  // serializes updates of result
       auto summands = expr_input_->as<Sum>().summands();
+
+#if SEQUANT_HAS_EXECUTION_HEADER
+      auto wick_task = [&result, &result_mtx, this,
+                        &count_only](const ExprPtr &input) {
+        WickTheorem wt(input, *this);
+        auto task_result = wt.compute(count_only);
+        if (task_result) {
+          std::scoped_lock<std::mutex> lock(result_mtx);
+          result->append(task_result);
+        }
+      };
+      std::for_each(std::execution::par_unseq, begin(summands), end(summands),
+                    wick_task);
+#else
       auto wick_task = [&summands, &result, &result_mtx, this,
                         &count_only](size_t task_id) {
         auto &summand = summands[task_id];
@@ -403,6 +422,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) const {
         }
       };
       parallel_for_each(wick_task, summands.size());
+#endif
 
       // if the sum is empty return zero
       // if the sum has 1 summand, return it directly
