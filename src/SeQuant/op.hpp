@@ -618,6 +618,17 @@ class NormalOperatorSequence : public container::svector<NormalOperator<S>>, pub
   operator const base_type &() const & { return *this; }
   operator base_type &&() && { return *this; }
 
+  /// @return the total number of Op<S> objects in this
+  /// @warning not to be confused with NormalOperatorSequence::size() that
+  /// returns the number of NormalOperator<S> objects
+  auto opsize() const {
+    size_t opsz = 0;
+    for (auto &&nop : *this) {
+      opsz += nop.size();
+    }
+    return opsz;
+  }
+
   /// applies (Hermitian) adjoint operation to this
   /// @return reference to @c *this , for daisy-chaining
   NormalOperatorSequence &adjoint() {
