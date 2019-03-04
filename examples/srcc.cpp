@@ -133,8 +133,8 @@ int main(int argc, char* argv[]) {
       std::make_shared<DefaultTensorCanonicalizer>());
 
   {  // CC amplitude eqs
-    constexpr size_t N = 2;
-    constexpr size_t P = 2;
+    constexpr size_t N = 6;
+    constexpr size_t P = 6;
     constexpr size_t PMIN = 1;
     auto eqvec = cceqvec<N, P>();
     for (size_t R = PMIN; R <= P; ++R) {
@@ -147,6 +147,7 @@ int main(int argc, char* argv[]) {
       if (R == 2 && N == 2) assert(eqvec[R]->size() == 31);
       if (R == 3 && N == 3) assert(eqvec[R]->size() == 47);
       if (R == 4 && N == 4) assert(eqvec[R]->size() == 74);
+      if (R == 5 && N == 5) assert(eqvec[R]->size() == 99);
     }
   }
 
