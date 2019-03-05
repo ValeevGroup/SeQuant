@@ -55,6 +55,8 @@ TEST_CASE("Op", "[elements]") {
     REQUIRE(oper1[1] == fann(L"i_1"));
 #endif
 
+    /////////////////// N-conserving normal op
+    // 1 body
     REQUIRE_NOTHROW(FNOperator({L"i_1"}, {L"a_1"}));
     auto nop1 = FNOperator({L"i_1"}, {L"a_1"});
     REQUIRE(nop1.creators().size() == 1);
@@ -62,6 +64,7 @@ TEST_CASE("Op", "[elements]") {
     REQUIRE(nop1.creators()[0] == fcre(L"i_1"));
     REQUIRE(nop1.annihilators()[0] == fann(L"a_1"));
 
+    // 2 body
     REQUIRE_NOTHROW(FNOperator({Index{L"i_1"}, Index{L"i_2"}},
                                {Index{L"a_1", {L"i_1", L"i_2"}}, Index{L"a_2", {L"i_1", L"i_2"}}}));
     auto nop2 =
@@ -73,6 +76,19 @@ TEST_CASE("Op", "[elements]") {
     REQUIRE(nop2.annihilators()[0] == fann(Index{L"a_1", {L"i_1", L"i_2"}}));
     REQUIRE(nop2.annihilators()[1] == fann(Index{L"a_2", {L"i_1", L"i_2"}}));
 
+    /////////////////// N-nonconserving normal op
+    REQUIRE_NOTHROW(FNOperator({L"i_1"}, {}));
+    auto nop3 = FNOperator({L"i_1"}, {});
+    REQUIRE(nop3.creators().size() == 1);
+    REQUIRE(nop3.annihilators().size() == 0);
+    REQUIRE(nop3.creators()[0] == fcre(L"i_1"));
+    REQUIRE_NOTHROW(FNOperator({}, {Index{L"a_1", {L"i_1"}}}));
+    auto nop4 = FNOperator({}, {Index{L"a_1", {L"i_1"}}});
+    REQUIRE(nop4.creators().size() == 0);
+    REQUIRE(nop4.annihilators().size() == 1);
+    REQUIRE(nop4.annihilators()[0] == fann(Index{L"a_1", {L"i_1"}}));
+
+    /////////////////// normal op sequence
     REQUIRE_NOTHROW(FNOperatorSeq({FNOperator({L"i_1"}, {L"i_2"}), FNOperator({L"i_3"}, {L"i_4"}),
                                    FNOperator({L"i_5"}, {L"i_6"})}));
     auto nopseq1 =
