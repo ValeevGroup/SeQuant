@@ -347,6 +347,12 @@ TEST_CASE("Op", "[elements]") {
     auto nop4 = FNOperator({L"i_1"}, {L"a_1", L"a_2"}, Vacuum::SingleProduct);
     REQUIRE(to_latex(nop4) == L"{\\tilde{a}^{\\textvisiblespace\\,{i_1}}_{{a_1}{a_2}}}");
 
+    auto nop5 = FNOperator({L"i_1"}, {}, Vacuum::SingleProduct);
+    REQUIRE(to_latex(nop5) == L"{\\tilde{a}^{{i_1}}_{\\textvisiblespace}}");
+
+    auto nop6 = FNOperator({}, {L"a_1"}, Vacuum::SingleProduct);
+    REQUIRE(to_latex(nop6) == L"{\\tilde{a}^{\\textvisiblespace}_{{a_1}}}");
+
     auto nopseq1 = FNOperatorSeq({nop1, nop2});
     REQUIRE(to_latex(nopseq1)
                 == L"{{\\tilde{a}^{{i_1}{i_2}}_{{a_1}{a_2}}}{\\tilde{a}^{{i_1}{i_2}}_{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}}}");
