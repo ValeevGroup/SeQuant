@@ -247,8 +247,8 @@ class Operator : public container::svector<Op<S>>, public Expr {
   using base_type::cbegin;
   using base_type::cend;
   using base_type::empty;
-  using base_type::end;
   using base_type::size;
+  using base_type::at;
   using base_type::operator[];
 
   Operator() = default;
@@ -376,8 +376,8 @@ class NormalOperator : public Operator<S> {
   using base_type::cbegin;
   using base_type::cend;
   using base_type::empty;
-  using base_type::end;
   using base_type::size;
+  using base_type::at;
   using base_type::operator[];
 
   /// constructs an identity operator
@@ -623,8 +623,8 @@ class NormalOperatorSequence : public container::svector<NormalOperator<S>>, pub
   using base_type::cbegin;
   using base_type::cend;
   using base_type::empty;
-  using base_type::end;
   using base_type::size;
+  using base_type::at;
   using base_type::operator[];
 
   /// constructs an empty sequence
