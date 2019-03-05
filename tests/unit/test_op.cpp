@@ -50,10 +50,8 @@ TEST_CASE("Op", "[elements]") {
     auto oper1 = FOperator{fcre(L"i_1"), fann(L"i_1")};
     REQUIRE(oper1.statistics == Statistics::FermiDirac);
     REQUIRE(oper1.size() == 2);
-#if not defined(__GNUG__)
     REQUIRE(oper1[0] == fcre(L"i_1"));
     REQUIRE(oper1[1] == fann(L"i_1"));
-#endif
 
     /////////////////// N-conserving normal op
     // 1 body
@@ -89,16 +87,25 @@ TEST_CASE("Op", "[elements]") {
     REQUIRE(nop4.annihilators()[0] == fann(Index{L"a_1", {L"i_1"}}));
 
     /////////////////// normal op sequence
+    // can include N-conserving ...
     REQUIRE_NOTHROW(FNOperatorSeq({FNOperator({L"i_1"}, {L"i_2"}), FNOperator({L"i_3"}, {L"i_4"}),
                                    FNOperator({L"i_5"}, {L"i_6"})}));
     auto nopseq1 =
         FNOperatorSeq({FNOperator({L"i_1"}, {L"i_2"}), FNOperator({L"i_3"}, {L"i_4"}), FNOperator({L"i_5"}, {L"i_6"})});
     REQUIRE(nopseq1.size() == 3);
-#if not defined(__GNUG__)
     REQUIRE(nopseq1[0] == FNOperator({L"i_1"}, {L"i_2"}));
     REQUIRE(nopseq1[1] == FNOperator({L"i_3"}, {L"i_4"}));
     REQUIRE(nopseq1[2] == FNOperator({L"i_5"}, {L"i_6"}));
-#endif
+    REQUIRE(nopseq1.at(0) == FNOperator({L"i_1"}, {L"i_2"}));
+    REQUIRE(nopseq1.at(1) == FNOperator({L"i_3"}, {L"i_4"}));
+    REQUIRE(nopseq1.at(2) == FNOperator({L"i_5"}, {L"i_6"}));
+
+    // ... N-nonconserving normal ops ...
+    auto nopseq2 = FNOperatorSeq({FNOperator({}, {L"i_1"})});
+    REQUIRE(nopseq2.size() == 1);
+    REQUIRE(nopseq2[0] == FNOperator({}, {L"i_1"}));
+
+    // but all vacua must match
     REQUIRE_THROWS(FNOperatorSeq({FNOperator({L"i_1"}, {L"i_2"}, Vacuum::Physical),
                                   FNOperator({L"i_3"}, {L"i_4"}, Vacuum::SingleProduct),
                                   FNOperator({L"i_5"}, {L"i_6"})}));
@@ -117,10 +124,8 @@ TEST_CASE("Op", "[elements]") {
     auto oper1 = FOperator{fcre(L"i_1"), fann(L"i_2")}.adjoint();
     REQUIRE(oper1.statistics == Statistics::FermiDirac);
     REQUIRE(oper1.size() == 2);
-#if not defined(__GNUG__)
     REQUIRE(oper1[0] == fcre(L"i_2"));
     REQUIRE(oper1[1] == fann(L"i_1"));
-#endif
 
     auto nop2 =
         FNOperator({Index{L"i_1"}}, {Index{L"a_1", {L"i_1"}}, Index{L"a_2", {L"i_1"}}}).adjoint();
@@ -133,11 +138,9 @@ TEST_CASE("Op", "[elements]") {
     auto nopseq1 = FNOperatorSeq({FNOperator({L"i_1"}, {L"i_2"}), FNOperator({L"i_3"}, {L"i_4"}),
                                   FNOperator({L"i_5"}, {L"i_6"})}).adjoint();
     REQUIRE(nopseq1.size() == 3);
-#if not defined(__GNUG__)
     REQUIRE(nopseq1[2] == FNOperator({L"i_1"}, {L"i_2"}).adjoint());
     REQUIRE(nopseq1[1] == FNOperator({L"i_3"}, {L"i_4"}).adjoint());
     REQUIRE(nopseq1[0] == FNOperator({L"i_5"}, {L"i_6"}).adjoint());
-#endif
   }
 
   SECTION("conversion") {
@@ -146,12 +149,10 @@ TEST_CASE("Op", "[elements]") {
     REQUIRE_NOTHROW(static_cast<FOperator>(nop1));
     FOperator op1(static_cast<FOperator>(nop1));
     REQUIRE(op1.size() == 4);
-#if not defined(__GNUG__)
     REQUIRE(op1[0] == fcre(L"i_1"));
     REQUIRE(op1[1] == fcre(L"i_2"));
     REQUIRE(op1[2] == fann(Index{L"a_2", {L"i_1", L"i_2"}}));
     REQUIRE(op1[3] == fann(Index{L"a_1", {L"i_1", L"i_2"}}));
-#endif
   }
 
   SECTION("quasiparticle character") {

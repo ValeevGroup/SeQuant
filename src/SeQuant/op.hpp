@@ -247,7 +247,9 @@ class Operator : public container::svector<Op<S>>, public Expr {
   using base_type::cbegin;
   using base_type::cend;
   using base_type::empty;
+  using base_type::end;
   using base_type::size;
+  using base_type::operator[];
 
   Operator() = default;
   explicit Operator(std::initializer_list<Op<S>> ops)
@@ -374,7 +376,9 @@ class NormalOperator : public Operator<S> {
   using base_type::cbegin;
   using base_type::cend;
   using base_type::empty;
+  using base_type::end;
   using base_type::size;
+  using base_type::operator[];
 
   /// constructs an identity operator
   NormalOperator(Vacuum v = get_default_context().vacuum()) {}
@@ -619,7 +623,9 @@ class NormalOperatorSequence : public container::svector<NormalOperator<S>>, pub
   using base_type::cbegin;
   using base_type::cend;
   using base_type::empty;
+  using base_type::end;
   using base_type::size;
+  using base_type::operator[];
 
   /// constructs an empty sequence
   NormalOperatorSequence() : vacuum_(get_default_context().vacuum()) {}
