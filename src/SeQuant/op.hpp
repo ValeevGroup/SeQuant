@@ -466,6 +466,16 @@ class NormalOperator : public Operator<S> {
     return ranges::view::concat(creators(), annihilators());
   }
 
+  /// @return number of creators/annihilators
+  /// @throw std::logic_error if the operator is not particle number conserving (i.e. if ncreators() != nannihilators() )
+  auto rank() const {
+    if (ncreators() != nannihilators()) {
+      throw std::logic_error("NormalOperator::rank(): ncreators != nannihilators");
+    }
+    return ncreators();
+  }
+
+
   /// @return the representation of @c *this as a Hugenholtz vertex
   /// @sa HugenholtzVertex
   const auto &hug() const {
