@@ -68,7 +68,7 @@ ExprPtr TensorNetwork<Tensor_>::canonicalize(
     });
   }
 
-  init_indices();
+  init_edges();
 
   // fast and slow canonizations produce index replacements
   container::map<Index, Index> idxrepl;
@@ -127,14 +127,14 @@ ExprPtr TensorNetwork<Tensor_>::canonicalize(
     {
       // for each color make a replacement list for bringing the indices to
       // the canonical order
-      const auto nindices = indices_.size();
+      const auto nindices = edges_.size();
       container::set<size_t> colors;
       container::multimap<size_t, std::pair<size_t, size_t>>
           color2idx;  // maps color to the ordinals of the corresponding
-      // indices in indices_ + their canonical ordinals
+      // indices in edges_ + their canonical ordinals
       // collect colors and internal indices sorted by colors
       size_t idx_cnt = 0;
-      for (auto &&ttpair : indices_) {
+      for (auto &&ttpair : edges_) {
         auto color = vcolors[idx_cnt];
         if (colors.find(color) == colors.end()) colors.insert(color);
         if (ext_indices_.find(ttpair.idx()) == ext_indices_.end())
@@ -143,7 +143,7 @@ ExprPtr TensorNetwork<Tensor_>::canonicalize(
       }
       // for each color sort internal indices by canonical order
       container::svector<std::pair<size_t, size_t>>
-          idx_can;  // canonically-ordered list of {index ordinal in indices_,
+          idx_can;  // canonically-ordered list of {index ordinal in edges_,
       // canonical ordinal}
       for (auto &&color : colors) {
         auto beg = color2idx.lower_bound(color);
@@ -165,7 +165,7 @@ ExprPtr TensorNetwork<Tensor_>::canonicalize(
           // make a replacement list by generating new indices in canonical
           // order
           for (auto &&p : idx_can) {
-            const auto &idx = (indices_.begin() + p.first)->idx();
+            const auto &idx = (edges_.begin() + p.first)->idx();
             idxrepl.emplace(std::make_pair(idx, idxfac.make(idx)));
           }
         }
@@ -244,10 +244,10 @@ ExprPtr TensorNetwork<Tensor_>::canonicalize(
     // - reindex internal indices using ordering of Edge as the
     // canonical definition of the internal index list
     {
-      // resort indices_ by Edge ... this automatically puts
+      // resort edges_ by Edge (not by Index's full label) ... this automatically puts
       // external indices first
-      idx_terminals_sorted.resize(indices_.size());
-      std::partial_sort_copy(begin(indices_), end(indices_),
+      idx_terminals_sorted.resize(edges_.size());
+      std::partial_sort_copy(begin(edges_), end(edges_),
                              begin(idx_terminals_sorted),
                              end(idx_terminals_sorted));
 
@@ -312,7 +312,7 @@ ExprPtr TensorNetwork<Tensor_>::canonicalize(
       if (bp) *canon_biproduct *= *bp;
     }
   }
-  indices_.clear();
+  edges_.clear();
   ext_indices_.clear();
 
   assert(canon_biproduct->is<Constant>());
@@ -324,17 +324,17 @@ template <typename Tensor_>
 std::tuple<std::shared_ptr<bliss::Graph>, std::vector<std::wstring>,
            std::vector<std::size_t>, std::vector<typename TensorNetwork<Tensor_>::VertexType>>
 TensorNetwork<Tensor_>::make_bliss_graph() const {
-  // must call init_indices() prior to calling this
-  assert(!indices_.empty());
+  // must call init_edges() prior to calling this
+  assert(!edges_.empty());
 
   // results
   std::shared_ptr<bliss::Graph> graph;
   std::vector<std::wstring> vertex_labels(
-      indices_.size());  // the size will be updated
-  std::vector<std::size_t> vertex_color(indices_.size(),
+      edges_.size());  // the size will be updated
+  std::vector<std::size_t> vertex_color(edges_.size(),
                                         0);  // the size will be updated
   std::vector<VertexType> vertex_type(
-      indices_.size());  // the size will be updated
+      edges_.size());  // the size will be updated
 
   // compute # of vertices
   size_t nv = 0;
@@ -347,8 +347,8 @@ TensorNetwork<Tensor_>::make_bliss_graph() const {
       std::decay_t<decltype(std::declval<const Index &>().proto_indices())>;
   container::set<protoindex_bundle_t> symmetric_protoindex_bundles;
   const size_t spbundle_vertex_offset =
-      indices_.size();  // where spbundle vertices will start
-  ranges::for_each(indices_, [&](const Edge &ttpair) {
+      edges_.size();  // where spbundle vertices will start
+  ranges::for_each(edges_, [&](const Edge &ttpair) {
     const Index &idx = ttpair.idx();
     ++nv;  // each index is a vertex
     vertex_labels.at(index_cnt) = idx.to_latex();
@@ -440,7 +440,7 @@ TensorNetwork<Tensor_>::make_bliss_graph() const {
   // add edges
   // - each index's degree <= 2 + # of protoindex terminals
   index_cnt = 0;
-  ranges::for_each(indices_, [&](const Edge &ttpair) {
+  ranges::for_each(edges_, [&](const Edge &ttpair) {
     for (int t = 0; t != 2; ++t) {
       const auto terminal_index = t == 0 ? ttpair.first() : ttpair.second();
       const auto terminal_position =
@@ -478,9 +478,9 @@ TensorNetwork<Tensor_>::make_bliss_graph() const {
   ranges::for_each(symmetric_protoindex_bundles, [&graph, this, &spbundle_cnt](
                                                      const auto &bundle) {
     for (auto &&proto_index : bundle) {
-      assert(indices_.find(proto_index.full_label()) != indices_.end());
+      assert(edges_.find(proto_index.full_label()) != edges_.end());
       const auto proto_index_vertex =
-          indices_.find(proto_index.full_label()) - indices_.begin();
+          edges_.find(proto_index.full_label()) - edges_.begin();
       graph->add_edge(spbundle_cnt, proto_index_vertex);
     }
     ++spbundle_cnt;
@@ -524,9 +524,11 @@ TensorNetwork<Tensor_>::make_bliss_graph() const {
 }
 
 template <typename Tensor_>
-void TensorNetwork<Tensor_>::init_indices() {
+void TensorNetwork<Tensor_>::init_edges() const {
+  if (have_edges_) return;
+
   auto idx_insert = [this](const Index &idx, int tensor_idx, int pos) {
-    decltype(indices_) &indices = this->indices_;
+    decltype(edges_) &indices = this->edges_;
     auto it = indices.find(idx.full_label());
     if (it == indices.end()) {
       indices.emplace(Edge(tensor_idx, &idx, pos));
@@ -552,13 +554,15 @@ void TensorNetwork<Tensor_>::init_indices() {
   }
 
   // extract external indices
-  for (const auto &terminals : indices_) {
+  for (const auto &terminals : edges_) {
     assert(terminals.size() != 0);
     if (terminals.size() == 1) {  // external?
       auto insertion_result = ext_indices_.emplace(terminals.idx());
       assert(insertion_result.second);
     }
   }
+
+  have_edges_ = true;
 }
 
 }  // namespace sequant

@@ -180,17 +180,28 @@ class TensorNetwork {
       return first < second.idx().full_label();
     }
   };
-  // Index -> Edge, sorted by labels
-  container::set<Edge, FullLabelCompare> indices_;
+  // Index -> Edge, sorted by full label
+  mutable container::set<Edge, FullLabelCompare> edges_;
+  // set to true by init_edges();
+  mutable bool have_edges_ = false;
   // ext indices do not connect tensors
   // sorted by *label* (not full label) of the corresponding value (Index)
   // this ensures that proto indices are not considered and all internal indices
   // have unique labels (not full labels)
-  container::set<Index, Index::LabelCompare> ext_indices_;
+  mutable container::set<Index, Index::LabelCompare> ext_indices_;
 
-  /// initializes indices_ and ext_indices_
-  void init_indices();
+  /// initializes edges_ and ext_indices_
+  void init_edges() const;
 
+ public:
+  /// accessor for Edge objects
+  /// @return a set of Edge objects, sorted by their Index's full label
+  const auto& edges() const {
+    init_edges();
+    return edges_;
+  }
+
+ private:
   /// @brief converts the network into a graph whose vertices are indices and
   /// tensor vertex representations
   /// @return {shared_ptr to Graph, vector of vertex labels, vector of vertex
