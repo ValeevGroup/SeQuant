@@ -729,6 +729,47 @@ std::wstring to_latex(const NormalOperatorSequence<S> &opseq) {
   return opseq.to_latex();
 }
 
+/// @name customization points to support generic algorithms on NormalOperator objects as Tensors
+/// @{
+template <Statistics S>
+auto bra(const NormalOperator<S>& nop) {
+  return ranges::view::counted(ranges::crbegin(nop.annihilators()),
+                               nop.nannihilators()) |
+         ranges::view::transform(
+             [](auto &&op) -> const Index & { return op.index(); });
+}
+template <Statistics S>
+auto bra(NormalOperator<S>& nop) {
+  return ranges::view::counted(ranges::rbegin(nop.annihilators()),
+                               nop.nannihilators()) |
+      ranges::view::transform(
+          [](auto &&op) -> const Index & { return op.index(); }) |
+      ranges::view::reverse;
+}
+template <Statistics S>
+auto ket(const NormalOperator<S>& nop) {
+  return ranges::view::counted(ranges::cbegin(nop.creators()),
+                               nop.ncreators()) |
+      ranges::view::transform(
+          [](auto &&op) -> const Index & { return op.index(); });
+}
+template <Statistics S>
+auto ket(NormalOperator<S>& nop) {
+  return ranges::view::counted(ranges::begin(nop.creators()),
+                               nop.ncreators()) |
+      ranges::view::transform(
+          [](auto &&op) -> const Index & { return op.index(); });
+}
+template <Statistics S>
+auto braket(const NormalOperator<S>& nop) {
+  return ranges::view::join(bra(nop),ket(nop));
+}
+template <Statistics S>
+auto braket(NormalOperator<S>& nop) {
+  return ranges::view::join(bra(nop),ket(nop));
+}
+///@}
+
 namespace detail {
   struct OpIdRegistrar {
     OpIdRegistrar();

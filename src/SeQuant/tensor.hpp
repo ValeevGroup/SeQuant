@@ -280,6 +280,27 @@ class TensorCanonicalizer {
   static container::vector<std::wstring> &cardinal_tensor_labels_accessor();
 };
 
+/// @name customization points to support generic algorithms on general Tensor-like quantities.
+/// @return range to the corresponding set of Index objects
+/// @{
+inline auto bra(const Tensor& t) {
+  // ranges::view::all seems to copy the vector!
+  return ranges::view::counted(ranges::cbegin(t.bra()), ranges::size(t.bra()));
+}
+inline auto bra(Tensor& t) {
+  return ranges::view::counted(ranges::begin(t.bra()), ranges::size(t.bra()));
+}
+inline auto ket(const Tensor& t) {
+  return ranges::view::counted(ranges::cbegin(t.ket()), ranges::size(t.ket()));
+}
+inline auto ket(Tensor& t) {
+  return ranges::view::counted(ranges::begin(t.ket()), ranges::size(t.ket()));
+}
+inline auto braket(const Tensor& t) {
+  return t.braket();
+}
+///@}
+
 class DefaultTensorCanonicalizer : public TensorCanonicalizer {
  public:
   DefaultTensorCanonicalizer() = default;
