@@ -273,8 +273,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       REQUIRE(result1->size() == 9);
       auto wick2 = FWickTheorem{opseq};
       auto result2 =
-          wick2.full_contractions(true).set_external_indices(ext_indices).set_op_connections(std::vector<std::pair<int,
-                                                                                                                   int>>{
+          wick2.full_contractions(true).set_external_indices(ext_indices).set_op_connections({
               {1, 2}, {1, 3}}).spinfree(false).compute();
 //      std::wcout << "G1*G1*G1*G1(1->2, 1->3) = " << to_latex_align(result2) << std::endl;
       REQUIRE(result1->size() == 9);
@@ -401,7 +400,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       REQUIRE(result->size() == 0);
     }
 #endif
-  }
+  }  // SECTION("fermi vacuum")
 
   auto print = [](const auto &lead, const auto &expr) {
     std::wcout << lead << to_latex(expr) << std::endl;
@@ -416,7 +415,6 @@ TEST_CASE("WickTheorem", "[algorithms]") {
     // labels
     TensorCanonicalizer::set_cardinal_tensor_labels({L"A", L"f", L"g", L"t"});
 
-#if 1
     // 2-body ^ 2-body
     SEQUANT_PROFILE_SINGLE("wick(H2*T2)", {
       auto opseq =
@@ -495,7 +493,6 @@ TEST_CASE("WickTheorem", "[algorithms]") {
               L"{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}}_{{a_1}}}{t^{{i_2}}_{{a_"
               L"2}}}}");
     });
-#endif
 
     // 2=body ^ 1-body ^ 2-body with dependent (PNO) indices
     SEQUANT_PROFILE_SINGLE("wick(P2*H1*T2)", {
@@ -638,8 +635,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
                       .spinfree(false)
                       .use_topology(topology);
       if (connected_only)
-        wick.set_op_connections(
-            std::vector<std::pair<int, int>>{{1, 2}, {1, 3}});
+        wick.set_op_connections({{1, 2}, {1, 3}});
       auto wick_result = wick.compute();
 
       std::wcout << "P3*H2*T2*T3 = " << to_latex_align(wick_result, 20)
