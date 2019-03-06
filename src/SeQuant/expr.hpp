@@ -354,7 +354,7 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
     throw std::logic_error("Expr::operator-= not implemented in this derived class");
   }
 
-///@}
+ ///@}
 
  private:
   friend ranges::range_access;

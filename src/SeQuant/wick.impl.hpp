@@ -481,7 +481,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) const {
         return expr_input_;
       }
     }
-    // ... else if NormalOperatorSequence already (unlikely!), compute ...
+    // ... else if NormalOperatorSequence already, compute ...
     else if (expr_input_->is<NormalOperatorSequence<S>>()) {
       input_ = expr_input_->as<NormalOperatorSequence<S>>();
       // NB no simplification possible for a bare product w/ full contractions

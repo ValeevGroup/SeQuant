@@ -122,7 +122,7 @@ inline ExprPtr vac_av(ExprPtr expr, std::initializer_list<std::pair<int,int>> op
       .full_contractions(true)
       .spinfree(false)
       .use_topology(true);
-  wick.set_op_connections(std::vector<std::pair<int, int>>{op_connections});
+  wick.set_op_connections(op_connections);
   auto result = wick.compute();
   simplify(result);
   return result;

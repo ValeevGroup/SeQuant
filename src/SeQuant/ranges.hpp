@@ -136,9 +136,9 @@ public:
       }
     }
 
-    /// @return the iterator pointing to the range at which this is located
+    /// @return the iterator pointing to the range in which this is located
     const auto range_iter() const { return range_iter_; }
-    /// @return ordinal index of the range where at which is located
+    /// @return ordinal index of the range in which this is located
     const auto range_ordinal() const { return range_iter_ - _begin(*range_); }
     /// @return the iterator pointing to the element at which this is located
     const auto elem_iter() const { return elem_iter_; }

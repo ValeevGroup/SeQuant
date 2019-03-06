@@ -110,11 +110,15 @@ class WickTheorem {
     return *this;
   }
 
+  /// @name operator connectivity specifiers
+  ///
   /// Ensures that the given pairs of normal operators are connected; by default
   /// will not constrain connectivity
   /// @param op_index_pairs the list of pairs of op indices to be connected in
   /// the result
+  ///
   /// TODO rename op -> nop to distinguish Op and NormalOperator
+  ///@{
   template <typename IndexPairContainer>
   WickTheorem &set_op_connections(IndexPairContainer &&op_index_pairs) {
     if (expr_input_ == nullptr || !op_connections_input_.empty()) {
@@ -128,7 +132,7 @@ class WickTheorem {
               "WickTheorem::set_op_connections: op index out of range");
         }
       }
-      if (!op_index_pairs.empty()) {
+      if (op_index_pairs.size() != 0) {
         op_connections_.resize(input_.size());
         for (auto &v : op_connections_) {
           v.set();
@@ -148,7 +152,15 @@ class WickTheorem {
     return *this;
   }
 
-  /// Specifies topological operator partitions; free (non-connected) operators
+  template <typename Integer = long>
+  WickTheorem& set_op_connections(std::initializer_list<std::pair<Integer,Integer>> op_index_pairs) {
+    return this->set_op_connections<const decltype(op_index_pairs)&>(op_index_pairs);
+  }
+  ///@}
+
+  /// @name topological partition specifiers
+  ///
+  /// Specifies topological partition of normal operators; free (non-connected) operators
   /// in the same partition are considered topologically equivalent, hence if
   /// only full contractions are needed only contractions to the first available
   /// operator in a partition is needed (multiplied by the degeneracy)
@@ -163,7 +175,10 @@ class WickTheorem {
   ///           sure every operator is assigned to a partition, including those
   ///           not mentioned in @c op_partitions) will be completed in
   ///           compute_nopseq().
+  ///
   /// TODO rename op -> nop to distinguish Op and NormalOperator
+  ///@{
+
   template <typename IndexListContainer>
   WickTheorem &set_op_partitions(IndexListContainer &&op_partitions) {
     using std::size;
@@ -181,7 +196,14 @@ class WickTheorem {
       }
       ++partition_cnt;
     }
+    return *this;
   }
+
+  template <typename Integer = long>
+  WickTheorem& set_op_partitions(std::initializer_list<std::initializer_list<Integer>> op_partitions) {
+    return this->set_op_partitions<const decltype(op_partitions)&>(op_partitions);
+  }
+  ///@}
 
   /// Computes and returns the result
   /// @param count_only if true, will return a vector of default-initialized
