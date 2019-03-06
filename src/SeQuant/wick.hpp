@@ -182,11 +182,9 @@ class WickTheorem {
   template <typename IndexListContainer>
   WickTheorem &set_op_partitions(IndexListContainer &&op_partitions) {
     using std::size;
-    topological_partition_size_ = container::svector<int>(size(op_partitions));
     size_t partition_cnt = 0;
     auto current_nops = size(op_topological_partition_);
     for (auto &&partition : op_partitions) {
-      topological_partition_size_[partition_cnt] = size(partition);
       for (auto &&op_idx : partition) {
         assert(op_idx >= 0);
         if (op_idx >= current_nops) {
@@ -236,30 +234,21 @@ class WickTheorem {
   // unique)
   /// TODO rename op -> nop to distinguish Op and NormalOperator
   mutable container::svector<size_t> op_topological_partition_;
-  container::svector<size_t>
-      topological_partition_size_;  // empty = assume all operators are
-                                    // topologically distinct
 
   /// upsizes op_topological_partition_, filling new entries with zeroes
-  /// noop if current size > new_size, or if topological_partition_size_ is
-  /// empty
+  /// noop if current size > new_size
   /// @return the (updated) size of op_topological_partition_
   /// TODO rename op -> nop to distinguish Op and NormalOperator
   size_t upsize_op_topological_partition(size_t new_size) const {
     using std::size;
-    if (!topological_partition_size_.empty()) {
-      const auto current_size = size(op_topological_partition_);
-      if (new_size > current_size) {
-        op_topological_partition_.resize(new_size);
-        for (size_t i = current_size; i != new_size; ++i)
-          op_topological_partition_[i] = 0;
-        return new_size;
-      } else
-        return current_size;
-    } else {
-      assert(op_topological_partition_.size() == 0);
-      return 0;
-    }
+    const auto current_size = size(op_topological_partition_);
+    if (new_size > current_size) {
+      op_topological_partition_.resize(new_size);
+      for (size_t i = current_size; i != new_size; ++i)
+        op_topological_partition_[i] = 0;
+      return new_size;
+    } else
+      return current_size;
   }
 
   /// Evaluates wick_ theorem for a single NormalOperatorSequence
@@ -287,8 +276,7 @@ class WickTheorem {
     NontensorWickState(
         const NormalOperatorSequence<S> &opseq,
         /// TODO rename op -> nop to distinguish Op and NormalOperator
-        const container::svector<size_t> &op_toppart,
-        const container::svector<size_t> &toppart_size)
+        const container::svector<size_t> &op_toppart)
         : opseq(opseq),
           opseq_size(opseq.opsize()),
           level(0),
@@ -296,8 +284,15 @@ class WickTheorem {
           op_connections(opseq.size()),
           adjacency_matrix(opseq.size() * (opseq.size() - 1) / 2, 0),
           op_nconnections(opseq.size(), 0),
-          op_topological_partition(op_toppart),
-          topological_partition_size(toppart_size) {}
+          op_topological_partition(op_toppart) {
+      init_topological_partitions();
+    }
+
+    NontensorWickState(const NontensorWickState&) = delete;
+    NontensorWickState(NontensorWickState&&) = delete;
+    NontensorWickState& operator=(const NontensorWickState&) = delete;
+    NontensorWickState& operator=(NontensorWickState&&) = delete;
+
     NormalOperatorSequence<S> opseq;  //!< current state of operator sequence
     std::size_t opseq_size;           //!< current size of opseq
     Product sp;                       //!< current prefactor
@@ -313,21 +308,30 @@ class WickTheorem {
     /// for each operator specifies how many connections it currently has
     /// TODO rename op -> nop to distinguish Op and NormalOperator
     container::svector<size_t> op_nconnections;
-    /// maps op to its topological partition, if any (0 = no partition)
+    /// maps op to its topological partition index (1-based, 0 = no partition)
     /// TODO rename op -> nop to distinguish Op and NormalOperator
-    const container::svector<size_t> &op_topological_partition;
-    /// current partition size
+    container::svector<size_t> op_topological_partition;
+    /// current state of partitions (will only match op_topological_partition before any contractions have occurred)
     /// - when an operator is connected it's removed from the partition
-    /// - when it is disconnected fully it's readded to the partition
-    container::svector<size_t> topological_partition_size;
+    /// - when it is disconnected fully it's re-added to the partition
+    container::svector<container::set<size_t>> topological_partitions;
 
-    void reset(const NormalOperatorSequence<S> &o) {
-      sp = Product{};
-      opseq = o;
-      op_connections = decltype(op_connections)(opseq.size());
-      adjacency_matrix =
-          decltype(adjacency_matrix)(opseq.size() * (opseq.size() - 1) / 2, 0);
-      opseq_size = o.opsize();
+    // populates partitions using the data from op_topological_partition
+    void init_topological_partitions() {
+      // partition indices in op_topological_partition are 1-based
+      const auto npartitions = *ranges::max_element(op_topological_partition);
+      topological_partitions.resize(npartitions);
+      size_t op_cnt = 0;
+      ranges::for_each(op_topological_partition, [this,&op_cnt](size_t toppart_idx) {
+        if (toppart_idx > 0) {  // in a partition
+          topological_partitions.at(toppart_idx - 1).insert(op_cnt);
+        }
+        ++op_cnt;
+      });
+      // assert that we don't have empty partitions due to invalid contents of op_topological_partition
+      assert(ranges::any_of(topological_partitions, [](auto&& partition){
+        return partition.empty();
+      }) == false);
     }
 
     template <typename T>
@@ -350,11 +354,16 @@ class WickTheorem {
 
       auto update_topology = [this](size_t op_idx) {
         const auto nconnections = op_nconnections[op_idx];
-        if (!op_topological_partition.empty()) {
-          const auto partition_idx = op_topological_partition[op_idx];
+//        std::wcout << "in connect:update_topology: op_idx=" << op_idx << " current #conn=" << nconnections << std::endl;
+        // if using topological partitions for normal ops, and this operator is in one of them, remove it on first connection
+        if (!topological_partitions.empty()) {
+          auto partition_idx = op_topological_partition[op_idx];
           if (nconnections == 0 && partition_idx > 0) {
-            assert(topological_partition_size[partition_idx] > 0);
-            --topological_partition_size[partition_idx - 1];
+            --partition_idx;  // to 0-based
+            assert(topological_partitions.at(partition_idx).size() > 0);
+            auto removed = topological_partitions[partition_idx].erase(op_idx);
+            assert(removed);
+//            std::wcout << "in connect:update_topology: removed op from its topological partition\n";
           }
         }
         ++op_nconnections[op_idx];
@@ -421,11 +430,16 @@ class WickTheorem {
                                &target_op_connections,
                            const Cursor &op1_cursor, const Cursor &op2_cursor) {
       auto update_topology = [this](size_t op_idx) {
+        assert(op_nconnections.at(op_idx) > 0);
         const auto nconnections = --op_nconnections[op_idx];
-        if (!op_topological_partition.empty()) {
-          const auto partition_idx = op_topological_partition[op_idx];
+//        std::wcout << "in disconnect:update_topology: op_idx=" << op_idx << " updated #conn=" << nconnections << std::endl;
+        if (!topological_partitions.empty()) {
+          auto partition_idx = op_topological_partition[op_idx];
           if (nconnections == 0 && partition_idx > 0) {
-            ++topological_partition_size[partition_idx - 1];
+            --partition_idx;  // to 0-based
+            auto inserted = topological_partitions.at(partition_idx).insert(op_idx);
+            assert(inserted.second);
+//            std::wcout << "in disconnect:update_topology: re-added op to its topological partition\n";
           }
         }
       };
@@ -458,8 +472,7 @@ class WickTheorem {
         result;      //!< current value of the result
     std::mutex mtx;  // used in critical sections updating the result
     auto result_plus_mutex = std::make_pair(&result, &mtx);
-    NontensorWickState state(input_, op_topological_partition_,
-                             topological_partition_size_);
+    NontensorWickState state(input_, op_topological_partition_);
     state.count_only = count_only;
 
     recursive_nontensor_wick(result_plus_mutex, state);
@@ -519,10 +532,27 @@ class WickTheorem {
               else
                 result = 0;
             }
-            // account for topology of normal operators
-            if (result > 0 && !topological_partition_size_.empty()) {
-              abort();
-            }
+//            // account for topologically-equivalent normal operators
+//            if (result > 0 && !state.topological_partitions.empty()) {
+//              auto opseq_right_idx = ranges::get_cursor(op_iter).range_ordinal();  // the index of normal operator
+//              auto opseq_right_toppart_idx = state.op_topological_partition.at(opseq_right_idx);  // the partition to which this normal operator belongs to (0 = none)
+//              if (opseq_right_toppart_idx > 0) {  // if part of a partition ...
+//                --opseq_right_toppart_idx;  // to 0-based
+//                const auto& opseq_right_toppart = state.topological_partitions.at(opseq_right_toppart_idx);
+//                if (!opseq_right_toppart.empty()) {  // ... and the partition is not empty ...
+//                  const auto it =
+//                      opseq_right_toppart.find(opseq_right_idx);
+//                  if (it == opseq_right_toppart.begin()) {  // ... and first in the partition
+//                    // account for the entire partition by scaling the
+//                    // contribution from the first contraction from this normal
+//                    // operator
+//                    result *=
+//                        opseq_right_toppart.size();
+//                  } else
+//                    result = 0;
+//                }
+//              }
+//            }
             return result;
           };
 
