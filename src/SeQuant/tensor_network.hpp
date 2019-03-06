@@ -15,40 +15,45 @@ class Graph;
 
 namespace sequant {
 
-/// @brief A (non-directed) graph view of a set of Tensor objects
+/// @brief A (non-directed) graph view of a set of Tensor (or Tensor like) objects
 
-/// The main role of this is to canonize itself. Since Tensors can be connected
+/// @tparam Tensor_ Tensor or another type for which @c bra(t) and @c ket(t)
+///         are valid expressions and evaluate to a range of Index objects.
+/// @note The main role of this is to canonize itself. Since Tensor_ objects can be connected
 /// by multiple Index'es (thus edges are colored), what is canonized is actually
-/// the graph of indices (i.e. the dual of the tensor graph), with Tensors
+/// the graph of indices (i.e. the dual of the tensor graph), with Tensor_ objects
 /// represented by one or more vertices.
+template <typename Tensor_ = Tensor>
 class TensorNetwork {
-  /// @brief Pair of indices to Tensor terminals
+ public:
 
-  /// @note Tensor terminals in a sequence of Tensors are indexed as follows:
+  /// @brief Edge in a TensorNetwork = Index annotating it + pair of indices to identify which Tensor_ terminals it's connected to
+
+  /// @note tensor terminals in a sequence of tensors are indexed as follows:
   /// - >0 for bra terminals (i.e. "+7" indicated connection to a bra terminal
-  /// of 7th Tensor object in the sequence)
+  /// of 7th tensor object in the sequence)
   /// - <0 for ket terminals
-  /// - 0 if free (not attached to any Tensor objects)
+  /// - 0 if free (not attached to any tensor objects)
   /// - position records the terminals location in the sequence of bra/ket
   /// terminals (always 0 for symmetric/antisymmetric tensors) Terminal indices
   /// are sorted by the tensor index (i.e. by the absolute value of the terminal
   /// index), followed by position
-  class TensorTerminalPair {
+  class Edge {
    public:
-    TensorTerminalPair() = default;
-    explicit TensorTerminalPair(int terminal_idx, int position = 0)
+    Edge() = default;
+    explicit Edge(int terminal_idx, int position = 0)
         : first_(0), second_(terminal_idx), second_position_(position) {}
-    TensorTerminalPair(int terminal_idx, const Index *idxptr, int position = 0)
+    Edge(int terminal_idx, const Index *idxptr, int position = 0)
         : first_(0),
           second_(terminal_idx),
           idxptr_(idxptr),
           second_position_(position) {}
-    //    TensorTerminalPair(const TensorTerminalPair&) = default;
-    //    TensorTerminalPair(TensorTerminalPair&&) = default;
-    //    TensorTerminalPair& operator=(const TensorTerminalPair&) = default;
-    //    TensorTerminalPair& operator=(TensorTerminalPair&&) = default;
+    //    Edge(const Edge&) = default;
+    //    Edge(Edge&&) = default;
+    //    Edge& operator=(const Edge&) = default;
+    //    Edge& operator=(Edge&&) = default;
 
-    TensorTerminalPair &add(int terminal_idx, int position = 0) {
+    Edge &connect_to(int terminal_idx, int position = 0) {
       assert(terminal_idx != 0);  // valid idx
       if (second_ == 0) {
         second_ = terminal_idx;
@@ -66,7 +71,7 @@ class TensorNetwork {
       return *this;
     }
 
-    bool operator<(const TensorTerminalPair &other) const {
+    bool operator<(const Edge &other) const {
       if (std::abs(first_) == std::abs(other.first_)) {
         if (first_position_ == other.first_position_) {
           if (std::abs(second_) == std::abs(other.second_)) {
@@ -82,7 +87,7 @@ class TensorNetwork {
       }
     }
 
-    bool operator==(const TensorTerminalPair &other) const {
+    bool operator==(const Edge &other) const {
       return std::abs(first_) == std::abs(other.first_) &&
              std::abs(second_) == std::abs(other.second_) &&
              first_position_ == other.first_position_ &&
@@ -126,18 +131,18 @@ class TensorNetwork {
   TensorNetwork(ExprPtrRange &exprptr_range) {
     const bool contains_a_nontensor = ranges::any_of(
         exprptr_range,
-        [](const ExprPtr &exprptr) { return !exprptr->is<Tensor>(); });
+        [](const ExprPtr &exprptr) { return !exprptr->is<Tensor_>(); });
     if (contains_a_nontensor)
       throw std::logic_error(
           "TensorNetwork(exprptr_range): exprptr_range contains a non-Tensor");
 
     auto tsrptr_range =
         exprptr_range | ranges::view::transform([](const ExprPtr &ex) {
-          return std::static_pointer_cast<Tensor>(ex);
+          return std::static_pointer_cast<Tensor_>(ex);
         });
     assert(ranges::size(tsrptr_range) == ranges::size(exprptr_range));
 
-    for (const auto &t : tsrptr_range) {
+    for (auto&&t : tsrptr_range) {
       tensors_.push_back(t);
     }
   }
@@ -155,26 +160,28 @@ class TensorNetwork {
       bool fast = true);
 
  private:
+  using Tensor_Ptr = std::shared_ptr<Tensor_>;
+
   // source tensors and indices
-  container::svector<TensorPtr> tensors_;
+  container::svector<Tensor_Ptr> tensors_;
 
   struct FullLabelCompare {
     using is_transparent = void;
-    bool operator()(const TensorTerminalPair &first,
-                    const TensorTerminalPair &second) const {
+    bool operator()(const Edge &first,
+                    const Edge &second) const {
       return first.idx().full_label() < second.idx().full_label();
     }
-    bool operator()(const TensorTerminalPair &first,
+    bool operator()(const Edge &first,
                     const std::wstring_view &second) const {
       return first.idx().full_label() < second;
     }
     bool operator()(const std::wstring_view &first,
-                    const TensorTerminalPair &second) const {
+                    const Edge &second) const {
       return first < second.idx().full_label();
     }
   };
-  // Index -> TensorTerminalPair, sorted by labels
-  container::set<TensorTerminalPair, FullLabelCompare> indices_;
+  // Index -> Edge, sorted by labels
+  container::set<Edge, FullLabelCompare> indices_;
   // ext indices do not connect tensors
   // sorted by *label* (not full label) of the corresponding value (Index)
   // this ensures that proto indices are not considered and all internal indices
@@ -200,7 +207,7 @@ class TensorNetwork {
   ///   - A nonsymmetric n-body tensor has n terminals, each connected to 2
   ///   indices and 1 tensor vertex which is connected to all n terminal
   ///   indices.
-  ///   - Tensor vertices are colored by the label+rank+symmetry of the
+  ///   - tensor vertices are colored by the label+rank+symmetry of the
   ///   tensor; terminal vertices are colored by the color of its tensor,
   ///     with the color of symm/antisymm terminals augmented by the
   ///     terminal's type (bra/ket).
@@ -210,5 +217,7 @@ class TensorNetwork {
 };
 
 }  // namespace sequant
+
+#include "tensor_network.impl.hpp"
 
 #endif  // SEQUANT_TENSOR_NETWORK_H

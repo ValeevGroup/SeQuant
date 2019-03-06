@@ -2,22 +2,22 @@
 // Created by Eduard Valeyev on 2019-02-26.
 //
 
-#include "tensor_network.hpp"
 #include "../../external/bliss/graph.hh"
 
 namespace sequant {
 
-ExprPtr TensorNetwork::canonicalize(
+template <typename Tensor_>
+ExprPtr TensorNetwork<Tensor_>::canonicalize(
     const container::vector<std::wstring> &cardinal_tensor_labels, bool fast) {
   ExprPtr canon_biproduct = ex<Constant>(1);
-  container::svector<TensorTerminalPair>
+  container::svector<Edge>
       idx_terminals_sorted;  // to avoid memory allocs
 
   if (debug_canonicalize) {
     std::wcout << "TensorNetwork::canonicalize(" << (fast ? "fast" : "slow")
                << "): input tensors\n";
     size_t cnt = 0;
-    ranges::for_each(tensors_, [&](const TensorPtr &t) {
+    ranges::for_each(tensors_, [&](const Tensor_Ptr &t) {
       std::wcout << "tensor " << cnt++ << ": " << t->to_latex() << std::endl;
     });
     std::wcout << "cardinal_tensor_labels = ";
@@ -32,8 +32,8 @@ ExprPtr TensorNetwork::canonicalize(
   using std::begin;
   using std::end;
   std::stable_sort(begin(tensors_), end(tensors_),
-                   [&cardinal_tensor_labels](const TensorPtr &first,
-                                             const TensorPtr &second) {
+                   [&cardinal_tensor_labels](const Tensor_Ptr &first,
+                                             const Tensor_Ptr &second) {
                      const auto cardinal_tensor_labels_end =
                          end(cardinal_tensor_labels);
                      const auto first_cardinal_it =
@@ -63,7 +63,7 @@ ExprPtr TensorNetwork::canonicalize(
     std::wcout << "TensorNetwork::canonicalize(" << (fast ? "fast" : "slow")
                << "): tensors after initial sort\n";
     size_t cnt = 0;
-    ranges::for_each(tensors_, [&](const TensorPtr &t) {
+    ranges::for_each(tensors_, [&](const Tensor_Ptr &t) {
       std::wcout << "tensor " << cnt++ << ": " << t->to_latex() << std::endl;
     });
   }
@@ -95,7 +95,7 @@ ExprPtr TensorNetwork::canonicalize(
     //   - A nonsymmetric n-body tensor has n terminals, each connected to 2
     //   indices and 1 tensor vertex which is connected to all n terminal
     //   indices.
-    //   - Tensor vertices are colored by the label+rank+symmetry of the
+    //   - tensor vertices are colored by the label+rank+symmetry of the
     //   tensor; terminal vertices are colored by the color of its tensor,
     //     with the color of symm/antisymm terminals augmented by the
     //     terminal's type (bra/ket).
@@ -241,10 +241,10 @@ ExprPtr TensorNetwork::canonicalize(
     // simpler approach that will work perfectly as long as tensors are
     // distinguishable
 
-    // - reindex internal indices using ordering of TensorTerminalPair as the
+    // - reindex internal indices using ordering of Edge as the
     // canonical definition of the internal index list
     {
-      // resort indices_ by TensorTerminalPair ... this automatically puts
+      // resort indices_ by Edge ... this automatically puts
       // external indices first
       idx_terminals_sorted.resize(indices_.size());
       std::partial_sort_copy(begin(indices_), end(indices_),
@@ -320,9 +320,10 @@ ExprPtr TensorNetwork::canonicalize(
                                                          : canon_biproduct;
 }
 
+template <typename Tensor_>
 std::tuple<std::shared_ptr<bliss::Graph>, std::vector<std::wstring>,
-           std::vector<std::size_t>, std::vector<TensorNetwork::VertexType>>
-TensorNetwork::make_bliss_graph() const {
+           std::vector<std::size_t>, std::vector<typename TensorNetwork<Tensor_>::VertexType>>
+TensorNetwork<Tensor_>::make_bliss_graph() const {
   // must call init_indices() prior to calling this
   assert(!indices_.empty());
 
@@ -347,7 +348,7 @@ TensorNetwork::make_bliss_graph() const {
   container::set<protoindex_bundle_t> symmetric_protoindex_bundles;
   const size_t spbundle_vertex_offset =
       indices_.size();  // where spbundle vertices will start
-  ranges::for_each(indices_, [&](const TensorTerminalPair &ttpair) {
+  ranges::for_each(indices_, [&](const Edge &ttpair) {
     const Index &idx = ttpair.idx();
     ++nv;  // each index is a vertex
     vertex_labels.at(index_cnt) = idx.to_latex();
@@ -381,7 +382,7 @@ TensorNetwork::make_bliss_graph() const {
   // this will map to tensor index to the first (core) vertex in its
   // representation
   container::svector<size_t> tensor_vertex_offset(tensors_.size());
-  ranges::for_each(tensors_, [&](const TensorPtr &t) {
+  ranges::for_each(tensors_, [&](const Tensor_Ptr &t) {
     tensor_vertex_offset.at(tensor_cnt) = nv;
     // each tensor has a core vertex (to be colored by its label)
     ++nv;
@@ -439,7 +440,7 @@ TensorNetwork::make_bliss_graph() const {
   // add edges
   // - each index's degree <= 2 + # of protoindex terminals
   index_cnt = 0;
-  ranges::for_each(indices_, [&](const TensorTerminalPair &ttpair) {
+  ranges::for_each(indices_, [&](const Edge &ttpair) {
     for (int t = 0; t != 2; ++t) {
       const auto terminal_index = t == 0 ? ttpair.first() : ttpair.second();
       const auto terminal_position =
@@ -448,7 +449,7 @@ TensorNetwork::make_bliss_graph() const {
         const auto tidx = std::abs(terminal_index) - 1;
         const auto ttpos = terminal_position;
         const bool bra = terminal_index > 0;
-        const TensorPtr &tptr = tensors_.at(tidx);
+        const auto& tptr = tensors_.at(tidx);
         const size_t braket_vertex_index = tensor_vertex_offset[tidx] +
                                            /* core */ 1 + 3 * ttpos +
                                            (bra ? 0 : 1);
@@ -487,7 +488,7 @@ TensorNetwork::make_bliss_graph() const {
   // - link up tensors
   tensor_cnt = 0;
   ranges::for_each(tensors_, [&graph, this, &tensor_cnt,
-                              &tensor_vertex_offset](const TensorPtr &t) {
+                              &tensor_vertex_offset](const Tensor_Ptr &t) {
     const auto vertex_offset = tensor_vertex_offset.at(tensor_cnt);
     // for each braket terminal linker
     const size_t nbk = t->symmetry() == Symmetry::nonsymm
@@ -522,27 +523,28 @@ TensorNetwork::make_bliss_graph() const {
   return {graph, vertex_labels, vertex_color, vertex_type};
 }
 
-void TensorNetwork::init_indices() {
+template <typename Tensor_>
+void TensorNetwork<Tensor_>::init_indices() {
   auto idx_insert = [this](const Index &idx, int tensor_idx, int pos) {
     decltype(indices_) &indices = this->indices_;
     auto it = indices.find(idx.full_label());
     if (it == indices.end()) {
-      indices.emplace(TensorTerminalPair(tensor_idx, &idx, pos));
+      indices.emplace(Edge(tensor_idx, &idx, pos));
     } else {
-      const_cast<TensorTerminalPair &>(*it).add(tensor_idx, pos);
+      const_cast<Edge &>(*it).connect_to(tensor_idx, pos);
     }
   };
 
   int t_idx = 1;
-  for (const auto &t : tensors_) {
+  for (auto&&t : tensors_) {
     const auto t_is_nonsymm = t->symmetry() == Symmetry::nonsymm;
     size_t cnt = 0;
-    for (const auto &idx : t->bra()) {
+    for (auto&&idx : bra(*t)) {
       idx_insert(idx, t_idx, t_is_nonsymm ? cnt : 0);
       ++cnt;
     }
     cnt = 0;
-    for (const auto &idx : t->ket()) {
+    for (auto&&idx : ket(*t)) {
       idx_insert(idx, -t_idx, t_is_nonsymm ? cnt : 0);
       ++cnt;
     }

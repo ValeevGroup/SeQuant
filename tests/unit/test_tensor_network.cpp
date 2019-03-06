@@ -6,20 +6,31 @@
 
 #include <iostream>
 #include "../../src/SeQuant/tensor_network.hpp"
+#include "../../src/SeQuant/op.hpp"
 
 TEST_CASE("TensorNetwork", "[elements]") {
 
   using namespace sequant;
 
   SECTION("constructors") {
+    {  // with Tensors
+      auto t1 = ex<Tensor>(L"F", WstrList{L"i_1"}, WstrList{L"i_2"});
+      auto t2 = ex<Tensor>(L"t", WstrList{L"i_2"}, WstrList{L"i_1"});
+      auto t1_x_t2 = t1 * t2;
+      REQUIRE_NOTHROW(TensorNetwork(*t1_x_t2));
 
-    auto t1 = ex<Tensor>(L"F", WstrList{L"i_1"}, WstrList{L"i_2"});
-    auto t2 = ex<Tensor>(L"t", WstrList{L"i_2"}, WstrList{L"i_1"});
-    auto t1_x_t2 = t1 * t2;
-    REQUIRE_NOTHROW(TensorNetwork(*t1_x_t2));
+      auto t1_x_t2_p_t2 = t1 * (t2 + t2);  // can only use a flat tensor product
+      REQUIRE_THROWS_AS(TensorNetwork(*t1_x_t2_p_t2), std::logic_error);
+    }
 
-    auto t1_x_t2_p_t2 = t1 * (t2 + t2); // can only use a flat tensor product
-    REQUIRE_THROWS_AS(TensorNetwork(*t1_x_t2_p_t2), std::logic_error);
+    {  // with NormalOperators
+      constexpr const auto V = Vacuum::SingleProduct;
+      auto t1 = ex<FNOperator>(WstrList{L"i_1"}, WstrList{L"i_2"}, V);
+      auto t2 = ex<FNOperator>(WstrList{L"i_2"}, WstrList{L"i_1"}, V);
+      auto t1_x_t2 = t1 * t2;
+      REQUIRE_NOTHROW(TensorNetwork<FNOperator>(*t1_x_t2));
+    }
+
   }  // SECTION("constructors")
 
 }  // TEST_CASE("Tensor")

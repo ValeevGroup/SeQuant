@@ -62,7 +62,7 @@ add_library(SeQuant
         src/SeQuant/tag.hpp
         src/SeQuant/hugenholtz.hpp
         src/SeQuant/algorithm.hpp
-        src/SeQuant/tensor_network.cpp
+        src/SeQuant/tensor_network.impl.hpp
         src/SeQuant/tensor_network.hpp
         src/SeQuant/runtime.hpp
         src/domain/mbpt/sr/sr.cpp
