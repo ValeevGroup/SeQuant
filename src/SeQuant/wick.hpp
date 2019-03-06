@@ -29,6 +29,9 @@ class WickTheorem {
   template <class T>
   friend struct access_by;
 
+  // set to true to debug
+  static bool debug;
+
   static constexpr const Statistics statistics = S;
   static_assert(S == Statistics::FermiDirac,
                 "WickTheorem not yet implemented for Bose-Einstein");
@@ -567,11 +570,14 @@ class WickTheorem {
               (top_degen = topological_degeneracy()) > 0 &&
               state.connect(op_connections_, ranges::get_cursor(op_iter),
                             ranges::get_cursor(opseq_view_begin))) {
-            //            std::wcout << "level " << state.level << ":
-            //            contracting " << to_latex(*opseq_view_begin) << " with
-            //            " << to_latex(*op_iter) << std::endl; std::wcout << "
-            //            current opseq = " << to_latex(state.opseq) <<
-            //            std::endl;
+            if (debug) {
+              std::wcout << "level " << state.level << ":contracting "
+                         << to_latex(*opseq_view_begin) << " with "
+                         << to_latex(*op_iter) << " (top_degen=" << top_degen
+                         << ")" << std::endl;
+              std::wcout << " current opseq = " << to_latex(state.opseq)
+                         << std::endl;
+            }
 
             // update the phase, if needed
             double phase = 1;
@@ -704,6 +710,9 @@ class WickTheorem {
 
 using BWickTheorem = WickTheorem<Statistics::BoseEinstein>;
 using FWickTheorem = WickTheorem<Statistics::FermiDirac>;
+
+template <Statistics S>
+bool WickTheorem<S>::debug = false;
 
 }  // namespace sequant
 
