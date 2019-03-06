@@ -383,7 +383,7 @@ inline void reduce_wick_impl(std::shared_ptr<Product> &expr,
 }  // namespace detail
 
 template <Statistics S>
-ExprPtr WickTheorem<S>::compute(const bool count_only) const {
+ExprPtr WickTheorem<S>::compute(const bool count_only) {
   // have an Expr as input? Apply recursively ...
   if (expr_input_) {
     /// expand, then apply recursively to products
@@ -442,12 +442,54 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) const {
       auto first_nop_it = ranges::find_if(
           *expr_input_,
           [](const ExprPtr &expr) { return expr->is<NormalOperator<S>>(); });
-      if (use_topology_) {
-        // TODO compute tensor-nop connections and topological partitions
-        //        abort(); // not yet implemented
-      }
       // if have ops, split into prefactor and op sequence
       if (first_nop_it != ranges::end(*expr_input_)) {
+
+        // TODO compute tensor-nop connections and topological partitions
+        if (use_topology_) {
+          //        abort(); // not yet implemented
+
+          // hack for CC only ... assume that third and higher nops come from Ts, to determine their equivalence just sort them by rank
+          container::multimap<size_t, size_t> rank_2_nop_idx; // maps rank to list of normal operator indices
+          auto nops_view = ranges::view::filter(
+              *expr_input_,
+              [](const ExprPtr &expr) { return expr->is<NormalOperator<S>>(); });
+//          assert(ranges::size(nops_view) >= 2);  // proj + hamiltonian
+          size_t max_nop_rank = 0;
+          size_t nop_idx = 0;
+          ranges::for_each(nops_view, [&nop_idx, &max_nop_rank, &rank_2_nop_idx](const ExprPtr& expr) {
+            // should actually use ranges::view::drop_exactly
+            if (nop_idx>=2) {
+              const auto& nop = expr->as<NormalOperator<S>>();
+              const auto nop_rank = nop.rank();
+              max_nop_rank = std::max(max_nop_rank, nop_rank);
+              rank_2_nop_idx.insert(std::make_pair(nop_rank, nop_idx));
+            }
+            ++nop_idx;
+          });
+
+          // convert rank_2_nop_idx to nop partitions
+          if (!rank_2_nop_idx.empty()) {
+            container::vector<container::vector<size_t>> nop_partitions;
+            assert(rank_2_nop_idx.upper_bound(8) == rank_2_nop_idx.end());
+            assert(max_nop_rank >= 1);
+            for(size_t rank=1; rank!=max_nop_rank; ++rank) {
+              auto rank_nop_range = rank_2_nop_idx.equal_range(rank);
+              const auto rank_nop_range_size = rank_nop_range.second - rank_nop_range.first;
+              if (rank_nop_range_size > 1) {
+                nop_partitions.emplace_back(rank_nop_range_size);
+                auto& partition = nop_partitions.back();
+                for(auto it=rank_nop_range.first; it != rank_nop_range.second; ++it) {
+                  partition.push_back(it->second);
+                }
+              }
+            }
+            if (!nop_partitions.empty())
+              this->set_op_partitions(nop_partitions);
+          }
+
+        }
+
         ExprPtr prefactor =
             ex<CProduct>(expr_input_->as<Product>().scalar(), ExprPtrList{});
         bool found_op = false;

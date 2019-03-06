@@ -215,7 +215,7 @@ class WickTheorem {
   /// @param count_only if true, will return a vector of default-initialized
   /// values, useful if only interested in the total count
   /// @return the result of applying Wick's theorem
-  ExprPtr compute(const bool count_only = false) const;
+  ExprPtr compute(const bool count_only = false);
 
  private:
   static constexpr size_t max_input_size =
