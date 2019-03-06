@@ -354,7 +354,6 @@ class WickTheorem {
 
       auto update_topology = [this](size_t op_idx) {
         const auto nconnections = op_nconnections[op_idx];
-//        std::wcout << "in connect:update_topology: op_idx=" << op_idx << " current #conn=" << nconnections << std::endl;
         // if using topological partitions for normal ops, and this operator is in one of them, remove it on first connection
         if (!topological_partitions.empty()) {
           auto partition_idx = op_topological_partition[op_idx];
@@ -363,7 +362,6 @@ class WickTheorem {
             assert(topological_partitions.at(partition_idx).size() > 0);
             auto removed = topological_partitions[partition_idx].erase(op_idx);
             assert(removed);
-//            std::wcout << "in connect:update_topology: removed op from its topological partition\n";
           }
         }
         ++op_nconnections[op_idx];
@@ -432,14 +430,12 @@ class WickTheorem {
       auto update_topology = [this](size_t op_idx) {
         assert(op_nconnections.at(op_idx) > 0);
         const auto nconnections = --op_nconnections[op_idx];
-//        std::wcout << "in disconnect:update_topology: op_idx=" << op_idx << " updated #conn=" << nconnections << std::endl;
         if (!topological_partitions.empty()) {
           auto partition_idx = op_topological_partition[op_idx];
           if (nconnections == 0 && partition_idx > 0) {
             --partition_idx;  // to 0-based
             auto inserted = topological_partitions.at(partition_idx).insert(op_idx);
             assert(inserted.second);
-//            std::wcout << "in disconnect:update_topology: re-added op to its topological partition\n";
           }
         }
       };
@@ -532,27 +528,35 @@ class WickTheorem {
               else
                 result = 0;
             }
-//            // account for topologically-equivalent normal operators
-//            if (result > 0 && !state.topological_partitions.empty()) {
-//              auto opseq_right_idx = ranges::get_cursor(op_iter).range_ordinal();  // the index of normal operator
-//              auto opseq_right_toppart_idx = state.op_topological_partition.at(opseq_right_idx);  // the partition to which this normal operator belongs to (0 = none)
-//              if (opseq_right_toppart_idx > 0) {  // if part of a partition ...
-//                --opseq_right_toppart_idx;  // to 0-based
-//                const auto& opseq_right_toppart = state.topological_partitions.at(opseq_right_toppart_idx);
-//                if (!opseq_right_toppart.empty()) {  // ... and the partition is not empty ...
-//                  const auto it =
-//                      opseq_right_toppart.find(opseq_right_idx);
-//                  if (it == opseq_right_toppart.begin()) {  // ... and first in the partition
-//                    // account for the entire partition by scaling the
-//                    // contribution from the first contraction from this normal
-//                    // operator
-//                    result *=
-//                        opseq_right_toppart.size();
-//                  } else
-//                    result = 0;
-//                }
-//              }
-//            }
+            // account for topologically-equivalent normal operators
+            if (result > 0 && !state.topological_partitions.empty()) {
+              auto opseq_right_idx =
+                  ranges::get_cursor(op_iter)
+                      .range_ordinal();  // the index of normal operator
+              auto opseq_right_toppart_idx = state.op_topological_partition.at(
+                  opseq_right_idx);  // the partition to which this normal
+                                     // operator belongs to (0 = none)
+              if (opseq_right_toppart_idx > 0) {  // if part of a partition ...
+                --opseq_right_toppart_idx;        // to 0-based
+                const auto &opseq_right_toppart =
+                    state.topological_partitions.at(opseq_right_toppart_idx);
+                if (!opseq_right_toppart
+                         .empty()) {  // ... and the partition is not empty ...
+                  const auto it = opseq_right_toppart.find(opseq_right_idx);
+                  // .. and not missing from the partition (because then it's topologically unique) ...
+                  if (it != opseq_right_toppart.end()) {
+                    // ... and first in the partition
+                    if (it == opseq_right_toppart.begin()) {
+                      // account for the entire partition by scaling the
+                      // contribution from the first contraction from this
+                      // normal operator
+                      result *= opseq_right_toppart.size();
+                    } else
+                      result = 0;
+                  }
+                }
+              }
+            }
             return result;
           };
 

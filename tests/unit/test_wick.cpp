@@ -462,13 +462,18 @@ TEST_CASE("WickTheorem", "[algorithms]") {
 
     // 2-body ^ 1-body ^ 1-body
     SEQUANT_PROFILE_SINGLE("wick(H2*T1*T1)", {
+      constexpr bool use_op_partitions = true;
       auto opseq =
           FNOperatorSeq({FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}, V),
                          FNOperator({L"a_4"}, {L"i_4"}, V),
                          FNOperator({L"a_5"}, {L"i_5"}, V)});
       auto wick = FWickTheorem{opseq};
-      auto wick_result = wick.full_contractions(true).spinfree(false).compute();
-      REQUIRE(wick_result->size() == 4);
+      wick.full_contractions(true).spinfree(false).use_topology(true);
+      if (use_op_partitions)
+        wick.set_op_partitions({{1,2}});
+
+      auto wick_result = wick.compute();
+      REQUIRE(wick_result->size() == (use_op_partitions ? 2 : 4));
 
       // multiply tensor factors and expand
       auto wick_result_2 =
@@ -544,6 +549,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
 
     // 2=body ^ 2-body ^ 2-body ^ 2-body with dependent (PNO) indices
     SEQUANT_PROFILE_SINGLE("wick(P2*H2*T2*T2)", {
+      constexpr bool use_op_partitions = true;
       auto opseq =
           FNOperatorSeq({FNOperator(IndexList{L"i_1", L"i_2"},
                                     {Index(L"a_1", {L"i_1", L"i_2"}),
@@ -557,16 +563,16 @@ TEST_CASE("WickTheorem", "[algorithms]") {
                                      Index(L"a_6", {L"i_5", L"i_6"})},
                                     IndexList{L"i_5", L"i_6"}, V)});
       auto wick = FWickTheorem{opseq};
-      auto wick_result =
-          wick.full_contractions(true)
+      wick.full_contractions(true)
               .spinfree(false)
-              .set_op_connections(
-                  std::vector<std::pair<int, int>>{{1, 2}, {1, 3}})
-              .use_topology(true)
-              .compute();
-      //      std::wcout << "P2*H2*T2*T2(PNO) tmp = " << to_latex(wick_result)
-      //                 << std::endl;
-      REQUIRE(wick_result->size() == 34);
+              .set_op_connections({{1, 2}, {1, 3}})
+              .use_topology(true);
+
+      if (use_op_partitions)
+        wick.set_op_partitions({{2,3}});
+      auto wick_result =
+          wick.compute();
+      REQUIRE(wick_result->size() == (use_op_partitions ? 17 : 34));
 
       // multiply tensor factors and expand
       auto wick_result_2 =
