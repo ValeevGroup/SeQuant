@@ -84,8 +84,8 @@ class WickTheorem {
   ///   set_op_partitions() ).
   ///
   /// This is useful to to eliminate the topologically-equivalent contractions
-  /// when full contractions are sought. By default the use of topology is not
-  /// enabled.
+  /// when fully-contracted result (i.e. the vacuum average) is sought.
+  /// By default the use of topology is not enabled.
   /// @param sf if true, will utilize the topology to minimize work.
   /// @warning currently is only supported if full contractions are requested
   /// @sa set_op_partitions()
@@ -122,6 +122,8 @@ class WickTheorem {
   ///
   /// TODO rename op -> nop to distinguish Op and NormalOperator
   ///@{
+
+  /// @tparam IndexPairContainer a sequence of std::pair<Integer,Integer>
   template <typename IndexPairContainer>
   WickTheorem &set_op_connections(IndexPairContainer &&op_index_pairs) {
     if (expr_input_ == nullptr || !op_connections_input_.empty()) {
@@ -155,6 +157,7 @@ class WickTheorem {
     return *this;
   }
 
+  /// @tparam Integer an integral type
   template <typename Integer = long>
   WickTheorem& set_op_connections(std::initializer_list<std::pair<Integer,Integer>> op_index_pairs) {
     return this->set_op_connections<const decltype(op_index_pairs)&>(op_index_pairs);
@@ -182,6 +185,7 @@ class WickTheorem {
   /// TODO rename op -> nop to distinguish Op and NormalOperator
   ///@{
 
+  /// @tparam IndexListContainer a sequence of sequences of Integer types
   template <typename IndexListContainer>
   WickTheorem &set_op_partitions(IndexListContainer &&op_partitions) {
     using std::size;
@@ -200,6 +204,7 @@ class WickTheorem {
     return *this;
   }
 
+  /// @tparam Integer an integral type
   template <typename Integer = long>
   WickTheorem& set_op_partitions(std::initializer_list<std::initializer_list<Integer>> op_partitions) {
     return this->set_op_partitions<const decltype(op_partitions)&>(op_partitions);

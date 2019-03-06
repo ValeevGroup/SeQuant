@@ -87,7 +87,7 @@ class Tensor : public Expr {
   std::wstring_view label() const { return label_; }
   const auto& bra() const { return bra_; }
   const auto& ket() const { return ket_; }
-  /// @return view of the bra+ket index ranges
+  /// @return joined view of the bra and ket index ranges
   auto braket() const { return ranges::view::concat(bra_, ket_); }
   /// @return view of the bra+ket index ranges
   /// @note this is to work around broken lookup rules
