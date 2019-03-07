@@ -403,6 +403,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
                         &count_only](const ExprPtr &input) {
         WickTheorem wt(input, *this);
         auto task_result = wt.compute(count_only);
+        stats() += wt.stats();
         if (task_result) {
           std::scoped_lock<std::mutex> lock(result_mtx);
           result->append(task_result);
@@ -416,6 +417,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
         auto &summand = summands[task_id];
         WickTheorem wt(summand, *this);
         auto task_result = wt.compute(count_only);
+        stats() += wt.stats();
         if (task_result) {
           std::scoped_lock<std::mutex> lock(result_mtx);
           result->append(task_result);

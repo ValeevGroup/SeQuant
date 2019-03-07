@@ -2,6 +2,7 @@
 #include <iostream>
 
 #include <boost/numeric/interval.hpp>
+#include <boost/math/special_functions/factorials.hpp>
 
 #include "../src/domain/mbpt/spin.hpp"
 #include "../src/domain/mbpt/sr/sr.hpp"
@@ -14,7 +15,7 @@ using namespace sequant::mbpt::sr::so;
 namespace {
 
 /// computes VEE for A(P)*H*T(N)^K using excitation level screening (unless @c
-/// screen is set)
+/// screen is set) + computes only canonical (with T ranks increasing) terms
 template <size_t K>
 ExprPtr screened_vac_av(
     const ExprPtr& expr,
@@ -31,8 +32,8 @@ ExprPtr screened_vac_av(
   assert(input->is<Sum>());
   auto input_sum = input->as<Sum>();
 
-  SumPtr screened_input;  // if needed
-  int term_cnt = 0;
+  // this will collect all canonical nonzero terms
+  SumPtr screened_input = std::make_shared<Sum>();
   for (auto&& term : input_sum.summands()) {
     assert(term->is<Product>());
     auto& term_prod = term->as<Product>();
@@ -48,39 +49,55 @@ ExprPtr screened_vac_av(
     auto hlabel = term_prod.factor(2)->as<Tensor>().label();
     assert(hlabel == L"f" || hlabel == L"g");
     const int R = term_prod.factor(2)->as<Tensor>().rank();
+    const int max_exlev_R = R - K;  // at least K lines must point down
 
-    using interval = boost::numeric::interval<int>;
-    auto exlev = interval(-P - R, -P + R);
+    auto exlev = -P;
 
-    for (size_t k = 0; k != K; ++k) {
+    bool canonical = true;
+    // number of possible permutations excluding permutations within same-rank partitions of T
+    // degeneracy = K! / M1! M2! .. where M1, M2 ... are sizes of each partition
+    double degeneracy = boost::math::factorial<double>(K);
+    int total_T_rank = 0;
+    int prev_rank = 0;
+    int current_partition_size = 1;  // size of current same-rank partition oF T
+    for (size_t k = 0; k != K && canonical; ++k) {
       auto p = 4 + k * 2;
       assert(term_prod.factor(p)->is<Tensor>());
       assert(term_prod.factor(p)->as<Tensor>().label() == L"t");
-      exlev += term_prod.factor(p)->as<Tensor>().rank();
+      const auto current_rank = term_prod.factor(p)->as<Tensor>().rank();
+      if (current_rank < prev_rank)  // if T ranks are not increasing, omit
+        canonical = false;
+      else {  // else keep track of degeneracy
+        assert(current_rank != 0);
+        if (current_rank == prev_rank) {
+          ++current_partition_size;
+        }
+        else {
+          if (current_partition_size > 1)
+            degeneracy /= boost::math::factorial<double>(current_partition_size);
+          current_partition_size = 1;
+          prev_rank = current_rank;
+        }
+        exlev += current_rank;
+        total_T_rank += current_rank;
+      }
     }
+    const int min_exlev_R = std::max(-R, R-2*total_T_rank);  // at most 2*total_T_rank lines can point down
 
-    // if VEE == 0, skip
-    if (!in(0, exlev)) {
-      // check if already skipped some ... if not, allocate the result and copy
-      // all terms prior to this one
-      if (screened_input == nullptr) {
-        screened_input =
-            std::make_shared<Sum>(input_sum.summands().begin(),
-                                  input_sum.summands().begin() + term_cnt);
-      }
-    } else {  // VEE != 0
-      if (screened_input) {
-        screened_input->append(term);
+    if (canonical) {
+      using interval = boost::numeric::interval<int>;
+      assert(min_exlev_R <= max_exlev_R);
+      if (exlev + min_exlev_R <= 0 && 0 <= exlev + max_exlev_R) {  // VEE != 0
+        screened_input->append(
+            degeneracy == 1 ? term : ex<Constant>(degeneracy) * term);
       }
     }
-    ++term_cnt;
   }  // term loop
 
-  ExprPtr wick_input = (screened_input) ? screened_input : input;
-  if (wick_input->size() == 0)
+  if (screened_input->size() == 0)
     return ex<Constant>(0);
   else {
-    return vac_av(wick_input, op_connections);
+    return vac_av(screened_input, op_connections);
   }
 }
 

@@ -471,7 +471,6 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       wick.full_contractions(true).spinfree(false).use_topology(true);
       if (use_op_partitions)
         wick.set_op_partitions({{1,2}});
-
       auto wick_result = wick.compute();
       REQUIRE(wick_result->size() == (use_op_partitions ? 2 : 4));
 
