@@ -60,7 +60,7 @@ class WickTheorem {
       : WickTheorem(other) {
     // copy ctor does not do anything useful, so this is OK
     expr_input_ = expr_input;
-    //reset_stats();
+    reset_stats();
   }
 
   /// Controls whether next call to compute() will full contractions only or all
