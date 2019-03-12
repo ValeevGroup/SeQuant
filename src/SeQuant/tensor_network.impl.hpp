@@ -3,6 +3,7 @@
 //
 
 #include "../../external/bliss/graph.hh"
+#include "./utility.hpp"
 
 namespace sequant {
 
@@ -13,7 +14,7 @@ ExprPtr TensorNetwork<Tensor_>::canonicalize(
   container::svector<Edge>
       idx_terminals_sorted;  // to avoid memory allocs
 
-  if (debug_canonicalize) {
+  if (Logger::get_instance().canonicalize) {
     std::wcout << "TensorNetwork::canonicalize(" << (fast ? "fast" : "slow")
                << "): input tensors\n";
     size_t cnt = 0;
@@ -59,7 +60,7 @@ ExprPtr TensorNetwork<Tensor_>::canonicalize(
                        return *first < *second;
                    });
 
-  if (debug_canonicalize) {
+  if (Logger::get_instance().canonicalize) {
     std::wcout << "TensorNetwork::canonicalize(" << (fast ? "fast" : "slow")
                << "): tensors after initial sort\n";
     size_t cnt = 0;
@@ -264,7 +265,7 @@ ExprPtr TensorNetwork<Tensor_>::canonicalize(
     }
   }  // canonical index replacement list computed
 
-  if (debug_canonicalize) {
+  if (Logger::get_instance().canonicalize) {
     for (const auto &idxpair : idxrepl) {
       std::wcout << "TensorNetwork::canonicalize: replacing "
                  << to_latex(idxpair.first) << " with "

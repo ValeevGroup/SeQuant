@@ -24,8 +24,6 @@
 
 namespace sequant {
 
-extern bool debug_canonicalize;
-
 /// @brief Base expression class
 
 /// Expr represents the interface needed to form expression trees. Classes that

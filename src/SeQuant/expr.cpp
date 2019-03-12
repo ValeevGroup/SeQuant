@@ -4,10 +4,9 @@
 
 #include "./expr.hpp"
 #include "./tensor_network.hpp"
+#include "./utility.hpp"
 
 namespace sequant {
-
-bool debug_canonicalize = false;
 
 bool Product::is_commutative() const {
   bool result = true;
@@ -30,7 +29,7 @@ std::shared_ptr<Expr> Product::canonicalize_impl(bool rapid) {
     }
   });
 
-  if (debug_canonicalize) {
+  if (Logger::get_instance().canonicalize) {
     std::wcout << "Product canonicalization(" << (rapid ? "fast" : "slow")
                << ") input: " << to_latex() << std::endl;
   }
@@ -98,7 +97,7 @@ std::shared_ptr<Expr> Product::canonicalize_impl(bool rapid) {
 
   // TODO factorize product of Tensors (turn this into Products of Products
 
-  if (debug_canonicalize)
+  if (Logger::get_instance().canonicalize)
     std::wcout << "Product canonicalization(" << (rapid ? "fast" : "slow")
                << ") result: " << to_latex() << std::endl;
 
