@@ -25,38 +25,54 @@ namespace sequant {
 /// \endcode
 template <typename Derived>
 class Singleton {
+  // can't use std::is_default_constructible since Derived's ctors should be private
+  template <typename T, typename Enabler = void>
+  struct is_default_constructible_helper : public std::false_type {};
+  template <typename T>
+  struct is_default_constructible_helper<T, std::void_t<decltype(T{})>>
+      : public std::true_type {};
+  constexpr static bool derived_is_default_constructible =
+      is_default_constructible_helper<Derived>::value;
+
  public:
+  /// @return reference to the instance
+  /// @throw std::logic_error if the reference has not been contructed (because Derived is not default-constructible and set_instance() had not been called)
   static Derived& get_instance() {
     const auto& result_ptr = instance_accessor();
-    if (result_ptr != nullptr)
-      return *result_ptr;
-    if constexpr (std::is_default_constructible_v<Derived>) {
+    if (result_ptr != nullptr) return *result_ptr;
+    if constexpr (derived_is_default_constructible) {
       set_instance();
       return *instance_accessor();
-    }
-    else
-      throw std::logic_error("sequant::Singleton: is not default-constructible and set_instance() has not been called");
+    } else
+      throw std::logic_error(
+          "sequant::Singleton: is not default-constructible and set_instance() "
+          "has not been called");
   }
 
+  /// @return pointer to the instance, or nullptr if it has not yet been constructed
   static Derived* get_instance_ptr() {
     const auto result_ptr = instance_accessor();
-    if (result_ptr != nullptr)
-      return result_ptr.get();
+    if (result_ptr != nullptr) return result_ptr.get();
     if constexpr (std::is_default_constructible_v<Derived>) {
       set_instance();
       return instance_accessor();
-    }
-    else
+    } else
       return nullptr;
   }
 
-  template <typename ... Args> static void set_instance(Args&&...args) {
+  /// Constructs the instance. This must be called if Derived is not default-constructible.
+  /// @tparam Args a parameter pack type
+  /// @param args a parameter pack
+  template <typename... Args>
+  static void set_instance(Args&&... args) {
     assert(instance_accessor() == nullptr);
-    instance_accessor() = std::move(std::unique_ptr<Derived>(new Derived(std::forward<Args>(args)...)));
+    instance_accessor() = std::move(
+        std::unique_ptr<Derived>(new Derived(std::forward<Args>(args)...)));
   }
 
  protected:
-  template <typename ... Args> Singleton(Args&& ... args) {}  // all constructors are private
+  template <typename... Args>
+  Singleton(Args&&... args) {}  // all constructors are private
 
   static auto& instance_accessor() {
     static std::unique_ptr<Derived> instance(nullptr);
@@ -67,13 +83,18 @@ class Singleton {
 struct Logger : public Singleton<Logger> {
   bool wick_contract = false;
   bool wick_reduce = false;
+  bool expand = false;
   bool canonicalize = false;
+  bool simplify = false;
  private:
   friend class Singleton<Logger>;
   Logger(int log_level = 0) {
     if (log_level > 0) {
-      wick = true;
+      wick_contract = true;
+      wick_reduce = true;
+      expand = true;
       canonicalize = true;
+      simplify = true;
     }
   }
 };

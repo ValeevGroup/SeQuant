@@ -356,25 +356,29 @@ inline void reduce_wick_impl(std::shared_ptr<Product> &expr,
       const auto replacement_rules =
           compute_index_replacement_rules(expr, external_indices, all_indices);
 
-      //      std::wcout << "reduce_wick_impl(expr, external_indices):\n  expr =
-      //      "
-      //                 << expr->to_latex() << "\n  external_indices = ";
-      //      ranges::for_each(external_indices,
-      //                       [](auto &index) { std::wcout << index.label() <<
-      //                       " "; });
-      //      std::wcout << "\n  replrules = ";
-      //      ranges::for_each(replacement_rules, [](auto &index) {
-      //        std::wcout << to_latex(index.first) << "\\to" <<
-      //        to_latex(index.second)
-      //                   << "\\,";
-      //      });
-      std::wcout.flush();
+      if (Logger::get_instance().wick_reduce){
+        std::wcout << "reduce_wick_impl(expr, external_indices):\n  expr = "
+                   << expr->to_latex() << "\n  external_indices = ";
+        ranges::for_each(external_indices, [](auto &index) {
+          std::wcout << index.label() << " ";
+        });
+        std::wcout << "\n  replrules = ";
+        ranges::for_each(replacement_rules, [](auto &index) {
+          std::wcout << to_latex(index.first) << "\\to"
+                     << to_latex(index.second) << "\\,";
+        });
+        std::wcout.flush();
+      }
 
       if (!replacement_rules.empty()) {
         pass_mutated = apply_index_replacement_rules(
             expr, replacement_rules, external_indices, all_indices);
       }
-      //      std::wcout << "\n  result = " << expr->to_latex() << std::endl;
+
+      if (Logger::get_instance().wick_reduce) {
+        std::wcout << "\n  result = " << expr->to_latex() << std::endl;
+      }
+
     } while (pass_mutated);  // keep reducing until stop changing
   } else
     abort();  // programming error?
@@ -446,7 +450,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
       if (first_nop_it != ranges::end(*expr_input_)) {
 
         // TODO compute tensor-nop connections and topological partitions
-        if (use_topology_) {
+        if (use_topology_ && true) {
           //        abort(); // not yet implemented
 
           // hack for CC only ... assume that third and higher nops come from Ts, to determine their equivalence just sort them by rank
@@ -507,14 +511,21 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
         if (!input_.empty()) {
           auto result = compute_nopseq(count_only);
           if (result) {  // simplify if obtained nonzero ...
+//            result = result->template as<Sum>().take_n(12,2);
+            std::wcout << "compute_nopseq result = " << to_latex_align(result, 20, 1) << std::endl;
             result = prefactor * result;
             expand(result);
+            std::wcout << "before reduce result = " << to_latex_align(result, 20, 1) << std::endl;
             this->reduce(result);
+            std::wcout << "reduce result = " << to_latex_align(result, 20, 1) << std::endl;
             rapid_simplify(result);
+            std::wcout << "rapid_simplify result = " << to_latex_align(result, 20, 1) << std::endl;
             canonicalize(result);
+            std::wcout << "canonicalize result = " << to_latex_align(result, 20, 1) << std::endl;
             rapid_simplify(
                 result);  // rapid_simplify again since canonization may produce
                           // new opportunities (e.g. terms cancel, etc.)
+            std::wcout << "rapid_simplify result = " << to_latex_align(result, 20, 1) << std::endl;
           } else
             result = ex<Constant>(0);
           return result;
@@ -550,8 +561,8 @@ void WickTheorem<S>::reduce(ExprPtr &expr) const {
     }
   } else {
     assert(expr->type_id() == Expr::get_type_id<Sum>());
-    for (auto &subexpr : *expr) {
-      assert(subexpr->type_id() == Expr::get_type_id<Product>());
+    for (auto &&subexpr : *expr) {
+      assert(subexpr->is<Product>());
       auto subexpr_cast = std::static_pointer_cast<Product>(subexpr);
       try {
         detail::reduce_wick_impl(subexpr_cast, external_indices_);

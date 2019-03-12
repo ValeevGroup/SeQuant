@@ -20,6 +20,7 @@
 #include "container.hpp"
 #include "hash.hpp"
 #include "latex.hpp"
+#include "utility.hpp"
 #include "wolfram.hpp"
 
 namespace sequant {

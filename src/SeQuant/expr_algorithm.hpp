@@ -19,12 +19,12 @@ inline void canonicalize(ExprPtr& expr) {
 namespace detail {
 struct expand_visitor {
   void operator()(ExprPtr& expr) {
-    if (debug) std::wcout << "expand_visitor received " << to_latex(expr) << std::endl;
+    if (Logger::get_instance().expand) std::wcout << "expand_visitor received " << to_latex(expr) << std::endl;
     // apply expand() iteratively until done
     while(expand(expr)) {
-      if (debug)  std::wcout << "after 1 round of expansion have " << to_latex(expr) << std::endl;
+      if (Logger::get_instance().expand)  std::wcout << "after 1 round of expansion have " << to_latex(expr) << std::endl;
     }
-    if (debug) std::wcout << "expansion result = " << to_latex(expr) << std::endl;
+    if (Logger::get_instance().expand) std::wcout << "expansion result = " << to_latex(expr) << std::endl;
     // simplification and canonicalization are to be done by other visitors
   }
 
@@ -63,7 +63,7 @@ struct expand_visitor {
     auto& expr_ref = *expr;
     std::shared_ptr<Sum> result;  // will keep the result if one or more summands is expanded
     const auto nsubexpr = ranges::size(*expr);
-    if (debug) std::wcout << "in expand_sum: expr = " << to_latex(expr) << std::endl;
+    if (Logger::get_instance().expand) std::wcout << "in expand_sum: expr = " << to_latex(expr) << std::endl;
     for(std::size_t i=0; i != nsubexpr; ++i) {
       if (expr_ref[i]->is<Product>()) {
         const auto this_term_expanded = expand_product(expr_ref[i]);
@@ -76,7 +76,7 @@ struct expand_visitor {
         // if expr != expanded result append current subexpr
         if (result)
           result->append(expr_ref[i]);
-        if (debug) std::wcout << "in expand_sum: after expand_product(" << (this_term_expanded ? "true)" : "false)") << " result = " << to_latex(result ? result : expr) << std::endl;
+        if (Logger::get_instance().expand) std::wcout << "in expand_sum: after expand_product(" << (this_term_expanded ? "true)" : "false)") << " result = " << to_latex(result ? result : expr) << std::endl;
       }
     }
     bool expr_changed = false;
@@ -104,8 +104,6 @@ struct expand_visitor {
     } else
       return false;
   }
-
-  bool debug = false;
 };
 };  // namespace detail
 
@@ -256,16 +254,16 @@ class expr_range
 namespace detail {
 struct rapid_simplify_visitor {
   void operator()(ExprPtr& expr) {
-    if (debug)
+    if (Logger::get_instance().simplify)
       std::wcout << "rapid_simplify_visitor received " << to_latex(expr)
                  << std::endl;
     // apply simplify() iteratively until done
     while (simplify(expr)) {
-      if (debug)
+      if (Logger::get_instance().simplify)
         std::wcout << "after 1 round of simplification have " << to_latex(expr)
                    << std::endl;
     }
-    if (debug)
+    if (Logger::get_instance().simplify)
       std::wcout << "simplification result = " << to_latex(expr) << std::endl;
   }
 
@@ -360,8 +358,6 @@ struct rapid_simplify_visitor {
     } else
       return false;
   }
-
-  bool debug = false;
 };
 };  // namespace detail
 
