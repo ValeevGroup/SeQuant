@@ -703,8 +703,6 @@ class WickTheorem {
     }
   }
 
- public:  // TODO make these members private once WickTheorem can work on full
-  // expressions (not on sequences of normal operators) directly
   /// @param[in,out] on input, Wick theorem result, on output the result of
   /// reducing the overlaps
   void reduce(ExprPtr &expr) const;
