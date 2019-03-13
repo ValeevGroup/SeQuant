@@ -953,6 +953,20 @@ class Sum : public Expr {
   /// @return ith summand
   const ExprPtr &summand(size_t i) const { return summands_.at(i); }
 
+  /// Takes the first @c count elements of the sum
+  ExprPtr take_n(size_t count) const {
+    const auto e = (count >= summands_.size()? summands_.end() : (summands_.begin() + count));
+    return ex<Sum>(summands_.begin(), e);
+  }
+
+  /// Takes the first @c count elements of the sum starting with element @c offset
+  ExprPtr take_n(size_t offset, size_t count) const {
+    const auto offset_plus_count = offset + count;
+    const auto b = (offset >= summands_.size() ? summands_.end() : (summands_.begin() + offset));
+    const auto e = (offset_plus_count >= summands_.size() ? summands_.end() : (summands_.begin() + offset_plus_count));
+    return ex<Sum>(b, e);
+  }
+
   /// @return true if the number of factors is zero
   bool empty() const { return summands_.empty(); }
 
