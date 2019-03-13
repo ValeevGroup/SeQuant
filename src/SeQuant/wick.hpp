@@ -209,9 +209,8 @@ class WickTheorem {
   ///@}
 
   /// Computes and returns the result
-  /// @param count_only if true, will return a vector of default-initialized
-  /// values, useful if only interested in the total count
-  /// @return the result of applying Wick's theorem
+  /// @param count_only if true, will return the total number of terms, as a Constant.
+  /// @return the result of applying Wick's theorem; either a Constant, a Product, or a Sum
   ExprPtr compute(const bool count_only = false);
 
  private:
@@ -286,6 +285,7 @@ class WickTheorem {
           opseq_size(opseq.opsize()),
           level(0),
           count_only(false),
+          count(0),
           op_connections(opseq.size()),
           adjacency_matrix(opseq.size() * (opseq.size() - 1) / 2, 0),
           op_nconnections(opseq.size(), 0),
@@ -302,7 +302,8 @@ class WickTheorem {
     std::size_t opseq_size;           //!< current size of opseq
     Product sp;                       //!< current prefactor
     int level;                        //!< level in recursive wick call stack
-    bool count_only;                  //!< if true, only update result size
+    bool count_only;                  //!< if true, only track the total number of summands in the result (i.e. 1 (the normal product) + the number of contractions (if normal wick result is wanted) or the number of complete constractions (if want complete contractions only)
+    std::atomic<size_t> count;        //!< if count_only is true, will countain the total number of terms
     /// TODO rename op -> nop to distinguish Op and NormalOperator
     container::svector<std::bitset<max_input_size>>
         op_connections;  //!< bitmask of connections for each op (1 = connected)
@@ -465,9 +466,9 @@ class WickTheorem {
     }
   };  // NontensorWickState
 
-  /// Applies most naive version of Wick's theorem, where sign rule involves
+  /// Applies most naive version of Wick's theorem, where the sign rule involves
   /// counting Ops
-  /// @return the result, or nullptr if the result is zero
+  /// @return the result
   ExprPtr compute_nontensor_wick(const bool count_only) const {
     std::vector<std::pair<Product, NormalOperator<S>>>
         result;      //!< current value of the result
@@ -493,7 +494,11 @@ class WickTheorem {
     // convert result to an Expr
     // if result.size() == 0, return null ptr
     ExprPtr result_expr;
-    if (result.size() == 1) {  // if result.size() == 1, return Product
+    if (count_only) {  // count only? return the total number as a Constant
+      assert(result.empty());
+      result_expr = ex<Constant>(state.count);
+    }
+    else if (result.size() == 1) {  // if result.size() == 1, return Product
       result_expr = ex<Product>(std::move(result[0].first));
     } else if (result.size() > 1) {
       auto sum = std::make_shared<Sum>();
@@ -502,6 +507,8 @@ class WickTheorem {
       }
       result_expr = sum;
     }
+    else if (result_expr == nullptr)
+      result_expr = ex<Constant>(0);
     return result_expr;
   }
 
@@ -623,18 +630,19 @@ class WickTheorem {
             // update the result if nothing left to contract and have a
             // nonzero result
             if (state.opseq_size == 0 && !state.sp.empty()) {
-              result.second->lock();
-              //              std::wcout << "got " << to_latex(state.sp) <<
-              //              std::endl;
-              if (!state.count_only)
+              if (!state.count_only) {
+                result.second->lock();
+                //              std::wcout << "got " << to_latex(state.sp) <<
+                //              std::endl;
                 result.first->push_back(std::make_pair(
                     std::move(state.sp.deep_copy()), NormalOperator<S>{}));
+                //              std::wcout << "now up to " <<
+                //              result.first->size()
+                //              << " terms" << std::endl;
+                result.second->unlock();
+              }
               else
-                result.first->resize(result.first->size() + 1);
-              //              std::wcout << "now up to " <<
-              //              result.first->size()
-              //              << " terms" << std::endl;
-              result.second->unlock();
+                ++state.count;
             }
 
             if (state.opseq_size != 0) {
