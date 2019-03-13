@@ -476,6 +476,18 @@ class WickTheorem {
     NontensorWickState state(input_, op_topological_partition_);
     state.count_only = count_only;
 
+    if (Logger::get_instance().wick_contract) {
+      std::wcout << "nop topological partitions: {\n";
+      for (auto &&toppart : state.topological_partitions) {
+        std::wcout << "{" << std::endl;
+        for (auto &&op_idx : toppart) {
+          std::wcout << op_idx << std::endl;
+        }
+        std::wcout << "}" << std::endl;
+      }
+      std::wcout << "}" << std::endl;
+    }
+
     recursive_nontensor_wick(result_plus_mutex, state);
 
     // convert result to an Expr

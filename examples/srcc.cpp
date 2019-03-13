@@ -134,7 +134,7 @@ int main(int argc, char* argv[]) {
       std::make_shared<DefaultTensorCanonicalizer>());
 
   {  // CC amplitude eqs
-    constexpr size_t N = 3;
+    constexpr size_t N = 4;
     constexpr size_t P = N;
     constexpr size_t PMIN = 1;
     auto eqvec = cceqvec<N, P>();
