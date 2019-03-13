@@ -19,7 +19,8 @@ template <size_t K>
 ExprPtr screened_vac_av(
     const ExprPtr& expr,
     std::initializer_list<std::pair<int, int>> op_connections,
-    bool screen = true) {
+    bool screen = true,
+    bool use_top = true) {
   if (!screen) return vac_av(expr, op_connections);
 
   ExprPtr input = expr;
@@ -80,7 +81,7 @@ ExprPtr screened_vac_av(
   if (wick_input->size() == 0)
     return ex<Constant>(0);
   else {
-    return vac_av(wick_input, op_connections);
+    return vac_av(wick_input, op_connections, use_top);
   }
 }
 
@@ -133,8 +134,8 @@ int main(int argc, char* argv[]) {
       std::make_shared<DefaultTensorCanonicalizer>());
 
   {  // CC amplitude eqs
-    constexpr size_t N = 6;
-    constexpr size_t P = 6;
+    constexpr size_t N = 3;
+    constexpr size_t P = N;
     constexpr size_t PMIN = 1;
     auto eqvec = cceqvec<N, P>();
     for (size_t R = PMIN; R <= P; ++R) {

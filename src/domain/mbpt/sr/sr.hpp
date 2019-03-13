@@ -117,11 +117,11 @@ ExprPtr H1mp();
 ExprPtr W();
 ExprPtr H();
 
-inline ExprPtr vac_av(ExprPtr expr, std::initializer_list<std::pair<int,int>> op_connections = {}) {
+inline ExprPtr vac_av(ExprPtr expr, std::initializer_list<std::pair<int,int>> op_connections = {}, bool use_top = true) {
   auto wick = FWickTheorem{expr}
       .full_contractions(true)
       .spinfree(false)
-      .use_topology(true);
+      .use_topology(use_top);
   wick.set_op_connections(op_connections);
   auto result = wick.compute();
   simplify(result);
