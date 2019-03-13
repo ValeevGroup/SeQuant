@@ -5,8 +5,9 @@
 #ifndef SEQUANT_META_HPP
 #define SEQUANT_META_HPP
 
-#include <type_traits>
+#include <complex>
 #include <memory>
+#include <type_traits>
 
 namespace sequant {
 namespace meta {
@@ -25,6 +26,18 @@ struct is_shared_ptr<std::shared_ptr<T> >
     : std::true_type {
 };
 template<class T> static constexpr bool is_shared_ptr_v = is_shared_ptr<T>::value;
+
+///////// is_complex /////////
+
+template<class T>
+struct is_complex
+    : std::false_type {
+};
+template<class T>
+struct is_complex<std::complex<T> >
+    : std::true_type {
+};
+template<class T> static constexpr bool is_complex_v = is_complex<T>::value;
 
 ///////// is_less_than_comparable /////////
 

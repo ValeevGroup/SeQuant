@@ -16,10 +16,12 @@
 #include <boost/callable_traits.hpp>
 #include <boost/core/demangle.hpp>
 #include <boost/functional/hash.hpp>
+#include <boost/numeric/conversion/cast.hpp>
 
 #include "container.hpp"
 #include "hash.hpp"
 #include "latex.hpp"
+#include "meta.hpp"
 #include "utility.hpp"
 #include "wolfram.hpp"
 
@@ -514,6 +516,9 @@ using ExprPtrList = std::initializer_list<ExprPtr>;
 static auto expr_ptr_comparer = [](const auto& ptr1, const auto& ptr2) { return *ptr1 == *ptr2; };
 
 class Constant : public Expr {
+ private:
+  std::complex<double> value_;
+
  public:
   Constant() = default;
   virtual ~Constant() = default;
@@ -523,7 +528,22 @@ class Constant : public Expr {
   Constant& operator=(Constant&&) = default;
   template <typename U> explicit Constant(U && value) : value_(std::forward<U>(value)) {}
 
-  auto value() const { return value_; }
+  /// @tparam T the result type; default to the type of value_
+  /// @return the value cast to ResultType
+  /// @throw std::invalid_argument if conversion to T is not possible
+  /// @throw boost::numeric::positive_overflow or boost::numeric::negative_overflow if cast fails
+  template <typename T = decltype(value_)>
+  auto value() const {
+    if constexpr (std::is_arithmetic_v<T>) {
+      assert(value_.imag() == 0);
+      return boost::numeric_cast<T>(value_.real());
+    } else if constexpr (meta::is_complex_v<T>) {
+      return T(boost::numeric_cast<typename T::value_type>(value_.real()),
+               boost::numeric_cast<typename T::value_type>(value_.imag()));
+    } else
+      throw std::invalid_argument(
+          "Constant::value<T>: cannot convert value to type T");
+  }
 
   std::wstring to_latex() const override {
     return L"{" + sequant::to_latex(value()) + L"}";
@@ -569,8 +589,6 @@ class Constant : public Expr {
   }
 
  private:
-  std::complex<double> value_;
-
   hash_type memoizing_hash() const override {
     hash_value_ = boost::hash_value(value_);
     return *hash_value_;

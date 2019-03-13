@@ -217,6 +217,16 @@ TEST_CASE("Expr", "[elements]") {
     }
   }
 
+  SECTION("constant") {
+    const auto ex = std::make_shared<Constant>(2);
+    REQUIRE(ex->value() == std::complex<double>{2, 0});
+    REQUIRE(ex->value<int>() == 2);
+    REQUIRE(ex->value<std::complex<int>>() == std::complex<int>{2, 0});
+    REQUIRE_THROWS_AS(ex->value<Dummy>(), std::invalid_argument);
+    REQUIRE_THROWS_AS(ex->value<bool>(), boost::numeric::positive_overflow);
+    REQUIRE_THROWS_AS(std::make_shared<Constant>(-2)->value<unsigned int>(), boost::numeric::negative_overflow);
+  }
+
   SECTION("scaled_product") {
     REQUIRE_NOTHROW(Product{});
     Product sp0{};
