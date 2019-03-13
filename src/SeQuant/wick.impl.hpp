@@ -450,7 +450,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
       if (first_nop_it != ranges::end(*expr_input_)) {
 
         // TODO compute tensor-nop connections and topological partitions
-        if (use_topology_ && true) {
+        if (use_topology_) {
           //        abort(); // not yet implemented
 
           // hack for CC only ... assume that third and higher nops come from Ts, to determine their equivalence just sort them by rank
@@ -481,8 +481,9 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
               auto rank_nop_range = rank_2_nop_idx.equal_range(rank);
               const auto rank_nop_range_size = rank_nop_range.second - rank_nop_range.first;
               if (rank_nop_range_size > 1) {
-                nop_partitions.emplace_back(rank_nop_range_size);
+                nop_partitions.push_back({});
                 auto& partition = nop_partitions.back();
+                partition.reserve(rank_nop_range_size);
                 for(auto it=rank_nop_range.first; it != rank_nop_range.second; ++it) {
                   partition.push_back(it->second);
                 }
@@ -511,21 +512,14 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
         if (!input_.empty()) {
           auto result = compute_nopseq(count_only);
           if (result) {  // simplify if obtained nonzero ...
-//            result = result->template as<Sum>().take_n(12,2);
-            std::wcout << "compute_nopseq result = " << to_latex_align(result, 20, 1) << std::endl;
             result = prefactor * result;
             expand(result);
-            std::wcout << "before reduce result = " << to_latex_align(result, 20, 1) << std::endl;
             this->reduce(result);
-            std::wcout << "reduce result = " << to_latex_align(result, 20, 1) << std::endl;
             rapid_simplify(result);
-            std::wcout << "rapid_simplify result = " << to_latex_align(result, 20, 1) << std::endl;
             canonicalize(result);
-            std::wcout << "canonicalize result = " << to_latex_align(result, 20, 1) << std::endl;
             rapid_simplify(
                 result);  // rapid_simplify again since canonization may produce
                           // new opportunities (e.g. terms cancel, etc.)
-            std::wcout << "rapid_simplify result = " << to_latex_align(result, 20, 1) << std::endl;
           } else
             result = ex<Constant>(0);
           return result;
