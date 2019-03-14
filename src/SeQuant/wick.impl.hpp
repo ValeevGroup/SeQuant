@@ -477,7 +477,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
             container::vector<container::vector<size_t>> nop_partitions;
             assert(rank_2_nop_idx.upper_bound(8) == rank_2_nop_idx.end());
             assert(max_nop_rank >= 1);
-            for(size_t rank=1; rank!=max_nop_rank; ++rank) {
+            for(size_t rank=1; rank<=max_nop_rank; ++rank) {
               auto rank_nop_range = rank_2_nop_idx.equal_range(rank);
               const auto rank_nop_range_size = rank_nop_range.second - rank_nop_range.first;
               if (rank_nop_range_size > 1) {
