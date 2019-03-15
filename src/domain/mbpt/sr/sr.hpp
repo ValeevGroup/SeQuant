@@ -118,13 +118,17 @@ ExprPtr W();
 ExprPtr H();
 
 inline ExprPtr vac_av(ExprPtr expr, std::initializer_list<std::pair<int,int>> op_connections = {}, bool use_top = true) {
-  auto wick = FWickTheorem{expr}
-      .full_contractions(true)
+  FWickTheorem wick{expr};
+  wick.full_contractions(true)
       .spinfree(false)
-      .use_topology(use_top);
-  wick.set_op_connections(op_connections);
+      .use_topology(use_top)
+      .set_op_connections(op_connections);
   auto result = wick.compute();
   simplify(result);
+  std::wcout << "WickTheorem stats: # of contractions attempted = "
+             << wick.stats().num_attempted_contractions
+             << " # of useful contractions = "
+             << wick.stats().num_useful_contractions << std::endl;
   return result;
 }
 

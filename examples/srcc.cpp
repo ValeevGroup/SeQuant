@@ -2,6 +2,7 @@
 #include <iostream>
 
 #include <boost/numeric/interval.hpp>
+#include <boost/math/special_functions/factorials.hpp>
 
 #include "../src/domain/mbpt/spin.hpp"
 #include "../src/domain/mbpt/sr/sr.hpp"
@@ -15,13 +16,14 @@ using namespace sequant::mbpt::sr::so;
 namespace {
 
 /// computes VEE for A(P)*H*T(N)^K using excitation level screening (unless @c
-/// screen is set)
+/// screen is set) + computes only canonical (with T ranks increasing) terms
 template <size_t K>
 ExprPtr screened_vac_av(
     const ExprPtr& expr,
     std::initializer_list<std::pair<int, int>> op_connections,
     bool screen = true,
-    bool use_topology = true) {
+    bool use_topology = true,
+    bool canonical_only = true) {
   if (!screen) return vac_av(expr, op_connections, use_topology);
 
   ExprPtr input = expr;
@@ -33,8 +35,8 @@ ExprPtr screened_vac_av(
   assert(input->is<Sum>());
   auto input_sum = input->as<Sum>();
 
-  SumPtr screened_input;  // if needed
-  int term_cnt = 0;
+  // this will collect all canonical nonzero terms
+  SumPtr screened_input = std::make_shared<Sum>();
   for (auto&& term : input_sum.summands()) {
     assert(term->is<Product>());
     auto& term_prod = term->as<Product>();
@@ -50,44 +52,66 @@ ExprPtr screened_vac_av(
     auto hlabel = term_prod.factor(2)->as<Tensor>().label();
     assert(hlabel == L"f" || hlabel == L"g");
     const int R = term_prod.factor(2)->as<Tensor>().rank();
+    const int max_exlev_R = R - K;  // at least K lines must point down
 
-    using interval = boost::numeric::interval<int>;
-    auto exlev = interval(-P - R, -P + R);
+    auto exlev = -P;
 
-    for (size_t k = 0; k != K; ++k) {
+    bool canonical = true;
+    // number of possible permutations within same-rank partitions of T
+    // number of possible permutations other than these
+    // degeneracy = M1! M2! .. where M1, M2 ... are sizes of each partition
+    double degeneracy = canonical_only ? boost::math::factorial<double>(K) : 1;
+    int total_T_rank = 0;
+    int prev_rank = 0;
+    int current_partition_size = 1;  // size of current same-rank partition of T
+    for (size_t k = 0; k != K && canonical; ++k) {
       auto p = 4 + k * 2;
       assert(term_prod.factor(p)->is<Tensor>());
       assert(term_prod.factor(p)->as<Tensor>().label() == L"t");
-      exlev += term_prod.factor(p)->as<Tensor>().rank();
+      const auto current_rank = term_prod.factor(p)->as<Tensor>().rank();
+      exlev += current_rank;
+      total_T_rank += current_rank;
+      // screen out the noncanonical terms, if needed
+      if (canonical_only) {
+        if (current_rank < prev_rank)  // if T ranks are not increasing, omit
+          canonical = false;
+        else {  // else keep track of degeneracy
+          assert(current_rank != 0);
+          if (current_rank == prev_rank) {
+            ++current_partition_size;
+          } else {
+            if (current_partition_size > 1)
+              degeneracy /=
+                  boost::math::factorial<double>(current_partition_size);
+            current_partition_size = 1;
+            prev_rank = current_rank;
+          }
+        }
+      }
     }
+    if (canonical_only)
+      degeneracy /= boost::math::factorial<double>(current_partition_size);  // account for the last partition
+    const int min_exlev_R = std::max(-R, R-2*total_T_rank);  // at most 2*total_T_rank lines can point down
 
-    // if VEE == 0, skip
-    if (!in(0, exlev)) {
-      // check if already skipped some ... if not, allocate the result and copy
-      // all terms prior to this one
-      if (screened_input == nullptr) {
-        screened_input =
-            std::make_shared<Sum>(input_sum.summands().begin(),
-                                  input_sum.summands().begin() + term_cnt);
-      }
-    } else {  // VEE != 0
-      if (screened_input) {
-        screened_input->append(term);
+    if (canonical || !canonical_only) {
+      using interval = boost::numeric::interval<int>;
+      if (exlev + min_exlev_R <= 0 && 0 <= exlev + max_exlev_R) {  // VEE != 0
+        assert(min_exlev_R <= max_exlev_R);
+        screened_input->append(
+            degeneracy == 1 ? term : ex<Constant>(degeneracy) * term);
       }
     }
-    ++term_cnt;
   }  // term loop
 
-  ExprPtr wick_input = (screened_input) ? screened_input : input;
-  if (wick_input->size() == 0)
+  if (screened_input->size() == 0)
     return ex<Constant>(0);
   else {
-    return vac_av(wick_input, op_connections, use_topology);
+    return vac_av(screened_input, op_connections, use_topology);
   }
 }
 
 template <size_t P, size_t N>
-auto ccresidual(bool screen, bool use_topology, bool use_connectivity) {
+auto ccresidual(bool screen, bool use_topology, bool use_connectivity, bool canonical_only) {
   auto ahbar = [=](const bool screen) {
     auto connect = [=](std::initializer_list<std::pair<int, int>> connlist) {
       if (use_connectivity)
@@ -96,17 +120,17 @@ auto ccresidual(bool screen, bool use_topology, bool use_connectivity) {
         return std::initializer_list<std::pair<int, int>>{};
     };
     auto result =
-        screened_vac_av<0>(A<P>() * H(), connect({}), screen, use_topology) +
-        screened_vac_av<1>(A<P>() * H() * T<N>(), connect({{1, 2}}), screen, use_topology) +
+        screened_vac_av<0>(A<P>() * H(), connect({}), screen, use_topology, canonical_only) +
+        screened_vac_av<1>(A<P>() * H() * T<N>(), connect({{1, 2}}), screen, use_topology, canonical_only) +
         ex<Constant>(1. / 2) *
             screened_vac_av<2>(A<P>() * H() * T<N>() * T<N>(), connect({{1, 2}, {1, 3}}),
-                               screen, use_topology) +
+                               screen, use_topology, canonical_only) +
         ex<Constant>(1. / 6) *
             screened_vac_av<3>(A<P>() * H() * T<N>() * T<N>() * T<N>(),
-                               connect({{1, 2}, {1, 3}, {1, 4}}), screen, use_topology) +
+                               connect({{1, 2}, {1, 3}, {1, 4}}), screen, use_topology, canonical_only) +
         ex<Constant>(1. / 24) *
             screened_vac_av<4>(A<P>() * H() * T<N>() * T<N>() * T<N>() * T<N>(),
-                               connect({{1, 2}, {1, 3}, {1, 4}, {1, 5}}), screen, use_topology);
+                               connect({{1, 2}, {1, 3}, {1, 4}, {1, 5}}), screen, use_topology, canonical_only);
     simplify(result);
 
     return result;
@@ -116,32 +140,33 @@ auto ccresidual(bool screen, bool use_topology, bool use_connectivity) {
 }
 
 template <size_t P, size_t PMIN, size_t N>
-void ccresidual_rec(std::vector<ExprPtr>& result, bool screen, bool use_topology, bool use_connectivity) {
-  result[P] = ccresidual<P, N>(screen, use_topology, use_connectivity);
+void ccresidual_rec(std::vector<ExprPtr>& result, bool screen, bool use_topology, bool use_connectivity, bool canonical_only) {
+  result[P] = ccresidual<P, N>(screen, use_topology, use_connectivity, canonical_only);
   rapid_simplify(result[P]);
-  if constexpr (P > PMIN) ccresidual_rec<P - 1, PMIN, N>(result, screen, use_topology, use_connectivity);
+  if constexpr (P > PMIN) ccresidual_rec<P - 1, PMIN, N>(result, screen, use_topology, use_connectivity, canonical_only);
 }
 
 }  // namespace
 
 template <size_t N, size_t P = N, size_t PMIN = 1>
-std::vector<ExprPtr> cceqvec(bool screen, bool use_topology, bool use_connectivity) {
+std::vector<ExprPtr> cceqvec(bool screen, bool use_topology, bool use_connectivity, bool canonical_only) {
   std::vector<ExprPtr> result(P + 1);
-  ccresidual_rec<P, PMIN, N>(result, screen, use_topology, use_connectivity);
+  ccresidual_rec<P, PMIN, N>(result, screen, use_topology, use_connectivity, canonical_only);
   return result;
 }
 
 TimerPool<32> tpool;
 
 template <size_t P, size_t PMIN, size_t N>
-void compute_cceqvec(size_t NMAX, bool print, bool screen, bool use_topology, bool use_connectivity) {
+void compute_cceqvec(size_t NMAX, bool print, bool screen, bool use_topology, bool use_connectivity, bool canonical_only) {
   if (N <= NMAX) {
     tpool.start(N);
-    auto eqvec = cceqvec<N, P>(screen, use_topology, use_connectivity);
+    auto eqvec = cceqvec<N, P>(screen, use_topology, use_connectivity, canonical_only);
     tpool.stop(N);
     std::wcout << std::boolalpha << "expS" << N << "[screen=" << screen
                << ",use_topology=" << use_topology
-               << ",use_connectivity=" << use_connectivity << "] computed in "
+               << ",use_connectivity=" << use_connectivity
+               << ",canonical_only=" << canonical_only << "] computed in "
                << tpool.read(N) << " seconds" << std::endl;
     for (size_t R = PMIN; R <= P; ++R) {
       std::wcout << "R" << R << "(expS" << N << ") has " << eqvec[R]->size()
@@ -159,9 +184,9 @@ void compute_cceqvec(size_t NMAX, bool print, bool screen, bool use_topology, bo
 }
 
 template <size_t ... N>
-void compute_all(size_t NMAX, bool print = true, bool screen = true, bool use_topology = true, bool use_connectivity = true) {
+void compute_all(size_t NMAX, bool print = true, bool screen = true, bool use_topology = true, bool use_connectivity = true, bool canonical_only = true) {
   (compute_cceqvec<N, 1, N>(NMAX, print, screen, use_topology,
-                            use_connectivity),
+                            use_connectivity, canonical_only),
    ...);
 }
 
@@ -182,11 +207,13 @@ int main(int argc, char* argv[]) {
   constexpr bool print = false;
   ranges::for_each({false, true}, [=](const bool screen) {
     ranges::for_each({false, true}, [=](const bool use_topology) {
-      tpool.clear();
-      // comment out to run all possible combinations
-      if (screen && use_topology)
-        compute_all<2, 3, 4, 5, 6, 7, 8, 9, 10>(NMAX, print, screen, use_topology,
-                                                true);
+      ranges::for_each({false, true}, [=](const bool canonical_only) {
+        tpool.clear();
+        // comment out to run all possible combinations
+        if (screen)
+          compute_all<2, 3, 4, 5, 6, 7, 8, 9, 10>(NMAX, print, screen, use_topology,
+                                                  true, canonical_only);
+      });
     });
   });
 

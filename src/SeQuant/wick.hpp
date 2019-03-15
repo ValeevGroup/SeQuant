@@ -33,10 +33,15 @@ class WickTheorem {
   static_assert(S == Statistics::FermiDirac,
                 "WickTheorem not yet implemented for Bose-Einstein");
 
-  WickTheorem(const WickTheorem &) = default;
   WickTheorem(WickTheorem &&) = default;
-  WickTheorem &operator=(const WickTheorem &) = default;
   WickTheorem &operator=(WickTheorem &&) = default;
+
+ private:
+  // make copying private to be able to adjust state
+  WickTheorem(const WickTheorem &) = default;
+  WickTheorem &operator=(const WickTheorem &) = default;
+
+ public:
 
   explicit WickTheorem(const NormalOperatorSequence<S> &input) : input_(input) {
     assert(input.size() <= max_input_size);
@@ -52,6 +57,7 @@ class WickTheorem {
       : WickTheorem(other) {
     // copy ctor does not do anything useful, so this is OK
     expr_input_ = expr_input;
+    reset_stats();
   }
 
   /// Controls whether next call to compute() will full contractions only or all
@@ -213,6 +219,43 @@ class WickTheorem {
   /// @return the result of applying Wick's theorem; either a Constant, a Product, or a Sum
   ExprPtr compute(const bool count_only = false);
 
+  /// Collects compute statistics
+  class Stats {
+   public:
+    Stats() : num_attempted_contractions(0), num_useful_contractions(0) {}
+    Stats(const Stats& other) noexcept {
+      num_attempted_contractions.store(other.num_attempted_contractions.load());
+      num_useful_contractions.store(other.num_useful_contractions.load());
+    }
+    Stats& operator=(const Stats& other) noexcept {
+      num_attempted_contractions.store(other.num_attempted_contractions.load());
+      num_useful_contractions.store(other.num_useful_contractions.load());
+      return *this;
+    }
+
+    void reset() { num_attempted_contractions = 0; num_useful_contractions = 0; }
+
+    Stats& operator+=(const Stats& other) {
+      num_attempted_contractions += other.num_attempted_contractions;
+      num_useful_contractions += other.num_useful_contractions;
+      return *this;
+    }
+
+    std::atomic<size_t> num_attempted_contractions;
+    std::atomic<size_t> num_useful_contractions;
+  };
+
+  /// Statistics accessor
+  /// @return statistics of compute calls since creation, or since the last call to reset_stats()
+  const Stats& stats() const { return stats_; }
+
+  /// Statistics accessor
+  /// @return statistics of compute calls since creation, or since the last call to reset_stats()
+  Stats& stats() { return stats_; }
+
+  /// Statistics reset
+  void reset_stats() { stats_.reset(); }
+
  private:
   static constexpr size_t max_input_size =
       32;  // max # of operators in the input sequence
@@ -225,6 +268,8 @@ class WickTheorem {
   bool full_contractions_ = false;
   bool spinfree_ = false;
   bool use_topology_ = false;
+  mutable Stats stats_;
+
   container::set<Index> external_indices_;
   // for each operator specifies the reverse bitmask of target connections
   // (0 = must connect)
@@ -543,12 +588,12 @@ class WickTheorem {
             size_t result = 1;
             if (use_topology_) {
               auto &opseq_right = *(ranges::get_cursor(op_iter).range_iter());
-              auto &op_it = ranges::get_cursor(op_iter).elem_iter();
-              auto op_idx_in_opseq = op_it - ranges::begin(opseq_right);
-              auto &hug = opseq_right.hug();
-              auto &group = hug->group(op_idx_in_opseq);
-              if (group.second.find(op_idx_in_opseq) == group.second.begin())
-                result = hug->group_size(op_idx_in_opseq);
+              auto &op_right_it = ranges::get_cursor(op_iter).elem_iter();
+              auto op_right_idx_in_opseq = op_right_it - ranges::begin(opseq_right);
+              auto &hug_right = opseq_right.hug();
+              auto &group_right = hug_right->group(op_right_idx_in_opseq);
+              if (group_right.second.find(op_right_idx_in_opseq) == group_right.second.begin())
+                result =hug_right->group_size(op_right_idx_in_opseq);
               else
                 result = 0;
             }
@@ -616,6 +661,10 @@ class WickTheorem {
             state.sp.append(
                 top_degen * phase,
                 contract(*opseq_view_begin, *op_iter, input_.vacuum()));
+
+            // update the stats
+            ++stats_.num_attempted_contractions;
+
             // remove from back to front
             Op<S> right = *op_iter;
             ranges::get_cursor(op_iter).erase();
@@ -643,12 +692,19 @@ class WickTheorem {
               }
               else
                 ++state.count;
+
+              // update the stats: count this contraction as useful
+              ++stats_.num_useful_contractions;
             }
 
             if (state.opseq_size != 0) {
+              const auto current_num_useful_contractions = stats_.num_useful_contractions.load();
               ++state.level;
               recursive_nontensor_wick(result, state);
               --state.level;
+              // this contraction is useful if it leads to useful contractions as a result
+              if (current_num_useful_contractions != stats_.num_useful_contractions.load())
+                ++stats_.num_useful_contractions;
             }
 
             // restore the prefactor and opseq
