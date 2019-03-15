@@ -19,7 +19,7 @@ class TensorCanonicalizer;
 /// @brief particle-symmetric Tensor, i.e. permuting
 class Tensor : public Expr {
  private:
-  using index_container_type = container::svector<Index>;
+  using index_container_type = container::svector<Index, 4>;
   auto make_indices(IndexList indices) { return indices; }
   auto make_indices(WstrList index_labels) {
     index_container_type result;

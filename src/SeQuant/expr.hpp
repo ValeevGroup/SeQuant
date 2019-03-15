@@ -794,7 +794,7 @@ class Product : public Expr {
 
  private:
   std::complex<double> scalar_ = {1.0, 0.0};
-  container::svector<ExprPtr> factors_{};
+  container::svector<ExprPtr, 2> factors_{};
 
   cursor begin_cursor() override {
     return factors_.empty() ? Expr::begin_cursor() : cursor{&factors_[0]};
@@ -1041,7 +1041,7 @@ class Sum : public Expr {
   }
 
  private:
-  container::svector<ExprPtr> summands_{};
+  container::svector<ExprPtr, 2> summands_{};
   std::optional<size_t>
       constant_summand_idx_{};  // points to the constant summand, if any; used
                                 // to sum up constants in append/prepend
