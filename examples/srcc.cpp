@@ -5,6 +5,7 @@
 
 #include "../src/domain/mbpt/spin.hpp"
 #include "../src/domain/mbpt/sr/sr.hpp"
+#include "../src/SeQuant/timer.hpp"
 
 using namespace sequant;
 
@@ -20,8 +21,8 @@ ExprPtr screened_vac_av(
     const ExprPtr& expr,
     std::initializer_list<std::pair<int, int>> op_connections,
     bool screen = true,
-    bool use_top = true) {
-  if (!screen) return vac_av(expr, op_connections);
+    bool use_topology = true) {
+  if (!screen) return vac_av(expr, op_connections, use_topology);
 
   ExprPtr input = expr;
   // expand, if possible
@@ -81,67 +82,71 @@ ExprPtr screened_vac_av(
   if (wick_input->size() == 0)
     return ex<Constant>(0);
   else {
-    return vac_av(wick_input, op_connections, use_top);
+    return vac_av(wick_input, op_connections, use_topology);
   }
 }
 
 template <size_t P, size_t N>
-auto ccresidual() {
-  auto ahbar = [](const bool screen) {
+auto ccresidual(bool screen, bool use_topology, bool use_connectivity) {
+  auto ahbar = [=](const bool screen) {
+    auto connect = [=](std::initializer_list<std::pair<int, int>> connlist) {
+      if (use_connectivity)
+        return connlist;
+      else
+        return std::initializer_list<std::pair<int, int>>{};
+    };
     auto result =
-        screened_vac_av<0>(A<P>() * H(), {}, screen) +
-        screened_vac_av<1>(A<P>() * H() * T<N>(), {{1, 2}}, screen) +
+        screened_vac_av<0>(A<P>() * H(), connect({}), screen, use_topology) +
+        screened_vac_av<1>(A<P>() * H() * T<N>(), connect({{1, 2}}), screen, use_topology) +
         ex<Constant>(1. / 2) *
-            screened_vac_av<2>(A<P>() * H() * T<N>() * T<N>(), {{1, 2}, {1, 3}},
-                               screen) +
+            screened_vac_av<2>(A<P>() * H() * T<N>() * T<N>(), connect({{1, 2}, {1, 3}}),
+                               screen, use_topology) +
         ex<Constant>(1. / 6) *
             screened_vac_av<3>(A<P>() * H() * T<N>() * T<N>() * T<N>(),
-                               {{1, 2}, {1, 3}, {1, 4}}, screen) +
+                               connect({{1, 2}, {1, 3}, {1, 4}}), screen, use_topology) +
         ex<Constant>(1. / 24) *
             screened_vac_av<4>(A<P>() * H() * T<N>() * T<N>() * T<N>() * T<N>(),
-                               {{1, 2}, {1, 3}, {1, 4}, {1, 5}}, screen);
+                               connect({{1, 2}, {1, 3}, {1, 4}, {1, 5}}), screen, use_topology);
     simplify(result);
 
     return result;
   };
 
-  return ahbar(true);
+  return ahbar(screen);
 }
 
 template <size_t P, size_t PMIN, size_t N>
-void ccresidual_rec(std::vector<ExprPtr>& result) {
-  result[P] = ccresidual<P, N>();
+void ccresidual_rec(std::vector<ExprPtr>& result, bool screen, bool use_topology, bool use_connectivity) {
+  result[P] = ccresidual<P, N>(screen, use_topology, use_connectivity);
   rapid_simplify(result[P]);
-  if constexpr (P > PMIN) ccresidual_rec<P - 1, PMIN, N>(result);
+  if constexpr (P > PMIN) ccresidual_rec<P - 1, PMIN, N>(result, screen, use_topology, use_connectivity);
 }
 
 }  // namespace
 
 template <size_t N, size_t P = N, size_t PMIN = 1>
-std::vector<ExprPtr> cceqvec() {
+std::vector<ExprPtr> cceqvec(bool screen, bool use_topology, bool use_connectivity) {
   std::vector<ExprPtr> result(P + 1);
-  ccresidual_rec<P, PMIN, N>(result);
+  ccresidual_rec<P, PMIN, N>(result, screen, use_topology, use_connectivity);
   return result;
 }
 
-int main(int argc, char* argv[]) {
-  std::setlocale(LC_ALL, "en_US.UTF-8");
-  std::cout.precision(std::numeric_limits<double>::max_digits10);
-  sequant::IndexSpace::register_standard_instances();
-  sequant::detail::OpIdRegistrar op_id_registrar;
-  TensorCanonicalizer::set_cardinal_tensor_labels({L"A", L"f", L"g", L"t"});
-  TensorCanonicalizer::register_instance(
-      std::make_shared<DefaultTensorCanonicalizer>());
+TimerPool<32> tpool;
 
-  {  // CC amplitude eqs
-    constexpr size_t N = 4;
-    constexpr size_t P = N;
-    constexpr size_t PMIN = 1;
-    auto eqvec = cceqvec<N, P>();
+template <size_t P, size_t PMIN, size_t N>
+void compute_cceqvec(size_t NMAX, bool print, bool screen, bool use_topology, bool use_connectivity) {
+  if (N <= NMAX) {
+    tpool.start(N);
+    auto eqvec = cceqvec<N, P>(screen, use_topology, use_connectivity);
+    tpool.stop(N);
+    std::wcout << std::boolalpha << "expS" << N << "[screen=" << screen
+               << ",use_topology=" << use_topology
+               << ",use_connectivity=" << use_connectivity << "] computed in "
+               << tpool.read(N) << " seconds" << std::endl;
     for (size_t R = PMIN; R <= P; ++R) {
       std::wcout << "R" << R << "(expS" << N << ") has " << eqvec[R]->size()
-                 << " terms:\n"
-                 << to_latex_align(eqvec[R], 20, 5) << std::endl;
+                 << " terms:" << std::endl;
+      if (print) std::wcout << to_latex_align(eqvec[R], 20, 5) << std::endl;
 
       // validate known sizes of some CC residuals
       if (R == 1 && N == 2) assert(eqvec[R]->size() == 14);
@@ -151,6 +156,39 @@ int main(int argc, char* argv[]) {
       if (R == 5 && N == 5) assert(eqvec[R]->size() == 99);
     }
   }
+}
+
+template <size_t ... N>
+void compute_all(size_t NMAX, bool print = true, bool screen = true, bool use_topology = true, bool use_connectivity = true) {
+  (compute_cceqvec<N, 1, N>(NMAX, print, screen, use_topology,
+                            use_connectivity),
+   ...);
+}
+
+template <typename T> struct type_printer;
+
+int main(int argc, char* argv[]) {
+  std::setlocale(LC_ALL, "en_US.UTF-8");
+  std::cout.precision(std::numeric_limits<double>::max_digits10);
+  sequant::IndexSpace::register_standard_instances();
+  sequant::detail::OpIdRegistrar op_id_registrar;
+  TensorCanonicalizer::set_cardinal_tensor_labels({L"A", L"f", L"g", L"t"});
+  TensorCanonicalizer::register_instance(
+      std::make_shared<DefaultTensorCanonicalizer>());
+  //set_num_threads(1);
+
+  const size_t NMAX = argc > 1 ? std::atoi(argv[1]) : 4;
+  assert(NMAX <= 10 && NMAX >= 2);
+  constexpr bool print = false;
+  ranges::for_each({false, true}, [=](const bool screen) {
+    ranges::for_each({false, true}, [=](const bool use_topology) {
+      tpool.clear();
+      // comment out to run all possible combinations
+      if (screen && use_topology)
+        compute_all<2, 3, 4, 5, 6, 7, 8, 9, 10>(NMAX, print, screen, use_topology,
+                                                true);
+    });
+  });
 
   return 0;
 }
