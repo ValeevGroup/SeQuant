@@ -10,8 +10,8 @@
 
 namespace sequant {
 
-/// TimerPool aggregates \c N C++11 "timers"; used to high-resolution profile
-/// stages of integral computation
+/// TimerPool aggregates \c N C++11 "timers"; used to profile
+/// stages of a computation with high resolution
 /// @tparam N the number of timers
 /// @note member functions are not reentrant, use one Timers object per thread
 template<size_t N = 1>
@@ -31,9 +31,9 @@ class TimerPool {
 
   /// use this to report the overhead of now() call; if set, the reported
   /// timings will be adjusted for this overhead
+  /// @param ns overhead in nanoseconds
   /// @note this is clearly compiler and system dependent, please measure
   /// carefully (turn off turboboost, etc.)
-  ///       using src/bin/profile/chrono.cc
   void set_now_overhead(size_t ns) { overhead_ = std::chrono::nanoseconds(ns); }
 
   /// starts timer \c t
