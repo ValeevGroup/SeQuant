@@ -710,6 +710,9 @@ AbstractGraph::search(const bool canonical, Stats& stats)
       update_labeling(best_path_labeling);
       /* Update statistics */
       stats.nof_leaf_nodes = 1;
+      /* Release component recursion data in partition */
+      if(opt_use_comprec)
+        p.cr_free();
       return;
     }
 
