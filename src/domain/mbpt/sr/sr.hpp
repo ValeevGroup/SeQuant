@@ -125,10 +125,12 @@ inline ExprPtr vac_av(ExprPtr expr, std::initializer_list<std::pair<int,int>> op
       .set_op_connections(op_connections);
   auto result = wick.compute();
   simplify(result);
-  std::wcout << "WickTheorem stats: # of contractions attempted = "
-             << wick.stats().num_attempted_contractions
-             << " # of useful contractions = "
-             << wick.stats().num_useful_contractions << std::endl;
+  if (Logger::get_instance().wick_stats) {
+    std::wcout << "WickTheorem stats: # of contractions attempted = "
+               << wick.stats().num_attempted_contractions
+               << " # of useful contractions = "
+               << wick.stats().num_useful_contractions << std::endl;
+  }
   return result;
 }
 

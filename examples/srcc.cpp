@@ -204,7 +204,11 @@ int main(int argc, char* argv[]) {
 
   const size_t NMAX = argc > 1 ? std::atoi(argv[1]) : 4;
   assert(NMAX <= 10 && NMAX >= 2);
+  // change to true to print out the resulting equations
   constexpr bool print = false;
+  // change to true to print stats
+  Logger::get_instance().wick_stats = false;
+
   ranges::for_each({false, true}, [=](const bool screen) {
     ranges::for_each({false, true}, [=](const bool use_topology) {
       ranges::for_each({false, true}, [=](const bool canonical_only) {

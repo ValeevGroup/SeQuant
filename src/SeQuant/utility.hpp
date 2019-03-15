@@ -83,6 +83,7 @@ class Singleton {
 struct Logger : public Singleton<Logger> {
   bool wick_contract = false;
   bool wick_reduce = false;
+  bool wick_stats = false;
   bool expand = false;
   bool canonicalize = false;
   bool simplify = false;
@@ -92,6 +93,7 @@ struct Logger : public Singleton<Logger> {
     if (log_level > 0) {
       wick_contract = true;
       wick_reduce = true;
+      wick_stats = true;
       expand = true;
       canonicalize = true;
       simplify = true;
