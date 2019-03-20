@@ -673,13 +673,12 @@ TEST_CASE("WickTheorem", "[algorithms]") {
           ex<FNOperator>(WstrList{L"a_6", L"a_7", L"a_8"},
                          WstrList{L"i_6", L"i_7", L"i_8"}, V);
       auto ext_indices = make_indices<std::vector<Index>>({});
-      auto wick = FWickTheorem{P3 * H2 * T2 * T3}
-                      .full_contractions(true)
-                      .set_external_indices(ext_indices)
-                      .spinfree(false)
-                      .use_topology(topology);
-      if (connected_only)
-        wick.set_op_connections({{1, 2}, {1, 3}});
+      FWickTheorem wick{P3 * H2 * T2 * T3};
+      wick.full_contractions(true)
+          .set_external_indices(ext_indices)
+          .spinfree(false)
+          .use_topology(topology);
+      if (connected_only) wick.set_op_connections({{1, 2}, {1, 3}});
       auto wick_result = wick.compute();
 
       std::wcout << "P3*H2*T2*T3 = " << to_latex_align(wick_result, 20)
