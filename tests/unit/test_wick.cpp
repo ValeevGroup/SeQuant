@@ -34,6 +34,9 @@ TEST_CASE("WickTheorem", "[algorithms]") {
 
   using namespace sequant;
 
+  TensorCanonicalizer::register_instance(
+      std::make_shared<DefaultTensorCanonicalizer>());
+
   SECTION("Op contractions") {
 
     REQUIRE(  FWickTheorem::can_contract(fann(L"i_1"),fcre(L"i_2"), Vacuum::Physical) );
@@ -244,6 +247,27 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       auto result = wick.full_contractions(true).spinfree(false).compute();
       REQUIRE(result->is<Sum>());
       REQUIRE(result->size() == 12);
+    }
+
+    // more N-nonconserving operators
+    {
+      auto input =
+          ex<FNOperator>(WstrList{L"i_1"}, WstrList{L"a_3", L"a_4"}, V) *
+          (ex<Constant>(0.25) *
+           ex<Tensor>(L"g", WstrList{L"p_1", L"p_2"}, WstrList{L"p_3", L"p_4"},
+                      Symmetry::antisymm) *
+           ex<FNOperator>(WstrList{L"p_1", L"p_2"}, WstrList{L"p_3", L"p_4"},
+                          V)) *
+          ex<FNOperator>(WstrList{L"a_2"}, WstrList{}, V);
+      auto wick = FWickTheorem{input};
+      auto result =
+          wick.full_contractions(true)
+              .spinfree(false)
+              .set_external_indices(IndexList{L"i_1", L"a_3", L"a_4", L"a_2"})
+              .compute();
+      std::wcout << "result = " << to_latex(result) << std::endl;
+      REQUIRE(result->is<Tensor>());
+      REQUIRE(result->size() == 0);
     }
 
     // odd number of ops -> full contraction is 0
