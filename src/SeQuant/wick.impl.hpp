@@ -70,7 +70,7 @@ inline container::map<Index, Index> compute_index_replacement_rules(
                                                               const Index &dst) {
     auto src_it = result.find(src);
     if (src_it == result.end()) {  // if brand new, add the rule
-      auto insertion_result = result.insert_or_assign(src, proto(dst, src));
+      auto insertion_result = result.emplace(src, proto(dst, src));
       assert(insertion_result.second);
     }
     else {  // else modify the destination of the existing rule to the
@@ -106,10 +106,10 @@ inline container::map<Index, Index> compute_index_replacement_rules(
         !src2.has_proto_indices() && src1.has_proto_indices() ? src1 : src2;
 
     if (!has_src1_rule && !has_src2_rule) {  // if brand new, add the rules
-      result.insert(std::make_pair(src1, proto(dst, dst1_proto)));
-      assert(!result.empty());
-      result.insert(std::make_pair(src2, proto(dst, dst2_proto)));
-      assert(!result.empty());
+      auto insertion_result1 = result.emplace(src1, proto(dst, dst1_proto));
+      assert(insertion_result1.second);
+      auto insertion_result2 = result.emplace(src2, proto(dst, dst2_proto));
+      assert(insertion_result2.second);
     } else if (has_src1_rule &&
                !has_src2_rule) {  // update the existing rule for src1
       const auto &old_dst1 = src1_it->second;
@@ -326,8 +326,8 @@ inline bool apply_index_replacement_rules(
   ranges::for_each(
       all_indices, [&const_replrules, &all_indices_new](const Index &idx) {
         auto dst_it = const_replrules.find(idx);
-        all_indices_new.insert(dst_it != const_replrules.end() ? dst_it->second
-                                                               : idx);
+        auto insertion_result = all_indices_new.emplace(dst_it != const_replrules.end() ? dst_it->second
+                                                                                        : idx);
       });
   std::swap(all_indices_new, all_indices);
 
@@ -471,7 +471,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
               const auto& nop = expr->as<NormalOperator<S>>();
               const auto nop_rank = nop.rank();
               max_nop_rank = std::max(max_nop_rank, nop_rank);
-              rank_2_nop_idx.insert(std::make_pair(nop_rank, nop_idx));
+              rank_2_nop_idx.emplace(nop_rank, nop_idx);
             }
             ++nop_idx;
           });
