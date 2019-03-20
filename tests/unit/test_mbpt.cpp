@@ -34,6 +34,21 @@ TEST_CASE("MBPT", "[mbpt]") {
     });
   }
 
+  SECTION("SRSO Fock") {
+    using namespace sequant::mbpt::sr::so;
+
+    // <2p1h|H2|1p> ->
+    SEQUANT_PROFILE_SINGLE("wick(<2p1h|H2|1p>)", ({
+      auto input = L<1, 2>() * H2() * R<1, 0>();
+      auto result = vac_av( input );
+
+      std::wcout << "<2p1h|H2|1p> = " << to_latex(result)
+                 << std::endl;
+      REQUIRE(result->is<Product>()); // product ...
+      REQUIRE(result->size() == 3); // ... of 3 factors
+      }));
+  }
+
   SECTION("SRSO-PNO") {
     using namespace sequant::mbpt::sr::so::pno;
 
