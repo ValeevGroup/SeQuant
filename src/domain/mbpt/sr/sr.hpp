@@ -13,7 +13,7 @@ namespace sequant {
 namespace mbpt {
 namespace sr {
 
-enum class OpType { f, g, t, l, A };
+enum class OpType { f, g, t, l, A, L, R };
 
 enum class OpClass { ex, deex, gen };
 
@@ -29,6 +29,10 @@ inline std::wstring to_wstring(OpType op) {
       return L"λ";
     case OpType::A:
       return L"A";
+    case OpType::L:
+      return L"L";
+    case OpType::R:
+      return L"R";
     default:
       throw std::invalid_argument("to_wstring(OpType op): invalid op");
   }
@@ -40,9 +44,11 @@ inline OpClass to_class(OpType op) {
     case OpType::g:
       return OpClass::gen;
     case OpType::t:
+    case OpType::R:
       return OpClass::ex;
     case OpType::l:
-    case OpType::A: return OpClass::deex;
+    case OpType::A:
+    case OpType::L: return OpClass::deex;
     default:
       throw std::invalid_argument("to_class(OpType op): invalid op");
   }
@@ -50,33 +56,34 @@ inline OpClass to_class(OpType op) {
 
 namespace so {
 
-inline size_t fac(std::size_t n) {
+inline constexpr size_t fac(std::size_t n) {
   if (n == 1 || n == 0)
     return 1;
   else
     return n * fac(n - 1);
 }
 
-template <std::size_t N, OpType _Op, bool pno>
+template <std::size_t Nbra, std::size_t Nket, OpType _Op, bool PNO>
 struct make_op {
   ExprPtr operator()() const {
-    assert(N>0);
-    size_t n = N;
+    const auto nbra = Nbra;
+    const auto nket = Nket;
+    const auto pno = PNO;
     OpType op = _Op;
-    auto make_idx_vector = [n,op](IndexSpace::Type spacetype) {
+    auto make_idx_vector = [op](size_t n, IndexSpace::Type spacetype) {
       auto space = IndexSpace::instance(spacetype);
       std::vector<Index> result;
       result.reserve(n);
-      for (size_t i = 0; i != N; ++i) {
+      for (size_t i = 0; i != n; ++i) {
         result.push_back(Index::make_tmp_index(space));
       }
       return result;
     };
-    auto make_depidx_vector = [n,op](IndexSpace::Type spacetype, auto&& protoidxs) {
+    auto make_depidx_vector = [op](size_t n, IndexSpace::Type spacetype, auto&& protoidxs) {
       auto space = IndexSpace::instance(spacetype);
       std::vector<Index> result;
       result.reserve(n);
-      for (size_t i = 0; i != N; ++i) {
+      for (size_t i = 0; i != n; ++i) {
         result.push_back(Index::make_tmp_index(space, protoidxs, true));
       }
       return result;
@@ -86,27 +93,31 @@ struct make_op {
     if (to_class(op) == OpClass::gen) {
 //      braidxs = make_idx_vector(IndexSpace::complete);
 //      ketidxs = make_idx_vector(IndexSpace::complete);
-      braidxs = make_idx_vector(IndexSpace::all);
-      ketidxs = make_idx_vector(IndexSpace::all);
+      braidxs = make_idx_vector(nbra, IndexSpace::all);
+      ketidxs = make_idx_vector(nket, IndexSpace::all);
     }
     else {
-      auto occidxs = make_idx_vector(IndexSpace::active_occupied);
-      auto uoccidxs = pno ? make_depidx_vector(IndexSpace::active_unoccupied, occidxs) : make_idx_vector(IndexSpace::active_unoccupied);
+      auto make_occidxs = [pno,&make_idx_vector](size_t n) {
+        return make_idx_vector(n, IndexSpace::active_occupied);
+      };
+      auto make_uoccidxs = [pno,&make_idx_vector,&make_depidx_vector](size_t n, auto&& occidxs) {
+        return pno ? make_depidx_vector(n, IndexSpace::active_unoccupied, occidxs) : make_idx_vector(n, IndexSpace::active_unoccupied);
+      };
       if (to_class(op) == OpClass::ex) {
-        braidxs = std::move(uoccidxs);
-        ketidxs = std::move(occidxs);
+        ketidxs = make_occidxs(nket);
+        braidxs = make_uoccidxs(nbra, ketidxs);
       } else {
-        ketidxs = std::move(uoccidxs);
-        braidxs = std::move(occidxs);
+        braidxs = make_occidxs(nbra);
+        ketidxs = make_uoccidxs(nket, braidxs);
       }
     }
-    return ex<Constant>(1. / (fac(N) * fac(N))) *
+    return ex<Constant>(1. / (fac(Nbra) * fac(Nket))) *
     ex<Tensor>(to_wstring(op), braidxs, ketidxs, Symmetry::antisymm) *
     ex<FNOperator>(braidxs, ketidxs, Vacuum::SingleProduct);
   }
 };
 
-template <std::size_t N, OpType _Op> static const auto Op = make_op<N, _Op, false>{};
+template <OpType _Op, std::size_t Nbra, std::size_t Nket = Nbra> static const auto Op = make_op<Nbra, Nket, _Op, false>{};
 
 #include "sr_op.impl.hpp"
 
@@ -136,7 +147,7 @@ inline ExprPtr vac_av(ExprPtr expr, std::initializer_list<std::pair<int,int>> op
 
 namespace pno {
 
-template <std::size_t N, OpType _Op> static const auto Op = make_op<N, _Op, true>{};
+template <OpType _Op, std::size_t Nbra, std::size_t Nket = Nbra> static const auto Op = make_op<Nbra, Nket, _Op, true>{};
 
 #include "sr_op.impl.hpp"
 

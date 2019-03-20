@@ -1,53 +1,65 @@
-/// makes excitation operator of rank @c N
-template <std::size_t N>
+/// makes excitation operator of bra/ket ranks @c Nbra/Nket
+template <std::size_t Nbra, std::size_t Nket = Nbra>
 ExprPtr T_() {
-  return Op<N, OpType::t>();
+  return Op<OpType::t, Nbra, Nket>();
 }
 
-/// makes lambda deexcitation operator of rank @c N
-template <std::size_t N>
-ExprPtr L_() {
-  return Op<N, OpType::l>();
+/// makes lambda deexcitation operator of bra/ket ranks @c Nbra/Nket
+template <std::size_t Nbra, std::size_t Nket = Nbra>
+ExprPtr Lambda_() {
+  return Op<OpType::l, Nbra, Nket>();
 }
 
 namespace detail {
 
-template <size_t N, OpType Op>
+template <OpType Op, size_t Nbra, size_t Nket = Nbra>
 void op_impl(ExprPtr& result) {
-  static_assert(N > 0);
+  static_assert(Nbra > 0 || Nket > 0);
   if constexpr (Op == OpType::t)
-    result = result ? result + T_<N>() : T_<N>();
+    result = result ? result + T_<Nbra, Nket>() : T_<Nbra, Nket>();
   else if constexpr (Op == OpType::l)
-    result = result ? result + L_<N>() : L_<N>();
+    result = result ? result + Lambda_<Nbra, Nket>() : Lambda_<Nbra, Nket>();
   else
     assert(false && "unsupported Op value");
 
-  if constexpr (N > 1) {
-    op_impl<N - 1, Op>(result);
+  if constexpr ((Nbra > 1 && Nket > 0) || (Nbra > 0 && Nket > 1)) {
+    op_impl<Op, Nbra - 1, Nket - 1>(result);
   }
 }
 }  // namespace detail
 
-/// makes excitation operator of all ranks up to (and including) @c N
-template <std::size_t N>
+/// makes excitation operator of all bra/ket ranks up to (and including) @c Nbra/Nket
+template <std::size_t Nbra, std::size_t Nket = Nbra>
 ExprPtr T() {
-  static_assert(N > 0);
+  static_assert(Nbra > 0 || Nket > 0);
   ExprPtr result;
-  detail::op_impl<N, OpType::t>(result);
+  detail::op_impl<OpType::t, Nbra, Nket>(result);
   return result;
 }
 
-/// makes excitation operator of all ranks up to (and including) @c N
-template <std::size_t N>
-ExprPtr L() {
-  static_assert(N > 0);
+/// makes deexcitation operator of all bra/ket ranks up to (and including) @c Nbra/Nket
+template <std::size_t Nbra, std::size_t Nket = Nbra>
+ExprPtr Lambda() {
+  static_assert(Nbra > 0 || Nket > 0);
   ExprPtr result;
-  detail::op_impl<N, OpType::l>(result);
+  detail::op_impl<OpType::l, Nbra, Nket>(result);
   return result;
 }
 
-/// makes A deexcitation operator of rank @c N
-template <std::size_t N>
+/// makes deexcitation operator of bra/ket ranks @c Nbra/Nket
+template <std::size_t Nbra, std::size_t Nket = Nbra>
 ExprPtr A() {
-  return Op<N, OpType::A>();
+  return Op<OpType::A, Nbra, Nket>();
+}
+
+/// makes L deexcitation operator of bra/ket ranks @c Nbra/Nket
+template <std::size_t Nbra, std::size_t Nket = Nbra>
+ExprPtr L() {
+  return Op<OpType::L, Nbra, Nket>();
+}
+
+/// makes R excitation operator of bra/ket ranks @c Nbra/Nket
+template <std::size_t Nbra, std::size_t Nket = Nbra>
+ExprPtr R() {
+  return Op<OpType::R, Nbra, Nket>();
 }

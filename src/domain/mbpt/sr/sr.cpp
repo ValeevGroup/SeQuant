@@ -10,10 +10,10 @@ namespace sr {
 namespace so {
 
 ExprPtr H1() {
-  return Op<1,OpType::f>();
+  return Op<OpType::f, 1>();
 }
 ExprPtr H2() {
-  return Op<2,OpType::g>();
+  return Op<OpType::g, 2>();
 }
 ExprPtr H0mp() {
   return H1();
