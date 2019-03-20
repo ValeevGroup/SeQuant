@@ -452,7 +452,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
       if (first_nop_it != ranges::end(*expr_input_)) {
 
         // TODO compute tensor-nop connections and topological partitions
-        if (use_topology_) {
+        if (use_topology_ && false) {
           //        abort(); // not yet implemented
 
           // hack for CC only ... assume that third and higher nops come from Ts, to determine their equivalence just sort them by rank
