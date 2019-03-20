@@ -88,8 +88,7 @@ set(utests_src
         tests/unit/test_mbpt.cpp)
 
 #set(utests_src
-#        tests/unit/test_wick.cpp
-#        tests/unit/timer.hpp)
+#        tests/unit/test_mbpt.cpp)
 
 set(unit_test_executable unit_tests)
 add_executable(${unit_test_executable} EXCLUDE_FROM_ALL
