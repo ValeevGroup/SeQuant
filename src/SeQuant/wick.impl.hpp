@@ -69,8 +69,10 @@ inline container::map<Index, Index> compute_index_replacement_rules(
   auto add_rule = [&result, &proto, &make_intersection_index](const Index &src,
                                                               const Index &dst) {
     auto src_it = result.find(src);
-    if (src_it == result.end())  // if brand new, add the rule
-      result[src] = proto(dst, src);
+    if (src_it == result.end()) {  // if brand new, add the rule
+      auto insertion_result = result.insert_or_assign(src, proto(dst, src));
+      assert(insertion_result.second);
+    }
     else {  // else modify the destination of the existing rule to the
       // intersection
       const auto &old_dst = src_it->second;
