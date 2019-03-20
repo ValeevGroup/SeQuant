@@ -10,6 +10,7 @@ namespace sequant {
 /// @brief bubble sort that uses swap exclusively
 template <typename ForwardIter, typename Compare>
 void bubble_sort(ForwardIter begin, ForwardIter end, Compare comp) {
+  if (begin == end) return;  // no-op for empty range
   bool swapped;
   do {
     swapped = false;
