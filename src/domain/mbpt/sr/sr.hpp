@@ -91,10 +91,10 @@ struct make_op {
     std::vector<Index> braidxs;
     std::vector<Index> ketidxs;
     if (to_class(op) == OpClass::gen) {
-//      braidxs = make_idx_vector(IndexSpace::complete);
-//      ketidxs = make_idx_vector(IndexSpace::complete);
-      braidxs = make_idx_vector(nbra, IndexSpace::all);
-      ketidxs = make_idx_vector(nket, IndexSpace::all);
+      braidxs = make_idx_vector(nbra, IndexSpace::complete);
+      ketidxs = make_idx_vector(nket, IndexSpace::complete);
+//      braidxs = make_idx_vector(nbra, IndexSpace::all);
+//      ketidxs = make_idx_vector(nket, IndexSpace::all);
     }
     else {
       auto make_occidxs = [pno,&make_idx_vector](size_t n) {
