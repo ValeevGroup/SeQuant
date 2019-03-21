@@ -87,6 +87,7 @@ struct Logger : public Singleton<Logger> {
   bool expand = false;
   bool canonicalize = false;
   bool simplify = false;
+  bool tensor_network = false;
  private:
   friend class Singleton<Logger>;
   Logger(int log_level = 0) {
@@ -97,6 +98,7 @@ struct Logger : public Singleton<Logger> {
       expand = true;
       canonicalize = true;
       simplify = true;
+      tensor_network = true;
     }
   }
 };

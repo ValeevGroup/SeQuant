@@ -273,7 +273,7 @@ ExprPtr TensorNetwork<Tensor_>::canonicalize(
 
   if (Logger::get_instance().canonicalize) {
     for (const auto &idxpair : idxrepl) {
-      std::wcout << "TensorNetwork::canonicalize: replacing "
+      std::wcout << "TensorNetwork::canonicalize(" << (fast ? "fast" : "slow") << "): replacing "
                  << to_latex(idxpair.first) << " with "
                  << to_latex(idxpair.second) << std::endl;
     }
@@ -535,6 +535,12 @@ void TensorNetwork<Tensor_>::init_edges() const {
   if (have_edges_) return;
 
   auto idx_insert = [this](const Index &idx, int tensor_idx, int pos) {
+    if (Logger::get_instance().tensor_network) {
+      std::wcout << "TensorNetwork::init_edges: idx=" << to_latex(idx)
+                 << " attached to tensor " << std::abs(tensor_idx) << "'s "
+                 << ((tensor_idx > 0) ? "bra" : "ket") << " at position " << pos
+                 << std::endl;
+    }
     decltype(edges_) &indices = this->edges_;
     auto it = indices.find(idx.full_label());
     if (it == indices.end()) {
@@ -564,6 +570,10 @@ void TensorNetwork<Tensor_>::init_edges() const {
   for (const auto &terminals : edges_) {
     assert(terminals.size() != 0);
     if (terminals.size() == 1) {  // external?
+      if (Logger::get_instance().tensor_network) {
+        std::wcout << "idx " << to_latex(terminals.idx()) << " is external"
+                   << std::endl;
+      }
       auto insertion_result = ext_indices_.emplace(terminals.idx());
       assert(insertion_result.second);
     }
