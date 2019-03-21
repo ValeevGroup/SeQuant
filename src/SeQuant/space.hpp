@@ -382,11 +382,11 @@ inline const IndexSpace &unIon(const IndexSpace &space1, const IndexSpace &space
 inline bool includes(IndexSpace::Type type1, IndexSpace::Type type2) {
   return type1.includes(type2);
 }
-/// @return true if qns1 is included in qns2, i.e. \code intersection(qns1, qns2) == qns2 \endcode is true
+/// @return true if qns2 is included in qns1, i.e. \code intersection(qns1, qns2) == qns2 \endcode is true
 inline bool includes(IndexSpace::QuantumNumbers qns1, IndexSpace::QuantumNumbers qns2) {
   return qns1.includes(qns2);
 }
-/// @return true if space1 is included in space2, i.e. intersection(space1, space2) == space2
+/// @return true if space2 is included in space1, i.e. intersection(space1, space2) == space2
 inline bool includes(const IndexSpace &space1, const IndexSpace &space2) {
   return space1.attr().includes(space2.attr());
 }
