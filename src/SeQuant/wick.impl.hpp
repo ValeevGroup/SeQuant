@@ -185,13 +185,13 @@ inline container::map<Index, Index> compute_index_replacement_rules(
           const auto new_dummy = idxfac.make(intersection_space);
           add_rules(bra, ket, new_dummy);
         } else if (bra_is_ext && !ket_is_ext) {  // ext + int
-          if (includes(bra.space(), ket.space())) {
+          if (includes(ket.space(), bra.space())) {
             add_rule(ket, bra);
           } else {
             add_rule(ket, idxfac.make(intersection_space));
           }
         } else if (!bra_is_ext && ket_is_ext) {  // int + ext
-          if (includes(ket.space(), bra.space())) {
+          if (includes(bra.space(), ket.space())) {
             add_rule(bra, ket);
           } else {
             add_rule(bra, idxfac.make(intersection_space));
@@ -272,7 +272,7 @@ inline bool apply_index_replacement_rules(
 #endif
               erase_it = true;
             } else if (bra_is_ext && !ket_is_ext) {  // ext + int
-              if (includes(bra.space(), ket.space())) {
+              if (includes(ket.space(), bra.space())) {
 #ifndef NDEBUG
                 if (replrules.find(ket) != replrules.end())
                   assert(replrules[ket].space() == bra.space());
@@ -285,7 +285,7 @@ inline bool apply_index_replacement_rules(
 #endif
               }
             } else if (!bra_is_ext && ket_is_ext) {  // int + ext
-              if (includes(ket.space(), bra.space())) {
+              if (includes(bra.space(), ket.space())) {
 #ifndef NDEBUG
                 if (replrules.find(bra) != replrules.end())
                   assert(replrules[bra].space() == ket.space());
@@ -297,6 +297,9 @@ inline bool apply_index_replacement_rules(
                   assert(replrules[bra].space() == intersection_space);
 #endif
               }
+            } else {  // ext + ext
+              if (bra == ket)
+                erase_it = true;
             }
 
             if (erase_it) {

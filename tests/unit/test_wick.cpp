@@ -265,9 +265,8 @@ TEST_CASE("WickTheorem", "[algorithms]") {
               .spinfree(false)
               .set_external_indices(IndexList{L"i_1", L"a_3", L"a_4", L"a_2"})
               .compute();
-      std::wcout << "result = " << to_latex(result) << std::endl;
-      REQUIRE(result->is<Tensor>());
-      REQUIRE(result->size() == 0);
+      //std::wcout << "result = " << to_latex(result) << std::endl;
+      REQUIRE(to_latex(result) == L"{{{-1}} \\times {g^{{i_1}{a_2}}_{{a_3}{a_4}}}}");
     }
 
     // odd number of ops -> full contraction is 0
