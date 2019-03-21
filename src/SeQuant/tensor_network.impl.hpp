@@ -170,6 +170,12 @@ ExprPtr TensorNetwork<Tensor_>::canonicalize(
             idxrepl.emplace(std::make_pair(idx, idxfac.make(idx)));
           }
         }
+        else if (sz == 1) {  // no need for resorting of colors with 1 index only, but still need to replace the index
+          const auto edge_it = edges_.begin() + beg->second.first;
+          const auto& idx = edge_it->idx();
+          idxrepl.emplace(std::make_pair(idx, idxfac.make(idx)));
+        }
+        // sz == 0 is possible since some colors in colors refer to tensors
       }
     }  // index repl
 
