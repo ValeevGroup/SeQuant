@@ -27,7 +27,7 @@ template <typename Tensor_ = Tensor>
 class TensorNetwork {
  public:
 
-  /// @brief Edge in a TensorNetwork = Index annotating it + pair of indices to identify which Tensor_ terminals it's connected to
+  /// @brief Edge in a TensorNetwork = the Index annotating it + a pair of indices to identify which Tensor terminals it's connected to
 
   /// @note tensor terminals in a sequence of tensors are indexed as follows:
   /// - >0 for bra terminals (i.e. "+7" indicated connection to a bra terminal
@@ -127,6 +127,8 @@ class TensorNetwork {
   };
 
  public:
+  /// @throw std::logic_error if exprptr_range contains a non-tensor
+  /// @note uses RTTI
   template <typename ExprPtrRange>
   TensorNetwork(ExprPtrRange &exprptr_range) {
     const bool contains_a_nontensor = ranges::any_of(

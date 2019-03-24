@@ -34,7 +34,7 @@ std::shared_ptr<Expr> Product::canonicalize_impl(bool rapid) {
                << ") input: " << to_latex() << std::endl;
   }
 
-  try {  // tensor tensor canonization is a special case that's done in TensorNetwork
+  try {  // tensor network canonization is a special case that's done in TensorNetwork
     TensorNetwork tn(factors_);
     auto canon_factor =
         tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), rapid);

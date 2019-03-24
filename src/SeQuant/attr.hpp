@@ -15,6 +15,7 @@ enum class IndexSpaceMetric {
   Invalid
 };
 
+/// describes supported symmetries of tensorial objects
 enum class Symmetry { symm, antisymm, nonsymm };
 
 inline std::wstring to_wolfram(const Symmetry& symmetry) {
