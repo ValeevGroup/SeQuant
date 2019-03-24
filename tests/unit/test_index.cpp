@@ -5,6 +5,7 @@
 #include "catch.hpp"
 
 #include "../../src/SeQuant/index.hpp"
+#include "../../src/SeQuant/latex.hpp"
 
 TEST_CASE("Index", "[elements]") {
 

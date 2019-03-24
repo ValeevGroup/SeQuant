@@ -7,8 +7,15 @@
 
 #include <type_traits>
 #include "wstring.hpp"
+#include "meta.hpp"
 
 namespace sequant {
+
+template <typename T>
+std::enable_if_t<meta::has_memfn_to_latex_v<std::decay_t<T>>, std::wstring>
+to_latex(T&& t) {
+  return t.to_latex();
+}
 
 template <typename T>
 std::enable_if_t<std::is_arithmetic_v<std::decay_t<T>> &&

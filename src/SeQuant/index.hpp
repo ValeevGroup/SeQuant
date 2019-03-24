@@ -549,8 +549,6 @@ void Index::canonicalize_proto_indices() {
     std::stable_sort(begin(proto_indices_), end(proto_indices_));
 }
 
-inline std::wstring to_latex(const Index &index) { return index.to_latex(); }
-
 class IndexSwapper {
  public:
   IndexSwapper() : even_num_of_swaps_(true) {}

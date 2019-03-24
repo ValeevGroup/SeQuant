@@ -1098,8 +1098,6 @@ class Sum : public Expr {
 
 using SumPtr = std::shared_ptr<Sum>;
 
-inline std::wstring to_latex(const Expr &expr) { return expr.to_latex(); }
-
 inline std::wstring to_latex(const ExprPtr &exprptr) {
   return exprptr->to_latex();
 }
@@ -1141,10 +1139,6 @@ inline std::wstring to_latex_align(const ExprPtr &exprptr,
   }
   result += L"\n\\end{align}";
   return result;
-}
-
-inline std::wstring to_wolfram(const Expr &expr) {
-  return expr.to_wolfram();
 }
 
 inline std::wstring to_wolfram(const ExprPtr &exprptr) {

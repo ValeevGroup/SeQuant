@@ -6,8 +6,15 @@
 #define SEQUANT_WOLFRAM_HPP
 
 #include <type_traits>
+#include "../../src/SeQuant/meta.h"
 
 namespace sequant {
+
+template <typename T>
+std::enable_if_t<meta::has_memfn_to_wolfram_v<std::decay_t<T>>, std::wstring>
+to_wolfram(T &&t) {
+  return t.to_wolfram();
+}
 
 template <typename T>
 std::enable_if_t<std::is_arithmetic_v<std::decay_t<T>>, std::wstring>

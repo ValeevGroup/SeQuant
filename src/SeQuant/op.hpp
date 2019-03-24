@@ -720,16 +720,6 @@ using FNOperator = NormalOperator<Statistics::FermiDirac>;
 using FNOperatorSeq = NormalOperatorSequence<Statistics::FermiDirac>;
 
 template<Statistics S>
-std::wstring to_latex(const Op<S> &op) {
-  return op.to_latex();
-}
-
-template<Statistics S>
-std::wstring to_latex(const Operator<S> &op) {
-  return op.to_latex();
-}
-
-template<Statistics S>
 std::wstring to_latex(const NormalOperator<S> &op) {
   return op.to_latex();
 }

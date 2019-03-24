@@ -63,6 +63,59 @@ struct is_initializer_list<std::initializer_list<T>>
 
 template<typename T> static constexpr bool is_initializer_list_v = is_initializer_list<T>::value;
 
+///////// tuple_has_type /////////
+
+template <typename T, typename Tuple>
+struct tuple_has_type;
+
+template <typename T, typename... Us>
+struct tuple_has_type<T, std::tuple<Us...>> : std::disjunction<std::is_same<T, Us>...> {};
+
+template<typename T, typename Tuple> static constexpr bool tuple_has_type_v = tuple_has_type<T, Tuple>::value;
+
+///////// tuple_index_of /////////
+
+/// tuple_index_of<T, Tuple>::value evaluates to the position of the first appearance of T in Tuple, or, if not found, to a negative number
+template <typename T, typename Tuple>
+struct tuple_index_of;
+
+template <typename T, typename U, typename... Us>
+struct tuple_index_of<T, std::tuple<U, Us...>> {
+  static const long value = std::is_same_v<T,U> ? 0 : 1 + tuple_index_of<T, std::tuple<Us...>>::value;
+};
+
+template <typename T>
+struct tuple_index_of<T, std::tuple<>> {
+  static const long value = std::numeric_limits<long>::lowest();
+};
+
+template<typename T, typename Tuple> static constexpr bool tuple_index_of_v = tuple_index_of<T, Tuple>::value;
+
+///////// has_memfn_to_latex /////////
+
+template<typename T, typename = std::void_t<>>
+struct has_memfn_to_latex : public std::false_type {};
+
+template<typename T>
+struct has_memfn_to_latex<T, std::void_t<decltype(static_cast<std::wstring>(std::declval<const T &>().to_latex()))>>
+    : public std::true_type {
+};
+
+template<typename T> static constexpr bool has_memfn_to_latex_v = has_memfn_to_latex<T>::value;
+
+///////// has_memfn_to_wolfram /////////
+
+template<typename T, typename = std::void_t<>>
+struct has_memfn_to_wolfram : public std::false_type {};
+
+template<typename T>
+struct has_memfn_to_wolfram<T, std::void_t<decltype(static_cast<std::wstring>(std::declval<const T &>().to_wolfram()))>>
+    : public std::true_type {
+};
+
+template<typename T> static constexpr bool has_memfn_to_wolfram_v = has_memfn_to_wolfram<T>::value;
+
+
 }  // namespace meta
 }  // namespace sequant
 
