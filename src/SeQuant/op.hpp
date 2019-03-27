@@ -489,9 +489,9 @@ class NormalOperator : public Operator<S> {
 
   /// @return the vacuum state with respect to which the operator is normal-ordered.
   Vacuum vacuum() const { return vacuum_; }
-  /// @return the range of creators
+  /// @return the range of creators, in the order of increasing particle index
   auto creators() const { return ranges::view::counted(this->cbegin(), ncreators()); }
-  /// @return the range of annihilators
+  /// @return the range of annihilators, in the order of increasing particle index
   auto annihilators() const { return ranges::view::counted(this->crbegin(), nannihilators()); }
   /// @return the number of creators
   auto ncreators() const { return ncreators_; }

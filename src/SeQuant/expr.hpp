@@ -310,7 +310,7 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
     return static_cast<T &>(*this);
   }
 
-  /// @return the (demanglecd) name of this type
+  /// @return the (demangled) name of this type
   /// @note uses RTTI
   std::string type_name() const {
     return boost::core::demangle(typeid(*this).name());

@@ -673,6 +673,11 @@ class IndexFactory {
 #endif
 };
 
+/// @brief hashing function
+
+/// @paramp[in] idx a const reference to an Index object
+/// @return the hash value of the object referred to by idx
+/// @note uses boost::hash_value
 inline auto hash_value(const Index &idx) {
   const auto &proto_indices = idx.proto_indices();
   using std::begin;
