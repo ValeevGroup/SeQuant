@@ -38,6 +38,13 @@ using IndexList = std::initializer_list<Index>;
 /// excluding '_', and "index"
 ///       is an integer less than the value returned by min_tmp_label() .
 class Index : public Taggable {
+
+  static auto& tmp_index_accessor() {
+    // initialized so that the first call to next_tmp_index will return min_tmp_index()
+    static std::atomic<std::size_t> index = min_tmp_index() - 1;
+    return index;
+  }
+
  public:
   Index() = default;
 
@@ -326,10 +333,15 @@ class Index : public Taggable {
   static constexpr std::size_t min_tmp_index() { return 100; }
 
   /// @return a unique temporary index, its value is equal to or greater than
-  /// that
+  /// that returned by min_tmp_index()
   static std::size_t next_tmp_index() {
-    static std::atomic<std::size_t> index = min_tmp_index() - 1;
-    return ++index;
+    return ++tmp_index_accessor();
+  }
+
+  /// resets the temporaty index counter so that the next call to next_tmp_index() will return the value returned by min_tmp_index()
+  /// @warning should only to be used when reproducibility matters (e.g. unit testing)
+  static void reset_tmp_index() {
+    tmp_index_accessor() = min_tmp_index() - 1;
   }
 
   /// @brief index replacement
