@@ -19,8 +19,8 @@ int main( int argc, char* argv[] )
 
   // global setup...
   std::setlocale(LC_ALL, "en_US.UTF-8");
-  std::wcout.precision(numeric_limits<double>::max_digits10);
-  std::wcerr.precision(numeric_limits<double>::max_digits10);
+  std::wcout.precision(std::numeric_limits<double>::max_digits10);
+  std::wcerr.precision(std::numeric_limits<double>::max_digits10);
   std::wcout.sync_with_stdio(false);
   std::wcerr.sync_with_stdio(false);
   std::wcout.imbue(std::locale("en_US.UTF-8"));
