@@ -17,8 +17,15 @@ int main( int argc, char* argv[] )
   Catch::Session session;
 
   // global setup...
-  setlocale(LC_ALL,"en_US.UTF-8");
-  cout.precision(numeric_limits<double>::max_digits10);
+  std::setlocale(LC_ALL, "en_US.UTF-8");
+  std::wcout.precision(numeric_limits<double>::max_digits10);
+  std::wcerr.precision(numeric_limits<double>::max_digits10);
+  std::wcout.sync_with_stdio(false);
+  std::wcerr.sync_with_stdio(false);
+  std::wcout.imbue(std::locale("en_US.UTF-8"));
+  std::wcerr.imbue(std::locale("en_US.UTF-8"));
+  std::wcout.sync_with_stdio(true);
+  std::wcerr.sync_with_stdio(true);
   IndexSpace::register_standard_instances();
   detail::OpIdRegistrar op_id_registrar;
 

@@ -194,10 +194,17 @@ template <typename T> struct type_printer;
 
 int main(int argc, char* argv[]) {
   std::setlocale(LC_ALL, "en_US.UTF-8");
-  std::cout.precision(std::numeric_limits<double>::max_digits10);
+  std::wcout.precision(numeric_limits<double>::max_digits10);
+  std::wcerr.precision(numeric_limits<double>::max_digits10);
+  std::wcout.sync_with_stdio(false);
+  std::wcerr.sync_with_stdio(false);
+  std::wcout.imbue(std::locale("en_US.UTF-8"));
+  std::wcerr.imbue(std::locale("en_US.UTF-8"));
+  std::wcout.sync_with_stdio(true);
+  std::wcerr.sync_with_stdio(true);
   sequant::IndexSpace::register_standard_instances();
   sequant::detail::OpIdRegistrar op_id_registrar;
-  TensorCanonicalizer::set_cardinal_tensor_labels({L"A", L"f", L"g", L"t"});
+  TensorCanonicalizer::set_cardinal_tensor_labels(mbpt::cardinal_tensor_labels);
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
   //set_num_threads(1);
