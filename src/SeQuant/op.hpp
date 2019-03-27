@@ -77,6 +77,42 @@ class Op {
   Action action_ = Action::invalid;
 };
 
+/// @brief The ordering operator
+
+/// @return true if @c op1 preceeds @c op2 in the canonical order; Op objects
+/// are ordered lexicographically, first by statistics (fermions < bosons)
+/// then by action (cre < ann), then by their indices
+template <Statistics S1, Statistics S2>
+inline bool operator<(const Op<S1> &op1, const Op<S2> &op2) {
+  if constexpr (S1 == S2) {
+    if (op1.action() == op2.action()) {
+      if (op1.index() == op2.index()) {
+        return false;
+      }
+      else {
+        return op1.index() < op2.index();
+      }
+    } else {
+      return op1.action() < op2.action();
+    }
+  }
+  else
+    return S1 < S2;
+}
+
+/// @brief hashing function
+
+/// @tparam S a Statistics value specifying the operator statistics
+/// @paramp[in] op a const reference to an Op<S> object
+/// @return the hash value of the object referred to by @c op
+/// @note uses boost::hash_value
+template <Statistics S>
+inline auto hash_value(const Op<S> &op) {
+  auto val = hash_value(op.index());
+  boost::hash_combine(val, op.action());
+  return val;
+}
+
 template<Statistics S>
 bool operator==(const Op<S> &op1, const Op<S> &op2) {
   return op1.index() == op2.index() && op1.action() == op2.action();
