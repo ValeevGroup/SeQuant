@@ -9,6 +9,9 @@
 
 #include <range/v3/all.hpp>
 
+#include <boost/functional/hash_fwd.hpp>
+
+#include "abstract_tensor.hpp"
 #include "attr.hpp"
 #include "container.hpp"
 #include "expr.hpp"
@@ -32,6 +35,7 @@ class Op {
   Op(Index index, Action action) noexcept : index_(std::move(index)), action_(action) {}
 
   const Index &index() const { return index_; }
+  Index &index() { return index_; }
   const Action &action() const { return action_; }
   /// applies (Hermitian) adjoint to this operator
   Op &adjoint() {
@@ -398,7 +402,7 @@ class Operator : public container::svector<Op<S>>, public Expr {
 ///
 /// @tparam S specifies the particle statistics
 template<Statistics S>
-class NormalOperator : public Operator<S> {
+class NormalOperator : public Operator<S>, public AbstractTensor {
  public:
   static constexpr Statistics statistics = S;
   using base_type = Operator<S>;
@@ -511,7 +515,6 @@ class NormalOperator : public Operator<S> {
     return ncreators();
   }
 
-
   /// @return the representation of @c *this as a Hugenholtz vertex
   /// @sa HugenholtzVertex
   const auto &hug() const {
@@ -528,6 +531,12 @@ class NormalOperator : public Operator<S> {
     // TODO rebuild the Hug
     hug_.reset();
     return *this;
+  }
+
+  std::wstring label() const {
+    return (S == Statistics::FermiDirac
+            ? (vacuum() == Vacuum::Physical ? L"a" : L"ã")
+            : (vacuum() == Vacuum::Physical ? L"b" : L"ᵬ"));
   }
 
   std::wstring to_latex() const override {
@@ -594,6 +603,24 @@ class NormalOperator : public Operator<S> {
     return std::make_shared<NormalOperator>(*this);
   }
 
+  /// Replaces indices using the index map
+  /// @param index_map maps Index to Index
+  /// @param tag_transformed_indices if true, will tag transformed indices with
+  /// integer 0 and skip any tagged indices that it encounters
+  /// @return true if one or more indices changed
+  template <template <typename, typename, typename... Args> class Map,
+      typename... Args>
+  bool transform_indices(const Map<Index, Index, Args...> &index_map,
+                         bool tag_transformed_indices = false) {
+    bool mutated = false;
+    ranges::for_each(*this, [&](auto &&op) {
+      if (op.index().transform(index_map, tag_transformed_indices)) mutated = true;
+    });
+    if (mutated)
+      this->reset_hash_value();
+    return mutated;
+  }
+
  private:
   Vacuum vacuum_;
   std::size_t ncreators_ = 0;
@@ -608,6 +635,54 @@ class NormalOperator : public Operator<S> {
              static_cast<const base_type &>(*this);
     } else
       return false;
+  }
+
+  bool static_less_than(const Expr &that) const override {
+
+    auto range_hash = [](const auto& sized_range) {
+      using ranges::begin;
+      using ranges::size;
+      auto b = begin(sized_range);
+      auto e = b + size(sized_range);
+      auto val = boost::hash_range(b, e);
+      return val;
+    };
+    auto range_compare = [](const auto& sized_range1, const auto& sized_range2) {
+      using ranges::begin;
+      using ranges::size;
+      auto b1 = begin(sized_range1);
+      auto e1 = b1 + size(sized_range1);
+      auto b2 = begin(sized_range2);
+      auto e2 = b2 + size(sized_range2);
+      auto val = std::lexicographical_compare(b1, e1, b2, e2);
+      return val;
+    };
+
+    const auto &that_cast = static_cast<const NormalOperator<S> &>(that);
+    if (this == &that) return false;
+    if (this->ncreators() == that_cast.ncreators()) {
+      if (this->nannihilators() == that_cast.nannihilators()) {
+        // unlike Tensor comparison, we don't memoize hashes of creators and annihilators separately
+        auto cre_hash = range_hash(this->creators());
+        auto that_cre_hash = range_hash(that_cast.creators());
+        if (cre_hash == that_cre_hash) {
+          auto ann_hash = range_hash(this->annihilators());
+          auto that_ann_hash = range_hash(that_cast.annihilators());
+          if (ann_hash == that_ann_hash)
+            return false;
+          else {
+            return range_compare(this->annihilators(), that_cast.annihilators());
+          }
+        }
+        else {
+          return range_compare(this->creators(), that_cast.creators());
+        }
+      } else {
+        return this->nannihilators() < that_cast.nannihilators();
+      }
+    } else {
+      return this->ncreators() < that_cast.ncreators();
+    }
   }
 
   template <Statistics>
@@ -647,6 +722,74 @@ class NormalOperator : public Operator<S> {
     }
     return result;
   }
+
+  // these implement the AbstractTensor interface
+  AbstractTensor::const_any_view_randsz _bra() const override final {
+    return annihilators() |
+           ranges::view::transform(
+               [](auto &&op) -> const Index & { return op.index(); });
+  }
+  AbstractTensor::const_any_view_randsz _ket() const override final {
+    return creators() | ranges::view::transform([](auto &&op) -> const Index & {
+             return op.index();
+           });
+  }
+  AbstractTensor::const_any_view_rand _braket() const override final {
+    return ranges::view::concat(annihilators(), creators()) |
+           ranges::view::transform(
+               [](auto &&op) -> const Index & { return op.index(); });
+  }
+  std::size_t _bra_rank() const override final {
+    return nannihilators();
+  }
+  std::size_t _ket_rank() const override final {
+    return ncreators();
+  }
+  Symmetry _symmetry() const override final {
+    return S == Statistics::FermiDirac ? Symmetry::antisymm : Symmetry::symm;
+  }
+  std::size_t _color() const override final {
+    return S == Statistics::FermiDirac ? 1 : 2;
+  }
+  bool _is_cnumber() const override final {
+    return false;
+  }
+  std::wstring _label() const override final {
+    return label();
+  }
+  std::wstring _to_latex() const override final {
+    return to_latex();
+  }
+  bool _transform_indices(const container::map<Index, Index>& index_map,
+                          bool tag_tranformed_indices) override final {
+    return transform_indices(index_map, tag_tranformed_indices);
+  }
+  void _reset_tags() override final {
+    ranges::for_each(*this, [](const auto &op) { op.index().reset_tag(); });
+  }
+  bool operator<(const AbstractTensor& other) const override final {
+    auto* other_nop = dynamic_cast<const NormalOperator<S>*>(&other);
+    if (other_nop) {
+      const Expr* other_expr = static_cast<const Expr*>(other_nop);
+      return this->static_less_than(*other_expr);
+    }
+    else
+      return false; // TODO do we compare typeid? labels? probably the latter
+  }
+
+  AbstractTensor::any_view_randsz _bra_mutable() override final {
+    this->reset_hash_value();
+    return ranges::view::counted(this->rbegin(), nannihilators()) |
+           ranges::view::transform(
+               [](auto &&op) -> Index & { return op.index(); });
+  }
+  AbstractTensor::any_view_randsz _ket_mutable() override final {
+    this->reset_hash_value();
+    return ranges::view::counted(this->begin(), ncreators()) |
+           ranges::view::transform(
+               [](auto &&op) -> Index & { return op.index(); });
+  }
+
 };
 
 template<Statistics S>
@@ -764,47 +907,6 @@ template<Statistics S>
 std::wstring to_latex(const NormalOperatorSequence<S> &opseq) {
   return opseq.to_latex();
 }
-
-/// @name customization points to support generic algorithms on NormalOperator objects as Tensors
-/// @{
-template <Statistics S>
-auto bra(const NormalOperator<S>& nop) {
-  return ranges::view::counted(ranges::crbegin(nop.annihilators()),
-                               nop.nannihilators()) |
-         ranges::view::transform(
-             [](auto &&op) -> const Index & { return op.index(); });
-}
-template <Statistics S>
-auto bra(NormalOperator<S>& nop) {
-  return ranges::view::counted(ranges::rbegin(nop.annihilators()),
-                               nop.nannihilators()) |
-      ranges::view::transform(
-          [](auto &&op) -> const Index & { return op.index(); }) |
-      ranges::view::reverse;
-}
-template <Statistics S>
-auto ket(const NormalOperator<S>& nop) {
-  return ranges::view::counted(ranges::cbegin(nop.creators()),
-                               nop.ncreators()) |
-      ranges::view::transform(
-          [](auto &&op) -> const Index & { return op.index(); });
-}
-template <Statistics S>
-auto ket(NormalOperator<S>& nop) {
-  return ranges::view::counted(ranges::begin(nop.creators()),
-                               nop.ncreators()) |
-      ranges::view::transform(
-          [](auto &&op) -> const Index & { return op.index(); });
-}
-template <Statistics S>
-auto braket(const NormalOperator<S>& nop) {
-  return ranges::view::join(bra(nop),ket(nop));
-}
-template <Statistics S>
-auto braket(NormalOperator<S>& nop) {
-  return ranges::view::join(bra(nop),ket(nop));
-}
-///@}
 
 namespace detail {
   struct OpIdRegistrar {

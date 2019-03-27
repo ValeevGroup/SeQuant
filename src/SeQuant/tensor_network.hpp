@@ -6,6 +6,7 @@
 #define SEQUANT_TENSOR_NETWORK_H
 
 #include "../SeQuant/container.hpp"
+#include "../SeQuant/abstract_tensor.hpp"
 #include "../SeQuant/tensor.hpp"
 
 // forward declarations
@@ -15,15 +16,12 @@ class Graph;
 
 namespace sequant {
 
-/// @brief A (non-directed) graph view of a set of Tensor (or Tensor like) objects
+/// @brief A (non-directed) graph view of a sequence of AbstractTensor objects
 
-/// @tparam Tensor_ Tensor or another type for which @c bra(t) and @c ket(t)
-///         are valid expressions and evaluate to a range of Index objects.
-/// @note The main role of this is to canonize itself. Since Tensor_ objects can be connected
+/// @note The main role of this is to canonize itself. Since Tensor objects can be connected
 /// by multiple Index'es (thus edges are colored), what is canonized is actually
-/// the graph of indices (i.e. the dual of the tensor graph), with Tensor_ objects
+/// the graph of indices (roughly the dual of the tensor graph), with Tensor objects
 /// represented by one or more vertices.
-template <typename Tensor_ = Tensor>
 class TensorNetwork {
  public:
 
@@ -131,21 +129,14 @@ class TensorNetwork {
   /// @note uses RTTI
   template <typename ExprPtrRange>
   TensorNetwork(ExprPtrRange &exprptr_range) {
-    const bool contains_a_nontensor = ranges::any_of(
-        exprptr_range,
-        [](const ExprPtr &exprptr) { return !exprptr->is<Tensor_>(); });
-    if (contains_a_nontensor)
-      throw std::logic_error(
-          "TensorNetwork(exprptr_range): exprptr_range contains a non-Tensor");
-
-    auto tsrptr_range =
-        exprptr_range | ranges::view::transform([](const ExprPtr &ex) {
-          return std::static_pointer_cast<Tensor_>(ex);
-        });
-    assert(ranges::size(tsrptr_range) == ranges::size(exprptr_range));
-
-    for (auto&&t : tsrptr_range) {
-      tensors_.push_back(t);
+    for (auto&&ex : exprptr_range) {
+      auto t = std::dynamic_pointer_cast<AbstractTensor>(ex);
+      if (t) {
+        tensors_.emplace_back(t);
+      }
+      else {
+        throw std::logic_error("TensorNetwork::TensorNetwork: non-tensors in the given expression range");
+      }
     }
   }
 
@@ -162,10 +153,8 @@ class TensorNetwork {
       bool fast = true);
 
  private:
-  using Tensor_Ptr = std::shared_ptr<Tensor_>;
-
   // source tensors and indices
-  container::svector<Tensor_Ptr> tensors_;
+  container::svector<AbstractTensorPtr> tensors_;
 
   struct FullLabelCompare {
     using is_transparent = void;
@@ -203,8 +192,8 @@ class TensorNetwork {
     return edges_;
   }
 
- private:
-  /// @brief converts the network into a graph whose vertices are indices and
+ public:
+  /// @brief converts the network into a Bliss graph whose vertices are indices and
   /// tensor vertex representations
   /// @return {shared_ptr to Graph, vector of vertex labels, vector of vertex
   /// colors, vector of vertex types}
@@ -230,7 +219,5 @@ class TensorNetwork {
 };
 
 }  // namespace sequant
-
-#include "tensor_network.impl.hpp"
 
 #endif  // SEQUANT_TENSOR_NETWORK_H

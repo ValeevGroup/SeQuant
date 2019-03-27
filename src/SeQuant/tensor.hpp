@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "abstract_tensor.hpp"
 #include "algorithm.hpp"
 #include "attr.hpp"
 #include "expr.hpp"
@@ -14,10 +15,8 @@
 
 namespace sequant {
 
-class TensorCanonicalizer;
-
 /// @brief particle-symmetric Tensor, i.e. permuting
-class Tensor : public Expr {
+class Tensor : public Expr, public AbstractTensor {
  private:
   using index_container_type = container::svector<Index, 4>;
   auto make_indices(IndexList indices) { return indices; }
@@ -196,6 +195,10 @@ class Tensor : public Expr {
     hash_value_ = val;
     return *hash_value_;
   }
+  void reset_hash_value() const override {
+    Expr::reset_hash_value();
+    bra_hash_value_.reset();
+  }
 
   bool static_equal(const Expr &that) const override {
     const auto& that_cast = static_cast<const Tensor&>(that);
@@ -238,139 +241,66 @@ class Tensor : public Expr {
     }
   }
 
-  friend class TensorCanonicalizer;
+  // these implement the AbstractTensor interface
+  AbstractTensor::const_any_view_randsz _bra() const override final {
+    return ranges::counted_view<const Index*>(bra_.empty() ? nullptr : &(bra_[0]), bra_.size());
+  }
+  AbstractTensor::const_any_view_randsz _ket() const override final {
+    return ranges::counted_view<const Index*>(ket_.empty() ? nullptr : &(ket_[0]), ket_.size());
+  }
+  AbstractTensor::const_any_view_rand _braket() const override final {
+    return braket();
+  }
+  std::size_t _bra_rank() const override final {
+    return bra_rank();
+  }
+  std::size_t _ket_rank() const override final {
+    return ket_rank();
+  }
+  Symmetry _symmetry() const override final {
+    return symmetry_;
+  }
+  std::size_t _color() const override final {
+    return 0;
+  }
+  bool _is_cnumber() const override final {
+    return true;
+  }
+  std::wstring _label() const override final {
+    return label_;
+  }
+  std::wstring _to_latex() const override final {
+    return to_latex();
+  }
+  bool _transform_indices(const container::map<Index, Index>& index_map,
+                          bool tag_tranformed_indices) override final {
+    return transform_indices(index_map, tag_tranformed_indices);
+  }
+  void _reset_tags() override final {
+    reset_tags();
+  }
+  bool operator<(const AbstractTensor& other) const override final {
+    auto* other_tensor = dynamic_cast<const Tensor*>(&other);
+    if (other_tensor) {
+      const Expr* other_expr = static_cast<const Expr*>(other_tensor);
+      return this->static_less_than(*other_expr);
+    }
+    else
+      return false; // TODO do we compare typeid? labels? probably the latter
+  }
+
+  AbstractTensor::any_view_randsz _bra_mutable() override final {
+    this->reset_hash_value();
+    return ranges::counted_view<Index*>(bra_.empty() ? nullptr : &(bra_[0]), bra_.size());
+  }
+  AbstractTensor::any_view_randsz _ket_mutable() override final {
+    this->reset_hash_value();
+    return ranges::counted_view<Index*>(ket_.empty() ? nullptr : &(ket_[0]), ket_.size());
+  }
+
 };  // class Tensor
 
 using TensorPtr = std::shared_ptr<Tensor>;
-
-/// @brief Base class for Tensor canonicalizers
-/// To make custom canonicalizer make a derived class and register an instance of that class with TensorCanonicalizer::register_instance
-class TensorCanonicalizer {
- public:
-  virtual ~TensorCanonicalizer();
-  /// returns a TensorCanonicalizer previously registered via TensorCanonicalizer::register_instance()
-  /// with @c label
-  static std::shared_ptr<TensorCanonicalizer> instance(std::wstring_view label = L"");
-  /// registers @c canonicalizer to be applied to Tensor objects with label @c label ; leave the label
-  /// empty if @c canonicalizer is to apply to Tensor with any label)
-  static void register_instance(
-      std::shared_ptr<TensorCanonicalizer> canonicalizer,
-      std::wstring_view label = L"");
-
-  /// @return a list of Tensor labels with lexicographic preference (in order)
-  static const auto &cardinal_tensor_labels() {
-    return cardinal_tensor_labels_accessor();
-  }
-  /// @param cardinal_tensor_labels a list of Tensor labels with lexicographic
-  /// preference (in order)
-  static void set_cardinal_tensor_labels(
-      const container::vector<std::wstring> &labels) {
-    cardinal_tensor_labels_accessor() = labels;
-  }
-
-  auto &bra(Tensor &t) { return t.bra_; };
-  auto &ket(Tensor &t) { return t.ket_; };
-  auto braket(Tensor &t) { return ranges::view::concat(bra(t), ket(t)); }
-
-  virtual std::shared_ptr<Expr> apply(Tensor &) = 0;
-
- private:
-  static container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>>
-      &instance_map_accessor();
-  static container::vector<std::wstring> &cardinal_tensor_labels_accessor();
-};
-
-/// @name customization points to support generic algorithms on general Tensor-like quantities.
-/// @return range to the corresponding set of Index objects
-/// @{
-inline auto bra(const Tensor& t) {
-  // ranges::view::all seems to copy the vector!
-  return ranges::view::counted(ranges::cbegin(t.bra()), ranges::size(t.bra()));
-}
-inline auto bra(Tensor& t) {
-  return ranges::view::counted(ranges::begin(t.bra()), ranges::size(t.bra()));
-}
-inline auto ket(const Tensor& t) {
-  return ranges::view::counted(ranges::cbegin(t.ket()), ranges::size(t.ket()));
-}
-inline auto ket(Tensor& t) {
-  return ranges::view::counted(ranges::begin(t.ket()), ranges::size(t.ket()));
-}
-inline auto braket(const Tensor& t) {
-  return t.braket();
-}
-///@}
-
-class DefaultTensorCanonicalizer : public TensorCanonicalizer {
- public:
-  DefaultTensorCanonicalizer() = default;
-
-  /// @tparam IndexContainer a Container of Index objects such that @c IndexContainer::value_type is convertible to Index (e.g. this can be std::vector or std::set , but not std::map)
-  /// @param external_indices container of external Index objects
-  /// @warning @c external_indices is assumed to be immutable during the lifetime of this object
-  template<typename IndexContainer>
-  DefaultTensorCanonicalizer(IndexContainer &&external_indices) {
-    ranges::for_each(external_indices, [this](const Index &idx) {
-      this->external_indices_.emplace(std::make_pair(std::wstring(idx.label()), idx));
-    });
-  }
-  virtual ~DefaultTensorCanonicalizer() = default;
-
-  /// Implements TensorCanonicalizer::apply
-  /// @note Canonicalizes @c t by sorting its bra (if @c t.symmetry()==Symmetry::nonsymm ) or its bra and ket (if @c t.symmetry()!=Symmetry::nonsymm ),
-  ///       with the external indices
-  std::shared_ptr<Expr> apply(Tensor &t) override;
-
-  template<typename Compare>
-  std::shared_ptr<Expr> apply(Tensor &t, const Compare &comp) {
-    auto symmetry = t.symmetry();
-    auto is_antisymm = symmetry == Symmetry::antisymm;
-
-    // can only handle anisymmetric case so far
-#ifndef NDEBUG
-    if (t.bra_rank() > 1 || t.ket_rank() > 1)
-      assert(is_antisymm);
-#endif
-
-    bool even = true;
-    switch (symmetry) {
-      case Symmetry::antisymm: {
-        auto &_bra = this->bra(t);
-        auto &_ket = this->ket(t);
-        using std::begin;
-        using std::end;
-//      std::wcout << "canonicalizing " << to_latex(t);
-        IndexSwapper::thread_instance().reset();
-        // std::{stable_}sort does not necessarily use swap! so must implement
-        // sort outselves .. thankfully ranks will be low so can stick with
-        // bubble
-        bubble_sort(begin(_bra), end(_bra), comp);
-        bubble_sort(begin(_ket), end(_ket), comp);
-        even = IndexSwapper::thread_instance().even_num_of_swaps();
-//      std::wcout << " is " << (even ? "even" : "odd") << " and produces " << to_latex(t) << std::endl;
-      }
-        break;
-
-      case Symmetry::symm: {
-
-      }
-        break;
-
-      case Symmetry::nonsymm: {
-
-      }
-        break;
-
-      default:abort();
-    }
-
-    std::shared_ptr<Expr> result = is_antisymm ? (even == false ? ex<Constant>(-1) : nullptr) : nullptr;
-    return result;
-  }
-
- private:
-  container::map<std::wstring, Index> external_indices_;
-};
 
 inline std::shared_ptr<Expr> overlap(const Index& bra_index, const Index& ket_index) {
   return ex<Tensor>(L"S", IndexList{bra_index}, IndexList{ket_index});

@@ -3,12 +3,12 @@
 //
 
 #include "../../external/bliss/graph.hh"
+#include "./tensor_network.hpp"
 #include "./utility.hpp"
 
 namespace sequant {
 
-template <typename Tensor_>
-ExprPtr TensorNetwork<Tensor_>::canonicalize(
+ExprPtr TensorNetwork::canonicalize(
     const container::vector<std::wstring> &cardinal_tensor_labels, bool fast) {
   ExprPtr canon_biproduct = ex<Constant>(1);
   container::svector<Edge>
@@ -18,8 +18,8 @@ ExprPtr TensorNetwork<Tensor_>::canonicalize(
     std::wcout << "TensorNetwork::canonicalize(" << (fast ? "fast" : "slow")
                << "): input tensors\n";
     size_t cnt = 0;
-    ranges::for_each(tensors_, [&](const Tensor_Ptr &t) {
-      std::wcout << "tensor " << cnt++ << ": " << t->to_latex() << std::endl;
+    ranges::for_each(tensors_, [&](const auto&t) {
+      std::wcout << "tensor " << cnt++ << ": " << to_latex(*t) << std::endl;
     });
     std::wcout << "cardinal_tensor_labels = ";
     ranges::for_each(cardinal_tensor_labels,
@@ -32,44 +32,51 @@ ExprPtr TensorNetwork<Tensor_>::canonicalize(
   // only and are free to reorder)
   using std::begin;
   using std::end;
-  std::stable_sort(begin(tensors_), end(tensors_),
-                   [&cardinal_tensor_labels](const Tensor_Ptr &first,
-                                             const Tensor_Ptr &second) {
-                     const auto cardinal_tensor_labels_end =
-                         end(cardinal_tensor_labels);
-                     const auto first_cardinal_it =
-                         std::find(begin(cardinal_tensor_labels),
-                                   end(cardinal_tensor_labels), first->label());
-                     const auto second_cardinal_it = std::find(
-                         begin(cardinal_tensor_labels),
-                         end(cardinal_tensor_labels), second->label());
-                     const auto first_is_cardinal =
-                         first_cardinal_it != cardinal_tensor_labels_end;
-                     const auto second_is_cardinal =
-                         second_cardinal_it != cardinal_tensor_labels_end;
-                     if (first_is_cardinal && second_is_cardinal) {
-                       if (first_cardinal_it == second_cardinal_it)
-                         return *first < *second;
-                       else
-                         return first_cardinal_it < second_cardinal_it;
-                     } else if (first_is_cardinal)
-                       return true;
-                     else if (second_is_cardinal)
-                       return false;
-                     else  // neither is cardinal
-                       return *first < *second;
-                   });
+  bubble_sort(begin(tensors_), end(tensors_),
+                   [&cardinal_tensor_labels](const auto& first_ptr,
+                                             const auto& second_ptr) {
+        const auto &first = *first_ptr;
+        const auto &second = *second_ptr;
+        // tensors commute if their colors are different or either one of them is a c-number
+        if ((color(first) != color(second)) ||
+            is_cnumber(first) /* || is_cnumber(second) */) {
+          const auto cardinal_tensor_labels_end = end(cardinal_tensor_labels);
+          const auto first_cardinal_it =
+              std::find(begin(cardinal_tensor_labels),
+                        end(cardinal_tensor_labels), label(first));
+          const auto second_cardinal_it =
+              std::find(begin(cardinal_tensor_labels),
+                        end(cardinal_tensor_labels), label(second));
+          const auto first_is_cardinal =
+              first_cardinal_it != cardinal_tensor_labels_end;
+          const auto second_is_cardinal =
+              second_cardinal_it != cardinal_tensor_labels_end;
+          if (first_is_cardinal && second_is_cardinal) {
+            if (first_cardinal_it == second_cardinal_it)
+              return first < second;
+            else
+              return first_cardinal_it < second_cardinal_it;
+          } else if (first_is_cardinal)
+            return true;
+          else if (second_is_cardinal)
+            return false;
+          else  // neither is cardinal
+            return first < second;
+        } else
+          return false;
+      });
 
   if (Logger::get_instance().canonicalize) {
     std::wcout << "TensorNetwork::canonicalize(" << (fast ? "fast" : "slow")
                << "): tensors after initial sort\n";
     size_t cnt = 0;
-    ranges::for_each(tensors_, [&](const Tensor_Ptr &t) {
-      std::wcout << "tensor " << cnt++ << ": " << t->to_latex() << std::endl;
+    ranges::for_each(tensors_, [&](const auto&t) {
+      std::wcout << "tensor " << cnt++ << ": " << to_latex(*t) << std::endl;
     });
   }
 
-  init_edges();
+  if (edges_.empty())
+    init_edges();
 
   // fast and slow canonizations produce index replacements
   container::map<Index, Index> idxrepl;
@@ -112,17 +119,17 @@ ExprPtr TensorNetwork<Tensor_>::canonicalize(
 
     // make the graph
     auto [graph, vlabels, vcolors, vtypes] = make_bliss_graph();
-    //    graph->write_dot(std::wcout, vlabels);
+//    graph->write_dot(std::wcout, vlabels);
 
     // canonize the graph
     bliss::Stats stats;
     graph->set_splitting_heuristic(bliss::Graph::shs_fsm);
     const unsigned int *cl = graph->canonical_form(stats, nullptr, nullptr);
 
-    //    bliss::Graph *cgraph = graph->permute(cl);
-    //    auto cvlabels = permute(vlabels, cl);
-    //    cgraph->write_dot(std::wcout, cvlabels);
-    //    delete cgraph;
+//    bliss::Graph *cgraph = graph->permute(cl);
+//    auto cvlabels = permute(vlabels, cl);
+//    cgraph->write_dot(std::wcout, cvlabels);
+//    delete cgraph;
 
     // make internal index replacement list
     {
@@ -179,7 +186,7 @@ ExprPtr TensorNetwork<Tensor_>::canonicalize(
       }
     }  // index repl
 
-    // reorder tensors_ to canonical order (defined by the core indices)
+    // reorder *commuting* tensors_ to canonical order (defined by the core indices)
     {
       decltype(tensors_) tensors_canonized(tensors_.size(), nullptr);
 
@@ -202,36 +209,46 @@ ExprPtr TensorNetwork<Tensor_>::canonicalize(
         ++vtx_cnt;
       }
       // for each color sort tensors by canonical order
+      // this assumes that tensors of different colors always commute (reaonsable)
+      // this only reorders tensors is they are c-numbers!
       container::svector<std::pair<size_t, size_t>>
           ord_can;  // canonically-ordered list of {ordinal in tensors_,
                     // canonical ordinal}
       container::svector<size_t>
-          ord_orig;  // originaly-ordered list of {ordinal in tensors_}
+          ord_orig;  // originaly-ordered list of {canonical ordinal}
       for (auto &&color : colors) {
         auto beg = color2idx.lower_bound(color);
         auto end = color2idx.upper_bound(color);
         const auto sz = end - beg;
         assert(sz > 0);
         if (sz > 1) {
+          // all tensors of same color are c-numbers or all q-numbers ... inspect the first to determine the type
+          const bool cnumber = is_cnumber(*(tensors_.at(beg->second.first)));
+
           ord_can.resize(sz);
           ord_orig.resize(sz);
+
           size_t cnt = 0;
           for (auto it = beg; it != end; ++it, ++cnt) {
             ord_can[cnt] = it->second;
             ord_orig[cnt] = it->second.first;
+            // assert that all tensors of same color are all c-numbers or all q-numbers
+            assert(cnumber == is_cnumber(*(tensors_.at(ord_orig[cnt]))));
           }
           using std::begin;
           using std::end;
-          std::sort(begin(ord_can), end(ord_can),
-                    [](const std::pair<size_t, size_t> &a,
-                       const std::pair<size_t, size_t> &b) {
-                      return a.second < b.second;
-                    });
+          if (cnumber)  // only resort if these are cnumbers
+            std::sort(begin(ord_can), end(ord_can),
+                      [](const std::pair<size_t, size_t> &a,
+                         const std::pair<size_t, size_t> &b) {
+                        return a.second < b.second;
+                      });
           std::sort(begin(ord_orig), end(ord_orig));
-          // write reordered tensors to tensors_canonized
+          // write (potentially reordered) tensors to tensors_canonized
           for (size_t t = 0; t != sz; ++t) {
             tensors_canonized.at(ord_orig[t]) = tensors_.at(ord_can[t].first);
           }
+
         } else {  // sz = 1
           auto tidx = beg->second.first;
           tensors_canonized.at(tidx) = tensors_.at(tidx);
@@ -286,8 +303,8 @@ ExprPtr TensorNetwork<Tensor_>::canonicalize(
 #ifndef NDEBUG
   // assert that tensors' indices are not tagged if going to tag indices
   if (tag_transformed_indices) {
-    for (auto &tensor : tensors_) {
-      assert(ranges::none_of(tensor->const_braket(), [](const Index &idx) {
+    for (const auto &tensor : tensors_) {
+      assert(ranges::none_of(braket(*tensor), [](const Index &idx) {
         return idx.tag().has_value();
       }));
     }
@@ -299,7 +316,7 @@ ExprPtr TensorNetwork<Tensor_>::canonicalize(
     pass_mutated = false;
     for (auto &tensor : tensors_) {
       pass_mutated |=
-          tensor->transform_indices(idxrepl, tag_transformed_indices);
+          transform_indices(*tensor, idxrepl, tag_transformed_indices);
     }
     mutated |= pass_mutated;
   } while (pass_mutated);  // transform till stops changing
@@ -307,7 +324,7 @@ ExprPtr TensorNetwork<Tensor_>::canonicalize(
   // if any replacements made, untag transformed indices as needed
   if (tag_transformed_indices) {
     for (auto &tensor : tensors_) {
-      tensor->reset_tags();
+      reset_tags(*tensor);
     }
   }
 
@@ -327,12 +344,13 @@ ExprPtr TensorNetwork<Tensor_>::canonicalize(
                                                          : canon_biproduct;
 }
 
-template <typename Tensor_>
 std::tuple<std::shared_ptr<bliss::Graph>, std::vector<std::wstring>,
-           std::vector<std::size_t>, std::vector<typename TensorNetwork<Tensor_>::VertexType>>
-TensorNetwork<Tensor_>::make_bliss_graph() const {
+           std::vector<std::size_t>, std::vector<typename TensorNetwork::VertexType>>
+TensorNetwork::make_bliss_graph() const {
   // must call init_edges() prior to calling this
-  assert(!edges_.empty());
+  if (edges_.empty()) {
+    init_edges();
+  }
 
   // results
   std::shared_ptr<bliss::Graph> graph;
@@ -389,41 +407,43 @@ TensorNetwork<Tensor_>::make_bliss_graph() const {
   // this will map to tensor index to the first (core) vertex in its
   // representation
   container::svector<size_t> tensor_vertex_offset(tensors_.size());
-  ranges::for_each(tensors_, [&](const Tensor_Ptr &t) {
+  ranges::for_each(tensors_, [&](const auto &t) {
     tensor_vertex_offset.at(tensor_cnt) = nv;
     // each tensor has a core vertex (to be colored by its label)
     ++nv;
-    vertex_labels.push_back(std::wstring(t->label()));
-    vertex_type.push_back(VertexType::TensorCore);
-    const auto t_color = boost::hash_value(t->label());
+    const auto tlabel = label(*t);
+    vertex_labels.emplace_back(tlabel);
+    vertex_type.emplace_back(VertexType::TensorCore);
+    const auto t_color = boost::hash_value(tlabel);
     static_assert(sizeof(t_color) == sizeof(unsigned long int));
     vertex_color.push_back(t_color);
     // symmetric/antisymmetric tensors are represented by 3 more vertices:
     // - bra
     // - ket
     // - braket (connecting bra and ket to the core)
-    if (t->symmetry() != Symmetry::nonsymm) {
+    auto& tref = *t;
+    if (symmetry(tref) != Symmetry::nonsymm) {
       nv += 3;
       vertex_labels.push_back(
-          std::wstring(L"bra") + to_wstring(t->bra_rank()) +
-          ((t->symmetry() == Symmetry::antisymm) ? L"a" : L"s"));
+          std::wstring(L"bra") + to_wstring(bra_rank(tref)) +
+          ((symmetry(tref) == Symmetry::antisymm) ? L"a" : L"s"));
       vertex_type.push_back(VertexType::TensorBra);
       vertex_color.push_back(0);
       vertex_labels.push_back(
-          std::wstring(L"ket") + to_wstring(t->ket_rank()) +
-          ((t->symmetry() == Symmetry::antisymm) ? L"a" : L"s"));
+          std::wstring(L"ket") + to_wstring(ket_rank(tref)) +
+          ((symmetry(tref) == Symmetry::antisymm) ? L"a" : L"s"));
       vertex_type.push_back(VertexType::TensorKet);
       vertex_color.push_back(0);
       vertex_labels.push_back(
           std::wstring(L"bk") +
-          ((t->symmetry() == Symmetry::antisymm) ? L"a" : L"s"));
+          ((symmetry(tref) == Symmetry::antisymm) ? L"a" : L"s"));
       vertex_type.push_back(VertexType::TensorBraKet);
       vertex_color.push_back(t_color);
     }
     // nonsymmetric tensors are represented by 3*rank more vertices (with rank =
     // max(bra_rank(),ket_rank())
     else {
-      const auto rank = std::max(t->bra_rank(), t->ket_rank());
+      const auto rank = std::max(bra_rank(tref), ket_rank(tref));
       for (size_t p = 0; p != rank; ++p) {
         nv += 3;
         auto pstr = to_wstring(p + 1);
@@ -495,11 +515,12 @@ TensorNetwork<Tensor_>::make_bliss_graph() const {
   // - link up tensors
   tensor_cnt = 0;
   ranges::for_each(tensors_, [&graph, this, &tensor_cnt,
-                              &tensor_vertex_offset](const Tensor_Ptr &t) {
+                              &tensor_vertex_offset](const auto &t) {
     const auto vertex_offset = tensor_vertex_offset.at(tensor_cnt);
     // for each braket terminal linker
-    const size_t nbk = t->symmetry() == Symmetry::nonsymm
-                           ? std::max(t->bra_rank(), t->ket_rank())
+    auto& tref = *t;
+    const size_t nbk = symmetry(tref) == Symmetry::nonsymm
+                           ? std::max(bra_rank(tref), ket_rank(tref))
                            : 1;
     for (size_t bk = 1; bk <= nbk; ++bk) {
       const int bk_vertex = vertex_offset + 3 * bk;
@@ -530,8 +551,7 @@ TensorNetwork<Tensor_>::make_bliss_graph() const {
   return {graph, vertex_labels, vertex_color, vertex_type};
 }
 
-template <typename Tensor_>
-void TensorNetwork<Tensor_>::init_edges() const {
+void TensorNetwork::init_edges() const {
   if (have_edges_) return;
 
   auto idx_insert = [this](const Index &idx, int tensor_idx, int pos) {
@@ -552,14 +572,14 @@ void TensorNetwork<Tensor_>::init_edges() const {
 
   int t_idx = 1;
   for (auto&&t : tensors_) {
-    const auto t_is_nonsymm = t->symmetry() == Symmetry::nonsymm;
+    const auto t_is_nonsymm = symmetry(*t) == Symmetry::nonsymm;
     size_t cnt = 0;
-    for (auto&&idx : bra(*t)) {
+    for (const Index& idx : bra(*t)) {
       idx_insert(idx, t_idx, t_is_nonsymm ? cnt : 0);
       ++cnt;
     }
     cnt = 0;
-    for (auto&&idx : ket(*t)) {
+    for (const Index& idx : ket(*t)) {
       idx_insert(idx, -t_idx, t_is_nonsymm ? cnt : 0);
       ++cnt;
     }

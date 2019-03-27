@@ -4,6 +4,7 @@
 
 #include "./expr.hpp"
 #include "./tensor_network.hpp"
+#include "./tensor.hpp"
 #include "./utility.hpp"
 
 namespace sequant {
@@ -43,7 +44,11 @@ std::shared_ptr<Expr> Product::canonicalize_impl(bool rapid) {
     assert(size(tensors) == size(factors_));
     using std::begin;
     using std::end;
-    std::copy(begin(tensors), end(tensors), begin(factors_));
+    std::transform(begin(tensors), end(tensors), begin(factors_), [](const auto& tptr) {
+      auto exprptr = std::dynamic_pointer_cast<Expr>(tptr);
+      assert(exprptr);
+      return exprptr;
+    });
     if (canon_factor) scalar_ *= canon_factor->as<Constant>().value();
     this->reset_hash_value();
   } catch (std::logic_error

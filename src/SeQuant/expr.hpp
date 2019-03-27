@@ -450,7 +450,7 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
     else
       return default_hash_value;
   }
-  void reset_hash_value() const {
+  virtual void reset_hash_value() const {
     hash_value_.reset();
   }
 
