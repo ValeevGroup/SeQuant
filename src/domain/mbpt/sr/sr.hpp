@@ -8,12 +8,11 @@
 #include "../../../SeQuant/op.hpp"
 #include "../../../SeQuant/tensor.hpp"
 #include "../../../SeQuant/wick.hpp"
+#include "../op.hpp"
 
 namespace sequant {
 namespace mbpt {
 namespace sr {
-
-enum class OpType { f, g, t, l, A, L, R };
 
 enum class OpClass { ex, deex, gen };
 
