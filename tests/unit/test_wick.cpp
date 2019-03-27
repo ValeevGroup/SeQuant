@@ -466,12 +466,6 @@ TEST_CASE("WickTheorem", "[algorithms]") {
   SECTION("Expression Reduction") {
     constexpr Vacuum V = Vacuum::SingleProduct;
 
-    // make these Tensor labels special ...
-    // these are already lexicographically ordered, but tensors that do not
-    // appear on this list (e.g. "S") will appear after Tensors with these
-    // labels
-    TensorCanonicalizer::set_cardinal_tensor_labels({L"A", L"f", L"g", L"t"});
-
     // 2-body ^ 2-body
     SEQUANT_PROFILE_SINGLE("wick(H2*T2)", {
       auto opseq =

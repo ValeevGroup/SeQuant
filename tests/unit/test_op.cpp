@@ -227,6 +227,32 @@ TEST_CASE("Op", "[elements]") {
     }
   }
 
+  SECTION("hashing") {
+    REQUIRE_NOTHROW(hash_value(FOp{}));
+    REQUIRE_NOTHROW(hash_value(BOp{}));
+    auto fc1 = fcre(L"i_1");
+    auto fc1_copy = fcre(L"i_1");
+    auto fa1 = fann(L"i_1");
+    auto bc1 = bcre(L"i_1");
+    auto ba1 = bann(L"i_1");
+    auto fc2 = fcre(L"i_2");
+    auto fa2 = fann(L"i_2");
+    auto fc2_34 = fcre(L"i_2", {L"i_3", L"i_4"});
+    REQUIRE_NOTHROW(hash_value(fc1));
+    REQUIRE_NOTHROW(hash_value(fa1));
+    REQUIRE_NOTHROW(hash_value(bc1));
+    REQUIRE_NOTHROW(hash_value(ba1));
+    REQUIRE_NOTHROW(hash_value(fc2_34));
+    REQUIRE(hash_value(fc1) != hash_value(FOp{}));
+    REQUIRE(hash_value(fc1) != hash_value(BOp{}));
+    REQUIRE(hash_value(fc1) == hash_value(fc1_copy));
+    REQUIRE(hash_value(fc1) != hash_value(fa1));
+    REQUIRE(hash_value(fc1) != hash_value(fc2));
+    REQUIRE(hash_value(fc1) == hash_value(bc1));  // hash is independent of statistics
+    REQUIRE(hash_value(fa1) == hash_value(ba1));  // hash is independent of statistics
+    REQUIRE(hash_value(fc1) == hash_value(fa1.adjoint()));
+  }
+
   SECTION("hug") {
     auto nop1 = FNOperator(
         {Index{L"i_1"}, Index{L"i_2"}, Index{L"i_3"}, Index{L"a_1"}},

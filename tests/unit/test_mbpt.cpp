@@ -8,7 +8,6 @@
 
 TEST_CASE("MBPT", "[mbpt]") {
   using namespace sequant;
-  TensorCanonicalizer::set_cardinal_tensor_labels({L"A", L"f", L"g", L"t"});
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
 
