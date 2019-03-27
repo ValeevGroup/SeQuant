@@ -8,13 +8,15 @@
 namespace sequant {
 
 /// @brief bubble sort that uses swap exclusively
-template <typename ForwardIter, typename Compare>
-void bubble_sort(ForwardIter begin, ForwardIter end, Compare comp) {
+template <typename ForwardIter, typename Sentinel, typename Compare>
+void bubble_sort(ForwardIter begin, Sentinel end, Compare comp) {
   if (begin == end) return;  // no-op for empty range
   bool swapped;
   do {
     swapped = false;
-    for (auto i = begin, inext = std::next(begin); inext != end; ++i, ++inext) {
+    auto i = begin;
+    auto inext = i;
+    for (++inext; inext != end; ++i, ++inext) {
       auto& val0 = *inext;
       auto& val1 = *i;
       if (comp(val0, val1)) {
