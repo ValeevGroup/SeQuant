@@ -45,7 +45,7 @@ TEST_CASE("TensorNetwork", "[elements]") {
   SECTION("bliss graph") {
     Index::reset_tmp_index();
     auto tmp = A<2>() * H2() * T_<2>() * T_<2>() * T_<2>();
-    //std::wcout << "A2*H2*T2*T2*T2 = " << to_latex(tmp) << std::endl;
+    // std::wcout << "A2*H2*T2*T2*T2 = " << to_latex(tmp) << std::endl;
     TensorNetwork tn(tmp->as<Product>().factors());
 
     // make graph
@@ -55,8 +55,9 @@ TEST_CASE("TensorNetwork", "[elements]") {
     // create dot
     std::basic_ostringstream<wchar_t> oss;
     REQUIRE_NOTHROW(graph->write_dot(oss, vlabels));
-    //std::wcout << oss.str() << std::endl;
-    REQUIRE(oss.str() == L"graph g {\n"
+    // std::wcout << oss.str() << std::endl;
+    REQUIRE(oss.str() ==
+            L"graph g {\n"
             "v0 [label=\"{a_{102}}\"; color=\"#4f1dd0\"];\n"
             "v0 -- v22\n"
             "v0 -- v25\n"
@@ -206,13 +207,14 @@ TEST_CASE("TensorNetwork", "[elements]") {
       graph->find_automorphisms(stats, save_aut, &aut_generators);
 
       // print automorphisms
-      auto print_auts = [&aut_generators](auto&& stream) {
-        auto gen_cnt = 0;
-        ranges::for_each(aut_generators, [&gen_cnt,&stream](auto&& gen) {
-          stream << "gen" << gen_cnt++ << " { ";
+      auto print_auts = [&aut_generators](auto&& stream, auto&& vlabels,
+                                          bool use_labels) {
+        ranges::for_each(aut_generators, [&stream, &vlabels,
+                                          &use_labels](auto&& gen) {
 
           // see bliss::print_permutation
-          auto print = [&stream](const std::vector<unsigned int>& perm) {
+          auto print = [&stream, &vlabels,
+                        &use_labels](const std::vector<unsigned int>& perm) {
             const unsigned int offset = 0;
             const unsigned int N = perm.size();
             for (unsigned int i = 0; i < N; i++) {
@@ -227,10 +229,14 @@ TEST_CASE("TensorNetwork", "[elements]") {
                 j = perm[j];
               }
               if (!is_first) continue;
-              stream << "(" << i + offset << ",";
+              stream << "("
+                     << (use_labels ? vlabels.at(i)
+                                    : std::to_wstring(i + offset))
+                     << ",";
               j = perm[i];
               while (j != i) {
-                stream << j + offset;
+                stream << (use_labels ? vlabels.at(j)
+                                      : std::to_wstring(j + offset));
                 j = perm[j];
                 if (j != i) stream << ",";
               }
@@ -239,26 +245,32 @@ TEST_CASE("TensorNetwork", "[elements]") {
           };
 
           print(gen);
+          stream << std::endl;
 
-          stream << "}" << std::endl;
         });
       };
       std::basic_ostringstream<wchar_t> oss;
-      print_auts(oss);
-      //std::wcout << oss.str() << std::endl;
-      REQUIRE(oss.str() == L"gen0 { (0,1)}\n"
-              "gen1 { (8,9)}\n"
-              "gen2 { (18,19)}\n"
-              "gen3 { (16,17)}\n"
-              "gen4 { (16,18)(17,19)(29,30)(33,34)}\n"
-              "gen5 { (2,3)}\n"
-              "gen6 { (10,11)}\n"
-              "gen7 { (4,5)}\n"
-              "gen8 { (6,7)}\n"
-              "gen9 { (12,13)}\n"
-              "gen10 { (14,15)}\n"
-              "gen11 { (4,6)(5,7)(12,14)(13,15)(44,52)(45,53)(46,54)(47,55)(48,56)(49,57)(50,58)(51,59)}\n"
-              "gen12 { (2,4)(3,5)(10,12)(11,13)(36,44)(37,45)(38,46)(39,47)(40,48)(41,49)(42,50)(43,51)}\n");
+      print_auts(oss, vlabels, false);
+      // std::wcout << oss.str() << std::endl;
+      REQUIRE(oss.str() ==
+              L"(0,1)\n"
+              "(8,9)\n"
+              "(18,19)\n"
+              "(16,17)\n"
+              "(16,18)(17,19)(29,30)(33,34)\n"
+              "(2,3)\n"
+              "(10,11)\n"
+              "(4,5)\n"
+              "(6,7)\n"
+              "(12,13)\n"
+              "(14,15)\n"
+              "(4,6)(5,7)(12,14)(13,15)(44,52)(45,53)(46,54)(47,55)(48,56)(49,57)(50,58)(51,59)\n"
+              "(2,4)(3,5)(10,12)(11,13)(36,44)(37,45)(38,46)(39,47)(40,48)(41,49)(42,50)(43,51)\n");
+      if (0) {
+        std::basic_ostringstream<wchar_t> oss2;
+        print_auts(oss2, vlabels, true);
+        std::wcout << oss2.str() << std::endl;
+      }
     }
 
   }  // SECTION("bliss graph")
