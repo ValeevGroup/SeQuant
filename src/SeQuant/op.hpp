@@ -74,7 +74,7 @@ class Op {
 
  private:
   Index index_;
-  Action action_;
+  Action action_ = Action::invalid;
 };
 
 template<Statistics S>

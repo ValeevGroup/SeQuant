@@ -43,7 +43,7 @@ inline std::wstring to_wolfram(BraKetPos a) {
 
 enum class Statistics { BoseEinstein, FermiDirac };
 
-enum class Action { create, annihilate };
+enum class Action { create, annihilate, invalid };
 
 /// applies (Hermitian) adjoint to @c action
 inline Action adjoint(Action action) { return action == Action::create ? Action::annihilate : Action::create; }
