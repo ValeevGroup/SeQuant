@@ -758,6 +758,9 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
   Symmetry _symmetry() const override final {
     return S == Statistics::FermiDirac ? Symmetry::antisymm : Symmetry::symm;
   }
+  BraKetSymmetry _braket_symmetry() const override final {
+    return BraKetSymmetry::nonsymm;
+  }
   std::size_t _color() const override final {
     return S == Statistics::FermiDirac ? 1 : 2;
   }

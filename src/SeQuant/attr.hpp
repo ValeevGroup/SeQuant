@@ -15,8 +15,11 @@ enum class IndexSpaceMetric {
   Invalid
 };
 
-/// describes supported symmetries of tensorial objects
-enum class Symmetry { symm, antisymm, nonsymm };
+/// describes supported symmetries of bra or ket of tensorial objects
+enum class Symmetry { symm, antisymm, nonsymm, invalid };
+
+/// describes supported symmetries of tensorial objects w.r.t. bra-ket exchange
+enum class BraKetSymmetry { symm, conjugate, nonsymm, invalid };
 
 inline std::wstring to_wolfram(const Symmetry& symmetry) {
   std::wstring result;
@@ -30,6 +33,8 @@ inline std::wstring to_wolfram(const Symmetry& symmetry) {
     case Symmetry::nonsymm:
       result = L"indexSymm[0]";
       break;
+    default:
+      abort();
   }
   return result;
 }

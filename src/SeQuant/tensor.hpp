@@ -12,6 +12,7 @@
 #include "attr.hpp"
 #include "expr.hpp"
 #include "index.hpp"
+#include "sequant.hpp"
 
 namespace sequant {
 
@@ -58,16 +59,18 @@ class Tensor : public Expr, public AbstractTensor {
   /// to indices)
   /// @param ket_indices list of ket indices (or objects that can be converted
   /// to indices)
-  /// @param symmetry the tensor symmetry
+  /// @param symmetry the symmetry of bra or ket
+  /// @param braket_symmetry the symmetry with respect to bra-ket exchange
   template <typename IndexContainer,
             typename = std::enable_if_t<
                 !meta::is_initializer_list_v<std::decay_t<IndexContainer>>>>
   Tensor(std::wstring_view label, IndexContainer &&bra_indices,
-         IndexContainer &&ket_indices, Symmetry s = Symmetry::nonsymm)
+         IndexContainer &&ket_indices, Symmetry s = Symmetry::nonsymm, BraKetSymmetry bks = get_default_context().braket_symmetry())
       : label_(label),
         bra_(make_indices(bra_indices)),
         ket_(make_indices(ket_indices)),
-        symmetry_(s) {}
+        symmetry_(s),
+        braket_symmetry_(bks) {}
 
   /// @tparam I1 any type convertible to Index)
   /// @tparam I2 any type convertible to Index
@@ -75,13 +78,14 @@ class Tensor : public Expr, public AbstractTensor {
   /// @param label the tensor label
   /// @param bra_indices list of bra indices (or objects that can be converted to indices)
   /// @param ket_indices list of ket indices (or objects that can be converted to indices)
-  /// @param symmetry the tensor symmetry
+  /// @param symmetry the symmetry of bra or ket
+  /// @param braket_symmetry the symmetry with respect to bra-ket exchange
   template <typename I1 = Index, typename I2 = Index>
   Tensor(std::wstring_view label,
          std::initializer_list<I1> bra_indices,
          std::initializer_list<I2> ket_indices,
-         Symmetry s = Symmetry::nonsymm)
-      : label_(label), bra_(make_indices(bra_indices)), ket_(make_indices(ket_indices)), symmetry_(s) {}
+         Symmetry s = Symmetry::nonsymm, BraKetSymmetry bks = get_default_context().braket_symmetry())
+      : label_(label), bra_(make_indices(bra_indices)), ket_(make_indices(ket_indices)), symmetry_(s), braket_symmetry_(bks) {}
 
   std::wstring_view label() const { return label_; }
   const auto& bra() const { return bra_; }
@@ -91,7 +95,13 @@ class Tensor : public Expr, public AbstractTensor {
   /// @return view of the bra+ket index ranges
   /// @note this is to work around broken lookup rules
   auto const_braket() const { return this->braket(); }
+  /// Returns the Symmetry object describing the symmetry of the bra and ket of the Tensor, i.e. what effect swapping indices in positions @c i  and @c j in <b>either bra or ket</em> has on the elements of the Tensor;
+  /// Tensor's are <em>always assumed</em> to be particle-symmetric, i.e. swapping indices in positions @c i and @c j in <b>both bra and ket</b>;
+  /// The allowed values are Symmetry::symm, Symmetry::antisymm, and Symmetry::nonsymm
+  /// @return the Symmetry object describing the symmetry of the bra and ket of the Tensor.
   Symmetry symmetry() const { return symmetry_; }
+  /// @return the BraKetSymmetry object describing the symmetry of the Tensor under exchange of bra and ket.
+  BraKetSymmetry braket_symmetry() const { return braket_symmetry_; }
 
   /// @return number of bra indices
   auto bra_rank() const { return bra_.size(); }
@@ -180,7 +190,8 @@ class Tensor : public Expr, public AbstractTensor {
   std::wstring label_{};
   index_container_type bra_{};
   index_container_type ket_{};
-  Symmetry symmetry_ = Symmetry::nonsymm;
+  Symmetry symmetry_ = Symmetry::invalid;
+  BraKetSymmetry braket_symmetry_ = BraKetSymmetry::invalid;
   mutable std::optional<hash_type>
       bra_hash_value_;  // memoized byproduct of memoizing_hash()
 
@@ -259,6 +270,9 @@ class Tensor : public Expr, public AbstractTensor {
   }
   Symmetry _symmetry() const override final {
     return symmetry_;
+  }
+  BraKetSymmetry _braket_symmetry() const override final {
+    return braket_symmetry_;
   }
   std::size_t _color() const override final {
     return 0;

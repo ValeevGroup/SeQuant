@@ -10,18 +10,24 @@ namespace sequant {
 /// spaces are orthonormal, etc.
 class SeQuant {
  public:
-  /// @param vac the vacuum type
-  explicit SeQuant(Vacuum vac = Vacuum::SingleProduct,
-                   IndexSpaceMetric m = IndexSpaceMetric::Unit)
-      : vacuum_(vac), metric_(m) {}
+  SeQuant() = default;
+  /// @param vac a Vacuum object
+  /// @param m an IndexSpaceMetric object
+  /// @param bks a BraKetSymmetry object
+  explicit SeQuant(Vacuum vac,
+                   IndexSpaceMetric m,
+                   BraKetSymmetry bks)
+      : vacuum_(vac), metric_(m), braket_symmetry_(bks) {}
   ~SeQuant() = default;
 
   Vacuum vacuum() const { return vacuum_; }
   IndexSpaceMetric metric() const { return metric_; }
+  BraKetSymmetry braket_symmetry() const { return braket_symmetry_; }
 
  private:
-  Vacuum vacuum_;
-  IndexSpaceMetric metric_;
+  Vacuum vacuum_ = Vacuum::SingleProduct;
+  IndexSpaceMetric metric_ = IndexSpaceMetric::Unit;
+  BraKetSymmetry braket_symmetry_ = BraKetSymmetry::conjugate;
 };
 
 const SeQuant &get_default_context();

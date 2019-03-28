@@ -18,7 +18,8 @@ TEST_CASE("Tensor", "[elements]") {
     REQUIRE(t1.bra_rank() == 0);
     REQUIRE(t1.ket_rank() == 0);
     REQUIRE(t1.rank() == 0);
-    REQUIRE(t1.symmetry() == Symmetry::nonsymm);
+    REQUIRE(t1.symmetry() == Symmetry::invalid);
+    REQUIRE(t1.braket_symmetry() == BraKetSymmetry::invalid);
     REQUIRE(t1.label() == L"");
 
     REQUIRE_NOTHROW(Tensor(L"F", {L"i_1"}, {L"i_1"}));
@@ -27,6 +28,7 @@ TEST_CASE("Tensor", "[elements]") {
     REQUIRE(t2.ket_rank() == 1);
     REQUIRE(t2.rank() == 1);
     REQUIRE(t2.symmetry() == Symmetry::nonsymm);
+    REQUIRE(t2.braket_symmetry() == BraKetSymmetry::conjugate);
     REQUIRE(t2.label() == L"F");
 
     REQUIRE_NOTHROW(Tensor(L"N", {L"i_1"}, {}));
@@ -35,14 +37,16 @@ TEST_CASE("Tensor", "[elements]") {
     REQUIRE(t3.ket_rank() == 0);
     REQUIRE_THROWS(t3.rank());
     REQUIRE(t3.symmetry() == Symmetry::nonsymm);
+    REQUIRE(t3.braket_symmetry() == BraKetSymmetry::conjugate);
     REQUIRE(t3.label() == L"N");
 
-    REQUIRE_NOTHROW(Tensor(L"g", {Index{L"i_1"}, Index{L"i_2"}}, {Index{L"i_3"}, Index{L"i_4"}}, Symmetry::antisymm));
-    auto t4 = Tensor(L"g", {Index{L"i_1"}, Index{L"i_2"}}, {Index{L"i_3"}, Index{L"i_4"}}, Symmetry::antisymm);
+    REQUIRE_NOTHROW(Tensor(L"g", {Index{L"i_1"}, Index{L"i_2"}}, {Index{L"i_3"}, Index{L"i_4"}}, Symmetry::antisymm, BraKetSymmetry::symm));
+    auto t4 = Tensor(L"g", {Index{L"i_1"}, Index{L"i_2"}}, {Index{L"i_3"}, Index{L"i_4"}}, Symmetry::antisymm, BraKetSymmetry::symm);
     REQUIRE(t4.bra_rank() == 2);
     REQUIRE(t4.ket_rank() == 2);
     REQUIRE(t4.rank() == 2);
     REQUIRE(t4.symmetry() == Symmetry::antisymm);
+    REQUIRE(t4.braket_symmetry() == BraKetSymmetry::symm);
     REQUIRE(t4.label() == L"g");
   }  // SECTION("constructors")
 
