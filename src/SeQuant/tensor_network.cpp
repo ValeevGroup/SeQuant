@@ -361,6 +361,13 @@ TensorNetwork::make_bliss_graph() const {
   std::vector<VertexType> vertex_type(
       edges_.size());  // the size will be updated
 
+  // N.B. Colors 0 and 1 are reserved:
+  // 0 - bra vertex in braket-nonsymmetric tensors or bra+ket verices in braket-symmetric tensors
+  // 1 - ket vertex in braket-symmetric tensors
+  auto nonreserved_color = [](size_t color) -> bool {
+    return !(color == 0 || color == 1);
+  };
+
   // compute # of vertices
   size_t nv = 0;
   size_t index_cnt = 0;
@@ -378,7 +385,9 @@ TensorNetwork::make_bliss_graph() const {
     ++nv;  // each index is a vertex
     vertex_labels.at(index_cnt) = idx.to_latex();
     vertex_type.at(index_cnt) = VertexType::Index;
-    vertex_color.at(index_cnt) = idx.color();
+    const auto idx_color = idx.color();
+    assert(nonreserved_color(idx_color));
+    vertex_color.at(index_cnt) = idx_color;
     // each symmetric proto index bundle will have a vertex
     if (idx.has_proto_indices()) {
       assert(idx.symmetric_proto_indices());  // only symmetric protoindices are
@@ -396,7 +405,9 @@ TensorNetwork::make_bliss_graph() const {
         spbundle_label += L"}";
         vertex_labels.push_back(spbundle_label);
         vertex_type.push_back(VertexType::SPBundle);
-        vertex_color.push_back(idx.proto_indices_color());
+        const auto idx_proto_indices_color = idx.proto_indices_color();
+        assert(nonreserved_color(idx_proto_indices_color));
+        vertex_color.push_back(idx_proto_indices_color);
         spbundle_cnt++;
       }
     }
@@ -416,6 +427,7 @@ TensorNetwork::make_bliss_graph() const {
     vertex_type.emplace_back(VertexType::TensorCore);
     const auto t_color = boost::hash_value(tlabel);
     static_assert(sizeof(t_color) == sizeof(unsigned long int));
+    assert(nonreserved_color(t_color));
     vertex_color.push_back(t_color);
     // symmetric/antisymmetric tensors are represented by 3 more vertices:
     // - bra
@@ -433,7 +445,7 @@ TensorNetwork::make_bliss_graph() const {
           std::wstring(L"ket") + to_wstring(ket_rank(tref)) +
           ((symmetry(tref) == Symmetry::antisymm) ? L"a" : L"s"));
       vertex_type.push_back(VertexType::TensorKet);
-      vertex_color.push_back(0);
+      vertex_color.push_back(braket_symmetry(tref) == BraKetSymmetry::symm ? 0 : 1);
       vertex_labels.push_back(
           std::wstring(L"bk") +
           ((symmetry(tref) == Symmetry::antisymm) ? L"a" : L"s"));
@@ -452,7 +464,7 @@ TensorNetwork::make_bliss_graph() const {
         vertex_color.push_back(0);
         vertex_labels.push_back(std::wstring(L"ket") + pstr);
         vertex_type.push_back(VertexType::TensorKet);
-        vertex_color.push_back(0);
+        vertex_color.push_back(braket_symmetry(tref) == BraKetSymmetry::symm ? 0 : 1);
         vertex_labels.push_back(std::wstring(L"bk") + pstr);
         vertex_type.push_back(VertexType::TensorBraKet);
         vertex_color.push_back(t_color);
