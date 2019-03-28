@@ -462,91 +462,107 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
 
         // compute topological NormalOperator partitions
         if (use_topology_) {
-          container::map<size_t,size_t> nop_to_partition_idx;
-          int next_partition_idx = -1;
 
           // construct graph representation of the tensor product
           TensorNetwork tn(expr_input_->as<Product>().factors());
           auto [graph, vlabels, vcolors, vtypes] = tn.make_bliss_graph();
-
-          // identify vertex indices of NormalOperators
           const auto n = vlabels.size();
           assert(vtypes.size() == n);
-          const auto &nop_labels = NormalOperator<S>::labels();
-          const auto nop_labels_begin = begin(nop_labels);
-          const auto nop_labels_end = end(nop_labels);
+
+          // identify vertex indices of NormalOperators and Indices
           container::set<size_t> nop_vertex_idx;
-          for (size_t v = 0; v != n; ++v) {
-            if (vtypes[v] == TensorNetwork::VertexType::TensorCore &&
-                (std::find(nop_labels_begin, nop_labels_end, vlabels[v]) !=
-                 nop_labels_end)) {
-              auto insertion_result = nop_vertex_idx.insert(v);
-              assert(insertion_result.second);
+          container::set<size_t> idx_vertex_idx;
+          {
+            const auto &nop_labels = NormalOperator<S>::labels();
+            const auto nop_labels_begin = begin(nop_labels);
+            const auto nop_labels_end = end(nop_labels);
+            for (size_t v = 0; v != n; ++v) {
+              if (vtypes[v] == TensorNetwork::VertexType::TensorCore &&
+                  (std::find(nop_labels_begin, nop_labels_end, vlabels[v]) !=
+                   nop_labels_end)) {
+                auto insertion_result = nop_vertex_idx.insert(v);
+                assert(insertion_result.second);
+              }
+              if (vtypes[v] == TensorNetwork::VertexType::Index) {
+                auto insertion_result = idx_vertex_idx.insert(v);
+                assert(insertion_result.second);
+              }
             }
           }
 
-          // compute graph automorphisms and use them to determine groups of topologically equivalent NormalLoperators
+          // compute and save graph automorphism generators
           std::vector<std::vector<unsigned int>> aut_generators;
           {
             bliss::Stats stats;
             graph->set_splitting_heuristic(bliss::Graph::shs_fsm);
 
-            // provide a hook to the automorphism search that will determine operator partitions
-            std::tuple<decltype(nop_to_partition_idx)*,decltype(nop_vertex_idx)*,decltype(next_partition_idx)*> hook_payload = {&nop_to_partition_idx, &nop_vertex_idx, &next_partition_idx};
-            using hook_payload_type = decltype(hook_payload);
-            auto aut_hook = [](void *param, const unsigned int n,
-                               const unsigned int *aut) {
-              assert(param);
-              auto* payload_ptr = reinterpret_cast<hook_payload_type*>(param);
-              auto& nop_to_partition_idx = *std::get<0>(*payload_ptr);
-              auto& nop_vertex_idx = *std::get<1>(*payload_ptr);
-              auto& next_partition_idx = *std::get<2>(*payload_ptr);
+            std::vector<std::vector<unsigned int>> aut_generators;
+            auto save_aut = [&aut_generators](const unsigned int n,
+                                              const unsigned int* aut) {
+              aut_generators.emplace_back(aut, aut + n);
+            };
 
-              // update operator partitions
-              for(const auto nop1_idx: nop_vertex_idx) {
-                const auto nop2_idx = aut[nop1_idx];
-                if (nop2_idx != nop1_idx) {  // if the automorphism maps this operator to another ... they both must be in the same partition
-                  assert(nop_vertex_idx.find(nop2_idx) != nop_vertex_idx.end());
-                  auto nop1_partition_it = nop_to_partition_idx.find(nop1_idx);
-                  auto nop2_partition_it = nop_to_partition_idx.find(nop2_idx);
-                  const bool nop1_has_partition = nop1_partition_it != nop_to_partition_idx.end();
-                  const bool nop2_has_partition = nop2_partition_it != nop_to_partition_idx.end();
-                  if (nop1_has_partition && nop2_has_partition) {  // both are in partitions? make sure they are in the same partition. N.B. this may leave gaps in partition indices ... no biggie
-                    const auto nop1_part_idx = nop1_partition_it->second;
-                    const auto nop2_part_idx = nop2_partition_it->second;
-                    if (nop1_part_idx != nop2_part_idx) {  // if they have different partition indices, change the larger of the two indices to match the lower
-                      const auto target_part_idx = std::min(nop1_part_idx, nop2_part_idx);
-                      for(auto& v: nop_to_partition_idx) {
-                        if (v.second == nop1_part_idx || v.second == nop2_part_idx)
+            graph->find_automorphisms(stats, &bliss::aut_hook<decltype(save_aut)>, &save_aut);
+          }
+
+          // use automorphisms to determine groups of topologically equivalent NormalLoperators and Indices
+          // this partitions vertices into partitions (only nontrivial partitions are reported)
+          auto compute_partitions = [&aut_generators](const container::set<size_t>& vertices) {
+            container::map<size_t, size_t> vertex_to_partition_idx;
+            int next_partition_idx = -1;
+
+            // using each automorphism generator
+            for (auto &&aut : aut_generators) {
+              // update partitions
+              for (const auto v1 : vertices) {
+                const auto v2 = aut[v1];
+                if (v2 !=
+                    v1) {  // if the automorphism maps this vertex to another ... they both must be in the same partition
+                  assert(vertices.find(v2) != vertices.end());
+                  auto v1_partition_it = vertex_to_partition_idx.find(v1);
+                  auto v2_partition_it = vertex_to_partition_idx.find(v2);
+                  const bool v1_has_partition =
+                      v1_partition_it != vertex_to_partition_idx.end();
+                  const bool v2_has_partition =
+                      v2_partition_it != vertex_to_partition_idx.end();
+                  if (v1_has_partition &&
+                      v2_has_partition) {  // both are in partitions? make sure they are in the same partition. N.B. this may leave gaps in partition indices ... no biggie
+                    const auto v1_part_idx = v1_partition_it->second;
+                    const auto v2_part_idx = v2_partition_it->second;
+                    if (v1_part_idx !=
+                        v2_part_idx) {  // if they have different partition indices, change the larger of the two indices to match the lower
+                      const auto target_part_idx =
+                          std::min(v1_part_idx, v2_part_idx);
+                      for (auto &v : vertex_to_partition_idx) {
+                        if (v.second == v1_part_idx || v.second == v2_part_idx)
                           v.second = target_part_idx;
                       }
                     }
-                  }
-                  else if (nop1_has_partition) {  // only nop1 is in a partition? place nop2 in it
-                    const auto nop1_part_idx = nop1_partition_it->second;
-                    nop_to_partition_idx.emplace(nop2_idx, nop1_part_idx);
-                  }
-                  else if (nop2_has_partition) {  // only nop2 is in a partition? place nop1 in it
-                    const auto nop2_part_idx = nop2_partition_it->second;
-                    nop_to_partition_idx.emplace(nop1_idx, nop2_part_idx);
-                  }
-                  else {  // neither is in a partition? place both in the next available partition
+                  } else if (v1_has_partition) {  // only v1 is in a partition? place v2 in it
+                    const auto v1_part_idx = v1_partition_it->second;
+                    vertex_to_partition_idx.emplace(v2, v1_part_idx);
+                  } else if (v2_has_partition) {  // only v2 is in a partition? place v1 in it
+                    const auto v2_part_idx = v2_partition_it->second;
+                    vertex_to_partition_idx.emplace(v1, v2_part_idx);
+                  } else {  // neither is in a partition? place both in the next available partition
                     const size_t target_part_idx = ++next_partition_idx;
-                    nop_to_partition_idx.emplace(nop1_idx, target_part_idx);
-                    nop_to_partition_idx.emplace(nop2_idx, target_part_idx);
+                    vertex_to_partition_idx.emplace(v1, target_part_idx);
+                    vertex_to_partition_idx.emplace(v2, target_part_idx);
                   }
                 }
               }
-            };
-            graph->find_automorphisms(stats, aut_hook, &hook_payload);
-          }
+            }
+            return std::make_tuple(vertex_to_partition_idx, next_partition_idx);
+          };
+
+          auto [nop_to_partition_idx, max_nop_partition_idx] = compute_partitions(nop_vertex_idx);
 
           // convert nop_to_partition_idx to partition lists, if there were any partitions found
           if (!nop_to_partition_idx.empty()) {
             container::vector<container::vector<size_t>> nop_partitions;
 
-            assert(next_partition_idx > -1);
-            const size_t max_partition_index = next_partition_idx;
+            assert(max_nop_partition_idx > -1);
+            const size_t max_partition_index = max_nop_partition_idx;
             nop_partitions.reserve(max_partition_index);
             // iterate over all partition indices ... note that there may be gaps so count the actual partitions
             size_t partition_cnt = 0;
