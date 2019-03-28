@@ -531,7 +531,7 @@ TensorNetwork::make_bliss_graph() const {
     ++tensor_cnt;
   });
 
-  // color vertices
+  // compress vertex colors to 32 bits, as required by Bliss, by hashing
   size_t v_cnt = 0;
   for (auto &&color : vertex_color) {
     auto hash6432shift = [](size_t key) {
@@ -544,7 +544,7 @@ TensorNetwork::make_bliss_graph() const {
       key = key ^ (key >> 22);
       return int(key);
     };
-    graph->change_color(v_cnt, color == 0 ? 0 : hash6432shift(color));
+    graph->change_color(v_cnt, hash6432shift(color));
     ++v_cnt;
   }
 

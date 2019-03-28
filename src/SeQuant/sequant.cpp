@@ -9,7 +9,7 @@ SeQuant &default_context_instance() {
   return instance_;
 }
 
-}  // anonymous namespace
+}  // namespace detail
 
 const SeQuant &get_default_context() {
   return detail::default_context_instance();
