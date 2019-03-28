@@ -7,8 +7,8 @@
 #include <iostream>
 #include "../../src/SeQuant/tensor_network.hpp"
 #include "../../src/SeQuant/op.hpp"
+#include "../../src/SeQuant/bliss.hpp"
 #include "../../src/domain/mbpt/sr/sr.hpp"
-#include "../../external/bliss/graph.hh"
 
 TEST_CASE("TensorNetwork", "[elements]") {
 
@@ -195,16 +195,12 @@ TEST_CASE("TensorNetwork", "[elements]") {
       bliss::Stats stats;
       graph->set_splitting_heuristic(bliss::Graph::shs_fsm);
 
-      auto save_aut = [](void* param, const unsigned int n,
-                         const unsigned int* aut) {
-        assert(param);
-        auto* aut_generators =
-            reinterpret_cast<std::vector<std::vector<unsigned int>>*>(param);
-        aut_generators->emplace_back(aut, aut + n);
-      };
-
       std::vector<std::vector<unsigned int>> aut_generators;
-      graph->find_automorphisms(stats, save_aut, &aut_generators);
+      auto save_aut = [&aut_generators](const unsigned int n,
+                                        const unsigned int* aut) {
+        aut_generators.emplace_back(aut, aut + n);
+      };
+      graph->find_automorphisms(stats, &bliss::aut_hook<decltype(save_aut)>, &save_aut);
 
       // print automorphisms
       auto print_auts = [&aut_generators](auto&& stream, auto&& vlabels,

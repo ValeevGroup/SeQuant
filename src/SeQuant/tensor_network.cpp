@@ -2,7 +2,7 @@
 // Created by Eduard Valeyev on 2019-02-26.
 //
 
-#include "../../external/bliss/graph.hh"
+#include "../SeQuant/bliss.hpp"
 #include "./tensor_network.hpp"
 #include "./utility.hpp"
 

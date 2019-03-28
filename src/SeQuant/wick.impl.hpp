@@ -11,7 +11,7 @@
 #endif
 
 #include "../SeQuant/tensor_network.hpp"
-#include "../../external/bliss/graph.hh"
+#include "../SeQuant/bliss.hpp"
 
 namespace sequant {
 

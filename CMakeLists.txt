@@ -68,6 +68,7 @@ add_library(SeQuant
         src/SeQuant/tensor_network.hpp
         src/SeQuant/runtime.hpp
         src/SeQuant/utility.hpp
+        src/SeQuant/bliss.hpp
         src/domain/mbpt/sr/sr.cpp
         src/domain/mbpt/sr/sr.hpp
         src/domain/mbpt/spin.hpp
