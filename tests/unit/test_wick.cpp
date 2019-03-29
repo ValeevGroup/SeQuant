@@ -260,11 +260,14 @@ TEST_CASE("WickTheorem", "[algorithms]") {
                           V)) *
           ex<FNOperator>(WstrList{L"a_2"}, WstrList{}, V);
       auto wick = FWickTheorem{input};
-      auto result =
-          wick.full_contractions(true)
+      wick.full_contractions(true)
               .spinfree(false)
               .set_external_indices(IndexList{L"i_1", L"a_3", L"a_4", L"a_2"})
-              .compute();
+              .use_topology(true);
+      REQUIRE_THROWS_AS(wick.compute(), std::invalid_argument);  // use_topology requires that every index within bra/ket of a NormalOperator
+      wick.use_topology(false);
+      ExprPtr result;
+      REQUIRE_NOTHROW(result = wick.compute());
       //std::wcout << "result = " << to_latex(result) << std::endl;
       REQUIRE(to_latex(result) == L"{{{-1}} \\times {g^{{i_1}{a_2}}_{{a_3}{a_4}}}}");
     }
