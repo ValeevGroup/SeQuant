@@ -361,11 +361,19 @@ TensorNetwork::make_bliss_graph() const {
   std::vector<VertexType> vertex_type(
       edges_.size());  // the size will be updated
 
-  // N.B. Colors 0 and 1 are reserved:
-  // 0 - bra vertex in braket-nonsymmetric tensors or bra+ket verices in braket-symmetric tensors
-  // 1 - ket vertex in braket-symmetric tensors
-  auto nonreserved_color = [](size_t color) -> bool {
-    return !(color == 0 || color == 1);
+  // N.B. Colors [0, 2 max rank + ext_indices_.size()) are reserved:
+  // 0 - the bra vertex (for particle 0, if bra is nonsymm, or for the entire bra, if (anti)symm)
+  // 1 - the bra vertex for particle 1, if bra is nonsymm
+  // ...
+  // max_rank - the ket vertex (for particle 0, if ket is nonsymm, or for the entire ket, if (anti)symm)
+  // max_rank+1 - the ket vertex for particle 1, if ket is nonsymm
+  // ...
+  // 2 max_rank - first external index
+  // 2 max_rank + 1 - second external index
+  // ...
+  // N.B. For braket-symmetric tensors the ket vertices use the same indices as the bra vertices
+  auto nonreserved_color = [this](size_t color) -> bool {
+    return color >= 2*max_rank + ext_indices_.size();
   };
 
   // compute # of vertices
@@ -385,9 +393,17 @@ TensorNetwork::make_bliss_graph() const {
     ++nv;  // each index is a vertex
     vertex_labels.at(index_cnt) = idx.to_latex();
     vertex_type.at(index_cnt) = VertexType::Index;
-    const auto idx_color = idx.color();
-    assert(nonreserved_color(idx_color));
-    vertex_color.at(index_cnt) = idx_color;
+    // assign color: external indices use reserved colors
+    const auto ext_index_it = ext_indices_.find(idx);
+    if (ext_index_it == ext_indices_.end()) {  // internal index? use Index::color
+      const auto idx_color = idx.color();
+      assert(nonreserved_color(idx_color));
+      vertex_color.at(index_cnt) = idx_color;
+    }
+    else {
+      const auto ext_index_rank = ext_index_it - ext_indices_.begin();
+      vertex_color.at(index_cnt) = 2*max_rank + ext_index_rank;
+    }
     // each symmetric proto index bundle will have a vertex
     if (idx.has_proto_indices()) {
       assert(idx.symmetric_proto_indices());  // only symmetric protoindices are
@@ -445,7 +461,7 @@ TensorNetwork::make_bliss_graph() const {
           std::wstring(L"ket") + to_wstring(ket_rank(tref)) +
           ((symmetry(tref) == Symmetry::antisymm) ? L"a" : L"s"));
       vertex_type.push_back(VertexType::TensorKet);
-      vertex_color.push_back(braket_symmetry(tref) == BraKetSymmetry::symm ? 0 : 1);
+      vertex_color.push_back(braket_symmetry(tref) == BraKetSymmetry::symm ? 0 : max_rank);
       vertex_labels.push_back(
           std::wstring(L"bk") +
           ((symmetry(tref) == Symmetry::antisymm) ? L"a" : L"s"));
@@ -456,15 +472,16 @@ TensorNetwork::make_bliss_graph() const {
     // max(bra_rank(),ket_rank())
     else {
       const auto rank = std::max(bra_rank(tref), ket_rank(tref));
+      assert(rank<=max_rank);
       for (size_t p = 0; p != rank; ++p) {
         nv += 3;
         auto pstr = to_wstring(p + 1);
         vertex_labels.push_back(std::wstring(L"bra") + pstr);
         vertex_type.push_back(VertexType::TensorBra);
-        vertex_color.push_back(0);
+        vertex_color.push_back(p);
         vertex_labels.push_back(std::wstring(L"ket") + pstr);
         vertex_type.push_back(VertexType::TensorKet);
-        vertex_color.push_back(braket_symmetry(tref) == BraKetSymmetry::symm ? 0 : 1);
+        vertex_color.push_back(braket_symmetry(tref) == BraKetSymmetry::symm ? p : p+max_rank);
         vertex_labels.push_back(std::wstring(L"bk") + pstr);
         vertex_type.push_back(VertexType::TensorBraKet);
         vertex_color.push_back(t_color);

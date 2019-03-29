@@ -25,6 +25,8 @@ namespace sequant {
 class TensorNetwork {
  public:
 
+  constexpr static size_t max_rank = 256;
+
   /// @brief Edge in a TensorNetwork = the Index annotating it + a pair of indices to identify which Tensor terminals it's connected to
 
   /// @note tensor terminals in a sequence of tensors are indexed as follows:
@@ -32,7 +34,7 @@ class TensorNetwork {
   /// of 7th tensor object in the sequence)
   /// - <0 for ket terminals
   /// - 0 if free (not attached to any tensor objects)
-  /// - position records the terminals location in the sequence of bra/ket
+  /// - position records the terminal's location in the sequence of bra/ket
   /// terminals (always 0 for symmetric/antisymmetric tensors) Terminal indices
   /// are sorted by the tensor index (i.e. by the absolute value of the terminal
   /// index), followed by position
@@ -140,7 +142,8 @@ class TensorNetwork {
     }
   }
 
-  /// @return sequence container of tensors
+  /// @return const reference to the sequence of tensors
+  /// @note the order of tensors may be different from that provided as input
   const auto &tensors() const { return tensors_; }
 
   /// @param cardinal_tensor_labels move all tensors with these labels to the
@@ -185,8 +188,9 @@ class TensorNetwork {
   void init_edges() const;
 
  public:
-  /// accessor for Edge objects
-  /// @return a set of Edge objects, sorted by their Index's full label
+  /// accessor for the Edge object sequence
+  /// @return const reference to the sequence container of Edge objects, sorted by their Index's full label
+  /// @sa Edge
   const auto& edges() const {
     init_edges();
     return edges_;
