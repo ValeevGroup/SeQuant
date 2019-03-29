@@ -5,6 +5,8 @@
 #ifndef SEQUANT_UTILITY_HPP
 #define SEQUANT_UTILITY_HPP
 
+#include <boost/locale/encoding_utf.hpp>
+
 namespace sequant {
 
 /// @brief Singleton base class
@@ -102,6 +104,17 @@ struct Logger : public Singleton<Logger> {
     }
   }
 };
+
+/// @brief (potentially) narrowing character converter.
+///
+/// Converts a UTF-8 encoded std::basic_string<Char> to a UTF-8 encoded std::basic_string<char>
+/// \tparam Char character type: wchar_t or char
+template <typename Char>
+inline std::basic_string<char> to_string(const std::basic_string<Char>& str_utf8) {
+  using boost::locale::conv::utf_to_utf;
+  return utf_to_utf<char>(str_utf8.c_str(),
+                          str_utf8.c_str() + str_utf8.size());
+}
 
 }
 
