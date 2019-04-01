@@ -3,11 +3,12 @@
 
 #include "space.hpp"
 #include "attr.hpp"
+#include "index.hpp"
 
 namespace sequant {
 
 /// Specifies second quantization context, such as vacuum choice, whether index
-/// spaces are orthonormal, etc.
+/// spaces are orthonormal, sizes of index spaces, etc.
 class SeQuant {
  public:
   SeQuant() = default;
@@ -23,6 +24,8 @@ class SeQuant {
   Vacuum vacuum() const { return vacuum_; }
   IndexSpaceMetric metric() const { return metric_; }
   BraKetSymmetry braket_symmetry() const { return braket_symmetry_; }
+  /// @return the IndexRegistry object
+  std::shared_ptr<IndexRegistry> index_registry() const;
 
  private:
   Vacuum vacuum_ = Vacuum::SingleProduct;
