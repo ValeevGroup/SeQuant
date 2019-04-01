@@ -5,54 +5,14 @@
 #ifndef SEQUANT_SRCC_HPP
 #define SEQUANT_SRCC_HPP
 
-#include "../../../SeQuant/op.hpp"
-#include "../../../SeQuant/tensor.hpp"
-#include "../../../SeQuant/wick.hpp"
+#include "../../../core/op.hpp"
+#include "../../../core/tensor.hpp"
+#include "../../../core/wick.hpp"
 #include "../op.hpp"
 
 namespace sequant {
 namespace mbpt {
 namespace sr {
-
-enum class OpClass { ex, deex, gen };
-
-inline std::wstring to_wstring(OpType op) {
-  switch (op) {
-    case OpType::f:
-      return L"f";
-    case OpType::g:
-      return L"g";
-    case OpType::t:
-      return L"t";
-    case OpType::l:
-      return L"λ";
-    case OpType::A:
-      return L"A";
-    case OpType::L:
-      return L"L";
-    case OpType::R:
-      return L"R";
-    default:
-      throw std::invalid_argument("to_wstring(OpType op): invalid op");
-  }
-}
-
-inline OpClass to_class(OpType op) {
-  switch (op) {
-    case OpType::f:
-    case OpType::g:
-      return OpClass::gen;
-    case OpType::t:
-    case OpType::R:
-      return OpClass::ex;
-    case OpType::l:
-    case OpType::A:
-    case OpType::L: return OpClass::deex;
-    default:
-      throw std::invalid_argument("to_class(OpType op): invalid op");
-  }
-}
-
 namespace so {
 
 inline constexpr size_t fac(std::size_t n) {

@@ -4,8 +4,8 @@
 
 #include <iostream>
 
-#include "../../src/SeQuant/timer.hpp"
-#include "../../src/SeQuant/wick.hpp"
+#include "../../src/SeQuant/core/timer.hpp"
+#include "../../src/SeQuant/core/wick.hpp"
 #include "catch.hpp"
 
 // comment out if want to run long tests

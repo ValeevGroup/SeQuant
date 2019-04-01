@@ -5,7 +5,7 @@
 #include "catch.hpp"
 
 #include <iostream>
-#include "../../src/SeQuant/op.hpp"
+#include "../../src/SeQuant/core/op.hpp"
 
 TEST_CASE("Op", "[elements]") {
 

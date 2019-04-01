@@ -4,8 +4,8 @@
 
 #include "catch.hpp"
 
-#include "../../src/SeQuant/ranges.hpp"
-#include "../../src/SeQuant/op.hpp"
+#include "../../src/SeQuant/core/op.hpp"
+#include "../../src/SeQuant/core/ranges.hpp"
 
 TEST_CASE("Iterators", "[elements]") {
 

@@ -4,10 +4,10 @@
 #include <boost/numeric/interval.hpp>
 #include <boost/math/special_functions/factorials.hpp>
 
-#include "../src/domain/mbpt/spin.hpp"
-#include "../src/domain/mbpt/convention.hpp"
-#include "../src/domain/mbpt/sr/sr.hpp"
-#include "../src/SeQuant/timer.hpp"
+#include <SeQuant/core/timer.hpp>
+#include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/spin.hpp>
+#include <SeQuant/domain/mbpt/sr/sr.hpp>
 
 using namespace sequant;
 

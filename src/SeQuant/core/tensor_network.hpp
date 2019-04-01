@@ -5,9 +5,9 @@
 #ifndef SEQUANT_TENSOR_NETWORK_H
 #define SEQUANT_TENSOR_NETWORK_H
 
-#include "../SeQuant/container.hpp"
-#include "../SeQuant/abstract_tensor.hpp"
-#include "../SeQuant/tensor.hpp"
+#include "abstract_tensor.hpp"
+#include "container.hpp"
+#include "tensor.hpp"
 
 // forward declarations
 namespace bliss {
@@ -151,9 +151,19 @@ class TensorNetwork {
   /// @param fast if true (default), does fast canonicalization that is only
   /// optimal if all tensors are distinct; set to false to perform complete
   /// canonicalization
+  /// @return biproduct of canonicalization (e.g. phase); if none, returns nullptr
   ExprPtr canonicalize(
       const container::vector<std::wstring> &cardinal_tensor_labels = {},
       bool fast = true);
+
+  /// Factorizes tensor network
+  /// @return sequence of binary products; each element encodes the tensors to be
+  ///         multiplied (values >0 refer to the tensors in tensors(),
+  ///         values <0 refer to the elements of this sequence. E.g. sequences @c {{0,1},{-1,2},{-2,3}}
+  ///         , @c {{0,2},{1,3},{-1,-2}} , @c {{3,1},{2,-1},{0,-2}}
+  ///         encode the following respective factorizations @c (((T0*T1)*T2)*T3) , @c ((T0*T2)*(T1*T3)) ,
+  ///         and @c (((T3*T1)*T2)*T0) .
+  container::vector<std::pair<long, long>> factorize();
 
  private:
   // source tensors and indices

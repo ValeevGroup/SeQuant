@@ -6,7 +6,7 @@
 #define SEQUANT_WOLFRAM_HPP
 
 #include <type_traits>
-#include "../SeQuant/meta.hpp"
+#include "meta.hpp"
 
 namespace sequant {
 

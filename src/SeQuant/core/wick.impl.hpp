@@ -10,9 +10,9 @@
 #define SEQUANT_HAS_EXECUTION_HEADER
 #endif
 
-#include "../SeQuant/tensor_network.hpp"
-#include "../SeQuant/utility.hpp"
-#include "../SeQuant/bliss.hpp"
+#include "bliss.hpp"
+#include "tensor_network.hpp"
+#include "utility.hpp"
 
 namespace sequant {
 

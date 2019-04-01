@@ -2,8 +2,8 @@
 // Created by Eduard Valeyev on 2019-02-19.
 //
 
-#include "../../src/SeQuant/timer.hpp"
-#include "../../src/domain/mbpt/sr/sr.hpp"
+#include "../../src/SeQuant/core/timer.hpp"
+#include "../../src/SeQuant/domain/mbpt/sr/sr.hpp"
 #include "catch.hpp"
 
 TEST_CASE("MBPT", "[mbpt]") {

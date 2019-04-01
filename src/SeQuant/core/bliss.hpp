@@ -5,7 +5,7 @@
 #ifndef SEQUANT_BLISS_HPP
 #define SEQUANT_BLISS_HPP
 
-#include "../../external/bliss/graph.hh"
+#include "../../../external/bliss/graph.hh"
 
 namespace bliss {
 

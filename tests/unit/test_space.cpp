@@ -4,7 +4,7 @@
 
 #include "catch.hpp"
 
-#include "../../src/SeQuant/space.hpp"
+#include "../../src/SeQuant/core/space.hpp"
 
 TEST_CASE("IndexSpace", "[elements]") {
   using namespace sequant;

@@ -4,8 +4,8 @@
 
 #include "catch.hpp"
 
-#include "../../src/SeQuant/index.hpp"
-#include "../../src/SeQuant/latex.hpp"
+#include "../../src/SeQuant/core/index.hpp"
+#include "../../src/SeQuant/core/latex.hpp"
 
 TEST_CASE("Index", "[elements]") {
 

@@ -5,8 +5,8 @@
 #ifndef SEQUANT_SPIN_HPP
 #define SEQUANT_SPIN_HPP
 
-#include "../../SeQuant/expr.hpp"
-#include "../../SeQuant/tensor.hpp"
+#include "../../core/expr.hpp"
+#include "../../core/tensor.hpp"
 
 namespace sequant {
 

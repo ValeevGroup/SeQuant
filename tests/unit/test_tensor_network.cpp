@@ -5,10 +5,10 @@
 #include "catch.hpp"
 
 #include <iostream>
-#include "../../src/SeQuant/tensor_network.hpp"
-#include "../../src/SeQuant/op.hpp"
-#include "../../src/SeQuant/bliss.hpp"
-#include "../../src/domain/mbpt/sr/sr.hpp"
+#include "../../src/SeQuant/core/bliss.hpp"
+#include "../../src/SeQuant/core/op.hpp"
+#include "../../src/SeQuant/core/tensor_network.hpp"
+#include "../../src/SeQuant/domain/mbpt/sr/sr.hpp"
 
 TEST_CASE("TensorNetwork", "[elements]") {
 

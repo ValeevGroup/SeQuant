@@ -2,10 +2,10 @@
 // Created by Eduard Valeyev on 2019-04-01.
 //
 
-#include "../../domain/mbpt/convention.hpp"
-#include "../../domain/mbpt/op.hpp"
-#include "../../SeQuant/index.hpp"
-#include "../../SeQuant/tensor.hpp"
+#include "convention.hpp"
+#include "../../core/index.hpp"
+#include "../../core/tensor.hpp"
+#include "op.hpp"
 
 namespace sequant {
 namespace mbpt {
