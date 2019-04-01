@@ -630,41 +630,6 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
           int max_index_partition_idx;
           std::tie(index_to_partition_idx, max_index_partition_idx) = compute_partitions(index_vertex_idx, exclude_index_vertex_pair);
           {
-            container::vector<container::vector<size_t>> index_partitions;
-
-            assert(max_index_partition_idx > -1);
-            const size_t max_partition_index = max_index_partition_idx;
-            index_partitions.reserve(max_partition_index);
-            // iterate over all partition indices ... note that there may be gaps so count the actual partitions
-            size_t partition_cnt = 0;
-            for(size_t p=0; p<=max_partition_index; ++p) {
-              bool p_found = false;
-              for(const auto& part: index_to_partition_idx) {
-                if (part.second == p) {
-                  // !!Indices are at the front of the vertex list, so no need to map vertex to index list!!
-                  assert(part.first == index_vertex_idx.find(part.first) - index_vertex_idx.begin());
-                  const auto index_idx = part.first;
-                  if (p_found == false) {  // first time this is found
-                    index_partitions.emplace_back(container::vector<size_t>{static_cast<size_t>(index_idx)});
-                  }
-                  else
-                    index_partitions[partition_cnt].emplace_back(index_idx);
-                  p_found = true;
-                }
-              }
-              if (p_found) ++partition_cnt;
-            }
-
-//            std::wcout << "topological Index partitions:{\n";
-//            ranges::for_each(index_partitions, [](auto&& part) {
-//              std::wcout << "{";
-//              ranges::for_each(part, [](auto&& p) {
-//                std::wcout << p << " ";
-//              });
-//              std::wcout << "}";
-//            });
-//            std::wcout << "}" << std::endl;
-
             // use_topology_=true in full contractions will assume that all
             // equivalent indices in NormalOperator's bra or ket are topologically
             // equivalent (see Hugenholtz vertex and associated code)
