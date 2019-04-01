@@ -5,6 +5,9 @@
 #ifndef SEQUANT_OP_HPP
 #define SEQUANT_OP_HPP
 
+#include <string>
+#include <vector>
+
 namespace sequant {
 namespace mbpt {
 
