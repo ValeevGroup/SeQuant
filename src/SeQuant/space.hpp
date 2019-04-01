@@ -214,20 +214,6 @@ class IndexSpace {
     instances_.emplace(std::make_pair(attr, IndexSpace(attr)));
   }
 
-  /// @brief returns the instance of an IndexSpace object
-  /// @param key string key describing a particular space
-  static void register_standard_instances() {
-    const bool do_not_throw = false;
-    register_instance(L"i", active_occupied, nullqns, do_not_throw);
-    register_instance(L"m", occupied, nullqns, do_not_throw);
-    register_instance(L"a", active_unoccupied, nullqns, do_not_throw);
-    register_instance(L"e", unoccupied, nullqns, do_not_throw);
-    register_instance(L"p", all, nullqns, do_not_throw);
-    register_instance(L"⍺'", other_unoccupied, nullqns, do_not_throw);
-    register_instance(L"⍺", complete_unoccupied, nullqns, do_not_throw);
-    register_instance(L"κ", complete, nullqns, do_not_throw);
-  }
-
   static bool instance_exists(std::wstring_view key) noexcept {
     return instance_exists(to_attr(reduce_key(key)));
   }

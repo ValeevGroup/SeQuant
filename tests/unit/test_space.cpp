@@ -16,8 +16,8 @@ TEST_CASE("IndexSpace", "[elements]") {
         IndexSpace::register_instance(L"p_1", IndexSpace::all));  // ditto
   }
 
+  // these are loaded in test_main.cpp
   SECTION("register_standard_instances") {
-    REQUIRE_NOTHROW(IndexSpace::register_standard_instances());  // can do twice
     REQUIRE(IndexSpace::instance_exists(L"i"));
     REQUIRE(IndexSpace::instance_exists(L"m"));
     REQUIRE(IndexSpace::instance_exists(L"p"));

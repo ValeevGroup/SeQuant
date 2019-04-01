@@ -69,9 +69,12 @@ add_library(SeQuant
         src/SeQuant/runtime.hpp
         src/SeQuant/utility.hpp
         src/SeQuant/bliss.hpp
+        src/domain/mbpt/convention.cpp
+        src/domain/mbpt/convention.hpp
+        src/domain/mbpt/op.hpp
+        src/domain/mbpt/spin.hpp
         src/domain/mbpt/sr/sr.cpp
         src/domain/mbpt/sr/sr.hpp
-        src/domain/mbpt/spin.hpp
         src/SeQuant/timer.hpp)
 target_link_libraries(SeQuant Range-V3 Boost bliss)
 

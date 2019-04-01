@@ -7,7 +7,7 @@
 #include "../../src/SeQuant/op.hpp"
 #include "../../src/SeQuant/space.hpp"
 #include "../../src/SeQuant/utility.hpp"
-#include "../../src/domain/mbpt/op.hpp"
+#include "../../src/domain/mbpt/convention.hpp"
 #include "catch.hpp"
 
 int main( int argc, char* argv[] )
@@ -27,13 +27,9 @@ int main( int argc, char* argv[] )
   std::wcerr.imbue(std::locale("en_US.UTF-8"));
   std::wcout.sync_with_stdio(true);
   std::wcerr.sync_with_stdio(true);
-  IndexSpace::register_standard_instances();
   detail::OpIdRegistrar op_id_registrar;
 
-  // load the default cardinal tensor labels for MBPT ...
-  // tensors that do not appear on this list will appear after Tensors with these
-  // labels
-  TensorCanonicalizer::set_cardinal_tensor_labels(mbpt::cardinal_tensor_labels);
+  mbpt::set_default_convention();
 
   // uncomment to enable verbose output ...
   //Logger::set_instance(1);
