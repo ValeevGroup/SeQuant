@@ -41,6 +41,8 @@ matrix:
           packages:
             - *base_packages
             - clang-7
+            - libc++-7-dev
+            - libc++abi-7-dev
     - compiler: clang
       env: CLANG_VERSION=7 BUILD_TYPE=Release
       addons:
@@ -51,6 +53,8 @@ matrix:
           packages:
             - *base_packages
             - clang-7
+            - libc++-7-dev
+            - libc++abi-7-dev
     - compiler: clang
       env: CLANG_VERSION=8 BUILD_TYPE=Debug
       addons:
@@ -61,6 +65,8 @@ matrix:
           packages:
             - *base_packages
             - clang-8
+            - libc++-8-dev
+            - libc++abi-8-dev
     - compiler: clang
       env: CLANG_VERSION=8 BUILD_TYPE=Release
       addons:
@@ -71,6 +77,8 @@ matrix:
           packages:
             - *base_packages
             - clang-8
+            - libc++-8-dev
+            - libc++abi-8-dev
     - compiler: gcc
       env: GCC_VERSION=8 BUILD_TYPE=Debug
       addons:
