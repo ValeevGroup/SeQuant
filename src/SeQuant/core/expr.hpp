@@ -5,6 +5,7 @@
 #ifndef SEQUANT_EXPR_HPP
 #define SEQUANT_EXPR_HPP
 
+#include <atomic>
 #include <complex>
 #include <iostream>
 #include <memory>
