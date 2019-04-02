@@ -12,6 +12,7 @@
 #  include <experimental/optional>
 namespace std {
 using std::experimental::optional;
+using std::experimental::nullopt;
 }
 # else
 #  error "std::optional is not available even though C++17 is supported"

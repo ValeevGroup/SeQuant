@@ -31,24 +31,6 @@ branches:
 matrix:
   fast_finish: true
   include:
-    - compiler: gcc
-      env: GCC_VERSION=8 BUILD_TYPE=Debug
-      addons:
-        apt:
-          sources:
-           - *base_sources
-          packages:
-           - *base_packages
-           - g++-8
-    - compiler: gcc
-      env: GCC_VERSION=8 BUILD_TYPE=Release
-      addons:
-        apt:
-          sources:
-           - *base_sources
-          packages:
-           - *base_packages
-           - g++-8
     - compiler: clang
       env: CLANG_VERSION=7 BUILD_TYPE=Debug
       addons:
@@ -89,6 +71,24 @@ matrix:
           packages:
             - *base_packages
             - clang-8
+    - compiler: gcc
+      env: GCC_VERSION=8 BUILD_TYPE=Debug
+      addons:
+        apt:
+          sources:
+            - *base_sources
+          packages:
+            - *base_packages
+            - g++-8
+    - compiler: gcc
+      env: GCC_VERSION=8 BUILD_TYPE=Release
+      addons:
+        apt:
+          sources:
+            - *base_sources
+          packages:
+            - *base_packages
+            - g++-8
 
 
 before_install:
