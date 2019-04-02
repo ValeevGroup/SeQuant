@@ -1,5 +1,6 @@
 #! /bin/sh
 
+${TRAVIS_BUILD_DIR}/bin/build-boost-$TRAVIS_OS_NAME.sh
 ${TRAVIS_BUILD_DIR}/bin/build-rangev3-$TRAVIS_OS_NAME.sh
 
 # Exit on error
@@ -43,6 +44,7 @@ cmake ${TRAVIS_BUILD_DIR} \
     -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" \
     -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
     -DRANGEV3_DIR="${INSTALL_PREFIX}/range-v3" \
+    -DBOOST_ROOT="${INSTALL_PREFIX}/boost" \
     -DCMAKE_CXX_FLAGS="${CXX_FLAGS} ${EXTRAFLAGS} ${CODECOVCXXFLAGS}"
 
 ### test within build tree

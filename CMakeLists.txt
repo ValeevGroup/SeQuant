@@ -8,7 +8,8 @@ add_library(Range-V3 INTERFACE IMPORTED)
 set_property(TARGET Range-V3 PROPERTY
              INTERFACE_INCLUDE_DIRECTORIES ${RANGEV3_DIR}/include)
 
-find_package(Boost)
+# need Boost.ContainerHash
+find_package(Boost 1.67 REQUIRED)
 add_library(Boost INTERFACE IMPORTED)
 set_property(TARGET Boost PROPERTY
         INTERFACE_INCLUDE_DIRECTORIES ${Boost_INCLUDE_DIR})
