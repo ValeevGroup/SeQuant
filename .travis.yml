@@ -12,6 +12,7 @@ addons:
       - ubuntu-toolchain-r-test
     sources: &clang_sources
       - llvm-toolchain-xenial-7
+      - llvm-toolchain-xenial-8
     packages: &base_packages
     - libboost-all-dev
     - cmake
@@ -48,26 +49,6 @@ matrix:
           packages:
            - *base_packages
            - g++-7
-    - compiler: clang
-      env: CLANG_VERSION=7 BUILD_TYPE=Debug
-      addons:
-        apt:
-          sources:
-           - *base_sources
-           - *clang_sources
-          packages:
-           - *base_packages
-           - clang-7
-    - compiler: clang
-      env: CLANG_VERSION=7 BUILD_TYPE=Release
-      addons:
-        apt:
-          sources:
-           - *base_sources
-           - *clang_sources
-          packages:
-           - *base_packages
-           - clang-7
     - compiler: gcc
       env: GCC_VERSION=8 BUILD_TYPE=Debug
       addons:
@@ -86,6 +67,46 @@ matrix:
           packages:
            - *base_packages
            - g++-8
+    - compiler: clang
+      env: CLANG_VERSION=7 BUILD_TYPE=Debug
+      addons:
+        apt:
+          sources:
+            - *base_sources
+            - *clang_sources
+          packages:
+            - *base_packages
+            - clang-7
+    - compiler: clang
+      env: CLANG_VERSION=7 BUILD_TYPE=Release
+      addons:
+        apt:
+          sources:
+            - *base_sources
+            - *clang_sources
+          packages:
+            - *base_packages
+            - clang-7
+    - compiler: clang
+      env: CLANG_VERSION=8 BUILD_TYPE=Debug
+      addons:
+        apt:
+          sources:
+            - *base_sources
+            - *clang_sources
+          packages:
+            - *base_packages
+            - clang-8
+    - compiler: clang
+      env: CLANG_VERSION=8 BUILD_TYPE=Release
+      addons:
+        apt:
+          sources:
+            - *base_sources
+            - *clang_sources
+          packages:
+            - *base_packages
+            - clang-8
 
 
 before_install:
