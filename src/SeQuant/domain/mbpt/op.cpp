@@ -1,4 +1,5 @@
 #include "../../../SeQuant/domain/mbpt/op.hpp"
+#include <stdexcept>
 
 namespace sequant {
 namespace mbpt {
