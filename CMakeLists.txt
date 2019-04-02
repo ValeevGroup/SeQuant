@@ -4,6 +4,9 @@ project(SeQuant)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# std::thread requires (on some platforms?) thread support which is not provided automatically
+find_package(Threads REQUIRED)
+
 add_library(Range-V3 INTERFACE IMPORTED)
 set_property(TARGET Range-V3 PROPERTY
              INTERFACE_INCLUDE_DIRECTORIES ${RANGEV3_DIR}/include)
@@ -77,7 +80,7 @@ add_library(SeQuant
         src/SeQuant/domain/mbpt/sr/sr.cpp
         src/SeQuant/domain/mbpt/sr/sr.hpp
         src/SeQuant/core/timer.hpp)
-target_link_libraries(SeQuant Range-V3 Boost bliss)
+target_link_libraries(SeQuant Range-V3 Boost bliss Threads::Threads)
 target_include_directories(SeQuant PUBLIC
         $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>
