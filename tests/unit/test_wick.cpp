@@ -592,6 +592,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
 
       std::wcout << L"P2*H1*T2(PNO) = " << to_latex_align(wick_result_2)
                  << std::endl;
+      0;
       // it appears that the two terms are swapped when using gcc 8 on linux
       // TODO investigate why sum canonicalization seems to produce platform-dependent results.
 //      REQUIRE(to_latex(wick_result_2) ==

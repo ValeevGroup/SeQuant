@@ -19,24 +19,24 @@ set_property(TARGET Boost PROPERTY
 
 # embedded bliss-0.73
 add_library(bliss
-        external/bliss/defs.cc
-        external/bliss/defs.hh
-        external/bliss/graph.cc
-        external/bliss/graph.hh
-        external/bliss/partition.cc
-        external/bliss/partition.hh
-        external/bliss/orbit.cc
-        external/bliss/orbit.hh
-        external/bliss/uintseqhash.cc
-        external/bliss/uintseqhash.hh
-        external/bliss/heap.cc
-        external/bliss/heap.hh
-        external/bliss/timer.cc
-        external/bliss/timer.hh
-        external/bliss/utils.cc
-        external/bliss/utils.hh
-        external/bliss/bliss_C.cc
-        external/bliss/bliss_C.h
+        src/SeQuant/external/bliss/defs.cc
+        src/SeQuant/external/bliss/defs.hh
+        src/SeQuant/external/bliss/graph.cc
+        src/SeQuant/external/bliss/graph.hh
+        src/SeQuant/external/bliss/partition.cc
+        src/SeQuant/external/bliss/partition.hh
+        src/SeQuant/external/bliss/orbit.cc
+        src/SeQuant/external/bliss/orbit.hh
+        src/SeQuant/external/bliss/uintseqhash.cc
+        src/SeQuant/external/bliss/uintseqhash.hh
+        src/SeQuant/external/bliss/heap.cc
+        src/SeQuant/external/bliss/heap.hh
+        src/SeQuant/external/bliss/timer.cc
+        src/SeQuant/external/bliss/timer.hh
+        src/SeQuant/external/bliss/utils.cc
+        src/SeQuant/external/bliss/utils.hh
+        src/SeQuant/external/bliss/bliss_C.cc
+        src/SeQuant/external/bliss/bliss_C.h
         )
 
 add_library(SeQuant
