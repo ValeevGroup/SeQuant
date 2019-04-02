@@ -32,7 +32,7 @@ class AbstractGraph;
 #include <cstdio>
 #include <iomanip>
 #include <iostream>
-#include <optional>
+#include "../../../SeQuant/external/c++/optional.hpp"
 #include <vector>
 #include "bignum.hh"
 #include "heap.hh"

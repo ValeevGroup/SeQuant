@@ -72,6 +72,7 @@ add_library(SeQuant
         src/SeQuant/core/runtime.hpp
         src/SeQuant/core/utility.hpp
         src/SeQuant/core/bliss.hpp
+        src/SeQuant/core/timer.hpp
         src/SeQuant/domain/mbpt/convention.cpp
         src/SeQuant/domain/mbpt/convention.hpp
         src/SeQuant/domain/mbpt/op.cpp
@@ -79,7 +80,8 @@ add_library(SeQuant
         src/SeQuant/domain/mbpt/spin.hpp
         src/SeQuant/domain/mbpt/sr/sr.cpp
         src/SeQuant/domain/mbpt/sr/sr.hpp
-        src/SeQuant/core/timer.hpp)
+        src/SeQuant/external/c++/optional.hpp
+        )
 target_link_libraries(SeQuant Range-V3 Boost bliss Threads::Threads)
 target_include_directories(SeQuant PUBLIC
         $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>

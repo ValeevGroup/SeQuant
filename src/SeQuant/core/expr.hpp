@@ -9,7 +9,7 @@
 #include <complex>
 #include <iostream>
 #include <memory>
-#include <optional>
+#include "../../SeQuant/external/c++/optional.hpp"
 #include <vector>
 
 #include <range/v3/all.hpp>
