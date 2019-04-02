@@ -1,5 +1,7 @@
 #! /bin/sh
 
+${TRAVIS_BUILD_DIR}/bin/build-rangev3-$TRAVIS_OS_NAME.sh
+
 # Exit on error
 set -ev
 
