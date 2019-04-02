@@ -32,24 +32,6 @@ matrix:
   fast_finish: true
   include:
     - compiler: gcc
-      env: GCC_VERSION=7 BUILD_TYPE=Release
-      addons:
-        apt:
-          sources:
-           - *base_sources
-          packages:
-           - *base_packages
-           - g++-7
-    - compiler: gcc
-      env: GCC_VERSION=7 BUILD_TYPE=Debug
-      addons:
-        apt:
-          sources:
-           - *base_sources
-          packages:
-           - *base_packages
-           - g++-7
-    - compiler: gcc
       env: GCC_VERSION=8 BUILD_TYPE=Debug
       addons:
         apt:
@@ -124,11 +106,11 @@ after_failure:
 after_success:
   # create report
   - cd ${TRAVIS_BUILD_DIR}
-  - if [ "$BUILD_TYPE" = "Debug" ] && [ "$GCC_VERSION" = 7 ]; then lcov --gcov-tool gcov-${GCC_VERSION} --directory ${BUILD_PREFIX}/mpqc4 --capture --output-file coverage.info; fi; # capture coverage info
-  - if [ "$BUILD_TYPE" = "Debug" ] && [ "$GCC_VERSION" = 7 ]; then lcov --remove coverage.info '/usr/*' '*/tiledarray/*' '*/madness/*' '*/btas/*' '*/tests/*' --output-file coverage.info; fi; # filter out non-project files
-  - if [ "$BUILD_TYPE" = "Debug" ] && [ "$GCC_VERSION" = 7 ]; then lcov --list coverage.info; fi; #debug info
+  - if [ "$BUILD_TYPE" = "Debug" ] && [ "$GCC_VERSION" = 8 ]; then lcov --gcov-tool gcov-${GCC_VERSION} --directory ${BUILD_PREFIX}/SeQuant2 --capture --output-file coverage.info; fi; # capture coverage info
+  - if [ "$BUILD_TYPE" = "Debug" ] && [ "$GCC_VERSION" = 8 ]; then lcov --remove coverage.info '/usr/*' '*/range-v3/*' '*/boost/*' '*/tests/*' '*/examples/*' '*/external/*' --output-file coverage.info; fi; # filter out non-project files
+  - if [ "$BUILD_TYPE" = "Debug" ] && [ "$GCC_VERSION" = 8 ]; then lcov --list coverage.info; fi; #debug info
   # upload report to CodeCov
-  #- if [ "$BUILD_TYPE" = "Debug" ] && [ "$GCC_VERSION" = 7 ]; then bash <(curl -s https://codecov.io/bash) -t c0d0a777-cce2-48fa-8ec0-863ce1dcf446; fi;
+  - if [ "$BUILD_TYPE" = "Debug" ] && [ "$GCC_VERSION" = 8 ]; then bash <(curl -s https://codecov.io/bash) -t c0d0a777-cce2-48fa-8ec0-863ce1dcf446; fi;
 
 notifications:
   slack:
