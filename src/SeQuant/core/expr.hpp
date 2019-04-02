@@ -13,7 +13,6 @@
 
 #include <range/v3/all.hpp>
 
-#include <boost/callable_traits.hpp>
 #include <boost/core/demangle.hpp>
 #include <boost/functional/hash.hpp>
 #include <boost/numeric/conversion/cast.hpp>
@@ -126,9 +125,9 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
     }
     // can only visit itself here if visitor(const ExprPtr&) is valid
     bool this_visited = false;
-    if constexpr(boost::callable_traits::is_invocable_r<void,
-                                                        std::remove_reference_t<Visitor>,
-                                                        const std::shared_ptr<Expr> &>::value) {
+    if constexpr(std::is_invocable_r_v<void,
+                                       std::remove_reference_t<Visitor>,
+                                       const std::shared_ptr<Expr> &>) {
       if (!atoms_only || this->is_atom()) {
         visitor(shared_from_this());
         this_visited = true;

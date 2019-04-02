@@ -8,8 +8,7 @@ add_library(Range-V3 INTERFACE IMPORTED)
 set_property(TARGET Range-V3 PROPERTY
              INTERFACE_INCLUDE_DIRECTORIES ${RANGEV3_DIR}/include)
 
-# need Boost.CallableTraits
-find_package(Boost 1.68 REQUIRED)
+find_package(Boost)
 add_library(Boost INTERFACE IMPORTED)
 set_property(TARGET Boost PROPERTY
         INTERFACE_INCLUDE_DIRECTORIES ${Boost_INCLUDE_DIR})
