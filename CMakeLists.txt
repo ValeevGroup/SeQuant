@@ -126,18 +126,6 @@ add_test(NAME example/${example0}/run
 set_tests_properties(example/${example0}/run
         PROPERTIES DEPENDS example/${example0}/build)
 
-# Traces -- disabled, will remove if bliss is sufficient
-#add_library(Traces INTERFACE IMPORTED)
-#set_property(TARGET Traces PROPERTY
-#        INTERFACE_INCLUDE_DIRECTORIES /Users/evaleev/code/build/nauty27rc1)
-#set_property(TARGET Traces PROPERTY
-#        PROPERTY INTERFACE_LINK_LIBRARIES /Users/evaleev/code/build/nauty27rc1/nauty.a)
-#
-#set(example2 traces-test)
-#add_executable(${example2} EXCLUDE_FROM_ALL
-#        examples/${example2}.cpp)
-#target_link_libraries(${example2} Traces)
-
 # target for running ALL tests
 add_custom_target(check USES_TERMINAL COMMAND ${CMAKE_CTEST_COMMAND} -V)
 
