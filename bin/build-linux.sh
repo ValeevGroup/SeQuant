@@ -23,6 +23,9 @@ fi
 echo $($CC --version)
 echo $($CXX --version)
 
+# list the prebuilt prereqs
+ls ${INSTALL_PREFIX}
+
 # where to install
 export INSTALL_DIR=${INSTALL_PREFIX}/SeQuant2
 
@@ -39,7 +42,7 @@ fi
 cmake ${TRAVIS_BUILD_DIR} \
     -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" \
     -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
-    -DRANGEV3_DIR="${INSTALL_DIR}/range-v3" \
+    -DRANGEV3_DIR="${INSTALL_PREFIX}/range-v3" \
     -DCMAKE_CXX_FLAGS="${CXX_FLAGS} ${EXTRAFLAGS} ${CODECOVCXXFLAGS}"
 
 ### test within build tree
