@@ -156,6 +156,12 @@ std::vector<ExprPtr> cceqvec(bool screen, bool use_topology, bool use_connectivi
   return result;
 }
 
+#define runtime_assert(tf) if (!(tf)) { \
+                             std::ostringstream oss; \
+                             oss << "failed assert at line " << __LINE__ << " in function " << __func__; \
+                             throw std::runtime_error(oss.str().c_str()); \
+                           }
+
 TimerPool<32> tpool;
 
 template <size_t P, size_t PMIN, size_t N>
@@ -175,11 +181,11 @@ void compute_cceqvec(size_t NMAX, bool print, bool screen, bool use_topology, bo
       if (print) std::wcout << to_latex_align(eqvec[R], 20, 5) << std::endl;
 
       // validate known sizes of some CC residuals
-      if (R == 1 && N == 2) assert(eqvec[R]->size() == 14);
-      if (R == 2 && N == 2) assert(eqvec[R]->size() == 31);
-      if (R == 3 && N == 3) assert(eqvec[R]->size() == 47);
-      if (R == 4 && N == 4) assert(eqvec[R]->size() == 74);
-      if (R == 5 && N == 5) assert(eqvec[R]->size() == 99);
+      if (R == 1 && N == 2) runtime_assert(eqvec[R]->size() == 14);
+      if (R == 2 && N == 2) runtime_assert(eqvec[R]->size() == 31);
+      if (R == 3 && N == 3) runtime_assert(eqvec[R]->size() == 47);
+      if (R == 4 && N == 4) runtime_assert(eqvec[R]->size() == 74);
+      if (R == 5 && N == 5) runtime_assert(eqvec[R]->size() == 99);
     }
   }
 }
@@ -190,8 +196,6 @@ void compute_all(size_t NMAX, bool print = true, bool screen = true, bool use_to
                             use_connectivity, canonical_only),
    ...);
 }
-
-template <typename T> struct type_printer;
 
 int main(int argc, char* argv[]) {
   std::setlocale(LC_ALL, "en_US.UTF-8");
@@ -211,7 +215,12 @@ int main(int argc, char* argv[]) {
       std::make_shared<DefaultTensorCanonicalizer>());
   //set_num_threads(1);
 
-  const size_t NMAX = argc > 1 ? std::atoi(argv[1]) : 4;
+#ifndef NDEBUG
+  const size_t DEFAULT_NMAX = 3;
+#else
+  const size_t DEFAULT_NMAX = 4;
+#endif
+  const size_t NMAX = argc > 1 ? std::atoi(argv[1]) : DEFAULT_NMAX;
   assert(NMAX <= 10 && NMAX >= 2);
   // change to true to print out the resulting equations
   constexpr bool print = false;

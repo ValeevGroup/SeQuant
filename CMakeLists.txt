@@ -83,7 +83,6 @@ target_include_directories(SeQuant PUBLIC
         )
 
 enable_testing(true)
-add_custom_target(check_unit USES_TERMINAL COMMAND ${CMAKE_CTEST_COMMAND} -V)
 
 set(utests_src
         tests/unit/test_space.cpp
@@ -121,6 +120,11 @@ set(example0 srcc)
 add_executable(${example0} EXCLUDE_FROM_ALL
         examples/${example0}.cpp)
 target_link_libraries(${example0} SeQuant)
+add_test(example/${example0}/build "${CMAKE_COMMAND}" --build ${CMAKE_BINARY_DIR} --target ${example0})
+add_test(NAME example/${example0}/run
+        COMMAND ${example0})
+set_tests_properties(example/${example0}/run
+        PROPERTIES DEPENDS example/${example0}/build)
 
 # Traces -- disabled, will remove if bliss is sufficient
 #add_library(Traces INTERFACE IMPORTED)
@@ -134,6 +138,9 @@ target_link_libraries(${example0} SeQuant)
 #        examples/${example2}.cpp)
 #target_link_libraries(${example2} Traces)
 
+# target for running ALL tests
+add_custom_target(check USES_TERMINAL COMMAND ${CMAKE_CTEST_COMMAND} -V)
+
 ####### DOCS ########
 
 find_package(Doxygen)
@@ -146,3 +153,4 @@ if (DOXYGEN_FOUND)
             COMMENT "Generate html dox"
     )
 endif(DOXYGEN_FOUND)
+
