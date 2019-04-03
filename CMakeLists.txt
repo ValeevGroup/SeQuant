@@ -93,7 +93,6 @@ add_library(SeQuant
         src/SeQuant/domain/mbpt/spin.hpp
         src/SeQuant/domain/mbpt/sr/sr.cpp
         src/SeQuant/domain/mbpt/sr/sr.hpp
-        src/SeQuant/external/c++/optional.hpp
         )
 target_link_libraries(SeQuant Range-V3 Boost bliss Threads::Threads)
 target_include_directories(SeQuant PUBLIC

@@ -8,7 +8,7 @@
 #include <atomic>
 #include <functional>
 #include <mutex>
-#include "../../SeQuant/external/c++/optional.hpp"
+#include <optional>
 #include <set>
 #include <string>
 
