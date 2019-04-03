@@ -49,8 +49,6 @@ cmake ${TRAVIS_BUILD_DIR} \
 
 ### test within build tree
 make -j2 check VERBOSE=1
-make srcc VERBOSE=1
-examples/srcc 3
 
 # print ccache stats
 ccache -s
