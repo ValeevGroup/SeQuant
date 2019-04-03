@@ -10,11 +10,11 @@ addons:
   apt:
     sources: &base_sources
       - ubuntu-toolchain-r-test
-    sources: &clang_sources
+    sources: &clang7_sources
       - llvm-toolchain-xenial-7
+    sources: &clang8_sources
       - llvm-toolchain-xenial-8
     packages: &base_packages
-    - libboost-all-dev
     - cmake
     - cmake-data
     - lcov
@@ -37,7 +37,7 @@ matrix:
         apt:
           sources:
             - *base_sources
-            - *clang_sources
+            - *clang7_sources
           packages:
             - *base_packages
             - clang-7
@@ -49,7 +49,7 @@ matrix:
         apt:
           sources:
             - *base_sources
-            - *clang_sources
+            - *clang7_sources
           packages:
             - *base_packages
             - clang-7
@@ -61,7 +61,7 @@ matrix:
         apt:
           sources:
             - *base_sources
-            - *clang_sources
+            - *clang8_sources
           packages:
             - *base_packages
             - clang-8
@@ -73,7 +73,7 @@ matrix:
         apt:
           sources:
             - *base_sources
-            - *clang_sources
+            - *clang8_sources
           packages:
             - *base_packages
             - clang-8
