@@ -107,8 +107,8 @@ script:
   - ./bin/build-$TRAVIS_OS_NAME.sh
 
 after_failure:
-- cat ${BUILD_PREFIX}/SeQuant2/CMakeFiles/CMakeOutput.log
-- cat ${BUILD_PREFIX}/SeQuant2/CMakeFiles/CMakeError.log
+- cat ${BUILD_PREFIX}/SeQuant/CMakeFiles/CMakeOutput.log
+- cat ${BUILD_PREFIX}/SeQuant/CMakeFiles/CMakeError.log
 
 # codecov
 after_success:

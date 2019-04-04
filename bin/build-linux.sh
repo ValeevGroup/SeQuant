@@ -28,12 +28,12 @@ echo $($CXX --version)
 ls ${INSTALL_PREFIX}
 
 # where to install
-export INSTALL_DIR=${INSTALL_PREFIX}/SeQuant2
+export INSTALL_DIR=${INSTALL_PREFIX}/SeQuant
 
 # make build dir
 cd ${BUILD_PREFIX}
-mkdir -p SeQuant2
-cd SeQuant2
+mkdir -p SeQuant
+cd SeQuant
 
 # configure CodeCov only for g++-8 debug build
 if [ "$BUILD_TYPE" = "Debug" ] && [ "$GCC_VERSION" = 8 ]; then
