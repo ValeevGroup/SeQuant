@@ -34,7 +34,7 @@ void register_index(IndexRegistry& reg, const Index& idx, long size) {
           return 40;
         else if (space == IndexSpace::occupied)
           return 50;
-        else if (space == IndexSpace::active_unoccupied) // PNO
+        else if (space == IndexSpace::active_unoccupied) // CVS, e.g. PNO
           return 50;
         else if (space == IndexSpace::all)
           return 100;

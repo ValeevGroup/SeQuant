@@ -22,12 +22,12 @@ inline constexpr size_t fac(std::size_t n) {
     return n * fac(n - 1);
 }
 
-template <std::size_t Nbra, std::size_t Nket, OpType _Op, bool PNO>
+template <std::size_t Nbra, std::size_t Nket, OpType _Op, bool CSV>
 struct make_op {
   ExprPtr operator()() const {
     const auto nbra = Nbra;
     const auto nket = Nket;
-    const auto pno = PNO;
+    const auto csv = CSV;
     OpType op = _Op;
     auto make_idx_vector = [op](size_t n, IndexSpace::Type spacetype) {
       auto space = IndexSpace::instance(spacetype);
@@ -54,11 +54,11 @@ struct make_op {
       ketidxs = make_idx_vector(nket, IndexSpace::complete);
     }
     else {
-      auto make_occidxs = [pno,&make_idx_vector](size_t n) {
+      auto make_occidxs = [csv,&make_idx_vector](size_t n) {
         return make_idx_vector(n, IndexSpace::active_occupied);
       };
-      auto make_uoccidxs = [pno,&make_idx_vector,&make_depidx_vector](size_t n, auto&& occidxs) {
-        return pno ? make_depidx_vector(n, IndexSpace::active_unoccupied, occidxs) : make_idx_vector(n, IndexSpace::active_unoccupied);
+      auto make_uoccidxs = [csv,&make_idx_vector,&make_depidx_vector](size_t n, auto&& occidxs) {
+        return csv ? make_depidx_vector(n, IndexSpace::active_unoccupied, occidxs) : make_idx_vector(n, IndexSpace::active_unoccupied);
       };
       if (to_class(op) == OpClass::ex) {
         ketidxs = make_occidxs(nket);
@@ -102,7 +102,7 @@ inline ExprPtr vac_av(ExprPtr expr, std::initializer_list<std::pair<int,int>> op
   return result;
 }
 
-namespace pno {
+namespace csv {
 
 template <OpType _Op, std::size_t Nbra, std::size_t Nket = Nbra> static const auto Op = make_op<Nbra, Nket, _Op, true>{};
 
@@ -115,7 +115,7 @@ using sequant::mbpt::sr::so::H1mp;
 using sequant::mbpt::sr::so::H2;
 using sequant::mbpt::sr::so::vac_av;
 
-}  // namespace pno
+}  // namespace csv
 
 }  // namespace so
 }  // namespace sr

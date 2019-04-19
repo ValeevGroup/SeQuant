@@ -49,7 +49,7 @@ TEST_CASE("MBPT", "[mbpt]") {
   }
 
   SECTION("SRSO-PNO") {
-    using namespace sequant::mbpt::sr::so::pno;
+    using namespace sequant::mbpt::sr::so::csv;
 
     // H2**T2**T2 -> R2
     SEQUANT_PROFILE_SINGLE("wick(H2**T2**T2 -> R2)", {
