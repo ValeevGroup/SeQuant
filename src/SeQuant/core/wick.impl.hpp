@@ -411,7 +411,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
       std::mutex result_mtx;  // serializes updates of result
       auto summands = expr_input_->as<Sum>().summands();
 
-#if SEQUANT_HAS_EXECUTION_HEADER
+#ifdef SEQUANT_HAS_EXECUTION_HEADER
       auto wick_task = [&result, &result_mtx, this,
                         &count_only](const ExprPtr &input) {
         WickTheorem wt(input, *this);
