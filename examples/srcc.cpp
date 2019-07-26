@@ -227,9 +227,9 @@ int main(int argc, char* argv[]) {
   // change to true to print stats
   Logger::get_instance().wick_stats = false;
 
-  ranges::for_each({false, true}, [=](const bool screen) {
-    ranges::for_each({false, true}, [=](const bool use_topology) {
-      ranges::for_each({false, true}, [=](const bool canonical_only) {
+  ranges::for_each(std::array<bool, 2>{false, true}, [=](const bool screen) {
+    ranges::for_each(std::array<bool, 2>{false, true}, [=](const bool use_topology) {
+      ranges::for_each(std::array<bool, 2>{false, true}, [=](const bool canonical_only) {
         tpool.clear();
         // comment out to run all possible combinations
         if (screen && use_topology && canonical_only)
