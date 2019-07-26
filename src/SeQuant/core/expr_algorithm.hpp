@@ -181,7 +181,7 @@ class expr_range
     }
     /// constructs a cursor pointing to the end
     /// @note has O(1) complexity
-    cursor(ExprPtr& top, ranges::default_sentinel)
+    cursor(ExprPtr& top, ranges::default_sentinel_t)
         : top_(&top) {}
 
     ExprPtr& read() const {
@@ -245,7 +245,7 @@ class expr_range
 //    }
   };
   cursor begin_cursor() { return {top_}; }
-  cursor end_cursor() { return {top_, ranges::default_sentinel{}}; }
+  cursor end_cursor() { return {top_, ranges::default_sentinel_t{}}; }
 
 // public:
 //  using iterator = ranges::basic_iterator<cursor>;

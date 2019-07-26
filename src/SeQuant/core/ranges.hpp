@@ -95,7 +95,7 @@ public:
           ordinal_{range_iter_ != this->_end(*range) ? 0 : -1} {}
     /// constructs a cursor pointing to the end
     /// @note has O(1) complexity
-    cursor(RangeNest *range, ranges::default_sentinel)
+    cursor(RangeNest *range, ranges::default_sentinel_t)
         : range_(range), range_iter_(this->_end(*range)) {}
 
     /// constructs a cursor pointing to particular @c range_iter and @c
@@ -172,7 +172,7 @@ public:
     }
   };
   cursor begin_cursor() const { return {range_}; }
-  cursor end_cursor() const { return {range_, ranges::default_sentinel{}}; }
+  cursor end_cursor() const { return {range_, ranges::default_sentinel_t{}}; }
 
  public:
   using iterator = ranges::basic_iterator<cursor>;
