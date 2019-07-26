@@ -4,8 +4,8 @@ SeQuant: second quantization toolkit in C++
 prerequisites:
   * CMake 3.9
   * a C++17 compiler
-  * a recent Boost library
-  * Range-V3 library (see https://github.com/ericniebler/range-v3.git)
+  * a recent (1.67 or later) Boost library (N.B. Boost.Container is broken in 1.70)
+  * the HEAD version of Range-V3 library (see https://github.com/ericniebler/range-v3.git)
 
 for the impatient:
   * `cmake . -DRANGEV3_DIR=...`
