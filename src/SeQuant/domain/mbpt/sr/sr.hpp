@@ -24,7 +24,7 @@ inline constexpr size_t fac(std::size_t n) {
 
 template <std::size_t Nbra, std::size_t Nket, OpType _Op, bool CSV>
 struct make_op {
-  ExprPtr operator()() const {
+  ExprPtr operator()(bool complete_unoccupieds = false) const {
     const auto nbra = Nbra;
     const auto nket = Nket;
     const auto csv = CSV;
@@ -57,8 +57,9 @@ struct make_op {
       auto make_occidxs = [csv,&make_idx_vector](size_t n) {
         return make_idx_vector(n, IndexSpace::active_occupied);
       };
-      auto make_uoccidxs = [csv,&make_idx_vector,&make_depidx_vector](size_t n, auto&& occidxs) {
-        return csv ? make_depidx_vector(n, IndexSpace::active_unoccupied, occidxs) : make_idx_vector(n, IndexSpace::active_unoccupied);
+      auto make_uoccidxs = [csv,complete_unoccupieds,&make_idx_vector,&make_depidx_vector](size_t n, auto&& occidxs) {
+        auto unocc = complete_unoccupieds ? IndexSpace::active_unoccupied : IndexSpace::complete_unoccupied;
+        return csv ? make_depidx_vector(n, unocc, occidxs) : make_idx_vector(n, unocc);
       };
       if (to_class(op) == OpClass::ex) {
         ketidxs = make_occidxs(nket);

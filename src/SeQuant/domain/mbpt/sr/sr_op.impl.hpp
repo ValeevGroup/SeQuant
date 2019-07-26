@@ -48,18 +48,18 @@ ExprPtr Lambda() {
 
 /// makes deexcitation operator of bra/ket ranks @c Nbra/Nket
 template <std::size_t Nbra, std::size_t Nket = Nbra>
-ExprPtr A() {
-  return Op<OpType::A, Nbra, Nket>();
+ExprPtr A(bool complete_unoccupieds = false) {
+  return Op<OpType::A, Nbra, Nket>(complete_unoccupieds);
 }
 
 /// makes L deexcitation operator of bra/ket ranks @c Nbra/Nket
 template <std::size_t Nbra, std::size_t Nket = Nbra>
-ExprPtr L() {
-  return Op<OpType::L, Nbra, Nket>();
+ExprPtr L(bool complete_unoccupieds = false) {
+  return Op<OpType::L, Nbra, Nket>(complete_unoccupieds);
 }
 
 /// makes R excitation operator of bra/ket ranks @c Nbra/Nket
 template <std::size_t Nbra, std::size_t Nket = Nbra>
-ExprPtr R() {
-  return Op<OpType::R, Nbra, Nket>();
+ExprPtr R(bool complete_unoccupieds = false) {
+  return Op<OpType::R, Nbra, Nket>(complete_unoccupieds);
 }

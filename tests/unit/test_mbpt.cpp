@@ -46,6 +46,17 @@ TEST_CASE("MBPT", "[mbpt]") {
       REQUIRE(result->is<Product>()); // product ...
       REQUIRE(result->size() == 3); // ... of 3 factors
       }));
+
+    // <2p1h|H2|2p1h(c)> ->
+    SEQUANT_PROFILE_SINGLE("wick(<2p1h|H2|2p1h(c)>)", ({
+      auto input = L<1, 2>() * H() * R<2, 1>(true);
+      auto result = vac_av( input );
+
+      std::wcout << "<2p1h|H|2p1h(c)> = " << to_latex(result)
+                 << std::endl;
+      REQUIRE(result->is<Sum>()); // sub ...
+      REQUIRE(result->size() == 4); // ... of 4 factors
+    }));
   }
 
   SECTION("SRSO-PNO") {
