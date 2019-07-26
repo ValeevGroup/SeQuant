@@ -25,7 +25,11 @@ set_property(TARGET Range-V3 PROPERTY
              INTERFACE_INCLUDE_DIRECTORIES ${RANGEV3_DIR}/include)
 
 # need Boost.ContainerHash
+# NB Boost.Container is broken in v1.70
 find_package(Boost 1.67 REQUIRED)
+if (Boost_VERSION EQUAL 107000)
+    message(FATAL_ERROR "Found Boost 1.70, but its Boost.Container is broken: use versions 1.67, 1.68, or 1.69")
+endif()
 add_library(Boost INTERFACE IMPORTED)
 set_property(TARGET Boost PROPERTY
         INTERFACE_INCLUDE_DIRECTORIES ${Boost_INCLUDE_DIR})
