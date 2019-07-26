@@ -17,6 +17,8 @@ if(NOT CMAKE_CXX_COMPILER MATCHES ".*/ccache$")
     endif()
 endif()
 
+list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/modules/")
+
 # std::thread requires (on some platforms?) thread support which is not provided automatically
 find_package(Threads REQUIRED)
 
@@ -103,6 +105,12 @@ target_include_directories(SeQuant PUBLIC
         $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>
         )
+# PSTL (used by g++-9 in c++17 mode) needs TBB
+if (${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU" AND ${CMAKE_CXX_COMPILER_VERSION} VERSION_GREATER 9)
+    find_package(TBB REQUIRED)
+    target_link_libraries(SeQuant ${TBB_LIBRARIES})
+    target_include_directories(SeQuant PUBLIC ${TBB_INCLUDE_DIRS})
+endif()
 
 enable_testing(true)
 

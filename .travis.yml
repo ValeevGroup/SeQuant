@@ -17,6 +17,7 @@ addons:
     packages: &base_packages
     - cmake
     - cmake-data
+    - libtbb-dev
     - lcov
 
 env:
