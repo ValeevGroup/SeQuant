@@ -19,6 +19,7 @@
 #include <boost/numeric/conversion/cast.hpp>
 
 #include "container.hpp"
+#include "expr_fwd.hpp"
 #include "hash.hpp"
 #include "latex.hpp"
 #include "meta.hpp"
@@ -499,8 +500,6 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
   };
 
 };  // class Expr
-
-using ExprPtr = std::shared_ptr<Expr>;
 
 /// make an ExprPtr to a new object of type T
 /// @tparam T a class derived from Expr

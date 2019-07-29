@@ -36,7 +36,7 @@ TEST_CASE("TensorNetwork", "[elements]") {
     }
 
     { // with Tensors and NormalOperators
-      auto tmp = A<2>() * H2() * T_<2>() * T_<2>();
+      auto tmp = A(2) * H2() * T_(2) * T_(2);
       REQUIRE_NOTHROW(TensorNetwork(tmp->as<Product>().factors()));
     };
 
@@ -44,7 +44,7 @@ TEST_CASE("TensorNetwork", "[elements]") {
 
   SECTION("bliss graph") {
     Index::reset_tmp_index();
-    auto tmp = A<2>() * H2() * T_<2>() * T_<2>() * T_<2>();
+    auto tmp = A(2) * H2() * T_(2) * T_(2) * T_(2);
     // std::wcout << "A2*H2*T2*T2*T2 = " << to_latex(tmp) << std::endl;
     TensorNetwork tn(tmp->as<Product>().factors());
 
