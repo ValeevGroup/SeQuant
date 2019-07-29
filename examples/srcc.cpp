@@ -16,7 +16,7 @@ using namespace sequant::mbpt::sr::so;
 
 namespace {
 
-/// computes VEE for A(P)*H*T(N)^K using excitation level screening (unless @c
+/// computes VEV for A(P)*H*T(N)^K using excitation level screening (unless @c
 /// screen is set) + computes only canonical (with T ranks increasing) terms
 template <size_t K>
 ExprPtr screened_vac_av(
@@ -96,7 +96,7 @@ ExprPtr screened_vac_av(
 
     if (canonical || !canonical_only) {
       using interval = boost::numeric::interval<int>;
-      if (exlev + min_exlev_R <= 0 && 0 <= exlev + max_exlev_R) {  // VEE != 0
+      if (exlev + min_exlev_R <= 0 && 0 <= exlev + max_exlev_R) {  // VEV != 0
         assert(min_exlev_R <= max_exlev_R);
         screened_input->append(
             degeneracy == 1 ? term : ex<Constant>(degeneracy) * term);
