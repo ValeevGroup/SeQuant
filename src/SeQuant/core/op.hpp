@@ -182,7 +182,7 @@ bool is_pure_qpcreator(const Op<S> &op,
   }
 };
 
-/// @return true if this is a quasdiparticle creator with respect to the given
+/// @return true if this is a quasiparticle creator with respect to the given
 /// vacuum, false otherwise
 template <Statistics S>
 bool is_qpcreator(const Op<S> &op,
@@ -220,7 +220,7 @@ IndexSpace qpcreator_space(const Op<S> &op,
   }
 }
 
-/// @return true if this is a pure quasdiparticle annihilator with respect to
+/// @return true if this is a pure quasiparticle annihilator with respect to
 /// the given vacuum, false otherwise
 template <Statistics S>
 bool is_pure_qpannihilator(const Op<S> &op,
@@ -239,7 +239,7 @@ bool is_pure_qpannihilator(const Op<S> &op,
   }
 };
 
-/// @return true if this is a quasdiparticle annihilator with respect to the
+/// @return true if this is a quasiparticle annihilator with respect to the
 /// given vacuum, false otherwise
 template <Statistics S>
 bool is_qpannihilator(const Op<S> &op,
@@ -435,8 +435,8 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
   /// constructs an identity operator
   NormalOperator(Vacuum v = get_default_context().vacuum()) {}
 
-  /// @param creators sequence of creators
-  /// @param annihilators sequence of annihilators (in order of particle indices, see the class documentation for more info).
+  /// @param creators sequence of creator indices
+  /// @param annihilators sequence of annihilator indices (in order of particle indices, see the class documentation for more info).
   template <
       typename IndexContainer,
       typename = std::enable_if_t<
@@ -472,9 +472,11 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
     this->insert(this->end(), crbegin(annihilators), crend(annihilators));
   }
 
-//  /// @param creator_indices sequence of creator indices
-//  /// @param annihilator_indices sequence of annihilator indices (in order of particle indices, see the class documentation for more info).
-  template <typename I, typename = std::enable_if_t<!std::is_same_v<std::decay_t<I>,Op<S>>>>
+  /// @param creators initializer_list of creator indices
+  /// @param annihilators initializer_list of annihilator indices (in order of particle indices, see the class documentation for more info).
+  template <
+      typename I,
+      typename = std::enable_if_t<!std::is_same_v<std::decay_t<I>,Op<S>>>>
   NormalOperator(std::initializer_list<I> creator_indices,
                  std::initializer_list<I> annihilator_indices,
                  Vacuum v = get_default_context().vacuum())
