@@ -302,7 +302,6 @@ class Operator : public container::svector<Op<S>>, public Expr {
   using base_type::size;
   using base_type::at;
   using base_type::operator[];
-  using base_type::insert;
 
   Operator() = default;
   explicit Operator(std::initializer_list<Op<S>> ops)
@@ -432,7 +431,6 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
   using base_type::size;
   using base_type::at;
   using base_type::operator[];
-  using base_type::insert;
 
   /// constructs an identity operator
   NormalOperator(Vacuum v = get_default_context().vacuum()) {}
