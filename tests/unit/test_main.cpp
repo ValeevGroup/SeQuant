@@ -4,6 +4,7 @@
 
 #define CATCH_CONFIG_RUNNER
 #include <clocale>
+#include "../../src/SeQuant/core/runtime.hpp"
 #include "../../src/SeQuant/core/op.hpp"
 #include "../../src/SeQuant/core/space.hpp"
 #include "../../src/SeQuant/core/utility.hpp"
