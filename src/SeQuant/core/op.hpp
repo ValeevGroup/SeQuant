@@ -450,7 +450,7 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
     for (const auto &i : creator_indices) {
       this->emplace_back(i, Action::create);
     }
-    for (const auto &i : annihilator_indices | ranges::view::reverse) {
+    for (const auto &i : annihilator_indices | ranges::views::reverse) {
       this->emplace_back(i, Action::annihilate);
     }
   }
