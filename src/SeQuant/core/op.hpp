@@ -151,7 +151,19 @@ inline FOp fann(Index i, std::initializer_list<I> pi) {
   return FOp(Index(i, pi), Action::annihilate);
 }
 
-/// @return true if this is a pure quasdiparticle creator with respect to the
+/// @return true if this is a particle creator, false otherwise
+template <Statistics S>
+bool is_creator(const Op<S> &op) {
+  return op.action() == Action::create;
+};
+
+/// @return true if this is a particle annihilator, false otherwise
+template <Statistics S>
+bool is_annihilator(const Op<S> &op) {
+  return op.action() == Action::annihilate;
+};
+
+/// @return true if this is a pure quasiparticle creator with respect to the
 /// given vacuum, false otherwise
 template <Statistics S>
 bool is_pure_qpcreator(const Op<S> &op,
