@@ -772,7 +772,7 @@ class Product : public Expr {
 
   std::shared_ptr<Expr> clone() const override {
     auto cloned_factors =
-        factors() | ranges::view::transform([](const ExprPtr &ptr) {
+        factors() | ranges::views::transform([](const ExprPtr &ptr) {
           return ptr ? ptr->clone() : nullptr;
         });
     return ex<Product>(this->scalar(), ranges::begin(cloned_factors),
@@ -781,7 +781,7 @@ class Product : public Expr {
 
   Product deep_copy() const {
     auto cloned_factors =
-        factors() | ranges::view::transform([](const ExprPtr &ptr) {
+        factors() | ranges::views::transform([](const ExprPtr &ptr) {
           return ptr ? ptr->clone() : nullptr;
         });
     return Product(this->scalar(), ranges::begin(cloned_factors),
@@ -828,7 +828,7 @@ class Product : public Expr {
   hash_type memoizing_hash() const override {
     auto deref_factors =
         factors() |
-        ranges::view::transform(
+        ranges::views::transform(
             [](const ExprPtr &ptr) -> const Expr & { return *ptr; });
     hash_value_ = boost::hash_range(ranges::begin(deref_factors),
                                     ranges::end(deref_factors));
@@ -1031,7 +1031,7 @@ class Sum : public Expr {
 
   std::shared_ptr<Expr> clone() const override {
     auto cloned_summands =
-        summands() | ranges::view::transform(
+        summands() | ranges::views::transform(
                          [](const ExprPtr &ptr) { return ptr->clone(); });
     return ex<Sum>(ranges::begin(cloned_summands),
                    ranges::end(cloned_summands));
@@ -1075,7 +1075,7 @@ class Sum : public Expr {
   hash_type memoizing_hash() const override {
     auto deref_summands =
         summands() |
-        ranges::view::transform(
+        ranges::views::transform(
             [](const ExprPtr &ptr) -> const Expr & { return *ptr; });
     hash_value_ = boost::hash_range(ranges::begin(deref_summands),
                                     ranges::end(deref_summands));
@@ -1158,7 +1158,7 @@ inline std::wstring to_wolfram(const ExprPtr &exprptr) {
 
 template<typename Sequence>
 std::decay_t<Sequence> clone(Sequence &&exprseq) {
-  auto cloned_seq = exprseq | ranges::view::transform([](const ExprPtr &ptr) { return ptr ? ptr->clone() : nullptr; });
+  auto cloned_seq = exprseq | ranges::views::transform([](const ExprPtr &ptr) { return ptr ? ptr->clone() : nullptr; });
   return std::decay_t<Sequence>(ranges::begin(cloned_seq), ranges::end(cloned_seq));
 }
 

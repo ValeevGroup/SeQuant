@@ -494,16 +494,16 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
   /// @return the vacuum state with respect to which the operator is normal-ordered.
   Vacuum vacuum() const { return vacuum_; }
   /// @return the range of creators, in the order of increasing particle index
-  auto creators() const { return ranges::view::counted(this->cbegin(), ncreators()); }
+  auto creators() const { return ranges::views::counted(this->cbegin(), ncreators()); }
   /// @return the range of annihilators, in the order of increasing particle index
-  auto annihilators() const { return ranges::view::counted(this->crbegin(), nannihilators()); }
+  auto annihilators() const { return ranges::views::counted(this->crbegin(), nannihilators()); }
   /// @return the number of creators
   auto ncreators() const { return ncreators_; }
   /// @return the number of annihilators
   auto nannihilators() const { return this->size() - ncreators(); }
   /// @return view of creators and annihilators as a single range
   auto creann() const {
-    return ranges::view::concat(creators(), annihilators());
+    return ranges::views::concat(creators(), annihilators());
   }
 
   /// @return number of creators/annihilators
@@ -736,17 +736,17 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
   // these implement the AbstractTensor interface
   AbstractTensor::const_any_view_randsz _bra() const override final {
     return annihilators() |
-           ranges::view::transform(
+           ranges::views::transform(
                [](auto &&op) -> const Index & { return op.index(); });
   }
   AbstractTensor::const_any_view_randsz _ket() const override final {
-    return creators() | ranges::view::transform([](auto &&op) -> const Index & {
+    return creators() | ranges::views::transform([](auto &&op) -> const Index & {
              return op.index();
            });
   }
   AbstractTensor::const_any_view_rand _braket() const override final {
-    return ranges::view::concat(annihilators(), creators()) |
-           ranges::view::transform(
+    return ranges::views::concat(annihilators(), creators()) |
+           ranges::views::transform(
                [](auto &&op) -> const Index & { return op.index(); });
   }
   std::size_t _bra_rank() const override final {
@@ -792,14 +792,14 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
 
   AbstractTensor::any_view_randsz _bra_mutable() override final {
     this->reset_hash_value();
-    return ranges::view::counted(this->rbegin(), nannihilators()) |
-           ranges::view::transform(
+    return ranges::views::counted(this->rbegin(), nannihilators()) |
+           ranges::views::transform(
                [](auto &&op) -> Index & { return op.index(); });
   }
   AbstractTensor::any_view_randsz _ket_mutable() override final {
     this->reset_hash_value();
-    return ranges::view::counted(this->begin(), ncreators()) |
-           ranges::view::transform(
+    return ranges::views::counted(this->begin(), ncreators()) |
+           ranges::views::transform(
                [](auto &&op) -> Index & { return op.index(); });
   }
 
