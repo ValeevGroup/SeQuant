@@ -240,6 +240,9 @@ TEST_CASE("Expr", "[elements]") {
 
     REQUIRE(begin(sp0.expr()) != end(sp0.expr()));
     REQUIRE(ranges::size(sp0.expr()) == 1);
+
+    REQUIRE_NOTHROW(sp0.scale(2.0));
+    REQUIRE(sp0.scalar() == 4.0);
   }
 
   SECTION("latex") {

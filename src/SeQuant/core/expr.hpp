@@ -653,6 +653,13 @@ class Product : public Expr {
     for (auto it = begin; it != end; ++it) append(1, *it);
   }
 
+  /// multiplies the product by @c scalar
+  template <typename T>
+  Product &scale(T scalar) {
+    scalar_ *= scalar;
+    return *this;
+  }
+
   /// (post-)multiplies the product by @c scalar times @c factor
   template <typename T>
   Product &append(T scalar, ExprPtr factor) {
@@ -782,7 +789,12 @@ class Product : public Expr {
   }
 
   virtual Expr &operator*=(const Expr &that) override {
-    this->append(1, const_cast<Expr &>(that).shared_from_this());
+    if (!that.is<Constant>()) {
+      this->append(1, const_cast<Expr &>(that).shared_from_this());
+    }
+    else {
+      scalar_ *= that.as<Constant>().value();
+    }
     return *this;
   }
 
