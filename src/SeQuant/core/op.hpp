@@ -439,9 +439,7 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
   /// @param annihilators sequence of annihilator indices (in order of particle indices, see the class documentation for more info).
   template <
       typename IndexContainer,
-      typename = std::enable_if_t<
-          !meta::is_initializer_list_v<std::decay_t<IndexContainer>> &&
-          std::is_same_v<typename std::decay_t<IndexContainer>::value_type, Index>>>
+      typename = std::enable_if_t<std::is_same_v<typename std::decay_t<IndexContainer>::value_type, Index>>>
   NormalOperator(IndexContainer &&creator_indices,
                  IndexContainer &&annihilator_indices,
                  Vacuum v = get_default_context().vacuum())
@@ -457,19 +455,20 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
 
   /// @param creators sequence of creators
   /// @param annihilators sequence of annihilators (in order of particle indices, see the class documentation for more info).
-  NormalOperator(std::initializer_list<Op<S>> creators,
-                 std::initializer_list<Op<S>> annihilators,
-                 Vacuum v = get_default_context().vacuum())
-      : Operator<S>{}, vacuum_(v), ncreators_(size(creators)) {
-    for (const auto &op: creators) {
+  template <typename OpContainer>
+  NormalOperator(OpContainer &&creators,
+                 OpContainer &&annihilators,
+                 Vacuum v = get_default_context().vacuum(),
+  std::enable_if_t<!std::is_same_v<std::decay_t<OpContainer>, NormalOperator> && std::is_same_v<typename std::decay_t<OpContainer>::value_type, Op<S>>>* = nullptr) : Operator<S>{}, vacuum_(v), ncreators_(ranges::size(creators)) {
+    for (const auto &op : creators) {
       assert(op.action() == Action::create);
     }
-    for (const auto &op: annihilators) {
+    for (const auto &op : annihilators) {
       assert(op.action() == Action::annihilate);
     }
-    this->reserve(size(creators) + size(annihilators));
-    this->insert(this->end(), cbegin(creators), cend(creators));
-    this->insert(this->end(), crbegin(annihilators), crend(annihilators));
+    this->reserve(ranges::size(creators) + ranges::size(annihilators));
+    this->insert(this->end(), std::cbegin(creators), std::cend(creators));
+    this->insert(this->end(), std::crbegin(annihilators), std::crend(annihilators));
   }
 
   /// @param creators initializer_list of creator indices
@@ -482,14 +481,29 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
                  Vacuum v = get_default_context().vacuum())
       : Operator<S>{}, vacuum_(v), ncreators_(creator_indices.size()) {
     this->reserve(creator_indices.size() + annihilator_indices.size());
-    for (const auto &i: creator_indices) {
+    for (const auto &i : creator_indices) {
       this->emplace_back(i, Action::create);
     }
-    for (const auto &i : annihilator_indices | ranges::view::reverse) {
+    for (const auto &i : annihilator_indices | ranges::views::reverse) {
       this->emplace_back(i, Action::annihilate);
     }
   }
 
+  /// @param creators initializer_list of creators
+  /// @param annihilators initializer_list of annihilators (in order of particle indices, see the class documentation for more info).
+  NormalOperator(std::initializer_list<Op<S>> creators,
+                 std::initializer_list<Op<S>> annihilators,
+                 Vacuum v = get_default_context().vacuum()) : Operator<S>{}, vacuum_(v), ncreators_(size(creators)) {
+    for (const auto &op : creators) {
+      assert(op.action() == Action::create);
+    }
+    for (const auto &op : annihilators) {
+      assert(op.action() == Action::annihilate);
+    }
+    this->reserve(size(creators) + size(annihilators));
+    this->insert(this->end(), cbegin(creators), cend(creators));
+    this->insert(this->end(), crbegin(annihilators), crend(annihilators));
+  }
   NormalOperator(const NormalOperator &other)
       : Operator<S>(other),
         vacuum_(other.vacuum_),
