@@ -267,6 +267,19 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       REQUIRE(result->size() == 36);
     }
 
+    // one general 1-body operator + one general 2-body operator, partial contraction:
+    // Eq. 9 of DOI 10.1063/1.474405
+    {
+      auto opseq =
+          FNOperatorSeq({FNOperator({L"p_1"}, {L"p_2"}, V),
+                         FNOperator({L"p_3", L"p_4"}, {L"p_5", L"p_6"}, V)});
+      auto wick = FWickTheorem{opseq};
+      REQUIRE_NOTHROW(wick.full_contractions(false).spinfree(false).compute());
+      auto result = wick.full_contractions(false).spinfree(false).compute();
+      REQUIRE(result->is<Sum>());
+      REQUIRE(result->size() == 9);
+    }
+
     // two general 2-body operators
     {
       auto opseq =
@@ -277,6 +290,17 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       auto result = wick.spinfree(false).compute();
       REQUIRE(result->is<Sum>());
       REQUIRE(result->size() == 4);
+    }
+    // two general 2-body operators, partial contractions: Eqs. 22 of DOI 10.1063/1.474405
+    {
+      auto opseq =
+          FNOperatorSeq({FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}, V),
+                         FNOperator({L"p_5", L"p_6"}, {L"p_7", L"p_8"}, V)});
+      auto wick = FWickTheorem{opseq};
+      REQUIRE_NOTHROW(wick.full_contractions(false).spinfree(false).compute());
+      auto result = wick.full_contractions(false).spinfree(false).compute();
+      REQUIRE(result->is<Sum>());
+      REQUIRE(result->size() == 49);  // the MK paper only gives 47 terms, misses the 2 double-hole contractions
     }
 
     // two general 3-body operators
