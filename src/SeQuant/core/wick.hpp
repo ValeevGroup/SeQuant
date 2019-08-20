@@ -595,17 +595,18 @@ class WickTheorem {
     auto opseq_view = opseq_view_type(&state.opseq);
     using std::begin;
     using std::end;
+
     // if full contractions needed, make contractions involving first index with another index, else contract any index i with index j (i<j)
-    auto opseq_view_begin = begin(opseq_view);
+    auto left_op_offset = state.left_op_offset;
+    auto op_left_iter = ranges::next(begin(opseq_view), left_op_offset);  // left op to contract
 
     // optimization: can't contract fully if first op is not a qp annihilator
     if (full_contractions_ &&
-        !is_qpannihilator(*opseq_view_begin, input_.vacuum()))
+        !is_qpannihilator(*op_left_iter, input_.vacuum()))
       return;
 
-    auto op_left_iter = ranges::next(opseq_view_begin, state.left_op_offset);  // left op to contract
     const auto op_left_iter_fence = full_contractions_ ? ranges::next(op_left_iter) : end(opseq_view);
-    for(; op_left_iter != op_left_iter_fence; ++op_left_iter, state.left_op_offset+=(full_contractions_ ? 0 : 1)) {
+    for(; op_left_iter != op_left_iter_fence; ++op_left_iter, ++left_op_offset) {
       auto op_right_iter = ranges::next(op_left_iter);
       for (; op_right_iter != end(opseq_view);) {
         if (op_right_iter != op_left_iter &&
@@ -745,6 +746,7 @@ class WickTheorem {
               const auto current_num_useful_contractions =
                   stats_.num_useful_contractions.load();
               ++state.level;
+              state.left_op_offset = left_op_offset;
               recursive_nontensor_wick(result, state);
               --state.level;
               // this contraction is useful if it leads to useful contractions as a result

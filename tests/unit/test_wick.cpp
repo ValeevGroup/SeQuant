@@ -178,6 +178,17 @@ TEST_CASE("WickTheorem", "[algorithms]") {
               L"{ \\left({{S^{{i_3}}_{{i_2}}}{a^{{i_1}{i_5}}_{{i_4}{i_6}}}} + {{S^{{i_3}}_{{i_2}}}{S^{{i_5}}_{{i_4}}}{a^{{i_1}}_{{i_6}}}} + {{{-1}} \\times {S^{{i_5}}_{{i_2}}}{a^{{i_1}{i_3}}_{{i_4}{i_6}}}} + {{S^{{i_5}}_{{i_4}}}{a^{{i_1}{i_3}}_{{i_2}{i_6}}}} + {{a^{{i_1}{i_3}{i_5}}_{{i_2}{i_4}{i_6}}}}\\right) }");
     }
 
+    // two 2-body operators, partial contraction: Eq. 9b of DOI 10.1063/1.474405
+    {
+      auto opseq =
+          FNOperatorSeq({FNOperator({L"i_1", L"i_2"}, {L"i_3", L"i_4"}, V), FNOperator({L"i_5", L"i_6"}, {L"i_7", L"i_8"}, V)});
+      auto wick = FWickTheorem{opseq};
+      REQUIRE_NOTHROW(wick.full_contractions(false).spinfree(false).compute());
+      auto result = wick.full_contractions(false).spinfree(false).compute();
+      REQUIRE(result->is<Sum>());
+      REQUIRE(result->size() == 7);
+    }
+
   }  // SECTION("physical vacuum")
 
   SECTION("fermi vacuum") {
