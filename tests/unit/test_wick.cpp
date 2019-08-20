@@ -157,10 +157,10 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       REQUIRE_NOTHROW(wick.full_contractions(false).spinfree(false).compute());
       auto result = wick.full_contractions(false).spinfree(false).compute();
       REQUIRE(result->is<Sum>());
-      REQUIRE(result->size() == 4);  // sum of 4 terms
+      REQUIRE(result->size() == 5);  // sum of 4 terms
       REQUIRE(
           to_latex(result) ==
-          L"{ \\left({{{-1}} \\times {S^{{i_2}}_{{i_1}}}{a^{{i_4}}_{{i_3}}}} + {{S^{{i_2}}_{{i_1}}}{S^{{i_4}}_{{i_3}}}} + {{S^{{i_4}}_{{i_1}}}{a^{{i_2}}_{{i_3}}}} + {{a^{{i_2}{i_4}}_{{i_1}{i_3}}}}\\right) }");
+          L"{ \\left({{{-1}} \\times {S^{{i_2}}_{{i_1}}}{a^{{i_4}}_{{i_3}}}} + {{S^{{i_2}}_{{i_1}}}{S^{{i_4}}_{{i_3}}}} + {{S^{{i_4}}_{{i_1}}}{a^{{i_2}}_{{i_3}}}} + {{{-1}} \\times {S^{{i_4}}_{{i_3}}}{a^{{i_2}}_{{i_1}}}} + {{a^{{i_2}{i_4}}_{{i_1}{i_3}}}}\\right) }");
     }
 
     // three 1-body operators, partial contraction

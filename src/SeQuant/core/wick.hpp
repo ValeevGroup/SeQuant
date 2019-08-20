@@ -605,11 +605,11 @@ class WickTheorem {
 
     auto op_left_iter = ranges::next(opseq_view_begin, state.left_op_offset);  // left op to contract
     const auto op_left_iter_fence = full_contractions_ ? ranges::next(op_left_iter) : end(opseq_view);
-    for(; op_left_iter != op_left_iter_fence; ++op_left_iter, ++state.left_op_offset) {
-      auto op_iter = ranges::next(op_left_iter);
-      for (; op_iter != end(opseq_view);) {
-        if (op_iter != op_left_iter &&
-            ranges::get_cursor(op_iter).range_iter() !=
+    for(; op_left_iter != op_left_iter_fence; ++op_left_iter, state.left_op_offset+=(full_contractions_ ? 0 : 1)) {
+      auto op_right_iter = ranges::next(op_left_iter);
+      for (; op_right_iter != end(opseq_view);) {
+        if (op_right_iter != op_left_iter &&
+            ranges::get_cursor(op_right_iter).range_iter() !=
                 ranges::get_cursor(op_left_iter)
                     .range_iter()  // can't contract within same normop
         ) {
@@ -619,8 +619,8 @@ class WickTheorem {
           auto topological_degeneracy = [&]() {
             size_t result = 1;
             if (use_topology_) {
-              auto &opseq_right = *(ranges::get_cursor(op_iter).range_iter());
-              auto &op_right_it = ranges::get_cursor(op_iter).elem_iter();
+              auto &opseq_right = *(ranges::get_cursor(op_right_iter).range_iter());
+              auto &op_right_it = ranges::get_cursor(op_right_iter).elem_iter();
               auto op_right_idx_in_opseq =
                   op_right_it - ranges::begin(opseq_right);
               auto &hug_right = opseq_right.hug();
@@ -634,7 +634,7 @@ class WickTheorem {
             // account for topologically-equivalent normal operators
             if (result > 0 && !state.topological_partitions.empty()) {
               auto opseq_right_idx =
-                  ranges::get_cursor(op_iter)
+                  ranges::get_cursor(op_right_iter)
                       .range_ordinal();  // the index of normal operator
               auto opseq_right_toppart_idx = state.op_topological_partition.at(
                   opseq_right_idx);  // the partition to which this normal
@@ -660,35 +660,20 @@ class WickTheorem {
                 }
               }
             }
-            std::cout << "topological_degeneracy:result=" << result
-                      << std::endl;
             return result;
           };
 
           // check if can contract these indices and
           // check connectivity constraints (if needed)
           size_t top_degen;
-          {
-            auto cc = can_contract(*op_left_iter, *op_iter, input_.vacuum());
-            if (Logger::get_instance().wick_contract) {
-              std::wcout << "level " << state.level
-                         << ": considering contraction of "
-                         << to_latex(*op_left_iter) << " with "
-                         << to_latex(*op_iter) << " (top_degen=" << top_degen
-                         << ")" << std::endl;
-              std::wcout << " current opseq = " << to_latex(state.opseq)
-                         << std::endl;
-              std::wcout << "can contract = " << cc << std::endl;
-            }
-          }
-          if (can_contract(*op_left_iter, *op_iter, input_.vacuum()) &&
+          if (can_contract(*op_left_iter, *op_right_iter, input_.vacuum()) &&
               (top_degen = topological_degeneracy()) > 0 &&
-              state.connect(op_connections_, ranges::get_cursor(op_iter),
+              state.connect(op_connections_, ranges::get_cursor(op_right_iter),
                             ranges::get_cursor(op_left_iter))) {
             if (Logger::get_instance().wick_contract) {
               std::wcout << "level " << state.level << ":contracting "
                          << to_latex(*op_left_iter) << " with "
-                         << to_latex(*op_iter) << " (top_degen=" << top_degen
+                         << to_latex(*op_right_iter) << " (top_degen=" << top_degen
                          << ")" << std::endl;
               std::wcout << " current opseq = " << to_latex(state.opseq)
                          << std::endl;
@@ -697,7 +682,7 @@ class WickTheorem {
             // update the phase, if needed
             double phase = 1;
             if (statistics == Statistics::FermiDirac) {
-              const auto distance = ranges::get_cursor(op_iter).ordinal() -
+              const auto distance = ranges::get_cursor(op_right_iter).ordinal() -
                                     ranges::get_cursor(op_left_iter).ordinal() -
                                     1;
               if (distance % 2) {
@@ -708,14 +693,14 @@ class WickTheorem {
             // update the prefactor and opseq
             Product sp_copy = state.sp;
             state.sp.append(top_degen * phase,
-                            contract(*op_left_iter, *op_iter, input_.vacuum()));
+                            contract(*op_left_iter, *op_right_iter, input_.vacuum()));
 
             // update the stats
             ++stats_.num_attempted_contractions;
 
             // remove from back to front
-            Op<S> right = *op_iter;
-            ranges::get_cursor(op_iter).erase();
+            Op<S> right = *op_right_iter;
+            ranges::get_cursor(op_right_iter).erase();
             --state.opseq_size;
             Op<S> left = *op_left_iter;
             ranges::get_cursor(op_left_iter).erase();
@@ -773,16 +758,16 @@ class WickTheorem {
             // restore from front to back
             ranges::get_cursor(op_left_iter).insert(std::move(left));
             ++state.opseq_size;
-            ranges::get_cursor(op_iter).insert(std::move(right));
+            ranges::get_cursor(op_right_iter).insert(std::move(right));
             ++state.opseq_size;
-            state.disconnect(op_connections_, ranges::get_cursor(op_iter),
+            state.disconnect(op_connections_, ranges::get_cursor(op_right_iter),
                              ranges::get_cursor(op_left_iter));
             //            std::wcout << "  restored opseq = " <<
             //            to_latex(state.opseq) << std::endl;
           }
-          ++op_iter;
+          ++op_right_iter;
         } else {
-          ++op_iter;
+          ++op_right_iter;
         }
       }  // right op iter
     }  // left op iter
