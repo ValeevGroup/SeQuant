@@ -64,10 +64,10 @@ template <typename Lambda>
 void parallel_for_each(Lambda&& lambda, const size_t ntasks) {
   std::atomic<size_t> work = 0;
   auto task = [&work, &lambda, ntasks](int thread_id) {
-    size_t task_id = work++;
+    size_t task_id = work.fetch_add(1);
     while(task_id < ntasks) {
       std::forward<Lambda>(lambda)(task_id);
-      task_id = work++;
+      task_id = work.fetch_add(1);
     }
   };
 
