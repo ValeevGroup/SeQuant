@@ -653,6 +653,13 @@ class Product : public Expr {
     for (auto it = begin; it != end; ++it) append(1, *it);
   }
 
+  /// multiplies the product by @c scalar
+  template <typename T>
+  Product &scale(T scalar) {
+    scalar_ *= scalar;
+    return *this;
+  }
+
   /// (post-)multiplies the product by @c scalar times @c factor
   template <typename T>
   Product &append(T scalar, ExprPtr factor) {
@@ -680,7 +687,15 @@ class Product : public Expr {
     return *this;
   }
 
-  /// (pre-)multiplies the product by @c scalar times @c factor ; less efficient
+  /// (post-)multiplies the product by @c scalar times @c factor
+  template <typename T, typename Factor, typename = std::enable_if_t<std::is_base_of_v<Expr, std::remove_reference_t<Factor>>>>
+  Product &append(T scalar, Factor&& factor) {
+    return this->append(scalar,
+                        std::static_pointer_cast<Expr>(
+                            std::forward<Factor>(factor).shared_from_this()));
+  }
+
+    /// (pre-)multiplies the product by @c scalar times @c factor ; less efficient
   /// than append()
   template <typename T>
   Product &prepend(T scalar, ExprPtr factor) {
@@ -706,6 +721,14 @@ class Product : public Expr {
       //      cend(factor_product->factors_));
     }
     return *this;
+  }
+
+  /// (pre-)multiplies the product by @c scalar times @c factor
+  template <typename T, typename Factor, typename = std::enable_if_t<std::is_base_of_v<Expr, std::remove_reference_t<Factor>>>>
+  Product &prepend(T scalar, Factor&& factor) {
+    return this->prepend(scalar,
+                         std::static_pointer_cast<Expr>(
+                             std::forward<Factor>(factor).shared_from_this()));
   }
 
   const std::complex<double> &scalar() const { return scalar_; }
@@ -765,7 +788,7 @@ class Product : public Expr {
 
   std::shared_ptr<Expr> clone() const override {
     auto cloned_factors =
-        factors() | ranges::view::transform([](const ExprPtr &ptr) {
+        factors() | ranges::views::transform([](const ExprPtr &ptr) {
           return ptr ? ptr->clone() : nullptr;
         });
     return ex<Product>(this->scalar(), ranges::begin(cloned_factors),
@@ -774,7 +797,7 @@ class Product : public Expr {
 
   Product deep_copy() const {
     auto cloned_factors =
-        factors() | ranges::view::transform([](const ExprPtr &ptr) {
+        factors() | ranges::views::transform([](const ExprPtr &ptr) {
           return ptr ? ptr->clone() : nullptr;
         });
     return Product(this->scalar(), ranges::begin(cloned_factors),
@@ -782,7 +805,12 @@ class Product : public Expr {
   }
 
   virtual Expr &operator*=(const Expr &that) override {
-    this->append(1, const_cast<Expr &>(that).shared_from_this());
+    if (!that.is<Constant>()) {
+      this->append(1, const_cast<Expr &>(that).shared_from_this());
+    }
+    else {
+      scalar_ *= that.as<Constant>().value();
+    }
     return *this;
   }
 
@@ -816,7 +844,7 @@ class Product : public Expr {
   hash_type memoizing_hash() const override {
     auto deref_factors =
         factors() |
-        ranges::view::transform(
+        ranges::views::transform(
             [](const ExprPtr &ptr) -> const Expr & { return *ptr; });
     hash_value_ = boost::hash_range(ranges::begin(deref_factors),
                                     ranges::end(deref_factors));
@@ -1019,7 +1047,7 @@ class Sum : public Expr {
 
   std::shared_ptr<Expr> clone() const override {
     auto cloned_summands =
-        summands() | ranges::view::transform(
+        summands() | ranges::views::transform(
                          [](const ExprPtr &ptr) { return ptr->clone(); });
     return ex<Sum>(ranges::begin(cloned_summands),
                    ranges::end(cloned_summands));
@@ -1063,7 +1091,7 @@ class Sum : public Expr {
   hash_type memoizing_hash() const override {
     auto deref_summands =
         summands() |
-        ranges::view::transform(
+        ranges::views::transform(
             [](const ExprPtr &ptr) -> const Expr & { return *ptr; });
     hash_value_ = boost::hash_range(ranges::begin(deref_summands),
                                     ranges::end(deref_summands));
@@ -1146,7 +1174,7 @@ inline std::wstring to_wolfram(const ExprPtr &exprptr) {
 
 template<typename Sequence>
 std::decay_t<Sequence> clone(Sequence &&exprseq) {
-  auto cloned_seq = exprseq | ranges::view::transform([](const ExprPtr &ptr) { return ptr ? ptr->clone() : nullptr; });
+  auto cloned_seq = exprseq | ranges::views::transform([](const ExprPtr &ptr) { return ptr ? ptr->clone() : nullptr; });
   return std::decay_t<Sequence>(ranges::begin(cloned_seq), ranges::end(cloned_seq));
 }
 

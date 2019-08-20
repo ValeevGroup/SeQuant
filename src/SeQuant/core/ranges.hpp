@@ -43,10 +43,10 @@ public:
   struct cursor {
   private:
     RangeNest *range_;
-    typename RangeNest::iterator
+    std::conditional_t<std::is_const_v<RangeNest>, typename RangeNest::const_iterator, typename RangeNest::iterator>
         range_iter_; // sequence iterator pointing to the current element's
                      // range in the sequence
-    typename Range::iterator
+    std::conditional_t<std::is_const_v<Range>, typename Range::const_iterator, typename Range::iterator>
         elem_iter_; // iterator pointing to the current element
     mutable int64_t ordinal_ =
         -1; // index of the current element within the sequence
@@ -176,6 +176,7 @@ public:
 
  public:
   using iterator = ranges::basic_iterator<cursor>;
+  using const_iterator = ranges::basic_iterator<const cursor>;
 };
 
 } // namespace sequant

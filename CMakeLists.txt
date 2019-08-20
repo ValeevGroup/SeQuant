@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.9)
-project(SeQuant)
+project(SeQuant LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -22,6 +22,9 @@ list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/modules/")
 # std::thread requires (on some platforms?) thread support which is not provided automatically
 find_package(Threads REQUIRED)
 
+if (NOT RANGEV3_DIR)
+    message(FATAL_ERROR "Set cache variable RANGEV3_DIR to the top of the Range-V3 source directory")
+endif(NOT RANGEV3_DIR)
 add_library(Range-V3 INTERFACE IMPORTED)
 set_property(TARGET Range-V3 PROPERTY
              INTERFACE_INCLUDE_DIRECTORIES ${RANGEV3_DIR}/include)
@@ -35,6 +38,34 @@ endif()
 add_library(Boost INTERFACE IMPORTED)
 set_property(TARGET Boost PROPERTY
         INTERFACE_INCLUDE_DIRECTORIES ${Boost_INCLUDE_DIR})
+
+# look for BTAS, if needed
+if (BTAS_INSTALL_DIR)
+    find_package(BTAS)
+    message (STATUS "BTAS_FOUND=${BTAS_FOUND}")
+    if (BTAS_FOUND)
+        # look for CBLAS + LAPACKE
+        find_package(CBLAS)
+        find_package(LAPACKE)
+        add_library(BTAS INTERFACE IMPORTED)
+        if (${CBLAS_FOUND} AND ${LAPACKE_FOUND})
+            set(BTAS_DEFINITIONS "_CBLAS_HEADER=\"${CBLAS_INCLUDE_FILE}\";_LAPACKE_HEADER=\"${LAPACKE_INCLUDE_FILE}\";BTAS_HAS_CBLAS=1")
+            if (MKL_FOUND)
+                set(BTAS_DEFINITIONS "_HAS_INTEL_MKL=1;${BTAS_DEFINITIONS}")
+            endif(MKL_FOUND)
+            message(STATUS "BTAS_DEFINITIONS=${BTAS_DEFINITIONS}")
+            set_target_properties(BTAS PROPERTIES
+                    INTERFACE_LINK_LIBRARIES "${LAPACKE_LIBRARIES};${CBLAS_LIBRARIES}"
+                    INTERFACE_COMPILE_DEFINITIONS "${BTAS_DEFINITIONS}"
+                    INTERFACE_INCLUDE_DIRECTORIES "${BTAS_INCLUDE_DIRS};${LAPACKE_INCLUDE_DIR};${CBLAS_INCLUDE_DIR}"
+                    )
+        else()
+            set_target_properties(BTAS PROPERTIES
+                    INTERFACE_INCLUDE_DIRECTORIES ${BTAS_INCLUDE_DIRS}
+                    )
+        endif()
+    endif(BTAS_FOUND)
+endif(BTAS_INSTALL_DIR)
 
 # embedded bliss-0.73
 add_library(bliss
