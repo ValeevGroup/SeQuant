@@ -687,7 +687,15 @@ class Product : public Expr {
     return *this;
   }
 
-  /// (pre-)multiplies the product by @c scalar times @c factor ; less efficient
+  /// (post-)multiplies the product by @c scalar times @c factor
+  template <typename T, typename Factor, typename = std::enable_if_t<std::is_base_of_v<Expr, std::remove_reference_t<Factor>>>>
+  Product &append(T scalar, Factor&& factor) {
+    return this->append(scalar,
+                        std::static_pointer_cast<Expr>(
+                            std::forward<Factor>(factor).shared_from_this()));
+  }
+
+    /// (pre-)multiplies the product by @c scalar times @c factor ; less efficient
   /// than append()
   template <typename T>
   Product &prepend(T scalar, ExprPtr factor) {
@@ -713,6 +721,14 @@ class Product : public Expr {
       //      cend(factor_product->factors_));
     }
     return *this;
+  }
+
+  /// (pre-)multiplies the product by @c scalar times @c factor
+  template <typename T, typename Factor, typename = std::enable_if_t<std::is_base_of_v<Expr, std::remove_reference_t<Factor>>>>
+  Product &prepend(T scalar, Factor&& factor) {
+    return this->prepend(scalar,
+                         std::static_pointer_cast<Expr>(
+                             std::forward<Factor>(factor).shared_from_this()));
   }
 
   const std::complex<double> &scalar() const { return scalar_; }
