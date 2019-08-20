@@ -230,6 +230,19 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       REQUIRE(to_latex(result)
                   == L"{{S^{{p_1}}_{{m_{102}}}}{S^{{m_{102}}}_{{p_4}}}{S^{{e_{103}}}_{{p_2}}}{S^{{p_3}}_{{e_{103}}}}}");
     }
+    // two general 1-body operators, partial contractions: Eq. 21a of DOI 10.1063/1.474405
+    {
+      auto opseq =
+          FNOperatorSeq({FNOperator({L"p_1"}, {L"p_2"}, V), FNOperator({L"p_3"}, {L"p_4"}, V)});
+      auto wick = FWickTheorem{opseq};
+      REQUIRE_NOTHROW(wick.full_contractions(false).spinfree(false).compute());
+      auto result = wick.full_contractions(false).spinfree(false).compute();
+      REQUIRE(result->is<Sum>());
+      REQUIRE(result->size() == 4);
+      REQUIRE(to_latex(result)
+                  == L"{ \\left({{{-1}} \\times {S^{{p_1}}_{{m_{107}}}}{S^{{m_{107}}}_{{p_4}}}{\\tilde{a}^{{p_3}}_{{p_2}}}} + {{S^{{p_1}}_{{m_{107}}}}{S^{{m_{107}}}_{{p_4}}}{S^{{e_{108}}}_{{p_2}}}{S^{{p_3}}_{{e_{108}}}}} + {{S^{{e_{109}}}_{{p_2}}}{S^{{p_3}}_{{e_{109}}}}{\\tilde{a}^{{p_1}}_{{p_4}}}} + {{\\tilde{a}^{{p_1}{p_3}}_{{p_2}{p_4}}}}\\right) }");
+    }
+
     // two (pure qp) 2-body operators
     {
       auto opseq =
