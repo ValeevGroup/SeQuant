@@ -48,7 +48,7 @@ class Tensor : public Expr, public AbstractTensor {
   }
 
   /// @return view of the bra+ket index ranges
-  auto braket() { return ranges::view::concat(bra_, ket_); }
+  auto braket() { return ranges::views::concat(bra_, ket_); }
 
  public:
   Tensor() = default;
@@ -91,7 +91,7 @@ class Tensor : public Expr, public AbstractTensor {
   const auto& bra() const { return bra_; }
   const auto& ket() const { return ket_; }
   /// @return joined view of the bra and ket index ranges
-  auto braket() const { return ranges::view::concat(bra_, ket_); }
+  auto braket() const { return ranges::views::concat(bra_, ket_); }
   /// @return view of the bra+ket index ranges
   /// @note this is to work around broken lookup rules
   auto const_braket() const { return this->braket(); }

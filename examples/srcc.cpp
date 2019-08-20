@@ -297,16 +297,5 @@ int main(int argc, char* argv[]) {
         });
   });
 
-  auto ccs_r1 = cceqvec{1, 1}(true, true, true, true);
-  std::wcout << to_latex(ccs_r1[1]) << std::endl;
-
-  auto expr_visitor = [](const ExprPtr& expr) {
-    if (true) {
-      std::wcout << "visited : " << to_latex(expr) << std::endl;
-      std::cout << "  label = " << expr->type_name() << std::endl;
-    }
-  };
-  ccs_r1[1]->visit(expr_visitor);
-
   return 0;
 }

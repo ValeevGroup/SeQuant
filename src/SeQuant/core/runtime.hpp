@@ -6,7 +6,9 @@
 #define SEQUANT_RUNTIME_HPP
 
 #include <mutex>
+#include <stdexcept>
 #include <thread>
+#include <vector>
 
 namespace sequant {
 

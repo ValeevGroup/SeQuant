@@ -151,7 +151,19 @@ inline FOp fann(Index i, std::initializer_list<I> pi) {
   return FOp(Index(i, pi), Action::annihilate);
 }
 
-/// @return true if this is a pure quasdiparticle creator with respect to the
+/// @return true if this is a particle creator, false otherwise
+template <Statistics S>
+bool is_creator(const Op<S> &op) {
+  return op.action() == Action::create;
+};
+
+/// @return true if this is a particle annihilator, false otherwise
+template <Statistics S>
+bool is_annihilator(const Op<S> &op) {
+  return op.action() == Action::annihilate;
+};
+
+/// @return true if this is a pure quasiparticle creator with respect to the
 /// given vacuum, false otherwise
 template <Statistics S>
 bool is_pure_qpcreator(const Op<S> &op,
@@ -170,7 +182,7 @@ bool is_pure_qpcreator(const Op<S> &op,
   }
 };
 
-/// @return true if this is a quasdiparticle creator with respect to the given
+/// @return true if this is a quasiparticle creator with respect to the given
 /// vacuum, false otherwise
 template <Statistics S>
 bool is_qpcreator(const Op<S> &op,
@@ -208,7 +220,7 @@ IndexSpace qpcreator_space(const Op<S> &op,
   }
 }
 
-/// @return true if this is a pure quasdiparticle annihilator with respect to
+/// @return true if this is a pure quasiparticle annihilator with respect to
 /// the given vacuum, false otherwise
 template <Statistics S>
 bool is_pure_qpannihilator(const Op<S> &op,
@@ -227,7 +239,7 @@ bool is_pure_qpannihilator(const Op<S> &op,
   }
 };
 
-/// @return true if this is a quasdiparticle annihilator with respect to the
+/// @return true if this is a quasiparticle annihilator with respect to the
 /// given vacuum, false otherwise
 template <Statistics S>
 bool is_qpannihilator(const Op<S> &op,
@@ -423,13 +435,11 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
   /// constructs an identity operator
   NormalOperator(Vacuum v = get_default_context().vacuum()) {}
 
-  /// @param creators sequence of creators
-  /// @param annihilators sequence of annihilators (in order of particle indices, see the class documentation for more info).
+  /// @param creators sequence of creator indices
+  /// @param annihilators sequence of annihilator indices (in order of particle indices, see the class documentation for more info).
   template <
       typename IndexContainer,
-      typename = std::enable_if_t<
-          !meta::is_initializer_list_v<std::decay_t<IndexContainer>> &&
-          std::is_same_v<typename std::decay_t<IndexContainer>::value_type, Index>>>
+      typename = std::enable_if_t<std::is_same_v<typename std::decay_t<IndexContainer>::value_type, Index>>>
   NormalOperator(IndexContainer &&creator_indices,
                  IndexContainer &&annihilator_indices,
                  Vacuum v = get_default_context().vacuum())
@@ -438,44 +448,62 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
     for (const auto &i : creator_indices) {
       this->emplace_back(i, Action::create);
     }
-    for (const auto &i : annihilator_indices | ranges::view::reverse) {
+    for (const auto &i : annihilator_indices | ranges::views::reverse) {
       this->emplace_back(i, Action::annihilate);
     }
   }
 
   /// @param creators sequence of creators
   /// @param annihilators sequence of annihilators (in order of particle indices, see the class documentation for more info).
-  NormalOperator(std::initializer_list<Op<S>> creators,
-                 std::initializer_list<Op<S>> annihilators,
-                 Vacuum v = get_default_context().vacuum())
-      : Operator<S>{}, vacuum_(v), ncreators_(size(creators)) {
-    for (const auto &op: creators) {
+  template <typename OpContainer>
+  NormalOperator(OpContainer &&creators,
+                 OpContainer &&annihilators,
+                 Vacuum v = get_default_context().vacuum(),
+  std::enable_if_t<!std::is_same_v<std::decay_t<OpContainer>, NormalOperator> && std::is_same_v<typename std::decay_t<OpContainer>::value_type, Op<S>>>* = nullptr) : Operator<S>{}, vacuum_(v), ncreators_(ranges::size(creators)) {
+    for (const auto &op : creators) {
       assert(op.action() == Action::create);
     }
-    for (const auto &op: annihilators) {
+    for (const auto &op : annihilators) {
+      assert(op.action() == Action::annihilate);
+    }
+    this->reserve(ranges::size(creators) + ranges::size(annihilators));
+    static_cast<container::svector<Op<S>>*>(this)->insert(this->end(), ranges::cbegin(creators), ranges::cend(creators));
+    static_cast<container::svector<Op<S>>*>(this)->insert(this->end(), ranges::crbegin(annihilators), ranges::crend(annihilators));
+  }
+
+  /// @param creators initializer_list of creator indices
+  /// @param annihilators initializer_list of annihilator indices (in order of particle indices, see the class documentation for more info).
+  template <
+      typename I,
+      typename = std::enable_if_t<!std::is_same_v<std::decay_t<I>,Op<S>>>>
+  NormalOperator(std::initializer_list<I> creator_indices,
+                 std::initializer_list<I> annihilator_indices,
+                 Vacuum v = get_default_context().vacuum())
+      : Operator<S>{}, vacuum_(v), ncreators_(creator_indices.size()) {
+    this->reserve(creator_indices.size() + annihilator_indices.size());
+    for (const auto &i : creator_indices) {
+      this->emplace_back(i, Action::create);
+    }
+    for (const auto &i : annihilator_indices | ranges::views::reverse) {
+      this->emplace_back(i, Action::annihilate);
+    }
+  }
+
+  /// @param creators initializer_list of creators
+  /// @param annihilators initializer_list of annihilators (in order of particle indices, see the class documentation for more info).
+  NormalOperator(std::initializer_list<Op<S>> creators,
+                 std::initializer_list<Op<S>> annihilators,
+                 Vacuum v = get_default_context().vacuum()) : Operator<S>{}, vacuum_(v), ncreators_(size(creators)) {
+    for (const auto &op : creators) {
+      assert(op.action() == Action::create);
+    }
+    for (const auto &op : annihilators) {
       assert(op.action() == Action::annihilate);
     }
     this->reserve(size(creators) + size(annihilators));
     this->insert(this->end(), cbegin(creators), cend(creators));
     this->insert(this->end(), crbegin(annihilators), crend(annihilators));
   }
-
-//  /// @param creator_indices sequence of creator indices
-//  /// @param annihilator_indices sequence of annihilator indices (in order of particle indices, see the class documentation for more info).
-  template <typename I, typename = std::enable_if_t<!std::is_same_v<std::decay_t<I>,Op<S>>>>
-  NormalOperator(std::initializer_list<I> creator_indices,
-                 std::initializer_list<I> annihilator_indices,
-                 Vacuum v = get_default_context().vacuum())
-      : Operator<S>{}, vacuum_(v), ncreators_(creator_indices.size()) {
-    this->reserve(creator_indices.size() + annihilator_indices.size());
-    for (const auto &i: creator_indices) {
-      this->emplace_back(i, Action::create);
-    }
-    for (const auto &i : annihilator_indices | ranges::view::reverse) {
-      this->emplace_back(i, Action::annihilate);
-    }
-  }
-
   NormalOperator(const NormalOperator &other)
       : Operator<S>(other),
         vacuum_(other.vacuum_),
@@ -494,16 +522,16 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
   /// @return the vacuum state with respect to which the operator is normal-ordered.
   Vacuum vacuum() const { return vacuum_; }
   /// @return the range of creators, in the order of increasing particle index
-  auto creators() const { return ranges::view::counted(this->cbegin(), ncreators()); }
+  auto creators() const { return ranges::views::counted(this->cbegin(), ncreators()); }
   /// @return the range of annihilators, in the order of increasing particle index
-  auto annihilators() const { return ranges::view::counted(this->crbegin(), nannihilators()); }
+  auto annihilators() const { return ranges::views::counted(this->crbegin(), nannihilators()); }
   /// @return the number of creators
   auto ncreators() const { return ncreators_; }
   /// @return the number of annihilators
   auto nannihilators() const { return this->size() - ncreators(); }
   /// @return view of creators and annihilators as a single range
   auto creann() const {
-    return ranges::view::concat(creators(), annihilators());
+    return ranges::views::concat(creators(), annihilators());
   }
 
   /// @return number of creators/annihilators
@@ -736,17 +764,17 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
   // these implement the AbstractTensor interface
   AbstractTensor::const_any_view_randsz _bra() const override final {
     return annihilators() |
-           ranges::view::transform(
+           ranges::views::transform(
                [](auto &&op) -> const Index & { return op.index(); });
   }
   AbstractTensor::const_any_view_randsz _ket() const override final {
-    return creators() | ranges::view::transform([](auto &&op) -> const Index & {
+    return creators() | ranges::views::transform([](auto &&op) -> const Index & {
              return op.index();
            });
   }
   AbstractTensor::const_any_view_rand _braket() const override final {
-    return ranges::view::concat(annihilators(), creators()) |
-           ranges::view::transform(
+    return ranges::views::concat(annihilators(), creators()) |
+           ranges::views::transform(
                [](auto &&op) -> const Index & { return op.index(); });
   }
   std::size_t _bra_rank() const override final {
@@ -792,14 +820,14 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
 
   AbstractTensor::any_view_randsz _bra_mutable() override final {
     this->reset_hash_value();
-    return ranges::view::counted(this->rbegin(), nannihilators()) |
-           ranges::view::transform(
+    return ranges::views::counted(this->rbegin(), nannihilators()) |
+           ranges::views::transform(
                [](auto &&op) -> Index & { return op.index(); });
   }
   AbstractTensor::any_view_randsz _ket_mutable() override final {
     this->reset_hash_value();
-    return ranges::view::counted(this->begin(), ncreators()) |
-           ranges::view::transform(
+    return ranges::views::counted(this->begin(), ncreators()) |
+           ranges::views::transform(
                [](auto &&op) -> Index & { return op.index(); });
   }
 
@@ -926,6 +954,62 @@ namespace detail {
     OpIdRegistrar();
   };
 }  // namespace detail
+
+/// converts NormalOperatorSequence to NormalOperator
+/// @tparam S Statistics
+/// @param[in] opseq a NormalOperatorSequence<S> object
+/// @return @c {phase,normal_operator} , where @c phase is +1 or -1, and @c normal_operator is a NormalOperator<S>
+template<Statistics S = Statistics::FermiDirac>
+std::tuple<int, std::shared_ptr<NormalOperator<S>>> normalize(const NormalOperatorSequence<S>& opseq) {
+  int phase = 1;
+  container::svector<Op<S>> creators, annihilators;
+
+  using opseq_view_type = flattened_rangenest<const NormalOperatorSequence<S>>;
+  auto opseq_view = opseq_view_type(&opseq);
+  using std::begin;
+  using std::end;
+
+  auto opseq_view_iter = begin(opseq_view);
+  auto opseq_view_end = end(opseq_view);
+  std::size_t pos = 0;
+  const auto nops = opseq.opsize(); // # of Op<S>
+  const auto nnops = opseq.size();  // # of NormalOperator<S>
+  assert(nnops > 0);
+  auto vacuum = opseq.vacuum();
+  container::svector<container::svector<Op<S>>> annihilator_groups(nnops);
+  while (opseq_view_iter != opseq_view_end) {
+    // creators: since they go left, concat them to preserve the order of NormalOperators and creators within Operators ...
+    if (is_creator(*opseq_view_iter)) {
+      creators.push_back(*opseq_view_iter);
+    } // annihilators: rev-concat the groups corresponding to NormalOperators to obtain the desired order of normalized NormalOperators, but within each group simply concat to preserve the original order
+    else {
+      assert(is_annihilator(*opseq_view_iter));
+
+      // distance from the given Op to the end of NOpSeq (to rev-concat NOps we are pushing to the first available group ...
+      // since we are using vector we are filling Op groups from the back, but this does not create any extra phase)
+      const auto distance_to_end = nops - pos - 1;
+      const auto op_group = nnops - ranges::get_cursor(opseq_view_iter).range_ordinal() - 1;  // group idx = reverse of the NOp index within NopSeq
+      assert(op_group < nnops);
+      const auto total_distance = distance_to_end + annihilator_groups[op_group].size();  // we are fwd-concating Ops within groups, hence extra phase
+      annihilator_groups[op_group].push_back(*opseq_view_iter);
+      if (S == Statistics::FermiDirac && total_distance%2==1) {
+        phase *= -1;
+      }
+    }
+    ++pos;
+    ++opseq_view_iter;
+  }
+
+  // convert annihilator_groups to annihilators N.B. the NormalOperator ctor expects annihilators in reverse order!
+  ranges::for_each(annihilator_groups | ranges::views::reverse, [&annihilators](const auto&agrp) {
+    ranges::for_each(agrp | ranges::views::reverse, [&annihilators](const auto& op) {
+      annihilators.push_back(op);
+    });
+  });
+
+  return std::make_tuple(phase, std::make_shared<NormalOperator<S>>(std::move(creators), std::move(annihilators), vacuum));
+}
+
 }  // namespace sequant
 
 #endif // SEQUANT_OP_H

@@ -107,8 +107,7 @@ ExprPtr W() {
 
 ExprPtr vac_av(ExprPtr expr, std::initializer_list<std::pair<int,int>> op_connections, bool use_top) {
   FWickTheorem wick{expr};
-  wick.full_contractions(true)
-      .spinfree(false)
+  wick.spinfree(false)
       .use_topology(use_top)
       .set_op_connections(op_connections);
   auto result = wick.compute();

@@ -767,6 +767,8 @@ void WickTheorem<S>::reduce(ExprPtr &expr) const {
     }
   }
 }
+template <Statistics S>
+WickTheorem<S>::~WickTheorem() {}
 
 }  // namespace sequant
 
