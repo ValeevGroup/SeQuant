@@ -467,8 +467,8 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
       assert(op.action() == Action::annihilate);
     }
     this->reserve(ranges::size(creators) + ranges::size(annihilators));
-    this->insert(this->end(), std::cbegin(creators), std::cend(creators));
-    this->insert(this->end(), std::crbegin(annihilators), std::crend(annihilators));
+    static_cast<container::svector<Op<S>>*>(this)->insert(this->end(), ranges::cbegin(creators), ranges::cend(creators));
+    static_cast<container::svector<Op<S>>*>(this)->insert(this->end(), ranges::crbegin(annihilators), ranges::crend(annihilators));
   }
 
   /// @param creators initializer_list of creator indices
@@ -960,7 +960,7 @@ namespace detail {
 /// @param[in] opseq a NormalOperatorSequence<S> object
 /// @return @c {phase,normal_operator} , where @c phase is +1 or -1, and @c normal_operator is a NormalOperator<S>
 template<Statistics S = Statistics::FermiDirac>
-std::tuple<int, NormalOperator<S>> normalize(const NormalOperatorSequence<S>& opseq) {
+std::tuple<int, std::shared_ptr<NormalOperator<S>>> normalize(const NormalOperatorSequence<S>& opseq) {
   int phase = 1;
   std::list<Op<S>> creators, annihilators;
 
@@ -972,16 +972,19 @@ std::tuple<int, NormalOperator<S>> normalize(const NormalOperatorSequence<S>& op
   auto opseq_view_iter = begin(opseq_view);
   auto opseq_view_end = end(opseq_view);
   std::size_t pos = 0;
+  std::size_t annihilators_size = 0;
   const auto nops = opseq.opsize();
   auto vacuum = opseq.vacuum();
   while (opseq_view_iter != opseq_view_end) {
+    // this preserves the order of creators (since creators go left, concatenate them) ...
     if (is_creator(*opseq_view_iter)) {
       creators.push_back(*opseq_view_iter);
-    }
+    } // ... and annihilators ...
     else {
       assert(is_annihilator(*opseq_view_iter));
-      annihilators.push_front(*opseq_view_iter);
-      const auto distance = nops - pos;
+      const auto distance = nops - pos - 1;  // concat annihilators in reverse order to get nice merging of PNC ops, hence no extra phase from crossing the annihilator set
+      annihilators.push_back(*opseq_view_iter);  // but reserve them since the (NormalOperator ctor expects them in reverse order
+      ++annihilators_size;
       if (S == Statistics::FermiDirac && distance%2==1) {
         phase *= -1;
       }
@@ -990,7 +993,7 @@ std::tuple<int, NormalOperator<S>> normalize(const NormalOperatorSequence<S>& op
     ++opseq_view_iter;
   }
 
-  return std::make_tuple(phase,  NormalOperator<S>(std::move(creators), std::move(annihilators), vacuum));
+  return std::make_tuple(phase, std::make_shared<NormalOperator<S>>(std::move(creators), std::move(annihilators), vacuum));
 }
 
 }  // namespace sequant

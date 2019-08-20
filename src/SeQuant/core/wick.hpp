@@ -303,9 +303,6 @@ class WickTheorem {
   /// Evaluates wick_ theorem for a single NormalOperatorSequence
   /// @return the result of applying Wick's theorem
   ExprPtr compute_nopseq(const bool count_only) const {
-    if (!full_contractions_)
-      throw std::logic_error(
-          "WickTheorem::compute: full_contractions=false not yet supported");
     if (spinfree_)
       throw std::logic_error(
           "WickTheorem::compute: spinfree=true not yet supported");
@@ -329,6 +326,7 @@ class WickTheorem {
         : opseq(opseq),
           opseq_size(opseq.opsize()),
           level(0),
+          left_op_offset(0),
           count_only(false),
           count(0),
           op_connections(opseq.size()),
@@ -347,6 +345,7 @@ class WickTheorem {
     std::size_t opseq_size;           //!< current size of opseq
     Product sp;                       //!< current prefactor
     int level;                        //!< level in recursive wick call stack
+    size_t left_op_offset;            //!< where to start looking for contractions
     bool count_only;                  //!< if true, only track the total number of summands in the result (i.e. 1 (the normal product) + the number of contractions (if normal wick result is wanted) or the number of complete constractions (if want complete contractions only)
     std::atomic<size_t> count;        //!< if count_only is true, will countain the total number of terms
     /// TODO rename op -> nop to distinguish Op and NormalOperator
@@ -515,7 +514,7 @@ class WickTheorem {
   /// counting Ops
   /// @return the result
   ExprPtr compute_nontensor_wick(const bool count_only) const {
-    std::vector<std::pair<Product, NormalOperator<S>>>
+    std::vector<std::pair<Product, std::shared_ptr<NormalOperator<S>>>>
         result;      //!< current value of the result
     std::mutex mtx;  // used in critical sections updating the result
     auto result_plus_mutex = std::make_pair(&result, &mtx);
@@ -536,6 +535,17 @@ class WickTheorem {
 
     recursive_nontensor_wick(result_plus_mutex, state);
 
+    // if computing everything, include the contraction-free term
+    if (!full_contractions_) {
+      if (count_only) {
+        ++state.count;
+      }
+      else {
+        auto [phase, normop] = normalize(input_);
+        result_plus_mutex.first->push_back(std::make_pair(Product(phase, {}), std::move(normop)));
+      }
+    }
+
     // convert result to an Expr
     // if result.size() == 0, return null ptr
     ExprPtr result_expr;
@@ -544,11 +554,28 @@ class WickTheorem {
       result_expr = ex<Constant>(state.count);
     }
     else if (result.size() == 1) {  // if result.size() == 1, return Product
-      result_expr = ex<Product>(std::move(result[0].first));
+      auto product = std::make_shared<Product>(std::move(result.at(0).first));
+      if (full_contractions_)
+        assert(result.at(0).second == nullptr);
+      else {
+        if (result.at(0).second)
+          product->append(1, std::move(result.at(0).second));
+      }
+      result_expr = product;
     } else if (result.size() > 1) {
       auto sum = std::make_shared<Sum>();
-      for (auto &term : result) {
-        sum->append(ex<Product>(std::move(term.first)));
+      for (auto &&term : result) {
+        if (full_contractions_) {
+          assert(term.second == nullptr);
+          sum->append(ex<Product>(std::move(term.first)));
+        }
+        else {
+          auto term_product = std::make_shared<Product>(std::move(term.first));
+          if (term.second) {
+            term_product->append(1, term.second);
+          }
+          sum->append(term_product);
+        }
       }
       result_expr = sum;
     }
@@ -557,28 +584,33 @@ class WickTheorem {
     return result_expr;
   }
 
+ public:
+  virtual ~WickTheorem();
+ private:
   void recursive_nontensor_wick(
-      std::pair<std::vector<std::pair<Product, NormalOperator<S>>> *,
+      std::pair<std::vector<std::pair<Product, std::shared_ptr<NormalOperator<S>>>> *,
                 std::mutex *> &result,
       NontensorWickState &state) const {
-    // if full contractions needed, make contractions involving first index with
-    // another index, else contract any index i with index j (i<j)
-    if (full_contractions_) {
-      using opseq_view_type = flattened_rangenest<NormalOperatorSequence<S>>;
-      auto opseq_view = opseq_view_type(&state.opseq);
-      using std::begin;
-      using std::end;
-      auto opseq_view_begin = begin(opseq_view);
+    using opseq_view_type = flattened_rangenest<NormalOperatorSequence<S>>;
+    auto opseq_view = opseq_view_type(&state.opseq);
+    using std::begin;
+    using std::end;
+    // if full contractions needed, make contractions involving first index with another index, else contract any index i with index j (i<j)
+    auto opseq_view_begin = begin(opseq_view);
 
-      // optimization: can't contract fully if first op is not a qp annihilator
-      if (!is_qpannihilator(*opseq_view_begin, input_.vacuum())) return;
+    // optimization: can't contract fully if first op is not a qp annihilator
+    if (full_contractions_ &&
+        !is_qpannihilator(*opseq_view_begin, input_.vacuum()))
+      return;
 
-      auto op_iter = opseq_view_begin;
-      ++op_iter;
+    auto op_left_iter = ranges::next(opseq_view_begin, state.left_op_offset);  // left op to contract
+    const auto op_left_iter_fence = full_contractions_ ? ranges::next(op_left_iter) : end(opseq_view);
+    for(; op_left_iter != op_left_iter_fence; ++op_left_iter, ++state.left_op_offset) {
+      auto op_iter = ranges::next(op_left_iter);
       for (; op_iter != end(opseq_view);) {
-        if (op_iter != opseq_view_begin &&
+        if (op_iter != op_left_iter &&
             ranges::get_cursor(op_iter).range_iter() !=
-                ranges::get_cursor(opseq_view_begin)
+                ranges::get_cursor(op_left_iter)
                     .range_iter()  // can't contract within same normop
         ) {
           // computes topological degeneracy:
@@ -589,11 +621,13 @@ class WickTheorem {
             if (use_topology_) {
               auto &opseq_right = *(ranges::get_cursor(op_iter).range_iter());
               auto &op_right_it = ranges::get_cursor(op_iter).elem_iter();
-              auto op_right_idx_in_opseq = op_right_it - ranges::begin(opseq_right);
+              auto op_right_idx_in_opseq =
+                  op_right_it - ranges::begin(opseq_right);
               auto &hug_right = opseq_right.hug();
               auto &group_right = hug_right->group(op_right_idx_in_opseq);
-              if (group_right.second.find(op_right_idx_in_opseq) == group_right.second.begin())
-                result =hug_right->group_size(op_right_idx_in_opseq);
+              if (group_right.second.find(op_right_idx_in_opseq) ==
+                  group_right.second.begin())
+                result = hug_right->group_size(op_right_idx_in_opseq);
               else
                 result = 0;
             }
@@ -626,19 +660,34 @@ class WickTheorem {
                 }
               }
             }
+            std::cout << "topological_degeneracy:result=" << result
+                      << std::endl;
             return result;
           };
 
           // check if can contract these indices and
           // check connectivity constraints (if needed)
           size_t top_degen;
-          if (can_contract(*opseq_view_begin, *op_iter, input_.vacuum()) &&
+          {
+            auto cc = can_contract(*op_left_iter, *op_iter, input_.vacuum());
+            if (Logger::get_instance().wick_contract) {
+              std::wcout << "level " << state.level
+                         << ": considering contraction of "
+                         << to_latex(*op_left_iter) << " with "
+                         << to_latex(*op_iter) << " (top_degen=" << top_degen
+                         << ")" << std::endl;
+              std::wcout << " current opseq = " << to_latex(state.opseq)
+                         << std::endl;
+              std::wcout << "can contract = " << cc << std::endl;
+            }
+          }
+          if (can_contract(*op_left_iter, *op_iter, input_.vacuum()) &&
               (top_degen = topological_degeneracy()) > 0 &&
               state.connect(op_connections_, ranges::get_cursor(op_iter),
-                            ranges::get_cursor(opseq_view_begin))) {
+                            ranges::get_cursor(op_left_iter))) {
             if (Logger::get_instance().wick_contract) {
               std::wcout << "level " << state.level << ":contracting "
-                         << to_latex(*opseq_view_begin) << " with "
+                         << to_latex(*op_left_iter) << " with "
                          << to_latex(*op_iter) << " (top_degen=" << top_degen
                          << ")" << std::endl;
               std::wcout << " current opseq = " << to_latex(state.opseq)
@@ -648,9 +697,9 @@ class WickTheorem {
             // update the phase, if needed
             double phase = 1;
             if (statistics == Statistics::FermiDirac) {
-              const auto distance =
-                  ranges::get_cursor(op_iter).ordinal() -
-                  ranges::get_cursor(opseq_view_begin).ordinal() - 1;
+              const auto distance = ranges::get_cursor(op_iter).ordinal() -
+                                    ranges::get_cursor(op_left_iter).ordinal() -
+                                    1;
               if (distance % 2) {
                 phase *= -1;
               }
@@ -658,9 +707,8 @@ class WickTheorem {
 
             // update the prefactor and opseq
             Product sp_copy = state.sp;
-            state.sp.append(
-                top_degen * phase,
-                contract(*opseq_view_begin, *op_iter, input_.vacuum()));
+            state.sp.append(top_degen * phase,
+                            contract(*op_left_iter, *op_iter, input_.vacuum()));
 
             // update the stats
             ++stats_.num_attempted_contractions;
@@ -669,63 +717,75 @@ class WickTheorem {
             Op<S> right = *op_iter;
             ranges::get_cursor(op_iter).erase();
             --state.opseq_size;
-            Op<S> left = *opseq_view_begin;
-            ranges::get_cursor(opseq_view_begin).erase();
+            Op<S> left = *op_left_iter;
+            ranges::get_cursor(op_left_iter).erase();
             --state.opseq_size;
 
             //            std::wcout << "  opseq after contraction = " <<
             //            to_latex(state.opseq) << std::endl;
 
-            // update the result if nothing left to contract and have a
-            // nonzero result
-            if (state.opseq_size == 0 && !state.sp.empty()) {
-              if (!state.count_only) {
-                result.second->lock();
-                //              std::wcout << "got " << to_latex(state.sp) <<
-                //              std::endl;
-                result.first->push_back(std::make_pair(
-                    std::move(state.sp.deep_copy()), NormalOperator<S>{}));
-                //              std::wcout << "now up to " <<
-                //              result.first->size()
-                //              << " terms" << std::endl;
-                result.second->unlock();
-              }
-              else
-                ++state.count;
+            // if have a nonzero result ...
+            if (!state.sp.empty()) {
+              // update the result if nothing left to contract and
+              if (!full_contractions_ ||
+                  (full_contractions_ && state.opseq_size == 0)) {
+                if (!state.count_only) {
+                  if (full_contractions_) {
+                    result.second->lock();
+                    //              std::wcout << "got " << to_latex(state.sp) << std::endl;
+                    result.first->push_back(
+                        std::make_pair(std::move(state.sp.deep_copy()),
+                                       std::shared_ptr<NormalOperator<S>>{}));
+                    //              std::wcout << "now up to " <<
+                    //              result.first->size()
+                    //              << " terms" << std::endl;
+                    result.second->unlock();
+                  } else {
+                    auto [phase, op] = normalize(state.opseq);
+                    result.second->lock();
+                    result.first->push_back(std::make_pair(
+                        std::move(state.sp.deep_copy().scale(phase)),
+                        op->empty() ? nullptr : std::move(op)));
+                    result.second->unlock();
+                  }
+                } else
+                  ++state.count;
 
-              // update the stats: count this contraction as useful
-              ++stats_.num_useful_contractions;
+                // update the stats: count this contraction as useful
+                ++stats_.num_useful_contractions;
+              }
             }
 
             if (state.opseq_size != 0) {
-              const auto current_num_useful_contractions = stats_.num_useful_contractions.load();
+              const auto current_num_useful_contractions =
+                  stats_.num_useful_contractions.load();
               ++state.level;
               recursive_nontensor_wick(result, state);
               --state.level;
               // this contraction is useful if it leads to useful contractions as a result
-              if (current_num_useful_contractions != stats_.num_useful_contractions.load())
+              if (current_num_useful_contractions !=
+                  stats_.num_useful_contractions.load())
                 ++stats_.num_useful_contractions;
             }
 
             // restore the prefactor and opseq
             state.sp = std::move(sp_copy);
             // restore from front to back
-            ranges::get_cursor(opseq_view_begin).insert(std::move(left));
+            ranges::get_cursor(op_left_iter).insert(std::move(left));
             ++state.opseq_size;
             ranges::get_cursor(op_iter).insert(std::move(right));
             ++state.opseq_size;
             state.disconnect(op_connections_, ranges::get_cursor(op_iter),
-                             ranges::get_cursor(opseq_view_begin));
+                             ranges::get_cursor(op_left_iter));
             //            std::wcout << "  restored opseq = " <<
             //            to_latex(state.opseq) << std::endl;
           }
           ++op_iter;
-        } else
+        } else {
           ++op_iter;
-      }
-    } else
-      assert(false);  // full_contraction_=false not implemented yet, should
-    // result in error earlier
+        }
+      }  // right op iter
+    }  // left op iter
   }
 
  public:

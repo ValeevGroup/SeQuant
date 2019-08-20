@@ -80,7 +80,6 @@ TEST_CASE("WickTheorem", "[algorithms]") {
                          FNOperator({L"i_5"}, {L"i_6"})});
       REQUIRE_NOTHROW(FWickTheorem{opseq1});
       auto wick1 = FWickTheorem{opseq1};
-      REQUIRE_THROWS(wick1.full_contractions(false).compute());
       REQUIRE_THROWS(wick1.spinfree(true).compute());
     }
 
@@ -135,7 +134,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       REQUIRE(result->size() == 24);
     }
 
-    // three 2-body operators
+    // 1/2 * 1 * 1/2 body ops, full contraction
     {
       auto opseq =
           FNOperatorSeq({FNOperator({}, {L"i_1"}, V),
@@ -149,6 +148,35 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       REQUIRE(result->size() == 2);  // product of 2 terms
     }
 
+    // 1/2 * 1 * 1/2 body ops, partial contraction
+    {
+      auto opseq = FNOperatorSeq({FNOperator({}, {L"i_1"}, V),
+                                  FNOperator({L"i_2"}, {L"i_3"}, V),
+                                  FNOperator({L"i_4"}, {}, V)});
+      auto wick = FWickTheorem{opseq};
+      REQUIRE_NOTHROW(wick.full_contractions(false).spinfree(false).compute());
+      auto result = wick.full_contractions(false).spinfree(false).compute();
+      REQUIRE(result->is<Sum>());
+      REQUIRE(result->size() == 4);  // sum of 4 terms
+      REQUIRE(
+          to_latex(result) ==
+          L"{ \\left({{{-1}} \\times {S^{{i_2}}_{{i_1}}}{a^{{i_4}}_{{i_3}}}} + {{S^{{i_2}}_{{i_1}}}{S^{{i_4}}_{{i_3}}}} + {{S^{{i_4}}_{{i_1}}}{a^{{i_2}}_{{i_3}}}} + {{a^{{i_2}{i_4}}_{{i_1}{i_3}}}}\\right) }");
+    }
+
+    // three 1-body operators, partial contraction
+    {
+      auto opseq1 =
+          FNOperatorSeq({FNOperator({L"i_1"}, {L"i_2"}, V), FNOperator({L"i_3"}, {L"i_4"}, V),
+                         FNOperator({L"i_5"}, {L"i_6"}, V)});
+      auto wick1 = FWickTheorem{opseq1};
+      REQUIRE_NOTHROW(wick1.full_contractions(false).spinfree(false).compute());
+      auto result = FWickTheorem{opseq1}.full_contractions(false).spinfree(false).compute();
+      REQUIRE(result->is<Sum>());
+      REQUIRE(result->size() == 5);
+      REQUIRE(
+          to_latex(result) ==
+              L"{ \\left({{S^{{i_3}}_{{i_2}}}{a^{{i_1}{i_5}}_{{i_4}{i_6}}}} + {{S^{{i_3}}_{{i_2}}}{S^{{i_5}}_{{i_4}}}{a^{{i_1}}_{{i_6}}}} + {{{-1}} \\times {S^{{i_5}}_{{i_2}}}{a^{{i_1}{i_3}}_{{i_4}{i_6}}}} + {{S^{{i_5}}_{{i_4}}}{a^{{i_1}{i_3}}_{{i_2}{i_6}}}} + {{a^{{i_1}{i_3}{i_5}}_{{i_2}{i_4}{i_6}}}}\\right) }");
+    }
 
   }  // SECTION("physical vacuum")
 
