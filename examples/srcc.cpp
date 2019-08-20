@@ -298,7 +298,7 @@ int main(int argc, char* argv[]) {
   });
 
   auto ccs_r1 = cceqvec{1, 1}(true, true, true, true);
-  std::wcout << to_latex(ccs_r1[1]) << std::endl;
+  std::wcout << to_latex_align(ccs_r1[1], 3) << std::endl;
 
   auto expr_visitor = [](const ExprPtr& expr) {
     if (true) {

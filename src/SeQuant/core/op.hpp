@@ -962,7 +962,7 @@ namespace detail {
 template<Statistics S = Statistics::FermiDirac>
 std::tuple<int, std::shared_ptr<NormalOperator<S>>> normalize(const NormalOperatorSequence<S>& opseq) {
   int phase = 1;
-  std::list<Op<S>> creators, annihilators;
+  container::svector<Op<S>> creators, annihilators;
 
   using opseq_view_type = flattened_rangenest<const NormalOperatorSequence<S>>;
   auto opseq_view = opseq_view_type(&opseq);
@@ -972,26 +972,40 @@ std::tuple<int, std::shared_ptr<NormalOperator<S>>> normalize(const NormalOperat
   auto opseq_view_iter = begin(opseq_view);
   auto opseq_view_end = end(opseq_view);
   std::size_t pos = 0;
-  std::size_t annihilators_size = 0;
-  const auto nops = opseq.opsize();
+  const auto nops = opseq.opsize(); // # of Op<S>
+  const auto nnops = opseq.size();  // # of NormalOperator<S>
+  assert(nnops > 0);
   auto vacuum = opseq.vacuum();
+  container::svector<container::svector<Op<S>>> annihilator_groups(nnops);
   while (opseq_view_iter != opseq_view_end) {
-    // this preserves the order of creators (since creators go left, concatenate them) ...
+    // creators: since they go left, concat them to preserve the order of NormalOperators and creators within Operators ...
     if (is_creator(*opseq_view_iter)) {
       creators.push_back(*opseq_view_iter);
-    } // ... and annihilators ...
+    } // annihilators: rev-concat the groups corresponding to NormalOperators to obtain the desired order of normalized NormalOperators, but within each group simply concat to preserve the original order
     else {
       assert(is_annihilator(*opseq_view_iter));
-      const auto distance = nops - pos - 1;  // concat annihilators in reverse order to get nice merging of PNC ops, hence no extra phase from crossing the annihilator set
-      annihilators.push_back(*opseq_view_iter);  // but reserve them since the (NormalOperator ctor expects them in reverse order
-      ++annihilators_size;
-      if (S == Statistics::FermiDirac && distance%2==1) {
+
+      // distance from the given Op to the end of NOpSeq (to rev-concat NOps we are pushing to the first available group ...
+      // since we are using vector we are filling Op groups from the back, but this does not create any extra phase)
+      const auto distance_to_end = nops - pos - 1;
+      const auto op_group = nnops - ranges::get_cursor(opseq_view_iter).range_ordinal() - 1;  // group idx = reverse of the NOp index within NopSeq
+      assert(op_group < nnops);
+      const auto total_distance = distance_to_end + annihilator_groups[op_group].size();  // we are fwd-concating Ops within groups, hence extra phase
+      annihilator_groups[op_group].push_back(*opseq_view_iter);
+      if (S == Statistics::FermiDirac && total_distance%2==1) {
         phase *= -1;
       }
     }
     ++pos;
     ++opseq_view_iter;
   }
+
+  // convert annihilator_groups to annihilators N.B. the NormalOperator ctor expects annihilators in reverse order!
+  ranges::for_each(annihilator_groups | ranges::views::reverse, [&annihilators](const auto&agrp) {
+    ranges::for_each(agrp | ranges::views::reverse, [&annihilators](const auto& op) {
+      annihilators.push_back(op);
+    });
+  });
 
   return std::make_tuple(phase, std::make_shared<NormalOperator<S>>(std::move(creators), std::move(annihilators), vacuum));
 }

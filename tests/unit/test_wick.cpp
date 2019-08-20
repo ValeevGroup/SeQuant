@@ -187,6 +187,8 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       auto result = wick.full_contractions(false).spinfree(false).compute();
       REQUIRE(result->is<Sum>());
       REQUIRE(result->size() == 7);
+      REQUIRE(
+          to_latex(result) == L"{ \\left({{S^{{i_5}}_{{i_4}}}{a^{{i_1}{i_2}{i_6}}_{{i_3}{i_7}{i_8}}}} + {{{-1}} \\times {S^{{i_5}}_{{i_4}}}{S^{{i_6}}_{{i_3}}}{a^{{i_1}{i_2}}_{{i_7}{i_8}}}} + {{{-1}} \\times {S^{{i_6}}_{{i_4}}}{a^{{i_1}{i_2}{i_5}}_{{i_3}{i_7}{i_8}}}} + {{S^{{i_6}}_{{i_4}}}{S^{{i_5}}_{{i_3}}}{a^{{i_1}{i_2}}_{{i_7}{i_8}}}} + {{{-1}} \\times {S^{{i_5}}_{{i_3}}}{a^{{i_1}{i_2}{i_6}}_{{i_4}{i_7}{i_8}}}} + {{S^{{i_6}}_{{i_3}}}{a^{{i_1}{i_2}{i_5}}_{{i_4}{i_7}{i_8}}}} + {{a^{{i_1}{i_2}{i_5}{i_6}}_{{i_3}{i_4}{i_7}{i_8}}}}\\right) }");
     }
 
   }  // SECTION("physical vacuum")
