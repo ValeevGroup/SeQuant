@@ -265,7 +265,7 @@ class WickTheorem {
   mutable ExprPtr expr_input_;
 
   mutable NormalOperatorSequence<S> input_;
-  bool full_contractions_ = false;
+  bool full_contractions_ = true;
   bool spinfree_ = false;
   bool use_topology_ = false;
   mutable Stats stats_;
