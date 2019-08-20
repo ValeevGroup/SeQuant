@@ -309,7 +309,7 @@ class Index : public Taggable {
   /// @sa Index::color()
   auto proto_indices_color() const {
     auto space_attr_view =
-        proto_indices_ | ranges::view::transform([](const Index &idx) {
+        proto_indices_ | ranges::views::transform([](const Index &idx) {
           return int64_t(idx.space().attr());
         });
     return boost::hash_range(ranges::begin(space_attr_view),
