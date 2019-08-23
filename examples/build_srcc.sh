@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
-
-cmake --build ../build --target srcc -- -j7 && ../build/srcc
+source /opt/intel/tbb/bin/tbbvars.sh "intel64"
+cmake --build ../build --target srcc -v -j7 && ../build/srcc

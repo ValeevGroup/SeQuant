@@ -22,6 +22,13 @@ list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/modules/")
 # std::thread requires (on some platforms?) thread support which is not provided automatically
 find_package(Threads REQUIRED)
 
+# PSTL (used by g++-9 and clang++-8 in c++17 mode) needs TBB
+if ((${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU" AND ${CMAKE_CXX_COMPILER_VERSION} VERSION_GREATER 9) OR
+    (${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang" AND ${CMAKE_CXX_COMPILER_VERSION} VERSION_GREATER 8))
+  set(PSTL_NEEDS_TBB TRUE)
+  find_package(TBB REQUIRED)
+endif()
+
 if (NOT RANGEV3_DIR)
     message(FATAL_ERROR "Set cache variable RANGEV3_DIR to the top of the Range-V3 source directory")
 endif(NOT RANGEV3_DIR)
@@ -132,16 +139,14 @@ add_library(SeQuant
         src/SeQuant/domain/mbpt/sr/sr.hpp
         )
 target_link_libraries(SeQuant Range-V3 Boost bliss Threads::Threads)
+if (PSTL_NEEDS_TBB)
+    target_link_libraries(SeQuant ${TBB_LIBRARIES})
+    target_include_directories(SeQuant PUBLIC ${TBB_INCLUDE_DIRS})
+endif()
 target_include_directories(SeQuant PUBLIC
         $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>
         )
-# PSTL (used by g++-9 in c++17 mode) needs TBB
-if (${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU" AND ${CMAKE_CXX_COMPILER_VERSION} VERSION_GREATER 9)
-    find_package(TBB REQUIRED)
-    target_link_libraries(SeQuant ${TBB_LIBRARIES})
-    target_include_directories(SeQuant PUBLIC ${TBB_INCLUDE_DIRS})
-endif()
 
 enable_testing(true)
 
@@ -180,9 +185,7 @@ set_tests_properties(unit/run
 set(example0 srcc)
 add_executable(${example0} EXCLUDE_FROM_ALL
         examples/${example0}.cpp)
-# target_link_libraries(${example0} SeQuant)
-# TODO doesn't pickup tbb
-target_link_libraries(${example0} SeQuant "-ltbb")
+target_link_libraries(${example0} SeQuant ${TBB_LIBRARIES})
 add_test(example/${example0}/build "${CMAKE_COMMAND}" --build ${CMAKE_BINARY_DIR} --target ${example0})
 add_test(NAME example/${example0}/run
         COMMAND ${example0})
@@ -196,17 +199,17 @@ set_target_properties(LIBINT PROPERTIES
     INTERFACE_INCLUDE_DIRECTORIES "${LIBINT_DIR}/include"
     INTERFACE_LINK_LIBRARIES -lint2
     INTERFACE_LINK_DIRECTORIES "${LIBINT_DIR}/lib")
-
+#
 set(example1 test_contract)
 add_executable(${example1} EXCLUDE_FROM_ALL
     examples/${example1}.cpp examples/contractable_tensor.hpp examples/contract.hpp examples/hartree-fock.cc)
-target_link_libraries(${example1} SeQuant "-ltbb" LIBINT BTAS)
+target_link_libraries(${example1} SeQuant ${TBB_LIBRARIES} LIBINT BTAS)
 
-# sequant::contractable::Tensor tests -- Bimal
-set(example2 test_ctensor)
-add_executable(${example2} EXCLUDE_FROM_ALL
-    examples/${example2}.cpp examples/contractable_tensor.hpp examples/contract.hpp)
-target_link_libraries(${example2} SeQuant "-ltbb")
+# # sequant::contractable::Tensor tests -- Bimal
+# set(example2 test_ctensor)
+# add_executable(${example2} EXCLUDE_FROM_ALL
+#     examples/${example2}.cpp examples/contractable_tensor.hpp examples/contract.hpp)
+# target_link_libraries(${example2} SeQuant)
 
 # target for running ALL tests
 add_custom_target(check USES_TERMINAL COMMAND ${CMAKE_CTEST_COMMAND} -V)
