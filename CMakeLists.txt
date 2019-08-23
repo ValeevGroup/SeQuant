@@ -22,6 +22,13 @@ list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/modules/")
 # std::thread requires (on some platforms?) thread support which is not provided automatically
 find_package(Threads REQUIRED)
 
+# PSTL (used by g++-9 and clang++-8 in c++17 mode) needs TBB
+if ((${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU" AND ${CMAKE_CXX_COMPILER_VERSION} VERSION_GREATER 9) OR
+    (${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang" AND ${CMAKE_CXX_COMPILER_VERSION} VERSION_GREATER 8))
+  set(PSTL_NEEDS_TBB TRUE)
+  find_package(TBB REQUIRED)
+endif()
+
 if (NOT RANGEV3_DIR)
     message(FATAL_ERROR "Set cache variable RANGEV3_DIR to the top of the Range-V3 source directory")
 endif(NOT RANGEV3_DIR)
@@ -132,16 +139,14 @@ add_library(SeQuant
         src/SeQuant/domain/mbpt/sr/sr.hpp
         )
 target_link_libraries(SeQuant Range-V3 Boost bliss Threads::Threads)
+if (PSTL_NEEDS_TBB)
+    target_link_libraries(SeQuant ${TBB_LIBRARIES})
+    target_include_directories(SeQuant PUBLIC ${TBB_INCLUDE_DIRS})
+endif()
 target_include_directories(SeQuant PUBLIC
         $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>
         )
-# PSTL (used by g++-9 in c++17 mode) needs TBB
-if (${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU" AND ${CMAKE_CXX_COMPILER_VERSION} VERSION_GREATER 9)
-    find_package(TBB REQUIRED)
-    target_link_libraries(SeQuant ${TBB_LIBRARIES})
-    target_include_directories(SeQuant PUBLIC ${TBB_INCLUDE_DIRS})
-endif()
 
 enable_testing(true)
 
