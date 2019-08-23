@@ -180,12 +180,33 @@ set_tests_properties(unit/run
 set(example0 srcc)
 add_executable(${example0} EXCLUDE_FROM_ALL
         examples/${example0}.cpp)
-target_link_libraries(${example0} SeQuant)
+# target_link_libraries(${example0} SeQuant)
+# TODO doesn't pickup tbb
+target_link_libraries(${example0} SeQuant "-ltbb")
 add_test(example/${example0}/build "${CMAKE_COMMAND}" --build ${CMAKE_BINARY_DIR} --target ${example0})
 add_test(NAME example/${example0}/run
         COMMAND ${example0})
 set_tests_properties(example/${example0}/run
         PROPERTIES DEPENDS example/${example0}/build)
+
+# contract method testing -- Bimal
+# libint2
+add_library(LIBINT INTERFACE IMPORTED)
+set_target_properties(LIBINT PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES "${LIBINT_DIR}/include"
+    INTERFACE_LINK_LIBRARIES -lint2
+    INTERFACE_LINK_DIRECTORIES "${LIBINT_DIR}/lib")
+
+set(example1 test_contract)
+add_executable(${example1} EXCLUDE_FROM_ALL
+    examples/${example1}.cpp examples/contractable_tensor.hpp examples/contract.hpp examples/hartree-fock.cc)
+target_link_libraries(${example1} SeQuant "-ltbb" LIBINT BTAS)
+
+# sequant::contractable::Tensor tests -- Bimal
+set(example2 test_ctensor)
+add_executable(${example2} EXCLUDE_FROM_ALL
+    examples/${example2}.cpp examples/contractable_tensor.hpp examples/contract.hpp)
+target_link_libraries(${example2} SeQuant "-ltbb")
 
 # target for running ALL tests
 add_custom_target(check USES_TERMINAL COMMAND ${CMAKE_CTEST_COMMAND} -V)
