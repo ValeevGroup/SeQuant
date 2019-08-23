@@ -384,11 +384,11 @@ TEST_CASE("Op", "[elements]") {
         FNOperator({Index{L"i_1"}, Index{L"i_2"}}, {Index{L"a_1", {L"i_1", L"i_2"}}, Index{L"a_2", {L"i_1", L"i_2"}}}, Vacuum::SingleProduct);
     REQUIRE(to_latex(nop2) == L"{\\tilde{a}^{{i_1}{i_2}}_{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}}");
 
-    auto nop3 = FNOperator({L"i_1", L"i_2"}, {L"a_1"}, Vacuum::SingleProduct);
-    REQUIRE(to_latex(nop3) == L"{\\tilde{a}^{{i_1}{i_2}}_{\\textvisiblespace\\,{a_1}}}");
+    auto nop3 = FNOperator({L"i_1", L"i_2"}, {L"a_2"}, Vacuum::SingleProduct);
+    REQUIRE(to_latex(nop3) == L"{\\tilde{a}^{{i_1}{i_2}}_{\\textvisiblespace\\,{a_2}}}");
 
-    auto nop4 = FNOperator({L"i_1"}, {L"a_1", L"a_2"}, Vacuum::SingleProduct);
-    REQUIRE(to_latex(nop4) == L"{\\tilde{a}^{\\textvisiblespace\\,{i_1}}_{{a_1}{a_2}}}");
+    auto nop4 = FNOperator({L"i_2"}, {L"a_1", L"a_2"}, Vacuum::SingleProduct);
+    REQUIRE(to_latex(nop4) == L"{\\tilde{a}^{\\textvisiblespace\\,{i_2}}_{{a_1}{a_2}}}");
 
     auto nop5 = FNOperator({L"i_1"}, {}, Vacuum::SingleProduct);
     REQUIRE(to_latex(nop5) == L"{\\tilde{a}^{{i_1}}_{\\textvisiblespace}}");
