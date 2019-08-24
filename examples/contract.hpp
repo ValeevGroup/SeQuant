@@ -230,7 +230,7 @@ BTensor antisymmetrize(const BTensor& bt) {
       // permute and add
       auto perm_t = BTensor(btas::permute(bt, perm_vec));
 
-      if (p.even_perm*q.even_perm == 1)
+      if (p.even_perm*q.even_perm == ADD)
         result += perm_t;
       else
         result -= perm_t;
