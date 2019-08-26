@@ -193,17 +193,13 @@ set_tests_properties(example/${example0}/run
         PROPERTIES DEPENDS example/${example0}/build)
 
 # contract method testing -- Bimal
-# libint2
-add_library(LIBINT INTERFACE IMPORTED)
-set_target_properties(LIBINT PROPERTIES
-    INTERFACE_INCLUDE_DIRECTORIES "${LIBINT_DIR}/include"
-    INTERFACE_LINK_LIBRARIES -lint2
-    INTERFACE_LINK_DIRECTORIES "${LIBINT_DIR}/lib")
-#
-set(example1 test_contract)
-add_executable(${example1} EXCLUDE_FROM_ALL
-    examples/${example1}.cpp examples/contractable_tensor.hpp examples/contract.hpp examples/hartree-fock.cc)
-target_link_libraries(${example1} SeQuant ${TBB_LIBRARIES} LIBINT BTAS)
+if (BTAS_FOUND)
+  find_package(Libint2 2.6.0 CONFIG REQUIRED)
+  set(example1 test_contract)
+  add_executable(${example1} EXCLUDE_FROM_ALL
+          examples/${example1}.cpp examples/contractable_tensor.hpp examples/contract.hpp examples/hartree-fock.cc)
+  target_link_libraries(${example1} SeQuant ${TBB_LIBRARIES} Libint2::cxx BTAS)
+endif(BTAS_FOUND)
 
 # # sequant::contractable::Tensor tests -- Bimal
 # set(example2 test_ctensor)
