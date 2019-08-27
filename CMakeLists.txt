@@ -163,11 +163,6 @@ set(example0 srcc)
 add_executable(${example0} EXCLUDE_FROM_ALL
         examples/${example0}.cpp)
 target_link_libraries(${example0} SeQuant ${TBB_LIBRARIES})
-add_test(example/${example0}/build "${CMAKE_COMMAND}" --build ${CMAKE_BINARY_DIR} --target ${example0})
-add_test(NAME example/${example0}/run
-        COMMAND ${example0})
-set_tests_properties(example/${example0}/run
-        PROPERTIES DEPENDS example/${example0}/build)
 
 # contract method testing -- Bimal
 if (BTAS_FOUND)
@@ -183,6 +178,18 @@ endif(BTAS_FOUND)
 # add_executable(${example2} EXCLUDE_FROM_ALL
 #     examples/${example2}.cpp examples/contractable_tensor.hpp examples/contract.hpp)
 # target_link_libraries(${example2} SeQuant)
+
+# add tests for running examples
+set (lastexample 2)
+foreach(i RANGE ${lastexample})
+    if (TARGET ${example${i}})
+        add_test(example/${example${i}}/build "${CMAKE_COMMAND}" --build ${CMAKE_BINARY_DIR} --target ${example${i}})
+        add_test(NAME example/${example${i}}/run
+                COMMAND ${example${i}})
+        set_tests_properties(example/${example${i}}/run
+                PROPERTIES DEPENDS example/${example${i}}/build)
+    endif()
+endforeach()
 
 # target for running ALL tests
 add_custom_target(check USES_TERMINAL COMMAND ${CMAKE_CTEST_COMMAND} -V)
