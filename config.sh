@@ -11,6 +11,6 @@ cmake -Bbuild \
       -DRANGEV3_DIR=/opt/range-v3 \
       -DBTAS_INSTALL_DIR=/opt/BTAS \
       -DBOOST_ROOT=/usr \
-      -DLIBINT_DIR=/opt/libint \
+      -DCMAKE_PREFIX_PATH=/opt/libint \
       -DMKL_THREADING=TBB
 
