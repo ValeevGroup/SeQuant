@@ -49,29 +49,6 @@ set_property(TARGET Boost PROPERTY
 # look for BTAS, if needed
 if (BTAS_INSTALL_DIR)
     find_package(BTAS)
-    message (STATUS "BTAS_FOUND=${BTAS_FOUND}")
-    if (BTAS_FOUND)
-        # look for CBLAS + LAPACKE
-        find_package(CBLAS)
-        find_package(LAPACKE)
-        add_library(BTAS INTERFACE IMPORTED)
-        if (${CBLAS_FOUND} AND ${LAPACKE_FOUND})
-            set(BTAS_DEFINITIONS "_CBLAS_HEADER=\"${CBLAS_INCLUDE_FILE}\";_LAPACKE_HEADER=\"${LAPACKE_INCLUDE_FILE}\";BTAS_HAS_CBLAS=1")
-            if (MKL_FOUND)
-                set(BTAS_DEFINITIONS "_HAS_INTEL_MKL=1;${BTAS_DEFINITIONS}")
-            endif(MKL_FOUND)
-            message(STATUS "BTAS_DEFINITIONS=${BTAS_DEFINITIONS}")
-            set_target_properties(BTAS PROPERTIES
-                    INTERFACE_LINK_LIBRARIES "${LAPACKE_LIBRARIES};${CBLAS_LIBRARIES}"
-                    INTERFACE_COMPILE_DEFINITIONS "${BTAS_DEFINITIONS}"
-                    INTERFACE_INCLUDE_DIRECTORIES "${BTAS_INCLUDE_DIRS};${LAPACKE_INCLUDE_DIR};${CBLAS_INCLUDE_DIR}"
-                    )
-        else()
-            set_target_properties(BTAS PROPERTIES
-                    INTERFACE_INCLUDE_DIRECTORIES ${BTAS_INCLUDE_DIRS}
-                    )
-        endif()
-    endif(BTAS_FOUND)
 endif(BTAS_INSTALL_DIR)
 
 # embedded bliss-0.73
