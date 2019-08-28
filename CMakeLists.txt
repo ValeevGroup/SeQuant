@@ -185,7 +185,8 @@ foreach(i RANGE ${lastexample})
     if (TARGET ${example${i}})
         add_test(example/${example${i}}/build "${CMAKE_COMMAND}" --build ${CMAKE_BINARY_DIR} --target ${example${i}})
         add_test(NAME example/${example${i}}/run
-                COMMAND ${example${i}})
+                COMMAND ${example${i}}
+                WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/examples)
         set_tests_properties(example/${example${i}}/run
                 PROPERTIES DEPENDS example/${example${i}}/build)
     endif()
