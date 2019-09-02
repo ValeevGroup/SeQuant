@@ -12,7 +12,7 @@ prerequisites:
 for the impatient:
   * `cmake . -DRANGEV3_DIR=...`
     * `RANGEV3_DIR` = path to the top of Range-V3 source tree
-  * `make test`
+  * `make check`
 
 CMake variables:
   * mandatory
