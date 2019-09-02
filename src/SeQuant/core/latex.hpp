@@ -49,7 +49,7 @@ to_latex(T&& t) {
       long denom = long(round_inv_t);
       using namespace std::literals;
       result += (std::signbit(t) ? L"-"s : L""s) + L"\\frac{1}{"s +
-                std::to_wstring(abs(denom)) + L"}}"s;
+                std::to_wstring(std::abs(denom)) + L"}}"s;
     } else
       result += to_wstring(t) + L"}";
   }

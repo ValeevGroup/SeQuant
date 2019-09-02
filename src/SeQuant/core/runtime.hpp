@@ -9,6 +9,7 @@
 #include <stdexcept>
 #include <thread>
 #include <vector>
+#include <atomic>
 
 namespace sequant {
 
