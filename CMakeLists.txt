@@ -122,6 +122,7 @@ add_library(SeQuant
         src/SeQuant/core/expr_operator.hpp
         src/SeQuant/core/hash.hpp
         src/SeQuant/core/tag.hpp
+        src/SeQuant/core/any.hpp
         src/SeQuant/core/hugenholtz.hpp
         src/SeQuant/core/algorithm.hpp
         src/SeQuant/core/tensor_network.cpp
