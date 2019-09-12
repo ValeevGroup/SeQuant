@@ -6,9 +6,16 @@
 #define SEQUANT_TAG_HPP
 
 #include "./meta.hpp"
-#include <any>
+#include "./any.hpp"
 
 namespace sequant {
+
+// prefer std::any, if available
+#ifdef SEQUANT_HAS_CXX17_ANY
+using std::any;
+using std::any_cast;
+using std::bad_any_cast;
+#else
 
 namespace detail {
 
@@ -16,14 +23,17 @@ class any_comparable {
  public:
   // this is constexpr in the standard
   any_comparable() : impl_(nullptr) {}
-  any_comparable(const any_comparable &other) : impl_(other.impl_ ? other.impl_->clone() : nullptr) {}
+  any_comparable(const any_comparable &other)
+      : impl_(other.impl_ ? other.impl_->clone() : nullptr) {}
   any_comparable(any_comparable &&other) = default;
-  template<typename ValueType,
-      typename = std::enable_if_t<!std::is_base_of<any_comparable, std::decay_t<ValueType>>::value &&
-          meta::is_less_than_comparable_v<std::decay_t<ValueType>>>>
+  template <
+      typename ValueType,
+      typename = std::enable_if_t<
+          !std::is_base_of<any_comparable, std::decay_t<ValueType> >::value &&
+          meta::is_less_than_comparable_v<std::decay_t<ValueType> > > >
   any_comparable(ValueType &&value)
       : impl_(new impl<typename std::decay<ValueType>::type>(
-      std::forward<ValueType>(value))) {}
+            std::forward<ValueType>(value))) {}
   ~any_comparable() = default;
 
   any_comparable &operator=(const any_comparable &rhs) {
@@ -34,41 +44,41 @@ class any_comparable {
     impl_ = std::move(rhs.impl_);
     return *this;
   }
-  template<typename ValueType,
-      typename = std::enable_if_t<!std::is_base_of<any_comparable, std::decay_t<ValueType>>::value &&
-          meta::is_less_than_comparable_v<std::decay_t<ValueType>>>>
+  template <
+      typename ValueType,
+      typename = std::enable_if_t<
+          !std::is_base_of<any_comparable, std::decay_t<ValueType> >::value &&
+          meta::is_less_than_comparable_v<std::decay_t<ValueType> > > >
   any_comparable &operator=(ValueType &&rhs) {
     impl_ = decltype(impl_)(new impl<typename std::decay<ValueType>::type>(
         std::forward<ValueType>(rhs)));
     return *this;
   }
 
-  template<class ValueType, class... Args>
-  std::enable_if_t<meta::is_less_than_comparable_v<std::decay_t<ValueType>>,
-                   std::decay_t<ValueType> &> emplace(Args &&... args) {
+  template <class ValueType, class... Args>
+  std::enable_if_t<meta::is_less_than_comparable_v<std::decay_t<ValueType> >,
+                   std::decay_t<ValueType> &>
+  emplace(Args &&... args) {
     reset();
     impl_ = new impl<typename std::decay<ValueType>::type>(
         std::forward<Args>(args)...);
     return (impl_->cast_static<typename std::decay<ValueType>::type>()->value);
   }
-  template<class ValueType, class U, class... Args>
-  std::enable_if_t<meta::is_less_than_comparable_v<std::decay_t<ValueType>>,
-                   std::decay_t<ValueType> &> emplace(std::initializer_list<U> il, Args &&... args) {
+  template <class ValueType, class U, class... Args>
+  std::enable_if_t<meta::is_less_than_comparable_v<std::decay_t<ValueType> >,
+                   std::decay_t<ValueType> &>
+  emplace(std::initializer_list<U> il, Args &&... args) {
     reset();
-    impl_ = new impl<typename std::decay<ValueType>::type>(il,
-                                                           std::forward<Args>(args)...);
+    impl_ = new impl<typename std::decay<ValueType>::type>(
+        il, std::forward<Args>(args)...);
     return (impl_->cast_static<typename std::decay<ValueType>::type>()->value);
   }
 
   void reset() { impl_.reset(); }
 
-  void swap(any_comparable &other) {
-    std::swap(impl_, other.impl_);
-  }
+  void swap(any_comparable &other) { std::swap(impl_, other.impl_); }
 
-  bool has_value() const {
-    return static_cast<bool>(impl_);
-  }
+  bool has_value() const { return static_cast<bool>(impl_); }
 
   const std::type_info &type() const {
     if (has_value())
@@ -90,7 +100,8 @@ class any_comparable {
   }
 
  private:
-  template<typename T, typename = std::enable_if_t<meta::is_less_than_comparable_v<T>>>
+  template <typename T,
+            typename = std::enable_if_t<meta::is_less_than_comparable_v<T> > >
   struct impl;
 
   struct impl_base {
@@ -100,7 +111,7 @@ class any_comparable {
     virtual const std::type_info &type() const = 0;
 
     // static if NDEBUG is defined, dynamic otherwise
-    template<typename T>
+    template <typename T>
     impl<T> *cast() {
 #ifndef NDEBUG
       return this->cast_static<T>();
@@ -109,7 +120,7 @@ class any_comparable {
 #endif
     }
     // static if NDEBUG is defined, dynamic otherwise
-    template<typename T>
+    template <typename T>
     const impl<T> *cast() const {
 #ifndef NDEBUG
       return this->cast_static<T>();
@@ -118,12 +129,12 @@ class any_comparable {
 #endif
     }
     // static always
-    template<typename T>
+    template <typename T>
     impl<T> *cast_static() {
       return static_cast<impl<T> *>(this);
     }
     // static always
-    template<typename T>
+    template <typename T>
     const impl<T> *cast_static() const {
       return static_cast<const impl<T> *>(this);
     }
@@ -131,17 +142,13 @@ class any_comparable {
     virtual bool operator<(const impl_base &other) const = 0;
     virtual bool operator==(const impl_base &other) const = 0;
   };
-  template<typename T, typename>
+  template <typename T, typename>
   struct impl : public impl_base {
-    template<typename U>
+    template <typename U>
     explicit impl(U &&v) : value(std::forward<U>(v)) {}
-    impl_base *clone() const override {
-      return new impl{value};
-    }
+    impl_base *clone() const override { return new impl{value}; }
 
-    const std::type_info &type() const override {
-      return typeid(T);
-    }
+    const std::type_info &type() const override { return typeid(T); }
 
     bool operator<(const impl_base &other) const override {
       assert(type() == other.type());
@@ -155,17 +162,19 @@ class any_comparable {
     T value;
   };
 
-  template<typename ValueType>
-  friend typename std::decay<ValueType>::type *any_comparable_cast(any_comparable *operand);
-  template<typename ValueType>
-  friend const typename std::decay<ValueType>::type *any_comparable_cast(const any_comparable *operand);
+  template <typename ValueType>
+  friend typename std::decay<ValueType>::type *any_comparable_cast(
+      any_comparable *operand);
+  template <typename ValueType>
+  friend const typename std::decay<ValueType>::type *any_comparable_cast(
+      const any_comparable *operand);
 
-  template<typename ValueType>
+  template <typename ValueType>
   typename std::decay<ValueType>::type *value_ptr() {
     return &(impl_->cast_static<typename std::decay<ValueType>::type>()->value);
   }
 
-  template<typename ValueType>
+  template <typename ValueType>
   const typename std::decay<ValueType>::type *value_ptr() const {
     return &(impl_->cast_static<typename std::decay<ValueType>::type>()->value);
   }
@@ -173,32 +182,25 @@ class any_comparable {
   std::unique_ptr<impl_base> impl_;
 };
 
-class bad_any_comparable_cast : public std::bad_any_cast {
- public:
-  bad_any_comparable_cast() = default;
-  virtual ~bad_any_comparable_cast() {}
-  virtual const char *what() const noexcept {
-    return "Bad any_comparable_cast";
-  }
-};
-
-template<typename ValueType>
-typename std::decay<ValueType>::type *any_comparable_cast(any_comparable *operand) {
+template <typename ValueType>
+typename std::decay<ValueType>::type *any_comparable_cast(
+    any_comparable *operand) {
   if (operand->type() == typeid(typename std::decay<ValueType>::type))
     return operand->value_ptr<typename std::decay<ValueType>::type>();
   else
     return nullptr;
 }
 
-template<typename ValueType>
-const typename std::decay<ValueType>::type *any_comparable_cast(const any_comparable *operand) {
+template <typename ValueType>
+const typename std::decay<ValueType>::type *any_comparable_cast(
+    const any_comparable *operand) {
   if (operand->type() == typeid(typename std::decay<ValueType>::type))
     return operand->value_ptr<typename std::decay<ValueType>::type>();
   else
     return nullptr;
 }
 
-template<typename ValueType>
+template <typename ValueType>
 ValueType any_comparable_cast(const any_comparable &operand) {
   const auto *cast_ptr =
       any_comparable_cast<typename std::decay<ValueType>::type>(&operand);
@@ -206,9 +208,10 @@ ValueType any_comparable_cast(const any_comparable &operand) {
   throw bad_any_comparable_cast();
 }
 
-template<typename ValueType>
+template <typename ValueType>
 ValueType any_comparable_cast(any_comparable &operand) {
-  auto *cast_ptr = any_comparable_cast<typename std::decay<ValueType>::type>(&operand);
+  auto *cast_ptr =
+      any_comparable_cast<typename std::decay<ValueType>::type>(&operand);
   if (cast_ptr != nullptr) return *cast_ptr;
   throw bad_any_comparable_cast();
 }
@@ -217,10 +220,9 @@ ValueType any_comparable_cast(any_comparable &operand) {
 
 /// @brief type-erasing holder for Comparable objects
 /// @note tag is not part of the state
-/// (since tag are temporary and do not affect objects identity except for temporarily labeling them),
-/// hence all methods are const
+/// (since tag are temporary and do not affect objects identity except for
+/// temporarily labeling them), hence all methods are const
 class Taggable {
-
  public:
   using any_comparable = ::sequant::detail::any_comparable;
 
@@ -252,14 +254,14 @@ class Taggable {
 
   bool operator<(const Taggable &other) const { return tag_ < other.tag_; }
 
-  bool operator==(const Taggable &other) const {
-    return tag_ == other.tag_;
-  }
+  bool operator==(const Taggable &other) const { return tag_ == other.tag_; }
 
  private:
   mutable any_comparable tag_;
 };
 
+#endif  // SEQUANT_HAS_CXX17_ANY
+
 }  // namespace sequant
 
-#endif //SEQUANT_TAG_HPP
+#endif  // SEQUANT_TAG_HPP
