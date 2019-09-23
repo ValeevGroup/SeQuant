@@ -167,17 +167,24 @@ target_link_libraries(${example0} SeQuant ${TBB_LIBRARIES})
 # contract method testing -- Bimal
 if (BTAS_FOUND)
   find_package(Libint2 2.6.0 CONFIG REQUIRED)
-  set(example1 test_contract)
-  add_executable(${example1} EXCLUDE_FROM_ALL
-          examples/${example1}.cpp examples/contractable_tensor.hpp examples/contract.hpp examples/hartree-fock.cc)
-  target_link_libraries(${example1} SeQuant ${TBB_LIBRARIES} Libint2::cxx BTAS)
-endif(BTAS_FOUND)
+  find_package(TiledArray CONFIG REQUIRED COMPONENTS tiledarray)
 
-# # sequant::contractable::Tensor tests -- Bimal
-# set(example2 test_ctensor)
-# add_executable(${example2} EXCLUDE_FROM_ALL
-#     examples/${example2}.cpp examples/contractable_tensor.hpp examples/contract.hpp)
-# target_link_libraries(${example2} SeQuant)
+  set(example1 test_ccsd_btas)
+  add_executable(${example1} EXCLUDE_FROM_ALL
+          examples/${example1}.cpp
+          examples/src/interpret/interpreted_tensor.hpp
+          examples/src/interpret/contract.hpp
+          examples/src/scf/hartree-fock.cc)
+  target_link_libraries(${example1} SeQuant ${TBB_LIBRARIES} Libint2::cxx BTAS tiledarray)
+
+  set(example2 test_ccsd_tiledarray)
+  add_executable(${example2} EXCLUDE_FROM_ALL
+          examples/${example2}.cpp
+          examples/src/interpret/interpreted_tensor.hpp
+          examples/src/interpret/contract.hpp
+          examples/src/scf/hartree-fock.cc)
+  target_link_libraries(${example2} SeQuant ${TBB_LIBRARIES} Libint2::cxx BTAS tiledarray)
+endif(BTAS_FOUND)
 
 # add tests for running examples
 set (lastexample 2)

@@ -1,16 +1,5 @@
 #include <clocale>
 #include <iostream>
-#include <random>
-#include <vector>
-#include <chrono>
-#include <map>
-#include <btas/btas.h>
-#include <btas/tensorview.h>
-#include <btas/tensor_func.h>
-
-#include <Eigen/Dense>
-#include <Eigen/Eigenvalues>
-#include <libint2.hpp>
 
 #include <boost/numeric/interval.hpp>
 #include <boost/math/special_functions/factorials.hpp>
@@ -21,13 +10,10 @@
 #include <SeQuant/domain/mbpt/spin.hpp>
 #include <SeQuant/domain/mbpt/sr/sr.hpp>
 
-#include "hartree-fock.h"
-#include "contractable_tensor.hpp"
-#include "contract.hpp"
-
-using namespace sequant;
-
-using namespace sequant::mbpt::sr::so;
+// TODO
+  using namespace sequant;
+  using namespace sequant::mbpt::sr::so;
+// 
 //using namespace sequant::mbpt::sr::so::csv;
 
 namespace {
@@ -40,6 +26,7 @@ class screened_vac_av {
   size_t K;
 
  public:
+
   screened_vac_av(size_t k) : K(k) {}
 
   ExprPtr operator()(const ExprPtr& expr,
@@ -268,3 +255,4 @@ class compute_all {
                                use_connectivity, canonical_only);
   }
 };  // class compute_all
+

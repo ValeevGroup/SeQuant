@@ -1,16 +1,20 @@
 #!/usr/bin/env bash
 
-# set up MKL variables
 
 rm -rf ./build
 
+# set up MKL variables
 INTEL_DIR=/opt/intel
 ${INTEL_DIR}/bin/compilervars.sh -arch intel64 -platform linux
-cmake -Bbuild \
-      -DRANGEV3_DIR=/opt/range-v3 \
-      -DBTAS_INSTALL_DIR=/opt/BTAS \
-      -DBOOST_ROOT=/usr \
-      -DCMAKE_PREFIX_PATH=/opt/libint \
-      -DMKL_THREADING=TBB \
-      -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
-      -G"Ninja"
+cmake -B build                            \
+      -D RANGEV3_DIR=/opt/range-v3        \
+      -D BTAS_INSTALL_DIR=/opt/BTAS       \
+      -D BOOST_ROOT=/usr                  \
+      -D CMAKE_PREFIX_PATH=/opt/libint    \
+      -D MKL_THREADING=TBB                \
+      -D CMAKE_EXPORT_COMPILE_COMMANDS=ON \
+      -D CMAKE_BUILD_TYPE=Debug           \
+      -D TiledArray_DIR=/opt/tiledarray   \
+      --verbose                           \
+      -H.
+      # -G"Ninja"

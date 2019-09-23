@@ -33,6 +33,13 @@
 
 // Libint Gaussian integrals library
 #include <libint2.hpp>
+
+// BTAS
+#include <btas/tensorview.h>
+#include <btas/tensor_func.h>
+// TiledArray
+#include <tiledarray.h>
+
 #include "hartree-fock.h"
 
 // this reads the geometry in the standard xyz format supported by most chemistry software
@@ -593,22 +600,22 @@ Matrix compute_2body_fock(const std::vector<libint2::Shell>& shells,
   return 0.5 * (G + Gt);
 }
 
-btas::Tensor<double> compute_ao_ints(const std::vector<libint2::Shell>& shells)
-{
-
-  // returns 2e integral on ao basis
-
-  using std::cout;
-  using std::endl;
+btas::Tensor<double> compute_mo_ints(const Matrix& coff_mat,
+    const std::vector<libint2::Shell>& shells) {
+  // returns 2e integrals on MO basis in physicist's notation
 
   using libint2::Shell;
   using libint2::Engine;
   using libint2::Operator;
+  using BTensor = btas::Tensor<double>;
 
   const auto nao = nbasis(shells);
-  const auto dim = btas::Range1{ nao };
 
-  btas::Tensor<double> result(btas::Range{ dim, dim, dim, dim });
+  // *************************************
+  // first calculate integrals on AO basis
+  // *************************************
+
+  BTensor ints_ao(nao, nao, nao, nao);
 
   libint2::initialize();
 
@@ -662,7 +669,7 @@ btas::Tensor<double> compute_ao_ints(const std::vector<libint2::Shell>& shells)
                 const auto bf3 = f3 + bf3_first;
                 for(auto f4=0; f4!=n4; ++f4, ++f1234) {
                   const auto bf4 = f4 + bf4_first;
-                  result(bf1, bf2, bf3, bf4) = buf_1234[f1234];
+                  ints_ao(bf1, bf2, bf3, bf4) = buf_1234[f1234];
                 }
               }
             }
@@ -670,36 +677,156 @@ btas::Tensor<double> compute_ao_ints(const std::vector<libint2::Shell>& shells)
         }
       }
     }
-  }
-  return result;
-}
+  } // computed ints_ao on AO basis
+  libint2::finalize(); // done with libint
 
-btas::Tensor<double> compute_mo_ints(const Matrix& coff_mat, const btas::Tensor<double>& ao_ints_tensor)
-{
+  // *********************
+  // transform to MO basis
+  // *********************
+  //
 
   // See 'The Smarter Algorithm' at http://sirius.chem.vt.edu/wiki/doku.php?id=crawdad:programming:project4
 
-  const auto nbasis = coff_mat.rows();
-  const auto dim    = btas::Range1{ nbasis };
-  const auto dims   = btas::Range{ dim, dim, dim, dim };
-  btas::Tensor<double> coff_tensor(btas::Range{ dim, dim });
+  BTensor coff_tensor(nao, nao);
   std::copy(coff_mat.data(), coff_mat.data()+coff_mat.size(), coff_tensor.begin());
 
   //first bracket (from right to left in the equation linked above)
-  btas::Tensor<double> s_contract(dims);
-  btas::contract(1.0, ao_ints_tensor, {1, 2, 3, 4}, coff_tensor, {4, 5}, 0.0, s_contract, {5, 1, 2, 3});
+  BTensor s_contract(nao, nao, nao, nao);
+  btas::contract(1.0, ints_ao, {1, 2, 3, 4}, coff_tensor, {4, 5}, 0.0, s_contract, {5, 1, 2, 3});
 
   //second bracket
-  btas::Tensor<double> rs_contract(dims);
+  BTensor rs_contract(nao, nao, nao, nao);
   btas::contract(1.0,     s_contract, {1, 2, 3, 4}, coff_tensor, {4, 5}, 0.0, rs_contract, {5, 1, 2, 3});
 
   //third bracket
-  btas::Tensor<double> qrs_contract(dims);
+  BTensor qrs_contract(nao, nao, nao, nao);
   btas::contract(1.0,    rs_contract, {1, 2, 3, 4}, coff_tensor, {4, 5}, 0.0, qrs_contract, {5, 1, 2, 3});
 
   //final loop
-  btas::Tensor<double> pqrs_contract(dims);
+  BTensor pqrs_contract(nao, nao, nao, nao);
   btas::contract(1.0,   qrs_contract, {1, 2, 3, 4}, coff_tensor, {4, 5}, 0.0, pqrs_contract, {5, 1, 2, 3});
 
-  return pqrs_contract;
+  // into Physicist's notation
+  return BTensor(btas::permute(pqrs_contract, {0, 2, 1, 3}));
 }
+
+TA::TArrayD compute_mo_ints(const Matrix& coff_mat,
+                     const std::vector<libint2::Shell>& shells,
+                     madness::World& world) {
+  // returns 2e integrals on MO basis in physicist's notation
+
+  using libint2::Shell;
+  using libint2::Engine;
+  using libint2::Operator;
+
+  const auto nao = nbasis(shells);
+
+  // *************************************
+  // first calculate integrals on AO basis
+  // *************************************
+
+  auto fill_eri_tensor = [&](const TA::Range& range){
+
+    // allocate the tensor to return
+    TA::Tensor<double> tile(range);
+
+    libint2::initialize();
+    // construct the electron repulsion integrals engine
+    Engine engine(Operator::coulomb, max_nprim(shells), max_l(shells), 0);
+
+    auto shell2bf = map_shell_to_basis_function(shells);
+
+    // buf[0] points to the target shell set after every call  to engine.compute()
+    const auto& buf = engine.results();
+
+    // loop over shell pairs of the Fock matrix, {s1,s2}
+    // Fock matrix is symmetric, but skipping it here for simplicity (see compute_2body_fock)
+    for(auto s1=0; s1!=shells.size(); ++s1) {
+
+      auto bf1_first = shell2bf[s1]; // first basis function in this shell
+      auto n1 = shells[s1].size();
+
+      for(auto s2=0; s2!=shells.size(); ++s2) {
+
+        auto bf2_first = shell2bf[s2];
+        auto n2 = shells[s2].size();
+
+        // loop over shell pairs of the density matrix, {s3,s4}
+        // again symmetry is not used for simplicity
+        for(auto s3=0; s3!=shells.size(); ++s3) {
+
+          auto bf3_first = shell2bf[s3];
+          auto n3 = shells[s3].size();
+
+          for(auto s4=0; s4!=shells.size(); ++s4) {
+
+            auto bf4_first = shell2bf[s4];
+            auto n4 = shells[s4].size();
+
+            // Coulomb contribution to the Fock matrix is from {s1,s2,s3,s4} integrals
+            engine.compute(shells[s1], shells[s2], shells[s3], shells[s4]);
+            const auto* buf_1234 = buf[0];
+            if (buf_1234 == nullptr)
+              continue; // if all integrals screened out, skip to next quartet
+
+            // we don't have an analog of Eigen for tensors (yet ... see github.com/BTAS/BTAS, under development)
+            // hence some manual labor here:
+            // 1) loop over every integral in the shell set (= nested loops over basis functions in each shell)
+            // and 2) add contribution from each integral
+            for(auto f1=0, f1234=0; f1!=n1; ++f1) {
+              const auto bf1 = f1 + bf1_first;
+              for(auto f2=0; f2!=n2; ++f2) {
+                const auto bf2 = f2 + bf2_first;
+                for(auto f3=0; f3!=n3; ++f3) {
+                  const auto bf3 = f3 + bf3_first;
+                  for(auto f4=0; f4!=n4; ++f4, ++f1234) {
+                    const auto bf4 = f4 + bf4_first;
+                    tile(bf1, bf2, bf3, bf4) = buf_1234[f1234];
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    } // computed ints on AO basis
+    libint2::finalize(); // done with libint
+    return tile;
+  };
+
+  // create ints_ao
+  TA::TiledRange trange_ao{{0, nao}, {0, nao}, {0, nao}, {0, nao}};
+  TA::TArrayD    ints_ao(world, trange_ao);
+  auto tile = ints_ao.world().taskq.add(fill_eri_tensor,
+                                ints_ao.trange().make_tile_range(0));
+  *(ints_ao.begin()) = tile;
+
+  // *********************
+  // transform to MO basis
+  // *********************
+  //
+
+  auto mat2tensor = [&](const TA::Range& range){
+    TA::Tensor<double> tile(range);
+    std::copy(coff_mat.data(),
+        coff_mat.data()+coff_mat.size(),
+        tile.begin());
+    return tile;
+  };
+  // transform the coefficient Eigen::MatrixD to TA::Tensor<double> type
+  TA::TArrayD coeff_tensor(world, TA::TiledRange{{0,nao},{0,nao}});
+  tile = coeff_tensor.world().taskq.add(mat2tensor,
+                                      coeff_tensor.trange().make_tile_range(0));
+  *(coeff_tensor.begin()) = tile;
+
+  TA::TArrayD ints_mo(world, trange_ao);
+  ints_mo("5,1,2,3") = ints_ao("1,2,3,4") * coeff_tensor("4,5"); // s contract
+  ints_mo("5,1,2,3") = ints_mo("1,2,3,4") * coeff_tensor("4,5"); // rs contract
+  ints_mo("5,1,2,3") = ints_mo("1,2,3,4") * coeff_tensor("4,5"); // qrs contract
+  ints_mo("5,1,2,3") = ints_mo("1,2,3,4") * coeff_tensor("4,5"); // pqrs contract
+
+  // into Physicist's notation
+  ints_mo("1,2,3,4") = ints_mo("1,3,2,4");
+  return ints_mo;
+}
+

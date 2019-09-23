@@ -1,9 +1,11 @@
 #ifndef MATRICES_H
 #define MATRICES_H
+#include <vector>
 #include <Eigen/Dense>
 #include <Eigen/Eigenvalues>
 #include <libint2.hpp>
 #include <btas/btas.h>
+#include <tiledarray.h>
 
 typedef Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
         Matrix;  // import dense, dynamically sized Matrix type from Eigen;
@@ -42,12 +44,12 @@ Matrix compute_2body_fock_simple(const std::vector<libint2::Shell>& shells,
 Matrix compute_2body_fock(const std::vector<libint2::Shell>& shells,
                                  const Matrix& D);
 
-btas::Tensor<double> compute_ao_ints(const std::vector<libint2::Shell>& shells);
+btas::Tensor<double> compute_mo_ints(const Matrix& coff_mat,
+                              const std::vector<libint2::Shell>& shells);
 
-double int_2e_mo(const Matrix& coff_mat, const btas::Tensor<double>& ao_ints_tensor,
-                size_t p, size_t q, size_t r, size_t s);
-
-btas::Tensor<double> compute_mo_ints(const Matrix& coff_mat, const btas::Tensor<double>& ao_ints_tensor);
+TA::TArrayD compute_mo_ints(const Matrix&,
+                     const std::vector<libint2::Shell>&,
+                     madness::World&);
 
 #endif /* ifndef MATRICES_H */
 
