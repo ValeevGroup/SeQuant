@@ -383,7 +383,7 @@ namespace sequant {
       std::string range_to_csv_str(const size_t& n) {
         std::vector<size_t> range_vec(n);
         for (auto i = 0; i < n; ++i)
-          range_vec[n] = n;
+          range_vec[i] = i;
         return ords_to_csv_str(range_vec);
       }
 
