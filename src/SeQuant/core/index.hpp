@@ -33,7 +33,7 @@ using IndexList = std::initializer_list<Index>;
 /// @brief Index = label + IndexSpace
 /// @note Unlike SeQuant1's ParticleIndex, this Index supports dependencies
 /// between indices to be able to express
-///       e.g. hierarchical partitioning of index spaces or hiearchical nesting
+///       e.g. hierarchical partitioning of index spaces or hierarchical nesting
 ///       of spaces
 /// @note label has format "label_index" where "label" is a string of characters
 /// excluding '_', and "index"

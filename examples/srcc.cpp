@@ -1,11 +1,11 @@
 #include <clocale>
 #include <iostream>
 
-#include <boost/numeric/interval.hpp>
 #include <boost/math/special_functions/factorials.hpp>
+#include <boost/numeric/interval.hpp>
 
-#include <SeQuant/core/timer.hpp>
 #include <SeQuant/core/op.hpp>
+#include <SeQuant/core/timer.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 #include <SeQuant/domain/mbpt/sr/sr.hpp>
@@ -13,7 +13,7 @@
 using namespace sequant;
 
 using namespace sequant::mbpt::sr::so;
-//using namespace sequant::mbpt::sr::so::csv;
+// using namespace sequant::mbpt::sr::so::csv;
 
 namespace {
 
@@ -123,13 +123,14 @@ class screened_vac_av {
   }
 };  // screened_vac_av
 
-
 class ccresidual {
   size_t P, N;
+
  public:
   ccresidual(size_t p, size_t n) : P(p), N(n) {}
 
-  ExprPtr operator()(bool screen, bool use_topology, bool use_connectivity, bool canonical_only) {
+  ExprPtr operator()(bool screen, bool use_topology, bool use_connectivity,
+                     bool canonical_only) {
     auto ahbar = [=](const bool screen) {
       auto connect = [=](std::initializer_list<std::pair<int, int>> connlist) {
         if (use_connectivity)
@@ -169,9 +170,8 @@ class ccresidual_vec {
  public:
   ccresidual_vec(size_t p, size_t pmin, size_t n) : P(p), PMIN(pmin), N(n) {}
 
-  void operator()(std::vector<ExprPtr>& result, bool screen,
-                      bool use_topology, bool use_connectivity,
-                      bool canonical_only) {
+  void operator()(std::vector<ExprPtr>& result, bool screen, bool use_topology,
+                  bool use_connectivity, bool canonical_only) {
     result[P] = ccresidual{P, N}(screen, use_topology, use_connectivity,
                                  canonical_only);
     rapid_simplify(result[P]);
@@ -199,11 +199,13 @@ class cceqvec {
   }
 };  // class cceqvec
 
-#define runtime_assert(tf) if (!(tf)) { \
-                             std::ostringstream oss; \
-                             oss << "failed assert at line " << __LINE__ << " in function " << __func__; \
-                             throw std::runtime_error(oss.str().c_str()); \
-                           }
+#define runtime_assert(tf)                                         \
+  if (!(tf)) {                                                     \
+    std::ostringstream oss;                                        \
+    oss << "failed assert at line " << __LINE__ << " in function " \
+        << __func__;                                               \
+    throw std::runtime_error(oss.str().c_str());                   \
+  }
 
 TimerPool<32> tpool;
 
@@ -214,7 +216,7 @@ class compute_cceqvec {
   compute_cceqvec(size_t p, size_t pmin, size_t n) : P(p), PMIN(pmin), N(n) {}
 
   void operator()(bool print, bool screen, bool use_topology,
-                       bool use_connectivity, bool canonical_only) {
+                  bool use_connectivity, bool canonical_only) {
     tpool.start(N);
     auto eqvec =
         cceqvec{N, P}(screen, use_topology, use_connectivity, canonical_only);
@@ -249,8 +251,8 @@ class compute_all {
                   bool use_topology = true, bool use_connectivity = true,
                   bool canonical_only = true) {
     for (size_t N = 2; N <= NMAX; ++N)
-      compute_cceqvec{N, 1, N}(print, screen, use_topology,
-                               use_connectivity, canonical_only);
+      compute_cceqvec{N, 1, N}(print, screen, use_topology, use_connectivity,
+                               canonical_only);
   }
 };  // class compute_all
 
@@ -270,7 +272,7 @@ int main(int argc, char* argv[]) {
 
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
-  //set_num_threads(1);
+  // set_num_threads(1);
 
 #ifndef NDEBUG
   const size_t DEFAULT_NMAX = 3;
@@ -282,6 +284,16 @@ int main(int argc, char* argv[]) {
   constexpr bool print = true;
   // change to true to print stats
   Logger::get_instance().wick_stats = false;
+
+  auto ccsd = cceqvec{2, 2}(true, true, true, true);
+  //  std::wcout << "CCSD R1 =" << ccsd[1]->to_latex() << std::endl;
+  //  std::wcout << std::endl;
+  //  std::wcout << "CCSD R2 =" << ccsd[2]->to_latex() << std::endl;
+
+  // Calling spin trace function here:
+  auto function_check = spintrace(ccsd[1]);
+  std::cout << std::endl;
+  function_check = spintrace(ccsd[2]);
 
   ranges::for_each(std::array<bool, 2>{false, true}, [=](const bool screen) {
     ranges::for_each(

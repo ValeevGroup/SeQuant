@@ -7,6 +7,7 @@
 
 #include <cassert>
 #include <bitset>
+#include <iostream>
 
 #include "attr.hpp"
 #include "container.hpp"
@@ -138,7 +139,7 @@ class IndexSpace {
   /// standard space tags are predefined that helps implement set theory of standard spaces as binary ops on bitsets
   static QuantumNumbers nullqns;  //!< no quantum numbers
   static QuantumNumbers alpha;  //!< spin-up
-  static QuantumNumbers beta;  //!< spin-down
+  static QuantumNumbers beta;  //!< spin-down`
   template <int32_t qnsint> static const constexpr bool is_standard_qns() {
     const QuantumNumbers qns{qnsint};
     return (qns == nullqns || qns == alpha || qns == beta);
@@ -194,8 +195,10 @@ class IndexSpace {
       return null_instance();
     const auto attr = to_attr(reduce_key(key));
     assert(attr.is_valid());
-    if (!instance_exists(attr))
+    if (!instance_exists(attr)) {
+      std::cout << "did not find space with attribute {" << attr.type() << "," << attr.qns() << "}" << std::endl;
       throw bad_key();
+    }
     return instances_.find(attr)->second;
   }
 
@@ -212,6 +215,7 @@ class IndexSpace {
     const auto irreducible_key = reduce_key(key);
     keys_[attr] = to_wstring(irreducible_key);
     instances_.emplace(std::make_pair(attr, IndexSpace(attr)));
+    std::cout << "registered space with attribute {" << attr.type() << "," << attr.qns() << "}" << std::endl;
   }
 
   static bool instance_exists(std::wstring_view key) noexcept {

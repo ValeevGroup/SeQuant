@@ -49,7 +49,7 @@ namespace qcifs {
 
 /// @brief registers standard instances of IndexSpace objects
 void register_standard_instances() {
-  const bool do_not_throw = false;
+  const bool do_not_throw = true;
   IndexSpace::register_instance(L"i", IndexSpace::active_occupied, IndexSpace::nullqns, do_not_throw);
   IndexSpace::register_instance(L"m", IndexSpace::occupied, IndexSpace::nullqns, do_not_throw);
   IndexSpace::register_instance(L"a", IndexSpace::active_unoccupied, IndexSpace::nullqns, do_not_throw);
@@ -58,6 +58,23 @@ void register_standard_instances() {
   IndexSpace::register_instance(L"⍺'", IndexSpace::other_unoccupied, IndexSpace::nullqns, do_not_throw);
   IndexSpace::register_instance(L"⍺", IndexSpace::complete_unoccupied, IndexSpace::nullqns, do_not_throw);
   IndexSpace::register_instance(L"κ", IndexSpace::complete, IndexSpace::nullqns, do_not_throw);
+
+//   TODO: Only on of the following register_instances work at a time. NEEDS FIXING
+//   PS: An underscore in the index name does not work.
+
+  // For ⍺ spin index
+//  IndexSpace::register_instance(L"i⍺", IndexSpace::active_occupied, IndexSpace::alpha, do_not_throw);
+//  IndexSpace::register_instance(L"m⍺", IndexSpace::occupied, IndexSpace::alpha, do_not_throw);
+//  IndexSpace::register_instance(L"a⍺", IndexSpace::active_unoccupied, IndexSpace::alpha, do_not_throw);
+//  IndexSpace::register_instance(L"e⍺", IndexSpace::unoccupied, IndexSpace::alpha, do_not_throw);
+//  IndexSpace::register_instance(L"p⍺", IndexSpace::all, IndexSpace::alpha, do_not_throw);
+
+  // For β spin index
+  IndexSpace::register_instance(L"iβ", IndexSpace::active_occupied, IndexSpace::beta, do_not_throw);
+  IndexSpace::register_instance(L"mβ", IndexSpace::occupied, IndexSpace::beta, do_not_throw);
+//  IndexSpace::register_instance(L"aβ", IndexSpace::active_unoccupied, IndexSpace::beta, do_not_throw);
+//  IndexSpace::register_instance(L"eβ", IndexSpace::unoccupied, IndexSpace::beta, do_not_throw);
+//  IndexSpace::register_instance(L"pβ", IndexSpace::all, IndexSpace::beta, do_not_throw);
 }
 
 /// @brief creates an IndexRegistry
@@ -73,6 +90,9 @@ void make_default_indexregistry() {
   register_index(idxreg_ref, Index{L"⍺'"}, 3000);
   register_index(idxreg_ref, Index{L"⍺"}, 4000);
   register_index(idxreg_ref, Index{L"κ"}, 4110);
+
+  register_index(idxreg_ref, Index{L"iβ"}, 100);
+//  register_index(idxreg_ref, Index{L"mβ"}, 110);
 }
 
 }  // namespace qcifs

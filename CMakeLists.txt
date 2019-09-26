@@ -6,7 +6,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Enable ccache if not already enabled by symlink masquerading
 if(NOT CMAKE_CXX_COMPILER MATCHES ".*/ccache$")
-    find_program(CCACHE_EXECUTABLE ccache)
+#    find_program(CCACHE_EXECUTABLE ccache)
     if (CCACHE_EXECUTABLE)
         mark_as_advanced(CCACHE_EXECUTABLE)
         set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ${CCACHE_EXECUTABLE})

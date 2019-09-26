@@ -42,6 +42,11 @@ TEST_CASE("IndexSpace", "[elements]") {
     REQUIRE(IndexSpace::instance(L"i") == IndexSpace::nullqns);
     REQUIRE(IndexSpace::nullqns == IndexSpace::instance(L"i").qns());
     REQUIRE(IndexSpace::nullqns == IndexSpace::instance(L"i"));
+
+    REQUIRE(IndexSpace::instance(L"iβ").qns() == IndexSpace::beta);
+    REQUIRE(IndexSpace::instance(L"iβ") == IndexSpace::beta);
+    REQUIRE(IndexSpace::beta == IndexSpace::instance(L"iβ").qns());
+    REQUIRE(IndexSpace::beta == IndexSpace::instance(L"iβ"));
   }
 
   SECTION("ordering") {
