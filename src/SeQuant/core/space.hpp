@@ -196,7 +196,6 @@ class IndexSpace {
     const auto attr = to_attr(reduce_key(key));
     assert(attr.is_valid());
     if (!instance_exists(attr)) {
-      std::cout << "did not find space with attribute {" << attr.type() << "," << attr.qns() << "}" << std::endl;
       throw bad_key();
     }
     return instances_.find(attr)->second;
@@ -215,7 +214,6 @@ class IndexSpace {
     const auto irreducible_key = reduce_key(key);
     keys_[attr] = to_wstring(irreducible_key);
     instances_.emplace(std::make_pair(attr, IndexSpace(attr)));
-    std::cout << "registered space with attribute {" << attr.type() << "," << attr.qns() << "}" << std::endl;
   }
 
   static bool instance_exists(std::wstring_view key) noexcept {
