@@ -103,12 +103,12 @@ class IndexSpace {
     static Attr invalid() noexcept { return Attr{TypeAttr::invalid(), QuantumNumbersAttr::invalid()}; }
     bool is_valid() const noexcept { return *this != Attr::invalid(); }
 
-    /// Attr objects are ordered by quantum numbers, then by type
+    /// Attr objects are ordered by type, then by quantum numbers
     bool operator<(Attr other) const {
-      if (this->qns() < other.qns()) {
+      if (this->type() < other.type()) {
         return true;
       } else {
-        return !(this->qns() == other.qns()) || this->type() < other.type();
+        return (this->type() == other.type()) ? this->qns() < other.qns() : false;
       }
     }
   };
