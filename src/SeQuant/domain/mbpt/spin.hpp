@@ -33,15 +33,27 @@ ExprPtr spintrace(ExprPtr expr,
   };
   expr->visit(collect_indices);
 
-  for (auto&& idx : grand_idxlist) {
+  //  container::set<Index> grand_idxlist_alpha;
+  //  container::set<Index> grand_idxlist_beta;
+  //  for (auto&& idx : grand_idxlist) {
+  // Checking IndexSpace
+  //    if(IndexSpace::instance(idx.label()) == IndexSpace::nullqns){
+  //      std::cout << "nullqns" << std::endl;
+  //      std::cout << IndexSpace::instance(idx.label()).qns() << std::endl;
+  //    }
+  //    std::wcout << idx.to_latex() << std::endl;
 
-    // Checking IndexSpace
-    if(IndexSpace::instance(idx.label()) == IndexSpace::nullqns){
-//      std::cout << "nullqns" << std::endl;
-      std::cout << IndexSpace::instance(idx.label()).qns() << std::endl;
-    }
-    std::wcout << idx.to_latex() << std::endl;
-  }
+  //    std::wcout << idx.label() << std::endl;
+  //    std::wcout << std::wstring(idx.label()) + L"⁺" << std::endl;
+  //    std::wcout << std::wstring(idx.label()) + L"⁻" << std::endl;
+
+  //    std::wcout << qndecorate( , idx.label()) << std::endl;
+
+  //    auto result = grand_idxlist_alpha.insert(std::wstring(idx.label()) +
+  //    L"⁺"); auto result2 =
+  //    grand_idxlist_beta.insert(std::wstring(idx.label()) + L"⁻");
+  //    assert(result.second);
+  //  }
 
   container::set<Index> ext_idxlist;
   for (auto&& idxgrp : ext_index_groups) {
@@ -51,8 +63,6 @@ ExprPtr spintrace(ExprPtr expr,
     }
   }
 
-  std::cout << std::endl;
-
   container::set<Index> int_idxlist;
   for (auto&& gidx : grand_idxlist) {
     if (ext_idxlist.find(gidx) == ext_idxlist.end()) {
@@ -60,13 +70,53 @@ ExprPtr spintrace(ExprPtr expr,
     }
   }
 
-  for (auto&& idx : int_idxlist) {
+  for (auto&& idx : grand_idxlist) {
     std::wcout << idx.to_latex() << std::endl;
   }
 
   // TODO make list of groups, generate all spin tuples, apply and replace ...
 
   // TODO: Add spin quantum numbers and generate tuples
+
+  {
+    std::vector<Index> alpha_list;
+    std::vector<Index> beta_list;
+    for (auto&& i : grand_idxlist) {
+      std::cout << "{" << IndexSpace::instance(i.label()).type() << ","
+                << IndexSpace::instance(i.label()).qns() << "}" << std::endl;
+      auto alpha_space = IndexSpace::instance(
+          IndexSpace::instance(i.label()).type(), IndexSpace::alpha);
+      auto beta_space = IndexSpace::instance(
+          IndexSpace::instance(i.label()).type(), IndexSpace::beta);
+      alpha_list.push_back(Index::make_tmp_index(alpha_space));
+      beta_list.push_back(Index::make_tmp_index(beta_space));
+    }
+
+    //    auto alpha_space = IndexSpace::instance(IndexSpace::active_occupied,
+    //    IndexSpace::alpha); auto beta_space =
+    //    IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::beta);
+    //    std::vector<Index> alpha_list;
+    //    std::vector<Index> beta_list;
+    //    for(size_t i = 0; i < int_idxlist.size(); i++){
+    //      alpha_list.push_back(Index::make_tmp_index(alpha_space));
+    //      beta_list.push_back(Index::make_tmp_index(beta_space));
+    //    }
+
+    for (auto&& i : alpha_list) {
+      std::wcout << i.label() << std::endl;
+      std::cout << "{" << IndexSpace::instance(i.label()).type() << ","
+                << IndexSpace::instance(i.label()).qns() << "}" << std::endl;
+    }
+    for (auto&& i : beta_list) {
+      std::wcout << i.label() << std::endl;
+      std::cout << "{" << IndexSpace::instance(i.label()).type() << ","
+                << IndexSpace::instance(i.label()).qns() << "}" << std::endl;
+    }
+  }
+
+  //  std::cout << "iA mutated: {" << IndexSpace::instance(iA.label()).type() <<
+  //  "," << IndexSpace::instance(iA.label()).qns() << "}" << std::endl;
+  //  std::wcout << iA.to_latex() << std::endl;
 
   //   Using tuples
   //  auto spinTuple = std::make_tuple('A', 'B');
@@ -119,10 +169,24 @@ ExprPtr spintrace(ExprPtr expr,
   for (auto&& i : tupleList) {
     //    std::cout << i << std::endl;
     std::vector<char> spinIndexList(i.begin(), i.end());
-    for(auto&&j : spinIndexList){
-
-    }
   }
+
+  //  auto iA = IndexSpace::instance(IndexSpace::active_occupied,
+  //  IndexSpace::alpha); Index(L"iA_1",Index
+  //  IndexSpace::active_occupied,IndexSpace::alpha);
+  Index iA(L"a_1",
+           IndexSpace::instance(IndexSpace::unoccupied, IndexSpace::nullqns));
+  //  std::cout << "iA: {" << IndexSpace::instance(iA.label()).type() << "," <<
+  //  IndexSpace::instance(iA.label()).qns() << "}" << std::endl;
+
+  //  std::cout << IndexSpace::instance(L"i⁺_1").type() << "," <<
+  //  IndexSpace::instance(L"i⁺_1").qns() << std::endl; std::cout <<
+  //  IndexSpace::instance(L"i_1⁺").type() << "," <<
+  //  IndexSpace::instance(L"i_1⁺").qns() << std::endl; std::cout <<
+  //  IndexSpace::instance(L"a⁻_1").type() << "," <<
+  //  IndexSpace::instance(L"a⁻_1").qns() << std::endl; std::cout <<
+  //  IndexSpace::instance(L"a_1⁻").type() << "," <<
+  //  IndexSpace::instance(L"a_1⁻").qns() << std::endl;
 
   // TODO: Add same terms
 
