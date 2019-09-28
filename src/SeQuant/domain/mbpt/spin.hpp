@@ -11,6 +11,9 @@
 #include "../../core/expr.hpp"
 #include "../../core/tensor.hpp"
 
+#define SPINTRACE_PRINT 0
+#define PRINT_PERMUTATION_LIST 0
+
 namespace sequant {
 
 class spinIndex : public Index {
@@ -33,6 +36,8 @@ ExprPtr spintrace(ExprPtr expr,
   };
   expr->visit(collect_indices);
 
+  std::cout << "grand_idxlist size: " << grand_idxlist.size() << std::endl;
+
   container::set<Index> ext_idxlist;
   for (auto&& idxgrp : ext_index_groups) {
     for (auto&& idx : idxgrp) {
@@ -48,77 +53,74 @@ ExprPtr spintrace(ExprPtr expr,
     }
   }
 
+#if SPINTRACE_PRINT
+  //  List of all Index ( label + IndexSpace )
   for (auto&& idx : grand_idxlist) {
     std::wcout << idx.to_latex() << std::endl;
   }
+#endif
 
   // TODO make list of groups, generate all spin tuples, apply and replace ...
 
-  // TODO: Add spin quantum numbers and generate tuples
-
-  std::vector<Index> alpha_list;
-  std::vector<Index> beta_list;
+  // Generate list of spin quantum numbers from Grand Index List
+  container::set<Index> alpha_list;
+  container::set<Index> beta_list;
   {
+    // For each index, copy .type() and add spin variable
     for (auto&& i : grand_idxlist) {
-      //      std::cout << "{" << IndexSpace::instance(i.label()).type() << ","
-      //                << IndexSpace::instance(i.label()).qns() << "}" <<
-      //                std::endl;
       auto alpha_space = IndexSpace::instance(
           IndexSpace::instance(i.label()).type(), IndexSpace::alpha);
       auto beta_space = IndexSpace::instance(
           IndexSpace::instance(i.label()).type(), IndexSpace::beta);
-      alpha_list.push_back(Index::make_tmp_index(alpha_space));
-      beta_list.push_back(Index::make_tmp_index(beta_space));
+      alpha_list.insert(alpha_list.end(), Index::make_tmp_index(alpha_space));
+      beta_list.insert(beta_list.end(), Index::make_tmp_index(beta_space));
     }
 
-    //    for (auto&& i : alpha_list) {
-    //      std::wcout << i.label() << std::endl;
-    //      std::cout << "{" << IndexSpace::instance(i.label()).type() << ","
-    //                << IndexSpace::instance(i.label()).qns() << "}" <<
-    //                std::endl;
-    //    }
-    //    for (auto&& i : beta_list) {
-    //      std::wcout << i.label() << std::endl;
-    //      std::cout << "{" << IndexSpace::instance(i.label()).type() << ","
-    //                << IndexSpace::instance(i.label()).qns() << "}" <<
-    //                std::endl;
-    //    }
+#if SPINTRACE_PRINT
+    for (auto&& i : alpha_list) {
+      std::wcout << i.label() << " {" << IndexSpace::instance(i.label()).type()
+                 << "," << IndexSpace::instance(i.label()).qns() << "}"
+                 << std::endl;
+    }
+    for (auto&& i : beta_list) {
+      std::wcout << i.label() << " {" << IndexSpace::instance(i.label()).type()
+                 << "," << IndexSpace::instance(i.label()).qns() << "}"
+                 << std::endl;
+    }
+    std::cout << "alpha_list size: " << alpha_list.size() << std::endl;
+    std::cout << "beta_list size: " << beta_list.size() << std::endl;
+#endif
   }
 
-  //  Using vector
-  std::vector<std::string> spinVector = {"A", "B"};
-  std::cout << "spinVector: " << spinVector[0] << " " << spinVector[1]
-            << std::endl;
-  std::cout << "Length of index list: " << int_idxlist.size() << std::endl;
-
-  //  std::vector<Index> tupleList(int_idxlist.size());
-  //  std::cout << "tupleList size: " << tupleList.size() << std::endl;
-
+  // Generate a list of tuples with A,B for spin
   auto tupleSize = 0;  // Counter for size of the list of tuples
   std::vector<std::string> tupleList;
 
-  //  Create a list of alpha spins the size of number of index
-  std::string strTuple;
-  for (size_t i = 0; i < grand_idxlist.size(); i++) {
-    strTuple.append(spinVector[0]);
-  }
-  tupleSize++;
+  //  Create a list of A spins (the size of number of index)
+  std::string strTuple(grand_idxlist.size(), 'A');
+
+  //  Add list of A spins to tupleList
   tupleList.push_back(strTuple);
+  tupleSize++;
+#if PRINT_PERMUTATION_LIST
+  std::cout << tupleSize << "\t" << strTuple << std::endl;
+#endif
 
-  // Replace one spin at a time and permute
+  //  Replace one spin in a tuple
   for (size_t i = 0; i < int_idxlist.size(); i++) {
-    strTuple.replace(int_idxlist.size() - i - 1, 1, spinVector[1]);
+    strTuple.replace(int_idxlist.size() - i - 1, 1, "B");
     std::sort(strTuple.begin(), strTuple.end());
-    do {
-      tupleSize++;
-      tupleList.push_back(strTuple);
-      //      std::cout << strTuple << '\n';
-    } while (std::next_permutation(strTuple.begin(), strTuple.end()));
-    //    std::cout << std::endl;
-    //    std::cout << i << " " << strTuple << std::endl;
-  }
 
-  std::cout << "tupleList.size(): " << tupleList.size() << std::endl;
+    //  Permute the tuples
+    do {
+      tupleList.push_back(strTuple);
+      tupleSize++;
+#if PRINT_PERMUTATION_LIST
+      std::cout << tupleSize << "\t" << strTuple << std::endl;
+#endif
+    } while (std::next_permutation(strTuple.begin(), strTuple.end()));
+  }
+  std::cout << "tupleList size: " << tupleList.size() << std::endl;
 
   // TODO: Merge tupleList elements and Index
 
