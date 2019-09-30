@@ -483,15 +483,13 @@ int main(int argc, char *argv[])
       cout << "\nCout 8" << endl;
       auto r2 = eval_equation(ccs_r[2], tensor_map);
       cout << "\nCout 9" << endl;
-      cout << "norm(r1) = " << r1.tensor()("i,j").norm() << endl;
-      cout << "norm(r2) = " << r2.tensor()("i,j,k,l").norm() << endl;
       /* antisymmetrize(r2, r2.tensor().trange().rank()); */
-
+      cout << "norm(r1) = " <<
+        std::sqrt(r1.tensor()("i,j").dot( r1.tensor()("i,j") )) << endl;
+      cout << "norm(r2) = " <<
+        std::sqrt(r2.tensor()("i,j,k,l").dot( r2.tensor()("i,j,k,l") )) << endl;
       cout << endl;
-      /* cout << "norm(r1) = " << std::sqrt(btas::dot(r1, r1)) << endl; */
-      /* cout << "norm(r2) = " << std::sqrt(btas::dot(r2, r2)) << endl; */
     } while(false);
-
     TA::finalize();
   } // end of try block; if any exceptions occurred, report them and exit cleanly
 

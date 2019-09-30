@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <iostream>
 
 #include <btas/btas.h>
 #include <btas/tensorview.h>
@@ -126,7 +127,7 @@ namespace sequant {
       if (rank == 2)
         return;
       else if (rank%2 != 0)
-        throw "Can't handle odd ranked tensors!";
+        throw "Can't handle odd-ordered tensors, just yet!";
 
       std::vector<size_t> to_perm;
       for (auto i = 0; i < (size_t)rank/2; ++i)
@@ -360,7 +361,7 @@ namespace sequant {
       std::string range_to_csv_str(const size_t& n) {
         std::vector<size_t> range_vec(n);
         for (auto i = 0; i < n; ++i)
-          range_vec[n] = n;
+          range_vec[i] = i;
         return ords_to_csv_str(range_vec);
       }
 
@@ -385,6 +386,7 @@ namespace sequant {
           const std::vector<size_t>& t2_ords,
           const std::vector<size_t>& nc_ords) {
         TA::TArrayD result;
+
         result(ords_to_csv_str(nc_ords))
           = t1(ords_to_csv_str(t1_ords))
           * t2(ords_to_csv_str(t2_ords));
@@ -413,9 +415,23 @@ namespace sequant {
 
       TA::TArrayD core_sum(const TA::TArrayD& t1,
           const TA::TArrayD& t2, bool subtract) {
+        if (!t2.is_initialized())
+          return t1;
+        if (!t1.is_initialized()) {
+          if (!subtract)
+            return t2;
+          else {
+            TArrayD result;
+            auto rank    = t1.trange().rank();
+            auto inds    = range_to_csv_str(rank);
+            result(inds) = t2(inds) * -1;
+            return result;
+          }
+        }
+        // now both t1 and t2 are initialized
         auto rank    = t1.trange().rank();
         auto inds    = range_to_csv_str(rank);
-        auto result  = t1;
+        TArrayD result;
         if (subtract)
           result(inds) = t1(inds) - t2(inds);
         else
