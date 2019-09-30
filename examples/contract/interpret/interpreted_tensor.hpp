@@ -151,7 +151,12 @@ namespace sequant {
     // use with care
     template<typename T>
       void InterpretedTensor<T>::scale_tensor(const double& d) {
+#ifdef SEQUANT_HAS_BTAS
         btas::scal(d, this->tensor_);
+#endif
+#ifdef SEQUANT_HAS_TILEDARRAY
+        TA::scale(this->tensor_, d);
+#endif
       }
 
   } // namespace interpret

@@ -46,10 +46,12 @@ add_library(Boost INTERFACE IMPORTED)
 set_property(TARGET Boost PROPERTY
         INTERFACE_INCLUDE_DIRECTORIES ${Boost_INCLUDE_DIR})
 
+############ optional dependencies
 # look for BTAS, if needed
 if (BTAS_INSTALL_DIR)
     find_package(BTAS)
 endif(BTAS_INSTALL_DIR)
+find_package(TiledArray CONFIG COMPONENTS tiledarray)
 
 # embedded bliss-0.73
 add_library(bliss
@@ -161,33 +163,38 @@ set_tests_properties(unit/run
 # Single-Reference Coupled-Cluster
 set(example0 srcc)
 add_executable(${example0} EXCLUDE_FROM_ALL
-        examples/${example0}.cpp)
+        examples/${example0}/${example0}.cpp)
 target_link_libraries(${example0} SeQuant ${TBB_LIBRARIES})
 
 # contract method testing -- Bimal
 if (BTAS_FOUND)
   find_package(Libint2 2.6.0 CONFIG REQUIRED)
-  find_package(TiledArray CONFIG REQUIRED COMPONENTS tiledarray)
 
-  set(example1 test_ccsd_btas)
+  set(example1 cc_btas)
   add_executable(${example1} EXCLUDE_FROM_ALL
-          examples/${example1}.cpp
-          examples/src/interpret/interpreted_tensor.hpp
-          examples/src/interpret/contract.hpp
-          examples/src/scf/hartree-fock.cc)
-  target_link_libraries(${example1} SeQuant ${TBB_LIBRARIES} Libint2::cxx BTAS tiledarray)
-
-  set(example2 test_ccsd_tiledarray)
-  add_executable(${example2} EXCLUDE_FROM_ALL
-          examples/${example2}.cpp
-          examples/src/interpret/interpreted_tensor.hpp
-          examples/src/interpret/contract.hpp
-          examples/src/scf/hartree-fock.cc)
-  target_link_libraries(${example2} SeQuant ${TBB_LIBRARIES} Libint2::cxx BTAS tiledarray)
+          examples/contract/${example1}.cpp
+          examples/contract/interpret/interpreted_tensor.hpp
+          examples/contract/interpret/contract.hpp
+          examples/contract/scf/hartree-fock.cc)
+  target_link_libraries(${example1} SeQuant ${TBB_LIBRARIES} Libint2::cxx BTAS)
+  target_compile_definitions(${example1} PRIVATE SEQUANT_HAS_BTAS)
 endif(BTAS_FOUND)
 
+if (TiledArray_FOUND)
+  find_package(Libint2 2.6.0 CONFIG REQUIRED)
+
+  set(example2 cc_tiledarray)
+  add_executable(${example2} EXCLUDE_FROM_ALL
+          examples/contract/${example2}.cpp
+          examples/contract/interpret/interpreted_tensor.hpp
+          examples/contract/interpret/contract.hpp
+          examples/contract/scf/hartree-fock.cc)
+  target_link_libraries(${example2} SeQuant ${TBB_LIBRARIES} Libint2::cxx tiledarray)
+  target_compile_definitions(${example2} PRIVATE SEQUANT_HAS_TILEDARRAY)
+endif(TiledArray_FOUND)
+
 # add tests for running examples
-set (lastexample 2)
+set (lastexample 3)
 foreach(i RANGE ${lastexample})
     if (TARGET ${example${i}})
         add_test(example/${example${i}}/build "${CMAKE_COMMAND}" --build ${CMAKE_BINARY_DIR} --target ${example${i}})

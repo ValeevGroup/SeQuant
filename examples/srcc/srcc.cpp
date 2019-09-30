@@ -1,4 +1,4 @@
-#include "sequant_setup.hpp"
+#include "../contract/sequant_setup.hpp"
 
 using namespace  sequant;
 

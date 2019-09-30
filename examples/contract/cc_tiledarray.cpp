@@ -1,13 +1,13 @@
 #include <iostream>
-#include <btas/btas.h>
-#include <btas/tensorview.h>
-#include <btas/tensor_func.h>
+#ifndef SEQUANT_HAS_TILEDARRAY
+# error "SEQUANT_HAS_TILEDARRAY should be defined when building cc_tiledarray"
+#endif
 
 #include "sequant_setup.hpp"
 
-#include "src/scf/hartree-fock.h"
-#include "src/interpret/interpreted_tensor.hpp"
-#include "src/interpret/contract.hpp"
+#include "../contract/scf/hartree-fock.h"
+#include "../contract/interpret/interpreted_tensor.hpp"
+#include "../contract/interpret/contract.hpp"
 
 int main(int argc, char *argv[])
 {

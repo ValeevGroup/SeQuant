@@ -34,12 +34,6 @@
 // Libint Gaussian integrals library
 #include <libint2.hpp>
 
-// BTAS
-#include <btas/tensorview.h>
-#include <btas/tensor_func.h>
-// TiledArray
-#include <tiledarray.h>
-
 #include "hartree-fock.h"
 
 // this reads the geometry in the standard xyz format supported by most chemistry software
@@ -600,6 +594,7 @@ Matrix compute_2body_fock(const std::vector<libint2::Shell>& shells,
   return 0.5 * (G + Gt);
 }
 
+#ifdef SEQUANT_HAS_BTAS
 btas::Tensor<double> compute_mo_ints(const Matrix& coff_mat,
     const std::vector<libint2::Shell>& shells) {
   // returns 2e integrals on MO basis in physicist's notation
@@ -709,7 +704,9 @@ btas::Tensor<double> compute_mo_ints(const Matrix& coff_mat,
   // into Physicist's notation
   return BTensor(btas::permute(pqrs_contract, {0, 2, 1, 3}));
 }
+#endif
 
+#ifdef SEQUANT_HAS_TILEDARRAY
 TA::TArrayD compute_mo_ints(const Matrix& coff_mat,
                      const std::vector<libint2::Shell>& shells,
                      madness::World& world) {
@@ -829,4 +826,4 @@ TA::TArrayD compute_mo_ints(const Matrix& coff_mat,
   ints_mo("1,2,3,4") = ints_mo("1,3,2,4");
   return ints_mo;
 }
-
+#endif

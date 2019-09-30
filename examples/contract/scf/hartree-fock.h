@@ -4,8 +4,16 @@
 #include <Eigen/Dense>
 #include <Eigen/Eigenvalues>
 #include <libint2.hpp>
-#include <btas/btas.h>
-#include <tiledarray.h>
+
+// BTAS
+#ifdef SEQUANT_HAS_BTAS
+# include <btas/btas.h>
+# include <btas/tensor_func.h>
+#endif
+// TiledArray
+#ifdef SEQUANT_HAS_TILEDARRAY
+# include <tiledarray.h>
+#endif
 
 typedef Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
         Matrix;  // import dense, dynamically sized Matrix type from Eigen;
@@ -44,12 +52,15 @@ Matrix compute_2body_fock_simple(const std::vector<libint2::Shell>& shells,
 Matrix compute_2body_fock(const std::vector<libint2::Shell>& shells,
                                  const Matrix& D);
 
+#ifdef SEQUANT_HAS_BTAS
 btas::Tensor<double> compute_mo_ints(const Matrix& coff_mat,
                               const std::vector<libint2::Shell>& shells);
-
+#endif
+#ifdef SEQUANT_HAS_TILEDARRAY
 TA::TArrayD compute_mo_ints(const Matrix&,
                      const std::vector<libint2::Shell>&,
                      madness::World&);
+#endif
 
 #endif /* ifndef MATRICES_H */
 

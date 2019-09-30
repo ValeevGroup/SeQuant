@@ -6,11 +6,15 @@
 #include <map>
 #include <iostream>
 
-#include <btas/btas.h>
-#include <btas/tensorview.h>
-#include <btas/tensor_func.h>
+#ifdef SEQUANT_HAS_BTAS
+# include <btas/btas.h>
+# include <btas/tensorview.h>
+# include <btas/tensor_func.h>
+#endif
 
-#include <tiledarray.h>
+#ifdef SEQUANT_HAS_TILEDARRAY
+# include <tiledarray.h>
+#endif
 
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/tensor.hpp>
@@ -58,14 +62,19 @@ namespace sequant {
           size_t cswap = 0, // count swaps
           size_t begin = 0);
 
+#ifdef SEQUANT_HAS_BTAS
       auto permute(const btas::Tensor<double>&, const std::vector<size_t>&);
+#endif
 
+#ifdef SEQUANT_HAS_TILEDARRAY
       auto permute(const TA::TArrayD&, const std::vector<size_t>&);
+#endif
 
       std::string ords_to_csv_str(const std::vector<size_t>&);
 
       std::string range_to_csv_str(const size_t&);
 
+#ifdef SEQUANT_HAS_BTAS
       btas::Tensor<double> core_contract(double, // scalar
           const btas::Tensor<double>&, // first tensor
           const std::vector<size_t>&,  // indexes of the first tensor
@@ -73,7 +82,9 @@ namespace sequant {
           const std::vector<size_t>&,  // indexes of the second tensor
           const std::vector<size_t>&   // non-contracting indices
           );
+#endif
 
+#ifdef SEQUANT_HAS_TILEDARRAY
       TA::TArrayD core_contract(double,
           const TA::TArrayD&,
           const std::vector<size_t>&,
@@ -81,16 +92,25 @@ namespace sequant {
           const std::vector<size_t>&,
           const std::vector<size_t>&
           );
+#endif
 
+#ifdef SEQUANT_HAS_BTAS
       btas::Tensor<double> scale(double, const btas::Tensor<double>&);
+#endif
 
+#ifdef SEQUANT_HAS_TILEDARRAY
       TA::TArrayD scale(double, const TA::TArrayD&);
+#endif
 
+#ifdef SEQUANT_HAS_BTAS
       btas::Tensor<double> core_sum(const btas::Tensor<double>&,
           const btas::Tensor<double>&, bool subtract=false);
+#endif
 
+#ifdef SEQUANT_HAS_TILEDARRAY
       TA::TArrayD core_sum(const TA::TArrayD&,
           const TA::TArrayD&, bool subtract=false);
+#endif
 
     } // namespace detail
 
@@ -329,12 +349,14 @@ namespace sequant {
         return result;
       }
 
+#ifdef SEQUANT_HAS_BTAS
       auto permute(const btas::Tensor<double>& bt,
           const std::vector<size_t>& perm_vec) {
         return btas::Tensor<double>(btas::permute(bt, perm_vec));
       }
+#endif
 
-
+#ifdef SEQUANT_HAS_TILEDARRAY
       auto permute(const TA::TArrayD& ta,
           const std::vector<size_t>& perm_vec) {
 
@@ -347,6 +369,7 @@ namespace sequant {
         permed(range_to_csv_str(perm_vec.size())) = permed(ords_to_csv_str(perm_vec));
         return permed;
       }
+#endif
 
       std::string ords_to_csv_str(const std::vector<size_t>& ords) {
 
@@ -365,6 +388,7 @@ namespace sequant {
         return ords_to_csv_str(range_vec);
       }
 
+#ifdef SEQUANT_HAS_BTAS
       btas::Tensor<double> core_contract(double scal, // scalar
           const btas::Tensor<double>& t1,      // first tensor
           const std::vector<size_t>&  t1_ords, // indexes of the first tensor
@@ -378,7 +402,9 @@ namespace sequant {
             0.0, result, nc_ords);
         return result;
       }
+#endif
 
+#ifdef SEQUANT_HAS_TILEDARRAY
       TA::TArrayD core_contract(double scal,
           const TA::TArrayD& t1,
           const std::vector<size_t>& t1_ords,
@@ -392,19 +418,25 @@ namespace sequant {
           * t2(ords_to_csv_str(t2_ords));
         return result;
       }
+#endif
 
+#ifdef SEQUANT_HAS_BTAS
       btas::Tensor<double> scale(double d, const btas::Tensor<double>& t) {
         auto result = t;
         btas::scal(d, result);
         return result;
       }
+#endif
 
+#ifdef SEQUANT_HAS_TILEDARRAY
       TA::TArrayD scale(double d, const TA::TArrayD& t) {
         auto result = t;
         TA::scale(result, d);
         return result;
       }
+#endif
 
+#ifdef SEQUANT_HAS_BTAS
       btas::Tensor<double> core_sum(const btas::Tensor<double>& t1,
           const btas::Tensor<double>& t2, bool subtract) {
         if (subtract)
@@ -412,7 +444,9 @@ namespace sequant {
         // else
         return t1 + t2;
       }
+#endif
 
+#ifdef SEQUANT_HAS_TILEDARRAY
       TA::TArrayD core_sum(const TA::TArrayD& t1,
           const TA::TArrayD& t2, bool subtract) {
         if (!t2.is_initialized())
@@ -438,6 +472,7 @@ namespace sequant {
           result(inds) = t1(inds) + t2(inds);
         return result;
       }
+#endif
 
       } // namespace detail
 
