@@ -29,8 +29,13 @@ namespace sequant {
       InterpretedTensor<T> eval_equation(const sequant::ExprPtr&,
           const std::map<std::wstring, T const * >&);
 
-    template <typename T>
-      void antisymmetrize(InterpretedTensor<T>&, const size_t&);
+#ifdef SEQUANT_HAS_BTAS
+    btas::Tensor<double> antisymmetrize(const btas::Tensor<double>&);
+#endif
+
+#ifdef SEQUANT_HAS_TILEDARRAY
+    TA::TArrayD antisymmetrize(const TA::TArrayD&);
+#endif
 
     namespace detail {
 
@@ -61,14 +66,6 @@ namespace sequant {
           size_t,
           size_t cswap = 0, // count swaps
           size_t begin = 0);
-
-#ifdef SEQUANT_HAS_BTAS
-      btas::Tensor<double> permute(const btas::Tensor<double>&, const std::vector<size_t>&);
-#endif
-
-#ifdef SEQUANT_HAS_TILEDARRAY
-      TA::TArrayD permute(const TA::TArrayD&, const std::vector<size_t>&);
-#endif
 
       std::string ords_to_csv_str(const std::vector<size_t>&);
 
@@ -123,29 +120,31 @@ namespace sequant {
   namespace interpret {
 
     template <typename T>
-    InterpretedTensor<T> eval_equation(const sequant::ExprPtr& expr,
-        const std::map<std::wstring, T const * >& tmap) {
+      InterpretedTensor<T> eval_equation(const sequant::ExprPtr& expr,
+          const std::map<std::wstring, T const * >& tmap) {
 
-      if (expr->is<sequant::Product>())
-        return detail::eval_product(expr, tmap);
+        if (expr->is<sequant::Product>())
+          return detail::eval_product(expr, tmap);
 
-      else if (expr->is<sequant::Sum>())
-        return detail::eval_sum(expr, tmap);
+        else if (expr->is<sequant::Sum>())
+          return detail::eval_sum(expr, tmap);
 
-      else if (expr->is<sequant::Tensor>()) {
-        auto ct = InterpretedTensor<T>(expr->as<sequant::Tensor>());
-        ct.link_tensor(*(tmap.find(ct.label()+L"_"+ct.translate())->second));
-        return ct;
+        else if (expr->is<sequant::Tensor>()) {
+          auto ct = InterpretedTensor<T>(expr->as<sequant::Tensor>());
+          ct.link_tensor(*(tmap.find(ct.label()+L"_"+ct.translate())->second));
+          return ct;
+        }
+
+        else
+          throw "Only know how to handle Sum, Product or Tensor!";
       }
 
-      else
-        throw "Only know how to handle Sum, Product or Tensor!";
-    }
+#ifdef SEQUANT_HAS_BTAS
+    btas::Tensor<double> antisymmetrize(const btas::Tensor<double>& tensor) {
 
-    template <typename T>
-    void antisymmetrize(InterpretedTensor<T>& tensor, const size_t& rank) {
+      size_t rank = tensor.rank();
       if (rank == 2)
-        return;
+        return tensor;
       else if (rank%2 != 0)
         throw "Can't handle odd-ordered tensors, just yet!";
 
@@ -154,11 +153,8 @@ namespace sequant {
         to_perm.push_back(i);
       auto vp = detail::perm_calc(to_perm, (size_t)rank/2);
 
-      // antisymmetrize
-      auto result = tensor.tensor();
-      result.fill(0); // could prove fragile
-                      // coincidentally both btas::Tensor and TA::DistArray
-                      // objects have a fill method with the same name
+      btas::Tensor<double> result(tensor.range());
+      result.fill(0);
 
       for (const auto& p: vp) {
         for (const auto& q: vp) {
@@ -169,16 +165,57 @@ namespace sequant {
           for (auto qq: q.perm)
             perm_vec.push_back((size_t)rank/2  + qq);
 
-          auto perm_t = detail::permute(tensor.tensor(), perm_vec);
+          // permute and add
+          auto perm_t = btas::Tensor<double>(btas::permute(tensor, perm_vec));
 
           if (p.even_perm * q.even_perm == detail::ADD)
-            result = detail::core_sum(result, perm_t);
+            result += perm_t;
           else
-            result = detail::core_sum(result, perm_t, true); // subtract = true
+            result -= perm_t;
         } // for q: vp
       } // for p: vp
-      tensor.link_tensor(result);
-    } // function antisymmetrize
+      return result;
+    } // function antisymmetrize btas
+#endif
+
+#ifdef SEQUANT_HAS_TILEDARRAY
+    TA::TArrayD antisymmetrize(const TA::TArrayD& tensor) {
+
+      size_t rank = tensor.trange().rank();
+      if (rank == 2)
+        return tensor;
+      else if (rank%2 != 0)
+        throw "Can't handle odd-ordered tensors, just yet!";
+
+      std::vector<size_t> to_perm;
+      for (auto i = 0; i < (size_t)rank/2; ++i)
+        to_perm.push_back(i);
+      auto vp = detail::perm_calc(to_perm, (size_t)rank/2);
+
+      TA::TArrayD result(tensor.world(), tensor.trange());
+      result.fill(0);
+
+      auto inds = detail::range_to_csv_str(rank);
+
+      for (const auto& p: vp) {
+        for (const auto& q: vp) {
+          // permutation of the bra
+          auto perm_vec = p.perm;
+          // permutation of the ket
+          // ket indices = rank/2 + bra indices
+          for (auto qq: q.perm)
+            perm_vec.push_back((size_t)rank/2  + qq);
+
+          // permute and add
+          if (p.even_perm * q.even_perm == detail::ADD)
+            result(inds) = result(inds) + tensor(detail::ords_to_csv_str(perm_vec));
+          else
+            result(inds) = result(inds) - tensor(detail::ords_to_csv_str(perm_vec));
+        } // for q: vp
+      } // for p: vp
+      return result;
+    } // function antisymmetrize btas
+#endif
 
     namespace detail {
 
@@ -327,8 +364,8 @@ namespace sequant {
       template <typename T>
         InterpretedTensor<T> sum(const InterpretedTensor<T>& s1,
             const InterpretedTensor<T>& s2, bool subtract) {
-          auto result = s1; // or s2
           auto t = core_sum(s1.tensor(), s2.tensor(), subtract);
+          auto result = s1; // or s2
           result.link_tensor(t);
           return result;
         }
@@ -353,28 +390,6 @@ namespace sequant {
         }
         return result;
       }
-
-#ifdef SEQUANT_HAS_BTAS
-      btas::Tensor<double> permute(const btas::Tensor<double>& bt,
-          const std::vector<size_t>& perm_vec) {
-        return btas::Tensor<double>(btas::permute(bt, perm_vec));
-      }
-#endif
-
-#ifdef SEQUANT_HAS_TILEDARRAY
-      TA::TArrayD permute(const TA::TArrayD& ta,
-          const std::vector<size_t>& perm_vec) {
-
-        // assumes we always get the perm_vec whose elements
-        // are the contiguous elements from 0 to n-1 where
-        // n is the size of the perm_vec
-
-        auto permed = ta;
-        permed.fill(0);
-        permed(range_to_csv_str(perm_vec.size())) = permed(ords_to_csv_str(perm_vec));
-        return permed;
-      }
-#endif
 
       std::string ords_to_csv_str(const std::vector<size_t>& ords) {
 
@@ -482,7 +497,6 @@ namespace sequant {
 #endif
 
       } // namespace detail
-
 
   } // namespace interpret
 
