@@ -211,6 +211,7 @@ int main(int argc, char *argv[])
     libint2::finalize(); // done with libint
 
     auto hf_final = ehf + enuc;
+    cout << endl;
     printf("** Hartree-Fock energy = %20.12f\n", hf_final);
 
     // compute eri on MO basis in physicist's notation
@@ -269,6 +270,7 @@ int main(int argc, char *argv[])
       return result;
     }();
 
+
     // convert Fock matrix to Spin Basis
     const auto fock_spin = [&]{
       BTensor result(nao, nao);
@@ -280,7 +282,10 @@ int main(int argc, char *argv[])
     }();
 
     cout << endl;
-    cout << "**** EMP2 ****" << endl;
+    cout << "***************************" << endl;
+    cout << "Calculating EMP2 using BTAS" << endl;
+    cout << "***************************" << endl;
+
     auto emp2 = 0.0;
 
     for (auto r = 0; r < nocc; ++r) {
@@ -295,11 +300,7 @@ int main(int argc, char *argv[])
             emp2 += calc/(fock_spin(r,r)
                 + fock_spin(s,s)
                 - fock_spin(p,p)
-                - fock_spin(q,q));
-          }
-        }
-      }
-    }
+                - fock_spin(q,q)); } } } }
     emp2 /= 4.0;
 
     cout << endl;
@@ -318,6 +319,7 @@ int main(int argc, char *argv[])
     BTensor G_oooo(nocc, nocc, nocc, nocc), G_vvvv(nvirt, nvirt, nvirt, nvirt);
     BTensor G_ovvv(nocc, nvirt, nvirt, nvirt), G_ooov(nocc, nocc, nocc, nvirt);
     BTensor G_oovv(nocc, nocc, nvirt, nvirt), G_ovov(nocc, nvirt, nocc, nvirt);
+
     for (auto i = 0; i < nocc; ++i) {
       Fock_oo(i,i) = fock_spin(i,i);
       for (auto a = 0; a < nvirt; ++a) {
@@ -393,6 +395,22 @@ int main(int argc, char *argv[])
     /* auto t_ooovvv = BTensor(nocc, nocc, nocc, nvirt, nvirt, nvirt); */
     /* t_ooovvv.fill(0.0); */
 
+    // printing norms
+    cout << endl;
+    cout << "norm(Fock_oo) " << std::sqrt(btas::dot(Fock_oo,Fock_oo)) <<endl;
+    cout << "norm(Fock_ov) " << std::sqrt(btas::dot(Fock_ov,Fock_ov)) <<endl;
+    cout << "norm(Fock_vv) " << std::sqrt(btas::dot(Fock_vv,Fock_vv)) <<endl;
+    cout << "norm(G_oooo)  " << std::sqrt(btas::dot(G_oooo,G_oooo))   <<endl;
+    cout << "norm(G_vvvv)  " << std::sqrt(btas::dot(G_vvvv,G_vvvv))   <<endl;
+    cout << "norm(G_ovvv)  " << std::sqrt(btas::dot(G_ovvv,G_ovvv))   <<endl;
+    cout << "norm(G_ooov)  " << std::sqrt(btas::dot(G_ooov,G_ooov))   <<endl;
+    cout << "norm(G_oovv)  " << std::sqrt(btas::dot(G_oovv,G_oovv))   <<endl;
+    cout << "norm(G_ovov)  " << std::sqrt(btas::dot(G_ovov,G_ovov))   <<endl;
+    cout << "norm(t_ov)    " << std::sqrt(btas::dot(t_ov,t_ov))       <<endl;
+    cout << "norm(t_oovv)  " << std::sqrt(btas::dot(t_oovv,t_oovv))   <<endl;
+    cout << endl;
+    //
+
     // a map that is required while evaluating sequant expressions
     std::map<std::wstring, BTensor const *> btensor_map;
     btensor_map.insert(std::pair<std::wstring, BTensor*>(L"f_oo",   &Fock_oo));
@@ -427,9 +445,9 @@ int main(int argc, char *argv[])
       auto r2 = eval_equation(ccs_r[2], btensor_map);
       antisymmetrize(r2, 4); // r2 is a order-4 tensor
 
-      cout << endl;
-      cout << "norm(r1) = " << std::sqrt(btas::dot(r1.tensor(), r1.tensor())) << endl;
-      cout << "norm(r2) = " << std::sqrt(btas::dot(r2.tensor(), r2.tensor())) << endl;
+      cout << "        iter " << iter << endl;
+      cout << "norm(R1) = " << std::sqrt(btas::dot(r1.tensor(), r1.tensor())) << endl;
+      cout << "norm(R2) = " << std::sqrt(btas::dot(r2.tensor(), r2.tensor())) << endl;
 
       // save previous norms
       auto norm_last  = std::sqrt(btas::dot(t_oovv, t_oovv));
@@ -469,6 +487,9 @@ int main(int argc, char *argv[])
       /*   } */
       /* } */
 
+      cout << "norm(t_ov)    " << std::sqrt(btas::dot(t_ov,t_ov))       <<endl;
+      cout << "norm(t_oovv)  " << std::sqrt(btas::dot(t_oovv,t_oovv))   <<endl;
+
       auto eccsd_last = eccsd;
 
       // calculating energy
@@ -479,8 +500,11 @@ int main(int argc, char *argv[])
       eccsd  = 0.5*btas::dot(temp_tensor, t_ov)
         + 0.25*btas::dot(G_oovv, t_oovv)
         + btas::dot(Fock_ov, t_ov);
-      printf("E(CCSDT) is: %20.12f\n", eccsd);
-      //
+      printf("E(CC) is: %20.12f\n", eccsd);
+      printf("  BTAS  ");
+      cout << endl;
+      cout << endl;
+
       normdiff = norm_last - sqrt(btas::dot(t_oovv, t_oovv));
       ediff    = eccsd_last - eccsd;
     } while ((fabs(normdiff) > conv || fabs(ediff) > conv) && (iter < maxiter));
@@ -490,6 +514,22 @@ int main(int argc, char *argv[])
     cout << "Out of loop after " << iter << " iterations." << endl;
     cout << endl;
     cout << "Time: " << duration.count() << " microseconds" << endl;
+
+    // printing norms
+    cout << endl;
+    cout << "norm(Fock_oo) " << std::sqrt(btas::dot(Fock_oo,Fock_oo)) <<endl;
+    cout << "norm(Fock_ov) " << std::sqrt(btas::dot(Fock_ov,Fock_ov)) <<endl;
+    cout << "norm(Fock_vv) " << std::sqrt(btas::dot(Fock_vv,Fock_vv)) <<endl;
+    cout << "norm(G_oooo)  " << std::sqrt(btas::dot(G_oooo,G_oooo))   <<endl;
+    cout << "norm(G_vvvv)  " << std::sqrt(btas::dot(G_vvvv,G_vvvv))   <<endl;
+    cout << "norm(G_ovvv)  " << std::sqrt(btas::dot(G_ovvv,G_ovvv))   <<endl;
+    cout << "norm(G_ooov)  " << std::sqrt(btas::dot(G_ooov,G_ooov))   <<endl;
+    cout << "norm(G_oovv)  " << std::sqrt(btas::dot(G_oovv,G_oovv))   <<endl;
+    cout << "norm(G_ovov)  " << std::sqrt(btas::dot(G_ovov,G_ovov))   <<endl;
+    cout << "norm(t_ov)    " << std::sqrt(btas::dot(t_ov,t_ov))       <<endl;
+    cout << "norm(t_oovv)  " << std::sqrt(btas::dot(t_oovv,t_oovv))   <<endl;
+    cout << endl;
+    //
   } // end of try block; if any exceptions occurred, report them and exit cleanly
   catch (const char* ex) {
     cerr << "caught exception: " << ex << endl;

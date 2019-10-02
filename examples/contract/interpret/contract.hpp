@@ -63,11 +63,11 @@ namespace sequant {
           size_t begin = 0);
 
 #ifdef SEQUANT_HAS_BTAS
-      auto permute(const btas::Tensor<double>&, const std::vector<size_t>&);
+      btas::Tensor<double> permute(const btas::Tensor<double>&, const std::vector<size_t>&);
 #endif
 
 #ifdef SEQUANT_HAS_TILEDARRAY
-      auto permute(const TA::TArrayD&, const std::vector<size_t>&);
+      TA::TArrayD permute(const TA::TArrayD&, const std::vector<size_t>&);
 #endif
 
       std::string ords_to_csv_str(const std::vector<size_t>&);
@@ -139,7 +139,7 @@ namespace sequant {
       }
 
       else
-        throw "Only know how to handle sum or product!";
+        throw "Only know how to handle Sum, Product or Tensor!";
     }
 
     template <typename T>
@@ -250,6 +250,11 @@ namespace sequant {
         InterpretedTensor<T> contract_vec(const std::vector<InterpretedTensor<T>>& vct,
             size_t n, double scal, size_t b) {
           // evaluates left to right
+          // vct: vector of InterpretedTensor objects
+          // n:   size of the vector
+          // scal: scaling factor of the result
+          // b:    position in the vector to begin contracting
+          //       b counts 1, 2, 3, .. 
           auto i = n - b;
           if (i == 0) {
             if (scal != 1.0) {
@@ -350,14 +355,14 @@ namespace sequant {
       }
 
 #ifdef SEQUANT_HAS_BTAS
-      auto permute(const btas::Tensor<double>& bt,
+      btas::Tensor<double> permute(const btas::Tensor<double>& bt,
           const std::vector<size_t>& perm_vec) {
         return btas::Tensor<double>(btas::permute(bt, perm_vec));
       }
 #endif
 
 #ifdef SEQUANT_HAS_TILEDARRAY
-      auto permute(const TA::TArrayD& ta,
+      TA::TArrayD permute(const TA::TArrayD& ta,
           const std::vector<size_t>& perm_vec) {
 
         // assumes we always get the perm_vec whose elements
@@ -414,8 +419,8 @@ namespace sequant {
         TA::TArrayD result;
 
         result(ords_to_csv_str(nc_ords))
-          = t1(ords_to_csv_str(t1_ords))
-          * t2(ords_to_csv_str(t2_ords));
+          = scal * t1(ords_to_csv_str(t1_ords))
+                 * t2(ords_to_csv_str(t2_ords));
         return result;
       }
 #endif
@@ -430,8 +435,10 @@ namespace sequant {
 
 #ifdef SEQUANT_HAS_TILEDARRAY
       TA::TArrayD scale(double d, const TA::TArrayD& t) {
-        auto result = t;
-        TA::scale(result, d);
+        auto rank = t.trange().rank();
+        auto inds = range_to_csv_str(rank);
+        TA::TArrayD result;
+        result(inds) = t(inds)*d;
         return result;
       }
 #endif
@@ -455,7 +462,7 @@ namespace sequant {
           if (!subtract)
             return t2;
           else {
-            TArrayD result;
+            TA::TArrayD result;
             auto rank    = t1.trange().rank();
             auto inds    = range_to_csv_str(rank);
             result(inds) = t2(inds) * -1;
@@ -465,7 +472,7 @@ namespace sequant {
         // now both t1 and t2 are initialized
         auto rank    = t1.trange().rank();
         auto inds    = range_to_csv_str(rank);
-        TArrayD result;
+        TA::TArrayD result;
         if (subtract)
           result(inds) = t1(inds) - t2(inds);
         else

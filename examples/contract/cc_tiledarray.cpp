@@ -186,6 +186,7 @@ int main(int argc, char *argv[])
     libint2::finalize(); // done with libint
      
     auto hf_final = ehf + enuc;
+    cout << endl;
     printf("** Hartree-Fock energy = %20.12f\n", hf_final);
 
     /*** =========================== ***/
@@ -198,11 +199,6 @@ int main(int argc, char *argv[])
 
     // Initialize MADWorld
     TA::World& world = TA::initialize(argc, argv);
-
-    cout << endl;
-    cout << "*********************************" << endl;
-    cout << "Calculating EMP2 using TiledArray" << endl;
-    cout << "*********************************" << endl;
 
     auto mo_ints_tensor     = compute_mo_ints(C, shells, world);
     auto tile_ints_spatial  = mo_ints_tensor.find({0,0,0,0}).get();
@@ -262,6 +258,7 @@ int main(int argc, char *argv[])
                                     TA::TiledRange{{0, nao}, {0, nao},
                                     {0, nao}, {0, nao}});
 
+
     auto tile_spin_ints = mo_ints_tensor_spin.world().taskq.add(spinify_ints,
                 mo_ints_tensor_spin.trange().make_tile_range(0));
     *(mo_ints_tensor_spin.begin()) = tile_spin_ints;
@@ -284,9 +281,15 @@ int main(int argc, char *argv[])
     // http://sirius.chem.vt.edu/wiki/doku.php?id=crawdad:programming:project4
     //
 
+    cout << endl;
+    cout << "*********************************" << endl;
+    cout << "Calculating EMP2 using TiledArray" << endl;
+    cout << "*********************************" << endl;
+
+    auto emp2 = 0.0;
+
     auto tile_ints_spin = mo_ints_tensor_spin.find({0,0,0,0}).get();
     auto tile_fock_spin = fock_spin.find({0,0}).get();
-    auto emp2 = 0.0;
 
     for (auto r = 0; r < nocc; ++r) {
         for (auto s = 0; s < nocc; ++s) {
@@ -300,13 +303,11 @@ int main(int argc, char *argv[])
                   emp2 += calc/(tile_fock_spin(r,r)
                       + tile_fock_spin(s,s)
                       - tile_fock_spin(p,p)
-                      - tile_fock_spin(q,q));
-                }
-            }
-        }
-    }
+                      - tile_fock_spin(q,q)); } } } }
     emp2 /= 4.0;
-    cout << "\nThe MP2 correlation energy: " << emp2 << endl;
+
+    cout << endl;
+    cout << "The MP2 correlation energy: " << emp2 << endl;
     cout << "Final energy is : " << hf_final + emp2 << endl;
 
     TA::TiledRange   tr_oo{{0, nocc},  {0, nocc}};
@@ -318,7 +319,6 @@ int main(int argc, char *argv[])
     TA::TiledRange tr_ovov{{0, nocc},  {0, nvirt}, {0, nocc},  {0, nvirt}};
     TA::TiledRange tr_ovvv{{0, nocc},  {0, nvirt}, {0, nvirt}, {0, nvirt}};
     TA::TiledRange tr_vvvv{{0, nvirt}, {0, nvirt}, {0, nvirt}, {0, nvirt}};
-    cout << "\nCout 1" << endl;
     //
     auto D_ov    = TA::TArrayD(world, tr_ov);
     auto D_oovv  = TA::TArrayD(world, tr_oovv);
@@ -331,20 +331,42 @@ int main(int argc, char *argv[])
     auto G_ovov  = TA::TArrayD(world, tr_ovov);
     auto G_ovvv  = TA::TArrayD(world, tr_ovvv);
     auto G_vvvv  = TA::TArrayD(world, tr_vvvv);
-    cout << "\nCout 2" << endl;
 
-    auto tile_D_ov    = TA::TArrayD::value_type(   D_ov.trange().make_tile_range(0));
-    auto tile_D_oovv  = TA::TArrayD::value_type( D_oovv.trange().make_tile_range(0));
-    auto tile_Fock_oo = TA::TArrayD::value_type(Fock_oo.trange().make_tile_range(0));
-    auto tile_Fock_ov = TA::TArrayD::value_type(Fock_ov.trange().make_tile_range(0));
-    auto tile_Fock_vv = TA::TArrayD::value_type(Fock_vv.trange().make_tile_range(0));
-    auto tile_G_oooo  = TA::TArrayD::value_type( G_oooo.trange().make_tile_range(0));
-    auto tile_G_ooov  = TA::TArrayD::value_type( G_ooov.trange().make_tile_range(0));
-    auto tile_G_oovv  = TA::TArrayD::value_type( G_oovv.trange().make_tile_range(0));
-    auto tile_G_ovov  = TA::TArrayD::value_type( G_ovov.trange().make_tile_range(0));
-    auto tile_G_ovvv  = TA::TArrayD::value_type( G_ovvv.trange().make_tile_range(0));
-    auto tile_G_vvvv  = TA::TArrayD::value_type( G_vvvv.trange().make_tile_range(0));
-    cout << "\nCout 3" << endl;
+    D_ov.fill(0.0);
+    D_oovv.fill(0.0);
+    Fock_oo.fill(0.0);
+    Fock_ov.fill(0.0);
+    Fock_vv.fill(0.0);
+    G_oooo.fill(0.0);
+    G_ooov.fill(0.0);
+    G_oovv.fill(0.0);
+    G_ovov.fill(0.0);
+    G_ovvv.fill(0.0);
+    G_vvvv.fill(0.0);
+
+    /* auto tile_D_ov    = TA::TArrayD::value_type(   D_ov.trange().make_tile_range(0)); */
+    /* auto tile_D_oovv  = TA::TArrayD::value_type( D_oovv.trange().make_tile_range(0)); */
+    /* auto tile_Fock_oo = TA::TArrayD::value_type(Fock_oo.trange().make_tile_range(0)); */
+    /* auto tile_Fock_ov = TA::TArrayD::value_type(Fock_ov.trange().make_tile_range(0)); */
+    /* auto tile_Fock_vv = TA::TArrayD::value_type(Fock_vv.trange().make_tile_range(0)); */
+    /* auto tile_G_oooo  = TA::TArrayD::value_type( G_oooo.trange().make_tile_range(0)); */
+    /* auto tile_G_ooov  = TA::TArrayD::value_type( G_ooov.trange().make_tile_range(0)); */
+    /* auto tile_G_oovv  = TA::TArrayD::value_type( G_oovv.trange().make_tile_range(0)); */
+    /* auto tile_G_ovov  = TA::TArrayD::value_type( G_ovov.trange().make_tile_range(0)); */
+    /* auto tile_G_ovvv  = TA::TArrayD::value_type( G_ovvv.trange().make_tile_range(0)); */
+    /* auto tile_G_vvvv  = TA::TArrayD::value_type( G_vvvv.trange().make_tile_range(0)); */
+
+    auto tile_D_ov    =    D_ov.find({0,0}).get();
+    auto tile_D_oovv  =  D_oovv.find({0,0,0,0}).get();
+    auto tile_Fock_oo = Fock_oo.find({0,0}).get();
+    auto tile_Fock_ov = Fock_ov.find({0,0}).get();
+    auto tile_Fock_vv = Fock_vv.find({0,0}).get();
+    auto tile_G_oooo  =  G_oooo.find({0,0,0,0}).get();
+    auto tile_G_ooov  =  G_ooov.find({0,0,0,0}).get();
+    auto tile_G_oovv  =  G_oovv.find({0,0,0,0}).get();
+    auto tile_G_ovov  =  G_ovov.find({0,0,0,0}).get();
+    auto tile_G_ovvv  =  G_ovvv.find({0,0,0,0}).get();
+    auto tile_G_vvvv  =  G_vvvv.find({0,0,0,0}).get();
 
     for (auto i = 0; i < nocc; ++i) {
       tile_Fock_oo(i,i) = tile_fock_spin(i,i);
@@ -399,21 +421,17 @@ int main(int argc, char *argv[])
       }
     }
 
-    cout << "\nCout 4" << endl;
-
-    *D_ov.begin()    = tile_D_ov   ;
-    *D_oovv.begin()  = tile_D_oovv ;
-    *Fock_oo.begin() = tile_Fock_oo;
-    *Fock_ov.begin() = tile_Fock_ov;
-    *Fock_vv.begin() = tile_Fock_vv;
-    *G_oooo.begin()  = tile_G_oooo ;
-    *G_ooov.begin()  = tile_G_ooov ;
-    *G_oovv.begin()  = tile_G_oovv ;
-    *G_ovov.begin()  = tile_G_ovov ;
-    *G_ovvv.begin()  = tile_G_ovvv ;
-    *G_vvvv.begin()  = tile_G_vvvv ;
-
-    cout << "\nCout 4" << endl;
+    /* *D_ov.begin()    = tile_D_ov   ; */
+    /* *D_oovv.begin()  = tile_D_oovv ; */
+    /* *Fock_oo.begin() = tile_Fock_oo; */
+    /* *Fock_ov.begin() = tile_Fock_ov; */
+    /* *Fock_vv.begin() = tile_Fock_vv; */
+    /* *G_oooo.begin()  = tile_G_oooo ; */
+    /* *G_ooov.begin()  = tile_G_ooov ; */
+    /* *G_oovv.begin()  = tile_G_oovv ; */
+    /* *G_ovov.begin()  = tile_G_ovov ; */
+    /* *G_ovvv.begin()  = tile_G_ovvv ; */
+    /* *G_vvvv.begin()  = tile_G_vvvv ; */
 
     // singles and doubles for CCSD calculations
     auto t_ov   = TA::TArrayD(world, tr_ov);
@@ -421,7 +439,21 @@ int main(int argc, char *argv[])
     t_ov.fill(0.0);
     t_oovv.fill(0.0);
 
-    cout << "\nCout 5" << endl;
+    //printing norms
+    cout<<endl;
+    cout<<"norm(Fock_oo)"<<std::sqrt(Fock_oo("i,j").dot(Fock_oo("i,j")))<<endl;
+    cout<<"norm(Fock_ov)"<<std::sqrt(Fock_ov("i,j").dot(Fock_ov("i,j")))<<endl;
+    cout<<"norm(Fock_vv)"<<std::sqrt(Fock_vv("i,j").dot(Fock_vv("i,j")))<<endl;
+    cout<<"norm(G_oooo)"<<std::sqrt(G_oooo("i,j,a,b").dot(G_oooo("i,j,a,b")))<<endl;
+    cout<<"norm(G_vvvv)"<<std::sqrt(G_vvvv("i,j,a,b").dot(G_vvvv("i,j,a,b")))<<endl;
+    cout<<"norm(G_ovvv)"<<std::sqrt(G_ovvv("i,j,a,b").dot(G_ovvv("i,j,a,b")))<<endl;
+    cout<<"norm(G_ooov)"<<std::sqrt(G_ooov("i,j,a,b").dot(G_ooov("i,j,a,b")))<<endl;
+    cout<<"norm(G_oovv)"<<std::sqrt(G_oovv("i,j,a,b").dot(G_oovv("i,j,a,b")))<<endl;
+    cout<<"norm(G_ovov)"<<std::sqrt(G_ovov("i,j,a,b").dot(G_ovov("i,j,a,b")))<<endl;
+    cout<<"norm(t_ov)"<<std::sqrt(t_ov("i,j").dot(t_ov("i,j")))<<endl;
+    cout<<"norm(t_oovv)"<<std::sqrt(t_oovv("i,j,a,b").dot(t_oovv("i,j,a,b")))<<endl;
+    cout<<endl;
+    //
 
     // a map that is required while evaluating sequant expressions
     using pair_tensor_map = std::pair<std::wstring, TA::TArrayD const *>;
@@ -438,8 +470,6 @@ int main(int argc, char *argv[])
     tensor_map.insert(pair_tensor_map(L"g_ovov", &G_ovov)); 
     tensor_map.insert(pair_tensor_map(L"t_ov",   &t_ov)); 
     tensor_map.insert(pair_tensor_map(L"t_oovv", &t_oovv)); 
-
-    cout << "\nCout 6" << endl;
 
     //
     // global sequant setup...
@@ -460,36 +490,102 @@ int main(int argc, char *argv[])
         std::make_shared<DefaultTensorCanonicalizer>());
     Logger::get_instance().wick_stats = false;
 
-    iter = 0;
-    rmsd = 0.0;
-    ediff = 0.0;
+    iter          = 0;
+    rmsd          = 0.0;
+    ediff         = 0.0;
     auto normdiff = 0.0;
-    auto eccsd = 0.0;
+    auto ecc      = 0.0;
     Logger::get_instance().wick_stats = false;
     auto ccs_r = cceqvec{ 2, 2 }(true, true, true, true);
-
-    cout << "\nCout 7" << endl;
 
     using sequant::interpret::antisymmetrize;
     using sequant::interpret::eval_equation;
 
-    auto start = std::chrono::high_resolution_clock::now();
-
-    cout << "\nCout 7" << endl;
-
+    auto tstart = std::chrono::high_resolution_clock::now();
     do {
       ++iter;
-      auto r1 = eval_equation(ccs_r[1], tensor_map);
-      cout << "\nCout 8" << endl;
-      auto r2 = eval_equation(ccs_r[2], tensor_map);
-      cout << "\nCout 9" << endl;
+      auto r1 = eval_equation(ccs_r[1], tensor_map); // adapter tensor object
+      auto r2 = eval_equation(ccs_r[2], tensor_map); // adapter tensor object
+
+      auto R1 = r1.tensor(); // TA::TArrayD object
+      auto R2 = r2.tensor(); // TA::TArrayD object
+
       /* antisymmetrize(r2, r2.tensor().trange().rank()); */
-      cout << "norm(r1) = " <<
-        std::sqrt(r1.tensor()("i,j").dot( r1.tensor()("i,j") )) << endl;
-      cout << "norm(r2) = " <<
-        std::sqrt(r2.tensor()("i,j,k,l").dot( r2.tensor()("i,j,k,l") )) << endl;
+      R2("i,j,a,b") = R2("i,j,a,b") - R2("j,i,a,b") - R2("i,j,b,a") + R2("j,i,b,a");
+
+      auto tile_R1     = R1.find({0,0}).get();
+      auto tile_t_ov   = t_ov.find({0,0}).get();
+
+      auto tile_R2     = R2.find({0,0,0,0}).get();
+      auto tile_t_oovv = t_oovv.find({0,0,0,0}).get();
+
+      cout << "        iter " << iter << endl;
+      cout << "norm(R1) = " << std::sqrt(R1("i,j").dot(R1("i,j"))) << endl;
+      cout << "norm(R2) = " << std::sqrt(R2("i,j,a,b").dot(R2("i,j,a,b"))) << endl;
+      // save previous norm
+      auto norm_last = std::sqrt(t_oovv("i,j,a,b").dot(t_oovv("i,j,a,b")));
+
+      //////////////
+      // Updating amplitudes
+
+      // update t_ov
+      for (auto i = 0; i < nocc; ++i) {
+        for (auto a = 0; a < nvirt; ++a) {
+          tile_t_ov(i,a) += tile_R1(i,a)/tile_D_ov(i,a); } }
+
+      //
+      // update t_oovv
+      for (auto i = 0; i < nocc; ++i) {
+        for (auto j = 0; j < nocc; ++j) {
+          for (auto a = 0; a < nvirt; ++a) {
+            for (auto b = 0; b < nvirt; ++b) {
+              tile_t_oovv(i,j,a,b) += tile_R2(i,j,a,b)/tile_D_oovv(i,j,a,b); } } } }
+
+      cout<<"norm(t_ov) "<<std::sqrt(t_ov("i,j").dot(t_ov("i,j")))<<endl;
+      cout<<"norm(t_oovv) "<<std::sqrt(t_oovv("i,j,a,b").dot(t_oovv("i,j,a,b")))<<endl;
+
+      auto ecc_last = ecc;
+
+      // calculating energy
+      TA::TArrayD temp_tensor;
+      temp_tensor("j,b") = G_oovv("i,j,a,b")*t_ov("i,a");
+
+      ecc = 0.5*temp_tensor("i,a").dot(t_ov("i,a"))
+              + 0.25*G_oovv("i,j,a,b").dot(t_oovv("i,j,a,b"))
+              + Fock_ov("i,a").dot(t_ov("i,a"));
+
+      printf("E(CC) is: %20.12f\n", ecc);
+      printf("  TA  ");
       cout << endl;
-    } while(false);
+      cout << endl;
+
+      normdiff = norm_last - std::sqrt(t_oovv("i,j,a,b").dot(t_oovv("i,j,a,b")));
+      ediff    = ecc_last - ecc;
+
+    } while((fabs(normdiff) > conv || fabs(ediff) > conv) && (iter < maxiter));
+    auto tstop = std::chrono::high_resolution_clock::now();
+    auto time_elapsed =
+      std::chrono::duration_cast<std::chrono::microseconds>(tstop - tstart);
+    cout << "Out of loop after " << iter << " iterations." << endl;
+    cout << endl;
+    cout << "Time: " << time_elapsed.count() << " microseconds" << endl;
+
+    // printing norms
+    cout<<endl;
+    cout<<"norm(Fock_oo)"<<std::sqrt(Fock_oo("i,j").dot(Fock_oo("i,j")))<<endl;
+    cout<<"norm(Fock_ov)"<<std::sqrt(Fock_ov("i,j").dot(Fock_ov("i,j")))<<endl;
+    cout<<"norm(Fock_vv)"<<std::sqrt(Fock_vv("i,j").dot(Fock_vv("i,j")))<<endl;
+    cout<<"norm(G_oooo)"<<std::sqrt(G_oooo("i,j,a,b").dot(G_oooo("i,j,a,b")))<<endl;
+    cout<<"norm(G_vvvv)"<<std::sqrt(G_vvvv("i,j,a,b").dot(G_vvvv("i,j,a,b")))<<endl;
+    cout<<"norm(G_ovvv)"<<std::sqrt(G_ovvv("i,j,a,b").dot(G_ovvv("i,j,a,b")))<<endl;
+    cout<<"norm(G_ooov)"<<std::sqrt(G_ooov("i,j,a,b").dot(G_ooov("i,j,a,b")))<<endl;
+    cout<<"norm(G_oovv)"<<std::sqrt(G_oovv("i,j,a,b").dot(G_oovv("i,j,a,b")))<<endl;
+    cout<<"norm(G_ovov)"<<std::sqrt(G_ovov("i,j,a,b").dot(G_ovov("i,j,a,b")))<<endl;
+    cout<<"norm(t_ov)"<<std::sqrt(t_ov("i,j").dot(t_ov("i,j")))<<endl;
+    cout<<"norm(t_oovv)"<<std::sqrt(t_oovv("i,j,a,b").dot(t_oovv("i,j,a,b")))<<endl;
+    cout<<endl;
+    //
+
     TA::finalize();
   } // end of try block; if any exceptions occurred, report them and exit cleanly
 

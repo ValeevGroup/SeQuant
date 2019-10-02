@@ -8,8 +8,8 @@ source ${INTEL_DIR}/tbb/bin/tbbvars.sh "intel64"
 
 MKL_NUM_THREADS=7
 
-cmake --build ../build \
-      --target test_ccsd_btas \
+cmake --build ../../build \
+      --target cc_btas \
       --verbose \
       -j 7 \
-      && ../build/test_ccsd_btas ./h2o.xyz
+      && ../../build/cc_btas ../h2o.xyz
