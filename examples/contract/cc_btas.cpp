@@ -16,23 +16,6 @@ using BTensor = btas::Tensor<double>;
 
 int main(int argc, char *argv[])
 {
-  // global setup...
-  std::setlocale(LC_ALL, "en_US.UTF-8");
-  std::wcout.precision(std::numeric_limits<double>::max_digits10);
-  std::wcerr.precision(std::numeric_limits<double>::max_digits10);
-  std::wcout.sync_with_stdio(true);
-  std::wcerr.sync_with_stdio(true);
-  std::wcout.imbue(std::locale("en_US.UTF-8"));
-  std::wcerr.imbue(std::locale("en_US.UTF-8"));
-  std::wcout.sync_with_stdio(true);
-  std::wcerr.sync_with_stdio(true);
-  sequant::detail::OpIdRegistrar op_id_registrar;
-
-  sequant::mbpt::set_default_convention();
-
-  TensorCanonicalizer::register_instance(
-      std::make_shared<DefaultTensorCanonicalizer>());
-
   using std::cout;
   using std::cerr;
   using std::wcout;
@@ -281,10 +264,10 @@ int main(int argc, char *argv[])
       return result;
     }();
 
-    cout << endl;
-    cout << "***************************" << endl;
-    cout << "Calculating EMP2 using BTAS" << endl;
-    cout << "***************************" << endl;
+    cout << "\n"
+         << "***************************\n"
+         << "Calculating EMP2 using BTAS\n"
+         << "***************************\n" << endl;
 
     auto emp2 = 0.0;
 
@@ -303,9 +286,15 @@ int main(int argc, char *argv[])
                 - fock_spin(q,q)); } } } }
     emp2 /= 4.0;
 
-    cout << endl;
-    cout << "The MP2 correlation energy: " << emp2 << endl;
-    cout << "Final energy is : " << hf_final + emp2 << endl;
+    cout << "E(MP2): "
+         << emp2
+         << "\nFinal energy is : " << hf_final + emp2 << endl;
+    /******************************************************/
+
+    cout << "\n"
+         << "*****************************\n"
+         << "Calculating ECCSDT using BTAS\n"
+         << "*****************************\n" << endl;
 
     // D_ov and D_oovv
     BTensor D_ov    (nocc, nvirt),
@@ -396,23 +385,21 @@ int main(int argc, char *argv[])
     t_ooovvv.fill(0.0);
 
     // printing norms
-    cout << endl;
-    cout << "norm(Fock_oo) " << std::sqrt(btas::dot(Fock_oo,Fock_oo)) <<endl;
-    cout << "norm(Fock_ov) " << std::sqrt(btas::dot(Fock_ov,Fock_ov)) <<endl;
-    cout << "norm(Fock_vv) " << std::sqrt(btas::dot(Fock_vv,Fock_vv)) <<endl;
-    cout << "norm(G_oooo)  " << std::sqrt(btas::dot(G_oooo,G_oooo))   <<endl;
-    cout << "norm(G_vvvv)  " << std::sqrt(btas::dot(G_vvvv,G_vvvv))   <<endl;
-    cout << "norm(G_ovvv)  " << std::sqrt(btas::dot(G_ovvv,G_ovvv))   <<endl;
-    cout << "norm(G_ooov)  " << std::sqrt(btas::dot(G_ooov,G_ooov))   <<endl;
-    cout << "norm(G_oovv)  " << std::sqrt(btas::dot(G_oovv,G_oovv))   <<endl;
-    cout << "norm(G_ovov)  " << std::sqrt(btas::dot(G_ovov,G_ovov))   <<endl;
-    cout << "norm(t_ov)    " << std::sqrt(btas::dot(t_ov,t_ov))       <<endl;
-    cout << "norm(t_oovv)  " << std::sqrt(btas::dot(t_oovv,t_oovv))   <<endl;
-    cout << "norm(t_ooovvv)  " << std::sqrt(btas::dot(t_ooovvv,t_ooovvv))   <<endl;
-    cout << endl;
+    // cout << "\n"
+    //      << "norm(Fock_oo) " << std::sqrt(btas::dot(Fock_oo,Fock_oo)) <<endl;
+    // cout << "norm(Fock_ov) " << std::sqrt(btas::dot(Fock_ov,Fock_ov)) <<endl;
+    // cout << "norm(Fock_vv) " << std::sqrt(btas::dot(Fock_vv,Fock_vv)) <<endl;
+    // cout << "norm(G_oooo)  " << std::sqrt(btas::dot(G_oooo,G_oooo))   <<endl;
+    // cout << "norm(G_vvvv)  " << std::sqrt(btas::dot(G_vvvv,G_vvvv))   <<endl;
+    // cout << "norm(G_ovvv)  " << std::sqrt(btas::dot(G_ovvv,G_ovvv))   <<endl;
+    // cout << "norm(G_ooov)  " << std::sqrt(btas::dot(G_ooov,G_ooov))   <<endl;
+    // cout << "norm(G_oovv)  " << std::sqrt(btas::dot(G_oovv,G_oovv))   <<endl;
+    // cout << "norm(G_ovov)  " << std::sqrt(btas::dot(G_ovov,G_ovov))   <<endl;
+    // cout << "norm(t_ov)    " << std::sqrt(btas::dot(t_ov,t_ov))       <<endl;
+    // cout << "norm(t_oovv)  " << std::sqrt(btas::dot(t_oovv,t_oovv))   <<endl;
     //
 
-    // a map that is required while evaluating sequant expressions
+    // the map that is required while evaluating sequant expressions
     std::map<std::wstring, BTensor const *> btensor_map;
     btensor_map.insert(std::pair<std::wstring, BTensor*>(L"f_oo",   &Fock_oo));
     btensor_map.insert(std::pair<std::wstring, BTensor*>(L"f_ov",   &Fock_ov));
@@ -427,6 +414,23 @@ int main(int argc, char *argv[])
     btensor_map.insert(std::pair<std::wstring, BTensor*>(L"t_oovv", &t_oovv)); 
     btensor_map.insert(std::pair<std::wstring, BTensor*>(L"t_ooovvv", &t_ooovvv)); 
 
+    // global sequant setup...
+    std::setlocale(LC_ALL, "en_US.UTF-8");
+    std::wcout.precision(std::numeric_limits<double>::max_digits10);
+    std::wcerr.precision(std::numeric_limits<double>::max_digits10);
+    std::wcout.sync_with_stdio(true);
+    std::wcerr.sync_with_stdio(true);
+    std::wcout.imbue(std::locale("en_US.UTF-8"));
+    std::wcerr.imbue(std::locale("en_US.UTF-8"));
+    std::wcout.sync_with_stdio(true);
+    std::wcerr.sync_with_stdio(true);
+    sequant::detail::OpIdRegistrar op_id_registrar;
+
+    sequant::mbpt::set_default_convention();
+
+    TensorCanonicalizer::register_instance(
+        std::make_shared<DefaultTensorCanonicalizer>());
+
     //
     iter = 0;
     rmsd = 0.0;
@@ -434,7 +438,7 @@ int main(int argc, char *argv[])
     auto normdiff = 0.0;
     auto eccsd = 0.0;
     Logger::get_instance().wick_stats = false;
-    auto ccs_r = cceqvec{ 3, 3 }(true, true, true, true);
+    auto cc_r = cceqvec{ 2, 2 }(true, true, true, true);
 
     using sequant::interpret::antisymmetrize;
     using sequant::interpret::eval_equation;
@@ -442,16 +446,14 @@ int main(int argc, char *argv[])
     auto start = high_resolution_clock::now();
     do { 
       ++iter;
-      auto r1 = eval_equation(ccs_r[1], btensor_map).tensor();
-      auto r2 = eval_equation(ccs_r[2], btensor_map).tensor();
-      auto r3 = eval_equation(ccs_r[3], btensor_map).tensor();
+      auto R1 = eval_equation(cc_r[1], btensor_map).tensor();
+      auto R2 = eval_equation(cc_r[2], btensor_map).tensor();
 
-      r2 = antisymmetrize(r2);
-      r3 = antisymmetrize(r3);
+      R2 = antisymmetrize(R2);
 
       cout << "using BTAS,    iter " << iter << endl;
-      /* cout << "norm(R1) = " << std::sqrt(btas::dot(r1, r1)) << endl; */
-      /* cout << "norm(R2) = " << std::sqrt(btas::dot(r2, r2)) << endl; */
+      /* cout << "norm(R1) = " << std::sqrt(btas::dot(R1, R1)) << endl; */
+      /* cout << "norm(R2) = " << std::sqrt(btas::dot(R2, R2)) << endl; */
 
       // save previous norms
       auto norm_last  = std::sqrt(btas::dot(t_oovv, t_oovv));
@@ -461,35 +463,15 @@ int main(int argc, char *argv[])
       // update t_ov
       for (auto i = 0; i < nocc; ++i) {
         for (auto a = 0; a < nvirt; ++a) {
-          t_ov(i, a) += r1(i, a)/D_ov(i,a);
-        }
-      }
+          t_ov(i, a) += R1(i, a)/D_ov(i,a); } }
+
       //
       // update t_oovv
       for (auto i = 0; i < nocc; ++i) {
         for (auto j = 0; j < nocc; ++j) {
           for (auto a = 0; a < nvirt; ++a) {
             for (auto b = 0; b < nvirt; ++b) {
-              t_oovv(i, j, a, b) += r2(i, j, a, b)/D_oovv(i,j,a,b);
-            }
-          }
-        }
-      }
-      //
-      // update t_ooovvv
-      for (auto i = 0; i < nocc; ++i) {
-        for (auto j = 0; j < nocc; ++j) {
-          for (auto k = 0; k < nocc; ++k) {
-            for (auto a = 0; a < nvirt; ++a) {
-              for (auto b = 0; b < nvirt; ++b) {
-                for (auto c = 0; c < nvirt; ++c) {
-                  t_ooovvv(i,j,k,a,b,c) += r3(i,j,k,a,b,c)/D_ooovvv(i,j,k,a,b,c);
-                }
-              }
-            }
-          }
-        }
-      }
+              t_oovv(i, j, a, b) += R2(i, j, a, b)/D_oovv(i,j,a,b); } } } }
 
       cout << "norm(t_ov)    " << std::sqrt(btas::dot(t_ov,t_ov))       <<endl;
       cout << "norm(t_oovv)  " << std::sqrt(btas::dot(t_oovv,t_oovv))   <<endl;
@@ -504,36 +486,18 @@ int main(int argc, char *argv[])
       eccsd  = 0.5*btas::dot(temp_tensor, t_ov)
         + 0.25*btas::dot(G_oovv, t_oovv)
         + btas::dot(Fock_ov, t_ov);
-      printf("E(CC) is: %20.12f\n", eccsd);
-      cout << endl;
-      cout << endl;
+      printf("E(CCSD) is: %20.12f\n\n", eccsd);
 
       normdiff = norm_last - sqrt(btas::dot(t_oovv, t_oovv));
       ediff    = eccsd_last - eccsd;
+
     } while ((fabs(normdiff) > conv || fabs(ediff) > conv) && (iter < maxiter));
 
     auto stop  = high_resolution_clock::now();
     auto  duration = duration_cast<microseconds>(stop - start);
-    cout << "Out of loop after " << iter << " iterations." << endl;
-    cout << endl;
-    cout << "Time: " << duration.count() << " microseconds" << endl;
+    cout << "\nOut of loop after " << iter   << " iterations.\n"
+         << "\nTime: " << duration.count() << " microseconds" << endl;
 
-    // printing norms
-    // cout << endl;
-    // cout << "norm(Fock_oo) " << std::sqrt(btas::dot(Fock_oo,Fock_oo)) <<endl;
-    // cout << "norm(Fock_ov) " << std::sqrt(btas::dot(Fock_ov,Fock_ov)) <<endl;
-    // cout << "norm(Fock_vv) " << std::sqrt(btas::dot(Fock_vv,Fock_vv)) <<endl;
-    // cout << "norm(G_oooo)  " << std::sqrt(btas::dot(G_oooo,G_oooo))   <<endl;
-    // cout << "norm(G_vvvv)  " << std::sqrt(btas::dot(G_vvvv,G_vvvv))   <<endl;
-    // cout << "norm(G_ovvv)  " << std::sqrt(btas::dot(G_ovvv,G_ovvv))   <<endl;
-    // cout << "norm(G_ooov)  " << std::sqrt(btas::dot(G_ooov,G_ooov))   <<endl;
-    // cout << "norm(G_oovv)  " << std::sqrt(btas::dot(G_oovv,G_oovv))   <<endl;
-    // cout << "norm(G_ovov)  " << std::sqrt(btas::dot(G_ovov,G_ovov))   <<endl;
-    // cout << "norm(t_ov)    " << std::sqrt(btas::dot(t_ov,t_ov))       <<endl;
-    // cout << "norm(t_oovv)  " << std::sqrt(btas::dot(t_oovv,t_oovv))   <<endl;
-    // cout << "norm(t_ooovvv)  " << std::sqrt(btas::dot(t_ooovvv,t_ooovvv))   <<endl;
-    cout << endl;
-    //
   } // end of try block; if any exceptions occurred, report them and exit cleanly
   catch (const char* ex) {
     cerr << "caught exception: " << ex << endl;

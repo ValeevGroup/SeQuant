@@ -281,10 +281,10 @@ int main(int argc, char *argv[])
     // http://sirius.chem.vt.edu/wiki/doku.php?id=crawdad:programming:project4
     //
 
-    cout << endl;
-    cout << "*********************************" << endl;
-    cout << "Calculating EMP2 using TiledArray" << endl;
-    cout << "*********************************" << endl;
+    cout << "\n"
+         << "*********************************\n"
+         << "Calculating EMP2 using TiledArray\n"
+         << "*********************************\n" << endl;
 
     auto emp2 = 0.0;
 
@@ -306,9 +306,15 @@ int main(int argc, char *argv[])
                       - tile_fock_spin(q,q)); } } } }
     emp2 /= 4.0;
 
-    cout << endl;
-    cout << "The MP2 correlation energy: " << emp2 << endl;
-    cout << "Final energy is : " << hf_final + emp2 << endl;
+    cout << "E(MP2): "
+         << emp2
+         << "\nFinal energy is : " << hf_final + emp2 << endl;
+    /******************************************************/
+
+    cout << "\n"
+         << "***********************************\n"
+         << "Calculating ECCSDT using TiledArray\n"
+         << "***********************************\n" << endl;
 
     TA::TiledRange   tr_oo{{0, nocc},  {0, nocc}};
     TA::TiledRange   tr_ov{{0, nocc},  {0, nvirt}};
@@ -347,18 +353,6 @@ int main(int argc, char *argv[])
     G_ovov.fill(0.0);
     G_ovvv.fill(0.0);
     G_vvvv.fill(0.0);
-
-    /* auto tile_D_ov    = TA::TArrayD::value_type(   D_ov.trange().make_tile_range(0)); */
-    /* auto tile_D_oovv  = TA::TArrayD::value_type( D_oovv.trange().make_tile_range(0)); */
-    /* auto tile_Fock_oo = TA::TArrayD::value_type(Fock_oo.trange().make_tile_range(0)); */
-    /* auto tile_Fock_ov = TA::TArrayD::value_type(Fock_ov.trange().make_tile_range(0)); */
-    /* auto tile_Fock_vv = TA::TArrayD::value_type(Fock_vv.trange().make_tile_range(0)); */
-    /* auto tile_G_oooo  = TA::TArrayD::value_type( G_oooo.trange().make_tile_range(0)); */
-    /* auto tile_G_ooov  = TA::TArrayD::value_type( G_ooov.trange().make_tile_range(0)); */
-    /* auto tile_G_oovv  = TA::TArrayD::value_type( G_oovv.trange().make_tile_range(0)); */
-    /* auto tile_G_ovov  = TA::TArrayD::value_type( G_ovov.trange().make_tile_range(0)); */
-    /* auto tile_G_ovvv  = TA::TArrayD::value_type( G_ovvv.trange().make_tile_range(0)); */
-    /* auto tile_G_vvvv  = TA::TArrayD::value_type( G_vvvv.trange().make_tile_range(0)); */
 
     auto tile_D_ov     = D_ov.find({0,0}).get();
     auto tile_D_oovv   = D_oovv.find({0,0,0,0}).get();
@@ -439,19 +433,7 @@ int main(int argc, char *argv[])
       }
     }
 
-    /* *D_ov.begin()    = tile_D_ov   ; */
-    /* *D_oovv.begin()  = tile_D_oovv ; */
-    /* *Fock_oo.begin() = tile_Fock_oo; */
-    /* *Fock_ov.begin() = tile_Fock_ov; */
-    /* *Fock_vv.begin() = tile_Fock_vv; */
-    /* *G_oooo.begin()  = tile_G_oooo ; */
-    /* *G_ooov.begin()  = tile_G_ooov ; */
-    /* *G_oovv.begin()  = tile_G_oovv ; */
-    /* *G_ovov.begin()  = tile_G_ovov ; */
-    /* *G_ovvv.begin()  = tile_G_ovvv ; */
-    /* *G_vvvv.begin()  = tile_G_vvvv ; */
-
-    // singles and doubles for CCSD calculations
+    // amplitudes for coupled-cluster calculations
     auto t_ov     = TA::TArrayD(world, tr_ov);
     auto t_oovv   = TA::TArrayD(world, tr_oovv);
     auto t_ooovvv = TA::TArrayD(world, tr_ooovvv);
@@ -460,23 +442,22 @@ int main(int argc, char *argv[])
     t_ooovvv.fill(0.0);
 
     //printing norms
-    cout<<endl;
-    cout<<"norm(Fock_oo)"<<std::sqrt(Fock_oo("i,j").dot(Fock_oo("i,j")))<<endl;
-    cout<<"norm(Fock_ov)"<<std::sqrt(Fock_ov("i,j").dot(Fock_ov("i,j")))<<endl;
-    cout<<"norm(Fock_vv)"<<std::sqrt(Fock_vv("i,j").dot(Fock_vv("i,j")))<<endl;
-    cout<<"norm(G_oooo)"<<std::sqrt(G_oooo("i,j,a,b").dot(G_oooo("i,j,a,b")))<<endl;
-    cout<<"norm(G_vvvv)"<<std::sqrt(G_vvvv("i,j,a,b").dot(G_vvvv("i,j,a,b")))<<endl;
-    cout<<"norm(G_ovvv)"<<std::sqrt(G_ovvv("i,j,a,b").dot(G_ovvv("i,j,a,b")))<<endl;
-    cout<<"norm(G_ooov)"<<std::sqrt(G_ooov("i,j,a,b").dot(G_ooov("i,j,a,b")))<<endl;
-    cout<<"norm(G_oovv)"<<std::sqrt(G_oovv("i,j,a,b").dot(G_oovv("i,j,a,b")))<<endl;
-    cout<<"norm(G_ovov)"<<std::sqrt(G_ovov("i,j,a,b").dot(G_ovov("i,j,a,b")))<<endl;
-    cout<<"norm(t_ov)"<<std::sqrt(t_ov("i,j").dot(t_ov("i,j")))<<endl;
-    cout<<"norm(t_oovv)"<<std::sqrt(t_oovv("i,j,a,b").dot(t_oovv("i,j,a,b")))<<endl;
-    cout<<"norm(t_ooovvv)"<<std::sqrt(t_ooovvv("i,j,k,a,b,c").dot(t_ooovvv("i,j,k,a,b,c")))<<endl;
-    cout<<endl;
+    // cout<< "\n"
+    //     <<"norm(Fock_oo)"<<std::sqrt(Fock_oo("i,j").dot(Fock_oo("i,j")))<<endl;
+    // cout<<"norm(Fock_ov)"<<std::sqrt(Fock_ov("i,j").dot(Fock_ov("i,j")))<<endl;
+    // cout<<"norm(Fock_vv)"<<std::sqrt(Fock_vv("i,j").dot(Fock_vv("i,j")))<<endl;
+    // cout<<"norm(G_oooo)"<<std::sqrt(G_oooo("i,j,a,b").dot(G_oooo("i,j,a,b")))<<endl;
+    // cout<<"norm(G_vvvv)"<<std::sqrt(G_vvvv("i,j,a,b").dot(G_vvvv("i,j,a,b")))<<endl;
+    // cout<<"norm(G_ovvv)"<<std::sqrt(G_ovvv("i,j,a,b").dot(G_ovvv("i,j,a,b")))<<endl;
+    // cout<<"norm(G_ooov)"<<std::sqrt(G_ooov("i,j,a,b").dot(G_ooov("i,j,a,b")))<<endl;
+    // cout<<"norm(G_oovv)"<<std::sqrt(G_oovv("i,j,a,b").dot(G_oovv("i,j,a,b")))<<endl;
+    // cout<<"norm(G_ovov)"<<std::sqrt(G_ovov("i,j,a,b").dot(G_ovov("i,j,a,b")))<<endl;
+    // cout<<"norm(t_ov)"<<std::sqrt(t_ov("i,j").dot(t_ov("i,j")))<<endl;
+    // cout<<"norm(t_oovv)"<<std::sqrt(t_oovv("i,j,a,b").dot(t_oovv("i,j,a,b")))<<endl;
+    // cout<<"norm(t_ooovvv)"<<std::sqrt(t_ooovvv("i,j,k,a,b,c").dot(t_ooovvv("i,j,k,a,b,c")))<<endl;
     //
 
-    // a map that is required while evaluating sequant expressions
+    // the map that is required while evaluating sequant expressions
     using pair_tensor_map = std::pair<std::wstring, TA::TArrayD const *>;
     auto tensor_map = std::map<pair_tensor_map::first_type,
                                pair_tensor_map::second_type>{};
@@ -518,7 +499,7 @@ int main(int argc, char *argv[])
     auto normdiff = 0.0;
     auto ecc      = 0.0;
     Logger::get_instance().wick_stats = false;
-    auto ccs_r = cceqvec{ 3, 3 }(true, true, true, true);
+    auto cc_r = cceqvec{ 3, 3 }(true, true, true, true);
 
     using sequant::interpret::antisymmetrize;
     using sequant::interpret::eval_equation;
@@ -526,9 +507,9 @@ int main(int argc, char *argv[])
     auto tstart = std::chrono::high_resolution_clock::now();
     do {
       ++iter;
-      auto R1 = eval_equation(ccs_r[1], tensor_map).tensor(); // TA::TArrayD object
-      auto R2 = eval_equation(ccs_r[2], tensor_map).tensor(); // TA::TArrayD object
-      auto R3 = eval_equation(ccs_r[3], tensor_map).tensor(); // TA::TArrayD object
+      auto R1 = eval_equation(cc_r[1], tensor_map).tensor(); // TA::TArrayD object
+      auto R2 = eval_equation(cc_r[2], tensor_map).tensor(); // TA::TArrayD object
+      auto R3 = eval_equation(cc_r[3], tensor_map).tensor(); // TA::TArrayD object
 
       R2 = antisymmetrize(R2);
       R3 = antisymmetrize(R3);
@@ -545,6 +526,7 @@ int main(int argc, char *argv[])
       cout << "using TA,    iter " << iter << endl;
       // cout << "norm(R1) = " << std::sqrt(R1("i,j").dot(R1("i,j"))) << endl;
       // cout << "norm(R2) = " << std::sqrt(R2("i,j,a,b").dot(R2("i,j,a,b"))) << endl;
+
       // save previous norm
       auto norm_last = std::sqrt(t_oovv("i,j,a,b").dot(t_oovv("i,j,a,b")));
 
@@ -587,9 +569,7 @@ int main(int argc, char *argv[])
               + 0.25*G_oovv("i,j,a,b").dot(t_oovv("i,j,a,b"))
               + Fock_ov("i,a").dot(t_ov("i,a"));
 
-      printf("E(CC) is: %20.12f\n", ecc);
-      cout << endl;
-      cout << endl;
+      printf("E(CC) is: %20.12f\n\n", ecc);
 
       normdiff = norm_last - std::sqrt(t_oovv("i,j,a,b").dot(t_oovv("i,j,a,b")));
       ediff    = ecc_last - ecc;
@@ -598,26 +578,8 @@ int main(int argc, char *argv[])
     auto tstop = std::chrono::high_resolution_clock::now();
     auto time_elapsed =
       std::chrono::duration_cast<std::chrono::microseconds>(tstop - tstart);
-    cout << "Out of loop after " << iter << " iterations." << endl;
-    cout << endl;
-    cout << "Time: " << time_elapsed.count() << " microseconds" << endl;
-
-    // printing norms
-    // cout<<endl;
-    // cout<<"norm(Fock_oo)"<<std::sqrt(Fock_oo("i,j").dot(Fock_oo("i,j")))<<endl;
-    // cout<<"norm(Fock_ov)"<<std::sqrt(Fock_ov("i,j").dot(Fock_ov("i,j")))<<endl;
-    // cout<<"norm(Fock_vv)"<<std::sqrt(Fock_vv("i,j").dot(Fock_vv("i,j")))<<endl;
-    // cout<<"norm(G_oooo)"<<std::sqrt(G_oooo("i,j,a,b").dot(G_oooo("i,j,a,b")))<<endl;
-    // cout<<"norm(G_vvvv)"<<std::sqrt(G_vvvv("i,j,a,b").dot(G_vvvv("i,j,a,b")))<<endl;
-    // cout<<"norm(G_ovvv)"<<std::sqrt(G_ovvv("i,j,a,b").dot(G_ovvv("i,j,a,b")))<<endl;
-    // cout<<"norm(G_ooov)"<<std::sqrt(G_ooov("i,j,a,b").dot(G_ooov("i,j,a,b")))<<endl;
-    // cout<<"norm(G_oovv)"<<std::sqrt(G_oovv("i,j,a,b").dot(G_oovv("i,j,a,b")))<<endl;
-    // cout<<"norm(G_ovov)"<<std::sqrt(G_ovov("i,j,a,b").dot(G_ovov("i,j,a,b")))<<endl;
-    // cout<<"norm(t_ov)"<<std::sqrt(t_ov("i,j").dot(t_ov("i,j")))<<endl;
-    // cout<<"norm(t_oovv)"<<std::sqrt(t_oovv("i,j,a,b").dot(t_oovv("i,j,a,b")))<<endl;
-    // cout<<"norm(t_ooovvv)"<<std::sqrt(t_ooovvv("i,j,k,a,b,c").dot(t_ooovvv("i,j,k,a,b,c")))<<endl;
-    // cout<<endl;
-    //
+    cout << "\nOut of loop after " << iter << " iterations.\n"
+         << "\nTime: " << time_elapsed.count() << " microseconds" << endl;
 
     TA::finalize();
   } // end of try block; if any exceptions occurred, report them and exit cleanly
