@@ -214,7 +214,7 @@ namespace sequant {
         } // for q: vp
       } // for p: vp
       return result;
-    } // function antisymmetrize btas
+    } // function antisymmetrize TA
 #endif
 
     namespace detail {
