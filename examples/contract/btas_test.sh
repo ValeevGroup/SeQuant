@@ -12,4 +12,4 @@ cmake --build ../../build \
       --target cc_btas \
       --verbose \
       -j 7 \
-      && ../../build/cc_btas ./h2o.xyz
+      && ../../build/cc_btas ../h2o.xyz

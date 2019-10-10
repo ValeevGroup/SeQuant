@@ -12,4 +12,4 @@ cmake --build ../../build \
       --target cc_tiledarray \
       --verbose \
       -j 7 \
-      && ../../build/cc_tiledarray ./h2o.xyz
+      && ../../build/cc_tiledarray ../h2o.xyz
