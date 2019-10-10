@@ -3,9 +3,9 @@
 
 rm -rf ./build
 
-# set up MKL variables
 INTEL_DIR=/opt/intel
-${INTEL_DIR}/bin/compilervars.sh -arch intel64 -platform linux
+source /opt/intel/tbb/bin/tbbvars.sh "intel64"
+
 cmake -B build                            \
       -D RANGEV3_DIR=/opt/range-v3        \
       -D BTAS_INSTALL_DIR=/opt/BTAS       \
