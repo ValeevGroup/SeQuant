@@ -5,8 +5,8 @@
 #include "catch.hpp"
 
 #include <iostream>
-#include "../../src/SeQuant/core/hash.hpp"
-#include "../../src/SeQuant/core/wick.hpp"
+#include "SeQuant/core/hash.hpp"
+#include "SeQuant/core/wick.hpp"
 
 struct Dummy : public sequant::Expr {
   virtual ~Dummy() = default;

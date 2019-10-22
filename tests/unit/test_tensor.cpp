@@ -5,7 +5,7 @@
 #include "catch.hpp"
 
 #include <iostream>
-#include "../../src/SeQuant/core/wick.hpp"
+#include "SeQuant/core/wick.hpp"
 
 TEST_CASE("Tensor", "[elements]") {
 

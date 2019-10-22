@@ -3,8 +3,8 @@
 //
 
 #include "convention.hpp"
-#include "../../core/index.hpp"
-#include "../../core/tensor.hpp"
+#include "SeQuant/core/index.hpp"
+#include "SeQuant/core/tensor.hpp"
 #include "op.hpp"
 
 namespace sequant {

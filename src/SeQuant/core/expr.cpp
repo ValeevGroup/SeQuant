@@ -2,10 +2,10 @@
 // Created by Eduard Valeyev on 2019-02-06.
 //
 
-#include "./expr.hpp"
-#include "./tensor_network.hpp"
-#include "./tensor.hpp"
-#include "./utility.hpp"
+#include "expr.hpp"
+#include "tensor_network.hpp"
+#include "tensor.hpp"
+#include "utility.hpp"
 
 namespace sequant {
 

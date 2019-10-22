@@ -2,8 +2,8 @@
 // Created by Eduard Valeyev on 2019-02-26.
 //
 
-#include "./tensor_network.hpp"
-#include "./utility.hpp"
+#include "tensor_network.hpp"
+#include "utility.hpp"
 #include "bliss.hpp"
 
 namespace sequant {

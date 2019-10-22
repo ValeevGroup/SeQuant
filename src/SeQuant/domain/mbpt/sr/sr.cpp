@@ -4,10 +4,10 @@
 
 #include "sr.hpp"
 
-#include "../../../core/expr.hpp"
-#include "../../../core/op.hpp"
-#include "../../../core/tensor.hpp"
-#include "../../../core/wick.hpp"
+#include "SeQuant/core/expr.hpp"
+#include "SeQuant/core/op.hpp"
+#include "SeQuant/core/tensor.hpp"
+#include "SeQuant/core/wick.hpp"
 
 namespace sequant {
 namespace mbpt {
