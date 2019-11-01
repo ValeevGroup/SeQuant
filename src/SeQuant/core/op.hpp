@@ -2,8 +2,8 @@
 // Created by Eduard Valeyev on 3/20/18.
 //
 
-#ifndef SEQUANT_OP_H
-#define SEQUANT_OP_H
+#ifndef SEQUANT_CORE_OP_H
+#define SEQUANT_CORE_OP_H
 
 #include <numeric>
 
@@ -1012,4 +1012,4 @@ std::tuple<int, std::shared_ptr<NormalOperator<S>>> normalize(const NormalOperat
 
 }  // namespace sequant
 
-#endif // SEQUANT_OP_H
+#endif // SEQUANT_CORE_OP_H
