@@ -255,10 +255,6 @@ std::endl;
             IndexSpace::instance(i.label()).type(), IndexSpace::beta);
         ketSpinIndexListB.insert(ketSpinIndexListB.end(),Index::make_tmp_index(beta_space));
       }
-      for(auto& i:ketSpinIndexListA)
-        std::wcout << sequant::to_latex(i) << std::endl;
-      for(auto& i:ketSpinIndexListB)
-        std::wcout << sequant::to_latex(i) << std::endl;
 
       container::set<Index> braSpinIndexListA;
       container::set<Index> braSpinIndexListB;
@@ -271,26 +267,10 @@ std::endl;
             IndexSpace::instance(i.label()).type(), IndexSpace::beta);
         braSpinIndexListB.insert(braSpinIndexListB.end(),Index::make_tmp_index(beta_space));
       }
-      for(auto& i:braSpinIndexListA)
-        std::wcout << sequant::to_latex(i) << std::endl;
-      for(auto& i:braSpinIndexListB)
-        std::wcout << sequant::to_latex(i) << std::endl;
 
-
-
-//      for (auto& i : n->as<Tensor>().const_braket()) {
-//         //Each i is an index
-//        std::wcout << sequant::to_latex(i) << std::endl;
-//        auto alpha_space = IndexSpace::instance(
-//            IndexSpace::instance(i.label()).type(), IndexSpace::alpha);
-//        std::wcout << sequant::to_latex(Index::make_tmp_index(alpha_space)) << std::endl;
-//        auto beta_space = IndexSpace::instance(
-//            IndexSpace::instance(i.label()).type(), IndexSpace::beta);
-//        std::wcout << sequant::to_latex(Index::make_tmp_index(beta_space)) << std::endl;
-//      }
-
-      // LABEL OF TENSOR
-//      std::wcout << Tensor((n->as<Tensor>()).label(),  )
+      auto tempA = Tensor((n->as<Tensor>()).label(),braSpinIndexListA, ketSpinIndexListA);
+      auto tempB = Tensor((n->as<Tensor>()).label(),braSpinIndexListB, ketSpinIndexListB);
+      std::wcout << to_latex(tempA) << " " << to_latex(tempB) << std::endl;
 
       std::cout << std::endl;
     }
