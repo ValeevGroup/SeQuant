@@ -241,24 +241,57 @@ std::endl;
     if (n->is<Tensor>()) {
       std::wcout << "&" << n->to_latex() << L"\\\\" << std::endl;
 
-      //    Get a list of indices for a tensor. Don't separate into bra/ket. Add
+      //    Get a list of indices for a tensor. BRA and KET needs to be separate lists. Add
       //    spin attribute to the index and regenetate the tensor
 
-      for (auto& i : n->as<Tensor>().const_braket()) {
-        std::wcout << sequant::to_latex(i) << " "
-                   << IndexSpace::instance(i.label()).type();
-        //        std::wcout << temp.label() << " {" <<
-        //        IndexSpace::instance(temp.label()).type()
-        //                   << "," << IndexSpace::instance(temp.label()).qns()
-        //                   << "}"
-        //                   << std::endl;
+      container::set<Index> ketSpinIndexListA;
+      container::set<Index> ketSpinIndexListB;
+      for( auto &i : n->as<Tensor>().ket()){
+        std::wcout << sequant::to_latex(i) << std::endl;
+        auto alpha_space = IndexSpace::instance(
+            IndexSpace::instance(i.label()).type(), IndexSpace::alpha);
+        ketSpinIndexListA.insert(ketSpinIndexListA.end(),Index::make_tmp_index(alpha_space));
+        auto beta_space = IndexSpace::instance(
+            IndexSpace::instance(i.label()).type(), IndexSpace::beta);
+        ketSpinIndexListB.insert(ketSpinIndexListB.end(),Index::make_tmp_index(beta_space));
       }
-      //      for (auto& i : n->as<Tensor>().ket()) {
-      //        std::wcout << sequant::to_latex(i) << " ";
-      //      }
-      //      std::cout << std::endl;
-      //      for (auto& i : n->as<Tensor>().bra())
-      //        std::wcout << sequant::to_latex(i) << " ";
+      for(auto& i:ketSpinIndexListA)
+        std::wcout << sequant::to_latex(i) << std::endl;
+      for(auto& i:ketSpinIndexListB)
+        std::wcout << sequant::to_latex(i) << std::endl;
+
+      container::set<Index> braSpinIndexListA;
+      container::set<Index> braSpinIndexListB;
+      for( auto &i : n->as<Tensor>().bra()){
+        std::wcout << sequant::to_latex(i) << std::endl;
+        auto alpha_space = IndexSpace::instance(
+            IndexSpace::instance(i.label()).type(), IndexSpace::alpha);
+        braSpinIndexListA.insert(braSpinIndexListA.end(),Index::make_tmp_index(alpha_space));
+        auto beta_space = IndexSpace::instance(
+            IndexSpace::instance(i.label()).type(), IndexSpace::beta);
+        braSpinIndexListB.insert(braSpinIndexListB.end(),Index::make_tmp_index(beta_space));
+      }
+      for(auto& i:braSpinIndexListA)
+        std::wcout << sequant::to_latex(i) << std::endl;
+      for(auto& i:braSpinIndexListB)
+        std::wcout << sequant::to_latex(i) << std::endl;
+
+
+
+//      for (auto& i : n->as<Tensor>().const_braket()) {
+//         //Each i is an index
+//        std::wcout << sequant::to_latex(i) << std::endl;
+//        auto alpha_space = IndexSpace::instance(
+//            IndexSpace::instance(i.label()).type(), IndexSpace::alpha);
+//        std::wcout << sequant::to_latex(Index::make_tmp_index(alpha_space)) << std::endl;
+//        auto beta_space = IndexSpace::instance(
+//            IndexSpace::instance(i.label()).type(), IndexSpace::beta);
+//        std::wcout << sequant::to_latex(Index::make_tmp_index(beta_space)) << std::endl;
+//      }
+
+      // LABEL OF TENSOR
+//      std::wcout << Tensor((n->as<Tensor>()).label(),  )
+
       std::cout << std::endl;
     }
   };
