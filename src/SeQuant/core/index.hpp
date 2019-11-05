@@ -214,6 +214,20 @@ class Index : public Taggable {
     return result;
   }
 
+  /// creates a globally non-unique index in space @c space. The label of the
+  /// resulting index = @c IndexSpace::base_key(space) + '_' + @c
+  /// subscript_label. Implemented for spin-trace functoin
+  /// \param space an IndexSpace object
+  /// \param subscript_label any std::wstring object
+  /// \return a non-unique index in space @c space with label @c subscript_label
+  static Index make_label_index(const IndexSpace &space,
+                                const std::wstring subscript_label) {
+    Index result;
+    result.label_ = IndexSpace::base_key(space) + L'_' + subscript_label;
+    result.space_ = space;
+    return result;
+  }
+
   /// @return the label
   /// @warning this does not include the proto index labels, use
   /// Index::full_label() instead
