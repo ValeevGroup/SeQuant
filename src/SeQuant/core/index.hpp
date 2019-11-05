@@ -39,9 +39,9 @@ using IndexList = std::initializer_list<Index>;
 /// excluding '_', and "index"
 ///       is an integer less than the value returned by min_tmp_label() .
 class Index : public Taggable {
-
-  static auto& tmp_index_accessor() {
-    // initialized so that the first call to next_tmp_index will return min_tmp_index()
+  static auto &tmp_index_accessor() {
+    // initialized so that the first call to next_tmp_index will return
+    // min_tmp_index()
     static std::atomic<std::size_t> index = min_tmp_index() - 1;
     return index;
   }
@@ -289,12 +289,13 @@ class Index : public Taggable {
     return result;
   }
 
-  template <typename ... Attrs> std::wstring to_wolfram(Attrs && ... attrs) const {
+  template <typename... Attrs>
+  std::wstring to_wolfram(Attrs &&... attrs) const {
     auto protect_subscript = [](const std::wstring_view str) {
       auto subsc_pos = str.find(L'_');
       if (subsc_pos == std::wstring_view::npos)
         return std::wstring(str);
-      else{
+      else {
         assert(subsc_pos + 1 < str.size());
         std::wstring result = L"\\!\\(\\*SubscriptBox[\\(";
         result += std::wstring(str.substr(0, subsc_pos));
@@ -349,15 +350,13 @@ class Index : public Taggable {
 
   /// @return a unique temporary index, its value is equal to or greater than
   /// that returned by min_tmp_index()
-  static std::size_t next_tmp_index() {
-    return ++tmp_index_accessor();
-  }
+  static std::size_t next_tmp_index() { return ++tmp_index_accessor(); }
 
-  /// resets the temporaty index counter so that the next call to next_tmp_index() will return the value returned by min_tmp_index()
-  /// @warning should only to be used when reproducibility matters (e.g. unit testing)
-  static void reset_tmp_index() {
-    tmp_index_accessor() = min_tmp_index() - 1;
-  }
+  /// resets the temporaty index counter so that the next call to
+  /// next_tmp_index() will return the value returned by min_tmp_index()
+  /// @warning should only to be used when reproducibility matters (e.g. unit
+  /// testing)
+  static void reset_tmp_index() { tmp_index_accessor() = min_tmp_index() - 1; }
 
   /// @brief index replacement
   /// replaces this object with its image in the Index map.
@@ -713,26 +712,32 @@ auto make_indices(WstrList index_labels = {}) {
 
 class IndexRegistry {
  public:
-  using Record = std::tuple<std::function<long(const Index&)>>;  // index record = {sizer}
+  using Record =
+      std::tuple<std::function<long(const Index &)>>;  // index record = {sizer}
 
   IndexRegistry() = default;
 
   /// updates an existing entry, or creates a new one if it does not exist
-  template <typename ... Args> void update(const Index& idx, Args&& ... args) {
+  template <typename... Args>
+  void update(const Index &idx, Args &&... args) {
     auto it = registry_.find(idx);
     if (it != registry_.end()) {
       registry_.erase(it);
     }
-    auto insertion_result = registry_.try_emplace(idx, std::forward<Args>(args)...);
+    auto insertion_result =
+        registry_.try_emplace(idx, std::forward<Args>(args)...);
   }
   /// creates a new entry
-  template <typename ... Args> void make(const Index& idx, Args&& ... args) {
-    auto insertion_result = registry_.try_emplace(idx, std::forward<Args>(args)...);
+  template <typename... Args>
+  void make(const Index &idx, Args &&... args) {
+    auto insertion_result =
+        registry_.try_emplace(idx, std::forward<Args>(args)...);
     assert(insertion_result.second);
   }
 
-  /// retrieves the pointer to the Record object for Index @idx , or nullptr if not found
-  const Record* retrieve(const Index& idx) const {
+  /// retrieves the pointer to the Record object for Index @idx , or nullptr if
+  /// not found
+  const Record *retrieve(const Index &idx) const {
     auto result = registry_.find(idx);
     if (result != registry_.end())
       return &(result->second);
@@ -741,7 +746,7 @@ class IndexRegistry {
   }
 
  private:
-  container::map<Index,Record> registry_;
+  container::map<Index, Record> registry_;
 };
 
 }  // namespace sequant
