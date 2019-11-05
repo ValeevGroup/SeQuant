@@ -286,14 +286,14 @@ int main(int argc, char* argv[]) {
   Logger::get_instance().wick_stats = false;
 
   auto ccsd = cceqvec{2, 2}(true, true, true, true);
-  //  std::wcout << "CCSD R1 =" << ccsd[1]->to_latex() << std::endl;
+  std::wcout << "CCSD R1 =" << ccsd[1]->to_latex() << std::endl;
   //  std::wcout << std::endl;
   //  std::wcout << "CCSD R2 =" << ccsd[2]->to_latex() << std::endl;
 
   // Calling spin trace function here:
   auto function_check = spintrace(ccsd[1]);
-  std::cout << std::endl;
-  function_check = spintrace(ccsd[2]);
+  //  std::cout << std::endl;
+  //  function_check = spintrace(ccsd[2]);
 
   ranges::for_each(std::array<bool, 2>{false, true}, [=](const bool screen) {
     ranges::for_each(
