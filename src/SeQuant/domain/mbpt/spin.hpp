@@ -7,6 +7,7 @@
 
 #include <algorithm>
 
+#include <codecvt>
 #include <string>
 #include <tuple>
 
@@ -15,7 +16,7 @@
 #include "SeQuant/core/expr.hpp"
 #include "SeQuant/core/tensor.hpp"
 
-#define SPINTRACE_PRINT 1
+#define SPINTRACE_PRINT 0
 #define PRINT_PERMUTATION_LIST 0
 
 namespace sequant {
@@ -29,14 +30,20 @@ class spinIndex : public Index {
 /// @return the expression with spin integrated out
 ExprPtr spintrace(ExprPtr expr,
                   std::initializer_list<IndexList> ext_index_groups = {{}}) {
-  std::cout << "In sequant::spintrace." << std::endl;
+
+  // SPIN TRACE DOES NOT SUPPORT PROTO INDICES YET.
+  auto check_proto_index = [&](const ExprPtr& expr) {
+    if (expr->is<Tensor>()) {
+      ranges::for_each(
+          expr->as<Tensor>().const_braket(),
+          [&](const Index& idx) { assert(!idx.has_proto_indices()); });
+    }
+  };
+  expr->visit(check_proto_index);
 
   container::set<Index> grand_idxlist;
   auto collect_indices = [&](const ExprPtr& expr) {
     if (expr->is<Tensor>()) {
-      //  std::wcout << expr->to_latex() << std::endl;
-      //  std::wcout << expr->as<Tensor>().bra_rank() << " " <<
-      //  expr->as<Tensor>().ket_rank() << std::endl;
       ranges::for_each(expr->as<Tensor>().const_braket(),
                        [&](const Index& idx) { grand_idxlist.insert(idx); });
     }
@@ -78,8 +85,6 @@ ExprPtr spintrace(ExprPtr expr,
   container::set<Index> alpha_list;
   container::set<Index> beta_list;
   {
-    //    Index::reset_tmp_index();
-
     // For each index, copy .type() and add spin variable
     for (auto&& i : grand_idxlist) {
       auto alpha_space = IndexSpace::instance(
@@ -234,49 +239,71 @@ std::endl;
   auto print_subexpr = [](const auto& n) {
     std::wcout << "&" << n->to_latex() << L"\\\\" << std::endl;
   };
-  ranges::for_each(expr->begin(), expr->end(), print_subexpr);
+  //  ranges::for_each(expr->begin(), expr->end(), print_subexpr);
 
   // The bra and ket indices from each tensor are separated here
-  auto print_subexpr_index = [&](ExprPtr& n) {
-    if (n->is<Tensor>()) {
-      std::wcout << "&" << n->to_latex() << L"\\\\" << std::endl;
+  auto print_subexpr_index = [&](ExprPtr& nn) {
+    for (auto& n : *nn) {
+      std::wcout << n->to_latex() << std::endl;
 
-      //    Get a list of indices for a tensor. BRA and KET needs to be separate lists. Add
-      //    spin attribute to the index and regenetate the tensor
-
+      //    Get a list of indices for a tensor. BRA and KET needs to be separate
+      //    lists. Add spin attribute to the index and regenetate the tensor
       container::set<Index> ketSpinIndexListA;
       container::set<Index> ketSpinIndexListB;
-      for( auto &i : n->as<Tensor>().ket()){
-        std::wcout << sequant::to_latex(i) << std::endl;
+      for (auto& i : n->as<Tensor>().ket()) {
+        auto subscript_label =  i.label().substr(i.label().find(L'_') + 1 );
+        std::wstring subscript_label_ws(subscript_label.begin(),subscript_label.end());
+//        std::wcout << i.label() << " " << subscript_label << std::endl;
+
         auto alpha_space = IndexSpace::instance(
             IndexSpace::instance(i.label()).type(), IndexSpace::alpha);
-        ketSpinIndexListA.insert(ketSpinIndexListA.end(),Index::make_tmp_index(alpha_space));
+        ketSpinIndexListA.insert(ketSpinIndexListA.end(),
+                                 Index::make_label_index(alpha_space, subscript_label_ws));
         auto beta_space = IndexSpace::instance(
             IndexSpace::instance(i.label()).type(), IndexSpace::beta);
-        ketSpinIndexListB.insert(ketSpinIndexListB.end(),Index::make_tmp_index(beta_space));
+        ketSpinIndexListB.insert(ketSpinIndexListB.end(),
+                                 Index::make_label_index(beta_space, subscript_label_ws));
       }
 
       container::set<Index> braSpinIndexListA;
       container::set<Index> braSpinIndexListB;
-      for( auto &i : n->as<Tensor>().bra()){
-        std::wcout << sequant::to_latex(i) << std::endl;
+      for (auto& i : n->as<Tensor>().bra()) {
+        auto subscript_label =  i.label().substr(i.label().find(L'_') + 1 );
+        std::wstring subscript_label_ws(subscript_label.begin(),subscript_label.end());
+//        std::wcout << i.label() << " " << subscript_label << std::endl;
+
         auto alpha_space = IndexSpace::instance(
             IndexSpace::instance(i.label()).type(), IndexSpace::alpha);
-        braSpinIndexListA.insert(braSpinIndexListA.end(),Index::make_tmp_index(alpha_space));
+        braSpinIndexListA.insert(braSpinIndexListA.end(),
+                                 Index::make_label_index(alpha_space, subscript_label_ws));
+
         auto beta_space = IndexSpace::instance(
             IndexSpace::instance(i.label()).type(), IndexSpace::beta);
-        braSpinIndexListB.insert(braSpinIndexListB.end(),Index::make_tmp_index(beta_space));
+        braSpinIndexListB.insert(braSpinIndexListB.end(),
+                                 Index::make_label_index(beta_space, subscript_label_ws));
       }
 
-      auto tempA = Tensor((n->as<Tensor>()).label(),braSpinIndexListA, ketSpinIndexListA);
-      auto tempB = Tensor((n->as<Tensor>()).label(),braSpinIndexListB, ketSpinIndexListB);
+      auto tempA = Tensor((n->as<Tensor>()).label(), braSpinIndexListA,
+                          ketSpinIndexListA);
+      auto tempB = Tensor((n->as<Tensor>()).label(), braSpinIndexListB,
+                          ketSpinIndexListB);
       std::wcout << to_latex(tempA) << " " << to_latex(tempB) << std::endl;
-
-      std::cout << std::endl;
+      /*
+            for(auto && i: braSpinIndexListA)
+              std::wcout << sequant::to_latex(i);
+            for(auto && i: braSpinIndexListB)
+              std::wcout << sequant::to_latex(i);
+            for(auto && i: ketSpinIndexListA)
+              std::wcout << sequant::to_latex(i);
+            for(auto && i: ketSpinIndexListB)
+              std::wcout << sequant::to_latex(i);
+            std::cout << std::endl;
+      */
     }
+// TODO: Form expression from individual tensors
+
   };
   expr->visit(print_subexpr_index);
-  //  ranges::for_each(expr->begin(), expr->end(), print_subexpr_index);
 
   // TODO: Add same terms
 
