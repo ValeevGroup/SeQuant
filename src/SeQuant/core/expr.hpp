@@ -292,7 +292,10 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
   /// @return true if this object is of type @c T
   template <typename T>
   bool is() const {
-    return this->type_id() == get_type_id<std::decay_t<T>>();
+    if constexpr (std::is_same_v<std::decay_t<T>,Expr>)
+      return true;
+    else
+      return this->type_id() == get_type_id<std::decay_t<T>>();
   }
 
   /// @tparam T an Expr type
