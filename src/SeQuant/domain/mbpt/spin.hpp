@@ -11,8 +11,6 @@
 #include <string>
 #include <tuple>
 
-// #include <range/v3/algorithm/for_each.hpp>
-
 #include "SeQuant/core/expr.hpp"
 #include "SeQuant/core/tensor.hpp"
 
@@ -30,7 +28,6 @@ class spinIndex : public Index {
 /// @return the expression with spin integrated out
 ExprPtr spintrace(ExprPtr expr,
                   std::initializer_list<IndexList> ext_index_groups = {{}}) {
-
   // SPIN TRACE DOES NOT SUPPORT PROTO INDICES YET.
   auto check_proto_index = [&](const ExprPtr& expr) {
     if (expr->is<Tensor>()) {
@@ -171,14 +168,8 @@ std::endl;
   }
 */
 
-  std::wcout << "Before: " << expr->to_latex() << std::endl;
-  expand(expr);
-  //  std::wcout << "After: " << expr->to_latex() << std::endl;
-  //  for (auto &&i : expand(expr)){
-  //    std::wcout << i << std::endl;
-  //  }
-
   //  TEST 2
+  /*
   {
     auto temp_counter = 0;
 
@@ -203,7 +194,7 @@ std::endl;
     }
     std::cout << "temp_counter: " << temp_counter << std::endl;
   }
-
+*/
   //  auto expr2 = expr->clone();
   //  std::wcout << "expr2:\n" << expr2->to_latex() << std::endl;
 
@@ -243,65 +234,72 @@ std::endl;
 
   // The bra and ket indices from each tensor are separated here
   auto print_subexpr_index = [&](ExprPtr& nn) {
+    std::wcout << nn->to_latex() << " Expr: " << nn->is<Expr>() << std::endl;
+    //    std::wcout << "Product: " << nn->is<Product>() << std::endl;
+    //    std::wcout << "Sum: " << nn->is<Sum>() << std::endl;
     for (auto& n : *nn) {
-      std::wcout << n->to_latex() << std::endl;
-
+      std::wcout << n->to_latex() << " tensor: " << n->is<Tensor>()
+                 << std::endl;
       //    Get a list of indices for a tensor. BRA and KET needs to be separate
       //    lists. Add spin attribute to the index and regenetate the tensor
       container::set<Index> ketSpinIndexListA;
       container::set<Index> ketSpinIndexListB;
       for (auto& i : n->as<Tensor>().ket()) {
-        auto subscript_label =  i.label().substr(i.label().find(L'_') + 1 );
-        std::wstring subscript_label_ws(subscript_label.begin(),subscript_label.end());
-//        std::wcout << i.label() << " " << subscript_label << std::endl;
+        auto subscript_label = i.label().substr(i.label().find(L'_') + 1);
+        std::wstring subscript_label_ws(subscript_label.begin(),
+                                        subscript_label.end());
+        //        std::wcout << i.label() << " " << subscript_label <<
+        //        std::endl;
 
         auto alpha_space = IndexSpace::instance(
             IndexSpace::instance(i.label()).type(), IndexSpace::alpha);
-        ketSpinIndexListA.insert(ketSpinIndexListA.end(),
-                                 Index::make_label_index(alpha_space, subscript_label_ws));
+        ketSpinIndexListA.insert(
+            ketSpinIndexListA.end(),
+            Index::make_label_index(alpha_space, subscript_label_ws));
         auto beta_space = IndexSpace::instance(
             IndexSpace::instance(i.label()).type(), IndexSpace::beta);
-        ketSpinIndexListB.insert(ketSpinIndexListB.end(),
-                                 Index::make_label_index(beta_space, subscript_label_ws));
+        ketSpinIndexListB.insert(
+            ketSpinIndexListB.end(),
+            Index::make_label_index(beta_space, subscript_label_ws));
       }
 
       container::set<Index> braSpinIndexListA;
       container::set<Index> braSpinIndexListB;
       for (auto& i : n->as<Tensor>().bra()) {
-        auto subscript_label =  i.label().substr(i.label().find(L'_') + 1 );
-        std::wstring subscript_label_ws(subscript_label.begin(),subscript_label.end());
-//        std::wcout << i.label() << " " << subscript_label << std::endl;
+        auto subscript_label = i.label().substr(i.label().find(L'_') + 1);
+        std::wstring subscript_label_ws(subscript_label.begin(),
+                                        subscript_label.end());
+        //        std::wcout << i.label() << " " << subscript_label <<
+        //        std::endl;
 
         auto alpha_space = IndexSpace::instance(
             IndexSpace::instance(i.label()).type(), IndexSpace::alpha);
-        braSpinIndexListA.insert(braSpinIndexListA.end(),
-                                 Index::make_label_index(alpha_space, subscript_label_ws));
+        braSpinIndexListA.insert(
+            braSpinIndexListA.end(),
+            Index::make_label_index(alpha_space, subscript_label_ws));
 
         auto beta_space = IndexSpace::instance(
             IndexSpace::instance(i.label()).type(), IndexSpace::beta);
-        braSpinIndexListB.insert(braSpinIndexListB.end(),
-                                 Index::make_label_index(beta_space, subscript_label_ws));
+        braSpinIndexListB.insert(
+            braSpinIndexListB.end(),
+            Index::make_label_index(beta_space, subscript_label_ws));
       }
 
       auto tempA = Tensor((n->as<Tensor>()).label(), braSpinIndexListA,
                           ketSpinIndexListA);
       auto tempB = Tensor((n->as<Tensor>()).label(), braSpinIndexListB,
                           ketSpinIndexListB);
-      std::wcout << to_latex(tempA) << " " << to_latex(tempB) << std::endl;
-      /*
-            for(auto && i: braSpinIndexListA)
-              std::wcout << sequant::to_latex(i);
-            for(auto && i: braSpinIndexListB)
-              std::wcout << sequant::to_latex(i);
-            for(auto && i: ketSpinIndexListA)
-              std::wcout << sequant::to_latex(i);
-            for(auto && i: ketSpinIndexListB)
-              std::wcout << sequant::to_latex(i);
-            std::cout << std::endl;
-      */
-    }
-// TODO: Form expression from individual tensors
 
+      std::wcout << to_latex(tempA) << " " << to_latex(tempB) << std::endl;
+
+      // std::wcout << to_latex(tempA.as<Product>()) << std::endl;
+
+      auto& temp_expr = tempA.as<Expr>();
+      std::wcout << "tensor: " << tempA.is<Expr>()
+                 << " Expr: " << temp_expr.is<Expr>() << std::endl;
+    }
+    // TODO: Form expression from individual tensors
+    std::cout << std::endl;
   };
   expr->visit(print_subexpr_index);
 
