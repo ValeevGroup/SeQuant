@@ -46,33 +46,12 @@ add_library(Boost INTERFACE IMPORTED)
 set_property(TARGET Boost PROPERTY
         INTERFACE_INCLUDE_DIRECTORIES ${Boost_INCLUDE_DIR})
 
+############ optional dependencies
 # look for BTAS, if needed
 if (BTAS_INSTALL_DIR)
     find_package(BTAS)
-    message (STATUS "BTAS_FOUND=${BTAS_FOUND}")
-    if (BTAS_FOUND)
-        # look for CBLAS + LAPACKE
-        find_package(CBLAS)
-        find_package(LAPACKE)
-        add_library(BTAS INTERFACE IMPORTED)
-        if (${CBLAS_FOUND} AND ${LAPACKE_FOUND})
-            set(BTAS_DEFINITIONS "_CBLAS_HEADER=\"${CBLAS_INCLUDE_FILE}\";_LAPACKE_HEADER=\"${LAPACKE_INCLUDE_FILE}\";BTAS_HAS_CBLAS=1")
-            if (MKL_FOUND)
-                set(BTAS_DEFINITIONS "_HAS_INTEL_MKL=1;${BTAS_DEFINITIONS}")
-            endif(MKL_FOUND)
-            message(STATUS "BTAS_DEFINITIONS=${BTAS_DEFINITIONS}")
-            set_target_properties(BTAS PROPERTIES
-                    INTERFACE_LINK_LIBRARIES "${LAPACKE_LIBRARIES};${CBLAS_LIBRARIES}"
-                    INTERFACE_COMPILE_DEFINITIONS "${BTAS_DEFINITIONS}"
-                    INTERFACE_INCLUDE_DIRECTORIES "${BTAS_INCLUDE_DIRS};${LAPACKE_INCLUDE_DIR};${CBLAS_INCLUDE_DIR}"
-                    )
-        else()
-            set_target_properties(BTAS PROPERTIES
-                    INTERFACE_INCLUDE_DIRECTORIES ${BTAS_INCLUDE_DIRS}
-                    )
-        endif()
-    endif(BTAS_FOUND)
 endif(BTAS_INSTALL_DIR)
+find_package(TiledArray CONFIG COMPONENTS tiledarray)
 
 # embedded bliss-0.73
 add_library(bliss
@@ -185,13 +164,48 @@ set_tests_properties(unit/run
 # Single-Reference Coupled-Cluster
 set(example0 srcc)
 add_executable(${example0} EXCLUDE_FROM_ALL
-        examples/${example0}.cpp)
-target_link_libraries(${example0} SeQuant)
-add_test(example/${example0}/build "${CMAKE_COMMAND}" --build ${CMAKE_BINARY_DIR} --target ${example0})
-add_test(NAME example/${example0}/run
-        COMMAND ${example0})
-set_tests_properties(example/${example0}/run
-        PROPERTIES DEPENDS example/${example0}/build)
+        examples/${example0}/${example0}.cpp)
+target_link_libraries(${example0} SeQuant ${TBB_LIBRARIES})
+
+# contract method testing -- Bimal
+if (BTAS_FOUND)
+  find_package(Libint2 2.6.0 CONFIG REQUIRED)
+
+  set(example1 cc_btas)
+  add_executable(${example1} EXCLUDE_FROM_ALL
+          examples/contract/${example1}.cpp
+          examples/contract/interpret/interpreted_tensor.hpp
+          examples/contract/interpret/contract.hpp
+          examples/contract/scf/hartree-fock.cc)
+  target_link_libraries(${example1} SeQuant ${TBB_LIBRARIES} Libint2::cxx BTAS)
+  target_compile_definitions(${example1} PRIVATE SEQUANT_HAS_BTAS)
+endif(BTAS_FOUND)
+
+if (TiledArray_FOUND)
+  find_package(Libint2 2.6.0 CONFIG REQUIRED)
+
+  set(example2 cc_tiledarray)
+  add_executable(${example2} EXCLUDE_FROM_ALL
+          examples/contract/${example2}.cpp
+          examples/contract/interpret/interpreted_tensor.hpp
+          examples/contract/interpret/contract.hpp
+          examples/contract/scf/hartree-fock.cc)
+  target_link_libraries(${example2} SeQuant ${TBB_LIBRARIES} Libint2::cxx tiledarray)
+  target_compile_definitions(${example2} PRIVATE SEQUANT_HAS_TILEDARRAY)
+endif(TiledArray_FOUND)
+
+# add tests for running examples
+set (lastexample 3)
+foreach(i RANGE ${lastexample})
+    if (TARGET ${example${i}})
+        add_test(example/${example${i}}/build "${CMAKE_COMMAND}" --build ${CMAKE_BINARY_DIR} --target ${example${i}})
+        add_test(NAME example/${example${i}}/run
+                COMMAND ${example${i}}
+                WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/examples)
+        set_tests_properties(example/${example${i}}/run
+                PROPERTIES DEPENDS example/${example${i}}/build)
+    endif()
+endforeach()
 
 # target for running ALL tests
 add_custom_target(check USES_TERMINAL COMMAND ${CMAKE_CTEST_COMMAND} -V)
