@@ -8,6 +8,7 @@
 #include <algorithm>
 
 #include <codecvt>
+#include <map>
 #include <string>
 #include <tuple>
 
@@ -29,7 +30,8 @@ struct zero_result : public std::exception {};
 inline container::map<Index, Index> compute_index_replacement_rules(
     std::shared_ptr<Product> &product,
     const container::set<Index> &external_indices,
-    const std::set<Index, Index::LabelCompare> &all_indices) {
+    const std::set<Index, Index::LabelCompare> &all_indices,
+    const container::set<Index> &substitution_indices) {
   expr_range exrng(product);
 
   /// this ensures that all temporary indices have unique *labels* (not just
@@ -39,6 +41,13 @@ inline container::map<Index, Index> compute_index_replacement_rules(
   };
   IndexFactory idxfac(index_validator);
   container::map<Index /* src */, Index /* dst */> result;  // src->dst
+
+  container::set<Index> all_index(all_indices.begin(),all_indices.end());
+
+  // compute index substitution between idx1 and idx2
+  auto make_index_substitution = [&idxfac] (const Index &idx1, const Index &idx2){
+
+  };
 
   // computes an index in intersection of space1 and space2
   auto make_intersection_index = [&idxfac](const IndexSpace &space1,
@@ -59,6 +68,16 @@ inline container::map<Index, Index> compute_index_replacement_rules(
     } else {
       assert(!img.has_proto_indices());
       return img;
+    }
+  };
+
+  // mutate labels in product src->dst
+  auto add_spin = [&result, &proto] (const Index &src, const Index &dst){
+
+    auto src_it = result.find(src);
+    if (src_it == result.end()) {
+      auto insertion_result = result.emplace(src, proto(dst, src));
+      assert(insertion_result.second);
     }
   };
 
@@ -163,6 +182,7 @@ inline container::map<Index, Index> compute_index_replacement_rules(
     const auto &factor = *it;
     if (factor->type_id() == Expr::get_type_id<Tensor>()) {
       const auto &tensor = static_cast<const Tensor &>(*factor);
+//      std::wcout << __FILE__ << " " <<  __LINE__  <<  factor->to_latex() << std::endl;
       if (tensor.label() == L"S") {
         assert(tensor.bra().size() == 1);
         assert(tensor.ket().size() == 1);
@@ -183,15 +203,15 @@ inline container::map<Index, Index> compute_index_replacement_rules(
           add_rules(bra, ket, new_dummy);
         } else if (bra_is_ext && !ket_is_ext) {  // ext + int
           if (includes(ket.space(), bra.space())) {
-            add_rule(ket, bra);
+            add_spin(ket, bra);
           } else {
-            add_rule(ket, idxfac.make(intersection_space));
+            add_spin(ket, idxfac.make(intersection_space));
           }
         } else if (!bra_is_ext && ket_is_ext) {  // int + ext
           if (includes(bra.space(), ket.space())) {
-            add_rule(bra, ket);
+            add_spin(bra, ket);
           } else {
-            add_rule(bra, idxfac.make(intersection_space));
+            add_spin(bra, idxfac.make(intersection_space));
           }
         }
       }
@@ -341,6 +361,7 @@ inline bool apply_index_replacement_rules(
 /// @return the expression with spin integrated out
 ExprPtr spintrace(ExprPtr expr,
                   std::initializer_list<IndexList> ext_index_groups = {{}}) {
+
   // SPIN TRACE DOES NOT SUPPORT PROTO INDICES YET.
   auto check_proto_index = [&](const ExprPtr& expr) {
     if (expr->is<Tensor>()) {
@@ -406,10 +427,9 @@ ExprPtr spintrace(ExprPtr expr,
       }
     });
 
-    for(auto&& i: all_indices)
-      std::wcout << i.label() << " ";
-
-    std::cout << std::endl;
+//    for(auto&& i: all_indices)
+//      std::wcout << i.label() << " ";
+//    std::cout << std::endl;
     container::set<Index> alpha_list;
     container::set<Index> beta_list;
     {
@@ -426,12 +446,10 @@ ExprPtr spintrace(ExprPtr expr,
         beta_list.insert(beta_list.end(), Index::make_label_index(beta_space, subscript_label_ws));
       }
     }
-      for(auto&& i: alpha_list)
-        std::wcout << i.label() << " ";
 
-      for(auto&& i: beta_list)
-        std::wcout << i.label() << " ";
-      std::cout << std::endl;
+//    for(auto&& i: i_to_alpha)
+//        std::wcout <<  (i.first).label() << " " <<  (i.second).label() << std::endl;
+//      std::cout << std::endl;
 
 /*
     container::map<Index, Index> int_to_alpha;
@@ -441,26 +459,93 @@ ExprPtr spintrace(ExprPtr expr,
                    { return std::make_pair(a,b);});
     */
 
+/*
+    {
+      std::vector<int> a1{1, 2, 3, 4, 5};
+      std::vector<int> a2{2, 4, 6, 8, 10} ; //(a1.begin(), a1.end());
+
+      container::map<int, int> map;
+      assert(a1.size() == a2.size());
+      for (size_t i = 0; i < a1.size(); ++i)
+         map.emplace(a1[i], a2[i]); //  map[a1[i]] = a2[i];
+
+      container::map<int, int>::iterator itr;
+      for(itr = map.begin(); itr != map.end(); ++itr){
+        std::cout << itr->first << " " << itr->second << std::endl;
+      }
+    }
+*/
+
+   /* {
+      std::vector<Index> alpha_vector(alpha_list.begin(), alpha_list.end());
+      std::vector<Index> beta_vector(beta_list.begin(), beta_list.end());
+      std::vector<Index> allidx_vector(all_indices.begin(), all_indices.end());
+
+      std::cout << __FILE__ << " " << __LINE__ << std::endl;
+
+      container::map<Index, Index> spin_idx_map;
+      assert(allidx_vector.size() == alpha_vector.size());
+      for (size_t i = 0; i < allidx_vector.size(); ++i)
+        spin_idx_map[allidx_vector[i]] = alpha_vector[i];
+
+      container::map<Index, Index>::iterator vec_iter;
+      for (vec_iter = spin_idx_map.begin(); vec_iter != spin_idx_map.end(); ++vec_iter) {
+        std::wcout << (vec_iter->first).label() << " " << (vec_iter->second).label() << std::endl;
+      }
+    }*/
+
+//    std::cout << __FILE__ << " " <<  __LINE__ << std::endl;
+
+    /*
+    assert(all_indices.size() == alpha_list.size());
+    auto ptr_t2 = alpha_list.begin();
+    for(auto &&i : all_indices){
+//      spin_idx_map[*(ptr_t2)] = i;
+      std::wcout << i.label() << " ";
+      std::wcout << (*ptr_t2).label() << std::endl;
+      ++ptr_t2;
+    }
+*/
+//    std::cout << __FILE__ << " " <<  __LINE__ << std::endl;
+
+
+    //    container::map<Index,Index>::iterator itr;
+//    for(itr = spin_idx_map.begin(); itr != spin_idx_map.end(); ++itr)
+//      std::wcout << (itr->first).label() << " " << (itr->second).label()  << std::endl;
+
+    container::map<Index, Index> i_to_alpha;
+    container::map<Index, Index> i_to_beta;
+    auto alpha_list_ptr = alpha_list.begin();
+    auto beta_list_ptr = beta_list.begin();
+    for(auto&& i: all_indices){
+      i_to_alpha.emplace(i,*alpha_list_ptr);
+      i_to_beta.emplace(i,*beta_list_ptr);
+      std::wcout << i.label() << " " << (*alpha_list_ptr).label() << " " << (*beta_list_ptr).label() << std::endl;
+      alpha_list_ptr++;
+      beta_list_ptr++;
+    }
+
     // TODO: Index replacement rules
-    std::shared_ptr<Product> expr_product (new Product(n->as<Product>()));
-    const auto replacement_rules = sequant::compute_index_replacement_rules(expr_product, ext_idxlist, all_indices);
+    // std::shared_ptr<Product> expr_product_alpha (new Product(n->as<Product>()));
+    std::shared_ptr<Product> expr_product_alpha = std::make_shared<Product>(Product(n->as<Product>()));
+
+    //    const auto replacement_rules = sequant::compute_index_replacement_rules(expr_product, ext_idxlist, all_indices, alpha_list);
 
     // TODO: Apply index replacement rules
-//    if(!replacement_rules.empty()){
 
-      pass_mutated = sequant::apply_index_replacement_rules(expr_product, replacement_rules, ext_idxlist, all_indices);
-//    }
+//      pass_mutated = sequant::apply_index_replacement_rules(expr_product, replacement_rules, ext_idxlist, all_indices);
+      pass_mutated = sequant::apply_index_replacement_rules(expr_product_alpha, i_to_alpha, ext_idxlist, all_indices);
+    std::wcout << "mutated: " << pass_mutated << " -> " << expr_product_alpha->to_latex() << std::endl;
 
-    std::wcout << "mutated: " << pass_mutated << " -> " << expr_product->to_latex() << std::endl;
+//    std::shared_ptr<Product> expr_product_beta (new Product(n->as<Product>()));
+//    std::shared_ptr<Product> expr_product_beta = std::make_shared<Product>(Product(n->as<Product>()));
+    auto expr_product_beta(expr_product_alpha);
 
-
+    pass_mutated = sequant::apply_index_replacement_rules(expr_product_beta, i_to_beta, ext_idxlist, all_indices);
+    std::wcout << "mutated: " << pass_mutated << " -> " << expr_product_beta->to_latex() << "\n" << std::endl;
   }
   };
   expr->visit(add_spin_labels);
-
- std::cout << __FILE__ << " " <<  __LINE__ << std::endl;
-
-
 
 #if SPINTRACE_PRINT
   //  List of all Index ( label + IndexSpace )
