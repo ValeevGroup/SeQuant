@@ -27,208 +27,14 @@ class spinIndex : public Index {
 
 struct zero_result : public std::exception {};
 
-inline container::map<Index, Index> compute_index_replacement_rules(
-    std::shared_ptr<Product> &product,
-    const container::set<Index> &external_indices,
-    const std::set<Index, Index::LabelCompare> &all_indices,
-    const container::set<Index> &substitution_indices) {
-  expr_range exrng(product);
-
-  /// this ensures that all temporary indices have unique *labels* (not just
-  /// unique *full labels*)
-  auto index_validator = [&all_indices](const Index &idx) {
-    return all_indices.find(idx) == all_indices.end();
-  };
-  IndexFactory idxfac(index_validator);
-  container::map<Index /* src */, Index /* dst */> result;  // src->dst
-
-  container::set<Index> all_index(all_indices.begin(),all_indices.end());
-
-  // compute index substitution between idx1 and idx2
-  auto make_index_substitution = [&idxfac] (const Index &idx1, const Index &idx2){
-
-  };
-
-  // computes an index in intersection of space1 and space2
-  auto make_intersection_index = [&idxfac](const IndexSpace &space1,
-                                           const IndexSpace &space2) {
-    const auto intersection_space = intersection(space1, space2);
-    if (intersection_space == IndexSpace::null_instance()) throw zero_result{};
-    return idxfac.make(intersection_space);
-  };
-
-  // transfers proto indices from idx (if any) to img
-  auto proto = [](const Index &img, const Index &idx) {
-    if (idx.has_proto_indices()) {
-      if (img.has_proto_indices()) {
-        assert(img.proto_indices() == idx.proto_indices());
-        return img;
-      } else
-        return Index(img, idx.proto_indices());
-    } else {
-      assert(!img.has_proto_indices());
-      return img;
-    }
-  };
-
-  // mutate labels in product src->dst
-  auto add_spin = [&result, &proto] (const Index &src, const Index &dst){
-
-    auto src_it = result.find(src);
-    if (src_it == result.end()) {
-      auto insertion_result = result.emplace(src, proto(dst, src));
-      assert(insertion_result.second);
-    }
-  };
-
-  // adds src->dst or src->intersection(dst,current_dst)
-  auto add_rule = [&result, &proto, &make_intersection_index](const Index &src,
-                                                              const Index &dst) {
-    auto src_it = result.find(src);
-    if (src_it == result.end()) {  // if brand new, add the rule
-      auto insertion_result = result.emplace(src, proto(dst, src));
-      assert(insertion_result.second);
-    }
-    else {  // else modify the destination of the existing rule to the
-      // intersection
-      const auto &old_dst = src_it->second;
-      assert(old_dst.proto_indices() == src.proto_indices());
-      if (dst.space() != old_dst.space()) {
-        src_it->second =
-            proto(make_intersection_index(old_dst.space(), dst.space()), src);
-      }
-    }
-  };
-
-  // adds src1->dst and src2->dst; if src1->dst1 and/or src2->dst2 already
-  // exist the existing rules are updated to map to the intersection of dst1,
-  // dst2 and dst
-  auto add_rules = [&result, &idxfac, &proto, &make_intersection_index](
-      const Index &src1, const Index &src2, const Index &dst) {
-    // are there replacement rules already for src{1,2}?
-    auto src1_it = result.find(src1);
-    auto src2_it = result.find(src2);
-    const auto has_src1_rule = src1_it != result.end();
-    const auto has_src2_rule = src2_it != result.end();
-
-    // which proto-indices should dst1 and dst2 inherit? a source index without
-    // proto indices will inherit its source counterpart's indices, unless it
-    // already has its own protoindices: <a_ij|p> = <a_ij|a_ij> (hence replace p
-    // with a_ij), but <a_ij|p_kl> = <a_ij|a_kl> != <a_ij|a_ij> (hence replace
-    // p_kl with a_kl)
-    const auto &dst1_proto =
-        !src1.has_proto_indices() && src2.has_proto_indices() ? src2 : src1;
-    const auto &dst2_proto =
-        !src2.has_proto_indices() && src1.has_proto_indices() ? src1 : src2;
-
-    if (!has_src1_rule && !has_src2_rule) {  // if brand new, add the rules
-      auto insertion_result1 = result.emplace(src1, proto(dst, dst1_proto));
-      assert(insertion_result1.second);
-      auto insertion_result2 = result.emplace(src2, proto(dst, dst2_proto));
-      assert(insertion_result2.second);
-    } else if (has_src1_rule &&
-        !has_src2_rule) {  // update the existing rule for src1
-      const auto &old_dst1 = src1_it->second;
-      assert(old_dst1.proto_indices() == dst1_proto.proto_indices());
-      if (dst.space() != old_dst1.space()) {
-        src1_it->second = proto(
-            make_intersection_index(old_dst1.space(), dst.space()), dst1_proto);
-      }
-      result[src2] = src1_it->second;
-    } else if (!has_src1_rule &&
-        has_src2_rule) {  // update the existing rule for src2
-      const auto &old_dst2 = src2_it->second;
-      assert(old_dst2.proto_indices() == dst2_proto.proto_indices());
-      if (dst.space() != old_dst2.space()) {
-        src2_it->second = proto(
-            make_intersection_index(old_dst2.space(), dst.space()), dst2_proto);
-      }
-      result[src1] = src2_it->second;
-    } else {  // update both of the existing rules
-      const auto &old_dst1 = src1_it->second;
-      const auto &old_dst2 = src2_it->second;
-      const auto new_dst_space =
-          (dst.space() != old_dst1.space() || dst.space() != old_dst2.space())
-          ? intersection(old_dst1.space(), old_dst2.space(), dst.space())
-          : dst.space();
-      if (new_dst_space == IndexSpace::null_instance()) throw zero_result{};
-      Index new_dst;
-      if (new_dst_space == old_dst1.space()) {
-        new_dst = old_dst1;
-        if (new_dst_space == old_dst2.space() && old_dst2 < new_dst) {
-          new_dst = old_dst2;
-        }
-        if (new_dst_space == dst.space() && dst < new_dst) {
-          new_dst = dst;
-        }
-      } else if (new_dst_space == old_dst2.space()) {
-        new_dst = old_dst2;
-        if (new_dst_space == dst.space() && dst < new_dst) {
-          new_dst = dst;
-        }
-      } else if (new_dst_space == dst.space()) {
-        new_dst = dst;
-      } else
-        new_dst = idxfac.make(new_dst_space);
-      result[src1] = proto(new_dst,dst1_proto);
-      result[src2] = proto(new_dst,dst2_proto);
-    }
-  };
-
-  /// this makes the list of replacements ... we do not mutate the expressions
-  /// to keep the information about which indices are related
-  for (auto it = ranges::begin(exrng); it != ranges::end(exrng);
-       ++it) {
-    const auto &factor = *it;
-    if (factor->type_id() == Expr::get_type_id<Tensor>()) {
-      const auto &tensor = static_cast<const Tensor &>(*factor);
-//      std::wcout << __FILE__ << " " <<  __LINE__  <<  factor->to_latex() << std::endl;
-      if (tensor.label() == L"S") {
-        assert(tensor.bra().size() == 1);
-        assert(tensor.ket().size() == 1);
-        const auto &bra = tensor.bra().at(0);
-        const auto &ket = tensor.ket().at(0);
-        assert(bra != ket);
-
-        const auto bra_is_ext = ranges::find(external_indices, bra) !=
-            ranges::end(external_indices);
-        const auto ket_is_ext = ranges::find(external_indices, ket) !=
-            ranges::end(external_indices);
-
-        const auto intersection_space = intersection(bra.space(), ket.space());
-        assert(intersection_space != IndexSpace::null_instance());
-
-        if (!bra_is_ext && !ket_is_ext) {  // int + int
-          const auto new_dummy = idxfac.make(intersection_space);
-          add_rules(bra, ket, new_dummy);
-        } else if (bra_is_ext && !ket_is_ext) {  // ext + int
-          if (includes(ket.space(), bra.space())) {
-            add_spin(ket, bra);
-          } else {
-            add_spin(ket, idxfac.make(intersection_space));
-          }
-        } else if (!bra_is_ext && ket_is_ext) {  // int + ext
-          if (includes(bra.space(), ket.space())) {
-            add_spin(bra, ket);
-          } else {
-            add_spin(bra, idxfac.make(intersection_space));
-          }
-        }
-      }
-    }
-  }
-
-  return result;
-}
-
 /// @return true if made any changes
 inline bool apply_index_replacement_rules(
-    std::shared_ptr<Product> &product,
-    const container::map<Index, Index> &const_replrules,
-    const container::set<Index> &external_indices,
-    std::set<Index, Index::LabelCompare> &all_indices) {
+    std::shared_ptr<Product>& product,
+    const container::map<Index, Index>& const_replrules,
+    const container::set<Index>& external_indices,
+    std::set<Index, Index::LabelCompare>& all_indices) {
   // to be able to use map[]
-  auto &replrules = const_cast<container::map<Index, Index> &>(const_replrules);
+  auto& replrules = const_cast<container::map<Index, Index>&>(const_replrules);
 
   expr_range exrng(product);
 
@@ -241,10 +47,10 @@ inline bool apply_index_replacement_rules(
   // assert that tensors_ indices are not tagged if going to tag indices
   if (tag_transformed_indices) {
     for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
-      const auto &factor = *it;
+      const auto& factor = *it;
       if (factor->is<Tensor>()) {
-        auto &tensor = factor->as<Tensor>();
-        assert(ranges::none_of(tensor.const_braket(), [](const Index &idx) {
+        auto& tensor = factor->as<Tensor>();
+        assert(ranges::none_of(tensor.const_braket(), [](const Index& idx) {
           return idx.tag().has_value();
         }));
       }
@@ -257,24 +63,24 @@ inline bool apply_index_replacement_rules(
     pass_mutated = false;
 
     for (auto it = ranges::begin(exrng); it != ranges::end(exrng);) {
-      const auto &factor = *it;
+      const auto& factor = *it;
       if (factor->is<Tensor>()) {
         bool erase_it = false;
-        auto &tensor = factor->as<Tensor>();
+        auto& tensor = factor->as<Tensor>();
 
         /// replace indices
         pass_mutated &=
             tensor.transform_indices(const_replrules, tag_transformed_indices);
 
         if (tensor.label() == L"S") {
-          const auto &bra = tensor.bra().at(0);
-          const auto &ket = tensor.ket().at(0);
+          const auto& bra = tensor.bra().at(0);
+          const auto& ket = tensor.ket().at(0);
 
           if (bra.proto_indices() == ket.proto_indices()) {
             const auto bra_is_ext = ranges::find(external_indices, bra) !=
-                ranges::end(external_indices);
+                                    ranges::end(external_indices);
             const auto ket_is_ext = ranges::find(external_indices, ket) !=
-                ranges::end(external_indices);
+                                    ranges::end(external_indices);
 
 #ifndef NDEBUG
             const auto intersection_space =
@@ -315,8 +121,7 @@ inline bool apply_index_replacement_rules(
 #endif
               }
             } else {  // ext + ext
-              if (bra == ket)
-                erase_it = true;
+              if (bra == ket) erase_it = true;
             }
 
             if (erase_it) {
@@ -334,7 +139,7 @@ inline bool apply_index_replacement_rules(
   // assert that tensors_ indices are not tagged if going to tag indices
   if (tag_transformed_indices) {
     for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
-      const auto &factor = *it;
+      const auto& factor = *it;
       if (factor->is<Tensor>()) {
         factor->as<Tensor>().reset_tags();
       }
@@ -344,24 +149,85 @@ inline bool apply_index_replacement_rules(
   // update all_indices
   std::set<Index, Index::LabelCompare> all_indices_new;
   ranges::for_each(
-      all_indices, [&const_replrules, &all_indices_new](const Index &idx) {
+      all_indices, [&const_replrules, &all_indices_new](const Index& idx) {
         auto dst_it = const_replrules.find(idx);
-        auto insertion_result = all_indices_new.emplace(dst_it != const_replrules.end() ? dst_it->second
-                                                                                        : idx);
+        auto insertion_result = all_indices_new.emplace(
+            dst_it != const_replrules.end() ? dst_it->second : idx);
       });
   std::swap(all_indices_new, all_indices);
 
   return mutated;
 }
 
+const container::set<Index> generate_alpha_idx(
+    const std::set<Index, Index::LabelCompare>& all_indices) {
+  container::set<Index> result;
+  for (auto&& i : all_indices) {
+    auto subscript_label = i.label().substr(i.label().find(L'_') + 1);
+    std::wstring subscript_label_ws(subscript_label.begin(),
+                                    subscript_label.end());
 
+    auto space = IndexSpace::instance(IndexSpace::instance(i.label()).type(),
+                                      IndexSpace::alpha);
+    result.insert(result.end(),
+                  Index::make_label_index(space, subscript_label_ws));
+  }
+  return result;
+}
+
+const container::set<Index> generate_beta_idx(
+    const std::set<Index, Index::LabelCompare>& all_indices) {
+  container::set<Index> result;
+  for (auto&& i : all_indices) {
+    auto subscript_label = i.label().substr(i.label().find(L'_') + 1);
+    std::wstring subscript_label_ws(subscript_label.begin(),
+                                    subscript_label.end());
+
+    // TODO: The spin_type does not work
+    auto space = IndexSpace::instance(IndexSpace::instance(i.label()).type(),
+                                      IndexSpace::beta);
+    result.insert(result.end(),
+                  Index::make_label_index(space, subscript_label_ws));
+  }
+  return result;
+}
+
+/// @param source_index list all indices in tensor product
+/// @param dest_index
+/// @return boost map
+const container::map<Index, Index> map_constructor(
+    const std::set<Index, Index::LabelCompare>& source_index,
+    container::set<Index>& dest_index) {
+  container::map<Index, Index> result;
+  auto dest_ptr = dest_index.begin();
+  for (auto&& i : source_index) {
+    result.emplace(i, *dest_ptr);
+    dest_ptr++;
+  }
+  return result;
+}
+
+const std::vector<container::map<Index, Index>> generate_map_list(
+    container::set<Index>& source_index,
+    container::set<Index>& destination_index) {
+  assert(source_index.size() == destination_index.size());
+  std::vector<container::map<Index, Index>> result;
+
+  // TODO: generate tuple list
+  std::cout << source_index.size() << std::endl;
+
+  // TODO: call map_constructor
+
+  // TODO: pushback to list
+
+  return result;
+}
 
 /// @param expr input expression
 /// @param ext_index_groups groups of external indices
 /// @return the expression with spin integrated out
 ExprPtr spintrace(ExprPtr expr,
                   std::initializer_list<IndexList> ext_index_groups = {{}}) {
-
   // SPIN TRACE DOES NOT SUPPORT PROTO INDICES YET.
   auto check_proto_index = [&](const ExprPtr& expr) {
     if (expr->is<Tensor>()) {
@@ -381,7 +247,7 @@ ExprPtr spintrace(ExprPtr expr,
   };
   expr->visit(collect_indices);
 
-//  std::cout << "grand_idxlist size: " << grand_idxlist.size() << std::endl;
+  //  std::cout << "grand_idxlist size: " << grand_idxlist.size() << std::endl;
 
   container::set<Index> ext_idxlist;
   for (auto&& idxgrp : ext_index_groups) {
@@ -398,152 +264,152 @@ ExprPtr spintrace(ExprPtr expr,
     }
   }
 
-  /*
-  std::wcout << "G: " << grand_idxlist.size() << " E: " << ext_idxlist.size() << " I: " << int_idxlist.size() << std::endl;
-  for(auto&&i : grand_idxlist)
-    std::wcout << " G: " << i.label();
-  std::cout << std::endl;
-  for(auto&&i : ext_idxlist)
-    std::wcout << " E: " << i.label();
-  std::cout << std::endl;
-  for(auto&&i : int_idxlist)
-    std::wcout << " I: " << i.label();
-  std::cout << std::endl;
-*/
+  auto add_spin_labels = [&](ExprPtr& n) {
+    if (n->is<Product>()) {
+      std::wcout << (n->as<Product>()).to_latex() << std::endl;
 
-  auto add_spin_labels = [&] (ExprPtr& n){
-  if(n->is<Product>()){
-    std::wcout << (n->as<Product>()).to_latex() << std::endl;
+      bool pass_mutated = false;
+      // extract current indices
+      std::set<Index, Index::LabelCompare> all_indices;
+      ranges::for_each(*n, [&all_indices](const auto& factor) {
+        if (factor->template is<Tensor>()) {
+          ranges::for_each(factor->template as<const Tensor>().braket(),
+                           [&all_indices](const Index& idx) {
+                             auto result = all_indices.insert(idx);
+                           });
+        }
+      });
 
-    bool pass_mutated = false;
-    // extract current indices
-    std::set<Index, Index::LabelCompare> all_indices;
-    ranges::for_each(*n, [&all_indices](const auto &factor) {
-      if (factor->template is<Tensor>()) {
-        ranges::for_each(factor->template as<const Tensor>().braket(),
-                         [&all_indices](const Index &idx) {
-                           auto result = all_indices.insert(idx);
-                         });
+#if 0
+      container::set<Index> alpha_list;
+      container::set<Index> beta_list;
+      {
+        // For each index, copy .type() and add spin variable
+        for (auto&& i : all_indices) {
+          auto subscript_label = i.label().substr(i.label().find(L'_') + 1);
+          std::wstring subscript_label_ws(subscript_label.begin(),
+                                          subscript_label.end());
+
+          auto alpha_space = IndexSpace::instance(
+              IndexSpace::instance(i.label()).type(), IndexSpace::alpha);
+          auto beta_space = IndexSpace::instance(
+              IndexSpace::instance(i.label()).type(), IndexSpace::beta);
+          alpha_list.insert(
+              alpha_list.end(),
+              Index::make_label_index(alpha_space, subscript_label_ws));
+          beta_list.insert(
+              beta_list.end(),
+              Index::make_label_index(beta_space, subscript_label_ws));
+        }
       }
-    });
+#endif
+      auto alpha_list = generate_alpha_idx(all_indices);
+      auto beta_list = generate_beta_idx(all_indices);
 
-//    for(auto&& i: all_indices)
-//      std::wcout << i.label() << " ";
-//    std::cout << std::endl;
-    container::set<Index> alpha_list;
-    container::set<Index> beta_list;
-    {
-      // For each index, copy .type() and add spin variable
-      for (auto &&i : all_indices) {
-        auto subscript_label = i.label().substr(i.label().find(L'_') + 1);
-        std::wstring subscript_label_ws(subscript_label.begin(), subscript_label.end());
+      /*
+          {
+            std::vector<int> a1{1, 2, 3, 4, 5};
+            std::vector<int> a2{2, 4, 6, 8, 10} ; //(a1.begin(), a1.end());
 
-        auto alpha_space = IndexSpace::instance(
-            IndexSpace::instance(i.label()).type(), IndexSpace::alpha);
-        auto beta_space = IndexSpace::instance(
-            IndexSpace::instance(i.label()).type(), IndexSpace::beta);
-        alpha_list.insert(alpha_list.end(), Index::make_label_index(alpha_space, subscript_label_ws));
-        beta_list.insert(beta_list.end(), Index::make_label_index(beta_space, subscript_label_ws));
+            container::map<int, int> map;
+            assert(a1.size() == a2.size());
+            for (size_t i = 0; i < a1.size(); ++i)
+               map.emplace(a1[i], a2[i]); //  map[a1[i]] = a2[i];
+
+            container::map<int, int>::iterator itr;
+            for(itr = map.begin(); itr != map.end(); ++itr){
+              std::cout << itr->first << " " << itr->second << std::endl;
+            }
+          }
+      */
+
+      /* {
+         std::vector<Index> alpha_vector(alpha_list.begin(), alpha_list.end());
+         std::vector<Index> beta_vector(beta_list.begin(), beta_list.end());
+         std::vector<Index> allidx_vector(all_indices.begin(),
+       all_indices.end());
+
+         std::cout << __FILE__ << " " << __LINE__ << std::endl;
+
+         container::map<Index, Index> spin_idx_map;
+         assert(allidx_vector.size() == alpha_vector.size());
+         for (size_t i = 0; i < allidx_vector.size(); ++i)
+           spin_idx_map[allidx_vector[i]] = alpha_vector[i];
+
+         container::map<Index, Index>::iterator vec_iter;
+         for (vec_iter = spin_idx_map.begin(); vec_iter != spin_idx_map.end();
+       ++vec_iter) { std::wcout << (vec_iter->first).label() << " " <<
+       (vec_iter->second).label() << std::endl;
+         }
+       }*/
+
+      //    std::cout << __FILE__ << " " <<  __LINE__ << std::endl;
+
+      /*
+      assert(all_indices.size() == alpha_list.size());
+      auto ptr_t2 = alpha_list.begin();
+      for(auto &&i : all_indices){
+  //      spin_idx_map[*(ptr_t2)] = i;
+        std::wcout << i.label() << " ";
+        std::wcout << (*ptr_t2).label() << std::endl;
+        ++ptr_t2;
       }
-    }
+  */
+      //    std::cout << __FILE__ << " " <<  __LINE__ << std::endl;
 
-//    for(auto&& i: i_to_alpha)
-//        std::wcout <<  (i.first).label() << " " <<  (i.second).label() << std::endl;
-//      std::cout << std::endl;
+      //    container::map<Index,Index>::iterator itr;
+      //    for(itr = spin_idx_map.begin(); itr != spin_idx_map.end(); ++itr)
+      //      std::wcout << (itr->first).label() << " " << (itr->second).label()
+      //      << std::endl;
 
-/*
-    container::map<Index, Index> int_to_alpha;
-    container::map<Index, Index> int_to_beta;
-
-    std::transform(beta_list.begin(), beta_list.end(),alpha_list.begin(), alpha_list.end(), std::inserter(int_to_alpha, int_to_alpha.end()),[] (Index a, Index b)
-                   { return std::make_pair(a,b);});
-    */
-
-/*
-    {
-      std::vector<int> a1{1, 2, 3, 4, 5};
-      std::vector<int> a2{2, 4, 6, 8, 10} ; //(a1.begin(), a1.end());
-
-      container::map<int, int> map;
-      assert(a1.size() == a2.size());
-      for (size_t i = 0; i < a1.size(); ++i)
-         map.emplace(a1[i], a2[i]); //  map[a1[i]] = a2[i];
-
-      container::map<int, int>::iterator itr;
-      for(itr = map.begin(); itr != map.end(); ++itr){
-        std::cout << itr->first << " " << itr->second << std::endl;
+#if 0
+      container::map<Index, Index> i_to_alpha;
+      container::map<Index, Index> i_to_beta;
+      {
+        auto alpha_list_ptr = alpha_list.begin();
+        auto beta_list_ptr = beta_list.begin();
+        for (auto&& i : all_indices) {
+          i_to_alpha.emplace(i, *alpha_list_ptr);
+          i_to_beta.emplace(i, *beta_list_ptr);
+          std::wcout << i.label() << " " << (*alpha_list_ptr).label() << " "
+                     << (*beta_list_ptr).label() << std::endl;
+          alpha_list_ptr++;
+          beta_list_ptr++;
+        }
       }
+#endif
+
+      auto i_to_alpha = map_constructor(all_indices, alpha_list);
+      auto i_to_beta = map_constructor(all_indices, beta_list);
+
+      // std::shared_ptr<Product> expr_product_alpha (new
+      // Product(n->as<Product>())); std::shared_ptr<Product> expr_product =
+      // std::make_shared<Product>(Product(n->as<Product>()));
+      auto expr_cast = std::static_pointer_cast<Product>(n);
+
+      // TODO: Apply index replacement rules
+
+      //      pass_mutated =
+      //      sequant::apply_index_replacement_rules(expr_product,
+      //      replacement_rules, ext_idxlist, all_indices);
+      pass_mutated = sequant::apply_index_replacement_rules(
+          expr_cast, i_to_alpha, ext_idxlist, all_indices);
+      std::wcout << "mutated: " << pass_mutated << " -> "
+                 << expr_cast->to_latex() << std::endl;
+
+      //    std::shared_ptr<Product> expr_product_beta (new
+      //    Product(n->as<Product>())); std::shared_ptr<Product>
+      //    expr_product_beta =
+      //    std::make_shared<Product>(Product(n->as<Product>())); auto
+      //    expr_product_beta(expr_product_alpha);
+
+      auto expr_cast2 = std::static_pointer_cast<Product>(n);
+      pass_mutated = sequant::apply_index_replacement_rules(
+          expr_cast2, i_to_beta, ext_idxlist, all_indices);
+      std::wcout << "mutated: " << pass_mutated << " -> "
+                 << expr_cast2->to_latex() << "\n"
+                 << std::endl;
     }
-*/
-
-   /* {
-      std::vector<Index> alpha_vector(alpha_list.begin(), alpha_list.end());
-      std::vector<Index> beta_vector(beta_list.begin(), beta_list.end());
-      std::vector<Index> allidx_vector(all_indices.begin(), all_indices.end());
-
-      std::cout << __FILE__ << " " << __LINE__ << std::endl;
-
-      container::map<Index, Index> spin_idx_map;
-      assert(allidx_vector.size() == alpha_vector.size());
-      for (size_t i = 0; i < allidx_vector.size(); ++i)
-        spin_idx_map[allidx_vector[i]] = alpha_vector[i];
-
-      container::map<Index, Index>::iterator vec_iter;
-      for (vec_iter = spin_idx_map.begin(); vec_iter != spin_idx_map.end(); ++vec_iter) {
-        std::wcout << (vec_iter->first).label() << " " << (vec_iter->second).label() << std::endl;
-      }
-    }*/
-
-//    std::cout << __FILE__ << " " <<  __LINE__ << std::endl;
-
-    /*
-    assert(all_indices.size() == alpha_list.size());
-    auto ptr_t2 = alpha_list.begin();
-    for(auto &&i : all_indices){
-//      spin_idx_map[*(ptr_t2)] = i;
-      std::wcout << i.label() << " ";
-      std::wcout << (*ptr_t2).label() << std::endl;
-      ++ptr_t2;
-    }
-*/
-//    std::cout << __FILE__ << " " <<  __LINE__ << std::endl;
-
-
-    //    container::map<Index,Index>::iterator itr;
-//    for(itr = spin_idx_map.begin(); itr != spin_idx_map.end(); ++itr)
-//      std::wcout << (itr->first).label() << " " << (itr->second).label()  << std::endl;
-
-    container::map<Index, Index> i_to_alpha;
-    container::map<Index, Index> i_to_beta;
-    auto alpha_list_ptr = alpha_list.begin();
-    auto beta_list_ptr = beta_list.begin();
-    for(auto&& i: all_indices){
-      i_to_alpha.emplace(i,*alpha_list_ptr);
-      i_to_beta.emplace(i,*beta_list_ptr);
-      std::wcout << i.label() << " " << (*alpha_list_ptr).label() << " " << (*beta_list_ptr).label() << std::endl;
-      alpha_list_ptr++;
-      beta_list_ptr++;
-    }
-
-    // TODO: Index replacement rules
-    // std::shared_ptr<Product> expr_product_alpha (new Product(n->as<Product>()));
-    std::shared_ptr<Product> expr_product_alpha = std::make_shared<Product>(Product(n->as<Product>()));
-
-    //    const auto replacement_rules = sequant::compute_index_replacement_rules(expr_product, ext_idxlist, all_indices, alpha_list);
-
-    // TODO: Apply index replacement rules
-
-//      pass_mutated = sequant::apply_index_replacement_rules(expr_product, replacement_rules, ext_idxlist, all_indices);
-      pass_mutated = sequant::apply_index_replacement_rules(expr_product_alpha, i_to_alpha, ext_idxlist, all_indices);
-    std::wcout << "mutated: " << pass_mutated << " -> " << expr_product_alpha->to_latex() << std::endl;
-
-//    std::shared_ptr<Product> expr_product_beta (new Product(n->as<Product>()));
-//    std::shared_ptr<Product> expr_product_beta = std::make_shared<Product>(Product(n->as<Product>()));
-    auto expr_product_beta(expr_product_alpha);
-
-    pass_mutated = sequant::apply_index_replacement_rules(expr_product_beta, i_to_beta, ext_idxlist, all_indices);
-    std::wcout << "mutated: " << pass_mutated << " -> " << expr_product_beta->to_latex() << "\n" << std::endl;
-  }
   };
   expr->visit(add_spin_labels);
 
@@ -681,19 +547,18 @@ std::endl;
   //  auto expr2 = expr->clone();
   //  std::wcout << "expr2:\n" << expr2->to_latex() << std::endl;
 
-
   struct latex_visitor {
     void operator()(const std::shared_ptr<sequant::Expr>& expr) {
       result += expr->to_latex();
     }
     std::wstring result{};
   };
-//  latex_visitor v1{};
-//  expr->visit(v1);
+  //  latex_visitor v1{};
+  //  expr->visit(v1);
   //  std::wcout << "v1.result = " << v1.result << std::endl;
 
-//  latex_visitor v2{};
-//  expr->visit(v2, true);
+  //  latex_visitor v2{};
+  //  expr->visit(v2, true);
   //  std::wcout << "v2.result = " << v2.result << std::endl;
 
   // YOU DON't NEED A LIST OF BRA OR KET INDICES
@@ -707,7 +572,7 @@ std::endl;
                        [&](const Index& idx) { bra_idxlist.insert(idx); });
     }
   };
-//  expr->visit(collect_bra_indices);
+  //  expr->visit(collect_bra_indices);
 
   //  Get sub expressions from an expression:
   auto print_subexpr = [](const auto& n) {
@@ -784,9 +649,7 @@ std::endl;
     // TODO: Form expression from individual tensors
     std::cout << std::endl;
   };
-//  expr->visit(print_subexpr_index);
-
-
+  //  expr->visit(print_subexpr_index);
 
   // TODO: Add same terms
 
