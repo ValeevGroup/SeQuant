@@ -183,7 +183,6 @@ const container::set<Index> generate_beta_idx(
     std::wstring subscript_label_ws(subscript_label.begin(),
                                     subscript_label.end());
 
-    // TODO: The spin_type does not work
     auto space = IndexSpace::instance(IndexSpace::instance(i.label()).type(),
                                       IndexSpace::beta);
     result.insert(result.end(),
@@ -207,18 +206,46 @@ const container::map<Index, Index> map_constructor(
   return result;
 }
 
-const std::vector<container::map<Index, Index>> generate_map_list(
-    container::set<Index>& source_index,
-    container::set<Index>& destination_index) {
-  assert(source_index.size() == destination_index.size());
-  std::vector<container::map<Index, Index>> result;
+// This will return a list that should be used in the map function
+/// @param list1 is the alpha index list
+/// @param list2 is the beta index list
+/// @return list with combined alpha and beta indices
+const container::set<Index> generate_permutation_index_list(
+    const container::set<Index>& list1,
+    const container::set<Index>& list2) {
+  assert(list1.size() == list1.size());
+//  std::vector<container::map<Index, Index>> result;
+  container::set<Index> result;
 
-  // TODO: generate tuple list
-  std::cout << source_index.size() << std::endl;
+  // TODO: generate tuple list: These could be vectors
+  std::vector<Index> list1_vec(list1.begin(), list1.end());
+  std::vector<Index> list2_vec(list2.begin(), list2.end());
 
-  // TODO: call map_constructor
 
-  // TODO: pushback to list
+  //  Create a list of A spins (the size of number of index)
+  std::string strTuple(list1_vec.size(), 'A');
+
+  //  Replace one spin in a tuple
+  for (size_t i = 0; i < list1_vec.size(); i++) {
+    strTuple.replace(list1_vec.size() - i - 1, 1, "B");
+    std::sort(strTuple.begin(), strTuple.end());
+
+    //  Permute the tuples
+    do {
+      std::cout << strTuple << std::endl;
+//      tupleList.push_back(strTuple);
+    } while (std::next_permutation(strTuple.begin(), strTuple.end()));
+  }
+
+  for(auto&& i: strTuple){}
+
+
+
+
+ // TODO: Generate set from using list1 and list2
+
+//  TODO: Convert vector to set.
+
 
   return result;
 }
@@ -280,135 +307,87 @@ ExprPtr spintrace(ExprPtr expr,
         }
       });
 
-#if 0
-      container::set<Index> alpha_list;
-      container::set<Index> beta_list;
-      {
-        // For each index, copy .type() and add spin variable
-        for (auto&& i : all_indices) {
-          auto subscript_label = i.label().substr(i.label().find(L'_') + 1);
-          std::wstring subscript_label_ws(subscript_label.begin(),
-                                          subscript_label.end());
-
-          auto alpha_space = IndexSpace::instance(
-              IndexSpace::instance(i.label()).type(), IndexSpace::alpha);
-          auto beta_space = IndexSpace::instance(
-              IndexSpace::instance(i.label()).type(), IndexSpace::beta);
-          alpha_list.insert(
-              alpha_list.end(),
-              Index::make_label_index(alpha_space, subscript_label_ws));
-          beta_list.insert(
-              beta_list.end(),
-              Index::make_label_index(beta_space, subscript_label_ws));
-        }
-      }
-#endif
+      // Generate list with spins
       auto alpha_list = generate_alpha_idx(all_indices);
       auto beta_list = generate_beta_idx(all_indices);
 
-      /*
-          {
-            std::vector<int> a1{1, 2, 3, 4, 5};
-            std::vector<int> a2{2, 4, 6, 8, 10} ; //(a1.begin(), a1.end());
-
-            container::map<int, int> map;
-            assert(a1.size() == a2.size());
-            for (size_t i = 0; i < a1.size(); ++i)
-               map.emplace(a1[i], a2[i]); //  map[a1[i]] = a2[i];
-
-            container::map<int, int>::iterator itr;
-            for(itr = map.begin(); itr != map.end(); ++itr){
-              std::cout << itr->first << " " << itr->second << std::endl;
-            }
-          }
-      */
-
-      /* {
-         std::vector<Index> alpha_vector(alpha_list.begin(), alpha_list.end());
-         std::vector<Index> beta_vector(beta_list.begin(), beta_list.end());
-         std::vector<Index> allidx_vector(all_indices.begin(),
-       all_indices.end());
-
-         std::cout << __FILE__ << " " << __LINE__ << std::endl;
-
-         container::map<Index, Index> spin_idx_map;
-         assert(allidx_vector.size() == alpha_vector.size());
-         for (size_t i = 0; i < allidx_vector.size(); ++i)
-           spin_idx_map[allidx_vector[i]] = alpha_vector[i];
-
-         container::map<Index, Index>::iterator vec_iter;
-         for (vec_iter = spin_idx_map.begin(); vec_iter != spin_idx_map.end();
-       ++vec_iter) { std::wcout << (vec_iter->first).label() << " " <<
-       (vec_iter->second).label() << std::endl;
-         }
-       }*/
-
-      //    std::cout << __FILE__ << " " <<  __LINE__ << std::endl;
-
-      /*
-      assert(all_indices.size() == alpha_list.size());
-      auto ptr_t2 = alpha_list.begin();
-      for(auto &&i : all_indices){
-  //      spin_idx_map[*(ptr_t2)] = i;
-        std::wcout << i.label() << " ";
-        std::wcout << (*ptr_t2).label() << std::endl;
-        ++ptr_t2;
-      }
-  */
-      //    std::cout << __FILE__ << " " <<  __LINE__ << std::endl;
-
-      //    container::map<Index,Index>::iterator itr;
-      //    for(itr = spin_idx_map.begin(); itr != spin_idx_map.end(); ++itr)
-      //      std::wcout << (itr->first).label() << " " << (itr->second).label()
-      //      << std::endl;
-
-#if 0
-      container::map<Index, Index> i_to_alpha;
-      container::map<Index, Index> i_to_beta;
-      {
-        auto alpha_list_ptr = alpha_list.begin();
-        auto beta_list_ptr = beta_list.begin();
-        for (auto&& i : all_indices) {
-          i_to_alpha.emplace(i, *alpha_list_ptr);
-          i_to_beta.emplace(i, *beta_list_ptr);
-          std::wcout << i.label() << " " << (*alpha_list_ptr).label() << " "
-                     << (*beta_list_ptr).label() << std::endl;
-          alpha_list_ptr++;
-          beta_list_ptr++;
-        }
-      }
-#endif
-
+      // generate maps TO the spin list
       auto i_to_alpha = map_constructor(all_indices, alpha_list);
       auto i_to_beta = map_constructor(all_indices, beta_list);
 
-      // std::shared_ptr<Product> expr_product_alpha (new
-      // Product(n->as<Product>())); std::shared_ptr<Product> expr_product =
-      // std::make_shared<Product>(Product(n->as<Product>()));
       auto expr_cast = std::static_pointer_cast<Product>(n);
-
-      // TODO: Apply index replacement rules
-
-      //      pass_mutated =
-      //      sequant::apply_index_replacement_rules(expr_product,
-      //      replacement_rules, ext_idxlist, all_indices);
       pass_mutated = sequant::apply_index_replacement_rules(
-          expr_cast, i_to_alpha, ext_idxlist, all_indices);
+          expr_cast, i_to_beta, ext_idxlist, all_indices);
       std::wcout << "mutated: " << pass_mutated << " -> "
                  << expr_cast->to_latex() << std::endl;
+/*
+      for(auto &&i: beta_list)
+        std::wcout << i.label() << " ";
 
-      //    std::shared_ptr<Product> expr_product_beta (new
-      //    Product(n->as<Product>())); std::shared_ptr<Product>
-      //    expr_product_beta =
-      //    std::make_shared<Product>(Product(n->as<Product>())); auto
-      //    expr_product_beta(expr_product_alpha);
+      // the index list is already sorted
+      std::sort(alpha_list.begin(),alpha_list.end());
+      for(auto &&i : alpha_list)
+        std::wcout << i.label() << " ";
+        std::cout << std::endl;
+*/
 
-      auto expr_cast2 = std::static_pointer_cast<Product>(n);
-      pass_mutated = sequant::apply_index_replacement_rules(
-          expr_cast2, i_to_beta, ext_idxlist, all_indices);
-      std::wcout << "mutated: " << pass_mutated << " -> "
-                 << expr_cast2->to_latex() << "\n"
-                 << std::endl;
+
+      // Generates a vector of target index
+      { // Permutaion scope
+
+        std::vector<container::set<Index>> tuple_vector_list;
+        assert(alpha_list.size() == beta_list.size());
+        std::string str_temp(all_indices.size(), 'A');
+        container::set<Index> permuted_index_list(alpha_list.begin(), alpha_list.end());
+//        for (auto &&i: permuted_index_list)
+//          std::wcout << i.label() << " ";
+//        std::cout << std::endl;
+        tuple_vector_list.push_back(permuted_index_list);
+
+        for (size_t i = 0; i < str_temp.size(); i++) {
+          str_temp.replace(str_temp.size() - i - 1, 1, "B");
+          std::sort(str_temp.begin(), str_temp.end());
+
+          do {
+            // have an iterator here
+            auto alpha_iter = alpha_list.begin();
+            auto beta_iter = beta_list.begin();
+
+//            std::cout << str_temp << ": ";
+            permuted_index_list.clear();
+
+            for (auto &&i : str_temp) {
+              if (i == 'A') {
+//              std::wcout << (*alpha_iter).label() << ", ";
+                permuted_index_list.insert(permuted_index_list.end(), *alpha_iter);
+              } else {
+//                std::wcout << (*beta_iter).label() << ", ";
+                permuted_index_list.insert(permuted_index_list.end(), *beta_iter);
+              }
+              alpha_iter++;
+              beta_iter++;
+            }
+//            for (auto &&i: permuted_index_list)
+//              std::wcout << i.label() << " ";
+//            std::cout << std::endl;
+            tuple_vector_list.push_back(permuted_index_list);
+
+          } while (std::next_permutation(str_temp.begin(), str_temp.end()));
+        }
+
+      for(auto &&j: tuple_vector_list){
+        for(auto &&i: j){
+          std::wcout << i.label() << " ";
+        }
+        std::cout << std::endl;
+      }
+
+      } // Permutaion scope
+
+
+
+
+
     }
   };
   expr->visit(add_spin_labels);
@@ -420,42 +399,10 @@ ExprPtr spintrace(ExprPtr expr,
   }
   std::cout << std::endl;
 
-  for (auto i = grand_idxlist.begin(); i != grand_idxlist.end(); ++i)
-    std::wcout << i->to_latex() << std::endl;
-
+//  for (auto i = grand_idxlist.begin(); i != grand_idxlist.end(); ++i)
+//    std::wcout << i->to_latex() << std::endl;
 #endif
-
   // TODO make list of groups, generate all spin tuples, apply and replace ...
-
-  // Generate list of spin quantum numbers from Grand Index List
-  container::set<Index> alpha_list;
-  container::set<Index> beta_list;
-  {
-    // For each index, copy .type() and add spin variable
-    for (auto&& i : grand_idxlist) {
-      auto alpha_space = IndexSpace::instance(
-          IndexSpace::instance(i.label()).type(), IndexSpace::alpha);
-      auto beta_space = IndexSpace::instance(
-          IndexSpace::instance(i.label()).type(), IndexSpace::beta);
-      alpha_list.insert(alpha_list.end(), Index::make_tmp_index(alpha_space));
-      beta_list.insert(beta_list.end(), Index::make_tmp_index(beta_space));
-    }
-
-#if SPINTRACE_PRINT
-    for (auto&& i : alpha_list) {
-      std::wcout << i.label() << " {" << IndexSpace::instance(i.label()).type()
-                 << "," << IndexSpace::instance(i.label()).qns() << "}"
-                 << std::endl;
-    }
-    for (auto&& i : beta_list) {
-      std::wcout << i.label() << " {" << IndexSpace::instance(i.label()).type()
-                 << "," << IndexSpace::instance(i.label()).qns() << "}"
-                 << std::endl;
-    }
-    std::cout << "alpha_list size: " << alpha_list.size() << std::endl;
-    std::cout << "beta_list size: " << beta_list.size() << std::endl;
-#endif
-  }
 
   // Generate a list of tuples with A,B for spin
   auto tupleSize = 0;  // Counter for size of the list of tuples
