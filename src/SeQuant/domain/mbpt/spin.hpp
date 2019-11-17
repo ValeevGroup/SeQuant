@@ -292,6 +292,7 @@ ExprPtr spintrace(ExprPtr expr,
   }
 
   auto add_spin_labels = [&](ExprPtr& n) {
+    auto result = n;
     if (n->is<Product>()) {
       std::wcout << (n->as<Product>()).to_latex() << std::endl;
 
@@ -315,79 +316,60 @@ ExprPtr spintrace(ExprPtr expr,
       auto i_to_alpha = map_constructor(all_indices, alpha_list);
       auto i_to_beta = map_constructor(all_indices, beta_list);
 
-      auto expr_cast = std::static_pointer_cast<Product>(n);
-      pass_mutated = sequant::apply_index_replacement_rules(
-          expr_cast, i_to_beta, ext_idxlist, all_indices);
-      std::wcout << "mutated: " << pass_mutated << " -> "
-                 << expr_cast->to_latex() << std::endl;
-/*
-      for(auto &&i: beta_list)
-        std::wcout << i.label() << " ";
-
-      // the index list is already sorted
-      std::sort(alpha_list.begin(),alpha_list.end());
-      for(auto &&i : alpha_list)
-        std::wcout << i.label() << " ";
-        std::cout << std::endl;
-*/
-
-
       // Generates a vector of target index
+      std::vector<container::set<Index>> tuple_vector_list;
       { // Permutaion scope
-
-        std::vector<container::set<Index>> tuple_vector_list;
         assert(alpha_list.size() == beta_list.size());
-        std::string str_temp(all_indices.size(), 'A');
-        container::set<Index> permuted_index_list(alpha_list.begin(), alpha_list.end());
-//        for (auto &&i: permuted_index_list)
-//          std::wcout << i.label() << " ";
-//        std::cout << std::endl;
+//        std::string str_temp(all_indices.size(), 'A');
+        std::string str_temp(all_indices.size(), 'B');
+//        container::set<Index> permuted_index_list(alpha_list.begin(), alpha_list.end());
+        container::set<Index> permuted_index_list(beta_list.begin(), beta_list.end());
         tuple_vector_list.push_back(permuted_index_list);
 
         for (size_t i = 0; i < str_temp.size(); i++) {
-          str_temp.replace(str_temp.size() - i - 1, 1, "B");
+//          str_temp.replace(str_temp.size() - i - 1, 1, "B");
+          str_temp.replace(str_temp.size() - i - 1, 1, "A");
           std::sort(str_temp.begin(), str_temp.end());
 
           do {
             // have an iterator here
             auto alpha_iter = alpha_list.begin();
             auto beta_iter = beta_list.begin();
-
-//            std::cout << str_temp << ": ";
             permuted_index_list.clear();
 
             for (auto &&i : str_temp) {
               if (i == 'A') {
-//              std::wcout << (*alpha_iter).label() << ", ";
                 permuted_index_list.insert(permuted_index_list.end(), *alpha_iter);
               } else {
-//                std::wcout << (*beta_iter).label() << ", ";
                 permuted_index_list.insert(permuted_index_list.end(), *beta_iter);
               }
               alpha_iter++;
               beta_iter++;
             }
-//            for (auto &&i: permuted_index_list)
+//            for(auto&& i: permuted_index_list)
 //              std::wcout << i.label() << " ";
 //            std::cout << std::endl;
             tuple_vector_list.push_back(permuted_index_list);
-
           } while (std::next_permutation(str_temp.begin(), str_temp.end()));
         }
-
-      for(auto &&j: tuple_vector_list){
-        for(auto &&i: j){
-          std::wcout << i.label() << " ";
-        }
-        std::cout << std::endl;
-      }
-
       } // Permutaion scope
 
-
-
-
-
+      auto expr_cast = std::static_pointer_cast<Product>(n);
+      for(auto&& i: all_indices)
+        std::wcout << i.label() << " ";
+      std::cout << std::endl;
+      auto counter = 1;
+      for(auto &&i: tuple_vector_list){
+        std::cout << counter << " ";
+        for(auto &&j: i)
+          std::wcout << j.label() << " ";
+        std::cout << std::endl;
+        auto index_map = map_constructor(all_indices, i);
+        pass_mutated = sequant::apply_index_replacement_rules(
+            expr_cast, index_map, ext_idxlist, all_indices);
+//        std::wcout << n->to_latex() << std::endl;
+        counter++;
+      }
     }
   };
   expr->visit(add_spin_labels);
