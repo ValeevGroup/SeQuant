@@ -27,12 +27,61 @@ class spinIndex : public Index {
 
 struct zero_result : public std::exception {};
 
+/// @return true if bra and ket indices for a tensor in @c product have same
+/// spin
+inline bool check_spin_symm(const std::shared_ptr<Product>& product) {
+  bool result = false;
+
+  // Get each tensor in product
+  for (auto&& n : *product) {
+    assert(n->as<Tensor>().bra().size() == n->as<Tensor>().ket().size());
+    /*
+    std::wcout << n->to_latex() << " " << __LINE__ << std::endl;
+    ranges::for_each(n->as<Tensor>().bra(), [&] (const Index i) {std::wcout <<
+    i.label() << " "; } ); std::cout << __LINE__ << "\n";
+    ranges::for_each(n->as<Tensor>().ket(), [&] (const Index i) {std::wcout <<
+    i.label() << " "; } ); std::cout << __LINE__ << "\n";
+    */
+    // For each index check if QNS match. return FALSE if one of the pairs does
+    // not match.
+    auto iter_ket = n->as<Tensor>().ket().begin();
+    for (auto&& bra : n->as<Tensor>().bra()) {
+      if (IndexSpace::instance(bra.label()).qns() ==
+          IndexSpace::instance(iter_ket->label()).qns()) {
+        //        std::wcout << __LINE__ << " " << bra.label() << " " <<
+        //        iter_ket->label() << std::endl;
+        result = true;
+      } else
+        return result;
+      iter_ket++;
+    }
+  }
+  return result;
+}
+
+/// @param spin_label_set list of indices with alpha/beta spin qns
+/// @return the same list of indices with null qns
+inline const container::set<Index, Index::LabelCompare> remove_spin_label(
+    const container::set<Index, Index::LabelCompare>& spin_label_set) {
+  container::set<Index, Index::LabelCompare> result;
+  for (auto&& i : spin_label_set) {
+    auto subscript_label = i.label().substr(i.label().find(L'_') + 1);
+    std::wstring subscript_label_ws(subscript_label.begin(),
+                                    subscript_label.end());
+    auto space = IndexSpace::instance(IndexSpace::instance(i.label()).type(),
+                                      IndexSpace::nullqns);
+    result.insert(result.end(),
+                  Index::make_label_index(space, subscript_label_ws));
+  }
+  return result;
+}
+
 /// @return true if made any changes
 inline bool apply_index_replacement_rules(
     std::shared_ptr<Product>& product,
     const container::map<Index, Index>& const_replrules,
     const container::set<Index>& external_indices,
-    std::set<Index, Index::LabelCompare>& all_indices) {
+    container::set<Index, Index::LabelCompare>& all_indices) {
   // to be able to use map[]
   auto& replrules = const_cast<container::map<Index, Index>&>(const_replrules);
 
@@ -147,7 +196,7 @@ inline bool apply_index_replacement_rules(
   }
 
   // update all_indices
-  std::set<Index, Index::LabelCompare> all_indices_new;
+  container::set<Index, Index::LabelCompare> all_indices_new;
   ranges::for_each(
       all_indices, [&const_replrules, &all_indices_new](const Index& idx) {
         auto dst_it = const_replrules.find(idx);
@@ -159,9 +208,9 @@ inline bool apply_index_replacement_rules(
   return mutated;
 }
 
-const container::set<Index> generate_alpha_idx(
-    const std::set<Index, Index::LabelCompare>& all_indices) {
-  container::set<Index> result;
+const container::set<Index, Index::LabelCompare> generate_alpha_idx(
+    const container::set<Index, Index::LabelCompare>& all_indices) {
+  container::set<Index, Index::LabelCompare> result;
   for (auto&& i : all_indices) {
     auto subscript_label = i.label().substr(i.label().find(L'_') + 1);
     std::wstring subscript_label_ws(subscript_label.begin(),
@@ -175,9 +224,9 @@ const container::set<Index> generate_alpha_idx(
   return result;
 }
 
-const container::set<Index> generate_beta_idx(
-    const std::set<Index, Index::LabelCompare>& all_indices) {
-  container::set<Index> result;
+const container::set<Index, Index::LabelCompare> generate_beta_idx(
+    const container::set<Index, Index::LabelCompare>& all_indices) {
+  container::set<Index, Index::LabelCompare> result;
   for (auto&& i : all_indices) {
     auto subscript_label = i.label().substr(i.label().find(L'_') + 1);
     std::wstring subscript_label_ws(subscript_label.begin(),
@@ -195,8 +244,8 @@ const container::set<Index> generate_beta_idx(
 /// @param dest_index
 /// @return boost map
 const container::map<Index, Index> map_constructor(
-    const std::set<Index, Index::LabelCompare>& source_index,
-    container::set<Index>& dest_index) {
+    const container::set<Index, Index::LabelCompare>& source_index,
+    container::set<Index, Index::LabelCompare>& dest_index) {
   container::map<Index, Index> result;
   auto dest_ptr = dest_index.begin();
   for (auto&& i : source_index) {
@@ -207,45 +256,51 @@ const container::map<Index, Index> map_constructor(
 }
 
 // This will return a list that should be used in the map function
+// BUG:TODO: This function returns an incorrect map: the number sequence in
+// label is not honored
 /// @param list1 is the alpha index list
 /// @param list2 is the beta index list
-/// @return list with combined alpha and beta indices
-const container::set<Index> generate_permutation_index_list(
-    const container::set<Index>& list1,
-    const container::set<Index>& list2) {
+/// @return list of vectors containing permuted alpha and beta indices
+const std::vector<container::set<Index, Index::LabelCompare>>
+generate_permutation_index_list(
+    const container::set<Index, Index::LabelCompare>& list1,
+    const container::set<Index, Index::LabelCompare>& list2) {
   assert(list1.size() == list1.size());
-//  std::vector<container::map<Index, Index>> result;
-  container::set<Index> result;
 
-  // TODO: generate tuple list: These could be vectors
-  std::vector<Index> list1_vec(list1.begin(), list1.end());
-  std::vector<Index> list2_vec(list2.begin(), list2.end());
+  std::vector<container::set<Index, Index::LabelCompare>> result;
 
+  assert(list1.size() == list2.size());
+  std::string string_tuple(list1.size(), 'A');
 
-  //  Create a list of A spins (the size of number of index)
-  std::string strTuple(list1_vec.size(), 'A');
+  std::vector<Index> permuted_index_list(list1.begin(), list1.end());
+  container::set<Index, Index::LabelCompare> permuted_index_list2(
+      permuted_index_list.begin(), permuted_index_list.end());
+  result.push_back(permuted_index_list2);
 
-  //  Replace one spin in a tuple
-  for (size_t i = 0; i < list1_vec.size(); i++) {
-    strTuple.replace(list1_vec.size() - i - 1, 1, "B");
-    std::sort(strTuple.begin(), strTuple.end());
+  for (size_t i = 0; i < string_tuple.size(); i++) {
+    string_tuple.replace(string_tuple.size() - i - 1, 1, "B");
+    std::sort(string_tuple.begin(), string_tuple.end());
 
-    //  Permute the tuples
     do {
-      std::cout << strTuple << std::endl;
-//      tupleList.push_back(strTuple);
-    } while (std::next_permutation(strTuple.begin(), strTuple.end()));
+      // have an iterator here
+      auto alpha_iter = list1.begin();
+      auto beta_iter = list2.begin();
+      permuted_index_list.clear();
+
+      for (auto&& i : string_tuple) {
+        if (i == 'A') {
+          permuted_index_list.insert(permuted_index_list.end(), *alpha_iter);
+        } else {
+          permuted_index_list.insert(permuted_index_list.end(), *beta_iter);
+        }
+        alpha_iter++;
+        beta_iter++;
+      }
+      container::set<Index, Index::LabelCompare> permuted_index_list3(
+          permuted_index_list.begin(), permuted_index_list.end());
+      result.push_back(permuted_index_list3);
+    } while (std::next_permutation(string_tuple.begin(), string_tuple.end()));
   }
-
-  for(auto&& i: strTuple){}
-
-
-
-
- // TODO: Generate set from using list1 and list2
-
-//  TODO: Convert vector to set.
-
 
   return result;
 }
@@ -292,13 +347,14 @@ ExprPtr spintrace(ExprPtr expr,
   }
 
   auto add_spin_labels = [&](ExprPtr& n) {
+    sequant::ExprPtr collect_expression;
     auto result = n;
     if (n->is<Product>()) {
       std::wcout << (n->as<Product>()).to_latex() << std::endl;
 
       bool pass_mutated = false;
       // extract current indices
-      std::set<Index, Index::LabelCompare> all_indices;
+      container::set<Index, Index::LabelCompare> all_indices;
       ranges::for_each(*n, [&all_indices](const auto& factor) {
         if (factor->template is<Tensor>()) {
           ranges::for_each(factor->template as<const Tensor>().braket(),
@@ -317,62 +373,54 @@ ExprPtr spintrace(ExprPtr expr,
       auto i_to_beta = map_constructor(all_indices, beta_list);
 
       // Generates a vector of target index
-      std::vector<container::set<Index>> tuple_vector_list;
-      { // Permutaion scope
-        assert(alpha_list.size() == beta_list.size());
-//        std::string str_temp(all_indices.size(), 'A');
-        std::string str_temp(all_indices.size(), 'B');
-//        container::set<Index> permuted_index_list(alpha_list.begin(), alpha_list.end());
-        container::set<Index> permuted_index_list(beta_list.begin(), beta_list.end());
-        tuple_vector_list.push_back(permuted_index_list);
+      // BUG: The index replacement rules are incorrect
+      auto tuple_vector_list =
+          generate_permutation_index_list(alpha_list, beta_list);
 
-        for (size_t i = 0; i < str_temp.size(); i++) {
-//          str_temp.replace(str_temp.size() - i - 1, 1, "B");
-          str_temp.replace(str_temp.size() - i - 1, 1, "A");
-          std::sort(str_temp.begin(), str_temp.end());
-
-          do {
-            // have an iterator here
-            auto alpha_iter = alpha_list.begin();
-            auto beta_iter = beta_list.begin();
-            permuted_index_list.clear();
-
-            for (auto &&i : str_temp) {
-              if (i == 'A') {
-                permuted_index_list.insert(permuted_index_list.end(), *alpha_iter);
-              } else {
-                permuted_index_list.insert(permuted_index_list.end(), *beta_iter);
-              }
-              alpha_iter++;
-              beta_iter++;
-            }
-//            for(auto&& i: permuted_index_list)
-//              std::wcout << i.label() << " ";
-//            std::cout << std::endl;
-            tuple_vector_list.push_back(permuted_index_list);
-          } while (std::next_permutation(str_temp.begin(), str_temp.end()));
-        }
-      } // Permutaion scope
-
-      auto expr_cast = std::static_pointer_cast<Product>(n);
-      for(auto&& i: all_indices)
-        std::wcout << i.label() << " ";
+      for (auto&& i : all_indices) std::wcout << i.to_latex() << " ";
       std::cout << std::endl;
+
       auto counter = 1;
-      for(auto &&i: tuple_vector_list){
+      for (auto&& i : tuple_vector_list) {
         std::cout << counter << " ";
-        for(auto &&j: i)
-          std::wcout << j.label() << " ";
+        for (auto&& j : i) {
+          std::wcout << j.to_latex() << " ";
+        }
         std::cout << std::endl;
+
+        // Generate replacement map
         auto index_map = map_constructor(all_indices, i);
+
+        auto expr_cast = std::static_pointer_cast<Product>(n);
+
+        // Ordering of labels is causing a problem
         pass_mutated = sequant::apply_index_replacement_rules(
             expr_cast, index_map, ext_idxlist, all_indices);
-//        std::wcout << n->to_latex() << std::endl;
+
+        // Check if spin qns on each pair of index is matching in a product
+        auto spin_symm = check_spin_symm(expr_cast);
+
+        if (spin_symm) {
+          std::wcout << "L" << __LINE__ << " " << n->to_latex() << std::endl;
+          auto spin_removed_list = remove_spin_label(i);
+
+          //          auto spin_free_map = map_constructor(i,
+          //          spin_removed_list); pass_mutated =
+          //          sequant::apply_index_replacement_rules(
+          //              expr_cast, spin_free_map, ext_idxlist, all_indices);
+          //          std::wcout << "L" << __LINE__ << " " << n->to_latex() <<
+          //          std::endl;
+        }
+
         counter++;
       }
+
+      std::wcout << "L" << __LINE__ << " " << result->to_latex() << std::endl;
     }
   };
   expr->visit(add_spin_labels);
+
+  std::wcout << "\n" << expr->to_latex() << std::endl;
 
 #if SPINTRACE_PRINT
   //  List of all Index ( label + IndexSpace )
