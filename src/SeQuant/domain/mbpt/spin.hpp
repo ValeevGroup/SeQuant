@@ -35,21 +35,13 @@ inline bool check_spin_symm(const std::shared_ptr<Product>& product) {
   // Get each tensor in product
   for (auto&& n : *product) {
     assert(n->as<Tensor>().bra().size() == n->as<Tensor>().ket().size());
-    /*
-    std::wcout << n->to_latex() << " " << __LINE__ << std::endl;
-    ranges::for_each(n->as<Tensor>().bra(), [&] (const Index i) {std::wcout <<
-    i.label() << " "; } ); std::cout << __LINE__ << "\n";
-    ranges::for_each(n->as<Tensor>().ket(), [&] (const Index i) {std::wcout <<
-    i.label() << " "; } ); std::cout << __LINE__ << "\n";
-    */
-    // For each index check if QNS match. return FALSE if one of the pairs does
-    // not match.
+
+    // For each index check if QNS match.
+    // return FALSE if one of the pairs does not match.
     auto iter_ket = n->as<Tensor>().ket().begin();
     for (auto&& bra : n->as<Tensor>().bra()) {
       if (IndexSpace::instance(bra.label()).qns() ==
           IndexSpace::instance(iter_ket->label()).qns()) {
-        //        std::wcout << __LINE__ << " " << bra.label() << " " <<
-        //        iter_ket->label() << std::endl;
         result = true;
       } else
         return result;
@@ -208,7 +200,7 @@ inline bool apply_index_replacement_rules(
   return mutated;
 }
 
-const container::set<Index, Index::LabelCompare> generate_alpha_idx(
+inline const container::set<Index, Index::LabelCompare> generate_alpha_idx(
     const container::set<Index, Index::LabelCompare>& all_indices) {
   container::set<Index, Index::LabelCompare> result;
   for (auto&& i : all_indices) {
@@ -224,7 +216,7 @@ const container::set<Index, Index::LabelCompare> generate_alpha_idx(
   return result;
 }
 
-const container::set<Index, Index::LabelCompare> generate_beta_idx(
+inline const container::set<Index, Index::LabelCompare> generate_beta_idx(
     const container::set<Index, Index::LabelCompare>& all_indices) {
   container::set<Index, Index::LabelCompare> result;
   for (auto&& i : all_indices) {
@@ -243,7 +235,7 @@ const container::set<Index, Index::LabelCompare> generate_beta_idx(
 /// @param source_index list all indices in tensor product
 /// @param dest_index
 /// @return boost map
-const container::map<Index, Index> map_constructor(
+inline const container::map<Index, Index> map_constructor(
     const container::set<Index, Index::LabelCompare>& source_index,
     container::set<Index, Index::LabelCompare>& dest_index) {
   container::map<Index, Index> result;
@@ -265,40 +257,58 @@ const std::vector<container::set<Index, Index::LabelCompare>>
 generate_permutation_index_list(
     const container::set<Index, Index::LabelCompare>& list1,
     const container::set<Index, Index::LabelCompare>& list2) {
-  assert(list1.size() == list1.size());
 
   std::vector<container::set<Index, Index::LabelCompare>> result;
+  result.push_back(list1);
+
+//  ranges::for_each(list1, [&] (Index i) {std::wcout << i.to_latex() << " ";});
+//  std::cout << std::endl;
 
   assert(list1.size() == list2.size());
+
+  // Generate a string containing just 'A'
   std::string string_tuple(list1.size(), 'A');
 
-  std::vector<Index> permuted_index_list(list1.begin(), list1.end());
-  container::set<Index, Index::LabelCompare> permuted_index_list2(
-      permuted_index_list.begin(), permuted_index_list.end());
-  result.push_back(permuted_index_list2);
+  // Copy contents of list1 to a vector
+  std::vector<Index> permuted_index_vector(list1.begin(), list1.end());
 
+  // Replace the last 'A' in tuple with a 'B' and permute
   for (size_t i = 0; i < string_tuple.size(); i++) {
     string_tuple.replace(string_tuple.size() - i - 1, 1, "B");
     std::sort(string_tuple.begin(), string_tuple.end());
 
     do {
-      // have an iterator here
+      // Iterator pointing to begining of l1 and l2
       auto alpha_iter = list1.begin();
       auto beta_iter = list2.begin();
-      permuted_index_list.clear();
+      permuted_index_vector.clear();
 
       for (auto&& i : string_tuple) {
         if (i == 'A') {
-          permuted_index_list.insert(permuted_index_list.end(), *alpha_iter);
+          permuted_index_vector.insert(permuted_index_vector.end(), *alpha_iter);
         } else {
-          permuted_index_list.insert(permuted_index_list.end(), *beta_iter);
+          permuted_index_vector.insert(permuted_index_vector.end(), *beta_iter);
         }
         alpha_iter++;
         beta_iter++;
       }
-      container::set<Index, Index::LabelCompare> permuted_index_list3(
-          permuted_index_list.begin(), permuted_index_list.end());
-      result.push_back(permuted_index_list3);
+
+      // TODO: It is apparant from the following lines that the 'ORDERING' of indices in a set
+      // must be edited such that the number in a label will have preference over the qns
+
+      std::cout << "V: "; // Vector
+      ranges::for_each(permuted_index_vector, [&] (Index i) {std::wcout << i.label() << " ";});
+      std::cout << std::endl;
+
+      // Convert vector to container set and push back to result
+      container::set<Index, Index::LabelCompare> permuted_index_list(
+          permuted_index_vector.begin(), permuted_index_vector.end());
+
+      std::cout << "S: "; // Set
+      ranges::for_each(permuted_index_list, [&] (Index i) {std::wcout << i.label() << " ";});
+      std::cout << std::endl;
+
+      result.push_back(permuted_index_list);
     } while (std::next_permutation(string_tuple.begin(), string_tuple.end()));
   }
 
@@ -346,8 +356,8 @@ ExprPtr spintrace(ExprPtr expr,
     }
   }
 
+  // Returns expr with a prefactor after spin tracing
   auto add_spin_labels = [&](ExprPtr& n) {
-    sequant::ExprPtr collect_expression;
     auto result = n;
     if (n->is<Product>()) {
       std::wcout << (n->as<Product>()).to_latex() << std::endl;
@@ -372,21 +382,26 @@ ExprPtr spintrace(ExprPtr expr,
       auto i_to_alpha = map_constructor(all_indices, alpha_list);
       auto i_to_beta = map_constructor(all_indices, beta_list);
 
+      for(auto &&i: i_to_alpha)
+        std::wcout << "L" << __LINE__ << " " << i.first.label() << " -> " << i.second.label() << std::endl;
+
+//      for(auto &&i: i_to_beta)
+//        std::wcout << "L" << __LINE__ << " " << i.first.label() << " -> " << i.second.label() << std::endl;
+
       // Generates a vector of target index
       // BUG: The index replacement rules are incorrect
       auto tuple_vector_list =
           generate_permutation_index_list(alpha_list, beta_list);
 
-      for (auto&& i : all_indices) std::wcout << i.to_latex() << " ";
+      ranges::for_each(all_indices, [&] (Index i) {std::wcout << i.to_latex() << " ";});
       std::cout << std::endl;
 
       auto counter = 1;
+      auto scaler_multiplier = 1;
       for (auto&& i : tuple_vector_list) {
-        std::cout << counter << " ";
-        for (auto&& j : i) {
-          std::wcout << j.to_latex() << " ";
-        }
-        std::cout << std::endl;
+
+        ranges::for_each(i, [&] (Index j) {std::wcout << j.to_latex() << " ";});
+        std::cout << " " << counter << std::endl;
 
         // Generate replacement map
         auto index_map = map_constructor(all_indices, i);
@@ -400,22 +415,27 @@ ExprPtr spintrace(ExprPtr expr,
         // Check if spin qns on each pair of index is matching in a product
         auto spin_symm = check_spin_symm(expr_cast);
 
+        // TODO: Use permut symm in expression to count -1.0
+        auto spin_antisymm = false;
+
         if (spin_symm) {
-          std::wcout << "L" << __LINE__ << " " << n->to_latex() << std::endl;
+          scaler_multiplier += 1;
+          // std::wcout << "L" << __LINE__ << " " << n->to_latex() << std::endl;
           auto spin_removed_list = remove_spin_label(i);
+          auto spin_free_map = map_constructor(i, spin_removed_list);
+          pass_mutated = sequant::apply_index_replacement_rules(
+              expr_cast, spin_free_map, ext_idxlist, all_indices);
+          // std::wcout << "L" << __LINE__ << " " << n->to_latex() << std::endl;
+        } else if (spin_antisymm) {
 
-          //          auto spin_free_map = map_constructor(i,
-          //          spin_removed_list); pass_mutated =
-          //          sequant::apply_index_replacement_rules(
-          //              expr_cast, spin_free_map, ext_idxlist, all_indices);
-          //          std::wcout << "L" << __LINE__ << " " << n->to_latex() <<
-          //          std::endl;
         }
-
         counter++;
       }
 
-      std::wcout << "L" << __LINE__ << " " << result->to_latex() << std::endl;
+      auto multiplier = 1.0;
+      multiplier *= scaler_multiplier;
+      (n->as<Product>()).scale(multiplier);
+      std::wcout << "L" << __LINE__ << " " << n->to_latex() << std::endl;
     }
   };
   expr->visit(add_spin_labels);
@@ -465,64 +485,6 @@ ExprPtr spintrace(ExprPtr expr,
   std::cout << "tupleList size: " << tupleList.size() << std::endl;
 
   // TODO: Merge tupleList elements and Index
-
-  // TEST 1
-  /*
-  {
-    for(auto&& i : tupleList){
-      auto num = &i - &tupleList[0];
-//      std::cout << num << "  " << std::endl;
-      for(auto&& j: grand_idxlist){
-        int num2 = &j - &grand_idxlist[0];
-//      std::cout << tupleList.at(num) << std::endl;
-
-      }
-    }
-  }
-
-
-  std::vector<Index> grandIndex_vector;
-  for(auto &&i : grand_idxlist){
-    grandIndex_vector.push_back(i);
-  }
-
-  std::cout << "grandIndex_vector.size(): " << grandIndex_vector.size() <<
-std::endl;
-
-  for(auto i = grandIndex_vector.begin(); i<= grandIndex_vector.end(); ++i){
-    std::cout << grandIndex_vector.at(i) << std::endl;
-  }
-*/
-
-  //  TEST 2
-  /*
-  {
-    auto temp_counter = 0;
-
-    //  TODO: Create list of groups
-    for (auto&& i : tupleList) {
-      temp_counter++;
-      auto num = &i - &tupleList[0];
-
-      //      std::cout << num << " " << i << std::endl;
-
-      // container::set<Index>::iterator it = alpha_list.begin();
-
-      //  Loop over each character in the tuple
-      for (auto&& j : i) {
-        auto idx = &j - &i[0];
-
-        if (j == 'A') {
-        } else {
-        }
-      }
-      //      std::cout << std::endl;
-    }
-    std::cout << "temp_counter: " << temp_counter << std::endl;
-  }
-*/
-  //  auto expr2 = expr->clone();
-  //  std::wcout << "expr2:\n" << expr2->to_latex() << std::endl;
 
   struct latex_visitor {
     void operator()(const std::shared_ptr<sequant::Expr>& expr) {
