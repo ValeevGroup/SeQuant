@@ -7,6 +7,7 @@
 
 #include <algorithm>
 
+// #include <bitset>
 #include <codecvt>
 #include <map>
 #include <string>
@@ -51,6 +52,23 @@ inline bool check_spin_symm(const std::shared_ptr<Product>& product) {
   return result;
 }
 
+inline bool tensor_symm(const Tensor& tensor){
+  bool result = false;
+  assert(tensor.bra().size() == tensor.ket().size());
+  // For each index check if QNS match.
+  // return FALSE if one of the pairs does not match.
+  auto iter_ket = tensor.ket().begin();
+  for (auto&& bra : tensor.bra()) {
+    if (IndexSpace::instance(bra.label()).qns() ==
+        IndexSpace::instance(iter_ket->label()).qns()) {
+      result = true;
+    } else
+      return result;
+    iter_ket++;
+  }
+  return result;
+}
+
 /// @param spin_label_set list of indices with alpha/beta spin qns
 /// @return the same list of indices with null qns
 inline const container::set<Index, Index::LabelCompare> remove_spin_label(
@@ -69,6 +87,7 @@ inline const container::set<Index, Index::LabelCompare> remove_spin_label(
 }
 
 /// @return true if made any changes
+// template <typename T0, typename T1>
 inline bool apply_index_replacement_rules(
     std::shared_ptr<Product>& product,
     const container::map<Index, Index>& const_replrules,
@@ -200,9 +219,9 @@ inline bool apply_index_replacement_rules(
   return mutated;
 }
 
-inline const container::set<Index, Index::LabelCompare> generate_alpha_idx(
-    const container::set<Index, Index::LabelCompare>& all_indices) {
-  container::set<Index, Index::LabelCompare> result;
+template <typename T>
+inline const T generate_alpha_idx(const T& all_indices) {
+  T result;
   for (auto&& i : all_indices) {
     auto subscript_label = i.label().substr(i.label().find(L'_') + 1);
     std::wstring subscript_label_ws(subscript_label.begin(),
@@ -216,9 +235,9 @@ inline const container::set<Index, Index::LabelCompare> generate_alpha_idx(
   return result;
 }
 
-inline const container::set<Index, Index::LabelCompare> generate_beta_idx(
-    const container::set<Index, Index::LabelCompare>& all_indices) {
-  container::set<Index, Index::LabelCompare> result;
+template <typename T>
+inline const T generate_beta_idx(const T& all_indices) {
+  T result;
   for (auto&& i : all_indices) {
     auto subscript_label = i.label().substr(i.label().find(L'_') + 1);
     std::wstring subscript_label_ws(subscript_label.begin(),
@@ -235,9 +254,10 @@ inline const container::set<Index, Index::LabelCompare> generate_beta_idx(
 /// @param source_index list all indices in tensor product
 /// @param dest_index
 /// @return boost map
+template <typename T0, typename T1>
 inline const container::map<Index, Index> map_constructor(
-    const container::set<Index, Index::LabelCompare>& source_index,
-    container::set<Index, Index::LabelCompare>& dest_index) {
+    const T0& source_index,
+    const T1& dest_index) {
   container::map<Index, Index> result;
   auto dest_ptr = dest_index.begin();
   for (auto&& i : source_index) {
@@ -253,12 +273,12 @@ inline const container::map<Index, Index> map_constructor(
 /// @param list1 is the alpha index list
 /// @param list2 is the beta index list
 /// @return list of vectors containing permuted alpha and beta indices
-const std::vector<container::set<Index, Index::LabelCompare>>
-generate_permutation_index_list(
-    const container::set<Index, Index::LabelCompare>& list1,
-    const container::set<Index, Index::LabelCompare>& list2) {
+template <typename T0, typename T1>
+const std::vector<T1> generate_permutation_index_list(
+    const T0& list1,
+    const T1& list2) {
 
-  std::vector<container::set<Index, Index::LabelCompare>> result;
+  std::vector<T1> result;
   result.push_back(list1);
 
 //  ranges::for_each(list1, [&] (Index i) {std::wcout << i.to_latex() << " ";});
@@ -296,17 +316,17 @@ generate_permutation_index_list(
       // TODO: It is apparant from the following lines that the 'ORDERING' of indices in a set
       // must be edited such that the number in a label will have preference over the qns
 
-      std::cout << "V: "; // Vector
-      ranges::for_each(permuted_index_vector, [&] (Index i) {std::wcout << i.label() << " ";});
-      std::cout << std::endl;
+      // std::cout << "V: "; // Vector
+      // ranges::for_each(permuted_index_vector, [&] (Index i) {std::wcout << i.label() << " ";});
+      // std::cout << std::endl;
 
       // Convert vector to container set and push back to result
       container::set<Index, Index::LabelCompare> permuted_index_list(
           permuted_index_vector.begin(), permuted_index_vector.end());
 
-      std::cout << "S: "; // Set
-      ranges::for_each(permuted_index_list, [&] (Index i) {std::wcout << i.label() << " ";});
-      std::cout << std::endl;
+      // std::cout << "S: "; // Set
+      // ranges::for_each(permuted_index_list, [&] (Index i) {std::wcout << i.label() << " ";});
+      // std::cout << std::endl;
 
       result.push_back(permuted_index_list);
     } while (std::next_permutation(string_tuple.begin(), string_tuple.end()));
@@ -320,6 +340,7 @@ generate_permutation_index_list(
 /// @return the expression with spin integrated out
 ExprPtr spintrace(ExprPtr expr,
                   std::initializer_list<IndexList> ext_index_groups = {{}}) {
+
   // SPIN TRACE DOES NOT SUPPORT PROTO INDICES YET.
   auto check_proto_index = [&](const ExprPtr& expr) {
     if (expr->is<Tensor>()) {
@@ -330,7 +351,7 @@ ExprPtr spintrace(ExprPtr expr,
   };
   expr->visit(check_proto_index);
 
-  container::set<Index> grand_idxlist;
+  container::set<Index, Index::LabelCompare> grand_idxlist;
   auto collect_indices = [&](const ExprPtr& expr) {
     if (expr->is<Tensor>()) {
       ranges::for_each(expr->as<Tensor>().const_braket(),
@@ -355,6 +376,135 @@ ExprPtr spintrace(ExprPtr expr,
       int_idxlist.insert(gidx);
     }
   }
+
+  // EFV: generate the grand list of index groups by concatenating list of external index
+  // EFV: groups with the groups of internal indices (each internal index = 1 group)
+  using IndexGroup = container::svector<Index>;
+  container::svector<IndexGroup> index_groups;
+
+  for(auto&& i: int_idxlist){
+    index_groups.emplace_back(IndexGroup(1,i));
+    }
+
+  index_groups.insert(index_groups.end(),ext_index_groups.begin(), ext_index_groups.end());
+
+  for(auto&& i: index_groups)
+    for(auto&&j : i)
+    std::wcout << j.label() << " ";
+  std::cout << std::endl;
+
+  // EFV: for each spincase (loop over integer from 0 to 2^(n)-1, n=#of index groups)
+  const uint64_t nspincases = std::pow(2, index_groups.size());
+
+  const auto tstart = std::chrono::high_resolution_clock::now();
+  for(uint64_t spincase_bitstr = 0; spincase_bitstr != nspincases; ++spincase_bitstr){
+
+    // EFV:  assign spin to each index group => make a replacement list
+    std::map<Index, Index> index_replacements;
+    int64_t index_group_count = 0;
+    for(auto && index_group: index_groups) {
+      auto spin_bit = (spincase_bitstr << (64 - index_group_count - 1)) >> 63;
+      // std::cout << spincase_bitstr << "spin_bit: " << spin_bit << std::endl;
+      assert((spin_bit == 0) || (spin_bit == 1));
+      for(auto && index : index_group) {
+        IndexSpace space;
+        if(spin_bit == 0){
+          space = IndexSpace::instance(IndexSpace::instance(index.label()).type(),
+                                            IndexSpace::alpha);
+        } else {
+          space = IndexSpace::instance(IndexSpace::instance(index.label()).type(),
+                                            IndexSpace::beta);
+        }
+        auto subscript_label = index.label().substr(index.label().find(L'_') + 1);
+        std::wstring subscript_label_ws(subscript_label.begin(), subscript_label.end());
+
+        Index spin_index = Index::make_label_index(space, subscript_label_ws);
+
+        index_replacements.emplace(std::make_pair(index, spin_index));
+      }
+      ++index_group_count;
+    }
+
+    // std::cout << spincase_bitstr << ": ";
+    // for(auto&& i: index_replacements)
+    //   std::wcout << i.first.label() << " -> " << i.second.label() << ",  " ;
+    // std::cout << std::endl;
+
+    // EFV:  for every term in the sum (else we only have 1 term)
+    // EFV:    apply replacement
+    // EFV:    screen out zeroes
+    // EFV:    if nonzero: remove spins + add to the running total
+
+    sequant::Tensor subs_expr;
+    for(auto&& expr_sum : *expr){
+
+//       for(auto&& expr_product : ranges::views::reverse(*expr_sum)){
+      for(auto&& expr_product : *expr_sum){
+
+        if(expr_product->is<Tensor>()) {
+          subs_expr = expr_product->as<Tensor>();
+          auto pass_mutated = subs_expr.transform_indices(index_replacements, false);
+
+          if(!tensor_symm(subs_expr))
+            break;
+          // std::wcout << subs_expr.to_latex(); //  << std::endl;
+
+        }
+      }
+      // std::wcout << std::endl;
+
+    }
+
+
+  }
+  const auto tstop = std::chrono::high_resolution_clock::now();
+  auto time_elapsed = std::chrono::duration_cast<std::chrono::microseconds>(tstop - tstart);
+  std::cout << time_elapsed.count() << " micro sec." << std::endl;
+
+
+
+
+#if 0
+  do{
+
+
+    // The permutation list is correct!
+    // ranges::for_each(permutation_list, [&] (Index& i) {std::wcout << i.label() << " ";});
+    // std::cout << std::endl;
+
+    auto index_map = map_constructor(int_idxlist, permutation_list);  // map works!
+
+    for(auto&& i: index_map)
+      std::wcout << i.first.label() << " -> " << i.second.label() << ",  " ;
+    std::cout << std::endl;
+
+
+    auto substitute_spin_labels = [&](ExprPtr& n) {
+    if(n->is<Product>()){
+      std::wcout<< __LINE__ << " " << (n->as<Product>()).to_latex() << std::endl;
+      auto pass_mutated = false;
+
+
+      auto expr_cast = std::static_pointer_cast<Product>(n);
+
+      // TODO: The first pass is mutating expr, which does not honor replacement rules
+      pass_mutated = sequant::apply_index_replacement_rules(expr_cast, index_map, ext_idxlist, grand_idxlist);
+      std::wcout << __LINE__ << " " << n->to_latex() << std::endl;
+
+      auto spin_symm = check_spin_symm(expr_cast);
+
+    }
+
+    };
+    expr->visit(substitute_spin_labels);
+    std::cout << std::endl;
+
+    // std::wcout << expr->to_latex() << std::endl;
+
+    i++;
+   } while (i != std::pow(2,grand_idxlist.size()));
+//  } while (i != 2); // This line for testing
+#endif
 
   // Returns expr with a prefactor after spin tracing
   auto add_spin_labels = [&](ExprPtr& n) {
@@ -412,15 +562,16 @@ ExprPtr spintrace(ExprPtr expr,
         pass_mutated = sequant::apply_index_replacement_rules(
             expr_cast, index_map, ext_idxlist, all_indices);
 
+        std::wcout << "L" << __LINE__ << " " << n->to_latex() << std::endl;
+
         // Check if spin qns on each pair of index is matching in a product
         auto spin_symm = check_spin_symm(expr_cast);
 
-        // TODO: Use permut symm in expression to count -1.0
         auto spin_antisymm = false;
 
         if (spin_symm) {
           scaler_multiplier += 1;
-          // std::wcout << "L" << __LINE__ << " " << n->to_latex() << std::endl;
+
           auto spin_removed_list = remove_spin_label(i);
           auto spin_free_map = map_constructor(i, spin_removed_list);
           pass_mutated = sequant::apply_index_replacement_rules(
@@ -438,9 +589,9 @@ ExprPtr spintrace(ExprPtr expr,
       std::wcout << "L" << __LINE__ << " " << n->to_latex() << std::endl;
     }
   };
-  expr->visit(add_spin_labels);
+  // expr->visit(add_spin_labels);
 
-  std::wcout << "\n" << expr->to_latex() << std::endl;
+  // std::wcout << "\n" << expr->to_latex() << std::endl;
 
 #if SPINTRACE_PRINT
   //  List of all Index ( label + IndexSpace )
@@ -482,7 +633,7 @@ ExprPtr spintrace(ExprPtr expr,
 #endif
     } while (std::next_permutation(strTuple.begin(), strTuple.end()));
   }
-  std::cout << "tupleList size: " << tupleList.size() << std::endl;
+  // std::cout << "tupleList size: " << tupleList.size() << std::endl;
 
   // TODO: Merge tupleList elements and Index
 
@@ -589,12 +740,6 @@ ExprPtr spintrace(ExprPtr expr,
     std::cout << std::endl;
   };
   //  expr->visit(print_subexpr_index);
-
-  // TODO: Add same terms
-
-  // TODO: Zero-out non-spinconserving terms
-
-  // TODO: Reindex and return
 
   return nullptr;
 }
