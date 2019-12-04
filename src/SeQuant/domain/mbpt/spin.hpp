@@ -396,6 +396,8 @@ ExprPtr spintrace(ExprPtr expr,
   // EFV: for each spincase (loop over integer from 0 to 2^(n)-1, n=#of index groups)
   const uint64_t nspincases = std::pow(2, index_groups.size());
 
+
+  auto total_terms = 0;
   const auto tstart = std::chrono::high_resolution_clock::now();
   for(uint64_t spincase_bitstr = 0; spincase_bitstr != nspincases; ++spincase_bitstr){
 
@@ -425,7 +427,7 @@ ExprPtr spintrace(ExprPtr expr,
       ++index_group_count;
     }
 
-    // std::cout << spincase_bitstr << ": ";
+    std::cout << "Permutation " << spincase_bitstr << ": " << std::endl;
     // for(auto&& i: index_replacements)
     //   std::wcout << i.first.label() << " -> " << i.second.label() << ",  " ;
     // std::cout << std::endl;
@@ -436,310 +438,34 @@ ExprPtr spintrace(ExprPtr expr,
     // EFV:    if nonzero: remove spins + add to the running total
 
     sequant::Tensor subs_expr;
+    auto summand_count = 0;
     for(auto&& expr_sum : *expr){
-
-//       for(auto&& expr_product : ranges::views::reverse(*expr_sum)){
+      Product temp_product;
       for(auto&& expr_product : *expr_sum){
-
+        temp_product.append(1.0, expr_product);
+        Product create_product;
         if(expr_product->is<Tensor>()) {
           subs_expr = expr_product->as<Tensor>();
           auto pass_mutated = subs_expr.transform_indices(index_replacements, false);
 
           if(!tensor_symm(subs_expr))
             break;
-          // std::wcout << subs_expr.to_latex(); //  << std::endl;
-
         }
       }
-      // std::wcout << std::endl;
-
+      if(tensor_symm(subs_expr)){
+        std::wcout << temp_product.to_latex() << std::endl;
+        summand_count++;
+      }
     }
-
-
+    std::cout << "Terms: " << summand_count << std::endl;
+    total_terms += summand_count;
   }
   const auto tstop = std::chrono::high_resolution_clock::now();
   auto time_elapsed = std::chrono::duration_cast<std::chrono::microseconds>(tstop - tstart);
-  std::cout << time_elapsed.count() << " micro sec." << std::endl;
+  std::cout << time_elapsed.count() << " micro sec; " << total_terms << " terms after expansion." << std::endl;
 
 
 
-
-#if 0
-  do{
-
-
-    // The permutation list is correct!
-    // ranges::for_each(permutation_list, [&] (Index& i) {std::wcout << i.label() << " ";});
-    // std::cout << std::endl;
-
-    auto index_map = map_constructor(int_idxlist, permutation_list);  // map works!
-
-    for(auto&& i: index_map)
-      std::wcout << i.first.label() << " -> " << i.second.label() << ",  " ;
-    std::cout << std::endl;
-
-
-    auto substitute_spin_labels = [&](ExprPtr& n) {
-    if(n->is<Product>()){
-      std::wcout<< __LINE__ << " " << (n->as<Product>()).to_latex() << std::endl;
-      auto pass_mutated = false;
-
-
-      auto expr_cast = std::static_pointer_cast<Product>(n);
-
-      // TODO: The first pass is mutating expr, which does not honor replacement rules
-      pass_mutated = sequant::apply_index_replacement_rules(expr_cast, index_map, ext_idxlist, grand_idxlist);
-      std::wcout << __LINE__ << " " << n->to_latex() << std::endl;
-
-      auto spin_symm = check_spin_symm(expr_cast);
-
-    }
-
-    };
-    expr->visit(substitute_spin_labels);
-    std::cout << std::endl;
-
-    // std::wcout << expr->to_latex() << std::endl;
-
-    i++;
-   } while (i != std::pow(2,grand_idxlist.size()));
-//  } while (i != 2); // This line for testing
-#endif
-
-  // Returns expr with a prefactor after spin tracing
-  auto add_spin_labels = [&](ExprPtr& n) {
-    auto result = n;
-    if (n->is<Product>()) {
-      std::wcout << (n->as<Product>()).to_latex() << std::endl;
-
-      bool pass_mutated = false;
-      // extract current indices
-      container::set<Index, Index::LabelCompare> all_indices;
-      ranges::for_each(*n, [&all_indices](const auto& factor) {
-        if (factor->template is<Tensor>()) {
-          ranges::for_each(factor->template as<const Tensor>().braket(),
-                           [&all_indices](const Index& idx) {
-                             auto result = all_indices.insert(idx);
-                           });
-        }
-      });
-
-      // Generate list with spins
-      auto alpha_list = generate_alpha_idx(all_indices);
-      auto beta_list = generate_beta_idx(all_indices);
-
-      // generate maps TO the spin list
-      auto i_to_alpha = map_constructor(all_indices, alpha_list);
-      auto i_to_beta = map_constructor(all_indices, beta_list);
-
-      for(auto &&i: i_to_alpha)
-        std::wcout << "L" << __LINE__ << " " << i.first.label() << " -> " << i.second.label() << std::endl;
-
-//      for(auto &&i: i_to_beta)
-//        std::wcout << "L" << __LINE__ << " " << i.first.label() << " -> " << i.second.label() << std::endl;
-
-      // Generates a vector of target index
-      // BUG: The index replacement rules are incorrect
-      auto tuple_vector_list =
-          generate_permutation_index_list(alpha_list, beta_list);
-
-      ranges::for_each(all_indices, [&] (Index i) {std::wcout << i.to_latex() << " ";});
-      std::cout << std::endl;
-
-      auto counter = 1;
-      auto scaler_multiplier = 1;
-      for (auto&& i : tuple_vector_list) {
-
-        ranges::for_each(i, [&] (Index j) {std::wcout << j.to_latex() << " ";});
-        std::cout << " " << counter << std::endl;
-
-        // Generate replacement map
-        auto index_map = map_constructor(all_indices, i);
-
-        auto expr_cast = std::static_pointer_cast<Product>(n);
-
-        // Ordering of labels is causing a problem
-        pass_mutated = sequant::apply_index_replacement_rules(
-            expr_cast, index_map, ext_idxlist, all_indices);
-
-        std::wcout << "L" << __LINE__ << " " << n->to_latex() << std::endl;
-
-        // Check if spin qns on each pair of index is matching in a product
-        auto spin_symm = check_spin_symm(expr_cast);
-
-        auto spin_antisymm = false;
-
-        if (spin_symm) {
-          scaler_multiplier += 1;
-
-          auto spin_removed_list = remove_spin_label(i);
-          auto spin_free_map = map_constructor(i, spin_removed_list);
-          pass_mutated = sequant::apply_index_replacement_rules(
-              expr_cast, spin_free_map, ext_idxlist, all_indices);
-          // std::wcout << "L" << __LINE__ << " " << n->to_latex() << std::endl;
-        } else if (spin_antisymm) {
-
-        }
-        counter++;
-      }
-
-      auto multiplier = 1.0;
-      multiplier *= scaler_multiplier;
-      (n->as<Product>()).scale(multiplier);
-      std::wcout << "L" << __LINE__ << " " << n->to_latex() << std::endl;
-    }
-  };
-  // expr->visit(add_spin_labels);
-
-  // std::wcout << "\n" << expr->to_latex() << std::endl;
-
-#if SPINTRACE_PRINT
-  //  List of all Index ( label + IndexSpace )
-  for (auto&& idx : grand_idxlist) {
-    std::wcout << idx.to_latex() << std::endl;
-  }
-  std::cout << std::endl;
-
-//  for (auto i = grand_idxlist.begin(); i != grand_idxlist.end(); ++i)
-//    std::wcout << i->to_latex() << std::endl;
-#endif
-  // TODO make list of groups, generate all spin tuples, apply and replace ...
-
-  // Generate a list of tuples with A,B for spin
-  auto tupleSize = 0;  // Counter for size of the list of tuples
-  std::vector<std::string> tupleList;
-
-  //  Create a list of A spins (the size of number of index)
-  std::string strTuple(grand_idxlist.size(), 'A');
-
-  //  Add list of A spins to tupleList
-  tupleList.push_back(strTuple);
-  tupleSize++;
-#if PRINT_PERMUTATION_LIST
-  std::cout << tupleSize << "\t" << strTuple << std::endl;
-#endif
-
-  //  Replace one spin in a tuple
-  for (size_t i = 0; i < int_idxlist.size(); i++) {
-    strTuple.replace(int_idxlist.size() - i - 1, 1, "B");
-    std::sort(strTuple.begin(), strTuple.end());
-
-    //  Permute the tuples
-    do {
-      tupleList.push_back(strTuple);
-      tupleSize++;
-#if PRINT_PERMUTATION_LIST
-      std::cout << tupleSize << "\t" << strTuple << std::endl;
-#endif
-    } while (std::next_permutation(strTuple.begin(), strTuple.end()));
-  }
-  // std::cout << "tupleList size: " << tupleList.size() << std::endl;
-
-  // TODO: Merge tupleList elements and Index
-
-  struct latex_visitor {
-    void operator()(const std::shared_ptr<sequant::Expr>& expr) {
-      result += expr->to_latex();
-    }
-    std::wstring result{};
-  };
-  //  latex_visitor v1{};
-  //  expr->visit(v1);
-  //  std::wcout << "v1.result = " << v1.result << std::endl;
-
-  //  latex_visitor v2{};
-  //  expr->visit(v2, true);
-  //  std::wcout << "v2.result = " << v2.result << std::endl;
-
-  // YOU DON't NEED A LIST OF BRA OR KET INDICES
-  container::set<Index> bra_idxlist;
-  auto collect_bra_indices = [&](const ExprPtr& expr) {
-    if (expr->is<Tensor>()) {
-      std::wcout << expr->as<Tensor>().to_latex() << std::endl;
-      for (auto& i : expr->as<Tensor>().bra())
-        std::wcout << sequant::to_latex(i) << std::endl;
-      ranges::for_each(expr->as<Tensor>().bra(),
-                       [&](const Index& idx) { bra_idxlist.insert(idx); });
-    }
-  };
-  //  expr->visit(collect_bra_indices);
-
-  //  Get sub expressions from an expression:
-  auto print_subexpr = [](const auto& n) {
-    std::wcout << "&" << n->to_latex() << L"\\\\" << std::endl;
-  };
-  //  ranges::for_each(expr->begin(), expr->end(), print_subexpr);
-
-  // The bra and ket indices from each tensor are separated here
-  auto print_subexpr_index = [&](ExprPtr& nn) {
-    std::wcout << nn->to_latex() << " Expr: " << nn->is<Expr>() << std::endl;
-    //    std::wcout << "Product: " << nn->is<Product>() << std::endl;
-    //    std::wcout << "Sum: " << nn->is<Sum>() << std::endl;
-    for (auto& n : *nn) {
-      std::wcout << n->to_latex() << " tensor: " << n->is<Tensor>()
-                 << std::endl;
-      //    Get a list of indices for a tensor. BRA and KET needs to be separate
-      //    lists. Add spin attribute to the index and regenetate the tensor
-      container::set<Index> ketSpinIndexListA;
-      container::set<Index> ketSpinIndexListB;
-      for (auto& i : n->as<Tensor>().ket()) {
-        auto subscript_label = i.label().substr(i.label().find(L'_') + 1);
-        std::wstring subscript_label_ws(subscript_label.begin(),
-                                        subscript_label.end());
-        //        std::wcout << i.label() << " " << subscript_label <<
-        //        std::endl;
-
-        auto alpha_space = IndexSpace::instance(
-            IndexSpace::instance(i.label()).type(), IndexSpace::alpha);
-        ketSpinIndexListA.insert(
-            ketSpinIndexListA.end(),
-            Index::make_label_index(alpha_space, subscript_label_ws));
-        auto beta_space = IndexSpace::instance(
-            IndexSpace::instance(i.label()).type(), IndexSpace::beta);
-        ketSpinIndexListB.insert(
-            ketSpinIndexListB.end(),
-            Index::make_label_index(beta_space, subscript_label_ws));
-      }
-
-      container::set<Index> braSpinIndexListA;
-      container::set<Index> braSpinIndexListB;
-      for (auto& i : n->as<Tensor>().bra()) {
-        auto subscript_label = i.label().substr(i.label().find(L'_') + 1);
-        std::wstring subscript_label_ws(subscript_label.begin(),
-                                        subscript_label.end());
-        //        std::wcout << i.label() << " " << subscript_label <<
-        //        std::endl;
-
-        auto alpha_space = IndexSpace::instance(
-            IndexSpace::instance(i.label()).type(), IndexSpace::alpha);
-        braSpinIndexListA.insert(
-            braSpinIndexListA.end(),
-            Index::make_label_index(alpha_space, subscript_label_ws));
-
-        auto beta_space = IndexSpace::instance(
-            IndexSpace::instance(i.label()).type(), IndexSpace::beta);
-        braSpinIndexListB.insert(
-            braSpinIndexListB.end(),
-            Index::make_label_index(beta_space, subscript_label_ws));
-      }
-
-      auto tempA = Tensor((n->as<Tensor>()).label(), braSpinIndexListA,
-                          ketSpinIndexListA);
-      auto tempB = Tensor((n->as<Tensor>()).label(), braSpinIndexListB,
-                          ketSpinIndexListB);
-
-      std::wcout << to_latex(tempA) << " " << to_latex(tempB) << std::endl;
-
-      // std::wcout << to_latex(tempA.as<Product>()) << std::endl;
-
-      auto& temp_expr = tempA.as<Expr>();
-      std::wcout << "tensor: " << tempA.is<Expr>()
-                 << " Expr: " << temp_expr.is<Expr>() << std::endl;
-    }
-    // TODO: Form expression from individual tensors
-    std::cout << std::endl;
-  };
-  //  expr->visit(print_subexpr_index);
 
   return nullptr;
 }
