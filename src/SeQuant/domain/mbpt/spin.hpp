@@ -450,35 +450,32 @@ ExprPtr spintrace(ExprPtr expr,
     for (auto&& expr_summand : *expr) {
       Product temp_product{};
       for (auto&& expr_product : *expr_summand) {
-        std::wcout << "expr_product->is<Tensor>(): "
-                   << (*expr_product).to_latex() << std::endl;
         subs_expr = expr_product->as<Tensor>();
         auto pass_mutated =
             subs_expr.transform_indices(index_replacements, false);
-        std::wcout << " subs_expr: " << subs_expr.to_latex() << std::endl; // sub_expr is Tensor/Expr
+        // std::wcout << " subs_expr: " << subs_expr.to_latex() << std::endl; // sub_expr is Tensor/Expr
 
-        if (!tensor_symm(subs_expr)) {
+        std::shared_ptr<Expr> subs_expr_ptr = std::make_shared<Tensor>(subs_expr);
+        if (!tensor_symm(subs_expr))
           break;
-        }
-        // else {
-        // std::wcout << "Spin expr: " << subs_expr.to_latex() << std::endl;
-        std::wcout << "Product: " << temp_product.to_latex() << std::endl;
-        temp_product.append(1.0, subs_expr);
-        // temp_sum.append(expr_product);
-        // }
+        temp_product.append(1.0, subs_expr_ptr);
       }
       if (tensor_symm(subs_expr)) {
         // std::wcout << temp_product.to_latex() << std::endl;
         summand_count++;
       }
+      // std::wcout << "temp_product: " << temp_product.to_latex() << std::endl;
+      std::shared_ptr<Expr> subs_expr_product_ptr = std::make_shared<Product>(temp_product);
+      temp_sum.append(subs_expr_product_ptr);
     }
-    // std::wcout << "temp_sum: " << temp_sum.to_latex() << std::endl;
+    std::shared_ptr<Expr> subs_expr_sum_ptr = std::make_shared<Sum>(temp_sum);
+    std::wcout << "temp_sum: " << to_latex_align(subs_expr_sum_ptr) << std::endl;
     total_terms += summand_count;
   }
   const auto tstop = std::chrono::high_resolution_clock::now();
   auto time_elapsed =
-      std::chrono::duration_cast<std::chrono::microseconds>(tstop - tstart);
-  std::cout << time_elapsed.count() << " micro sec; " << total_terms
+      std::chrono::duration_cast<std::chrono::milliseconds>(tstop - tstart);
+  std::cout << "Time: " << time_elapsed.count() << " milli sec; " << total_terms
             << " terms after expansion." << std::endl;
 
   return nullptr;
