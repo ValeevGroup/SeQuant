@@ -52,7 +52,7 @@ inline bool check_spin_symm(const std::shared_ptr<Product>& product) {
   return result;
 }
 
-inline bool tensor_symm(const Tensor& tensor){
+inline bool tensor_symm(const Tensor& tensor) {
   bool result = false;
   assert(tensor.bra().size() == tensor.ket().size());
   // For each index check if QNS match.
@@ -85,7 +85,7 @@ inline const container::set<Index, Index::LabelCompare> remove_spin_label(
   }
   return result;
 }
-
+#if 0
 /// @return true if made any changes
 // template <typename T0, typename T1>
 inline bool apply_index_replacement_rules(
@@ -219,6 +219,7 @@ inline bool apply_index_replacement_rules(
   return mutated;
 }
 
+
 template <typename T>
 inline const T generate_alpha_idx(const T& all_indices) {
   T result;
@@ -266,6 +267,7 @@ inline const container::map<Index, Index> map_constructor(
   }
   return result;
 }
+
 
 // This will return a list that should be used in the map function
 // BUG:TODO: This function returns an incorrect map: the number sequence in
@@ -334,13 +336,13 @@ const std::vector<T1> generate_permutation_index_list(
 
   return result;
 }
+#endif
 
 /// @param expr input expression
 /// @param ext_index_groups groups of external indices
 /// @return the expression with spin integrated out
 ExprPtr spintrace(ExprPtr expr,
                   std::initializer_list<IndexList> ext_index_groups = {{}}) {
-
   // SPIN TRACE DOES NOT SUPPORT PROTO INDICES YET.
   auto check_proto_index = [&](const ExprPtr& expr) {
     if (expr->is<Tensor>()) {
@@ -377,48 +379,52 @@ ExprPtr spintrace(ExprPtr expr,
     }
   }
 
-  // EFV: generate the grand list of index groups by concatenating list of external index
-  // EFV: groups with the groups of internal indices (each internal index = 1 group)
+  // EFV: generate the grand list of index groups by concatenating list of
+  // external index EFV: groups with the groups of internal indices (each
+  // internal index = 1 group)
   using IndexGroup = container::svector<Index>;
   container::svector<IndexGroup> index_groups;
 
-  for(auto&& i: int_idxlist){
-    index_groups.emplace_back(IndexGroup(1,i));
-    }
+  for (auto&& i : int_idxlist) {
+    index_groups.emplace_back(IndexGroup(1, i));
+  }
 
-  index_groups.insert(index_groups.end(),ext_index_groups.begin(), ext_index_groups.end());
+  index_groups.insert(index_groups.end(), ext_index_groups.begin(),
+                      ext_index_groups.end());
 
-  for(auto&& i: index_groups)
-    for(auto&&j : i)
-    std::wcout << j.label() << " ";
+  for (auto&& i : index_groups)
+    for (auto&& j : i) std::wcout << j.label() << " ";
   std::cout << std::endl;
 
-  // EFV: for each spincase (loop over integer from 0 to 2^(n)-1, n=#of index groups)
+  // EFV: for each spincase (loop over integer from 0 to 2^(n)-1, n=#of index
+  // groups)
   const uint64_t nspincases = std::pow(2, index_groups.size());
 
-
+  ExprPtr addition_list;
   auto total_terms = 0;
   const auto tstart = std::chrono::high_resolution_clock::now();
-  for(uint64_t spincase_bitstr = 0; spincase_bitstr != nspincases; ++spincase_bitstr){
-
+  for (uint64_t spincase_bitstr = 0; spincase_bitstr != nspincases;
+       ++spincase_bitstr) {
     // EFV:  assign spin to each index group => make a replacement list
     std::map<Index, Index> index_replacements;
     int64_t index_group_count = 0;
-    for(auto && index_group: index_groups) {
+    for (auto&& index_group : index_groups) {
       auto spin_bit = (spincase_bitstr << (64 - index_group_count - 1)) >> 63;
-      // std::cout << spincase_bitstr << "spin_bit: " << spin_bit << std::endl;
       assert((spin_bit == 0) || (spin_bit == 1));
-      for(auto && index : index_group) {
+
+      for (auto&& index : index_group) {
         IndexSpace space;
-        if(spin_bit == 0){
-          space = IndexSpace::instance(IndexSpace::instance(index.label()).type(),
-                                            IndexSpace::alpha);
+        if (spin_bit == 0) {
+          space = IndexSpace::instance(
+              IndexSpace::instance(index.label()).type(), IndexSpace::alpha);
         } else {
-          space = IndexSpace::instance(IndexSpace::instance(index.label()).type(),
-                                            IndexSpace::beta);
+          space = IndexSpace::instance(
+              IndexSpace::instance(index.label()).type(), IndexSpace::beta);
         }
-        auto subscript_label = index.label().substr(index.label().find(L'_') + 1);
-        std::wstring subscript_label_ws(subscript_label.begin(), subscript_label.end());
+        auto subscript_label =
+            index.label().substr(index.label().find(L'_') + 1);
+        std::wstring subscript_label_ws(subscript_label.begin(),
+                                        subscript_label.end());
 
         Index spin_index = Index::make_label_index(space, subscript_label_ws);
 
@@ -427,7 +433,7 @@ ExprPtr spintrace(ExprPtr expr,
       ++index_group_count;
     }
 
-    std::cout << "Permutation " << spincase_bitstr << ": " << std::endl;
+    std::cout << "\nPermutation " << spincase_bitstr << ": " << std::endl;
     // for(auto&& i: index_replacements)
     //   std::wcout << i.first.label() << " -> " << i.second.label() << ",  " ;
     // std::cout << std::endl;
@@ -439,33 +445,41 @@ ExprPtr spintrace(ExprPtr expr,
 
     sequant::Tensor subs_expr;
     auto summand_count = 0;
-    for(auto&& expr_sum : *expr){
-      Product temp_product;
-      for(auto&& expr_product : *expr_sum){
-        temp_product.append(1.0, expr_product);
-        Product create_product;
-        if(expr_product->is<Tensor>()) {
-          subs_expr = expr_product->as<Tensor>();
-          auto pass_mutated = subs_expr.transform_indices(index_replacements, false);
+    Sum temp_sum;
 
-          if(!tensor_symm(subs_expr))
-            break;
+    for (auto&& expr_summand : *expr) {
+      Product temp_product{};
+      for (auto&& expr_product : *expr_summand) {
+        std::wcout << "expr_product->is<Tensor>(): "
+                   << (*expr_product).to_latex() << std::endl;
+        subs_expr = expr_product->as<Tensor>();
+        auto pass_mutated =
+            subs_expr.transform_indices(index_replacements, false);
+        std::wcout << " subs_expr: " << subs_expr.to_latex() << std::endl; // sub_expr is Tensor/Expr
+
+        if (!tensor_symm(subs_expr)) {
+          break;
         }
+        // else {
+        // std::wcout << "Spin expr: " << subs_expr.to_latex() << std::endl;
+        std::wcout << "Product: " << temp_product.to_latex() << std::endl;
+        temp_product.append(1.0, subs_expr);
+        // temp_sum.append(expr_product);
+        // }
       }
-      if(tensor_symm(subs_expr)){
-        std::wcout << temp_product.to_latex() << std::endl;
+      if (tensor_symm(subs_expr)) {
+        // std::wcout << temp_product.to_latex() << std::endl;
         summand_count++;
       }
     }
-    std::cout << "Terms: " << summand_count << std::endl;
+    // std::wcout << "temp_sum: " << temp_sum.to_latex() << std::endl;
     total_terms += summand_count;
   }
   const auto tstop = std::chrono::high_resolution_clock::now();
-  auto time_elapsed = std::chrono::duration_cast<std::chrono::microseconds>(tstop - tstart);
-  std::cout << time_elapsed.count() << " micro sec; " << total_terms << " terms after expansion." << std::endl;
-
-
-
+  auto time_elapsed =
+      std::chrono::duration_cast<std::chrono::microseconds>(tstop - tstart);
+  std::cout << time_elapsed.count() << " micro sec; " << total_terms
+            << " terms after expansion." << std::endl;
 
   return nullptr;
 }
