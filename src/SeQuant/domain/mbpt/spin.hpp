@@ -448,6 +448,8 @@ ExprPtr spintrace(ExprPtr expr,
     Sum temp_sum;
 
     for (auto&& expr_summand : *expr) {
+      // std::wcout << "expr_summand: " << expr_summand->as<Product>().scalar().real() << std::endl;
+      const auto scaler_factor = expr_summand->as<Product>().scalar().real();
       Product temp_product{};
       for (auto&& expr_product : *expr_summand) {
         subs_expr = expr_product->as<Tensor>();
@@ -465,6 +467,7 @@ ExprPtr spintrace(ExprPtr expr,
         summand_count++;
       }
       // std::wcout << "temp_product: " << temp_product.to_latex() << std::endl;
+      temp_product.scale(scaler_factor);
       std::shared_ptr<Expr> subs_expr_product_ptr = std::make_shared<Product>(temp_product);
       temp_sum.append(subs_expr_product_ptr);
     }
