@@ -337,7 +337,7 @@ class Operator : public container::svector<Op<S>>, public Expr {
     return get_type_id<Operator>();
   };
 
-  std::shared_ptr<Expr> clone() const override {
+  ExprPtr clone() const override {
     return std::make_shared<Operator>(*this);
   }
 
@@ -637,7 +637,7 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
     return Expr::get_type_id<NormalOperator>();
   };
 
-  std::shared_ptr<Expr> clone() const override {
+  ExprPtr clone() const override {
     return std::make_shared<NormalOperator>(*this);
   }
 

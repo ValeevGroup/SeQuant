@@ -157,7 +157,7 @@ class Tensor : public Expr, public AbstractTensor {
     return result;
   }
 
-  std::shared_ptr<Expr> canonicalize() override;
+  ExprPtr canonicalize() override;
 
   /// Replaces indices using the index map
   /// @param index_map maps Index to Index
@@ -178,7 +178,7 @@ class Tensor : public Expr, public AbstractTensor {
 
   type_id_type type_id() const override { return get_type_id<Tensor>(); };
 
-  std::shared_ptr<Expr> clone() const override { return ex<Tensor>(*this); }
+  ExprPtr clone() const override { return ex<Tensor>(*this); }
 
   void reset_tags() const {
     ranges::for_each(braket(), [](const auto &idx) { idx.reset_tag(); });
@@ -311,7 +311,7 @@ class Tensor : public Expr, public AbstractTensor {
 
 using TensorPtr = std::shared_ptr<Tensor>;
 
-inline std::shared_ptr<Expr> overlap(const Index &bra_index,
+inline ExprPtr overlap(const Index &bra_index,
                                      const Index &ket_index) {
   return ex<Tensor>(L"S", IndexList{bra_index}, IndexList{ket_index});
 }

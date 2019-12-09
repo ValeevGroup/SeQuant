@@ -84,20 +84,20 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
 
   /// @return a clone of this object
   /// @note must be overridden in the derived class
-  virtual std::shared_ptr<Expr> clone() const {
+  virtual ExprPtr clone() const {
     throw std::logic_error("Expr::clone not implemented in this derived class");
   }
 
   /// Canonicalizes @c this and returns the biproduct of canonicalization (e.g. phase)
   /// @return the biproduct of canonicalization, or @c nullptr if no biproduct generated
-  virtual std::shared_ptr<Expr> canonicalize() {
+  virtual ExprPtr canonicalize() {
     return {};  // by default do nothing and return nullptr
   }
 
   /// Performs approximate, but fast, canonicalization of @c this and returns the biproduct of canonicalization (e.g. phase)
   /// The default is to use canonicalize(), unless overridden in the derived class.
   /// @return the biproduct of canonicalization, or @c nullptr if no biproduct generated
-  virtual std::shared_ptr<Expr> rapid_canonicalize() {
+  virtual ExprPtr rapid_canonicalize() {
     return this->canonicalize();
   }
 
@@ -129,7 +129,7 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
     bool this_visited = false;
     if constexpr(std::is_invocable_r_v<void,
                                        std::remove_reference_t<Visitor>,
-                                       const std::shared_ptr<Expr> &>) {
+                                       const ExprPtr &>) {
       if (!atoms_only || this->is_atom()) {
         visitor(shared_from_this());
         this_visited = true;
@@ -372,15 +372,15 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
 
   struct cursor
   {
-    using value_type = std::shared_ptr<Expr>;
+    using value_type = ExprPtr;
 
     cursor() = default;
-    constexpr explicit cursor(std::shared_ptr<Expr>* subexpr_ptr) noexcept
+    constexpr explicit cursor(ExprPtr* subexpr_ptr) noexcept
         : ptr_{subexpr_ptr}
     {}
     /// when take const ptr note runtime const flag
-    constexpr explicit cursor(const std::shared_ptr<Expr>* subexpr_ptr) noexcept
-        : ptr_{const_cast<std::shared_ptr<Expr>*>(subexpr_ptr)}, const_{true}
+    constexpr explicit cursor(const ExprPtr* subexpr_ptr) noexcept
+        : ptr_{const_cast<ExprPtr*>(subexpr_ptr)}, const_{true}
     {}
     bool equal(const cursor& that) const
     {
@@ -395,18 +395,18 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
       --ptr_;
     }
     // TODO figure out why can't return const here if want to be able to assign to *begin(Expr&)
-    std::shared_ptr<Expr>& read() const
+    ExprPtr& read() const
     {
       RANGES_EXPECT(ptr_);
       return *ptr_;
     }
-    std::shared_ptr<Expr>& read()
+    ExprPtr& read()
     {
       RANGES_EXPECT(const_ == false);
       RANGES_EXPECT(ptr_);
       return *ptr_;
     }
-    void assign(const std::shared_ptr<Expr>& that_ptr)
+    void assign(const ExprPtr& that_ptr)
     {
       RANGES_EXPECT(ptr_);
       *ptr_ = that_ptr;
@@ -420,7 +420,7 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
       ptr_ += n;
     }
    private:
-    std::shared_ptr<Expr>* ptr_ = nullptr;  // both begin and end will be represented by this, so Expr without subexpressions begin() equals end() automatically
+    ExprPtr* ptr_ = nullptr;  // both begin and end will be represented by this, so Expr without subexpressions begin() equals end() automatically
     bool const_ = false;  // assert in nonconst ops
   };
 
@@ -559,7 +559,7 @@ class Constant : public Expr {
     return get_type_id<Constant>();
   }
 
-  std::shared_ptr<Expr> clone() const override {
+  ExprPtr clone() const override {
     return ex<Constant>(this->value());
   }
 
@@ -789,7 +789,7 @@ class Product : public Expr {
 
   type_id_type type_id() const override { return get_type_id<Product>(); };
 
-  std::shared_ptr<Expr> clone() const override {
+  ExprPtr clone() const override {
     auto cloned_factors =
         factors() | ranges::views::transform([](const ExprPtr &ptr) {
           return ptr ? ptr->clone() : nullptr;
@@ -854,9 +854,9 @@ class Product : public Expr {
     return *hash_value_;
   }
 
-  std::shared_ptr<Expr> canonicalize_impl(bool rapid = false);
-  virtual std::shared_ptr<Expr> canonicalize() override;
-  virtual std::shared_ptr<Expr> rapid_canonicalize() override;
+  ExprPtr canonicalize_impl(bool rapid = false);
+  virtual ExprPtr canonicalize() override;
+  virtual ExprPtr rapid_canonicalize() override;
 
   bool static_equal(const Expr &that) const override {
     const auto &that_cast = static_cast<const Product &>(that);
@@ -1048,7 +1048,7 @@ class Sum : public Expr {
     return Expr::get_type_id<Sum>();
   };
 
-  std::shared_ptr<Expr> clone() const override {
+  ExprPtr clone() const override {
     auto cloned_summands =
         summands() | ranges::views::transform(
                          [](const ExprPtr &ptr) { return ptr->clone(); });

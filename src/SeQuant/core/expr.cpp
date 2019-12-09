@@ -20,7 +20,7 @@ bool Product::is_commutative() const {
   return result;
 }
 
-std::shared_ptr<Expr> Product::canonicalize_impl(bool rapid) {
+ExprPtr Product::canonicalize_impl(bool rapid) {
   // recursively canonicalize subfactors ...
   ranges::for_each(factors_, [this](auto &factor) {
     auto bp = factor->canonicalize();
@@ -109,15 +109,15 @@ std::shared_ptr<Expr> Product::canonicalize_impl(bool rapid) {
   return {};  // side effects are absorbed into the scalar_
 }
 
-std::shared_ptr<Expr> Product::canonicalize() {
+ExprPtr Product::canonicalize() {
   return this->canonicalize_impl(/* rapid = */ false);
 }
 
-std::shared_ptr<Expr> Product::rapid_canonicalize() {
+ExprPtr Product::rapid_canonicalize() {
   return this->canonicalize_impl(/* rapid = */ true);
 }
 
-// std::shared_ptr<Expr> Product::rapid_canonicalize() {
+// ExprPtr Product::rapid_canonicalize() {
 //  // recursively canonicalize subfactors ...
 //  ranges::for_each(factors_, [this](auto &factor) {
 //    auto bp = factor->canonicalize();

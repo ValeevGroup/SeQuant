@@ -219,11 +219,11 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
   /// Implements TensorCanonicalizer::apply
   /// @note Canonicalizes @c t by sorting its bra (if @c t.symmetry()==Symmetry::nonsymm ) or its bra and ket (if @c t.symmetry()!=Symmetry::nonsymm ),
   ///       with the external indices appearing "before" (smaller particle indices) than the internal indices
-  std::shared_ptr<Expr> apply(AbstractTensor &t) override;
+  ExprPtr apply(AbstractTensor &t) override;
 
   /// Core of DefaultTensorCanonicalizer::apply, only does the canonicalization, i.e. no tagging/untagging
   template<typename Compare>
-  std::shared_ptr<Expr> apply(AbstractTensor &t, const Compare &comp) {
+  ExprPtr apply(AbstractTensor &t, const Compare &comp) {
     auto s = symmetry(t);
     auto is_antisymm = (s == Symmetry::antisymm);
 
@@ -263,7 +263,7 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
       default:abort();
     }
 
-    std::shared_ptr<Expr> result = is_antisymm ? (even == false ? ex<Constant>(-1) : nullptr) : nullptr;
+    ExprPtr result = is_antisymm ? (even == false ? ex<Constant>(-1) : nullptr) : nullptr;
     return result;
   }
 
