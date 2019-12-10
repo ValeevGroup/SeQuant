@@ -133,17 +133,18 @@ inline bool expand_antisymm(const Tensor& tensor){
       ket_list.insert(ket_idx);
     const auto const_ket_list = ket_list;
 
-    ranges::for_each(bra_list, [] (Index i) {std::wcout << i.to_latex() << " ";});
-    std::cout << std::endl;
-    ranges::for_each(ket_list, [] (Index i) {std::wcout << i.to_latex() << " ";});
-    std::cout << std::endl;
+//    ranges::for_each(bra_list, [] (Index i) {std::wcout << i.to_latex() << " ";});
+//    std::cout << std::endl;
+//    ranges::for_each(ket_list, [] (Index i) {std::wcout << i.to_latex() << " ";});
+//    std::cout << std::endl;
 
+    Sum expr_sum{};
     // Next permutation with sign
     std::cout << "Permutation loop:\n";
     auto p_count = 0;
     do{
       int permutation_int_array[bra_list.size()];
-      ranges::for_each(bra_list, [](Index i){std::wcout << i.label() << " ";});
+      // ranges::for_each(bra_list, [](Index i){std::wcout << i.label() << " ";});
       auto counter_for_array = 0;
       ranges::for_each(const_bra_list,[&](Index i){
 
@@ -156,13 +157,20 @@ inline bool expand_antisymm(const Tensor& tensor){
       // for(auto i = 0; i< bra_list.size(); ++i) std::cout << permutation_int_array[i] << " ";
 
       auto permutation_count = countSwaps(permutation_int_array, sizeof(permutation_int_array)/ sizeof(*permutation_int_array));
-      std::cout << "; " << permutation_count << "\t" << std::pow(-1,permutation_count); // << std::endl;
+      // std::cout << "; " << permutation_count << "\t" << std::pow(-1,permutation_count); // << std::endl;
       auto new_tensor = Tensor(tensor.label(), bra_list, ket_list);
-      std::wcout << "\t" << new_tensor.to_latex() << "\n";
+      // std::wcout << "\t" << new_tensor.to_latex() << "\n";
+      ExprPtr new_tensor_ptr = std::make_shared<Tensor>(new_tensor);
+      Product new_tensor_product{};
+      new_tensor_product.append(std::pow(-1,permutation_count), new_tensor_ptr);
+      ExprPtr new_tensor_product_ptr = std::make_shared<Product>(new_tensor_product);
+      // std::wcout << "\t" << new_tensor_product_ptr->to_latex() << "\n";
+      expr_sum.append(new_tensor_product_ptr);
 
       p_count++;
     }while(std::next_permutation(bra_list.begin(), bra_list.end()));
-    std::cout << "Number of permutations: " << p_count << std::endl;
+    std::cout << "Number of permutations: " << p_count << "\n" << std::endl;
+    std::wcout << expr_sum.to_latex() << std::endl;
 
     result = true;
     return result;
