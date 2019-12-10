@@ -45,20 +45,21 @@ inline bool tensor_symm(const Tensor& tensor) {
 }
 //================================================
 #if 1
-// This piece of code from: https://www.geeksforgeeks.org/number-swaps-sort-adjacent-swapping-allowed/
-int merge(int arr[], int temp[], int left, int mid, int right)
-{
+// These functions are from:
+// https://www.geeksforgeeks.org/number-swaps-sort-adjacent-swapping-allowed/
+// They are required to calculate the number of inversions or adjacent swaps
+// performed to get a (-1)^n sign for a permuted tensor
+// TODO: Use STL containers and simplify for current application
+int merge(int arr[], int temp[], int left, int mid, int right) {
   auto inv_count = 0;
 
   auto i = left; /* i is index for left subarray*/
   auto j = mid;  /* i is index for right subarray*/
   auto k = left; /* i is index for resultant merged subarray*/
-  while ((i <= mid - 1) && (j <= right))
-  {
+  while ((i <= mid - 1) && (j <= right)) {
     if (arr[i] <= arr[j])
       temp[k++] = arr[i++];
-    else
-    {
+    else {
       temp[k++] = arr[j++];
 
       /* this is tricky -- see above explanation/
@@ -69,112 +70,101 @@ int merge(int arr[], int temp[], int left, int mid, int right)
 
   /* Copy the remaining elements of left subarray
    (if there are any) to temp*/
-  while (i <= mid - 1)
-    temp[k++] = arr[i++];
+  while (i <= mid - 1) temp[k++] = arr[i++];
 
   /* Copy the remaining elements of right subarray
    (if there are any) to temp*/
-  while (j <= right)
-    temp[k++] = arr[j++];
+  while (j <= right) temp[k++] = arr[j++];
 
   /*Copy back the merged elements to original array*/
-  for (i=left; i <= right; i++)
-    arr[i] = temp[i];
+  for (i = left; i <= right; i++) arr[i] = temp[i];
 
   return inv_count;
 }
 
-int _mergeSort(int arr[], int temp[], int left, int right)
-{
+int _mergeSort(int arr[], int temp[], int left, int right) {
   int mid, inv_count = 0;
-  if (right > left)
-  {
+  if (right > left) {
     /* Divide the array into two parts and call
       _mergeSortAndCountInv() for each of the parts */
-    mid = (right + left)/2;
+    mid = (right + left) / 2;
 
     /* Inversion count will be sum of inversions in
        left-part, right-part and number of inversions
        in merging */
-    inv_count  = _mergeSort(arr, temp, left, mid);
-    inv_count += _mergeSort(arr, temp, mid+1, right);
+    inv_count = _mergeSort(arr, temp, left, mid);
+    inv_count += _mergeSort(arr, temp, mid + 1, right);
 
     /*Merge the two parts*/
-    inv_count += merge(arr, temp, left, mid+1, right);
+    inv_count += merge(arr, temp, left, mid + 1, right);
   }
 
   return inv_count;
 }
 
-int countSwaps(int arr[], int n)
-{
+int countSwaps(int arr[], int n) {
   int temp[n];
   return _mergeSort(arr, temp, 0, n - 1);
 }
 #endif
 //================================================
 // TODO: This MUST return an ExprPtr
-inline bool expand_antisymm(const Tensor& tensor){
+inline bool expand_antisymm(const Tensor& tensor) {
   bool result = false;
   assert(tensor.bra().size() == tensor.ket().size());
-  // TODO: IF tensor is antisymmetric, get the antisymmetrized sum
-  // std::wcout << "L" << __LINE__ <<  " " << tensor.to_latex() << std::endl;
-  if((tensor.symmetry() == Symmetry::antisymm) && (tensor.bra().size() > 1 )){
-    // std::wcout << "L" << __LINE__ <<  " " << tensor.to_latex() << std::endl;
-    auto n = tensor.ket().size();
+
+  // Generate a sum of asymmetric tensors if the input tensor is antisymmetric
+  // otherwise, return the tensor
+  if ((tensor.symmetry() == Symmetry::antisymm) && (tensor.bra().size() > 1)) {
+    // auto n = tensor.ket().size();
 
     container::set<Index> bra_list;
-    for(auto &&bra_idx: tensor.bra())
-        bra_list.insert(bra_idx);
+    for (auto&& bra_idx : tensor.bra()) bra_list.insert(bra_idx);
     const auto const_bra_list = bra_list;
 
     container::set<Index> ket_list;
-    for(auto &&ket_idx: tensor.ket())
-      ket_list.insert(ket_idx);
-    const auto const_ket_list = ket_list;
-
-//    ranges::for_each(bra_list, [] (Index i) {std::wcout << i.to_latex() << " ";});
-//    std::cout << std::endl;
-//    ranges::for_each(ket_list, [] (Index i) {std::wcout << i.to_latex() << " ";});
-//    std::cout << std::endl;
+    for (auto&& ket_idx : tensor.ket()) ket_list.insert(ket_idx);
 
     Sum expr_sum{};
-    // Next permutation with sign
-    std::cout << "Permutation loop:\n";
     auto p_count = 0;
-    do{
+    do {
       int permutation_int_array[bra_list.size()];
-      // ranges::for_each(bra_list, [](Index i){std::wcout << i.label() << " ";});
       auto counter_for_array = 0;
-      ranges::for_each(const_bra_list,[&](Index i){
 
+      // Store distance of each index in an array
+      ranges::for_each(const_bra_list, [&](Index i) {
         auto pos = std::find(bra_list.begin(), bra_list.end(), i);
         int dist = std::distance(bra_list.begin(), pos);
         permutation_int_array[counter_for_array] = dist;
-        // std::wcout << " " << dist;
         counter_for_array++;
       });
-      // for(auto i = 0; i< bra_list.size(); ++i) std::cout << permutation_int_array[i] << " ";
+      // for(auto i = 0; i< bra_list.size(); ++i) std::cout <<
+      // permutation_int_array[i] << " ";
 
-      auto permutation_count = countSwaps(permutation_int_array, sizeof(permutation_int_array)/ sizeof(*permutation_int_array));
-      // std::cout << "; " << permutation_count << "\t" << std::pow(-1,permutation_count); // << std::endl;
+      // Call function to count number of pair swaps
+      auto permutation_count =
+          countSwaps(permutation_int_array, sizeof(permutation_int_array) /
+                                                sizeof(*permutation_int_array));
+
+      // Generate tensor with new labels
       auto new_tensor = Tensor(tensor.label(), bra_list, ket_list);
-      // std::wcout << "\t" << new_tensor.to_latex() << "\n";
       ExprPtr new_tensor_ptr = std::make_shared<Tensor>(new_tensor);
-      Product new_tensor_product{};
-      new_tensor_product.append(std::pow(-1,permutation_count), new_tensor_ptr);
-      ExprPtr new_tensor_product_ptr = std::make_shared<Product>(new_tensor_product);
-      // std::wcout << "\t" << new_tensor_product_ptr->to_latex() << "\n";
-      expr_sum.append(new_tensor_product_ptr);
 
+      // Tensor as product with (-1)^n, where n is number of adjacent swaps
+      Product new_tensor_product{};
+      new_tensor_product.append(std::pow(-1, permutation_count),
+                                new_tensor_ptr);
+
+      ExprPtr new_tensor_product_ptr =
+          std::make_shared<Product>(new_tensor_product);
+      expr_sum.append(new_tensor_product_ptr);
       p_count++;
-    }while(std::next_permutation(bra_list.begin(), bra_list.end()));
-    std::cout << "Number of permutations: " << p_count << "\n" << std::endl;
-    std::wcout << expr_sum.to_latex() << std::endl;
+    } while (std::next_permutation(bra_list.begin(), bra_list.end()));
+    std::wcout << expr_sum.to_latex() << "\n" << std::endl;
 
     result = true;
     return result;
-  } else{
+  } else {
     return result;
   }
 }
@@ -233,14 +223,14 @@ ExprPtr spintrace(ExprPtr expr,
   index_groups.insert(index_groups.end(), ext_index_groups.begin(),
                       ext_index_groups.end());
 
-//  for (auto&& i : index_groups)
-//    for (auto&& j : i) std::wcout << j.label() << " ";
-//  std::cout << std::endl;
+  //  for (auto&& i : index_groups)
+  //    for (auto&& j : i) std::wcout << j.label() << " ";
+  //  std::cout << std::endl;
 
   // EFV: for each spincase (loop over integer from 0 to 2^(n)-1, n=#of index
   // groups)
   // const uint64_t nspincases = std::pow(2, index_groups.size());
-  const uint64_t nspincases = 5; // TODO: remove this line
+  const uint64_t nspincases = 5;  // TODO: remove this line before release
 
   Sum spin_expr_sum{};
   auto total_terms = 0;
@@ -302,8 +292,7 @@ ExprPtr spintrace(ExprPtr expr,
         auto pass_mutated =
             subs_expr.transform_indices(index_replacements, false);
 
-        ExprPtr subs_expr_ptr =
-            std::make_shared<Tensor>(subs_expr);
+        ExprPtr subs_expr_ptr = std::make_shared<Tensor>(subs_expr);
 
         // EFV:    screen out zeroes
         if (!tensor_symm(subs_expr)) break;
@@ -322,19 +311,18 @@ ExprPtr spintrace(ExprPtr expr,
 
       if ((*expr_summand).size() == temp_product.size()) {
         temp_product.scale(scaler_factor);
-        ExprPtr subs_expr_product_ptr =
-            std::make_shared<Product>(temp_product);
+        ExprPtr subs_expr_product_ptr = std::make_shared<Product>(temp_product);
         temp_sum.append(subs_expr_product_ptr);
       }
-
     }
     ExprPtr subs_expr_sum_ptr = std::make_shared<Sum>(temp_sum);
     spin_expr_sum.append(subs_expr_sum_ptr);
-    // std::wcout << "sum of terms for " << spincase_bitstr << " permutation: " << to_latex_align(subs_expr_sum_ptr)
+    // std::wcout << "sum of terms for " << spincase_bitstr << " permutation: "
+    // << to_latex_align(subs_expr_sum_ptr)
     //            << "\n";
     total_terms += summand_count;
 
-  } // Permutation FOR loop
+  }  // Permutation FOR loop
 
   const auto tstop = std::chrono::high_resolution_clock::now();
   auto time_elapsed =
