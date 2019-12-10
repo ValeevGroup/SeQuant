@@ -26,17 +26,20 @@ class spinIndex : public Index {
 
 struct zero_result : public std::exception {};
 
+// TODO: param could be an ExprPtr
 inline bool tensor_symm(const Tensor& tensor) {
+  // TODO: IF tensor, evaluate; ELSE iterate over terms to extract tensors
   bool result = false;
   assert(tensor.bra().size() == tensor.ket().size());
   // For each index check if QNS match.
   // return FALSE if one of the pairs does not match.
   auto iter_ket = tensor.ket().begin();
-  for (auto&& bra : tensor.bra()) {
-    if (IndexSpace::instance(bra.label()).qns() ==
+  for (auto&& index : tensor.bra()) {
+    if (IndexSpace::instance(index.label()).qns() ==
         IndexSpace::instance(iter_ket->label()).qns()) {
       result = true;
     } else {
+      result = false;
       return result;
     }
     iter_ket++;
@@ -108,7 +111,9 @@ int countSwaps(int arr[], int n) {
 }
 #endif
 //================================================
-// TODO: This MUST return an ExprPtr
+/// expand an antisymmetric Tensor
+/// @param tensor a tensor from a product
+/// @return expression pointer containing the sum of expanded terms
 ExprPtr expand_antisymm(const Tensor& tensor) {
   // bool result = false;
   assert(tensor.bra().size() == tensor.ket().size());
@@ -128,34 +133,37 @@ ExprPtr expand_antisymm(const Tensor& tensor) {
     Sum expr_sum{};
     auto p_count = 0;
     do {
-      int permutation_int_array[bra_list.size()];
-      auto counter_for_array = 0;
-
-      // Store distance of each index in an array
-      ranges::for_each(const_bra_list, [&](Index i) {
-        auto pos = std::find(bra_list.begin(), bra_list.end(), i);
-        int dist = std::distance(bra_list.begin(), pos);
-        permutation_int_array[counter_for_array] = dist;
-        counter_for_array++;
-      });
-
-      // Call function to count number of pair swaps
-      auto permutation_count =
-          countSwaps(permutation_int_array, sizeof(permutation_int_array) /
-                                                sizeof(*permutation_int_array));
-
       // Generate tensor with new labels
       auto new_tensor = Tensor(tensor.label(), bra_list, ket_list);
-      ExprPtr new_tensor_ptr = std::make_shared<Tensor>(new_tensor);
 
-      // Tensor as product with (-1)^n, where n is number of adjacent swaps
-      Product new_tensor_product{};
-      new_tensor_product.append(std::pow(-1, permutation_count),
-                                new_tensor_ptr);
+      if(tensor_symm(new_tensor)) {
+        int permutation_int_array[bra_list.size()];
+        auto counter_for_array = 0;
 
-      ExprPtr new_tensor_product_ptr =
-          std::make_shared<Product>(new_tensor_product);
-      expr_sum.append(new_tensor_product_ptr);
+        // Store distance of each index in an array
+        ranges::for_each(const_bra_list, [&](Index i) {
+          auto pos = std::find(bra_list.begin(), bra_list.end(), i);
+          int dist = std::distance(bra_list.begin(), pos);
+          permutation_int_array[counter_for_array] = dist;
+          counter_for_array++;
+        });
+
+        // Call function to count number of pair swaps
+        auto permutation_count =
+            countSwaps(permutation_int_array, sizeof(permutation_int_array) /
+                sizeof(*permutation_int_array));
+
+        ExprPtr new_tensor_ptr = std::make_shared<Tensor>(new_tensor);
+
+        // Tensor as product with (-1)^n, where n is number of adjacent swaps
+        Product new_tensor_product{};
+        new_tensor_product.append(std::pow(-1, permutation_count),
+                                  new_tensor_ptr);
+
+        ExprPtr new_tensor_product_ptr =
+            std::make_shared<Product>(new_tensor_product);
+        expr_sum.append(new_tensor_product_ptr);
+      }
       p_count++;
     } while (std::next_permutation(bra_list.begin(), bra_list.end()));
 
@@ -167,6 +175,46 @@ ExprPtr expand_antisymm(const Tensor& tensor) {
     // std::wcout << tensor.to_latex() << ":\n" << result->to_latex() << "\n" << std::endl;
     return result;
   }
+}
+
+ExprPtr expand_antisymm(const ExprPtr& expr){
+  Sum expanded_sum{};
+  for(auto &&summand: *expr){
+    const auto scalar_factor = summand->as<Product>().scalar().real();
+    Product expanded_product{};
+    for(auto &&expr_product: *summand ){
+       auto tensor = expr_product->as<sequant::Tensor>();
+       auto expanded_ptr = expand_antisymm(tensor);
+       expanded_product.append(1, expanded_ptr);
+    }
+    expanded_product.scale(scalar_factor);
+    ExprPtr expanded_product_ptr = std::make_shared<Product>(expanded_product);
+    expanded_sum.append(expanded_product_ptr);
+  }
+  ExprPtr result = std::make_shared<Sum>(expanded_sum);
+  return result;
+}
+
+/// Check if the number of alpha spins in bra and ket are equal
+/// beta spins will match if total number of indices is the same
+/// @param any tensor
+/// @return true if number of alpha spins match in bra and ket
+bool can_expand(const Tensor& tensor){
+  assert(tensor.bra_rank() == tensor.ket_rank());
+  auto result = false;
+  auto alpha_in_bra = 0;
+  auto alpha_in_ket = 0;
+  ranges::for_each(tensor.bra(),[&](Index i){
+     if(IndexSpace::instance(i.label()).qns() == IndexSpace::alpha)
+       ++alpha_in_bra;
+  });
+  ranges::for_each(tensor.ket(),[&](Index i){
+    if(IndexSpace::instance(i.label()).qns() == IndexSpace::alpha)
+      ++alpha_in_ket;
+  });
+  if(alpha_in_bra == alpha_in_ket)
+    result = true;
+  return result;
 }
 
 /// @param expr input expression
@@ -192,8 +240,6 @@ ExprPtr spintrace(ExprPtr expr,
     }
   };
   expr->visit(collect_indices);
-
-  //  std::cout << "grand_idxlist size: " << grand_idxlist.size() << std::endl;
 
   container::set<Index> ext_idxlist;
   for (auto&& idxgrp : ext_index_groups) {
@@ -223,23 +269,23 @@ ExprPtr spintrace(ExprPtr expr,
   index_groups.insert(index_groups.end(), ext_index_groups.begin(),
                       ext_index_groups.end());
 
-  //  for (auto&& i : index_groups)
-  //    for (auto&& j : i) std::wcout << j.label() << " ";
-  //  std::cout << std::endl;
-
   // EFV: for each spincase (loop over integer from 0 to 2^(n)-1, n=#of index
   // groups)
-  // const uint64_t nspincases = std::pow(2, index_groups.size());
-  const uint64_t nspincases = 5;  // TODO: remove this line before release
+
+  const uint64_t nspincases = std::pow(2, index_groups.size());
+  // const uint64_t nspincases = 1;  // TODO: remove this line before release
 
   Sum spin_expr_sum{};
   auto total_terms = 0;
   const auto tstart = std::chrono::high_resolution_clock::now();
   for (uint64_t spincase_bitstr = 0; spincase_bitstr != nspincases;
        ++spincase_bitstr) {
+    std::cout << "\nPermutation: " << spincase_bitstr << ":\n";
+
     // EFV:  assign spin to each index group => make a replacement list
     std::map<Index, Index> index_replacements;
     std::map<Index, Index> remove_spin_replacements;
+
     int64_t index_group_count = 0;
     for (auto&& index_group : index_groups) {
       auto spin_bit = (spincase_bitstr << (64 - index_group_count - 1)) >> 63;
@@ -267,60 +313,52 @@ ExprPtr spintrace(ExprPtr expr,
       ++index_group_count;
     }
 
-    // std::cout << "\nPermutation " << spincase_bitstr << ": " << std::endl;
-    // for(auto&& i: index_replacements)
-    //   std::wcout << i.first.label() << " -> " << i.second.label() << ",  " ;
-    // std::cout << std::endl;
-
-    // EFV:  for every term in the sum (else we only have 1 term)
-    // EFV:    apply replacement
-    // EFV:    screen out zeroes
-    // EFV:    if nonzero: remove spins + add to the running total
-
-    sequant::Tensor subs_expr;
+    // sequant::Tensor tensor;
     auto summand_count = 0;
     Sum temp_sum;
 
-    // EFV:  for every term in the sum (else we only have 1 term)
-    for (auto&& expr_summand : *expr) {
-      const auto scaler_factor = expr_summand->as<Product>().scalar().real();
+    // For each term in the sum
+    for (auto&& summand : *expr) {
+
+      // Get scaling factor for the summand
+      const auto scaler_factor = summand->as<Product>().scalar().real();
+
+      sequant::Tensor tensor;
       Product temp_product{};
-      for (auto&& expr_product : *expr_summand) {
-        subs_expr = expr_product->as<Tensor>();
 
-        // EFV:    apply replacement
+      // For each product in the sum
+      for (auto&& expr_product : *summand) {
+
+        // get tensors from products
+        tensor = expr_product->as<Tensor>();
+
+        // apply index replacement on tensor
         auto pass_mutated =
-            subs_expr.transform_indices(index_replacements, false);
+            tensor.transform_indices(index_replacements, false);
 
-        ExprPtr subs_expr_ptr = std::make_shared<Tensor>(subs_expr);
+        if(can_expand(tensor)){
+          auto antisymm_expansion = expand_antisymm(tensor);
+          std::wcout << "as: " << antisymm_expansion->to_latex() << "\n" << std::endl;
+        }
 
-        // EFV:    screen out zeroes
-        if (!tensor_symm(subs_expr)) break;
-
-        temp_product.append(1.0, subs_expr_ptr);
-
-        auto antisymm_expansion = expand_antisymm(subs_expr);
-        std::wcout << antisymm_expansion->to_latex() << "\n" << std::endl;
+        ExprPtr tensor_ptr = std::make_shared<Tensor>(tensor);
+        temp_product.append(1.0, tensor_ptr);
       }
-
-      if (tensor_symm(subs_expr)) {
-        // std::wcout << temp_product.to_latex() << std::endl;
-        summand_count++;
-      }
-
       // std::wcout << "temp_product: " << temp_product.to_latex() << std::endl;
 
-      if ((*expr_summand).size() == temp_product.size()) {
+      if ((*summand).size() == temp_product.size()) {
         temp_product.scale(scaler_factor);
-        ExprPtr subs_expr_product_ptr = std::make_shared<Product>(temp_product);
-        temp_sum.append(subs_expr_product_ptr);
+        ExprPtr tensor_product_ptr = std::make_shared<Product>(temp_product);
+        temp_sum.append(tensor_product_ptr);
       }
     }
-    ExprPtr subs_expr_sum_ptr = std::make_shared<Sum>(temp_sum);
-    spin_expr_sum.append(subs_expr_sum_ptr);
-    // std::wcout << "sum of terms for " << spincase_bitstr << " permutation: "
-    // << to_latex_align(subs_expr_sum_ptr)
-    //            << "\n";
+    ExprPtr tensor_sum_ptr = std::make_shared<Sum>(temp_sum);
+
+    auto antisymm_expansion = expand_antisymm(tensor_sum_ptr);
+
+    spin_expr_sum.append(antisymm_expansion);
+//    std::wcout << to_latex_align(tensor_sum_ptr)
+//                << "\n";
     total_terms += summand_count;
 
   }  // Permutation FOR loop
