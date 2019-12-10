@@ -109,12 +109,12 @@ int countSwaps(int arr[], int n) {
 #endif
 //================================================
 // TODO: This MUST return an ExprPtr
-inline bool expand_antisymm(const Tensor& tensor) {
-  bool result = false;
+ExprPtr expand_antisymm(const Tensor& tensor) {
+  // bool result = false;
   assert(tensor.bra().size() == tensor.ket().size());
 
   // Generate a sum of asymmetric tensors if the input tensor is antisymmetric
-  // otherwise, return the tensor
+  // AND more than one body otherwise, return the tensor
   if ((tensor.symmetry() == Symmetry::antisymm) && (tensor.bra().size() > 1)) {
     // auto n = tensor.ket().size();
 
@@ -138,8 +138,6 @@ inline bool expand_antisymm(const Tensor& tensor) {
         permutation_int_array[counter_for_array] = dist;
         counter_for_array++;
       });
-      // for(auto i = 0; i< bra_list.size(); ++i) std::cout <<
-      // permutation_int_array[i] << " ";
 
       // Call function to count number of pair swaps
       auto permutation_count =
@@ -160,11 +158,13 @@ inline bool expand_antisymm(const Tensor& tensor) {
       expr_sum.append(new_tensor_product_ptr);
       p_count++;
     } while (std::next_permutation(bra_list.begin(), bra_list.end()));
-    std::wcout << expr_sum.to_latex() << "\n" << std::endl;
 
-    result = true;
+    ExprPtr result = std::make_shared<Sum>(expr_sum);
+    // std::wcout << tensor.to_latex() << ":\n" << result->to_latex() << "\n" << std::endl;
     return result;
   } else {
+    ExprPtr result = std::make_shared<Tensor>(tensor);
+    // std::wcout << tensor.to_latex() << ":\n" << result->to_latex() << "\n" << std::endl;
     return result;
   }
 }
@@ -299,7 +299,8 @@ ExprPtr spintrace(ExprPtr expr,
 
         temp_product.append(1.0, subs_expr_ptr);
 
-        expand_antisymm(subs_expr);
+        auto antisymm_expansion = expand_antisymm(subs_expr);
+        std::wcout << antisymm_expansion->to_latex() << "\n" << std::endl;
       }
 
       if (tensor_symm(subs_expr)) {
