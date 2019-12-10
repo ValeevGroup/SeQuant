@@ -43,14 +43,84 @@ inline bool tensor_symm(const Tensor& tensor) {
   }
   return result;
 }
+//================================================
+#if 1
+// This piece of code from: https://www.geeksforgeeks.org/number-swaps-sort-adjacent-swapping-allowed/
+int merge(int arr[], int temp[], int left, int mid, int right)
+{
+  auto inv_count = 0;
+
+  auto i = left; /* i is index for left subarray*/
+  auto j = mid;  /* i is index for right subarray*/
+  auto k = left; /* i is index for resultant merged subarray*/
+  while ((i <= mid - 1) && (j <= right))
+  {
+    if (arr[i] <= arr[j])
+      temp[k++] = arr[i++];
+    else
+    {
+      temp[k++] = arr[j++];
+
+      /* this is tricky -- see above explanation/
+        diagram for merge()*/
+      inv_count = inv_count + (mid - i);
+    }
+  }
+
+  /* Copy the remaining elements of left subarray
+   (if there are any) to temp*/
+  while (i <= mid - 1)
+    temp[k++] = arr[i++];
+
+  /* Copy the remaining elements of right subarray
+   (if there are any) to temp*/
+  while (j <= right)
+    temp[k++] = arr[j++];
+
+  /*Copy back the merged elements to original array*/
+  for (i=left; i <= right; i++)
+    arr[i] = temp[i];
+
+  return inv_count;
+}
+
+int _mergeSort(int arr[], int temp[], int left, int right)
+{
+  int mid, inv_count = 0;
+  if (right > left)
+  {
+    /* Divide the array into two parts and call
+      _mergeSortAndCountInv() for each of the parts */
+    mid = (right + left)/2;
+
+    /* Inversion count will be sum of inversions in
+       left-part, right-part and number of inversions
+       in merging */
+    inv_count  = _mergeSort(arr, temp, left, mid);
+    inv_count += _mergeSort(arr, temp, mid+1, right);
+
+    /*Merge the two parts*/
+    inv_count += merge(arr, temp, left, mid+1, right);
+  }
+
+  return inv_count;
+}
+
+int countSwaps(int arr[], int n)
+{
+  int temp[n];
+  return _mergeSort(arr, temp, 0, n - 1);
+}
+#endif
+//================================================
 // TODO: This MUST return an ExprPtr
 inline bool expand_antisymm(const Tensor& tensor){
   bool result = false;
   assert(tensor.bra().size() == tensor.ket().size());
   // TODO: IF tensor is antisymmetric, get the antisymmetrized sum
-  // std::wcout << __LINE__ <<  " " << tensor.to_latex() << std::endl;
+  // std::wcout << "L" << __LINE__ <<  " " << tensor.to_latex() << std::endl;
   if((tensor.symmetry() == Symmetry::antisymm) && (tensor.bra().size() > 1 )){
-    std::wcout << __LINE__ <<  " " << tensor.to_latex() << std::endl;
+    // std::wcout << "L" << __LINE__ <<  " " << tensor.to_latex() << std::endl;
     auto n = tensor.ket().size();
 
     container::set<Index> bra_list;
@@ -68,15 +138,31 @@ inline bool expand_antisymm(const Tensor& tensor){
     ranges::for_each(ket_list, [] (Index i) {std::wcout << i.to_latex() << " ";});
     std::cout << std::endl;
 
-    //   TODO: Next permutation with sign
+    // Next permutation with sign
     std::cout << "Permutation loop:\n";
+    auto p_count = 0;
     do{
-      ranges::for_each(bra_list, [] (Index i) {std::wcout << i.to_latex() << " ";});
-      std::cout << std::endl;
-      std::map<Index, Index> index_replacements;
+      int permutation_int_array[bra_list.size()];
+      ranges::for_each(bra_list, [](Index i){std::wcout << i.label() << " ";});
+      auto counter_for_array = 0;
+      ranges::for_each(const_bra_list,[&](Index i){
 
-      // index_replacements.emplace(std::make_pair(const_bra_list, bra_list));
+        auto pos = std::find(bra_list.begin(), bra_list.end(), i);
+        int dist = std::distance(bra_list.begin(), pos);
+        permutation_int_array[counter_for_array] = dist;
+        // std::wcout << " " << dist;
+        counter_for_array++;
+      });
+      // for(auto i = 0; i< bra_list.size(); ++i) std::cout << permutation_int_array[i] << " ";
+
+      auto permutation_count = countSwaps(permutation_int_array, sizeof(permutation_int_array)/ sizeof(*permutation_int_array));
+      std::cout << "; " << permutation_count << "\t" << std::pow(-1,permutation_count); // << std::endl;
+      auto new_tensor = Tensor(tensor.label(), bra_list, ket_list);
+      std::wcout << "\t" << new_tensor.to_latex() << "\n";
+
+      p_count++;
     }while(std::next_permutation(bra_list.begin(), bra_list.end()));
+    std::cout << "Number of permutations: " << p_count << std::endl;
 
     result = true;
     return result;
