@@ -26,7 +26,6 @@ class spinIndex : public Index {
 
 struct zero_result : public std::exception {};
 
-// TODO: param could be an ExprPtr
 inline bool tensor_symm(const Tensor& tensor) {
   // TODO: IF tensor, evaluate; ELSE iterate over terms to extract tensors
   bool result = false;
@@ -281,6 +280,7 @@ ExprPtr spintrace(ExprPtr expr,
   for (uint64_t spincase_bitstr = 0; spincase_bitstr != nspincases;
        ++spincase_bitstr) {
     std::cout << "\nPermutation: " << spincase_bitstr << ":\n";
+    std::wcout << "expr: " << expr->to_latex() << "\n";
 
     // EFV:  assign spin to each index group => make a replacement list
     std::map<Index, Index> index_replacements;
@@ -321,7 +321,7 @@ ExprPtr spintrace(ExprPtr expr,
     for (auto&& summand : *expr) {
 
       // Get scaling factor for the summand
-      const auto scaler_factor = summand->as<Product>().scalar().real();
+      const auto scalar_factor = summand->as<Product>().scalar().real();
 
       sequant::Tensor tensor;
       Product temp_product{};
@@ -337,28 +337,57 @@ ExprPtr spintrace(ExprPtr expr,
             tensor.transform_indices(index_replacements, false);
 
         if(can_expand(tensor)){
+          // TODO: Use canonicalizer
           auto antisymm_expansion = expand_antisymm(tensor);
-          std::wcout << "as: " << antisymm_expansion->to_latex() << "\n" << std::endl;
+          temp_product.append(1,antisymm_expansion);
+          // std::wcout << "antisymmetrized: " << antisymm_expansion->to_latex() << "\n";
+          ExprPtr temp_tensor = std::make_shared<Tensor>(tensor);
         }
 
-        ExprPtr tensor_ptr = std::make_shared<Tensor>(tensor);
-        temp_product.append(1.0, tensor_ptr);
+        // ExprPtr tensor_ptr = std::make_shared<Tensor>(tensor);
+        // temp_product.append(1.0, tensor_ptr);
       }
       // std::wcout << "temp_product: " << temp_product.to_latex() << std::endl;
 
       if ((*summand).size() == temp_product.size()) {
-        temp_product.scale(scaler_factor);
+        temp_product.scale(scalar_factor);
         ExprPtr tensor_product_ptr = std::make_shared<Product>(temp_product);
+        expand(tensor_product_ptr);
         temp_sum.append(tensor_product_ptr);
       }
     }
+    // std::wcout << "temp_sum_: " << temp_sum.to_latex() << std::endl;
     ExprPtr tensor_sum_ptr = std::make_shared<Sum>(temp_sum);
+    std::wcout << "tensor_sum_ptr: " << tensor_sum_ptr->to_latex() << std::endl;
 
-    auto antisymm_expansion = expand_antisymm(tensor_sum_ptr);
+    // std::cout << "remove_spin_replacements:\n";
+    // ranges::for_each(remove_spin_replacements, [&](std::pair<Index, Index> i) {std::wcout << (i.first).label() << " -> " << (i.second).label() << std::endl;} );
 
-    spin_expr_sum.append(antisymm_expansion);
-//    std::wcout << to_latex_align(tensor_sum_ptr)
-//                << "\n";
+#if 1
+    for (auto&& summand : *tensor_sum_ptr) {
+
+      // Get scaling factor for the summand
+      const auto scalar_factor = summand->as<Product>().scalar().real();
+
+      sequant::Tensor tensor;
+      Product temp_product{};
+
+      // For each product in the sum
+      for (auto&& expr_product : *summand) {
+
+        // get tensors from products
+        tensor = expr_product->as<Tensor>();
+
+        auto pass_mutated = tensor.transform_indices(remove_spin_replacements);
+        std::wcout << "** "<< pass_mutated << " " << tensor.to_latex() << " ";
+
+      }
+      std::cout << std::endl;
+    }
+#endif
+
+
+    spin_expr_sum.append(tensor_sum_ptr);
     total_terms += summand_count;
 
   }  // Permutation FOR loop
