@@ -59,8 +59,8 @@ ExprPtr make_op::operator()(bool complete_unoccupieds) const {
     };
     auto make_uoccidxs = [csv, complete_unoccupieds, &make_idx_vector,
                           &make_depidx_vector](size_t n, auto&& occidxs) {
-      auto unocc = complete_unoccupieds ? IndexSpace::active_unoccupied
-                                        : IndexSpace::complete_unoccupied;
+      auto unocc = complete_unoccupieds ? IndexSpace::complete_unoccupied
+                                        : IndexSpace::active_unoccupied;
       return csv ? make_depidx_vector(n, unocc, occidxs)
                  : make_idx_vector(n, unocc);
     };
