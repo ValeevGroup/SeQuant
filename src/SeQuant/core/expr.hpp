@@ -756,11 +756,18 @@ class Product : public Expr {
 
  public:
   std::wstring to_latex() const override {
+    return to_latex(false);
+  }
+
+  /// just like Expr::to_latex() , but can negate before conversion
+  /// @param[in] negate if true, scalar will be before conversion
+  std::wstring to_latex(bool negate) const {
     std::wstring result;
     result = L"{";
     if (scalar() != 0.) {
-      if (scalar() != 1.) {
-        result += sequant::to_latex(scalar()) + L" \\times ";
+      const auto scal = negate ? -scalar() : scalar();
+      if (scal != 1.) {
+        result += sequant::to_latex(scal) + L" ";
       }
       for (const auto &i : factors()) result += i->to_latex();
     }
@@ -1020,9 +1027,26 @@ class Sum : public Expr {
     result = L"{ \\left(";
     std::size_t counter = 0;
     for (const auto &i : summands()) {
-      result += i->to_latex();
+      if (counter == 0) {
+        result += i->to_latex();
+      }
+      else {  // counter > 0
+        const auto i_is_product = i->is<Product>();
+        if (!i_is_product) {
+          result += L" + " + i->to_latex();
+        }
+        else {  // i_is_product
+          const auto i_prod = i->as<Product>();
+          const auto scalar = i_prod.scalar();
+          if (scalar.real() < 0 || (scalar.real() == 0 && scalar.imag() < 0)) {
+            result += L" - " + i_prod.to_latex(true);
+          }
+          else {
+            result += L" + " + i->to_latex();
+          }
+        }
+      }
       ++counter;
-      if (counter != summands().size()) result += L" + ";
     }
     result += L"\\right) }";
     return result;
@@ -1147,19 +1171,47 @@ inline std::wstring to_latex_align(const ExprPtr &exprptr,
     int line_counter = 0;
     int term_counter = 0;
     std::wstring::size_type pos = 0;
-    while ((pos = result.find(L" + ", pos + 1)) != std::wstring::npos) {
+    std::wstring::size_type plus_pos = 0;
+    std::wstring::size_type minus_pos = 0;
+    bool last_pos_has_plus = false;
+    bool have_next_term = true;
+    auto insert_into_result_at = [&](std::wstring::size_type at, const auto& str) {
+      assert(pos != std::wstring::npos);
+      result.insert(at, str);
+      const auto str_nchar = std::size(str) - 1;  // neglect end-of-string
+      pos += str_nchar;
+      if (plus_pos != std::wstring::npos)
+        plus_pos += str_nchar;
+      if (minus_pos != std::wstring::npos)
+        minus_pos += str_nchar;
+      if (pos != plus_pos)
+        assert(plus_pos == result.find(L" + ", plus_pos));
+      if (pos != minus_pos)
+        assert(minus_pos == result.find(L" - ", minus_pos));
+    };
+    while (have_next_term) {
       if (max_lines_per_align > 0 &&
           line_counter == max_lines_per_align) {  // start new align block?
-        result.insert(pos + 3, L"\n\\end{align}\n\\begin{align}\n& ");
+        insert_into_result_at(pos + 1, L"\n\\end{align}\n\\begin{align}\n& ");
         line_counter = 0;
       } else {
         // break the line if needed
-        if ((term_counter + 1) % max_terms_per_line == 0) {
-          result.insert(pos + 3, L"\\\\\n& ");
+        if (term_counter != 0 && term_counter % max_terms_per_line == 0) {
+          insert_into_result_at(pos + 1, L"\\\\\n& ");
           ++line_counter;
         }
       }
-      ++term_counter;
+      // next term, plz
+      if (plus_pos == 0 || last_pos_has_plus)
+        plus_pos = result.find(L" + ", plus_pos + 1);
+      if (minus_pos == 0 || !last_pos_has_plus)
+        minus_pos = result.find(L" - ", minus_pos + 1);
+      pos = std::min(plus_pos, minus_pos);
+      last_pos_has_plus = (pos == plus_pos);
+      if (pos != std::wstring::npos)
+        ++term_counter;
+      else
+        have_next_term = false;
     }
   } else {
     result = std::wstring(L"\\begin{align}\n& ") + result;
