@@ -248,7 +248,7 @@ TEST_CASE("Expr", "[elements]") {
   SECTION("latex") {
     Product sp0{};
     sp0.append(2.0, std::make_shared<Dummy>());
-    REQUIRE(to_latex(sp0) == L"{{{2}} \\times {\\text{Dummy}}}");
+    REQUIRE(to_latex(sp0) == L"{{{2}}{\\text{Dummy}}}");
 
     // VecExpr<shared_ptr<Expr>>
     {
@@ -410,7 +410,7 @@ TEST_CASE("Expr", "[elements]") {
       expand(x);
       //      std::wcout << "x = " << to_latex(x) << std::endl;
       REQUIRE(to_latex(x) ==
-              L"{ \\left({{{3}} \\times } + {{\\text{Dummy}}} + {{{3}} \\times "
+              L"{ \\left({{{3}}} + {{\\text{Dummy}}} + {{{3}}"
               L"{\\text{Dummy}}} + {{\\text{Dummy}}{\\text{Dummy}}}\\right) }");
       rapid_simplify(x);
       //      std::wcout << "x = " << to_latex(x) << std::endl;
@@ -422,18 +422,18 @@ TEST_CASE("Expr", "[elements]") {
           (ex<Constant>(5.0) * (ex<Constant>(6.0) + ex<Dummy>()) + ex<Dummy>());
       //      std::wcout << "x = " << to_latex(x) << std::endl;
       REQUIRE(to_latex(x) ==
-              L"{{ \\left({{{1}}} + {{{2}} \\times { \\left({{{3}}} + {{{-1}} "
-              L"\\times {\\text{Dummy}}}\\right) }}\\right) }{ \\left({{{5}} "
-              L"\\times { \\left({{{6}}} + {\\text{Dummy}}\\right) }} + "
+              L"{{ \\left({{{1}}} + {{{2}}{ \\left({{{3}}} - {"
+              L"{\\text{Dummy}}}\\right) }}\\right) }{ \\left({{{5}}"
+              L"{ \\left({{{6}}} + {\\text{Dummy}}\\right) }} + "
               L"{\\text{Dummy}}\\right) }}");
       expand(x);
       //      std::wcout << "ex = " << to_latex(x) << std::endl;
       REQUIRE(to_latex(x) ==
-              L"{ \\left({{{30}} \\times } + {{{5}} \\times {\\text{Dummy}}} + "
-              L"{{\\text{Dummy}}} + {{{180}} \\times } + {{{30}} \\times "
-              L"{\\text{Dummy}}} + {{{6}} \\times {\\text{Dummy}}} + {{{-60}} "
-              L"\\times {\\text{Dummy}}} + {{{-10}} \\times "
-              L"{\\text{Dummy}}{\\text{Dummy}}} + {{{-2}} \\times "
+              L"{ \\left({{{30}}} + {{{5}}{\\text{Dummy}}} + "
+              L"{{\\text{Dummy}}} + {{{180}}} + {{{30}}"
+              L"{\\text{Dummy}}} + {{{6}}{\\text{Dummy}}} - {{{60}}"
+              L"{\\text{Dummy}}} - {{{10}}"
+              L"{\\text{Dummy}}{\\text{Dummy}}} - {{{2}}"
               L"{\\text{Dummy}}{\\text{Dummy}}}\\right) }");
     }
   }

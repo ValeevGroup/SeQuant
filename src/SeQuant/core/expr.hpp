@@ -767,7 +767,7 @@ class Product : public Expr {
     if (scalar() != 0.) {
       const auto scal = negate ? -scalar() : scalar();
       if (scal != 1.) {
-        result += sequant::to_latex(scal) + L" ";
+        result += sequant::to_latex(scal);
       }
       for (const auto &i : factors()) result += i->to_latex();
     }
@@ -1027,23 +1027,16 @@ class Sum : public Expr {
     result = L"{ \\left(";
     std::size_t counter = 0;
     for (const auto &i : summands()) {
-      if (counter == 0) {
-        result += i->to_latex();
-      }
-      else {  // counter > 0
-        const auto i_is_product = i->is<Product>();
-        if (!i_is_product) {
-          result += L" + " + i->to_latex();
-        }
-        else {  // i_is_product
-          const auto i_prod = i->as<Product>();
-          const auto scalar = i_prod.scalar();
-          if (scalar.real() < 0 || (scalar.real() == 0 && scalar.imag() < 0)) {
-            result += L" - " + i_prod.to_latex(true);
-          }
-          else {
-            result += L" + " + i->to_latex();
-          }
+      const auto i_is_product = i->is<Product>();
+      if (!i_is_product) {
+        result += (counter == 0) ? i->to_latex() : (L" + " + i->to_latex());
+      } else {  // i_is_product
+        const auto i_prod = i->as<Product>();
+        const auto scalar = i_prod.scalar();
+        if (scalar.real() < 0 || (scalar.real() == 0 && scalar.imag() < 0)) {
+          result += L" - " + i_prod.to_latex(true);
+        } else {
+          result += (counter == 0) ? i->to_latex() : (L" + " + i->to_latex());
         }
       }
       ++counter;
