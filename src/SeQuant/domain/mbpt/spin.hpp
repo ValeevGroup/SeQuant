@@ -294,19 +294,20 @@ ExprPtr spintrace(ExprPtr expr,
   index_groups.insert(index_groups.end(), ext_index_groups.begin(),
                       ext_index_groups.end());
 
-  // EFV: for each spincase (loop over integer from 0 to 2^(n)-1, n=#of index
+  // EFV: for each spincase (loop over integer from 0 to 2^n-1, n=#of index
   // groups)
 
-  // const uint64_t nspincases = std::pow(2, index_groups.size());
-  const uint64_t nspincases = 1;  // TODO: remove this line before release
+  const uint64_t nspincases = std::pow(2, index_groups.size()-1);
+  // const uint64_t nspincases = 1;  // TODO: remove this line before release
 
-  // Sum spin_expr_sum{};
+  std::cout << "nspincases: " << nspincases << "\n";
+  Sum spin_expr_summed{};
   auto total_terms = 0;
   const auto tstart = std::chrono::high_resolution_clock::now();
   for (uint64_t spincase_bitstr = 0; spincase_bitstr != nspincases;
        ++spincase_bitstr) {
-    std::cout << "\nPermutation: " << spincase_bitstr << ":\n";
-    std::wcout << "expr: " << expr->to_latex() << "\n";
+    std::cout << "\nPermutation " << spincase_bitstr << ":\n";
+    std::wcout << "expr:\n" << expr->to_latex() << "\n";
 
     // EFV:  assign spin to each index group => make a replacement list
     std::map<Index, Index> index_replacements;
@@ -390,13 +391,20 @@ ExprPtr spintrace(ExprPtr expr,
 //     ranges::for_each(remove_spin_replacements, [&](std::pair<Index, Index> i) {std::wcout << (i.first).label() << " -> " << (i.second).label() << std::endl;} );
 
     auto no_spin_ptr = remove_spin(tensor_sum_ptr, remove_spin_replacements);
-    expand(no_spin_ptr);
-    std::wcout << " no_spin_ptr: " << no_spin_ptr->to_latex() << std::endl;
+    // std::wcout << "no_spin_ptr: " << no_spin_ptr->to_latex() << std::endl;
+    // expand(no_spin_ptr);
+    // std::wcout << "EXPAND no_spin_ptr: " << no_spin_ptr->to_latex() << "\n" << std::endl;
+    // simplify(no_spin_ptr);
+    // std::wcout << "SIMPLIFY no_spin_ptr: " << no_spin_ptr->to_latex() << std::endl;
 
+    spin_expr_summed.append(no_spin_ptr);
     // spin_expr_sum.append(tensor_sum_ptr);
     total_terms += summand_count;
 
   }  // Permutation FOR loop
+
+  ExprPtr result = std::make_shared<Sum>(spin_expr_summed);
+  std::wcout << "Result:\n" << result->to_latex() << std::endl;
 
   const auto tstop = std::chrono::high_resolution_clock::now();
   auto time_elapsed =
