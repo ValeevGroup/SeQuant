@@ -26,6 +26,32 @@ class spinIndex : public Index {
 
 struct zero_result : public std::exception {};
 
+ExprPtr remove_spin(ExprPtr &expr, std::map<Index, Index> &replacement_map){
+
+  // std::cout << "remove_spin_replacements:\n";
+  // ranges::for_each(replacement_map, [&](std::pair<Index, Index> i) {std::wcout << (i.first).label() << " -> " << (i.second).label() << std::endl;} );
+
+  Sum expr_sum{};
+  for(auto&& summand : *expr){
+    Product new_tensor_product{};
+    const auto scalar_factor = summand->as<Product>().scalar().real();
+    for(auto&& product : *summand){
+       Tensor tensor = product->as<Tensor>();
+       // TODO: why do tags need to be reset?
+       ranges::for_each(tensor.const_braket(), [&] (const Index& idx) {idx.reset_tag();} );
+       auto mutated = tensor.transform_indices(replacement_map, false);
+       auto tensor_ptr = std::make_shared<Tensor>(tensor);
+      new_tensor_product.append(1,tensor_ptr);
+    }
+    new_tensor_product.scale(scalar_factor);
+    ExprPtr product_ptr = std::make_shared<Product>(new_tensor_product);
+    expr_sum.append(product_ptr);
+  }
+  ExprPtr result = std::make_shared<Sum>(expr_sum);
+  std::wcout << result->to_latex() << std::endl;
+  return result;
+}
+
 inline bool tensor_symm(const Tensor& tensor) {
   // TODO: IF tensor, evaluate; ELSE iterate over terms to extract tensors
   bool result = false;
@@ -271,10 +297,10 @@ ExprPtr spintrace(ExprPtr expr,
   // EFV: for each spincase (loop over integer from 0 to 2^(n)-1, n=#of index
   // groups)
 
-  const uint64_t nspincases = std::pow(2, index_groups.size());
-  // const uint64_t nspincases = 1;  // TODO: remove this line before release
+  // const uint64_t nspincases = std::pow(2, index_groups.size());
+  const uint64_t nspincases = 1;  // TODO: remove this line before release
 
-  Sum spin_expr_sum{};
+  // Sum spin_expr_sum{};
   auto total_terms = 0;
   const auto tstart = std::chrono::high_resolution_clock::now();
   for (uint64_t spincase_bitstr = 0; spincase_bitstr != nspincases;
@@ -358,36 +384,16 @@ ExprPtr spintrace(ExprPtr expr,
     }
     // std::wcout << "temp_sum_: " << temp_sum.to_latex() << std::endl;
     ExprPtr tensor_sum_ptr = std::make_shared<Sum>(temp_sum);
-    std::wcout << "tensor_sum_ptr: " << tensor_sum_ptr->to_latex() << std::endl;
+    // std::wcout << "tensor_sum_ptr: " << tensor_sum_ptr->to_latex() << std::endl;
 
-    // std::cout << "remove_spin_replacements:\n";
-    // ranges::for_each(remove_spin_replacements, [&](std::pair<Index, Index> i) {std::wcout << (i.first).label() << " -> " << (i.second).label() << std::endl;} );
+//     std::cout << "remove_spin_replacements:\n";
+//     ranges::for_each(remove_spin_replacements, [&](std::pair<Index, Index> i) {std::wcout << (i.first).label() << " -> " << (i.second).label() << std::endl;} );
 
-#if 1
-    for (auto&& summand : *tensor_sum_ptr) {
+    auto no_spin_ptr = remove_spin(tensor_sum_ptr, remove_spin_replacements);
+    expand(no_spin_ptr);
+    std::wcout << " no_spin_ptr: " << no_spin_ptr->to_latex() << std::endl;
 
-      // Get scaling factor for the summand
-      const auto scalar_factor = summand->as<Product>().scalar().real();
-
-      sequant::Tensor tensor;
-      Product temp_product{};
-
-      // For each product in the sum
-      for (auto&& expr_product : *summand) {
-
-        // get tensors from products
-        tensor = expr_product->as<Tensor>();
-
-        auto pass_mutated = tensor.transform_indices(remove_spin_replacements);
-        std::wcout << "** "<< pass_mutated << " " << tensor.to_latex() << " ";
-
-      }
-      std::cout << std::endl;
-    }
-#endif
-
-
-    spin_expr_sum.append(tensor_sum_ptr);
+    // spin_expr_sum.append(tensor_sum_ptr);
     total_terms += summand_count;
 
   }  // Permutation FOR loop
