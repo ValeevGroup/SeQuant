@@ -374,11 +374,10 @@ ExprPtr spintrace(ExprPtr expr,
 
         if(can_expand(tensor)){
           // TODO: Use canonicalizer
+          // Antisymmetric tensors are expanded and non-spin conserving terms are dropped
           auto antisymm_expansion = expand_antisymm(tensor);
           // std::wcout << "antisymm_expansion:\n" << (antisymm_expansion)->to_latex() << "\n";
           temp_product.append(1,antisymm_expansion);
-          ExprPtr temp_tensor = std::make_shared<Tensor>(tensor);
-          // std::wcout << "temp_tensor:\n" << temp_tensor->to_latex() << "\n";
         }
       }
       // std::wcout << "temp_product:\n" << temp_product.to_latex() << "\n";
@@ -387,7 +386,7 @@ ExprPtr spintrace(ExprPtr expr,
         temp_product.scale(scalar_factor);
         ExprPtr tensor_product_ptr = std::make_shared<Product>(temp_product);
         expand(tensor_product_ptr);
-        // TODO: Gives incorrect answer for one summand
+        // TODO: Gives incorrect answer if we have only one summand (i.e. Product is not flattend)
         std::wcout << "tensor_product_ptr:\n" << tensor_product_ptr->to_latex() << std::endl;
         temp_sum.append(tensor_product_ptr);
       }
@@ -415,10 +414,7 @@ ExprPtr spintrace(ExprPtr expr,
   const auto tstop = std::chrono::high_resolution_clock::now();
   auto time_elapsed =
       std::chrono::duration_cast<std::chrono::milliseconds>(tstop - tstart);
-  std::cout << "Time: " << time_elapsed.count() << " milli sec; " << total_terms
-            << " terms after expansion." << std::endl;
-
-  // std::wcout << spin_expr_sum.to_latex() << std::endl;
+  std::cout << "Time: " << time_elapsed.count() << " milli sec.";
   return nullptr;
 }
 
