@@ -27,41 +27,37 @@ class spinIndex : public Index {
 struct zero_result : public std::exception {};
 
 ExprPtr remove_spin(ExprPtr &expr, std::map<Index, Index> &replacement_map){
-
-  // std::cout << "remove_spin_replacements:\n";
-  // ranges::for_each(replacement_map, [&](std::pair<Index, Index> i) {std::wcout << (i.first).label() << " -> " << (i.second).label() << std::endl;} );
-
+  // std::cout << "expr size: " << (*expr).size() << "\n";
   Sum expr_sum{};
   for(auto&& summand : *expr){
     Product new_tensor_product{};
     const auto scalar_factor = summand->as<Product>().scalar().real();
-    std::wcout << "L" << __LINE__ << " " << summand->to_latex() << std::endl;
+    // std::wcout << "L" << __LINE__ << " " << summand->to_latex() << std::endl;
     for(auto&& product : *summand) {
-      // TODO: Issue for terms having a single product.
-      std::wcout << "L" << __LINE__ << " " << product->is<Tensor>() << " " << product->to_latex() << std::endl;
+      // std::wcout << "L" << __LINE__ << " " << product->is<Tensor>() << " " << product->to_latex() << std::endl;
       if (product->is<Tensor>()){
-        // std::wcout << "L" << __LINE__ << " " << product->to_latex() << std::endl;
         auto tensor = product->as<Tensor>();
-        std::wcout << "remove_spin: " << tensor.to_latex() << " ";
+        // std::wcout << "remove_spin: " << tensor.to_latex() << " ";
         // TODO: why do tags need to be reset?
         ranges::for_each(tensor.const_braket(), [&](const Index &idx) { idx.reset_tag(); });
         auto mutated = tensor.transform_indices(replacement_map, false);
-        std::wcout << tensor.to_latex() << "\n";
         auto tensor_ptr = std::make_shared<Tensor>(tensor);
+        // std::wcout << tensor_ptr->to_latex() << "\n";
         new_tensor_product.append(1, tensor_ptr);
       }
     }
     new_tensor_product.scale(scalar_factor);
     ExprPtr product_ptr = std::make_shared<Product>(new_tensor_product);
+    // std::wcout << "product_ptr:\n" << product_ptr->to_latex() <<"\n";
+    expand(product_ptr);
     expr_sum.append(product_ptr);
   }
   ExprPtr result = std::make_shared<Sum>(expr_sum);
-  std::wcout << result->to_latex() << std::endl;
+  // std::wcout << "remove_spin output:\n" << result->to_latex() << std::endl;
   return result;
 }
 
 inline bool tensor_symm(const Tensor& tensor) {
-  // TODO: IF tensor, evaluate; ELSE iterate over terms to extract tensors
   bool result = false;
   assert(tensor.bra().size() == tensor.ket().size());
   // For each index check if QNS match.
@@ -361,13 +357,15 @@ ExprPtr spintrace(ExprPtr expr,
       // Get scaling factor for the summand
       const auto scalar_factor = summand->as<Product>().scalar().real();
 
-      sequant::Tensor tensor;
       Product temp_product{};
+      // std::wcout << "summand: " << summand->to_latex() << "\n";
 
       // For each product in the sum
       for (auto&& expr_product : *summand) {
+        // std::wcout << "expr_product: " << expr_product->to_latex() << "\n";
 
         // get tensors from products
+        Tensor tensor;
         tensor = expr_product->as<Tensor>();
 
         // apply index replacement on tensor
@@ -377,31 +375,35 @@ ExprPtr spintrace(ExprPtr expr,
         if(can_expand(tensor)){
           // TODO: Use canonicalizer
           auto antisymm_expansion = expand_antisymm(tensor);
+          // std::wcout << "antisymm_expansion:\n" << (antisymm_expansion)->to_latex() << "\n";
           temp_product.append(1,antisymm_expansion);
           ExprPtr temp_tensor = std::make_shared<Tensor>(tensor);
+          // std::wcout << "temp_tensor:\n" << temp_tensor->to_latex() << "\n";
         }
       }
-      std::wcout << "temp_product:\n" << temp_product.to_latex() << std::endl;
+      // std::wcout << "temp_product:\n" << temp_product.to_latex() << "\n";
 
       if ((*summand).size() == temp_product.size()) {
         temp_product.scale(scalar_factor);
         ExprPtr tensor_product_ptr = std::make_shared<Product>(temp_product);
         expand(tensor_product_ptr);
+        // TODO: Gives incorrect answer for one summand
+        std::wcout << "tensor_product_ptr:\n" << tensor_product_ptr->to_latex() << std::endl;
         temp_sum.append(tensor_product_ptr);
       }
     }
     // std::wcout << "temp_sum_: " << temp_sum.to_latex() << std::endl;
     ExprPtr tensor_sum_ptr = std::make_shared<Sum>(temp_sum);
     expand(tensor_sum_ptr);
-    std::wcout << "tensor_sum_ptr:\n" << tensor_sum_ptr->to_latex() << std::endl;
+    // std::wcout << "tensor_sum_ptr:\n" << tensor_sum_ptr->to_latex() << " " << (*tensor_sum_ptr).size() << std::endl;
 
-    auto no_spin_ptr = remove_spin(tensor_sum_ptr, remove_spin_replacements);
-    std::wcout << "no_spin_ptr:\n" << to_latex_align(no_spin_ptr) << std::endl;
+    if((*tensor_sum_ptr).size() != 0) {
+      auto no_spin_ptr = remove_spin(tensor_sum_ptr, remove_spin_replacements);
+      // std::wcout << "no_spin_ptr:\n" << to_latex_align(no_spin_ptr) << std::endl;
 
-    spin_expr_summed.append(no_spin_ptr);
-    // spin_expr_summed.append(tensor_sum_ptr);
-    total_terms += summand_count;
-
+      spin_expr_summed.append(no_spin_ptr);
+      total_terms += summand_count;
+    }
   }  // Permutation FOR loop
 
   ExprPtr result = std::make_shared<Sum>(spin_expr_summed);
