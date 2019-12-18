@@ -31,7 +31,11 @@ ExprPtr remove_spin(ExprPtr &expr, std::map<Index, Index> &replacement_map){
   Sum expr_sum{};
   for(auto&& summand : *expr){
     Product new_tensor_product{};
-    const auto scalar_factor = summand->as<Product>().scalar().real();
+    auto scalar_factor = 1.0;
+    if(summand->is<Product>()){
+      std::wcout << "summand:" << "\n" << summand->to_latex() << std::endl;
+      scalar_factor = summand->as<Product>().scalar().real();
+    }
     // std::wcout << "L" << __LINE__ << " " << summand->to_latex() << std::endl;
     for(auto&& product : *summand) {
       // std::wcout << "L" << __LINE__ << " " << product->is<Tensor>() << " " << product->to_latex() << std::endl;
@@ -285,6 +289,8 @@ ExprPtr spintrace(ExprPtr expr,
     }
   }
 
+
+
   // EFV: generate the grand list of index groups by concatenating list of
   // external index EFV: groups with the groups of internal indices (each
   // internal index = 1 group)
@@ -301,8 +307,8 @@ ExprPtr spintrace(ExprPtr expr,
   // EFV: for each spincase (loop over integer from 0 to 2^n-1, n=#of index
   // groups)
 
-  const uint64_t nspincases = std::pow(2, index_groups.size()-1);
-  // const uint64_t nspincases = 1;  // TODO: remove this line before release
+   const uint64_t nspincases = std::pow(2, index_groups.size()-1);
+//  const uint64_t nspincases = 1;  // TODO: remove this line before release
 
   std::map<Index, Index> spin_removal_map;
 
@@ -386,19 +392,24 @@ ExprPtr spintrace(ExprPtr expr,
         temp_product.scale(scalar_factor);
         ExprPtr tensor_product_ptr = std::make_shared<Product>(temp_product);
         expand(tensor_product_ptr);
-        // TODO: Gives incorrect answer if we have only one summand (i.e. Product is not flattend)
-        std::wcout << "tensor_product_ptr:\n" << tensor_product_ptr->to_latex() << std::endl;
+        std::wcout << "tensor_product_ptr expand:\n" << tensor_product_ptr->to_latex() << " # of factors: "<< (*tensor_product_ptr).size()  << std::endl;
+        rapid_simplify(tensor_product_ptr);
+        // TODO: Gives incorrect answer if we have only one summand (i.e. Product is not flattend )
+        std::wcout << "tensor_product_ptr rapid_simplify:\n" << tensor_product_ptr->to_latex() << " # of factors: "<< (*tensor_product_ptr).size() << std::endl;
         temp_sum.append(tensor_product_ptr);
       }
     }
     // std::wcout << "temp_sum_: " << temp_sum.to_latex() << std::endl;
     ExprPtr tensor_sum_ptr = std::make_shared<Sum>(temp_sum);
     expand(tensor_sum_ptr);
-    // std::wcout << "tensor_sum_ptr:\n" << tensor_sum_ptr->to_latex() << " " << (*tensor_sum_ptr).size() << std::endl;
+    std::wcout << "tensor_sum_ptr expand:\n" << tensor_sum_ptr->to_latex() << " # of factors: " << (*tensor_sum_ptr).size() << std::endl;
+
+    rapid_simplify(tensor_sum_ptr);
+    std::wcout << "tensor_sum_ptr rapid_simplify:\n" << tensor_sum_ptr->to_latex() << " # of factors: " << (*tensor_sum_ptr).size() << std::endl;
 
     if((*tensor_sum_ptr).size() != 0) {
       auto no_spin_ptr = remove_spin(tensor_sum_ptr, remove_spin_replacements);
-      // std::wcout << "no_spin_ptr:\n" << to_latex_align(no_spin_ptr) << std::endl;
+      std::wcout << "no_spin_ptr:\n" << to_latex_align(no_spin_ptr) << std::endl;
 
       spin_expr_summed.append(no_spin_ptr);
       total_terms += summand_count;
@@ -414,7 +425,7 @@ ExprPtr spintrace(ExprPtr expr,
   const auto tstop = std::chrono::high_resolution_clock::now();
   auto time_elapsed =
       std::chrono::duration_cast<std::chrono::milliseconds>(tstop - tstart);
-  std::cout << "Time: " << time_elapsed.count() << " milli sec.";
+  std::cout << "Time: " << time_elapsed.count() << " milli sec.\n";
   return nullptr;
 }
 
