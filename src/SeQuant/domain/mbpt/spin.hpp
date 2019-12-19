@@ -27,8 +27,47 @@ class spinIndex : public Index {
 
 struct zero_result : public std::exception {};
 
-ExprPtr remove_spin(ExprPtr& expr) {
+ExprPtr append_spin(ExprPtr& expr, std::map<Index, Index> &index_replacements) {
+  auto add_spin_to_tensor = [&] (const Tensor& tensor) {
+    auto spin_tensor = std::make_shared<Tensor>(tensor);
+    auto pass_mutated = spin_tensor->transform_indices(index_replacements);
+    return spin_tensor;
+  };
 
+  auto add_spin_to_product = [&] (const Product& product) {
+    auto spin_product = std::make_shared<Product>();
+    spin_product->scale(product.scalar());
+    for(auto&& term: product){
+      if(term->is<Tensor>()){
+        spin_product->append(1, add_spin_to_tensor(term->as<Tensor>()));
+      } else
+        abort();
+    }
+    return spin_product;
+  };
+
+  if(expr->is<Tensor>()){
+    return add_spin_to_tensor(expr->as<Tensor>());
+  } else if (expr->is<Product>()){
+    return add_spin_to_product(expr->as<Product>());
+  } else if (expr->is<Sum>()){
+    auto spin_expr = std::make_shared<Sum>();
+    for(auto&& summand: *expr){
+      if(summand->is<Tensor>()){
+        spin_expr->append(add_spin_to_tensor(summand->as<Tensor>()));
+      } else if (summand->is<Product>()){
+        spin_expr->append(add_spin_to_product(summand->as<Product>()));
+      } else {
+        spin_expr->append(summand);
+      }
+    }
+    // std::wcout << "spin_expr:\n" << spin_expr->to_latex() << std::endl;
+    return spin_expr;
+  } else
+  return expr;
+}
+
+ExprPtr remove_spin(ExprPtr& expr) {
   auto remove_spin_from_tensor = [&](const Tensor& tensor) {
     auto sf_tensor = std::make_shared<Tensor>(tensor);
     ranges::for_each(sf_tensor->get_braket(), [&](Index& idx) {
@@ -182,7 +221,7 @@ ExprPtr expand_antisymm(const Tensor& tensor) {
     auto p_count = 0;
     do {
       // Generate tensor with new labels
-      auto new_tensor = Tensor(tensor.label(), bra_list, ket_list);
+      auto new_tensor = Tensor(tensor.label(), bra_list, ket_list, Symmetry::symm);
 
       if (tensor_symm(new_tensor)) {
         int permutation_int_array[bra_list.size()];
@@ -324,20 +363,15 @@ ExprPtr spintrace(ExprPtr expr,
   const uint64_t nspincases = std::pow(2, index_groups.size() - 1);
   //  const uint64_t nspincases = 1;  // TODO: remove this line before release
 
-  std::map<Index, Index> spin_removal_map;
+  // std::map<Index, Index> spin_removal_map;
 
-  std::cout << "nspincases: " << nspincases << "\n";
-  Sum result{};
-  auto total_terms = 0;
+  auto result = std::make_shared<Sum>();
   const auto tstart = std::chrono::high_resolution_clock::now();
   for (uint64_t spincase_bitstr = 0; spincase_bitstr != nspincases;
        ++spincase_bitstr) {
-    std::cout << "\nPermutation " << spincase_bitstr << ":\n";
-    // std::wcout << "expr:\n" << expr->to_latex() << "\n";
-
     // EFV:  assign spin to each index group => make a replacement list
     std::map<Index, Index> index_replacements;
-    std::map<Index, Index> remove_spin_replacements;
+    // std::map<Index, Index> remove_spin_replacements;
 
     int64_t index_group_count = 0;
     for (auto&& index_group : index_groups) {
@@ -361,27 +395,60 @@ ExprPtr spintrace(ExprPtr expr,
         Index spin_index = Index::make_label_index(space, subscript_label_ws);
 
         index_replacements.emplace(std::make_pair(index, spin_index));
-        remove_spin_replacements.emplace(std::make_pair(spin_index, index));
+        // remove_spin_replacements.emplace(std::make_pair(spin_index, index));
       }
       ++index_group_count;
     }
-    spin_removal_map = remove_spin_replacements;
 
-    // sequant::Tensor tensor;
-    auto summand_count = 0;
-    Sum temp_sum;
+    {
 
+      auto all_terms = std::make_shared<Sum>();
+      auto spin_expr = append_spin(expr, index_replacements);
+      rapid_simplify(spin_expr);
+      std::wcout << spincase_bitstr << " " << spin_expr->is<Product>() << " " << spin_expr->to_latex() << "\n";
+
+      // Attempt to do everything faster
+      // TODO: lambda for tensor
+         // check if it can expand
+         // if yes, expand
+         // apply spin symmetry
+         // remove label
+         // append to all terms
+
+      // TODO: lambda for product
+         // check if its a tensor
+         // if yes, call tensor lambda
+
+      // TODO: if(tensor) else if (product) else if (sum) else (return expr)
+
+
+      bool terms_can_expand = false;
+      if (spin_expr->is<Tensor>()) {
+        terms_can_expand = can_expand(spin_expr->as<Tensor>());
+      } else if (spin_expr->is<Product>()) {
+        for (auto &&term: *spin_expr) {
+          if (term->is<Tensor>()) {
+            terms_can_expand = can_expand(term->as<Tensor>());
+            if (!terms_can_expand) break;
+          }
+        }
+      } else if (spin_expr->is<Sum>()) {
+        // TODO: Check if individual products can expand
+      }
+      // std::cout << " terms_can_expand: " << terms_can_expand << "\n";
+
+      if (terms_can_expand) {
+        // TODO something
+      }
+    }
     // For each term in the sum
     for (auto&& summand : *expr) {
-      // Get scaling factor for the summand
       const auto scalar_factor = summand->as<Product>().scalar().real();
 
       Product temp_product{};
-      // std::wcout << "summand: " << summand->to_latex() << "\n";
 
       // For each product in the sum
       for (auto&& expr_product : *summand) {
-        // std::wcout << "expr_product: " << expr_product->to_latex() << "\n";
 
         // get tensors from products
         Tensor tensor;
@@ -389,6 +456,8 @@ ExprPtr spintrace(ExprPtr expr,
 
         // apply index replacement on tensor
         auto pass_mutated = tensor.transform_indices(index_replacements, false);
+//        canonicalize(expr_product);
+//        temp_product.append(1, expr_product);
 
         if (can_expand(tensor)) {
           // TODO: Use canonicalizer
@@ -403,32 +472,34 @@ ExprPtr spintrace(ExprPtr expr,
         ExprPtr tensor_product_ptr = std::make_shared<Product>(temp_product);
         expand(tensor_product_ptr);
         rapid_simplify(tensor_product_ptr);
-        auto remove_tensor_spin =
-        remove_spin(tensor_product_ptr);
-        temp_sum.append(remove_tensor_spin);
+        auto remove_tensor_spin = remove_spin(tensor_product_ptr);
+        result->append(remove_tensor_spin);
       }
-    }
-    ExprPtr tensor_sum_ptr = std::make_shared<Sum>(temp_sum);
-    if ((*tensor_sum_ptr).size() != 0) {
-      // auto no_spin_ptr = remove_spin(tensor_sum_ptr, remove_spin_replacements);
-      auto no_spin_ptr = remove_spin(tensor_sum_ptr);
-      std::wcout << "no_spin_ptr:\n"
-                 << to_latex_align(no_spin_ptr) << std::endl;
-
-      result.append(no_spin_ptr);
-      total_terms += summand_count;
     }
   }  // Permutation FOR loop
 
-  ExprPtr result_ptr = std::make_shared<Sum>(result);
-  rapid_simplify(result_ptr);
-  std::wcout << "\nRESULT:\n" << to_latex_align(result_ptr, 25) << std::endl;
+  // std::wcout << "\nRESULT:\n" << to_latex_align(result, 25) << std::endl;
+  assert(to_latex_align(result, 25) == L"\\begin{align}\n"
+                                       "& ({{{\\frac{1}{4}}} \\times {g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{{a_1}{a_2}}}} + \\\\\n"
+                                       "& {{{-\\frac{1}{4}}} \\times {g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{{a_2}{a_1}}}} + \\\\\n"
+                                       "& {{{-\\frac{1}{4}}} \\times {g^{{a_1}{a_2}}_{{i_2}{i_1}}}{t^{{i_1}{i_2}}_{{a_1}{a_2}}}} + \\\\\n"
+                                       "& {{{\\frac{1}{4}}} \\times {g^{{a_1}{a_2}}_{{i_2}{i_1}}}{t^{{i_1}{i_2}}_{{a_2}{a_1}}}} + \\\\\n"
+                                       "& {{{\\frac{1}{4}}} \\times {g^{{a_2}{a_1}}_{{i_2}{i_1}}}{t^{{i_2}{i_1}}_{{a_2}{a_1}}}} + \\\\\n"
+                                       "& {{{\\frac{1}{4}}} \\times {g^{{a_2}{a_1}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{{a_2}{a_1}}}} + \\\\\n"
+                                       "& {{{\\frac{1}{4}}} \\times {g^{{a_1}{a_2}}_{{i_2}{i_1}}}{t^{{i_2}{i_1}}_{{a_1}{a_2}}}} + \\\\\n"
+                                       "& {{{\\frac{1}{4}}} \\times {g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{{a_1}{a_2}}}} + \\\\\n"
+                                       "& {{{\\frac{1}{4}}} \\times {g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{{a_1}{a_2}}}} + \\\\\n"
+                                       "& {{{-\\frac{1}{4}}} \\times {g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{{a_2}{a_1}}}} + \\\\\n"
+                                       "& {{{-\\frac{1}{4}}} \\times {g^{{a_1}{a_2}}_{{i_2}{i_1}}}{t^{{i_1}{i_2}}_{{a_1}{a_2}}}} + \\\\\n"
+                                       "& {{{\\frac{1}{4}}} \\times {g^{{a_1}{a_2}}_{{i_2}{i_1}}}{t^{{i_1}{i_2}}_{{a_2}{a_1}}}})\n"
+                                       "\\end{align}" );
 
   const auto tstop = std::chrono::high_resolution_clock::now();
   auto time_elapsed =
       std::chrono::duration_cast<std::chrono::milliseconds>(tstop - tstart);
-  std::cout << "Time: " << time_elapsed.count() << " milli sec.\n";
-  return nullptr;
+  // std::cout << "Time: " << time_elapsed.count() << " milli sec.\n";
+  // return nullptr;
+  return result;
 }
 
 }  // namespace sequant
