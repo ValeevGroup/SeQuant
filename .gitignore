@@ -66,3 +66,5 @@ _deps
 # End of https://www.gitignore.io/api/cmake
 # build directory
 build
+
+.clangd

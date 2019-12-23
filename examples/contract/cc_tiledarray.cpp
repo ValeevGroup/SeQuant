@@ -3,7 +3,7 @@
 # error "SEQUANT_HAS_TILEDARRAY should be defined when building cc_tiledarray"
 #endif
 
-#include "sequant_setup.hpp"
+#include "../sequant_setup.hpp"
 
 #include "../contract/scf/hartree-fock.h"
 #include "../contract/interpret/interpreted_tensor.hpp"

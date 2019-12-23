@@ -33,7 +33,7 @@ class screened_vac_av {
                      std::initializer_list<std::pair<int, int>> op_connections,
                      bool screen = true, bool use_topology = true,
                      bool canonical_only = true) {
-    if (!screen) return vac_av(expr, op_connections, use_topology);
+    if (!screen) return sequant::mbpt::sr::so::vac_av(expr, op_connections, use_topology);
 
     ExprPtr input = expr;
     // expand, if possible
@@ -120,7 +120,7 @@ class screened_vac_av {
     if (screened_input->size() == 0)
       return ex<Constant>(0);
     else {
-      return vac_av(screened_input, op_connections, use_topology);
+      return sequant::mbpt::sr::so::vac_av(screened_input, op_connections, use_topology);
     }
   }
 };  // screened_vac_av

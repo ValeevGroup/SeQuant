@@ -24,9 +24,9 @@ find_package(Threads REQUIRED)
 
 # PSTL (used by g++-9 and clang++-8 in c++17 mode) needs TBB
 if ((${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU" AND ${CMAKE_CXX_COMPILER_VERSION} VERSION_GREATER 9) OR
-    (${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang" AND ${CMAKE_CXX_COMPILER_VERSION} VERSION_GREATER 8))
-  set(PSTL_NEEDS_TBB TRUE)
-  find_package(TBB REQUIRED)
+(${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang" AND ${CMAKE_CXX_COMPILER_VERSION} VERSION_GREATER 8))
+    set(PSTL_NEEDS_TBB TRUE)
+    find_package(TBB REQUIRED)
 endif()
 
 if (NOT RANGEV3_DIR)
@@ -34,7 +34,7 @@ if (NOT RANGEV3_DIR)
 endif(NOT RANGEV3_DIR)
 add_library(Range-V3 INTERFACE IMPORTED)
 set_property(TARGET Range-V3 PROPERTY
-             INTERFACE_INCLUDE_DIRECTORIES ${RANGEV3_DIR}/include)
+        INTERFACE_INCLUDE_DIRECTORIES ${RANGEV3_DIR}/include)
 
 # need Boost.ContainerHash
 # NB Boost.Container is broken in v1.70
@@ -128,6 +128,15 @@ target_include_directories(SeQuant PUBLIC
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>
         )
 
+add_library(factorizer EXCLUDE_FROM_ALL
+        src/SeQuant/domain/factorize/factorizer.hpp
+        src/SeQuant/domain/factorize/factorizer.cpp)
+target_include_directories(factorizer PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>
+        )
+target_link_libraries(factorizer PUBLIC SeQuant)
+
 enable_testing(true)
 
 set(utests_src
@@ -169,33 +178,43 @@ target_link_libraries(${example0} SeQuant ${TBB_LIBRARIES})
 
 # contract method testing -- Bimal
 if (BTAS_FOUND)
-  find_package(Libint2 2.6.0 CONFIG REQUIRED)
+    find_package(Libint2 2.6.0 CONFIG REQUIRED)
 
-  set(example1 cc_btas)
-  add_executable(${example1} EXCLUDE_FROM_ALL
-          examples/contract/${example1}.cpp
-          examples/contract/interpret/interpreted_tensor.hpp
-          examples/contract/interpret/contract.hpp
-          examples/contract/scf/hartree-fock.cc)
-  target_link_libraries(${example1} SeQuant ${TBB_LIBRARIES} Libint2::cxx BTAS)
-  target_compile_definitions(${example1} PRIVATE SEQUANT_HAS_BTAS)
+    set(example1 cc_btas)
+    add_executable(${example1} EXCLUDE_FROM_ALL
+            examples/contract/${example1}.cpp
+            examples/contract/interpret/interpreted_tensor.hpp
+            examples/contract/interpret/contract.hpp
+            examples/contract/scf/hartree-fock.cc)
+    target_link_libraries(${example1} SeQuant ${TBB_LIBRARIES} Libint2::cxx BTAS)
+    target_compile_definitions(${example1} PRIVATE SEQUANT_HAS_BTAS)
 endif(BTAS_FOUND)
 
 if (TiledArray_FOUND)
-  find_package(Libint2 2.6.0 CONFIG REQUIRED)
+    find_package(Libint2 2.6.0 CONFIG REQUIRED)
 
-  set(example2 cc_tiledarray)
-  add_executable(${example2} EXCLUDE_FROM_ALL
-          examples/contract/${example2}.cpp
-          examples/contract/interpret/interpreted_tensor.hpp
-          examples/contract/interpret/contract.hpp
-          examples/contract/scf/hartree-fock.cc)
-  target_link_libraries(${example2} SeQuant ${TBB_LIBRARIES} Libint2::cxx tiledarray)
-  target_compile_definitions(${example2} PRIVATE SEQUANT_HAS_TILEDARRAY)
+    set(example2 cc_tiledarray)
+    add_executable(${example2} EXCLUDE_FROM_ALL
+            examples/contract/${example2}.cpp
+            examples/contract/interpret/interpreted_tensor.hpp
+            examples/contract/interpret/contract.hpp
+            examples/contract/scf/hartree-fock.cc)
+    target_link_libraries(${example2} SeQuant ${TBB_LIBRARIES} Libint2::cxx tiledarray)
+    target_compile_definitions(${example2} PRIVATE SEQUANT_HAS_TILEDARRAY)
 endif(TiledArray_FOUND)
 
+# factorization examples
+set(example3 product_factorization)
+add_executable(${example3} EXCLUDE_FROM_ALL
+    examples/factorization/${example3}.cpp)
+target_include_directories(${example3} PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>
+    )
+target_link_libraries(${example3} SeQuant factorizer)
+
 # add tests for running examples
-set (lastexample 3)
+set (lastexample 4)
 foreach(i RANGE ${lastexample})
     if (TARGET ${example${i}})
         add_test(example/${example${i}}/build "${CMAKE_COMMAND}" --build ${CMAKE_BINARY_DIR} --target ${example${i}})
@@ -222,4 +241,3 @@ if (DOXYGEN_FOUND)
             COMMENT "Generate html dox"
     )
 endif(DOXYGEN_FOUND)
-

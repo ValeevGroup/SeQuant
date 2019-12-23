@@ -8,8 +8,8 @@ source ${INTEL_DIR}/tbb/bin/tbbvars.sh "intel64"
 
 MKL_NUM_THREADS=7
 
-cmake --build ../../build \
+cmake --build $(dirname $0)/../../*build* \
       --target cc_tiledarray \
       --verbose \
       -j 7 \
-      && ../../build/cc_tiledarray ../h2o.xyz
+      && $(dirname $0)/../../*build*/cc_tiledarray ../h2o.xyz

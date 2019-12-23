@@ -6,11 +6,11 @@
 #include <btas/tensorview.h>
 #include <btas/tensor_func.h>
 
-#include "sequant_setup.hpp"
+#include "../sequant_setup.hpp"
 
-#include "../contract/scf/hartree-fock.h"
-#include "../contract/interpret/interpreted_tensor.hpp"
-#include "../contract/interpret/contract.hpp"
+#include "scf/hartree-fock.h"
+#include "interpret/interpreted_tensor.hpp"
+#include "interpret/contract.hpp"
 
 using BTensor = btas::Tensor<double>;
 
