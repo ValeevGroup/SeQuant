@@ -31,6 +31,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <string>
 
 namespace sequant {
 namespace factorize {
@@ -59,7 +60,7 @@ class PathTree {
 
   bool is_leaf() const;
 
-  std::string print_tree() const;
+  std::wstring print_tree() const;
 
  private:
   size_t label_;

@@ -36,15 +36,15 @@ void PathTree::pop_last_child() { children_.pop_back(); }
 
 bool PathTree::is_leaf() const { return children_.empty(); }
 
-std::string PathTree::print_tree() const {
+std::wstring PathTree::print_tree() const {
   if (is_leaf()) {
-    return " " + std::to_string(get_label());
+    return L" " + std::to_wstring(get_label());
   } else {
-    std::string result = " (" + std::to_string(get_label());
+    std::wstring result = L" (" + std::to_wstring(get_label());
     for (const auto& ch : get_children()) {
       result += ch->print_tree();
     }
-    result += ")";
+    result += L")";
     return result;
   }
 }

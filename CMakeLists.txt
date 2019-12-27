@@ -129,8 +129,10 @@ target_include_directories(SeQuant PUBLIC
         )
 
 add_library(factorizer EXCLUDE_FROM_ALL
+        src/SeQuant/domain/factorize/path_tree.hpp
+        src/SeQuant/domain/factorize/path_tree.cpp
         src/SeQuant/domain/factorize/factorizer.hpp
-        src/SeQuant/domain/factorize/factorizer.cpp src/SeQuant/domain/factorize/path_tree.cpp src/SeQuant/domain/factorize/path_tree.hpp)
+        src/SeQuant/domain/factorize/factorizer.cpp)
 target_include_directories(factorizer PUBLIC
         $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>
@@ -208,6 +210,7 @@ set(example3 product_factorization)
 add_executable(${example3} EXCLUDE_FROM_ALL
     examples/factorization/${example3}.cpp)
 target_include_directories(${example3} PUBLIC
+        #$<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src/SeQuant/domain/factorize>
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>
     )
