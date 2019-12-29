@@ -18,6 +18,8 @@
 
 #define SPINTRACE_PRINT 0
 #define PRINT_PERMUTATION_LIST 0
+#define TEST_FASTER_IMPL 0
+#define CRUDE_IMPLEMENTATION 0
 
 namespace sequant {
 
@@ -68,18 +70,28 @@ ExprPtr append_spin(ExprPtr& expr, std::map<Index, Index> &index_replacements) {
 }
 
 ExprPtr remove_spin(ExprPtr& expr) {
+
   auto remove_spin_from_tensor = [&](const Tensor& tensor) {
-    auto sf_tensor = std::make_shared<Tensor>(tensor);
-    ranges::for_each(sf_tensor->get_braket(), [&](Index& idx) {
-      // TODO: Use function to set idx.space().qns() to IndexSpace::nullqns
-      auto space = IndexSpace::instance(
-          IndexSpace::instance(idx.label()).type(), IndexSpace::nullqns);
-      auto subscript_label =
-          idx.label().substr(idx.label().find(L'_') + 1);
-      std::wstring subscript_label_ws(subscript_label.begin(),
-                                      subscript_label.end());
-      idx = Index::make_label_index(space, subscript_label_ws);
-    });
+    std::vector<Index> bra;     // An unordered list is required
+    std::vector<Index> ket;     // An unordered list is required
+    {
+      for (auto &&idx : tensor.bra()) bra.emplace_back(idx);
+      for (auto &&idx : tensor.ket()) ket.emplace_back(idx);
+      auto braket_list = ranges::views::concat(bra, ket);
+
+      for (auto &&idx: braket_list) {
+        auto space = IndexSpace::instance(
+            IndexSpace::instance(idx.label()).type(), IndexSpace::nullqns);
+        auto subscript_label =
+            idx.label().substr(idx.label().find(L'_') + 1);
+        std::wstring subscript_label_ws(subscript_label.begin(),
+                                        subscript_label.end());
+        idx = Index::make_label_index(space, subscript_label_ws);
+      }
+    }
+    auto sft = Tensor(tensor.label(), bra, ket, tensor.symmetry(), tensor.braket_symmetry());
+    auto sf_tensor = std::make_shared<Tensor>(sft);
+    // std::wcout << "Output: " << sf_tensor->to_latex() << "\n";
     return sf_tensor;
   };
 
@@ -310,6 +322,10 @@ bool can_expand(const Tensor& tensor) {
 /// @return the expression with spin integrated out
 ExprPtr spintrace(ExprPtr expr,
                   std::initializer_list<IndexList> ext_index_groups = {{}}) {
+  // std::wcout << "expr in spintrace: " << expr->to_latex() << "\n";
+  if(expr->is<Constant>())
+    return expr;
+
   // SPIN TRACE DOES NOT SUPPORT PROTO INDICES YET.
   auto check_proto_index = [&](const ExprPtr& expr) {
     if (expr->is<Tensor>()) {
@@ -361,9 +377,7 @@ ExprPtr spintrace(ExprPtr expr,
   // groups)
 
   const uint64_t nspincases = std::pow(2, index_groups.size() - 1);
-  //  const uint64_t nspincases = 1;  // TODO: remove this line before release
-
-  // std::map<Index, Index> spin_removal_map;
+  std::cout << "nspincases: " << nspincases << "\n";
 
   auto result = std::make_shared<Sum>();
   const auto tstart = std::chrono::high_resolution_clock::now();
@@ -371,7 +385,6 @@ ExprPtr spintrace(ExprPtr expr,
        ++spincase_bitstr) {
     // EFV:  assign spin to each index group => make a replacement list
     std::map<Index, Index> index_replacements;
-    // std::map<Index, Index> remove_spin_replacements;
 
     int64_t index_group_count = 0;
     for (auto&& index_group : index_groups) {
@@ -387,6 +400,8 @@ ExprPtr spintrace(ExprPtr expr,
           space = IndexSpace::instance(
               IndexSpace::instance(index.label()).type(), IndexSpace::beta);
         }
+
+        // TODO: Check if valid for index with no subscripts
         auto subscript_label =
             index.label().substr(index.label().find(L'_') + 1);
         std::wstring subscript_label_ws(subscript_label.begin(),
@@ -395,33 +410,137 @@ ExprPtr spintrace(ExprPtr expr,
         Index spin_index = Index::make_label_index(space, subscript_label_ws);
 
         index_replacements.emplace(std::make_pair(index, spin_index));
-        // remove_spin_replacements.emplace(std::make_pair(spin_index, index));
       }
       ++index_group_count;
     }
 
+
     {
+       auto all_terms = std::make_shared<Sum>();
+       auto spin_expr = append_spin(expr, index_replacements);
+       rapid_simplify(spin_expr);
+       std::wcout << spincase_bitstr << " " << spin_expr->to_latex() << "\n";
 
-      auto all_terms = std::make_shared<Sum>();
-      auto spin_expr = append_spin(expr, index_replacements);
-      rapid_simplify(spin_expr);
-      std::wcout << spincase_bitstr << " " << spin_expr->is<Product>() << " " << spin_expr->to_latex() << "\n";
+      auto spin_trace_tensor = [&] (const Tensor& tensor) {
+        auto spin_tensor = std::make_shared<Tensor>(tensor);
+        if(can_expand(tensor)){
+          auto temp = expand_antisymm(spin_tensor->as<Tensor>());
+          std::wcout << "expand_antisymm: " << temp->to_latex() << std::endl;
+          return temp;
+        } else
+          abort();
+      };
 
-      // Attempt to do everything faster
+      auto spin_trace_product = [&] (const Product& product) {
+        //auto spin_product = std::make_shared<Product>();
+        std::wcout << "product: " << product.to_latex() << std::endl;
+        Product spin_product{};
+        spin_product.scale(product.scalar());
+        for(auto&& term : product){
+          if (term->is<Tensor>()){
+            std::wcout << "term: " << term->to_latex() << std::endl;
+            if(can_expand(term->as<Tensor>())){
+              spin_product.append(1, spin_trace_tensor(term->as<Tensor>()));
+            }
+          } else
+            abort();
+        }
+        std::wcout << "spin_product: " << spin_product.to_latex() << std::endl;
+        ExprPtr ProductPtr = std::make_shared<Product>(spin_product);
+        expand(ProductPtr);
+        rapid_simplify(ProductPtr);
+        return ProductPtr;
+        // return spin_product;
+      };
+
+      if(spin_expr->is<Tensor>()){
+        auto temp = spin_trace_tensor(spin_expr->as<Tensor>());
+        auto spin_removed = remove_spin(temp);
+        result->append(spin_removed);
+      } else if (spin_expr->is<Product>()){
+        std::wcout << "spin_expr is product: " << spin_expr->to_latex() << std::endl;
+        auto temp = spin_trace_product(spin_expr->as<Product>());
+        std::wcout << "temp: " << temp->to_latex() << std::endl;
+        if(!(temp->size() == 0)){
+          result->append(remove_spin(temp));
+          std::wcout << "remove_spin result: " << result->to_latex() << std::endl;
+        }
+      } else if (spin_expr->is<Sum>()){
+        for(auto&& summand: *spin_expr){
+          // auto temp = std::make_shared<Sum>();
+          Sum temp{};
+          if(summand->is<Tensor>())
+            temp.append(spin_trace_tensor(summand->as<Tensor>()));
+          else if (summand->is<Product>())
+            temp.append(spin_trace_product(summand->as<Product>()));
+          else{
+            temp.append(summand);
+          }
+          ExprPtr SumPtr = std::make_shared<Sum>(temp);
+          expand(SumPtr);
+          rapid_simplify(SumPtr);
+          auto spin_removed = remove_spin(SumPtr);
+          result->append(spin_removed);
+          std::wcout << "spin_removed_expr:\n" << to_latex_align(result) << std::endl;
+        }
+      } else {
+        result->append(expr);
+      }
+
+#if TEST_FASTER_IMPL
       // TODO: lambda for tensor
-         // check if it can expand
-         // if yes, expand
-         // apply spin symmetry
-         // remove label
-         // append to all terms
+      auto spin_trace_tensor = [&] (Tensor& tensor) {
+        tensor.transform_indices(index_replacements);
+        auto spin_tensor = std::make_shared<Tensor>(tensor);
+        if(can_expand(tensor)){
+          // auto antisymm_expansion = expand_antisymm(spin_tensor);
+          return expand_antisymm(spin_tensor);
+        }
+        else
+          abort();
+      };
 
       // TODO: lambda for product
-         // check if its a tensor
-         // if yes, call tensor lambda
+      auto spin_trace_product = [&] (Product& product) {
+        auto spin_product = std::make_shared<Product>();
+        spin_product->scale(product.scalar());
+        for(auto&& t: product){
+          if (t->is<Tensor>())
+            spin_product->append(1, spin_trace_tensor(t->as<Tensor>()));
+          else
+            abort();
+        }
+        std::wcout << "spin_product: " << spin_product->to_latex() << "\n";
+        return spin_product;
+      };
 
-      // TODO: if(tensor) else if (product) else if (sum) else (return expr)
 
+      if(expr->is<Tensor>()){
+        auto spin_expr = spin_trace_tensor(expr->as<Tensor>());
+        auto spin_removed_expr = remove_spin(spin_expr);
+        std::wcout << "spin_removed_expr:\n" << to_latex_align(spin_removed_expr) << "\n";
 
+      } else if(expr->is<Product>()){
+        auto spin_expr = spin_trace_product(expr->as<Product>());
+        auto spin_removed_expr = remove_spin(spin_expr);
+        std::wcout << "spin_removed_expr:\n" << to_latex_align(spin_removed_expr) << "\n";
+      } else if(expr->is<Sum>()){
+        for(auto&& summand: *expr){
+          auto spin_expr = std::make_shared<Sum>();
+          if(summand->is<Tensor>())
+            spin_expr->append(spin_trace_tensor(summand->as<Tensor>()));
+          else if (summand->is<Product>())
+            spin_expr->append(spin_trace_product(summand->as<Product>()));
+          else{
+            spin_expr->append(summand);
+          }
+          auto spin_removed_expr = remove_spin(spin_expr);
+          std::wcout << "spin_removed_expr:\n" << to_latex_align(spin_removed_expr) << "\n";
+        }
+      } else
+        return expr;
+
+/*
       bool terms_can_expand = false;
       if (spin_expr->is<Tensor>()) {
         terms_can_expand = can_expand(spin_expr->as<Tensor>());
@@ -440,7 +559,11 @@ ExprPtr spintrace(ExprPtr expr,
       if (terms_can_expand) {
         // TODO something
       }
+     */
+#endif
     }
+
+#if CRUDE_IMPLEMENTATION
     // For each term in the sum
     for (auto&& summand : *expr) {
       const auto scalar_factor = summand->as<Product>().scalar().real();
@@ -476,9 +599,13 @@ ExprPtr spintrace(ExprPtr expr,
         result->append(remove_tensor_spin);
       }
     }
+
+#endif
+
   }  // Permutation FOR loop
 
   // std::wcout << "\nRESULT:\n" << to_latex_align(result, 25) << std::endl;
+#if 1
   assert(to_latex_align(result, 25) == L"\\begin{align}\n"
                                        "& ({{{\\frac{1}{4}}} \\times {g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{{a_1}{a_2}}}} + \\\\\n"
                                        "& {{{-\\frac{1}{4}}} \\times {g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{{a_2}{a_1}}}} + \\\\\n"
@@ -493,6 +620,7 @@ ExprPtr spintrace(ExprPtr expr,
                                        "& {{{-\\frac{1}{4}}} \\times {g^{{a_1}{a_2}}_{{i_2}{i_1}}}{t^{{i_1}{i_2}}_{{a_1}{a_2}}}} + \\\\\n"
                                        "& {{{\\frac{1}{4}}} \\times {g^{{a_1}{a_2}}_{{i_2}{i_1}}}{t^{{i_1}{i_2}}_{{a_2}{a_1}}}})\n"
                                        "\\end{align}" );
+#endif
 
   const auto tstop = std::chrono::high_resolution_clock::now();
   auto time_elapsed =

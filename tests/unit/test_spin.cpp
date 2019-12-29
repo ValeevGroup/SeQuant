@@ -48,24 +48,37 @@ TEST_CASE("Spin"){
     auto G = std::make_shared<Tensor>(g);
     auto T2 = std::make_shared<Tensor>(t2);
 
-    Product expr;
-    expr.scale(0.25);
-    expr.append(1,G);
-    expr.append(1,T2);
-    // std::wcout << "expr: " << expr.to_latex() << std::endl;
+    {
+      auto exprPtr = std::make_shared<Constant>(0.25);
+      auto result = spintrace(exprPtr);
+      std::wcout << "\nExpr:\n" << exprPtr->to_latex() << "\nSpin traced:\n" << result->to_latex() << "\n";
+    }
 
-    auto productPtr = std::make_shared<Product>(expr);
-    // auto result = spintrace(productPtr);
-    // std::wcout << "result:\n" <<  to_latex_align(result) << std::endl;
+//    {
+//      Tensor expr = t2;
+//      auto exprPtr = std::make_shared<Tensor>(expr);
+//      auto result = spintrace(exprPtr);
+//      std::wcout << "\n" << exprPtr->to_latex() << "\nSpin traced:\n" << result->to_latex() << "\n";
+//    }
 
-    Sum sum{};
-    sum.append(productPtr);
-    auto sumPtr = std::make_shared<Sum>(sum);
-    auto result = spintrace(sumPtr);
-    std::wcout << "sum result:\n" <<  to_latex_align(result) << std::endl;
+    {
+      Product expr;
+      expr.scale(0.25);
+      expr.append(1,G);
+      expr.append(1,T2);
+      auto exprPtr = std::make_shared<Product>(expr);
+      auto result = spintrace(exprPtr);
+      std::wcout << "expr:\n" << exprPtr->to_latex() << "\nSpin traced:\n" << to_latex_align(result) << "\n";
 
+//      Sum sum{};
+//      sum.append(exprPtr);
+//      sum.append(T2);
+//      sum.append(std::make_shared<Constant>(0.125));
+//      auto sumPtr = std::make_shared<Sum>(sum);
+//      result = spintrace(sumPtr);
+//      std::wcout << "expr:\n" << exprPtr->to_latex() << "\nSpin traced:\n" << result->to_latex() << "\n";
 
-
+    }
 
     // anti-symmetrize
 
