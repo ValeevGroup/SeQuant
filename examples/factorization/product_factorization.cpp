@@ -5,7 +5,6 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/domain/factorize/factorizer.hpp>
-#include <SeQuant/domain/factorize/path_tree.hpp>
 #include "../sequant_setup.hpp"
 
 #include <memory>
@@ -35,14 +34,8 @@ int main() {
 
   using sequant::Tensor;
   using sequant::factorize::factorize_product;
-  using sequant::factorize::detail::ContractionCostResult;
-  using sequant::factorize::detail::PathCostResult;
-  using sequant::factorize::detail::ContractionCostCounter;
-  using sequant::factorize::detail::optimal_path;
-  using sequant::factorize::detail::PathTree;
-
-  /* using PathPtr = std::shared_ptr<PathTree>; */
-  /* using vec_path_ptr = sequant::container::svector<PathPtr>; */
+  using ispace_pair = std::pair<sequant::IndexSpace::Type, size_t>;
+  using ispace_map = sequant::container::map<ispace_pair::first_type, ispace_pair::second_type>;
 
   std::wcout << "Creating a product..\n";
   std::shared_ptr<Tensor> t1, t2, t3, t4;
@@ -61,45 +54,18 @@ int main() {
   prod1.append(1, t3);
   prod1.append(1, t4);
 
-  std::wcout << prod1.to_latex();
+  // std::wcout << prod1.to_latex();
   std::wcout << "\nno. of factors = " << prod1.factors().size() << "\n";
-  std::wcout << "\nSetting up a flops counter object with nocc = 10 and nvirt "
-                "= 20..\n";
-  auto counter = ContractionCostCounter{10, 20};
+  std::wcout << "\nSetting up a map with nocc = 10 and nvirt = 20..\n";
 
-  auto initiate_path = [&](sequant::Product prod) {
-    auto result = sequant::container::svector<std::shared_ptr<PathTree>>(
-        prod.factors().size());
-    for (ulong i = 0; i < prod.factors().size(); ++i)
-      result[i] = std::make_shared<PathTree>(PathTree{i});
-    return result;
-  };
+  auto counter_map = std::make_shared<ispace_map>(ispace_map{});
 
-  auto initial_path = initiate_path(prod1);
-
-  auto running_cost = std::make_shared<PathCostResult>();
-
-  optimal_path(initial_path, prod1, counter, running_cost);
-
-   std::wcout << "\nThe optimal path must be "
-             << running_cost->path->print_tree()
-             << " " << running_cost->flops << "\n";
-
-  // testing path_to_product
-  auto tree0 = std::make_shared<PathTree>(0);
-  auto tree1 = std::make_shared<PathTree>(1);
-  auto tree2 = std::make_shared<PathTree>(2);
-  auto tree3 = std::make_shared<PathTree>(3);
-  tree0->add_child(tree3);
-  tree2->add_child(tree1);
-  tree0->add_child(tree2);
-  std::wcout << "Printing the tree..\n" << tree0->print_tree() << "\n";
-  auto new_prod = sequant::factorize::detail::path_to_product(tree0, prod1);
-  std::wcout << "New product in latex..\n" << new_prod->to_latex() << "\n";
+  counter_map->insert(ispace_pair{sequant::IndexSpace::active_occupied, 10});
+  counter_map->insert(ispace_pair{sequant::IndexSpace::active_unoccupied, 20});
 
   std::wcout << "\nProduct about to be factorized..\n" << prod1.to_latex()
              << "\nAfter factorization the product looks like..\n";
-  auto result = factorize_product(prod1, counter);
+  auto result = factorize_product(prod1, counter_map);
   std::wcout << result->to_latex() << "\n";
   return 0;
 }

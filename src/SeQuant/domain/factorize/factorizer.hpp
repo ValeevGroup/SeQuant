@@ -19,10 +19,12 @@ namespace sequant {
 namespace factorize {
 namespace detail {
 
+using FlopsType = unsigned long long;
+
 /// @brief uncontracted @c indices and @c flops holder
 struct ContractionCostResult {
-  sequant::container::svector<sequant::Index> indices;
-  unsigned long long flops = 0;
+  container::svector<Index> indices;
+  FlopsType flops = 0;
 
   ContractionCostResult() = default;
   ContractionCostResult(const ExprPtr&);
@@ -31,40 +33,41 @@ struct ContractionCostResult {
 /// @brief stores sizes of IndexSpace::Type's and
 /// defines the parenthesis operator( )
 struct ContractionCostCounter {
-  size_t nocc, nvirt;
+  const std::shared_ptr<container::map<IndexSpace::Type, size_t>> map_ptr = nullptr;
   /// @return ContractionCostResult
-  ContractionCostResult operator()(const ContractionCostResult&, const ContractionCostResult&);
+  ContractionCostResult operator()(const ContractionCostResult&,
+                                   const ContractionCostResult&);
 };
 
 /// @brief a PathTree @c path and its corresponding @c flops
 struct PathCostResult {
   PathCostResult() = default;
-  std::shared_ptr<PathTree> path  = std::make_shared<PathTree>(0);
-  unsigned long long flops = std::numeric_limits<unsigned long long>::max();
+  std::shared_ptr<PathTree> path = std::make_shared<PathTree>(0);
+  FlopsType flops = std::numeric_limits<FlopsType>::max();
 };
 
 /// @brief computes the flops for a path
 /// @return ContractionCostResult
 ContractionCostResult compute_path_cost(const std::shared_ptr<PathTree>&,
-                        const sequant::Product&, const ContractionCostCounter&);
+                                        const Product&,
+                                        const ContractionCostCounter&);
 
 /// @brief finds the optimal path for a given TensorNetwork
 /// Note: a PathCostResult object has to be intialized and passed
 /// as the last parameter and it will hold the optimal path result
-void optimal_path(sequant::container::svector<std::shared_ptr<PathTree>>&,
-                  const sequant::Product&, const ContractionCostCounter&,
+void optimal_path(container::svector<std::shared_ptr<PathTree>>&,
+                  const Product&, const ContractionCostCounter&,
                   std::shared_ptr<PathCostResult>&);
 
 /// @brief translate a PathTree to a TensorNetwork object
 /// @return ExprPtr
-sequant::ExprPtr path_to_product(const std::shared_ptr<PathTree>&,
-    const sequant::Product&);
+ExprPtr path_to_product(const std::shared_ptr<PathTree>&, const Product&);
 
 }  // namespace detail
 
 /// @brief optimize a TensorNetwork
-sequant::ExprPtr factorize_product(const sequant::Product&,
-    const detail::ContractionCostCounter&);
+ExprPtr factorize_product(const Product&,
+  const std::shared_ptr<container::map<IndexSpace::Type, size_t>>&);
 }  // namespace factorize
 }  // namespace sequant
 
