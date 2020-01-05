@@ -687,6 +687,19 @@ class Product : public Expr {
     return *this;
   }
 
+  /// append @c factor without flattening
+  Product &append(ExprPtr factor) {
+    if (factor->is<Constant>()) {
+      auto factor_constant = factor->as<Constant>();
+      scalar_ *= factor_constant.value();
+    } else {
+    factors_.push_back(std::move(factor));
+    reset_hash_value();
+    }
+
+    return *this;
+  }
+
   /// (post-)multiplies the product by @c scalar times @c factor
   template <typename T, typename Factor, typename = std::enable_if_t<std::is_base_of_v<Expr, std::remove_reference_t<Factor>>>>
   Product &append(T scalar, Factor&& factor) {
