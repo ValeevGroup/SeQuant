@@ -8,6 +8,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <algorithm>
 #include <string>
 
 namespace sequant {
@@ -16,6 +17,16 @@ namespace detail {
 
 // constructor
 PathTree::PathTree(size_t x) : label_{x} { children_.clear(); }
+
+// copy constructor
+PathTree::PathTree(const PathTree& rhs) {
+  label_ = rhs.get_label();
+  auto chsize = rhs.get_children().size();
+  children_.resize(chsize);
+  for (auto i=0; i<chsize; ++i){
+    children_[i] = std::make_shared<PathTree>(*rhs.get_children()[i]);
+  }
+}
 
 size_t PathTree::get_label() const { return label_; }
 

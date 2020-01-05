@@ -47,10 +47,11 @@ class PathTree {
 
   ~PathTree() = default;
 
+  PathTree(const PathTree&);
+
   size_t get_label() const;
 
-  const sequant::container::svector<std::shared_ptr<PathTree>>& get_children()
-      const;
+  const sequant::container::svector<std::shared_ptr<PathTree>>& get_children() const;
 
   sequant::container::svector<std::shared_ptr<PathTree>>& get_children();
 

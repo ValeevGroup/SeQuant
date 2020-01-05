@@ -8,9 +8,10 @@
 #include <SeQuant/domain/factorize/path_tree.hpp>
 #include "../sequant_setup.hpp"
 
-#include <iostream>
 #include <memory>
+#include <limits>
 #include <string>
+#include <iostream>
 
 int main() {
   // global sequant setup...
@@ -33,8 +34,11 @@ int main() {
   /* auto cc_r = cceqvec{ 2, 2 }(true, true, true, true); */
 
   using sequant::Tensor;
-  using sequant::factorize::detail::CostCounter;
-  using sequant::factorize::detail::path_scanner;
+  using sequant::factorize::factorize_product;
+  using sequant::factorize::detail::ContractionCostResult;
+  using sequant::factorize::detail::PathCostResult;
+  using sequant::factorize::detail::ContractionCostCounter;
+  using sequant::factorize::detail::optimal_path;
   using sequant::factorize::detail::PathTree;
 
   /* using PathPtr = std::shared_ptr<PathTree>; */
@@ -58,10 +62,10 @@ int main() {
   prod1.append(1, t4);
 
   std::wcout << prod1.to_latex();
-
+  std::wcout << "\nno. of factors = " << prod1.factors().size() << "\n";
   std::wcout << "\nSetting up a flops counter object with nocc = 10 and nvirt "
                 "= 20..\n";
-  auto counter = CostCounter{10, 20};
+  auto counter = ContractionCostCounter{10, 20};
 
   auto initiate_path = [&](sequant::Product prod) {
     auto result = sequant::container::svector<std::shared_ptr<PathTree>>(
@@ -73,7 +77,29 @@ int main() {
 
   auto initial_path = initiate_path(prod1);
 
-  path_scanner(initial_path, prod1, counter);
+  auto running_cost = std::make_shared<PathCostResult>();
 
+  optimal_path(initial_path, prod1, counter, running_cost);
+
+   std::wcout << "\nThe optimal path must be "
+             << running_cost->path->print_tree()
+             << " " << running_cost->flops << "\n";
+
+  // testing path_to_product
+  auto tree0 = std::make_shared<PathTree>(0);
+  auto tree1 = std::make_shared<PathTree>(1);
+  auto tree2 = std::make_shared<PathTree>(2);
+  auto tree3 = std::make_shared<PathTree>(3);
+  tree0->add_child(tree3);
+  tree2->add_child(tree1);
+  tree0->add_child(tree2);
+  std::wcout << "Printing the tree..\n" << tree0->print_tree() << "\n";
+  auto new_prod = sequant::factorize::detail::path_to_product(tree0, prod1);
+  std::wcout << "New product in latex..\n" << new_prod->to_latex() << "\n";
+
+  std::wcout << "\nProduct about to be factorized..\n" << prod1.to_latex()
+             << "\nAfter factorization the product looks like..\n";
+  auto result = factorize_product(prod1, counter);
+  std::wcout << result->to_latex() << "\n";
   return 0;
 }

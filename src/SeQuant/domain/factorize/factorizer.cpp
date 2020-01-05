@@ -12,13 +12,12 @@
 #include <iostream>
 #include <numeric>
 
-namespace sequant {
-namespace factorize {
+namespace sequant::factorize {
 namespace detail {
 
 using vec_path_ptr = sequant::container::svector<std::shared_ptr<PathTree>>;
 
-CostResult::CostResult(
+ContractionCostResult::ContractionCostResult(
     const ExprPtr& ptr) {  // ptr is a sequant::Tensor pointer
   const auto& tensor = ptr->as<sequant::Tensor>();
   std::copy(tensor.bra().begin(), tensor.bra().end(),
@@ -27,11 +26,11 @@ CostResult::CostResult(
             std::back_inserter(indices));
 }
 
-CostResult CostCounter::operator()(const CostResult& res1,
-                                   const CostResult& res2) {
+ContractionCostResult ContractionCostCounter::operator()(const ContractionCostResult& res1,
+                                   const ContractionCostResult& res2) {
   using index_vec = sequant::container::svector<sequant::Index>;
 
-  auto result = CostResult{};
+  auto result = ContractionCostResult{};
 
   std::set_symmetric_difference(res1.indices.begin(), res1.indices.end(),
                                 res2.indices.begin(), res2.indices.end(),
@@ -48,32 +47,40 @@ CostResult CostCounter::operator()(const CostResult& res1,
     else if (i.space() == sequant::IndexSpace::active_unoccupied)
       flops *= nvirt;
     else
-      throw "Only know about occupied and unoccupied Index spaces.";
+      throw std::runtime_error("Only know about occupied and unoccupied Index spaces.");
   }
   result.flops += res1.flops + flops + res2.flops;
   return result;
 }
 
-CostResult compute_cost(const std::shared_ptr<PathTree>& tree,
+ContractionCostResult compute_path_cost(const std::shared_ptr<PathTree>& tree,
                         const sequant::Product& product,
-                        const CostCounter& counter) {
+                        const ContractionCostCounter& counter) {
   if (tree->is_leaf())
-    return CostResult{product.factors().at(tree->get_label())};
+    return ContractionCostResult{product.factors().at(tree->get_label())};
 
-  auto children = sequant::container::svector<CostResult>{};
+  auto children = sequant::container::svector<ContractionCostResult>{};
   for (const auto& i : tree->get_children()) {
-    children.push_back(compute_cost(i, product, counter));
+    children.push_back(compute_path_cost(i, product, counter));
   }
   return std::accumulate(children.begin(), children.end(),
-                         CostResult{product.factors().at(tree->get_label())},
+      ContractionCostResult{product.factors().at(tree->get_label())},
                          counter);
 }
 
-void path_scanner(vec_path_ptr& paths, const sequant::Product& product,
-                  const CostCounter& counter) {
+void optimal_path(vec_path_ptr& paths, const sequant::Product& product,
+                  const ContractionCostCounter& counter,
+                  std::shared_ptr<PathCostResult>& running_cost) {
   if (paths.size() == 1) {
-    std::wcout << paths[0]->print_tree() << L"  "
-               << compute_cost(paths[0], product, counter).flops << "\n";
+    auto current_cost = compute_path_cost(paths[0], product, counter);
+    /* std::wcout << paths[0]->print_tree() << L"  " */
+    /*            << current_cost.flops << "\n"; */
+
+    if (current_cost.flops < running_cost->flops) {
+      running_cost->flops = current_cost.flops;
+      running_cost->path = std::make_shared<PathTree>(*paths[0]);
+    }
+    return;
   }
 
   for (auto i = 0; i < paths.size(); ++i) {
@@ -103,13 +110,51 @@ void path_scanner(vec_path_ptr& paths, const sequant::Product& product,
           new_args.push_back(paths[k]);
         }
       }
-      if (!skip_recursive_call) path_scanner(new_args, product, counter);
+      if (!skip_recursive_call) optimal_path(new_args, product, counter, running_cost);
 
       paths[i]->pop_last_child();
     }  // for j
   }    // for i
 }
 
+sequant::ExprPtr path_to_product(const std::shared_ptr<PathTree>& path,
+                                 const sequant::Product& product) {
+  ProductPtr result(new sequant::Product{});
+  if (path->is_leaf()) {
+    result->append(product.factors()[path->get_label()]);
+    return result;
+  }
+
+  result->append(product.factors()[path->get_label()]);
+  for (const auto& i : path->get_children()) {
+    auto res = path_to_product(i, product);
+    auto& res_product = res->as<Product>();
+    // product of single factors is flattened
+    if (res_product.factors().size() == 1) result->append(std::move(res_product.factors()[0]));
+    // else append as it is
+    else result->append(std::move(res));
+  }
+  return result;
+}
+
 }  // namespace detail
-}  // namespace factorize
+sequant::ExprPtr factorize_product(const sequant::Product& product,
+                                   const detail::ContractionCostCounter& counter) {
+  using detail::vec_path_ptr;
+  using detail::PathTree;
+
+  auto initial_path = [&](sequant::Product prod){
+    auto fsize = prod.factors().size();
+    auto result = vec_path_ptr{};
+    for (size_t i=0; i < fsize; ++i) {
+      result.push_back(std::shared_ptr<PathTree>(new PathTree{i}));
+    }
+    return result;
+  };
+  auto paths = initial_path(product);
+  auto running_path_result = std::make_shared<detail::PathCostResult>();
+
+  detail::optimal_path(paths, product, counter, running_path_result);
+  return detail::path_to_product(running_path_result->path, product);
+}
 }  // namespace sequant
