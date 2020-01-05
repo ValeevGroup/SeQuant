@@ -164,6 +164,9 @@ ExprPtr factorize_product(const Product& product,
   detail::optimal_path(paths, product,
       detail::ContractionCostCounter{ispace_size},
       running_path_result);
-  return detail::path_to_product(running_path_result->path, product);
+  auto factorized_expr = detail::path_to_product(running_path_result->path, product);
+  auto& factorized_prod = factorized_expr->as<Product>();
+  factorized_prod.scale(product.scalar());
+  return factorized_expr;
 }
 }  // namespace sequant

@@ -49,10 +49,10 @@ int main() {
       Tensor{L"t", {L"i_1", L"i_2"}, {L"i_3", L"a_6"}});
 
   auto prod1 = sequant::Product{};
-  prod1.append(1, t1);
-  prod1.append(1, t2);
-  prod1.append(1, t3);
-  prod1.append(1, t4);
+  prod1.append(2.0, t1);
+  prod1.append(1.5, t2);
+  prod1.append(1.5, t3);
+  prod1.append(1.5, t4);
 
   // std::wcout << prod1.to_latex();
   std::wcout << "\nno. of factors = " << prod1.factors().size() << "\n";
