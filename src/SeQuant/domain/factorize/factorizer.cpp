@@ -6,6 +6,7 @@
 #include "path_tree.hpp"
 
 #include <SeQuant/core/container.hpp>
+#include <memory>
 #include <SeQuant/core/tensor.hpp>
 
 #include <algorithm>
@@ -47,12 +48,6 @@ ContractionCostResult ContractionCostCounter::operator()(const ContractionCostRe
     } catch (const std::exception& e) {
       std::cout << e.what() << "\n";
     }
-    /* if (i.space() == IndexSpace::active_occupied) */
-    /*   flops *= nocc; */
-    /* else if (i.space() == IndexSpace::active_unoccupied) */
-    /*   flops *= nvirt; */
-    /* else */
-    /*   throw std::runtime_error("Only know about occupied and unoccupied Index spaces."); */
   }
   result.flops += res1.flops + flops + res2.flops;
   return result;
@@ -98,11 +93,12 @@ void optimal_path(vec_path_ptr& paths, const Product& product,
       // newly formed prod. is the first element
       new_args.push_back(paths[i]);
 
+      // unlike in Python there's no 'for else' loop in C++
+      bool skip_recursive_call = false;
+
       // all tensors from paths argument should be
       // in the new_args except the ith and the jth
       // since they are absorbed in the product formed above
-      // unlike in Python there's no 'for else' loop in C++
-      bool skip_recursive_call = false;
       for (auto k = 0; k < paths.size(); ++k) {
         if ((k != i) && (k != j)) {
           // remove redundancy by lexicographic comparison
@@ -154,7 +150,7 @@ ExprPtr factorize_product(const Product& product,
     auto fsize = prod.factors().size();
     auto result = vec_path_ptr{};
     for (size_t i=0; i < fsize; ++i) {
-      result.push_back(std::shared_ptr<PathTree>(new PathTree{i}));
+      result.push_back(std::make_shared<PathTree>(i));
     }
     return result;
   };

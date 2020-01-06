@@ -33,9 +33,7 @@
 #include <memory>
 #include <string>
 
-namespace sequant {
-namespace factorize {
-namespace detail {
+namespace sequant::factorize::detail {
 
 class PathTree;
 
@@ -64,13 +62,11 @@ class PathTree {
   std::wstring print_tree() const;
 
  private:
-  size_t label_;
+  size_t label_{};
 
   sequant::container::svector<std::shared_ptr<PathTree>> children_;
 };
 
-}  // namespace detail
-}  // namespace factorize
 }  // namespace sequant
 
 #endif  // SEQUANT_FACTORIZE_PATH_TREE_HPP

@@ -15,8 +15,7 @@
 #include <cstddef>
 #include <limits>
 
-namespace sequant {
-namespace factorize {
+namespace sequant::factorize {
 namespace detail {
 
 using FlopsType = unsigned long long;
@@ -27,7 +26,7 @@ struct ContractionCostResult {
   FlopsType flops = 0;
 
   ContractionCostResult() = default;
-  ContractionCostResult(const ExprPtr&);
+  explicit ContractionCostResult(const ExprPtr&);
 };
 
 /// @brief stores sizes of IndexSpace::Type's and
@@ -53,7 +52,7 @@ ContractionCostResult compute_path_cost(const std::shared_ptr<PathTree>&,
                                         const ContractionCostCounter&);
 
 /// @brief finds the optimal path for a given TensorNetwork
-/// Note: a PathCostResult object has to be intialized and passed
+/// Note: a PathCostResult object has to be initialized and passed
 /// as the last parameter and it will hold the optimal path result
 void optimal_path(container::svector<std::shared_ptr<PathTree>>&,
                   const Product&, const ContractionCostCounter&,
@@ -66,9 +65,10 @@ ExprPtr path_to_product(const std::shared_ptr<PathTree>&, const Product&);
 }  // namespace detail
 
 /// @brief optimize a TensorNetwork
-ExprPtr factorize_product(const Product&,
-  const std::shared_ptr<container::map<IndexSpace::Type, size_t>>&);
-}  // namespace factorize
-}  // namespace sequant
+ExprPtr factorize_product(
+    const Product&,
+    const std::shared_ptr<container::map<IndexSpace::Type, size_t>>&);
+
+}  // namespace sequant::factorize
 
 #endif  // SEQUANT_FACTORIZER_HPP

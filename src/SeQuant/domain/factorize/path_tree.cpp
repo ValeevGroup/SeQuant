@@ -8,12 +8,9 @@
 
 #include <cstddef>
 #include <memory>
-#include <algorithm>
 #include <string>
 
-namespace sequant {
-namespace factorize {
-namespace detail {
+namespace sequant::factorize::detail {
 
 // constructor
 PathTree::PathTree(size_t x) : label_{x} { children_.clear(); }
@@ -60,6 +57,4 @@ std::wstring PathTree::print_tree() const {
   }
 }
 
-}  // namespace detail
-}  // namespace factorize
 }  // namespace sequant

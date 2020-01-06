@@ -17,12 +17,12 @@ int main() {
   std::setlocale(LC_ALL, "en_US.UTF-8");
   std::wcout.precision(std::numeric_limits<double>::max_digits10);
   std::wcerr.precision(std::numeric_limits<double>::max_digits10);
-  std::wcout.sync_with_stdio(true);
-  std::wcerr.sync_with_stdio(true);
+  std::wostream::sync_with_stdio(true);
+  std::wostream::sync_with_stdio(true);
   std::wcout.imbue(std::locale("en_US.UTF-8"));
   std::wcerr.imbue(std::locale("en_US.UTF-8"));
-  std::wcout.sync_with_stdio(true);
-  std::wcerr.sync_with_stdio(true);
+  std::wostream::sync_with_stdio(true);
+  std::wostream::sync_with_stdio(true);
   sequant::detail::OpIdRegistrar op_id_registrar;
 
   sequant::mbpt::set_default_convention();
