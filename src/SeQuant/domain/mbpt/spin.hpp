@@ -16,7 +16,7 @@
 #include "SeQuant/core/tensor.hpp"
 #include "../../core/space.hpp"
 
-#define SPINTRACE_PRINT 0
+#define SPINTRACE_PRINT 1
 #define PRINT_PERMUTATION_LIST 0
 #define TEST_FASTER_IMPL 0
 #define CRUDE_IMPLEMENTATION 0
@@ -326,6 +326,11 @@ ExprPtr spintrace(ExprPtr expr,
   if(expr->is<Constant>())
     return expr;
 
+  if(expr->is<Tensor>()){
+    // std::wcout << "expr tensor: " << expr->to_latex() << std::endl;
+    return expand_antisymm(expr->as<Tensor>());
+  }
+
   // SPIN TRACE DOES NOT SUPPORT PROTO INDICES YET.
   auto check_proto_index = [&](const ExprPtr& expr) {
     if (expr->is<Tensor>()) {
@@ -414,18 +419,21 @@ ExprPtr spintrace(ExprPtr expr,
       ++index_group_count;
     }
 
+#if !CRUDE_IMPLEMENTATION
 
     {
        auto all_terms = std::make_shared<Sum>();
        auto spin_expr = append_spin(expr, index_replacements);
        rapid_simplify(spin_expr);
-       std::wcout << spincase_bitstr << " " << spin_expr->to_latex() << "\n";
+       if(SPINTRACE_PRINT)
+         std::wcout << "\n" << spincase_bitstr << " " << spin_expr->to_latex() << "\n";
 
       auto spin_trace_tensor = [&] (const Tensor& tensor) {
         auto spin_tensor = std::make_shared<Tensor>(tensor);
         if(can_expand(tensor)){
           auto temp = expand_antisymm(spin_tensor->as<Tensor>());
-          std::wcout << "expand_antisymm: " << temp->to_latex() << std::endl;
+//          if(SPINTRACE_PRINT)
+//           std::wcout << "expand_antisymm: " << temp->to_latex() << std::endl;
           return temp;
         } else
           abort();
@@ -433,23 +441,29 @@ ExprPtr spintrace(ExprPtr expr,
 
       auto spin_trace_product = [&] (const Product& product) {
         //auto spin_product = std::make_shared<Product>();
-        std::wcout << "product: " << product.to_latex() << std::endl;
+        if(SPINTRACE_PRINT)
+          std::wcout << "product: " << product.to_latex() << "\n";
         Product spin_product{};
         spin_product.scale(product.scalar());
         for(auto&& term : product){
           if (term->is<Tensor>()){
-            std::wcout << "term: " << term->to_latex() << std::endl;
+            // std::wcout << "term: " << term->to_latex() << std::endl;
             if(can_expand(term->as<Tensor>())){
               spin_product.append(1, spin_trace_tensor(term->as<Tensor>()));
             }
           } else
             abort();
         }
-        std::wcout << "spin_product: " << spin_product.to_latex() << std::endl;
+        if(SPINTRACE_PRINT)
+          std::wcout << "spin_product: " << spin_product.to_latex() << std::endl;
+        if(product.size() != spin_product.size())
+          spin_product.scale(0);
         ExprPtr ProductPtr = std::make_shared<Product>(spin_product);
         expand(ProductPtr);
         rapid_simplify(ProductPtr);
-        return ProductPtr;
+          return ProductPtr;
+//        else
+//          abort();
         // return spin_product;
       };
 
@@ -458,16 +472,15 @@ ExprPtr spintrace(ExprPtr expr,
         auto spin_removed = remove_spin(temp);
         result->append(spin_removed);
       } else if (spin_expr->is<Product>()){
-        std::wcout << "spin_expr is product: " << spin_expr->to_latex() << std::endl;
+        // std::wcout << "spin_expr is product: " << spin_expr->to_latex() << std::endl;
         auto temp = spin_trace_product(spin_expr->as<Product>());
-        std::wcout << "temp: " << temp->to_latex() << std::endl;
+        // std::wcout << "temp: " << temp->to_latex() << std::endl;
         if(!(temp->size() == 0)){
           result->append(remove_spin(temp));
-          std::wcout << "remove_spin result: " << result->to_latex() << std::endl;
+          // std::wcout << "remove_spin result: " << result->to_latex() << std::endl;
         }
       } else if (spin_expr->is<Sum>()){
         for(auto&& summand: *spin_expr){
-          // auto temp = std::make_shared<Sum>();
           Sum temp{};
           if(summand->is<Tensor>())
             temp.append(spin_trace_tensor(summand->as<Tensor>()));
@@ -481,11 +494,19 @@ ExprPtr spintrace(ExprPtr expr,
           rapid_simplify(SumPtr);
           auto spin_removed = remove_spin(SumPtr);
           result->append(spin_removed);
-          std::wcout << "spin_removed_expr:\n" << to_latex_align(result) << std::endl;
+          if(SPINTRACE_PRINT)
+           std::wcout << "spin_removed_expr:\n" << to_latex_align(result) << std::endl;
         }
       } else {
         result->append(expr);
       }
+
+
+
+
+//      ExprPtr result2 = result;
+//      simplify(result2);
+//      std::wcout << "result simplified: " << result2->to_latex() << std::endl;
 
 #if TEST_FASTER_IMPL
       // TODO: lambda for tensor
@@ -562,6 +583,7 @@ ExprPtr spintrace(ExprPtr expr,
      */
 #endif
     }
+#endif
 
 #if CRUDE_IMPLEMENTATION
     // For each term in the sum
@@ -605,7 +627,7 @@ ExprPtr spintrace(ExprPtr expr,
   }  // Permutation FOR loop
 
   // std::wcout << "\nRESULT:\n" << to_latex_align(result, 25) << std::endl;
-#if 1
+#if 0
   assert(to_latex_align(result, 25) == L"\\begin{align}\n"
                                        "& ({{{\\frac{1}{4}}} \\times {g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{{a_1}{a_2}}}} + \\\\\n"
                                        "& {{{-\\frac{1}{4}}} \\times {g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{{a_2}{a_1}}}} + \\\\\n"
