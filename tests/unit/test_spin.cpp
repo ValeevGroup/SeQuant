@@ -55,29 +55,35 @@ TEST_CASE("Spin"){
 
     auto G = std::make_shared<Tensor>(g);
     auto T2 = std::make_shared<Tensor>(t2);
-
-    /*
+/*
     {
       auto exprPtr = std::make_shared<Constant>(0.25);
       auto result = spintrace(exprPtr);
+      // REQUIRE(result->is<Constant>());
       std::wcout << "\nExpr:\n" << exprPtr->to_latex() << "\nSpin traced:\n" << result->to_latex() << "\n";
     }
 
     {
-      Tensor expr = t2;
+      Tensor expr = g;
       auto exprPtr = std::make_shared<Tensor>(expr);
       auto result = spintrace(exprPtr);
+       // REQUIRE(result->is<Sum>());
       std::wcout << "\n" << exprPtr->to_latex() << "\nSpin traced:\n" << result->to_latex() << "\n";
     }
 */
-
     {
       Product expr;
       expr.append(1,F);
       expr.append(1,T1);
       auto exprPtr = std::make_shared<Product>(expr);
       {
-        auto result = spintrace(exprPtr);
+        std::wcout << "\n" << exprPtr->to_latex() << std::endl;
+         auto result = spintrace(exprPtr);
+        TensorCanonicalizer::register_instance(
+            std::make_shared<DefaultTensorCanonicalizer>());
+        canonicalize(result);
+        std::wcout << "\nSpin traced:\n" << to_latex_align(result) << std::endl;
+          REQUIRE(result->is<Sum>());
       }
 
 
@@ -88,7 +94,10 @@ TEST_CASE("Spin"){
       expr2.append(1,T1_2);
       auto expr2Ptr = std::make_shared<Product>(expr2);
       {
+        std::wcout << "\nExpr:\n" << expr2Ptr->to_latex() << std::endl;
         auto result = spintrace(expr2Ptr);
+        REQUIRE(result->is<Sum>());
+        std::wcout << "\nSpin traced:\n" << to_latex_align(result) << "\n";
       }
 
       Product expr3;
@@ -97,18 +106,21 @@ TEST_CASE("Spin"){
       expr3.append(1,T2);
       auto expr3Ptr = std::make_shared<Product>(expr3);
       {
+        std::wcout << "\nExpr:\n" << expr3Ptr->to_latex() << std::endl;
         auto result = spintrace(expr3Ptr);
+        REQUIRE(result->is<Sum>());
+        std::wcout << "\nSpin traced:\n" << to_latex_align(result) << "\n";
       }
 
       Sum sum{};
       sum.append(exprPtr);
       sum.append(expr2Ptr);
       sum.append(expr3Ptr);
-      auto sumPtr = std::make_shared<Sum>(sum);
+      ExprPtr sumPtr (new Sum(sum));
       {
         std::wcout << "\nExpr:\n" << sumPtr->to_latex() << std::endl;
         auto result = spintrace(sumPtr);
-        rapid_simplify(result);
+        REQUIRE(result->is<Sum>());
         std::wcout << "\nSpin traced:\n" << to_latex_align(result) << "\n";
       }
     }
