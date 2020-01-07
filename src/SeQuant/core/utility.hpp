@@ -55,7 +55,7 @@ class Singleton {
   static Derived* get_instance_ptr() {
     const auto result_ptr = instance_accessor();
     if (result_ptr != nullptr) return result_ptr.get();
-    if constexpr (std::is_default_constructible_v<Derived>) {
+    if constexpr (derived_is_default_constructible) {
       set_instance();
       return instance_accessor();
     } else
