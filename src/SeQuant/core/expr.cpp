@@ -161,11 +161,14 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
       }
     };
 
-    // ... then resort according to hash values
+    // ... then resort according to size, then hash values
     using std::begin;
     using std::end;
     std::stable_sort(begin(summands_), end(summands_), [](const auto &first, const auto &second) {
-      return *first < *second;
+      const auto first_size = ranges::size(*first);
+      const auto second_size = ranges::size(*second);
+
+      return (first_size == second_size) ? *first < *second : first_size < second_size;
     });
 
     // ... then reduce terms whose hash values are identical

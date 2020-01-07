@@ -293,7 +293,7 @@ int main(int argc, char *argv[])
 
     cout << "\n"
          << "*****************************\n"
-         << "Calculating ECCSDT using BTAS\n"
+         << "Calculating ECCSD using BTAS\n"
          << "*****************************\n" << endl;
 
     // D_ov and D_oovv

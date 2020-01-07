@@ -247,7 +247,7 @@ class compute_all {
  public:
   compute_all(size_t nmax) : NMAX(nmax) {}
 
-  void operator()(size_t NMAX, bool print = true, bool screen = true,
+  void operator()(bool print = true, bool screen = true,
                   bool use_topology = true, bool use_connectivity = true,
                   bool canonical_only = true) {
     for (size_t N = 2; N <= NMAX; ++N)
