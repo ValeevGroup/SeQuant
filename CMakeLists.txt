@@ -188,7 +188,7 @@ if (BTAS_FOUND)
             examples/contract/interpret/interpreted_tensor.hpp
             examples/contract/interpret/contract.hpp
             examples/contract/scf/hartree-fock.cc)
-    target_link_libraries(${example1} SeQuant ${TBB_LIBRARIES} Libint2::cxx BTAS)
+    target_link_libraries(${example1} SeQuant factorizer ${TBB_LIBRARIES} Libint2::cxx BTAS)
     target_compile_definitions(${example1} PRIVATE SEQUANT_HAS_BTAS)
 endif(BTAS_FOUND)
 
@@ -206,15 +206,18 @@ if (TiledArray_FOUND)
 endif(TiledArray_FOUND)
 
 # factorization examples
+if(BTAS_FOUND)
 set(example3 product_factorization)
 add_executable(${example3} EXCLUDE_FROM_ALL
     examples/factorization/${example3}.cpp)
 target_include_directories(${example3} PUBLIC
-        #$<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src/SeQuant/domain/factorize>
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>
+    ${BTAS_INSTALL_DIR}
     )
 target_link_libraries(${example3} SeQuant factorizer)
+target_compile_definitions(${example3} PRIVATE SEQUANT_HAS_BTAS)
+endif(BTAS_FOUND)
 
 # add tests for running examples
 set (lastexample 4)
