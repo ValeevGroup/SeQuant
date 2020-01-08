@@ -5,13 +5,6 @@
 #ifndef SEQUANT_SPIN_HPP
 #define SEQUANT_SPIN_HPP
 
-// #include <algorithm>
-
-// #include <codecvt>
-// #include <map>
-// #include <string>
-// #include <tuple>
-
 #include "SeQuant/core/tensor.hpp"
 
 namespace sequant {

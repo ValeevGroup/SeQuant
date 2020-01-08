@@ -7,44 +7,6 @@
 
 TEST_CASE("Spin Trace") {
   using namespace sequant;
-#if 0
-  SECTION("constructors") {
-    // Check {alpha, beta, null} on index, term
-    Index i1(L"i_1", IndexSpace::instance(IndexSpace::active_occupied,
-                                          IndexSpace::alpha));
-    REQUIRE(i1.space() == IndexSpace::instance(IndexSpace::active_occupied,
-                                               IndexSpace::alpha));
-    REQUIRE(i1.space().qns() == IndexSpace::alpha);
-
-    Index a1(L"a_1", IndexSpace::instance(IndexSpace::active_occupied,
-                                          IndexSpace::beta));
-    REQUIRE(a1.space() == IndexSpace::instance(IndexSpace::active_occupied,
-                                               IndexSpace::beta));
-    REQUIRE(a1.space().qns() == IndexSpace::beta);
-
-    Index i2(L"i_2", IndexSpace::instance(IndexSpace::active_occupied));
-    REQUIRE(i2.space() == IndexSpace::instance(IndexSpace::active_occupied));
-    REQUIRE(i2.space().qns() == IndexSpace::nullqns);
-
-    Index a2(L"a_2", IndexSpace::instance(IndexSpace::active_occupied,
-                                          IndexSpace::alpha));
-
-    std::wcout << "i1: " << i1.label() << " " << "a1: " << a1.label() << "\n";
-    // remove spin
-    auto t1 = Tensor(L"t", {a1}, {i1});
-    auto t2 = Tensor(L"t", {a2}, {i2});
-    std::wcout << t1.to_latex() << " " << t2.to_latex() << "\n";
-
-    std::cout << " t1: " << tensor_symm(t1) << " ";
-    std::cout << " t2: " << tensor_symm(t2) << "\n";
-    ExprPtr T1(new Tensor(t1));
-    ExprPtr T2(new Tensor(t2));
-    auto exprPtr = T1 * T2;
-    std::wcout << "expr: " << exprPtr->to_latex() << "\n";
-    remove_spin(exprPtr);
-    std::wcout << "expr spin removed: " << exprPtr->to_latex() << "\n";
-  }  //  SECTION("constructors")
-#endif
 
   SECTION("Constant") {
     auto exprPtr = ex<Constant>(1. / 4);
