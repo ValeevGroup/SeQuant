@@ -131,7 +131,7 @@ ExprPtr path_to_product(const std::shared_ptr<PathTree>& path,
     auto res = path_to_product(i, product);
     auto& res_product = res->as<Product>();
     // product of single factors is flattened
-    if (res_product.factors().size() == 1) result->append(std::move(res_product.factors()[0]));
+    if (res_product.factors().size() == 1) result->append(1.0, std::move(res_product.factors()[0]));
     // else append as it is
     else result->append(std::move(res));
   }
