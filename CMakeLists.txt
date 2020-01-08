@@ -140,7 +140,8 @@ set(utests_src
         tests/unit/test_expr.cpp
         tests/unit/test_iterator.cpp
         tests/unit/test_tensor_network.cpp
-        tests/unit/test_mbpt.cpp)
+        tests/unit/test_mbpt.cpp
+        tests/unit/test_spin.cpp)
 
 #set(utests_src
 #        tests/unit/test_mbpt.cpp)
