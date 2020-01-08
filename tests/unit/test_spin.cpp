@@ -2,145 +2,208 @@
 // Created by Nakul Teke on 12/20/19.
 //
 
-#include <iostream>
-
-#include "catch.hpp"
 #include "SeQuant/domain/mbpt/spin.hpp"
+#include "catch.hpp"
 
-TEST_CASE("Spin"){
+TEST_CASE("Spin Trace") {
   using namespace sequant;
-
-  SECTION("constructors"){
+#if 0
+  SECTION("constructors") {
     // Check {alpha, beta, null} on index, term
-    Index i1(L"i_1", IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::alpha));
-    REQUIRE(i1.space()== IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::alpha));
+    Index i1(L"i_1", IndexSpace::instance(IndexSpace::active_occupied,
+                                          IndexSpace::alpha));
+    REQUIRE(i1.space() == IndexSpace::instance(IndexSpace::active_occupied,
+                                               IndexSpace::alpha));
     REQUIRE(i1.space().qns() == IndexSpace::alpha);
 
-    Index a1(L"a", IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::beta));
-    REQUIRE(a1.space()== IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::beta));
+    Index a1(L"a_1", IndexSpace::instance(IndexSpace::active_occupied,
+                                          IndexSpace::beta));
+    REQUIRE(a1.space() == IndexSpace::instance(IndexSpace::active_occupied,
+                                               IndexSpace::beta));
     REQUIRE(a1.space().qns() == IndexSpace::beta);
 
     Index i2(L"i_2", IndexSpace::instance(IndexSpace::active_occupied));
-    REQUIRE(i2.space()== IndexSpace::instance(IndexSpace::active_occupied));
+    REQUIRE(i2.space() == IndexSpace::instance(IndexSpace::active_occupied));
     REQUIRE(i2.space().qns() == IndexSpace::nullqns);
 
+    Index a2(L"a_2", IndexSpace::instance(IndexSpace::active_occupied,
+                                          IndexSpace::alpha));
+
+    std::wcout << "i1: " << i1.label() << " " << "a1: " << a1.label() << "\n";
     // remove spin
+    auto t1 = Tensor(L"t", {a1}, {i1});
+    auto t2 = Tensor(L"t", {a2}, {i2});
+    std::wcout << t1.to_latex() << " " << t2.to_latex() << "\n";
 
+    std::cout << " t1: " << tensor_symm(t1) << " ";
+    std::cout << " t2: " << tensor_symm(t2) << "\n";
+    ExprPtr T1(new Tensor(t1));
+    ExprPtr T2(new Tensor(t2));
+    auto exprPtr = T1 * T2;
+    std::wcout << "expr: " << exprPtr->to_latex() << "\n";
+    remove_spin(exprPtr);
+    std::wcout << "expr spin removed: " << exprPtr->to_latex() << "\n";
+  }  //  SECTION("constructors")
+#endif
 
-  } //  SECTION("constructors")
-
-  SECTION("index transformations"){
-
-    // add spin
-
-
-    // remove spin
-
-  } //  SECTION("constructors")
-
-  SECTION("algorithms"){
-
-    // define sequence of operators
-    Tensor f = Tensor(L"F",{Index{L"i_1"}},{Index{L"a_1"}});
-    Tensor t1 = Tensor(L"t",{Index{L"a_1"}},{Index{L"i_1"}});
-    Tensor t1_2 = Tensor(L"t",{Index{L"a_2"}},{Index{L"i_2"}});
-
-    auto F = std::make_shared<Tensor>(f);
-    auto T1 = std::make_shared<Tensor>(t1);
-    auto T1_2 = std::make_shared<Tensor>(t1_2);
-
-    Tensor g = Tensor(L"g", {Index{L"i_1"}, Index{L"i_2"}},
-                       {Index{L"a_1"}, Index{L"a_2"}}, Symmetry::antisymm);
-    Tensor t2 = Tensor(L"t",{Index{L"a_1"}, Index{L"a_2"}}, {Index{L"i_1"}, Index{L"i_2"}}, Symmetry::antisymm);
-
-    auto G = std::make_shared<Tensor>(g);
-    auto T2 = std::make_shared<Tensor>(t2);
-/*
-    {
-      auto exprPtr = std::make_shared<Constant>(0.25);
-      auto result = spintrace(exprPtr);
-      // REQUIRE(result->is<Constant>());
-      std::wcout << "\nExpr:\n" << exprPtr->to_latex() << "\nSpin traced:\n" << result->to_latex() << "\n";
-    }
-
-    {
-      Tensor expr = g;
-      auto exprPtr = std::make_shared<Tensor>(expr);
-      auto result = spintrace(exprPtr);
-       // REQUIRE(result->is<Sum>());
-      std::wcout << "\n" << exprPtr->to_latex() << "\nSpin traced:\n" << result->to_latex() << "\n";
-    }
-*/
-    {
-      Product expr;
-      expr.append(1,F);
-      expr.append(1,T1);
-      auto exprPtr = std::make_shared<Product>(expr);
-      {
-        std::wcout << "\n" << exprPtr->to_latex() << std::endl;
-         auto result = spintrace(exprPtr);
-        TensorCanonicalizer::register_instance(
-            std::make_shared<DefaultTensorCanonicalizer>());
-        canonicalize(result);
-        std::wcout << "\nSpin traced:\n" << to_latex_align(result) << std::endl;
-          REQUIRE(result->is<Sum>());
-      }
-
-
-      Product expr2;
-      expr2.scale(0.5);
-      expr2.append(1,G);
-      expr2.append(1,T1);
-      expr2.append(1,T1_2);
-      auto expr2Ptr = std::make_shared<Product>(expr2);
-      {
-        std::wcout << "\nExpr:\n" << expr2Ptr->to_latex() << std::endl;
-        auto result = spintrace(expr2Ptr);
-        REQUIRE(result->is<Sum>());
-        std::wcout << "\nSpin traced:\n" << to_latex_align(result) << "\n";
-      }
-
-      Product expr3;
-      expr3.scale(0.25);
-      expr3.append(1,G);
-      expr3.append(1,T2);
-      auto expr3Ptr = std::make_shared<Product>(expr3);
-      {
-        std::wcout << "\nExpr:\n" << expr3Ptr->to_latex() << std::endl;
-        auto result = spintrace(expr3Ptr);
-        REQUIRE(result->is<Sum>());
-        std::wcout << "\nSpin traced:\n" << to_latex_align(result) << "\n";
-      }
-
-      Sum sum{};
-      sum.append(exprPtr);
-      sum.append(expr2Ptr);
-      sum.append(expr3Ptr);
-      ExprPtr sumPtr (new Sum(sum));
-      {
-        std::wcout << "\nExpr:\n" << sumPtr->to_latex() << std::endl;
-        auto result = spintrace(sumPtr);
-        REQUIRE(result->is<Sum>());
-        std::wcout << "\nSpin traced:\n" << to_latex_align(result) << "\n";
-      }
-    }
-
-    // anti-symmetrize
-
-    // zero out terms
-
-    // add together
-
-  } // SECTION("algorithms")
-
-  SECTION("expr"){
-    // spin trace on constant, tensor, product and sum
-
+  SECTION("Constant") {
+    auto exprPtr = ex<Constant>(1. / 4);
+    auto result = spintrace(exprPtr);
+    REQUIRE(result->is<Constant>());
+    REQUIRE(result->is_atom());
+    REQUIRE(to_latex(result) == L"{{{\\frac{1}{4}}}}");
   }
 
-  SECTION("latex"){
+  SECTION("Tensor") {
+    const auto expr = ex<Tensor>(L"g", WstrList{L"i_1", L"i_2"},
+                                 WstrList{L"a_1", L"a_2"}, Symmetry::antisymm);
+    auto result = spintrace(expr);
+    REQUIRE(result->is<Sum>());
+    REQUIRE(result->size() == 2);
+    REQUIRE(to_latex(result) ==
+            L"{ \\left({{g^{{a_1}{a_2}}_{{i_1}{i_2}}}} - "
+            L"{{g^{{a_1}{a_2}}_{{i_2}{i_1}}}}\\right) }");
+  }
 
-  } // SECTION("latex")
+  SECTION("Product") {
+    const auto expr = ex<Tensor>(L"f", WstrList{L"i_1"}, WstrList{L"a_1"}) *
+                      ex<Tensor>(L"t", WstrList{L"a_1"}, WstrList{L"i_1"});
+    auto result = spintrace(expr);
+    REQUIRE(result->is<Sum>());
+    REQUIRE(result->size() == 2);
+    REQUIRE(to_latex(result) ==
+            L"{ \\left({{f^{{a_1}}_{{i_1}}}{t^{{i_1}}_{{a_1}}}} + "
+            L"{{f^{{a_1}}_{{i_1}}}{t^{{i_1}}_{{a_1}}}}\\right) }");
+  }
 
-} // TEST_CASE("Spin", "[terms]")
+  SECTION("Scaled Product") {
+    {
+      // 1/2 * g * t1 * t1
+      const auto expr =
+          ex<Constant>(1. / 2) *
+          ex<Tensor>(L"g", WstrList{L"i_1", L"i_2"}, WstrList{L"a_1", L"a_2"},
+                     Symmetry::antisymm) *
+          ex<Tensor>(L"t", WstrList{L"a_1"}, WstrList{L"i_1"}) *
+          ex<Tensor>(L"t", WstrList{L"a_2"}, WstrList{L"i_2"});
+      auto result = spintrace(expr);
+      rapid_simplify(result);
+      REQUIRE(result->is<Sum>());
+      REQUIRE(result->size() == 6);
+      REQUIRE(to_latex(result) ==
+              L"{ "
+              L"\\left({{{\\frac{1}{2}}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}}"
+              L"_{{a_1}}}{t^{{i_2}}_{{a_2}}}} - "
+              L"{{{\\frac{1}{2}}}{g^{{a_1}{a_2}}_{{i_2}{i_1}}}{t^{{i_1}}_{{a_1}"
+              L"}}{t^{{i_2}}_{{a_2}}}} + "
+              L"{{{\\frac{1}{2}}}{g^{{a_2}{a_1}}_{{i_2}{i_1}}}{t^{{i_1}}_{{a_1}"
+              L"}}{t^{{i_2}}_{{a_2}}}} + "
+              L"{{{\\frac{1}{2}}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}}_{{a_1}"
+              L"}}{t^{{i_2}}_{{a_2}}}} + "
+              L"{{{\\frac{1}{2}}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}}_{{a_1}"
+              L"}}{t^{{i_2}}_{{a_2}}}} - "
+              L"{{{\\frac{1}{2}}}{g^{{a_1}{a_2}}_{{i_2}{i_1}}}{t^{{i_1}}_{{a_1}"
+              L"}}{t^{{i_2}}_{{a_2}}}}\\right) }");
+    }
 
+    {
+      // 1/4 * g * t2
+      const auto expr =
+          ex<Constant>(1. / 4) *
+          ex<Tensor>(L"g", WstrList{L"i_1", L"i_2"}, WstrList{L"a_1", L"a_2"},
+                     Symmetry::antisymm) *
+          ex<Tensor>(L"t", WstrList{L"a_1", L"a_2"}, WstrList{L"i_1", L"i_2"},
+                     Symmetry::antisymm);
+
+      auto result = spintrace(expr);
+      REQUIRE(result->is<Sum>());
+      REQUIRE(result->size() == 12);
+      REQUIRE(to_latex(result) ==
+              L"{ "
+              L"\\left({{{\\frac{1}{4}}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}{"
+              L"i_2}}_{{a_1}{a_2}}}} - "
+              L"{{{\\frac{1}{4}}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{"
+              L"{a_2}{a_1}}}} - "
+              L"{{{\\frac{1}{4}}}{g^{{a_1}{a_2}}_{{i_2}{i_1}}}{t^{{i_1}{i_2}}_{"
+              L"{a_1}{a_2}}}} + "
+              L"{{{\\frac{1}{4}}}{g^{{a_1}{a_2}}_{{i_2}{i_1}}}{t^{{i_1}{i_2}}_{"
+              L"{a_2}{a_1}}}} + "
+              L"{{{\\frac{1}{4}}}{g^{{a_2}{a_1}}_{{i_2}{i_1}}}{t^{{i_2}{i_1}}_{"
+              L"{a_2}{a_1}}}} + "
+              L"{{{\\frac{1}{4}}}{g^{{a_2}{a_1}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{"
+              L"{a_2}{a_1}}}} + "
+              L"{{{\\frac{1}{4}}}{g^{{a_1}{a_2}}_{{i_2}{i_1}}}{t^{{i_2}{i_1}}_{"
+              L"{a_1}{a_2}}}} + "
+              L"{{{\\frac{1}{4}}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{"
+              L"{a_1}{a_2}}}} + "
+              L"{{{\\frac{1}{4}}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{"
+              L"{a_1}{a_2}}}} - "
+              L"{{{\\frac{1}{4}}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{"
+              L"{a_2}{a_1}}}} - "
+              L"{{{\\frac{1}{4}}}{g^{{a_1}{a_2}}_{{i_2}{i_1}}}{t^{{i_1}{i_2}}_{"
+              L"{a_1}{a_2}}}} + "
+              L"{{{\\frac{1}{4}}}{g^{{a_1}{a_2}}_{{i_2}{i_1}}}{t^{{i_1}{i_2}}_{"
+              L"{a_2}{a_1}}}}\\right) }");
+    }
+  }
+
+  SECTION("Sum") {
+    // f * t1 + 1/2 * g * t1 * t1 + 1/4 * g * t2
+    const auto ex1 = ex<Tensor>(L"f", WstrList{L"i_1"}, WstrList{L"a_1"}) *
+                     ex<Tensor>(L"t", WstrList{L"a_1"}, WstrList{L"i_1"});
+    const auto ex2 = ex<Constant>(1. / 2) *
+                     ex<Tensor>(L"g", WstrList{L"i_1", L"i_2"},
+                                WstrList{L"a_1", L"a_2"}, Symmetry::antisymm) *
+                     ex<Tensor>(L"t", WstrList{L"a_1"}, WstrList{L"i_1"}) *
+                     ex<Tensor>(L"t", WstrList{L"a_2"}, WstrList{L"i_2"});
+    const auto ex3 = ex<Constant>(1. / 4) *
+                     ex<Tensor>(L"g", WstrList{L"i_1", L"i_2"},
+                                WstrList{L"a_1", L"a_2"}, Symmetry::antisymm) *
+                     ex<Tensor>(L"t", WstrList{L"a_1", L"a_2"},
+                                WstrList{L"i_1", L"i_2"}, Symmetry::antisymm);
+
+    auto expr = ex1 + ex2 + ex3;
+    auto result = spintrace(expr);
+    REQUIRE(result->is<Sum>());
+    REQUIRE(result->size() == 20);
+    REQUIRE(to_latex(result) ==
+            L"{ \\left({{f^{{a_1}}_{{i_1}}}{t^{{i_1}}_{{a_1}}}} + "
+            L"{{f^{{a_1}}_{{i_1}}}{t^{{i_1}}_{{a_1}}}} + "
+            L"{{{\\frac{1}{2}}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}}_{{a_1}}}"
+            L"{t^{{i_2}}_{{a_2}}}} - "
+            L"{{{\\frac{1}{2}}}{g^{{a_1}{a_2}}_{{i_2}{i_1}}}{t^{{i_1}}_{{a_1}}}"
+            L"{t^{{i_2}}_{{a_2}}}} + "
+            L"{{{\\frac{1}{2}}}{g^{{a_2}{a_1}}_{{i_2}{i_1}}}{t^{{i_1}}_{{a_1}}}"
+            L"{t^{{i_2}}_{{a_2}}}} + "
+            L"{{{\\frac{1}{2}}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}}_{{a_1}}}"
+            L"{t^{{i_2}}_{{a_2}}}} + "
+            L"{{{\\frac{1}{2}}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}}_{{a_1}}}"
+            L"{t^{{i_2}}_{{a_2}}}} - "
+            L"{{{\\frac{1}{2}}}{g^{{a_1}{a_2}}_{{i_2}{i_1}}}{t^{{i_1}}_{{a_1}}}"
+            L"{t^{{i_2}}_{{a_2}}}} + "
+            L"{{{\\frac{1}{4}}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{{"
+            L"a_1}{a_2}}}} - "
+            L"{{{\\frac{1}{4}}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{{"
+            L"a_2}{a_1}}}} - "
+            L"{{{\\frac{1}{4}}}{g^{{a_1}{a_2}}_{{i_2}{i_1}}}{t^{{i_1}{i_2}}_{{"
+            L"a_1}{a_2}}}} + "
+            L"{{{\\frac{1}{4}}}{g^{{a_1}{a_2}}_{{i_2}{i_1}}}{t^{{i_1}{i_2}}_{{"
+            L"a_2}{a_1}}}} + "
+            L"{{{\\frac{1}{4}}}{g^{{a_2}{a_1}}_{{i_2}{i_1}}}{t^{{i_2}{i_1}}_{{"
+            L"a_2}{a_1}}}} + "
+            L"{{{\\frac{1}{4}}}{g^{{a_2}{a_1}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{{"
+            L"a_2}{a_1}}}} + "
+            L"{{{\\frac{1}{4}}}{g^{{a_1}{a_2}}_{{i_2}{i_1}}}{t^{{i_2}{i_1}}_{{"
+            L"a_1}{a_2}}}} + "
+            L"{{{\\frac{1}{4}}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{{"
+            L"a_1}{a_2}}}} + "
+            L"{{{\\frac{1}{4}}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{{"
+            L"a_1}{a_2}}}} - "
+            L"{{{\\frac{1}{4}}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{{"
+            L"a_2}{a_1}}}} - "
+            L"{{{\\frac{1}{4}}}{g^{{a_1}{a_2}}_{{i_2}{i_1}}}{t^{{i_1}{i_2}}_{{"
+            L"a_1}{a_2}}}} + "
+            L"{{{\\frac{1}{4}}}{g^{{a_1}{a_2}}_{{i_2}{i_1}}}{t^{{i_1}{i_2}}_{{"
+            L"a_2}{a_1}}}}\\right) }");
+  }
+
+}  // TEST_CASE("Spin Trace")
