@@ -322,13 +322,14 @@ namespace sequant {
             else {
               auto t = f->as<sequant::Tensor>();
               // "A": antisymmetrizing tensors are ommitted at this point
-              if (t.label() != L"A")
-                fvec.push_back(InterpretedTensor<T>{t});
+              if (t.label() != L"A") {
+                auto ip_tensor = InterpretedTensor<T>{t};
+                // linking the suitable tensors from the map
+                ip_tensor.link_tensor(*(tmap.find(ip_tensor.label() +
+                                      L"_" + ip_tensor.translate())->second));
+                fvec.push_back(ip_tensor);
+              }
             }
-          }
-          // linking the suitable tensors from the map
-          for (auto& f: fvec) {
-            f.link_tensor(*(tmap.find(f.label() + L"_" + f.translate())->second));
           }
           return contract_vec(fvec, fvec.size(), std::real(p.scalar()));
         }
