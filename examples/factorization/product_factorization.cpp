@@ -91,7 +91,7 @@ int main() {
   using ispace_map = sequant::container::map<ispace_pair::first_type,
                                              ispace_pair::second_type>;
 
-  size_t nocc = 5, nvirt = 10;
+  size_t nocc = 5, nvirt = 20;
   std::wcout << "\nSetting up a map with nocc = " << nocc << " and nvirt = " << nvirt << "..\n";
   auto counter_map = std::make_shared<ispace_map>(ispace_map{});
   counter_map->insert(ispace_pair{sequant::IndexSpace::active_occupied, nocc});
@@ -172,19 +172,32 @@ int main() {
               << "\nFactorized..\n"
               << factorized_expr->to_latex()
               << "\n";
-
+  // to confirm that we are not working
+  // on the same Expr
   if (*unfactorized_expr != *factorized_expr)
-    std::wcout << "\nunfactorized != factorized";
-  else std::wcout << "\nunfactorized == factorized";
+       std::wcout << "\nunfactorized and factorized Epr are not the same.. which is good:)\n";
+  else std::wcout << "\nunfactorized and factorized Expr are the same.. time to debug:(\n";
 
-   auto unfactorized_eval  = sequant::interpret::eval_equation(unfactorized_expr, btensor_map);
-   auto factorized_eval    = sequant::interpret::eval_equation(factorized_expr, btensor_map);
+  using std::chrono::duration_cast;
+  using std::chrono::microseconds;
 
-   std::wcout << "\nnorm(unfac) = "
-              << std::sqrt(btas::dot(unfactorized_eval.tensor(), unfactorized_eval.tensor()))
-              << "\n";
-   std::wcout << "\nnorm(fac) = "
-             << std::sqrt(btas::dot(factorized_eval.tensor(), factorized_eval.tensor()))
-             << "\n";
+  auto tstart            = std::chrono::high_resolution_clock::now();
+  auto unfactorized_eval = sequant::interpret::eval_equation(unfactorized_expr, btensor_map);
+  auto tstop             = std::chrono::high_resolution_clock::now();
+  auto duration          = duration_cast<microseconds>(tstop - tstart).count();
+  std::wcout << "time(unfactorized_eval) = " << duration << " microseconds.\n";
+
+  tstart                 = std::chrono::high_resolution_clock::now();
+  auto factorized_eval   = sequant::interpret::eval_equation(factorized_expr, btensor_map);
+  tstop                  = std::chrono::high_resolution_clock::now();
+  duration               = duration_cast<microseconds>(tstop - tstart).count();
+  std::wcout << "time(factorized_eval) = " << duration << " microseconds.\n";
+
+  std::wcout << "\nnorm(unfac) = "
+    << std::sqrt(btas::dot(unfactorized_eval.tensor(), unfactorized_eval.tensor()))
+    << "\n";
+  std::wcout << "\nnorm(fac) = "
+    << std::sqrt(btas::dot(factorized_eval.tensor(), factorized_eval.tensor()))
+    << "\n";
   return 0;
 }
