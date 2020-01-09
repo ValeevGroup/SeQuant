@@ -29,6 +29,11 @@ ContractionCostResult::ContractionCostResult(
 
 ContractionCostResult ContractionCostCounter::operator()(const ContractionCostResult& res1,
                                    const ContractionCostResult& res2) {
+  // TODO
+  // rewrite the ContractionCostCounter such that the operator() only
+  // deals with the reduced ratio of the different sizes of the IndexSpaces
+  // eg. imagine calculating 20*20*20*20*100*100*100*100 vs 1*1*1*1*5*5*5*5
+  // we care more about relative flops counts than absolute ones
   using index_vec = container::svector<Index>;
 
   auto result = ContractionCostResult{};
