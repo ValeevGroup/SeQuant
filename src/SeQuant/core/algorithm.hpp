@@ -16,13 +16,43 @@ void bubble_sort(ForwardIter begin, Sentinel end, Compare comp) {
     swapped = false;
     auto i = begin;
     auto inext = i;
+    // iterators either dereference to a reference or to a composite of references
+    constexpr const bool iter_deref_to_ref = std::is_reference_v<decltype(*(std::declval<ForwardIter>()))>;
     for (++inext; inext != end; ++i, ++inext) {
-      auto& val0 = *inext;
-      auto& val1 = *i;
-      if (comp(val0, val1)) {
-        using std::swap;
-        swap(val1, val0);
-        swapped = true;
+      if constexpr (iter_deref_to_ref) {
+        auto& val0 = *inext;
+        auto& val1 = *i;
+        if (comp(val0, val1)) {
+          using std::swap;
+          swap(val1, val0);
+          swapped = true;
+        }
+      }
+      else {
+        auto val0 = *inext;
+        auto val1 = *i;
+        static_assert(std::tuple_size_v<decltype(val0)> == 2,
+                      "need to generalize comparer to handle tuples");
+        auto composite_compare = [](auto&& c0, auto&& c1) {
+          if (std::get<0>(c0) < std::get<0>(c1)) {  // c0[0] < c1[1]
+            return true;
+          } else if (!(std::get<0>(c1) <
+                       std::get<0>(c0))) {  // c0[0] == c1[0]
+            return std::get<1>(c0) < std::get<1>(c1);
+          }
+          else {  // c0[0] > c1[0]
+            return false;
+          }
+        };
+        auto composite_swap = [](auto& c0, auto& c1) {
+          using std::swap;
+          swap(std::get<0>(c0), std::get<0>(c1));
+          swap(std::get<1>(c0), std::get<1>(c1));
+        };
+        if (composite_compare(val0, val1)) {
+          composite_swap(val1, val0);
+          swapped = true;
+        }
       }
     }
   } while (swapped);

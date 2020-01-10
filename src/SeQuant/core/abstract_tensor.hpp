@@ -226,10 +226,19 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
   ExprPtr apply(AbstractTensor &t, const Compare &comp) {
     auto s = symmetry(t);
     auto is_antisymm = (s == Symmetry::antisymm);
+    const auto _bra_rank = bra_rank(t);
+    const auto _ket_rank = ket_rank(t);
+    const auto _rank = std::min(_bra_rank, _ket_rank);
 
     // nothing to do for rank-1 tensors
-    if (bra_rank(t) == 1 && ket_rank(t) == 1)
+    if (_bra_rank == 1 && _ket_rank == 1)
       return nullptr;
+
+    using ranges::begin;
+    using ranges::end;
+    using ranges::views::zip;
+    using ranges::views::take;
+    using ranges::views::counted;
 
     bool even = true;
     switch (s) {
@@ -238,8 +247,6 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
       {
         auto _bra = bra_range(t);
         auto _ket = ket_range(t);
-        using ranges::begin;
-        using ranges::end;
 //      std::wcout << "canonicalizing " << to_latex(t);
         IndexSwapper::thread_instance().reset();
         // std::{stable_}sort does not necessarily use swap! so must implement
@@ -254,7 +261,21 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
         break;
 
       case Symmetry::nonsymm: {
-        assert(false);
+        // sort particles with bra and ket functions first, then the particleas with either bra or ket index
+        auto _bra = bra_range(t);
+        auto _ket = ket_range(t);
+        auto _zip_braket = zip(take(_bra, _rank),
+                               take(_ket, _rank));
+        bubble_sort(begin(_zip_braket), end(_zip_braket), comp);
+        if (_bra_rank > _rank) {
+          auto size_of_rest = _bra_rank - _rank;
+          auto rest_of = counted(begin(_bra) + _rank, size_of_rest);
+          bubble_sort(begin(rest_of), end(rest_of), comp);
+        } else if (_ket_rank > _rank) {
+          auto size_of_rest = _ket_rank - _rank;
+          auto rest_of = counted(begin(_ket) + _rank, size_of_rest);
+          bubble_sort(begin(rest_of), end(rest_of), comp);
+        }
       }
         break;
 
