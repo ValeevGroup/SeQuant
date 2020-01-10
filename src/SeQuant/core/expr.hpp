@@ -695,7 +695,7 @@ class Product : public Expr {
                             std::forward<Factor>(factor).shared_from_this()));
   }
 
-    /// (pre-)multiplies the product by @c scalar times @c factor ; less efficient
+  /// (pre-)multiplies the product by @c scalar times @c factor ; less efficient
   /// than append()
   template <typename T>
   Product &prepend(T scalar, ExprPtr factor) {
