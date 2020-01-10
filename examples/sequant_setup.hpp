@@ -9,12 +9,37 @@
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 #include <SeQuant/domain/mbpt/sr/sr.hpp>
+#include <SeQuant/domain/factorize/factorizer.hpp>
 
 // TODO
   using namespace sequant;
   using namespace sequant::mbpt::sr::so;
+
+    using ispace_pair = std::pair<sequant::IndexSpace::Type, size_t>;
+    using ispace_map = sequant::container::map<ispace_pair::first_type,
+    ispace_pair::second_type>;
 // 
 //using namespace sequant::mbpt::sr::so::csv;
+
+// print_expr adds extra parentheses
+// to make product of products more visible
+// however, the scalars of a product are dropped.
+void print_expr(const ExprPtr& expr_ptr){
+  if (expr_ptr->is<sequant::Product>()){
+    // Note: the scalar factor is not printed.
+    for (auto &&fac: expr_ptr->as<sequant::Product>()){
+      if (fac->is<sequant::Product>())
+        std::wcout << LR"(\left()" << fac->to_latex() << LR"(\right))";
+      else std::wcout << fac->to_latex();
+    }
+  } else if (expr_ptr->is<sequant::Sum>()) {
+    for (auto &&sumand: expr_ptr->as<sequant::Sum>()) {
+      print_expr(sumand);
+      std::wcout << " + ";
+    }
+  } else {
+    std::wcout << expr_ptr->to_latex(); }
+}
 
 namespace {
 
