@@ -227,11 +227,9 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
     auto s = symmetry(t);
     auto is_antisymm = (s == Symmetry::antisymm);
 
-    // can only handle (anti)symmetric case so far
-#ifndef NDEBUG
-    if (bra_rank(t) > 1 || ket_rank(t) > 1)
-      assert(s != Symmetry::nonsymm);
-#endif
+    // nothing to do for rank-1 tensors
+    if (bra_rank(t) == 1 && ket_rank(t) == 1)
+      return nullptr;
 
     bool even = true;
     switch (s) {
@@ -256,7 +254,7 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
         break;
 
       case Symmetry::nonsymm: {
-
+        assert(false);
       }
         break;
 
