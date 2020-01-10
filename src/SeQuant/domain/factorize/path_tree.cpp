@@ -16,14 +16,13 @@ namespace sequant::factorize::detail {
 PathTree::PathTree(size_t x) : label_{x} { children_.clear(); }
 
 // copy constructor
-PathTree::PathTree(const PathTree& rhs) {
-  label_ = rhs.get_label();
-  auto chsize = rhs.get_children().size();
-  children_.resize(chsize);
-  for (auto i=0; i<chsize; ++i){
-    children_[i] = std::make_shared<PathTree>(*rhs.get_children()[i]);
-  }
-}
+// PathTree::PathTree(const std::shared_ptr<PathTree>& rhs) {
+//   label_ = rhs->label_;
+//   if (rhs->is_leaf())
+//     return;
+//   for(const auto& rch: rhs->children_)
+//     children_.push_back(std::make_shared<PathTree>(PathTree(rch)));
+// }
 
 size_t PathTree::get_label() const { return label_; }
 

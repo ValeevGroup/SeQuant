@@ -45,7 +45,7 @@ class PathTree {
 
   ~PathTree() = default;
 
-  PathTree(const PathTree&);
+  // PathTree(const std::shared_ptr<PathTree>& );
 
   size_t get_label() const;
 
