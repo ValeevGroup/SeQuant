@@ -35,7 +35,7 @@ struct ContractionCostCounter {
   const std::shared_ptr<container::map<IndexSpace::Type, size_t>> map_ptr = nullptr;
   /// @return ContractionCostResult
   ContractionCostResult operator()(const ContractionCostResult&,
-                                   const ContractionCostResult&);
+                                   const ContractionCostResult&) const;
 };
 
 /// @brief a PathTree @c path and its corresponding @c flops
@@ -68,6 +68,10 @@ ExprPtr path_to_product(const std::shared_ptr<PathTree>&, const Product&);
 ExprPtr factorize_product(
     const Product&,
     const std::shared_ptr<container::map<IndexSpace::Type, size_t>>&);
+
+ExprPtr factorize_expr(const ExprPtr&,
+                       const std::shared_ptr<container::map<IndexSpace::Type, size_t>>&,
+                       bool factorize=true);
 
 }  // namespace sequant::factorize
 

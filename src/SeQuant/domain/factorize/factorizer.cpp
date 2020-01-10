@@ -25,52 +25,51 @@ ContractionCostResult::ContractionCostResult(
             std::back_inserter(indices));
   std::copy(tensor.ket().begin(), tensor.ket().end(),
             std::back_inserter(indices));
+  std::sort(indices.begin(), indices.end(), sequant::Index::LabelCompare());
 }
 
 ContractionCostResult ContractionCostCounter::operator()(const ContractionCostResult& res1,
-                                   const ContractionCostResult& res2) {
+                                   const ContractionCostResult& res2) const {
   // TODO
   // rewrite the ContractionCostCounter such that the operator() only
   // deals with the reduced ratio of the different sizes of the IndexSpaces
   // eg. imagine calculating 20*20*20*20*100*100*100*100 vs 1*1*1*1*5*5*5*5
   // we care more about relative flops counts than absolute ones
   using index_vec = container::svector<Index>;
+  auto label_comp = sequant::Index::LabelCompare();
 
   auto result = ContractionCostResult{};
-
   std::set_symmetric_difference(res1.indices.begin(), res1.indices.end(),
                                 res2.indices.begin(), res2.indices.end(),
-                                std::back_inserter(result.indices));
+                                std::back_inserter(result.indices),
+                                label_comp);
 
   index_vec indx_union;
   std::set_union(res1.indices.begin(), res1.indices.end(), res2.indices.begin(),
-                 res2.indices.end(), std::back_inserter(indx_union));
+                 res2.indices.end(), std::back_inserter(indx_union),
+                 label_comp);
 
-  FlopsType flops = 1;
-  for (const auto& i : indx_union) {
-    try {
-    flops *= (map_ptr->find(i.space().type()))->second;
-    } catch (const std::exception& e) {
-      std::cout << e.what() << "\n";
-    }
-  }
-  result.flops += res1.flops + flops + res2.flops;
+  FlopsType result_flops = 1;
+  for (const auto& i : indx_union)
+    result_flops *= (map_ptr->find(i.space().type()))->second;
+
+  result.flops = res1.flops + result_flops + res2.flops;
   return result;
 }
 
 ContractionCostResult compute_path_cost(const std::shared_ptr<PathTree>& tree,
                         const Product& product,
                         const ContractionCostCounter& counter) {
-  if (tree->is_leaf())
-    return ContractionCostResult{product.factors().at(tree->get_label())};
+  if (tree->is_leaf()) {
+      return ContractionCostResult{product.factors().at(tree->get_label())};
+  }
 
   auto children = container::svector<ContractionCostResult>{};
-  for (const auto& i : tree->get_children()) {
+  for (const auto& i : tree->get_children())
     children.push_back(compute_path_cost(i, product, counter));
-  }
+
   return std::accumulate(children.begin(), children.end(),
-      ContractionCostResult{product.factors().at(tree->get_label())},
-                         counter);
+      ContractionCostResult{product.factors().at(tree->get_label())}, counter);
 }
 
 void optimal_path(vec_path_ptr& paths, const Product& product,
@@ -78,9 +77,6 @@ void optimal_path(vec_path_ptr& paths, const Product& product,
                   std::shared_ptr<PathCostResult>& running_cost) {
   if (paths.size() == 1) {
     auto current_cost = compute_path_cost(paths[0], product, counter);
-    /* std::wcout << paths[0]->print_tree() << L"  " */
-    /*            << current_cost.flops << "\n"; */
-
     if (current_cost.flops < running_cost->flops) {
       running_cost->flops = current_cost.flops;
       running_cost->path = std::make_shared<PathTree>(*paths[0]);
@@ -170,4 +166,39 @@ ExprPtr factorize_product(const Product& product,
   factorized_prod.scale(product.scalar());
   return factorized_expr;
 }
-}  // namespace sequant
+/// factorize an Expr
+/// Note: antisymmetrization Exprs will be gone from the returned result
+/// @return ExprPtr
+ExprPtr factorize_expr(const ExprPtr& expr_ptr,
+                                const std::shared_ptr<container::map<IndexSpace::Type, size_t>>& ispace_map,
+                                bool factorize){
+  if (expr_ptr->is<Product>()){
+    // form a new product by omitting antisymmetrization tensors
+    // and return the result of the sequant::factorize::product_factorize on it
+
+    ProductPtr new_prod(new Product{});
+    auto& prod = expr_ptr->as<Product>();
+    for (auto &&fac: prod) {
+      // CATCH: no further checking if the factors are non-Tensor type
+      auto& tnsr = fac->as<Tensor>();
+      // skip antisym. tensors
+      if (tnsr.label() != L"A") new_prod->append(1, fac);
+    }
+    new_prod->scale(prod.scalar());
+
+    if (factorize)
+      return factorize_product(new_prod->as<Product>(), ispace_map);
+    else return new_prod;
+
+  } else if (expr_ptr->is<Sum>()){
+
+    SumPtr new_sum(new Sum{});
+    auto& sum = expr_ptr->as<Sum>();
+    for (auto &&sumand: sum)
+      new_sum->append(factorize_expr(sumand, ispace_map, factorize));
+    return new_sum;
+  } else {
+    return expr_ptr;
+  }
+}
+}  // namespace sequant::factorize
