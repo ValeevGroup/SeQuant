@@ -4,15 +4,19 @@
 #endif
 #include <btas/btas.h>
 #include <btas/tensorview.h>
-#include <btas/tensor_func.h>
 
 #include "../sequant_setup.hpp"
+#include <SeQuant/domain/factorize/factorizer.hpp>
 
 #include "scf/hartree-fock.h"
 #include "interpret/interpreted_tensor.hpp"
 #include "interpret/contract.hpp"
 
 using BTensor = btas::Tensor<double>;
+
+using ispace_pair = std::pair<sequant::IndexSpace::Type, size_t>;
+using ispace_map = sequant::container::map<ispace_pair::first_type,
+        ispace_pair::second_type>;
 
 int main(int argc, char *argv[])
 {
@@ -440,6 +444,14 @@ int main(int argc, char *argv[])
     Logger::get_instance().wick_stats = false;
     auto cc_r = cceqvec{ 2, 2 }(true, true, true, true);
 
+    // factorize CCSD equations
+    auto index_size_map = std::make_shared<ispace_map>(ispace_map{});
+    index_size_map->insert(ispace_pair(sequant::IndexSpace::active_occupied, nocc));
+    index_size_map->insert(ispace_pair(sequant::IndexSpace::active_unoccupied, nvirt));
+    cc_r[1] = sequant::factorize::factorize_expr(cc_r.at(1), index_size_map, true);
+    cc_r[2] = sequant::factorize::factorize_expr(cc_r.at(2), index_size_map, true);
+
+
     using sequant::interpret::antisymmetrize;
     using sequant::interpret::eval_equation;
 
@@ -496,8 +508,7 @@ int main(int argc, char *argv[])
     auto stop  = high_resolution_clock::now();
     auto  duration = duration_cast<microseconds>(stop - start);
     cout << "\nOut of loop after " << iter   << " iterations.\n"
-         << "\nTime: " << duration.count() << " microseconds" << endl;
-
+         << "\nTime: " << duration.count() << " microseconds." << endl;
   } // end of try block; if any exceptions occurred, report them and exit cleanly
   catch (const char* ex) {
     cerr << "caught exception: " << ex << endl;
