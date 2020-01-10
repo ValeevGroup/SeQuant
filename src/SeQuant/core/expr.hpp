@@ -782,7 +782,11 @@ class Product : public Expr {
       if (scal != 1.) {
         result += sequant::to_latex(scal);
       }
-      for (const auto &i : factors()) result += i->to_latex();
+      for (const auto &i : factors()) {
+        if (i->is<Product>())
+          result += L"\\left(" + i->to_latex() + L"\\right)";
+        else result += i->to_latex();
+      }
     }
     result += L"}";
     return result;
