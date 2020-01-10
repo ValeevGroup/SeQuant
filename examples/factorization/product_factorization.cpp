@@ -16,52 +16,31 @@
 #include <iostream>
 #include <limits>
 #include <memory>
+#include <ostream>
 #include <string>
 
 #include <functional>  // for std::bind
 #include <random>      // for std::mt19937
 #include <chrono>      // for seeding
 
-// factorize an Expr
-// Note: antisymmetrization Expr's will be gone from the returned result
-sequant::ExprPtr factorize_expr(const ExprPtr& expr_ptr,
-    const std::shared_ptr<sequant::container::map<sequant::IndexSpace::Type, size_t>>& ispace_map,
-    bool factorize=true){
-  using sequant::ExprPtr;
-  using sequant::SumPtr;
-  using sequant::ProductPtr;
-  using sequant::Sum;
-  using sequant::Product;
-  using sequant::Tensor;
-
-  if (expr_ptr->is<Product>()){
-    // form a new product by omitting antisymmetrization tensors
-    // and return the result of the sequant::factorize::product_factorize on it
-
-    ProductPtr new_prod(new Product{});
-    auto& prod = expr_ptr->as<Product>();
-    for (auto &&fac: prod) {
-      // CATCH: no further checking if the factors are non-Tensor type
-      auto& tnsr = fac->as<Tensor>();
-      // skip antisym. tensors
-      if (tnsr.label() != L"A") new_prod->append(1, fac);
+// print_expr adds extra parentheses
+// to make product of products more visible 
+// however, the scalars of a product are dropped.
+void print_expr(const ExprPtr& expr_ptr){
+  if (expr_ptr->is<sequant::Product>()){
+    // Note: the scalar factor is not printed.
+    for (auto &&fac: expr_ptr->as<sequant::Product>()){
+      if (fac->is<sequant::Product>())
+        std::wcout << LR"(\left()" << fac->to_latex() << LR"(\right))";
+      else std::wcout << fac->to_latex();
     }
-    new_prod->scale(prod.scalar());
-
-    if (factorize)
-      return sequant::factorize::factorize_product(new_prod->as<Product>(), ispace_map);
-    else return new_prod;
-
-  } else if (expr_ptr->is<Sum>()){
-
-    SumPtr new_sum(new Sum{});
-    auto& sum = expr_ptr->as<Sum>();
-    for (auto &&sumand: sum)
-      new_sum->append(factorize_expr(sumand, ispace_map, factorize));
-    return new_sum;
+  } else if (expr_ptr->is<sequant::Sum>()) {
+    for (auto &&sumand: expr_ptr->as<sequant::Sum>()) {
+      print_expr(sumand);
+      std::wcout << " + ";
+    }
   } else {
-    return expr_ptr;
-  }
+    std::wcout << expr_ptr->to_latex(); }
 }
 
 int main() {
@@ -91,7 +70,7 @@ int main() {
   using ispace_map = sequant::container::map<ispace_pair::first_type,
                                              ispace_pair::second_type>;
 
-  size_t nocc = 5, nvirt = 20;
+  size_t nocc = 10, nvirt = 4;
   std::wcout << "\nSetting up a map with nocc = " << nocc << " and nvirt = " << nvirt << "..\n";
   auto counter_map = std::make_shared<ispace_map>(ispace_map{});
   counter_map->insert(ispace_pair{sequant::IndexSpace::active_occupied, nocc});
@@ -163,19 +142,13 @@ int main() {
 
    // factorization and evaluation
    auto& expr_to_factorize = cc_r[2];
-   auto unfactorized_expr  = factorize_expr(expr_to_factorize, counter_map, false);
-   auto factorized_expr    = factorize_expr(expr_to_factorize, counter_map, true);
+   auto unfactorized_expr  = sequant::factorize::factorize_expr(expr_to_factorize, counter_map, false);
+   auto factorized_expr    = sequant::factorize::factorize_expr(expr_to_factorize, counter_map, true);
 
-   std::wcout << "\nUnfactorized..\n"
-              << unfactorized_expr->to_latex()
-              << "\n"
-              << "\nFactorized..\n"
-              << factorized_expr->to_latex()
-              << "\n";
   // to confirm that we are not working
   // on the same Expr
   if (*unfactorized_expr != *factorized_expr)
-       std::wcout << "\nunfactorized and factorized Epr are not the same.. which is good:)\n";
+       std::wcout << "\nunfactorized and factorized Expr are not the same.. which is good:)\n";
   else std::wcout << "\nunfactorized and factorized Expr are the same.. time to debug:(\n";
 
   using std::chrono::duration_cast;
@@ -199,5 +172,9 @@ int main() {
   std::wcout << "\nnorm(fac) = "
     << std::sqrt(btas::dot(factorized_eval.tensor(), factorized_eval.tensor()))
     << "\n";
+  std::wcout << "\nUnfactorized expr (scalars dropped!) \n";
+  print_expr(unfactorized_expr);
+  std::wcout << "\n\nFactorized expr (scalars dropped!) \n";
+  print_expr(factorized_expr);
   return 0;
 }
