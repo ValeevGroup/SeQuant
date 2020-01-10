@@ -216,7 +216,7 @@ ExprPtr expand_antisymm(const Tensor& tensor) {
     do {
       // Generate tensor with new labels
       auto new_tensor =
-          Tensor(tensor.label(), bra_list, ket_list, Symmetry::symm);
+          Tensor(tensor.label(), bra_list, ket_list, Symmetry::nonsymm);
 
       if (tensor_symm(new_tensor)) {
         int permutation_int_array[bra_list.size()];
@@ -312,10 +312,21 @@ ExprPtr spintrace(ExprPtr expression,
   };
   expression->visit(check_proto_index);
 
-  if (expression->is<Constant>()) return expression;
+  if (expression->is<Constant>()){
+    const auto tstop = std::chrono::high_resolution_clock::now();
+    auto time_elapsed =
+        std::chrono::duration_cast<std::chrono::milliseconds>(tstop - tstart);
+    std::cout << "Time: " << time_elapsed.count() << " milli sec.\n";
+    return expression;
+  }
 
-  if (expression->is<Tensor>())
+  if (expression->is<Tensor>()) {
+    const auto tstop = std::chrono::high_resolution_clock::now();
+    auto time_elapsed =
+        std::chrono::duration_cast<std::chrono::milliseconds>(tstop - tstart);
+    std::cout << "Time: " << time_elapsed.count() << " milli sec.\n";
     return expand_antisymm(expression->as<Tensor>());
+  }
 
   auto spin_trace_tensor = [&](const Tensor& tensor) {
     auto spin_tensor = std::make_shared<Tensor>(tensor);
@@ -469,21 +480,25 @@ ExprPtr spintrace(ExprPtr expression,
       }
     }  // Permutation FOR loop
 
-    const auto tstop = std::chrono::high_resolution_clock::now();
-    auto time_elapsed =
-        std::chrono::duration_cast<std::chrono::milliseconds>(tstop - tstart);
-    // std::cout << "Time: " << time_elapsed.count() << " milli sec.\n";
     return result;
   };
 
-  if (expression->is<Product>())
+  if (expression->is<Product>()){
+    const auto tstop = std::chrono::high_resolution_clock::now();
+    auto time_elapsed =
+        std::chrono::duration_cast<std::chrono::milliseconds>(tstop - tstart);
+    std::cout << "Time: " << time_elapsed.count() << " milli sec.\n";
     return trace_product(expression->as<Product>());
-  else if ((expression->is<Sum>())) {
+  }  else if ((expression->is<Sum>())) {
     auto result = std::make_shared<Sum>();
     for (auto&& summand : *expression) {
       if (summand->is<Product>())
         result->append(trace_product(summand->as<Product>()));
     }
+    const auto tstop = std::chrono::high_resolution_clock::now();
+    auto time_elapsed =
+        std::chrono::duration_cast<std::chrono::milliseconds>(tstop - tstart);
+    std::cout << "Time: " << time_elapsed.count() << " milli sec.\n";
     return result;
   } else
     return nullptr;
