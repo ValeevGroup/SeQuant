@@ -23,26 +23,6 @@
 #include <random>      // for std::mt19937
 #include <chrono>      // for seeding
 
-// print_expr adds extra parentheses
-// to make product of products more visible 
-// however, the scalars of a product are dropped.
-void print_expr(const ExprPtr& expr_ptr){
-  if (expr_ptr->is<sequant::Product>()){
-    // Note: the scalar factor is not printed.
-    for (auto &&fac: expr_ptr->as<sequant::Product>()){
-      if (fac->is<sequant::Product>())
-        std::wcout << LR"(\left()" << fac->to_latex() << LR"(\right))";
-      else std::wcout << fac->to_latex();
-    }
-  } else if (expr_ptr->is<sequant::Sum>()) {
-    for (auto &&sumand: expr_ptr->as<sequant::Sum>()) {
-      print_expr(sumand);
-      std::wcout << " + ";
-    }
-  } else {
-    std::wcout << expr_ptr->to_latex(); }
-}
-
 int main() {
   // global sequant setup...
   std::setlocale(LC_ALL, "en_US.UTF-8");
@@ -62,7 +42,7 @@ int main() {
       std::make_shared<DefaultTensorCanonicalizer>());
   Logger::get_instance().wick_stats = false;
   // CCSD equations
-  auto cc_r = cceqvec{2, 2}(true, true, true, true);
+  auto cc_r = cceqvec{3, 3}(true, true, true, true);
 
   // factorization and evaluation of the CC equations
   using sequant::factorize::factorize_product;
@@ -88,7 +68,8 @@ int main() {
                        G_oovv  (nocc, nocc, nvirt, nvirt),
                        G_ovov  (nocc, nvirt, nocc, nvirt),
                        T_ov    (nocc, nvirt),
-                       T_oovv  (nocc, nocc, nvirt, nvirt);
+                       T_oovv  (nocc, nocc, nvirt, nvirt),
+                       T_ooovvv (nocc, nocc, nocc, nvirt, nvirt, nvirt);
   // fill random data to tensors
   auto randfill_tensor = [&](btas::Tensor<double>& tnsr){
     auto seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
@@ -108,6 +89,7 @@ int main() {
    randfill_tensor(G_ovov );
    randfill_tensor(T_ov   );
    randfill_tensor(T_oovv );
+   randfill_tensor(T_ooovvv);
 
    /* std::wcout << L"\nnorm(Fock_oo) = " << std::sqrt(btas::dot(Fock_oo,Fock_oo)) */
    /*            << L"\nnorm(Fock_ov) = " << std::sqrt(btas::dot(Fock_ov,Fock_ov)) */
@@ -139,9 +121,10 @@ int main() {
    btensor_map.insert(str_to_tensor_pair(L"g_ovov", &G_ovov));
    btensor_map.insert(str_to_tensor_pair(L"t_ov",   &T_ov));
    btensor_map.insert(str_to_tensor_pair(L"t_oovv", &T_oovv));
+  btensor_map.insert(str_to_tensor_pair(L"t_ooovvv", &T_ooovvv));
 
    // factorization and evaluation
-   auto& expr_to_factorize = cc_r[2];
+   auto& expr_to_factorize = cc_r[3];
    auto unfactorized_expr  = sequant::factorize::factorize_expr(expr_to_factorize, counter_map, false);
    auto factorized_expr    = sequant::factorize::factorize_expr(expr_to_factorize, counter_map, true);
 
@@ -173,8 +156,10 @@ int main() {
     << std::sqrt(btas::dot(factorized_eval.tensor(), factorized_eval.tensor()))
     << "\n";
   std::wcout << "\nUnfactorized expr (scalars dropped!) \n";
-  print_expr(unfactorized_expr);
+  // print_expr(unfactorized_expr);
+  std::wcout << unfactorized_expr->to_latex();
   std::wcout << "\n\nFactorized expr (scalars dropped!) \n";
-  print_expr(factorized_expr);
+  // print_expr(factorized_expr);
+  std::wcout << factorized_expr->to_latex();
   return 0;
 }
