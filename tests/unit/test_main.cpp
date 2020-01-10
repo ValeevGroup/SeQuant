@@ -4,11 +4,11 @@
 
 #define CATCH_CONFIG_RUNNER
 #include <clocale>
-#include "../../src/SeQuant/core/runtime.hpp"
-#include "../../src/SeQuant/core/op.hpp"
-#include "../../src/SeQuant/core/space.hpp"
-#include "../../src/SeQuant/core/utility.hpp"
-#include "../../src/SeQuant/domain/mbpt/convention.hpp"
+#include "SeQuant/core/runtime.hpp"
+#include "SeQuant/core/op.hpp"
+#include "SeQuant/core/space.hpp"
+#include "SeQuant/core/utility.hpp"
+#include "SeQuant/domain/mbpt/convention.hpp"
 #include "catch.hpp"
 
 int main( int argc, char* argv[] )

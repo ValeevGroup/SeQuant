@@ -2,8 +2,8 @@
 // Created by Eduard Valeyev on 3/20/18.
 //
 
-#ifndef SEQUANT_OP_H
-#define SEQUANT_OP_H
+#ifndef SEQUANT_CORE_OP_H
+#define SEQUANT_CORE_OP_H
 
 #include <numeric>
 
@@ -337,7 +337,7 @@ class Operator : public container::svector<Op<S>>, public Expr {
     return get_type_id<Operator>();
   };
 
-  std::shared_ptr<Expr> clone() const override {
+  ExprPtr clone() const override {
     return std::make_shared<Operator>(*this);
   }
 
@@ -637,7 +637,7 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
     return Expr::get_type_id<NormalOperator>();
   };
 
-  std::shared_ptr<Expr> clone() const override {
+  ExprPtr clone() const override {
     return std::make_shared<NormalOperator>(*this);
   }
 
@@ -1012,4 +1012,4 @@ std::tuple<int, std::shared_ptr<NormalOperator<S>>> normalize(const NormalOperat
 
 }  // namespace sequant
 
-#endif // SEQUANT_OP_H
+#endif // SEQUANT_CORE_OP_H

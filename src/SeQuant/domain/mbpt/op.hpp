@@ -2,8 +2,8 @@
 // Created by Eduard Valeyev on 2019-03-26.
 //
 
-#ifndef SEQUANT_OP_HPP
-#define SEQUANT_OP_HPP
+#ifndef SEQUANT_DOMAIN_MBPT_OP_HPP
+#define SEQUANT_DOMAIN_MBPT_OP_HPP
 
 #include <string>
 #include <vector>
@@ -23,4 +23,4 @@ OpClass to_class(OpType op);
 }  // namespace mbpt
 }  // namespace sequant
 
-#endif //SEQUANT_OP_HPP
+#endif //SEQUANT_DOMAIN_MBPT_OP_HPP

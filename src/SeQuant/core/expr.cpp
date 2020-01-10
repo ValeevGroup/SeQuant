@@ -2,10 +2,10 @@
 // Created by Eduard Valeyev on 2019-02-06.
 //
 
-#include "./expr.hpp"
-#include "./tensor_network.hpp"
-#include "./tensor.hpp"
-#include "./utility.hpp"
+#include "expr.hpp"
+#include "tensor_network.hpp"
+#include "tensor.hpp"
+#include "utility.hpp"
 
 namespace sequant {
 
@@ -20,7 +20,7 @@ bool Product::is_commutative() const {
   return result;
 }
 
-std::shared_ptr<Expr> Product::canonicalize_impl(bool rapid) {
+ExprPtr Product::canonicalize_impl(bool rapid) {
   // recursively canonicalize subfactors ...
   ranges::for_each(factors_, [this](auto &factor) {
     auto bp = factor->canonicalize();
@@ -109,15 +109,15 @@ std::shared_ptr<Expr> Product::canonicalize_impl(bool rapid) {
   return {};  // side effects are absorbed into the scalar_
 }
 
-std::shared_ptr<Expr> Product::canonicalize() {
+ExprPtr Product::canonicalize() {
   return this->canonicalize_impl(/* rapid = */ false);
 }
 
-std::shared_ptr<Expr> Product::rapid_canonicalize() {
+ExprPtr Product::rapid_canonicalize() {
   return this->canonicalize_impl(/* rapid = */ true);
 }
 
-// std::shared_ptr<Expr> Product::rapid_canonicalize() {
+// ExprPtr Product::rapid_canonicalize() {
 //  // recursively canonicalize subfactors ...
 //  ranges::for_each(factors_, [this](auto &factor) {
 //    auto bp = factor->canonicalize();
@@ -161,11 +161,14 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
       }
     };
 
-    // ... then resort according to hash values
+    // ... then resort according to size, then hash values
     using std::begin;
     using std::end;
     std::stable_sort(begin(summands_), end(summands_), [](const auto &first, const auto &second) {
-      return *first < *second;
+      const auto first_size = ranges::size(*first);
+      const auto second_size = ranges::size(*second);
+
+      return (first_size == second_size) ? *first < *second : first_size < second_size;
     });
 
     // ... then reduce terms whose hash values are identical

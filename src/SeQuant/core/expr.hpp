@@ -84,20 +84,20 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
 
   /// @return a clone of this object
   /// @note must be overridden in the derived class
-  virtual std::shared_ptr<Expr> clone() const {
+  virtual ExprPtr clone() const {
     throw std::logic_error("Expr::clone not implemented in this derived class");
   }
 
   /// Canonicalizes @c this and returns the biproduct of canonicalization (e.g. phase)
   /// @return the biproduct of canonicalization, or @c nullptr if no biproduct generated
-  virtual std::shared_ptr<Expr> canonicalize() {
+  virtual ExprPtr canonicalize() {
     return {};  // by default do nothing and return nullptr
   }
 
   /// Performs approximate, but fast, canonicalization of @c this and returns the biproduct of canonicalization (e.g. phase)
   /// The default is to use canonicalize(), unless overridden in the derived class.
   /// @return the biproduct of canonicalization, or @c nullptr if no biproduct generated
-  virtual std::shared_ptr<Expr> rapid_canonicalize() {
+  virtual ExprPtr rapid_canonicalize() {
     return this->canonicalize();
   }
 
@@ -129,7 +129,7 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
     bool this_visited = false;
     if constexpr(std::is_invocable_r_v<void,
                                        std::remove_reference_t<Visitor>,
-                                       const std::shared_ptr<Expr> &>) {
+                                       const ExprPtr &>) {
       if (!atoms_only || this->is_atom()) {
         visitor(shared_from_this());
         this_visited = true;
@@ -292,7 +292,10 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
   /// @return true if this object is of type @c T
   template <typename T>
   bool is() const {
-    return this->type_id() == get_type_id<std::decay_t<T>>();
+    if constexpr (std::is_same_v<std::decay_t<T>,Expr>)
+      return true;
+    else
+      return this->type_id() == get_type_id<std::decay_t<T>>();
   }
 
   /// @tparam T an Expr type
@@ -369,15 +372,15 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
 
   struct cursor
   {
-    using value_type = std::shared_ptr<Expr>;
+    using value_type = ExprPtr;
 
     cursor() = default;
-    constexpr explicit cursor(std::shared_ptr<Expr>* subexpr_ptr) noexcept
+    constexpr explicit cursor(ExprPtr* subexpr_ptr) noexcept
         : ptr_{subexpr_ptr}
     {}
     /// when take const ptr note runtime const flag
-    constexpr explicit cursor(const std::shared_ptr<Expr>* subexpr_ptr) noexcept
-        : ptr_{const_cast<std::shared_ptr<Expr>*>(subexpr_ptr)}, const_{true}
+    constexpr explicit cursor(const ExprPtr* subexpr_ptr) noexcept
+        : ptr_{const_cast<ExprPtr*>(subexpr_ptr)}, const_{true}
     {}
     bool equal(const cursor& that) const
     {
@@ -392,18 +395,18 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
       --ptr_;
     }
     // TODO figure out why can't return const here if want to be able to assign to *begin(Expr&)
-    std::shared_ptr<Expr>& read() const
+    ExprPtr& read() const
     {
       RANGES_EXPECT(ptr_);
       return *ptr_;
     }
-    std::shared_ptr<Expr>& read()
+    ExprPtr& read()
     {
       RANGES_EXPECT(const_ == false);
       RANGES_EXPECT(ptr_);
       return *ptr_;
     }
-    void assign(const std::shared_ptr<Expr>& that_ptr)
+    void assign(const ExprPtr& that_ptr)
     {
       RANGES_EXPECT(ptr_);
       *ptr_ = that_ptr;
@@ -417,7 +420,7 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
       ptr_ += n;
     }
    private:
-    std::shared_ptr<Expr>* ptr_ = nullptr;  // both begin and end will be represented by this, so Expr without subexpressions begin() equals end() automatically
+    ExprPtr* ptr_ = nullptr;  // both begin and end will be represented by this, so Expr without subexpressions begin() equals end() automatically
     bool const_ = false;  // assert in nonconst ops
   };
 
@@ -556,7 +559,7 @@ class Constant : public Expr {
     return get_type_id<Constant>();
   }
 
-  std::shared_ptr<Expr> clone() const override {
+  ExprPtr clone() const override {
     return ex<Constant>(this->value());
   }
 
@@ -756,11 +759,18 @@ class Product : public Expr {
 
  public:
   std::wstring to_latex() const override {
+    return to_latex(false);
+  }
+
+  /// just like Expr::to_latex() , but can negate before conversion
+  /// @param[in] negate if true, scalar will be before conversion
+  std::wstring to_latex(bool negate) const {
     std::wstring result;
     result = L"{";
     if (scalar() != 0.) {
-      if (scalar() != 1.) {
-        result += sequant::to_latex(scalar()) + L" \\times ";
+      const auto scal = negate ? -scalar() : scalar();
+      if (scal != 1.) {
+        result += sequant::to_latex(scal);
       }
       for (const auto &i : factors()) result += i->to_latex();
     }
@@ -786,7 +796,7 @@ class Product : public Expr {
 
   type_id_type type_id() const override { return get_type_id<Product>(); };
 
-  std::shared_ptr<Expr> clone() const override {
+  ExprPtr clone() const override {
     auto cloned_factors =
         factors() | ranges::views::transform([](const ExprPtr &ptr) {
           return ptr ? ptr->clone() : nullptr;
@@ -851,9 +861,9 @@ class Product : public Expr {
     return *hash_value_;
   }
 
-  std::shared_ptr<Expr> canonicalize_impl(bool rapid = false);
-  virtual std::shared_ptr<Expr> canonicalize() override;
-  virtual std::shared_ptr<Expr> rapid_canonicalize() override;
+  ExprPtr canonicalize_impl(bool rapid = false);
+  virtual ExprPtr canonicalize() override;
+  virtual ExprPtr rapid_canonicalize() override;
 
   bool static_equal(const Expr &that) const override {
     const auto &that_cast = static_cast<const Product &>(that);
@@ -1020,9 +1030,19 @@ class Sum : public Expr {
     result = L"{ \\left(";
     std::size_t counter = 0;
     for (const auto &i : summands()) {
-      result += i->to_latex();
+      const auto i_is_product = i->is<Product>();
+      if (!i_is_product) {
+        result += (counter == 0) ? i->to_latex() : (L" + " + i->to_latex());
+      } else {  // i_is_product
+        const auto i_prod = i->as<Product>();
+        const auto scalar = i_prod.scalar();
+        if (scalar.real() < 0 || (scalar.real() == 0 && scalar.imag() < 0)) {
+          result += L" - " + i_prod.to_latex(true);
+        } else {
+          result += (counter == 0) ? i->to_latex() : (L" + " + i->to_latex());
+        }
+      }
       ++counter;
-      if (counter != summands().size()) result += L" + ";
     }
     result += L"\\right) }";
     return result;
@@ -1045,7 +1065,7 @@ class Sum : public Expr {
     return Expr::get_type_id<Sum>();
   };
 
-  std::shared_ptr<Expr> clone() const override {
+  ExprPtr clone() const override {
     auto cloned_summands =
         summands() | ranges::views::transform(
                          [](const ExprPtr &ptr) { return ptr->clone(); });
@@ -1147,19 +1167,47 @@ inline std::wstring to_latex_align(const ExprPtr &exprptr,
     int line_counter = 0;
     int term_counter = 0;
     std::wstring::size_type pos = 0;
-    while ((pos = result.find(L" + ", pos + 1)) != std::wstring::npos) {
+    std::wstring::size_type plus_pos = 0;
+    std::wstring::size_type minus_pos = 0;
+    bool last_pos_has_plus = false;
+    bool have_next_term = true;
+    auto insert_into_result_at = [&](std::wstring::size_type at, const auto& str) {
+      assert(pos != std::wstring::npos);
+      result.insert(at, str);
+      const auto str_nchar = std::size(str) - 1;  // neglect end-of-string
+      pos += str_nchar;
+      if (plus_pos != std::wstring::npos)
+        plus_pos += str_nchar;
+      if (minus_pos != std::wstring::npos)
+        minus_pos += str_nchar;
+      if (pos != plus_pos)
+        assert(plus_pos == result.find(L" + ", plus_pos));
+      if (pos != minus_pos)
+        assert(minus_pos == result.find(L" - ", minus_pos));
+    };
+    while (have_next_term) {
       if (max_lines_per_align > 0 &&
           line_counter == max_lines_per_align) {  // start new align block?
-        result.insert(pos + 3, L"\n\\end{align}\n\\begin{align}\n& ");
+        insert_into_result_at(pos + 1, L"\n\\end{align}\n\\begin{align}\n& ");
         line_counter = 0;
       } else {
         // break the line if needed
-        if ((term_counter + 1) % max_terms_per_line == 0) {
-          result.insert(pos + 3, L"\\\\\n& ");
+        if (term_counter != 0 && term_counter % max_terms_per_line == 0) {
+          insert_into_result_at(pos + 1, L"\\\\\n& ");
           ++line_counter;
         }
       }
-      ++term_counter;
+      // next term, plz
+      if (plus_pos == 0 || last_pos_has_plus)
+        plus_pos = result.find(L" + ", plus_pos + 1);
+      if (minus_pos == 0 || !last_pos_has_plus)
+        minus_pos = result.find(L" - ", minus_pos + 1);
+      pos = std::min(plus_pos, minus_pos);
+      last_pos_has_plus = (pos == plus_pos);
+      if (pos != std::wstring::npos)
+        ++term_counter;
+      else
+        have_next_term = false;
     }
   } else {
     result = std::wstring(L"\\begin{align}\n& ") + result;

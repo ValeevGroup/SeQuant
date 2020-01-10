@@ -15,10 +15,15 @@ addons:
     sources: &clang8_sources
       - llvm-toolchain-xenial-8
     packages: &base_packages
-    - cmake
-    - cmake-data
-    - libtbb-dev
-    - lcov
+      - libboost-all-dev
+      - libblas-dev
+      - liblapack-dev
+      - liblapacke-dev
+      - libopenblas-dev
+      - cmake
+      - cmake-data
+      - libtbb-dev
+      - lcov
 
 env:
   global:
