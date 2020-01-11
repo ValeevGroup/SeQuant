@@ -316,7 +316,7 @@ ExprPtr spintrace(ExprPtr expression,
     const auto tstop = std::chrono::high_resolution_clock::now();
     auto time_elapsed =
         std::chrono::duration_cast<std::chrono::milliseconds>(tstop - tstart);
-    std::cout << "Time: " << time_elapsed.count() << " milli sec.\n";
+    // std::cout << "Time: " << time_elapsed.count() << " milli sec.\n";
     return expression;
   }
 
@@ -324,7 +324,7 @@ ExprPtr spintrace(ExprPtr expression,
     const auto tstop = std::chrono::high_resolution_clock::now();
     auto time_elapsed =
         std::chrono::duration_cast<std::chrono::milliseconds>(tstop - tstart);
-    std::cout << "Time: " << time_elapsed.count() << " milli sec.\n";
+    // std::cout << "Time: " << time_elapsed.count() << " milli sec.\n";
     return expand_antisymm(expression->as<Tensor>());
   }
 
@@ -487,7 +487,7 @@ ExprPtr spintrace(ExprPtr expression,
     const auto tstop = std::chrono::high_resolution_clock::now();
     auto time_elapsed =
         std::chrono::duration_cast<std::chrono::milliseconds>(tstop - tstart);
-    std::cout << "Time: " << time_elapsed.count() << " milli sec.\n";
+    // std::cout << "Time: " << time_elapsed.count() << " milli sec.\n";
     return trace_product(expression->as<Product>());
   }  else if ((expression->is<Sum>())) {
     auto result = std::make_shared<Sum>();
@@ -498,7 +498,7 @@ ExprPtr spintrace(ExprPtr expression,
     const auto tstop = std::chrono::high_resolution_clock::now();
     auto time_elapsed =
         std::chrono::duration_cast<std::chrono::milliseconds>(tstop - tstart);
-    std::cout << "Time: " << time_elapsed.count() << " milli sec.\n";
+    // std::cout << "Time: " << time_elapsed.count() << " milli sec.\n";
     return result;
   } else
     return nullptr;
