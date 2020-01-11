@@ -9,12 +9,6 @@
 
 namespace sequant {
 
-class spinIndex : public Index {
- private:
-};
-
-struct zero_result : public std::exception {};
-
 ExprPtr append_spin(ExprPtr& expr, std::map<Index, Index>& index_replacements) {
   auto add_spin_to_tensor = [&](const Tensor& tensor) {
     auto spin_tensor = std::make_shared<Tensor>(tensor);
