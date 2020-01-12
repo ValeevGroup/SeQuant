@@ -210,17 +210,29 @@ if(BTAS_FOUND)
 set(example3 product_factorization)
 add_executable(${example3} EXCLUDE_FROM_ALL
     examples/factorization/${example3}.cpp)
+
 target_include_directories(${example3} PUBLIC
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>
-    ${BTAS_INSTALL_DIR}
-    )
+    ${BTAS_INSTALL_DIR})
+
 target_link_libraries(${example3} SeQuant factorizer)
 target_compile_definitions(${example3} PRIVATE SEQUANT_HAS_BTAS)
+
+set(example4 expr_evaluation)
+add_executable(${example4} EXCLUDE_FROM_ALL
+    src/SeQuant/domain/evaluate/evalexpr.hpp
+    examples/evaluation/${example4}.cpp)
+
+target_include_directories(${example4} PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>
+        ${BTAS_INSTALL_DIR})
+target_link_libraries(${example4} SeQuant)
 endif(BTAS_FOUND)
 
 # add tests for running examples
-set (lastexample 4)
+set (lastexample 5)
 foreach(i RANGE ${lastexample})
     if (TARGET ${example${i}})
         add_test(example/${example${i}}/build "${CMAKE_COMMAND}" --build ${CMAKE_BINARY_DIR} --target ${example${i}})
