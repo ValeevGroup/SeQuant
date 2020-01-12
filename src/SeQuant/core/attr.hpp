@@ -16,9 +16,18 @@ enum class IndexSpaceMetric {
 };
 
 /// describes supported symmetries of bra or ket of tensorial objects
+///
+/// @note It does not matter whether this refers to bra or ket since they
+///       must match, i.e. it does not make sense for ket to be symmetric
+///       with respect to a permutation but bra to be antisymmetric with respect
+///       to the same permutation (due to the implied particle
+///       indistinguishibility)
 enum class Symmetry { symm, antisymm, nonsymm, invalid };
 
 /// describes supported symmetries of tensorial objects w.r.t. bra-ket exchange
+///
+/// @note Currently there is no support for swapping bra index with the ket
+///       index for a single particle, only whole bra-ket swaps are considered.
 enum class BraKetSymmetry { symm, conjugate, nonsymm, invalid };
 
 inline std::wstring to_wolfram(const Symmetry& symmetry) {
