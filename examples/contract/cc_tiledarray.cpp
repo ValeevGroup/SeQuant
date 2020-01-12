@@ -5,9 +5,9 @@
 
 #include "../sequant_setup.hpp"
 
-#include "../contract/scf/hartree-fock.h"
-#include "../contract/interpret/interpreted_tensor.hpp"
-#include "../contract/interpret/contract.hpp"
+#include "scf/hartree-fock.h"
+#include "interpret/interpreted_tensor.hpp"
+#include "interpret/contract.hpp"
 
 int main(int argc, char *argv[])
 {
@@ -503,6 +503,14 @@ int main(int argc, char *argv[])
 
     using sequant::interpret::antisymmetrize;
     using sequant::interpret::eval_equation;
+    using sequant::factorize::factorize_expr;
+
+    // factorize CCSDT equations
+    auto index_size_map = std::make_shared<ispace_map>(ispace_map{});
+    index_size_map->insert(ispace_pair(sequant::IndexSpace::active_occupied, nocc));
+    index_size_map->insert(ispace_pair(sequant::IndexSpace::active_unoccupied, nvirt));
+    for (auto i=1; i<cc_r.size(); ++i)
+      cc_r[i] = factorize_expr(cc_r.at(i), index_size_map, true);
 
     auto tstart = std::chrono::high_resolution_clock::now();
     do {

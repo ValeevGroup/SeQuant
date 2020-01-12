@@ -6,17 +6,12 @@
 #include <btas/tensorview.h>
 
 #include "../sequant_setup.hpp"
-#include <SeQuant/domain/factorize/factorizer.hpp>
 
 #include "scf/hartree-fock.h"
 #include "interpret/interpreted_tensor.hpp"
 #include "interpret/contract.hpp"
 
 using BTensor = btas::Tensor<double>;
-
-using ispace_pair = std::pair<sequant::IndexSpace::Type, size_t>;
-using ispace_map = sequant::container::map<ispace_pair::first_type,
-        ispace_pair::second_type>;
 
 int main(int argc, char *argv[])
 {
@@ -309,9 +304,9 @@ int main(int argc, char *argv[])
     BTensor Fock_oo(nocc, nocc), Fock_ov(nocc, nvirt), Fock_vv(nvirt, nvirt);
 
     // Integral tensors
-    BTensor G_oooo(nocc, nocc, nocc, nocc), G_vvvv(nvirt, nvirt, nvirt, nvirt);
-    BTensor G_ovvv(nocc, nvirt, nvirt, nvirt), G_ooov(nocc, nocc, nocc, nvirt);
-    BTensor G_oovv(nocc, nocc, nvirt, nvirt), G_ovov(nocc, nvirt, nocc, nvirt);
+    BTensor G_oooo(nocc, nocc, nocc, nocc), G_vvvv(nvirt, nvirt, nvirt, nvirt),
+            G_ovvv(nocc, nvirt, nvirt, nvirt), G_ooov(nocc, nocc, nocc, nvirt),
+            G_oovv(nocc, nocc, nvirt, nvirt), G_ovov(nocc, nvirt, nocc, nvirt);
 
     for (auto i = 0; i < nocc; ++i) {
       Fock_oo(i,i) = fock_spin(i,i);
@@ -384,7 +379,7 @@ int main(int argc, char *argv[])
     auto t_oovv = BTensor(nocc, nocc, nvirt, nvirt);
     t_ov.fill(0.0);
     t_oovv.fill(0.0);
-    // and triples
+    // and triples if CCSDT required
     auto t_ooovvv = BTensor(nocc, nocc, nocc, nvirt, nvirt, nvirt);
     t_ooovvv.fill(0.0);
 
@@ -444,24 +439,27 @@ int main(int argc, char *argv[])
     Logger::get_instance().wick_stats = false;
     auto cc_r = cceqvec{ 2, 2 }(true, true, true, true);
 
+    using sequant::interpret::antisymmetrize;
+    using sequant::interpret::eval_equation;
+    using sequant::factorize::factorize_expr;
+
     // factorize CCSD equations
     auto index_size_map = std::make_shared<ispace_map>(ispace_map{});
     index_size_map->insert(ispace_pair(sequant::IndexSpace::active_occupied, nocc));
     index_size_map->insert(ispace_pair(sequant::IndexSpace::active_unoccupied, nvirt));
-    cc_r[1] = sequant::factorize::factorize_expr(cc_r.at(1), index_size_map, true);
-    cc_r[2] = sequant::factorize::factorize_expr(cc_r.at(2), index_size_map, true);
 
-
-    using sequant::interpret::antisymmetrize;
-    using sequant::interpret::eval_equation;
+    for (auto i=1; i<cc_r.size(); ++i)
+      cc_r[i] = factorize_expr(cc_r.at(i), index_size_map, true);
 
     auto start = high_resolution_clock::now();
     do { 
       ++iter;
       auto R1 = eval_equation(cc_r[1], btensor_map).tensor();
       auto R2 = eval_equation(cc_r[2], btensor_map).tensor();
+      // auto R3 = eval_equation(cc_r[3], btensor_map).tensor();
 
       R2 = antisymmetrize(R2);
+      // R3 = antisymmetrize(R3);
 
       cout << "using BTAS,    iter " << iter << endl;
       /* cout << "norm(R1) = " << std::sqrt(btas::dot(R1, R1)) << endl; */
@@ -485,6 +483,17 @@ int main(int argc, char *argv[])
             for (auto b = 0; b < nvirt; ++b) {
               t_oovv(i, j, a, b) += R2(i, j, a, b)/D_oovv(i,j,a,b); } } } }
 
+      //
+      // update t_ooovvv
+      // for (auto i = 0; i < nocc; ++i) {
+      //   for (auto j = 0; j < nocc; ++j) {
+      //     for (auto k = 0; k < nocc; ++k) {
+      //       for (auto a = 0; a < nvirt; ++a) {
+      //         for (auto b = 0; b < nvirt; ++b) {
+      //           for (auto c = 0; c < nvirt; ++c) {
+      //             t_ooovvv(i,j,k,a,b,c)
+      //               += R3(i,j,k,a,b,c)/D_ooovvv(i,j,k,a,b,c); } } } } } }
+
       cout << "norm(t_ov)    " << std::sqrt(btas::dot(t_ov,t_ov))       <<endl;
       cout << "norm(t_oovv)  " << std::sqrt(btas::dot(t_oovv,t_oovv))   <<endl;
 
@@ -498,7 +507,7 @@ int main(int argc, char *argv[])
       eccsd  = 0.5*btas::dot(temp_tensor, t_ov)
         + 0.25*btas::dot(G_oovv, t_oovv)
         + btas::dot(Fock_ov, t_ov);
-      printf("E(CCSD) is: %20.12f\n\n", eccsd);
+      printf("E(CC) is: %20.12f\n\n", eccsd);
 
       normdiff = norm_last - sqrt(btas::dot(t_oovv, t_oovv));
       ediff    = eccsd_last - eccsd;

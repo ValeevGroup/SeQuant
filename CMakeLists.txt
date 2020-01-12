@@ -201,7 +201,7 @@ if (TiledArray_FOUND)
             examples/contract/interpret/interpreted_tensor.hpp
             examples/contract/interpret/contract.hpp
             examples/contract/scf/hartree-fock.cc)
-    target_link_libraries(${example2} SeQuant ${TBB_LIBRARIES} Libint2::cxx tiledarray)
+    target_link_libraries(${example2} SeQuant factorizer ${TBB_LIBRARIES} Libint2::cxx tiledarray)
     target_compile_definitions(${example2} PRIVATE SEQUANT_HAS_TILEDARRAY)
 endif(TiledArray_FOUND)
 
