@@ -139,7 +139,7 @@ class IndexSpace {
   /// standard space tags are predefined that helps implement set theory of standard spaces as binary ops on bitsets
   static QuantumNumbers nullqns;  //!< no quantum numbers
   static QuantumNumbers alpha;  //!< spin-up
-  static QuantumNumbers beta;  //!< spin-down`
+  static QuantumNumbers beta;  //!< spin-down
   template <int32_t qnsint> static const constexpr bool is_standard_qns() {
     const QuantumNumbers qns{qnsint};
     return (qns == nullqns || qns == alpha || qns == beta);

@@ -216,7 +216,7 @@ class Index : public Taggable {
 
   /// creates a globally non-unique index in space @c space. The label of the
   /// resulting index = @c IndexSpace::base_key(space) + '_' + @c
-  /// subscript_label. Implemented for spin-trace functoin
+  /// subscript_label.
   /// \param space an IndexSpace object
   /// \param subscript_label any std::wstring object
   /// \return a non-unique index in space @c space with label @c subscript_label
@@ -352,7 +352,7 @@ class Index : public Taggable {
   /// that returned by min_tmp_index()
   static std::size_t next_tmp_index() { return ++tmp_index_accessor(); }
 
-  /// resets the temporaty index counter so that the next call to
+  /// resets the temporary index counter so that the next call to
   /// next_tmp_index() will return the value returned by min_tmp_index()
   /// @warning should only to be used when reproducibility matters (e.g. unit
   /// testing)

@@ -31,8 +31,6 @@ int main(int argc, char* argv[]) {
   // change to true to print stats
   Logger::get_instance().wick_stats = false;
 
-  auto ccsd = cceqvec{2, 2}(true, true, true, true);
-
   ranges::for_each(std::array<bool, 2>{false, true}, [=](const bool screen) {
     ranges::for_each(
         std::array<bool, 2>{false, true}, [=](const bool use_topology) {
