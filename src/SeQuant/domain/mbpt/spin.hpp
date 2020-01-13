@@ -9,6 +9,11 @@
 
 namespace sequant {
 
+/// @brief Adds spins to indices in an expression using a map
+/// @param expr an expression pointer
+/// @param index_replacements a map of pairs containing the index and its
+/// replacement
+/// @return expr the expression with substituted indices
 ExprPtr append_spin(ExprPtr& expr, std::map<Index, Index>& index_replacements) {
   auto add_spin_to_tensor = [&](const Tensor& tensor) {
     auto spin_tensor = std::make_shared<Tensor>(tensor);
@@ -43,12 +48,14 @@ ExprPtr append_spin(ExprPtr& expr, std::map<Index, Index>& index_replacements) {
         spin_expr->append(summand);
       }
     }
-    // std::wcout << "spin_expr:\n" << spin_expr->to_latex() << std::endl;
     return spin_expr;
   } else
     return expr;
 }
 
+/// @brief Removes spin label from all indices in an expression
+/// @param expr an expression pointer with spin labels
+/// @return expr an expression pointer without spin labels
 ExprPtr remove_spin(ExprPtr& expr) {
   auto remove_spin_from_tensor = [&](const Tensor& tensor) {
     std::vector<Index> bra;  // An unordered list is required
@@ -70,7 +77,6 @@ ExprPtr remove_spin(ExprPtr& expr) {
     auto sft = Tensor(tensor.label(), bra, ket, tensor.symmetry(),
                       tensor.braket_symmetry());
     auto sf_tensor = std::make_shared<Tensor>(sft);
-    // std::wcout << "Output: " << sf_tensor->to_latex() << "\n";
     return sf_tensor;
   };
 
@@ -106,6 +112,10 @@ ExprPtr remove_spin(ExprPtr& expr) {
     return expr;
 }
 
+/// @brief Checks the spin symmetry of pairs of indices corresponding to a
+/// particle in tensor notation
+/// @param tensor a tensor with indices containing spin labels
+/// @return true if spin symmetry matches for all pairs of indices
 inline bool tensor_symm(const Tensor& tensor) {
   bool result = false;
   assert(tensor.bra().size() == tensor.ket().size());
@@ -124,6 +134,28 @@ inline bool tensor_symm(const Tensor& tensor) {
   }
   return result;
 }
+
+/// @brief Check if the number of alpha spins in bra and ket are equal
+/// beta spins will match if total number of indices is the same
+/// @param any tensor
+/// @return true if number of alpha spins match in bra and ket
+bool can_expand(const Tensor& tensor) {
+  assert(tensor.bra_rank() == tensor.ket_rank());
+  auto result = false;
+  auto alpha_in_bra = 0;
+  auto alpha_in_ket = 0;
+  ranges::for_each(tensor.bra(), [&](Index i) {
+    if (IndexSpace::instance(i.label()).qns() == IndexSpace::alpha)
+      ++alpha_in_bra;
+  });
+  ranges::for_each(tensor.ket(), [&](Index i) {
+    if (IndexSpace::instance(i.label()).qns() == IndexSpace::alpha)
+      ++alpha_in_ket;
+  });
+  if (alpha_in_bra == alpha_in_ket) result = true;
+  return result;
+}
+
 //================================================
 #if 1
 // These functions are from:
@@ -189,9 +221,12 @@ int countSwaps(int arr[], int n) {
 }
 #endif
 //================================================
-/// expand an antisymmetric Tensor
+
+/// @brief expand an antisymmetric tensor
 /// @param tensor a tensor from a product
-/// @return expression pointer containing the sum of expanded terms
+/// @return an expression pointer containing the sum of expanded terms if
+/// antisymmetric or
+/// @return an expression pointer containing the tensor otherwise
 ExprPtr expand_antisymm(const Tensor& tensor) {
   assert(tensor.bra().size() == tensor.ket().size());
 
@@ -251,6 +286,9 @@ ExprPtr expand_antisymm(const Tensor& tensor) {
   }
 }
 
+/// @brief expands all antisymmetric tensors in a product
+/// @param expr an expression pointer to expand
+/// @return an expression pointer with expanded tensors
 ExprPtr expand_antisymm(const ExprPtr& expr) {
   Sum expanded_sum{};
   for (auto&& summand : *expr) {
@@ -269,27 +307,12 @@ ExprPtr expand_antisymm(const ExprPtr& expr) {
   return result;
 }
 
-/// Check if the number of alpha spins in bra and ket are equal
-/// beta spins will match if total number of indices is the same
-/// @param any tensor
-/// @return true if number of alpha spins match in bra and ket
-bool can_expand(const Tensor& tensor) {
-  assert(tensor.bra_rank() == tensor.ket_rank());
-  auto result = false;
-  auto alpha_in_bra = 0;
-  auto alpha_in_ket = 0;
-  ranges::for_each(tensor.bra(), [&](Index i) {
-    if (IndexSpace::instance(i.label()).qns() == IndexSpace::alpha)
-      ++alpha_in_bra;
-  });
-  ranges::for_each(tensor.ket(), [&](Index i) {
-    if (IndexSpace::instance(i.label()).qns() == IndexSpace::alpha)
-      ++alpha_in_ket;
-  });
-  if (alpha_in_bra == alpha_in_ket) result = true;
-  return result;
-}
-
+/// @brief Spin traces a given expression pointer
+/// @detailed Given an expression, this function extracts all indices and adds a
+/// spin attribute to all the indices in the expression. A map is generated with
+/// all possible spin permutations and substituted in the expression. Only the
+/// non-zero terms are kept, expanded, the spin labels removed and a sum of all
+/// non-zero expressions is returned.
 /// @param expr input expression
 /// @param ext_index_groups groups of external indices
 /// @return the expression with spin integrated out
@@ -306,21 +329,10 @@ ExprPtr spintrace(ExprPtr expression,
   };
   expression->visit(check_proto_index);
 
-  if (expression->is<Constant>()){
-    const auto tstop = std::chrono::high_resolution_clock::now();
-    auto time_elapsed =
-        std::chrono::duration_cast<std::chrono::milliseconds>(tstop - tstart);
-    // std::cout << "Time: " << time_elapsed.count() << " milli sec.\n";
-    return expression;
-  }
+  if (expression->is<Constant>()) return expression;
 
-  if (expression->is<Tensor>()) {
-    const auto tstop = std::chrono::high_resolution_clock::now();
-    auto time_elapsed =
-        std::chrono::duration_cast<std::chrono::milliseconds>(tstop - tstart);
-    // std::cout << "Time: " << time_elapsed.count() << " milli sec.\n";
+  if (expression->is<Tensor>())
     return expand_antisymm(expression->as<Tensor>());
-  }
 
   auto spin_trace_tensor = [&](const Tensor& tensor) {
     auto spin_tensor = std::make_shared<Tensor>(tensor);
@@ -332,20 +344,16 @@ ExprPtr spintrace(ExprPtr expression,
   };
 
   auto spin_trace_product = [&](const Product& product) {
-    //  std::wcout << "product: " << product.to_latex() << "\n";
     Product spin_product{};
     spin_product.scale(product.scalar());
     for (auto&& term : product) {
       if (term->is<Tensor>()) {
-        // std::wcout << "term: " << term->to_latex() << std::endl;
         if (can_expand(term->as<Tensor>())) {
           spin_product.append(1, spin_trace_tensor(term->as<Tensor>()));
         }
       } else
         abort();
     }
-    //  std::wcout << "spin_product: " << spin_product.to_latex() <<
-    //  std::endl;
     if (product.size() != spin_product.size()) spin_product.scale(0);
     ExprPtr result = std::make_shared<Product>(spin_product);
     expand(result);
@@ -354,10 +362,8 @@ ExprPtr spintrace(ExprPtr expression,
   };
 
   auto trace_product = [&](const Product& expression) {
-    // if(expression->is<Product>()){
     auto result = std::make_shared<Sum>();
     ExprPtr expr = std::make_shared<Product>(expression);
-    // std::wcout << "Summand:\n" << to_latex_align(expr) << std::endl;
 
     container::set<Index, Index::LabelCompare> grand_idxlist;
     auto collect_indices = [&](const ExprPtr& expr) {
@@ -400,7 +406,6 @@ ExprPtr spintrace(ExprPtr expression,
     // groups)
 
     const uint64_t nspincases = std::pow(2, index_groups.size() - 1);
-    // std::cout << "nspincases: " << nspincases << "\n";
 
     for (uint64_t spincase_bitstr = 0; spincase_bitstr != nspincases;
          ++spincase_bitstr) {
@@ -438,18 +443,13 @@ ExprPtr spintrace(ExprPtr expression,
       auto all_terms = std::make_shared<Sum>();
       auto spin_expr = append_spin(expr, index_replacements);
       rapid_simplify(spin_expr);
-      // std::wcout << "\n" << spincase_bitstr << " " << spin_expr->to_latex()
-      // << "\n";
 
       if (spin_expr->is<Tensor>()) {
         auto temp = spin_trace_tensor(spin_expr->as<Tensor>());
         auto spin_removed = remove_spin(temp);
         result->append(spin_removed);
       } else if (spin_expr->is<Product>()) {
-        // std::wcout << "spin_expr is product: " << spin_expr->to_latex() <<
-        // std::endl;
         auto temp = spin_trace_product(spin_expr->as<Product>());
-        // std::wcout << "temp: " << temp->to_latex() << std::endl;
         if (!(temp->size() == 0)) {
           result->append(remove_spin(temp));
         }
@@ -477,22 +477,14 @@ ExprPtr spintrace(ExprPtr expression,
     return result;
   };
 
-  if (expression->is<Product>()){
-    const auto tstop = std::chrono::high_resolution_clock::now();
-    auto time_elapsed =
-        std::chrono::duration_cast<std::chrono::milliseconds>(tstop - tstart);
-    // std::cout << "Time: " << time_elapsed.count() << " milli sec.\n";
+  if (expression->is<Product>()) {
     return trace_product(expression->as<Product>());
-  }  else if ((expression->is<Sum>())) {
+  } else if ((expression->is<Sum>())) {
     auto result = std::make_shared<Sum>();
     for (auto&& summand : *expression) {
       if (summand->is<Product>())
         result->append(trace_product(summand->as<Product>()));
     }
-    const auto tstop = std::chrono::high_resolution_clock::now();
-    auto time_elapsed =
-        std::chrono::duration_cast<std::chrono::milliseconds>(tstop - tstart);
-    // std::cout << "Time: " << time_elapsed.count() << " milli sec.\n";
     return result;
   } else
     return nullptr;
