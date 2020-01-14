@@ -156,72 +156,6 @@ inline bool can_expand(const Tensor& tensor) {
   return result;
 }
 
-//================================================
-#if 0
-// These functions are from:
-// https://www.geeksforgeeks.org/number-swaps-sort-adjacent-swapping-allowed/
-// They are required to calculate the number of inversions or adjacent swaps
-// performed to get a (-1)^n sign for a permuted tensor
-// TODO: Use STL containers and simplify for current application
-int merge(int arr[], int temp[], int left, int mid, int right) {
-  auto inv_count = 0;
-
-  auto i = left; /* i is index for left subarray*/
-  auto j = mid;  /* i is index for right subarray*/
-  auto k = left; /* i is index for resultant merged subarray*/
-  while ((i <= mid - 1) && (j <= right)) {
-    if (arr[i] <= arr[j])
-      temp[k++] = arr[i++];
-    else {
-      temp[k++] = arr[j++];
-
-      /* this is tricky -- see above explanation/
-        diagram for merge()*/
-      inv_count = inv_count + (mid - i);
-    }
-  }
-
-  /* Copy the remaining elements of left subarray
-   (if there are any) to temp*/
-  while (i <= mid - 1) temp[k++] = arr[i++];
-
-  /* Copy the remaining elements of right subarray
-   (if there are any) to temp*/
-  while (j <= right) temp[k++] = arr[j++];
-
-  /*Copy back the merged elements to original array*/
-  for (i = left; i <= right; i++) arr[i] = temp[i];
-
-  return inv_count;
-}
-
-int _mergeSort(int arr[], int temp[], int left, int right) {
-  int mid, inv_count = 0;
-  if (right > left) {
-    /* Divide the array into two parts and call
-      _mergeSortAndCountInv() for each of the parts */
-    mid = (right + left) / 2;
-
-    /* Inversion count will be sum of inversions in
-       left-part, right-part and number of inversions
-       in merging */
-    inv_count = _mergeSort(arr, temp, left, mid);
-    inv_count += _mergeSort(arr, temp, mid + 1, right);
-
-    /*Merge the two parts*/
-    inv_count += merge(arr, temp, left, mid + 1, right);
-  }
-
-  return inv_count;
-}
-
-int countSwaps(int arr[], int n) {
-  int temp[n];
-  return _mergeSort(arr, temp, 0, n - 1);
-}
-#endif
-//================================================
-
 /// @brief expand an antisymmetric tensor
 /// @param tensor a tensor from a product
 /// @return an expression pointer containing the sum of expanded terms if
@@ -229,16 +163,7 @@ int countSwaps(int arr[], int n) {
 /// @return an expression pointer containing the tensor otherwise
 ExprPtr expand_antisymm(const Tensor& tensor) {
   assert(tensor.bra().size() == tensor.ket().size());
-  /*
-     TensorCanonicalizer::register_instance(
-         std::make_shared<DefaultTensorCanonicalizer>());
 
-  //  {
-  //     auto tnsr = ex<Tensor>(tensor);
-  //     canonicalize(tnsr);
-  //     std::wcout << tnsr->to_latex() << " canonicalized\n";
-  //  }
-  */
   // Generate a sum of asymmetric tensors if the input tensor is antisymmetric
   // AND more than one body otherwise, return the tensor
   if ((tensor.symmetry() == Symmetry::antisymm) && (tensor.bra().size() > 1)) {
@@ -259,45 +184,14 @@ ExprPtr expand_antisymm(const Tensor& tensor) {
       if (is_tensor_spin_symm(new_tensor)) {
         auto new_tensor_ptr = ex<Tensor>(new_tensor);
         Product new_tensor_product{};
-        {
-          IndexSwapper::thread_instance().reset();
-          using std::begin;
-          using std::end;
-          auto bra_list2 = bra_list;
-          bubble_sort(begin(bra_list2), end(bra_list2), std::less<Index>{});
-          bubble_sort(begin(ket_list), end(ket_list), std::less<Index>{});
-          bool even = IndexSwapper::thread_instance().even_num_of_swaps();
-          std::wcout << (even ? "1 " : "-1 ") << to_latex(new_tensor) << "\n";
-          auto factor = even ? 1 : -1;
-          new_tensor_product.append(factor, new_tensor_ptr);
-        }
-        /*
-                {
-                int permutation_int_array[bra_list.size()];
-                auto counter_for_array = 0;
-
-                // Store distance of each index in an array
-                ranges::for_each(const_bra_list, [&](Index i) {
-                  auto pos = std::find(bra_list.begin(), bra_list.end(), i);
-                  int dist = std::distance(bra_list.begin(), pos);
-                  permutation_int_array[counter_for_array] = dist;
-                  counter_for_array++;
-                });
-
-                // Call function to count number of pair swaps
-                auto permutation_count = countSwaps(
-                    permutation_int_array,
-                    sizeof(permutation_int_array) /
-           sizeof(*permutation_int_array));
-
-                ExprPtr new_tensor_ptr = std::make_shared<Tensor>(new_tensor);
-
-                // Tensor as product with (-1)^n, where n is number of adjacent
-           swaps Product new_tensor_product{};
-                new_tensor_product.append(std::pow(-1, permutation_count),
-                                          new_tensor_ptr);
-              }
-        */
+        IndexSwapper::thread_instance().reset();
+        using std::begin;
+        using std::end;
+        auto bra_list2 = bra_list;
+        bubble_sort(begin(bra_list2), end(bra_list2), std::less<Index>{});
+        bubble_sort(begin(ket_list), end(ket_list), std::less<Index>{});
+        bool even = IndexSwapper::thread_instance().even_num_of_swaps();
+        new_tensor_product.append((even ? 1 : -1), new_tensor_ptr);
         auto new_tensor_product_ptr = ex<Product>(new_tensor_product);
         expr_sum.append(new_tensor_product_ptr);
       }
@@ -305,7 +199,6 @@ ExprPtr expand_antisymm(const Tensor& tensor) {
     } while (std::next_permutation(bra_list.begin(), bra_list.end()));
 
     ExprPtr result = std::make_shared<Sum>(expr_sum);
-    std::wcout << "result: " << result->to_latex() << "\n" << std::endl;
     return result;
   } else {
     ExprPtr result = std::make_shared<Tensor>(tensor);
