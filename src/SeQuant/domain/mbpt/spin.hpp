@@ -116,7 +116,7 @@ ExprPtr remove_spin(ExprPtr& expr) {
 /// particle in tensor notation
 /// @param tensor a tensor with indices containing spin labels
 /// @return true if spin symmetry matches for all pairs of indices
-inline bool tensor_symm(const Tensor& tensor) {
+inline bool is_tensor_spin_symm(const Tensor& tensor) {
   bool result = false;
   assert(tensor.bra().size() == tensor.ket().size());
   // For each index check if QNS match.
@@ -139,7 +139,7 @@ inline bool tensor_symm(const Tensor& tensor) {
 /// beta spins will match if total number of indices is the same
 /// @param any tensor
 /// @return true if number of alpha spins match in bra and ket
-bool can_expand(const Tensor& tensor) {
+inline bool can_expand(const Tensor& tensor) {
   assert(tensor.bra_rank() == tensor.ket_rank());
   auto result = false;
   auto alpha_in_bra = 0;
@@ -157,7 +157,7 @@ bool can_expand(const Tensor& tensor) {
 }
 
 //================================================
-#if 1
+#if 0
 // These functions are from:
 // https://www.geeksforgeeks.org/number-swaps-sort-adjacent-swapping-allowed/
 // They are required to calculate the number of inversions or adjacent swaps
@@ -229,7 +229,16 @@ int countSwaps(int arr[], int n) {
 /// @return an expression pointer containing the tensor otherwise
 ExprPtr expand_antisymm(const Tensor& tensor) {
   assert(tensor.bra().size() == tensor.ket().size());
+  /*
+     TensorCanonicalizer::register_instance(
+         std::make_shared<DefaultTensorCanonicalizer>());
 
+  //  {
+  //     auto tnsr = ex<Tensor>(tensor);
+  //     canonicalize(tnsr);
+  //     std::wcout << tnsr->to_latex() << " canonicalized\n";
+  //  }
+  */
   // Generate a sum of asymmetric tensors if the input tensor is antisymmetric
   // AND more than one body otherwise, return the tensor
   if ((tensor.symmetry() == Symmetry::antisymm) && (tensor.bra().size() > 1)) {
@@ -247,38 +256,56 @@ ExprPtr expand_antisymm(const Tensor& tensor) {
       auto new_tensor =
           Tensor(tensor.label(), bra_list, ket_list, Symmetry::nonsymm);
 
-      if (tensor_symm(new_tensor)) {
-        int permutation_int_array[bra_list.size()];
-        auto counter_for_array = 0;
-
-        // Store distance of each index in an array
-        ranges::for_each(const_bra_list, [&](Index i) {
-          auto pos = std::find(bra_list.begin(), bra_list.end(), i);
-          int dist = std::distance(bra_list.begin(), pos);
-          permutation_int_array[counter_for_array] = dist;
-          counter_for_array++;
-        });
-
-        // Call function to count number of pair swaps
-        auto permutation_count = countSwaps(
-            permutation_int_array,
-            sizeof(permutation_int_array) / sizeof(*permutation_int_array));
-
-        ExprPtr new_tensor_ptr = std::make_shared<Tensor>(new_tensor);
-
-        // Tensor as product with (-1)^n, where n is number of adjacent swaps
+      if (is_tensor_spin_symm(new_tensor)) {
+        auto new_tensor_ptr = ex<Tensor>(new_tensor);
         Product new_tensor_product{};
-        new_tensor_product.append(std::pow(-1, permutation_count),
-                                  new_tensor_ptr);
+        {
+          IndexSwapper::thread_instance().reset();
+          using std::begin;
+          using std::end;
+          auto bra_list2 = bra_list;
+          bubble_sort(begin(bra_list2), end(bra_list2), std::less<Index>{});
+          bubble_sort(begin(ket_list), end(ket_list), std::less<Index>{});
+          bool even = IndexSwapper::thread_instance().even_num_of_swaps();
+          std::wcout << (even ? "1 " : "-1 ") << to_latex(new_tensor) << "\n";
+          auto factor = even ? 1 : -1;
+          new_tensor_product.append(factor, new_tensor_ptr);
+        }
+        /*
+                {
+                int permutation_int_array[bra_list.size()];
+                auto counter_for_array = 0;
 
-        ExprPtr new_tensor_product_ptr =
-            std::make_shared<Product>(new_tensor_product);
+                // Store distance of each index in an array
+                ranges::for_each(const_bra_list, [&](Index i) {
+                  auto pos = std::find(bra_list.begin(), bra_list.end(), i);
+                  int dist = std::distance(bra_list.begin(), pos);
+                  permutation_int_array[counter_for_array] = dist;
+                  counter_for_array++;
+                });
+
+                // Call function to count number of pair swaps
+                auto permutation_count = countSwaps(
+                    permutation_int_array,
+                    sizeof(permutation_int_array) /
+           sizeof(*permutation_int_array));
+
+                ExprPtr new_tensor_ptr = std::make_shared<Tensor>(new_tensor);
+
+                // Tensor as product with (-1)^n, where n is number of adjacent
+           swaps Product new_tensor_product{};
+                new_tensor_product.append(std::pow(-1, permutation_count),
+                                          new_tensor_ptr);
+              }
+        */
+        auto new_tensor_product_ptr = ex<Product>(new_tensor_product);
         expr_sum.append(new_tensor_product_ptr);
       }
       p_count++;
     } while (std::next_permutation(bra_list.begin(), bra_list.end()));
 
     ExprPtr result = std::make_shared<Sum>(expr_sum);
+    std::wcout << "result: " << result->to_latex() << "\n" << std::endl;
     return result;
   } else {
     ExprPtr result = std::make_shared<Tensor>(tensor);
@@ -289,7 +316,7 @@ ExprPtr expand_antisymm(const Tensor& tensor) {
 /// @brief expands all antisymmetric tensors in a product
 /// @param expr an expression pointer to expand
 /// @return an expression pointer with expanded tensors
-ExprPtr expand_antisymm(const ExprPtr& expr) {
+inline ExprPtr expand_antisymm(const ExprPtr& expr) {
   Sum expanded_sum{};
   for (auto&& summand : *expr) {
     const auto scalar_factor = summand->as<Product>().scalar().real();
