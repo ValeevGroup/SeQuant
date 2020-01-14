@@ -184,7 +184,7 @@ class TensorCanonicalizer {
   /// @internal what should be returned if canonicalization requires
   /// complex conjugation? Special ExprPtr type (e.g. ConjOp)? Or the actual
   /// return of the canonicalization?
-  // TODO generalize for complex tenrsors
+  // TODO generalize for complex tensors
   virtual ExprPtr apply(AbstractTensor &) = 0;
 
  protected:

@@ -23,11 +23,8 @@ TEST_CASE("Spin Trace") {
     const auto expr = ex<Tensor>(L"g", WstrList{L"p_1", L"p_2"},
                                  WstrList{L"p_3", L"p_4"}, Symmetry::antisymm);
     auto result = spintrace(expr);
-//    std::wcout << "\nExpr:\n"
-//               << expr->to_latex() << "\nTraced:\n"
-//               << result->to_latex() << std::endl;
     REQUIRE(result->is<Sum>());
-    // REQUIRE(result->size() == 2);
+    REQUIRE(result->size() == 2);
     REQUIRE(to_latex(result) ==
             L"{ \\left({{g^{{p_3}{p_4}}_{{p_1}{p_2}}}} - "
             L"{{g^{{p_3}{p_4}}_{{p_2}{p_1}}}}\\right) }");
@@ -38,9 +35,6 @@ TEST_CASE("Spin Trace") {
                       ex<Tensor>(L"t", WstrList{L"a_1"}, WstrList{L"i_1"});
     auto result = spintrace(expr);
     canonicalize(result);
-//    std::wcout << "\nExpr:\n"
-//               << expr->to_latex() << "\nTraced:\n"
-//               << result->to_latex();
     REQUIRE(result->is<Sum>());
     REQUIRE(result->size() == 1);
     REQUIRE(
@@ -58,28 +52,7 @@ TEST_CASE("Spin Trace") {
           ex<Tensor>(L"t", WstrList{L"a_1"}, WstrList{L"i_1"}) *
           ex<Tensor>(L"t", WstrList{L"a_2"}, WstrList{L"i_2"});
       auto result = spintrace(expr);
-/*
-      std::cout << "\\begin{align}\n";
-      Sum sum_of_canonicalized;
-      for(auto &&p : *result){
-        if(p->is<Product>()){
-          std::wcout << "& " << p->to_latex() <<  " \\\\ \n";
-          ExprPtr pp = std::make_shared<Product>(p->as<Product>());
-          canonicalize(pp);
-          std::wcout << "& " << pp->to_latex() <<  " \\\\ \n";
-          sum_of_canonicalized.append(pp);
-        }
-      }
-      std::cout << "\\end{align}\n";
-      ExprPtr sum_of_canonicalized_terms = std::make_shared<Sum>(sum_of_canonicalized);
-      rapid_simplify(sum_of_canonicalized_terms);
-      canonicalize(sum_of_canonicalized_terms);
-      std::wcout << "sum_of_canonicalized_terms: " << sum_of_canonicalized_terms->to_latex() << std::endl;
-*/
       canonicalize(result);
-//      std::wcout << "\nExpr:\n"
-//                 << expr->to_latex() << "\nTraced:\n"
-//                 << result->to_latex();
       REQUIRE(result->is<Sum>());
       REQUIRE(result->size() == 2);
       REQUIRE(to_latex(result) ==
@@ -101,9 +74,6 @@ TEST_CASE("Spin Trace") {
 
       auto result = spintrace(expr);
       canonicalize(result);
-//      std::wcout << "\nExpr:\n"
-//                 << expr->to_latex() << "\nTraced:\n"
-//                 << result->to_latex() << std::endl;
       REQUIRE(result->is<Sum>());
       REQUIRE(result->size() == 2);
       REQUIRE(to_latex(result) ==
@@ -133,9 +103,6 @@ TEST_CASE("Spin Trace") {
     auto expr = ex1 + ex2 + ex3;
     auto result = spintrace(expr);
     canonicalize(result);
-//    std::wcout << "\nExpr:\n"
-//               << expr->to_latex() << "\nTraced:\n"
-//               << result->to_latex() << std::endl;
     REQUIRE(result->is<Sum>());
     REQUIRE(result->size() == 5);
     REQUIRE(

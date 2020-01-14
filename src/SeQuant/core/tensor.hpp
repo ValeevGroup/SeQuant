@@ -103,10 +103,11 @@ class Tensor : public Expr, public AbstractTensor {
   auto const_braket() const { return this->braket(); }
   /// Returns the Symmetry object describing the symmetry of the bra and ket of
   /// the Tensor, i.e. what effect swapping indices in positions @c i  and @c j
-  /// in <b>either bra or ket</em> has on the elements of the Tensor; Tensor's
-  /// are <em>always assumed</em> to be particle-symmetric, i.e. swapping
-  /// indices in positions @c i and @c j in <b>both bra and ket</b>; The allowed
-  /// values are Symmetry::symm, Symmetry::antisymm, and Symmetry::nonsymm
+  /// in <b>either bra or ket</em> has on the elements of the Tensor;
+  /// Tensor's are <em>always assumed</em> to be particle-symmetric, i.e.
+  /// swapping indices in positions @c i and @c j in <b>both bra and ket</b>;
+  /// The allowed values are Symmetry::symm, Symmetry::antisymm, and
+  /// Symmetry::nonsymm
   /// @return the Symmetry object describing the symmetry of the bra and ket of
   /// the Tensor.
   Symmetry symmetry() const { return symmetry_; }
@@ -311,8 +312,7 @@ class Tensor : public Expr, public AbstractTensor {
 
 using TensorPtr = std::shared_ptr<Tensor>;
 
-inline ExprPtr overlap(const Index &bra_index,
-                                     const Index &ket_index) {
+inline ExprPtr overlap(const Index &bra_index, const Index &ket_index) {
   return ex<Tensor>(L"S", IndexList{bra_index}, IndexList{ket_index});
 }
 
