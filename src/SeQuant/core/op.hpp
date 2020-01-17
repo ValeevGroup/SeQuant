@@ -643,16 +643,15 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
 
   /// Replaces indices using the index map
   /// @param index_map maps Index to Index
-  /// @param tag_transformed_indices if true, will tag transformed indices with
-  /// integer 0 and skip any tagged indices that it encounters
   /// @return true if one or more indices changed
+  /// @pre indices are not tagged, or (if want to protect them from replacement) tagged with (int)0
+  /// @post indices that were replaced will be tagged with (int)0
   template <template <typename, typename, typename... Args> class Map,
       typename... Args>
-  bool transform_indices(const Map<Index, Index, Args...> &index_map,
-                         bool tag_transformed_indices = false) {
+  bool transform_indices(const Map<Index, Index, Args...> &index_map) {
     bool mutated = false;
     ranges::for_each(*this, [&](auto &&op) {
-      if (op.index().transform(index_map, tag_transformed_indices)) mutated = true;
+      if (op.index().transform(index_map)) mutated = true;
     });
     if (mutated)
       this->reset_hash_value();
@@ -801,9 +800,8 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
   std::wstring _to_latex() const override final {
     return to_latex();
   }
-  bool _transform_indices(const container::map<Index, Index>& index_map,
-                          bool tag_tranformed_indices) override final {
-    return transform_indices(index_map, tag_tranformed_indices);
+  bool _transform_indices(const container::map<Index, Index>& index_map) override final {
+    return transform_indices(index_map);
   }
   void _reset_tags() override final {
     ranges::for_each(*this, [](const auto &op) { op.index().reset_tag(); });

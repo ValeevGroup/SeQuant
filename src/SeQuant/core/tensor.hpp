@@ -152,16 +152,13 @@ class Tensor : public Expr, public AbstractTensor {
 
   /// Replaces indices using the index map
   /// @param index_map maps Index to Index
-  /// @param tag_transformed_indices if true, will tag transformed indices with
-  /// integer 0 and skip any tagged indices that it encounters
   /// @return true if one or more indices changed
   template <template <typename, typename, typename... Args> class Map,
             typename... Args>
-  bool transform_indices(const Map<Index, Index, Args...> &index_map,
-                         bool tag_transformed_indices = false) {
+  bool transform_indices(const Map<Index, Index, Args...> &index_map) {
     bool mutated = false;
     ranges::for_each(braket(), [&](auto &idx) {
-      if (idx.transform(index_map, tag_transformed_indices)) mutated = true;
+      if (idx.transform(index_map)) mutated = true;
     });
     if (mutated)
       this->reset_hash_value();
@@ -286,9 +283,8 @@ class Tensor : public Expr, public AbstractTensor {
   std::wstring _to_latex() const override final {
     return to_latex();
   }
-  bool _transform_indices(const container::map<Index, Index>& index_map,
-                          bool tag_tranformed_indices) override final {
-    return transform_indices(index_map, tag_tranformed_indices);
+  bool _transform_indices(const container::map<Index, Index>& index_map) override final {
+    return transform_indices(index_map);
   }
   void _reset_tags() override final {
     reset_tags();
