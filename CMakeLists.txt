@@ -24,7 +24,7 @@ find_package(Threads REQUIRED)
 
 # PSTL (used by g++-9 and clang++-8 in c++17 mode) needs TBB
 if ((${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU" AND ${CMAKE_CXX_COMPILER_VERSION} VERSION_GREATER 9) OR
-(${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang" AND ${CMAKE_CXX_COMPILER_VERSION} VERSION_GREATER 8))
+    (${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang" AND ${CMAKE_CXX_COMPILER_VERSION} VERSION_GREATER 8))
     set(PSTL_NEEDS_TBB TRUE)
     find_package(TBB REQUIRED)
 endif()
@@ -51,7 +51,10 @@ set_property(TARGET Boost PROPERTY
 if (BTAS_INSTALL_DIR)
     find_package(BTAS)
 endif(BTAS_INSTALL_DIR)
-find_package(TiledArray CONFIG COMPONENTS tiledarray)
+
+if (TiledArray_DIR)
+    find_package(TiledArray CONFIG COMPONENTS tiledarray)
+endif(TiledArray_DIR)
 
 # embedded bliss-0.73
 add_library(bliss
@@ -193,20 +196,21 @@ if (BTAS_FOUND)
 endif(BTAS_FOUND)
 
 if (TiledArray_FOUND)
-    find_package(Libint2 2.6.0 CONFIG REQUIRED)
-
     set(example2 cc_tiledarray)
+
     add_executable(${example2} EXCLUDE_FROM_ALL
             examples/contract/${example2}.cpp
             examples/contract/interpret/interpreted_tensor.hpp
             examples/contract/interpret/contract.hpp
             examples/contract/scf/hartree-fock.cc)
     target_link_libraries(${example2} SeQuant factorizer ${TBB_LIBRARIES} Libint2::cxx tiledarray)
+    target_link_directories(${example2} PUBLIC ${TBB_LIBRARIES})
     target_compile_definitions(${example2} PRIVATE SEQUANT_HAS_TILEDARRAY)
 endif(TiledArray_FOUND)
 
 # factorization examples
 if(BTAS_FOUND)
+
 set(example3 product_factorization)
 add_executable(${example3} EXCLUDE_FROM_ALL
     examples/factorization/${example3}.cpp)
@@ -221,15 +225,20 @@ target_compile_definitions(${example3} PRIVATE SEQUANT_HAS_BTAS)
 
 set(example4 expr_evaluation)
 add_executable(${example4} EXCLUDE_FROM_ALL
-    src/SeQuant/domain/evaluate/evalexpr.hpp
+    src/SeQuant/domain/evaluate/eval_fwd.hpp
+    src/SeQuant/domain/evaluate/eval_tensor.hpp
+    src/SeQuant/domain/evaluate/eval_expr.hpp
+    src/SeQuant/domain/evaluate/eval_tensor.cpp
     examples/evaluation/${example4}.cpp)
 
 target_include_directories(${example4} PUBLIC
         $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>
         ${BTAS_INSTALL_DIR})
-target_link_libraries(${example4} SeQuant)
-endif(BTAS_FOUND)
+
+target_link_libraries(${example4} SeQuant factorizer)
+target_compile_definitions(${example4} PRIVATE SEQUANT_HAS_BTAS)
+endif()
 
 # add tests for running examples
 set (lastexample 5)
