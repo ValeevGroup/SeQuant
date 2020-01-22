@@ -41,7 +41,7 @@ int main() {
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
   Logger::get_instance().wick_stats = false;
-  // CCSD equations
+  // CC equations
   auto cc_r = cceqvec{3, 3}(true, true, true, true);
 
   // factorization and evaluation of the CC equations
@@ -49,6 +49,7 @@ int main() {
   using ispace_pair = std::pair<sequant::IndexSpace::Type, size_t>;
   using ispace_map = sequant::container::map<ispace_pair::first_type,
                                              ispace_pair::second_type>;
+  using BTensor = btas::Tensor<double>;
 
   size_t nocc = 10, nvirt = 4;
   std::wcout << "\nSetting up a map with nocc = " << nocc << " and nvirt = " << nvirt << "..\n";
@@ -58,18 +59,19 @@ int main() {
       ispace_pair{sequant::IndexSpace::active_unoccupied, nvirt});
 
   // initializing tensors present in the CCSD equations
-  btas::Tensor<double> Fock_oo (nocc, nocc),
-                       Fock_ov (nocc, nvirt),
-                       Fock_vv (nvirt, nvirt),
-                       G_oooo  (nocc, nocc, nocc, nocc),
-                       G_vvvv  (nvirt, nvirt, nvirt, nvirt),
-                       G_ovvv  (nocc, nvirt, nvirt, nvirt),
-                       G_ooov  (nocc, nocc, nocc, nvirt),
-                       G_oovv  (nocc, nocc, nvirt, nvirt),
-                       G_ovov  (nocc, nvirt, nocc, nvirt),
-                       T_ov    (nocc, nvirt),
-                       T_oovv  (nocc, nocc, nvirt, nvirt),
-                       T_ooovvv (nocc, nocc, nocc, nvirt, nvirt, nvirt);
+  auto Fock_oo = std::make_shared<BTensor>(nocc, nocc);
+  auto Fock_ov = std::make_shared<BTensor>(nocc, nvirt);
+  auto Fock_vv = std::make_shared<BTensor>(nvirt, nvirt);
+  auto G_oooo = std::make_shared<BTensor> (nocc, nocc, nocc, nocc);
+  auto G_vvvv = std::make_shared<BTensor> (nvirt, nvirt, nvirt, nvirt);
+  auto G_ovvv = std::make_shared<BTensor> (nocc, nvirt, nvirt, nvirt);
+  auto G_ooov = std::make_shared<BTensor> (nocc, nocc, nocc, nvirt);
+  auto G_oovv = std::make_shared<BTensor> (nocc, nocc, nvirt, nvirt);
+  auto G_ovov = std::make_shared<BTensor> (nocc, nvirt, nocc, nvirt);
+  auto T_ov = std::make_shared<BTensor>   (nocc, nvirt);
+  auto T_oovv = std::make_shared<BTensor> (nocc, nocc, nvirt, nvirt);
+  auto T_ooovvv = std::make_shared<BTensor>(nocc, nocc, nocc, nvirt, nvirt, nvirt);
+
   // fill random data to tensors
   auto randfill_tensor = [&](btas::Tensor<double>& tnsr){
     auto seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
@@ -78,50 +80,38 @@ int main() {
     tnsr.generate(std::bind(dist, rgen));
   };
 
-   randfill_tensor(Fock_oo);
-   randfill_tensor(Fock_ov);
-   randfill_tensor(Fock_vv);
-   randfill_tensor(G_oooo );
-   randfill_tensor(G_vvvv );
-   randfill_tensor(G_ovvv );
-   randfill_tensor(G_ooov );
-   randfill_tensor(G_oovv );
-   randfill_tensor(G_ovov );
-   randfill_tensor(T_ov   );
-   randfill_tensor(T_oovv );
-   randfill_tensor(T_ooovvv);
-
-   /* std::wcout << L"\nnorm(Fock_oo) = " << std::sqrt(btas::dot(Fock_oo,Fock_oo)) */
-   /*            << L"\nnorm(Fock_ov) = " << std::sqrt(btas::dot(Fock_ov,Fock_ov)) */
-   /*            << L"\nnorm(Fock_vv) = " << std::sqrt(btas::dot(Fock_vv,Fock_vv)) */
-   /*            << L"\nnorm(G_oooo ) = " << std::sqrt(btas::dot(G_oooo,G_oooo)) */
-   /*            << L"\nnorm(G_vvvv ) = " << std::sqrt(btas::dot(G_vvvv,G_vvvv)) */
-   /*            << L"\nnorm(G_ovvv ) = " << std::sqrt(btas::dot(G_ovvv,G_ovvv)) */
-   /*            << L"\nnorm(G_ooov ) = " << std::sqrt(btas::dot(G_ooov,G_ooov)) */
-   /*            << L"\nnorm(G_oovv ) = " << std::sqrt(btas::dot(G_oovv,G_oovv)) */
-   /*            << L"\nnorm(G_ovov ) = " << std::sqrt(btas::dot(G_ovov,G_ovov)) */
-   /*            << L"\nnorm(T_ov   ) = " << std::sqrt(btas::dot(T_ov,T_ov)) */
-   /*            << L"\nnorm(T_oovv ) = " << std::sqrt(btas::dot(T_oovv,T_oovv)); */
+   randfill_tensor(*Fock_oo);
+   randfill_tensor(*Fock_ov);
+   randfill_tensor(*Fock_vv);
+   randfill_tensor(*G_oooo );
+   randfill_tensor(*G_vvvv );
+   randfill_tensor(*G_ovvv );
+   randfill_tensor(*G_ooov );
+   randfill_tensor(*G_oovv );
+   randfill_tensor(*G_ovov );
+   randfill_tensor(*T_ov   );
+   randfill_tensor(*T_oovv );
+   randfill_tensor(*T_ooovvv);
 
    // for the evaluation of the expressions
    // a map is needed
-   using str_to_tensor_pair = std::pair<std::wstring, btas::Tensor<double> const *>;
+   using str_to_tensor_pair = std::pair<std::wstring, std::shared_ptr<BTensor>>;
    using str_to_tensor_map = std::map<str_to_tensor_pair::first_type,
                                        str_to_tensor_pair::second_type>;
 
    str_to_tensor_map btensor_map;
-   btensor_map.insert(str_to_tensor_pair(L"f_oo",   &Fock_oo));
-   btensor_map.insert(str_to_tensor_pair(L"f_ov",   &Fock_ov));
-   btensor_map.insert(str_to_tensor_pair(L"f_vv",   &Fock_vv));
-   btensor_map.insert(str_to_tensor_pair(L"g_oooo", &G_oooo));
-   btensor_map.insert(str_to_tensor_pair(L"g_vvvv", &G_vvvv));
-   btensor_map.insert(str_to_tensor_pair(L"g_ovvv", &G_ovvv));
-   btensor_map.insert(str_to_tensor_pair(L"g_ooov", &G_ooov));
-   btensor_map.insert(str_to_tensor_pair(L"g_oovv", &G_oovv));
-   btensor_map.insert(str_to_tensor_pair(L"g_ovov", &G_ovov));
-   btensor_map.insert(str_to_tensor_pair(L"t_ov",   &T_ov));
-   btensor_map.insert(str_to_tensor_pair(L"t_oovv", &T_oovv));
-  btensor_map.insert(str_to_tensor_pair(L"t_ooovvv", &T_ooovvv));
+   btensor_map.insert(str_to_tensor_pair(L"f_oo",   Fock_oo));
+   btensor_map.insert(str_to_tensor_pair(L"f_ov",   Fock_ov));
+   btensor_map.insert(str_to_tensor_pair(L"f_vv",   Fock_vv));
+   btensor_map.insert(str_to_tensor_pair(L"g_oooo", G_oooo));
+   btensor_map.insert(str_to_tensor_pair(L"g_vvvv", G_vvvv));
+   btensor_map.insert(str_to_tensor_pair(L"g_ovvv", G_ovvv));
+   btensor_map.insert(str_to_tensor_pair(L"g_ooov", G_ooov));
+   btensor_map.insert(str_to_tensor_pair(L"g_oovv", G_oovv));
+   btensor_map.insert(str_to_tensor_pair(L"g_ovov", G_ovov));
+   btensor_map.insert(str_to_tensor_pair(L"t_ov",   T_ov));
+   btensor_map.insert(str_to_tensor_pair(L"t_oovv", T_oovv));
+   btensor_map.insert(str_to_tensor_pair(L"t_ooovvv", T_ooovvv));
 
    // factorization and evaluation
    auto& expr_to_factorize = cc_r[3];
