@@ -1,0 +1,28 @@
+  struct EvalTensorBuilder {
+    Operation op{Operation::Eval};
+    std::shared_ptr<EvalTensor<DataTensorType>> operator()(
+        const ExprPtr& left_expr, const ExprPtr& right_expr) {
+      auto new_etensor = std::make_shared<DataTensorType>();
+      new_etensor.left_tensor_ = std::make_shared<DataTensorType>(
+          EvalTensor<DataTensorType>(left_expr));
+      new_etensor.right_tensor_ = std::make_shared<DataTensorType>(
+          EvalTensor<DataTensorType>(right_expr));
+      new_etensor->operation_ = op;
+      new_etensor->hash();
+      return new_etensor;
+      //
+    }
+  };
+  EvalTensor<DataTensorType>(const ExprPtr& expr) {
+    if (expr->is<Tensor>())
+      EvalTensor<DataTensorType>(expr->as<Tensor>(), true);
+    auto new_etensor = std::make_shared<DataTensorType>();
+    if (expr->is<Sum>()) {
+      auto builder = EvalTensorBuilder(Operation::Sum);
+      auto& the_sum = expr->as<Sum>();
+    } else if (expr->is<Product>()) {
+      new_etensor->operation_ = Operation::Product;
+    } else {
+      throw std::domain_error("I only know Tensor, Sum and Product!");
+    }
+  }
