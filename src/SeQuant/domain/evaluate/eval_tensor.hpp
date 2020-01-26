@@ -25,8 +25,8 @@ namespace sequant::evaluate {
 /// can be an input for another evaluation, i.e. evaluations can be nested.
 ///
 /// This class represents such evaluations. @note No evaluations on data-tensors
-/// are actually performed. To do calculations on data-tensors @see
-/// eval_expr.hpp
+/// are actually performed. To do calculations on data-tensors look at eval_expr.hpp
+/// @see eval_expr.hpp
 /// @author Bimal Gaudel
 /// @date Jan 2020
 ///
@@ -92,8 +92,8 @@ class EvalTensor {
   ///
   /// i.e. left_tensor_ and right_tensor_ are null pointers.
   /// However, checking for nullity of either of them is
-  /// sufficient as only one of them cannot be nullpointer
-  /// while the other points to some other EvalTensor.
+  /// sufficient as one of them canNOT be a null pointer
+  /// while the other is non-null.
   bool is_leaf() const;
 
 #ifdef SEQUANT_HAS_BTAS
@@ -138,7 +138,7 @@ class EvalTensor {
 #endif
 };
 
-/// Build binary operations from EvalTensor and Tensor
+/// Build binary evaluations from EvalTensor and Tensor
 class BinaryOpTypeBuilder {
  public:
   BinaryOpTypeBuilder(EvalTensor::Operation opr = EvalTensor::Operation::Eval)
@@ -157,7 +157,9 @@ class BinaryOpTypeBuilder {
   /// The type of operation between the parameters that gave the result.
   ///
   /// Could either be EvalTensor::Operation::Sum
-  /// or EvalTensor::Operation::Product.
+  /// or EvalTensor::Operation::Product. Conceivably,
+  /// EvalTensor::Operation::Eval should not be
+  /// assigned to @param op from here.
   /// 
   EvalTensor::Operation op;
 };

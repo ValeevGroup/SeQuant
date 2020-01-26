@@ -12,16 +12,13 @@
 namespace sequant::evaluate {
 class EvalTensor;
 
-template <typename DataTensorType>
-class ExprEvaluator;
+using hash_type = std::size_t;
+
+using constant_type = std::complex<double>;
 
 using EvTensorPtr = std::shared_ptr<EvalTensor>;
 
 using label_container_type = container::svector<std::wstring, 4>;
-
-using constant_type = std::complex<double>;
-
-using hash_type = std::size_t;
 
 using btas_index_container = container::svector<hash_type>;
 

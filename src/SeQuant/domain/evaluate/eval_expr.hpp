@@ -36,11 +36,11 @@ namespace sequant::evaluate {
 ///        then {IndexSpace::active_occupied, IndexSpace::active_unoccupied}
 ///        could be a possible specification.
 ///
-/// @method get_hash_value() returns std::size_t by using the same hashing
+/// @method get_hash_value() returns hash_type by using the same hashing
 ///         technique as the EvalTensor constructor.
 ///
-///        The only difference is there the state of 'extra-canonicalization' is
-///        deduced, i.e., for example, if bra-indices are all virtuals and
+///        The only difference is, there the state of 'extra-canonicalization'
+///        is deduced, i.e., for example, if bra-indices are all virtuals and
 ///        ket-indices are all occupied, then 'extra-canonicalization' swaps
 ///        bra<->ket index labels (as far as the sequant::Tensor has
 ///        Symmetry:antisymm and BraKetSymmetry:conjugate for this particular
@@ -88,21 +88,43 @@ struct EvalContext {
     }
   }
 
+  explicit EvalContext(
+      const hash_to_dtensor_map<DataTensorType>& hash_leaf_ptr_map)
+      : leaf_map_{hash_leaf_ptr_map} {}
+
+  /// Map of the hash value of leaf EvalTensor objects to
+  /// their corresponding data-tensor pointers
+  ///
+  /// @return const hash_to_dtensor_map<DataTensorType>&
   const hash_to_dtensor_map<DataTensorType>& leaf_map() const {
     return leaf_map_;
   }
 
-  const container::map<hash_type, std::size_t>& imed_counts() const {
-    return imed_counts_;
-  }
-
-  container::map<hash_type, std::size_t>& imed_counts() { return imed_counts_; }
-
+  /// Map of the hash value of intermediate EvalTensor objects to
+  /// their corresponding data-tensor pointers
+  ///
+  /// @return const hash_to_dtensor_map<DataTensorType>&
   const hash_to_dtensor_map<DataTensorType>& imed_map() const {
     return imed_map_;
   }
 
+  /// Mutable map of the hash value of intermediate EvalTensor objects to
+  /// their corresponding data-tensor pointers
+  ///
+  /// @return hash_to_dtensor_map<DataTensorType>&
   hash_to_dtensor_map<DataTensorType>& imed_map() { return imed_map_; }
+
+  /// Map of the hash value of intermediate EvalTensor objects to their
+  /// corresponding counts.
+  ///
+  /// @note Only the intermediates that appear more than once are counted.
+  const container::map<hash_type, std::size_t>& imed_counts() const {
+    return imed_counts_;
+  }
+
+  /// Mutable map of the hash value of intermediate EvalTensor objects to their
+  /// corresponding counts.
+  container::map<hash_type, std::size_t>& imed_counts() { return imed_counts_; }
 
  private:
   using hash_to_count_map = container::map<hash_type, std::size_t>;
@@ -181,7 +203,9 @@ DataTensorType eval_evtensor(const EvTensorPtr& evt_ptr,
     result = eval_evsum(evt_ptr, context);
   else if (evt_ptr->get_op() == EvalTensor::Operation::Product)
     result = eval_evproduct(evt_ptr, context);
-  else throw std::logic_error("Only a Tensor, Sum or Product is handled from here.\n");
+  else
+    throw std::logic_error(
+        "Only a Tensor, Sum or Product is handled from here.\n");
   return result;
 }
 
@@ -211,7 +235,7 @@ DataTensorType eval_evsum(const EvTensorPtr& evt_ptr,
 
 template <typename DataTensorType>
 DataTensorType eval_evproduct(const EvTensorPtr& evt_ptr,
-                               EvalContext<DataTensorType>& context) {
+                              EvalContext<DataTensorType>& context) {
   DataTensorType result{};
   auto lscalar = evt_ptr->left_tensor()->get_scalar();
   auto rscalar = evt_ptr->right_tensor()->get_scalar();
