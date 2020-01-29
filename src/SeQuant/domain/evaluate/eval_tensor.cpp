@@ -215,7 +215,7 @@ EvalTensor::EvalTensor(const ExprPtr& expr) {
 
 constant_type EvalTensor::get_scalar() const { return scalar_; }
 
-void EvalTensor::set_scalar(constant_type c) { scalar_ = std::move(c); }
+void EvalTensor::set_scalar(constant_type c) { scalar_ = c; }
 
 EvalTensor::Operation EvalTensor::get_op() const { return operation_; }
 
@@ -251,6 +251,7 @@ void EvalTensor::fill_btas_indices() {
   /*   for (const auto& idx : indices()) */
   /*     btas_indices_.emplace_back(label_to_hash(idx)); */
 
+  // convert the index labels to ordinals of size_t type
   auto wstring_to_number = [](const std::wstring& str) {
     size_t result = 0;
     for (const auto& ch : str) result += size_t(ch);

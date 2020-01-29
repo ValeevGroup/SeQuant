@@ -97,21 +97,19 @@ class EvalTensor {
   bool is_leaf() const;
 
 #ifdef SEQUANT_HAS_BTAS
-  ///
-  /// If btas_indices_ is empty, traverses the
-  /// evaluation tree recursively and fills them up
-  ///
+  //< If indices empty, traverses the
+  //< evaluation tree recursively and fills them up
   void fill_btas_indices();
 
-  /// @return const reference to btas_indices_.
+  //< @return const reference to btas_indices_.
   const btas_index_container& btas_indices() const;
 #endif
 
  private:
-  /// A complex number that multiplies corresponding data-tensor ultimately
+  //< A complex number that multiplies corresponding data-tensor ultimately
   constant_type scalar_{1};
 
-  /// Represents the binary operation eg. sum or product
+  //< Represents the binary operation eg. sum or product
   Operation operation_{Operation::Eval};
 
   ///
@@ -123,16 +121,16 @@ class EvalTensor {
   ///
   label_container_type indices_{};
 
-  /// The unique identifier of the evaluation resulting into this object
+  //< The unique identifier of the evaluation resulting into this object
   hash_type hash_value_{0};
 
-  /// Left tensor for the binary evaluation
+  //< Left tensor for the binary evaluation
   EvTensorPtr left_tensor_{nullptr};
 
-  /// Right tensor for the binary evaluation
+  //< Right tensor for the binary evaluation
   EvTensorPtr right_tensor_{nullptr};
 
-  /// BTAS works with ordinal as index label rather than wstring
+  //< BTAS works with ordinal as index label rather than wstring
 #ifdef SEQUANT_HAS_BTAS
   btas_index_container btas_indices_{};
 #endif

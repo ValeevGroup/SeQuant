@@ -54,7 +54,7 @@ int main() {
   using ispace_pair = std::pair<sequant::IndexSpace::Type, size_t>;
   using ispace_map = sequant::container::map<ispace_pair::first_type,
                                              ispace_pair::second_type>;
-  std::size_t nocc = 10, nvirt = 4;
+  std::size_t nocc = 10, nvirt = 16;
   std::wcout << "\nSetting up a map with nocc = " << nocc
              << " and nvirt = " << nvirt << "..\n";
   auto fac_map = std::make_shared<ispace_map>(ispace_map{});

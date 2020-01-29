@@ -212,25 +212,16 @@ DataTensorType eval_evtensor(const EvTensorPtr& evt_ptr,
 template <typename DataTensorType>
 DataTensorType eval_evsum(const EvTensorPtr& evt_ptr,
                           EvalContext<DataTensorType>& context) {
-  auto result = DataTensorType{};
-  auto get_scaled_tensor = [](constant_type c, const DataTensorType& dtensor) {
-    assert(c.imag() == 0);
-    if (c.real() == 1) return dtensor;
-    auto result = DataTensorType{dtensor};
-    btas::scal(c.real(), result);
-    return result;
-  };
 
-  auto lresult =
-      get_scaled_tensor(evt_ptr->left_tensor()->get_scalar(),
-                        eval_evtensor(evt_ptr->left_tensor(), context));
+  auto lresult = eval_evtensor(evt_ptr->left_tensor(), context);
+  auto rresult = eval_evtensor(evt_ptr->right_tensor(), context);
 
-  auto rresult =
-      get_scaled_tensor(evt_ptr->right_tensor()->get_scalar(),
-                        eval_evtensor(evt_ptr->right_tensor(), context));
+  btas::scal(evt_ptr->left_tensor()->get_scalar().real(), lresult);
 
-  result = lresult + rresult;
-  return result;
+  btas::scal(evt_ptr->right_tensor()->get_scalar().real(), rresult);
+
+  return lresult + rresult;
+
 }
 
 template <typename DataTensorType>
