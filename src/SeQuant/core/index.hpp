@@ -362,13 +362,12 @@ class Index : public Taggable {
   /// replaces this object with its image in the Index map.
   /// If this object was not found in the map, tries replacing its subindices.
   /// @param index_map maps Index to Index
-  /// @param tag_transformed_indices if true, will tag transformed indices with
-  /// integer 0 and skip any tagged indices that it encounters
   /// @return false if no replacements were made
+  /// @pre  \code this->tag().has_value() == false || (this->tag().has_value() == true && this->tag().value<int>() == 0) \endcode
+  /// @post if return value is true: \code this->tag().has_value() == true && this->tag().value<int>() == 0 \endcode
   template <template <typename, typename, typename... Args> class Map,
             typename... Args>
-  bool transform(const Map<Index, Index, Args...> &index_map,
-                 bool tag_transformed_index = false) {
+  bool transform(const Map<Index, Index, Args...> &index_map) {
     bool mutated = false;
 
     // outline:
@@ -397,7 +396,7 @@ class Index : public Taggable {
     if (!mutated) {
       bool proto_indices_transformed = false;
       for (auto &&subidx : proto_indices_) {
-        if (subidx.transform(index_map, tag_transformed_index))
+        if (subidx.transform(index_map))
           proto_indices_transformed = true;
       }
       if (proto_indices_transformed) {

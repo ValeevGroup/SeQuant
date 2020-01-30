@@ -86,8 +86,7 @@ class AbstractTensor {
     throw missing_instantiation_for("operator<");
   }
 
-  virtual bool _transform_indices(const container::map<Index, Index>& index_map,
-                                  bool tag_tranformed_indices) {
+  virtual bool _transform_indices(const container::map<Index, Index>& index_map) {
     throw missing_instantiation_for("_transform_indices");
   }
   virtual void _reset_tags() {
@@ -126,18 +125,18 @@ inline auto to_latex(const AbstractTensor& t) { return t._to_latex(); }
 ///         will need to make a copy.
 /// @param[in,out] t an AbstractTensor object whose indices will be transformed
 /// @param[in] index_map a const reference to an IndexMap object that specifies the transformation
-/// @param[in] tag_tranformed_indices a boolean that specifies whether to tag the transformed indices
 /// @return false if no indices were transformed, true otherwise
+/// @pre indices are not tagged, or (if want to protect them from replacement) tagged with (int)0
+/// @post transformed indices are tagged with (int)0
 template <typename IndexMap = container::map<Index, Index>>
-inline bool transform_indices(AbstractTensor& t, const IndexMap& index_map,
-                              bool tag_tranformed_indices) {
+inline bool transform_indices(AbstractTensor& t, const IndexMap& index_map) {
   if constexpr (std::is_same_v<IndexMap, container::map<Index, Index>>) {
-    return t._transform_indices(index_map, tag_tranformed_indices);
+    return t._transform_indices(index_map);
   }
   else {
     container::map<Index, Index> index_map_copy;
     ranges::copy(index_map, index_map_copy);
-    return t._transform_indices(index_map_copy, tag_tranformed_indices);
+    return t._transform_indices(index_map_copy);
   }
 }
 /// Removes tags from tensor indices

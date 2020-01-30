@@ -60,7 +60,7 @@ void fatal_error(const char* fmt, ...);
 
 
 
-/*! \mainpage Bliss
+/*! \page Bliss
  *
  * \section intro_sec Introduction
  *

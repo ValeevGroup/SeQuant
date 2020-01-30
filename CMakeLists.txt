@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.9)
 project(SeQuant LANGUAGES CXX)
+set(SEQUANT_VERSION 2.0.0-alpha.1)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -215,14 +216,4 @@ add_custom_target(check USES_TERMINAL COMMAND ${CMAKE_CTEST_COMMAND} -V)
 
 ####### DOCS ########
 
-find_package(Doxygen)
-if (DOXYGEN_FOUND)
-    set(DOXYGEN_GENERATE_HTML YES)
-    doxygen_add_docs(
-            html
-            ${PROJECT_SOURCE_DIR}/src
-            DOXYGEN_EXCLUDE_PATTERNS "catch.hpp"
-            COMMENT "Generate html dox"
-    )
-endif(DOXYGEN_FOUND)
-
+add_subdirectory(doc)
