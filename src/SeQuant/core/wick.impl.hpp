@@ -221,12 +221,9 @@ inline bool apply_index_replacement_rules(
 
   /// this recursively applies replacement rules until result does not
   /// change removes the deltas that are no longer needed
-  const bool tag_transformed_indices =
-      true;  // to replace indices when maps image and domain overlap, tag
-             // transformed indices
 #ifndef NDEBUG
-  // assert that tensors_ indices are not tagged if going to tag indices
-  if (tag_transformed_indices) {
+  // assert that tensors_ indices are not tagged since going to tag indices
+  {
     for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
       const auto &factor = *it;
       if (factor->is<Tensor>()) {
@@ -251,7 +248,7 @@ inline bool apply_index_replacement_rules(
 
         /// replace indices
         pass_mutated &=
-            tensor.transform_indices(const_replrules, tag_transformed_indices);
+            tensor.transform_indices(const_replrules);
 
         if (tensor.label() == L"S") {
           const auto &bra = tensor.bra().at(0);
@@ -318,8 +315,8 @@ inline bool apply_index_replacement_rules(
     mutated |= pass_mutated;
   } while (pass_mutated);  // keep replacing til fixed point
 
-  // assert that tensors_ indices are not tagged if going to tag indices
-  if (tag_transformed_indices) {
+  // assert that tensors_ indices are not tagged since going to tag indices
+  {
     for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
       const auto &factor = *it;
       if (factor->is<Tensor>()) {

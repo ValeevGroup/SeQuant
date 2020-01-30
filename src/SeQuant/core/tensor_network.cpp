@@ -296,13 +296,9 @@ ExprPtr TensorNetwork::canonicalize(
     }
   }
 
-  // transform indices
-  const bool tag_transformed_indices =
-      true;  // to replace indices when maps image and domain overlap, tag
-  // transformed indices
 #ifndef NDEBUG
-  // assert that tensors' indices are not tagged if going to tag indices
-  if (tag_transformed_indices) {
+  // assert that tensors' indices are not tagged since going to tag indices
+  {
     for (const auto &tensor : tensors_) {
       assert(ranges::none_of(braket(*tensor), [](const Index &idx) {
         return idx.tag().has_value();
@@ -316,13 +312,13 @@ ExprPtr TensorNetwork::canonicalize(
     pass_mutated = false;
     for (auto &tensor : tensors_) {
       pass_mutated |=
-          transform_indices(*tensor, idxrepl, tag_transformed_indices);
+          transform_indices(*tensor, idxrepl);
     }
     mutated |= pass_mutated;
   } while (pass_mutated);  // transform till stops changing
 
-  // if any replacements made, untag transformed indices as needed
-  if (tag_transformed_indices) {
+  // untag transformed indices (if any)
+  {
     for (auto &tensor : tensors_) {
       reset_tags(*tensor);
     }
