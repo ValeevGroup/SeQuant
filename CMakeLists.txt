@@ -190,7 +190,8 @@ if (BTAS_FOUND)
             examples/contract/${example1}.cpp
             examples/contract/interpret/interpreted_tensor.hpp
             examples/contract/interpret/contract.hpp
-            examples/contract/scf/hartree-fock.cc)
+            examples/contract/scf/hartree-fock.cc
+            src/SeQuant/domain/evaluate/eval_tensor.cpp)
     target_link_libraries(${example1} SeQuant factorizer ${TBB_LIBRARIES} Libint2::cxx BTAS)
     target_compile_definitions(${example1} PRIVATE SEQUANT_HAS_BTAS)
 endif(BTAS_FOUND)

@@ -4,6 +4,8 @@
 #include "interpret/interpreted_tensor.hpp"
 #include "interpret/contract.hpp"
 
+#include <SeQuant/domain/evaluate/eval_expr.hpp>
+
 #ifndef SEQUANT_HAS_BTAS
 # error "SEQUANT_HAS_BTAS should be defined when building cc_btas"
 #endif
@@ -459,12 +461,55 @@ int main(int argc, char *argv[])
     for (auto i=1; i<cc_r.size(); ++i)
       cc_r[i] = factorize_expr(cc_r.at(i), index_size_map, true);
 
+    auto cc_r1 = std::make_shared<sequant::evaluate::EvalTensor>(cc_r[1]);
+    cc_r1->fill_btas_indices();
+    auto cc_r2 = std::make_shared<sequant::evaluate::EvalTensor>(cc_r[2]);
+    cc_r2->fill_btas_indices();
+
+    sequant::container::map<sequant::evaluate::hash_type, size_t>  hash_counts_r1, hash_counts_r2;
+    sequant::evaluate::fill_hash_counts(cc_r1, hash_counts_r1);
+    sequant::evaluate::fill_hash_counts(cc_r2, hash_counts_r2);
+
+    auto generate_hash_map_entry = [](std::wstring& label, std::wstring& spaces,
+        std::shared_ptr<BTensor>& tnsr_ptr) {
+      auto space_vector = container::svector<IndexSpace::Type>{};
+      for (auto sp : spaces) {
+        if (sp == 'o')
+          space_vector.push_back(IndexSpace::active_occupied);
+        else if (sp == 'v')
+          space_vector.push_back(IndexSpace::active_unoccupied);
+        else
+          throw std::logic_error(
+              "Use 'o' for active_occupied and 'v' for active_unoccupied "
+              "IndexSpace!");
+      }
+      auto hval = sequant::evaluate::DataTensorSpecs(label, space_vector)
+        .get_hash_value();
+      return sequant::evaluate::hash_to_dtensor_map<BTensor>::value_type(hval, tnsr_ptr);
+    };
+
+    auto hash_to_ptr = sequant::evaluate::hash_to_dtensor_map<BTensor>();
+    for (auto& item: btensor_map){
+      std::wstring label = std::wstring{item.first[0]};
+      std::wstring spaces = std::wstring{item.first.substr(2, std::wstring::npos)};
+      auto entry = generate_hash_map_entry(label, spaces, item.second);
+      hash_to_ptr.insert(entry);
+    }
+
+    auto context_r1 = sequant::evaluate::EvalContext<BTensor>(hash_to_ptr, hash_counts_r1);
+    auto context_r2 = sequant::evaluate::EvalContext<BTensor>(hash_to_ptr, hash_counts_r2);
+
     auto start = high_resolution_clock::now();
     do { 
       ++iter;
-      auto R1 = eval_equation(cc_r[1], btensor_map).tensor();
-      auto R2 = eval_equation(cc_r[2], btensor_map).tensor();
+      // old method
+      // auto R1 = eval_equation(cc_r[1], btensor_map).tensor();
+      // auto R2 = eval_equation(cc_r[2], btensor_map).tensor();
       // auto R3 = eval_equation(cc_r[3], btensor_map).tensor();
+
+      // new method
+      auto R1 = sequant::evaluate::eval_evtensor(cc_r1, context_r1);
+      auto R2 = sequant::evaluate::eval_evtensor(cc_r2, context_r2);
 
       R2 = antisymmetrize(R2);
       // R3 = antisymmetrize(R3);
