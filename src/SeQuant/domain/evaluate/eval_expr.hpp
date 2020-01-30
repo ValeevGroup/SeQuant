@@ -172,7 +172,7 @@ DataTensorType eval_evtensor(const EvTensorPtr& evt_ptr,
         // first case
         if (context.imed_counts()[this_hash] == 0) {
           result = std::move(*context.imed_map().find(this_hash)->second);
-          context.imed_map().erase(this_hash);
+          context.imed_map()[this_hash] = std::shared_ptr<DataTensorType>();
         } else {  // part of the second case
           result = *(context.imed_map().find(this_hash)->second);
         }
