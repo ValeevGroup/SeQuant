@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.9)
 project(SeQuant LANGUAGES CXX)
+set(SEQUANT_VERSION 2.0.0-alpha.1)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -25,8 +26,8 @@ find_package(Threads REQUIRED)
 # PSTL (used by g++-9 and clang++-8 in c++17 mode) needs TBB
 if ((${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU" AND ${CMAKE_CXX_COMPILER_VERSION} VERSION_GREATER 9) OR
     (${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang" AND ${CMAKE_CXX_COMPILER_VERSION} VERSION_GREATER 8))
-    set(PSTL_NEEDS_TBB TRUE)
-    find_package(TBB REQUIRED)
+  set(PSTL_NEEDS_TBB TRUE)
+  find_package(TBB REQUIRED)
 endif()
 
 if (NOT RANGEV3_DIR)
@@ -34,7 +35,7 @@ if (NOT RANGEV3_DIR)
 endif(NOT RANGEV3_DIR)
 add_library(Range-V3 INTERFACE IMPORTED)
 set_property(TARGET Range-V3 PROPERTY
-        INTERFACE_INCLUDE_DIRECTORIES ${RANGEV3_DIR}/include)
+             INTERFACE_INCLUDE_DIRECTORIES ${RANGEV3_DIR}/include)
 
 # need Boost.ContainerHash
 # NB Boost.Container is broken in v1.70
@@ -52,9 +53,8 @@ if (BTAS_INSTALL_DIR)
     find_package(BTAS)
 endif(BTAS_INSTALL_DIR)
 
-if (TiledArray_DIR)
-    find_package(TiledArray CONFIG COMPONENTS tiledarray)
-endif(TiledArray_DIR)
+# look for TA
+find_package(TiledArray CONFIG COMPONENTS tiledarray)
 
 # embedded bliss-0.73
 add_library(bliss
@@ -259,13 +259,4 @@ add_custom_target(check USES_TERMINAL COMMAND ${CMAKE_CTEST_COMMAND} -V)
 
 ####### DOCS ########
 
-find_package(Doxygen)
-if (DOXYGEN_FOUND)
-    set(DOXYGEN_GENERATE_HTML YES)
-    doxygen_add_docs(
-            html
-            ${PROJECT_SOURCE_DIR}/src
-            DOXYGEN_EXCLUDE_PATTERNS "catch.hpp"
-            COMMENT "Generate html dox"
-    )
-endif(DOXYGEN_FOUND)
+add_subdirectory(doc)

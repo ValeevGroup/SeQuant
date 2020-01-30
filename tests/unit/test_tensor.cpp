@@ -55,17 +55,21 @@ TEST_CASE("Tensor", "[elements]") {
                     {Index{L"i_3"}, Index{L"i_4"}}, Symmetry::antisymm);
     std::map<Index, Index> idxmap = {{Index{L"i_1"}, Index{L"i_2"}},
                                      {Index{L"i_2"}, Index{L"i_1"}}};
-    REQUIRE(t.transform_indices(idxmap, true));
+    REQUIRE(t.transform_indices(idxmap));
     REQUIRE(t.bra()[0].tag().has_value());
+    const auto t_bra0_tag_value = t.bra()[0].tag().value<int>();
+    REQUIRE(t_bra0_tag_value == 0);
     REQUIRE(t.bra()[1].tag().has_value());
+    const auto t_bra1_tag_value = t.bra()[1].tag().value<int>();
+    REQUIRE(t_bra1_tag_value == 0);
     REQUIRE(!t.ket()[0].tag().has_value());
     REQUIRE(!t.ket()[1].tag().has_value());
     REQUIRE(t == Tensor(L"g", {Index{L"i_2"}, Index{L"i_1"}},
                         {Index{L"i_3"}, Index{L"i_4"}}, Symmetry::antisymm));
     // tagged indices are protected, so no replacements the second goaround
-    REQUIRE(!t.transform_indices(idxmap, true));
+    REQUIRE(!t.transform_indices(idxmap));
     t.reset_tags();
-    REQUIRE(t.transform_indices(idxmap, true));
+    REQUIRE(t.transform_indices(idxmap));
     REQUIRE(t == Tensor(L"g", {Index{L"i_1"}, Index{L"i_2"}},
                         {Index{L"i_3"}, Index{L"i_4"}}, Symmetry::antisymm));
     t.reset_tags();
