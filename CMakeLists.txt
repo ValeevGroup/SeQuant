@@ -20,6 +20,8 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/modules/")
 
+include(external/versions.cmake)
+
 # std::thread requires (on some platforms?) thread support which is not provided automatically
 find_package(Threads REQUIRED)
 
@@ -30,18 +32,35 @@ if ((${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU" AND ${CMAKE_CXX_COMPILER_VERSION} V
   find_package(TBB REQUIRED)
 endif()
 
+# Ranges-V3
 if (NOT RANGEV3_DIR)
     message(FATAL_ERROR "Set cache variable RANGEV3_DIR to the top of the Range-V3 source directory")
 endif(NOT RANGEV3_DIR)
+if (NOT EXISTS "${RANGEV3_DIR}/include")
+    message(FATAL_ERROR "Given RANGEV3_DIR=\"${RANGEV3_DIR}\" but did not find include subdirectory; make sure that RANGEV3_DIR points to the top of valid Range-V3 source directory")
+endif()
+# if Range-V3 is a git repo check the revision
+if(EXISTS "${RANGEV3_DIR}/.git")
+  find_package(Git REQUIRED)
+  execute_process(
+      COMMAND ${GIT_EXECUTABLE} rev-parse -q HEAD
+      WORKING_DIRECTORY "${RANGEV3_DIR}"
+      OUTPUT_VARIABLE RANGEV3_REVISION )
+  string(REGEX MATCH "[0-9a-f]*"
+      RANGEV3_REVISION "${RANGEV3_REVISION}")
+  if (NOT (${RANGEV3_REVISION} STREQUAL ${SEQUANT_TRACKED_RANGESV3_TAG}))
+    message(FATAL_ERROR "RANGEV3_DIR=\"${RANGEV3_DIR}\" points to Range-V3 library with revision ${RANGEV3_REVISION}, but need ${SEQUANT_TRACKED_RANGESV3_TAG}")
+  endif ()
+endif()
 add_library(Range-V3 INTERFACE IMPORTED)
 set_property(TARGET Range-V3 PROPERTY
-             INTERFACE_INCLUDE_DIRECTORIES ${RANGEV3_DIR}/include)
+             INTERFACE_INCLUDE_DIRECTORIES "${RANGEV3_DIR}/include")
 
 # need Boost.ContainerHash
 # NB Boost.Container is broken in v1.70
-find_package(Boost 1.67 REQUIRED)
+find_package(Boost ${SEQUANT_TRACKED_BOOST_VERSION} REQUIRED)
 if (Boost_VERSION EQUAL 107000)
-    message(FATAL_ERROR "Found Boost 1.70, but its Boost.Container is broken: use versions 1.67, 1.68, or 1.69")
+    message(FATAL_ERROR "Found Boost 1.70, but its Boost.Container is broken: use any version ${SEQUANT_TRACKED_BOOST_VERSION} or higher, other than 1.70")
 endif()
 add_library(Boost INTERFACE IMPORTED)
 set_property(TARGET Boost PROPERTY
