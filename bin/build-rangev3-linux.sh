@@ -7,7 +7,7 @@ export INSTALL_DIR=${INSTALL_PREFIX}/range-v3
 
 # extract the tracked tag of Range-V3
 export RANGEV3_TAG=`grep 'set(SEQUANT_TRACKED_RANGESV3_TAG ' ${TRAVIS_BUILD_DIR}/external/versions.cmake | awk '{print $2}' | sed s/\)//g`
-echo "required Range-V3 revision = ${MADNESS_TAG}"
+echo "required Range-V3 revision = ${RANGEV3_TAG}"
 
 # make sure installed Range-V3 tag matches the required tag, if not, remove INSTALL_DIR (will cause reinstall)
 # if can't determine the tag, remove and reinstall just in case
