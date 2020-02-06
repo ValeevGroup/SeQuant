@@ -106,9 +106,8 @@ class IndexSpace {
     bool operator<(Attr other) const {
       if (this->qns() == other.qns()) {
         return this->type() < other.type();
-      }
-      else {
-        return this->qns() < other.qns());
+      } else {
+        return this->qns() < other.qns();
       }
     }
   };
