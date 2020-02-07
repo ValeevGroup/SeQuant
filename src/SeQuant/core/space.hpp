@@ -7,7 +7,6 @@
 
 #include <cassert>
 #include <bitset>
-#include <iostream>
 
 #include "attr.hpp"
 #include "container.hpp"
@@ -103,12 +102,12 @@ class IndexSpace {
     static Attr invalid() noexcept { return Attr{TypeAttr::invalid(), QuantumNumbersAttr::invalid()}; }
     bool is_valid() const noexcept { return *this != Attr::invalid(); }
 
-    /// Attr objects are ordered by type, then by quantum numbers
+    /// Attr objects are ordered by quantum numbers, then by type
     bool operator<(Attr other) const {
-      if (this->type() < other.type()) {
-        return true;
+      if (this->qns() == other.qns()) {
+        return this->type() < other.type();
       } else {
-        return (this->type() == other.type()) ? this->qns() < other.qns() : false;
+        return this->qns() < other.qns();
       }
     }
   };
@@ -195,9 +194,8 @@ class IndexSpace {
       return null_instance();
     const auto attr = to_attr(reduce_key(key));
     assert(attr.is_valid());
-    if (!instance_exists(attr)) {
+    if (!instance_exists(attr))
       throw bad_key();
-    }
     return instances_.find(attr)->second;
   }
 

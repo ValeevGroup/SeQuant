@@ -63,6 +63,13 @@ TEST_CASE("IndexSpace", "[elements]") {
       auto iB = IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::beta);
       auto aA = IndexSpace::instance(IndexSpace::active_unoccupied, IndexSpace::alpha);
       auto aB = IndexSpace::instance(IndexSpace::active_unoccupied, IndexSpace::beta);
+
+      auto p1A = IndexSpace::instance(IndexSpace::all, IndexSpace::alpha);
+      auto p1B = IndexSpace::instance(IndexSpace::all, IndexSpace::beta);
+      auto p2A = IndexSpace::instance(IndexSpace::all, IndexSpace::alpha);
+      auto p2B = IndexSpace::instance(IndexSpace::all, IndexSpace::beta);
+
+
       REQUIRE(iA < aA);
       REQUIRE(iB < aB);
       REQUIRE(iA < aB);
@@ -72,6 +79,12 @@ TEST_CASE("IndexSpace", "[elements]") {
       REQUIRE(!(iA < iA));
       REQUIRE(i < iA);
       REQUIRE(i < iB);
+
+      REQUIRE(p1A < p1B);
+      REQUIRE(p1B < p2A);
+      REQUIRE(p1A < p2A);
+      REQUIRE(p1B < p2B);
+
     }
   }
 

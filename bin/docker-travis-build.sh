@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# this script builds a 'Trusty' env docker image used by Travis-CI for ValeevGroup/SeQuant2 (aka SeQuant) project
+# this script builds a 'Bionic' env docker image used by Travis-CI for ValeevGroup/SeQuant2 (aka SeQuant) project
 #
 # to run bash in the image: docker run -it sequant-travis-debug bash -l
 # N.B. relevant locations:
@@ -17,7 +17,7 @@ setup=setup.sh
 cat > $setup << END
 #!/bin/sh
 curl -sSL "http://apt.llvm.org/llvm-snapshot.gpg.key" | apt-key add -
-echo "deb http://apt.llvm.org/xenial/ llvm-toolchain-xenial-8 main" | tee -a /etc/apt/sources.list > /dev/null
+echo "deb http://apt.llvm.org/bionic/ llvm-toolchain-bionic-9 main" | tee -a /etc/apt/sources.list > /dev/null
 apt-add-repository -y "ppa:ubuntu-toolchain-r/test"
 apt-get -yq update >> ~/apt-get-update.log
 apt-get -yq --no-install-suggests --no-install-recommends --force-yes install g++-8 clang-8 libc++-8-dev libc++abi-8-dev gdb cmake cmake-data
@@ -36,16 +36,15 @@ cd /home/travis/_build
 export BUILD_PREFIX=/home/travis/_build
 export INSTALL_PREFIX=/home/travis/_install
 export TRAVIS_BUILD_DIR=${TRAVIS_BUILD_TOPDIR}/ValeevGroup/SeQuant
-./build-linux.sh
+${TRAVIS_BUILD_DIR}/bin/build-linux.sh
 END
 chmod +x $build
 
 ##############################################################
 # make Dockerfile
 cat > Dockerfile << END
-# Travis default 'Xenial' image
-# for up-to-date info: https://docs.travis-ci.com/user/common-build-problems/#troubleshooting-locally-in-a-docker-image
-FROM travisci/ci-sardonyx:packer-1541445940-e193d27
+# Travis default 'Bionic' image
+FROM travisci/ci-ubuntu-1804:packer-1577347966-74db3f91
 
 # Use baseimage-docker's init system.
 CMD ["/sbin/my_init"]
@@ -73,9 +72,6 @@ RUN /home/travis/_build/$setup
 RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # copy travis scripts + ssh key
-ADD build-boost-linux.sh /home/travis/_build/build-boost-linux.sh
-ADD build-linux.sh /home/travis/_build/build-linux.sh
-ADD build-rangev3-linux.sh /home/travis/_build/build-rangev3-linux.sh
 ADD $build /home/travis/_build/$build
 END
 
