@@ -68,10 +68,7 @@ set_property(TARGET Boost PROPERTY
         INTERFACE_INCLUDE_DIRECTORIES ${Boost_INCLUDE_DIR})
 
 ############ optional dependencies
-# look for BTAS, if needed
-if (BTAS_INSTALL_DIR)
-    find_package(BTAS)
-endif(BTAS_INSTALL_DIR)
+include(FindOrFetchBTAS)
 find_package(TiledArray CONFIG COMPONENTS tiledarray)
 
 # embedded bliss-0.73
