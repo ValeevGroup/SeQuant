@@ -20,6 +20,7 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/modules/")
 
+include(AddCustomTargetSubproject)
 include(external/versions.cmake)
 
 # std::thread requires (on some platforms?) thread support which is not provided automatically
@@ -228,7 +229,7 @@ foreach(i RANGE ${lastexample})
 endforeach()
 
 # target for running ALL tests
-add_custom_target(check USES_TERMINAL COMMAND ${CMAKE_CTEST_COMMAND} -V)
+add_custom_target_subproject(sequant check USES_TERMINAL COMMAND ${CMAKE_CTEST_COMMAND} -V)
 
 ####### DOCS ########
 
