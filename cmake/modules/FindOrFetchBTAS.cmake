@@ -4,7 +4,7 @@ if (NOT TARGET BTAS::btas)
 
   include(DownloadProject)
   download_project(PROJ                BTAS
-    GIT_REPOSITORY      /Users/evaleev/code/BTAS
+    GIT_REPOSITORY      https://github.com/BTAS/btas.git
     GIT_TAG             ${SEQUANT_TRACKED_BTAS_TAG}
     UPDATE_DISCONNECTED 1
     )
