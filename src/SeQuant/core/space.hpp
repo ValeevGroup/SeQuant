@@ -104,10 +104,10 @@ class IndexSpace {
 
     /// Attr objects are ordered by quantum numbers, then by type
     bool operator<(Attr other) const {
-      if (this->qns() < other.qns()) {
-        return true;
+      if (this->qns() == other.qns()) {
+        return this->type() < other.type();
       } else {
-        return !(this->qns() == other.qns()) || this->type() < other.type();
+        return this->qns() < other.qns();
       }
     }
   };
