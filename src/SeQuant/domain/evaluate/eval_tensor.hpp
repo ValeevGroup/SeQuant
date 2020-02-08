@@ -38,16 +38,16 @@ class EvalTensor {
     Sum,
     /// Represents contraction of tensors
     Product,
-    /// Represents the end of evaluation
+    /// Represents the end of evaluation ie. leaf of the evaluation tree
     Eval
   };
 
   EvalTensor() = default;
 
   ///
-  /// Constructs EvalTensor from a Tensor object.
+  /// Constructs EvalTensor from a sequant::Tensor object.
   ///
-  /// @note Tensor objects are leaf type sequant Exprs'.
+  /// @note sequant::Tensor objects are leaf type sequant Exprs'.
   /// Thus the resulting EvalTensor will be constructed
   /// as leaf. That means, the indices and the hash value
   /// are filled during the construction of the object and
