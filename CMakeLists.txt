@@ -197,9 +197,12 @@ add_executable(${example0} EXCLUDE_FROM_ALL
 target_link_libraries(${example0} SeQuant ${TBB_LIBRARIES})
 
 # contract method testing -- Bimal
-if (BTAS_FOUND)
-    find_package(Libint2 2.6.0 CONFIG REQUIRED)
 
+if (BTAS_FOUND OR TiledArray_FOUND)
+    find_package(Libint2 2.6.0 CONFIG REQUIRED)
+endif()
+
+if (BTAS_FOUND)
     set(example1 cc_btas)
     add_executable(${example1} EXCLUDE_FROM_ALL
             examples/contract/${example1}.cpp
