@@ -5,11 +5,112 @@
 #include "SeQuant/domain/mbpt/spin.hpp"
 #include "catch.hpp"
 
-TEST_CASE("Spin Trace") {
+TEST_CASE("Spin") {
   using namespace sequant;
 
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
+
+  SECTION("Tensor symmetry"){
+
+  }
+
+  SECTION("Tensor spin symmetry"){
+
+  }
+
+  SECTION("Append spin"){
+    auto input = ex<Tensor>();
+
+  }
+
+  SECTION("Remove spin"){
+
+  }
+
+  SECTION("Test Antisymmetrizer"){
+    {
+      const auto input =
+          ex<Constant>(1. / 4) +
+              ex<Constant>(1. / 2) *
+                  ex<Tensor>(L"g", WstrList{L"i_1", L"i_2"}, WstrList{L"a_1", L"a_2"},
+                             Symmetry::antisymm) *
+                  ex<Tensor>(L"t", WstrList{L"a_1"}, WstrList{L"i_1"}) *
+                  ex<Tensor>(L"t", WstrList{L"a_2"}, WstrList{L"i_2"}) +
+              ex<Constant>(1. / 4) *
+                  ex<Tensor>(L"g", WstrList{L"i_1", L"i_2"}, WstrList{L"a_1", L"a_2"},
+                             Symmetry::antisymm) *
+                  ex<Tensor>(L"t", WstrList{L"a_1", L"a_2"}, WstrList{L"i_1", L"i_2"},
+                             Symmetry::antisymm);
+      std::wcout << "\ninput: " << to_latex(input) << "\n";
+      auto A_found = check_A_operator(input);
+      if(A_found){
+        auto result = expand_A_operator(input);
+        std::wcout << "result: " << to_latex(result) << "\n";
+        for(auto&& summand: *result){
+          std::wcout<< "term: " << to_latex(summand) << "\n";
+          auto spin_traced = spintrace(summand);
+          std::wcout<< "sptr: " << to_latex(spin_traced) << "\n\n";
+        }
+        // auto spin_traced = spintrace(result);
+        // std::wcout << "spin_traced: " << to_latex(spin_traced) << "\n";
+      } else {
+        std::cout << "No A found.\n";
+      }
+    }
+
+    }
+
+    {
+      const auto input = ex<Constant>(1. / 4) *
+          ex<Tensor>(L"A", WstrList{L"a_1", L"a_2"}, WstrList{L"i_1", L"i_2"},
+                     Symmetry::antisymm) *
+      ex<Tensor>(L"g", WstrList{L"i_1", L"i_2"}, WstrList{L"a_1", L"a_2"},
+                  Symmetry::antisymm);
+
+      std::wcout << "\ninput: " << to_latex(input) << "\n";
+      auto A_found = check_A_operator(input);
+      if(A_found){
+        auto result = expand_A_operator(input);
+        std::wcout << "result: " << to_latex(result) << "\n";
+        for(auto&& summand: *result){
+          std::wcout<< "term: " << to_latex(summand) << "\n";
+          auto spin_traced = spintrace(summand);
+          std::wcout<< "sptr: " << to_latex(spin_traced) << "\n\n";
+        }
+        // auto spin_traced = spintrace(result);
+        // std::wcout << "spin_traced: " << to_latex(spin_traced) << "\n";
+      }
+
+    {
+      const auto input = ex<Constant>(-0.5) *
+          ex<Tensor>(L"A", WstrList{L"a_1", L"a_2"}, WstrList{L"i_1", L"i_2"},
+                     Symmetry::antisymm) *
+          ex<Tensor>(L"g", WstrList{L"a_3", L"a_4"}, WstrList{L"a_1", L"a_2"},
+                     Symmetry::antisymm) *
+      ex<Tensor>(L"t", WstrList{L"i_2", L"i_1"}, WstrList{L"a_3", L"a_4"},
+                 Symmetry::antisymm);
+
+      std::wcout << "\ninput: " << to_latex(input) << "\n";
+      auto A_found = check_A_operator(input);
+      if(A_found){
+        auto result = expand_A_operator(input);
+        std::wcout << "result: " << to_latex(result) << "\n";
+        for(auto&& summand: *result){
+          std::wcout<< "term: " << to_latex(summand) << "\n";
+          auto spin_traced = spintrace(summand);
+          std::wcout<< "sptr: " << to_latex(spin_traced) << "\n\n";
+        }
+        // auto spin_traced = spintrace(result);
+        // std::wcout << "spin_traced: " << to_latex(spin_traced) << "\n";
+      }
+
+    }
+
+
+  }
+
+#if 0
 
   SECTION("Constant") {
     auto exprPtr = ex<Constant>(1. / 4);
@@ -20,15 +121,28 @@ TEST_CASE("Spin Trace") {
   }
 
   SECTION("Tensor") {
-    const auto expr = ex<Tensor>(L"g", WstrList{L"p_1", L"p_2"},
+    const auto expr = ex<Constant>(0.25) * ex<Tensor>(L"g", WstrList{L"p_1", L"p_2"},
                                  WstrList{L"p_3", L"p_4"}, Symmetry::antisymm);
     auto result = spintrace(expr);
     REQUIRE(result->is<Sum>());
-    REQUIRE(result->size() == 2);
-    REQUIRE(to_latex(result) ==
-            L"{ \\left({{g^{{p_3}{p_4}}_{{p_1}{p_2}}}} - "
-            L"{{g^{{p_3}{p_4}}_{{p_2}{p_1}}}}\\right) }");
+    std::wcout << "input:  " << to_latex(expr) << "\n";
+    std::wcout << "result: " << to_latex(result) << "\n";
+//  REQUIRE(result->size() == 2);
+//    REQUIRE(to_latex(result) ==
+//            L"{ \\left({{g^{{p_3}{p_4}}_{{p_1}{p_2}}}} - "
+//            L"{{g^{{p_3}{p_4}}_{{p_2}{p_1}}}}\\right) }");
   }
+
+  SECTION("Antisymmetrizer check"){
+    const auto input = ex<Tensor>(L"g", WstrList{L"p_1", L"p_2"},
+                         WstrList{L"p_3", L"p_4"}, Symmetry::antisymm);
+
+    auto result = expand_antisymm(input->as<Tensor>());
+    std::wcout << "input:  " << to_latex(input) << "\n";
+    std::wcout << "result: " << to_latex(result) << "\n";
+  }
+
+
 
   SECTION("Product") {
     const auto expr = ex<Tensor>(L"f", WstrList{L"i_1"}, WstrList{L"a_1"}) *
@@ -116,5 +230,5 @@ TEST_CASE("Spin Trace") {
         L"{{{2}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}}_{{a_1}}}{t^{{i_2}}_{{a_"
         L"2}}}}\\right) }");
   }
-
+#endif
 }  // TEST_CASE("Spin Trace")

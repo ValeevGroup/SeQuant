@@ -232,7 +232,7 @@ inline ExprPtr expand_antisymm(const ExprPtr& expr) {
 /// @brief Check if the Antisymmetrizer operator is present in given expression
 /// @param expr input expression
 /// @return true if this function finds an A operator
-bool check_Antisymm_operator(const ExprPtr& expr){
+bool check_A_operator(const ExprPtr& expr){
 
   auto check_tensor = [&] (const Tensor& tensor) {
     if(tensor.label() == L"A")
@@ -270,25 +270,6 @@ bool check_Antisymm_operator(const ExprPtr& expr){
     }
   } else
     throw("Unknown arg type for check_Antisymm_operator.");
-
-  /*
-  std::wcout << __LINE__ << "L ";
-  for(auto&& summand: *expr){
-    if(summand->is<Product>()){
-      for(auto && term : *summand){
-        if(term->is<Tensor>()){
-          auto tensor = term->as<Tensor>();
-          std::wcout << __LINE__ << "L " << to_latex(tensor) << "\n";
-          if(tensor.label() == L"A") result = true;
-          return result;
-        }
-      }
-    }
-
-  }
-
-  */
-  // return result;
 }
 
 /// @brief Generates a vector of replacement maps
@@ -335,73 +316,23 @@ std::vector<std::map<Index, Index>> A_replacement_map(const Tensor& A){
 /// @return expression pointer with A operator applied
 ExprPtr expand_A_operator(const Product& product){
 
-  // Check A, get bra list, get ket list
-//  container::set<Index> A_bra;
-//  container::set<Index> A_ket;
-//  container::svector<Index> A_braket;
+  bool has_A_operator = false;
+
+  // Check A and build replacement map
   std::vector<std::map<Index, Index>> map_list;
   for(auto& term : product){
-    if(term->is<Tensor>())
-      if(term->as<Tensor>().label() == L"A"){
-        auto A = term->as<Tensor>();
-//        for(auto& idx: A.bra()) A_bra.insert(idx);
-//        for(auto& idx: A.ket()) A_ket.insert(idx);
-//        for(auto& idx: A.const_braket()) A_braket.push_back(idx);
+    if(term->is<Tensor>()){
+      auto A = term->as<Tensor>();
+      if(A.label() == L"A"){
+        has_A_operator = true;
         map_list = A_replacement_map(A);
         break;
       }
+    }
   }
 
-#if 0
-  std::cout << "\nA Bra: ";
-  ranges::for_each(A_bra, [&] (Index& idx){std::wcout << idx.label() << " ";} );
-  std::cout << "\nA Ket: ";
-  ranges::for_each(A_ket, [&] (Index& idx){std::wcout << idx.label() << " ";} );
-  std::cout << "\nA BraKet: ";
-  ranges::for_each(A_braket, [&] (Index& idx){std::wcout << idx.label() << " ";} );
-  std::cout << "\n";
+  if(!has_A_operator) return std::make_shared<Product>(product);
 
-  // generate vector of replacement maps
-  std::vector<std::map<Index, Index>> map_list;
-  // use nested next permutation
-  do{
-    do{
-      auto A_bra_copy = A_bra;
-      auto A_ket_copy = A_ket;
-/*
-      IndexSwapper::thread_instance().reset();
-      bubble_sort(std::begin(A_bra_copy), std::end(A_bra_copy), std::less<Index>{});
-      bubble_sort(std::begin(A_ket_copy), std::end(A_ket_copy), std::less<Index>{});
-      ranges::for_each(A_bra, [&] (Index& idx){std::wcout << idx.label() << " ";} );
-      ranges::for_each(A_ket, [&] (Index& idx){std::wcout << idx.label() << " ";} );
-      bool even = IndexSwapper::thread_instance().even_num_of_swaps();
-      std::cout << (even ? 1 : -1) << "\n";
-*/
-      std::map<Index, Index> replacement_map;
-
-      auto A_braket_ptr = A_braket.begin();
-      for(auto&& idx: A_bra){
-        replacement_map.emplace(std::make_pair(*A_braket_ptr, idx));
-        A_braket_ptr++;
-      }
-      for(auto&& idx: A_ket){
-        replacement_map.emplace(std::make_pair(*A_braket_ptr, idx));
-        A_braket_ptr++;
-      }
-/*
-      std::cout << "Map:\n";
-      // ranges::for_each(A_braket, [&] (Index& idx){std::wcout << idx.label() << " ";} );
-      for(auto&& pair : replacement_map){
-        std::wcout << pair.first.label() << " " << pair.second.label() << "\n";
-      }
-      std::cout << "\n";
-*/
-      map_list.push_back(replacement_map);
-    } while (std::next_permutation(A_bra.begin(), A_bra.end()));
-  } while (std::next_permutation(A_ket.begin(), A_ket.end()));
-#endif
-
-  std::cout << "New tensors:\n";
   // substitute and expand
   Product large_product{};
   auto product_of_expanded_terms = std::make_shared<Product>();
@@ -421,19 +352,42 @@ ExprPtr expand_A_operator(const Product& product){
         auto new_tensor_ptr = std::make_shared<Tensor>(new_tensor);
         Product new_product{};
         new_product.append((even ? 1 : -1), new_tensor_ptr);
-        std::wcout << to_latex(new_product) << "\n";
+//         std::wcout << to_latex(new_product) << "\n";
         auto new_product_ptr = std::make_shared<Product>(new_product);
         new_sum.append(new_product_ptr);
       }
-      std::cout << "\nSum: ";
-      std::wcout << to_latex(new_sum) << "\n";
+//      std::cout << "\nSum: ";
+//      std::wcout << to_latex(new_sum) << "\n";
       auto new_sum_ptr = std::make_shared<Sum>(new_sum);
       product_of_expanded_terms->append(1, new_sum_ptr);
     }
   }
   ExprPtr result = product_of_expanded_terms;
+  expand(result);
   rapid_simplify(result);
   return result;
+}
+
+/// @brief expands all A operators
+/// @param expr A product or sum
+/// @return expression pointer with A removed.
+ExprPtr expand_A_operator(const ExprPtr& expr){
+  if(expr->is<Constant>() || expr->is<Tensor>())
+    throw("Unknown arg for expand_A_operator");
+
+    if (expr->is<Product>())
+      return expand_A_operator(expr->as<Product>());
+    else if(expr->is<Sum>()){
+      auto result = std::make_shared<Sum>();
+      for(auto&& summand: *expr){
+        if(summand->is<Product>())
+          result->append(expand_A_operator(summand->as<Product>()));
+        else
+          result->append(summand);
+      }
+      return result;
+    } else
+      throw("Unknown arg Type for expand_A_operator.");
 }
 
 /// @brief Spin traces a given expression pointer
@@ -462,8 +416,11 @@ ExprPtr spintrace(ExprPtr expression,
 
   if (expression->is<Constant>()) return expression;
 
-  if (expression->is<Tensor>())
+  if (expression->is<Tensor>()){
+
     return expand_antisymm(expression->as<Tensor>());
+  }
+
 
   auto spin_trace_tensor = [&](const Tensor& tensor) {
     auto spin_tensor = std::make_shared<Tensor>(tensor);
@@ -607,6 +564,10 @@ ExprPtr spintrace(ExprPtr expression,
 
     return result;
   };
+
+  // TODO: Check if 'A' exist in expression
+  // IF true: expand A;
+  // ELSE continue with spintrace.
 
   if (expression->is<Product>()) {
     return trace_product(expression->as<Product>());
