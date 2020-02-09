@@ -50,7 +50,6 @@ CMakeCache.txt
 CMakeFiles
 CMakeScripts
 CMakeDoxy*
-Doxy*
 Testing
 Makefile
 cmake_install.cmake
