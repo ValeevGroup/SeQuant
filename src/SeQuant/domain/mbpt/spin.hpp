@@ -18,7 +18,7 @@ ExprPtr append_spin(ExprPtr& expr, std::map<Index, Index>& index_replacements) {
   auto add_spin_to_tensor = [&](const Tensor& tensor) {
     auto spin_tensor = std::make_shared<Tensor>(tensor);
     // auto spin_tensor = tensor;
-    for (auto&& idx : spin_tensor->const_braket()) idx.reset_tag();
+    // for (auto&& idx : spin_tensor->const_braket()) idx.reset_tag();
 
     auto pass_mutated = spin_tensor->transform_indices(index_replacements);
     //    auto pass_mutated = spin_tensor.transform_indices(index_replacements);
@@ -275,7 +275,8 @@ bool check_A_operator(const ExprPtr& expr) {
       if (result) return result;
     }
   } else
-    throw("Unknown arg type for check_Antisymm_operator.");
+    return false;
+    // throw("Unknown arg type for check_Antisymm_operator.");
 }
 
 /// @brief Generates a vector of replacement maps
@@ -379,7 +380,8 @@ ExprPtr expand_A_operator(const Product& product) {
 /// @return expression pointer with A removed.
 ExprPtr expand_A_operator(const ExprPtr& expr) {
   if (expr->is<Constant>() || expr->is<Tensor>())
-    throw("Unknown arg for expand_A_operator");
+    return expr;
+    // throw("Unknown arg for expand_A_operator");
 
   if (expr->is<Product>())
     return expand_A_operator(expr->as<Product>());
@@ -409,7 +411,9 @@ ExprPtr spintrace(ExprPtr expression,
                   std::initializer_list<IndexList> ext_index_groups = {{}}) {
   const auto tstart = std::chrono::high_resolution_clock::now();
 
-  // TODO: Fix this. Products have to be identified
+  if(expression->is<Tensor>())
+    expression = ex<Constant>(1) * expression;
+
   // SPIN TRACE DOES NOT SUPPORT PROTO INDICES YET.
   auto check_proto_index = [&](const ExprPtr& expr) {
     if (expr->is<Tensor>()) {
@@ -423,10 +427,10 @@ ExprPtr spintrace(ExprPtr expression,
   if (expression->is<Constant>()) return expression;
 
   // TODO: Fix this
-  if (expression->is<Tensor>()) {
-    // IF can_expand: expand, add spins, make zeros, add and return
-    return expand_antisymm(expression->as<Tensor>());
-  }
+//  if (expression->is<Tensor>()) {
+//     IF can_expand: expand, add spins, make zeros, add and return
+//    return expand_antisymm(expression->as<Tensor>());
+//  }
 
   // TODO: Fix this
   auto spin_trace_tensor = [&](const Tensor& tensor) {
@@ -469,7 +473,9 @@ ExprPtr spintrace(ExprPtr expression,
     auto collect_indices = [&](const ExprPtr& expr) {
       if (expr->is<Tensor>()) {
         ranges::for_each(expr->as<Tensor>().const_braket(),
-                         [&](const Index& idx) { grand_idxlist.insert(idx); });
+                         [&](const Index& idx) {
+          idx.reset_tag();
+          grand_idxlist.insert(idx); });
       }
     };
     expr->visit(collect_indices);
@@ -477,6 +483,7 @@ ExprPtr spintrace(ExprPtr expression,
     container::set<Index> ext_idxlist;
     for (auto&& idxgrp : ext_index_groups) {
       for (auto&& idx : idxgrp) {
+        idx.reset_tag();
         auto result = ext_idxlist.insert(idx);
         assert(result.second);
       }
@@ -593,6 +600,8 @@ ExprPtr spintrace(ExprPtr expression,
   // TODO: Check if 'A' exist in expression
   // IF true: expand A;
   // ELSE continue with spintrace
+  if(check_A_operator(expression))
+    expression = expand_A_operator(expression);
 
   if (expression->is<Product>()) {
     //    std::cout << __LINE__ << "L ";
