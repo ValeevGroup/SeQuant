@@ -11,24 +11,137 @@ TEST_CASE("Spin") {
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
 
-  SECTION("Tensor symmetry"){
+SECTION("Tensor spintrace"){
 
+}
+
+# if 0
+  SECTION("No proto") {
+    Index i1(L"i_1");
+    Index i2(L"i_2");
+    Index a1(L"a_1");
+    Index a2(L"a_2");
+
+    Index i3(L"i_3", IndexSpace::instance(IndexSpace::active_occupied),
+             {i1, i2});
+    Index a3(L"a_3", IndexSpace::instance(IndexSpace::active_occupied),
+             {a1, a2});
+
+    const auto input = ex<Tensor>(L"t", IndexList{i3}, IndexList{a3});
+    // TODO: Use exception for passing
+    // REQUIRE_THROWS_AS(spintrace(input),std::abort());
   }
 
-  SECTION("Tensor spin symmetry"){
+  SECTION("Tensor: can_expand, is_tensor_spin_symm, remove_spin") {
+    auto p1 =
+        Index(L"p⁺_1", IndexSpace::instance(IndexSpace::all, IndexSpace::alpha));
+    auto p2 =
+        Index(L"p⁻_2", IndexSpace::instance(IndexSpace::all, IndexSpace::beta));
+    auto p3 =
+        Index(L"p⁺_3", IndexSpace::instance(IndexSpace::all, IndexSpace::alpha));
+    auto p4 =
+        Index(L"p⁻_4", IndexSpace::instance(IndexSpace::all, IndexSpace::beta));
 
+    auto input = ex<Tensor>(L"t", IndexList{p1, p2}, IndexList{p3, p4});
+    REQUIRE(can_expand(input->as<Tensor>()) == true);
+    REQUIRE(is_tensor_spin_symm(input->as<Tensor>()) == true);
+
+    auto result = remove_spin(input);
+    for (auto i : result->as<Tensor>().const_braket())
+      REQUIRE(i.space() ==
+              IndexSpace::instance(IndexSpace::all, IndexSpace::nullqns));
+
+    input = ex<Tensor>(L"t", IndexList{p1, p3}, IndexList{p2, p4});
+    REQUIRE(can_expand(input->as<Tensor>()) == false);
+    REQUIRE(is_tensor_spin_symm(input->as<Tensor>()) == false);
   }
 
-  SECTION("Append spin"){
-    auto input = ex<Tensor>();
+  SECTION("Tensor: expand_antisymm") {
 
+    // 1-body
+    auto input = ex<Tensor>(L"t", WstrList{L"a_1"}, WstrList{L"i_1"});
+    auto result = expand_antisymm(input->as<Tensor>());
+    REQUIRE(input->as<Tensor>() == result->as<Tensor>());
+    REQUIRE(!result->is<Sum>());
+    REQUIRE(to_latex(result) == L"{t^{{i_1}}_{{a_1}}}");
+
+    // 2-body
+    input = ex<Tensor>(L"g", WstrList{L"i_1", L"i_2"}, WstrList{L"a_1", L"a_2"},
+                       Symmetry::antisymm);
+    result = expand_antisymm(input->as<Tensor>());
+    REQUIRE(result->is<Sum>());
+    REQUIRE(to_latex(result) ==
+            L"{ \\left({{g^{{a_1}{a_2}}_{{i_1}{i_2}}}} - "
+            L"{{g^{{a_1}{a_2}}_{{i_2}{i_1}}}}\\right) }");
+
+    // 3-body
+    input = ex<Tensor>(L"t", WstrList{L"a_1", L"a_2", L"a_3"},
+                       WstrList{L"i_1", L"i_2", L"i_3"}, Symmetry::antisymm);
+    result = expand_antisymm(input->as<Tensor>());
+    REQUIRE(result->is<Sum>());
+    REQUIRE(to_latex(result) ==
+            L"{ \\left({{t^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}} - "
+            L"{{t^{{i_1}{i_2}{i_3}}_{{a_1}{a_3}{a_2}}}} - "
+            L"{{t^{{i_1}{i_2}{i_3}}_{{a_2}{a_1}{a_3}}}} + "
+            L"{{t^{{i_1}{i_2}{i_3}}_{{a_2}{a_3}{a_1}}}} + "
+            L"{{t^{{i_1}{i_2}{i_3}}_{{a_3}{a_1}{a_2}}}} - "
+            L"{{t^{{i_1}{i_2}{i_3}}_{{a_3}{a_2}{a_1}}}}\\right) }");
   }
 
-  SECTION("Remove spin"){
+  SECTION("Anti-symmetrizer Operator") {
+    // 2-body
+    {
+      const auto input =
+          ex<Constant>(1. / 4) * ex<Tensor>(L"g", WstrList{L"i_1", L"i_2"},
+                                            WstrList{L"a_1", L"a_2"},
+                                            Symmetry::antisymm);
+      auto result = expand_A_operator(input);
+      REQUIRE(to_latex(result) ==
+              L"{{{\\frac{1}{4}}}{\\bar{g}^{{a_1}{a_2}}_{{i_1}{i_2}}}}");
+    }
 
-  }
+    // 2-body
+    {
+      const auto input =
+          ex<Constant>(1. / 4) *
+          ex<Tensor>(L"A", WstrList{L"a_1", L"a_2"}, WstrList{L"i_1", L"i_2"},
+                     Symmetry::antisymm) *
+          ex<Tensor>(L"g", WstrList{L"i_1", L"i_2"}, WstrList{L"a_1", L"a_2"},
+                     Symmetry::antisymm);
+      auto result = expand_A_operator(input);
+      REQUIRE(
+          to_latex(result) ==
+          L"{ \\left({{{\\frac{1}{4}}}{\\bar{g}^{{a_1}{a_2}}_{{i_1}{i_2}}}} - "
+          L"{{{\\frac{1}{4}}}{\\bar{g}^{{a_2}{a_1}}_{{i_1}{i_2}}}} - "
+          L"{{{\\frac{1}{4}}}{\\bar{g}^{{a_1}{a_2}}_{{i_2}{i_1}}}} + "
+          L"{{{\\frac{1}{4}}}{\\bar{g}^{{a_2}{a_1}}_{{i_2}{i_1}}}}\\right) }");
+    }
 
-  SECTION("Test Antisymmetrizer"){
+    // 3-body
+    {
+      const auto input =
+          ex<Tensor>(L"t", WstrList{L"a_1", L"a_2", L"a_3"},
+                     WstrList{L"i_1", L"i_2", L"i_3"}, Symmetry::antisymm);
+      auto result = expand_A_operator(input);
+      REQUIRE(to_latex(result) == L"{t^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}");
+
+      auto antisymm_t = expand_antisymm(input->as<Tensor>());
+      std::wcout << "3-body result: " << to_latex(antisymm_t) << "\n";
+    }
+
+    // 3-body
+    {
+      const auto input =
+          ex<Tensor>(L"A", WstrList{L"i_1", L"i_2", L"i_3"},
+                     WstrList{L"a_1", L"a_2", L"a_3"}, Symmetry::antisymm) *
+          ex<Tensor>(L"t", WstrList{L"a_1", L"a_2", L"a_3"},
+                     WstrList{L"i_1", L"i_2", L"i_3"}, Symmetry::antisymm);
+      std::wcout << "3-body input: " << to_latex(input) << "\n";
+      auto result = expand_A_operator(input);
+      std::wcout << "3-body result: " << to_latex(result) << "\n";
+    }
+#endif
+#if 0
     {
       const auto input =
           ex<Constant>(1. / 4) +
@@ -44,13 +157,18 @@ TEST_CASE("Spin") {
                              Symmetry::antisymm);
       std::wcout << "\ninput: " << to_latex(input) << "\n";
       auto A_found = check_A_operator(input);
-      if(A_found){
+      if (A_found) {
         auto result = expand_A_operator(input);
         std::wcout << "result: " << to_latex(result) << "\n";
-        for(auto&& summand: *result){
-          std::wcout<< "term: " << to_latex(summand) << "\n";
+        auto iter = 0;
+        for (auto &&summand: *result) {
+          ++iter;
+          std::wcout << "term: " << to_latex(summand) << "\n";
           auto spin_traced = spintrace(summand);
-          std::wcout<< "sptr: " << to_latex(spin_traced) << "\n\n";
+          std::wcout << "sptr: " << to_latex(spin_traced) << "\n";
+          canonicalize(spin_traced);
+          std::wcout << "can: " << to_latex(spin_traced) << "\n\n";
+          if(iter>0) break;
         }
         // auto spin_traced = spintrace(result);
         // std::wcout << "spin_traced: " << to_latex(spin_traced) << "\n";
@@ -59,28 +177,33 @@ TEST_CASE("Spin") {
       }
     }
 
+    {
+    const auto input = ex<Constant>(1. / 4) *
+        ex<Tensor>(L"A", WstrList{L"a_1", L"a_2"}, WstrList{L"i_1", L"i_2"},
+                   Symmetry::antisymm) *
+        ex<Tensor>(L"g", WstrList{L"i_1", L"i_2"}, WstrList{L"a_1", L"a_2"},
+                   Symmetry::antisymm);
+
+    std::wcout << "\ninput: " << to_latex(input) << "\n";
+    auto A_found = check_A_operator(input);
+    if (A_found) {
+      auto result = expand_A_operator(input);
+      std::wcout << "result: " << to_latex(result) << "\n";
+      auto iter = 0;
+      for (auto &&summand: *result) {
+        ++iter;
+        std::wcout << "term: " << to_latex(summand) << "\n";
+        auto spin_traced = spintrace(summand);
+        std::wcout << "sptr: " << to_latex(spin_traced) << "\n";
+        canonicalize(spin_traced);
+        std::wcout << "can: " << to_latex(spin_traced) << "\n\n";
+        if(iter>0) break;
+      }
+      // auto spin_traced = spintrace(result);
+      // std::wcout << "spin_traced: " << to_latex(spin_traced) << "\n";
     }
 
-    {
-      const auto input = ex<Constant>(1. / 4) *
-          ex<Tensor>(L"A", WstrList{L"a_1", L"a_2"}, WstrList{L"i_1", L"i_2"},
-                     Symmetry::antisymm) *
-      ex<Tensor>(L"g", WstrList{L"i_1", L"i_2"}, WstrList{L"a_1", L"a_2"},
-                  Symmetry::antisymm);
-
-      std::wcout << "\ninput: " << to_latex(input) << "\n";
-      auto A_found = check_A_operator(input);
-      if(A_found){
-        auto result = expand_A_operator(input);
-        std::wcout << "result: " << to_latex(result) << "\n";
-        for(auto&& summand: *result){
-          std::wcout<< "term: " << to_latex(summand) << "\n";
-          auto spin_traced = spintrace(summand);
-          std::wcout<< "sptr: " << to_latex(spin_traced) << "\n\n";
-        }
-        // auto spin_traced = spintrace(result);
-        // std::wcout << "spin_traced: " << to_latex(spin_traced) << "\n";
-      }
+  }
 
     {
       const auto input = ex<Constant>(-0.5) *
@@ -96,10 +219,15 @@ TEST_CASE("Spin") {
       if(A_found){
         auto result = expand_A_operator(input);
         std::wcout << "result: " << to_latex(result) << "\n";
+        auto iter = 0;
         for(auto&& summand: *result){
+          ++iter;
           std::wcout<< "term: " << to_latex(summand) << "\n";
           auto spin_traced = spintrace(summand);
-          std::wcout<< "sptr: " << to_latex(spin_traced) << "\n\n";
+          std::wcout<< "sptr: " << to_latex(spin_traced) << "\n";
+          canonicalize(spin_traced);
+          std::wcout << "can: " << to_latex(spin_traced) << "\n\n";
+          if(iter>0) break;
         }
         // auto spin_traced = spintrace(result);
         // std::wcout << "spin_traced: " << to_latex(spin_traced) << "\n";
@@ -107,7 +235,7 @@ TEST_CASE("Spin") {
 
     }
 
-
+#endif
   }
 
 #if 0
@@ -127,6 +255,8 @@ TEST_CASE("Spin") {
     REQUIRE(result->is<Sum>());
     std::wcout << "input:  " << to_latex(expr) << "\n";
     std::wcout << "result: " << to_latex(result) << "\n";
+    canonicalize(result);
+    std::wcout << "canoni: " << to_latex(result) << "\n\n";
 //  REQUIRE(result->size() == 2);
 //    REQUIRE(to_latex(result) ==
 //            L"{ \\left({{g^{{p_3}{p_4}}_{{p_1}{p_2}}}} - "
@@ -140,6 +270,8 @@ TEST_CASE("Spin") {
     auto result = expand_antisymm(input->as<Tensor>());
     std::wcout << "input:  " << to_latex(input) << "\n";
     std::wcout << "result: " << to_latex(result) << "\n";
+    canonicalize(result);
+    std::wcout << "canoni: " << to_latex(result) << "\n\n";
   }
 
 
