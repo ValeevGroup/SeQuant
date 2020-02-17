@@ -75,6 +75,13 @@ struct DataTensorSpecs {
 ///
 template <typename DataTensorType>
 struct EvalContext {
+  ///
+  /// Construct an evaluation context.
+  /// @param hash_leaf_ptr_map A map of hash values of leaf tensors to the
+  /// shared_ptr of their corresponding data tensors.
+  /// @param hash_count_map A map of all tensor hashes to their number of
+  /// appearance in the evaluation tree.
+  ///
  public:
   EvalContext(const hash_to_dtensor_map<DataTensorType>& hash_leaf_ptr_map,
               const container::map<hash_type, std::size_t>& hash_count_map)
@@ -212,7 +219,6 @@ DataTensorType eval_evtensor(const EvTensorPtr& evt_ptr,
 template <typename DataTensorType>
 DataTensorType eval_evsum(const EvTensorPtr& evt_ptr,
                           EvalContext<DataTensorType>& context) {
-
   auto lresult = eval_evtensor(evt_ptr->left_tensor(), context);
   auto rresult = eval_evtensor(evt_ptr->right_tensor(), context);
 
@@ -221,7 +227,6 @@ DataTensorType eval_evsum(const EvTensorPtr& evt_ptr,
   btas::scal(evt_ptr->right_tensor()->get_scalar().real(), rresult);
 
   return lresult + rresult;
-
 }
 
 template <typename DataTensorType>
