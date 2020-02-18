@@ -131,7 +131,8 @@ inline bool is_tensor_spin_symm(const Tensor& tensor) {
       result = false;
       return result;
     }
-    iter_ket++;
+    // iter_ket++;
+    ++iter_ket;
   }
   return result;
 }
@@ -165,8 +166,9 @@ inline bool can_expand(const Tensor& tensor) {
 ExprPtr expand_antisymm(const Tensor& tensor) {
   assert(tensor.bra().size() == tensor.ket().size());
 
+  // std::wcout << __LINE__ << "L " << to_latex(tensor) << "\n";
+#if 0
 {
-  std::wcout << __LINE__ << "L " << to_latex(tensor) << "\n";
   if ((tensor.bra().size() == 1) || (tensor.symmetry() != Symmetry::antisymm))
     return ex<Tensor>(tensor);
   else if (tensor.symmetry() == Symmetry::antisymm) {
@@ -184,14 +186,14 @@ ExprPtr expand_antisymm(const Tensor& tensor) {
 //    std::cout << "\n";
     auto result = std::make_shared<Sum>();
     do {
-      std::cout << "L0: ";
-      ranges::for_each(bra_list, [&] (const Index& idx) {std::wcout << idx.label() << " ";});
+//      std::cout << "L0: ";
+//      ranges::for_each(bra_list, [&] (const Index& idx) {std::wcout << idx.label() << " ";});
 
       auto new_product = std::make_shared<Product>();
 
       auto bra_list2 = bra_list;
-      std::cout << "\nLx: ";
-      ranges::for_each(bra_list, [&] (const Index& idx) {std::wcout << idx.label() << " ";});
+//      std::cout << "\nLx: ";
+//      ranges::for_each(bra_list, [&] (const Index& idx) {std::wcout << idx.label() << " ";});
 
       IndexSwapper::thread_instance().reset();
       bubble_sort(bra_list2.begin(), bra_list2.end(), std::less<Index>{});
@@ -204,51 +206,85 @@ ExprPtr expand_antisymm(const Tensor& tensor) {
       ranges::for_each(bra_list2, [&] (const Index& idx) {std::wcout << idx.label() << " ";});
       std::cout << "\n";
       auto new_tensor =
-          Tensor(tensor.label(), bra_list2, ket_list, Symmetry::nonsymm);
-      if(is_tensor_spin_symm(new_tensor))
+          Tensor(tensor.label(), bra_list, ket_list, Symmetry::nonsymm);
+      std::wcout << "tensor: " << to_latex(new_tensor) << "\n";
+      if(is_tensor_spin_symm(new_tensor)){
         new_product->append(1, ex<Tensor>(new_tensor));
-      else
+      } else{
         new_product->scale(0);
+      }
       std::wcout << __LINE__ << "L " << to_latex(new_product) << "\n";
       result->append(new_product);
     } while (std::next_permutation(bra_list.begin(), bra_list.end()));
     std::wcout << __LINE__ << "L " << to_latex(result) << "\n";
     // return result;
-  } else
-    return nullptr;
+  } // else
+    // return nullptr;
 }
+#endif
 
+auto get_phase = [] (const Tensor& t) {
+  container::svector<Index> bra_list;
+  for (auto&& bra_idx : t.bra()) bra_list.push_back(bra_idx);
+  container::svector<Index> ket_list;
+  for (auto&& ket_idx : t.ket()) ket_list.push_back(ket_idx);
+  IndexSwapper::thread_instance().reset();
+  bubble_sort(std::begin(bra_list), std::end(bra_list), std::less<Index>{});
+  bubble_sort(std::begin(ket_list), std::end(ket_list), std::less<Index>{});
+  bool even = IndexSwapper::thread_instance().even_num_of_swaps();
+  return (even ? 1 : -1);
+};
 
 
 #if 1
   // Generate a sum of asymmetric tensors if the input tensor is antisymmetric
   // AND more than one body otherwise, return the tensor
   if ((tensor.symmetry() == Symmetry::antisymm) && (tensor.bra().size() > 1)) {
-    container::set<Index> bra_list;
-    for (auto&& bra_idx : tensor.bra()) bra_list.insert(bra_idx);
+    std::wcout << __LINE__ << "L " << get_phase(tensor) << " " << to_latex(tensor) << "\n";
+    container::svector<Index> bra_list;
+    for (auto&& bra_idx : tensor.bra()) bra_list.push_back(bra_idx);
     const auto const_bra_list = bra_list;
 
-    container::set<Index> ket_list;
-    for (auto&& ket_idx : tensor.ket()) ket_list.insert(ket_idx);
+    container::svector<Index> ket_list;
+    for (auto&& ket_idx : tensor.ket()) ket_list.push_back(ket_idx);
+
+//    std::cout << "Sorted: " << std::is_sorted(ket_list.begin(), ket_list.end()) << " "
+//              << std::is_sorted(bra_list.begin(),bra_list.end()) <<"\n";
 
     Sum expr_sum{};
     auto p_count = 0;
     do {
+      auto bra_list2 = bra_list;
       // Generate tensor with new labels
       auto new_tensor =
           Tensor(tensor.label(), bra_list, ket_list, Symmetry::nonsymm);
-      // std::wcout << __LINE__ << "L " << to_latex(new_tensor) << "\n";
+      std::wcout << __LINE__ << "L " << get_phase(new_tensor) << " " << to_latex(new_tensor) << " ";
+      std::cout << "Sorted: " << std::is_sorted(ket_list.begin(), ket_list.end()) << " "
+                << std::is_sorted(bra_list.begin(),bra_list.end()) <<"\n";
+
       if (is_tensor_spin_symm(new_tensor)) {
         auto new_tensor_ptr = ex<Tensor>(new_tensor);
         Product new_tensor_product{};
-        IndexSwapper::thread_instance().reset();
-        auto bra_list2 = bra_list;
-        bubble_sort(std::begin(bra_list2), std::end(bra_list2), std::less<Index>{});
+        // IndexSwapper::thread_instance().reset();
+        // auto bra_list2 = bra_list;
+//        std::cout << "\nL1: ";
+//        ranges::for_each(bra_list, [&] (const Index& idx) {std::wcout << idx.label() << " ";});
+//        std::cout << "is_sorted: " << std::is_sorted(bra_list.begin(),bra_list.end());
+//        std::cout << "\nL2: ";
+//        ranges::for_each(bra_list2, [&] (const Index& idx) {std::wcout << idx.label() << " ";});
+
+        // TODO: The sort phase must be relative to the input bra/ket lists.
+        // bubble_sort(std::begin(bra_list2), std::end(bra_list2), std::less<Index>{});
         // bubble_sort(std::begin(ket_list), std::end(ket_list), std::less<Index>{});
-        bool even = IndexSwapper::thread_instance().even_num_of_swaps();
-        new_tensor_product.append((even ? 1 : -1), new_tensor_ptr);
+//        std::cout << "\nL2: ";
+//        ranges::for_each(bra_list2, [&] (const Index& idx) {std::wcout << idx.label() << " ";});
+        // std::cout << "is_sorted: " << std::is_sorted(bra_list2.begin(),bra_list2.end());
+        // std::cout << "\n";
+        // bool even = IndexSwapper::thread_instance().even_num_of_swaps();
+        // auto new_product_scalar  =  get_phase(new_tensor) * (even ? 1 : -1);
+        new_tensor_product.append(get_phase(new_tensor), new_tensor_ptr);
         auto new_tensor_product_ptr = ex<Product>(new_tensor_product);
-        // std::wcout << __LINE__ << "L "<< (even ? 1 : -1) << to_latex(new_tensor_product_ptr) << "\n";
+        std::wcout << __LINE__ << "L "<< get_phase(new_tensor) << " " << to_latex(new_tensor_product_ptr) << "\n";
         expr_sum.append(new_tensor_product_ptr);
       }
       p_count++;
@@ -269,10 +305,10 @@ ExprPtr expand_antisymm(const Tensor& tensor) {
 /// @return an expression pointer with expanded tensors
 inline ExprPtr expand_antisymm(const ExprPtr& expr) {
   Sum expanded_sum{};
-  for (auto&& summand : *expr) {
-    const auto scalar_factor = summand->as<Product>().scalar().real();
+  for (auto&& item : *expr) {
+    const auto scalar_factor = item->as<Product>().scalar().real();
     Product expanded_product{};
-    for (auto&& expr_product : *summand) {
+    for (auto&& expr_product : *item) {
       auto tensor = expr_product->as<sequant::Tensor>();
       auto expanded_ptr = expand_antisymm(tensor);
       expanded_product.append(1, expanded_ptr);
