@@ -223,14 +223,14 @@ ExprPtr expand_antisymm(const Tensor& tensor) {
 }
 #endif
 
-auto get_phase = [] (const Tensor& t) {
-  container::svector<Index> bra_list;
-  for (auto&& bra_idx : t.bra()) bra_list.push_back(bra_idx);
-  container::svector<Index> ket_list;
-  for (auto&& ket_idx : t.ket()) ket_list.push_back(ket_idx);
+auto get_phase = [&] (const Tensor& t) {
+  container::svector<Index> bra;
+  for (auto&& bra_idx : t.bra()) bra.push_back(bra_idx);
+  container::svector<Index> ket;
+  for (auto&& ket_idx : t.ket()) ket.push_back(ket_idx);
   IndexSwapper::thread_instance().reset();
-  bubble_sort(std::begin(bra_list), std::end(bra_list), std::less<Index>{});
-  bubble_sort(std::begin(ket_list), std::end(ket_list), std::less<Index>{});
+  bubble_sort(std::begin(bra), std::end(bra), std::less<Index>{});
+  bubble_sort(std::begin(ket), std::end(ket), std::less<Index>{});
   bool even = IndexSwapper::thread_instance().even_num_of_swaps();
   return (even ? 1 : -1);
 };
@@ -240,58 +240,39 @@ auto get_phase = [] (const Tensor& t) {
   // Generate a sum of asymmetric tensors if the input tensor is antisymmetric
   // AND more than one body otherwise, return the tensor
   if ((tensor.symmetry() == Symmetry::antisymm) && (tensor.bra().size() > 1)) {
-    std::wcout << __LINE__ << "L " << get_phase(tensor) << " " << to_latex(tensor) << "\n";
-    container::svector<Index> bra_list;
-    for (auto&& bra_idx : tensor.bra()) bra_list.push_back(bra_idx);
+    const auto prefactor = get_phase(tensor);
+    // std::wcout << __LINE__ << "L " << prefactor << " " << to_latex(tensor) << "\n";
+    container::set<Index> bra_list;
+    for (auto&& bra_idx : tensor.bra()) bra_list.insert(bra_idx);
     const auto const_bra_list = bra_list;
 
-    container::svector<Index> ket_list;
-    for (auto&& ket_idx : tensor.ket()) ket_list.push_back(ket_idx);
-
-//    std::cout << "Sorted: " << std::is_sorted(ket_list.begin(), ket_list.end()) << " "
-//              << std::is_sorted(bra_list.begin(),bra_list.end()) <<"\n";
+    container::set<Index> ket_list;
+    for (auto&& ket_idx : tensor.ket()) ket_list.insert(ket_idx);
 
     Sum expr_sum{};
     auto p_count = 0;
     do {
       auto bra_list2 = bra_list;
-      // Generate tensor with new labels
       auto new_tensor =
           Tensor(tensor.label(), bra_list, ket_list, Symmetry::nonsymm);
-      std::wcout << __LINE__ << "L " << get_phase(new_tensor) << " " << to_latex(new_tensor) << " ";
-      std::cout << "Sorted: " << std::is_sorted(ket_list.begin(), ket_list.end()) << " "
-                << std::is_sorted(bra_list.begin(),bra_list.end()) <<"\n";
+      // std::cout << "Sorted: " << std::is_sorted(ket_list.begin(), ket_list.end()) << " "
+      //           << std::is_sorted(bra_list.begin(),bra_list.end()) <<"\n";
 
       if (is_tensor_spin_symm(new_tensor)) {
+        const auto phase = get_phase(new_tensor);
         auto new_tensor_ptr = ex<Tensor>(new_tensor);
         Product new_tensor_product{};
-        // IndexSwapper::thread_instance().reset();
-        // auto bra_list2 = bra_list;
-//        std::cout << "\nL1: ";
-//        ranges::for_each(bra_list, [&] (const Index& idx) {std::wcout << idx.label() << " ";});
-//        std::cout << "is_sorted: " << std::is_sorted(bra_list.begin(),bra_list.end());
-//        std::cout << "\nL2: ";
-//        ranges::for_each(bra_list2, [&] (const Index& idx) {std::wcout << idx.label() << " ";});
-
-        // TODO: The sort phase must be relative to the input bra/ket lists.
-        // bubble_sort(std::begin(bra_list2), std::end(bra_list2), std::less<Index>{});
-        // bubble_sort(std::begin(ket_list), std::end(ket_list), std::less<Index>{});
-//        std::cout << "\nL2: ";
-//        ranges::for_each(bra_list2, [&] (const Index& idx) {std::wcout << idx.label() << " ";});
-        // std::cout << "is_sorted: " << std::is_sorted(bra_list2.begin(),bra_list2.end());
-        // std::cout << "\n";
-        // bool even = IndexSwapper::thread_instance().even_num_of_swaps();
-        // auto new_product_scalar  =  get_phase(new_tensor) * (even ? 1 : -1);
-        new_tensor_product.append(get_phase(new_tensor), new_tensor_ptr);
+        new_tensor_product.append(phase, new_tensor_ptr);
+        new_tensor_product.scale(prefactor);
         auto new_tensor_product_ptr = ex<Product>(new_tensor_product);
-        std::wcout << __LINE__ << "L "<< get_phase(new_tensor) << " " << to_latex(new_tensor_product_ptr) << "\n";
+        // std::wcout << __LINE__ << "L "<< get_phase(new_tensor) << " " << to_latex(new_tensor_product_ptr) << "\n";
         expr_sum.append(new_tensor_product_ptr);
       }
       p_count++;
     } while (std::next_permutation(bra_list.begin(), bra_list.end()));
 
     auto result = std::make_shared<Sum>(expr_sum);
-    std::wcout << __LINE__ << "L "<< to_latex(result) << "\n\n";
+    // std::wcout << __LINE__ << "L "<< to_latex(result) << "\n\n";
     return result;
   } else {
     auto result = std::make_shared<Tensor>(tensor);
@@ -695,15 +676,15 @@ ExprPtr spintrace(ExprPtr expression,
   if (check_A_operator(expression)) expression = expand_A_operator(expression);
 
   expression->visit(reset_idx_tags);
-  std::wcout << __LINE__ << "L " << to_latex(expression) << "\n";
+  // std::wcout << __LINE__ << "L " << to_latex(expression) << "\n";
 
   if (expression->is<Tensor>()) expression = ex<Constant>(1) * expression;
 
   if (expression->is<Product>()) {
-    std::cout << __LINE__ << "L\n";
+    // std::cout << __LINE__ << "L\n";
     return trace_product(expression->as<Product>());
   } else if ((expression->is<Sum>())) {
-    std::cout << __LINE__ << "L\n";
+    // std::cout << __LINE__ << "L\n";
     auto result = std::make_shared<Sum>();
     for (auto&& term : *expression) {
       if (term->is<Product>())
