@@ -105,7 +105,7 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
       canonicalize(input);
       REQUIRE(to_latex(input) ==
               L"{ "
-              L"\\left({{g^{{p_1}{p_4}}_{{p_2}{p_3}}}{t^{{p_2}}_{{p_1}}}{t^{{p_"
+              L"\\left({{\\bar{g}^{{p_1}{p_4}}_{{p_2}{p_3}}}{t^{{p_2}}_{{p_1}}}{t^{{p_"
               L"3}}_{{p_4}}}}\\right) }");
     }
   }
