@@ -25,12 +25,9 @@ ExprPtr append_spin(ExprPtr& expr, std::map<Index, Index>& index_replacements) {
     auto spin_product = std::make_shared<Product>();
     spin_product->scale(product.scalar());
     for (auto&& term : product) {
-      if (term->is<Tensor>()) {
+      if (term->is<Tensor>())
         spin_product->append(1, add_spin_to_tensor(term->as<Tensor>()));
-      } else
-        abort();
     }
-    //     std::wcout << __LINE__ << "L " << to_latex(spin_product) <<"\n";
     return spin_product;
   };
 
@@ -131,7 +128,6 @@ inline bool is_tensor_spin_symm(const Tensor& tensor) {
       result = false;
       return result;
     }
-    // iter_ket++;
     ++iter_ket;
   }
   return result;
@@ -166,63 +162,6 @@ inline bool can_expand(const Tensor& tensor) {
 ExprPtr expand_antisymm(const Tensor& tensor) {
   assert(tensor.bra().size() == tensor.ket().size());
 
-  // std::wcout << __LINE__ << "L " << to_latex(tensor) << "\n";
-#if 0
-{
-  if ((tensor.bra().size() == 1) || (tensor.symmetry() != Symmetry::antisymm))
-    return ex<Tensor>(tensor);
-  else if (tensor.symmetry() == Symmetry::antisymm) {
-    container::svector<Index> bra_list;
-    for (auto &&bra_idx : tensor.bra()) bra_list.push_back(bra_idx);
-//    const auto const_bra_list = bra_list;
-    container::svector<Index> ket_list;
-    for (auto &&ket_idx : tensor.ket()) ket_list.push_back(ket_idx);
-
-//    std::cout << "Ket list: ";
-//    ranges::for_each(ket_list, [&] (const Index& idx) {std::wcout << idx.label() << " ";});
-//    std::cout << "\n";
-//    std::cout << "Bra list: ";
-//    ranges::for_each(bra_list, [&] (const Index& idx) {std::wcout << idx.label() << " ";});
-//    std::cout << "\n";
-    auto result = std::make_shared<Sum>();
-    do {
-//      std::cout << "L0: ";
-//      ranges::for_each(bra_list, [&] (const Index& idx) {std::wcout << idx.label() << " ";});
-
-      auto new_product = std::make_shared<Product>();
-
-      auto bra_list2 = bra_list;
-//      std::cout << "\nLx: ";
-//      ranges::for_each(bra_list, [&] (const Index& idx) {std::wcout << idx.label() << " ";});
-
-      IndexSwapper::thread_instance().reset();
-      bubble_sort(bra_list2.begin(), bra_list2.end(), std::less<Index>{});
-      bool even = IndexSwapper::thread_instance().even_num_of_swaps();
-      new_product->scale((even ? 1 : -1));
-      // std::cout << (even ? 1 : -1) << " ";
-      std::cout << "\nL1: ";
-      ranges::for_each(bra_list, [&] (const Index& idx) {std::wcout << idx.label() << " ";});
-      std::cout << "\nL2: ";
-      ranges::for_each(bra_list2, [&] (const Index& idx) {std::wcout << idx.label() << " ";});
-      std::cout << "\n";
-      auto new_tensor =
-          Tensor(tensor.label(), bra_list, ket_list, Symmetry::nonsymm);
-      std::wcout << "tensor: " << to_latex(new_tensor) << "\n";
-      if(is_tensor_spin_symm(new_tensor)){
-        new_product->append(1, ex<Tensor>(new_tensor));
-      } else{
-        new_product->scale(0);
-      }
-      std::wcout << __LINE__ << "L " << to_latex(new_product) << "\n";
-      result->append(new_product);
-    } while (std::next_permutation(bra_list.begin(), bra_list.end()));
-    std::wcout << __LINE__ << "L " << to_latex(result) << "\n";
-    // return result;
-  } // else
-    // return nullptr;
-}
-#endif
-
 auto get_phase = [&] (const Tensor& t) {
   container::svector<Index> bra;
   for (auto&& bra_idx : t.bra()) bra.push_back(bra_idx);
@@ -235,8 +174,6 @@ auto get_phase = [&] (const Tensor& t) {
   return (even ? 1 : -1);
 };
 
-
-#if 1
   // Generate a sum of asymmetric tensors if the input tensor is antisymmetric
   // AND more than one body otherwise, return the tensor
   if ((tensor.symmetry() == Symmetry::antisymm) && (tensor.bra().size() > 1)) {
@@ -255,8 +192,6 @@ auto get_phase = [&] (const Tensor& t) {
       auto bra_list2 = bra_list;
       auto new_tensor =
           Tensor(tensor.label(), bra_list, ket_list, Symmetry::nonsymm);
-      // std::cout << "Sorted: " << std::is_sorted(ket_list.begin(), ket_list.end()) << " "
-      //           << std::is_sorted(bra_list.begin(),bra_list.end()) <<"\n";
 
       if (is_tensor_spin_symm(new_tensor)) {
         const auto phase = get_phase(new_tensor);
@@ -278,7 +213,6 @@ auto get_phase = [&] (const Tensor& t) {
     auto result = std::make_shared<Tensor>(tensor);
     return result;
   }
-#endif
 }
 
 /// @brief expands all antisymmetric tensors in a product
@@ -625,11 +559,11 @@ ExprPtr spintrace(ExprPtr expression,
         ++index_group_count;
       }
 
-      //      std::cout << "Replacement map:\n";
-      //      for(auto&& pair: index_replacements){
-      //        std::wcout << pair.first.label() << " " << pair.second.label()
-      //        << "\n";
-      //      }
+      // std::cout << "Replacement map:\n";
+      // for(auto&& pair: index_replacements){
+      //     std::wcout << pair.first.label() << " "
+      //     << pair.second.label() << "\n";
+      // }
 
       auto all_terms = std::make_shared<Sum>();
       auto spin_expr = append_spin(expr, index_replacements);
@@ -668,7 +602,7 @@ ExprPtr spintrace(ExprPtr expression,
         result->append(expr);
       }
     }  // Permutation FOR loop
-       //    std::wcout << __LINE__ << "L " << to_latex(result) << "\n\n";
+    //  std::wcout << __LINE__ << "L " << to_latex(result) << "\n\n";
     result->visit(reset_idx_tags);
     return result;
   };
