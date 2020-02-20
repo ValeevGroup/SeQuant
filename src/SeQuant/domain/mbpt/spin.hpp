@@ -17,7 +17,7 @@ namespace sequant {
 ExprPtr append_spin(ExprPtr& expr, std::map<Index, Index>& index_replacements) {
   auto add_spin_to_tensor = [&](const Tensor& tensor) {
     auto spin_tensor = std::make_shared<Tensor>(tensor);
-    auto pass_mutated = spin_tensor->transform_indices(index_replacements);
+    spin_tensor->transform_indices(index_replacements);
     return spin_tensor;
   };
 
@@ -140,13 +140,14 @@ inline bool is_tensor_spin_symm(const Tensor& tensor) {
 inline bool can_expand(const Tensor& tensor) {
   if (tensor.bra_rank() != tensor.ket_rank()) return false;
   auto result = false;
+  // TODO: Throw error if called on non-qns idx
   auto alpha_in_bra = 0;
   auto alpha_in_ket = 0;
-  ranges::for_each(tensor.bra(), [&](Index i) {
+  ranges::for_each(tensor.bra(), [&](const Index& i) {
     if (IndexSpace::instance(i.label()).qns() == IndexSpace::alpha)
       ++alpha_in_bra;
   });
-  ranges::for_each(tensor.ket(), [&](Index i) {
+  ranges::for_each(tensor.ket(), [&](const Index& i) {
     if (IndexSpace::instance(i.label()).qns() == IndexSpace::alpha)
       ++alpha_in_ket;
   });
@@ -178,8 +179,6 @@ ExprPtr expand_antisymm(const Tensor& tensor) {
   // AND more than one body otherwise, return the tensor
   if ((tensor.symmetry() == Symmetry::antisymm) && (tensor.bra().size() > 1)) {
     const auto prefactor = get_phase(tensor);
-    // std::wcout << __LINE__ << "L " << prefactor << " " << to_latex(tensor) <<
-    // "\n";
     container::set<Index> bra_list;
     for (auto&& bra_idx : tensor.bra()) bra_list.insert(bra_idx);
     const auto const_bra_list = bra_list;
@@ -201,15 +200,12 @@ ExprPtr expand_antisymm(const Tensor& tensor) {
         new_tensor_product.append(phase, new_tensor_ptr);
         new_tensor_product.scale(prefactor);
         auto new_tensor_product_ptr = ex<Product>(new_tensor_product);
-        // std::wcout << __LINE__ << "L "<< get_phase(new_tensor) << " " <<
-        // to_latex(new_tensor_product_ptr) << "\n";
         expr_sum.append(new_tensor_product_ptr);
       }
       p_count++;
     } while (std::next_permutation(bra_list.begin(), bra_list.end()));
 
     auto result = std::make_shared<Sum>(expr_sum);
-    // std::wcout << __LINE__ << "L "<< to_latex(result) << "\n\n";
     return result;
   } else {
     auto result = std::make_shared<Tensor>(tensor);
@@ -249,6 +245,7 @@ bool check_A_operator(const ExprPtr& expr) {
       return false;
   };
 
+  // Assuming that 'A' is ALWAYS the first tensor in a product
   auto check_product = [&](const Product& product) {
     bool result = false;
     for (auto&& term : product) {
@@ -263,6 +260,7 @@ bool check_A_operator(const ExprPtr& expr) {
     return result;
   };
 
+  // TODO: Make this faster
   if (expr->is<Constant>()) {
     return false;
   } else if (expr->is<Tensor>()) {
@@ -277,7 +275,6 @@ bool check_A_operator(const ExprPtr& expr) {
     }
   } else
     return false;
-  // throw("Unknown arg type for check_Antisymm_operator.");
 }
 
 /// @brief Generates a vector of replacement maps
@@ -345,10 +342,7 @@ ExprPtr expand_A_operator(const Product& product) {
         map_list = A_replacement_map(A);
         break;
       } else if ((A.label() == L"A") && (A.bra().size() == 1)) {
-        //        std::wcout <<  __LINE__ << "L " << to_latex(A) << "\n";
-        auto result = remove_A_from_product(product);
-        //        std::wcout <<  __LINE__ << "L " << to_latex(result) << "\n";
-        return result;
+        return remove_A_from_product(product);
       }
     }
   }
@@ -381,50 +375,8 @@ ExprPtr expand_A_operator(const Product& product) {
     new_product.scale((even ? 1 : -1));
     new_result->append(ex<Product>(new_product));
   }  // map_list
-  // std::wcout << __LINE__ << "L " << to_latex(new_result) << "\n";
   return new_result;
 
-#if 0
-  // substitute and expand
-  auto product_of_expanded_terms = std::make_shared<Product>();
-  product_of_expanded_terms->scale(product.scalar());
-  for (auto& term : product) {
-    Sum new_sum{};
-    if ((term->is<Tensor>()) && (term->as<Tensor>().label() != L"A")) {
-      auto tensor = term->as<Tensor>();
-      if (tensor.bra().size() == 1) {
-        // std::wcout << __LINE__ << "L " << to_latex(tensor) << "\n";
-        product_of_expanded_terms->append(1, ex<Tensor>(tensor));
-      } else {
-        for (auto&& map : map_list) {
-          auto new_tensor = tensor;
-          new_tensor.transform_indices(map);
-          container::svector<Index> new_tensor_braket;
-          ranges::for_each(new_tensor.const_braket(), [&](const Index& idx) {
-            new_tensor_braket.push_back(idx);
-          });
-          IndexSwapper::thread_instance().reset();
-          bubble_sort(std::begin(new_tensor_braket),
-                      std::end(new_tensor_braket), std::less<Index>{});
-          bool even = IndexSwapper::thread_instance().even_num_of_swaps();
-          auto new_tensor_ptr = std::make_shared<Tensor>(new_tensor);
-          Product new_product{};
-          new_product.append((even ? 1 : -1), new_tensor_ptr);
-          // std::wcout << to_latex(new_product) << "\n";
-          auto new_product_ptr = std::make_shared<Product>(new_product);
-          new_sum.append(new_product_ptr);
-        }
-        //  std::cout << "\nSum: ";
-        //  std::wcout << to_latex(new_sum) << "\n";
-        auto new_sum_ptr = std::make_shared<Sum>(new_sum);
-        product_of_expanded_terms->append(1, new_sum_ptr);
-      }
-    }
-  }
-  ExprPtr result = product_of_expanded_terms;
-  expand(result);
-  rapid_simplify(result);
-  return result;
 }
 
 /// @brief expands all A operators
@@ -432,7 +384,6 @@ ExprPtr expand_A_operator(const Product& product) {
 /// @return expression pointer with A removed.
 ExprPtr expand_A_operator(const ExprPtr& expr) {
   if (expr->is<Constant>() || expr->is<Tensor>()) return expr;
-  // throw("Unknown arg for expand_A_operator");
 
   if (expr->is<Product>())
     return expand_A_operator(expr->as<Product>());
@@ -460,7 +411,6 @@ ExprPtr expand_A_operator(const ExprPtr& expr) {
 /// @return the expression with spin integrated out
 ExprPtr spintrace(ExprPtr expression,
                   std::initializer_list<IndexList> ext_index_groups = {{}}) {
-  const auto tstart = std::chrono::high_resolution_clock::now();
 
   if (expression->is<Tensor>()) expression = ex<Constant>(1) * expression;
 
@@ -476,15 +426,11 @@ ExprPtr spintrace(ExprPtr expression,
 
   if (expression->is<Constant>()) return expression;
 
-  // TODO: Fix this
   auto spin_trace_tensor = [&](const Tensor& tensor) {
-    // std::wcout << __LINE__ << "L " << to_latex(tensor) << "\n";
     if (can_expand(tensor)) {
-      //      std::wcout << __LINE__ << "L " << to_latex(tensor) << "\n";
       return expand_antisymm(tensor);
     } else
-      return ex<Constant>(0);  // <Tensor>(tensor);
-                               // abort();
+      return ex<Constant>(0);
   };
 
   auto spin_trace_product = [&](const Product& product) {
@@ -501,7 +447,7 @@ ExprPtr spintrace(ExprPtr expression,
     if (product.size() != spin_product.size()) spin_product.scale(0);
     ExprPtr result = std::make_shared<Product>(spin_product);
     expand(result);
-    rapid_simplify(result);
+    rapid_simplify(result);  // TODO: Check if this is required
     return result;
   };
 
@@ -511,6 +457,7 @@ ExprPtr spintrace(ExprPtr expression,
                        [&](const Index& idx) { idx.reset_tag(); });
   };
 
+  // Most important lambda of this function
   auto trace_product = [&](const Product& expression) {
     auto result = std::make_shared<Sum>();
     ExprPtr expr = std::make_shared<Product>(expression);
@@ -542,9 +489,6 @@ ExprPtr spintrace(ExprPtr expression,
         int_idxlist.insert(gidx);
       }
     }
-    //    std::cout << "Grand idx list: ";
-    //    ranges::for_each(grand_idxlist, [&](Index& idx) {std::wcout <<
-    //    idx.label() << " ";} ); std::cout << "\n";
 
     // EFV: generate the grand list of index groups by concatenating list of
     // external index EFV: groups with the groups of internal indices (each
@@ -597,30 +541,20 @@ ExprPtr spintrace(ExprPtr expression,
         ++index_group_count;
       }
 
-      // std::cout << "Replacement map:\n";
-      // for(auto&& pair: index_replacements){
-      //     std::wcout << pair.first.label() << " "
-      //     << pair.second.label() << "\n";
-      // }
-
       auto all_terms = std::make_shared<Sum>();
       auto spin_expr = append_spin(expr, index_replacements);
-      rapid_simplify(spin_expr);
-      // std::wcout <<__LINE__ << "L " << to_latex(spin_expr) << "\n";
+      rapid_simplify(spin_expr);  // TODO: Check if this is required
 
       if (spin_expr->is<Tensor>()) {
         auto temp = spin_trace_tensor(spin_expr->as<Tensor>());
-        // std::cout << __LINE__ << "L ";
         auto spin_removed = remove_spin(temp);
         result->append(spin_removed);
       } else if (spin_expr->is<Product>()) {
-        // std::cout << __LINE__ << "L ";
         auto temp = spin_trace_product(spin_expr->as<Product>());
         if (!(temp->size() == 0)) {
           result->append(remove_spin(temp));
         }
       } else if (spin_expr->is<Sum>()) {
-        // std::cout << __LINE__ << "L ";
         for (auto&& summand : *spin_expr) {
           Sum temp{};
           if (summand->is<Tensor>())
@@ -632,7 +566,7 @@ ExprPtr spintrace(ExprPtr expression,
           }
           ExprPtr SumPtr = std::make_shared<Sum>(temp);
           expand(SumPtr);
-          rapid_simplify(SumPtr);
+          rapid_simplify(SumPtr);  // TODO: Check if this is required
           auto spin_removed = remove_spin(SumPtr);
           result->append(spin_removed);
         }
@@ -640,26 +574,22 @@ ExprPtr spintrace(ExprPtr expression,
         result->append(expr);
       }
     }  // Permutation FOR loop
-    // std::wcout << __LINE__ << "L " << to_latex(result) << "\n\n";
-    result->visit(reset_idx_tags);
+    // result->visit(reset_idx_tags);
     return result;
   };
 
   if (check_A_operator(expression)) {
     expression = expand_A_operator(expression);
-    rapid_simplify(expression);
+    rapid_simplify(expression);  // TODO: Check if this is required
   }
 
-  expression->visit(reset_idx_tags);
-  // std::wcout << __LINE__ << "L " << to_latex(expression) << "\n";
+  // expression->visit(reset_idx_tags);
 
   if (expression->is<Tensor>()) expression = ex<Constant>(1) * expression;
 
   if (expression->is<Product>()) {
-    // std::cout << __LINE__ << "L\n";
     return trace_product(expression->as<Product>());
   } else if ((expression->is<Sum>())) {
-    // std::cout << __LINE__ << "L\n";
     auto result = std::make_shared<Sum>();
     for (auto&& term : *expression) {
       if (term->is<Product>())
