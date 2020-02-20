@@ -355,6 +355,36 @@ ExprPtr expand_A_operator(const Product& product) {
 
   if (!has_A_operator) return std::make_shared<Product>(product);
 
+  auto new_result = std::make_shared<Sum>();
+  for (auto&& map : map_list) {
+    // Get phase of the transformation
+    bool even;
+    {
+      container::svector<Index> transformed_list;
+      for (auto&& element : map) transformed_list.push_back(element.second);
+      IndexSwapper::thread_instance().reset();
+      bubble_sort(std::begin(transformed_list), std::end(transformed_list),
+                  std::less<Index>{});
+      even = IndexSwapper::thread_instance().even_num_of_swaps();
+    }
+
+    Product new_product{};
+    new_product.scale(product.scalar());
+    auto temp_product = remove_A_from_product(product);
+    for (auto&& term : *temp_product) {
+      if (term->is<Tensor>()) {
+        auto new_tensor = term->as<Tensor>();
+        new_tensor.transform_indices(map);
+        new_product.append(1, ex<Tensor>(new_tensor));
+      }
+    }
+    new_product.scale((even ? 1 : -1));
+    new_result->append(ex<Product>(new_product));
+  }  // map_list
+  // std::wcout << __LINE__ << "L " << to_latex(new_result) << "\n";
+  return new_result;
+
+#if 0
   // substitute and expand
   auto product_of_expanded_terms = std::make_shared<Product>();
   product_of_expanded_terms->scale(product.scalar());
