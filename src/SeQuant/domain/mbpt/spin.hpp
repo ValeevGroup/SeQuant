@@ -9,6 +9,64 @@
 
 namespace sequant {
 
+/// @brief Applies index replacement to an expression pointer
+/// @param expr Expression pointer to use for transformation
+/// @param index_replacements index replacement map
+/// @param scaling_factor to scale the result
+/// @return a substituted and scaled expression pointer
+ExprPtr transform_expression(const ExprPtr& expr,
+                             std::map<Index, Index>& index_replacements,
+                             double scaling_factor = 1.0) {
+  if (expr->is<Constant>()) return ex<Constant>(scaling_factor) * expr;
+
+  auto transform_tensor = [&](const Tensor& tensor) {
+    auto tr_tensor = tensor;
+    tr_tensor.transform_indices(index_replacements);
+    ranges::for_each(tr_tensor.const_braket(),
+                     [&](const Index& idx) { idx.reset_tag(); });
+    ExprPtr result = std::make_shared<Tensor>(tr_tensor);
+    return result;
+  };
+
+  auto transform_product = [&](const Product& product) {
+    auto result = std::make_shared<Product>();
+    result->scale(product.scalar());
+    for (auto&& term : product) {
+      if (term->is<Tensor>()) {
+        auto tensor = term->as<Tensor>();
+        result->append(1, transform_tensor(tensor));
+      }
+    }
+    result->scale(scaling_factor);
+    return result;
+  };
+
+  if (expr->is<Tensor>()) {
+    auto result =
+        ex<Constant>(scaling_factor) * transform_tensor(expr->as<Tensor>());
+    return result;
+  } else if (expr->is<Product>()) {
+    auto result = transform_product(expr->as<Product>());
+    return result;
+  } else if (expr->is<Sum>()) {
+    auto result = std::make_shared<Sum>();
+    for (auto&& term : *expr) {
+      if (term->is<Constant>())
+        result->append(ex<Constant>(scaling_factor) * term);
+      else if (term->is<Tensor>()) {
+        auto transformed_tensor =
+            ex<Constant>(scaling_factor) * transform_tensor(term->as<Tensor>());
+        result->append(transformed_tensor);
+      } else if (term->is<Product>()) {
+        auto transformed_product = transform_product(term->as<Product>());
+        result->append(transformed_product);
+      }
+    }
+    return result;
+  } else
+    return nullptr;
+}
+
 /// @brief Adds spins to indices in an expression using a map
 /// @param expr an expression pointer
 /// @param index_replacements a map of pairs containing the index and its
@@ -376,7 +434,6 @@ ExprPtr expand_A_operator(const Product& product) {
     new_result->append(ex<Product>(new_product));
   }  // map_list
   return new_result;
-
 }
 
 /// @brief expands all A operators
@@ -411,15 +468,16 @@ ExprPtr expand_A_operator(const ExprPtr& expr) {
 /// @return the expression with spin integrated out
 ExprPtr spintrace(ExprPtr expression,
                   std::initializer_list<IndexList> ext_index_groups = {{}}) {
-
   if (expression->is<Tensor>()) expression = ex<Constant>(1) * expression;
 
   // SPIN TRACE DOES NOT SUPPORT PROTO INDICES YET.
   auto check_proto_index = [&](const ExprPtr& expr) {
     if (expr->is<Tensor>()) {
       ranges::for_each(
-          expr->as<Tensor>().const_braket(),
-          [&](const Index& idx) { assert(!idx.has_proto_indices()); });
+          expr->as<Tensor>().const_braket(), [&](const Index& idx) {
+            assert(!idx.has_proto_indices() &&
+                   "Proto index not supported in spintrace function.");
+          });
     }
   };
   expression->visit(check_proto_index);
@@ -478,8 +536,7 @@ ExprPtr spintrace(ExprPtr expression,
     for (auto&& idxgrp : ext_index_groups) {
       for (auto&& idx : idxgrp) {
         idx.reset_tag();
-        auto result = ext_idxlist.insert(idx);
-        assert(result.second);
+        ext_idxlist.insert(idx);
       }
     }
 
@@ -506,14 +563,14 @@ ExprPtr spintrace(ExprPtr expression,
     // EFV: for each spincase (loop over integer from 0 to 2^n-1, n=#of index
     // groups)
 
-    const uint64_t nspincases = std::pow(2, index_groups.size() - 1);
+    const uint64_t nspincases = std::pow(2, index_groups.size());
 
     for (uint64_t spincase_bitstr = 0; spincase_bitstr != nspincases;
          ++spincase_bitstr) {
       // EFV:  assign spin to each index group => make a replacement list
       std::map<Index, Index> index_replacements;
 
-      int64_t index_group_count = 0;
+      uint64_t index_group_count = 0;
       for (auto&& index_group : index_groups) {
         auto spin_bit = (spincase_bitstr << (64 - index_group_count - 1)) >> 63;
         assert((spin_bit == 0) || (spin_bit == 1));
@@ -540,6 +597,11 @@ ExprPtr spintrace(ExprPtr expression,
         }
         ++index_group_count;
       }
+
+      // std::cout << "Replacement map:\n";
+      // for (auto&& pair : index_replacements)
+      //   std::wcout << pair.first.label() << " " << pair.second.label() <<
+      //   "\n";
 
       auto all_terms = std::make_shared<Sum>();
       auto spin_expr = append_spin(expr, index_replacements);
