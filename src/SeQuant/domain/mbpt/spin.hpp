@@ -296,7 +296,7 @@ inline ExprPtr expand_antisymm(const ExprPtr& expr) {
 /// @param expr input expression
 /// @return true if this function finds an A operator
 bool check_A_operator(const ExprPtr& expr) {
-  auto check_tensor = [&](const Tensor& tensor) {
+  auto check_tensor_is_A = [&](const Tensor& tensor) {
     if (tensor.label() == L"A")
       return true;
     else
@@ -304,11 +304,11 @@ bool check_A_operator(const ExprPtr& expr) {
   };
 
   // Assuming that 'A' is ALWAYS the first tensor in a product
-  auto check_product = [&](const Product& product) {
+  auto check_product_has_A = [&](const Product& product) {
     bool result = false;
     for (auto&& term : product) {
       if (term->is<Tensor>()) {
-        return check_tensor(term->as<Tensor>());
+        return check_tensor_is_A(term->as<Tensor>());
         //        if (check_tensor(term->as<Tensor>())) {
         //          result = true; //  ?Just: return true;
         //          break;
@@ -322,13 +322,13 @@ bool check_A_operator(const ExprPtr& expr) {
   if (expr->is<Constant>()) {
     return false;
   } else if (expr->is<Tensor>()) {
-    return check_tensor(expr->as<Tensor>());
+    return check_tensor_is_A(expr->as<Tensor>());
   } else if (expr->is<Product>()) {
-    return check_product(expr->as<Product>());
+    return check_product_has_A(expr->as<Product>());
   } else if (expr->is<Sum>()) {
     bool result = false;
     for (auto&& term : *expr) {
-      if (term->is<Product>()) result = check_product(term->as<Product>());
+      if (term->is<Product>()) result = check_product_has_A(term->as<Product>());
       if (result) return result;
     }
   } else
