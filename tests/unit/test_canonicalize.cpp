@@ -105,8 +105,34 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
       canonicalize(input);
       REQUIRE(to_latex(input) ==
               L"{ "
-              L"\\left({{\\bar{g}^{{p_1}{p_4}}_{{p_2}{p_3}}}{t^{{p_2}}_{{p_1}}}{t^{{p_"
+              L"\\left({{\\bar{g}^{{p_1}{p_4}}_{{p_2}{p_3}}}{t^{{p_2}}_{{p_1}}}"
+              L"{t^{{p_"
               L"3}}_{{p_4}}}}\\right) }");
+    }
+
+    // Case 4: permuted indices
+    {
+      auto input =
+          ex<Constant>(4. / 3.) *
+              ex<Tensor>(L"g", WstrList{L"i_3", L"i_4"},
+                         WstrList{L"a_3", L"i_1"}, Symmetry::antisymm) *
+              ex<Tensor>(L"t", IndexList{{L"a_2"}}, IndexList{{L"i_3"}},
+                         Symmetry::nonsymm) *
+              ex<Tensor>(L"t", IndexList{L"a_1", L"a_3"},
+                         IndexList{L"i_4", L"i_2"}, Symmetry::antisymm) -
+          ex<Constant>(1. / 3.) *
+              ex<Tensor>(L"g", WstrList{L"i_3", L"i_4"},
+                         WstrList{L"i_1", L"a_3"}, Symmetry::antisymm) *
+              ex<Tensor>(L"t", IndexList{{L"a_2"}}, IndexList{{L"i_4"}},
+                         Symmetry::nonsymm) *
+              ex<Tensor>(L"t", IndexList{L"a_1", L"a_3"},
+                         IndexList{L"i_3", L"i_2"}, Symmetry::antisymm);
+      canonicalize(input);
+      REQUIRE(input->size() == 1);
+      REQUIRE(to_latex(input) ==
+              L"{ "
+              "\\left({{\\bar{g}^{{i_1}{a_3}}_{{i_3}{i_4}}}{t^{{i_3}}_{{a_2}}}{"
+              "t^{{i_2}{i_4}}_{{a_1}{a_3}}}}\\right) }");
     }
   }
 }
