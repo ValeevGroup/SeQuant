@@ -20,6 +20,7 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/modules/")
 
+include(AddCustomTargetSubproject)
 include(external/versions.cmake)
 
 # std::thread requires (on some platforms?) thread support which is not provided automatically
@@ -67,10 +68,7 @@ set_property(TARGET Boost PROPERTY
         INTERFACE_INCLUDE_DIRECTORIES ${Boost_INCLUDE_DIR})
 
 ############ optional dependencies
-# look for BTAS, if needed
-if (BTAS_INSTALL_DIR)
-    find_package(BTAS)
-endif(BTAS_INSTALL_DIR)
+include(FindOrFetchBTAS)
 find_package(TiledArray CONFIG COMPONENTS tiledarray)
 
 # embedded bliss-0.73
@@ -231,7 +229,7 @@ foreach(i RANGE ${lastexample})
 endforeach()
 
 # target for running ALL tests
-add_custom_target(check USES_TERMINAL COMMAND ${CMAKE_CTEST_COMMAND} -V)
+add_custom_target_subproject(sequant check USES_TERMINAL COMMAND ${CMAKE_CTEST_COMMAND} -V)
 
 ####### DOCS ########
 
