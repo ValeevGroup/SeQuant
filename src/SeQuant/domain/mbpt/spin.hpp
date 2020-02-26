@@ -498,9 +498,9 @@ ExprPtr spintrace(ExprPtr expression,
       if (term->is<Tensor>()) {
         if (can_expand(term->as<Tensor>())) {
           spin_product.append(1, spin_trace_tensor(term->as<Tensor>()));
-        }
-      } else
-        abort();
+        } else
+          break;
+      }
     }
     if (product.size() != spin_product.size()) spin_product.scale(0);
     ExprPtr result = std::make_shared<Product>(spin_product);
