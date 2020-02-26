@@ -109,6 +109,19 @@ TEST_CASE("Index", "[elements]") {
     REQUIRE(!(a1 < i1));
   }
 
+  SECTION("qns ordering"){
+    auto p1A = Index(L"p_1", IndexSpace::instance(IndexSpace::all, IndexSpace::alpha));
+    auto p1B = Index(L"p_1", IndexSpace::instance(IndexSpace::all, IndexSpace::beta));
+    auto p2A = Index(L"p_2", IndexSpace::instance(IndexSpace::all, IndexSpace::alpha));
+    auto p2B = Index(L"p_2", IndexSpace::instance(IndexSpace::all, IndexSpace::beta));
+
+    REQUIRE(p1A < p1B);
+    REQUIRE(p2A < p1B);
+    REQUIRE(p1A < p2A);
+    // REQUIRE(p2B < p1B);
+  }
+
+
   SECTION("hashing") {
     REQUIRE_NOTHROW(hash_value(Index{}));
     Index i1(L"i_1");
