@@ -134,5 +134,33 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
               "\\left({{\\bar{g}^{{i_1}{a_3}}_{{i_3}{i_4}}}{t^{{i_3}}_{{a_2}}}{"
               "t^{{i_2}{i_4}}_{{a_1}{a_3}}}}\\right) }");
     }
+
+    // Case 4: permuted indices from CCSD R2 biorthogonal configuration
+    {
+      auto input =
+          ex<Constant>(4. / 3.) *
+              ex<Tensor>(L"g", WstrList{L"i_3", L"i_4"},
+                         WstrList{L"a_3", L"i_1"}, Symmetry::nonsymm) *
+              ex<Tensor>(L"t", IndexList{{L"a_2"}}, IndexList{{L"i_3"}},
+                         Symmetry::antisymm) *
+              ex<Tensor>(L"t", IndexList{L"a_1", L"a_3"},
+                         IndexList{L"i_4", L"i_2"}, Symmetry::nonsymm) -
+          ex<Constant>(1. / 3.) *
+              ex<Tensor>(L"g", WstrList{L"i_3", L"i_4"},
+                         WstrList{L"i_1", L"a_3"}, Symmetry::nonsymm) *
+              ex<Tensor>(L"t", IndexList{{L"a_2"}}, IndexList{{L"i_4"}},
+                         Symmetry::antisymm) *
+              ex<Tensor>(L"t", IndexList{L"a_1", L"a_3"},
+                         IndexList{L"i_3", L"i_2"}, Symmetry::nonsymm);
+
+      std::wcout << "input: " << to_latex(input) <<"\n";
+      canonicalize(input);
+      std::wcout << "canon: " << to_latex(input) <<"\n";
+      // REQUIRE(input->size() == 1);
+      // REQUIRE(to_latex(input) ==
+      //         L"{ "
+      //         "\\left({{\\bar{g}^{{i_1}{a_3}}_{{i_3}{i_4}}}{t^{{i_3}}_{{a_2}}}{"
+      //         "t^{{i_2}{i_4}}_{{a_1}{a_3}}}}\\right) }");
+    }
   }
 }
