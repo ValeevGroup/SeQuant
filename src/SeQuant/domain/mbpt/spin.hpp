@@ -331,6 +331,7 @@ bool check_A_operator(const ExprPtr& expr) {
       if (term->is<Product>()) result = check_product_has_A(term->as<Product>());
       if (result) return result;
     }
+    return result;
   } else
     return false;
 }
