@@ -119,17 +119,21 @@ ExprPtr TensorNetwork::canonicalize(
 
     // make the graph
     auto [graph, vlabels, vcolors, vtypes] = make_bliss_graph();
-//    graph->write_dot(std::wcout, vlabels);
+    if (Logger::get_instance().canonicalize_dot) {
+      graph->write_dot(std::wcout, vlabels);
+    }
 
     // canonize the graph
     bliss::Stats stats;
     graph->set_splitting_heuristic(bliss::Graph::shs_fsm);
     const unsigned int *cl = graph->canonical_form(stats, nullptr, nullptr);
 
-//    bliss::Graph *cgraph = graph->permute(cl);
-//    auto cvlabels = permute(vlabels, cl);
-//    cgraph->write_dot(std::wcout, cvlabels);
-//    delete cgraph;
+    if (Logger::get_instance().canonicalize_dot) {
+      bliss::Graph *cgraph = graph->permute(cl);
+      auto cvlabels = permute(vlabels, cl);
+      cgraph->write_dot(std::wcout, cvlabels);
+      delete cgraph;
+    }
 
     // make internal index replacement list
     {
@@ -209,7 +213,7 @@ ExprPtr TensorNetwork::canonicalize(
         ++vtx_cnt;
       }
       // for each color sort tensors by canonical order
-      // this assumes that tensors of different colors always commute (reaonsable)
+      // this assumes that tensors of different colors always commute (reasonable)
       // this only reorders tensors is they are c-numbers!
       container::svector<std::pair<size_t, size_t>>
           ord_can;  // canonically-ordered list of {ordinal in tensors_,
