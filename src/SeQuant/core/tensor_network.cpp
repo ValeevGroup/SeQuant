@@ -214,7 +214,7 @@ ExprPtr TensorNetwork::canonicalize(
       }
       // for each color sort tensors by canonical order
       // this assumes that tensors of different colors always commute (reasonable)
-      // this only reorders tensors is they are c-numbers!
+      // this only reorders tensors if they are c-numbers!
       container::svector<std::pair<size_t, size_t>>
           ord_can;  // canonically-ordered list of {ordinal in tensors_,
                     // canonical ordinal}
@@ -257,7 +257,7 @@ ExprPtr TensorNetwork::canonicalize(
           auto tidx = beg->second.first;
           tensors_canonized.at(tidx) = tensors_.at(tidx);
         }
-      }  // colores
+      }  // colors
 
       // commit the canonically-ordered list of tensors to tensors_
       using std::swap;
@@ -362,11 +362,11 @@ TensorNetwork::make_bliss_graph() const {
       edges_.size());  // the size will be updated
 
   // N.B. Colors [0, 2 max rank + ext_indices_.size()) are reserved:
-  // 0 - the bra vertex (for particle 0, if bra is nonsymm, or for the entire bra, if (anti)symm)
-  // 1 - the bra vertex for particle 1, if bra is nonsymm
+  // 0 - the bra vertex (for particle 0, if particle-asymmetric, or for the entire bra, if particle-symmetric)
+  // 1 - the bra vertex for particle 1, if particle-asymmetric
   // ...
-  // max_rank - the ket vertex (for particle 0, if ket is nonsymm, or for the entire ket, if (anti)symm)
-  // max_rank+1 - the ket vertex for particle 1, if ket is nonsymm
+  // max_rank - the ket vertex (for particle 0, if particle-asymmetric, or for the entire ket, if particle-symmetric)
+  // max_rank+1 - the ket vertex for particle 1, if particle-asymmetric
   // ...
   // 2 max_rank - first external index
   // 2 max_rank + 1 - second external index
@@ -478,10 +478,12 @@ TensorNetwork::make_bliss_graph() const {
         auto pstr = to_wstring(p + 1);
         vertex_labels.push_back(std::wstring(L"bra") + pstr);
         vertex_type.push_back(VertexType::TensorBra);
-        vertex_color.push_back(p);
+        const bool t_is_particle_symmetric = particle_symmetry(tref) == ParticleSymmetry::nonsymm;
+        const auto bra_color = t_is_particle_symmetric ? p : 0;
+        vertex_color.push_back(bra_color);
         vertex_labels.push_back(std::wstring(L"ket") + pstr);
         vertex_type.push_back(VertexType::TensorKet);
-        vertex_color.push_back(braket_symmetry(tref) == BraKetSymmetry::symm ? p : p+max_rank);
+        vertex_color.push_back(braket_symmetry(tref) == BraKetSymmetry::symm ? bra_color : bra_color+max_rank);
         vertex_labels.push_back(std::wstring(L"bk") + pstr);
         vertex_type.push_back(VertexType::TensorBraKet);
         vertex_color.push_back(t_color);

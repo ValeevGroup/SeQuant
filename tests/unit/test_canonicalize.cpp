@@ -57,9 +57,7 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
                                   IndexList{{L"p_2"}}, Symmetry::nonsymm);
       canonicalize(input);
       REQUIRE(to_latex(input) ==
-              L"{ "
-              L"\\left({{g^{{p_2}{p_4}}_{{p_1}{p_3}}}{t^{{p_1}}_{{p_2}}}{t^{{p_"
-              L"3}}_{{p_4}}}}\\right) }");
+              L"{ \\left({{g^{{p_2}{p_3}}_{{p_1}{p_4}}}{t^{{p_1}}_{{p_2}}}{t^{{p_4}}_{{p_3}}}}\\right) }");
     }
 
     // CASE 2: Symmetric tensors
@@ -142,25 +140,21 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
               ex<Tensor>(L"g", WstrList{L"i_3", L"i_4"},
                          WstrList{L"a_3", L"i_1"}, Symmetry::nonsymm) *
               ex<Tensor>(L"t", IndexList{{L"a_2"}}, IndexList{{L"i_3"}},
-                         Symmetry::antisymm) *
+                         Symmetry::nonsymm) *
               ex<Tensor>(L"t", IndexList{L"a_1", L"a_3"},
                          IndexList{L"i_4", L"i_2"}, Symmetry::nonsymm) -
           ex<Constant>(1. / 3.) *
               ex<Tensor>(L"g", WstrList{L"i_3", L"i_4"},
                          WstrList{L"i_1", L"a_3"}, Symmetry::nonsymm) *
               ex<Tensor>(L"t", IndexList{{L"a_2"}}, IndexList{{L"i_4"}},
-                         Symmetry::antisymm) *
+                         Symmetry::nonsymm) *
               ex<Tensor>(L"t", IndexList{L"a_1", L"a_3"},
                          IndexList{L"i_3", L"i_2"}, Symmetry::nonsymm);
 
-      std::wcout << "input: " << to_latex(input) <<"\n";
       canonicalize(input);
-      std::wcout << "canon: " << to_latex(input) <<"\n";
-      // REQUIRE(input->size() == 1);
-      // REQUIRE(to_latex(input) ==
-      //         L"{ "
-      //         "\\left({{\\bar{g}^{{i_1}{a_3}}_{{i_3}{i_4}}}{t^{{i_3}}_{{a_2}}}{"
-      //         "t^{{i_2}{i_4}}_{{a_1}{a_3}}}}\\right) }");
+      REQUIRE(input->size() == 1);
+      REQUIRE(to_latex(input) ==
+               L"{ \\left({{g^{{a_3}{i_1}}_{{i_3}{i_4}}}{t^{{i_3}}_{{a_2}}}{t^{{i_4}{i_2}}_{{a_1}{a_3}}}}\\right) }");
     }
   }
 }
