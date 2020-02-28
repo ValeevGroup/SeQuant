@@ -74,9 +74,7 @@ class Tensor : public Expr, public AbstractTensor {
         symmetry_(s),
         braket_symmetry_(bks),
         particle_symmetry_(ps) {
-    // (anti)symmetric bra or ket makes sense only for particle-symmetric tensors
-    if (symmetry_ == Symmetry::symm || symmetry_ == Symmetry::antisymm)
-      assert(particle_symmetry_ == ParticleSymmetry::symm);
+          validate_symmetries();
   }
 
   /// @tparam I1 any type convertible to Index)
@@ -92,12 +90,16 @@ class Tensor : public Expr, public AbstractTensor {
   template <typename I1 = Index, typename I2 = Index>
   Tensor(std::wstring_view label, std::initializer_list<I1> bra_indices,
          std::initializer_list<I2> ket_indices, Symmetry s = Symmetry::nonsymm,
-         BraKetSymmetry bks = get_default_context().braket_symmetry())
+         BraKetSymmetry bks = get_default_context().braket_symmetry(),
+         ParticleSymmetry ps = ParticleSymmetry::symm)
       : label_(label),
         bra_(make_indices(bra_indices)),
         ket_(make_indices(ket_indices)),
         symmetry_(s),
-        braket_symmetry_(bks) {}
+        braket_symmetry_(bks),
+        particle_symmetry_(ps)  {
+          validate_symmetries();
+        }
 
   std::wstring_view label() const { return label_; }
   const auto &bra() const { return bra_; }
@@ -210,6 +212,12 @@ class Tensor : public Expr, public AbstractTensor {
   ParticleSymmetry particle_symmetry_ = ParticleSymmetry::invalid;
   mutable std::optional<hash_type>
       bra_hash_value_;  // memoized byproduct of memoizing_hash()
+
+  void validate_symmetries() {
+    // (anti)symmetric bra or ket makes sense only for particle-symmetric tensors
+    if (symmetry_ == Symmetry::symm || symmetry_ == Symmetry::antisymm)
+      assert(particle_symmetry_ == ParticleSymmetry::symm);
+  }
 
   hash_type memoizing_hash() const override {
     using std::begin;
