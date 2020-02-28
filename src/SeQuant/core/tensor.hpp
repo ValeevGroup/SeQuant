@@ -66,12 +66,18 @@ class Tensor : public Expr, public AbstractTensor {
                 !meta::is_initializer_list_v<std::decay_t<IndexContainer>>>>
   Tensor(std::wstring_view label, IndexContainer &&bra_indices,
          IndexContainer &&ket_indices, Symmetry s = Symmetry::nonsymm,
-         BraKetSymmetry bks = get_default_context().braket_symmetry())
+         BraKetSymmetry bks = get_default_context().braket_symmetry(),
+         ParticleSymmetry ps = ParticleSymmetry::symm)
       : label_(label),
         bra_(make_indices(bra_indices)),
         ket_(make_indices(ket_indices)),
         symmetry_(s),
-        braket_symmetry_(bks) {}
+        braket_symmetry_(bks),
+        particle_symmetry_(ps) {
+    // (anti)symmetric bra or ket makes sense only for particle-symmetric tensors
+    if (symmetry_ == Symmetry::symm || symmetry_ == Symmetry::antisymm)
+      assert(particle_symmetry_ == ParticleSymmetry::symm);
+  }
 
   /// @tparam I1 any type convertible to Index)
   /// @tparam I2 any type convertible to Index
@@ -114,6 +120,9 @@ class Tensor : public Expr, public AbstractTensor {
   /// @return the BraKetSymmetry object describing the symmetry of the Tensor
   /// under exchange of bra and ket.
   BraKetSymmetry braket_symmetry() const { return braket_symmetry_; }
+  /// @return the ParticleSymmetry object describing the symmetry of the Tensor
+  /// under exchange of particles (columns).
+  ParticleSymmetry particle_symmetry() const { return particle_symmetry_; }
 
   /// @return number of bra indices
   auto bra_rank() const { return bra_.size(); }
@@ -198,6 +207,7 @@ class Tensor : public Expr, public AbstractTensor {
   index_container_type ket_{};
   Symmetry symmetry_ = Symmetry::invalid;
   BraKetSymmetry braket_symmetry_ = BraKetSymmetry::invalid;
+  ParticleSymmetry particle_symmetry_ = ParticleSymmetry::invalid;
   mutable std::optional<hash_type>
       bra_hash_value_;  // memoized byproduct of memoizing_hash()
 
@@ -279,6 +289,9 @@ class Tensor : public Expr, public AbstractTensor {
   Symmetry _symmetry() const override final { return symmetry_; }
   BraKetSymmetry _braket_symmetry() const override final {
     return braket_symmetry_;
+  }
+  ParticleSymmetry _particle_symmetry() const override final {
+    return particle_symmetry_;
   }
   std::size_t _color() const override final { return 0; }
   bool _is_cnumber() const override final { return true; }

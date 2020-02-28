@@ -20,8 +20,9 @@ class TensorCanonicalizer;
 /// This interface class defines a Tensor concept. Object @c t of a type that meets the concept must satisfy the following:
 ///         - @c bra(t) , @c ket(t) , and @c braket(t) are valid expressions and evaluate to a range of Index objects;
 ///         - @c bra_rank(t) and @c ket_rank(t) are valid expression and return sizes of the @c bra(t) and @c ket(t) ranges, respectively;
-///         - @c symmetry(t) is a valid expression and evaluates to a Symmetry object that describes the particle symmetry of @c t ;
+///         - @c symmetry(t) is a valid expression and evaluates to a Symmetry object that describes the symmetry of bra/ket of a _particle-symmetric_ @c t ;
 ///         - @c braket_symmetry(t) is a valid expression and evaluates to a BraKetSymmetry object that describes the bra-ket symmetry of @c t ;
+///         - @c particle_symmetry(t) is a valid expression and evaluates to a ParticleSymmetry object that describes the symmetry of @c t with respect to permutations of particles;
 ///         - @c color(t) is a valid expression and returns whether a nonnegative integer that identifies the type of a tensor; tensors with different colors can be reordered in a Product at will
 ///         - @c is_cnumber(t) is a valid expression and returns whether t commutes with other tensor of same color (tensors of different colors are, for now, always assumed to commute)
 ///         - @c label(t) is a valid expression and its return is convertible to a std::wstring;
@@ -66,6 +67,9 @@ class AbstractTensor {
   }
   virtual BraKetSymmetry _braket_symmetry() const {
     throw missing_instantiation_for("_braket_symmetry");
+  }
+  virtual ParticleSymmetry _particle_symmetry() const {
+    throw missing_instantiation_for("_particle_symmetry");
   }
   virtual std::size_t _color() const {
     throw missing_instantiation_for("_color");
@@ -117,6 +121,7 @@ inline auto bra_rank(const AbstractTensor& t) { return t._bra_rank(); }
 inline auto ket_rank(const AbstractTensor& t) { return t._ket_rank(); }
 inline auto symmetry(const AbstractTensor& t) { return t._symmetry(); }
 inline auto braket_symmetry(const AbstractTensor& t) { return t._braket_symmetry(); }
+inline auto particle_symmetry(const AbstractTensor& t) { return t._particle_symmetry(); }
 inline auto color(const AbstractTensor& t) { return t._color(); }
 inline auto is_cnumber(const AbstractTensor& t) { return t._is_cnumber(); }
 inline auto label(const AbstractTensor& t) { return t._label(); }
