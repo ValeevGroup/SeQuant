@@ -293,7 +293,7 @@ inline ExprPtr expand_antisymm(const ExprPtr& expr) {
 /// @param expr input expression
 /// @param label tensor label to find
 /// @return true if this function finds an A operator
-bool check_label(const ExprPtr& expr, std::wstring label) {
+bool has_tensor_label(const ExprPtr& expr, std::wstring label) {
   if (expr->is<Constant>()) return false;
 
   auto check_tensor = [&](const Tensor& tensor) {
@@ -722,7 +722,7 @@ ExprPtr spintrace(ExprPtr expression,
     return result;
   };
 
-  if (check_label(expression, L"A")) {
+  if (has_tensor_label(expression, L"A")) {
     expression = expand_A_operator(expression);
     rapid_simplify(expression);  // TODO: Check if this is required
   }
