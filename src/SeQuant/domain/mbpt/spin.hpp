@@ -20,11 +20,10 @@ ExprPtr transform_expression(const ExprPtr& expr,
   if (expr->is<Constant>()) return ex<Constant>(scaling_factor) * expr;
 
   auto transform_tensor = [&](const Tensor& tensor) {
-    auto tr_tensor = tensor;
-    tr_tensor.transform_indices(index_replacements);
-    ranges::for_each(tr_tensor.const_braket(),
+    auto result = std::make_shared<Tensor>(tensor);
+    result->transform_indices(index_replacements);
+    ranges::for_each(result->const_braket(),
                      [&](const Index& idx) { idx.reset_tag(); });
-    ExprPtr result = std::make_shared<Tensor>(tr_tensor);
     return result;
   };
 
@@ -114,8 +113,8 @@ ExprPtr append_spin(ExprPtr& expr, std::map<Index, Index>& index_replacements) {
 /// @return expr an expression pointer without spin labels
 ExprPtr remove_spin(ExprPtr& expr) {
   auto remove_spin_from_tensor = [&](const Tensor& tensor) {
-    std::vector<Index> bra;  // An unordered list is required
-    std::vector<Index> ket;  // An unordered list is required
+    container::svector<Index> bra;
+    container::svector<Index> ket;
     {
       for (auto&& idx : tensor.bra()) bra.emplace_back(idx);
       for (auto&& idx : tensor.ket()) ket.emplace_back(idx);
@@ -175,16 +174,13 @@ ExprPtr remove_spin(ExprPtr& expr) {
 inline bool is_tensor_spin_symm(const Tensor& tensor) {
   bool result = false;
   assert(tensor.bra().size() == tensor.ket().size());
-  // For each index check if QNS match.
-  // return FALSE if one of the pairs does not match.
   auto iter_ket = tensor.ket().begin();
   for (auto&& index : tensor.bra()) {
     if (IndexSpace::instance(index.label()).qns() ==
         IndexSpace::instance(iter_ket->label()).qns()) {
       result = true;
     } else {
-      result = false;
-      return result;
+      return false;
     }
     ++iter_ket;
   }
@@ -196,17 +192,18 @@ inline bool is_tensor_spin_symm(const Tensor& tensor) {
 /// @param any tensor
 /// @return true if number of alpha spins match in bra and ket
 inline bool can_expand(const Tensor& tensor) {
+  assert(tensor.bra_rank() == tensor.ket_rank() && "can_expand failed.");
   if (tensor.bra_rank() != tensor.ket_rank()) return false;
   auto result = false;
   // TODO: Throw error if called on non-qns idx
   auto alpha_in_bra = 0;
   auto alpha_in_ket = 0;
-  ranges::for_each(tensor.bra(), [&](const Index& i) {
-    if (IndexSpace::instance(i.label()).qns() == IndexSpace::alpha)
+  ranges::for_each(tensor.bra(), [&](const Index& idx) {
+    if (IndexSpace::instance(idx.label()).qns() == IndexSpace::alpha)
       ++alpha_in_bra;
   });
-  ranges::for_each(tensor.ket(), [&](const Index& i) {
-    if (IndexSpace::instance(i.label()).qns() == IndexSpace::alpha)
+  ranges::for_each(tensor.ket(), [&](const Index& idx) {
+    if (IndexSpace::instance(idx.label()).qns() == IndexSpace::alpha)
       ++alpha_in_ket;
   });
   if (alpha_in_bra == alpha_in_ket) result = true;
@@ -292,44 +289,39 @@ inline ExprPtr expand_antisymm(const ExprPtr& expr) {
   return result;
 }
 
-/// @brief Check if the Antisymmetrizer operator is present in given expression
+/// @brief Check if an operator is present in given expression
 /// @param expr input expression
+/// @param label tensor label to find
 /// @return true if this function finds an A operator
-bool check_A_operator(const ExprPtr& expr) {
-  auto check_tensor_is_A = [&](const Tensor& tensor) {
-    if (tensor.label() == L"A")
+bool check_label(const ExprPtr& expr, std::wstring label) {
+  if (expr->is<Constant>()) return false;
+
+  auto check_tensor = [&](const Tensor& tensor) {
+    if (tensor.label() == label)
       return true;
     else
       return false;
   };
 
-  // Assuming that 'A' is ALWAYS the first tensor in a product
-  auto check_product_has_A = [&](const Product& product) {
+  // Assuming that 'A' or 'P' is ALWAYS the first tensor in a product
+  auto check_product = [&](const Product& product) {
     bool result = false;
     for (auto&& term : product) {
       if (term->is<Tensor>()) {
-        return check_tensor_is_A(term->as<Tensor>());
-        //        if (check_tensor(term->as<Tensor>())) {
-        //          result = true; //  ?Just: return true;
-        //          break;
-        //        }
+        if (check_tensor(term->as<Tensor>())) return true;
       }
     }
     return result;
   };
 
-  // TODO: Make this faster
-  if (expr->is<Constant>()) {
-    return false;
-  } else if (expr->is<Tensor>()) {
-    return check_tensor_is_A(expr->as<Tensor>());
+  if (expr->is<Tensor>()) {
+    return check_tensor(expr->as<Tensor>());
   } else if (expr->is<Product>()) {
-    return check_product_has_A(expr->as<Product>());
+    return check_product(expr->as<Product>());
   } else if (expr->is<Sum>()) {
     bool result = false;
     for (auto&& term : *expr) {
-      if (term->is<Product>())
-        result = check_product_has_A(term->as<Product>());
+      if (term->is<Product>()) result = check_product(term->as<Product>());
       if (result) return result;
     }
     return result;
@@ -341,37 +333,37 @@ bool check_A_operator(const ExprPtr& expr) {
 /// @param A The antisymmetrizer with replacement indices
 /// @return A vector of replacement maps
 std::vector<std::map<Index, Index>> A_replacement_map(const Tensor& A) {
-  // Check A, get bra list, get ket list
-  container::set<Index> A_bra;
-  container::set<Index> A_ket;
-  container::svector<Index> A_braket;
-  if (A.label() == L"A") {
-    for (auto& idx : A.bra()) A_bra.insert(idx);
-    for (auto& idx : A.ket()) A_ket.insert(idx);
-    for (auto& idx : A.const_braket()) A_braket.push_back(idx);
-  } else
-    throw("A_replacement_map needs the antisymmetrizer tensor");
-
+  assert(A.label() == L"A");
+  assert(A.bra().size() == A.ket().size());
+  container::svector<int> bra_int_list(A.bra().size());
+  std::iota(std::begin(bra_int_list), std::end(bra_int_list), 0);
+  auto ket_int_list = bra_int_list;
   std::vector<std::map<Index, Index>> result;
+  container::svector<Index> A_braket;
+  for (auto& idx : A.const_braket()) A_braket.push_back(idx);
+
   do {
     do {
       std::map<Index, Index> replacement_map;
       auto A_braket_ptr = A_braket.begin();
-      for (auto&& idx : A_bra) {
-        replacement_map.emplace(std::make_pair(*A_braket_ptr, idx));
+      for (auto&& idx : bra_int_list) {
+        replacement_map.emplace(std::make_pair(*A_braket_ptr, A.bra()[idx]));
         A_braket_ptr++;
       }
-      for (auto&& idx : A_ket) {
-        replacement_map.emplace(std::make_pair(*A_braket_ptr, idx));
+      for (auto&& idx : ket_int_list) {
+        replacement_map.emplace(std::make_pair(*A_braket_ptr, A.ket()[idx]));
         A_braket_ptr++;
       }
       result.push_back(replacement_map);
-    } while (std::next_permutation(A_bra.begin(), A_bra.end()));
-  } while (std::next_permutation(A_ket.begin(), A_ket.end()));
-
+    } while (std::next_permutation(bra_int_list.begin(), bra_int_list.end()));
+  } while (std::next_permutation(ket_int_list.begin(), ket_int_list.end()));
   return result;
 }
 
+/// @brief Removes tensor with a certain label from product
+/// @param product A product to modify
+/// @param label Label of the tensor to remove
+/// @return ExprPtr with the tensor removed
 ExprPtr remove_tensor_from_product(const Product& product, std::wstring label) {
   auto new_product = std::make_shared<Product>();
   new_product->scale(product.scalar());
@@ -730,7 +722,7 @@ ExprPtr spintrace(ExprPtr expression,
     return result;
   };
 
-  if (check_A_operator(expression)) {
+  if (check_label(expression, L"A")) {
     expression = expand_A_operator(expression);
     rapid_simplify(expression);  // TODO: Check if this is required
   }
