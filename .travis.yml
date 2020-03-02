@@ -39,6 +39,7 @@ matrix:
             - clang-7
             - libc++-7-dev
             - libc++abi-7-dev
+            - g++-8
     - compiler: clang
       env: CLANG_VERSION=7 BUILD_TYPE=Release
       addons:
@@ -48,18 +49,17 @@ matrix:
             - clang-7
             - libc++-7-dev
             - libc++abi-7-dev
+            - g++-8
     - compiler: clang
       env: CLANG_VERSION=8 BUILD_TYPE=Debug
       addons:
         apt:
-          sources:
-            - *base_sources
-            - *clang8_sources
           packages:
             - *base_packages
             - clang-8
             - libc++-8-dev
             - libc++abi-8-dev
+            - g++-8
     - compiler: clang
       env: CLANG_VERSION=8 BUILD_TYPE=Release
       addons:
@@ -69,6 +69,33 @@ matrix:
             - clang-8
             - libc++-8-dev
             - libc++abi-8-dev
+            - g++-8
+    - compiler: clang
+      env: CLANG_VERSION=9 BUILD_TYPE=Debug
+      addons:
+        apt:
+          sources:
+            - sourceline: 'deb http://apt.llvm.org/bionic/ llvm-toolchain-bionic-9 main'
+              key_url: 'https://apt.llvm.org/llvm-snapshot.gpg.key'
+          packages:
+            - *base_packages
+            - clang-9
+            - libc++-9-dev
+            - libc++abi-9-dev
+            - g++-8
+    - compiler: clang
+      env: CLANG_VERSION=9 BUILD_TYPE=Release
+      addons:
+        apt:
+          sources:
+            - sourceline: 'deb http://apt.llvm.org/bionic/ llvm-toolchain-bionic-9 main'
+              key_url: 'https://apt.llvm.org/llvm-snapshot.gpg.key'
+          packages:
+            - *base_packages
+            - clang-9
+            - libc++-9-dev
+            - libc++abi-9-dev
+    - compiler: clang
     - compiler: gcc
       env: GCC_VERSION=8 BUILD_TYPE=Debug
       addons:
@@ -83,6 +110,24 @@ matrix:
           packages:
             - *base_packages
             - g++-8
+    - compiler: gcc
+      env: GCC_VERSION=9 BUILD_TYPE=Debug
+      addons:
+        sources:
+          - sourceline: 'ppa:ubuntu-toolchain-r/test'
+        apt:
+          packages:
+            - *base_packages
+            - g++-9
+    - compiler: gcc
+      env: GCC_VERSION=9 BUILD_TYPE=Release
+      addons:
+        apt:
+          sources:
+            - sourceline: 'ppa:ubuntu-toolchain-r/test'
+          packages:
+            - *base_packages
+            - g++-9
 
 
 before_install:

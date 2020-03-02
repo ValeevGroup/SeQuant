@@ -10,6 +10,7 @@
 
 # this is where in the container file system Travis-CI "starts"
 export TRAVIS_BUILD_TOPDIR=/home/travis/build
+export CURRENT_REV_SHA=`git rev-parse HEAD`
 
 ##############################################################
 # make a script to download all prereqs and clone ValeevGroup/SeQuant2 repo
@@ -20,10 +21,12 @@ curl -sSL "http://apt.llvm.org/llvm-snapshot.gpg.key" | apt-key add -
 echo "deb http://apt.llvm.org/bionic/ llvm-toolchain-bionic-9 main" | tee -a /etc/apt/sources.list > /dev/null
 apt-add-repository -y "ppa:ubuntu-toolchain-r/test"
 apt-get -yq update >> ~/apt-get-update.log
-apt-get -yq --no-install-suggests --no-install-recommends --force-yes install g++-8 clang-8 libc++-8-dev libc++abi-8-dev gdb cmake cmake-data
+apt-get -yq --no-install-suggests --no-install-recommends --force-yes install g++-8 g++-9 clang-8 clang-9 gdb cmake cmake-data
 mkdir -p ${TRAVIS_BUILD_TOPDIR}
 cd ${TRAVIS_BUILD_TOPDIR}
 git clone git@github.com:ValeevGroup/SeQuant2 ${TRAVIS_BUILD_TOPDIR}/ValeevGroup/SeQuant
+cd ${TRAVIS_BUILD_TOPDIR}/ValeevGroup/SeQuant
+git checkout ${CURRENT_REV_SHA}
 END
 chmod +x $setup
 
@@ -36,7 +39,7 @@ cd /home/travis/_build
 export BUILD_PREFIX=/home/travis/_build
 export INSTALL_PREFIX=/home/travis/_install
 export TRAVIS_BUILD_DIR=${TRAVIS_BUILD_TOPDIR}/ValeevGroup/SeQuant
-${TRAVIS_BUILD_DIR}/bin/build-linux.sh
+\${TRAVIS_BUILD_DIR}/bin/build-linux.sh
 END
 chmod +x $build
 
