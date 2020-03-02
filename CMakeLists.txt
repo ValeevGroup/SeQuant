@@ -67,10 +67,6 @@ add_library(Boost INTERFACE IMPORTED)
 set_property(TARGET Boost PROPERTY
         INTERFACE_INCLUDE_DIRECTORIES ${Boost_INCLUDE_DIR})
 
-############ optional dependencies
-include(FindOrFetchBTAS)
-find_package(TiledArray CONFIG COMPONENTS tiledarray)
-
 # embedded bliss-0.73
 add_library(bliss
         src/SeQuant/external/bliss/defs.cc
@@ -197,19 +193,22 @@ add_executable(${example0} EXCLUDE_FROM_ALL
 target_link_libraries(${example0} SeQuant ${TBB_LIBRARIES})
 
 # contract method testing -- Bimal
-if (BTAS_FOUND)
-    find_package(Libint2 2.6.0 CONFIG REQUIRED)
+############ optional dependencies
+find_package(Libint2 2.6.0 CONFIG REQUIRED)
 
-    set(example1 cc_btas)
-    add_executable(${example1} EXCLUDE_FROM_ALL
-            examples/contract/${example1}.cpp
-            examples/contract/interpret/interpreted_tensor.hpp
-            examples/contract/interpret/contract.hpp
-            examples/contract/scf/hartree-fock.cc
-            src/SeQuant/domain/evaluate/eval_tensor.cpp)
-    target_link_libraries(${example1} SeQuant factorizer ${TBB_LIBRARIES} Libint2::cxx BTAS)
-    target_compile_definitions(${example1} PRIVATE SEQUANT_HAS_BTAS)
-endif(BTAS_FOUND)
+include(FindOrFetchBTAS)
+set(example1 cc_btas)
+add_executable(${example1} EXCLUDE_FROM_ALL
+    examples/contract/${example1}.cpp
+    examples/contract/interpret/interpreted_tensor.hpp
+    examples/contract/interpret/contract.hpp
+    examples/contract/scf/hartree-fock.cc
+    src/SeQuant/domain/evaluate/eval_tensor.cpp)
+target_link_libraries(${example1} SeQuant factorizer ${TBB_LIBRARIES} Libint2::cxx BTAS)
+target_compile_definitions(${example1} PRIVATE SEQUANT_HAS_BTAS)
+
+find_package(TiledArray CONFIG COMPONENTS tiledarray)
+
 
 if (TiledArray_FOUND)
     set(example2 cc_tiledarray)
@@ -225,8 +224,6 @@ if (TiledArray_FOUND)
 endif(TiledArray_FOUND)
 
 # factorization examples
-if(BTAS_FOUND)
-
 set(example3 product_factorization)
 add_executable(${example3} EXCLUDE_FROM_ALL
     examples/factorization/${example3}.cpp)
@@ -234,7 +231,7 @@ add_executable(${example3} EXCLUDE_FROM_ALL
 target_include_directories(${example3} PUBLIC
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>
-    ${BTAS_INSTALL_DIR})
+    ${BTAS_SOURCE_DIR})
 
 target_link_libraries(${example3} SeQuant factorizer)
 target_compile_definitions(${example3} PRIVATE SEQUANT_HAS_BTAS)
@@ -250,11 +247,10 @@ add_executable(${example4} EXCLUDE_FROM_ALL
 target_include_directories(${example4} PUBLIC
         $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>
-        ${BTAS_INSTALL_DIR})
+        ${BTAS_SOURCE_DIR})
 
 target_link_libraries(${example4} SeQuant factorizer)
 target_compile_definitions(${example4} PRIVATE SEQUANT_HAS_BTAS)
-endif()
 
 # add tests for running examples
 set (lastexample 5)
