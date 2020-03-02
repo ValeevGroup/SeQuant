@@ -129,7 +129,11 @@ TEST_CASE("Spin") {
       REQUIRE(result->is<Sum>());
       REQUIRE(result->size() == 2);
       REQUIRE(to_latex(result) ==
-              L"{ \\left( - {{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_2}}_{{a_1}}}{t^{{i_1}}_{{a_2}}}} + {{{2}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}}_{{a_1}}}{t^{{i_2}}_{{a_2}}}}\\right) }");
+              L"{ \\left( - "
+              L"{{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_2}}_{{a_1}}}{t^{{i_1}}_{{"
+              L"a_2}}}} + "
+              L"{{{2}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}}_{{a_1}}}{t^{{i_2}"
+              L"}_{{a_2}}}}\\right) }");
     }
   }
 
@@ -155,8 +159,21 @@ TEST_CASE("Spin") {
     canonicalize(result);
     REQUIRE(result->is<Sum>());
     REQUIRE(result->size() == 5);
-    REQUIRE(to_latex(result) ==
-            L"{ \\left({{{2}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{{a_1}{a_2}}}} - {{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_2}{i_1}}_{{a_1}{a_2}}}} + {{{2}}{f^{{a_1}}_{{i_1}}}{t^{{i_1}}_{{a_1}}}} - {{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_2}}_{{a_1}}}{t^{{i_1}}_{{a_2}}}} + {{{2}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}}_{{a_1}}}{t^{{i_2}}_{{a_2}}}}\\right) }");
+
+    using boost::hash_value;
+    for(auto&& term : *result){
+      std::cout << hash_value(term->as<Product>()) << "\n";
+    }
+    REQUIRE(
+        to_latex(result) ==
+        L"{ "
+        L"\\left({{{2}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{{a_1}{a_2}"
+        L"}}} - {{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_2}{i_1}}_{{a_1}{a_2}}}} + "
+        L"{{{2}}{f^{{a_1}}_{{i_1}}}{t^{{i_1}}_{{a_1}}}} - "
+        L"{{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_2}}_{{a_1}}}{t^{{i_1}}_{{a_2}}}}"
+        L" + "
+        L"{{{2}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}}_{{a_1}}}{t^{{i_2}}_{{a_"
+        L"2}}}}\\right) }");
   }  // Sum
 
   SECTION("Expand Antisymmetrizer") {
@@ -302,6 +319,78 @@ TEST_CASE("Spin") {
       auto asm_input = expand_A_operator(input);
       REQUIRE(asm_input->size() == 14400);
       REQUIRE(asm_input->is<Sum>());
+    }
+  }
+
+  SECTION("Expand Permutation operator") {
+    {  // 2-body
+      const auto input =
+          ex<Tensor>(L"P", WstrList{L"i_1", L"i_2"}, WstrList{L"a_1", L"a_2"},
+                     Symmetry::nonsymm) *
+          ex<Tensor>(L"t", WstrList{L"a_1", L"a_2"}, WstrList{L"i_1", L"i_2"},
+                     Symmetry::antisymm);
+      auto result = expand_P_operator(input);
+      REQUIRE(result->size() == 2);
+      REQUIRE(result->is<Sum>());
+      REQUIRE(to_latex(result) ==
+              L"{ \\left({{t^{{i_1}{i_2}}_{{a_1}{a_2}}}} + "
+              L"{{t^{{i_2}{i_1}}_{{a_2}{a_1}}}}\\right) }");
+    }
+
+    {  // 3-body
+      const auto input =
+          ex<Tensor>(L"P", WstrList{L"i_1", L"i_2", L"i_3"},
+                     WstrList{L"a_1", L"a_2", L"a_3"}, Symmetry::nonsymm) *
+          ex<Tensor>(L"t", WstrList{L"a_1", L"a_2", L"a_3"},
+                     WstrList{L"i_1", L"i_2", L"i_3"}, Symmetry::antisymm);
+      auto result = expand_P_operator(input);
+      REQUIRE(result->is<Sum>());
+      REQUIRE(result->size() == 6);
+      REQUIRE(to_latex(result) ==
+              L"{ \\left({{t^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}} + "
+              L"{{t^{{i_1}{i_3}{i_2}}_{{a_1}{a_3}{a_2}}}} + "
+              L"{{t^{{i_2}{i_1}{i_3}}_{{a_2}{a_1}{a_3}}}} + "
+              L"{{t^{{i_2}{i_3}{i_1}}_{{a_2}{a_3}{a_1}}}} + "
+              L"{{t^{{i_3}{i_1}{i_2}}_{{a_3}{a_1}{a_2}}}} + "
+              L"{{t^{{i_3}{i_2}{i_1}}_{{a_3}{a_2}{a_1}}}}\\right) }");
+    }
+
+    {  // 4-body
+      const auto input =
+          ex<Tensor>(L"P", WstrList{L"i_1", L"i_2", L"i_3", L"i_4"},
+                     WstrList{L"a_1", L"a_2", L"a_3", L"a_4"},
+                     Symmetry::nonsymm) *
+          ex<Tensor>(L"t", WstrList{L"a_1", L"a_2", L"a_3", L"a_4"},
+                     WstrList{L"i_1", L"i_2", L"i_3", L"i_4"},
+                     Symmetry::antisymm);
+      auto result = expand_P_operator(input);
+      REQUIRE(result->size() == 24);
+      REQUIRE(result->is<Sum>());
+      REQUIRE(to_latex(result) ==
+              L"{ \\left({{t^{{i_1}{i_2}{i_3}{i_4}}_{{a_1}{a_2}{a_3}{a_4}}}} + "
+              L"{{t^{{i_1}{i_2}{i_4}{i_3}}_{{a_1}{a_2}{a_4}{a_3}}}} + "
+              L"{{t^{{i_1}{i_3}{i_2}{i_4}}_{{a_1}{a_3}{a_2}{a_4}}}} + "
+              L"{{t^{{i_1}{i_3}{i_4}{i_2}}_{{a_1}{a_3}{a_4}{a_2}}}} + "
+              L"{{t^{{i_1}{i_4}{i_2}{i_3}}_{{a_1}{a_4}{a_2}{a_3}}}} + "
+              L"{{t^{{i_1}{i_4}{i_3}{i_2}}_{{a_1}{a_4}{a_3}{a_2}}}} + "
+              L"{{t^{{i_2}{i_1}{i_3}{i_4}}_{{a_2}{a_1}{a_3}{a_4}}}} + "
+              L"{{t^{{i_2}{i_1}{i_4}{i_3}}_{{a_2}{a_1}{a_4}{a_3}}}} + "
+              L"{{t^{{i_2}{i_3}{i_1}{i_4}}_{{a_2}{a_3}{a_1}{a_4}}}} + "
+              L"{{t^{{i_2}{i_3}{i_4}{i_1}}_{{a_2}{a_3}{a_4}{a_1}}}} + "
+              L"{{t^{{i_2}{i_4}{i_1}{i_3}}_{{a_2}{a_4}{a_1}{a_3}}}} + "
+              L"{{t^{{i_2}{i_4}{i_3}{i_1}}_{{a_2}{a_4}{a_3}{a_1}}}} + "
+              L"{{t^{{i_3}{i_1}{i_2}{i_4}}_{{a_3}{a_1}{a_2}{a_4}}}} + "
+              L"{{t^{{i_3}{i_1}{i_4}{i_2}}_{{a_3}{a_1}{a_4}{a_2}}}} + "
+              L"{{t^{{i_3}{i_2}{i_1}{i_4}}_{{a_3}{a_2}{a_1}{a_4}}}} + "
+              L"{{t^{{i_3}{i_2}{i_4}{i_1}}_{{a_3}{a_2}{a_4}{a_1}}}} + "
+              L"{{t^{{i_3}{i_4}{i_1}{i_2}}_{{a_3}{a_4}{a_1}{a_2}}}} + "
+              L"{{t^{{i_3}{i_4}{i_2}{i_1}}_{{a_3}{a_4}{a_2}{a_1}}}} + "
+              L"{{t^{{i_4}{i_1}{i_2}{i_3}}_{{a_4}{a_1}{a_2}{a_3}}}} + "
+              L"{{t^{{i_4}{i_1}{i_3}{i_2}}_{{a_4}{a_1}{a_3}{a_2}}}} + "
+              L"{{t^{{i_4}{i_2}{i_1}{i_3}}_{{a_4}{a_2}{a_1}{a_3}}}} + "
+              L"{{t^{{i_4}{i_2}{i_3}{i_1}}_{{a_4}{a_2}{a_3}{a_1}}}} + "
+              L"{{t^{{i_4}{i_3}{i_1}{i_2}}_{{a_4}{a_3}{a_1}{a_2}}}} + "
+              L"{{t^{{i_4}{i_3}{i_2}{i_1}}_{{a_4}{a_3}{a_2}{a_1}}}}\\right) }");
     }
   }
 
