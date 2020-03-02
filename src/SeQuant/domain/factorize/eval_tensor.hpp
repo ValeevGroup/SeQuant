@@ -1,6 +1,9 @@
 #ifndef SEQUANT_FACTORIZER_EVAL_TENSOR_HPP
 #define SEQUANT_FACTORIZER_EVAL_TENSOR_HPP
 
+#include <boost/any.hpp>
+#include <memory>
+
 #include "eval_tensor_fwd.hpp"
 
 namespace sequant::factorize {
@@ -40,10 +43,10 @@ class EvalTensor {
   virtual ~EvalTensor() = default;
 
   /// Setter method of the indices_ field.
-  void set_indices(const IndexLabelContainer &);
+  void set_indices(const IndexLabelContainer&);
 
   /// Getter method of the indices_ field.
-  const IndexLabelContainer &get_indices() const;
+  const IndexLabelContainer& get_indices() const;
 
   /// Setter method of the hash_value_ field.
   void set_hash_value(HashType);
@@ -59,6 +62,76 @@ class EvalTensor {
 
   /// Check if this is the end of the evaluation.
   virtual bool is_leaf() const = 0;
+};
+
+///
+/// Non-leaf type EvalTensor node in a binary evaluation of the
+/// sequant::Expr at some context.
+///
+/// @author Bimal Gaudel
+/// @version Feb 2020
+///
+class EvalTensorIntermediate : public EvalTensor {
+ private:
+  /// Evaluation node to the left.
+  std::shared_ptr<EvalTensor> left_tensor_ptr_{nullptr};
+
+  /// Evaluation node to the right
+  std::shared_ptr<EvalTensor> right_tensor_ptr_{nullptr};
+
+  /// The type of the binary evaluation.
+  Operation op_type_;
+
+ public:
+  /// @return false
+  bool is_leaf() const override;
+
+  /// Setter method for the left evaluation node.
+  void set_left_ptr(const std::shared_ptr<EvalTensor>&);
+
+  /// Getter method for the left evaluation node.
+  const EvalTensorPtr& get_left_tensor() const;
+
+  /// Setter method for the right evaluation node.
+  void set_right_ptr(const std::shared_ptr<EvalTensor>&);
+
+  /// Getter method for the left evaluation node.
+  const EvalTensorPtr& get_right_tensor() const;
+
+  /// Setter method for the operation type.
+  /// @param op An Operation.
+  void set_operation(Operation op);
+
+  /// Getter method for the operation type.
+  /// @return Operation for this intermediate tensor.
+  const Operation get_operation() const;
+};
+
+///
+/// The leaf node of the EvalTensor tree.
+///
+/// Leaf type evaluations have an access to the appropriate data-tensor object
+/// provided during evaluation. Consequently, evaluation should simply return
+/// the data pointed by this EvalTensorLeaf.
+///
+/// @author Bimal Gaudel
+/// @version Feb 2020
+///
+class EvalTensorLeaf : public EvalTensor {
+ private:
+  /// The data-tensor pointer assigned during the evaluation time based on this
+  /// EvalTensorLeaf's hash value. Eg. std::shared_ptr<btas::Tensor<double>>
+  /// when using BTAS backend. See: https://github.com/BTAS/BTAS
+  std::shared_ptr<boost::any> dtensor_ptr_{nullptr};
+
+ public:
+  /// Setter method for the dtensor_ptr_;
+  /// @param dtensor_ptr A shared_ptr to the data-tensor associated with this
+  /// leaf tensor.
+  void set_dtensor_ptr(const std::shared_ptr<boost::any>& dtensor_ptr);
+
+  /// @return True.
+  bool is_leaf() const override;
 };
 
 }  // namespace sequant::factorize

@@ -9,9 +9,9 @@ namespace sequant::factorize {
 
 using HashType = size_t;
 
-using IndexLabelContainer = container::svector<std::wstring_view>;
+using IndexLabelContainer = container::svector<std::wstring_view, 4>;
 
-using OpsCount = long long;
+using OpsCount = unsigned long long;
 
 class EvalTensor;
 

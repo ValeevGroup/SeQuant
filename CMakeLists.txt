@@ -147,12 +147,10 @@ add_library(factorizer
         src/SeQuant/domain/factorize/eval_tensor_fwd.hpp
         src/SeQuant/domain/factorize/eval_tensor.hpp
         src/SeQuant/domain/factorize/eval_tensor.cpp
-        src/SeQuant/domain/factorize/leaf_eval_tensor.hpp
-        src/SeQuant/domain/factorize/leaf_eval_tensor.cpp
-        src/SeQuant/domain/factorize/intermediate_eval_tensor.hpp
-        src/SeQuant/domain/factorize/intermediate_eval_tensor.cpp
-        src/SeQuant/domain/factorize/eval_tree_builder.hpp
-        src/SeQuant/domain/factorize/eval_tree_builder.cpp
+        src/SeQuant/domain/factorize/eval_tensor_builder.hpp
+        src/SeQuant/domain/factorize/eval_tensor_builder.cpp
+        src/SeQuant/domain/factorize/factorizer.hpp
+        src/SeQuant/domain/factorize/factorizer.cpp
         )
 target_include_directories(factorizer PUBLIC
         $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
@@ -160,16 +158,16 @@ target_include_directories(factorizer PUBLIC
 target_link_libraries(factorizer PUBLIC SeQuant)
 
 set(utests_src
-        tests/unit/test_space.cpp
-        tests/unit/test_index.cpp
-        tests/unit/test_op.cpp
-        tests/unit/test_wick.cpp
-        tests/unit/test_tensor.cpp
-        tests/unit/test_bliss.cpp
-        tests/unit/test_expr.cpp
-        tests/unit/test_iterator.cpp
-        tests/unit/test_tensor_network.cpp
-        tests/unit/test_mbpt.cpp
+        # tests/unit/test_space.cpp
+        # tests/unit/test_index.cpp
+        # tests/unit/test_op.cpp
+        # tests/unit/test_wick.cpp
+        # tests/unit/test_tensor.cpp
+        # tests/unit/test_bliss.cpp
+        # tests/unit/test_expr.cpp
+        # tests/unit/test_iterator.cpp
+        # tests/unit/test_tensor_network.cpp
+        # tests/unit/test_mbpt.cpp
         #### unit tests for factorization
         tests/unit/test_path_tree.cpp)
 

@@ -9,7 +9,7 @@
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 #include <SeQuant/domain/mbpt/sr/sr.hpp>
-#include <SeQuant/domain/factorize/factorizer.hpp>
+//#include <SeQuant/domain/factorize/factorizer.hpp>
 
 // TODO
   using namespace sequant;

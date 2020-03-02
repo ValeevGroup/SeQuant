@@ -1,10 +1,8 @@
-#include "eval_tree_builder.hpp"
-#include "eval_tensor_fwd.hpp"
-#include "intermediate_eval_tensor.hpp"
-#include "leaf_eval_tensor.hpp"
+#include "eval_tensor_builder.hpp"
+#include "eval_tensor.hpp"
 #include "path_tree.hpp"
 
-#include <SeQuant/core/expr_fwd.hpp>
+#include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <boost/functional/hash.hpp>
 
@@ -12,18 +10,33 @@
 
 namespace sequant::factorize {
 
-/// Getter for the built EvalTree.
+// ctor
+EvalTreeBuilder::EvalTreeBuilder(bool complex_tensor_data)
+    : complex_tensor_data{complex_tensor_data} {}
+
 const EvalTensorPtr& EvalTreeBuilder::get_eval_tree() const {
   return eval_tree_;
 }
 
-EvalTensorPtr EvalTreeBuilder::build_leaf(const ExprPtr& expr,
-                                          bool real_valued) {
+const EvalTensorPtr EvalTreeBuilder::build_from_product(
+    const ProductPtr& prod_ptr, const PathTreePtr& path) const {
+
+  const auto& prod = prod_ptr->as<Product>();
+
+  // if the path is leaf, return a leaf type eval tensor 
+  if (path->is_leaf()) return build_leaf(prod.factor(path->get_label()));
+
+  // else recursively generate an intermediate eval tensor
+  auto imed_prod = std::make_shared<EvalTensorIntermediate>();
+  // imed_prod->set_left_ptr(build_from_product(prod_ptr, path->
+}
+
+const EvalTensorPtr EvalTreeBuilder::build_leaf(const ExprPtr& expr) const {
   auto& tnsr = expr->as<Tensor>();
 
   // if expr references to a real valued tensor check if swapping bra and ket
   // labels is required else set as not required
-  bool swap_bk = real_valued ? swap_bra_ket_labels(expr) : false;
+  bool swap_bk = swap_bra_ket_labels(expr);
 
   // get the labels of indices in bra and ket
   IndexLabelContainer bra_index_labels, ket_index_labels;
@@ -39,7 +52,7 @@ EvalTensorPtr EvalTreeBuilder::build_leaf(const ExprPtr& expr,
             std::back_inserter(bra_index_labels));
 
   // create an object to return
-  auto leaf_tensor_ptr = std::make_shared<LeafEvalTensor>();
+  auto leaf_tensor_ptr = std::make_shared<EvalTensorLeaf>();
   // set indices of the object
   leaf_tensor_ptr->set_indices(bra_index_labels);
   // set hash value of the object
@@ -48,9 +61,9 @@ EvalTensorPtr EvalTreeBuilder::build_leaf(const ExprPtr& expr,
   return leaf_tensor_ptr;
 }
 
-EvalTensorPtr EvalTreeBuilder::build_intermediate(const EvalTensorPtr& ltensor,
-                                                  const EvalTensorPtr& rtensor,
-                                                  Operation op) {
+const EvalTensorPtr EvalTreeBuilder::build_intermediate(
+    const EvalTensorPtr& ltensor, const EvalTensorPtr& rtensor,
+    Operation op) const {
   if ((op == Operation::SUM) &&
       (ltensor->get_indices() != rtensor->get_indices())) {
     throw std::domain_error(
@@ -58,7 +71,7 @@ EvalTensorPtr EvalTreeBuilder::build_intermediate(const EvalTensorPtr& ltensor,
   }
 
   // create the intermediate
-  auto imed = std::make_shared<IntermediateEvalTensor>();
+  auto imed = std::make_shared<EvalTensorIntermediate>();
 
   // set left and right tensors
   imed->set_left_ptr(ltensor);
@@ -92,7 +105,7 @@ EvalTensorPtr EvalTreeBuilder::build_intermediate(const EvalTensorPtr& ltensor,
   return imed;
 }
 
-HashType EvalTreeBuilder::hash_leaf(const ExprPtr& expr, bool swap_bk) {
+HashType EvalTreeBuilder::hash_leaf(const ExprPtr& expr, bool swap_bk) const {
   auto& tnsr = expr->as<Tensor>();
   HashType leaf_hash_value;
 
@@ -123,14 +136,15 @@ HashType EvalTreeBuilder::hash_leaf(const ExprPtr& expr, bool swap_bk) {
   return leaf_hash_value;
 }
 
-HashType EvalTreeBuilder::hash_intermediate(const EvalTensorPtr& evtensor) {
+HashType EvalTreeBuilder::hash_intermediate(
+    const EvalTensorPtr& evtensor) const {
   // intermediate is hashed by the type of operation(sum, prod, etc.)
   // and the contracting/non-contracting index positions of the left and
   // the right tensor indices.
   // index positions are size_t by default
   // to combine the hashes cast Operation type to size_t as well
 
-  auto imed_ptr = std::dynamic_pointer_cast<IntermediateEvalTensor>(evtensor);
+  auto imed_ptr = std::dynamic_pointer_cast<EvalTensorIntermediate>(evtensor);
 
   boost::hash<size_t> number_hasher;
   HashType imed_hash_value;
@@ -152,13 +166,13 @@ HashType EvalTreeBuilder::hash_intermediate(const EvalTensorPtr& evtensor) {
     boost::hash_combine(imed_hash_value, lhash_value);
   }
 
-  // the Operation is product ie. a tensor contraction, not only the left and
+  // when Operation is product ie. a tensor contraction, not only the left and
   // the right tensor's hash values are important but also the information
-  // about which of their indices got  contracted is needed to uniquely
+  // about which of their indices got contracted is needed to uniquely
   // identify such an evaluation
   if (imed_ptr->get_operation() == Operation::PRODUCT) {
-    // a lambda expression that combines the hashes of the uncontracting indices
-    // of right or left tensor
+    // a lambda expression that combines the hashes of the non-contracting
+    // indices of right or left tensor
     auto index_hash_combiner = [&](const EvalTensorPtr& lr_tensor) {
       // iterate through the imed_ptr indices
       for (const auto& idx : imed_ptr->get_indices()) {
@@ -175,8 +189,11 @@ HashType EvalTreeBuilder::hash_intermediate(const EvalTensorPtr& evtensor) {
           boost::hash_combine(imed_hash_value, number_hasher(i));
         }
       }
-    };
+    };  // lambda function index_hash_combiner
 
+    // when the same contraction occurs with left tensor switched to the right
+    // we should obtain the same hash value. ie hashing is agnostic to the order
+    // of the two contracting tensors
     if (lhash_value < rhash_value) {
       index_hash_combiner(imed_ptr->get_left_tensor());
       index_hash_combiner(imed_ptr->get_right_tensor());
@@ -185,22 +202,41 @@ HashType EvalTreeBuilder::hash_intermediate(const EvalTensorPtr& evtensor) {
       index_hash_combiner(imed_ptr->get_left_tensor());
     }
   }  // done combining hashes for product type evaluation
+
   return imed_hash_value;
 }
 
-bool EvalTreeBuilder::swap_bra_ket_labels(const ExprPtr& expr) {
+bool EvalTreeBuilder::swap_bra_ket_labels(const ExprPtr& expr) const {
   auto& tnsr = expr->as<Tensor>();
+
+  // non-symmetric and bra-kets with invalid symmetries are handled
+  if ((tnsr.braket_symmetry() == BraKetSymmetry::nonsymm) ||
+      (tnsr.braket_symmetry() == BraKetSymmetry::invalid)) {
+    return false;
+  }
+
+  // when working with complex tensors if it doesn't have symmetric bra-ket
+  if (complex_tensor_data && (tnsr.braket_symmetry() != BraKetSymmetry::symm)) {
+    return false;
+  }
 
   if (tnsr.bra_rank() != tnsr.ket_rank())
     throw std::domain_error(
         "Only equal bra_rank() and ket_rank() are handled for now!");
+  //
 
   for (auto i = 0; i < tnsr.rank(); ++i) {
-    if (tnsr.bra()[i].label()[0] == tnsr.ket()[i].label()[0]) continue;
-    if (!(tnsr.bra()[i].label() > tnsr.ket()[i].label())) {
-      return true;
-    }  // if
-  }    // for
+    // if bra index and ket index at the same positions
+    // in bra and ket have the same index space then we
+    // don't know yet if we should do the swapping, so
+    if (tnsr.bra()[i].space() == tnsr.ket()[i].space()) continue;
+
+    // for the corresponding positions if the index space value of the ket
+    // index is lower than that of the bra index, then swapping should be done
+    if (tnsr.ket()[i].space() < tnsr.bra()[i].space()) return true;
+  }
+
+  // survived this far implies no swapping is needed
   return false;
 }
 

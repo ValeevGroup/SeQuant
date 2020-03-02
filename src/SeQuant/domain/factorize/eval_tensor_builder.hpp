@@ -1,7 +1,7 @@
-#ifndef SEQUANT_FACTORIZE_EVAL_TREE_BUILDER_HPP
-#define SEQUANT_FACTORIZE_EVAL_TREE_BUILDER_HPP
+#ifndef SEQUANT_FACTORIZE_EVAL_TENSOR_BUILDER_HPP
+#define SEQUANT_FACTORIZE_EVAL_TENSOR_BUILDER_HPP
 
-#include <SeQuant/core/expr_fwd.hpp>
+#include <SeQuant/core/expr.hpp>
 
 #include "eval_tensor_fwd.hpp"
 #include "path_tree.hpp"
@@ -18,40 +18,44 @@ class EvalTreeBuilder {
   /// The evaluation tree built by this builder.
   EvalTensorPtr eval_tree_{nullptr};
 
+  /// By default assume the tensor data is real -- not complex.
+  const bool complex_tensor_data{false};
+
  public:
-  /// Construct EvalTree from sequant Expr.
-  /// @param expr sequant ExprPtr to a sequant expression.
-  EvalTreeBuilder(const ExprPtr& expr);
+  /// Constructor.
+  /// @param complex_tensor_data false by default. Set to true when working with
+  /// complex-valued tensors.
+  EvalTreeBuilder(bool complex_tensor_data = false);
 
   /// Getter for the built EvalTree.
   /// @return EvalTensorPtr to the evaluation tree.
   const EvalTensorPtr& get_eval_tree() const;
 
   /// Build EvalTensor from a sequant Product.
-  /// @param expr ExprPtr to sequant Product.
-  /// @param path PathTreePtr that determines the sequence of evaluation.
+  /// @param prod ProductPtr to sequant Product.
+  /// @param path shared_ptr to PathTree that determines the sequence of
+  /// evaluation.
+  ///
   /// @return Evaluation tree pointer.
-  static EvalTensorPtr& build_from_product(const ExprPtr& expr,
-                                           const PathTreePtr& path);
+  const EvalTensorPtr build_from_product(const ProductPtr& prod,
+                                         const PathTreePtr& path) const;
 
   /// Build leaf EvalTensor from sequant tensor.
   ///
   /// @param expr sequant ExprPtr to a sequant Tensor.
-  /// @param real_valued Whether to assume the data-tensor is real valued. True
-  /// by default, set false if the the data tensor should be assumed to be
-  /// complex valued.
-  ///
   /// @return EvalTensorPtr to a EvalTensor.
-  static EvalTensorPtr build_leaf(const ExprPtr& expr, bool real_valued = true);
+  const EvalTensorPtr build_leaf(const ExprPtr& expr) const;
 
   /// Build intermediate tensor from sequant expr.
   ///
   /// @param ltensor The left evaluation tensor.
   /// @param rtensor The right evaluation tensor.
   /// @return EvalTensorPtr to a EvalTensor.
-  static EvalTensorPtr build_intermediate(const EvalTensorPtr& ltensor,
-                                          const EvalTensorPtr& rtensor,
-                                          Operation op);
+  /// @throw domain_error when the indices do not match for sum type evaluations
+  /// of two tensors.
+  const EvalTensorPtr build_intermediate(const EvalTensorPtr& ltensor,
+                                         const EvalTensorPtr& rtensor,
+                                         Operation op) const;
 
   /// Hash leaf tensor.
   ///
@@ -60,14 +64,14 @@ class EvalTreeBuilder {
   /// true while hashing real-valued tensors.
   /// @return Hash value of the tensor based on its kind and the index space of
   /// its bra and ket indices.
-  static HashType hash_leaf(const ExprPtr& expr, bool swap_bra_ket_labels);
+  HashType hash_leaf(const ExprPtr& expr, bool swap_bra_ket_labels) const;
 
   /// Hash intermediate tensor
   ///
   /// @param expr sequant ExprPtr to a sequant expression.
   /// @return Hash value of the tensor based on its kind and the index space of
   /// its bra and ket indices.
-  static HashType hash_intermediate(const EvalTensorPtr& expr);
+  HashType hash_intermediate(const EvalTensorPtr& expr) const;
 
   /// Should we swap the whole bra indices with the whole ket indices?
   ///
@@ -76,9 +80,9 @@ class EvalTreeBuilder {
   /// @param expr sequant ExprPtr to a sequant expression.
   /// @return True if swapping is necessary.
   /// @throw domain_error if bra rank and ket rank do not match.
-  static bool swap_bra_ket_labels(const ExprPtr& expr);
+  bool swap_bra_ket_labels(const ExprPtr& expr) const;
 };
 
 }  // namespace sequant::factorize
 
-#endif /* ifndef SEQUANT_FACTORIZE_EVAL_TREE_BUILDER_HPP */
+#endif /* ifndef SEQUANT_FACTORIZE_EVAL_TENSOR_BUILDER_HPP */

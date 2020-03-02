@@ -41,15 +41,15 @@ class PathTree;
 using PathTreePtr = std::shared_ptr<PathTree>;
 
 ///
-/// PathTree is a tree data structure where each node has a size_t data. The
-/// size_t data represents the position of a tensor expression in a tensor
-/// network.
+/// PathTree is a tree data structure where each node has a size_t type data
+/// also called a label herein. The label represents the position of a
+/// tensor expression in a tensor network.
 ///
 /// Eg.  (T_i * T_j * T_k * T_l * T_m) is a tensor network of tensor
 /// contractions, then the positions of the tensors are 0..4 for T_i..T_m.
 /// So the corresponding path_tree will be (0, 1, 2, 3).
 ///
-/// (T_i * T_j * T_k) * T_l * T_m) is yet another tensor network of tensor
+/// ((T_i * T_j * T_k) * T_l * T_m) is yet another tensor network of tensor
 /// contractions where
 ///      Index
 ///         0 -> child path_tree (0 -> T_i
@@ -68,12 +68,12 @@ class PathTree {
 
   /// Construct PathTree from a size_t label.
   ///
-  /// @param size_t The label stored at the root node.
+  /// @param label The label stored at the root node.
   ///
-  explicit PathTree(size_t);
+  explicit PathTree(size_t label);
 
   /// Destructor is the default destructor.
-  ~PathTree() = default;
+  virtual ~PathTree() = default;
 
   /// Getter for the label_ field.
   size_t get_label() const;
