@@ -162,7 +162,7 @@ TEST_CASE("Spin") {
 
     using boost::hash_value;
     for(auto&& term : *result){
-      std::wcout << hash_value(term) << " " << to_latex(term) << "\n";
+      std::cout << hash_value(term->as<Product>()) << "\n";
     }
     REQUIRE(
         to_latex(result) ==
