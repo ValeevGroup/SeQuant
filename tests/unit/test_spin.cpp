@@ -159,6 +159,11 @@ TEST_CASE("Spin") {
     canonicalize(result);
     REQUIRE(result->is<Sum>());
     REQUIRE(result->size() == 5);
+
+    using boost::hash_value;
+    for(auto&& term : *result){
+      std::wcout << hash_value(term) << " " << to_latex(term) << "\n";
+    }
     REQUIRE(
         to_latex(result) ==
         L"{ "
