@@ -125,12 +125,12 @@ inline void range(std::size_t& seed, It first, It last) {
 }
 
 template <typename T>
-struct _<T, std::enable_if_t<!(detail::has_boost_hash_value_v<T> || detail::has_hash_value_v<T>) && meta::is_range_v<T>>> {
+struct _<T, std::enable_if_t<!(detail::has_hash_value_v<T>) && meta::is_range_v<T>>> {
   std::size_t operator()(T const& v) const { return range(begin(v), end(v)); }
 };
 
 template <typename T>
-struct _<T, std::enable_if_t<!(!(detail::has_boost_hash_value_v<T> || detail::has_hash_value_v<T>) && meta::is_range_v<T>)>> {
+struct _<T, std::enable_if_t<!(!(detail::has_hash_value_v<T>) && meta::is_range_v<T>)>> {
   std::size_t operator()(T const& v) const {
     using boost::hash_value;
     return hash_value(v);
