@@ -303,7 +303,6 @@ bool has_tensor_label(const ExprPtr& expr, std::wstring label) {
       return false;
   };
 
-  // Assuming that 'A' or 'P' is ALWAYS the first tensor in a product
   auto check_product = [&](const Product& product) {
     bool result = false;
     for (auto&& term : product) {
