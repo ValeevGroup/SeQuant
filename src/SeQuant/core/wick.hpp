@@ -787,7 +787,7 @@ class WickTheorem {
     return false;
   }
 
-  static std::shared_ptr<Expr> contract(
+  static ExprPtr contract(
       const Op<S> &left, const Op<S> &right,
       Vacuum vacuum = get_default_context().vacuum()) {
     assert(can_contract(left, right, vacuum));

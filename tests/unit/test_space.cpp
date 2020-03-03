@@ -4,7 +4,7 @@
 
 #include "catch.hpp"
 
-#include "../../src/SeQuant/core/space.hpp"
+#include "SeQuant/core/space.hpp"
 
 TEST_CASE("IndexSpace", "[elements]") {
   using namespace sequant;
@@ -45,6 +45,7 @@ TEST_CASE("IndexSpace", "[elements]") {
   }
 
   SECTION("ordering") {
+    REQUIRE(!(IndexSpace::instance(L"i") < IndexSpace::instance(L"i")));
     REQUIRE(IndexSpace::instance(L"i") < IndexSpace::instance(L"a"));
     REQUIRE(!(IndexSpace::instance(L"a") < IndexSpace::instance(L"i")));
     REQUIRE(IndexSpace::instance(L"i") < IndexSpace::instance(L"m"));
@@ -53,6 +54,27 @@ TEST_CASE("IndexSpace", "[elements]") {
     REQUIRE(IndexSpace::instance(L"m") < IndexSpace::instance(L"p"));
     REQUIRE(IndexSpace::instance(L"a") < IndexSpace::instance(L"p"));
     REQUIRE(IndexSpace::instance(L"p") < IndexSpace::instance(L"⍺"));
+
+    // test ordering with quantum numbers
+    {
+      auto i = IndexSpace::instance(L"i");
+      auto a = IndexSpace::instance(L"a");
+      auto iA = IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::alpha);
+      auto iB = IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::beta);
+      auto aA = IndexSpace::instance(IndexSpace::active_unoccupied, IndexSpace::alpha);
+      auto aB = IndexSpace::instance(IndexSpace::active_unoccupied, IndexSpace::beta);
+
+      REQUIRE(iA < aA);
+      REQUIRE(iB < aB);
+      REQUIRE(iA < aB);
+      REQUIRE(iA < aB);
+      REQUIRE(iA < iB);
+      REQUIRE(aA < aB);
+      REQUIRE(!(iA < iA));
+      REQUIRE(i < iA);
+      REQUIRE(i < iB);
+
+    }
   }
 
   SECTION("set operations") {

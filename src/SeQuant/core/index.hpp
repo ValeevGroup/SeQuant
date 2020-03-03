@@ -14,10 +14,9 @@
 
 #include <range/v3/all.hpp>
 
-#include <boost/container_hash/hash.hpp>
-
 #include "attr.hpp"
 #include "container.hpp"
+#include "hash.hpp"
 #include "space.hpp"
 #include "tag.hpp"
 
@@ -33,15 +32,15 @@ using IndexList = std::initializer_list<Index>;
 /// @brief Index = label + IndexSpace
 /// @note Unlike SeQuant1's ParticleIndex, this Index supports dependencies
 /// between indices to be able to express
-///       e.g. hierarchical partitioning of index spaces or hiearchical nesting
+///       e.g. hierarchical partitioning of index spaces or hierarchical nesting
 ///       of spaces
 /// @note label has format "label_index" where "label" is a string of characters
 /// excluding '_', and "index"
 ///       is an integer less than the value returned by min_tmp_label() .
 class Index : public Taggable {
-
-  static auto& tmp_index_accessor() {
-    // initialized so that the first call to next_tmp_index will return min_tmp_index()
+  static auto &tmp_index_accessor() {
+    // initialized so that the first call to next_tmp_index will return
+    // min_tmp_index()
     static std::atomic<std::size_t> index = min_tmp_index() - 1;
     return index;
   }
@@ -214,6 +213,20 @@ class Index : public Taggable {
     return result;
   }
 
+  /// creates a globally non-unique index in space @c space. The label of the
+  /// resulting index = @c IndexSpace::base_key(space) + '_' + @c
+  /// subscript_label.
+  /// \param space an IndexSpace object
+  /// \param subscript_label any std::wstring object
+  /// \return a non-unique index in space @c space with label @c subscript_label
+  static Index make_label_index(const IndexSpace &space,
+                                const std::wstring &subscript_label) {
+    Index result;
+    result.label_ = IndexSpace::base_key(space) + L'_' + subscript_label;
+    result.space_ = space;
+    return result;
+  }
+
   /// @return the label
   /// @warning this does not include the proto index labels, use
   /// Index::full_label() instead
@@ -275,12 +288,13 @@ class Index : public Taggable {
     return result;
   }
 
-  template <typename ... Attrs> std::wstring to_wolfram(Attrs && ... attrs) const {
+  template <typename... Attrs>
+  std::wstring to_wolfram(Attrs &&... attrs) const {
     auto protect_subscript = [](const std::wstring_view str) {
       auto subsc_pos = str.find(L'_');
       if (subsc_pos == std::wstring_view::npos)
         return std::wstring(str);
-      else{
+      else {
         assert(subsc_pos + 1 < str.size());
         std::wstring result = L"\\!\\(\\*SubscriptBox[\\(";
         result += std::wstring(str.substr(0, subsc_pos));
@@ -312,8 +326,8 @@ class Index : public Taggable {
         proto_indices_ | ranges::views::transform([](const Index &idx) {
           return int64_t(idx.space().attr());
         });
-    return boost::hash_range(ranges::begin(space_attr_view),
-                             ranges::end(space_attr_view));
+    return hash::range(ranges::begin(space_attr_view),
+                       ranges::end(space_attr_view));
   }
 
   /// Color of an Index = hashed IndexSpace + IndexSpace objects of the
@@ -322,10 +336,10 @@ class Index : public Taggable {
   auto color() const {
     if (has_proto_indices()) {
       auto result = proto_indices_color();
-      boost::hash_combine(result, int64_t(space().attr()));
+      hash::combine(result, int64_t(space().attr()));
       return result;
     } else {
-      auto result = boost::hash_value(int64_t(space().attr()));
+      auto result = hash::value(int64_t(space().attr()));
       return result;
     }
   }
@@ -335,15 +349,13 @@ class Index : public Taggable {
 
   /// @return a unique temporary index, its value is equal to or greater than
   /// that returned by min_tmp_index()
-  static std::size_t next_tmp_index() {
-    return ++tmp_index_accessor();
-  }
+  static std::size_t next_tmp_index() { return ++tmp_index_accessor(); }
 
-  /// resets the temporaty index counter so that the next call to next_tmp_index() will return the value returned by min_tmp_index()
-  /// @warning should only to be used when reproducibility matters (e.g. unit testing)
-  static void reset_tmp_index() {
-    tmp_index_accessor() = min_tmp_index() - 1;
-  }
+  /// resets the temporary index counter so that the next call to
+  /// next_tmp_index() will return the value returned by min_tmp_index()
+  /// @warning should only to be used when reproducibility matters (e.g. unit
+  /// testing)
+  static void reset_tmp_index() { tmp_index_accessor() = min_tmp_index() - 1; }
 
   /// @brief index replacement
   /// replaces this object with its image in the Index map.
@@ -677,13 +689,12 @@ class IndexFactory {
 
 /// @paramp[in] idx a const reference to an Index object
 /// @return the hash value of the object referred to by idx
-/// @note uses boost::hash_value
 inline auto hash_value(const Index &idx) {
   const auto &proto_indices = idx.proto_indices();
   using std::begin;
   using std::end;
-  auto val = boost::hash_range(begin(proto_indices), end(proto_indices));
-  boost::hash_combine(val, idx.label());
+  auto val = hash::range(begin(proto_indices), end(proto_indices));
+  hash::combine(val, idx.label());
   return val;
 }
 
@@ -698,26 +709,32 @@ auto make_indices(WstrList index_labels = {}) {
 
 class IndexRegistry {
  public:
-  using Record = std::tuple<std::function<long(const Index&)>>;  // index record = {sizer}
+  using Record =
+      std::tuple<std::function<long(const Index &)>>;  // index record = {sizer}
 
   IndexRegistry() = default;
 
   /// updates an existing entry, or creates a new one if it does not exist
-  template <typename ... Args> void update(const Index& idx, Args&& ... args) {
+  template <typename... Args>
+  void update(const Index &idx, Args &&... args) {
     auto it = registry_.find(idx);
     if (it != registry_.end()) {
       registry_.erase(it);
     }
-    auto insertion_result = registry_.try_emplace(idx, std::forward<Args>(args)...);
+    auto insertion_result =
+        registry_.try_emplace(idx, std::forward<Args>(args)...);
   }
   /// creates a new entry
-  template <typename ... Args> void make(const Index& idx, Args&& ... args) {
-    auto insertion_result = registry_.try_emplace(idx, std::forward<Args>(args)...);
+  template <typename... Args>
+  void make(const Index &idx, Args &&... args) {
+    auto insertion_result =
+        registry_.try_emplace(idx, std::forward<Args>(args)...);
     assert(insertion_result.second);
   }
 
-  /// retrieves the pointer to the Record object for Index @idx , or nullptr if not found
-  const Record* retrieve(const Index& idx) const {
+  /// retrieves the pointer to the Record object for Index @idx , or nullptr if
+  /// not found
+  const Record *retrieve(const Index &idx) const {
     auto result = registry_.find(idx);
     if (result != registry_.end())
       return &(result->second);
@@ -726,7 +743,7 @@ class IndexRegistry {
   }
 
  private:
-  container::map<Index,Record> registry_;
+  container::map<Index, Record> registry_;
 };
 
 }  // namespace sequant

@@ -21,7 +21,7 @@ if [ "$CXX" = "g++" ]; then
 else
     export CC=/usr/bin/clang-$CLANG_VERSION
     export CXX=/usr/bin/clang++-$CLANG_VERSION
-    export EXTRAFLAGS="-Wno-unused-command-line-argument -stdlib=libc++"
+    export EXTRAFLAGS="-Wno-unused-command-line-argument"
 fi
 
 echo $($CC --version)
@@ -39,7 +39,7 @@ mkdir -p SeQuant
 cd SeQuant
 
 # configure CodeCov only for g++-8 debug build
-if [ "$BUILD_TYPE" = "Debug" ] && [ "$GCC_VERSION" = 8 ]; then
+if [ "$BUILD_TYPE" = "Debug" ] && [ "$GCC_VERSION" = 8 ] && [ "$CXX" = "g++" ]; then
     export CODECOVCXXFLAGS="--coverage -O0"
 fi
 
