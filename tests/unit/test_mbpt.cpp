@@ -2,9 +2,9 @@
 // Created by Eduard Valeyev on 2019-02-19.
 //
 
-#include "../../src/SeQuant/core/timer.hpp"
-#include "../../src/SeQuant/domain/mbpt/sr/sr.hpp"
-#include "../../src/SeQuant/core/tensor.hpp"
+#include "SeQuant/core/timer.hpp"
+#include "SeQuant/domain/mbpt/sr/sr.hpp"
+#include "SeQuant/core/tensor.hpp"
 #include "catch.hpp"
 
 TEST_CASE("MBPT", "[mbpt]") {

@@ -1,6 +1,6 @@
 #! /bin/sh
 
-export BOOST_VERSION=1_69_0
+export BOOST_VERSION=1_72_0
 
 # Exit on error
 set -ev
@@ -9,7 +9,7 @@ set -ev
 export INSTALL_DIR=${INSTALL_PREFIX}/boost_${BOOST_VERSION}
 if [ ! -d "${INSTALL_DIR}" ]; then
     cd ${INSTALL_PREFIX}
-    wget -q https://dl.bintray.com/boostorg/release/1.69.0/source/boost_${BOOST_VERSION}.tar.bz2
+    wget -q https://dl.bintray.com/boostorg/release/1.72.0/source/boost_${BOOST_VERSION}.tar.bz2
     tar -xjf boost_${BOOST_VERSION}.tar.bz2
     # make shortcut
     rm -f boost
