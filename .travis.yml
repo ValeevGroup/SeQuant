@@ -94,7 +94,6 @@ matrix:
             - clang-9
             - libc++-9-dev
             - libc++abi-9-dev
-    - compiler: clang
     - compiler: gcc
       env: GCC_VERSION=8 BUILD_TYPE=Debug
       addons:
