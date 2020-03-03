@@ -21,7 +21,7 @@ if [ "$CXX" = "g++" ]; then
 else
     export CC=/usr/bin/clang-$CLANG_VERSION
     export CXX=/usr/bin/clang++-$CLANG_VERSION
-    export EXTRAFLAGS="-Wno-unused-command-line-argument -stdlib=libc++"
+    export EXTRAFLAGS="-Wno-unused-command-line-argument"
 fi
 
 echo $($CC --version)
