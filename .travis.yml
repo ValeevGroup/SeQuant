@@ -75,12 +75,15 @@ matrix:
           sources:
             - sourceline: 'deb http://apt.llvm.org/bionic/ llvm-toolchain-bionic-9 main'
               key_url: 'https://apt.llvm.org/llvm-snapshot.gpg.key'
+            - sourceline: 'deb https://apt.repos.intel.com/tbb all main'
+              key_url: 'https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS-2019.PUB'
           packages:
             - *base_packages
             - clang-9
             - libc++-9-dev
             - libc++abi-9-dev
             - g++-8
+            - intel-tbb-2019.8-075
     - compiler: clang
       env: CLANG_VERSION=9 BUILD_TYPE=Release
       addons:
@@ -88,11 +91,15 @@ matrix:
           sources:
             - sourceline: 'deb http://apt.llvm.org/bionic/ llvm-toolchain-bionic-9 main'
               key_url: 'https://apt.llvm.org/llvm-snapshot.gpg.key'
+            - sourceline: 'deb https://apt.repos.intel.com/tbb all main'
+              key_url: 'https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS-2019.PUB'
           packages:
             - *base_packages
             - clang-9
             - libc++-9-dev
             - libc++abi-9-dev
+            - g++-8
+            - intel-tbb-2019.8-075
     - compiler: gcc
       env: GCC_VERSION=8 BUILD_TYPE=Debug
       addons:
