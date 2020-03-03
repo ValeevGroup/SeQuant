@@ -39,7 +39,7 @@ mkdir -p SeQuant
 cd SeQuant
 
 # configure CodeCov only for g++-8 debug build
-if [ "$BUILD_TYPE" = "Debug" ] && [ "$GCC_VERSION" = 8 ]; then
+if [ "$BUILD_TYPE" = "Debug" ] && [ "$GCC_VERSION" = 8 ] && [ "$CXX" = "g++" ]; then
     export CODECOVCXXFLAGS="--coverage -O0"
 fi
 
