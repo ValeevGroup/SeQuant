@@ -160,9 +160,11 @@ TEST_CASE("Spin") {
     REQUIRE(result->is<Sum>());
     REQUIRE(result->size() == 5);
 
-    using boost::hash_value;
     for(auto&& term : *result){
-      std::cout << hash_value(term->as<Product>()) << "\n";
+      auto&& product = term->as<Product>();
+      std::cout << hash::value(product) << "\n";
+      for(auto&& factor: product.factors())
+        std::cout << "  " << hash::value(factor) << "\n";
     }
     REQUIRE(
         to_latex(result) ==

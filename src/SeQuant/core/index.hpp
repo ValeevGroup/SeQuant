@@ -14,10 +14,9 @@
 
 #include <range/v3/all.hpp>
 
-#include <boost/container_hash/hash.hpp>
-
 #include "attr.hpp"
 #include "container.hpp"
+#include "hash.hpp"
 #include "space.hpp"
 #include "tag.hpp"
 
@@ -327,8 +326,8 @@ class Index : public Taggable {
         proto_indices_ | ranges::views::transform([](const Index &idx) {
           return int64_t(idx.space().attr());
         });
-    return boost::hash_range(ranges::begin(space_attr_view),
-                             ranges::end(space_attr_view));
+    return hash::range(ranges::begin(space_attr_view),
+                       ranges::end(space_attr_view));
   }
 
   /// Color of an Index = hashed IndexSpace + IndexSpace objects of the
@@ -337,10 +336,10 @@ class Index : public Taggable {
   auto color() const {
     if (has_proto_indices()) {
       auto result = proto_indices_color();
-      boost::hash_combine(result, int64_t(space().attr()));
+      hash::combine(result, int64_t(space().attr()));
       return result;
     } else {
-      auto result = boost::hash_value(int64_t(space().attr()));
+      auto result = hash::value(int64_t(space().attr()));
       return result;
     }
   }
@@ -690,13 +689,12 @@ class IndexFactory {
 
 /// @paramp[in] idx a const reference to an Index object
 /// @return the hash value of the object referred to by idx
-/// @note uses boost::hash_value
 inline auto hash_value(const Index &idx) {
   const auto &proto_indices = idx.proto_indices();
   using std::begin;
   using std::end;
-  auto val = boost::hash_range(begin(proto_indices), end(proto_indices));
-  boost::hash_combine(val, idx.label());
+  auto val = hash::range(begin(proto_indices), end(proto_indices));
+  hash::combine(val, idx.label());
   return val;
 }
 

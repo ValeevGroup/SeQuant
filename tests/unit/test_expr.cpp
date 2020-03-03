@@ -442,7 +442,6 @@ TEST_CASE("Expr", "[elements]") {
     const auto ex5_init =
         std::vector<std::shared_ptr<Constant>>{std::make_shared<Constant>(1.0), std::make_shared<Constant>(2.0),
                                                std::make_shared<Constant>(3.0)};
-    using boost::hash_value;
     REQUIRE_NOTHROW(hash_value(ex5_init));
     REQUIRE(hash_value(ex5_init) != hash_value(ex<Constant>(1)));
   }

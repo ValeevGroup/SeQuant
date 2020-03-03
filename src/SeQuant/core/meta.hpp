@@ -115,6 +115,24 @@ struct has_memfn_to_wolfram<T, std::void_t<decltype(static_cast<std::wstring>(st
 
 template<typename T> static constexpr bool has_memfn_to_wolfram_v = has_memfn_to_wolfram<T>::value;
 
+/// is_range
+struct not_this_one {}; // Tag type for detecting which begin/ end are being selected
+
+// Import begin/ end from std here so they are considered alongside the fallback (...) overloads in this namespace
+using std::begin;
+using std::end;
+
+not_this_one begin( ... );
+not_this_one end( ... );
+
+template <typename T>
+struct is_range {
+  static const bool value =
+      !std::is_same<decltype(begin(std::declval<T>())), not_this_one>::value &&
+      !std::is_same<decltype(end(std::declval<T>())), not_this_one>::value;
+};
+
+template<typename T> static constexpr bool is_range_v = is_range<T>::value;
 
 }  // namespace meta
 }  // namespace sequant

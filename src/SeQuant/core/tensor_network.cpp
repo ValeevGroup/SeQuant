@@ -441,7 +441,7 @@ TensorNetwork::make_bliss_graph() const {
     const auto tlabel = label(*t);
     vertex_labels.emplace_back(tlabel);
     vertex_type.emplace_back(VertexType::TensorCore);
-    const auto t_color = boost::hash_value(tlabel);
+    const auto t_color = hash::value(tlabel);
     static_assert(sizeof(t_color) == sizeof(unsigned long int));
     assert(nonreserved_color(t_color));
     vertex_color.push_back(t_color);

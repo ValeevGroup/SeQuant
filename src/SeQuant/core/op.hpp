@@ -9,12 +9,11 @@
 
 #include <range/v3/all.hpp>
 
-#include <boost/functional/hash_fwd.hpp>
-
 #include "abstract_tensor.hpp"
 #include "attr.hpp"
 #include "container.hpp"
 #include "expr.hpp"
+#include "hash.hpp"
 #include "hugenholtz.hpp"
 #include "index.hpp"
 #include "ranges.hpp"
@@ -109,11 +108,10 @@ inline bool operator<(const Op<S1> &op1, const Op<S2> &op2) {
 /// @tparam S a Statistics value specifying the operator statistics
 /// @paramp[in] op a const reference to an Op<S> object
 /// @return the hash value of the object referred to by @c op
-/// @note uses boost::hash_value
 template <Statistics S>
 inline auto hash_value(const Op<S> &op) {
   auto val = hash_value(op.index());
-  boost::hash_combine(val, op.action());
+  hash::combine(val, op.action());
   return val;
 }
 
@@ -681,7 +679,7 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
       using ranges::size;
       auto b = begin(sized_range);
       auto e = b + size(sized_range);
-      auto val = boost::hash_range(b, e);
+      auto val = hash::range(b, e);
       return val;
     };
     auto range_compare = [](const auto& sized_range1, const auto& sized_range2) {

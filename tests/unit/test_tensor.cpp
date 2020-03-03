@@ -83,6 +83,18 @@ TEST_CASE("Tensor", "[elements]") {
     REQUIRE(!t.ket()[1].tag().has_value());
   }  // SECTION("index transformation")
 
+  SECTION("hash") {
+    auto t1 = Tensor(L"F", {L"i_1"}, {L"i_2"});
+    size_t t1_hash;
+    REQUIRE_NOTHROW(t1_hash = hash_value(t1));
+
+    auto t2 = Tensor(L"F", {L"i_2"}, {L"i_1"});
+    size_t t2_hash;
+    REQUIRE_NOTHROW(t2_hash = hash_value(t2));
+    REQUIRE_NOTHROW(t1_hash != t2_hash);
+
+  }  // SECTION("hash")
+
   SECTION("latex") {
     auto t1 = Tensor(L"F", {L"i_1"}, {L"i_2"});
     REQUIRE(to_latex(t1) == L"{F^{{i_2}}_{{i_1}}}");

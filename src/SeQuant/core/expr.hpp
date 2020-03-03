@@ -15,7 +15,6 @@
 #include <range/v3/all.hpp>
 
 #include <boost/core/demangle.hpp>
-#include <boost/functional/hash.hpp>
 #include <boost/numeric/conversion/cast.hpp>
 
 #include "container.hpp"
@@ -592,7 +591,7 @@ class Constant : public Expr {
 
  private:
   hash_type memoizing_hash() const override {
-    hash_value_ = boost::hash_value(value_);
+    hash_value_ = hash::value(value_);
     return *hash_value_;
   }
 
@@ -856,8 +855,8 @@ class Product : public Expr {
         factors() |
         ranges::views::transform(
             [](const ExprPtr &ptr) -> const Expr & { return *ptr; });
-    hash_value_ = boost::hash_range(ranges::begin(deref_factors),
-                                    ranges::end(deref_factors));
+    hash_value_ = hash::range(ranges::begin(deref_factors),
+                              ranges::end(deref_factors));
     return *hash_value_;
   }
 
@@ -1113,8 +1112,8 @@ class Sum : public Expr {
         summands() |
         ranges::views::transform(
             [](const ExprPtr &ptr) -> const Expr & { return *ptr; });
-    hash_value_ = boost::hash_range(ranges::begin(deref_summands),
-                                    ranges::end(deref_summands));
+    hash_value_ = hash::range(ranges::begin(deref_summands),
+                              ranges::end(deref_summands));
     return *hash_value_;
   }
 
