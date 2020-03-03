@@ -14,7 +14,6 @@ addons:
       - liblapacke-dev
       - cmake
       - cmake-data
-      - libtbb-dev
       - lcov
 
 env:
@@ -111,24 +110,27 @@ matrix:
     - compiler: gcc
       env: GCC_VERSION=9 BUILD_TYPE=Debug
       addons:
+        apt:
           sources:
-            - ubuntu-toolchain-r-test
-            - sourceline: ppa:ubuntu-toolchain-r/test
-      apt:
+            - sourceline: 'ppa:ubuntu-toolchain-r/test'
+            - sourceline: 'deb https://apt.repos.intel.com/tbb all main'
+              key_url: 'https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS-2019.PUB'
           packages:
             - *base_packages
             - g++-9
+            - intel-tbb-2019.8-075
     - compiler: gcc
       env: GCC_VERSION=9 BUILD_TYPE=Release
       addons:
         apt:
           sources:
-            - ubuntu-toolchain-r-test
-            - sourceline: ppa:ubuntu-toolchain-r/test
+            - sourceline: 'ppa:ubuntu-toolchain-r/test'
+            - sourceline: 'deb https://apt.repos.intel.com/tbb all main'
+              key_url: 'https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS-2019.PUB'
           packages:
             - *base_packages
             - g++-9
-
+            - intel-tbb-2019.8-075
 
 before_install:
 - "env"
