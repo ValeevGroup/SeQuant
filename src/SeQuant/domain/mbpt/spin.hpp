@@ -9,8 +9,8 @@
 
 namespace sequant {
 
-/// @brief Applies index replacement to an expression pointer
-/// @param expr Expression pointer to use for transformation
+/// @brief Applies index replacement rules to an ExprPtr
+/// @param expr ExprPtr to transform
 /// @param index_replacements index replacement map
 /// @param scaling_factor to scale the result
 /// @return a substituted and scaled expression pointer
@@ -66,11 +66,11 @@ ExprPtr transform_expression(const ExprPtr& expr,
     return nullptr;
 }
 
-/// @brief Adds spins to indices in an expression using a map
+/// @brief Adds spins to indices in an expression with a replacement map
 /// @param expr an expression pointer
-/// @param index_replacements a map of pairs containing the index and its
-/// replacement
-/// @return expr the expression with substituted indices
+/// @param index_replacements a map of pairs containing the index and the
+/// corresponding replacement
+/// @return expr the ExprPtr with substituted indices
 ExprPtr append_spin(ExprPtr& expr, std::map<Index, Index>& index_replacements) {
   auto add_spin_to_tensor = [&](const Tensor& tensor) {
     auto spin_tensor = std::make_shared<Tensor>(tensor);
@@ -109,8 +109,8 @@ ExprPtr append_spin(ExprPtr& expr, std::map<Index, Index>& index_replacements) {
 }
 
 /// @brief Removes spin label from all indices in an expression
-/// @param expr an expression pointer with spin labels
-/// @return expr an expression pointer without spin labels
+/// @param expr an ExprPtr with spin indices
+/// @return expr an ExprPtr with spin labels removed
 ExprPtr remove_spin(ExprPtr& expr) {
   auto remove_spin_from_tensor = [&](const Tensor& tensor) {
     container::svector<Index> bra;
@@ -167,7 +167,7 @@ ExprPtr remove_spin(ExprPtr& expr) {
     return expr;
 }
 
-/// @brief Checks the spin symmetry of pairs of indices corresponding to a
+/// @brief Checks the spin symmetry of a pair of indices corresponding to a
 /// particle in tensor notation
 /// @param tensor a tensor with indices containing spin labels
 /// @return true if spin symmetry matches for all pairs of indices
@@ -187,9 +187,9 @@ inline bool is_tensor_spin_symm(const Tensor& tensor) {
   return result;
 }
 
-/// @brief Check if the number of alpha spins in bra and ket are equal
+/// @brief Check if the number of alpha spins in bra and ket are equal;
 /// beta spins will match if total number of indices is the same
-/// @param any tensor
+/// @param tensor with spin indices
 /// @return true if number of alpha spins match in bra and ket
 inline bool can_expand(const Tensor& tensor) {
   assert(tensor.bra_rank() == tensor.ket_rank() && "can_expand failed.");
@@ -212,13 +212,13 @@ inline bool can_expand(const Tensor& tensor) {
 
 /// @brief expand an antisymmetric tensor
 /// @param tensor a tensor from a product
-/// @return an expression pointer containing the sum of expanded terms if
-/// antisymmetric or
-/// @return an expression pointer containing the tensor otherwise
+/// @return an ExprPtr containing the sum of expanded terms if antisymmetric OR
+/// @return an ExprPtr containing the tensor otherwise
 ExprPtr expand_antisymm(const Tensor& tensor) {
   assert(tensor.bra().size() == tensor.ket().size());
 
   auto get_phase = [&](const Tensor& t) {
+    assert(t.bra_rank() > 1);
     container::svector<Index> bra;
     for (auto&& bra_idx : t.bra()) bra.push_back(bra_idx);
     container::svector<Index> ket;
@@ -231,7 +231,7 @@ ExprPtr expand_antisymm(const Tensor& tensor) {
   };
 
   // Generate a sum of asymmetric tensors if the input tensor is antisymmetric
-  // AND more than one body otherwise, return the tensor
+  // and greater than one body otherwise, return the tensor
   if ((tensor.symmetry() == Symmetry::antisymm) && (tensor.bra().size() > 1)) {
     const auto prefactor = get_phase(tensor);
     container::set<Index> bra_list;
@@ -270,7 +270,7 @@ ExprPtr expand_antisymm(const Tensor& tensor) {
 
 /// @brief expands all antisymmetric tensors in a product
 /// @param expr an expression pointer to expand
-/// @return an expression pointer with expanded tensors
+/// @return an expression pointer with expanded tensors as a sum
 inline ExprPtr expand_antisymm(const ExprPtr& expr) {
   Sum expanded_sum{};
   for (auto&& item : *expr) {
@@ -289,10 +289,10 @@ inline ExprPtr expand_antisymm(const ExprPtr& expr) {
   return result;
 }
 
-/// @brief Check if an operator is present in given expression
+/// @brief Check if a tensor with a certain label is present in an expression
 /// @param expr input expression
-/// @param label tensor label to find
-/// @return true if this function finds an A operator
+/// @param label tensor label to find in the expression
+/// @return true if tensor with given label is found
 bool has_tensor_label(const ExprPtr& expr, std::wstring label) {
   if (expr->is<Constant>()) return false;
 
@@ -303,12 +303,12 @@ bool has_tensor_label(const ExprPtr& expr, std::wstring label) {
       return false;
   };
 
-  // Assuming that 'A' or 'P' is ALWAYS the first tensor in a product
   auto check_product = [&](const Product& product) {
     bool result = false;
     for (auto&& term : product) {
       if (term->is<Tensor>()) {
-        if (check_tensor(term->as<Tensor>())) return true;
+        auto tensor = term->as<Tensor>();
+        if (check_tensor(tensor)) return true;
       }
     }
     return result;
@@ -329,11 +329,12 @@ bool has_tensor_label(const ExprPtr& expr, std::wstring label) {
     return false;
 }
 
-/// @brief Generates a vector of replacement maps
-/// @param A The antisymmetrizer with replacement indices
-/// @return A vector of replacement maps
+/// @brief Generates a vector of replacement maps for Antisymmetrizer operator
+/// @param A An antisymmetrizer tensor (A) (with > 2 particle indices)
+/// @return Vector of replacement maps
 std::vector<std::map<Index, Index>> A_replacement_map(const Tensor& A) {
   assert(A.label() == L"A");
+  assert(A.bra_rank() > 1);
   assert(A.bra().size() == A.ket().size());
   container::svector<int> bra_int_list(A.bra().size());
   std::iota(std::begin(bra_int_list), std::end(bra_int_list), 0);
@@ -361,7 +362,7 @@ std::vector<std::map<Index, Index>> A_replacement_map(const Tensor& A) {
 }
 
 /// @brief Removes tensor with a certain label from product
-/// @param product A product to modify
+/// @param product A product expression
 /// @param label Label of the tensor to remove
 /// @return ExprPtr with the tensor removed
 ExprPtr remove_tensor_from_product(const Product& product, std::wstring label) {
@@ -376,9 +377,9 @@ ExprPtr remove_tensor_from_product(const Product& product, std::wstring label) {
   return new_product;
 }
 
-/// @brief Expand expression with Antisymmetrization operator
-/// @param A product term
-/// @return expression pointer with A operator applied
+/// @brief Expand a product containing the Antisymmetrization (A) operator
+/// @param A product term with/without A operator
+/// @return an ExprPtr containing sum of expanded terms if A is present
 ExprPtr expand_A_operator(const Product& product) {
   bool has_A_operator = false;
 
@@ -428,9 +429,9 @@ ExprPtr expand_A_operator(const Product& product) {
   return new_result;
 }
 
-/// @brief apply the antisymmetrizer "A" operators
-/// @param expr A product or sum
-/// @return expression pointer with A applied.
+/// @brief Expand an expression containing the Antisymmetrization (A) operator
+/// @param expr any ExprPtr
+/// @return an ExprPtr containing sum of expanded terms if A is present
 ExprPtr expand_A_operator(const ExprPtr& expr) {
   if (expr->is<Constant>() || expr->is<Tensor>()) return expr;
 
@@ -449,11 +450,13 @@ ExprPtr expand_A_operator(const ExprPtr& expr) {
     throw("Unknown arg Type for expand_A_operator.");
 }
 
-/// @brief Generates a vector of replacement maps
-/// @param A The antisymmetrizer with replacement indices
-/// @return A vector of replacement maps
+/// @brief Generates a vector of replacement maps for particle permutation
+/// operator
+/// @param P A particle permutation operator (with > 2 particle indices)
+/// @return Vector of replacement maps
 std::vector<std::map<Index, Index>> P_replacement_map(const Tensor& P) {
   assert(P.label() == L"P");
+  assert(P.bra_rank() > 1);
   assert(P.bra().size() == P.ket().size());
   container::svector<int> int_list(P.bra().size());
   std::iota(std::begin(int_list), std::end(int_list), 0);
@@ -478,13 +481,13 @@ std::vector<std::map<Index, Index>> P_replacement_map(const Tensor& P) {
   return result;
 }
 
-/// @brief Expand expression with Antisymmetrization operator
-/// @param A product term
-/// @return expression pointer with A operator applied
+/// @brief Expand a product containing the particle permutation (P) operator
+/// @param A product term with/without P operator
+/// @return an ExprPtr containing sum of expanded terms if P is present
 ExprPtr expand_P_operator(const Product& product) {
   bool has_P_operator = false;
 
-  // Check A and build replacement map
+  // Check P and build a replacement map
   std::vector<std::map<Index, Index>> map_list;
   for (auto& term : product) {
     if (term->is<Tensor>()) {
@@ -518,9 +521,9 @@ ExprPtr expand_P_operator(const Product& product) {
   return new_result;
 }
 
-/// @brief apply the Permutation "P" operator
-/// @param expr an expression pointer
-/// @return expression pointer with P applied.
+/// @brief Expand an expression containing the particle permutation (P) operator
+/// @param expr any ExprPtr
+/// @return an ExprPtr containing sum of expanded terms if P is present
 ExprPtr expand_P_operator(const ExprPtr& expr) {
   if (expr->is<Constant>() || expr->is<Tensor>()) return expr;
 
@@ -539,18 +542,17 @@ ExprPtr expand_P_operator(const ExprPtr& expr) {
     throw("Unknown arg Type for expand_P_operator.");
 }
 
-/// @brief Spin traces a given expression pointer
+/// @brief Transforms an expression from spin orbital to spatial orbitals
 /// @detailed Given an expression, this function extracts all indices and adds a
 /// spin attribute to all the indices in the expression. A map is generated with
-/// all possible spin permutations and substituted in the expression. Only the
-/// non-zero terms are kept, expanded, the spin labels removed and a sum of all
-/// non-zero expressions is returned.
-/// @param expr input expression
+/// all possible spin permutations and substituted in the expression. Based on
+/// spin symmetry of particle indices: the non-zero terms are expanded, the spin
+/// labels removed and a sum of all non-zero expressions is returned.
+/// @param expr ExprPtr with spin orbital indices
 /// @param ext_index_groups groups of external indices
-/// @return the expression with spin integrated out
+/// @return an expression with spin integrated/adapted
 ExprPtr spintrace(ExprPtr expression,
                   std::initializer_list<IndexList> ext_index_groups = {{}}) {
-  if (expression->is<Tensor>()) expression = ex<Constant>(1) * expression;
 
   // SPIN TRACE DOES NOT SUPPORT PROTO INDICES YET.
   auto check_proto_index = [&](const ExprPtr& expr) {
@@ -565,6 +567,7 @@ ExprPtr spintrace(ExprPtr expression,
   expression->visit(check_proto_index);
 
   if (expression->is<Constant>()) return expression;
+  if (expression->is<Tensor>()) expression = ex<Constant>(1) * expression;
 
   auto spin_trace_tensor = [&](const Tensor& tensor) {
     if (can_expand(tensor)) {
@@ -680,12 +683,6 @@ ExprPtr spintrace(ExprPtr expression,
         ++index_group_count;
       }
 
-      // std::cout << "Replacement map:\n";
-      // for (auto&& pair : index_replacements)
-      //   std::wcout << pair.first.label() << " " << pair.second.label() <<
-      //   "\n";
-
-      auto all_terms = std::make_shared<Sum>();
       auto spin_expr = append_spin(expr, index_replacements);
       rapid_simplify(spin_expr);  // TODO: Check if this is required
 
@@ -718,16 +715,14 @@ ExprPtr spintrace(ExprPtr expression,
         result->append(expr);
       }
     }  // Permutation FOR loop
-    // result->visit(reset_idx_tags);
     return result;
   };
 
+  // Check if the antisymmetrizer operator (A) is present in the expression
   if (has_tensor_label(expression, L"A")) {
     expression = expand_A_operator(expression);
     rapid_simplify(expression);  // TODO: Check if this is required
   }
-
-  // expression->visit(reset_idx_tags);
 
   if (expression->is<Tensor>()) expression = ex<Constant>(1) * expression;
 
