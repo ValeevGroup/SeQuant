@@ -4,8 +4,8 @@
 
 #include <iostream>
 
-#include "../../src/SeQuant/core/timer.hpp"
-#include "../../src/SeQuant/core/wick.hpp"
+#include "SeQuant/core/timer.hpp"
+#include "SeQuant/core/wick.hpp"
 #include "catch.hpp"
 
 // comment out if want to run long tests
@@ -347,7 +347,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       ExprPtr result;
       REQUIRE_NOTHROW(result = wick.compute());
       //std::wcout << "result = " << to_latex(result) << std::endl;
-      REQUIRE(to_latex(result) == L"{{{-1}}{g^{{i_1}{a_2}}_{{a_3}{a_4}}}}");
+      REQUIRE(to_latex(result) == L"{{{-1}}{\\bar{g}^{{i_1}{a_2}}_{{a_3}{a_4}}}}");
     }
 
     // odd number of ops -> full contraction is 0
@@ -563,16 +563,16 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       expand(wick_result_2);
       REQUIRE(to_latex(wick_result_2) ==
               L"{ "
-              L"\\left({{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_"
+              L"\\left({{\\bar{g}^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_"
               L"5}}}{S^{{p_1}}_{{i_5}}}{S^{{p_2}}_{{i_4}}}{S^{{a_4}}_{{p_4}}}{"
               L"S^{{a_5}}_{{p_3}}}} - {"
-              L"{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{S^{{"
+              L"{\\bar{g}^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{S^{{"
               L"p_1}}_{{i_5}}}{S^{{p_2}}_{{i_4}}}{S^{{a_5}}_{{p_4}}}{S^{{a_4}}_"
               L"{{p_3}}}} - {"
-              L"{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{S^{{"
+              L"{\\bar{g}^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{S^{{"
               L"p_1}}_{{i_4}}}{S^{{p_2}}_{{i_5}}}{S^{{a_4}}_{{p_4}}}{S^{{a_5}}_"
               L"{{p_3}}}} + "
-              L"{{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{S^{"
+              L"{{\\bar{g}^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{S^{"
               L"{p_1}}_{{i_4}}}{S^{{p_2}}_{{i_5}}}{S^{{a_5}}_{{p_4}}}{S^{{a_4}}"
               L"_{{p_3}}}}\\right) }");
       wick.reduce(wick_result_2);
@@ -586,7 +586,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       std::wcout << L"H2*T2 = " << to_wolfram(wick_result_2) << std::endl;
       REQUIRE(to_latex(wick_result_2) ==
               L"{{{4}}"
-              L"{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{{a_1}{a_2}}}}");
+              L"{\\bar{g}^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{{a_1}{a_2}}}}");
     });
 
     // 2-body ^ 1-body ^ 1-body
@@ -624,7 +624,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       print("H2*T1*T1 = ", wick_result_2);
       REQUIRE(to_latex(wick_result_2) ==
               L"{{{4}}"
-              L"{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}}_{{a_1}}}{t^{{i_2}}_{{a_"
+              L"{\\bar{g}^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}}_{{a_1}}}{t^{{i_2}}_{{a_"
               L"2}}}}");
     });
 
