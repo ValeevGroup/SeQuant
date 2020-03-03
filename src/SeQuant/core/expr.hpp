@@ -35,7 +35,7 @@ namespace sequant {
 /// Expr is an Iterable over subexpressions (each of which is an Expr itself). More precisely,
 /// Expr meets the SizedIterable concept (see https://raw.githubusercontent.com/ericniebler/range-v3/master/doc/std/D4128.md).
 /// Specifically, iterators to subexpressions
-/// dereference to std::shared_ptr<Expr>. Since Expr is a range, it provides begin/end/etc. that can participate in overloads
+/// dereference to ExprPtr. Since Expr is a range, it provides begin/end/etc. that can participate in overloads
 ///       with other functions in the derived class. Consider a Container class derived from a BaseContainer class:
 /// @code
 ///   template <typename T> class Container : public BaseContainer, public Expr {
@@ -45,7 +45,7 @@ namespace sequant {
 ///   };
 /// @endcode
 /// There are two possible scenarios:
-///   - if @c Container is a container of Expr objects, BaseContainer will iterate over std::shared_ptr<Expr> objects already
+///   - if @c Container is a container of Expr objects, BaseContainer will iterate over ExprPtr objects already
 ///     and both ranges will be equivalent; it is sufficient to add `using BaseContainer::begin`, etc. to Container's public API.
 ///   - if @c Container is a container of non-Expr objects, iteration over BaseContainer is likely to be more commonly used
 ///     in practice, hence again adding `using BaseContainer::begin`, etc. will suffice. To be able to iterate over subexpression
@@ -100,18 +100,19 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
     return this->canonicalize();
   }
 
+  // clang-format off
   /// recursively visit this expression, i.e. call visitor on each subexpression
   /// in depth-first fashion.
   /// @warning this will only work for tree expressions; no checking is
   /// performed that each subexpression has only been visited once
   /// TODO make work for graphs
-  /// @tparam Visitor a callable with (std::shared_ptr<Expr>&) or (const
-  /// std::shared_ptr<Expr>&) signature
+  /// @tparam Visitor a callable of type void(ExprPtr&) or void(const ExprPtr&)
   /// @param visitor the visitor object
   /// @param atoms_only if true, will visit only the leaves; the default is to
   /// visit all nodes
   /// @return true if this object was visited
   /// @sa expr_range
+  // clang-format on
   template<typename Visitor>
   bool visit(Visitor &&visitor, const bool atoms_only = false) {
     for(auto& subexpr_ptr: expr()) {

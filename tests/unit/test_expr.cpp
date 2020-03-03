@@ -250,7 +250,7 @@ TEST_CASE("Expr", "[elements]") {
     sp0.append(2.0, std::make_shared<Dummy>());
     REQUIRE(to_latex(sp0) == L"{{{2}}{\\text{Dummy}}}");
 
-    // VecExpr<shared_ptr<Expr>>
+    // VecExpr<ExprPtr>
     {
       const auto ex5_init =
           std::vector<std::shared_ptr<Constant>>{std::make_shared<Constant>(1.0), std::make_shared<Constant>(2.0),
@@ -267,7 +267,7 @@ TEST_CASE("Expr", "[elements]") {
     sp0.append(2.0, std::make_shared<Dummy>());
     REQUIRE(to_wolfram(sp0) == L"Times[2,Dummy[]]");
 
-    // VecExpr<shared_ptr<Expr>>
+    // VecExpr<ExprPtr>
     {
       const auto ex5_init =
           std::vector<std::shared_ptr<Constant>>{std::make_shared<Constant>(1.0), std::make_shared<Constant>(2.0),
