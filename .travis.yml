@@ -111,9 +111,10 @@ matrix:
     - compiler: gcc
       env: GCC_VERSION=9 BUILD_TYPE=Debug
       addons:
-        sources:
-          - sourceline: 'ppa:ubuntu-toolchain-r/test'
-        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+            - sourceline: ppa:ubuntu-toolchain-r/test
+      apt:
           packages:
             - *base_packages
             - g++-9
@@ -122,7 +123,8 @@ matrix:
       addons:
         apt:
           sources:
-            - sourceline: 'ppa:ubuntu-toolchain-r/test'
+            - ubuntu-toolchain-r-test
+            - sourceline: ppa:ubuntu-toolchain-r/test
           packages:
             - *base_packages
             - g++-9
