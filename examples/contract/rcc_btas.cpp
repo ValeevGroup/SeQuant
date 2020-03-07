@@ -199,9 +199,10 @@ int main(int argc, char* argv[]) {
     auto G_ovvv = std::make_shared<BTensor>(nocc, nvirt, nvirt, nvirt);
     auto G_ooov = std::make_shared<BTensor>(nocc, nocc, nocc, nvirt);
     auto G_oovv = std::make_shared<BTensor>(nocc, nocc, nvirt, nvirt);
+    auto G_vvoo = std::make_shared<BTensor>(nvirt, nvirt, nocc, nocc);
     auto G_ovov = std::make_shared<BTensor>(nocc, nvirt, nocc, nvirt);
 
-    //  F_oo, F_ov, F_vv, D_ov, D_oovv, G_oovv, G_ovov
+    //  F_oo, F_ov, F_vv, D_ov, D_oovv, G_oovv, G_vvoo, G_ovov
     for (auto i = 0; i < nocc; ++i) {
       (*F_oo)(i, i) = Fock_matrix(i, i);
       for (auto a = 0; a < nvirt; ++a) {
@@ -213,6 +214,7 @@ int main(int argc, char* argv[]) {
             (*D_oovv)(i, j, a, b) = (*D_ov)(i, a) + Fock_matrix(j, j) -
                                     Fock_matrix(b + nocc, b + nocc);
             (*G_oovv)(i, j, a, b) = ints_mo_spatial(i, j, a + nocc, b + nocc);
+            (*G_vvoo)(a, b, i, j) = ints_mo_spatial(a + nocc, b + nocc, i, j);
             (*G_ovov)(i, a, j, b) = ints_mo_spatial(i, a + nocc, j, b + nocc);
           }
         }
@@ -284,6 +286,7 @@ int main(int argc, char* argv[]) {
     btensor_map.insert(std::pair<std::wstring, BTensorPtr>(L"g_ovvv", G_ovvv));
     btensor_map.insert(std::pair<std::wstring, BTensorPtr>(L"g_ooov", G_ooov));
     btensor_map.insert(std::pair<std::wstring, BTensorPtr>(L"g_oovv", G_oovv));
+    btensor_map.insert(std::pair<std::wstring, BTensorPtr>(L"g_vvoo", G_vvoo));
     btensor_map.insert(std::pair<std::wstring, BTensorPtr>(L"g_ovov", G_ovov));
     btensor_map.insert(std::pair<std::wstring, BTensorPtr>(L"t_ov", t_ov));
     btensor_map.insert(std::pair<std::wstring, BTensorPtr>(L"t_oovv", t_oovv));
