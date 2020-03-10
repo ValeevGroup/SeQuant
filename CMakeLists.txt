@@ -23,7 +23,8 @@ list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/modules/")
 include(AddCustomTargetSubproject)
 include(external/versions.cmake)
 
-# std::thread requires (on some platforms?) thread support which is not provided automatically
+# std::thread requires (on some platforms?) thread support which is not
+# provided automatically
 find_package(Threads REQUIRED)
 
 # PSTL (used by g++-9 and clang++-8 in c++17 mode) needs TBB
@@ -38,7 +39,8 @@ if (NOT RANGEV3_DIR)
     message(FATAL_ERROR "Set cache variable RANGEV3_DIR to the top of the Range-V3 source directory")
 endif(NOT RANGEV3_DIR)
 if (NOT EXISTS "${RANGEV3_DIR}/include")
-    message(FATAL_ERROR "Given RANGEV3_DIR=\"${RANGEV3_DIR}\" but did not find include subdirectory; make sure that RANGEV3_DIR points to the top of valid Range-V3 source directory")
+    message(FATAL_ERROR "Given RANGEV3_DIR=\"${RANGEV3_DIR}\" but did not find include subdirectory;"
+    " make sure that RANGEV3_DIR points to the top of valid Range-V3 source directory")
 endif()
 # if Range-V3 is a git repo check the revision
 if(EXISTS "${RANGEV3_DIR}/.git")
@@ -50,7 +52,9 @@ if(EXISTS "${RANGEV3_DIR}/.git")
   string(REGEX MATCH "[0-9a-f]*"
       RANGEV3_REVISION "${RANGEV3_REVISION}")
   if (NOT (${RANGEV3_REVISION} STREQUAL ${SEQUANT_TRACKED_RANGESV3_TAG}))
-    message(FATAL_ERROR "RANGEV3_DIR=\"${RANGEV3_DIR}\" points to Range-V3 library with revision ${RANGEV3_REVISION}, but need ${SEQUANT_TRACKED_RANGESV3_TAG}")
+    message(FATAL_ERROR "RANGEV3_DIR=\"${RANGEV3_DIR}\" points to Range-V3"
+        + " library with revision ${RANGEV3_REVISION}, "
+        + " but need ${SEQUANT_TRACKED_RANGESV3_TAG}")
   endif ()
 endif()
 add_library(Range-V3 INTERFACE IMPORTED)
@@ -61,7 +65,8 @@ set_property(TARGET Range-V3 PROPERTY
 # NB Boost.Container is broken in v1.70
 find_package(Boost ${SEQUANT_TRACKED_BOOST_VERSION} REQUIRED)
 if (Boost_VERSION EQUAL 107000)
-    message(FATAL_ERROR "Found Boost 1.70, but its Boost.Container is broken: use any version ${SEQUANT_TRACKED_BOOST_VERSION} or higher, other than 1.70")
+    message(FATAL_ERROR "Found Boost 1.70, but its Boost.Container is broken: "
+        + "use any version ${SEQUANT_TRACKED_BOOST_VERSION} or higher, other than 1.70")
 endif()
 add_library(Boost INTERFACE IMPORTED)
 set_property(TARGET Boost PROPERTY
@@ -141,21 +146,21 @@ target_include_directories(SeQuant PUBLIC
         $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>)
 
-add_library(factorizer
-        src/SeQuant/domain/factorize/path_tree.hpp
-        src/SeQuant/domain/factorize/path_tree.cpp
-        src/SeQuant/domain/factorize/eval_tensor_fwd.hpp
-        src/SeQuant/domain/factorize/eval_tensor.hpp
-        src/SeQuant/domain/factorize/eval_tensor.cpp
-        src/SeQuant/domain/factorize/eval_tensor_builder.hpp
-        src/SeQuant/domain/factorize/eval_tensor_builder.cpp
-        src/SeQuant/domain/factorize/factorizer.hpp
-        src/SeQuant/domain/factorize/factorizer.cpp
+add_library(evaluator
+        src/SeQuant/domain/evaluate/path_tree.hpp
+        src/SeQuant/domain/evaluate/path_tree.cpp
+        src/SeQuant/domain/evaluate/eval_tensor_fwd.hpp
+        src/SeQuant/domain/evaluate/eval_tensor.hpp
+        src/SeQuant/domain/evaluate/eval_tensor.cpp
+        src/SeQuant/domain/evaluate/eval_tensor_builder.hpp
+        src/SeQuant/domain/evaluate/eval_tensor_builder.cpp
+        src/SeQuant/domain/evaluate/factorizer.hpp
+        src/SeQuant/domain/evaluate/factorizer.cpp
         )
-target_include_directories(factorizer PUBLIC
+target_include_directories(evaluator PUBLIC
         $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>)
-target_link_libraries(factorizer PUBLIC SeQuant)
+target_link_libraries(evaluator PUBLIC SeQuant)
 
 set(utests_src
         # tests/unit/test_space.cpp
@@ -176,7 +181,7 @@ add_executable(${unit_test_executable} EXCLUDE_FROM_ALL
         tests/unit/test_main.cpp
         tests/unit/catch.hpp
         ${utests_src})
-target_link_libraries(${unit_test_executable} factorizer SeQuant)
+target_link_libraries(${unit_test_executable} evaluator SeQuant)
 add_test(unit/build "${CMAKE_COMMAND}" --build ${CMAKE_BINARY_DIR} --target ${unit_test_executable})
 
 add_test(NAME unit/run

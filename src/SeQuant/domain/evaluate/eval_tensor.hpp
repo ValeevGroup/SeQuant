@@ -35,13 +35,10 @@ class EvalTensor {
   /// The operations count that resulted during this evaluation.
   OpsCount ops_count_{0};
 
+  /// The scalar to multiply this evaluation with.
+  ScalarType scalar_{1};
+
  public:
-  /// Default constructor.
-  EvalTensor() = default;
-
-  /// Default destructor.
-  virtual ~EvalTensor() = default;
-
   /// Setter method of the indices_ field.
   void set_indices(const IndexLabelContainer&);
 
@@ -52,13 +49,19 @@ class EvalTensor {
   void set_hash_value(HashType);
 
   /// Getter method of the hash_value_ field.
-  const HashType get_hash_value() const;
+  HashType get_hash_value() const;
 
   /// Setter method of the ops_count_ field.
   void set_ops_count(OpsCount);
 
   /// Getter method of the ops_count_ field.
-  const OpsCount get_ops_count() const;
+  OpsCount get_ops_count() const;
+
+  /// Getter for the scalar field.
+  ScalarType get_scalar() const;
+
+  /// Setter for the scalar field.
+  void set_scalar(ScalarType);
 
   /// Check if this is the end of the evaluation.
   virtual bool is_leaf() const = 0;
@@ -74,26 +77,26 @@ class EvalTensor {
 class EvalTensorIntermediate : public EvalTensor {
  private:
   /// Evaluation node to the left.
-  std::shared_ptr<EvalTensor> left_tensor_ptr_{nullptr};
+  std::shared_ptr<EvalTensor> left_tensor_{nullptr};
 
   /// Evaluation node to the right
-  std::shared_ptr<EvalTensor> right_tensor_ptr_{nullptr};
+  std::shared_ptr<EvalTensor> right_tensor_{nullptr};
 
   /// The type of the binary evaluation.
-  Operation op_type_;
+  Operation operation_;
 
  public:
   /// @return false
   bool is_leaf() const override;
 
   /// Setter method for the left evaluation node.
-  void set_left_ptr(const std::shared_ptr<EvalTensor>&);
+  void set_left_tensor(const std::shared_ptr<EvalTensor>&);
 
   /// Getter method for the left evaluation node.
   const EvalTensorPtr& get_left_tensor() const;
 
   /// Setter method for the right evaluation node.
-  void set_right_ptr(const std::shared_ptr<EvalTensor>&);
+  void set_right_tensor(const std::shared_ptr<EvalTensor>&);
 
   /// Getter method for the left evaluation node.
   const EvalTensorPtr& get_right_tensor() const;
@@ -104,7 +107,7 @@ class EvalTensorIntermediate : public EvalTensor {
 
   /// Getter method for the operation type.
   /// @return Operation for this intermediate tensor.
-  const Operation get_operation() const;
+  Operation get_operation() const;
 };
 
 ///
@@ -122,13 +125,13 @@ class EvalTensorLeaf : public EvalTensor {
   /// The data-tensor pointer assigned during the evaluation time based on this
   /// EvalTensorLeaf's hash value. Eg. std::shared_ptr<btas::Tensor<double>>
   /// when using BTAS backend. See: https://github.com/BTAS/BTAS
-  std::shared_ptr<boost::any> dtensor_ptr_{nullptr};
+  std::shared_ptr<boost::any> data_tensor_{nullptr};
 
  public:
-  /// Setter method for the dtensor_ptr_;
+  /// Setter method for the data_tensor_;
   /// @param dtensor_ptr A shared_ptr to the data-tensor associated with this
   /// leaf tensor.
-  void set_dtensor_ptr(const std::shared_ptr<boost::any>& dtensor_ptr);
+  void set_data_tensor(const std::shared_ptr<boost::any>& dtensor_ptr);
 
   /// @return True.
   bool is_leaf() const override;

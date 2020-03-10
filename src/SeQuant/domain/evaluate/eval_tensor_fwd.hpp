@@ -9,6 +9,8 @@ namespace sequant::factorize {
 
 using HashType = size_t;
 
+using ScalarType = double;
+
 using IndexLabelContainer = container::svector<std::wstring_view, 4>;
 
 using OpsCount = unsigned long long;

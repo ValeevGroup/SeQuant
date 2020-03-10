@@ -17,43 +17,45 @@ void EvalTensor::set_hash_value(HashType hash_value) {
   hash_value_ = hash_value;
 }
 
-const HashType EvalTensor::get_hash_value() const { return hash_value_; }
+HashType EvalTensor::get_hash_value() const { return hash_value_; }
 
 void EvalTensor::set_ops_count(OpsCount count) { ops_count_ = count; }
 
-const OpsCount EvalTensor::get_ops_count() const { return ops_count_; }
+OpsCount EvalTensor::get_ops_count() const { return ops_count_; }
+
+ScalarType EvalTensor::get_scalar() const { return scalar_; }
+
+void EvalTensor::set_scalar(ScalarType scale) { scalar_ = scale; }
 
 // EvalTensorIntermediate
 bool EvalTensorIntermediate::is_leaf() const { return false; }
 
-void EvalTensorIntermediate::set_left_ptr(
+void EvalTensorIntermediate::set_left_tensor(
     const std::shared_ptr<EvalTensor>& tensor_ptr) {
-  left_tensor_ptr_ = tensor_ptr;
+  left_tensor_ = tensor_ptr;
 }
 
 const EvalTensorPtr& EvalTensorIntermediate::get_left_tensor() const {
-  return left_tensor_ptr_;
+  return left_tensor_;
 }
 
-void EvalTensorIntermediate::set_right_ptr(
+void EvalTensorIntermediate::set_right_tensor(
     const std::shared_ptr<EvalTensor>& tensor_ptr) {
-  right_tensor_ptr_ = tensor_ptr;
+  right_tensor_ = tensor_ptr;
 }
 
 const EvalTensorPtr& EvalTensorIntermediate::get_right_tensor() const {
-  return right_tensor_ptr_;
+  return right_tensor_;
 }
 
-void EvalTensorIntermediate::set_operation(Operation op) { op_type_ = op; }
+void EvalTensorIntermediate::set_operation(Operation op) { operation_ = op; }
 
-const Operation EvalTensorIntermediate::get_operation() const {
-  return op_type_;
-}
+Operation EvalTensorIntermediate::get_operation() const { return operation_; }
 
 // EvalTensorLeaf
-void EvalTensorLeaf::set_dtensor_ptr(
+void EvalTensorLeaf::set_data_tensor(
     const std::shared_ptr<boost::any>& dtensor_ptr) {
-  dtensor_ptr_ = dtensor_ptr;
+  data_tensor_ = dtensor_ptr;
 }
 
 bool EvalTensorLeaf::is_leaf() const { return true; }
