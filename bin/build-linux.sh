@@ -1,4 +1,11 @@
-#! /bin/sh
+#! /bin/bash
+
+# wipe out cache if commit message contains [travis clear-cache]
+ls ${INSTALL_PREFIX}
+if [[ "${TRAVIS_COMMIT_MESSAGE}" = *"[travis clean-cache]"* ]];
+  echo "Clearing out install dir due to [travis clean-cache] found in the commit message"
+  rm -rf ${INSTALL_PREFIX}/*
+fi
 
 ${TRAVIS_BUILD_DIR}/bin/build-boost-$TRAVIS_OS_NAME.sh
 ${TRAVIS_BUILD_DIR}/bin/build-rangev3-$TRAVIS_OS_NAME.sh
@@ -26,9 +33,6 @@ fi
 
 echo $($CC --version)
 echo $($CXX --version)
-
-# list the prebuilt prereqs
-ls ${INSTALL_PREFIX}
 
 # where to install
 export INSTALL_DIR=${INSTALL_PREFIX}/SeQuant
