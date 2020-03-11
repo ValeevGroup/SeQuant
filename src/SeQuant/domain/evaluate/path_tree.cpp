@@ -10,7 +10,7 @@
 #include <memory>
 #include <string>
 
-namespace sequant::factorize {
+namespace sequant::evaluate {
 
 PathTree::PathTree(size_t x) : label_{x} { children_.clear(); }
 
@@ -45,4 +45,4 @@ std::wstring PathTree::print_tree() const {
   }
 }
 
-}  // namespace sequant::factorize
+}  // namespace sequant::evaluate

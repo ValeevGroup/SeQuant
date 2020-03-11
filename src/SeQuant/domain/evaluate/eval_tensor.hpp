@@ -1,12 +1,12 @@
-#ifndef SEQUANT_FACTORIZER_EVAL_TENSOR_HPP
-#define SEQUANT_FACTORIZER_EVAL_TENSOR_HPP
+#ifndef SEQUANT_EVALUATE_EVAL_TENSOR_HPP
+#define SEQUANT_EVALUATE_EVAL_TENSOR_HPP
 
 #include <boost/any.hpp>
 #include <memory>
 
 #include "eval_tensor_fwd.hpp"
 
-namespace sequant::factorize {
+namespace sequant::evaluate {
 ///
 /// @brief Representation of binary evaluation of sequant::Expr objects. A
 /// context is needed for evaluation.
@@ -137,6 +137,6 @@ class EvalTensorLeaf : public EvalTensor {
   bool is_leaf() const override;
 };
 
-}  // namespace sequant::factorize
+}  // namespace sequant::evaluate
 
-#endif /* SEQUANT_FACTORIZER_EVAL_TENSOR_HPP */
+#endif /* SEQUANT_EVALUATE_EVAL_TENSOR_HPP */

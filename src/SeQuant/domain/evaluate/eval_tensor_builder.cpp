@@ -8,7 +8,7 @@
 
 #include <algorithm>
 
-namespace sequant::factorize {
+namespace sequant::evaluate {
 
 // ctor
 EvalTensorBuilder::EvalTensorBuilder(bool complex_tensor_data)
@@ -185,10 +185,11 @@ EvalTensorPtr EvalTensorBuilder::build_intermediate(
                                   rindices.begin(), rindices.end(),
                                   std::back_inserter(imed_indices));
     imed->set_indices(imed_indices);
-  } else if (op == Operation::ANTISYMMETRIZE) {
+  } else if ((op == Operation::ANTISYMMETRIZE) ||
+             (op == Operation::SYMMETRIZE)) {
     // nothing special needs to be done
     // the evaluator should be smart enough
-    // on handling antisymmetrization type operations
+    // on handling (anti)symmetrization type operations
   }
 
   // set the hash value
@@ -208,17 +209,19 @@ HashType EvalTensorBuilder::hash_intermediate(
 
   auto imed_ptr = std::dynamic_pointer_cast<EvalTensorIntermediate>(eval_expr);
 
+  auto imed_operation = imed_ptr->get_operation();
+
   boost::hash<size_t> number_hasher;
   HashType imed_hash_value;
 
   // hashing the type of binary operation by casting operation into size_t
-  imed_hash_value =
-      number_hasher(static_cast<size_t>(imed_ptr->get_operation()));
+  imed_hash_value = number_hasher(static_cast<size_t>(imed_operation));
 
   // operation is of antisymmetrization type then its hash value is solely
   // determined by which indices are being permuted, this information is
   // carried by the left tensor -- the tensor with label 'A'
-  if (imed_ptr->get_operation() == Operation::ANTISYMMETRIZE) {
+  if ((imed_operation == Operation::ANTISYMMETRIZE) ||
+      (imed_operation == Operation::SYMMETRIZE)) {
     boost::hash_combine(imed_hash_value,
                         imed_ptr->get_left_tensor()->get_hash_value());
     return imed_hash_value;
@@ -241,7 +244,7 @@ HashType EvalTensorBuilder::hash_intermediate(
   // the right tensor's hash values are important but also the information
   // about which of their indices got contracted is needed to uniquely
   // identify such an evaluation
-  if (imed_ptr->get_operation() == Operation::PRODUCT) {
+  if (imed_operation == Operation::PRODUCT) {
     // a lambda expression that combines the hashes of the non-contracting
     // indices of right or left tensor
     auto index_hash_combiner = [&](const EvalTensorPtr& lr_tensor) {
@@ -310,4 +313,4 @@ bool EvalTensorBuilder::need_bra_ket_swap(const ExprPtr& expr) const {
   return false;
 }
 
-}  // namespace sequant::factorize
+}  // namespace sequant::evaluate

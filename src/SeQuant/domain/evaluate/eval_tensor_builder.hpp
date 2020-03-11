@@ -1,5 +1,5 @@
-#ifndef SEQUANT_FACTORIZE_EVAL_TENSOR_BUILDER_HPP
-#define SEQUANT_FACTORIZE_EVAL_TENSOR_BUILDER_HPP
+#ifndef SEQUANT_EVALUATE_EVAL_TENSOR_BUILDER_HPP
+#define SEQUANT_EVALUATE_EVAL_TENSOR_BUILDER_HPP
 
 #include <SeQuant/core/expr_fwd.hpp>
 
@@ -12,7 +12,7 @@
 /// @author Bimal Gaudel
 /// @version Feb 2020
 ///
-namespace sequant::factorize {
+namespace sequant::evaluate {
 class EvalTensorBuilder {
  private:
   /// The evaluation tree built by this builder.
@@ -91,6 +91,6 @@ class EvalTensorBuilder {
   bool need_bra_ket_swap(const ExprPtr& expr) const;
 };
 
-}  // namespace sequant::factorize
+}  // namespace sequant::evaluate
 
-#endif /* ifndef SEQUANT_FACTORIZE_EVAL_TENSOR_BUILDER_HPP */
+#endif /* ifndef SEQUANT_EVALUATE_EVAL_TENSOR_BUILDER_HPP */

@@ -7,7 +7,7 @@
 #include <SeQuant/core/expr_fwd.hpp>
 #include <tuple>
 
-namespace sequant::factorize {
+namespace sequant::evaluate {
 
 /* To-Do
 std::tuple<EvalTensorPtr, EvalTensorPtr> fuse_optimally(const ExprPtr& lexpr,
@@ -54,4 +54,4 @@ OpsCount get_unique_ops_count(const EvalTensorPtr& tensor,
 
 }  // namespace detail
 
-}  // namespace sequant::factorize
+}  // namespace sequant::evaluate

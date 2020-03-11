@@ -4,7 +4,7 @@
 #include <boost/any.hpp>
 #include <memory>
 
-namespace sequant::factorize {
+namespace sequant::evaluate {
 
 // EvalTensor the base class
 void EvalTensor::set_indices(const IndexLabelContainer& index_labels) {
@@ -60,4 +60,4 @@ void EvalTensorLeaf::set_data_tensor(
 
 bool EvalTensorLeaf::is_leaf() const { return true; }
 
-}  // namespace sequant::factorize
+}  // namespace sequant::evaluate

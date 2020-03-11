@@ -1,5 +1,5 @@
-#ifndef SEQUANT_FACTORIZE_FACTORIZER_HPP
-#define SEQUANT_FACTORIZE_FACTORIZER_HPP
+#ifndef SEQUANT_EVALUATE_FACTORIZER_HPP
+#define SEQUANT_EVALUATE_FACTORIZER_HPP
 
 ///
 /// Find optimal evaluation sequences of EvalTensor evaluation tree that result
@@ -14,7 +14,7 @@
 #include <SeQuant/core/expr_fwd.hpp>
 #include <tuple>
 
-namespace sequant::factorize {
+namespace sequant::evaluate {
 
 /// Generate the corresponding EvalTensor's of @c lexpr and @c rexpr. Such that
 /// the resulting EvalTensor's have the maximum number of common sub-expressions
@@ -46,6 +46,6 @@ OpsCount get_unique_ops_count(const EvalTensorPtr& tensor,
 
 }  // namespace detail
 
-}  // namespace sequant::factorize
+}  // namespace sequant::evaluate
 
-#endif /* ifndef SEQUANT_FACTORIZE_FACTORIZER_HPP */
+#endif /* ifndef SEQUANT_EVALUATE_FACTORIZER_HPP */

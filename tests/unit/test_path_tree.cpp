@@ -9,7 +9,7 @@
 #include "../../src/SeQuant/domain/evaluate/path_tree.hpp"
 
 TEST_CASE("PathTree is computed", "path_tree") {
-  using sequant::factorize::PathTree;
+  using sequant::evaluate::PathTree;
 
   REQUIRE_NOTHROW(PathTree());
 

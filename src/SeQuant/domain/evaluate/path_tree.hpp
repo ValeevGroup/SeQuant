@@ -25,8 +25,8 @@
 /// Created by Bimal Gaudel on December 2019
 ///
 
-#ifndef SEQUANT_FACTORIZE_PATH_TREE_HPP
-#define SEQUANT_FACTORIZE_PATH_TREE_HPP
+#ifndef SEQUANT_EVALUATE_PATH_TREE_HPP
+#define SEQUANT_EVALUATE_PATH_TREE_HPP
 
 #include <SeQuant/core/container.hpp>
 
@@ -34,7 +34,7 @@
 #include <memory>
 #include <string>
 
-namespace sequant::factorize {
+namespace sequant::evaluate {
 
 class PathTree;
 
@@ -108,6 +108,6 @@ class PathTree {
   sequant::container::svector<PathTreePtr> children_;
 };
 
-}  // namespace sequant::factorize
+}  // namespace sequant::evaluate
 
-#endif  // SEQUANT_FACTORIZE_PATH_TREE_HPP
+#endif  // SEQUANT_EVALUATE_PATH_TREE_HPP

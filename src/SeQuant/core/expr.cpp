@@ -100,7 +100,7 @@ std::shared_ptr<Expr> Product::canonicalize_impl(bool rapid) {
     }
   }
 
-  // TODO factorize product of Tensors (turn this into Products of Products)
+  // TODO evaluate product of Tensors (turn this into Products of Products)
 
   if (Logger::get_instance().canonicalize)
     std::wcout << "Product canonicalization(" << (rapid ? "fast" : "slow")
@@ -142,7 +142,7 @@ std::shared_ptr<Expr> Product::rapid_canonicalize() {
 //      return first_id < second_id;
 //  });
 //
-//  // TODO factorize product of Tensors (turn this into Products of Products
+//  // TODO evaluate product of Tensors (turn this into Products of Products
 //
 //  return {};  // side effects are absorbed into the scalar_
 //}

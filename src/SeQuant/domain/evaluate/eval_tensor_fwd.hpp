@@ -1,11 +1,11 @@
-#ifndef SEQUANT_FACTORIZER_EVAL_TENSOR_FWD_HPP
-#define SEQUANT_FACTORIZER_EVAL_TENSOR_FWD_HPP
+#ifndef SEQUANT_EVALUATE_EVAL_TENSOR_FWD_HPP
+#define SEQUANT_EVALUATE_EVAL_TENSOR_FWD_HPP
 
 #include <SeQuant/core/container.hpp>
 #include <cstddef>
 #include <memory>
 
-namespace sequant::factorize {
+namespace sequant::evaluate {
 
 using HashType = size_t;
 
@@ -32,10 +32,17 @@ enum class Operation {
   /// sequant) and the tensor to be antisymmetrized.
   ///
   ANTISYMMETRIZE,
+  ///
+  /// Represents the symmetrization type evaluation.
+  ///
+  /// An symmetrization type evaluation should be thought of as a binary
+  /// operation between an symmetrization tensor (label "P" tensors in
+  /// sequant) and the tensor to be symmetrized.
+  SYMMETRIZE,
   /// Represents an invalid evaluation.
   INVALID
 };
 
-}  // namespace sequant::factorize
+}  // namespace sequant::evaluate
 
-#endif /* ifndef SEQUANT_FACTORIZER_EVAL_TENSOR_FWD_HPP */
+#endif /* ifndef SEQUANT_EVALUATE_EVAL_TENSOR_FWD_HPP */
