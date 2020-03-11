@@ -1,10 +1,13 @@
 #! /bin/bash
 
-# wipe out cache if commit message contains [travis clear-cache]
+# wipe out cache if commit message contains [travis delete-cache]
+# see https://github.com/travis-ci/travis-ci/issues/2245
 ls ${INSTALL_PREFIX}
-if [[ "${TRAVIS_COMMIT_MESSAGE}" = *"[travis clean-cache]"* ]];
-  echo "Clearing out install dir due to [travis clean-cache] found in the commit message"
+if [[ "${TRAVIS_COMMIT_MESSAGE}" = *"[travis delete-cache]"* ]]; then
+  echo "Clearing out cache due to [travis clean-cache] found in the commit message"
   rm -rf ${INSTALL_PREFIX}/*
+  ccache -C
+  ccache -c
 fi
 
 ${TRAVIS_BUILD_DIR}/bin/build-boost-$TRAVIS_OS_NAME.sh
