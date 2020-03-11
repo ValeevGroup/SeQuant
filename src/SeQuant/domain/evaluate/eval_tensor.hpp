@@ -65,6 +65,9 @@ class EvalTensor {
 
   /// Check if this is the end of the evaluation.
   virtual bool is_leaf() const = 0;
+
+  /// Get a directed graph definitions and paths in dot language.
+  virtual std::wstring to_digraph() const = 0;
 };
 
 ///
@@ -108,6 +111,9 @@ class EvalTensorIntermediate : public EvalTensor {
   /// Getter method for the operation type.
   /// @return Operation for this intermediate tensor.
   Operation get_operation() const;
+
+  /// Get a directed graph definitions and paths in dot language.
+  std::wstring to_digraph() const override;
 };
 
 ///
@@ -135,6 +141,9 @@ class EvalTensorLeaf : public EvalTensor {
 
   /// @return True.
   bool is_leaf() const override;
+
+  /// Get a directed graph definitions and paths in dot language.
+  std::wstring to_digraph() const override;
 };
 
 }  // namespace sequant::evaluate

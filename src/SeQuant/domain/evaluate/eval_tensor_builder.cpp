@@ -19,24 +19,9 @@ const EvalTensorPtr& EvalTensorBuilder::get_eval_tree() const {
 }
 
 void EvalTensorBuilder::build_eval_tree(const ExprPtr& expr) {
-  // a lambda function to build product type evaltree of a single product
-  auto prod_maker = [this](const ExprPtr& prod) {
-    // @note using a trivial path tree
-    // optimization can be done by finding an optimal path tree
-    size_t i = 0;
-    auto path_tree = std::make_shared<PathTree>(i);
-    for (const auto& sum : *prod) {
-      auto child = std::make_shared<PathTree>(i + 1);
-      path_tree->add_child(child);
-    }
-    // because path tree has one label too extra
-    path_tree->pop_last_child();
-    return build_from_product(prod, path_tree);
-  };
-
   // a lambda function to combine an eval tensor with a summand
-  auto sum_accumulator = [&prod_maker, this](const EvalTensorPtr& left,
-                                             const ExprPtr& summand) {
+  auto sum_accumulator = [this](const EvalTensorPtr& left,
+                                const ExprPtr& summand) {
     // the @c left param is a binary evaluation tree such that it
     // is an intermediate type of evaluation tensor whose left child
     // is an antisymmetrization/symmetrization eval tensor and the right
@@ -45,7 +30,7 @@ void EvalTensorBuilder::build_eval_tree(const ExprPtr& expr) {
     auto& left_tensor = left_imed->get_right_tensor();
     //
     //
-    auto right = prod_maker(summand);
+    auto right = build_from_product(summand);
     auto right_imed = std::dynamic_pointer_cast<EvalTensorIntermediate>(right);
     auto right_tensor = right_imed->get_right_tensor();
     auto result_right =
@@ -57,33 +42,29 @@ void EvalTensorBuilder::build_eval_tree(const ExprPtr& expr) {
   };
   // initialize the result with the first summand
   auto& sum = expr->as<Sum>();
-  auto init = prod_maker(sum.summand(0));
+  auto init = build_from_product(sum.summand(0));
   // build and store the tree
   eval_tree_ =
       std::accumulate(sum.begin() + 1, sum.end(), init, sum_accumulator);
 }
 
-EvalTensorPtr EvalTensorBuilder::build_from_product(
-    const ExprPtr& expr, const PathTreePtr& path) const {
-  const auto& prod = expr->as<Product>();
-
-  // a lambda function to convert a linear container eg. as a vector, of
-  // ExprPtr to sequant Tensors to an evaluation tensor
-  auto product_accumulator = [&expr, &prod, this](const EvalTensorPtr& left,
-                                                  const PathTreePtr& path) {
-    std::shared_ptr<EvalTensor> right =
-        path->is_leaf() ? build_leaf(prod.factor(path->get_label()))
-                        : build_from_product(expr, path);
-
+EvalTensorPtr EvalTensorBuilder::build_from_product(const ExprPtr& expr) const {
+  if (expr->is<Tensor>()) {
+    return build_leaf(expr);
+  }
+  // lambda function to make an intermediate evaluation product from the factors
+  // of a product type sequant exprs
+  auto product_accumulator = [this](const EvalTensorPtr& left,
+                                    const ExprPtr& expr) {
+    auto right = build_from_product(expr);
     return build_intermediate(left, right, Operation::PRODUCT);
   };
-
-  auto left = build_leaf(prod.factor(path->get_label()));
-  auto right =
-      std::accumulate(path->get_children().begin(), path->get_children().end(),
-                      left, product_accumulator);
-  auto result = build_intermediate(left, right, Operation::PRODUCT);
-  // @NOTE only real value is used for now
+  const auto& prod = expr->as<Product>();
+  // initialize with the first factor
+  auto init = build_from_product(*prod.factors().begin());
+  auto result =
+      std::accumulate(prod.begin() + 1, prod.end(), init, product_accumulator);
+  // @note only real scalar is used for now
   result->set_scalar(prod.scalar().real());
   return result;
 }

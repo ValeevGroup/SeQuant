@@ -52,6 +52,26 @@ void EvalTensorIntermediate::set_operation(Operation op) { operation_ = op; }
 
 Operation EvalTensorIntermediate::get_operation() const { return operation_; }
 
+std::wstring EvalTensorIntermediate::to_digraph() const {
+  auto this_node = L"node" + std::to_wstring(get_hash_value()) + L" [label = " +
+                   std::to_wstring(get_hash_value()) + L"];\n";
+
+  auto left_node = get_left_tensor()->to_digraph();
+
+  auto right_node = get_right_tensor()->to_digraph();
+  // drawing the graphs
+  auto get_node_name = [](const std::wstring& str) {
+    return str.substr(0, str.find(L" "));
+  };
+  auto parent_node_name = get_node_name(this_node);
+  auto left_node_name = get_node_name(left_node);
+  auto right_node_name = get_node_name(right_node);
+  auto result =
+      this_node + parent_node_name + L" -> {" + left_node_name + L"};\n";
+  result += this_node + parent_node_name + L" -> {" + right_node_name + L"};\n";
+  return result;
+}
+
 // EvalTensorLeaf
 void EvalTensorLeaf::set_data_tensor(
     const std::shared_ptr<boost::any>& dtensor_ptr) {
@@ -59,5 +79,10 @@ void EvalTensorLeaf::set_data_tensor(
 }
 
 bool EvalTensorLeaf::is_leaf() const { return true; }
+
+std::wstring EvalTensorLeaf::to_digraph() const {
+  return L"node" + std::to_wstring(get_hash_value()) + L" [label = " +
+         std::to_wstring(get_hash_value()) + L"];\n";
+}
 
 }  // namespace sequant::evaluate

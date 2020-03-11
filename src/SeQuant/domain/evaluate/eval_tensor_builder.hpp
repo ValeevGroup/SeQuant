@@ -40,12 +40,9 @@ class EvalTensorBuilder {
 
   /// Build EvalTensor from a sequant Product.
   /// @param expr sequant ExprPtr to sequant Product.
-  /// @param path shared_ptr to PathTree that determines the sequence of
-  /// evaluation.
   ///
   /// @return EvalTensor pointer.
-  EvalTensorPtr build_from_product(const ExprPtr& expr,
-                                   const PathTreePtr& path) const;
+  EvalTensorPtr build_from_product(const ExprPtr& expr) const;
 
   /// Build leaf EvalTensor from sequant tensor.
   ///
