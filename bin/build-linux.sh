@@ -4,7 +4,7 @@
 # see https://github.com/travis-ci/travis-ci/issues/2245
 ls ${INSTALL_PREFIX}
 if [[ "${TRAVIS_COMMIT_MESSAGE}" = *"[travis delete-cache]"* ]]; then
-  echo "Clearing out cache due to [travis clean-cache] found in the commit message"
+  echo "Clearing out cache due to [travis delete-cache] found in the commit message"
   rm -rf ${INSTALL_PREFIX}/*
   ccache -C
   ccache -c
