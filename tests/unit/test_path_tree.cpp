@@ -8,7 +8,7 @@
 #include <memory>
 #include "../../src/SeQuant/domain/evaluate/path_tree.hpp"
 
-TEST_CASE("PathTree is computed", "path_tree") {
+TEST_CASE("PathTree is computed", "[path_tree]") {
   using sequant::evaluate::PathTree;
 
   REQUIRE_NOTHROW(PathTree());

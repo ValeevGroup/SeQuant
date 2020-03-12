@@ -2,6 +2,7 @@
 #define SEQUANT_EVALUATE_EVAL_TENSOR_HPP
 
 #include <boost/any.hpp>
+#include <functional>
 #include <memory>
 
 #include "eval_tensor_fwd.hpp"
@@ -25,7 +26,7 @@ namespace sequant::evaluate {
 ///
 
 class EvalTensor {
- protected:
+ private:
   /// The index labels of the tensor's bra and ket in that order.
   IndexLabelContainer indices_;
 
@@ -68,6 +69,10 @@ class EvalTensor {
 
   /// Get a directed graph definitions and paths in dot language.
   virtual std::wstring to_digraph() const = 0;
+
+  /// Visit the tree by pre-order traversal.
+  virtual void visit(
+      const std::function<void(const EvalTensor &)> &visitor) const = 0;
 };
 
 ///
@@ -86,7 +91,7 @@ class EvalTensorIntermediate : public EvalTensor {
   std::shared_ptr<EvalTensor> right_tensor_{nullptr};
 
   /// The type of the binary evaluation.
-  Operation operation_;
+  Operation operation_{Operation::INVALID};
 
  public:
   /// @return false
@@ -114,6 +119,9 @@ class EvalTensorIntermediate : public EvalTensor {
 
   /// Get a directed graph definitions and paths in dot language.
   std::wstring to_digraph() const override;
+
+  /// Visit the tree by pre-order traversal.
+  void visit(const std::function<void(const EvalTensor &)> &visitor = {}) const override;
 };
 
 ///
@@ -144,6 +152,9 @@ class EvalTensorLeaf : public EvalTensor {
 
   /// Get a directed graph definitions and paths in dot language.
   std::wstring to_digraph() const override;
+
+  /// Visit the tree by pre-order traversal.
+  void visit(const std::function<void(const EvalTensor &)> &visitor = {}) const override;
 };
 
 }  // namespace sequant::evaluate

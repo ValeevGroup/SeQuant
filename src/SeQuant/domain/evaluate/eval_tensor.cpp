@@ -59,17 +59,25 @@ std::wstring EvalTensorIntermediate::to_digraph() const {
   auto left_node = get_left_tensor()->to_digraph();
 
   auto right_node = get_right_tensor()->to_digraph();
-  // drawing the graphs
+  // drawing the edges
   auto get_node_name = [](const std::wstring& str) {
     return str.substr(0, str.find(L" "));
   };
   auto parent_node_name = get_node_name(this_node);
   auto left_node_name = get_node_name(left_node);
   auto right_node_name = get_node_name(right_node);
-  auto result =
-      this_node + parent_node_name + L" -> {" + left_node_name + L"};\n";
-  result += this_node + parent_node_name + L" -> {" + right_node_name + L"};\n";
+  auto result = this_node + left_node + right_node;
+  result += parent_node_name + L" -> {" + left_node_name + L"};\n";
+  result += parent_node_name + L" -> {" + right_node_name + L"};\n";
   return result;
+}
+
+/// Visit the tree by pre-order traversal.
+void EvalTensorIntermediate::visit(
+    const std::function<void(const EvalTensor&)>& visitor) const {
+  visitor(*this);
+  get_left_tensor()->visit(visitor);
+  get_right_tensor()->visit(visitor);
 }
 
 // EvalTensorLeaf
@@ -83,6 +91,12 @@ bool EvalTensorLeaf::is_leaf() const { return true; }
 std::wstring EvalTensorLeaf::to_digraph() const {
   return L"node" + std::to_wstring(get_hash_value()) + L" [label = " +
          std::to_wstring(get_hash_value()) + L"];\n";
+}
+
+/// Visit the tree by pre-order traversal.
+void EvalTensorLeaf::visit(
+    const std::function<void(const EvalTensor&)>& visitor) const {
+  visitor(*this);
 }
 
 }  // namespace sequant::evaluate

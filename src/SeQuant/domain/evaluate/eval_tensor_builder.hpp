@@ -4,7 +4,7 @@
 #include <SeQuant/core/expr_fwd.hpp>
 
 #include "eval_tensor_fwd.hpp"
-#include "path_tree.hpp"
+// #include "path_tree.hpp"
 
 ///
 /// Evaluation tree builder from sequant Expr.

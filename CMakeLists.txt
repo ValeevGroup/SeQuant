@@ -173,8 +173,9 @@ set(utests_src
         # tests/unit/test_iterator.cpp
         # tests/unit/test_tensor_network.cpp
         # tests/unit/test_mbpt.cpp
-        #### unit tests for factorization
-        tests/unit/test_path_tree.cpp)
+        #### unit tests for evaluation
+        #tests/unit/test_path_tree.cpp
+        tests/unit/test_eval_tensor.cpp)
 
 set(unit_test_executable unit_tests)
 add_executable(${unit_test_executable} EXCLUDE_FROM_ALL
@@ -198,6 +199,10 @@ add_executable(${example0} EXCLUDE_FROM_ALL
         examples/${example0}/${example0}.cpp)
 target_link_libraries(${example0} SeQuant ${TBB_LIBRARIES})
 
+set(example1 expr_evaluation)
+add_executable(${example1} EXCLUDE_FROM_ALL
+    examples/evaluation/${example1}.cpp)
+target_link_libraries(${example1} SeQuant evaluator ${TBB_LIBRARIES})
 
 # add tests for running examples
 set (lastexample 5)
