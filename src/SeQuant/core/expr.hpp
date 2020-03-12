@@ -690,6 +690,19 @@ class Product : public Expr {
     return *this;
   }
 
+  /// append @c factor without flattening
+  Product &append(ExprPtr factor) {
+    if (factor->is<Constant>()) {
+      auto factor_constant = factor->as<Constant>();
+      scalar_ *= factor_constant.value();
+    } else {
+    factors_.push_back(std::move(factor));
+    reset_hash_value();
+    }
+
+    return *this;
+  }
+
   /// (post-)multiplies the product by @c scalar times @c factor
   template <typename T, typename Factor, typename = std::enable_if_t<std::is_base_of_v<Expr, std::remove_reference_t<Factor>>>>
   Product &append(T scalar, Factor&& factor) {
@@ -772,7 +785,11 @@ class Product : public Expr {
       if (scal != 1.) {
         result += sequant::to_latex(scal);
       }
-      for (const auto &i : factors()) result += i->to_latex();
+      for (const auto &i : factors()) {
+        if (i->is<Product>())
+          result += L"\\left(" + i->to_latex() + L"\\right)";
+        else result += i->to_latex();
+      }
     }
     result += L"}";
     return result;

@@ -1,18 +1,22 @@
-#include <iostream>
+#include "../sequant_setup.hpp"
+
+#include "scf/hartree-fock.h"
+#include "interpret/interpreted_tensor.hpp"
+#include "interpret/contract.hpp"
+
+#include <SeQuant/domain/evaluate/eval_expr.hpp>
+
 #ifndef SEQUANT_HAS_BTAS
 # error "SEQUANT_HAS_BTAS should be defined when building cc_btas"
 #endif
 #include <btas/btas.h>
 #include <btas/tensorview.h>
-#include <btas/tensor_func.h>
 
-#include "sequant_setup.hpp"
-
-#include "../contract/scf/hartree-fock.h"
-#include "../contract/interpret/interpreted_tensor.hpp"
-#include "../contract/interpret/contract.hpp"
+#include <memory>
+#include <iostream>
 
 using BTensor = btas::Tensor<double>;
+using BTensorPtr = std::shared_ptr<BTensor>;
 
 int main(int argc, char *argv[])
 {
@@ -297,29 +301,34 @@ int main(int argc, char *argv[])
          << "*****************************\n" << endl;
 
     // D_ov and D_oovv
-    BTensor D_ov    (nocc, nvirt),
-            D_oovv  (nocc, nocc, nvirt, nvirt),
-            D_ooovvv(nocc, nocc, nocc, nvirt, nvirt, nvirt);
+    auto D_ov = std::make_shared<BTensor>(nocc, nvirt);
+    auto D_oovv  = std::make_shared<BTensor>(nocc, nocc, nvirt, nvirt);
+    auto D_ooovvv = std::make_shared<BTensor>(nocc, nocc, nocc, nvirt, nvirt, nvirt);
 
     // Fock matrix tensors
-    BTensor Fock_oo(nocc, nocc), Fock_ov(nocc, nvirt), Fock_vv(nvirt, nvirt);
+    auto  Fock_oo = std::make_shared<BTensor>(nocc, nocc);
+    auto  Fock_ov = std::make_shared<BTensor>(nocc, nvirt);
+    auto  Fock_vv = std::make_shared<BTensor>(nvirt, nvirt);
 
     // Integral tensors
-    BTensor G_oooo(nocc, nocc, nocc, nocc), G_vvvv(nvirt, nvirt, nvirt, nvirt);
-    BTensor G_ovvv(nocc, nvirt, nvirt, nvirt), G_ooov(nocc, nocc, nocc, nvirt);
-    BTensor G_oovv(nocc, nocc, nvirt, nvirt), G_ovov(nocc, nvirt, nocc, nvirt);
+    auto  G_oooo = std::make_shared<BTensor>(nocc, nocc, nocc, nocc);
+    auto  G_vvvv = std::make_shared<BTensor>(nvirt, nvirt, nvirt, nvirt);
+    auto  G_ovvv = std::make_shared<BTensor>(nocc, nvirt, nvirt, nvirt);
+    auto  G_ooov = std::make_shared<BTensor>(nocc, nocc, nocc, nvirt);
+    auto  G_oovv = std::make_shared<BTensor>(nocc, nocc, nvirt, nvirt);
+    auto  G_ovov = std::make_shared<BTensor>(nocc, nvirt, nocc, nvirt);
 
     for (auto i = 0; i < nocc; ++i) {
-      Fock_oo(i,i) = fock_spin(i,i);
+      (*Fock_oo)(i,i) = fock_spin(i,i);
       for (auto a = 0; a < nvirt; ++a) {
-        Fock_ov(i,a) = fock_spin(i,a+nocc);
-        D_ov(i,a) = fock_spin(i,i) - fock_spin(a+nocc,a+nocc);
+        (*Fock_ov)(i,a) = fock_spin(i,a+nocc);
+        (*D_ov)(i,a) = fock_spin(i,i) - fock_spin(a+nocc,a+nocc);
         for (auto j = 0; j < nocc; ++j) {
           for (auto b = 0; b < nvirt; ++b) {
-            Fock_vv(a,b) = fock_spin(a+nocc,b+nocc);
-            D_oovv(i,j,a,b) = D_ov(i,a) + fock_spin(j,j) - fock_spin(b+nocc,b+nocc);
-            G_oovv(i,j,a,b) = ints_mo_spin(i,j,a+nocc,b+nocc);
-            G_ovov(i,a,j,b) = ints_mo_spin(i,a+nocc,j,b+nocc);
+            (*Fock_vv)(a,b) = fock_spin(a+nocc,b+nocc);
+            (*D_oovv)(i,j,a,b) = (*D_ov)(i,a) + fock_spin(j,j) - fock_spin(b+nocc,b+nocc);
+            (*G_oovv)(i,j,a,b) = ints_mo_spin(i,j,a+nocc,b+nocc);
+            (*G_ovov)(i,a,j,b) = ints_mo_spin(i,a+nocc,j,b+nocc);
           }
         }
       }
@@ -328,7 +337,7 @@ int main(int argc, char *argv[])
       for (auto a = 0; a < nvirt; ++a) {
         for (auto b = 0; b < nvirt; ++b) {
           for (auto c = 0; c < nvirt; ++c) {
-            G_ovvv(i,a,b,c) = ints_mo_spin(i,a+nocc,b+nocc,c+nocc);
+            (*G_ovvv)(i,a,b,c) = ints_mo_spin(i,a+nocc,b+nocc,c+nocc);
           }
         }
       }
@@ -337,7 +346,7 @@ int main(int argc, char *argv[])
       for (auto j = 0; j < nocc; ++j) {
         for (auto k = 0; k < nocc; ++k) {
           for (auto a = 0; a < nvirt; ++a) {
-            G_ooov(i,j,k,a) = ints_mo_spin(i,j,k,a+nocc);
+            (*G_ooov)(i,j,k,a) = ints_mo_spin(i,j,k,a+nocc);
           }
         }
       }
@@ -346,7 +355,7 @@ int main(int argc, char *argv[])
       for (auto j = 0; j < nocc; ++j) {
         for (auto k = 0; k < nocc; ++k) {
           for (auto l = 0; l < nocc; ++l) {
-            G_oooo(i,j,k,l) = ints_mo_spin(i,j,k,l);
+            (*G_oooo)(i,j,k,l) = ints_mo_spin(i,j,k,l);
           }
         }
       }
@@ -355,7 +364,7 @@ int main(int argc, char *argv[])
       for (auto b = 0; b < nvirt; ++b) {
         for (auto c = 0; c < nvirt; ++c) {
           for (auto d = 0; d < nvirt; ++d) {
-            G_vvvv(a,b,c,d) = ints_mo_spin(a+nocc,b+nocc,c+nocc,d+nocc);
+            (*G_vvvv)(a,b,c,d) = ints_mo_spin(a+nocc,b+nocc,c+nocc,d+nocc);
           }
         }
       }
@@ -366,7 +375,7 @@ int main(int argc, char *argv[])
           for (auto a = 0; a < nvirt; ++a) {
             for (auto b = 0; b < nvirt; ++b) {
               for (auto c = 0; c < nvirt; ++c) {
-                D_ooovvv(i,j,k,a,b,c) = D_oovv(i,j,a,b) + D_ov(k,c);
+                (*D_ooovvv)(i,j,k,a,b,c) = (*D_oovv)(i,j,a,b) + (*D_ov)(k,c);
               }
             }
           }
@@ -376,13 +385,13 @@ int main(int argc, char *argv[])
 
     //
     // singles and doubles for CCSD calculation
-    auto t_ov   = BTensor(nocc, nvirt);
-    auto t_oovv = BTensor(nocc, nocc, nvirt, nvirt);
-    t_ov.fill(0.0);
-    t_oovv.fill(0.0);
-    // and triples
-    auto t_ooovvv = BTensor(nocc, nocc, nocc, nvirt, nvirt, nvirt);
-    t_ooovvv.fill(0.0);
+    auto t_ov   = std::make_shared<BTensor>(nocc, nvirt);
+    auto t_oovv = std::make_shared<BTensor>(nocc, nocc, nvirt, nvirt);
+    (*t_ov).fill(0.0);
+    (*t_oovv).fill(0.0);
+    // and triples if CCSDT required
+    auto t_ooovvv = std::make_shared<BTensor>(nocc, nocc, nocc, nvirt, nvirt, nvirt);
+    (*t_ooovvv).fill(0.0);
 
     // printing norms
     // cout << "\n"
@@ -400,19 +409,19 @@ int main(int argc, char *argv[])
     //
 
     // the map that is required while evaluating sequant expressions
-    std::map<std::wstring, BTensor const *> btensor_map;
-    btensor_map.insert(std::pair<std::wstring, BTensor*>(L"f_oo",   &Fock_oo));
-    btensor_map.insert(std::pair<std::wstring, BTensor*>(L"f_ov",   &Fock_ov));
-    btensor_map.insert(std::pair<std::wstring, BTensor*>(L"f_vv",   &Fock_vv));
-    btensor_map.insert(std::pair<std::wstring, BTensor*>(L"g_oooo", &G_oooo)); 
-    btensor_map.insert(std::pair<std::wstring, BTensor*>(L"g_vvvv", &G_vvvv)); 
-    btensor_map.insert(std::pair<std::wstring, BTensor*>(L"g_ovvv", &G_ovvv)); 
-    btensor_map.insert(std::pair<std::wstring, BTensor*>(L"g_ooov", &G_ooov)); 
-    btensor_map.insert(std::pair<std::wstring, BTensor*>(L"g_oovv", &G_oovv)); 
-    btensor_map.insert(std::pair<std::wstring, BTensor*>(L"g_ovov", &G_ovov)); 
-    btensor_map.insert(std::pair<std::wstring, BTensor*>(L"t_ov",   &t_ov)); 
-    btensor_map.insert(std::pair<std::wstring, BTensor*>(L"t_oovv", &t_oovv)); 
-    btensor_map.insert(std::pair<std::wstring, BTensor*>(L"t_ooovvv", &t_ooovvv)); 
+    std::map<std::wstring, BTensorPtr> btensor_map;
+    btensor_map.insert(std::pair<std::wstring, BTensorPtr>(L"f_oo",   Fock_oo));
+    btensor_map.insert(std::pair<std::wstring, BTensorPtr>(L"f_ov",   Fock_ov));
+    btensor_map.insert(std::pair<std::wstring, BTensorPtr>(L"f_vv",   Fock_vv));
+    btensor_map.insert(std::pair<std::wstring, BTensorPtr>(L"g_oooo", G_oooo)); 
+    btensor_map.insert(std::pair<std::wstring, BTensorPtr>(L"g_vvvv", G_vvvv)); 
+    btensor_map.insert(std::pair<std::wstring, BTensorPtr>(L"g_ovvv", G_ovvv)); 
+    btensor_map.insert(std::pair<std::wstring, BTensorPtr>(L"g_ooov", G_ooov)); 
+    btensor_map.insert(std::pair<std::wstring, BTensorPtr>(L"g_oovv", G_oovv)); 
+    btensor_map.insert(std::pair<std::wstring, BTensorPtr>(L"g_ovov", G_ovov)); 
+    btensor_map.insert(std::pair<std::wstring, BTensorPtr>(L"t_ov",   t_ov)); 
+    btensor_map.insert(std::pair<std::wstring, BTensorPtr>(L"t_oovv", t_oovv)); 
+    btensor_map.insert(std::pair<std::wstring, BTensorPtr>(L"t_ooovvv", t_ooovvv)); 
 
     // global sequant setup...
     std::setlocale(LC_ALL, "en_US.UTF-8");
@@ -442,28 +451,82 @@ int main(int argc, char *argv[])
 
     using sequant::interpret::antisymmetrize;
     using sequant::interpret::eval_equation;
+    using sequant::factorize::factorize_expr;
+
+    // factorize CCSD equations
+    auto index_size_map = std::make_shared<ispace_map>(ispace_map{});
+    index_size_map->insert(ispace_pair(sequant::IndexSpace::active_occupied, nocc));
+    index_size_map->insert(ispace_pair(sequant::IndexSpace::active_unoccupied, nvirt));
+
+    for (auto i=1; i<cc_r.size(); ++i)
+      cc_r[i] = factorize_expr(cc_r.at(i), index_size_map, true);
+
+    auto cc_r1 = std::make_shared<sequant::evaluate::EvalTensor>(cc_r[1]);
+    cc_r1->fill_btas_indices();
+    auto cc_r2 = std::make_shared<sequant::evaluate::EvalTensor>(cc_r[2]);
+    cc_r2->fill_btas_indices();
+
+    sequant::container::map<sequant::evaluate::hash_type, size_t>  hash_counts_r1, hash_counts_r2;
+    sequant::evaluate::fill_hash_counts(cc_r1, hash_counts_r1);
+    sequant::evaluate::fill_hash_counts(cc_r2, hash_counts_r2);
+
+    auto generate_hash_map_entry = [](std::wstring& label, std::wstring& spaces,
+        std::shared_ptr<BTensor>& tnsr_ptr) {
+      auto space_vector = container::svector<IndexSpace::Type>{};
+      for (auto sp : spaces) {
+        if (sp == 'o')
+          space_vector.push_back(IndexSpace::active_occupied);
+        else if (sp == 'v')
+          space_vector.push_back(IndexSpace::active_unoccupied);
+        else
+          throw std::logic_error(
+              "Use 'o' for active_occupied and 'v' for active_unoccupied "
+              "IndexSpace!");
+      }
+      auto hval = sequant::evaluate::DataTensorSpecs(label, space_vector)
+        .get_hash_value();
+      return sequant::evaluate::hash_to_dtensor_map<BTensor>::value_type(hval, tnsr_ptr);
+    };
+
+    auto hash_to_ptr = sequant::evaluate::hash_to_dtensor_map<BTensor>();
+    for (auto& item: btensor_map){
+      std::wstring label = std::wstring{item.first[0]};
+      std::wstring spaces = std::wstring{item.first.substr(2, std::wstring::npos)};
+      auto entry = generate_hash_map_entry(label, spaces, item.second);
+      hash_to_ptr.insert(entry);
+    }
+
+    auto context_r1 = sequant::evaluate::EvalContext<BTensor>(hash_to_ptr, hash_counts_r1);
+    auto context_r2 = sequant::evaluate::EvalContext<BTensor>(hash_to_ptr, hash_counts_r2);
 
     auto start = high_resolution_clock::now();
     do { 
       ++iter;
-      auto R1 = eval_equation(cc_r[1], btensor_map).tensor();
-      auto R2 = eval_equation(cc_r[2], btensor_map).tensor();
+      // old method
+      // auto R1 = eval_equation(cc_r[1], btensor_map).tensor();
+      // auto R2 = eval_equation(cc_r[2], btensor_map).tensor();
+      // auto R3 = eval_equation(cc_r[3], btensor_map).tensor();
+
+      // new method
+      auto R1 = sequant::evaluate::eval_evtensor(cc_r1, context_r1);
+      auto R2 = sequant::evaluate::eval_evtensor(cc_r2, context_r2);
 
       R2 = antisymmetrize(R2);
+      // R3 = antisymmetrize(R3);
 
       cout << "using BTAS,    iter " << iter << endl;
       /* cout << "norm(R1) = " << std::sqrt(btas::dot(R1, R1)) << endl; */
       /* cout << "norm(R2) = " << std::sqrt(btas::dot(R2, R2)) << endl; */
 
       // save previous norms
-      auto norm_last  = std::sqrt(btas::dot(t_oovv, t_oovv));
+      auto norm_last  = std::sqrt(btas::dot(*t_oovv, *t_oovv));
 
       //////////////
       // Updating amplitudes
       // update t_ov
       for (auto i = 0; i < nocc; ++i) {
         for (auto a = 0; a < nvirt; ++a) {
-          t_ov(i, a) += R1(i, a)/D_ov(i,a); } }
+          (*t_ov)(i, a) += R1(i, a)/(*D_ov)(i,a); } }
 
       //
       // update t_oovv
@@ -471,24 +534,35 @@ int main(int argc, char *argv[])
         for (auto j = 0; j < nocc; ++j) {
           for (auto a = 0; a < nvirt; ++a) {
             for (auto b = 0; b < nvirt; ++b) {
-              t_oovv(i, j, a, b) += R2(i, j, a, b)/D_oovv(i,j,a,b); } } } }
+              (*t_oovv)(i, j, a, b) += R2(i, j, a, b)/(*D_oovv)(i,j,a,b); } } } }
 
-      cout << "norm(t_ov)    " << std::sqrt(btas::dot(t_ov,t_ov))       <<endl;
-      cout << "norm(t_oovv)  " << std::sqrt(btas::dot(t_oovv,t_oovv))   <<endl;
+      //
+      // update t_ooovvv
+      // for (auto i = 0; i < nocc; ++i) {
+      //   for (auto j = 0; j < nocc; ++j) {
+      //     for (auto k = 0; k < nocc; ++k) {
+      //       for (auto a = 0; a < nvirt; ++a) {
+      //         for (auto b = 0; b < nvirt; ++b) {
+      //           for (auto c = 0; c < nvirt; ++c) {
+      //             t_ooovvv(i,j,k,a,b,c)
+      //               += R3(i,j,k,a,b,c)/D_ooovvv(i,j,k,a,b,c); } } } } } }
+
+      cout << "norm(t_ov)    " << std::sqrt(btas::dot(*t_ov,*t_ov))       <<endl;
+      cout << "norm(t_oovv)  " << std::sqrt(btas::dot(*t_oovv,*t_oovv))   <<endl;
 
       auto eccsd_last = eccsd;
 
       // calculating energy
       BTensor temp_tensor;
       enum {i, j, a, b};
-      btas::contract(1.0, G_oovv, {i,j,a,b}, t_ov, {i,a}, 0.0, temp_tensor, {j,b});
+      btas::contract(1.0, *G_oovv, {i,j,a,b}, *t_ov, {i,a}, 0.0, temp_tensor, {j,b});
       //
-      eccsd  = 0.5*btas::dot(temp_tensor, t_ov)
-        + 0.25*btas::dot(G_oovv, t_oovv)
-        + btas::dot(Fock_ov, t_ov);
-      printf("E(CCSD) is: %20.12f\n\n", eccsd);
+      eccsd  = 0.5*btas::dot(temp_tensor, *t_ov)
+        + 0.25*btas::dot(*G_oovv, *t_oovv)
+        + btas::dot(*Fock_ov, *t_ov);
+      printf("E(CC) is: %20.12f\n\n", eccsd);
 
-      normdiff = norm_last - sqrt(btas::dot(t_oovv, t_oovv));
+      normdiff = norm_last - sqrt(btas::dot(*t_oovv, *t_oovv));
       ediff    = eccsd_last - eccsd;
 
     } while ((fabs(normdiff) > conv || fabs(ediff) > conv) && (iter < maxiter));
@@ -496,8 +570,7 @@ int main(int argc, char *argv[])
     auto stop  = high_resolution_clock::now();
     auto  duration = duration_cast<microseconds>(stop - start);
     cout << "\nOut of loop after " << iter   << " iterations.\n"
-         << "\nTime: " << duration.count() << " microseconds" << endl;
-
+         << "\nTime: " << duration.count() << " microseconds." << endl;
   } // end of try block; if any exceptions occurred, report them and exit cleanly
   catch (const char* ex) {
     cerr << "caught exception: " << ex << endl;

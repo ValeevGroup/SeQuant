@@ -3,11 +3,11 @@
 # error "SEQUANT_HAS_TILEDARRAY should be defined when building cc_tiledarray"
 #endif
 
-#include "sequant_setup.hpp"
+#include "../sequant_setup.hpp"
 
-#include "../contract/scf/hartree-fock.h"
-#include "../contract/interpret/interpreted_tensor.hpp"
-#include "../contract/interpret/contract.hpp"
+#include "scf/hartree-fock.h"
+#include "interpret/interpreted_tensor.hpp"
+#include "interpret/contract.hpp"
 
 int main(int argc, char *argv[])
 {
@@ -328,44 +328,44 @@ int main(int argc, char *argv[])
     TA::TiledRange tr_ooovvv{{0, nocc}, {0, nocc}, {0, nocc},
                              {0, nvirt}, {0, nvirt}, {0, nvirt}};
     //
-    auto D_ov     = TA::TArrayD(world, tr_ov);
-    auto D_oovv   = TA::TArrayD(world, tr_oovv);
-    auto D_ooovvv = TA::TArrayD(world, tr_ooovvv);
-    auto Fock_oo  = TA::TArrayD(world, tr_oo);
-    auto Fock_ov  = TA::TArrayD(world, tr_ov);
-    auto Fock_vv  = TA::TArrayD(world, tr_vv);
-    auto G_oooo   = TA::TArrayD(world, tr_oooo);
-    auto G_ooov   = TA::TArrayD(world, tr_ooov);
-    auto G_oovv   = TA::TArrayD(world, tr_oovv);
-    auto G_ovov   = TA::TArrayD(world, tr_ovov);
-    auto G_ovvv   = TA::TArrayD(world, tr_ovvv);
-    auto G_vvvv   = TA::TArrayD(world, tr_vvvv);
+    auto D_ov     = std::make_shared<TA::TArrayD>(world, tr_ov);
+    auto D_oovv   = std::make_shared<TA::TArrayD>(world, tr_oovv);
+    auto D_ooovvv = std::make_shared<TA::TArrayD>(world, tr_ooovvv);
+    auto Fock_oo  = std::make_shared<TA::TArrayD>(world, tr_oo);
+    auto Fock_ov  = std::make_shared<TA::TArrayD>(world, tr_ov);
+    auto Fock_vv  = std::make_shared<TA::TArrayD>(world, tr_vv);
+    auto G_oooo   = std::make_shared<TA::TArrayD>(world, tr_oooo);
+    auto G_ooov   = std::make_shared<TA::TArrayD>(world, tr_ooov);
+    auto G_oovv   = std::make_shared<TA::TArrayD>(world, tr_oovv);
+    auto G_ovov   = std::make_shared<TA::TArrayD>(world, tr_ovov);
+    auto G_ovvv   = std::make_shared<TA::TArrayD>(world, tr_ovvv);
+    auto G_vvvv   = std::make_shared<TA::TArrayD>(world, tr_vvvv);
 
-    D_ov.fill(0.0);
-    D_oovv.fill(0.0);
-    D_ooovvv.fill(0.0);
-    Fock_oo.fill(0.0);
-    Fock_ov.fill(0.0);
-    Fock_vv.fill(0.0);
-    G_oooo.fill(0.0);
-    G_ooov.fill(0.0);
-    G_oovv.fill(0.0);
-    G_ovov.fill(0.0);
-    G_ovvv.fill(0.0);
-    G_vvvv.fill(0.0);
+    (*D_ov).fill(0.0);
+    (*D_oovv).fill(0.0);
+    (*D_ooovvv).fill(0.0);
+    (*Fock_oo).fill(0.0);
+    (*Fock_ov).fill(0.0);
+    (*Fock_vv).fill(0.0);
+    (*G_oooo).fill(0.0);
+    (*G_ooov).fill(0.0);
+    (*G_oovv).fill(0.0);
+    (*G_ovov).fill(0.0);
+    (*G_ovvv).fill(0.0);
+    (*G_vvvv).fill(0.0);
 
-    auto tile_D_ov     = D_ov.find({0,0}).get();
-    auto tile_D_oovv   = D_oovv.find({0,0,0,0}).get();
-    auto tile_D_ooovvv = D_ooovvv.find({0,0,0,0,0,0}).get();
-    auto tile_Fock_oo  = Fock_oo.find({0,0}).get();
-    auto tile_Fock_ov  = Fock_ov.find({0,0}).get();
-    auto tile_Fock_vv  = Fock_vv.find({0,0}).get();
-    auto tile_G_oooo   = G_oooo.find({0,0,0,0}).get();
-    auto tile_G_ooov   = G_ooov.find({0,0,0,0}).get();
-    auto tile_G_oovv   = G_oovv.find({0,0,0,0}).get();
-    auto tile_G_ovov   = G_ovov.find({0,0,0,0}).get();
-    auto tile_G_ovvv   = G_ovvv.find({0,0,0,0}).get();
-    auto tile_G_vvvv   = G_vvvv.find({0,0,0,0}).get();
+    auto tile_D_ov     = (*D_ov).find({0,0}).get();
+    auto tile_D_oovv   = (*D_oovv).find({0,0,0,0}).get();
+    auto tile_D_ooovvv = (*D_ooovvv).find({0,0,0,0,0,0}).get();
+    auto tile_Fock_oo  = (*Fock_oo).find({0,0}).get();
+    auto tile_Fock_ov  = (*Fock_ov).find({0,0}).get();
+    auto tile_Fock_vv  = (*Fock_vv).find({0,0}).get();
+    auto tile_G_oooo   = (*G_oooo).find({0,0,0,0}).get();
+    auto tile_G_ooov   = (*G_ooov).find({0,0,0,0}).get();
+    auto tile_G_oovv   = (*G_oovv).find({0,0,0,0}).get();
+    auto tile_G_ovov   = (*G_ovov).find({0,0,0,0}).get();
+    auto tile_G_ovvv   = (*G_ovvv).find({0,0,0,0}).get();
+    auto tile_G_vvvv   = (*G_vvvv).find({0,0,0,0}).get();
 
     for (auto i = 0; i < nocc; ++i) {
       tile_Fock_oo(i,i) = tile_fock_spin(i,i);
@@ -434,45 +434,29 @@ int main(int argc, char *argv[])
     }
 
     // amplitudes for coupled-cluster calculations
-    auto t_ov     = TA::TArrayD(world, tr_ov);
-    auto t_oovv   = TA::TArrayD(world, tr_oovv);
-    auto t_ooovvv = TA::TArrayD(world, tr_ooovvv);
-    t_ov.fill(0.0);
-    t_oovv.fill(0.0);
-    t_ooovvv.fill(0.0);
-
-    //printing norms
-    // cout<< "\n"
-    //     <<"norm(Fock_oo)"<<std::sqrt(Fock_oo("i,j").dot(Fock_oo("i,j")))<<endl;
-    // cout<<"norm(Fock_ov)"<<std::sqrt(Fock_ov("i,j").dot(Fock_ov("i,j")))<<endl;
-    // cout<<"norm(Fock_vv)"<<std::sqrt(Fock_vv("i,j").dot(Fock_vv("i,j")))<<endl;
-    // cout<<"norm(G_oooo)"<<std::sqrt(G_oooo("i,j,a,b").dot(G_oooo("i,j,a,b")))<<endl;
-    // cout<<"norm(G_vvvv)"<<std::sqrt(G_vvvv("i,j,a,b").dot(G_vvvv("i,j,a,b")))<<endl;
-    // cout<<"norm(G_ovvv)"<<std::sqrt(G_ovvv("i,j,a,b").dot(G_ovvv("i,j,a,b")))<<endl;
-    // cout<<"norm(G_ooov)"<<std::sqrt(G_ooov("i,j,a,b").dot(G_ooov("i,j,a,b")))<<endl;
-    // cout<<"norm(G_oovv)"<<std::sqrt(G_oovv("i,j,a,b").dot(G_oovv("i,j,a,b")))<<endl;
-    // cout<<"norm(G_ovov)"<<std::sqrt(G_ovov("i,j,a,b").dot(G_ovov("i,j,a,b")))<<endl;
-    // cout<<"norm(t_ov)"<<std::sqrt(t_ov("i,j").dot(t_ov("i,j")))<<endl;
-    // cout<<"norm(t_oovv)"<<std::sqrt(t_oovv("i,j,a,b").dot(t_oovv("i,j,a,b")))<<endl;
-    // cout<<"norm(t_ooovvv)"<<std::sqrt(t_ooovvv("i,j,k,a,b,c").dot(t_ooovvv("i,j,k,a,b,c")))<<endl;
-    //
+    auto t_ov     = std::make_shared<TA::TArrayD>(world, tr_ov);
+    auto t_oovv   = std::make_shared<TA::TArrayD>(world, tr_oovv);
+    auto t_ooovvv = std::make_shared<TA::TArrayD>(world, tr_ooovvv);
+    (*t_ov).fill(0.0);
+    (*t_oovv).fill(0.0);
+    (*t_ooovvv).fill(0.0);
 
     // the map that is required while evaluating sequant expressions
-    using pair_tensor_map = std::pair<std::wstring, TA::TArrayD const *>;
+    using pair_tensor_map = std::pair<std::wstring, std::shared_ptr<TA::TArrayD>>;
     auto tensor_map = std::map<pair_tensor_map::first_type,
                                pair_tensor_map::second_type>{};
-    tensor_map.insert(pair_tensor_map(L"f_oo",   &Fock_oo));
-    tensor_map.insert(pair_tensor_map(L"f_ov",   &Fock_ov));
-    tensor_map.insert(pair_tensor_map(L"f_vv",   &Fock_vv));
-    tensor_map.insert(pair_tensor_map(L"g_oooo", &G_oooo)); 
-    tensor_map.insert(pair_tensor_map(L"g_vvvv", &G_vvvv)); 
-    tensor_map.insert(pair_tensor_map(L"g_ovvv", &G_ovvv)); 
-    tensor_map.insert(pair_tensor_map(L"g_ooov", &G_ooov)); 
-    tensor_map.insert(pair_tensor_map(L"g_oovv", &G_oovv)); 
-    tensor_map.insert(pair_tensor_map(L"g_ovov", &G_ovov)); 
-    tensor_map.insert(pair_tensor_map(L"t_ov",   &t_ov)); 
-    tensor_map.insert(pair_tensor_map(L"t_oovv", &t_oovv)); 
-    tensor_map.insert(pair_tensor_map(L"t_ooovvv", &t_ooovvv)); 
+    tensor_map.insert(pair_tensor_map(L"f_oo",   Fock_oo));
+    tensor_map.insert(pair_tensor_map(L"f_ov",   Fock_ov));
+    tensor_map.insert(pair_tensor_map(L"f_vv",   Fock_vv));
+    tensor_map.insert(pair_tensor_map(L"g_oooo", G_oooo)); 
+    tensor_map.insert(pair_tensor_map(L"g_vvvv", G_vvvv)); 
+    tensor_map.insert(pair_tensor_map(L"g_ovvv", G_ovvv)); 
+    tensor_map.insert(pair_tensor_map(L"g_ooov", G_ooov)); 
+    tensor_map.insert(pair_tensor_map(L"g_oovv", G_oovv)); 
+    tensor_map.insert(pair_tensor_map(L"g_ovov", G_ovov)); 
+    tensor_map.insert(pair_tensor_map(L"t_ov",   t_ov)); 
+    tensor_map.insert(pair_tensor_map(L"t_oovv", t_oovv)); 
+    tensor_map.insert(pair_tensor_map(L"t_ooovvv", t_ooovvv)); 
 
     //
     // global sequant setup...
@@ -503,6 +487,14 @@ int main(int argc, char *argv[])
 
     using sequant::interpret::antisymmetrize;
     using sequant::interpret::eval_equation;
+    using sequant::factorize::factorize_expr;
+
+    // factorize CCSDT equations
+    auto index_size_map = std::make_shared<ispace_map>(ispace_map{});
+    index_size_map->insert(ispace_pair(sequant::IndexSpace::active_occupied, nocc));
+    index_size_map->insert(ispace_pair(sequant::IndexSpace::active_unoccupied, nvirt));
+    for (auto i=1; i<cc_r.size(); ++i)
+      cc_r[i] = factorize_expr(cc_r.at(i), index_size_map, true);
 
     auto tstart = std::chrono::high_resolution_clock::now();
     do {
@@ -515,20 +507,20 @@ int main(int argc, char *argv[])
       R3 = antisymmetrize(R3);
 
       auto tile_R1       = R1.find({0,0}).get();
-      auto tile_t_ov     = t_ov.find({0,0}).get();
+      auto tile_t_ov     = (*t_ov).find({0,0}).get();
 
       auto tile_R2       = R2.find({0,0,0,0}).get();
-      auto tile_t_oovv   = t_oovv.find({0,0,0,0}).get();
+      auto tile_t_oovv   = (*t_oovv).find({0,0,0,0}).get();
 
       auto tile_R3       = R3.find({0,0,0,0,0,0}).get();
-      auto tile_t_ooovvv = t_ooovvv.find({0,0,0,0,0,0}).get();
+      auto tile_t_ooovvv = (*t_ooovvv).find({0,0,0,0,0,0}).get();
 
       cout << "using TA,    iter " << iter << endl;
       // cout << "norm(R1) = " << std::sqrt(R1("i,j").dot(R1("i,j"))) << endl;
       // cout << "norm(R2) = " << std::sqrt(R2("i,j,a,b").dot(R2("i,j,a,b"))) << endl;
 
       // save previous norm
-      auto norm_last = std::sqrt(t_oovv("i,j,a,b").dot(t_oovv("i,j,a,b")));
+      auto norm_last = std::sqrt((*t_oovv)("i,j,a,b").dot((*t_oovv)("i,j,a,b")));
 
       //////////////
       // Updating amplitudes
@@ -556,22 +548,22 @@ int main(int argc, char *argv[])
                   tile_t_ooovvv(i,j,k,a,b,c)
                     += tile_R3(i,j,k,a,b,c)/tile_D_ooovvv(i,j,k,a,b,c); } } } } } }
 
-      cout<<"norm(t_ov) "<<std::sqrt(t_ov("i,j").dot(t_ov("i,j")))<<endl;
-      cout<<"norm(t_oovv) "<<std::sqrt(t_oovv("i,j,a,b").dot(t_oovv("i,j,a,b")))<<endl;
+      cout<<"norm(t_ov) "<<std::sqrt((*t_ov)("i,j").dot((*t_ov)("i,j")))<<endl;
+      cout<<"norm(t_oovv) "<<std::sqrt((*t_oovv)("i,j,a,b").dot((*t_oovv)("i,j,a,b")))<<endl;
 
       auto ecc_last = ecc;
 
       // calculating energy
       TA::TArrayD temp_tensor;
-      temp_tensor("j,b") = G_oovv("i,j,a,b")*t_ov("i,a");
+      temp_tensor("j,b") = (*G_oovv)("i,j,a,b")*(*t_ov)("i,a");
 
-      ecc = 0.5*temp_tensor("i,a").dot(t_ov("i,a"))
-              + 0.25*G_oovv("i,j,a,b").dot(t_oovv("i,j,a,b"))
-              + Fock_ov("i,a").dot(t_ov("i,a"));
+      ecc = 0.5*temp_tensor("i,a").dot((*t_ov)("i,a"))
+              + 0.25*(*G_oovv)("i,j,a,b").dot((*t_oovv)("i,j,a,b"))
+              + (*Fock_ov)("i,a").dot((*t_ov)("i,a"));
 
       printf("E(CC) is: %20.12f\n\n", ecc);
 
-      normdiff = norm_last - std::sqrt(t_oovv("i,j,a,b").dot(t_oovv("i,j,a,b")));
+      normdiff = norm_last - std::sqrt((*t_oovv)("i,j,a,b").dot((*t_oovv)("i,j,a,b")));
       ediff    = ecc_last - ecc;
 
     } while((fabs(normdiff) > conv || fabs(ediff) > conv) && (iter < maxiter));

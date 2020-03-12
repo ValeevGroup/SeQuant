@@ -38,6 +38,9 @@ if(NOT TBB_FOUND)
       elseif(EXISTS ${TBB_ROOT_DIR}/lib/intel64/gcc4.1) # Intel packaged TBB
         set(TBB_LIBRARY ${TBB_ROOT_DIR}/lib/intel64/gcc4.1
                 CACHE PATH "The library directory for TBB")
+      elseif(EXISTS ${TBB_ROOT_DIR}/lib/intel64/gcc4.8) # Intel packaged TBB
+        set(TBB_LIBRARY ${TBB_ROOT_DIR}/lib/intel64/gcc4.8
+                CACHE PATH "The library directory for TBB")
       else() # Intel OSS TBB
         set(TBB_LIBRARY ${TBB_ROOT_DIR}/lib
                 CACHE PATH "The library directory for TBB")

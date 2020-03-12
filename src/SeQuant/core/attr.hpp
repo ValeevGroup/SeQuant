@@ -27,6 +27,9 @@ enum class ParticleSymmetry { symm, nonsymm, invalid };
 enum class Symmetry { symm, antisymm, nonsymm, invalid };
 
 /// describes supported symmetries of tensorial objects w.r.t. bra-ket exchange
+///
+/// @note Currently there is no support for swapping bra index with the ket
+///       index for a single particle, only whole bra-ket swaps are considered.
 enum class BraKetSymmetry { symm, conjugate, nonsymm, invalid };
 
 inline std::wstring to_wolfram(const Symmetry& symmetry) {
