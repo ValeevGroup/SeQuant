@@ -1,4 +1,14 @@
-#! /bin/sh
+#! /bin/bash
+
+# wipe out cache if commit message contains [travis delete-cache]
+# see https://github.com/travis-ci/travis-ci/issues/2245
+ls ${INSTALL_PREFIX}
+if [[ "${TRAVIS_COMMIT_MESSAGE}" = *"[travis delete-cache]"* ]]; then
+  echo "Clearing out cache due to [travis clean-cache] found in the commit message"
+  rm -rf ${INSTALL_PREFIX}/*
+  ccache -C
+  ccache -c
+fi
 
 ${TRAVIS_BUILD_DIR}/bin/build-boost-$TRAVIS_OS_NAME.sh
 ${TRAVIS_BUILD_DIR}/bin/build-rangev3-$TRAVIS_OS_NAME.sh
@@ -21,14 +31,11 @@ if [ "$CXX" = "g++" ]; then
 else
     export CC=/usr/bin/clang-$CLANG_VERSION
     export CXX=/usr/bin/clang++-$CLANG_VERSION
-    export EXTRAFLAGS="-Wno-unused-command-line-argument -stdlib=libc++"
+    export EXTRAFLAGS="-Wno-unused-command-line-argument"
 fi
 
 echo $($CC --version)
 echo $($CXX --version)
-
-# list the prebuilt prereqs
-ls ${INSTALL_PREFIX}
 
 # where to install
 export INSTALL_DIR=${INSTALL_PREFIX}/SeQuant
@@ -39,7 +46,7 @@ mkdir -p SeQuant
 cd SeQuant
 
 # configure CodeCov only for g++-8 debug build
-if [ "$BUILD_TYPE" = "Debug" ] && [ "$GCC_VERSION" = 8 ]; then
+if [ "$BUILD_TYPE" = "Debug" ] && [ "$GCC_VERSION" = 8 ] && [ "$CXX" = "g++" ]; then
     export CODECOVCXXFLAGS="--coverage -O0"
 fi
 

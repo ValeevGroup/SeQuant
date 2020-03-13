@@ -8,8 +8,8 @@
 #include <limits>
 #include <utility>
 
-#include "../op.hpp"
-#include "../../../core/expr_fwd.hpp"
+#include "SeQuant/domain/mbpt/op.hpp"
+#include "SeQuant/core/expr_fwd.hpp"
 
 namespace sequant {
 namespace mbpt {

@@ -5,8 +5,8 @@
 #include "catch.hpp"
 
 #include <iostream>
-#include "../../src/SeQuant/core/hash.hpp"
-#include "../../src/SeQuant/core/wick.hpp"
+#include "SeQuant/core/hash.hpp"
+#include "SeQuant/core/wick.hpp"
 
 struct Dummy : public sequant::Expr {
   virtual ~Dummy() = default;
@@ -250,7 +250,7 @@ TEST_CASE("Expr", "[elements]") {
     sp0.append(2.0, std::make_shared<Dummy>());
     REQUIRE(to_latex(sp0) == L"{{{2}}{\\text{Dummy}}}");
 
-    // VecExpr<shared_ptr<Expr>>
+    // VecExpr<ExprPtr>
     {
       const auto ex5_init =
           std::vector<std::shared_ptr<Constant>>{std::make_shared<Constant>(1.0), std::make_shared<Constant>(2.0),
@@ -267,7 +267,7 @@ TEST_CASE("Expr", "[elements]") {
     sp0.append(2.0, std::make_shared<Dummy>());
     REQUIRE(to_wolfram(sp0) == L"Times[2,Dummy[]]");
 
-    // VecExpr<shared_ptr<Expr>>
+    // VecExpr<ExprPtr>
     {
       const auto ex5_init =
           std::vector<std::shared_ptr<Constant>>{std::make_shared<Constant>(1.0), std::make_shared<Constant>(2.0),
@@ -442,7 +442,6 @@ TEST_CASE("Expr", "[elements]") {
     const auto ex5_init =
         std::vector<std::shared_ptr<Constant>>{std::make_shared<Constant>(1.0), std::make_shared<Constant>(2.0),
                                                std::make_shared<Constant>(3.0)};
-    using boost::hash_value;
     REQUIRE_NOTHROW(hash_value(ex5_init));
     REQUIRE(hash_value(ex5_init) != hash_value(ex<Constant>(1)));
   }

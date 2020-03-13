@@ -41,7 +41,7 @@ void TensorCanonicalizer::register_instance(std::shared_ptr<TensorCanonicalizer>
 }
 
 
-std::shared_ptr<Expr> DefaultTensorCanonicalizer::apply(AbstractTensor &t) {
+ExprPtr DefaultTensorCanonicalizer::apply(AbstractTensor &t) {
   // tag all indices as ext->true/ind->false
   auto braket_view = braket(t);
   ranges::for_each(braket_view, [this](auto &idx) {
