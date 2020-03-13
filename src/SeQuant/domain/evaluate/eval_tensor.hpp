@@ -5,6 +5,8 @@
 #include <functional>
 #include <memory>
 
+#include <SeQuant/core/expr_fwd.hpp>
+
 #include "eval_tensor_fwd.hpp"
 
 namespace sequant::evaluate {
@@ -72,7 +74,7 @@ class EvalTensor {
 
   /// Visit the tree by pre-order traversal.
   virtual void visit(
-      const std::function<void(const EvalTensor &)> &visitor) const = 0;
+      const std::function<void(const EvalTensor&)>& visitor) const = 0;
 };
 
 ///
@@ -121,7 +123,8 @@ class EvalTensorIntermediate : public EvalTensor {
   std::wstring to_digraph() const override;
 
   /// Visit the tree by pre-order traversal.
-  void visit(const std::function<void(const EvalTensor &)> &visitor = {}) const override;
+  void visit(const std::function<void(const EvalTensor&)>& visitor = {})
+      const override;
 };
 
 ///
@@ -141,7 +144,13 @@ class EvalTensorLeaf : public EvalTensor {
   /// when using BTAS backend. See: https://github.com/BTAS/BTAS
   std::shared_ptr<boost::any> data_tensor_{nullptr};
 
+  /// The sequant Expression this leaf evaltensor corresponds to.
+  ExprPtr expr_{nullptr};
+
  public:
+  // Construct from a sequant tensor.
+  EvalTensorLeaf(const ExprPtr& expr);
+
   /// Setter method for the data_tensor_;
   /// @param dtensor_ptr A shared_ptr to the data-tensor associated with this
   /// leaf tensor.
@@ -150,11 +159,15 @@ class EvalTensorLeaf : public EvalTensor {
   /// @return True.
   bool is_leaf() const override;
 
+  /// Getter of the sequant expr corresponding to this eval tensor.
+  const ExprPtr& get_expr() const;
+
   /// Get a directed graph definitions and paths in dot language.
   std::wstring to_digraph() const override;
 
   /// Visit the tree by pre-order traversal.
-  void visit(const std::function<void(const EvalTensor &)> &visitor = {}) const override;
+  void visit(const std::function<void(const EvalTensor&)>& visitor = {})
+      const override;
 };
 
 }  // namespace sequant::evaluate

@@ -10,6 +10,7 @@
 ///
 
 #include "eval_tensor_fwd.hpp"
+#include "path_tree.hpp"
 
 #include <SeQuant/core/expr_fwd.hpp>
 #include <tuple>
@@ -28,21 +29,35 @@ std::tuple<EvalTensorPtr, EvalTensorPtr> fuse_optimally(const ExprPtr& lexpr,
 
 namespace detail {
 
-/// Get the hash values of all nodes in a evaluation tensor.
 ///
-/// @param tensor EvalTensor pointer.
-/// @return A set of hash values of each node in the EvalTensor.
-container::set<HashType> get_hash_values(const EvalTensorPtr& tensor);
+/// A functor for eval_tensor visit method.
+///
+/// It collects unique hash values and the ops counts of the corresponding
+/// evaluation tensors. The intention is to initialize such an object once and
+/// pass it as the parameter for visit method of EvalTensor objects to get the
+/// ops count when such objects are fused.
+///
+class FusionOpsCounter {
+ private:
+  container::set<HashType> m_hash_values;
 
-///
-/// Get the sum of operation counts for evaluations in a tensor whose hash
-/// values do not exist in a set of hash_values passed as a parameter.
-///
-/// @param tensor A pointer to EvalTensor.
-/// @param hash_values A set of hash_values to look at while dis-counting.
-/// @return Sum of operations count of evaluations.
-OpsCount get_unique_ops_count(const EvalTensorPtr& tensor,
-                              const container::set<HashType>& hash_values);
+  OpsCount m_ops_count{0};
+
+ public:
+  void operator()(const EvalTensorPtr& tree);
+
+  const container::set<HashType>& get_hash_values() const;
+
+  OpsCount get_ops_count() const;
+};
+
+/// @brief Translate a PathTree to a TensorNetwork object.
+/// @param path A PathTree object that encodes how the product will be
+/// factorized.
+/// @param expr A expr to seuant product to be factorized.
+/// @return ExprPtr to a sequant Product.
+ExprPtr path_to_product(const std::shared_ptr<PathTree>& path,
+                        const ExprPtr& expr);
 
 }  // namespace detail
 

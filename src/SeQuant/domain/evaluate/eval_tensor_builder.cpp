@@ -70,6 +70,9 @@ EvalTensorPtr EvalTensorBuilder::build_from_product(const ExprPtr& expr) const {
 }
 
 EvalTensorPtr EvalTensorBuilder::build_leaf(const ExprPtr& expr) const {
+  // create an object to return
+  auto leaf_tensor_ptr = std::make_shared<EvalTensorLeaf>(expr);
+
   auto& tnsr = expr->as<Tensor>();
 
   // if expr references to a real valued tensor check if swapping bra and ket
@@ -89,8 +92,6 @@ EvalTensorPtr EvalTensorBuilder::build_leaf(const ExprPtr& expr) const {
   std::move(ket_index_labels.begin(), ket_index_labels.end(),
             std::back_inserter(bra_index_labels));
 
-  // create an object to return
-  auto leaf_tensor_ptr = std::make_shared<EvalTensorLeaf>();
   // set indices of the object
   leaf_tensor_ptr->set_indices(bra_index_labels);
   // set hash value of the object

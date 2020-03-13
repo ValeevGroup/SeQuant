@@ -1,6 +1,8 @@
 #include "eval_tensor.hpp"
 #include "eval_tensor_fwd.hpp"
 
+#include <SeQuant/core/expr.hpp>
+
 #include <boost/any.hpp>
 #include <memory>
 
@@ -81,12 +83,17 @@ void EvalTensorIntermediate::visit(
 }
 
 // EvalTensorLeaf
+
+EvalTensorLeaf::EvalTensorLeaf(const ExprPtr& expr) : expr_{expr} {}
+
 void EvalTensorLeaf::set_data_tensor(
     const std::shared_ptr<boost::any>& dtensor_ptr) {
   data_tensor_ = dtensor_ptr;
 }
 
 bool EvalTensorLeaf::is_leaf() const { return true; }
+
+const ExprPtr& EvalTensorLeaf::get_expr() const { return expr_; }
 
 std::wstring EvalTensorLeaf::to_digraph() const {
   return L"node" + std::to_wstring(get_hash_value()) + L" [label = " +

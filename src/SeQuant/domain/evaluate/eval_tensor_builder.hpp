@@ -65,7 +65,7 @@ class EvalTensorBuilder {
   /// Hash leaf tensor.
   ///
   /// @param expr sequant ExprPtr to a sequant expression.
-  /// @param swap_bra_ket_labels hash kets before bras if true. Should be set
+  /// @param swap_bra_ket_labels Hash kets before bras if true. Should be set
   /// true while hashing real-valued tensors.
   /// @return Hash value of the tensor based on its kind and the index space of
   /// its bra and ket indices.

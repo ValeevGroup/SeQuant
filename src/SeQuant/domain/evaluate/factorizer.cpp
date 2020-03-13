@@ -22,34 +22,50 @@ const auto& rprod = std::dynamic_pointer_cast<Product>(rexpr);
 
 namespace detail {
 
-container::set<HashType> get_hash_values(const EvalTensorPtr& tensor) {
-  if (tensor->is_leaf())
-    return container::set<HashType>{tensor->get_hash_value()};
+class FusionOpsCounter {
+ private:
+  container::set<HashType> m_hash_values;
+  OpsCount m_ops_count;
 
-  const auto& imed = std::dynamic_pointer_cast<EvalTensorIntermediate>(tensor);
+ public:
+  void operator()(const EvalTensorPtr& tree) {
+    HashType hvalue = tree->get_hash_value();
 
-  // get hash values of the left eval tensor
-  auto lresult = get_hash_values(imed->get_left_tensor());
+    if (m_hash_values.contains(hvalue)) return;
 
-  // get hash values of the right eval tensor
-  auto rresult = get_hash_values(imed->get_right_tensor());
+    m_hash_values.insert(hvalue);
 
-  // merget them together and return
-  lresult.insert(rresult.begin(), rresult.end());
-  return lresult;
-}
+    m_ops_count += tree->get_ops_count();
+  }
 
-OpsCount get_unique_ops_count(const EvalTensorPtr& tensor,
-                              const container::set<HashType>& hash_values) {
-  // if a hash value exists, don't count it.
-  if (hash_values.contains(tensor->get_hash_value())) return 0;
+  const container::set<HashType>& get_hash_values() const {
+    return m_hash_values;
+  }
 
-  if (tensor->is_leaf()) return tensor->get_ops_count();
+  OpsCount get_ops_count() const { return m_ops_count; }
+};
 
-  const auto& imed = std::dynamic_pointer_cast<EvalTensorIntermediate>(tensor);
-  return imed->get_hash_value() +
-         get_unique_ops_count(imed->get_left_tensor(), hash_values) +
-         get_unique_ops_count(imed->get_right_tensor(), hash_values);
+ExprPtr path_to_product(const std::shared_ptr<PathTree>& path,
+                        const ExprPtr& expr) {
+  auto product = std::dynamic_pointer_cast<Product>(expr);
+  ProductPtr result(new Product{});
+  if (path->is_leaf()) {
+    result->append(product->factors()[path->get_label()]);
+    return result;
+  }
+
+  result->append(product->factors()[path->get_label()]);
+  for (const auto& i : path->get_children()) {
+    auto res = path_to_product(i, product);
+    auto& res_product = res->as<Product>();
+    // product of single factors is flattened
+    if (res_product.factors().size() == 1)
+      result->append(1.0, std::move(res_product.factors()[0]));
+    // else append as it is
+    else
+      result->append(std::move(res));
+  }
+  return result;
 }
 
 }  // namespace detail
