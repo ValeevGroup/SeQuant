@@ -95,6 +95,16 @@ class EvalTensorIntermediate : public EvalTensor {
   /// The type of the binary evaluation.
   Operation operation_{Operation::INVALID};
 
+  /// Colors used while generating digraphs
+  static const std::wstring SUM_COLOR;
+
+  static const std::wstring PROD_COLOR;
+
+  static const std::wstring ANTISYMM_COLOR;
+
+  static const std::wstring SYMM_COLOR;
+
+
  public:
   /// @return false
   bool is_leaf() const override;

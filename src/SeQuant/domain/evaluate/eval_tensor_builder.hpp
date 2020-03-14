@@ -15,9 +15,6 @@
 namespace sequant::evaluate {
 class EvalTensorBuilder {
  private:
-  /// The evaluation tree built by this builder.
-  EvalTensorPtr eval_tree_{nullptr};
-
   /// By default assume the tensor data is real -- not complex.
   const bool complex_tensor_data{false};
 
@@ -32,17 +29,22 @@ class EvalTensorBuilder {
   /// such that the first factor of the product is either an antisymmetrization
   /// tensor or symmetrization tensor.
   /// @param expr sequant ExprPtr.
-  void build_eval_tree(const ExprPtr& expr);
+  /// @return Pointer to the Evaluation Tensor
+  /// @throws std::domain_error when the expr is neither Sum, Product or Tensor.
+  EvalTensorPtr build_tree(const ExprPtr& expr) const;
 
-  /// Getter for the built EvalTree.
-  /// @return EvalTensorPtr to the evaluation tree.
-  const EvalTensorPtr& get_eval_tree() const;
-
+ private:
   /// Build EvalTensor from a sequant Product.
   /// @param expr sequant ExprPtr to sequant Product.
   ///
   /// @return EvalTensor pointer.
-  EvalTensorPtr build_from_product(const ExprPtr& expr) const;
+  EvalTensorPtr build_product(const ExprPtr& expr) const;
+
+  /// Build EvalTensor from a sequant Sum.
+  /// @param expr sequant ExprPtr to sequant Sum.
+  ///
+  /// @return EvalTensor pointer.
+  EvalTensorPtr build_sum(const ExprPtr& expr) const;
 
   /// Build leaf EvalTensor from sequant tensor.
   ///

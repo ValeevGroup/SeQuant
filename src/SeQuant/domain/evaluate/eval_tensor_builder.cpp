@@ -14,59 +14,44 @@ namespace sequant::evaluate {
 EvalTensorBuilder::EvalTensorBuilder(bool complex_tensor_data)
     : complex_tensor_data{complex_tensor_data} {}
 
-const EvalTensorPtr& EvalTensorBuilder::get_eval_tree() const {
-  return eval_tree_;
-}
-
-void EvalTensorBuilder::build_eval_tree(const ExprPtr& expr) {
-  // a lambda function to combine an eval tensor with a summand
-  auto sum_accumulator = [this](const EvalTensorPtr& left,
-                                const ExprPtr& summand) {
-    // the @c left param is a binary evaluation tree such that it
-    // is an intermediate type of evaluation tensor whose left child
-    // is an antisymmetrization/symmetrization eval tensor and the right
-    // child is any other kind of valid eval tensor
-    auto left_imed = std::dynamic_pointer_cast<EvalTensorIntermediate>(left);
-    auto& left_tensor = left_imed->get_right_tensor();
-    //
-    //
-    auto right = build_from_product(summand);
-    auto right_imed = std::dynamic_pointer_cast<EvalTensorIntermediate>(right);
-    auto right_tensor = right_imed->get_right_tensor();
-    auto result_right =
-        build_intermediate(left_tensor, right_tensor, Operation::SUM);
-    // result_left is the antisymmetrization or the symmetrization operation
-    auto result_left = left_imed->get_left_tensor();
-    return build_intermediate(left_tensor, right_tensor,
-                              left_imed->get_operation());
-  };
-  // initialize the result with the first summand
-  auto& sum = expr->as<Sum>();
-  auto init = build_from_product(sum.summand(0));
-  // build and store the tree
-  eval_tree_ =
-      std::accumulate(sum.begin() + 1, sum.end(), init, sum_accumulator);
-}
-
-EvalTensorPtr EvalTensorBuilder::build_from_product(const ExprPtr& expr) const {
+EvalTensorPtr EvalTensorBuilder::build_tree(const ExprPtr& expr) const {
   if (expr->is<Tensor>()) {
     return build_leaf(expr);
   }
-  // lambda function to make an intermediate evaluation product from the factors
-  // of a product type sequant exprs
-  auto product_accumulator = [this](const EvalTensorPtr& left,
-                                    const ExprPtr& expr) {
-    auto right = build_from_product(expr);
-    return build_intermediate(left, right, Operation::PRODUCT);
+  if (expr->is<Product>()) {
+    return build_product(expr);
+  }
+  if (expr->is<Sum>()) {
+    return build_sum(expr);
+  }
+  throw std::domain_error("Only sum, product or tensor is allowed!");
+}
+
+EvalTensorPtr EvalTensorBuilder::build_sum(const ExprPtr& expr) const {
+  auto sum_accumulator = [this](const EvalTensorPtr& lexpr,
+                                const ExprPtr& summand) {
+    return build_intermediate(lexpr, build_tree(summand), Operation::SUM);
   };
-  const auto& prod = expr->as<Product>();
-  // initialize with the first factor
-  auto init = build_from_product(*prod.factors().begin());
-  auto result =
-      std::accumulate(prod.begin() + 1, prod.end(), init, product_accumulator);
-  // @note only real scalar is used for now
-  result->set_scalar(prod.scalar().real());
-  return result;
+  auto& sum = expr->as<Sum>();
+  return std::accumulate(sum.begin() + 1, sum.end(), build_tree(sum.summand(0)),
+                         sum_accumulator);
+}
+
+EvalTensorPtr EvalTensorBuilder::build_product(const ExprPtr& expr) const {
+  auto prod_accumulator = [this](const EvalTensorPtr& lexpr,
+                                 const ExprPtr& factor) {
+    return build_intermediate(lexpr, build_tree(factor), Operation::PRODUCT);
+  };
+  auto& prod = expr->as<Product>();
+  auto& tnsr = prod.factor(0)->as<Tensor>();
+  if ((tnsr.label() == L"A") || (tnsr.label() == L"P")) {
+    auto right = std::make_shared<Product>(expr->begin() + 1, expr->end());
+    return build_intermediate(build_tree(prod.factor(0)), build_tree(right),
+                              tnsr.label() == L"A" ? Operation::ANTISYMMETRIZE
+                                                   : Operation::SYMMETRIZE);
+  }
+  return std::accumulate(prod.begin() + 1, prod.end(),
+                         build_tree(prod.factor(0)), prod_accumulator);
 }
 
 EvalTensorPtr EvalTensorBuilder::build_leaf(const ExprPtr& expr) const {
@@ -134,10 +119,10 @@ HashType EvalTensorBuilder::hash_leaf(const ExprPtr& expr, bool swap_bk) const {
 EvalTensorPtr EvalTensorBuilder::build_intermediate(
     const EvalTensorPtr& left_eval_expr, const EvalTensorPtr& right_eval_expr,
     Operation op) const {
-  if ((op == Operation::SUM) &&
-      (left_eval_expr->get_indices() != right_eval_expr->get_indices())) {
+  if ((op == Operation::SUM) && (left_eval_expr->get_indices().size() !=
+                                 right_eval_expr->get_indices().size())) {
     throw std::domain_error(
-        "While summing two tensors, their indices must be identical!");
+        "While summing two tensors, their number of indices must match!");
   }
 
   // create the intermediate
@@ -152,6 +137,20 @@ EvalTensorPtr EvalTensorBuilder::build_intermediate(
 
   // fill the indices
   if (op == Operation::SUM) {
+    if (!((left_eval_expr->is_leaf() || right_eval_expr->is_leaf()))) {
+      auto limed =
+          std::dynamic_pointer_cast<EvalTensorIntermediate>(left_eval_expr);
+      auto rimed =
+          std::dynamic_pointer_cast<EvalTensorIntermediate>(right_eval_expr);
+      if ((limed->get_operation() == Operation::ANTISYMMETRIZE) &&
+          (rimed->get_operation() == limed->get_operation())) {
+        return build_intermediate(
+            limed->get_left_tensor(),
+            build_intermediate(limed->get_right_tensor(),
+                               rimed->get_right_tensor(), Operation::SUM),
+            Operation::ANTISYMMETRIZE);
+      }
+    }
     imed->set_indices(left_eval_expr->get_indices());
   } else if (op == Operation::PRODUCT) {
     IndexLabelContainer lindices = left_eval_expr->get_indices();
@@ -169,6 +168,7 @@ EvalTensorPtr EvalTensorBuilder::build_intermediate(
     imed->set_indices(imed_indices);
   } else if ((op == Operation::ANTISYMMETRIZE) ||
              (op == Operation::SYMMETRIZE)) {
+    imed->set_indices(left_eval_expr->get_indices());
     // nothing special needs to be done
     // the evaluator should be smart enough
     // on handling (anti)symmetrization type operations
@@ -199,9 +199,9 @@ HashType EvalTensorBuilder::hash_intermediate(
   // hashing the type of binary operation by casting operation into size_t
   imed_hash_value = number_hasher(static_cast<size_t>(imed_operation));
 
-  // operation is of antisymmetrization type then its hash value is solely
+  // operation is of (anti)symmetrization type then its hash value is solely
   // determined by which indices are being permuted, this information is
-  // carried by the left tensor -- the tensor with label 'A'
+  // carried by the left tensor -- the tensor with label 'A'(or 'P')
   if ((imed_operation == Operation::ANTISYMMETRIZE) ||
       (imed_operation == Operation::SYMMETRIZE)) {
     boost::hash_combine(imed_hash_value,

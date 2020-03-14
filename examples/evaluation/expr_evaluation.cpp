@@ -22,25 +22,20 @@ int main() {
   Logger::get_instance().wick_stats = false;
   // CC equations
   auto cc_r = cceqvec{2, 2}(true, true, true, true);
-  //auto prod = *(cc_r[2]->begin() + 1);
-  auto prod = cc_r[2];
-  // std::wcout << "Got product: " << prod->to_latex() << std::endl;
-
+  auto expr = cc_r[1];
+  // std::wcout << expr->to_latex() << "\nexpr->to_latex()\n";
   using namespace sequant::evaluate;
   auto builder = EvalTensorBuilder{};
-  // auto tree = builder.build_from_product(prod);
-  builder.build_eval_tree(prod);
-  auto tree = builder.get_eval_tree();
+  auto tree = builder.build_tree(expr);
   std::wcout << "Digraph:\n";
-  // std::wcout << tree->to_digraph() << std::endl;
+  std::wcout << tree->to_digraph() << std::endl;
 
-  auto evt_visitor = [](const EvalTensor& evt) {
-      for (const auto& id: evt.get_indices()) {
-          std::wcout << id << " ";
-      }
-      std::wcout << std::endl;
-  };
-
-  tree->visit(evt_visitor);
+  /* auto evt_visitor = [](const EvalTensor& evt) { */
+  /*     for (const auto& id: evt.get_indices()) { */
+  /*         std::wcout << id << " "; */
+  /*     } */
+  /*     std::wcout << std::endl; */
+  /* }; */
+  /* tree->visit(evt_visitor); */
   return 0;
 }

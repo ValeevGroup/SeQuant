@@ -41,7 +41,7 @@ TEST_CASE("EVAL_TENSOR_BUILDER_TESTS", "[eval_tensor_builder]") {
     auto prod = std::make_shared<Product>(Product({t1, t2, g1}));
     std::wcout << "Formed product \n";
     std::wcout << prod->to_latex() << std::endl;
-    builder.build_from_product(prod);
+    builder.build_product(prod);
     // std::wcout << "printing the graph..\n";
     // std::wcout << builder.get_eval_tree()->to_digraph() << std::endl;
   }

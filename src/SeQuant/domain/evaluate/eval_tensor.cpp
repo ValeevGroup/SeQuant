@@ -30,6 +30,14 @@ ScalarType EvalTensor::get_scalar() const { return scalar_; }
 void EvalTensor::set_scalar(ScalarType scale) { scalar_ = scale; }
 
 // EvalTensorIntermediate
+const std::wstring EvalTensorIntermediate::SUM_COLOR = L"green";
+
+const std::wstring EvalTensorIntermediate::PROD_COLOR = L"red";
+
+const std::wstring EvalTensorIntermediate::ANTISYMM_COLOR = L"gray";
+
+const std::wstring EvalTensorIntermediate::SYMM_COLOR = L"turquoise";
+
 bool EvalTensorIntermediate::is_leaf() const { return false; }
 
 void EvalTensorIntermediate::set_left_tensor(
@@ -55,8 +63,24 @@ void EvalTensorIntermediate::set_operation(Operation op) { operation_ = op; }
 Operation EvalTensorIntermediate::get_operation() const { return operation_; }
 
 std::wstring EvalTensorIntermediate::to_digraph() const {
-  auto this_node = L"node" + std::to_wstring(get_hash_value()) + L" [label = " +
-                   std::to_wstring(get_hash_value()) + L"];\n";
+  std::wstring bra = L"";
+  std::wstring ket = L"";
+  for (auto i = 0; i < get_indices().size() / 2; ++i) {
+    bra += L"{" + std::wstring(get_indices().at(i)) + L"}";
+  }
+  for (auto i = get_indices().size() / 2; i < get_indices().size(); ++i) {
+    ket += L"{" + std::wstring(get_indices().at(i)) + L"}";
+  }
+  auto node_color = get_operation() == Operation::SUM
+                        ? SUM_COLOR
+                        : get_operation() == Operation::PRODUCT
+                              ? PROD_COLOR
+                              : get_operation() == Operation::ANTISYMMETRIZE
+                                    ? ANTISYMM_COLOR
+                                    : SYMM_COLOR;
+  auto this_node = L"node" + std::to_wstring(get_hash_value()) +
+                   L" [label=\"" + L"q^{" + ket + L"}_{" + bra + L"}\"" +
+                   L", color=\"" + node_color + L"\", style = \"filled\"" + L", fontcolor=\"white\"];\n";
 
   auto left_node = get_left_tensor()->to_digraph();
 
@@ -96,8 +120,8 @@ bool EvalTensorLeaf::is_leaf() const { return true; }
 const ExprPtr& EvalTensorLeaf::get_expr() const { return expr_; }
 
 std::wstring EvalTensorLeaf::to_digraph() const {
-  return L"node" + std::to_wstring(get_hash_value()) + L" [label = " +
-         std::to_wstring(get_hash_value()) + L"];\n";
+  return L"node" + std::to_wstring(get_hash_value()) + L" [label = \"" +
+         get_expr()->to_latex() + L"\"];\n";
 }
 
 /// Visit the tree by pre-order traversal.
