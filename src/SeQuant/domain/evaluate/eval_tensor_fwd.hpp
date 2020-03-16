@@ -2,6 +2,7 @@
 #define SEQUANT_EVALUATE_EVAL_TENSOR_FWD_HPP
 
 #include <SeQuant/core/container.hpp>
+
 #include <cstddef>
 #include <memory>
 
@@ -15,9 +16,11 @@ using IndexLabelContainer = container::svector<std::wstring_view, 4>;
 
 using OpsCount = unsigned long long;
 
+template <typename DataTensorType>
 class EvalTensor;
 
-using EvalTensorPtr = std::shared_ptr<EvalTensor>;
+template <typename DataTensorType>
+using EvalTensorPtr = std::shared_ptr<EvalTensor<DataTensorType>>;
 
 enum class Operation {
   /// Represents the summation type binary evaluation

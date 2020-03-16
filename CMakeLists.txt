@@ -146,21 +146,25 @@ target_include_directories(SeQuant PUBLIC
         $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>)
 
-add_library(evaluator
-        src/SeQuant/domain/evaluate/path_tree.hpp
-        src/SeQuant/domain/evaluate/path_tree.cpp
-        src/SeQuant/domain/evaluate/eval_tensor_fwd.hpp
-        src/SeQuant/domain/evaluate/eval_tensor.hpp
-        src/SeQuant/domain/evaluate/eval_tensor.cpp
-        src/SeQuant/domain/evaluate/eval_tensor_builder.hpp
-        src/SeQuant/domain/evaluate/eval_tensor_builder.cpp
-        src/SeQuant/domain/evaluate/factorizer.hpp
-        src/SeQuant/domain/evaluate/factorizer.cpp
-        )
+find_package(Libint2 2.6.0 CONFIG REQUIRED)
+
+find_package(TiledArray CONFIG COMPONENTS tiledarray REQUIRED)
+
+add_library(evaluator EXCLUDE_FROM_ALL
+    src/SeQuant/domain/evaluate/eval_tensor_fwd.hpp
+    src/SeQuant/domain/evaluate/eval_tensor.hpp
+    src/SeQuant/domain/evaluate/eval_tensor_builder.hpp
+    src/SeQuant/domain/evaluate/eval_context.hpp
+    src/SeQuant/domain/evaluate/path_tree.hpp
+    src/SeQuant/domain/evaluate/path_tree.cpp)
+    # src/SeQuant/domain/evaluate/factorizer.hpp
+    # src/SeQuant/domain/evaluate/factorizer.cpp
 target_include_directories(evaluator PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
-        $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>)
-target_link_libraries(evaluator PUBLIC SeQuant)
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>)
+target_link_libraries(evaluator SeQuant ${TBB_LIBRARIES})
+
+enable_testing(true)
 
 set(utests_src
         # tests/unit/test_space.cpp
@@ -201,8 +205,12 @@ target_link_libraries(${example0} SeQuant ${TBB_LIBRARIES})
 
 set(example1 expr_evaluation)
 add_executable(${example1} EXCLUDE_FROM_ALL
-    examples/evaluation/${example1}.cpp)
-target_link_libraries(${example1} SeQuant evaluator ${TBB_LIBRARIES})
+    examples/evaluation/${example1}.cpp
+    examples/contract/interpret/contract.hpp
+    examples/contract/scf/hartree-fock.cc)
+target_link_libraries(${example1} SeQuant evaluator ${TBB_LIBRARIES} Libint2::cxx tiledarray)
+target_link_directories(${example1} PUBLIC ${TBB_LIBRARIES})
+target_compile_definitions(${example1} PRIVATE SEQUANT_HAS_TILEDARRAY)
 
 # add tests for running examples
 set (lastexample 5)
