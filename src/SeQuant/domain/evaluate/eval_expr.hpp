@@ -160,7 +160,7 @@ DataTensorType eval_evtensor(const EvTensorPtr& evt_ptr,
     // if the result already exists, return it
     // but, be wise, the pointer to the data tensor
     // could be a nullptr and scaling might need
-    // to be done before return based on this
+    // to be done before returning based on this
     // tensor's scalar
     //
     // pointer to data tensor
@@ -192,10 +192,13 @@ DataTensorType eval_evtensor(const EvTensorPtr& evt_ptr,
       }
     } else {  // this is an useful intermediate but has no data yet
       auto result_ptr = std::make_shared<DataTensorType>();
-      if (evt_ptr->get_op() == EvalTensor::Operation::Sum)
+
+      if (evt_ptr->get_op() == EvalTensor::Operation::Sum) {
         *result_ptr = eval_evsum(evt_ptr, context);
-      else
+      } else {
         *result_ptr = eval_evproduct(evt_ptr, context);
+      }
+
       context.imed_map()[this_hash] = result_ptr;
 
       if (this_scalar.real() == 1) return *result_ptr;
@@ -219,8 +222,31 @@ DataTensorType eval_evtensor(const EvTensorPtr& evt_ptr,
 template <typename DataTensorType>
 DataTensorType eval_evsum(const EvTensorPtr& evt_ptr,
                           EvalContext<DataTensorType>& context) {
-  auto lresult = eval_evtensor(evt_ptr->left_tensor(), context);
-  auto rresult = eval_evtensor(evt_ptr->right_tensor(), context);
+  DataTensorType lresult, rresult;
+
+  if (evt_ptr->left_tensor()->indices() != evt_ptr->right_tensor()->indices()) {
+#ifdef SEQUANT_HAS_BTAS
+    auto& left_indices = evt_ptr->left_tensor()->btas_indices();
+    auto& right_indices = evt_ptr->right_tensor()->btas_indices();
+
+    container::vector<size_t> perm_annot;
+    for (const auto& idx : right_indices) {
+      perm_annot.push_back(std::distance(
+          left_indices.begin(),
+          std::find(right_indices.begin(), right_indices.end(), idx)));
+    }
+    container::vector<size_t> unperm_annot;
+    for (size_t i =0; i <  perm_annot.size(); ++i){
+      unperm_annot.push_back(i);
+    }
+
+    btas::permute(eval_evtensor(evt_ptr->right_tensor(), context), unperm_annot, rresult, perm_annot);
+#endif
+  }  // if left_tensor()->indices() != right_tensor()->indices()
+  else {
+    rresult = eval_evtensor(evt_ptr->right_tensor(), context);
+  }
+  lresult = eval_evtensor(evt_ptr->left_tensor(), context);
 
   btas::scal(evt_ptr->left_tensor()->get_scalar().real(), lresult);
 
