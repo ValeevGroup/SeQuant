@@ -6,7 +6,6 @@
 #include "../sequant_setup.hpp"
 
 #include <btas/btas.h>
-#include <btas/tensorview.h>
 
 #include <complex>
 #include <iostream>

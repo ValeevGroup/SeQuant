@@ -195,7 +195,6 @@ add_executable(${example0} EXCLUDE_FROM_ALL
         examples/${example0}/${example0}.cpp)
 target_link_libraries(${example0} SeQuant ${TBB_LIBRARIES})
 
-# contract method testing -- Bimal
 ############ optional dependencies
 find_package(Libint2 2.6.0 CONFIG REQUIRED)
 
@@ -210,8 +209,16 @@ add_executable(${example1} EXCLUDE_FROM_ALL
 target_link_libraries(${example1} SeQuant factorizer ${TBB_LIBRARIES} Libint2::cxx BTAS)
 target_compile_definitions(${example1} PRIVATE SEQUANT_HAS_BTAS)
 
-find_package(TiledArray CONFIG COMPONENTS tiledarray)
+# add_executable(rcc_btas EXCLUDE_FROM_ALL
+#     examples/contract/rcc_btas.cpp
+#     examples/contract/interpret/interpreted_tensor.hpp
+#     examples/contract/interpret/contract.hpp
+#     examples/contract/scf/hartree-fock.cc
+#     src/SeQuant/domain/evaluate/eval_tensor.cpp)
+# target_link_libraries(rcc_btas SeQuant factorizer ${TBB_LIBRARIES} Libint2::cxx BTAS)
+# target_compile_definitions(rcc_btas PRIVATE SEQUANT_HAS_BTAS)
 
+find_package(TiledArray CONFIG COMPONENTS tiledarray)
 
 if (TiledArray_FOUND)
     set(example2 cc_tiledarray)
