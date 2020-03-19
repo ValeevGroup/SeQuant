@@ -26,7 +26,7 @@ class EvalTensorBuilder {
   /// Constructor.
   /// @param complex_tensor_data false by default. Set to true when working with
   /// complex-valued tensors.
-  explicit EvalTensorBuilder(bool complex_tensor_data=false)
+  explicit EvalTensorBuilder(bool complex_tensor_data = false)
       : complex_tensor_data{complex_tensor_data} {};
 
   /// Build evaluation tree from a sequant expression.
@@ -63,12 +63,15 @@ class EvalTensorBuilder {
     auto& tnsr = prod.factor(0)->as<Tensor>();
     if ((tnsr.label() == L"A") || (tnsr.label() == L"P")) {
       auto right = std::make_shared<Product>(expr->begin() + 1, expr->end());
+      right->scale(prod.scalar());
       return build_intermediate(build_tree(prod.factor(0)), build_tree(right),
                                 tnsr.label() == L"A" ? Operation::ANTISYMMETRIZE
                                                      : Operation::SYMMETRIZE);
     }
-    return std::accumulate(prod.begin() + 1, prod.end(),
-                           build_tree(prod.factor(0)), prod_accumulator);
+    auto init = build_tree(prod.factor(0));
+    init->set_scalar(prod.scalar().real());
+    return std::accumulate(prod.begin() + 1, prod.end(), init,
+                           prod_accumulator);
   }
 
   /// Build EvalTensor from a sequant Sum.
@@ -193,9 +196,11 @@ class EvalTensorBuilder {
     if (op == Operation::SUM) {
       if (!((left_eval_expr->is_leaf() || right_eval_expr->is_leaf()))) {
         auto limed =
-            std::dynamic_pointer_cast<EvalTensorIntermediate<DataTensorType>>(left_eval_expr);
+            std::dynamic_pointer_cast<EvalTensorIntermediate<DataTensorType>>(
+                left_eval_expr);
         auto rimed =
-            std::dynamic_pointer_cast<EvalTensorIntermediate<DataTensorType>>(right_eval_expr);
+            std::dynamic_pointer_cast<EvalTensorIntermediate<DataTensorType>>(
+                right_eval_expr);
         if ((limed->get_operation() == Operation::ANTISYMMETRIZE) &&
             (rimed->get_operation() == limed->get_operation())) {
           return build_intermediate(
@@ -251,7 +256,8 @@ class EvalTensorBuilder {
     // to combine the hashes cast Operation type to size_t as well
 
     auto imed_ptr =
-        std::dynamic_pointer_cast<EvalTensorIntermediate<DataTensorType>>(eval_expr);
+        std::dynamic_pointer_cast<EvalTensorIntermediate<DataTensorType>>(
+            eval_expr);
 
     auto imed_operation = imed_ptr->get_operation();
 
@@ -366,7 +372,7 @@ class EvalTensorBuilder {
     return false;
   }
 
-}; // class EvalTensorBuilder<DataTensorType>
+};  // class EvalTensorBuilder<DataTensorType>
 
 }  // namespace sequant::evaluate
 

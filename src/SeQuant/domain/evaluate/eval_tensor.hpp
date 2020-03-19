@@ -7,6 +7,7 @@
 #include <memory>
 
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/tensor.hpp>
 
 namespace sequant::evaluate {
 
@@ -28,7 +29,7 @@ std::vector<Perm> perm_calc(std::vector<size_t> to_perm, size_t size,
     std::swap(to_perm[begin], to_perm[i]);
     auto more_result =
         perm_calc(to_perm, size, (begin == i) ? cswap : cswap + 1, begin + 1);
-    for (auto p : more_result) {
+    for (auto& p : more_result) {
       result.push_back(p);
     }
     std::swap(to_perm[begin], to_perm[i]);
@@ -172,17 +173,24 @@ class EvalTensorIntermediate : public EvalTensor<DataTensorType> {
          i < this->get_indices().size(); ++i) {
       ket += L"{" + std::wstring(this->get_indices().at(i)) + L"}";
     }
-    auto node_color = get_operation() == Operation::SUM
-                          ? L"green"
-                          : get_operation() == Operation::PRODUCT
-                                ? L"red"
-                                : get_operation() == Operation::ANTISYMMETRIZE
-                                      ? L"gray"
-                                      : L"turquoise";
-    auto this_node = L"node" + std::to_wstring(this->get_hash_value()) +
-                     L" [label=\"" + L"q^{" + ket + L"}_{" + bra + L"}\"" +
-                     L", color=\"" + node_color + L"\", style = \"filled\"" +
-                     L", fontcolor=\"white\"];\n";
+    auto node_color =
+        get_operation() == Operation::SUM
+            ? L"green"
+            : get_operation() == Operation::PRODUCT
+                  ? L"red"
+                  : get_operation() == Operation::ANTISYMMETRIZE
+                        ? L"gray"
+                        : L"turquoise";  // turquoise for symmetrization
+    std::string scalar = std::to_string(this->get_scalar());
+    scalar = scalar.substr(4);
+    auto this_node =
+        L"node" + std::to_wstring(this->get_hash_value()) + L" [label=\"" +
+        ((this->get_scalar() != 1.)
+             ? std::wstring(scalar.begin(), scalar.end()) + L"\\times "
+             : L"");
+    this_node += L"q^{" + ket + L"}_{" + bra + L"}\"" + L", color=\"" +
+                 node_color + L"\", style = \"filled\"" +
+                 L", fontcolor=\"white\"];\n";
 
     auto left_node = get_left_tensor()->to_digraph();
 
@@ -226,27 +234,30 @@ class EvalTensorIntermediate : public EvalTensor<DataTensorType> {
     auto right_annot = TA_annotation(get_right_tensor()->get_indices());
     auto this_annot = TA_annotation(this->get_indices());
 
-    DataTensorType result;
-
     if (get_operation() == Operation::SUM) {
+      DataTensorType result;
       result(this_annot) =
           get_left_tensor()->get_scalar() *
               get_left_tensor()->evaluate(context)(left_annot) +
           get_right_tensor()->get_scalar() *
               get_right_tensor()->evaluate(context)(right_annot);
+      return result;
     } else if (get_operation() == Operation::PRODUCT) {
+      DataTensorType result;
       result(this_annot) = get_left_tensor()->get_scalar() *
                            get_left_tensor()->evaluate(context)(left_annot) *
                            get_right_tensor()->get_scalar() *
                            get_right_tensor()->evaluate(context)(right_annot);
+      return result;
 
     } else if (get_operation() == Operation::ANTISYMMETRIZE) {
-      auto tensor = get_right_tensor()->evaluate(context);
-      size_t rank = tensor.trange().rank();
+      auto right_eval = get_right_tensor()->evaluate(context);
+
+      size_t rank = right_eval.trange().rank();
       if (rank == 2)
-        return tensor;
+        return right_eval;
       else if (rank % 2 != 0)
-        throw "Can't handle odd-ordered tensors, just yet!";
+        throw std::domain_error("Can't handle odd-ordered tensors yet!");
 
       std::vector<size_t> to_perm;
       for (auto i = 0; i < (size_t)rank / 2; ++i) to_perm.push_back(i);
@@ -268,6 +279,8 @@ class EvalTensorIntermediate : public EvalTensor<DataTensorType> {
 
       auto inds = range_to_csv_str(rank);
 
+      DataTensorType result(right_eval.world(), right_eval.trange());
+      result.fill(0.);
       for (const auto& p : vp) {
         for (const auto& q : vp) {
           // permutation of the bra
@@ -278,15 +291,16 @@ class EvalTensorIntermediate : public EvalTensor<DataTensorType> {
 
           // permute and add
           if (p.phase * q.phase == 1)
-            result(inds) = result(inds) + tensor(ords_to_csv_str(perm_vec));
+            result(inds) = result(inds) + right_eval(ords_to_csv_str(perm_vec));
           else
-            result(inds) = result(inds) - tensor(ords_to_csv_str(perm_vec));
+            result(inds) = result(inds) - right_eval(ords_to_csv_str(perm_vec));
         }  // for q: vp
       }    // for p: vp
-    } else {
-      throw std::domain_error("Functionality not yet implemented!");
+      result(inds) = result(inds) * this->get_right_tensor()->get_scalar();
+      return result;
     }
-    return result;
+
+    throw std::domain_error("Functionality not yet implemented!");
   }
 };
 
@@ -314,7 +328,7 @@ class EvalTensorLeaf : public EvalTensor<DataTensorType> {
   const ExprPtr& get_expr() const { return expr_; }
 
   /// Get a directed graph definitions and paths in dot language.
-  std::wstring to_digraph() const override{
+  std::wstring to_digraph() const override {
     return L"node" + std::to_wstring(this->get_hash_value()) + L" [label = \"" +
            get_expr()->to_latex() + L"\"];\n";
   }
@@ -329,6 +343,10 @@ class EvalTensorLeaf : public EvalTensor<DataTensorType> {
   DataTensorType evaluate(
       const container::map<HashType, std::shared_ptr<DataTensorType>>& context)
       const override {
+    if (auto label = expr_->as<Tensor>().label();
+        (label == L"A" || label == L"P"))
+      throw std::logic_error(
+          "(anti-)symmetrization tensors cannot be evaluated from here!");
     return *context.find(this->get_hash_value())->second;
   }
 };

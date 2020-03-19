@@ -11,8 +11,14 @@
 #include "../../src/SeQuant/domain/mbpt/convention.hpp"
 #include "catch.hpp"
 
+// namespace sequant_test {
+//     int argc;
+//     char* argv_pvtr[]{};
+// } // namespace sequant_test
+
 int main( int argc, char* argv[] )
 {
+//  sequant_test::argc = argc;
   using namespace std;
   using namespace sequant;
 

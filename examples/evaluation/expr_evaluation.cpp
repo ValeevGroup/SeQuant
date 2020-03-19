@@ -420,8 +420,8 @@ int main(int argc, char* argv[]) {
     auto t_ov = std::make_shared<TA::TArrayD>(world, tr_ov);
     auto t_oovv = std::make_shared<TA::TArrayD>(world, tr_oovv);
     // auto t_ooovvv = std::make_shared<TA::TArrayD>(world, tr_ooovvv);
-    (*t_ov).fill(0.0);
-    (*t_oovv).fill(0.0);
+    (*t_ov).fill(0.);
+    (*t_oovv).fill(0.);
     // (*t_ooovvv).fill(0.0);
 
     //
@@ -443,15 +443,9 @@ int main(int argc, char* argv[]) {
         std::make_shared<DefaultTensorCanonicalizer>());
     Logger::get_instance().wick_stats = false;
 
-    iter = 0;
-    rmsd = 0.0;
-    ediff = 0.0;
-    auto normdiff = 0.0;
-    auto ecc = 0.0;
-    Logger::get_instance().wick_stats = false;
     auto cc_r = cceqvec{2, 2}(true, true, true, true);
 
-    std::vector<decltype(Fock_oo)> data_tensors = {Fock_oo, Fock_ov, Fock_vv, G_oooo,
+    std::vector<std::shared_ptr<TA::TArrayD>> data_tensors = {Fock_oo, Fock_ov, Fock_vv, G_oooo,
                                         G_ooov,  G_oovv,  G_ovov,  G_ovvv,
                                         G_vvvv,  t_ov,    t_oovv};
 
@@ -474,27 +468,103 @@ int main(int argc, char* argv[]) {
 
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"g", {L"a_1",L"a_2"}, {L"a_3",L"a_4"})),
 
-        std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"i_1",}, {L"a_1",})),
+        std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"i_1",}, {L"a_1"})),
 
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"i_1",L"i_2"}, {L"a_1",L"a_2"}))
     };
-    using ContextMapType =
-        container::map<sequant::evaluate::HashType, std::shared_ptr<TA::TArrayD>>;
+
+    container::map<ExprPtr, std::shared_ptr<TA::TArrayD>> context_builder;
+
+    assert(data_tensors.size() == seq_tensors.size());
+    for (auto i = 0; i < seq_tensors.size(); ++i) {
+        context_builder.insert(decltype(context_builder)::value_type(seq_tensors.at(i),
+                    data_tensors.at(i)));
+    }
+
+    auto context = evaluate::EvalContext(context_builder);
 
     auto builder = sequant::evaluate::EvalTensorBuilder<TA::TArrayD>();
 
-    ContextMapType context_map;
-    for (auto i = 0; i < data_tensors.size(); ++i) {
-        auto hash_value = builder.build_tree(seq_tensors[i])->get_hash_value();
-        context_map.insert(std::make_pair(hash_value, std::make_shared<TA::TArrayD>(*data_tensors[i])));
-    }
-
     auto r1_tree = builder.build_tree(cc_r[1]);
     auto r2_tree = builder.build_tree(cc_r[2]);
-    auto r1 = r1_tree->evaluate(context_map);
-    std::cout << "norm(r1) = " << std::sqrt(r1("i,a").dot(r1("i,a"))) << std::endl;
-    auto r2 = r2_tree->evaluate(context_map);
-    /* std::cout << "norm(r2) = " << std::sqrt(r2("i,j,a,b").dot(r1("i,j,a,b"))) << std::endl; */
+
+    iter = 0;
+    rmsd = 0.0;
+    ediff = 0.0;
+    auto normdiff = 0.0;
+    auto ecc = 0.0;
+    auto tstart = std::chrono::high_resolution_clock::now();
+    do {
+        ++iter;
+        cout << "using TiledArray,    iter: " << iter << endl;
+        auto R1 = r1_tree->evaluate(context.get_map());
+        auto R2 = r2_tree->evaluate(context.get_map());
+
+        auto tile_R1       = R1.find({0,0}).get();
+        auto tile_t_ov     = (*t_ov).find({0,0}).get();
+
+        auto tile_R2       = R2.find({0,0,0,0}).get();
+        auto tile_t_oovv   = (*t_oovv).find({0,0,0,0}).get();
+
+        // save previous norm
+        auto norm_last = std::sqrt((*t_oovv)("i,j,a,b").dot((*t_oovv)("i,j,a,b")));
+
+        //////////////
+        // Updating amplitudes
+
+        // update t_ov
+        for (auto i = 0; i < nocc; ++i) {
+            for (auto a = 0; a < nvirt; ++a) {
+                tile_t_ov(i,a) += tile_R1(i,a)/tile_D_ov(i,a); } }
+
+        //
+        // update t_oovv
+        for (auto i = 0; i < nocc; ++i) {
+            for (auto j = 0; j < nocc; ++j) {
+                for (auto a = 0; a < nvirt; ++a) {
+                    for (auto b = 0; b < nvirt; ++b) {
+                        tile_t_oovv(i,j,a,b) += tile_R2(i,j,a,b)/tile_D_oovv(i,j,a,b); } } } }
+
+      cout << "norm(t_ov) "   << std::sqrt((*t_ov)("i,j").dot((*t_ov)("i,j")))             <<endl;
+      cout << "norm(t_oovv) " << std::sqrt((*t_oovv)("i,j,a,b").dot((*t_oovv)("i,j,a,b"))) <<endl;
+
+      auto ecc_last = ecc;
+
+      // calculating energy
+      TA::TArrayD temp_tensor;
+      temp_tensor("j,b") = (*G_oovv)("i,j,a,b")*(*t_ov)("i,a");
+
+      ecc = 0.5*temp_tensor("i,a").dot((*t_ov)("i,a"))
+              + 0.25*(*G_oovv)("i,j,a,b").dot((*t_oovv)("i,j,a,b"))
+              + (*Fock_ov)("i,a").dot((*t_ov)("i,a"));
+
+      printf("E(CC) is: %20.12f\n\n", ecc);
+
+      normdiff = norm_last - std::sqrt((*t_oovv)("i,j,a,b").dot((*t_oovv)("i,j,a,b")));
+      ediff    = ecc_last - ecc;
+    } while((fabs(normdiff) > conv || fabs(ediff) > conv) && (iter < maxiter));
+    //} while(false);
+
+    auto tstop = std::chrono::high_resolution_clock::now();
+    auto time_elapsed =
+        std::chrono::duration_cast<std::chrono::microseconds>(tstop - tstart);
+
+    std::cout << "\nOut of loop after "
+        << iter << " iterations.\n"
+        << "\nTime: "
+        << time_elapsed.count() << " microseconds"
+        << std::endl;
+
+    /* auto r1 = r1_tree->evaluate(context.get_map()); */
+    /* std::cout << "norm(r1) = " << std::sqrt(r1("i,a").dot(r1("i,a"))) << std::endl; */
+
+    /* auto r2 = r2_tree->evaluate(context.get_map()); */
+    /* std::cout << "norm(r2) = " << std::sqrt(r2("i,j,a,b").dot(r2("i,j,a,b"))) << std::endl; */
+
+    /* std::wcout << "Digraph for R1\n------------\n"; */
+    /* std::wcout << r1_tree->to_digraph() << std::endl; */
+    /* std::wcout << "Digraph for R2\n------------\n"; */
+    /* std::wcout << r2_tree->to_digraph() << std::endl; */
 
     TA::finalize();
   }  // end of try block

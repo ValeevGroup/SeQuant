@@ -186,7 +186,7 @@ add_executable(${unit_test_executable} EXCLUDE_FROM_ALL
         tests/unit/test_main.cpp
         tests/unit/catch.hpp
         ${utests_src})
-target_link_libraries(${unit_test_executable} evaluator SeQuant)
+target_link_libraries(${unit_test_executable} evaluator SeQuant tiledarray)
 add_test(unit/build "${CMAKE_COMMAND}" --build ${CMAKE_BINARY_DIR} --target ${unit_test_executable})
 
 add_test(NAME unit/run
