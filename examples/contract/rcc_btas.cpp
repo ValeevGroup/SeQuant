@@ -7,7 +7,6 @@
 #error "SEQUANT_HAS_BTAS should be defined when building cc_btas"
 #endif
 
-#include <omp.h>
 #include <iostream>
 #include <memory>
 
@@ -156,15 +155,18 @@ int main(int argc, char* argv[]) {
     size_t nocc = ndocc;  // in place of ndocc use nocc
 
     auto emp2 = 0.0;
-    for (int a = ndocc; a < nao; a++)
-      for (int b = ndocc; b < nao; b++)
-        for (int i = 0; i < ndocc; i++)
+    for (int a = ndocc; a < nao; a++) {
+      for (int b = ndocc; b < nao; b++) {
+        for (int i = 0; i < ndocc; i++) {
           for (int j = 0; j < ndocc; j++) {
             auto temp = ints_mo_spatial(i, j, a, b) *
                         (2.0 * ints_mo_spatial(i, j, a, b) -
                          ints_mo_spatial(j, i, a, b));
             emp2 += temp / (eps(i) + eps(j) - eps(a) - eps(b));
           }
+        }
+      }
+    }
 
     printf("** MP2 energy = %20.12f a.u.\n** Total energy = %20.12f a.u.\n",
            emp2, hf_final + emp2);
@@ -345,7 +347,6 @@ int main(int argc, char* argv[]) {
       rapid_simplify(spin_removed_term);
       cc_r[i] = result;
     }
-
     expand(cc_r[2]);
     rapid_simplify(cc_r[2]);
     canonicalize(cc_r[2]);
@@ -452,7 +453,6 @@ int main(int argc, char* argv[]) {
       // auto R2 = eval_equation(cc_r[2], btensor_map).tensor();
       // auto R3 = eval_equation(cc_r[3], btensor_map).tensor();
 
-      std::cout << __LINE__ << "L " << std::endl;
       // new method
       auto R1 = sequant::evaluate::eval_evtensor(cc_r1, context_r1);
       auto R2 = sequant::evaluate::eval_evtensor(cc_r2, context_r2);

@@ -382,7 +382,6 @@ int main(int argc, char* argv[]) {
     // SPIN TRACE THE RESIDUAL
     std::vector<ExprPtr> cc_r(ccsd_r.size());
     for (size_t i = 1; i < ccsd_r.size(); ++i){
-      // std::wcout << "R" << i << ":\n" << to_latex(ccsd_r[i]) << std::endl;
       if(i == 1)
         external_indices = {{L"i_1", L"a_1"}};
       else if(i == 2)
@@ -409,13 +408,11 @@ int main(int argc, char* argv[]) {
 
 #define SIMPLIFIED_R2 1
 #if SIMPLIFIED_R2
+    // 1/3 R + 1/6 R' for simpler equations
     std::map<Index, Index> idxmap = {{Index{L"i_1"}, Index{L"i_2"}},
                                      {Index{L"i_2"}, Index{L"i_1"}}};
 
-    // 1/3 R + 1/6 R' for simpler equations
     auto temp_expr = transform_expression(cc_r[2], idxmap);
-
-    // std::wcout << to_latex(cc_r[2]) << "\n\n";
     auto simpler_R2 =
         ex<Constant>(1.0 / 3.0) * cc_r[2] + ex<Constant>(1.0 / 6.0) * temp_expr;
 
@@ -423,9 +420,7 @@ int main(int argc, char* argv[]) {
     rapid_simplify(simpler_R2);
     canonicalize(simpler_R2);
     rapid_simplify(simpler_R2);
-    // std::wcout << "CCSD R2 traced:\n" << to_latex(simpler_R2) << "\n";
 
-    // Trick to fool canonicalizer and reduce the number of terms
     auto P = ex<Tensor>(L"P", WstrList{L"a_1", L"a_2"}, WstrList{L"i_1", L"i_2"}, Symmetry::nonsymm);
     auto P_R2 = P * simpler_R2;
 
@@ -433,13 +428,13 @@ int main(int argc, char* argv[]) {
     rapid_simplify(P_R2);
     canonicalize(P_R2);
     rapid_simplify(P_R2);
-    std::wcout << "P2 times CCSD R2 traced:\n" << to_latex(expand_P_operator(P_R2)) << "\n";
 #endif
 
     std::vector<std::shared_ptr<TA::TArrayD>> data_tensors = {Fock_oo, Fock_ov, Fock_vv, G_oooo,
                                                               G_ooov,  G_oovv,  G_ovov,  G_ovvv,
                                                               G_vvvv,  t_ov,    t_oovv};
 
+    // TODO: DO I NEED TO GET PERMUTED MAPS ?
     std::vector<sequant::ExprPtr> seq_tensors = {
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"f", {L"i_1"}, {L"i_1"})),
 
@@ -473,16 +468,15 @@ int main(int argc, char* argv[]) {
     }
 
     auto context = evaluate::EvalContext(context_builder);
-
     auto builder = sequant::evaluate::EvalTensorBuilder<TA::TArrayD>();
 
-    std::wcout << "CCSD R1:\n" << to_latex(cc_r[1]) << endl;
-    std::wcout << "CCSD R2:\n" << to_latex(cc_r[2]) << endl;
+//    std::wcout << "CCSD R1:\n" << to_latex(cc_r[1]) << endl;
+//    std::wcout << "CCSD R2:\n" << to_latex(cc_r[2]) << endl;
 
     auto r1_tree = builder.build_tree(cc_r[1]);
     auto r2_tree = builder.build_tree(cc_r[2]);
 
-# if 0
+# if 1
     iter = 0;
     rmsd = 0.0;
     ediff = 0.0;
@@ -494,9 +488,14 @@ int main(int argc, char* argv[]) {
     auto tstart = std::chrono::high_resolution_clock::now();
     do {
       ++iter;
+      cout << __LINE__ << endl;
 
       auto R1 = r1_tree->evaluate(context.get_map());
+      cout << __LINE__ << endl;
+      cout << "R1: " << R1 << endl;
       auto R2 = r2_tree->evaluate(context.get_map());
+      cout << __LINE__ << endl;
+      cout << "R2: " << R2 << endl;
 
       auto tile_R1       = R1.find({0,0}).get();
       auto tile_t_ov     = (*t_ov).find({0,0}).get();
@@ -523,8 +522,8 @@ int main(int argc, char* argv[]) {
             for (auto b = 0; b < nvirt; ++b) {
               tile_t_oovv(i,j,a,b) += tile_R2(i,j,a,b)/tile_D_oovv(i,j,a,b); } } } }
 
-      // cout << "norm(t_ov) "   << std::sqrt((*t_ov)("i,j").dot((*t_ov)("i,j")))             <<endl;
-      // cout << "norm(t_oovv) " << std::sqrt((*t_oovv)("i,j,a,b").dot((*t_oovv)("i,j,a,b"))) <<endl;
+      cout << "norm(t_ov) "   << std::sqrt((*t_ov)("i,j").dot((*t_ov)("i,j")))             <<endl;
+      cout << "norm(t_oovv) " << std::sqrt((*t_oovv)("i,j,a,b").dot((*t_oovv)("i,j,a,b"))) <<endl;
       cout << iter << "   " <<  std::sqrt((*t_ov)("i,j").dot((*t_ov)("i,j"))) << "     ";
       cout << std::sqrt((*t_oovv)("i,j,a,b").dot((*t_oovv)("i,j,a,b"))) << "     ";
       auto ecc_last = ecc;
@@ -533,11 +532,12 @@ int main(int argc, char* argv[]) {
       TA::TArrayD temp_tensor;
       temp_tensor("j,b") = (*G_oovv)("i,j,a,b")*(*t_ov)("i,a");
 
-      ecc = 0.5*temp_tensor("i,a").dot((*t_ov)("i,a"))
-          + 0.25*(*G_oovv)("i,j,a,b").dot((*t_oovv)("i,j,a,b"))
-          + (*Fock_ov)("i,a").dot((*t_ov)("i,a"));
-
-      // printf("E(CC) is: %20.12f\n\n", ecc);
+      // TODO: Spin-free CC expression here
+//      ecc = 0.5*temp_tensor("i,a").dot((*t_ov)("i,a"))
+//          + 0.25*(*G_oovv)("i,j,a,b").dot((*t_oovv)("i,j,a,b"))
+//          + (*Fock_ov)("i,a").dot((*t_ov)("i,a"));
+      ecc = 2.0; // * (*Fock_ov)("i,a").dot((*t_ov)("i,a")) +
+            
 
       normdiff = norm_last - std::sqrt((*t_oovv)("i,j,a,b").dot((*t_oovv)("i,j,a,b")));
       ediff    = ecc_last - ecc;

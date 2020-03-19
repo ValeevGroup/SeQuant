@@ -3,8 +3,8 @@
 //
 
 #include "convention.hpp"
-#include "../../core/index.hpp"
-#include "../../core/tensor.hpp"
+#include "SeQuant/core/index.hpp"
+#include "SeQuant/core/tensor.hpp"
 #include "op.hpp"
 
 namespace sequant {
@@ -47,17 +47,35 @@ void register_index(IndexRegistry& reg, const Index& idx, long size) {
 
 namespace qcifs {
 
+namespace {
+enum class qns { none = 0, alpha = 1, beta = 2 };
+auto qndecorate(qns qn, std::wstring_view label) {
+  switch (static_cast<int>(qn)) {
+    case 0: return std::wstring(label);
+    case 1: return std::wstring(label) + L"⁺";
+    case 2: return std::wstring(label) + L"⁻";
+    default: assert(false && "invalid quantum number");
+  }
+};
+};
+
 /// @brief registers standard instances of IndexSpace objects
 void register_standard_instances() {
-  const bool do_not_throw = false;
-  IndexSpace::register_instance(L"i", IndexSpace::active_occupied, IndexSpace::nullqns, do_not_throw);
-  IndexSpace::register_instance(L"m", IndexSpace::occupied, IndexSpace::nullqns, do_not_throw);
-  IndexSpace::register_instance(L"a", IndexSpace::active_unoccupied, IndexSpace::nullqns, do_not_throw);
-  IndexSpace::register_instance(L"e", IndexSpace::unoccupied, IndexSpace::nullqns, do_not_throw);
-  IndexSpace::register_instance(L"p", IndexSpace::all, IndexSpace::nullqns, do_not_throw);
-  IndexSpace::register_instance(L"⍺'", IndexSpace::other_unoccupied, IndexSpace::nullqns, do_not_throw);
-  IndexSpace::register_instance(L"⍺", IndexSpace::complete_unoccupied, IndexSpace::nullqns, do_not_throw);
-  IndexSpace::register_instance(L"κ", IndexSpace::complete, IndexSpace::nullqns, do_not_throw);
+  const bool do_not_throw = true;
+  for(int s=0; s<=2; ++s) {
+    auto qnattr = s==0 ? IndexSpace::nullqns : (s==1 ? IndexSpace::alpha : IndexSpace::beta);
+    auto declab = [s](auto&& label) {
+      return qndecorate(static_cast<qns>(s), label);
+    };
+    IndexSpace::register_instance(declab(L"i"), IndexSpace::active_occupied, qnattr, do_not_throw);
+    IndexSpace::register_instance(declab(L"m"), IndexSpace::occupied, qnattr, do_not_throw);
+    IndexSpace::register_instance(declab(L"a"), IndexSpace::active_unoccupied, qnattr, do_not_throw);
+    IndexSpace::register_instance(declab(L"e"), IndexSpace::unoccupied, qnattr, do_not_throw);
+    IndexSpace::register_instance(declab(L"p"), IndexSpace::all, qnattr, do_not_throw);
+    IndexSpace::register_instance(declab(L"⍺'"), IndexSpace::other_unoccupied, qnattr, do_not_throw);
+    IndexSpace::register_instance(declab(L"⍺"), IndexSpace::complete_unoccupied, qnattr, do_not_throw);
+    IndexSpace::register_instance(declab(L"κ"), IndexSpace::complete, qnattr, do_not_throw);
+  }
 }
 
 /// @brief creates an IndexRegistry
@@ -65,14 +83,19 @@ void make_default_indexregistry() {
   auto idxreg = std::make_shared<IndexRegistry>();
   auto& idxreg_ref = *idxreg;
 
-  register_index(idxreg_ref, Index{L"i"}, 100);
-  register_index(idxreg_ref, Index{L"m"}, 110);
-  register_index(idxreg_ref, Index{L"a"}, 1000);
-  register_index(idxreg_ref, Index{L"e"}, 1000);
-  register_index(idxreg_ref, Index{L"p"}, 1110);
-  register_index(idxreg_ref, Index{L"⍺'"}, 3000);
-  register_index(idxreg_ref, Index{L"⍺"}, 4000);
-  register_index(idxreg_ref, Index{L"κ"}, 4110);
+  for(int s=0; s<=2; ++s) {
+    auto declab = [s](auto &&label) {
+      return qndecorate(static_cast<qns>(s), label);
+    };
+    register_index(idxreg_ref, Index{declab(L"i")}, 100);
+    register_index(idxreg_ref, Index{declab(L"m")}, 110);
+    register_index(idxreg_ref, Index{declab(L"a")}, 1000);
+    register_index(idxreg_ref, Index{declab(L"e")}, 1000);
+    register_index(idxreg_ref, Index{declab(L"p")}, 1110);
+    register_index(idxreg_ref, Index{declab(L"⍺'")}, 3000);
+    register_index(idxreg_ref, Index{declab(L"⍺")}, 4000);
+    register_index(idxreg_ref, Index{declab(L"κ")}, 4110);
+  }
 }
 
 }  // namespace qcifs

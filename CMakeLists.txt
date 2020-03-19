@@ -167,19 +167,22 @@ target_link_libraries(evaluator SeQuant ${TBB_LIBRARIES})
 enable_testing(true)
 
 set(utests_src
-        # tests/unit/test_space.cpp
-        # tests/unit/test_index.cpp
-        # tests/unit/test_op.cpp
-        # tests/unit/test_wick.cpp
-        # tests/unit/test_tensor.cpp
-        # tests/unit/test_bliss.cpp
-        # tests/unit/test_expr.cpp
-        # tests/unit/test_iterator.cpp
-        # tests/unit/test_tensor_network.cpp
-        # tests/unit/test_mbpt.cpp
-        #### unit tests for evaluation
-        #tests/unit/test_path_tree.cpp
+        tests/unit/test_space.cpp
+        tests/unit/test_index.cpp
+        tests/unit/test_op.cpp
+        tests/unit/test_wick.cpp
+        tests/unit/test_tensor.cpp
+        tests/unit/test_bliss.cpp
+        tests/unit/test_expr.cpp
+        tests/unit/test_iterator.cpp
+        tests/unit/test_tensor_network.cpp
+        tests/unit/test_mbpt.cpp
+        tests/unit/test_spin.cpp
+        tests/unit/test_canonicalize.cpp
         tests/unit/test_eval_tensor.cpp)
+
+#set(utests_src
+#        tests/unit/test_mbpt.cpp)
 
 set(unit_test_executable unit_tests)
 add_executable(${unit_test_executable} EXCLUDE_FROM_ALL
@@ -203,14 +206,67 @@ add_executable(${example0} EXCLUDE_FROM_ALL
         examples/${example0}/${example0}.cpp)
 target_link_libraries(${example0} SeQuant ${TBB_LIBRARIES})
 
-set(example1 expr_evaluation)
-add_executable(${example1} EXCLUDE_FROM_ALL
-    examples/evaluation/${example1}.cpp
-    examples/contract/interpret/contract.hpp
-    examples/contract/scf/hartree-fock.cc)
-target_link_libraries(${example1} SeQuant evaluator ${TBB_LIBRARIES} Libint2::cxx tiledarray)
-target_link_directories(${example1} PUBLIC ${TBB_LIBRARIES})
-target_compile_definitions(${example1} PRIVATE SEQUANT_HAS_TILEDARRAY)
+# contract method testing -- Bimal
+if (BTAS_FOUND)
+    find_package(Libint2 2.6.0 CONFIG REQUIRED)
+
+    set(example1 cc_btas)
+    add_executable(${example1} EXCLUDE_FROM_ALL
+            examples/contract/${example1}.cpp
+            examples/contract/interpret/interpreted_tensor.hpp
+            examples/contract/interpret/contract.hpp
+            examples/contract/scf/hartree-fock.cc
+            src/SeQuant/domain/evaluate/eval_tensor.cpp)
+    target_link_libraries(${example1} SeQuant factorizer ${TBB_LIBRARIES} Libint2::cxx BTAS)
+    target_compile_definitions(${example1} PRIVATE SEQUANT_HAS_BTAS)
+endif(BTAS_FOUND)
+
+find_package(TiledArray CONFIG COMPONENTS tiledarray)
+
+if (TiledArray_FOUND)
+    set(example2 cc_tiledarray)
+
+    add_executable(${example2} EXCLUDE_FROM_ALL
+            examples/contract/${example2}.cpp
+            examples/contract/interpret/interpreted_tensor.hpp
+            examples/contract/interpret/contract.hpp
+            examples/contract/scf/hartree-fock.cc)
+    target_link_libraries(${example2} SeQuant factorizer ${TBB_LIBRARIES} Libint2::cxx tiledarray)
+    target_link_directories(${example2} PUBLIC ${TBB_LIBRARIES})
+    target_compile_definitions(${example2} PRIVATE SEQUANT_HAS_TILEDARRAY)
+endif(TiledArray_FOUND)
+
+# factorization examples
+if(BTAS_FOUND)
+
+set(example3 product_factorization)
+add_executable(${example3} EXCLUDE_FROM_ALL
+    examples/factorization/${example3}.cpp)
+
+target_include_directories(${example3} PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>
+    ${BTAS_INSTALL_DIR})
+
+target_link_libraries(${example3} SeQuant factorizer)
+target_compile_definitions(${example3} PRIVATE SEQUANT_HAS_BTAS)
+
+set(example4 expr_evaluation)
+add_executable(${example4} EXCLUDE_FROM_ALL
+    src/SeQuant/domain/evaluate/eval_fwd.hpp
+    src/SeQuant/domain/evaluate/eval_tensor.hpp
+    src/SeQuant/domain/evaluate/eval_expr.hpp
+    src/SeQuant/domain/evaluate/eval_tensor.cpp
+    examples/evaluation/${example4}.cpp)
+
+target_include_directories(${example4} PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>
+        ${BTAS_INSTALL_DIR})
+
+target_link_libraries(${example4} SeQuant factorizer)
+target_compile_definitions(${example4} PRIVATE SEQUANT_HAS_BTAS)
+endif()
 
 set(example2 rcc_evaluation)
 add_executable(${example2} EXCLUDE_FROM_ALL
@@ -220,6 +276,15 @@ add_executable(${example2} EXCLUDE_FROM_ALL
 target_link_libraries(${example2} SeQuant evaluator ${TBB_LIBRARIES} Libint2::cxx tiledarray)
 target_link_directories(${example2} PUBLIC ${TBB_LIBRARIES})
 target_compile_definitions(${example2} PRIVATE SEQUANT_HAS_TILEDARRAY)
+
+#target_include_directories(${example4} PUBLIC
+#        $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
+#        $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>
+#        ${BTAS_INSTALL_DIR})
+#
+#target_link_libraries(${example4} SeQuant factorizer)
+#target_compile_definitions(${example4} PRIVATE SEQUANT_HAS_BTAS)
+
 
 # add tests for running examples
 set (lastexample 5)

@@ -15,7 +15,6 @@
 #include <range/v3/all.hpp>
 
 #include <boost/core/demangle.hpp>
-#include <boost/functional/hash.hpp>
 #include <boost/numeric/conversion/cast.hpp>
 
 #include "container.hpp"
@@ -36,7 +35,7 @@ namespace sequant {
 /// Expr is an Iterable over subexpressions (each of which is an Expr itself). More precisely,
 /// Expr meets the SizedIterable concept (see https://raw.githubusercontent.com/ericniebler/range-v3/master/doc/std/D4128.md).
 /// Specifically, iterators to subexpressions
-/// dereference to std::shared_ptr<Expr>. Since Expr is a range, it provides begin/end/etc. that can participate in overloads
+/// dereference to ExprPtr. Since Expr is a range, it provides begin/end/etc. that can participate in overloads
 ///       with other functions in the derived class. Consider a Container class derived from a BaseContainer class:
 /// @code
 ///   template <typename T> class Container : public BaseContainer, public Expr {
@@ -46,7 +45,7 @@ namespace sequant {
 ///   };
 /// @endcode
 /// There are two possible scenarios:
-///   - if @c Container is a container of Expr objects, BaseContainer will iterate over std::shared_ptr<Expr> objects already
+///   - if @c Container is a container of Expr objects, BaseContainer will iterate over ExprPtr objects already
 ///     and both ranges will be equivalent; it is sufficient to add `using BaseContainer::begin`, etc. to Container's public API.
 ///   - if @c Container is a container of non-Expr objects, iteration over BaseContainer is likely to be more commonly used
 ///     in practice, hence again adding `using BaseContainer::begin`, etc. will suffice. To be able to iterate over subexpression
@@ -84,35 +83,36 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
 
   /// @return a clone of this object
   /// @note must be overridden in the derived class
-  virtual std::shared_ptr<Expr> clone() const {
+  virtual ExprPtr clone() const {
     throw std::logic_error("Expr::clone not implemented in this derived class");
   }
 
   /// Canonicalizes @c this and returns the biproduct of canonicalization (e.g. phase)
   /// @return the biproduct of canonicalization, or @c nullptr if no biproduct generated
-  virtual std::shared_ptr<Expr> canonicalize() {
+  virtual ExprPtr canonicalize() {
     return {};  // by default do nothing and return nullptr
   }
 
   /// Performs approximate, but fast, canonicalization of @c this and returns the biproduct of canonicalization (e.g. phase)
   /// The default is to use canonicalize(), unless overridden in the derived class.
   /// @return the biproduct of canonicalization, or @c nullptr if no biproduct generated
-  virtual std::shared_ptr<Expr> rapid_canonicalize() {
+  virtual ExprPtr rapid_canonicalize() {
     return this->canonicalize();
   }
 
+  // clang-format off
   /// recursively visit this expression, i.e. call visitor on each subexpression
   /// in depth-first fashion.
   /// @warning this will only work for tree expressions; no checking is
   /// performed that each subexpression has only been visited once
   /// TODO make work for graphs
-  /// @tparam Visitor a callable with (std::shared_ptr<Expr>&) or (const
-  /// std::shared_ptr<Expr>&) signature
+  /// @tparam Visitor a callable of type void(ExprPtr&) or void(const ExprPtr&)
   /// @param visitor the visitor object
   /// @param atoms_only if true, will visit only the leaves; the default is to
   /// visit all nodes
   /// @return true if this object was visited
   /// @sa expr_range
+  // clang-format on
   template<typename Visitor>
   bool visit(Visitor &&visitor, const bool atoms_only = false) {
     for(auto& subexpr_ptr: expr()) {
@@ -129,7 +129,7 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
     bool this_visited = false;
     if constexpr(std::is_invocable_r_v<void,
                                        std::remove_reference_t<Visitor>,
-                                       const std::shared_ptr<Expr> &>) {
+                                       const ExprPtr &>) {
       if (!atoms_only || this->is_atom()) {
         visitor(shared_from_this());
         this_visited = true;
@@ -292,7 +292,10 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
   /// @return true if this object is of type @c T
   template <typename T>
   bool is() const {
-    return this->type_id() == get_type_id<std::decay_t<T>>();
+    if constexpr (std::is_same_v<std::decay_t<T>,Expr>)
+      return true;
+    else
+      return this->type_id() == get_type_id<std::decay_t<T>>();
   }
 
   /// @tparam T an Expr type
@@ -369,15 +372,15 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
 
   struct cursor
   {
-    using value_type = std::shared_ptr<Expr>;
+    using value_type = ExprPtr;
 
     cursor() = default;
-    constexpr explicit cursor(std::shared_ptr<Expr>* subexpr_ptr) noexcept
+    constexpr explicit cursor(ExprPtr* subexpr_ptr) noexcept
         : ptr_{subexpr_ptr}
     {}
     /// when take const ptr note runtime const flag
-    constexpr explicit cursor(const std::shared_ptr<Expr>* subexpr_ptr) noexcept
-        : ptr_{const_cast<std::shared_ptr<Expr>*>(subexpr_ptr)}, const_{true}
+    constexpr explicit cursor(const ExprPtr* subexpr_ptr) noexcept
+        : ptr_{const_cast<ExprPtr*>(subexpr_ptr)}, const_{true}
     {}
     bool equal(const cursor& that) const
     {
@@ -392,18 +395,18 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
       --ptr_;
     }
     // TODO figure out why can't return const here if want to be able to assign to *begin(Expr&)
-    std::shared_ptr<Expr>& read() const
+    ExprPtr& read() const
     {
       RANGES_EXPECT(ptr_);
       return *ptr_;
     }
-    std::shared_ptr<Expr>& read()
+    ExprPtr& read()
     {
       RANGES_EXPECT(const_ == false);
       RANGES_EXPECT(ptr_);
       return *ptr_;
     }
-    void assign(const std::shared_ptr<Expr>& that_ptr)
+    void assign(const ExprPtr& that_ptr)
     {
       RANGES_EXPECT(ptr_);
       *ptr_ = that_ptr;
@@ -417,7 +420,7 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
       ptr_ += n;
     }
    private:
-    std::shared_ptr<Expr>* ptr_ = nullptr;  // both begin and end will be represented by this, so Expr without subexpressions begin() equals end() automatically
+    ExprPtr* ptr_ = nullptr;  // both begin and end will be represented by this, so Expr without subexpressions begin() equals end() automatically
     bool const_ = false;  // assert in nonconst ops
   };
 
@@ -556,7 +559,7 @@ class Constant : public Expr {
     return get_type_id<Constant>();
   }
 
-  std::shared_ptr<Expr> clone() const override {
+  ExprPtr clone() const override {
     return ex<Constant>(this->value());
   }
 
@@ -589,7 +592,7 @@ class Constant : public Expr {
 
  private:
   hash_type memoizing_hash() const override {
-    hash_value_ = boost::hash_value(value_);
+    hash_value_ = hash::value(value_);
     return *hash_value_;
   }
 
@@ -810,7 +813,7 @@ class Product : public Expr {
 
   type_id_type type_id() const override { return get_type_id<Product>(); };
 
-  std::shared_ptr<Expr> clone() const override {
+  ExprPtr clone() const override {
     auto cloned_factors =
         factors() | ranges::views::transform([](const ExprPtr &ptr) {
           return ptr ? ptr->clone() : nullptr;
@@ -870,14 +873,14 @@ class Product : public Expr {
         factors() |
         ranges::views::transform(
             [](const ExprPtr &ptr) -> const Expr & { return *ptr; });
-    hash_value_ = boost::hash_range(ranges::begin(deref_factors),
-                                    ranges::end(deref_factors));
+    hash_value_ = hash::range(ranges::begin(deref_factors),
+                              ranges::end(deref_factors));
     return *hash_value_;
   }
 
-  std::shared_ptr<Expr> canonicalize_impl(bool rapid = false);
-  virtual std::shared_ptr<Expr> canonicalize() override;
-  virtual std::shared_ptr<Expr> rapid_canonicalize() override;
+  ExprPtr canonicalize_impl(bool rapid = false);
+  virtual ExprPtr canonicalize() override;
+  virtual ExprPtr rapid_canonicalize() override;
 
   bool static_equal(const Expr &that) const override {
     const auto &that_cast = static_cast<const Product &>(that);
@@ -1079,7 +1082,7 @@ class Sum : public Expr {
     return Expr::get_type_id<Sum>();
   };
 
-  std::shared_ptr<Expr> clone() const override {
+  ExprPtr clone() const override {
     auto cloned_summands =
         summands() | ranges::views::transform(
                          [](const ExprPtr &ptr) { return ptr->clone(); });
@@ -1127,8 +1130,8 @@ class Sum : public Expr {
         summands() |
         ranges::views::transform(
             [](const ExprPtr &ptr) -> const Expr & { return *ptr; });
-    hash_value_ = boost::hash_range(ranges::begin(deref_summands),
-                                    ranges::end(deref_summands));
+    hash_value_ = hash::range(ranges::begin(deref_summands),
+                              ranges::end(deref_summands));
     return *hash_value_;
   }
 

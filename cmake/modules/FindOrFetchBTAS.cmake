@@ -6,6 +6,7 @@ if (NOT TARGET BTAS::btas)
   download_project(PROJ                BTAS
     GIT_REPOSITORY      https://github.com/BTAS/btas.git
     GIT_TAG             ${SEQUANT_TRACKED_BTAS_TAG}
+    PREFIX              ${PROJECT_BINARY_DIR}/external
     UPDATE_DISCONNECTED 1
     )
 
