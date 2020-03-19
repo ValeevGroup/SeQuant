@@ -179,12 +179,12 @@ set(utests_src
         # tests/unit/test_mbpt.cpp
         #### unit tests for evaluation
         tests/unit/test_path_tree.cpp)
-set(utests_deps SeQuant)
+set(utests_deps SeQuant evaluator)
 
 if (TARGET tiledarray)
   list(APPEND utests_src
       tests/unit/test_eval_tensor.cpp)
-  list(APPEND utests_deps evaluator tiledarray)
+  list(APPEND utests_deps tiledarray)
 endif(TARGET tiledarray)
 
 set(unit_test_executable unit_tests)
