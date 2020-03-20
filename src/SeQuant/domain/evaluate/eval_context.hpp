@@ -33,7 +33,7 @@ class EvalContext {
     for (auto& item : expr_to_dtensor_map) {
       auto hash_value = tree_builder.build_tree(item.first)->get_hash_value();
       this->hash_to_tensor_.insert(std::make_pair(hash_value,
-                  std::make_shared<DataTensorType>(*item.second)));
+                  item.second));
     }
   }
 

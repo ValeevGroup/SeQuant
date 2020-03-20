@@ -222,7 +222,7 @@ TEST_CASE("EVAL_TENSOR_EVALUATE_TESTS", "[eval_tensor_builder]") {
     auto expr = seq_tensor_bad;
     auto tree = builder.build_tree(expr);
 
-    REQUIRE_THROWS_AS(tree->evaluate(ev_context.get_map()), std::runtime_error);
+    REQUIRE_THROWS_AS(tree->evaluate(ev_context.get_map()), std::logic_error);
 
   }
   // TA::finalize();
