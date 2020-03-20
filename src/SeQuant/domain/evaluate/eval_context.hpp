@@ -38,7 +38,7 @@ class EvalContext {
   }
 
   const auto& get_map() { return hash_to_tensor_; }
-};
+}; 
 
 }  // namespace sequant::evaluate
 

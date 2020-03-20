@@ -211,5 +211,19 @@ TEST_CASE("EVAL_TENSOR_EVALUATE_TESTS", "[eval_tensor_builder]") {
 
     REQUIRE(manual_norm == Approx(eval_norm));
   }
+
+  SECTION("Testing missing data tensor") {
+    auto seq_tensor_bad = make_tensor_expr({"t", "a_1", "i_1", "a_2", "a_3"});
+    auto seq_tensor_good = make_tensor_expr({"t", "i_1", "a_1", "a_2", "a_3"});
+    ContextMapType context;
+    context.insert(ContextMapType::value_type(seq_tensor_good, T_ov));
+    auto ev_context = EvalContext(context);
+
+    auto expr = seq_tensor_bad;
+    auto tree = builder.build_tree(expr);
+
+    REQUIRE_THROWS_AS(tree->evaluate(ev_context.get_map()), std::runtime_error);
+
+  }
   // TA::finalize();
 }
