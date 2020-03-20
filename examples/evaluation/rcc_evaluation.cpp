@@ -241,6 +241,8 @@ int main(int argc, char* argv[]) {
     TA::TiledRange tr_ovvv{{0, nocc}, {0, nvirt}, {0, nvirt}, {0, nvirt}};
     TA::TiledRange tr_vvvv{{0, nvirt}, {0, nvirt}, {0, nvirt}, {0, nvirt}};
 
+    TA::TiledRange tr_vovv{{0, nvirt}, {0, nocc}, {0, nvirt}, {0, nvirt}};
+
 #define CCSDT_eval 0
 #if CCSDT_eval 
     // TA::TiledRange tr_ooovvv{{0, nocc},  {0, nocc},  {0, nocc},
@@ -261,6 +263,7 @@ int main(int argc, char* argv[]) {
     auto G_ovov = std::make_shared<TA::TArrayD>(world, tr_ovov);
     auto G_ovvv = std::make_shared<TA::TArrayD>(world, tr_ovvv);
     auto G_vvvv = std::make_shared<TA::TArrayD>(world, tr_vvvv);
+    auto G_vovv = std::make_shared<TA::TArrayD>(world, tr_vovv);
 
     (*D_ov).fill(0.0);
     (*D_oovv).fill(0.0);
@@ -276,6 +279,7 @@ int main(int argc, char* argv[]) {
     (*G_ovov).fill(0.0);
     (*G_ovvv).fill(0.0);
     (*G_vvvv).fill(0.0);
+    (*G_vovv).fill(0.0);
 
     auto tile_D_ov = (*D_ov).find({0, 0}).get();
     auto tile_D_oovv = (*D_oovv).find({0, 0, 0, 0}).get();
@@ -291,6 +295,7 @@ int main(int argc, char* argv[]) {
     auto tile_G_ovov = (*G_ovov).find({0, 0, 0, 0}).get();
     auto tile_G_ovvv = (*G_ovvv).find({0, 0, 0, 0}).get();
     auto tile_G_vvvv = (*G_vvvv).find({0, 0, 0, 0}).get();
+    auto tile_G_vovv = (*G_vovv).find({0, 0, 0, 0}).get();
 
     for (auto i = 0; i < nocc; ++i) {
       tile_Fock_oo(i, i) = tile_fock(i, i);
@@ -316,6 +321,14 @@ int main(int argc, char* argv[]) {
           for (auto c = 0; c < nvirt; ++c)
             tile_G_ovvv(i, a, b, c) =
                 tile_ints_spatial(i, a + nocc, b + nocc, c + nocc);
+
+    for (auto a = 0; a < nvirt; ++a)
+      for (auto i = 0; i < nocc; ++i)
+        for (auto b = 0; b < nvirt; ++b)
+          for (auto c = 0; c < nvirt; ++c)
+            tile_G_vovv(a, i, b, c) =
+                tile_ints_spatial(a + nocc, i, b + nocc, c + nocc);
+
 
     for (auto i = 0; i < nocc; ++i)
       for (auto j = 0; j < nocc; ++j)
@@ -431,7 +444,7 @@ int main(int argc, char* argv[]) {
 #endif
 
     std::vector<std::shared_ptr<TA::TArrayD>> data_tensors = {Fock_oo, Fock_ov, Fock_vv, G_oooo,
-                                                              G_ooov,  G_oovv,  G_ovov,  G_ovvv,
+                                                              G_ooov,  G_oovv,  G_ovov,  G_ovvv, G_vovv,
                                                               G_vvvv,  t_ov,    t_oovv};
 
     // TODO: DO I NEED TO GET PERMUTED MAPS ?
@@ -452,6 +465,8 @@ int main(int argc, char* argv[]) {
 
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"g", {L"i_1",L"a_1"}, {L"a_2",L"a_3"})),
 
+        std::make_shared<sequant::Tensor>(sequant::Tensor(L"g", {L"a_1", L"i_1"}, {L"a_2",L"a_3"})),
+
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"g", {L"a_1",L"a_2"}, {L"a_3",L"a_4"})),
 
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"i_1",}, {L"a_1"})),
@@ -470,8 +485,8 @@ int main(int argc, char* argv[]) {
     auto context = evaluate::EvalContext(context_builder);
     auto builder = sequant::evaluate::EvalTensorBuilder<TA::TArrayD>();
 
-//    std::wcout << "CCSD R1:\n" << to_latex(cc_r[1]) << endl;
-//    std::wcout << "CCSD R2:\n" << to_latex(cc_r[2]) << endl;
+    std::wcout << "CCSD R1:\n" << to_latex(cc_r[1]) << endl;
+    std::wcout << "CCSD R2:\n" << to_latex(cc_r[2]) << endl;
 
     auto r1_tree = builder.build_tree(cc_r[1]);
     auto r2_tree = builder.build_tree(cc_r[2]);
@@ -488,13 +503,9 @@ int main(int argc, char* argv[]) {
     auto tstart = std::chrono::high_resolution_clock::now();
     do {
       ++iter;
-      cout << __LINE__ << endl;
-
       auto R1 = r1_tree->evaluate(context.get_map());
-      cout << __LINE__ << endl;
       cout << "R1: " << R1 << endl;
       auto R2 = r2_tree->evaluate(context.get_map());
-      cout << __LINE__ << endl;
       cout << "R2: " << R2 << endl;
 
       auto tile_R1       = R1.find({0,0}).get();

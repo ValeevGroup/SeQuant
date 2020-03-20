@@ -148,7 +148,7 @@ target_include_directories(SeQuant PUBLIC
 
 find_package(Libint2 2.6.0 CONFIG REQUIRED)
 
-find_package(TiledArray CONFIG COMPONENTS tiledarray REQUIRED)
+find_package(TiledArray CONFIG COMPONENTS tiledarray)
 
 add_library(evaluator EXCLUDE_FROM_ALL
     src/SeQuant/domain/evaluate/eval_tensor_fwd.hpp
@@ -180,6 +180,13 @@ set(utests_src
         tests/unit/test_spin.cpp
         tests/unit/test_canonicalize.cpp
         tests/unit/test_eval_tensor.cpp)
+set(utests_deps SeQuant evaluator)
+
+if (TARGET tiledarray)
+  list(APPEND utests_src
+      tests/unit/test_eval_tensor.cpp)
+  list(APPEND utests_deps tiledarray)
+endif(TARGET tiledarray)
 
 #set(utests_src
 #        tests/unit/test_mbpt.cpp)
@@ -189,7 +196,7 @@ add_executable(${unit_test_executable} EXCLUDE_FROM_ALL
         tests/unit/test_main.cpp
         tests/unit/catch.hpp
         ${utests_src})
-target_link_libraries(${unit_test_executable} evaluator SeQuant tiledarray)
+target_link_libraries(${unit_test_executable} ${utests_deps})
 add_test(unit/build "${CMAKE_COMMAND}" --build ${CMAKE_BINARY_DIR} --target ${unit_test_executable})
 
 add_test(NAME unit/run
