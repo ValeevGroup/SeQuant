@@ -347,7 +347,11 @@ class EvalTensorLeaf : public EvalTensor<DataTensorType> {
         (label == L"A" || label == L"P"))
       throw std::logic_error(
           "(anti-)symmetrization tensors cannot be evaluated from here!");
-    return *context.find(this->get_hash_value())->second;
+    auto context_entry = context.find(this->get_hash_value());
+    if (context_entry == context.end()) {
+      throw std::runtime_error("Data tensor missing!");
+    }
+    return *context_entry->second;
   }
 };
 
