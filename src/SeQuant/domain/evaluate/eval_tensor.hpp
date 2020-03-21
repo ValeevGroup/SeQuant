@@ -340,22 +340,27 @@ class EvalTensorLeaf : public EvalTensor<DataTensorType> {
   }
 
   /// Evaluate the EvalTensor.
-  const DataTensorType& evaluate(
+  DataTensorType evaluate(
       const container::map<HashType, std::shared_ptr<DataTensorType>>& context)
       const override {
     if (auto label = expr_->as<Tensor>().label();
         (label == L"A" || label == L"P"))
       throw std::logic_error(
           "(anti-)symmetrization tensors cannot be evaluated from here!");
+
     auto found_it = context.find(this->get_hash_value());
     if (found_it != context.end()) {
       return *(found_it->second);
     }
-    else {
-      std::ostringstream error_msg_os;
-      error_msg_os << "EvalTensorLeaf::evaluate(): did not find such tensor in context (expr=\"" << expr_->as<Tensor>().to_latex() << "\")";
-      throw std::logic_error(error_msg_os.str());
-    }
+
+    std::wstring error_msg_os = L"";
+
+    error_msg_os += L"EvalTensorLeaf::evaluate(): ";
+    error_msg_os += L"did not find such tensor in context (expr=\"";
+    error_msg_os += expr_->as<Tensor>().to_latex() + L"\")";
+
+    throw std::logic_error(
+        std::string(error_msg_os.begin(), error_msg_os.end()));
   }
 };
 
