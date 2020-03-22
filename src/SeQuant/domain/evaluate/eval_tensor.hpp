@@ -58,7 +58,7 @@ template <typename DataTensorType>
 class EvalTensor {
  private:
   /// The index labels of the tensor's bra and ket in that order.
-  IndexLabelContainer indices_;
+  IndexContainer indices_;
 
   /// A unique identifier of this evaluation.
   HashType hash_value_{0};
@@ -71,12 +71,12 @@ class EvalTensor {
 
  public:
   /// Setter method of the indices_ field.
-  void set_indices(const IndexLabelContainer& index_labels) {
+  void set_indices(const IndexContainer& index_labels) {
     indices_ = index_labels;
   }
 
   /// Getter method of the indices_ field.
-  const IndexLabelContainer& get_indices() const { return indices_; }
+  const IndexContainer& get_indices() const { return indices_; }
 
   /// Setter method of the hash_value_ field.
   void set_hash_value(HashType hash_value) { hash_value_ = hash_value; }
@@ -167,11 +167,11 @@ class EvalTensorIntermediate : public EvalTensor<DataTensorType> {
     std::wstring bra = L"";
     std::wstring ket = L"";
     for (auto i = 0; i < this->get_indices().size() / 2; ++i) {
-      bra += L"{" + std::wstring(this->get_indices().at(i)) + L"}";
+      bra += this->get_indices().at(i).to_latex();
     }
     for (auto i = this->get_indices().size() / 2;
          i < this->get_indices().size(); ++i) {
-      ket += L"{" + std::wstring(this->get_indices().at(i)) + L"}";
+      ket += this->get_indices().at(i).to_latex();
     }
     auto node_color =
         get_operation() == Operation::SUM
@@ -182,7 +182,7 @@ class EvalTensorIntermediate : public EvalTensor<DataTensorType> {
                         ? L"gray"
                         : L"turquoise";  // turquoise for symmetrization
     std::string scalar = std::to_string(this->get_scalar());
-    scalar = scalar.substr(4);
+    scalar = scalar.substr(4);  // truncating decimal points
     auto this_node =
         L"node" + std::to_wstring(this->get_hash_value()) + L" [label=\"" +
         ((this->get_scalar() != 1.)
@@ -224,7 +224,7 @@ class EvalTensorIntermediate : public EvalTensor<DataTensorType> {
     auto TA_annotation = [this](decltype(this->get_indices())& indices) {
       std::string annot = "";
       for (const auto& idx : indices)
-        annot += std::string(idx.begin(), idx.end()) + ", ";
+        annot += std::string(idx.label().begin(), idx.label().end()) + ", ";
 
       annot.erase(annot.size() - 2);  // remove trailing L", "
       return annot;
@@ -298,9 +298,9 @@ class EvalTensorIntermediate : public EvalTensor<DataTensorType> {
       }    // for p: vp
       result(inds) = result(inds) * this->get_right_tensor()->get_scalar();
       return result;
+    } else {
+      throw std::domain_error("Functionality not yet implemented!");
     }
-
-    throw std::domain_error("Functionality not yet implemented!");
   }
 };
 

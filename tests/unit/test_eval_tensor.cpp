@@ -223,7 +223,23 @@ TEST_CASE("EVAL_TENSOR_EVALUATE_TESTS", "[eval_tensor_builder]") {
     auto tree = builder.build_tree(expr);
 
     REQUIRE_THROWS_AS(tree->evaluate(ev_context.get_map()), std::logic_error);
-
   }
+
+  //SECTION("Bra and ket indices") {
+  //  auto visitor = [](const EvalTensor<DTensorType>& evtensor) {
+  //    std::wcout << "Indices: ";
+  //    for (const auto& idx : evtensor.get_indices())
+  //      std::wcout << idx.to_latex();
+  //    std::wcout << std::endl;
+  //  };
+  //  auto t = make_tensor_expr({"t", "i_1", "i_2", "a_1", "a_2"});
+  //  auto g = make_tensor_expr({"g", "i_1", "i_2", "a_1", "a_2"});
+  //  auto expr = std::make_shared<Sum>(Sum({g, t}));
+  //  auto tree = builder.build_tree(expr);
+  //  tree->visit(visitor);
+  //  std::wcout << "digraph G {\n";
+  //  std::wcout << tree->to_digraph();
+  //  std::wcout << "}\n";
+  //}
   // TA::finalize();
 }
