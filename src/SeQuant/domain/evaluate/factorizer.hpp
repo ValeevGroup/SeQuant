@@ -9,7 +9,7 @@
 /// @version Feb 2020
 ///
 
-#include "eval_tensor_fwd.hpp"
+#include "eval_tensor.hpp"
 #include "path_tree.hpp"
 
 #include <SeQuant/core/expr_fwd.hpp>
@@ -24,8 +24,9 @@ namespace sequant::evaluate {
 /// @param lexpr left sequant Expr to be fused.
 /// @param rexpr right sequant Expr to be fused.
 /// @return A tuple of shared pointers to EvalTensor's.
-std::tuple<EvalTensorPtr, EvalTensorPtr> fuse_optimally(const ExprPtr& lexpr,
-                                                        const ExprPtr& rexpr);
+template <typename DataTensorType>
+std::tuple<EvalTensorPtr<DataTensorType>, EvalTensorPtr<DataTensorType>>
+fuse_optimally(const ExprPtr& lexpr, const ExprPtr& rexpr);
 
 namespace detail {
 
@@ -34,7 +35,7 @@ namespace detail {
 ///
 /// It collects unique hash values and the ops counts of the corresponding
 /// evaluation tensors. The intention is to initialize such an object once and
-/// pass it as the parameter for visit method of EvalTensor objects to get the
+/// pass it as a parameter for visit method of EvalTensor objects to get the
 /// ops count when such objects are fused.
 ///
 class FusionOpsCounter {
@@ -44,7 +45,8 @@ class FusionOpsCounter {
   OpsCount m_ops_count{0};
 
  public:
-  void operator()(const EvalTensorPtr& tree);
+  template <typename DataTensorType>
+  void operator()(const EvalTensorPtr<DataTensorType>& tree);
 
   const container::set<HashType>& get_hash_values() const;
 

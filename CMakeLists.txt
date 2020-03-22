@@ -156,8 +156,8 @@ add_library(evaluator EXCLUDE_FROM_ALL
     src/SeQuant/domain/evaluate/eval_tensor_builder.hpp
     src/SeQuant/domain/evaluate/eval_context.hpp
     src/SeQuant/domain/evaluate/path_tree.hpp
-    src/SeQuant/domain/evaluate/path_tree.cpp)
-    # src/SeQuant/domain/evaluate/factorizer.hpp
+    src/SeQuant/domain/evaluate/path_tree.cpp
+    src/SeQuant/domain/evaluate/factorizer.hpp)
     # src/SeQuant/domain/evaluate/factorizer.cpp
 target_include_directories(evaluator PUBLIC
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>

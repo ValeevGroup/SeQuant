@@ -28,7 +28,8 @@ class FusionOpsCounter {
   OpsCount m_ops_count;
 
  public:
-  void operator()(const EvalTensorPtr& tree) {
+  template <typename DataTensorType>
+  void operator()(const EvalTensorPtr<DataTensorType>& tree) {
     HashType hvalue = tree->get_hash_value();
 
     if (m_hash_values.contains(hvalue)) return;

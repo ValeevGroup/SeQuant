@@ -15,16 +15,16 @@
 #include "../../src/SeQuant/core/space.hpp"
 #include "../../src/SeQuant/core/tensor.hpp"
 #include "../../src/SeQuant/core/utility.hpp"
-#include "../../src/SeQuant/domain/evaluate/eval_context.hpp"
 #include "../../src/SeQuant/domain/mbpt/convention.hpp"
 #include "catch.hpp"
 
 #include "../../examples/sequant_setup.hpp"
+#include "../../src/SeQuant/domain/evaluate/eval_context.hpp"
 #include "../../src/SeQuant/domain/evaluate/eval_tensor.hpp"
 #include "../../src/SeQuant/domain/evaluate/eval_tensor_builder.hpp"
+#include "../../src/SeQuant/domain/evaluate/factorizer.hpp"
 
 using namespace sequant;
-using namespace std;
 
 using namespace sequant::evaluate;
 using DTensorType = TA::TArrayD;
@@ -105,9 +105,6 @@ TEST_CASE("EVAL_TENSOR_EVALUATE_TESTS", "[eval_tensor_builder]") {
   // global sequant setup...
   sequant::detail::OpIdRegistrar op_id_registrar;
   sequant::mbpt::set_default_convention();
-
-  using sequant::Product;
-  using sequant::Sum;
 
   // creating some random tensors
   auto T_ov = std::make_shared<DTensorType>(world, tr_ov);
@@ -225,7 +222,7 @@ TEST_CASE("EVAL_TENSOR_EVALUATE_TESTS", "[eval_tensor_builder]") {
     REQUIRE_THROWS_AS(tree->evaluate(ev_context.get_map()), std::logic_error);
   }
 
-  //SECTION("Bra and ket indices") {
+  // SECTION("Bra and ket indices") {
   //  auto visitor = [](const EvalTensor<DTensorType>& evtensor) {
   //    std::wcout << "Indices: ";
   //    for (const auto& idx : evtensor.get_indices())
@@ -242,4 +239,54 @@ TEST_CASE("EVAL_TENSOR_EVALUATE_TESTS", "[eval_tensor_builder]") {
   //  std::wcout << "}\n";
   //}
   // TA::finalize();
+}
+
+TEST_CASE("FACTORIZER_TESTS", "[factorizer]") {
+  // global sequant setup...
+  sequant::detail::OpIdRegistrar op_id_registrar;
+  sequant::mbpt::set_default_convention();
+
+  container::map<IndexSpace::TypeAttr, size_t> space_size;
+  space_size.insert(
+      decltype(space_size)::value_type(IndexSpace::active_occupied, nocc));
+  space_size.insert(
+      decltype(space_size)::value_type(IndexSpace::active_unoccupied, nvirt));
+
+  SECTION("Testing operation counts for product") {
+    auto t = make_tensor_expr({"t", "i_1", "a_1"});
+    auto g = make_tensor_expr({"g", "i_1", "i_2", "a_1", "a_2"});
+    auto expr = std::make_shared<Product>(Product({t, g}));
+    auto tree = builder.build_tree(expr);
+
+    tree->set_ops_count(space_size);
+
+    // by looking at 't' and 'g' tensors
+    // we see the ops count should be
+    // (num of active_occupied squared) * (num of active_unoccupied squared)
+
+    REQUIRE(tree->get_ops_count() == nocc * nocc * nvirt * nvirt);
+  }
+
+  SECTION("Testing operation counts for sum") {
+    auto t = make_tensor_expr({"t", "i_1", "a_1"});
+    auto f = make_tensor_expr({"f", "i_2", "a_2"});
+    auto g = make_tensor_expr({"g", "i_1", "i_2", "a_1", "a_2"});
+
+    auto left_sumand = std::make_shared<Product>(Product{t, f});
+    auto& right_sumand = g;
+
+    auto expr = std::make_shared<Sum>(Sum{left_sumand, right_sumand});
+
+    auto tree = builder.build_tree(expr);
+
+    tree->set_ops_count(space_size);
+
+    REQUIRE(tree->get_ops_count() == nocc * nocc * nvirt * nvirt);
+
+    // auto ops_printer = [](const EvalTensor<DTensorType>& node) {
+    //   std::wcout << "ops count = " << node.get_ops_count() << "\n";
+    // };
+    // std::wcout << "Digraph G{\n" << tree->to_digraph() << "}\n";
+    // tree->visit(ops_printer);
+  }
 }

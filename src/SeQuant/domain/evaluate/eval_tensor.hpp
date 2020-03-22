@@ -1,6 +1,7 @@
 #ifndef SEQUANT_EVALUATE_EVAL_TENSOR_HPP
 #define SEQUANT_EVALUATE_EVAL_TENSOR_HPP
 
+#include "SeQuant/core/container.hpp"
 #include "eval_tensor_fwd.hpp"
 
 #include <functional>
@@ -56,7 +57,7 @@ std::vector<Perm> perm_calc(std::vector<size_t> to_perm, size_t size,
 ///
 template <typename DataTensorType>
 class EvalTensor {
- private:
+ protected:
   /// The index labels of the tensor's bra and ket in that order.
   IndexContainer indices_;
 
@@ -84,8 +85,9 @@ class EvalTensor {
   /// Getter method of the hash_value_ field.
   HashType get_hash_value() const { return hash_value_; }
 
-  /// Setter method of the ops_count_ field.
-  void set_ops_count(OpsCount count) { ops_count_ = count; }
+  /// Compute and store the ops count.
+  virtual void set_ops_count(
+      const container::map<IndexSpace::TypeAttr, size_t>& space_size_map) = 0;
 
   /// Getter method of the ops_count_ field.
   OpsCount get_ops_count() const { return ops_count_; }
@@ -104,7 +106,8 @@ class EvalTensor {
 
   /// Visit the tree by pre-order traversal.
   virtual void visit(
-      const std::function<void(const EvalTensor&)>& visitor) const = 0;
+      const std::function<void(const EvalTensor<DataTensorType>&)>& visitor)
+      const = 0;
 
   /// Evaluate the EvalTensor.
   virtual DataTensorType evaluate(
@@ -161,6 +164,37 @@ class EvalTensorIntermediate : public EvalTensor<DataTensorType> {
   /// Getter method for the operation type.
   /// @return Operation for this intermediate tensor.
   Operation get_operation() const { return operation_; }
+
+  /// Compute and store the ops count.
+  void set_ops_count(const container::map<IndexSpace::TypeAttr, size_t>&
+                         space_size_map) override {
+    this->get_left_tensor()->set_ops_count(space_size_map);
+    this->get_right_tensor()->set_ops_count(space_size_map);
+
+    OpsCount count = this->get_left_tensor()->get_ops_count() +
+                     this->get_right_tensor()->get_ops_count();
+
+    if (this->get_operation() == Operation::PRODUCT) {
+      OpsCount contractions_ops = 1;
+      auto& left_indices = this->get_left_tensor()->get_indices();
+      auto& right_indices = this->get_right_tensor()->get_indices();
+
+      container::set<Index> unique_indices;
+      for (const auto& idx : left_indices) {
+        unique_indices.insert(idx);
+      }
+      for (const auto& idx : right_indices) {
+        unique_indices.insert(idx);
+      }
+
+      for (const auto& idx : unique_indices) {
+        contractions_ops *= (space_size_map.find(idx.space().type()))->second;
+      }
+      count += contractions_ops;
+    }  // if operation is product
+
+    this->ops_count_ = count;
+  }
 
   /// Get a directed graph definitions and paths in dot language.
   std::wstring to_digraph() const override {
@@ -326,6 +360,13 @@ class EvalTensorLeaf : public EvalTensor<DataTensorType> {
 
   /// Getter of the sequant expr corresponding to this eval tensor.
   const ExprPtr& get_expr() const { return expr_; }
+
+  /// Compute and store the ops count.
+  void set_ops_count(const container::map<IndexSpace::TypeAttr, size_t>&
+                         space_size_map) override {
+    // leaf data tensors are pre-computed
+    this->ops_count_ = 0;
+  }
 
   /// Get a directed graph definitions and paths in dot language.
   std::wstring to_digraph() const override {
