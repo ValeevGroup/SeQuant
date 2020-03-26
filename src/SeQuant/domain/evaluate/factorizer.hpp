@@ -67,7 +67,7 @@ ExprPtr largest_common_subnet(
   for (const auto& subA : *exprA) {
     auto j = 0;
     for (const auto& subB : *exprB) {
-      if (subA == subB) {
+      if (*subA == *subB) {
         commonIdxA.push_back(i);
         commonIdxB.push_back(j);
       }

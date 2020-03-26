@@ -298,14 +298,16 @@ TEST_CASE("FACTORIZER_TESTS", "[factorizer]") {
                  make_tensor_expr({"f", "i_2", "a_2"})}));
 
     auto prodB = std::make_shared<Product>(
-        Product({make_tensor_expr({"t", "i_4", "i_6", "a_4", "a_6"}),
-                 make_tensor_expr({"g", "i_4", "i_8", "a_4", "a_8"}),
-                 make_tensor_expr({"f", "i_8", "a_8"})}));
+        Product({make_tensor_expr({"t", "i_1", "i_2", "a_1", "a_2"}),
+                 make_tensor_expr({"g", "i_1", "i_3", "a_1", "a_3"}),
+                 make_tensor_expr({"f", "i_3", "a_3"})}));
 
     auto subfactor = largest_common_subnet(prodA, prodB, space_size, builder);
     if (subfactor) {
-      std::wcout << "The larges common subfactor is: " << subfactor->to_latex()
-                 << std::endl;
+      auto expected = std::make_shared<Product>(
+          Product({make_tensor_expr({"t", "i_1", "i_2", "a_1", "a_2"}),
+                   make_tensor_expr({"g", "i_1", "i_3", "a_1", "a_3"})}));
+      REQUIRE(*expected == *subfactor);
     } else {
       std::wcout << "Not even a single common subfactor exists." << std::endl;
     }
