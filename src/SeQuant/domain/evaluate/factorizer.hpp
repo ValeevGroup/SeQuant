@@ -14,6 +14,7 @@
 
 #include <SeQuant/core/expr.hpp>
 #include <algorithm>
+#include <tuple>
 
 namespace sequant::evaluate {
 namespace detail {
@@ -37,8 +38,11 @@ ExprPtr getSubExpr(const ExprPtr& expr,
       result->append(sum.summand(idx));
     }
     return result;
+  } else if (expr->is<Tensor>() && *idx_vec.begin() == 0) {
+    return expr;
   } else {
-    throw std::domain_error("Only Sum or Product type expression expected!");
+    throw std::domain_error(
+        "Only Tensor, Sum or Product type expression expected!");
   }
 }  // getSubExpr
 
@@ -52,12 +56,13 @@ ExprPtr getSubExpr(const ExprPtr& expr,
 /// @param exprA Expression to find common subnetwork of.
 /// @param exprB Expression to find common subnetwork of.
 /// @param space_size_map Map from index space to its size.
+/// @param builder EvalTensorBuilder object to give a context while interpreting
+/// tensors.
 ///
-/// @return ExprPtr to the largest common subnetwork with minimum ops count.
+/// @return Tuple of ExprPtr that correspond to equivalent data tensors.
 template <typename T>
-ExprPtr largest_common_subnet(
+std::tuple<ExprPtr, ExprPtr> largest_common_subnet(
     const ExprPtr& exprA, const ExprPtr& exprB,
-    const container::map<IndexSpace::TypeAttr, size_t>& space_size_map,
     const EvalTensorBuilder<T>& builder) {
   // finding the positions of the common sub-expressions
   container::svector<size_t> commonIdxA;
@@ -67,9 +72,12 @@ ExprPtr largest_common_subnet(
   for (const auto& subA : *exprA) {
     auto j = 0;
     for (const auto& subB : *exprB) {
-      if (*subA == *subB) {
-        commonIdxA.push_back(i);
-        commonIdxB.push_back(j);
+      if (j >= i) {  // skip redundant computations
+        if (builder.build_tree(subA)->get_hash_value() ==
+            builder.build_tree(subB)->get_hash_value()) {
+          commonIdxA.push_back(i);
+          commonIdxB.push_back(j);
+        }
       }
       ++j;
     }
@@ -77,21 +85,20 @@ ExprPtr largest_common_subnet(
   }
 
   // finding the sub-networks
-  // optimal_subnet holds the best subnet found so far
-  auto optimal_subnet = ExprPtr(nullptr);
-  // the operation counts for the optimal_subnet
+  //
+  // hold the best subnet found so far
+  auto optimal_subnetA = ExprPtr(nullptr), optimal_subnetB = ExprPtr(nullptr);
+  // the operation counts for the optimal_subnets
   auto optimal_ops_count = 0;
-  // builds eval_tensor from sequant expressions assuming
-  // the tensors refer to a real valued data tensor
-
+  //
   // choose determines the size of a combination
   auto choose = commonIdxA.size();  // or commonIdxB.size()
   while (choose > 0) {
     // generating unique combinations, of decreasing size,
-    // from the common indices
+    // from the vector of
     //
     // https://stackoverflow.com/questions/9430568/generating-combinations-in-c
-    //           -- answer by mitchnull
+    //           -answer by mitchnull
 
     // the combination will be generated in this vector
     container::vector<size_t> combination;
@@ -103,51 +110,37 @@ ExprPtr largest_common_subnet(
       // clear previous combination
       combination.clear();
       //
-      for (auto i = 0; i < grid.size(); ++i) {
-        if (grid[i]) {
-          combination.push_back(i);
+      for (auto k = 0; k < grid.size(); ++k) {
+        if (grid[k]) {
+          combination.push_back(k);
         }
       }
       // generated a combination, do something with it
       //
       // get the two subnets
-      auto subNetA = detail::getSubExpr(exprA, combination);
-      auto subNetB = detail::getSubExpr(exprB, combination);
+      container::vector<size_t> index_selectorA, index_selectorB;
+      for (auto& idx : combination) {
+        index_selectorA.push_back(commonIdxA[idx]);
+        index_selectorB.push_back(commonIdxB[idx]);
+      }
+      auto subNetA = detail::getSubExpr(exprA, index_selectorA);
+      auto subNetB = detail::getSubExpr(exprB, index_selectorB);
       //
       // now check if the two subnets are equivalent
       // using eval_tensor for now
       auto evalTreeA = builder.build_tree(subNetA);
       auto evalTreeB = builder.build_tree(subNetB);
 
-      if (evalTreeA->get_hash_value() != evalTreeB->get_hash_value()) {
-        continue;
-      }
-      // found identical subnets
-      // update the running subnet
-      if (optimal_subnet) {
-        // getting the operations count
-        evalTreeA->set_ops_count(space_size_map);
-        if (evalTreeA->get_ops_count() < optimal_ops_count) {
-          // this one is better than the previous one, update
-          optimal_subnet = subNetA;
-          optimal_ops_count = evalTreeA->get_ops_count();
-        }  // else nothing needs to be done, proceed for next subnet
-      } else {
-        // this is the first time we have encountered the common subnet
-        optimal_subnet = subNetA;
-        evalTreeA->set_ops_count(space_size_map);
-        optimal_ops_count = evalTreeA->get_ops_count();
+      if (evalTreeA->get_hash_value() == evalTreeB->get_hash_value()) {
+        // found identical subnets
+        return std::make_tuple(subNetA, subNetB);
       }
     } while (std::prev_permutation(grid.begin(), grid.end()));
-    // before finding a smaller subnet, if we have found one so far return it
-    if (optimal_subnet) {
-      return optimal_subnet;
-    }
     // if nothing found so far proceed to find a smaller subnet
     --choose;
   }
   // if not even a single subnet is found in common
-  return nullptr;
+  return std::make_tuple(nullptr, nullptr);
 }
 
 }  // namespace sequant::evaluate

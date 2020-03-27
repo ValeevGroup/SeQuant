@@ -238,7 +238,6 @@ TEST_CASE("EVAL_TENSOR_EVALUATE_TESTS", "[eval_tensor_builder]") {
   //  std::wcout << tree->to_digraph();
   //  std::wcout << "}\n";
   //}
-  // TA::finalize();
 }
 
 TEST_CASE("FACTORIZER_TESTS", "[factorizer]") {
@@ -298,18 +297,33 @@ TEST_CASE("FACTORIZER_TESTS", "[factorizer]") {
                  make_tensor_expr({"f", "i_2", "a_2"})}));
 
     auto prodB = std::make_shared<Product>(
-        Product({make_tensor_expr({"t", "i_1", "i_2", "a_1", "a_2"}),
-                 make_tensor_expr({"g", "i_1", "i_3", "a_1", "a_3"}),
-                 make_tensor_expr({"f", "i_3", "a_3"})}));
+        Product({make_tensor_expr({"t", "i_4", "i_6", "a_4", "a_6"}),
+                 make_tensor_expr({"g", "i_4", "i_8", "a_4", "a_8"}),
+                 make_tensor_expr({"f", "i_8", "a_8"})}));
+    // Note how each tensor in prodA is equivalent to a tensor in prodB
+    // (equivalent in the sense that both represent the same data tensor)
+    // however, prodA and prodB are not equivalent products
+    // that is beacuse even though, the nodes of the two tensor networks (prodA
+    // and prodB) are the same, their edges differ.
+    //
+    // The 't' and 'g' tensors are labelled in such a way that the network of
+    // t<-->g in both products have the same edges, and thus t<-->g is the
+    // subtensor network common to prodA and prodB.
 
-    auto subfactor = largest_common_subnet(prodA, prodB, space_size, builder);
-    if (subfactor) {
-      auto expected = std::make_shared<Product>(
-          Product({make_tensor_expr({"t", "i_1", "i_2", "a_1", "a_2"}),
-                   make_tensor_expr({"g", "i_1", "i_3", "a_1", "a_3"})}));
-      REQUIRE(*expected == *subfactor);
-    } else {
-      std::wcout << "Not even a single common subfactor exists." << std::endl;
-    }
+    auto treeA = builder.build_tree(prodA);
+    auto treeB = builder.build_tree(prodB);
+
+    auto [subfactorA, subfactorB] =
+        largest_common_subnet(prodA, prodB, builder);
+    auto expectedA = std::make_shared<Product>(
+        Product({make_tensor_expr({"t", "i_1", "i_2", "a_1", "a_2"}),
+                 make_tensor_expr({"g", "i_1", "i_3", "a_1", "a_3"})}));
+    auto expectedB = std::make_shared<Product>(
+        Product({make_tensor_expr({"t", "i_4", "i_6", "a_4", "a_6"}),
+                 make_tensor_expr({"g", "i_4", "i_8", "a_4", "a_8"})}));
+    // std::wcout << "subfactorA = " << subfactorA->to_latex() << "\n"
+    //            << "subfactorB = " << subfactorB->to_latex() << std::endl;
+    REQUIRE(*expectedA == *subfactorA);
+    REQUIRE(*expectedB == *subfactorB);
   }
 }
