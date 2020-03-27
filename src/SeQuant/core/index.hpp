@@ -20,6 +20,7 @@
 #include "container.hpp"
 #include "space.hpp"
 #include "tag.hpp"
+#include "hash.hpp"
 
 // change to 1 to make thread-safe
 #define SEQUANT_INDEX_THREADSAFE 1
@@ -312,8 +313,8 @@ class Index : public Taggable {
         proto_indices_ | ranges::views::transform([](const Index &idx) {
           return int64_t(idx.space().attr());
         });
-    return boost::hash_range(ranges::begin(space_attr_view),
-                             ranges::end(space_attr_view));
+    return hash_range(ranges::begin(space_attr_view),
+                      ranges::end(space_attr_view));
   }
 
   /// Color of an Index = hashed IndexSpace + IndexSpace objects of the
@@ -682,7 +683,7 @@ inline auto hash_value(const Index &idx) {
   const auto &proto_indices = idx.proto_indices();
   using std::begin;
   using std::end;
-  auto val = boost::hash_range(begin(proto_indices), end(proto_indices));
+  auto val = hash_range(begin(proto_indices), end(proto_indices));
   boost::hash_combine(val, idx.label());
   return val;
 }
