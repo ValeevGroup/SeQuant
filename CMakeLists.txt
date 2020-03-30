@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.9)
+cmake_minimum_required(VERSION 3.11)  # FetchContent needs 3.11
 project(SeQuant LANGUAGES CXX)
 set(SEQUANT_VERSION 2.0.0-alpha.1)
 
@@ -20,6 +20,8 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/modules/")
 
+set(FETCHCONTENT_UPDATES_DISCONNECTED OFF CACHE BOOL "Enables UPDATE_DISCONNECTED behavior for all content population")
+include(FetchContent)
 include(AddCustomTargetSubproject)
 include(external/versions.cmake)
 
