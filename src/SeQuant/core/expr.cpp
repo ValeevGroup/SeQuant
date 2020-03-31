@@ -189,24 +189,16 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
           Product tensor_as_Product{};
           tensor_as_Product.append(1.0,(*first_it)->as<Tensor>());
           (*first_it) = std::make_shared<Product>(tensor_as_Product);
-//          std::wcout << (*first_it)->to_latex() << " "
-//                     << (*first_it)->hash_value() << std::endl;
         }
 
         assert((*first_it)->template is<Product>());
-//        std::wcout << (*first_it)->to_latex() << " "
-//                   << (*first_it)->hash_value() << std::endl;
         for (auto it = begin; it != end; ++it) {
-//          std::wcout << (*it)->to_latex() << " "
-//                     << (*it)->hash_value() << std::endl;
           if (it != first_it) {
             if ((*it)->template is<Tensor>()){
               assert((*it)->template is<Tensor>());
               Product tensor_as_Product{};
               tensor_as_Product.append(1.0,(*it)->template as<Tensor>());
               (*it) = std::make_shared<Product>(tensor_as_Product);
-//              std::wcout << (*it)->to_latex() << " "
-//                         << (*it)->hash_value() << std::endl;
             }
             assert((*it)->template is<Product>());
             std::static_pointer_cast<Product>(*first_it)->add_identical(std::static_pointer_cast<Product>(*it));
