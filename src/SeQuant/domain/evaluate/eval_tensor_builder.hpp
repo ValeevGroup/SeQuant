@@ -104,11 +104,11 @@ class EvalTensorBuilder {
     bool swap_bk = need_bra_ket_swap(expr);
 
     // get the labels of indices in bra and ket
-    IndexLabelContainer bra_index_labels, ket_index_labels;
+    IndexContainer bra_index_labels, ket_index_labels;
     for (const auto& idx : tnsr.bra())
-      bra_index_labels.emplace_back(idx.label());
+      bra_index_labels.emplace_back(idx);
     for (const auto& idx : tnsr.ket())
-      ket_index_labels.emplace_back(idx.label());
+      ket_index_labels.emplace_back(idx);
 
     // swap labels as required
     if (swap_bk) std::swap(bra_index_labels, ket_index_labels);
@@ -212,8 +212,8 @@ class EvalTensorBuilder {
       }
       imed->set_indices(left_eval_expr->get_indices());
     } else if (op == Operation::PRODUCT) {
-      IndexLabelContainer lindices = left_eval_expr->get_indices();
-      IndexLabelContainer rindices = right_eval_expr->get_indices();
+      IndexContainer lindices = left_eval_expr->get_indices();
+      IndexContainer rindices = right_eval_expr->get_indices();
 
       // indices of intermediate tensors are canonicalized by sorting them
       if (left_eval_expr->is_leaf())
@@ -222,7 +222,7 @@ class EvalTensorBuilder {
       if (right_eval_expr->is_leaf())
         std::sort(rindices.begin(), rindices.end());
 
-      IndexLabelContainer imed_indices;
+      IndexContainer imed_indices;
       std::set_symmetric_difference(lindices.begin(), lindices.end(),
                                     rindices.begin(), rindices.end(),
                                     std::back_inserter(imed_indices));
@@ -307,7 +307,7 @@ class EvalTensorBuilder {
                 // if the index of the imed_ptr matches with the lr_tensor
                 // then time to break as we found the contracted indices
                 // no need to look further
-                if (idx == lr_tensor->get_indices()[i]) {
+                if (idx.label() == lr_tensor->get_indices()[i].label()) {
                   break;
                 }
                 // combine the hash of the counter of non-contracted index

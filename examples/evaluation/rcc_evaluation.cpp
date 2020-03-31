@@ -407,17 +407,21 @@ int main(int argc, char* argv[]) {
       auto j_iter = 0;
       for (auto&& term: *spin_removed_term){
         ++j_iter;
-        if(j_iter > 1)
-          canonicalize(term);
+//        if(j_iter > 1)
+        canonicalize(term);
         result->append(term);
       }
       rapid_simplify(spin_removed_term);
       cc_r[i] = result;
     }
 
-    expand(cc_r[2]);
-    rapid_simplify(cc_r[2]);
-    canonicalize(cc_r[2]);
+    expand(cc_r[1]);
+    rapid_simplify(cc_r[1]);
+    canonicalize(cc_r[1]);
+
+//    expand(cc_r[2]);
+//    rapid_simplify(cc_r[2]);
+//    canonicalize(cc_r[2]);
 
 #define SIMPLIFIED_R2 1
 #if SIMPLIFIED_R2

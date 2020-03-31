@@ -2,6 +2,7 @@
 #define SEQUANT_EVALUATE_EVAL_TENSOR_FWD_HPP
 
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/index.hpp>
 
 #include <cstddef>
 #include <memory>
@@ -12,7 +13,7 @@ using HashType = size_t;
 
 using ScalarType = double;
 
-using IndexLabelContainer = container::svector<std::wstring_view, 4>;
+using IndexContainer = container::svector<Index, 4>;
 
 using OpsCount = unsigned long long;
 

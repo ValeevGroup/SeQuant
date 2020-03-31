@@ -1,6 +1,7 @@
 #ifndef SEQUANT_EVALUATE_EVAL_TENSOR_HPP
 #define SEQUANT_EVALUATE_EVAL_TENSOR_HPP
 
+#include "SeQuant/core/container.hpp"
 #include "eval_tensor_fwd.hpp"
 
 #include <functional>
@@ -12,11 +13,19 @@
 namespace sequant::evaluate {
 
 namespace detail {
+/// Permutation of ordinals with a phase.
 struct Perm {
   std::vector<size_t> sequence;
   int phase{1};
 };
 
+///
+/// Permute @c to_perm recursively and generate Perm objects.
+/// @param to_perm Sequence of ordinals to calculate permutations of.
+/// @param size Size of @c to_perm
+/// @param cswap Number of swaps done before calling the function.
+/// @param begin Position to start permuting.
+///
 std::vector<Perm> perm_calc(std::vector<size_t> to_perm, size_t size,
                             size_t cswap = 0, size_t begin = 0) {
   if (begin + 1 == size) {
@@ -27,11 +36,15 @@ std::vector<Perm> perm_calc(std::vector<size_t> to_perm, size_t size,
   auto result = std::vector<Perm>{};
   for (auto i = begin; i < size; ++i) {
     std::swap(to_perm[begin], to_perm[i]);
+    // recursively call the function to compute the permutations
+    // @note cswap is incremented only if the swapped indices are not the same
+    // ie. to swap an element with itself is not counted.
     auto more_result =
         perm_calc(to_perm, size, (begin == i) ? cswap : cswap + 1, begin + 1);
     for (auto& p : more_result) {
       result.push_back(p);
     }
+    // undo the swap so the side effect is nullified for next call
     std::swap(to_perm[begin], to_perm[i]);
   }
   return result;
@@ -56,9 +69,9 @@ std::vector<Perm> perm_calc(std::vector<size_t> to_perm, size_t size,
 ///
 template <typename DataTensorType>
 class EvalTensor {
- private:
+ protected:
   /// The index labels of the tensor's bra and ket in that order.
-  IndexLabelContainer indices_;
+  IndexContainer indices_;
 
   /// A unique identifier of this evaluation.
   HashType hash_value_{0};
@@ -71,12 +84,12 @@ class EvalTensor {
 
  public:
   /// Setter method of the indices_ field.
-  void set_indices(const IndexLabelContainer& index_labels) {
+  void set_indices(const IndexContainer& index_labels) {
     indices_ = index_labels;
   }
 
   /// Getter method of the indices_ field.
-  const IndexLabelContainer& get_indices() const { return indices_; }
+  const IndexContainer& get_indices() const { return indices_; }
 
   /// Setter method of the hash_value_ field.
   void set_hash_value(HashType hash_value) { hash_value_ = hash_value; }
@@ -84,8 +97,9 @@ class EvalTensor {
   /// Getter method of the hash_value_ field.
   HashType get_hash_value() const { return hash_value_; }
 
-  /// Setter method of the ops_count_ field.
-  void set_ops_count(OpsCount count) { ops_count_ = count; }
+  /// Compute and store the ops count.
+  virtual void set_ops_count(
+      const container::map<IndexSpace::TypeAttr, size_t>& space_size_map) = 0;
 
   /// Getter method of the ops_count_ field.
   OpsCount get_ops_count() const { return ops_count_; }
@@ -104,7 +118,8 @@ class EvalTensor {
 
   /// Visit the tree by pre-order traversal.
   virtual void visit(
-      const std::function<void(const EvalTensor&)>& visitor) const = 0;
+      const std::function<void(const EvalTensor<DataTensorType>&)>& visitor)
+      const = 0;
 
   /// Evaluate the EvalTensor.
   virtual DataTensorType evaluate(
@@ -162,16 +177,51 @@ class EvalTensorIntermediate : public EvalTensor<DataTensorType> {
   /// @return Operation for this intermediate tensor.
   Operation get_operation() const { return operation_; }
 
+  /// Compute and store the ops count.
+  void set_ops_count(const container::map<IndexSpace::TypeAttr, size_t>&
+                         space_size_map) override {
+    // compute the ops count on the left and the right nodes
+    this->get_left_tensor()->set_ops_count(space_size_map);
+    this->get_right_tensor()->set_ops_count(space_size_map);
+
+    // computing for this node
+    OpsCount count = this->get_left_tensor()->get_ops_count() +
+                     this->get_right_tensor()->get_ops_count();
+
+    if (this->get_operation() == Operation::PRODUCT) {
+      // the ops count for a product is the product of the sizes of the index
+      // space of the unique indices in the left and right node combined
+      OpsCount contractions_ops = 1;
+      auto& left_indices = this->get_left_tensor()->get_indices();
+      auto& right_indices = this->get_right_tensor()->get_indices();
+
+      container::set<Index> unique_indices;
+      for (const auto& idx : left_indices) {
+        unique_indices.insert(idx);
+      }
+      for (const auto& idx : right_indices) {
+        unique_indices.insert(idx);
+      }
+
+      for (const auto& idx : unique_indices) {
+        contractions_ops *= (space_size_map.find(idx.space().type()))->second;
+      }
+      count += contractions_ops;
+    }  // if operation is product
+
+    this->ops_count_ = count;
+  }
+
   /// Get a directed graph definitions and paths in dot language.
   std::wstring to_digraph() const override {
     std::wstring bra = L"";
     std::wstring ket = L"";
     for (auto i = 0; i < this->get_indices().size() / 2; ++i) {
-      bra += L"{" + std::wstring(this->get_indices().at(i)) + L"}";
+      bra += this->get_indices().at(i).to_latex();
     }
     for (auto i = this->get_indices().size() / 2;
          i < this->get_indices().size(); ++i) {
-      ket += L"{" + std::wstring(this->get_indices().at(i)) + L"}";
+      ket += this->get_indices().at(i).to_latex();
     }
     auto node_color =
         get_operation() == Operation::SUM
@@ -182,7 +232,7 @@ class EvalTensorIntermediate : public EvalTensor<DataTensorType> {
                         ? L"gray"
                         : L"turquoise";  // turquoise for symmetrization
     std::string scalar = std::to_string(this->get_scalar());
-    scalar = scalar.substr(4);
+    scalar = scalar.substr(4);  // truncating decimal points
     auto this_node =
         L"node" + std::to_wstring(this->get_hash_value()) + L" [label=\"" +
         ((this->get_scalar() != 1.)
@@ -221,10 +271,13 @@ class EvalTensorIntermediate : public EvalTensor<DataTensorType> {
   DataTensorType evaluate(
       const container::map<HashType, std::shared_ptr<DataTensorType>>& context)
       const override {
+    // generates tiledarray annotation based on a nodes index labels
+    // @note this wouldn't be necessary if the tensor algebra library
+    // would support std::string_view as annotations
     auto TA_annotation = [this](decltype(this->get_indices())& indices) {
       std::string annot = "";
       for (const auto& idx : indices)
-        annot += std::string(idx.begin(), idx.end()) + ", ";
+        annot += std::string(idx.label().begin(), idx.label().end()) + ", ";
 
       annot.erase(annot.size() - 2);  // remove trailing L", "
       return annot;
@@ -259,10 +312,13 @@ class EvalTensorIntermediate : public EvalTensor<DataTensorType> {
       else if (rank % 2 != 0)
         throw std::domain_error("Can't handle odd-ordered tensors yet!");
 
+      // computing the permutations of indices with the phase
       std::vector<size_t> to_perm;
       for (auto i = 0; i < (size_t)rank / 2; ++i) to_perm.push_back(i);
-      auto vp = detail::perm_calc(to_perm, (size_t)rank / 2);
+      auto permutations = detail::perm_calc(to_perm, (size_t)rank / 2);
 
+      // convert a sequence of ordinals into string annotation for
+      // labelling tensor
       auto ords_to_csv_str = [](const std::vector<size_t>& ords) {
         std::string str = "";
         for (const auto& o : ords) str += std::to_string(o) + ",";
@@ -271,6 +327,7 @@ class EvalTensorIntermediate : public EvalTensor<DataTensorType> {
         return str;
       };
 
+      // generates a string annotation like: "0,1,2,...,n-1"
       auto range_to_csv_str = [&ords_to_csv_str](const size_t& n) {
         std::vector<size_t> range_vec(n);
         for (auto i = 0; i < n; ++i) range_vec[i] = i;
@@ -281,8 +338,10 @@ class EvalTensorIntermediate : public EvalTensor<DataTensorType> {
 
       DataTensorType result(right_eval.world(), right_eval.trange());
       result.fill(0.);
-      for (const auto& p : vp) {
-        for (const auto& q : vp) {
+      // iter through permutations of bra
+      for (const auto& p : permutations) {
+        // iter through permutations of ket
+        for (const auto& q : permutations) {
           // permutation of the bra
           auto perm_vec = p.sequence;
           // permutation of the ket
@@ -294,13 +353,13 @@ class EvalTensorIntermediate : public EvalTensor<DataTensorType> {
             result(inds) = result(inds) + right_eval(ords_to_csv_str(perm_vec));
           else
             result(inds) = result(inds) - right_eval(ords_to_csv_str(perm_vec));
-        }  // for q: vp
-      }    // for p: vp
+        }  // for q: permutations
+      }    // for p: permutations
       result(inds) = result(inds) * this->get_right_tensor()->get_scalar();
       return result;
+    } else {
+      throw std::domain_error("Functionality not yet implemented!");
     }
-
-    throw std::domain_error("Functionality not yet implemented!");
   }
 };
 
@@ -326,6 +385,13 @@ class EvalTensorLeaf : public EvalTensor<DataTensorType> {
 
   /// Getter of the sequant expr corresponding to this eval tensor.
   const ExprPtr& get_expr() const { return expr_; }
+
+  /// Compute and store the ops count.
+  void set_ops_count(const container::map<IndexSpace::TypeAttr, size_t>&
+                         space_size_map) override {
+    // leaf data tensors are pre-computed
+    this->ops_count_ = 0;
+  }
 
   /// Get a directed graph definitions and paths in dot language.
   std::wstring to_digraph() const override {

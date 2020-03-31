@@ -223,11 +223,11 @@ class Tensor : public Expr, public AbstractTensor {
   hash_type memoizing_hash() const override {
     using std::begin;
     using std::end;
-    auto val = hash::range(begin(bra()), end(bra()));
+    auto val = hash::hash_range(begin(bra()), end(bra()));
     bra_hash_value_ = val;
-    hash::range(val, begin(ket()), end(ket()));
-    hash::combine(val, label_);
-    hash::combine(val, symmetry_);
+    hash::hash_range(val, begin(ket()), end(ket()));
+    boost::hash_combine(val, label_);
+    boost::hash_combine(val, symmetry_);
     hash_value_ = val;
     return *hash_value_;
   }
