@@ -681,7 +681,7 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
       using ranges::size;
       auto b = begin(sized_range);
       auto e = b + size(sized_range);
-      auto val = boost::hash_range(b, e);
+      auto val = hash_range(b, e);
       return val;
     };
     auto range_compare = [](const auto& sized_range1, const auto& sized_range2) {
