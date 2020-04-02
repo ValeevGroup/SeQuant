@@ -289,7 +289,7 @@ TEST_CASE("FACTORIZER_TESTS", "[factorizer]") {
     // tree->visit(ops_printer);
   }
 
-  SECTION("Testing largest common subfactor") {
+  SECTION("Testing largest common subfactor: Product") {
     // forming two tensor products
     auto prodA = std::make_shared<Product>(
         Product({make_tensor_expr({"t", "i_1", "i_2", "a_1", "a_2"}),
@@ -310,9 +310,6 @@ TEST_CASE("FACTORIZER_TESTS", "[factorizer]") {
     // t<-->g in both products have the same edges, and thus t<-->g is the
     // subtensor network common to prodA and prodB.
 
-    auto treeA = builder.build_tree(prodA);
-    auto treeB = builder.build_tree(prodB);
-
     auto [subfactorA, subfactorB] =
         largest_common_subnet(prodA, prodB, builder);
     auto expectedA = std::make_shared<Product>(
@@ -325,5 +322,96 @@ TEST_CASE("FACTORIZER_TESTS", "[factorizer]") {
     //            << "subfactorB = " << subfactorB->to_latex() << std::endl;
     REQUIRE(*expectedA == *subfactorA);
     REQUIRE(*expectedB == *subfactorB);
+
+    // prodC is the same as prodB except the position of 'f' and 'g' tensors are
+    // swapped this shows that absolute order of the constiuents that make up
+    // the common subnet in the pair of tensor networks
+    // doesn't need to be the same
+    auto prodC = std::make_shared<Product>(
+        Product({make_tensor_expr({"t", "i_4", "i_6", "a_4", "a_6"}),
+                 make_tensor_expr({"f", "i_8", "a_8"}),
+                 make_tensor_expr({"g", "i_4", "i_8", "a_4", "a_8"})}));
+    auto [subfactorX, subfactorY] =
+        largest_common_subnet(prodA, prodC, builder);
+    REQUIRE(*expectedA == *subfactorX);
+    REQUIRE(*expectedB == *subfactorY);
+
+    // lets completely reverse the order of the tensors in prodB
+    // shows that the relative order of the constiuents of the common subnet
+    // doesn't matter
+    prodC = std::make_shared<Product>(
+        Product({make_tensor_expr({"f", "i_8", "a_8"}),
+                 make_tensor_expr({"g", "i_4", "i_8", "a_4", "a_8"}),
+                 make_tensor_expr({"t", "i_4", "i_6", "a_4", "a_6"})}));
+
+    auto [subfactorXX, subfactorYY] =
+        largest_common_subnet(prodA, prodC, builder);
+    REQUIRE(*expectedA == *subfactorXX);
+    REQUIRE(*expectedB == *subfactorYY);
+
+    // no common subnet
+    prodA = std::make_shared<Product>(
+        Product({make_tensor_expr({"f", "i_8", "a_8"})}));
+    prodB = std::make_shared<Product>(
+        Product({make_tensor_expr({"g", "i_4", "i_8", "a_4", "a_8"})}));
+
+    auto [subfactorA_null, subfactorB_null] =
+        largest_common_subnet(prodA, prodB, builder);
+
+    REQUIRE(subfactorA_null == nullptr);
+    REQUIRE(subfactorB_null == nullptr);
+  }
+
+  SECTION("Testing largest common subfactor: Sum") {
+    // forming two sums
+    auto sumA = std::make_shared<Sum>(
+        Sum({make_tensor_expr({"t", "i_1", "i_2", "a_1", "a_2"}),
+             make_tensor_expr({"g", "i_1", "i_2", "a_1", "a_4"})}));
+
+    auto sumB = std::make_shared<Sum>(
+        Sum({make_tensor_expr({"t", "i_4", "i_6", "a_4", "a_6"}),
+             make_tensor_expr({"g", "i_4", "i_6", "a_4", "a_6"})}));
+
+    auto [summandA, summandB] = largest_common_subnet(sumA, sumB, builder);
+
+    REQUIRE(*summandA == *sumA);
+    REQUIRE(*summandB == *sumB);
+
+    // forming sums whose summands are products
+    auto prod1 = std::make_shared<Product>(
+        Product({make_tensor_expr({"t", "i_1", "i_2", "a_1", "a_2"}),
+                 make_tensor_expr({"g", "i_1", "i_3", "a_1", "a_3"}),
+                 make_tensor_expr({"f", "i_2", "a_2"})}));
+
+    auto prod2 = std::make_shared<Product>(
+        Product({make_tensor_expr({"f", "i_3", "a_3"})}));
+
+    auto prod3 = std::make_shared<Product>(
+        Product({make_tensor_expr({"t", "i_2", "i_3", "a_2", "a_3"}),
+                 make_tensor_expr({"f", "i_2", "a_2"})}));
+
+    auto prod4 = std::make_shared<Product>(
+        Product({make_tensor_expr({"g", "i_2", "i_3", "a_2", "a_3"}),
+                 make_tensor_expr({"t", "i_2", "a_2"})}));
+
+    sumA = std::make_shared<Sum>(Sum({prod1, prod2, prod3}));
+    sumB = std::make_shared<Sum>(Sum({prod1, prod2, prod4}));
+
+    auto expectedSubNet = std::make_shared<Sum>(Sum({prod1, prod2}));
+
+    auto [summandAA, summandBB] = largest_common_subnet(sumA, sumB, builder);
+
+    REQUIRE(*summandAA == *expectedSubNet);
+    REQUIRE(*summandBB == *expectedSubNet);
+
+    // no common subnet
+    sumA = std::make_shared<Sum>(Sum({prod1, prod2}));
+    sumB = std::make_shared<Sum>(Sum({prod3, prod4}));
+
+    auto [summandAnull, summandBnull] =
+        largest_common_subnet(sumA, sumB, builder);
+
+    REQUIRE(summandAnull == nullptr);
+    REQUIRE(summandBnull == nullptr);
   }
 }
