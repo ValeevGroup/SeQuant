@@ -261,7 +261,6 @@ class EvalTensorIntermediate : public EvalTensor<DataTensorType> {
   /// Visit the tree by pre-order traversal.
   void visit(const std::function<void(const EvalTensor<DataTensorType>&)>&
                  visitor = {}) const override {
-    /// Visit the tree by pre-order traversal.
     visitor(*this);
     get_left_tensor()->visit(visitor);
     get_right_tensor()->visit(visitor);

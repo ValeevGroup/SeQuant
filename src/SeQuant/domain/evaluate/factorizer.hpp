@@ -55,7 +55,6 @@ ExprPtr getSubExpr(const ExprPtr& expr,
 ///
 /// @param exprA Expression to find common subnetwork of.
 /// @param exprB Expression to find common subnetwork of.
-/// @param space_size_map Map from index space to its size.
 /// @param builder EvalTensorBuilder object to give a context while interpreting
 /// tensors.
 ///
