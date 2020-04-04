@@ -284,6 +284,16 @@ target_link_libraries(${example2} SeQuant evaluator ${TBB_LIBRARIES} Libint2::cx
 target_link_directories(${example2} PUBLIC ${TBB_LIBRARIES})
 target_compile_definitions(${example2} PRIVATE SEQUANT_HAS_TILEDARRAY)
 
+set(example3 expr_evaluation)
+add_executable(${example3} EXCLUDE_FROM_ALL
+        examples/evaluation/${example3}.cpp
+        examples/contract/interpret/contract.hpp
+        examples/contract/scf/hartree-fock.cc)
+target_link_libraries(${example3} SeQuant evaluator ${TBB_LIBRARIES} Libint2::cxx tiledarray)
+target_link_directories(${example3} PUBLIC ${TBB_LIBRARIES})
+target_compile_definitions(${example3} PRIVATE SEQUANT_HAS_TILEDARRAY)
+
+
 #target_include_directories(${example4} PUBLIC
 #        $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
 #        $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>

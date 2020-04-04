@@ -184,6 +184,8 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
       });
       assert(plast_it - first_it > 1);
       auto reduce_range = [first_it, this](auto &begin, auto &end) {
+
+        // Converting tensor into a product; TODO: Use separate add_identical function for Tensor
         if ((*first_it)->template is<Tensor>()){
           assert((*first_it)->template is<Tensor>());
           Product tensor_as_Product{};

@@ -500,6 +500,9 @@ int main(int argc, char* argv[]) {
         auto R1 = r1_tree->evaluate(context.get_map());
         auto R2 = r2_tree->evaluate(context.get_map());
 
+        cout << "R1: " << R1 << endl;
+        // cout << "R2: " << R2 << endl;
+
         auto& tile_R1       = R1.find({0,0}).get();
         auto& tile_t_ov     = (*t_ov).find({0,0}).get();
 
@@ -525,6 +528,8 @@ int main(int argc, char* argv[]) {
                     for (auto b = 0; b < nvirt; ++b) {
                         tile_t_oovv(i,j,a,b) += tile_R2(i,j,a,b)/tile_D_oovv(i,j,a,b); } } } }
 
+      cout << "T1: " << tile_t_ov << endl;
+      // cout << "T2: " << tile_t_oovv << endl;
       cout << "norm(t_ov) "   << std::sqrt((*t_ov)("i,j").dot((*t_ov)("i,j")))             <<endl;
       cout << "norm(t_oovv) " << std::sqrt((*t_oovv)("i,j,a,b").dot((*t_oovv)("i,j,a,b"))) <<endl;
 

@@ -204,6 +204,15 @@ class Tensor : public Expr, public AbstractTensor {
     return *bra_hash_value_;
   }
 
+  /// @brief Adds tensors if their hash values match
+  /// @param other tensor to compare
+  /// @return an expression pointer of type Product
+  ExprPtr add_identical(const std::shared_ptr<Tensor> &other){
+    assert(this->hash_value() == other->hash_value());
+    ExprPtr result = ex<Constant>(2.0) * ex<Tensor>(this->as<Tensor>());
+    return result;
+  }
+
  private:
   std::wstring label_{};
   index_container_type bra_{};
