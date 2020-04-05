@@ -452,9 +452,9 @@ int main(int argc, char* argv[]) {
     std::vector<sequant::ExprPtr> seq_tensors = {
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"f", {L"i_1"}, {L"i_1"})),
 
-        std::make_shared<sequant::Tensor>(sequant::Tensor(L"f", {L"i_1",}, {L"a_1"})),
+        std::make_shared<sequant::Tensor>(sequant::Tensor(L"f", {L"i_1"}, {L"a_1"})),
 
-        std::make_shared<sequant::Tensor>(sequant::Tensor(L"f", {L"a_1",}, {L"a_2",})),
+        std::make_shared<sequant::Tensor>(sequant::Tensor(L"f", {L"a_1"}, {L"a_2"})),
 
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"g", {L"i_1",L"i_2"}, {L"i_3",L"i_4"})),
 
@@ -473,17 +473,17 @@ int main(int argc, char* argv[]) {
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"i_1",L"i_2"}, {L"a_1",L"a_2"}))
     };
 
-    container::map<ExprPtr, std::shared_ptr<TA::TArrayD>> context_builder;
+    container::map<ExprPtr, std::shared_ptr<TA::TArrayD>> context_map;
 
     assert(data_tensors.size() == seq_tensors.size());
     for (auto i = 0; i < seq_tensors.size(); ++i) {
-        context_builder.insert(decltype(context_builder)::value_type(seq_tensors.at(i),
+        context_map.insert(decltype(context_map)::value_type(seq_tensors.at(i),
                     data_tensors.at(i)));
     }
 
-    auto context = evaluate::EvalContext(context_builder);
-
     auto builder = sequant::evaluate::EvalTensorBuilder<TA::TArrayD>();
+    auto context = evaluate::EvalContext(context_map, builder);
+
 
     auto r1_tree = builder.build_tree(cc_r[1]);
     auto r2_tree = builder.build_tree(cc_r[2]);
@@ -499,9 +499,6 @@ int main(int argc, char* argv[]) {
         cout << "using TiledArray,    iter: " << iter << endl;
         auto R1 = r1_tree->evaluate(context.get_map());
         auto R2 = r2_tree->evaluate(context.get_map());
-
-        cout << "R1: " << R1 << endl;
-        // cout << "R2: " << R2 << endl;
 
         auto& tile_R1       = R1.find({0,0}).get();
         auto& tile_t_ov     = (*t_ov).find({0,0}).get();
@@ -528,8 +525,6 @@ int main(int argc, char* argv[]) {
                     for (auto b = 0; b < nvirt; ++b) {
                         tile_t_oovv(i,j,a,b) += tile_R2(i,j,a,b)/tile_D_oovv(i,j,a,b); } } } }
 
-      cout << "T1: " << tile_t_ov << endl;
-      // cout << "T2: " << tile_t_oovv << endl;
       cout << "norm(t_ov) "   << std::sqrt((*t_ov)("i,j").dot((*t_ov)("i,j")))             <<endl;
       cout << "norm(t_oovv) " << std::sqrt((*t_oovv)("i,j,a,b").dot((*t_oovv)("i,j,a,b"))) <<endl;
 
