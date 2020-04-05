@@ -28,19 +28,24 @@ include(external/versions.cmake)
 find_package(Threads REQUIRED)
 
 # PSTL (used by g++-9 and clang++-8 in c++17 mode) needs TBB
-if ((${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU" AND ${CMAKE_CXX_COMPILER_VERSION} VERSION_GREATER 9) OR
-    (${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang" AND ${CMAKE_CXX_COMPILER_VERSION} VERSION_GREATER 8))
+if ((${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU" AND
+    ${CMAKE_CXX_COMPILER_VERSION} VERSION_GREATER 9) OR
+    (${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang" AND
+    ${CMAKE_CXX_COMPILER_VERSION} VERSION_GREATER 8))
   set(PSTL_NEEDS_TBB TRUE)
   find_package(TBB REQUIRED)
 endif()
 
 # Ranges-V3
 if (NOT RANGEV3_DIR)
-    message(FATAL_ERROR "Set cache variable RANGEV3_DIR to the top of the Range-V3 source directory")
+    message(FATAL_ERROR "Set cache variable RANGEV3_DIR "
+        "to the top of the Range-V3 source directory")
 endif(NOT RANGEV3_DIR)
 if (NOT EXISTS "${RANGEV3_DIR}/include")
-    message(FATAL_ERROR "Given RANGEV3_DIR=\"${RANGEV3_DIR}\" but did not find include subdirectory;"
-    " make sure that RANGEV3_DIR points to the top of valid Range-V3 source directory")
+    message(FATAL_ERROR "Given RANGEV3_DIR=\"${RANGEV3_DIR}\" but"
+        " did not find include subdirectory;"
+        " make sure that RANGEV3_DIR points"
+        " to the top of valid Range-V3 source directory")
 endif()
 # if Range-V3 is a git repo check the revision
 if(EXISTS "${RANGEV3_DIR}/.git")
@@ -66,7 +71,8 @@ set_property(TARGET Range-V3 PROPERTY
 find_package(Boost ${SEQUANT_TRACKED_BOOST_VERSION} REQUIRED)
 if (Boost_VERSION EQUAL 107000)
     message(FATAL_ERROR "Found Boost 1.70, but its Boost.Container is broken: "
-        + "use any version ${SEQUANT_TRACKED_BOOST_VERSION} or higher, other than 1.70")
+        "use any version ${SEQUANT_TRACKED_BOOST_VERSION} "
+        "or higher, other than 1.70")
 endif()
 add_library(Boost INTERFACE IMPORTED)
 set_property(TARGET Boost PROPERTY
@@ -156,9 +162,8 @@ add_library(evaluator EXCLUDE_FROM_ALL
     src/SeQuant/domain/evaluate/eval_tensor_builder.hpp
     src/SeQuant/domain/evaluate/eval_context.hpp
     src/SeQuant/domain/evaluate/path_tree.hpp
-    src/SeQuant/domain/evaluate/path_tree.cpp)
-    # src/SeQuant/domain/evaluate/factorizer.hpp
-    # src/SeQuant/domain/evaluate/factorizer.cpp
+    src/SeQuant/domain/evaluate/path_tree.cpp
+    src/SeQuant/domain/evaluate/factorizer.hpp)
 target_include_directories(evaluator PUBLIC
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>)
@@ -179,7 +184,9 @@ set(utests_src
         tests/unit/test_mbpt.cpp
         tests/unit/test_spin.cpp
         tests/unit/test_canonicalize.cpp
-        tests/unit/test_eval_tensor.cpp)
+        #### unit tests for evaluation
+        #tests/unit/test_path_tree.cpp
+        )
 set(utests_deps SeQuant evaluator)
 
 if (TARGET tiledarray)
@@ -188,16 +195,14 @@ if (TARGET tiledarray)
   list(APPEND utests_deps tiledarray)
 endif(TARGET tiledarray)
 
-#set(utests_src
-#        tests/unit/test_mbpt.cpp)
-
 set(unit_test_executable unit_tests)
 add_executable(${unit_test_executable} EXCLUDE_FROM_ALL
         tests/unit/test_main.cpp
         tests/unit/catch.hpp
         ${utests_src})
 target_link_libraries(${unit_test_executable} ${utests_deps})
-add_test(unit/build "${CMAKE_COMMAND}" --build ${CMAKE_BINARY_DIR} --target ${unit_test_executable})
+add_test(unit/build "${CMAKE_COMMAND}" --build ${CMAKE_BINARY_DIR}
+    --target ${unit_test_executable})
 
 add_test(NAME unit/run
         COMMAND ${unit_test_executable})
@@ -213,101 +218,32 @@ add_executable(${example0} EXCLUDE_FROM_ALL
         examples/${example0}/${example0}.cpp)
 target_link_libraries(${example0} SeQuant ${TBB_LIBRARIES})
 
-# contract method testing -- Bimal
-if (BTAS_FOUND)
-    find_package(Libint2 2.6.0 CONFIG REQUIRED)
-
-    set(example1 cc_btas)
-    add_executable(${example1} EXCLUDE_FROM_ALL
-            examples/contract/${example1}.cpp
-            examples/contract/interpret/interpreted_tensor.hpp
-            examples/contract/interpret/contract.hpp
-            examples/contract/scf/hartree-fock.cc
-            src/SeQuant/domain/evaluate/eval_tensor.cpp)
-    target_link_libraries(${example1} SeQuant factorizer ${TBB_LIBRARIES} Libint2::cxx BTAS)
-    target_compile_definitions(${example1} PRIVATE SEQUANT_HAS_BTAS)
-endif(BTAS_FOUND)
-
-find_package(TiledArray CONFIG COMPONENTS tiledarray)
-
-if (TiledArray_FOUND)
-    set(example2 cc_tiledarray)
-
-    add_executable(${example2} EXCLUDE_FROM_ALL
-            examples/contract/${example2}.cpp
-            examples/contract/interpret/interpreted_tensor.hpp
-            examples/contract/interpret/contract.hpp
-            examples/contract/scf/hartree-fock.cc)
-    target_link_libraries(${example2} SeQuant factorizer ${TBB_LIBRARIES} Libint2::cxx tiledarray)
-    target_link_directories(${example2} PUBLIC ${TBB_LIBRARIES})
-    target_compile_definitions(${example2} PRIVATE SEQUANT_HAS_TILEDARRAY)
-endif(TiledArray_FOUND)
-
-# factorization examples
-if(BTAS_FOUND)
-
-set(example3 product_factorization)
-add_executable(${example3} EXCLUDE_FROM_ALL
-    examples/factorization/${example3}.cpp)
-
-target_include_directories(${example3} PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
-    $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>
-    ${BTAS_INSTALL_DIR})
-
-target_link_libraries(${example3} SeQuant factorizer)
-target_compile_definitions(${example3} PRIVATE SEQUANT_HAS_BTAS)
-
-set(example4 expr_evaluation)
-add_executable(${example4} EXCLUDE_FROM_ALL
-    src/SeQuant/domain/evaluate/eval_fwd.hpp
-    src/SeQuant/domain/evaluate/eval_tensor.hpp
-    src/SeQuant/domain/evaluate/eval_expr.hpp
-    src/SeQuant/domain/evaluate/eval_tensor.cpp
-    examples/evaluation/${example4}.cpp)
-
-target_include_directories(${example4} PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
-        $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>
-        ${BTAS_INSTALL_DIR})
-
-target_link_libraries(${example4} SeQuant factorizer)
-target_compile_definitions(${example4} PRIVATE SEQUANT_HAS_BTAS)
-endif()
+set(example1 expr_evaluation)
+add_executable(${example1} EXCLUDE_FROM_ALL
+    examples/evaluation/${example1}.cpp
+    examples/contract/interpret/contract.hpp
+    examples/contract/scf/hartree-fock.cc)
+target_link_libraries(${example1} SeQuant evaluator ${TBB_LIBRARIES}
+    Libint2::cxx tiledarray)
+target_link_directories(${example1} PUBLIC ${TBB_LIBRARIES})
+target_compile_definitions(${example1} PRIVATE SEQUANT_HAS_TILEDARRAY)
 
 set(example2 rcc_evaluation)
 add_executable(${example2} EXCLUDE_FROM_ALL
         examples/evaluation/${example2}.cpp
         examples/contract/interpret/contract.hpp
         examples/contract/scf/hartree-fock.cc)
-target_link_libraries(${example2} SeQuant evaluator ${TBB_LIBRARIES} Libint2::cxx tiledarray)
+target_link_libraries(${example2} SeQuant evaluator
+    ${TBB_LIBRARIES} Libint2::cxx tiledarray)
 target_link_directories(${example2} PUBLIC ${TBB_LIBRARIES})
 target_compile_definitions(${example2} PRIVATE SEQUANT_HAS_TILEDARRAY)
 
-set(example3 expr_evaluation)
-add_executable(${example3} EXCLUDE_FROM_ALL
-        examples/evaluation/${example3}.cpp
-        examples/contract/interpret/contract.hpp
-        examples/contract/scf/hartree-fock.cc)
-target_link_libraries(${example3} SeQuant evaluator ${TBB_LIBRARIES} Libint2::cxx tiledarray)
-target_link_directories(${example3} PUBLIC ${TBB_LIBRARIES})
-target_compile_definitions(${example3} PRIVATE SEQUANT_HAS_TILEDARRAY)
-
-
-#target_include_directories(${example4} PUBLIC
-#        $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
-#        $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>
-#        ${BTAS_INSTALL_DIR})
-#
-#target_link_libraries(${example4} SeQuant factorizer)
-#target_compile_definitions(${example4} PRIVATE SEQUANT_HAS_BTAS)
-
-
 # add tests for running examples
-set (lastexample 5)
+set (lastexample 3)
 foreach(i RANGE ${lastexample})
     if (TARGET ${example${i}})
-        add_test(example/${example${i}}/build "${CMAKE_COMMAND}" --build ${CMAKE_BINARY_DIR} --target ${example${i}})
+        add_test(example/${example${i}}/build "${CMAKE_COMMAND}"
+            --build ${CMAKE_BINARY_DIR} --target ${example${i}})
         add_test(NAME example/${example${i}}/run
                 COMMAND ${example${i}}
                 WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/examples)
@@ -317,7 +253,8 @@ foreach(i RANGE ${lastexample})
 endforeach()
 
 # target for running ALL tests
-add_custom_target_subproject(sequant check USES_TERMINAL COMMAND ${CMAKE_CTEST_COMMAND} -V)
+add_custom_target_subproject(sequant check
+    USES_TERMINAL COMMAND ${CMAKE_CTEST_COMMAND} -V)
 
 ####### DOCS ########
 
