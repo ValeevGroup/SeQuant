@@ -55,7 +55,7 @@ auto make_tensor_expr =
     };
 
 // context map builder for evaluating the eval_tensor
-auto builder = EvalTensorBuilder<DTensorType>();
+auto builder = EvalTensorBuilder<DTensorType>{};
 
 const size_t nocc = 10;
 const size_t nvirt = 20;
@@ -123,7 +123,7 @@ TEST_CASE("EVAL_TENSOR_EVALUATE_TESTS", "[eval_tensor_builder]") {
     ContextMapType context;
     context.insert(ContextMapType::value_type(t, T_oovv));
     context.insert(ContextMapType::value_type(g, G_oovv));
-    auto ev_context = EvalContext(context);
+    auto ev_context = EvalContext(context, builder);
 
     DTensorType manual_sum;
     manual_sum("i, j, a, b") =
@@ -146,7 +146,7 @@ TEST_CASE("EVAL_TENSOR_EVALUATE_TESTS", "[eval_tensor_builder]") {
     context.clear();
     context.insert(ContextMapType::value_type(t, T_oovv));
     context.insert(ContextMapType::value_type(g, G_oovv));
-    ev_context = EvalContext(context);
+    ev_context = EvalContext(context, builder);
     expr = std::make_shared<Sum>(Sum({g, t}));
     tree = builder.build_tree(expr);
 
@@ -168,7 +168,7 @@ TEST_CASE("EVAL_TENSOR_EVALUATE_TESTS", "[eval_tensor_builder]") {
     ContextMapType context;
     context.insert(ContextMapType::value_type(t, T_ov));
     context.insert(ContextMapType::value_type(g, G_oovv));
-    auto ev_context = EvalContext(context);
+    auto ev_context = EvalContext(context, builder);
 
     DTensorType manual_prod;
     manual_prod("j,b") = (*T_ov)("i,a") * (*G_oovv)("i,j,a,b");
@@ -190,7 +190,7 @@ TEST_CASE("EVAL_TENSOR_EVALUATE_TESTS", "[eval_tensor_builder]") {
 
     ContextMapType context;
     context.insert(ContextMapType::value_type(t, T_oovv));
-    auto ev_context = EvalContext(context);
+    auto ev_context = EvalContext(context, builder);
 
     DTensorType manual_result;
     manual_result("i,j,a,b") = (*T_oovv)("i,j,a,b") - (*T_oovv)("i,j,b,a") +
@@ -214,7 +214,7 @@ TEST_CASE("EVAL_TENSOR_EVALUATE_TESTS", "[eval_tensor_builder]") {
     auto seq_tensor_good = make_tensor_expr({"t", "i_1", "a_1", "a_2", "a_3"});
     ContextMapType context;
     context.insert(ContextMapType::value_type(seq_tensor_good, T_ov));
-    auto ev_context = EvalContext(context);
+    auto ev_context = EvalContext(context, builder);
 
     auto expr = seq_tensor_bad;
     auto tree = builder.build_tree(expr);

@@ -27,18 +27,17 @@ class EvalContext {
   ContextMapType hash_to_tensor_{};
 
  public:
-  explicit EvalContext(container::map<ExprPtr, std::shared_ptr<DataTensorType>>&
-                           expr_to_dtensor_map) {
-    auto tree_builder = EvalTensorBuilder<DataTensorType>{false};
+  EvalContext(container::map<ExprPtr, std::shared_ptr<DataTensorType>>&
+                  expr_to_dtensor_map,
+              const EvalTensorBuilder<DataTensorType>& builder) {
     for (auto& item : expr_to_dtensor_map) {
-      auto hash_value = tree_builder.build_tree(item.first)->get_hash_value();
-      this->hash_to_tensor_.insert(std::make_pair(hash_value,
-                  item.second));
+      auto hash_value = builder.build_tree(item.first)->get_hash_value();
+      this->hash_to_tensor_.insert(std::make_pair(hash_value, item.second));
     }
   }
 
   const auto& get_map() { return hash_to_tensor_; }
-}; 
+};
 
 }  // namespace sequant::evaluate
 
