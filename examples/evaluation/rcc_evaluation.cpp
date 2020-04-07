@@ -59,8 +59,8 @@ int main(int argc, char* argv[]) {
     size_t nao = 0;
     for (auto s = 0; s < shells.size(); ++s) nao += shells[s].size();
     size_t nvirt = nao - ndocc;
-    std::cout << "nao  : " << nao << "\n";
-    std::cout << "ndocc: " << ndocc << "\n";
+    std::cout << "nao  : " << nao << "\t";
+    std::cout << "ndocc: " << ndocc << "\t";
     std::cout << "nvirt: " << nvirt << "\n";
 
     /*** =========================== ***/
@@ -113,7 +113,7 @@ int main(int argc, char* argv[]) {
     auto ediff = 0.0;
     auto ehf = 0.0;
     Matrix Fock_matrix;  // capture fock matrix for ccsd calculations
-    cout << "\n\n Iter        E(elec)              E(tot)               "
+    cout << "\n Iter        E(elec)              E(tot)               "
             "Delta(E)             RMS(D)         Time(s)\n";
     do {
       const auto tstart = std::chrono::high_resolution_clock::now();
@@ -502,20 +502,41 @@ int main(int argc, char* argv[]) {
     auto context = evaluate::EvalContext(context_map, builder);
 
     // Full CCSD R1 and R2 equations
-    std::wcout << "CCSD R1:\n" << to_latex(cc_r[1]) << endl;
-    std::wcout << "CCSD R2:\n" << to_latex(R2_simplified) << endl;
+//    std::wcout << "CCSD R1:\n" << to_latex(cc_r[1]) << endl;
+//    std::wcout << "CCSD R2:\n" << to_latex(R2_simplified) << endl;
 
     // Selecting few terms out of CCSD R1 equation
-    size_t cc_r1_offset = 7;
-    size_t cc_r1_n = 20;
+    size_t cc_r1_offset = 6;
+    size_t cc_r1_n = 1;
     auto cc_r1_subExpr = (cc_r[1]->as<Sum>()).take_n(cc_r1_offset - 1, cc_r1_n);
     std::wcout << "R1 summands: ["<< cc_r1_offset << ", " << cc_r1_offset + cc_r1_n << "):\n" << cc_r1_subExpr->to_latex() << std::endl;
 
+    for(auto&& term : *cc_r1_subExpr){
+      if(term->is<Product>()){
+        for(auto&&tensor : term->as<Product>()){
+          std::wcout << tensor->to_latex() << " "
+          << (int)tensor->as<Tensor>().symmetry() << " "
+          <<  (int)tensor->as<Tensor>().braket_symmetry() << std::endl;
+        }
+      }
+    }
+
     // Selecting few terms out of CCSD R2 equation
-    size_t cc_r2_offset = 1;
-    size_t cc_r2_n = 2;
-    auto cc_r2_subExpr = (R2_simplified->as<Sum>()).take_n(cc_r2_offset - 1, cc_r2_n);
+    size_t cc_r2_offset = 16;
+    size_t cc_r2_n = 1;
+     auto cc_r2_subExpr = (R2_simplified->as<Sum>()).take_n(cc_r2_offset - 1, cc_r2_n);
+//    auto& cc_r2_subExpr = R2_simplified;
     std::wcout << "R2 summands: ["<< cc_r2_offset << ", " << cc_r2_offset + cc_r2_n << "):\n" << cc_r2_subExpr->to_latex() << std::endl;
+
+    for(auto&& term : *cc_r2_subExpr){
+      if(term->is<Product>()){
+        for(auto&&tensor : term->as<Product>()){
+          std::wcout << tensor->to_latex() << " "
+                     << (int)tensor->as<Tensor>().symmetry() << " "
+                     <<  (int)tensor->as<Tensor>().braket_symmetry() << std::endl;
+        }
+      }
+    }
 
     // Generate tree for subexpression only
     auto r1_tree = builder.build_tree(cc_r1_subExpr);
