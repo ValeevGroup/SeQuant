@@ -9,7 +9,6 @@
 
 #include <tiledarray.h>
 
-#include "../../examples/sequant_setup.hpp"
 #include "catch.hpp"
 
 #include "../../src/SeQuant/domain/evaluate/eval_context.hpp"
@@ -18,8 +17,8 @@
 #include "../../src/SeQuant/domain/evaluate/factorizer.hpp"
 
 using namespace sequant;
-
 using namespace sequant::evaluate;
+
 using DTensorType = TA::TArrayD;
 using ContextMapType =
     sequant::container::map<sequant::ExprPtr, std::shared_ptr<DTensorType>>;
@@ -30,6 +29,9 @@ char* args[]{};
 char** argv = {args};
 auto& world = TA::initialize(argc, argv);
 
+// get a sequant Tensor made out of specs
+// specs -> {label, b1, ..., b(n/2), k1, ..., k(n/2)}
+// eg. {"g", "i_1", "i_2", "a_1", "a_2"} 
 auto make_tensor_expr =
     [](const sequant::container::svector<std::string>& specs) {
       // only equal bra-ket ranks are expected
@@ -79,29 +81,9 @@ TEST_CASE("Eval_Tensor_CONSTRUCTOR_TESTS", "[eval_tensor]") {
     EvalTensorLeaf<DTensorType> evt_leaf(nullptr);
     REQUIRE(evt_leaf.is_leaf());
   }
-
-  // SECTION("Scalars in the evaluation tree") {
-  //   auto visitor = [](const EvalTensor<DTensorType>& node) {
-  //       std::wcout << "scalar found: " << node.get_scalar() << std::endl;
-  //   };
-  //   // global sequant setup...
-  //   sequant::detail::OpIdRegistrar op_id_registrar;
-  //   sequant::mbpt::set_default_convention();
-  //   TensorCanonicalizer::register_instance(
-  //       std::make_shared<DefaultTensorCanonicalizer>());
-  //   auto cc_r = cceqvec(2, 2)(true, true, true, true);
-
-  //   auto builder = EvalTensorBuilder<DTensorType>();
-  //   auto r1_tree = builder.build_tree(cc_r[1]);
-  //   r1_tree->visit(visitor);
-  // }
 }
 
 TEST_CASE("EVAL_TENSOR_EVALUATE_TESTS", "[eval_tensor_builder]") {
-  // global sequant setup...
-  sequant::detail::OpIdRegistrar op_id_registrar;
-  sequant::mbpt::set_default_convention();
-
   // creating some random tensors
   auto T_ov = std::make_shared<DTensorType>(world, tr_ov);
   auto T_oovv = std::make_shared<DTensorType>(world, tr_oovv);
@@ -241,10 +223,6 @@ TEST_CASE("EVAL_TENSOR_EVALUATE_TESTS", "[eval_tensor_builder]") {
 }
 
 TEST_CASE("FACTORIZER_TESTS", "[factorizer]") {
-  // global sequant setup...
-  sequant::detail::OpIdRegistrar op_id_registrar;
-  sequant::mbpt::set_default_convention();
-
   container::map<IndexSpace::TypeAttr, size_t> space_size;
   space_size.insert(
       decltype(space_size)::value_type(IndexSpace::active_occupied, nocc));
