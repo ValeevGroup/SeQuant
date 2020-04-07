@@ -105,10 +105,8 @@ class EvalTensorBuilder {
 
     // get the labels of indices in bra and ket
     IndexContainer bra_index_labels, ket_index_labels;
-    for (const auto& idx : tnsr.bra())
-      bra_index_labels.emplace_back(idx);
-    for (const auto& idx : tnsr.ket())
-      ket_index_labels.emplace_back(idx);
+    for (const auto& idx : tnsr.bra()) bra_index_labels.emplace_back(idx);
+    for (const auto& idx : tnsr.ket()) ket_index_labels.emplace_back(idx);
 
     // swap labels as required
     if (swap_bk) std::swap(bra_index_labels, ket_index_labels);
@@ -361,11 +359,14 @@ class EvalTensorBuilder {
     for (auto i = 0; i < tnsr.rank(); ++i) {
       // if bra index and ket index at the same positions have the same
       // index space then we don't know what to do yet, so
-      if (tnsr.bra()[i].space() == tnsr.ket()[i].space()) continue;
+      if (tnsr.bra().at(i).space() == tnsr.ket().at(i).space()) continue;
 
       // for the corresponding positions if the index space value of the ket
       // index is lower than that of the bra index, then swapping should be done
-      if (tnsr.ket()[i].space() < tnsr.bra()[i].space()) return true;
+      else if (tnsr.ket().at(i).space() < tnsr.bra().at(i).space())
+        return true;
+      else
+        return false;
     }
 
     // survived this far implies no swapping is needed
