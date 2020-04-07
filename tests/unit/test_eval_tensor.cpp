@@ -9,24 +9,16 @@
 
 #include <tiledarray.h>
 
-#include "../../src/SeQuant/core/expr.hpp"
-#include "../../src/SeQuant/core/op.hpp"
-#include "../../src/SeQuant/core/runtime.hpp"
-#include "../../src/SeQuant/core/space.hpp"
-#include "../../src/SeQuant/core/tensor.hpp"
-#include "../../src/SeQuant/core/utility.hpp"
-#include "../../src/SeQuant/domain/mbpt/convention.hpp"
 #include "catch.hpp"
 
-#include "../../examples/sequant_setup.hpp"
 #include "../../src/SeQuant/domain/evaluate/eval_context.hpp"
 #include "../../src/SeQuant/domain/evaluate/eval_tensor.hpp"
 #include "../../src/SeQuant/domain/evaluate/eval_tensor_builder.hpp"
 #include "../../src/SeQuant/domain/evaluate/factorizer.hpp"
 
 using namespace sequant;
-
 using namespace sequant::evaluate;
+
 using DTensorType = TA::TArrayD;
 using ContextMapType =
     sequant::container::map<sequant::ExprPtr, std::shared_ptr<DTensorType>>;
@@ -37,6 +29,9 @@ char* args[]{};
 char** argv = {args};
 auto& world = TA::initialize(argc, argv);
 
+// get a sequant Tensor made out of specs
+// specs -> {label, b1, ..., b(n/2), k1, ..., k(n/2)}
+// eg. {"g", "i_1", "i_2", "a_1", "a_2"} 
 auto make_tensor_expr =
     [](const sequant::container::svector<std::string>& specs) {
       // only equal bra-ket ranks are expected
@@ -69,8 +64,11 @@ TA::TiledRange tr_oovv{{0, nocc}, {0, nocc}, {0, nvirt}, {0, nvirt}};
 TA::TiledRange tr_ovov{{0, nocc}, {0, nvirt}, {0, nocc}, {0, nvirt}};
 TA::TiledRange tr_ovvv{{0, nocc}, {0, nvirt}, {0, nvirt}, {0, nvirt}};
 TA::TiledRange tr_vvvv{{0, nvirt}, {0, nvirt}, {0, nvirt}, {0, nvirt}};
+//
+TA::TiledRange tr_ovvo{{0, nocc}, {0, nvirt}, {0, nvirt}, {0, nocc}};
+TA::TiledRange tr_voov{{0, nvirt}, {0, nocc}, {0, nocc}, {0, nvirt}};
 
-TEST_CASE("EVAL_TENSOR_CONSTRUCTOR_TESTS", "[eval_tensor]") {
+TEST_CASE("Eval_Tensor_CONSTRUCTOR_TESTS", "[eval_tensor]") {
   SECTION("Intermediate construction") {
     EvalTensorIntermediate<DTensorType> evt_imed;
     REQUIRE(!evt_imed.is_leaf());
@@ -83,51 +81,35 @@ TEST_CASE("EVAL_TENSOR_CONSTRUCTOR_TESTS", "[eval_tensor]") {
     EvalTensorLeaf<DTensorType> evt_leaf(nullptr);
     REQUIRE(evt_leaf.is_leaf());
   }
-
-  // SECTION("Scalars in the evaluation tree") {
-  //   auto visitor = [](const EvalTensor<DTensorType>& node) {
-  //       std::wcout << "scalar found: " << node.get_scalar() << std::endl;
-  //   };
-  //   // global sequant setup...
-  //   sequant::detail::OpIdRegistrar op_id_registrar;
-  //   sequant::mbpt::set_default_convention();
-  //   TensorCanonicalizer::register_instance(
-  //       std::make_shared<DefaultTensorCanonicalizer>());
-  //   auto cc_r = cceqvec(2, 2)(true, true, true, true);
-
-  //   auto builder = EvalTensorBuilder<DTensorType>();
-  //   auto r1_tree = builder.build_tree(cc_r[1]);
-  //   r1_tree->visit(visitor);
-  // }
 }
 
 TEST_CASE("EVAL_TENSOR_EVALUATE_TESTS", "[eval_tensor_builder]") {
-  // global sequant setup...
-  sequant::detail::OpIdRegistrar op_id_registrar;
-  sequant::mbpt::set_default_convention();
-
   // creating some random tensors
   auto T_ov = std::make_shared<DTensorType>(world, tr_ov);
   auto T_oovv = std::make_shared<DTensorType>(world, tr_oovv);
   auto G_oovv = std::make_shared<DTensorType>(world, tr_oovv);
   //
+  auto G_ovvo = std::make_shared<DTensorType>(world, tr_ovvo);
+  auto G_voov = std::make_shared<DTensorType>(world, tr_voov);
+  //
 
   T_ov->fill_random();
   T_oovv->fill_random();
   G_oovv->fill_random();
+  G_ovvo->fill_random();
 
   SECTION("Testing Sum type evaluation") {
     auto t = make_tensor_expr({"t", "i_1", "i_2", "a_1", "a_2"});
     auto g = make_tensor_expr({"g", "i_1", "i_2", "a_1", "a_2"});
 
+    DTensorType manual_sum;
+    manual_sum("i, j, a, b") =
+        (*G_oovv)("i, j, a, b") + (*T_oovv)("i, j, a, b");
+
     ContextMapType context;
     context.insert(ContextMapType::value_type(t, T_oovv));
     context.insert(ContextMapType::value_type(g, G_oovv));
     auto ev_context = EvalContext(context, builder);
-
-    DTensorType manual_sum;
-    manual_sum("i, j, a, b") =
-        (*G_oovv)("i, j, a, b") + (*T_oovv)("i, j, a, b");
 
     auto expr = std::make_shared<Sum>(Sum({g, t}));
     auto tree = builder.build_tree(expr);
@@ -163,17 +145,17 @@ TEST_CASE("EVAL_TENSOR_EVALUATE_TESTS", "[eval_tensor_builder]") {
 
   SECTION("Testing Product type evaluation") {
     auto t = make_tensor_expr({"t", "i_1", "a_1"});
-    auto g = make_tensor_expr({"g", "i_1", "i_2", "a_1", "a_2"});
-
-    ContextMapType context;
-    context.insert(ContextMapType::value_type(t, T_ov));
-    context.insert(ContextMapType::value_type(g, G_oovv));
-    auto ev_context = EvalContext(context, builder);
+    auto g1 = make_tensor_expr({"g", "i_1", "i_2", "a_1", "a_2"});
 
     DTensorType manual_prod;
     manual_prod("j,b") = (*T_ov)("i,a") * (*G_oovv)("i,j,a,b");
 
-    auto expr = std::make_shared<Product>(Product({t, g}));
+    ContextMapType context;
+    context.insert(ContextMapType::value_type(t, T_ov));
+    context.insert(ContextMapType::value_type(g1, G_oovv));
+    auto ev_context = EvalContext(context, builder);
+
+    auto expr = std::make_shared<Product>(Product({t, g1}));
     auto tree = builder.build_tree(expr);
     auto eval_prod = tree->evaluate(ev_context.get_map());
 
@@ -241,10 +223,6 @@ TEST_CASE("EVAL_TENSOR_EVALUATE_TESTS", "[eval_tensor_builder]") {
 }
 
 TEST_CASE("FACTORIZER_TESTS", "[factorizer]") {
-  // global sequant setup...
-  sequant::detail::OpIdRegistrar op_id_registrar;
-  sequant::mbpt::set_default_convention();
-
   container::map<IndexSpace::TypeAttr, size_t> space_size;
   space_size.insert(
       decltype(space_size)::value_type(IndexSpace::active_occupied, nocc));
@@ -413,5 +391,77 @@ TEST_CASE("FACTORIZER_TESTS", "[factorizer]") {
 
     REQUIRE(summandAnull == nullptr);
     REQUIRE(summandBnull == nullptr);
+  }
+}
+
+TEST_CASE("EVAL_TENSOR_BUILDER_TESTS", "[eval_tensor_builder]") {
+  using DTensorType = TA::TArrayD;
+
+  // complex data false
+  auto real_builder = EvalTensorBuilder<TA::TArrayD>(false);
+
+  // complex data true
+  auto complex_builder = EvalTensorBuilder<TA::TArrayD>(true);
+
+  SECTION("Index label agnostic hashing") {
+    auto t1 = std::make_shared<Tensor>(
+        Tensor(L"t", {L"i_1", L"i_2"}, {L"a_1", L"a_2"}));
+
+    auto t2 = std::make_shared<Tensor>(
+        Tensor(L"t", {L"i_10", L"i_11"}, {L"a_11", L"a_12"}));
+
+    REQUIRE(real_builder.build_tree(t1)->get_hash_value() ==
+            real_builder.build_tree(t2)->get_hash_value());
+
+    REQUIRE(complex_builder.build_tree(t1)->get_hash_value() ==
+            complex_builder.build_tree(t2)->get_hash_value());
+  }
+
+  SECTION("Non-symmetric brakets") {
+    auto t1 = std::make_shared<Tensor>(
+        Tensor(L"t", {L"i_1", L"i_2"}, {L"a_1", L"a_2"}, Symmetry::nonsymm,
+               BraKetSymmetry::nonsymm));
+
+    auto t2 = std::make_shared<Tensor>(
+        Tensor(L"t", {L"a_1", L"a_2"}, {L"i_1", L"i_2"}, Symmetry::nonsymm,
+               BraKetSymmetry::nonsymm));
+
+    REQUIRE(real_builder.build_tree(t1)->get_hash_value() !=
+            real_builder.build_tree(t2)->get_hash_value());
+
+    REQUIRE(complex_builder.build_tree(t1)->get_hash_value() !=
+            complex_builder.build_tree(t2)->get_hash_value());
+  }
+
+  SECTION("Symmetric brakets") {
+    auto t1 = std::make_shared<Tensor>(
+        Tensor(L"t", {L"i_1", L"i_2"}, {L"a_1", L"a_2"}, Symmetry::nonsymm,
+               BraKetSymmetry::symm));
+
+    auto t2 = std::make_shared<Tensor>(
+        Tensor(L"t", {L"a_1", L"a_2"}, {L"i_1", L"i_2"}, Symmetry::nonsymm,
+               BraKetSymmetry::symm));
+
+    REQUIRE(real_builder.build_tree(t1)->get_hash_value() ==
+            real_builder.build_tree(t2)->get_hash_value());
+
+    REQUIRE(complex_builder.build_tree(t1)->get_hash_value() ==
+            complex_builder.build_tree(t2)->get_hash_value());
+  }
+
+  SECTION("Conjugate brakets") {
+    auto t1 = std::make_shared<Tensor>(
+        Tensor(L"t", {L"i_1", L"i_2"}, {L"a_1", L"a_2"}, Symmetry::nonsymm,
+               BraKetSymmetry::conjugate));
+
+    auto t2 = std::make_shared<Tensor>(
+        Tensor(L"t", {L"a_1", L"a_2"}, {L"i_1", L"i_2"}, Symmetry::nonsymm,
+               BraKetSymmetry::conjugate));
+
+    REQUIRE(real_builder.build_tree(t1)->get_hash_value() ==
+            real_builder.build_tree(t2)->get_hash_value());
+
+    REQUIRE(complex_builder.build_tree(t1)->get_hash_value() !=
+            complex_builder.build_tree(t2)->get_hash_value());
   }
 }
