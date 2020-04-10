@@ -365,6 +365,17 @@ int main(int argc, char* argv[]) {
           for (auto d = 0; d < nvirt; ++d)
             tile_G_vvvv(a, b, c, d) =
                 tile_ints_spatial(a + nocc, b + nocc, c + nocc, d + nocc);
+
+#if 0
+    cout << "tile_G_oooo: " << tile_G_oooo.sum() << endl;
+    cout << tile_G_oooo.size() << endl;
+    cout << tile_G_oooo << endl;
+
+    cout << "tile_G_vvvv: " << tile_G_vvvv.sum() << endl;
+    cout << tile_G_vvvv.size() << endl;
+    cout << tile_G_vvvv << endl;
+#endif
+
 #if CCSDT_eval
     for (auto i = 0; i < nocc; ++i)
       for (auto j = 0; j < nocc; ++j)
@@ -409,6 +420,11 @@ int main(int argc, char* argv[]) {
     auto ccsd_r = cceqvec{2, 2}(true, true, true, true);
     std::initializer_list<IndexList> external_indices = {{}};
 
+//    std::wcout << "CCSD R1: " << to_latex(ccsd_r[1]) << std::endl;
+//    std::wcout << "CCSD R1: " << to_latex(expand_A_operator(ccsd_r[1])) << std::endl;
+//    std::wcout << "CCSD R2: " << to_latex(ccsd_r[2]) << std::endl;
+//    std::wcout << "CCSD R2: " << to_latex(expand_A_operator(ccsd_r[2])) << std::endl;
+//
     // SPIN TRACE THE RESIDUAL
     std::vector<ExprPtr> cc_r(ccsd_r.size());
     for (size_t i = 1; i < ccsd_r.size(); ++i){
@@ -450,18 +466,21 @@ int main(int argc, char* argv[]) {
     auto simpler_R2 =
         ex<Constant>(1.0 / 3.0) * cc_r[2] + ex<Constant>(1.0 / 6.0) * temp_expr;
 
-    expand(simpler_R2);
-    rapid_simplify(simpler_R2);
-    canonicalize(simpler_R2);
-    rapid_simplify(simpler_R2);
+//    expand(simpler_R2);
+//    rapid_simplify(simpler_R2);
+//    canonicalize(simpler_R2);
+//    rapid_simplify(simpler_R2);
+//    std::wcout << "simpler_R2: " << to_latex(simpler_R2) << std::endl;
 
-    auto P = ex<Tensor>(L"P", WstrList{L"a_1", L"a_2"}, WstrList{L"i_1", L"i_2"}, Symmetry::nonsymm);
-    auto P_R2 = P * simpler_R2;
+    auto P_R2 = ex<Constant>(0.5) *  ex<Tensor>(L"P", WstrList{L"a_1", L"a_2"}, WstrList{L"i_1", L"i_2"}, Symmetry::nonsymm) * simpler_R2;
     expand(P_R2);
     rapid_simplify(P_R2);
     canonicalize(P_R2);
+    std::wcout << "P_R2: " << to_latex(P_R2) << std::endl;
+
     auto R2_simplified = expand_P_operator(P_R2);
     rapid_simplify(R2_simplified);
+//    std::wcout << "CCSD R2 Simplified:\n" << to_latex(R2_simplified) << endl;
 
 #endif
 
@@ -503,8 +522,9 @@ int main(int argc, char* argv[]) {
 
     // Full CCSD R1 and R2 equations
 //    std::wcout << "CCSD R1:\n" << to_latex(cc_r[1]) << endl;
-//    std::wcout << "CCSD R2:\n" << to_latex(R2_simplified) << endl;
-
+//    std::wcout << "CCSD R2:\n" << to_latex(cc_r[2]) << endl;
+//    std::wcout << "CCSD R2 Simplified:\n" << to_latex(R2_simplified) << endl;
+#if 0
     // Selecting few terms out of CCSD R1 equation
     size_t cc_r1_offset = 6;
     size_t cc_r1_n = 1;
@@ -537,29 +557,45 @@ int main(int argc, char* argv[]) {
         }
       }
     }
-
-    // Generate tree for subexpression only
+        // Generate tree for subexpression only
     auto r1_tree = builder.build_tree(cc_r1_subExpr);
     auto r2_tree = builder.build_tree(cc_r2_subExpr);
 
+#endif
+
+    auto cc_r1_biorthogonal = ex<Constant>(0.5) * cc_r[1];
+    expand(cc_r1_biorthogonal);
+    rapid_simplify(cc_r1_biorthogonal);
+
+    auto r1_tree = builder.build_tree(cc_r1_biorthogonal);
+    auto r2_tree = builder.build_tree(R2_simplified);
 
 # if 1
     iter = 0;
-    size_t cc_maxiter = 10;
+    size_t cc_maxiter = 100;
     rmsd = 0.0;
     ediff = 0.0;
     auto normdiff = 0.0;
     auto ecc = 0.0;
-    cout << "using TiledArray" << endl;
-    cout << "iter     norm(t_ov)     norm(t_oovv)    ΔE(CC)    E(CC)" << endl;
-    cout << "=======================================================" << endl;
+    cout << "Using TiledArray..." << endl;
+    cout << "Iter    norm(t_ov)      norm(t_oovv)     ΔE(CC)     E(CC)" << endl;
+    cout << "===============================================================" << endl;
     auto tstart = std::chrono::high_resolution_clock::now();
     do {
       ++iter;
       auto R1 = r1_tree->evaluate(context.get_map());
-      cout << "R1: " << R1 << endl;
       auto R2 = r2_tree->evaluate(context.get_map());
-      cout << "R2: " << R2 << endl;
+
+#if 0
+      {
+        TA::TArrayD r1_temp;
+        TA::TArrayD r2_temp;
+        r1_temp("a,i") = R1("i,a");
+        r2_temp("a,b,i,j") = R2("i,j,a,b");
+        cout<< "R1: " << r1_temp << endl;
+        cout<< "R2: " << r2_temp << endl;
+      }
+#endif
 
       auto tile_R1       = R1.find({0,0}).get();
       auto tile_t_ov     = (*t_ov).find({0,0}).get();
@@ -578,61 +614,57 @@ int main(int argc, char* argv[]) {
         for (auto a = 0; a < nvirt; ++a) {
           tile_t_ov(i,a) += tile_R1(i,a)/tile_D_ov(i,a); } }
 
-      //
+//      cout << "T1: " << tile_t_ov << endl;
+
       // update t_oovv
       for (auto i = 0; i < nocc; ++i) {
         for (auto j = 0; j < nocc; ++j) {
           for (auto a = 0; a < nvirt; ++a) {
             for (auto b = 0; b < nvirt; ++b) {
-              tile_t_oovv(i,j,a,b) += tile_R2(i,j,a,b)/tile_D_oovv(i,j,a,b); } } } }
+              tile_t_oovv(i,j,a,b) += tile_R2(i,j,a,b)/tile_D_oovv(i,j,a,b);
+            } } } }
 
-      cout << "T1: " << tile_t_ov << endl;
-      cout << "T2: " << tile_t_oovv << endl;
-      cout << iter << "\t" <<  std::sqrt((*t_ov)("i,j").dot((*t_ov)("i,j"))) << "\t";
-      cout << std::sqrt((*t_oovv)("i,j,a,b").dot((*t_oovv)("i,j,a,b"))) << "\t";
+//      cout << "T2: " << tile_t_oovv << endl;
+
       auto ecc_last = ecc;
 
-      // calculating energy
-      TA::TArrayD temp_tensor1, temp_tensor2;
-      temp_tensor1("j,b") = (*G_oovv)("i,j,a,b")*(*t_ov)("i,a");
-      temp_tensor2("j,b") = (*G_oovv)("i,j,b,a")*(*t_ov)("i,a");
+      // Calculate CCSD contribution to correlation energy
+      {
+        TA::TArrayD temp_tensor1, temp_tensor2;
+        temp_tensor1("j,b") = (*G_oovv)("i,j,a,b")*(*t_ov)("i,a");
+        temp_tensor2("j,b") = (*G_oovv)("i,j,b,a")*(*t_ov)("i,a");
 
-      // Spin-free energy equation
-      ecc = (*Fock_ov)("i,a").dot((*t_ov)("i,a")) +
-          temp_tensor1("j,b").dot((*t_ov)("j,b")) +
-          (*G_oovv)("i,j,a,b").dot((*t_oovv)("i,j,a,b"));
-      ecc *= 2.0;
-      ecc -= temp_tensor2("j,b").dot((*t_ov)("j,b"));
-      ecc -= (*G_oovv)("i,j,a,b").dot((*t_oovv)("j,i,a,b"));
+        // Spin-free energy equation
+        ecc = (*Fock_ov)("i,a").dot((*t_ov)("i,a")) +
+            temp_tensor1("j,b").dot((*t_ov)("j,b")) +
+            (*G_oovv)("i,j,a,b").dot((*t_oovv)("i,j,a,b"));
+        ecc *= 2.0;
+        ecc -= temp_tensor2("j,b").dot((*t_ov)("j,b"));
+        ecc -= (*G_oovv)("i,j,a,b").dot((*t_oovv)("j,i,a,b"));
+      }
 
-      normdiff = norm_last - std::sqrt((*t_oovv)("i,j,a,b").dot((*t_oovv)("i,j,a,b")));
+      // convergence variables
+      auto norm_t1 = std::sqrt((*t_ov)("i,j").dot((*t_ov)("i,j")));
+      auto norm_t2 = std::sqrt((*t_oovv)("i,j,a,b").dot((*t_oovv)("i,j,a,b")));
+      printf("%2d     %4.8f     %4.8f     %4.8f     %4.12f\n", iter, norm_t1, norm_t2, ediff, ecc);
+      normdiff = norm_last - norm_t2;
       ediff    = ecc_last - ecc;
-      cout << ediff << "    " << ecc << endl;
     } while((fabs(normdiff) > conv || fabs(ediff) > conv) && (iter < cc_maxiter));
-    //} while(false);
 
     auto tstop = std::chrono::high_resolution_clock::now();
     auto time_elapsed =
         std::chrono::duration_cast<std::chrono::microseconds>(tstop - tstart);
 
-    std::cout << "\nOut of loop after "
-              << iter << " iterations.\n"
-              << "\nTime: "
-              << time_elapsed.count() << " μs"
-              << std::endl;
+    cout << "\nOut of loop after "
+        << iter << " iterations.\n"
+        << "Time: "
+        << time_elapsed.count() << " μs"
+        << endl;
 
-    /* auto r1 = r1_tree->evaluate(context.get_map()); */
-    /* std::cout << "norm(r1) = " << std::sqrt(r1("i,a").dot(r1("i,a"))) << std::endl; */
-
-    /* auto r2 = r2_tree->evaluate(context.get_map()); */
-    /* std::cout << "norm(r2) = " << std::sqrt(r2("i,j,a,b").dot(r2("i,j,a,b"))) << std::endl; */
-
-    /* std::wcout << "Digraph for R1\n------------\n"; */
-    /* std::wcout << r1_tree->to_digraph() << std::endl; */
-    /* std::wcout << "Digraph for R2\n------------\n"; */
-    /* std::wcout << r2_tree->to_digraph() << std::endl; */
 #endif
     TA::finalize();
+
+    cout << "Total energy = " << enuc + ehf + ecc << " a.u.\n";
 
   }  // end of try block
 
