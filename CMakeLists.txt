@@ -68,7 +68,7 @@ set_property(TARGET Range-V3 PROPERTY
 
 # need Boost.ContainerHash
 # NB Boost.Container is broken in v1.70
-find_package(Boost ${SEQUANT_TRACKED_BOOST_VERSION} REQUIRED)
+find_package(Boost ${SEQUANT_TRACKED_BOOST_VERSION} COMPONENTS serialization REQUIRED)
 if (Boost_VERSION EQUAL 107000)
     message(FATAL_ERROR "Found Boost 1.70, but its Boost.Container is broken: "
         "use any version ${SEQUANT_TRACKED_BOOST_VERSION} "
