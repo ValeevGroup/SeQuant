@@ -172,24 +172,25 @@ target_link_libraries(evaluator SeQuant ${TBB_LIBRARIES})
 enable_testing(true)
 
 set(utests_src
-        # tests/unit/test_space.cpp
-        # tests/unit/test_index.cpp
-        # tests/unit/test_op.cpp
-         tests/unit/test_wick.cpp
-        # tests/unit/test_tensor.cpp
-        # tests/unit/test_bliss.cpp
-        # tests/unit/test_expr.cpp
-        # tests/unit/test_iterator.cpp
-         tests/unit/test_tensor_network.cpp
-        # tests/unit/test_mbpt.cpp
-        ## unit tests for evaluation
-        tests/unit/test_path_tree.cpp
+        tests/unit/test_space.cpp
+        tests/unit/test_index.cpp
+        tests/unit/test_op.cpp
+        tests/unit/test_wick.cpp
+        tests/unit/test_tensor.cpp
+        tests/unit/test_bliss.cpp
+        tests/unit/test_expr.cpp
+        tests/unit/test_iterator.cpp
+        tests/unit/test_tensor_network.cpp
+        tests/unit/test_mbpt.cpp
         )
 set(utests_deps SeQuant evaluator)
 
 if (TARGET tiledarray)
   list(APPEND utests_src
-      tests/unit/test_eval_tensor.cpp)
+      ## unit tests for evaluation
+      tests/unit/test_path_tree.cpp
+      tests/unit/test_eval_tensor.cpp
+      )
   list(APPEND utests_deps tiledarray)
 endif(TARGET tiledarray)
 
@@ -211,20 +212,24 @@ set_tests_properties(unit/run
 ####### Tests ########
 
 # Single-Reference Coupled-Cluster
+# srcc example
 set(example0 srcc)
 add_executable(${example0} EXCLUDE_FROM_ALL
         examples/${example0}/${example0}.cpp)
 target_link_libraries(${example0} SeQuant ${TBB_LIBRARIES})
 
-set(example1 expr_evaluation)
-add_executable(${example1} EXCLUDE_FROM_ALL
-    examples/evaluation/${example1}.cpp
-    examples/contract/interpret/contract.hpp
-    examples/contract/scf/hartree-fock.cc)
-target_link_libraries(${example1} SeQuant evaluator ${TBB_LIBRARIES}
-    Libint2::cxx tiledarray)
-target_link_directories(${example1} PUBLIC ${TBB_LIBRARIES})
-target_compile_definitions(${example1} PRIVATE SEQUANT_HAS_TILEDARRAY)
+if (TARGET tiledarray)
+# expr_evaluation example
+    set(example1 expr_evaluation)
+    add_executable(${example1} EXCLUDE_FROM_ALL
+        examples/evaluation/${example1}.cpp
+        examples/contract/interpret/contract.hpp
+        examples/contract/scf/hartree-fock.cc)
+    target_link_libraries(${example1} SeQuant evaluator ${TBB_LIBRARIES}
+        Libint2::cxx tiledarray)
+    target_link_directories(${example1} PUBLIC ${TBB_LIBRARIES})
+    target_compile_definitions(${example1} PRIVATE SEQUANT_HAS_TILEDARRAY)
+endif (TARGET tiledarray)
 
 # add tests for running examples
 set (lastexample 2)
