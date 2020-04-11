@@ -58,6 +58,14 @@ TEST_CASE("TensorNetwork", "[elements]") {
       // ext indices
       auto ext_indices = tn.ext_indices();
       REQUIRE(ext_indices.size() == 2);
+
+      // tensors
+      auto tensors = tn.tensors();
+      REQUIRE(size(tensors) == 2);
+      REQUIRE(std::dynamic_pointer_cast<Expr>(tensors[0]));
+      REQUIRE(std::dynamic_pointer_cast<Expr>(tensors[1]));
+      REQUIRE(*std::dynamic_pointer_cast<Expr>(tensors[0]) == *t1);
+      REQUIRE(*std::dynamic_pointer_cast<Expr>(tensors[1]) == *t2);
     }
   }  // SECTION("accessors")
 
@@ -72,6 +80,8 @@ TEST_CASE("TensorNetwork", "[elements]") {
       {
         TensorNetwork tn(*t1_x_t2);
         tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false);
+
+        REQUIRE(size(tn.tensors()) == 2);
       }
 
       // with explicit named indices
@@ -82,6 +92,8 @@ TEST_CASE("TensorNetwork", "[elements]") {
         named_indices_t indices{Index{L"i_17"}};
         tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false,
                         &indices);
+
+        REQUIRE(size(tn.tensors()) == 2);
       }
     }
   }  // SECTION("accessors")
