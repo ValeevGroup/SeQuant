@@ -193,7 +193,7 @@ if (TARGET tiledarray AND TARGET Libint2::cxx)
   list(APPEND utests_src
       tests/unit/test_eval_tensor.cpp)
   list(APPEND utests_deps tiledarray)
-endif(TARGET tiledarray)
+endif(TARGET tiledarray AND TARGET Libint2::cxx)
 
 set(unit_test_executable unit_tests)
 add_executable(${unit_test_executable} EXCLUDE_FROM_ALL
