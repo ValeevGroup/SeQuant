@@ -82,6 +82,12 @@ TEST_CASE("TensorNetwork", "[elements]") {
         tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false);
 
         REQUIRE(size(tn.tensors()) == 2);
+        REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[0]));
+        REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[1]));
+        //std::wcout << to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) << std::endl;
+        //std::wcout << to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) << std::endl;
+        REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) == L"{\\tilde{a}^{{i_1}}_{{i_3}}}");
+        REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) == L"{F^{{i_1}}_{{i_{17}}}}");
       }
 
       // with explicit named indices
@@ -94,6 +100,12 @@ TEST_CASE("TensorNetwork", "[elements]") {
                         &indices);
 
         REQUIRE(size(tn.tensors()) == 2);
+        REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[0]));
+        REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[1]));
+//        std::wcout << to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) << std::endl;
+//        std::wcout << to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) << std::endl;
+        REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) == L"{\\tilde{a}^{{i_2}}_{{i_1}}}");
+        REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) == L"{F^{{i_2}}_{{i_{17}}}}");
       }
     }
   }  // SECTION("accessors")
