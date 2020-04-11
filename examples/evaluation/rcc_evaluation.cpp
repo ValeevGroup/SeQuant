@@ -11,7 +11,6 @@
 #include <tiledarray.h>
 #include <libint2.hpp>
 
-#include <array>
 #include <memory>
 
 int main(int argc, char* argv[]) {
@@ -49,7 +48,7 @@ int main(int argc, char* argv[]) {
         auto r = sqrt(r2);
         enuc += atoms[i].atomic_number * atoms[j].atomic_number / r;
       }
-    cout << "Nuclear repulsion energy = " << enuc << endl;
+    cout << "Nuclear repulsion energy = " << enuc << " a.u." << endl;
 
     /*** =========================== ***/
     /*** create basis set            ***/
@@ -59,8 +58,8 @@ int main(int argc, char* argv[]) {
     size_t nao = 0;
     for (auto s = 0; s < shells.size(); ++s) nao += shells[s].size();
     size_t nvirt = nao - ndocc;
-    std::cout << "nao  : " << nao << "\n";
-    std::cout << "ndocc: " << ndocc << "\n";
+    std::cout << "nao  : " << nao << "\t";
+    std::cout << "ndocc: " << ndocc << "\t";
     std::cout << "nvirt: " << nvirt << "\n";
 
     /*** =========================== ***/
@@ -113,7 +112,7 @@ int main(int argc, char* argv[]) {
     auto ediff = 0.0;
     auto ehf = 0.0;
     Matrix Fock_matrix;  // capture fock matrix for ccsd calculations
-    cout << "\n\n Iter        E(elec)              E(tot)               "
+    cout << "\n Iter        E(elec)              E(tot)               "
             "Delta(E)             RMS(D)         Time(s)\n";
     do {
       const auto tstart = std::chrono::high_resolution_clock::now();
@@ -161,10 +160,6 @@ int main(int argc, char* argv[]) {
     /*** =========================== ***/
     /***          MP2 energy         ***/
     /*** =========================== ***/
-    //
-
-    /* cout << "Coeff matrix is: " << endl; */
-    /* cout << C << endl << endl; */
 
     // Initialize MADWorld
     TA::World& world = TA::initialize(argc, argv);
@@ -172,11 +167,6 @@ int main(int argc, char* argv[]) {
     auto mo_ints_tensor = compute_mo_ints(C, shells, world);
     auto tile_ints_spatial = mo_ints_tensor.find({0, 0, 0, 0}).get();
 
-    // from here on number of occupied and virtual orbitals
-    // is doubled as we are now working on spin basis
-    // nao *= 2;
-    // nvirt *= 2;
-    size_t nocc = ndocc;  // in place of ndocc use nocc
     auto TA_fock = [&](const TA::Range& range) {
       TA::Tensor<double> tile(range);
       for (auto i = 0; i < nao; ++i) {
@@ -190,12 +180,6 @@ int main(int argc, char* argv[]) {
     auto tile_fock_temp = fock.world().taskq.add(
         TA_fock, fock.trange().make_tile_range(0));
     *(fock.begin()) = tile_fock_temp;
-//    Matrix Fock = eps.asDiagonal();
-//    cout << "Fock:\n" << Fock << endl;
-
-    // See Step 4 at
-    // http://sirius.chem.vt.edu/wiki/doku.php?id=crawdad:programming:project4
-    //
 
     cout << "\n"
          << "*********************************\n"
@@ -207,15 +191,13 @@ int main(int argc, char* argv[]) {
 
     auto tile_ints = mo_ints_tensor.find({0, 0, 0, 0}).get();
     auto tile_fock = fock.find({0, 0}).get();
-    // auto nocc = ndocc;
 
-    for (auto r = 0; r < nocc; ++r) {
-      for (auto s = 0; s < nocc; ++s) {
+    for (auto r = 0; r < ndocc; ++r) {
+      for (auto s = 0; s < ndocc; ++s) {
         for (auto p = ndocc; p < nao; ++p) {
           for (auto q = ndocc; q < nao; ++q) {
             auto calc = tile_ints(r, s, p, q) *
                    ( 2.0 * tile_ints(r, s, p, q) - tile_ints(r, s, q, p));
-            // emp2 += calc / (eps(r) + eps(s) - eps(q) - eps(p));
             emp2 += calc / (tile_fock(r,r) + tile_fock(s,s) - tile_fock(q,q) - tile_fock(p,p));
           }
         }
@@ -233,24 +215,24 @@ int main(int argc, char* argv[]) {
 
     cout << "Initializing tensors..." << endl;
 
-    TA::TiledRange tr_oo{{0, nocc}, {0, nocc}};
-    TA::TiledRange tr_ov{{0, nocc}, {0, nvirt}};
+    TA::TiledRange tr_oo{{0, ndocc}, {0, ndocc}};
+    TA::TiledRange tr_ov{{0, ndocc}, {0, nvirt}};
     TA::TiledRange tr_vv{{0, nvirt}, {0, nvirt}};
-    TA::TiledRange tr_oooo{{0, nocc}, {0, nocc}, {0, nocc}, {0, nocc}};
-    TA::TiledRange tr_ooov{{0, nocc}, {0, nocc}, {0, nocc}, {0, nvirt}};
-    TA::TiledRange tr_oovo{{0, nocc}, {0, nocc}, {0, nvirt}, {0, nocc}};
-    TA::TiledRange tr_oovv{{0, nocc}, {0, nocc}, {0, nvirt}, {0, nvirt}};
-    TA::TiledRange tr_ovov{{0, nocc}, {0, nvirt}, {0, nocc}, {0, nvirt}};
-    TA::TiledRange tr_ovvo{{0, nocc}, {0, nvirt}, {0, nvirt}, {0, nocc}};
-    TA::TiledRange tr_vovo{{0, nvirt}, {0, nocc}, {0, nvirt}, {0, nocc}};
-    TA::TiledRange tr_voov{{0, nvirt}, {0, nocc}, {0, nocc}, {0, nvirt}};
-    TA::TiledRange tr_ovvv{{0, nocc}, {0, nvirt}, {0, nvirt}, {0, nvirt}};
+    TA::TiledRange tr_oooo{{0, ndocc}, {0, ndocc}, {0, ndocc}, {0, ndocc}};
+    TA::TiledRange tr_ooov{{0, ndocc}, {0, ndocc}, {0, ndocc}, {0, nvirt}};
+    TA::TiledRange tr_oovo{{0, ndocc}, {0, ndocc}, {0, nvirt}, {0, ndocc}};
+    TA::TiledRange tr_oovv{{0, ndocc}, {0, ndocc}, {0, nvirt}, {0, nvirt}};
+    TA::TiledRange tr_ovov{{0, ndocc}, {0, nvirt}, {0, ndocc}, {0, nvirt}};
+    TA::TiledRange tr_ovvo{{0, ndocc}, {0, nvirt}, {0, nvirt}, {0, ndocc}};
+    TA::TiledRange tr_vovo{{0, nvirt}, {0, ndocc}, {0, nvirt}, {0, ndocc}};
+    TA::TiledRange tr_voov{{0, nvirt}, {0, ndocc}, {0, ndocc}, {0, nvirt}};
+    TA::TiledRange tr_ovvv{{0, ndocc}, {0, nvirt}, {0, nvirt}, {0, nvirt}};
     TA::TiledRange tr_vvvv{{0, nvirt}, {0, nvirt}, {0, nvirt}, {0, nvirt}};
-    TA::TiledRange tr_vovv{{0, nvirt}, {0, nocc}, {0, nvirt}, {0, nvirt}};
+    TA::TiledRange tr_vovv{{0, nvirt}, {0, ndocc}, {0, nvirt}, {0, nvirt}};
 
 #define CCSDT_eval 0
 #if CCSDT_eval
-    // TA::TiledRange tr_ooovvv{{0, nocc},  {0, nocc},  {0, nocc},
+    // TA::TiledRange tr_ooovvv{{0, ndocc},  {0, ndocc},  {0, ndocc},
     //                          {0, nvirt}, {0, nvirt}, {0, nvirt}};
     //
 #endif
@@ -314,49 +296,49 @@ int main(int argc, char* argv[]) {
     auto tile_G_vvvv = (*G_vvvv).find({0, 0, 0, 0}).get();
     auto tile_G_vovv = (*G_vovv).find({0, 0, 0, 0}).get();
 
-    for (auto i = 0; i < nocc; ++i) {
+    for (auto i = 0; i < ndocc; ++i) {
       tile_Fock_oo(i, i) = tile_fock(i, i);
       for (auto a = 0; a < nvirt; ++a) {
-        tile_Fock_ov(i, a) = tile_fock(i, a + nocc);
+        tile_Fock_ov(i, a) = tile_fock(i, a + ndocc);
         tile_D_ov(i, a) =
-            tile_fock(i, i) - tile_fock(a + nocc, a + nocc);
-        for (auto j = 0; j < nocc; ++j) {
+            tile_fock(i, i) - tile_fock(a + ndocc, a + ndocc);
+        for (auto j = 0; j < ndocc; ++j) {
           for (auto b = 0; b < nvirt; ++b) {
-            tile_Fock_vv(a, b) = tile_fock(a + nocc, b + nocc);
+            tile_Fock_vv(a, b) = tile_fock(a + ndocc, b + ndocc);
             tile_D_oovv(i, j, a, b) = tile_D_ov(i, a) + tile_fock(j, j) -
-                tile_fock(b + nocc, b + nocc);
-            tile_G_oovv(i, j, a, b) = tile_ints_spatial(i, j, a + nocc, b + nocc);
-            tile_G_ovov(i, a, j, b) = tile_ints_spatial(i, a + nocc, j, b + nocc);
-            tile_G_ovvo(i, a, b, j) = tile_ints_spatial(i, a + nocc, b + nocc, j);
-            tile_G_vovo(a, i, b, j) = tile_ints_spatial(a + nocc, i, b + nocc, j);
-            tile_G_voov(a, i, j, b) = tile_ints_spatial(a + nocc, i, j, b + nocc);
+                tile_fock(b + ndocc, b + ndocc);
+            tile_G_oovv(i, j, a, b) = tile_ints_spatial(i, j, a + ndocc, b + ndocc);
+            tile_G_ovov(i, a, j, b) = tile_ints_spatial(i, a + ndocc, j, b + ndocc);
+            tile_G_ovvo(i, a, b, j) = tile_ints_spatial(i, a + ndocc, b + ndocc, j);
+            tile_G_vovo(a, i, b, j) = tile_ints_spatial(a + ndocc, i, b + ndocc, j);
+            tile_G_voov(a, i, j, b) = tile_ints_spatial(a + ndocc, i, j, b + ndocc);
           }
         }
       }
     }
 
-    for (auto i = 0; i < nocc; ++i)
+    for (auto i = 0; i < ndocc; ++i)
       for (auto a = 0; a < nvirt; ++a)
         for (auto b = 0; b < nvirt; ++b)
           for (auto c = 0; c < nvirt; ++c){
             tile_G_ovvv(i, a, b, c) =
-                tile_ints_spatial(i, a + nocc, b + nocc, c + nocc);
+                tile_ints_spatial(i, a + ndocc, b + ndocc, c + ndocc);
             tile_G_vovv(a, i, b, c) =
-                tile_ints_spatial(a + nocc, i, b + nocc, c + nocc);
+                tile_ints_spatial(a + ndocc, i, b + ndocc, c + ndocc);
           }
 
-    for (auto i = 0; i < nocc; ++i)
-      for (auto j = 0; j < nocc; ++j)
-        for (auto k = 0; k < nocc; ++k)
+    for (auto i = 0; i < ndocc; ++i)
+      for (auto j = 0; j < ndocc; ++j)
+        for (auto k = 0; k < ndocc; ++k)
           for (auto a = 0; a < nvirt; ++a){
-            tile_G_ooov(i, j, k, a) = tile_ints_spatial(i, j, k, a + nocc);
-            tile_G_oovo(i, j, a, k) = tile_ints_spatial(i, j, a + nocc, k);
+            tile_G_ooov(i, j, k, a) = tile_ints_spatial(i, j, k, a + ndocc);
+            tile_G_oovo(i, j, a, k) = tile_ints_spatial(i, j, a + ndocc, k);
           }
 
-    for (auto i = 0; i < nocc; ++i)
-      for (auto j = 0; j < nocc; ++j)
-        for (auto k = 0; k < nocc; ++k)
-          for (auto l = 0; l < nocc; ++l)
+    for (auto i = 0; i < ndocc; ++i)
+      for (auto j = 0; j < ndocc; ++j)
+        for (auto k = 0; k < ndocc; ++k)
+          for (auto l = 0; l < ndocc; ++l)
             tile_G_oooo(i, j, k, l) = tile_ints_spatial(i, j, k, l);
 
     for (auto a = 0; a < nvirt; ++a)
@@ -364,11 +346,12 @@ int main(int argc, char* argv[]) {
         for (auto c = 0; c < nvirt; ++c)
           for (auto d = 0; d < nvirt; ++d)
             tile_G_vvvv(a, b, c, d) =
-                tile_ints_spatial(a + nocc, b + nocc, c + nocc, d + nocc);
+                tile_ints_spatial(a + ndocc, b + ndocc, c + ndocc, d + ndocc);
+
 #if CCSDT_eval
-    for (auto i = 0; i < nocc; ++i)
-      for (auto j = 0; j < nocc; ++j)
-        for (auto k = 0; k < nocc; ++k)
+    for (auto i = 0; i < ndocc; ++i)
+      for (auto j = 0; j < ndocc; ++j)
+        for (auto k = 0; k < ndocc; ++k)
           for (auto a = 0; a < nvirt; ++a)
             for (auto b = 0; b < nvirt; ++b)
               for (auto c = 0; c < nvirt; ++c)
@@ -417,53 +400,36 @@ int main(int argc, char* argv[]) {
       else if(i == 2)
         external_indices = {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}};
 
-      auto spin_removed_term = spintrace(ccsd_r[i], external_indices);
-      expand(spin_removed_term);
-      rapid_simplify(spin_removed_term);
-      auto result = std::make_shared<Sum>();
-      auto j_iter = 0;
-      for (auto&& term: *spin_removed_term){
-        ++j_iter;
-        // canonicalize(term);
-        result->append(term);
-        // if((j_iter == 5)  && (i == 1)) break;
-      }
-      rapid_simplify(spin_removed_term);
-      cc_r[i] = result;
+      cc_r[i] = spintrace(ccsd_r[i], external_indices);
+      canonicalize(cc_r[i]);
     }
 
-    expand(cc_r[1]);
-    rapid_simplify(cc_r[1]);
-    canonicalize(cc_r[1]);
+    // Use Biorthogonal transformation for simpler CCSD residual equations
+    auto biorthogonal_transformation = true;
+    if(biorthogonal_transformation){
+      // CCSD R1
+      auto cc_r1_biorthogonal = ex<Constant>(0.5) * cc_r[1];
+      expand(cc_r1_biorthogonal);
+      rapid_simplify(cc_r1_biorthogonal);
+      cc_r[1] = cc_r1_biorthogonal;
 
-    expand(cc_r[2]);
-    rapid_simplify(cc_r[2]);
-    canonicalize(cc_r[2]);
+      // CCSD R2: 1/3 R2 + 1/6 R2' for simpler equations
+      std::map<Index, Index> idxmap = {{Index{L"i_1"}, Index{L"i_2"}},
+                                       {Index{L"i_2"}, Index{L"i_1"}}};
 
-#define SIMPLIFIED_R2 1
-#if SIMPLIFIED_R2
-    // 1/3 R + 1/6 R' for simpler equations
-    std::map<Index, Index> idxmap = {{Index{L"i_1"}, Index{L"i_2"}},
-                                     {Index{L"i_2"}, Index{L"i_1"}}};
+      auto temp_expr = transform_expression(cc_r[2], idxmap);
+      auto simpler_R2 =
+          ex<Constant>(1.0 / 3.0) * cc_r[2] + ex<Constant>(1.0 / 6.0) * temp_expr;
 
-    auto temp_expr = transform_expression(cc_r[2], idxmap);
-    auto simpler_R2 =
-        ex<Constant>(1.0 / 3.0) * cc_r[2] + ex<Constant>(1.0 / 6.0) * temp_expr;
+      auto P_R2 = ex<Constant>(0.5) *  ex<Tensor>(L"P", WstrList{L"a_1", L"a_2"}, WstrList{L"i_1", L"i_2"}, Symmetry::nonsymm) * simpler_R2;
+      expand(P_R2);
+      canonicalize(P_R2);
 
-    expand(simpler_R2);
-    rapid_simplify(simpler_R2);
-    canonicalize(simpler_R2);
-    rapid_simplify(simpler_R2);
-
-    auto P = ex<Tensor>(L"P", WstrList{L"a_1", L"a_2"}, WstrList{L"i_1", L"i_2"}, Symmetry::nonsymm);
-    auto P_R2 = P * simpler_R2;
-    expand(P_R2);
-    rapid_simplify(P_R2);
-    canonicalize(P_R2);
-    auto R2_simplified = expand_P_operator(P_R2);
-    rapid_simplify(R2_simplified);
-
-#endif
+      // TODO: Do not expand P operator; evaluate R2 and permute instead
+      auto R2_simplified = expand_P_operator(P_R2);
+      rapid_simplify(R2_simplified);
+      cc_r[2] = R2_simplified;
+    }
 
     std::vector<std::shared_ptr<TA::TArrayD>> data_tensors = {Fock_oo, Fock_ov, Fock_vv,
               G_oooo, G_ooov, G_oovo,  G_oovv,  G_ovov,  G_ovvo, G_vovo, G_voov, G_ovvv, G_vovv, G_vvvv,
@@ -501,44 +467,23 @@ int main(int argc, char* argv[]) {
     auto builder = sequant::evaluate::EvalTensorBuilder<TA::TArrayD>();
     auto context = evaluate::EvalContext(context_map, builder);
 
-    // Full CCSD R1 and R2 equations
-    std::wcout << "CCSD R1:\n" << to_latex(cc_r[1]) << endl;
-    std::wcout << "CCSD R2:\n" << to_latex(R2_simplified) << endl;
+    auto r1_tree = builder.build_tree(cc_r[1]);
+    auto r2_tree = builder.build_tree(cc_r[2]);
 
-    // Selecting few terms out of CCSD R1 equation
-    size_t cc_r1_offset = 7;
-    size_t cc_r1_n = 20;
-    auto cc_r1_subExpr = (cc_r[1]->as<Sum>()).take_n(cc_r1_offset - 1, cc_r1_n);
-    std::wcout << "R1 summands: ["<< cc_r1_offset << ", " << cc_r1_offset + cc_r1_n << "):\n" << cc_r1_subExpr->to_latex() << std::endl;
-
-    // Selecting few terms out of CCSD R2 equation
-    size_t cc_r2_offset = 1;
-    size_t cc_r2_n = 2;
-    auto cc_r2_subExpr = (R2_simplified->as<Sum>()).take_n(cc_r2_offset - 1, cc_r2_n);
-    std::wcout << "R2 summands: ["<< cc_r2_offset << ", " << cc_r2_offset + cc_r2_n << "):\n" << cc_r2_subExpr->to_latex() << std::endl;
-
-    // Generate tree for subexpression only
-    auto r1_tree = builder.build_tree(cc_r1_subExpr);
-    auto r2_tree = builder.build_tree(cc_r2_subExpr);
-
-
-# if 1
     iter = 0;
-    size_t cc_maxiter = 10;
     rmsd = 0.0;
     ediff = 0.0;
     auto normdiff = 0.0;
     auto ecc = 0.0;
-    cout << "using TiledArray" << endl;
-    cout << "iter     norm(t_ov)     norm(t_oovv)    ΔE(CC)    E(CC)" << endl;
-    cout << "=======================================================" << endl;
+    cout << "Using TiledArray..." << endl;
+    cout << "Iter   norm(t_ov)    norm(t_oovv)     ΔE(CC)          E(CC)       time(s)" << endl;
+    cout << "============================================================================" << endl;
     auto tstart = std::chrono::high_resolution_clock::now();
     do {
+      const auto tstart = std::chrono::high_resolution_clock::now();
       ++iter;
       auto R1 = r1_tree->evaluate(context.get_map());
-      cout << "R1: " << R1 << endl;
       auto R2 = r2_tree->evaluate(context.get_map());
-      cout << "R2: " << R2 << endl;
 
       auto tile_R1       = R1.find({0,0}).get();
       auto tile_t_ov     = (*t_ov).find({0,0}).get();
@@ -549,69 +494,60 @@ int main(int argc, char* argv[]) {
       // save previous norm
       auto norm_last = std::sqrt((*t_oovv)("i,j,a,b").dot((*t_oovv)("i,j,a,b")));
 
-      //////////////
       // Updating amplitudes
 
       // update t_ov
-      for (auto i = 0; i < nocc; ++i) {
+      for (auto i = 0; i < ndocc; ++i) {
         for (auto a = 0; a < nvirt; ++a) {
           tile_t_ov(i,a) += tile_R1(i,a)/tile_D_ov(i,a); } }
 
-      //
       // update t_oovv
-      for (auto i = 0; i < nocc; ++i) {
-        for (auto j = 0; j < nocc; ++j) {
+      for (auto i = 0; i < ndocc; ++i) {
+        for (auto j = 0; j < ndocc; ++j) {
           for (auto a = 0; a < nvirt; ++a) {
             for (auto b = 0; b < nvirt; ++b) {
               tile_t_oovv(i,j,a,b) += tile_R2(i,j,a,b)/tile_D_oovv(i,j,a,b); } } } }
 
-      cout << "T1: " << tile_t_ov << endl;
-      cout << "T2: " << tile_t_oovv << endl;
-      cout << iter << "\t" <<  std::sqrt((*t_ov)("i,j").dot((*t_ov)("i,j"))) << "\t";
-      cout << std::sqrt((*t_oovv)("i,j,a,b").dot((*t_oovv)("i,j,a,b"))) << "\t";
       auto ecc_last = ecc;
 
-      // calculating energy
-      TA::TArrayD temp_tensor1, temp_tensor2;
-      temp_tensor1("j,b") = (*G_oovv)("i,j,a,b")*(*t_ov)("i,a");
-      temp_tensor2("j,b") = (*G_oovv)("i,j,b,a")*(*t_ov)("i,a");
+      // Calculate CCSD contribution to correlation energy
+      {
+        TA::TArrayD temp_tensor1, temp_tensor2;
+        temp_tensor1("j,b") = (*G_oovv)("i,j,a,b")*(*t_ov)("i,a");
+        temp_tensor2("j,b") = (*G_oovv)("i,j,b,a")*(*t_ov)("i,a");
 
-      // Spin-free energy equation
-      ecc = (*Fock_ov)("i,a").dot((*t_ov)("i,a")) +
-          temp_tensor1("j,b").dot((*t_ov)("j,b")) +
-          (*G_oovv)("i,j,a,b").dot((*t_oovv)("i,j,a,b"));
-      ecc *= 2.0;
-      ecc -= temp_tensor2("j,b").dot((*t_ov)("j,b"));
-      ecc -= (*G_oovv)("i,j,a,b").dot((*t_oovv)("j,i,a,b"));
+        // Spin-free energy equation
+        ecc = (*Fock_ov)("i,a").dot((*t_ov)("i,a")) +
+            temp_tensor1("j,b").dot((*t_ov)("j,b")) +
+            (*G_oovv)("i,j,a,b").dot((*t_oovv)("i,j,a,b"));
+        ecc *= 2.0;
+        ecc -= temp_tensor2("j,b").dot((*t_ov)("j,b"));
+        ecc -= (*G_oovv)("i,j,a,b").dot((*t_oovv)("j,i,a,b"));
+      }
 
-      normdiff = norm_last - std::sqrt((*t_oovv)("i,j,a,b").dot((*t_oovv)("i,j,a,b")));
+      // convergence variables
+      auto norm_t1 = std::sqrt((*t_ov)("i,j").dot((*t_ov)("i,j")));
+      auto norm_t2 = std::sqrt((*t_oovv)("i,j,a,b").dot((*t_oovv)("i,j,a,b")));
+      const auto tstop = std::chrono::high_resolution_clock::now();
+      const std::chrono::duration<double> time_elapsed = tstop - tstart;
+      printf("%2d    %4.8f     %4.8f     %4.8f     %4.12f   %5.5f\n", iter, norm_t1, norm_t2, ediff, ecc, time_elapsed.count());
+      normdiff = norm_last - norm_t2;
       ediff    = ecc_last - ecc;
-      cout << ediff << "    " << ecc << endl;
-    } while((fabs(normdiff) > conv || fabs(ediff) > conv) && (iter < cc_maxiter));
-    //} while(false);
+    } while((fabs(normdiff) > conv || fabs(ediff) > conv) && (iter < maxiter));
 
     auto tstop = std::chrono::high_resolution_clock::now();
     auto time_elapsed =
         std::chrono::duration_cast<std::chrono::microseconds>(tstop - tstart);
 
-    std::cout << "\nOut of loop after "
-              << iter << " iterations.\n"
-              << "\nTime: "
-              << time_elapsed.count() << " μs"
-              << std::endl;
+    cout << "\nOut of loop after "
+        << iter << " iterations.\n"
+        << "Time: "
+        << time_elapsed.count() << " μs"
+        << endl;
 
-    /* auto r1 = r1_tree->evaluate(context.get_map()); */
-    /* std::cout << "norm(r1) = " << std::sqrt(r1("i,a").dot(r1("i,a"))) << std::endl; */
-
-    /* auto r2 = r2_tree->evaluate(context.get_map()); */
-    /* std::cout << "norm(r2) = " << std::sqrt(r2("i,j,a,b").dot(r2("i,j,a,b"))) << std::endl; */
-
-    /* std::wcout << "Digraph for R1\n------------\n"; */
-    /* std::wcout << r1_tree->to_digraph() << std::endl; */
-    /* std::wcout << "Digraph for R2\n------------\n"; */
-    /* std::wcout << r2_tree->to_digraph() << std::endl; */
-#endif
     TA::finalize();
+
+    cout << "Total energy = " << enuc + ehf + ecc << " a.u.\n";
 
   }  // end of try block
 
