@@ -9,7 +9,23 @@
 namespace sequant {
 
 ExprPtr TensorNetwork::canonicalize(
-    const container::vector<std::wstring> &cardinal_tensor_labels, bool fast) {
+    const container::vector<std::wstring> &cardinal_tensor_labels, bool fast,
+    const named_indices_t* named_indices_ptr) {
+
+  // initialize named_indices by default to all external indices (these may not have been computed yet!)
+  const auto& named_indices = named_indices_ptr == nullptr ? this->ext_indices() : *named_indices_ptr;
+
+  // helpers to filter named ("external" in traditional use case) / anonymous ("internal" in traditional use case)
+  auto is_named_index = [&](const Index& idx) {
+    return named_indices.find(idx) != named_indices.end();
+  };
+  auto is_anonymous_index = [&](const Index& idx) {
+    return named_indices.find(idx) == named_indices.end();
+  };
+  auto namedness = [&](const Index& idx) {
+    return is_named_index(idx) ? 1 : 0;
+  };
+
   ExprPtr canon_biproduct = ex<Constant>(1);
   container::svector<Edge>
       idx_terminals_sorted;  // to avoid memory allocs
@@ -78,14 +94,11 @@ ExprPtr TensorNetwork::canonicalize(
   if (edges_.empty())
     init_edges();
 
-  // fast and slow canonizations produce index replacements
+  // fast and slow canonizations produce index replacements for anonymous indices
   container::map<Index, Index> idxrepl;
 
-  // util
-  auto int_idx_validator = [this](const Index &idx) {
-    return this->ext_indices_.find(idx) == this->ext_indices_.end();
-  };
-  IndexFactory idxfac(int_idx_validator, 1);  // start reindexing from 1
+  // index factory to generate anonymous indices
+  IndexFactory idxfac(is_anonymous_index, 1);  // start reindexing anonymous indices from 1
 
   if (!fast) {
     // - canonize indices
@@ -118,7 +131,7 @@ ExprPtr TensorNetwork::canonicalize(
     };
 
     // make the graph
-    auto [graph, vlabels, vcolors, vtypes] = make_bliss_graph();
+    auto [graph, vlabels, vcolors, vtypes] = make_bliss_graph(&named_indices);
 //    graph->write_dot(std::wcout, vlabels);
 
     // canonize the graph
@@ -131,7 +144,7 @@ ExprPtr TensorNetwork::canonicalize(
 //    cgraph->write_dot(std::wcout, cvlabels);
 //    delete cgraph;
 
-    // make internal index replacement list
+    // make anonymous index replacement list
     {
       // for each color make a replacement list for bringing the indices to
       // the canonical order
@@ -140,19 +153,19 @@ ExprPtr TensorNetwork::canonicalize(
       container::multimap<size_t, std::pair<size_t, size_t>>
           color2idx;  // maps color to the ordinals of the corresponding
       // indices in edges_ + their canonical ordinals
-      // collect colors and internal indices sorted by colors
+      // collect colors and anonymous indices sorted by colors
       size_t idx_cnt = 0;
       for (auto &&ttpair : edges_) {
         auto color = vcolors[idx_cnt];
         if (colors.find(color) == colors.end()) colors.insert(color);
-        if (ext_indices_.find(ttpair.idx()) == ext_indices_.end())
+        if (is_anonymous_index(ttpair.idx())) {
           color2idx.emplace(color, std::make_pair(idx_cnt, cl[idx_cnt]));
+        }
         ++idx_cnt;
       }
-      // for each color sort internal indices by canonical order
+      // for each color sort amonymous indices by canonical order
       container::svector<std::pair<size_t, size_t>>
-          idx_can;  // canonically-ordered list of {index ordinal in edges_,
-      // canonical ordinal}
+          idx_can;  // canonically-ordered list of {index ordinal in edges_, canonical ordinal}
       for (auto &&color : colors) {
         auto beg = color2idx.lower_bound(color);
         auto end = color2idx.upper_bound(color);
@@ -268,22 +281,31 @@ ExprPtr TensorNetwork::canonicalize(
     // - reindex internal indices using ordering of Edge as the
     // canonical definition of the internal index list
     {
-      // resort edges_ by Edge (not by Index's full label) ... this automatically puts
-      // external indices first
+      // resort edges_ first by index's character (named<anonymous), then by Edge (not by Index's full label) ... this automatically puts
+      // named indices first
       idx_terminals_sorted.resize(edges_.size());
       std::partial_sort_copy(begin(edges_), end(edges_),
                              begin(idx_terminals_sorted),
-                             end(idx_terminals_sorted));
+                             end(idx_terminals_sorted)
+//                                 ,
+//                             [&namedness](const Edge& edge1, const Edge& edge2) {
+//                               const auto n1 = namedness(edge1.idx());  // 1 -> named, 0 -> anonymous
+//                               const auto n2 = namedness(edge2.idx());
+//                               if (n1 == n2)
+//                                 return edge1 < edge2;
+//                               else
+//                                 return n1 > n2;
+//                             }
+                             );
 
-      // make index replacement list for internal indices only
-      const auto num_ext_indices = ext_indices_.size();
-      std::for_each(begin(idx_terminals_sorted) + num_ext_indices,
+      // make index replacement list for anonymous indices only
+      const auto num_named_indices = named_indices.size();
+      std::for_each(begin(idx_terminals_sorted) + num_named_indices,
                     end(idx_terminals_sorted),
-                    [&idxrepl, &idxfac](const auto &terminals) {
+                    [&idxrepl, &idxfac, &is_anonymous_index](const auto &terminals) {
                       const auto &idx = terminals.idx();
-                      if (terminals.size() == 2) {  // internal index?
-                        idxrepl.emplace(std::make_pair(idx, idxfac.make(idx)));
-                      }
+                      assert(is_anonymous_index(idx));  // should only encounter anonymous indices here
+                      idxrepl.emplace(std::make_pair(idx, idxfac.make(idx)));
                     });
     }
   }  // canonical index replacement list computed
@@ -326,7 +348,7 @@ ExprPtr TensorNetwork::canonicalize(
 
   // - re-canonize tensors
   {
-    DefaultTensorCanonicalizer tensor_canonizer(ext_indices_);
+    DefaultTensorCanonicalizer tensor_canonizer(named_indices);
     for (auto &tensor : tensors_) {
       auto bp = tensor_canonizer.apply(*tensor);
       if (bp) *canon_biproduct *= *bp;
@@ -342,7 +364,11 @@ ExprPtr TensorNetwork::canonicalize(
 
 std::tuple<std::shared_ptr<bliss::Graph>, std::vector<std::wstring>,
            std::vector<std::size_t>, std::vector<typename TensorNetwork::VertexType>>
-TensorNetwork::make_bliss_graph() const {
+TensorNetwork::make_bliss_graph(const named_indices_t* named_indices_ptr) const {
+
+  // initialize named_indices by default to all external indices (these may not have been computed yet!)
+  const auto& named_indices = named_indices_ptr == nullptr ? this->ext_indices() : *named_indices_ptr;
+
   // must call init_edges() prior to calling this
   if (edges_.empty()) {
     init_edges();
@@ -357,19 +383,19 @@ TensorNetwork::make_bliss_graph() const {
   std::vector<VertexType> vertex_type(
       edges_.size());  // the size will be updated
 
-  // N.B. Colors [0, 2 max rank + ext_indices_.size()) are reserved:
+  // N.B. Colors [0, 2 max rank + named_indices.size()) are reserved:
   // 0 - the bra vertex (for particle 0, if bra is nonsymm, or for the entire bra, if (anti)symm)
   // 1 - the bra vertex for particle 1, if bra is nonsymm
   // ...
   // max_rank - the ket vertex (for particle 0, if ket is nonsymm, or for the entire ket, if (anti)symm)
   // max_rank+1 - the ket vertex for particle 1, if ket is nonsymm
   // ...
-  // 2 max_rank - first external index
-  // 2 max_rank + 1 - second external index
+  // 2 max_rank - first named index
+  // 2 max_rank + 1 - second named index
   // ...
   // N.B. For braket-symmetric tensors the ket vertices use the same indices as the bra vertices
-  auto nonreserved_color = [this](size_t color) -> bool {
-    return color >= 2*max_rank + ext_indices_.size();
+  auto nonreserved_color = [this, &named_indices](size_t color) -> bool {
+    return color >= 2*max_rank + named_indices.size();
   };
 
   // compute # of vertices
@@ -389,16 +415,16 @@ TensorNetwork::make_bliss_graph() const {
     ++nv;  // each index is a vertex
     vertex_labels.at(index_cnt) = idx.to_latex();
     vertex_type.at(index_cnt) = VertexType::Index;
-    // assign color: external indices use reserved colors
-    const auto ext_index_it = ext_indices_.find(idx);
-    if (ext_index_it == ext_indices_.end()) {  // internal index? use Index::color
+    // assign color: named indices use reserved colors
+    const auto named_index_it = named_indices.find(idx);
+    if (named_index_it == named_indices.end()) {  // anonymous index? use Index::color
       const auto idx_color = idx.color();
       assert(nonreserved_color(idx_color));
       vertex_color.at(index_cnt) = idx_color;
     }
     else {
-      const auto ext_index_rank = ext_index_it - ext_indices_.begin();
-      vertex_color.at(index_cnt) = 2*max_rank + ext_index_rank;
+      const auto named_index_rank = named_index_it - named_indices.begin();
+      vertex_color.at(index_cnt) = 2*max_rank + named_index_rank;
     }
     // each symmetric proto index bundle will have a vertex
     if (idx.has_proto_indices()) {

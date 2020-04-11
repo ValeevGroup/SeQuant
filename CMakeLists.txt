@@ -175,12 +175,12 @@ set(utests_src
         # tests/unit/test_space.cpp
         # tests/unit/test_index.cpp
         # tests/unit/test_op.cpp
-        # tests/unit/test_wick.cpp
+         tests/unit/test_wick.cpp
         # tests/unit/test_tensor.cpp
         # tests/unit/test_bliss.cpp
         # tests/unit/test_expr.cpp
         # tests/unit/test_iterator.cpp
-        # tests/unit/test_tensor_network.cpp
+         tests/unit/test_tensor_network.cpp
         # tests/unit/test_mbpt.cpp
         ## unit tests for evaluation
         tests/unit/test_path_tree.cpp

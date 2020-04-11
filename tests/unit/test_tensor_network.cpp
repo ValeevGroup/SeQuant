@@ -42,6 +42,50 @@ TEST_CASE("TensorNetwork", "[elements]") {
 
   }  // SECTION("constructors")
 
+  SECTION("accessors") {
+    {
+      constexpr const auto V = Vacuum::SingleProduct;
+      auto t1 = ex<Tensor>(L"F", WstrList{L"i_1"}, WstrList{L"i_2"});
+      auto t2 = ex<FNOperator>(WstrList{L"i_2"}, WstrList{L"i_3"}, V);
+      auto t1_x_t2 = t1 * t2;
+      REQUIRE_NOTHROW(TensorNetwork(*t1_x_t2));
+      TensorNetwork tn(*t1_x_t2);
+
+      // edges
+      auto edges = tn.edges();
+      REQUIRE(edges.size() == 3);
+
+      // ext indices
+      auto ext_indices = tn.ext_indices();
+      REQUIRE(ext_indices.size() == 2);
+    }
+  }  // SECTION("accessors")
+
+  SECTION("canonicalizer") {
+    {
+      constexpr const auto V = Vacuum::SingleProduct;
+      auto t1 = ex<Tensor>(L"F", WstrList{L"i_17"}, WstrList{L"i_2"});
+      auto t2 = ex<FNOperator>(WstrList{L"i_2"}, WstrList{L"i_3"}, V);
+      auto t1_x_t2 = t1 * t2;
+
+      // with all external named indices
+      {
+        TensorNetwork tn(*t1_x_t2);
+        tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false);
+      }
+
+      // with explicit named indices
+      {
+        TensorNetwork tn(*t1_x_t2);
+
+        using named_indices_t = TensorNetwork::named_indices_t;
+        named_indices_t indices{Index{L"i_17"}};
+        tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false,
+                        &indices);
+      }
+    }
+  }  // SECTION("accessors")
+
   SECTION("bliss graph") {
     Index::reset_tmp_index();
     auto tmp = A(2) * H2() * T_(2) * T_(2) * T_(2);
