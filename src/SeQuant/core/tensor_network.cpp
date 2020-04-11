@@ -278,24 +278,23 @@ ExprPtr TensorNetwork::canonicalize(
     // simpler approach that will work perfectly as long as tensors are
     // distinguishable
 
-    // - reindex internal indices using ordering of Edge as the
-    // canonical definition of the internal index list
+    // - reindex anonymous indices using ordering of Edge as the
+    // canonical definition of the anonymous index list
     {
       // resort edges_ first by index's character (named<anonymous), then by Edge (not by Index's full label) ... this automatically puts
       // named indices first
       idx_terminals_sorted.resize(edges_.size());
       std::partial_sort_copy(begin(edges_), end(edges_),
                              begin(idx_terminals_sorted),
-                             end(idx_terminals_sorted)
-//                                 ,
-//                             [&namedness](const Edge& edge1, const Edge& edge2) {
-//                               const auto n1 = namedness(edge1.idx());  // 1 -> named, 0 -> anonymous
-//                               const auto n2 = namedness(edge2.idx());
-//                               if (n1 == n2)
-//                                 return edge1 < edge2;
-//                               else
-//                                 return n1 > n2;
-//                             }
+                             end(idx_terminals_sorted),
+                             [&namedness](const Edge& edge1, const Edge& edge2) {
+                               const auto n1 = namedness(edge1.idx());  // 1 -> named, 0 -> anonymous
+                               const auto n2 = namedness(edge2.idx());
+                               if (n1 == n2)
+                                 return edge1 < edge2;
+                               else
+                                 return n1 > n2;
+                             }
                              );
 
       // make index replacement list for anonymous indices only
