@@ -50,8 +50,6 @@ ExprPtr getSubExpr(const ExprPtr& expr,
 
 ///
 /// Find the largest common sub network between a pair of tensor networks.
-/// If multiple tensor networks of the largest size are found, return the
-/// one that results into minimal operations count while evaluating.
 ///
 /// @param exprA Expression to find common subnetwork of.
 /// @param exprB Expression to find common subnetwork of.
