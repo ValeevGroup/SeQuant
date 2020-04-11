@@ -12,20 +12,6 @@ ExprPtr TensorNetwork::canonicalize(
     const container::vector<std::wstring> &cardinal_tensor_labels, bool fast,
     const named_indices_t* named_indices_ptr) {
 
-  // initialize named_indices by default to all external indices (these may not have been computed yet!)
-  const auto& named_indices = named_indices_ptr == nullptr ? this->ext_indices() : *named_indices_ptr;
-
-  // helpers to filter named ("external" in traditional use case) / anonymous ("internal" in traditional use case)
-  auto is_named_index = [&](const Index& idx) {
-    return named_indices.find(idx) != named_indices.end();
-  };
-  auto is_anonymous_index = [&](const Index& idx) {
-    return named_indices.find(idx) == named_indices.end();
-  };
-  auto namedness = [&](const Index& idx) {
-    return is_named_index(idx) ? 1 : 0;
-  };
-
   ExprPtr canon_biproduct = ex<Constant>(1);
   container::svector<Edge>
       idx_terminals_sorted;  // to avoid memory allocs
@@ -93,6 +79,20 @@ ExprPtr TensorNetwork::canonicalize(
 
   if (edges_.empty())
     init_edges();
+
+  // initialize named_indices by default to all external indices (these HAVE been computed in init_edges)
+  const auto& named_indices = named_indices_ptr == nullptr ? this->ext_indices() : *named_indices_ptr;
+
+  // helpers to filter named ("external" in traditional use case) / anonymous ("internal" in traditional use case)
+  auto is_named_index = [&](const Index& idx) {
+    return named_indices.find(idx) != named_indices.end();
+  };
+  auto is_anonymous_index = [&](const Index& idx) {
+    return named_indices.find(idx) == named_indices.end();
+  };
+  auto namedness = [&](const Index& idx) {
+    return is_named_index(idx) ? 1 : 0;
+  };
 
   // fast and slow canonizations produce index replacements for anonymous indices
   container::map<Index, Index> idxrepl;
@@ -365,13 +365,13 @@ std::tuple<std::shared_ptr<bliss::Graph>, std::vector<std::wstring>,
            std::vector<std::size_t>, std::vector<typename TensorNetwork::VertexType>>
 TensorNetwork::make_bliss_graph(const named_indices_t* named_indices_ptr) const {
 
-  // initialize named_indices by default to all external indices (these may not have been computed yet!)
-  const auto& named_indices = named_indices_ptr == nullptr ? this->ext_indices() : *named_indices_ptr;
-
   // must call init_edges() prior to calling this
   if (edges_.empty()) {
     init_edges();
   }
+
+  // initialize named_indices by default to all external indices (these HAVE been computed in init_edges)
+  const auto& named_indices = named_indices_ptr == nullptr ? this->ext_indices() : *named_indices_ptr;
 
   // results
   std::shared_ptr<bliss::Graph> graph;
