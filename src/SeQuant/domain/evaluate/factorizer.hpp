@@ -18,12 +18,13 @@
 
 namespace sequant::evaluate {
 namespace detail {
+
 /// Generate a subexpression of an expr made of those present in indices
 /// positions @c idx_vec.
 /// @param expr The expression to extract subexpression from.
 /// @param idx_vec Vector of indices of subexpressions in @c expr.
 ExprPtr getSubExpr(const ExprPtr& expr,
-                   const container::vector<size_t>& idx_vec) {
+                   const container::svector<size_t>& idx_vec) {
   if (expr->is<Product>()) {
     auto& prod = expr->as<Product>();
     auto result = std::make_shared<Product>();
@@ -50,19 +51,17 @@ ExprPtr getSubExpr(const ExprPtr& expr,
 
 ///
 /// Find the largest common sub network between a pair of tensor networks.
-/// If multiple tensor networks of the largest size are found, return the
-/// one that results into minimal operations count while evaluating.
 ///
 /// @param exprA Expression to find common subnetwork of.
 /// @param exprB Expression to find common subnetwork of.
 /// @param builder EvalTensorBuilder object to give a context while interpreting
 /// tensors.
 ///
-/// @return Tuple of ExprPtr that correspond to equivalent data tensors.
+/// @return Tuple of positions of the common sub-networks.
 template <typename T>
-std::tuple<ExprPtr, ExprPtr> largest_common_subnet(
-    const ExprPtr& exprA, const ExprPtr& exprB,
-    const EvalTensorBuilder<T>& builder) {
+std::tuple<container::svector<size_t>, container::svector<size_t>>
+largest_common_subnet(const ExprPtr& exprA, const ExprPtr& exprB,
+                      const EvalTensorBuilder<T>& builder) {
   // finding the positions of the common sub-expressions
   container::svector<size_t> commonIdxA;
   container::svector<size_t> commonIdxB;
@@ -86,10 +85,8 @@ std::tuple<ExprPtr, ExprPtr> largest_common_subnet(
   // finding the sub-networks
   //
   // hold the best subnet found so far
-  auto optimal_subnetA = ExprPtr(nullptr), optimal_subnetB = ExprPtr(nullptr);
-  // the operation counts for the optimal_subnets
-  auto optimal_ops_count = 0;
-  //
+  container::svector<size_t> optimal_subnetA, optimal_subnetB;
+
   // choose determines the size of a combination
   auto choose = commonIdxA.size();  // or commonIdxB.size()
   while (choose > 0) {
@@ -117,7 +114,7 @@ std::tuple<ExprPtr, ExprPtr> largest_common_subnet(
       // generated a combination, do something with it
       //
       // get the two subnets
-      container::vector<size_t> index_selectorA, index_selectorB;
+      container::svector<size_t> index_selectorA, index_selectorB;
       for (auto& idx : combination) {
         index_selectorA.push_back(commonIdxA[idx]);
         index_selectorB.push_back(commonIdxB[idx]);
@@ -132,15 +129,18 @@ std::tuple<ExprPtr, ExprPtr> largest_common_subnet(
 
       if (evalTreeA->get_hash_value() == evalTreeB->get_hash_value()) {
         // found identical subnets
-        return std::make_tuple(subNetA, subNetB);
+        return std::make_tuple(index_selectorA, index_selectorB);
       }
     } while (std::prev_permutation(grid.begin(), grid.end()));
     // if nothing found so far proceed to find a smaller subnet
     --choose;
   }
+  //
   // if not even a single subnet is found in common
-  return std::make_tuple(nullptr, nullptr);
-}
+  //
+  return std::make_tuple(container::svector<size_t>(),
+                         container::svector<size_t>());
+} /* function largest_common_subnet ends */
 
 }  // namespace sequant::evaluate
 

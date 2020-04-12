@@ -31,7 +31,7 @@ auto& world = TA::initialize(argc, argv);
 
 // get a sequant Tensor made out of specs
 // specs -> {label, b1, ..., b(n/2), k1, ..., k(n/2)}
-// eg. {"g", "i_1", "i_2", "a_1", "a_2"} 
+// eg. {"g", "i_1", "i_2", "a_1", "a_2"}
 auto make_tensor_expr =
     [](const sequant::container::svector<std::string>& specs) {
       // only equal bra-ket ranks are expected
@@ -290,16 +290,8 @@ TEST_CASE("FACTORIZER_TESTS", "[factorizer]") {
 
     auto [subfactorA, subfactorB] =
         largest_common_subnet(prodA, prodB, builder);
-    auto expectedA = std::make_shared<Product>(
-        Product({make_tensor_expr({"t", "i_1", "i_2", "a_1", "a_2"}),
-                 make_tensor_expr({"g", "i_1", "i_3", "a_1", "a_3"})}));
-    auto expectedB = std::make_shared<Product>(
-        Product({make_tensor_expr({"t", "i_4", "i_6", "a_4", "a_6"}),
-                 make_tensor_expr({"g", "i_4", "i_8", "a_4", "a_8"})}));
-    // std::wcout << "subfactorA = " << subfactorA->to_latex() << "\n"
-    //            << "subfactorB = " << subfactorB->to_latex() << std::endl;
-    REQUIRE(*expectedA == *subfactorA);
-    REQUIRE(*expectedB == *subfactorB);
+    REQUIRE(subfactorA == container::svector<size_t>{0, 1});
+    REQUIRE(subfactorB == container::svector<size_t>{0, 1});
 
     // prodC is the same as prodB except the position of 'f' and 'g' tensors are
     // swapped this shows that absolute order of the constiuents that make up
@@ -311,8 +303,8 @@ TEST_CASE("FACTORIZER_TESTS", "[factorizer]") {
                  make_tensor_expr({"g", "i_4", "i_8", "a_4", "a_8"})}));
     auto [subfactorX, subfactorY] =
         largest_common_subnet(prodA, prodC, builder);
-    REQUIRE(*expectedA == *subfactorX);
-    REQUIRE(*expectedB == *subfactorY);
+    REQUIRE(subfactorX == container::svector<size_t>{0, 1});
+    REQUIRE(subfactorY == container::svector<size_t>{0, 2});
 
     // lets completely reverse the order of the tensors in prodB
     // shows that the relative order of the constiuents of the common subnet
@@ -324,8 +316,8 @@ TEST_CASE("FACTORIZER_TESTS", "[factorizer]") {
 
     auto [subfactorXX, subfactorYY] =
         largest_common_subnet(prodA, prodC, builder);
-    REQUIRE(*expectedA == *subfactorXX);
-    REQUIRE(*expectedB == *subfactorYY);
+    REQUIRE(subfactorXX == container::svector<size_t>{0, 1});
+    REQUIRE(subfactorYY == container::svector<size_t>{2, 1});
 
     // no common subnet
     prodA = std::make_shared<Product>(
@@ -336,8 +328,8 @@ TEST_CASE("FACTORIZER_TESTS", "[factorizer]") {
     auto [subfactorA_null, subfactorB_null] =
         largest_common_subnet(prodA, prodB, builder);
 
-    REQUIRE(subfactorA_null == nullptr);
-    REQUIRE(subfactorB_null == nullptr);
+    REQUIRE(subfactorA_null.empty());
+    REQUIRE(subfactorB_null.empty());
   }
 
   SECTION("Testing largest common subfactor: Sum") {
@@ -352,8 +344,8 @@ TEST_CASE("FACTORIZER_TESTS", "[factorizer]") {
 
     auto [summandA, summandB] = largest_common_subnet(sumA, sumB, builder);
 
-    REQUIRE(*summandA == *sumA);
-    REQUIRE(*summandB == *sumB);
+    REQUIRE(summandA == container::svector<size_t>{0, 1});
+    REQUIRE(summandB == container::svector<size_t>{0, 1});
 
     // forming sums whose summands are products
     auto prod1 = std::make_shared<Product>(
@@ -379,8 +371,8 @@ TEST_CASE("FACTORIZER_TESTS", "[factorizer]") {
 
     auto [summandAA, summandBB] = largest_common_subnet(sumA, sumB, builder);
 
-    REQUIRE(*summandAA == *expectedSubNet);
-    REQUIRE(*summandBB == *expectedSubNet);
+    REQUIRE(summandAA == container::svector<size_t>{0, 1});
+    REQUIRE(summandBB == container::svector<size_t>{0, 1});
 
     // no common subnet
     sumA = std::make_shared<Sum>(Sum({prod1, prod2}));
@@ -389,8 +381,8 @@ TEST_CASE("FACTORIZER_TESTS", "[factorizer]") {
     auto [summandAnull, summandBnull] =
         largest_common_subnet(sumA, sumB, builder);
 
-    REQUIRE(summandAnull == nullptr);
-    REQUIRE(summandBnull == nullptr);
+    REQUIRE(summandAnull.empty());
+    REQUIRE(summandBnull.empty());
   }
 }
 
