@@ -232,9 +232,9 @@ int main(int argc, char* argv[]) {
 
 #define CCSDT_eval 0
 #if CCSDT_eval
-    // TA::TiledRange tr_ooovvv{{0, ndocc},  {0, ndocc},  {0, ndocc},
-    //                          {0, nvirt}, {0, nvirt}, {0, nvirt}};
-    //
+     TA::TiledRange tr_ooovvv{{0, ndocc},  {0, ndocc},  {0, ndocc},
+                              {0, nvirt}, {0, nvirt}, {0, nvirt}};
+
 #endif
     auto D_ov = std::make_shared<TA::TArrayD>(world, tr_ov);
     auto D_oovv = std::make_shared<TA::TArrayD>(world, tr_oovv);
@@ -389,46 +389,65 @@ int main(int argc, char* argv[]) {
         std::make_shared<DefaultTensorCanonicalizer>());
     Logger::get_instance().wick_stats = false;
 
-    auto ccsd_r = cceqvec{2, 2}(true, true, true, true);
-    std::initializer_list<IndexList> external_indices = {{}};
+#if CCSDT_eval // CCSDT
+    auto cc_r = cceqvec{3, 3}(true, true, true, true);
+#else // CCSD
+    auto cc_r = cceqvec{2, 2}(true, true, true, true);
+#endif
 
     // SPIN TRACE THE RESIDUAL
-    std::vector<ExprPtr> cc_r(ccsd_r.size());
-    for (size_t i = 1; i < ccsd_r.size(); ++i){
+    std::vector<ExprPtr> cc_st_r(cc_r.size());
+    for (size_t i = 1; i < cc_r.size(); ++i){
+      const auto tstart = std::chrono::high_resolution_clock::now();
+      std::initializer_list<IndexList> external_indices = {{}};
       if(i == 1)
         external_indices = {{L"i_1", L"a_1"}};
       else if(i == 2)
         external_indices = {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}};
+      else if(i == 3)
+        external_indices = {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}};
 
-      cc_r[i] = spintrace(ccsd_r[i], external_indices);
-      canonicalize(cc_r[i]);
+      cc_st_r[i] = spintrace(cc_r[i], external_indices);
+      canonicalize(cc_st_r[i]);
+      const auto tstop = std::chrono::high_resolution_clock::now();
+      const std::chrono::duration<double> time_elapsed = tstop - tstart;
+      printf("CC R%lu size: %lu time: %5.3f sec.\n", i, cc_st_r[i]->size(), time_elapsed.count());
+      // cout << "CC R"<< i << " size: " << cc_st_r[i]->size() << " time: " << time_elapsed.count() << " s." << endl;
     }
 
     // Use Biorthogonal transformation for simpler CCSD residual equations
-    auto biorthogonal_transformation = true;
+    bool biorthogonal_transformation = true;
     if(biorthogonal_transformation){
       // CCSD R1
-      auto cc_r1_biorthogonal = ex<Constant>(0.5) * cc_r[1];
+      auto cc_r1_biorthogonal = ex<Constant>(0.5) * cc_st_r[1];
       expand(cc_r1_biorthogonal);
       rapid_simplify(cc_r1_biorthogonal);
-      cc_r[1] = cc_r1_biorthogonal;
+      cc_st_r[1] = cc_r1_biorthogonal;
 
       // CCSD R2: 1/3 R2 + 1/6 R2' for simpler equations
       std::map<Index, Index> idxmap = {{Index{L"i_1"}, Index{L"i_2"}},
                                        {Index{L"i_2"}, Index{L"i_1"}}};
 
-      auto temp_expr = transform_expression(cc_r[2], idxmap);
-      auto simpler_R2 =
-          ex<Constant>(1.0 / 3.0) * cc_r[2] + ex<Constant>(1.0 / 6.0) * temp_expr;
+      auto temp_expr = transform_expression(cc_st_r[2], idxmap);
+      auto biorthogonal_R2 =
+              ex<Constant>(1.0 / 3.0) * cc_st_r[2] +
+              ex<Constant>(1.0 / 6.0) * temp_expr;
 
-      auto P_R2 = ex<Constant>(0.5) *  ex<Tensor>(L"P", WstrList{L"a_1", L"a_2"}, WstrList{L"i_1", L"i_2"}, Symmetry::nonsymm) * simpler_R2;
-      expand(P_R2);
-      canonicalize(P_R2);
+      auto P_cc_r2 = ex<Constant>(0.5) *
+          ex<Tensor>(L"P", WstrList{L"a_1", L"a_2"}, WstrList{L"i_1", L"i_2"}, Symmetry::nonsymm) *
+          biorthogonal_R2;
+      expand(P_cc_r2);
+      canonicalize(P_cc_r2);
 
       // TODO: Do not expand P operator; evaluate R2 and permute instead
-      auto R2_simplified = expand_P_operator(P_R2);
-      rapid_simplify(R2_simplified);
-      cc_r[2] = R2_simplified;
+      auto cc_r2_biorthogonal = expand_P_operator(P_cc_r2);
+      rapid_simplify(cc_r2_biorthogonal);
+      cc_st_r[2] = cc_r2_biorthogonal;
+    } else {
+      expand(cc_st_r[1]);
+      rapid_simplify(cc_st_r[1]);
+      expand(cc_st_r[2]);
+      rapid_simplify(cc_st_r[2]);
     }
 
     std::vector<std::shared_ptr<TA::TArrayD>> data_tensors = {Fock_oo, Fock_ov, Fock_vv,
@@ -456,20 +475,28 @@ int main(int argc, char* argv[]) {
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"i_1",L"i_2"}, {L"a_1",L"a_2"})) //oovv
     };
 
+#if CCSDT_eval
+    data_tensors.push_back(t_ooovvv);
+    seq_tensors.push_back(std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"i_1", L"i_2", L"i_3"}, {L"a_1", L"a_2", L"a_3"})));
+#endif
+
     container::map<ExprPtr, std::shared_ptr<TA::TArrayD>> context_map;
 
     assert(data_tensors.size() == seq_tensors.size());
     for (auto i = 0; i < seq_tensors.size(); ++i) {
-      context_map.insert(decltype(context_map)::value_type(seq_tensors.at(i),
-                                                                   data_tensors.at(i)));
+      context_map.insert(decltype(context_map)::value_type(seq_tensors.at(i), data_tensors.at(i)));
     }
 
     auto builder = sequant::evaluate::EvalTensorBuilder<TA::TArrayD>();
     auto context = evaluate::EvalContext(context_map, builder);
 
-    auto r1_tree = builder.build_tree(cc_r[1]);
-    auto r2_tree = builder.build_tree(cc_r[2]);
+    auto r1_tree = builder.build_tree(cc_st_r[1]);
+    auto r2_tree = builder.build_tree(cc_st_r[2]);
+#if CCSDT_eval
+    auto r3_tree = builder.build_tree(cc_st_r[3]);
+#endif
 
+    const auto cc_conv = conv * 1e2;
     iter = 0;
     rmsd = 0.0;
     ediff = 0.0;
@@ -484,12 +511,20 @@ int main(int argc, char* argv[]) {
       ++iter;
       auto R1 = r1_tree->evaluate(context.get_map());
       auto R2 = r2_tree->evaluate(context.get_map());
+#if CCSDT_eval
+      auto R3 = r3_tree->evaluate(context.get_map());
+#endif
 
       auto tile_R1       = R1.find({0,0}).get();
       auto tile_t_ov     = (*t_ov).find({0,0}).get();
 
       auto tile_R2       = R2.find({0,0,0,0}).get();
       auto tile_t_oovv   = (*t_oovv).find({0,0,0,0}).get();
+
+#if CCSDT_eval
+      auto tile_R3       = R3.find({0,0,0,0,0,0}).get();
+      auto tile_t_ooovvv   = (*t_oovv).find({0,0,0,0,0,0}).get();
+#endif
 
       // save previous norm
       auto norm_last = std::sqrt((*t_oovv)("i,j,a,b").dot((*t_oovv)("i,j,a,b")));
@@ -507,6 +542,18 @@ int main(int argc, char* argv[]) {
           for (auto a = 0; a < nvirt; ++a) {
             for (auto b = 0; b < nvirt; ++b) {
               tile_t_oovv(i,j,a,b) += tile_R2(i,j,a,b)/tile_D_oovv(i,j,a,b); } } } }
+
+# if CCSDT_eval
+      // update t_ooovvv
+      for (auto i = 0; i < ndocc; ++i) {
+        for (auto j = 0; j < ndocc; ++j) {
+          for (auto k = 0; k < ndocc; ++k) {
+            for (auto a = 0; a < nvirt; ++a) {
+              for (auto b = 0; b < nvirt; ++b) {
+                for (auto c = 0; c < nvirt; ++c) {
+                  tile_t_ooovvv(i,j,k,a,b,c) +=
+                      tile_R3(i,j,k,a,b,c)/tile_D_ooovvv(i,j,k,a,b,c); } } } } } }
+#endif
 
       auto ecc_last = ecc;
 
@@ -533,7 +580,9 @@ int main(int argc, char* argv[]) {
       printf("%2d    %4.8f     %4.8f     %4.8f     %4.12f   %5.5f\n", iter, norm_t1, norm_t2, ediff, ecc, time_elapsed.count());
       normdiff = norm_last - norm_t2;
       ediff    = ecc_last - ecc;
-    } while((fabs(normdiff) > conv || fabs(ediff) > conv) && (iter < maxiter));
+    } while((fabs(normdiff) > conv || fabs(ediff) > cc_conv) && (iter < maxiter));
+
+    TA::finalize();
 
     auto tstop = std::chrono::high_resolution_clock::now();
     auto time_elapsed =
@@ -544,10 +593,12 @@ int main(int argc, char* argv[]) {
         << "Time: "
         << time_elapsed.count() << " μs"
         << endl;
-
-    TA::finalize();
-
     cout << "Total energy = " << enuc + ehf + ecc << " a.u.\n";
+
+    { // Check water molecule, sto-3g
+      double cc_correlation = -0.0706804519;
+      assert(fabs(cc_correlation - ecc) < cc_conv);
+    }
 
   }  // end of try block
 
