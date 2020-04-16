@@ -1042,6 +1042,9 @@ class Sum : public Expr {
   /// @return true if the number of factors is zero
   bool empty() const { return summands_.empty(); }
 
+  /// @return the number of summands in a Sum
+  std::size_t size() const { return summands_.size(); }
+
   std::wstring to_latex() const override {
     std::wstring result;
     result = L"{ \\left(";
