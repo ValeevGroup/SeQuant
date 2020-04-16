@@ -332,6 +332,35 @@ TEST_CASE("FACTORIZER_TESTS", "[factorizer]") {
     REQUIRE(subfactorB_null.empty());
   }
 
+  SECTION("Testing largest common subfactor: Product (v2)") {
+    // forming two tensor products
+    auto prodA = std::make_shared<Product>(
+        Product({make_tensor_expr({"t", "i_1", "i_2", "a_1", "a_2"}),
+                 make_tensor_expr({"g", "i_3", "i_4", "a_2", "a_4"}),
+                 make_tensor_expr({"t", "i_3", "i_4", "a_3", "a_4"})
+        }));
+
+    auto prodB = std::make_shared<Product>(
+        Product({make_tensor_expr({"t", "i_3", "i_4", "a_3", "a_4"}),
+                 make_tensor_expr({"g", "i_3", "i_4", "a_2", "a_4"}),
+                 make_tensor_expr({"t", "i_1", "i_2", "a_1", "a_2"})
+        }));
+    // Note how each tensor in prodA is equivalent to a tensor in prodB
+    // (equivalent in the sense that both represent the same data tensor)
+    // however, prodA and prodB are not equivalent products
+    // that is beacuse even though, the nodes of the two tensor networks (prodA
+    // and prodB) are the same, their edges differ.
+    //
+    // The 't' and 'g' tensors are labelled in such a way that the network of
+    // t<-->g in both products have the same edges, and thus t<-->g is the
+    // subtensor network common to prodA and prodB.
+
+    auto [subfactorA, subfactorB] =
+    largest_common_subnet(prodA, prodB, builder);
+    REQUIRE(subfactorA == container::svector<size_t>{0, 1, 2});
+    REQUIRE(subfactorB == container::svector<size_t>{2, 1, 0});
+  }
+
   SECTION("Testing largest common subfactor: Sum") {
     // forming two sums
     auto sumA = std::make_shared<Sum>(
