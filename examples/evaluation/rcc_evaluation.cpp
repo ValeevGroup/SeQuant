@@ -217,12 +217,14 @@ int main(int argc, char* argv[]) {
 
     TA::TiledRange tr_oo{{0, ndocc}, {0, ndocc}};
     TA::TiledRange tr_ov{{0, ndocc}, {0, nvirt}};
+    TA::TiledRange tr_vo{{0, nvirt}, {0, ndocc}};
     TA::TiledRange tr_vv{{0, nvirt}, {0, nvirt}};
     TA::TiledRange tr_oooo{{0, ndocc}, {0, ndocc}, {0, ndocc}, {0, ndocc}};
     TA::TiledRange tr_ooov{{0, ndocc}, {0, ndocc}, {0, ndocc}, {0, nvirt}};
     TA::TiledRange tr_oovo{{0, ndocc}, {0, ndocc}, {0, nvirt}, {0, ndocc}};
     TA::TiledRange tr_oovv{{0, ndocc}, {0, ndocc}, {0, nvirt}, {0, nvirt}};
     TA::TiledRange tr_ovov{{0, ndocc}, {0, nvirt}, {0, ndocc}, {0, nvirt}};
+    TA::TiledRange tr_ovoo{{0, ndocc}, {0, nvirt}, {0, ndocc}, {0, ndocc}};
     TA::TiledRange tr_ovvo{{0, ndocc}, {0, nvirt}, {0, nvirt}, {0, ndocc}};
     TA::TiledRange tr_vovo{{0, nvirt}, {0, ndocc}, {0, nvirt}, {0, ndocc}};
     TA::TiledRange tr_voov{{0, nvirt}, {0, ndocc}, {0, ndocc}, {0, nvirt}};
@@ -248,12 +250,14 @@ int main(int argc, char* argv[]) {
 #endif
     auto Fock_oo = std::make_shared<TA::TArrayD>(world, tr_oo);
     auto Fock_ov = std::make_shared<TA::TArrayD>(world, tr_ov);
+    auto Fock_vo = std::make_shared<TA::TArrayD>(world, tr_vo);
     auto Fock_vv = std::make_shared<TA::TArrayD>(world, tr_vv);
     auto G_oooo = std::make_shared<TA::TArrayD>(world, tr_oooo);
     auto G_ooov = std::make_shared<TA::TArrayD>(world, tr_ooov);
     auto G_oovo = std::make_shared<TA::TArrayD>(world, tr_oovo);
     auto G_oovv = std::make_shared<TA::TArrayD>(world, tr_oovv);
     auto G_ovov = std::make_shared<TA::TArrayD>(world, tr_ovov);
+    auto G_ovoo = std::make_shared<TA::TArrayD>(world, tr_ovoo);
     auto G_ovvo = std::make_shared<TA::TArrayD>(world, tr_ovvo);
     auto G_vovo = std::make_shared<TA::TArrayD>(world, tr_vovo);
     auto G_voov = std::make_shared<TA::TArrayD>(world, tr_voov);
@@ -273,6 +277,7 @@ int main(int argc, char* argv[]) {
 #endif
     (*Fock_oo).fill(0.0);
     (*Fock_ov).fill(0.0);
+    (*Fock_vo).fill(0.0);
     (*Fock_vv).fill(0.0);
     (*G_oooo).fill(0.0);
     (*G_ooov).fill(0.0);
@@ -280,6 +285,7 @@ int main(int argc, char* argv[]) {
     (*G_oovv).fill(0.0);
     (*G_ovov).fill(0.0);
     (*G_ovvo).fill(0.0);
+    (*G_ovoo).fill(0.0);
     (*G_vovo).fill(0.0);
     (*G_voov).fill(0.0);
     (*G_ovvv).fill(0.0);
@@ -298,12 +304,14 @@ int main(int argc, char* argv[]) {
 #endif
     auto tile_Fock_oo = (*Fock_oo).find({0, 0}).get();
     auto tile_Fock_ov = (*Fock_ov).find({0, 0}).get();
+    auto tile_Fock_vo = (*Fock_vo).find({0, 0}).get();
     auto tile_Fock_vv = (*Fock_vv).find({0, 0}).get();
     auto tile_G_oooo = (*G_oooo).find({0, 0, 0, 0}).get();
     auto tile_G_ooov = (*G_ooov).find({0, 0, 0, 0}).get();
     auto tile_G_oovo = (*G_oovo).find({0, 0, 0, 0}).get();
     auto tile_G_oovv = (*G_oovv).find({0, 0, 0, 0}).get();
     auto tile_G_ovov = (*G_ovov).find({0, 0, 0, 0}).get();
+    auto tile_G_ovoo = (*G_ovoo).find({0, 0, 0, 0}).get();
     auto tile_G_ovvo = (*G_ovvo).find({0, 0, 0, 0}).get();
     auto tile_G_vovo = (*G_vovo).find({0, 0, 0, 0}).get();
     auto tile_G_voov = (*G_voov).find({0, 0, 0, 0}).get();
@@ -320,6 +328,8 @@ int main(int argc, char* argv[]) {
       tile_Fock_oo(i, i) = tile_fock(i, i);
       for (auto a = 0; a < nvirt; ++a) {
         tile_Fock_ov(i, a) = tile_fock(i, a + ndocc);
+        tile_Fock_vo(a, i) = tile_fock(a + ndocc, i);
+
         tile_D_ov(i, a) =
             tile_fock(i, i) - tile_fock(a + ndocc, a + ndocc);
         for (auto j = 0; j < ndocc; ++j) {
@@ -359,6 +369,7 @@ int main(int argc, char* argv[]) {
             tile_G_ooov(i, j, k, a) = tile_ints_spatial(i, j, k, a + ndocc);
             tile_G_oovo(i, j, a, k) = tile_ints_spatial(i, j, a + ndocc, k);
 
+            tile_G_ovoo(i, a, j, k) = tile_ints_spatial(i, a + ndocc, j, k);
             tile_G_vooo(a, i, j, k) = tile_ints_spatial(a + ndocc, i, j, k);
           }
 
@@ -477,14 +488,15 @@ int main(int argc, char* argv[]) {
       rapid_simplify(cc_st_r[2]);
     }
 
-    std::vector<std::shared_ptr<TA::TArrayD>> data_tensors = {Fock_oo, Fock_ov, Fock_vv,
+    std::vector<std::shared_ptr<TA::TArrayD>> data_tensors = {Fock_oo, Fock_ov, Fock_vo, Fock_vv,
               G_oooo, G_ooov, G_oovo, G_oovv, G_ovov, G_ovvo, G_vovo, G_voov, G_ovvv, G_vovv, G_vvvv,
-              G_vvoo, G_vooo, G_vvvo, G_vvov,
+              G_vvoo, G_vooo, G_vvvo, G_vvov, G_ovoo,
               t_ov, t_oovv};
 
     std::vector<sequant::ExprPtr> seq_tensors = {
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"f", {L"i_1"}, {L"i_1"})), // f_oo
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"f", {L"i_1",}, {L"a_1"})), // f_ov
+        std::make_shared<sequant::Tensor>(sequant::Tensor(L"f", {L"a_1"}, {L"i_1",})), // f_vo
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"f", {L"a_1",}, {L"a_2",})), // f_vv
 
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"g", {L"i_1",L"i_2"}, {L"i_3",L"i_4"})), //oooo
@@ -503,6 +515,7 @@ int main(int argc, char* argv[]) {
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"g", {L"a_1",L"i_1"}, {L"i_2",L"i_3"})), //vooo
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"g", {L"a_1",L"a_2"}, {L"a_3",L"i_1"})), //vvvo
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"g", {L"a_1",L"a_2"}, {L"i_1",L"a_3"})), //vvov
+        std::make_shared<sequant::Tensor>(sequant::Tensor(L"g", {L"i_1",L"a_1"}, {L"i_2",L"i_3"})), //ovoo
 
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"i_1",}, {L"a_1"})), //ov
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"i_1",L"i_2"}, {L"a_1",L"a_2"})) //oovv
@@ -543,7 +556,13 @@ int main(int argc, char* argv[]) {
       const auto tstart = std::chrono::high_resolution_clock::now();
       ++iter;
       auto R1 = r1_tree->evaluate(context.get_map());
-      auto R2 = r2_tree->evaluate(context.get_map());
+      auto R2_ = r2_tree->evaluate(context.get_map());
+
+//      cout << "R1: " << R1 << endl;
+      TA::TArrayD R2;
+      R2("i,j,a,b") = R2_("a,b,i,j");
+//      cout << "R2: " << R2 << endl;
+
 #if CCSDT_eval
       auto R3 = r3_tree->evaluate(context.get_map());
 #endif

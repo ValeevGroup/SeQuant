@@ -101,7 +101,9 @@ class EvalTensorBuilder {
 
     // if expr references to a real valued tensor check if swapping bra and ket
     // labels is required else set as not required
-    bool swap_bk = need_bra_ket_swap(expr);
+    bool swap_bk = false;
+    if((tnsr.label() ==  L"t") || (tnsr.label() ==  L"f"))
+       swap_bk = need_bra_ket_swap(expr);
 
     // get the labels of indices in bra and ket
     IndexContainer bra_index_labels, ket_index_labels;
