@@ -198,9 +198,9 @@ add_executable(${example0} EXCLUDE_FROM_ALL
 target_link_libraries(${example0} SeQuant ${TBB_LIBRARIES})
 #
 ############# optional dependencies
-#find_package(Libint2 2.6.0 CONFIG REQUIRED)
+find_package(Libint2 2.6.0 CONFIG REQUIRED)
 #
-#include(FindOrFetchBTAS)
+include(FindOrFetchBTAS)
 #set(example1 cc_btas)
 #add_executable(${example1} EXCLUDE_FROM_ALL
 #    examples/contract/${example1}.cpp
@@ -220,7 +220,7 @@ target_link_libraries(${example0} SeQuant ${TBB_LIBRARIES})
 ## target_link_libraries(rcc_btas SeQuant factorizer ${TBB_LIBRARIES} Libint2::cxx BTAS)
 ## target_compile_definitions(rcc_btas PRIVATE SEQUANT_HAS_BTAS)
 #
-#find_package(TiledArray CONFIG COMPONENTS tiledarray)
+find_package(TiledArray CONFIG COMPONENTS tiledarray)
 #
 #if (TiledArray_FOUND)
 #    set(example2 cc_tiledarray)
@@ -248,7 +248,7 @@ target_link_libraries(${example0} SeQuant ${TBB_LIBRARIES})
 #target_link_libraries(${example3} SeQuant factorizer)
 #target_compile_definitions(${example3} PRIVATE SEQUANT_HAS_BTAS)
 #
-#set(example4 expr_evaluation)
+#set(example4 rcc_evaluation)
 #add_executable(${example4} EXCLUDE_FROM_ALL
 #    src/SeQuant/domain/evaluate/eval_fwd.hpp
 #    src/SeQuant/domain/evaluate/eval_tensor.hpp
@@ -260,22 +260,30 @@ target_link_libraries(${example0} SeQuant ${TBB_LIBRARIES})
 #        $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
 #        $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>
 #        ${BTAS_SOURCE_DIR})
-#
-#target_link_libraries(${example4} SeQuant factorizer)
-#target_compile_definitions(${example4} PRIVATE SEQUANT_HAS_BTAS)
-#
-## add tests for running examples
-#set (lastexample 5)
-#foreach(i RANGE ${lastexample})
-#    if (TARGET ${example${i}})
-#        add_test(example/${example${i}}/build "${CMAKE_COMMAND}" --build ${CMAKE_BINARY_DIR} --target ${example${i}})
-#        add_test(NAME example/${example${i}}/run
-#                COMMAND ${example${i}}
-#                WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/examples)
-#        set_tests_properties(example/${example${i}}/run
-#                PROPERTIES DEPENDS example/${example${i}}/build)
-#    endif()
-#endforeach()
+
+set(example2 rcc_evaluation)
+add_executable(${example2} EXCLUDE_FROM_ALL
+        examples/evaluation/${example2}.cpp
+        examples/contract/interpret/contract.hpp
+        examples/contract/scf/hartree-fock.cc)
+target_link_libraries(${example2} SeQuant evaluator
+    ${TBB_LIBRARIES} Libint2::cxx tiledarray)
+target_link_directories(${example2} PUBLIC ${TBB_LIBRARIES})
+target_compile_definitions(${example2} PRIVATE SEQUANT_HAS_TILEDARRAY)
+
+# add tests for running examples
+set (lastexample 3)
+foreach(i RANGE ${lastexample})
+    if (TARGET ${example${i}})
+        add_test(example/${example${i}}/build "${CMAKE_COMMAND}"
+            --build ${CMAKE_BINARY_DIR} --target ${example${i}})
+        add_test(NAME example/${example${i}}/run
+                COMMAND ${example${i}}
+                WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/examples)
+        set_tests_properties(example/${example${i}}/run
+                PROPERTIES DEPENDS example/${example${i}}/build)
+    endif()
+endforeach()
 
 # target for running ALL tests
 add_custom_target_subproject(sequant check USES_TERMINAL COMMAND ${CMAKE_CTEST_COMMAND} -V)
