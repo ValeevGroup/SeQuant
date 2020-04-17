@@ -1,8 +1,7 @@
 #ifndef SEQUANT_EVALUATE_EVAL_CONTEXT
 #define SEQUANT_EVALUATE_EVAL_CONTEXT
 
-#include "eval_tensor_builder.hpp"
-#include "eval_tensor_fwd.hpp"
+#include "eval_tree.hpp"
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr_fwd.hpp>
@@ -28,10 +27,9 @@ class EvalContext {
 
  public:
   EvalContext(container::map<ExprPtr, std::shared_ptr<DataTensorType>>&
-                  expr_to_dtensor_map,
-              const EvalTensorBuilder<DataTensorType>& builder) {
+                  expr_to_dtensor_map) {
     for (auto& item : expr_to_dtensor_map) {
-      auto hash_value = builder.build_tree(item.first)->get_hash_value();
+      auto hash_value = EvalTree<DataTensorType>(item.first).hash_value();
       this->hash_to_tensor_.insert(std::make_pair(hash_value, item.second));
     }
   }

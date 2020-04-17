@@ -157,9 +157,8 @@ find_package(Libint2 2.6.0 CONFIG REQUIRED)
 find_package(TiledArray CONFIG COMPONENTS tiledarray)
 
 add_library(evaluator EXCLUDE_FROM_ALL
-    src/SeQuant/domain/evaluate/eval_tensor_fwd.hpp
-    src/SeQuant/domain/evaluate/eval_tensor.hpp
-    src/SeQuant/domain/evaluate/eval_tensor_builder.hpp
+    src/SeQuant/domain/evaluate/eval_fwd.hpp
+    src/SeQuant/domain/evaluate/eval_tree.hpp
     src/SeQuant/domain/evaluate/eval_context.hpp
     src/SeQuant/domain/evaluate/path_tree.hpp
     src/SeQuant/domain/evaluate/path_tree.cpp
@@ -172,16 +171,16 @@ target_link_libraries(evaluator SeQuant ${TBB_LIBRARIES})
 enable_testing(true)
 
 set(utests_src
-        tests/unit/test_space.cpp
-        tests/unit/test_index.cpp
-        tests/unit/test_op.cpp
-        tests/unit/test_wick.cpp
-        tests/unit/test_tensor.cpp
-        tests/unit/test_bliss.cpp
-        tests/unit/test_expr.cpp
-        tests/unit/test_iterator.cpp
-        tests/unit/test_tensor_network.cpp
-        tests/unit/test_mbpt.cpp
+        # tests/unit/test_space.cpp
+        # tests/unit/test_index.cpp
+        # tests/unit/test_op.cpp
+        # tests/unit/test_wick.cpp
+        # tests/unit/test_tensor.cpp
+        # tests/unit/test_bliss.cpp
+        # tests/unit/test_expr.cpp
+        # tests/unit/test_iterator.cpp
+        # tests/unit/test_tensor_network.cpp
+        # tests/unit/test_mbpt.cpp
         )
 set(utests_deps SeQuant evaluator)
 
@@ -189,7 +188,7 @@ if (TARGET tiledarray)
   list(APPEND utests_src
       ## unit tests for evaluation
       tests/unit/test_path_tree.cpp
-      tests/unit/test_eval_tensor.cpp
+      tests/unit/test_eval_tree.cpp
       )
   list(APPEND utests_deps tiledarray)
 endif(TARGET tiledarray)

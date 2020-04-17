@@ -12,8 +12,7 @@
 #include "catch.hpp"
 
 #include "../../src/SeQuant/domain/evaluate/eval_context.hpp"
-#include "../../src/SeQuant/domain/evaluate/eval_tensor.hpp"
-#include "../../src/SeQuant/domain/evaluate/eval_tensor_builder.hpp"
+#include "../../src/SeQuant/domain/evaluate/eval_tree.hpp"
 #include "../../src/SeQuant/domain/evaluate/factorizer.hpp"
 
 using namespace sequant;
@@ -49,9 +48,6 @@ auto make_tensor_expr =
       return std::make_shared<sequant::Tensor>(label, bra_indices, ket_indices);
     };
 
-// context map builder for evaluating the eval_tensor
-auto builder = EvalTensorBuilder<DTensorType>{};
-
 const size_t nocc = 10;
 const size_t nvirt = 20;
 
@@ -67,21 +63,6 @@ TA::TiledRange tr_vvvv{{0, nvirt}, {0, nvirt}, {0, nvirt}, {0, nvirt}};
 //
 TA::TiledRange tr_ovvo{{0, nocc}, {0, nvirt}, {0, nvirt}, {0, nocc}};
 TA::TiledRange tr_voov{{0, nvirt}, {0, nocc}, {0, nocc}, {0, nvirt}};
-
-TEST_CASE("Eval_Tensor_CONSTRUCTOR_TESTS", "[eval_tensor]") {
-  SECTION("Intermediate construction") {
-    EvalTensorIntermediate<DTensorType> evt_imed;
-    REQUIRE(!evt_imed.is_leaf());
-    REQUIRE(evt_imed.get_operation() == Operation::INVALID);
-    REQUIRE(evt_imed.get_left_tensor() == nullptr);
-    REQUIRE(evt_imed.get_right_tensor() == nullptr);
-  }
-
-  SECTION("Leaf construction") {
-    EvalTensorLeaf<DTensorType> evt_leaf(nullptr);
-    REQUIRE(evt_leaf.is_leaf());
-  }
-}
 
 TEST_CASE("EVAL_TENSOR_EVALUATE_TESTS", "[eval_tensor_builder]") {
   // creating some random tensors
@@ -109,11 +90,11 @@ TEST_CASE("EVAL_TENSOR_EVALUATE_TESTS", "[eval_tensor_builder]") {
     ContextMapType context;
     context.insert(ContextMapType::value_type(t, T_oovv));
     context.insert(ContextMapType::value_type(g, G_oovv));
-    auto ev_context = EvalContext(context, builder);
+    auto ev_context = EvalContext(context);
 
     auto expr = std::make_shared<Sum>(Sum({g, t}));
-    auto tree = builder.build_tree(expr);
-    auto eval_sum = tree->evaluate(ev_context.get_map());
+    auto tree = EvalTree<DTensorType>(expr);
+    auto eval_sum = tree.evaluate(ev_context.get_map());
 
     auto manual_norm =
         std::sqrt(manual_sum("i,j,a,b").dot(manual_sum("i,j,a,b")));
@@ -128,11 +109,11 @@ TEST_CASE("EVAL_TENSOR_EVALUATE_TESTS", "[eval_tensor_builder]") {
     context.clear();
     context.insert(ContextMapType::value_type(t, T_oovv));
     context.insert(ContextMapType::value_type(g, G_oovv));
-    ev_context = EvalContext(context, builder);
+    ev_context = EvalContext(context);
     expr = std::make_shared<Sum>(Sum({g, t}));
-    tree = builder.build_tree(expr);
+    tree = EvalTree<DTensorType>(expr);
 
-    eval_sum = tree->evaluate(ev_context.get_map());
+    eval_sum = tree.evaluate(ev_context.get_map());
 
     manual_sum("i, j, a, b") =
         (*G_oovv)("i, j, a, b") + (*T_oovv)("i, j, b, a");
@@ -153,11 +134,11 @@ TEST_CASE("EVAL_TENSOR_EVALUATE_TESTS", "[eval_tensor_builder]") {
     ContextMapType context;
     context.insert(ContextMapType::value_type(t, T_ov));
     context.insert(ContextMapType::value_type(g1, G_oovv));
-    auto ev_context = EvalContext(context, builder);
+    auto ev_context = EvalContext(context);
 
     auto expr = std::make_shared<Product>(Product({t, g1}));
-    auto tree = builder.build_tree(expr);
-    auto eval_prod = tree->evaluate(ev_context.get_map());
+    auto tree = EvalTree<DTensorType>(expr);
+    auto eval_prod = tree.evaluate(ev_context.get_map());
 
     auto manual_norm = std::sqrt(manual_prod("j,b").dot(manual_prod("j,b")));
 
@@ -172,7 +153,7 @@ TEST_CASE("EVAL_TENSOR_EVALUATE_TESTS", "[eval_tensor_builder]") {
 
     ContextMapType context;
     context.insert(ContextMapType::value_type(t, T_oovv));
-    auto ev_context = EvalContext(context, builder);
+    auto ev_context = EvalContext(context);
 
     DTensorType manual_result;
     manual_result("i,j,a,b") = (*T_oovv)("i,j,a,b") - (*T_oovv)("i,j,b,a") +
@@ -182,8 +163,8 @@ TEST_CASE("EVAL_TENSOR_EVALUATE_TESTS", "[eval_tensor_builder]") {
         std::sqrt(manual_result("i,j,a,b").dot(manual_result("i,j,a,b")));
 
     auto expr = std::make_shared<Product>(Product({A, t}));
-    auto tree = builder.build_tree(expr);
-    auto eval_result = tree->evaluate(ev_context.get_map());
+    auto tree = EvalTree<DTensorType>(expr);
+    auto eval_result = tree.evaluate(ev_context.get_map());
 
     auto eval_norm =
         std::sqrt(eval_result("i,j,a,b").dot(eval_result("i,j,a,b")));
@@ -196,30 +177,13 @@ TEST_CASE("EVAL_TENSOR_EVALUATE_TESTS", "[eval_tensor_builder]") {
     auto seq_tensor_good = make_tensor_expr({"t", "i_1", "a_1", "a_2", "a_3"});
     ContextMapType context;
     context.insert(ContextMapType::value_type(seq_tensor_good, T_ov));
-    auto ev_context = EvalContext(context, builder);
+    auto ev_context = EvalContext(context);
 
     auto expr = seq_tensor_bad;
-    auto tree = builder.build_tree(expr);
+    auto tree = EvalTree<DTensorType>(expr);
 
-    REQUIRE_THROWS_AS(tree->evaluate(ev_context.get_map()), std::logic_error);
+    REQUIRE_THROWS_AS(tree.evaluate(ev_context.get_map()), std::logic_error);
   }
-
-  // SECTION("Bra and ket indices") {
-  //  auto visitor = [](const EvalTensor<DTensorType>& evtensor) {
-  //    std::wcout << "Indices: ";
-  //    for (const auto& idx : evtensor.get_indices())
-  //      std::wcout << idx.to_latex();
-  //    std::wcout << std::endl;
-  //  };
-  //  auto t = make_tensor_expr({"t", "i_1", "i_2", "a_1", "a_2"});
-  //  auto g = make_tensor_expr({"g", "i_1", "i_2", "a_1", "a_2"});
-  //  auto expr = std::make_shared<Sum>(Sum({g, t}));
-  //  auto tree = builder.build_tree(expr);
-  //  tree->visit(visitor);
-  //  std::wcout << "digraph G {\n";
-  //  std::wcout << tree->to_digraph();
-  //  std::wcout << "}\n";
-  //}
 }
 
 TEST_CASE("FACTORIZER_TESTS", "[factorizer]") {
@@ -233,15 +197,13 @@ TEST_CASE("FACTORIZER_TESTS", "[factorizer]") {
     auto t = make_tensor_expr({"t", "i_1", "a_1"});
     auto g = make_tensor_expr({"g", "i_1", "i_2", "a_1", "a_2"});
     auto expr = std::make_shared<Product>(Product({t, g}));
-    auto tree = builder.build_tree(expr);
-
-    tree->set_ops_count(space_size);
+    auto tree = EvalTree<DTensorType>(expr);
 
     // by looking at 't' and 'g' tensors
     // we see the ops count should be
     // (num of active_occupied squared) * (num of active_unoccupied squared)
 
-    REQUIRE(tree->get_ops_count() == nocc * nocc * nvirt * nvirt);
+    REQUIRE(tree.ops_count(space_size) == nocc * nocc * nvirt * nvirt);
   }
 
   SECTION("Testing operation counts for sum") {
@@ -254,17 +216,9 @@ TEST_CASE("FACTORIZER_TESTS", "[factorizer]") {
 
     auto expr = std::make_shared<Sum>(Sum{left_sumand, right_sumand});
 
-    auto tree = builder.build_tree(expr);
+    auto tree = EvalTree<DTensorType>(expr);
 
-    tree->set_ops_count(space_size);
-
-    REQUIRE(tree->get_ops_count() == nocc * nocc * nvirt * nvirt);
-
-    // auto ops_printer = [](const EvalTensor<DTensorType>& node) {
-    //   std::wcout << "ops count = " << node.get_ops_count() << "\n";
-    // };
-    // std::wcout << "Digraph G{\n" << tree->to_digraph() << "}\n";
-    // tree->visit(ops_printer);
+    REQUIRE(tree.ops_count(space_size) == nocc * nocc * nvirt * nvirt);
   }
 
   SECTION("Testing largest common subfactor: Product") {
@@ -289,7 +243,7 @@ TEST_CASE("FACTORIZER_TESTS", "[factorizer]") {
     // subtensor network common to prodA and prodB.
 
     auto [subfactorA, subfactorB] =
-        largest_common_subnet(prodA, prodB, builder);
+        largest_common_subnet<DTensorType>(prodA, prodB);
     REQUIRE(subfactorA == container::svector<size_t>{0, 1});
     REQUIRE(subfactorB == container::svector<size_t>{0, 1});
 
@@ -302,7 +256,7 @@ TEST_CASE("FACTORIZER_TESTS", "[factorizer]") {
                  make_tensor_expr({"f", "i_8", "a_8"}),
                  make_tensor_expr({"g", "i_4", "i_8", "a_4", "a_8"})}));
     auto [subfactorX, subfactorY] =
-        largest_common_subnet(prodA, prodC, builder);
+        largest_common_subnet<DTensorType>(prodA, prodC);
     REQUIRE(subfactorX == container::svector<size_t>{0, 1});
     REQUIRE(subfactorY == container::svector<size_t>{0, 2});
 
@@ -315,7 +269,7 @@ TEST_CASE("FACTORIZER_TESTS", "[factorizer]") {
                  make_tensor_expr({"t", "i_4", "i_6", "a_4", "a_6"})}));
 
     auto [subfactorXX, subfactorYY] =
-        largest_common_subnet(prodA, prodC, builder);
+        largest_common_subnet<DTensorType>(prodA, prodC);
     REQUIRE(subfactorXX == container::svector<size_t>{0, 1});
     REQUIRE(subfactorYY == container::svector<size_t>{2, 1});
 
@@ -326,7 +280,7 @@ TEST_CASE("FACTORIZER_TESTS", "[factorizer]") {
         Product({make_tensor_expr({"g", "i_4", "i_8", "a_4", "a_8"})}));
 
     auto [subfactorA_null, subfactorB_null] =
-        largest_common_subnet(prodA, prodB, builder);
+        largest_common_subnet<DTensorType>(prodA, prodB);
 
     REQUIRE(subfactorA_null.empty());
     REQUIRE(subfactorB_null.empty());
@@ -342,7 +296,7 @@ TEST_CASE("FACTORIZER_TESTS", "[factorizer]") {
         Sum({make_tensor_expr({"t", "i_4", "i_6", "a_4", "a_6"}),
              make_tensor_expr({"g", "i_4", "i_6", "a_4", "a_6"})}));
 
-    auto [summandA, summandB] = largest_common_subnet(sumA, sumB, builder);
+    auto [summandA, summandB] = largest_common_subnet<DTensorType>(sumA, sumB);
 
     REQUIRE(summandA == container::svector<size_t>{0, 1});
     REQUIRE(summandB == container::svector<size_t>{0, 1});
@@ -369,7 +323,7 @@ TEST_CASE("FACTORIZER_TESTS", "[factorizer]") {
 
     auto expectedSubNet = std::make_shared<Sum>(Sum({prod1, prod2}));
 
-    auto [summandAA, summandBB] = largest_common_subnet(sumA, sumB, builder);
+    auto [summandAA, summandBB] = largest_common_subnet<DTensorType>(sumA, sumB);
 
     REQUIRE(summandAA == container::svector<size_t>{0, 1});
     REQUIRE(summandBB == container::svector<size_t>{0, 1});
@@ -379,81 +333,9 @@ TEST_CASE("FACTORIZER_TESTS", "[factorizer]") {
     sumB = std::make_shared<Sum>(Sum({prod3, prod4}));
 
     auto [summandAnull, summandBnull] =
-        largest_common_subnet(sumA, sumB, builder);
+        largest_common_subnet<DTensorType>(sumA, sumB);
 
     REQUIRE(summandAnull.empty());
     REQUIRE(summandBnull.empty());
-  }
-}
-
-TEST_CASE("EVAL_TENSOR_BUILDER_TESTS", "[eval_tensor_builder]") {
-  using DTensorType = TA::TArrayD;
-
-  // complex data false
-  auto real_builder = EvalTensorBuilder<TA::TArrayD>(false);
-
-  // complex data true
-  auto complex_builder = EvalTensorBuilder<TA::TArrayD>(true);
-
-  SECTION("Index label agnostic hashing") {
-    auto t1 = std::make_shared<Tensor>(
-        Tensor(L"t", {L"i_1", L"i_2"}, {L"a_1", L"a_2"}));
-
-    auto t2 = std::make_shared<Tensor>(
-        Tensor(L"t", {L"i_10", L"i_11"}, {L"a_11", L"a_12"}));
-
-    REQUIRE(real_builder.build_tree(t1)->get_hash_value() ==
-            real_builder.build_tree(t2)->get_hash_value());
-
-    REQUIRE(complex_builder.build_tree(t1)->get_hash_value() ==
-            complex_builder.build_tree(t2)->get_hash_value());
-  }
-
-  SECTION("Non-symmetric brakets") {
-    auto t1 = std::make_shared<Tensor>(
-        Tensor(L"t", {L"i_1", L"i_2"}, {L"a_1", L"a_2"}, Symmetry::nonsymm,
-               BraKetSymmetry::nonsymm));
-
-    auto t2 = std::make_shared<Tensor>(
-        Tensor(L"t", {L"a_1", L"a_2"}, {L"i_1", L"i_2"}, Symmetry::nonsymm,
-               BraKetSymmetry::nonsymm));
-
-    REQUIRE(real_builder.build_tree(t1)->get_hash_value() !=
-            real_builder.build_tree(t2)->get_hash_value());
-
-    REQUIRE(complex_builder.build_tree(t1)->get_hash_value() !=
-            complex_builder.build_tree(t2)->get_hash_value());
-  }
-
-  SECTION("Symmetric brakets") {
-    auto t1 = std::make_shared<Tensor>(
-        Tensor(L"t", {L"i_1", L"i_2"}, {L"a_1", L"a_2"}, Symmetry::nonsymm,
-               BraKetSymmetry::symm));
-
-    auto t2 = std::make_shared<Tensor>(
-        Tensor(L"t", {L"a_1", L"a_2"}, {L"i_1", L"i_2"}, Symmetry::nonsymm,
-               BraKetSymmetry::symm));
-
-    REQUIRE(real_builder.build_tree(t1)->get_hash_value() ==
-            real_builder.build_tree(t2)->get_hash_value());
-
-    REQUIRE(complex_builder.build_tree(t1)->get_hash_value() ==
-            complex_builder.build_tree(t2)->get_hash_value());
-  }
-
-  SECTION("Conjugate brakets") {
-    auto t1 = std::make_shared<Tensor>(
-        Tensor(L"t", {L"i_1", L"i_2"}, {L"a_1", L"a_2"}, Symmetry::nonsymm,
-               BraKetSymmetry::conjugate));
-
-    auto t2 = std::make_shared<Tensor>(
-        Tensor(L"t", {L"a_1", L"a_2"}, {L"i_1", L"i_2"}, Symmetry::nonsymm,
-               BraKetSymmetry::conjugate));
-
-    REQUIRE(real_builder.build_tree(t1)->get_hash_value() ==
-            real_builder.build_tree(t2)->get_hash_value());
-
-    REQUIRE(complex_builder.build_tree(t1)->get_hash_value() !=
-            complex_builder.build_tree(t2)->get_hash_value());
   }
 }

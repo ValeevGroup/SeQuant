@@ -18,10 +18,10 @@ using IndexContainer = container::svector<Index, 4>;
 using OpsCount = unsigned long long;
 
 template <typename DataTensorType>
-class EvalTensor;
+class EvalTree;
 
 template <typename DataTensorType>
-using EvalTensorPtr = std::shared_ptr<EvalTensor<DataTensorType>>;
+using EvalTreePtr = std::shared_ptr<EvalTree<DataTensorType>>;
 
 enum class Operation {
   /// Represents the summation type binary evaluation

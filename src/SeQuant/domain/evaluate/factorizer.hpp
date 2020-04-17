@@ -9,10 +9,10 @@
 /// @version March 2020
 ///
 
-#include "eval_tensor_builder.hpp"
-#include "eval_tensor_fwd.hpp"
+#include "eval_fwd.hpp"
 
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/tensor.hpp>
 #include <algorithm>
 #include <tuple>
 
@@ -52,6 +52,7 @@ ExprPtr getSubExpr(const ExprPtr& expr,
 ///
 /// Find the largest common sub network between a pair of tensor networks.
 ///
+/// @param T Type of data tensor.
 /// @param exprA Expression to find common subnetwork of.
 /// @param exprB Expression to find common subnetwork of.
 /// @param builder EvalTensorBuilder object to give a context while interpreting
@@ -60,8 +61,7 @@ ExprPtr getSubExpr(const ExprPtr& expr,
 /// @return Tuple of positions of the common sub-networks.
 template <typename T>
 std::tuple<container::svector<size_t>, container::svector<size_t>>
-largest_common_subnet(const ExprPtr& exprA, const ExprPtr& exprB,
-                      const EvalTensorBuilder<T>& builder) {
+largest_common_subnet(const ExprPtr& exprA, const ExprPtr& exprB) {
   // finding the positions of the common sub-expressions
   container::svector<size_t> commonIdxA;
   container::svector<size_t> commonIdxB;
@@ -71,8 +71,9 @@ largest_common_subnet(const ExprPtr& exprA, const ExprPtr& exprB,
     auto j = 0;
     for (const auto& subB : *exprB) {
       if (j >= i) {  // skip redundant computations
-        if (builder.build_tree(subA)->get_hash_value() ==
-            builder.build_tree(subB)->get_hash_value()) {
+        if (EvalTree<T>(subA).hash_value() == EvalTree<T>(subB).hash_value()) {
+          // if (builder.build_tree(subA)->get_hash_value() ==
+          //     builder.build_tree(subB)->get_hash_value()) {
           commonIdxA.push_back(i);
           commonIdxB.push_back(j);
         }
@@ -124,10 +125,10 @@ largest_common_subnet(const ExprPtr& exprA, const ExprPtr& exprB,
       //
       // now check if the two subnets are equivalent
       // using eval_tensor for now
-      auto evalTreeA = builder.build_tree(subNetA);
-      auto evalTreeB = builder.build_tree(subNetB);
+      auto evalTreeA = EvalTree<T>(subNetA);
+      auto evalTreeB = EvalTree<T>(subNetB);
 
-      if (evalTreeA->get_hash_value() == evalTreeB->get_hash_value()) {
+      if (evalTreeA.hash_value() == evalTreeB.hash_value()) {
         // found identical subnets
         return std::make_tuple(index_selectorA, index_selectorB);
       }
