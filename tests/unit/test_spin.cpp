@@ -158,12 +158,12 @@ TEST_CASE("Spin") {
     REQUIRE(result->is<Sum>());
     REQUIRE(result->size() == 5);
 
-    for(auto&& term : *result){
-      auto&& product = term->as<Product>();
-      std::cout << hash::value(product) << "\n";
-      for(auto&& factor: product.factors())
-        std::cout << "  " << hash::value(factor) << "\n";
-    }
+//    for(auto&& term : *result){
+//      auto&& product = term->as<Product>();
+//      std::cout << hash::value(product) << "\n";
+//      for(auto&& factor: product.factors())
+//        std::cout << "  " << hash::value(factor) << "\n";
+//    }
     REQUIRE(
         to_latex(result) == L"{ \\left( - {{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_2}{i_1}}_{{a_1}{a_2}}}} + {{"
         L"{2}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{{a_1}{a_2}}}} + {{{2}}{f^{"
