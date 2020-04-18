@@ -68,15 +68,12 @@ set_property(TARGET Range-V3 PROPERTY
 
 # need Boost.ContainerHash
 # NB Boost.Container is broken in v1.70
-find_package(Boost ${SEQUANT_TRACKED_BOOST_VERSION} REQUIRED)
+find_package(Boost ${SEQUANT_TRACKED_BOOST_VERSION} REQUIRED COMPONENTS serialization)
 if (Boost_VERSION EQUAL 107000)
     message(FATAL_ERROR "Found Boost 1.70, but its Boost.Container is broken: "
         "use any version ${SEQUANT_TRACKED_BOOST_VERSION} "
         "or higher, other than 1.70")
 endif()
-add_library(Boost INTERFACE IMPORTED)
-set_property(TARGET Boost PROPERTY
-        INTERFACE_INCLUDE_DIRECTORIES ${Boost_INCLUDE_DIR})
 
 # embedded bliss-0.73
 add_library(bliss
@@ -143,7 +140,7 @@ add_library(SeQuant
         src/SeQuant/domain/mbpt/sr/sr.cpp
         src/SeQuant/domain/mbpt/sr/sr.hpp
         )
-target_link_libraries(SeQuant Range-V3 Boost bliss Threads::Threads)
+target_link_libraries(SeQuant Range-V3 Boost::boost bliss Threads::Threads)
 if (PSTL_NEEDS_TBB)
     target_link_libraries(SeQuant ${TBB_LIBRARIES})
     target_include_directories(SeQuant PUBLIC ${TBB_INCLUDE_DIRS})
