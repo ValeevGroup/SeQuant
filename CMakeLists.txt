@@ -184,8 +184,6 @@ set(utests_src
         tests/unit/test_mbpt.cpp
         tests/unit/test_spin.cpp
         tests/unit/test_canonicalize.cpp
-        #### unit tests for evaluation
-        #tests/unit/test_path_tree.cpp
         )
 set(utests_deps SeQuant evaluator)
 

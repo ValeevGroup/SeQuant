@@ -1,25 +1,27 @@
+#ifndef SEQUANT_EXAMPLES_SEQUANT_SETUP_HPP
+#define SEQUANT_EXAMPLES_SEQUANT_SETUP_HPP
+
 #include <clocale>
 #include <iostream>
 
-#include <boost/numeric/interval.hpp>
 #include <boost/math/special_functions/factorials.hpp>
+#include <boost/numeric/interval.hpp>
 
-#include <SeQuant/core/timer.hpp>
 #include <SeQuant/core/op.hpp>
+#include <SeQuant/core/timer.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 #include <SeQuant/domain/mbpt/sr/sr.hpp>
-//#include <SeQuant/domain/evaluate/factorizer.hpp>
 
 // TODO
-  using namespace sequant;
-  using namespace sequant::mbpt::sr::so;
+using namespace sequant;
+using namespace sequant::mbpt::sr::so;
 
-    using ispace_pair = std::pair<sequant::IndexSpace::Type, size_t>;
-    using ispace_map = sequant::container::map<ispace_pair::first_type,
-    ispace_pair::second_type>;
-// 
-//using namespace sequant::mbpt::sr::so::csv;
+using ispace_pair = std::pair<sequant::IndexSpace::Type, size_t>;
+using ispace_map =
+    sequant::container::map<ispace_pair::first_type, ispace_pair::second_type>;
+//
+// using namespace sequant::mbpt::sr::so::csv;
 
 namespace {
 
@@ -31,14 +33,14 @@ class screened_vac_av {
   size_t K;
 
  public:
-
   screened_vac_av(size_t k) : K(k) {}
 
   ExprPtr operator()(const ExprPtr& expr,
                      std::initializer_list<std::pair<int, int>> op_connections,
                      bool screen = true, bool use_topology = true,
                      bool canonical_only = true) {
-    if (!screen) return sequant::mbpt::sr::so::vac_av(expr, op_connections, use_topology);
+    if (!screen)
+      return sequant::mbpt::sr::so::vac_av(expr, op_connections, use_topology);
 
     ExprPtr input = expr;
     // expand, if possible
@@ -125,18 +127,20 @@ class screened_vac_av {
     if (screened_input->size() == 0)
       return ex<Constant>(0);
     else {
-      return sequant::mbpt::sr::so::vac_av(screened_input, op_connections, use_topology);
+      return sequant::mbpt::sr::so::vac_av(screened_input, op_connections,
+                                           use_topology);
     }
   }
 };  // screened_vac_av
 
-
 class ccresidual {
   size_t P, N;
+
  public:
   ccresidual(size_t p, size_t n) : P(p), N(n) {}
 
-  ExprPtr operator()(bool screen, bool use_topology, bool use_connectivity, bool canonical_only) {
+  ExprPtr operator()(bool screen, bool use_topology, bool use_connectivity,
+                     bool canonical_only) {
     auto ahbar = [=](const bool screen) {
       auto connect = [=](std::initializer_list<std::pair<int, int>> connlist) {
         if (use_connectivity)
@@ -176,9 +180,8 @@ class ccresidual_vec {
  public:
   ccresidual_vec(size_t p, size_t pmin, size_t n) : P(p), PMIN(pmin), N(n) {}
 
-  void operator()(std::vector<ExprPtr>& result, bool screen,
-                      bool use_topology, bool use_connectivity,
-                      bool canonical_only) {
+  void operator()(std::vector<ExprPtr>& result, bool screen, bool use_topology,
+                  bool use_connectivity, bool canonical_only) {
     result[P] = ccresidual{P, N}(screen, use_topology, use_connectivity,
                                  canonical_only);
     rapid_simplify(result[P]);
@@ -206,11 +209,13 @@ class cceqvec {
   }
 };  // class cceqvec
 
-#define runtime_assert(tf) if (!(tf)) { \
-                             std::ostringstream oss; \
-                             oss << "failed assert at line " << __LINE__ << " in function " << __func__; \
-                             throw std::runtime_error(oss.str().c_str()); \
-                           }
+#define runtime_assert(tf)                                         \
+  if (!(tf)) {                                                     \
+    std::ostringstream oss;                                        \
+    oss << "failed assert at line " << __LINE__ << " in function " \
+        << __func__;                                               \
+    throw std::runtime_error(oss.str().c_str());                   \
+  }
 
 TimerPool<32> tpool;
 
@@ -221,7 +226,7 @@ class compute_cceqvec {
   compute_cceqvec(size_t p, size_t pmin, size_t n) : P(p), PMIN(pmin), N(n) {}
 
   void operator()(bool print, bool screen, bool use_topology,
-                       bool use_connectivity, bool canonical_only) {
+                  bool use_connectivity, bool canonical_only) {
     tpool.start(N);
     auto eqvec =
         cceqvec{N, P}(screen, use_topology, use_connectivity, canonical_only);
@@ -256,8 +261,9 @@ class compute_all {
                   bool use_topology = true, bool use_connectivity = true,
                   bool canonical_only = true) {
     for (size_t N = 2; N <= NMAX; ++N)
-      compute_cceqvec{N, 1, N}(print, screen, use_topology,
-                               use_connectivity, canonical_only);
+      compute_cceqvec{N, 1, N}(print, screen, use_topology, use_connectivity,
+                               canonical_only);
   }
 };  // class compute_all
 
+#endif // SEQUANT_EXAMPLES_SEQUANT_SETUP_HPP

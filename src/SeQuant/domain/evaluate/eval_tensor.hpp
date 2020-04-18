@@ -296,10 +296,21 @@ class EvalTensorIntermediate : public EvalTensor<DataTensorType> {
       return result;
     } else if (get_operation() == Operation::PRODUCT) {
       DataTensorType result;
+      try {
       result(this_annot) = get_left_tensor()->get_scalar() *
                            get_left_tensor()->evaluate(context)(left_annot) *
                            get_right_tensor()->get_scalar() *
                            get_right_tensor()->evaluate(context)(right_annot);
+      }
+      catch (TA::Exception& ex){
+        TA::DistArray right_eval = get_right_tensor()->evaluate(context);
+        TA::DistArray left_eval = get_left_tensor()->evaluate(context);
+        std::cerr << "Left: " <<  left_eval.trange() << " ";
+        std::cerr << left_annot << std::endl;
+        std::cerr << "Right: " <<  right_eval.trange() << " ";
+        std::cerr << right_annot << std::endl;
+        throw ex;
+      }
       return result;
 
     } else if (get_operation() == Operation::ANTISYMMETRIZE) {
