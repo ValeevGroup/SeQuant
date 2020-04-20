@@ -123,7 +123,8 @@ largest_common_subnet(const ExprPtr& exprA, const ExprPtr& exprB,
       auto subNetB = detail::getSubExpr(exprB, index_selectorB);
       //
       // now check if the two subnets are equivalent
-      // using eval_tensor for now
+
+      // using evaluation tree's hash value
       auto evalTreeA = builder.build_tree(subNetA);
       auto evalTreeB = builder.build_tree(subNetB);
 

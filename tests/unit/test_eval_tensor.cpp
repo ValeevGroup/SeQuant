@@ -11,10 +11,11 @@
 
 #include "catch.hpp"
 
-#include "../../src/SeQuant/domain/evaluate/eval_context.hpp"
-#include "../../src/SeQuant/domain/evaluate/eval_tensor.hpp"
-#include "../../src/SeQuant/domain/evaluate/eval_tensor_builder.hpp"
-#include "../../src/SeQuant/domain/evaluate/factorizer.hpp"
+#include <SeQuant/core/tensor_network.hpp>
+#include <SeQuant/domain/evaluate/eval_context.hpp>
+#include <SeQuant/domain/evaluate/eval_tensor.hpp>
+#include <SeQuant/domain/evaluate/eval_tensor_builder.hpp>
+#include <SeQuant/domain/evaluate/factorizer.hpp>
 
 using namespace sequant;
 using namespace sequant::evaluate;
@@ -337,14 +338,12 @@ TEST_CASE("FACTORIZER_TESTS", "[factorizer]") {
     auto prodA = std::make_shared<Product>(
         Product({make_tensor_expr({"t", "i_1", "i_2", "a_1", "a_2"}),
                  make_tensor_expr({"g", "i_3", "i_4", "a_2", "a_4"}),
-                 make_tensor_expr({"t", "i_3", "i_4", "a_3", "a_4"})
-        }));
+                 make_tensor_expr({"t", "i_3", "i_4", "a_3", "a_4"})}));
 
     auto prodB = std::make_shared<Product>(
         Product({make_tensor_expr({"t", "i_3", "i_4", "a_3", "a_4"}),
                  make_tensor_expr({"g", "i_3", "i_4", "a_2", "a_4"}),
-                 make_tensor_expr({"t", "i_1", "i_2", "a_1", "a_2"})
-        }));
+                 make_tensor_expr({"t", "i_1", "i_2", "a_1", "a_2"})}));
     // Note how each tensor in prodA is equivalent to a tensor in prodB
     // (equivalent in the sense that both represent the same data tensor)
     // however, prodA and prodB are not equivalent products
@@ -355,10 +354,23 @@ TEST_CASE("FACTORIZER_TESTS", "[factorizer]") {
     // t<-->g in both products have the same edges, and thus t<-->g is the
     // subtensor network common to prodA and prodB.
 
-    auto [subfactorA, subfactorB] =
-    largest_common_subnet(prodA, prodB, builder);
-    REQUIRE(subfactorA == container::svector<size_t>{0, 1, 2});
-    REQUIRE(subfactorB == container::svector<size_t>{2, 1, 0});
+    // auto [subfactorA, subfactorB] = largest_common_subnet(prodA, prodB,
+    // builder); REQUIRE(subfactorA == container::svector<size_t>{0, 1, 2});
+    // REQUIRE(subfactorB == container::svector<size_t>{2, 1, 0});
+
+    auto tnA = TensorNetwork(*prodA);
+    auto tnB = TensorNetwork(*prodB);
+
+    tnA.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), true);
+    // tnB.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false);
+
+    /* std::wcout << "canonicalized prodA..\n"; */
+    /* for (const auto& tnsr: tnA.tensors()) */
+    /*     std::wcout << std::dynamic_pointer_cast<Expr>(tnsr)->to_latex() << std::endl; */
+
+    /* std::wcout << "canonicalized prodB..\n"; */
+    /* for (const auto& tnsr: tnB.tensors()) */
+    /*     std::wcout << std::dynamic_pointer_cast<Expr>(tnsr)->to_latex() << std::endl; */
   }
 
   SECTION("Testing largest common subfactor: Sum") {
