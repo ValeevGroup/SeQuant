@@ -68,15 +68,12 @@ set_property(TARGET Range-V3 PROPERTY
 
 # need Boost.ContainerHash
 # NB Boost.Container is broken in v1.70
-find_package(Boost ${SEQUANT_TRACKED_BOOST_VERSION} COMPONENTS serialization REQUIRED)
+find_package(Boost ${SEQUANT_TRACKED_BOOST_VERSION} REQUIRED COMPONENTS serialization)
 if (Boost_VERSION EQUAL 107000)
     message(FATAL_ERROR "Found Boost 1.70, but its Boost.Container is broken: "
         "use any version ${SEQUANT_TRACKED_BOOST_VERSION} "
         "or higher, other than 1.70")
 endif()
-add_library(Boost INTERFACE IMPORTED)
-set_property(TARGET Boost PROPERTY
-        INTERFACE_INCLUDE_DIRECTORIES ${Boost_INCLUDE_DIR})
 
 # embedded bliss-0.73
 add_library(bliss
@@ -143,7 +140,7 @@ add_library(SeQuant
         src/SeQuant/domain/mbpt/sr/sr.cpp
         src/SeQuant/domain/mbpt/sr/sr.hpp
         )
-target_link_libraries(SeQuant Range-V3 Boost bliss Threads::Threads)
+target_link_libraries(SeQuant Range-V3 Boost::boost bliss Threads::Threads)
 if (PSTL_NEEDS_TBB)
     target_link_libraries(SeQuant ${TBB_LIBRARIES})
     target_include_directories(SeQuant PUBLIC ${TBB_INCLUDE_DIRS})
@@ -152,7 +149,7 @@ target_include_directories(SeQuant PUBLIC
         $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>)
 
-find_package(Libint2 2.6.0 CONFIG REQUIRED)
+find_package(Libint2 2.6.0 CONFIG)
 
 find_package(TiledArray CONFIG COMPONENTS tiledarray)
 
@@ -182,17 +179,16 @@ set(utests_src
         tests/unit/test_iterator.cpp
         tests/unit/test_tensor_network.cpp
         tests/unit/test_mbpt.cpp
+        tests/unit/test_spin.cpp
+        tests/unit/test_canonicalize.cpp
         )
 set(utests_deps SeQuant evaluator)
 
-if (TARGET tiledarray)
+if (TARGET tiledarray AND TARGET Libint2::cxx)
   list(APPEND utests_src
-      ## unit tests for evaluation
-      tests/unit/test_path_tree.cpp
-      tests/unit/test_eval_tensor.cpp
-      )
+      tests/unit/test_eval_tensor.cpp)
   list(APPEND utests_deps tiledarray)
-endif(TARGET tiledarray)
+endif(TARGET tiledarray AND TARGET Libint2::cxx)
 
 set(unit_test_executable unit_tests)
 add_executable(${unit_test_executable} EXCLUDE_FROM_ALL
@@ -212,34 +208,32 @@ set_tests_properties(unit/run
 ####### Tests ########
 
 # Single-Reference Coupled-Cluster
-# srcc example
 set(example0 srcc)
 add_executable(${example0} EXCLUDE_FROM_ALL
         examples/${example0}/${example0}.cpp)
 target_link_libraries(${example0} SeQuant ${TBB_LIBRARIES})
 
-if (TARGET tiledarray)
-# expr_evaluation example
-    set(example1 expr_evaluation)
-    add_executable(${example1} EXCLUDE_FROM_ALL
-        examples/evaluation/${example1}.cpp
-        examples/contract/interpret/contract.hpp
-        examples/contract/scf/hartree-fock.cc)
-    target_link_libraries(${example1} SeQuant evaluator ${TBB_LIBRARIES}
-        Libint2::cxx tiledarray)
-    target_link_directories(${example1} PUBLIC ${TBB_LIBRARIES})
-    target_compile_definitions(${example1} PRIVATE SEQUANT_HAS_TILEDARRAY)
-endif (TARGET tiledarray)
+if (TARGET tiledarray AND TARGET Libint2::cxx)
+  set(example1 expr_evaluation)
+  add_executable(${example1} EXCLUDE_FROM_ALL
+      examples/evaluation/${example1}.cpp
+      examples/contract/interpret/contract.hpp
+      examples/contract/scf/hartree-fock.cc)
+  target_link_libraries(${example1} SeQuant evaluator ${TBB_LIBRARIES}
+      Libint2::cxx tiledarray)
+  target_link_directories(${example1} PUBLIC ${TBB_LIBRARIES})
+  target_compile_definitions(${example1} PRIVATE SEQUANT_HAS_TILEDARRAY)
 
-set(example2 rcc_evaluation)
-add_executable(${example2} EXCLUDE_FROM_ALL
-        examples/evaluation/${example2}.cpp
-        examples/contract/interpret/contract.hpp
-        examples/contract/scf/hartree-fock.cc)
-target_link_libraries(${example2} SeQuant evaluator
-    ${TBB_LIBRARIES} Libint2::cxx tiledarray)
-target_link_directories(${example2} PUBLIC ${TBB_LIBRARIES})
-target_compile_definitions(${example2} PRIVATE SEQUANT_HAS_TILEDARRAY)
+  set(example2 rcc_evaluation)
+  add_executable(${example2} EXCLUDE_FROM_ALL
+      examples/evaluation/${example2}.cpp
+      examples/contract/interpret/contract.hpp
+      examples/contract/scf/hartree-fock.cc)
+  target_link_libraries(${example2} SeQuant evaluator
+      ${TBB_LIBRARIES} Libint2::cxx tiledarray)
+  target_link_directories(${example2} PUBLIC ${TBB_LIBRARIES})
+  target_compile_definitions(${example2} PRIVATE SEQUANT_HAS_TILEDARRAY)
+endif (TARGET tiledarray AND TARGET Libint2::cxx)
 
 # add tests for running examples
 set (lastexample 3)
