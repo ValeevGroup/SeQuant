@@ -1,26 +1,23 @@
 //
-// created by Bimal Gaudel on Mar 11, 2020
+// created by Bimal Gaudel on Apr 18, 2020
 //
+
+#include "catch.hpp"
+
+#include <SeQuant/domain/evaluate/eval_tree.hpp>
+
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/tensor.hpp>
+
+#include <tiledarray.h>
 
 #include <clocale>
 #include <iostream>
 #include <memory>
 #include <random>
 
-#include <tiledarray.h>
-
-#include "catch.hpp"
-
-#include "../../src/SeQuant/domain/evaluate/eval_context.hpp"
-#include "../../src/SeQuant/domain/evaluate/eval_tree.hpp"
-#include "../../src/SeQuant/domain/evaluate/factorizer.hpp"
-
 using namespace sequant;
 using namespace sequant::evaluate;
-
-using DTensorType = TA::TArrayD;
-using ContextMapType =
-    sequant::container::map<sequant::ExprPtr, std::shared_ptr<DTensorType>>;
 
 // initialize MADWorld
 int argc = 1;
@@ -48,101 +45,101 @@ auto make_tensor_expr =
       return std::make_shared<sequant::Tensor>(label, bra_indices, ket_indices);
     };
 
-const size_t nocc = 10;
-const size_t nvirt = 20;
+TEST_CASE("CONSTRUCTOR TESTS", "[eval_tree]") {
+  SECTION("Testing construction") {
+    auto t = make_tensor_expr({"t", "i_1", "i_2", "a_1", "a_2"});
+    auto g = make_tensor_expr({"g", "i_1", "i_2", "a_1", "a_2"});
 
-TA::TiledRange tr_oo{{0, nocc}, {0, nocc}};
-TA::TiledRange tr_ov{{0, nocc}, {0, nvirt}};
-TA::TiledRange tr_vv{{0, nvirt}, {0, nvirt}};
-TA::TiledRange tr_oooo{{0, nocc}, {0, nocc}, {0, nocc}, {0, nocc}};
-TA::TiledRange tr_ooov{{0, nocc}, {0, nocc}, {0, nocc}, {0, nvirt}};
-TA::TiledRange tr_oovv{{0, nocc}, {0, nocc}, {0, nvirt}, {0, nvirt}};
-TA::TiledRange tr_ovov{{0, nocc}, {0, nvirt}, {0, nocc}, {0, nvirt}};
-TA::TiledRange tr_ovvv{{0, nocc}, {0, nvirt}, {0, nvirt}, {0, nvirt}};
-TA::TiledRange tr_vvvv{{0, nvirt}, {0, nvirt}, {0, nvirt}, {0, nvirt}};
-//
-TA::TiledRange tr_ovvo{{0, nocc}, {0, nvirt}, {0, nvirt}, {0, nocc}};
-TA::TiledRange tr_voov{{0, nvirt}, {0, nocc}, {0, nocc}, {0, nvirt}};
+    REQUIRE_NOTHROW(EvalTree(t));
+    REQUIRE_NOTHROW(EvalTree(t, true));
 
-TEST_CASE("EVAL_TENSOR_EVALUATE_TESTS", "[eval_tensor_builder]") {
-  // creating some random tensors
+    REQUIRE_NOTHROW(std::make_shared<Product>(Product({t, g})));
+    REQUIRE_NOTHROW(std::make_shared<Sum>(Sum({t, g})));
+  }
+}
+
+TEST_CASE("EVALUATIONS TESTS", "[eval_tree]") {
+  using DTensorType = TA::TArrayD;
+  using ContextMapType =
+      sequant::container::map<HashType, std::shared_ptr<DTensorType>>;
+
+  const size_t nocc = 10;
+  const size_t nvirt = 20;
+
+  TA::TiledRange tr_ov{{0, nocc}, {0, nvirt}};
+  TA::TiledRange tr_oovv{{0, nocc}, {0, nocc}, {0, nvirt}, {0, nvirt}};
+
   auto T_ov = std::make_shared<DTensorType>(world, tr_ov);
   auto T_oovv = std::make_shared<DTensorType>(world, tr_oovv);
   auto G_oovv = std::make_shared<DTensorType>(world, tr_oovv);
-  //
-  auto G_ovvo = std::make_shared<DTensorType>(world, tr_ovvo);
-  auto G_voov = std::make_shared<DTensorType>(world, tr_voov);
-  //
 
   T_ov->fill_random();
   T_oovv->fill_random();
   G_oovv->fill_random();
-  G_ovvo->fill_random();
 
-  SECTION("Testing Sum type evaluation") {
+  SECTION("Testing Sum type evaluations") {
+    //
     auto t = make_tensor_expr({"t", "i_1", "i_2", "a_1", "a_2"});
     auto g = make_tensor_expr({"g", "i_1", "i_2", "a_1", "a_2"});
 
-    DTensorType manual_sum;
-    manual_sum("i, j, a, b") =
-        (*G_oovv)("i, j, a, b") + (*T_oovv)("i, j, a, b");
+    DTensorType manual_result;
+    manual_result("i, j, a, b") =
+        (*T_oovv)("i, j, a, b") + (*G_oovv)("i, j, a, b");
 
     ContextMapType context;
-    context.insert(ContextMapType::value_type(t, T_oovv));
-    context.insert(ContextMapType::value_type(g, G_oovv));
-    auto ev_context = EvalContext(context);
+    context.insert(
+        ContextMapType::value_type(EvalTree(t).hash_value(), T_oovv));
+    context.insert(
+        ContextMapType::value_type(EvalTree(g).hash_value(), G_oovv));
 
     auto expr = std::make_shared<Sum>(Sum({g, t}));
-    auto tree = EvalTree<DTensorType>(expr);
-    auto eval_sum = tree.evaluate(ev_context.get_map());
+    auto tree = EvalTree(expr);
+    auto eval_result = tree.evaluate(context);
 
     auto manual_norm =
-        std::sqrt(manual_sum("i,j,a,b").dot(manual_sum("i,j,a,b")));
-
-    auto eval_norm = std::sqrt(eval_sum("i,j,a,b").dot(eval_sum("i,j,a,b")));
+        std::sqrt(manual_result("0,1,2,3").dot(manual_result("0,1,2,3")));
+    auto eval_norm =
+        std::sqrt(eval_result("0,1,2,3").dot(eval_result("0,1,2,3")));
 
     REQUIRE(manual_norm == Approx(eval_norm));
 
     // sum by permutation test
-    t = make_tensor_expr({"t", "i_1", "i_2", "a_1", "a_2"});
     g = make_tensor_expr({"g", "i_1", "i_2", "a_2", "a_1"});
-    context.clear();
-    context.insert(ContextMapType::value_type(t, T_oovv));
-    context.insert(ContextMapType::value_type(g, G_oovv));
-    ev_context = EvalContext(context);
+    context.insert(
+        ContextMapType::value_type(EvalTree(g).hash_value(), G_oovv));
+
+    manual_result("i, j, a, b") =
+        (*T_oovv)("i, j, a, b") + (*G_oovv)("i, j, b, a");
+    manual_norm =
+        std::sqrt(manual_result("0,1,2,3").dot(manual_result("0,1,2,3")));
+
     expr = std::make_shared<Sum>(Sum({g, t}));
-    tree = EvalTree<DTensorType>(expr);
-
-    eval_sum = tree.evaluate(ev_context.get_map());
-
-    manual_sum("i, j, a, b") =
-        (*G_oovv)("i, j, a, b") + (*T_oovv)("i, j, b, a");
-    manual_norm = std::sqrt(manual_sum("i,j,a,b").dot(manual_sum("i,j,a,b")));
-
-    eval_norm = std::sqrt(eval_sum("i,j,a,b").dot(eval_sum("i,j,a,b")));
+    tree = EvalTree(expr);
+    eval_result = tree.evaluate(context);
+    eval_norm = std::sqrt(eval_result("0,1,2,3").dot(eval_result("0,1,2,3")));
 
     REQUIRE(manual_norm == Approx(eval_norm));
   }
 
-  SECTION("Testing Product type evaluation") {
+  SECTION("Testing product type evaluation") {
     auto t = make_tensor_expr({"t", "i_1", "a_1"});
-    auto g1 = make_tensor_expr({"g", "i_1", "i_2", "a_1", "a_2"});
+    auto g = make_tensor_expr({"g", "i_1", "i_2", "a_1", "a_2"});
 
-    DTensorType manual_prod;
-    manual_prod("j,b") = (*T_ov)("i,a") * (*G_oovv)("i,j,a,b");
+    DTensorType manual_result;
+    manual_result("j,b") = (*T_ov)("i,a") * (*G_oovv)("i,j,a,b");
 
     ContextMapType context;
-    context.insert(ContextMapType::value_type(t, T_ov));
-    context.insert(ContextMapType::value_type(g1, G_oovv));
-    auto ev_context = EvalContext(context);
+    context.insert(ContextMapType::value_type(EvalTree(t).hash_value(), T_ov));
+    context.insert(
+        ContextMapType::value_type(EvalTree(g).hash_value(), G_oovv));
 
-    auto expr = std::make_shared<Product>(Product({t, g1}));
-    auto tree = EvalTree<DTensorType>(expr);
-    auto eval_prod = tree.evaluate(ev_context.get_map());
+    auto expr = std::make_shared<Product>(Product({t, g}));
+    auto tree = EvalTree(expr);
+    auto eval_result = tree.evaluate(context);
 
-    auto manual_norm = std::sqrt(manual_prod("j,b").dot(manual_prod("j,b")));
-
-    auto eval_norm = std::sqrt(eval_prod("j,b").dot(eval_prod("j,b")));
+    auto manual_norm =
+        std::sqrt(manual_result("0,1").dot(manual_result("0,1")));
+    auto eval_norm = std::sqrt(eval_result("0,1").dot(eval_result("0,1")));
 
     REQUIRE(manual_norm == Approx(eval_norm));
   }
@@ -152,190 +149,23 @@ TEST_CASE("EVAL_TENSOR_EVALUATE_TESTS", "[eval_tensor_builder]") {
     auto A = make_tensor_expr({"A", "i_1", "i_2", "a_1", "a_2"});
 
     ContextMapType context;
-    context.insert(ContextMapType::value_type(t, T_oovv));
-    auto ev_context = EvalContext(context);
+    context.insert(
+        ContextMapType::value_type(EvalTree(t).hash_value(), T_oovv));
 
     DTensorType manual_result;
     manual_result("i,j,a,b") = (*T_oovv)("i,j,a,b") - (*T_oovv)("i,j,b,a") +
                                (*T_oovv)("j,i,b,a") - (*T_oovv)("j,i,a,b");
 
-    auto manual_norm =
-        std::sqrt(manual_result("i,j,a,b").dot(manual_result("i,j,a,b")));
-
     auto expr = std::make_shared<Product>(Product({A, t}));
-    auto tree = EvalTree<DTensorType>(expr);
-    auto eval_result = tree.evaluate(ev_context.get_map());
+    auto tree = EvalTree(expr);
+    auto eval_result = tree.evaluate(context);
+
+    auto manual_norm =
+        std::sqrt(manual_result("0,1,2,3").dot(manual_result("0,1,2,3")));
 
     auto eval_norm =
-        std::sqrt(eval_result("i,j,a,b").dot(eval_result("i,j,a,b")));
+        std::sqrt(eval_result("0,1,2,3").dot(eval_result("0,1,2,3")));
 
     REQUIRE(manual_norm == Approx(eval_norm));
-  }
-
-  SECTION("Testing missing data tensor") {
-    auto seq_tensor_bad = make_tensor_expr({"t", "a_1", "i_1", "a_2", "a_3"});
-    auto seq_tensor_good = make_tensor_expr({"t", "i_1", "a_1", "a_2", "a_3"});
-    ContextMapType context;
-    context.insert(ContextMapType::value_type(seq_tensor_good, T_ov));
-    auto ev_context = EvalContext(context);
-
-    auto expr = seq_tensor_bad;
-    auto tree = EvalTree<DTensorType>(expr);
-
-    REQUIRE_THROWS_AS(tree.evaluate(ev_context.get_map()), std::logic_error);
-  }
-}
-
-TEST_CASE("FACTORIZER_TESTS", "[factorizer]") {
-  container::map<IndexSpace::TypeAttr, size_t> space_size;
-  space_size.insert(
-      decltype(space_size)::value_type(IndexSpace::active_occupied, nocc));
-  space_size.insert(
-      decltype(space_size)::value_type(IndexSpace::active_unoccupied, nvirt));
-
-  SECTION("Testing operation counts for product") {
-    auto t = make_tensor_expr({"t", "i_1", "a_1"});
-    auto g = make_tensor_expr({"g", "i_1", "i_2", "a_1", "a_2"});
-    auto expr = std::make_shared<Product>(Product({t, g}));
-    auto tree = EvalTree<DTensorType>(expr);
-
-    // by looking at 't' and 'g' tensors
-    // we see the ops count should be
-    // (num of active_occupied squared) * (num of active_unoccupied squared)
-
-    REQUIRE(tree.ops_count(space_size) == nocc * nocc * nvirt * nvirt);
-  }
-
-  SECTION("Testing operation counts for sum") {
-    auto t = make_tensor_expr({"t", "i_1", "a_1"});
-    auto f = make_tensor_expr({"f", "i_2", "a_2"});
-    auto g = make_tensor_expr({"g", "i_1", "i_2", "a_1", "a_2"});
-
-    auto left_sumand = std::make_shared<Product>(Product{t, f});
-    auto& right_sumand = g;
-
-    auto expr = std::make_shared<Sum>(Sum{left_sumand, right_sumand});
-
-    auto tree = EvalTree<DTensorType>(expr);
-
-    REQUIRE(tree.ops_count(space_size) == nocc * nocc * nvirt * nvirt);
-  }
-
-  SECTION("Testing largest common subfactor: Product") {
-    // forming two tensor products
-    auto prodA = std::make_shared<Product>(
-        Product({make_tensor_expr({"t", "i_1", "i_2", "a_1", "a_2"}),
-                 make_tensor_expr({"g", "i_1", "i_3", "a_1", "a_3"}),
-                 make_tensor_expr({"f", "i_2", "a_2"})}));
-
-    auto prodB = std::make_shared<Product>(
-        Product({make_tensor_expr({"t", "i_4", "i_6", "a_4", "a_6"}),
-                 make_tensor_expr({"g", "i_4", "i_8", "a_4", "a_8"}),
-                 make_tensor_expr({"f", "i_8", "a_8"})}));
-    // Note how each tensor in prodA is equivalent to a tensor in prodB
-    // (equivalent in the sense that both represent the same data tensor)
-    // however, prodA and prodB are not equivalent products
-    // that is beacuse even though, the nodes of the two tensor networks (prodA
-    // and prodB) are the same, their edges differ.
-    //
-    // The 't' and 'g' tensors are labelled in such a way that the network of
-    // t<-->g in both products have the same edges, and thus t<-->g is the
-    // subtensor network common to prodA and prodB.
-
-    auto [subfactorA, subfactorB] =
-        largest_common_subnet<DTensorType>(prodA, prodB);
-    REQUIRE(subfactorA == container::svector<size_t>{0, 1});
-    REQUIRE(subfactorB == container::svector<size_t>{0, 1});
-
-    // prodC is the same as prodB except the position of 'f' and 'g' tensors are
-    // swapped this shows that absolute order of the constiuents that make up
-    // the common subnet in the pair of tensor networks
-    // doesn't need to be the same
-    auto prodC = std::make_shared<Product>(
-        Product({make_tensor_expr({"t", "i_4", "i_6", "a_4", "a_6"}),
-                 make_tensor_expr({"f", "i_8", "a_8"}),
-                 make_tensor_expr({"g", "i_4", "i_8", "a_4", "a_8"})}));
-    auto [subfactorX, subfactorY] =
-        largest_common_subnet<DTensorType>(prodA, prodC);
-    REQUIRE(subfactorX == container::svector<size_t>{0, 1});
-    REQUIRE(subfactorY == container::svector<size_t>{0, 2});
-
-    // lets completely reverse the order of the tensors in prodB
-    // shows that the relative order of the constiuents of the common subnet
-    // doesn't matter
-    prodC = std::make_shared<Product>(
-        Product({make_tensor_expr({"f", "i_8", "a_8"}),
-                 make_tensor_expr({"g", "i_4", "i_8", "a_4", "a_8"}),
-                 make_tensor_expr({"t", "i_4", "i_6", "a_4", "a_6"})}));
-
-    auto [subfactorXX, subfactorYY] =
-        largest_common_subnet<DTensorType>(prodA, prodC);
-    REQUIRE(subfactorXX == container::svector<size_t>{0, 1});
-    REQUIRE(subfactorYY == container::svector<size_t>{2, 1});
-
-    // no common subnet
-    prodA = std::make_shared<Product>(
-        Product({make_tensor_expr({"f", "i_8", "a_8"})}));
-    prodB = std::make_shared<Product>(
-        Product({make_tensor_expr({"g", "i_4", "i_8", "a_4", "a_8"})}));
-
-    auto [subfactorA_null, subfactorB_null] =
-        largest_common_subnet<DTensorType>(prodA, prodB);
-
-    REQUIRE(subfactorA_null.empty());
-    REQUIRE(subfactorB_null.empty());
-  }
-
-  SECTION("Testing largest common subfactor: Sum") {
-    // forming two sums
-    auto sumA = std::make_shared<Sum>(
-        Sum({make_tensor_expr({"t", "i_1", "i_2", "a_1", "a_2"}),
-             make_tensor_expr({"g", "i_1", "i_2", "a_1", "a_4"})}));
-
-    auto sumB = std::make_shared<Sum>(
-        Sum({make_tensor_expr({"t", "i_4", "i_6", "a_4", "a_6"}),
-             make_tensor_expr({"g", "i_4", "i_6", "a_4", "a_6"})}));
-
-    auto [summandA, summandB] = largest_common_subnet<DTensorType>(sumA, sumB);
-
-    REQUIRE(summandA == container::svector<size_t>{0, 1});
-    REQUIRE(summandB == container::svector<size_t>{0, 1});
-
-    // forming sums whose summands are products
-    auto prod1 = std::make_shared<Product>(
-        Product({make_tensor_expr({"t", "i_1", "i_2", "a_1", "a_2"}),
-                 make_tensor_expr({"g", "i_1", "i_3", "a_1", "a_3"}),
-                 make_tensor_expr({"f", "i_2", "a_2"})}));
-
-    auto prod2 = std::make_shared<Product>(
-        Product({make_tensor_expr({"f", "i_3", "a_3"})}));
-
-    auto prod3 = std::make_shared<Product>(
-        Product({make_tensor_expr({"t", "i_2", "i_3", "a_2", "a_3"}),
-                 make_tensor_expr({"f", "i_2", "a_2"})}));
-
-    auto prod4 = std::make_shared<Product>(
-        Product({make_tensor_expr({"g", "i_2", "i_3", "a_2", "a_3"}),
-                 make_tensor_expr({"t", "i_2", "a_2"})}));
-
-    sumA = std::make_shared<Sum>(Sum({prod1, prod2, prod3}));
-    sumB = std::make_shared<Sum>(Sum({prod1, prod2, prod4}));
-
-    auto expectedSubNet = std::make_shared<Sum>(Sum({prod1, prod2}));
-
-    auto [summandAA, summandBB] = largest_common_subnet<DTensorType>(sumA, sumB);
-
-    REQUIRE(summandAA == container::svector<size_t>{0, 1});
-    REQUIRE(summandBB == container::svector<size_t>{0, 1});
-
-    // no common subnet
-    sumA = std::make_shared<Sum>(Sum({prod1, prod2}));
-    sumB = std::make_shared<Sum>(Sum({prod3, prod4}));
-
-    auto [summandAnull, summandBnull] =
-        largest_common_subnet<DTensorType>(sumA, sumB);
-
-    REQUIRE(summandAnull.empty());
-    REQUIRE(summandBnull.empty());
   }
 }

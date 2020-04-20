@@ -159,10 +159,14 @@ find_package(TiledArray CONFIG COMPONENTS tiledarray)
 add_library(evaluator EXCLUDE_FROM_ALL
     src/SeQuant/domain/evaluate/eval_fwd.hpp
     src/SeQuant/domain/evaluate/eval_tree.hpp
-    src/SeQuant/domain/evaluate/eval_context.hpp
-    src/SeQuant/domain/evaluate/path_tree.hpp
-    src/SeQuant/domain/evaluate/path_tree.cpp
-    src/SeQuant/domain/evaluate/factorizer.hpp)
+    src/SeQuant/domain/evaluate/eval_tree.cpp
+    src/SeQuant/domain/evaluate/eval_tree_node.hpp
+    src/SeQuant/domain/evaluate/eval_tree_node.cpp
+    # src/SeQuant/domain/evaluate/eval_context.hpp
+    # src/SeQuant/domain/evaluate/path_tree.hpp
+    # src/SeQuant/domain/evaluate/path_tree.cpp
+    # src/SeQuant/domain/evaluate/factorizer.hpp
+    )
 target_include_directories(evaluator PUBLIC
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>)
@@ -187,8 +191,9 @@ set(utests_deps SeQuant evaluator)
 if (TARGET tiledarray)
   list(APPEND utests_src
       ## unit tests for evaluation
-      tests/unit/test_path_tree.cpp
       tests/unit/test_eval_tree.cpp
+      # tests/unit/test_path_tree.cpp
+      # tests/unit/test_eval_tree.cpp
       )
   list(APPEND utests_deps tiledarray)
 endif(TARGET tiledarray)
@@ -219,19 +224,26 @@ target_link_libraries(${example0} SeQuant ${TBB_LIBRARIES})
 
 if (TARGET tiledarray)
 # expr_evaluation example
-    set(example1 expr_evaluation)
-    add_executable(${example1} EXCLUDE_FROM_ALL
-        examples/evaluation/${example1}.cpp
-        examples/contract/interpret/contract.hpp
-        examples/contract/scf/hartree-fock.cc)
-    target_link_libraries(${example1} SeQuant evaluator ${TBB_LIBRARIES}
-        Libint2::cxx tiledarray)
-    target_link_directories(${example1} PUBLIC ${TBB_LIBRARIES})
-    target_compile_definitions(${example1} PRIVATE SEQUANT_HAS_TILEDARRAY)
+    # set(example1 expr_evaluation)
+    # add_executable(${example1} EXCLUDE_FROM_ALL
+    #     examples/evaluation/${example1}.cpp
+    #     examples/contract/interpret/contract.hpp
+    #     examples/contract/scf/hartree-fock.cc)
+    # target_link_libraries(${example1} SeQuant evaluator ${TBB_LIBRARIES}
+    #     Libint2::cxx tiledarray)
+    # target_link_directories(${example1} PUBLIC ${TBB_LIBRARIES})
+    # target_compile_definitions(${example1} PRIVATE SEQUANT_HAS_TILEDARRAY)
+
+    set(example2 tree_evaluation)
+    add_executable(${example2} EXCLUDE_FROM_ALL
+        examples/evaluation/tree.cpp)
+    target_link_libraries(${example2} SeQuant ${TBB_LIBRARIES} evaluator tiledarray)
+    target_link_directories(${example2} PUBLIC ${TBB_LIBRARIES})
 endif (TARGET tiledarray)
 
+
 # add tests for running examples
-set (lastexample 2)
+set (lastexample 3)
 foreach(i RANGE ${lastexample})
     if (TARGET ${example${i}})
         add_test(example/${example${i}}/build "${CMAKE_COMMAND}"

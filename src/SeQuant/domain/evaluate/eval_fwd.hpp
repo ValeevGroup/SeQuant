@@ -9,7 +9,7 @@
 
 namespace sequant::evaluate {
 
-using HashType = size_t;
+using HashType = std::size_t;
 
 using ScalarType = double;
 
@@ -17,11 +17,11 @@ using IndexContainer = container::svector<Index, 4>;
 
 using OpsCount = unsigned long long;
 
-template <typename DataTensorType>
 class EvalTree;
 
-template <typename DataTensorType>
-using EvalTreePtr = std::shared_ptr<EvalTree<DataTensorType>>;
+class EvalTreeNode;
+
+using EvalNodePtr = std::shared_ptr<EvalTreeNode>;
 
 enum class Operation {
   /// Represents the summation type binary evaluation
