@@ -25,8 +25,11 @@ Operation EvalTreeInternalNode::operation() const { return operation_; }
 
 bool EvalTreeInternalNode::is_leaf() const { return false; }
 
+bool EvalTreeInternalNode::unswap_braket_labels() { return false; }
+
 EvalTreeInternalNode::EvalTreeInternalNode(const EvalNodePtr& left_ptr,
-                           const EvalNodePtr& right_ptr, Operation op)
+                                           const EvalNodePtr& right_ptr,
+                                           Operation op)
     : left_{left_ptr}, right_{right_ptr}, operation_{op} {
   auto& left = this->left();
   auto& right = this->right();
@@ -70,6 +73,7 @@ EvalTreeInternalNode::EvalTreeInternalNode(const EvalNodePtr& left_ptr,
 HashType EvalTreeInternalNode::hash_node() const {
   auto imed_operation = this->operation();
 
+  // number_hasher is used to hash index positions and operation type
   boost::hash<size_t> number_hasher;
 
   HashType imed_hash_value;
@@ -103,16 +107,17 @@ HashType EvalTreeInternalNode::hash_node() const {
   if (imed_operation == Operation::PRODUCT) {
     // a lambda expression that combines the hashes of the non-contracting
     // indices of right or left tensor
-    auto index_hash_combiner = [&](const EvalNodePtr& lr_node) {
-      // iterate through the imed_ptr indices
+    auto index_hash_combiner = [&number_hasher, &imed_hash_value,
+                                this](const EvalNodePtr& lr_node) {
+      // iterate through this node's indices
       for (const auto& idx : this->indices()) {
-        // iterate through the indices of the passed left/right tensor
-        // by a counter
+        // iterate through the indices of the passed left/right node
         for (auto i = 0; i < lr_node->indices().size(); ++i) {
-          // if the index of the imed_ptr matches with the lr_tensor
-          // then time to break as we found the contracted indices
-          // no need to look further
           if (idx.label() == lr_node->indices()[i].label()) {
+            // if the indexes match then time to break as
+            // we found the contracted indices
+            // no need to look further for this same label
+            // in the left/right node
             break;
           }
           // combine the hash of the counter of non-contracted index
@@ -138,11 +143,20 @@ HashType EvalTreeInternalNode::hash_node() const {
 
 bool EvalTreeLeafNode::is_leaf() const { return true; }
 
-const ExprPtr& EvalTreeLeafNode::expr() const { return expr_; }
-
-void EvalTreeLeafNode::uncanonize_braket() {
-  if (swapped_bra_ket_) std::reverse(indices_.begin(), indices_.end());
+bool EvalTreeLeafNode::unswap_braket_labels() {
+  if (swapped_bra_ket_) {
+    auto& tnsr = expr()->as<Tensor>();
+    std::copy(tnsr.bra().begin(), tnsr.bra().end(), this->indices_.begin());
+    std::copy(tnsr.ket().begin(), tnsr.ket().end(),
+              this->indices_.begin() + tnsr.bra().size());
+    // rehash node
+    this->hash_value_ = this->hash_node();
+    return true;
+  }
+  return false;
 }
+
+const ExprPtr& EvalTreeLeafNode::expr() const { return expr_; }
 
 bool EvalTreeLeafNode::need_bra_ket_swap(const ExprPtr& expr) {
   auto& tnsr = expr->as<Tensor>();
@@ -199,17 +213,20 @@ HashType EvalTreeLeafNode::hash_node() const {
   return leaf_hash_value;
 }
 
-EvalTreeLeafNode::EvalTreeLeafNode(const ExprPtr& tnsr_expr, bool canonize_braket)
+EvalTreeLeafNode::EvalTreeLeafNode(const ExprPtr& tnsr_expr,
+                                   bool canonize_braket)
     : expr_{tnsr_expr} {
   swapped_bra_ket_ = canonize_braket ? need_bra_ket_swap(expr()) : false;
   // set indices_
   auto& tnsr = expr()->as<Tensor>();
 
-  for (const auto& idx : tnsr.bra()) this->indices_.emplace_back(idx);
-  for (const auto& idx : tnsr.ket()) this->indices_.emplace_back(idx);
-
-  if (swapped_bra_ket_)
-    std::reverse(this->indices_.begin(), this->indices_.end());
+  if (swapped_bra_ket_) {
+    for (const auto& idx : tnsr.ket()) this->indices_.emplace_back(idx);
+    for (const auto& idx : tnsr.bra()) this->indices_.emplace_back(idx);
+  } else {
+    for (const auto& idx : tnsr.bra()) this->indices_.emplace_back(idx);
+    for (const auto& idx : tnsr.ket()) this->indices_.emplace_back(idx);
+  }
 
   // set hash_value_
   this->hash_value_ = this->hash_node();

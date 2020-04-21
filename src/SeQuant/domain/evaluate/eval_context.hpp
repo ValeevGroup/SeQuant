@@ -29,7 +29,7 @@ class EvalContext {
   EvalContext(container::map<ExprPtr, std::shared_ptr<DataTensorType>>&
                   expr_to_dtensor_map) {
     for (auto& item : expr_to_dtensor_map) {
-      auto hash_value = EvalTree<DataTensorType>(item.first).hash_value();
+      auto hash_value = EvalTree(item.first).hash_value();
       this->hash_to_tensor_.insert(std::make_pair(hash_value, item.second));
     }
   }

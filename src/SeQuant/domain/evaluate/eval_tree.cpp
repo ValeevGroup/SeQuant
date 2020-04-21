@@ -7,11 +7,19 @@
 
 namespace sequant::evaluate {
 
+EvalTree::EvalTree(const ExprPtr& expr, bool canonize_leaf_braket) {
+  root = build_expr(expr, canonize_leaf_braket);
+}
+
 HashType EvalTree::hash_value() { return root->hash_value(); }
 
 OpsCount EvalTree::ops_count(
     const container::map<IndexSpace::TypeAttr, size_t>& ispace_size_map) {
   return _ops_count(root, ispace_size_map);
+}
+
+void EvalTree::visit(const std::function<void(const EvalNodePtr&)>& visitor) {
+  _visit(root, visitor);
 }
 
 OpsCount EvalTree::_ops_count(
@@ -43,17 +51,17 @@ OpsCount EvalTree::_ops_count(
          _ops_count(intrnl_node->right(), ispace_size_map);
 }
 
-void EvalTree::visit(const std::function<void(const EvalNodePtr&)>& visitor) {
-  visitor(root);
-  if (root->is_leaf()) return;
+void EvalTree::_visit(const EvalNodePtr& node,
+                      const std::function<void(const EvalNodePtr&)>& visitor) {
+  if (node->is_leaf()) {
+    visitor(node);
+    return;
+  }
 
-  auto intrnl_node = std::dynamic_pointer_cast<EvalTreeInternalNode>(root);
-  visitor(intrnl_node->left());
-  visitor(intrnl_node->right());
-}
-
-EvalTree::EvalTree(const ExprPtr& expr, bool canonize_leaf_braket) {
-  root = build_expr(expr, canonize_leaf_braket);
+  visitor(node);
+  auto intrnl_node = std::dynamic_pointer_cast<EvalTreeInternalNode>(node);
+  _visit(intrnl_node->left(), visitor);
+  _visit(intrnl_node->right(), visitor);
 }
 
 EvalNodePtr EvalTree::build_expr(const ExprPtr& expr,

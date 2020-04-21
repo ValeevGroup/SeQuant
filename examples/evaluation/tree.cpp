@@ -95,28 +95,23 @@ int main() {
   auto manual_norm =
       std::sqrt(manual_result("0,1,2,3").dot(manual_result("0,1,2,3")));
 
-  /* std::wcout << "computing phase permutations to verify.." << std::endl; */
-  /* auto svec = container::svector<size_t>{0, 1, 2, 3}; */
-  /* for (auto item : EvalTree::_phase_perm(svec)) { */
-  /*   auto phase = std::get<0>(item); */
-  /*   auto perm = std::get<1>(item); */
-  /*   std::wcout << "phase = " << phase; */
-  /*   std::wcout << " perm = "; */
-  /*   for (auto ii : perm) std::wcout << ii << " "; */
-  /*   std::wcout << std::endl; */
-  /* } */
+  std::wcout << "calling intrusive antisymmetrization..." << std::endl;
 
-  /* std::wcout << "calling intrusive antisymmetrization..." << std::endl; */
-  /* auto intrusive_call_result = EvalTree::_antisymmetrize(*T_oovv, 2, 2); */
-  /* auto intrusive_call_norm = std::sqrt( */
-  /*     intrusive_call_result("0,1,2,3").dot(intrusive_call_result("0,1,2,3"))); */
+  auto intrusive_call_result = EvalTree::_antisymmetrize(*T_oovv, 2, 2);
 
-  std::wcout << "evaluating tree..." << std::endl;
-  auto eval_result = tree.evaluate(context);
-  // auto eval_norm = std::sqrt(eval_result("0,1,2,3").dot(eval_result("0,1,2,3")));
+  std::wcout << "intrusive_call_result.trange() = "
+             << intrusive_call_result.trange().rank() << std::endl;
+
+  // auto intrusive_call_norm = std::sqrt(
+  // intrusive_call_result("0,1,2,3").dot(intrusive_call_result("0,1,2,3")));
+
+  // std::wcout << "evaluating tree..." << std::endl;
+  // auto eval_result = tree.evaluate(context);
+  // auto eval_norm =
+  // std::sqrt(eval_result("0,1,2,3").dot(eval_result("0,1,2,3")));
 
   std::wcout << "manual_norm = " << manual_norm;
-  /* std::wcout << "\nintrusive_call_norm = " << intrusive_call_norm; */
+  // std::wcout << "\nintrusive_call_norm = " << intrusive_call_norm;
   // std::wcout << "\neval_norm = " << eval_norm;
 
   std::wcout << std::endl;
