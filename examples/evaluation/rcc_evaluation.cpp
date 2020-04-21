@@ -13,6 +13,8 @@
 
 #include <memory>
 
+#define CCSDT_eval 1
+
 int main(int argc, char* argv[]) {
   using std::cerr;
   using std::cout;
@@ -105,7 +107,7 @@ int main(int argc, char* argv[]) {
     /***  SCF iterative loop         ***/
     /*** =========================== ***/
 
-    const auto maxiter = 100;
+    const auto maxiter = 200;
     const auto conv = 1e-12;
     auto iter = 0;
     auto rmsd = 0.0;
@@ -237,7 +239,6 @@ int main(int argc, char* argv[]) {
     TA::TiledRange tr_vvvo{{0, nvirt}, {0, nvirt}, {0, nvirt}, {0, ndocc}};
     TA::TiledRange tr_vvov{{0, nvirt}, {0, nvirt}, {0, ndocc}, {0, nvirt}};
 
-#define CCSDT_eval 0
 #if CCSDT_eval
      TA::TiledRange tr_ooovvv{{0, ndocc},  {0, ndocc},  {0, ndocc},
                               {0, nvirt}, {0, nvirt}, {0, nvirt}};
@@ -450,7 +451,6 @@ int main(int argc, char* argv[]) {
       const auto tstop = std::chrono::high_resolution_clock::now();
       const std::chrono::duration<double> time_elapsed = tstop - tstart;
       printf("CC R%lu size: %lu time: %5.3f sec.\n", i, cc_st_r[i]->size(), time_elapsed.count());
-      // cout << "CC R"<< i << " size: " << cc_st_r[i]->size() << " time: " << time_elapsed.count() << " s." << endl;
     }
 
     // Use Biorthogonal transformation for simpler CCSD residual equations
@@ -487,6 +487,52 @@ int main(int argc, char* argv[]) {
       expand(cc_st_r[2]);
       rapid_simplify(cc_st_r[2]);
     }
+
+#if CCSDT_eval
+    if(biorthogonal_transformation){
+      // Biorthogonal transformation of CC R3 equation (http://arxiv.org/abs/1805.00565 Eq. 31)
+
+      using IdxMap = std::map<Index, Index>;
+      IdxMap m1 = {{Index{L"i_1"}, Index{L"i_1"}},
+                   {Index{L"i_2"}, Index{L"i_3"}},
+                   {Index{L"i_3"}, Index{L"i_2"}}};
+      IdxMap m2 = {{Index{L"i_1"}, Index{L"i_2"}},
+                   {Index{L"i_2"}, Index{L"i_1"}},
+                   {Index{L"i_3"}, Index{L"i_3"}}};
+      IdxMap m3 = {{Index{L"i_1"}, Index{L"i_2"}},
+                   {Index{L"i_2"}, Index{L"i_3"}},
+                   {Index{L"i_3"}, Index{L"i_1"}}};
+      IdxMap m4 = {{Index{L"i_1"}, Index{L"i_3"}},
+                   {Index{L"i_2"}, Index{L"i_1"}},
+                   {Index{L"i_3"}, Index{L"i_2"}}};
+      IdxMap m5 = {{Index{L"i_1"}, Index{L"i_3"}},
+                   {Index{L"i_2"}, Index{L"i_2"}},
+                   {Index{L"i_3"}, Index{L"i_1"}}};
+
+      auto p1 = transform_expression(cc_st_r[3], m1,-1.0/120.0);
+      auto p2 = transform_expression(cc_st_r[3], m2,-1.0/120.0);
+      auto p3 = transform_expression(cc_st_r[3], m3,-7.0/120.0);
+      auto p4 = transform_expression(cc_st_r[3], m4,-7.0/120.0);
+      auto p5 = transform_expression(cc_st_r[3], m5,-1.0/120.0);
+
+      auto biorthogonal_R3 =
+          ex<Constant>(17/120) * cc_st_r[3] + p1 + p2 + p3 + p4 + p5;
+
+      auto P_cc_r3 = ex<Constant>(1./6.) *
+          ex<Tensor>(L"P", WstrList{L"a_1", L"a_2", L"a_3"}, WstrList{L"i_1", L"i_2", L"i_3"}, Symmetry::nonsymm) *
+          biorthogonal_R3;
+      expand(P_cc_r3);
+      canonicalize(P_cc_r3);
+
+      // TODO: Do not expand P operator; evaluate R3 and permute instead
+      auto cc_r3_biorthogonal = expand_P_operator(P_cc_r3);
+      rapid_simplify(cc_r3_biorthogonal);
+      cc_st_r[3] = cc_r3_biorthogonal;
+    } else {
+      expand(cc_st_r[3]);
+      rapid_simplify(cc_st_r[3]);
+    }
+#endif
 
     std::vector<std::shared_ptr<TA::TArrayD>> data_tensors = {Fock_oo, Fock_ov, Fock_vo, Fock_vv,
               G_oooo, G_ooov, G_oovo, G_oovv, G_ovov, G_ovvo, G_vovo, G_voov, G_ovvv, G_vovv, G_vvvv,
@@ -542,7 +588,6 @@ int main(int argc, char* argv[]) {
     auto r3_tree = builder.build_tree(cc_st_r[3]);
 #endif
 
-    const auto cc_conv = conv * 1e2;
     iter = 0;
     rmsd = 0.0;
     ediff = 0.0;
@@ -558,10 +603,8 @@ int main(int argc, char* argv[]) {
       auto R1 = r1_tree->evaluate(context.get_map());
       auto R2_ = r2_tree->evaluate(context.get_map());
 
-//      cout << "R1: " << R1 << endl;
       TA::TArrayD R2;
       R2("i,j,a,b") = R2_("a,b,i,j");
-//      cout << "R2: " << R2 << endl;
 
 #if CCSDT_eval
       auto R3 = r3_tree->evaluate(context.get_map());
@@ -575,7 +618,7 @@ int main(int argc, char* argv[]) {
 
 #if CCSDT_eval
       auto tile_R3       = R3.find({0,0,0,0,0,0}).get();
-      auto tile_t_ooovvv   = (*t_oovv).find({0,0,0,0,0,0}).get();
+      auto tile_t_ooovvv   = (*t_ooovvv).find({0,0,0,0,0,0}).get();
 #endif
 
       // save previous norm
@@ -632,7 +675,7 @@ int main(int argc, char* argv[]) {
       printf("%2d    %4.8f     %4.8f     %4.8f     %4.12f   %5.5f\n", iter, norm_t1, norm_t2, ediff, ecc, time_elapsed.count());
       normdiff = norm_last - norm_t2;
       ediff    = ecc_last - ecc;
-    } while((fabs(normdiff) > conv || fabs(ediff) > cc_conv) && (iter < maxiter));
+    } while((fabs(normdiff) > conv || fabs(ediff) > conv) && (iter < maxiter));
 
     TA::finalize();
 
@@ -645,11 +688,16 @@ int main(int argc, char* argv[]) {
         << "Time: "
         << time_elapsed.count() << " μs"
         << endl;
-    cout << "Total energy = " << enuc + ehf + ecc << " a.u.\n";
+    cout << "Total energy = " << enuc + ehf + ecc << " a.u." << endl;
 
     { // Check water molecule, sto-3g
-      double cc_correlation = -0.0706804519;
-      assert(fabs(cc_correlation - ecc) < cc_conv);
+      double ccsd_correlation = -0.070680451962;
+      double ccsdt_correlation = -0.070813170670;
+#if CCSDT_eval
+      assert(fabs(ccsdt_correlation - ecc) < 1e-10);
+#else
+      assert(fabs(ccsd_correlation - ecc) < 1e-10);
+#endif
     }
 
   }  // end of try block
