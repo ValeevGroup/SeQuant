@@ -1,8 +1,7 @@
 #include "../../examples/contract/scf/hartree-fock.h"
-#include "../../src/SeQuant/domain/evaluate/eval_context.hpp"
-#include "../../src/SeQuant/domain/evaluate/eval_tensor.hpp"
-#include "../../src/SeQuant/domain/evaluate/eval_tensor_builder.hpp"
 #include "../sequant_setup.hpp"
+
+#include <SeQuant/domain/evaluate/eval_tree.hpp>
 
 #include <TiledArray/initialize.h>
 #include <tiledarray.h>
@@ -473,20 +472,21 @@ int main(int argc, char* argv[]) {
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"i_1",L"i_2"}, {L"a_1",L"a_2"}))
     };
 
-    container::map<ExprPtr, std::shared_ptr<TA::TArrayD>> context_map;
+    using evaluate::HashType;
+    using evaluate::EvalTree;
+    using ContextMapType =
+        sequant::container::map<HashType, std::shared_ptr<TA::TArrayD>>;
+
+    ContextMapType context_map;
 
     assert(data_tensors.size() == seq_tensors.size());
     for (auto i = 0; i < seq_tensors.size(); ++i) {
-        context_map.insert(decltype(context_map)::value_type(seq_tensors.at(i),
-                    data_tensors.at(i)));
+        auto hash_val = EvalTree(seq_tensors.at(i)).hash_value();
+        context_map.insert(ContextMapType::value_type(hash_val, data_tensors.at(i)));
     }
 
-    auto builder = sequant::evaluate::EvalTensorBuilder<TA::TArrayD>();
-    auto context = evaluate::EvalContext(context_map, builder);
-
-
-    auto r1_tree = builder.build_tree(cc_r[1]);
-    auto r2_tree = builder.build_tree(cc_r[2]);
+    auto r1_tree = EvalTree(cc_r[1]);
+    auto r2_tree = EvalTree(cc_r[2]);
 
     iter = 0;
     rmsd = 0.0;
@@ -497,8 +497,8 @@ int main(int argc, char* argv[]) {
     do {
         ++iter;
         cout << "using TiledArray,    iter: " << iter << endl;
-        auto R1 = r1_tree->evaluate(context.get_map());
-        auto R2 = r2_tree->evaluate(context.get_map());
+        auto R1 = r1_tree.evaluate(context_map);
+        auto R2 = r2_tree.evaluate(context_map);
 
         auto& tile_R1       = R1.find({0,0}).get();
         auto& tile_t_ov     = (*t_ov).find({0,0}).get();
@@ -554,17 +554,6 @@ int main(int argc, char* argv[]) {
         << "\nTime: "
         << time_elapsed.count() << " microseconds"
         << std::endl;
-
-    /* auto r1 = r1_tree->evaluate(context.get_map()); */
-    /* std::cout << "norm(r1) = " << std::sqrt(r1("i,a").dot(r1("i,a"))) << std::endl; */
-
-    /* auto r2 = r2_tree->evaluate(context.get_map()); */
-    /* std::cout << "norm(r2) = " << std::sqrt(r2("i,j,a,b").dot(r2("i,j,a,b"))) << std::endl; */
-
-    /* std::wcout << "Digraph for R1\n------------\n"; */
-    /* std::wcout << r1_tree->to_digraph() << std::endl; */
-    /* std::wcout << "Digraph for R2\n------------\n"; */
-    /* std::wcout << r2_tree->to_digraph() << std::endl; */
 
     TA::finalize();
   }  // end of try block

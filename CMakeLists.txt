@@ -154,13 +154,16 @@ find_package(Libint2 2.6.0 CONFIG)
 find_package(TiledArray CONFIG COMPONENTS tiledarray)
 
 add_library(evaluator EXCLUDE_FROM_ALL
-    src/SeQuant/domain/evaluate/eval_tensor_fwd.hpp
-    src/SeQuant/domain/evaluate/eval_tensor.hpp
-    src/SeQuant/domain/evaluate/eval_tensor_builder.hpp
-    src/SeQuant/domain/evaluate/eval_context.hpp
-    src/SeQuant/domain/evaluate/path_tree.hpp
-    src/SeQuant/domain/evaluate/path_tree.cpp
-    src/SeQuant/domain/evaluate/factorizer.hpp)
+    src/SeQuant/domain/evaluate/eval_fwd.hpp
+    src/SeQuant/domain/evaluate/eval_tree.hpp
+    src/SeQuant/domain/evaluate/eval_tree.cpp
+    src/SeQuant/domain/evaluate/eval_tree_node.hpp
+    src/SeQuant/domain/evaluate/eval_tree_node.cpp
+    src/SeQuant/domain/evaluate/factorizer.hpp
+    src/SeQuant/domain/evaluate/factorizer.cpp
+    # src/SeQuant/domain/evaluate/path_tree.hpp
+    # src/SeQuant/domain/evaluate/path_tree.cpp
+    )
 target_include_directories(evaluator PUBLIC
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>)
@@ -177,16 +180,20 @@ set(utests_src
         tests/unit/test_bliss.cpp
         tests/unit/test_expr.cpp
         tests/unit/test_iterator.cpp
-        tests/unit/test_tensor_network.cpp
         tests/unit/test_mbpt.cpp
         tests/unit/test_spin.cpp
         tests/unit/test_canonicalize.cpp
+        # tests/unit/test_tensor_network.cpp
+        tests/unit/test_tn_factorization.cpp
         )
 set(utests_deps SeQuant evaluator)
 
 if (TARGET tiledarray AND TARGET Libint2::cxx)
   list(APPEND utests_src
-      tests/unit/test_eval_tensor.cpp)
+      ## unit tests for evaluation
+      tests/unit/test_eval_tree.cpp
+      # tests/unit/test_path_tree.cpp
+      )
   list(APPEND utests_deps tiledarray)
 endif(TARGET tiledarray AND TARGET Libint2::cxx)
 
@@ -214,25 +221,26 @@ add_executable(${example0} EXCLUDE_FROM_ALL
 target_link_libraries(${example0} SeQuant ${TBB_LIBRARIES})
 
 if (TARGET tiledarray AND TARGET Libint2::cxx)
-  set(example1 expr_evaluation)
-  add_executable(${example1} EXCLUDE_FROM_ALL
-      examples/evaluation/${example1}.cpp
-      examples/contract/interpret/contract.hpp
-      examples/contract/scf/hartree-fock.cc)
-  target_link_libraries(${example1} SeQuant evaluator ${TBB_LIBRARIES}
-      Libint2::cxx tiledarray)
-  target_link_directories(${example1} PUBLIC ${TBB_LIBRARIES})
-  target_compile_definitions(${example1} PRIVATE SEQUANT_HAS_TILEDARRAY)
+    # sequant expression evaluation example
+    set(example1 expr_evaluation)
+    add_executable(${example1} EXCLUDE_FROM_ALL
+        examples/evaluation/${example1}.cpp
+        examples/contract/interpret/contract.hpp
+        examples/contract/scf/hartree-fock.cc)
+    target_link_libraries(${example1} SeQuant evaluator ${TBB_LIBRARIES}
+        Libint2::cxx tiledarray)
+    target_link_directories(${example1} PUBLIC ${TBB_LIBRARIES})
+    target_compile_definitions(${example1} PRIVATE SEQUANT_HAS_TILEDARRAY)
 
-  set(example2 rcc_evaluation)
-  add_executable(${example2} EXCLUDE_FROM_ALL
-      examples/evaluation/${example2}.cpp
-      examples/contract/interpret/contract.hpp
-      examples/contract/scf/hartree-fock.cc)
-  target_link_libraries(${example2} SeQuant evaluator
-      ${TBB_LIBRARIES} Libint2::cxx tiledarray)
-  target_link_directories(${example2} PUBLIC ${TBB_LIBRARIES})
-  target_compile_definitions(${example2} PRIVATE SEQUANT_HAS_TILEDARRAY)
+    set(example2 rcc_evaluation)
+    add_executable(${example2} EXCLUDE_FROM_ALL
+        examples/evaluation/${example2}.cpp
+        examples/contract/interpret/contract.hpp
+        examples/contract/scf/hartree-fock.cc)
+    target_link_libraries(${example2} SeQuant evaluator
+        ${TBB_LIBRARIES} Libint2::cxx tiledarray)
+    target_link_directories(${example2} PUBLIC ${TBB_LIBRARIES})
+    target_compile_definitions(${example2} PRIVATE SEQUANT_HAS_TILEDARRAY)
 endif (TARGET tiledarray AND TARGET Libint2::cxx)
 
 # add tests for running examples

@@ -55,10 +55,10 @@ class TensorNetwork {
 
     Edge &connect_to(int terminal_idx, int position = 0) {
       assert(terminal_idx != 0);  // valid idx
-      if (second_ == 0) {
+      if (second_ == 0) {  // unconnected Edge
         second_ = terminal_idx;
         second_position_ = position;
-      } else if (std::abs(second_) < std::abs(terminal_idx)) {
+      } else if (std::abs(second_) < std::abs(terminal_idx)) {  // connected to 2 Edges? ensure first_ < second_
         assert(first_ == 0);  // there are slots left
         first_ = second_;
         first_position_ = second_position_;
@@ -108,8 +108,8 @@ class TensorNetwork {
     }
 
    private:
-    /// this assumes antisymmetric tensors ... for nonsymmetric tensors need to
-    /// know not only tensor index but also terminal index within bra/ket
+    // if only connected to 1 terminal, this is always 0
+    // otherwise first_ <= second_
     int first_ = 0;
     int second_ = 0;
     const Index *idxptr_ = nullptr;
@@ -146,15 +146,22 @@ class TensorNetwork {
   /// @note the order of tensors may be different from that provided as input
   const auto &tensors() const { return tensors_; }
 
+  using named_indices_t = container::set<Index, Index::LabelCompare>;
+
   /// @param cardinal_tensor_labels move all tensors with these labels to the
   /// front before canonicalizing indices
   /// @param fast if true (default), does fast canonicalization that is only
   /// optimal if all tensors are distinct; set to false to perform complete
   /// canonicalization
+  /// @param named_indices specifies the indices that cannot be renamed, i.e.
+  /// their labels are meaningful; defaults is nullptr, which results in external
+  /// indices treated as named indices
   /// @return biproduct of canonicalization (e.g. phase); if none, returns nullptr
   ExprPtr canonicalize(
       const container::vector<std::wstring> &cardinal_tensor_labels = {},
-      bool fast = true);
+      bool fast = true,
+      const named_indices_t* named_indices = nullptr
+      );
 
   /// Factorizes tensor network
   /// @return sequence of binary products; each element encodes the tensors to be
@@ -192,7 +199,7 @@ class TensorNetwork {
   // sorted by *label* (not full label) of the corresponding value (Index)
   // this ensures that proto indices are not considered and all internal indices
   // have unique labels (not full labels)
-  mutable container::set<Index, Index::LabelCompare> ext_indices_;
+  mutable named_indices_t ext_indices_;
 
   /// initializes edges_ and ext_indices_
   void init_edges() const;
@@ -206,9 +213,20 @@ class TensorNetwork {
     return edges_;
   }
 
+  /// @brief Returns a range of external indices, i.e. those indices that do not connect tensors
+
+  /// @note The external indices are sorted by *label* (not full label) of the corresponding value (Index)
+  const auto& ext_indices() const {
+    if (edges_.empty())
+      init_edges();
+    return ext_indices_;
+  }
+
  public:
   /// @brief converts the network into a Bliss graph whose vertices are indices and
   /// tensor vertex representations
+  /// @param[in] named_indices pointer to the set of named indices (ordinarily, this includes all external indices);
+  ///            default is nullptr, which means use all external indices for named indices
   /// @return {shared_ptr to Graph, vector of vertex labels, vector of vertex
   /// colors, vector of vertex types}
 
@@ -229,7 +247,7 @@ class TensorNetwork {
   ///     terminal's type (bra/ket).
   std::tuple<std::shared_ptr<bliss::Graph>, std::vector<std::wstring>,
              std::vector<std::size_t>, std::vector<VertexType>>
-  make_bliss_graph() const;
+  make_bliss_graph(const named_indices_t* named_indices = nullptr) const;
 };
 
 }  // namespace sequant
