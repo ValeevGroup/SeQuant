@@ -89,7 +89,7 @@ TEST_CASE("TN_FACTORIZE_BASED_ON_EVAL_TREE", "[tensor_network]") {
     REQUIRE(subfactorB_null.empty());
   }
 
-  SECTION("Testing largest common subfactor: Sum") {
+  SECTION("Testing largest common sub-expressions: Sum") {
     // forming two sums
     auto sumA = std::make_shared<Sum>(
         Sum({make_tensor_expr({"t", "i_1", "i_2", "a_1", "a_2"}),
@@ -139,5 +139,22 @@ TEST_CASE("TN_FACTORIZE_BASED_ON_EVAL_TREE", "[tensor_network]") {
 
     REQUIRE(summandAnull.empty());
     REQUIRE(summandBnull.empty());
+  }
+
+  SECTION("Testing largest common subfactor: Fails using EvalTree hash") {
+    // forming two tensor products
+    auto prodA = std::make_shared<Product>(
+        Product({make_tensor_expr({"t", "i_1", "i_2", "a_1", "a_2"}),
+                 make_tensor_expr({"g", "i_3", "i_4", "a_2", "a_4"}),
+                 make_tensor_expr({"t", "i_3", "i_4", "a_3", "a_4"})}));
+
+    auto prodB = std::make_shared<Product>(
+        Product({make_tensor_expr({"t", "i_3", "i_4", "a_3", "a_4"}),
+                 make_tensor_expr({"g", "i_3", "i_4", "a_2", "a_4"}),
+                 make_tensor_expr({"t", "i_1", "i_2", "a_1", "a_2"})}));
+
+    auto [subfactorA, subfactorB] = largest_common_subnet(prodA, prodB);
+    // REQUIRE(subfactorA == container::svector<size_t>{0, 1, 2});
+    // REQUIRE(subfactorB == container::svector<size_t>{2, 1, 0});
   }
 }
