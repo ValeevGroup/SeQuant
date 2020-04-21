@@ -157,13 +157,16 @@ find_package(Libint2 2.6.0 CONFIG REQUIRED)
 find_package(TiledArray CONFIG COMPONENTS tiledarray)
 
 add_library(evaluator EXCLUDE_FROM_ALL
-    src/SeQuant/domain/evaluate/eval_tensor_fwd.hpp
-    src/SeQuant/domain/evaluate/eval_tensor.hpp
-    src/SeQuant/domain/evaluate/eval_tensor_builder.hpp
-    src/SeQuant/domain/evaluate/eval_context.hpp
-    src/SeQuant/domain/evaluate/path_tree.hpp
-    src/SeQuant/domain/evaluate/path_tree.cpp
-    src/SeQuant/domain/evaluate/factorizer.hpp)
+    src/SeQuant/domain/evaluate/eval_fwd.hpp
+    src/SeQuant/domain/evaluate/eval_tree.hpp
+    src/SeQuant/domain/evaluate/eval_tree.cpp
+    src/SeQuant/domain/evaluate/eval_tree_node.hpp
+    src/SeQuant/domain/evaluate/eval_tree_node.cpp
+    src/SeQuant/domain/evaluate/factorizer.hpp
+    src/SeQuant/domain/evaluate/factorizer.cpp
+    # src/SeQuant/domain/evaluate/path_tree.hpp
+    # src/SeQuant/domain/evaluate/path_tree.cpp
+    )
 target_include_directories(evaluator PUBLIC
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>)
@@ -172,24 +175,25 @@ target_link_libraries(evaluator SeQuant ${TBB_LIBRARIES})
 enable_testing(true)
 
 set(utests_src
-        # tests/unit/test_space.cpp
-        # tests/unit/test_index.cpp
-        # tests/unit/test_op.cpp
-        # tests/unit/test_wick.cpp
-        # tests/unit/test_tensor.cpp
-        # tests/unit/test_bliss.cpp
-        # tests/unit/test_expr.cpp
-        # tests/unit/test_iterator.cpp
+        tests/unit/test_space.cpp
+        tests/unit/test_index.cpp
+        tests/unit/test_op.cpp
+        tests/unit/test_wick.cpp
+        tests/unit/test_tensor.cpp
+        tests/unit/test_bliss.cpp
+        tests/unit/test_expr.cpp
+        tests/unit/test_iterator.cpp
+        tests/unit/test_mbpt.cpp
         # tests/unit/test_tensor_network.cpp
-        # tests/unit/test_mbpt.cpp
+        tests/unit/test_tn_factorization.cpp
         )
 set(utests_deps SeQuant evaluator)
 
 if (TARGET tiledarray)
   list(APPEND utests_src
       ## unit tests for evaluation
-      tests/unit/test_path_tree.cpp
-      tests/unit/test_eval_tensor.cpp
+      tests/unit/test_eval_tree.cpp
+      # tests/unit/test_path_tree.cpp
       )
   list(APPEND utests_deps tiledarray)
 endif(TARGET tiledarray)
@@ -219,7 +223,7 @@ add_executable(${example0} EXCLUDE_FROM_ALL
 target_link_libraries(${example0} SeQuant ${TBB_LIBRARIES})
 
 if (TARGET tiledarray)
-# expr_evaluation example
+    # expr_evaluation example
     set(example1 expr_evaluation)
     add_executable(${example1} EXCLUDE_FROM_ALL
         examples/evaluation/${example1}.cpp
@@ -231,8 +235,9 @@ if (TARGET tiledarray)
     target_compile_definitions(${example1} PRIVATE SEQUANT_HAS_TILEDARRAY)
 endif (TARGET tiledarray)
 
+
 # add tests for running examples
-set (lastexample 2)
+set (lastexample 3)
 foreach(i RANGE ${lastexample})
     if (TARGET ${example${i}})
         add_test(example/${example${i}}/build "${CMAKE_COMMAND}"
