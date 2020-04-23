@@ -13,7 +13,7 @@ namespace sequant::evaluate {
 ///
 /// \brief Representation of binary evaluation of sequant::Expr objects.
 ///
-/// The atomic SeQuant Expr(s) can be thought of either as a representation of a
+/// The SeQuant Expr(s) can be thought of either as a representation of a
 /// single data-tensor (eg. btas::Tensor<double>, TA::TArrayD), or binary
 /// evaluations of such data-tensors. An evaluation could be summing two
 /// data-tensors, taking a product of them antisymmetrizing tensors. A result of
@@ -57,6 +57,10 @@ class EvalTree {
   /// ie. Node is visited first followed by left node and then right node.
   void visit(const std::function<void(const EvalNodePtr&)>& visitor);
 
+  /// Swap labels of leaf nodes made out of such sequant tensor object whose
+  /// to_latex() result matches that of @c expr.
+  bool swap_labels(const ExprPtr& expr);
+
   /// Construct eval tree from sequant expression.
   ///
   /// \param canonize_leaf_braket When true (default) swaps bra indices and with
@@ -85,6 +89,12 @@ class EvalTree {
       const EvalNodePtr& node,
       const container::map<IndexSpace::TypeAttr, size_t>& ispace_size_map);
 
+  /// Swap bra ket labels of those leaf tensors for which the @c predicate
+  /// function evaluates true.
+  static bool _swap_braket_labels(
+      const EvalNodePtr& node,
+      const std::function<bool(const EvalTreeLeafNode&)>& predicate);
+
   ///
   /// Compute permutation of ordinals with phase.
   /// Phase is 1 if the the permutation is even -1 if it's odd.
@@ -97,8 +107,8 @@ class EvalTree {
   _phase_perm(container::svector<size_t>& ords, size_t begin = 0,
               size_t swaps_count = 0);
 
-  /// \tparam DataTensorType Backend data tensor type eg. TA::TArrayD
   /// Antisymmetrize DataTensorType
+  /// \tparam DataTensorType Backend data tensor type eg. TA::TArrayD
   /// \param ta_tensor TiledArray tensor.
   /// \param bra_rank rank of the tensor bra.
   /// \param ket_rank rank of the tensor ket.

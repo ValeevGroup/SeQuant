@@ -17,6 +17,8 @@ ScalarType EvalTreeNode::scalar() const { return scalar_; }
 
 void EvalTreeNode::scale(ScalarType scal) { scalar_ = scal; }
 
+void EvalTreeNode::update_hash() { this->hash_value_ = this->hash_node(); }
+
 const EvalNodePtr& EvalTreeInternalNode::left() const { return left_; }
 
 const EvalNodePtr& EvalTreeInternalNode::right() const { return right_; }
@@ -24,8 +26,6 @@ const EvalNodePtr& EvalTreeInternalNode::right() const { return right_; }
 Operation EvalTreeInternalNode::operation() const { return operation_; }
 
 bool EvalTreeInternalNode::is_leaf() const { return false; }
-
-bool EvalTreeInternalNode::unswap_braket_labels() { return false; }
 
 EvalTreeInternalNode::EvalTreeInternalNode(const EvalNodePtr& left_ptr,
                                            const EvalNodePtr& right_ptr,
@@ -67,7 +67,7 @@ EvalTreeInternalNode::EvalTreeInternalNode(const EvalNodePtr& left_ptr,
   }
 
   // set the hash value
-  this->hash_value_ = this->hash_node();
+  this->update_hash();
 }
 
 HashType EvalTreeInternalNode::hash_node() const {
@@ -143,22 +143,36 @@ HashType EvalTreeInternalNode::hash_node() const {
 
 bool EvalTreeLeafNode::is_leaf() const { return true; }
 
-bool EvalTreeLeafNode::unswap_braket_labels() {
-  if (swapped_bra_ket_) {
-    auto& tnsr = expr()->as<Tensor>();
-    std::copy(tnsr.bra().begin(), tnsr.bra().end(), this->indices_.begin());
-    std::copy(tnsr.ket().begin(), tnsr.ket().end(),
-              this->indices_.begin() + tnsr.bra().size());
-    // rehash node
-    this->hash_value_ = this->hash_node();
-    return true;
+void EvalTreeLeafNode::swap_labels() {
+  // based on the previous state
+  // toggle the state of the object
+  // to indicate whether the bra-ket labels
+  // should be swapped or unswapped
+  swapped_labels_ = !swapped_labels_;
+  // then set labels
+  set_labels();
+  this->update_hash();
+}
+
+void EvalTreeLeafNode::set_labels() {
+  this->indices_.clear();
+  if (auto& tnsr = expr()->as<Tensor>(); swapped_labels_) {
+    // if bra-ket swapped state
+    // set indices from ket first followed by bra
+    for (const auto& idx : tnsr.ket()) this->indices_.emplace_back(idx);
+    for (const auto& idx : tnsr.bra()) this->indices_.emplace_back(idx);
+  } else {
+    // else set from bra first followed by ket
+    for (const auto& idx : tnsr.bra()) this->indices_.emplace_back(idx);
+    for (const auto& idx : tnsr.ket()) this->indices_.emplace_back(idx);
   }
-  return false;
 }
 
 const ExprPtr& EvalTreeLeafNode::expr() const { return expr_; }
 
-bool EvalTreeLeafNode::need_bra_ket_swap(const ExprPtr& expr) {
+bool EvalTreeLeafNode::swapped_labels() const { return swapped_labels_; }
+
+bool EvalTreeLeafNode::canonize_swap(const ExprPtr& expr) {
   auto& tnsr = expr->as<Tensor>();
   for (auto i = 0; i < (tnsr.bra_rank() < tnsr.ket_rank() ? tnsr.bra_rank()
                                                           : tnsr.ket_rank());
@@ -202,7 +216,7 @@ HashType EvalTreeLeafNode::hash_node() const {
           number_hasher(static_cast<ispace_cast>(idx.space().type())));
   };
 
-  if (swapped_bra_ket_) {
+  if (swapped_labels_) {
     hash_idx_space(tnsr.ket());
     hash_idx_space(tnsr.bra());
   } else {
@@ -216,20 +230,11 @@ HashType EvalTreeLeafNode::hash_node() const {
 EvalTreeLeafNode::EvalTreeLeafNode(const ExprPtr& tnsr_expr,
                                    bool canonize_braket)
     : expr_{tnsr_expr} {
-  swapped_bra_ket_ = canonize_braket ? need_bra_ket_swap(expr()) : false;
-  // set indices_
-  auto& tnsr = expr()->as<Tensor>();
+  swapped_labels_ = canonize_braket ? canonize_swap(expr()) : false;
 
-  if (swapped_bra_ket_) {
-    for (const auto& idx : tnsr.ket()) this->indices_.emplace_back(idx);
-    for (const auto& idx : tnsr.bra()) this->indices_.emplace_back(idx);
-  } else {
-    for (const auto& idx : tnsr.bra()) this->indices_.emplace_back(idx);
-    for (const auto& idx : tnsr.ket()) this->indices_.emplace_back(idx);
-  }
+  set_labels();
 
-  // set hash_value_
-  this->hash_value_ = this->hash_node();
+  this->update_hash();
 }
 
 }  // namespace sequant::evaluate

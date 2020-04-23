@@ -22,6 +22,13 @@ void EvalTree::visit(const std::function<void(const EvalNodePtr&)>& visitor) {
   _visit(root, visitor);
 }
 
+bool EvalTree::swap_labels(const ExprPtr& expr) {
+  auto predicate = [&expr](const auto& leaf) {
+    return leaf.expr()->to_latex() == expr->to_latex();
+  };
+  return _swap_braket_labels(root, predicate);
+}
+
 OpsCount EvalTree::_ops_count(
     const EvalNodePtr& node,
     const container::map<IndexSpace::TypeAttr, size_t>& ispace_size_map) {
@@ -62,6 +69,27 @@ void EvalTree::_visit(const EvalNodePtr& node,
   auto intrnl_node = std::dynamic_pointer_cast<EvalTreeInternalNode>(node);
   _visit(intrnl_node->left(), visitor);
   _visit(intrnl_node->right(), visitor);
+}
+
+bool EvalTree::_swap_braket_labels(
+    const EvalNodePtr& node,
+    const std::function<bool(const EvalTreeLeafNode&)>& predicate) {
+  if (node->is_leaf()) {
+    auto leaf_node = std::dynamic_pointer_cast<EvalTreeLeafNode>(node);
+    if (predicate(*leaf_node)) {
+      leaf_node->swap_labels();
+      return true;
+    } else
+      return false;
+  }
+  // internal node
+  auto intrnl_node = std::dynamic_pointer_cast<EvalTreeInternalNode>(node);
+
+  auto swap_success = _swap_braket_labels(intrnl_node->left(), predicate) ||
+                      _swap_braket_labels(intrnl_node->right(), predicate);
+
+  if (swap_success) intrnl_node->update_hash();
+  return swap_success;
 }
 
 EvalNodePtr EvalTree::build_expr(const ExprPtr& expr,
