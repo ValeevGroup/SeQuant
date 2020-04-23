@@ -495,19 +495,19 @@ int main(int argc, char* argv[]) {
       using IdxMap = std::map<Index, Index>;
       IdxMap m1 = {{Index{L"i_1"}, Index{L"i_1"}},
                    {Index{L"i_2"}, Index{L"i_3"}},
-                   {Index{L"i_3"}, Index{L"i_2"}}};
+                   {Index{L"i_3"}, Index{L"i_2"}}}; // ijk -> ikj
       IdxMap m2 = {{Index{L"i_1"}, Index{L"i_2"}},
                    {Index{L"i_2"}, Index{L"i_1"}},
-                   {Index{L"i_3"}, Index{L"i_3"}}};
+                   {Index{L"i_3"}, Index{L"i_3"}}}; // ijk -> jik
       IdxMap m3 = {{Index{L"i_1"}, Index{L"i_2"}},
                    {Index{L"i_2"}, Index{L"i_3"}},
-                   {Index{L"i_3"}, Index{L"i_1"}}};
+                   {Index{L"i_3"}, Index{L"i_1"}}}; // ijk -> jki
       IdxMap m4 = {{Index{L"i_1"}, Index{L"i_3"}},
                    {Index{L"i_2"}, Index{L"i_1"}},
-                   {Index{L"i_3"}, Index{L"i_2"}}};
+                   {Index{L"i_3"}, Index{L"i_2"}}}; // ijk -> kij
       IdxMap m5 = {{Index{L"i_1"}, Index{L"i_3"}},
                    {Index{L"i_2"}, Index{L"i_2"}},
-                   {Index{L"i_3"}, Index{L"i_1"}}};
+                   {Index{L"i_3"}, Index{L"i_1"}}}; // ijk -> kji
 
       auto p1 = transform_expression(cc_st_r[3], m1,-1.0/120.0);
       auto p2 = transform_expression(cc_st_r[3], m2,-1.0/120.0);
