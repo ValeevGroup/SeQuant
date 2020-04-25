@@ -322,7 +322,7 @@ bool has_tensor_label(const ExprPtr& expr, std::wstring label) {
     bool result = false;
     for (auto&& term : *expr) {
       if (term->is<Product>()) result = check_product(term->as<Product>());
-      if (result) return result;
+      if (result) return true;
     }
     return result;
   } else
@@ -567,7 +567,7 @@ ExprPtr spintrace(ExprPtr expression,
   expression->visit(check_proto_index);
 
   if (expression->is<Constant>()) return expression;
-  if (expression->is<Tensor>()) expression = ex<Constant>(1) * expression;
+//  if (expression->is<Tensor>()) expression = ex<Constant>(1) * expression;
 
   auto spin_trace_tensor = [&](const Tensor& tensor) {
     if (can_expand(tensor)) {
@@ -684,7 +684,7 @@ ExprPtr spintrace(ExprPtr expression,
       }
 
       auto spin_expr = append_spin(expr, index_replacements);
-      rapid_simplify(spin_expr);  // TODO: Check if this is required
+//      rapid_simplify(spin_expr);  // TODO: Check if this is required
 
       if (spin_expr->is<Tensor>()) {
         auto temp = spin_trace_tensor(spin_expr->as<Tensor>());
@@ -706,8 +706,8 @@ ExprPtr spintrace(ExprPtr expression,
             temp.append(summand);
           }
           ExprPtr SumPtr = std::make_shared<Sum>(temp);
-          expand(SumPtr);
-          rapid_simplify(SumPtr);  // TODO: Check if this is required
+//          expand(SumPtr);
+//          rapid_simplify(SumPtr);  // TODO: Check if this is required
           auto spin_removed = remove_spin(SumPtr);
           result->append(spin_removed);
         }
@@ -721,7 +721,7 @@ ExprPtr spintrace(ExprPtr expression,
   // Check if the antisymmetrizer operator (A) is present in the expression
   if (has_tensor_label(expression, L"A")) {
     expression = expand_A_operator(expression);
-    rapid_simplify(expression);  // TODO: Check if this is required
+//    rapid_simplify(expression);  // TODO: Check if this is required
   }
 
   if (expression->is<Tensor>()) expression = ex<Constant>(1) * expression;
@@ -731,6 +731,7 @@ ExprPtr spintrace(ExprPtr expression,
   } else if ((expression->is<Sum>())) {
     auto result = std::make_shared<Sum>();
     for (auto&& term : *expression) {
+      auto term_start = std::chrono::high_resolution_clock::now();
       if (term->is<Product>())
         result->append(trace_product(term->as<Product>()));
       else if (term->is<Tensor>()) {
@@ -738,6 +739,10 @@ ExprPtr spintrace(ExprPtr expression,
         result->append(trace_product(term_as_product->as<Product>()));
       } else
         result->append(term);
+      auto term_stop = std::chrono::high_resolution_clock::now();
+      auto t_time_elapsed =
+          std::chrono::duration_cast<std::chrono::microseconds>(term_stop - term_start);
+      // std::wcout << t_time_elapsed.count() << " " << to_latex(term) << "\n";
     }
     result->visit(reset_idx_tags);
     return result;

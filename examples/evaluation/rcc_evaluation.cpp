@@ -13,7 +13,7 @@
 
 #include <memory>
 
-#define CCSDT_eval 1
+#define CCSDT_eval 0
 
 int main(int argc, char* argv[]) {
   using std::cerr;
@@ -596,7 +596,7 @@ int main(int argc, char* argv[]) {
     cout << "Using TiledArray..." << endl;
     cout << "Iter   norm(t_ov)    norm(t_oovv)     ΔE(CC)          E(CC)       time(s)" << endl;
     cout << "============================================================================" << endl;
-    auto tstart = std::chrono::high_resolution_clock::now();
+    auto CC_start = std::chrono::high_resolution_clock::now();
     do {
       const auto tstart = std::chrono::high_resolution_clock::now();
       ++iter;
@@ -679,9 +679,9 @@ int main(int argc, char* argv[]) {
 
     TA::finalize();
 
-    auto tstop = std::chrono::high_resolution_clock::now();
+    auto CC_stop = std::chrono::high_resolution_clock::now();
     auto time_elapsed =
-        std::chrono::duration_cast<std::chrono::microseconds>(tstop - tstart);
+        std::chrono::duration_cast<std::chrono::microseconds>(CC_stop - CC_start);
 
     cout << "\nOut of loop after "
         << iter << " iterations.\n"
