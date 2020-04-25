@@ -715,14 +715,26 @@ ExprPtr spintrace(ExprPtr expression,
         result->append(expr);
       }
     }  // Permutation FOR loop
-    return result;
+
+    {
+      ExprPtr temp_expr = result;
+      canonicalize(temp_expr);
+      simplify(temp_expr);
+      std::wcout << to_latex(expression) << "\n" << to_latex(temp_expr) << "\n\n";
+    }
+     return result;
   };
 
+  const auto A_start = std::chrono::high_resolution_clock::now();
   // Check if the antisymmetrizer operator (A) is present in the expression
   if (has_tensor_label(expression, L"A")) {
     expression = expand_A_operator(expression);
 //    rapid_simplify(expression);  // TODO: Check if this is required
   }
+  const auto A_stop = std::chrono::high_resolution_clock::now();
+  auto A_time_elapsed =
+      std::chrono::duration_cast<std::chrono::microseconds>(A_stop - A_start);
+  // std::cout << "A operator: " << A_time_elapsed.count() << " micro sec.\n";
 
   if (expression->is<Tensor>()) expression = ex<Constant>(1) * expression;
 
