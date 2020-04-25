@@ -20,7 +20,7 @@ TEST_CASE("TensorNetwork", "[elements]") {
   SECTION("constructors") {
     {  // with Tensors
       auto t1 = ex<Tensor>(L"F", WstrList{L"i_1"}, WstrList{L"i_2"});
-      auto t2 = ex<Tensor>(L"t", WstrList{L"i_2"}, WstrList{L"i_1"});
+      auto t2 = ex<Tensor>(L"t", WstrList{L"i_1"}, WstrList{L"i_2"});
       auto t1_x_t2 = t1 * t2;
       REQUIRE_NOTHROW(TensorNetwork(*t1_x_t2));
 
@@ -42,6 +42,99 @@ TEST_CASE("TensorNetwork", "[elements]") {
     };
 
   }  // SECTION("constructors")
+
+  SECTION("accessors") {
+    {
+      constexpr const auto V = Vacuum::SingleProduct;
+      auto t1 = ex<Tensor>(L"F", WstrList{L"i_1"}, WstrList{L"i_2"});
+      auto t2 = ex<FNOperator>(WstrList{L"i_1"}, WstrList{L"i_3"}, V);
+      auto t1_x_t2 = t1 * t2;
+      REQUIRE_NOTHROW(TensorNetwork(*t1_x_t2));
+      TensorNetwork tn(*t1_x_t2);
+
+      // edges
+      auto edges = tn.edges();
+      REQUIRE(edges.size() == 3);
+
+      // ext indices
+      auto ext_indices = tn.ext_indices();
+      REQUIRE(ext_indices.size() == 2);
+
+      // tensors
+      auto tensors = tn.tensors();
+      REQUIRE(size(tensors) == 2);
+      REQUIRE(std::dynamic_pointer_cast<Expr>(tensors[0]));
+      REQUIRE(std::dynamic_pointer_cast<Expr>(tensors[1]));
+      REQUIRE(*std::dynamic_pointer_cast<Expr>(tensors[0]) == *t1);
+      REQUIRE(*std::dynamic_pointer_cast<Expr>(tensors[1]) == *t2);
+    }
+  }  // SECTION("accessors")
+
+  SECTION("canonicalizer") {
+    {
+      {  // with no external indices, hence no named indices whatsoever
+        constexpr const auto V = Vacuum::SingleProduct;
+        auto t1 = ex<Tensor>(L"F", WstrList{L"i_1"}, WstrList{L"i_2"});
+        auto t2 = ex<FNOperator>(WstrList{L"i_1"}, WstrList{L"i_2"}, V);
+        auto t1_x_t2 = t1 * t2;
+        TensorNetwork tn(*t1_x_t2);
+        tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false);
+
+        REQUIRE(size(tn.tensors()) == 2);
+        REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[0]));
+        REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[1]));
+//        std::wcout << to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) << std::endl;
+//        std::wcout << to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) << std::endl;
+        REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) ==
+            L"{\\tilde{a}^{{i_1}}_{{i_2}}}");
+        REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) ==
+            L"{F^{{i_2}}_{{i_1}}}");
+      }
+
+      {
+        constexpr const auto V = Vacuum::SingleProduct;
+        auto t1 = ex<Tensor>(L"F", WstrList{L"i_2"}, WstrList{L"i_17"});
+        auto t2 = ex<FNOperator>(WstrList{L"i_2"}, WstrList{L"i_3"}, V);
+        auto t1_x_t2 = t1 * t2;
+
+        // with all external named indices
+        {
+          TensorNetwork tn(*t1_x_t2);
+          tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false);
+
+          REQUIRE(size(tn.tensors()) == 2);
+          REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[0]));
+          REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[1]));
+          // std::wcout << to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) << std::endl;
+          // std::wcout << to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) << std::endl;
+          REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) ==
+                  L"{\\tilde{a}^{{i_1}}_{{i_3}}}");
+          REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) ==
+                  L"{F^{{i_{17}}}_{{i_1}}}");
+        }
+
+        // with explicit named indices
+        {
+          TensorNetwork tn(*t1_x_t2);
+
+          using named_indices_t = TensorNetwork::named_indices_t;
+          named_indices_t indices{Index{L"i_17"}};
+          tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false,
+                          &indices);
+
+          REQUIRE(size(tn.tensors()) == 2);
+          REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[0]));
+          REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[1]));
+          //        std::wcout << to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) << std::endl;
+          //        std::wcout << to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) << std::endl;
+          REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) ==
+                  L"{\\tilde{a}^{{i_2}}_{{i_1}}}");
+          REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) ==
+                  L"{F^{{i_{17}}}_{{i_2}}}");
+        }
+      }
+    }
+  }  // SECTION("accessors")
 
   SECTION("bliss graph") {
     Index::reset_tmp_index();
