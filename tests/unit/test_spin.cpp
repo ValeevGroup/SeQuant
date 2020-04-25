@@ -417,4 +417,289 @@ TEST_CASE("Spin") {
         L"{ \\left({{{2}}{g^{{i_2}{a_2}}_{{a_1}{i_1}}}{t^{{i_1}}_{{a_2}}}} - "
         L"{{g^{{a_2}{i_2}}_{{a_1}{i_1}}}{t^{{i_1}}_{{a_2}}}}\\right) }");
   }
+
+
+  SECTION("CCSD R1") {
+    // These terms from CCSD R1 equations
+    {
+      // A * f
+      const auto input = ex<Tensor>(L"A", WstrList{L"i_1"}, WstrList{L"a_1"}) *
+          ex<Tensor>(L"f", WstrList{L"a_1"}, WstrList{L"i_1"});
+      auto result = ex<Constant>(0.5) * spintrace(input, {{L"i_1", L"a_1"}});
+      expand(result);
+      rapid_simplify(result);
+      canonicalize(result);
+      REQUIRE(to_latex(result) == L"{ \\left({{f^{{i_1}}_{{a_1}}}}\\right) }");
+    }
+
+    {
+      // Transform indices in an expression
+      // - A * g * t1
+      const auto input =
+          ex<Constant>(-1) *
+              ex<Tensor>(L"A", WstrList{L"i_1"}, WstrList{L"a_1"}) *
+              ex<Tensor>(L"g", WstrList{L"i_2", L"a_1"}, WstrList{L"i_1", L"a_2"},
+                         Symmetry::antisymm) *
+              ex<Tensor>(L"t", WstrList{L"a_2"}, WstrList{L"i_2"});
+      auto result = ex<Constant>(0.5) * spintrace(input, {{L"i_1", L"a_1"}});
+      expand(result);
+      rapid_simplify(result);
+      canonicalize(result);
+      REQUIRE(
+          to_latex(result) ==
+              L"{ \\left({{{2}}{g^{{i_1}{a_2}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}} - "
+              L"{{g^{{a_2}{i_1}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}}\\right) }");
+
+      std::map<Index, Index> idxmap = {{Index{L"i_1"}, Index{L"i_2"}},
+                                       {Index{L"i_2"}, Index{L"i_1"}}};
+      auto transformed_result = transform_expression(result, idxmap);
+      REQUIRE(transformed_result->is<Sum>());
+      REQUIRE(transformed_result->size() == 2);
+      REQUIRE(
+          to_latex(transformed_result) ==
+              L"{ \\left({{{2}}{g^{{i_2}{a_2}}_{{a_1}{i_1}}}{t^{{i_1}}_{{a_2}}}} - "
+              L"{{g^{{a_2}{i_2}}_{{a_1}{i_1}}}{t^{{i_1}}_{{a_2}}}}\\right) }");
+    }
+
+    {
+      // - A * f * t1
+      const auto input = ex<Constant>(-1) *
+          ex<Tensor>(L"A", WstrList{L"i_1"}, WstrList{L"a_1"}) *
+          ex<Tensor>(L"f", WstrList{L"i_2"}, WstrList{L"i_1"}) *
+          ex<Tensor>(L"t", WstrList{L"a_1"}, WstrList{L"i_2"});
+      // std::wcout << "input:3  " << to_latex(input) << "\n";
+      auto result = ex<Constant>(0.5) * spintrace(input, {{L"i_1", L"a_1"}});
+      expand(result);
+      rapid_simplify(result);
+      canonicalize(result);
+      // std::wcout << "result: " << to_latex(result) << "\n\n";
+      REQUIRE(
+          to_latex(result) ==
+              L"{ \\left( - {{f^{{i_1}}_{{i_2}}}{t^{{i_2}}_{{a_1}}}}\\right) }");
+    }
+
+    {
+      // A * f * t1
+      const auto input = ex<Tensor>(L"A", WstrList{L"i_1"}, WstrList{L"a_1"}) *
+          ex<Tensor>(L"f", WstrList{L"a_1"}, WstrList{L"a_2"}) *
+          ex<Tensor>(L"t", WstrList{L"a_2"}, WstrList{L"i_1"});
+      // std::wcout << "input:4  " << to_latex(input) << "\n";
+      auto result = ex<Constant>(0.5) * spintrace(input, {{L"i_1", L"a_1"}});
+      expand(result);
+      rapid_simplify(result);
+      canonicalize(result);
+      // std::wcout << "result: " << to_latex(result) << "\n\n";
+      REQUIRE(to_latex(result) ==
+          L"{ \\left({{f^{{a_2}}_{{a_1}}}{t^{{i_1}}_{{a_2}}}}\\right) }");
+    }
+
+    {
+      // -1/2 * A * g * t2
+      const auto input =
+          ex<Constant>(-1. / 2.) *
+              ex<Tensor>(L"A", WstrList{L"i_1"}, WstrList{L"a_1"}) *
+              ex<Tensor>(L"g", WstrList{L"i_2", L"i_3"}, WstrList{L"i_1", L"a_2"},
+                         Symmetry::antisymm) *
+              ex<Tensor>(L"t", WstrList{L"a_1", L"a_2"}, WstrList{L"i_2", L"i_3"},
+                         Symmetry::antisymm);
+      // std::wcout << "input:5  " << to_latex(input) << "\n";
+      auto result = ex<Constant>(0.5) * spintrace(input, {{L"i_1", L"a_1"}});
+      expand(result);
+      rapid_simplify(result);
+      canonicalize(result);
+      // std::wcout << "result: " << to_latex(result) << "\n\n";
+      REQUIRE(to_latex(result) ==
+          L"{ \\left( - "
+          L"{{{2}}{g^{{a_2}{i_1}}_{{i_2}{i_3}}}{t^{{i_3}{i_2}}_{{a_1}{a_2}}"
+          L"}} + "
+          L"{{g^{{a_2}{i_1}}_{{i_2}{i_3}}}{t^{{i_2}{i_3}}_{{a_1}{a_2}}}}"
+          L"\\right) }");
+    }
+
+    {
+      // -1/2 * A * g * t2
+      const auto input =
+          ex<Constant>(-0.5) *
+              ex<Tensor>(L"A", WstrList{L"i_1"}, WstrList{L"a_1"}) *
+              ex<Tensor>(L"g", WstrList{L"i_2", L"a_1"}, WstrList{L"a_2", L"a_3"},
+                         Symmetry::antisymm) *
+              ex<Tensor>(L"t", WstrList{L"a_2", L"a_3"}, WstrList{L"i_1", L"i_2"},
+                         Symmetry::antisymm);
+      //  std::wcout << "input:6  " << to_latex(input) << "\n";
+      auto result = ex<Constant>(0.5) * spintrace(input, {{L"i_1", L"a_1"}});
+      expand(result);
+      rapid_simplify(result);
+      canonicalize(result);
+      //  std::wcout << "result: " << to_latex(result) << "\n\n";
+      REQUIRE(to_latex(result) ==
+          L"{ "
+          L"\\left({{{2}}{g^{{a_3}{a_2}}_{{a_1}{i_2}}}{t^{{i_2}{i_1}}_{{a_"
+          L"2}{a_3}}}} - "
+          L"{{g^{{a_3}{a_2}}_{{a_1}{i_2}}}{t^{{i_1}{i_2}}_{{a_2}{a_3}}}}"
+          L"\\right) }");
+    }
+
+    {
+      // A * f * t2
+      const auto input =
+          ex<Tensor>(L"A", WstrList{L"i_1"}, WstrList{L"a_1"}) *
+              ex<Tensor>(L"f", WstrList{L"i_2"}, WstrList{L"a_2"},
+                         Symmetry::antisymm) *
+              ex<Tensor>(L"t", WstrList{L"a_1", L"a_2"}, WstrList{L"i_1", L"i_2"},
+                         Symmetry::antisymm);
+      //  std::wcout << "input:7  " << to_latex(input) << "\n";
+      auto result = ex<Constant>(0.5) * spintrace(input, {{L"i_1", L"a_1"}});
+      expand(result);
+      rapid_simplify(result);
+      canonicalize(result);
+      //  std::wcout << "result: " << to_latex(result) << "\n\n";
+      REQUIRE(
+          to_latex(result) == L"{ \\left({{{2}}{f^{{a_2}}_{{i_2}}}{t^{{i_1}{i_2}}_{{a_1}{a_2}}}} - {{f^{{a_2}}_{{i_2}}}{t^{{i_2}{i_1}}_{{a_1}{a_2}}}}\\right) }");
+    }
+
+    {
+      // A * g * t1 * t1
+      const auto input =
+          ex<Tensor>(L"A", WstrList{L"i_1"}, WstrList{L"a_1"}) *
+              ex<Tensor>(L"g", WstrList{L"i_2", L"a_1"}, WstrList{L"a_2", L"a_3"},
+                         Symmetry::antisymm) *
+              ex<Tensor>(L"t", WstrList{L"a_2"}, WstrList{L"i_2"}) *
+              ex<Tensor>(L"t", WstrList{L"a_3"}, WstrList{L"i_1"});
+      // std::wcout << "input:8  " << to_latex(input) << "\n";
+      auto result = ex<Constant>(0.5) * spintrace(input, {{L"i_1", L"a_1"}});
+      expand(result);
+      rapid_simplify(result);
+      canonicalize(result);
+      //  std::wcout << "result: " << to_latex(result) << "\n\n";
+      REQUIRE(to_latex(result) ==
+          L"{ "
+          L"\\left({{{2}}{g^{{a_3}{a_2}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}{"
+          L"t^{{i_1}}_{{a_3}}}} - "
+          L"{{g^{{a_3}{a_2}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_3}}}{t^{{i_1}}_{{"
+          L"a_2}}}}\\right) }");
+    }
+
+    {
+      // A * g * t2 * t2
+      const auto input =
+          ex<Tensor>(L"A", WstrList{L"i_1"}, WstrList{L"a_1"}) *
+              ex<Tensor>(L"g", WstrList{L"i_2", L"i_3"}, WstrList{L"i_1", L"a_2"},
+                         Symmetry::antisymm) *
+              ex<Tensor>(L"t", WstrList{L"a_2"}, WstrList{L"i_2"}) *
+              ex<Tensor>(L"t", WstrList{L"a_1"}, WstrList{L"i_3"});
+      //  std::wcout << "input:9  " << to_latex(input) << "\n";
+      auto result = ex<Constant>(0.5) * spintrace(input, {{L"i_1", L"a_1"}});
+      expand(result);
+      rapid_simplify(result);
+      canonicalize(result);
+      //  std::wcout << "result: " << to_latex(result) << "\n\n";
+      REQUIRE(to_latex(result) ==
+          L"{ \\left({{g^{{a_2}{i_1}}_{{i_2}{i_3}}}{t^{{i_2}}_{{a_1}}}{t^{{i_3}}_{{a_2}}}} - {{{2}}{g^{{a_2}{i_1}}_{{i_2}{i_3}}}{t^{{i_3}}_{{a_1}}}{t^{{i_2}}_{{a_2}}}}\\right) }");
+    }
+
+    {
+      // A * f * t1 * t1
+      const auto input = ex<Constant>(-1) *
+          ex<Tensor>(L"A", WstrList{L"i_1"}, WstrList{L"a_1"}) *
+          ex<Tensor>(L"f", WstrList{L"i_2"}, WstrList{L"a_2"}) *
+          ex<Tensor>(L"t", WstrList{L"a_2"}, WstrList{L"i_1"}) *
+          ex<Tensor>(L"t", WstrList{L"a_1"}, WstrList{L"i_2"});
+      //  std::wcout << "input:10  " << to_latex(input) << "\n";
+      auto result = ex<Constant>(0.5) * spintrace(input, {{L"i_1", L"a_1"}});
+      expand(result);
+      rapid_simplify(result);
+      canonicalize(result);
+      //  std::wcout << "result: " << to_latex(result) << "\n\n";
+      REQUIRE(to_latex(result) ==
+          L"{ \\left( - "
+          L"{{f^{{a_2}}_{{i_2}}}{t^{{i_2}}_{{a_1}}}{t^{{i_1}}_{{a_2}}}}"
+          L"\\right) }");
+    }
+
+    {
+      // -1/2 * A * g * t1 * t2
+      const auto input =
+          ex<Constant>(-1. / 2.) *
+              ex<Tensor>(L"A", WstrList{L"i_1"}, WstrList{L"a_1"}) *
+              ex<Tensor>(L"g", WstrList{L"i_2", L"i_3"}, WstrList{L"a_2", L"a_3"},
+                         Symmetry::antisymm) *
+              ex<Tensor>(L"t", WstrList{L"a_1"}, WstrList{L"i_2"}) *
+              ex<Tensor>(L"t", WstrList{L"a_2", L"a_3"}, WstrList{L"i_1", L"i_3"},
+                         Symmetry::antisymm);
+      //  std::wcout << "input:11  " << to_latex(input) << "\n";
+      auto result = ex<Constant>(0.5) * spintrace(input, {{L"i_1", L"a_1"}});
+      expand(result);
+      rapid_simplify(result);
+      canonicalize(result);
+      //  std::wcout << "result: " << to_latex(result) << "\n\n";
+      REQUIRE(to_latex(result) == L"{ \\left({{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_2}}_{{a_1}}}{t^{{i_3}{i_1}}_{{a_2}{a_3}}}} - {{{2}}{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_3}}_{{a_1}}}{t^{{i_2}{i_1}}_{{a_2}{a_3}}}}\\right) }");
+    }
+
+    {
+      // -1/2 * A * g * t1 * t2
+      const auto input =
+          ex<Constant>(-1. / 2.) *
+              ex<Tensor>(L"A", WstrList{L"i_1"}, WstrList{L"a_1"}) *
+              ex<Tensor>(L"g", WstrList{L"i_2", L"i_3"}, WstrList{L"a_2", L"a_3"},
+                         Symmetry::antisymm) *
+              ex<Tensor>(L"t", WstrList{L"a_2"}, WstrList{L"i_1"}) *
+              ex<Tensor>(L"t", WstrList{L"a_1", L"a_3"}, WstrList{L"i_2", L"i_3"},
+                         Symmetry::antisymm);
+      //  std::wcout << "input:12  " << to_latex(input) << "\n";
+      auto result = ex<Constant>(0.5) * spintrace(input, {{L"i_1", L"a_1"}});
+      expand(result);
+      rapid_simplify(result);
+      canonicalize(result);
+//        std::wcout << "result: " << to_latex(result) << "\n\n";
+      REQUIRE(to_latex(result) ==
+          L"{ \\left( - "
+          L"{{{2}}{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_1}}_{{a_3}}}{t^{{i_3}"
+          L"{i_2}}_{{a_1}{a_2}}}} + "
+          L"{{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_1}}_{{a_3}}}{t^{{i_2}{i_3}"
+          L"}_{{a_1}{a_2}}}}\\right) }");
+    }
+
+    {
+      // A * g * t1 * t2
+      const auto input =
+          ex<Constant>(1) *
+              ex<Tensor>(L"A", WstrList{L"i_1"}, WstrList{L"a_1"}) *
+              ex<Tensor>(L"g", WstrList{L"i_2", L"i_3"}, WstrList{L"a_2", L"a_3"},
+                         Symmetry::antisymm) *
+              ex<Tensor>(L"t", WstrList{L"a_2"}, WstrList{L"i_2"}) *
+              ex<Tensor>(L"t", WstrList{L"a_1", L"a_3"}, WstrList{L"i_1", L"i_3"},
+                         Symmetry::antisymm);
+      //  std::wcout << "input:13  " << to_latex(input) << "\n";
+      auto result = ex<Constant>(0.5) * spintrace(input, {{L"i_1", L"a_1"}});
+      expand(result);
+      rapid_simplify(result);
+      canonicalize(result);
+      //  std::wcout << "result: " << to_latex(result) << "\n\n";
+      REQUIRE(to_latex(result) ==
+          L"{ \\left( - {{{2}}{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_2}}_{{a_2}}}{t^{{i_3}{i_1}}_{{a_1}{a_3}}}} + {{{4}}{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_2}}_{{a_2}}}{t^{{i_1}{i_3}}_{{a_1}{a_3}}}} + {{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_3}}_{{a_2}}}{t^{{i_2}{i_1}}_{{a_1}{a_3}}}} - {{{2}}{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_2}}_{{a_3}}}{t^{{i_1}{i_3}}_{{a_1}{a_2}}}}\\right) }");
+    }
+
+    {
+      // - A * g * t1 * t1 * t1
+      auto input = ex<Constant>(-1.) *
+          ex<Tensor>(L"g", WstrList{L"i_2", L"i_3"},
+                     WstrList{L"a_2", L"a_3"}, Symmetry::antisymm) *
+          ex<Tensor>(L"t", WstrList{L"a_2"}, WstrList{L"i_2"}) *
+          ex<Tensor>(L"t", WstrList{L"a_3"}, WstrList{L"i_1"}) *
+          ex<Tensor>(L"t", WstrList{L"a_1"}, WstrList{L"i_3"});
+      //  std::wcout << "input:14  " << to_latex(input) << "\n";
+      auto result = ex<Constant>(0.5) * spintrace(input, {{L"i_1", L"a_1"}});
+      expand(result);
+      rapid_simplify(result);
+      canonicalize(result);
+      //  std::wcout << "result: " << to_latex(result) << "\n\n";
+      REQUIRE(to_latex(result) ==
+          L"{ "
+          L"\\left({{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_2}}_{{a_1}}}{t^{{i_"
+          L"3}}_{{a_2}}}{t^{{i_1}}_{{a_3}}}} - "
+          L"{{{2}}{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_3}}_{{a_1}}}{t^{{i_2}"
+          L"}_{{a_2}}}{t^{{i_1}}_{{a_3}}}}\\right) }");
+    }
+  }  // CCSD R1
+
 }
