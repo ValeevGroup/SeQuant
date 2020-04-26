@@ -23,6 +23,9 @@ class EvalTreeNode {
   virtual HashType hash_node() const = 0;
 
  public:
+  /// Default destructor made virtual.
+  virtual ~EvalTreeNode() = default;
+
   /// Getter for the index label container.
   /// \return Const reference to the index label container.
   const IndexContainer& indices() const;
@@ -58,6 +61,9 @@ class EvalTreeInternalNode : public EvalTreeNode {
   HashType hash_node() const override;
 
  public:
+  /// Default destructor made virtual.
+  virtual ~EvalTreeInternalNode() = default;
+
   /// Construct internal node.
   EvalTreeInternalNode(const EvalNodePtr&, const EvalNodePtr&, Operation);
 
@@ -97,6 +103,9 @@ class EvalTreeLeafNode : public EvalTreeNode {
   static bool canonize_swap(const ExprPtr&);
 
  public:
+  /// Default destructor made virtual.
+  virtual ~EvalTreeLeafNode() = default;
+
   /// Construct leaf node.
   /// \param tnsr_expr       shared pointer to the SeQuant Expr of Tensor type.
   //
