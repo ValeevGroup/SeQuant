@@ -18,13 +18,11 @@ EvTensorPtr BinaryOpTypeBuilder::operator()(EvTensorPtr& evt_ptr,
                                             const ExprPtr& expr_ptr) const {
   auto right_evtptr = std::make_shared<EvalTensor>(EvalTensor(expr_ptr));
   if ((this->op == EvalTensor::Operation::Sum) &&
-      evt_ptr->indices() != right_evtptr->indices()){
-    std::wcout << __LINE__ << " " << to_latex(expr_ptr) << " " << evt_ptr->indices().size() << " " << right_evtptr->indices().size() << std::endl;
+      evt_ptr->indices().size() != right_evtptr->indices().size()){
     throw std::domain_error(
         "While summing two tensors, their indices should be identical");
   }
 
-  // std::wcout << __LINE__ << " " << to_latex(expr_ptr) << " " << evt_ptr->indices().size() << " " << right_evtptr->indices().size() << std::endl;
   auto result = std::make_shared<EvalTensor>();
 
   result->set_left_tensor(evt_ptr);
