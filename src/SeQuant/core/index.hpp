@@ -327,7 +327,7 @@ class Index : public Taggable {
         proto_indices_ | ranges::views::transform([](const Index &idx) {
           return int64_t(idx.space().attr());
         });
-    return hash::hash_range(ranges::begin(space_attr_view),
+    return hash::range(ranges::begin(space_attr_view),
                       ranges::end(space_attr_view));
   }
 
@@ -694,8 +694,8 @@ inline auto hash_value(const Index &idx) {
   const auto &proto_indices = idx.proto_indices();
   using std::begin;
   using std::end;
-  auto val = hash::hash_range(begin(proto_indices), end(proto_indices));
-  boost::hash_combine(val, idx.label());
+  auto val = hash::range(begin(proto_indices), end(proto_indices));
+  hash::combine(val, idx.label());
   return val;
 }
 

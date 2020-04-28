@@ -873,7 +873,7 @@ class Product : public Expr {
         factors() |
         ranges::views::transform(
             [](const ExprPtr &ptr) -> const Expr & { return *ptr; });
-    hash_value_ = hash::hash_range(ranges::begin(deref_factors),
+    hash_value_ = hash::range(ranges::begin(deref_factors),
                              ranges::end(deref_factors));
     return *hash_value_;
   }
@@ -1133,7 +1133,7 @@ class Sum : public Expr {
         summands() |
         ranges::views::transform(
             [](const ExprPtr &ptr) -> const Expr & { return *ptr; });
-    hash_value_ = hash::hash_range(ranges::begin(deref_summands),
+    hash_value_ = hash::range(ranges::begin(deref_summands),
                                     ranges::end(deref_summands));
     return *hash_value_;
   }
