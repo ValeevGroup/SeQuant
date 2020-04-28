@@ -10,6 +10,15 @@ if [[ "${TRAVIS_COMMIT_MESSAGE}" = *"[travis delete-cache]"* ]]; then
   ccache -c
 fi
 
+# get the most recent cmake available
+if [ ! -d "${INSTALL_PREFIX}/cmake" ]; then
+  CMAKE_VERSION=3.17.1
+  CMAKE_URL="https://cmake.org/files/v${CMAKE_VERSION%.[0-9]}/cmake-${CMAKE_VERSION}-Linux-x86_64.tar.gz"
+  mkdir ${INSTALL_PREFIX}/cmake && wget --no-check-certificate -O - ${CMAKE_URL} | tar --strip-components=1 -xz -C ${INSTALL_PREFIX}/cmake
+fi
+export PATH=${INSTALL_PREFIX}/cmake/bin:${PATH}
+cmake --version
+
 ${TRAVIS_BUILD_DIR}/bin/build-boost-$TRAVIS_OS_NAME.sh
 ${TRAVIS_BUILD_DIR}/bin/build-rangev3-$TRAVIS_OS_NAME.sh
 ${TRAVIS_BUILD_DIR}/bin/build-btas-$TRAVIS_OS_NAME.sh
