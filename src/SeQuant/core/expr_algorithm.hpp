@@ -49,7 +49,7 @@ struct expand_visitor {
           exprseq_clone[i] = subsubexpr;  // scavenging summands here
           using std::begin;
           using std::end;
-          result->append(std::move(ex<Product>(scalar, begin(exprseq_clone), end(exprseq_clone))));
+          result->append(ex<Product>(scalar, begin(exprseq_clone), end(exprseq_clone)));
         }
         expr = std::static_pointer_cast<Expr>(result); // expanded one Sum, return
         return true;

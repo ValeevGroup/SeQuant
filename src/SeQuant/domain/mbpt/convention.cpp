@@ -56,6 +56,7 @@ auto qndecorate(qns qn, std::wstring_view label) {
     case 2: return std::wstring(label) + L"⁻";
     default: assert(false && "invalid quantum number");
   }
+  abort();  // unreachable
 };
 };
 
