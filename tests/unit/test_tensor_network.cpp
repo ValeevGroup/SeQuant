@@ -45,8 +45,9 @@ TEST_CASE("TensorNetwork", "[elements]") {
 
   SECTION("bliss graph") {
     Index::reset_tmp_index();
-    auto tmp = A(2) * H2() * T_(2) * T_(2) * T_(2);
-    // std::wcout << "A2*H2*T2*T2*T2 = " << to_latex(tmp) << std::endl;
+    // to generate expressions in specified (i.e., platform-independent) manner can't use operator expression, must use initializer list
+    auto tmp = ex<Product, std::initializer_list<ExprPtr>>({A(2), H2(), T_(2), T_(2), T_(2)});
+    std::wcout << "A2*H2*T2*T2*T2 = " << to_latex(tmp) << std::endl;
     TensorNetwork tn(tmp->as<Product>().factors());
 
     // make graph
