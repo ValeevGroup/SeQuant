@@ -567,6 +567,84 @@ ExprPtr expand_P_operator(const ExprPtr& expr) {
 }
 
 /// @brief Transforms an expression from spin orbital to spatial orbitals
+/// @detailed
+ExprPtr closed_shell_spintrace(const ExprPtr& expression,
+    std::initializer_list<IndexList> ext_index_groups = {{}}){
+
+  auto check_proto_index = [&](const ExprPtr& expr) {
+    if (expr->is<Tensor>()) {
+      ranges::for_each(
+          expr->as<Tensor>().const_braket(), [&](const Index& idx) {
+            assert(!idx.has_proto_indices() &&
+                "Proto index not supported in spintrace function.");
+          });
+    }
+  };
+  expression->visit(check_proto_index);
+
+  // ExprPtr result;
+  // ExprPtr expr;
+
+  // Expand A operator, antisymmetrize
+  auto expand_all = [&] (const ExprPtr& expr){
+    // ExprPtr temp;
+    auto temp = expr;
+    if (has_tensor_label(temp, L"A"))
+      temp = expand_A_operator(temp);
+    temp = expand_antisymm(temp);
+    rapid_simplify(temp);
+    return temp;
+  };
+  auto expr = expand_all(expression);
+  std::wcout << __LINE__ << " " << to_latex(expr) << std::endl;
+  expand(expr);
+  rapid_simplify(expr);
+  canonicalize(expr);
+  std::wcout << __LINE__ << " " << to_latex(expr) << std::endl;
+
+  // Apply antisymmetrizer operator
+//  if (has_tensor_label(expression, L"A")) {
+//    expr = expand_A_operator(expression);
+//    rapid_simplify(expr);
+//    std::wcout << to_latex(expr) << "\n";
+//  }
+
+  // Lambda for a product
+  auto trace_product = [&] (const Product& product){
+    auto result = std::make_shared<Sum>();
+    ExprPtr expr = std::make_shared<Product>(product);
+    TensorNetwork tn(expr->as<Product>().factors());
+    const auto& tn_edges = tn.edges();
+    const auto& tn_tensors = tn.tensors();
+    for(auto&& i : tn_edges) std::wcout << i.idx().to_latex() << " ";
+    std::cout << "\n";
+
+     return result;
+//    return nullptr;
+  };
+
+  if(expr->is<Constant>())
+    return expr;
+  else if (expr->is<Tensor>())
+    return expand_all(expr);
+  else if(expr->is<Product>())
+    return trace_product(expr->as<Product>());
+  else if (expr->is<Sum>()){
+    auto result = std::make_shared<Sum>();
+    for(auto&& summand : *expr){
+      if(summand->is<Product>()){
+        result->append(trace_product(summand->as<Product>()));
+      } else if (summand->is<Tensor>()){
+        result->append(expand_all(summand));
+      } else
+        result->append(summand);
+    }
+    return result;
+  } else
+    return nullptr;
+}
+
+/// @brief Transforms an expression from spin orbital to spatial orbitals
 /// @detailed Given an expression, this function extracts all indices and adds a
 /// spin attribute to all the indices in the expression. A map is generated with
 /// all possible spin permutations and substituted in the expression. Based on
