@@ -1,4 +1,19 @@
-cmake_minimum_required(VERSION 3.11)  # FetchContent needs 3.11
+
+cmake_minimum_required (VERSION 3.15.0) # need list(PREPEND for toolchains
+
+###############################################################################
+# Bring ValeevGroup cmake toolkit
+###############################################################################
+include(FetchContent)
+FetchContent_Populate(
+    vg_cmake_kit
+    QUIET
+    GIT_REPOSITORY      https://github.com/ValeevGroup/kit-cmake.git
+    SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/cmake/vg
+    BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/cmake/vg-build
+    SUBBUILD_DIR ${CMAKE_CURRENT_BINARY_DIR}/cmake/vg-subbuild
+)
+
 project(SeQuant LANGUAGES CXX)
 set(SEQUANT_VERSION 2.0.0-alpha.1)
 
@@ -70,7 +85,7 @@ set_property(TARGET Range-V3 PROPERTY
 
 # need Boost.ContainerHash
 # NB Boost.Container is broken in v1.70
-find_package(Boost ${SEQUANT_TRACKED_BOOST_VERSION} REQUIRED)
+find_package(Boost ${SEQUANT_TRACKED_BOOST_VERSION} REQUIRED COMPONENTS serialization)
 if (Boost_VERSION EQUAL 107000)
     message(FATAL_ERROR "Found Boost 1.70, but its Boost.Container is broken: "
         "use any version ${SEQUANT_TRACKED_BOOST_VERSION} "
