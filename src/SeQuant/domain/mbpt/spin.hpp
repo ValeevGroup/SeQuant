@@ -590,7 +590,7 @@ ExprPtr spintrace(ExprPtr expression,
     if (product.size() != spin_product.size()) spin_product.scale(0);
     ExprPtr result = std::make_shared<Product>(spin_product);
     expand(result);
-    rapid_simplify(result);  // TODO: Check if this is required
+    rapid_simplify(result);
     return result;
   };
 
@@ -684,7 +684,7 @@ ExprPtr spintrace(ExprPtr expression,
       }
 
       auto spin_expr = append_spin(expr, index_replacements);
-//      rapid_simplify(spin_expr);  // TODO: Check if this is required
+      // rapid_simplify(spin_expr);
 
       if (spin_expr->is<Tensor>()) {
         auto temp = spin_trace_tensor(spin_expr->as<Tensor>());
@@ -706,8 +706,8 @@ ExprPtr spintrace(ExprPtr expression,
             temp.append(summand);
           }
           ExprPtr SumPtr = std::make_shared<Sum>(temp);
-//          expand(SumPtr);
-//          rapid_simplify(SumPtr);  // TODO: Check if this is required
+          // expand(SumPtr);
+          // rapid_simplify(SumPtr);
           auto spin_removed = remove_spin(SumPtr);
           result->append(spin_removed);
         }
@@ -716,12 +716,6 @@ ExprPtr spintrace(ExprPtr expression,
       }
     }  // Permutation FOR loop
 
-    {
-      ExprPtr temp_expr = result;
-      canonicalize(temp_expr);
-      simplify(temp_expr);
-      std::wcout << to_latex(expression) << "\n" << to_latex(temp_expr) << "\n\n";
-    }
      return result;
   };
 
@@ -729,7 +723,7 @@ ExprPtr spintrace(ExprPtr expression,
   // Check if the antisymmetrizer operator (A) is present in the expression
   if (has_tensor_label(expression, L"A")) {
     expression = expand_A_operator(expression);
-//    rapid_simplify(expression);  // TODO: Check if this is required
+    // rapid_simplify(expression);
   }
   const auto A_stop = std::chrono::high_resolution_clock::now();
   auto A_time_elapsed =
