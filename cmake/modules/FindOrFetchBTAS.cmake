@@ -2,14 +2,16 @@ find_package(BTAS 1.0.0 QUIET)
 
 if (NOT TARGET BTAS::btas)
 
-  include(DownloadProject)
-  download_project(PROJ                BTAS
-    GIT_REPOSITORY      https://github.com/BTAS/btas.git
-    GIT_TAG             ${SEQUANT_TRACKED_BTAS_TAG}
-    PREFIX              ${PROJECT_BINARY_DIR}/external
-    UPDATE_DISCONNECTED 1
-    )
-
-  add_subdirectory(${BTAS_SOURCE_DIR} ${BTAS_BINARY_DIR})
+  include(FetchContent)
+  FetchContent_Declare(
+      BTAS
+      GIT_REPOSITORY      https://github.com/BTAS/btas.git
+      GIT_TAG             ${SEQUANT_TRACKED_BTAS_TAG}
+  )
+  FetchContent_MakeAvailable(BTAS)
+  FetchContent_GetProperties(BTAS
+      SOURCE_DIR BTAS_SOURCE_DIR
+      BINARY_DIR BTAS_BINARY_DIR
+      )
 
 endif(NOT TARGET BTAS::btas)
