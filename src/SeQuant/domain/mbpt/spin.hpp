@@ -5,6 +5,7 @@
 #ifndef SEQUANT_SPIN_HPP
 #define SEQUANT_SPIN_HPP
 
+#include <SeQuant/core/tensor_network.hpp>
 #include "SeQuant/core/tensor.hpp"
 
 namespace sequant {
@@ -268,25 +269,48 @@ ExprPtr expand_antisymm(const Tensor& tensor) {
   }
 }
 
+// TODO: Correct this function
 /// @brief expands all antisymmetric tensors in a product
 /// @param expr an expression pointer to expand
 /// @return an expression pointer with expanded tensors as a sum
 inline ExprPtr expand_antisymm(const ExprPtr& expr) {
-  Sum expanded_sum{};
-  for (auto&& item : *expr) {
-    const auto scalar_factor = item->as<Product>().scalar().real();
-    Product expanded_product{};
-    for (auto&& expr_product : *item) {
-      auto tensor = expr_product->as<sequant::Tensor>();
-      auto expanded_ptr = expand_antisymm(tensor);
-      expanded_product.append(1, expanded_ptr);
+
+  if(expr->is<Constant>())
+    return expr;
+  else if (expr->is<Tensor>())
+    return expand_antisymm(expr->as<Tensor>());
+
+  // Product lambda
+  auto expand_product = [&] (const Product& expr){
+    Product temp{};
+    temp.scale(expr.scalar());
+    for(auto&& term: expr){
+      if(term->is<Tensor>())
+        temp.append(expand_antisymm(term->as<Tensor>()));
     }
-    expanded_product.scale(scalar_factor);
-    ExprPtr expanded_product_ptr = std::make_shared<Product>(expanded_product);
-    expanded_sum.append(expanded_product_ptr);
-  }
-  ExprPtr result = std::make_shared<Sum>(expanded_sum);
-  return result;
+    ExprPtr result = std::make_shared<Product>(temp);
+    rapid_simplify(result);
+    return result;
+  };
+
+  if (expr->is<Product>())
+    return expand_product(expr->as<Product>());
+  else if (expr->is<Sum>()){
+    Sum temp{};
+    for(auto&& term: *expr){
+      if(term->is<Product>())
+        temp.append(expand_product(term->as<Product>()));
+      else if (term->is<Tensor>())
+        temp.append(expand_antisymm(term->as<Tensor>()));
+      else if (term->is<Constant>())
+        temp.append(term);
+      else
+        temp.append(nullptr);
+    }
+    ExprPtr result = std::make_shared<Sum>(temp);
+    return result;
+  } else
+    return nullptr;
 }
 
 /// @brief Check if a tensor with a certain label is present in an expression
