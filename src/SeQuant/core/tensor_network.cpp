@@ -571,7 +571,7 @@ TensorNetwork::make_bliss_graph() const {
       key = key ^ (key >> 11);
       key = key + (key << 6);
       key = key ^ (key >> 22);
-      return int(key);
+      return static_cast<int>(key);
     };
     graph->change_color(v_cnt, hash6432shift(color));
     ++v_cnt;
