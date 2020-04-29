@@ -24,7 +24,7 @@ echo "deb https://apt.repos.intel.com/tbb all main" | tee -a /etc/apt/sources.li
 apt-add-repository -y "ppa:ubuntu-toolchain-r/test"
 apt-add-repository -y "ppa:mhier/libboost-latest"
 apt-get -yq update >> ~/apt-get-update.log
-apt-get -yq --no-install-suggests --no-install-recommends --force-yes install g++-8 g++-9 clang-8 clang-9 libboost1.70-dev libblas-dev liblapack-dev liblapacke-dev gdb cmake cmake-data intel-tbb-2019.8-075
+apt-get -yq --no-install-suggests --no-install-recommends --force-yes install g++-8 gfortran-8  g++-9 clang-8 clang-9 libboost1.70-dev libblas-dev liblapack-dev liblapacke-dev gdb cmake cmake-data intel-tbb-2019.8-075
 mkdir -p ${TRAVIS_BUILD_TOPDIR}
 cd ${TRAVIS_BUILD_TOPDIR}
 git clone git@github.com:ValeevGroup/SeQuant2 ${TRAVIS_BUILD_TOPDIR}/ValeevGroup/SeQuant
