@@ -22,9 +22,8 @@ echo "deb http://apt.llvm.org/bionic/ llvm-toolchain-bionic-9 main" | tee -a /et
 wget -O- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS-2019.PUB | sudo apt-key add -
 echo "deb https://apt.repos.intel.com/tbb all main" | tee -a /etc/apt/sources.list.d/intel-tbb.list > /dev/null
 apt-add-repository -y "ppa:ubuntu-toolchain-r/test"
-apt-add-repository -y "ppa:mhier/libboost-latest"
 apt-get -yq update >> ~/apt-get-update.log
-apt-get -yq --no-install-suggests --no-install-recommends --force-yes install g++-8 gfortran-8  g++-9 clang-8 clang-9 libboost1.70-dev libblas-dev liblapack-dev liblapacke-dev gdb cmake cmake-data intel-tbb-2019.8-075
+apt-get -yq --no-install-suggests --no-install-recommends --force-yes install g++-8 gfortran-8  g++-9 clang-8 clang-9 libblas-dev liblapack-dev liblapacke-dev gdb cmake cmake-data intel-tbb-2019.8-075
 mkdir -p ${TRAVIS_BUILD_TOPDIR}
 cd ${TRAVIS_BUILD_TOPDIR}
 git clone git@github.com:ValeevGroup/SeQuant2 ${TRAVIS_BUILD_TOPDIR}/ValeevGroup/SeQuant

@@ -19,6 +19,7 @@ fi
 export PATH=${INSTALL_PREFIX}/cmake/bin:${PATH}
 cmake --version
 
+${TRAVIS_BUILD_DIR}/bin/build-boost-$TRAVIS_OS_NAME.sh
 ${TRAVIS_BUILD_DIR}/bin/build-rangev3-$TRAVIS_OS_NAME.sh
 ${TRAVIS_BUILD_DIR}/bin/build-eigen3-$TRAVIS_OS_NAME.sh
 ${TRAVIS_BUILD_DIR}/bin/build-libint-$TRAVIS_OS_NAME.sh
