@@ -8,8 +8,10 @@ os: linux
 
 addons:
   apt:
+    sources:
+      - sourceline: 'ppa:mhier/libboost-latest'
     packages: &base_packages
-      - libboost1.71-all-dev
+      - libboost1.70-dev
       - libblas-dev
       - liblapack-dev
       - liblapacke-dev
