@@ -44,7 +44,7 @@ if [ ! -d "${INSTALL_DIR}" ]; then
   export LDFLAGS="${EXTRACXXFLAGS}"
   mkdir build
   cd build
-  cmake .. -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" -DCMAKE_PREFIX_PATH="${INSTALL_PREFIX}/eigen3;${INSTALL_PREFIX}/boost" -DCMAKE_BUILD_TYPE=Release
+  cmake .. -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" -DCMAKE_PREFIX_PATH="${INSTALL_PREFIX}/eigen3" -DCMAKE_BUILD_TYPE=Release
 
   cmake --build . -j 2
   cmake --build . --target install
