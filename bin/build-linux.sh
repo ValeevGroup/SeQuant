@@ -20,9 +20,10 @@ export PATH=${INSTALL_PREFIX}/cmake/bin:${PATH}
 cmake --version
 
 ${TRAVIS_BUILD_DIR}/bin/build-rangev3-$TRAVIS_OS_NAME.sh
-${TRAVIS_BUILD_DIR}/bin/build-btas-$TRAVIS_OS_NAME.sh
 ${TRAVIS_BUILD_DIR}/bin/build-eigen3-$TRAVIS_OS_NAME.sh
 ${TRAVIS_BUILD_DIR}/bin/build-libint-$TRAVIS_OS_NAME.sh
+${TRAVIS_BUILD_DIR}/bin/build-mpich-$TRAVIS_OS_NAME.sh
+${TRAVIS_BUILD_DIR}/bin/build-TA-$TRAVIS_OS_NAME.sh
 
 # Exit on error
 set -ev
@@ -35,7 +36,7 @@ if [ "$CXX" = "g++" ]; then
     export CC=/usr/bin/gcc-$GCC_VERSION
     export CXX=/usr/bin/g++-$GCC_VERSION
     # ggc-min params to try to reduce peak memory consumption ... typical ICE under Travis is due to insufficient memory
-    export EXTRAFLAGS="--param ggc-min-expand=20 --param ggc-min-heapsize=2048000"
+    export EXTRAFLAGS="--param ggc-min-heapsize=2048000"
 else
     export CC=/usr/bin/clang-$CLANG_VERSION
     export CXX=/usr/bin/clang++-$CLANG_VERSION
@@ -62,8 +63,7 @@ cmake ${TRAVIS_BUILD_DIR} \
     -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" \
     -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
     -DRANGEV3_DIR="${INSTALL_PREFIX}/range-v3" \
-    -DBTAS_INSTALL_DIR="${INSTALL_PREFIX}/BTAS" \
-    -DCMAKE_PREFIX_PATH="${INSTALL_PREFIX}/libint;${INSTALL_PREFIX}/eigen3" \
+    -DCMAKE_PREFIX_PATH="${INSTALL_PREFIX}/libint;${INSTALL_PREFIX}/eigen3;${INSTALL_PREFIX}/TA" \
     -DCMAKE_CXX_FLAGS="${CXX_FLAGS} ${EXTRAFLAGS} ${CODECOVCXXFLAGS}"
 
 ### test within build tree

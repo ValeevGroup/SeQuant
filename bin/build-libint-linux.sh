@@ -1,7 +1,7 @@
 #! /bin/sh
 
 # set to the release id of the required library
-export RELID=2.7.0-beta.1
+export RELID=2.7.0-beta.5
 
 # Exit on error
 set -ev
