@@ -37,7 +37,7 @@ if [ ! -d "${INSTALL_DIR}" ]; then
 
   # download and unpack libint tarball
   wget --no-check-certificate -q https://github.com/evaleev/libint/releases/download/v$RELID/libint-$RELID-test-mpqc4.tgz
-  tar -xvzf libint-$RELID-test-mpqc4.tgz
+  tar -xzf libint-$RELID-test-mpqc4.tgz
   cd libint-$RELID/
 
   export CXXFLAGS="${EXTRACXXFLAGS}"
