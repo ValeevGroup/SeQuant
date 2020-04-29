@@ -29,7 +29,7 @@ ExprPtr make_op::operator()(bool complete_unoccupieds) const {
   const auto nket = nket_;
   const auto csv = csv_;
   OpType op = op_;
-  auto make_idx_vector = [op](size_t n, IndexSpace::Type spacetype) {
+  auto make_idx_vector = [](size_t n, IndexSpace::Type spacetype) {
     auto space = IndexSpace::instance(spacetype);
     std::vector<Index> result;
     result.reserve(n);
@@ -38,7 +38,7 @@ ExprPtr make_op::operator()(bool complete_unoccupieds) const {
     }
     return result;
   };
-  auto make_depidx_vector = [op](size_t n, IndexSpace::Type spacetype,
+  auto make_depidx_vector = [](size_t n, IndexSpace::Type spacetype,
                                  auto&& protoidxs) {
     auto space = IndexSpace::instance(spacetype);
     std::vector<Index> result;
@@ -54,7 +54,7 @@ ExprPtr make_op::operator()(bool complete_unoccupieds) const {
     braidxs = make_idx_vector(nbra, IndexSpace::complete);
     ketidxs = make_idx_vector(nket, IndexSpace::complete);
   } else {
-    auto make_occidxs = [csv, &make_idx_vector](size_t n) {
+    auto make_occidxs = [&make_idx_vector](size_t n) {
       return make_idx_vector(n, IndexSpace::active_occupied);
     };
     auto make_uoccidxs = [csv, complete_unoccupieds, &make_idx_vector,

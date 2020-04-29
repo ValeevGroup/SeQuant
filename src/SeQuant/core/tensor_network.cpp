@@ -408,7 +408,7 @@ TensorNetwork::make_bliss_graph(
   // ...
   // N.B. For braket-symmetric tensors the ket vertices use the same indices as
   // the bra vertices
-  auto nonreserved_color = [this, &named_indices](size_t color) -> bool {
+  auto nonreserved_color = [&named_indices](size_t color) -> bool {
     return color >= 2 * max_rank + named_indices.size();
   };
 
