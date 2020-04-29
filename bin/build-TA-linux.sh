@@ -57,7 +57,7 @@ if [ ! -d "${INSTALL_DIR}" ]; then
       -DBUILD_SHARED_LIBS=${BUILD_SHARED} \
       -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
       -DCMAKE_CXX_FLAGS="${EXTRACXXFLAGS}" \
-      -DCMAKE_PREFIX_PATH=${INSTALL_PREFIX} \
+      -DCMAKE_PREFIX_PATH="${INSTALL_PREFIX}/boost;${INSTALL_PREFIX}/eigen3" \
       -DCMAKE_TOOLCHAIN_FILE=cmake/vg/toolchains/travis.cmake \
       $EXTRA_CMAKE_FLAGS
 
