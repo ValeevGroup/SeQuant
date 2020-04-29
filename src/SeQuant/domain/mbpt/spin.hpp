@@ -571,6 +571,7 @@ ExprPtr expand_P_operator(const ExprPtr& expr) {
 ExprPtr closed_shell_spintrace(const ExprPtr& expression,
     std::initializer_list<IndexList> ext_index_groups = {{}}){
 
+  // NOT supported for Proto indices
   auto check_proto_index = [&](const ExprPtr& expr) {
     if (expr->is<Tensor>()) {
       ranges::for_each(
@@ -582,12 +583,8 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
   };
   expression->visit(check_proto_index);
 
-  // ExprPtr result;
-  // ExprPtr expr;
-
   // Expand A operator, antisymmetrize
   auto expand_all = [&] (const ExprPtr& expr){
-    // ExprPtr temp;
     auto temp = expr;
     if (has_tensor_label(temp, L"A"))
       temp = expand_A_operator(temp);
@@ -596,30 +593,69 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
     return temp;
   };
   auto expr = expand_all(expression);
-  std::wcout << __LINE__ << " " << to_latex(expr) << std::endl;
   expand(expr);
   rapid_simplify(expr);
   canonicalize(expr);
-  std::wcout << __LINE__ << " " << to_latex(expr) << std::endl;
-
-  // Apply antisymmetrizer operator
-//  if (has_tensor_label(expression, L"A")) {
-//    expr = expand_A_operator(expression);
-//    rapid_simplify(expr);
-//    std::wcout << to_latex(expr) << "\n";
-//  }
 
   // Lambda for a product
   auto trace_product = [&] (const Product& product){
-    auto result = std::make_shared<Sum>();
-    ExprPtr expr = std::make_shared<Product>(product);
-    TensorNetwork tn(expr->as<Product>().factors());
-    const auto& tn_edges = tn.edges();
-    const auto& tn_tensors = tn.tensors();
-    for(auto&& i : tn_edges) std::wcout << i.idx().to_latex() << " ";
-    std::cout << "\n";
+    std::wcout << to_latex(product) << "\n";
 
-     return result;
+    auto get_ket_indices = [&] (const Product& prod){
+      std::vector<Index> ket_idx;
+      for(auto&& t: prod) {
+        if(t->is<Tensor>())
+        ranges::for_each(t->as<Tensor>().ket(), [&] (const Index& idx) {ket_idx.push_back(idx);});
+      }
+      return ket_idx;
+    };
+
+    auto get_bra_indices = [&] (const Product& prod){
+      std::vector<Index> bra_idx;
+      for(auto&& t: prod) {
+        if(t->is<Tensor>())
+          ranges::for_each(t->as<Tensor>().bra(), [&] (const Index& idx) {bra_idx.push_back(idx);});
+      }
+      return bra_idx;
+    };
+
+    auto product_kets = get_ket_indices(product);
+    auto product_bras = get_bra_indices(product);
+
+    auto count_cycles = [&] (std::vector<Index>& v, std::vector<Index>& v1){
+      size_t cc = 0;
+      auto dummy_idx = Index(L"i_11111");
+      for(auto it = v.begin(); it != v.end(); ++it){
+        if(*it != dummy_idx){
+          cc++;
+          auto idx = std::distance(v.begin(), it);
+          auto it0 = it;
+          auto it1 = std::find(v1.begin(), v1.end(), *it0);
+          auto idx1 = std::distance(v.begin(), it1);
+          do{
+            it0 = std::find(v.begin(), v.end(), v[idx1]);
+            it1 = std::find(v1.begin(), v1.end(), *it0);
+            idx1 = std::distance(v1.begin(), it1);
+          *it0 = dummy_idx;
+          }while(idx1 != idx);
+        }
+      }
+      return cc;
+    };
+
+    auto cc = count_cycles(product_kets, product_bras);
+    std::cout << "Cycles: " << cc <<  " " << std::pow(2,cc) << std::endl;
+
+    auto result = std::make_shared<Product>(product);
+    result->scale(std::pow(2,cc));
+    std::wcout << "traced_product: " << to_latex(result) << std::endl;
+    return result;
+//    ExprPtr expr = std::make_shared<Product>(product);
+//    TensorNetwork tn(expr->as<Product>().factors());
+//    const auto& tn_edges = tn.edges();
+//    const auto& tn_tensors = tn.tensors();
+//    for(auto&& i : tn_edges) std::wcout << i.idx().to_latex() << " ";
+//    std::cout << "\n";
 //    return nullptr;
   };
 
