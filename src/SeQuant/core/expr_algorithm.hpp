@@ -87,12 +87,13 @@ struct expand_visitor {
           for(std::size_t j=0; j != i; ++j)
             result->append(expr_ref[j]);
         }
-        result->append(expr_ref[i]);
+        if (result)
+          result->append(expr_ref[i]);
         if (Logger::get_instance().expand) std::wcout << "in expand_sum: after flattening Sum summand result = " << to_latex(result ? result : expr) << std::endl;
       }
     }
     bool expr_changed = false;
-    if (result) { // if any summand was expanded, copy result into expr
+    if (result) { // if any summand was expanded or flattened, copy result into expr
       expr = std::static_pointer_cast<Expr>(result);
       expr_changed = true;
     }
@@ -337,7 +338,7 @@ struct rapid_simplify_visitor {
       expr = expr_sum.summands()[0];
       mutated = true;
     } else {  // sums can be simplified if any of its summands are sums or two
-      // or more summands are Constants
+      // or more summands are Constants (or have a zero Constant)
       size_t nconst = 0;
       bool need_to_rebuild = false;
       for (auto&& summand : expr_sum.summands()) {
@@ -345,6 +346,10 @@ struct rapid_simplify_visitor {
           need_to_rebuild = true;
           break;
         } else if (summand->is<Constant>()) {
+          if (summand->as<Constant>().is_zero()) {
+            need_to_rebuild = true;
+            break;
+          }
           ++nconst;
           if (nconst == 2) {
             need_to_rebuild = true;
