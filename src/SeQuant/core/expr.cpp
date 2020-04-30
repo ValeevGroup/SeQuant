@@ -9,6 +9,41 @@
 
 namespace sequant {
 
+std::logic_error
+Expr::not_implemented(const char* fn) const {
+  std::ostringstream oss;
+  oss << "Expr::" << fn << " not implemented in this derived class (type_name=" << type_name() << ")";
+  return std::logic_error(oss.str().c_str());
+}
+
+std::wstring Expr::to_latex() const {
+  throw not_implemented("to_latex");
+}
+
+std::wstring Expr::to_wolfram() const{
+  throw not_implemented("to_wolfram");
+}
+
+ExprPtr Expr::clone() const {
+  throw not_implemented("clone");
+}
+
+Expr& Expr::operator*=(const Expr &that) {
+  throw not_implemented("operator*=");
+}
+
+Expr& Expr::operator^=(const Expr &that) {
+  throw not_implemented("operator^=");
+}
+
+Expr& Expr::operator+=(const Expr &that) {
+  throw not_implemented("operator+=");
+}
+
+Expr& Expr::operator-=(const Expr &that) {
+  throw not_implemented("operator-=");
+}
+
 bool Product::is_commutative() const {
   bool result = true;
   const auto nfactors = size();

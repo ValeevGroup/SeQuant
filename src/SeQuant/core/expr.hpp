@@ -72,20 +72,14 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
   }
 
   /// @return the string representation of @c this in the LaTeX format
-  virtual std::wstring to_latex() const {
-    throw std::logic_error("Expr::to_latex not implemented in this derived class");
-  }
+  virtual std::wstring to_latex() const;
 
   /// @return the string representation of @c this in the Wolfram Language format
-  virtual std::wstring to_wolfram() const {
-    throw std::logic_error("Expr::to_wolfram not implemented in this derived class");
-  }
+  virtual std::wstring to_wolfram() const;
 
   /// @return a clone of this object
   /// @note must be overridden in the derived class
-  virtual ExprPtr clone() const {
-    throw std::logic_error("Expr::clone not implemented in this derived class");
-  }
+  virtual ExprPtr clone() const;
 
   /// Canonicalizes @c this and returns the biproduct of canonicalization (e.g. phase)
   /// @return the biproduct of canonicalization, or @c nullptr if no biproduct generated
@@ -330,34 +324,24 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
   /// @return reference to @c *this
   /// @throw std::logic_error if not implemented for this class, or cannot be
   /// implemented for the particular @c that
-  virtual Expr &operator*=(const Expr &that) {
-    throw std::logic_error(
-        "Expr::operator*= not implemented in this derived class");
-  }
+  virtual Expr &operator*=(const Expr &that);
 
   /// @brief in-place non-commutatively-multiply @c *this by @c that
   /// @return reference to @c *this
   /// @throw std::logic_error if not implemented for this class, or cannot be
   /// implemented for the particular @c that
-  virtual Expr &operator^=(const Expr &that) {
-    throw std::logic_error(
-        "Expr::operator^= not implemented in this derived class");
-  }
+  virtual Expr &operator^=(const Expr &that);
 
   /// @brief in-place add @c that to @c *this
   /// @return reference to @c *this
   /// @throw std::logic_error if not implemented for this class, or cannot be
   /// implemented for the particular @c that
-  virtual Expr &operator+=(const Expr &that) {
-    throw std::logic_error("Expr::operator+= not implemented in this derived class");
-  }
+  virtual Expr &operator+=(const Expr &that);
 
   /// @brief in-place subtract @c that from @c *this
   /// @return reference to @c *this
   /// @throw std::logic_error if not implemented for this class, or cannot be implemented for the particular @c that
-  virtual Expr &operator-=(const Expr &that) {
-    throw std::logic_error("Expr::operator-= not implemented in this derived class");
-  }
+  virtual Expr &operator-=(const Expr &that);
 
  ///@}
 
@@ -502,6 +486,10 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
     return type_id;
   };
 
+ private:
+  /// @input[in] fn the name of function that is missing in this class
+  /// @return a std::logic_error object containing a message describing that @p fn is missing from this type
+  std::logic_error not_implemented(const char* fn) const;
 };  // class Expr
 
 /// make an ExprPtr to a new object of type T
