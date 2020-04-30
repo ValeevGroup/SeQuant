@@ -184,6 +184,8 @@ ExprPtr Product::rapid_canonicalize() {
 
 ExprPtr Sum::canonicalize_impl(bool multipass) {
 
+  if (Logger::get_instance().canonicalize) std::wcout << "Sum::canonicalize_impl: input = " << to_latex_align(shared_from_this()) << std::endl;
+
   const auto npasses = multipass ? 3 : 1;
   for (auto pass = 0; pass != npasses; ++pass) {
     // recursively canonicalize summands ...
@@ -196,6 +198,8 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
       }
     };
 
+    if (Logger::get_instance().canonicalize) std::wcout << "Sum::canonicalize_impl (pass=" << pass << "): after canonicalizing summands = " << to_latex_align(shared_from_this()) << std::endl;
+
     // ... then resort according to size, then hash values
     using std::begin;
     using std::end;
@@ -205,6 +209,8 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
 
       return (first_size == second_size) ? *first < *second : first_size < second_size;
     });
+
+    if (Logger::get_instance().canonicalize) std::wcout << "Sum::canonicalize_impl (pass=" << pass << "): after hash-sorting summands = " << to_latex_align(shared_from_this()) << std::endl;
 
     // ... then reduce terms whose hash values are identical
     auto first_it = begin(summands_);
@@ -245,6 +251,9 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
       };
       reduce_range(first_it, plast_it);
     }
+
+    if (Logger::get_instance().canonicalize) std::wcout << "Sum::canonicalize_impl (pass=" << pass << "): after reducing summands = " << to_latex_align(shared_from_this()) << std::endl;
+
   }
 
   return {};  // side effects are absorbed into summands
