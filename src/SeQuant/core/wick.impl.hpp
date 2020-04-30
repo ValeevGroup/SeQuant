@@ -330,7 +330,7 @@ inline bool apply_index_replacement_rules(
   ranges::for_each(
       all_indices, [&const_replrules, &all_indices_new](const Index &idx) {
         auto dst_it = const_replrules.find(idx);
-        auto insertion_result = all_indices_new.emplace(dst_it != const_replrules.end() ? dst_it->second
+        [[maybe_unused]] auto insertion_result = all_indices_new.emplace(dst_it != const_replrules.end() ? dst_it->second
                                                                                         : idx);
       });
   std::swap(all_indices_new, all_indices);
@@ -354,7 +354,7 @@ inline void reduce_wick_impl(std::shared_ptr<Product> &expr,
         if (factor->template is<Tensor>()) {
           ranges::for_each(factor->template as<const Tensor>().braket(),
                            [&all_indices](const Index &idx) {
-                             auto result = all_indices.insert(idx);
+                             [[maybe_unused]] auto result = all_indices.insert(idx);
                            });
         }
       });
