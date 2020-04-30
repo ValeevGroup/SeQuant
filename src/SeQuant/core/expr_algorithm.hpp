@@ -65,6 +65,7 @@ struct expand_visitor {
     const auto nsubexpr = ranges::size(*expr);
     if (Logger::get_instance().expand) std::wcout << "in expand_sum: expr = " << to_latex(expr) << std::endl;
     for(std::size_t i=0; i != nsubexpr; ++i) {
+      // if summand is a Product, expand it
       if (expr_ref[i]->is<Product>()) {
         const auto this_term_expanded = expand_product(expr_ref[i]);
         // if this is the first term that was expanded, create a result and copy all preceeding subexpressions into it
@@ -77,6 +78,17 @@ struct expand_visitor {
         if (result)
           result->append(expr_ref[i]);
         if (Logger::get_instance().expand) std::wcout << "in expand_sum: after expand_product(" << (this_term_expanded ? "true)" : "false)") << " result = " << to_latex(result ? result : expr) << std::endl;
+      }
+      // if summand is a Sum, flatten it
+      else if (expr_ref[i]->is<Sum>()) {
+        // create a result, if not yet created, by copying all preceeding subexpressions into it
+        if (!result) {
+          result = std::make_shared<Sum>();
+          for(std::size_t j=0; j != i; ++j)
+            result->append(expr_ref[j]);
+        }
+        result->append(expr_ref[i]);
+        if (Logger::get_instance().expand) std::wcout << "in expand_sum: after flattening Sum summand result = " << to_latex(result ? result : expr) << std::endl;
       }
     }
     bool expr_changed = false;
