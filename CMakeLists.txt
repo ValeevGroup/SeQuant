@@ -118,6 +118,7 @@ add_library(SeQuant
         src/SeQuant/core/sequant.cpp
         src/SeQuant/core/sequant.hpp
         src/SeQuant/core/attr.hpp
+        src/SeQuant/core/index.cpp
         src/SeQuant/core/index.hpp
         src/SeQuant/core/space.cpp
         src/SeQuant/core/space.hpp
