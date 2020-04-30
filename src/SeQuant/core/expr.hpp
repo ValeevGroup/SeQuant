@@ -578,6 +578,10 @@ class Constant : public Expr {
     return *this;
   }
 
+  bool is_zero() const {
+    return value_ == decltype(value_){0,0};
+  }
+
  private:
   hash_type memoizing_hash() const override {
     hash_value_ = hash::value(value_);
@@ -775,7 +779,7 @@ class Product : public Expr {
       }
       for (const auto &i : factors()) {
         if (i->is<Product>())
-          result += L"\\left(" + i->to_latex() + L"\\right)";
+          result += L"\\bigl(" + i->to_latex() + L"\\bigr)";
         else result += i->to_latex();
       }
     }
@@ -961,7 +965,7 @@ class Sum : public Expr {
           assert(summands_.at(*constant_summand_idx_)->is<Constant>());
           *(summands_[*constant_summand_idx_]) += *summand;
         } else {
-          if (*summand_constant != Constant(0)) {
+          if (!summand_constant->is_zero()) {
             summands_.push_back(std::move(summand));
             constant_summand_idx_ = summands_.size() - 1;
           }
@@ -988,7 +992,7 @@ class Sum : public Expr {
           *summands_[*constant_summand_idx_] += *summand_constant;
         } else {  // or include the nonzero constant and update
                   // constant_summand_idx_
-          if (summand_constant != 0) {
+          if (!summand_constant->is_zero()) {
             summands_.insert(summands_.begin(), std::move(summand));
             constant_summand_idx_ = 0;
           }
@@ -1035,7 +1039,7 @@ class Sum : public Expr {
 
   std::wstring to_latex() const override {
     std::wstring result;
-    result = L"{ \\left(";
+    result = L"{ \\bigl(";
     std::size_t counter = 0;
     for (const auto &i : summands()) {
       const auto i_is_product = i->is<Product>();
@@ -1052,7 +1056,7 @@ class Sum : public Expr {
       }
       ++counter;
     }
-    result += L"\\right) }";
+    result += L"\\bigr) }";
     return result;
   }
 
@@ -1167,9 +1171,9 @@ inline std::wstring to_latex_align(const ExprPtr &exprptr,
                                    size_t max_terms_per_line = 1) {
   std::wstring result = to_latex(exprptr);
   if (exprptr->is<Sum>()) {
-    result.erase(0, 7);  // remove leading  "{ \left"
+    result.erase(0, 7);  // remove leading  "{ \bigl"
     result.replace(result.size() - 9, 9,
-                   L")");  // replace trailing "\right) }" with ")"
+                   L")");  // replace trailing "\bigr) }" with ")"
     result = std::wstring(L"\\begin{align}\n& ") + result;
     // assume no inner sums
     int line_counter = 0;

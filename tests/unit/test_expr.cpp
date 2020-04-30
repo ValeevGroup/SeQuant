@@ -294,8 +294,8 @@ TEST_CASE("Expr", "[elements]") {
           v1.result ==
           L"{{{1}}}{{{2}}}{{{3}}}{\\text{VecExpr}\\{{{{1}}} {{{2}}} {{{3}}} "
           L"\\}}{{{1}}}{{{2}}}{{{3}}}{\\text{VecExpr}\\{{{{1}}} {{{2}}} "
-          L"{{{3}}} \\}}{ \\left({\\text{VecExpr}\\{{{{1}}} {{{2}}} {{{3}}} "
-          L"\\}} + {\\text{VecExpr}\\{{{{1}}} {{{2}}} {{{3}}} \\}}\\right) }");
+          L"{{{3}}} \\}}{ \\bigl({\\text{VecExpr}\\{{{{1}}} {{{2}}} {{{3}}} "
+          L"\\}} + {\\text{VecExpr}\\{{{{1}}} {{{2}}} {{{3}}} \\}}\\bigr) }");
 
       latex_visitor v2{};
       ex->visit(v2, /* atoms_only = */ true);
@@ -405,13 +405,13 @@ TEST_CASE("Expr", "[elements]") {
       auto x =
           (ex<Constant>(1.0) + ex<Dummy>()) * (ex<Constant>(3.0) + ex<Dummy>());
       REQUIRE(to_latex(x) ==
-              L"{{ \\left({{{1}}} + {\\text{Dummy}}\\right) }{ \\left({{{3}}} "
-              L"+ {\\text{Dummy}}\\right) }}");
+              L"{{ \\bigl({{{1}}} + {\\text{Dummy}}\\bigr) }{ \\bigl({{{3}}} "
+              L"+ {\\text{Dummy}}\\bigr) }}");
       expand(x);
       //      std::wcout << "x = " << to_latex(x) << std::endl;
       REQUIRE(to_latex(x) ==
-              L"{ \\left({{{3}}} + {{\\text{Dummy}}} + {{{3}}"
-              L"{\\text{Dummy}}} + {{\\text{Dummy}}{\\text{Dummy}}}\\right) }");
+              L"{ \\bigl({{{3}}} + {{\\text{Dummy}}} + {{{3}}"
+              L"{\\text{Dummy}}} + {{\\text{Dummy}}{\\text{Dummy}}}\\bigr) }");
       rapid_simplify(x);
       //      std::wcout << "x = " << to_latex(x) << std::endl;
     }
@@ -422,19 +422,19 @@ TEST_CASE("Expr", "[elements]") {
           (ex<Constant>(5.0) * (ex<Constant>(6.0) + ex<Dummy>()) + ex<Dummy>());
       //      std::wcout << "x = " << to_latex(x) << std::endl;
       REQUIRE(to_latex(x) ==
-              L"{{ \\left({{{1}}} + {{{2}}{ \\left({{{3}}} - {"
-              L"{\\text{Dummy}}}\\right) }}\\right) }{ \\left({{{5}}"
-              L"{ \\left({{{6}}} + {\\text{Dummy}}\\right) }} + "
-              L"{\\text{Dummy}}\\right) }}");
+              L"{{ \\bigl({{{1}}} + {{{2}}{ \\bigl({{{3}}} - {"
+              L"{\\text{Dummy}}}\\bigr) }}\\bigr) }{ \\bigl({{{5}}"
+              L"{ \\bigl({{{6}}} + {\\text{Dummy}}\\bigr) }} + "
+              L"{\\text{Dummy}}\\bigr) }}");
       expand(x);
       //      std::wcout << "ex = " << to_latex(x) << std::endl;
       REQUIRE(to_latex(x) ==
-              L"{ \\left({{{30}}} + {{{5}}{\\text{Dummy}}} + "
+              L"{ \\bigl({{{30}}} + {{{5}}{\\text{Dummy}}} + "
               L"{{\\text{Dummy}}} + {{{180}}} + {{{30}}"
               L"{\\text{Dummy}}} + {{{6}}{\\text{Dummy}}} - {{{60}}"
               L"{\\text{Dummy}}} - {{{10}}"
               L"{\\text{Dummy}}{\\text{Dummy}}} - {{{2}}"
-              L"{\\text{Dummy}}{\\text{Dummy}}}\\right) }");
+              L"{\\text{Dummy}}{\\text{Dummy}}}\\bigr) }");
     }
   }
 
