@@ -397,7 +397,9 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
   // have an Expr as input? Apply recursively ...
   if (expr_input_) {
     /// expand, then apply recursively to products
+    if (Logger::get_instance().wick_harness) std::wcout << "WickTheorem<S>::compute: input (before expand) = " << to_latex_align(expr_input_) << std::endl;
     expand(expr_input_);
+    if (Logger::get_instance().wick_harness) std::wcout << "WickTheorem<S>::compute: input (after expand) = " << to_latex_align(expr_input_) << std::endl;
     // if sum, canonicalize and apply to each summand ...
     if (expr_input_->is<Sum>()) {
       canonicalize(expr_input_);
@@ -407,6 +409,8 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
       auto result = std::make_shared<Sum>();
       std::mutex result_mtx;  // serializes updates of result
       auto summands = expr_input_->as<Sum>().summands();
+
+      if (Logger::get_instance().wick_harness) std::wcout << "WickTheorem<S>::compute: input (after canonicalize) has " << summands.size() << " terms = " << to_latex_align(result) << std::endl;
 
 #ifdef SEQUANT_HAS_EXECUTION_HEADER
       auto wick_task = [&result, &result_mtx, this,
