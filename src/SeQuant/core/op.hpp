@@ -112,6 +112,7 @@ template <Statistics S>
 inline auto hash_value(const Op<S> &op) {
   auto val = hash_value(op.index());
   hash::combine(val, op.action());
+  hash::combine(val, S);
   return val;
 }
 
@@ -377,6 +378,14 @@ class Operator : public container::svector<Op<S>>, public Expr {
     }
     return result;
   }
+
+  hash_type memoizing_hash() const override {
+    using std::begin;
+    using std::end;
+    const auto& ops = static_cast<const base_type&>(*this);
+    return hash::range(begin(ops), end(ops));
+  }
+
 };
 
 template<Statistics S>
