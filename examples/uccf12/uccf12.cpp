@@ -1,3 +1,4 @@
+#include "../../src/SeQuant/core/wick.hpp"
 #include "../sequant_setup.hpp"
 
 using namespace  sequant;
@@ -20,10 +21,13 @@ int main(int argc, char* argv[]) {
 
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
-  //set_num_threads(1);
+  set_num_threads(1);
 
   try {
     try_main();
+  }
+  catch(std::exception& ex) {
+    std::cerr << "caught a std::exception: " << ex.what();
   }
   catch(...) {
     std::cerr << "caught an unknown exception, ouch";
@@ -35,10 +39,24 @@ int main(int argc, char* argv[]) {
 void
 try_main() {
 
-  {
-    auto result = vac_av( H() * T(2), {{0, 1}} );
+  auto do_wick = [](ExprPtr expr) {
+    using sequant::FWickTheorem;
+    FWickTheorem wick{expr};
+    wick.spinfree(false)
+        .full_contractions(false);
+    auto result = wick.compute();
+    simplify(result);
+    return result;
+  };
 
-    std::wcout << "H*T12 -> 0 = " << to_latex_align(result, 20)
+  {
+    auto h = H2();
+    auto a = T(2);
+//    Logger::get_instance().canonicalize = true;
+//    Logger::get_instance().wick_harness = true;
+    auto ht_comm = do_wick( h*t - t*h );
+
+    std::wcout << "[H,T] = " << to_latex_align(ht_comm, 20)
                << std::endl;
   }
 
