@@ -43,6 +43,8 @@ ExprPtr H2(bool antisymm = true);
 
 ExprPtr H0mp();
 ExprPtr H1mp(bool antisymm = true);
+
+ExprPtr F();
 ExprPtr W(bool antisymm = true);
 
 /// @brief generates (nonrelativistic) Hamiltonian operator

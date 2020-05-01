@@ -51,18 +51,10 @@ try_main() {
     return result;
   };
 
-  {
-    auto h = H();
-    auto x = R12(IndexSpace::all);
-    auto hx_comm = do_wick( h*x - x*h );
-
-    std::wcout << "[H,F] = " << to_latex_align(hx_comm, 20)
-               << std::endl;
-
-    // keep only 1 and 2-body ints
-    assert(hx_comm->is<Sum>());
+  auto keep_1_and_2_body_terms = [](const ExprPtr& input) {
+    assert(input->is<Sum>());
     auto filtered_summands =
-        hx_comm->as<Sum>().summands() | ranges::views::remove_if([](const ExprPtr &ptr) {
+        input->as<Sum>().summands() | ranges::views::remove_if([](const ExprPtr &ptr) {
           assert(ptr->is<Product>());
           bool keep = false;
           bool found_operator = false;
@@ -76,10 +68,45 @@ try_main() {
           }
           return !keep;
         });
-    auto hx_comm_12 = ex<Sum>(ranges::begin(filtered_summands),
-        ranges::end(filtered_summands));
-    std::wcout << "[H,F]_{1,2} = " << to_latex_align(hx_comm_12, 20)
+    auto result = ex<Sum>(ranges::begin(filtered_summands),
+                          ranges::end(filtered_summands));
+    return result;
+  };
+
+  // single commutator, needs symmetrization
+  {
+    auto h = H();
+    auto r = R12(IndexSpace::all);
+    auto hr_comm = do_wick( ex<Constant>(2) * (h*r - r*h) );  // this assumes symmetrization includes 1/2
+
+    std::wcout << "[H,R] = " << to_latex_align(hr_comm, 20)
                << std::endl;
+
+    auto hr_comm_12 = keep_1_and_2_body_terms(hr_comm);
+    std::wcout << "[H,R]_{1,2} = " << to_latex_align(hr_comm_12, 20)
+               << std::endl;
+  }
+
+  // double commutator, also needs symmetrization
+  {
+    auto f = F();
+    auto r = R12(IndexSpace::all);
+    auto fr_comm = do_wick( ex<Constant>(2) * (f*r - r*f) );
+
+    std::wcout << "[F,R] = " << to_latex_align(fr_comm, 20)
+               << std::endl;
+
+    {
+      auto r = R12(IndexSpace::all);  // second instance of R
+      auto a = r - adjoint(r);
+      auto comm2 = do_wick(fr_comm * a - a * fr_comm);
+
+      std::wcout << "[[F,R],A] = " << to_latex_align(comm2, 20) << std::endl;
+
+      auto comm2_12 = keep_1_and_2_body_terms(comm2);
+      std::wcout << "[[[F,R],A]_{1,2} = " << to_latex_align(comm2_12, 20)
+                 << std::endl;
+    }
   }
 
 }

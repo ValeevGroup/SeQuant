@@ -106,17 +106,21 @@ ExprPtr H2(bool antisymm) {
 }
 
 ExprPtr H0mp() {
-  assert(get_default_context().vacuum() == Vacuum::Physical);
+  assert(get_default_context().vacuum() == Vacuum::SingleProduct);
   return H1();
 }
 
 ExprPtr H1mp(bool antisymm) {
-  assert(get_default_context().vacuum() == Vacuum::Physical);
+  assert(get_default_context().vacuum() == Vacuum::SingleProduct);
   return H2(antisymm);
 }
 
+ExprPtr F() {
+  return Op(OpType::f, 1)();
+}
+
 ExprPtr W(bool antisymm) {
-  assert(get_default_context().vacuum() == Vacuum::Physical);
+  assert(get_default_context().vacuum() == Vacuum::SingleProduct);
   return H1mp(antisymm);
 }
 
