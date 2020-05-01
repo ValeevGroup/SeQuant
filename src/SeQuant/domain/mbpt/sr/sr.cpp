@@ -25,6 +25,12 @@ make_op::make_op(std::size_t nbra, std::size_t nket, OpType op, bool csv) :
       nbra_(nbra), nket_(nket), op_(op), csv_(csv) {}
 
 ExprPtr make_op::operator()(bool complete_unoccupieds) const {
+  const auto unocc = complete_unoccupieds ? IndexSpace::complete_unoccupied
+                                          : IndexSpace::active_unoccupied;
+  return (*this)(unocc);
+}
+
+ExprPtr make_op::operator()(IndexSpace::Type unocc) const {
   const auto nbra = nbra_;
   const auto nket = nket_;
   const auto csv = csv_;
@@ -57,10 +63,8 @@ ExprPtr make_op::operator()(bool complete_unoccupieds) const {
     auto make_occidxs = [&make_idx_vector](size_t n) {
       return make_idx_vector(n, IndexSpace::active_occupied);
     };
-    auto make_uoccidxs = [csv, complete_unoccupieds, &make_idx_vector,
+    auto make_uoccidxs = [csv, &unocc, &make_idx_vector,
                           &make_depidx_vector](size_t n, auto&& occidxs) {
-      auto unocc = complete_unoccupieds ? IndexSpace::complete_unoccupied
-                                        : IndexSpace::active_unoccupied;
       return csv ? make_depidx_vector(n, unocc, occidxs)
                  : make_idx_vector(n, unocc);
     };

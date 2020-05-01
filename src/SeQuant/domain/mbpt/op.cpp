@@ -20,6 +20,8 @@ std::wstring to_wstring(OpType op) {
       return L"L";
     case OpType::R:
       return L"R";
+    case OpType::R12:
+      return L"F";
     default:
       throw std::invalid_argument("to_wstring(OpType op): invalid op");
   }
@@ -32,6 +34,7 @@ OpClass to_class(OpType op) {
       return OpClass::gen;
     case OpType::t:
     case OpType::R:
+    case OpType::R12:
       return OpClass::ex;
     case OpType::l:
     case OpType::A:

@@ -10,6 +10,7 @@
 
 #include "SeQuant/domain/mbpt/op.hpp"
 #include "SeQuant/core/expr_fwd.hpp"
+#include "SeQuant/core/space.hpp"
 
 namespace sequant {
 namespace mbpt {
@@ -24,6 +25,7 @@ class make_op {
  public:
   make_op(std::size_t nbra, std::size_t nket, OpType op, bool csv);
 
+  ExprPtr operator()(IndexSpace::Type unocc) const;
   ExprPtr operator()(bool complete_unoccupieds = false) const;
 };
 
