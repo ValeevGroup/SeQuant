@@ -597,6 +597,8 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
   rapid_simplify(expr);
   canonicalize(expr);
 
+  // TODO: Substitute indices from external indices
+
   // Lambda for a product
   auto trace_product = [&] (const Product& product){
     std::wcout << to_latex(product) << "\n";
@@ -624,14 +626,14 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
 
     auto count_cycles = [&] (std::vector<Index>& v, std::vector<Index>& v1){
       size_t cc = 0;
-      auto dummy_idx = Index(L"i_11111");
+      auto dummy_idx = Index(L"p_50");
       for(auto it = v.begin(); it != v.end(); ++it){
         if(*it != dummy_idx){
           cc++;
           auto idx = std::distance(v.begin(), it);
           auto it0 = it;
           auto it1 = std::find(v1.begin(), v1.end(), *it0);
-          auto idx1 = std::distance(v.begin(), it1);
+          auto idx1 = std::distance(v1.begin(), it1);
           do{
             it0 = std::find(v.begin(), v.end(), v[idx1]);
             it1 = std::find(v1.begin(), v1.end(), *it0);
