@@ -505,6 +505,8 @@ ExprPtr ex(Args &&... args) {
 using ExprPtrList = std::initializer_list<ExprPtr>;
 static auto expr_ptr_comparer = [](const auto& ptr1, const auto& ptr2) { return *ptr1 == *ptr2; };
 
+using ExprPtrVector = container::svector<ExprPtr>;
+
 class Constant : public Expr {
  private:
   std::complex<double> value_;

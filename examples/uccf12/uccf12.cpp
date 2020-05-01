@@ -50,13 +50,33 @@ try_main() {
   };
 
   {
-    auto h = H2();
-    auto a = T(2);
-//    Logger::get_instance().canonicalize = true;
-//    Logger::get_instance().wick_harness = true;
-    auto ht_comm = do_wick( h*t - t*h );
+    auto h = H();
+    auto x = R12();
+    auto hx_comm = do_wick( h*x - x*h );
 
-    std::wcout << "[H,T] = " << to_latex_align(ht_comm, 20)
+    std::wcout << "[H,F] = " << to_latex_align(hx_comm, 20)
+               << std::endl;
+
+    // keep only 1 and 2-body ints
+    assert(hx_comm->is<Sum>());
+    auto filtered_summands =
+        hx_comm->as<Sum>().summands() | ranges::views::remove_if([](const ExprPtr &ptr) {
+          assert(ptr->is<Product>());
+          bool keep = false;
+          bool found_operator = false;
+          for(auto&& factor : ptr->as<Product>().factors()) {
+            if (factor->is<FNOperator>()) {
+              assert(!found_operator);
+              found_operator = true;
+              const auto rank = factor->as<FNOperator>().rank();
+              keep = (rank >= 1 && rank <=2);
+            }
+          }
+          return !keep;
+        });
+    auto hx_comm_12 = ex<Sum>(ranges::begin(filtered_summands),
+        ranges::end(filtered_summands));
+    std::wcout << "[H,F]_{1,2} = " << to_latex_align(hx_comm_12, 20)
                << std::endl;
   }
 
