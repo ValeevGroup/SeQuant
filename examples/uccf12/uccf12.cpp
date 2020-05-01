@@ -17,10 +17,12 @@ int main(int argc, char* argv[]) {
   std::wcerr.sync_with_stdio(true);
   sequant::detail::OpIdRegistrar op_id_registrar;
 
+  sequant::set_default_context(SeQuant(Vacuum::Physical, IndexSpaceMetric::Unit, BraKetSymmetry::conjugate));
   mbpt::set_default_convention();
 
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
+  // WARNING some code is not thread safe ...
   set_num_threads(1);
 
   try {
@@ -51,7 +53,7 @@ try_main() {
 
   {
     auto h = H();
-    auto x = R12();
+    auto x = R12(IndexSpace::all);
     auto hx_comm = do_wick( h*x - x*h );
 
     std::wcout << "[H,F] = " << to_latex_align(hx_comm, 20)

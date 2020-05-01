@@ -6,6 +6,8 @@ namespace mbpt {
 
 std::wstring to_wstring(OpType op) {
   switch (op) {
+    case OpType::h:
+      return L"h";
     case OpType::f:
       return L"f";
     case OpType::g:
@@ -29,6 +31,7 @@ std::wstring to_wstring(OpType op) {
 
 OpClass to_class(OpType op) {
   switch (op) {
+    case OpType::h:
     case OpType::f:
     case OpType::g:
       return OpClass::gen;
