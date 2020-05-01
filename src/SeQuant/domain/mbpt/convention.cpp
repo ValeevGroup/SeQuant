@@ -73,8 +73,8 @@ void register_standard_instances() {
     IndexSpace::register_instance(declab(L"a"), IndexSpace::active_unoccupied, qnattr, do_not_throw);
     IndexSpace::register_instance(declab(L"e"), IndexSpace::unoccupied, qnattr, do_not_throw);
     IndexSpace::register_instance(declab(L"p"), IndexSpace::all, qnattr, do_not_throw);
-    IndexSpace::register_instance(declab(L"⍺'"), IndexSpace::other_unoccupied, qnattr, do_not_throw);
-    IndexSpace::register_instance(declab(L"⍺"), IndexSpace::complete_unoccupied, qnattr, do_not_throw);
+    IndexSpace::register_instance(declab(L"α'"), IndexSpace::other_unoccupied, qnattr, do_not_throw);
+    IndexSpace::register_instance(declab(L"α"), IndexSpace::complete_unoccupied, qnattr, do_not_throw);
     IndexSpace::register_instance(declab(L"κ"), IndexSpace::complete, qnattr, do_not_throw);
   }
 }
@@ -93,8 +93,8 @@ void make_default_indexregistry() {
     register_index(idxreg_ref, Index{declab(L"a")}, 1000);
     register_index(idxreg_ref, Index{declab(L"e")}, 1000);
     register_index(idxreg_ref, Index{declab(L"p")}, 1110);
-    register_index(idxreg_ref, Index{declab(L"⍺'")}, 3000);
-    register_index(idxreg_ref, Index{declab(L"⍺")}, 4000);
+    register_index(idxreg_ref, Index{declab(L"α'")}, 3000);
+    register_index(idxreg_ref, Index{declab(L"α")}, 4000);
     register_index(idxreg_ref, Index{declab(L"κ")}, 4110);
   }
 }
