@@ -28,6 +28,10 @@ ExprPtr Expr::clone() const {
   throw not_implemented("clone");
 }
 
+void Expr::adjoint() {
+  throw not_implemented("adjoint");
+}
+
 Expr& Expr::operator*=(const Expr &that) {
   throw not_implemented("operator*=");
 }
@@ -42,6 +46,17 @@ Expr& Expr::operator+=(const Expr &that) {
 
 Expr& Expr::operator-=(const Expr &that) {
   throw not_implemented("operator-=");
+}
+
+ExprPtr adjoint(const ExprPtr& expr) {
+  auto result = expr->clone();
+  result->adjoint();
+  return result;
+}
+
+void Constant::adjoint() {
+  value_ = conj(value_);
+  reset_hash_value();
 }
 
 bool Product::is_commutative() const {
@@ -144,6 +159,15 @@ ExprPtr Product::canonicalize_impl(bool rapid) {
   return {};  // side effects are absorbed into the scalar_
 }
 
+void Product::adjoint() {
+  assert(static_commutativity() == false);  // assert no slicing
+  auto adj_scalar = conj(scalar());
+  using namespace ranges;
+  auto adj_factors = factors() | views::reverse | views::transform([](auto& expr) { return ::sequant::adjoint(expr); });
+  using std::swap;
+  *this = Product(adj_scalar, ranges::begin(adj_factors), ranges::end(adj_factors));
+}
+
 ExprPtr Product::canonicalize() {
   return this->canonicalize_impl(/* rapid = */ false);
 }
@@ -181,6 +205,28 @@ ExprPtr Product::rapid_canonicalize() {
 //
 //  return {};  // side effects are absorbed into the scalar_
 //}
+
+void CProduct::adjoint() {
+  auto adj_scalar = conj(scalar());
+  using namespace ranges;
+  // no need to reverse for commutative product
+  auto adj_factors = factors() | views::transform([](auto&& expr) { return ::sequant::adjoint(expr); });
+  *this = CProduct(adj_scalar, ranges::begin(adj_factors), ranges::end(adj_factors));
+}
+
+void NCProduct::adjoint() {
+  auto adj_scalar = conj(scalar());
+  using namespace ranges;
+  // no need to reverse for commutative product
+  auto adj_factors = factors() | views::reverse | views::transform([](auto&& expr) { return ::sequant::adjoint(expr); });
+  *this = NCProduct(adj_scalar, ranges::begin(adj_factors), ranges::end(adj_factors));
+}
+
+void Sum::adjoint() {
+  using namespace ranges;
+  auto adj_summands = summands() | views::transform([](auto&& expr) { return ::sequant::adjoint(expr); });
+  *this = Sum(ranges::begin(adj_summands), ranges::end(adj_summands));
+}
 
 ExprPtr Sum::canonicalize_impl(bool multipass) {
 

@@ -19,6 +19,7 @@ struct Dummy : public sequant::Expr {
   type_id_type type_id() const override { return get_type_id<Dummy>(); };
   sequant::ExprPtr clone() const override { return sequant::ex<Dummy>(); }
   bool static_equal(const sequant::Expr &that) const override { return true; }
+  void adjoint() override {};
 };
 
 template<typename T>
@@ -245,6 +246,28 @@ TEST_CASE("Expr", "[elements]") {
     REQUIRE(sp0.scalar() == 4.0);
   }
 
+  SECTION("adjoint") {
+    {   // implemented in Dummy
+      const auto e = std::make_shared<Dummy>();
+      REQUIRE_NOTHROW(e->adjoint());
+    }
+    {   // not implemented by default
+      const auto e = std::make_shared<VecExpr<double>>();
+      REQUIRE_THROWS_AS(e->adjoint(), std::logic_error);
+    }
+    {   // Constant
+      const auto e = std::make_shared<Constant>(std::complex<double>{1,2});
+      REQUIRE_NOTHROW(e->adjoint());
+      REQUIRE(e->value() == std::complex<double>{1,-2});
+    }
+    {   // Product
+      const auto e = std::make_shared<Product>();
+      e->append(std::complex<double>{2,-1}, ex<Dummy>());
+      REQUIRE_NOTHROW(e->adjoint());
+      REQUIRE(e->scalar() == std::complex<double>{2,1});
+    }
+  }
+
   SECTION("latex") {
     Product sp0{};
     sp0.append(2.0, std::make_shared<Dummy>());
@@ -420,14 +443,14 @@ TEST_CASE("Expr", "[elements]") {
           (ex<Constant>(1.0) +
            ex<Constant>(2.0) * (ex<Constant>(3.0) - ex<Dummy>())) *
           (ex<Constant>(5.0) * (ex<Constant>(6.0) + ex<Dummy>()) + ex<Dummy>());
-      //      std::wcout << "x = " << to_latex(x) << std::endl;
+      //std::wcout << "x = " << to_latex(x) << std::endl;
       REQUIRE(to_latex(x) ==
               L"{{ \\bigl({{{1}}} + {{{2}}{ \\bigl({{{3}}} - {"
               L"{\\text{Dummy}}}\\bigr) }}\\bigr) }{ \\bigl({{{5}}"
               L"{ \\bigl({{{6}}} + {\\text{Dummy}}\\bigr) }} + "
               L"{\\text{Dummy}}\\bigr) }}");
       expand(x);
-      //      std::wcout << "ex = " << to_latex(x) << std::endl;
+      //std::wcout << "ex = " << to_latex(x) << std::endl;
       REQUIRE(to_latex(x) ==
               L"{ \\bigl({{{30}}} + {{{5}}{\\text{Dummy}}} + "
               L"{{\\text{Dummy}}} + {{{180}}} + {{{30}}"

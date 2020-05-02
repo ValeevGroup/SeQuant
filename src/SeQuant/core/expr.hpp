@@ -215,6 +215,10 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
     return result;
   }
 
+  /// @brief changes this to its adjoint
+  /// @note base implementation throws, must be reimplemented in the derived class
+  virtual void adjoint();
+
   /// Computes and returns the memoized hash value.
   /// @note always returns 0 unless this derived class overrides Expr::memoizing_hash
   /// @return the hash value for this Expr
@@ -507,6 +511,11 @@ static auto expr_ptr_comparer = [](const auto& ptr1, const auto& ptr2) { return 
 
 using ExprPtrVector = container::svector<ExprPtr>;
 
+/// @brief computes the adjoint of @p expr
+/// @param[in] expr an Expr object
+/// @return the adjoint of @p expr
+ExprPtr adjoint(const ExprPtr& expr);
+
 class Constant : public Expr {
  private:
   std::complex<double> value_;
@@ -552,6 +561,9 @@ class Constant : public Expr {
   ExprPtr clone() const override {
     return ex<Constant>(this->value());
   }
+
+  /// @brief adjoint of a Constant is its complex conjugate
+  virtual void adjoint() override;
 
   virtual Expr &operator*=(const Expr &that) override {
     if (that.is<Constant>()) {
@@ -759,6 +771,9 @@ class Product : public Expr {
   /// @sa CProduct::is_commutative() and NCProduct::is_commutative()
   virtual bool is_commutative() const;
 
+  /// @brief adjoint of a Product is a reversed product of adjoints of its factors, with complex-conjugated scalar
+  virtual void adjoint() override;
+
  private:
   /// @return true if commutativity is decidable statically
   /// @sa CProduct::static_commutativity() and NCProduct::static_commutativity()
@@ -903,6 +918,10 @@ class CProduct : public Product {
 
   bool is_commutative() const override { return true; }
 
+  /// @brief adjoint of a CProduct is a product of adjoints of its factors, with complex-conjugated scalar
+  /// @note factors are not reversed since the factors commute
+  virtual void adjoint() override;
+
  private:
   bool static_commutativity() const override { return true; }
 };  // class CProduct
@@ -916,6 +935,9 @@ class NCProduct : public Product {
   NCProduct(Product &&other) : Product(other) {}
 
   bool is_commutative() const override { return false; }
+
+  /// @brief adjoint of a NCProduct is a reserved product of adjoints of its factors, with complex-conjugated scalar
+  virtual void adjoint() override;
 
  private:
   bool static_commutativity() const override { return true; }
@@ -1086,6 +1108,9 @@ class Sum : public Expr {
     return ex<Sum>(ranges::begin(cloned_summands),
                    ranges::end(cloned_summands));
   }
+
+  /// @brief adjoint of a Sum is a sum of adjoints of its factors
+  virtual void adjoint() override;
 
   virtual Expr &operator+=(const Expr &that) override {
     this->append(const_cast<Expr &>(that).shared_from_this());
