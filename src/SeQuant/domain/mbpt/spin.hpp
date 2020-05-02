@@ -597,41 +597,6 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
   rapid_simplify(expr);
   canonicalize(expr);
 
-  // TODO: Call this lambda while counting cycles; don't substitute expression
-  auto substitute_external_indices = [&] (ExprPtr& expr, std::initializer_list<IndexList>& idx_group) {
-
-    std::cout << "idx_group.size(): " << idx_group.size() << std::endl;
-
-    // generate replacement map
-    bool need_replacements = false;
-    std::map<Index, Index> index_replacements;
-    ranges::for_each(idx_group, [&](const IndexList &idx_pair) {
-    // assert(idx_pair.size() == 2);
-    if(idx_pair.size() == 2){
-      need_replacements = true;
-      auto it = idx_pair.begin();
-      auto first = *it;
-      it++;
-      auto second = *it;
-      index_replacements.emplace(std::make_pair(first, second));
-    }
-    });
-
-    if(need_replacements){
-      // std::cout << "index_replacements.size(): " << index_replacements.size() << "\n";
-      for(auto&& pair: index_replacements)
-        std::wcout << to_latex(pair.first) << " " << to_latex(pair.second);
-      std::cout << "\n";
-
-      // call transform function on expr
-      expr = transform_expression(expr, index_replacements);
-      return expr;
-    } else {
-      return expr;
-    }
-  };
-  // expr = substitute_external_indices(expr, ext_index_groups);
-
   // Lambda for a product
   auto trace_product = [&] (const Product& product){
     // TODO: Check symmetry of tensors
@@ -658,20 +623,15 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
     auto product_kets = get_ket_indices(product);
     auto product_bras = get_bra_indices(product);
 
-     // TODO: Call index replacement on these vectors
-#if 1
-//     std::cout << "Before substitution:\n";
-//     ranges::for_each(product_bras, [] (Index& i){std::wcout << to_latex(i) << " ";});
-//     std::cout << std::endl;
-//     ranges::for_each(product_kets, [] (Index& i){std::wcout << to_latex(i) << " ";});
-//     std::cout << std::endl;
-
+    // Substitute indices from external index list
     {
+      // TODO: Don't make an index map; substitute directly
       bool need_replacements = false;
+
+      // Construct map
       std::map<Index, Index> index_replacements;
       ranges::for_each(ext_index_groups, [&](const IndexList &idx_pair) {
-        // assert(idx_pair.size() == 2);
-        if(idx_pair.size() == 2){
+        if (idx_pair.size() == 2) {
           need_replacements = true;
           auto it = idx_pair.begin();
           auto first = *it;
@@ -681,20 +641,15 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
         }
       });
 
-      for(auto&& pair : index_replacements){
+      // Make replacements in bra/ket idx vectors
+      // TODO: Check for a potential bug if index appears at v.end()
+      for (auto &&pair : index_replacements) {
         auto bra_it = std::find(product_bras.begin(), product_bras.end(), pair.first);
-        if(bra_it != product_bras.end()) *bra_it = pair.second;
+        if (bra_it != product_bras.end()) *bra_it = pair.second;
         auto ket_it = std::find(product_kets.begin(), product_kets.end(), pair.first);
-        if(ket_it != product_kets.end()) *ket_it = pair.second;
+        if (ket_it != product_kets.end()) *ket_it = pair.second;
       }
-
-//      std::cout << "After substitution:\n";
-//      ranges::for_each(product_bras, [] (Index& i){std::wcout << to_latex(i) << " ";});
-//      std::cout << std::endl;
-//      ranges::for_each(product_kets, [] (Index& i){std::wcout << to_latex(i) << " ";});
-//      std::cout << std::endl;
     }
-#endif
 
     // Returns the number of cycles
     auto count_cycles = [&] (std::vector<Index>& v, std::vector<Index>& v1){
