@@ -118,6 +118,7 @@ add_library(SeQuant
         src/SeQuant/core/sequant.cpp
         src/SeQuant/core/sequant.hpp
         src/SeQuant/core/attr.hpp
+        src/SeQuant/core/index.cpp
         src/SeQuant/core/index.hpp
         src/SeQuant/core/space.cpp
         src/SeQuant/core/space.hpp
@@ -260,8 +261,13 @@ if (TARGET tiledarray AND TARGET Libint2::cxx)
   target_compile_definitions(${example2} PRIVATE SEQUANT_HAS_TILEDARRAY)
 endif (TARGET tiledarray AND TARGET Libint2::cxx)
 
+set(example3 uccf12)
+add_executable(${example3} EXCLUDE_FROM_ALL
+    examples/${example3}/${example3}.cpp)
+target_link_libraries(${example3} SeQuant ${TBB_LIBRARIES})
+
 # add tests for running examples
-set (lastexample 3)
+set (lastexample 4)
 foreach(i RANGE ${lastexample})
     if (TARGET ${example${i}})
         add_test(example/${example${i}}/build "${CMAKE_COMMAND}"

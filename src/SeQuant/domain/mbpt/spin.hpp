@@ -726,7 +726,7 @@ ExprPtr spintrace(ExprPtr expression,
     // rapid_simplify(expression);
   }
   const auto A_stop = std::chrono::high_resolution_clock::now();
-  auto A_time_elapsed =
+  [[maybe_unused]] auto A_time_elapsed =
       std::chrono::duration_cast<std::chrono::microseconds>(A_stop - A_start);
   // std::cout << "A operator: " << A_time_elapsed.count() << " micro sec.\n";
 
@@ -746,7 +746,7 @@ ExprPtr spintrace(ExprPtr expression,
       } else
         result->append(term);
       auto term_stop = std::chrono::high_resolution_clock::now();
-      auto t_time_elapsed =
+      [[maybe_unused]] auto t_time_elapsed =
           std::chrono::duration_cast<std::chrono::microseconds>(term_stop - term_start);
       // std::wcout << t_time_elapsed.count() << " " << to_latex(term) << "\n";
     }

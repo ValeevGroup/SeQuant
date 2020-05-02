@@ -176,6 +176,9 @@ class Tensor : public Expr, public AbstractTensor {
 
   ExprPtr canonicalize() override;
 
+  /// @brief adjoint of a Tensor swaps its bra and ket
+  virtual void adjoint() override;
+
   /// Replaces indices using the index map
   /// @param index_map maps Index to Index
   /// @return true if one or more indices changed

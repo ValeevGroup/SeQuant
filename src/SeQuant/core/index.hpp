@@ -259,35 +259,7 @@ class Index : public Taggable {
   /// protoindices
   bool symmetric_proto_indices() const { return symmetric_proto_indices_; }
 
-  std::wstring to_latex() const {
-    auto protect_subscript = [](const std::wstring_view str) {
-      auto subsc_pos = str.find(L'_');
-      if (subsc_pos == std::wstring_view::npos)
-        return std::wstring(str);
-      else {
-        assert(subsc_pos + 1 < str.size());
-        if (subsc_pos + 2 == str.size())  // don't protect single character
-          return std::wstring(str);
-        std::wstring result = std::wstring(str.substr(0, subsc_pos + 1)) +
-                              L"{" + std::wstring(str.substr(subsc_pos + 1)) +
-                              L"}";
-        return result;
-      }
-    };
-
-    std::wstring result;
-    result = L"{";
-    result += protect_subscript(this->label());
-    if (this->has_proto_indices()) {
-      result += L"^{";
-      for (const auto &pi : this->proto_indices()) {
-        result += pi.to_latex();
-      }
-      result += L"}";
-    }
-    result += L"}";
-    return result;
-  }
+  std::wstring to_latex() const;
 
   template <typename... Attrs>
   std::wstring to_wolfram(Attrs &&... attrs) const {

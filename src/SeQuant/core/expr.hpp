@@ -72,20 +72,14 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
   }
 
   /// @return the string representation of @c this in the LaTeX format
-  virtual std::wstring to_latex() const {
-    throw std::logic_error("Expr::to_latex not implemented in this derived class");
-  }
+  virtual std::wstring to_latex() const;
 
   /// @return the string representation of @c this in the Wolfram Language format
-  virtual std::wstring to_wolfram() const {
-    throw std::logic_error("Expr::to_wolfram not implemented in this derived class");
-  }
+  virtual std::wstring to_wolfram() const;
 
   /// @return a clone of this object
   /// @note must be overridden in the derived class
-  virtual ExprPtr clone() const {
-    throw std::logic_error("Expr::clone not implemented in this derived class");
-  }
+  virtual ExprPtr clone() const;
 
   /// Canonicalizes @c this and returns the biproduct of canonicalization (e.g. phase)
   /// @return the biproduct of canonicalization, or @c nullptr if no biproduct generated
@@ -221,6 +215,10 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
     return result;
   }
 
+  /// @brief changes this to its adjoint
+  /// @note base implementation throws, must be reimplemented in the derived class
+  virtual void adjoint();
+
   /// Computes and returns the memoized hash value.
   /// @note always returns 0 unless this derived class overrides Expr::memoizing_hash
   /// @return the hash value for this Expr
@@ -330,34 +328,24 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
   /// @return reference to @c *this
   /// @throw std::logic_error if not implemented for this class, or cannot be
   /// implemented for the particular @c that
-  virtual Expr &operator*=(const Expr &that) {
-    throw std::logic_error(
-        "Expr::operator*= not implemented in this derived class");
-  }
+  virtual Expr &operator*=(const Expr &that);
 
   /// @brief in-place non-commutatively-multiply @c *this by @c that
   /// @return reference to @c *this
   /// @throw std::logic_error if not implemented for this class, or cannot be
   /// implemented for the particular @c that
-  virtual Expr &operator^=(const Expr &that) {
-    throw std::logic_error(
-        "Expr::operator^= not implemented in this derived class");
-  }
+  virtual Expr &operator^=(const Expr &that);
 
   /// @brief in-place add @c that to @c *this
   /// @return reference to @c *this
   /// @throw std::logic_error if not implemented for this class, or cannot be
   /// implemented for the particular @c that
-  virtual Expr &operator+=(const Expr &that) {
-    throw std::logic_error("Expr::operator+= not implemented in this derived class");
-  }
+  virtual Expr &operator+=(const Expr &that);
 
   /// @brief in-place subtract @c that from @c *this
   /// @return reference to @c *this
   /// @throw std::logic_error if not implemented for this class, or cannot be implemented for the particular @c that
-  virtual Expr &operator-=(const Expr &that) {
-    throw std::logic_error("Expr::operator-= not implemented in this derived class");
-  }
+  virtual Expr &operator-=(const Expr &that);
 
  ///@}
 
@@ -502,6 +490,10 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
     return type_id;
   };
 
+ private:
+  /// @input[in] fn the name of function that is missing in this class
+  /// @return a std::logic_error object containing a message describing that @p fn is missing from this type
+  std::logic_error not_implemented(const char* fn) const;
 };  // class Expr
 
 /// make an ExprPtr to a new object of type T
@@ -516,6 +508,13 @@ ExprPtr ex(Args &&... args) {
 // this is needed when using std::make_shared<X>({ExprPtr,ExprPtr}), i.e. must std::make_shared<X>(ExprPtrList{ExprPtr,ExprPtr})
 using ExprPtrList = std::initializer_list<ExprPtr>;
 static auto expr_ptr_comparer = [](const auto& ptr1, const auto& ptr2) { return *ptr1 == *ptr2; };
+
+using ExprPtrVector = container::svector<ExprPtr>;
+
+/// @brief computes the adjoint of @p expr
+/// @param[in] expr an Expr object
+/// @return the adjoint of @p expr
+ExprPtr adjoint(const ExprPtr& expr);
 
 class Constant : public Expr {
  private:
@@ -563,6 +562,9 @@ class Constant : public Expr {
     return ex<Constant>(this->value());
   }
 
+  /// @brief adjoint of a Constant is its complex conjugate
+  virtual void adjoint() override;
+
   virtual Expr &operator*=(const Expr &that) override {
     if (that.is<Constant>()) {
       value_ *= that.as<Constant>().value();
@@ -588,6 +590,10 @@ class Constant : public Expr {
       throw std::logic_error("Constant::operator-=(that): not valid for that");
     }
     return *this;
+  }
+
+  bool is_zero() const {
+    return value_ == decltype(value_){0,0};
   }
 
  private:
@@ -765,6 +771,9 @@ class Product : public Expr {
   /// @sa CProduct::is_commutative() and NCProduct::is_commutative()
   virtual bool is_commutative() const;
 
+  /// @brief adjoint of a Product is a reversed product of adjoints of its factors, with complex-conjugated scalar
+  virtual void adjoint() override;
+
  private:
   /// @return true if commutativity is decidable statically
   /// @sa CProduct::static_commutativity() and NCProduct::static_commutativity()
@@ -787,7 +796,7 @@ class Product : public Expr {
       }
       for (const auto &i : factors()) {
         if (i->is<Product>())
-          result += L"\\left(" + i->to_latex() + L"\\right)";
+          result += L"\\bigl(" + i->to_latex() + L"\\bigr)";
         else result += i->to_latex();
       }
     }
@@ -909,6 +918,10 @@ class CProduct : public Product {
 
   bool is_commutative() const override { return true; }
 
+  /// @brief adjoint of a CProduct is a product of adjoints of its factors, with complex-conjugated scalar
+  /// @note factors are not reversed since the factors commute
+  virtual void adjoint() override;
+
  private:
   bool static_commutativity() const override { return true; }
 };  // class CProduct
@@ -922,6 +935,9 @@ class NCProduct : public Product {
   NCProduct(Product &&other) : Product(other) {}
 
   bool is_commutative() const override { return false; }
+
+  /// @brief adjoint of a NCProduct is a reserved product of adjoints of its factors, with complex-conjugated scalar
+  virtual void adjoint() override;
 
  private:
   bool static_commutativity() const override { return true; }
@@ -973,7 +989,7 @@ class Sum : public Expr {
           assert(summands_.at(*constant_summand_idx_)->is<Constant>());
           *(summands_[*constant_summand_idx_]) += *summand;
         } else {
-          if (*summand_constant != Constant(0)) {
+          if (!summand_constant->is_zero()) {
             summands_.push_back(std::move(summand));
             constant_summand_idx_ = summands_.size() - 1;
           }
@@ -1000,7 +1016,7 @@ class Sum : public Expr {
           *summands_[*constant_summand_idx_] += *summand_constant;
         } else {  // or include the nonzero constant and update
                   // constant_summand_idx_
-          if (summand_constant != 0) {
+          if (!summand_constant->is_zero()) {
             summands_.insert(summands_.begin(), std::move(summand));
             constant_summand_idx_ = 0;
           }
@@ -1047,7 +1063,7 @@ class Sum : public Expr {
 
   std::wstring to_latex() const override {
     std::wstring result;
-    result = L"{ \\left(";
+    result = L"{ \\bigl(";
     std::size_t counter = 0;
     for (const auto &i : summands()) {
       const auto i_is_product = i->is<Product>();
@@ -1064,7 +1080,7 @@ class Sum : public Expr {
       }
       ++counter;
     }
-    result += L"\\right) }";
+    result += L"\\bigr) }";
     return result;
   }
 
@@ -1092,6 +1108,9 @@ class Sum : public Expr {
     return ex<Sum>(ranges::begin(cloned_summands),
                    ranges::end(cloned_summands));
   }
+
+  /// @brief adjoint of a Sum is a sum of adjoints of its factors
+  virtual void adjoint() override;
 
   virtual Expr &operator+=(const Expr &that) override {
     this->append(const_cast<Expr &>(that).shared_from_this());
@@ -1179,9 +1198,9 @@ inline std::wstring to_latex_align(const ExprPtr &exprptr,
                                    size_t max_terms_per_line = 1) {
   std::wstring result = to_latex(exprptr);
   if (exprptr->is<Sum>()) {
-    result.erase(0, 7);  // remove leading  "{ \left"
+    result.erase(0, 7);  // remove leading  "{ \bigl"
     result.replace(result.size() - 9, 9,
-                   L")");  // replace trailing "\right) }" with ")"
+                   L")");  // replace trailing "\bigr) }" with ")"
     result = std::wstring(L"\\begin{align}\n& ") + result;
     // assume no inner sums
     int line_counter = 0;
