@@ -91,6 +91,10 @@ struct expand_visitor {
           result->append(expr_ref[i]);
         if (Logger::get_instance().expand) std::wcout << "in expand_sum: after flattening Sum summand result = " << to_latex(result ? result : expr) << std::endl;
       }
+      else {  // nothing to expand? if expanded previously (i.e. result is nonnull) append to result
+        if (result)
+          result->append(expr_ref[i]);
+      }
     }
     bool expr_changed = false;
     if (result) { // if any summand was expanded or flattened, copy result into expr
