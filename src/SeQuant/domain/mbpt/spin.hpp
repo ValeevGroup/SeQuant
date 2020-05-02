@@ -597,7 +597,7 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
   rapid_simplify(expr);
   canonicalize(expr);
 
-  // TODO: Substitute indices from external indices
+  // TODO: Call this lambda while counting cycles; don't substitute expression
   auto substitute_external_indices = [&] (ExprPtr& expr, std::initializer_list<IndexList>& idx_group) {
 
     std::cout << "idx_group.size(): " << idx_group.size() << std::endl;
@@ -630,7 +630,7 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
       return expr;
     }
   };
-  expr = substitute_external_indices(expr, ext_index_groups);
+  // expr = substitute_external_indices(expr, ext_index_groups);
 
   // Lambda for a product
   auto trace_product = [&] (const Product& product){
@@ -658,10 +658,43 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
     auto product_kets = get_ket_indices(product);
     auto product_bras = get_bra_indices(product);
 
-//    ranges::for_each(product_bras, [] (Index& i){std::wcout << to_latex(i) << " ";});
-//    std::cout << std::endl;
-//    ranges::for_each(product_kets, [] (Index& i){std::wcout << to_latex(i) << " ";});
-//    std::cout << std::endl;
+     // TODO: Call index replacement on these vectors
+#if 1
+//     std::cout << "Before substitution:\n";
+//     ranges::for_each(product_bras, [] (Index& i){std::wcout << to_latex(i) << " ";});
+//     std::cout << std::endl;
+//     ranges::for_each(product_kets, [] (Index& i){std::wcout << to_latex(i) << " ";});
+//     std::cout << std::endl;
+
+    {
+      bool need_replacements = false;
+      std::map<Index, Index> index_replacements;
+      ranges::for_each(ext_index_groups, [&](const IndexList &idx_pair) {
+        // assert(idx_pair.size() == 2);
+        if(idx_pair.size() == 2){
+          need_replacements = true;
+          auto it = idx_pair.begin();
+          auto first = *it;
+          it++;
+          auto second = *it;
+          index_replacements.emplace(std::make_pair(first, second));
+        }
+      });
+
+      for(auto&& pair : index_replacements){
+        auto bra_it = std::find(product_bras.begin(), product_bras.end(), pair.first);
+        if(bra_it != product_bras.end()) *bra_it = pair.second;
+        auto ket_it = std::find(product_kets.begin(), product_kets.end(), pair.first);
+        if(ket_it != product_kets.end()) *ket_it = pair.second;
+      }
+
+//      std::cout << "After substitution:\n";
+//      ranges::for_each(product_bras, [] (Index& i){std::wcout << to_latex(i) << " ";});
+//      std::cout << std::endl;
+//      ranges::for_each(product_kets, [] (Index& i){std::wcout << to_latex(i) << " ";});
+//      std::cout << std::endl;
+    }
+#endif
 
     // Returns the number of cycles
     auto count_cycles = [&] (std::vector<Index>& v, std::vector<Index>& v1){
@@ -691,13 +724,6 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
     result->scale(std::pow(2,cc));
     // std::wcout << "Result:  " << to_latex(result) << "\n" << std::endl;
     return result;
-//    ExprPtr expr = std::make_shared<Product>(product);
-//    TensorNetwork tn(expr->as<Product>().factors());
-//    const auto& tn_edges = tn.edges();
-//    const auto& tn_tensors = tn.tensors();
-//    for(auto&& i : tn_edges) std::wcout << i.idx().to_latex() << " ";
-//    std::cout << "\n";
-//    return nullptr;
   };
 
   if(expr->is<Constant>())
