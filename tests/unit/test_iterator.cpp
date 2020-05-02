@@ -15,7 +15,7 @@ TEST_CASE("Iterators", "[elements]") {
 
     {
       REQUIRE_NOTHROW(flattened_rangenest<FNOperatorSeq>{});
-      auto rng0 = flattened_rangenest<FNOperatorSeq>{};
+      [[maybe_unused]] auto rng0 = flattened_rangenest<FNOperatorSeq>{};
     }
 
     {
