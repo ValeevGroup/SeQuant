@@ -249,9 +249,9 @@ TEST_CASE("Op", "[elements]") {
     REQUIRE(hash_value(fc1) == hash_value(fc1_copy));
     REQUIRE(hash_value(fc1) != hash_value(fa1));
     REQUIRE(hash_value(fc1) != hash_value(fc2));
-    REQUIRE(hash_value(fc1) == hash_value(bc1));  // hash is independent of statistics
-    REQUIRE(hash_value(fa1) == hash_value(ba1));  // hash is independent of statistics
-    REQUIRE(hash_value(fc1) == hash_value(fa1.adjoint()));
+    REQUIRE(hash_value(fc1) != hash_value(bc1));  // hash is depends on statistics
+    REQUIRE(hash_value(fa1) != hash_value(ba1));  // hash is depends on statistics
+    REQUIRE(hash_value(fc1) == hash_value(adjoint(fa1)));
   }
 
   SECTION("hug") {
