@@ -19,7 +19,6 @@ struct Dummy : public sequant::Expr {
   type_id_type type_id() const override { return get_type_id<Dummy>(); };
   sequant::ExprPtr clone() const override { return sequant::ex<Dummy>(); }
   bool static_equal(const sequant::Expr &that) const override { return true; }
-  void adjoint() override {};
 };
 
 template<typename T>
@@ -92,6 +91,24 @@ struct VecExpr : public std::vector<T>, public sequant::Expr {
     return static_cast<const base_type&>(*this) == static_cast<const base_type&>(static_cast<const VecExpr&>(that));
   }
 
+};
+
+struct Adjointable : public sequant::Expr {
+  Adjointable() = default;
+  Adjointable(int v) : v(v) {}
+  virtual ~Adjointable() = default;
+  std::wstring to_latex() const override {
+    return L"{\\text{Adjointable}{" + std::to_wstring(v) + L"}}";
+  }
+  std::wstring to_wolfram() const override {
+    return L"Adjointable[" + std::to_wstring(v) + L"]";
+  }
+  type_id_type type_id() const override { return get_type_id<Adjointable>(); };
+  sequant::ExprPtr clone() const override { return sequant::ex<Adjointable>(v); }
+  bool static_equal(const sequant::Expr &that) const override { return v == that.as<Adjointable>().v; }
+  void adjoint() override { v = -v; };
+
+  int v = 1;
 };
 
 struct latex_visitor {
@@ -247,13 +264,13 @@ TEST_CASE("Expr", "[elements]") {
   }
 
   SECTION("adjoint") {
-    {   // implemented in Dummy
-      const auto e = std::make_shared<Dummy>();
-      REQUIRE_NOTHROW(e->adjoint());
-    }
     {   // not implemented by default
-      const auto e = std::make_shared<VecExpr<double>>();
+      const auto e = std::make_shared<Dummy>();
       REQUIRE_THROWS_AS(e->adjoint(), std::logic_error);
+    }
+    {   // implemented in Adjointable
+      const auto e = std::make_shared<Adjointable>();
+      REQUIRE_NOTHROW(e->adjoint());
     }
     {   // Constant
       const auto e = std::make_shared<Constant>(std::complex<double>{1,2});
@@ -262,9 +279,38 @@ TEST_CASE("Expr", "[elements]") {
     }
     {   // Product
       const auto e = std::make_shared<Product>();
-      e->append(std::complex<double>{2,-1}, ex<Dummy>());
+      e->append(std::complex<double>{2,-1}, ex<Adjointable>());
+      e->append(1, ex<Adjointable>(-2));
       REQUIRE_NOTHROW(e->adjoint());
       REQUIRE(e->scalar() == std::complex<double>{2,1});
+      REQUIRE(e->factors()[0]->as<Adjointable>().v == 2);
+      REQUIRE(e->factors()[1]->as<Adjointable>().v == -1);
+    }
+    {   // CProduct
+      const auto e = std::make_shared<CProduct>();
+      e->append(std::complex<double>{2,-1}, ex<Adjointable>());
+      e->append(1, ex<Adjointable>(-2));
+      REQUIRE_NOTHROW(e->adjoint());
+      REQUIRE(e->scalar() == std::complex<double>{2,1});
+      REQUIRE(e->factors()[0]->as<Adjointable>().v == -1);
+      REQUIRE(e->factors()[1]->as<Adjointable>().v == 2);
+    }
+    {   // NCProduct
+      const auto e = std::make_shared<NCProduct>();
+      e->append(std::complex<double>{2,-1}, ex<Adjointable>());
+      e->append(1, ex<Adjointable>(-2));
+      REQUIRE_NOTHROW(e->adjoint());
+      REQUIRE(e->scalar() == std::complex<double>{2,1});
+      REQUIRE(e->factors()[0]->as<Adjointable>().v == 2);
+      REQUIRE(e->factors()[1]->as<Adjointable>().v == -1);
+    }
+    {   // Sum
+      const auto e = std::make_shared<Sum>();
+      e->append(ex<Adjointable>());
+      e->append(ex<Adjointable>(-2));
+      REQUIRE_NOTHROW(e->adjoint());
+      REQUIRE(e->summands()[0]->as<Adjointable>().v == -1);
+      REQUIRE(e->summands()[1]->as<Adjointable>().v == 2);
     }
   }
 
