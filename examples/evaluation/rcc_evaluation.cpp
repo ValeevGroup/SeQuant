@@ -401,8 +401,14 @@ int main(int argc, char* argv[]) {
     // amplitudes for coupled-cluster calculations
     auto t_ov = std::make_shared<TA::TArrayD>(world, tr_ov);
     (*t_ov).fill(0.);
+    auto t_vo = std::make_shared<TA::TArrayD>(world, tr_vo);
+    (*t_vo).fill(0.);
+
     auto t_oovv = std::make_shared<TA::TArrayD>(world, tr_oovv);
     (*t_oovv).fill(0.);
+    auto t_vvoo = std::make_shared<TA::TArrayD>(world, tr_vvoo);
+    (*t_vvoo).fill(0.);
+
 #if CCSDT_eval
     auto t_ooovvv = std::make_shared<TA::TArrayD>(world, tr_ooovvv);
     (*t_ooovvv).fill(0.0);
@@ -536,7 +542,7 @@ int main(int argc, char* argv[]) {
     std::vector<std::shared_ptr<TA::TArrayD>> data_tensors = {Fock_oo, Fock_ov, Fock_vo, Fock_vv,
               G_oooo, G_ooov, G_oovo, G_oovv, G_ovov, G_ovvo, G_vovo, G_voov, G_ovvv, G_vovv, G_vvvv,
               G_vvoo, G_vooo, G_vvvo, G_vvov, G_ovoo,
-              t_ov, t_oovv};
+              t_ov, t_vo, t_oovv, t_vvoo};
 
     std::vector<sequant::ExprPtr> seq_tensors = {
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"f", {L"i_1"}, {L"i_1"})), // f_oo
@@ -562,8 +568,10 @@ int main(int argc, char* argv[]) {
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"g", {L"a_1",L"a_2"}, {L"i_1",L"a_3"})), //vvov
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"g", {L"i_1",L"a_1"}, {L"i_2",L"i_3"})), //ovoo
 
-        std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"i_1",}, {L"a_1"})), //ov
-        std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"i_1",L"i_2"}, {L"a_1",L"a_2"})) //oovv
+        std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"i_1"}, {L"a_1"})), //ov
+        std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"a_1"}, {L"i_1"})), //vo
+        std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"i_1",L"i_2"}, {L"a_1",L"a_2"})), //oovv
+        std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"a_1",L"a_2"}, {L"i_1",L"i_2"})) //vvoo
     };
 
 #if CCSDT_eval
@@ -574,21 +582,43 @@ int main(int argc, char* argv[]) {
     using sequant::evaluate::EvalTree;
     using ContextMapType = container::map<sequant::evaluate::HashType, 
           std::shared_ptr<TA::TArrayD>>;
+    // whether to consider T_{i j}^{a b} and T_{a b}^{i j} kind of tensors
+    // equivalent or not.
+    bool swap_braket_labels = false;
 
     ContextMapType context;
 
     assert(data_tensors.size() == seq_tensors.size());
     for (auto i = 0; i < seq_tensors.size(); ++i)
         context.insert(ContextMapType::value_type(
-                EvalTree(seq_tensors.at(i)).hash_value(),
+                EvalTree(seq_tensors.at(i), swap_braket_labels).hash_value(),
                 data_tensors.at(i)));
 
 
-    auto r1_tree = EvalTree(cc_st_r[1], false);
-    auto r2_tree = EvalTree(cc_st_r[2], false);
+    auto r1_tree = EvalTree(cc_st_r[1], swap_braket_labels);
+    auto r2_tree = EvalTree(cc_st_r[2], swap_braket_labels);
 #if CCSDT_eval
-    auto r3_tree = EvalTree(cc_st_r[3], false);
+    auto r3_tree = EvalTree(cc_st_r[3], swap_braket_labels);
 #endif
+
+    auto t1_vo = std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"a_1"}, {L"i_1"}));
+    auto t1_unswapper = [&t1_vo](const auto& node) {
+      if (node->hash_value() == EvalTree(t1_vo).hash_value()) {
+        node->unswap_braket_labels();
+      }
+    };
+
+    auto t2_vvoo = std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"a_1",L"a_2"}, {L"i_1",L"i_2"}));
+    auto t2_unswapper = [&t2_vvoo](const auto& node) {
+      if (node->hash_value() == EvalTree(t2_vvoo).hash_value()) {
+        node->unswap_braket_labels();
+      }
+    };
+
+    r1_tree.visit(t1_unswapper);
+    r2_tree.visit(t1_unswapper);
+    r1_tree.visit(t2_unswapper);
+    r2_tree.visit(t2_unswapper);
 
     iter = 0;
     rmsd = 0.0;
@@ -614,9 +644,11 @@ int main(int argc, char* argv[]) {
 
       auto tile_R1       = R1.find({0,0}).get();
       auto tile_t_ov     = (*t_ov).find({0,0}).get();
+      auto tile_t_vo     = (*t_vo).find({0,0}).get();
 
       auto tile_R2       = R2.find({0,0,0,0}).get();
       auto tile_t_oovv   = (*t_oovv).find({0,0,0,0}).get();
+      auto tile_t_vvoo   = (*t_vvoo).find({0,0,0,0}).get();
 
 #if CCSDT_eval
       auto tile_R3       = R3.find({0,0,0,0,0,0}).get();
