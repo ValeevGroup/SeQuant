@@ -601,6 +601,25 @@ int main(int argc, char* argv[]) {
     auto r3_tree = EvalTree(cc_st_r[3], swap_braket_labels);
 #endif
 
+    auto t1_vo = std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"a_1"}, {L"i_1"}));
+    auto t1_unswapper = [&t1_vo](const auto& node) {
+      if (node->hash_value() == EvalTree(t1_vo).hash_value()) {
+        node->unswap_braket_labels();
+      }
+    };
+
+    auto t2_vvoo = std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"a_1",L"a_2"}, {L"i_1",L"i_2"}));
+    auto t2_unswapper = [&t2_vvoo](const auto& node) {
+      if (node->hash_value() == EvalTree(t2_vvoo).hash_value()) {
+        node->unswap_braket_labels();
+      }
+    };
+
+    r1_tree.visit(t1_unswapper);
+    r2_tree.visit(t1_unswapper);
+    r1_tree.visit(t2_unswapper);
+    r2_tree.visit(t2_unswapper);
+
     iter = 0;
     rmsd = 0.0;
     ediff = 0.0;
