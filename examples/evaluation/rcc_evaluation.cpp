@@ -401,6 +401,9 @@ int main(int argc, char* argv[]) {
     // amplitudes for coupled-cluster calculations
     auto t_ov = std::make_shared<TA::TArrayD>(world, tr_ov);
     (*t_ov).fill(0.);
+    auto t_vo = std::make_shared<TA::TArrayD>(world, tr_vo);
+    (*t_vo).fill(0.);
+
     auto t_oovv = std::make_shared<TA::TArrayD>(world, tr_oovv);
     (*t_oovv).fill(0.);
     auto t_vvoo = std::make_shared<TA::TArrayD>(world, tr_vvoo);
@@ -539,7 +542,7 @@ int main(int argc, char* argv[]) {
     std::vector<std::shared_ptr<TA::TArrayD>> data_tensors = {Fock_oo, Fock_ov, Fock_vo, Fock_vv,
               G_oooo, G_ooov, G_oovo, G_oovv, G_ovov, G_ovvo, G_vovo, G_voov, G_ovvv, G_vovv, G_vvvv,
               G_vvoo, G_vooo, G_vvvo, G_vvov, G_ovoo,
-              t_ov, t_oovv, t_vvoo};
+              t_ov, t_vo, t_oovv, t_vvoo};
 
     std::vector<sequant::ExprPtr> seq_tensors = {
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"f", {L"i_1"}, {L"i_1"})), // f_oo
@@ -565,7 +568,8 @@ int main(int argc, char* argv[]) {
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"g", {L"a_1",L"a_2"}, {L"i_1",L"a_3"})), //vvov
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"g", {L"i_1",L"a_1"}, {L"i_2",L"i_3"})), //ovoo
 
-        std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"i_1",}, {L"a_1"})), //ov
+        std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"i_1"}, {L"a_1"})), //ov
+        std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"a_1"}, {L"i_1"})), //vo
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"i_1",L"i_2"}, {L"a_1",L"a_2"})), //oovv
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"a_1",L"a_2"}, {L"i_1",L"i_2"})) //vvoo
     };
@@ -621,6 +625,7 @@ int main(int argc, char* argv[]) {
 
       auto tile_R1       = R1.find({0,0}).get();
       auto tile_t_ov     = (*t_ov).find({0,0}).get();
+      auto tile_t_vo     = (*t_vo).find({0,0}).get();
 
       auto tile_R2       = R2.find({0,0,0,0}).get();
       auto tile_t_oovv   = (*t_oovv).find({0,0,0,0}).get();
