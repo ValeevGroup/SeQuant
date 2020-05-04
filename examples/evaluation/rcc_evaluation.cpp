@@ -578,20 +578,23 @@ int main(int argc, char* argv[]) {
     using sequant::evaluate::EvalTree;
     using ContextMapType = container::map<sequant::evaluate::HashType, 
           std::shared_ptr<TA::TArrayD>>;
+    // whether to consider T_{i j}^{a b} and T_{a b}^{i j} kind of tensors
+    // equivalent or not.
+    bool swap_braket_labels = false;
 
     ContextMapType context;
 
     assert(data_tensors.size() == seq_tensors.size());
     for (auto i = 0; i < seq_tensors.size(); ++i)
         context.insert(ContextMapType::value_type(
-                EvalTree(seq_tensors.at(i)).hash_value(),
+                EvalTree(seq_tensors.at(i), swap_braket_labels).hash_value(),
                 data_tensors.at(i)));
 
 
-    auto r1_tree = EvalTree(cc_st_r[1], false);
-    auto r2_tree = EvalTree(cc_st_r[2], false);
+    auto r1_tree = EvalTree(cc_st_r[1], swap_braket_labels);
+    auto r2_tree = EvalTree(cc_st_r[2], swap_braket_labels);
 #if CCSDT_eval
-    auto r3_tree = EvalTree(cc_st_r[3], false);
+    auto r3_tree = EvalTree(cc_st_r[3], swap_braket_labels);
 #endif
 
     iter = 0;
