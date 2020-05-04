@@ -603,22 +603,22 @@ int main(int argc, char* argv[]) {
 
     auto t1_vo = std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"a_1"}, {L"i_1"}));
     auto t1_unswapper = [&t1_vo](const auto& node) {
-      if (node->hash_value() == EvalTree(t1_vo).hash_value()) {
+      if (node->hash_value() == EvalTree(t1_vo, false).hash_value()) {
         node->unswap_braket_labels();
       }
     };
 
     auto t2_vvoo = std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"a_1",L"a_2"}, {L"i_1",L"i_2"}));
     auto t2_unswapper = [&t2_vvoo](const auto& node) {
-      if (node->hash_value() == EvalTree(t2_vvoo).hash_value()) {
+      if (node->hash_value() == EvalTree(t2_vvoo, false).hash_value()) {
         node->unswap_braket_labels();
       }
     };
 
-    r1_tree.visit(t1_unswapper);
-    r2_tree.visit(t1_unswapper);
-    r1_tree.visit(t2_unswapper);
-    r2_tree.visit(t2_unswapper);
+    /* r1_tree.visit(t1_unswapper); */
+    /* r2_tree.visit(t1_unswapper); */
+    /* r1_tree.visit(t2_unswapper); */
+    /* r2_tree.visit(t2_unswapper); */
 
     iter = 0;
     rmsd = 0.0;
@@ -633,10 +633,7 @@ int main(int argc, char* argv[]) {
       const auto tstart = std::chrono::high_resolution_clock::now();
       ++iter;
       auto R1 = r1_tree.evaluate(context);
-      auto R2_ = r2_tree.evaluate(context);
-
-      TA::TArrayD R2;
-      R2("i,j,a,b") = R2_("a,b,i,j");
+      auto R2 = r2_tree.evaluate(context);
 
 #if CCSDT_eval
       auto R3 = r3_tree.evaluate(context);
