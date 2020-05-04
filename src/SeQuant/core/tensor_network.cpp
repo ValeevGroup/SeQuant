@@ -139,7 +139,6 @@ ExprPtr TensorNetwork::canonicalize(
     {
       // for each color make a replacement list for bringing the indices to
       // the canonical order
-      const auto nindices = edges_.size();
       container::set<size_t> colors;
       container::multimap<size_t, std::pair<size_t, size_t>>
           color2idx;  // maps color to the ordinals of the corresponding
@@ -507,7 +506,6 @@ TensorNetwork::make_bliss_graph() const {
         const auto tidx = std::abs(terminal_index) - 1;
         const auto ttpos = terminal_position;
         const bool bra = terminal_index > 0;
-        const auto& tptr = tensors_.at(tidx);
         const size_t braket_vertex_index = tensor_vertex_offset[tidx] +
                                            /* core */ 1 + 3 * ttpos +
                                            (bra ? 0 : 1);
@@ -545,7 +543,7 @@ TensorNetwork::make_bliss_graph() const {
   });
   // - link up tensors
   tensor_cnt = 0;
-  ranges::for_each(tensors_, [&graph, this, &tensor_cnt,
+  ranges::for_each(tensors_, [&graph, &tensor_cnt,
                               &tensor_vertex_offset](const auto &t) {
     const auto vertex_offset = tensor_vertex_offset.at(tensor_cnt);
     // for each braket terminal linker
@@ -573,7 +571,7 @@ TensorNetwork::make_bliss_graph() const {
       key = key ^ (key >> 11);
       key = key + (key << 6);
       key = key ^ (key >> 22);
-      return int(key);
+      return static_cast<int>(key);
     };
     graph->change_color(v_cnt, hash6432shift(color));
     ++v_cnt;
