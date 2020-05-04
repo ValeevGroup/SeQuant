@@ -51,6 +51,7 @@ try_main() {
     return result;
   };
 
+  // this keeps 1- and 2-body terms w.r.t. physical vacuum
   auto keep_1_and_2_body_terms = [](const ExprPtr& input) {
     assert(input->is<Sum>());
     auto filtered_summands =
@@ -73,10 +74,12 @@ try_main() {
     return result;
   };
 
+  auto gg_space = IndexSpace::active_occupied;  // Geminal-generating space: active occupieds is the normal choice, all orbitals is the reference-independent (albeit expensive) choice
+
   // single commutator, needs symmetrization
   {
     auto h = H();
-    auto r = R12(IndexSpace::all);
+    auto r = R12(gg_space);
     auto hr_comm = do_wick( ex<Constant>(2) * (h*r - r*h) );  // this assumes symmetrization includes 1/2
 
     std::wcout << "[H,R] = " << to_latex_align(hr_comm, 20)
@@ -90,14 +93,14 @@ try_main() {
   // double commutator, also needs symmetrization
   {
     auto f = F();
-    auto r = R12(IndexSpace::all);
+    auto r = R12(gg_space);
     auto fr_comm = do_wick( ex<Constant>(2) * (f*r - r*f) );
 
     std::wcout << "[F,R] = " << to_latex_align(fr_comm, 20)
                << std::endl;
 
     {
-      auto r = R12(IndexSpace::all);  // second instance of R
+      auto r = R12(gg_space);  // second instance of R
       auto a = r - adjoint(r);
       auto comm2 = do_wick(fr_comm * a - a * fr_comm);
 
