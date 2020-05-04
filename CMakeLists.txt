@@ -162,8 +162,8 @@ add_library(evaluator EXCLUDE_FROM_ALL
     src/SeQuant/domain/evaluate/eval_tree.cpp
     src/SeQuant/domain/evaluate/eval_tree_node.hpp
     src/SeQuant/domain/evaluate/eval_tree_node.cpp
-    src/SeQuant/domain/evaluate/factorizer.hpp
-    src/SeQuant/domain/evaluate/factorizer.cpp
+    src/SeQuant/domain/factorize/factorizer.hpp
+    src/SeQuant/domain/factorize/factorizer.cpp
     # src/SeQuant/domain/evaluate/path_tree.hpp
     # src/SeQuant/domain/evaluate/path_tree.cpp
     )
@@ -175,16 +175,16 @@ target_link_libraries(evaluator SeQuant ${TBB_LIBRARIES})
 enable_testing(true)
 
 set(utests_src
-        tests/unit/test_space.cpp
-        tests/unit/test_index.cpp
-        tests/unit/test_op.cpp
-        tests/unit/test_wick.cpp
-        tests/unit/test_tensor.cpp
-        tests/unit/test_bliss.cpp
-        tests/unit/test_expr.cpp
-        tests/unit/test_iterator.cpp
-        tests/unit/test_mbpt.cpp
-        # tests/unit/test_tensor_network.cpp
+        # tests/unit/test_space.cpp
+        # tests/unit/test_index.cpp
+        # tests/unit/test_op.cpp
+        # tests/unit/test_wick.cpp
+        # tests/unit/test_tensor.cpp
+        # tests/unit/test_bliss.cpp
+        # tests/unit/test_expr.cpp
+        # tests/unit/test_iterator.cpp
+        # tests/unit/test_mbpt.cpp
+        # tests/unit/test_tensor_network.c pp
         tests/unit/test_tn_factorization.cpp
         )
 set(utests_deps SeQuant evaluator)
@@ -192,7 +192,7 @@ set(utests_deps SeQuant evaluator)
 if (TARGET tiledarray)
   list(APPEND utests_src
       ## unit tests for evaluation
-      tests/unit/test_eval_tree.cpp
+      # tests/unit/test_eval_tree.cpp
       # tests/unit/test_path_tree.cpp
       )
   list(APPEND utests_deps tiledarray)
