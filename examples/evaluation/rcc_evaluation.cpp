@@ -241,7 +241,8 @@ int main(int argc, char* argv[]) {
 #if CCSDT_eval
      TA::TiledRange tr_ooovvv{{0, ndocc},  {0, ndocc},  {0, ndocc},
                               {0, nvirt}, {0, nvirt}, {0, nvirt}};
-
+     TA::TiledRange tr_vvvooo{{0, nvirt}, {0, nvirt}, {0, nvirt},
+                              {0, ndocc},  {0, ndocc},  {0, ndocc}};
 #endif
     auto D_ov = std::make_shared<TA::TArrayD>(world, tr_ov);
     auto D_oovv = std::make_shared<TA::TArrayD>(world, tr_oovv);
@@ -412,6 +413,8 @@ int main(int argc, char* argv[]) {
 #if CCSDT_eval
     auto t_ooovvv = std::make_shared<TA::TArrayD>(world, tr_ooovvv);
     (*t_ooovvv).fill(0.0);
+    auto t_vvvooo = std::make_shared<TA::TArrayD>(world, tr_vvvooo);
+    (*t_vvvooo).fill(0.0);
 #endif
 
     //
@@ -576,7 +579,9 @@ int main(int argc, char* argv[]) {
 
 #if CCSDT_eval
     data_tensors.push_back(t_ooovvv);
-    seq_tensors.push_back(std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"i_1", L"i_2", L"i_3"}, {L"a_1", L"a_2", L"a_3"})));
+    data_tensors.push_back(t_vvvooo);
+    seq_tensors.push_back(std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"i_1", L"i_2", L"i_3"}, {L"a_1", L"a_2", L"a_3"}))); //ooovvv
+    seq_tensors.push_back(std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"a_1", L"a_2", L"a_3"}, {L"i_1", L"i_2", L"i_3"}))); //vvvooo
 #endif
 
     using sequant::evaluate::EvalTree;
@@ -600,25 +605,6 @@ int main(int argc, char* argv[]) {
 #if CCSDT_eval
     auto r3_tree = EvalTree(cc_st_r[3], swap_braket_labels);
 #endif
-
-    auto t1_vo = std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"a_1"}, {L"i_1"}));
-    auto t1_unswapper = [&t1_vo](const auto& node) {
-      if (node->hash_value() == EvalTree(t1_vo, false).hash_value()) {
-        node->unswap_braket_labels();
-      }
-    };
-
-    auto t2_vvoo = std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"a_1",L"a_2"}, {L"i_1",L"i_2"}));
-    auto t2_unswapper = [&t2_vvoo](const auto& node) {
-      if (node->hash_value() == EvalTree(t2_vvoo, false).hash_value()) {
-        node->unswap_braket_labels();
-      }
-    };
-
-    /* r1_tree.visit(t1_unswapper); */
-    /* r2_tree.visit(t1_unswapper); */
-    /* r1_tree.visit(t2_unswapper); */
-    /* r2_tree.visit(t2_unswapper); */
 
     iter = 0;
     rmsd = 0.0;
@@ -650,24 +636,27 @@ int main(int argc, char* argv[]) {
 #if CCSDT_eval
       auto tile_R3       = R3.find({0,0,0,0,0,0}).get();
       auto tile_t_ooovvv   = (*t_ooovvv).find({0,0,0,0,0,0}).get();
+      auto tile_t_vvvooo   = (*t_vvvooo).find({0,0,0,0,0,0}).get();
 #endif
 
       // save previous norm
       auto norm_last = std::sqrt((*t_oovv)("i,j,a,b").dot((*t_oovv)("i,j,a,b")));
 
-      // Updating amplitudes
-
+      // Update T amplitudes
       // update t_ov
       for (auto i = 0; i < ndocc; ++i) {
-        for (auto a = 0; a < nvirt; ++a) { // TODO: Derive equation for regular T1
+        for (auto a = 0; a < nvirt; ++a) {
           tile_t_ov(i,a) += tile_R1(i,a)/tile_D_ov(i,a); } }
 
       // update t_oovv
       for (auto i = 0; i < ndocc; ++i) {
         for (auto j = 0; j < ndocc; ++j) {
           for (auto a = 0; a < nvirt; ++a) {
-            for (auto b = 0; b < nvirt; ++b) { // TODO: Derive equation for regular T2
+            for (auto b = 0; b < nvirt; ++b) {
               tile_t_oovv(i,j,a,b) += tile_R2(i,j,a,b)/tile_D_oovv(i,j,a,b); } } } }
+
+      (*t_vo)("a,i") = (*t_ov)("i,a");
+      (*t_vvoo)("a,b,i,j") = (*t_oovv)("i,j,a,b");
 
 # if CCSDT_eval
       // update t_ooovvv
@@ -679,6 +668,8 @@ int main(int argc, char* argv[]) {
                 for (auto c = 0; c < nvirt; ++c) {
                   tile_t_ooovvv(i,j,k,a,b,c) +=
                       tile_R3(i,j,k,a,b,c)/tile_D_ooovvv(i,j,k,a,b,c); } } } } } }
+
+      (*t_vvvooo)("a,b,c,i,j,k") = (*t_ooovvv)("i,j,k,a,b,c");
 #endif
 
       auto ecc_last = ecc;
@@ -723,11 +714,11 @@ int main(int argc, char* argv[]) {
     cout << "Total energy = " << enuc + ehf + ecc << " a.u." << endl;
 
     { // Check water molecule, sto-3g
-      double ccsd_correlation = -0.070680451962;
-      double ccsdt_correlation = -0.070813170670;
 #if CCSDT_eval
+      double ccsdt_correlation = -0.070813170670;
       assert(fabs(ccsdt_correlation - ecc) < 1e-10);
 #else
+      double ccsd_correlation = -0.070680451962;
       assert(fabs(ccsd_correlation - ecc) < 1e-10);
 #endif
     }
