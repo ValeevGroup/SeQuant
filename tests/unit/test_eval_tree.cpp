@@ -182,25 +182,25 @@ TEST_CASE("VISITOR_TEST", "[eval_tree]") {
 }
 
 TEST_CASE("UNSWAP_BK_LABELS_TEST", "[eval_tree]") {
-  auto G_oovv = make_tensor_expr({"g", "i_1", "i_2", "a_1", "a_2"});
   auto G_vvoo = make_tensor_expr({"g", "a_1", "a_2", "i_1", "i_2"});
-
   container::svector<decltype(G_vvoo->bra().begin()->label())>
       reaped_idx_labels;
 
-  // reap index labels from G_oovv and G_vvoo leaf nodes in a tree
+  // reap index labels from leaf nodes
   // and store them into reaped_idx_labels vector
-  auto reaper = [&reaped_idx_labels, &G_vvoo, &G_oovv](const auto& node) {
-    if ((node->hash_value() == EvalTree(G_vvoo).hash_value()) ||
-        (node->hash_value() == EvalTree(G_oovv).hash_value())) {
+  auto reaper = [&reaped_idx_labels](const auto& node) {
+    if (node->is_leaf()) {
       for (const auto& idx : node->indices())
         reaped_idx_labels.push_back(idx.label());
     }
   };
 
+  auto tree = EvalTree(G_vvoo, true);
+
   // G_vvoo was used with swap allowed
   // so, the bra-ket labels will be swapped as they should be for G_vvoo
-  auto tree = EvalTree(G_vvoo, true);
+
+  reaped_idx_labels.clear();
   tree.visit(reaper);
 
   {
@@ -212,15 +212,9 @@ TEST_CASE("UNSWAP_BK_LABELS_TEST", "[eval_tree]") {
   }
 
   // let's unswap
+  tree.swap_labels(G_vvoo);
+
   reaped_idx_labels.clear();
-
-  auto unswapper = [&G_oovv](const auto& node) {
-    if (node->hash_value() == EvalTree(G_oovv).hash_value()) {
-      node->unswap_braket_labels();
-    }
-  };
-
-  tree.visit(unswapper);
   tree.visit(reaper);
 
   {

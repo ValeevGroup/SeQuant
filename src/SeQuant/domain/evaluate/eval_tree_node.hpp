@@ -23,6 +23,9 @@ class EvalTreeNode {
   virtual HashType hash_node() const = 0;
 
  public:
+  /// Default destructor made virtual.
+  virtual ~EvalTreeNode() = default;
+
   /// Getter for the index label container.
   /// \return Const reference to the index label container.
   const IndexContainer& indices() const;
@@ -36,12 +39,11 @@ class EvalTreeNode {
   /// Set the scalar of the node.
   void scale(ScalarType);
 
+  /// Update the hash value of the node.
+  void update_hash();
+
   /// Check if the node is a leaf node.
   virtual bool is_leaf() const = 0;
-
-  /// If bra and ket labels were swapped during construction of a node, unswap
-  /// them and return true.
-  virtual bool unswap_braket_labels() = 0;
 };
 
 class EvalTreeInternalNode : public EvalTreeNode {
@@ -59,6 +61,9 @@ class EvalTreeInternalNode : public EvalTreeNode {
   HashType hash_node() const override;
 
  public:
+  /// Default destructor made virtual.
+  virtual ~EvalTreeInternalNode() = default;
+
   /// Construct internal node.
   EvalTreeInternalNode(const EvalNodePtr&, const EvalNodePtr&, Operation);
 
@@ -73,32 +78,34 @@ class EvalTreeInternalNode : public EvalTreeNode {
 
   /// Returns false as internal node is not leaf.
   bool is_leaf() const override;
-
-  /// Returns false as unswapping bra-ket labels in an internal node is not
-  /// supported.
-  bool unswap_braket_labels() override;
 };
 
 class EvalTreeLeafNode : public EvalTreeNode {
  private:
   /// Pointer to the SeQuant Expr of Tensor type.
   ExprPtr expr_{nullptr};
+  //
+  /// Hashing method for the leaf node.
+  HashType hash_node() const override;
 
   /// Set true if the bra-ket index labels were swapped during object
   /// construction.
-  bool swapped_bra_ket_{false};
+  bool swapped_labels_{false};
 
-  /// Hashing method for the leaf node.
-  HashType hash_node() const override;
+  /// Set the bra-ket labels of the node based on the field swapped_labels_
+  void set_labels();
 
   /// Determine if a SeQuant Expr of Tensor type requires swapping index labels
   /// swapped during construction of the object.
   /// \return True as soon as first occurence where the ket Index's IndexSpace
   /// attribute is lexicographically smaller than that of the bra Index's at
   /// corresponding position.
-  static bool need_bra_ket_swap(const ExprPtr&);
+  static bool canonize_swap(const ExprPtr&);
 
  public:
+  /// Default destructor made virtual.
+  virtual ~EvalTreeLeafNode() = default;
+
   /// Construct leaf node.
   /// \param tnsr_expr       shared pointer to the SeQuant Expr of Tensor type.
   //
@@ -115,15 +122,20 @@ class EvalTreeLeafNode : public EvalTreeNode {
   /// Getter of the pointer to the SeQuant Expr associated to this object.
   const ExprPtr& expr() const;
 
-  /// If index labels ordering was reversed during construction, un-reverse it.
-  void uncanonize_braket();
-
   /// Returns true as this object is a leaf node.
   bool is_leaf() const override;
 
-  /// If bra and ket labels were swapped during construction, unswap
-  /// them and return true.
-  bool unswap_braket_labels() override; 
+  /// Swap tensor bra-ket index labels.
+  /// eg. if was  T(b_1, b_2, k_1, k_2)
+  ///     will be T(k_1, k_2, b_1, b_2)
+  /// @note don't forget to update_hash()
+  void swap_labels();
+
+  /// Return true if the bra-ket labels have been swapped from how they appear
+  /// in the tensor Expr.
+  bool swapped_labels() const;
+
+  //
 };
 
 }  // namespace sequant::evaluate
