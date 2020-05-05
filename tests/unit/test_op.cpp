@@ -5,7 +5,8 @@
 #include "catch.hpp"
 
 #include <iostream>
-#include "../../src/SeQuant/core/op.hpp"
+
+#include "SeQuant/core/op.hpp"
 
 TEST_CASE("Op", "[elements]") {
 
@@ -112,35 +113,35 @@ TEST_CASE("Op", "[elements]") {
   }
 
   SECTION("adjoint") {
-    auto o1 = FOp(Index(L"i_1"), Action::create).adjoint();
+    auto o1 = adjoint(FOp(Index(L"i_1"), Action::create));
     REQUIRE(o1.statistics == Statistics::FermiDirac);
     REQUIRE(o1.index() == Index(L"i_1"));
     REQUIRE(o1.action() == Action::annihilate);
     o1.adjoint();
     REQUIRE(o1.action() == Action::create);
-    o1.adjoint().adjoint();
+    o1.adjoint(); o1.adjoint();
     REQUIRE(o1.action() == Action::create);
 
-    auto oper1 = FOperator{fcre(L"i_1"), fann(L"i_2")}.adjoint();
+    auto oper1 = adjoint(FOperator{fcre(L"i_1"), fann(L"i_2")});
     REQUIRE(oper1.statistics == Statistics::FermiDirac);
     REQUIRE(oper1.size() == 2);
     REQUIRE(oper1[0] == fcre(L"i_2"));
     REQUIRE(oper1[1] == fann(L"i_1"));
 
     auto nop2 =
-        FNOperator({Index{L"i_1"}}, {Index{L"a_1", {L"i_1"}}, Index{L"a_2", {L"i_1"}}}).adjoint();
+        adjoint(FNOperator({Index{L"i_1"}}, {Index{L"a_1", {L"i_1"}}, Index{L"a_2", {L"i_1"}}}));
     REQUIRE(nop2.creators().size() == 2);
     REQUIRE(nop2.annihilators().size() == 1);
     REQUIRE(nop2.annihilators()[0] == fann(L"i_1"));
     REQUIRE(nop2.creators()[0] == fcre(Index{L"a_1", {L"i_1"}}));
     REQUIRE(nop2.creators()[1] == fcre(Index{L"a_2", {L"i_1"}}));
 
-    auto nopseq1 = FNOperatorSeq({FNOperator({L"i_1"}, {L"i_2"}), FNOperator({L"i_3"}, {L"i_4"}),
-                                  FNOperator({L"i_5"}, {L"i_6"})}).adjoint();
+    auto nopseq1 = adjoint(FNOperatorSeq({FNOperator({L"i_1"}, {L"i_2"}), FNOperator({L"i_3"}, {L"i_4"}),
+                                  FNOperator({L"i_5"}, {L"i_6"})}));
     REQUIRE(nopseq1.size() == 3);
-    REQUIRE(nopseq1[2] == FNOperator({L"i_1"}, {L"i_2"}).adjoint());
-    REQUIRE(nopseq1[1] == FNOperator({L"i_3"}, {L"i_4"}).adjoint());
-    REQUIRE(nopseq1[0] == FNOperator({L"i_5"}, {L"i_6"}).adjoint());
+    REQUIRE(nopseq1[2] == adjoint(FNOperator({L"i_1"}, {L"i_2"})));
+    REQUIRE(nopseq1[1] == adjoint(FNOperator({L"i_3"}, {L"i_4"})));
+    REQUIRE(nopseq1[0] == adjoint(FNOperator({L"i_5"}, {L"i_6"})));
   }
 
   SECTION("conversion") {
@@ -248,9 +249,9 @@ TEST_CASE("Op", "[elements]") {
     REQUIRE(hash_value(fc1) == hash_value(fc1_copy));
     REQUIRE(hash_value(fc1) != hash_value(fa1));
     REQUIRE(hash_value(fc1) != hash_value(fc2));
-    REQUIRE(hash_value(fc1) == hash_value(bc1));  // hash is independent of statistics
-    REQUIRE(hash_value(fa1) == hash_value(ba1));  // hash is independent of statistics
-    REQUIRE(hash_value(fc1) == hash_value(fa1.adjoint()));
+    REQUIRE(hash_value(fc1) != hash_value(bc1));  // hash is depends on statistics
+    REQUIRE(hash_value(fa1) != hash_value(ba1));  // hash is depends on statistics
+    REQUIRE(hash_value(fc1) == hash_value(adjoint(fa1)));
   }
 
   SECTION("hug") {
@@ -410,12 +411,12 @@ TEST_CASE("Op", "[elements]") {
     REQUIRE(nop1.commutes_with(nop2));
     REQUIRE(nop2.commutes_with(nop1));
     REQUIRE(nop2.commutes_with(nop2));
-    REQUIRE(!nop1.commutes_with(FNOperator(nop1).adjoint()));
-    REQUIRE(!nop1.commutes_with(FNOperator(nop2).adjoint()));
-    REQUIRE(!nop2.commutes_with(FNOperator(nop1).adjoint()));
-    REQUIRE(!nop2.commutes_with(FNOperator(nop2).adjoint()));
-    REQUIRE(FNOperator(nop1).adjoint().commutes_with(FNOperator(nop2).adjoint()));
-    REQUIRE(FNOperator(nop2).adjoint().commutes_with(FNOperator(nop1).adjoint()));
+    REQUIRE(!nop1.commutes_with(adjoint(FNOperator(nop1))));
+    REQUIRE(!nop1.commutes_with(adjoint(FNOperator(nop2))));
+    REQUIRE(!nop2.commutes_with(adjoint(FNOperator(nop1))));
+    REQUIRE(!nop2.commutes_with(adjoint(FNOperator(nop2))));
+    REQUIRE(adjoint(FNOperator(nop1)).commutes_with(adjoint(FNOperator(nop2))));
+    REQUIRE(adjoint(FNOperator(nop2)).commutes_with(adjoint(FNOperator(nop1))));
   }
 
 }  // TEST_CASE("Op")

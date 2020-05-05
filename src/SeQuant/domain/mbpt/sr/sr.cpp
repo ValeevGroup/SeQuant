@@ -4,10 +4,10 @@
 
 #include "sr.hpp"
 
-#include "../../../core/expr.hpp"
-#include "../../../core/op.hpp"
-#include "../../../core/tensor.hpp"
-#include "../../../core/wick.hpp"
+#include "SeQuant/core/expr.hpp"
+#include "SeQuant/core/op.hpp"
+#include "SeQuant/core/tensor.hpp"
+#include "SeQuant/core/wick.hpp"
 
 namespace sequant {
 namespace mbpt {
@@ -24,12 +24,23 @@ inline constexpr size_t fac(std::size_t n) {
 make_op::make_op(std::size_t nbra, std::size_t nket, OpType op, bool csv) :
       nbra_(nbra), nket_(nket), op_(op), csv_(csv) {}
 
-ExprPtr make_op::operator()(bool complete_unoccupieds) const {
+ExprPtr make_op::operator()(bool complete_unoccupieds, bool antisymm) const {
+  const auto unocc = complete_unoccupieds ? IndexSpace::complete_unoccupied
+                                          : IndexSpace::active_unoccupied;
+  const auto occ = IndexSpace::active_occupied;
+  return (*this)(unocc, occ, antisymm);
+}
+
+ExprPtr make_op::operator()(IndexSpace::Type unocc, IndexSpace::Type occ, bool antisymm) const {
+  // not sure what it means to use nonsymmetric operator if nbra != nket
+  if (!antisymm)
+    assert(nbra_ == nket_);
+
   const auto nbra = nbra_;
   const auto nket = nket_;
   const auto csv = csv_;
   OpType op = op_;
-  auto make_idx_vector = [op](size_t n, IndexSpace::Type spacetype) {
+  auto make_idx_vector = [](size_t n, IndexSpace::Type spacetype) {
     auto space = IndexSpace::instance(spacetype);
     std::vector<Index> result;
     result.reserve(n);
@@ -38,7 +49,7 @@ ExprPtr make_op::operator()(bool complete_unoccupieds) const {
     }
     return result;
   };
-  auto make_depidx_vector = [op](size_t n, IndexSpace::Type spacetype,
+  auto make_depidx_vector = [](size_t n, IndexSpace::Type spacetype,
                                  auto&& protoidxs) {
     auto space = IndexSpace::instance(spacetype);
     std::vector<Index> result;
@@ -54,13 +65,11 @@ ExprPtr make_op::operator()(bool complete_unoccupieds) const {
     braidxs = make_idx_vector(nbra, IndexSpace::complete);
     ketidxs = make_idx_vector(nket, IndexSpace::complete);
   } else {
-    auto make_occidxs = [csv, &make_idx_vector](size_t n) {
-      return make_idx_vector(n, IndexSpace::active_occupied);
+    auto make_occidxs = [&make_idx_vector, &occ](size_t n) {
+      return make_idx_vector(n, occ);
     };
-    auto make_uoccidxs = [csv, complete_unoccupieds, &make_idx_vector,
+    auto make_uoccidxs = [csv, &unocc, &make_idx_vector,
                           &make_depidx_vector](size_t n, auto&& occidxs) {
-      auto unocc = complete_unoccupieds ? IndexSpace::complete_unoccupied
-                                        : IndexSpace::active_unoccupied;
       return csv ? make_depidx_vector(n, unocc, occidxs)
                  : make_idx_vector(n, unocc);
     };
@@ -72,8 +81,10 @@ ExprPtr make_op::operator()(bool complete_unoccupieds) const {
       ketidxs = make_uoccidxs(nket, braidxs);
     }
   }
-  return ex<Constant>(1. / (fac(nbra) * fac(nket))) *
-         ex<Tensor>(to_wstring(op), braidxs, ketidxs, Symmetry::antisymm) *
+  const auto mult = antisymm ? fac(nbra) * fac(nket) : fac(nbra);
+  const auto opsymm = antisymm ? Symmetry::antisymm : Symmetry::nonsymm;
+  return ex<Constant>(1. / mult) *
+         ex<Tensor>(to_wstring(op), braidxs, ketidxs, opsymm) *
          ex<FNOperator>(braidxs, ketidxs, Vacuum::SingleProduct);
 }
 
@@ -87,22 +98,34 @@ make_op Op(OpType _Op, std::size_t Nbra, std::size_t Nket) {
 #include "sr_op.impl.cpp"
 
 ExprPtr H1() {
-  return Op(OpType::f, 1)();
+  return get_default_context().vacuum() == Vacuum::Physical ? Op(OpType::h, 1)() : Op(OpType::f, 1)();
 }
-ExprPtr H2() {
-  return Op(OpType::g, 2)();
+
+ExprPtr H2(bool antisymm) {
+  return Op(OpType::g, 2)(false, antisymm);
 }
+
 ExprPtr H0mp() {
+  assert(get_default_context().vacuum() == Vacuum::SingleProduct);
   return H1();
 }
-ExprPtr H1mp() {
-  return H2();
+
+ExprPtr H1mp(bool antisymm) {
+  assert(get_default_context().vacuum() == Vacuum::SingleProduct);
+  return H2(antisymm);
 }
-ExprPtr H() {
-  return H1() + H2();
+
+ExprPtr F() {
+  return Op(OpType::f, 1)();
 }
-ExprPtr W() {
-  return H2();
+
+ExprPtr W(bool antisymm) {
+  assert(get_default_context().vacuum() == Vacuum::SingleProduct);
+  return H1mp(antisymm);
+}
+
+ExprPtr H(bool antisymm) {
+  return H1() + H2(antisymm);
 }
 
 ExprPtr vac_av(ExprPtr expr, std::initializer_list<std::pair<int,int>> op_connections, bool use_top) {

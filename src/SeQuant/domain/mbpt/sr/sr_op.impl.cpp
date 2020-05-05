@@ -66,6 +66,13 @@ ExprPtr Lambda(std::size_t Nbra, std::size_t Nket, bool complete_unoccupieds) {
   return result;
 }
 
+/// makes geminal excitation operator for ansatz @p ansatz
+ExprPtr R12(IndexSpace::Type gg_space, int ansatz) {
+  assert(ansatz == 1 || ansatz == 2);
+  bool antisymm = (get_default_context().vacuum() != Vacuum::Physical);
+  return Op(OpType::R12, 2, 2)(ansatz == 2 ? IndexSpace::complete_unoccupied : IndexSpace::other_unoccupied, gg_space, antisymm);
+}
+
 /// makes deexcitation operator of bra/ket ranks @c Nbra/Nket
 ExprPtr A(std::size_t Nbra, std::size_t Nket, bool complete_unoccupieds) {
   assert(Nbra > 0 && Nbra < std::numeric_limits<std::size_t>::max());

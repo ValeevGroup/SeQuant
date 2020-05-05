@@ -1,4 +1,19 @@
-cmake_minimum_required(VERSION 3.9)
+
+cmake_minimum_required (VERSION 3.15.0) # need list(PREPEND for toolchains
+
+###############################################################################
+# Bring ValeevGroup cmake toolkit
+###############################################################################
+include(FetchContent)
+FetchContent_Populate(
+    vg_cmake_kit
+    QUIET
+    GIT_REPOSITORY      https://github.com/ValeevGroup/kit-cmake.git
+    SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/cmake/vg
+    BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/cmake/vg-build
+    SUBBUILD_DIR ${CMAKE_CURRENT_BINARY_DIR}/cmake/vg-subbuild
+)
+
 project(SeQuant LANGUAGES CXX)
 set(SEQUANT_VERSION 2.0.0-alpha.1)
 
@@ -20,6 +35,8 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/modules/")
 
+set(FETCHCONTENT_UPDATES_DISCONNECTED OFF CACHE BOOL "Enables UPDATE_DISCONNECTED behavior for all content population")
+include(FetchContent)
 include(AddCustomTargetSubproject)
 include(external/versions.cmake)
 
@@ -68,15 +85,12 @@ set_property(TARGET Range-V3 PROPERTY
 
 # need Boost.ContainerHash
 # NB Boost.Container is broken in v1.70
-find_package(Boost ${SEQUANT_TRACKED_BOOST_VERSION} COMPONENTS serialization REQUIRED)
+find_package(Boost ${SEQUANT_TRACKED_BOOST_VERSION} REQUIRED COMPONENTS serialization)
 if (Boost_VERSION EQUAL 107000)
     message(FATAL_ERROR "Found Boost 1.70, but its Boost.Container is broken: "
         "use any version ${SEQUANT_TRACKED_BOOST_VERSION} "
         "or higher, other than 1.70")
 endif()
-add_library(Boost INTERFACE IMPORTED)
-set_property(TARGET Boost PROPERTY
-        INTERFACE_INCLUDE_DIRECTORIES ${Boost_INCLUDE_DIR})
 
 # embedded bliss-0.73
 add_library(bliss
@@ -104,6 +118,7 @@ add_library(SeQuant
         src/SeQuant/core/sequant.cpp
         src/SeQuant/core/sequant.hpp
         src/SeQuant/core/attr.hpp
+        src/SeQuant/core/index.cpp
         src/SeQuant/core/index.hpp
         src/SeQuant/core/space.cpp
         src/SeQuant/core/space.hpp
@@ -143,7 +158,7 @@ add_library(SeQuant
         src/SeQuant/domain/mbpt/sr/sr.cpp
         src/SeQuant/domain/mbpt/sr/sr.hpp
         )
-target_link_libraries(SeQuant Range-V3 Boost bliss Threads::Threads)
+target_link_libraries(SeQuant Range-V3 Boost::boost bliss Threads::Threads)
 if (PSTL_NEEDS_TBB)
     target_link_libraries(SeQuant ${TBB_LIBRARIES})
     target_include_directories(SeQuant PUBLIC ${TBB_INCLUDE_DIRS})
@@ -152,7 +167,7 @@ target_include_directories(SeQuant PUBLIC
         $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>)
 
-find_package(Libint2 2.6.0 CONFIG REQUIRED)
+find_package(Libint2 2.6.0 CONFIG)
 
 find_package(TiledArray CONFIG COMPONENTS tiledarray)
 
@@ -189,14 +204,14 @@ set(utests_src
         )
 set(utests_deps SeQuant evaluator)
 
-if (TARGET tiledarray)
+if (TARGET tiledarray AND TARGET Libint2::cxx)
   list(APPEND utests_src
       ## unit tests for evaluation
       # tests/unit/test_eval_tree.cpp
       # tests/unit/test_path_tree.cpp
       )
   list(APPEND utests_deps tiledarray)
-endif(TARGET tiledarray)
+endif(TARGET tiledarray AND TARGET Libint2::cxx)
 
 set(unit_test_executable unit_tests)
 add_executable(${unit_test_executable} EXCLUDE_FROM_ALL
@@ -216,28 +231,41 @@ set_tests_properties(unit/run
 ####### Tests ########
 
 # Single-Reference Coupled-Cluster
-# srcc example
 set(example0 srcc)
 add_executable(${example0} EXCLUDE_FROM_ALL
         examples/${example0}/${example0}.cpp)
 target_link_libraries(${example0} SeQuant ${TBB_LIBRARIES})
 
-if (TARGET tiledarray)
-    # expr_evaluation example
-    set(example1 expr_evaluation)
-    add_executable(${example1} EXCLUDE_FROM_ALL
-        examples/evaluation/${example1}.cpp
-        examples/contract/interpret/contract.hpp
-        examples/contract/scf/hartree-fock.cc)
-    target_link_libraries(${example1} SeQuant evaluator ${TBB_LIBRARIES}
-        Libint2::cxx tiledarray)
-    target_link_directories(${example1} PUBLIC ${TBB_LIBRARIES})
-    target_compile_definitions(${example1} PRIVATE SEQUANT_HAS_TILEDARRAY)
-endif (TARGET tiledarray)
+if (TARGET tiledarray AND TARGET Libint2::cxx)
+  # sequant expression evaluation example
+  set(example1 expr_evaluation)
+  add_executable(${example1} EXCLUDE_FROM_ALL
+      examples/evaluation/${example1}.cpp
+      examples/contract/interpret/contract.hpp
+      examples/contract/scf/hartree-fock.cc)
+  target_link_libraries(${example1} SeQuant evaluator ${TBB_LIBRARIES}
+      Libint2::cxx tiledarray)
+  target_link_directories(${example1} PUBLIC ${TBB_LIBRARIES})
+  target_compile_definitions(${example1} PRIVATE SEQUANT_HAS_TILEDARRAY)
 
+  set(example2 rcc_evaluation)
+  add_executable(${example2} EXCLUDE_FROM_ALL
+      examples/evaluation/${example2}.cpp
+      examples/contract/interpret/contract.hpp
+      examples/contract/scf/hartree-fock.cc)
+  target_link_libraries(${example2} SeQuant evaluator
+      ${TBB_LIBRARIES} Libint2::cxx tiledarray)
+  target_link_directories(${example2} PUBLIC ${TBB_LIBRARIES})
+  target_compile_definitions(${example2} PRIVATE SEQUANT_HAS_TILEDARRAY)
+endif (TARGET tiledarray AND TARGET Libint2::cxx)
+
+set(example3 uccf12)
+add_executable(${example3} EXCLUDE_FROM_ALL
+    examples/${example3}/${example3}.cpp)
+target_link_libraries(${example3} SeQuant ${TBB_LIBRARIES})
 
 # add tests for running examples
-set (lastexample 3)
+set (lastexample 4)
 foreach(i RANGE ${lastexample})
     if (TARGET ${example${i}})
         add_test(example/${example${i}}/build "${CMAKE_COMMAND}"

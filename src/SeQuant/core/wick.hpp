@@ -400,8 +400,6 @@ class WickTheorem {
     inline bool connect(const container::svector<std::bitset<max_input_size>>
                             &target_op_connections,
                         const Cursor &op1_cursor, const Cursor &op2_cursor) {
-      auto result = true;
-
       auto update_topology = [this](size_t op_idx) {
         const auto nconnections = op_nconnections[op_idx];
         // if using topological partitions for normal ops, and this operator is in one of them, remove it on first connection
@@ -787,7 +785,7 @@ class WickTheorem {
     return false;
   }
 
-  static std::shared_ptr<Expr> contract(
+  static ExprPtr contract(
       const Op<S> &left, const Op<S> &right,
       Vacuum vacuum = get_default_context().vacuum()) {
     assert(can_contract(left, right, vacuum));

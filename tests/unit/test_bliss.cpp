@@ -4,8 +4,8 @@
 
 #include "catch.hpp"
 
-#include "../../src/SeQuant/external/bliss/graph.hh"
-#include "../../src/SeQuant/external/bliss/utils.hh"
+#include "SeQuant/external/bliss/graph.hh"
+#include "SeQuant/external/bliss/utils.hh"
 
 #include <cstdio>
 #include <iostream>
@@ -18,8 +18,8 @@ constexpr const bool use_colors = true;
  * The hook function that prints the found automorphisms.
  * \a param must be a file descriptor (FILE *).
  */
-static void report_aut(void* param, const unsigned int n,
-                       const unsigned int* aut) {
+[[maybe_unused]] static void report_aut(void* param, const unsigned int n,
+                                        const unsigned int* aut) {
   assert(param);
   fprintf((FILE*)param, "Generator: ");
   bliss::print_permutation((FILE*)param, n, aut, 1);
@@ -60,8 +60,8 @@ TEST_CASE("Bliss", "[elements]") {
       // 2. line vertices: 8 lines = 8 vertices, each vertex has degree 2
       // b1 -> 0, k1 -> 1, b2 -> 2, k2 -> 3, b3 -> 4, k3 -> 5, b4 -> 6, k4 -> 7, i1
       // -> 8, i2 -> 9, ... a1 -> 12, a2 -> 13, ...
-      const char* labels[] = {"b1", "k1", "b2", "k2", "b3", "k3", "b4", "k4",
-                              "i1", "i2", "i3", "i4", "a1", "a2", "a3", "a4"};
+      [[maybe_unused]] const char* labels[] = {"b1", "k1", "b2", "k2", "b3", "k3", "b4", "k4",
+                                               "i1", "i2", "i3", "i4", "a1", "a2", "a3", "a4"};
 
       // "make" tensors in both graphs
       for (auto g = 0; g != 2; ++g) {

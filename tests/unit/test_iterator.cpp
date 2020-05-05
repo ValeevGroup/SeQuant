@@ -4,8 +4,8 @@
 
 #include "catch.hpp"
 
-#include "../../src/SeQuant/core/op.hpp"
-#include "../../src/SeQuant/core/ranges.hpp"
+#include "SeQuant/core/op.hpp"
+#include "SeQuant/core/ranges.hpp"
 
 TEST_CASE("Iterators", "[elements]") {
 
@@ -15,7 +15,7 @@ TEST_CASE("Iterators", "[elements]") {
 
     {
       REQUIRE_NOTHROW(flattened_rangenest<FNOperatorSeq>{});
-      auto rng0 = flattened_rangenest<FNOperatorSeq>{};
+      [[maybe_unused]] auto rng0 = flattened_rangenest<FNOperatorSeq>{};
     }
 
     {

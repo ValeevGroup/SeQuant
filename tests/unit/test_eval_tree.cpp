@@ -175,7 +175,10 @@ TEST_CASE("VISITOR_TEST", "[eval_tree]") {
       L"a_2", L"i_1", L"i_2", L"i_3", L"i_4", L"i_1", L"i_2",
       L"a_1", L"a_2", L"a_1", L"a_2", L"a_3", L"a_4"};
 
-  REQUIRE(reaped_idx_labels == expected_idx_labels);
+  REQUIRE(size(reaped_idx_labels) == size(expected_idx_labels));
+  for(size_t c=0; c!=size(reaped_idx_labels); ++c) {
+    REQUIRE(reaped_idx_labels[c] == *(begin(expected_idx_labels)+c));
+  }
 }
 
 TEST_CASE("UNSWAP_BK_LABELS_TEST", "[eval_tree]") {
@@ -200,8 +203,13 @@ TEST_CASE("UNSWAP_BK_LABELS_TEST", "[eval_tree]") {
   reaped_idx_labels.clear();
   tree.visit(reaper);
 
-  REQUIRE(reaped_idx_labels ==
-          decltype(reaped_idx_labels){L"i_1", L"i_2", L"a_1", L"a_2"});
+  {
+    auto expected_idx_labels = {L"i_1", L"i_2", L"a_1", L"a_2"};
+    REQUIRE(size(reaped_idx_labels) == size(expected_idx_labels));
+    for (size_t c = 0; c != size(reaped_idx_labels); ++c) {
+      REQUIRE(reaped_idx_labels[c] == *(begin(expected_idx_labels) + c));
+    }
+  }
 
   // let's unswap
   tree.swap_labels(G_vvoo);
@@ -209,8 +217,13 @@ TEST_CASE("UNSWAP_BK_LABELS_TEST", "[eval_tree]") {
   reaped_idx_labels.clear();
   tree.visit(reaper);
 
-  REQUIRE(reaped_idx_labels ==
-          decltype(reaped_idx_labels){L"a_1", L"a_2", L"i_1", L"i_2"});
+  {
+    auto expected_idx_labels = {L"a_1", L"a_2", L"i_1", L"i_2"};
+    REQUIRE(size(reaped_idx_labels) == size(expected_idx_labels));
+    for (size_t c = 0; c != size(reaped_idx_labels); ++c) {
+      REQUIRE(reaped_idx_labels[c] == *(begin(expected_idx_labels) + c));
+    }
+  }
 }
 
 TEST_CASE("OPS_COUNT TESTS", "[eval_tree]") {

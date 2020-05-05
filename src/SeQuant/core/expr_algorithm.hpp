@@ -49,7 +49,7 @@ struct expand_visitor {
           exprseq_clone[i] = subsubexpr;  // scavenging summands here
           using std::begin;
           using std::end;
-          result->append(std::move(ex<Product>(scalar, begin(exprseq_clone), end(exprseq_clone))));
+          result->append(ex<Product>(scalar, begin(exprseq_clone), end(exprseq_clone)));
         }
         expr = std::static_pointer_cast<Expr>(result); // expanded one Sum, return
         return true;
@@ -65,6 +65,7 @@ struct expand_visitor {
     const auto nsubexpr = ranges::size(*expr);
     if (Logger::get_instance().expand) std::wcout << "in expand_sum: expr = " << to_latex(expr) << std::endl;
     for(std::size_t i=0; i != nsubexpr; ++i) {
+      // if summand is a Product, expand it
       if (expr_ref[i]->is<Product>()) {
         const auto this_term_expanded = expand_product(expr_ref[i]);
         // if this is the first term that was expanded, create a result and copy all preceeding subexpressions into it
@@ -78,9 +79,25 @@ struct expand_visitor {
           result->append(expr_ref[i]);
         if (Logger::get_instance().expand) std::wcout << "in expand_sum: after expand_product(" << (this_term_expanded ? "true)" : "false)") << " result = " << to_latex(result ? result : expr) << std::endl;
       }
+      // if summand is a Sum, flatten it
+      else if (expr_ref[i]->is<Sum>()) {
+        // create a result, if not yet created, by copying all preceeding subexpressions into it
+        if (!result) {
+          result = std::make_shared<Sum>();
+          for(std::size_t j=0; j != i; ++j)
+            result->append(expr_ref[j]);
+        }
+        if (result)
+          result->append(expr_ref[i]);
+        if (Logger::get_instance().expand) std::wcout << "in expand_sum: after flattening Sum summand result = " << to_latex(result ? result : expr) << std::endl;
+      }
+      else {  // nothing to expand? if expanded previously (i.e. result is nonnull) append to result
+        if (result)
+          result->append(expr_ref[i]);
+      }
     }
     bool expr_changed = false;
-    if (result) { // if any summand was expanded, copy result into expr
+    if (result) { // if any summand was expanded or flattened, copy result into expr
       expr = std::static_pointer_cast<Expr>(result);
       expr_changed = true;
     }
@@ -325,7 +342,7 @@ struct rapid_simplify_visitor {
       expr = expr_sum.summands()[0];
       mutated = true;
     } else {  // sums can be simplified if any of its summands are sums or two
-      // or more summands are Constants
+      // or more summands are Constants (or have a zero Constant)
       size_t nconst = 0;
       bool need_to_rebuild = false;
       for (auto&& summand : expr_sum.summands()) {
@@ -333,6 +350,10 @@ struct rapid_simplify_visitor {
           need_to_rebuild = true;
           break;
         } else if (summand->is<Constant>()) {
+          if (summand->as<Constant>().is_zero()) {
+            need_to_rebuild = true;
+            break;
+          }
           ++nconst;
           if (nconst == 2) {
             need_to_rebuild = true;
