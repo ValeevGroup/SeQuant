@@ -1028,8 +1028,8 @@ std::tuple<int, std::shared_ptr<NormalOperator<S>>> normalize(const NormalOperat
   return std::make_tuple(phase, std::make_shared<NormalOperator<S>>(std::move(creators), std::move(annihilators), vacuum));
 }
 
-template <typename T, typename = std::void_t<decltype(std::declval<T&>().adjoint())>>
-std::decay_t<T> adjoint(T&& t) {
+template <typename T>
+std::decay_t<T> adjoint(T&& t, std::void_t<decltype(std::declval<T&>().adjoint())>* = nullptr) {
   if constexpr (std::is_reference_v<T>) {
     std::decay_t<T> t_copy(t);
     t_copy.adjoint();

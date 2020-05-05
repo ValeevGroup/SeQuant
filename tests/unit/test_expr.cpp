@@ -271,6 +271,7 @@ TEST_CASE("Expr", "[elements]") {
     {   // implemented in Adjointable
       const auto e = std::make_shared<Adjointable>();
       REQUIRE_NOTHROW(e->adjoint());
+      REQUIRE_NOTHROW(adjoint(e));  // check free-function adjoint
     }
     {   // Constant
       const auto e = std::make_shared<Constant>(std::complex<double>{1,2});
