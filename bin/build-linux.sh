@@ -12,9 +12,9 @@ fi
 
 # get the most recent cmake available
 if [ ! -d "${INSTALL_PREFIX}/cmake" ]; then
-  CMAKE_VERSION=3.17.1
+  CMAKE_VERSION=3.17.2
   CMAKE_URL="https://cmake.org/files/v${CMAKE_VERSION%.[0-9]}/cmake-${CMAKE_VERSION}-Linux-x86_64.tar.gz"
-  mkdir ${INSTALL_PREFIX}/cmake && wget --no-check-certificate -O - ${CMAKE_URL} | tar --strip-components=1 -xz -C ${INSTALL_PREFIX}/cmake
+  mkdir -p ${INSTALL_PREFIX}/cmake && wget --no-check-certificate -O - ${CMAKE_URL} | tar --strip-components=1 -xz -C ${INSTALL_PREFIX}/cmake
 fi
 export PATH=${INSTALL_PREFIX}/cmake/bin:${PATH}
 cmake --version
