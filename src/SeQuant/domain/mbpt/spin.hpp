@@ -567,7 +567,13 @@ ExprPtr expand_P_operator(const ExprPtr& expr) {
 }
 
 /// @brief Transforms an expression from spin orbital to spatial orbitals
-/// @detailed
+/// @detailed This functions is designed for integrating spin out of expression
+/// with Coupled Cluster equations in mind.
+/// @attention This function may fail on arbitrarily created expressions that lacks
+/// proper index attributes.
+/// @param expr ExprPtr with spin orbital indices
+/// @param ext_index_groups groups of external indices
+/// @return an expression with spin integrated/adapted
 ExprPtr closed_shell_spintrace(const ExprPtr& expression,
     std::initializer_list<IndexList> ext_index_groups = {{}}){
 
@@ -603,7 +609,33 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
   expr->visit(reset_idx_tags);
   expand(expr);
   rapid_simplify(expr);
-  canonicalize(expr);
+  // canonicalize(expr);
+  // expr->visit(reset_idx_tags);
+  // std::wcout << to_latex(expr) << std::endl;
+
+  // Returns the number of cycles
+  auto count_cycles = [&] (std::vector<Index>& v, std::vector<Index>& v1){
+    assert(v.size() == v1.size());
+    size_t n_cycles = 0;
+    auto dummy_idx = Index(L"p_50");
+    for(auto it = v.begin(); it != v.end(); ++it){
+      if(*it != dummy_idx){
+        // TODO: Throw exception if bra and ket indices don't match
+        n_cycles++;
+        auto idx = std::distance(v.begin(), it);
+        auto it0 = it;
+        auto it1 = std::find(v1.begin(), v1.end(), *it0);
+        auto idx1 = std::distance(v1.begin(), it1);
+        do{
+          it0 = std::find(v.begin(), v.end(), v[idx1]);
+          it1 = std::find(v1.begin(), v1.end(), *it0);
+          idx1 = std::distance(v1.begin(), it1);
+          *it0 = dummy_idx;
+        }while(idx1 != idx);
+      }
+    }
+    return n_cycles;
+  };
 
   // Lambda for a product
   auto trace_product = [&] (const Product& product){
@@ -612,7 +644,7 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
 
     auto get_ket_indices = [&] (const Product& prod){
       std::vector<Index> ket_idx;
-      for(auto&& t: prod) {
+      for(auto&& t: prod) {#include "SeQuant/core/runtime.hpp"
         if(t->is<Tensor>())
         ranges::for_each(t->as<Tensor>().ket(), [&] (const Index& idx) {ket_idx.push_back(idx);});
       }
@@ -631,60 +663,33 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
     auto product_kets = get_ket_indices(product);
     auto product_bras = get_bra_indices(product);
 
+//    ranges::for_each(product_kets,[] (Index& i) {std::wcout << to_latex(i) << " ";});
+//    std::cout << "\n";
+//    ranges::for_each(product_bras,[] (Index& i) {std::wcout << to_latex(i) << " ";});
+//    std::cout << "\n";
+
     // Substitute indices from external index list
-    {
-      // TODO: Don't make an index map; substitute directly
-      bool need_replacements = false;
-
-      // Construct map
-      std::map<Index, Index> index_replacements;
-      ranges::for_each(ext_index_groups, [&](const IndexList &idx_pair) {
-        if (idx_pair.size() == 2) {
-          need_replacements = true;
-          auto it = idx_pair.begin();
-          auto first = *it;
-          it++;
-          auto second = *it;
-          index_replacements.emplace(std::make_pair(first, second));
-        }
-      });
-
-      // Make replacements in bra/ket idx vectors
-      // TODO: Check for a potential bug if index appears at v.end()
-      for (auto &&pair : index_replacements) {
-        auto bra_it = std::find(product_bras.begin(), product_bras.end(), pair.first);
-        if (bra_it != product_bras.end()) *bra_it = pair.second;
-        auto ket_it = std::find(product_kets.begin(), product_kets.end(), pair.first);
-        if (ket_it != product_kets.end()) *ket_it = pair.second;
+    if((*ext_index_groups.begin()).size() == 2)
+    ranges::for_each(ext_index_groups, [&](const IndexList &idx_pair) {
+      if (idx_pair.size() == 2) {
+        auto it = idx_pair.begin();
+        auto first = *it;
+        it++;
+        auto second = *it;
+        // TODO: Check for a potential bug if index appears at v.end()
+        auto bra_it = std::find(product_bras.begin(), product_bras.end(), first);
+        if (bra_it != product_bras.end())
+          *bra_it = second;
+        auto ket_it = std::find(product_kets.begin(), product_kets.end(), first);
+        if (ket_it != product_kets.end())
+          *ket_it = second;
       }
-    }
+    });
 
-    // Returns the number of cycles
-    auto count_cycles = [&] (std::vector<Index>& v, std::vector<Index>& v1){
-      size_t cc = 0;
-      auto dummy_idx = Index(L"p_50");
-      for(auto it = v.begin(); it != v.end(); ++it){
-        if(*it != dummy_idx){
-          cc++;
-          auto idx = std::distance(v.begin(), it);
-          auto it0 = it;
-          auto it1 = std::find(v1.begin(), v1.end(), *it0);
-          auto idx1 = std::distance(v1.begin(), it1);
-          do{
-            it0 = std::find(v.begin(), v.end(), v[idx1]);
-            it1 = std::find(v1.begin(), v1.end(), *it0);
-            idx1 = std::distance(v1.begin(), it1);
-          *it0 = dummy_idx;
-          }while(idx1 != idx);
-        }
-      }
-      return cc;
-    };
-
-    auto cc = count_cycles(product_kets, product_bras);
+    auto n_cycles = count_cycles(product_kets, product_bras);
 
     auto result = std::make_shared<Product>(product);
-    result->scale(std::pow(2,cc));
+    result->scale(std::pow(2,n_cycles));
     // std::wcout << "Result:  " << to_latex(result) << "\n" << std::endl;
     return result;
   };
@@ -701,10 +706,11 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
       if(summand->is<Product>()){
         result->append(trace_product(summand->as<Product>()));
       } else if (summand->is<Tensor>()){
-        result->append(expand_all(summand));
-      } else
+        result->append(trace_product((ex<Constant>(1.) * expr)->as<Product>()));
+      } else // summand->is<Constant>()
         result->append(summand);
     }
+    // std::wcout << "Expr result: " << to_latex(result) << std::endl;
     return result;
   } else
     return nullptr;
