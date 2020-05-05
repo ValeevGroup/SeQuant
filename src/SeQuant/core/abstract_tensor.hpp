@@ -20,8 +20,9 @@ class TensorCanonicalizer;
 /// This interface class defines a Tensor concept. Object @c t of a type that meets the concept must satisfy the following:
 ///         - @c bra(t) , @c ket(t) , and @c braket(t) are valid expressions and evaluate to a range of Index objects;
 ///         - @c bra_rank(t) and @c ket_rank(t) are valid expression and return sizes of the @c bra(t) and @c ket(t) ranges, respectively;
-///         - @c symmetry(t) is a valid expression and evaluates to a Symmetry object that describes the particle symmetry of @c t ;
+///         - @c symmetry(t) is a valid expression and evaluates to a Symmetry object that describes the symmetry of bra/ket of a _particle-symmetric_ @c t ;
 ///         - @c braket_symmetry(t) is a valid expression and evaluates to a BraKetSymmetry object that describes the bra-ket symmetry of @c t ;
+///         - @c particle_symmetry(t) is a valid expression and evaluates to a ParticleSymmetry object that describes the symmetry of @c t with respect to permutations of particles;
 ///         - @c color(t) is a valid expression and returns whether a nonnegative integer that identifies the type of a tensor; tensors with different colors can be reordered in a Product at will
 ///         - @c is_cnumber(t) is a valid expression and returns whether t commutes with other tensor of same color (tensors of different colors are, for now, always assumed to commute)
 ///         - @c label(t) is a valid expression and its return is convertible to a std::wstring;
@@ -66,6 +67,9 @@ class AbstractTensor {
   }
   virtual BraKetSymmetry _braket_symmetry() const {
     throw missing_instantiation_for("_braket_symmetry");
+  }
+  virtual ParticleSymmetry _particle_symmetry() const {
+    throw missing_instantiation_for("_particle_symmetry");
   }
   virtual std::size_t _color() const {
     throw missing_instantiation_for("_color");
@@ -117,6 +121,7 @@ inline auto bra_rank(const AbstractTensor& t) { return t._bra_rank(); }
 inline auto ket_rank(const AbstractTensor& t) { return t._ket_rank(); }
 inline auto symmetry(const AbstractTensor& t) { return t._symmetry(); }
 inline auto braket_symmetry(const AbstractTensor& t) { return t._braket_symmetry(); }
+inline auto particle_symmetry(const AbstractTensor& t) { return t._particle_symmetry(); }
 inline auto color(const AbstractTensor& t) { return t._color(); }
 inline auto is_cnumber(const AbstractTensor& t) { return t._is_cnumber(); }
 inline auto label(const AbstractTensor& t) { return t._label(); }
@@ -183,7 +188,7 @@ class TensorCanonicalizer {
   /// @internal what should be returned if canonicalization requires
   /// complex conjugation? Special ExprPtr type (e.g. ConjOp)? Or the actual
   /// return of the canonicalization?
-  // TODO generalize for complex tenrsors
+  // TODO generalize for complex tensors
   virtual ExprPtr apply(AbstractTensor &) = 0;
 
  protected:
@@ -218,19 +223,26 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
   /// Implements TensorCanonicalizer::apply
   /// @note Canonicalizes @c t by sorting its bra (if @c t.symmetry()==Symmetry::nonsymm ) or its bra and ket (if @c t.symmetry()!=Symmetry::nonsymm ),
   ///       with the external indices appearing "before" (smaller particle indices) than the internal indices
-  std::shared_ptr<Expr> apply(AbstractTensor &t) override;
+  ExprPtr apply(AbstractTensor &t) override;
 
   /// Core of DefaultTensorCanonicalizer::apply, only does the canonicalization, i.e. no tagging/untagging
   template<typename Compare>
-  std::shared_ptr<Expr> apply(AbstractTensor &t, const Compare &comp) {
+  ExprPtr apply(AbstractTensor &t, const Compare &comp) {
     auto s = symmetry(t);
     auto is_antisymm = (s == Symmetry::antisymm);
+    const auto _bra_rank = bra_rank(t);
+    const auto _ket_rank = ket_rank(t);
+    const auto _rank = std::min(_bra_rank, _ket_rank);
 
-    // can only handle (anti)symmetric case so far
-#ifndef NDEBUG
-    if (bra_rank(t) > 1 || ket_rank(t) > 1)
-      assert(s != Symmetry::nonsymm);
-#endif
+    // nothing to do for rank-1 tensors
+    if (_bra_rank == 1 && _ket_rank == 1)
+      return nullptr;
+
+    using ranges::begin;
+    using ranges::end;
+    using ranges::views::zip;
+    using ranges::views::take;
+    using ranges::views::counted;
 
     bool even = true;
     switch (s) {
@@ -239,8 +251,6 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
       {
         auto _bra = bra_range(t);
         auto _ket = ket_range(t);
-        using ranges::begin;
-        using ranges::end;
 //      std::wcout << "canonicalizing " << to_latex(t);
         IndexSwapper::thread_instance().reset();
         // std::{stable_}sort does not necessarily use swap! so must implement
@@ -255,14 +265,28 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
         break;
 
       case Symmetry::nonsymm: {
-
+        // sort particles with bra and ket functions first, then the particleas with either bra or ket index
+        auto _bra = bra_range(t);
+        auto _ket = ket_range(t);
+        auto _zip_braket = zip(take(_bra, _rank),
+                               take(_ket, _rank));
+        bubble_sort(begin(_zip_braket), end(_zip_braket), comp);
+        if (_bra_rank > _rank) {
+          auto size_of_rest = _bra_rank - _rank;
+          auto rest_of = counted(begin(_bra) + _rank, size_of_rest);
+          bubble_sort(begin(rest_of), end(rest_of), comp);
+        } else if (_ket_rank > _rank) {
+          auto size_of_rest = _ket_rank - _rank;
+          auto rest_of = counted(begin(_ket) + _rank, size_of_rest);
+          bubble_sort(begin(rest_of), end(rest_of), comp);
+        }
       }
         break;
 
       default:abort();
     }
 
-    std::shared_ptr<Expr> result = is_antisymm ? (even == false ? ex<Constant>(-1) : nullptr) : nullptr;
+    ExprPtr result = is_antisymm ? (even == false ? ex<Constant>(-1) : nullptr) : nullptr;
     return result;
   }
 

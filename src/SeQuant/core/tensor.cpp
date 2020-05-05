@@ -8,7 +8,13 @@ namespace sequant {
 
 Tensor::~Tensor() = default;
 
-std::shared_ptr<Expr> Tensor::canonicalize() {
+void
+Tensor::adjoint() {
+  std::swap(bra_, ket_);
+  reset_hash_value();
+}
+
+ExprPtr Tensor::canonicalize() {
   const auto &canonicalizer = TensorCanonicalizer::instance(label_);
   return canonicalizer->apply(*this);
 }

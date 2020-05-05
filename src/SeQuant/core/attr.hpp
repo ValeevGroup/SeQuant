@@ -15,13 +15,15 @@ enum class IndexSpaceMetric {
   Invalid
 };
 
-/// describes supported symmetries of bra or ket of tensorial objects
-///
-/// @note It does not matter whether this refers to bra or ket since they
-///       must match, i.e. it does not make sense for ket to be symmetric
-///       with respect to a permutation but bra to be antisymmetric with respect
-///       to the same permutation (due to the implied particle
-///       indistinguishibility)
+// clang-format off
+/// describes supported symmetries of tensorial objects with respect to permutations of particles (or columns, in tensor notation)
+// clang-format on
+enum class ParticleSymmetry { symm, nonsymm, invalid };
+
+// clang-format off
+/// describes supported symmetries of bra or ket of _particle-symmetric_ tensorial objects
+/// @note bra or ket can be symmetric or antisymmetric only if the tensor is particle-symmetric, otherwise it does not make sense to permute indices corresponding to distinguishable particles
+// clang-format on
 enum class Symmetry { symm, antisymm, nonsymm, invalid };
 
 /// describes supported symmetries of tensorial objects w.r.t. bra-ket exchange

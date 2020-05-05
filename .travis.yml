@@ -9,13 +9,11 @@ os: linux
 addons:
   apt:
     packages: &base_packages
-      - libboost-all-dev
       - libblas-dev
       - liblapack-dev
       - liblapacke-dev
       - cmake
       - cmake-data
-      - libtbb-dev
       - lcov
 
 env:
@@ -31,7 +29,7 @@ matrix:
   fast_finish: true
   include:
     - compiler: clang
-      env: CLANG_VERSION=7 BUILD_TYPE=Debug
+      env: CLANG_VERSION=7 GCC_VERSION=8 BUILD_TYPE=Debug
       addons:
         apt:
           packages:
@@ -39,8 +37,10 @@ matrix:
             - clang-7
             - libc++-7-dev
             - libc++abi-7-dev
+            - g++-8
+            - gfortran-8
     - compiler: clang
-      env: CLANG_VERSION=7 BUILD_TYPE=Release
+      env: CLANG_VERSION=7 GCC_VERSION=8 BUILD_TYPE=Release
       addons:
         apt:
           packages:
@@ -48,27 +48,64 @@ matrix:
             - clang-7
             - libc++-7-dev
             - libc++abi-7-dev
+            - g++-8
+            - gfortran-8
     - compiler: clang
-      env: CLANG_VERSION=8 BUILD_TYPE=Debug
+      env: CLANG_VERSION=8 GCC_VERSION=8 BUILD_TYPE=Debug
+      addons:
+        apt:
+          packages:
+            - *base_packages
+            - clang-8
+            - libc++-8-dev
+            - libc++abi-8-dev
+            - g++-8
+            - gfortran-8
+    - compiler: clang
+      env: CLANG_VERSION=8 GCC_VERSION=8 BUILD_TYPE=Release
+      addons:
+        apt:
+          packages:
+            - *base_packages
+            - clang-8
+            - libc++-8-dev
+            - libc++abi-8-dev
+            - g++-8
+            - gfortran-8
+    - compiler: clang
+      env: CLANG_VERSION=9 GCC_VERSION=8 BUILD_TYPE=Debug
       addons:
         apt:
           sources:
-            - *base_sources
-            - *clang8_sources
+            - sourceline: 'deb http://apt.llvm.org/bionic/ llvm-toolchain-bionic-9 main'
+              key_url: 'https://apt.llvm.org/llvm-snapshot.gpg.key'
+            - sourceline: 'deb https://apt.repos.intel.com/tbb all main'
+              key_url: 'https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS-2019.PUB'
           packages:
             - *base_packages
-            - clang-8
-            - libc++-8-dev
-            - libc++abi-8-dev
+            - clang-9
+            - libc++-9-dev
+            - libc++abi-9-dev
+            - g++-8
+            - gfortran-8
+            - intel-tbb-2019.8-075
     - compiler: clang
-      env: CLANG_VERSION=8 BUILD_TYPE=Release
+      env: CLANG_VERSION=9 GCC_VERSION=8 BUILD_TYPE=Release
       addons:
         apt:
+          sources:
+            - sourceline: 'deb http://apt.llvm.org/bionic/ llvm-toolchain-bionic-9 main'
+              key_url: 'https://apt.llvm.org/llvm-snapshot.gpg.key'
+            - sourceline: 'deb https://apt.repos.intel.com/tbb all main'
+              key_url: 'https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS-2019.PUB'
           packages:
             - *base_packages
-            - clang-8
-            - libc++-8-dev
-            - libc++abi-8-dev
+            - clang-9
+            - libc++-9-dev
+            - libc++abi-9-dev
+            - g++-8
+            - gfortran-8
+            - intel-tbb-2019.8-075
     - compiler: gcc
       env: GCC_VERSION=8 BUILD_TYPE=Debug
       addons:
@@ -76,6 +113,7 @@ matrix:
           packages:
             - *base_packages
             - g++-8
+            - gfortran-8
     - compiler: gcc
       env: GCC_VERSION=8 BUILD_TYPE=Release
       addons:
@@ -83,7 +121,33 @@ matrix:
           packages:
             - *base_packages
             - g++-8
-
+            - gfortran-8
+    - compiler: gcc
+      env: GCC_VERSION=9 BUILD_TYPE=Debug
+      addons:
+        apt:
+          sources:
+            - sourceline: 'ppa:ubuntu-toolchain-r/test'
+            - sourceline: 'deb https://apt.repos.intel.com/tbb all main'
+              key_url: 'https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS-2019.PUB'
+          packages:
+            - *base_packages
+            - g++-9
+            - gfortran-8
+            - intel-tbb-2019.8-075
+    - compiler: gcc
+      env: GCC_VERSION=9 BUILD_TYPE=Release
+      addons:
+        apt:
+          sources:
+            - sourceline: 'ppa:ubuntu-toolchain-r/test'
+            - sourceline: 'deb https://apt.repos.intel.com/tbb all main'
+              key_url: 'https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS-2019.PUB'
+          packages:
+            - *base_packages
+            - g++-9
+            - gfortran-8
+            - intel-tbb-2019.8-075
 
 before_install:
 - "env"

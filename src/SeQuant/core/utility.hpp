@@ -55,7 +55,7 @@ class Singleton {
   static Derived* get_instance_ptr() {
     const auto result_ptr = instance_accessor();
     if (result_ptr != nullptr) return result_ptr.get();
-    if constexpr (std::is_default_constructible_v<Derived>) {
+    if constexpr (derived_is_default_constructible) {
       set_instance();
       return instance_accessor();
     } else
@@ -83,11 +83,13 @@ class Singleton {
 };
 
 struct Logger : public Singleton<Logger> {
+  bool wick_harness = false;
   bool wick_contract = false;
   bool wick_reduce = false;
   bool wick_stats = false;
   bool expand = false;
   bool canonicalize = false;
+  bool canonicalize_dot = false;
   bool simplify = false;
   bool tensor_network = false;
  private:

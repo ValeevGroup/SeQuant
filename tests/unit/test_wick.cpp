@@ -4,8 +4,8 @@
 
 #include <iostream>
 
-#include "../../src/SeQuant/core/timer.hpp"
-#include "../../src/SeQuant/core/wick.hpp"
+#include "SeQuant/core/timer.hpp"
+#include "SeQuant/core/wick.hpp"
 #include "catch.hpp"
 
 // comment out if want to run long tests
@@ -160,7 +160,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       REQUIRE(result->size() == 5);  // sum of 4 terms
       REQUIRE(
           to_latex(result) ==
-          L"{ \\left( - {{S^{{i_2}}_{{i_1}}}{a^{{i_4}}_{{i_3}}}} + {{S^{{i_2}}_{{i_1}}}{S^{{i_4}}_{{i_3}}}} + {{S^{{i_4}}_{{i_1}}}{a^{{i_2}}_{{i_3}}}} - {{S^{{i_4}}_{{i_3}}}{a^{{i_2}}_{{i_1}}}} + {{a^{{i_2}{i_4}}_{{i_1}{i_3}}}}\\right) }");
+          L"{ \\bigl( - {{S^{{i_2}}_{{i_1}}}{a^{{i_4}}_{{i_3}}}} + {{S^{{i_2}}_{{i_1}}}{S^{{i_4}}_{{i_3}}}} + {{S^{{i_4}}_{{i_1}}}{a^{{i_2}}_{{i_3}}}} - {{S^{{i_4}}_{{i_3}}}{a^{{i_2}}_{{i_1}}}} + {{a^{{i_2}{i_4}}_{{i_1}{i_3}}}}\\bigr) }");
     }
 
     // three 1-body operators, partial contraction
@@ -175,7 +175,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       REQUIRE(result->size() == 5);
       REQUIRE(
           to_latex(result) ==
-              L"{ \\left({{S^{{i_3}}_{{i_2}}}{a^{{i_1}{i_5}}_{{i_4}{i_6}}}} + {{S^{{i_3}}_{{i_2}}}{S^{{i_5}}_{{i_4}}}{a^{{i_1}}_{{i_6}}}} - {{S^{{i_5}}_{{i_2}}}{a^{{i_1}{i_3}}_{{i_4}{i_6}}}} + {{S^{{i_5}}_{{i_4}}}{a^{{i_1}{i_3}}_{{i_2}{i_6}}}} + {{a^{{i_1}{i_3}{i_5}}_{{i_2}{i_4}{i_6}}}}\\right) }");
+              L"{ \\bigl({{S^{{i_3}}_{{i_2}}}{a^{{i_1}{i_5}}_{{i_4}{i_6}}}} + {{S^{{i_3}}_{{i_2}}}{S^{{i_5}}_{{i_4}}}{a^{{i_1}}_{{i_6}}}} - {{S^{{i_5}}_{{i_2}}}{a^{{i_1}{i_3}}_{{i_4}{i_6}}}} + {{S^{{i_5}}_{{i_4}}}{a^{{i_1}{i_3}}_{{i_2}{i_6}}}} + {{a^{{i_1}{i_3}{i_5}}_{{i_2}{i_4}{i_6}}}}\\bigr) }");
     }
 
     // two 2-body operators, partial contraction: Eq. 9b of DOI 10.1063/1.474405
@@ -188,7 +188,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       REQUIRE(result->is<Sum>());
       REQUIRE(result->size() == 7);
       REQUIRE(
-          to_latex(result) == L"{ \\left({{S^{{i_5}}_{{i_4}}}{a^{{i_1}{i_2}{i_6}}_{{i_3}{i_7}{i_8}}}} - {{S^{{i_5}}_{{i_4}}}{S^{{i_6}}_{{i_3}}}{a^{{i_1}{i_2}}_{{i_7}{i_8}}}} - {{S^{{i_6}}_{{i_4}}}{a^{{i_1}{i_2}{i_5}}_{{i_3}{i_7}{i_8}}}} + {{S^{{i_6}}_{{i_4}}}{S^{{i_5}}_{{i_3}}}{a^{{i_1}{i_2}}_{{i_7}{i_8}}}} - {{S^{{i_5}}_{{i_3}}}{a^{{i_1}{i_2}{i_6}}_{{i_4}{i_7}{i_8}}}} + {{S^{{i_6}}_{{i_3}}}{a^{{i_1}{i_2}{i_5}}_{{i_4}{i_7}{i_8}}}} + {{a^{{i_1}{i_2}{i_5}{i_6}}_{{i_3}{i_4}{i_7}{i_8}}}}\\right) }");
+          to_latex(result) == L"{ \\bigl({{S^{{i_5}}_{{i_4}}}{a^{{i_1}{i_2}{i_6}}_{{i_3}{i_7}{i_8}}}} - {{S^{{i_5}}_{{i_4}}}{S^{{i_6}}_{{i_3}}}{a^{{i_1}{i_2}}_{{i_7}{i_8}}}} - {{S^{{i_6}}_{{i_4}}}{a^{{i_1}{i_2}{i_5}}_{{i_3}{i_7}{i_8}}}} + {{S^{{i_6}}_{{i_4}}}{S^{{i_5}}_{{i_3}}}{a^{{i_1}{i_2}}_{{i_7}{i_8}}}} - {{S^{{i_5}}_{{i_3}}}{a^{{i_1}{i_2}{i_6}}_{{i_4}{i_7}{i_8}}}} + {{S^{{i_6}}_{{i_3}}}{a^{{i_1}{i_2}{i_5}}_{{i_4}{i_7}{i_8}}}} + {{a^{{i_1}{i_2}{i_5}{i_6}}_{{i_3}{i_4}{i_7}{i_8}}}}\\bigr) }");
     }
 
   }  // SECTION("physical vacuum")
@@ -242,7 +242,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       REQUIRE(result->is<Sum>());
       REQUIRE(result->size() == 4);
       REQUIRE(to_latex(result)
-                  == L"{ \\left( - {{S^{{p_1}}_{{m_{107}}}}{S^{{m_{107}}}_{{p_4}}}{\\tilde{a}^{{p_3}}_{{p_2}}}} + {{S^{{p_1}}_{{m_{107}}}}{S^{{m_{107}}}_{{p_4}}}{S^{{e_{108}}}_{{p_2}}}{S^{{p_3}}_{{e_{108}}}}} + {{S^{{e_{109}}}_{{p_2}}}{S^{{p_3}}_{{e_{109}}}}{\\tilde{a}^{{p_1}}_{{p_4}}}} + {{\\tilde{a}^{{p_1}{p_3}}_{{p_2}{p_4}}}}\\right) }");
+                  == L"{ \\bigl( - {{S^{{p_1}}_{{m_{107}}}}{S^{{m_{107}}}_{{p_4}}}{\\tilde{a}^{{p_3}}_{{p_2}}}} + {{S^{{p_1}}_{{m_{107}}}}{S^{{m_{107}}}_{{p_4}}}{S^{{e_{108}}}_{{p_2}}}{S^{{p_3}}_{{e_{108}}}}} + {{S^{{e_{109}}}_{{p_2}}}{S^{{p_3}}_{{e_{109}}}}{\\tilde{a}^{{p_1}}_{{p_4}}}} + {{\\tilde{a}^{{p_1}{p_3}}_{{p_2}{p_4}}}}\\bigr) }");
     }
 
     // two (pure qp) 2-body operators
@@ -347,7 +347,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       ExprPtr result;
       REQUIRE_NOTHROW(result = wick.compute());
       //std::wcout << "result = " << to_latex(result) << std::endl;
-      REQUIRE(to_latex(result) == L"{{{-1}}{g^{{i_1}{a_2}}_{{a_3}{a_4}}}}");
+      REQUIRE(to_latex(result) == L"{{{-1}}{\\bar{g}^{{i_1}{a_2}}_{{a_3}{a_4}}}}");
     }
 
     // odd number of ops -> full contraction is 0
@@ -563,18 +563,18 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       expand(wick_result_2);
       REQUIRE(to_latex(wick_result_2) ==
               L"{ "
-              L"\\left({{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_"
+              L"\\bigl({{\\bar{g}^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_"
               L"5}}}{S^{{p_1}}_{{i_5}}}{S^{{p_2}}_{{i_4}}}{S^{{a_4}}_{{p_4}}}{"
               L"S^{{a_5}}_{{p_3}}}} - {"
-              L"{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{S^{{"
+              L"{\\bar{g}^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{S^{{"
               L"p_1}}_{{i_5}}}{S^{{p_2}}_{{i_4}}}{S^{{a_5}}_{{p_4}}}{S^{{a_4}}_"
               L"{{p_3}}}} - {"
-              L"{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{S^{{"
+              L"{\\bar{g}^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{S^{{"
               L"p_1}}_{{i_4}}}{S^{{p_2}}_{{i_5}}}{S^{{a_4}}_{{p_4}}}{S^{{a_5}}_"
               L"{{p_3}}}} + "
-              L"{{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{S^{"
+              L"{{\\bar{g}^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{S^{"
               L"{p_1}}_{{i_4}}}{S^{{p_2}}_{{i_5}}}{S^{{a_5}}_{{p_4}}}{S^{{a_4}}"
-              L"_{{p_3}}}}\\right) }");
+              L"_{{p_3}}}}\\bigr) }");
       wick.reduce(wick_result_2);
       rapid_simplify(wick_result_2);
       TensorCanonicalizer::register_instance(
@@ -586,7 +586,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       std::wcout << L"H2*T2 = " << to_wolfram(wick_result_2) << std::endl;
       REQUIRE(to_latex(wick_result_2) ==
               L"{{{4}}"
-              L"{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{{a_1}{a_2}}}}");
+              L"{\\bar{g}^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{{a_1}{a_2}}}}");
     });
 
     // 2-body ^ 1-body ^ 1-body
@@ -624,7 +624,7 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       print("H2*T1*T1 = ", wick_result_2);
       REQUIRE(to_latex(wick_result_2) ==
               L"{{{4}}"
-              L"{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}}_{{a_1}}}{t^{{i_2}}_{{a_"
+              L"{\\bar{g}^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}}_{{a_1}}}{t^{{i_2}}_{{a_"
               L"2}}}}");
     });
 
@@ -670,14 +670,14 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       // it appears that the two terms are swapped when using gcc 8 on linux
       // TODO investigate why sum canonicalization seems to produce platform-dependent results.
 //      REQUIRE(to_latex(wick_result_2) ==
-//              L"{ \\left( - {{{8}}"
+//              L"{ \\bigl( - {{{8}}"
 //              L"{A^{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}_{{i_1}{i_2}}}{f^{{a_"
 //              L"3^{{i_1}{i_2}}}}_{{a_1^{{i_1}{i_2}}}}}{t^{{i_1}{i_2}}_{{a_2^{{"
 //              L"i_1}{i_2}}}{a_3^{{i_1}{i_2}}}}}} + {{{8}}"
 //              L"{A^{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}_{{i_1}{i_2}}}{f^{{i_"
 //              L"1}}_{{i_3}}}{t^{{i_2}{i_3}}_{{a_3^{{i_2}{i_3}}}{a_4^{{i_2}{i_3}"
 //              L"}}}}{S^{{a_3^{{i_2}{i_3}}}}_{{a_1^{{i_1}{i_2}}}}}{S^{{a_4^{{i_"
-//              L"2}{i_3}}}}_{{a_2^{{i_1}{i_2}}}}}}\\right) }");
+//              L"2}{i_3}}}}_{{a_2^{{i_1}{i_2}}}}}}\\bigr) }");
     });
 
     // 2=body ^ 2-body ^ 2-body ^ 2-body with dependent (PNO) indices

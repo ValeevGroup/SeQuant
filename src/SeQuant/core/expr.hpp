@@ -15,7 +15,6 @@
 #include <range/v3/all.hpp>
 
 #include <boost/core/demangle.hpp>
-#include <boost/functional/hash.hpp>
 #include <boost/numeric/conversion/cast.hpp>
 
 #include "container.hpp"
@@ -36,7 +35,7 @@ namespace sequant {
 /// Expr is an Iterable over subexpressions (each of which is an Expr itself). More precisely,
 /// Expr meets the SizedIterable concept (see https://raw.githubusercontent.com/ericniebler/range-v3/master/doc/std/D4128.md).
 /// Specifically, iterators to subexpressions
-/// dereference to std::shared_ptr<Expr>. Since Expr is a range, it provides begin/end/etc. that can participate in overloads
+/// dereference to ExprPtr. Since Expr is a range, it provides begin/end/etc. that can participate in overloads
 ///       with other functions in the derived class. Consider a Container class derived from a BaseContainer class:
 /// @code
 ///   template <typename T> class Container : public BaseContainer, public Expr {
@@ -46,7 +45,7 @@ namespace sequant {
 ///   };
 /// @endcode
 /// There are two possible scenarios:
-///   - if @c Container is a container of Expr objects, BaseContainer will iterate over std::shared_ptr<Expr> objects already
+///   - if @c Container is a container of Expr objects, BaseContainer will iterate over ExprPtr objects already
 ///     and both ranges will be equivalent; it is sufficient to add `using BaseContainer::begin`, etc. to Container's public API.
 ///   - if @c Container is a container of non-Expr objects, iteration over BaseContainer is likely to be more commonly used
 ///     in practice, hence again adding `using BaseContainer::begin`, etc. will suffice. To be able to iterate over subexpression
@@ -73,46 +72,41 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
   }
 
   /// @return the string representation of @c this in the LaTeX format
-  virtual std::wstring to_latex() const {
-    throw std::logic_error("Expr::to_latex not implemented in this derived class");
-  }
+  virtual std::wstring to_latex() const;
 
   /// @return the string representation of @c this in the Wolfram Language format
-  virtual std::wstring to_wolfram() const {
-    throw std::logic_error("Expr::to_wolfram not implemented in this derived class");
-  }
+  virtual std::wstring to_wolfram() const;
 
   /// @return a clone of this object
   /// @note must be overridden in the derived class
-  virtual std::shared_ptr<Expr> clone() const {
-    throw std::logic_error("Expr::clone not implemented in this derived class");
-  }
+  virtual ExprPtr clone() const;
 
   /// Canonicalizes @c this and returns the biproduct of canonicalization (e.g. phase)
   /// @return the biproduct of canonicalization, or @c nullptr if no biproduct generated
-  virtual std::shared_ptr<Expr> canonicalize() {
+  virtual ExprPtr canonicalize() {
     return {};  // by default do nothing and return nullptr
   }
 
   /// Performs approximate, but fast, canonicalization of @c this and returns the biproduct of canonicalization (e.g. phase)
   /// The default is to use canonicalize(), unless overridden in the derived class.
   /// @return the biproduct of canonicalization, or @c nullptr if no biproduct generated
-  virtual std::shared_ptr<Expr> rapid_canonicalize() {
+  virtual ExprPtr rapid_canonicalize() {
     return this->canonicalize();
   }
 
+  // clang-format off
   /// recursively visit this expression, i.e. call visitor on each subexpression
   /// in depth-first fashion.
   /// @warning this will only work for tree expressions; no checking is
   /// performed that each subexpression has only been visited once
   /// TODO make work for graphs
-  /// @tparam Visitor a callable with (std::shared_ptr<Expr>&) or (const
-  /// std::shared_ptr<Expr>&) signature
+  /// @tparam Visitor a callable of type void(ExprPtr&) or void(const ExprPtr&)
   /// @param visitor the visitor object
   /// @param atoms_only if true, will visit only the leaves; the default is to
   /// visit all nodes
   /// @return true if this object was visited
   /// @sa expr_range
+  // clang-format on
   template<typename Visitor>
   bool visit(Visitor &&visitor, const bool atoms_only = false) {
     for(auto& subexpr_ptr: expr()) {
@@ -129,7 +123,7 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
     bool this_visited = false;
     if constexpr(std::is_invocable_r_v<void,
                                        std::remove_reference_t<Visitor>,
-                                       const std::shared_ptr<Expr> &>) {
+                                       const ExprPtr &>) {
       if (!atoms_only || this->is_atom()) {
         visitor(shared_from_this());
         this_visited = true;
@@ -221,6 +215,10 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
     return result;
   }
 
+  /// @brief changes this to its adjoint
+  /// @note base implementation throws, must be reimplemented in the derived class
+  virtual void adjoint();
+
   /// Computes and returns the memoized hash value.
   /// @note always returns 0 unless this derived class overrides Expr::memoizing_hash
   /// @return the hash value for this Expr
@@ -292,7 +290,10 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
   /// @return true if this object is of type @c T
   template <typename T>
   bool is() const {
-    return this->type_id() == get_type_id<std::decay_t<T>>();
+    if constexpr (std::is_same_v<std::decay_t<T>,Expr>)
+      return true;
+    else
+      return this->type_id() == get_type_id<std::decay_t<T>>();
   }
 
   /// @tparam T an Expr type
@@ -327,34 +328,24 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
   /// @return reference to @c *this
   /// @throw std::logic_error if not implemented for this class, or cannot be
   /// implemented for the particular @c that
-  virtual Expr &operator*=(const Expr &that) {
-    throw std::logic_error(
-        "Expr::operator*= not implemented in this derived class");
-  }
+  virtual Expr &operator*=(const Expr &that);
 
   /// @brief in-place non-commutatively-multiply @c *this by @c that
   /// @return reference to @c *this
   /// @throw std::logic_error if not implemented for this class, or cannot be
   /// implemented for the particular @c that
-  virtual Expr &operator^=(const Expr &that) {
-    throw std::logic_error(
-        "Expr::operator^= not implemented in this derived class");
-  }
+  virtual Expr &operator^=(const Expr &that);
 
   /// @brief in-place add @c that to @c *this
   /// @return reference to @c *this
   /// @throw std::logic_error if not implemented for this class, or cannot be
   /// implemented for the particular @c that
-  virtual Expr &operator+=(const Expr &that) {
-    throw std::logic_error("Expr::operator+= not implemented in this derived class");
-  }
+  virtual Expr &operator+=(const Expr &that);
 
   /// @brief in-place subtract @c that from @c *this
   /// @return reference to @c *this
   /// @throw std::logic_error if not implemented for this class, or cannot be implemented for the particular @c that
-  virtual Expr &operator-=(const Expr &that) {
-    throw std::logic_error("Expr::operator-= not implemented in this derived class");
-  }
+  virtual Expr &operator-=(const Expr &that);
 
  ///@}
 
@@ -369,15 +360,15 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
 
   struct cursor
   {
-    using value_type = std::shared_ptr<Expr>;
+    using value_type = ExprPtr;
 
     cursor() = default;
-    constexpr explicit cursor(std::shared_ptr<Expr>* subexpr_ptr) noexcept
+    constexpr explicit cursor(ExprPtr* subexpr_ptr) noexcept
         : ptr_{subexpr_ptr}
     {}
     /// when take const ptr note runtime const flag
-    constexpr explicit cursor(const std::shared_ptr<Expr>* subexpr_ptr) noexcept
-        : ptr_{const_cast<std::shared_ptr<Expr>*>(subexpr_ptr)}, const_{true}
+    constexpr explicit cursor(const ExprPtr* subexpr_ptr) noexcept
+        : ptr_{const_cast<ExprPtr*>(subexpr_ptr)}, const_{true}
     {}
     bool equal(const cursor& that) const
     {
@@ -392,18 +383,18 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
       --ptr_;
     }
     // TODO figure out why can't return const here if want to be able to assign to *begin(Expr&)
-    std::shared_ptr<Expr>& read() const
+    ExprPtr& read() const
     {
       RANGES_EXPECT(ptr_);
       return *ptr_;
     }
-    std::shared_ptr<Expr>& read()
+    ExprPtr& read()
     {
       RANGES_EXPECT(const_ == false);
       RANGES_EXPECT(ptr_);
       return *ptr_;
     }
-    void assign(const std::shared_ptr<Expr>& that_ptr)
+    void assign(const ExprPtr& that_ptr)
     {
       RANGES_EXPECT(ptr_);
       *ptr_ = that_ptr;
@@ -417,7 +408,7 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
       ptr_ += n;
     }
    private:
-    std::shared_ptr<Expr>* ptr_ = nullptr;  // both begin and end will be represented by this, so Expr without subexpressions begin() equals end() automatically
+    ExprPtr* ptr_ = nullptr;  // both begin and end will be represented by this, so Expr without subexpressions begin() equals end() automatically
     bool const_ = false;  // assert in nonconst ops
   };
 
@@ -499,6 +490,10 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
     return type_id;
   };
 
+ private:
+  /// @input[in] fn the name of function that is missing in this class
+  /// @return a std::logic_error object containing a message describing that @p fn is missing from this type
+  std::logic_error not_implemented(const char* fn) const;
 };  // class Expr
 
 /// make an ExprPtr to a new object of type T
@@ -513,6 +508,13 @@ ExprPtr ex(Args &&... args) {
 // this is needed when using std::make_shared<X>({ExprPtr,ExprPtr}), i.e. must std::make_shared<X>(ExprPtrList{ExprPtr,ExprPtr})
 using ExprPtrList = std::initializer_list<ExprPtr>;
 static auto expr_ptr_comparer = [](const auto& ptr1, const auto& ptr2) { return *ptr1 == *ptr2; };
+
+using ExprPtrVector = container::svector<ExprPtr>;
+
+/// @brief computes the adjoint of @p expr
+/// @param[in] expr an Expr object
+/// @return the adjoint of @p expr
+ExprPtr adjoint(const ExprPtr& expr);
 
 class Constant : public Expr {
  private:
@@ -556,9 +558,12 @@ class Constant : public Expr {
     return get_type_id<Constant>();
   }
 
-  std::shared_ptr<Expr> clone() const override {
+  ExprPtr clone() const override {
     return ex<Constant>(this->value());
   }
+
+  /// @brief adjoint of a Constant is its complex conjugate
+  virtual void adjoint() override;
 
   virtual Expr &operator*=(const Expr &that) override {
     if (that.is<Constant>()) {
@@ -587,9 +592,13 @@ class Constant : public Expr {
     return *this;
   }
 
+  bool is_zero() const {
+    return value_ == decltype(value_){0,0};
+  }
+
  private:
   hash_type memoizing_hash() const override {
-    hash_value_ = boost::hash_value(value_);
+    hash_value_ = hash::value(value_);
     return *hash_value_;
   }
 
@@ -762,6 +771,9 @@ class Product : public Expr {
   /// @sa CProduct::is_commutative() and NCProduct::is_commutative()
   virtual bool is_commutative() const;
 
+  /// @brief adjoint of a Product is a reversed product of adjoints of its factors, with complex-conjugated scalar
+  virtual void adjoint() override;
+
  private:
   /// @return true if commutativity is decidable statically
   /// @sa CProduct::static_commutativity() and NCProduct::static_commutativity()
@@ -784,7 +796,7 @@ class Product : public Expr {
       }
       for (const auto &i : factors()) {
         if (i->is<Product>())
-          result += L"\\left(" + i->to_latex() + L"\\right)";
+          result += L"\\bigl(" + i->to_latex() + L"\\bigr)";
         else result += i->to_latex();
       }
     }
@@ -810,7 +822,7 @@ class Product : public Expr {
 
   type_id_type type_id() const override { return get_type_id<Product>(); };
 
-  std::shared_ptr<Expr> clone() const override {
+  ExprPtr clone() const override {
     auto cloned_factors =
         factors() | ranges::views::transform([](const ExprPtr &ptr) {
           return ptr ? ptr->clone() : nullptr;
@@ -870,14 +882,14 @@ class Product : public Expr {
         factors() |
         ranges::views::transform(
             [](const ExprPtr &ptr) -> const Expr & { return *ptr; });
-    hash_value_ = hash_range(ranges::begin(deref_factors),
+    hash_value_ = hash::range(ranges::begin(deref_factors),
                              ranges::end(deref_factors));
     return *hash_value_;
   }
 
-  std::shared_ptr<Expr> canonicalize_impl(bool rapid = false);
-  virtual std::shared_ptr<Expr> canonicalize() override;
-  virtual std::shared_ptr<Expr> rapid_canonicalize() override;
+  ExprPtr canonicalize_impl(bool rapid = false);
+  virtual ExprPtr canonicalize() override;
+  virtual ExprPtr rapid_canonicalize() override;
 
   bool static_equal(const Expr &that) const override {
     const auto &that_cast = static_cast<const Product &>(that);
@@ -906,6 +918,10 @@ class CProduct : public Product {
 
   bool is_commutative() const override { return true; }
 
+  /// @brief adjoint of a CProduct is a product of adjoints of its factors, with complex-conjugated scalar
+  /// @note factors are not reversed since the factors commute
+  virtual void adjoint() override;
+
  private:
   bool static_commutativity() const override { return true; }
 };  // class CProduct
@@ -919,6 +935,9 @@ class NCProduct : public Product {
   NCProduct(Product &&other) : Product(other) {}
 
   bool is_commutative() const override { return false; }
+
+  /// @brief adjoint of a NCProduct is a reserved product of adjoints of its factors, with complex-conjugated scalar
+  virtual void adjoint() override;
 
  private:
   bool static_commutativity() const override { return true; }
@@ -970,7 +989,7 @@ class Sum : public Expr {
           assert(summands_.at(*constant_summand_idx_)->is<Constant>());
           *(summands_[*constant_summand_idx_]) += *summand;
         } else {
-          if (*summand_constant != Constant(0)) {
+          if (!summand_constant->is_zero()) {
             summands_.push_back(std::move(summand));
             constant_summand_idx_ = summands_.size() - 1;
           }
@@ -997,7 +1016,7 @@ class Sum : public Expr {
           *summands_[*constant_summand_idx_] += *summand_constant;
         } else {  // or include the nonzero constant and update
                   // constant_summand_idx_
-          if (summand_constant != 0) {
+          if (!summand_constant->is_zero()) {
             summands_.insert(summands_.begin(), std::move(summand));
             constant_summand_idx_ = 0;
           }
@@ -1039,9 +1058,12 @@ class Sum : public Expr {
   /// @return true if the number of factors is zero
   bool empty() const { return summands_.empty(); }
 
+  /// @return the number of summands in a Sum
+  std::size_t size() const { return summands_.size(); }
+
   std::wstring to_latex() const override {
     std::wstring result;
-    result = L"{ \\left(";
+    result = L"{ \\bigl(";
     std::size_t counter = 0;
     for (const auto &i : summands()) {
       const auto i_is_product = i->is<Product>();
@@ -1058,7 +1080,7 @@ class Sum : public Expr {
       }
       ++counter;
     }
-    result += L"\\right) }";
+    result += L"\\bigr) }";
     return result;
   }
 
@@ -1079,13 +1101,16 @@ class Sum : public Expr {
     return Expr::get_type_id<Sum>();
   };
 
-  std::shared_ptr<Expr> clone() const override {
+  ExprPtr clone() const override {
     auto cloned_summands =
         summands() | ranges::views::transform(
                          [](const ExprPtr &ptr) { return ptr->clone(); });
     return ex<Sum>(ranges::begin(cloned_summands),
                    ranges::end(cloned_summands));
   }
+
+  /// @brief adjoint of a Sum is a sum of adjoints of its factors
+  virtual void adjoint() override;
 
   virtual Expr &operator+=(const Expr &that) override {
     this->append(const_cast<Expr &>(that).shared_from_this());
@@ -1127,7 +1152,7 @@ class Sum : public Expr {
         summands() |
         ranges::views::transform(
             [](const ExprPtr &ptr) -> const Expr & { return *ptr; });
-    hash_value_ = hash_range(ranges::begin(deref_summands),
+    hash_value_ = hash::range(ranges::begin(deref_summands),
                                     ranges::end(deref_summands));
     return *hash_value_;
   }
@@ -1173,9 +1198,9 @@ inline std::wstring to_latex_align(const ExprPtr &exprptr,
                                    size_t max_terms_per_line = 1) {
   std::wstring result = to_latex(exprptr);
   if (exprptr->is<Sum>()) {
-    result.erase(0, 7);  // remove leading  "{ \left"
+    result.erase(0, 7);  // remove leading  "{ \bigl"
     result.replace(result.size() - 9, 9,
-                   L")");  // replace trailing "\right) }" with ")"
+                   L")");  // replace trailing "\bigr) }" with ")"
     result = std::wstring(L"\\begin{align}\n& ") + result;
     // assume no inner sums
     int line_counter = 0;

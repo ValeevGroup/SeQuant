@@ -115,7 +115,6 @@ class screened_vac_av {
           R - 2 * total_T_rank);  // at most 2*total_T_rank lines can point down
 
       if (canonical || !canonical_only) {
-        using interval = boost::numeric::interval<int>;
         if (exlev + min_exlev_R <= 0 && 0 <= exlev + max_exlev_R) {  // VEV != 0
           assert(min_exlev_R <= max_exlev_R);
           screened_input->append(
