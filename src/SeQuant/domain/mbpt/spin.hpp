@@ -593,6 +593,14 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
     return temp;
   };
   auto expr = expand_all(expression);
+
+  auto reset_idx_tags = [&](ExprPtr& expr) {
+    if (expr->is<Tensor>())
+      ranges::for_each(expr->as<Tensor>().const_braket(),
+                       [&](const Index& idx) { idx.reset_tag(); });
+  };
+
+  expr->visit(reset_idx_tags);
   expand(expr);
   rapid_simplify(expr);
   canonicalize(expr);
@@ -684,7 +692,7 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
   if(expr->is<Constant>())
     return expr;
   else if (expr->is<Tensor>())
-    return expand_all(expr);
+    return trace_product((ex<Constant>(1.) * expr)->as<Product>()); // expand_all(expr);
   else if(expr->is<Product>())
     return trace_product(expr->as<Product>());
   else if (expr->is<Sum>()){
