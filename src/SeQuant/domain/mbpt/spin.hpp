@@ -644,7 +644,7 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
 
     auto get_ket_indices = [&] (const Product& prod){
       std::vector<Index> ket_idx;
-      for(auto&& t: prod) {#include "SeQuant/core/runtime.hpp"
+      for(auto&& t: prod) {
         if(t->is<Tensor>())
         ranges::for_each(t->as<Tensor>().ket(), [&] (const Index& idx) {ket_idx.push_back(idx);});
       }
@@ -706,7 +706,7 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
       if(summand->is<Product>()){
         result->append(trace_product(summand->as<Product>()));
       } else if (summand->is<Tensor>()){
-        result->append(trace_product((ex<Constant>(1.) * expr)->as<Product>()));
+        result->append(trace_product((ex<Constant>(1.) * summand)->as<Product>()));
       } else // summand->is<Constant>()
         result->append(summand);
     }
