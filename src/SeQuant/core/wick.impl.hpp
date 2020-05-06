@@ -6,8 +6,8 @@
 #define SEQUANT_WICK_IMPL_HPP
 
 #if __has_include(<execution>)
-//#include <execution>
-//#define SEQUANT_HAS_EXECUTION_HEADER
+#include <execution>
+#define SEQUANT_HAS_EXECUTION_HEADER
 #endif
 
 #include "bliss.hpp"
@@ -415,7 +415,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
 #ifdef SEQUANT_HAS_EXECUTION_HEADER
       auto wick_task = [&result, &result_mtx, this,
                         &count_only](const ExprPtr &input) {
-        WickTheorem wt(input, *this);
+        WickTheorem wt(input->clone(), *this);
         auto task_result = wt.compute(count_only);
         stats() += wt.stats();
         if (task_result) {
@@ -429,7 +429,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
       auto wick_task = [&summands, &result, &result_mtx, this,
                         &count_only](size_t task_id) {
         auto &summand = summands[task_id];
-        WickTheorem wt(summand, *this);
+        WickTheorem wt(summand->clone(), *this);
         auto task_result = wt.compute(count_only);
         stats() += wt.stats();
         if (task_result) {

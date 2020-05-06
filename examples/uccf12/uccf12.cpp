@@ -1,7 +1,7 @@
 #include "../../src/SeQuant/core/wick.hpp"
 #include "../sequant_setup.hpp"
 
-using namespace  sequant;
+using namespace sequant;
 
 void try_main();
 
@@ -23,7 +23,7 @@ int main(int argc, char* argv[]) {
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
   // WARNING some code is not thread safe ...
-  set_num_threads(1);
+  //set_num_threads(1);
 
   try {
     try_main();
