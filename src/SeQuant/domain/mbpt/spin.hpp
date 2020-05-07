@@ -609,9 +609,6 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
   expr->visit(reset_idx_tags);
   expand(expr);
   rapid_simplify(expr);
-  // canonicalize(expr);
-  // expr->visit(reset_idx_tags);
-  // std::wcout << to_latex(expr) << std::endl;
 
   // Returns the number of cycles
   auto count_cycles = [&] (std::vector<Index>& v, std::vector<Index>& v1){
@@ -640,7 +637,6 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
   // Lambda for a product
   auto trace_product = [&] (const Product& product){
     // TODO: Check symmetry of tensors
-    // std::wcout << "Product: " << to_latex(product) << std::endl;
 
     auto get_ket_indices = [&] (const Product& prod){
       std::vector<Index> ket_idx;
@@ -662,11 +658,6 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
 
     auto product_kets = get_ket_indices(product);
     auto product_bras = get_bra_indices(product);
-
-//    ranges::for_each(product_kets,[] (Index& i) {std::wcout << to_latex(i) << " ";});
-//    std::cout << "\n";
-//    ranges::for_each(product_bras,[] (Index& i) {std::wcout << to_latex(i) << " ";});
-//    std::cout << "\n";
 
     // Substitute indices from external index list
     if((*ext_index_groups.begin()).size() == 2)
@@ -690,7 +681,6 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
 
     auto result = std::make_shared<Product>(product);
     result->scale(std::pow(2,n_cycles));
-    // std::wcout << "Result:  " << to_latex(result) << "\n" << std::endl;
     return result;
   };
 
@@ -710,7 +700,6 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
       } else // summand->is<Constant>()
         result->append(summand);
     }
-    // std::wcout << "Expr result: " << to_latex(result) << std::endl;
     return result;
   } else
     return nullptr;
