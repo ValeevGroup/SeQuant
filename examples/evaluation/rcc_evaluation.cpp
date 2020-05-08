@@ -518,7 +518,7 @@ int main(int argc, char* argv[]) {
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"g", {L"a_1",L"a_2"}, {L"a_3",L"a_4"})), //vvvv
 
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"i_1"}, {L"a_1"})), //ov
-        std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"i_1",L"i_2"}, {L"a_1",L"a_2"})), //oovv
+        std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"i_1",L"i_2"}, {L"a_1",L"a_2"})) //oovv
     };
 
 #if CCSDT_eval
@@ -645,16 +645,58 @@ int main(int argc, char* argv[]) {
          << endl;
     cout << "Total energy = " << enuc + ehf + ecc << " a.u." << endl;
 
-    { // Check water molecule, sto-3g
+    // Check water molecule, sto-3g
 #if CCSDT_eval
       double ccsdt_correlation = -0.070813170670;
       assert(fabs(ccsdt_correlation - ecc) < 1e-10);
 #else
       double ccsd_correlation = -0.070680451962;
       assert(fabs(ccsd_correlation - ecc) < 1e-10);
+      /* CCSD ref value obtained with mpqc using this input
+  {
+      "units": "2010CODATA",
+      "atoms": {
+          "file_name": "h2o.xyz",
+          "sort_input": "true",
+          "charge": "0",
+          "n_cluster": "1",
+          "reblock": "4"
+      },
+      "obs": {
+          "name": "STO-3G",
+          "atoms": "$:atoms"
+      },
+      "wfn_world": {
+          "atoms": "$:atoms",
+          "basis": "$:obs",
+          "screen": "schwarz"
+      },
+      "scf": {
+          "type": "RHF",
+          "wfn_world": "$:wfn_world"
+      },
+      "wfn": {
+          "type": "CCSD",
+          "wfn_world": "$:wfn_world",
+          "export_orbitals": "true",
+          "atoms": "$:atoms",
+          "ref": "$:scf",
+          "reduced_abcd_memory": "true",
+          "frozen_core": "false",
+          "occ_block_size": "2",
+          "unocc_block_size": "2"
+      },
+      "property": {
+          "type": "Energy",
+          "precision": "1e-10",
+          "wfn": "$:wfn",
+          "value": {
+              "value": "-75.012759831161077"
+          }
+      }
+  }
+       */
 #endif
-    }
-
   }  // end of try block
 
   catch (const char* ex) {
