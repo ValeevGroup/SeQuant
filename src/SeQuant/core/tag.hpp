@@ -254,7 +254,7 @@ class Taggable {
 
   bool operator<(const Taggable &other) const { return tag_ < other.tag_; }
 
-  bool operator==(const Taggable &other) const { return tag_ == other.tag_; }
+  bool operator==(const Taggable &other) const { return tag_ == other.tag_;}
 
  private:
   mutable any_comparable tag_;

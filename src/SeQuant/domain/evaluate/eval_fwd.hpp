@@ -1,31 +1,52 @@
-#ifndef SEQUANT_EVAL_FWD
-#define SEQUANT_EVAL_FWD
+#ifndef SEQUANT_EVALUATE_EVAL_TENSOR_FWD_HPP
+#define SEQUANT_EVALUATE_EVAL_TENSOR_FWD_HPP
 
 #include <SeQuant/core/container.hpp>
-#include <boost/functional/hash_fwd.hpp>
+#include <SeQuant/core/index.hpp>
 
 #include <cstddef>
-#include <complex>
 #include <memory>
-#include <string>
 
 namespace sequant::evaluate {
-class EvalTensor;
 
-using hash_type = std::size_t;
+using HashType = std::size_t;
 
-using constant_type = std::complex<double>;
+using ScalarType = double;
 
-using EvTensorPtr = std::shared_ptr<EvalTensor>;
+using IndexContainer = container::svector<Index, 4>;
 
-using label_container_type = container::svector<std::wstring, 4>;
+using OpsCount = unsigned long long;
 
-using btas_index_container = container::svector<hash_type>;
+class EvalTree;
 
-template <typename DataTensorType>
-using hash_to_dtensor_map =
-    container::map<hash_type, std::shared_ptr<DataTensorType>>;
+class EvalTreeNode;
+
+using EvalNodePtr = std::shared_ptr<EvalTreeNode>;
+
+enum class Operation {
+  /// Represents the summation type binary evaluation
+  SUM,
+  /// Represents the contraction type binary evaluation
+  PRODUCT,
+  ///
+  /// Represents the antisymmetrization type evaluation.
+  ///
+  /// An antisymmetrization type evaluation should be thought of as a binary
+  /// operation between an antisymmetrization tensor (label "A" tensors in
+  /// sequant) and the tensor to be antisymmetrized.
+  ///
+  ANTISYMMETRIZE,
+  ///
+  /// Represents the symmetrization type evaluation.
+  ///
+  /// An symmetrization type evaluation should be thought of as a binary
+  /// operation between an symmetrization tensor (label "P" tensors in
+  /// sequant) and the tensor to be symmetrized.
+  SYMMETRIZE,
+  /// Represents an invalid evaluation.
+  INVALID
+};
 
 }  // namespace sequant::evaluate
 
-#endif  // ifndef SEQUANT_EVAL_FWD
+#endif /* ifndef SEQUANT_EVALUATE_EVAL_TENSOR_FWD_HPP */

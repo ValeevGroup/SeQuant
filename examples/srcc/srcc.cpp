@@ -45,5 +45,13 @@ int main(int argc, char* argv[]) {
           });
     });
 
+  auto cc_r = cceqvec{ 3, 3 }(true, true, true, true);
+  auto prod = (*cc_r[2]->begin())->as<Product>();
+  for (const auto& fac: prod){
+    auto tensor = fac->as<Tensor>();
+    std::wcout << "symmetry = " << int(tensor.symmetry())
+    << " braket_symmetry = "
+    << int(tensor.braket_symmetry()) << std::endl;
+  }
   return 0;
 }

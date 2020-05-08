@@ -1,7 +1,7 @@
 #! /bin/sh
 
 # set to the release id of the required library
-export RELID=2.7.0-beta.1
+export RELID=2.7.0-beta.5
 
 # Exit on error
 set -ev
@@ -37,14 +37,14 @@ if [ ! -d "${INSTALL_DIR}" ]; then
 
   # download and unpack libint tarball
   wget --no-check-certificate -q https://github.com/evaleev/libint/releases/download/v$RELID/libint-$RELID-test-mpqc4.tgz
-  tar -xvzf libint-$RELID-test-mpqc4.tgz
+  tar -xzf libint-$RELID-test-mpqc4.tgz
   cd libint-$RELID/
 
   export CXXFLAGS="${EXTRACXXFLAGS}"
   export LDFLAGS="${EXTRACXXFLAGS}"
   mkdir build
   cd build
-  cmake .. -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" -DCMAKE_PREFIX_PATH="${INSTALL_PREFIX}/eigen3" -DCMAKE_BUILD_TYPE=Release
+  cmake .. -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" -DCMAKE_PREFIX_PATH="${INSTALL_PREFIX}/eigen3;${INSTALL_PREFIX}/boost" -DCMAKE_BUILD_TYPE=Release
 
   cmake --build . -j 2
   cmake --build . --target install

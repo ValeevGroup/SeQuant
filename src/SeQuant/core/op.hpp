@@ -36,10 +36,10 @@ class Op {
   const Index &index() const { return index_; }
   Index &index() { return index_; }
   const Action &action() const { return action_; }
-  /// applies (Hermitian) adjoint to this operator
-  Op &adjoint() {
+
+  /// @brief changes this to its (Hermitian) adjoint
+  void adjoint() {
     action_ = sequant::adjoint(action_);
-    return *this;
   }
 
   /// @return the string representation of @c this in LaTeX format
@@ -112,6 +112,7 @@ template <Statistics S>
 inline auto hash_value(const Op<S> &op) {
   auto val = hash_value(op.index());
   hash::combine(val, op.action());
+  hash::combine(val, S);
   return val;
 }
 
@@ -313,12 +314,11 @@ class Operator : public container::svector<Op<S>>, public Expr {
   operator base_type &() const & { return *this; }
   operator base_type &&() && { return *this; }
 
-  /// applies (Hermitian) adjoint operation to this
-  /// @return reference to @c *this , for daisy-chaining
-  Operator &adjoint() {
+  /// @brief adjoint of an Operator is a reversed string of the adjoints of its ops
+  virtual void adjoint() override {
     std::reverse(this->begin(), this->end());
     std::for_each(this->begin(), this->end(), [](Op<S> &op) { op.adjoint(); });
-    return *this;
+    this->reset_hash_value();
   }
 
   /// @return the string representation of @c this in LaTeX format
@@ -359,20 +359,7 @@ class Operator : public container::svector<Op<S>>, public Expr {
     return result;
   }
 
-  bool static_equal(const Expr &that) const override {
-    const auto &that_cast = static_cast<const Operator &>(that);
-    if (this->size() == that_cast.size()) {
-      if (this->empty()) return true;
-      // compare hash values first
-      if (this->hash_value() ==
-          that.hash_value())  // hash values agree -> do full comparison
-        return static_cast<const base_type &>(*this) ==
-               static_cast<const base_type &>(that_cast);
-      else
-        return false;
-    } else
-      return false;
-  }
+  bool static_equal(const Expr &that) const override;
 
   bool is_cnumber() const override {
     return false;
@@ -390,7 +377,37 @@ class Operator : public container::svector<Op<S>>, public Expr {
     }
     return result;
   }
+
+  hash_type memoizing_hash() const override {
+    using std::begin;
+    using std::end;
+    const auto& ops = static_cast<const base_type&>(*this);
+    return hash::range(begin(ops), end(ops));
+  }
+
 };
+
+template<Statistics S>
+inline bool operator==(const Operator<S>& one, const Operator<S>& another) {
+  using base_type = container::svector<Op<S>>;
+  if (one.size() == another.size()) {
+    if (one.empty()) return true;
+    // compare hash values first
+    if (one.hash_value() ==
+        another.hash_value())  // hash values agree -> do full comparison
+      return static_cast<const base_type &>(one) ==
+             static_cast<const base_type &>(another);
+    else
+      return false;
+  } else
+    return false;
+}
+
+template<Statistics S>
+bool Operator<S>::static_equal(const Expr &that) const {
+  const auto &that_cast = static_cast<const Operator &>(that);
+  return *this == that_cast;
+}
 
 /// @brief NormalOperator is an Operator normal-ordered with respect to vacuum.
 
@@ -551,14 +568,6 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
     return hug_;
   }
 
-  NormalOperator &adjoint() {
-    static_cast<Operator<S> &>(*this).adjoint();
-    ncreators_ = this->size() - ncreators_;
-    // TODO rebuild the Hug
-    hug_.reset();
-    return *this;
-  }
-
   /// @return all possible values returned by label() for this operator type
   static const auto& labels() {
     using namespace std::literals;
@@ -639,6 +648,13 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
     return std::make_shared<NormalOperator>(*this);
   }
 
+  virtual void adjoint() override {
+    // same as base adjoint(), but updates extra state
+    Operator<S>::adjoint();
+    hug_.reset();
+    ncreators_ = nannihilators();
+  }
+
   /// Replaces indices using the index map
   /// @param index_map maps Index to Index
   /// @return true if one or more indices changed
@@ -662,15 +678,7 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
   using hug_type = HugenholtzVertex<Op<S>, typename Op<S>::TypeEquality>;
   mutable std::unique_ptr<hug_type> hug_;  // only created if needed
 
-  bool static_equal(const Expr &that) const override {
-    const auto &that_cast = static_cast<const NormalOperator &>(that);
-    if (this->vacuum() == that_cast.vacuum() &&
-        this->ncreators() == that_cast.ncreators()) {
-      return static_cast<const base_type &>(*this) ==
-             static_cast<const base_type &>(*this);
-    } else
-      return false;
-  }
+  bool static_equal(const Expr &that) const override;
 
   bool static_less_than(const Expr &that) const override {
 
@@ -834,7 +842,19 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
 
 template<Statistics S>
 bool operator==(const NormalOperator<S> &op1, const NormalOperator<S> &op2) {
-  return op1.vacuum() == op2.vacuum() && ranges::equal(op1, op2);
+  using base_type = Operator<S>;
+  if (op1.vacuum() == op2.vacuum() && op1.ncreators() == op2.ncreators()) {
+    return static_cast<const base_type &>(op1) ==
+           static_cast<const base_type &>(op2);
+  } else
+    return false;
+}
+
+template<Statistics S>
+bool
+NormalOperator<S>::static_equal(const Expr &that) const {
+  const auto &that_cast = static_cast<const NormalOperator &>(that);
+  return *this == that_cast;
 }
 
 /// @brief NormalOperatorSequence is a sequence NormalOperator objects, all
@@ -880,12 +900,11 @@ class NormalOperatorSequence : public container::svector<NormalOperator<S>>, pub
     return opsz;
   }
 
-  /// applies (Hermitian) adjoint operation to this
-  /// @return reference to @c *this , for daisy-chaining
-  NormalOperatorSequence &adjoint() {
+  /// @brief adjoint of a NormalOperatorSequence is a reversed sequence of adjoints
+  virtual void adjoint() override {
     std::reverse(this->begin(), this->end());
     std::for_each(this->begin(), this->end(), [](NormalOperator<S> &op) { op.adjoint(); });
-    return *this;
+    reset_hash_value();
   }
 
   std::wstring to_latex() const override {
@@ -1007,6 +1026,19 @@ std::tuple<int, std::shared_ptr<NormalOperator<S>>> normalize(const NormalOperat
   });
 
   return std::make_tuple(phase, std::make_shared<NormalOperator<S>>(std::move(creators), std::move(annihilators), vacuum));
+}
+
+template <typename T>
+std::decay_t<T> adjoint(T&& t, std::void_t<decltype(std::declval<T&>().adjoint())>* = nullptr) {
+  if constexpr (std::is_reference_v<T>) {
+    std::decay_t<T> t_copy(t);
+    t_copy.adjoint();
+    return t_copy;
+  }
+  else {
+    t.adjoint();
+    return std::move(t);
+  }
 }
 
 }  // namespace sequant

@@ -83,6 +83,7 @@ class Singleton {
 };
 
 struct Logger : public Singleton<Logger> {
+  bool wick_harness = false;
   bool wick_contract = false;
   bool wick_reduce = false;
   bool wick_stats = false;

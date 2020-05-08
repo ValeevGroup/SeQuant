@@ -57,7 +57,7 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
                                   IndexList{{L"p_2"}}, Symmetry::nonsymm);
       canonicalize(input);
       REQUIRE(to_latex(input) ==
-              L"{ \\left({{g^{{p_2}{p_3}}_{{p_1}{p_4}}}{t^{{p_1}}_{{p_2}}}{t^{{p_4}}_{{p_3}}}}\\right) }");
+              L"{ \\bigl({{g^{{p_2}{p_3}}_{{p_1}{p_4}}}{t^{{p_1}}_{{p_2}}}{t^{{p_4}}_{{p_3}}}}\\bigr) }");
     }
 
     // CASE 2: Symmetric tensors
@@ -79,8 +79,8 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
       canonicalize(input);
       REQUIRE(to_latex(input) ==
               L"{ "
-              L"\\left({{g^{{p_1}{p_4}}_{{p_2}{p_3}}}{t^{{p_2}}_{{p_1}}}{t^{{p_"
-              L"3}}_{{p_4}}}}\\right) }");
+              L"\\bigl({{g^{{p_1}{p_4}}_{{p_2}{p_3}}}{t^{{p_2}}_{{p_1}}}{t^{{p_"
+              L"3}}_{{p_4}}}}\\bigr) }");
     }
 
     // Case 3: Anti-symmetric tensors
@@ -103,9 +103,9 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
       canonicalize(input);
       REQUIRE(to_latex(input) ==
               L"{ "
-              L"\\left({{\\bar{g}^{{p_1}{p_4}}_{{p_2}{p_3}}}{t^{{p_2}}_{{p_1}}}"
+              L"\\bigl({{\\bar{g}^{{p_1}{p_4}}_{{p_2}{p_3}}}{t^{{p_2}}_{{p_1}}}"
               L"{t^{{p_"
-              L"3}}_{{p_4}}}}\\right) }");
+              L"3}}_{{p_4}}}}\\bigr) }");
     }
 
     // Case 4: permuted indices
@@ -129,8 +129,8 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
       REQUIRE(input->size() == 1);
       REQUIRE(to_latex(input) ==
               L"{ "
-              "\\left({{\\bar{g}^{{i_1}{a_3}}_{{i_3}{i_4}}}{t^{{i_3}}_{{a_2}}}{"
-              "t^{{i_2}{i_4}}_{{a_1}{a_3}}}}\\right) }");
+              "\\bigl({{\\bar{g}^{{i_1}{a_3}}_{{i_3}{i_4}}}{t^{{i_3}}_{{a_2}}}{"
+              "t^{{i_2}{i_4}}_{{a_1}{a_3}}}}\\bigr) }");
     }
 
     // Case 4: permuted indices from CCSD R2 biorthogonal configuration
@@ -154,7 +154,7 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
       canonicalize(input);
       REQUIRE(input->size() == 1);
       REQUIRE(to_latex(input) ==
-               L"{ \\left({{g^{{a_3}{i_1}}_{{i_3}{i_4}}}{t^{{i_3}}_{{a_2}}}{t^{{i_4}{i_2}}_{{a_1}{a_3}}}}\\right) }");
+               L"{ \\bigl({{g^{{a_3}{i_1}}_{{i_3}{i_4}}}{t^{{i_3}}_{{a_2}}}{t^{{i_4}{i_2}}_{{a_1}{a_3}}}}\\bigr) }");
     }
   }
 }

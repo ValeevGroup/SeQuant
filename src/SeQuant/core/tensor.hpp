@@ -176,6 +176,9 @@ class Tensor : public Expr, public AbstractTensor {
 
   ExprPtr canonicalize() override;
 
+  /// @brief adjoint of a Tensor swaps its bra and ket
+  virtual void adjoint() override;
+
   /// Replaces indices using the index map
   /// @param index_map maps Index to Index
   /// @return true if one or more indices changed
@@ -202,6 +205,15 @@ class Tensor : public Expr, public AbstractTensor {
     if (!hash_value_)  // if hash not computed, or reset, recompute
       memoizing_hash();
     return *bra_hash_value_;
+  }
+
+  /// @brief Adds tensors if their hash values match
+  /// @param other tensor to compare
+  /// @return an expression pointer of type Product
+  ExprPtr add_identical(const std::shared_ptr<Tensor> &other){
+    assert(this->hash_value() == other->hash_value());
+    ExprPtr result = ex<Constant>(2.0) * ex<Tensor>(this->as<Tensor>());
+    return result;
   }
 
  private:

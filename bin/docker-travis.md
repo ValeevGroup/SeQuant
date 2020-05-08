@@ -7,7 +7,6 @@ These notes assume that Docker is installed on your machine and that you start a
 3. `cd /home/travis/_build`
 4. Configure the job to use the appropriate compiler, compiler version, and debug/release build type:
   * `export BUILD_TYPE=B`, where `B` is `Debug` or `Release`.
-  * `export TRAVIS_OS_NAME=linux` .
   * If want to use GNU C++ compiler (gcc):
     * `export GCC_VERSION=VVV` where `VVV` should be the GCC version to be used. The currently valid values are `8` and `9`.
     * `export CXX=g++`
