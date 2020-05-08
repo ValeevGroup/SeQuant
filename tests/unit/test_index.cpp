@@ -185,10 +185,10 @@ TEST_CASE("Index", "[elements]") {
             L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(a\\), \\(1\\)]\\)\",particleSpace[virtual]]");
     REQUIRE(Index(L"p_1").to_wolfram() ==
             L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(p\\), \\(1\\)]\\)\",particleSpace[occupied,virtual]]");
-    REQUIRE(Index(L"⍺'_1").to_wolfram() ==
-            L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(⍺'\\), \\(1\\)]\\)\",particleSpace[othervirtual]]");
-    REQUIRE(Index(L"⍺_1").to_wolfram() ==
-            L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(⍺\\), \\(1\\)]\\)\",particleSpace[virtual,othervirtual]]");
+    REQUIRE(Index(L"α'_1").to_wolfram() ==
+            L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(α'\\), \\(1\\)]\\)\",particleSpace[othervirtual]]");
+    REQUIRE(Index(L"α_1").to_wolfram() ==
+            L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(α\\), \\(1\\)]\\)\",particleSpace[virtual,othervirtual]]");
     REQUIRE(
         Index(L"κ_1").to_wolfram() ==
         L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(κ\\), \\(1\\)]\\)\",particleSpace[occupied,virtual,othervirtual]]");

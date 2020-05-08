@@ -9,7 +9,6 @@ os: linux
 addons:
   apt:
     packages: &base_packages
-      - libboost1.71-all-dev
       - libblas-dev
       - liblapack-dev
       - liblapacke-dev
@@ -30,7 +29,7 @@ matrix:
   fast_finish: true
   include:
     - compiler: clang
-      env: CLANG_VERSION=7 BUILD_TYPE=Debug
+      env: CLANG_VERSION=7 GCC_VERSION=8 BUILD_TYPE=Debug
       addons:
         apt:
           packages:
@@ -39,8 +38,9 @@ matrix:
             - libc++-7-dev
             - libc++abi-7-dev
             - g++-8
+            - gfortran-8
     - compiler: clang
-      env: CLANG_VERSION=7 BUILD_TYPE=Release
+      env: CLANG_VERSION=7 GCC_VERSION=8 BUILD_TYPE=Release
       addons:
         apt:
           packages:
@@ -49,8 +49,9 @@ matrix:
             - libc++-7-dev
             - libc++abi-7-dev
             - g++-8
+            - gfortran-8
     - compiler: clang
-      env: CLANG_VERSION=8 BUILD_TYPE=Debug
+      env: CLANG_VERSION=8 GCC_VERSION=8 BUILD_TYPE=Debug
       addons:
         apt:
           packages:
@@ -59,8 +60,9 @@ matrix:
             - libc++-8-dev
             - libc++abi-8-dev
             - g++-8
+            - gfortran-8
     - compiler: clang
-      env: CLANG_VERSION=8 BUILD_TYPE=Release
+      env: CLANG_VERSION=8 GCC_VERSION=8 BUILD_TYPE=Release
       addons:
         apt:
           packages:
@@ -69,8 +71,9 @@ matrix:
             - libc++-8-dev
             - libc++abi-8-dev
             - g++-8
+            - gfortran-8
     - compiler: clang
-      env: CLANG_VERSION=9 BUILD_TYPE=Debug
+      env: CLANG_VERSION=9 GCC_VERSION=8 BUILD_TYPE=Debug
       addons:
         apt:
           sources:
@@ -84,9 +87,10 @@ matrix:
             - libc++-9-dev
             - libc++abi-9-dev
             - g++-8
+            - gfortran-8
             - intel-tbb-2019.8-075
     - compiler: clang
-      env: CLANG_VERSION=9 BUILD_TYPE=Release
+      env: CLANG_VERSION=9 GCC_VERSION=8 BUILD_TYPE=Release
       addons:
         apt:
           sources:
@@ -100,6 +104,7 @@ matrix:
             - libc++-9-dev
             - libc++abi-9-dev
             - g++-8
+            - gfortran-8
             - intel-tbb-2019.8-075
     - compiler: gcc
       env: GCC_VERSION=8 BUILD_TYPE=Debug
@@ -108,6 +113,7 @@ matrix:
           packages:
             - *base_packages
             - g++-8
+            - gfortran-8
     - compiler: gcc
       env: GCC_VERSION=8 BUILD_TYPE=Release
       addons:
@@ -115,6 +121,7 @@ matrix:
           packages:
             - *base_packages
             - g++-8
+            - gfortran-8
     - compiler: gcc
       env: GCC_VERSION=9 BUILD_TYPE=Debug
       addons:
@@ -126,6 +133,7 @@ matrix:
           packages:
             - *base_packages
             - g++-9
+            - gfortran-8
             - intel-tbb-2019.8-075
     - compiler: gcc
       env: GCC_VERSION=9 BUILD_TYPE=Release
@@ -138,6 +146,7 @@ matrix:
           packages:
             - *base_packages
             - g++-9
+            - gfortran-8
             - intel-tbb-2019.8-075
 
 before_install:

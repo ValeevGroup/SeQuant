@@ -23,8 +23,8 @@ TEST_CASE("IndexSpace", "[elements]") {
     REQUIRE(IndexSpace::instance_exists(L"p"));
     REQUIRE(IndexSpace::instance_exists(L"a_17"));
     REQUIRE(IndexSpace::instance_exists(L"e_19"));
-    REQUIRE(IndexSpace::instance_exists(L"⍺_21"));
-    REQUIRE(IndexSpace::instance_exists(L"⍺'_32"));
+    REQUIRE(IndexSpace::instance_exists(L"α_21"));
+    REQUIRE(IndexSpace::instance_exists(L"α'_32"));
     REQUIRE(IndexSpace::instance_exists(L"κ_48"));
   }
 
@@ -53,7 +53,7 @@ TEST_CASE("IndexSpace", "[elements]") {
     REQUIRE(IndexSpace::instance(L"m") < IndexSpace::instance(L"a"));
     REQUIRE(IndexSpace::instance(L"m") < IndexSpace::instance(L"p"));
     REQUIRE(IndexSpace::instance(L"a") < IndexSpace::instance(L"p"));
-    REQUIRE(IndexSpace::instance(L"p") < IndexSpace::instance(L"⍺"));
+    REQUIRE(IndexSpace::instance(L"p") < IndexSpace::instance(L"α"));
 
     // test ordering with quantum numbers
     {
@@ -80,13 +80,13 @@ TEST_CASE("IndexSpace", "[elements]") {
   SECTION("set operations") {
     REQUIRE(IndexSpace::instance(L"i") == intersection(IndexSpace::instance(L"i"), IndexSpace::instance(L"p")));
     REQUIRE(IndexSpace::null_instance() == intersection(IndexSpace::instance(L"a"), IndexSpace::instance(L"i")));
-    REQUIRE(IndexSpace::null_instance() == intersection(IndexSpace::instance(L"a"), IndexSpace::instance(L"⍺'")));
+    REQUIRE(IndexSpace::null_instance() == intersection(IndexSpace::instance(L"a"), IndexSpace::instance(L"α'")));
 
-    REQUIRE(IndexSpace::instance(L"κ") == unIon(IndexSpace::instance(L"m"), IndexSpace::instance(L"⍺")));
+    REQUIRE(IndexSpace::instance(L"κ") == unIon(IndexSpace::instance(L"m"), IndexSpace::instance(L"α")));
 
     REQUIRE(includes(IndexSpace::instance(L"κ"), IndexSpace::instance(L"m")));
     REQUIRE(!includes(IndexSpace::instance(L"m"), IndexSpace::instance(L"κ")));
-    REQUIRE(includes(IndexSpace::instance(L"⍺"), IndexSpace::instance(L"a")));
+    REQUIRE(includes(IndexSpace::instance(L"α"), IndexSpace::instance(L"a")));
   }
 
   SECTION("occupancy_class") {

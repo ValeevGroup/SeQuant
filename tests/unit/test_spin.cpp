@@ -65,8 +65,8 @@ TEST_CASE("Spin") {
     result = expand_antisymm(input->as<Tensor>());
     REQUIRE(result->is<Sum>());
     REQUIRE(to_latex(result) ==
-            L"{ \\left({{g^{{a_1}{a_2}}_{{i_1}{i_2}}}} - "
-            L"{{g^{{a_1}{a_2}}_{{i_2}{i_1}}}}\\right) }");
+            L"{ \\bigl({{g^{{a_1}{a_2}}_{{i_1}{i_2}}}} - "
+            L"{{g^{{a_1}{a_2}}_{{i_2}{i_1}}}}\\bigr) }");
 
     // 3-body
     input = ex<Tensor>(L"t", WstrList{L"a_1", L"a_2", L"a_3"},
@@ -74,12 +74,12 @@ TEST_CASE("Spin") {
     result = expand_antisymm(input->as<Tensor>());
     REQUIRE(result->is<Sum>());
     REQUIRE(to_latex(result) ==
-            L"{ \\left({{t^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}} - "
+            L"{ \\bigl({{t^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}} - "
             L"{{t^{{i_1}{i_2}{i_3}}_{{a_1}{a_3}{a_2}}}} - "
             L"{{t^{{i_1}{i_2}{i_3}}_{{a_2}{a_1}{a_3}}}} + "
             L"{{t^{{i_1}{i_2}{i_3}}_{{a_2}{a_3}{a_1}}}} + "
             L"{{t^{{i_1}{i_2}{i_3}}_{{a_3}{a_1}{a_2}}}} - "
-            L"{{t^{{i_1}{i_2}{i_3}}_{{a_3}{a_2}{a_1}}}}\\right) }");
+            L"{{t^{{i_1}{i_2}{i_3}}_{{a_3}{a_2}{a_1}}}}\\bigr) }");
   }
 
   SECTION("Constant") {
@@ -99,8 +99,8 @@ TEST_CASE("Spin") {
     canonicalize(result);
     REQUIRE(result->size() == 2);
     REQUIRE(to_latex(result) ==
-            L"{ \\left({{{2}}{g^{{p_3}{p_4}}_{{p_1}{p_2}}}} - {{{2}}{g^{{p_4}{p_3}}_{{p_1}"
-            L"{p_2}}}}\\right) }");
+            L"{ \\bigl({{{2}}{g^{{p_3}{p_4}}_{{p_1}{p_2}}}} - {{{2}}{g^{{p_4}{p_3}}_{{p_1}"
+            L"{p_2}}}}\\bigr) }");
   }
 
   SECTION("Product") {
@@ -112,7 +112,7 @@ TEST_CASE("Spin") {
     REQUIRE(result->size() == 1);
     REQUIRE(
         to_latex(result) ==
-        L"{ \\left({{{2}}{f^{{a_1}}_{{i_1}}}{t^{{i_1}}_{{a_1}}}}\\right) }");
+        L"{ \\bigl({{{2}}{f^{{a_1}}_{{i_1}}}{t^{{i_1}}_{{a_1}}}}\\bigr) }");
   }
 
   SECTION("Scaled Product") {
@@ -129,9 +129,9 @@ TEST_CASE("Spin") {
       REQUIRE(result->is<Sum>());
       REQUIRE(result->size() == 2);
       REQUIRE(to_latex(result) ==
-              L"{ \\left( - {{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_2}}_{{a_1}}}{t^{{i_1}}_{"
+              L"{ \\bigl( - {{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_2}}_{{a_1}}}{t^{{i_1}}_{"
           L"{a_2}}}} + {{{2}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}}_{{a_1}}}{t^{{i_2}}_{"
-          L"{a_2}}}}\\right) }");
+          L"{a_2}}}}\\bigr) }");
     }
   }
 
@@ -157,19 +157,12 @@ TEST_CASE("Spin") {
     canonicalize(result);
     REQUIRE(result->is<Sum>());
     REQUIRE(result->size() == 5);
-
-    for(auto&& term : *result){
-      auto&& product = term->as<Product>();
-      std::cout << hash::value(product) << "\n";
-      for(auto&& factor: product.factors())
-        std::cout << "  " << hash::value(factor) << "\n";
-    }
     REQUIRE(
-        to_latex(result) == L"{ \\left( - {{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_2}{i_1}}_{{a_1}{a_2}}}} + {{"
+        to_latex(result) == L"{ \\bigl( - {{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_2}{i_1}}_{{a_1}{a_2}}}} + {{"
         L"{2}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{{a_1}{a_2}}}} + {{{2}}{f^{"
         L"{a_1}}_{{i_1}}}{t^{{i_1}}_{{a_1}}}} - {{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_2}"
         L"}_{{a_1}}}{t^{{i_1}}_{{a_2}}}} + {{{2}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}"
-        L"}_{{a_1}}}{t^{{i_2}}_{{a_2}}}}\\right) }");
+        L"}_{{a_1}}}{t^{{i_2}}_{{a_2}}}}\\bigr) }");
   }  // Sum
 
   SECTION("Expand Antisymmetrizer") {
@@ -219,10 +212,10 @@ TEST_CASE("Spin") {
       REQUIRE(result->is<Sum>());
       REQUIRE(
           to_latex(result) ==
-          L"{ \\left({{{\\frac{1}{4}}}{\\bar{g}^{{a_1}{a_2}}_{{i_1}{i_2}}}} - "
+          L"{ \\bigl({{{\\frac{1}{4}}}{\\bar{g}^{{a_1}{a_2}}_{{i_1}{i_2}}}} - "
           L"{{{\\frac{1}{4}}}{\\bar{g}^{{a_2}{a_1}}_{{i_1}{i_2}}}} - "
           L"{{{\\frac{1}{4}}}{\\bar{g}^{{a_1}{a_2}}_{{i_2}{i_1}}}} + "
-          L"{{{\\frac{1}{4}}}{\\bar{g}^{{a_2}{a_1}}_{{i_2}{i_1}}}}\\right) }");
+          L"{{{\\frac{1}{4}}}{\\bar{g}^{{a_2}{a_1}}_{{i_2}{i_1}}}}\\bigr) }");
 
       // 1/4 * A * g * t1 * t1
       input = ex<Constant>(1. / 4.) *
@@ -237,14 +230,14 @@ TEST_CASE("Spin") {
       REQUIRE(result->size() == 4);
       REQUIRE(to_latex(result) ==
               L"{ "
-              L"\\left({{{\\frac{1}{4}}}{\\bar{g}^{{a_3}{a_4}}_{{a_1}{a_2}}}{t^"
+              L"\\bigl({{{\\frac{1}{4}}}{\\bar{g}^{{a_3}{a_4}}_{{a_1}{a_2}}}{t^"
               L"{{i_1}}_{{a_3}}}{t^{{i_2}}_{{a_4}}}} - "
               L"{{{\\frac{1}{4}}}{\\bar{g}^{{a_3}{a_4}}_{{a_2}{a_1}}}{t^{{i_1}}"
               L"_{{a_3}}}{t^{{i_2}}_{{a_4}}}} - "
               L"{{{\\frac{1}{4}}}{\\bar{g}^{{a_3}{a_4}}_{{a_1}{a_2}}}{t^{{i_2}}"
               L"_{{a_3}}}{t^{{i_1}}_{{a_4}}}} + "
               L"{{{\\frac{1}{4}}}{\\bar{g}^{{a_3}{a_4}}_{{a_2}{a_1}}}{t^{{i_2}}"
-              L"_{{a_3}}}{t^{{i_1}}_{{a_4}}}}\\right) }");
+              L"_{{a_3}}}{t^{{i_1}}_{{a_4}}}}\\bigr) }");
 
       // 1/4 * A * g * t1 * t1 * t1 * t1
       input = ex<Constant>(1. / 4.) *
@@ -262,7 +255,7 @@ TEST_CASE("Spin") {
       REQUIRE(
           to_latex(result) ==
           L"{ "
-          L"\\left({{{\\frac{1}{4}}}{\\bar{g}^{{a_3}{a_4}}_{{i_3}{i_4}}}{t^{{i_"
+          L"\\bigl({{{\\frac{1}{4}}}{\\bar{g}^{{a_3}{a_4}}_{{i_3}{i_4}}}{t^{{i_"
           L"1}}_{{a_3}}}{t^{{i_2}}_{{a_4}}}{t^{{i_3}}_{{a_1}}}{t^{{i_4}}_{{a_2}"
           L"}}} - "
           L"{{{\\frac{1}{4}}}{\\bar{g}^{{a_3}{a_4}}_{{i_3}{i_4}}}{t^{{i_2}}_{{"
@@ -271,7 +264,7 @@ TEST_CASE("Spin") {
           L"a_3}}}{t^{{i_2}}_{{a_4}}}{t^{{i_3}}_{{a_2}}}{t^{{i_4}}_{{a_1}}}} + "
           L"{{{\\frac{1}{4}}}{\\bar{g}^{{a_3}{a_4}}_{{i_3}{i_4}}}{t^{{i_2}}_{{"
           L"a_3}}}{t^{{i_1}}_{{a_4}}}{t^{{i_3}}_{{a_2}}}{t^{{i_4}}_{{a_1}}}}"
-          L"\\right) }");
+          L"\\bigr) }");
     }
 
     // 3-body
@@ -329,8 +322,8 @@ TEST_CASE("Spin") {
       REQUIRE(result->size() == 2);
       REQUIRE(result->is<Sum>());
       REQUIRE(to_latex(result) ==
-              L"{ \\left({{t^{{i_1}{i_2}}_{{a_1}{a_2}}}} + "
-              L"{{t^{{i_2}{i_1}}_{{a_2}{a_1}}}}\\right) }");
+              L"{ \\bigl({{t^{{i_1}{i_2}}_{{a_1}{a_2}}}} + "
+              L"{{t^{{i_2}{i_1}}_{{a_2}{a_1}}}}\\bigr) }");
     }
 
     {  // 3-body
@@ -343,12 +336,12 @@ TEST_CASE("Spin") {
       REQUIRE(result->is<Sum>());
       REQUIRE(result->size() == 6);
       REQUIRE(to_latex(result) ==
-              L"{ \\left({{t^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}} + "
+              L"{ \\bigl({{t^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}} + "
               L"{{t^{{i_1}{i_3}{i_2}}_{{a_1}{a_3}{a_2}}}} + "
               L"{{t^{{i_2}{i_1}{i_3}}_{{a_2}{a_1}{a_3}}}} + "
               L"{{t^{{i_2}{i_3}{i_1}}_{{a_2}{a_3}{a_1}}}} + "
               L"{{t^{{i_3}{i_1}{i_2}}_{{a_3}{a_1}{a_2}}}} + "
-              L"{{t^{{i_3}{i_2}{i_1}}_{{a_3}{a_2}{a_1}}}}\\right) }");
+              L"{{t^{{i_3}{i_2}{i_1}}_{{a_3}{a_2}{a_1}}}}\\bigr) }");
     }
 
     {  // 4-body
@@ -363,7 +356,7 @@ TEST_CASE("Spin") {
       REQUIRE(result->size() == 24);
       REQUIRE(result->is<Sum>());
       REQUIRE(to_latex(result) ==
-              L"{ \\left({{t^{{i_1}{i_2}{i_3}{i_4}}_{{a_1}{a_2}{a_3}{a_4}}}} + "
+              L"{ \\bigl({{t^{{i_1}{i_2}{i_3}{i_4}}_{{a_1}{a_2}{a_3}{a_4}}}} + "
               L"{{t^{{i_1}{i_2}{i_4}{i_3}}_{{a_1}{a_2}{a_4}{a_3}}}} + "
               L"{{t^{{i_1}{i_3}{i_2}{i_4}}_{{a_1}{a_3}{a_2}{a_4}}}} + "
               L"{{t^{{i_1}{i_3}{i_4}{i_2}}_{{a_1}{a_3}{a_4}{a_2}}}} + "
@@ -386,7 +379,7 @@ TEST_CASE("Spin") {
               L"{{t^{{i_4}{i_2}{i_1}{i_3}}_{{a_4}{a_2}{a_1}{a_3}}}} + "
               L"{{t^{{i_4}{i_2}{i_3}{i_1}}_{{a_4}{a_2}{a_3}{a_1}}}} + "
               L"{{t^{{i_4}{i_3}{i_1}{i_2}}_{{a_4}{a_3}{a_1}{a_2}}}} + "
-              L"{{t^{{i_4}{i_3}{i_2}{i_1}}_{{a_4}{a_3}{a_2}{a_1}}}}\\right) }");
+              L"{{t^{{i_4}{i_3}{i_2}{i_1}}_{{a_4}{a_3}{a_2}{a_1}}}}\\bigr) }");
     }
   }
 
@@ -404,8 +397,8 @@ TEST_CASE("Spin") {
     canonicalize(result);
     REQUIRE(
         to_latex(result) ==
-        L"{ \\left({{{2}}{g^{{i_1}{a_2}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}} - "
-        L"{{g^{{a_2}{i_1}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}}\\right) }");
+        L"{ \\bigl({{{2}}{g^{{i_1}{a_2}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}} - "
+        L"{{g^{{a_2}{i_1}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}}\\bigr) }");
 
     std::map<Index, Index> idxmap = {{Index{L"i_1"}, Index{L"i_2"}},
                                      {Index{L"i_2"}, Index{L"i_1"}}};
@@ -414,7 +407,7 @@ TEST_CASE("Spin") {
     REQUIRE(transformed_result->size() == 2);
     REQUIRE(
         to_latex(transformed_result) ==
-        L"{ \\left({{{2}}{g^{{i_2}{a_2}}_{{a_1}{i_1}}}{t^{{i_1}}_{{a_2}}}} - "
-        L"{{g^{{a_2}{i_2}}_{{a_1}{i_1}}}{t^{{i_1}}_{{a_2}}}}\\right) }");
+        L"{ \\bigl({{{2}}{g^{{i_2}{a_2}}_{{a_1}{i_1}}}{t^{{i_1}}_{{a_2}}}} - "
+        L"{{g^{{a_2}{i_2}}_{{a_1}{i_1}}}{t^{{i_1}}_{{a_2}}}}\\bigr) }");
   }
 }

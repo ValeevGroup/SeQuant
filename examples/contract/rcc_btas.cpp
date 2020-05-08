@@ -324,6 +324,7 @@ int main(int argc, char* argv[]) {
     std::initializer_list<IndexList> external_indices = {{}};
 
 
+    // SPIN TRACE THE RESIDUAL
     std::vector<ExprPtr> cc_r(ccsd_r.size());
     for (size_t i = 1; i < ccsd_r.size(); ++i){
       // std::wcout << "R" << i << ":\n" << to_latex(ccsd_r[i]) << std::endl;
@@ -346,13 +347,39 @@ int main(int argc, char* argv[]) {
       rapid_simplify(spin_removed_term);
       cc_r[i] = result;
     }
+    expand(cc_r[2]);
+    rapid_simplify(cc_r[2]);
+    canonicalize(cc_r[2]);
+    // std::wcout << "R2 traced:\n" << to_latex(cc_r[2]) << "\n";
 
-//    std::cout << "SPINTRACED: " << std::endl;
-//    for (auto i = 1; i < cc_r.size(); ++i)
-//      std::wcout << "R" << i << ":\n" << to_latex(cc_r[i]) << "\n";
+#define SIMPLIFIED_R2 1
+#if SIMPLIFIED_R2
+    std::map<Index, Index> idxmap = {{Index{L"i_1"}, Index{L"i_2"}},
+                                     {Index{L"i_2"}, Index{L"i_1"}}};
 
-    // cc_r[i] represents spin traced equation from here
+    // 1/3 R + 1/6 R' for simpler equations
+    auto temp_expr = transform_expression(cc_r[2], idxmap);
 
+    // std::wcout << to_latex(cc_r[2]) << "\n\n";
+    auto simpler_R2 =
+        ex<Constant>(1.0 / 3.0) * cc_r[2] + ex<Constant>(1.0 / 6.0) * temp_expr;
+
+    expand(simpler_R2);
+    rapid_simplify(simpler_R2);
+    canonicalize(simpler_R2);
+    rapid_simplify(simpler_R2);
+    // std::wcout << "CCSD R2 traced:\n" << to_latex(simpler_R2) << "\n";
+
+    // Trick to fool canonicalizer and reduce the number of terms
+    auto P = ex<Tensor>(L"P", WstrList{L"a_1", L"a_2"}, WstrList{L"i_1", L"i_2"}, Symmetry::nonsymm);
+    auto P_R2 = P * simpler_R2;
+
+    expand(P_R2);
+    rapid_simplify(P_R2);
+    canonicalize(P_R2);
+    rapid_simplify(P_R2);
+    std::wcout << "P2 times CCSD R2 traced:\n" << to_latex(expand_P_operator(P_R2)) << "\n";
+#endif
     using sequant::factorize::factorize_expr;
     using sequant::interpret::antisymmetrize;
     using sequant::interpret::eval_equation;
@@ -360,13 +387,10 @@ int main(int argc, char* argv[]) {
 #if 1 // Factorization
     // factorize CCSD equations
     auto index_size_map = std::make_shared<ispace_map>(ispace_map{});
-    std::cout << __LINE__ << "L " << index_size_map->size() << std::endl;
     index_size_map->insert(
         ispace_pair(sequant::IndexSpace::active_occupied, nocc));
-    std::cout << __LINE__ << "L " << index_size_map->size() << std::endl;
     index_size_map->insert(
         ispace_pair(sequant::IndexSpace::active_unoccupied, nvirt));
-    std::cout << __LINE__ << "L " << index_size_map->size() << std::endl;
 
     for (auto i = 1; i < cc_r.size(); ++i){
       cc_r[i] = factorize_expr(cc_r.at(i), index_size_map, true);
@@ -376,18 +400,15 @@ int main(int argc, char* argv[]) {
 
     auto cc_r1 = std::make_shared<sequant::evaluate::EvalTensor>(cc_r[1]);
     cc_r1->fill_btas_indices();
-    std::cout << __LINE__ << "L " << std::endl;
 
-    // TODO: Start here
-    auto cc_r2 = std::make_shared<sequant::evaluate::EvalTensor>(cc_r[2]);
+    // auto cc_r2 = std::make_shared<sequant::evaluate::EvalTensor>(cc_r[2]);
+    auto cc_r2 = std::make_shared<sequant::evaluate::EvalTensor>(P_R2);
     cc_r2->fill_btas_indices();
-    std::cout << __LINE__ << "L " << std::endl;
 
     sequant::container::map<sequant::evaluate::hash_type, size_t>
         hash_counts_r1, hash_counts_r2;
     sequant::evaluate::fill_hash_counts(cc_r1, hash_counts_r1);
     sequant::evaluate::fill_hash_counts(cc_r2, hash_counts_r2);
-    std::cout << __LINE__ << "L " << std::endl;
 
     auto generate_hash_map_entry = [](std::wstring& label, std::wstring& spaces,
                                       std::shared_ptr<BTensor>& tnsr_ptr) {
@@ -409,7 +430,6 @@ int main(int argc, char* argv[]) {
     };
 
     std::cout << __LINE__ << "L " << std::endl;
-
     auto hash_to_ptr = sequant::evaluate::hash_to_dtensor_map<BTensor>();
     for (auto& item : btensor_map) {
       std::wstring label = std::wstring{item.first[0]};
