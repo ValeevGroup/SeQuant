@@ -5,6 +5,7 @@
 #ifndef SEQUANT_SPIN_HPP
 #define SEQUANT_SPIN_HPP
 
+#include <SeQuant/core/tensor_network.hpp>
 #include "SeQuant/core/tensor.hpp"
 
 namespace sequant {
@@ -268,25 +269,48 @@ ExprPtr expand_antisymm(const Tensor& tensor) {
   }
 }
 
+// TODO: Correct this function
 /// @brief expands all antisymmetric tensors in a product
 /// @param expr an expression pointer to expand
 /// @return an expression pointer with expanded tensors as a sum
 inline ExprPtr expand_antisymm(const ExprPtr& expr) {
-  Sum expanded_sum{};
-  for (auto&& item : *expr) {
-    const auto scalar_factor = item->as<Product>().scalar().real();
-    Product expanded_product{};
-    for (auto&& expr_product : *item) {
-      auto tensor = expr_product->as<sequant::Tensor>();
-      auto expanded_ptr = expand_antisymm(tensor);
-      expanded_product.append(1, expanded_ptr);
+
+  if(expr->is<Constant>())
+    return expr;
+  else if (expr->is<Tensor>())
+    return expand_antisymm(expr->as<Tensor>());
+
+  // Product lambda
+  auto expand_product = [&] (const Product& expr){
+    Product temp{};
+    temp.scale(expr.scalar());
+    for(auto&& term: expr){
+      if(term->is<Tensor>())
+        temp.append(expand_antisymm(term->as<Tensor>()));
     }
-    expanded_product.scale(scalar_factor);
-    ExprPtr expanded_product_ptr = std::make_shared<Product>(expanded_product);
-    expanded_sum.append(expanded_product_ptr);
-  }
-  ExprPtr result = std::make_shared<Sum>(expanded_sum);
-  return result;
+    ExprPtr result = std::make_shared<Product>(temp);
+    rapid_simplify(result);
+    return result;
+  };
+
+  if (expr->is<Product>())
+    return expand_product(expr->as<Product>());
+  else if (expr->is<Sum>()){
+    Sum temp{};
+    for(auto&& term: *expr){
+      if(term->is<Product>())
+        temp.append(expand_product(term->as<Product>()));
+      else if (term->is<Tensor>())
+        temp.append(expand_antisymm(term->as<Tensor>()));
+      else if (term->is<Constant>())
+        temp.append(term);
+      else
+        temp.append(nullptr);
+    }
+    ExprPtr result = std::make_shared<Sum>(temp);
+    return result;
+  } else
+    return nullptr;
 }
 
 /// @brief Check if a tensor with a certain label is present in an expression
@@ -540,6 +564,145 @@ ExprPtr expand_P_operator(const ExprPtr& expr) {
     return result;
   } else
     throw("Unknown arg Type for expand_P_operator.");
+}
+
+/// @brief Transforms an expression from spin orbital to spatial orbitals
+/// @detailed This functions is designed for integrating spin out of expression
+/// with Coupled Cluster equations in mind.
+/// @attention This function may fail on arbitrarily created expressions that lacks
+/// proper index attributes.
+/// @param expr ExprPtr with spin orbital indices
+/// @param ext_index_groups groups of external indices
+/// @return an expression with spin integrated/adapted
+ExprPtr closed_shell_spintrace(const ExprPtr& expression,
+    std::initializer_list<IndexList> ext_index_groups = {{}}){
+
+  // NOT supported for Proto indices
+  auto check_proto_index = [&](const ExprPtr& expr) {
+    if (expr->is<Tensor>()) {
+      ranges::for_each(
+          expr->as<Tensor>().const_braket(), [&](const Index& idx) {
+            assert(!idx.has_proto_indices() &&
+                "Proto index not supported in spintrace function.");
+          });
+    }
+  };
+  expression->visit(check_proto_index);
+
+  // Expand A operator, antisymmetrize
+  auto expand_all = [&] (const ExprPtr& expr){
+    auto temp = expr;
+    if (has_tensor_label(temp, L"A"))
+      temp = expand_A_operator(temp);
+    temp = expand_antisymm(temp);
+    rapid_simplify(temp);
+    return temp;
+  };
+  auto expr = expand_all(expression);
+
+  auto reset_idx_tags = [&](ExprPtr& expr) {
+    if (expr->is<Tensor>())
+      ranges::for_each(expr->as<Tensor>().const_braket(),
+                       [&](const Index& idx) { idx.reset_tag(); });
+  };
+
+  expr->visit(reset_idx_tags);
+  expand(expr);
+  rapid_simplify(expr);
+
+  // Returns the number of cycles
+  auto count_cycles = [&] (std::vector<Index>& v, std::vector<Index>& v1){
+    assert(v.size() == v1.size());
+    size_t n_cycles = 0;
+    auto dummy_idx = Index(L"p_50");
+    for(auto it = v.begin(); it != v.end(); ++it){
+      if(*it != dummy_idx){
+        // TODO: Throw exception if bra and ket indices don't match
+        n_cycles++;
+        auto idx = std::distance(v.begin(), it);
+        auto it0 = it;
+        auto it1 = std::find(v1.begin(), v1.end(), *it0);
+        auto idx1 = std::distance(v1.begin(), it1);
+        do{
+          it0 = std::find(v.begin(), v.end(), v[idx1]);
+          it1 = std::find(v1.begin(), v1.end(), *it0);
+          idx1 = std::distance(v1.begin(), it1);
+          *it0 = dummy_idx;
+        }while(idx1 != idx);
+      }
+    }
+    return n_cycles;
+  };
+
+  // Lambda for a product
+  auto trace_product = [&] (const Product& product){
+    // TODO: Check symmetry of tensors
+
+    auto get_ket_indices = [&] (const Product& prod){
+      std::vector<Index> ket_idx;
+      for(auto&& t: prod) {
+        if(t->is<Tensor>())
+        ranges::for_each(t->as<Tensor>().ket(), [&] (const Index& idx) {ket_idx.push_back(idx);});
+      }
+      return ket_idx;
+    };
+
+    auto get_bra_indices = [&] (const Product& prod){
+      std::vector<Index> bra_idx;
+      for(auto&& t: prod) {
+        if(t->is<Tensor>())
+          ranges::for_each(t->as<Tensor>().bra(), [&] (const Index& idx) {bra_idx.push_back(idx);});
+      }
+      return bra_idx;
+    };
+
+    auto product_kets = get_ket_indices(product);
+    auto product_bras = get_bra_indices(product);
+
+    // Substitute indices from external index list
+    if((*ext_index_groups.begin()).size() == 2)
+    ranges::for_each(ext_index_groups, [&](const IndexList &idx_pair) {
+      if (idx_pair.size() == 2) {
+        auto it = idx_pair.begin();
+        auto first = *it;
+        it++;
+        auto second = *it;
+        // TODO: Check for a potential bug if index appears at v.end()
+        auto bra_it = std::find(product_bras.begin(), product_bras.end(), first);
+        if (bra_it != product_bras.end())
+          *bra_it = second;
+        auto ket_it = std::find(product_kets.begin(), product_kets.end(), first);
+        if (ket_it != product_kets.end())
+          *ket_it = second;
+      }
+    });
+
+    auto n_cycles = count_cycles(product_kets, product_bras);
+
+    auto result = std::make_shared<Product>(product);
+    result->scale(std::pow(2,n_cycles));
+    return result;
+  };
+
+  if(expr->is<Constant>())
+    return expr;
+  else if (expr->is<Tensor>())
+    return trace_product((ex<Constant>(1.) * expr)->as<Product>()); // expand_all(expr);
+  else if(expr->is<Product>())
+    return trace_product(expr->as<Product>());
+  else if (expr->is<Sum>()){
+    auto result = std::make_shared<Sum>();
+    for(auto&& summand : *expr){
+      if(summand->is<Product>()){
+        result->append(trace_product(summand->as<Product>()));
+      } else if (summand->is<Tensor>()){
+        result->append(trace_product((ex<Constant>(1.) * summand)->as<Product>()));
+      } else // summand->is<Constant>()
+        result->append(summand);
+    }
+    return result;
+  } else
+    return nullptr;
 }
 
 /// @brief Transforms an expression from spin orbital to spatial orbitals
