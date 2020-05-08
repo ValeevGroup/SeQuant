@@ -597,10 +597,56 @@ int main(int argc, char* argv[]) {
          << endl;
     cout << "Total energy = " << enuc + ehf + ecc << " a.u.\n";
 
-    { // Check water molecule, sto-3g
-      double cc_correlation = -0.0706804519;
+#if !CCSDT_eval
+    {
+      /* CCSD ref value obtained with mpqc using this input
+  {
+      "units": "2010CODATA",
+      "atoms": {
+          "file_name": "h2o.xyz",
+          "sort_input": "true",
+          "charge": "0",
+          "n_cluster": "1",
+          "reblock": "4"
+      },
+      "obs": {
+          "name": "STO-3G",
+          "atoms": "$:atoms"
+      },
+      "wfn_world": {
+          "atoms": "$:atoms",
+          "basis": "$:obs",
+          "screen": "schwarz"
+      },
+      "scf": {
+          "type": "RHF",
+          "wfn_world": "$:wfn_world"
+      },
+      "wfn": {
+          "type": "CCSD",
+          "wfn_world": "$:wfn_world",
+          "export_orbitals": "true",
+          "atoms": "$:atoms",
+          "ref": "$:scf",
+          "reduced_abcd_memory": "true",
+          "frozen_core": "false",
+          "occ_block_size": "2",
+          "unocc_block_size": "2"
+      },
+      "property": {
+          "type": "Energy",
+          "precision": "1e-10",
+          "wfn": "$:wfn",
+          "value": {
+              "value": "-75.012759831161077"
+          }
+      }
+  }
+       */
+      const auto cc_correlation = -0.070680451951;
       assert(fabs(cc_correlation - ecc) < cc_conv);
     }
+#endif
 
   }  // end of try block
 
