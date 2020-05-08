@@ -422,7 +422,7 @@ TEST_CASE("Spin") {
       expand(result);
       rapid_simplify(result);
       canonicalize(result);
-      REQUIRE(to_latex(result) == L"{ \\left({{f^{{i_1}}_{{a_1}}}}\\right) }");
+      REQUIRE(to_latex(result) == L"{ \\bigl({{f^{{i_1}}_{{a_1}}}}\\bigr) }");
     }
 
     {
@@ -440,8 +440,8 @@ TEST_CASE("Spin") {
       canonicalize(result);
       REQUIRE(
           to_latex(result) ==
-              L"{ \\left({{{2}}{g^{{i_1}{a_2}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}} - "
-              L"{{g^{{a_2}{i_1}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}}\\right) }");
+              L"{ \\bigl({{{2}}{g^{{i_1}{a_2}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}} - "
+              L"{{g^{{a_2}{i_1}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}}\\bigr) }");
 
       std::map<Index, Index> idxmap = {{Index{L"i_1"}, Index{L"i_2"}},
                                        {Index{L"i_2"}, Index{L"i_1"}}};
@@ -450,8 +450,8 @@ TEST_CASE("Spin") {
       REQUIRE(transformed_result->size() == 2);
       REQUIRE(
           to_latex(transformed_result) ==
-              L"{ \\left({{{2}}{g^{{i_2}{a_2}}_{{a_1}{i_1}}}{t^{{i_1}}_{{a_2}}}} - "
-              L"{{g^{{a_2}{i_2}}_{{a_1}{i_1}}}{t^{{i_1}}_{{a_2}}}}\\right) }");
+              L"{ \\bigl({{{2}}{g^{{i_2}{a_2}}_{{a_1}{i_1}}}{t^{{i_1}}_{{a_2}}}} - "
+              L"{{g^{{a_2}{i_2}}_{{a_1}{i_1}}}{t^{{i_1}}_{{a_2}}}}\\bigr) }");
     }
 
     {
@@ -468,7 +468,7 @@ TEST_CASE("Spin") {
       // std::wcout << "result: " << to_latex(result) << "\n\n";
       REQUIRE(
           to_latex(result) ==
-              L"{ \\left( - {{f^{{i_1}}_{{i_2}}}{t^{{i_2}}_{{a_1}}}}\\right) }");
+              L"{ \\bigl( - {{f^{{i_1}}_{{i_2}}}{t^{{i_2}}_{{a_1}}}}\\bigr) }");
     }
 
     {
@@ -483,7 +483,7 @@ TEST_CASE("Spin") {
       canonicalize(result);
       // std::wcout << "result: " << to_latex(result) << "\n\n";
       REQUIRE(to_latex(result) ==
-          L"{ \\left({{f^{{a_2}}_{{a_1}}}{t^{{i_1}}_{{a_2}}}}\\right) }");
+          L"{ \\bigl({{f^{{a_2}}_{{a_1}}}{t^{{i_1}}_{{a_2}}}}\\bigr) }");
     }
 
     {
@@ -502,11 +502,11 @@ TEST_CASE("Spin") {
       canonicalize(result);
       // std::wcout << "result: " << to_latex(result) << "\n\n";
       REQUIRE(to_latex(result) ==
-          L"{ \\left( - "
+          L"{ \\bigl( - "
           L"{{{2}}{g^{{a_2}{i_1}}_{{i_2}{i_3}}}{t^{{i_3}{i_2}}_{{a_1}{a_2}}"
           L"}} + "
           L"{{g^{{a_2}{i_1}}_{{i_2}{i_3}}}{t^{{i_2}{i_3}}_{{a_1}{a_2}}}}"
-          L"\\right) }");
+          L"\\bigr) }");
     }
 
     {
@@ -526,10 +526,10 @@ TEST_CASE("Spin") {
       //  std::wcout << "result: " << to_latex(result) << "\n\n";
       REQUIRE(to_latex(result) ==
           L"{ "
-          L"\\left({{{2}}{g^{{a_3}{a_2}}_{{a_1}{i_2}}}{t^{{i_2}{i_1}}_{{a_"
+          L"\\bigl({{{2}}{g^{{a_3}{a_2}}_{{a_1}{i_2}}}{t^{{i_2}{i_1}}_{{a_"
           L"2}{a_3}}}} - "
           L"{{g^{{a_3}{a_2}}_{{a_1}{i_2}}}{t^{{i_1}{i_2}}_{{a_2}{a_3}}}}"
-          L"\\right) }");
+          L"\\bigr) }");
     }
 
     {
@@ -547,7 +547,7 @@ TEST_CASE("Spin") {
       canonicalize(result);
       //  std::wcout << "result: " << to_latex(result) << "\n\n";
       REQUIRE(
-          to_latex(result) == L"{ \\left({{{2}}{f^{{a_2}}_{{i_2}}}{t^{{i_1}{i_2}}_{{a_1}{a_2}}}} - {{f^{{a_2}}_{{i_2}}}{t^{{i_2}{i_1}}_{{a_1}{a_2}}}}\\right) }");
+          to_latex(result) == L"{ \\bigl({{{2}}{f^{{a_2}}_{{i_2}}}{t^{{i_1}{i_2}}_{{a_1}{a_2}}}} - {{f^{{a_2}}_{{i_2}}}{t^{{i_2}{i_1}}_{{a_1}{a_2}}}}\\bigr) }");
     }
 
     {
@@ -566,10 +566,10 @@ TEST_CASE("Spin") {
       //  std::wcout << "result: " << to_latex(result) << "\n\n";
       REQUIRE(to_latex(result) ==
           L"{ "
-          L"\\left({{{2}}{g^{{a_3}{a_2}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}{"
+          L"\\bigl({{{2}}{g^{{a_3}{a_2}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}{"
           L"t^{{i_1}}_{{a_3}}}} - "
           L"{{g^{{a_3}{a_2}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_3}}}{t^{{i_1}}_{{"
-          L"a_2}}}}\\right) }");
+          L"a_2}}}}\\bigr) }");
     }
 
     {
@@ -587,7 +587,7 @@ TEST_CASE("Spin") {
       canonicalize(result);
       //  std::wcout << "result: " << to_latex(result) << "\n\n";
       REQUIRE(to_latex(result) ==
-          L"{ \\left({{g^{{a_2}{i_1}}_{{i_2}{i_3}}}{t^{{i_2}}_{{a_1}}}{t^{{i_3}}_{{a_2}}}} - {{{2}}{g^{{a_2}{i_1}}_{{i_2}{i_3}}}{t^{{i_3}}_{{a_1}}}{t^{{i_2}}_{{a_2}}}}\\right) }");
+          L"{ \\bigl({{g^{{a_2}{i_1}}_{{i_2}{i_3}}}{t^{{i_2}}_{{a_1}}}{t^{{i_3}}_{{a_2}}}} - {{{2}}{g^{{a_2}{i_1}}_{{i_2}{i_3}}}{t^{{i_3}}_{{a_1}}}{t^{{i_2}}_{{a_2}}}}\\bigr) }");
     }
 
     {
@@ -604,9 +604,9 @@ TEST_CASE("Spin") {
       canonicalize(result);
       //  std::wcout << "result: " << to_latex(result) << "\n\n";
       REQUIRE(to_latex(result) ==
-          L"{ \\left( - "
+          L"{ \\bigl( - "
           L"{{f^{{a_2}}_{{i_2}}}{t^{{i_2}}_{{a_1}}}{t^{{i_1}}_{{a_2}}}}"
-          L"\\right) }");
+          L"\\bigr) }");
     }
 
     {
@@ -625,7 +625,7 @@ TEST_CASE("Spin") {
       rapid_simplify(result);
       canonicalize(result);
       //  std::wcout << "result: " << to_latex(result) << "\n\n";
-      REQUIRE(to_latex(result) == L"{ \\left({{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_2}}_{{a_1}}}{t^{{i_3}{i_1}}_{{a_2}{a_3}}}} - {{{2}}{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_3}}_{{a_1}}}{t^{{i_2}{i_1}}_{{a_2}{a_3}}}}\\right) }");
+      REQUIRE(to_latex(result) == L"{ \\bigl({{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_2}}_{{a_1}}}{t^{{i_3}{i_1}}_{{a_2}{a_3}}}} - {{{2}}{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_3}}_{{a_1}}}{t^{{i_2}{i_1}}_{{a_2}{a_3}}}}\\bigr) }");
     }
 
     {
@@ -645,11 +645,11 @@ TEST_CASE("Spin") {
       canonicalize(result);
 //        std::wcout << "result: " << to_latex(result) << "\n\n";
       REQUIRE(to_latex(result) ==
-          L"{ \\left( - "
+          L"{ \\bigl( - "
           L"{{{2}}{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_1}}_{{a_3}}}{t^{{i_3}"
           L"{i_2}}_{{a_1}{a_2}}}} + "
           L"{{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_1}}_{{a_3}}}{t^{{i_2}{i_3}"
-          L"}_{{a_1}{a_2}}}}\\right) }");
+          L"}_{{a_1}{a_2}}}}\\bigr) }");
     }
 
     {
@@ -669,7 +669,7 @@ TEST_CASE("Spin") {
       canonicalize(result);
       //  std::wcout << "result: " << to_latex(result) << "\n\n";
       REQUIRE(to_latex(result) ==
-          L"{ \\left( - {{{2}}{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_2}}_{{a_2}}}{t^{{i_3}{i_1}}_{{a_1}{a_3}}}} + {{{4}}{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_2}}_{{a_2}}}{t^{{i_1}{i_3}}_{{a_1}{a_3}}}} + {{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_3}}_{{a_2}}}{t^{{i_2}{i_1}}_{{a_1}{a_3}}}} - {{{2}}{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_2}}_{{a_3}}}{t^{{i_1}{i_3}}_{{a_1}{a_2}}}}\\right) }");
+          L"{ \\bigl( - {{{2}}{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_2}}_{{a_2}}}{t^{{i_3}{i_1}}_{{a_1}{a_3}}}} + {{{4}}{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_2}}_{{a_2}}}{t^{{i_1}{i_3}}_{{a_1}{a_3}}}} + {{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_3}}_{{a_2}}}{t^{{i_2}{i_1}}_{{a_1}{a_3}}}} - {{{2}}{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_2}}_{{a_3}}}{t^{{i_1}{i_3}}_{{a_1}{a_2}}}}\\bigr) }");
     }
 
     {
@@ -688,10 +688,10 @@ TEST_CASE("Spin") {
       //  std::wcout << "result: " << to_latex(result) << "\n\n";
       REQUIRE(to_latex(result) ==
           L"{ "
-          L"\\left({{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_2}}_{{a_1}}}{t^{{i_"
+          L"\\bigl({{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_2}}_{{a_1}}}{t^{{i_"
           L"3}}_{{a_2}}}{t^{{i_1}}_{{a_3}}}} - "
           L"{{{2}}{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_3}}_{{a_1}}}{t^{{i_2}"
-          L"}_{{a_2}}}{t^{{i_1}}_{{a_3}}}}\\right) }");
+          L"}_{{a_2}}}{t^{{i_1}}_{{a_3}}}}\\bigr) }");
     }
   }  // CCSD R1
 
