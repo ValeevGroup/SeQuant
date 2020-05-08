@@ -12,7 +12,7 @@
 
 #include <memory>
 
-#define CCSDT_eval 1
+#define CCSDT_eval 0
 
 int main(int argc, char* argv[]) {
   using std::cerr;
@@ -218,14 +218,12 @@ int main(int argc, char* argv[]) {
 
     TA::TiledRange tr_oo{{0, ndocc}, {0, ndocc}};
     TA::TiledRange tr_ov{{0, ndocc}, {0, nvirt}};
-    TA::TiledRange tr_vo{{0, nvirt}, {0, ndocc}};
     TA::TiledRange tr_vv{{0, nvirt}, {0, nvirt}};
     TA::TiledRange tr_oooo{{0, ndocc}, {0, ndocc}, {0, ndocc}, {0, ndocc}};
     TA::TiledRange tr_ooov{{0, ndocc}, {0, ndocc}, {0, ndocc}, {0, nvirt}};
     TA::TiledRange tr_oovo{{0, ndocc}, {0, ndocc}, {0, nvirt}, {0, ndocc}};
     TA::TiledRange tr_oovv{{0, ndocc}, {0, ndocc}, {0, nvirt}, {0, nvirt}};
     TA::TiledRange tr_ovov{{0, ndocc}, {0, nvirt}, {0, ndocc}, {0, nvirt}};
-    TA::TiledRange tr_ovoo{{0, ndocc}, {0, nvirt}, {0, ndocc}, {0, ndocc}};
     TA::TiledRange tr_ovvo{{0, ndocc}, {0, nvirt}, {0, nvirt}, {0, ndocc}};
     TA::TiledRange tr_vovo{{0, nvirt}, {0, ndocc}, {0, nvirt}, {0, ndocc}};
     TA::TiledRange tr_voov{{0, nvirt}, {0, ndocc}, {0, ndocc}, {0, nvirt}};
@@ -233,16 +231,9 @@ int main(int argc, char* argv[]) {
     TA::TiledRange tr_vvvv{{0, nvirt}, {0, nvirt}, {0, nvirt}, {0, nvirt}};
     TA::TiledRange tr_vovv{{0, nvirt}, {0, ndocc}, {0, nvirt}, {0, nvirt}};
 
-    TA::TiledRange tr_vvoo{{0, nvirt}, {0, nvirt}, {0, ndocc}, {0, ndocc}};
-    TA::TiledRange tr_vooo{{0, nvirt}, {0, ndocc}, {0, ndocc}, {0, ndocc}};
-    TA::TiledRange tr_vvvo{{0, nvirt}, {0, nvirt}, {0, nvirt}, {0, ndocc}};
-    TA::TiledRange tr_vvov{{0, nvirt}, {0, nvirt}, {0, ndocc}, {0, nvirt}};
-
 #if CCSDT_eval
     TA::TiledRange tr_ooovvv{{0, ndocc},  {0, ndocc},  {0, ndocc},
                               {0, nvirt}, {0, nvirt}, {0, nvirt}};
-     TA::TiledRange tr_vvvooo{{0, nvirt}, {0, nvirt}, {0, nvirt},
-                              {0, ndocc},  {0, ndocc},  {0, ndocc}};
 #endif
     auto D_ov = std::make_shared<TA::TArrayD>(world, tr_ov);
     auto D_oovv = std::make_shared<TA::TArrayD>(world, tr_oovv);
@@ -251,25 +242,18 @@ int main(int argc, char* argv[]) {
 #endif
     auto Fock_oo = std::make_shared<TA::TArrayD>(world, tr_oo);
     auto Fock_ov = std::make_shared<TA::TArrayD>(world, tr_ov);
-    auto Fock_vo = std::make_shared<TA::TArrayD>(world, tr_vo);
     auto Fock_vv = std::make_shared<TA::TArrayD>(world, tr_vv);
     auto G_oooo = std::make_shared<TA::TArrayD>(world, tr_oooo);
     auto G_ooov = std::make_shared<TA::TArrayD>(world, tr_ooov);
     auto G_oovo = std::make_shared<TA::TArrayD>(world, tr_oovo);
     auto G_oovv = std::make_shared<TA::TArrayD>(world, tr_oovv);
     auto G_ovov = std::make_shared<TA::TArrayD>(world, tr_ovov);
-    auto G_ovoo = std::make_shared<TA::TArrayD>(world, tr_ovoo);
     auto G_ovvo = std::make_shared<TA::TArrayD>(world, tr_ovvo);
     auto G_vovo = std::make_shared<TA::TArrayD>(world, tr_vovo);
     auto G_voov = std::make_shared<TA::TArrayD>(world, tr_voov);
     auto G_ovvv = std::make_shared<TA::TArrayD>(world, tr_ovvv);
     auto G_vvvv = std::make_shared<TA::TArrayD>(world, tr_vvvv);
     auto G_vovv = std::make_shared<TA::TArrayD>(world, tr_vovv);
-
-    auto G_vvoo = std::make_shared<TA::TArrayD>(world, tr_vvoo);
-    auto G_vooo = std::make_shared<TA::TArrayD>(world, tr_vooo);
-    auto G_vvvo = std::make_shared<TA::TArrayD>(world, tr_vvvo);
-    auto G_vvov = std::make_shared<TA::TArrayD>(world, tr_vvov);
 
     (*D_ov).fill(0.0);
     (*D_oovv).fill(0.0);
@@ -278,7 +262,6 @@ int main(int argc, char* argv[]) {
 #endif
     (*Fock_oo).fill(0.0);
     (*Fock_ov).fill(0.0);
-    (*Fock_vo).fill(0.0);
     (*Fock_vv).fill(0.0);
     (*G_oooo).fill(0.0);
     (*G_ooov).fill(0.0);
@@ -286,17 +269,11 @@ int main(int argc, char* argv[]) {
     (*G_oovv).fill(0.0);
     (*G_ovov).fill(0.0);
     (*G_ovvo).fill(0.0);
-    (*G_ovoo).fill(0.0);
     (*G_vovo).fill(0.0);
     (*G_voov).fill(0.0);
     (*G_ovvv).fill(0.0);
     (*G_vvvv).fill(0.0);
     (*G_vovv).fill(0.0);
-
-    (*G_vvoo).fill(0.0);
-    (*G_vooo).fill(0.0);
-    (*G_vvvo).fill(0.0);
-    (*G_vvov).fill(0.0);
 
     auto tile_D_ov = (*D_ov).find({0, 0}).get();
     auto tile_D_oovv = (*D_oovv).find({0, 0, 0, 0}).get();
@@ -305,14 +282,12 @@ int main(int argc, char* argv[]) {
 #endif
     auto tile_Fock_oo = (*Fock_oo).find({0, 0}).get();
     auto tile_Fock_ov = (*Fock_ov).find({0, 0}).get();
-    auto tile_Fock_vo = (*Fock_vo).find({0, 0}).get();
     auto tile_Fock_vv = (*Fock_vv).find({0, 0}).get();
     auto tile_G_oooo = (*G_oooo).find({0, 0, 0, 0}).get();
     auto tile_G_ooov = (*G_ooov).find({0, 0, 0, 0}).get();
     auto tile_G_oovo = (*G_oovo).find({0, 0, 0, 0}).get();
     auto tile_G_oovv = (*G_oovv).find({0, 0, 0, 0}).get();
     auto tile_G_ovov = (*G_ovov).find({0, 0, 0, 0}).get();
-    auto tile_G_ovoo = (*G_ovoo).find({0, 0, 0, 0}).get();
     auto tile_G_ovvo = (*G_ovvo).find({0, 0, 0, 0}).get();
     auto tile_G_vovo = (*G_vovo).find({0, 0, 0, 0}).get();
     auto tile_G_voov = (*G_voov).find({0, 0, 0, 0}).get();
@@ -320,17 +295,10 @@ int main(int argc, char* argv[]) {
     auto tile_G_vvvv = (*G_vvvv).find({0, 0, 0, 0}).get();
     auto tile_G_vovv = (*G_vovv).find({0, 0, 0, 0}).get();
 
-    auto tile_G_vvoo = (*G_vvoo).find({0, 0, 0, 0}).get();
-    auto tile_G_vooo = (*G_vooo).find({0, 0, 0, 0}).get();
-    auto tile_G_vvvo = (*G_vvvo).find({0, 0, 0, 0}).get();
-    auto tile_G_vvov = (*G_vvov).find({0, 0, 0, 0}).get();
-
     for (auto i = 0; i < ndocc; ++i) {
       tile_Fock_oo(i, i) = tile_fock(i, i);
       for (auto a = 0; a < nvirt; ++a) {
         tile_Fock_ov(i, a) = tile_fock(i, a + ndocc);
-        tile_Fock_vo(a, i) = tile_fock(a + ndocc, i);
-
         tile_D_ov(i, a) =
             tile_fock(i, i) - tile_fock(a + ndocc, a + ndocc);
         for (auto j = 0; j < ndocc; ++j) {
@@ -343,8 +311,6 @@ int main(int argc, char* argv[]) {
             tile_G_ovvo(i, a, b, j) = tile_ints_spatial(i, a + ndocc, b + ndocc, j);
             tile_G_vovo(a, i, b, j) = tile_ints_spatial(a + ndocc, i, b + ndocc, j);
             tile_G_voov(a, i, j, b) = tile_ints_spatial(a + ndocc, i, j, b + ndocc);
-
-            tile_G_vvoo(a, b, i, j) = tile_ints_spatial(a + ndocc,b + ndocc, i, j);
           }
         }
       }
@@ -358,9 +324,6 @@ int main(int argc, char* argv[]) {
                 tile_ints_spatial(i, a + ndocc, b + ndocc, c + ndocc);
             tile_G_vovv(a, i, b, c) =
                 tile_ints_spatial(a + ndocc, i, b + ndocc, c + ndocc);
-
-            tile_G_vvvo(a, b, c, i) = tile_ints_spatial(a + ndocc, b + ndocc, c + ndocc, i);
-            tile_G_vvov(a, b, i, c) = tile_ints_spatial(a + ndocc, b + ndocc, i, c + ndocc);
           }
 
     for (auto i = 0; i < ndocc; ++i)
@@ -369,9 +332,6 @@ int main(int argc, char* argv[]) {
           for (auto a = 0; a < nvirt; ++a){
             tile_G_ooov(i, j, k, a) = tile_ints_spatial(i, j, k, a + ndocc);
             tile_G_oovo(i, j, a, k) = tile_ints_spatial(i, j, a + ndocc, k);
-
-            tile_G_ovoo(i, a, j, k) = tile_ints_spatial(i, a + ndocc, j, k);
-            tile_G_vooo(a, i, j, k) = tile_ints_spatial(a + ndocc, i, j, k);
           }
 
     for (auto i = 0; i < ndocc; ++i)
@@ -402,19 +362,12 @@ int main(int argc, char* argv[]) {
     // amplitudes for coupled-cluster calculations
     auto t_ov = std::make_shared<TA::TArrayD>(world, tr_ov);
     (*t_ov).fill(0.);
-    auto t_vo = std::make_shared<TA::TArrayD>(world, tr_vo);
-    (*t_vo).fill(0.);
-
     auto t_oovv = std::make_shared<TA::TArrayD>(world, tr_oovv);
     (*t_oovv).fill(0.);
-    auto t_vvoo = std::make_shared<TA::TArrayD>(world, tr_vvoo);
-    (*t_vvoo).fill(0.);
 
 #if CCSDT_eval
     auto t_ooovvv = std::make_shared<TA::TArrayD>(world, tr_ooovvv);
     (*t_ooovvv).fill(0.0);
-    auto t_vvvooo = std::make_shared<TA::TArrayD>(world, tr_vvvooo);
-    (*t_vvvooo).fill(0.0);
 #endif
 
     //
@@ -543,15 +496,13 @@ int main(int argc, char* argv[]) {
     }
 #endif
 
-    std::vector<std::shared_ptr<TA::TArrayD>> data_tensors = {Fock_oo, Fock_ov, Fock_vo, Fock_vv,
-              G_oooo, G_ooov, G_oovo,  G_oovv,  G_ovov,  G_ovvo, G_vovo, G_voov, G_ovvv, G_vovv, G_vvvv,
-              G_vvoo, G_vooo, G_vvvo, G_vvov, G_ovoo,
-              t_ov, t_vo, t_oovv, t_vvoo};
+    std::vector<std::shared_ptr<TA::TArrayD>> data_tensors = {Fock_oo, Fock_ov, Fock_vv,
+        G_oooo, G_ooov, G_oovo,  G_oovv,  G_ovov,  G_ovvo, G_vovo, G_voov, G_ovvv, G_vovv, G_vvvv,
+        t_ov, t_oovv};
 
     std::vector<sequant::ExprPtr> seq_tensors = {
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"f", {L"i_1"}, {L"i_1"})), // f_oo
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"f", {L"i_1",}, {L"a_1"})), // f_ov
-        std::make_shared<sequant::Tensor>(sequant::Tensor(L"f", {L"a_1"}, {L"i_1",})), // f_vo
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"f", {L"a_1",}, {L"a_2",})), // f_vv
 
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"g", {L"i_1",L"i_2"}, {L"i_3",L"i_4"})), //oooo
@@ -563,26 +514,16 @@ int main(int argc, char* argv[]) {
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"g", {L"a_1",L"i_1"}, {L"a_2",L"i_2"})), //vovo
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"g", {L"a_1",L"i_1"}, {L"i_2",L"a_2"})), //voov
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"g", {L"i_1",L"a_1"}, {L"a_2",L"a_3"})), //ovvv
-        std::make_shared<sequant::Tensor>(sequant::Tensor(L"g", {L"a_1", L"i_1"}, {L"a_2",L"a_3"})), //vovv
+        std::make_shared<sequant::Tensor>(sequant::Tensor(L"g", {L"a_1",L"i_1"}, {L"a_2",L"a_3"})), //vovv
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"g", {L"a_1",L"a_2"}, {L"a_3",L"a_4"})), //vvvv
 
-        std::make_shared<sequant::Tensor>(sequant::Tensor(L"g", {L"a_1",L"a_2"}, {L"i_1",L"i_2"})), //vvoo
-        std::make_shared<sequant::Tensor>(sequant::Tensor(L"g", {L"a_1",L"i_1"}, {L"i_2",L"i_3"})), //vooo
-        std::make_shared<sequant::Tensor>(sequant::Tensor(L"g", {L"a_1",L"a_2"}, {L"a_3",L"i_1"})), //vvvo
-        std::make_shared<sequant::Tensor>(sequant::Tensor(L"g", {L"a_1",L"a_2"}, {L"i_1",L"a_3"})), //vvov
-        std::make_shared<sequant::Tensor>(sequant::Tensor(L"g", {L"i_1",L"a_1"}, {L"i_2",L"i_3"})), //ovoo
-
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"i_1"}, {L"a_1"})), //ov
-        std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"a_1"}, {L"i_1"})), //vo
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"i_1",L"i_2"}, {L"a_1",L"a_2"})), //oovv
-        std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"a_1",L"a_2"}, {L"i_1",L"i_2"})) //vvoo
     };
 
 #if CCSDT_eval
     data_tensors.push_back(t_ooovvv);
-    data_tensors.push_back(t_vvvooo);
     seq_tensors.push_back(std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"i_1", L"i_2", L"i_3"}, {L"a_1", L"a_2", L"a_3"}))); //ooovvv
-    seq_tensors.push_back(std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"a_1", L"a_2", L"a_3"}, {L"i_1", L"i_2", L"i_3"}))); //vvvooo
 #endif
 
     using evaluate::HashType;
@@ -626,17 +567,13 @@ int main(int argc, char* argv[]) {
 
       auto tile_R1       = R1.find({0,0}).get();
       auto tile_t_ov     = (*t_ov).find({0,0}).get();
-      auto tile_t_vo     = (*t_vo).find({0,0}).get();
 
       auto tile_R2       = R2.find({0,0,0,0}).get();
       auto tile_t_oovv   = (*t_oovv).find({0,0,0,0}).get();
-      auto tile_t_vvoo   = (*t_vvoo).find({0,0,0,0}).get();
 
 #if CCSDT_eval
       auto tile_R3       = R3.find({0,0,0,0,0,0}).get();
-      // cout << tile_R3 << endl;
       auto tile_t_ooovvv   = (*t_ooovvv).find({0,0,0,0,0,0}).get();
-      auto tile_t_vvvooo   = (*t_vvvooo).find({0,0,0,0,0,0}).get();
 #endif
 
       // save previous norm
@@ -655,9 +592,6 @@ int main(int argc, char* argv[]) {
             for (auto b = 0; b < nvirt; ++b) {
               tile_t_oovv(i,j,a,b) += tile_R2(i,j,a,b)/tile_D_oovv(i,j,a,b); } } } }
 
-      (*t_vo)("a,i") = (*t_ov)("i,a");
-      (*t_vvoo)("a,b,i,j") = (*t_oovv)("i,j,a,b");
-
 # if CCSDT_eval
       // update t_ooovvv
       for (auto i = 0; i < ndocc; ++i) {
@@ -668,8 +602,6 @@ int main(int argc, char* argv[]) {
                 for (auto c = 0; c < nvirt; ++c) {
                   tile_t_ooovvv(i,j,k,a,b,c) +=
                       tile_R3(i,j,k,a,b,c)/tile_D_ooovvv(i,j,k,a,b,c); } } } } } }
-
-      (*t_vvvooo)("a,b,c,i,j,k") = (*t_ooovvv)("i,j,k,a,b,c");
 #endif
 
       auto ecc_last = ecc;
@@ -704,12 +636,12 @@ int main(int argc, char* argv[]) {
 
     auto CC_stop = std::chrono::high_resolution_clock::now();
     auto time_elapsed =
-        std::chrono::duration_cast<std::chrono::microseconds>(CC_stop - CC_start);
+        std::chrono::duration_cast<std::chrono::seconds>(CC_stop - CC_start);
 
     cout << "\nOut of loop after "
          << iter << " iterations.\n"
          << "Time: "
-         << time_elapsed.count() << " μs"
+         << time_elapsed.count() << " sec."
          << endl;
     cout << "Total energy = " << enuc + ehf + ecc << " a.u." << endl;
 
