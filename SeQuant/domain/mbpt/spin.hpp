@@ -732,7 +732,6 @@ ExprPtr spintrace(ExprPtr expression,
   expression->visit(check_proto_index);
 
   if (expression->is<Constant>()) return expression;
-//  if (expression->is<Tensor>()) expression = ex<Constant>(1) * expression;
 
   auto spin_trace_tensor = [&](const Tensor& tensor) {
     if (can_expand(tensor)) {
@@ -872,8 +871,6 @@ ExprPtr spintrace(ExprPtr expression,
             temp.append(summand);
           }
           ExprPtr SumPtr = std::make_shared<Sum>(temp);
-          // expand(SumPtr);
-          // rapid_simplify(SumPtr);
           auto spin_removed = remove_spin(SumPtr);
           result->append(spin_removed);
         }
@@ -881,20 +878,12 @@ ExprPtr spintrace(ExprPtr expression,
         result->append(expr);
       }
     }  // Permutation FOR loop
-
-     return result;
+    return result;
   };
 
-  const auto A_start = std::chrono::high_resolution_clock::now();
-  // Check if the antisymmetrizer operator (A) is present in the expression
-  if (has_tensor_label(expression, L"A")) {
+  // Expand antisymmetrizer operator (A) if present in the expression
+  if (has_tensor_label(expression, L"A"))
     expression = expand_A_operator(expression);
-    // rapid_simplify(expression);
-  }
-  const auto A_stop = std::chrono::high_resolution_clock::now();
-  [[maybe_unused]] auto A_time_elapsed =
-      std::chrono::duration_cast<std::chrono::microseconds>(A_stop - A_start);
-  // std::cout << "A operator: " << A_time_elapsed.count() << " micro sec.\n";
 
   if (expression->is<Tensor>()) expression = ex<Constant>(1) * expression;
 
@@ -903,7 +892,6 @@ ExprPtr spintrace(ExprPtr expression,
   } else if ((expression->is<Sum>())) {
     auto result = std::make_shared<Sum>();
     for (auto&& term : *expression) {
-      auto term_start = std::chrono::high_resolution_clock::now();
       if (term->is<Product>())
         result->append(trace_product(term->as<Product>()));
       else if (term->is<Tensor>()) {
@@ -911,10 +899,6 @@ ExprPtr spintrace(ExprPtr expression,
         result->append(trace_product(term_as_product->as<Product>()));
       } else
         result->append(term);
-      auto term_stop = std::chrono::high_resolution_clock::now();
-      [[maybe_unused]] auto t_time_elapsed =
-          std::chrono::duration_cast<std::chrono::microseconds>(term_stop - term_start);
-      // std::wcout << t_time_elapsed.count() << " " << to_latex(term) << "\n";
     }
     result->visit(reset_idx_tags);
     return result;
