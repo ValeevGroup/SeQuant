@@ -1,4 +1,4 @@
-#include "../../src/SeQuant/core/wick.hpp"
+#include <SeQuant/core/wick.hpp>
 #include "../sequant_setup.hpp"
 
 using namespace sequant;
