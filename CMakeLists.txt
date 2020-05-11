@@ -144,7 +144,7 @@ find_package(Libint2 2.6.0 CONFIG)
 
 find_package(TiledArray CONFIG COMPONENTS tiledarray)
 
-add_library(evaluator EXCLUDE_FROM_ALL
+set(evaluator_src
     src/SeQuant/domain/evaluate/eval_fwd.hpp
     src/SeQuant/domain/evaluate/eval_tree.hpp
     src/SeQuant/domain/evaluate/eval_tree.cpp
@@ -152,9 +152,10 @@ add_library(evaluator EXCLUDE_FROM_ALL
     src/SeQuant/domain/evaluate/eval_tree_node.cpp
     src/SeQuant/domain/factorize/factorizer.hpp
     src/SeQuant/domain/factorize/factorizer.cpp
-    # src/SeQuant/domain/evaluate/path_tree.hpp
-    # src/SeQuant/domain/evaluate/path_tree.cpp
+    src/SeQuant/domain/evaluate/path_tree.hpp
+    src/SeQuant/domain/evaluate/path_tree.cpp
     )
+add_library(evaluator EXCLUDE_FROM_ALL ${evaluator_src})
 target_include_directories(evaluator PUBLIC
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>)
@@ -177,14 +178,14 @@ set(utests_src
         )
 set(utests_deps SeQuant evaluator)
 
-if (TARGET tiledarray AND TARGET Libint2::cxx)
+if (TARGET tiledarray)
   list(APPEND utests_src
       ## unit tests for evaluation
-      # tests/unit/test_eval_tree.cpp
-      # tests/unit/test_path_tree.cpp
+      tests/unit/test_eval_tree.cpp
+      tests/unit/test_path_tree.cpp
       )
   list(APPEND utests_deps tiledarray)
-endif(TARGET tiledarray AND TARGET Libint2::cxx)
+endif(TARGET tiledarray)
 
 set(unit_test_executable unit_tests)
 add_executable(${unit_test_executable} EXCLUDE_FROM_ALL
@@ -192,6 +193,9 @@ add_executable(${unit_test_executable} EXCLUDE_FROM_ALL
         tests/unit/catch.hpp
         ${utests_src})
 target_link_libraries(${unit_test_executable} ${utests_deps})
+if (TARGET tiledarray)
+  target_compile_definitions(${unit_test_executable} PRIVATE SEQUANT_HAS_TILEDARRAY)
+endif(TARGET tiledarray)
 add_test(unit/build "${CMAKE_COMMAND}" --build ${CMAKE_BINARY_DIR}
     --target ${unit_test_executable})
 
