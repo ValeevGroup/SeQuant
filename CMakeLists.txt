@@ -194,6 +194,7 @@ install(DIRECTORY SeQuant
     FILES_MATCHING PATTERN "*.hpp"
                    PATTERN "*.hh"
     )
+add_library(SeQuant::SeQuant ALIAS SeQuant)  # to be able to use as subproject
 
 ### optional prereqs
 if (NOT TARGET Libint2::cxx)
