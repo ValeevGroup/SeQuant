@@ -41,9 +41,10 @@ if(NOT TARGET Boost::boost)
   endif (Boost_USE_CONFIG)
 endif()
 
-if (NOT TARGET range-v3)
-  find_package(Range-v3 QUIET REQUIRED)
-endif(NOT TARGET range-v3)
+if (NOT TARGET range-v3::range-v3)
+  get_filename_component(range-v3_DIR "@range-v3_CONFIG@" DIRECTORY)
+  find_package(range-v3 QUIET REQUIRED HINTS "${range-v3_DIR}")
+endif(NOT TARGET range-v3::range-v3)
 
 if (NOT TARGET Threads::Threads)
     find_package(Threads REQUIRED)

@@ -177,7 +177,7 @@ add_library(SeQuant
         SeQuant/domain/mbpt/sr/sr.cpp
         SeQuant/domain/mbpt/sr/sr.hpp
         )
-target_link_libraries(SeQuant range-v3 Boost::boost SeQuant-bliss Threads::Threads)
+target_link_libraries(SeQuant range-v3::range-v3 Boost::boost SeQuant-bliss Threads::Threads)
 if (PSTL_NEEDS_TBB)
     target_link_libraries(SeQuant ${TBB_LIBRARIES})
     target_include_directories(SeQuant PUBLIC ${TBB_INCLUDE_DIRS})
