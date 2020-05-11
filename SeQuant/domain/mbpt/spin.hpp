@@ -217,6 +217,8 @@ inline bool can_expand(const Tensor& tensor) {
 /// @return an ExprPtr containing the tensor otherwise
 ExprPtr expand_antisymm(const Tensor& tensor) {
   assert(tensor.bra().size() == tensor.ket().size());
+  if(tensor.bra().size() == 1)
+    return std::make_shared<Tensor>(tensor);
 
   auto get_phase = [&](const Tensor& t) {
     assert(t.bra_rank() > 1);
@@ -847,7 +849,8 @@ ExprPtr spintrace(ExprPtr expression,
       }
 
       auto spin_expr = append_spin(expr, index_replacements);
-      // rapid_simplify(spin_expr);
+      // This call to rapid_simplify is required for Tensor case
+      rapid_simplify(spin_expr);
 
       if (spin_expr->is<Tensor>()) {
         auto temp = spin_trace_tensor(spin_expr->as<Tensor>());
