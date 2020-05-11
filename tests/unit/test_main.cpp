@@ -11,6 +11,10 @@
 #include "SeQuant/domain/mbpt/convention.hpp"
 #include "catch.hpp"
 
+#ifdef SEQUANT_HAS_TILEDARRAY
+#  include <tiledarray.h>
+#endif
+
 int main( int argc, char* argv[] )
 {
   using namespace std;
@@ -37,7 +41,16 @@ int main( int argc, char* argv[] )
   // ... or can instead selectively set/unset particular logging flags
   //Logger::get_instance().wick_contract = true;
 
+#ifdef SEQUANT_HAS_TILEDARRAY
+  auto& world = TA::initialize(argc, argv);
+  TA::set_default_world(world);
+#endif
+
   int result = session.run(argc, argv);
+
+#ifdef SEQUANT_HAS_TILEDARRAY
+  TA::finalize();
+#endif
 
   return result;
 }

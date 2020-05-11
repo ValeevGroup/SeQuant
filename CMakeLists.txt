@@ -54,34 +54,7 @@ if ((${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU" AND
 endif()
 
 # Ranges-V3
-if (NOT RANGEV3_DIR)
-    message(FATAL_ERROR "Set cache variable RANGEV3_DIR "
-        "to the top of the Range-V3 source directory")
-endif(NOT RANGEV3_DIR)
-if (NOT EXISTS "${RANGEV3_DIR}/include")
-    message(FATAL_ERROR "Given RANGEV3_DIR=\"${RANGEV3_DIR}\" but"
-        " did not find include subdirectory;"
-        " make sure that RANGEV3_DIR points"
-        " to the top of valid Range-V3 source directory")
-endif()
-# if Range-V3 is a git repo check the revision
-if(EXISTS "${RANGEV3_DIR}/.git")
-  find_package(Git REQUIRED)
-  execute_process(
-      COMMAND ${GIT_EXECUTABLE} rev-parse -q HEAD
-      WORKING_DIRECTORY "${RANGEV3_DIR}"
-      OUTPUT_VARIABLE RANGEV3_REVISION )
-  string(REGEX MATCH "[0-9a-f]*"
-      RANGEV3_REVISION "${RANGEV3_REVISION}")
-  if (NOT (${RANGEV3_REVISION} STREQUAL ${SEQUANT_TRACKED_RANGESV3_TAG}))
-    message(FATAL_ERROR "RANGEV3_DIR=\"${RANGEV3_DIR}\" points to Range-V3"
-        + " library with revision ${RANGEV3_REVISION}, "
-        + " but need ${SEQUANT_TRACKED_RANGESV3_TAG}")
-  endif ()
-endif()
-add_library(Range-V3 INTERFACE IMPORTED)
-set_property(TARGET Range-V3 PROPERTY
-             INTERFACE_INCLUDE_DIRECTORIES "${RANGEV3_DIR}/include")
+include(FindOrFetchRangeV3)
 
 # need Boost.ContainerHash
 # NB Boost.Container is broken in v1.70
@@ -158,7 +131,7 @@ add_library(SeQuant
         src/SeQuant/domain/mbpt/sr/sr.cpp
         src/SeQuant/domain/mbpt/sr/sr.hpp
         )
-target_link_libraries(SeQuant Range-V3 Boost::boost bliss Threads::Threads)
+target_link_libraries(SeQuant range-v3 Boost::boost bliss Threads::Threads)
 if (PSTL_NEEDS_TBB)
     target_link_libraries(SeQuant ${TBB_LIBRARIES})
     target_include_directories(SeQuant PUBLIC ${TBB_INCLUDE_DIRS})
@@ -171,7 +144,7 @@ find_package(Libint2 2.6.0 CONFIG)
 
 find_package(TiledArray CONFIG COMPONENTS tiledarray)
 
-add_library(evaluator EXCLUDE_FROM_ALL
+set(evaluator_src
     src/SeQuant/domain/evaluate/eval_fwd.hpp
     src/SeQuant/domain/evaluate/eval_tree.hpp
     src/SeQuant/domain/evaluate/eval_tree.cpp
@@ -179,9 +152,10 @@ add_library(evaluator EXCLUDE_FROM_ALL
     src/SeQuant/domain/evaluate/eval_tree_node.cpp
     src/SeQuant/domain/factorize/factorizer.hpp
     src/SeQuant/domain/factorize/factorizer.cpp
-    # src/SeQuant/domain/evaluate/path_tree.hpp
-    # src/SeQuant/domain/evaluate/path_tree.cpp
+    src/SeQuant/domain/evaluate/path_tree.hpp
+    src/SeQuant/domain/evaluate/path_tree.cpp
     )
+add_library(evaluator EXCLUDE_FROM_ALL ${evaluator_src})
 target_include_directories(evaluator PUBLIC
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>)
@@ -204,14 +178,14 @@ set(utests_src
         )
 set(utests_deps SeQuant evaluator)
 
-if (TARGET tiledarray AND TARGET Libint2::cxx)
+if (TARGET tiledarray)
   list(APPEND utests_src
       ## unit tests for evaluation
-      # tests/unit/test_eval_tree.cpp
-      # tests/unit/test_path_tree.cpp
+      tests/unit/test_eval_tree.cpp
+      tests/unit/test_path_tree.cpp
       )
   list(APPEND utests_deps tiledarray)
-endif(TARGET tiledarray AND TARGET Libint2::cxx)
+endif(TARGET tiledarray)
 
 set(unit_test_executable unit_tests)
 add_executable(${unit_test_executable} EXCLUDE_FROM_ALL
@@ -219,6 +193,9 @@ add_executable(${unit_test_executable} EXCLUDE_FROM_ALL
         tests/unit/catch.hpp
         ${utests_src})
 target_link_libraries(${unit_test_executable} ${utests_deps})
+if (TARGET tiledarray)
+  target_compile_definitions(${unit_test_executable} PRIVATE SEQUANT_HAS_TILEDARRAY)
+endif(TARGET tiledarray)
 add_test(unit/build "${CMAKE_COMMAND}" --build ${CMAKE_BINARY_DIR}
     --target ${unit_test_executable})
 
