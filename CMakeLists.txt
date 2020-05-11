@@ -183,7 +183,7 @@ if (PSTL_NEEDS_TBB)
     target_include_directories(SeQuant PUBLIC ${TBB_INCLUDE_DIRS})
 endif()
 target_include_directories(SeQuant PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>
+        $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>)
 target_compile_features(SeQuant INTERFACE "cxx_std_17")
 install(TARGETS SeQuant-bliss EXPORT sequant COMPONENT sequant LIBRARY DESTINATION ${SEQUANT_INSTALL_LIBDIR})
@@ -246,7 +246,7 @@ add_test(NAME unit/run
         COMMAND ${unit_test_executable})
 set_tests_properties(unit/run
         PROPERTIES DEPENDS unit/build
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/unit)
+        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tests/unit)
 
 ####### Tests ########
 
@@ -290,10 +290,10 @@ set (lastexample 4)
 foreach(i RANGE ${lastexample})
     if (TARGET ${example${i}})
         add_test(example/${example${i}}/build "${CMAKE_COMMAND}"
-            --build ${CMAKE_BINARY_DIR} --target ${example${i}})
+            --build ${PROJECT_BINARY_DIR} --target ${example${i}})
         add_test(NAME example/${example${i}}/run
                 COMMAND ${example${i}}
-                WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/examples)
+                WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/examples)
         set_tests_properties(example/${example${i}}/run
                 PROPERTIES DEPENDS example/${example${i}}/build)
     endif()
@@ -360,7 +360,7 @@ install(FILES
     DESTINATION "${SEQUANT_INSTALL_CMAKEDIR}"
     COMPONENT sequant-config)
 add_custom_target_subproject(sequant install-config
-    COMMAND ${CMAKE_COMMAND} -DCOMPONENT=sequant-config -P ${CMAKE_BINARY_DIR}/cmake_install.cmake
+    COMMAND ${CMAKE_COMMAND} -DCOMPONENT=sequant-config -P ${PROJECT_BINARY_DIR}/cmake_install.cmake
     COMMENT "Installing SeQuant config components")
 
 feature_summary(WHAT ALL
