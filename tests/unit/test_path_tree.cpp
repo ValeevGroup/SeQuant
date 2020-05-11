@@ -6,7 +6,7 @@
 
 #include <iostream>
 #include <memory>
-#include "../../src/SeQuant/domain/evaluate/path_tree.hpp"
+#include <SeQuant/domain/evaluate/path_tree.hpp>
 
 TEST_CASE("PathTree is computed", "[path_tree]") {
   using sequant::evaluate::PathTree;

@@ -1,4 +1,4 @@
-find_package(Range-v3 1.0.0 QUIET)
+find_package(Range-v3 QUIET)
 
 if (NOT TARGET range-v3)
 

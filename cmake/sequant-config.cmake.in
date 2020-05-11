@@ -1,0 +1,60 @@
+# - CMAKE Config file for the SeQuant package
+# This will define the following CMake cache variables
+#
+#    SEQUANT_FOUND        - true if SeQuant library were found
+#    SEQUANT_VERSION      - the x.y.z SeQuant version
+#    SEQUANT_EXT_VERSION  - the x.y.z(-buildid) SeQuant version, where the (optional) buildid is smth like beta.3
+#
+# and the following imported targets
+#
+#     SeQuant::SeQuant    - the SeQuant library
+#
+
+# Set package version
+set(SEQUANT_VERSION "@SEQUANT_VERSION@")
+set(SEQUANT_EXT_VERSION "@SEQUANT_EXT_VERSION@")
+
+@PACKAGE_INIT@
+
+if(NOT TARGET Boost::boost)
+  set(Boost_USE_CONFIG @Boost_USE_CONFIG@)
+  if (Boost_USE_CONFIG)
+    set(Boost_CONFIG @Boost_CONFIG@)
+    if (NOT Boost_CONFIG OR NOT EXISTS ${Boost_CONFIG})
+      message(FATAL_ERROR "Expected Boost config file at ${Boost_CONFIG}; directory moved since SeQuant configuration?")
+    endif()
+    get_filename_component(Boost_DIR ${Boost_CONFIG} DIRECTORY)
+    find_package(Boost CONFIG QUIET REQUIRED PATHS ${Boost_DIR} NO_DEFAULT_PATH)
+  else (Boost_USE_CONFIG)
+    set(BOOST_INCLUDEDIR @Boost_INCLUDE_DIR@)
+    set(BOOST_LIBRARYDIR @Boost_LIBRARY_DIR_RELEASE@)
+    if (NOT BOOST_LIBRARYDIR OR NOT EXISTS ${BOOST_LIBRARYDIR})
+      set(BOOST_LIBRARYDIR @Boost_LIBRARY_DIR_DEBUG@)
+    endif()
+    set(Boost_NO_SYSTEM_PATHS OFF)
+    if (BOOST_LIBRARYDIR AND BOOST_INCLUDEDIR)
+      if (EXISTS ${BOOST_LIBRARYDIR} AND EXISTS ${BOOST_INCLUDEDIR})
+        set(Boost_NO_SYSTEM_PATHS ON)
+      endif()
+    endif()
+    find_package(Boost QUIET REQUIRED)
+  endif (Boost_USE_CONFIG)
+endif()
+
+if (NOT TARGET range-v3)
+  find_package(Range-v3 QUIET REQUIRED)
+endif(NOT TARGET range-v3)
+
+if (NOT TARGET Threads::Threads)
+    find_package(Threads REQUIRED)
+endif (NOT TARGET Threads::Threads)
+
+# Include library IMPORT targets
+if(NOT TARGET SeQuant::SeQuant)
+  include("${CMAKE_CURRENT_LIST_DIR}/sequant-targets.cmake")
+  if(NOT TARGET SeQuant::SeQuant)
+    message(FATAL_ERROR "expected SeQuant::SeQuant among imported SeQuant targets")
+  endif()
+endif()
+
+set(SEQUANT_FOUND TRUE)
