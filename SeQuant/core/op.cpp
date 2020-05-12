@@ -14,5 +14,30 @@ OpIdRegistrar::OpIdRegistrar() {
   Expr::set_type_id<BOperator>(--id);
 }
 }  // namespace detail
+
+template<>
+const container::vector<std::wstring>& NormalOperator<Statistics::FermiDirac>::labels() {
+  using namespace std::literals;
+  static container::vector<std::wstring> labels_{L"a"s, L"ã"s};
+  return labels_;
+}
+
+template<>
+const container::vector<std::wstring>& NormalOperator<Statistics::BoseEinstein>::labels() {
+  using namespace std::literals;
+  static container::vector<std::wstring> labels_{L"b"s, L"ᵬ"s};
+  return labels_;
+}
+
+template<>
+std::wstring NormalOperator<Statistics::FermiDirac>::label() const {
+  return vacuum() == Vacuum::Physical ? L"a" : L"ã";
+}
+
+template<>
+std::wstring NormalOperator<Statistics::BoseEinstein>::label() const {
+  return vacuum() == Vacuum::Physical ? L"b" : L"ᵬ";
+}
+
 }  // namespace sequant
 
