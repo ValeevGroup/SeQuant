@@ -500,11 +500,11 @@ int main(int argc, char* argv[]) {
         auto R1 = r1_tree.evaluate(context_map);
         auto R2 = r2_tree.evaluate(context_map);
 
-        auto& tile_R1       = R1.find({0,0}).get();
-        auto& tile_t_ov     = (*t_ov).find({0,0}).get();
+        auto tile_R1       = R1.find({0,0}).get();
+        auto tile_t_ov     = (*t_ov).find({0,0}).get();
 
-        auto& tile_R2       = R2.find({0,0,0,0}).get();
-        auto& tile_t_oovv   = (*t_oovv).find({0,0,0,0}).get();
+        auto tile_R2       = R2.find({0,0,0,0}).get();
+        auto tile_t_oovv   = (*t_oovv).find({0,0,0,0}).get();
 
         // save previous norm
         auto norm_last = std::sqrt((*t_oovv)("i,j,a,b").dot((*t_oovv)("i,j,a,b")));
