@@ -73,6 +73,7 @@ TEST_CASE("TensorNetwork", "[elements]") {
   SECTION("canonicalizer") {
     {
       {  // with no external indices, hence no named indices whatsoever
+        Index::reset_tmp_index();
         constexpr const auto V = Vacuum::SingleProduct;
         auto t1 = ex<Tensor>(L"F", WstrList{L"i_1"}, WstrList{L"i_2"});
         auto t2 = ex<FNOperator>(WstrList{L"i_1"}, WstrList{L"i_2"}, V);
@@ -86,12 +87,13 @@ TEST_CASE("TensorNetwork", "[elements]") {
 //        std::wcout << to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) << std::endl;
 //        std::wcout << to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) << std::endl;
         REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) ==
-            L"{\\tilde{a}^{{i_1}}_{{i_2}}}");
+            L"{F^{{i_1}}_{{i_2}}}");
         REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) ==
-            L"{F^{{i_2}}_{{i_1}}}");
+            L"{\\tilde{a}^{{i_2}}_{{i_1}}}");
       }
 
       {
+        Index::reset_tmp_index();
         constexpr const auto V = Vacuum::SingleProduct;
         auto t1 = ex<Tensor>(L"F", WstrList{L"i_2"}, WstrList{L"i_17"});
         auto t2 = ex<FNOperator>(WstrList{L"i_2"}, WstrList{L"i_3"}, V);
@@ -107,14 +109,15 @@ TEST_CASE("TensorNetwork", "[elements]") {
           REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[1]));
           // std::wcout << to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) << std::endl;
           // std::wcout << to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) << std::endl;
-          REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) ==
-                  L"{\\tilde{a}^{{i_1}}_{{i_3}}}");
           REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) ==
+                  L"{\\tilde{a}^{{i_1}}_{{i_3}}}");
+          REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) ==
                   L"{F^{{i_{17}}}_{{i_1}}}");
         }
 
         // with explicit named indices
         {
+          Index::reset_tmp_index();
           TensorNetwork tn(*t1_x_t2);
 
           using named_indices_t = TensorNetwork::named_indices_t;
@@ -127,9 +130,9 @@ TEST_CASE("TensorNetwork", "[elements]") {
           REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[1]));
           //        std::wcout << to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) << std::endl;
           //        std::wcout << to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) << std::endl;
-          REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) ==
-                  L"{\\tilde{a}^{{i_2}}_{{i_1}}}");
           REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) ==
+                  L"{\\tilde{a}^{{i_2}}_{{i_1}}}");
+          REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) ==
                   L"{F^{{i_{17}}}_{{i_2}}}");
         }
       }
@@ -200,16 +203,16 @@ TEST_CASE("TensorNetwork", "[elements]") {
             "v15 [label=\"{i_{117}}\"; color=\"#a78ee8\"];\n"
             "v15 -- v54\n"
             "v15 -- v57\n"
-            "v16 [label=\"{κ_{104}}\"; color=\"#808f74\"];\n"
+            "v16 [label=\"{\\kappa_{104}}\"; color=\"#808f74\"];\n"
             "v16 -- v29\n"
             "v16 -- v34\n"
-            "v17 [label=\"{κ_{105}}\"; color=\"#808f74\"];\n"
+            "v17 [label=\"{\\kappa_{105}}\"; color=\"#808f74\"];\n"
             "v17 -- v29\n"
             "v17 -- v34\n"
-            "v18 [label=\"{κ_{106}}\"; color=\"#808f74\"];\n"
+            "v18 [label=\"{\\kappa_{106}}\"; color=\"#808f74\"];\n"
             "v18 -- v30\n"
             "v18 -- v33\n"
-            "v19 [label=\"{κ_{107}}\"; color=\"#808f74\"];\n"
+            "v19 [label=\"{\\kappa_{107}}\"; color=\"#808f74\"];\n"
             "v19 -- v30\n"
             "v19 -- v33\n"
             "v20 [label=\"A\"; color=\"#2ef7ff\"];\n"
