@@ -569,20 +569,9 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
   }
 
   /// @return all possible values returned by label() for this operator type
-  static const auto& labels() {
-    using namespace std::literals;
-    static container::vector<std::wstring> labels_(
-        S == Statistics::FermiDirac
-            ? std::initializer_list<std::wstring>{L"a"s, L"ã"s}
-            : std::initializer_list<std::wstring>{L"b"s, L"ᵬ"s});
-    return labels_;
-  }
+  static const container::vector<std::wstring>& labels();
 
-  std::wstring label() const {
-    return (S == Statistics::FermiDirac
-            ? (vacuum() == Vacuum::Physical ? L"a" : L"ã")
-            : (vacuum() == Vacuum::Physical ? L"b" : L"ᵬ"));
-  }
+  std::wstring label() const;
 
   std::wstring to_latex() const override {
     std::wstring result;

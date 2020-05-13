@@ -14,8 +14,8 @@ namespace mbpt {
 enum class OpType { h, f, g, t, l, A, L, R, R12 };
 enum class OpClass { ex, deex, gen };
 
-const static std::vector<std::wstring> cardinal_tensor_labels = {
-    L"A", L"P", L"L", L"λ", L"h", L"f", L"g", L"t", L"R", L"F", L"S", L"a", L"ã", L"b", L"ᵬ"};
+/// @return the tensor labels in the cardinal order
+std::vector<std::wstring> cardinal_tensor_labels();
 
 std::wstring to_wstring(OpType op);
 OpClass to_class(OpType op);

@@ -1,0 +1,26 @@
+//
+// Created by Eduard Valeyev on 5/11/20.
+//
+
+#ifndef SEQUANT_SRC_SEQUANT_VERSION_H_IN_H
+#define SEQUANT_SRC_SEQUANT_VERSION_H_IN_H
+
+/* Defines a string with the Git SHA1 revision hash tag of SeQuant */
+#define SEQUANT_REVISION "@SEQUANT_REVISION@"
+
+/* TiledArray version X.Y.Z-id */
+#define SEQUANT_VERSION "@SEQUANT_VERSION@"
+
+/* TiledArray major version */
+#define SEQUANT_MAJOR_VERSION @SEQUANT_MAJOR_VERSION@
+
+/* TiledArray minor version */
+#define SEQUANT_MINOR_VERSION @SEQUANT_MINOR_VERSION@
+
+/* TiledArray micro version */
+#define SEQUANT_MICRO_VERSION @SEQUANT_MICRO_VERSION@
+
+/* TiledArray prerelease id */
+#define SEQUANT_PRERELEASE_ID "@SEQUANT_PRERELEASE_ID@"
+
+#endif  // SEQUANT_SRC_SEQUANT_VERSION_H_IN_H

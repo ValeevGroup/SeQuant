@@ -4,6 +4,12 @@
 namespace sequant {
 namespace mbpt {
 
+std::vector<std::wstring>
+    cardinal_tensor_labels() {
+  return {L"A", L"P", L"L", L"λ", L"h", L"f", L"g", L"t",
+          L"R", L"F", L"S", L"a", L"ã", L"b", L"ᵬ"};
+}
+
 std::wstring to_wstring(OpType op) {
   switch (op) {
     case OpType::h:

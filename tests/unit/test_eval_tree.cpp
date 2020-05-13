@@ -19,12 +19,6 @@
 using namespace sequant;
 using namespace sequant::evaluate;
 
-// initialize MADWorld
-int argc = 1;
-char* args[]{};
-char** argv = {args};
-auto& world = TA::initialize(argc, argv);
-
 // get a sequant Tensor made out of specs
 // specs -> {label, b1, ..., b(n/2), k1, ..., k(n/2)}
 // eg. {"g", "i_1", "i_2", "a_1", "a_2"}
@@ -276,6 +270,7 @@ TEST_CASE("EVALUATIONS TESTS", "[eval_tree]") {
   TA::TiledRange tr_ov{{0, nocc}, {0, nvirt}};
   TA::TiledRange tr_oovv{{0, nocc}, {0, nocc}, {0, nvirt}, {0, nvirt}};
 
+  auto& world = TA::get_default_world();
   auto T_ov = std::make_shared<DTensorType>(world, tr_ov);
   auto T_oovv = std::make_shared<DTensorType>(world, tr_oovv);
   auto G_oovv = std::make_shared<DTensorType>(world, tr_oovv);

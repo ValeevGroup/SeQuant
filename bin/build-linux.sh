@@ -20,7 +20,6 @@ export PATH=${INSTALL_PREFIX}/cmake/bin:${PATH}
 cmake --version
 
 ${TRAVIS_BUILD_DIR}/bin/build-boost-$TRAVIS_OS_NAME.sh
-${TRAVIS_BUILD_DIR}/bin/build-rangev3-$TRAVIS_OS_NAME.sh
 ${TRAVIS_BUILD_DIR}/bin/build-eigen3-$TRAVIS_OS_NAME.sh
 ${TRAVIS_BUILD_DIR}/bin/build-libint-$TRAVIS_OS_NAME.sh
 ${TRAVIS_BUILD_DIR}/bin/build-mpich-$TRAVIS_OS_NAME.sh
@@ -63,7 +62,6 @@ fi
 cmake ${TRAVIS_BUILD_DIR} \
     -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" \
     -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
-    -DRANGEV3_DIR="${INSTALL_PREFIX}/range-v3" \
     -DCMAKE_PREFIX_PATH="${INSTALL_PREFIX}/libint;${INSTALL_PREFIX}/eigen3;${INSTALL_PREFIX}/boost;${INSTALL_PREFIX}/TA" \
     -DCMAKE_CXX_FLAGS="${CXX_FLAGS} ${EXTRAFLAGS} ${CODECOVCXXFLAGS}"
 

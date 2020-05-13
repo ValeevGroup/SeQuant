@@ -108,7 +108,7 @@ void set_default_convention(Convention conv) {
       using namespace qcifs;
       register_standard_instances();
       make_default_indexregistry();
-      TensorCanonicalizer::set_cardinal_tensor_labels(mbpt::cardinal_tensor_labels);
+      TensorCanonicalizer::set_cardinal_tensor_labels(mbpt::cardinal_tensor_labels());
     }
   }
 }
