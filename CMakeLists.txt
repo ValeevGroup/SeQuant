@@ -91,7 +91,7 @@ include(FindOrFetchRangeV3)
 # need Boost.ContainerHash
 # NB Boost.Container is broken in v1.70
 find_package(Boost ${SEQUANT_TRACKED_BOOST_VERSION} CONFIG)
-if (NOT TARGET Boost::boost)
+if (Boost_VERSION_STRING VERSION_LESS ${SEQUANT_TRACKED_BOOST_VERSION} OR NOT TARGET Boost::boost)
   find_package(Boost ${SEQUANT_TRACKED_BOOST_VERSION} REQUIRED)
   set(Boost_USE_CONFIG FALSE)
   set(Boost_USE_CONFIG TRUE)
