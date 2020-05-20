@@ -455,6 +455,119 @@ ExprPtr expand_A_operator(const Product& product) {
   return new_result;
 }
 
+/// @brief Write expression in terms of Symmetrizer
+/// @param product
+/// @return expression pointer with Symmstrizer operator
+ExprPtr expr_symmetrize(const Product& product) {
+  auto result = std::make_shared<Sum>();
+
+  std::wcout << __LINE__ << " " << to_latex(product) << std::endl;
+
+  bool has_A_operator = false;
+
+  // CHECK: A is present, >1 particle tensors
+  // GENERATE S tensor
+  auto S = Tensor{};
+  std::vector<std::map<Index, Index>> map_list;
+  for (auto& term : product) {
+    if (term->is<Tensor>()) {
+      auto A = term->as<Tensor>();
+      if ((A.label() == L"A") && (A.bra().size() > 1)) {
+        S = Tensor(L"S", A.bra(), A.ket());
+        has_A_operator = true;
+        break;
+      } else if ((A.label() == L"A") && (A.bra().size() == 1)) {
+        return remove_tensor_from_product(product, L"A");
+      }
+    }
+  }
+
+  // Check if tensors are particle number conserving
+  // TODO: if not, which one is larger
+  bool n_conserving_tensor = true;
+  for(auto&& term: product){
+    if(term->is<Tensor>()){
+      auto tensor = term->as<Tensor>();
+      n_conserving_tensor = (tensor.bra_rank() == tensor.ket_rank() ? true : false);
+    }
+  }
+
+  std::wcout <<__LINE__ << " " << to_latex(S) << "\n";
+
+
+
+  // Lambda to generate index replacements
+  auto replacement_maps = [&](const Tensor& A){
+    // TODO: Generalize for bra OR ket
+    assert(A.bra_rank() > 1);
+    assert(A.ket_rank() > 1);
+    container::svector<int> bra_int_list(A.bra_rank());
+    std::iota(bra_int_list.begin(), bra_int_list.end(), 0);
+    std::vector<std::map<Index, Index>> result;
+    do{
+      std::map<Index, Index> replacement_map;
+      auto A_bra_ptr = A.bra().begin();
+      for (auto&& idx : bra_int_list) {
+        replacement_map.emplace(std::make_pair(*A_bra_ptr, A.bra()[idx]));
+        A_bra_ptr++;
+      }
+      result.push_back(replacement_map);
+    } while (std::next_permutation(bra_int_list.begin(), bra_int_list.end()));
+
+    for(auto&& map : result) {
+      // for(auto&& i : map) std::wcout << to_latex(i.first)<< " " << to_latex(i.second) << "\n";
+      for(auto&& i : map) std::wcout << to_latex(i.second) << " ";
+      std::cout << "\n";
+    }
+
+    assert(result.size() == std::tgamma(A.bra_rank() + 1));
+    return result;
+  };
+
+
+  // CASE 1: n_bra = n_ket on all tensors
+  if(n_conserving_tensor){
+    for(auto&& term : product){
+      std::wcout <<__LINE__ << " " << to_latex(term) << "\n";
+      if(term->is<Tensor>()){
+        auto tensor = term->as<Tensor>();
+        if(tensor.label() == L"A") auto maps = replacement_maps(tensor);
+
+      }
+    }
+
+    // TODO: Expand terms, use S operator
+
+
+
+
+  } else {
+  // CASE 2: n_bra != n_ket on all tensors
+  }
+  return result;
+}
+
+/// @brief Expand an expression containing the Antisymmetrization (A) operator
+/// @param expr any ExprPtr
+/// @return an ExprPtr containing sum of expanded terms if A is present
+ExprPtr expr_symmetrize(const ExprPtr& expr) {
+  if (expr->is<Constant>() || expr->is<Tensor>()) return expr;
+
+  if (expr->is<Product>())
+    return expr_symmetrize(expr->as<Product>());
+  else if (expr->is<Sum>()) {
+    auto result = std::make_shared<Sum>();
+    for (auto&& summand : *expr) {
+      if (summand->is<Product>())
+        result->append(expr_symmetrize(summand->as<Product>()));
+      else
+        result->append(summand);
+    }
+    return result;
+  } else
+    throw("Unknown arg Type for expr_symmetrize.");
+}
+
 /// @brief Expand an expression containing the Antisymmetrization (A) operator
 /// @param expr any ExprPtr
 /// @return an ExprPtr containing sum of expanded terms if A is present
