@@ -462,60 +462,32 @@ ExprPtr expr_symmetrize(const Product& product) {
   auto result = std::make_shared<Sum>();
   bool has_A_operator = false;
 
+  // Assumes canonical sequence of tensors in the product
+  if(product.factor(0)->as<Tensor>().label() != L"A")
+    return std::make_shared<Product>(product);
+
   // CHECK: A is present, >1 particle tensors
   // GENERATE S tensor
   auto S = Tensor{};
-  std::vector<std::map<Index, Index>> map_list;
-  for (auto& term : product) {
-    if (term->is<Tensor>()) {
-      auto A = term->as<Tensor>();
-      if ((A.label() == L"A") && (A.bra().size() > 1)) {
-        S = Tensor(L"S", A.bra(), A.ket());
-        has_A_operator = true;
-        break;
-      } else if ((A.label() == L"A") && (A.bra().size() == 1)) {
-        return remove_tensor_from_product(product, L"A");
-      }
+  {
+    auto tensor = product.factor(0)->as<Tensor>();
+    if((tensor.label() == L"A") && (tensor.bra().size() > 1)) {
+      S = Tensor(L"S", tensor.bra(), tensor.ket());
+      has_A_operator = true;
+    } else if ((tensor.label() == L"A") && (tensor.bra_rank() == 1)){
+      return remove_tensor_from_product(product, L"A");
     }
   }
 
   // Check if tensors are particle number conserving
-  // TODO: if not, which one is larger
   bool n_conserving_tensor = true;
   for(auto&& term: product){
     if(term->is<Tensor>()){
       auto tensor = term->as<Tensor>();
       n_conserving_tensor = (tensor.bra_rank() == tensor.ket_rank() ? true : false);
+      if(!n_conserving_tensor) break;
     }
   }
-
-  // Lambda to generate index replacements
-  auto replacement_maps = [&](const Tensor& A){
-    // TODO: Generalize for bra OR ket
-    assert(A.bra_rank() > 1);
-    assert(A.ket_rank() > 1);
-    container::svector<int> bra_int_list(A.bra_rank());
-    std::iota(bra_int_list.begin(), bra_int_list.end(), 0);
-    std::vector<std::map<Index, Index>> result;
-    do{
-      std::map<Index, Index> replacement_map;
-      auto A_bra_ptr = A.bra().begin();
-      for (auto&& idx : bra_int_list) {
-        replacement_map.emplace(std::make_pair(*A_bra_ptr, A.bra()[idx]));
-        A_bra_ptr++;
-      }
-      result.push_back(replacement_map);
-    } while (std::next_permutation(bra_int_list.begin(), bra_int_list.end()));
-
-    for(auto&& map : result) {
-      // for(auto&& i : map) std::wcout << to_latex(i.first)<< " " << to_latex(i.second) << "\n";
-      for(auto&& i : map) std::wcout << to_latex(i.second) << " ";
-      std::cout << "\n";
-    }
-
-    assert(result.size() == std::tgamma(A.bra_rank() + 1));
-    return result;
-  };
 
   // Generate replacement maps from a list(could be a bra or a ket)
   // Uses a permuted list of int to generate permutations
@@ -536,8 +508,7 @@ ExprPtr expr_symmetrize(const Product& product) {
     return result;
   };
 
-  assert(product.factor(0)->as<Tensor>().label() == L"A");
-
+  // Get phase relative to the canonical order
   auto get_phase = [&] (const std::map<Index, Index>& map){
     bool even;
     container::svector<Index> transformed_list;
@@ -549,25 +520,17 @@ ExprPtr expr_symmetrize(const Product& product) {
     return even;
   };
 
+  assert(product.factor(0)->as<Tensor>().label() == L"A");
+
+  std::vector<std::map<Index, Index>> maps;
   // CASE 1: n_bra = n_ket on all tensors
   if(n_conserving_tensor){
-    std::vector<std::map<Index, Index>> maps;
-    if(product.factor(0)->as<Tensor>().label() == L"A")
-      maps = maps_from_list(product.factor(0)->as<Tensor>().bra());
+    // if(product.factor(0)->as<Tensor>().label() == L"A")
+    maps = maps_from_list(product.factor(0)->as<Tensor>().bra());
 
     assert(!maps.empty());
     for(auto&& map : maps){
-      // Get phase of transformation
       auto even = get_phase(map);
-//      {
-//        container::svector<Index> transformed_list;
-//        for (auto&& element : map) transformed_list.push_back(element.second);
-//        IndexSwapper::thread_instance().reset();
-//        bubble_sort(std::begin(transformed_list), std::end(transformed_list),
-//                    std::less<Index>{});
-//        even = IndexSwapper::thread_instance().even_num_of_swaps();
-//      }
-
       Product new_product{};
       new_product.scale(product.scalar());
       even ? new_product.append(1, ex<Tensor>(S)) : new_product.append(-1, ex<Tensor>(S));
@@ -584,8 +547,31 @@ ExprPtr expr_symmetrize(const Product& product) {
 
   } else {
   // CASE 2: n_bra != n_ket on all tensors
+  // Get smaller of the two and generate maps
+  auto tensor = product.factor(0)->as<Tensor>();
+  assert(tensor.bra_rank() != tensor.ket_rank());
+  if(tensor.bra_rank() < tensor.ket_rank())
+    maps = maps_from_list(product.factor(0)->as<Tensor>().bra());
+  else
+    maps = maps_from_list(product.factor(0)->as<Tensor>().ket());
 
-
+  // TODO: Fix for non-particle n conserving products
+    assert(!maps.empty());
+    for(auto&& map : maps){
+      auto even = get_phase(map);
+      Product new_product{};
+      new_product.scale(product.scalar());
+      even ? new_product.append(1, ex<Tensor>(S)) : new_product.append(-1, ex<Tensor>(S));
+      auto temp_product = remove_tensor_from_product(product, L"A");
+      for (auto&& term : *temp_product) {
+        if (term->is<Tensor>()) {
+          auto new_tensor = term->as<Tensor>();
+          new_tensor.transform_indices(map);
+          new_product.append(1, ex<Tensor>(new_tensor));
+        }
+      }
+      result->append(ex<Product>(new_product));
+    }
   }
   return result;
 }
