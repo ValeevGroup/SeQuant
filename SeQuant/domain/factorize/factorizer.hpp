@@ -2,11 +2,10 @@
 #define SEQUANT_FACTORIZER_HPP
 
 #include <SeQuant/core/container.hpp>
-#include <SeQuant/core/expr.hpp>
-#include <SeQuant/core/tensor_network.hpp>
+#include <SeQuant/core/expr_fwd.hpp>
 
-// IndexSpace type based hashing of tensors
-#include <SeQuant/domain/evaluate/eval_tree.hpp>
+// IndexSpace type based hashing of tensors for ColorMatrix
+#include "SeQuant/domain/evaluate/eval_fwd.hpp"
 
 #include <tuple>
 
@@ -17,8 +16,51 @@
 ///
 
 namespace sequant::factorize {
+/// Adjacency matrix of an undirected tensor network.
+/// @author Bimal Gaudel
+/// @version May 16, 2020
+class AdjacencyMatrix {
+ public:
+  using pos_type = std::size_t;
+  using color_mat_type =
+      container::svector<container::svector<evaluate::HashType>>;
+
+ private:
+  /// Color data matrix of an undirected tensor network.
+  color_mat_type colorMatrix_;
+
+  /// Constant reference to the color data matrix.
+  const color_mat_type& color_mat() const;
+
+ public:
+  /// @param expr is a ExprPtr of Tensors'.
+  explicit AdjacencyMatrix(const ExprPtr& expr);
+
+  /// @param tensors is a vector of ExprPtr to Tensors'
+  AdjacencyMatrix(const container::svector<ExprPtr>& tensors);
+
+  /// Getter for the number of vertices.
+  size_t num_verts() const;
+
+  /// Check if pos1 and pos2 are adjacent to each other.
+  bool are_connected(pos_type pos1, pos_type pos2) const;
+
+  /// Get the color between the vertices at positions pos1 and pos2.
+  color_mat_type::value_type::value_type color(pos_type pos1,
+                                               pos_type pos2) const;
+
+  /// Check if two tensors t1 and t2 are connected.
+  /// @return True if at least one of the braket label is common in both
+  /// tensors.
+  static bool are_connected(const ExprPtr& t1, const ExprPtr& t2);
+};
+
+/// Check if a Tensor expresion exists in a potentially nested Product of
+/// tensors.
+bool tensor_exists(const ExprPtr& expr, const ExprPtr& tnsr);
+
 ///
-/// Find the largest common sub network between a pair of tensor networks.
+/// Factorize common sub-networks from a pair of tensor networks.
 ///
 /// @param exprA Expression to find common subnetwork of. All of the
 /// subexpressions of @exprA must be ExprPtr to sequant Tensors'.
@@ -26,40 +68,11 @@ namespace sequant::factorize {
 /// @param exprB Expression to find common subnetwork of. All of the
 /// subexpressions of @exprB must be ExprPtr to sequant Tensors'.
 ///
-/// @return Tuple of position vectors of the common subexpressions.
+/// @return Tuple of two ExprPtr that are factorized forms of exprA and exprB.
 ///
-std::tuple<container::svector<size_t>, container::svector<size_t>>
-largest_common_subnet(const ExprPtr& exprA, const ExprPtr& exprB);
-
-/// Generate a subexpression of an expr made of those present at @c indices
-/// positions in the @c expr.
-/// @tparam Container A container type that allows range-based for looping.
-/// @param expr The expression to extract subexpression from.
-/// @param indices Vector of indices of subexpressions in @c expr.
-template <typename Container>
-ExprPtr _getSubExpr(const ExprPtr& expr, const Container& indices) {
-  if (expr->is<Product>()) {
-    auto& prod = expr->as<Product>();
-    auto result = std::make_shared<Product>();
-    for (auto idx : indices) {
-      result->append(1, prod.factor(idx));
-    }
-    return result;
-  } else if (expr->is<Sum>()) {
-    auto& sum = expr->as<Sum>();
-    auto result = std::make_shared<Sum>();
-    for (auto idx : indices) {
-      result->append(sum.summand(idx));
-    }
-    return result;
-  } else if (expr->is<Tensor>() && *indices.begin() == 0) {
-    return expr;
-  } else {
-    throw std::logic_error(
-        "Only Tensor, Sum or Product type expression expected!");
-  }
-}  // _getSubExpr
-
+/// @note Only pair of Tensor Products' are supported now.
+std::tuple<ExprPtr, ExprPtr> factorize_pair(const ExprPtr& exprA,
+                                            const ExprPtr& exprB);
 }  // namespace sequant::factorize
 
 #endif /* #ifndef SEQUANT_FACTORIZER_HPP */
