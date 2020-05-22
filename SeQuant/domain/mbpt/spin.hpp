@@ -485,7 +485,6 @@ ExprPtr expand_A_operator(const Product& product) {
 /// @return expression pointer with Symmstrizer operator
 ExprPtr expr_symmetrize(const Product& product) {
   auto result = std::make_shared<Sum>();
-  bool has_A_operator = false;
 
   // Assumes canonical sequence of tensors in the product
   if(product.factor(0)->as<Tensor>().label() != L"A")
@@ -493,30 +492,24 @@ ExprPtr expr_symmetrize(const Product& product) {
 
   // CHECK: A is present and >1 particle
   // GENERATE S tensor
+  auto A_tensor = product.factor(0)->as<Tensor>();
+  auto A_is_nconserving = A_tensor.bra_rank() == A_tensor.ket_rank();
   auto S = Tensor{};
   {
     auto tensor = product.factor(0)->as<Tensor>();
     if((tensor.label() == L"A") && (tensor.bra().size() > 1)) {
+      if (!A_is_nconserving)
+        abort();  // Nakul, fix me
       S = Tensor(L"P", tensor.bra(), tensor.ket(), Symmetry::nonsymm);
-      has_A_operator = true;
     } else if ((tensor.label() == L"A") && (tensor.bra_rank() == 1)){
       return remove_tensor_from_product(product, L"A");
     }
   }
 
-  // Check if tensors are particle number conserving
-  bool n_conserving_tensor = true;
-  for(auto&& term: product){
-    if(term->is<Tensor>()){
-      auto tensor = term->as<Tensor>();
-      n_conserving_tensor = (tensor.bra_rank() == tensor.ket_rank() ? true : false);
-      if(!n_conserving_tensor) break;
-    }
-  }
-
   // Generate replacement maps from a list(could be a bra or a ket)
   // Uses a permuted list of int to generate permutations
-  auto maps_from_list = [&] (const container::svector<Index, 4>& list){
+  // TODO factor out for reuse
+  auto maps_from_list = [&] (const container::svector<Index>& list){
     container::svector<int> int_list(list.size());
     std::iota(int_list.begin(), int_list.end(), 0);
     std::vector<std::map<Index, Index>> result;
@@ -534,6 +527,7 @@ ExprPtr expr_symmetrize(const Product& product) {
   };
 
   // Get phase relative to the canonical order
+  // TODO factor out for reuse
   auto get_phase = [&] (const std::map<Index, Index>& map){
     bool even;
     container::svector<Index> idx_list;
@@ -545,11 +539,9 @@ ExprPtr expr_symmetrize(const Product& product) {
     return even;
   };
 
-  assert(product.factor(0)->as<Tensor>().label() == L"A");
-
   std::vector<std::map<Index, Index>> maps;
   // CASE 1: n_bra = n_ket on all tensors
-  if(n_conserving_tensor){
+  if(A_is_nconserving){
     maps = maps_from_list(product.factor(0)->as<Tensor>().bra());
     assert(!maps.empty());
     for(auto&& map : maps){
@@ -573,7 +565,7 @@ ExprPtr expr_symmetrize(const Product& product) {
   // Get smaller of the two and generate maps
   auto tensor = product.factor(0)->as<Tensor>();
   assert(tensor.bra_rank() != tensor.ket_rank());
-  if(tensor.bra_rank() < tensor.ket_rank())
+  if(tensor.bra_rank() > tensor.ket_rank())
     maps = maps_from_list(product.factor(0)->as<Tensor>().bra());
   else
     maps = maps_from_list(product.factor(0)->as<Tensor>().ket());
