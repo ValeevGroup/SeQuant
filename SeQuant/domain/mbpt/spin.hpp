@@ -497,7 +497,8 @@ ExprPtr expr_symmetrize(const Product& product) {
   {
     auto tensor = product.factor(0)->as<Tensor>();
     if((tensor.label() == L"A") && (tensor.bra().size() > 1)) {
-      S = Tensor(L"P", tensor.bra(), tensor.ket(), Symmetry::nonsymm);
+      S = Tensor(L"S", tensor.bra(), tensor.ket(), Symmetry::symm);
+      // TODO: check if A is particle number conserving
       has_A_operator = true;
     } else if ((tensor.label() == L"A") && (tensor.bra_rank() == 1)){
       return remove_tensor_from_product(product, L"A");
@@ -773,33 +774,49 @@ ExprPtr expand_S_operator(const ExprPtr& expr){
       maps.push_back(map);
     }while(std::next_permutation(int_list.begin(), int_list.end()));
 
+    for(auto&& map: maps){
+      ranges::for_each(map, [&] (const std::pair<Index, Index>& p) {std::wcout << to_latex(p.second) << " "; } );
+      std::cout << std::endl;
+    }
     return maps;
   };
 
   // Lambda for applying S on products
-  auto expand_S_operator = [&] (const Product& product, const std::vector<std::map<Index, Index>>& maps){
+  auto expand_S_product = [&] (const Product& product){
     // check if S is present
     if(!has_tensor_label(ex<Product>(product), L"S"))
       return ex<Product>(product);
 
-    for(auto&&map : maps){
-
-    }
-
+    std::vector<std::map<Index, Index>> maps;
+    if(product.factor(0)->as<Tensor>().label() == L"S")
+      maps = replacement_maps(product.factor(0)->as<Tensor>());
+    assert(!maps.empty());
     Sum sum{};
-    auto result = ex<Sum>(sum);
-    return result;
+    for(auto&&map : maps){
+      Product new_product{};
+      new_product.scale(product.scalar());
+      auto temp_product = remove_tensor_from_product(product, L"S");
+      for (auto&& term : *temp_product) {
+        if (term->is<Tensor>()) {
+          auto new_tensor = term->as<Tensor>();
+          new_tensor.transform_indices(map);
+          new_product.append(1, ex<Tensor>(new_tensor));
+        }
+      }
+      sum.append(ex<Product>(new_product));
+    }
+    return ex<Sum>(sum);;
   };
 
-#if 0
+#if 1
   if(expr->is<Product>()){
-
+    return expand_S_product(expr->as<Product>());
   } else if (expr->is<Sum>()){
     for(auto&& term : *expr){
       if(term->is<Product>()){
-        result->append(/**/);
+        result->append(expand_S_product(term->as<Product>()));
       } else if (term->is<Tensor>()){
-        result->append(/**/);
+        result->append(term);
       } else if (term->is<Constant>()){
         result->append(term);
       }
@@ -808,7 +825,6 @@ ExprPtr expand_S_operator(const ExprPtr& expr){
 #endif
   return result;
 }
-
 
 
 /// @brief Transforms an expression from spin orbital to spatial orbitals
@@ -835,7 +851,7 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
   expression->visit(check_proto_index);
 
   // Expand A operator, antisymmetrize
-#if 0
+#if 1
   auto expand_all = [&] (const ExprPtr& expr){
     auto temp = expr;
     // if (has_tensor_label(temp, L"A"))
@@ -851,8 +867,11 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
     auto temp = expr;
     if (has_A_label(temp))
       temp = expr_symmetrize(temp);
-    if (has_tensor_label(temp, L"P"))
-      temp = expand_P_operator(temp);
+    if (has_tensor_label(temp, L"S")){
+      std::wcout << __LINE__ << to_latex(temp) << std::endl;
+      // temp = expand_P_operator(temp);
+      temp = expand_S_operator(temp);
+    }
     temp = expand_antisymm(temp);
     rapid_simplify(temp);
     return temp;
