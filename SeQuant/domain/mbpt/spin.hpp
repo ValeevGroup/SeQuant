@@ -851,7 +851,7 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
   expression->visit(check_proto_index);
 
   // Expand A operator, antisymmetrize
-#if 1
+#if 0
   auto expand_all = [&] (const ExprPtr& expr){
     auto temp = expr;
     // if (has_tensor_label(temp, L"A"))
@@ -867,11 +867,6 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
     auto temp = expr;
     if (has_A_label(temp))
       temp = expr_symmetrize(temp);
-    if (has_tensor_label(temp, L"S")){
-      std::wcout << __LINE__ << to_latex(temp) << std::endl;
-      // temp = expand_P_operator(temp);
-      temp = expand_S_operator(temp);
-    }
     temp = expand_antisymm(temp);
     rapid_simplify(temp);
     return temp;
@@ -918,6 +913,18 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
     // std::wcout << to_latex(product) << std::endl;
     // TODO: Check symmetry of tensors
 
+    // Remove S if present in a product
+    Product temp_product{};
+    temp_product.scale(product.scalar());
+    if(product.factor(0)->as<Tensor>().label() == L"S"){
+      auto S_is_present = true;
+      for(auto&& term : product.factors()){
+        if(term->is<Tensor>() && term->as<Tensor>().label() != L"S")
+          temp_product.append(term);
+      }
+    }
+    // std::wcout << to_latex(product) << " -> " << to_latex(temp_product) << std::endl;
+
     auto get_ket_indices = [&] (const Product& prod){
       std::vector<Index> ket_idx;
       for(auto&& t: prod) {
@@ -936,8 +943,8 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
       return bra_idx;
     };
 
-    auto product_kets = get_ket_indices(product);
-    auto product_bras = get_bra_indices(product);
+    auto product_kets = get_ket_indices(temp_product);
+    auto product_bras = get_bra_indices(temp_product);
 
     // Substitute indices from external index list
     if((*ext_index_groups.begin()).size() == 2)
