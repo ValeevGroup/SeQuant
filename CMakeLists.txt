@@ -290,7 +290,7 @@ set (lastexample 4)
 foreach(i RANGE ${lastexample})
     if (TARGET ${example${i}})
         add_test(example/${example${i}}/build "${CMAKE_COMMAND}"
-            --build ${PROJECT_BINARY_DIR} --target ${example${i}})
+            --build ${CMAKE_BINARY_DIR} --target ${example${i}})
         add_test(NAME example/${example${i}}/run
                 COMMAND ${example${i}}
                 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/examples)
