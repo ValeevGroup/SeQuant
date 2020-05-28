@@ -174,7 +174,7 @@ ExprPtr remove_spin(ExprPtr& expr) {
 /// @return true if spin symmetry matches for all pairs of indices
 inline bool is_tensor_spin_symm(const Tensor& tensor) {
   bool result = false;
-  assert(tensor.bra().size() == tensor.ket().size());
+  assert(tensor.bra_rank() == tensor.ket_rank());
   auto iter_ket = tensor.ket().begin();
   for (auto&& index : tensor.bra()) {
     if (IndexSpace::instance(index.label()).qns() ==
@@ -485,7 +485,6 @@ ExprPtr expand_A_operator(const Product& product) {
 /// @return expression pointer with Symmstrizer operator
 ExprPtr expr_symmetrize(const Product& product) {
   auto result = std::make_shared<Sum>();
-  bool has_A_operator = false;
 
   // Assumes canonical sequence of tensors in the product
   if(product.factor(0)->as<Tensor>().label() != L"A")
@@ -493,30 +492,40 @@ ExprPtr expr_symmetrize(const Product& product) {
 
   // CHECK: A is present and >1 particle
   // GENERATE S tensor
+  auto A_tensor = product.factor(0)->as<Tensor>();
+  assert(A_tensor.label() == L"A");
+  auto A_is_nconserving = A_tensor.bra_rank() == A_tensor.ket_rank();
+
+  if(A_is_nconserving)
+    if(A_tensor.bra_rank() == 1) return remove_tensor_from_product(product, L"A");
+
   auto S = Tensor{};
+
+  // A is nconserving
+  if(A_is_nconserving){
+
+
+  } else {
+  // A is not nconserving
+    S = Tensor(L"S", A_tensor.bra(), A_tensor.ket(), Symmetry::symm);
+  }
+
+  // Generate S
+
   {
     auto tensor = product.factor(0)->as<Tensor>();
     if((tensor.label() == L"A") && (tensor.bra().size() > 1)) {
-      S = Tensor(L"S", tensor.bra(), tensor.ket(), Symmetry::symm);
-      // TODO: check if A is particle number conserving
-      has_A_operator = true;
+      if (!A_is_nconserving)
+        abort();  // Nakul, fix me
+      S = Tensor(L"S", tensor.bra(), tensor.ket(), Symmetry::nonsymm);
     } else if ((tensor.label() == L"A") && (tensor.bra_rank() == 1)){
       return remove_tensor_from_product(product, L"A");
     }
   }
 
-  // Check if tensors are particle number conserving
-  bool n_conserving_tensor = true;
-  for(auto&& term: product){
-    if(term->is<Tensor>()){
-      auto tensor = term->as<Tensor>();
-      n_conserving_tensor = (tensor.bra_rank() == tensor.ket_rank() ? true : false);
-      if(!n_conserving_tensor) break;
-    }
-  }
-
   // Generate replacement maps from a list(could be a bra or a ket)
   // Uses a permuted list of int to generate permutations
+  // TODO factor out for reuse
   auto maps_from_list = [&] (const container::svector<Index, 4>& list){
     container::svector<int> int_list(list.size());
     std::iota(int_list.begin(), int_list.end(), 0);
@@ -535,6 +544,7 @@ ExprPtr expr_symmetrize(const Product& product) {
   };
 
   // Get phase relative to the canonical order
+  // TODO factor out for reuse
   auto get_phase = [&] (const std::map<Index, Index>& map){
     bool even;
     container::svector<Index> idx_list;
@@ -546,11 +556,9 @@ ExprPtr expr_symmetrize(const Product& product) {
     return even;
   };
 
-  assert(product.factor(0)->as<Tensor>().label() == L"A");
-
   std::vector<std::map<Index, Index>> maps;
   // CASE 1: n_bra = n_ket on all tensors
-  if(n_conserving_tensor){
+  if(A_is_nconserving){
     maps = maps_from_list(product.factor(0)->as<Tensor>().bra());
     assert(!maps.empty());
     for(auto&& map : maps){
@@ -574,7 +582,7 @@ ExprPtr expr_symmetrize(const Product& product) {
   // Get smaller of the two and generate maps
   auto tensor = product.factor(0)->as<Tensor>();
   assert(tensor.bra_rank() != tensor.ket_rank());
-  if(tensor.bra_rank() < tensor.ket_rank())
+  if(tensor.bra_rank() > tensor.ket_rank())
     maps = maps_from_list(product.factor(0)->as<Tensor>().bra());
   else
     maps = maps_from_list(product.factor(0)->as<Tensor>().ket());
@@ -671,11 +679,6 @@ std::vector<std::map<Index, Index>> P_replacement_map(const Tensor& P) {
     result.push_back(replacement_map);
   } while (std::next_permutation(int_list.begin(), int_list.end()));
 
-//  for(auto&& map: result){
-//    for(auto&& i : map) std::wcout << to_latex(i.second) << " ";
-//    std::cout << "\n";
-//  }
-//  std::cout << "\n";
   return result;
 }
 
@@ -716,7 +719,6 @@ ExprPtr expand_P_operator(const Product& product) {
     }
     result->append(ex<Product>(new_product));
   }  // map_list
-  // std::wcout << __LINE__ << to_latex(result) << "\n";
   return result;
 }
 
@@ -774,10 +776,6 @@ ExprPtr expand_S_operator(const ExprPtr& expr){
       maps.push_back(map);
     }while(std::next_permutation(int_list.begin(), int_list.end()));
 
-    for(auto&& map: maps){
-      ranges::for_each(map, [&] (const std::pair<Index, Index>& p) {std::wcout << to_latex(p.second) << " "; } );
-      std::cout << std::endl;
-    }
     return maps;
   };
 
@@ -808,7 +806,6 @@ ExprPtr expand_S_operator(const ExprPtr& expr){
     return ex<Sum>(sum);;
   };
 
-#if 1
   if(expr->is<Product>()){
     return expand_S_product(expr->as<Product>());
   } else if (expr->is<Sum>()){
@@ -822,10 +819,8 @@ ExprPtr expand_S_operator(const ExprPtr& expr){
       }
     }
   }
-#endif
   return result;
 }
-
 
 /// @brief Transforms an expression from spin orbital to spatial orbitals
 /// @detailed This functions is designed for integrating spin out of expression
@@ -844,7 +839,7 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
       ranges::for_each(
           expr->as<Tensor>().const_braket(), [&](const Index& idx) {
             assert(!idx.has_proto_indices() &&
-                "Proto index not supported in spintrace function.");
+                "Proto index not supported in spintrace call.");
           });
     }
   };
@@ -852,7 +847,7 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
 
   // Expand A operator, antisymmetrize
 #if 0
-  auto expand_all = [&] (const ExprPtr& expr){
+  auto symm_and_expand = [&] (const ExprPtr& expr){
     auto temp = expr;
     // if (has_tensor_label(temp, L"A"))
     if (has_A_label(temp))
@@ -862,8 +857,8 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
     return temp;
   };
 #else
-  // Symmetrize the expr and expand P operator
-  auto expand_all = [&] (const ExprPtr& expr){
+  // Symmetrize the expr and keep S operator
+  auto symm_and_expand = [&] (const ExprPtr& expr){
     auto temp = expr;
     if (has_A_label(temp))
       temp = expr_symmetrize(temp);
@@ -872,7 +867,7 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
     return temp;
   };
 #endif
-  auto expr = expand_all(expression);
+  auto expr = symm_and_expand(expression);
 
   auto reset_idx_tags = [&](ExprPtr& expr) {
     if (expr->is<Tensor>())
@@ -880,7 +875,7 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
                        [&](const Index& idx) { idx.reset_tag(); });
   };
 
-  expr->visit(reset_idx_tags);
+  // expr->visit(reset_idx_tags);
   expand(expr);
   rapid_simplify(expr);
 
@@ -910,20 +905,19 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
 
   // Lambda for a product
   auto trace_product = [&] (const Product& product){
-    // std::wcout << to_latex(product) << std::endl;
     // TODO: Check symmetry of tensors
 
     // Remove S if present in a product
     Product temp_product{};
     temp_product.scale(product.scalar());
     if(product.factor(0)->as<Tensor>().label() == L"S"){
-      auto S_is_present = true;
       for(auto&& term : product.factors()){
         if(term->is<Tensor>() && term->as<Tensor>().label() != L"S")
           temp_product.append(term);
       }
+    } else {
+      temp_product = product;
     }
-    // std::wcout << to_latex(product) << " -> " << to_latex(temp_product) << std::endl;
 
     auto get_ket_indices = [&] (const Product& prod){
       std::vector<Index> ket_idx;
