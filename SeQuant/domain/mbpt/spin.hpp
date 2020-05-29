@@ -494,24 +494,37 @@ ExprPtr expr_symmetrize(const Product& product) {
   // GENERATE S tensor
   auto A_tensor = product.factor(0)->as<Tensor>();
   assert(A_tensor.label() == L"A");
-  auto A_is_nconserving = A_tensor.bra_rank() == A_tensor.ket_rank();
 
+  auto A_is_nconserving = A_tensor.bra_rank() == A_tensor.ket_rank();
   if(A_is_nconserving)
     if(A_tensor.bra_rank() == 1) return remove_tensor_from_product(product, L"A");
+  assert(A_tensor.rank() > 1);
 
   auto S = Tensor{};
-
-  // A is nconserving
   if(A_is_nconserving){
-
-
-  } else {
-  // A is not nconserving
-    S = Tensor(L"S", A_tensor.bra(), A_tensor.ket(), Symmetry::symm);
+    S = Tensor(L"S", A_tensor.bra(), A_tensor.ket(), Symmetry::nonsymm);
+  } else { // A is not nconserving
+    if(A_tensor.bra_rank() < A_tensor.ket_rank()){
+      size_t n = A_tensor.bra_rank();
+      container::svector<Index> bra_list, ket_list;
+      for(size_t idx = 0; idx != n; ++idx){
+        bra_list.push_back(A_tensor.bra()[idx]);
+        ket_list.push_back(A_tensor.ket()[idx]);
+      }
+      S = Tensor(L"S", bra_list, ket_list, Symmetry::nonsymm);
+    } else {
+      size_t n = A_tensor.ket_rank();
+      container::svector<Index> bra_list, ket_list;
+      for(size_t idx = 0; idx != n; ++idx){
+        bra_list.push_back(A_tensor.bra()[idx]);
+        ket_list.push_back(A_tensor.ket()[idx]);
+      }
+      S = Tensor(L"S", bra_list, ket_list, Symmetry::nonsymm);
+    }
   }
 
   // Generate S
-
+#if 0
   {
     auto tensor = product.factor(0)->as<Tensor>();
     if((tensor.label() == L"A") && (tensor.bra().size() > 1)) {
@@ -522,7 +535,7 @@ ExprPtr expr_symmetrize(const Product& product) {
       return remove_tensor_from_product(product, L"A");
     }
   }
-
+#endif
   // Generate replacement maps from a list(could be a bra or a ket)
   // Uses a permuted list of int to generate permutations
   // TODO factor out for reuse
