@@ -337,7 +337,8 @@ bool has_A_label(const ExprPtr& expr){
       if (result) return result;
     }
     return result;
-  }
+  } else
+    throw("control reached end of check_A_label function."); // TODO: Catch exception
 }
 
 /// @brief Check if a tensor with a certain label is present in an expression
@@ -504,38 +505,15 @@ ExprPtr expr_symmetrize(const Product& product) {
   if(A_is_nconserving){
     S = Tensor(L"S", A_tensor.bra(), A_tensor.ket(), Symmetry::nonsymm);
   } else { // A is not nconserving
-    if(A_tensor.bra_rank() < A_tensor.ket_rank()){
-      size_t n = A_tensor.bra_rank();
+    size_t n = (A_tensor.bra_rank() < A_tensor.ket_rank()) ? A_tensor.bra_rank() : A_tensor.ket_rank();
       container::svector<Index> bra_list, ket_list;
       for(size_t idx = 0; idx != n; ++idx){
         bra_list.push_back(A_tensor.bra()[idx]);
         ket_list.push_back(A_tensor.ket()[idx]);
       }
       S = Tensor(L"S", bra_list, ket_list, Symmetry::nonsymm);
-    } else {
-      size_t n = A_tensor.ket_rank();
-      container::svector<Index> bra_list, ket_list;
-      for(size_t idx = 0; idx != n; ++idx){
-        bra_list.push_back(A_tensor.bra()[idx]);
-        ket_list.push_back(A_tensor.ket()[idx]);
-      }
-      S = Tensor(L"S", bra_list, ket_list, Symmetry::nonsymm);
-    }
   }
 
-  // Generate S
-#if 0
-  {
-    auto tensor = product.factor(0)->as<Tensor>();
-    if((tensor.label() == L"A") && (tensor.bra().size() > 1)) {
-      if (!A_is_nconserving)
-        abort();  // Nakul, fix me
-      S = Tensor(L"S", tensor.bra(), tensor.ket(), Symmetry::nonsymm);
-    } else if ((tensor.label() == L"A") && (tensor.bra_rank() == 1)){
-      return remove_tensor_from_product(product, L"A");
-    }
-  }
-#endif
   // Generate replacement maps from a list(could be a bra or a ket)
   // Uses a permuted list of int to generate permutations
   // TODO factor out for reuse
@@ -571,53 +549,31 @@ ExprPtr expr_symmetrize(const Product& product) {
 
   std::vector<std::map<Index, Index>> maps;
   // CASE 1: n_bra = n_ket on all tensors
-  if(A_is_nconserving){
-    maps = maps_from_list(product.factor(0)->as<Tensor>().bra());
-    assert(!maps.empty());
-    for(auto&& map : maps){
-      auto even = get_phase(map);
-      Product new_product{};
-      new_product.scale(product.scalar());
-      even ? new_product.append(1, ex<Tensor>(S)) : new_product.append(-1, ex<Tensor>(S));
-      auto temp_product = remove_tensor_from_product(product, L"A");
-      for (auto&& term : *temp_product) {
-        if (term->is<Tensor>()) {
-          auto new_tensor = term->as<Tensor>();
-          new_tensor.transform_indices(map);
-          new_product.append(1, ex<Tensor>(new_tensor));
-        }
-      }
-      result->append(ex<Product>(new_product));
-    }
-
+  if(A_is_nconserving) {
+    maps = maps_from_list(A_tensor.bra());
   } else {
-  // CASE 2: n_bra != n_ket on all tensors
-  // Get smaller of the two and generate maps
-  auto tensor = product.factor(0)->as<Tensor>();
-  assert(tensor.bra_rank() != tensor.ket_rank());
-  if(tensor.bra_rank() > tensor.ket_rank())
-    maps = maps_from_list(product.factor(0)->as<Tensor>().bra());
-  else
-    maps = maps_from_list(product.factor(0)->as<Tensor>().ket());
-
-  // TODO: Fix for non-particle number conserving products
-    assert(!maps.empty());
-    for(auto&& map : maps){
-      auto even = get_phase(map);
-      Product new_product{};
-      new_product.scale(product.scalar());
-      even ? new_product.append(1, ex<Tensor>(S)) : new_product.append(-1, ex<Tensor>(S));
-      auto temp_product = remove_tensor_from_product(product, L"A");
-      for (auto&& term : *temp_product) {
-        if (term->is<Tensor>()) {
-          auto new_tensor = term->as<Tensor>();
-          new_tensor.transform_indices(map);
-          new_product.append(1, ex<Tensor>(new_tensor));
-        }
-      }
-      result->append(ex<Product>(new_product));
-    }
+    assert(A_tensor.bra_rank() != A_tensor.ket_rank());
+    if(A_tensor.bra_rank() > A_tensor.ket_rank())
+      maps = maps_from_list(A_tensor.bra());
+    else
+      maps = maps_from_list(A_tensor.ket());
   }
+  assert(!maps.empty());
+  for(auto&& map : maps){
+    auto even = get_phase(map);
+    Product new_product{};
+    new_product.scale(product.scalar());
+    even ? new_product.append(1, ex<Tensor>(S)) : new_product.append(-1, ex<Tensor>(S));
+    auto temp_product = remove_tensor_from_product(product, L"A");
+    for (auto&& term : *temp_product) {
+      if (term->is<Tensor>()) {
+        auto new_tensor = term->as<Tensor>();
+        new_tensor.transform_indices(map);
+        new_product.append(1, ex<Tensor>(new_tensor));
+      }
+    }
+    result->append(ex<Product>(new_product));
+  } // map
   // std::wcout << __LINE__ << to_latex(result) << "\n";
   return result;
 }
@@ -858,8 +814,8 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
   };
   expression->visit(check_proto_index);
 
-  // Expand A operator, antisymmetrize
 #if 0
+  // Expand A operator, antisymmetrize
   auto symm_and_expand = [&] (const ExprPtr& expr){
     auto temp = expr;
     // if (has_tensor_label(temp, L"A"))
@@ -888,12 +844,12 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
                        [&](const Index& idx) { idx.reset_tag(); });
   };
 
-  // expr->visit(reset_idx_tags);
-  expand(expr);
+  expr->visit(reset_idx_tags); // This call is REQUIRED
+  expand(expr); // This call is REQUIRED
   rapid_simplify(expr);
 
   // Returns the number of cycles
-  auto count_cycles = [&] (std::vector<Index>& v, std::vector<Index>& v1){
+  auto count_cycles = [&] (container::svector<Index>& v, container::svector<Index>& v1){
     assert(v.size() == v1.size());
     size_t n_cycles = 0;
     auto dummy_idx = Index(L"p_50");
@@ -933,7 +889,7 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
     }
 
     auto get_ket_indices = [&] (const Product& prod){
-      std::vector<Index> ket_idx;
+      container::svector<Index> ket_idx;
       for(auto&& t: prod) {
         if(t->is<Tensor>())
         ranges::for_each(t->as<Tensor>().ket(), [&] (const Index& idx) {ket_idx.push_back(idx);});
@@ -942,7 +898,7 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
     };
 
     auto get_bra_indices = [&] (const Product& prod){
-      std::vector<Index> bra_idx;
+      container::svector<Index> bra_idx;
       for(auto&& t: prod) {
         if(t->is<Tensor>())
           ranges::for_each(t->as<Tensor>().bra(), [&] (const Index& idx) {bra_idx.push_back(idx);});
