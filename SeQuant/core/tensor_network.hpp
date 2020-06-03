@@ -154,7 +154,7 @@ class TensorNetwork {
   /// optimal if all tensors are distinct; set to false to perform complete
   /// canonicalization
   /// @param named_indices specifies the indices that cannot be renamed, i.e.
-  /// their labels are meaningful; defaults is nullptr, which results in external
+  /// their labels are meaningful; default is nullptr, which results in external
   /// indices treated as named indices
   /// @return biproduct of canonicalization (e.g. phase); if none, returns nullptr
   ExprPtr canonicalize(
