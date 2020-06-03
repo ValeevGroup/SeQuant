@@ -72,6 +72,17 @@ set(SEQUANT_INSTALL_DOCDIR "${SEQUANT_INSTALL_SHAREDIR}/doc"
 set(SEQUANT_INSTALL_CMAKEDIR "lib/cmake/sequant"
     CACHE PATH "SeQuant CMAKE install directory")
 
+##########################
+# SeQuant package options
+##########################
+
+option(ENABLE_TBB "Enable TBB as an optional prerequisite for C++17's parallel STL (if PSTL is not supported will use of standard C++11 concurrency)" OFF)
+add_feature_info(TBB ENABLE_TBB "Intel Thread-Building Blocks is an optional prerequisite for C++17's parallel STL")
+
+##########################
+# Prerequisites
+##########################
+
 # std::thread requires (on some platforms?) thread support which is not
 # provided automatically
 find_package(Threads REQUIRED)
@@ -81,9 +92,13 @@ if ((${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU" AND
     ${CMAKE_CXX_COMPILER_VERSION} VERSION_GREATER 9) OR
     (${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang" AND
     ${CMAKE_CXX_COMPILER_VERSION} VERSION_GREATER 8))
-  set(PSTL_NEEDS_TBB TRUE)
-  find_package(TBB REQUIRED)
+  if (ENABLE_TBB)  # but user must enable the search for TBB since this is an additional source of build entropy
+    find_package(TBB REQUIRED)
+  endif(ENABLE_TBB)
 endif()
+# check of <execution> header is usable
+include(CheckCXXFeatures)
+check_cxx_execution_header(SEQUANT)
 
 # Ranges-V3
 include(FindOrFetchRangeV3)
@@ -177,10 +192,13 @@ add_library(SeQuant
         SeQuant/domain/mbpt/sr/sr.cpp
         SeQuant/domain/mbpt/sr/sr.hpp
         )
-target_link_libraries(SeQuant range-v3::range-v3 Boost::boost SeQuant-bliss Threads::Threads)
-if (PSTL_NEEDS_TBB)
-    target_link_libraries(SeQuant ${TBB_LIBRARIES})
+target_link_libraries(SeQuant PUBLIC range-v3::range-v3 Boost::boost SeQuant-bliss Threads::Threads)
+if (SEQUANT_HAS_EXECUTION_HEADER_STANDALONE OR SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB)
+  target_compile_definitions(SeQuant PUBLIC SEQUANT_HAS_EXECUTION_HEADER)
+  if (SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB)
+    target_link_libraries(SeQuant PUBLIC ${TBB_LIBRARIES})
     target_include_directories(SeQuant PUBLIC ${TBB_INCLUDE_DIRS})
+  endif()
 endif()
 target_include_directories(SeQuant PUBLIC
         $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>
