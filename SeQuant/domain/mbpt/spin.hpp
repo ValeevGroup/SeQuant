@@ -791,6 +791,95 @@ ExprPtr expand_S_operator(const ExprPtr& expr){
   return result;
 }
 
+/// @brief Returns the number of cycles
+/// @detailed
+/// @param
+/// @return
+inline int count_cycles(const container::svector<int, 6>& vec1, const container::svector<int, 6>& vec2) {
+  assert(vec1.size() == vec2.size());
+  int n_cycles = 0;
+  auto dummy_idx = 99;
+  container::svector<int, 6> v = vec1;
+  container::svector<int, 6> v1 = vec2;
+  for (auto it = v.begin(); it != v.end(); ++it) {
+    if (*it != dummy_idx) {
+      n_cycles++;
+      auto idx = std::distance(v.begin(), it);
+      auto it0 = it;
+      auto it1 = std::find(v1.begin(), v1.end(), *it0);
+      auto idx1 = std::distance(v1.begin(), it1);
+      do {
+        it0 = std::find(v.begin(), v.end(), v[idx1]);
+        it1 = std::find(v1.begin(), v1.end(), *it0);
+        idx1 = std::distance(v1.begin(), it1);
+        *it0 = dummy_idx;
+      } while (idx1 != idx);
+    }
+  }
+  return n_cycles;
+}
+
+/// @brief Calculates permutation matrix for Biorthogonal transformation
+/// @detailed
+/// @param
+/// @return
+Eigen::MatrixXd permutation_matrix(const int n_particles) {
+  int n = std::tgamma(n_particles + 1);
+  Eigen::MatrixXd result(n, n);
+  result.setZero();
+  size_t n_row = 0;
+  container::svector<int, 6> v(n_particles), v1(n_particles);
+  std::iota(v.begin(), v.end(), 0);
+  std::iota(v1.begin(), v1.end(), 0);
+  do {
+    container::vector<double> permutation_vector;
+    do {
+      auto cycles = count_cycles(v1, v);
+      permutation_vector.push_back(std::pow(-2, cycles));
+    } while (std::next_permutation(v.begin(), v.end()));
+    Eigen::VectorXd pv_eig = Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(permutation_vector.data(),
+                                               permutation_vector.size());
+    result.row(n_row) = pv_eig;
+    ++n_row;
+  } while (std::next_permutation(v1.begin(), v1.end()));
+  result *= std::pow(-1, n_particles);
+  // std::cout << "permutation_matrix:\n" << result << "\n";
+  return result;
+}
+
+/// @brief Returns a vector of coefficients
+/// @detailed
+/// @param
+/// @return
+container::vector<double> biorthogonal_transformation_coeff(const Eigen::MatrixXd& M, const double& threshold){
+  using namespace Eigen;
+
+  // Normalization constant
+  double scalar;
+  {
+    // inline bool nonZero(double d) { return abs(d) > threshold ? true : false; }
+    auto nonZero = [&] (const double d) { return abs(d) > threshold ? true : false; };
+
+    // Solve system of equations
+    SelfAdjointEigenSolver<MatrixXd> eig_solver(M);
+    container::vector<double> eig_vals(eig_solver.eigenvalues().size());
+    VectorXd::Map(&eig_vals[0], eig_solver.eigenvalues().size()) =
+        eig_solver.eigenvalues();
+
+    double non0count = std::count_if(eig_vals.begin(), eig_vals.end(), nonZero);
+    scalar = eig_vals.size() / non0count;
+  }
+
+  // Find Pseudo Inverse, get 1st row only
+  MatrixXd pinv = M.completeOrthogonalDecomposition().pseudoInverse();
+  pinv = pinv.row(0) * scalar;
+
+  // std::cout << "Scaled oefficients: << pinv
+  container::vector<double> result(pinv.size());
+  VectorXd::Map(&result[0], pinv.size()) = pinv;
+  return result;
+}
+
 /// @brief Transforms an expression from spin orbital to spatial orbitals
 /// @detailed This functions is designed for integrating spin out of expression
 /// with Coupled Cluster equations in mind.
@@ -814,29 +903,21 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
   };
   expression->visit(check_proto_index);
 
-#if 0
-  // Expand A operator, antisymmetrize
-  auto symm_and_expand = [&] (const ExprPtr& expr){
-    auto temp = expr;
-    // if (has_tensor_label(temp, L"A"))
-    if (has_A_label(temp))
-      temp = expand_A_operator(temp);
-    temp = expand_antisymm(temp);
-    rapid_simplify(temp);
-    return temp;
-  };
-#else
-  // Symmetrize the expr and keep S operator
+ // Symmetrize the expr and keep S operator
   auto symm_and_expand = [&] (const ExprPtr& expr){
     auto temp = expr;
     if (has_A_label(temp))
       temp = expr_symmetrize(temp);
+    // std::cout << __LINE__ << temp->size() << std::endl;
     temp = expand_antisymm(temp);
+    // std::cout << __LINE__ << temp->size() << std::endl;
     rapid_simplify(temp);
+    // std::cout << __LINE__ << temp->size() << std::endl;
     return temp;
   };
-#endif
+
   auto expr = symm_and_expand(expression);
+  // std::cout << __LINE__ << expr->size() << std::endl;
 
   auto reset_idx_tags = [&](ExprPtr& expr) {
     if (expr->is<Tensor>())
@@ -845,8 +926,11 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
   };
 
   expr->visit(reset_idx_tags); // This call is REQUIRED
+  // std::wcout << __LINE__ << expr->size() << L" " << to_latex(expr) << std::endl;
   expand(expr); // This call is REQUIRED
+  // std::wcout << __LINE__ << expr->size() << L" " << to_latex(expr) << std::endl;
   rapid_simplify(expr);
+  // std::cout << __LINE__ << expr->size() << std::endl;
 
   // Returns the number of cycles
   auto count_cycles = [&] (container::svector<Index>& v, container::svector<Index>& v1){
