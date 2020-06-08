@@ -22,11 +22,34 @@ AdjacencyMatrix::AdjacencyMatrix(const ExprPtr& expr)
   for (auto ii = 0; ii < expr->size(); ++ii)
     for (auto jj = ii + 1; jj < expr->size(); ++jj) {
       // set color data
-      if (are_connected(expr->at(ii), expr->at(jj)))
+      if (are_connected(expr->at(ii), expr->at(jj))) {
         colorMatrix_[ii][jj] = colorMatrix_[jj][ii] =
             evaluate::EvalTree(
                 std::make_shared<Product>(Product{expr->at(ii), expr->at(jj)}))
                 .hash_value();
+
+        /////
+        /* auto t1 = std::make_shared<Tensor>(expr->at(ii)->as<Tensor>()); */
+        /* auto t2 = std::make_shared<Tensor>(expr->at(jj)->as<Tensor>()); */
+
+        /* auto tn = TensorNetwork(*std::make_shared<Product>(Product{t1, t2})); */
+
+        /* tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false); */
+
+        /* auto tensor = [&tn](auto idx) { */
+        /*   return std::dynamic_pointer_cast<Tensor>( */
+        /*       *(tn.tensors().begin() + idx)); */
+        /* }; */
+
+        /* auto vertex0 = tensor(0); */
+        /* auto vertex1 = tensor(1); */
+
+        /* colorMatrix_[ii][jj] = colorMatrix_[jj][ii] = */
+        /*     evaluate::EvalTree( */
+        /*         std::make_shared<Product>(Product{vertex0, vertex1})) */
+        /*         .hash_value(); */
+        /////
+      }
     }
 }
 
@@ -92,26 +115,19 @@ std::tuple<ExprPtr, ExprPtr> factorize_pair(const ExprPtr& exprA,
           common_t2.insert(t2);
         }
       }
-    return std::make_tuple(common_t1, common_t2);
+
+    // convert set to vector
+    auto exprptr_vec = [](const auto& container) {
+      container::svector<ExprPtr> result;
+      result.reserve(container.size());
+      for (auto&& xpr : container) result.push_back(xpr);
+      return result;
+    };
+
+    return std::make_tuple(exprptr_vec(common_t1), exprptr_vec(common_t2));
   };  // lambda common_tensors
 
-  auto [commonA, commonB] = common_tensors(*exprA, *exprB);
-  // canonicalize the common tensors
-  auto tnA = TensorNetwork(commonA);
-  auto tnB = TensorNetwork(commonB);
-  tnA.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false);
-  tnB.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false);
-
-  // collect common tensors after canonicalization
-  auto tensors = [](const auto& container) {
-    container::svector<ExprPtr> tensors;
-    for (const auto& expr : container.tensors())
-      tensors.push_back(std::dynamic_pointer_cast<Tensor>(expr));
-    return tensors;
-  };
-
-  auto tensorsA = tensors(tnA);
-  auto tensorsB = tensors(tnB);
+  auto [tensorsA, tensorsB] = common_tensors(*exprA, *exprB);
 
   // get positions in a container where different 'kind' of tensors begin
   // container: {f_ov, f_ov, t_oo, t_oovv, g_oovv, g_oovv}
@@ -160,6 +176,15 @@ std::tuple<ExprPtr, ExprPtr> factorize_pair(const ExprPtr& exprA,
   //
   auto common_pairs = [&parts_indices](const auto& container1,
                                        const auto& container2) {
+    // given @c pos position of an element in a container and
+    // given @c parts partition vector of the container
+    // return the index in the @c parts container in which the @c pos falls.
+    // eg.
+    // parts: {(0, 2), (2, 5), (5, 6)}
+    // pos: 3
+    // return: 1
+    // since 3 belongs to (2, 5) partition whose index in the
+    // partition vector is 1
     const auto part_idx = [](pos_type pos, const auto& parts) {
       for (size_t ii = 0; ii < parts.size(); ++ii) {
         if ((std::get<0>(parts.at(ii)) <= pos) &&
@@ -171,7 +196,7 @@ std::tuple<ExprPtr, ExprPtr> factorize_pair(const ExprPtr& exprA,
 
     auto parts1 = parts_indices(container1);
     auto parts2 = parts_indices(container2);
-    assert(parts1.size() == parts2.size());
+    // assert(parts1.size() == parts2.size());
 
     auto adjMat1 = AdjacencyMatrix(container1);
     auto adjMat2 = AdjacencyMatrix(container2);

@@ -4,7 +4,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr_fwd.hpp>
 
-// IndexSpace type based hashing of tensors for ColorMatrix
+// IndexSpace type based hashing of tensors for connectivity
 #include "SeQuant/domain/evaluate/eval_fwd.hpp"
 
 #include <tuple>
@@ -55,8 +55,8 @@ class AdjacencyMatrix {
   static bool are_connected(const ExprPtr& t1, const ExprPtr& t2);
 };
 
-/// Check if a Tensor expresion exists in a potentially nested Product of
-/// tensors.
+/// Check if a Tensor expression exists in a potentially nested Product of
+/// Tensors'.
 bool tensor_exists(const ExprPtr& expr, const ExprPtr& tnsr);
 
 ///

@@ -115,6 +115,13 @@ TEST_CASE("FACTORIZER", "[factorizer]") {
     fact2Expected->append(1, prod2->at(prod2->size() - 1));
 
     REQUIRE(*fact2Expected == *fact2);
+
+    std::wcout << "Factorization of single common subnets\n";
+    std::wcout << "prod1 = " << prod1->to_latex() << "\n";
+    std::wcout << "prod2 = " << prod2->to_latex() << "\n";
+    std::wcout << "after factorization..\n";
+    std::wcout << "prod1 = " << fact1->to_latex() << "\n";
+    std::wcout << "prod2 = " << fact2->to_latex() << "\n";
   }
 
   SECTION("Connected and unconnected common subnets") {
@@ -144,6 +151,14 @@ TEST_CASE("FACTORIZER", "[factorizer]") {
     fact2Expected->append(
         std::make_shared<Product>(Product{prod2->at(2), prod2->at(3)}));
     REQUIRE(*fact2 == *fact2Expected);
+
+    std::wcout
+        << "Factorization of connected and disconnected common subnets\n";
+    std::wcout << "prod1 = " << prod1->to_latex() << "\n";
+    std::wcout << "prod2 = " << prod2->to_latex() << "\n";
+    std::wcout << "after factorization..\n";
+    std::wcout << "prod1 = " << fact1->to_latex() << "\n";
+    std::wcout << "prod2 = " << fact2->to_latex() << "\n";
   }
 
   SECTION("Connected subnets with different colors") {
@@ -173,6 +188,14 @@ TEST_CASE("FACTORIZER", "[factorizer]") {
     fact2Expected->append(
         std::make_shared<Product>(Product{prod2->at(2), prod2->at(3)}));
     REQUIRE(*fact2 == *fact2Expected);
+
+    std::wcout << "Factorization of connected common subnets with different "
+                  "connectivity\n";
+    std::wcout << "prod1 = " << prod1->to_latex() << "\n";
+    std::wcout << "prod2 = " << prod2->to_latex() << "\n";
+    std::wcout << "after factorization..\n";
+    std::wcout << "prod1 = " << fact1->to_latex() << "\n";
+    std::wcout << "prod2 = " << fact2->to_latex() << "\n";
   }
 
   SECTION("Different factorizations based on the second param") {

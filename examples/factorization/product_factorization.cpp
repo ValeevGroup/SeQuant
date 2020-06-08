@@ -2,14 +2,10 @@
 // Created by Bimal Gaudel on 12/22/19.
 //
 
-#include <btas/btas.h>
-#include <btas/tensorview.h>
-#include <btas/tensor_func.h>
-
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/tensor.hpp>
+#include <SeQuant/domain/evaluate/eval_tree.hpp>
 #include <SeQuant/domain/factorize/factorizer.hpp>
-#include "../contract/interpret/contract.hpp"
 
 #include "../sequant_setup.hpp"
 
@@ -19,9 +15,53 @@
 #include <ostream>
 #include <string>
 
+#include <chrono>      // for seeding
 #include <functional>  // for std::bind
 #include <random>      // for std::mt19937
-#include <chrono>      // for seeding
+
+// drops A and P tensors
+// sets scalars to 1
+// expr is a Product of Tensors'
+auto trimmed_prod = [](const auto& expr) {
+  auto result = std::make_shared<Product>();
+  for (const auto& xpr : *expr) {
+    if (auto label = xpr->template as<Tensor>().label();
+        label == L"A" || label == L"P")
+      continue;
+    else
+      result->append(1, xpr);
+  }
+  return result;
+};
+
+// trim summands of expr
+// expr is a Sum of Products' of Tensors'
+auto trimmed_sum = [](const auto& expr) {
+  auto result = std::make_shared<Sum>();
+  for (const auto& xpr : *expr) result->append(trimmed_prod(xpr));
+  return result;
+};
+
+// expr1 and expr2 are Products' Tensors'
+void print_factors(const ExprPtr& expr1, const ExprPtr& expr2) {
+  std::wcout << "$" << expr1->to_latex() << "$  vs  $" << expr2->to_latex()
+             << "$  :  ";
+  auto [fact1, fact2] = factorize::factorize_pair(expr1, expr2);
+  std::wcout << "$" << fact1->to_latex() << "$  and $" << fact2->to_latex()
+             << "$\n";
+}
+
+// expr is a Sum of Products' of Tensors'
+void print_factors(const ExprPtr& expr) {
+  for (auto ii = 0; ii < expr->size(); ++ii) {
+    for (auto jj = ii + 1; jj < expr->size(); ++jj) {
+      std::wcout << "term " << ii + 1 << " vs " << jj + 1 << "\n";
+      print_factors(expr->at(ii), expr->at(jj));
+      std::wcout << "\n";
+    }
+    std::wcout << std::endl;
+  }
+}
 
 int main() {
   // global sequant setup...
@@ -41,115 +81,101 @@ int main() {
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
   Logger::get_instance().wick_stats = false;
-  // CC equations
-  auto cc_r = cceqvec{3, 3}(true, true, true, true);
 
-  // factorization and evaluation of the CC equations
-  using sequant::factorize::factorize_product;
-  using ispace_pair = std::pair<sequant::IndexSpace::Type, size_t>;
-  using ispace_map = sequant::container::map<ispace_pair::first_type,
-                                             ispace_pair::second_type>;
-  using BTensor = btas::Tensor<double>;
+  // get positions in a container where different 'kind' of tensors begin
+  // container: {f_ov, f_ov, t_oo, t_oovv, g_oovv, g_oovv}
+  // output:    {(0, 2), (2, 3), (3, 4), (4, 6)}
+  const auto parts_indices = [](const auto& container) {
+    using evaluate::EvalTree;  // for hashing tensors by their types
+    using pos_type = std::size_t;
 
-  size_t nocc = 10, nvirt = 4;
-  std::wcout << "\nSetting up a map with nocc = " << nocc << " and nvirt = " << nvirt << "..\n";
-  auto counter_map = std::make_shared<ispace_map>(ispace_map{});
-  counter_map->insert(ispace_pair{sequant::IndexSpace::active_occupied, nocc});
-  counter_map->insert(
-      ispace_pair{sequant::IndexSpace::active_unoccupied, nvirt});
-
-  // initializing tensors present in the CCSD equations
-  auto Fock_oo = std::make_shared<BTensor>(nocc, nocc);
-  auto Fock_ov = std::make_shared<BTensor>(nocc, nvirt);
-  auto Fock_vv = std::make_shared<BTensor>(nvirt, nvirt);
-  auto G_oooo = std::make_shared<BTensor> (nocc, nocc, nocc, nocc);
-  auto G_vvvv = std::make_shared<BTensor> (nvirt, nvirt, nvirt, nvirt);
-  auto G_ovvv = std::make_shared<BTensor> (nocc, nvirt, nvirt, nvirt);
-  auto G_ooov = std::make_shared<BTensor> (nocc, nocc, nocc, nvirt);
-  auto G_oovv = std::make_shared<BTensor> (nocc, nocc, nvirt, nvirt);
-  auto G_ovov = std::make_shared<BTensor> (nocc, nvirt, nocc, nvirt);
-  auto T_ov = std::make_shared<BTensor>   (nocc, nvirt);
-  auto T_oovv = std::make_shared<BTensor> (nocc, nocc, nvirt, nvirt);
-  auto T_ooovvv = std::make_shared<BTensor>(nocc, nocc, nocc, nvirt, nvirt, nvirt);
-
-  // fill random data to tensors
-  auto randfill_tensor = [&](btas::Tensor<double>& tnsr){
-    auto seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
-    std::mt19937 rgen(seed);
-    auto dist = std::uniform_real_distribution<double>{-1.0, 1.0};
-    tnsr.generate(std::bind(dist, rgen));
+    container::svector<pos_type> indices;
+    indices.push_back(0);
+    for (auto ii = 0; ii < container.size();) {
+      auto lead_hvalue = EvalTree(container.at(ii)).hash_value();
+      auto jj = ii + 1;
+      for (; jj < container.size(); ++jj) {
+        auto trail_hvalue = EvalTree(container.at(jj)).hash_value();
+        if (lead_hvalue != trail_hvalue) break;
+      }
+      ii = jj;
+      indices.push_back(ii);
+    }
+    container::svector<std::tuple<pos_type, pos_type>> result;
+    for (auto ii = 0; ii < indices.size() - 1; ++ii)
+      result.push_back(std::make_tuple(indices.at(ii), indices.at(ii + 1)));
+    return result;
   };
 
-   randfill_tensor(*Fock_oo);
-   randfill_tensor(*Fock_ov);
-   randfill_tensor(*Fock_vv);
-   randfill_tensor(*G_oooo );
-   randfill_tensor(*G_vvvv );
-   randfill_tensor(*G_ovvv );
-   randfill_tensor(*G_ooov );
-   randfill_tensor(*G_oovv );
-   randfill_tensor(*G_ovov );
-   randfill_tensor(*T_ov   );
-   randfill_tensor(*T_oovv );
-   randfill_tensor(*T_ooovvv);
+  // lambda to get the common tensors in container_t1 and container_t2
+  auto common_tensors = [](const auto& container_t1, const auto& container_t2) {
+    container::set<ExprPtr> common_t1, common_t2;
 
-   // for the evaluation of the expressions
-   // a map is needed
-   using str_to_tensor_pair = std::pair<std::wstring, std::shared_ptr<BTensor>>;
-   using str_to_tensor_map = std::map<str_to_tensor_pair::first_type,
-                                       str_to_tensor_pair::second_type>;
+    for (const auto& t1 : container_t1)
+      for (const auto& t2 : container_t2) {
+        //
+        // NOTE: As an example: t_{i j}^{a b} has the same
+        // hash value as t_{a b}^{i j}. To hash such expressions
+        // differently, use EvalTree(expr, false).
+        //
+        if (evaluate::EvalTree(t1).hash_value() ==
+            evaluate::EvalTree(t2).hash_value()) {
+          common_t1.insert(t1);
+          common_t2.insert(t2);
+        }
+      }
 
-   str_to_tensor_map btensor_map;
-   btensor_map.insert(str_to_tensor_pair(L"f_oo",   Fock_oo));
-   btensor_map.insert(str_to_tensor_pair(L"f_ov",   Fock_ov));
-   btensor_map.insert(str_to_tensor_pair(L"f_vv",   Fock_vv));
-   btensor_map.insert(str_to_tensor_pair(L"g_oooo", G_oooo));
-   btensor_map.insert(str_to_tensor_pair(L"g_vvvv", G_vvvv));
-   btensor_map.insert(str_to_tensor_pair(L"g_ovvv", G_ovvv));
-   btensor_map.insert(str_to_tensor_pair(L"g_ooov", G_ooov));
-   btensor_map.insert(str_to_tensor_pair(L"g_oovv", G_oovv));
-   btensor_map.insert(str_to_tensor_pair(L"g_ovov", G_ovov));
-   btensor_map.insert(str_to_tensor_pair(L"t_ov",   T_ov));
-   btensor_map.insert(str_to_tensor_pair(L"t_oovv", T_oovv));
-   btensor_map.insert(str_to_tensor_pair(L"t_ooovvv", T_ooovvv));
+    // convert set to vector
+    auto exprptr_vec = [](const auto& container) {
+      container::svector<ExprPtr> result;
+      result.reserve(container.size());
+      for (auto&& xpr : container) result.push_back(xpr);
+      return result;
+    };
 
-   // factorization and evaluation
-   auto& expr_to_factorize = cc_r[3];
-   auto unfactorized_expr  = sequant::factorize::factorize_expr(expr_to_factorize, counter_map, false);
-   auto factorized_expr    = sequant::factorize::factorize_expr(expr_to_factorize, counter_map, true);
+    return std::make_tuple(exprptr_vec(common_t1), exprptr_vec(common_t2));
+  };  // lambda common_tensors
 
-  // to confirm that we are not working
-  // on the same Expr
-  if (*unfactorized_expr != *factorized_expr)
-       std::wcout << "\nunfactorized and factorized Expr are not the same.. which is good:)\n";
-  else std::wcout << "\nunfactorized and factorized Expr are the same.. time to debug:(\n";
+  // CC equations
+  auto cc_r = cceqvec{2, 2}(true, true, true, true);
+  auto ampl = 2;
+  auto expr = trimmed_sum(cc_r[ampl]);
 
-  using std::chrono::duration_cast;
-  using std::chrono::microseconds;
+  /*   for (auto ii = 0; ii < expr->size(); ++ii) */
+  /*     for (auto jj = ii + 1; jj < expr->size(); ++jj) { */
+  /*       auto pos1 = ii; */
+  /*       auto pos2 = jj; */
 
-  auto tstart            = std::chrono::high_resolution_clock::now();
-  auto unfactorized_eval = sequant::interpret::eval_equation(unfactorized_expr, btensor_map);
-  auto tstop             = std::chrono::high_resolution_clock::now();
-  auto duration          = duration_cast<microseconds>(tstop - tstart).count();
-  std::wcout << "time(unfactorized_eval) = " << duration << " microseconds.\n";
+  /*       auto term1 = trimmed_prod(expr->at(pos1)); */
+  /*       auto term2 = trimmed_prod(expr->at(pos2)); */
 
-  tstart                 = std::chrono::high_resolution_clock::now();
-  auto factorized_eval   = sequant::interpret::eval_equation(factorized_expr, btensor_map);
-  tstop                  = std::chrono::high_resolution_clock::now();
-  duration               = duration_cast<microseconds>(tstop - tstart).count();
-  std::wcout << "time(factorized_eval) = " << duration << " microseconds.\n";
+  /*       std::wcout << "term #" << pos1 + 1                 // */
+  /*                  << " = " << term1->to_latex() << "\n"   // */
+  /*                  << "term #" << pos2 + 1                 // */
+  /*                  << " = " << term2->to_latex() << "\n";  // */
 
-  std::wcout << "\nnorm(unfac) = "
-    << std::sqrt(btas::dot(unfactorized_eval.tensor(), unfactorized_eval.tensor()))
-    << "\n";
-  std::wcout << "\nnorm(fac) = "
-    << std::sqrt(btas::dot(factorized_eval.tensor(), factorized_eval.tensor()))
-    << "\n";
-  std::wcout << "\nUnfactorized expr (scalars dropped!) \n";
-  // print_expr(unfactorized_expr);
-  std::wcout << unfactorized_expr->to_latex();
-  std::wcout << "\n\nFactorized expr (scalars dropped!) \n";
-  // print_expr(factorized_expr);
-  std::wcout << factorized_expr->to_latex();
+  /*       auto [tensorsA, tensorsB] = common_tensors(*term1, *term2); */
+
+  /*       std::wcout << "tensorsA.size() = " << tensorsA.size() */
+  /*                  << "    tensorsB.size() = " << tensorsB.size() << "\n"; */
+
+  /*       auto parts_term1 = parts_indices(tensorsA); */
+  /*       auto parts_term2 = parts_indices(tensorsB); */
+  /*       std::wcout << "parts_term1.size() = "        // */
+  /*                  << parts_term1.size()             // */
+  /*                  << "\nparts_term2.size() = "      // */
+  /*                  << parts_term2.size() << "\n\n";  // */
+  /*     } */
+
+  std::wcout << R"(\section*{Equation})"
+             << "\n"
+             << R"(\begin{dmath*})"
+             << "\n"
+             << expr->to_latex() << "\n"
+             << R"(\end{dmath*})" << std::endl;
+  std::wcout << R"(\section*{Factors})"
+             << "\n";
+  print_factors(expr);
+
   return 0;
 }
