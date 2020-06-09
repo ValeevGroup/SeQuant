@@ -916,11 +916,8 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
     auto temp = expr;
     if (has_A_label(temp))
       temp = expr_symmetrize(temp);
-    // std::cout << __LINE__ << temp->size() << std::endl;
     temp = expand_antisymm(temp);
-    // std::cout << __LINE__ << temp->size() << std::endl;
     rapid_simplify(temp);
-    // std::cout << __LINE__ << temp->size() << std::endl;
     return temp;
   };
 
@@ -934,11 +931,8 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
   };
 
   expr->visit(reset_idx_tags); // This call is REQUIRED
-  // std::wcout << __LINE__ << expr->size() << L" " << to_latex(expr) << std::endl;
   expand(expr); // This call is REQUIRED
-  // std::wcout << __LINE__ << expr->size() << L" " << to_latex(expr) << std::endl;
   rapid_simplify(expr);
-  // std::cout << __LINE__ << expr->size() << std::endl;
 
   // Returns the number of cycles
   auto count_cycles = [&] (container::svector<Index>& v, container::svector<Index>& v1){
