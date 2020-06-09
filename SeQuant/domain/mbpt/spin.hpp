@@ -788,6 +788,14 @@ ExprPtr expand_S_operator(const ExprPtr& expr){
       }
     }
   }
+
+  auto reset_idx_tags = [&](ExprPtr& expr) {
+    if (expr->is<Tensor>())
+      ranges::for_each(expr->as<Tensor>().const_braket(),
+                       [&](const Index& idx) { idx.reset_tag(); });
+  };
+
+  result->visit(reset_idx_tags);
   return result;
 }
 
@@ -994,6 +1002,7 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
     auto product_bras = get_bra_indices(temp_product);
 
     // Substitute indices from external index list
+    // BUG: This fails for f_i^a term.
     if((*ext_index_groups.begin()).size() == 2)
     ranges::for_each(ext_index_groups, [&](const IndexList &idx_pair) {
       if (idx_pair.size() == 2) {
