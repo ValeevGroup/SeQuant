@@ -1002,23 +1002,27 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
     auto product_bras = get_bra_indices(temp_product);
 
     // Substitute indices from external index list
-    // BUG: This fails for f_i^a term.
     if((*ext_index_groups.begin()).size() == 2)
-    ranges::for_each(ext_index_groups, [&](const IndexList &idx_pair) {
-      if (idx_pair.size() == 2) {
-        auto it = idx_pair.begin();
-        auto first = *it;
-        it++;
-        auto second = *it;
-        // TODO: Check for a potential bug if index appears at v.end()
-        auto bra_it = std::find(product_bras.begin(), product_bras.end(), first);
-        if (bra_it != product_bras.end())
-          *bra_it = second;
-        auto ket_it = std::find(product_kets.begin(), product_kets.end(), first);
-        if (ket_it != product_kets.end())
-          *ket_it = second;
-      }
-    });
+      ranges::for_each(ext_index_groups, [&](const IndexList &idx_pair) {
+        if (idx_pair.size() == 2) {
+          auto it = idx_pair.begin();
+          auto first = *it;
+          it++;
+          auto second = *it;
+          // TODO: Check for a potential bug if index appears at v.end()
+          if(product_kets.size() == 1 && product_bras.size() == 1){
+            if(product_bras[0] == first) product_bras[0] = second;
+            if(product_kets[0] == first) product_kets[0] = second;
+          } else {
+            auto bra_it = std::find(product_bras.begin(), product_bras.end(), first);
+            if (bra_it != product_bras.end())
+              *bra_it = second;
+            auto ket_it = std::find(product_kets.begin(), product_kets.end(), first);
+            if (ket_it != product_kets.end())
+              *ket_it = second;
+          }
+        }
+      });
 
     auto n_cycles = count_cycles(product_kets, product_bras);
 
