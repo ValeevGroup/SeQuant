@@ -395,6 +395,12 @@ int main(int argc, char* argv[]) {
     auto cc_r = cceqvec{2, 2}(true, true, true, true);
 #endif
 
+//    auto reset_idx_tags = [&](ExprPtr& expr) {
+//      if (expr->is<Tensor>())
+//        ranges::for_each(expr->as<Tensor>().const_braket(),
+//                         [&](const Index& idx) { idx.reset_tag(); });
+//    };
+
     // SPIN TRACE THE RESIDUAL
     std::vector<ExprPtr> cc_st_r(cc_r.size());
     for (size_t i = 1; i < cc_r.size(); ++i){
@@ -410,6 +416,12 @@ int main(int argc, char* argv[]) {
       // cc_st_r[i] = spintrace(cc_r[i], external_indices);
       cc_st_r[i] = closed_shell_spintrace(cc_r[i], external_indices);
       canonicalize(cc_st_r[i]);
+      // std::wcout << to_latex(cc_st_r[i]) << "\n";
+      printf("R%lu Spin-orbit: %lu terms; With S operator: %lu;", i, cc_r[i]->size(), cc_st_r[i]->size());
+      cc_st_r[i] = expand_S_operator(cc_st_r[i]);
+      rapid_simplify(cc_st_r[i]);
+      canonicalize(cc_st_r[i]);
+      printf(" S expanded: %lu\n", cc_st_r[i]->size());
       const auto tstop = std::chrono::high_resolution_clock::now();
       const std::chrono::duration<double> time_elapsed = tstop - tstart;
       printf("CC R%lu size: %lu time: %5.3f sec.\n", i, cc_st_r[i]->size(), time_elapsed.count());
@@ -418,6 +430,8 @@ int main(int argc, char* argv[]) {
     // Use Biorthogonal transformation for simpler CCSD residual equations
     bool biorthogonal_transformation = true;
     if(biorthogonal_transformation){
+      cout << "Using Biorthogonal transformation...\n";
+
       // CCSD R1
       auto cc_r1_biorthogonal = ex<Constant>(0.5) * cc_st_r[1];
       expand(cc_r1_biorthogonal);
@@ -430,22 +444,17 @@ int main(int argc, char* argv[]) {
 
       auto temp_expr = transform_expression(cc_st_r[2], idxmap);
       auto biorthogonal_R2 =
-          ex<Constant>(1.0 / 3.0) * cc_st_r[2] +
-              ex<Constant>(1.0 / 6.0) * temp_expr;
+          ex<Constant>(1.0 / 3.0) * cc_st_r[2] + ex<Constant>(1.0 / 6.0) * temp_expr;
 
-      auto P_cc_r2 = ex<Constant>(0.5) *
-          ex<Tensor>(L"P", WstrList{L"a_1", L"a_2"}, WstrList{L"i_1", L"i_2"}, Symmetry::nonsymm) *
-          biorthogonal_R2;
-      expand(P_cc_r2);
-      canonicalize(P_cc_r2);
-
-      // TODO: Do not expand P operator; evaluate R2 and permute instead
-      auto cc_r2_biorthogonal = expand_P_operator(P_cc_r2);
-      rapid_simplify(cc_r2_biorthogonal);
-      cc_st_r[2] = cc_r2_biorthogonal;
+      expand(biorthogonal_R2);
+      canonicalize(biorthogonal_R2);
+      rapid_simplify(biorthogonal_R2);
+      cc_st_r[2] = biorthogonal_R2;
     } else {
+      cc_st_r[1] = ex<Constant>(0.5) * cc_st_r[1];
       expand(cc_st_r[1]);
       rapid_simplify(cc_st_r[1]);
+      cc_st_r[2] = ex<Constant>(0.25) * cc_st_r[2];
       expand(cc_st_r[2]);
       rapid_simplify(cc_st_r[2]);
     }
@@ -479,7 +488,12 @@ int main(int argc, char* argv[]) {
 
       auto biorthogonal_R3 =
           ex<Constant>(17/120) * cc_st_r[3] + p1 + p2 + p3 + p4 + p5;
-
+#if 1
+      expand(biorthogonal_R3);
+      canonicalize(biorthogonal_R3);
+      rapid_simplify(biorthogonal_R3);
+      cc_st_r[3] = biorthogonal_R3;
+#else
       auto P_cc_r3 = ex<Constant>(1./6.) *
           ex<Tensor>(L"P", WstrList{L"a_1", L"a_2", L"a_3"}, WstrList{L"i_1", L"i_2", L"i_3"}, Symmetry::nonsymm) *
           biorthogonal_R3;
@@ -490,8 +504,11 @@ int main(int argc, char* argv[]) {
       auto cc_r3_biorthogonal = expand_P_operator(P_cc_r3);
       rapid_simplify(cc_r3_biorthogonal);
       cc_st_r[3] = cc_r3_biorthogonal;
+#endif
     } else {
+      cc_st_r[3] = ex<Constant>(0.125) * cc_st_r[3];
       expand(cc_st_r[3]);
+      canonicalize(cc_st_r[3]);
       rapid_simplify(cc_st_r[3]);
     }
 #endif
@@ -539,10 +556,14 @@ int main(int argc, char* argv[]) {
       context_map.insert(ContextMapType::value_type(hash_val, data_tensors.at(i)));
     }
 
+    printf("R1 size: %lu\n",cc_st_r[1]->size());
+    printf("R2 size: %lu\n",cc_st_r[2]->size());
+
     bool swap_braket_labels = true;
     auto r1_tree = EvalTree(cc_st_r[1], swap_braket_labels);
     auto r2_tree = EvalTree(cc_st_r[2], swap_braket_labels);
 #if CCSDT_eval
+    printf("R3 size: %lu\n",cc_st_r[3]->size());
     auto r3_tree = EvalTree(cc_st_r[3], swap_braket_labels);
 #endif
 
@@ -552,6 +573,15 @@ int main(int argc, char* argv[]) {
     ediff = 0.0;
     auto normdiff = 0.0;
     auto ecc = 0.0;
+    bool diis = true;
+
+    int start_diis = 3;
+    int diis_size = 3;
+    std::deque<TA::TArrayD> e1_vec, e2_vec;
+    std::deque<TA::TArrayD> t1_vec, t2_vec;
+    TA::TArrayD t_ov_prev;
+    TA::TArrayD t_oovv_prev;
+
     cout << "Using TiledArray..." << endl;
     cout << "Iter   norm(t_ov)    norm(t_oovv)     ΔE(CC)          E(CC)       time(s)" << endl;
     cout << "============================================================================" << endl;
@@ -559,6 +589,83 @@ int main(int argc, char* argv[]) {
     do {
       const auto tstart = std::chrono::high_resolution_clock::now();
       ++iter;
+
+      if(diis && iter > 1){
+
+        // Error vector
+        TA::TArrayD e1;
+        e1("i,a") = (*t_ov)("i,a") - t_ov_prev("i,a");
+        TA::TArrayD diis_t1;
+        diis_t1 = TiledArray::clone(*t_ov);
+
+        TA::TArrayD e2;
+        e2("i,j,a,b") = (*t_oovv)("i,j,a,b") - t_oovv_prev("i,j,a,b");
+        TA::TArrayD diis_t2;
+        diis_t2 = TiledArray::clone(*t_oovv);
+
+        // cout << "e1: " << e1;
+        // cout << "e2: " << e2;
+
+        // Vector of error matrices
+        e1_vec.push_back(e1);
+        e2_vec.push_back(e2);
+
+        t1_vec.push_back(diis_t1);
+        t2_vec.push_back(diis_t2);
+
+        int B_size = std::min(iter, diis_size) - 1;
+
+        if(e1_vec.size() > B_size){
+          e1_vec.pop_front();
+          e2_vec.pop_front();
+          t1_vec.pop_front();
+          t2_vec.pop_front();
+        }
+
+        if(iter > start_diis){
+          // Fill 'B' matrix
+          Matrix B_t1(B_size + 1, B_size + 1);
+          B_t1.setConstant(-1.0);
+          B_t1(B_size, B_size) = 0.0;
+          Matrix B_t2 = B_t1;
+
+          // TODO: Use Matrix Views
+          for(int i = 0; i < B_size; ++i){
+            for(int j = 0; j < B_size; ++j){
+              B_t1(i,j) = TA::dot_product(e1_vec[i],e1_vec[j]);
+              B_t2(i,j) = TA::dot_product(e2_vec[i],e2_vec[j]);
+            }
+          }
+
+          // Solve, get coefficients
+          Eigen::VectorXd rhs(B_size + 1);
+          rhs.setZero();
+          rhs(B_size) = -1;
+
+          Eigen::ColPivHouseholderQR<Matrix> solver_t1(B_t1);
+          Eigen::VectorXd coeff_t1 = solver_t1.solve(rhs);
+
+          Eigen::ColPivHouseholderQR<Matrix> solver_t2(B_t2);
+          Eigen::VectorXd coeff_t2 = solver_t2.solve(rhs);
+
+          // cout << coeff_t1.size() << " " << coeff_t1.transpose() << "\n";
+          // cout << coeff_t2.size() << " " << coeff_t2.transpose() << "\n";
+
+          // Update T amplitudes
+          TA::TArrayD new_t1(world, tr_ov);
+          new_t1.fill(0.0);
+          TA::TArrayD new_t2(world, tr_oovv);
+          new_t2.fill(0.0);
+          for(int i = 0; i < B_size; ++i){
+            new_t1("i,a") += t1_vec[i]("i,a") * coeff_t1[i];
+            new_t2("i,j,a,b") += t2_vec[i]("i,j,a,b") * coeff_t2[i];
+          }
+
+          (*t_ov)("i,a") = new_t1("i,a");
+          (*t_oovv)("i,j,a,b") = new_t2("i,j,a,b");
+        }
+      }
+
       auto R1 = r1_tree.evaluate(context_map);
       auto R2 = r2_tree.evaluate(context_map);
 #if CCSDT_eval
@@ -575,6 +682,13 @@ int main(int argc, char* argv[]) {
       auto tile_R3       = R3.find({0,0,0,0,0,0}).get();
       auto tile_t_ooovvv   = (*t_ooovvv).find({0,0,0,0,0,0}).get();
 #endif
+
+      if(diis){
+        t_ov_prev = TiledArray::clone(*t_ov);
+        t_oovv_prev = TiledArray::clone(*t_oovv);
+        cout << t_ov_prev;
+        cout << t_oovv_prev;
+      }
 
       // save previous norm
       auto norm_last = std::sqrt((*t_oovv)("i,j,a,b").dot((*t_oovv)("i,j,a,b")));
@@ -626,7 +740,7 @@ int main(int argc, char* argv[]) {
       auto norm_t2 = std::sqrt((*t_oovv)("i,j,a,b").dot((*t_oovv)("i,j,a,b")));
       const auto tstop = std::chrono::high_resolution_clock::now();
       const std::chrono::duration<double> time_elapsed = tstop - tstart;
-      printf("%2d    %4.8f     %4.8f     %4.8f     %4.12f   %5.5f\n", iter,
+      printf("%2d    %4.8f     %4.8f     %4.8f     %4.12f   %5.5f\n\n", iter,
               norm_t1, norm_t2, ediff, ecc, time_elapsed.count());
       normdiff = norm_last - norm_t2;
       ediff    = ecc_last - ecc;
@@ -714,4 +828,3 @@ int main(int argc, char* argv[]) {
   }
   return 0;
 }
-
