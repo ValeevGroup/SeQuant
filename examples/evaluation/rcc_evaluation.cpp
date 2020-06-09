@@ -416,12 +416,12 @@ int main(int argc, char* argv[]) {
       // cc_st_r[i] = spintrace(cc_r[i], external_indices);
       cc_st_r[i] = closed_shell_spintrace(cc_r[i], external_indices);
       canonicalize(cc_st_r[i]);
-      // std::wcout << to_latex(cc_st_r[i]) << "\n";
+      std::wcout << to_latex(cc_st_r[i]) << "\n";
       printf("R%lu Spin-orbit: %lu terms; With S operator: %lu;", i, cc_r[i]->size(), cc_st_r[i]->size());
-      cc_st_r[i] = expand_S_operator(cc_st_r[i]);
-      rapid_simplify(cc_st_r[i]);
-      canonicalize(cc_st_r[i]);
-      printf(" S expanded: %lu\n", cc_st_r[i]->size());
+      // cc_st_r[i] = expand_S_operator(cc_st_r[i]);
+      // rapid_simplify(cc_st_r[i]);
+      // canonicalize(cc_st_r[i]);
+      // printf(" S expanded: %lu\n", cc_st_r[i]->size());
       const auto tstop = std::chrono::high_resolution_clock::now();
       const std::chrono::duration<double> time_elapsed = tstop - tstart;
       printf("CC R%lu size: %lu time: %5.3f sec.\n", i, cc_st_r[i]->size(), time_elapsed.count());
@@ -559,6 +559,9 @@ int main(int argc, char* argv[]) {
 
     printf("R1 size: %lu\n",cc_st_r[1]->size());
     printf("R2 size: %lu\n",cc_st_r[2]->size());
+
+    std::wcout << to_latex(cc_st_r[1]) << "\n";
+    std::wcout << to_latex(cc_st_r[2]) << "\n";
 
     bool swap_braket_labels = true;
     auto r1_tree = EvalTree(cc_st_r[1], swap_braket_labels);
@@ -715,11 +718,14 @@ int main(int argc, char* argv[]) {
       auto tile_t_ooovvv   = (*t_ooovvv).find({0,0,0,0,0,0}).get();
 #endif
 
+      TA::TArrayD temp_t1, temp_t2;
       if(diis){
         t_ov_prev = TiledArray::clone(*t_ov);
         t_oovv_prev = TiledArray::clone(*t_oovv);
         cout << t_ov_prev;
-        cout << t_oovv_prev;
+        // cout << t_oovv_prev;
+        // temp_t1 = TiledArray::clone(t_ov_prev);
+        // temp_t2 = TiledArray::clone(t_oovv_prev);
       }
 
 #if CCSDT_eval
