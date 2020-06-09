@@ -134,7 +134,7 @@ EvalNodePtr EvalTree::build_prod(const ExprPtr& expr,
   auto& fac0 = prod.factor(0);
 
   if (auto label = fac0->is<Tensor>() ? fac0->as<Tensor>().label() : L"";
-      label == L"A" || label == L"P") {
+      label == L"A" || label == L"S") {
     // (anti-)symmetrization tensor encountered
     auto right = std::make_shared<Product>(prod.begin() + 1, prod.end());
     right->scale(prod.scalar());
