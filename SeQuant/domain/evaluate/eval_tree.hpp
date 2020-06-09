@@ -8,6 +8,7 @@
 
 #include <functional>
 #include <memory>
+#include <numeric>
 
 namespace sequant::evaluate {
 ///
@@ -118,6 +119,16 @@ class EvalTree {
                                         size_t bra_rank, size_t ket_rank,
                                         ScalarType scal = 1);
 
+  /// Symmetrize DataTensorType
+  /// \tparam DataTensorType Backend data tensor type eg. TA::TArrayD
+  /// \param ta_tensor TiledArray tensor.
+  /// \param bra_rank rank of the tensor bra.
+  /// \param ket_rank rank of the tensor ket.
+  /// \param scal ScalarType factor to scale the result. 1 by default.
+  template <typename DataTensorType>
+  static DataTensorType _symmetrize(const DataTensorType& ta_tensor,
+                                    size_t braket_rank, ScalarType scal = 1);
+
   /// Evaluate a node in a given context.
   template <typename DataTensorType>
   static DataTensorType _evaluate(
@@ -165,7 +176,7 @@ DataTensorType EvalTree::_antisymmetrize(const DataTensorType& ta_tensor,
   };
 
   DataTensorType result(ta_tensor.world(), ta_tensor.trange());
-  result.fill(0.);
+  result.fill(0);
 
   // lhs_annot is always result of
   // ords_to_csv_str( 0, 1, ..., ta_tensor.rank()-1 )
@@ -195,13 +206,47 @@ DataTensorType EvalTree::_antisymmetrize(const DataTensorType& ta_tensor,
 }  // function _antisymmetrize
 
 template <typename DataTensorType>
+DataTensorType EvalTree::_symmetrize(const DataTensorType& ta_tensor,
+                                     size_t braket_rank, ScalarType scal) {
+  // generates a string annotation
+  // input: vector<size_t>{10, 14, 19}
+  // output:             "10,14,19"
+  auto ords_to_csv_str = [](const auto& ords, auto add) {
+    std::string str = "";
+    for (auto ii : ords) {
+      str += std::to_string(ii + add) + ",";
+    }
+    str.pop_back();  // remove the trailing comma ","
+    return str;
+  };
+
+  DataTensorType result(ta_tensor.world(), ta_tensor.trange());
+  result.fill(0);
+
+  auto perm_vec = container::svector<size_t>(braket_rank);
+  std::iota(perm_vec.begin(), perm_vec.end(), 0);
+
+  auto lhs_annot = ords_to_csv_str(perm_vec, 0) + "," +
+                   ords_to_csv_str(perm_vec, braket_rank);
+
+  do {
+    auto rhs_annot = ords_to_csv_str(perm_vec, 0) + "," +
+                     ords_to_csv_str(perm_vec, braket_rank);
+    result(lhs_annot) += ta_tensor(rhs_annot);
+
+  } while (std::next_permutation(perm_vec.begin(), perm_vec.end()));
+
+  return result;
+}
+
+template <typename DataTensorType>
 DataTensorType EvalTree::_evaluate(
     const EvalNodePtr& node,
     const container::map<HashType, std::shared_ptr<DataTensorType>>& context) {
   if (node->is_leaf()) {
     auto leaf_node = std::dynamic_pointer_cast<EvalTreeLeafNode>(node);
     if (auto label = leaf_node->expr()->as<Tensor>().label();
-        (label == L"A" || label == L"P")) {
+        (label == L"A" || label == L"S")) {
       throw std::logic_error(
           "(anti-)symmetrization tensors cannot be evaluated from here!");
     }
@@ -233,6 +278,16 @@ DataTensorType EvalTree::_evaluate(
     return _antisymmetrize(_evaluate(intrnl_node->right(), context), bra_rank,
                            ket_rank, intrnl_node->right()->scalar());
   }  // anitsymmetrization type evaluation done
+
+  if (opr == Operation::SYMMETRIZE) {
+    auto braket_rank = intrnl_node->indices().size();
+    if (braket_rank % 2 != 0)
+      throw std::logic_error("Can not symmetrize odd-ordered tensor!");
+
+    braket_rank /= 2;
+    return _symmetrize(_evaluate(intrnl_node->right(), context), braket_rank,
+                       intrnl_node->right()->scalar());
+  }  // symmetrization type evaluation done
 
   // generates tiledarray annotation based on a node's index labels
   // @note this wouldn't be necessary if the tensor algebra library

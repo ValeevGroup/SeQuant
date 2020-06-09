@@ -170,8 +170,8 @@ TEST_CASE("VISITOR_TEST", "[eval_tree]") {
       L"a_1", L"a_2", L"a_1", L"a_2", L"a_3", L"a_4"};
 
   REQUIRE(size(reaped_idx_labels) == size(expected_idx_labels));
-  for(size_t c=0; c!=size(reaped_idx_labels); ++c) {
-    REQUIRE(reaped_idx_labels[c] == *(begin(expected_idx_labels)+c));
+  for (size_t c = 0; c != size(reaped_idx_labels); ++c) {
+    REQUIRE(reaped_idx_labels[c] == *(begin(expected_idx_labels) + c));
   }
 }
 
@@ -364,6 +364,29 @@ TEST_CASE("EVALUATIONS TESTS", "[eval_tree]") {
 
     auto manual_norm =
         std::sqrt(manual_result("0,1,2,3").dot(manual_result("0,1,2,3")));
+
+    auto eval_norm =
+        std::sqrt(eval_result("0,1,2,3").dot(eval_result("0,1,2,3")));
+
+    REQUIRE(manual_norm == Approx(eval_norm));
+  }
+
+  SECTION("Testing symmetrization evaluation") {
+    auto t = make_tensor_expr({"t", "i_1", "i_2", "a_1", "a_2"});
+    auto S_oovv = make_tensor_expr({"S", "i_1", "i_2", "a_1", "a_2"});
+
+    DTensorType manual_result;
+    manual_result("0,1,2,3") = (*T_oovv)("0,1,2,3") + (*T_oovv)("1,0,3,2");
+    auto manual_norm =
+        std::sqrt(manual_result("0,1,2,3").dot(manual_result("0,1,2,3")));
+
+    ContextMapType context;
+    context.insert(
+        ContextMapType::value_type(EvalTree(t).hash_value(), T_oovv));
+
+    auto expr = std::make_shared<Product>(Product({S_oovv, t}));
+    auto tree = EvalTree(expr);
+    auto eval_result = tree.evaluate(context);
 
     auto eval_norm =
         std::sqrt(eval_result("0,1,2,3").dot(eval_result("0,1,2,3")));
