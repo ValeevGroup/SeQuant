@@ -68,7 +68,7 @@ class EvalTree {
   ///        the ket indices and returns while constructing leaf node from
   ///        sequant tensor as soon as IndexSpace attribute in ket is lower than
   ///        that in bra at corresponding positions.
-  EvalTree(const ExprPtr& expr, bool canonize_leaf_braket = true);
+  explicit EvalTree(const ExprPtr& expr, bool canonize_leaf_braket = true);
 
  private:
   /// Build EvalTreeNode pointer from sequant expression of Sum, Product or
@@ -152,7 +152,7 @@ DataTensorType EvalTree::_antisymmetrize(const DataTensorType& ta_tensor,
   // input: vector<size_t>{10, 14, 19}
   // output:             "10,14,19"
   auto ords_to_csv_str = [](const auto& ords) {
-    std::string str = "";
+    std::string str;
     for (auto ii : ords) {
       str += std::to_string(ii) + ",";
     }
@@ -212,7 +212,7 @@ DataTensorType EvalTree::_symmetrize(const DataTensorType& ta_tensor,
   // input: vector<size_t>{10, 14, 19}
   // output:             "10,14,19"
   auto ords_to_csv_str = [](const auto& ords, auto add) {
-    std::string str = "";
+    std::string str;
     for (auto ii : ords) {
       str += std::to_string(ii + add) + ",";
     }
@@ -236,6 +236,7 @@ DataTensorType EvalTree::_symmetrize(const DataTensorType& ta_tensor,
 
   } while (std::next_permutation(perm_vec.begin(), perm_vec.end()));
 
+  result(lhs_annot) = scal * result(lhs_annot);
   return result;
 }
 
@@ -255,7 +256,7 @@ DataTensorType EvalTree::_evaluate(
     if (found_it != context.end()) {
       return *(found_it->second);
     } else {
-      std::wstring error_msg_os = L"";
+      std::wstring error_msg_os;
 
       error_msg_os += L"EvalNodeLeaf::evaluate(): ";
       error_msg_os += L"did not find such tensor in context (expr=\"";
@@ -294,7 +295,7 @@ DataTensorType EvalTree::_evaluate(
   // would support std::string_view as annotations
   auto TA_annotation =
       [&intrnl_node](decltype(intrnl_node->indices())& indices) {
-        std::string annot = "";
+        std::string annot;
         for (const auto& idx : indices)
           annot += std::string(idx.label().begin(), idx.label().end()) + ", ";
 

@@ -271,13 +271,13 @@ TEST_CASE("EVALUATIONS TESTS", "[eval_tree]") {
   TA::TiledRange tr_oovv{{0, nocc}, {0, nocc}, {0, nvirt}, {0, nvirt}};
 
   auto& world = TA::get_default_world();
-  auto T_ov = std::make_shared<DTensorType>(world, tr_ov);
-  auto T_oovv = std::make_shared<DTensorType>(world, tr_oovv);
-  auto G_oovv = std::make_shared<DTensorType>(world, tr_oovv);
+  auto tnsr_T_ov = std::make_shared<DTensorType>(world, tr_ov);
+  auto tnsr_T_oovv = std::make_shared<DTensorType>(world, tr_oovv);
+  auto tnsr_G_oovv = std::make_shared<DTensorType>(world, tr_oovv);
 
-  T_ov->fill_random();
-  T_oovv->fill_random();
-  G_oovv->fill_random();
+  tnsr_T_ov->fill_random();
+  tnsr_T_oovv->fill_random();
+  tnsr_G_oovv->fill_random();
 
   SECTION("Testing Sum type evaluations") {
     //
@@ -286,13 +286,13 @@ TEST_CASE("EVALUATIONS TESTS", "[eval_tree]") {
 
     DTensorType manual_result;
     manual_result("i, j, a, b") =
-        (*T_oovv)("i, j, a, b") + (*G_oovv)("i, j, a, b");
+        (*tnsr_T_oovv)("i, j, a, b") + (*tnsr_G_oovv)("i, j, a, b");
 
     ContextMapType context;
     context.insert(
-        ContextMapType::value_type(EvalTree(t).hash_value(), T_oovv));
+        ContextMapType::value_type(EvalTree(t).hash_value(), tnsr_T_oovv));
     context.insert(
-        ContextMapType::value_type(EvalTree(g).hash_value(), G_oovv));
+        ContextMapType::value_type(EvalTree(g).hash_value(), tnsr_G_oovv));
 
     auto expr = std::make_shared<Sum>(Sum({g, t}));
     auto tree = EvalTree(expr);
@@ -308,10 +308,10 @@ TEST_CASE("EVALUATIONS TESTS", "[eval_tree]") {
     // sum by permutation test
     g = make_tensor_expr({"g", "i_1", "i_2", "a_2", "a_1"});
     context.insert(
-        ContextMapType::value_type(EvalTree(g).hash_value(), G_oovv));
+        ContextMapType::value_type(EvalTree(g).hash_value(), tnsr_G_oovv));
 
     manual_result("i, j, a, b") =
-        (*T_oovv)("i, j, a, b") + (*G_oovv)("i, j, b, a");
+        (*tnsr_T_oovv)("i, j, a, b") + (*tnsr_G_oovv)("i, j, b, a");
     manual_norm =
         std::sqrt(manual_result("0,1,2,3").dot(manual_result("0,1,2,3")));
 
@@ -328,12 +328,13 @@ TEST_CASE("EVALUATIONS TESTS", "[eval_tree]") {
     auto g = make_tensor_expr({"g", "i_1", "i_2", "a_1", "a_2"});
 
     DTensorType manual_result;
-    manual_result("j,b") = (*T_ov)("i,a") * (*G_oovv)("i,j,a,b");
+    manual_result("j,b") = (*tnsr_T_ov)("i,a") * (*tnsr_G_oovv)("i,j,a,b");
 
     ContextMapType context;
-    context.insert(ContextMapType::value_type(EvalTree(t).hash_value(), T_ov));
     context.insert(
-        ContextMapType::value_type(EvalTree(g).hash_value(), G_oovv));
+        ContextMapType::value_type(EvalTree(t).hash_value(), tnsr_T_ov));
+    context.insert(
+        ContextMapType::value_type(EvalTree(g).hash_value(), tnsr_G_oovv));
 
     auto expr = std::make_shared<Product>(Product({t, g}));
     auto tree = EvalTree(expr);
@@ -352,11 +353,12 @@ TEST_CASE("EVALUATIONS TESTS", "[eval_tree]") {
 
     ContextMapType context;
     context.insert(
-        ContextMapType::value_type(EvalTree(t).hash_value(), T_oovv));
+        ContextMapType::value_type(EvalTree(t).hash_value(), tnsr_T_oovv));
 
     DTensorType manual_result;
-    manual_result("i,j,a,b") = (*T_oovv)("i,j,a,b") - (*T_oovv)("i,j,b,a") +
-                               (*T_oovv)("j,i,b,a") - (*T_oovv)("j,i,a,b");
+    manual_result("i,j,a,b") =
+        (*tnsr_T_oovv)("i,j,a,b") - (*tnsr_T_oovv)("i,j,b,a") +
+        (*tnsr_T_oovv)("j,i,b,a") - (*tnsr_T_oovv)("j,i,a,b");
 
     auto expr = std::make_shared<Product>(Product({A, t}));
     auto tree = EvalTree(expr);
@@ -372,25 +374,60 @@ TEST_CASE("EVALUATIONS TESTS", "[eval_tree]") {
   }
 
   SECTION("Testing symmetrization evaluation") {
-    auto t = make_tensor_expr({"t", "i_1", "i_2", "a_1", "a_2"});
-    auto S_oovv = make_tensor_expr({"S", "i_1", "i_2", "a_1", "a_2"});
+    TA::TiledRange tr_ooovvv{{0, nocc},  {0, nocc},  {0, nocc},
+                             {0, nvirt}, {0, nvirt}, {0, nvirt}};
+    auto tnsr_T_ooovvv = std::make_shared<DTensorType>(world, tr_ooovvv);
+    tnsr_T_ooovvv->fill_random();
 
-    DTensorType manual_result;
-    manual_result("0,1,2,3") = (*T_oovv)("0,1,2,3") + (*T_oovv)("1,0,3,2");
-    auto manual_norm =
-        std::sqrt(manual_result("0,1,2,3").dot(manual_result("0,1,2,3")));
+    auto t_ov = make_tensor_expr({"t", "i_1", "a_1"});
+    auto t_oovv = make_tensor_expr({"t", "i_1", "i_2", "a_1", "a_2"});
+    auto t_ooovvv =
+        make_tensor_expr({"t", "i_1", "i_2", "i_3", "a_1", "a_2", "a_3"});
+
+    auto S_ov = make_tensor_expr({"S", "i_1", "i_2"});
+    auto S_oovv = make_tensor_expr({"S", "i_1", "i_2", "a_1", "a_2"});
+    auto S_ooovvv =
+        make_tensor_expr({"S", "i_1", "i_2", "i_3", "a_1", "a_2", "a_3"});
 
     ContextMapType context;
     context.insert(
-        ContextMapType::value_type(EvalTree(t).hash_value(), T_oovv));
+        ContextMapType::value_type(EvalTree(t_ov).hash_value(), tnsr_T_ov));
+    context.insert(
+        ContextMapType::value_type(EvalTree(t_oovv).hash_value(), tnsr_T_oovv));
+    context.insert(  //
+        ContextMapType::value_type(EvalTree(t_ooovvv).hash_value(),
+                                   tnsr_T_ooovvv));
 
-    auto expr = std::make_shared<Product>(Product({S_oovv, t}));
-    auto tree = EvalTree(expr);
-    auto eval_result = tree.evaluate(context);
+    DTensorType manual_result, eval_result;
+    auto expr = std::make_shared<Product>(Product({S_ov, t_ov}));
+    eval_result = EvalTree(expr).evaluate(context);
+    manual_result("0,1") = (*tnsr_T_ov)("0,1");
+    auto eval_norm = std::sqrt(eval_result("0,1").dot(eval_result("0,1")));
+    auto manual_norm =
+        std::sqrt(manual_result("0,1").dot(manual_result("0,1")));
+    REQUIRE(manual_norm == Approx(eval_norm));
 
-    auto eval_norm =
-        std::sqrt(eval_result("0,1,2,3").dot(eval_result("0,1,2,3")));
+    expr = std::make_shared<Product>(Product({S_oovv, t_oovv}));
+    eval_result = EvalTree(expr).evaluate(context);
+    manual_result("0,1,2,3") =
+        (*tnsr_T_oovv)("0,1,2,3") + (*tnsr_T_oovv)("1,0,3,2");
+    eval_norm = std::sqrt(eval_result("0,1,2,3").dot(eval_result("0,1,2,3")));
+    manual_norm =
+        std::sqrt(manual_result("0,1,2,3").dot(manual_result("0,1,2,3")));
+    REQUIRE(manual_norm == Approx(eval_norm));
 
+    expr = std::make_shared<Product>(Product({S_ooovvv, t_ooovvv}));
+    expr->scale(1.0 / 12.0);
+    eval_result = EvalTree(expr).evaluate(context);
+    manual_result("0,1,2,3,4,5") =
+        (*tnsr_T_ooovvv)("0,2,1,3,5,4") + (*tnsr_T_ooovvv)("0,1,2,3,4,5") +
+        (*tnsr_T_ooovvv)("1,0,2,4,3,5") + (*tnsr_T_ooovvv)("1,2,0,4,5,3") +
+        (*tnsr_T_ooovvv)("2,0,1,5,3,4") + (*tnsr_T_ooovvv)("2,1,0,5,4,3");
+    manual_result("0,1,2,3,4,5") = 1.0 / 12.0 * manual_result("0,1,2,3,4,5");
+    eval_norm =
+        std::sqrt(eval_result("0,1,2,3,4,5").dot(eval_result("0,1,2,3,4,5")));
+    manual_norm = std::sqrt(
+        manual_result("0,1,2,3,4,5").dot(manual_result("0,1,2,3,4,5")));
     REQUIRE(manual_norm == Approx(eval_norm));
   }
 
@@ -399,7 +436,7 @@ TEST_CASE("EVALUATIONS TESTS", "[eval_tree]") {
     auto seq_tensor_good = make_tensor_expr({"t", "i_1", "a_1", "a_2", "a_3"});
     ContextMapType context;
     context.insert(ContextMapType::value_type(
-        EvalTree(seq_tensor_good).hash_value(), T_ov));
+        EvalTree(seq_tensor_good).hash_value(), tnsr_T_ov));
 
     auto expr = seq_tensor_bad;
     auto tree = EvalTree(expr);
@@ -436,17 +473,17 @@ TEST_CASE("EVALUATIONS TESTS", "[eval_tree]") {
     auto& g_ovvv_seq = prod2->as<Product>().factor(1);
     auto& t_ov_seq = prod2->as<Product>().factor(2);
 
-    context.insert(
-        ContextMapType::value_type(EvalTree(g_oovv_seq).hash_value(), G_oovv));
+    context.insert(ContextMapType::value_type(EvalTree(g_oovv_seq).hash_value(),
+                                              tnsr_G_oovv));
 
     context.insert(
         ContextMapType::value_type(EvalTree(g_ovvv_seq).hash_value(), G_ovvv));
 
-    context.insert(
-        ContextMapType::value_type(EvalTree(t_oovv_seq).hash_value(), T_oovv));
+    context.insert(ContextMapType::value_type(EvalTree(t_oovv_seq).hash_value(),
+                                              tnsr_T_oovv));
 
     context.insert(
-        ContextMapType::value_type(EvalTree(t_ov_seq).hash_value(), T_ov));
+        ContextMapType::value_type(EvalTree(t_ov_seq).hash_value(), tnsr_T_ov));
 
     auto visitor = [](const auto& node) {
       if (node->is_leaf())
@@ -468,10 +505,11 @@ TEST_CASE("EVALUATIONS TESTS", "[eval_tree]") {
     // manual evaluation
     DTensorType before_antisym;
     before_antisym("i_1, i_2, a_1, a_2") =
-        1 / 16. * (*G_oovv)("i_3, i_4, a_3, a_4") *
-            (*T_oovv)("i_3, i_4, a_1, a_2") * (*T_oovv)("i_1, i_2, a_3, a_4") -
-        1 * (*G_ovvv)("i_3, a_1, a_3, a_4") * (*T_ov)("i_1, a_3") *
-            (*T_oovv)("i_2, i_3, a_2, a_4");
+        1 / 16. * (*tnsr_G_oovv)("i_3, i_4, a_3, a_4") *
+            (*tnsr_T_oovv)("i_3, i_4, a_1, a_2") *
+            (*tnsr_T_oovv)("i_1, i_2, a_3, a_4") -
+        1 * (*G_ovvv)("i_3, a_1, a_3, a_4") * (*tnsr_T_ov)("i_1, a_3") *
+            (*tnsr_T_oovv)("i_2, i_3, a_2, a_4");
     DTensorType manual_result;
     manual_result("i,j,a,b") =
         1 * before_antisym("i,j,a,b") - 1 * before_antisym("i,j,b,a") +
