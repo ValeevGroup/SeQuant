@@ -428,7 +428,7 @@ int main(int argc, char* argv[]) {
     }
 
     // Use Biorthogonal transformation for simpler CCSD residual equations
-    bool biorthogonal_transformation = true;
+    bool biorthogonal_transformation = false;
     if(biorthogonal_transformation){
       cout << "Using Biorthogonal transformation...\n";
 
@@ -488,7 +488,7 @@ int main(int argc, char* argv[]) {
 
       auto biorthogonal_R3 =
           ex<Constant>(17/120) * cc_st_r[3] + p1 + p2 + p3 + p4 + p5;
-#if 1
+#if 0
       expand(biorthogonal_R3);
       canonicalize(biorthogonal_R3);
       rapid_simplify(biorthogonal_R3);
@@ -503,10 +503,11 @@ int main(int argc, char* argv[]) {
       // TODO: Do not expand P operator; evaluate R3 and permute instead
       auto cc_r3_biorthogonal = expand_P_operator(P_cc_r3);
       rapid_simplify(cc_r3_biorthogonal);
+      // canonicalize(cc_st_r[3]);
       cc_st_r[3] = cc_r3_biorthogonal;
 #endif
     } else {
-      cc_st_r[3] = ex<Constant>(0.125) * cc_st_r[3];
+      // cc_st_r[3] = ex<Constant>(1/6) * cc_st_r[3];
       expand(cc_st_r[3]);
       canonicalize(cc_st_r[3]);
       rapid_simplify(cc_st_r[3]);
@@ -577,10 +578,11 @@ int main(int argc, char* argv[]) {
 
     int start_diis = 3;
     int diis_size = 3;
-    std::deque<TA::TArrayD> e1_vec, e2_vec;
-    std::deque<TA::TArrayD> t1_vec, t2_vec;
+    std::deque<TA::TArrayD> e1_vec, e2_vec, e3_vec;
+    std::deque<TA::TArrayD> t1_vec, t2_vec, t3_vec;
     TA::TArrayD t_ov_prev;
     TA::TArrayD t_oovv_prev;
+    TA::TArrayD t_ooovvv_prev;
 
     cout << "Using TiledArray..." << endl;
     cout << "Iter   norm(t_ov)    norm(t_oovv)     ΔE(CC)          E(CC)       time(s)" << endl;
@@ -603,9 +605,6 @@ int main(int argc, char* argv[]) {
         TA::TArrayD diis_t2;
         diis_t2 = TiledArray::clone(*t_oovv);
 
-        // cout << "e1: " << e1;
-        // cout << "e2: " << e2;
-
         // Vector of error matrices
         e1_vec.push_back(e1);
         e2_vec.push_back(e2);
@@ -622,6 +621,21 @@ int main(int argc, char* argv[]) {
           t2_vec.pop_front();
         }
 
+#if CCSDT_eval
+        TA::TArrayD e3;
+        e3("i,j,k,a,b,c") = (*t_ooovvv)("i,j,k,a,b,c") - t_ooovvv_prev("i,j,k,a,b,c");
+        TA::TArrayD diis_t3;
+        diis_t3 = TiledArray::clone(*t_ooovvv);
+
+        e3_vec.push_back(e3);
+        t3_vec.push_back(diis_t3);
+
+        if(e1_vec.size() > B_size){
+          e3_vec.pop_front();
+          t3_vec.pop_front();
+        }
+#endif
+
         if(iter > start_diis){
           // Fill 'B' matrix
           Matrix B_t1(B_size + 1, B_size + 1);
@@ -629,11 +643,10 @@ int main(int argc, char* argv[]) {
           B_t1(B_size, B_size) = 0.0;
           Matrix B_t2 = B_t1;
 
-          // TODO: Use Matrix Views
           for(int i = 0; i < B_size; ++i){
             for(int j = 0; j < B_size; ++j){
-              B_t1(i,j) = TA::dot_product(e1_vec[i],e1_vec[j]);
-              B_t2(i,j) = TA::dot_product(e2_vec[i],e2_vec[j]);
+              B_t1(i,j) = TA::dot_product(e1_vec[i], e1_vec[j]);
+              B_t2(i,j) = TA::dot_product(e2_vec[i], e2_vec[j]);
             }
           }
 
@@ -648,9 +661,6 @@ int main(int argc, char* argv[]) {
           Eigen::ColPivHouseholderQR<Matrix> solver_t2(B_t2);
           Eigen::VectorXd coeff_t2 = solver_t2.solve(rhs);
 
-          // cout << coeff_t1.size() << " " << coeff_t1.transpose() << "\n";
-          // cout << coeff_t2.size() << " " << coeff_t2.transpose() << "\n";
-
           // Update T amplitudes
           TA::TArrayD new_t1(world, tr_ov);
           new_t1.fill(0.0);
@@ -663,6 +673,28 @@ int main(int argc, char* argv[]) {
 
           (*t_ov)("i,a") = new_t1("i,a");
           (*t_oovv)("i,j,a,b") = new_t2("i,j,a,b");
+
+#if CCSDT
+          Matrix B_t3(B_size + 1, B_size + 1);
+          B_t3.setConstant(-1.0);
+          B_t3(B_size, B_size) = 0.0;
+
+          for(int i = 0; i < B_size; ++i){
+            for(int j = 0; j < B_size; ++j) {
+              B_t3(i,j) = TA::dot_product(e3_vec[i], e3_vec[j]);
+            }
+          }
+
+          Eigen::ColPivHouseholderQR<Matrix> solver_t3(B_t3);
+          Eigen::VectorXd coeff_t3 = solver_t3.solve(rhs);
+
+          TA::TArrayD new_t3(world, tr_ooovvv);
+          new_t3.fill(0.0);
+          for(int i = 0; i < B_size; ++i){
+            new_t3("i,j,k,a,b,c") += t3_vec[i]("i,j,k,a,b,c") * coeff_t3[i];
+          }
+          (*t_ooovvv)("i,j,k,a,b,c") = new_t2("i,j,k,a,b,c");
+#endif
         }
       }
 
@@ -689,6 +721,13 @@ int main(int argc, char* argv[]) {
         cout << t_ov_prev;
         cout << t_oovv_prev;
       }
+
+#if CCSDT_eval
+      if(diis){
+        t_ooovvv_prev = TiledArray::clone(*t_ooovvv);
+        cout << t_ooovvv_prev;
+      }
+#endif
 
       // save previous norm
       auto norm_last = std::sqrt((*t_oovv)("i,j,a,b").dot((*t_oovv)("i,j,a,b")));
