@@ -197,9 +197,9 @@ install(DIRECTORY SeQuant
 add_library(SeQuant::SeQuant ALIAS SeQuant)  # to be able to use as subproject
 
 ### optional prereqs
-if (NOT TARGET Libint2::libint2_cxx)
+if (NOT TARGET Libint2::cxx)
   find_package(Libint2 2.7.0 CONFIG)
-endif(NOT TARGET Libint2::libint2_cxx)
+endif(NOT TARGET Libint2::cxx)
 if (NOT TARGET tiledarray)
   find_package(TiledArray CONFIG COMPONENTS tiledarray)
 endif(NOT TARGET tiledarray)
@@ -256,7 +256,7 @@ add_executable(${example0} EXCLUDE_FROM_ALL
         examples/${example0}/${example0}.cpp)
 target_link_libraries(${example0} SeQuant ${TBB_LIBRARIES})
 
-if (TARGET tiledarray AND TARGET Libint2::libint2_cxx)
+if (TARGET tiledarray AND TARGET Libint2::cxx)
   # SRCC spin-orbital equation evaluation
   set(example1 expr_evaluation)
   add_executable(${example1} EXCLUDE_FROM_ALL
@@ -264,7 +264,7 @@ if (TARGET tiledarray AND TARGET Libint2::libint2_cxx)
       examples/contract/interpret/contract.hpp
       examples/contract/scf/hartree-fock.cc)
   target_link_libraries(${example1} SeQuant ${TBB_LIBRARIES}
-      Libint2::libint2_cxx tiledarray)
+      Libint2::cxx tiledarray)
   target_link_directories(${example1} PUBLIC ${TBB_LIBRARIES})
   target_compile_definitions(${example1} PRIVATE SEQUANT_HAS_TILEDARRAY)
 
@@ -275,10 +275,10 @@ if (TARGET tiledarray AND TARGET Libint2::libint2_cxx)
       examples/contract/interpret/contract.hpp
       examples/contract/scf/hartree-fock.cc)
   target_link_libraries(${example2} SeQuant
-      ${TBB_LIBRARIES} Libint2::libint2_cxx tiledarray)
+      ${TBB_LIBRARIES} Libint2::cxx tiledarray)
   target_link_directories(${example2} PUBLIC ${TBB_LIBRARIES})
   target_compile_definitions(${example2} PRIVATE SEQUANT_HAS_TILEDARRAY)
-endif (TARGET tiledarray AND TARGET Libint2::libint2_cxx)
+endif (TARGET tiledarray AND TARGET Libint2::cxx)
 
 set(example3 uccf12)
 add_executable(${example3} EXCLUDE_FROM_ALL
