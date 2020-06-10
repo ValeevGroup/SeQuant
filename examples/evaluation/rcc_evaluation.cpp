@@ -395,13 +395,10 @@ int main(int argc, char* argv[]) {
     auto cc_r = cceqvec{2, 2}(true, true, true, true);
 #endif
 
-//    auto reset_idx_tags = [&](ExprPtr& expr) {
-//      if (expr->is<Tensor>())
-//        ranges::for_each(expr->as<Tensor>().const_braket(),
-//                         [&](const Index& idx) { idx.reset_tag(); });
-//    };
+    bool expand_S = true;
+    bool bt = true;
 
-    // SPIN TRACE THE RESIDUAL
+    // SPIN TRACE THE CC RESIDUAL EQUATIONS
     std::vector<ExprPtr> cc_st_r(cc_r.size());
     for (size_t i = 1; i < cc_r.size(); ++i){
       const auto tstart = std::chrono::high_resolution_clock::now();
@@ -412,24 +409,67 @@ int main(int argc, char* argv[]) {
         external_indices = {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}};
       else if(i == 3)
         external_indices = {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}};
+      else if(i == 4)
+        external_indices = {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}, {L"i_4", L"a_4"}};
 
       // cc_st_r[i] = spintrace(cc_r[i], external_indices);
       cc_st_r[i] = closed_shell_spintrace(cc_r[i], external_indices);
       canonicalize(cc_st_r[i]);
       // std::wcout << to_latex(cc_st_r[i]) << "\n";
       printf("R%lu Spin-orbit: %lu terms; With S operator: %lu;", i, cc_r[i]->size(), cc_st_r[i]->size());
-      bool expand_S = false;
       if(expand_S){
         cc_st_r[i] = expand_S_operator(cc_st_r[i]);
         rapid_simplify(cc_st_r[i]);
         canonicalize(cc_st_r[i]);
         printf(" S expanded: %lu\n", cc_st_r[i]->size());
+        // std::wcout << __LINE__ << to_latex(cc_st_r[i]) << "\n" << std::endl;
+
+        if(bt){
+
+          // Checks if the replacement map is a canonical sequence
+          auto is_canonical = [&] (const std::map<Index, Index>& idx_map){
+            bool canonical = true;
+            for(auto&& pair: idx_map) if(pair.first != pair.second) return false;
+            return canonical;
+          };
+
+          // Get coefficients and replacement maps
+          auto btc = biorthogonal_tran_coeff(external_indices.size(), 1.e-12);
+          auto idx_map = biorthogonal_tran_idx_map(external_indices);
+          assert(btc.size() == idx_map.size());
+
+          // Append scale and append all transformations
+          Sum bt_expr{};
+          auto btc_ptr = btc.begin();
+          for(auto&& map: idx_map){
+            ExprPtr transformed_expr{};
+            if(is_canonical(map))
+              transformed_expr = ex<Constant>(*btc_ptr) * cc_st_r[i];
+            else
+              transformed_expr = ex<Constant>(*btc_ptr) * transform_expression(cc_st_r[i], map);
+            btc_ptr++;
+            bt_expr.append(transformed_expr);
+          }
+          ExprPtr bt_expr_p = std::make_shared<Sum>(bt_expr);
+          expand(bt_expr_p);
+          canonicalize(bt_expr_p);
+          rapid_simplify(bt_expr_p);
+          cc_st_r[i] = bt_expr_p;
+          printf("Biorthogonal transform: %lu\n", cc_st_r[i]->size());
+        } else {
+          // TODO: Scale residual equations
+        }
       }
       const auto tstop = std::chrono::high_resolution_clock::now();
       const std::chrono::duration<double> time_elapsed = tstop - tstart;
-      printf("CC R%lu size: %lu time: %5.3f sec.\n", i, cc_st_r[i]->size(), time_elapsed.count());
+      printf("CC R%lu size: %lu time: %5.3f sec.\n\n", i, cc_st_r[i]->size(), time_elapsed.count());
     }
 
+    // std::wcout << "CCSD R1: " << to_latex(cc_st_r[1]) << "\n";
+    // std::wcout << "CCSD R2: " << to_latex(cc_st_r[2]) << "\n";
+
+    // return 0;
+#if 0
     // Use Biorthogonal transformation for simpler CCSD residual equations
     bool biorthogonal_transformation = false;
     if(biorthogonal_transformation){
@@ -517,7 +557,8 @@ int main(int argc, char* argv[]) {
       rapid_simplify(temp_R3);
       cc_st_r[3] = temp_R3;
     }
-    std::wcout << "CC R3: " << to_latex(cc_st_r[3]) << "\n";
+    // std::wcout << "CC R3: " << to_latex(cc_st_r[3]) << "\n";
+#endif
 #endif
 
     std::vector<std::shared_ptr<TA::TArrayD>> data_tensors = {Fock_oo, Fock_ov, Fock_vv,

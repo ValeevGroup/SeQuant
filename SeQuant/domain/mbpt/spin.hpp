@@ -835,7 +835,7 @@ inline int count_cycles(const container::svector<int, 6>& vec1, const container:
 /// @param n_particles Number of external index group
 /// @param threshold Cut-off for counting number of non-zero eigen values
 /// @return A vector<double> of biorthogonal transformation coefficients
-container::vector<double> biorthogonal_transformation_coeff(const int n_particles, const double& threshold){
+container::vector<double> biorthogonal_tran_coeff(const int n_particles, const double& threshold){
   using namespace Eigen;
 
   int n = std::tgamma(n_particles + 1); // <- Dimension of permutation matrix is n_particles!
@@ -885,6 +885,34 @@ container::vector<double> biorthogonal_transformation_coeff(const int n_particle
   return result;
 }
 
+/// @brief Biorthogonal transformation map
+std::vector<std::map<Index, Index>> biorthogonal_tran_idx_map(std::initializer_list<IndexList> ext_index_groups = {{}}){
+
+  //Check size of external index group; catch exception otherwise
+  if(ext_index_groups.size() == 0) throw( "Cannot compute index map since " && "ext_index_groups.size() == 0");
+  assert(ext_index_groups.size() > 0);
+
+  // Get one element of each group, put it in a list
+  // ? Does it have to be an occupied index? Can you do generate maps from virtuals?
+  container::vector<Index> idx_list;
+  for(auto&& idx_group : ext_index_groups) idx_list.push_back(*idx_group.begin());
+
+  const container::vector<Index> const_idx_list = idx_list;
+  // Do permutations and append to map
+  std::vector<std::map<Index, Index>> result;
+  do{
+    std::map<Index, Index> map;
+    auto const_list_ptr = const_idx_list.begin();
+    for(auto&& i : idx_list){
+      map.emplace(std::make_pair(*const_list_ptr, i));
+      const_list_ptr++;
+    }
+    result.push_back(map);
+  } while(std::next_permutation(idx_list.begin(), idx_list.end()));
+
+  return result;
+}
+
 /// @brief Transforms an expression from spin orbital to spatial orbitals
 /// @detailed This functions is designed for integrating spin out of expression
 /// with Coupled Cluster equations in mind.
@@ -917,16 +945,13 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
     rapid_simplify(temp);
     return temp;
   };
-
   auto expr = symm_and_expand(expression);
-  // std::cout << __LINE__ << expr->size() << std::endl;
 
   auto reset_idx_tags = [&](ExprPtr& expr) {
     if (expr->is<Tensor>())
       ranges::for_each(expr->as<Tensor>().const_braket(),
                        [&](const Index& idx) { idx.reset_tag(); });
   };
-
   expr->visit(reset_idx_tags); // This call is REQUIRED
   expand(expr); // This call is REQUIRED
   rapid_simplify(expr);
