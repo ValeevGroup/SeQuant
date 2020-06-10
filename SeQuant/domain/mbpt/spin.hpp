@@ -827,40 +827,40 @@ inline int count_cycles(const container::svector<int, 6>& vec1, const container:
   return n_cycles;
 }
 
-/// @brief Calculates permutation matrix for Biorthogonal transformation
-/// @detailed
-/// @param
-/// @return
-Eigen::MatrixXd permutation_matrix(const int n_particles) {
-  int n = std::tgamma(n_particles + 1);
-  Eigen::MatrixXd result(n, n);
-  result.setZero();
-  size_t n_row = 0;
-  container::svector<int, 6> v(n_particles), v1(n_particles);
-  std::iota(v.begin(), v.end(), 0);
-  std::iota(v1.begin(), v1.end(), 0);
-  do {
-    container::vector<double> permutation_vector;
-    do {
-      auto cycles = count_cycles(v1, v);
-      permutation_vector.push_back(std::pow(-2, cycles));
-    } while (std::next_permutation(v.begin(), v.end()));
-    Eigen::VectorXd pv_eig = Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(permutation_vector.data(),
-                                               permutation_vector.size());
-    result.row(n_row) = pv_eig;
-    ++n_row;
-  } while (std::next_permutation(v1.begin(), v1.end()));
-  result *= std::pow(-1, n_particles);
-  // std::cout << "permutation_matrix:\n" << result << "\n";
-  return result;
-}
-
-/// @brief Returns a vector of coefficients
-/// @detailed
-/// @param
-/// @return
-container::vector<double> biorthogonal_transformation_coeff(const Eigen::MatrixXd& M, const double& threshold){
+/// @brief Find coefficients for biorthogonal transformation
+/// @detailed Given the number of external indices, this function calculates the permutation matrix,
+/// counts it's eigenvalues to find normalization constant and calculates a pseudoinverse
+/// to find the coefficients corresponding to the n! permutations.
+/// For details, see: http://arxiv.org/abs/1805.00565
+/// @param n_particles Number of external index group
+/// @param threshold Cut-off for counting number of non-zero eigen values
+/// @return A vector<double> of biorthogonal transformation coefficients
+container::vector<double> biorthogonal_transformation_coeff(const int n_particles, const double& threshold){
   using namespace Eigen;
+
+  int n = std::tgamma(n_particles + 1); // <- Dimension of permutation matrix is n_particles!
+  // Permutation matrix
+  Eigen::MatrixXd M(n,n);
+  {
+    M.setZero();
+    size_t n_row = 0;
+    container::svector<int, 6> v(n_particles), v1(n_particles);
+    std::iota(v.begin(), v.end(), 0);
+    std::iota(v1.begin(), v1.end(), 0);
+    do {
+      container::vector<double> permutation_vector;
+      do {
+        auto cycles = count_cycles(v1, v);
+        permutation_vector.push_back(std::pow(-2, cycles));
+      } while (std::next_permutation(v.begin(), v.end()));
+      Eigen::VectorXd pv_eig = Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(permutation_vector.data(),
+                                                                             permutation_vector.size());
+      M.row(n_row) = pv_eig;
+      ++n_row;
+    } while (std::next_permutation(v1.begin(), v1.end()));
+    M *= std::pow(-1, n_particles);
+    // std::cout << "permutation_matrix:\n" << M << "\n";
+  }
 
   // Normalization constant
   double scalar;
@@ -880,11 +880,8 @@ container::vector<double> biorthogonal_transformation_coeff(const Eigen::MatrixX
 
   // Find Pseudo Inverse, get 1st row only
   MatrixXd pinv = M.completeOrthogonalDecomposition().pseudoInverse();
-  pinv = pinv.row(0) * scalar;
-
-  // std::cout << "Scaled oefficients: << pinv
-  container::vector<double> result(pinv.size());
-  VectorXd::Map(&result[0], pinv.size()) = pinv;
+  container::vector<double> result(pinv.rows());
+  VectorXd::Map(&result[0], result.size()) = pinv.row(0) * scalar;
   return result;
 }
 
