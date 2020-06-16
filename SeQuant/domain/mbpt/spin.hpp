@@ -381,6 +381,40 @@ bool has_tensor_label(const ExprPtr& expr, std::wstring label) {
     return false;
 }
 
+/// @brief Check if an operator with a certain label is present in an expression
+/// @detailed Specifically designed for
+/// @param expr input expression
+/// @param label tensor label to find in the expression
+/// @return true if tensor with given label is found
+bool has_operator_label(const ExprPtr& expr, std::wstring label){
+
+  bool result = false;
+
+  if(expr->is<Constant>())
+    return result;
+  else if(expr->is<Tensor>())
+    return expr->as<Tensor>().label() == label;
+  else if(expr->is<Product>()){
+    if(expr->as<Product>().factor(0)->is<Tensor>())
+      return expr->as<Product>().factor(0)->as<Tensor>().label() == label;
+  } else if (expr->is<Sum>()){
+    for(auto&& term: *expr){
+      if(term->is<Product>()){
+        if((term->as<Product>().factor(0))->is<Tensor>()){
+          result = (term->as<Product>().factor(0))->as<Tensor>().label() == label;
+          if(result)
+            return true;
+        }
+      } else if (term->is<Tensor>()){
+        result = term->as<Tensor>().label() == label;
+        if(result)
+          return true;
+      }
+    }
+  }
+  return result;
+}
+
 /// @brief Generates a vector of replacement maps for Antisymmetrizer operator
 /// @param A An antisymmetrizer tensor (A) (with > 2 particle indices)
 /// @return Vector of replacement maps
@@ -481,7 +515,7 @@ ExprPtr expand_A_operator(const Product& product) {
   return new_result;
 }
 
-/// @brief Write expression in terms of Symmetrizer
+/// @brief Write expression in terms of Symmetrizer (S operator)
 /// @param product
 /// @return expression pointer with Symmstrizer operator
 ExprPtr expr_symmetrize(const Product& product) {
@@ -886,11 +920,17 @@ container::vector<double> biorthogonal_tran_coeff(const int n_particles, const d
 }
 
 /// @brief Biorthogonal transformation map
-std::vector<std::map<Index, Index>> biorthogonal_tran_idx_map(std::initializer_list<IndexList> ext_index_groups = {{}}){
+std::vector<std::map<Index, Index>> biorthogonal_tran_idx_map(const std::initializer_list<IndexList> ext_index_groups = {{}}){
 
   //Check size of external index group; catch exception otherwise
   if(ext_index_groups.size() == 0) throw( "Cannot compute index map since " && "ext_index_groups.size() == 0");
   assert(ext_index_groups.size() > 0);
+
+  // initializer_list to container::svector
+  container::svector<container::svector<Index>> ext_idx_groups(std::begin(ext_index_groups), std::end(ext_index_groups));
+
+  // for(auto it = std::begin(ext_index_groups); it != std::end(ext_index_groups); ++it)
+  //   ext_idx_groups.push_back(*it);
 
   // Get one element of each group, put it in a list
   // ? Does it have to be an occupied index? Can you do generate maps from virtuals?
@@ -922,7 +962,7 @@ std::vector<std::map<Index, Index>> biorthogonal_tran_idx_map(std::initializer_l
 /// @param ext_index_groups groups of external indices
 /// @return an expression with spin integrated/adapted
 ExprPtr closed_shell_spintrace(const ExprPtr& expression,
-    std::initializer_list<IndexList> ext_index_groups = {{}}){
+    const std::initializer_list<IndexList> ext_index_groups = {{}}){
 
   // NOT supported for Proto indices
   auto check_proto_index = [&](const ExprPtr& expr) {
@@ -1257,6 +1297,115 @@ ExprPtr spintrace(ExprPtr expression,
   } else
     return nullptr;
 }  // ExprPtr spintrace
+
+/// @brief Factorize S out of terms
+/// @detailed Given an expression, permute indices and check if a given product
+ExprPtr factorize_S_operator(const ExprPtr& expression,
+  const std::initializer_list<IndexList> ext_index_groups = {{}}){
+  auto result = std::make_shared<Sum>();
+
+  // Canonicalize expression
+  ExprPtr expr = expression;
+  canonicalize(expr);
+
+  // If expression has S operator, do nothing and exit
+  if(has_operator_label(expr, L"S")) return expr;
+
+  // Check if S operator exist
+  bool has_S_op = has_operator_label(expr, L"S");
+
+  // For the simplest version, we need S to be defined
+  // or all possible permutations need to be considered
+
+  // If S operator is absent: generate from ext_index_groups
+  Tensor S{};
+  {
+    container::svector<Index> bra_list, ket_list;
+    // Fill bras and kets
+    ranges::for_each(ext_index_groups, [&] (const IndexList& idx_pair) {
+      auto it = idx_pair.begin();
+      bra_list.push_back(*it);
+      it++;
+      ket_list.push_back(*it);
+    });
+    S = Tensor(L"S", bra_list, ket_list, Symmetry::nonsymm);
+  }
+  std::wcout << __LINE__ << " " << to_latex(S) << std::endl;
+
+  // Generate list of permutation indices
+  // Index replacement map
+  std::map<Index, Index> replacement_map;
+  replacement_map.emplace(std::make_pair(L"i_1", L"i_2"));
+  replacement_map.emplace(std::make_pair(L"i_2", L"i_1"));
+  replacement_map.emplace(std::make_pair(L"a_1", L"a_2"));
+  replacement_map.emplace(std::make_pair(L"a_2", L"a_1"));
+
+  // Tensor index replacement lambda
+  auto transform_tensor = [&](const Tensor& tensor) {
+    auto result = std::make_shared<Tensor>(tensor);
+    result->transform_indices(replacement_map);
+    ranges::for_each(result->const_braket(),
+                     [&](const Index& idx) { idx.reset_tag(); });
+    return result;
+  };
+
+  // For each Product: get hash value
+  container::set<std::size_t> const_expr_hash;
+  std::map<size_t, ExprPtr> hash_map;
+  for(auto&& term: *expr) {
+    const_expr_hash.emplace(term->hash_value());
+    hash_map.emplace(std::make_pair(term->hash_value(), term));
+  }
+  std::cout << "const_expr_hash.size(): " << const_expr_hash.size() << "\n";
+
+  // apply S operator
+  // check hash value after action of S
+  container::set<std::size_t> symm_expr_hash;
+  std::map<size_t, ExprPtr> hash_map_S;
+  for(auto&& term: *expr){
+    if(term->is<Product>()){
+      auto product = term->as<Product>();
+      assert(term->hash_value() == product.hash_value());
+      Product new_product{};
+      new_product.scale(product.scalar());
+      for(auto&& t: product){
+        if(t->is<Tensor>())
+          new_product.append(transform_tensor(t->as<Tensor>()));
+      }
+      auto new_product_expr = ex<Product>(new_product);
+      canonicalize(new_product_expr);
+      symm_expr_hash.emplace(new_product_expr->hash_value());
+      hash_map_S.emplace(new_product_expr->hash_value(), term);
+    } else if(term->is<Tensor>()){
+      auto tensor = term->as<Tensor>();
+      assert(term->hash_value() == tensor.hash_value());
+      auto new_tensor = transform_tensor(tensor);
+      // canonicalize(new_tensor);
+      symm_expr_hash.emplace(new_tensor->hash_value());
+      hash_map_S.emplace(new_tensor->hash_value(), term); // Copying the original term to compare result
+    }
+  }
+  std::cout << "symm_expr_hash.size(): " << symm_expr_hash.size() << "\n";
+
+  // Check if there are matching hashes
+  assert(const_expr_hash.size() == symm_expr_hash.size());
+  int common_terms = 0;
+  for(auto&& val : const_expr_hash){
+    auto it = std::find(symm_expr_hash.begin(), symm_expr_hash.end(), val);
+    if(it != symm_expr_hash.end()) {
+      // std::cout << val << " " << *it << "\n";
+      std::wcout << to_latex(hash_map.find(*it)->second) << "\n";
+      std::wcout << to_latex(hash_map_S.find(*it)->second) << "\n\n";
+      common_terms++;
+    }
+  }
+  std::cout << "Common_terms: " << common_terms << "\n";
+
+  // if hash value matches, increment the prefactor
+
+
+  return result;
+}
 
 }  // namespace sequant
 
