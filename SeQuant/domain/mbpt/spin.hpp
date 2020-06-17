@@ -1302,7 +1302,6 @@ ExprPtr spintrace(ExprPtr expression,
 /// @detailed Given an expression, permute indices and check if a given product
 ExprPtr factorize_S_operator(const ExprPtr& expression,
   const std::initializer_list<IndexList> ext_index_groups = {{}}){
-  auto result = std::make_shared<Sum>();
 
   // Canonicalize expression
   ExprPtr expr = expression;
@@ -1404,27 +1403,109 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
   // Check if there are matching hashes
   assert(const_expr_hash.size() == symm_expr_hash.size());
   int symmetric_terms = 0;
+  Sum temp_result{};
+  std::cout << "const_expr_hash.size: " << const_expr_hash.size() << "\n";
+  std::cout << "hash_map.size: " << hash_map.size() << "\n";
+  term_counter = 0;
   for(auto&& val : const_expr_hash){
+    ++term_counter;
+    // std::cout << term_counter << ":\n";
+    // std::wcout << to_latex(hash_map.find(val)->second) << "\n";
     auto it = std::find(symm_expr_hash.begin(), symm_expr_hash.end(), val);
+    if(it != symm_expr_hash.end()) {
+      // auto new_term = hash_map.find(*it)->second;
+      auto n1 = expr_hash_map.find(*it)->second;
+      auto n2 = hash_map_S_map.find(*it)->second;
+      if(n1 < n2){
+        auto new_term = ex<Tensor>(S) * hash_map.find(*it)->second;
+        expand(new_term);
+        temp_result.append(new_term);
+        // std::wcout << __LINE__ << " " << to_latex(hash_map.find(val)->second) << "\n";
+        // std::wcout << __LINE__ << " " << to_latex(hash_map.find(*it)->second) << "\n\n";
+        std::cout << expr_hash_map.find(*it)->second << " ";
+        std::wcout << to_latex(hash_map.find(*it)->second) << "\n";
+        std::cout << hash_map_S_map.find(*it)->second << " ";
+        std::wcout << to_latex(hash_map_S.find(*it)->second) << "\n\n";
+        symmetric_terms++;
+      }
+    } else {
+      std::cout << expr_hash_map.find(val)->second << " ";
+      std::wcout << to_latex(hash_map.find(val)->second) << "\n\n";
+      // std::wcout << __LINE__ << " " << to_latex(hash_map.find(val)->second) << "\n\n";
+      // temp_result.append(hash_map.find(val)->second);
+    }
+  }
+  std::cout << "const_expr_hash.size: " << const_expr_hash.size() << "\n";
+  std::cout << "hash_map.size: " << hash_map.size() << "\n";
+  std::cout << "n symmetric terms: " << symmetric_terms << "\n";
+
+  ExprPtr result_expr = std::make_shared<Sum>(temp_result);
+  expand(result_expr);
+  canonicalize(result_expr);
+  rapid_simplify(result_expr);
+  std::wcout << __LINE__ << " " << to_latex(result_expr) << "\n";
+
+  // if hash value matches, pre-multiply S operator, remove permuted term;
+  Sum temp_sum{};
+  for(auto&& hash : const_expr_hash){
+    auto it = std::find(symm_expr_hash.begin(), symm_expr_hash.end(), hash);
     if(it != symm_expr_hash.end()) {
       auto n1 = expr_hash_map.find(*it)->second;
       auto n2 = hash_map_S_map.find(*it)->second;
       if(n1 < n2){
-//        std::cout << expr_hash_map.find(*it)->second << " ";
-//        std::wcout << to_latex(hash_map.find(*it)->second) << "\n";
-//        std::cout << hash_map_S_map.find(*it)->second << " ";
-//        std::wcout << to_latex(hash_map_S.find(*it)->second) << "\n\n";
-        std::cout << expr_hash_map.find(*it)->second << " ";
-        std::cout << hash_map_S_map.find(*it)->second << "\n";
-        symmetric_terms++;
+        auto idx = std::distance(symm_expr_hash.begin(), it);
+        auto term = hash_map.find(*it)->second;
+        temp_sum.append(ex<Tensor>(S) * term);
+        symm_expr_hash.erase(it);
+        const_expr_hash.erase(const_expr_hash.begin() + idx);
+      }
+    } else {
+      temp_sum.append(hash_map.find(hash)->second);
+    }
+  }
+
+  ExprPtr result = std::make_shared<Sum>(temp_sum);
+  expand(result);
+  canonicalize(result);
+  rapid_simplify(result);
+  std::wcout << __LINE__ << " " << to_latex(result) << "\n";
+
+
+#if 0
+  int n_symmetric_terms = 0;
+  std::cout << "New simplified vector approach...\n";
+  {
+    container::vector<size_t> expr_hash, perm_hash;
+    int n_terms = 0;
+    for(auto&& term: *expr){
+      ++n_terms;
+      expr_hash.push_back(term->hash_value());
+      if(term->is<Tensor>()){
+        perm_hash.push_back(transform_tensor(term->as<Tensor>())->hash_value());
+      } else if (term->is<Product>()){
+        auto product = term->as<Product>();
+        Product new_product{};
+        new_product.scale(product.scalar());
+        for(auto&& t: product){
+          if(t->is<Tensor>())
+            new_product.append(transform_tensor(t->as<Tensor>()));
+        }
+        auto new_product_expr = ex<Product>(new_product);
+        canonicalize(new_product_expr);
+        perm_hash.push_back(new_product_expr->hash_value());
+      }
+    }
+    std::cout << expr_hash.size() << " ";
+    std::cout << perm_hash.size() << "\n";
+
+    for(auto&& hash_value: expr_hash){
+      auto it = std::find(perm_hash.begin(), perm_hash.end(), hash_value);
+      if(it != perm_hash.end()){
+
       }
     }
   }
-  std::cout << "n symmetric terms: " << symmetric_terms << "\n";
-
-  // if hash value matches, pre-multiply S operator, remove permuted term;
-
-  // if hash value matches, increment the prefactor
+#endif
 
 
   return result;
