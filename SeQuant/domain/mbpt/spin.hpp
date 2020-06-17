@@ -1308,6 +1308,15 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
   ExprPtr expr = expression;
   canonicalize(expr);
 
+  std::map<size_t, int> expr_hash_map;
+  {
+    int term_counter = 0;
+    for(auto&& term : *expr){
+      ++term_counter;
+      expr_hash_map.emplace(std::make_pair(term->hash_value(), term_counter));
+    }
+  }
+
   // If expression has S operator, do nothing and exit
   if(has_operator_label(expr, L"S")) return expr;
 
@@ -1332,6 +1341,7 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
   }
   std::wcout << __LINE__ << " " << to_latex(S) << std::endl;
 
+  // TODO: Automate map generation
   // Generate list of permutation indices
   // Index replacement map
   std::map<Index, Index> replacement_map;
@@ -1362,7 +1372,10 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
   // check hash value after action of S
   container::set<std::size_t> symm_expr_hash;
   std::map<size_t, ExprPtr> hash_map_S;
+  std::map<size_t, int> hash_map_S_map;
+  int term_counter = 0;
   for(auto&& term: *expr){
+    ++term_counter;
     if(term->is<Product>()){
       auto product = term->as<Product>();
       assert(term->hash_value() == product.hash_value());
@@ -1376,30 +1389,40 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
       canonicalize(new_product_expr);
       symm_expr_hash.emplace(new_product_expr->hash_value());
       hash_map_S.emplace(new_product_expr->hash_value(), term);
+      hash_map_S_map.emplace(new_product_expr->hash_value(), term_counter);
     } else if(term->is<Tensor>()){
       auto tensor = term->as<Tensor>();
       assert(term->hash_value() == tensor.hash_value());
       auto new_tensor = transform_tensor(tensor);
-      // canonicalize(new_tensor);
       symm_expr_hash.emplace(new_tensor->hash_value());
       hash_map_S.emplace(new_tensor->hash_value(), term); // Copying the original term to compare result
+      hash_map_S_map.emplace(new_tensor->hash_value(), term_counter);
     }
   }
   std::cout << "symm_expr_hash.size(): " << symm_expr_hash.size() << "\n";
 
   // Check if there are matching hashes
   assert(const_expr_hash.size() == symm_expr_hash.size());
-  int common_terms = 0;
+  int symmetric_terms = 0;
   for(auto&& val : const_expr_hash){
     auto it = std::find(symm_expr_hash.begin(), symm_expr_hash.end(), val);
     if(it != symm_expr_hash.end()) {
-      // std::cout << val << " " << *it << "\n";
-      std::wcout << to_latex(hash_map.find(*it)->second) << "\n";
-      std::wcout << to_latex(hash_map_S.find(*it)->second) << "\n\n";
-      common_terms++;
+      auto n1 = expr_hash_map.find(*it)->second;
+      auto n2 = hash_map_S_map.find(*it)->second;
+      if(n1 < n2){
+//        std::cout << expr_hash_map.find(*it)->second << " ";
+//        std::wcout << to_latex(hash_map.find(*it)->second) << "\n";
+//        std::cout << hash_map_S_map.find(*it)->second << " ";
+//        std::wcout << to_latex(hash_map_S.find(*it)->second) << "\n\n";
+        std::cout << expr_hash_map.find(*it)->second << " ";
+        std::cout << hash_map_S_map.find(*it)->second << "\n";
+        symmetric_terms++;
+      }
     }
   }
-  std::cout << "Common_terms: " << common_terms << "\n";
+  std::cout << "n symmetric terms: " << symmetric_terms << "\n";
+
+  // if hash value matches, pre-multiply S operator, remove permuted term;
 
   // if hash value matches, increment the prefactor
 
