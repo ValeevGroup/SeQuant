@@ -1507,6 +1507,67 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
   }
 #endif
 
+#endif
+
+  Sum result_sum{};
+  int n_symm_terms = 0;
+
+  // If a term was symmetrized, put the index in a list
+  container::set<int> i_list;
+
+  // Loop over terms of expression (OUTER LOOP)
+  for(auto it = expr->begin(); it != expr->end(); ++it){
+
+    // If *it is symmetrized, go to next
+    while(std::find(i_list.begin(), i_list.end(), std::distance(expr->begin(), it)) != i_list.end()) ++it;
+
+    auto hash0 = (*it)->hash_value();
+    auto new_product = (*it)->clone();
+
+    // Loop over the {i+1,...,n} terms (INNER LOOP)
+    for(auto find_it = it+1; find_it != expr->end(); ++find_it){
+      auto idx = std::distance(expr->begin(), find_it);
+
+      // Apply S operator and check hash value of new product/tensor.
+      // If the hash value is a match, multiply parent term (from outer loop)
+      // with S operator and add index of the found term to list
+      if((*find_it)->is<Product>()){
+        auto product = (*find_it)->as<Product>();
+        Product S_product{};
+        S_product.scale(product.scalar());
+        for(auto&& t: product){
+          if(t->is<Tensor>())
+            S_product.append(transform_tensor(t->as<Tensor>(), replacement_map));
+        }
+        auto new_product_expr = ex<Product>(S_product);
+        new_product_expr->canonicalize();
+        if(new_product_expr->hash_value() == hash0){
+          ++n_symm_terms;
+          new_product = ex<Tensor>(S) * new_product;
+          i_list.insert(idx);
+        }
+      } else if((*find_it)->is<Tensor>()){
+        auto tensor = (*find_it)->as<Tensor>();
+        auto new_tensor = transform_tensor(tensor, replacement_map);
+        new_tensor->canonicalize();
+        if(new_tensor->hash_value() == hash0){
+          ++n_symm_terms;
+          new_product = ex<Tensor>(S) * new_product;
+          i_list.insert(idx);
+        }
+      }
+    } // (INNER LOOP)
+
+    // append product to running sum
+    result_sum.append(new_product);
+  }
+  std::cout << "n_symm_terms: " << n_symm_terms << "\n";
+
+  ExprPtr result = std::make_shared<Sum>(result_sum);
+  expand(result);
+  canonicalize(result);
+  rapid_simplify(result);
+  std::wcout << "Result:\n" << result->size() << " " << to_latex(result) << "\n";
 
   return result;
 }
