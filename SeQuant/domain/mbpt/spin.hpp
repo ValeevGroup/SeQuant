@@ -1521,6 +1521,7 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
     // If *it is symmetrized, go to next
     while(std::find(i_list.begin(), i_list.end(), std::distance(expr->begin(), it)) != i_list.end()) ++it;
 
+    // hash value of current term // TODO: container of hash values
     auto hash0 = (*it)->hash_value();
     auto new_product = (*it)->clone();
 
@@ -1535,23 +1536,39 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
         auto product = (*find_it)->as<Product>();
         Product S_product{};
         S_product.scale(product.scalar());
+
+        // Transform indices by action of S operator
         for(auto&& t: product){
           if(t->is<Tensor>())
             S_product.append(transform_tensor(t->as<Tensor>(), replacement_map));
         }
         auto new_product_expr = ex<Product>(S_product);
+
+        // Canonicalize the new product before computing hash value
         new_product_expr->canonicalize();
+
+        // If hash value match, prepend S operator
+        // TODO: std::find(container, new_product->hash_value());
         if(new_product_expr->hash_value() == hash0){
           ++n_symm_terms;
+
+          // TODO: Prepend 'S' only if all symmetry hash_values are found
           new_product = ex<Tensor>(S) * new_product;
           i_list.insert(idx);
         }
       } else if((*find_it)->is<Tensor>()){
         auto tensor = (*find_it)->as<Tensor>();
+
+        // Transform indices by action of S operator
         auto new_tensor = transform_tensor(tensor, replacement_map);
+
+        // Canonicalize the new tensor before computing hash value
+        // TODO: std::find(container, new_tensor->hash_value());
         new_tensor->canonicalize();
         if(new_tensor->hash_value() == hash0){
           ++n_symm_terms;
+
+          // TODO: Prepend 'S' only if all symmetry hash_values are found
           new_product = ex<Tensor>(S) * new_product;
           i_list.insert(idx);
         }
