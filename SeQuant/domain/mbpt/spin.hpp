@@ -1509,12 +1509,26 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
 
 #endif
 
+
+  // clang-format off
+  ///////////////////////////////////////////////
+  ///            Lazy approach                ///
+  ///////////////////////////////////////////////
+  // This approach is slower because the hash values are computed on thefly.
+  // Subsequently, this algorithm applies 'S' operator n^2 times
+
+  // clang-format on
+  std::wcout << "Lazy approach\n";
+
   Sum result_sum{};
   int n_symm_terms = 0;
 
   // If a term was symmetrized, put the index in a list
   container::set<int> i_list;
 
+
+#define FAST 1
+  const auto tstart = std::chrono::high_resolution_clock::now();
   // Loop over terms of expression (OUTER LOOP)
   for(auto it = expr->begin(); it != expr->end(); ++it){
 
@@ -1522,13 +1536,60 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
     while(std::find(i_list.begin(), i_list.end(), std::distance(expr->begin(), it)) != i_list.end()) ++it;
 
     // hash value of current term // TODO: container of hash values
+#if !FAST
     auto hash0 = (*it)->hash_value();
+#endif
+
+#if FAST
+    // Symmetrize *it instead of symmetrizing *find_it everytime
+    size_t hash0;
+    {
+      if((*it)->is<Product>()){
+        // Clone *it, apply symmetrizer, store hash value
+        auto product = (*it)->as<Product>();
+        Product S_product{};
+        S_product.scale(product.scalar());
+
+        // Transform indices by action of S operator
+        for(auto&& t: product){
+          if(t->is<Tensor>())
+            S_product.append(transform_tensor(t->as<Tensor>(), replacement_map));
+        }
+        auto new_product_expr = ex<Product>(S_product);
+        new_product_expr->canonicalize();
+        hash0 = new_product_expr->hash_value();
+      } else if ((*it)->is<Tensor>()){
+        // Clone *it, apply symmetrizer, store hash value
+        auto tensor = (*it)->as<Tensor>();
+
+        // Transform indices by action of S operator
+        auto new_tensor = transform_tensor(tensor, replacement_map);
+
+        // Canonicalize the new tensor before computing hash value
+        new_tensor->canonicalize();
+        hash0 = new_tensor->hash_value();
+      }
+    }
+#endif
     auto new_product = (*it)->clone();
 
     // Loop over the {i+1,...,n} terms (INNER LOOP)
     for(auto find_it = it+1; find_it != expr->end(); ++find_it){
       auto idx = std::distance(expr->begin(), find_it);
 
+      (*find_it)->canonicalize();
+
+      if((*find_it)->hash_value() == hash0){
+        ++n_symm_terms;
+        new_product = ex<Tensor>(S) * new_product;
+        i_list.insert(idx);
+        std::wcout << n_symm_terms << ": "
+                  << std::distance(expr->begin(), it) << " "
+                  << idx <<  " "
+                  << to_latex(*it) << "\n";
+      }
+
+#if !FAST
       // Apply S operator and check hash value of new product/tensor.
       // If the hash value is a match, multiply parent term (from outer loop)
       // with S operator and add index of the found term to list
@@ -1555,6 +1616,10 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
           // TODO: Prepend 'S' only if all symmetry hash_values are found
           new_product = ex<Tensor>(S) * new_product;
           i_list.insert(idx);
+                  std::wcout << n_symm_terms << ": "
+                  << std::distance(expr->begin(), it) << " "
+                  << idx <<  " "
+                  << to_latex(*it) << "\n";
         }
       } else if((*find_it)->is<Tensor>()){
         auto tensor = (*find_it)->as<Tensor>();
@@ -1571,13 +1636,22 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
           // TODO: Prepend 'S' only if all symmetry hash_values are found
           new_product = ex<Tensor>(S) * new_product;
           i_list.insert(idx);
+                  std::wcout << n_symm_terms << ": "
+                  << std::distance(expr->begin(), it) << " "
+                  << idx <<  " "
+                  << to_latex(*it) << "\n";
         }
       }
+#endif
+
     } // (INNER LOOP)
 
     // append product to running sum
     result_sum.append(new_product);
   }
+  const auto tstop = std::chrono::high_resolution_clock::now();
+  const auto time_elapsed = std::chrono::duration_cast<std::chrono::microseconds>(tstop - tstart);
+  std::cout << "Time: " << time_elapsed.count() << " μs.\n";
   std::cout << "n_symm_terms: " << n_symm_terms << "\n";
 
   ExprPtr result = std::make_shared<Sum>(result_sum);
@@ -1585,6 +1659,12 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
   canonicalize(result);
   rapid_simplify(result);
   std::wcout << "Result:\n" << result->size() << " " << to_latex(result) << "\n";
+
+  auto result_expr = expand_S_operator(result);
+  expand(result_expr);
+  canonicalize(result_expr);
+  rapid_simplify(result_expr);
+  std::wcout << __LINE__ << " " << result_expr->size() << " " << to_latex(result_expr) << "\n";
 
   return result;
 }
