@@ -926,14 +926,6 @@ std::vector<std::map<Index, Index>> biorthogonal_tran_idx_map(const std::initial
   if(ext_index_groups.size() == 0) throw( "Cannot compute index map since " && "ext_index_groups.size() == 0");
   assert(ext_index_groups.size() > 0);
 
-  // initializer_list to container::svector
-  container::svector<container::svector<Index>> ext_idx_groups(std::begin(ext_index_groups), std::end(ext_index_groups));
-
-  // for(auto it = std::begin(ext_index_groups); it != std::end(ext_index_groups); ++it)
-  //   ext_idx_groups.push_back(*it);
-
-  // Get one element of each group, put it in a list
-  // ? Does it have to be an occupied index? Can you do generate maps from virtuals?
   container::vector<Index> idx_list;
   for(auto&& idx_group : ext_index_groups) idx_list.push_back(*idx_group.begin());
 
