@@ -12,7 +12,10 @@
 
 #include <memory>
 
-#define CCSDT_eval 0
+#define CCSDT_eval 1
+
+container::vector<double> biorthogonal_tran_coeff(const int n_particles, const double& threshold);
+std::vector<std::map<Index, Index>> biorthogonal_tran_idx_map(const std::initializer_list<IndexList> ext_index_groups);
 
 int main(int argc, char* argv[]) {
   using std::cerr;
@@ -917,3 +920,89 @@ int main(int argc, char* argv[]) {
   }
   return 0;
 }
+
+
+/// @brief Find coefficients for biorthogonal transformation
+/// @detailed Given the number of external indices, this function calculates the permutation matrix,
+/// counts it's eigenvalues to find normalization constant and calculates a pseudoinverse
+/// to find the coefficients corresponding to the n! permutations.
+/// For details, see: http://arxiv.org/abs/1805.00565
+/// @param n_particles Number of external index group
+/// @param threshold Cut-off for counting number of non-zero eigen values
+/// @return A vector<double> of biorthogonal transformation coefficients
+container::vector<double> biorthogonal_tran_coeff(const int n_particles, const double& threshold){
+  using namespace Eigen;
+
+  int n = std::tgamma(n_particles + 1); // <- Dimension of permutation matrix is n_particles!
+  // Permutation matrix
+  Eigen::MatrixXd M(n,n);
+  {
+    M.setZero();
+    size_t n_row = 0;
+    container::svector<int, 6> v(n_particles), v1(n_particles);
+    std::iota(v.begin(), v.end(), 0);
+    std::iota(v1.begin(), v1.end(), 0);
+    do {
+      container::vector<double> permutation_vector;
+      do {
+        auto cycles = count_cycles(v1, v);
+        permutation_vector.push_back(std::pow(-2, cycles));
+      } while (std::next_permutation(v.begin(), v.end()));
+      Eigen::VectorXd pv_eig = Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(permutation_vector.data(),
+                                                                             permutation_vector.size());
+      M.row(n_row) = pv_eig;
+      ++n_row;
+    } while (std::next_permutation(v1.begin(), v1.end()));
+    M *= std::pow(-1, n_particles);
+    // std::cout << "permutation_matrix:\n" << M << "\n";
+  }
+
+  // Normalization constant
+  double scalar;
+  {
+    // inline bool nonZero(double d) { return abs(d) > threshold ? true : false; }
+    auto nonZero = [&] (const double d) { return abs(d) > threshold ? true : false; };
+
+    // Solve system of equations
+    SelfAdjointEigenSolver<MatrixXd> eig_solver(M);
+    container::vector<double> eig_vals(eig_solver.eigenvalues().size());
+    VectorXd::Map(&eig_vals[0], eig_solver.eigenvalues().size()) =
+        eig_solver.eigenvalues();
+
+    double non0count = std::count_if(eig_vals.begin(), eig_vals.end(), nonZero);
+    scalar = eig_vals.size() / non0count;
+  }
+
+  // Find Pseudo Inverse, get 1st row only
+  MatrixXd pinv = M.completeOrthogonalDecomposition().pseudoInverse();
+  container::vector<double> result(pinv.rows());
+  VectorXd::Map(&result[0], result.size()) = pinv.row(0) * scalar;
+  return result;
+}
+
+/// @brief Biorthogonal transformation map
+std::vector<std::map<Index, Index>> biorthogonal_tran_idx_map(const std::initializer_list<IndexList> ext_index_groups = {{}}){
+
+  //Check size of external index group; catch exception otherwise
+  if(ext_index_groups.size() == 0) throw( "Cannot compute index map since " && "ext_index_groups.size() == 0");
+  assert(ext_index_groups.size() > 0);
+
+  container::vector<Index> idx_list;
+  for(auto&& idx_group : ext_index_groups) idx_list.push_back(*idx_group.begin());
+
+  const container::vector<Index> const_idx_list = idx_list;
+  // Do permutations and append to map
+  std::vector<std::map<Index, Index>> result;
+  do{
+    std::map<Index, Index> map;
+    auto const_list_ptr = const_idx_list.begin();
+    for(auto&& i : idx_list){
+      map.emplace(std::make_pair(*const_list_ptr, i));
+      const_list_ptr++;
+    }
+    result.push_back(map);
+  } while(std::next_permutation(idx_list.begin(), idx_list.end()));
+
+  return result;
+}
+

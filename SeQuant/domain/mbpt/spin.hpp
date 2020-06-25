@@ -885,7 +885,7 @@ inline int count_cycles(const container::svector<int, 6>& vec1, const container:
   }
   return n_cycles;
 }
-
+/*
 /// @brief Find coefficients for biorthogonal transformation
 /// @detailed Given the number of external indices, this function calculates the permutation matrix,
 /// counts it's eigenvalues to find normalization constant and calculates a pseudoinverse
@@ -969,7 +969,7 @@ std::vector<std::map<Index, Index>> biorthogonal_tran_idx_map(const std::initial
 
   return result;
 }
-
+*/
 /// @brief Transforms an expression from spin orbital to spatial orbitals
 /// @detailed This functions is designed for integrating spin out of expression
 /// with Coupled Cluster equations in mind.
