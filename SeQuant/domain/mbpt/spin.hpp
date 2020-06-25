@@ -1414,8 +1414,14 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
     int n_symm_terms = 0;
     for (auto it = expr->begin(); it != expr->end(); ++it) {
 
+      // TODO: This looks ugly
       // Exclude summand with value zero
-      while ((*it) == ex<Constant>(0.0)) ++it;
+      while ((*it)->hash_value() == ex<Constant>(0)->hash_value()) {
+        ++it;
+        if(it == expr->end())
+          break;
+      }
+      if(it == expr->end()) break;
 
       // Remove current hash_value from list and clone summand
       auto hash0 = (*it)->hash_value();
@@ -1467,12 +1473,16 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
         // Prepend S operator
         new_product = ex<Tensor>(S) * new_product;
         ++n_symm_terms;
+        std::wcout << n_symm_terms << ": "
+                   << std::distance(expr->begin(), it) << " "
+                   << to_latex((*it)->clone()) << "\n";
+
         // remove values from hash1_map from summands_hash_list
         ranges::for_each(hash1_map, [&] (const size_t hash1){
           summands_hash_list.erase(hash1);
           auto term = summands_hash_map.find(hash1)->second;
           auto find_it = std::find(expr->begin(), expr->end(), term);
-          (*find_it) = ex<Constant>(0.0);  // SILVER BULLET
+          (*find_it) = ex<Constant>(0);  // SILVER BULLET
         });
       }
 #else
