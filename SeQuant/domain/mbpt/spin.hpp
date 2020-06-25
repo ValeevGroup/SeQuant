@@ -746,6 +746,30 @@ ExprPtr expand_P_operator(const ExprPtr& expr) {
     throw("Unknown arg Type for expand_P_operator.");
 }
 
+std::vector<std::map<Index, Index>> S_replacement_maps(const Tensor& S){
+  assert(S.label() == L"S");
+  assert(S.bra_rank() > 1);
+  assert(S.bra().size() == S.ket().size());
+  container::svector<int> int_list(S.bra().size());
+  std::iota(std::begin(int_list), std::end(int_list), 0);
+
+  std::vector<std::map<Index, Index>> maps;
+  do{
+    std::map<Index, Index> map;
+    auto S_bra_ptr = S.bra().begin();
+    auto S_ket_ptr = S.ket().begin();
+    for(auto&& i : int_list){
+      map.emplace(std::make_pair(*S_bra_ptr, S.bra()[i]));
+      ++S_bra_ptr;
+      map.emplace(std::make_pair(*S_ket_ptr, S.ket()[i]));
+      ++S_ket_ptr;
+    }
+    maps.push_back(map);
+  }while(std::next_permutation(int_list.begin(), int_list.end()));
+
+  return maps;
+}
+
 /// @brief Expand S operator
 ExprPtr expand_S_operator(const ExprPtr& expr){
 
@@ -758,6 +782,7 @@ ExprPtr expand_S_operator(const ExprPtr& expr){
     return expr;
 
   // Lambda for making replacement maps
+/*
   auto replacement_maps = [&] (const Tensor& S){
     assert(S.label() == L"S");
     assert(S.bra_rank() > 1);
@@ -790,7 +815,7 @@ ExprPtr expand_S_operator(const ExprPtr& expr){
 
     std::vector<std::map<Index, Index>> maps;
     if(product.factor(0)->as<Tensor>().label() == L"S")
-      maps = replacement_maps(product.factor(0)->as<Tensor>());
+      maps = S_replacement_maps(product.factor(0)->as<Tensor>());
     assert(!maps.empty());
     Sum sum{};
     for(auto&&map : maps){
@@ -1324,18 +1349,32 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
     S = Tensor(L"S", bra_list, ket_list, Symmetry::nonsymm);
   }
 
-  // TODO: Automate map generation
+  // Control general CC method or CCSD R2
+  // nCC = 1 : General Coupled-cluster residual equation
+  //     = 0 : CCSD R2 only
+#define nCC 1
+#if nCC
   // Generate list of permutation indices
-  // Index replacement map and remove the canonical order.
+  auto replacement_maps = S_replacement_maps(S);
+  std::cout << "replacement_maps.size(): " << replacement_maps.size() << "\n";
 
+  replacement_maps.erase(replacement_maps.begin());
+  // std::cout << "replacement_maps.size(): " << replacement_maps.size() << "\n";
+//  for(auto&& map : replacement_maps) {
+//    for (auto&& pair : map)
+//      std::wcout << to_latex(pair.first) << " " << to_latex(pair.second) << "\n";
+//    std::cout << "\n";
+//  }
+#else
   // Create S_{ij}^{ab}
   std::map<Index, Index> replacement_map;
   replacement_map.emplace(std::make_pair(L"i_1", L"i_2"));
   replacement_map.emplace(std::make_pair(L"i_2", L"i_1"));
   replacement_map.emplace(std::make_pair(L"a_1", L"a_2"));
   replacement_map.emplace(std::make_pair(L"a_2", L"a_1"));
+#endif
 
-  // Lambda function for tensor index replacement
+  // Lambda function for index replacement in tensor
   auto transform_tensor = [&](const Tensor& tensor, const std::map<Index, Index>& replacement_map) {
     auto result = std::make_shared<Tensor>(tensor);
     result->transform_indices(replacement_map);
@@ -1383,6 +1422,60 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
       summands_hash_list.erase(hash0);
       auto new_product = (*it)->clone();
 
+#if nCC // CONTAINER OF HASH VALUES AND SYMMETRIZED TERMS
+      // FOR GENERALIZED EXPRESSION WITH ARBITRATY S OPERATOR
+      // Loop over replacement maps The entire code from here
+      container::vector<size_t> hash1_map;
+      for(auto&& replacement_map : replacement_maps){
+        size_t hash1;
+        if ((*it)->is<Product>()) {
+          // Clone *it, apply symmetrizer, store hash1 value
+          auto product = (*it)->as<Product>();
+          Product S_product{};
+          S_product.scale(product.scalar());
+
+          // Transform indices by action of S operator
+          for (auto&& t : product) {
+            if (t->is<Tensor>())
+              S_product.append(
+                  transform_tensor(t->as<Tensor>(), replacement_map));
+          }
+          auto new_product_expr = ex<Product>(S_product);
+          new_product_expr->canonicalize();
+          hash1 = new_product_expr->hash_value();
+
+        } else if ((*it)->is<Tensor>()) {
+          // Clone *it, apply symmetrizer, store hash value
+          auto tensor = (*it)->as<Tensor>();
+
+          // Transform indices by action of S operator
+          auto new_tensor = transform_tensor(tensor, replacement_map);
+
+          // Canonicalize the new tensor before computing hash value
+          new_tensor->canonicalize();
+          hash1 = new_tensor->hash_value();
+        }
+        hash1_map.push_back(hash1);
+      }
+
+      auto hash1_found = [&](size_t h){ return summands_hash_list.find(h) != summands_hash_list.end();};
+      bool symmetrizable = false;
+      auto n_hash_found = ranges::count_if(hash1_map, hash1_found);
+      if(n_hash_found == hash1_map.size()) symmetrizable = true;
+      // std::cout << "n_hash_found: " << n_hash_found << std::boolalpha << symmetrizable << "\n";
+      if(symmetrizable){
+        // Prepend S operator
+        new_product = ex<Tensor>(S) * new_product;
+        ++n_symm_terms;
+        // remove values from hash1_map from summands_hash_list
+        ranges::for_each(hash1_map, [&] (const size_t hash1){
+          summands_hash_list.erase(hash1);
+          auto term = summands_hash_map.find(hash1)->second;
+          auto find_it = std::find(expr->begin(), expr->end(), term);
+          (*find_it) = ex<Constant>(0.0);  // SILVER BULLET
+        });
+      }
+#else
       // Hash value of symmetrized summand
       size_t hash1;
       if ((*it)->is<Product>()) {
@@ -1428,7 +1521,7 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
         auto find_it = std::find(expr->begin(), expr->end(), term);
         (*find_it) = ex<Constant>(0.0);  // SILVER BULLET
       }
-
+#endif
       result_sum.append(new_product);
     }
     const auto tstop = std::chrono::high_resolution_clock::now();
@@ -1578,6 +1671,14 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
   expand(result);
   canonicalize(result);
   rapid_simplify(result);
+  // return result;
+  std::cout << "Size: " << result->size() << " -> ";
+
+  result = expand_S_operator(result);
+  expand(result);
+  canonicalize(result);
+  rapid_simplify(result);
+  std::cout << result->size() << "\n";
   return result;
 }
 
