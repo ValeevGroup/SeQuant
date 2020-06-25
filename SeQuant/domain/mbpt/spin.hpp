@@ -1562,6 +1562,41 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
       auto new_product = (*it)->clone();
 
       // hash value of summand // TODO: container of hash values
+#if nCC
+      container::vector<size_t> hash0_list;
+      for(auto&& replacement_map : replacement_maps){
+        size_t hash0;
+        if ((*it)->is<Product>()) {
+          // Clone *it, apply symmetrizer, store hash value
+          auto product = (*it)->as<Product>();
+          Product S_product{};
+          S_product.scale(product.scalar());
+
+          // Transform indices by action of S operator
+          for (auto&& t : product) {
+            if (t->is<Tensor>())
+              S_product.append(
+                  transform_tensor(t->as<Tensor>(), replacement_map));
+          }
+          auto new_product_expr = ex<Product>(S_product);
+          new_product_expr->canonicalize();
+          hash0 = new_product_expr->hash_value();
+          hash0_list.push_back(hash0);
+        } else if ((*it)->is<Tensor>()) {
+          // Clone *it, apply symmetrizer, store hash value
+          auto tensor = (*it)->as<Tensor>();
+
+          // Transform indices by action of S operator
+          auto new_tensor = transform_tensor(tensor, replacement_map);
+
+          // Canonicalize the new tensor before computing hash value
+          new_tensor->canonicalize();
+          hash0 = new_tensor->hash_value();
+          hash0_list.push_back(hash0);
+        }
+      }
+
+#else
       size_t hash0;
       if(quick_method){
         // Symmetrize *it instead of symmetrizing *find_it everytime
@@ -1594,11 +1629,34 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
       } else {
         auto hash0 = (*it)->hash_value();
       }
+#endif
 
+#if nCC
+      for (auto&& hash0 : hash0_list) {
+        int n_matches = 0;
+        container::svector<int> idx_vec;
+        for (auto find_it = it + 1; find_it != expr->end(); ++find_it) {
+          auto idx = std::distance(expr->begin(), find_it);
+          (*find_it)->canonicalize();
+
+          if ((*find_it)->hash_value() == hash0) {
+            ++n_matches;
+            idx_vec.push_back(idx);
+          }
+        }
+        if (n_matches == hash0_list.size()) {
+          ++n_symm_terms;
+          std::wcout << n_symm_terms << ": "
+                     << std::distance(expr->begin(), it) << " "
+                     << to_latex((*it)->clone()) << "\n";
+          new_product = ex<Tensor>(S) * new_product;
+          i_list.insert(idx_vec.begin(), idx_vec.end());
+        }
+      }
+#else
       // Loop over the {i+1,...,n} terms (INNER LOOP)
       for (auto find_it = it + 1; find_it != expr->end(); ++find_it) {
         auto idx = std::distance(expr->begin(), find_it);
-
         (*find_it)->canonicalize();
 
         if ((*find_it)->hash_value() == hash0) {
@@ -1655,7 +1713,7 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
           }
         }
       }  // (INNER LOOP)
-
+#endif
       // append product to running sum
       result_sum.append(new_product);
     }
@@ -1671,14 +1729,14 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
   expand(result);
   canonicalize(result);
   rapid_simplify(result);
-  // return result;
-  std::cout << "Size: " << result->size() << " -> ";
+//  return result;
+//  std::wcout << "Symmetrized expr: " << to_latex(result) << std::endl;
 
-  result = expand_S_operator(result);
-  expand(result);
-  canonicalize(result);
-  rapid_simplify(result);
-  std::cout << result->size() << "\n";
+//  result = expand_S_operator(result);
+//  expand(result);
+//  canonicalize(result);
+//  rapid_simplify(result);
+//  std::cout << result->size() << "\n";
   return result;
 }
 
