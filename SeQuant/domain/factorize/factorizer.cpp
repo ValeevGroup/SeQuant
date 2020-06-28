@@ -3,59 +3,58 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/tensor_network.hpp>
-// IndexSpace type based hashing of tensors for ColorMatrix
+// IndexSpace type based hashing of tensors for AdjacencyMatrix
 #include <SeQuant/domain/evaluate/eval_tree.hpp>
 
+#include <iomanip>
 #include <ios>
 #include <tuple>
+
+#define DEBUG_PRINT 0
 
 namespace sequant::factorize {
 
 using pos_type = AdjacencyMatrix::pos_type;
 using color_mat_type = AdjacencyMatrix::color_mat_type;
 
-AdjacencyMatrix::AdjacencyMatrix(const ExprPtr& expr)
-    : colorMatrix_(
+AdjacencyMatrix::AdjacencyMatrix(
+    const ExprPtr& expr,
+    const TensorNetwork::named_indices_t& external_indices)
+    : colorMatrix_(  // allocates color matrix
           expr->size(),
           color_mat_type::value_type(
               expr->size(), color_mat_type::value_type::value_type{})) {
+  // get a Product out of a TensorNetwork
+  auto tn_to_prod = [](const auto& tn) {
+    auto prod = std::make_shared<Product>();
+    for (const auto& tnsr : tn.tensors())
+      prod->append(1, std::dynamic_pointer_cast<Tensor>(tnsr));
+    return prod;
+  };
+
+  // fill the color values
   for (auto ii = 0; ii < expr->size(); ++ii)
     for (auto jj = ii + 1; jj < expr->size(); ++jj) {
       // set color data
       if (are_connected(expr->at(ii), expr->at(jj))) {
+        // auto prod = std::make_shared<Product>(Product{expr->at(ii),
+        // expr->at(jj)});
+        auto tnet =
+            TensorNetwork(*(expr->at(ii)->clone() * expr->at(jj)->clone()));
+        tnet.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false,
+                          &external_indices);
         colorMatrix_[ii][jj] = colorMatrix_[jj][ii] =
-            evaluate::EvalTree(
-                std::make_shared<Product>(Product{expr->at(ii), expr->at(jj)}))
-                .hash_value();
-
-        /////
-        /* auto t1 = std::make_shared<Tensor>(expr->at(ii)->as<Tensor>()); */
-        /* auto t2 = std::make_shared<Tensor>(expr->at(jj)->as<Tensor>()); */
-
-        /* auto tn = TensorNetwork(*std::make_shared<Product>(Product{t1, t2})); */
-
-        /* tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false); */
-
-        /* auto tensor = [&tn](auto idx) { */
-        /*   return std::dynamic_pointer_cast<Tensor>( */
-        /*       *(tn.tensors().begin() + idx)); */
-        /* }; */
-
-        /* auto vertex0 = tensor(0); */
-        /* auto vertex1 = tensor(1); */
-
-        /* colorMatrix_[ii][jj] = colorMatrix_[jj][ii] = */
-        /*     evaluate::EvalTree( */
-        /*         std::make_shared<Product>(Product{vertex0, vertex1})) */
-        /*         .hash_value(); */
-        /////
+            evaluate::EvalTree(tn_to_prod(tnet)).hash_value();
       }
     }
 }
 
-AdjacencyMatrix::AdjacencyMatrix(const container::svector<ExprPtr>& tensors)
+AdjacencyMatrix::AdjacencyMatrix(
+    const container::svector<ExprPtr>& tensors,
+    const TensorNetwork::named_indices_t& external_indices)
     : AdjacencyMatrix(
-          std::make_shared<Product>(1, tensors.begin(), tensors.end())) {}
+          std::make_shared<Product>(1, tensors.begin(), tensors.end()),
+          external_indices) {}
 
 bool AdjacencyMatrix::are_connected(const ExprPtr& t1, const ExprPtr& t2) {
   auto tnsr1 = t1->as<Tensor>();
@@ -96,219 +95,234 @@ bool tensor_exists(const ExprPtr& expr, const ExprPtr& tnsr) {
   return false;
 };
 
-std::tuple<ExprPtr, ExprPtr> factorize_pair(const ExprPtr& exprA,
-                                            const ExprPtr& exprB) {
-  // lambda to get the common tensors in container_t1 and container_t2
-  auto common_tensors = [](const auto& container_t1, const auto& container_t2) {
-    container::set<ExprPtr> common_t1, common_t2;
+/***********************************
+ * Functions for factorization     *
+ ***********************************/
 
-    for (const auto& t1 : container_t1)
-      for (const auto& t2 : container_t2) {
-        //
-        // NOTE: As an example: t_{i j}^{a b} has the same
-        // hash value as t_{a b}^{i j}. To hash such expressions
-        // differently, use EvalTree(expr, false).
-        //
-        if (evaluate::EvalTree(t1).hash_value() ==
-            evaluate::EvalTree(t2).hash_value()) {
-          common_t1.insert(t1);
-          common_t2.insert(t2);
-        }
-      }
-
-    // convert set to vector
-    auto exprptr_vec = [](const auto& container) {
-      container::svector<ExprPtr> result;
-      result.reserve(container.size());
-      for (auto&& xpr : container) result.push_back(xpr);
-      return result;
-    };
-
-    return std::make_tuple(exprptr_vec(common_t1), exprptr_vec(common_t2));
-  };  // lambda common_tensors
-
-  auto [tensorsA, tensorsB] = common_tensors(*exprA, *exprB);
-
-  // get positions in a container where different 'kind' of tensors begin
-  // container: {f_ov, f_ov, t_oo, t_oovv, g_oovv, g_oovv}
-  // output:    {(0, 2), (2, 3), (3, 4), (4, 6)}
-  const auto parts_indices = [](const auto& container) {
-    using evaluate::EvalTree;  // for hashing tensors by their types
-
-    container::svector<pos_type> indices;
-    indices.push_back(0);
-    for (auto ii = 0; ii < container.size();) {
-      auto lead_hvalue = EvalTree(container.at(ii)).hash_value();
-      auto jj = ii + 1;
-      for (; jj < container.size(); ++jj) {
-        auto trail_hvalue = EvalTree(container.at(jj)).hash_value();
-        if (lead_hvalue != trail_hvalue) break;
-      }
-      ii = jj;
-      indices.push_back(ii);
+// get target indices
+TensorNetwork::named_indices_t target_indices(const ExprPtr& expr) {
+  TensorNetwork::named_indices_t result;
+  for (const auto& tnsr : *expr) {
+    for (const auto& idx : tnsr->as<Tensor>().const_braket()) {
+      if (result.contains(idx))
+        result.erase(idx);
+      else
+        result.insert(idx);
     }
-    container::svector<std::tuple<pos_type, pos_type>> result;
-    for (auto ii = 0; ii < indices.size() - 1; ++ii)
-      result.push_back(std::make_tuple(indices.at(ii), indices.at(ii + 1)));
-    return result;
-  };
+  }
+  return result;
+}
 
-  // get pairs of tensors from each of the two containers, container1 and
-  // container2 where a pair from 1 has the same color of connectivity as the
-  // corresponding pair from 2.
-  //
-  // returned value is a tuple of two vectors each vector has tuple(s) of two
-  // position indices
-  // eg.
-  //     ({(0,4), (1,3)}, {(1,7), (3, 8)})
-  //
-  //     tensors at positions 0 and 4 from container1 are equivalently
-  //     contracted as tensors at positions 1 and 7 from container2
-  //
-  //     tensors at positions 1 and 3 from container1 are equivalently
-  //     contracted as tensors at positions 3 and 8 from container2
-  //
-  // container1 and container2 maybe different in size, however, they must have
-  // same number of kinds of tensors
-  // eg.
-  // {t_ov, t_ov, t_ov, g_oovv} and {t_ov, g_oovv} are good
-  // {t_ov, t_ov, t_ov, g_oovv, f_ov} and {t_ov, g_oovv} are not good
-  //
-  auto common_pairs = [&parts_indices](const auto& container1,
-                                       const auto& container2) {
-    // given @c pos position of an element in a container and
-    // given @c parts partition vector of the container
-    // return the index in the @c parts container in which the @c pos falls.
-    // eg.
-    // parts: {(0, 2), (2, 5), (5, 6)}
-    // pos: 3
-    // return: 1
-    // since 3 belongs to (2, 5) partition whose index in the
-    // partition vector is 1
-    const auto part_idx = [](pos_type pos, const auto& parts) {
-      for (size_t ii = 0; ii < parts.size(); ++ii) {
-        if ((std::get<0>(parts.at(ii)) <= pos) &&
-            (std::get<1>(parts.at(ii)) > pos))
-          return ii;
+// Get positions of common type of tensors in a pair of Exprs'.
+std::tuple<container::set<pos_type>, container::set<pos_type>> common_tensors(
+    const ExprPtr& expr1, const ExprPtr& expr2) {
+  container::set<pos_type> commonT_1, commonT_2;
+  for (pos_type ii = 0; ii < expr1->size(); ++ii)
+    for (pos_type jj = 0; jj < expr2->size(); ++jj) {
+      //
+      // NOTE: As an example: t_{i j}^{a b} has the same
+      // hash value as t_{a b}^{i j}. To hash such expressions
+      // differently, use EvalTree(expr, false).
+      //
+      if (evaluate::EvalTree(expr1->at(ii)).hash_value() ==
+          evaluate::EvalTree(expr2->at(jj)).hash_value()) {
+        commonT_1.insert(ii);
+        commonT_2.insert(jj);
       }
-      return parts.size();
-    };
+    }
+  return std::tuple(commonT_1, commonT_2);
+}
 
-    auto parts1 = parts_indices(container1);
-    auto parts2 = parts_indices(container2);
-    // assert(parts1.size() == parts2.size());
-
-    auto adjMat1 = AdjacencyMatrix(container1);
-    auto adjMat2 = AdjacencyMatrix(container2);
-
-    container::svector<std::tuple<pos_type, pos_type>> commonPair1, commonPair2;
-    for (auto p1 = 0; p1 < adjMat1.num_verts(); ++p1) {
-      for (auto pp1 = p1 + 1; pp1 < adjMat1.num_verts(); ++pp1) {
-        const auto [low1, up1] = parts2.at(part_idx(p1, parts1));
-        const auto [low2, up2] = parts2.at(part_idx(pp1, parts1));
-        for (auto p2 = low1; p2 < up1; ++p2)
-          for (auto pp2 = low2; pp2 < up2; ++pp2) {
-            if (auto color = adjMat1.color(p1, pp1);
-                (color != color_mat_type::value_type::value_type{}) &&
-                (color == adjMat2.color(p2, pp2))) {
-              commonPair1.push_back(std::make_tuple(p1, pp1));
-              commonPair2.push_back(std::make_tuple(p2, pp2));
-            }
+container::map<std::tuple<pos_type, pos_type>, std::tuple<pos_type, pos_type>>
+common_pairs(const AdjacencyMatrix& mat1, const AdjacencyMatrix& mat2) {
+  auto result = container::map<std::tuple<pos_type, pos_type>,
+                               std::tuple<pos_type, pos_type>>{};
+  for (auto ii = 0; ii < mat1.num_verts(); ++ii)
+    for (auto jj = ii + 1; jj < mat1.num_verts(); ++jj)
+      for (auto kk = 0; kk < mat2.num_verts(); ++kk)
+        for (auto ll = kk + 1; ll < mat2.num_verts(); ++ll)
+          if (auto color = mat1.color(ii, jj);
+              color != color_mat_type::value_type::value_type{} &&
+              color == mat2.color(kk, ll)) {
+            result.insert(decltype(result)::value_type{std::tuple(ii, jj),
+                                                       std::tuple(kk, ll)});
+            break;
           }
+
+  return result;
+}
+
+std::tuple<container::svector<container::set<AdjacencyMatrix::pos_type>>,
+           container::svector<container::set<AdjacencyMatrix::pos_type>>>
+common_nets(const container::map<std::tuple<pos_type, pos_type>,
+                                 std::tuple<pos_type, pos_type>>& pairs) {
+  // make a copy of pairs
+  auto common_p = pairs;
+  // to hold processed nets
+  container::svector<container::set<AdjacencyMatrix::pos_type>> common_net1,
+      common_net2;
+  decltype(common_p)::iterator pair_iter;
+  while (!common_p.empty()) {
+    pair_iter = common_p.begin();
+
+    decltype(common_net1)::value_type net1, net2;
+
+    net1.insert(std::get<0>(pair_iter->first));
+    net1.insert(std::get<1>(pair_iter->first));
+
+    net2.insert(std::get<0>(pair_iter->second));
+    net2.insert(std::get<1>(pair_iter->second));
+
+    pair_iter = common_p.erase(pair_iter);
+    while (pair_iter != common_p.end()) {
+      auto [pFirst1, pFirst2] = pair_iter->first;
+      auto [pSecond1, pSecond2] = pair_iter->second;
+
+      if (net1.contains(pFirst1) || net1.contains(pFirst2)) {
+        assert(net2.contains(pSecond1) || net2.contains(pSecond2));
+        pair_iter = common_p.erase(pair_iter);
+      } else {
+        assert(!(net2.contains(pSecond1) || net2.contains(pSecond2)));
+        ++pair_iter;
       }
     }
+    common_net1.push_back(net1);
+    common_net2.push_back(net2);
+  }
+  return std::tuple(common_net1, common_net2);
+}
 
-    return std::make_tuple(commonPair1, commonPair2);
-  };
+std::tuple<ExprPtr, ExprPtr> factorize_pair(const ExprPtr& expr1,
+                                             const ExprPtr& expr2) {
+  // get common type of tensor's positions
+  auto [commonIdx1, commonIdx2] = common_tensors(expr1, expr2);
 
-  auto [commonPairsA, commonPairsB] = common_pairs(tensorsA, tensorsB);
-  assert(commonPairsA.size() == commonPairsB.size());
-
-  // keep track of indices that make a walk/common subnet
-  container::svector<container::set<pos_type>> processedNetsA, processedNetsB;
-
-  // keep track of tuple's positions that have been consumed in a walk
-  container::svector<bool> processedTuples(commonPairsA.size(), false);
-
-  for (auto ii = 0; ii < commonPairsA.size(); ++ii) {
-    if (processedTuples[ii]) continue;
-    decltype(processedNetsA)::value_type runningNetA, runningNetB;
-
-    runningNetA.insert(std::get<0>(commonPairsA.at(ii)));
-    runningNetA.insert(std::get<1>(commonPairsA.at(ii)));
-
-    runningNetB.insert(std::get<0>(commonPairsB.at(ii)));
-    runningNetB.insert(std::get<1>(commonPairsB.at(ii)));
-
-    processedTuples[ii] = true;
-
-    for (auto jj = ii + 1; jj < commonPairsA.size(); ++jj) {
-      if (processedTuples[jj]) continue;
-      auto [idxA1, idxA2] = commonPairsA.at(jj);
-      auto [idxB1, idxB2] = commonPairsB.at(jj);
-      if (runningNetA.contains(idxA1) || runningNetA.contains(idxA2)) {
-        assert(runningNetB.contains(idxB1) || runningNetB.contains(idxB2));
-        runningNetA.insert(idxA1);
-        runningNetA.insert(idxA2);
-
-        runningNetB.insert(idxB1);
-        runningNetB.insert(idxB2);
-
-        processedTuples[jj] = true;
-      }
-    }
-    processedNetsA.push_back(runningNetA);
-    processedNetsB.push_back(runningNetB);
+  container::svector<ExprPtr> commonExpr1, commonExpr2;
+  for (auto idx : commonIdx1) {
+    commonExpr1.push_back(expr1->at(idx));
+  }
+  for (auto idx : commonIdx2) {
+    commonExpr2.push_back(expr2->at(idx));
   }
 
-  /* std::wcout << "positions in netA\n"; */
-  /* for (const auto& pos : processedNetsA) { */
-  /*   std::wcout << "("; */
-  /*   for (auto p : pos) std::wcout << p << "  "; */
+#ifndef DEBUG_PRINT
+  std::wcout << "\nprinting common tensors\n"
+             << "-----------------------\n";
+  for (const auto& xpr : commonExpr1) std::wcout << xpr->to_latex() << " ";
+  std::wcout << "\n";
+  for (const auto& xpr : commonExpr2) std::wcout << xpr->to_latex() << " ";
+  std::wcout << "\n";
+#endif
 
-  /*   std::wcout << ")\n"; */
-  /* } */
+  // get the target indices
+  auto target1 = target_indices(expr1);
+  auto target2 = target_indices(expr2);
 
-  /* std::wcout << "positions in netB\n"; */
-  /* for (const auto& pos : processedNetsB) { */
-  /*   std::wcout << "("; */
-  /*   for (auto p : pos) std::wcout << p << "  "; */
+#ifndef DEBUG_PRINT
+  std::wcout << "\nprinting target indices\n"
+             << "-----------------------\n";
+  for (const auto& idx : target1) std::wcout << idx.to_latex() << " ";
+  std::wcout << "\n";
+  for (const auto& idx : target2) std::wcout << idx.to_latex() << " ";
+  std::wcout << "\n";
+#endif
 
-  /*   std::wcout << ")\n"; */
-  /* } */
+  // form adjacency matrices for common tensors
+  auto adjMat1 = AdjacencyMatrix(commonExpr1, target1);
+  auto adjMat2 = AdjacencyMatrix(commonExpr2, target2);
 
-  auto form_product = [](const auto& nets, const auto& tensors) {
-    auto result = std::make_shared<Product>();
-    for (const auto& n : nets) {
-      auto prod = std::make_shared<Product>();
-      for (auto nn : n) {
-        prod->append(tensors.at(nn));
+  auto print_adj_mat = [](const auto& mat, bool color = false) {
+    for (auto ii = 0; ii < mat.num_verts(); ++ii) {
+      for (auto jj = 0; jj < mat.num_verts(); ++jj) {
+        if (color)
+          std::wcout << std::setw(27) << mat.color(ii, jj);
+        else
+          std::wcout << mat.are_connected(ii, jj);
+        std::wcout << "  ";
       }
-      result->append(prod);
+      std::wcout << "\n";
     }
+  };
+
+#ifndef DEBUG_PRINT
+  std::wcout << "\nprinting adjacency matrix1\n"
+             << "--------------------------\n";
+  print_adj_mat(adjMat1, true);
+  std::wcout << "\nprinting adjacency matrix2\n"
+             << "--------------------------\n";
+  print_adj_mat(adjMat2, true);
+#endif
+
+  // find common pairs
+  auto common_p = common_pairs(adjMat1, adjMat2);
+
+#ifndef DEBUG_PRINT
+  std::wcout << "\nprinting common pair indices\n"
+             << "----------------------------\n";
+  for (const auto& p : common_p) {
+    auto [tup1, tup2] = p;
+    std::wcout << "(" << std::get<0>(tup1) << ", " << std::get<1>(tup1)
+               << ")  ";
+    std::wcout << "(" << std::get<0>(tup2) << ", " << std::get<1>(tup2) << ")";
+    std::wcout << "\n";
+  }
+  std::wcout << std::endl;
+#endif
+
+  // find common nets
+  auto [netIdx1, netIdx2] = common_nets(common_p);
+
+  // form selectivev ExprPtr out of an iterable of
+  // pos_types and a given reference Expr
+  auto iter_to_expr = [](const auto& iterable, const auto& expr) {
+    auto result = std::make_shared<Product>();
+    for (auto idx : iterable) result->append(1, expr.at(idx));
     return result;
   };
 
-  auto subnetA = form_product(processedNetsA, tensorsA);
-  auto subnetB = form_product(processedNetsB, tensorsB);
-  /* std::wcout << "subnetA = " << subnetA->to_latex() << "\n"; */
-  /* std::wcout << "subnetB = " << subnetB->to_latex() << "\n"; */
+  auto subnet1 = std::make_shared<Product>();
+  for (const auto& group : netIdx1)
+    subnet1->append(1, iter_to_expr(group, commonExpr1));
 
-  decltype(tensorsA) unfactoredA, unfactoredB;
-  for (const auto& tnsr : *exprA)
-    if (!tensor_exists(subnetA, tnsr)) unfactoredA.push_back(tnsr);
-  for (const auto& tnsr : *exprB)
-    if (!tensor_exists(subnetB, tnsr)) unfactoredB.push_back(tnsr);
+  auto subnet2 = std::make_shared<Product>();
+  for (const auto& group : netIdx2)
+    subnet2->append(1, iter_to_expr(group, commonExpr2));
 
-  subnetA->append(
-      1, std::make_shared<Product>(1, unfactoredA.begin(), unfactoredA.end()));
-  subnetA->scale(exprA->as<Product>().scalar());
+  // append left out tensors from the original expr to individual subnets
+  auto get_left_out = [](const auto& commonidx, const ExprPtr& factorized,
+                         const ExprPtr& original) {
+    auto left_out = std::make_shared<Product>();
 
-  subnetB->append(
-      1, std::make_shared<Product>(1, unfactoredB.begin(), unfactoredB.end()));
-  subnetB->scale(exprB->as<Product>().scalar());
+    for (pos_type ii = 0; ii < original->size(); ++ii)
+      if (auto tnsr = original->at(ii);
+          !(tensor_exists(factorized, tnsr)))
+        left_out->append(1, tnsr->clone());
+    return left_out;
+  };
 
-  return std::tuple(subnetA, subnetB);
+  auto left1 = get_left_out(commonIdx1, subnet1, expr1);
+  auto left2 = get_left_out(commonIdx2, subnet2, expr2);
+
+#ifndef DEBUG_PRINT
+  std::wcout << "subnet1 = " << subnet1->to_latex() << "\n"
+             << "subnet2 = " << subnet2->to_latex() << "\n"
+             << "left1   = " << left1->to_latex() << "\n"
+             << "left2   = " << left2->to_latex() << "\n";
+#endif
+
+  auto combine_expr = [](const ExprPtr& exprA, const ExprPtr& exprB) {
+    if (exprA->size() == 0) return exprB->clone();
+    if (exprB->size() == 0) return exprA->clone();
+    auto combined = std::make_shared<Product>();
+    combined->append(exprA->clone());
+    combined->append(exprB->clone());
+    return std::dynamic_pointer_cast<Expr>(combined);
+  };
+
+  auto factorForm1 = combine_expr(subnet1, left1);
+  auto factorForm2 = combine_expr(subnet2, left2);
+
+  return std::tuple(factorForm1, factorForm2);
 }
 
 }  // namespace sequant::factorize

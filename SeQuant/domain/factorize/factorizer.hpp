@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr_fwd.hpp>
+#include <SeQuant/core/tensor_network.hpp>
 
 // IndexSpace type based hashing of tensors for connectivity
 #include "SeQuant/domain/evaluate/eval_fwd.hpp"
@@ -34,10 +35,13 @@ class AdjacencyMatrix {
 
  public:
   /// @param expr is a ExprPtr of Tensors'.
-  explicit AdjacencyMatrix(const ExprPtr& expr);
-
+  explicit AdjacencyMatrix(
+      const ExprPtr& expr,
+      const TensorNetwork::named_indices_t& external_indices = {});
   /// @param tensors is a vector of ExprPtr to Tensors'
-  AdjacencyMatrix(const container::svector<ExprPtr>& tensors);
+  explicit AdjacencyMatrix(
+      const container::svector<ExprPtr>& tensors,
+      const TensorNetwork::named_indices_t& external_indices = {});
 
   /// Getter for the number of vertices.
   size_t num_verts() const;
@@ -59,6 +63,32 @@ class AdjacencyMatrix {
 /// Tensors'.
 bool tensor_exists(const ExprPtr& expr, const ExprPtr& tnsr);
 
+/// Get positions of common type of tensors in a pair of Exprs'.
+std::tuple<container::set<AdjacencyMatrix::pos_type>,
+           container::set<AdjacencyMatrix::pos_type>>
+common_tensors(const ExprPtr& expr1, const ExprPtr& expr2);
+
+/// Get the target indices of an expression
+TensorNetwork::named_indices_t target_indices(const ExprPtr& expr);
+
+/// Get a map of common sub-expr pair from a pair of AdjacencyMatrix objects.
+///
+/// @return A tuple-tuple map. eg. {(0, 2): (1, 5), ... }
+///         implies the node 0 and 2 from the AdjacencyMatrix mat1 are
+///         equivalently connected as the nodes 1 and 5 from mat2 and so on.
+container::map<std::tuple<AdjacencyMatrix::pos_type, AdjacencyMatrix::pos_type>,
+               std::tuple<AdjacencyMatrix::pos_type, AdjacencyMatrix::pos_type>>
+common_pairs(const AdjacencyMatrix& mat1, const AdjacencyMatrix& mat2);
+
+/// Get a tuple of two vectors, where elements of the vectors are the set of
+/// pos_types'.
+std::tuple<container::svector<container::set<AdjacencyMatrix::pos_type>>,
+           container::svector<container::set<AdjacencyMatrix::pos_type>>>
+common_nets(const container::map<
+            std::tuple<AdjacencyMatrix::pos_type, AdjacencyMatrix::pos_type>,
+            std::tuple<AdjacencyMatrix::pos_type, AdjacencyMatrix::pos_type>>&
+                pairs);
+
 ///
 /// Factorize common sub-networks from a pair of tensor networks.
 ///
@@ -73,6 +103,7 @@ bool tensor_exists(const ExprPtr& expr, const ExprPtr& tnsr);
 /// @note Only pair of Tensor Products' are supported now.
 std::tuple<ExprPtr, ExprPtr> factorize_pair(const ExprPtr& exprA,
                                             const ExprPtr& exprB);
+
 }  // namespace sequant::factorize
 
 #endif /* #ifndef SEQUANT_FACTORIZER_HPP */
