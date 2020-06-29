@@ -97,7 +97,8 @@ ExprPtr TensorNetwork::canonicalize(
 
   // fast and slow canonizations produce index replacements for anonymous
   // indices
-  container::map<Index, Index> idxrepl;
+  idxrepl_.clear();
+  auto& idxrepl = idxrepl_;
 
   // index factory to generate anonymous indices
   IndexFactory idxfac(is_anonymous_index,
@@ -167,7 +168,7 @@ ExprPtr TensorNetwork::canonicalize(
         }
         ++idx_cnt;
       }
-      // for each color sort amonymous indices by canonical order
+      // for each color sort anonymous indices by canonical order
       container::svector<std::pair<size_t, size_t>>
           idx_can;  // canonically-ordered list of {index ordinal in edges_,
                     // canonical ordinal}
