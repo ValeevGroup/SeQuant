@@ -403,7 +403,7 @@ int main(int argc, char* argv[]) {
 
     // SPIN TRACE THE CC RESIDUAL EQUATIONS
     std::vector<ExprPtr> cc_st_r(cc_r.size());
-    for (size_t i = 1; i < cc_r.size(); ++i){
+    for (int i = 1; i < cc_r.size(); ++i){
       const auto tstart = std::chrono::high_resolution_clock::now();
       std::initializer_list<IndexList> external_indices = {{}};
       if(i == 1)
@@ -419,12 +419,12 @@ int main(int argc, char* argv[]) {
       cc_st_r[i] = closed_shell_spintrace(cc_r[i], external_indices);
       canonicalize(cc_st_r[i]);
       // std::wcout << to_latex(cc_st_r[i]) << "\n";
-      printf("R%lu Spin-orbit: %lu terms; With S operator: %lu;", i, cc_r[i]->size(), cc_st_r[i]->size());
+      printf("R%d Spin-orbit: %lu terms;\nSPINTRACED: With S operator: %lu;", i, cc_r[i]->size(), cc_st_r[i]->size());
       if(expand_S){
         cc_st_r[i] = expand_S_operator(cc_st_r[i]);
         rapid_simplify(cc_st_r[i]);
         canonicalize(cc_st_r[i]);
-        printf(" S expanded: %lu\n", cc_st_r[i]->size());
+        printf("S factorized: %lu\n", cc_st_r[i]->size());
         // std::wcout << __LINE__ << to_latex(cc_st_r[i]) << "\n" << std::endl;
 
         if(bt){
@@ -459,14 +459,63 @@ int main(int argc, char* argv[]) {
           rapid_simplify(bt_expr_p);
           cc_st_r[i] = bt_expr_p;
           printf("Biorthogonal transform: %lu\n", cc_st_r[i]->size());
+          if(factorize_S && i > 1){
+            if(i == 1)
+              external_indices = {{L"i_1", L"a_1"}};
+            else if(i == 2)
+              external_indices = {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}};
+            else if(i == 3)
+              external_indices = {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}};
+            else if(i == 4)
+              external_indices = {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}, {L"i_4", L"a_4"}};
+
+            cc_st_r[i] = factorize_S_operator(cc_st_r[i], external_indices, true);
+            printf("Factorize S: %lu\n", cc_st_r[i]->size());
+          }
         } else {
           // TODO: Scale residual equations
         }
       }
       const auto tstop = std::chrono::high_resolution_clock::now();
       const std::chrono::duration<double> time_elapsed = tstop - tstart;
-      printf("CC R%lu size: %lu time: %5.3f sec.\n\n", i, cc_st_r[i]->size(), time_elapsed.count());
+      printf("CC R%d size: %lu time: %5.3f sec.\n\n", i, cc_st_r[i]->size(), time_elapsed.count());
     }
+
+#if 1
+    {
+      auto result = std::make_shared<Sum>();
+      int terms_with_S = 0;
+      int counter = 0;
+      std::cout << "\ncc_st_r[3] size: " << cc_st_r[3]->size() << "\n";
+      for (auto&& summand : *cc_st_r[3]) {
+        ++counter;
+        auto term = summand->clone();
+        if (has_tensor_label(term, L"S")) {
+          std::wcout << counter << ": " << to_latex(term) << "\n";
+          ++terms_with_S;
+
+          ExprPtr S_expanded = expand_S_operator(term);
+          int s1 = S_expanded->size();
+          std::wcout << to_latex(S_expanded) << "\n";
+
+          auto temp2 = factorize_S_operator(
+              S_expanded,
+              {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}},
+              true);
+          int s2 = temp2->as<Sum>().size();
+          std::wcout << to_latex(temp2) << "\n\n";
+
+          result->append(temp2);
+        } else {
+          result->append(term);
+        }
+//        break;
+      }
+      std::cout << "\nTerms_with_S: " << terms_with_S;
+      std::cout << "\nResult->size(): " << result->size();
+    }
+#endif
+    return 0;
 
     // std::wcout << "CCSD R1: " << to_latex(cc_st_r[1]) << "\n";
     // std::wcout << "CCSD R2: " << to_latex(cc_st_r[2]) << "\n";
