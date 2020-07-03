@@ -10,6 +10,8 @@
 
 #include <tuple>
 
+#include <boost/bimap.hpp>  // cyclic index replacement
+
 ///
 /// Find common sub-networks between a pair of tensor networks.
 /// @author Bimal Gaudel
@@ -63,6 +65,11 @@ class AdjacencyMatrix {
 /// Tensors'.
 bool tensor_exists(const ExprPtr& expr, const ExprPtr& tnsr);
 
+/// Swap indices in a term according to a index map.
+/// @note mutates expr
+void swap_indices(const ExprPtr& expr,
+                  const boost::bimap<Index, Index>& indexBimap);
+
 /// Get positions of common type of tensors in a pair of Exprs'.
 std::tuple<container::set<AdjacencyMatrix::pos_type>,
            container::set<AdjacencyMatrix::pos_type>>
@@ -101,8 +108,21 @@ common_nets(const container::map<
 /// @return Tuple of two ExprPtr that are factorized forms of exprA and exprB.
 ///
 /// @note Only pair of Tensor Products' are supported now.
-std::tuple<ExprPtr, ExprPtr> factorize_pair(const ExprPtr& exprA,
-                                            const ExprPtr& exprB);
+std::tuple<ExprPtr, ExprPtr> factorize_pair(const ExprPtr& expr1,
+                                            const ExprPtr& expr2);
+
+///
+/// Fuse two factorized Exprs'.
+///
+/// @param expr1 factorized term to be fused
+/// @param expr2 factorized term to be fused
+///              expr1 and expr2 are of the form (AB..)(CD..)
+///
+/// @param symop ExprPtr to 'S' or 'A' type tensor
+/// @return ExprPtr to fused form or nullptr if no fusion is possible.
+///
+ExprPtr fuse_pair(const ExprPtr& expr1, const ExprPtr& expr2,
+                  const ExprPtr& symop);
 
 }  // namespace sequant::factorize
 

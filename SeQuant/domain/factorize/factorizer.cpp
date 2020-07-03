@@ -95,6 +95,15 @@ bool tensor_exists(const ExprPtr& expr, const ExprPtr& tnsr) {
   return false;
 };
 
+
+void swap_indices(const ExprPtr& expr,
+                  const boost::bimap<Index, Index>& indexBimap) {
+    // TODO
+    if (expr->is<Tensor>()){
+        auto& tnsr = expr->as<Tensor>();
+    }
+}
+
 /***********************************
  * Functions for factorization     *
  ***********************************/
@@ -193,7 +202,7 @@ common_nets(const container::map<std::tuple<pos_type, pos_type>,
 }
 
 std::tuple<ExprPtr, ExprPtr> factorize_pair(const ExprPtr& expr1,
-                                             const ExprPtr& expr2) {
+                                            const ExprPtr& expr2) {
   // get common type of tensor's positions
   auto [commonIdx1, commonIdx2] = common_tensors(expr1, expr2);
 
@@ -294,8 +303,7 @@ std::tuple<ExprPtr, ExprPtr> factorize_pair(const ExprPtr& expr1,
     auto left_out = std::make_shared<Product>();
 
     for (pos_type ii = 0; ii < original->size(); ++ii)
-      if (auto tnsr = original->at(ii);
-          !(tensor_exists(factorized, tnsr)))
+      if (auto tnsr = original->at(ii); !(tensor_exists(factorized, tnsr)))
         left_out->append(1, tnsr->clone());
     return left_out;
   };
@@ -311,8 +319,8 @@ std::tuple<ExprPtr, ExprPtr> factorize_pair(const ExprPtr& expr1,
 #endif
 
   auto combine_expr = [](const ExprPtr& exprA, const ExprPtr& exprB) {
-    if (exprA->size() == 0) return exprB->clone();
-    if (exprB->size() == 0) return exprA->clone();
+    if (exprA->empty()) return exprB->clone();
+    if (exprB->empty()) return exprA->clone();
     auto combined = std::make_shared<Product>();
     combined->append(exprA->clone());
     combined->append(exprB->clone());
@@ -323,6 +331,98 @@ std::tuple<ExprPtr, ExprPtr> factorize_pair(const ExprPtr& expr1,
   auto factorForm2 = combine_expr(subnet2, left2);
 
   return std::tuple(factorForm1, factorForm2);
+}
+
+ExprPtr fuse_pair(const ExprPtr& expr1, const ExprPtr& expr2,
+                  const ExprPtr& symop) {
+  // let's check if the input terms are fusable at all
+  if (!(expr1->is<Product>() && expr2->is<Product>() &&
+        expr1->size() == expr2->size() &&
+        expr1->size() == 2 &&  // 2 since (AB..)(...) is expected
+        expr1->at(0)->is<Product>() && expr2->at(0)->is<Product>())) {
+    return nullptr;
+  }
+
+  auto expr_to_tnet = [&symop](const auto& expr) {
+    auto prod = std::make_shared<Product>();
+    prod->append(1, symop->clone());
+    prod->append(1, expr->at(0)->clone());
+    auto tnet = TensorNetwork(*prod);
+    return tnet;
+  };
+
+  // shallow copy tensors from network into a product form
+  auto tnet_to_expr = [&symop](const auto& tnet) {
+    auto symopLabel = symop->as<Tensor>().label();
+    auto prod = std::make_shared<Product>();
+    for (auto& expr : tnet.tensors()) {
+      auto tnsr = std::dynamic_pointer_cast<Expr>(expr);
+      if (tnsr->template as<Tensor>().label() != symopLabel) prod->append(tnsr);
+    }
+    return prod;
+  };
+
+  auto commonTnet1 = expr_to_tnet(expr1);
+  auto commonTnet2 = expr_to_tnet(expr2);
+
+  auto namedIdx = TensorNetwork::named_indices_t{};
+
+  auto phase1 = commonTnet1.canonicalize(
+      TensorCanonicalizer::cardinal_tensor_labels(), false, &namedIdx);
+  auto phase2 = commonTnet2.canonicalize(
+      TensorCanonicalizer::cardinal_tensor_labels(), false, &namedIdx);
+
+  if (!phase1)
+      phase1 = std::make_shared<Constant>(Constant{1});
+
+  if (!phase2)
+      phase2 = std::make_shared<Constant>(Constant{1});
+
+  auto fusedFact1 = tnet_to_expr(commonTnet1);
+  auto fusedFact2 = tnet_to_expr(commonTnet2);
+
+  if (evaluate::EvalTree(fusedFact1).hash_value() !=
+      evaluate::EvalTree(fusedFact2).hash_value()) {
+    std::wcout << "fused common factors"
+                  R"(\\)"
+                  "\n$"
+               << fusedFact1->to_latex() << "$ \\quad $"
+               << fusedFact2->to_latex() << "$\n";
+    return nullptr;  // not fusable pair
+  }
+
+  auto remainder1 = expr1->at(1)->clone();
+  auto remainder2 = expr2->at(1)->clone();
+
+  // replace the indices in the remainders
+  for (auto& expr : *remainder1) {
+    auto& tnsr = expr->as<Tensor>();
+    tnsr.transform_indices(commonTnet1.idxrepl());
+  }
+  for (auto& expr : *remainder2) {
+    auto& tnsr = expr->as<Tensor>();
+    tnsr.transform_indices(commonTnet2.idxrepl());
+  }
+
+  auto commonFact = std::make_shared<Product>();
+  for (auto& expr : *fusedFact1)
+    if (expr != symop) commonFact->append(1, expr);
+
+  auto remainderSum = std::make_shared<Sum>();
+  remainderSum->append(remainder1);
+  remainderSum->append(remainder2);
+
+  auto result = std::make_shared<Product>();
+
+  result->append(commonFact);
+  result->append(remainderSum);
+
+  result->scale(phase1->as<Constant>().value());
+
+  auto scalProd = phase1->as<Constant>().value() / result->scalar();
+  auto scalSum = phase2->as<Constant>().value() / result->scalar();
+
+  return result;
 }
 
 }  // namespace sequant::factorize

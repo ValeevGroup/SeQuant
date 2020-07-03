@@ -85,6 +85,59 @@ void print_factors(const ExprPtr& expr) {
   }
 }
 
+void pair_factors_to_latex(const ExprPtr& expr) {
+  std::wcout << R"(\section*{Equation})"
+             << "\n"
+             << R"(\begin{dmath*})"
+             << "\n"
+             << expr->to_latex() << "\n"
+             << R"(\end{dmath*})" << std::endl;
+
+  std::wcout << R"(\section*{Factors})"
+             << "\n";
+  print_factors(expr);
+}
+
+void pair_fustion_to_latex(const ExprPtr& expr) {
+  std::wcout << R"(\section*{Equation})"
+             << "\n"
+             << R"(\begin{dmath*})"
+             << "\n"
+             << expr->to_latex() << "\n"
+             << R"(\end{dmath*})" << std::endl;
+  std::wcout << R"(\section*{Factors})"
+             << "\n";
+  auto asymOp = make_tensor_expr({"A", "i_1", "i_2", "a_1", "a_2"});
+
+  for (auto ii = 0; ii < expr->size(); ++ii)
+    for (auto jj = ii + 1; jj < expr->size(); ++jj) {
+      auto [factr1, factr2] =
+          factorize::factorize_pair(expr->at(ii), expr->at(jj));
+      if (factr1->size() != expr->at(ii)->size()) {  // fusable
+        auto fused = factorize::fuse_pair(factr1, factr2, asymOp);
+        std::wcout << "term " << ii+1 << " vs " << jj+1
+                   << R"(\\)"
+                      "\n$"
+                   << expr->at(ii)->to_latex() << "$ vs $"
+                   << expr->at(jj)->to_latex() << "$\n";
+        if (fused)
+          std::wcout << "$" << fused->to_latex() << "$";
+        else
+          std::wcout << "FAILED!";
+        std::wcout << R"(\\)"
+                      "\n";
+      }
+      /* std::wcout << "processed " << ii+1 << "th vs " << jj+1 << "th terms\n"; */
+    }
+}
+
+auto tn_to_prod = [](const auto& tn) {
+  auto prod = std::make_shared<Product>();
+  for (const auto& t : tn.tensors())
+    prod->append(std::dynamic_pointer_cast<Expr>(t));
+  return prod;
+};
+
 int main() {
   // global sequant setup...
   std::setlocale(LC_ALL, "en_US.UTF-8");
@@ -126,22 +179,37 @@ int main() {
   auto sum = std::make_shared<Sum>();
   // sum->append(prod1);
   // sum->append(prod2);
-  sum->append(expr->at(12));
-  sum->append(expr->at(25));
 
-  std::wcout << R"(\section*{Equation})"
-             << "\n"
-             << R"(\begin{dmath*})"
-             << "\n"
-             << expr->to_latex()
-             << "\n"
-             // << sum->to_latex() << "\n"
-             << R"(\end{dmath*})" << std::endl;
+  sum->append(expr->at(12));  // 13th term of the CCSD R2 equation
+  sum->append(expr->at(25));  // 26th term of the CCSD R2 equation
 
-  std::wcout << R"(\section*{Factors})"
-             << "\n";
-  print_factors(expr);
-  // print_factors(sum);
+  /* sum->append(expr->at(19));  // 13th term of the CCSD R2 equation */
+  /* sum->append(expr->at(28));  // 26th term of the CCSD R2 equation */
+
+  auto [factr1, factr2] = factorize::factorize_pair(sum->at(0), sum->at(1));
+
+  // pair_factors_to_latex(expr);
+
+  //
+  std::wcout << "factr1 and factr2"
+                R"(\\)"
+                "\n"
+                "$"
+             << factr1->to_latex()
+             << "$"
+                R"( \quad )"  //
+             << "$" << factr2->to_latex() << "$" << std::endl;
+
+  auto asymOp = make_tensor_expr({"A", "i_1", "i_2", "a_1", "a_2"});
+
+  auto fused = factorize::fuse_pair(factr1, factr2, asymOp);
+
+  // -------------------------------------------------------
+  // fusing expr termwise
+  std::wcout << "fusing pairwise expr terms\n"
+             << "--------------------------\n";
+  pair_fustion_to_latex(expr);
+  std::wcout << std::endl;
 
   return 0;
 }

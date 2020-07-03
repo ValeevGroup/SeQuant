@@ -140,15 +140,7 @@ TEST_CASE("FACTORIZER", "[factorizer]") {
     for (const auto& t : tn2.tensors())
       canon_term2->append(1, std::dynamic_pointer_cast<Expr>(t));
 
-    // std::wcout << "prod1 = " << prod1->to_latex() << "\n";
-    // std::wcout << "prod2 = " << prod2->to_latex() << "\n";
-    // std::wcout << "after factorization..\n";
-    // std::wcout << "prod1 = " << fact3->to_latex() << "\n";
-    // std::wcout << "prod2 = " << fact4->to_latex() << "\n";
-    // std::wcout << std::endl;
-
     REQUIRE(evaluate::EvalTree(canon_term1).hash_value() ==
             evaluate::EvalTree(canon_term2).hash_value());
-
   }
 }

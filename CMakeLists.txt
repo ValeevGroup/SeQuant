@@ -225,25 +225,25 @@ endif(NOT TARGET tiledarray)
 enable_testing(true)
 
 set(utests_src
-         tests/unit/test_space.cpp
-         tests/unit/test_index.cpp
-         tests/unit/test_op.cpp
-         tests/unit/test_wick.cpp
-         tests/unit/test_tensor.cpp
-         tests/unit/test_bliss.cpp
-         tests/unit/test_expr.cpp
-         tests/unit/test_iterator.cpp
-         tests/unit/test_mbpt.cpp
-         tests/unit/test_tensor_network.cpp
-         tests/unit/test_tn_factorization.cpp
+         # tests/unit/test_space.cpp
+         # tests/unit/test_index.cpp
+         # tests/unit/test_op.cpp
+         # tests/unit/test_wick.cpp
+         # tests/unit/test_tensor.cpp
+         # tests/unit/test_bliss.cpp
+         # tests/unit/test_expr.cpp
+         # tests/unit/test_iterator.cpp
+         # tests/unit/test_mbpt.cpp
+         # tests/unit/test_tensor_network.cpp
+         tests/unit/test_factorizer.cpp
         )
 set(utests_deps SeQuant)
 
 if (TARGET tiledarray)
   list(APPEND utests_src
       ## unit tests for evaluation
-      tests/unit/test_eval_tree.cpp
-      tests/unit/test_path_tree.cpp
+      # tests/unit/test_eval_tree.cpp
+      # tests/unit/test_path_tree.cpp
       )
   list(APPEND utests_deps tiledarray)
 endif(TARGET tiledarray)
@@ -303,8 +303,13 @@ add_executable(${example3} EXCLUDE_FROM_ALL
     examples/${example3}/${example3}.cpp)
 target_link_libraries(${example3} SeQuant ${TBB_LIBRARIES})
 
+set(example4 pair_factorization)
+add_executable(${example4} EXCLUDE_FROM_ALL
+    examples/factorization/${example4}.cpp)
+target_link_libraries(${example4} SeQuant ${TBB_LIBRARIES})
+
 # add tests for running examples
-set (lastexample 4)
+set (lastexample 5)
 foreach(i RANGE ${lastexample})
     if (TARGET ${example${i}})
         add_test(example/${example${i}}/build "${CMAKE_COMMAND}"
