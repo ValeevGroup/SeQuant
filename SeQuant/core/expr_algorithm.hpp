@@ -212,7 +212,7 @@ class expr_range
       assert(element_ptr_);
       // first the next parent with children
       auto* parent_plus_child = &(address_.back());
-      while (parent_plus_child->second + 1 == ranges::size(**(parent_plus_child->first))) {
+      while ((size_t)parent_plus_child->second + 1 == ranges::size(**(parent_plus_child->first))) {
         address_.pop_back();  // step up, look for next atom
         if (address_.empty()) { // we might be done if address is empty (i.e. we are back at the top
           break;

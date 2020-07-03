@@ -364,7 +364,7 @@ class WickTheorem {
     /// current state of partitions (will only match op_topological_partition before any contractions have occurred)
     /// - when an operator is connected it's removed from the partition
     /// - when it is disconnected fully it's re-added to the partition
-    container::svector<container::set<size_t>> topological_partitions;
+    container::vector<container::set<size_t>> topological_partitions;
 
     // populates partitions using the data from op_topological_partition
     void init_topological_partitions() {

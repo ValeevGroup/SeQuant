@@ -1203,8 +1203,8 @@ inline std::wstring to_latex_align(const ExprPtr &exprptr,
                    L")");  // replace trailing "\bigr) }" with ")"
     result = std::wstring(L"\\begin{align}\n& ") + result;
     // assume no inner sums
-    int line_counter = 0;
-    int term_counter = 0;
+    size_t line_counter = 0;
+    size_t term_counter = 0;
     std::wstring::size_type pos = 0;
     std::wstring::size_type plus_pos = 0;
     std::wstring::size_type minus_pos = 0;
