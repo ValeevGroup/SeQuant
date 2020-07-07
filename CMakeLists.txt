@@ -381,6 +381,14 @@ add_custom_target_subproject(sequant install-config
     COMMAND ${CMAKE_COMMAND} -DCOMPONENT=sequant-config -P ${PROJECT_BINARY_DIR}/cmake_install.cmake
     COMMENT "Installing SeQuant config components")
 
+option(SEQUANT_PYTHON "Build SEQUANT python module" OFF)
+if (SEQUANT_PYTHON)
+  if (NOT CMAKE_POSITION_INDEPENDENT_CODE)
+    message(FATAL_ERROR "Python module requires CMAKE_POSITION_INDEPENDENT_CODE=ON")
+  endif()
+  add_subdirectory(python)
+endif()
+
 feature_summary(WHAT ALL
     DESCRIPTION "=== SeQuant Package/Feature Info ===")
 
