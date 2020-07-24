@@ -5,6 +5,7 @@
 #ifndef SEQUANT_SPIN_HPP
 #define SEQUANT_SPIN_HPP
 
+#include <unordered_map>
 #include <SeQuant/core/tensor_network.hpp>
 #include "SeQuant/core/tensor.hpp"
 
@@ -790,22 +791,12 @@ ExprPtr expand_S_operator(const ExprPtr& expr){
     container::svector<int> int_list(S.bra().size());
     std::iota(std::begin(int_list), std::end(int_list), 0);
 
-    std::vector<std::map<Index, Index>> maps;
-    do{
-      std::map<Index, Index> map;
-      auto S_bra_ptr = S.bra().begin();
-      auto S_ket_ptr = S.ket().begin();
-      for(auto&& i : int_list){
-        map.emplace(std::make_pair(*S_bra_ptr, S.bra()[i]));
-        ++S_bra_ptr;
-        map.emplace(std::make_pair(*S_ket_ptr, S.ket()[i]));
-        ++S_ket_ptr;
-      }
-      maps.push_back(map);
-    }while(std::next_permutation(int_list.begin(), int_list.end()));
-
-    return maps;
+  auto reset_idx_tags = [&](ExprPtr& expr) {
+    if (expr->is<Tensor>())
+      ranges::for_each(expr->as<Tensor>().const_braket(),
+                       [&](const Index& idx) { idx.reset_tag(); });
   };
+  expr->visit(reset_idx_tags);
 
   // Lambda for applying S on products
   auto expand_S_product = [&] (const Product& product){
@@ -821,17 +812,20 @@ ExprPtr expand_S_operator(const ExprPtr& expr){
     for(auto&&map : maps){
       Product new_product{};
       new_product.scale(product.scalar());
-      auto temp_product = remove_tensor_from_product(product, L"S");
-      for (auto&& term : *temp_product) {
+      auto temp_product = remove_tensor_from_product(product, L"S")->as<Product>();
+      for (auto&& term : temp_product) {
         if (term->is<Tensor>()) {
           auto new_tensor = term->as<Tensor>();
           new_tensor.transform_indices(map);
           new_product.append(1, ex<Tensor>(new_tensor));
         }
       }
+      // std::wcout << __LINE__ << " " << to_latex(new_product) << "\n";
       sum.append(ex<Product>(new_product));
     }
-    return ex<Sum>(sum);;
+    // std::wcout << __LINE__ << " " << to_latex(sum) << "\n";
+    ExprPtr result = std::make_shared<Sum>(sum);
+    return result;
   };
 
   if(expr->is<Product>()){
@@ -847,12 +841,6 @@ ExprPtr expand_S_operator(const ExprPtr& expr){
       }
     }
   }
-
-  auto reset_idx_tags = [&](ExprPtr& expr) {
-    if (expr->is<Tensor>())
-      ranges::for_each(expr->as<Tensor>().const_braket(),
-                       [&](const Index& idx) { idx.reset_tag(); });
-  };
 
   result->visit(reset_idx_tags);
   return result;
@@ -1327,8 +1315,10 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
 
   // Canonicalize the expression
   ExprPtr expr = expression;
-  canonicalize(expr);
+  // canonicalize(expr);
 
+  // std::wcout<< __LINE__ << " " << to_latex(expr) << "\n";
+#define nCC 1
   // If expression has S operator, do nothing and exit
   if(has_operator_label(expr, L"S")) return expr;
 
@@ -1349,30 +1339,19 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
     S = Tensor(L"S", bra_list, ket_list, Symmetry::nonsymm);
   }
 
-  // Control general CC method or CCSD R2
-  // nCC = 1 : General Coupled-cluster residual equation
-  //     = 0 : CCSD R2 only
-#define nCC 1
-#if nCC
-  // Generate list of permutation indices
+  // For any order CC residual equation:
+  // Generate a list of permutation indices
+  // Erase the canonical entry
   auto replacement_maps = S_replacement_maps(S);
-  std::cout << "replacement_maps.size(): " << replacement_maps.size() << "\n";
-
   replacement_maps.erase(replacement_maps.begin());
-  // std::cout << "replacement_maps.size(): " << replacement_maps.size() << "\n";
-//  for(auto&& map : replacement_maps) {
-//    for (auto&& pair : map)
-//      std::wcout << to_latex(pair.first) << " " << to_latex(pair.second) << "\n";
-//    std::cout << "\n";
-//  }
-#else
+
+  // This single replacement map is used for CC R2 only
   // Create S_{ij}^{ab}
-  std::map<Index, Index> replacement_map;
-  replacement_map.emplace(std::make_pair(L"i_1", L"i_2"));
-  replacement_map.emplace(std::make_pair(L"i_2", L"i_1"));
-  replacement_map.emplace(std::make_pair(L"a_1", L"a_2"));
-  replacement_map.emplace(std::make_pair(L"a_2", L"a_1"));
-#endif
+//  std::map<Index, Index> replacement_map;
+//  replacement_map.emplace(std::make_pair(L"i_1", L"i_2"));
+//  replacement_map.emplace(std::make_pair(L"i_2", L"i_1"));
+//  replacement_map.emplace(std::make_pair(L"a_1", L"a_2"));
+//  replacement_map.emplace(std::make_pair(L"a_2", L"a_1"));
 
   // Lambda function for index replacement in tensor
   auto transform_tensor = [&](const Tensor& tensor, const std::map<Index, Index>& replacement_map) {
@@ -1391,21 +1370,31 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
   // for faster run times
 
   if(fast_method) {
-    std::cout << "Using fast approach.\n";
+    // std::cout << "Using fast approach.\n";
     const auto tstart = std::chrono::high_resolution_clock::now();
 
     // summands_hash_list sorted container of hash values of canonicalized summands
     // summands_hash_map unsorted map of (hash_val, summand) pairs
-    container::set<size_t> summands_hash_list;
+    // container::set<size_t> summands_hash_list;
+    container::vector<size_t> summands_hash_list;
     std::unordered_map<size_t, ExprPtr> summands_hash_map;
     for (auto it = expr->begin(); it != expr->end(); ++it) {
+      // std::wcout<< "(*it): " << to_latex(*it) << "\n";
       (*it)->canonicalize();
       auto hash = (*it)->hash_value();
-      summands_hash_list.insert(hash);
+      // std::wcout<< "(*it): " << to_latex(*it) << " " << hash << "\n\n";
+      // summands_hash_list.insert(hash);
+      summands_hash_list.push_back(hash);
       summands_hash_map.emplace(std::make_pair(hash, *it));
     }
     assert(summands_hash_list.size() == expr->size());
     assert(summands_hash_map.size() == expr->size());
+//
+//    std::cout << "summands_hash_list size: " << summands_hash_list.size() << "\n";
+//    for(auto&& hash : summands_hash_list){
+//      std::cout << hash << "\n";
+//    }
+//    std::cout << "\n";
 
     // Symmetrize every summand, assign its hash value to hash1
     // Check if hash1 exist in summands_hash_list
@@ -1413,8 +1402,6 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
     // else continue
     int n_symm_terms = 0;
     for (auto it = expr->begin(); it != expr->end(); ++it) {
-
-      // TODO: This looks ugly
       // Exclude summand with value zero
       while ((*it)->hash_value() == ex<Constant>(0)->hash_value()) {
         ++it;
@@ -1425,13 +1412,16 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
 
       // Remove current hash_value from list and clone summand
       auto hash0 = (*it)->hash_value();
-      summands_hash_list.erase(hash0);
+      // summands_hash_list.erase(hash0);
+      // auto hash0_it = std::find(summands_hash_list.begin(), summands_hash_list.end(), hash0);
+      // summands_hash_list.erase(hash0_it);
+      summands_hash_list.erase(std::find(summands_hash_list.begin(), summands_hash_list.end(), hash0));
       auto new_product = (*it)->clone();
 
 #if nCC // CONTAINER OF HASH VALUES AND SYMMETRIZED TERMS
       // FOR GENERALIZED EXPRESSION WITH ARBITRATY S OPERATOR
       // Loop over replacement maps The entire code from here
-      container::vector<size_t> hash1_map;
+      container::vector<size_t> hash1_list;
       for(auto&& replacement_map : replacement_maps){
         size_t hash1;
         if ((*it)->is<Product>()) {
@@ -1461,29 +1451,81 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
           new_tensor->canonicalize();
           hash1 = new_tensor->hash_value();
         }
-        hash1_map.push_back(hash1);
+        hash1_list.push_back(hash1);
       }
 
-      auto hash1_found = [&](size_t h){ return summands_hash_list.find(h) != summands_hash_list.end();};
-      bool symmetrizable = false;
-      auto n_hash_found = ranges::count_if(hash1_map, hash1_found);
-      if(n_hash_found == hash1_map.size()) symmetrizable = true;
-      // std::cout << "n_hash_found: " << n_hash_found << std::boolalpha << symmetrizable << "\n";
-      if(symmetrizable){
+
+      // bool symmetrizable = false;
+      // auto hash1_found = [&](size_t h){ return summands_hash_list.find(h) != summands_hash_list.end();};
+      auto hash1_found = [&](size_t h){
+        return std::find(summands_hash_list.begin(), summands_hash_list.end(), h) != summands_hash_list.end();
+      };
+      auto n_hash_found = ranges::count_if(hash1_list, hash1_found);
+
+//      std::cout << "Sizes: hash1_list: " << hash1_list.size()
+//                << " n_hash_found: " << n_hash_found << "\n";
+//
+//      std::cout << "hash1_list size: " << hash1_list.size() << "\n";
+//      for(auto&& hash : hash1_list){
+//        std::cout << hash << "\n";
+//      }
+//      std::cout << "\n";
+//
+//      std::cout << "summands_hash_list size: " << summands_hash_list.size() << "\n";
+//      for(auto&& hash : summands_hash_list){
+//        std::cout << hash << "\n";
+//      }
+//      std::cout << "\n";
+
+      if(n_hash_found == hash1_list.size()){
         // Prepend S operator
         new_product = ex<Tensor>(S) * new_product;
         ++n_symm_terms;
-        std::wcout << n_symm_terms << ": "
-                   << std::distance(expr->begin(), it) << " "
-                   << to_latex((*it)->clone()) << "\n";
 
-        // remove values from hash1_map from summands_hash_list
-        ranges::for_each(hash1_map, [&] (const size_t hash1){
-          summands_hash_list.erase(hash1);
+//        std::wcout << __LINE__ << " " << to_latex(expr) << "\n";
+
+        // remove values from hash1_list from summands_hash_list
+        ranges::for_each(hash1_list, [&] (const size_t hash1){
+
+//          std::cout << "hash1: " << hash1 << std::endl;
+
+          // summands_hash_list.erase(hash1);
+          summands_hash_list.erase(std::find(summands_hash_list.begin(), summands_hash_list.end(), hash1));
+//          for(auto&& hash : summands_hash_list){
+//            std::cout << hash << std::endl;
+//          }
+//          std::cout << std::endl;
+
+          auto term = summands_hash_map.find(hash1)->second;
+          // std::wcout << __LINE__ << to_latex(term) << std::endl;
+
+          // std::wcout << __LINE__ << " " << to_latex(expr) << "\n";
+          for(auto&& summand : *expr){
+            if(summand->hash_value() == hash1) summand = ex<Constant>(0.0);
+          }
+//          auto find_it = std::find(expr->begin(), expr->end(), term);
+//          std::cout << hash1 << " " << (*find_it)->hash_value() << " " << std::endl;
+//          std::wcout << __LINE__ << to_latex(*find_it) << std::endl;
+//          (*find_it) = ex<Constant>(0);  // SILVER BULLET
+
+        });
+
+/*
+        for(auto it = hash1_list.begin(); it != hash1_list.end(); ++it){
+          auto hash1 = *it;
+          std::cout << "hash1: " << hash1 << std::endl;
+          auto hash1_it = std::find(summands_hash_list.begin(), summands_hash_list.end(), hash1);
+          (*hash1_it) = 1;
+//          if(hash1_it != summands_hash_list.end())
+//            summands_hash_list.erase(hash1_it);
+//          else
+//            summands_hash_list.clear();
           auto term = summands_hash_map.find(hash1)->second;
           auto find_it = std::find(expr->begin(), expr->end(), term);
-          (*find_it) = ex<Constant>(0);  // SILVER BULLET
-        });
+          (*find_it) = ex<Constant>(0.0);  // SILVER BULLET
+        }
+*/
+
       }
 #else
       // Hash value of symmetrized summand
@@ -1537,9 +1579,9 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
     const auto tstop = std::chrono::high_resolution_clock::now();
     const auto time_elapsed =
         std::chrono::duration_cast<std::chrono::microseconds>(tstop - tstart);
-    std::cout << "Fast method: " << std::boolalpha << fast_method << "\n";
-    std::cout << "N symm terms found: " << n_symm_terms << "\n";
-    std::cout << "Time: " << time_elapsed.count() << " μs.\n";
+//    std::cout << "Fast method: " << std::boolalpha << fast_method << "\n";
+//    std::cout << "N symm terms found: " << n_symm_terms << "\n";
+//    std::cout << "Time: " << time_elapsed.count() << " μs.\n";
   } else {
 
     ///////////////////////////////////////////////
@@ -1736,6 +1778,7 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
   }
 
   ExprPtr result = std::make_shared<Sum>(result_sum);
+  // std::wcout << __LINE__ << " " << to_latex(result) << "\n";
   expand(result);
   canonicalize(result);
   rapid_simplify(result);
@@ -1748,6 +1791,7 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
 //  rapid_simplify(result);
 //  std::cout << result->size() << "\n";
   return result;
+
 }
 
 }  // namespace sequant
