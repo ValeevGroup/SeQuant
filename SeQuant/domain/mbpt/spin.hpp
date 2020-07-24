@@ -782,14 +782,6 @@ ExprPtr expand_S_operator(const ExprPtr& expr){
   if(!has_tensor_label(expr, L"S"))
     return expr;
 
-  // Lambda for making replacement maps
-/*
-  auto replacement_maps = [&] (const Tensor& S){
-    assert(S.label() == L"S");
-    assert(S.bra_rank() > 1);
-    assert(S.bra().size() == S.ket().size());
-    container::svector<int> int_list(S.bra().size());
-    std::iota(std::begin(int_list), std::end(int_list), 0);
 
   auto reset_idx_tags = [&](ExprPtr& expr) {
     if (expr->is<Tensor>())
@@ -1317,18 +1309,14 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
   ExprPtr expr = expression;
   // canonicalize(expr);
 
-  // std::wcout<< __LINE__ << " " << to_latex(expr) << "\n";
-#define nCC 1
   // If expression has S operator, do nothing and exit
   if(has_operator_label(expr, L"S")) return expr;
-
-  // For the simplest version, we need S to be defined
-  // or all possible permutations need to be considered
 
   // If S operator is absent: generate from ext_index_groups
   Tensor S{};
   {
     container::svector<Index> bra_list, ket_list;
+
     // Fill bras and kets
     ranges::for_each(ext_index_groups, [&] (const IndexList& idx_pair) {
       auto it = idx_pair.begin();
@@ -1344,14 +1332,6 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
   // Erase the canonical entry
   auto replacement_maps = S_replacement_maps(S);
   replacement_maps.erase(replacement_maps.begin());
-
-  // This single replacement map is used for CC R2 only
-  // Create S_{ij}^{ab}
-//  std::map<Index, Index> replacement_map;
-//  replacement_map.emplace(std::make_pair(L"i_1", L"i_2"));
-//  replacement_map.emplace(std::make_pair(L"i_2", L"i_1"));
-//  replacement_map.emplace(std::make_pair(L"a_1", L"a_2"));
-//  replacement_map.emplace(std::make_pair(L"a_2", L"a_1"));
 
   // Lambda function for index replacement in tensor
   auto transform_tensor = [&](const Tensor& tensor, const std::map<Index, Index>& replacement_map) {
@@ -1379,22 +1359,14 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
     container::vector<size_t> summands_hash_list;
     std::unordered_map<size_t, ExprPtr> summands_hash_map;
     for (auto it = expr->begin(); it != expr->end(); ++it) {
-      // std::wcout<< "(*it): " << to_latex(*it) << "\n";
       (*it)->canonicalize();
       auto hash = (*it)->hash_value();
-      // std::wcout<< "(*it): " << to_latex(*it) << " " << hash << "\n\n";
       // summands_hash_list.insert(hash);
       summands_hash_list.push_back(hash);
       summands_hash_map.emplace(std::make_pair(hash, *it));
     }
     assert(summands_hash_list.size() == expr->size());
     assert(summands_hash_map.size() == expr->size());
-//
-//    std::cout << "summands_hash_list size: " << summands_hash_list.size() << "\n";
-//    for(auto&& hash : summands_hash_list){
-//      std::cout << hash << "\n";
-//    }
-//    std::cout << "\n";
 
     // Symmetrize every summand, assign its hash value to hash1
     // Check if hash1 exist in summands_hash_list
@@ -1418,7 +1390,7 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
       summands_hash_list.erase(std::find(summands_hash_list.begin(), summands_hash_list.end(), hash0));
       auto new_product = (*it)->clone();
 
-#if nCC // CONTAINER OF HASH VALUES AND SYMMETRIZED TERMS
+      // CONTAINER OF HASH VALUES AND SYMMETRIZED TERMS
       // FOR GENERALIZED EXPRESSION WITH ARBITRATY S OPERATOR
       // Loop over replacement maps The entire code from here
       container::vector<size_t> hash1_list;
@@ -1462,118 +1434,26 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
       };
       auto n_hash_found = ranges::count_if(hash1_list, hash1_found);
 
-//      std::cout << "Sizes: hash1_list: " << hash1_list.size()
-//                << " n_hash_found: " << n_hash_found << "\n";
-//
-//      std::cout << "hash1_list size: " << hash1_list.size() << "\n";
-//      for(auto&& hash : hash1_list){
-//        std::cout << hash << "\n";
-//      }
-//      std::cout << "\n";
-//
-//      std::cout << "summands_hash_list size: " << summands_hash_list.size() << "\n";
-//      for(auto&& hash : summands_hash_list){
-//        std::cout << hash << "\n";
-//      }
-//      std::cout << "\n";
-
       if(n_hash_found == hash1_list.size()){
         // Prepend S operator
         new_product = ex<Tensor>(S) * new_product;
         ++n_symm_terms;
 
-//        std::wcout << __LINE__ << " " << to_latex(expr) << "\n";
-
         // remove values from hash1_list from summands_hash_list
         ranges::for_each(hash1_list, [&] (const size_t hash1){
 
-//          std::cout << "hash1: " << hash1 << std::endl;
-
           // summands_hash_list.erase(hash1);
           summands_hash_list.erase(std::find(summands_hash_list.begin(), summands_hash_list.end(), hash1));
-//          for(auto&& hash : summands_hash_list){
-//            std::cout << hash << std::endl;
-//          }
-//          std::cout << std::endl;
 
           auto term = summands_hash_map.find(hash1)->second;
-          // std::wcout << __LINE__ << to_latex(term) << std::endl;
 
-          // std::wcout << __LINE__ << " " << to_latex(expr) << "\n";
           for(auto&& summand : *expr){
             if(summand->hash_value() == hash1) summand = ex<Constant>(0.0);
           }
-//          auto find_it = std::find(expr->begin(), expr->end(), term);
-//          std::cout << hash1 << " " << (*find_it)->hash_value() << " " << std::endl;
-//          std::wcout << __LINE__ << to_latex(*find_it) << std::endl;
-//          (*find_it) = ex<Constant>(0);  // SILVER BULLET
 
         });
 
-/*
-        for(auto it = hash1_list.begin(); it != hash1_list.end(); ++it){
-          auto hash1 = *it;
-          std::cout << "hash1: " << hash1 << std::endl;
-          auto hash1_it = std::find(summands_hash_list.begin(), summands_hash_list.end(), hash1);
-          (*hash1_it) = 1;
-//          if(hash1_it != summands_hash_list.end())
-//            summands_hash_list.erase(hash1_it);
-//          else
-//            summands_hash_list.clear();
-          auto term = summands_hash_map.find(hash1)->second;
-          auto find_it = std::find(expr->begin(), expr->end(), term);
-          (*find_it) = ex<Constant>(0.0);  // SILVER BULLET
-        }
-*/
-
       }
-#else
-      // Hash value of symmetrized summand
-      size_t hash1;
-      if ((*it)->is<Product>()) {
-        // Clone *it, apply symmetrizer, store hash1 value
-        auto product = (*it)->as<Product>();
-        Product S_product{};
-        S_product.scale(product.scalar());
-
-        // Transform indices by action of S operator
-        for (auto&& t : product) {
-          if (t->is<Tensor>())
-            S_product.append(
-                transform_tensor(t->as<Tensor>(), replacement_map));
-        }
-        auto new_product_expr = ex<Product>(S_product);
-        new_product_expr->canonicalize();
-        hash1 = new_product_expr->hash_value();
-
-      } else if ((*it)->is<Tensor>()) {
-        // Clone *it, apply symmetrizer, store hash value
-        auto tensor = (*it)->as<Tensor>();
-
-        // Transform indices by action of S operator
-        auto new_tensor = transform_tensor(tensor, replacement_map);
-
-        // Canonicalize the new tensor before computing hash value
-        new_tensor->canonicalize();
-        hash1 = new_tensor->hash_value();
-      }
-
-      // Check hash1 in summands_hash_list
-      if (summands_hash_list.find(hash1) != summands_hash_list.end()) {
-
-        // If found, increment symm terms counter
-        // Prepend S operator to product
-        // Remove hash value from summands_hash_list
-        ++n_symm_terms;
-        new_product = ex<Tensor>(S) * new_product;
-        summands_hash_list.erase(hash1);
-
-        // Since the term is found, make the matching term 0 in expr
-        auto term = summands_hash_map.find(hash1)->second;
-        auto find_it = std::find(expr->begin(), expr->end(), term);
-        (*find_it) = ex<Constant>(0.0);  // SILVER BULLET
-      }
-#endif
       result_sum.append(new_product);
     }
     const auto tstop = std::chrono::high_resolution_clock::now();
@@ -1613,8 +1493,7 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
       // Clone the summand
       auto new_product = (*it)->clone();
 
-      // hash value of summand // TODO: container of hash values
-#if nCC
+      // hash value of summand
       container::vector<size_t> hash0_list;
       for(auto&& replacement_map : replacement_maps){
         size_t hash0;
@@ -1648,42 +1527,6 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
         }
       }
 
-#else
-      size_t hash0;
-      if(quick_method){
-        // Symmetrize *it instead of symmetrizing *find_it everytime
-        if ((*it)->is<Product>()) {
-          // Clone *it, apply symmetrizer, store hash value
-          auto product = (*it)->as<Product>();
-          Product S_product{};
-          S_product.scale(product.scalar());
-
-          // Transform indices by action of S operator
-          for (auto&& t : product) {
-            if (t->is<Tensor>())
-              S_product.append(
-                  transform_tensor(t->as<Tensor>(), replacement_map));
-          }
-          auto new_product_expr = ex<Product>(S_product);
-          new_product_expr->canonicalize();
-          hash0 = new_product_expr->hash_value();
-        } else if ((*it)->is<Tensor>()) {
-          // Clone *it, apply symmetrizer, store hash value
-          auto tensor = (*it)->as<Tensor>();
-
-          // Transform indices by action of S operator
-          auto new_tensor = transform_tensor(tensor, replacement_map);
-
-          // Canonicalize the new tensor before computing hash value
-          new_tensor->canonicalize();
-          hash0 = new_tensor->hash_value();
-        }
-      } else {
-        auto hash0 = (*it)->hash_value();
-      }
-#endif
-
-#if nCC
       for (auto&& hash0 : hash0_list) {
         int n_matches = 0;
         container::svector<int> idx_vec;
@@ -1705,67 +1548,7 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
           i_list.insert(idx_vec.begin(), idx_vec.end());
         }
       }
-#else
-      // Loop over the {i+1,...,n} terms (INNER LOOP)
-      for (auto find_it = it + 1; find_it != expr->end(); ++find_it) {
-        auto idx = std::distance(expr->begin(), find_it);
-        (*find_it)->canonicalize();
 
-        if ((*find_it)->hash_value() == hash0) {
-          ++n_symm_terms;
-          new_product = ex<Tensor>(S) * new_product;
-          i_list.insert(idx);
-        }
-
-        if(!quick_method){
-          // Apply S operator and check hash value of new product/tensor.
-          // If the hash value is a match, multiply parent term (from outer loop)
-          // with S operator and add index of the found term to list
-        if ((*find_it)->is<Product>()) {
-            auto product = (*find_it)->as<Product>();
-            Product S_product{};
-            S_product.scale(product.scalar());
-
-            // Transform indices by action of S operator
-            for (auto&& t : product) {
-              if (t->is<Tensor>())
-                S_product.append(
-                    transform_tensor(t->as<Tensor>(), replacement_map));
-            }
-            auto new_product_expr = ex<Product>(S_product);
-
-            // Canonicalize the new product before computing hash value
-            new_product_expr->canonicalize();
-
-            // If hash value match, prepend S operator
-            // TODO: std::find(container, new_product->hash_value());
-            if (new_product_expr->hash_value() == hash0) {
-              ++n_symm_terms;
-
-              // TODO: Prepend 'S' only if all symmetry hash_values are found
-              new_product = ex<Tensor>(S) * new_product;
-              i_list.insert(idx);
-              }
-          } else if ((*find_it)->is<Tensor>()) {
-            auto tensor = (*find_it)->as<Tensor>();
-
-            // Transform indices by action of S operator
-            auto new_tensor = transform_tensor(tensor, replacement_map);
-
-            // Canonicalize the new tensor before computing hash value
-            // TODO: std::find(container, new_tensor->hash_value());
-            new_tensor->canonicalize();
-            if (new_tensor->hash_value() == hash0) {
-              ++n_symm_terms;
-
-              // TODO: Prepend 'S' only if all symmetry hash_values are found
-              new_product = ex<Tensor>(S) * new_product;
-              i_list.insert(idx);
-            }
-          }
-        }
-      }  // (INNER LOOP)
-#endif
       // append product to running sum
       result_sum.append(new_product);
     }
@@ -1778,7 +1561,6 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
   }
 
   ExprPtr result = std::make_shared<Sum>(result_sum);
-  // std::wcout << __LINE__ << " " << to_latex(result) << "\n";
   expand(result);
   canonicalize(result);
   rapid_simplify(result);
