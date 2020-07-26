@@ -1,13 +1,10 @@
 #include <SeQuant/core/sequant.hpp>
 #include <SeQuant/core/tensor.hpp>
 
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
-#include <pybind11/shared_ptr.h>
-#include <pybind11/operators.h>
-#include <pybind11/boost/container/small_vector.h>
 
 #include <iostream>
+
+#include "mbpt.h"
 
 
 namespace py = pybind11;
@@ -28,6 +25,15 @@ namespace sequant::python {
     std::vector<std::wstring> ket)
   {
     return std::make_shared<Tensor>(label, make_index(bra), make_index(ket));
+  }
+
+  inline ExprPtr pow(const ExprPtr &b, int n) {
+    ExprPtr e = b->clone();
+    //auto p = *e;
+    for (int i = 1; i < n; ++i) {
+      e = e*b;
+    }
+    return e;
   }
 
   void index_space_register(py::kwargs kwargs) {
@@ -80,14 +86,32 @@ PYBIND11_MODULE(_sequant, m) {
     .def("__add__", [](const ExprPtr &l, const ExprPtr &r) { return l+r; })
     .def("__sub__", [](const ExprPtr &l, const ExprPtr &r) { return l-r; })
     .def("__mul__", [](const ExprPtr &l, const ExprPtr &r) { return l*r; })
+    .def("__pow__", [](const ExprPtr &b, int n) { return pow(b,n); })
+    ;
+
+  py::class_<Index, std::shared_ptr<Index> >(m, "Index")
+    .def("__str__", &Index::label)
+    .def("__repr__", &Index::label)
     ;
 
   py::class_<Tensor, std::shared_ptr<Tensor>, Expr>(m, "Tensor")
     .def(py::init(&python::make_tensor))
+    .def_property_readonly("label", &Tensor::label)
+    .def_property_readonly("bra", &Tensor::bra)
+    .def_property_readonly("ket", &Tensor::ket)
+    .def_property_readonly(
+      "braket",
+      [](const Tensor &t) {
+        auto braket = t.braket();
+        return std::vector<Index>(braket.begin(), braket.end());
+      }
+    )
     ;
 
   py::class_<Product, std::shared_ptr<Product>, Expr>(m, "Product");
 
   py::class_<Sum, std::shared_ptr<Sum>, Expr>(m, "Sum");
+
+  python::mbpt::__init__(m.def_submodule("mbpt"));
 
 }

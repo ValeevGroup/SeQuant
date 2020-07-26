@@ -128,7 +128,7 @@ ExprPtr H(bool antisymm) {
   return H1() + H2(antisymm);
 }
 
-ExprPtr vac_av(ExprPtr expr, std::initializer_list<std::pair<int,int>> op_connections, bool use_top) {
+ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int,int>> op_connections, bool use_top) {
   FWickTheorem wick{expr};
   wick.spinfree(false)
       .use_topology(use_top)
