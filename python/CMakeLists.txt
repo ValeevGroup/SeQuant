@@ -10,6 +10,8 @@ FetchContent_MakeAvailable(pybind11)
 
 set(CMAKE_CXX_STANDARD 17)
 add_compile_options(-Wall)
+# Python2.7 has register in Python.h
+add_compile_options(-Wno-register)
 
 pybind11_add_module(python-sequant MODULE src/sequant/_sequant.cc)
 
