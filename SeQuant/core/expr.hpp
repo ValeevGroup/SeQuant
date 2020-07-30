@@ -219,12 +219,14 @@ class Expr : public std::enable_shared_from_this<Expr>, public ranges::view_faca
   /// @note base implementation throws, must be reimplemented in the derived class
   virtual void adjoint();
 
-  /// Computes and returns the memoized hash value.
+  /// Computes and returns the hash value. If default @p hasher is used then the value will be
+  /// memoized, otherwise @p hasher will be used to compute the hash every time.
+  /// @param hasher the hasher object, if omitted, the default is used (@sa Expr::memoizing_hash )
   /// @note always returns 0 unless this derived class overrides Expr::memoizing_hash
   /// @return the hash value for this Expr
-  hash_type hash_value() const {
-    return memoizing_hash();
-  };
+  hash_type hash_value(std::function<hash_type(const std::shared_ptr<const Expr>&)> hasher = {}) const {
+    return hasher ? hasher(shared_from_this()) : memoizing_hash();
+  }
 
   /// Computes and returns the derived type identifier
   /// @note this function must be overridden in the derived class

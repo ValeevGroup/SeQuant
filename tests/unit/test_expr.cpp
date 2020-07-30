@@ -514,6 +514,11 @@ TEST_CASE("Expr", "[elements]") {
                                                std::make_shared<Constant>(3.0)};
     REQUIRE_NOTHROW(hash_value(ex5_init));
     REQUIRE(hash_value(ex5_init) != hash_value(ex<Constant>(1)));
+
+    auto hasher = [](const std::shared_ptr<const Expr>&) ->unsigned int {
+      return 0;
+    };
+    REQUIRE_NOTHROW(ex<Constant>(1)->hash_value(hasher) == 0);
   }
 
   SECTION("commutativity") {
