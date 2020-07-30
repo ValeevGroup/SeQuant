@@ -110,12 +110,12 @@ std::tuple<ExprPtr, ExprPtr> factorize_pair(const ExprPtr& expr1,
 /// @param expr1 factorized term to be fused
 /// @param expr2 factorized term to be fused
 ///              expr1 and expr2 are of the form (AB..)(CD..)
-///
 /// @param symOp ExprPtr to 'S' or 'A' type tensor
+///
 /// @return ExprPtr to fused form or nullptr if no fusion is possible.
 ///
 ExprPtr fuse_pair(const ExprPtr& expr1, const ExprPtr& expr2,
-                  const ExprPtr& symop, evaluate::Operation op);
+                  const ExprPtr& symOp);
 
 /// @param symOp ExprPtr to 'S' or 'A' type tensor
 /// @param arithOp evaluate::Operation type
