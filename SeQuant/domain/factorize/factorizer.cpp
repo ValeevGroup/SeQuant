@@ -486,7 +486,10 @@ ExprPtr make_intermediate(const ExprPtr& expr1, const ExprPtr& expr2,
   // update hash value
   //
   auto& imed_tensor = imed_tensor_ptr->as<Tensor>();
-  // imed_tensor->hash_value([&imed_hash](){return imed_hash;});
+  auto hasher = [&imed_hash](const std::shared_ptr<const Expr>&) {
+    return imed_hash;
+  };
+  imed_tensor.hash_value(hasher);
 
   return imed_tensor_ptr;
 }
