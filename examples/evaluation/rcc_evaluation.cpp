@@ -12,7 +12,7 @@
 
 #include <memory>
 
-#define CCSDT_eval 1
+#define CCSDT_eval 0
 
 container::vector<double> biorthogonal_tran_coeff(const int n_particles, const double& threshold);
 std::vector<std::map<Index, Index>> biorthogonal_tran_idx_map(const std::initializer_list<IndexList> ext_index_groups);
@@ -213,7 +213,7 @@ int main(int argc, char* argv[]) {
 
     cout << "\n"
          << "***********************************\n"
-         << "Calculating ECCSD using TiledArray\n"
+         << "Coupled Cluster using TiledArray\n"
          << "***********************************\n"
          << endl;
 
@@ -392,18 +392,36 @@ int main(int argc, char* argv[]) {
         std::make_shared<DefaultTensorCanonicalizer>());
     Logger::get_instance().wick_stats = false;
 
+    cout << "\n"
+         << "***********************************\n";
 #if CCSDT_eval // CCSDT
+    cout << "            CCSDT\n";
     auto cc_r = cceqvec{3, 3}(true, true, true, true);
+    // auto cc_r = cceqvec{4, 4}(true, true, true, true);
 #else // CCSD
+    cout << "            CCSD\n";
     auto cc_r = cceqvec{2, 2}(true, true, true, true);
+    // cout << "            CCSDTQ\n";
+    // auto cc_r = cceqvec{4, 4}(true, true, true, true);
 #endif
+    cout << "***********************************\n" << endl;
+
+//    bool expand_S = false;
+//    bool bt = false;
+//    bool factorize_S = false;
 
     bool expand_S = true;
     bool bt = true;
+    bool factorize_S = true;
+
+    // std::wcout << to_latex(cc_r[1]) << std::endl;
+    // std::wcout << to_latex(cc_r[2]) << std::endl;
 
     // SPIN TRACE THE CC RESIDUAL EQUATIONS
     std::vector<ExprPtr> cc_st_r(cc_r.size());
     for (int i = 1; i < cc_r.size(); ++i){
+      // std::wcout << "CC R" << i << ":\n" << to_latex_align(cc_r[i], 20, 5) << "\n";
+      std::wcout << "CC R" << i << ":\n" << to_latex(cc_r[i]) << "\n";
       const auto tstart = std::chrono::high_resolution_clock::now();
       std::initializer_list<IndexList> external_indices = {{}};
       if(i == 1)
@@ -415,16 +433,19 @@ int main(int argc, char* argv[]) {
       else if(i == 4)
         external_indices = {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}, {L"i_4", L"a_4"}};
 
-      // cc_st_r[i] = spintrace(cc_r[i], external_indices);
-      cc_st_r[i] = closed_shell_spintrace(cc_r[i], external_indices);
+      cc_st_r[i] = spintrace(cc_r[i], external_indices);
+      // cc_st_r[i] = closed_shell_spintrace(cc_r[i], external_indices);
       canonicalize(cc_st_r[i]);
-      // std::wcout << to_latex(cc_st_r[i]) << "\n";
+      if(i<3){
+        // std::wcout <<  __LINE__ << to_latex_align(cc_st_r[i], 20, 5) << "\n";
+        std::wcout <<  __LINE__ << "\n" << to_latex(cc_st_r[i]) << "\n";
+      }
       printf("R%d Spin-orbit: %lu terms;\nSPINTRACED: With S operator: %lu;", i, cc_r[i]->size(), cc_st_r[i]->size());
       if(expand_S){
         cc_st_r[i] = expand_S_operator(cc_st_r[i]);
         rapid_simplify(cc_st_r[i]);
         canonicalize(cc_st_r[i]);
-        printf("S factorized: %lu\n", cc_st_r[i]->size());
+        printf("S expanded: %lu\n", cc_st_r[i]->size());
         // std::wcout << __LINE__ << to_latex(cc_st_r[i]) << "\n" << std::endl;
 
         if(bt){
@@ -438,6 +459,17 @@ int main(int argc, char* argv[]) {
 
           // Get coefficients and replacement maps
           auto btc = biorthogonal_tran_coeff(external_indices.size(), 1.e-12);
+
+          // TODO: external_indices are getting modified before.
+          if(i == 1)
+            external_indices = {{L"i_1", L"a_1"}};
+          else if(i == 2)
+            external_indices = {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}};
+          else if(i == 3)
+            external_indices = {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}};
+          else if(i == 4)
+            external_indices = {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}, {L"i_4", L"a_4"}};
+
           auto idx_map = biorthogonal_tran_idx_map(external_indices);
           assert(btc.size() == idx_map.size());
 
@@ -454,11 +486,17 @@ int main(int argc, char* argv[]) {
             bt_expr.append(transformed_expr);
           }
           ExprPtr bt_expr_p = std::make_shared<Sum>(bt_expr);
+//          if(i == 3)
+//           bt_expr_p = ex<Tensor>(L"S", WstrList{L"i_1", L"i_2", L"i_3"},
+//                                  WstrList{L"a_1", L"a_2", L"a_3"}, Symmetry::nonsymm) * bt_expr_p;
+//
           expand(bt_expr_p);
           canonicalize(bt_expr_p);
           rapid_simplify(bt_expr_p);
           cc_st_r[i] = bt_expr_p;
+//          std::wcout << __LINE__ << "\n" << to_latex_align(cc_st_r[i], 20, 5) << "\n";
           printf("Biorthogonal transform: %lu\n", cc_st_r[i]->size());
+
           if(factorize_S && i > 1){
             if(i == 1)
               external_indices = {{L"i_1", L"a_1"}};
@@ -476,12 +514,16 @@ int main(int argc, char* argv[]) {
           // TODO: Scale residual equations
         }
       }
+      // canonicalize(cc_st_r[i]);
+      // rapid_simplify(cc_st_r[i]);
       const auto tstop = std::chrono::high_resolution_clock::now();
       const std::chrono::duration<double> time_elapsed = tstop - tstart;
       printf("CC R%d size: %lu time: %5.3f sec.\n\n", i, cc_st_r[i]->size(), time_elapsed.count());
+      // std::wcout << "R" << i << ":\n" << to_latex_align(cc_st_r[i], 20, 5) << "\n";
     }
 
-#if 1
+    return 0;
+#if 0 // Check if S is factorized correctly (get back 490 terms of CCSDT R3)
     {
       auto result = std::make_shared<Sum>();
       int terms_with_S = 0;
@@ -514,103 +556,95 @@ int main(int argc, char* argv[]) {
       std::cout << "\nTerms_with_S: " << terms_with_S;
       std::cout << "\nResult->size(): " << result->size();
     }
-#endif
     return 0;
+#endif
 
-    // std::wcout << "CCSD R1: " << to_latex(cc_st_r[1]) << "\n";
-    // std::wcout << "CCSD R2: " << to_latex(cc_st_r[2]) << "\n";
-
-    // return 0;
-#if 0
-    // Use Biorthogonal transformation for simpler CCSD residual equations
-    bool biorthogonal_transformation = false;
-    if(biorthogonal_transformation){
-      cout << "Using Biorthogonal transformation...\n";
-
-      // CCSD R1
-      auto cc_r1_biorthogonal = ex<Constant>(0.5) * cc_st_r[1];
-      expand(cc_r1_biorthogonal);
-      rapid_simplify(cc_r1_biorthogonal);
-      cc_st_r[1] = cc_r1_biorthogonal;
-
-      // CCSD R2: 1/3 R2 + 1/6 R2' for simpler equations
-      std::map<Index, Index> idxmap = {{Index{L"i_1"}, Index{L"i_2"}},
-                                       {Index{L"i_2"}, Index{L"i_1"}}};
-
-      auto temp_expr = transform_expression(cc_st_r[2], idxmap);
-      auto biorthogonal_R2 =
-          ex<Constant>(1.0 / 3.0) * cc_st_r[2] + ex<Constant>(1.0 / 6.0) * temp_expr;
-
-      expand(biorthogonal_R2);
-      canonicalize(biorthogonal_R2);
-      rapid_simplify(biorthogonal_R2);
-      cc_st_r[2] = biorthogonal_R2;
-    } else {
-       cc_st_r[1] = ex<Constant>(0.5) * cc_st_r[1];
-       expand(cc_st_r[1]);
-       rapid_simplify(cc_st_r[1]);
-       cc_st_r[2] = ex<Constant>(0.25) * cc_st_r[2];
-       expand(cc_st_r[2]);
-       rapid_simplify(cc_st_r[2]);
+#if 0 // Check terms from CCSDT R3, where S is missing
+    {
+      int i_term = 0;
+      for(auto&& summand: *cc_st_r[3]){
+        ++i_term;
+        if(summand->is<Product>()){
+          if(summand->as<Product>().factor(0)->as<Tensor>().label() != L"S")
+            std::wcout << i_term << ": " << to_latex(summand) << "\n";
+        }
+      }
     }
+    return 0;
+#endif
+
+#if 0
+    {
+      auto idx_map = biorthogonal_tran_idx_map({{L"i_1", L"a_1"}, {L"i_2",L"a_2"}, {L"i_3", L"a_3"}});
+
+      auto is_canonical = [&] (const std::map<Index, Index>& idx_map){
+        bool canonical = true;
+        for(auto&& pair: idx_map) if(pair.first != pair.second) return false;
+        return canonical;
+      };
+
+      // Get coefficients and replacement maps
+      auto btc = biorthogonal_tran_coeff(3, 1.e-12);
+
+      int i_term = 0;
+      // Check spintrace of each term
+      for (auto&& summand : *cc_r[3]) {
+        ++i_term;
+        auto term = summand->clone();
+        std::wcout << "Term: " << to_latex(term) << "\n";
+
+        auto st_term = closed_shell_spintrace(
+            term, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
+        std::wcout << "Spin traced: " << st_term->size() << " "
+                   << to_latex(st_term) << "\n";
+
+        auto S_expanded =
+            expand_S_operator(st_term);  // , {{L"i_1", L"a_1"}, {L"i_2",L"a_2"}, {L"i_3", L"a_3"}}, true);
+        std::wcout << "S_expanded: " << S_expanded->size() << " "
+                   << to_latex(S_expanded) << "\n";
+
+//        Sum bt_expr{};
+//        auto btc_ptr = btc.begin();
+//        for(auto&& map: idx_map){
+//          ExprPtr transformed_expr{};
+//          if(is_canonical(map))
+//            transformed_expr = ex<Constant>(*btc_ptr) * S_expanded;
+//          else
+//            transformed_expr = ex<Constant>(*btc_ptr) * transform_expression(S_expanded, map);
+//          btc_ptr++;
+//          bt_expr.append(transformed_expr);
+//        }
+//        ExprPtr bt_expr_p = std::make_shared<Sum>(bt_expr);
+//        std::wcout << "bt_expr_p: " << bt_expr_p->size() << " "
+//                   << to_latex(bt_expr_p) << "\n";
+
+        std::cout << "\n";
+
+        if(i_term > 5) break;
+      }
+    }
+#endif
+    // return 0;
+
+#if !CCSDT_eval
+    std::wcout << "CCSD R1: " << to_latex(cc_st_r[1]) << "\n";
+    std::wcout << "CCSD R2: " << to_latex(cc_st_r[2]) << "\n";
+#endif
+
+//    cc_st_r[1] = ex<Constant>(0.5) * cc_st_r[1];
+//    expand(cc_st_r[1]);
+//    canonicalize(cc_st_r[1]);
+//    rapid_simplify(cc_st_r[1]);
+//
+//    cc_st_r[2] = ex<Constant>(0.25) * cc_st_r[2];
+//    expand(cc_st_r[2]);
+//    canonicalize(cc_st_r[2]);
+//    rapid_simplify(cc_st_r[2]);
 
 #if CCSDT_eval
-    if(biorthogonal_transformation){
-      // Biorthogonal transformation of CC R3 equation (http://arxiv.org/abs/1805.00565 Eq. 31)
-
-      using IdxMap = std::map<Index, Index>;
-      IdxMap m1 = {{Index{L"i_1"}, Index{L"i_1"}},
-                   {Index{L"i_2"}, Index{L"i_3"}},
-                   {Index{L"i_3"}, Index{L"i_2"}}}; // ijk -> ikj
-      IdxMap m2 = {{Index{L"i_1"}, Index{L"i_2"}},
-                   {Index{L"i_2"}, Index{L"i_1"}},
-                   {Index{L"i_3"}, Index{L"i_3"}}}; // ijk -> jik
-      IdxMap m3 = {{Index{L"i_1"}, Index{L"i_2"}},
-                   {Index{L"i_2"}, Index{L"i_3"}},
-                   {Index{L"i_3"}, Index{L"i_1"}}}; // ijk -> jki
-      IdxMap m4 = {{Index{L"i_1"}, Index{L"i_3"}},
-                   {Index{L"i_2"}, Index{L"i_1"}},
-                   {Index{L"i_3"}, Index{L"i_2"}}}; // ijk -> kij
-      IdxMap m5 = {{Index{L"i_1"}, Index{L"i_3"}},
-                   {Index{L"i_2"}, Index{L"i_2"}},
-                   {Index{L"i_3"}, Index{L"i_1"}}}; // ijk -> kji
-
-      auto p1 = transform_expression(cc_st_r[3], m1,-1.0/120.0);
-      auto p2 = transform_expression(cc_st_r[3], m2,-1.0/120.0);
-      auto p3 = transform_expression(cc_st_r[3], m3,-7.0/120.0);
-      auto p4 = transform_expression(cc_st_r[3], m4,-7.0/120.0);
-      auto p5 = transform_expression(cc_st_r[3], m5,-1.0/120.0);
-
-      auto biorthogonal_R3 =
-          ex<Constant>(17.0/120.0) * cc_st_r[3] + p1 + p2 + p3 + p4 + p5;
-#if 0
-      expand(biorthogonal_R3);
-      canonicalize(biorthogonal_R3);
-      rapid_simplify(biorthogonal_R3);
-      cc_st_r[3] = biorthogonal_R3;
-#else
-      auto P_cc_r3 = ex<Constant>(1./6.) *
-          ex<Tensor>(L"P", WstrList{L"a_1", L"a_2", L"a_3"}, WstrList{L"i_1", L"i_2", L"i_3"}, Symmetry::nonsymm) *
-          biorthogonal_R3;
-      expand(P_cc_r3);
-      canonicalize(P_cc_r3);
-
-      // TODO: Do not expand P operator; evaluate R3 and permute instead
-      auto cc_r3_biorthogonal = expand_P_operator(P_cc_r3);
-      rapid_simplify(cc_r3_biorthogonal);
-      canonicalize(cc_st_r[3]);
-      cc_st_r[3] = cc_r3_biorthogonal;
-#endif
-    } else {
-      std::wcout << "CC R3: " << to_latex(cc_st_r[3]) << "\n";
-      auto temp_R3 = ex<Constant>(1.0) * cc_st_r[3];
-      expand(temp_R3);
-      canonicalize(temp_R3);
-      rapid_simplify(temp_R3);
-      cc_st_r[3] = temp_R3;
-    }
-    // std::wcout << "CC R3: " << to_latex(cc_st_r[3]) << "\n";
-#endif
+    // cc_st_r[3] = ex<Constant>(5.0) * cc_st_r[3];
+    // expand(cc_st_r[3]);
+    // rapid_simplify(cc_st_r[3]);
 #endif
 
     std::vector<std::shared_ptr<TA::TArrayD>> data_tensors = {Fock_oo, Fock_ov, Fock_vv,
@@ -657,18 +691,59 @@ int main(int argc, char* argv[]) {
     }
 
     printf("R1 size: %lu\n",cc_st_r[1]->size());
-    printf("R2 size: %lu\n",cc_st_r[2]->size());
+    std::wcout << to_latex(cc_st_r[1]) << "\n";
 
-    // std::wcout << to_latex(cc_st_r[1]) << "\n";
-    // std::wcout << to_latex(cc_st_r[2]) << "\n";
+    printf("R2 size: %lu\n",cc_st_r[2]->size());
+    std::wcout << to_latex(cc_st_r[2]) << "\n";
+
+    // printf("R3 size: %lu\n",cc_st_r[3]->size());
+    // std::wcout << to_latex(cc_st_r[3]) << "\n";
 
     bool swap_braket_labels = true;
     auto r1_tree = EvalTree(cc_st_r[1], swap_braket_labels);
     auto r2_tree = EvalTree(cc_st_r[2], swap_braket_labels);
 #if CCSDT_eval
+    canonicalize(cc_st_r[3]);
+    rapid_simplify(cc_st_r[3]);
     printf("R3 size: %lu\n",cc_st_r[3]->size());
+    // std::wcout << "CCSDT R3:\n" << to_latex_align(cc_st_r[3], 20) << "\n";
+/*
+    {
+      auto r3_no_S = std::make_shared<Sum>();
+      auto r3_with_S = std::make_shared<Sum>();
+      for(auto&& summand: *cc_st_r[3]){
+        if(summand->as<Product>().factor(0)->as<Tensor>().label() != L"S")
+          r3_no_S->append(summand);
+        else{
+          r3_with_S->append(summand);
+        }
+      }
+      std::wcout << "CCSDT R3 terms that don't have S operator: Size: "
+                 << r3_no_S->size() << "\n"
+                 << to_latex_align(r3_no_S, 20, 5) << std::endl;
+
+      std::cout << r3_no_S->size() << "\n";
+      auto new_result = factorize_S_operator(r3_no_S,  {{L"i_1", L"a_1"}, {L"i_3", L"a_3"}}, true);
+      std::cout << "ia, kc pairs: " << new_result->size() << "\n";
+
+      cc_st_r[3] = new_result + r3_with_S;
+      expand(cc_st_r[3]);
+      canonicalize(cc_st_r[3]);
+      rapid_simplify(cc_st_r[3]);
+      printf("R3 size: %lu\n",cc_st_r[3]->size());
+      std::wcout << "\n" << to_latex_align(cc_st_r[3], 20, 5) << "\n";
+
+      auto temp = expand_S_operator(cc_st_r[3]);
+      cc_st_r[3] = temp;
+      expand(cc_st_r[3]);
+      canonicalize(cc_st_r[3]);
+      rapid_simplify(cc_st_r[3]);
+      printf("R3 size: %lu\n",cc_st_r[3]->size());
+    }
+*/
     auto r3_tree = EvalTree(cc_st_r[3], swap_braket_labels);
 #endif
+    return 0;
 
     const auto cc_conv = conv * 1e2;
     iter = 0;
@@ -676,7 +751,7 @@ int main(int argc, char* argv[]) {
     ediff = 0.0;
     auto normdiff = 0.0;
     auto ecc = 0.0;
-    bool diis = true;
+    bool diis = false;
 
     int start_diis = 3;
     int diis_size = 3;
@@ -686,7 +761,6 @@ int main(int argc, char* argv[]) {
     TA::TArrayD t_oovv_prev;
     TA::TArrayD t_ooovvv_prev;
 
-    cout << "Using TiledArray..." << endl;
     cout << "Iter   norm(t_ov)    norm(t_oovv)     ΔE(CC)          E(CC)       time(s)" << endl;
     cout << "============================================================================" << endl;
     auto CC_start = std::chrono::high_resolution_clock::now();
@@ -776,7 +850,7 @@ int main(int argc, char* argv[]) {
           (*t_ov)("i,a") = new_t1("i,a");
           (*t_oovv)("i,j,a,b") = new_t2("i,j,a,b");
 
-#if CCSDT
+#if CCSDT_eval
           Matrix B_t3(B_size + 1, B_size + 1);
           B_t3.setConstant(-1.0);
           B_t3(B_size, B_size) = 0.0;
@@ -795,7 +869,7 @@ int main(int argc, char* argv[]) {
           for(int i = 0; i < B_size; ++i){
             new_t3("i,j,k,a,b,c") += t3_vec[i]("i,j,k,a,b,c") * coeff_t3[i];
           }
-          (*t_ooovvv)("i,j,k,a,b,c") = new_t2("i,j,k,a,b,c");
+          (*t_ooovvv)("i,j,k,a,b,c") = new_t3("i,j,k,a,b,c");
 #endif
         }
       }
@@ -818,17 +892,18 @@ int main(int argc, char* argv[]) {
 #endif
 
       if(diis){
-        t_ov_prev = TiledArray::clone(*t_ov);
-        t_oovv_prev = TiledArray::clone(*t_oovv);
+        t_ov_prev = (*t_ov).clone();
+        t_oovv_prev = (*t_oovv).clone();
         cout << t_ov_prev;
-        // cout << t_oovv_prev;
+        cout << t_oovv_prev;
       }
 
 #if CCSDT_eval
       if(diis){
-        t_ooovvv_prev = TiledArray::clone(*t_ooovvv);
+        t_ooovvv_prev = (*t_ooovvv).clone();
         cout << t_ooovvv_prev;
       }
+      // cout << (*t_ooovvv) << "\n";
 #endif
 
       // save previous norm
@@ -881,7 +956,7 @@ int main(int argc, char* argv[]) {
       auto norm_t2 = std::sqrt((*t_oovv)("i,j,a,b").dot((*t_oovv)("i,j,a,b")));
       const auto tstop = std::chrono::high_resolution_clock::now();
       const std::chrono::duration<double> time_elapsed = tstop - tstart;
-      printf("%2d    %4.8f     %4.8f     %4.8f     %4.12f   %5.5f\n\n", iter,
+      printf("%2d    %4.8f     %4.8f     %4.8f     %4.12f   %5.5f\n", iter,
               norm_t1, norm_t2, ediff, ecc, time_elapsed.count());
       normdiff = norm_last - norm_t2;
       ediff    = ecc_last - ecc;
