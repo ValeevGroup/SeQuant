@@ -805,7 +805,7 @@ TEST_CASE("Spin") {
   SECTION("NON-ORTHOGONAL TRANSFORMATION"){
     //﻿http://dx.doi.org/10.1063/1.4907278
     // Intermediates
-
+#if 1
     // 39
     auto W_ijam = ex<Tensor>(L"g", WstrList{L"i_1", L"i_2"}, WstrList{L"a_1", L"i_5"}, Symmetry::nonsymm) +
         ex<Tensor>(L"g", WstrList{L"a_5", L"i_2"}, WstrList{L"a_1", L"i_5"}, Symmetry::nonsymm) * ex<Tensor>(L"t", WstrList{L"i_1"}, WstrList{L"a_5"}) +
@@ -930,7 +930,7 @@ TEST_CASE("Spin") {
                      (ex<Tensor>(L"t", WstrList{L"i_1", L"i_2"}, WstrList{L"a_5", L"a_6"}, Symmetry::nonsymm) + ex<Tensor>(L"t", WstrList{L"i_1"}, WstrList{L"a_5"}, Symmetry::nonsymm) * ex<Tensor>(L"t", WstrList{L"i_2"}, WstrList{L"a_6"}, Symmetry::nonsymm));
 
     expand(temp1);
-
+/*
     std::map<Index, Index> P_ab_ij;
     {
       Index a(L"a_1");
@@ -942,12 +942,140 @@ TEST_CASE("Spin") {
       P_ab.emplace(std::make_pair(a, b));
       P_ab.emplace(std::make_pair(b, a));
     }
+*/
     auto ccsd_z2 = ex<Tensor>(L"S", WstrList{L"a_1", L"a_2"}, WstrList{L"i_1", L"i_2"}) * temp1; // + transform_expression(temp1, P_ab_ij);
-    expand(ccsd_z2);
-    std::wcout << "Result: " << ccsd_z2->size() << "\n" << to_latex(ccsd_z2) << "\n";
-    canonicalize(ccsd_z2);
-    rapid_simplify(ccsd_z2);
-    std::wcout << "Result: " << ccsd_z2->size() << "\n" << to_latex(ccsd_z2) << "\n";
+    // expand(ccsd_z2);
+    // std::wcout << "Result: " << ccsd_z2->size() << "\n" << to_latex(ccsd_z2) << "\n";
+    // canonicalize(ccsd_z2); // FIXME: This canonicalization changes indices in the intermediate tensors.
+    // rapid_simplify(ccsd_z2);
+    // std::wcout << "Result: " << ccsd_z2->size() << "\n" << to_latex(ccsd_z2) << "\n";
+#endif
+
+    //////////////////////////////////
+    ///    Required for T3 != 0    ///
+    //////////////////////////////////
+
+    auto expanded_T3 = [&] (container::svector<Index> bra, container::svector<Index> ket){
+      assert(bra.size() == 3);
+      assert(bra.size() == ket.size());
+
+      auto t3_1 = Tensor(L"t", bra, ket);
+      container::svector<Index> ket2 = {ket[1], ket[0], ket[2]};
+      auto t3_2 = Tensor(L"t", bra, ket2);
+      container::svector<Index> ket3 = {ket[2], ket[1], ket[0]};
+      auto t3_3 = Tensor(L"t", bra, ket3);
+      auto result = ex<Constant>(2.0) * ex<Tensor>(t3_1) - ex<Tensor>(t3_2) - ex<Tensor>(t3_3);
+      return result;
+    };
+
+    // 38
+    auto W_efam = ex<Tensor>(L"g", WstrList{L"a_5", L"a_6"}, WstrList{L"a_1", L"i_5"}, Symmetry::nonsymm) -
+        ex<Tensor>(L"g", WstrList{L"a_5", L"a_6"}, WstrList{L"i_6", L"i_5"}, Symmetry::nonsymm) * ex<Tensor>(L"t", WstrList{L"i_6"}, WstrList{L"a_1"});
+    std::wcout << "W_efam " << to_latex(W_efam) << "\n\n";
+
+    // 46'
+    auto W___ejam = ex<Tensor>(L"g", WstrList{L"a_5", L"i_2"}, WstrList{L"a_1", L"i_5"}, Symmetry::nonsymm) -
+        ex<Tensor>(L"g", WstrList{L"a_5", L"i_2"}, WstrList{L"i_6", L"i_5"}, Symmetry::nonsymm) * ex<Tensor>(L"t", WstrList{L"i_1", L"i_6"}, WstrList{L"i_6", L"i_1"}, Symmetry::nonsymm);
+    std::wcout << "W___ejam " << to_latex(W___ejam) << "\n\n";
+
+    // 45'
+    auto W___ejmb = ex<Tensor>(L"g", WstrList{L"a_5", L"i_2"}, WstrList{L"i_5", L"a_2"}, Symmetry::nonsymm) +
+        ex<Constant>(0.5) * (ex<Constant>(2.0) * ex<Tensor>(L"g", WstrList{L"a_6", L"a_5"}, WstrList{L"i_6", L"i_5"}, Symmetry::nonsymm) - ex<Tensor>(L"g", WstrList{L"a_6", L"a_5"}, WstrList{L"i_5", L"i_6"}, Symmetry::nonsymm)) *
+            (ex<Constant>(2.0) * ex<Tensor>(L"t", WstrList{L"i_6", L"i_1"}, WstrList{L"a_6", L"a_1"}, Symmetry::nonsymm) - ex<Tensor>(L"t", WstrList{L"i_6", L"i_1"}, WstrList{L"a_1", L"a_6"}, Symmetry::nonsymm)) -
+        ex<Constant>(0.5) * ex<Tensor>(L"g", WstrList{L"a_5", L"a_6"}, WstrList{L"i_6", L"i_5"}, Symmetry::nonsymm) * ex<Tensor>(L"t", WstrList{L"i_1", L"i_6"}, WstrList{L"a_6", L"a_1"}, Symmetry::nonsymm);
+    std::wcout << "W___ejmb " << to_latex(W___ejmb) << "\n\n";
+
+    // 41
+    ExprPtr W_ejab;
+    {
+
+      auto g_tau = ex<Tensor>(L"g", WstrList{L"a_5", L"a_6"}, WstrList{L"i_5", L"a_1"}, Symmetry::nonsymm) *
+                   (ex<Tensor>(L"t", WstrList{L"i_2" L"i_5"}, WstrList{L"a_6", L"a_2"}) + ex<Tensor>(L"t", WstrList{L"i_2"}, WstrList{L"a_6"}) * ex<Tensor>(L"t", WstrList{L"i_6"}, WstrList{L"a_2"}));
+      auto P_g_tau = ex<Constant>(0.5) * g_tau + transform_expression(g_tau, P_ab);
+
+      Index a(L"a_1"),
+          b(L"a_2"),
+          e(L"a_5"),
+          f(L"a_6"),
+          i(L"i_1"),
+          j(L"i_2"),
+          m(L"i_5"),
+          n(L"i_6");
+
+      container::svector<Index> nmj = {n, m, j};
+      container::svector<Index> fab = {f, a, b};
+
+      W_ejab = ex<Tensor>(L"g", WstrList{L"a_5", L"a_6"}, WstrList{L"a_1", L"a_2"}, Symmetry::nonsymm) -
+        W___ejam * ex<Tensor>(L"t", WstrList{L"i_5"}, WstrList{L"a_2"}) -
+        W___ejmb * ex<Tensor>(L"t", WstrList{L"i_5"}, WstrList{L"a_1"}) +
+        W_ejmn * (ex<Tensor>(L"t", WstrList{L"i_5", L"i_6"}, WstrList{L"a_1", L"a_2"}) + ex<Tensor>(L"t", WstrList{L"i_5"}, WstrList{L"a_1"}) * ex<Tensor>(L"t", WstrList{L"i_6"}, WstrList{L"a_2"})) +
+        ex<Tensor>(L"g", WstrList{L"a_5", L"a_6"}, WstrList{L"a_1", L"a_2"}, Symmetry::nonsymm) * ex<Tensor>(L"t", WstrList{L"i_2"}, WstrList{L"a_6"}) +
+        ex<Constant>(0.5) * (ex<Constant>(2.0) * ex<Tensor>(L"g", WstrList{L"a_6", L"a_5"}, WstrList{L"i_5", L"a_1"}, Symmetry::nonsymm) - ex<Tensor>(L"g", WstrList{L"a_5", L"a_6"}, WstrList{L"i_5", L"a_1"}, Symmetry::nonsymm)) *
+            (ex<Constant>(2.0) * ex<Tensor>(L"t", WstrList{L"i_5", L"i_2"}, WstrList{L"a_1", L"a_2"}, Symmetry::nonsymm) - ex<Tensor>(L"t", WstrList{L"i_2", L"i_5"}, WstrList{L"a_1", L"a_2"}, Symmetry::nonsymm) -
+                ex<Tensor>(L"t", WstrList{L"i_2"}, WstrList{L"a_6"}) * ex<Tensor>(L"t", WstrList{L"i_5"}, WstrList{L"a_2"})) -
+        P_g_tau -
+        ex<Tensor>(L"g", WstrList{L"a_5", L"a_6"}, WstrList{L"i_5", L"i_6"}, Symmetry::nonsymm) * expanded_T3(nmj, fab);
+      std::wcout << "W_ejab " << to_latex(W_ejab) << "\n\n";
+    }
+
+    ExprPtr ccsdt_r2;
+    {
+      Index a(L"a_1"),
+          b(L"a_2"),
+          e(L"a_5"),
+          f(L"a_6"),
+          i(L"i_1"),
+          j(L"i_2"),
+          m(L"i_5"),
+          n(L"i_6");
+
+      container::svector<Index> mij = {m, i, j};
+      container::svector<Index> min = {m, i, n};
+      container::svector<Index> eab = {e, a, b};
+      container::svector<Index> feb = {f, e, b};
+
+//      std::wcout << "36 F_em: " << to_latex(F_em) << "\n\n";
+//      std::wcout << "37 W_ejmn: " << to_latex(W_ejmn) << "\n\n";
+//      std::wcout << "38 W_efam: " << to_latex(W_efam) << "\n\n";
+
+      ccsdt_r2 = ex<Constant>(0.5) * F_em * expanded_T3(mij, eab) +
+          W_efam * expanded_T3(mij, feb) -
+          W_ejmn * expanded_T3(min, eab);
+      std::wcout << "ccsdt_r2: " << ccsdt_r2->size() << " " << to_latex(ccsdt_r2) << "\n\n";
+    }
+    ccsdt_r2 = ccsd_z2 + ccsdt_r2;
+
+    // 31
+    ExprPtr ccsdt_r3;
+    {
+      Index a(L"a_1"),
+       b(L"a_2"),
+       c(L"a_3"),
+       d(L"a_4"),
+       e(L"a_5"),
+       f(L"a_6"),
+
+       i(L"i_1"),
+       j(L"i_2"),
+       k(L"i_3"),
+       l(L"i_4"),
+       m(L"i_5"),
+       n(L"i_6");
+
+      container::svector<Index> mjk = {m, j, k};
+      container::svector<Index> ebc = {e, b, c};
+
+      ccsdt_r3 = W_ejab * ex<Tensor>(L"t", WstrList{ L"i_1", L"i_3"}, WstrList{L"a_5", L"a_3"}) -
+          W_ijam * ex<Tensor>(L"t", WstrList{ L"i_5", L"i_3"}, WstrList{L"a_2", L"a_3"}) +
+          ex<Constant>(0.5) * F_ea * ex<Tensor>(L"t", WstrList{ L"i_1", L"i_2", L"i_3"}, WstrList{L"a_5", L"a_2", L"a_3"}) -
+          ex<Constant>(0.5) * F_im * ex<Tensor>(L"t", WstrList{ L"i_5", L"i_2", L"i_3"}, WstrList{L"a_1", L"a_2", L"a_3"}) +
+          ex<Constant>(0.25) * (ex<Constant>(2.0) * W_eima - W_iema) * expanded_T3(mjk, ebc);
+
+    }
+    expand(ccsdt_r3);
+    canonicalize(ccsdt_r3);
+    rapid_simplify(ccsdt_r3);
+    std::wcout << "ccsdt_r3: " << ccsdt_r3->size() << " " << to_latex(ccsdt_r3) << "\n\n";
 
   } // NON-ORTHOGONAL TRANSFORMATION
 
