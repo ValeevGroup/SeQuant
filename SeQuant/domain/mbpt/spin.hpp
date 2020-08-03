@@ -821,7 +821,7 @@ ExprPtr expand_S_operator(const ExprPtr& expr){
   };
 
   if(expr->is<Product>()){
-    return expand_S_product(expr->as<Product>());
+    result->append(expand_S_product(expr->as<Product>()));
   } else if (expr->is<Sum>()){
     for(auto&& term : *expr){
       if(term->is<Product>()){
