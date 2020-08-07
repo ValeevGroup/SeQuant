@@ -225,18 +225,20 @@ endif(NOT TARGET tiledarray)
 enable_testing(true)
 
 set(utests_src
-         # tests/unit/test_space.cpp
-         # tests/unit/test_index.cpp
-         # tests/unit/test_op.cpp
-         # tests/unit/test_wick.cpp
-         # tests/unit/test_tensor.cpp
-         # tests/unit/test_bliss.cpp
-         # tests/unit/test_expr.cpp
-         # tests/unit/test_iterator.cpp
-         # tests/unit/test_mbpt.cpp
-         # tests/unit/test_tensor_network.cpp
-         tests/unit/test_factorizer.cpp
-        )
+    # tests/unit/test_space.cpp
+    # tests/unit/test_index.cpp
+    # tests/unit/test_op.cpp
+    # tests/unit/test_wick.cpp
+    # tests/unit/test_tensor.cpp
+    # tests/unit/test_bliss.cpp
+    # tests/unit/test_expr.cpp
+    # tests/unit/test_iterator.cpp
+    # tests/unit/test_mbpt.cpp
+    # tests/unit/test_tensor_network.cpp
+    # tests/unit/test_factorizer.cpp
+    SeQuant/domain/factorize/inferred_imed_data.hpp
+    tests/unit/test_inferred_imed_data.cpp
+    )
 set(utests_deps SeQuant)
 
 if (TARGET tiledarray)
@@ -305,7 +307,7 @@ target_link_libraries(${example3} SeQuant ${TBB_LIBRARIES})
 
 set(example4 pair_factorization)
 add_executable(${example4} EXCLUDE_FROM_ALL
-    examples/factorization/${example4}.cpp)
+               examples/factorization/${example4}.cpp SeQuant/domain/factorize/imed_tensor.cpp SeQuant/domain/factorize/imed_tensor.hpp)
 target_link_libraries(${example4} SeQuant ${TBB_LIBRARIES})
 
 # add tests for running examples
