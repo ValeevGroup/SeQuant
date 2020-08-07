@@ -8,6 +8,10 @@
 namespace sequant::factorize {
 
 struct InferredImedData {
+  ExprPtr left;
+
+  ExprPtr right;
+
   container::svector<Index> bra_indices;
 
   container::svector<Index> ket_indices;
@@ -24,11 +28,11 @@ struct InferredImedData {
 
   Expr::hash_type hash_value{};
 
-  InferredImedData(const ExprPtr& left, const ExprPtr& right) {
-    auto& ltensor = left->as<Tensor>();
-    auto& rtensor = right->as<Tensor>();
+  InferredImedData(const ExprPtr& lexpr, const ExprPtr& rexpr) {
+    auto& ltensor = lexpr->as<Tensor>();
+    auto& rtensor = rexpr->as<Tensor>();
 
-    // figure out if it is a sum of left and right tensors
+    // figure out if it is a sum of lexpr and rexpr tensors
     is_sum = ltensor.rank() == rtensor.rank();
     // not only rank but also all indices in one tensor must be
     // present in the other
@@ -49,8 +53,8 @@ struct InferredImedData {
                 std::back_inserter(bra_indices));
       std::copy(ltensor.ket().begin(), ltensor.ket().end(),
                 std::back_inserter(ket_indices));
-      left_ = left->clone();
-      right_ = right->clone();
+      left = lexpr->clone();
+      right = rexpr->clone();
     } else {
       // is_sum false implies product type operation
       // need to canonicalize
@@ -63,13 +67,13 @@ struct InferredImedData {
         else
           target_indices.insert(idx);
       }  // target_indices figured out
-      auto tnet = TensorNetwork(*(left->clone() * right->clone()));
+      auto tnet = TensorNetwork(*(lexpr->clone() * rexpr->clone()));
       // canonicalize
       phase = tnet.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
                                 false, &target_indices);
       //
-      left_ = std::dynamic_pointer_cast<Tensor>(tnet.tensors().at(0));
-      right_ = std::dynamic_pointer_cast<Tensor>(tnet.tensors().at(1));
+      left = std::dynamic_pointer_cast<Tensor>(tnet.tensors().at(0));
+      right = std::dynamic_pointer_cast<Tensor>(tnet.tensors().at(1));
       //
       // set indices
       auto set_indices = [&target_indices, this](const auto& tnetTnsr) {
@@ -114,7 +118,7 @@ struct InferredImedData {
           else
             commons.insert(idx);
         }
-        return commons.size() == 0;
+        return commons.empty();
       };
       bool whole_bk_contracted =
           (all_common_indices(ltensor.bra(), rtensor.ket()) ||
@@ -128,7 +132,7 @@ struct InferredImedData {
         else if (ltensor.symmetry() == rtensor.symmetry() &&
                  ltensor.symmetry() == Symmetry::symm)
           symmetry = Symmetry::symm;
-      }
+      } // whole bk contracted
       if (ltensor.hash_value() == rtensor.hash_value() &&
           bra_indices.size() + ket_indices.size() ==
               ltensor.rank() + rtensor.rank()) {
@@ -140,13 +144,6 @@ struct InferredImedData {
     if (symmetry == Symmetry::antisymm || symmetry == Symmetry::symm)
       particle_symmetry = ParticleSymmetry::symm;  // set particle symmetry
   };
-
-  const auto& left() const { return left_; }
-  const auto& right() const { return right_; }
-
- private:
-  ExprPtr left_;
-  ExprPtr right_;
 };
 
 }  // namespace sequant::factorize

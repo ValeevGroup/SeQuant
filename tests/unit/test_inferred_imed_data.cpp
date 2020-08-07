@@ -1,4 +1,5 @@
 #include "SeQuant/core/attr.hpp"
+#include "SeQuant/core/tensor_network.hpp"
 #include "catch.hpp"
 
 #include <SeQuant/core/tensor.hpp>
@@ -41,11 +42,11 @@ TEST_CASE("Test InferredImedData", "[factorization][intermediate]") {
     REQUIRE(inferredData.particle_symmetry == ParticleSymmetry::nonsymm);
 
     // outer product of the same tensor
-    // Turned off for now. 
-    // auto tnsr5 = std::make_shared<Tensor>(Tensor(L"f", {L"i_1"}, {L"i_2"}, Symmetry::nonsymm));
-    // auto tnsr6 = std::make_shared<Tensor>(Tensor(L"f", {L"i_3"}, {L"i_4"}, Symmetry::nonsymm));
-    // inferredData = InferredImedData(tnsr5, tnsr6);
-    // REQUIRE_FALSE(inferredData.is_sum);
+    // Turned off for now.
+    // auto tnsr5 = std::make_shared<Tensor>(Tensor(L"f", {L"i_1"}, {L"i_2"},
+    // Symmetry::nonsymm)); auto tnsr6 = std::make_shared<Tensor>(Tensor(L"f",
+    // {L"i_3"}, {L"i_4"}, Symmetry::nonsymm)); inferredData =
+    // InferredImedData(tnsr5, tnsr6); REQUIRE_FALSE(inferredData.is_sum);
     // REQUIRE(inferredData.symmetry == Symmetry::symm);
     // REQUIRE(inferredData.particle_symmetry == ParticleSymmetry::symm);
   }
