@@ -68,6 +68,49 @@ ExprPtr transform_expression(const ExprPtr& expr,
     return nullptr;
 }
 
+/// @brief Preserving particle symmetry, swaps bra and ket labels on all tensors in an expression
+/// @param expr ExprPtr to transform
+/// @return transformed expression
+ExprPtr swap_bra_ket(const ExprPtr& expr){
+
+  if(expr->is<Constant>()) return expr;
+
+  // Lambda for tensor
+  auto tensor_swap = [&] (const Tensor& tensor){
+    auto result = Tensor(tensor.label(), tensor.ket(), tensor.bra(), tensor.symmetry(), tensor.braket_symmetry(), tensor.particle_symmetry());
+    return ex<Tensor>(result);
+  };
+
+  // Lambda for product
+  auto product_swap = [&] (const Product& product) {
+    auto result = std::make_shared<Product>();
+    result->scale(product.scalar());
+    for (auto&& term : product) {
+      if (term->is<Tensor>())
+        result->append(tensor_swap(term->as<Tensor>()));
+    }
+    return result;
+  };
+
+  if(expr->is<Tensor>())
+    return tensor_swap(expr->as<Tensor>());
+  else if(expr->is<Product>())
+    return product_swap(expr->as<Product>());
+  else if(expr->is<Sum>()){
+    auto result = std::make_shared<Sum>();
+    for(auto&& term : *expr){
+      if(term->is<Product>())
+        result->append(product_swap(term->as<Product>()));
+      else if(term->is<Tensor>())
+        result->append(tensor_swap(term->as<Tensor>()));
+      else if(term->is<Constant>())
+        result->append(term);
+    }
+    return result;
+  } else
+    throw ("Reached end of swap_bra_ket function in spin.hpp");
+}
+
 /// @brief Adds spins to indices in an expression with a replacement map
 /// @param expr an expression pointer
 /// @param index_replacements a map of pairs containing the index and the
