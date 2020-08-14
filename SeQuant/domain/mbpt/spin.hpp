@@ -218,8 +218,13 @@ inline bool can_expand(const Tensor& tensor) {
 /// @return an ExprPtr containing the tensor otherwise
 ExprPtr expand_antisymm(const Tensor& tensor) {
   assert(tensor.bra().size() == tensor.ket().size());
-  if(tensor.bra().size() == 1)
-    return std::make_shared<Tensor>(tensor);
+  if (tensor.bra_rank() == 1){
+    Tensor new_tensor(tensor.label(), tensor.bra(), tensor.ket(),
+                      Symmetry::nonsymm,
+                      tensor.braket_symmetry(),
+                      tensor.particle_symmetry());
+    return std::make_shared<Tensor>(new_tensor);
+  }
 
   auto get_phase = [&](const Tensor& t) {
     assert(t.bra_rank() > 1);
@@ -236,7 +241,7 @@ ExprPtr expand_antisymm(const Tensor& tensor) {
 
   // Generate a sum of asymmetric tensors if the input tensor is antisymmetric
   // and greater than one body otherwise, return the tensor
-  if ((tensor.symmetry() == Symmetry::antisymm) && (tensor.bra().size() > 1)) {
+if ((tensor.symmetry() == Symmetry::antisymm) && (tensor.bra_rank() > 1)) {
     const auto prefactor = get_phase(tensor);
     container::set<Index> bra_list;
     for (auto&& bra_idx : tensor.bra()) bra_list.insert(bra_idx);
