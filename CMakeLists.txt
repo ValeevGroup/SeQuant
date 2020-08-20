@@ -238,7 +238,11 @@ set(utests_src
     # tests/unit/test_factorizer.cpp
     SeQuant/domain/factorize/inferred_imed_data.hpp
     tests/unit/test_inferred_imed_data.cpp
+    SeQuant/domain/factorize/imed_tensor.hpp
+    SeQuant/domain/factorize/imed_tensor.cpp
+    tests/unit/test_imed_tensor.cpp
     )
+
 set(utests_deps SeQuant)
 
 if (TARGET tiledarray)
@@ -307,11 +311,16 @@ target_link_libraries(${example3} SeQuant ${TBB_LIBRARIES})
 
 set(example4 pair_factorization)
 add_executable(${example4} EXCLUDE_FROM_ALL
-               examples/factorization/${example4}.cpp SeQuant/domain/factorize/imed_tensor.cpp SeQuant/domain/factorize/imed_tensor.hpp)
+               examples/factorization/${example4}.cpp)
 target_link_libraries(${example4} SeQuant ${TBB_LIBRARIES})
 
+set(example5 scratch)
+add_executable(${example5} EXCLUDE_FROM_ALL
+               examples/${example5}/main.cpp)
+target_link_libraries(${example5} SeQuant ${TBB_LIBRARIES})
+
 # add tests for running examples
-set (lastexample 5)
+set (lastexample 6)
 foreach(i RANGE ${lastexample})
     if (TARGET ${example${i}})
         add_test(example/${example${i}}/build "${CMAKE_COMMAND}"
