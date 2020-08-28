@@ -17,7 +17,7 @@ namespace sequant {
 /// @param scaling_factor to scale the result
 /// @return a substituted and scaled expression pointer
 ExprPtr transform_expression(const ExprPtr& expr,
-                             std::map<Index, Index>& index_replacements,
+                             const std::map<Index, Index>& index_replacements,
                              double scaling_factor = 1.0) {
   if (expr->is<Constant>()) return ex<Constant>(scaling_factor) * expr;
 
@@ -116,7 +116,7 @@ ExprPtr swap_bra_ket(const ExprPtr& expr){
 /// @param index_replacements a map of pairs containing the index and the
 /// corresponding replacement
 /// @return expr the ExprPtr with substituted indices
-ExprPtr append_spin(ExprPtr& expr, std::map<Index, Index>& index_replacements) {
+ExprPtr append_spin(ExprPtr& expr, const std::map<Index, Index>& index_replacements) {
   auto add_spin_to_tensor = [&](const Tensor& tensor) {
     auto spin_tensor = std::make_shared<Tensor>(tensor);
     spin_tensor->transform_indices(index_replacements);
@@ -890,7 +890,8 @@ ExprPtr expand_S_operator(const ExprPtr& expr){
 /// @detailed
 /// @param
 /// @return
-inline int count_cycles(const container::svector<int, 6>& vec1, const container::svector<int, 6>& vec2) {
+inline int count_cycles(const container::svector<int, 6>& vec1,
+                        const container::svector<int, 6>& vec2) {
   assert(vec1.size() == vec2.size());
   int n_cycles = 0;
   auto dummy_idx = 99;
