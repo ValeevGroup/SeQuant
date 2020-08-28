@@ -38,6 +38,38 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
     }
   }
 
+  SECTION("Products"){
+    {
+      auto input = ex<Tensor>(L"S", WstrList{L"a_1", L"a_2"},
+                              WstrList{L"i_1", L"i_2"}, Symmetry::nonsymm) *
+                   ex<Tensor>(L"f", IndexList{{L"a_5"}}, IndexList{{L"i_5"}},
+                              Symmetry::nonsymm) *
+                   ex<Tensor>(L"t", IndexList{{L"i_5"}}, IndexList{{L"a_1"}},
+                              Symmetry::nonsymm) *
+                   ex<Tensor>(L"t", WstrList{L"i_1", L"i_2"},
+                              WstrList{L"a_5", L"a_2"}, Symmetry::nonsymm);
+      std::wcout << " S2*f*t1*t2: " << to_latex(input) << "\n";
+      canonicalize(input);
+      std::wcout << " S2*f*t1*t2: " << to_latex(input) << "\n\n";
+    }
+
+    {
+      auto input = ex<Tensor>(L"S", WstrList{L"a_1", L"a_2"},
+                              WstrList{L"i_1", L"i_2"}, Symmetry::nonsymm) *
+          ex<Tensor>(L"f", IndexList{{L"a_5"}}, IndexList{{L"i_5"}},
+                     Symmetry::nonsymm) *
+          ex<Tensor>(L"t", IndexList{{L"i_1"}}, IndexList{{L"a_5"}},
+                     Symmetry::nonsymm) *
+          ex<Tensor>(L"t", WstrList{L"i_5", L"i_2"},
+                     WstrList{L"a_1", L"a_2"}, Symmetry::nonsymm);
+      std::wcout << " \\text{S2*f*t1*t2}: " << to_latex(input) << "\n";
+      canonicalize(input);
+      std::wcout << " \\text{S2*f*t1*t2}: " << to_latex(input) << "\n\n";
+    }
+
+
+  }
+
   SECTION("sum of products") {
     {
       // CASE 1: Non-symmetric tensors

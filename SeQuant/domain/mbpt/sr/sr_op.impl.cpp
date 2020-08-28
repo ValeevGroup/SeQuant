@@ -1,9 +1,9 @@
 /// makes excitation operator of bra/ket ranks @c Nbra/Nket
-ExprPtr T_(std::size_t Nbra, std::size_t Nket, bool complete_unoccupieds) {
+ExprPtr T_(std::size_t Nbra, std::size_t Nket, bool complete_unoccupieds, bool antisymm) {
   assert(Nbra > 0 && Nbra < std::numeric_limits<std::size_t>::max());
   assert(Nket > 0);
   const auto Nket_ = Nket == std::numeric_limits<std::size_t>::max() ? Nbra : Nket;
-  return Op(OpType::t, Nbra, Nket_)(complete_unoccupieds);
+  return Op(OpType::t, Nbra, Nket_)(complete_unoccupieds, antisymm);
 }
 
 /// makes lambda deexcitation operator of bra/ket ranks @c Nbra/Nket
@@ -29,9 +29,9 @@ class op_impl {
     assert(nket_ > 0);
   }
 
-  void operator()(ExprPtr& result, bool complete_unoccupieds = false) {
+  void operator()(ExprPtr& result, bool complete_unoccupieds = false, bool antisymm = true) {
     if (op_ == OpType::t)
-      result = result ? result + T_(nbra_, nket_, complete_unoccupieds) : T_(nbra_, nket_, complete_unoccupieds);
+      result = result ? result + T_(nbra_, nket_, complete_unoccupieds, antisymm) : T_(nbra_, nket_, complete_unoccupieds, antisymm);
     else if (op_ == OpType::l)
       result = result ? result + Lambda_(nbra_, nket_, complete_unoccupieds) : Lambda_(nbra_, nket_, complete_unoccupieds);
     else
@@ -47,12 +47,12 @@ class op_impl {
 }  // namespace detail
 
 /// makes excitation operator of all bra/ket ranks up to (and including) @c Nbra/Nket
-ExprPtr T(std::size_t Nbra, std::size_t Nket, bool complete_unoccupieds) {
+ExprPtr T(std::size_t Nbra, std::size_t Nket, bool complete_unoccupieds, bool antisymm) {
   assert(Nbra > 0 && Nbra < std::numeric_limits<std::size_t>::max());
   const auto Nket_ = Nket == std::numeric_limits<std::size_t>::max() ? Nbra : Nket;
   assert(Nket_ > 0);
   ExprPtr result;
-  detail::op_impl{OpType::t, Nbra, Nket_}(result, complete_unoccupieds);
+  detail::op_impl{OpType::t, Nbra, Nket_}(result, complete_unoccupieds, antisymm);
   return result;
 }
 
