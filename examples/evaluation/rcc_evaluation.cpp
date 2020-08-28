@@ -396,32 +396,25 @@ int main(int argc, char* argv[]) {
          << "***********************************\n";
 #if CCSDT_eval // CCSDT
     cout << "            CCSDT\n";
-    auto cc_r = cceqvec{3, 3}(true, true, true, true);
-    // auto cc_r = cceqvec{4, 4}(true, true, true, true);
+    auto cc_r = cceqvec{3, 3}(true, true, true, true, true);
+    // auto cc_r = cceqvec{4, 4}(true, true, true, true, true);
 #else // CCSD
     cout << "            CCSD\n";
-    auto cc_r = cceqvec{2, 2}(true, true, true, true);
+    auto cc_r = cceqvec{2, 2}(true, true, true, true, true);
     // cout << "            CCSDTQ\n";
     // auto cc_r = cceqvec{4, 4}(true, true, true, true);
 #endif
     cout << "***********************************\n" << endl;
 
-//    bool expand_S = false;
-//    bool bt = false;
-//    bool factorize_S = false;
-
     bool expand_S = true;
     bool bt = true;
     bool factorize_S = true;
 
-    // std::wcout << to_latex(cc_r[1]) << std::endl;
-    // std::wcout << to_latex(cc_r[2]) << std::endl;
 
     // SPIN TRACE THE CC RESIDUAL EQUATIONS
     std::vector<ExprPtr> cc_st_r(cc_r.size());
     for (int i = 1; i < cc_r.size(); ++i){
-      // std::wcout << "CC R" << i << ":\n" << to_latex_align(cc_r[i], 20, 5) << "\n";
-      std::wcout << "CC R" << i << ":\n" << to_latex(cc_r[i]) << "\n";
+      std::wcout << "CC R" << i << ":\n" << to_latex_align(cc_r[i], 20, 5) << "\n";
       const auto tstart = std::chrono::high_resolution_clock::now();
       std::initializer_list<IndexList> external_indices = {{}};
       if(i == 1)
@@ -433,12 +426,12 @@ int main(int argc, char* argv[]) {
       else if(i == 4)
         external_indices = {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}, {L"i_4", L"a_4"}};
 
-      cc_st_r[i] = spintrace(cc_r[i], external_indices);
-      // cc_st_r[i] = closed_shell_spintrace(cc_r[i], external_indices);
+      // cc_st_r[i] = spintrace(cc_r[i], external_indices);
+      cc_st_r[i] = closed_shell_spintrace(cc_r[i], external_indices);
       canonicalize(cc_st_r[i]);
+
       if(i<3){
-        // std::wcout <<  __LINE__ << to_latex_align(cc_st_r[i], 20, 5) << "\n";
-        std::wcout <<  __LINE__ << "\n" << to_latex(cc_st_r[i]) << "\n";
+        std::wcout <<  __LINE__ << to_latex_align(cc_st_r[i], 20, 5) << "\n";
       }
       printf("R%d Spin-orbit: %lu terms;\nSPINTRACED: With S operator: %lu;", i, cc_r[i]->size(), cc_st_r[i]->size());
       if(expand_S){
@@ -460,7 +453,7 @@ int main(int argc, char* argv[]) {
           // Get coefficients and replacement maps
           auto btc = biorthogonal_tran_coeff(external_indices.size(), 1.e-12);
 
-          // TODO: external_indices are getting modified before.
+          // TODO: external_indices get modified before; so reset them
           if(i == 1)
             external_indices = {{L"i_1", L"a_1"}};
           else if(i == 2)
@@ -494,7 +487,7 @@ int main(int argc, char* argv[]) {
           canonicalize(bt_expr_p);
           rapid_simplify(bt_expr_p);
           cc_st_r[i] = bt_expr_p;
-//          std::wcout << __LINE__ << "\n" << to_latex_align(cc_st_r[i], 20, 5) << "\n";
+          // std::wcout << __LINE__ << "\n" << to_latex_align(cc_st_r[i], 20, 5) << "\n";
           printf("Biorthogonal transform: %lu\n", cc_st_r[i]->size());
 
           if(factorize_S && i > 1){
@@ -519,133 +512,10 @@ int main(int argc, char* argv[]) {
       const auto tstop = std::chrono::high_resolution_clock::now();
       const std::chrono::duration<double> time_elapsed = tstop - tstart;
       printf("CC R%d size: %lu time: %5.3f sec.\n\n", i, cc_st_r[i]->size(), time_elapsed.count());
-      // std::wcout << "R" << i << ":\n" << to_latex_align(cc_st_r[i], 20, 5) << "\n";
+      std::wcout << "R" << i << ":\n" << to_latex_align(cc_st_r[i], 20, 5) << "\n";
     }
 
     return 0;
-#if 0 // Check if S is factorized correctly (get back 490 terms of CCSDT R3)
-    {
-      auto result = std::make_shared<Sum>();
-      int terms_with_S = 0;
-      int counter = 0;
-      std::cout << "\ncc_st_r[3] size: " << cc_st_r[3]->size() << "\n";
-      for (auto&& summand : *cc_st_r[3]) {
-        ++counter;
-        auto term = summand->clone();
-        if (has_tensor_label(term, L"S")) {
-          std::wcout << counter << ": " << to_latex(term) << "\n";
-          ++terms_with_S;
-
-          ExprPtr S_expanded = expand_S_operator(term);
-          int s1 = S_expanded->size();
-          std::wcout << to_latex(S_expanded) << "\n";
-
-          auto temp2 = factorize_S_operator(
-              S_expanded,
-              {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}},
-              true);
-          int s2 = temp2->as<Sum>().size();
-          std::wcout << to_latex(temp2) << "\n\n";
-
-          result->append(temp2);
-        } else {
-          result->append(term);
-        }
-//        break;
-      }
-      std::cout << "\nTerms_with_S: " << terms_with_S;
-      std::cout << "\nResult->size(): " << result->size();
-    }
-    return 0;
-#endif
-
-#if 0 // Check terms from CCSDT R3, where S is missing
-    {
-      int i_term = 0;
-      for(auto&& summand: *cc_st_r[3]){
-        ++i_term;
-        if(summand->is<Product>()){
-          if(summand->as<Product>().factor(0)->as<Tensor>().label() != L"S")
-            std::wcout << i_term << ": " << to_latex(summand) << "\n";
-        }
-      }
-    }
-    return 0;
-#endif
-
-#if 0
-    {
-      auto idx_map = biorthogonal_tran_idx_map({{L"i_1", L"a_1"}, {L"i_2",L"a_2"}, {L"i_3", L"a_3"}});
-
-      auto is_canonical = [&] (const std::map<Index, Index>& idx_map){
-        bool canonical = true;
-        for(auto&& pair: idx_map) if(pair.first != pair.second) return false;
-        return canonical;
-      };
-
-      // Get coefficients and replacement maps
-      auto btc = biorthogonal_tran_coeff(3, 1.e-12);
-
-      int i_term = 0;
-      // Check spintrace of each term
-      for (auto&& summand : *cc_r[3]) {
-        ++i_term;
-        auto term = summand->clone();
-        std::wcout << "Term: " << to_latex(term) << "\n";
-
-        auto st_term = closed_shell_spintrace(
-            term, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
-        std::wcout << "Spin traced: " << st_term->size() << " "
-                   << to_latex(st_term) << "\n";
-
-        auto S_expanded =
-            expand_S_operator(st_term);  // , {{L"i_1", L"a_1"}, {L"i_2",L"a_2"}, {L"i_3", L"a_3"}}, true);
-        std::wcout << "S_expanded: " << S_expanded->size() << " "
-                   << to_latex(S_expanded) << "\n";
-
-//        Sum bt_expr{};
-//        auto btc_ptr = btc.begin();
-//        for(auto&& map: idx_map){
-//          ExprPtr transformed_expr{};
-//          if(is_canonical(map))
-//            transformed_expr = ex<Constant>(*btc_ptr) * S_expanded;
-//          else
-//            transformed_expr = ex<Constant>(*btc_ptr) * transform_expression(S_expanded, map);
-//          btc_ptr++;
-//          bt_expr.append(transformed_expr);
-//        }
-//        ExprPtr bt_expr_p = std::make_shared<Sum>(bt_expr);
-//        std::wcout << "bt_expr_p: " << bt_expr_p->size() << " "
-//                   << to_latex(bt_expr_p) << "\n";
-
-        std::cout << "\n";
-
-        if(i_term > 5) break;
-      }
-    }
-#endif
-    // return 0;
-
-#if !CCSDT_eval
-    std::wcout << "CCSD R1: " << to_latex(cc_st_r[1]) << "\n";
-    std::wcout << "CCSD R2: " << to_latex(cc_st_r[2]) << "\n";
-#endif
-
-//    cc_st_r[1] = ex<Constant>(0.5) * cc_st_r[1];
-//    expand(cc_st_r[1]);
-//    canonicalize(cc_st_r[1]);
-//    rapid_simplify(cc_st_r[1]);
-//
-//    cc_st_r[2] = ex<Constant>(0.25) * cc_st_r[2];
-//    expand(cc_st_r[2]);
-//    canonicalize(cc_st_r[2]);
-//    rapid_simplify(cc_st_r[2]);
-
-#if CCSDT_eval
-    // cc_st_r[3] = ex<Constant>(5.0) * cc_st_r[3];
-    // expand(cc_st_r[3]);
-    // rapid_simplify(cc_st_r[3]);
-#endif
 
     std::vector<std::shared_ptr<TA::TArrayD>> data_tensors = {Fock_oo, Fock_ov, Fock_vv,
         G_oooo, G_ooov, G_oovo,  G_oovv,  G_ovov,  G_ovvo, G_vovo, G_voov, G_ovvv, G_vovv, G_vvvv,
@@ -690,11 +560,11 @@ int main(int argc, char* argv[]) {
       context_map.insert(ContextMapType::value_type(hash_val, data_tensors.at(i)));
     }
 
-    printf("R1 size: %lu\n",cc_st_r[1]->size());
-    std::wcout << to_latex(cc_st_r[1]) << "\n";
+    // printf("R1 size: %lu\n",cc_st_r[1]->size());
+    // std::wcout << to_latex(cc_st_r[1]) << "\n";
 
-    printf("R2 size: %lu\n",cc_st_r[2]->size());
-    std::wcout << to_latex(cc_st_r[2]) << "\n";
+    // printf("R2 size: %lu\n",cc_st_r[2]->size());
+    // std::wcout << to_latex(cc_st_r[2]) << "\n";
 
     // printf("R3 size: %lu\n",cc_st_r[3]->size());
     // std::wcout << to_latex(cc_st_r[3]) << "\n";
@@ -707,43 +577,9 @@ int main(int argc, char* argv[]) {
     rapid_simplify(cc_st_r[3]);
     printf("R3 size: %lu\n",cc_st_r[3]->size());
     // std::wcout << "CCSDT R3:\n" << to_latex_align(cc_st_r[3], 20) << "\n";
-/*
-    {
-      auto r3_no_S = std::make_shared<Sum>();
-      auto r3_with_S = std::make_shared<Sum>();
-      for(auto&& summand: *cc_st_r[3]){
-        if(summand->as<Product>().factor(0)->as<Tensor>().label() != L"S")
-          r3_no_S->append(summand);
-        else{
-          r3_with_S->append(summand);
-        }
-      }
-      std::wcout << "CCSDT R3 terms that don't have S operator: Size: "
-                 << r3_no_S->size() << "\n"
-                 << to_latex_align(r3_no_S, 20, 5) << std::endl;
-
-      std::cout << r3_no_S->size() << "\n";
-      auto new_result = factorize_S_operator(r3_no_S,  {{L"i_1", L"a_1"}, {L"i_3", L"a_3"}}, true);
-      std::cout << "ia, kc pairs: " << new_result->size() << "\n";
-
-      cc_st_r[3] = new_result + r3_with_S;
-      expand(cc_st_r[3]);
-      canonicalize(cc_st_r[3]);
-      rapid_simplify(cc_st_r[3]);
-      printf("R3 size: %lu\n",cc_st_r[3]->size());
-      std::wcout << "\n" << to_latex_align(cc_st_r[3], 20, 5) << "\n";
-
-      auto temp = expand_S_operator(cc_st_r[3]);
-      cc_st_r[3] = temp;
-      expand(cc_st_r[3]);
-      canonicalize(cc_st_r[3]);
-      rapid_simplify(cc_st_r[3]);
-      printf("R3 size: %lu\n",cc_st_r[3]->size());
-    }
-*/
     auto r3_tree = EvalTree(cc_st_r[3], swap_braket_labels);
+    // return 0;
 #endif
-    return 0;
 
     const auto cc_conv = conv * 1e2;
     iter = 0;
