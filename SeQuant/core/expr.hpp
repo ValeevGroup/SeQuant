@@ -1267,7 +1267,7 @@ std::decay_t<Sequence> clone(Sequence &&exprseq) {
   return std::decay_t<Sequence>(ranges::begin(cloned_seq), ranges::end(cloned_seq));
 }
 
-};  // namespace sequant
+}  // namespace sequant
 
 #include "expr_operator.hpp"
 

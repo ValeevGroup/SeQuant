@@ -1,3 +1,4 @@
+#include <SeQuant/domain/evaluate/eval_tree.hpp>
 #include "../sequant_setup.hpp"
 
 using namespace sequant;
@@ -31,27 +32,27 @@ int main(int argc, char* argv[]) {
   // change to true to print stats
   Logger::get_instance().wick_stats = false;
 
-    ranges::for_each(std::array<bool, 2>{false, true}, [=](const bool screen) {
-      ranges::for_each(
-          std::array<bool, 2>{false, true}, [=](const bool use_topology) {
-            ranges::for_each(std::array<bool, 2>{false, true},
-                             [=](const bool canonical_only) {
-                               tpool.clear();
-                               // comment out to run all possible combinations
-                               if (screen && use_topology && canonical_only)
-                                 compute_all{NMAX}(print, screen, use_topology,
-                                                   true, canonical_only);
-                             });
-          });
-    });
+  // ranges::for_each(std::array<bool, 2>{false, true}, [=](const bool screen) {
+  //   ranges::for_each(
+  //       std::array<bool, 2>{false, true}, [=](const bool use_topology) {
+  //         ranges::for_each(std::array<bool, 2>{false, true},
+  //                          [=](const bool canonical_only) {
+  //                            tpool.clear();
+  //                            // comment out to run all possible combinations
+  //                            if (screen && use_topology && canonical_only)
+  //                              compute_all{NMAX}(print, screen, use_topology,
+  //                                                true, canonical_only);
+  //                          });
+  //       });
+  // });
 
-  auto cc_r = cceqvec{ 3, 3 }(true, true, true, true);
-  auto prod = (*cc_r[2]->begin())->as<Product>();
-  for (const auto& fac: prod){
-    auto tensor = fac->as<Tensor>();
-    std::wcout << "symmetry = " << int(tensor.symmetry())
-    << " braket_symmetry = "
-    << int(tensor.braket_symmetry()) << std::endl;
-  }
+  auto cc_r = cceqvec{2, 2}(true, true, true, true);
+
+  SumPtr sum = std::make_shared<Sum>();
+  for (auto ii = 0; ii < 4; ++ii) sum->append(cc_r[2]->at(ii));
+
+  auto treeCCD = evaluate::EvalTree(sum);
+  treeCCD.digraph(std::wcout);
+
   return 0;
 }

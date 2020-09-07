@@ -141,7 +141,23 @@ HashType EvalTreeInternalNode::hash_node() const {
   return imed_hash_value;
 }
 
-bool EvalTreeLeafNode::is_leaf() const { return true; }
+std::wstring EvalTreeInternalNode::to_latex() const {
+    std::wostringstream tex;
+
+    tex << L"I_{"; // All intermediates have the tensor label I
+
+    for (auto ii = 0;  ii < indices().size()/2; ++ii)
+        tex << indices().at(ii).to_latex();
+    tex << L"}^{";
+
+    for (auto ii = indices().size()/2; ii < indices().size(); ++ii)
+        tex << indices().at(ii).to_latex();
+    tex << L"}";
+
+    return tex.str();
+}
+
+    bool EvalTreeLeafNode::is_leaf() const { return true; }
 
 void EvalTreeLeafNode::swap_labels() {
   // based on the previous state
@@ -230,11 +246,15 @@ HashType EvalTreeLeafNode::hash_node() const {
 EvalTreeLeafNode::EvalTreeLeafNode(const ExprPtr& tnsr_expr,
                                    bool canonize_braket)
     : expr_{tnsr_expr} {
-  swapped_labels_ = canonize_braket ? canonize_swap(expr()) : false;
+  swapped_labels_ = canonize_braket && canonize_swap(expr());
 
   set_labels();
 
   this->update_hash();
+}
+
+std::wstring EvalTreeLeafNode::to_latex() const {
+        return expr()->to_latex();
 }
 
 }  // namespace sequant::evaluate

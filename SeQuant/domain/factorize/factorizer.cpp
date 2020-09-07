@@ -419,79 +419,45 @@ ExprPtr fuse_pair(const ExprPtr& expr1, const ExprPtr& expr2,
   return result;
 }
 
-ExprPtr make_intermediate(const ExprPtr& expr1, const ExprPtr& expr2,
-                          const ExprPtr& symOp, evaluate::Operation arithOp) {
-  ExprPtr imed{nullptr};
+Expr::hash_type ispace_hasher(const Index& idx) {
+  static boost::hash<std::size_t> size_t_hasher{};
+  // IndexSpace::space().type() is explicitly cast to std::size_t
+  return size_t_hasher(static_cast<std::size_t>(idx.space().type()));
+}
 
-  if (arithOp == evaluate::Operation::SUM) {
-    auto imed = std::make_shared<Sum>();
-    imed->append(expr1);
-    imed->append(expr2);
-  } else {
-    auto imed = std::make_shared<Product>();
-    imed->append(expr1);
-    imed->append(expr2);
-  }
+// hash and combine index spaces of Indexes from a container
+Expr::hash_type ispace_container_hasher(
+    const std::decay_t<decltype(Tensor().bra())>& cont) {
+  auto result = Expr::hash_type{};
+  for (const auto& idx : cont) boost::hash_combine(result, ispace_hasher(idx));
+  return result;
+}
 
-  const auto imed_hash = evaluate::EvalTree(imed).hash_value();
+Expr::hash_type tensor_hasher(const std::shared_ptr<const Expr> & expr) {
+  auto& tnsr = expr->as<Tensor>();
+  auto result = Expr::hash_type{};
+  static boost::hash<decltype(Tensor().label())> label_hasher{};
+  boost::hash_combine(result, label_hasher(tnsr.label()));
+  boost::hash_combine(result, ispace_container_hasher(tnsr.bra()));
+  boost::hash_combine(result, ispace_container_hasher(tnsr.ket()));
+  return result;
+}
 
-  // auto tn = TensorNetwork(imed);
+Expr::hash_type product_hasher(const std::shared_ptr<const Expr> & expr) {
+  auto& prod = expr->as<Product>();
+  container::svector<Expr::hash_type> factors_hash(prod.factors().size());
+  for (auto ii = 0; ii < prod.factors().size(); ++ii)
+      factors_hash[ii] = prod.factors().at(ii)->hash_value(expr_hasher);
+  // for (const auto& fact : prod.factors()) fact->hash_value(;
+}
 
-  auto& tnsr1 = expr1->as<Tensor>();
-  auto& tnsr2 = expr2->as<Tensor>();
-
-  container::set<Index> idx1, idx2;
-
-  idx1.reserve(tnsr1.rank());
-  idx2.reserve(tnsr2.rank());
-
-  idx1.insert(tnsr1.const_braket().begin(), tnsr1.const_braket().end());
-  idx2.insert(tnsr2.const_braket().begin(), tnsr2.const_braket().end());
-
-  // canonicalization
-  auto tn = expr_to_tnet(imed, symOp);
-  auto namedIdx = TensorNetwork::named_indices_t{};
-  auto phase = tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
-                               false, &namedIdx);
-  if (!phase) phase = std::make_shared<Constant>(Constant{1});
-
-  auto canon_prod = tnet_to_expr(tn, symOp->as<Tensor>().label());
-
-  // figure the product's bra and ket
-  container::svector<Index> prod_bra{}, prod_ket{};
-
-  // if 'item' exists in iterable, remove it
-  // if 'item' doesn't exist in iterable, append it
-  auto collect_unique = [](auto& iterable, const auto& items) {
-    for (const auto item : items) {
-      auto it = iterable.begin();
-      for (; it != iterable.end(); ++it) {
-        if (*it == item) iterable.erase(it);
-        break;
-      }
-      if (it == iterable.end()) iterable.push_back(item);
-    }
-  };
-
-  collect_unique(prod_bra, tnsr1.bra());
-  collect_unique(prod_bra, tnsr2.bra());
-
-  collect_unique(prod_ket, tnsr1.ket());
-  collect_unique(prod_ket, tnsr2.ket());
-
-  auto imed_tensor_ptr = std::make_shared<Tensor>(
-      Tensor{L"I", prod_bra, prod_ket, Symmetry::nonsymm,
-             BraKetSymmetry::nonsymm, ParticleSymmetry::nonsymm});
-
-  // update hash value
-  //
-  auto& imed_tensor = imed_tensor_ptr->as<Tensor>();
-  auto hasher = [&imed_hash](const std::shared_ptr<const Expr>&) {
-    return imed_hash;
-  };
-  imed_tensor.hash_value(hasher);
-
-  return imed_tensor_ptr;
+Expr::hash_type expr_hasher(const std::shared_ptr<const Expr> & expr) {
+    if (expr->is<Tensor>())
+        return tensor_hasher(expr);
+    else if (expr->is<Sum>())
+        return sum_hasher(expr);
+    else
+        return product_hasher(expr);
 }
 
 }  // namespace sequant::factorize

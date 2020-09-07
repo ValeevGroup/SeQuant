@@ -9,6 +9,7 @@
 #include <functional>
 #include <memory>
 #include <numeric>
+#include <ostream>
 
 namespace sequant::evaluate {
 ///
@@ -56,7 +57,13 @@ class EvalTree {
 
   /// Visit the tree by pre-order traversal.
   /// ie. Node is visited first followed by left node and then right node.
-  void visit(const std::function<void(const EvalNodePtr&)>& visitor);
+  void visit(std::function<void(const std::shared_ptr<const EvalTreeNode>&)>
+                 visitor) const;
+
+  /// Generate a directed graph of the hash values of the tree.
+  /// @param stream std::wostream that will be written with the
+  /// generated digraph code in the dot language.
+  void digraph(std::wostream& stream) const;
 
   /// Swap labels of leaf nodes made out of such sequant tensor object whose
   /// to_latex() result matches that of @c expr.
@@ -82,8 +89,9 @@ class EvalTree {
   static EvalNodePtr build_prod(const ExprPtr& expr, bool canonize_leaf_braket);
 
   /// visit each node
-  static void _visit(const EvalNodePtr& node,
-                     const std::function<void(const EvalNodePtr&)>& visitor);
+  static void _visit(
+      const std::shared_ptr<const EvalTreeNode>& node,
+      std::function<void(const std::shared_ptr<const EvalTreeNode>&)> visitor);
 
   /// Get operation counts of a node.
   static OpsCount _ops_count(
@@ -95,6 +103,36 @@ class EvalTree {
   static bool _swap_braket_labels(
       const EvalNodePtr& node,
       const std::function<bool(const EvalTreeLeafNode&)>& predicate);
+
+  ///
+  /// For generating digraphs.
+  ///
+  struct NodeInfo {
+    /// Identifier of the node in a tree.
+    size_t id;
+    /// hash value of the EvalTree node
+    Expr::hash_type hash;
+    /// latex code
+    std::wstring label;
+  };
+
+  /// Write directed graph of the tree.
+  ///
+  /// @param node Node to start writing graph from.
+  ///
+  /// @param node_count The node count for @c node.
+  ///
+  /// @param global_node_count Total number of nodes visited so far. May get
+  /// incremented
+  ///
+  /// @param node_defs A vector of NodeInfo objects.
+  ///
+  /// @param stream Out stream that will be written with the graph data in the
+  /// dot language
+  static void _digraph(std::shared_ptr<const EvalTreeNode> node,
+                       size_t node_count, size_t& global_node_count,
+                       container::vector<NodeInfo>& node_defs,
+                       std::wostream& stream);
 
   ///
   /// Compute permutation of ordinals with phase.

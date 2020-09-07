@@ -117,10 +117,8 @@ std::tuple<ExprPtr, ExprPtr> factorize_pair(const ExprPtr& expr1,
 ExprPtr fuse_pair(const ExprPtr& expr1, const ExprPtr& expr2,
                   const ExprPtr& symOp);
 
-/// @param symOp ExprPtr to 'S' or 'A' type tensor
-/// @param arithOp evaluate::Operation type
-ExprPtr make_intermediate(const ExprPtr& expr1, const ExprPtr& expr2,
-                          const ExprPtr& symOp, evaluate::Operation arithOp);
+/// IndexSpace based Expr hasher.
+Expr::hash_type expr_hasher(const std::shared_ptr<const Expr> & expr);
 
 }  // namespace sequant::factorize
 

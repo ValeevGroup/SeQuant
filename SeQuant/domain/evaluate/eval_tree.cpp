@@ -3,7 +3,10 @@
 
 #include <SeQuant/core/tensor.hpp>
 
+#include <ctime>
 #include <memory>
+#include <random>
+#include <sstream>
 
 namespace sequant::evaluate {
 
@@ -18,8 +21,105 @@ OpsCount EvalTree::ops_count(
   return _ops_count(root, ispace_size_map);
 }
 
-void EvalTree::visit(const std::function<void(const EvalNodePtr&)>& visitor) {
+void EvalTree::visit(
+    std::function<void(const std::shared_ptr<const EvalTreeNode>&)> visitor)
+    const {
   _visit(root, visitor);
+}
+
+auto hsv_to_rgb = [](double h, double s, double v) {
+  // https://martin.ankerl.com/2009/12/09/how-to-create-random-colors-programmatically/
+  int h_i = (int)(h * 6);
+  double f = h * 6 - h_i;
+  double p = v * (1 - s);
+  double q = v * (1 - f * s);
+  double t = v * (1 - (1 - f) * s);
+
+  double r, g, b;
+  r = g = b = -1.;
+
+  if (h_i == 0) {
+    r = v;
+    g = t;
+    b = p;
+  } else if (h_i == 1) {
+    r = q;
+    g = v;
+    b = p;
+  } else if (h_i == 2) {
+    r = p;
+    g = v;
+    b = t;
+  } else if (h_i == 3) {
+    r = p;
+    g = q;
+    b = v;
+  } else if (h_i == 4) {
+    r = t;
+    g = p;
+    b = v;
+  } else if (h_i == 5) {
+    r = v;
+    g = p;
+    b = q;
+  }
+
+  std::wostringstream rgb;
+  rgb << std::hex;
+  for (auto c : {r, g, b}) rgb << (int)(256 * c);
+
+  return rgb.str();
+};
+
+void EvalTree::digraph(std::wostream& stream) const {
+  container::vector<NodeInfo> node_definitions{};
+  size_t globalNodeCount = 0;
+  node_definitions.push_back(
+      NodeInfo{globalNodeCount, root->hash_value(), root->to_latex()});
+
+  std::wostringstream oss;
+  _digraph(root, 0, globalNodeCount, node_definitions, oss);
+  oss.flush();
+
+  container::map<size_t, size_t> hash_counts;
+  for (auto& def : node_definitions) {
+    if (auto found = hash_counts.find(def.hash); found != hash_counts.end())
+      found->second += 1;
+    else
+      hash_counts.insert(decltype(hash_counts)::value_type(def.hash, 1));
+  }
+
+  //
+  // Generate random RGB color code for repeating node labels
+  //
+  std::random_device seeder;
+  const auto seed = seeder.entropy() ? seeder() : std::time(nullptr);
+  std::mt19937_64 randEngine(static_cast<std::mt19937::result_type>(seed));
+  std::uniform_real_distribution<double> dist;
+  const double GOLDEN_RATIO_CONJ = 0.618033988749895;
+
+  container::map<size_t, std::wstring> hash_to_color;
+  for (const auto& cc : hash_counts) {
+    if (cc.second > 1) {  // repeating hash
+      auto hue = GOLDEN_RATIO_CONJ + dist(randEngine);
+      hue = hue > 1 ? hue - 1 : hue;
+      hash_to_color.insert(decltype(hash_to_color)::value_type(
+          cc.first, hsv_to_rgb(hue, 0.5, 0.95)));
+    }
+  }
+
+  stream << "digraph EvalTree {\n";
+
+  for (const auto& ndef : node_definitions) {
+    stream << "node" << ndef.id << " [texlbl = \"$" << ndef.label << "$\"";
+    if (auto cc = hash_to_color.find(ndef.hash); cc != hash_to_color.end()) {
+      stream << ", color=\"#" << cc->second << "\"";
+      stream << ", style=filled";
+    }
+    stream << "];\n";
+  }
+  stream << std::endl << oss.str();
+  stream << "}" << std::endl;
 }
 
 bool EvalTree::swap_labels(const ExprPtr& expr) {
@@ -58,17 +158,47 @@ OpsCount EvalTree::_ops_count(
          _ops_count(intrnl_node->right(), ispace_size_map);
 }
 
-void EvalTree::_visit(const EvalNodePtr& node,
-                      const std::function<void(const EvalNodePtr&)>& visitor) {
+void EvalTree::_visit(
+    const std::shared_ptr<const EvalTreeNode>& node,
+    std::function<void(const std::shared_ptr<const EvalTreeNode>&)> visitor) {
   if (node->is_leaf()) {
     visitor(node);
     return;
   }
 
   visitor(node);
-  auto intrnl_node = std::dynamic_pointer_cast<EvalTreeInternalNode>(node);
+  auto intrnl_node =
+      std::dynamic_pointer_cast<const EvalTreeInternalNode>(node);
   _visit(intrnl_node->left(), visitor);
   _visit(intrnl_node->right(), visitor);
+}
+
+void EvalTree::_digraph(std::shared_ptr<const EvalTreeNode> node,
+                        size_t node_count, size_t& global_node_count,
+                        container::vector<NodeInfo>& node_defs,
+                        std::wostream& stream) {
+  if (node->is_leaf()) return;
+  const auto intrnl_node =
+      std::dynamic_pointer_cast<const EvalTreeInternalNode>(node);
+
+  ++global_node_count;
+  node_defs.push_back(NodeInfo{global_node_count,
+                               intrnl_node->left()->hash_value(),
+                               intrnl_node->left()->to_latex()});
+  ++global_node_count;
+  node_defs.push_back(NodeInfo{global_node_count,
+                               intrnl_node->right()->hash_value(),
+                               intrnl_node->right()->to_latex()});
+
+  auto leftNodeCount = global_node_count - 1;
+  auto rightNodeCount = global_node_count;
+  stream << "node" << node_count << " -> {"
+         << "node" << leftNodeCount << ", node" << rightNodeCount << "};\n";
+
+  _digraph(intrnl_node->left(), leftNodeCount, global_node_count, node_defs,
+           stream);
+  _digraph(intrnl_node->right(), rightNodeCount, global_node_count, node_defs,
+           stream);
 }
 
 bool EvalTree::_swap_braket_labels(

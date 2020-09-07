@@ -180,8 +180,8 @@ add_library(SeQuant
         SeQuant/domain/evaluate/eval_tree.cpp
         SeQuant/domain/evaluate/eval_tree_node.hpp
         SeQuant/domain/evaluate/eval_tree_node.cpp
-        SeQuant/domain/factorize/factorizer.hpp
-        SeQuant/domain/factorize/factorizer.cpp
+        #SeQuant/domain/factorize/factorizer.hpp
+        #SeQuant/domain/factorize/factorizer.cpp
         SeQuant/domain/evaluate/path_tree.hpp
         SeQuant/domain/evaluate/path_tree.cpp
         SeQuant/domain/mbpt/convention.cpp
@@ -238,9 +238,9 @@ set(utests_src
     # tests/unit/test_factorizer.cpp
     SeQuant/domain/factorize/inferred_imed_data.hpp
     tests/unit/test_inferred_imed_data.cpp
-    SeQuant/domain/factorize/imed_tensor.hpp
-    SeQuant/domain/factorize/imed_tensor.cpp
-    tests/unit/test_imed_tensor.cpp
+    #SeQuant/domain/factorize/imed_tensor.hpp
+    #SeQuant/domain/factorize/imed_tensor.cpp
+    #tests/unit/test_imed_tensor.cpp
     )
 
 set(utests_deps SeQuant)
@@ -248,7 +248,7 @@ set(utests_deps SeQuant)
 if (TARGET tiledarray)
   list(APPEND utests_src
       ## unit tests for evaluation
-      # tests/unit/test_eval_tree.cpp
+      tests/unit/test_eval_tree.cpp
       # tests/unit/test_path_tree.cpp
       )
   list(APPEND utests_deps tiledarray)

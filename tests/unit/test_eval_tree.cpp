@@ -259,6 +259,24 @@ TEST_CASE("OPS_COUNT TESTS", "[eval_tree]") {
   }
 }
 
+TEST_CASE("Digraph generation", "[eval_tree]") {
+  auto prod1 = std::make_shared<Product>(
+      Product(1 / 16.0, {make_tensor_expr({"A", "i_1", "i_2", "a_1", "a_2"}),
+                         make_tensor_expr({"g", "i_3", "i_4", "a_3", "a_4"}),
+                         make_tensor_expr({"t", "a_1", "a_2", "i_3", "i_4"}),
+                         make_tensor_expr({"t", "a_3", "a_4", "i_1", "i_2"})}));
+
+  auto prod2 = std::make_shared<Product>(
+      Product(-1., {make_tensor_expr({"A", "i_1", "i_2", "a_1", "a_2"}),
+                    make_tensor_expr({"g", "i_3", "a_1", "a_3", "a_4"}),
+                    make_tensor_expr({"t", "a_3", "i_1"}),
+                    make_tensor_expr({"t", "a_2", "a_4", "i_2", "i_3"})}));
+
+  auto sum = std::make_shared<Sum>(Sum{prod1, prod2});
+
+  EvalTree(sum).digraph(std::wcout);
+}
+
 TEST_CASE("EVALUATIONS TESTS", "[eval_tree]") {
   using DTensorType = TA::TArrayD;
   using ContextMapType =

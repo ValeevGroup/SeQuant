@@ -20,7 +20,7 @@ class EvalTreeNode {
 
   /// Hashing method for the node. All derived classes should implement their
   /// own hashing methods with this name.
-  virtual HashType hash_node() const = 0;
+  [[nodiscard]] virtual HashType hash_node() const = 0;
 
  public:
   /// Default destructor made virtual.
@@ -31,7 +31,10 @@ class EvalTreeNode {
   const IndexContainer& indices() const;
 
   /// Get the hash value of the node.
-  HashType hash_value() const;
+  [[nodiscard]] HashType hash_value() const;
+
+  /// Update the hash value of the node.
+  void update_hash();
 
   /// Get the scalar of the node.
   ScalarType scalar() const;
@@ -39,8 +42,8 @@ class EvalTreeNode {
   /// Set the scalar of the node.
   void scale(ScalarType);
 
-  /// Update the hash value of the node.
-  void update_hash();
+  /// Get the LaTex code for the node.
+  virtual std::wstring to_latex() const = 0;
 
   /// Check if the node is a leaf node.
   virtual bool is_leaf() const = 0;
@@ -75,6 +78,9 @@ class EvalTreeInternalNode : public EvalTreeNode {
 
   /// Get operation type.
   Operation operation() const;
+
+  /// Get the LaTeX code for the node.
+  std::wstring to_latex() const override;
 
   /// Returns false as internal node is not leaf.
   bool is_leaf() const override;
@@ -121,6 +127,9 @@ class EvalTreeLeafNode : public EvalTreeNode {
 
   /// Getter of the pointer to the SeQuant Expr associated to this object.
   const ExprPtr& expr() const;
+
+ /// Get the LaTeX code for the node.
+ std::wstring to_latex() const override;
 
   /// Returns true as this object is a leaf node.
   bool is_leaf() const override;
