@@ -367,10 +367,7 @@ ExprPtr r3(const int r){
         P_ij_mn.emplace(std::make_pair(m, n));
         P_ij_mn.emplace(std::make_pair(n, m));
       }
-      auto W_ijnm = W_ijnm_temp_c->clone() + transform_expression(W_ijnm_temp_c->clone(), P_ij_mn);
-      std::wcout << "W_ijnm: " << to_latex(W_ijnm) << "\n";
-      expand(W_ijnm);
-      std::wcout << "W_ijnm: " << to_latex(W_ijnm) << "\n";
+      W_ijnm = W_ijnm_temp_c->clone() + transform_expression(W_ijnm_temp_c->clone(), P_ij_mn);
     }
 
 
@@ -389,12 +386,13 @@ ExprPtr r3(const int r){
     container::svector<Index> nij = {n, i, j};
     container::svector<Index> fae = {f, a, e};
 
-    W_ijam = W__ijam +
-             ex<Constant>(1./2) * (ex<Constant>(2.0) * ex<Tensor>(L"g", WstrList{L"a_5", L"i_2"}, WstrList{L"i_6", L"i_5"}, Symmetry::nonsymm) - ex<Tensor>(L"g", WstrList{L"a_5", L"i_2"}, WstrList{L"i_5", L"i_6"}, Symmetry::nonsymm)) *
+    W_ijam = W__ijam->clone() +
+             ex<Constant>(1./2) *
+                 (ex<Constant>(2.0) * ex<Tensor>(L"g", WstrList{L"a_5", L"i_2"}, WstrList{L"i_6", L"i_5"}, Symmetry::nonsymm) - ex<Tensor>(L"g", WstrList{L"a_5", L"i_2"}, WstrList{L"i_5", L"i_6"}, Symmetry::nonsymm)) *
                  (ex<Constant>(2.0) * ex<Tensor>(L"t", WstrList{L"i_6", L"i_1"}, WstrList{L"a_5", L"a_1"}, Symmetry::nonsymm) - ex<Tensor>(L"t", WstrList{L"i_6", L"i_1"}, WstrList{L"a_1", L"a_5"}, Symmetry::nonsymm)) -
-             P_g_t2 -
-             W_ijnm * ex<Tensor>(L"t", WstrList{L"i_6"}, WstrList{L"a_1"}, Symmetry::nonsymm) +
-             F_em * ex<Tensor>(L"t", WstrList{L"i_1", L"i_2"}, WstrList{L"a_1", L"a_5"}, Symmetry::nonsymm) +
+             P_g_t2->clone() -
+             W_ijnm->clone() * ex<Tensor>(L"t", WstrList{L"i_6"}, WstrList{L"a_1"}, Symmetry::nonsymm) +
+             F_em->clone() * ex<Tensor>(L"t", WstrList{L"i_1", L"i_2"}, WstrList{L"a_1", L"a_5"}, Symmetry::nonsymm) +
              ex<Tensor>(L"g", WstrList{L"a_5", L"a_6"}, WstrList{L"i_5", L"i_6"}, Symmetry::nonsymm) * expanded_T3(nij, fae);
   }
 
@@ -456,7 +454,7 @@ ExprPtr r3(const int r){
 
     // 46
     auto W___iema = ex<Tensor>(L"g", WstrList{L"i_1", L"a_5"}, WstrList{L"i_5", L"a_1"}, Symmetry::nonsymm) -
-        ex<Tensor>(L"g", WstrList{L"a_5", L"a_6"}, WstrList{L"i_6", L"i_5"}, Symmetry::nonsymm) * ex<Tensor>(L"t", WstrList{L"i_1", L"i_6"}, WstrList{L"i_5", L"a_1"}, Symmetry::nonsymm);
+        ex<Tensor>(L"g", WstrList{L"a_5", L"a_6"}, WstrList{L"i_6", L"i_5"}, Symmetry::nonsymm) * ex<Tensor>(L"t", WstrList{L"i_1", L"i_6"}, WstrList{L"a_6", L"a_1"}, Symmetry::nonsymm); // <======
 
     W_iema = W__iema + ex<Constant>(0.5) * W___iema - ex<Constant>(0.5) * ex<Tensor>(L"g", WstrList{L"i_1", L"a_5"}, WstrList{L"i_5", L"a_1"}, Symmetry::nonsymm);
   }
@@ -484,7 +482,8 @@ ExprPtr r3(const int r){
     P_ab.emplace(std::make_pair(a, b));
     P_ab.emplace(std::make_pair(b, a));
 
-    auto term = W_iema * ex<Tensor>(L"t", WstrList{ L"i_2", L"i_5", L"i_3"}, WstrList{L"a_5", L"a_2", L"a_3"});
+    auto term = W_iema->clone() * ex<Tensor>(L"t", WstrList{ L"i_2", L"i_5", L"i_3"}, WstrList{L"a_5", L"a_2", L"a_3"});
+    expand(term);
     P_W_T3 = ex<Constant>(0.5) * term->clone() + transform_expression(term->clone(), P_ab);
   }
 
@@ -518,11 +517,12 @@ ExprPtr r3(const int r){
         ex<Tensor>(L"g", WstrList{L"a_5", L"a_6"}, WstrList{L"a_1", L"i_5"}, Symmetry::nonsymm) * ex<Tensor>(L"t", WstrList{ L"i_5"}, WstrList{L"a_2"}) +
         ex<Constant>(0.5) * ex<Tensor>(L"g", WstrList{L"a_5", L"a_6"}, WstrList{L"i_5", L"i_6"}, Symmetry::nonsymm) *
         (ex<Tensor>(L"t", WstrList{ L"i_5", L"i_6"}, WstrList{L"a_1", L"a_2"}) + ex<Tensor>(L"t", WstrList{L"i_5"}, WstrList{L"a_1"}) * ex<Tensor>(L"t", WstrList{L"i_6"}, WstrList{L"a_2"}));
-    auto temp = terms->clone();
-    W_efab = terms->clone() + transform_expression(temp, P_ef_ab);
+    expand(terms);
+    W_efab = terms->clone() + transform_expression(terms->clone(), P_ef_ab);
   }
 
-  auto ccsdt_r3 = W_ejab->clone() * ex<Tensor>(L"t", WstrList{ L"i_1", L"i_3"}, WstrList{L"a_5", L"a_3"}) - // W.t2
+  auto ccsdt_r3 =
+      W_ejab->clone() * ex<Tensor>(L"t", WstrList{ L"i_1", L"i_3"}, WstrList{L"a_5", L"a_3"}) -
       W_ijam->clone() * ex<Tensor>(L"t", WstrList{ L"i_5", L"i_3"}, WstrList{L"a_2", L"a_3"}) +
       ex<Constant>(0.5) * F_ea->clone() * ex<Tensor>(L"t", WstrList{ L"i_1", L"i_2", L"i_3"}, WstrList{L"a_5", L"a_2", L"a_3"}) -
       ex<Constant>(0.5) * F_im->clone() * ex<Tensor>(L"t", WstrList{ L"i_5", L"i_2", L"i_3"}, WstrList{L"a_1", L"a_2", L"a_3"}) +
@@ -532,10 +532,10 @@ ExprPtr r3(const int r){
       ex<Constant>(0.5) * W_efab * ex<Tensor>(L"t", WstrList{ L"i_1", L"i_2", L"i_3"}, WstrList{L"a_5", L"a_6", L"a_3"});
 
   expand(ccsdt_r3);
-
-  ccsdt_r3 = ex<Tensor>(L"S", WstrList{L"a_1", L"a_2", L"a_3"}, WstrList{L"i_1", L"i_2", L"i_3"}) * ccsdt_r3->clone();
-  expand(ccsdt_r3);
   ccsdt_r3 = swap_bra_ket(ccsdt_r3);
+
+  ccsdt_r3 = ex<Tensor>(L"S", WstrList{L"i_1", L"i_2", L"i_3"}, WstrList{L"a_1", L"a_2", L"a_3"}) * ccsdt_r3->clone();
+  // expand(ccsdt_r3);
   simplify(ccsdt_r3);
   return ccsdt_r3;
 }
