@@ -1,18 +1,21 @@
 //
 // Created by Nakul Teke on 3/18/20.
 //
-#include "../../examples/contract/scf/hartree-fock.h"
-#include "../sequant_setup.hpp"
+//#include "../../examples/contract/scf/hartree-fock.h"
+//#include "../sequant_setup.hpp"
 
-#include <SeQuant/domain/evaluate/eval_tree.hpp>
+//#include <SeQuant/domain/evaluate/eval_tree.hpp>
+//
+//#include <TiledArray/initialize.h>
+//#include <tiledarray.h>
+//#include <libint2.hpp>
+//
+//#include <memory>
 
-#include <TiledArray/initialize.h>
-#include <tiledarray.h>
-#include <libint2.hpp>
+#include "ms_cc_r.h"
 
-#include <memory>
-
-#define CCSDT_eval 0
+#define CCSDT_eval 1
+#define CCSDTQ 0
 
 container::vector<double> biorthogonal_tran_coeff(const int n_particles, const double& threshold);
 std::vector<std::map<Index, Index>> biorthogonal_tran_idx_map(const std::initializer_list<IndexList> ext_index_groups);
@@ -237,11 +240,19 @@ int main(int argc, char* argv[]) {
 #if CCSDT_eval
     TA::TiledRange tr_ooovvv{{0, ndocc},  {0, ndocc},  {0, ndocc},
                               {0, nvirt}, {0, nvirt}, {0, nvirt}};
+#if CCSDTQ
+    TA::TiledRange tr_oooovvvv{{0, ndocc}, {0, ndocc},  {0, ndocc}, {0, ndocc},
+                               {0, nvirt}, {0, nvirt}, {0, nvirt}, {0, nvirt}};
+
+#endif
 #endif
     auto D_ov = std::make_shared<TA::TArrayD>(world, tr_ov);
     auto D_oovv = std::make_shared<TA::TArrayD>(world, tr_oovv);
 #if CCSDT_eval
     auto D_ooovvv = std::make_shared<TA::TArrayD>(world, tr_ooovvv);
+#if CCSDTQ
+    auto D_oooovvvv = std::make_shared<TA::TArrayD>(world, tr_oooovvvv);
+#endif
 #endif
     auto Fock_oo = std::make_shared<TA::TArrayD>(world, tr_oo);
     auto Fock_ov = std::make_shared<TA::TArrayD>(world, tr_ov);
@@ -262,6 +273,9 @@ int main(int argc, char* argv[]) {
     (*D_oovv).fill(0.0);
 #if CCSDT_eval
     (*D_ooovvv).fill(0.0);
+#if CCSDTQ
+    (*D_oooovvvv).fill(0.0);
+#endif
 #endif
     (*Fock_oo).fill(0.0);
     (*Fock_ov).fill(0.0);
@@ -282,6 +296,9 @@ int main(int argc, char* argv[]) {
     auto tile_D_oovv = (*D_oovv).find({0, 0, 0, 0}).get();
 #if CCSDT_eval
     auto tile_D_ooovvv = (*D_ooovvv).find({0, 0, 0, 0, 0, 0}).get();
+#if CCSDTQ
+    auto tile_D_oooovvvv = (*D_oooovvvv).find({0, 0, 0, 0, 0, 0, 0, 0}).get();
+#endif
 #endif
     auto tile_Fock_oo = (*Fock_oo).find({0, 0}).get();
     auto tile_Fock_ov = (*Fock_ov).find({0, 0}).get();
@@ -361,6 +378,19 @@ int main(int argc, char* argv[]) {
                     tile_D_oovv(i, j, a, b) + tile_D_ov(k, c);
 #endif
 
+#if CCSDTQ
+    for (auto i = 0; i < ndocc; ++i)
+      for (auto j = 0; j < ndocc; ++j)
+        for (auto k = 0; k < ndocc; ++k)
+          for (auto l = 0; l < ndocc; ++l)
+          for (auto a = 0; a < nvirt; ++a)
+            for (auto b = 0; b < nvirt; ++b)
+              for (auto c = 0; c < nvirt; ++c)
+                for (auto d = 0; d < nvirt; ++d)
+                tile_D_oooovvvv(i, j, k, l, a, b, c, d) =
+                    tile_D_ooovvv(i, j, k, a, b, c) + tile_D_ov(l, d);
+#endif
+
     //
     // amplitudes for coupled-cluster calculations
     auto t_ov = std::make_shared<TA::TArrayD>(world, tr_ov);
@@ -371,6 +401,10 @@ int main(int argc, char* argv[]) {
 #if CCSDT_eval
     auto t_ooovvv = std::make_shared<TA::TArrayD>(world, tr_ooovvv);
     (*t_ooovvv).fill(0.0);
+#if CCSDTQ
+    auto t_oooovvvv = std::make_shared<TA::TArrayD>(world, tr_oooovvvv);
+    (*t_oooovvvv).fill(0.0);
+#endif
 #endif
 
     //
@@ -392,6 +426,8 @@ int main(int argc, char* argv[]) {
         std::make_shared<DefaultTensorCanonicalizer>());
     Logger::get_instance().wick_stats = false;
 
+#define MS_CC_EQ 1
+#if !MS_CC_EQ
     cout << "\n"
          << "***********************************\n";
 #if CCSDT_eval // CCSDT
@@ -410,11 +446,12 @@ int main(int argc, char* argv[]) {
     bool bt = true;
     bool factorize_S = true;
 
-
     // SPIN TRACE THE CC RESIDUAL EQUATIONS
     std::vector<ExprPtr> cc_st_r(cc_r.size());
+
+
     for (int i = 1; i < cc_r.size(); ++i){
-      std::wcout << "CC R" << i << ":\n" << to_latex_align(cc_r[i], 20, 5) << "\n";
+      // std::wcout << "CC R" << i << ":\n" << to_latex_align(cc_r[i], 20, 5) << "\n";
       const auto tstart = std::chrono::high_resolution_clock::now();
       std::initializer_list<IndexList> external_indices = {{}};
       if(i == 1)
@@ -431,7 +468,7 @@ int main(int argc, char* argv[]) {
       canonicalize(cc_st_r[i]);
 
       if(i<3){
-        std::wcout <<  __LINE__ << to_latex_align(cc_st_r[i], 20, 5) << "\n";
+        // std::wcout <<  __LINE__ << to_latex_align(cc_st_r[i], 20, 5) << "\n";
       }
       printf("R%d Spin-orbit: %lu terms;\nSPINTRACED: With S operator: %lu;", i, cc_r[i]->size(), cc_st_r[i]->size());
       if(expand_S){
@@ -512,10 +549,28 @@ int main(int argc, char* argv[]) {
       const auto tstop = std::chrono::high_resolution_clock::now();
       const std::chrono::duration<double> time_elapsed = tstop - tstart;
       printf("CC R%d size: %lu time: %5.3f sec.\n\n", i, cc_st_r[i]->size(), time_elapsed.count());
-      std::wcout << "R" << i << ":\n" << to_latex_align(cc_st_r[i], 20, 5) << "\n";
+      // std::wcout << "R" << i << ":\n" << to_latex_align(cc_st_r[i], 20, 5) << "\n";
     }
-
-    return 0;
+    auto ccsdt_r1 = cc_st_r[1];
+    auto ccsdt_r2 = cc_st_r[2];
+#if CCSDT_eval
+    auto ccsdt_r3 = cc_st_r[3];
+#endif
+#else
+    auto ccsdt_r1 = r1(3);
+    auto ccsdt_r2 = r2(3);
+#if CCSDT_eval
+    auto ccsdt_r3 = r3(3);
+#endif
+#endif
+    simplify(ccsdt_r1);
+    simplify(ccsdt_r2);
+    std::wcout << "Sizes: R1:" << ccsdt_r1->size() << "; R2: " << ccsdt_r2->size() << ";\n";
+#if CCSDT_eval
+    simplify(ccsdt_r3);
+    std::cout << "R3: " << ccsdt_r3->size() << "\n";
+    // std::wcout << "CCSDT R3: " << to_latex(ccsdt_r3) << "\n";
+#endif
 
     std::vector<std::shared_ptr<TA::TArrayD>> data_tensors = {Fock_oo, Fock_ov, Fock_vv,
         G_oooo, G_ooov, G_oovo,  G_oovv,  G_ovov,  G_ovvo, G_vovo, G_voov, G_ovvv, G_vovv, G_vvvv,
@@ -545,6 +600,10 @@ int main(int argc, char* argv[]) {
 #if CCSDT_eval
     data_tensors.push_back(t_ooovvv);
     seq_tensors.push_back(std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"i_1", L"i_2", L"i_3"}, {L"a_1", L"a_2", L"a_3"}))); //ooovvv
+#if CCSDTQ
+    data_tensors.push_back(t_oooovvvv);
+    seq_tensors.push_back(std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"i_1", L"i_2", L"i_3", L"i_4"}, {L"a_1", L"a_2", L"a_3", L"a_4"}))); //oooovvvv
+#endif
 #endif
 
     using evaluate::HashType;
@@ -569,16 +628,44 @@ int main(int argc, char* argv[]) {
     // printf("R3 size: %lu\n",cc_st_r[3]->size());
     // std::wcout << to_latex(cc_st_r[3]) << "\n";
 
+#if !CCSDT_eval
+    auto ccsd_r1 = r1(2);
+    auto ccsd_r2 = r2(2);
+    simplify(ccsd_r1);
+    std::wcout << "CCSD R1: " << to_latex(ccsd_r1) << "\n";
+    simplify(ccsd_r2);
+
     bool swap_braket_labels = true;
-    auto r1_tree = EvalTree(cc_st_r[1], swap_braket_labels);
-    auto r2_tree = EvalTree(cc_st_r[2], swap_braket_labels);
+//    auto r1_tree = EvalTree(cc_st_r[1], swap_braket_labels);
+//    auto r2_tree = EvalTree(cc_st_r[2], swap_braket_labels);
+    auto r1_tree = EvalTree(ccsd_r1, swap_braket_labels);
+    auto r2_tree = EvalTree(ccsd_r2, swap_braket_labels);
+#endif
+
 #if CCSDT_eval
-    canonicalize(cc_st_r[3]);
-    rapid_simplify(cc_st_r[3]);
-    printf("R3 size: %lu\n",cc_st_r[3]->size());
+//    canonicalize(cc_st_r[3]);
+//    rapid_simplify(cc_st_r[3]);
+//    printf("R3 size: %lu\n",cc_st_r[3]->size());
     // std::wcout << "CCSDT R3:\n" << to_latex_align(cc_st_r[3], 20) << "\n";
-    auto r3_tree = EvalTree(cc_st_r[3], swap_braket_labels);
-    // return 0;
+//    auto r3_tree = EvalTree(cc_st_r[3], swap_braket_labels);
+
+//#if MS_CC_EQ
+//    auto ccsdt_r1 = r1(3);
+//    auto ccsdt_r2 = r2(3);
+//    auto ccsdt_r3 = r3(3);
+//#else
+//    auto ccsdt_r1 = cc_st_r[1];
+//    auto ccsdt_r2 = cc_st_r[2];
+//    auto ccsdt_r3 = cc_st_r[3];
+//#endif
+
+    bool swap_braket_labels = true;
+    auto r1_tree = EvalTree(ccsdt_r1, swap_braket_labels);
+    auto r2_tree = EvalTree(ccsdt_r2, swap_braket_labels);
+    auto r3_tree = EvalTree(ccsdt_r3, swap_braket_labels);
+#if CCSDTQ
+    auto r4_tree = EvalTree(cc_st_r[4], swap_braket_labels);
+#endif
 #endif
 
     const auto cc_conv = conv * 1e2;
@@ -714,6 +801,9 @@ int main(int argc, char* argv[]) {
       auto R2 = r2_tree.evaluate(context_map);
 #if CCSDT_eval
       auto R3 = r3_tree.evaluate(context_map);
+#if CCSDTQ
+      auto R4 = r4_tree.evaluate(context_map);
+#endif
 #endif
 
       auto tile_R1       = R1.find({0,0}).get();
@@ -725,13 +815,17 @@ int main(int argc, char* argv[]) {
 #if CCSDT_eval
       auto tile_R3       = R3.find({0,0,0,0,0,0}).get();
       auto tile_t_ooovvv   = (*t_ooovvv).find({0,0,0,0,0,0}).get();
+#if CCSDTQ
+      auto tile_R4       = R4.find({0,0,0,0,0,0,0,0}).get();
+      auto tile_t_oooovvvv   = (*t_oooovvvv).find({0,0,0,0,0,0,0,0}).get();
+#endif
 #endif
 
       if(diis){
         t_ov_prev = (*t_ov).clone();
         t_oovv_prev = (*t_oovv).clone();
-        cout << t_ov_prev;
-        cout << t_oovv_prev;
+        // cout << t_ov_prev;
+        // cout << t_oovv_prev;
       }
 
 #if CCSDT_eval
@@ -770,6 +864,19 @@ int main(int argc, char* argv[]) {
                       tile_R3(i,j,k,a,b,c)/tile_D_ooovvv(i,j,k,a,b,c); } } } } } }
 #endif
 
+# if CCSDTQ
+      // update t_oooovvvv
+      for (auto i = 0; i < ndocc; ++i) {
+        for (auto j = 0; j < ndocc; ++j) {
+          for (auto k = 0; k < ndocc; ++k) {
+            for (auto l = 0; l < ndocc; ++l) {
+            for (auto a = 0; a < nvirt; ++a) {
+              for (auto b = 0; b < nvirt; ++b) {
+                for (auto c = 0; c < nvirt; ++c) {
+                  for (auto d = 0; d < nvirt; ++d) {
+                  tile_t_oooovvvv(i,j,k,l,a,b,c,d) +=
+                      tile_R4(i,j,k,l,a,b,c,d)/tile_D_oooovvvv(i,j,k,l,a,b,c,d); } } } } } } } }
+#endif
       auto ecc_last = ecc;
 
       // Calculate CCSD contribution to correlation energy
@@ -812,57 +919,58 @@ int main(int argc, char* argv[]) {
     cout << "Total energy = " << enuc + ehf + ecc << " a.u." << endl;
 
     // Check water molecule, sto-3g
-#if CCSDT_eval
-      double ccsdt_correlation = -0.070813170670;
-      assert(fabs(ccsdt_correlation - ecc) < 1e-10);
-#else
-      double ccsd_correlation = -0.070680451962;
-      assert(fabs(ccsd_correlation - ecc) < 1e-10);
-      /* CCSD ref value obtained with mpqc using this input
-  {
-      "units": "2010CODATA",
-      "atoms": {
-          "file_name": "h2o.xyz",
-          "sort_input": "true",
-          "charge": "0",
-          "n_cluster": "1",
-          "reblock": "4"
-      },
-      "obs": {
-          "name": "STO-3G",
-          "atoms": "$:atoms"
-      },
-      "wfn_world": {
-          "atoms": "$:atoms",
-          "basis": "$:obs",
-          "screen": "schwarz"
-      },
-      "scf": {
-          "type": "RHF",
-          "wfn_world": "$:wfn_world"
-      },
-      "wfn": {
-          "type": "CCSD",
-          "wfn_world": "$:wfn_world",
-          "export_orbitals": "true",
-          "atoms": "$:atoms",
-          "ref": "$:scf",
-          "reduced_abcd_memory": "true",
-          "frozen_core": "false",
-          "occ_block_size": "2",
-          "unocc_block_size": "2"
-      },
-      "property": {
-          "type": "Energy",
-          "precision": "1e-10",
-          "wfn": "$:wfn",
-          "value": {
-              "value": "-75.012759831161077"
-          }
-      }
-  }
-       */
-#endif
+//#if CCSDT_eval
+//      double ccsdt_correlation = -0.070813170670;
+//      assert(fabs(ccsdt_correlation - ecc) < 1e-10);
+//#else
+//      double ccsd_correlation = -0.070680451962;
+//      assert(fabs(ccsd_correlation - ecc) < 1e-10);
+//      /* CCSD ref value obtained with mpqc using this input
+//  {
+//      "units": "2010CODATA",
+//      "atoms": {
+//          "file_name": "h2o.xyz",
+//          "sort_input": "true",
+//          "charge": "0",
+//          "n_cluster": "1",
+//          "reblock": "4"
+//      },
+//      "obs": {
+//          "name": "STO-3G",
+//          "atoms": "$:atoms"
+//      },
+//      "wfn_world": {
+//          "atoms": "$:atoms",
+//          "basis": "$:obs",
+//          "screen": "schwarz"
+//      },
+//      "scf": {
+//          "type": "RHF",
+//          "wfn_world": "$:wfn_world"
+//      },
+//      "wfn": {
+//          "type": "CCSD",
+//          "wfn_world": "$:wfn_world",
+//          "export_orbitals": "true",
+//          "atoms": "$:atoms",
+//          "ref": "$:scf",
+//          "reduced_abcd_memory": "true",
+//          "frozen_core": "false",
+//          "occ_block_size": "2",
+//          "unocc_block_size": "2"
+//      },
+//      "property": {
+//          "type": "Energy",
+//          "precision": "1e-10",
+//          "wfn": "$:wfn",
+//          "value": {
+//              "value": "-75.012759831161077"
+//          }
+//      }
+//  }
+//       */
+//#endif
+
   }  // end of try block
 
   catch (const char* ex) {
