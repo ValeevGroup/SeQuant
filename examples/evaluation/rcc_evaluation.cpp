@@ -183,7 +183,12 @@ int main(int argc, char* argv[]) {
       return tile;
     };
 
-    TA::TArrayD fock(world, TA::TiledRange{{0, nao}, {0, nao}});
+    std::vector<size_t> tile_boundaries = {0, nao};
+    std::vector<TA::TiledRange1> ranges(
+        2, TA::TiledRange1(tile_boundaries.begin(), tile_boundaries.end()));
+    TA::TiledRange trange(ranges.begin(), ranges.end());
+
+    TA::TArrayD fock(world, trange);
     auto tile_fock_temp = fock.world().taskq.add(
         TA_fock, fock.trange().make_tile_range(0));
     *(fock.begin()) = tile_fock_temp;
@@ -222,29 +227,48 @@ int main(int argc, char* argv[]) {
 
     cout << "Initializing tensors..." << endl;
 
-    TA::TiledRange tr_oo{{0, ndocc}, {0, ndocc}};
-    TA::TiledRange tr_ov{{0, ndocc}, {0, nvirt}};
-    TA::TiledRange tr_vv{{0, nvirt}, {0, nvirt}};
-    TA::TiledRange tr_oooo{{0, ndocc}, {0, ndocc}, {0, ndocc}, {0, ndocc}};
-    TA::TiledRange tr_ooov{{0, ndocc}, {0, ndocc}, {0, ndocc}, {0, nvirt}};
-    TA::TiledRange tr_oovo{{0, ndocc}, {0, ndocc}, {0, nvirt}, {0, ndocc}};
-    TA::TiledRange tr_oovv{{0, ndocc}, {0, ndocc}, {0, nvirt}, {0, nvirt}};
-    TA::TiledRange tr_ovov{{0, ndocc}, {0, nvirt}, {0, ndocc}, {0, nvirt}};
-    TA::TiledRange tr_ovvo{{0, ndocc}, {0, nvirt}, {0, nvirt}, {0, ndocc}};
-    TA::TiledRange tr_vovo{{0, nvirt}, {0, ndocc}, {0, nvirt}, {0, ndocc}};
-    TA::TiledRange tr_voov{{0, nvirt}, {0, ndocc}, {0, ndocc}, {0, nvirt}};
-    TA::TiledRange tr_ovvv{{0, ndocc}, {0, nvirt}, {0, nvirt}, {0, nvirt}};
-    TA::TiledRange tr_vvvv{{0, nvirt}, {0, nvirt}, {0, nvirt}, {0, nvirt}};
-    TA::TiledRange tr_vovv{{0, nvirt}, {0, ndocc}, {0, nvirt}, {0, nvirt}};
+    container::svector<size_t> r_occ = {0, ndocc};
+    container::svector<size_t> r_vir = {0, nvirt};
+    auto tr1o = TA::TiledRange1(r_occ.begin(), r_occ.end());
+    auto tr1v = TA::TiledRange1(r_vir.begin(), r_vir.end());
+
+    using TR1vec = std::vector<TA::TiledRange1>;
+    TR1vec r_oo(2, tr1o);
+    TR1vec r_vv(2, tr1v);
+    TR1vec r_ov(1, tr1o); r_ov.push_back(tr1v);
+    TR1vec r_vo(1,tr1v); r_vo.push_back(tr1o);
+    TR1vec r_oooo(4, tr1o);
+    TR1vec r_ooov(3, tr1o); r_ooov.push_back(tr1v);
+    TR1vec r_oovo(3, tr1o); r_oovo.insert(r_oovo.end()-1, tr1v);
+    TR1vec r_oovv(2, tr1o); r_oovv.insert(r_oovv.end(), 2, tr1v);
+    TR1vec r_ovov(r_ov.begin(), r_ov.end()); r_ovov.insert(r_ovov.end(), r_ov.begin(), r_ov.end());
+    TR1vec r_ovvo(r_ov.begin(), r_ov.end()); r_ovvo.insert(r_ovvo.end(), r_vo.begin(), r_vo.end());
+    TR1vec r_vovo(r_vo.begin(), r_vo.end()); r_vovo.insert(r_vovo.end(), r_vo.begin(), r_vo.end());
+    TR1vec r_voov(r_vo.begin(), r_vo.end()); r_voov.insert(r_voov.end(), r_ov.begin(), r_ov.end());
+    TR1vec r_ovvv(3, tr1v); r_ovvv.insert(r_ovvv.begin(), tr1o);
+    TR1vec r_vovv(3, tr1v); r_vovv.insert(r_vovv.begin()+1, tr1o);
+    TR1vec r_vvvv(4, tr1v);
+
+    using TTR = TA::TiledRange;
+    TTR tr_oo(r_oo.begin(), r_oo.end());
+    TTR tr_ov(r_ov.begin(), r_ov.end());
+    TTR tr_vv(r_vv.begin(), r_vv.end());
+    TTR tr_oooo(r_oooo.begin(), r_oooo.end());
+    TTR tr_ooov(r_ooov.begin(), r_ooov.end());
+    TTR tr_oovo(r_oovo.begin(), r_oovo.end());
+    TTR tr_oovv(r_oovv.begin(), r_oovv.end());
+    TTR tr_ovov(r_ovov.begin(), r_ovov.end());
+    TTR tr_ovvo(r_ovvo.begin(), r_ovvo.end());
+    TTR tr_voov(r_voov.begin(), r_voov.end());
+    TTR tr_vovo(r_vovo.begin(), r_vovo.end());
+    TTR tr_ovvv(r_ovvv.begin(), r_ovvv.end());
+    TTR tr_vovv(r_vovv.begin(), r_vovv.end());
+    TTR tr_vvvv(r_vvvv.begin(), r_vvvv.end());
 
 #if CCSDT_eval
-    TA::TiledRange tr_ooovvv{{0, ndocc},  {0, ndocc},  {0, ndocc},
-                              {0, nvirt}, {0, nvirt}, {0, nvirt}};
-#if CCSDTQ
-    TA::TiledRange tr_oooovvvv{{0, ndocc}, {0, ndocc},  {0, ndocc}, {0, ndocc},
-                               {0, nvirt}, {0, nvirt}, {0, nvirt}, {0, nvirt}};
-
-#endif
+    TR1vec r_ooovvv(3,tr1o);
+    r_ooovvv.insert(r_ooovvv.end(), 3, tr1v);
+    TA::TiledRange tr_ooovvv(r_ooovvv.begin(), r_ooovvv.end());
 #endif
     auto D_ov = std::make_shared<TA::TArrayD>(world, tr_ov);
     auto D_oovv = std::make_shared<TA::TArrayD>(world, tr_oovv);
@@ -426,7 +450,7 @@ int main(int argc, char* argv[]) {
         std::make_shared<DefaultTensorCanonicalizer>());
     Logger::get_instance().wick_stats = false;
 
-#define MS_CC_EQ 1
+#define MS_CC_EQ 0
 #if !MS_CC_EQ
     cout << "\n"
          << "***********************************\n";
@@ -557,15 +581,19 @@ int main(int argc, char* argv[]) {
     auto ccsdt_r3 = cc_st_r[3];
 #endif
 #else
-    auto ccsdt_r1 = r1(3);
-    auto ccsdt_r2 = r2(3);
-#if CCSDT_eval
-    auto ccsdt_r3 = r3(3);
+#if !CCSDT_eval
+    int n_cc = 2;
+#else
+    int n_cc = 3;
+    auto ccsdt_r3 = r3(n_cc);
 #endif
+    auto ccsdt_r1 = r1(n_cc);
+    auto ccsdt_r2 = r2(n_cc);
 #endif
     simplify(ccsdt_r1);
     simplify(ccsdt_r2);
     std::wcout << "Sizes: R1:" << ccsdt_r1->size() << "; R2: " << ccsdt_r2->size() << ";\n";
+    std::wcout << "CCSDT R1: " << to_latex(ccsdt_r1) << "\n";
 #if CCSDT_eval
     simplify(ccsdt_r3);
     std::cout << "R3: " << ccsdt_r3->size() << "\n";
