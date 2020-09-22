@@ -791,8 +791,12 @@ TA::TArrayD compute_mo_ints(const Matrix& coff_mat,
     return tile;
   };
 
+  std::vector<size_t> tile_boundaries = {0, nao};
+  std::vector<TA::TiledRange1> ranges(
+      4, TA::TiledRange1(tile_boundaries.begin(), tile_boundaries.end()));
+
   // create ints_ao
-  TA::TiledRange trange_ao{{0, nao}, {0, nao}, {0, nao}, {0, nao}};
+  TA::TiledRange trange_ao(ranges.begin(), ranges.end());
   TA::TArrayD    ints_ao(world, trange_ao);
   auto tile = ints_ao.world().taskq.add(fill_eri_tensor,
                                 ints_ao.trange().make_tile_range(0));
@@ -810,8 +814,14 @@ TA::TArrayD compute_mo_ints(const Matrix& coff_mat,
         tile.begin());
     return tile;
   };
+
+  std::vector<TA::TiledRange1> ranges2(
+      2, TA::TiledRange1(tile_boundaries.begin(), tile_boundaries.end()));
+
+  TA::TiledRange trange_ao2(ranges2.begin(), ranges2.end());
+
   // transform the coefficient Eigen::MatrixD to TA::Tensor<double> type
-  TA::TArrayD coeff_tensor(world, TA::TiledRange{{0,nao},{0,nao}});
+  TA::TArrayD coeff_tensor(world, trange_ao2);
   tile = coeff_tensor.world().taskq.add(mat2tensor,
                                       coeff_tensor.trange().make_tile_range(0));
   *(coeff_tensor.begin()) = tile;
