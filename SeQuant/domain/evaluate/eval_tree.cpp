@@ -2,6 +2,7 @@
 #include "eval_tree_node.hpp"
 
 #include <SeQuant/core/tensor.hpp>
+#include <SeQuant/domain/utils/rand_color.hpp>
 
 #include <ctime>
 #include <memory>
@@ -22,54 +23,10 @@ OpsCount EvalTree::ops_count(
 }
 
 void EvalTree::visit(
-    std::function<void(const std::shared_ptr<const EvalTreeNode>&)> visitor)
+    const std::function<void(const std::shared_ptr<const EvalTreeNode>&)>& visitor)
     const {
   _visit(root, visitor);
 }
-
-auto hsv_to_rgb = [](double h, double s, double v) {
-  // https://martin.ankerl.com/2009/12/09/how-to-create-random-colors-programmatically/
-  int h_i = (int)(h * 6);
-  double f = h * 6 - h_i;
-  double p = v * (1 - s);
-  double q = v * (1 - f * s);
-  double t = v * (1 - (1 - f) * s);
-
-  double r, g, b;
-  r = g = b = -1.;
-
-  if (h_i == 0) {
-    r = v;
-    g = t;
-    b = p;
-  } else if (h_i == 1) {
-    r = q;
-    g = v;
-    b = p;
-  } else if (h_i == 2) {
-    r = p;
-    g = v;
-    b = t;
-  } else if (h_i == 3) {
-    r = p;
-    g = q;
-    b = v;
-  } else if (h_i == 4) {
-    r = t;
-    g = p;
-    b = v;
-  } else if (h_i == 5) {
-    r = v;
-    g = p;
-    b = q;
-  }
-
-  std::wostringstream rgb;
-  rgb << std::hex;
-  for (auto c : {r, g, b}) rgb << (int)(256 * c);
-
-  return rgb.str();
-};
 
 void EvalTree::digraph(std::wostream& stream) const {
   container::vector<NodeInfo> node_definitions{};
@@ -92,19 +49,13 @@ void EvalTree::digraph(std::wostream& stream) const {
   //
   // Generate random RGB color code for repeating node labels
   //
-  std::random_device seeder;
-  const auto seed = seeder.entropy() ? seeder() : std::time(nullptr);
-  std::mt19937_64 randEngine(static_cast<std::mt19937::result_type>(seed));
-  std::uniform_real_distribution<double> dist;
-  const double GOLDEN_RATIO_CONJ = 0.618033988749895;
 
   container::map<size_t, std::wstring> hash_to_color;
+  auto color_gen = domain::util::rand_color();
   for (const auto& cc : hash_counts) {
     if (cc.second > 1) {  // repeating hash
-      auto hue = GOLDEN_RATIO_CONJ + dist(randEngine);
-      hue = hue > 1 ? hue - 1 : hue;
-      hash_to_color.insert(decltype(hash_to_color)::value_type(
-          cc.first, hsv_to_rgb(hue, 0.5, 0.95)));
+      hash_to_color.insert(decltype(hash_to_color)::value_type{
+          cc.first, color_gen.rand_rgb(0.5, 0.95)});
     }
   }
 
@@ -113,7 +64,7 @@ void EvalTree::digraph(std::wostream& stream) const {
   for (const auto& ndef : node_definitions) {
     stream << "node" << ndef.id << " [texlbl = \"$" << ndef.label << "$\"";
     if (auto cc = hash_to_color.find(ndef.hash); cc != hash_to_color.end()) {
-      stream << ", color=\"#" << cc->second << "\"";
+      stream << ", color=\"" << cc->second << "\"";
       stream << ", style=filled";
     }
     stream << "];\n";
@@ -240,6 +191,7 @@ EvalNodePtr EvalTree::build_sum(const ExprPtr& expr,
                                 bool canonize_leaf_braket) {
   auto sum_accumulator = [canonize_leaf_braket](const EvalNodePtr& lexpr,
                                                 const ExprPtr& summand) {
+    //
     return std::make_shared<EvalTreeInternalNode>(EvalTreeInternalNode(
         lexpr, build_expr(summand, canonize_leaf_braket), Operation::SUM));
   };

@@ -57,8 +57,9 @@ class EvalTree {
 
   /// Visit the tree by pre-order traversal.
   /// ie. Node is visited first followed by left node and then right node.
-  void visit(std::function<void(const std::shared_ptr<const EvalTreeNode>&)>
-                 visitor) const;
+  void visit(
+      const std::function<void(const std::shared_ptr<const EvalTreeNode>&)>&
+          visitor) const;
 
   /// Generate a directed graph of the hash values of the tree.
   /// @param stream std::wostream that will be written with the
