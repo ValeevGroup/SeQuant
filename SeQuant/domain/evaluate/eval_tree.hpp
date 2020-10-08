@@ -54,6 +54,15 @@ class EvalTree {
     return _evaluate(root, context);
   }
 
+  /// Evaluate with lcao factory functionality
+  template <typename DataTensorType>
+  DataTensorType evaluate_and_make(
+      const container::map<HashType, std::shared_ptr<DataTensorType>>& const_context,
+      const std::function<DataTensorType(const Tensor&)>& make_g_tensor{})
+  const {
+    return _evaluate_and_make(root, const_context, make_g_tensor{});
+  }
+
   /// Visit the tree by pre-order traversal.
   /// ie. Node is visited first followed by left node and then right node.
   void visit(const std::function<void(const EvalNodePtr&)>& visitor);
@@ -134,6 +143,13 @@ class EvalTree {
   static DataTensorType _evaluate(
       const EvalNodePtr& node,
       const container::map<HashType, std::shared_ptr<DataTensorType>>& context);
+
+  /// Evaluate a node in a given context.
+  template <typename DataTensorType>
+  static DataTensorType _evaluate_and_make(
+      const EvalNodePtr& node,
+      const container::map<HashType, std::shared_ptr<DataTensorType>>& const_context,
+      const std::function<DataTensorType(const Tensor&)>& make_g_tensor{});
 
 };  // class EvalTree
 
@@ -331,6 +347,104 @@ DataTensorType EvalTree::_evaluate(
   return result;
 
 }  // function _evaluate
+
+template <typename DataTensorType>
+DataTensorType EvalTree::_evaluate_and_make(
+    const EvalNodePtr& node,
+    const container::map<HashType, std::shared_ptr<DataTensorType>>& const_context,
+    const std::function<DataTensorType(const Tensor&)>& make_g_tensor{}) {
+
+  // [x] Make a copy of context map and append the made tensors
+  // TODO: Need a mutable context
+  container::map<HashType, std::shared_ptr<DataTensorType>> context = const_context;
+
+  if (node->is_leaf()) {
+    auto leaf_node = std::dynamic_pointer_cast<EvalTreeLeafNode>(node);
+    if (auto label = leaf_node->expr()->as<Tensor>().label();
+        (label == L"A" || label == L"S")) {
+      throw std::logic_error(
+          "(anti-)symmetrization tensors cannot be evaluated from here!");
+    }
+
+    auto found_it = context.find(node->hash_value());
+    if (found_it != context.end()) {
+      return *(found_it->second);
+    } else {
+    // If tensor is not found in context, call lambda to make it
+    auto seq_tensor = leaf_node->expr()->as<Tensor>();
+    auto ta_tensor = make_g_tensor(seq_tensor);
+    auto ta_tensor_ptr = std::make_shared<DataTensorType>(ta_tensor);
+
+    // Append the made tensor to the context for further use
+    context.insert(seq_tensor.hash_value(), ta_tensor_ptr);
+    return ta_tensor_ptr;
+    }
+  }  // done leaf evaluation
+
+  //
+  // non-leaf evaluation
+  //
+  auto intrnl_node = std::dynamic_pointer_cast<EvalTreeInternalNode>(node);
+
+  auto opr = intrnl_node->operation();
+  if (opr == Operation::ANTISYMMETRIZE) {
+    auto bra_rank = intrnl_node->indices().size() / 2;
+    auto ket_rank = intrnl_node->indices().size() - bra_rank;
+    return _antisymmetrize(_evaluate_and_make(intrnl_node->right(), context, make_g_tensor), bra_rank,
+                           ket_rank, intrnl_node->right()->scalar());
+  }  // anitsymmetrization type evaluation done
+
+  if (opr == Operation::SYMMETRIZE) {
+    auto braket_rank = intrnl_node->indices().size();
+    if (braket_rank % 2 != 0)
+      throw std::logic_error("Can not symmetrize odd-ordered tensor!");
+
+    braket_rank /= 2;
+    return _symmetrize(_evaluate_and_make(intrnl_node->right(), context, make_g_tensor), braket_rank,
+                       intrnl_node->right()->scalar());
+  }  // symmetrization type evaluation done
+
+  // generates tiledarray annotation based on a node's index labels
+  // @note this wouldn't be necessary if the tensor algebra library
+  // would support std::string_view as annotations
+  auto TA_annotation =
+      [&intrnl_node](decltype(intrnl_node->indices())& indices) {
+        std::string annot;
+        for (const auto& idx : indices)
+          annot += std::string(idx.label().begin(), idx.label().end()) + ", ";
+
+        annot.erase(annot.size() - 2);  // remove trailing ", "
+        return annot;
+      };
+
+  auto left_annot = TA_annotation(intrnl_node->left()->indices());
+  auto right_annot = TA_annotation(intrnl_node->right()->indices());
+  auto this_annot = TA_annotation(intrnl_node->indices());
+
+  DataTensorType result;
+  if (opr == Operation::SUM) {
+    // sum left and right evaluated tensors
+    // using tiled array syntax
+    result(this_annot) =
+        intrnl_node->left()->scalar() *
+            _evaluate_and_make(intrnl_node->left(), context, make_g_tensor)(left_annot) +
+            intrnl_node->right()->scalar() *
+                _evaluate_and_make(intrnl_node->right(), context, make_g_tensor)(right_annot);
+    //
+  } else if (opr == Operation::PRODUCT) {
+    // contract left and right evaluated tensors
+    // using tiled array syntax
+    result(this_annot) = intrnl_node->left()->scalar() *
+        _evaluate_and_make(intrnl_node->left(), context, make_g_tensor)(left_annot) *
+        intrnl_node->right()->scalar() *
+        _evaluate_and_make(intrnl_node->right(), context, make_g_tensor)(right_annot);
+  } else {
+    throw std::domain_error("Operation: " + std::to_string((size_t)opr) +
+        " not supported!");
+  }  // sum and product type evaluation
+  return result;
+
+}  // function _evaluate_and_make
 
 }  // namespace sequant::evaluate
 
