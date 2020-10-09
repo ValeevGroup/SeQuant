@@ -4,7 +4,7 @@
 
 namespace sequant::factorize {
 
-std::ostream &operator<<(std::ostream &os, const rooted_tree &tree) {
+std::wostream &operator<<(std::wostream &os, const rooted_tree &tree) {
   if (tree.children.empty()) {
     os << tree.label;
     return os;
@@ -20,29 +20,28 @@ std::ostream &operator<<(std::ostream &os, const rooted_tree &tree) {
 }
 
 void enumerate_eval_sequence(
-    const std::vector<rooted_tree> &paths,
+    const std::vector<rooted_tree> &leaves,
     const std::function<void(const rooted_tree &)> &callback) {
-  if (paths.size() == 1) callback(*paths.begin());
-  for (auto i = 0; i < paths.size(); ++i) {
-    for (auto j = i + 1; j < paths.size(); ++j) {
-      std::vector<rooted_tree> new_args{paths[i]};
-      new_args.begin()->children.push_back(paths[j]);
+  if (leaves.size() == 1) callback(*leaves.begin());
+  for (auto i = 0; i < leaves.size(); ++i) {
+    for (auto j = i + 1; j < leaves.size(); ++j) {
+      std::vector<rooted_tree> new_args{leaves[i]};
+      new_args.begin()->children.push_back(leaves[j]);
 
       bool skip_recursive_call = false;
-      for (auto k = 0; k < paths.size(); ++k)
+      for (auto k = 0; k < leaves.size(); ++k)
         if (k != i && k != j) {
           // remove redundancy by lexicographic comparison
-          if ((!paths[k].children.empty()) &&
-              (paths[k].label < paths[i].label)) {
+          if ((!leaves[k].children.empty()) &&
+              (leaves[k].label < leaves[i].label)) {
             skip_recursive_call = true;
             new_args.clear();
             break;
           }
-          new_args.push_back(paths[k]);
+          new_args.push_back(leaves[k]);
         }
 
-      if (!skip_recursive_call)
-        enumerate_eval_sequence(new_args, std::move(callback));
+      if (!skip_recursive_call) enumerate_eval_sequence(new_args, callback);
     }  // for j
   }    // for i
 }

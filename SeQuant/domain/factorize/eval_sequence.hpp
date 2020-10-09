@@ -40,13 +40,13 @@ struct rooted_tree {
 };
 
 /** Stream out a rooted tree. */
-std::ostream &operator<<(std::ostream &, const rooted_tree &);
+std::wostream &operator<<(std::wostream &, const rooted_tree &);
 
 /**
- * Enumerates all possible rooted trees with the elements of @c paths as the
+ * Enumerates all possible rooted trees with the elements of @c leaves as the
  * leaves and call @c callback on each such enumerations.
  *
- * @param paths Leaves of the trees being enumerated. All enumerations have all
+ * @param leaves Leaves of the trees being enumerated. All enumerations have all
  * of these leaves.
  *
  * @param callback Function to be called on each enumeration.
@@ -62,7 +62,7 @@ std::ostream &operator<<(std::ostream &, const rooted_tree &);
  *     4!! =         4 * 2.
  */
 void enumerate_eval_sequence(
-    const std::vector<rooted_tree> &paths,
+    const std::vector<rooted_tree> &leaves,
     const std::function<void(const rooted_tree &)> &callback = {});
 
 }  // namespace sequant::factorize
