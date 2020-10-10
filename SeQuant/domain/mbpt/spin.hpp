@@ -1317,7 +1317,7 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
 
   if(fast_method) {
     // std::cout << "Using fast approach.\n";
-    const auto tstart = std::chrono::high_resolution_clock::now();
+//    const auto tstart = std::chrono::high_resolution_clock::now();
 
     // summands_hash_list sorted container of hash values of canonicalized summands
     // summands_hash_map unsorted map of (hash_val, summand) pairs
@@ -1425,9 +1425,9 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
       }
       result_sum.append(new_product);
     }
-    const auto tstop = std::chrono::high_resolution_clock::now();
-    const auto time_elapsed =
-        std::chrono::duration_cast<std::chrono::microseconds>(tstop - tstart);
+//    const auto tstop = std::chrono::high_resolution_clock::now();
+//    const auto time_elapsed =
+//        std::chrono::duration_cast<std::chrono::microseconds>(tstop - tstart);
 //    std::cout << "Fast method: " << std::boolalpha << fast_method << "\n";
 //    std::cout << "N symm terms found: " << n_symm_terms << "\n";
 //    std::cout << "Time: " << time_elapsed.count() << " μs.\n";
@@ -1451,7 +1451,7 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
     // Controls which term to symmetrize
     // true -> symmetrize the summand
     // false -> symmetrize lookup term
-    bool quick_method = true;
+    // bool quick_method = true;
 
     // Loop over terms of expression (OUTER LOOP)
     for (auto it = expr->begin(); it != expr->end(); ++it) {
