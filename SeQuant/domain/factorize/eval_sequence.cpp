@@ -4,6 +4,16 @@
 
 namespace sequant::factorize {
 
+rooted_tree::rooted_tree(size_t l, std::initializer_list<size_t> &&labels)
+    : label{l} {
+  children.reserve(labels.size());
+  for (const auto &l : labels) children.emplace_back(l);
+}
+
+bool operator==(const rooted_tree &lhs, const rooted_tree &rhs) {
+  return lhs.label == rhs.label && lhs.children == rhs.children;
+}
+
 std::wostream &operator<<(std::wostream &os, const rooted_tree &tree) {
   if (tree.children.empty()) {
     os << tree.label;

@@ -20,7 +20,16 @@ TEST_CASE("TEST_EVAL_SEQUENCE", "[eval_sequence]") {
     REQUIRE(rooted_tree{0}.label == 0);
 
     auto t0 = rooted_tree{0};
-    REQUIRE_NOTHROW(t0.children.push_back(rooted_tree{0}));
+    REQUIRE_NOTHROW(t0.children.push_back(rooted_tree{1}));
+
+    t0.children.push_back(rooted_tree{2});
+    t0.children.push_back(rooted_tree{3});
+
+    REQUIRE_NOTHROW(rooted_tree{0, {1, 2, 3}});
+    auto t1 = rooted_tree{0, {1, 2, 3}};
+    REQUIRE(t0 == t1);
+
+    REQUIRE_NOTHROW(rooted_tree{0, {rooted_tree{1}, rooted_tree{2, {3, 4}}}});
   }
 
   SECTION("enumerate_eval_sequence") {

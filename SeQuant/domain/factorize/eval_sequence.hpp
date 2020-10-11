@@ -26,6 +26,21 @@ struct rooted_tree {
    */
   rooted_tree(size_t l) : label{l} {}  // not explicit
 
+  /** Construct rooted_tree.
+   *
+   * @param l Root label.
+   * @param children Children rooted_tree objects.
+   */
+  rooted_tree(size_t l, std::vector<rooted_tree> &&children)
+      : label{l}, children{std::move(children)} {}
+
+  /**
+   * Construct rooted_tree.
+   * @param l Root label.
+   * @param labels Children labels.
+   */
+  rooted_tree(size_t l, std::initializer_list<size_t> &&labels);
+
   /** Default ctor. */
   rooted_tree() = default;
 
@@ -35,9 +50,18 @@ struct rooted_tree {
   /** Default copy ctor. */
   rooted_tree(const rooted_tree &) = default;
 
+  /** Default copy assign. */
+  rooted_tree &operator=(const rooted_tree &) = default;
+
   /** Default move ctor. */
   rooted_tree(rooted_tree &&) = default;
+
+  /** Default move assign. */
+  rooted_tree &operator=(rooted_tree &&) = default;
 };
+
+/** Compare two rooted_tree objects. */
+bool operator==(const rooted_tree &, const rooted_tree &);
 
 /** Stream out a rooted tree. */
 std::wostream &operator<<(std::wostream &, const rooted_tree &);
