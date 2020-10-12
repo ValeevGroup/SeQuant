@@ -1,4 +1,5 @@
 #include "single_term_opt.hpp"
+#include <SeQuant/core/tensor.hpp>
 
 namespace sequant::factorize {
 
@@ -9,7 +10,7 @@ ExprPtr sto_exhaustive_scan(const ExprPtr& expr, size_t nocc, size_t nvirt) {
 ExprPtr repack_prod(const ExprPtr& expr, const factorize::rooted_tree& tree,
                     bool scale) {
   if (tree.children.empty()) {
-    auto prod = expr->at(tree.label)->clone();
+    auto prod = ex<Product>(Product{expr->at(tree.label)});
     if (scale) {
       auto& prod_deref = prod->as<Product>();
       prod_deref.scale(expr->as<Product>().scalar());
@@ -32,7 +33,7 @@ ExprPtr repack_prod(const ExprPtr& expr, const factorize::rooted_tree& tree,
 }
 
 OptimalRootedTree::OptimalRootedTree(const ExprPtr& prod, size_t nocc,
-                                             size_t nvirt)
+                                     size_t nvirt)
     : prod{prod},
       flops{std::numeric_limits<decltype(flops)>::max()},
       nocc{nocc},
@@ -47,6 +48,7 @@ void OptimalRootedTree::operator()(const rooted_tree& tree) {
 
 rooted_tree OptimalRootedTree::tree() {
   if (tree_.has_value()) return tree_.value();
+  if (prod->is<Tensor>()) return rooted_tree{0};
 
   auto init = std::vector<rooted_tree>(prod->size());
   for (size_t ii = 0; ii < prod->size(); ++ii) init[ii] = rooted_tree{ii};
