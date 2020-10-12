@@ -3,6 +3,37 @@
 
 namespace sequant::factorize {
 
+ExprPtr single_term_opt(
+    const ExprPtr& expr, size_t nocc, size_t nvirt,
+    const std::function<ExprPtr(const ExprPtr&, size_t, size_t)>& backend) {
+  if (expr->is<Product>()) {
+    container::svector<ExprPtr> operators, nonOperators;
+    ranges::partition_copy(*expr, ranges::back_inserter(operators),
+                           ranges::back_inserter(nonOperators),
+                           [](const auto& x) {  //
+                             if (!x->template is<Tensor>()) return true;
+                             auto l = x->template as<Tensor>().label();
+                             return l == L"A" || l == L"P";
+                           });
+
+    auto factors =
+        ranges::views::concat(
+            operators,
+            *backend(ex<Product>(nonOperators.begin(), nonOperators.end()),
+                     nocc, nvirt)) |
+        ranges::to<container::svector<ExprPtr>>;
+
+    return ex<Product>(
+        Product{expr->as<Product>().scalar(), factors.begin(), factors.end()});
+  }
+
+  auto sum = Sum{};
+  for (const auto& x : *expr)
+    sum.append(single_term_opt(x, nocc, nvirt, backend));
+
+  return sum.clone();
+}
+
 ExprPtr sto_exhaustive_scan(const ExprPtr& expr, size_t nocc, size_t nvirt) {
   return repack_prod(expr, OptimalRootedTree{expr, nocc, nvirt}.tree());
 }

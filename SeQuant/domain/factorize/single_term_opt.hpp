@@ -6,7 +6,6 @@
 #include "ops_count.hpp"
 
 namespace sequant::factorize {
-
 /**
  * Exhaustively scan all possible evaluation sequences for the given product to
  * find the optimal sequence.
@@ -21,17 +20,42 @@ namespace sequant::factorize {
  */
 ExprPtr sto_exhaustive_scan(const ExprPtr& expr, size_t nocc = 2,
                             size_t nvirt = 3);
+/**
+ * Get the single-term-optimized expression.
+ *
+ * @param expr Expression to be performed single term optimization on.
+ *
+ * @param nocc Number of occupied orbitals.
+ *
+ * @param nvirt Number of virtual orbitals.
+ *
+ * @param backend Backend function that does the single term optimization on a
+ * Product type expression. Default is sequant::factorize::sto_exhaustive_scan
+ * function.
+ *
+ * @return Single-term-optimized expression.
+ */
+ExprPtr single_term_opt(
+    const ExprPtr& expr, size_t nocc, size_t nvirt,
+    const std::function<ExprPtr(const ExprPtr&, size_t, size_t)>& backend =
+        factorize::sto_exhaustive_scan);
 
 /**
  * Repack a product in accordance with a evaluation sequence.
  *
- * @param prod Reference product to be repacked.
+ * @param expr Reference product or tensor to be repacked.
+ *
  * @param tree Dictates the way of repacking.
+ *
  * @param scale Scale the result by the scalar of @c prod. True by default.
  *
  * @return A new expression.
+ *
+ * @note Validity of the passed tree is not checked should may lead to runtime
+ * error of out of bound access on container type.
+
  */
-ExprPtr repack_prod(const ExprPtr& prod, const factorize::rooted_tree& tree,
+ExprPtr repack_prod(const ExprPtr& expr, const factorize::rooted_tree& tree,
                     bool scale = true);
 
 /**
