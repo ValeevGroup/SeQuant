@@ -657,7 +657,6 @@ ExprPtr expr_symmetrize(const Product& product) {
     }
     result->append(ex<Product>(new_product));
   } // map
-  // std::wcout << __LINE__ << to_latex(result) << "\n";
   return result;
 }
 
@@ -860,10 +859,8 @@ ExprPtr expand_S_operator(const ExprPtr& expr){
           new_product.append(1, ex<Tensor>(new_tensor));
         }
       }
-      // std::wcout << __LINE__ << " " << to_latex(new_product) << "\n";
       sum.append(ex<Product>(new_product));
     }
-    // std::wcout << __LINE__ << " " << to_latex(sum) << "\n";
     ExprPtr result = std::make_shared<Sum>(sum);
     return result;
   };
@@ -1316,8 +1313,6 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
   // for faster run times
 
   if(fast_method) {
-    // std::cout << "Using fast approach.\n";
-//    const auto tstart = std::chrono::high_resolution_clock::now();
 
     // summands_hash_list sorted container of hash values of canonicalized summands
     // summands_hash_map unsorted map of (hash_val, summand) pairs
@@ -1351,9 +1346,6 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
 
       // Remove current hash_value from list and clone summand
       auto hash0 = (*it)->hash_value();
-      // summands_hash_list.erase(hash0);
-      // auto hash0_it = std::find(summands_hash_list.begin(), summands_hash_list.end(), hash0);
-      // summands_hash_list.erase(hash0_it);
       summands_hash_list.erase(std::find(summands_hash_list.begin(), summands_hash_list.end(), hash0));
       auto new_product = (*it)->clone();
       new_product = ex<Constant>(1.0/symm_factor) * ex<Tensor>(S) * new_product;
@@ -1425,12 +1417,6 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
       }
       result_sum.append(new_product);
     }
-//    const auto tstop = std::chrono::high_resolution_clock::now();
-//    const auto time_elapsed =
-//        std::chrono::duration_cast<std::chrono::microseconds>(tstop - tstart);
-//    std::cout << "Fast method: " << std::boolalpha << fast_method << "\n";
-//    std::cout << "N symm terms found: " << n_symm_terms << "\n";
-//    std::cout << "Time: " << time_elapsed.count() << " μs.\n";
   } else {
 
     ///////////////////////////////////////////////
@@ -1510,9 +1496,6 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
         }
         if (n_matches == hash0_list.size()) {
           ++n_symm_terms;
-          std::wcout << n_symm_terms << ": "
-                     << std::distance(expr->begin(), it) << " "
-                     << to_latex((*it)->clone()) << "\n";
           new_product = ex<Tensor>(S) * new_product;
           i_list.insert(idx_vec.begin(), idx_vec.end());
         }
@@ -1524,25 +1507,16 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
     const auto tstop = std::chrono::high_resolution_clock::now();
     const auto time_elapsed =
         std::chrono::duration_cast<std::chrono::microseconds>(tstop - tstart);
-    std::cout << "Fast method: " << std::boolalpha << fast_method << "\n";
-    std::cout << "N symm terms found: " << n_symm_terms << "\n";
-    std::cout << "Time: " << time_elapsed.count() << " μs.\n";
+    // std::cout << "Fast method: " << std::boolalpha << fast_method << "\n";
+    // std::cout << "N symm terms found: " << n_symm_terms << "\n";
+    // std::cout << "Time: " << time_elapsed.count() << " μs.\n";
   }
 
   ExprPtr result = std::make_shared<Sum>(result_sum);
   expand(result);
   canonicalize(result);
   rapid_simplify(result);
-//  return result;
-//  std::wcout << "Symmetrized expr: " << to_latex(result) << std::endl;
-
-//  result = expand_S_operator(result);
-//  expand(result);
-//  canonicalize(result);
-//  rapid_simplify(result);
-//  std::cout << result->size() << "\n";
   return result;
-
 }
 
 }  // namespace sequant
