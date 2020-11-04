@@ -77,7 +77,7 @@ class EvalTree {
   ///        the ket indices and returns while constructing leaf node from
   ///        sequant tensor as soon as IndexSpace attribute in ket is lower than
   ///        that in bra at corresponding positions.
-  explicit EvalTree(const ExprPtr& expr, bool canonize_leaf_braket = true);
+  explicit EvalTree(const ExprPtr& expr, bool canonize_leaf_braket = false);
 
  private:
   /// Build EvalTreeNode pointer from sequant expression of Sum, Product or
@@ -358,6 +358,7 @@ DataTensorType EvalTree::_evaluate_and_make(
     container::map<HashType, std::shared_ptr<DataTensorType>>& context,
     const std::function<DataTensorType(const Tensor&)>& eval_tensor) {
 
+  // If node is a leaf, return the object from context
   if (node->is_leaf()) {
     auto leaf_node = std::dynamic_pointer_cast<EvalTreeLeafNode>(node);
     if (auto label = leaf_node->expr()->as<Tensor>().label();
@@ -366,15 +367,15 @@ DataTensorType EvalTree::_evaluate_and_make(
           "(anti-)symmetrization tensors cannot be evaluated from here!");
     }
 
-    std::wcout << "SeQ: " << to_latex(leaf_node->expr()->as<Tensor>())
-               << "context size: " << context.size() << " ";
-
+    // Iterator pointing to the hash value of leaf
     auto it = context.find(node->hash_value());
 
-    // Make a tensor if it didn't find one
+    // If it didn't find the leaf, call a function that makes it
     if (it == context.end()) {
       auto seq_tensor = leaf_node->expr()->as<Tensor>();
-      auto ta_tensor = eval_tensor(seq_tensor);
+
+      // TODO: Pass bool for swapped labels
+      const auto ta_tensor = eval_tensor(seq_tensor);
       auto ta_tensor_ptr = std::make_shared<DataTensorType>(ta_tensor);
 
       // Append the made tensor to the context for further use
@@ -410,7 +411,7 @@ DataTensorType EvalTree::_evaluate_and_make(
   // @note this wouldn't be necessary if the tensor algebra library
   // would support std::string_view as annotations
   auto TA_annotation =
-      [&intrnl_node](decltype(intrnl_node->indices())& indices) {
+      [](decltype(intrnl_node->indices())& indices) {
         std::string annot;
         for (const auto& idx : indices)
           annot += std::string(idx.label().begin(), idx.label().end()) + ", ";
@@ -425,19 +426,14 @@ DataTensorType EvalTree::_evaluate_and_make(
 
   DataTensorType result;
   if (opr == Operation::SUM) {
-    // sum left and right evaluated tensors
-    // using tiled array syntax
+    // sum left and right evaluated tensors using TA syntax
     result(this_annot) =
         intrnl_node->left()->scalar() *
             _evaluate_and_make(intrnl_node->left(), context, eval_tensor)(left_annot) +
             intrnl_node->right()->scalar() *
                 _evaluate_and_make(intrnl_node->right(), context, eval_tensor)(right_annot);
-    //
   } else if (opr == Operation::PRODUCT) {
-    // contract left and right evaluated tensors
-    // using tiled array syntax
-    std::cout << "TA_annot: " << left_annot << " " << right_annot << "\n";
-
+    // contract left and right evaluated tensors using TA syntax
     result(this_annot) = intrnl_node->left()->scalar() *
         _evaluate_and_make(intrnl_node->left(), context, eval_tensor)(left_annot) *
         intrnl_node->right()->scalar() *
