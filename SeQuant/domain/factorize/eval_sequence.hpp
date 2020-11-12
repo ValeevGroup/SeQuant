@@ -78,7 +78,7 @@ std::wostream &operator<<(std::wostream &, const rooted_tree &);
  *
  * There are (2k - 1)!! number of ways to evaluate a product of k factors.
  * The notation x!! implies 'double factorial' of x which is defined as the
- * product of all integers from 1 upto x whose parity matches with that of x.
+ * product of all integers from 1 upto x whose parity matches that of x.
  *
  * Eg. 5!! =     5 * 3 * 1.
  *     7!! = 7 * 5 * 3 * 1.

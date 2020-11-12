@@ -5,6 +5,14 @@
 #include "eval_sequence.hpp"
 #include "ops_count.hpp"
 
+//
+// TODO:
+//     - make single_term_opt function take in an iterable param: so vector of
+//     ExprPtr, *ExprPtr, and ranges::views can be the argument
+//     - make operations counting function to work for generic expression rather
+//     than just product type expressions.
+//
+
 namespace sequant::factorize {
 /**
  * Exhaustively scan all possible evaluation sequences for the given product to
@@ -18,8 +26,8 @@ namespace sequant::factorize {
  *
  * @return Product made of the copies of factors in @c expr.
  */
-ExprPtr sto_exhaustive_scan(const ExprPtr& expr, size_t nocc = 2,
-                            size_t nvirt = 3);
+ExprPtr sto_exhaustive_scan(const ExprPtr& expr, size_t nocc,
+                            size_t nvirt);
 /**
  * Get the single-term-optimized expression.
  *
@@ -41,7 +49,7 @@ ExprPtr single_term_opt(
         factorize::sto_exhaustive_scan);
 
 /**
- * Repack a product in accordance with a evaluation sequence.
+ * Repack a product in accordance with an evaluation sequence.
  *
  * @param expr Reference product or tensor to be repacked.
  *
@@ -63,14 +71,14 @@ ExprPtr repack_prod(const ExprPtr& expr, const factorize::rooted_tree& tree,
  * given prodcut.
  */
 struct OptimalRootedTree {
-  /** Number of occupied orbitals. */
-  size_t nocc;
-
-  /** Number of virtual orbitals. */
-  size_t nvirt;
-
   /** Reference to a product. */
   const ExprPtr& prod;
+
+  /** Number of occupied orbitals. */
+  const size_t nocc;
+
+  /** Number of virtual orbitals. */
+  const size_t nvirt;
 
   /** Optimal evaluation sequence. */
   std::optional<rooted_tree> tree_;
