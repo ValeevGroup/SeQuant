@@ -38,7 +38,7 @@ ExprPtr sto_exhaustive_scan(const ExprPtr& expr, size_t nocc, size_t nvirt) {
   return repack_prod(expr, OptimalRootedTree{expr, nocc, nvirt}.tree());
 }
 
-ExprPtr repack_prod(const ExprPtr& expr, const factorize::rooted_tree& tree,
+ExprPtr repack_prod(const ExprPtr& expr, const factorize::eval_sequence& tree,
                     bool scale) {
   if (tree.children.empty()) {
     auto prod = ex<Product>(Product{expr->at(tree.label)});
@@ -70,19 +70,19 @@ OptimalRootedTree::OptimalRootedTree(const ExprPtr& prod, size_t nocc,
       nocc{nocc},
       nvirt{nvirt} {}
 
-void OptimalRootedTree::operator()(const rooted_tree& tree) {
+void OptimalRootedTree::operator()(const eval_sequence& tree) {
   if (auto&& res = ops_count(prod, tree, nocc, nvirt); res.flops < flops) {
     tree_ = tree;
     flops = res.flops;
   }
 }
 
-rooted_tree OptimalRootedTree::tree() {
+eval_sequence OptimalRootedTree::tree() {
   if (tree_.has_value()) return tree_.value();
-  if (prod->is<Tensor>()) return rooted_tree{0};
+  if (prod->is<Tensor>()) return eval_sequence{0};
 
-  auto init = std::vector<rooted_tree>(prod->size());
-  for (size_t ii = 0; ii < prod->size(); ++ii) init[ii] = rooted_tree{ii};
+  auto init = std::vector<eval_sequence>(prod->size());
+  for (size_t ii = 0; ii < prod->size(); ++ii) init[ii] = eval_sequence{ii};
 
   enumerate_eval_sequence(init, std::ref(*this));
 

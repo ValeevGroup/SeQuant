@@ -8,7 +8,7 @@
 
 namespace sequant::factorize {
 
-OpsCalcResult ops_count(const ExprPtr& prod, const rooted_tree& tree,  //
+OpsCalcResult ops_count(const ExprPtr& prod, const eval_sequence& tree,  //
                         size_t nocc, size_t nvirt) {
   if (tree.children.empty()) {
     auto& tnsr = prod->at(tree.label)->as<Tensor>();
@@ -45,7 +45,7 @@ OpsCalcResult ops_count(const ExprPtr& prod, const rooted_tree& tree,  //
   return std::accumulate(
       tree.children.begin(), tree.children.end(),
 
-      ops_count(prod, rooted_tree{tree.label}, nocc, nvirt),
+      ops_count(prod, eval_sequence{tree.label}, nocc, nvirt),
 
       [&combine_results, nocc, nvirt, &prod](const auto& x, const auto& y) {
         return combine_results(x, ops_count(prod, y, nocc, nvirt));

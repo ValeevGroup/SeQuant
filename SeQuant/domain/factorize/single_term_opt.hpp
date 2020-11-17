@@ -63,7 +63,7 @@ ExprPtr single_term_opt(
  * error of out of bound access on container type.
 
  */
-ExprPtr repack_prod(const ExprPtr& expr, const factorize::rooted_tree& tree,
+ExprPtr repack_prod(const ExprPtr& expr, const factorize::eval_sequence& tree,
                     bool scale = true);
 
 /**
@@ -81,7 +81,7 @@ struct OptimalRootedTree {
   const size_t nvirt;
 
   /** Optimal evaluation sequence. */
-  std::optional<rooted_tree> tree_;
+  std::optional<eval_sequence> tree_;
 
   /** Flops for the optimal evaluation. */
   OpsCalcResult::ops_type flops;
@@ -100,12 +100,12 @@ struct OptimalRootedTree {
    *
    * @param tree Evaluation sequence for @c prod.
    */
-  void operator()(const rooted_tree& tree);
+  void operator()(const eval_sequence& tree);
 
   /**
    * @return The optimal evaluation sequence.
    */
-  rooted_tree tree();
+  eval_sequence tree();
 
 };  // struct OptimalRootedTree
 

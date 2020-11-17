@@ -13,61 +13,61 @@ namespace sequant::factorize {
  *
  * @version 07 Oct 2020
  */
-struct rooted_tree {
+struct eval_sequence {
   /** Label of the node. */
   size_t label;
 
   /** Children of the node. */
-  std::vector<rooted_tree> children;
+  std::vector<eval_sequence> children;
 
-  /** Construct rooted_tree.
+  /** Construct eval_sequence.
    *
    * @param l Root label.
    */
-  rooted_tree(size_t l) : label{l} {}  // not explicit
+  eval_sequence(size_t l) : label{l} {}  // not explicit
 
-  /** Construct rooted_tree.
+  /** Construct eval_sequence.
    *
    * @param l Root label.
-   * @param children Children rooted_tree objects.
+   * @param children Children eval_sequence objects.
    */
-  rooted_tree(size_t l, std::vector<rooted_tree> &&children)
+  eval_sequence(size_t l, std::vector<eval_sequence> &&children)
       : label{l}, children{std::move(children)} {}
 
   /**
-   * Construct rooted_tree.
+   * Construct eval_sequence.
    * @param l Root label.
    * @param labels Children labels.
    */
-  rooted_tree(size_t l, std::initializer_list<size_t> &&labels);
+  eval_sequence(size_t l, std::initializer_list<size_t> &&labels);
 
   /** Default ctor. */
-  rooted_tree() = default;
+  eval_sequence() = default;
 
   /** Default dtor. */
-  ~rooted_tree() = default;
+  ~eval_sequence() = default;
 
   /** Default copy ctor. */
-  rooted_tree(const rooted_tree &) = default;
+  eval_sequence(const eval_sequence &) = default;
 
   /** Default copy assign. */
-  rooted_tree &operator=(const rooted_tree &) = default;
+  eval_sequence &operator=(const eval_sequence &) = default;
 
   /** Default move ctor. */
-  rooted_tree(rooted_tree &&) = default;
+  eval_sequence(eval_sequence &&) = default;
 
   /** Default move assign. */
-  rooted_tree &operator=(rooted_tree &&) = default;
+  eval_sequence &operator=(eval_sequence &&) = default;
 };
 
-/** Compare two rooted_tree objects. */
-bool operator==(const rooted_tree &, const rooted_tree &);
+/** Compare two eval_sequence objects. */
+bool operator==(const eval_sequence &, const eval_sequence &);
 
-/** Stream out a rooted tree. */
-std::wostream &operator<<(std::wostream &, const rooted_tree &);
+/** Stream out an eval_sequence. */
+std::wostream &operator<<(std::wostream &, const eval_sequence &);
 
 /**
- * Enumerates all possible rooted trees with the elements of @c leaves as the
+ * Enumerates all possible evaluation sequences with the elements of @c leaves as the
  * leaves and call @c callback on each such enumerations.
  *
  * @param leaves Leaves of the trees being enumerated. All enumerations have all
@@ -86,8 +86,8 @@ std::wostream &operator<<(std::wostream &, const rooted_tree &);
  *     4!! =         4 * 2.
  */
 void enumerate_eval_sequence(
-    const std::vector<rooted_tree> &leaves,
-    const std::function<void(const rooted_tree &)> &callback = {});
+    const std::vector<eval_sequence> &leaves,
+    const std::function<void(const eval_sequence &)> &callback = {});
 
 }  // namespace sequant::factorize
 

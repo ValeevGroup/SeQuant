@@ -19,9 +19,9 @@ TEST_CASE("TEST_OPS_COUNT", "[ops_count]") {
   auto prod = ex<Product>(Product{g_oovv, t_oovv_1, t_oovv_2});
 
   using namespace sequant::factorize;
-  auto tree1 = rooted_tree{0};
-  tree1.children.push_back(rooted_tree{1});
-  tree1.children.push_back(rooted_tree{2});
+  auto tree1 = eval_sequence{0};
+  tree1.children.push_back(eval_sequence{1});
+  tree1.children.push_back(eval_sequence{2});
   // tree1 == ((0 1) 2)
   // manually derived formula
   auto ops_manual_tree1 = [](size_t nocc,
@@ -29,9 +29,9 @@ TEST_CASE("TEST_OPS_COUNT", "[ops_count]") {
     return 4 * std::pow(nocc, 2) * std::pow(nvirt, 4);
   };
 
-  auto tree2 = rooted_tree{0};
-  tree2.children.push_back(rooted_tree{2});
-  tree2.children.push_back(rooted_tree{1});
+  auto tree2 = eval_sequence{0};
+  tree2.children.push_back(eval_sequence{2});
+  tree2.children.push_back(eval_sequence{1});
   // tree2 == ((0 2) 1)
   // manually derived formula
   auto ops_manual_tree2 = [](size_t nocc,
@@ -39,9 +39,9 @@ TEST_CASE("TEST_OPS_COUNT", "[ops_count]") {
     return 4 * std::pow(nocc, 4) * std::pow(nvirt, 2);
   };
 
-  auto tree3 = rooted_tree{1};
-  tree3.children.push_back(rooted_tree{2});
-  tree3.children.push_back(rooted_tree{0});
+  auto tree3 = eval_sequence{1};
+  tree3.children.push_back(eval_sequence{2});
+  tree3.children.push_back(eval_sequence{0});
   // tree3 == ((1 2) 0)
   // manually derived formula
   auto ops_manual_tree3 = [](size_t nocc,

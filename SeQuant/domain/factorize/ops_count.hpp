@@ -33,7 +33,7 @@ struct OpsCalcResult {
  *
  * @return OpsCalcResult.
  */
-OpsCalcResult ops_count(const ExprPtr& prod, const rooted_tree& tree,
+OpsCalcResult ops_count(const ExprPtr& prod, const eval_sequence& tree,
                         size_t nocc, size_t nvirt);
 
 }  // namespace sequant::factorize

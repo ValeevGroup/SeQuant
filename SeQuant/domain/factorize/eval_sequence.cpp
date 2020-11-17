@@ -4,17 +4,17 @@
 
 namespace sequant::factorize {
 
-rooted_tree::rooted_tree(size_t l, std::initializer_list<size_t> &&labels)
+eval_sequence::eval_sequence(size_t l, std::initializer_list<size_t> &&labels)
     : label{l} {
   children.reserve(labels.size());
   for (const auto &l : labels) children.emplace_back(l);
 }
 
-bool operator==(const rooted_tree &lhs, const rooted_tree &rhs) {
+bool operator==(const eval_sequence &lhs, const eval_sequence &rhs) {
   return lhs.label == rhs.label && lhs.children == rhs.children;
 }
 
-std::wostream &operator<<(std::wostream &os, const rooted_tree &tree) {
+std::wostream &operator<<(std::wostream &os, const eval_sequence &tree) {
   if (tree.children.empty()) {
     os << tree.label;
     return os;
@@ -30,12 +30,12 @@ std::wostream &operator<<(std::wostream &os, const rooted_tree &tree) {
 }
 
 void enumerate_eval_sequence(
-    const std::vector<rooted_tree> &leaves,
-    const std::function<void(const rooted_tree &)> &callback) {
+    const std::vector<eval_sequence> &leaves,
+    const std::function<void(const eval_sequence &)> &callback) {
   if (leaves.size() == 1) callback(*leaves.begin());
   for (auto i = 0; i < leaves.size(); ++i) {
     for (auto j = i + 1; j < leaves.size(); ++j) {
-      std::vector<rooted_tree> new_args{leaves[i]};
+      std::vector<eval_sequence> new_args{leaves[i]};
       new_args.begin()->children.push_back(leaves[j]);
 
       bool skip_recursive_call = false;

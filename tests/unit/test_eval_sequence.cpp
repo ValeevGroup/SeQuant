@@ -8,28 +8,29 @@
 TEST_CASE("TEST_EVAL_SEQUENCE", "[eval_sequence]") {
   using namespace sequant::factorize;
   auto init_rt_vec = [](size_t n) {
-    std::vector<rooted_tree> vec;
+    std::vector<eval_sequence> vec;
     vec.reserve(n);
-    for (size_t ii = 0; ii < n; ++ii) vec.emplace_back(rooted_tree{ii});
+    for (size_t ii = 0; ii < n; ++ii) vec.emplace_back(eval_sequence{ii});
     return vec;
   };
 
-  SECTION("rooted_tree") {
-    REQUIRE_NOTHROW(rooted_tree{0});
-    REQUIRE(rooted_tree{0}.children.empty());
-    REQUIRE(rooted_tree{0}.label == 0);
+  SECTION("eval_sequence") {
+    REQUIRE_NOTHROW(eval_sequence{0});
+    REQUIRE(eval_sequence{0}.children.empty());
+    REQUIRE(eval_sequence{0}.label == 0);
 
-    auto t0 = rooted_tree{0};
-    REQUIRE_NOTHROW(t0.children.push_back(rooted_tree{1}));
+    auto t0 = eval_sequence{0};
+    REQUIRE_NOTHROW(t0.children.push_back(eval_sequence{1}));
 
-    t0.children.push_back(rooted_tree{2});
-    t0.children.push_back(rooted_tree{3});
+    t0.children.push_back(eval_sequence{2});
+    t0.children.push_back(eval_sequence{3});
 
-    REQUIRE_NOTHROW(rooted_tree{0, {1, 2, 3}});
-    auto t1 = rooted_tree{0, {1, 2, 3}};
+    REQUIRE_NOTHROW(eval_sequence{0, {1, 2, 3}});
+    auto t1 = eval_sequence{0, {1, 2, 3}};
     REQUIRE(t0 == t1);
 
-    REQUIRE_NOTHROW(rooted_tree{0, {rooted_tree{1}, rooted_tree{2, {3, 4}}}});
+    REQUIRE_NOTHROW(
+        eval_sequence{0, {eval_sequence{1}, eval_sequence{2, {3, 4}}}});
   }
 
   SECTION("enumerate_eval_sequence") {
@@ -41,7 +42,7 @@ TEST_CASE("TEST_EVAL_SEQUENCE", "[eval_sequence]") {
     // to to_container
     //
     auto reap_seqs_to = [](std::set<std::wstring>& to_container) {
-      return [&to_container](const rooted_tree& t) {
+      return [&to_container](const eval_sequence& t) {
         std::wostringstream oss;
         oss << t;
         oss.flush();
@@ -99,13 +100,13 @@ TEST_CASE("TEST_EVAL_SEQUENCE", "[eval_sequence]") {
       return result;
     };
 
-    auto count_num_eval_seqs = [](const std::vector<rooted_tree>& init) {
+    auto count_num_eval_seqs = [](const std::vector<eval_sequence>& init) {
       //
       // counts the number of trees enumerated by the enumerate_eval_sequence
-      // function for a given initial vector of rooted trees init
+      // function for a given initial vector of evaluation sequences init
       //
       size_t count = 0;
-      enumerate_eval_sequence(init, [&count](const rooted_tree&) { ++count; });
+      enumerate_eval_sequence(init, [&count](const eval_sequence&) { ++count; });
       return count;
     };
 

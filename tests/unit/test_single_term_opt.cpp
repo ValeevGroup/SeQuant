@@ -23,15 +23,15 @@ TEST_CASE("TEST_SINGLE_TERM_OPT", "[single_term_opt]") {
       //
   );
 
-  SECTION("Optimal rooted_tree") {
+  SECTION("Optimal eval_sequence") {
     // equiv to ((0 1) 2)
-    auto tree1 = rooted_tree{0, {1, 2}};
+    auto tree1 = eval_sequence{0, {1, 2}};
 
     // equiv to ((0 2) 1)
-    auto tree2 = rooted_tree{0, {2, 1}};
+    auto tree2 = eval_sequence{0, {2, 1}};
 
     // equiv to ((1 2) 0)
-    auto tree3 = rooted_tree{1, {2, 0}};
+    auto tree3 = eval_sequence{1, {2, 0}};
 
     // nocc (= 10) < nvirt (= 20)
     REQUIRE(OptimalRootedTree{prod1, 10, 20}.tree() == tree2);
@@ -53,13 +53,13 @@ TEST_CASE("TEST_SINGLE_TERM_OPT", "[single_term_opt]") {
 
   SECTION("repack_product") {
     // equiv to ((0 1) 2)
-    auto prod1Tree1 = rooted_tree{0, {1, 2}};
+    auto prod1Tree1 = eval_sequence{0, {1, 2}};
 
     // equiv to ((0 2) 1)
-    auto prod1Tree2 = rooted_tree{0, {2, 1}};
+    auto prod1Tree2 = eval_sequence{0, {2, 1}};
 
     // equiv to ((1 2) 0)
-    auto prod1Tree3 = rooted_tree{1, {2, 0}};
+    auto prod1Tree3 = eval_sequence{1, {2, 0}};
 
     const auto& prod1Repack1 = prod1;
 
@@ -91,7 +91,7 @@ TEST_CASE("TEST_SINGLE_TERM_OPT", "[single_term_opt]") {
         }                                           //
     });
 
-    auto prod2Tree1 = rooted_tree{0, {1, rooted_tree{2, {3}}}};
+    auto prod2Tree1 = eval_sequence{0, {1, eval_sequence{2, {3}}}};
     auto prod2Repack1 =
         ex<Product>(Product{-1. / 2, {prod2->at(0), prod2->at(1)}});
 
@@ -105,10 +105,10 @@ TEST_CASE("TEST_SINGLE_TERM_OPT", "[single_term_opt]") {
   SECTION("Single term optimization: exhaustive scan of eval sequence") {
     // optimization of prod1
     // equiv to ((0 1) 2)
-    auto tree1 = rooted_tree{0, {1, 2}};
+    auto tree1 = eval_sequence{0, {1, 2}};
 
     // equiv to ((0 2) 1)
-    auto tree2 = rooted_tree{0, {2, 1}};
+    auto tree2 = eval_sequence{0, {2, 1}};
 
     // nocc (= 2) < nvirt (= 3)
     REQUIRE(*sto_exhaustive_scan(prod1, 2, 3) == *repack_prod(prod1, tree2));
