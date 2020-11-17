@@ -57,10 +57,15 @@ class EvalTree {
   /// Evaluate with lcao factory functionality
   template <typename DataTensorType>
   DataTensorType evaluate_and_make(
-      container::map<HashType, std::shared_ptr<DataTensorType>>& context,
+      // container::map<HashType, std::shared_ptr<DataTensorType>>& context,
       const std::function<DataTensorType(const Tensor&)>& eval_tensor)
   const {
-    return _evaluate_and_make(root, context, eval_tensor);
+    return _evaluate_and_make(root, /* context, */ eval_tensor);
+  }
+
+  template<typename DataTensorType>
+  DataTensorType symmetrize(DataTensorType& tensor, int rank){
+    return _symmetrize(tensor, rank);
   }
 
   /// Visit the tree by pre-order traversal.
@@ -148,7 +153,7 @@ class EvalTree {
   template <typename DataTensorType>
   static DataTensorType _evaluate_and_make(
       const EvalNodePtr& node,
-      container::map<HashType, std::shared_ptr<DataTensorType>>& context,
+      // container::map<HashType, std::shared_ptr<DataTensorType>>& context,
       const std::function<DataTensorType(const Tensor&)>& eval_tensor);
 
 };  // class EvalTree
@@ -239,12 +244,15 @@ DataTensorType EvalTree::_symmetrize(const DataTensorType& ta_tensor,
   DataTensorType result(ta_tensor.world(), ta_tensor.trange());
   result.fill(0);
 
+  // generate a vector and fill it with int starting with 0
   auto perm_vec = container::svector<size_t>(braket_rank);
   std::iota(perm_vec.begin(), perm_vec.end(), 0);
 
+  // fix indices of the result tensor
   auto lhs_annot = ords_to_csv_str(perm_vec, 0) + "," +
                    ords_to_csv_str(perm_vec, braket_rank);
 
+  // keep adding the permuted tensors to the result
   do {
     auto rhs_annot = ords_to_csv_str(perm_vec, 0) + "," +
                      ords_to_csv_str(perm_vec, braket_rank);
@@ -355,7 +363,7 @@ DataTensorType EvalTree::_evaluate(
 template <typename DataTensorType>
 DataTensorType EvalTree::_evaluate_and_make(
     const EvalNodePtr& node,
-    container::map<HashType, std::shared_ptr<DataTensorType>>& context,
+    // container::map<HashType, std::shared_ptr<DataTensorType>>& context,
     const std::function<DataTensorType(const Tensor&)>& eval_tensor) {
 
   // If node is a leaf, return the object from context
@@ -366,22 +374,28 @@ DataTensorType EvalTree::_evaluate_and_make(
       throw std::logic_error(
           "(anti-)symmetrization tensors cannot be evaluated from here!");
     }
-
+#if 0
     // Iterator pointing to the hash value of leaf
-    auto it = context.find(node->hash_value());
+    // auto it = context.find(node->hash_value());
 
     // If it didn't find the leaf, call a function that makes it
-    if (it == context.end()) {
+    // if (it == context.end()) {
       auto seq_tensor = leaf_node->expr()->as<Tensor>();
 
       // TODO: Pass bool for swapped labels
+      // TODO: This should be a reference
       const auto ta_tensor = eval_tensor(seq_tensor);
       auto ta_tensor_ptr = std::make_shared<DataTensorType>(ta_tensor);
 
       // Append the made tensor to the context for further use
-      it = (context.insert(std::pair{seq_tensor.hash_value(), ta_tensor_ptr})).first;
-    }
-    return *(it->second);
+      auto it = (context.insert(std::pair{seq_tensor.hash_value(), ta_tensor_ptr})).first;
+      // it = (context[seq_tensor.hash_value()] = ta_tensor_ptr).first;
+    // }
+//    if(leaf_node->expr()->as<Tensor>().label() == L"t")
+//      std::cout << " t:" << *(it->second);
+#endif
+    return eval_tensor(leaf_node->expr()->as<Tensor>());
+    // return *(it->second);
   }  // done leaf evaluation
 
   //
@@ -393,7 +407,7 @@ DataTensorType EvalTree::_evaluate_and_make(
   if (opr == Operation::ANTISYMMETRIZE) {
     auto bra_rank = intrnl_node->indices().size() / 2;
     auto ket_rank = intrnl_node->indices().size() - bra_rank;
-    return _antisymmetrize(_evaluate_and_make(intrnl_node->right(), context, eval_tensor), bra_rank,
+    return _antisymmetrize(_evaluate_and_make(intrnl_node->right(), eval_tensor), bra_rank,
                            ket_rank, intrnl_node->right()->scalar());
   }  // anitsymmetrization type evaluation done
 
@@ -403,7 +417,7 @@ DataTensorType EvalTree::_evaluate_and_make(
       throw std::logic_error("Can not symmetrize odd-ordered tensor!");
 
     braket_rank /= 2;
-    return _symmetrize(_evaluate_and_make(intrnl_node->right(), context, eval_tensor), braket_rank,
+    return _symmetrize(_evaluate_and_make(intrnl_node->right(), eval_tensor), braket_rank,
                        intrnl_node->right()->scalar());
   }  // symmetrization type evaluation done
 
@@ -429,15 +443,15 @@ DataTensorType EvalTree::_evaluate_and_make(
     // sum left and right evaluated tensors using TA syntax
     result(this_annot) =
         intrnl_node->left()->scalar() *
-            _evaluate_and_make(intrnl_node->left(), context, eval_tensor)(left_annot) +
+            _evaluate_and_make(intrnl_node->left(), eval_tensor)(left_annot) +
             intrnl_node->right()->scalar() *
-                _evaluate_and_make(intrnl_node->right(), context, eval_tensor)(right_annot);
+                _evaluate_and_make(intrnl_node->right(), eval_tensor)(right_annot);
   } else if (opr == Operation::PRODUCT) {
     // contract left and right evaluated tensors using TA syntax
     result(this_annot) = intrnl_node->left()->scalar() *
-        _evaluate_and_make(intrnl_node->left(), context, eval_tensor)(left_annot) *
+        _evaluate_and_make(intrnl_node->left(), eval_tensor)(left_annot) *
         intrnl_node->right()->scalar() *
-        _evaluate_and_make(intrnl_node->right(), context, eval_tensor)(right_annot);
+        _evaluate_and_make(intrnl_node->right(), eval_tensor)(right_annot);
   } else {
     throw std::domain_error("Operation: " + std::to_string((size_t)opr) +
         " not supported!");
