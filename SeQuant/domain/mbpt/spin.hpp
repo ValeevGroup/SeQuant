@@ -29,7 +29,8 @@ ExprPtr transform_expression(const ExprPtr& expr,
     return result;
   };
 
-  auto transform_product = [&transform_tensor, &scaling_factor](const Product& product) {
+  auto transform_product = [&transform_tensor,
+                            &scaling_factor](const Product& product) {
     auto result = std::make_shared<Product>();
     result->scale(product.scalar());
     for (auto&& term : product) {
@@ -68,47 +69,48 @@ ExprPtr transform_expression(const ExprPtr& expr,
     return nullptr;
 }
 
-/// @brief Preserving particle symmetry, swaps bra and ket labels on all tensors in an expression
+/// @brief Preserving particle symmetry, swaps bra and ket labels on all tensors
+/// in an expression
 /// @param expr ExprPtr to transform
 /// @return transformed expression
-ExprPtr swap_bra_ket(const ExprPtr& expr){
-
-  if(expr->is<Constant>()) return expr;
+ExprPtr swap_bra_ket(const ExprPtr& expr) {
+  if (expr->is<Constant>()) return expr;
 
   // Lambda for tensor
-  auto tensor_swap = [] (const Tensor& tensor){
-    auto result = Tensor(tensor.label(), tensor.ket(), tensor.bra(), tensor.symmetry(), tensor.braket_symmetry(), tensor.particle_symmetry());
+  auto tensor_swap = [](const Tensor& tensor) {
+    auto result =
+        Tensor(tensor.label(), tensor.ket(), tensor.bra(), tensor.symmetry(),
+               tensor.braket_symmetry(), tensor.particle_symmetry());
     return ex<Tensor>(result);
   };
 
   // Lambda for product
-  auto product_swap = [&tensor_swap] (const Product& product) {
+  auto product_swap = [&tensor_swap](const Product& product) {
     auto result = std::make_shared<Product>();
     result->scale(product.scalar());
     for (auto&& term : product) {
-      if (term->is<Tensor>())
-        result->append(tensor_swap(term->as<Tensor>()));
+      if (term->is<Tensor>()) result->append(tensor_swap(term->as<Tensor>()));
     }
     return result;
   };
 
-  if(expr->is<Tensor>())
+  if (expr->is<Tensor>())
     return tensor_swap(expr->as<Tensor>());
-  else if(expr->is<Product>())
+  else if (expr->is<Product>())
     return product_swap(expr->as<Product>());
-  else if(expr->is<Sum>()){
+  else if (expr->is<Sum>()) {
     auto result = std::make_shared<Sum>();
-    for(auto&& term : *expr){
-      if(term->is<Product>())
+    for (auto&& term : *expr) {
+      if (term->is<Product>())
         result->append(product_swap(term->as<Product>()));
-      else if(term->is<Tensor>())
+      else if (term->is<Tensor>())
         result->append(tensor_swap(term->as<Tensor>()));
-      else if(term->is<Constant>())
+      else if (term->is<Constant>())
         result->append(term);
     }
     return result;
   } else
-    throw ("Reached end of swap_bra_ket function in spin.hpp");
+    throw("Reached end of swap_bra_ket function in spin.hpp");
 }
 
 /// @brief Adds spins to indices in an expression with a replacement map
@@ -116,7 +118,8 @@ ExprPtr swap_bra_ket(const ExprPtr& expr){
 /// @param index_replacements a map of pairs containing the index and the
 /// corresponding replacement
 /// @return expr the ExprPtr with substituted indices
-ExprPtr append_spin(ExprPtr& expr, const std::map<Index, Index>& index_replacements) {
+ExprPtr append_spin(ExprPtr& expr,
+                    const std::map<Index, Index>& index_replacements) {
   auto add_spin_to_tensor = [&index_replacements](const Tensor& tensor) {
     auto spin_tensor = std::make_shared<Tensor>(tensor);
     spin_tensor->transform_indices(index_replacements);
@@ -180,17 +183,18 @@ ExprPtr remove_spin(ExprPtr& expr) {
     return sf_tensor;
   };
 
-  auto remove_spin_from_product = [&remove_spin_from_tensor](const Product& product) {
-    auto result = std::make_shared<Product>();
-    result->scale(product.scalar());
-    for (auto&& term : product) {
-      if (term->is<Tensor>()) {
-        result->append(1, remove_spin_from_tensor(term->as<Tensor>()));
-      } else
-        abort();
-    }
-    return result;
-  };
+  auto remove_spin_from_product =
+      [&remove_spin_from_tensor](const Product& product) {
+        auto result = std::make_shared<Product>();
+        result->scale(product.scalar());
+        for (auto&& term : product) {
+          if (term->is<Tensor>()) {
+            result->append(1, remove_spin_from_tensor(term->as<Tensor>()));
+          } else
+            abort();
+        }
+        return result;
+      };
 
   if (expr->is<Tensor>()) {
     return remove_spin_from_tensor(expr->as<Tensor>());
@@ -261,10 +265,9 @@ inline bool can_expand(const Tensor& tensor) {
 /// @return an ExprPtr containing the tensor otherwise
 ExprPtr expand_antisymm(const Tensor& tensor) {
   assert(tensor.bra().size() == tensor.ket().size());
-  if (tensor.bra_rank() == 1){
+  if (tensor.bra_rank() == 1) {
     Tensor new_tensor(tensor.label(), tensor.bra(), tensor.ket(),
-                      Symmetry::nonsymm,
-                      tensor.braket_symmetry(),
+                      Symmetry::nonsymm, tensor.braket_symmetry(),
                       tensor.particle_symmetry());
     return std::make_shared<Tensor>(new_tensor);
   }
@@ -284,7 +287,7 @@ ExprPtr expand_antisymm(const Tensor& tensor) {
 
   // Generate a sum of asymmetric tensors if the input tensor is antisymmetric
   // and greater than one body otherwise, return the tensor
-if ((tensor.symmetry() == Symmetry::antisymm) && (tensor.bra_rank() > 1)) {
+  if ((tensor.symmetry() == Symmetry::antisymm) && (tensor.bra_rank() > 1)) {
     const auto prefactor = get_phase(tensor);
     container::set<Index> bra_list;
     for (auto&& bra_idx : tensor.bra()) bra_list.insert(bra_idx);
@@ -325,19 +328,17 @@ if ((tensor.symmetry() == Symmetry::antisymm) && (tensor.bra_rank() > 1)) {
 /// @param expr an expression pointer to expand
 /// @return an expression pointer with expanded tensors as a sum
 inline ExprPtr expand_antisymm(const ExprPtr& expr) {
-
-  if(expr->is<Constant>())
+  if (expr->is<Constant>())
     return expr;
   else if (expr->is<Tensor>())
     return expand_antisymm(expr->as<Tensor>());
 
   // Product lambda
-  auto expand_product = [] (const Product& expr){
+  auto expand_product = [](const Product& expr) {
     Product temp{};
     temp.scale(expr.scalar());
-    for(auto&& term: expr){
-      if(term->is<Tensor>())
-        temp.append(expand_antisymm(term->as<Tensor>()));
+    for (auto&& term : expr) {
+      if (term->is<Tensor>()) temp.append(expand_antisymm(term->as<Tensor>()));
     }
     ExprPtr result = std::make_shared<Product>(temp);
     rapid_simplify(result);
@@ -346,10 +347,10 @@ inline ExprPtr expand_antisymm(const ExprPtr& expr) {
 
   if (expr->is<Product>())
     return expand_product(expr->as<Product>());
-  else if (expr->is<Sum>()){
+  else if (expr->is<Sum>()) {
     Sum temp{};
-    for(auto&& term: *expr){
-      if(term->is<Product>())
+    for (auto&& term : *expr) {
+      if (term->is<Product>())
         temp.append(expand_product(term->as<Product>()));
       else if (term->is<Tensor>())
         temp.append(expand_antisymm(term->as<Tensor>()));
@@ -369,25 +370,30 @@ inline ExprPtr expand_antisymm(const ExprPtr& expr) {
 /// in product for performance
 /// @input expr an expression pointer
 /// @return true if A is present in input
-bool has_A_label(const ExprPtr& expr){
+bool has_A_label(const ExprPtr& expr) {
   if (expr->is<Constant>()) return false;
 
   if (expr->is<Tensor>())
     return (expr->as<Tensor>().label() == L"A") ? true : false;
-  else if(expr->is<Product>())
-    return ((expr->as<Product>().factor(0))->as<Tensor>().label() == L"A") ? true : false;
-  else if(expr->is<Sum>()) {
+  else if (expr->is<Product>())
+    return ((expr->as<Product>().factor(0))->as<Tensor>().label() == L"A")
+               ? true
+               : false;
+  else if (expr->is<Sum>()) {
     bool result = false;
     for (auto&& term : *expr) {
       if (term->is<Product>())
-        result = ((term->as<Product>().factor(0))->as<Tensor>().label() == L"A") ? true : false;
+        result = ((term->as<Product>().factor(0))->as<Tensor>().label() == L"A")
+                     ? true
+                     : false;
       if (term->is<Tensor>())
         result = (expr->as<Tensor>().label() == L"A") ? true : false;
       if (result) return result;
     }
     return result;
   } else
-    throw("control reached end of check_A_label function."); // TODO: Catch exception
+    throw("control reached end of check_A_label function.");  // TODO: Catch
+                                                              // exception
 }
 
 /// @brief Check if a tensor with a certain label is present in an expression
@@ -435,29 +441,27 @@ bool has_tensor_label(const ExprPtr& expr, std::wstring label) {
 /// @param expr input expression
 /// @param label tensor label to find in the expression
 /// @return true if tensor with given label is found
-bool has_operator_label(const ExprPtr& expr, std::wstring label){
-
+bool has_operator_label(const ExprPtr& expr, std::wstring label) {
   bool result = false;
 
-  if(expr->is<Constant>())
+  if (expr->is<Constant>())
     return result;
-  else if(expr->is<Tensor>())
+  else if (expr->is<Tensor>())
     return expr->as<Tensor>().label() == label;
-  else if(expr->is<Product>()){
-    if(expr->as<Product>().factor(0)->is<Tensor>())
+  else if (expr->is<Product>()) {
+    if (expr->as<Product>().factor(0)->is<Tensor>())
       return expr->as<Product>().factor(0)->as<Tensor>().label() == label;
-  } else if (expr->is<Sum>()){
-    for(auto&& term: *expr){
-      if(term->is<Product>()){
-        if((term->as<Product>().factor(0))->is<Tensor>()){
-          result = (term->as<Product>().factor(0))->as<Tensor>().label() == label;
-          if(result)
-            return true;
+  } else if (expr->is<Sum>()) {
+    for (auto&& term : *expr) {
+      if (term->is<Product>()) {
+        if ((term->as<Product>().factor(0))->is<Tensor>()) {
+          result =
+              (term->as<Product>().factor(0))->as<Tensor>().label() == label;
+          if (result) return true;
         }
-      } else if (term->is<Tensor>()){
+      } else if (term->is<Tensor>()) {
         result = term->as<Tensor>().label() == label;
-        if(result)
-          return true;
+        if (result) return true;
       }
     }
   }
@@ -571,7 +575,7 @@ ExprPtr expr_symmetrize(const Product& product) {
   auto result = std::make_shared<Sum>();
 
   // Assumes canonical sequence of tensors in the product
-  if(product.factor(0)->as<Tensor>().label() != L"A")
+  if (product.factor(0)->as<Tensor>().label() != L"A")
     return std::make_shared<Product>(product);
 
   // CHECK: A is present and >1 particle
@@ -580,73 +584,76 @@ ExprPtr expr_symmetrize(const Product& product) {
   assert(A_tensor.label() == L"A");
 
   auto A_is_nconserving = A_tensor.bra_rank() == A_tensor.ket_rank();
-  if(A_is_nconserving)
-    if(A_tensor.bra_rank() == 1) return remove_tensor_from_product(product, L"A");
+  if (A_is_nconserving)
+    if (A_tensor.bra_rank() == 1)
+      return remove_tensor_from_product(product, L"A");
   assert(A_tensor.rank() > 1);
 
   auto S = Tensor{};
-  if(A_is_nconserving){
+  if (A_is_nconserving) {
     S = Tensor(L"S", A_tensor.bra(), A_tensor.ket(), Symmetry::nonsymm);
-  } else { // A is not nconserving
-    size_t n = (A_tensor.bra_rank() < A_tensor.ket_rank()) ? A_tensor.bra_rank() : A_tensor.ket_rank();
-      container::svector<Index> bra_list, ket_list;
-      for(size_t idx = 0; idx != n; ++idx){
-        bra_list.push_back(A_tensor.bra()[idx]);
-        ket_list.push_back(A_tensor.ket()[idx]);
-      }
-      S = Tensor(L"S", bra_list, ket_list, Symmetry::nonsymm);
+  } else {  // A is not nconserving
+    size_t n = (A_tensor.bra_rank() < A_tensor.ket_rank())
+                   ? A_tensor.bra_rank()
+                   : A_tensor.ket_rank();
+    container::svector<Index> bra_list, ket_list;
+    for (size_t idx = 0; idx != n; ++idx) {
+      bra_list.push_back(A_tensor.bra()[idx]);
+      ket_list.push_back(A_tensor.ket()[idx]);
+    }
+    S = Tensor(L"S", bra_list, ket_list, Symmetry::nonsymm);
   }
 
   // Generate replacement maps from a list(could be a bra or a ket)
   // Uses a permuted list of int to generate permutations
   // TODO factor out for reuse
-  auto maps_from_list = [] (const container::svector<Index, 4>& list){
+  auto maps_from_list = [](const container::svector<Index, 4>& list) {
     container::svector<int> int_list(list.size());
     std::iota(int_list.begin(), int_list.end(), 0);
     std::vector<std::map<Index, Index>> result;
     do {
       std::map<Index, Index> map;
       auto list_ptr = list.begin();
-      for(auto&& i : int_list){
+      for (auto&& i : int_list) {
         map.emplace(std::make_pair(*list_ptr, list[i]));
         list_ptr++;
       }
       result.push_back(map);
-    } while(std::next_permutation(int_list.begin(), int_list.end()));
+    } while (std::next_permutation(int_list.begin(), int_list.end()));
     assert(result.size() == std::tgamma(list.size() + 1));
     return result;
   };
 
   // Get phase relative to the canonical order
   // TODO factor out for reuse
-  auto get_phase = [] (const std::map<Index, Index>& map){
+  auto get_phase = [](const std::map<Index, Index>& map) {
     bool even;
     container::svector<Index> idx_list;
     for (auto&& pair : map) idx_list.push_back(pair.second);
     IndexSwapper::thread_instance().reset();
-    bubble_sort(std::begin(idx_list), std::end(idx_list),
-                std::less<Index>{});
+    bubble_sort(std::begin(idx_list), std::end(idx_list), std::less<Index>{});
     even = IndexSwapper::thread_instance().even_num_of_swaps();
     return even;
   };
 
   std::vector<std::map<Index, Index>> maps;
   // CASE 1: n_bra = n_ket on all tensors
-  if(A_is_nconserving) {
+  if (A_is_nconserving) {
     maps = maps_from_list(A_tensor.bra());
   } else {
     assert(A_tensor.bra_rank() != A_tensor.ket_rank());
-    if(A_tensor.bra_rank() > A_tensor.ket_rank())
+    if (A_tensor.bra_rank() > A_tensor.ket_rank())
       maps = maps_from_list(A_tensor.bra());
     else
       maps = maps_from_list(A_tensor.ket());
   }
   assert(!maps.empty());
-  for(auto&& map : maps){
+  for (auto&& map : maps) {
     auto even = get_phase(map);
     Product new_product{};
     new_product.scale(product.scalar());
-    even ? new_product.append(1, ex<Tensor>(S)) : new_product.append(-1, ex<Tensor>(S));
+    even ? new_product.append(1, ex<Tensor>(S))
+         : new_product.append(-1, ex<Tensor>(S));
     auto temp_product = remove_tensor_from_product(product, L"A");
     for (auto&& term : *temp_product) {
       if (term->is<Tensor>()) {
@@ -656,7 +663,7 @@ ExprPtr expr_symmetrize(const Product& product) {
       }
     }
     result->append(ex<Product>(new_product));
-  } // map
+  }  // map
   return result;
 }
 
@@ -678,7 +685,7 @@ ExprPtr expr_symmetrize(const ExprPtr& expr) {
     }
     return result;
   } else
-    throw("Unknown arg Type for expr_symmetrize."); // TODO: Catch exception
+    throw("Unknown arg Type for expr_symmetrize.");  // TODO: Catch exception
 }
 
 /// @brief Expand an expression containing the Antisymmetrization (A) operator
@@ -794,7 +801,7 @@ ExprPtr expand_P_operator(const ExprPtr& expr) {
     throw("Unknown arg Type for expand_P_operator.");
 }
 
-std::vector<std::map<Index, Index>> S_replacement_maps(const Tensor& S){
+std::vector<std::map<Index, Index>> S_replacement_maps(const Tensor& S) {
   assert(S.label() == L"S");
   assert(S.bra_rank() > 1);
   assert(S.bra().size() == S.ket().size());
@@ -802,33 +809,30 @@ std::vector<std::map<Index, Index>> S_replacement_maps(const Tensor& S){
   std::iota(std::begin(int_list), std::end(int_list), 0);
 
   std::vector<std::map<Index, Index>> maps;
-  do{
+  do {
     std::map<Index, Index> map;
     auto S_bra_ptr = S.bra().begin();
     auto S_ket_ptr = S.ket().begin();
-    for(auto&& i : int_list){
+    for (auto&& i : int_list) {
       map.emplace(std::make_pair(*S_bra_ptr, S.bra()[i]));
       ++S_bra_ptr;
       map.emplace(std::make_pair(*S_ket_ptr, S.ket()[i]));
       ++S_ket_ptr;
     }
     maps.push_back(map);
-  }while(std::next_permutation(int_list.begin(), int_list.end()));
+  } while (std::next_permutation(int_list.begin(), int_list.end()));
 
   return maps;
 }
 
 /// @brief Expand S operator
-ExprPtr expand_S_operator(const ExprPtr& expr){
-
+ExprPtr expand_S_operator(const ExprPtr& expr) {
   if (expr->is<Constant>() || expr->is<Tensor>()) return expr;
 
   auto result = std::make_shared<Sum>();
 
   // Check if S operator is present
-  if(!has_tensor_label(expr, L"S"))
-    return expr;
-
+  if (!has_tensor_label(expr, L"S")) return expr;
 
   auto reset_idx_tags = [](ExprPtr& expr) {
     if (expr->is<Tensor>())
@@ -838,20 +842,21 @@ ExprPtr expand_S_operator(const ExprPtr& expr){
   expr->visit(reset_idx_tags);
 
   // Lambda for applying S on products
-  auto expand_S_product = [] (const Product& product){
+  auto expand_S_product = [](const Product& product) {
     // check if S is present
-    if(!has_tensor_label(ex<Product>(product), L"S"))
+    if (!has_tensor_label(ex<Product>(product), L"S"))
       return ex<Product>(product);
 
     std::vector<std::map<Index, Index>> maps;
-    if(product.factor(0)->as<Tensor>().label() == L"S")
+    if (product.factor(0)->as<Tensor>().label() == L"S")
       maps = S_replacement_maps(product.factor(0)->as<Tensor>());
     assert(!maps.empty());
     Sum sum{};
-    for(auto&&map : maps){
+    for (auto&& map : maps) {
       Product new_product{};
       new_product.scale(product.scalar());
-      auto temp_product = remove_tensor_from_product(product, L"S")->as<Product>();
+      auto temp_product =
+          remove_tensor_from_product(product, L"S")->as<Product>();
       for (auto&& term : temp_product) {
         if (term->is<Tensor>()) {
           auto new_tensor = term->as<Tensor>();
@@ -865,15 +870,15 @@ ExprPtr expand_S_operator(const ExprPtr& expr){
     return result;
   };
 
-  if(expr->is<Product>()){
+  if (expr->is<Product>()) {
     result->append(expand_S_product(expr->as<Product>()));
-  } else if (expr->is<Sum>()){
-    for(auto&& term : *expr){
-      if(term->is<Product>()){
+  } else if (expr->is<Sum>()) {
+    for (auto&& term : *expr) {
+      if (term->is<Product>()) {
         result->append(expand_S_product(term->as<Product>()));
-      } else if (term->is<Tensor>()){
+      } else if (term->is<Tensor>()) {
         result->append(term);
-      } else if (term->is<Constant>()){
+      } else if (term->is<Constant>()) {
         result->append(term);
       }
     }
@@ -915,31 +920,29 @@ inline int count_cycles(const container::svector<int, 6>& vec1,
 /// @brief Transforms an expression from spin orbital to spatial orbitals
 /// @detailed This functions is designed for integrating spin out of expression
 /// with Coupled Cluster equations in mind.
-/// @attention This function may fail on arbitrarily created expressions that lacks
-/// proper index attributes.
+/// @attention This function may fail on arbitrarily created expressions that
+/// lacks proper index attributes.
 /// @param expr ExprPtr with spin orbital indices
 /// @param ext_index_groups groups of external indices
 /// @return an expression with spin integrated/adapted
-ExprPtr closed_shell_spintrace(const ExprPtr& expression,
-    const std::initializer_list<IndexList> ext_index_groups = {{}}){
-
+ExprPtr closed_shell_spintrace(
+    const ExprPtr& expression,
+    const container::vector<container::vector<Index>> ext_index_groups = {{}}) {
   // NOT supported for Proto indices
   auto check_proto_index = [](const ExprPtr& expr) {
     if (expr->is<Tensor>()) {
-      ranges::for_each(
-          expr->as<Tensor>().const_braket(), [](const Index& idx) {
-            assert(!idx.has_proto_indices() &&
-                "Proto index not supported in spintrace call.");
-          });
+      ranges::for_each(expr->as<Tensor>().const_braket(), [](const Index& idx) {
+        assert(!idx.has_proto_indices() &&
+               "Proto index not supported in spintrace call.");
+      });
     }
   };
   expression->visit(check_proto_index);
 
- // Symmetrize the expr and keep S operator
-  auto symm_and_expand = [] (const ExprPtr& expr){
+  // Symmetrize the expr and keep S operator
+  auto symm_and_expand = [](const ExprPtr& expr) {
     auto temp = expr;
-    if (has_A_label(temp))
-      temp = expr_symmetrize(temp);
+    if (has_A_label(temp)) temp = expr_symmetrize(temp);
     temp = expand_antisymm(temp);
     rapid_simplify(temp);
     return temp;
@@ -951,64 +954,70 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
       ranges::for_each(expr->as<Tensor>().const_braket(),
                        [](const Index& idx) { idx.reset_tag(); });
   };
-  expr->visit(reset_idx_tags); // This call is REQUIRED
-  expand(expr); // This call is REQUIRED
+  expr->visit(reset_idx_tags);  // This call is REQUIRED
+  expand(expr);                 // This call is REQUIRED
   rapid_simplify(expr);
 
   // Returns the number of cycles
-  auto count_cycles = [] (container::svector<Index>& v, container::svector<Index>& v1){
+  auto count_cycles = [](container::svector<Index>& v,
+                         container::svector<Index>& v1) {
     assert(v.size() == v1.size());
     size_t n_cycles = 0;
     auto dummy_idx = Index(L"p_50");
-    for(auto it = v.begin(); it != v.end(); ++it){
-      if(*it != dummy_idx){
+    for (auto it = v.begin(); it != v.end(); ++it) {
+      if (*it != dummy_idx) {
         // TODO: Throw exception if bra and ket indices don't match
         n_cycles++;
         auto idx = std::distance(v.begin(), it);
         auto it0 = it;
         auto it1 = std::find(v1.begin(), v1.end(), *it0);
         auto idx1 = std::distance(v1.begin(), it1);
-        do{
+        do {
           it0 = std::find(v.begin(), v.end(), v[idx1]);
           it1 = std::find(v1.begin(), v1.end(), *it0);
           idx1 = std::distance(v1.begin(), it1);
           *it0 = dummy_idx;
-        }while(idx1 != idx);
+        } while (idx1 != idx);
       }
     }
     return n_cycles;
   };
 
   // Lambda for a product
-  auto trace_product = [&ext_index_groups, &count_cycles] (const Product& product){
+  auto trace_product = [&ext_index_groups,
+                        &count_cycles](const Product& product) {
     // TODO: Check symmetry of tensors
 
     // Remove S if present in a product
     Product temp_product{};
     temp_product.scale(product.scalar());
-    if(product.factor(0)->as<Tensor>().label() == L"S"){
-      for(auto&& term : product.factors()){
-        if(term->is<Tensor>() && term->as<Tensor>().label() != L"S")
+    if (product.factor(0)->as<Tensor>().label() == L"S") {
+      for (auto&& term : product.factors()) {
+        if (term->is<Tensor>() && term->as<Tensor>().label() != L"S")
           temp_product.append(term);
       }
     } else {
       temp_product = product;
     }
 
-    auto get_ket_indices = [] (const Product& prod){
+    auto get_ket_indices = [](const Product& prod) {
       container::svector<Index> ket_idx;
-      for(auto&& t: prod) {
-        if(t->is<Tensor>())
-        ranges::for_each(t->as<Tensor>().ket(), [&ket_idx] (const Index& idx) {ket_idx.push_back(idx);});
+      for (auto&& t : prod) {
+        if (t->is<Tensor>())
+          ranges::for_each(t->as<Tensor>().ket(), [&ket_idx](const Index& idx) {
+            ket_idx.push_back(idx);
+          });
       }
       return ket_idx;
     };
 
-    auto get_bra_indices = [] (const Product& prod){
+    auto get_bra_indices = [](const Product& prod) {
       container::svector<Index> bra_idx;
-      for(auto&& t: prod) {
-        if(t->is<Tensor>())
-          ranges::for_each(t->as<Tensor>().bra(), [&bra_idx] (const Index& idx) {bra_idx.push_back(idx);});
+      for (auto&& t : prod) {
+        if (t->is<Tensor>())
+          ranges::for_each(t->as<Tensor>().bra(), [&bra_idx](const Index& idx) {
+            bra_idx.push_back(idx);
+          });
       }
       return bra_idx;
     };
@@ -1017,40 +1026,46 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
     auto product_bras = get_bra_indices(temp_product);
 
     // Substitute indices from external index list
-    if((*ext_index_groups.begin()).size() == 2)
-      ranges::for_each(ext_index_groups, [&product_bras, &product_kets, &count_cycles](const IndexList &idx_pair) {
-        assert(idx_pair.size() == 2);
-        if (idx_pair.size() == 2) {
-          auto it = idx_pair.begin();
-          auto first = *it;
-          it++;
-          auto second = *it;
-          std::replace(product_bras.begin(), product_bras.end(), first, second);
-          std::replace(product_kets.begin(), product_kets.end(), first, second);
-        }
-      });
+    if ((*ext_index_groups.begin()).size() == 2)
+      ranges::for_each(ext_index_groups, [&product_bras, &product_kets]
+                       (const container::vector<Index>& idx_pair)
+        {
+           assert(idx_pair.size() == 2);
+           if (idx_pair.size() == 2) {
+             auto it = idx_pair.begin();
+             auto first = *it;
+             it++;
+             auto second = *it;
+             std::replace(product_bras.begin(),
+                          product_bras.end(), first, second);
+             std::replace(product_kets.begin(),
+                          product_kets.end(), first, second);
+           }
+        });
 
     auto n_cycles = count_cycles(product_kets, product_bras);
 
     auto result = std::make_shared<Product>(product);
-    result->scale(std::pow(2,n_cycles));
+    result->scale(std::pow(2, n_cycles));
     return result;
   };
 
-  if(expr->is<Constant>())
+  if (expr->is<Constant>())
     return expr;
   else if (expr->is<Tensor>())
-    return trace_product((ex<Constant>(1.) * expr)->as<Product>()); // expand_all(expr);
-  else if(expr->is<Product>())
+    return trace_product(
+        (ex<Constant>(1.) * expr)->as<Product>());  // expand_all(expr);
+  else if (expr->is<Product>())
     return trace_product(expr->as<Product>());
-  else if (expr->is<Sum>()){
+  else if (expr->is<Sum>()) {
     auto result = std::make_shared<Sum>();
-    for(auto&& summand : *expr){
-      if(summand->is<Product>()){
+    for (auto&& summand : *expr) {
+      if (summand->is<Product>()) {
         result->append(trace_product(summand->as<Product>()));
-      } else if (summand->is<Tensor>()){
-        result->append(trace_product((ex<Constant>(1.) * summand)->as<Product>()));
-      } else // summand->is<Constant>()
+      } else if (summand->is<Tensor>()) {
+        result->append(
+            trace_product((ex<Constant>(1.) * summand)->as<Product>()));
+      } else  // summand->is<Constant>()
         result->append(summand);
     }
     return result;
@@ -1069,15 +1084,13 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
 /// @return an expression with spin integrated/adapted
 ExprPtr spintrace(ExprPtr expression,
                   std::initializer_list<IndexList> ext_index_groups = {{}}) {
-
   // SPIN TRACE DOES NOT SUPPORT PROTO INDICES YET.
   auto check_proto_index = [](const ExprPtr& expr) {
     if (expr->is<Tensor>()) {
-      ranges::for_each(
-          expr->as<Tensor>().const_braket(), [](const Index& idx) {
-            assert(!idx.has_proto_indices() &&
-                   "Proto index not supported in spintrace function.");
-          });
+      ranges::for_each(expr->as<Tensor>().const_braket(), [](const Index& idx) {
+        assert(!idx.has_proto_indices() &&
+               "Proto index not supported in spintrace function.");
+      });
     }
   };
   expression->visit(check_proto_index);
@@ -1116,7 +1129,8 @@ ExprPtr spintrace(ExprPtr expression,
   };
 
   // Most important lambda of this function
-  auto trace_product = [&ext_index_groups, &spin_trace_tensor, &spin_trace_product](const Product& expression) {
+  auto trace_product = [&ext_index_groups, &spin_trace_tensor,
+                        &spin_trace_product](const Product& expression) {
     auto result = std::make_shared<Sum>();
     ExprPtr expr = std::make_shared<Product>(expression);
 
@@ -1263,16 +1277,16 @@ ExprPtr spintrace(ExprPtr expression,
 /// @param fast_method use hash maps (memory intensive) for faster evaluation
 /// @param ext_index_groups External index groups to geenrate S operator
 /// @return ExprPtr with terms with S operator as a factor
-ExprPtr factorize_S_operator(const ExprPtr& expression,
-                             const std::initializer_list<IndexList> ext_index_groups = {{}},
-                             const bool fast_method = true){
-
+ExprPtr factorize_S_operator(
+    const ExprPtr& expression,
+    const std::initializer_list<IndexList> ext_index_groups = {{}},
+    const bool fast_method = true) {
   // Canonicalize the expression
   ExprPtr expr = expression;
   // canonicalize(expr);
 
   // If expression has S operator, do nothing and exit
-  if(has_operator_label(expr, L"S")) return expr;
+  if (has_operator_label(expr, L"S")) return expr;
 
   // If S operator is absent: generate from ext_index_groups
   Tensor S{};
@@ -1280,7 +1294,7 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
     container::svector<Index> bra_list, ket_list;
 
     // Fill bras and kets
-    ranges::for_each(ext_index_groups, [&] (const IndexList& idx_pair) {
+    ranges::for_each(ext_index_groups, [&](const IndexList& idx_pair) {
       auto it = idx_pair.begin();
       bra_list.push_back(*it);
       it++;
@@ -1297,7 +1311,8 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
   replacement_maps.erase(replacement_maps.begin());
 
   // Lambda function for index replacement in tensor
-  auto transform_tensor = [](const Tensor& tensor, const std::map<Index, Index>& replacement_map) {
+  auto transform_tensor = [](const Tensor& tensor,
+                             const std::map<Index, Index>& replacement_map) {
     auto result = std::make_shared<Tensor>(tensor);
     result->transform_indices(replacement_map);
     ranges::for_each(result->const_braket(),
@@ -1312,10 +1327,9 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
   // This method is stores hash values of terms in a container
   // for faster run times
 
-  if(fast_method) {
-
-    // summands_hash_list sorted container of hash values of canonicalized summands
-    // summands_hash_map unsorted map of (hash_val, summand) pairs
+  if (fast_method) {
+    // summands_hash_list sorted container of hash values of canonicalized
+    // summands summands_hash_map unsorted map of (hash_val, summand) pairs
     // container::set<size_t> summands_hash_list;
     container::vector<size_t> summands_hash_list;
     std::unordered_map<size_t, ExprPtr> summands_hash_map;
@@ -1339,22 +1353,23 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
       // Exclude summand with value zero
       while ((*it)->hash_value() == ex<Constant>(0)->hash_value()) {
         ++it;
-        if(it == expr->end())
-          break;
+        if (it == expr->end()) break;
       }
-      if(it == expr->end()) break;
+      if (it == expr->end()) break;
 
       // Remove current hash_value from list and clone summand
       auto hash0 = (*it)->hash_value();
-      summands_hash_list.erase(std::find(summands_hash_list.begin(), summands_hash_list.end(), hash0));
+      summands_hash_list.erase(std::find(summands_hash_list.begin(),
+                                         summands_hash_list.end(), hash0));
       auto new_product = (*it)->clone();
-      new_product = ex<Constant>(1.0/symm_factor) * ex<Tensor>(S) * new_product;
+      new_product =
+          ex<Constant>(1.0 / symm_factor) * ex<Tensor>(S) * new_product;
 
       // CONTAINER OF HASH VALUES AND SYMMETRIZED TERMS
       // FOR GENERALIZED EXPRESSION WITH ARBITRATY S OPERATOR
       // Loop over replacement maps The entire code from here
       container::vector<size_t> hash1_list;
-      for(auto&& replacement_map : replacement_maps){
+      for (auto&& replacement_map : replacement_maps) {
         size_t hash1;
         if ((*it)->is<Product>()) {
           // Clone *it, apply symmetrizer, store hash1 value
@@ -1386,39 +1401,37 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
         hash1_list.push_back(hash1);
       }
 
-
       // bool symmetrizable = false;
-      // auto hash1_found = [&](size_t h){ return summands_hash_list.find(h) != summands_hash_list.end();};
-      auto hash1_found = [&summands_hash_list](size_t h){
-        return std::find(summands_hash_list.begin(), summands_hash_list.end(), h) != summands_hash_list.end();
+      // auto hash1_found = [&](size_t h){ return summands_hash_list.find(h) !=
+      // summands_hash_list.end();};
+      auto hash1_found = [&summands_hash_list](size_t h) {
+        return std::find(summands_hash_list.begin(), summands_hash_list.end(),
+                         h) != summands_hash_list.end();
       };
       auto n_hash_found = ranges::count_if(hash1_list, hash1_found);
 
-      if(n_hash_found == hash1_list.size()){
+      if (n_hash_found == hash1_list.size()) {
         // Prepend S operator
         // new_product = ex<Tensor>(S) * new_product;
         new_product = ex<Constant>(symm_factor) * new_product;
         ++n_symm_terms;
 
         // remove values from hash1_list from summands_hash_list
-        ranges::for_each(hash1_list, [&] (const size_t hash1){
-
+        ranges::for_each(hash1_list, [&](const size_t hash1) {
           // summands_hash_list.erase(hash1);
-          summands_hash_list.erase(std::find(summands_hash_list.begin(), summands_hash_list.end(), hash1));
+          summands_hash_list.erase(std::find(summands_hash_list.begin(),
+                                             summands_hash_list.end(), hash1));
 
           auto term = summands_hash_map.find(hash1)->second;
 
-          for(auto&& summand : *expr){
-            if(summand->hash_value() == hash1) summand = ex<Constant>(0.0);
+          for (auto&& summand : *expr) {
+            if (summand->hash_value() == hash1) summand = ex<Constant>(0.0);
           }
-
         });
-
       }
       result_sum.append(new_product);
     }
   } else {
-
     ///////////////////////////////////////////////
     ///            Lazy approach                ///
     ///////////////////////////////////////////////
@@ -1432,7 +1445,7 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
 
     // The quick_method is a "faster" lazy approach that
     // symmetrizes *it instead of symmetrizing *find_it in the inside loop
-//    const auto tstart = std::chrono::high_resolution_clock::now();
+    //    const auto tstart = std::chrono::high_resolution_clock::now();
 
     // Controls which term to symmetrize
     // true -> symmetrize the summand
@@ -1441,16 +1454,17 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
 
     // Loop over terms of expression (OUTER LOOP)
     for (auto it = expr->begin(); it != expr->end(); ++it) {
-
       // If *it is symmetrized, go to next
-      while (std::find(i_list.begin(), i_list.end(), std::distance(expr->begin(), it)) != i_list.end()) ++it;
+      while (std::find(i_list.begin(), i_list.end(),
+                       std::distance(expr->begin(), it)) != i_list.end())
+        ++it;
 
       // Clone the summand
       auto new_product = (*it)->clone();
 
       // hash value of summand
       container::vector<size_t> hash0_list;
-      for(auto&& replacement_map : replacement_maps){
+      for (auto&& replacement_map : replacement_maps) {
         size_t hash0;
         if ((*it)->is<Product>()) {
           // Clone *it, apply symmetrizer, store hash value
@@ -1504,9 +1518,10 @@ ExprPtr factorize_S_operator(const ExprPtr& expression,
       // append product to running sum
       result_sum.append(new_product);
     }
-//    const auto tstop = std::chrono::high_resolution_clock::now();
-//    const auto time_elapsed =
-//        std::chrono::duration_cast<std::chrono::microseconds>(tstop - tstart);
+    //    const auto tstop = std::chrono::high_resolution_clock::now();
+    //    const auto time_elapsed =
+    //        std::chrono::duration_cast<std::chrono::microseconds>(tstop -
+    //        tstart);
     // std::cout << "Fast method: " << std::boolalpha << fast_method << "\n";
     // std::cout << "N symm terms found: " << n_symm_terms << "\n";
     // std::cout << "Time: " << time_elapsed.count() << " μs.\n";
