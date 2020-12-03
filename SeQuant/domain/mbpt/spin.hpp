@@ -17,9 +17,11 @@ namespace sequant {
 /// @param scaling_factor to scale the result
 /// @return a substituted and scaled expression pointer
 ExprPtr transform_expression(const ExprPtr& expr,
-                             const std::map<Index, Index>& index_replacements,
-                             double scaling_factor = 1.0) {
-  if (expr->is<Constant>()) return ex<Constant>(scaling_factor) * expr;
+    const std::map<Index, Index>& index_replacements,
+    double scaling_factor = 1.0) {
+  if (expr->is<Constant>()) {
+    return ex<Constant>(scaling_factor) * expr;
+  }
 
   auto transform_tensor = [&index_replacements](const Tensor& tensor) {
     auto result = std::make_shared<Tensor>(tensor);
@@ -29,8 +31,8 @@ ExprPtr transform_expression(const ExprPtr& expr,
     return result;
   };
 
-  auto transform_product = [&transform_tensor,
-                            &scaling_factor](const Product& product) {
+  auto transform_product = [&transform_tensor, &scaling_factor]
+      (const Product& product) {
     auto result = std::make_shared<Product>();
     result->scale(product.scalar());
     for (auto&& term : product) {
@@ -119,7 +121,7 @@ ExprPtr swap_bra_ket(const ExprPtr& expr) {
 /// corresponding replacement
 /// @return expr the ExprPtr with substituted indices
 ExprPtr append_spin(ExprPtr& expr,
-                    const std::map<Index, Index>& index_replacements) {
+    const std::map<Index, Index>& index_replacements) {
   auto add_spin_to_tensor = [&index_replacements](const Tensor& tensor) {
     auto spin_tensor = std::make_shared<Tensor>(tensor);
     spin_tensor->transform_indices(index_replacements);
@@ -400,7 +402,8 @@ bool has_A_label(const ExprPtr& expr) {
 /// @param expr input expression
 /// @param label tensor label to find in the expression
 /// @return true if tensor with given label is found
-bool has_tensor_label(const ExprPtr& expr, std::wstring label) {
+bool has_tensor_label(const ExprPtr& expr,
+    std::wstring label) {
   if (expr->is<Constant>()) return false;
 
   auto check_tensor = [&label](const Tensor& tensor) {
@@ -441,7 +444,8 @@ bool has_tensor_label(const ExprPtr& expr, std::wstring label) {
 /// @param expr input expression
 /// @param label tensor label to find in the expression
 /// @return true if tensor with given label is found
-bool has_operator_label(const ExprPtr& expr, std::wstring label) {
+bool has_operator_label(const ExprPtr& expr,
+    std::wstring label) {
   bool result = false;
 
   if (expr->is<Constant>())
@@ -504,7 +508,8 @@ std::vector<std::map<Index, Index>> A_replacement_map(const Tensor& A) {
 /// @param product A product expression
 /// @param label Label of the tensor to remove
 /// @return ExprPtr with the tensor removed
-ExprPtr remove_tensor_from_product(const Product& product, std::wstring label) {
+ExprPtr remove_tensor_from_product(const Product& product,
+    std::wstring label) {
   auto new_product = std::make_shared<Product>();
   new_product->scale(product.scalar());
   for (auto&& term : product) {
@@ -893,7 +898,7 @@ ExprPtr expand_S_operator(const ExprPtr& expr) {
 /// @param
 /// @return
 inline int count_cycles(const container::svector<int, 6>& vec1,
-                        const container::svector<int, 6>& vec2) {
+    const container::svector<int, 6>& vec2) {
   assert(vec1.size() == vec2.size());
   int n_cycles = 0;
   auto dummy_idx = 99;
@@ -925,8 +930,7 @@ inline int count_cycles(const container::svector<int, 6>& vec1,
 /// @param expr ExprPtr with spin orbital indices
 /// @param ext_index_groups groups of external indices
 /// @return an expression with spin integrated/adapted
-ExprPtr closed_shell_spintrace(
-    const ExprPtr& expression,
+ExprPtr closed_shell_spintrace(const ExprPtr& expression,
     const container::vector<container::vector<Index>> ext_index_groups = {{}}) {
   // NOT supported for Proto indices
   auto check_proto_index = [](const ExprPtr& expr) {

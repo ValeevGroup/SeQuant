@@ -42,7 +42,7 @@ int main() {
       std::make_shared<DefaultTensorCanonicalizer>());
   Logger::get_instance().wick_stats = false;
   // CC equations
-  auto cc_r = cceqvec{3, 3}(true, true, true, true);
+  auto cc_r = cceqvec{3, 3}(true, true, true, true, true);
 
   // factorization and evaluation of the CC equations
   using sequant::factorize::factorize_product;

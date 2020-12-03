@@ -127,10 +127,7 @@ int main(int argc, char* argv[]) {
     tstop = std::chrono::high_resolution_clock::now();
     time_elapsed = tstop - tstart;
     printf("CC R%d size: %lu S time: %5.6f sec.\n", i, cc_st_r[i]->size(), time_elapsed.count());
-
-    expand(cc_st_r[i]);
-    canonicalize(cc_st_r[i]);
-    rapid_simplify(cc_st_r[i]);
+    simplify(cc_st_r[i]);
 
     tstop = std::chrono::high_resolution_clock::now();
     time_elapsed = tstop - tstart;

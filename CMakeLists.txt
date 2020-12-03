@@ -206,7 +206,7 @@ endif(NOT TARGET tiledarray)
 
 enable_testing(true)
 
-set(utests2_src
+set(utests_src
          tests/unit/test_space.cpp
          tests/unit/test_index.cpp
          tests/unit/test_op.cpp
@@ -218,11 +218,9 @@ set(utests2_src
          tests/unit/test_mbpt.cpp
          tests/unit/test_tensor_network.cpp
          tests/unit/test_tn_factorization.cpp
-        )
-set(utests_src
-        tests/unit/test_spin.cpp
-        tests/unit/test_canonicalize.cpp
-        tests/unit/test_expr.cpp)
+         tests/unit/test_spin.cpp
+         tests/unit/test_canonicalize.cpp
+         tests/unit/test_expr.cpp)
 
 set(utests_deps SeQuant)
 
@@ -254,12 +252,13 @@ set_tests_properties(unit/run
         WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tests/unit)
 
 ####### Tests ########
+find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 
 # Single-Reference Coupled-Cluster equation generation (spin-orbital)
 set(example0 srcc)
 add_executable(${example0} EXCLUDE_FROM_ALL
         examples/${example0}/${example0}.cpp)
-target_link_libraries(${example0} SeQuant ${TBB_LIBRARIES})
+target_link_libraries(${example0} SeQuant ${TBB_LIBRARIES} Eigen3::Eigen)
 
 if (TARGET tiledarray AND TARGET Libint2::cxx)
   # SRCC spin-orbital equation evaluation
@@ -290,15 +289,8 @@ add_executable(${example3} EXCLUDE_FROM_ALL
     examples/${example3}/${example3}.cpp)
 target_link_libraries(${example3} SeQuant ${TBB_LIBRARIES})
 
-set(example4 srcc_tests)
-add_executable(${example4} EXCLUDE_FROM_ALL
-        examples/srcc/${example4}.cpp)
-target_link_libraries(${example4} SeQuant ${TBB_LIBRARIES} tiledarray)
-target_link_directories(${example4} PUBLIC ${TBB_LIBRARIES})
-target_compile_definitions(${example4} PRIVATE SEQUANT_HAS_TILEDARRAY)
-
 # add tests for running examples
-set (lastexample 5)
+set (lastexample 4)
 foreach(i RANGE ${lastexample})
     if (TARGET ${example${i}})
         add_test(example/${example${i}}/build "${CMAKE_COMMAND}"

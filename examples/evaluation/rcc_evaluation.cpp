@@ -1,24 +1,29 @@
 //
 // Created by Nakul Teke on 3/18/20.
 //
-//#include "../../examples/contract/scf/hartree-fock.h"
-//#include "../sequant_setup.hpp"
+#include "../../examples/contract/scf/hartree-fock.h"
+#include "../sequant_setup.hpp"
 
-//#include <SeQuant/domain/evaluate/eval_tree.hpp>
-//
-//#include <TiledArray/initialize.h>
-//#include <tiledarray.h>
-//#include <libint2.hpp>
-//
-//#include <memory>
+#include <SeQuant/domain/evaluate/eval_tree.hpp>
 
+#include <TiledArray/initialize.h>
+#include <tiledarray.h>
+#include <libint2.hpp>
+
+#include <memory>
+
+// Use manually coded CC equations
+#define MS_CC_EQ 0
+#if MS_CC_EQ
 #include "ms_cc_r.h"
+#endif
 
-#define CCSDT_eval 1
-#define CCSDTQ 0
+// CCSDT or CCSD
+#define CCSDT_eval 0
 
 container::vector<double> biorthogonal_tran_coeff(const int n_particles, const double& threshold);
-std::vector<std::map<Index, Index>> biorthogonal_tran_idx_map(const std::initializer_list<IndexList> ext_index_groups);
+std::vector<std::map<Index, Index>> biorthogonal_tran_idx_map(const container::vector<container::vector<Index>> ext_index_groups);
+ExprPtr symmetrize_expr(ExprPtr& expr, const container::vector<container::vector<Index>> ext_index_groups);
 
 int main(int argc, char* argv[]) {
   using std::cerr;
@@ -174,7 +179,7 @@ int main(int argc, char* argv[]) {
     auto mo_ints_tensor = compute_mo_ints(C, shells, world);
     auto tile_ints_spatial = mo_ints_tensor.find({0, 0, 0, 0}).get();
 
-    auto TA_fock = [&](const TA::Range& range) {
+    auto TA_fock = [&nao, &eps](const TA::Range& range) {
       TA::Tensor<double> tile(range);
       for (auto i = 0; i < nao; ++i) {
         for (auto j = 0; j < nao; ++j)
@@ -210,22 +215,15 @@ int main(int argc, char* argv[]) {
           for (auto q = ndocc; q < nao; ++q) {
             auto calc = tile_ints(r, s, p, q) *
                 ( 2.0 * tile_ints(r, s, p, q) - tile_ints(r, s, q, p));
-            emp2 += calc / (tile_fock(r,r) + tile_fock(s,s) - tile_fock(q,q) - tile_fock(p,p));
-          }
-        }
-      }
-    }
+            emp2 += calc / (tile_fock(r,r) + tile_fock(s,s) - tile_fock(q,q) - tile_fock(p,p)); } } } }
 
-    cout << "E(MP2): " << emp2 << "\nFinal energy is : " << hf_final + emp2 << " a.u."
-         << endl;
+    cout << "E(MP2): " << emp2 << "\nFinal energy is : " << hf_final + emp2 << " a.u." << endl;
 
     cout << "\n"
          << "***********************************\n"
          << "Coupled Cluster using TiledArray\n"
          << "***********************************\n"
          << endl;
-
-    cout << "Initializing tensors..." << endl;
 
     container::svector<size_t> r_occ = {0, ndocc};
     container::svector<size_t> r_vir = {0, nvirt};
@@ -236,7 +234,7 @@ int main(int argc, char* argv[]) {
     TR1vec r_oo(2, tr1o);
     TR1vec r_vv(2, tr1v);
     TR1vec r_ov(1, tr1o); r_ov.push_back(tr1v);
-    TR1vec r_vo(1,tr1v); r_vo.push_back(tr1o);
+    TR1vec r_vo(1, tr1v); r_vo.push_back(tr1o);
     TR1vec r_oooo(4, tr1o);
     TR1vec r_ooov(3, tr1o); r_ooov.push_back(tr1v);
     TR1vec r_oovo(3, tr1o); r_oovo.insert(r_oovo.end()-1, tr1v);
@@ -274,9 +272,6 @@ int main(int argc, char* argv[]) {
     auto D_oovv = std::make_shared<TA::TArrayD>(world, tr_oovv);
 #if CCSDT_eval
     auto D_ooovvv = std::make_shared<TA::TArrayD>(world, tr_ooovvv);
-#if CCSDTQ
-    auto D_oooovvvv = std::make_shared<TA::TArrayD>(world, tr_oooovvvv);
-#endif
 #endif
     auto Fock_oo = std::make_shared<TA::TArrayD>(world, tr_oo);
     auto Fock_ov = std::make_shared<TA::TArrayD>(world, tr_ov);
@@ -297,9 +292,6 @@ int main(int argc, char* argv[]) {
     (*D_oovv).fill(0.0);
 #if CCSDT_eval
     (*D_ooovvv).fill(0.0);
-#if CCSDTQ
-    (*D_oooovvvv).fill(0.0);
-#endif
 #endif
     (*Fock_oo).fill(0.0);
     (*Fock_ov).fill(0.0);
@@ -320,9 +312,6 @@ int main(int argc, char* argv[]) {
     auto tile_D_oovv = (*D_oovv).find({0, 0, 0, 0}).get();
 #if CCSDT_eval
     auto tile_D_ooovvv = (*D_ooovvv).find({0, 0, 0, 0, 0, 0}).get();
-#if CCSDTQ
-    auto tile_D_oooovvvv = (*D_oooovvvv).find({0, 0, 0, 0, 0, 0, 0, 0}).get();
-#endif
 #endif
     auto tile_Fock_oo = (*Fock_oo).find({0, 0}).get();
     auto tile_Fock_ov = (*Fock_ov).find({0, 0}).get();
@@ -402,33 +391,14 @@ int main(int argc, char* argv[]) {
                     tile_D_oovv(i, j, a, b) + tile_D_ov(k, c);
 #endif
 
-#if CCSDTQ
-    for (auto i = 0; i < ndocc; ++i)
-      for (auto j = 0; j < ndocc; ++j)
-        for (auto k = 0; k < ndocc; ++k)
-          for (auto l = 0; l < ndocc; ++l)
-          for (auto a = 0; a < nvirt; ++a)
-            for (auto b = 0; b < nvirt; ++b)
-              for (auto c = 0; c < nvirt; ++c)
-                for (auto d = 0; d < nvirt; ++d)
-                tile_D_oooovvvv(i, j, k, l, a, b, c, d) =
-                    tile_D_ooovvv(i, j, k, a, b, c) + tile_D_ov(l, d);
-#endif
-
-    //
     // amplitudes for coupled-cluster calculations
     auto t_ov = std::make_shared<TA::TArrayD>(world, tr_ov);
     (*t_ov).fill(0.);
     auto t_oovv = std::make_shared<TA::TArrayD>(world, tr_oovv);
     (*t_oovv).fill(0.);
-
 #if CCSDT_eval
     auto t_ooovvv = std::make_shared<TA::TArrayD>(world, tr_ooovvv);
     (*t_ooovvv).fill(0.0);
-#if CCSDTQ
-    auto t_oooovvvv = std::make_shared<TA::TArrayD>(world, tr_oooovvvv);
-    (*t_oooovvvv).fill(0.0);
-#endif
 #endif
 
     //
@@ -450,131 +420,81 @@ int main(int argc, char* argv[]) {
         std::make_shared<DefaultTensorCanonicalizer>());
     Logger::get_instance().wick_stats = false;
 
-#define MS_CC_EQ 0
 #if !MS_CC_EQ
     cout << "\n"
          << "***********************************\n";
 #if CCSDT_eval // CCSDT
     cout << "            CCSDT\n";
     auto cc_r = cceqvec{3, 3}(true, true, true, true, true);
-    // auto cc_r = cceqvec{4, 4}(true, true, true, true, true);
-#else // CCSD
+#else
     cout << "            CCSD\n";
     auto cc_r = cceqvec{2, 2}(true, true, true, true, true);
-    // cout << "            CCSDTQ\n";
-    // auto cc_r = cceqvec{4, 4}(true, true, true, true);
 #endif
     cout << "***********************************\n" << endl;
 
-    bool expand_S = true;
-    bool bt = true;
-    bool factorize_S = true;
+    /// Make external index
+    auto ext_idx_list = [] (const int i_max){
+      container::vector<container::vector<Index>> ext_idx_list;
 
-    // SPIN TRACE THE CC RESIDUAL EQUATIONS
+      for(size_t i = 1; i <= i_max; ++i) {
+        auto label = std::to_wstring(i);
+        auto occ_i = Index::make_label_index(IndexSpace::instance(IndexSpace::active_occupied), label);
+        auto virt_i = Index::make_label_index(IndexSpace::instance(IndexSpace::active_unoccupied), label);
+        container::vector<Index> pair = {occ_i, virt_i};
+        ext_idx_list.push_back(pair);
+      }
+      return ext_idx_list;
+    };
+
+    // SPINspin. TRACE THE CC RESIDUAL EQUATIONS
     std::vector<ExprPtr> cc_st_r(cc_r.size());
-
-
     for (int i = 1; i < cc_r.size(); ++i){
-      // std::wcout << "CC R" << i << ":\n" << to_latex_align(cc_r[i], 20, 5) << "\n";
       const auto tstart = std::chrono::high_resolution_clock::now();
-      std::initializer_list<IndexList> external_indices = {{}};
-      if(i == 1)
-        external_indices = {{L"i_1", L"a_1"}};
-      else if(i == 2)
-        external_indices = {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}};
-      else if(i == 3)
-        external_indices = {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}};
-      else if(i == 4)
-        external_indices = {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}, {L"i_4", L"a_4"}};
 
-      // cc_st_r[i] = spintrace(cc_r[i], external_indices);
-      cc_st_r[i] = closed_shell_spintrace(cc_r[i], external_indices);
+      auto ext_idx_clone = ext_idx_list(i);
+      cc_st_r[i] = closed_shell_spintrace(cc_r[i], ext_idx_clone);
       canonicalize(cc_st_r[i]);
-
-      if(i<3){
-        // std::wcout <<  __LINE__ << to_latex_align(cc_st_r[i], 20, 5) << "\n";
-      }
       printf("R%d Spin-orbit: %lu terms;\nSPINTRACED: With S operator: %lu;", i, cc_r[i]->size(), cc_st_r[i]->size());
-      if(expand_S){
-        cc_st_r[i] = expand_S_operator(cc_st_r[i]);
-        rapid_simplify(cc_st_r[i]);
-        canonicalize(cc_st_r[i]);
-        printf("S expanded: %lu\n", cc_st_r[i]->size());
-        // std::wcout << __LINE__ << to_latex(cc_st_r[i]) << "\n" << std::endl;
 
-        if(bt){
-
-          // Checks if the replacement map is a canonical sequence
-          auto is_canonical = [&] (const std::map<Index, Index>& idx_map){
-            bool canonical = true;
-            for(auto&& pair: idx_map) if(pair.first != pair.second) return false;
-            return canonical;
-          };
-
-          // Get coefficients and replacement maps
-          auto btc = biorthogonal_tran_coeff(external_indices.size(), 1.e-12);
-
-          // TODO: external_indices get modified before; so reset them
-          if(i == 1)
-            external_indices = {{L"i_1", L"a_1"}};
-          else if(i == 2)
-            external_indices = {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}};
-          else if(i == 3)
-            external_indices = {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}};
-          else if(i == 4)
-            external_indices = {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}, {L"i_4", L"a_4"}};
-
-          auto idx_map = biorthogonal_tran_idx_map(external_indices);
-          assert(btc.size() == idx_map.size());
-
-          // Append scale and append all transformations
-          Sum bt_expr{};
-          auto btc_ptr = btc.begin();
-          for(auto&& map: idx_map){
-            ExprPtr transformed_expr{};
-            if(is_canonical(map))
-              transformed_expr = ex<Constant>(*btc_ptr) * cc_st_r[i];
-            else
-              transformed_expr = ex<Constant>(*btc_ptr) * transform_expression(cc_st_r[i], map);
-            btc_ptr++;
-            bt_expr.append(transformed_expr);
-          }
-          ExprPtr bt_expr_p = std::make_shared<Sum>(bt_expr);
-//          if(i == 3)
-//           bt_expr_p = ex<Tensor>(L"S", WstrList{L"i_1", L"i_2", L"i_3"},
-//                                  WstrList{L"a_1", L"a_2", L"a_3"}, Symmetry::nonsymm) * bt_expr_p;
-//
-          expand(bt_expr_p);
-          canonicalize(bt_expr_p);
-          rapid_simplify(bt_expr_p);
-          cc_st_r[i] = bt_expr_p;
-          // std::wcout << __LINE__ << "\n" << to_latex_align(cc_st_r[i], 20, 5) << "\n";
-          printf("Biorthogonal transform: %lu\n", cc_st_r[i]->size());
-
-          if(factorize_S && i > 1){
-            if(i == 1)
-              external_indices = {{L"i_1", L"a_1"}};
-            else if(i == 2)
-              external_indices = {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}};
-            else if(i == 3)
-              external_indices = {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}};
-            else if(i == 4)
-              external_indices = {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}, {L"i_4", L"a_4"}};
-
-            cc_st_r[i] = factorize_S_operator(cc_st_r[i], external_indices, true);
-            printf("Factorize S: %lu\n", cc_st_r[i]->size());
-          }
-        } else {
-          // TODO: Scale residual equations
-        }
+      for(auto&& term: *cc_st_r[i]){
+        if(term->is<Product>()) term = remove_tensor_from_product(term->as<Product>(), L"S");
       }
-      // canonicalize(cc_st_r[i]);
-      // rapid_simplify(cc_st_r[i]);
+
+      // Checks if the replacement map is a canonical sequence
+      auto is_canonical = [] (const std::map<Index, Index>& idx_map){
+        bool canonical = true;
+        for(auto&& pair: idx_map) if(pair.first != pair.second) return false;
+        return canonical;
+      };
+
+      // Get coefficients and replacement maps
+      auto btc = biorthogonal_tran_coeff(ext_idx_clone.size(), 1.e-12);
+      auto idx_map = biorthogonal_tran_idx_map(ext_idx_clone);
+      assert(btc.size() == idx_map.size());
+
+      // Append scale and append all transformations
+      Sum bt_expr{};
+      auto btc_ptr = btc.begin();
+      for(auto&& map: idx_map){
+        ExprPtr transformed_expr{};
+        if(is_canonical(map))
+          transformed_expr = ex<Constant>(*btc_ptr) * cc_st_r[i];
+        else
+          transformed_expr = ex<Constant>(*btc_ptr) * transform_expression(cc_st_r[i], map);
+        btc_ptr++;
+        bt_expr.append(transformed_expr);
+      }
+      cc_st_r[i] = std::make_shared<Sum>(bt_expr);
+
+      if(i != 1)
+        cc_st_r[i] = symmetrize_expr(cc_st_r[i], ext_idx_clone);
+      simplify(cc_st_r[i]);
+
       const auto tstop = std::chrono::high_resolution_clock::now();
       const std::chrono::duration<double> time_elapsed = tstop - tstart;
       printf("CC R%d size: %lu time: %5.3f sec.\n\n", i, cc_st_r[i]->size(), time_elapsed.count());
-      // std::wcout << "R" << i << ":\n" << to_latex_align(cc_st_r[i], 20, 5) << "\n";
     }
+
     auto ccsdt_r1 = cc_st_r[1];
     auto ccsdt_r2 = cc_st_r[2];
 #if CCSDT_eval
@@ -592,16 +512,12 @@ int main(int argc, char* argv[]) {
 #endif
     simplify(ccsdt_r1);
     simplify(ccsdt_r2);
-    std::wcout << "Sizes: R1:" << ccsdt_r1->size() << "; R2: " << ccsdt_r2->size() << ";\n";
-    std::wcout << "CCSDT R1: " << to_latex(ccsdt_r1) << "\n";
 #if CCSDT_eval
     simplify(ccsdt_r3);
-    std::cout << "R3: " << ccsdt_r3->size() << "\n";
-    // std::wcout << "CCSDT R3: " << to_latex(ccsdt_r3) << "\n";
 #endif
 
     std::vector<std::shared_ptr<TA::TArrayD>> data_tensors = {Fock_oo, Fock_ov, Fock_vv,
-        G_oooo, G_ooov, G_oovo,  G_oovv,  G_ovov,  G_ovvo, G_vovo, G_voov, G_ovvv, G_vovv, G_vvvv,
+        G_oooo, G_ooov, G_oovo,  G_oovv,  G_ovov,  G_ovvo, G_vovo, G_ovvv, G_vovv, G_vvvv,
         t_ov, t_oovv};
 
     std::vector<sequant::ExprPtr> seq_tensors = {
@@ -616,7 +532,6 @@ int main(int argc, char* argv[]) {
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"g", {L"i_1",L"a_1"}, {L"i_2",L"a_2"})), //ovov
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"g", {L"i_1",L"a_1"}, {L"a_2",L"i_2"})), //ovvo
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"g", {L"a_1",L"i_1"}, {L"a_2",L"i_2"})), //vovo
-        std::make_shared<sequant::Tensor>(sequant::Tensor(L"g", {L"a_1",L"i_1"}, {L"i_2",L"a_2"})), //voov
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"g", {L"i_1",L"a_1"}, {L"a_2",L"a_3"})), //ovvv
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"g", {L"a_1",L"i_1"}, {L"a_2",L"a_3"})), //vovv
         std::make_shared<sequant::Tensor>(sequant::Tensor(L"g", {L"a_1",L"a_2"}, {L"a_3",L"a_4"})), //vvvv
@@ -628,10 +543,6 @@ int main(int argc, char* argv[]) {
 #if CCSDT_eval
     data_tensors.push_back(t_ooovvv);
     seq_tensors.push_back(std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"i_1", L"i_2", L"i_3"}, {L"a_1", L"a_2", L"a_3"}))); //ooovvv
-#if CCSDTQ
-    data_tensors.push_back(t_oooovvvv);
-    seq_tensors.push_back(std::make_shared<sequant::Tensor>(sequant::Tensor(L"t", {L"i_1", L"i_2", L"i_3", L"i_4"}, {L"a_1", L"a_2", L"a_3", L"a_4"}))); //oooovvvv
-#endif
 #endif
 
     using evaluate::HashType;
@@ -647,53 +558,32 @@ int main(int argc, char* argv[]) {
       context_map.insert(ContextMapType::value_type(hash_val, data_tensors.at(i)));
     }
 
-    // printf("R1 size: %lu\n",cc_st_r[1]->size());
-    // std::wcout << to_latex(cc_st_r[1]) << "\n";
-
-    // printf("R2 size: %lu\n",cc_st_r[2]->size());
-    // std::wcout << to_latex(cc_st_r[2]) << "\n";
-
-    // printf("R3 size: %lu\n",cc_st_r[3]->size());
-    // std::wcout << to_latex(cc_st_r[3]) << "\n";
-
 #if !CCSDT_eval
+
+#if MS_CC_EQ
     auto ccsd_r1 = r1(2);
     auto ccsd_r2 = r2(2);
     simplify(ccsd_r1);
-    std::wcout << "CCSD R1: " << to_latex(ccsd_r1) << "\n";
     simplify(ccsd_r2);
-
+#else
+    auto ccsd_r1 = cc_st_r[1];
+    auto ccsd_r2 = cc_st_r[2];
+#endif
     bool swap_braket_labels = true;
-//    auto r1_tree = EvalTree(cc_st_r[1], swap_braket_labels);
-//    auto r2_tree = EvalTree(cc_st_r[2], swap_braket_labels);
     auto r1_tree = EvalTree(ccsd_r1, swap_braket_labels);
     auto r2_tree = EvalTree(ccsd_r2, swap_braket_labels);
 #endif
 
 #if CCSDT_eval
-//    canonicalize(cc_st_r[3]);
-//    rapid_simplify(cc_st_r[3]);
-//    printf("R3 size: %lu\n",cc_st_r[3]->size());
-    // std::wcout << "CCSDT R3:\n" << to_latex_align(cc_st_r[3], 20) << "\n";
-//    auto r3_tree = EvalTree(cc_st_r[3], swap_braket_labels);
-
-//#if MS_CC_EQ
-//    auto ccsdt_r1 = r1(3);
-//    auto ccsdt_r2 = r2(3);
-//    auto ccsdt_r3 = r3(3);
-//#else
-//    auto ccsdt_r1 = cc_st_r[1];
-//    auto ccsdt_r2 = cc_st_r[2];
-//    auto ccsdt_r3 = cc_st_r[3];
-//#endif
-
+#if MS_CC_EQ
+    auto ccsdt_r1 = r1(3);
+    auto ccsdt_r2 = r2(3);
+    auto ccsdt_r3 = r3(3);
+#endif
     bool swap_braket_labels = true;
     auto r1_tree = EvalTree(ccsdt_r1, swap_braket_labels);
     auto r2_tree = EvalTree(ccsdt_r2, swap_braket_labels);
     auto r3_tree = EvalTree(ccsdt_r3, swap_braket_labels);
-#if CCSDTQ
-    auto r4_tree = EvalTree(cc_st_r[4], swap_braket_labels);
-#endif
 #endif
 
     const auto cc_conv = conv * 1e2;
@@ -702,15 +592,6 @@ int main(int argc, char* argv[]) {
     ediff = 0.0;
     auto normdiff = 0.0;
     auto ecc = 0.0;
-    bool diis = false;
-
-    int start_diis = 3;
-    int diis_size = 3;
-    std::deque<TA::TArrayD> e1_vec, e2_vec, e3_vec;
-    std::deque<TA::TArrayD> t1_vec, t2_vec, t3_vec;
-    TA::TArrayD t_ov_prev;
-    TA::TArrayD t_oovv_prev;
-    TA::TArrayD t_ooovvv_prev;
 
     cout << "Iter   norm(t_ov)    norm(t_oovv)     ΔE(CC)          E(CC)       time(s)" << endl;
     cout << "============================================================================" << endl;
@@ -719,121 +600,11 @@ int main(int argc, char* argv[]) {
       const auto tstart = std::chrono::high_resolution_clock::now();
       ++iter;
 
-      if(diis && iter > 1){
-
-        // Error vector
-        TA::TArrayD e1;
-        e1("i,a") = (*t_ov)("i,a") - t_ov_prev("i,a");
-        TA::TArrayD diis_t1;
-        diis_t1 = TiledArray::clone(*t_ov);
-
-        TA::TArrayD e2;
-        e2("i,j,a,b") = (*t_oovv)("i,j,a,b") - t_oovv_prev("i,j,a,b");
-        TA::TArrayD diis_t2;
-        diis_t2 = TiledArray::clone(*t_oovv);
-
-        // Vector of error matrices
-        e1_vec.push_back(e1);
-        e2_vec.push_back(e2);
-
-        t1_vec.push_back(diis_t1);
-        t2_vec.push_back(diis_t2);
-
-        int B_size = std::min(iter, diis_size) - 1;
-
-        if(e1_vec.size() > B_size){
-          e1_vec.pop_front();
-          e2_vec.pop_front();
-          t1_vec.pop_front();
-          t2_vec.pop_front();
-        }
-
-#if CCSDT_eval
-        TA::TArrayD e3;
-        e3("i,j,k,a,b,c") = (*t_ooovvv)("i,j,k,a,b,c") - t_ooovvv_prev("i,j,k,a,b,c");
-        TA::TArrayD diis_t3;
-        diis_t3 = TiledArray::clone(*t_ooovvv);
-
-        e3_vec.push_back(e3);
-        t3_vec.push_back(diis_t3);
-
-        if(e1_vec.size() > B_size){
-          e3_vec.pop_front();
-          t3_vec.pop_front();
-        }
-#endif
-
-        if(iter > start_diis){
-          // Fill 'B' matrix
-          Matrix B_t1(B_size + 1, B_size + 1);
-          B_t1.setConstant(-1.0);
-          B_t1(B_size, B_size) = 0.0;
-          Matrix B_t2 = B_t1;
-
-          for(int i = 0; i < B_size; ++i){
-            for(int j = 0; j < B_size; ++j){
-              B_t1(i,j) = TA::dot_product(e1_vec[i], e1_vec[j]);
-              B_t2(i,j) = TA::dot_product(e2_vec[i], e2_vec[j]);
-            }
-          }
-
-          // Solve, get coefficients
-          Eigen::VectorXd rhs(B_size + 1);
-          rhs.setZero();
-          rhs(B_size) = -1;
-
-          Eigen::ColPivHouseholderQR<Matrix> solver_t1(B_t1);
-          Eigen::VectorXd coeff_t1 = solver_t1.solve(rhs);
-
-          Eigen::ColPivHouseholderQR<Matrix> solver_t2(B_t2);
-          Eigen::VectorXd coeff_t2 = solver_t2.solve(rhs);
-
-          // Update T amplitudes
-          TA::TArrayD new_t1(world, tr_ov);
-          new_t1.fill(0.0);
-          TA::TArrayD new_t2(world, tr_oovv);
-          new_t2.fill(0.0);
-          for(int i = 0; i < B_size; ++i){
-            new_t1("i,a") += t1_vec[i]("i,a") * coeff_t1[i];
-            new_t2("i,j,a,b") += t2_vec[i]("i,j,a,b") * coeff_t2[i];
-          }
-
-          (*t_ov)("i,a") = new_t1("i,a");
-          (*t_oovv)("i,j,a,b") = new_t2("i,j,a,b");
-
-#if CCSDT_eval
-          Matrix B_t3(B_size + 1, B_size + 1);
-          B_t3.setConstant(-1.0);
-          B_t3(B_size, B_size) = 0.0;
-
-          for(int i = 0; i < B_size; ++i){
-            for(int j = 0; j < B_size; ++j) {
-              B_t3(i,j) = TA::dot_product(e3_vec[i], e3_vec[j]);
-            }
-          }
-
-          Eigen::ColPivHouseholderQR<Matrix> solver_t3(B_t3);
-          Eigen::VectorXd coeff_t3 = solver_t3.solve(rhs);
-
-          TA::TArrayD new_t3(world, tr_ooovvv);
-          new_t3.fill(0.0);
-          for(int i = 0; i < B_size; ++i){
-            new_t3("i,j,k,a,b,c") += t3_vec[i]("i,j,k,a,b,c") * coeff_t3[i];
-          }
-          (*t_ooovvv)("i,j,k,a,b,c") = new_t3("i,j,k,a,b,c");
-#endif
-        }
-      }
-
       auto R1 = r1_tree.evaluate(context_map);
       auto R2 = r2_tree.evaluate(context_map);
 #if CCSDT_eval
       auto R3 = r3_tree.evaluate(context_map);
-#if CCSDTQ
-      auto R4 = r4_tree.evaluate(context_map);
 #endif
-#endif
-
       auto tile_R1       = R1.find({0,0}).get();
       auto tile_t_ov     = (*t_ov).find({0,0}).get();
 
@@ -843,26 +614,10 @@ int main(int argc, char* argv[]) {
 #if CCSDT_eval
       auto tile_R3       = R3.find({0,0,0,0,0,0}).get();
       auto tile_t_ooovvv   = (*t_ooovvv).find({0,0,0,0,0,0}).get();
-#if CCSDTQ
-      auto tile_R4       = R4.find({0,0,0,0,0,0,0,0}).get();
-      auto tile_t_oooovvvv   = (*t_oooovvvv).find({0,0,0,0,0,0,0,0}).get();
-#endif
 #endif
 
-      if(diis){
-        t_ov_prev = (*t_ov).clone();
-        t_oovv_prev = (*t_oovv).clone();
-        // cout << t_ov_prev;
-        // cout << t_oovv_prev;
-      }
-
-#if CCSDT_eval
-      if(diis){
-        t_ooovvv_prev = (*t_ooovvv).clone();
-        cout << t_ooovvv_prev;
-      }
-      // cout << (*t_ooovvv) << "\n";
-#endif
+      auto norm_r1 = std::sqrt(R1("i,j").dot(R1("i,j")));
+      auto norm_r2 = std::sqrt(R2("i,j,a,b").dot(R2("i,j,a,b")));
 
       // save previous norm
       auto norm_last = std::sqrt((*t_oovv)("i,j,a,b").dot((*t_oovv)("i,j,a,b")));
@@ -880,6 +635,7 @@ int main(int argc, char* argv[]) {
             for (auto b = 0; b < nvirt; ++b) {
               tile_t_oovv(i,j,a,b) += tile_R2(i,j,a,b)/tile_D_oovv(i,j,a,b); } } } }
 
+      // std::cout << "t1: " << tile_t_ov << "\nt2: " << tile_t_oovv << std::endl;
 # if CCSDT_eval
       // update t_ooovvv
       for (auto i = 0; i < ndocc; ++i) {
@@ -892,19 +648,6 @@ int main(int argc, char* argv[]) {
                       tile_R3(i,j,k,a,b,c)/tile_D_ooovvv(i,j,k,a,b,c); } } } } } }
 #endif
 
-# if CCSDTQ
-      // update t_oooovvvv
-      for (auto i = 0; i < ndocc; ++i) {
-        for (auto j = 0; j < ndocc; ++j) {
-          for (auto k = 0; k < ndocc; ++k) {
-            for (auto l = 0; l < ndocc; ++l) {
-            for (auto a = 0; a < nvirt; ++a) {
-              for (auto b = 0; b < nvirt; ++b) {
-                for (auto c = 0; c < nvirt; ++c) {
-                  for (auto d = 0; d < nvirt; ++d) {
-                  tile_t_oooovvvv(i,j,k,l,a,b,c,d) +=
-                      tile_R4(i,j,k,l,a,b,c,d)/tile_D_oooovvvv(i,j,k,l,a,b,c,d); } } } } } } } }
-#endif
       auto ecc_last = ecc;
 
       // Calculate CCSD contribution to correlation energy
@@ -1017,6 +760,19 @@ int main(int argc, char* argv[]) {
   return 0;
 }
 
+// Generate S operator from external index list
+ExprPtr symmetrize_expr(ExprPtr& expr, const container::vector<container::vector<Index>> ext_index_groups = {{}}){
+
+  container::vector<Index> bra_list, ket_list;
+  for(auto&& idx_group : ext_index_groups) {
+    bra_list.push_back(*idx_group.begin());
+    ket_list.push_back(*(idx_group.begin() + 1));
+  }
+
+  assert(bra_list.size() == ket_list.size());
+  auto S = Tensor(L"S", bra_list, ket_list, Symmetry::nonsymm);
+  return ex<Tensor>(S) * expr;
+}
 
 /// @brief Find coefficients for biorthogonal transformation
 /// @detailed Given the number of external indices, this function calculates the permutation matrix,
@@ -1050,14 +806,14 @@ container::vector<double> biorthogonal_tran_coeff(const int n_particles, const d
       ++n_row;
     } while (std::next_permutation(v1.begin(), v1.end()));
     M *= std::pow(-1, n_particles);
-    // std::cout << "permutation_matrix:\n" << M << "\n";
+    // std::cout << "permutation_matrix:\n" << M << std::endl;
   }
 
   // Normalization constant
   double scalar;
   {
     // inline bool nonZero(double d) { return abs(d) > threshold ? true : false; }
-    auto nonZero = [&] (const double d) { return abs(d) > threshold ? true : false; };
+    auto nonZero = [&threshold] (const double d) { return abs(d) > threshold ? true : false; };
 
     // Solve system of equations
     SelfAdjointEigenSolver<MatrixXd> eig_solver(M);
@@ -1068,7 +824,7 @@ container::vector<double> biorthogonal_tran_coeff(const int n_particles, const d
     double non0count = std::count_if(eig_vals.begin(), eig_vals.end(), nonZero);
     scalar = eig_vals.size() / non0count;
   }
-
+  // std::cout << "scalar: " << scalar << std::endl;
   // Find Pseudo Inverse, get 1st row only
   MatrixXd pinv = M.completeOrthogonalDecomposition().pseudoInverse();
   container::vector<double> result(pinv.rows());
@@ -1077,8 +833,8 @@ container::vector<double> biorthogonal_tran_coeff(const int n_particles, const d
 }
 
 /// @brief Biorthogonal transformation map
-std::vector<std::map<Index, Index>> biorthogonal_tran_idx_map(const std::initializer_list<IndexList> ext_index_groups = {{}}){
-
+std::vector<std::map<Index, Index>> biorthogonal_tran_idx_map(
+    const container::vector<container::vector<Index>> ext_index_groups = {{}}){
   //Check size of external index group; catch exception otherwise
   if(ext_index_groups.size() == 0) throw( "Cannot compute index map since " && "ext_index_groups.size() == 0");
   assert(ext_index_groups.size() > 0);
@@ -1098,7 +854,6 @@ std::vector<std::map<Index, Index>> biorthogonal_tran_idx_map(const std::initial
     }
     result.push_back(map);
   } while(std::next_permutation(idx_list.begin(), idx_list.end()));
-
   return result;
 }
 
