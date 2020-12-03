@@ -60,7 +60,7 @@ class EvalTree {
       // container::map<HashType, std::shared_ptr<DataTensorType>>& context,
       const std::function<DataTensorType(const Tensor&)>& eval_tensor)
   const {
-    return _evaluate_and_make(root, /* context, */ eval_tensor);
+    return _evaluate_and_make(root, eval_tensor);
   }
 
   template<typename DataTensorType>
@@ -153,7 +153,6 @@ class EvalTree {
   template <typename DataTensorType>
   static DataTensorType _evaluate_and_make(
       const EvalNodePtr& node,
-      // container::map<HashType, std::shared_ptr<DataTensorType>>& context,
       const std::function<DataTensorType(const Tensor&)>& eval_tensor);
 
 };  // class EvalTree
@@ -363,7 +362,6 @@ DataTensorType EvalTree::_evaluate(
 template <typename DataTensorType>
 DataTensorType EvalTree::_evaluate_and_make(
     const EvalNodePtr& node,
-    // container::map<HashType, std::shared_ptr<DataTensorType>>& context,
     const std::function<DataTensorType(const Tensor&)>& eval_tensor) {
 
   // If node is a leaf, return the object from context
@@ -374,28 +372,7 @@ DataTensorType EvalTree::_evaluate_and_make(
       throw std::logic_error(
           "(anti-)symmetrization tensors cannot be evaluated from here!");
     }
-#if 0
-    // Iterator pointing to the hash value of leaf
-    // auto it = context.find(node->hash_value());
-
-    // If it didn't find the leaf, call a function that makes it
-    // if (it == context.end()) {
-      auto seq_tensor = leaf_node->expr()->as<Tensor>();
-
-      // TODO: Pass bool for swapped labels
-      // TODO: This should be a reference
-      const auto ta_tensor = eval_tensor(seq_tensor);
-      auto ta_tensor_ptr = std::make_shared<DataTensorType>(ta_tensor);
-
-      // Append the made tensor to the context for further use
-      auto it = (context.insert(std::pair{seq_tensor.hash_value(), ta_tensor_ptr})).first;
-      // it = (context[seq_tensor.hash_value()] = ta_tensor_ptr).first;
-    // }
-//    if(leaf_node->expr()->as<Tensor>().label() == L"t")
-//      std::cout << " t:" << *(it->second);
-#endif
     return eval_tensor(leaf_node->expr()->as<Tensor>());
-    // return *(it->second);
   }  // done leaf evaluation
 
   //
