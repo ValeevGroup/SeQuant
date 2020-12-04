@@ -267,8 +267,18 @@ TEST_CASE("EVALUATIONS TESTS", "[eval_tree]") {
   const size_t nocc = 10;
   const size_t nvirt = 20;
 
-  TA::TiledRange tr_ov{{0, nocc}, {0, nvirt}};
-  TA::TiledRange tr_oovv{{0, nocc}, {0, nocc}, {0, nvirt}, {0, nvirt}};
+  container::svector<size_t> r_occ = {0, nocc};
+  container::svector<size_t> r_vir = {0, nvirt};
+  auto tr1o = TA::TiledRange1(r_occ.begin(), r_occ.end());
+  auto tr1v = TA::TiledRange1(r_vir.begin(), r_vir.end());
+
+  std::vector<TA::TiledRange1> r_ov(1,tr1o);
+  r_ov.push_back(tr1v);
+  std::vector<TA::TiledRange1> r_oovv(2, tr1o);
+  r_oovv.insert(r_oovv.end(), 2, tr1v);
+
+  TA::TiledRange tr_ov(r_ov.begin(), r_ov.end());
+  TA::TiledRange tr_oovv(r_oovv.begin(), r_oovv.end());
 
   auto& world = TA::get_default_world();
   auto tnsr_T_ov = std::make_shared<DTensorType>(world, tr_ov);
@@ -460,7 +470,9 @@ TEST_CASE("EVALUATIONS TESTS", "[eval_tree]") {
     auto sum = std::make_shared<Sum>(Sum{prod1, prod2});
 
     // g_oovv, t_oovv, t_ov are already declared
-    TA::TiledRange tr_ovvv{{0, nocc}, {0, nvirt}, {0, nvirt}, {0, nvirt}};
+    std::vector<TA::TiledRange1> r_ovvv(1, tr1o);
+    r_ovvv.insert(r_ovvv.end(), 3, tr1v);
+    TA::TiledRange tr_ovvv(r_ovvv.begin(), r_ovvv.end());
     auto G_ovvv = std::make_shared<DTensorType>(world, tr_ovvv);
     G_ovvv->fill_random();
 

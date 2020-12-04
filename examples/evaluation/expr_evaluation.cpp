@@ -361,17 +361,47 @@ int main(int argc, char* argv[]) {
     r_ooovvv.insert(r_ooovvv.end(), 3, tr1v);
     TA::TiledRange tr_ooovvv(r_ooovvv.begin(), r_ooovvv.end());
 
-//    TA::TiledRange tr_oo{{0, nocc}, {0, nocc}};
-//    TA::TiledRange tr_ov{{0, nocc}, {0, nvirt}};
-//    TA::TiledRange tr_vv{{0, nvirt}, {0, nvirt}};
-//    TA::TiledRange tr_oooo{{0, nocc}, {0, nocc}, {0, nocc}, {0, nocc}};
-//    TA::TiledRange tr_ooov{{0, nocc}, {0, nocc}, {0, nocc}, {0, nvirt}};
-//    TA::TiledRange tr_oovv{{0, nocc}, {0, nocc}, {0, nvirt}, {0, nvirt}};
-//    TA::TiledRange tr_ovov{{0, nocc}, {0, nvirt}, {0, nocc}, {0, nvirt}};
-//    TA::TiledRange tr_ovvv{{0, nocc}, {0, nvirt}, {0, nvirt}, {0, nvirt}};
-//    TA::TiledRange tr_vvvv{{0, nvirt}, {0, nvirt}, {0, nvirt}, {0, nvirt}};
-//    TA::TiledRange tr_ooovvv{{0, nocc},  {0, nocc},  {0, nocc},
-//                             {0, nvirt}, {0, nvirt}, {0, nvirt}};
+    container::svector<size_t> r_occ = {0, nocc};
+    container::svector<size_t> r_vir = {0, nvirt};
+    auto tr1o = TA::TiledRange1(r_occ.begin(), r_occ.end());
+    auto tr1v = TA::TiledRange1(r_vir.begin(), r_vir.end());
+
+    using TR1vec = std::vector<TA::TiledRange1>;
+    TR1vec r_oo(2, tr1o);
+    TR1vec r_vv(2, tr1v);
+    TR1vec r_ov(1, tr1o); r_ov.push_back(tr1v);
+    TR1vec r_vo(1,tr1v); r_vo.push_back(tr1o);
+    TR1vec r_oooo(4, tr1o);
+    TR1vec r_ooov(3, tr1o); r_ooov.push_back(tr1v);
+    TR1vec r_oovo(3, tr1o); r_oovo.insert(r_oovo.end()-1, tr1v);
+    TR1vec r_oovv(2, tr1o); r_oovv.insert(r_oovv.end(), 2, tr1v);
+    TR1vec r_ovov(r_ov.begin(), r_ov.end()); r_ovov.insert(r_ovov.end(), r_ov.begin(), r_ov.end());
+    TR1vec r_ovvo(r_ov.begin(), r_ov.end()); r_ovvo.insert(r_ovvo.end(), r_vo.begin(), r_vo.end());
+    TR1vec r_vovo(r_vo.begin(), r_vo.end()); r_vovo.insert(r_vovo.end(), r_vo.begin(), r_vo.end());
+    TR1vec r_voov(r_vo.begin(), r_vo.end()); r_voov.insert(r_voov.end(), r_ov.begin(), r_ov.end());
+    TR1vec r_ovvv(3, tr1v); r_ovvv.insert(r_ovvv.begin(), tr1o);
+    TR1vec r_vovv(3, tr1v); r_vovv.insert(r_vovv.begin()+1, tr1o);
+    TR1vec r_vvvv(4, tr1v);
+
+    using TTR = TA::TiledRange;
+    TTR tr_oo(r_oo.begin(), r_oo.end());
+    TTR tr_ov(r_ov.begin(), r_ov.end());
+    TTR tr_vv(r_vv.begin(), r_vv.end());
+    TTR tr_oooo(r_oooo.begin(), r_oooo.end());
+    TTR tr_ooov(r_ooov.begin(), r_ooov.end());
+    TTR tr_oovo(r_oovo.begin(), r_oovo.end());
+    TTR tr_oovv(r_oovv.begin(), r_oovv.end());
+    TTR tr_ovov(r_ovov.begin(), r_ovov.end());
+    TTR tr_ovvo(r_ovvo.begin(), r_ovvo.end());
+    TTR tr_voov(r_voov.begin(), r_voov.end());
+    TTR tr_vovo(r_vovo.begin(), r_vovo.end());
+    TTR tr_ovvv(r_ovvv.begin(), r_ovvv.end());
+    TTR tr_vovv(r_vovv.begin(), r_vovv.end());
+    TTR tr_vvvv(r_vvvv.begin(), r_vvvv.end());
+
+    TR1vec r_ooovvv(3,tr1o);
+    r_ooovvv.insert(r_ooovvv.end(), 3, tr1v);
+    TA::TiledRange tr_ooovvv(r_ooovvv.begin(), r_ooovvv.end());
 
     auto D_ov = std::make_shared<TA::TArrayD>(world, tr_ov);
     auto D_oovv = std::make_shared<TA::TArrayD>(world, tr_oovv);
@@ -456,22 +486,22 @@ int main(int argc, char* argv[]) {
             tile_G_vvvv(a, b, c, d) =
                 tile_ints_spin(a + nocc, b + nocc, c + nocc, d + nocc);
 
-//    for (auto i = 0; i < nocc; ++i)
-//      for (auto j = 0; j < nocc; ++j)
-//        for (auto k = 0; k < nocc; ++k)
-//          for (auto a = 0; a < nvirt; ++a)
-//            for (auto b = 0; b < nvirt; ++b)
-//              for (auto c = 0; c < nvirt; ++c)
-//                tile_D_ooovvv(i, j, k, a, b, c) =
-//                    tile_D_oovv(i, j, a, b) + tile_D_ov(k, c);
+    // for (auto i = 0; i < nocc; ++i)
+    //   for (auto j = 0; j < nocc; ++j)
+    //     for (auto k = 0; k < nocc; ++k)
+    //       for (auto a = 0; a < nvirt; ++a)
+    //         for (auto b = 0; b < nvirt; ++b)
+    //           for (auto c = 0; c < nvirt; ++c)
+    //             tile_D_ooovvv(i, j, k, a, b, c) =
+    //                 tile_D_oovv(i, j, a, b) + tile_D_ov(k, c);
 
     // amplitudes for coupled-cluster calculations
     auto t_ov = std::make_shared<TA::TArrayD>(world, tr_ov);
     auto t_oovv = std::make_shared<TA::TArrayD>(world, tr_oovv);
-//    auto t_ooovvv = std::make_shared<TA::TArrayD>(world, tr_ooovvv);
+    // auto t_ooovvv = std::make_shared<TA::TArrayD>(world, tr_ooovvv);
     (*t_ov).fill(0.);
     (*t_oovv).fill(0.);
-//    (*t_ooovvv).fill(0.0);
+    // (*t_ooovvv).fill(0.0);
 
     //
     // global sequant setup...

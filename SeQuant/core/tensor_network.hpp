@@ -154,7 +154,7 @@ class TensorNetwork {
   /// optimal if all tensors are distinct; set to false to perform complete
   /// canonicalization
   /// @param named_indices specifies the indices that cannot be renamed, i.e.
-  /// their labels are meaningful; defaults is nullptr, which results in external
+  /// their labels are meaningful; default is nullptr, which results in external
   /// indices treated as named indices
   /// @return biproduct of canonicalization (e.g. phase); if none, returns nullptr
   ExprPtr canonicalize(
@@ -201,6 +201,9 @@ class TensorNetwork {
   // have unique labels (not full labels)
   mutable named_indices_t ext_indices_;
 
+  // replacements of anonymous indices produced by the last call to canonicalize()
+  container::map<Index, Index> idxrepl_;
+
   /// initializes edges_ and ext_indices_
   void init_edges() const;
 
@@ -221,6 +224,10 @@ class TensorNetwork {
       init_edges();
     return ext_indices_;
   }
+
+  /// accessor for the list of anonymous index replacements performed by the last call to canonicalize()
+  /// @return replacements of anonymous indices performed by the last call to canonicalize()
+  const auto& idxrepl() const { return idxrepl_; };
 
  public:
   /// @brief converts the network into a Bliss graph whose vertices are indices and

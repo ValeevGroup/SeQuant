@@ -67,6 +67,10 @@ TEST_CASE("TensorNetwork", "[elements]") {
       REQUIRE(std::dynamic_pointer_cast<Expr>(tensors[1]));
       REQUIRE(*std::dynamic_pointer_cast<Expr>(tensors[0]) == *t1);
       REQUIRE(*std::dynamic_pointer_cast<Expr>(tensors[1]) == *t2);
+
+      // index replacements performed by canonicalize() ... since canonicalize() not invoked this is empty
+      auto idxrepl = tn.idxrepl();
+      REQUIRE(idxrepl.size() == 0);
     }
   }  // SECTION("accessors")
 
@@ -90,6 +94,7 @@ TEST_CASE("TensorNetwork", "[elements]") {
             L"{F^{{i_1}}_{{i_2}}}");
         REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) ==
             L"{\\tilde{a}^{{i_2}}_{{i_1}}}");
+        REQUIRE(tn.idxrepl().size() == 2);
       }
 
       {

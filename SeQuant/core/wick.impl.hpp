@@ -5,14 +5,13 @@
 #ifndef SEQUANT_WICK_IMPL_HPP
 #define SEQUANT_WICK_IMPL_HPP
 
-#if __has_include(<execution>)
-#include <execution>
-#define SEQUANT_HAS_EXECUTION_HEADER
-#endif
-
 #include "bliss.hpp"
 #include "tensor_network.hpp"
 #include "utility.hpp"
+
+#ifdef SEQUANT_HAS_EXECUTION_HEADER
+# include <execution>
+#endif
 
 namespace sequant {
 
