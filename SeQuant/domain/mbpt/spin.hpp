@@ -1087,7 +1087,8 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
 /// @param ext_index_groups groups of external indices
 /// @return an expression with spin integrated/adapted
 ExprPtr spintrace(ExprPtr expression,
-                  std::initializer_list<IndexList> ext_index_groups = {{}}) {
+                  container::vector<container::vector<Index>> ext_index_groups = {{}}) {
+
   // SPIN TRACE DOES NOT SUPPORT PROTO INDICES YET.
   auto check_proto_index = [](const ExprPtr& expr) {
     if (expr->is<Tensor>()) {
@@ -1099,8 +1100,11 @@ ExprPtr spintrace(ExprPtr expression,
   };
   expression->visit(check_proto_index);
 
-  if (expression->is<Constant>()) return expression;
+  if (expression->is<Constant>()) {
+    return expression;
+  }
 
+  // BUG ? why does this return a contant
   auto spin_trace_tensor = [](const Tensor& tensor) {
     if (can_expand(tensor)) {
       return expand_antisymm(tensor);
@@ -1119,7 +1123,9 @@ ExprPtr spintrace(ExprPtr expression,
           break;
       }
     }
-    if (product.size() != spin_product.size()) spin_product.scale(0);
+    if (product.size() != spin_product.size()) {
+      spin_product.scale(0);
+    }
     ExprPtr result = std::make_shared<Product>(spin_product);
     expand(result);
     rapid_simplify(result);
@@ -1168,8 +1174,8 @@ ExprPtr spintrace(ExprPtr expression,
     // EFV: generate the grand list of index groups by concatenating list of
     // external index EFV: groups with the groups of internal indices (each
     // internal index = 1 group)
-    using IndexGroup = container::svector<Index>;
-    container::svector<IndexGroup> index_groups;
+    using IndexGroup = container::vector<Index>;
+    container::vector<IndexGroup> index_groups;
 
     for (auto&& i : int_idxlist) {
       index_groups.emplace_back(IndexGroup(1, i));
@@ -1195,22 +1201,15 @@ ExprPtr spintrace(ExprPtr expression,
 
         for (auto&& index : index_group) {
           IndexSpace space;
-          if (spin_bit == 0) {
-            space = IndexSpace::instance(
-                IndexSpace::instance(index.label()).type(), IndexSpace::alpha);
-          } else {
-            space = IndexSpace::instance(
-                IndexSpace::instance(index.label()).type(), IndexSpace::beta);
-          }
+          space = spin_bit == 0 ?
+             IndexSpace::instance(IndexSpace::instance(index.label()).type(), IndexSpace::alpha):
+             IndexSpace::instance(IndexSpace::instance(index.label()).type(), IndexSpace::beta);
 
           // TODO: Check if valid for index with no subscripts
           auto subscript_label =
               index.label().substr(index.label().find(L'_') + 1);
-          std::wstring subscript_label_ws(subscript_label.begin(),
-                                          subscript_label.end());
-
+          std::wstring subscript_label_ws(subscript_label.begin(), subscript_label.end());
           Index spin_index = Index::make_label_index(space, subscript_label_ws);
-
           index_replacements.emplace(std::make_pair(index, spin_index));
         }
         ++index_group_count;
