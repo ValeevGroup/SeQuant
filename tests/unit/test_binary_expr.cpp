@@ -81,10 +81,6 @@ TEST_CASE("TEST BINARY_EXPR_CLASS", "[binary_expr]") {
     //       /  \      / \
     //      5    7   13  17
 
-    // sequant::utils::visit_inorder<int>(node,
-    //                            [](const auto& x) { std::cout << x << " "; });
-    // std::cout << std::endl;
-
     //
     // evaluator
     //

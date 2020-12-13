@@ -12,7 +12,9 @@ class binary_expr {
   T data_;
 
  protected:
-  binary_expr(T&& data) : data_{std::forward<T>(data)} {}
+  binary_expr(const T& data) : data_{data} {}
+
+  binary_expr(T&& data) : data_{std::move(data)} {}
 
  public:
   using type = T;
@@ -85,6 +87,7 @@ class binary_expr_leaf final : public binary_expr<T> {
 
 template <typename T, typename V>
 bool operator==(const binary_expr<T>& lhs, const binary_expr<V>& rhs) {
+  if (&lhs == &rhs) return true;
   return lhs.data() == rhs.data() &&
          ((lhs.leaf() && rhs.leaf()) ||
           (*lhs.left() == *rhs.left()) && (*lhs.right() == *rhs.right()));
@@ -178,15 +181,14 @@ R evaluate_binary_expr(const typename binary_expr<T>::node_ptr& node,
                        F&& evaluator) {
   static_assert(std::is_convertible_v<F, std::function<R(const T&)>>,
                 "evaluator signature does not match");
-  static_assert(
-      std::is_convertible_v<
-          F, std::function<R(const typename binary_expr<T>::node_ptr&, R, R)>>,
-      "evaluator signature does not match");
+  static_assert(std::is_convertible_v<
+                    F, std::function<R(const typename binary_expr<T>::node_ptr&,
+                                       const R&, const R&)>>,
+                "evaluator signature does not match");
 
   if (!node) throw std::logic_error("Called evaluate on nullptr");
 
-  if (node->leaf())
-    return std::invoke(std::forward<F>(evaluator), node->data());
+  if (node->leaf()) return evaluator(node->data());
 
   return evaluator(
       node,
