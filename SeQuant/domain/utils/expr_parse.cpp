@@ -4,7 +4,6 @@
 #include <SeQuant/core/tensor.hpp>
 #include <range/v3/view.hpp>
 #include <regex>
-#include <sstream>
 #include <string>
 
 namespace sequant::utils {
@@ -92,7 +91,7 @@ ExprPtr parse_product_term(const std::wstring& expr, Symmetry tensor_sym) {
 
   // find the tensors
   const auto& tregex = std::wregex(expr_rgx_pat.at("tensor"));
-  std::wsregex_iterator beg(expr.begin(), expr.end(), tregex);
+  std::wsregex_iterator beg(expr.cbegin(), expr.cend(), tregex);
   std::wsregex_iterator end{};
 
   auto tensors = ranges::subrange(beg, end) |
@@ -132,12 +131,16 @@ ExprPtr parse_sum(const std::wstring& expr, Symmetry tensor_sym) {
 }  // namespace detail
 
 ExprPtr parse_expr(std::wstring_view raw, Symmetry tensor_sym) {
-  auto expr = detail::prune_space(raw);
-  if (std::regex_match(expr,
-                       std::wregex{detail::expr_rgx_pat.at("term"),
-                                   std::regex_constants::nosubs}))
+  const auto& expr = detail::prune_space(raw);
+  using detail::expr_rgx_pat;
+  if (std::regex_match(expr, std::wregex{expr_rgx_pat.at("term"),
+                                         std::regex_constants::nosubs}))
     return detail::parse_term(expr, tensor_sym);
-  return detail::parse_sum(expr, tensor_sym);
+  else if (std::regex_match(expr, std::wregex(expr_rgx_pat.at("sum"),
+                                              std::regex_constants::nosubs))) {
+    return detail::parse_sum(expr, tensor_sym);
+  } else
+    throw std::logic_error("Expression parse error. Invalid expression spec.");
 }
 
 }  // namespace sequant::utils

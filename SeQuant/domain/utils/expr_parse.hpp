@@ -106,8 +106,8 @@ const auto expr_rgx_pat = []() {  // a map from expr components to regex pattern
 
   const std::wstring pt =         // tensor pattern
       rgx_capture(L"[[:w:]]+") +  // group 1 tensor label
-      rgx_look_ahead(LR"([^[:s:]]*)" + rgx_capture(pb)) +  // group 2 tensor bra
-      rgx_look_ahead(LR"([^[:s:]]*)" + rgx_capture(pk)) +  // group 3 tensor ket
+      rgx_look_ahead(LR"([^[:s:]]*?)" + rgx_capture(pb)) +  // group 2 tensor bra
+      rgx_look_ahead(LR"([^[:s:]]*?)" + rgx_capture(pk)) +  // group 3 tensor ket
       rgx_or_nc(pb + pk, pk + pb);
 
   const std::wstring ptt =  // tensor term: ie. just a tensor. no scaling

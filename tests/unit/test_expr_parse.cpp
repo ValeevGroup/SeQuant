@@ -4,11 +4,11 @@
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/domain/utils/expr_parse.hpp>
 
-#include <iostream>
 #include <range/v3/view.hpp>
 #include <regex>
 
-auto validate_regex = [](std::wstring_view target, std::wregex rgx) -> bool {
+auto validate_regex = [](std::wstring_view target,
+                         const std::wregex& rgx) -> bool {
   return std::regex_match(target.data(), rgx);
 };
 
@@ -41,7 +41,6 @@ TEST_CASE("TEST_EXPR_PARSE", "[expr_parse]") {
   }
 
   SECTION("tensor") {
-    using index_cont = sequant::container::svector<std::wstring>;
     const auto& tensor_regex = std::wregex(expr_rgx_pat.at("tensor"));
 
     for (std::wstring_view tnsr : {
@@ -212,97 +211,113 @@ TEST_CASE("TEST_MAKE_EXPR_BY_PARSE", "[expr_parse]") {
   using namespace std::string_literals;
   using namespace sequant;
   using utils::parse_expr;
+  using utils::detail::prune_space;
 
   using index_list = container::svector<Index>;
 
-  auto A = ex<Tensor>(Tensor{L"A", index_list{L"i_1", L"i_2"},
-                             index_list{L"a_1", L"a_2"}, Symmetry::antisymm});
+  SECTION("tensor") {
+    using utils::detail::parse_tensor_term;
 
-  auto g1 = ex<Tensor>(Tensor{L"g", index_list{L"i_3", L"i_4"},
-                              index_list{L"a_3", L"a_4"}, Symmetry::antisymm});
+    const auto& g1 =
+        ex<Tensor>(Tensor{L"g", index_list{L"i_3", L"i_4"},
+                          index_list{L"a_3", L"a_4"}, Symmetry::antisymm});
 
-  auto t1 = ex<Tensor>(
-      Tensor{L"t", {L"a_3", L"a_4"}, {L"i_1", L"i_2"}, Symmetry::antisymm});
-
-  auto t2 = ex<Tensor>(
-      Tensor{L"t", {L"a_1", L"a_2"}, {L"i_3", L"i_4"}, Symmetry::antisymm});
-
-  auto t3 = ex<Tensor>(Tensor{L"t", {L"a_1"}, {L"i_3"}, Symmetry::antisymm});
-
-  auto t4 = ex<Tensor>(
-      Tensor{L"t", {L"a_2", L"a_3"}, {L"i_1", L"i_2"}, Symmetry::antisymm});
-
-  auto f1 = ex<Tensor>(Tensor{L"f", {L"i_3"}, {L"a_3"}, Symmetry::antisymm});
-
-  auto prod1 = ex<Product>(Product{1.0 / 16, {A, g1, t1, t2}});
-
-  auto prod2 = ex<Product>(Product{1.0 / 2, {A, f1, t3, t4}});
-
-  auto sum1 = ex<Sum>(Sum{prod1, prod2});
-  auto sum2 =
-      ex<Sum>(Sum{prod1, ex<Tensor>(Tensor{L"g", index_list{L"a_1, a_2"},
-                                           index_list{L"i_1", L"i_2"},
-                                           Symmetry::antisymm})});
-  const auto& str_g1_1 =
-      L"g"
-      "_(i3, i4)"
-      "^(a_3, a_4)";
-
-  const auto& str_g1_2 =
-      L"g"
-      "^(a_3, a_4)"
-      "_(i3, i4)";
-
-  const auto& str_A = L"A_(i1, i2)^(a1, a2)";
-  const auto& str_t1 = L"t^(i1, i2)_(a3, a4)";
-  const auto& str_t2 = L"t_(a1, a2)^(i3, i4)";
-  const auto& str_t3 = L"t_(a_1)^(i_3)";
-  const auto& str_t4 = L"t_(a2, a3)^(i1, i2)";
-  const auto& str_f1 = L"f_(i3)^(a3)";
-
-  for (const auto& [s, t] :
-       container::map<std::wstring_view, ExprPtr>{{str_g1_1, g1},
-                                                  {str_g1_2, g1},
-                                                  {str_t1, t1},
-                                                  {str_t2, t2},
-                                                  {str_t3, t3},
-                                                  {str_t4, t4},
-                                                  {str_f1, f1}}) {
-    auto parsed = parse_expr(s, Symmetry::antisymm);
-    REQUIRE(parsed);
-    REQUIRE(parsed->is<Tensor>());
-    REQUIRE(*parsed == *t);
+    const auto& str_g1_1 = L"g_(i3, i4)^(a3, a4)";
+    const auto& str_g1_2 = L" + g_(i3, i4)^(a3, a4)";
+    REQUIRE(*g1 ==
+            *parse_tensor_term(prune_space(str_g1_1), Symmetry::antisymm));
+    REQUIRE(*g1 ==
+            *parse_tensor_term(prune_space(str_g1_2), Symmetry::antisymm));
   }
 
-  const auto& str_prod1 = L"  1/16 * "s + str_A + L" * "s + str_g1_1 + L" * "s +
-                          str_t1 + L" * "s + str_t2;
+  SECTION("product") {
+    using utils::detail::parse_product_term;
+    const auto& p1 = ex<Product>(Product{
+        ex<Tensor>(Tensor{L"g", index_list{L"i_3", L"i_4"},
+                          index_list{L"a_3", L"a_4"}, Symmetry::antisymm}),
+        ex<Tensor>(Tensor{
+            L"t", {L"a_3", L"a_4"}, {L"i_1", L"i_2"}, Symmetry::antisymm})});
 
-  const auto& str_prod2 = L" 1/2 *"s + str_A + L" * "s + str_f1 + L" * "s +
-                          str_t3 + L" * "s + str_t4;
-
-  for (const auto& [s, e] : container::map<std::wstring_view, ExprPtr>{
-           {str_prod1, prod1}, {str_prod2, prod2}}) {
-    auto parsed = parse_expr(s, Symmetry::antisymm);
-    REQUIRE(parsed);
-    REQUIRE(parsed->is<Product>());
-    // std::wcout << "Orig:   " << e->to_latex() << "\n"
-    //            << "Parsed: " << parsed->to_latex() << "\n\n";
-    // REQUIRE(*parsed == *e);
-  }
-  // std::wcout.flush();
-
-  const auto& str_sum1 = str_prod1 + L" + "s + str_prod2;
-  const auto& str_sum2 = str_prod1 + L" + g_(a1, a2)^(i1, i2) ";
-
-  for (const auto& [s, e] : container::map<std::wstring_view, ExprPtr>{
-           {str_sum1, sum1}, {str_sum2, sum2}}) {
-    auto parsed = parse_expr(s, Symmetry::antisymm);
-    REQUIRE(parsed);
-    REQUIRE(parsed->is<Sum>());
-    // REQUIRE(*parsed == *e);
+    const auto& str_p1 = L"g_(i3, i4)^(a3, a4) * t_(a3, a4)^(i1, i2)";
+    REQUIRE(*parse_product_term(prune_space(str_p1), Symmetry::antisymm) ==
+            *p1);
   }
 
-  auto parsed = parse_expr(str_sum2, Symmetry::antisymm);
-  REQUIRE(parsed);
-  REQUIRE(parsed->at(1)->is<Tensor>());
+  SECTION("sum") {
+    const auto& A =
+        ex<Tensor>(Tensor{L"A", index_list{L"i_1", L"i_2"},
+                          index_list{L"a_1", L"a_2"}, Symmetry::antisymm});
+
+    const auto& g1 =
+        ex<Tensor>(Tensor{L"g", index_list{L"i_3", L"i_4"},
+                          index_list{L"a_3", L"a_4"}, Symmetry::antisymm});
+
+    const auto& t1 = ex<Tensor>(
+        Tensor{L"t", {L"a_3", L"a_4"}, {L"i_1", L"i_2"}, Symmetry::antisymm});
+
+    const auto& t2 = ex<Tensor>(
+        Tensor{L"t", {L"a_1", L"a_2"}, {L"i_3", L"i_4"}, Symmetry::antisymm});
+
+    const auto& t3 =
+        ex<Tensor>(Tensor{L"t", {L"a_1"}, {L"i_3"}, Symmetry::antisymm});
+
+    const auto& t4 = ex<Tensor>(
+        Tensor{L"t", {L"a_2", L"a_3"}, {L"i_1", L"i_2"}, Symmetry::antisymm});
+
+    const auto& f1 =
+        ex<Tensor>(Tensor{L"f", {L"i_3"}, {L"a_3"}, Symmetry::antisymm});
+
+    const auto& prod1 = ex<Product>(Product{1.0 / 16, {A, g1, t1, t2}});
+
+    const auto& prod2 = ex<Product>(Product{1.0 / 2, {A, f1, t3, t4}});
+
+    const auto& sum1 = ex<Sum>(Sum{prod1, prod2});
+    const auto& sum2 =
+        ex<Sum>(Sum{prod1, ex<Tensor>(Tensor{L"g", index_list{L"a_1", L"a_2"},
+                                             index_list{L"i_1", L"i_2"},
+                                             Symmetry::antisymm})});
+    const auto& str_prod1 =
+        L"1/16 "
+        L" * A_(i1, i2) ^(a1, a2)"
+        L" * g ^(a3, a4) _(i3, i4)"
+        L" * t ^ (i1, i2) _ (a_3, a_4)"
+        L" * t_(a1, a2)^(i3, i4)";
+
+    const auto& str_prod2 =
+        L"1/2"
+        L" * A_(i1, i2)^(a1, a2)"
+        L" * f_(i3)^(a3) "
+        L" * t_(a1)^(i3) "
+        L" * t_(a2, a3)^(i1, i2)";
+
+    const auto& str_sum1 = str_prod1 + L" + "s + str_prod2;
+
+    const auto& str_sum2 = str_prod1 + L" + g_(a1, a2)^(i1, i2)"s;
+
+    const auto& parsed_sum1 = parse_expr(str_sum1, Symmetry::antisymm);
+    REQUIRE(*parsed_sum1 == *sum1);
+
+    const auto& parsed_sum2 = parse_expr(str_sum2, Symmetry::antisymm);
+    REQUIRE(*parsed_sum2 == *sum2);
+
+    REQUIRE(sum2->at(1)->is<Tensor>());
+    REQUIRE(parsed_sum2->at(1)->is<Tensor>());
+  }
+
+  SECTION("invalid") {
+    auto ex_nsym = [](const auto& x) {
+      return parse_expr(x, Symmetry::nonsymm);
+    };
+
+    REQUIRE_THROWS_AS(ex_nsym(L"t_(i1) (a1)"), std::logic_error);
+
+    REQUIRE_NOTHROW(ex_nsym(L"t_(i1)^(a1)"));
+    REQUIRE_NOTHROW(ex_nsym(L"t^(a1)_(i1)"));
+
+    REQUIRE_THROWS_AS(ex_nsym(L"2.5 t_(i1)^(a1)"), std::logic_error);
+    REQUIRE_NOTHROW(ex_nsym(L"2.5 * t_(i1) ^ (a1)"));
+
+    REQUIRE_THROWS_AS(ex_nsym(L"t_(i1)^(a1) f_(i2)^(a2)"), std::logic_error);
+    REQUIRE_NOTHROW(ex_nsym(L"t_(i1)^(a1) * f_(i2)^(a2)"));
+  }
 }
