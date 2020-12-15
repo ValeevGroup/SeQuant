@@ -147,7 +147,7 @@ TEST_CASE("TEST_EVAL_EXPR", "[eval_expr]") {
     REQUIRE_FALSE(x12.hash() == x3.hash());
   }
 
-  SECTION("Intermediate symmetry") {
+  SECTION("Symmetry of product") {
     // whole bra <-> ket contraction between two antisymmetric tensors
     const auto t1 = ex_asym(L"g_(i3,i4)^(i1,i2)")->as<Tensor>();
     const auto t2 = ex_asym(L"t_(a1,a2)^(i3,i4)")->as<Tensor>();
@@ -181,5 +181,46 @@ TEST_CASE("TEST_EVAL_EXPR", "[eval_expr]") {
     const auto x78 = eval_expr{eval_expr{t7}, eval_expr{t8}};
 
     REQUIRE(x78.seq_expr()->as<Tensor>().symmetry() == Symmetry::nonsymm);
+  }
+
+  SECTION("Symmetry of sum") {
+    auto tensor = [](Symmetry s) {
+      return parse_expr(L"I_(i1,i2)^(a1,a2)", s)->as<Tensor>();
+    };
+
+    auto symmetry = [](const eval_expr& x) {
+      return x.seq_expr()->as<Tensor>().symmetry();
+    };
+
+    auto imed = [](const Tensor& t1, const Tensor& t2) {
+      return eval_expr{eval_expr{t1}, eval_expr{t2}};
+    };
+
+    const auto t1 = tensor(Symmetry::antisymm);
+    const auto t2 = tensor(Symmetry::antisymm);
+
+    const auto t3 = tensor(Symmetry::symm);
+    const auto t4 = tensor(Symmetry::symm);
+
+    const auto t5 = tensor(Symmetry::nonsymm);
+    const auto t6 = tensor(Symmetry::nonsymm);
+
+    // sum of two antisymm tensors.
+    REQUIRE(symmetry(imed(t1, t2)) == Symmetry::antisymm);
+
+    // sum of one antisymm and one symmetric tensors
+    REQUIRE(symmetry(imed(t1, t3)) == Symmetry::symm);
+
+    // sum of two symmetric tensors
+    REQUIRE(symmetry(imed(t3, t4)) == Symmetry::symm);
+
+    // sum of one antisymmetric and one one nonsymmetric tensors
+    REQUIRE(symmetry(imed(t1, t5)) == Symmetry::nonsymm);
+
+    // sum of one symmetric and one nonsymmetric tensors
+    REQUIRE(symmetry(imed(t3, t5)) == Symmetry::nonsymm);
+
+    // sum of two nonsymmetric tensors
+    REQUIRE(symmetry(imed(t5, t6)) == Symmetry::nonsymm);
   }
 }

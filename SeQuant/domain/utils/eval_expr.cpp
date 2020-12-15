@@ -88,10 +88,8 @@ Symmetry eval_expr::infer_tensor_symmetry_sum(const Tensor& tnsr1,
 
 Symmetry eval_expr::infer_tensor_symmetry_prod(const Tensor& tnsr1,
                                                const Tensor& tnsr2) {
-  //***************
-  // HELPER LAMBDAS
-  //***************
-
+  // HELPER LAMBDA
+  // //////
   // check if all the indices in cont1 are in cont2 AND vice versa
   auto all_common_indices = [](const auto& cont1, const auto& cont2) -> bool {
     if (cont1.size() != cont2.size()) return false;
@@ -106,9 +104,6 @@ Symmetry eval_expr::infer_tensor_symmetry_prod(const Tensor& tnsr1,
   // sym/sym or antisym/antisym with whole braket contraction
   if (whole_bk_contracted && tnsr1.symmetry() == tnsr2.symmetry())
     return tnsr1.symmetry();
-
-  // outer product of the same tensor is symmetric
-  // if (is_outer_product(tnsr1, tnsr2)) return Symmetry::symm;
 
   // non symmetric intermediate
   return Symmetry::nonsymm;
