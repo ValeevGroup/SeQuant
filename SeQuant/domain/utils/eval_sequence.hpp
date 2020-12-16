@@ -46,8 +46,9 @@ class eval_sequence {
    * @param l Root label.
    * @param children Children eval_sequence objects.
    */
-  eval_sequence(T &&l, std::vector<eval_sequence<T>> &&children)
-      : eval_sequence(std::forward<T>(l)), nodes_{std::move(children)} {
+  eval_sequence(const T &l, std::vector<eval_sequence<T>> &&children)
+      : eval_sequence(l) {
+    nodes_ = std::move(children);
     nodes_.shrink_to_fit();
   }
 
@@ -57,8 +58,8 @@ class eval_sequence {
    * @param l Root label.
    * @param labels Children labels.
    */
-  eval_sequence(T &&l, std::initializer_list<T> &&labels)
-      : eval_sequence(std::forward<T>(l)) {
+  eval_sequence(const T &l, std::initializer_list<T> &&labels)
+      : eval_sequence(l) {
     nodes_.reserve(labels.size());
     for (auto &&lbl : labels) nodes_.emplace_back(std::move(lbl));
   }
