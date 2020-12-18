@@ -123,19 +123,19 @@ TEST_CASE("TEST_EVAL_SEQUENCE", "[eval_sequence]") {
         };
 
     // clang-format off
-    // the number of ways to evaluate a tensor product depends on the number
-    // of factors it has -- obviously
-    // the growth follows the odd factorial sequence
-    // ie.
-    // # factors in a product | # ways to evaluate product
-    // -----------------------|---------------------------
-    //                     2  | 1     = 1!!
-    //                     3  | 3     = 3!!
-    //                     4  | 15    = 5!!
-    //                     5  | 105   = 7!!
-    //                     6  | 945   = 9!!
-    //
-    // and so on.
+        // the number of ways to evaluate a tensor product depends on the number
+        // of factors it has -- obviously
+        // the growth follows the odd factorial sequence
+        // ie.
+        // # factors in a product | # ways to evaluate product
+        // -----------------------|---------------------------
+        //                     2  | 1     = 1!!
+        //                     3  | 3     = 3!!
+        //                     4  | 15    = 5!!
+        //                     5  | 105   = 7!!
+        //                     6  | 945   = 9!!
+        //
+        // and so on.
     // clang-format on
 
     auto iter = 0;
@@ -160,50 +160,109 @@ TEST_CASE("TEST_EVAL_SEQUENCE", "[eval_sequence]") {
     auto nseq = eval_sequence<short>{2, {3, 5, 7}};
     auto nbinarized = binarize_eval_sequence<short, int>(nseq, sum_and_double);
     // clang-format off
-    // nbinarized tree:
-    //           74
-    //          /  \
-    //       30    7
-    //      /  \
-    //   10     5
-    //   / \
-    // 2   3
+        // nbinarized tree:
+        //           74
+        //          /  \
+        //       30    7
+        //      /  \
+        //   10     5
+        //   / \
+        // 2   3
     // clang-format on
 
-    auto expected_node1 = make_binary_expr<int>(
+    auto expected_node0 = make_binary_expr<int>(
         74,
         make_binary_expr<int>(30, make_binary_expr<int>(10, 2, 3),
                               make_binary_expr<int>(5)),
         make_binary_expr<int>(7));
 
-    REQUIRE(*nbinarized == *expected_node1);
+    REQUIRE(*nbinarized == *expected_node0);
 
     struct {
       size_t operator()(std::string_view s) const { return s.size(); }
       size_t operator()(size_t x, size_t y) const { return x + y; }
     } str_len;
 
-    auto sseq = eval_sequence<std::string_view>{"Foo", {"Bar", "Bazz"}};
+    auto sseq1 = eval_sequence<std::string_view>{"Foo", {"Bar", "Bazz"}};
 
-    auto sbinarized =
-        binarize_eval_sequence<std::string_view, size_t>(sseq, str_len);
+    auto sbinarized1 =
+        binarize_eval_sequence<std::string_view, size_t>(sseq1, str_len);
     // clang-format off
-    // sbinarized tree:
-    //              10
-    //            /   \
-    //          6      4
-    //        /  \
-    //      3     3
+        // sbinarized tree:
+        //              10
+        //            /   \
+        //          6      4
+        //        /  \
+        //      3     3
     // clang-format on
 
-    auto expected_node2 =
+    auto expected_node1 =
         make_binary_expr<size_t>(10,                                 //
                                  make_binary_expr<size_t>(6, 3, 3),  //
                                  make_binary_expr<size_t>(4));       //
 
-    REQUIRE(*sbinarized == *expected_node2);
+    REQUIRE(*sbinarized1 == *expected_node1);
 
-    // print_inorder(std::move(sbinarized));
-    // std::cout << std::endl;
+    using str_seq = eval_sequence<std::string_view>;
+
+    auto sseq2 = str_seq{
+        "Foo", {str_seq{"Bar"}, str_seq{"Spam", {"Egg"}}, str_seq{"Bazz"}}};
+
+    auto sbinarized2 =
+        binarize_eval_sequence<std::string_view, size_t>(sseq2, str_len);
+
+    // clang-format off
+    //
+    //                       17
+    //                     /    \
+    //                    /      \
+    //                   /        \
+    //                  /          \
+    //                 /            \
+    //               13               4 (Bazz)
+    //              /   \
+    //             /      \
+    //            /         \
+    //           /            \
+    //          /               \
+    //         6                  7
+    //        /  \               /  \
+    //       /    \             /     \
+    //   3 (Foo)  3 (Bar)    4 (Spam)   3 (Egg)
+    //
+    // clang-format on
+
+    auto expected_node2 = make_binary_expr<size_t>(
+        17,
+        make_binary_expr<size_t>(
+            13,
+            make_binary_expr<size_t>(6, make_binary_expr<size_t>(3),
+                                     make_binary_expr<size_t>(3)),
+            make_binary_expr<size_t>(7, make_binary_expr<size_t>(4),
+                                     make_binary_expr<size_t>(3))),
+        make_binary_expr<size_t>(4));
+
+    REQUIRE(*expected_node2 == *sbinarized2);
+  }
+
+  SECTION("transform_eval_sequence") {
+    using seq_t = eval_sequence<size_t>;
+
+    auto square = [](size_t x) { return x * x; };
+    auto cube = [](size_t x) { return x * x * x; };
+
+    auto seq1 = seq_t{1, {2, 3, 5, 7}};
+
+    auto tr1 = transform_eval_sequence<size_t, size_t>(seq1, square);
+
+
+    REQUIRE(tr1 == seq_t{1, {4, 9, 25, 49}});
+
+    auto seq2 = seq_t{1, {seq_t{2, {3}}, seq_t{5, {7}}}};
+    // seq2 = (1, (2, 3), (5, 7))
+
+    auto tr2 = transform_eval_sequence<size_t, size_t>(seq2, cube);
+
+    REQUIRE(tr2 == seq_t{1, {seq_t{8, {27}}, seq_t{125, {7 * 7 * 7}}}});
   }
 }

@@ -5,6 +5,8 @@
 #include <numeric>
 #include <ostream>
 #include <range/v3/numeric/accumulate.hpp>
+#include <range/v3/range/conversion.hpp>
+#include <range/v3/view.hpp>
 #include <vector>
 
 #include "binary_expr.hpp"
@@ -94,6 +96,13 @@ class eval_sequence {
   [[nodiscard]] bool terminal() const { return nodes_.empty(); }
 };
 
+template <typename T>
+bool operator==(const eval_sequence<T> &lhs, const eval_sequence<T> &rhs) {
+  if (&lhs == &rhs) return true;
+
+  return (lhs.label() == rhs.label()) && (lhs.nodes() == rhs.nodes());
+}
+
 /**
  * Stream out an eval_sequence.
  */
@@ -128,6 +137,9 @@ void enumerate_eval_sequence(
 template <typename T, typename S, typename F>
 typename binary_expr<S>::node_ptr binarize_eval_sequence(
     const eval_sequence<T> &seq, F &&binarizer);
+
+template <typename T, typename S, typename F>
+eval_sequence<S> transform_eval_sequence(const eval_sequence<T> &seq, F &&pred);
 
 //
 // Implementations.
@@ -196,11 +208,34 @@ typename binary_expr<S>::node_ptr binarize_eval_sequence(
   return ranges::accumulate(
       seq.nodes().begin(), seq.nodes().end(), std::move(parent_result),
       [&binarizer](auto &&lexpr, const auto &rseq) {
-        auto bin_res = binarizer(lexpr->data(), binarizer(rseq.label()));
+        auto bin_res = binarizer(
+            lexpr->data(),
+            binarize_eval_sequence<T, S, F>(rseq, std::forward<F>(binarizer))
+                ->data());
         return make_binary_expr<S>(
             std::move(bin_res), std::move(lexpr),
             binarize_eval_sequence<T, S, F>(rseq, std::forward<F>(binarizer)));
       });
+}
+
+template <typename T, typename S, typename F>
+eval_sequence<S> transform_eval_sequence(const eval_sequence<T> &seq,
+                                         F &&pred) {
+  static_assert(std::is_convertible_v<F, std::function<S(const T &)>>,
+                "Transformer function signature not matched");
+
+  using ranges::views::transform;
+
+  auto parent_result = pred(seq.label());
+  if (seq.terminal()) return eval_sequence<S>{parent_result};
+
+  auto children =
+      seq.nodes() | transform([&pred](const auto &x) {
+        return transform_eval_sequence<T, S, F>(x, std::forward<F>(pred));
+      }) |
+      ranges::to<std::vector<eval_sequence<S>>>;
+
+  return eval_sequence<S>{parent_result, std::move(children)};
 }
 
 }  // namespace sequant::utils
