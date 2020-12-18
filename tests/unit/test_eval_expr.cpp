@@ -86,7 +86,7 @@ TEST_CASE("TEST_EVAL_EXPR", "[eval_expr]") {
     REQUIRE(eval_expr{eval_expr{Constant{1.5}}, c2}.op() ==
             eval_expr::eval_op::Scale);
 
-    const auto& c5 = eval_expr{ex_asym(L"I^(i3,a1)_(i1,i2)")->as<Tensor>()};
+    const auto c5 = eval_expr{ex_asym(L"I^(i3,a1)_(i1,i2)")->as<Tensor>()};
     const auto& c6 = eval_expr{c2, c5};
 
     REQUIRE(c6.op() == eval_expr::eval_op::Sum);
@@ -98,8 +98,6 @@ TEST_CASE("TEST_EVAL_EXPR", "[eval_expr]") {
     const auto& t1 = ex_asym(str_t1);
 
     const auto& t2 = ex_asym(str_t2);
-
-    // const auto&
 
     const auto& x1 = eval_expr{t1->as<Tensor>()};
     const auto& x2 = eval_expr{t2->as<Tensor>()};
@@ -124,6 +122,16 @@ TEST_CASE("TEST_EVAL_EXPR", "[eval_expr]") {
     REQUIRE(x3.op() == eval_expr::eval_op::Prod);
 
     REQUIRE(prod_indices == expected_indices);
+
+    const auto t4 = ex_asym(L"g_(i3,i4)^(a3,a4)")->as<Tensor>();
+    const auto t5 = ex_asym(L"I_(a1,a2,a3,a4)^(i1,i2,i3,i4)")->as<Tensor>();
+
+    const auto& x45 = eval_expr{eval_expr{t4}, eval_expr{t5}};
+    const auto& x54 = eval_expr{eval_expr{t5}, eval_expr{t4}};
+
+    REQUIRE(x45.seq_expr()->to_latex() ==
+            ex_asym(L"I_(a1,a2)^(i1,i2)")->to_latex());
+    REQUIRE(x45.seq_expr()->to_latex() == x54.seq_expr()->to_latex());
   }
 
   SECTION("Hash value") {

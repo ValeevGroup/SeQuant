@@ -126,10 +126,20 @@ eval_expr::braket_type eval_expr::target_braket_sum(const Tensor& tnsr1,
 
 eval_expr::braket_type eval_expr::target_braket_prod(const Tensor& tnsr1,
                                                      const Tensor& tnsr2) {
-  auto target_bra = tnsr1.bra() | ranges::to<eval_expr::index_container_type>;
-  auto target_ket = tnsr1.ket() | ranges::to<eval_expr::index_container_type>;
-  const auto& incoming_bra = tnsr2.bra();
-  const auto& incoming_ket = tnsr2.ket();
+  //
+  // TODO:
+  // write a better algorithm
+  //
+  bool swap_on = tnsr1.rank() > tnsr2.rank();
+
+  auto target_bra = (swap_on ? tnsr2.bra() : tnsr1.bra()) |
+                    ranges::to<eval_expr::index_container_type>;
+
+  auto target_ket = (swap_on ? tnsr2.ket() : tnsr1.ket()) |
+                    ranges::to<eval_expr::index_container_type>;
+
+  const auto& incoming_bra = swap_on ? tnsr1.bra() : tnsr2.bra();
+  const auto& incoming_ket = swap_on ? tnsr1.ket() : tnsr2.ket();
 
   for (auto&& [ipos, iparticle] : ranges::views::enumerate(
            ranges::views::zip(incoming_bra, incoming_ket))) {
@@ -165,7 +175,7 @@ eval_expr::braket_type eval_expr::target_braket_prod(const Tensor& tnsr1,
   next_incoming_particle:;
   }
 
-  return eval_expr::braket_type{target_bra, target_ket};
+  return {target_bra, target_ket};
 }
 
 size_t eval_expr::hash_braket(
