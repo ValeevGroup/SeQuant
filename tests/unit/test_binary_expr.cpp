@@ -1,5 +1,6 @@
 #include <SeQuant/domain/utils/binary_expr.hpp>
 #include <iostream>
+#include <sstream>
 
 #include "catch.hpp"
 
@@ -33,7 +34,6 @@ TEST_CASE("TEST BINARY_EXPR_CLASS", "[binary_expr]") {
   }
 
   SECTION("methods") {
-    using data_type = size_t;
     auto node1 = make_binary_expr(0, make_binary_expr(1), make_binary_expr(2));
     REQUIRE(node1->data() == 0);
     REQUIRE(node1->left()->data() == 1);
@@ -58,15 +58,18 @@ TEST_CASE("TEST BINARY_EXPR_CLASS", "[binary_expr]") {
 
     } visitor;
 
-    sequant::utils::visit_inorder_binary_expr<std::string>(node1, std::ref(visitor));
+    sequant::utils::visit_inorder_binary_expr<std::string>(node1,
+                                                           std::ref(visitor));
     REQUIRE(visitor.words == std::vector<std::string>{"bar", "foo", "bazz"});
 
     visitor.words.clear();
-    sequant::utils::visit_preorder_binary_expr<std::string>(node1, std::ref(visitor));
+    sequant::utils::visit_preorder_binary_expr<std::string>(node1,
+                                                            std::ref(visitor));
     REQUIRE(visitor.words == std::vector<std::string>{"foo", "bar", "bazz"});
 
     visitor.words.clear();
-    sequant::utils::visit_postorder_binary_expr<std::string>(node1, std::ref(visitor));
+    sequant::utils::visit_postorder_binary_expr<std::string>(node1,
+                                                             std::ref(visitor));
     REQUIRE(visitor.words == std::vector<std::string>{"bar", "bazz", "foo"});
   }
 
@@ -141,5 +144,24 @@ TEST_CASE("TEST BINARY_EXPR_CLASS", "[binary_expr]") {
 
     sequant::utils::visit_inorder_binary_expr<size_t>(node1_trans, visitor);
     REQUIRE(visitor.lengths == std::vector<size_t>{3, 3, 4});
+  }
+
+  SECTION("digraph") {
+    const auto& node = make_binary_expr(1, 2, 3);
+    std::stringstream os;
+    sequant::utils::digraph_binary_expr<int>(
+        os, node,
+        [](binary_expr<int>::node_ptr const& x) { return x->data(); });
+
+    auto expected =
+        "digraph binary_expr {\n"
+        "node0[label=1];\n"
+        "node0 -> node1;\n"
+        "node1[label=2];\n"
+        "node0 -> node2;\n"
+        "node2[label=3];\n"
+        "}\n";
+
+    REQUIRE(os.str() == expected);
   }
 }

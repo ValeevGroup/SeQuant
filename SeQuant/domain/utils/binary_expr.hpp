@@ -2,7 +2,9 @@
 #define SEQUANT_UTILS_BINARY_EXPR_HPP
 
 #include <functional>
+#include <iostream>
 #include <memory>
+#include <string>
 
 namespace sequant::utils {
 
@@ -12,9 +14,9 @@ class binary_expr {
   T data_;
 
  protected:
-  binary_expr(const T& data) : data_{data} {}
+  explicit binary_expr(const T& data) : data_{data} {}
 
-  binary_expr(T&& data) : data_{std::move(data)} {}
+  explicit binary_expr(T&& data) : data_{std::move(data)} {}
 
  public:
   using type = T;
@@ -53,7 +55,7 @@ class binary_expr_internal final : public binary_expr<T> {
 
   binary_expr_internal<T>& operator=(const binary_expr_internal<T>&) = delete;
 
-  bool leaf() const override { return false; }
+  [[nodiscard]] bool leaf() const override { return false; }
 
   const node_ptr& left() const override { return left_; }
 
@@ -66,13 +68,13 @@ class binary_expr_leaf final : public binary_expr<T> {
   using typename binary_expr<T>::node_ptr;
 
  public:
-  binary_expr_leaf(T&& data) : binary_expr<T>(std::forward<T>(data)) {}
+  explicit binary_expr_leaf(T&& data) : binary_expr<T>(std::forward<T>(data)) {}
 
   binary_expr_leaf(const binary_expr_leaf<T>&) = delete;
 
   binary_expr_leaf<T>& operator=(const binary_expr_leaf<T>&) = delete;
 
-  bool leaf() const override { return true; }
+  [[nodiscard]] bool leaf() const override { return true; }
 
   const node_ptr& left() const override {
     throw std::logic_error("left() called on leaf node");
@@ -212,6 +214,43 @@ typename binary_expr<R>::node_ptr transform_binary_expr(
                                  node->left(), std::forward<F>(transformer)),
                              transform_binary_expr<T, R, F>(
                                  node->right(), std::forward<F>(transformer)));
+}
+
+template <typename T, typename Os, typename F>
+void node_connect(Os& out, typename binary_expr<T>::node_ptr const& node,
+                  size_t& node_count, F&& pred) {
+  auto label = "node" + std::to_string(node_count);
+  out << label.data() << "[label=" << pred(node) << "];\n";
+
+  if (node->leaf()) return;
+
+  out << label.data() << " -> "
+      << "node" << ++node_count << ";\n";
+
+  node_connect<T, Os>(out, node->left(), node_count, std::forward<F>(pred));
+
+  out << label.data() << " -> "
+      << "node" << ++node_count << ";\n";
+
+  node_connect<T, Os>(out, node->right(), node_count, std::forward<F>(pred));
+}
+
+template <typename T, typename Os, typename F>
+Os& digraph_binary_expr(
+    Os& out, typename binary_expr<T>::node_ptr const& node,
+    F&& label_gen = [](typename binary_expr<T>::node_ptr const&) {
+      return "";
+    }) {
+  static_assert(
+      std::is_invocable_v<F, const typename binary_expr<T>::node_ptr&>,
+      "label generator signature not matched");
+
+  out << "digraph binary_expr {\n";
+  size_t count = 0;
+  node_connect<T>(out, node, count, std::forward<F>(label_gen));
+  out << "}\n";
+
+  return out;
 }
 
 }  // namespace sequant::utils
