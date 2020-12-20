@@ -111,10 +111,10 @@ TEST_CASE("TEST_BINARIZE_EXPR", "[binarize_expr]") {
 
     auto ev_xpr = [](const auto& x) { return eval_expr{x}; };
 
-    auto eseq = [](const auto& x) { return utils::eval_sequence{x}; };
+    // auto eseq = [](const auto& x) { return utils::eval_sequence{x}; };
 
     const auto summands =
-        specs | transform(tensor) | transform(ev_xpr) | transform(eseq);
+        specs | transform(tensor) | transform(ev_xpr);  //| transform(eseq);
 
     auto node = utils::binarize_evxpr_range(summands);
 

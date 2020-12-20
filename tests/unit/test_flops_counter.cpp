@@ -55,15 +55,15 @@ TEST_CASE("TEST_OPS_COUNTER", "[flops_counter]") {
 
   SECTION("Identity operation") {
     const Tensor t1 = tnsr_nsym(L"g_(i3,i4)^(a3,a4)");
-    auto tree = binarize_evxpr_range(
-        ranges::views::single(eval_sequence<eval_expr>{eval_expr{t1}}));
+    auto tree =
+        binarize_evxpr_range(ranges::views::single(eval_expr{eval_expr{t1}}));
 
     REQUIRE(evaluate_flops(tree, no_lt_nv) == 0);
     REQUIRE(evaluate_flops(tree, no_gt_nv) == 0);
     REQUIRE(evaluate_flops(tree, no_eq_nv) == 0);
 
-    tree = binarize_evxpr_range(ranges::views::single(
-        eval_sequence<eval_expr>{eval_expr{Constant{1.0}}}));
+    tree = binarize_evxpr_range(
+        ranges::views::single(eval_expr{eval_expr{Constant{1.0}}}));
 
     REQUIRE(evaluate_flops(tree, no_lt_nv) == 0);
     REQUIRE(evaluate_flops(tree, no_gt_nv) == 0);
@@ -92,10 +92,8 @@ TEST_CASE("TEST_OPS_COUNTER", "[flops_counter]") {
     //                              Symmetry::antisymm)
     //                       ->as<Sum>();
 
-    using seq_t = eval_sequence<eval_expr>;
-
     auto seq_node = [](std::wstring_view spec) {
-      return seq_t{eval_expr{tnsr_nsym(spec)}};
+      return eval_expr{tnsr_nsym(spec)};
     };
 
     const auto srange1 = {seq_node(L"I1_(i1,i2)^(a1,a2)"),
