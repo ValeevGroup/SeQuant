@@ -48,6 +48,21 @@ struct binarize_prod {
   const Product& prod;
 };
 
+/**
+ * @tparam Cont type of a container.
+ *
+ * @param container Cont type container of eval_sequence<eval_expr> objects.
+ */
+template <typename Cont>
+binary_expr<eval_expr>::node_ptr binarize_evxpr_range(Cont&& container) {
+  const auto eseq = eval_sequence<eval_expr>{
+      (*ranges::begin(container)).label(),
+      ranges::views::tail(container) |
+          ranges::to<std::vector<eval_sequence<eval_expr>>>};
+
+  return binarize_eval_sequence<eval_expr, eval_expr>(eseq, binarize_eval_expr);
+}
+
 }  // namespace sequant::utils
 
 #endif  // SEQUANT_UTILS_BINARIZE_EXPR_HPP
