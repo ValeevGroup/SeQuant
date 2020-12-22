@@ -51,9 +51,9 @@ class binary_expr_internal final : public binary_expr<T> {
         left_{std::move(left)},
         right_{std::move(right)} {}
 
-  binary_expr_internal(const binary_expr_internal<T>&) = delete;
+  binary_expr_internal(binary_expr_internal<T> const&) = delete;
 
-  binary_expr_internal<T>& operator=(const binary_expr_internal<T>&) = delete;
+  binary_expr_internal<T>& operator=(binary_expr_internal<T> const&) = delete;
 
   [[nodiscard]] bool leaf() const override { return false; }
 
@@ -70,9 +70,9 @@ class binary_expr_leaf final : public binary_expr<T> {
  public:
   explicit binary_expr_leaf(T&& data) : binary_expr<T>(std::forward<T>(data)) {}
 
-  binary_expr_leaf(const binary_expr_leaf<T>&) = delete;
+  binary_expr_leaf(binary_expr_leaf<T> const&) = delete;
 
-  binary_expr_leaf<T>& operator=(const binary_expr_leaf<T>&) = delete;
+  binary_expr_leaf<T>& operator=(binary_expr_leaf<T> const&) = delete;
 
   [[nodiscard]] bool leaf() const override { return true; }
 
@@ -89,7 +89,6 @@ class binary_expr_leaf final : public binary_expr<T> {
 
 template <typename T, typename V>
 bool operator==(const binary_expr<T>& lhs, const binary_expr<V>& rhs) {
-  if (&lhs == &rhs) return true;
   return lhs.data() == rhs.data() &&
          ((lhs.leaf() && rhs.leaf()) ||
           (*lhs.left() == *rhs.left()) && (*lhs.right() == *rhs.right()));
@@ -116,14 +115,15 @@ typename binary_expr<T>::node_ptr make_binary_expr(T&& p, T&& l, T&& r) {
 }
 
 template <typename T, typename F>
-void visit_inorder_binary_expr(const typename binary_expr<T>::node_ptr& node,
+void visit_inorder_binary_expr(typename binary_expr<T>::node_ptr const& node,
                                F&& visitor) {
-  static_assert(std::is_invocable_v<F, const T&>,
-                "visitor signature not matched");
+  static_assert(
+      std::is_invocable_v<F, typename binary_expr<T>::node_ptr const&>,
+      "visitor signature not matched");
   if (!node) return;  // if nullptr passed explicitly
 
   if (node->leaf()) {
-    visitor(node->data());
+    visitor(node);
     return;
   }
 
@@ -131,26 +131,27 @@ void visit_inorder_binary_expr(const typename binary_expr<T>::node_ptr& node,
   visit_inorder_binary_expr<T, F>(node->left(), std::forward<F>(visitor));
 
   // visit this node
-  visitor(node->data());
+  visitor(node);
 
   // visit right node
   visit_inorder_binary_expr<T, F>(node->right(), std::forward<F>(visitor));
 }
 
 template <typename T, typename F>
-void visit_preorder_binary_expr(const typename binary_expr<T>::node_ptr& node,
+void visit_preorder_binary_expr(typename binary_expr<T>::node_ptr const& node,
                                 F&& visitor) {
-  static_assert(std::is_invocable_v<F, const T&>,
-                "visitor signature not matched");
+  static_assert(
+      std::is_invocable_v<F, typename binary_expr<T>::node_ptr const&>,
+      "visitor signature not matched");
   if (!node) return;  // if nullptr passed explicitly
 
   if (node->leaf()) {
-    visitor(node->data());
+    visitor(node);
     return;
   }
 
   // visit this node
-  visitor(node->data());
+  visitor(node);
 
   // visit left node
   visit_preorder_binary_expr<T, F>(node->left(), std::forward<F>(visitor));
@@ -160,12 +161,14 @@ void visit_preorder_binary_expr(const typename binary_expr<T>::node_ptr& node,
 }
 
 template <typename T, typename F>
-void visit_postorder_binary_expr(const typename binary_expr<T>::node_ptr& node,
+void visit_postorder_binary_expr(typename binary_expr<T>::node_ptr const& node,
                                  F&& visitor) {
-  static_assert(std::is_invocable_v<F, const T&>,
-                "visitor signature not matched");
+  static_assert(
+      std::is_invocable_v<F, typename binary_expr<T>::node_ptr const&>,
+      "visitor signature not matched");
+
   if (node->leaf()) {
-    visitor(node->data());
+    visitor(node);
     return;
   }
   // visit left node
@@ -175,22 +178,24 @@ void visit_postorder_binary_expr(const typename binary_expr<T>::node_ptr& node,
   visit_postorder_binary_expr<T, F>(node->right(), std::forward<F>(visitor));
 
   // visit this node
-  visitor(node->data());
+  visitor(node);
 }
 
 template <typename T, typename R, typename F>
-R evaluate_binary_expr(const typename binary_expr<T>::node_ptr& node,
+R evaluate_binary_expr(typename binary_expr<T>::node_ptr const& node,
                        F&& evaluator) {
-  static_assert(std::is_convertible_v<F, std::function<R(const T&)>>,
-                "evaluator signature does not match");
+  static_assert(
+      std::is_convertible_v<
+          F, std::function<R(typename binary_expr<T>::node_ptr const&)>>,
+      "evaluator signature does not match");
   static_assert(std::is_convertible_v<
-                    F, std::function<R(const typename binary_expr<T>::node_ptr&,
+                    F, std::function<R(typename binary_expr<T>::node_ptr const&,
                                        const R&, const R&)>>,
                 "evaluator signature does not match");
 
   if (!node) throw std::logic_error("Called evaluate on nullptr");
 
-  if (node->leaf()) return evaluator(node->data());
+  if (node->leaf()) return evaluator(node);
 
   return evaluator(
       node,
@@ -200,7 +205,7 @@ R evaluate_binary_expr(const typename binary_expr<T>::node_ptr& node,
 
 template <typename T, typename R, typename F>
 typename binary_expr<R>::node_ptr transform_binary_expr(
-    const typename binary_expr<T>::node_ptr& node, F&& transformer) {
+    typename binary_expr<T>::node_ptr const& node, F&& transformer) {
   static_assert(std::is_convertible_v<F, std::function<R(const T&)>>,
                 "transformer signature does not match");
   if (!node) return nullptr;
@@ -242,7 +247,7 @@ Os& digraph_binary_expr(
       return "";
     }) {
   static_assert(
-      std::is_invocable_v<F, const typename binary_expr<T>::node_ptr&>,
+      std::is_invocable_v<F, typename binary_expr<T>::node_ptr const&>,
       "label generator signature not matched");
 
   out << "digraph binary_expr {\n";

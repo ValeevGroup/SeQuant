@@ -42,6 +42,9 @@ TEST_CASE("TEST BINARY_EXPR_CLASS", "[binary_expr]") {
 
   SECTION("visitor methods") {
     using namespace std::literals::string_literals;
+
+    using node_type = binary_expr<std::string>;
+
     auto node1 = make_binary_expr("foo"s,  //
                                   "bar"s,  //
                                   "bazz"s);
@@ -54,22 +57,22 @@ TEST_CASE("TEST BINARY_EXPR_CLASS", "[binary_expr]") {
 
     struct {
       std::vector<std::string> words;
-      void operator()(const std::string& str) { words.emplace_back(str); }
+      void operator()(node_type::node_ptr const& node) {
+        words.emplace_back(node->data());
+      }
 
     } visitor;
 
-    sequant::utils::visit_inorder_binary_expr<std::string>(node1,
-                                                           std::ref(visitor));
+    visitor.words.clear();
+    sequant::utils::visit_inorder_binary_expr<std::string>(node1, visitor);
     REQUIRE(visitor.words == std::vector<std::string>{"bar", "foo", "bazz"});
 
     visitor.words.clear();
-    sequant::utils::visit_preorder_binary_expr<std::string>(node1,
-                                                            std::ref(visitor));
+    sequant::utils::visit_preorder_binary_expr<std::string>(node1, visitor);
     REQUIRE(visitor.words == std::vector<std::string>{"foo", "bar", "bazz"});
 
     visitor.words.clear();
-    sequant::utils::visit_postorder_binary_expr<std::string>(node1,
-                                                             std::ref(visitor));
+    sequant::utils::visit_postorder_binary_expr<std::string>(node1, visitor);
     REQUIRE(visitor.words == std::vector<std::string>{"bar", "bazz", "foo"});
   }
 
@@ -88,12 +91,14 @@ TEST_CASE("TEST BINARY_EXPR_CLASS", "[binary_expr]") {
     // evaluator
     //
     struct {
-      double operator()(int x) { return x; }
+      double operator()(typename binary_expr<int>::node_ptr const& node) {
+        return node->data();
+      }
 
       // sums left and right result then divides by this node's data
-      double operator()(typename binary_expr<int>::node_ptr const& n, double l,
-                        double r) {
-        return (l + r) / n->data();
+      double operator()(typename binary_expr<int>::node_ptr const& node,
+                        double leval, double reval) {
+        return (leval + reval) / node->data();
       }
 
     } evaluator;
@@ -137,13 +142,7 @@ TEST_CASE("TEST BINARY_EXPR_CLASS", "[binary_expr]") {
     //      /   \
     //     3     4
 
-    struct {
-      std::vector<size_t> lengths;
-      void operator()(size_t x) { lengths.emplace_back(x); }
-    } visitor;
-
-    sequant::utils::visit_inorder_binary_expr<size_t>(node1_trans, visitor);
-    REQUIRE(visitor.lengths == std::vector<size_t>{3, 3, 4});
+    REQUIRE(*node1_trans == *sequant::utils::make_binary_expr(3, 3, 4));
   }
 
   SECTION("digraph") {
