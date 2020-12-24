@@ -241,7 +241,7 @@ void node_connect(Os& out, typename binary_expr<T>::node_ptr const& node,
 }
 
 template <typename T, typename Os, typename F>
-Os& digraph_binary_expr(
+void digraph_binary_expr(
     Os& out, typename binary_expr<T>::node_ptr const& node,
     F&& label_gen = [](typename binary_expr<T>::node_ptr const&) {
       return "";
@@ -254,8 +254,6 @@ Os& digraph_binary_expr(
   size_t count = 0;
   node_connect<T>(out, node, count, std::forward<F>(label_gen));
   out << "}\n";
-
-  return out;
 }
 
 }  // namespace sequant::utils
