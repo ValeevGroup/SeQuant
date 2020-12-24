@@ -208,10 +208,12 @@ typename binary_expr<S>::node_ptr binarize_eval_sequence(
   return ranges::accumulate(
       seq.nodes().begin(), seq.nodes().end(), std::move(parent_result),
       [&binarizer](auto &&lexpr, const auto &rseq) {
+
         auto bin_res = binarizer(
             lexpr->data(),
             binarize_eval_sequence<T, S, F>(rseq, std::forward<F>(binarizer))
                 ->data());
+
         return make_binary_expr<S>(
             std::move(bin_res), std::move(lexpr),
             binarize_eval_sequence<T, S, F>(rseq, std::forward<F>(binarizer)));

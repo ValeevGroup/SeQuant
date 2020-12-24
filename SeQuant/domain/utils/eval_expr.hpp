@@ -60,6 +60,11 @@ class eval_expr final {
    */
   [[nodiscard]] const ExprPtr& seq_expr() const;
 
+  friend inline bool operator==(const eval_expr& lhs, const eval_expr& rhs) {
+    return lhs.hash() == rhs.hash() &&
+           (lhs.seq_expr()->to_latex() == rhs.seq_expr()->to_latex());
+  }
+
  private:
   using index_container_type = container::svector<Index>;
   using braket_type = std::pair<index_container_type, index_container_type>;
