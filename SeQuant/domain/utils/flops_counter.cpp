@@ -4,15 +4,15 @@ namespace sequant::utils {
 
 flops_counter::flops_counter(size_t no, size_t nv) : nocc{no}, nvirt{nv} {}
 
-size_t flops_counter::flops(size_t oidx_c, size_t vidx_c) {
+size_t flops_counter::flops(size_t oidx_c, size_t vidx_c) const {
   return (oidx_c == 0 ? 0 : std::pow(nocc, oidx_c)) *
          (vidx_c == 0 ? 0 : std::pow(nvirt, vidx_c));
 }
 
-size_t flops_counter::operator()(const eval_expr& expr) { return 0; }
+size_t flops_counter::operator()(const binary_node& expr) const { return 0; }
 
 size_t flops_counter::operator()(const binary_node& node, size_t lops,
-                                 size_t rops) {
+                                 size_t rops) const {
   // right tensor
   const auto& tr = node->right()->data().seq_expr()->as<Tensor>();
   auto op = node->data().op();

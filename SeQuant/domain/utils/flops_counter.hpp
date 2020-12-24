@@ -17,12 +17,12 @@ struct flops_counter {
  public:
   flops_counter(size_t no, size_t nv);
 
-  size_t operator()(const eval_expr& expr);
+  size_t operator()(const binary_node& expr) const;
 
-  size_t operator()(const binary_node& node, size_t lops, size_t rops);
+  size_t operator()(const binary_node& node, size_t lops, size_t rops) const;
 
  private:
-  size_t flops(size_t oidx_c, size_t vidx_c);
+  size_t flops(size_t oidx_c, size_t vidx_c) const;
 
   // pair: occupied indices count and virtual indices count
   static inline auto ov_idx_count =
