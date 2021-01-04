@@ -44,7 +44,7 @@ auto tnsr_nsym = [](std::wstring_view spec) {
 TEST_CASE("TEST_OPS_COUNTER", "[flops_counter]") {
   using namespace sequant;
   using utils::binarize_evxpr_range;
-  using utils::binarize_prod;
+  using utils::binarize_flat_prod;
   using utils::eval_expr;
   using utils::eval_sequence;
   using utils::parse_expr;
@@ -74,7 +74,7 @@ TEST_CASE("TEST_OPS_COUNTER", "[flops_counter]") {
     const auto prod = parse_expr(L"1/2 * g_(i1,i2)^(a1,a2)", Symmetry::antisymm)
                           ->as<Product>();
 
-    const auto tree = binarize_prod{prod}(eval_sequence<size_t>{0});
+    const auto tree = binarize_flat_prod{prod}(eval_sequence<size_t>{0});
 
     auto flops = [](const std::pair<size_t, size_t>& ov) {
       size_t nocc = std::get<0>(ov);
@@ -143,7 +143,7 @@ TEST_CASE("TEST_OPS_COUNTER", "[flops_counter]") {
       return (size_t)(std::pow(nocc, 2) * std::pow(nvirt, 4));
     };
 
-    const auto tree1 = binarize_prod{prod1}(seq_t{0, {1}});
+    const auto tree1 = binarize_flat_prod{prod1}(seq_t{0, {1}});
 
     REQUIRE(evaluate_flops(tree1, no_lt_nv) == flops1(no_lt_nv));
     REQUIRE(evaluate_flops(tree1, no_gt_nv) == flops1(no_gt_nv));
@@ -173,7 +173,7 @@ TEST_CASE("TEST_OPS_COUNTER", "[flops_counter]") {
       return (size_t)(2 * std::pow(nocc, 2) * std::pow(nvirt, 4));
     };
 
-    const auto tree2_0 = binarize_prod{prod2}(seq2_0);
+    const auto tree2_0 = binarize_flat_prod{prod2}(seq2_0);
 
     REQUIRE(evaluate_flops(tree2_0, no_lt_nv) == flops2_0(no_lt_nv));
     REQUIRE(evaluate_flops(tree2_0, no_gt_nv) == flops2_0(no_gt_nv));
@@ -195,7 +195,7 @@ TEST_CASE("TEST_OPS_COUNTER", "[flops_counter]") {
       return (size_t)(2 * std::pow(nocc, 4) * std::pow(nvirt, 4));
     };
 
-    const auto tree2_1 = binarize_prod{prod2}(seq2_1);
+    const auto tree2_1 = binarize_flat_prod{prod2}(seq2_1);
 
     REQUIRE(evaluate_flops(tree2_1, no_lt_nv) == flops2_1(no_lt_nv));
     REQUIRE(evaluate_flops(tree2_1, no_gt_nv) == flops2_1(no_gt_nv));

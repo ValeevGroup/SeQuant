@@ -18,8 +18,8 @@ const struct {
   }
 } binarize_eval_expr;
 
-struct binarize_prod {
-  binarize_prod(const Product& p) : prod{p} {
+struct binarize_flat_prod {
+  binarize_flat_prod(const Product& p) : prod{p} {
     for (const auto& f : p) assert(f->is<Tensor>());
   }
 

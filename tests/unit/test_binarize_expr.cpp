@@ -35,7 +35,7 @@ TEST_CASE("TEST_BINARIZE_EXPR", "[binarize_expr]") {
   using utils::eval_expr;
   using utils::parse_expr;
   using eval_seq = utils::eval_sequence<size_t>;
-  using utils::binarize_prod;
+  using utils::binarize_flat_prod;
 
   SECTION("binarize_prod") {
     const auto p1 = parse_expr(
@@ -48,7 +48,7 @@ TEST_CASE("TEST_BINARIZE_EXPR", "[binarize_expr]") {
 
     auto s1 = make_eval_seq(0, p1.size());
 
-    auto binarizer = binarize_prod{p1};
+    auto binarizer = binarize_flat_prod{p1};
 
     auto snode1 = binarizer(s1);
 
