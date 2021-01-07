@@ -70,7 +70,7 @@ TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
 
     const auto opt_seq1 = utils::eval_sequence<size_t>{0, {2, 1}};
 
-    REQUIRE(*utils::binarize_prod{prod1}(opt_seq1) ==
+    REQUIRE(*utils::binarize_flat_prod{prod1}(opt_seq1) ==
             *result1.optimal_seqs.at(0));
 
     //
@@ -96,5 +96,22 @@ TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
     const auto result2_discounted =
         single_term_opt(evxpr_range(prod2), nocc, nvirt, imed_hashes_prod1);
     REQUIRE(result2_discounted.ops < result2_naive.ops);
+  }
+
+  SECTION("Most expensive term") {
+    using factorize::most_expensive;
+    const container::set<size_t> imed_hashes = {};
+
+    const size_t nocc = 2, nvirt = 3;  // nocc < nvirt
+
+    const auto expr = parse_expr(
+        L"f_(i3)^(i1)*t_(a1,a2)^(i2,i3)"
+        L"    + "
+        L"    g_(a1,a2)^(a3,a4)*t_(a3,a4)^(i1,i2)",
+        Symmetry::antisymm);
+
+    auto [me_expr, me_ops_result] = most_expensive(*expr, nocc, nvirt, {});
+
+    REQUIRE(*me_expr == *expr->at(1));
   }
 }

@@ -43,13 +43,8 @@ struct sto_flops_counter {
  * @param container Iterable of eval_expr objects.
  */
 template <typename Cont>
-ops_count_result single_term_opt(Cont&& container, size_t nocc, size_t nvirt,
-                                 container::set<size_t> const& imeds_hash);
-
-// implementations
-
-template <typename Cont>
-ops_count_result single_term_opt(Cont&& container, size_t nocc, size_t nvirt,
+ops_count_result single_term_opt(Cont const& container, size_t nocc,
+                                 size_t nvirt,
                                  container::set<size_t> const& imeds_hash) {
   using seq_t = utils::eval_sequence<size_t>;
 
@@ -90,6 +85,55 @@ ops_count_result single_term_opt(Cont&& container, size_t nocc, size_t nvirt,
 
   return result;
 }
+
+/**
+ * @tparam Cont type of @c container.
+ *
+ * @param container Iterable of ExprPtr to flat Product.
+ */
+template <typename Iter>
+std::pair<ExprPtr, ops_count_result> most_expensive(
+    Iter const& iterable, size_t nocc, size_t nvirt,
+    container::set<size_t> const& imed_hashes) {
+  using ranges::views::transform;
+
+  // prod is a flat Product
+  auto evxpr_prod_range = [](Product const& prod) {
+    return prod | transform([](ExprPtr const& x) {
+             return utils::eval_expr{x->as<Tensor>()};
+           });
+  };
+
+  auto evxprs = iterable | transform([evxpr_prod_range](const auto& x) {
+                  return evxpr_prod_range(x->template as<Product>());
+                });
+
+  auto costs = evxprs | transform([nocc, nvirt, &imed_hashes](const auto& x) {
+                 return single_term_opt(x, nocc, nvirt, imed_hashes);
+               });
+
+  struct {
+    ExprPtr max_expr{nullptr};
+    ops_count_result max_ops_res{};
+  } max_result;
+
+  assert(max_result.max_ops_res.ops == 0);
+
+  auto zipped = ranges::views::zip(iterable, costs);
+
+  for (auto&& [x, y] : zipped) {
+    if (y.ops >= max_result.max_ops_res.ops) {
+      max_result.max_expr = x;
+      max_result.max_ops_res = std::move(y);
+    }
+  }
+
+  return {max_result.max_expr, std::move(max_result.max_ops_res)};
+}
+
+// elements in container are ExprPtr to Product
+template <typename Cont>
+auto multi_term_opt_hartono(Cont const& container, size_t nocc, size_t nvirt);
 
 }  // namespace sequant::factorize
 
