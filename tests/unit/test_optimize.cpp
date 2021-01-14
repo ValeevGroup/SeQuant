@@ -110,8 +110,8 @@ TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
         L"    g_(a1,a2)^(a3,a4)*t_(a3,a4)^(i1,i2)",
         Symmetry::antisymm);
 
-    auto [me_expr, me_ops_result] = most_expensive(*expr, nocc, nvirt, {});
+    auto expensive = most_expensive(*expr, nocc, nvirt, {});
 
-    REQUIRE(*me_expr == *expr->at(1));
+    REQUIRE(*expr->at(1) == *expensive.mets.begin()->first);
   }
 }
