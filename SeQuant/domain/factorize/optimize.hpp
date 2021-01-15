@@ -156,14 +156,42 @@ met_result most_expensive(Iter const& iterable, size_t nocc, size_t nvirt,
   return std::move(expensive);
 }
 
-// elements in container are ExprPtr to Product
+///
+/// elements in container are ExprPtr to Product
+/// container is non-empty
+///
 template <typename Cont>
 auto multi_term_opt_hartono(Cont const& container, size_t nocc, size_t nvirt) {
-  auto imed_hashes = container::set<size_t>{};  // initial intermediate hashes
+  auto optimized_terms = container::vector<met_result>{};
 
-  // find the most expensive
-  auto expensive = most_expensive(container, nocc, nvirt, imed_hashes);
-  //
+  // initial intermediate hash registry is empty
+  auto imed_hashes = container::set<size_t>{};
+
+  auto terms_range = container;
+
+  while (ranges::distance(terms_range) > 0) {
+    // find the most expensive
+    met_result expensive = most_expensive(container, nocc, nvirt, imed_hashes);
+
+    // update intermediate hashes
+    for (auto&& [x, y] : expensive.mets)
+      utils::visit_inorder_binary_expr<utils::eval_expr>(
+          *y.optimal_seqs.begin(), [&imed_hashes](const auto& x) {
+            return imed_hashes.emplace(x.hash());
+          });
+
+    // update terms_range
+    auto pruned_terms = ranges::views::keys(expensive.mets);
+    terms_range = ranges::views::set_difference(
+        terms_range, pruned_terms,
+        [](const auto& x, const auto& y) { return *x != *y; });
+
+    // collect result
+    for (auto&& res : expensive.mets)
+      optimized_terms.emplace_back(std::move(res));
+  }
+
+  return std::move(optimized_terms);
 }
 
 }  // namespace sequant::factorize
