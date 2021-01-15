@@ -84,6 +84,15 @@ class EvalTree {
   ///        that in bra at corresponding positions.
   explicit EvalTree(const ExprPtr& expr, bool canonize_leaf_braket = false);
 
+  /// For antisymmetrizing a TA object (called in MPQC::CCk)
+  template <typename DataTensorType>
+  static DataTensorType antisymmetrize_tensor(
+      const DataTensorType& ta_tensor,
+      size_t bra_rank,
+      size_t ket_rank){
+    return _antisymmetrize(ta_tensor, bra_rank, ket_rank);
+  }
+
  private:
   /// Build EvalTreeNode pointer from sequant expression of Sum, Product or
   /// Tensor type.
