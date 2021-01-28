@@ -175,15 +175,34 @@ add_library(SeQuant
         SeQuant/core/utility.hpp
         SeQuant/core/bliss.hpp
         SeQuant/core/timer.hpp
-        SeQuant/domain/evaluate/eval_fwd.hpp
-        SeQuant/domain/evaluate/eval_tree.hpp
-        SeQuant/domain/evaluate/eval_tree.cpp
-        SeQuant/domain/evaluate/eval_tree_node.hpp
-        SeQuant/domain/evaluate/eval_tree_node.cpp
-        #SeQuant/domain/factorize/factorizer.hpp
-        #SeQuant/domain/factorize/factorizer.cpp
-        SeQuant/domain/evaluate/path_tree.hpp
-        SeQuant/domain/evaluate/path_tree.cpp
+        SeQuant/domain/utils/rand_color.hpp
+        SeQuant/domain/utils/rand_color.cpp
+        SeQuant/domain/utils/expr_parse.hpp
+        SeQuant/domain/utils/expr_parse.cpp
+        SeQuant/domain/utils/binary_expr.hpp
+        SeQuant/domain/utils/eval_sequence.hpp
+        SeQuant/domain/utils/eval_expr.hpp
+        SeQuant/domain/utils/eval_expr.cpp
+        SeQuant/domain/utils/binarize_expr.hpp
+        SeQuant/domain/utils/flops_counter.hpp
+        SeQuant/domain/utils/flops_counter.cpp
+        SeQuant/domain/factorize/optimize.hpp
+        SeQuant/domain/factorize/optimize.cpp
+        #
+        # SeQuant/domain/factorize/factorize.hpp
+        # SeQuant/domain/factorize/factorize.cpp
+        # SeQuant/domain/factorize/eval_sequence.hpp
+        # SeQuant/domain/factorize/eval_sequence.cpp
+        # SeQuant/domain/factorize/ops_count.hpp
+        # SeQuant/domain/factorize/ops_count.cpp
+        # SeQuant/domain/factorize/single_term_opt.hpp
+        # SeQuant/domain/factorize/single_term_opt.cpp
+        # SeQuant/domain/evaluate/eval_fwd.hpp
+        # SeQuant/domain/evaluate/eval_tree.hpp
+        # SeQuant/domain/evaluate/eval_tree.cpp
+        # SeQuant/domain/evaluate/eval_tree_node.hpp
+        # SeQuant/domain/evaluate/eval_tree_node.cpp
+        #
         SeQuant/domain/mbpt/convention.cpp
         SeQuant/domain/mbpt/convention.hpp
         SeQuant/domain/mbpt/op.cpp
@@ -222,25 +241,29 @@ if (NOT TARGET tiledarray)
   find_package(TiledArray CONFIG COMPONENTS tiledarray)
 endif(NOT TARGET tiledarray)
 
+add_subdirectory(scratch)
+
 enable_testing(true)
 
 set(utests_src
-    # tests/unit/test_space.cpp
-    # tests/unit/test_index.cpp
-    # tests/unit/test_op.cpp
-    # tests/unit/test_wick.cpp
-    # tests/unit/test_tensor.cpp
-    # tests/unit/test_bliss.cpp
-    # tests/unit/test_expr.cpp
-    # tests/unit/test_iterator.cpp
-    # tests/unit/test_mbpt.cpp
-    # tests/unit/test_tensor_network.cpp
-    # tests/unit/test_factorizer.cpp
-    SeQuant/domain/factorize/inferred_imed_data.hpp
-    tests/unit/test_inferred_imed_data.cpp
-    #SeQuant/domain/factorize/imed_tensor.hpp
-    #SeQuant/domain/factorize/imed_tensor.cpp
-    #tests/unit/test_imed_tensor.cpp
+     tests/unit/test_space.cpp
+     tests/unit/test_index.cpp
+     tests/unit/test_op.cpp
+     # tests/unit/test_wick.cpp
+     tests/unit/test_tensor.cpp
+     tests/unit/test_bliss.cpp
+     tests/unit/test_expr.cpp
+     tests/unit/test_iterator.cpp
+     tests/unit/test_mbpt.cpp
+     tests/unit/test_tensor_network.cpp
+     # tests/unit/test_expr_parse.cpp
+     tests/unit/test_binary_expr.cpp
+     tests/unit/test_eval_sequence.cpp
+     tests/unit/test_eval_expr.cpp
+     tests/unit/test_binarize_expr.cpp
+     tests/unit/test_flops_counter.cpp
+     tests/unit/test_optimize.cpp
+     # tests/unit/test_factorize.cpp
     )
 
 set(utests_deps SeQuant)
@@ -277,7 +300,9 @@ set_tests_properties(unit/run
 # Single-Reference Coupled-Cluster equation generation (spin-orbital)
 set(example0 srcc)
 add_executable(${example0} EXCLUDE_FROM_ALL
-        examples/${example0}/${example0}.cpp)
+        examples/${example0}/${example0}.cpp
+        examples/cceqs.hpp
+        examples/cceqs.cpp)
 target_link_libraries(${example0} SeQuant ${TBB_LIBRARIES})
 
 if (TARGET tiledarray AND TARGET Libint2::libint2_cxx)
@@ -306,21 +331,20 @@ endif (TARGET tiledarray AND TARGET Libint2::libint2_cxx)
 
 set(example3 uccf12)
 add_executable(${example3} EXCLUDE_FROM_ALL
-    examples/${example3}/${example3}.cpp)
+    examples/${example3}/${example3}.cpp
+    examples/cceqs.hpp
+    examples/cceqs.cpp)
 target_link_libraries(${example3} SeQuant ${TBB_LIBRARIES})
 
 set(example4 pair_factorization)
 add_executable(${example4} EXCLUDE_FROM_ALL
-               examples/factorization/${example4}.cpp)
+               examples/factorization/${example4}.cpp
+               examples/cceqs.hpp
+               examples/cceqs.cpp)
 target_link_libraries(${example4} SeQuant ${TBB_LIBRARIES})
 
-set(example5 scratch)
-add_executable(${example5} EXCLUDE_FROM_ALL
-               examples/${example5}/main.cpp)
-target_link_libraries(${example5} SeQuant ${TBB_LIBRARIES})
-
 # add tests for running examples
-set (lastexample 6)
+set (lastexample 5)
 foreach(i RANGE ${lastexample})
     if (TARGET ${example${i}})
         add_test(example/${example${i}}/build "${CMAKE_COMMAND}"
