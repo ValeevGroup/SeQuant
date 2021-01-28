@@ -30,18 +30,14 @@ struct binarize_flat_prod {
           return eval_expr{prod.at(x)->template as<Tensor>()};
         });
 
-    auto&& pred = binarize_eval_expr;
+    auto result = binarize_eval_sequence<eval_expr, eval_expr>(
+        xpr_seq, binarize_eval_expr);
 
-    auto without_scalar =
-        binarize_eval_sequence<eval_expr, eval_expr>(xpr_seq, pred);
+    result->data().scale(Constant{result->data().scalar().value() *
+                                  result->data().phase().value() *
+                                  prod.scalar()});
 
-    if (prod.scalar() == 1.0) return std::move(without_scalar);
-
-    auto scal = Constant{prod.scalar()};
-
-    return make_binary_expr(pred(eval_expr{scal}, without_scalar->data()),
-                            make_binary_expr(eval_expr{scal}),
-                            std::move(without_scalar));
+    return std::move(result);
   }
 
  private:

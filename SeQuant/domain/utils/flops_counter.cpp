@@ -5,25 +5,24 @@ namespace sequant::utils {
 flops_counter::flops_counter(size_t no, size_t nv) : nocc{no}, nvirt{nv} {}
 
 size_t flops_counter::flops(size_t oidx_c, size_t vidx_c) const {
-  return (oidx_c == 0 ? 0 : std::pow(nocc, oidx_c)) *
-         (vidx_c == 0 ? 0 : std::pow(nvirt, vidx_c));
+  return (oidx_c == 0 ? 1 : std::pow(nocc, oidx_c)) *
+         (vidx_c == 0 ? 1 : std::pow(nvirt, vidx_c));
 }
 
 size_t flops_counter::operator()(const binary_node& expr) const { return 0; }
 
 size_t flops_counter::operator()(const binary_node& node, size_t lops,
                                  size_t rops) const {
-  // right tensor
   const auto& tr = node->right()->data().seq_expr()->as<Tensor>();
-  auto op = node->data().op();
 
-  if (op == eval_expr::eval_op::Scale || op == eval_expr::eval_op::Sum) {
+  if (node->data().op() == eval_expr::eval_op::Sum) {
     auto [o, v] = flops_counter::ov_idx_count(tr.const_braket());
+    auto base = flops_counter::flops(o, v);
+    auto total = lops + rops + base;
+    if (node->left()->data().scalar() != Constant{1}) total += base;
+    if (node->right()->data().scalar() != Constant{1}) total += base;
 
-    if (op == eval_expr::eval_op::Scale)
-      return flops_counter::flops(o, v) + rops;
-    else  // sum
-      return flops_counter::flops(o, v) + lops + rops;
+    return total;
   }
 
   // product of two tensors confirmed

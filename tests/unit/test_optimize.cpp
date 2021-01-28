@@ -114,4 +114,16 @@ TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
 
     REQUIRE(*expr->at(1) == *expensive.mets.begin()->first);
   }
+
+  SECTION("Multiple terms Hartono") {
+    auto specs = {L"g_(i3,a1)^(a3,a4) * t_(a3,a4)^(i1,i2) * t_(a2)^(i3)",  //
+                  L"",
+                  L"g_(i3,i4)^()"};
+    auto terms = specs | ranges::views::transform([](std::wstring_view spec) {
+                   return parse_expr(spec, Symmetry::antisymm);
+                 });
+
+    // parse_expr(L"g_(i3,a1)^(a3,a4) * t_(a3,a4)^(i1,i2) * t_(a2)^(i3)",
+    //            Symmetry::antisymm)};
+  }
 }

@@ -19,8 +19,6 @@ class eval_expr final {
   enum class eval_op {
     /** Identity type evaluation. */
     Id,
-    /** Scale type evaluation. */
-    Scale,
     /** Sum type evaluation. */
     Sum,
     /** Product type evaluation. */
@@ -32,12 +30,6 @@ class eval_expr final {
    * of the binary evaluation tree.
    */
   explicit eval_expr(const Tensor&);
-
-  /**
-   * Construct eval_expr that goes into the leaf nodes
-   * of the binary evaluation tree.
-   */
-  explicit eval_expr(const Constant&);
 
   /**
    * Construct eval_expr that goes into the internal nodes
@@ -60,6 +52,15 @@ class eval_expr final {
    */
   [[nodiscard]] const ExprPtr& seq_expr() const;
 
+  /** Factor to scale tensor by. */
+  [[nodiscard]] const Constant& scalar() const;
+
+  /** Phase of the tensor resulting from canonicalization. */
+  [[nodiscard]] const Constant& phase() const;
+
+  /** Set the scalar. **/
+  void scale(const Constant&);
+
   friend inline bool operator==(const eval_expr& lhs, const eval_expr& rhs) {
     return lhs.hash() == rhs.hash() &&
            (lhs.seq_expr()->to_latex() == rhs.seq_expr()->to_latex());
@@ -74,6 +75,10 @@ class eval_expr final {
   size_t hash_;
 
   ExprPtr expr_;
+
+  Constant scalar_{1};
+
+  Constant phase_{1};
 
   /**
    * Make an intermediate tensor from two expressions.
@@ -131,8 +136,8 @@ class eval_expr final {
    *
    * @param op Type of evaluation operation between @c expr1 and @c expr2.
    */
-  static size_t hash_imed(const ExprPtr& expr1, const ExprPtr& expr2,
-                          size_t hash1, size_t hash2, eval_op op);
+  static size_t hash_imed(const eval_expr& expr1, const eval_expr& expr2,
+                          eval_op op);
 
   /**
    * Hash tensor pair(T1, T2) based on the tensor labels and the topology of
@@ -149,7 +154,7 @@ class eval_expr final {
   static size_t hash_tensor_pair_topology(const Tensor&, const Tensor&);
 
   /**
-   * Firgure the target braket of resulting tensor from sum between a pair of
+   * Figure the target braket of resulting tensor from sum between a pair of
    * tensors.
    *
    * @return Pair of bra and ket index containers where

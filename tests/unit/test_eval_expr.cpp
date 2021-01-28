@@ -13,10 +13,7 @@ std::wostream& operator<<(std::wostream& os,
     case eval_expr::eval_op::Prod:
       os << "Product";
       break;
-    case eval_expr::eval_op::Scale:
-      os << "Scale";
-      break;
-    default:
+    case eval_expr::eval_op::Id:
       os << "Id";
   }
   return os;
@@ -55,9 +52,6 @@ TEST_CASE("TEST_EVAL_EXPR", "[eval_expr]") {
 
     REQUIRE_NOTHROW(eval_expr{t1->as<sequant::Tensor>()});
 
-    auto c1 = Constant(1.0);
-    REQUIRE_NOTHROW(eval_expr{c1});
-
     auto p1 = ex_asym(L"g_(i3,a1)^(i1,i2) * t_(a2)^(a3)");
 
     const auto& c2 = eval_expr{p1->at(0)->as<Tensor>()};
@@ -73,18 +67,12 @@ TEST_CASE("TEST_EVAL_EXPR", "[eval_expr]") {
 
     REQUIRE(x1.op() == eval_expr::eval_op::Id);
 
-    auto x2 = eval_expr(Constant(1.0));
-    REQUIRE(x1.op() == eval_expr::eval_op::Id);
-
     auto p1 = ex_asym(L"g_(i3,a1)^(i1,i2) * t_(a2)^(a3)");
 
     const auto& c2 = eval_expr{p1->at(0)->as<Tensor>()};
     const auto& c3 = eval_expr{p1->at(1)->as<Tensor>()};
     const auto& c4 = eval_expr{c2, c3};
     REQUIRE(c4.op() == eval_expr::eval_op::Prod);
-
-    REQUIRE(eval_expr{eval_expr{Constant{1.5}}, c2}.op() ==
-            eval_expr::eval_op::Scale);
 
     const auto c5 = eval_expr{ex_asym(L"I^(i3,a1)_(i1,i2)")->as<Tensor>()};
     const auto& c6 = eval_expr{c2, c5};
@@ -230,5 +218,17 @@ TEST_CASE("TEST_EVAL_EXPR", "[eval_expr]") {
 
     // sum of two nonsymmetric tensors
     REQUIRE(symmetry(imed(t5, t6)) == Symmetry::nonsymm);
+  }
+
+  SECTION("Canonicalization") {
+    auto evxpr1 = eval_expr(
+        parse_expr(L"g_(i1,i2)^(a1,a2)", Symmetry::antisymm)->as<Tensor>());
+    auto evxpr2 = eval_expr(
+        parse_expr(L"g_(i2,i1)^(a1,a2)", Symmetry::antisymm)->as<Tensor>());
+
+    REQUIRE(*evxpr1.seq_expr() == *evxpr2.seq_expr());
+    REQUIRE_FALSE(evxpr1.scalar() == evxpr2.scalar());
+    std::wcout << "evxpr1.hash = " << evxpr1.hash() << "\n"
+               << "evxpr2.hash = " << evxpr2.hash() << std::endl;
   }
 }

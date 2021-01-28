@@ -52,11 +52,9 @@ TEST_CASE("TEST_BINARIZE_EXPR", "[binarize_expr]") {
 
     auto snode1 = binarizer(s1);
 
-    REQUIRE(snode1->left()->data().seq_expr()->as<Constant>() ==
-            Constant{1.0 / 16});
-    REQUIRE(snode1->left()->leaf());
+    REQUIRE(snode1->data().scalar() == Constant{1.0 / 16});
 
-    const auto& node1 = snode1->right();
+    const auto& node1 = snode1;
 
     REQUIRE(validate_tensor(node1->data().seq_expr(), L"I_(a1,a2)^(i1,i2)"));
 
@@ -76,21 +74,20 @@ TEST_CASE("TEST_BINARIZE_EXPR", "[binarize_expr]") {
     REQUIRE(node1->left()->left()->leaf());
     REQUIRE(node1->left()->right()->leaf());
 
-    const auto& s2 = eval_seq{0, {eval_seq{1, {2}}}};
-    // s2 = (0, (1 2))
+    const auto& s2 = eval_seq{0, {eval_seq{1, {2}}}};  // s2 = (0, (1 2))
 
     auto snode2 = binarizer(s2);
-    REQUIRE(snode2->left()->data().seq_expr()->as<Constant>() ==
-            Constant{1.0 / 16});
 
-    const auto& node2 = snode2->right();
+    REQUIRE(snode2->data().scalar() == Constant{1.0 / 16});
+
+    const auto& node2 = snode2;
     REQUIRE(validate_tensor(node2->data().seq_expr(), L"I_(a1,a2)^(i1,i2)"));
 
     REQUIRE(validate_tensor(node2->left()->data().seq_expr(),
                             L"g_(i3,i4)^(a3,a4)"));
 
     REQUIRE(validate_tensor(node2->right()->data().seq_expr(),
-                            L"I_(a1,a2,a3,a4)^(i3,i4,i1,i2)"));
+                            L"I_(a1,a2,a3,a4)^(i1,i2,i3,i4)"));
 
     REQUIRE(validate_tensor(node2->right()->left()->data().seq_expr(),
                             L"t_(a1,a2)^(i3,i4)"));
@@ -110,8 +107,6 @@ TEST_CASE("TEST_BINARIZE_EXPR", "[binarize_expr]") {
     };
 
     auto ev_xpr = [](const auto& x) { return eval_expr{x}; };
-
-    // auto eseq = [](const auto& x) { return utils::eval_sequence{x}; };
 
     const auto summands =
         specs | transform(tensor) | transform(ev_xpr);  //| transform(eseq);

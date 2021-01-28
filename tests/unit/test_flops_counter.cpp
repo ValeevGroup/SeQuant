@@ -61,37 +61,27 @@ TEST_CASE("TEST_OPS_COUNTER", "[flops_counter]") {
     REQUIRE(evaluate_flops(tree, no_lt_nv) == 0);
     REQUIRE(evaluate_flops(tree, no_gt_nv) == 0);
     REQUIRE(evaluate_flops(tree, no_eq_nv) == 0);
-
-    tree = binarize_evxpr_range(
-        ranges::views::single(eval_expr{eval_expr{Constant{1.0}}}));
-
-    REQUIRE(evaluate_flops(tree, no_lt_nv) == 0);
-    REQUIRE(evaluate_flops(tree, no_gt_nv) == 0);
-    REQUIRE(evaluate_flops(tree, no_eq_nv) == 0);
   }
 
-  SECTION("Scaling operation") {
-    const auto prod = parse_expr(L"1/2 * g_(i1,i2)^(a1,a2)", Symmetry::antisymm)
-                          ->as<Product>();
-
-    const auto tree = binarize_flat_prod{prod}(eval_sequence<size_t>{0});
-
-    auto flops = [](const std::pair<size_t, size_t>& ov) {
-      size_t nocc = std::get<0>(ov);
-      size_t nvirt = std::get<1>(ov);
-      return nocc * nocc * nvirt * nvirt;
-    };
-
-    REQUIRE(evaluate_flops(tree, no_lt_nv) == flops(no_lt_nv));
-    REQUIRE(evaluate_flops(tree, no_gt_nv) == flops(no_gt_nv));
-    REQUIRE(evaluate_flops(tree, no_eq_nv) == flops(no_eq_nv));
-  }
+  // SECTION("Scaling operation") {
+  //   const auto prod = parse_expr(L"1/2 * g_(i1,i2)^(a1,a2)",
+  //   Symmetry::antisymm)
+  //                         ->as<Product>();
+  //
+  //   const auto tree = binarize_flat_prod{prod}(eval_sequence<size_t>{0});
+  //
+  //   auto flops = [](const std::pair<size_t, size_t>& ov) {
+  //     size_t nocc = std::get<0>(ov);
+  //     size_t nvirt = std::get<1>(ov);
+  //     return nocc * nocc * nvirt * nvirt;
+  //   };
+  //
+  //   REQUIRE(evaluate_flops(tree, no_lt_nv) == flops(no_lt_nv));
+  //   REQUIRE(evaluate_flops(tree, no_gt_nv) == flops(no_gt_nv));
+  //   REQUIRE(evaluate_flops(tree, no_eq_nv) == flops(no_eq_nv));
+  // }
 
   SECTION("Summation operation") {
-    // const auto sum1 = parse_expr(L"I1_(i1,i2)^(a1,a2) + I2_(i1,i2)^(a1,a2)",
-    //                              Symmetry::antisymm)
-    //                       ->as<Sum>();
-
     auto seq_node = [](std::wstring_view spec) {
       return eval_expr{tnsr_nsym(spec)};
     };
@@ -126,6 +116,9 @@ TEST_CASE("TEST_OPS_COUNTER", "[flops_counter]") {
     REQUIRE(evaluate_flops(tree2, no_lt_nv) == flops2(no_lt_nv));
     REQUIRE(evaluate_flops(tree2, no_gt_nv) == flops2(no_gt_nv));
     REQUIRE(evaluate_flops(tree2, no_eq_nv) == flops2(no_eq_nv));
+
+    // todo
+    // sum with scaling
   }
 
   SECTION("Product operation") {

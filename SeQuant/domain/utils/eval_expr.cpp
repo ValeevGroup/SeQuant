@@ -9,15 +9,22 @@ eval_expr::eval_op eval_expr::op() const { return op_; }
 
 const ExprPtr& eval_expr::seq_expr() const { return expr_; }
 
-eval_expr::eval_expr(const Tensor& tnsr)
-    : op_{eval_op::Id},
-      hash_{eval_expr::hash_terminal_tensor(tnsr)},
-      expr_{ex<Tensor>(tnsr)} {}
+const Constant& eval_expr::phase() const { return phase_; }
 
-eval_expr::eval_expr(const Constant& scalar)
-    : op_{eval_op::Id},
-      hash_{hash::value(scalar)},
-      expr_{ex<Constant>(scalar)} {}
+const Constant& eval_expr::scalar() const { return scalar_; }
+
+void eval_expr::scale(const Constant& scal) { scalar_ = scal; }
+
+eval_expr::eval_expr(const Tensor& tnsr)
+    : op_{eval_op::Id}, expr_{ex<Tensor>(tnsr)} {
+  sequant::TensorCanonicalizer::register_instance(
+      std::make_shared<sequant::DefaultTensorCanonicalizer>());
+
+  if (auto canon_biprod = expr_->canonicalize(); canon_biprod)
+    scale(canon_biprod->as<Constant>());
+
+  hash_ = eval_expr::hash_terminal_tensor(seq_expr()->as<Tensor>());
+}
 
 eval_expr::eval_expr(const eval_expr& expr1, const eval_expr& expr2) {
   // canonicalization based on hash value
@@ -25,19 +32,28 @@ eval_expr::eval_expr(const eval_expr& expr1, const eval_expr& expr2) {
   // to obtain the equivalence of the kind
   // AB == BA for a binary operation between A and B
 
+  assert(
+      !(expr1.seq_expr()->is<Constant>() || expr2.seq_expr()->is<Constant>()));
+
+  sequant::TensorCanonicalizer::register_instance(
+      std::make_shared<sequant::DefaultTensorCanonicalizer>());
+
   const auto& sxpr1 = expr1.seq_expr();
   const auto& sxpr2 = expr2.seq_expr();
 
-  auto swap_on = sxpr1->is<Constant>() ? false : expr2.hash() < expr1.hash();
+  auto swap_on = expr2.hash() < expr1.hash();
 
   op_ = eval_expr::infer_eval_op(sxpr1, sxpr2);
   expr_ = std::move(swap_on ? eval_expr::make_imed_expr(expr2, expr1, op())
                             : eval_expr::make_imed_expr(expr1, expr2, op()));
+  // compute phase
+  phase_ *= expr1.phase();
+  phase_ *= expr2.phase();
+  if (auto canon_biprod = expr_->canonicalize(); canon_biprod)
+    phase_ *= canon_biprod->as<Constant>();
 
-  hash_ = swap_on ? eval_expr::hash_imed(sxpr2, sxpr1,  //
-                                         expr2.hash(), expr1.hash(), op())
-                  : eval_expr::hash_imed(sxpr1, sxpr2,  //
-                                         expr1.hash(), expr2.hash(), op());
+  hash_ = swap_on ? eval_expr::hash_imed(expr2, expr1, op())
+                  : eval_expr::hash_imed(expr1, expr2, op());
 }
 
 eval_expr::eval_op eval_expr::infer_eval_op(const ExprPtr& expr1,
@@ -51,8 +67,6 @@ eval_expr::eval_op eval_expr::infer_eval_op(const ExprPtr& expr1,
   };
   // HELPER LAMBDA END
 
-  if (expr1->is<Constant>()) return eval_op::Scale;
-
   assert(expr1->is<Tensor>());
   assert(expr2->is<Tensor>());
 
@@ -61,9 +75,11 @@ eval_expr::eval_op eval_expr::infer_eval_op(const ExprPtr& expr1,
 
   if (tnsr1.rank() == tnsr2.rank()) {
     for (const auto& idx : tnsr1.const_braket())
-      if (!(index_exists(tnsr2.const_braket(), idx)))
-        return eval_op::Prod;  // found an index that doesn't exist
-    // in the other tensor
+      if (!(index_exists(tnsr2.const_braket(), idx))) {
+        // found an index that doesn't exist
+        // in the other tensor
+        return eval_op::Prod;
+      }
 
     return eval_op::Sum;  // all indices in any, exist in the other
   }
@@ -206,30 +222,22 @@ size_t eval_expr::hash_tensor_pair_topology(const Tensor& tnsr1,
   return hashTopo;
 }
 
-size_t eval_expr::hash_imed(const ExprPtr& expr1, const ExprPtr& expr2,
-                            size_t hash1, size_t hash2, eval_op op) {
+size_t eval_expr::hash_imed(const eval_expr& expr1, const eval_expr& expr2,
+                            eval_op op) {
   size_t imedHash = 0;
-  hash::combine(imedHash, hash1);
-  hash::combine(imedHash, hash2);
+  hash::combine(imedHash, expr1.hash());
+  hash::combine(imedHash, expr2.hash());
 
-  if (op == eval_op::Scale) {
-    if (expr1->as<Constant>().value() == 1.0) return hash2;
-    return imedHash;
-  }
-
-  const auto& t1 = expr1->as<Tensor>();
-  const auto& t2 = expr2->as<Tensor>();
+  const auto& t1 = expr1.seq_expr()->as<Tensor>();
+  const auto& t2 = expr2.seq_expr()->as<Tensor>();
 
   hash::combine(imedHash, eval_expr::hash_braket(t1.const_braket()));
   hash::combine(imedHash, eval_expr::hash_braket(t2.const_braket()));
   hash::combine(imedHash, eval_expr::hash_tensor_pair_topology(t1, t2));
 
   if (op == eval_op::Sum) {
-    hash::combine(imedHash, eval_op::Sum);
-  } else if (op == eval_op::Prod) {
-    hash::combine(imedHash, eval_op::Prod);
-  } else {
-    // not reachable
+    hash::combine(imedHash, expr1.scalar());
+    hash::combine(imedHash, expr2.scalar());
   }
 
   return imedHash;
@@ -238,12 +246,8 @@ size_t eval_expr::hash_imed(const ExprPtr& expr1, const ExprPtr& expr2,
 ExprPtr eval_expr::make_imed_expr(const eval_expr& expr1,
                                   const eval_expr& expr2, eval_op op) {
   assert(op != eval_op::Id);
-  assert(!expr2.seq_expr()->is<Constant>());
-
-  if (op == eval_op::Scale)
-    return expr2.seq_expr()->clone();  // expr1 is just a scalar
-
-  // assert(op == eval_op::Sum || op == eval_op::Prod);
+  assert(!expr1.seq_expr()->is<Constant>() &&
+         !expr2.seq_expr()->is<Constant>());
 
   const auto& t1 = expr1.seq_expr()->as<Tensor>();
   const auto& t2 = expr2.seq_expr()->as<Tensor>();

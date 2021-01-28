@@ -32,6 +32,8 @@ class binary_expr {
   virtual const node_ptr& right() const = 0;
 
   const T& data() const { return data_; }
+
+  T& data() { return data_; }
 };
 
 namespace detail {

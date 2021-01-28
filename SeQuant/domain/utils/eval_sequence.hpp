@@ -194,12 +194,11 @@ void enumerate_eval_sequence(const std::vector<eval_sequence<T>> &nodes,
 template <typename T, typename S, typename F>
 typename binary_expr<S>::node_ptr binarize_eval_sequence(
     const eval_sequence<T> &seq, F &&binarizer) {
-  static_assert(std::is_convertible_v<F, std::function<S(const T &)>>,
+  static_assert(std::is_convertible_v<F, std::function<S(T &&)>>,
                 "Binarizer to handle leaf nodes missing.");
 
-  static_assert(
-      std::is_convertible_v<F, std::function<S(const S &, const S &)>>,
-      "Binarizer to handle internal nodes missing.");
+  static_assert(std::is_convertible_v<F, std::function<S(S &&, S &&)>>,
+                "Binarizer to handle internal nodes missing.");
 
   auto parent_result = make_binary_expr<S>(binarizer(seq.label()));
 
@@ -208,7 +207,6 @@ typename binary_expr<S>::node_ptr binarize_eval_sequence(
   return ranges::accumulate(
       seq.nodes().begin(), seq.nodes().end(), std::move(parent_result),
       [&binarizer](auto &&lexpr, const auto &rseq) {
-
         auto bin_res = binarizer(
             lexpr->data(),
             binarize_eval_sequence<T, S, F>(rseq, std::forward<F>(binarizer))
