@@ -228,7 +228,6 @@ TEST_CASE("TEST_EVAL_EXPR", "[eval_expr]") {
 
     REQUIRE(*evxpr1.seq_expr() == *evxpr2.seq_expr());
     REQUIRE_FALSE(evxpr1.scalar() == evxpr2.scalar());
-    std::wcout << "evxpr1.hash = " << evxpr1.hash() << "\n"
-               << "evxpr2.hash = " << evxpr2.hash() << std::endl;
+    REQUIRE(evxpr1.hash() == evxpr2.hash());
   }
 }

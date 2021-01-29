@@ -153,12 +153,12 @@ TEST_CASE("TEST_EVAL_SEQUENCE", "[eval_sequence]") {
 
   SECTION("binarize_eval_sequence") {
     struct {
-      int operator()(short x) { return x; }
-      int operator()(int x, int y) { return (x + y) * 2; }
+      int operator()(short x) const { return x; }
+      int operator()(int x, int y) const { return (x + y) * 2; }
     } sum_and_double;
 
     auto nseq = eval_sequence<short>{2, {3, 5, 7}};
-    auto nbinarized = binarize_eval_sequence<short, int>(nseq, sum_and_double);
+    auto nbinarized = binarize_eval_sequence<short>(nseq, sum_and_double);
     // clang-format off
         // nbinarized tree:
         //           74
@@ -185,8 +185,7 @@ TEST_CASE("TEST_EVAL_SEQUENCE", "[eval_sequence]") {
 
     auto sseq1 = eval_sequence<std::string_view>{"Foo", {"Bar", "Bazz"}};
 
-    auto sbinarized1 =
-        binarize_eval_sequence<std::string_view, size_t>(sseq1, str_len);
+    auto sbinarized1 = binarize_eval_sequence<std::string_view>(sseq1, str_len);
     // clang-format off
         // sbinarized tree:
         //              10
@@ -208,8 +207,7 @@ TEST_CASE("TEST_EVAL_SEQUENCE", "[eval_sequence]") {
     auto sseq2 = str_seq{
         "Foo", {str_seq{"Bar"}, str_seq{"Spam", {"Egg"}}, str_seq{"Bazz"}}};
 
-    auto sbinarized2 =
-        binarize_eval_sequence<std::string_view, size_t>(sseq2, str_len);
+    auto sbinarized2 = binarize_eval_sequence<std::string_view>(sseq2, str_len);
 
     // clang-format off
     //
@@ -253,15 +251,14 @@ TEST_CASE("TEST_EVAL_SEQUENCE", "[eval_sequence]") {
 
     auto seq1 = seq_t{1, {2, 3, 5, 7}};
 
-    auto tr1 = transform_eval_sequence<size_t, size_t>(seq1, square);
-
+    auto tr1 = transform_eval_sequence<size_t>(seq1, square);
 
     REQUIRE(tr1 == seq_t{1, {4, 9, 25, 49}});
 
     auto seq2 = seq_t{1, {seq_t{2, {3}}, seq_t{5, {7}}}};
     // seq2 = (1, (2, 3), (5, 7))
 
-    auto tr2 = transform_eval_sequence<size_t, size_t>(seq2, cube);
+    auto tr2 = transform_eval_sequence<size_t>(seq2, cube);
 
     REQUIRE(tr2 == seq_t{1, {seq_t{8, {27}}, seq_t{125, {7 * 7 * 7}}}});
   }

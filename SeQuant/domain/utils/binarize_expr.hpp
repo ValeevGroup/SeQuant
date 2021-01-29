@@ -25,13 +25,12 @@ struct binarize_flat_prod {
 
   binary_expr<eval_expr>::node_ptr operator()(
       const eval_sequence<size_t>& seq) {
-    auto xpr_seq =
-        transform_eval_sequence<size_t, eval_expr>(seq, [this](auto x) {
-          return eval_expr{prod.at(x)->template as<Tensor>()};
-        });
+    auto xpr_seq = transform_eval_sequence<size_t>(seq, [this](auto x) {
+      return eval_expr{prod.at(x)->template as<Tensor>()};
+    });
 
-    auto result = binarize_eval_sequence<eval_expr, eval_expr>(
-        xpr_seq, binarize_eval_expr);
+    auto result =
+        binarize_eval_sequence<eval_expr>(xpr_seq, binarize_eval_expr);
 
     result->data().scale(Constant{result->data().scalar().value() *
                                   result->data().phase().value() *
@@ -58,7 +57,7 @@ binary_expr<eval_expr>::node_ptr binarize_evxpr_range(Cont&& container) {
               [](const auto& x) { return eval_sequence<eval_expr>{x}; }) |
           ranges::to<std::vector<eval_sequence<eval_expr>>>};
 
-  return binarize_eval_sequence<eval_expr, eval_expr>(eseq, binarize_eval_expr);
+  return binarize_eval_sequence<eval_expr>(eseq, binarize_eval_expr);
 }
 
 }  // namespace sequant::utils

@@ -103,6 +103,22 @@ bool operator==(const eval_sequence<T> &lhs, const eval_sequence<T> &rhs) {
   return (lhs.label() == rhs.label()) && (lhs.nodes() == rhs.nodes());
 }
 
+template <typename T, typename Os>
+Os &operator<<(Os &os, const eval_sequence<T> &seq) {
+  if (seq.terminal()) {
+    os << seq.label();
+    return os;
+  }
+  os << "(" << seq.label() << " ";
+
+  for (auto ii = 0; ii < seq.nodes().size() - 1; ++ii)
+    os << seq.nodes()[ii] << " ";
+  os << *(seq.nodes().end() - 1);
+
+  os << ")";
+  return os;
+}
+
 /**
  * Stream out an eval_sequence.
  */
@@ -132,38 +148,7 @@ Os &operator<<(Os &, const eval_sequence<T> &);
 template <typename T, typename Comp = std::less<T>, typename F>
 void enumerate_eval_sequence(
     const std::vector<eval_sequence<T>> &nodes,
-    F &&callback = [](const eval_sequence<T> &) -> void {});
-
-template <typename T, typename S, typename F>
-typename binary_expr<S>::node_ptr binarize_eval_sequence(
-    const eval_sequence<T> &seq, F &&binarizer);
-
-template <typename T, typename S, typename F>
-eval_sequence<S> transform_eval_sequence(const eval_sequence<T> &seq, F &&pred);
-
-//
-// Implementations.
-//
-
-template <typename T, typename Os>
-Os &operator<<(Os &os, const eval_sequence<T> &seq) {
-  if (seq.terminal()) {
-    os << seq.label();
-    return os;
-  }
-  os << "(" << seq.label() << " ";
-
-  for (auto ii = 0; ii < seq.nodes().size() - 1; ++ii)
-    os << seq.nodes()[ii] << " ";
-  os << *(seq.nodes().end() - 1);
-
-  os << ")";
-  return os;
-}
-
-template <typename T, typename Comp, typename F>
-void enumerate_eval_sequence(const std::vector<eval_sequence<T>> &nodes,
-                             F &&callback) {
+    F &&callback = [](const eval_sequence<T> &) -> void {}) {
   static_assert(std::is_invocable_v<F, const eval_sequence<T> &>,
                 "callback function signature doesn't match");
   if (nodes.size() == 1) callback(*nodes.begin());
@@ -191,16 +176,20 @@ void enumerate_eval_sequence(const std::vector<eval_sequence<T>> &nodes,
   }    // for i
 }
 
-template <typename T, typename S, typename F>
-typename binary_expr<S>::node_ptr binarize_eval_sequence(
-    const eval_sequence<T> &seq, F &&binarizer) {
-  static_assert(std::is_convertible_v<F, std::function<S(T &&)>>,
-                "Binarizer to handle leaf nodes missing.");
+template <typename T, typename F>
+auto binarize_eval_sequence(const eval_sequence<T> &seq, F &&binarizer) {
+  static_assert(std::is_invocable_v<F, T>, "terminal node binarizer missing");
 
-  static_assert(std::is_convertible_v<F, std::function<S(S &&, S &&)>>,
-                "Binarizer to handle internal nodes missing.");
+  using return_data_t = std::invoke_result_t<F, T>;
 
-  auto parent_result = make_binary_expr<S>(binarizer(seq.label()));
+  static_assert(std::is_invocable_v<F, return_data_t, return_data_t>,
+                "non-terminal node binarizer missing");
+  static_assert(
+      std::is_same_v<return_data_t,
+                     std::invoke_result_t<F, return_data_t, return_data_t>>,
+      "binarizer(T) and binarizer(T, T) have different return types");
+
+  auto parent_result = make_binary_expr<return_data_t>(binarizer(seq.label()));
 
   if (seq.terminal()) return std::move(parent_result);
 
@@ -209,33 +198,33 @@ typename binary_expr<S>::node_ptr binarize_eval_sequence(
       [&binarizer](auto &&lexpr, const auto &rseq) {
         auto bin_res = binarizer(
             lexpr->data(),
-            binarize_eval_sequence<T, S, F>(rseq, std::forward<F>(binarizer))
+            binarize_eval_sequence<T, F>(rseq, std::forward<F>(binarizer))
                 ->data());
 
-        return make_binary_expr<S>(
+        return make_binary_expr<return_data_t>(
             std::move(bin_res), std::move(lexpr),
-            binarize_eval_sequence<T, S, F>(rseq, std::forward<F>(binarizer)));
+            binarize_eval_sequence<T, F>(rseq, std::forward<F>(binarizer)));
       });
 }
 
-template <typename T, typename S, typename F>
-eval_sequence<S> transform_eval_sequence(const eval_sequence<T> &seq,
-                                         F &&pred) {
-  static_assert(std::is_convertible_v<F, std::function<S(const T &)>>,
-                "Transformer function signature not matched");
+template <typename T, typename F>
+auto transform_eval_sequence(const eval_sequence<T> &seq, F &&pred) {
+  static_assert(std::is_invocable_v<F, T>, "predicate to transform missing");
+
+  using return_data_t = std::invoke_result_t<F, T>;
 
   using ranges::views::transform;
 
   auto parent_result = pred(seq.label());
-  if (seq.terminal()) return eval_sequence<S>{parent_result};
+  if (seq.terminal()) return eval_sequence<return_data_t>{parent_result};
 
   auto children =
       seq.nodes() | transform([&pred](const auto &x) {
-        return transform_eval_sequence<T, S, F>(x, std::forward<F>(pred));
+        return transform_eval_sequence<T, F>(x, std::forward<F>(pred));
       }) |
-      ranges::to<std::vector<eval_sequence<S>>>;
+      ranges::to<std::vector<eval_sequence<return_data_t>>>;
 
-  return eval_sequence<S>{parent_result, std::move(children)};
+  return eval_sequence<return_data_t>{parent_result, std::move(children)};
 }
 
 }  // namespace sequant::utils

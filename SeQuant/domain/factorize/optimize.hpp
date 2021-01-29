@@ -43,12 +43,6 @@ struct sto_result {
 
   container::vector<utils::binary_expr<utils::eval_expr>::node_ptr>
       optimal_seqs;
-
-  sto_result(sto_result&&) = default;
-  sto_result& operator=(sto_result&&) = default;
-
-  sto_result(const sto_result&) = delete;
-  sto_result& operator=(const sto_result&) = delete;
 };
 
 /**
@@ -58,12 +52,6 @@ struct met_result {
   size_t ops;
 
   container::map<ExprPtr, sto_result> mets;
-
-  met_result(met_result&&) = default;
-  met_result& operator=(met_result&&) = default;
-
-  met_result(const met_result&) = delete;
-  met_result& operator=(const met_result&) = delete;
 };
 
 /**
@@ -81,17 +69,15 @@ sto_result single_term_opt(Cont const& container, size_t nocc, size_t nvirt,
   sto_result result{std::numeric_limits<size_t>::max(), {}};
 
   auto finder = [&result, &container, &counter](const auto& seq) {
-    auto tseq = utils::transform_eval_sequence<size_t, utils::eval_expr>(
-        seq, [&container](auto x) {
+    auto tseq =
+        utils::transform_eval_sequence<size_t>(seq, [&container](auto x) {
           return utils::eval_expr{*(ranges::begin(container) + x)};
         });
 
-    auto node =
-        utils::binarize_eval_sequence<utils::eval_expr, utils::eval_expr>(
-            tseq, utils::binarize_eval_expr);
+    auto node = utils::binarize_eval_sequence<utils::eval_expr>(
+        tseq, utils::binarize_eval_expr);
 
-    auto flops =
-        utils::evaluate_binary_expr<utils::eval_expr, size_t>(node, counter);
+    auto flops = utils::evaluate_binary_expr<utils::eval_expr>(node, counter);
 
     if (flops == result.ops) {
       result.optimal_seqs.emplace_back(std::move(node));
@@ -153,7 +139,7 @@ met_result most_expensive(Iter const& iterable, size_t nocc, size_t nvirt,
     }
   }
 
-  return std::move(expensive);
+  return expensive;
 }
 
 ///
@@ -167,9 +153,10 @@ auto multi_term_opt_hartono(Cont const& container, size_t nocc, size_t nvirt) {
   // initial intermediate hash registry is empty
   auto imed_hashes = container::set<size_t>{};
 
-  auto terms_range = container;
+  Cont terms_range = container;
 
-  while (ranges::distance(terms_range) > 0) {
+  // TODO: Debug
+  while (ranges::distance(terms_range) < 0) {
     // find the most expensive
     met_result expensive = most_expensive(container, nocc, nvirt, imed_hashes);
 
@@ -177,21 +164,22 @@ auto multi_term_opt_hartono(Cont const& container, size_t nocc, size_t nvirt) {
     for (auto&& [x, y] : expensive.mets)
       utils::visit_inorder_binary_expr<utils::eval_expr>(
           *y.optimal_seqs.begin(), [&imed_hashes](const auto& x) {
-            return imed_hashes.emplace(x.hash());
+            return imed_hashes.emplace(x->data().hash());
           });
 
     // update terms_range
-    auto pruned_terms = ranges::views::keys(expensive.mets);
-    terms_range = ranges::views::set_difference(
-        terms_range, pruned_terms,
-        [](const auto& x, const auto& y) { return *x != *y; });
-
-    // collect result
-    for (auto&& res : expensive.mets)
-      optimized_terms.emplace_back(std::move(res));
+    auto pruned_terms = ranges::views::keys(expensive.mets) | ranges::to<Cont>;
+    // terms_range = ranges::views::set_difference(
+    //                   terms_range, pruned_terms,
+    //                   [](auto&& x, auto&& y) { return *x != *y; }) |
+    //               ranges::to<Cont>;
+    //
+    // // collect result
+    // for (auto&& res : expensive.mets)
+    //   optimized_terms.emplace_back(std::move(res));
   }
 
-  return std::move(optimized_terms);
+  return optimized_terms;
 }
 
 }  // namespace sequant::factorize

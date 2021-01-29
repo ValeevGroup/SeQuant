@@ -25,8 +25,7 @@
 size_t evaluate_flops(sequant::utils::binary_expr<
                           sequant::utils::eval_expr>::node_ptr const& node,
                       size_t nocc, size_t nvirt) {
-  return sequant::utils::evaluate_binary_expr<sequant::utils::eval_expr,
-                                              size_t>(
+  return sequant::utils::evaluate_binary_expr<sequant::utils::eval_expr>(
       node, sequant::utils::flops_counter{nocc, nvirt});
 }
 

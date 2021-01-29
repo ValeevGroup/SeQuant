@@ -116,14 +116,20 @@ TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
   }
 
   SECTION("Multiple terms Hartono") {
-    auto specs = {L"g_(i3,a1)^(a3,a4) * t_(a3,a4)^(i1,i2) * t_(a2)^(i3)",  //
-                  L"",
-                  L"g_(i3,i4)^()"};
-    auto terms = specs | ranges::views::transform([](std::wstring_view spec) {
-                   return parse_expr(spec, Symmetry::antisymm);
-                 });
+    // a: a1   i: i1
+    // b: a2   j: i2
+    // c: a3   k: i3
+    // d: a4   l: i4
+    auto t1 = parse_expr(L"t_(a1,a2)^(i1,i2)", Symmetry::antisymm);
+    auto g1 = parse_expr(L"g_(i2,i3)^(a2,a3)", Symmetry::antisymm);
+    auto g2 = parse_expr(L"g_(i3,a3)^(a2,a4)", Symmetry::antisymm);
+    auto t2 = parse_expr(L"t_(a4)^(i4)", Symmetry::antisymm);
 
-    // parse_expr(L"g_(i3,a1)^(a3,a4) * t_(a3,a4)^(i1,i2) * t_(a2)^(i3)",
-    //            Symmetry::antisymm)};
+    auto prod1 = ex<Product>(Product{t1->clone(), g1});
+    auto prod2 = ex<Product>(Product{t1->clone(), g2, t2});
+
+    container::svector<ExprPtr> terms{prod1, prod2};
+
+    auto opt_terms = factorize::multi_term_opt_hartono(terms, 2, 3);
   }
 }

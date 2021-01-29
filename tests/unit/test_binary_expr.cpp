@@ -4,6 +4,52 @@
 
 #include "catch.hpp"
 
+using sequant::utils::binary_expr;
+
+template <typename T, typename F>
+void visit_preorder_binary_expr(typename binary_expr<T>::node_ptr const& node,
+                                F&& visitor) {
+  static_assert(
+      std::is_invocable_v<F, typename binary_expr<T>::node_ptr const&>,
+      "visitor signature not matched");
+  if (!node) return;  // if nullptr passed explicitly
+
+  if (node->leaf()) {
+    visitor(node);
+    return;
+  }
+
+  // visit this node
+  visitor(node);
+
+  // visit left node
+  visit_preorder_binary_expr<T, F>(node->left(), std::forward<F>(visitor));
+
+  // visit right node
+  visit_preorder_binary_expr<T, F>(node->right(), std::forward<F>(visitor));
+}
+
+template <typename T, typename F>
+void visit_postorder_binary_expr(typename binary_expr<T>::node_ptr const& node,
+                                 F&& visitor) {
+  static_assert(
+      std::is_invocable_v<F, typename binary_expr<T>::node_ptr const&>,
+      "visitor signature not matched");
+
+  if (node->leaf()) {
+    visitor(node);
+    return;
+  }
+  // visit left node
+  visit_postorder_binary_expr<T, F>(node->left(), std::forward<F>(visitor));
+
+  // visit right node
+  visit_postorder_binary_expr<T, F>(node->right(), std::forward<F>(visitor));
+
+  // visit this node
+  visitor(node);
+}
+
 TEST_CASE("TEST BINARY_EXPR_CLASS", "[binary_expr]") {
   using sequant::utils::binary_expr;
   using sequant::utils::make_binary_expr;
@@ -68,11 +114,11 @@ TEST_CASE("TEST BINARY_EXPR_CLASS", "[binary_expr]") {
     REQUIRE(visitor.words == std::vector<std::string>{"bar", "foo", "bazz"});
 
     visitor.words.clear();
-    sequant::utils::visit_preorder_binary_expr<std::string>(node1, visitor);
+    visit_preorder_binary_expr<std::string>(node1, visitor);
     REQUIRE(visitor.words == std::vector<std::string>{"foo", "bar", "bazz"});
 
     visitor.words.clear();
-    sequant::utils::visit_postorder_binary_expr<std::string>(node1, visitor);
+    visit_postorder_binary_expr<std::string>(node1, visitor);
     REQUIRE(visitor.words == std::vector<std::string>{"bar", "bazz", "foo"});
   }
 
@@ -114,35 +160,8 @@ TEST_CASE("TEST BINARY_EXPR_CLASS", "[binary_expr]") {
     //      5.0    7.0   13.0  17.0
     //
 
-    REQUIRE(sequant::utils::evaluate_binary_expr<int, double>(
-                node, evaluator) == Approx(7.4 / (1.1 * 2)));
-  }
-
-  SECTION("transformation") {
-    using namespace std::literals::string_literals;
-    auto node1 = make_binary_expr("foo"s, "bar"s, "bazz"s);
-    // node1 tree:
-    //
-    //       foo
-    //      /   \
-    //   bar    bazz
-    //
-
-    struct {
-      size_t operator()(const std::string& str) { return str.size(); }
-    } transformer;
-
-    auto node1_trans =
-        sequant::utils::transform_binary_expr<std::string, size_t>(node1,
-                                                                   transformer);
-
-    // node1_trans tree:
-    //
-    //        3
-    //      /   \
-    //     3     4
-
-    REQUIRE(*node1_trans == *sequant::utils::make_binary_expr(3, 3, 4));
+    REQUIRE(sequant::utils::evaluate_binary_expr<int>(node, evaluator) ==
+            Approx(7.4 / (1.1 * 2)));
   }
 
   SECTION("digraph") {
