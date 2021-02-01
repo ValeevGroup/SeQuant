@@ -384,8 +384,14 @@ TEST_CASE("EVALUATIONS TESTS", "[eval_tree]") {
   }
 
   SECTION("Testing symmetrization evaluation") {
-    TA::TiledRange tr_ooovvv{{0, nocc},  {0, nocc},  {0, nocc},
-                             {0, nvirt}, {0, nvirt}, {0, nvirt}};
+
+    container::svector<size_t> r_occ = {0, nocc};
+    container::svector<size_t> r_vir = {0, nvirt};
+    auto tr1o = TA::TiledRange1(r_occ.begin(), r_occ.end());
+    auto tr1v = TA::TiledRange1(r_vir.begin(), r_vir.end());
+    std::vector<TA::TiledRange1> r_ooovvv(3, tr1o);
+    r_ooovvv.insert(r_ooovvv.end(), 3, tr1v);
+    TA::TiledRange tr_ooovvv{r_ooovvv.begin(),r_ooovvv.end()};
     auto tnsr_T_ooovvv = std::make_shared<DTensorType>(world, tr_ooovvv);
     tnsr_T_ooovvv->fill_random();
 
