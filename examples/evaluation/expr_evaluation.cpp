@@ -444,22 +444,12 @@ int main(int argc, char* argv[]) {
             tile_G_vvvv(a, b, c, d) =
                 tile_ints_spin(a + nocc, b + nocc, c + nocc, d + nocc);
 
-    // for (auto i = 0; i < nocc; ++i)
-    //   for (auto j = 0; j < nocc; ++j)
-    //     for (auto k = 0; k < nocc; ++k)
-    //       for (auto a = 0; a < nvirt; ++a)
-    //         for (auto b = 0; b < nvirt; ++b)
-    //           for (auto c = 0; c < nvirt; ++c)
-    //             tile_D_ooovvv(i, j, k, a, b, c) =
-    //                 tile_D_oovv(i, j, a, b) + tile_D_ov(k, c);
 
     // amplitudes for coupled-cluster calculations
     auto t_ov = std::make_shared<TA::TArrayD>(world, tr_ov);
     auto t_oovv = std::make_shared<TA::TArrayD>(world, tr_oovv);
-    // auto t_ooovvv = std::make_shared<TA::TArrayD>(world, tr_ooovvv);
     (*t_ov).fill(0.);
     (*t_oovv).fill(0.);
-    // (*t_ooovvv).fill(0.0);
 
     //
     // global sequant setup...

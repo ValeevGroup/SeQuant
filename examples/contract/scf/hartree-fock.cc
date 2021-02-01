@@ -796,7 +796,6 @@ TA::TArrayD compute_mo_ints(const Matrix& coff_mat,
       4, TA::TiledRange1(tile_boundaries.begin(), tile_boundaries.end()));
 
   // create ints_ao
-  // TA::TiledRange trange_ao(ranges.begin(), ranges.end());
   TA::TiledRange trange_ao(ranges.begin(), ranges.end());
   TA::TArrayD    ints_ao(world, trange_ao);
   auto tile = ints_ao.world().taskq.add(fill_eri_tensor,

@@ -5,7 +5,7 @@
 
 using namespace sequant;
 
-#define CLOSED_SHELL_SPINTRACE 1
+#define CLOSED_SHELL_SPINTRACE 0
 #if CLOSED_SHELL_SPINTRACE
 container::vector<double> biorthogonal_tran_coeff(const int n_particles, const double& threshold);
 std::vector<std::map<Index, Index>> biorthogonal_tran_idx_map(const container::vector<container::vector<Index>> ext_index_groups);
