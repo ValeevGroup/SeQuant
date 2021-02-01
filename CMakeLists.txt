@@ -245,8 +245,8 @@ set(utests_deps SeQuant)
 if (TARGET tiledarray)
   list(APPEND utests_src
       ## unit tests for evaluation
-      ## tests/unit/test_eval_tree.cpp
-      ## tests/unit/test_path_tree.cpp
+      tests/unit/test_eval_tree.cpp
+      tests/unit/test_path_tree.cpp
       )
   list(APPEND utests_deps tiledarray)
 endif(TARGET tiledarray)
