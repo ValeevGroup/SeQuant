@@ -34,7 +34,7 @@ class EvalTree {
   HashType hash_value();
 
   /// Compute operation counts for the evaluation.
-  /// \param ispace_size_map A map from IndexSpace type to the size of the
+  /// param ispace_size_map A map from IndexSpace type to the size of the
   ///                       space.
   ///                       e.g. IndexSpace::active_occupied -> 5
   ///                       e.g. IndexSpace::active_unoccupied -> 20
@@ -54,10 +54,11 @@ class EvalTree {
     return _evaluate(root, context);
   }
 
-  /// Evaluate with lcao factory functionality
+  /// \brief Evaluate: Use lambda to generate unknown Tensor objects
+  /// \param eval_tensor External lambda function that generates tensor
+  /// \return Result after evaluating all tensor operations
   template <typename DataTensorType>
   DataTensorType evaluate_and_make(
-      // container::map<HashType, std::shared_ptr<DataTensorType>>& context,
       const std::function<DataTensorType(const Tensor&)>& eval_tensor)
   const {
     return _evaluate_and_make(root, eval_tensor);
@@ -84,7 +85,14 @@ class EvalTree {
   ///        that in bra at corresponding positions.
   explicit EvalTree(const ExprPtr& expr, bool canonize_leaf_braket = false);
 
-  /// For antisymmetrizing a TA object (called in MPQC::CCk)
+  /// \brief Antisymmetrizes a data tensor with same bra/ket ranks
+  /// \details The function performs the action of Antisymmetrizer operator on a tensor generating
+  /// a sum of all (n!)^2 permutations where n is the bra/ket rank.
+  /// e.g: A_{ab}^{ij}t_{ij}^{ab} = t_{ij}^{ab} - t_{ji}^{ab} - t_{ij}^{ba} + t_{ji}^{ba}
+  /// \param ta_tensor Data tensor to be antisymmetrized
+  /// \param bra_rank
+  /// \param ket_rank
+  /// \result the antisymmetrized data tensor
   template <typename DataTensorType>
   static DataTensorType antisymmetrize_tensor(
       const DataTensorType& ta_tensor,
@@ -131,34 +139,51 @@ class EvalTree {
   _phase_perm(container::svector<size_t>& ords, size_t begin = 0,
               size_t swaps_count = 0);
 
-  /// Antisymmetrize DataTensorType
+  /// \brief Antisymmetrize DataTensorType
+  /// \details The function performs the action of Antisymmetrizer operator on a tensor generating
+  /// a sum of all (n!)^2 permutations where n is the bra/ket rank.
+  /// e.g: A_{ab}^{ij}t_{ij}^{ab} = t_{ij}^{ab} - t_{ji}^{ab} - t_{ij}^{ba} + t_{ji}^{ba}
   /// \tparam DataTensorType Backend data tensor type eg. TA::TArrayD
   /// \param ta_tensor TiledArray tensor.
   /// \param bra_rank rank of the tensor bra.
   /// \param ket_rank rank of the tensor ket.
   /// \param scal ScalarType factor to scale the result. 1 by default.
+  /// \return An antisymmetrized data tensor
   template <typename DataTensorType>
   static DataTensorType _antisymmetrize(const DataTensorType& ta_tensor,
                                         size_t bra_rank, size_t ket_rank,
                                         ScalarType scal = 1);
 
-  /// Symmetrize DataTensorType
+  /// \brief Symmetrize DataTensorType
+  /// \details The function performs the action of Symmetrizer on a tensor generating
+  /// a sum of all n! permutations where n is the bra/ket rank.
+  /// e.g: S_{ab}^{ij}t_{ij}^{ab} = t_{ij}^{ab} + t_{ji}^{ba}
   /// \tparam DataTensorType Backend data tensor type eg. TA::TArrayD
   /// \param ta_tensor TiledArray tensor.
-  /// \param bra_rank rank of the tensor bra.
-  /// \param ket_rank rank of the tensor ket.
+  /// \param braket_rank rank of the tensor bra.
   /// \param scal ScalarType factor to scale the result. 1 by default.
+  /// \return A symmetrized data tensor
   template <typename DataTensorType>
   static DataTensorType _symmetrize(const DataTensorType& ta_tensor,
                                     size_t braket_rank, ScalarType scal = 1);
 
-  /// Evaluate a node in a given context.
+  /// Evaluate the tree in a given context.
+  /// \tparam DataTensorType Type of the backend data tensor. eg. TA::TArrayD
+  /// while using TiledArray
+  /// \param  context A map that maps hash values of (at least) all the leaf
+  /// nodes in the tree to the DataTensorType tensor.
+  /// \return Result of evaluation that is of DataTensorType.
   template <typename DataTensorType>
   static DataTensorType _evaluate(
       const EvalNodePtr& node,
       const container::map<HashType, std::shared_ptr<DataTensorType>>& context);
 
-  /// Evaluate a node in a given context.
+  /// \brief Evaluate a node in absence of a context
+  /// \details If no context is provided, use a lambda function to generate
+  /// a data tensor corresponding to every sequant::Tensor in the node
+  /// \param node root node of evaluation tree
+  /// \param eval_tensor A lambda function that generates a data tensor
+  /// \return Result after evaluating all tensor operations
   template <typename DataTensorType>
   static DataTensorType _evaluate_and_make(
       const EvalNodePtr& node,
@@ -166,6 +191,13 @@ class EvalTree {
 
 };  // class EvalTree
 
+/// \brief Antisymmetrize DataTensorType
+/// \tparam DataTensorType Backend data tensor type eg. TA::TArrayD
+/// \param ta_tensor TiledArray tensor.
+/// \param bra_rank rank of the tensor bra.
+/// \param ket_rank rank of the tensor ket.
+/// \param scal ScalarType factor to scale the result. 1 by default.
+/// \return An antisymmetrized data tensor
 template <typename DataTensorType>
 DataTensorType EvalTree::_antisymmetrize(const DataTensorType& ta_tensor,
                                          size_t bra_rank, size_t ket_rank,
@@ -233,7 +265,12 @@ DataTensorType EvalTree::_antisymmetrize(const DataTensorType& ta_tensor,
   return result;
 
 }  // function _antisymmetrize
-
+/// \brief Symmetrize DataTensorType
+/// \tparam DataTensorType Backend data tensor type eg. TA::TArrayD
+/// \param ta_tensor TiledArray tensor.
+/// \param braket_rank rank of the tensor bra.
+/// \param scal ScalarType factor to scale the result. 1 by default.
+/// \return A symmetrized data tensor
 template <typename DataTensorType>
 DataTensorType EvalTree::_symmetrize(const DataTensorType& ta_tensor,
                                      size_t braket_rank, ScalarType scal) {
@@ -272,6 +309,11 @@ DataTensorType EvalTree::_symmetrize(const DataTensorType& ta_tensor,
   return result;
 }
 
+/// Evaluate the tree in a given context.
+/// \param node Root node of evaluation tree
+/// \param context A map that maps hash values of (at least) all the leaf
+/// nodes in the tree to the DataTensorType tensor.
+/// \return Result of evaluation that is of DataTensorType.
 template <typename DataTensorType>
 DataTensorType EvalTree::_evaluate(
     const EvalNodePtr& node,
@@ -365,9 +407,10 @@ DataTensorType EvalTree::_evaluate(
 }  // function _evaluate
 
 /// @brief evaluates a tree, uses a tensor generator lambda if the tensor object is missing from context
-/// @param node
+/// @param node Root node of evaluation tree
 /// @param context Mutable map of hash values and Tensors
 /// @param eval_tensor lambda function that returns a Tensor object
+/// @return Result after evaluating all tensor operations
 template <typename DataTensorType>
 DataTensorType EvalTree::_evaluate_and_make(
     const EvalNodePtr& node,
