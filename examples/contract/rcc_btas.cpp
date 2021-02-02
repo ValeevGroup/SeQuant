@@ -319,7 +319,7 @@ int main(int argc, char* argv[]) {
     auto normdiff = 0.0;
     auto eccsd = 0.0;
     Logger::get_instance().wick_stats = false;
-    auto ccsd_r = cceqvec{2, 2}(true, true, true, true);
+    auto ccsd_r = cceqvec{2, 2}(true, true, true, true, true);
 
     std::initializer_list<IndexList> external_indices = {{}};
 

@@ -8,6 +8,7 @@
 
 #include <functional>
 #include <memory>
+#include <numeric>
 
 namespace sequant::evaluate {
 ///
@@ -33,7 +34,7 @@ class EvalTree {
   HashType hash_value();
 
   /// Compute operation counts for the evaluation.
-  /// \param ispace_size_map A map from IndexSpace type to the size of the
+  /// param ispace_size_map A map from IndexSpace type to the size of the
   ///                       space.
   ///                       e.g. IndexSpace::active_occupied -> 5
   ///                       e.g. IndexSpace::active_unoccupied -> 20
@@ -53,6 +54,21 @@ class EvalTree {
     return _evaluate(root, context);
   }
 
+  /// \brief Evaluate: Use lambda to generate unknown Tensor objects
+  /// \param eval_tensor External lambda function that generates tensor
+  /// \return Result after evaluating all tensor operations
+  template <typename DataTensorType>
+  DataTensorType evaluate_and_make(
+      const std::function<DataTensorType(const Tensor&)>& eval_tensor)
+  const {
+    return _evaluate_and_make(root, eval_tensor);
+  }
+
+  template<typename DataTensorType>
+  DataTensorType symmetrize(DataTensorType& tensor, int rank){
+    return _symmetrize(tensor, rank);
+  }
+
   /// Visit the tree by pre-order traversal.
   /// ie. Node is visited first followed by left node and then right node.
   void visit(const std::function<void(const EvalNodePtr&)>& visitor);
@@ -67,7 +83,23 @@ class EvalTree {
   ///        the ket indices and returns while constructing leaf node from
   ///        sequant tensor as soon as IndexSpace attribute in ket is lower than
   ///        that in bra at corresponding positions.
-  EvalTree(const ExprPtr& expr, bool canonize_leaf_braket = true);
+  explicit EvalTree(const ExprPtr& expr, bool canonize_leaf_braket = false);
+
+  /// \brief Antisymmetrizes a data tensor with same bra/ket ranks
+  /// \details The function performs the action of Antisymmetrizer operator on a tensor generating
+  /// a sum of all (n!)^2 permutations where n is the bra/ket rank.
+  /// e.g: A_{ab}^{ij}t_{ij}^{ab} = t_{ij}^{ab} - t_{ji}^{ab} - t_{ij}^{ba} + t_{ji}^{ba}
+  /// \param ta_tensor Data tensor to be antisymmetrized
+  /// \param bra_rank
+  /// \param ket_rank
+  /// \result the antisymmetrized data tensor
+  template <typename DataTensorType>
+  static DataTensorType antisymmetrize_tensor(
+      const DataTensorType& ta_tensor,
+      size_t bra_rank,
+      size_t ket_rank){
+    return _antisymmetrize(ta_tensor, bra_rank, ket_rank);
+  }
 
  private:
   /// Build EvalTreeNode pointer from sequant expression of Sum, Product or
@@ -107,25 +139,65 @@ class EvalTree {
   _phase_perm(container::svector<size_t>& ords, size_t begin = 0,
               size_t swaps_count = 0);
 
-  /// Antisymmetrize DataTensorType
+  /// \brief Antisymmetrize DataTensorType
+  /// \details The function performs the action of Antisymmetrizer operator on a tensor generating
+  /// a sum of all (n!)^2 permutations where n is the bra/ket rank.
+  /// e.g: A_{ab}^{ij}t_{ij}^{ab} = t_{ij}^{ab} - t_{ji}^{ab} - t_{ij}^{ba} + t_{ji}^{ba}
   /// \tparam DataTensorType Backend data tensor type eg. TA::TArrayD
   /// \param ta_tensor TiledArray tensor.
   /// \param bra_rank rank of the tensor bra.
   /// \param ket_rank rank of the tensor ket.
   /// \param scal ScalarType factor to scale the result. 1 by default.
+  /// \return An antisymmetrized data tensor
   template <typename DataTensorType>
   static DataTensorType _antisymmetrize(const DataTensorType& ta_tensor,
                                         size_t bra_rank, size_t ket_rank,
                                         ScalarType scal = 1);
 
-  /// Evaluate a node in a given context.
+  /// \brief Symmetrize DataTensorType
+  /// \details The function performs the action of Symmetrizer on a tensor generating
+  /// a sum of all n! permutations where n is the bra/ket rank.
+  /// e.g: S_{ab}^{ij}t_{ij}^{ab} = t_{ij}^{ab} + t_{ji}^{ba}
+  /// \tparam DataTensorType Backend data tensor type eg. TA::TArrayD
+  /// \param ta_tensor TiledArray tensor.
+  /// \param braket_rank rank of the tensor bra.
+  /// \param scal ScalarType factor to scale the result. 1 by default.
+  /// \return A symmetrized data tensor
+  template <typename DataTensorType>
+  static DataTensorType _symmetrize(const DataTensorType& ta_tensor,
+                                    size_t braket_rank, ScalarType scal = 1);
+
+  /// Evaluate the tree in a given context.
+  /// \tparam DataTensorType Type of the backend data tensor. eg. TA::TArrayD
+  /// while using TiledArray
+  /// \param  context A map that maps hash values of (at least) all the leaf
+  /// nodes in the tree to the DataTensorType tensor.
+  /// \return Result of evaluation that is of DataTensorType.
   template <typename DataTensorType>
   static DataTensorType _evaluate(
       const EvalNodePtr& node,
       const container::map<HashType, std::shared_ptr<DataTensorType>>& context);
 
+  /// \brief Evaluate a node in absence of a context
+  /// \details If no context is provided, use a lambda function to generate
+  /// a data tensor corresponding to every sequant::Tensor in the node
+  /// \param node root node of evaluation tree
+  /// \param eval_tensor A lambda function that generates a data tensor
+  /// \return Result after evaluating all tensor operations
+  template <typename DataTensorType>
+  static DataTensorType _evaluate_and_make(
+      const EvalNodePtr& node,
+      const std::function<DataTensorType(const Tensor&)>& eval_tensor);
+
 };  // class EvalTree
 
+/// \brief Antisymmetrize DataTensorType
+/// \tparam DataTensorType Backend data tensor type eg. TA::TArrayD
+/// \param ta_tensor TiledArray tensor.
+/// \param bra_rank rank of the tensor bra.
+/// \param ket_rank rank of the tensor ket.
+/// \param scal ScalarType factor to scale the result. 1 by default.
+/// \return An antisymmetrized data tensor
 template <typename DataTensorType>
 DataTensorType EvalTree::_antisymmetrize(const DataTensorType& ta_tensor,
                                          size_t bra_rank, size_t ket_rank,
@@ -141,7 +213,7 @@ DataTensorType EvalTree::_antisymmetrize(const DataTensorType& ta_tensor,
   // input: vector<size_t>{10, 14, 19}
   // output:             "10,14,19"
   auto ords_to_csv_str = [](const auto& ords) {
-    std::string str = "";
+    std::string str;
     for (auto ii : ords) {
       str += std::to_string(ii) + ",";
     }
@@ -165,7 +237,7 @@ DataTensorType EvalTree::_antisymmetrize(const DataTensorType& ta_tensor,
   };
 
   DataTensorType result(ta_tensor.world(), ta_tensor.trange());
-  result.fill(0.);
+  result.fill(0);
 
   // lhs_annot is always result of
   // ords_to_csv_str( 0, 1, ..., ta_tensor.rank()-1 )
@@ -193,7 +265,55 @@ DataTensorType EvalTree::_antisymmetrize(const DataTensorType& ta_tensor,
   return result;
 
 }  // function _antisymmetrize
+/// \brief Symmetrize DataTensorType
+/// \tparam DataTensorType Backend data tensor type eg. TA::TArrayD
+/// \param ta_tensor TiledArray tensor.
+/// \param braket_rank rank of the tensor bra.
+/// \param scal ScalarType factor to scale the result. 1 by default.
+/// \return A symmetrized data tensor
+template <typename DataTensorType>
+DataTensorType EvalTree::_symmetrize(const DataTensorType& ta_tensor,
+                                     size_t braket_rank, ScalarType scal) {
+  // generates a string annotation
+  // input: vector<size_t>{10, 14, 19}
+  // output:             "10,14,19"
+  auto ords_to_csv_str = [](const auto& ords, auto add) {
+    std::string str;
+    for (auto ii : ords) {
+      str += std::to_string(ii + add) + ",";
+    }
+    str.pop_back();  // remove the trailing comma ","
+    return str;
+  };
 
+  DataTensorType result(ta_tensor.world(), ta_tensor.trange());
+  result.fill(0);
+
+  // generate a vector and fill it with int starting with 0
+  auto perm_vec = container::svector<size_t>(braket_rank);
+  std::iota(perm_vec.begin(), perm_vec.end(), 0);
+
+  // fix indices of the result tensor
+  auto lhs_annot = ords_to_csv_str(perm_vec, 0) + "," +
+                   ords_to_csv_str(perm_vec, braket_rank);
+
+  // keep adding the permuted tensors to the result
+  do {
+    auto rhs_annot = ords_to_csv_str(perm_vec, 0) + "," +
+                     ords_to_csv_str(perm_vec, braket_rank);
+    result(lhs_annot) += ta_tensor(rhs_annot);
+
+  } while (std::next_permutation(perm_vec.begin(), perm_vec.end()));
+
+  result(lhs_annot) = scal * result(lhs_annot);
+  return result;
+}
+
+/// Evaluate the tree in a given context.
+/// \param node Root node of evaluation tree
+/// \param context A map that maps hash values of (at least) all the leaf
+/// nodes in the tree to the DataTensorType tensor.
+/// \return Result of evaluation that is of DataTensorType.
 template <typename DataTensorType>
 DataTensorType EvalTree::_evaluate(
     const EvalNodePtr& node,
@@ -201,7 +321,7 @@ DataTensorType EvalTree::_evaluate(
   if (node->is_leaf()) {
     auto leaf_node = std::dynamic_pointer_cast<EvalTreeLeafNode>(node);
     if (auto label = leaf_node->expr()->as<Tensor>().label();
-        (label == L"A" || label == L"P")) {
+        (label == L"A" || label == L"S")) {
       throw std::logic_error(
           "(anti-)symmetrization tensors cannot be evaluated from here!");
     }
@@ -210,7 +330,7 @@ DataTensorType EvalTree::_evaluate(
     if (found_it != context.end()) {
       return *(found_it->second);
     } else {
-      std::wstring error_msg_os = L"";
+      std::wstring error_msg_os;
 
       error_msg_os += L"EvalNodeLeaf::evaluate(): ";
       error_msg_os += L"did not find such tensor in context (expr=\"";
@@ -234,12 +354,22 @@ DataTensorType EvalTree::_evaluate(
                            ket_rank, intrnl_node->right()->scalar());
   }  // anitsymmetrization type evaluation done
 
+  if (opr == Operation::SYMMETRIZE) {
+    auto braket_rank = intrnl_node->indices().size();
+    if (braket_rank % 2 != 0)
+      throw std::logic_error("Can not symmetrize odd-ordered tensor!");
+
+    braket_rank /= 2;
+    return _symmetrize(_evaluate(intrnl_node->right(), context), braket_rank,
+                       intrnl_node->right()->scalar());
+  }  // symmetrization type evaluation done
+
   // generates tiledarray annotation based on a node's index labels
   // @note this wouldn't be necessary if the tensor algebra library
   // would support std::string_view as annotations
   auto TA_annotation =
       [&intrnl_node](decltype(intrnl_node->indices())& indices) {
-        std::string annot = "";
+        std::string annot;
         for (const auto& idx : indices)
           annot += std::string(idx.label().begin(), idx.label().end()) + ", ";
 
@@ -275,6 +405,89 @@ DataTensorType EvalTree::_evaluate(
   return result;
 
 }  // function _evaluate
+
+/// @brief evaluates a tree, uses a tensor generator lambda if the tensor object is missing from context
+/// @param node Root node of evaluation tree
+/// @param context Mutable map of hash values and Tensors
+/// @param eval_tensor lambda function that returns a Tensor object
+/// @return Result after evaluating all tensor operations
+template <typename DataTensorType>
+DataTensorType EvalTree::_evaluate_and_make(
+    const EvalNodePtr& node,
+    const std::function<DataTensorType(const Tensor&)>& eval_tensor) {
+
+  // If node is a leaf, return the object from context
+  if (node->is_leaf()) {
+    auto leaf_node = std::dynamic_pointer_cast<EvalTreeLeafNode>(node);
+    if (auto label = leaf_node->expr()->as<Tensor>().label();
+        (label == L"A" || label == L"S")) {
+      throw std::logic_error(
+          "(anti-)symmetrization tensors cannot be evaluated from here!");
+    }
+    return eval_tensor(leaf_node->expr()->as<Tensor>());
+  }  // done leaf evaluation
+
+  //
+  // non-leaf evaluation
+  //
+  auto intrnl_node = std::dynamic_pointer_cast<EvalTreeInternalNode>(node);
+
+  auto opr = intrnl_node->operation();
+  if (opr == Operation::ANTISYMMETRIZE) {
+    auto bra_rank = intrnl_node->indices().size() / 2;
+    auto ket_rank = intrnl_node->indices().size() - bra_rank;
+    return _antisymmetrize(_evaluate_and_make(intrnl_node->right(), eval_tensor), bra_rank,
+                           ket_rank, intrnl_node->right()->scalar());
+  }  // anitsymmetrization type evaluation done
+
+  if (opr == Operation::SYMMETRIZE) {
+    auto braket_rank = intrnl_node->indices().size();
+    if (braket_rank % 2 != 0)
+      throw std::logic_error("Can not symmetrize odd-ordered tensor!");
+
+    braket_rank /= 2;
+    return _symmetrize(_evaluate_and_make(intrnl_node->right(), eval_tensor), braket_rank,
+                       intrnl_node->right()->scalar());
+  }  // symmetrization type evaluation done
+
+  // generates tiledarray annotation based on a node's index labels
+  // @note this wouldn't be necessary if the tensor algebra library
+  // would support std::string_view as annotations
+  auto TA_annotation =
+      [](decltype(intrnl_node->indices())& indices) {
+        std::string annot;
+        for (const auto& idx : indices)
+          annot += std::string(idx.label().begin(), idx.label().end()) + ", ";
+
+        annot.erase(annot.size() - 2);  // remove trailing ", "
+        return annot;
+      };
+
+  auto left_annot = TA_annotation(intrnl_node->left()->indices());
+  auto right_annot = TA_annotation(intrnl_node->right()->indices());
+  auto this_annot = TA_annotation(intrnl_node->indices());
+
+  DataTensorType result;
+  if (opr == Operation::SUM) {
+    // sum left and right evaluated tensors using TA syntax
+    result(this_annot) =
+        intrnl_node->left()->scalar() *
+            _evaluate_and_make(intrnl_node->left(), eval_tensor)(left_annot) +
+            intrnl_node->right()->scalar() *
+                _evaluate_and_make(intrnl_node->right(), eval_tensor)(right_annot);
+  } else if (opr == Operation::PRODUCT) {
+    // contract left and right evaluated tensors using TA syntax
+    result(this_annot) = intrnl_node->left()->scalar() *
+        _evaluate_and_make(intrnl_node->left(), eval_tensor)(left_annot) *
+        intrnl_node->right()->scalar() *
+        _evaluate_and_make(intrnl_node->right(), eval_tensor)(right_annot);
+  } else {
+    throw std::domain_error("Operation: " + std::to_string((size_t)opr) +
+        " not supported!");
+  }  // sum and product type evaluation
+  return result;
+
+}  // function _evaluate_and_make
 
 }  // namespace sequant::evaluate
 

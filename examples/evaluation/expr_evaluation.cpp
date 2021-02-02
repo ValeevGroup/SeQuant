@@ -444,22 +444,12 @@ int main(int argc, char* argv[]) {
             tile_G_vvvv(a, b, c, d) =
                 tile_ints_spin(a + nocc, b + nocc, c + nocc, d + nocc);
 
-//    for (auto i = 0; i < nocc; ++i)
-//      for (auto j = 0; j < nocc; ++j)
-//        for (auto k = 0; k < nocc; ++k)
-//          for (auto a = 0; a < nvirt; ++a)
-//            for (auto b = 0; b < nvirt; ++b)
-//              for (auto c = 0; c < nvirt; ++c)
-//                tile_D_ooovvv(i, j, k, a, b, c) =
-//                    tile_D_oovv(i, j, a, b) + tile_D_ov(k, c);
 
     // amplitudes for coupled-cluster calculations
     auto t_ov = std::make_shared<TA::TArrayD>(world, tr_ov);
     auto t_oovv = std::make_shared<TA::TArrayD>(world, tr_oovv);
-//    auto t_ooovvv = std::make_shared<TA::TArrayD>(world, tr_ooovvv);
     (*t_ov).fill(0.);
     (*t_oovv).fill(0.);
-//    (*t_ooovvv).fill(0.0);
 
     //
     // global sequant setup...
@@ -480,7 +470,7 @@ int main(int argc, char* argv[]) {
         std::make_shared<DefaultTensorCanonicalizer>());
     Logger::get_instance().wick_stats = false;
 
-    auto cc_r = cceqvec{2, 2}(true, true, true, true);
+    auto cc_r = cceqvec{2, 2}(true, true, true, true, true);
 
     std::vector<std::shared_ptr<TA::TArrayD>> data_tensors = {Fock_oo, Fock_ov, Fock_vv, G_oooo,
                                         G_ooov,  G_oovv,  G_ovov,  G_ovvv,
@@ -523,8 +513,8 @@ int main(int argc, char* argv[]) {
         context_map.insert(ContextMapType::value_type(hash_val, data_tensors.at(i)));
     }
 
-    auto r1_tree = EvalTree(cc_r[1]);
-    auto r2_tree = EvalTree(cc_r[2]);
+    auto r1_tree = EvalTree(cc_r[1], true);
+    auto r2_tree = EvalTree(cc_r[2], true);
 
     iter = 0;
     rmsd = 0.0;

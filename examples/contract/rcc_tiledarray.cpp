@@ -487,7 +487,7 @@ int main(int argc, char *argv[])
     auto normdiff = 0.0;
     auto ecc      = 0.0;
     Logger::get_instance().wick_stats = false;
-    auto cc_r = cceqvec{ 3, 3 }(true, true, true, true);
+    auto cc_r = cceqvec{ 3, 3 }(true, true, true, true, true);
 
     using sequant::interpret::antisymmetrize;
     using sequant::interpret::eval_equation;

@@ -215,9 +215,9 @@ install(DIRECTORY SeQuant
 add_library(SeQuant::SeQuant ALIAS SeQuant)  # to be able to use as subproject
 
 ### optional prereqs
-if (NOT TARGET Libint2::libint2_cxx)
+if (NOT TARGET Libint2::cxx)
   find_package(Libint2 2.7.0 CONFIG)
-endif(NOT TARGET Libint2::libint2_cxx)
+endif(NOT TARGET Libint2::cxx)
 if (NOT TARGET tiledarray)
   find_package(TiledArray CONFIG COMPONENTS tiledarray)
 endif(NOT TARGET tiledarray)
@@ -236,7 +236,10 @@ set(utests_src
          tests/unit/test_mbpt.cpp
          tests/unit/test_tensor_network.cpp
          tests/unit/test_tn_factorization.cpp
-        )
+         tests/unit/test_spin.cpp
+         tests/unit/test_canonicalize.cpp
+         tests/unit/test_expr.cpp)
+
 set(utests_deps SeQuant)
 
 if (TARGET tiledarray)
@@ -267,12 +270,13 @@ set_tests_properties(unit/run
         WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tests/unit)
 
 ####### Tests ########
+find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 
 # Single-Reference Coupled-Cluster equation generation (spin-orbital)
 set(example0 srcc)
 add_executable(${example0} EXCLUDE_FROM_ALL
         examples/${example0}/${example0}.cpp)
-target_link_libraries(${example0} SeQuant ${TBB_LIBRARIES})
+target_link_libraries(${example0} SeQuant ${TBB_LIBRARIES} Eigen3::Eigen)
 
 if (TARGET tiledarray AND TARGET Libint2::cxx)
   # SRCC spin-orbital equation evaluation

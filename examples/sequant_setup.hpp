@@ -45,7 +45,8 @@ class screened_vac_av {
   ExprPtr operator()(const ExprPtr& expr,
                      std::initializer_list<std::pair<int, int>> op_connections,
                      bool screen = true, bool use_topology = true,
-                     bool canonical_only = true) {
+                     bool canonical_only = true, bool antisymm = true) {
+    // TODO: Implement antisymm here
     if (!screen)
       return sequant::mbpt::sr::so::vac_av(expr, op_connections, use_topology);
 
@@ -146,7 +147,7 @@ class ccresidual {
   ccresidual(size_t p, size_t n) : P(p), N(n) {}
 
   ExprPtr operator()(bool screen, bool use_topology, bool use_connectivity,
-                     bool canonical_only) {
+                     bool canonical_only, bool antisymm) {
     auto ahbar = [=](const bool screen) {
       auto connect = [=](std::initializer_list<std::pair<int, int>> connlist) {
         if (use_connectivity)
@@ -155,20 +156,20 @@ class ccresidual {
           return std::initializer_list<std::pair<int, int>>{};
       };
       auto result =
-          screened_vac_av{0}(A(P) * H(), connect({}), screen, use_topology,
-                             canonical_only) +
-          screened_vac_av{1}(A(P) * H() * T(N), connect({{1, 2}}), screen,
-                             use_topology, canonical_only) +
-          ex<Constant>(1. / 2) * screened_vac_av{2}(A(P) * H() * T(N) * T(N),
+          screened_vac_av{0}(A(P) * H(antisymm), connect({}), screen, use_topology,
+                             canonical_only, antisymm) +
+          screened_vac_av{1}(A(P) * H(antisymm) * T(N, N, false, antisymm), connect({{1, 2}}), screen,
+                             use_topology, canonical_only, antisymm) +
+          ex<Constant>(1. / 2) * screened_vac_av{2}(A(P) * H(antisymm) * T(N, N, false, antisymm) * T(N, N, false, antisymm),
                                                     connect({{1, 2}, {1, 3}}),
                                                     screen, use_topology,
                                                     canonical_only) +
           ex<Constant>(1. / 6) *
-              screened_vac_av{3}(A(P) * H() * T(N) * T(N) * T(N),
+              screened_vac_av{3}(A(P) * H(antisymm) * T(N, N, false, antisymm) * T(N, N, false, antisymm) * T(N, N, false, antisymm),
                                  connect({{1, 2}, {1, 3}, {1, 4}}), screen,
                                  use_topology, canonical_only) +
           ex<Constant>(1. / 24) *
-              screened_vac_av{4}(A(P) * H() * T(N) * T(N) * T(N) * T(N),
+              screened_vac_av{4}(A(P) * H(antisymm) * T(N, N, false, antisymm) * T(N, N, false, antisymm) * T(N, N, false, antisymm) * T(N, N, false, antisymm),
                                  connect({{1, 2}, {1, 3}, {1, 4}, {1, 5}}),
                                  screen, use_topology, canonical_only);
       simplify(result);
@@ -187,13 +188,13 @@ class ccresidual_vec {
   ccresidual_vec(size_t p, size_t pmin, size_t n) : P(p), PMIN(pmin), N(n) {}
 
   void operator()(std::vector<ExprPtr>& result, bool screen, bool use_topology,
-                  bool use_connectivity, bool canonical_only) {
+                  bool use_connectivity, bool canonical_only, bool use_antisymm) {
     result[P] = ccresidual{P, N}(screen, use_topology, use_connectivity,
-                                 canonical_only);
+                                 canonical_only, use_antisymm);
     rapid_simplify(result[P]);
     if (P > PMIN)
       ccresidual_vec{P - 1, PMIN, N}(result, screen, use_topology,
-                                     use_connectivity, canonical_only);
+                                     use_connectivity, canonical_only, use_antisymm);
   }
 };  // class ccresidual_vec
 
@@ -207,10 +208,10 @@ class cceqvec {
           size_t pmin = 1)
       : N(n), P(p == std::numeric_limits<size_t>::max() ? n : p), PMIN(pmin) {}
   std::vector<ExprPtr> operator()(bool screen, bool use_topology,
-                                  bool use_connectivity, bool canonical_only) {
+                                  bool use_connectivity, bool canonical_only, bool use_antisymm) {
     std::vector<ExprPtr> result(P + 1);
     ccresidual_vec{P, PMIN, N}(result, screen, use_topology, use_connectivity,
-                               canonical_only);
+                               canonical_only, use_antisymm);
     return result;
   }
 };  // class cceqvec
@@ -232,10 +233,10 @@ class compute_cceqvec {
   compute_cceqvec(size_t p, size_t pmin, size_t n) : P(p), PMIN(pmin), N(n) {}
 
   void operator()(bool print, bool screen, bool use_topology,
-                  bool use_connectivity, bool canonical_only) {
+                  bool use_connectivity, bool canonical_only, bool use_antisymm) {
     tpool.start(N);
     auto eqvec =
-        cceqvec{N, P}(screen, use_topology, use_connectivity, canonical_only);
+        cceqvec{N, P}(screen, use_topology, use_connectivity, canonical_only, use_antisymm);
     tpool.stop(N);
     std::wcout << std::boolalpha << "expS" << N << "[screen=" << screen
                << ",use_topology=" << use_topology
@@ -248,11 +249,11 @@ class compute_cceqvec {
       if (print) std::wcout << to_latex_align(eqvec[R], 20, 3) << std::endl;
 
       // validate known sizes of some CC residuals
-      if (R == 1 && N == 2) runtime_assert(eqvec[R]->size() == 14);
-      if (R == 2 && N == 2) runtime_assert(eqvec[R]->size() == 31);
-      if (R == 3 && N == 3) runtime_assert(eqvec[R]->size() == 47);
-      if (R == 4 && N == 4) runtime_assert(eqvec[R]->size() == 74);
-      if (R == 5 && N == 5) runtime_assert(eqvec[R]->size() == 99);
+      if (R == 1 && N == 2 && use_antisymm) runtime_assert(eqvec[R]->size() == 14);
+      if (R == 2 && N == 2 && use_antisymm) runtime_assert(eqvec[R]->size() == 31);
+      if (R == 3 && N == 3 && use_antisymm) runtime_assert(eqvec[R]->size() == 47);
+      if (R == 4 && N == 4 && use_antisymm) runtime_assert(eqvec[R]->size() == 74);
+      if (R == 5 && N == 5 && use_antisymm) runtime_assert(eqvec[R]->size() == 99);
     }
   }
 };  // class compute_cceqvec
@@ -265,10 +266,10 @@ class compute_all {
 
   void operator()(bool print = true, bool screen = true,
                   bool use_topology = true, bool use_connectivity = true,
-                  bool canonical_only = true) {
+                  bool canonical_only = true, bool use_antisymm = true) {
     for (size_t N = 2; N <= NMAX; ++N)
       compute_cceqvec{N, 1, N}(print, screen, use_topology, use_connectivity,
-                               canonical_only);
+                               canonical_only, use_antisymm);
   }
 };  // class compute_all
 
