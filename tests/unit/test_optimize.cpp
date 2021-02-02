@@ -8,7 +8,7 @@
 using namespace sequant;
 
 auto get_tex = [](utils::binary_expr<utils::eval_expr>::node_ptr const& node) {
-  return L"$" + node->data().seq_expr()->to_latex() + L"$";
+  return L"\"$" + node->data().seq_expr()->to_latex() + L"$\"";
 };
 
 auto get_hash = [](utils::binary_expr<utils::eval_expr>::node_ptr const& node) {
@@ -83,19 +83,50 @@ TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
                            ->as<Product>();
 
     const auto result2_naive =
-        single_term_opt(evxpr_range(prod2), nocc, nvirt, {});
-    // there will be two degenerate evaluation sequences for prod2 when no
+        single_term_opt(evxpr_range(prod2), nocc, nvirt,
+                        {});  // there will be two degenerate evaluation
+                              // sequences for prod2 when no
     REQUIRE(result2_naive.optimal_seqs.size() == 2);
 
     // now let's reuse intermediates from the optimal sequence of evaluation of
     // prod1, to compute the optimal sequence for prod2
-
     container::set<size_t> imed_hashes_prod1{};
     yield_hash(result1.optimal_seqs.at(0), imed_hashes_prod1);
 
     const auto result2_discounted =
         single_term_opt(evxpr_range(prod2), nocc, nvirt, imed_hashes_prod1);
     REQUIRE(result2_discounted.ops < result2_naive.ops);
+
+    // yet another example
+    auto prod3 =
+        parse_expr(L"t_(a1,a2)^(i1,i2) * g_(i2,i3)^(a2,a3) * t_(a3)^(i4)",
+                   Symmetry::antisymm);
+    auto prod4 = parse_expr(L"t_(a1,a2)^(i1,i2) * g_(i2,i3)^(a2,a3)",
+                            Symmetry::antisymm);
+    // we show that two the evaluation trees for prod3
+    //  - one: single term optimized on prod3 alone
+    //  - two: single term optimized on prod3 with the intermediate from prod4
+    //  are not the same.
+    auto prod3_sto =
+        std::move(*(single_term_opt(prod3->as<Product>(), nocc, nvirt, {})
+                        .optimal_seqs.begin()));
+
+    // finding the intermediate from the evaluation tree of prod4
+    auto prod4_sto =
+        std::move(*(single_term_opt(prod4->as<Product>(), nocc, nvirt, {})
+                        .optimal_seqs.begin()));
+
+    auto imeds_prod4 = container::set<size_t>{};
+    utils::visit_inorder_binary_expr<utils::eval_expr>(
+        prod4_sto, [&imeds_prod4](auto const& n) {
+          if (!n->leaf()) imeds_prod4.emplace(n->data().hash());
+        });
+
+    auto prod3_sto_with_imeds = std::move(
+        *single_term_opt(prod3->as<Product>(), nocc, nvirt, imeds_prod4)
+             .optimal_seqs.begin());
+
+    REQUIRE_FALSE(*prod3_sto == *prod3_sto_with_imeds);
   }
 
   SECTION("Most expensive term") {
@@ -120,16 +151,32 @@ TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
     // b: a2   j: i2
     // c: a3   k: i3
     // d: a4   l: i4
-    auto t1 = parse_expr(L"t_(a1,a2)^(i1,i2)", Symmetry::antisymm);
-    auto g1 = parse_expr(L"g_(i2,i3)^(a2,a3)", Symmetry::antisymm);
-    auto g2 = parse_expr(L"g_(i3,a3)^(a2,a4)", Symmetry::antisymm);
-    auto t2 = parse_expr(L"t_(a4)^(i4)", Symmetry::antisymm);
 
-    auto prod1 = ex<Product>(Product{t1->clone(), g1});
-    auto prod2 = ex<Product>(Product{t1->clone(), g2, t2});
+    auto prod1 =
+        parse_expr(L"t_(a1,a2)^(i1,i2) * g_(i2,i3)^(a2,a3) * t_(a3)^(i4)",
+                   Symmetry::antisymm);
+    auto prod2 = parse_expr(L"t_(a1,a2)^(i1,i2) * g_(i2,i3)^(a2,a3)",
+                            Symmetry::antisymm);
 
-    container::svector<ExprPtr> terms{prod1, prod2};
+    auto terms = container::svector<ExprPtr>{prod1, prod2};
 
-    auto opt_terms = factorize::multi_term_opt_hartono(terms, 2, 3);
+    size_t nocc = 2, nvirt = 5;
+    auto opt_terms = factorize::multi_term_opt_hartono(terms, nocc, nvirt);
+
+    auto prod2_opt = std::move(
+        *(factorize::single_term_opt(prod2->as<Product>(), nocc, nvirt, {})
+              .optimal_seqs.begin()));
+    auto imeds = container::set<size_t>{};
+    utils::visit_inorder_binary_expr<utils::eval_expr>(
+        prod2_opt, [&imeds](auto const& n) {
+          if (!n->leaf()) imeds.emplace(n->data().hash());
+        });
+
+    auto prod1_opt = std::move(
+        *(factorize::single_term_opt(prod1->as<Product>(), nocc, nvirt, imeds)
+              .optimal_seqs.begin()));
+
+    REQUIRE(**(opt_terms.at(prod2).optimal_seqs.begin()) == *prod2_opt);
+    REQUIRE(**(opt_terms.at(prod1).optimal_seqs.begin()) == *prod1_opt);
   }
 }

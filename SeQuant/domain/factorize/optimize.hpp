@@ -88,7 +88,7 @@ sto_result single_term_opt(Cont const& container, size_t nocc, size_t nvirt,
     } else {
       // flops > optimal flops. do nothing.
     }
-  };
+  };  // finder
 
   auto init_seq = ranges::views::iota(size_t{0}) |
                   ranges::views::take(ranges::distance(container)) |
@@ -100,6 +100,9 @@ sto_result single_term_opt(Cont const& container, size_t nocc, size_t nvirt,
   return result;
 }
 
+sto_result single_term_opt(Product const& flat_prod, size_t nocc, size_t nvirt,
+                           container::set<size_t> const& imeds_hash);
+
 /**
  * @tparam Cont type of @c container.
  *
@@ -110,20 +113,11 @@ met_result most_expensive(Iter const& iterable, size_t nocc, size_t nvirt,
                           container::set<size_t> const& imed_hashes) {
   using ranges::views::transform;
 
-  // prod is a flat Product
-  auto evxpr_prod_range = [](Product const& prod) {
-    return prod | transform([](ExprPtr const& x) {
-             return utils::eval_expr{x->as<Tensor>()};
-           });
-  };
-
-  auto evxprs = iterable | transform([evxpr_prod_range](const auto& x) {
-                  return evxpr_prod_range(x->template as<Product>());
-                });
-
-  auto costs = evxprs | transform([nocc, nvirt, &imed_hashes](const auto& x) {
-                 return single_term_opt(x, nocc, nvirt, imed_hashes);
-               });
+  auto costs =
+      iterable | transform([nocc, nvirt, &imed_hashes](auto const& xpr) {
+        return single_term_opt(xpr->template as<Product>(), nocc, nvirt,
+                               imed_hashes);
+      });
 
   met_result expensive{0, {}};
   auto zipped = ranges::views::zip(iterable, costs);
@@ -148,35 +142,51 @@ met_result most_expensive(Iter const& iterable, size_t nocc, size_t nvirt,
 ///
 template <typename Cont>
 auto multi_term_opt_hartono(Cont const& container, size_t nocc, size_t nvirt) {
-  auto optimized_terms = container::vector<met_result>{};
+  using ranges::none_of;
+  using ranges::views::addressof;
+  using ranges::views::filter;
+  using ranges::views::indirect;
+  using ranges::views::keys;
+
+  auto optimized_terms = container::map<ExprPtr, sto_result>{};
 
   // initial intermediate hash registry is empty
   auto imed_hashes = container::set<size_t>{};
 
-  Cont terms_range = container;
+  auto terms_range = container | ranges::to<container::vector<ExprPtr>>;
 
-  // TODO: Debug
-  while (ranges::distance(terms_range) < 0) {
+  while (!terms_range.empty()) {
     // find the most expensive
     met_result expensive = most_expensive(container, nocc, nvirt, imed_hashes);
 
     // update intermediate hashes
-    for (auto&& [x, y] : expensive.mets)
-      utils::visit_inorder_binary_expr<utils::eval_expr>(
-          *y.optimal_seqs.begin(), [&imed_hashes](const auto& x) {
-            return imed_hashes.emplace(x->data().hash());
-          });
+    for (auto&& [xpr, sto] : expensive.mets) {
+      // considers only the first of the degenerate evaluation trees
+      const auto& opt_tree = *(sto.optimal_seqs.begin());
 
-    // update terms_range
-    auto pruned_terms = ranges::views::keys(expensive.mets) | ranges::to<Cont>;
-    // terms_range = ranges::views::set_difference(
-    //                   terms_range, pruned_terms,
-    //                   [](auto&& x, auto&& y) { return *x != *y; }) |
-    //               ranges::to<Cont>;
+      // visit tree nodes and copy their hashes to registry
+      utils::visit_inorder_binary_expr<utils::eval_expr>(
+          opt_tree, [&imed_hashes](const auto& x) {
+            if (!x->leaf()) imed_hashes.emplace(x->data().hash());
+          });
+    }
+    // std::wcout << "hashes:\n";
+    // for (auto x : imed_hashes) std::wcout << "#" << x << "$\n";
+
+    // collect result
+    for (auto&& res : expensive.mets) optimized_terms.emplace(std::move(res));
+
     //
-    // // collect result
-    // for (auto&& res : expensive.mets)
-    //   optimized_terms.emplace_back(std::move(res));
+    // update terms_range
+    //
+    // returns true if xpr is not present in optimized_terms
+    auto remaining_filter = [&optimized_terms](auto const& xpr) {
+      return none_of(addressof(indirect(keys(optimized_terms))),
+                     [&xpr](auto x) { return x == std::addressof(*xpr); });
+    };
+    //
+    terms_range = container | filter(remaining_filter) |
+                  ranges::to<container::vector<ExprPtr>>;
   }
 
   return optimized_terms;
