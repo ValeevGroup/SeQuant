@@ -36,7 +36,7 @@ struct binarize_flat_prod {
                                   result->data().phase().value() *
                                   prod.scalar()});
 
-    return std::move(result);
+    return result;
   }
 
  private:
@@ -59,6 +59,8 @@ binary_expr<eval_expr>::node_ptr binarize_evxpr_range(Cont&& container) {
 
   return binarize_eval_sequence<eval_expr>(eseq, binarize_eval_expr);
 }
+
+ExprPtr debinarize_eval_expr(binary_expr<eval_expr>::node_ptr const& node);
 
 }  // namespace sequant::utils
 
