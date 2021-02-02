@@ -184,25 +184,11 @@ add_library(SeQuant
         SeQuant/domain/utils/eval_expr.hpp
         SeQuant/domain/utils/eval_expr.cpp
         SeQuant/domain/utils/binarize_expr.hpp
+        SeQuant/domain/utils/binarize_expr.cpp
         SeQuant/domain/utils/flops_counter.hpp
         SeQuant/domain/utils/flops_counter.cpp
         SeQuant/domain/factorize/optimize.hpp
         SeQuant/domain/factorize/optimize.cpp
-        #
-        # SeQuant/domain/factorize/factorize.hpp
-        # SeQuant/domain/factorize/factorize.cpp
-        # SeQuant/domain/factorize/eval_sequence.hpp
-        # SeQuant/domain/factorize/eval_sequence.cpp
-        # SeQuant/domain/factorize/ops_count.hpp
-        # SeQuant/domain/factorize/ops_count.cpp
-        # SeQuant/domain/factorize/single_term_opt.hpp
-        # SeQuant/domain/factorize/single_term_opt.cpp
-        # SeQuant/domain/evaluate/eval_fwd.hpp
-        # SeQuant/domain/evaluate/eval_tree.hpp
-        # SeQuant/domain/evaluate/eval_tree.cpp
-        # SeQuant/domain/evaluate/eval_tree_node.hpp
-        # SeQuant/domain/evaluate/eval_tree_node.cpp
-        #
         SeQuant/domain/mbpt/convention.cpp
         SeQuant/domain/mbpt/convention.hpp
         SeQuant/domain/mbpt/op.cpp
@@ -256,14 +242,13 @@ set(utests_src
      tests/unit/test_iterator.cpp
      tests/unit/test_mbpt.cpp
      tests/unit/test_tensor_network.cpp
-     # tests/unit/test_expr_parse.cpp
+     tests/unit/test_expr_parse.cpp
      tests/unit/test_binary_expr.cpp
      tests/unit/test_eval_sequence.cpp
      tests/unit/test_eval_expr.cpp
      tests/unit/test_binarize_expr.cpp
      tests/unit/test_flops_counter.cpp
      tests/unit/test_optimize.cpp
-     # tests/unit/test_factorize.cpp
     )
 
 set(utests_deps SeQuant)

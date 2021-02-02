@@ -48,11 +48,11 @@ TEST_CASE("TEST_EVAL_EXPR", "[eval_expr]") {
   };
 
   SECTION("Constructors") {
-    auto t1 = ex_asym(L"t_(i1, i2)^(a1, a2)");
+    auto t1 = ex_asym(L"t_{i1, i2}^{a1, a2}");
 
     REQUIRE_NOTHROW(eval_expr{t1->as<sequant::Tensor>()});
 
-    auto p1 = ex_asym(L"g_(i3,a1)^(i1,i2) * t_(a2)^(a3)");
+    auto p1 = ex_asym(L"g_{i3,a1}^{i1,i2} * t_{a2}^{a3}");
 
     const auto& c2 = eval_expr{p1->at(0)->as<Tensor>()};
     const auto& c3 = eval_expr{p1->at(1)->as<Tensor>()};
@@ -61,28 +61,28 @@ TEST_CASE("TEST_EVAL_EXPR", "[eval_expr]") {
   }
 
   SECTION("Eval ops") {
-    auto t1 = ex_asym(L"t_(i1, i2)^(a1, a2)");
+    auto t1 = ex_asym(L"t_{i1, i2}^{a1, a2}");
 
     auto x1 = eval_expr(t1->as<Tensor>());
 
     REQUIRE(x1.op() == eval_expr::eval_op::Id);
 
-    auto p1 = ex_asym(L"g_(i3,a1)^(i1,i2) * t_(a2)^(a3)");
+    auto p1 = ex_asym(L"g_{i3,a1}^{i1,i2} * t_{a2}^{a3}");
 
     const auto& c2 = eval_expr{p1->at(0)->as<Tensor>()};
     const auto& c3 = eval_expr{p1->at(1)->as<Tensor>()};
     const auto& c4 = eval_expr{c2, c3};
     REQUIRE(c4.op() == eval_expr::eval_op::Prod);
 
-    const auto c5 = eval_expr{ex_asym(L"I^(i3,a1)_(i1,i2)")->as<Tensor>()};
+    const auto c5 = eval_expr{ex_asym(L"I^{i3,a1}_{i1,i2}")->as<Tensor>()};
     const auto& c6 = eval_expr{c2, c5};
 
     REQUIRE(c6.op() == eval_expr::eval_op::Sum);
   }
 
   SECTION("Sequant expression") {
-    const auto& str_t1 = L"g_(a1,a2)^(a3,a4)";
-    const auto& str_t2 = L"t_(a3,a4)^(i1,i2)";
+    const auto& str_t1 = L"g_{a1,a2}^{a3,a4}";
+    const auto& str_t2 = L"t_{a3,a4}^{i1,i2}";
     const auto& t1 = ex_asym(str_t1);
 
     const auto& t2 = ex_asym(str_t2);
@@ -111,21 +111,21 @@ TEST_CASE("TEST_EVAL_EXPR", "[eval_expr]") {
 
     REQUIRE(prod_indices == expected_indices);
 
-    const auto t4 = ex_asym(L"g_(i3,i4)^(a3,a4)")->as<Tensor>();
-    const auto t5 = ex_asym(L"I_(a1,a2,a3,a4)^(i1,i2,i3,i4)")->as<Tensor>();
+    const auto t4 = ex_asym(L"g_{i3,i4}^{a3,a4}")->as<Tensor>();
+    const auto t5 = ex_asym(L"I_{a1,a2,a3,a4}^{i1,i2,i3,i4}")->as<Tensor>();
 
     const auto& x45 = eval_expr{eval_expr{t4}, eval_expr{t5}};
     const auto& x54 = eval_expr{eval_expr{t5}, eval_expr{t4}};
 
     REQUIRE(x45.seq_expr()->to_latex() ==
-            ex_asym(L"I_(a1,a2)^(i1,i2)")->to_latex());
+            ex_asym(L"I_{a1,a2}^{i1,i2}")->to_latex());
     REQUIRE(x45.seq_expr()->to_latex() == x54.seq_expr()->to_latex());
   }
 
   SECTION("Hash value") {
-    const auto t1 = ex_asym(L"t_(i1)^(a1)")->as<Tensor>();
-    const auto t2 = ex_asym(L"t_(i2)^(a2)")->as<Tensor>();
-    const auto t3 = ex_asym(L"t_(i1,i2)^(a1,a2)")->as<Tensor>();
+    const auto t1 = ex_asym(L"t_{i1}^{a1}")->as<Tensor>();
+    const auto t2 = ex_asym(L"t_{i2}^{a2}")->as<Tensor>();
+    const auto t3 = ex_asym(L"t_{i1,i2}^{a1,a2}")->as<Tensor>();
 
     const auto& x1 = eval_expr{t1};
     const auto& x2 = eval_expr{t2};
@@ -145,8 +145,8 @@ TEST_CASE("TEST_EVAL_EXPR", "[eval_expr]") {
 
   SECTION("Symmetry of product") {
     // whole bra <-> ket contraction between two antisymmetric tensors
-    const auto t1 = ex_asym(L"g_(i3,i4)^(i1,i2)")->as<Tensor>();
-    const auto t2 = ex_asym(L"t_(a1,a2)^(i3,i4)")->as<Tensor>();
+    const auto t1 = ex_asym(L"g_{i3,i4}^{i1,i2}")->as<Tensor>();
+    const auto t2 = ex_asym(L"t_{a1,a2}^{i3,i4}")->as<Tensor>();
 
     const auto x12 = eval_expr{eval_expr{t1}, eval_expr{t2}};
 
@@ -154,25 +154,25 @@ TEST_CASE("TEST_EVAL_EXPR", "[eval_expr]") {
 
     // whole bra <-> ket contraction between two symmetric tensors
     const auto t3 =
-        parse_expr(L"g_(i3,i4)^(i1,i2)", Symmetry::symm)->as<Tensor>();
+        parse_expr(L"g_{i3,i4}^{i1,i2}", Symmetry::symm)->as<Tensor>();
     const auto t4 =
-        parse_expr(L"t_(a1,a2)^(i3,i4)", Symmetry::symm)->as<Tensor>();
+        parse_expr(L"t_{a1,a2}^{i3,i4}", Symmetry::symm)->as<Tensor>();
 
     const auto x34 = eval_expr{eval_expr{t3}, eval_expr{t4}};
 
     REQUIRE(x34.seq_expr()->as<Tensor>().symmetry() == Symmetry::symm);
 
     // outer product of the same tensor
-    const auto t5 = parse_expr(L"f_(i1)^(a1)", Symmetry::nonsymm)->as<Tensor>();
-    const auto t6 = parse_expr(L"f_(i2)^(a2)", Symmetry::nonsymm)->as<Tensor>();
+    const auto t5 = parse_expr(L"f_{i1}^{a1}", Symmetry::nonsymm)->as<Tensor>();
+    const auto t6 = parse_expr(L"f_{i2}^{a2}", Symmetry::nonsymm)->as<Tensor>();
 
     const auto& x56 = eval_expr{eval_expr{t5}, eval_expr{t6}};
 
     REQUIRE(x56.seq_expr()->as<Tensor>().symmetry() == Symmetry::symm);
 
     // contraction of some indices from a bra to a ket
-    const auto t7 = ex_asym(L"g_(a1,a2)^(i1,a3)")->as<Tensor>();
-    const auto t8 = ex_asym(L"t_(a3)^(i2)")->as<Tensor>();
+    const auto t7 = ex_asym(L"g_{a1,a2}^{i1,a3}")->as<Tensor>();
+    const auto t8 = ex_asym(L"t_{a3}^{i2}")->as<Tensor>();
 
     const auto x78 = eval_expr{eval_expr{t7}, eval_expr{t8}};
 
@@ -181,7 +181,7 @@ TEST_CASE("TEST_EVAL_EXPR", "[eval_expr]") {
 
   SECTION("Symmetry of sum") {
     auto tensor = [](Symmetry s) {
-      return parse_expr(L"I_(i1,i2)^(a1,a2)", s)->as<Tensor>();
+      return parse_expr(L"I_{i1,i2}^{a1,a2}", s)->as<Tensor>();
     };
 
     auto symmetry = [](const eval_expr& x) {
@@ -222,9 +222,9 @@ TEST_CASE("TEST_EVAL_EXPR", "[eval_expr]") {
 
   SECTION("Canonicalization") {
     auto evxpr1 = eval_expr(
-        parse_expr(L"g_(i1,i2)^(a1,a2)", Symmetry::antisymm)->as<Tensor>());
+        parse_expr(L"g_{i1,i2}^{a1,a2}", Symmetry::antisymm)->as<Tensor>());
     auto evxpr2 = eval_expr(
-        parse_expr(L"g_(i2,i1)^(a1,a2)", Symmetry::antisymm)->as<Tensor>());
+        parse_expr(L"g_{i2,i1}^{a1,a2}", Symmetry::antisymm)->as<Tensor>());
 
     REQUIRE(*evxpr1.seq_expr() == *evxpr2.seq_expr());
     REQUIRE_FALSE(evxpr1.scalar() == evxpr2.scalar());

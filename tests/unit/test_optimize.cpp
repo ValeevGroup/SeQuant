@@ -44,9 +44,9 @@ TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
     const size_t nocc = 2, nvirt = 3;  // nocc < nvirt
 
     const auto prod1 = parse_expr(
-                           L"g_(i3,i4)^(a3,a4)"     // T1
-                           " * t_(a1,a2)^(i3,i4)"   // T2
-                           " * t_(a3,a4)^(i1,i2)",  // T3
+                           L"g_{i3,i4}^{a3,a4}"     // T1
+                           " * t_{a1,a2}^{i3,i4}"   // T2
+                           " * t_{a3,a4}^{i1,i2}",  // T3
                            Symmetry::nonsymm)
                            ->as<Product>();
     //
@@ -75,10 +75,10 @@ TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
 
     //
     const auto prod2 = parse_expr(
-                           L"   g_(i3,i4)^(a3,a4)"
-                           L" * t_(a3,a4)^(i1,i2)"
-                           L" * t_(a1)^(i3)"
-                           L" * t_(a2)^(i4)",
+                           L"   g_{i3,i4}^{a3,a4}"
+                           L" * t_{a3,a4}^{i1,i2}"
+                           L" * t_{a1}^{i3}"
+                           L" * t_{a2}^{i4}",
                            Symmetry::nonsymm)
                            ->as<Product>();
 
@@ -99,9 +99,9 @@ TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
 
     // yet another example
     auto prod3 =
-        parse_expr(L"t_(a1,a2)^(i1,i2) * g_(i2,i3)^(a2,a3) * t_(a3)^(i4)",
+        parse_expr(L"t_{a1,a2}^{i1,i2} * g_{i2,i3}^{a2,a3} * t_{a3}^{i4}",
                    Symmetry::antisymm);
-    auto prod4 = parse_expr(L"t_(a1,a2)^(i1,i2) * g_(i2,i3)^(a2,a3)",
+    auto prod4 = parse_expr(L"t_{a1,a2}^{i1,i2} * g_{i2,i3}^{a2,a3}",
                             Symmetry::antisymm);
     // we show that two the evaluation trees for prod3
     //  - one: single term optimized on prod3 alone
@@ -136,9 +136,9 @@ TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
     const size_t nocc = 2, nvirt = 3;  // nocc < nvirt
 
     const auto expr = parse_expr(
-        L"f_(i3)^(i1)*t_(a1,a2)^(i2,i3)"
+        L"f_{i3}^{i1}*t_{a1,a2}^{i2,i3}"
         L"    + "
-        L"    g_(a1,a2)^(a3,a4)*t_(a3,a4)^(i1,i2)",
+        L"    g_{a1,a2}^{a3,a4}*t_{a3,a4}^{i1,i2}",
         Symmetry::antisymm);
 
     auto expensive = most_expensive(*expr, nocc, nvirt, {});
@@ -153,9 +153,9 @@ TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
     // d: a4   l: i4
 
     auto prod1 =
-        parse_expr(L"t_(a1,a2)^(i1,i2) * g_(i2,i3)^(a2,a3) * t_(a3)^(i4)",
+        parse_expr(L"t_{a1,a2}^{i1,i2} * g_{i2,i3}^{a2,a3} * t_{a3}^{i4}",
                    Symmetry::antisymm);
-    auto prod2 = parse_expr(L"t_(a1,a2)^(i1,i2) * g_(i2,i3)^(a2,a3)",
+    auto prod2 = parse_expr(L"t_{a1,a2}^{i1,i2} * g_{i2,i3}^{a2,a3}",
                             Symmetry::antisymm);
 
     auto terms = container::svector<ExprPtr>{prod1, prod2};

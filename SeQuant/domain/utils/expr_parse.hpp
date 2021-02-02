@@ -97,9 +97,9 @@ const auto expr_rgx_pat = []() {  // a map from expr components to regex pattern
   const std::wstring pi = L"[ia]_?[[:d:]]+";  // index pattern
 
   const std::wstring pii =  // (i1, i2, ..)
-      LR"(\()"              // open paren
+      LR"(\{)"              // open brace
       + rgx_capture_not(pi + rgx_zero_or_more_nc(L"," + pi)) +
-      LR"(\))";  // close paren
+      LR"(\})";  // close brace
 
   const std::wstring pb = L"_" + pii;      // bra
   const std::wstring pk = LR"(\^)" + pii;  // ket
