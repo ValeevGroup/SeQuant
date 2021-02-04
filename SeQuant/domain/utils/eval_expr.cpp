@@ -7,7 +7,7 @@ size_t eval_expr::hash() const { return hash_; }
 
 eval_expr::eval_op eval_expr::op() const { return op_; }
 
-const ExprPtr& eval_expr::seq_expr() const { return expr_; }
+const Tensor& eval_expr::tensor() const { return tensor_; }
 
 const Constant& eval_expr::phase() const { return phase_; }
 
@@ -15,49 +15,45 @@ const Constant& eval_expr::scalar() const { return scalar_; }
 
 void eval_expr::scale(const Constant& scal) { scalar_ = scal; }
 
-eval_expr::eval_expr(const Tensor& tnsr)
-    : op_{eval_op::Id}, expr_{ex<Tensor>(tnsr)} {
+eval_expr::eval_expr(Tensor tnsr) : op_{eval_op::Id}, tensor_{std::move(tnsr)} {
   sequant::TensorCanonicalizer::register_instance(
       std::make_shared<sequant::DefaultTensorCanonicalizer>());
 
-  if (auto canon_biprod = expr_->canonicalize(); canon_biprod)
-    scale(canon_biprod->as<Constant>());
+  if (auto canon_biprod = tensor_.canonicalize(); canon_biprod)
+    phase_ *= canon_biprod->as<Constant>();
 
-  hash_ = eval_expr::hash_terminal_tensor(seq_expr()->as<Tensor>());
+  hash_ = eval_expr::hash_terminal_tensor(tensor_);
 }
 
 eval_expr::eval_expr(const eval_expr& expr1, const eval_expr& expr2) {
+  sequant::TensorCanonicalizer::register_instance(
+      std::make_shared<sequant::DefaultTensorCanonicalizer>());
+
+  const auto& sxpr1 = expr1.tensor();
+  const auto& sxpr2 = expr2.tensor();
+
   // canonicalization based on hash value
   // re-order eval sequence ( -- doesn't swap values though)
   // to obtain the equivalence of the kind
   // AB == BA for a binary operation between A and B
 
-  assert(
-      !(expr1.seq_expr()->is<Constant>() || expr2.seq_expr()->is<Constant>()));
-
-  sequant::TensorCanonicalizer::register_instance(
-      std::make_shared<sequant::DefaultTensorCanonicalizer>());
-
-  const auto& sxpr1 = expr1.seq_expr();
-  const auto& sxpr2 = expr2.seq_expr();
-
   auto swap_on = expr2.hash() < expr1.hash();
 
   op_ = eval_expr::infer_eval_op(sxpr1, sxpr2);
-  expr_ = std::move(swap_on ? eval_expr::make_imed_expr(expr2, expr1, op())
-                            : eval_expr::make_imed_expr(expr1, expr2, op()));
+  tensor_ = std::move(swap_on ? eval_expr::make_imed_expr(expr2, expr1, op())
+                              : eval_expr::make_imed_expr(expr1, expr2, op()));
   // compute phase
   phase_ *= expr1.phase();
   phase_ *= expr2.phase();
-  if (auto canon_biprod = expr_->canonicalize(); canon_biprod)
+  if (auto canon_biprod = tensor_.canonicalize(); canon_biprod)
     phase_ *= canon_biprod->as<Constant>();
 
   hash_ = swap_on ? eval_expr::hash_imed(expr2, expr1, op())
                   : eval_expr::hash_imed(expr1, expr2, op());
 }
 
-eval_expr::eval_op eval_expr::infer_eval_op(const ExprPtr& expr1,
-                                            const ExprPtr& expr2) {
+eval_expr::eval_op eval_expr::infer_eval_op(const Tensor& tnsr1,
+                                            const Tensor& tnsr2) {
   // HELPER LAMBDA
   // checks if a given index exists in a container
   auto index_exists = [](const auto& container, const auto& index) -> bool {
@@ -66,12 +62,6 @@ eval_expr::eval_op eval_expr::infer_eval_op(const ExprPtr& expr1,
     });
   };
   // HELPER LAMBDA END
-
-  assert(expr1->is<Tensor>());
-  assert(expr2->is<Tensor>());
-
-  auto& tnsr1 = expr1->as<Tensor>();
-  auto& tnsr2 = expr2->as<Tensor>();
 
   if (tnsr1.rank() == tnsr2.rank()) {
     for (const auto& idx : tnsr1.const_braket())
@@ -105,7 +95,6 @@ Symmetry eval_expr::infer_tensor_symmetry_sum(const Tensor& tnsr1,
 Symmetry eval_expr::infer_tensor_symmetry_prod(const Tensor& tnsr1,
                                                const Tensor& tnsr2) {
   // HELPER LAMBDA
-  // //////
   // check if all the indices in cont1 are in cont2 AND vice versa
   auto all_common_indices = [](const auto& cont1, const auto& cont2) -> bool {
     if (cont1.size() != cont2.size()) return false;
@@ -113,6 +102,7 @@ Symmetry eval_expr::infer_tensor_symmetry_prod(const Tensor& tnsr1,
     return (cont1 | ranges::to<container::set<Index, Index::LabelCompare>>) ==
            (cont2 | ranges::to<container::set<Index, Index::LabelCompare>>);
   };
+  // //////
 
   bool whole_bk_contracted = (all_common_indices(tnsr1.bra(), tnsr2.ket()) ||
                               all_common_indices(tnsr1.ket(), tnsr2.bra()));
@@ -228,8 +218,8 @@ size_t eval_expr::hash_imed(const eval_expr& expr1, const eval_expr& expr2,
   hash::combine(imedHash, expr1.hash());
   hash::combine(imedHash, expr2.hash());
 
-  const auto& t1 = expr1.seq_expr()->as<Tensor>();
-  const auto& t2 = expr2.seq_expr()->as<Tensor>();
+  const auto& t1 = expr1.tensor();
+  const auto& t2 = expr2.tensor();
 
   hash::combine(imedHash, eval_expr::hash_braket(t1.const_braket()));
   hash::combine(imedHash, eval_expr::hash_braket(t2.const_braket()));
@@ -243,17 +233,15 @@ size_t eval_expr::hash_imed(const eval_expr& expr1, const eval_expr& expr2,
   return imedHash;
 }
 
-ExprPtr eval_expr::make_imed_expr(const eval_expr& expr1,
-                                  const eval_expr& expr2, eval_op op) {
+Tensor eval_expr::make_imed_expr(const eval_expr& expr1, const eval_expr& expr2,
+                                 eval_op op) {
   assert(op != eval_op::Id);
-  assert(!expr1.seq_expr()->is<Constant>() &&
-         !expr2.seq_expr()->is<Constant>());
 
-  const auto& t1 = expr1.seq_expr()->as<Tensor>();
-  const auto& t2 = expr2.seq_expr()->as<Tensor>();
+  const auto& t1 = expr1.tensor();
+  const auto& t2 = expr2.tensor();
 
-  auto [bra, ket] = (op == eval_op::Sum)
-                        ? eval_expr::target_braket_sum(t1, t2)
+  auto [bra, ket] = (op == eval_op::Sum)                        //
+                        ? eval_expr::target_braket_sum(t1, t2)  //
                         : eval_expr::target_braket_prod(t1, t2);
 
   auto tensorSym = Symmetry::invalid;  // init only
@@ -268,9 +256,12 @@ ExprPtr eval_expr::make_imed_expr(const eval_expr& expr1,
                     : eval_expr::infer_tensor_symmetry_prod(t1, t2);
   }
 
-  return ex<Tensor>(Tensor{L"I", bra, ket, tensorSym,
-                           eval_expr::infer_braket_symmetry(),
-                           eval_expr::infer_particle_symmetry(tensorSym)});
+  return Tensor{L"I",
+                bra,
+                ket,
+                tensorSym,
+                eval_expr::infer_braket_symmetry(),
+                eval_expr::infer_particle_symmetry(tensorSym)};
 }
 
 }  // namespace sequant::utils

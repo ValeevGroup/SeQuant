@@ -8,7 +8,7 @@
 using namespace sequant;
 
 auto get_tex = [](utils::binary_expr<utils::eval_expr>::node_ptr const& node) {
-  return L"\"$" + node->data().seq_expr()->to_latex() + L"$\"";
+  return L"\"$" + node->data().tensor().to_latex() + L"$\"";
 };
 
 auto get_hash = [](utils::binary_expr<utils::eval_expr>::node_ptr const& node) {

@@ -90,15 +90,15 @@ TEST_CASE("TEST_EVAL_EXPR", "[eval_expr]") {
     const auto& x1 = eval_expr{t1->as<Tensor>()};
     const auto& x2 = eval_expr{t2->as<Tensor>()};
 
-    REQUIRE(*t1 == *x1.seq_expr());
-    REQUIRE(*t2 == *x2.seq_expr());
+    REQUIRE(*t1 == x1.tensor());
+    REQUIRE(*t2 == x2.tensor());
 
     const auto& x3 = eval_expr{x1, x2};
 
-    REQUIRE_NOTHROW(x3.seq_expr()->as<Tensor>());
+    REQUIRE_NOTHROW(x3.tensor());
 
     const auto& prod_indices =
-        x3.seq_expr()->as<Tensor>().const_braket() |
+        x3.tensor().const_braket() |
         ranges::views::transform([](const auto& x) { return x.label(); }) |
         ranges::to<container::set<std::wstring_view>>;
 
@@ -117,9 +117,9 @@ TEST_CASE("TEST_EVAL_EXPR", "[eval_expr]") {
     const auto& x45 = eval_expr{eval_expr{t4}, eval_expr{t5}};
     const auto& x54 = eval_expr{eval_expr{t5}, eval_expr{t4}};
 
-    REQUIRE(x45.seq_expr()->to_latex() ==
+    REQUIRE(x45.tensor().to_latex() ==
             ex_asym(L"I_{a1,a2}^{i1,i2}")->to_latex());
-    REQUIRE(x45.seq_expr()->to_latex() == x54.seq_expr()->to_latex());
+    REQUIRE(x45.tensor().to_latex() == x54.tensor().to_latex());
   }
 
   SECTION("Hash value") {
@@ -150,7 +150,7 @@ TEST_CASE("TEST_EVAL_EXPR", "[eval_expr]") {
 
     const auto x12 = eval_expr{eval_expr{t1}, eval_expr{t2}};
 
-    REQUIRE(x12.seq_expr()->as<Tensor>().symmetry() == Symmetry::antisymm);
+    REQUIRE(x12.tensor().symmetry() == Symmetry::antisymm);
 
     // whole bra <-> ket contraction between two symmetric tensors
     const auto t3 =
@@ -160,7 +160,7 @@ TEST_CASE("TEST_EVAL_EXPR", "[eval_expr]") {
 
     const auto x34 = eval_expr{eval_expr{t3}, eval_expr{t4}};
 
-    REQUIRE(x34.seq_expr()->as<Tensor>().symmetry() == Symmetry::symm);
+    REQUIRE(x34.tensor().symmetry() == Symmetry::symm);
 
     // outer product of the same tensor
     const auto t5 = parse_expr(L"f_{i1}^{a1}", Symmetry::nonsymm)->as<Tensor>();
@@ -168,7 +168,7 @@ TEST_CASE("TEST_EVAL_EXPR", "[eval_expr]") {
 
     const auto& x56 = eval_expr{eval_expr{t5}, eval_expr{t6}};
 
-    REQUIRE(x56.seq_expr()->as<Tensor>().symmetry() == Symmetry::symm);
+    REQUIRE(x56.tensor().symmetry() == Symmetry::symm);
 
     // contraction of some indices from a bra to a ket
     const auto t7 = ex_asym(L"g_{a1,a2}^{i1,a3}")->as<Tensor>();
@@ -176,7 +176,7 @@ TEST_CASE("TEST_EVAL_EXPR", "[eval_expr]") {
 
     const auto x78 = eval_expr{eval_expr{t7}, eval_expr{t8}};
 
-    REQUIRE(x78.seq_expr()->as<Tensor>().symmetry() == Symmetry::nonsymm);
+    REQUIRE(x78.tensor().symmetry() == Symmetry::nonsymm);
   }
 
   SECTION("Symmetry of sum") {
@@ -184,9 +184,7 @@ TEST_CASE("TEST_EVAL_EXPR", "[eval_expr]") {
       return parse_expr(L"I_{i1,i2}^{a1,a2}", s)->as<Tensor>();
     };
 
-    auto symmetry = [](const eval_expr& x) {
-      return x.seq_expr()->as<Tensor>().symmetry();
-    };
+    auto symmetry = [](const eval_expr& x) { return x.tensor().symmetry(); };
 
     auto imed = [](const Tensor& t1, const Tensor& t2) {
       return eval_expr{eval_expr{t1}, eval_expr{t2}};
@@ -226,8 +224,8 @@ TEST_CASE("TEST_EVAL_EXPR", "[eval_expr]") {
     auto evxpr2 = eval_expr(
         parse_expr(L"g_{i2,i1}^{a1,a2}", Symmetry::antisymm)->as<Tensor>());
 
-    REQUIRE(*evxpr1.seq_expr() == *evxpr2.seq_expr());
-    REQUIRE_FALSE(evxpr1.scalar() == evxpr2.scalar());
+    REQUIRE(evxpr1.tensor() == evxpr2.tensor());
+    REQUIRE_FALSE(evxpr1.phase() == evxpr2.phase());
     REQUIRE(evxpr1.hash() == evxpr2.hash());
   }
 }

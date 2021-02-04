@@ -11,8 +11,8 @@ ExprPtr debinarize_eval_expr(binary_expr<eval_expr>::node_ptr const& node) {
   switch (op) {
     case eval_expr::eval_op::Id:
       return evxpr.scalar().value() == 1.0
-                 ? evxpr.seq_expr()->clone()
-                 : ex<Constant>(evxpr.scalar()) * evxpr.seq_expr()->clone();
+                 ? evxpr.tensor().clone()
+                 : ex<Constant>(evxpr.scalar()) * evxpr.tensor().clone();
 
     case eval_expr::eval_op::Prod:
       return ex<Constant>(evxpr.scalar()) *

@@ -9,11 +9,14 @@ size_t flops_counter::flops(size_t oidx_c, size_t vidx_c) const {
          (vidx_c == 0 ? 1 : std::pow(nvirt, vidx_c));
 }
 
-size_t flops_counter::operator()(const binary_node& expr) const { return 0; }
+size_t flops_counter::operator()(const binary_node& expr) const {
+  // leaf node
+  return 0;
+}
 
 size_t flops_counter::operator()(const binary_node& node, size_t lops,
                                  size_t rops) const {
-  const auto& tr = node->right()->data().seq_expr()->as<Tensor>();
+  const auto& tr = node->right()->data().tensor();
 
   if (node->data().op() == eval_expr::eval_op::Sum) {
     auto [o, v] = flops_counter::ov_idx_count(tr.const_braket());
@@ -26,12 +29,12 @@ size_t flops_counter::operator()(const binary_node& node, size_t lops,
   }
 
   // product of two tensors confirmed
-  const auto& tl = node->left()->data().seq_expr()->as<Tensor>();
+  const auto& tl = node->left()->data().tensor();
 
   auto [o_pre, v_pre] = flops_counter::ov_idx_count(
       ranges::views::concat(tl.const_braket(), tr.const_braket()));
 
-  const auto& tn = node->data().seq_expr()->as<Tensor>();
+  const auto& tn = node->data().tensor();
   auto [o_post, v_post] = flops_counter::ov_idx_count(tn.const_braket());
 
   auto o_net = o_pre - (o_pre - o_post) / 2;

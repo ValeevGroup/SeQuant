@@ -22,14 +22,14 @@ class eval_expr final {
     /** Sum type evaluation. */
     Sum,
     /** Product type evaluation. */
-    Prod
+    Prod,
   };  // eval_op
 
   /**
    * Construct eval_expr that goes into the leaf nodes
    * of the binary evaluation tree.
    */
-  explicit eval_expr(const Tensor&);
+  explicit eval_expr(Tensor);
 
   /**
    * Construct eval_expr that goes into the internal nodes
@@ -48,9 +48,9 @@ class eval_expr final {
   [[nodiscard]] size_t hash() const;
 
   /**
-   * ExprPtr stored by the object.
+   * Tensor expression stored by the object.
    */
-  [[nodiscard]] const ExprPtr& seq_expr() const;
+  [[nodiscard]] const Tensor& tensor() const;
 
   /** Factor to scale tensor by. */
   [[nodiscard]] const Constant& scalar() const;
@@ -63,7 +63,7 @@ class eval_expr final {
 
   friend inline bool operator==(const eval_expr& lhs, const eval_expr& rhs) {
     return lhs.hash() == rhs.hash() &&
-           (lhs.seq_expr()->to_latex() == rhs.seq_expr()->to_latex());
+           (lhs.tensor().to_latex() == rhs.tensor().to_latex());
   }
 
  private:
@@ -74,7 +74,7 @@ class eval_expr final {
 
   size_t hash_;
 
-  ExprPtr expr_;
+  Tensor tensor_;
 
   Constant scalar_{1};
 
@@ -83,13 +83,13 @@ class eval_expr final {
   /**
    * Make an intermediate tensor from two expressions.
    */
-  static ExprPtr make_imed_expr(const eval_expr& expr1, const eval_expr& expr2,
+  static Tensor make_imed_expr(const eval_expr& expr1, const eval_expr& expr2,
                                 eval_op op);
 
   /**
    * Figure out the type of evaluation between a pair of expressions.
    */
-  static eval_op infer_eval_op(const ExprPtr&, const ExprPtr&);
+  static eval_op infer_eval_op(const Tensor&, const Tensor&);
 
   /**
    * Infer the symmetry of the resulting tensor after summing two tensors.

@@ -7,7 +7,7 @@
 
 std::wostream& operator<<(std::wostream& out,
                           const sequant::utils::eval_expr& expr) {
-  out << "$" << expr.seq_expr()->to_latex() << "$";
+  out << "$" << expr.tensor().to_latex() << "$";
   return out;
 }
 
@@ -41,7 +41,7 @@ auto latex_label = [](const auto& x) {
 
 // validates if x is constructible from tspec using parse_expr
 auto validate_tensor = [](const auto& x, std::wstring_view tspec) -> bool {
-  return x->to_latex() ==
+  return x.to_latex() ==
          sequant::utils::parse_expr(tspec, sequant::Symmetry::antisymm)
              ->to_latex();
 };
@@ -72,18 +72,18 @@ TEST_CASE("TEST_BINARIZE_EXPR", "[binarize_expr]") {
 
     const auto& node1 = snode1;
 
-    REQUIRE(validate_tensor(node1->data().seq_expr(), L"I_{a1,a2}^{i1,i2}"));
+    REQUIRE(validate_tensor(node1->data().tensor(), L"I_{a1,a2}^{i1,i2}"));
 
-    REQUIRE(validate_tensor(node1->left()->data().seq_expr(),
-                            L"I_{a1,a2}^{a3,a4}"));
+    REQUIRE(
+        validate_tensor(node1->left()->data().tensor(), L"I_{a1,a2}^{a3,a4}"));
 
-    REQUIRE(validate_tensor(node1->right()->data().seq_expr(),
-                            L"t_{a3,a4}^{i1,i2}"));
+    REQUIRE(
+        validate_tensor(node1->right()->data().tensor(), L"t_{a3,a4}^{i1,i2}"));
 
-    REQUIRE(validate_tensor(node1->left()->left()->data().seq_expr(),
+    REQUIRE(validate_tensor(node1->left()->left()->data().tensor(),
                             L"g_{i3,i4}^{a3,a4}"));
 
-    REQUIRE(validate_tensor(node1->left()->right()->data().seq_expr(),
+    REQUIRE(validate_tensor(node1->left()->right()->data().tensor(),
                             L"t_{a1,a2}^{i3,i4}"));
 
     REQUIRE(node1->right()->leaf());
@@ -97,18 +97,18 @@ TEST_CASE("TEST_BINARIZE_EXPR", "[binarize_expr]") {
     REQUIRE(snode2->data().scalar() == Constant{1.0 / 16});
 
     const auto& node2 = snode2;
-    REQUIRE(validate_tensor(node2->data().seq_expr(), L"I_{a1,a2}^{i1,i2}"));
+    REQUIRE(validate_tensor(node2->data().tensor(), L"I_{a1,a2}^{i1,i2}"));
 
-    REQUIRE(validate_tensor(node2->left()->data().seq_expr(),
-                            L"g_{i3,i4}^{a3,a4}"));
+    REQUIRE(
+        validate_tensor(node2->left()->data().tensor(), L"g_{i3,i4}^{a3,a4}"));
 
-    REQUIRE(validate_tensor(node2->right()->data().seq_expr(),
+    REQUIRE(validate_tensor(node2->right()->data().tensor(),
                             L"I_{a1,a2,a3,a4}^{i1,i2,i3,i4}"));
 
-    REQUIRE(validate_tensor(node2->right()->left()->data().seq_expr(),
+    REQUIRE(validate_tensor(node2->right()->left()->data().tensor(),
                             L"t_{a1,a2}^{i3,i4}"));
 
-    REQUIRE(validate_tensor(node2->right()->right()->data().seq_expr(),
+    REQUIRE(validate_tensor(node2->right()->right()->data().tensor(),
                             L"t_{a3,a4}^{i1,i2}"));
   }
 
@@ -129,17 +129,17 @@ TEST_CASE("TEST_BINARIZE_EXPR", "[binarize_expr]") {
 
     auto node = utils::binarize_evxpr_range(summands);
 
-    REQUIRE(validate_tensor(node->data().seq_expr(), L"I_{i1,i2}^{a1,a2}"));
+    REQUIRE(validate_tensor(node->data().tensor(), L"I_{i1,i2}^{a1,a2}"));
 
-    REQUIRE(validate_tensor(node->right()->data().seq_expr(),
-                            L"I3_{i1,i2}^{a1,a2}"));
     REQUIRE(
-        validate_tensor(node->left()->data().seq_expr(), L"I_{i1,i2}^{a1,a2}"));
+        validate_tensor(node->right()->data().tensor(), L"I3_{i1,i2}^{a1,a2}"));
+    REQUIRE(
+        validate_tensor(node->left()->data().tensor(), L"I_{i1,i2}^{a1,a2}"));
 
-    REQUIRE(validate_tensor(node->left()->left()->data().seq_expr(),
+    REQUIRE(validate_tensor(node->left()->left()->data().tensor(),
                             L"I1_{i1,i2}^{a1,a2}"));
 
-    REQUIRE(validate_tensor(node->left()->right()->data().seq_expr(),
+    REQUIRE(validate_tensor(node->left()->right()->data().tensor(),
                             L"I2_{i1,i2}^{a1,a2}"));
   }
 

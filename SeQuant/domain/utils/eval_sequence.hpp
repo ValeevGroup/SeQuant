@@ -33,25 +33,16 @@ class eval_sequence {
    *
    * @param l Root label.
    */
-  explicit eval_sequence(T &&l) : label_{std::move(l)} {
-    nodes_.shrink_to_fit();
-  }
-
-  /** Construct eval_sequence.
-   *
-   * @param l Root label.
-   */
-  explicit eval_sequence(const T &l) : label_{l} { nodes_.shrink_to_fit(); }
+  explicit eval_sequence(T l) : label_{std::move(l)} {}
 
   /** Construct eval_sequence.
    *
    * @param l Root label.
    * @param children Children eval_sequence objects.
    */
-  eval_sequence(const T &l, std::vector<eval_sequence<T>> &&children)
-      : eval_sequence(l) {
+  eval_sequence(T l, std::vector<eval_sequence<T>> children)
+      : eval_sequence(std::move(l)) {
     nodes_ = std::move(children);
-    nodes_.shrink_to_fit();
   }
 
   /**
@@ -60,8 +51,8 @@ class eval_sequence {
    * @param l Root label.
    * @param labels Children labels.
    */
-  eval_sequence(const T &l, std::initializer_list<T> &&labels)
-      : eval_sequence(l) {
+  eval_sequence(T l, std::initializer_list<T> &&labels)
+      : eval_sequence(std::move(l)) {
     nodes_.reserve(labels.size());
     for (auto &&lbl : labels) nodes_.emplace_back(std::move(lbl));
   }
@@ -73,22 +64,12 @@ class eval_sequence {
   /**
    * Append a node to the sequence of evaluation.
    */
-  void seque(const T &n) { nodes_.emplace_back(n); }
+  void seque(T n) { nodes_.emplace_back(std::move(n)); }
 
   /**
    * Append a node to the sequence.
    */
-  void seque(T &&n) { nodes_.emplace_back(std::move(n)); }
-
-  /**
-   * Append a node to the sequence.
-   */
-  void seque(const eval_sequence<T> &n) { nodes_.emplace_back(n); }
-
-  /**
-   * Append a node to the sequence.
-   */
-  void seque(eval_sequence<T> &&n) { nodes_.emplace_back(n); }
+  void seque(eval_sequence<T> n) { nodes_.emplace_back(std::move(n)); }
 
   /**
    * Check if the node is a terminal in the evaluation sequence.
@@ -96,11 +77,10 @@ class eval_sequence {
   [[nodiscard]] bool terminal() const { return nodes_.empty(); }
 };
 
-template <typename T>
-bool operator==(const eval_sequence<T> &lhs, const eval_sequence<T> &rhs) {
-  if (&lhs == &rhs) return true;
-
-  return (lhs.label() == rhs.label()) && (lhs.nodes() == rhs.nodes());
+template <typename T, typename V>
+bool operator==(const eval_sequence<T> &lhs, const eval_sequence<V> &rhs) {
+  return ((&lhs == &rhs) ||
+          (lhs.label() == rhs.label() && lhs.nodes() == rhs.nodes()));
 }
 
 template <typename T, typename Os>
@@ -118,12 +98,6 @@ Os &operator<<(Os &os, const eval_sequence<T> &seq) {
   os << ")";
   return os;
 }
-
-/**
- * Stream out an eval_sequence.
- */
-template <typename T, typename Os>
-Os &operator<<(Os &, const eval_sequence<T> &);
 
 /**
  * Enumerates all possible rooted trees with the elements of @c paths as the
