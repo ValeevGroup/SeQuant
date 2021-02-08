@@ -225,7 +225,7 @@ TEST_CASE("TEST_EVAL_EXPR", "[eval_expr]") {
         parse_expr(L"g_{i2,i1}^{a1,a2}", Symmetry::antisymm)->as<Tensor>());
 
     REQUIRE(evxpr1.tensor() == evxpr2.tensor());
-    REQUIRE_FALSE(evxpr1.phase() == evxpr2.phase());
+    REQUIRE_FALSE(evxpr1.scalar() == evxpr2.scalar());
     REQUIRE(evxpr1.hash() == evxpr2.hash());
   }
 }

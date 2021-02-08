@@ -1,5 +1,5 @@
 #include <SeQuant/domain/utils/binarize_expr.hpp>
-#include <SeQuant/domain/utils/eval_sequence.hpp>
+#include <SeQuant/domain/utils/eval_seq.hpp>
 #include <SeQuant/domain/utils/expr_parse.hpp>
 #include <vector>
 
@@ -27,16 +27,8 @@ Os& operator<<(Os& os, sequant::utils::eval_expr::eval_op op) {
   return os;
 }
 
-auto make_eval_seq = [](size_t start, size_t n) {
-  auto children =
-      ranges::views::iota(start + 1) | ranges::views::take(n - 1) |
-      ranges::to<std::vector<sequant::utils::eval_sequence<size_t>>>;
-
-  return sequant::utils::eval_sequence<size_t>{start, std::move(children)};
-};
-
 auto latex_label = [](const auto& x) {
-  return L'"' + x->data().seq_expr()->to_latex() + L'"';
+  return L'"' + x->seq_expr()->to_latex() + L'"';
 };
 
 // validates if x is constructible from tspec using parse_expr
@@ -50,7 +42,8 @@ TEST_CASE("TEST_BINARIZE_EXPR", "[binarize_expr]") {
   using namespace sequant;
   using utils::eval_expr;
   using utils::parse_expr;
-  using eval_seq = utils::eval_sequence<size_t>;
+  using eval_seq = utils::eval_seq<size_t>;
+  using utils::binarize_evxpr_range;
   using utils::binarize_flat_prod;
 
   SECTION("binarize_prod") {
@@ -62,54 +55,53 @@ TEST_CASE("TEST_BINARIZE_EXPR", "[binarize_expr]") {
                         Symmetry::antisymm)
                         ->as<Product>();
 
-    auto s1 = make_eval_seq(0, p1.size());
+    auto s1 = eval_seq{(size_t)0, {size_t{1}, size_t{2}}};
 
     auto binarizer = binarize_flat_prod{p1};
 
     auto snode1 = binarizer(s1);
 
-    REQUIRE(snode1->data().scalar() == Constant{1.0 / 16});
+    REQUIRE(snode1->scalar() == Constant{1.0 / 16});
+
+    REQUIRE(snode1 == binarize_flat_prod{p1}());
 
     const auto& node1 = snode1;
 
-    REQUIRE(validate_tensor(node1->data().tensor(), L"I_{a1,a2}^{i1,i2}"));
+    REQUIRE(validate_tensor(node1->tensor(), L"I_{a1,a2}^{i1,i2}"));
+
+    REQUIRE(validate_tensor(node1.left()->tensor(), L"I_{a1,a2}^{a3,a4}"));
+
+    REQUIRE(validate_tensor(node1.right()->tensor(), L"t_{a3,a4}^{i1,i2}"));
 
     REQUIRE(
-        validate_tensor(node1->left()->data().tensor(), L"I_{a1,a2}^{a3,a4}"));
+        validate_tensor(node1.left().left()->tensor(), L"g_{i3,i4}^{a3,a4}"));
 
     REQUIRE(
-        validate_tensor(node1->right()->data().tensor(), L"t_{a3,a4}^{i1,i2}"));
+        validate_tensor(node1.left().right()->tensor(), L"t_{a1,a2}^{i3,i4}"));
 
-    REQUIRE(validate_tensor(node1->left()->left()->data().tensor(),
-                            L"g_{i3,i4}^{a3,a4}"));
-
-    REQUIRE(validate_tensor(node1->left()->right()->data().tensor(),
-                            L"t_{a1,a2}^{i3,i4}"));
-
-    REQUIRE(node1->right()->leaf());
-    REQUIRE(node1->left()->left()->leaf());
-    REQUIRE(node1->left()->right()->leaf());
+    REQUIRE(node1.right().leaf());
+    REQUIRE(node1.left().left().leaf());
+    REQUIRE(node1.left().right().leaf());
 
     const auto& s2 = eval_seq{0, {eval_seq{1, {2}}}};  // s2 = (0, (1 2))
 
     auto snode2 = binarizer(s2);
 
-    REQUIRE(snode2->data().scalar() == Constant{1.0 / 16});
+    REQUIRE(snode2->scalar() == Constant{1.0 / 16});
 
     const auto& node2 = snode2;
-    REQUIRE(validate_tensor(node2->data().tensor(), L"I_{a1,a2}^{i1,i2}"));
+    REQUIRE(validate_tensor(node2->tensor(), L"I_{a1,a2}^{i1,i2}"));
 
-    REQUIRE(
-        validate_tensor(node2->left()->data().tensor(), L"g_{i3,i4}^{a3,a4}"));
+    REQUIRE(validate_tensor(node2.left()->tensor(), L"g_{i3,i4}^{a3,a4}"));
 
-    REQUIRE(validate_tensor(node2->right()->data().tensor(),
+    REQUIRE(validate_tensor(node2.right()->tensor(),
                             L"I_{a1,a2,a3,a4}^{i1,i2,i3,i4}"));
 
-    REQUIRE(validate_tensor(node2->right()->left()->data().tensor(),
-                            L"t_{a1,a2}^{i3,i4}"));
+    REQUIRE(
+        validate_tensor(node2.right().left()->tensor(), L"t_{a1,a2}^{i3,i4}"));
 
-    REQUIRE(validate_tensor(node2->right()->right()->data().tensor(),
-                            L"t_{a3,a4}^{i1,i2}"));
+    REQUIRE(
+        validate_tensor(node2.right().right()->tensor(), L"t_{a3,a4}^{i1,i2}"));
   }
 
   SECTION("binarize_evxpr_range") {
@@ -124,40 +116,55 @@ TEST_CASE("TEST_BINARIZE_EXPR", "[binarize_expr]") {
 
     auto ev_xpr = [](const auto& x) { return eval_expr{x}; };
 
-    const auto summands =
-        specs | transform(tensor) | transform(ev_xpr);  //| transform(eseq);
+    auto const summands = specs | transform(tensor) | transform(ev_xpr);
 
-    auto node = utils::binarize_evxpr_range(summands);
+    auto const node = binarize_evxpr_range(summands);
 
-    REQUIRE(validate_tensor(node->data().tensor(), L"I_{i1,i2}^{a1,a2}"));
+    REQUIRE(validate_tensor(node->tensor(), L"I_{i1,i2}^{a1,a2}"));
+
+    REQUIRE(validate_tensor(node.right()->tensor(), L"I3_{i1,i2}^{a1,a2}"));
+    REQUIRE(validate_tensor(node.left()->tensor(), L"I_{i1,i2}^{a1,a2}"));
 
     REQUIRE(
-        validate_tensor(node->right()->data().tensor(), L"I3_{i1,i2}^{a1,a2}"));
+        validate_tensor(node.left().left()->tensor(), L"I1_{i1,i2}^{a1,a2}"));
+
     REQUIRE(
-        validate_tensor(node->left()->data().tensor(), L"I_{i1,i2}^{a1,a2}"));
+        validate_tensor(node.left().right()->tensor(), L"I2_{i1,i2}^{a1,a2}"));
 
-    REQUIRE(validate_tensor(node->left()->left()->data().tensor(),
-                            L"I1_{i1,i2}^{a1,a2}"));
+    auto const prod =
+        parse_expr(L"t_{a1,a2}^{i3,i4}*g_{i3,i4}^{i1,i2}", Symmetry::antisymm);
 
-    REQUIRE(validate_tensor(node->left()->right()->data().tensor(),
-                            L"I2_{i1,i2}^{a1,a2}"));
+    REQUIRE(binarize_evxpr_range(Constant{1.0 / 16},
+                                 *prod | transform([&ev_xpr](auto&& x) {
+                                   return ev_xpr(x->template as<Tensor>());
+                                 }))
+                ->scalar() == Constant{1.0 / 16});
   }
 
-  SECTION("binarization of edge cases") {
-    auto expr = parse_expr(L"1/4 * g_{i1,i2}^{a1,a2}", Symmetry::antisymm);
-    auto root = utils::binarize_flat_prod{expr->as<Product>()}(eval_seq{0});
-    std::wcout << "phase = " << root->data().phase().value()
-               << "  scalar = " << root->data().scalar().value()
-               << "  op = " << root->data().op() << std::endl;
+  SECTION("binarization with canonicalization") {
+    auto const expr1 =
+        parse_expr(L"1/4 * g_{i2,i1}^{a1,a2}", Symmetry::antisymm);
+
+    auto const node1 = binarize_flat_prod{expr1->as<Product>()}();
+    //
+    // g_{i2, i1}^{a1, a2} =canonized=> -g_{i1, i2}^{a1,a2}
+    //
+
+    REQUIRE(node1->scalar() == Constant{-1.0 / 4});
+    auto const expr2 = parse_expr(
+        L"1/4 * t_{a1,a2}^{i3,i4} * g_{i4,i3}^{i1,i2}", Symmetry::antisymm);
+    //
+    // g_{i4,i3}^{i1,i2} =canonized=> -g_{i3,i4}^{i1,i2}
+    //
+
+    auto const node2 = binarize_flat_prod{expr2->as<Product>()}();
+
+    REQUIRE(node2->scalar() == Constant{-1.0 / 4});
+    REQUIRE(node2.left()->scalar() == Constant{1});
+    REQUIRE(node2.right()->scalar() == Constant{1});
   }
 
-  // SECTION("debinarization") {
-  //   auto prod1 = parse_expr(L"1/8 * g_(a1,a2)^(a3,a4) * t_(a3,a4)^(i1,i2)",
-  //                           Symmetry::antisymm);
-  //   auto prod1_node =
-  //       binarize_flat_prod{prod1->as<Product>()}(eval_seq{0, {1}});
-  //   auto prod1_denode = utils::debinarize_eval_expr(prod1_node);
-  //   std::wcout << "prod1 = $" << prod1->to_latex() << "$\n"
-  //              << "de_prod1 = $" << prod1_denode->to_latex() << "$\n";
-  // }
+  SECTION("debinarization") {
+      // todo
+  }
 }

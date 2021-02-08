@@ -1,5 +1,5 @@
 #include <SeQuant/domain/factorize/factorize.hpp>
-#include <SeQuant/domain/utils/eval_sequence.hpp>
+#include <SeQuant/domain/utils/eval_seq.hpp>
 #include <SeQuant/domain/utils/expr_parse.hpp>
 
 #include "catch.hpp"

@@ -29,7 +29,7 @@ class eval_expr final {
    * Construct eval_expr that goes into the leaf nodes
    * of the binary evaluation tree.
    */
-  explicit eval_expr(Tensor);
+  explicit eval_expr(const Tensor&);
 
   /**
    * Construct eval_expr that goes into the internal nodes
@@ -55,11 +55,16 @@ class eval_expr final {
   /** Factor to scale tensor by. */
   [[nodiscard]] const Constant& scalar() const;
 
-  /** Phase of the tensor resulting from canonicalization. */
-  [[nodiscard]] const Constant& phase() const;
+  template <typename T = std::complex<double>>
+  eval_expr& operator*=(T fac) {
+    scalar_ *= Constant{std::move(fac)};
+    return *this;
+  }
 
-  /** Set the scalar. **/
-  void scale(const Constant&);
+  template <typename T = std::complex<double>>
+  void scale(T fac) {
+    scalar_ = Constant{std::move(fac)};
+  }
 
   friend inline bool operator==(const eval_expr& lhs, const eval_expr& rhs) {
     return lhs.hash() == rhs.hash() &&
@@ -78,13 +83,11 @@ class eval_expr final {
 
   Constant scalar_{1};
 
-  Constant phase_{1};
-
   /**
    * Make an intermediate tensor from two expressions.
    */
   static Tensor make_imed_expr(const eval_expr& expr1, const eval_expr& expr2,
-                                eval_op op);
+                               eval_op op);
 
   /**
    * Figure out the type of evaluation between a pair of expressions.
@@ -138,14 +141,6 @@ class eval_expr final {
    */
   static size_t hash_imed(const eval_expr& expr1, const eval_expr& expr2,
                           eval_op op);
-
-  /**
-   * Hash tensor pair(T1, T2) based on the tensor labels and the topology of
-   * braket connection between them.
-   *
-   * @note result of pair(T1, T2) may or may not equal that of pair(T2, T1).
-   */
-  static size_t hash_tensor_pair(const Tensor&, const Tensor&);
 
   /**
    * Hash the topology of braket connectivity between a pair of tensor. The

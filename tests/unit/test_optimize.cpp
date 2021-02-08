@@ -7,19 +7,6 @@
 
 using namespace sequant;
 
-auto get_tex = [](utils::binary_expr<utils::eval_expr>::node_ptr const& node) {
-  return L"\"$" + node->data().tensor().to_latex() + L"$\"";
-};
-
-auto get_hash = [](utils::binary_expr<utils::eval_expr>::node_ptr const& node) {
-  return std::to_wstring(node->data().hash());
-};
-
-auto get_hash_and_tex =
-    [](utils::binary_expr<utils::eval_expr>::node_ptr const& node) {
-      return L"\"" + get_tex(node) + L"\\n" + get_hash(node) + L"\"";
-    };
-
 auto evxpr_range = [](const Product& prod) {
   return prod.factors() | ranges::views::transform([](const auto& expr) {
            return utils::eval_expr{expr->template as<Tensor>()};
@@ -27,11 +14,10 @@ auto evxpr_range = [](const Product& prod) {
          ranges::to<container::svector<utils::eval_expr>>;
 };
 
-auto yield_hash = [](const auto& node, auto& container) {
-  utils::visit_inorder_binary_expr<utils::eval_expr>(
-      node, [&container](const auto& x) {
-        if (!x->leaf()) container.insert(x->data().hash());
-      });
+auto yield_interm_hash = [](utils::binary_node<utils::eval_expr> const& node,
+                            auto& container) {
+  node.visit_internal(
+      [&container](const auto& x) { container.emplace(x.hash()); });
 };
 
 TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
@@ -41,7 +27,7 @@ TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
   SECTION("Single term optimization") {
     const container::set<size_t> imed_hashes = {};
 
-    const size_t nocc = 2, nvirt = 3;  // nocc < nvirt
+    const size_t nocc = 2, nvirt = 5;  // nocc < nvirt
 
     const auto prod1 = parse_expr(
                            L"g_{i3,i4}^{a3,a4}"     // T1
@@ -63,15 +49,14 @@ TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
         single_term_opt(evxpr_range(prod1), nocc, nvirt, imed_hashes);
 
     REQUIRE(result1.ops < std::numeric_limits<size_t>::max());
-    for (const auto& x : result1.optimal_seqs) REQUIRE(x);
 
     // there are no degenerate evaluation sequences
     REQUIRE(result1.optimal_seqs.size() == 1);
 
-    const auto opt_seq1 = utils::eval_sequence<size_t>{0, {2, 1}};
+    const auto opt_seq1 = utils::eval_seq<size_t>{0, {2, 1}};
 
-    REQUIRE(*utils::binarize_flat_prod{prod1}(opt_seq1) ==
-            *result1.optimal_seqs.at(0));
+    REQUIRE(utils::binarize_flat_prod{prod1}(opt_seq1) ==
+            result1.optimal_seqs.at(0));
 
     //
     const auto prod2 = parse_expr(
@@ -91,7 +76,7 @@ TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
     // now let's reuse intermediates from the optimal sequence of evaluation of
     // prod1, to compute the optimal sequence for prod2
     container::set<size_t> imed_hashes_prod1{};
-    yield_hash(result1.optimal_seqs.at(0), imed_hashes_prod1);
+    yield_interm_hash(result1.optimal_seqs.at(0), imed_hashes_prod1);
 
     const auto result2_discounted =
         single_term_opt(evxpr_range(prod2), nocc, nvirt, imed_hashes_prod1);
@@ -117,10 +102,7 @@ TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
                         .optimal_seqs.begin()));
 
     auto imeds_prod4 = container::set<size_t>{};
-    utils::visit_inorder_binary_expr<utils::eval_expr>(
-        prod4_sto, [&imeds_prod4](auto const& n) {
-          if (!n->leaf()) imeds_prod4.emplace(n->data().hash());
-        });
+    yield_interm_hash(prod4_sto, imeds_prod4);
 
     auto prod3_sto_with_imeds = std::move(
         *single_term_opt(prod3->as<Product>(), nocc, nvirt, imeds_prod4)
@@ -167,10 +149,7 @@ TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
         *(factorize::single_term_opt(prod2->as<Product>(), nocc, nvirt, {})
               .optimal_seqs.begin()));
     auto imeds = container::set<size_t>{};
-    utils::visit_inorder_binary_expr<utils::eval_expr>(
-        prod2_opt, [&imeds](auto const& n) {
-          if (!n->leaf()) imeds.emplace(n->data().hash());
-        });
+    yield_interm_hash(prod2_opt, imeds);
 
     auto prod1_opt = std::move(
         *(factorize::single_term_opt(prod1->as<Product>(), nocc, nvirt, imeds)

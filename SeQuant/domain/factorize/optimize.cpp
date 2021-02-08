@@ -1,5 +1,4 @@
 #include "optimize.hpp"
-#include <iostream>
 
 namespace sequant::factorize {
 
@@ -7,14 +6,15 @@ bin_eval_expr_flops_counter::bin_eval_expr_flops_counter(
     size_t no, size_t nv, const container::set<size_t>& imeds)
     : counter{no, nv}, imed_hashes{imeds} {}
 
-size_t bin_eval_expr_flops_counter::operator()(const binary_node& node) const {
+size_t bin_eval_expr_flops_counter::operator()(
+    utils::binary_node<utils::eval_expr> const& node) const {
   return 0;
 }
 
-size_t bin_eval_expr_flops_counter::operator()(const binary_node& node,
-                                               size_t lflops,
-                                               size_t rflops) const {
-  if (imed_hashes.contains(node->data().hash())) return 0;
+size_t bin_eval_expr_flops_counter::operator()(
+    utils::binary_node<utils::eval_expr> const& node, size_t lflops,
+    size_t rflops) const {
+  if (imed_hashes.contains(node->hash())) return 0;
 
   return counter(node, lflops, rflops);
 }
@@ -26,10 +26,11 @@ sto_result single_term_opt(Product const& flat_prod, size_t nocc, size_t nvirt,
                         return utils::eval_expr{t->template as<Tensor>()};
                       }),
                       nocc, nvirt, imeds_hash);
-  ranges::for_each(
-      result.optimal_seqs, [s = flat_prod.scalar()](auto const& node) {
-        node->data().scale(Constant{node->data().scalar().value() * s});
-      });
+  ranges::for_each(result.optimal_seqs,
+                   [s = flat_prod.scalar()](auto& node) {
+                     // node->scale(node->scalar().value() * s);
+                     *node *= s;
+                   });
   return result;
 }
 

@@ -12,8 +12,6 @@ namespace sequant::factorize {
  */
 struct bin_eval_expr_flops_counter {
  private:
-  using binary_node = utils::binary_expr<utils::eval_expr>::node_ptr;
-
   container::set<size_t> const& imed_hashes;
 
   utils::flops_counter const counter;
@@ -22,10 +20,10 @@ struct bin_eval_expr_flops_counter {
   bin_eval_expr_flops_counter(size_t no, size_t nv,
                               const container::set<size_t>& imeds);
 
-  size_t operator()(const binary_node& node) const;
+  size_t operator()(utils::binary_node<utils::eval_expr> const& node) const;
 
-  size_t operator()(const binary_node& node, size_t lflops,
-                    size_t rflops) const;
+  size_t operator()(utils::binary_node<utils::eval_expr> const& node,
+                    size_t lflops, size_t rflops) const;
 };
 
 /**
@@ -41,8 +39,7 @@ struct bin_eval_expr_flops_counter {
 struct sto_result {
   size_t ops;
 
-  container::vector<utils::binary_expr<utils::eval_expr>::node_ptr>
-      optimal_seqs;
+  container::vector<utils::binary_node<utils::eval_expr>> optimal_seqs;
 };
 
 /**
@@ -62,22 +59,20 @@ struct met_result {
 template <typename Cont>
 sto_result single_term_opt(Cont const& container, size_t nocc, size_t nvirt,
                            container::set<size_t> const& imeds_hash) {
-  using seq_t = utils::eval_sequence<size_t>;
+  using seq_t = utils::eval_seq<size_t>;
 
   const auto counter = bin_eval_expr_flops_counter{nocc, nvirt, imeds_hash};
 
   sto_result result{std::numeric_limits<size_t>::max(), {}};
 
   auto finder = [&result, &container, &counter](const auto& seq) {
-    auto tseq =
-        utils::transform_eval_sequence<size_t>(seq, [&container](auto x) {
-          return utils::eval_expr{*(ranges::begin(container) + x)};
-        });
+    auto tseq = seq.transform([&container](auto x) {
+      return utils::eval_expr{*(ranges::begin(container) + x)};
+    });
 
-    auto node = utils::binarize_eval_sequence<utils::eval_expr>(
-        tseq, utils::binarize_eval_expr);
+    auto node = tseq.binarize(utils::binarize_eval_expr);
 
-    auto flops = utils::evaluate_binary_expr<utils::eval_expr>(node, counter);
+    auto flops = node.evaluate(counter);
 
     if (flops == result.ops) {
       result.optimal_seqs.emplace_back(std::move(node));
@@ -93,9 +88,9 @@ sto_result single_term_opt(Cont const& container, size_t nocc, size_t nvirt,
   auto init_seq = ranges::views::iota(size_t{0}) |
                   ranges::views::take(ranges::distance(container)) |
                   ranges::views::transform([](auto x) { return seq_t{x}; }) |
-                  ranges::to<std::vector<seq_t>>;
+                  ranges::to_vector;
 
-  utils::enumerate_eval_sequence<size_t>(init_seq, finder);
+  utils::enumerate_eval_seq<size_t>(init_seq, finder);
 
   return result;
 }
@@ -108,8 +103,8 @@ sto_result single_term_opt(Product const& flat_prod, size_t nocc, size_t nvirt,
  *
  * @param container Iterable of ExprPtr to flat Product.
  */
-template <typename Iter>
-met_result most_expensive(Iter const& iterable, size_t nocc, size_t nvirt,
+template <typename Cont>
+met_result most_expensive(Cont const& iterable, size_t nocc, size_t nvirt,
                           container::set<size_t> const& imed_hashes) {
   using ranges::views::transform;
 
@@ -165,10 +160,9 @@ auto multi_term_opt_hartono(Cont const& container, size_t nocc, size_t nvirt) {
       const auto& opt_tree = *(sto.optimal_seqs.begin());
 
       // visit tree nodes and copy their hashes to registry
-      utils::visit_inorder_binary_expr<utils::eval_expr>(
-          opt_tree, [&imed_hashes](const auto& x) {
-            if (!x->leaf()) imed_hashes.emplace(x->data().hash());
-          });
+
+      opt_tree.visit_internal(
+          [&imed_hashes](const auto& x) { imed_hashes.emplace(x.hash()); });
     }
     // std::wcout << "hashes:\n";
     // for (auto x : imed_hashes) std::wcout << "#" << x << "$\n";

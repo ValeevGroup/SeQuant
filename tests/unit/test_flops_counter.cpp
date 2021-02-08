@@ -2,36 +2,20 @@
 
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/domain/utils/binarize_expr.hpp>
-#include <SeQuant/domain/utils/binary_expr.hpp>
-#include <SeQuant/domain/utils/eval_sequence.hpp>
+#include <SeQuant/domain/utils/binary_node.hpp>
+#include <SeQuant/domain/utils/eval_seq.hpp>
 #include <SeQuant/domain/utils/expr_parse.hpp>
 #include <SeQuant/domain/utils/flops_counter.hpp>
 
-// std::wostream& operator<<(
-//     std::wostream& os,
-//     sequant::utils::binary_expr<sequant::utils::eval_expr>::node_ptr const&
-//         node) {
-//   os << "\n";
-//
-//   sequant::utils::digraph_binary_expr<sequant::utils::eval_expr>(
-//       os, node, [](const auto& x) {
-//         return L"\"$" + x->data().seq_expr()->to_latex() + L"$\"";
-//       });
-//
-//   os << "\n";
-//   return os;
-// }
-
-size_t evaluate_flops(sequant::utils::binary_expr<
-                          sequant::utils::eval_expr>::node_ptr const& node,
-                      size_t nocc, size_t nvirt) {
-  return sequant::utils::evaluate_binary_expr<sequant::utils::eval_expr>(
-      node, sequant::utils::flops_counter{nocc, nvirt});
+size_t evaluate_flops(
+    sequant::utils::binary_node<sequant::utils::eval_expr> const& node,
+    size_t nocc, size_t nvirt) {
+  return node.evaluate(sequant::utils::flops_counter{nocc, nvirt});
 }
 
-size_t evaluate_flops(sequant::utils::binary_expr<
-                          sequant::utils::eval_expr>::node_ptr const& node,
-                      std::pair<size_t, size_t> nov) {
+size_t evaluate_flops(
+    sequant::utils::binary_node<sequant::utils::eval_expr> const& node,
+    std::pair<size_t, size_t> nov) {
   return evaluate_flops(node, std::get<0>(nov), std::get<1>(nov));
 }
 
@@ -45,7 +29,7 @@ TEST_CASE("TEST_OPS_COUNTER", "[flops_counter]") {
   using utils::binarize_evxpr_range;
   using utils::binarize_flat_prod;
   using utils::eval_expr;
-  using utils::eval_sequence;
+  using utils::eval_seq;
   using utils::parse_expr;
 
   const std::pair<size_t, size_t> no_lt_nv = {2, 3};
@@ -61,24 +45,6 @@ TEST_CASE("TEST_OPS_COUNTER", "[flops_counter]") {
     REQUIRE(evaluate_flops(tree, no_gt_nv) == 0);
     REQUIRE(evaluate_flops(tree, no_eq_nv) == 0);
   }
-
-  // SECTION("Scaling operation") {
-  //   const auto prod = parse_expr(L"1/2 * g_{i1,i2}^{a1,a2}",
-  //   Symmetry::antisymm)
-  //                         ->as<Product>();
-  //
-  //   const auto tree = binarize_flat_prod{prod}(eval_sequence<size_t>{0});
-  //
-  //   auto flops = [](const std::pair<size_t, size_t>& ov) {
-  //     size_t nocc = std::get<0>(ov);
-  //     size_t nvirt = std::get<1>(ov);
-  //     return nocc * nocc * nvirt * nvirt;
-  //   };
-  //
-  //   REQUIRE(evaluate_flops(tree, no_lt_nv) == flops(no_lt_nv));
-  //   REQUIRE(evaluate_flops(tree, no_gt_nv) == flops(no_gt_nv));
-  //   REQUIRE(evaluate_flops(tree, no_eq_nv) == flops(no_eq_nv));
-  // }
 
   SECTION("Summation operation") {
     auto seq_node = [](std::wstring_view spec) {
@@ -121,7 +87,7 @@ TEST_CASE("TEST_OPS_COUNTER", "[flops_counter]") {
   }
 
   SECTION("Product operation") {
-    using seq_t = eval_sequence<size_t>;
+    using seq_t = eval_seq<size_t>;
 
     const auto prod1 = parse_expr(
                            L"g_{i3,i4}^{a3,a4}"
@@ -150,7 +116,7 @@ TEST_CASE("TEST_OPS_COUNTER", "[flops_counter]") {
 
     const auto seq2_0 = seq_t{0, {1, 2}};
 
-    auto flops2_0 = [&flops1](const std::pair<size_t, size_t>& ov) {
+    auto flops2_0 = [](const std::pair<size_t, size_t>& ov) {
       size_t nocc = std::get<0>(ov);
       size_t nvirt = std::get<1>(ov);
 
@@ -173,7 +139,7 @@ TEST_CASE("TEST_OPS_COUNTER", "[flops_counter]") {
 
     const auto seq2_1 = seq_t{0, {seq_t{1, {2}}}};
 
-    auto flops2_1 = [&flops1](const std::pair<size_t, size_t>& ov) {
+    auto flops2_1 = [](const std::pair<size_t, size_t>& ov) {
       size_t nocc = std::get<0>(ov);
       size_t nvirt = std::get<1>(ov);
 

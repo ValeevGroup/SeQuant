@@ -2,11 +2,9 @@
 
 namespace sequant::utils {
 
-ExprPtr debinarize_eval_expr(binary_expr<eval_expr>::node_ptr const& node) {
-  if (!node) throw std::logic_error("debinarization called on nullptr");
-
-  auto op = node->data().op();
-  auto const& evxpr = node->data();
+ExprPtr debinarize_eval_expr(binary_node<eval_expr> const& node) {
+  auto op = node->op();
+  auto const& evxpr = *node;
 
   switch (op) {
     case eval_expr::eval_op::Id:
@@ -16,12 +14,12 @@ ExprPtr debinarize_eval_expr(binary_expr<eval_expr>::node_ptr const& node) {
 
     case eval_expr::eval_op::Prod:
       return ex<Constant>(evxpr.scalar()) *
-             ex<Product>(Product{debinarize_eval_expr(node->left()),
-                                 debinarize_eval_expr(node->right())});
+             ex<Product>(Product{debinarize_eval_expr(node.left()),
+                                 debinarize_eval_expr(node.right())});
 
     case eval_expr::eval_op::Sum:
-      return ex<Sum>(Sum{debinarize_eval_expr(node->left()),
-                         debinarize_eval_expr(node->right())});
+      return ex<Sum>(Sum{debinarize_eval_expr(node.left()),
+                         debinarize_eval_expr(node.right())});
   }
 }
 

@@ -9,18 +9,14 @@ eval_expr::eval_op eval_expr::op() const { return op_; }
 
 const Tensor& eval_expr::tensor() const { return tensor_; }
 
-const Constant& eval_expr::phase() const { return phase_; }
-
 const Constant& eval_expr::scalar() const { return scalar_; }
 
-void eval_expr::scale(const Constant& scal) { scalar_ = scal; }
-
-eval_expr::eval_expr(Tensor tnsr) : op_{eval_op::Id}, tensor_{std::move(tnsr)} {
+eval_expr::eval_expr(const Tensor& tnsr) : op_{eval_op::Id}, tensor_{tnsr} {
   sequant::TensorCanonicalizer::register_instance(
       std::make_shared<sequant::DefaultTensorCanonicalizer>());
 
   if (auto canon_biprod = tensor_.canonicalize(); canon_biprod)
-    phase_ *= canon_biprod->as<Constant>();
+    scalar_ *= canon_biprod->as<Constant>();
 
   hash_ = eval_expr::hash_terminal_tensor(tensor_);
 }
@@ -40,13 +36,11 @@ eval_expr::eval_expr(const eval_expr& expr1, const eval_expr& expr2) {
   auto swap_on = expr2.hash() < expr1.hash();
 
   op_ = eval_expr::infer_eval_op(sxpr1, sxpr2);
-  tensor_ = std::move(swap_on ? eval_expr::make_imed_expr(expr2, expr1, op())
-                              : eval_expr::make_imed_expr(expr1, expr2, op()));
+  tensor_ = swap_on ? eval_expr::make_imed_expr(expr2, expr1, op())
+                              : eval_expr::make_imed_expr(expr1, expr2, op());
   // compute phase
-  phase_ *= expr1.phase();
-  phase_ *= expr2.phase();
   if (auto canon_biprod = tensor_.canonicalize(); canon_biprod)
-    phase_ *= canon_biprod->as<Constant>();
+    scalar_ *= canon_biprod->as<Constant>();
 
   hash_ = swap_on ? eval_expr::hash_imed(expr2, expr1, op())
                   : eval_expr::hash_imed(expr1, expr2, op());
@@ -244,7 +238,7 @@ Tensor eval_expr::make_imed_expr(const eval_expr& expr1, const eval_expr& expr2,
                         ? eval_expr::target_braket_sum(t1, t2)  //
                         : eval_expr::target_braket_prod(t1, t2);
 
-  auto tensorSym = Symmetry::invalid;  // init only
+  Symmetry tensorSym;  // init only
 
   if ((expr1.hash() == expr2.hash()) &&
       (bra.size() + ket.size() == 2 * (t1.rank() + t2.rank()))) {
