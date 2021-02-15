@@ -37,7 +37,7 @@ eval_expr::eval_expr(const eval_expr& expr1, const eval_expr& expr2) {
 
   op_ = eval_expr::infer_eval_op(sxpr1, sxpr2);
   tensor_ = swap_on ? eval_expr::make_imed_expr(expr2, expr1, op())
-                              : eval_expr::make_imed_expr(expr1, expr2, op());
+                    : eval_expr::make_imed_expr(expr1, expr2, op());
   // compute phase
   if (auto canon_biprod = tensor_.canonicalize(); canon_biprod)
     scalar_ *= canon_biprod->as<Constant>();
@@ -126,56 +126,46 @@ eval_expr::braket_type eval_expr::target_braket_sum(const Tensor& tnsr1,
 
 eval_expr::braket_type eval_expr::target_braket_prod(const Tensor& tnsr1,
                                                      const Tensor& tnsr2) {
-  //
-  // TODO:
-  // write a better algorithm
-  //
-  bool swap_on = tnsr1.rank() > tnsr2.rank();
+  using ranges::views::keys;
+  using ranges::views::values;
+  using ranges::views::zip;
 
-  auto target_bra = (swap_on ? tnsr2.bra() : tnsr1.bra()) |
-                    ranges::to<eval_expr::index_container_type>;
+  auto remove_item = [](auto& vec, size_t pos) -> void {
+    std::swap(vec[pos], vec.back());
+    vec.pop_back();
+  };
 
-  auto target_ket = (swap_on ? tnsr2.ket() : tnsr1.ket()) |
-                    ranges::to<eval_expr::index_container_type>;
+  auto left = zip(tnsr1.bra(), tnsr1.ket()) | ranges::to_vector;
+  auto right = zip(tnsr2.bra(), tnsr2.ket()) | ranges::to_vector;
 
-  const auto& incoming_bra = swap_on ? tnsr1.bra() : tnsr2.bra();
-  const auto& incoming_ket = swap_on ? tnsr1.ket() : tnsr2.ket();
-
-  for (auto&& [ipos, iparticle] : ranges::views::enumerate(
-           ranges::views::zip(incoming_bra, incoming_ket))) {
-    for (auto&& [tpos, tparticle] :
-         ranges::views::enumerate(ranges::views::zip(target_bra, target_ket))) {
-      if (iparticle.first.label() == tparticle.second.label()) {
-        // bra index of incoming particle contracted
-        // with ket index of target particle
-        if (iparticle.second.label() == tparticle.first.label()) {
-          // AND, ket index contracted with bra index
-          target_bra.erase(target_bra.begin() + tpos);
-          target_ket.erase(target_ket.begin() + tpos);
-
-        } else {
-          // only bra index of incoming particle contracted
-          // with the ket index of the target particle
-          target_ket[tpos] = incoming_ket[ipos];
+next_contract:
+  while (!right.empty()) {
+    for (auto rr = 0; rr < right.size(); ++rr) {
+      auto& [rb, rk] = right[rr];
+      for (auto ll = 0; ll < left.size(); ++ll) {
+        auto& [lb, lk] = left[ll];
+        if (lb == rk && rb == lk) {
+          remove_item(left, ll);
+          remove_item(right, rr);
+          goto next_contract;
+        } else if (lb == rk) {
+          std::swap(lk, rk);
+          remove_item(left, ll);
+          goto next_contract;
+        } else if (lk == rb) {
+          std::swap(lb, rb);
+          remove_item(left, ll);
+          goto next_contract;
         }
-        goto next_incoming_particle;
-      } else if (iparticle.second.label() == tparticle.first.label()) {
-        // ket index of incoming particle contracted
-        // with bra index of target particle
-        target_bra[tpos] = incoming_bra[ipos];
-        goto next_incoming_particle;
-      } else {
-        continue;  // to next target particle
-      }
-    }
-    // got an incoming paticle which is not contracted at all
-    target_bra.emplace_back(incoming_bra.at(ipos));
-    target_ket.emplace_back(incoming_ket.at(ipos));
-
-  next_incoming_particle:;
+      }  // ll
+      left.emplace_back(rb, rk);
+      remove_item(right, rr);
+    }  // rr
   }
+  // the result is now in left
 
-  return {target_bra, target_ket};
+  return {keys(left) | ranges::to<index_container_type>,
+          values(left) | ranges::to<index_container_type>};
 }
 
 size_t eval_expr::hash_braket(
