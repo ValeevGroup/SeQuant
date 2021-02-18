@@ -3,9 +3,9 @@
 
 #include <array>
 #include <random>
-#include <string>
+#include <set>
 
-namespace sequant::domain::util {
+namespace sequant::utils {
 
 /**
  * Random color generator.
@@ -24,6 +24,8 @@ class rand_color {
 
   std::mt19937_64 randEngine;
 
+  std::set<double> hue_cache_;
+
  public:
   rand_color();
 
@@ -31,12 +33,13 @@ class rand_color {
    * Get a random color RGB hexcode for a given saturation level
    * and a brightness level.
    *
-   * @param saturation Saturation level.
-   * @param brightness Brightness level.
+   * @param sat Saturation level.
+   * @param brit Brightness level.
    *
-   * @return String of the pattern '#<R><G><B>' where <X> is a hex number.
+   * @return std::array<size_t, 3> for red, blue and green
+   *                               levels in the range [0,255]
    */
-  std::wstring rand_rgb(double saturation, double brightness);
+  std::array<size_t, 3> rand_rgb(double sat, double brit);
 
   /**
    * Get a random hue.
@@ -45,7 +48,6 @@ class rand_color {
    */
   double rand_hue();
 
- private:
   /**
    * Convert hue, saturation, brightness value to hex number.
    *
@@ -60,6 +62,6 @@ class rand_color {
                                           double brightness);
 };
 
-}  // namespace sequant::domain::util
+}  // namespace sequant::utils
 
 #endif  // SEQUANT_UTIL_RAND_COLOR_HPP

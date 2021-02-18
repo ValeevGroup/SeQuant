@@ -3,10 +3,8 @@
 #include <array>
 #include <ctime>
 #include <random>
-#include <sstream>
-#include <string>
 
-namespace sequant::domain::util {
+namespace sequant::utils {
 
 rand_color::rand_color()
     : randEngine{[]() {
@@ -15,16 +13,22 @@ rand_color::rand_color()
         return static_cast<std::mt19937_64::result_type>(seed);
       }()} {}
 
-std::wstring rand_color::rand_rgb(double saturation, double brightness) {
-  std::wostringstream oss;
-  oss << "#" << std::hex;
-  for (auto cc : hsv_to_rgb(rand_hue(), saturation, brightness)) oss << cc;
-  return oss.str();
+std::array<size_t, 3> rand_color::rand_rgb(double sat, double brit) {
+  return rand_color::hsv_to_rgb(rand_hue(), sat, brit);
 }
 
 double rand_color::rand_hue() {
-  auto hue = GOLDEN_RATIO_CONJ + uniRealDist(randEngine);
-  return hue > 1 ? hue - 1 : hue;
+  auto attempt = [this]() {
+    auto hue = GOLDEN_RATIO_CONJ + uniRealDist(randEngine);
+    return hue_cache_.emplace(hue > 1 ? hue - 1 : hue);
+  };
+
+  auto result = attempt();
+  while (!result.second) {
+    // hue already exists in the cache registry
+    result = attempt();
+  }
+  return *result.first;
 }
 
 std::array<size_t, 3> rand_color::hsv_to_rgb(double h, double s, double v) {
@@ -71,4 +75,4 @@ std::array<size_t, 3> rand_color::hsv_to_rgb(double h, double s, double v) {
   };
 };
 
-}  // namespace sequant::domain::util
+}  // namespace sequant::utils
