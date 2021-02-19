@@ -239,6 +239,33 @@ class binary_node {
     return rcount;
   }
 
+  template <typename Ostream, typename F, typename G>
+  void tikz(Ostream& os, F&& label_gen, G&& spec_gen, size_t indent = 2) const {
+    auto pad = [](Ostream& o, size_t i) {
+      for (auto j = 0; j < i; ++j) o << " ";
+    };
+
+    // pad(os, indent);
+
+    os << "node [" << spec_gen(*this) << "]"
+       << " {" << label_gen(*this) << "}";
+    if (leaf()) return;
+    os << "\n";
+
+    pad(os, indent);
+    os << "child {";
+    left().tikz(os, std::forward<F>(label_gen), std::forward<G>(spec_gen),
+                indent + 2);
+    os << "}";
+    os << "\n";
+
+    pad(os, indent);
+    os << "child {";
+    right().tikz(os, std::forward<F>(label_gen), std::forward<G>(spec_gen),
+                 indent + 2);
+    os << "}";
+  }
+
  public:
   template <typename string_t, typename F>
   string_t digraph(F&& label_gen, string_t const& graph_name = {}) const {
@@ -252,6 +279,17 @@ class binary_node {
     oss << "}";
     oss.flush();
 
+    return oss.str();
+  }
+
+  template <typename string_t>
+  string_t tikz(std::function<string_t(binary_node<T> const&)> label_gen,
+                std::function<string_t(binary_node<T> const&)> spec_gen) const {
+    auto oss = std::basic_ostringstream{string_t{}};
+    oss << "\\tikz{\n\\";
+    tikz(oss, label_gen, spec_gen);
+    oss << "\n}";
+    oss.flush();
     return oss.str();
   }
 
