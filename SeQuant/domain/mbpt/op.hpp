@@ -11,7 +11,21 @@
 namespace sequant {
 namespace mbpt {
 
-enum class OpType { h, f, g, t, l, A, L, R, R12 };
+/// Operators
+enum class OpType {
+  h,   //!< 1-body Hamiltonian
+  f,   //!< Fock operator
+  g,   //!< 2-body Coulomb
+  t,   //!< cluster amplitudes
+  l,   //!< deexcitation cluster amplitudes
+  A,   //!< antisymmetrizer
+  S,   //!< particle symmetrizer
+  L,   //!< left-hand eigenstate
+  R,   //!< right-hand eigenstate
+  R12  //!< geminal kernel
+};
+
+/// Operator character relative to Fermi vacuum
 enum class OpClass { ex, deex, gen };
 
 /// @return the tensor labels in the cardinal order
