@@ -79,6 +79,9 @@ set(SEQUANT_INSTALL_CMAKEDIR "lib/cmake/sequant"
 option(ENABLE_TBB "Enable TBB as an optional prerequisite for C++17's parallel STL (if PSTL is not supported will use of standard C++11 concurrency)" OFF)
 add_feature_info(TBB ENABLE_TBB "Intel Thread-Building Blocks is an optional prerequisite for C++17's parallel STL")
 
+option(SEQUANT_EVAL_TESTS "Enable building of evaluation tests (will look for and/or build Libint+TA)" OFF)
+add_feature_info(EVAL_TESTS SEQUANT_EVAL_TESTS "Build evaluation tests (will look for and/or build Libint+TA)")
+
 ##########################
 # Prerequisites
 ##########################
@@ -215,13 +218,10 @@ install(DIRECTORY SeQuant
 add_library(SeQuant::SeQuant ALIAS SeQuant)  # to be able to use as subproject
 
 ### optional prereqs
-if (NOT TARGET Libint2::cxx)
-  find_package(Libint2 2.7.0 CONFIG)
-endif(NOT TARGET Libint2::cxx)
-if (NOT TARGET tiledarray)
-  find_package(TiledArray CONFIG COMPONENTS tiledarray)
-endif(NOT TARGET tiledarray)
-
+if (SEQUANT_EVAL_TESTS)
+  include(FindOrFetchLibint2)
+  include(FindOrFetchTiledArray)
+endif(SEQUANT_EVAL_TESTS)
 enable_testing(true)
 
 set(utests_src
