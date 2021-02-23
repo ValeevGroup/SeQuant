@@ -21,8 +21,8 @@ namespace sequant {
 class Tensor : public Expr, public AbstractTensor {
  private:
   using index_container_type = container::svector<Index, 4>;
-  auto make_indices(IndexList indices) { return indices; }
-  auto make_indices(WstrList index_labels) {
+  static auto make_indices(IndexList indices) { return indices; }
+  static auto make_indices(WstrList index_labels) {
     index_container_type result;
     result.reserve(index_labels.size());
     for (const auto &label : index_labels) {
@@ -30,7 +30,7 @@ class Tensor : public Expr, public AbstractTensor {
     }
     return result;
   }
-  auto make_indices(std::initializer_list<const wchar_t *> index_labels) {
+  static auto make_indices(std::initializer_list<const wchar_t *> index_labels) {
     index_container_type result;
     result.reserve(index_labels.size());
     for (const auto &label : index_labels) {
@@ -39,7 +39,7 @@ class Tensor : public Expr, public AbstractTensor {
     return result;
   }
   template <typename IndexContainer>
-  index_container_type make_indices(IndexContainer &&indices) {
+  static index_container_type make_indices(IndexContainer &&indices) {
     if constexpr (std::is_same_v<index_container_type,
                                  std::decay_t<IndexContainer>>) {
       return std::forward<IndexContainer>(indices);
@@ -50,6 +50,31 @@ class Tensor : public Expr, public AbstractTensor {
 
   /// @return view of the bra+ket index ranges
   auto braket() { return ranges::views::concat(bra_, ket_); }
+
+  /// asserts that @p label is not reserved
+  /// @note Tensor with reserved labels are constructed using friends of Tensor
+  /// @param label a Tensor label candidate
+  void assert_nonreserved_label(std::wstring_view label) const;
+
+  // utility for disaptching to private ctor
+  struct reserved_tag{};
+
+  // list of friends who can make Tensor objects with reserved labels
+  friend ExprPtr make_overlap(const Index &bra_index, const Index &ket_index);
+
+  template <typename IndexContainer1, typename IndexContainer2>
+  Tensor(std::wstring_view label, IndexContainer1 &&bra_indices,
+         IndexContainer2 &&ket_indices, reserved_tag, Symmetry s = Symmetry::nonsymm,
+         BraKetSymmetry bks = get_default_context().braket_symmetry(),
+         ParticleSymmetry ps = ParticleSymmetry::symm)
+      : label_(label),
+        bra_(make_indices(bra_indices)),
+        ket_(make_indices(ket_indices)),
+        symmetry_(s),
+        braket_symmetry_(bks),
+        particle_symmetry_(ps) {
+    validate_symmetries();
+  }
 
  public:
   Tensor() = default;
@@ -69,13 +94,12 @@ class Tensor : public Expr, public AbstractTensor {
          IndexContainer &&ket_indices, Symmetry s = Symmetry::nonsymm,
          BraKetSymmetry bks = get_default_context().braket_symmetry(),
          ParticleSymmetry ps = ParticleSymmetry::symm)
-      : label_(label),
-        bra_(make_indices(bra_indices)),
-        ket_(make_indices(ket_indices)),
-        symmetry_(s),
-        braket_symmetry_(bks),
-        particle_symmetry_(ps) {
-          validate_symmetries();
+      : Tensor(label,
+               std::forward<IndexContainer>(bra_indices),
+               std::forward<IndexContainer>(ket_indices),
+               reserved_tag{},
+               s, bks, ps) {
+    assert_nonreserved_label(label_);
   }
 
   /// @tparam I1 any type convertible to Index)
@@ -93,14 +117,10 @@ class Tensor : public Expr, public AbstractTensor {
          std::initializer_list<I2> ket_indices, Symmetry s = Symmetry::nonsymm,
          BraKetSymmetry bks = get_default_context().braket_symmetry(),
          ParticleSymmetry ps = ParticleSymmetry::symm)
-      : label_(label),
-        bra_(make_indices(bra_indices)),
-        ket_(make_indices(ket_indices)),
-        symmetry_(s),
-        braket_symmetry_(bks),
-        particle_symmetry_(ps)  {
-          validate_symmetries();
-        }
+      : Tensor(label, make_indices(bra_indices), make_indices(ket_indices),
+               reserved_tag{}, s, bks, ps) {
+    assert_nonreserved_label(label_);
+  }
 
   std::wstring_view label() const { return label_; }
   const auto &bra() const { return bra_; }
@@ -346,8 +366,14 @@ class Tensor : public Expr, public AbstractTensor {
 
 using TensorPtr = std::shared_ptr<Tensor>;
 
-inline ExprPtr overlap(const Index &bra_index, const Index &ket_index) {
-  return ex<Tensor>(L"S", IndexList{bra_index}, IndexList{ket_index});
+/// make_overlap tensor label is reserved since it is used by low-level SeQuant
+/// machinery. Users can create make_overlap Tensor using make_overlap()
+inline std::wstring overlap_label() {
+  return L"s";
+}
+
+inline ExprPtr make_overlap(const Index &bra_index, const Index &ket_index) {
+  return ex<Tensor>(Tensor(overlap_label(), std::array<Index, 1>{{bra_index}}, std::array<Index, 1>{{ket_index}}, Tensor::reserved_tag{}));
 }
 
 }  // namespace sequant

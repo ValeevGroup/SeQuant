@@ -8,6 +8,10 @@ namespace sequant {
 
 Tensor::~Tensor() = default;
 
+void Tensor::assert_nonreserved_label(std::wstring_view label) const {
+  assert(label != overlap_label());
+}
+
 void
 Tensor::adjoint() {
   std::swap(bra_, ket_);

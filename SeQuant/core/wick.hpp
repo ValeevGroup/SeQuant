@@ -796,7 +796,7 @@ class WickTheorem {
     // correct for dependent indices
     if (is_pure_qpannihilator<S>(left, vacuum) &&
         is_pure_qpcreator<S>(right, vacuum))
-      return overlap(left.index(), right.index());
+      return make_overlap(left.index(), right.index());
     else {
       const auto qpspace_left = qpannihilator_space<S>(left, vacuum);
       const auto qpspace_right = qpcreator_space<S>(right, vacuum);
@@ -812,14 +812,14 @@ class WickTheorem {
               right.index().space()) {  // may need 2 overlaps if neither space
         // is pure qp creator/annihilator
         auto result = std::make_shared<Product>();
-        result->append(1, left_is_ann ? overlap(left.index(), index_common)
-                                      : overlap(index_common, left.index()));
-        result->append(1, left_is_ann ? overlap(index_common, right.index())
-                                      : overlap(right.index(), index_common));
+        result->append(1, left_is_ann ? make_overlap(left.index(), index_common)
+                                      : make_overlap(index_common, left.index()));
+        result->append(1, left_is_ann ? make_overlap(index_common, right.index())
+                                      : make_overlap(right.index(), index_common));
         return result;
       } else {
-        return left_is_ann ? overlap(left.index(), right.index())
-                           : overlap(right.index(), left.index());
+        return left_is_ann ? make_overlap(left.index(), right.index())
+                           : make_overlap(right.index(), left.index());
       }
     }
   }
