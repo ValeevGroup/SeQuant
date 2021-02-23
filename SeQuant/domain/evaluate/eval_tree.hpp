@@ -34,7 +34,7 @@ class EvalTree {
   HashType hash_value();
 
   /// Compute operation counts for the evaluation.
-  /// param ispace_size_map A map from IndexSpace type to the size of the
+  /// \param ispace_size_map A map from IndexSpace type to the size of the
   ///                       space.
   ///                       e.g. IndexSpace::active_occupied -> 5
   ///                       e.g. IndexSpace::active_unoccupied -> 20
