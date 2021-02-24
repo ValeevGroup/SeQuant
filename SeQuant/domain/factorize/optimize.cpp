@@ -19,19 +19,78 @@ size_t bin_eval_expr_flops_counter::operator()(
   return counter(node, lflops, rflops);
 }
 
-sto_result single_term_opt(Product const& flat_prod, size_t nocc, size_t nvirt,
+sto_result single_term_opt(Product const& prod, size_t nocc, size_t nvirt,
                            container::set<size_t> const& imeds_hash) {
-  auto result =
-      single_term_opt(flat_prod | ranges::views::transform([](auto const& t) {
-                        return utils::eval_expr{t->template as<Tensor>()};
-                      }),
-                      nocc, nvirt, imeds_hash);
-  ranges::for_each(result.optimal_seqs,
-                   [s = flat_prod.scalar()](auto& node) {
-                     // node->scale(node->scalar().value() * s);
-                     *node *= s;
-                   });
+  using seq_t = utils::eval_seq<size_t>;
+
+  struct {
+    Product const& facs;
+
+    ExprPtr operator()(size_t pos) { return facs.factor(pos)->clone(); }
+
+    ExprPtr operator()(ExprPtr lf, ExprPtr rf) {
+      auto p = Product{};
+      p.append(lf);
+      p.append(rf);
+
+      return ex<Product>(std::move(p));
+    }
+  } fold_prod{prod};  // struct
+
+  const auto counter = bin_eval_expr_flops_counter{nocc, nvirt, imeds_hash};
+
+  auto result = sto_result{std::numeric_limits<size_t>::max(), {}};
+
+  auto finder = [&result, &fold_prod, &counter, &prod](const auto& seq) {
+    auto expr = seq.evaluate(fold_prod);
+    expr->canonicalize();
+    pull_scalar(expr);
+
+    if (prod.scalar() != 1.) {
+      if (!expr->template is<Product>())  // in case expr is non-product
+        expr = ex<Product>(Product{expr});
+      *expr *= Constant{prod.scalar()};
+    }
+    auto node = utils::binarize_expr(expr);
+
+    auto flops = node.evaluate(counter);
+
+    if (flops == result.ops) {
+      result.optimal_seqs.emplace_back(std::move(node));
+    } else if (flops < result.ops) {
+      result.optimal_seqs.clear();
+      result.optimal_seqs.emplace_back(std::move(node));
+      result.ops = flops;
+    } else {
+      // flops > optimal flops. do nothing.
+    }
+  };  // finder
+
+  auto init_seq = ranges::views::iota(size_t{0}) |
+                  ranges::views::take(prod.size()) |
+                  ranges::views::transform([](auto x) { return seq_t{x}; }) |
+                  ranges::to_vector;
+
+  utils::enumerate_eval_seq<size_t>(init_seq, finder);
+
   return result;
+}
+
+void pull_scalar(sequant::ExprPtr expr) noexcept {
+  using sequant::Product;
+  if (!expr->is<Product>()) return;
+  auto& prod = expr->as<Product>();
+
+  auto scal = prod.scalar();
+  for (auto&& x : *expr)
+    if (x->is<Product>()) {
+      auto& p = x->as<Product>();
+      scal *= p.scalar();
+      p.scale(1.0 / p.scalar());
+    }
+
+  prod.scale(1.0 / prod.scalar());
+  prod.scale(scal);
 }
 
 }  // namespace sequant::factorize

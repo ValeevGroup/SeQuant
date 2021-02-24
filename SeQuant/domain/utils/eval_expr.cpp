@@ -1,5 +1,4 @@
 #include "eval_expr.hpp"
-#include "SeQuant/core/sequant.hpp"
 
 namespace sequant::utils {
 
@@ -12,9 +11,6 @@ const Tensor& eval_expr::tensor() const { return tensor_; }
 const Constant& eval_expr::scalar() const { return scalar_; }
 
 eval_expr::eval_expr(const Tensor& tnsr) : op_{eval_op::Id}, tensor_{tnsr} {
-  sequant::TensorCanonicalizer::register_instance(
-      std::make_shared<sequant::DefaultTensorCanonicalizer>());
-
   if (auto canon_biprod = tensor_.canonicalize(); canon_biprod)
     scalar_ *= canon_biprod->as<Constant>();
 
@@ -22,9 +18,6 @@ eval_expr::eval_expr(const Tensor& tnsr) : op_{eval_op::Id}, tensor_{tnsr} {
 }
 
 eval_expr::eval_expr(const eval_expr& expr1, const eval_expr& expr2) {
-  sequant::TensorCanonicalizer::register_instance(
-      std::make_shared<sequant::DefaultTensorCanonicalizer>());
-
   const auto& sxpr1 = expr1.tensor();
   const auto& sxpr2 = expr2.tensor();
 

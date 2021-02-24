@@ -1,47 +1,16 @@
+#include <SeQuant/core/sequant.hpp>
 #include <SeQuant/domain/utils/eval_expr.hpp>
 #include <SeQuant/domain/utils/expr_parse.hpp>
 
 #include "catch.hpp"
-
-std::wostream& operator<<(std::wostream& os,
-                          const sequant::utils::eval_expr::eval_op& op) {
-  using sequant::utils::eval_expr;
-  switch (op) {
-    case eval_expr::eval_op::Sum:
-      os << "Sum";
-      break;
-    case eval_expr::eval_op::Prod:
-      os << "Product";
-      break;
-    case eval_expr::eval_op::Id:
-      os << "Id";
-  }
-  return os;
-}
-
-std::wostream& operator<<(std::wostream& os, const sequant::Symmetry& s) {
-  using sequant::Symmetry;
-  switch (s) {
-    case Symmetry::antisymm:
-      os << "antisymm";
-      break;
-    case Symmetry::symm:
-      os << "symm";
-      break;
-    case Symmetry::nonsymm:
-      os << "nonsymm";
-      break;
-    default:
-      os << "invalid";
-  }
-  return os;
-}
 
 TEST_CASE("TEST_EVAL_EXPR", "[eval_expr]") {
   using namespace std::string_literals;
   using sequant::utils::eval_expr;
   using sequant::utils::parse_expr;
   using namespace sequant;
+  sequant::TensorCanonicalizer::register_instance(
+      std::make_shared<sequant::DefaultTensorCanonicalizer>());
 
   auto ex_asym = [](std::wstring_view spec) {
     return utils::parse_expr(spec, Symmetry::antisymm);
@@ -60,7 +29,7 @@ TEST_CASE("TEST_EVAL_EXPR", "[eval_expr]") {
     REQUIRE_NOTHROW(eval_expr{c2, c3});
   }
 
-  SECTION("Eval ops") {
+  SECTION("Eval ops_met") {
     auto t1 = ex_asym(L"t_{i1, i2}^{a1, a2}");
 
     auto x1 = eval_expr(t1->as<Tensor>());

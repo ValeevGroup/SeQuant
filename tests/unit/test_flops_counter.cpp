@@ -19,15 +19,12 @@ size_t evaluate_flops(
   return evaluate_flops(node, std::get<0>(nov), std::get<1>(nov));
 }
 
-auto tnsr_nsym = [](std::wstring_view spec) {
-  return sequant::utils::parse_expr(spec, sequant::Symmetry::nonsymm)
-      ->as<sequant::Tensor>();
-};
-
 TEST_CASE("TEST_OPS_COUNTER", "[flops_counter]") {
+  sequant::TensorCanonicalizer::register_instance(
+      std::make_shared<sequant::DefaultTensorCanonicalizer>());
+
   using namespace sequant;
-  using utils::binarize_evxpr_range;
-  using utils::binarize_flat_prod;
+  using utils::binarize_expr;
   using utils::eval_expr;
   using utils::eval_seq;
   using utils::parse_expr;
@@ -37,9 +34,8 @@ TEST_CASE("TEST_OPS_COUNTER", "[flops_counter]") {
   const std::pair<size_t, size_t> no_eq_nv = {2, 2};
 
   SECTION("Identity operation") {
-    const Tensor t1 = tnsr_nsym(L"g_{i3,i4}^{a3,a4}");
-    auto tree =
-        binarize_evxpr_range(ranges::views::single(eval_expr{eval_expr{t1}}));
+    auto t1 = parse_expr(L"g_{i3,i4}^{a3,a4}", Symmetry::nonsymm);
+    auto tree = binarize_expr(t1);
 
     REQUIRE(evaluate_flops(tree, no_lt_nv) == 0);
     REQUIRE(evaluate_flops(tree, no_gt_nv) == 0);
@@ -47,14 +43,12 @@ TEST_CASE("TEST_OPS_COUNTER", "[flops_counter]") {
   }
 
   SECTION("Summation operation") {
-    auto seq_node = [](std::wstring_view spec) {
-      return eval_expr{tnsr_nsym(spec)};
-    };
+    const auto srange1 = parse_expr(
+        L"I1_{i1,i2}^{a1,a2}"
+        " + I2_{i1,i2}^{a1,a2}",
+        Symmetry::nonsymm);
 
-    const auto srange1 = {seq_node(L"I1_{i1,i2}^{a1,a2}"),
-                          seq_node(L"I2_{i1,i2}^{a1,a2}")};
-
-    const auto tree1 = binarize_evxpr_range(srange1);
+    const auto tree1 = binarize_expr(srange1);
 
     auto flops1 = [](const std::pair<size_t, size_t>& ov) {
       size_t nocc = std::get<0>(ov);
@@ -66,11 +60,13 @@ TEST_CASE("TEST_OPS_COUNTER", "[flops_counter]") {
     REQUIRE(evaluate_flops(tree1, no_gt_nv) == flops1(no_gt_nv));
     REQUIRE(evaluate_flops(tree1, no_eq_nv) == flops1(no_eq_nv));
 
-    const auto srange2 = {seq_node(L"I1_{i1,i2}^{a1,a2}"),
-                          seq_node(L"I2_{i1,i2}^{a1,a2}"),
-                          seq_node(L"I3_{i1,i2}^{a1,a2}")};
+    const auto srange2 = parse_expr(
+        L"I1_{i1,i2}^{a1,a2}"
+        " + I2_{i1,i2}^{a1,a2}"
+        " + I3_{i1,i2}^{a1,a2}",
+        Symmetry::nonsymm);
 
-    const auto tree2 = binarize_evxpr_range(srange2);
+    const auto tree2 = binarize_expr(srange2);
 
     auto flops2 = [](const std::pair<size_t, size_t>& ov) {
       size_t nocc = std::get<0>(ov);
@@ -87,13 +83,10 @@ TEST_CASE("TEST_OPS_COUNTER", "[flops_counter]") {
   }
 
   SECTION("Product operation") {
-    using seq_t = eval_seq<size_t>;
-
     const auto prod1 = parse_expr(
-                           L"g_{i3,i4}^{a3,a4}"
-                           " * t_{a1,a2}^{i3,i4}",
-                           Symmetry::nonsymm)
-                           ->as<Product>();
+        L"g_{i3,i4}^{a3,a4}"
+        " * t_{a1,a2}^{i3,i4}",
+        Symmetry::nonsymm);
 
     auto flops1 = [](const std::pair<size_t, size_t>& ov) {
       size_t nocc = std::get<0>(ov);
@@ -101,26 +94,24 @@ TEST_CASE("TEST_OPS_COUNTER", "[flops_counter]") {
       return (size_t)(std::pow(nocc, 2) * std::pow(nvirt, 4));
     };
 
-    const auto tree1 = binarize_flat_prod{prod1}(seq_t{0, {1}});
+    const auto tree1 = binarize_expr(prod1);
 
     REQUIRE(evaluate_flops(tree1, no_lt_nv) == flops1(no_lt_nv));
     REQUIRE(evaluate_flops(tree1, no_gt_nv) == flops1(no_gt_nv));
     REQUIRE(evaluate_flops(tree1, no_eq_nv) == flops1(no_eq_nv));
 
-    const auto prod2 = parse_expr(
-                           L"g_{i3,i4}^{a3,a4}"
-                           " * t_{a1,a2}^{i3,i4}"
-                           " * t_{a3,a4}^{i1,i2}",
-                           Symmetry::nonsymm)
-                           ->as<Product>();
-
-    const auto seq2_0 = seq_t{0, {1, 2}};
+    auto const prod2_0 = ex<Product>(Product{
+        parse_expr(L"g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4}",
+                   Symmetry::nonsymm),  // fac
+        parse_expr(L"t_{a3,a4}^{i1,i2}",
+                   Symmetry::nonsymm)  // fac
+    });
 
     auto flops2_0 = [](const std::pair<size_t, size_t>& ov) {
       size_t nocc = std::get<0>(ov);
       size_t nvirt = std::get<1>(ov);
 
-      // seq2_0 implies:
+      // prod2_0 implies:
       //
       //   ( g_(i3, i4)^(a3, a4) * t_(a1, a2)^(i3, i4) ) * t_(a3, a4)^(i1, i2)
       //     =>
@@ -131,19 +122,22 @@ TEST_CASE("TEST_OPS_COUNTER", "[flops_counter]") {
       return (size_t)(2 * std::pow(nocc, 2) * std::pow(nvirt, 4));
     };
 
-    const auto tree2_0 = binarize_flat_prod{prod2}(seq2_0);
+    const auto tree2_0 = binarize_expr(prod2_0);
 
     REQUIRE(evaluate_flops(tree2_0, no_lt_nv) == flops2_0(no_lt_nv));
     REQUIRE(evaluate_flops(tree2_0, no_gt_nv) == flops2_0(no_gt_nv));
     REQUIRE(evaluate_flops(tree2_0, no_eq_nv) == flops2_0(no_eq_nv));
 
-    const auto seq2_1 = seq_t{0, {seq_t{1, {2}}}};
+    auto prod2_1 = Product{};
+    prod2_1.append(parse_expr(L"g_{i3,i4}^{a3,a4}", Symmetry::nonsymm));
+    prod2_1.append(parse_expr(L"t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2}",
+                              Symmetry::nonsymm));
 
     auto flops2_1 = [](const std::pair<size_t, size_t>& ov) {
       size_t nocc = std::get<0>(ov);
       size_t nvirt = std::get<1>(ov);
 
-      // seq2_1 implies:
+      // prod2_1 implies:
       //
       //   g_(i3, i4)^(a3, a4) * ( t_(a1, a2)^(i3, i4) * t_(a3, a4)^(i1, i2) )
       //     => g_(i3, i4)^(a3, a4) * I_(a1,a2,a3,a4)^(i3,i4,i1,i2)
@@ -153,7 +147,7 @@ TEST_CASE("TEST_OPS_COUNTER", "[flops_counter]") {
       return (size_t)(2 * std::pow(nocc, 4) * std::pow(nvirt, 4));
     };
 
-    const auto tree2_1 = binarize_flat_prod{prod2}(seq2_1);
+    const auto tree2_1 = binarize_expr(ex<Product>(prod2_1));
 
     REQUIRE(evaluate_flops(tree2_1, no_lt_nv) == flops2_1(no_lt_nv));
     REQUIRE(evaluate_flops(tree2_1, no_gt_nv) == flops2_1(no_gt_nv));

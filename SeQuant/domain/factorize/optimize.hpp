@@ -7,6 +7,8 @@
 
 namespace sequant::factorize {
 
+void pull_scalar(sequant::ExprPtr expr) noexcept;
+
 /**
  * Function object to perform flops count on binary_expr<eval_expr>.
  */
@@ -46,56 +48,15 @@ struct sto_result {
  * Holds the result of the most expensive term scan.
  */
 struct met_result {
-  size_t ops;
+  // sum of operations count of less expensive terms.
+  size_t ops_lets;
+  // operations count of most expensive term(s).
+  size_t ops_met;
 
   container::map<ExprPtr, sto_result> mets;
 };
 
-/**
- * @tparam Cont type of @c container.
- *
- * @param container Iterable of eval_expr objects.
- */
-template <typename Cont>
-sto_result single_term_opt(Cont const& container, size_t nocc, size_t nvirt,
-                           container::set<size_t> const& imeds_hash) {
-  using seq_t = utils::eval_seq<size_t>;
-
-  const auto counter = bin_eval_expr_flops_counter{nocc, nvirt, imeds_hash};
-
-  sto_result result{std::numeric_limits<size_t>::max(), {}};
-
-  auto finder = [&result, &container, &counter](const auto& seq) {
-    auto tseq = seq.transform([&container](auto x) {
-      return utils::eval_expr{*(ranges::begin(container) + x)};
-    });
-
-    auto node = tseq.binarize(utils::binarize_eval_expr);
-
-    auto flops = node.evaluate(counter);
-
-    if (flops == result.ops) {
-      result.optimal_seqs.emplace_back(std::move(node));
-    } else if (flops < result.ops) {
-      result.optimal_seqs.clear();
-      result.optimal_seqs.emplace_back(std::move(node));
-      result.ops = flops;
-    } else {
-      // flops > optimal flops. do nothing.
-    }
-  };  // finder
-
-  auto init_seq = ranges::views::iota(size_t{0}) |
-                  ranges::views::take(ranges::distance(container)) |
-                  ranges::views::transform([](auto x) { return seq_t{x}; }) |
-                  ranges::to_vector;
-
-  utils::enumerate_eval_seq<size_t>(init_seq, finder);
-
-  return result;
-}
-
-sto_result single_term_opt(Product const& flat_prod, size_t nocc, size_t nvirt,
+sto_result single_term_opt(Product const& prod, size_t nocc, size_t nvirt,
                            container::set<size_t> const& imeds_hash);
 
 /**
@@ -114,19 +75,25 @@ met_result most_expensive(Cont const& iterable, size_t nocc, size_t nvirt,
                                imed_hashes);
       });
 
-  met_result expensive{0, {}};
-  auto zipped = ranges::views::zip(iterable, costs);
-  for (auto&& [x, y] : zipped) {
-    if (y.ops == expensive.ops) {
-      expensive.mets.emplace(x, std::move(y));
-    } else if (y.ops > expensive.ops) {
-      expensive.ops = y.ops;
+  met_result expensive{0, 0, {}};
+  auto expr2sto = ranges::views::zip(iterable, costs);
+  for (auto&& [xpr, sto] : expr2sto) {
+    if (sto.ops == expensive.ops_met) {
+      // found another most-expensive term
+      expensive.mets.emplace(xpr, std::move(sto));
+    } else if (sto.ops > expensive.ops_met) {
+      // found a more expensive term than the previous most expensive
+      expensive.ops_met = sto.ops;
       expensive.mets.clear();
-      expensive.mets.emplace(x, std::move(y));
+      expensive.mets.emplace(xpr, std::move(sto));
     } else {
+      // found a less expensive
       // do nothing
     }
-  }
+    expensive.ops_lets += sto.ops;
+  }  // for
+
+  expensive.ops_lets -= ranges::distance(expensive.mets) * expensive.ops_met;
 
   return expensive;
 }
@@ -136,7 +103,8 @@ met_result most_expensive(Cont const& iterable, size_t nocc, size_t nvirt,
 /// container is non-empty
 ///
 template <typename Cont>
-auto multi_term_opt_hartono(Cont const& container, size_t nocc, size_t nvirt) {
+container::map<ExprPtr, sto_result> multi_term_opt_hartono(
+    Cont const& container, size_t nocc, size_t nvirt) {
   using ranges::none_of;
   using ranges::views::addressof;
   using ranges::views::filter;
@@ -164,8 +132,6 @@ auto multi_term_opt_hartono(Cont const& container, size_t nocc, size_t nvirt) {
       opt_tree.visit_internal(
           [&imed_hashes](const auto& x) { imed_hashes.emplace(x.hash()); });
     }
-    // std::wcout << "hashes:\n";
-    // for (auto x : imed_hashes) std::wcout << "#" << x << "$\n";
 
     // collect result
     for (auto&& res : expensive.mets) optimized_terms.emplace(std::move(res));

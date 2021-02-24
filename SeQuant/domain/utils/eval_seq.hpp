@@ -72,6 +72,35 @@ class eval_seq {
   [[nodiscard]] bool terminal() const { return nodes_.empty(); }
 
   template <typename F>
+  auto evaluate(F &&fun) const {
+    static_assert(std::is_invocable_v<F, T const &>,
+                  "F can't be called on T const&");
+
+    using return_data_t = std::invoke_result_t<F, T const &>;
+
+    static_assert(
+        std::is_invocable_v<F, return_data_t const &, return_data_t const &>,
+        "non-terminal node evaluator missing");
+
+    static_assert(std::is_same_v<return_data_t,
+                                 std::invoke_result_t<F, return_data_t const &,
+                                                      return_data_t const &>>,
+                  "fun(T) and fun(T, T) have different return types");
+
+    auto parent_result = fun(label());
+
+    if (terminal()) return std::move(parent_result);
+
+    return ranges::accumulate(
+        nodes().begin(), nodes().end(), std::move(parent_result),
+        [&fun](auto &&leval, auto const &rseq) {
+          //
+          auto reval = rseq.evaluate(std::forward<F>(fun));
+          return fun(std::move(leval), std::move(reval));
+        });
+  }
+
+  template <typename F>
   auto binarize(F &&binarizer) const {
     static_assert(std::is_invocable_v<F, T const &>,
                   "terminal node binarizer missing");
@@ -86,6 +115,24 @@ class eval_seq {
                        std::invoke_result_t<F, return_data_t const &,
                                             return_data_t const &>>,
         "binarizer(T) and binarizer(T, T) have different return types");
+
+    //
+    // todo
+    //
+    // struct {
+    //   auto operator()(T const &node) const {
+    //     return binary_node<return_data_t>{binarizer(node)};
+    //   }
+    //
+    //   auto operator()(binary_node<return_data_t> &&lnode,
+    //                   binary_node<return_data_t> &&rnode) const {
+    //     auto pres = binary_node<return_data_t>{binarizer(*lnode, *rnode)};
+    //     return binary_node<return_data_t>{std::move(pres), std::move(lnode),
+    //                                       std::move(rnode)};
+    //   }
+    // } evaluator;
+    //
+    // return evaluate(std::forward<decltype(evaluator)>(evaluator));
 
     auto parent_result = binary_node<return_data_t>{binarizer(label())};
 
