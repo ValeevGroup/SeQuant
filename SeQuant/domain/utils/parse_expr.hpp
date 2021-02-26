@@ -1,5 +1,5 @@
-#ifndef SEQUANT_UTILS_EXPR_PARSE_HPP
-#define SEQUANT_UTILS_EXPR_PARSE_HPP
+#ifndef SEQUANT_UTILS_PARSE_EXPR_HPP
+#define SEQUANT_UTILS_PARSE_EXPR_HPP
 
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
@@ -106,8 +106,10 @@ const auto expr_rgx_pat = []() {  // a map from expr components to regex pattern
 
   const std::wstring pt =         // tensor pattern
       rgx_capture(L"[[:w:]]+") +  // group 1 tensor label
-      rgx_look_ahead(LR"([^[:s:]]*?)" + rgx_capture(pb)) +  // group 2 tensor bra
-      rgx_look_ahead(LR"([^[:s:]]*?)" + rgx_capture(pk)) +  // group 3 tensor ket
+      rgx_look_ahead(LR"([^[:s:]]*?)" +
+                     rgx_capture(pb)) +  // group 2 tensor bra
+      rgx_look_ahead(LR"([^[:s:]]*?)" +
+                     rgx_capture(pk)) +  // group 3 tensor ket
       rgx_or_nc(pb + pk, pk + pb);
 
   const std::wstring ptt =  // tensor term: ie. just a tensor. no scaling
@@ -198,4 +200,4 @@ ExprPtr parse_expr(std::wstring_view raw, Symmetry tensor_sym);
 
 }  // namespace sequant::utils
 
-#endif  // SEQUANT_UTILS_EXPR_PARSE_HPP
+#endif  // SEQUANT_UTILS_PARSE_EXPR_HPP
