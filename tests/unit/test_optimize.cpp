@@ -1,18 +1,11 @@
 #include "catch.hpp"
 
-#include <SeQuant/domain/factorize/optimize.hpp>
+#include <SeQuant/domain/optimize/optimize.hpp>
 #include <SeQuant/domain/utils/binarize_expr.hpp>
 #include <SeQuant/domain/utils/expr_parse.hpp>
 #include <iostream>
 
 using namespace sequant;
-
-auto evxpr_range = [](const Product& prod) {
-  return prod.factors() | ranges::views::transform([](const auto& expr) {
-           return utils::eval_expr{expr->template as<Tensor>()};
-         }) |
-         ranges::to<container::svector<utils::eval_expr>>;
-};
 
 auto yield_interm_hash = [](utils::binary_node<utils::eval_expr> const& node,
                             auto& container) {
@@ -21,8 +14,12 @@ auto yield_interm_hash = [](utils::binary_node<utils::eval_expr> const& node,
 };
 
 TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
-  using factorize::single_term_opt;
+  using optimize::single_term_opt;
+  using utils::binarize_expr;
   using utils::parse_expr;
+
+  sequant::TensorCanonicalizer::register_instance(
+      std::make_shared<sequant::DefaultTensorCanonicalizer>());
 
   SECTION("Single term optimization") {
     const container::set<size_t> imed_hashes = {};
@@ -45,18 +42,19 @@ TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
     // ((T2 * T3) * T1)  : 2 * O^4 * V^4  worst sequence of evaluation
     //
 
+    // canonicalization set false as it is unnecessary here
     const auto result1 =
-        single_term_opt(evxpr_range(prod1), nocc, nvirt, imed_hashes);
+        single_term_opt(prod1, nocc, nvirt, imed_hashes, false);
 
     REQUIRE(result1.ops < std::numeric_limits<size_t>::max());
 
     // there are no degenerate evaluation sequences
     REQUIRE(result1.optimal_seqs.size() == 1);
 
-    const auto opt_seq1 = utils::eval_seq<size_t>{0, {2, 1}};
+    auto prod1_opt =
+        ex<Product>(Product{prod1.at(0), prod1.at(2), prod1.at(1)});
 
-    REQUIRE(utils::binarize_flat_prod{prod1}(opt_seq1) ==
-            result1.optimal_seqs.at(0));
+    REQUIRE(binarize_expr(prod1_opt) == result1.optimal_seqs.at(0));
 
     //
     const auto prod2 = parse_expr(
@@ -67,10 +65,10 @@ TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
                            Symmetry::nonsymm)
                            ->as<Product>();
 
-    const auto result2_naive =
-        single_term_opt(evxpr_range(prod2), nocc, nvirt,
-                        {});  // there will be two degenerate evaluation
-                              // sequences for prod2 when no
+    // canon set on
+    const auto result2_naive = single_term_opt(prod2, nocc, nvirt, {}, true);
+
+    // there will be two degenerate evaluation sequences for prod2 when no
     REQUIRE(result2_naive.optimal_seqs.size() == 2);
 
     // now let's reuse intermediates from the optimal sequence of evaluation of
@@ -79,7 +77,7 @@ TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
     yield_interm_hash(result1.optimal_seqs.at(0), imed_hashes_prod1);
 
     const auto result2_discounted =
-        single_term_opt(evxpr_range(prod2), nocc, nvirt, imed_hashes_prod1);
+        single_term_opt(prod2, nocc, nvirt, imed_hashes_prod1, true);
     REQUIRE(result2_discounted.ops < result2_naive.ops);
 
     // yet another example
@@ -93,26 +91,26 @@ TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
     //  - two: single term optimized on prod3 with the intermediate from prod4
     //  are not the same.
     auto prod3_sto =
-        std::move(*(single_term_opt(prod3->as<Product>(), nocc, nvirt, {})
+        std::move(*(single_term_opt(prod3->as<Product>(), nocc, nvirt, {}, true)
                         .optimal_seqs.begin()));
 
     // finding the intermediate from the evaluation tree of prod4
     auto prod4_sto =
-        std::move(*(single_term_opt(prod4->as<Product>(), nocc, nvirt, {})
+        std::move(*(single_term_opt(prod4->as<Product>(), nocc, nvirt, {}, true)
                         .optimal_seqs.begin()));
 
     auto imeds_prod4 = container::set<size_t>{};
     yield_interm_hash(prod4_sto, imeds_prod4);
 
     auto prod3_sto_with_imeds = std::move(
-        *single_term_opt(prod3->as<Product>(), nocc, nvirt, imeds_prod4)
+        *single_term_opt(prod3->as<Product>(), nocc, nvirt, imeds_prod4, true)
              .optimal_seqs.begin());
 
     REQUIRE_FALSE(*prod3_sto == *prod3_sto_with_imeds);
   }
 
   SECTION("Most expensive term") {
-    using factorize::most_expensive;
+    using optimize::most_expensive;
     const container::set<size_t> imed_hashes = {};
 
     const size_t nocc = 2, nvirt = 3;  // nocc < nvirt
@@ -143,17 +141,18 @@ TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
     auto terms = container::svector<ExprPtr>{prod1, prod2};
 
     size_t nocc = 2, nvirt = 5;
-    auto opt_terms = factorize::multi_term_opt_hartono(terms, nocc, nvirt);
+    auto opt_terms = optimize::multi_term_opt_hartono(terms, nocc, nvirt);
 
-    auto prod2_opt = std::move(
-        *(factorize::single_term_opt(prod2->as<Product>(), nocc, nvirt, {})
-              .optimal_seqs.begin()));
+    auto prod2_opt = std::move(*(
+        optimize::single_term_opt(prod2->as<Product>(), nocc, nvirt, {}, true)
+            .optimal_seqs.begin()));
     auto imeds = container::set<size_t>{};
     yield_interm_hash(prod2_opt, imeds);
 
-    auto prod1_opt = std::move(
-        *(factorize::single_term_opt(prod1->as<Product>(), nocc, nvirt, imeds)
-              .optimal_seqs.begin()));
+    auto prod1_opt =
+        std::move(*(optimize::single_term_opt(prod1->as<Product>(), nocc,
+                                               nvirt, imeds, true)
+                        .optimal_seqs.begin()));
 
     REQUIRE(**(opt_terms.at(prod2).optimal_seqs.begin()) == *prod2_opt);
     REQUIRE(**(opt_terms.at(prod1).optimal_seqs.begin()) == *prod1_opt);

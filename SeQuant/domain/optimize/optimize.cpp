@@ -1,6 +1,6 @@
 #include "optimize.hpp"
 
-namespace sequant::factorize {
+namespace sequant::optimize {
 
 bin_eval_expr_flops_counter::bin_eval_expr_flops_counter(
     size_t no, size_t nv, const container::set<size_t>& imeds)
@@ -20,7 +20,8 @@ size_t bin_eval_expr_flops_counter::operator()(
 }
 
 sto_result single_term_opt(Product const& prod, size_t nocc, size_t nvirt,
-                           container::set<size_t> const& imeds_hash) {
+                           container::set<size_t> const& imeds_hash,
+                           bool canon) {
   using seq_t = utils::eval_seq<size_t>;
 
   struct {
@@ -41,16 +42,18 @@ sto_result single_term_opt(Product const& prod, size_t nocc, size_t nvirt,
 
   auto result = sto_result{std::numeric_limits<size_t>::max(), {}};
 
-  auto finder = [&result, &fold_prod, &counter, &prod](const auto& seq) {
+  auto finder = [&result, &fold_prod, &counter, &prod, canon](const auto& seq) {
     auto expr = seq.evaluate(fold_prod);
-    expr->canonicalize();
-    pull_scalar(expr);
+    if (canon) {
+      expr->canonicalize();
+      pull_scalar(expr);
 
-    if (prod.scalar() != 1.) {
-      if (!expr->template is<Product>())  // in case expr is non-product
-        expr = ex<Product>(Product{expr});
-      *expr *= Constant{prod.scalar()};
-    }
+      if (prod.scalar() != 1.) {
+        if (!expr->template is<Product>())  // in case expr is non-product
+          expr = ex<Product>(Product{expr});
+        *expr *= Constant{prod.scalar()};
+      }
+    }  // if canon
     auto node = utils::binarize_expr(expr);
 
     auto flops = node.evaluate(counter);
@@ -93,4 +96,4 @@ void pull_scalar(sequant::ExprPtr expr) noexcept {
   prod.scale(scal);
 }
 
-}  // namespace sequant::factorize
+}  // namespace sequant::optimize
