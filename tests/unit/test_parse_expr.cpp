@@ -2,7 +2,7 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/tensor.hpp>
-#include <SeQuant/domain/utils/expr_parse.hpp>
+#include <SeQuant/domain/utils/parse_expr.hpp>
 
 #include <range/v3/view.hpp>
 #include <regex>

@@ -1,6 +1,6 @@
 #include <SeQuant/core/sequant.hpp>
 #include <SeQuant/domain/utils/eval_expr.hpp>
-#include <SeQuant/domain/utils/expr_parse.hpp>
+#include <SeQuant/domain/utils/parse_expr.hpp>
 
 #include "catch.hpp"
 

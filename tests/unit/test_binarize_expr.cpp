@@ -1,6 +1,6 @@
 #include <SeQuant/domain/utils/binarize_expr.hpp>
 #include <SeQuant/domain/utils/eval_seq.hpp>
-#include <SeQuant/domain/utils/expr_parse.hpp>
+#include <SeQuant/domain/utils/parse_expr.hpp>
 #include <vector>
 
 #include "catch.hpp"

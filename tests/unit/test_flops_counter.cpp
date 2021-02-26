@@ -4,8 +4,8 @@
 #include <SeQuant/domain/utils/binarize_expr.hpp>
 #include <SeQuant/domain/utils/binary_node.hpp>
 #include <SeQuant/domain/utils/eval_seq.hpp>
-#include <SeQuant/domain/utils/expr_parse.hpp>
 #include <SeQuant/domain/utils/flops_counter.hpp>
+#include <SeQuant/domain/utils/parse_expr.hpp>
 
 size_t evaluate_flops(
     sequant::utils::binary_node<sequant::utils::eval_expr> const& node,
