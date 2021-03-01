@@ -79,6 +79,9 @@ set(SEQUANT_INSTALL_CMAKEDIR "lib/cmake/sequant"
 option(ENABLE_TBB "Enable TBB as an optional prerequisite for C++17's parallel STL (if PSTL is not supported will use of standard C++11 concurrency)" OFF)
 add_feature_info(TBB ENABLE_TBB "Intel Thread-Building Blocks is an optional prerequisite for C++17's parallel STL")
 
+option(SEQUANT_EVAL_TESTS "Enable building of evaluation tests (will look for and/or build Libint+TA)" OFF)
+add_feature_info(EVAL_TESTS SEQUANT_EVAL_TESTS "Build evaluation tests (will look for and/or build Libint+TA)")
+
 ##########################
 # Prerequisites
 ##########################
@@ -215,13 +218,10 @@ install(DIRECTORY SeQuant
 add_library(SeQuant::SeQuant ALIAS SeQuant)  # to be able to use as subproject
 
 ### optional prereqs
-if (NOT TARGET Libint2::cxx)
-  find_package(Libint2 2.7.0 CONFIG)
-endif(NOT TARGET Libint2::cxx)
-if (NOT TARGET tiledarray)
-  find_package(TiledArray CONFIG COMPONENTS tiledarray)
-endif(NOT TARGET tiledarray)
-
+if (SEQUANT_EVAL_TESTS)
+  include(FindOrFetchLibint2)
+  include(FindOrFetchTiledArray)
+endif(SEQUANT_EVAL_TESTS)
 enable_testing(true)
 
 set(utests_src
@@ -260,13 +260,13 @@ target_link_libraries(${unit_test_executable} ${utests_deps})
 if (TARGET tiledarray)
   target_compile_definitions(${unit_test_executable} PRIVATE SEQUANT_HAS_TILEDARRAY)
 endif(TARGET tiledarray)
-add_test(unit/build "${CMAKE_COMMAND}" --build ${CMAKE_BINARY_DIR}
+add_test(sequant/unit/build "${CMAKE_COMMAND}" --build ${CMAKE_BINARY_DIR}
     --target ${unit_test_executable})
 
-add_test(NAME unit/run
+add_test(NAME sequant/unit/run
         COMMAND ${unit_test_executable})
-set_tests_properties(unit/run
-        PROPERTIES DEPENDS unit/build
+set_tests_properties(sequant/unit/run
+        PROPERTIES DEPENDS sequant/unit/build
         WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tests/unit)
 
 ####### Tests ########
@@ -311,19 +311,19 @@ target_link_libraries(${example3} SeQuant ${TBB_LIBRARIES})
 set (lastexample 4)
 foreach(i RANGE ${lastexample})
     if (TARGET ${example${i}})
-        add_test(example/${example${i}}/build "${CMAKE_COMMAND}"
+        add_test(sequant/example/${example${i}}/build "${CMAKE_COMMAND}"
             --build ${CMAKE_BINARY_DIR} --target ${example${i}})
-        add_test(NAME example/${example${i}}/run
+        add_test(NAME sequant/example/${example${i}}/run
                 COMMAND ${example${i}}
                 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/examples)
-        set_tests_properties(example/${example${i}}/run
-                PROPERTIES DEPENDS example/${example${i}}/build)
+        set_tests_properties(sequant/example/${example${i}}/run
+                PROPERTIES DEPENDS sequant/example/${example${i}}/build)
     endif()
 endforeach()
 
 # target for running ALL tests
 add_custom_target_subproject(sequant check
-    USES_TERMINAL COMMAND ${CMAKE_CTEST_COMMAND} -V)
+    USES_TERMINAL COMMAND ${CMAKE_CTEST_COMMAND} -V -R "'sequant/(unit|example)'")
 
 ####### DOCS ########
 

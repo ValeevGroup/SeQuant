@@ -267,18 +267,12 @@ TEST_CASE("EVALUATIONS TESTS", "[eval_tree]") {
   const size_t nocc = 10;
   const size_t nvirt = 20;
 
-  container::svector<size_t> r_occ = {0, nocc};
-  container::svector<size_t> r_vir = {0, nvirt};
-  auto tr1o = TA::TiledRange1(r_occ.begin(), r_occ.end());
-  auto tr1v = TA::TiledRange1(r_vir.begin(), r_vir.end());
+  auto tr1o = TA::TiledRange1{0, nocc};
+  auto tr1v = TA::TiledRange1{0, nvirt};
 
-  std::vector<TA::TiledRange1> r_ov(1,tr1o);
-  r_ov.push_back(tr1v);
-  std::vector<TA::TiledRange1> r_oovv(2, tr1o);
-  r_oovv.insert(r_oovv.end(), 2, tr1v);
-
-  TA::TiledRange tr_ov(r_ov.begin(), r_ov.end());
-  TA::TiledRange tr_oovv(r_oovv.begin(), r_oovv.end());
+  auto tr_ov = TA::TiledRange{tr1o, tr1v};
+  auto tr_oovv = TA::TiledRange{tr1o, tr1o, tr1v, tr1v};
+  auto tr_ooovvv = TA::TiledRange{tr1o, tr1o, tr1o, tr1v, tr1v, tr1v};
 
   auto& world = TA::get_default_world();
   auto tnsr_T_ov = std::make_shared<DTensorType>(world, tr_ov);
@@ -384,14 +378,6 @@ TEST_CASE("EVALUATIONS TESTS", "[eval_tree]") {
   }
 
   SECTION("Testing symmetrization evaluation") {
-
-    container::svector<size_t> r_occ = {0, nocc};
-    container::svector<size_t> r_vir = {0, nvirt};
-    auto tr1o = TA::TiledRange1(r_occ.begin(), r_occ.end());
-    auto tr1v = TA::TiledRange1(r_vir.begin(), r_vir.end());
-    std::vector<TA::TiledRange1> r_ooovvv(3, tr1o);
-    r_ooovvv.insert(r_ooovvv.end(), 3, tr1v);
-    TA::TiledRange tr_ooovvv{r_ooovvv.begin(),r_ooovvv.end()};
     auto tnsr_T_ooovvv = std::make_shared<DTensorType>(world, tr_ooovvv);
     tnsr_T_ooovvv->fill_random();
 
@@ -425,6 +411,7 @@ TEST_CASE("EVALUATIONS TESTS", "[eval_tree]") {
 
     expr = std::make_shared<Product>(Product({S_oovv, t_oovv}));
     eval_result = EvalTree(expr).evaluate(context);
+    manual_result = DTensorType{manual_result.world(), eval_result.trange()};
     manual_result("0,1,2,3") =
         (*tnsr_T_oovv)("0,1,2,3") + (*tnsr_T_oovv)("1,0,3,2");
     eval_norm = std::sqrt(eval_result("0,1,2,3").dot(eval_result("0,1,2,3")));
@@ -435,6 +422,7 @@ TEST_CASE("EVALUATIONS TESTS", "[eval_tree]") {
     expr = std::make_shared<Product>(Product({S_ooovvv, t_ooovvv}));
     expr->scale(1.0 / 12.0);
     eval_result = EvalTree(expr).evaluate(context);
+    manual_result = DTensorType{manual_result.world(), eval_result.trange()};
     manual_result("0,1,2,3,4,5") =
         (*tnsr_T_ooovvv)("0,2,1,3,5,4") + (*tnsr_T_ooovvv)("0,1,2,3,4,5") +
         (*tnsr_T_ooovvv)("1,0,2,4,3,5") + (*tnsr_T_ooovvv)("1,2,0,4,5,3") +
@@ -464,32 +452,31 @@ TEST_CASE("EVALUATIONS TESTS", "[eval_tree]") {
     auto prod1 = std::make_shared<Product>(Product(
         1 / 16.0, {make_tensor_expr({"A", "i_1", "i_2", "a_1", "a_2"}),
                    make_tensor_expr({"g", "i_3", "i_4", "a_3", "a_4"}),
-                   make_tensor_expr({"t", "a_1", "a_2", "i_3", "i_4"}),
-                   make_tensor_expr({"t", "a_3", "a_4", "i_1", "i_2"})}));
+                   make_tensor_expr({"t", "i_3", "i_4", "a_1", "a_2"}),
+                   make_tensor_expr({"t", "i_1", "i_2", "a_3", "a_4"})}));
 
     auto prod2 = std::make_shared<Product>(
         Product(-1., {make_tensor_expr({"A", "i_1", "i_2", "a_1", "a_2"}),
                       make_tensor_expr({"g", "i_3", "a_1", "a_3", "a_4"}),
-                      make_tensor_expr({"t", "a_3", "i_1"}),
-                      make_tensor_expr({"t", "a_2", "a_4", "i_2", "i_3"})}));
+                      make_tensor_expr({"t", "i_1", "a_3"}),
+                      make_tensor_expr({"t", "i_2", "i_3", "a_2", "a_4"})}));
 
     auto sum = std::make_shared<Sum>(Sum{prod1, prod2});
 
     // g_oovv, t_oovv, t_ov are already declared
-    std::vector<TA::TiledRange1> r_ovvv(1, tr1o);
-    r_ovvv.insert(r_ovvv.end(), 3, tr1v);
-    TA::TiledRange tr_ovvv(r_ovvv.begin(), r_ovvv.end());
+
+    TA::TiledRange tr_ovvv{tr1o, tr1v, tr1v, tr1v};
     auto G_ovvv = std::make_shared<DTensorType>(world, tr_ovvv);
     G_ovvv->fill_random();
 
     // building context for evaluation
     ContextMapType context;
 
-    auto& g_oovv_seq = prod1->as<Product>().factor(1);
-    auto& t_oovv_seq = prod1->as<Product>().factor(2);
+    auto& g_oovv_seq = prod1->at(1);
+    auto& t_oovv_seq = prod1->at(2);
 
-    auto& g_ovvv_seq = prod2->as<Product>().factor(1);
-    auto& t_ov_seq = prod2->as<Product>().factor(2);
+    auto& g_ovvv_seq = prod2->at(1);
+    auto& t_ov_seq = prod2->at(2);
 
     context.insert(ContextMapType::value_type(EvalTree(g_oovv_seq).hash_value(),
                                               tnsr_G_oovv));
