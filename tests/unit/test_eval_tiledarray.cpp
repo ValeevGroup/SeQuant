@@ -5,6 +5,7 @@
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/domain/eval/eval_tiledarray.hpp>
 #include <SeQuant/domain/utils/parse_expr.hpp>
+#include <cstdlib>
 #include <string>
 #include <vector>
 
@@ -17,6 +18,8 @@ TEST_CASE("TEST_EVALUATE_TILEDARRAY", "[evaluate]") {
   using TA::TArrayD;
   using utils::parse_expr;
 
+  std::srand(2021);
+
   sequant::TensorCanonicalizer::register_instance(
       std::make_shared<sequant::DefaultTensorCanonicalizer>());
 
@@ -24,7 +27,10 @@ TEST_CASE("TEST_EVALUATE_TILEDARRAY", "[evaluate]") {
 
   auto make_rand_tensor = [&world](auto const& tr) {
     auto res = TArrayD{world, tr};
-    res.fill_random();
+    // res.fill_random();
+    res.init_elements([](auto const&) {
+      return static_cast<double>(std::rand()) / RAND_MAX;
+    });
     return res;
   };
 
@@ -111,9 +117,9 @@ TEST_CASE("TEST_EVALUATE_TILEDARRAY", "[evaluate]") {
         Symmetry::antisymm);
 
     auto man1 = TArrayD{};
-    man1("a1,a2,i1,i2") = -1 / 4 * g_oovv("i3,i4,a3,a4") *
+    man1("a1,a2,i1,i2") = -1.0 / 4 * g_oovv("i3,i4,a3,a4") *
                               t_vvoo("a2,a4,i1,i2") * t_vvoo("a1,a3,i3,i4") +
-                          1 / 16 * g_oovv("i3,i4,a3,a4") *
+                          1.0 / 16 * g_oovv("i3,i4,a3,a4") *
                               t_vvoo("a1,a2,i3,i4") * t_vvoo("a3,a4,i1,i2");
 
     auto eval1 = evaluate<TArrayD>(expr1, true, tensor_yield);
