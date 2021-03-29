@@ -469,12 +469,14 @@ DataTensorType EvalTree::_evaluate_and_make(
 
   DataTensorType result;
   if (opr == Operation::SUM) {
-    // sum left and right evaluated tensors using TA syntax
-    result(this_annot) =
-        intrnl_node->left()->scalar() *
-            _evaluate_and_make(intrnl_node->left(), eval_tensor)(left_annot) +
-            intrnl_node->right()->scalar() *
-                _evaluate_and_make(intrnl_node->right(), eval_tensor)(right_annot);
+    // Evaluate terms as intermediates
+    DataTensorType i1, i2;
+    i1(this_annot) = intrnl_node->left()->scalar() *
+        _evaluate_and_make(intrnl_node->left(), eval_tensor)(left_annot);
+    i2(this_annot) = intrnl_node->right()->scalar() *
+        _evaluate_and_make(intrnl_node->right(), eval_tensor)(right_annot);
+
+    result(this_annot) = i1(this_annot) + i2(this_annot);
   } else if (opr == Operation::PRODUCT) {
     // contract left and right evaluated tensors using TA syntax
     result(this_annot) = intrnl_node->left()->scalar() *
