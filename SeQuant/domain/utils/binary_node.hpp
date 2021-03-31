@@ -167,6 +167,7 @@ class binary_node {
   void visit_leaf(F&& pred) const {
     if (leaf()) {
       pred(**this);
+      return;
     }
 
     left().visit_leaf(std::forward<F>(pred));
