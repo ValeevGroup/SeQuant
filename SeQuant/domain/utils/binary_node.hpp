@@ -43,7 +43,7 @@ class binary_node {
     binary_node<U> const& right() const override { return right_; }
 
     binary_node<U> clone() const override {
-      return binary_node<U>{data_, *left_, *right_};
+      return binary_node<U>{data_, left_.clone(), right_.clone()};
     }
   };  // data_node_internal<U>
 
@@ -88,8 +88,7 @@ class binary_node {
   binary_node<T> const& right() const { return dnode->right(); }
 
   binary_node<T> clone() const {
-    return leaf() ? binary_node<T>{**this}
-                  : binary_node<T>{**this, *left(), *right()};
+    return dnode->clone();
   }
 
   explicit binary_node(T d)
