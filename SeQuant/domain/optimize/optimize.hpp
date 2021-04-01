@@ -7,7 +7,14 @@
 
 namespace sequant::optimize {
 
-void pull_scalar(sequant::ExprPtr expr) noexcept;
+utils::binary_node<utils::eval_expr> optimize(ExprPtr const& expr);
+
+/**
+ * Omit the first factor from the top level product from given expression.
+ * Intended to drop "A" and "S" tensors from CC amplitudes as a preparatory step
+ * for evaluation of the amplitudes.
+ */
+ExprPtr tail_factor(ExprPtr const& expr) noexcept;
 
 /**
  * Function object to perform flops count on binary_expr<eval_expr>.
@@ -57,7 +64,8 @@ struct met_result {
 };
 
 sto_result single_term_opt(Product const& prod, size_t nocc, size_t nvirt,
-                           container::set<size_t> const& imeds_hash, bool canon=true);
+                           container::set<size_t> const& imeds_hash,
+                           bool canon = true);
 
 /**
  * @tparam Cont type of @c container.
@@ -72,7 +80,7 @@ met_result most_expensive(Cont const& iterable, size_t nocc, size_t nvirt,
   auto costs =
       iterable | transform([nocc, nvirt, &imed_hashes](auto const& xpr) {
         return single_term_opt(xpr->template as<Product>(), nocc, nvirt,
-                               imed_hashes,true);
+                               imed_hashes, true);
       });
 
   met_result expensive{0, 0, {}};
@@ -151,7 +159,6 @@ container::map<ExprPtr, sto_result> multi_term_opt_hartono(
 
   return optimized_terms;
 }
-
 }  // namespace sequant::optimize
 
 #endif  // SEQUANT_DOMAIN_OPTIMIZE_OPTIMIZE_HPP

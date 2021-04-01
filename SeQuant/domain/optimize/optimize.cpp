@@ -19,6 +19,27 @@ size_t bin_eval_expr_flops_counter::operator()(
   return counter(node, lflops, rflops);
 }
 
+/**
+ * Pulls out scalar to the top level from a nested product.
+ * If @c expr is not Product, does nothing.
+ */
+void pull_scalar(sequant::ExprPtr expr) noexcept {
+  using sequant::Product;
+  if (!expr->is<Product>()) return;
+  auto& prod = expr->as<Product>();
+
+  auto scal = prod.scalar();
+  for (auto&& x : *expr)
+    if (x->is<Product>()) {
+      auto& p = x->as<Product>();
+      scal *= p.scalar();
+      p.scale(1.0 / p.scalar());
+    }
+
+  prod.scale(1.0 / prod.scalar());
+  prod.scale(scal);
+}
+
 sto_result single_term_opt(Product const& prod, size_t nocc, size_t nvirt,
                            container::set<size_t> const& imeds_hash,
                            bool canon) {
@@ -79,21 +100,44 @@ sto_result single_term_opt(Product const& prod, size_t nocc, size_t nvirt,
   return result;
 }
 
-void pull_scalar(sequant::ExprPtr expr) noexcept {
-  using sequant::Product;
-  if (!expr->is<Product>()) return;
-  auto& prod = expr->as<Product>();
+ExprPtr tail_factor(ExprPtr const& expr) noexcept {
+  if (expr->is<Tensor>())
+    return expr->clone();
 
-  auto scal = prod.scalar();
-  for (auto&& x : *expr)
-    if (x->is<Product>()) {
-      auto& p = x->as<Product>();
-      scal *= p.scalar();
-      p.scale(1.0 / p.scalar());
-    }
+  else if (expr->is<Product>()) {
+    auto scalar = expr->as<Product>().scalar();
+    auto facs = ranges::views::tail(*expr);
+    return ex<Product>(Product{scalar, ranges::begin(facs), ranges::end(facs)});
+  } else {
+    // sum
+    auto summands = *expr | ranges::views::transform(
+                                [](auto const& x) { return tail_factor(x); });
+    return ex<Sum>(Sum{ranges::begin(summands), ranges::end(summands)});
+  }
+}
 
-  prod.scale(1.0 / prod.scalar());
-  prod.scale(scal);
+utils::binary_node<utils::eval_expr> optimize(const ExprPtr& expr) {
+  if (expr->is<Tensor>()) return utils::binarize_expr(expr);
+  if (expr->is<Product>()) {
+    // nocc << nvirt is realistic in quantum
+    // chemistry calculations
+    size_t nocc = 2, nvirt = 10;
+    auto node = single_term_opt(expr->as<Product>(), nocc, nvirt,  //
+                                {},  // empty set of pre-existing intermediates
+                                true)  // canonicalize true
+                    .optimal_seqs.begin()
+                    ->clone();
+    return node;
+  } else {  // expr is sum
+
+    auto summands = *expr | ranges::views::transform([](auto const& s) {
+      auto node = optimize(s);
+      return utils::debinarize_eval_expr(node);
+    }) | ranges::to_vector;
+
+    auto sum = ex<Sum>(Sum{summands.begin(), summands.end()});
+    return utils::binarize_expr(sum);
+  }
 }
 
 }  // namespace sequant::optimize
