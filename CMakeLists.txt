@@ -1,4 +1,3 @@
-
 cmake_minimum_required (VERSION 3.15.0) # need list(PREPEND for toolchains
 
 ###############################################################################
@@ -78,6 +77,9 @@ set(SEQUANT_INSTALL_CMAKEDIR "lib/cmake/sequant"
 
 option(ENABLE_TBB "Enable TBB as an optional prerequisite for C++17's parallel STL (if PSTL is not supported will use of standard C++11 concurrency)" OFF)
 add_feature_info(TBB ENABLE_TBB "Intel Thread-Building Blocks is an optional prerequisite for C++17's parallel STL")
+
+option(SEQUANT_EVAL_TESTS "Enable building of evaluation tests (will look for and/or build Libint+TA)" OFF)
+add_feature_info(EVAL_TESTS SEQUANT_EVAL_TESTS "Build evaluation tests (will look for and/or build Libint+TA)")
 
 ##########################
 # Prerequisites
@@ -175,20 +177,23 @@ add_library(SeQuant
         SeQuant/core/utility.hpp
         SeQuant/core/bliss.hpp
         SeQuant/core/timer.hpp
-        SeQuant/domain/utils/rand_color.hpp
-        SeQuant/domain/utils/rand_color.cpp
-        SeQuant/domain/utils/expr_parse.hpp
-        SeQuant/domain/utils/expr_parse.cpp
-        SeQuant/domain/utils/binary_expr.hpp
-        SeQuant/domain/utils/eval_sequence.hpp
-        SeQuant/domain/utils/eval_expr.hpp
-        SeQuant/domain/utils/eval_expr.cpp
-        SeQuant/domain/utils/binarize_expr.hpp
+        SeQuant/domain/eqs/cceqs.hpp
+        SeQuant/domain/eqs/cceqs.cpp
         SeQuant/domain/utils/binarize_expr.cpp
-        SeQuant/domain/utils/flops_counter.hpp
+        SeQuant/domain/utils/binarize_expr.hpp
+        SeQuant/domain/utils/binary_node.hpp
+        SeQuant/domain/utils/eval_expr.cpp
+        SeQuant/domain/utils/eval_expr.hpp
+        SeQuant/domain/utils/eval_seq.hpp
         SeQuant/domain/utils/flops_counter.cpp
-        SeQuant/domain/factorize/optimize.hpp
-        SeQuant/domain/factorize/optimize.cpp
+        SeQuant/domain/utils/flops_counter.hpp
+        SeQuant/domain/utils/parse_expr.cpp
+        SeQuant/domain/utils/parse_expr.hpp
+        SeQuant/domain/utils/rand_color.cpp
+        SeQuant/domain/utils/rand_color.hpp
+        SeQuant/domain/eval/eval.hpp
+        SeQuant/domain/optimize/optimize.hpp
+        SeQuant/domain/optimize/optimize.cpp
         SeQuant/domain/mbpt/convention.cpp
         SeQuant/domain/mbpt/convention.hpp
         SeQuant/domain/mbpt/op.cpp
@@ -220,45 +225,43 @@ install(DIRECTORY SeQuant
 add_library(SeQuant::SeQuant ALIAS SeQuant)  # to be able to use as subproject
 
 ### optional prereqs
-if (NOT TARGET Libint2::libint2_cxx)
-  find_package(Libint2 2.7.0 CONFIG)
-endif(NOT TARGET Libint2::libint2_cxx)
-if (NOT TARGET tiledarray)
-  find_package(TiledArray CONFIG COMPONENTS tiledarray)
-endif(NOT TARGET tiledarray)
+if (SEQUANT_EVAL_TESTS)
+  include(FindOrFetchLibint2)
+  include(FindOrFetchTiledArray)
+endif(SEQUANT_EVAL_TESTS)
 
-add_subdirectory(scratch)
+if (BTAS_SOURCE_DIR)
+    add_subdirectory(scratch)
+endif(BTAS_SOURCE_DIR)
 
 enable_testing(true)
 
 set(utests_src
-     tests/unit/test_space.cpp
-     tests/unit/test_index.cpp
-     tests/unit/test_op.cpp
-     # tests/unit/test_wick.cpp
-     tests/unit/test_tensor.cpp
-     tests/unit/test_bliss.cpp
-     tests/unit/test_expr.cpp
-     tests/unit/test_iterator.cpp
-     tests/unit/test_mbpt.cpp
-     tests/unit/test_tensor_network.cpp
-     tests/unit/test_expr_parse.cpp
-     tests/unit/test_binary_expr.cpp
-     tests/unit/test_eval_sequence.cpp
-     tests/unit/test_eval_expr.cpp
-     tests/unit/test_binarize_expr.cpp
-     tests/unit/test_flops_counter.cpp
-     tests/unit/test_optimize.cpp
-    )
+    tests/unit/test_space.cpp
+    tests/unit/test_index.cpp
+    tests/unit/test_op.cpp
+    # tests/unit/test_wick.cpp
+    tests/unit/test_tensor.cpp
+    tests/unit/test_bliss.cpp
+    tests/unit/test_expr.cpp
+    tests/unit/test_iterator.cpp
+    tests/unit/test_mbpt.cpp
+    tests/unit/test_tensor_network.cpp
+    tests/unit/test_parse_expr.cpp
+    tests/unit/test_eval_expr.cpp
+    tests/unit/test_binary_node.cpp
+    tests/unit/test_eval_seq.cpp
+    tests/unit/test_binarize_expr.cpp
+    tests/unit/test_flops_counter.cpp
+    tests/unit/test_optimize.cpp)
 
 set(utests_deps SeQuant)
 
 if (TARGET tiledarray)
   list(APPEND utests_src
       ## unit tests for evaluation
-      tests/unit/test_eval_tree.cpp
-      # tests/unit/test_path_tree.cpp
-      )
+       # tests/unit/test_evaluate_TA.cpp
+       )
   list(APPEND utests_deps tiledarray)
 endif(TARGET tiledarray)
 
@@ -271,80 +274,70 @@ target_link_libraries(${unit_test_executable} ${utests_deps})
 if (TARGET tiledarray)
   target_compile_definitions(${unit_test_executable} PRIVATE SEQUANT_HAS_TILEDARRAY)
 endif(TARGET tiledarray)
-add_test(unit/build "${CMAKE_COMMAND}" --build ${CMAKE_BINARY_DIR}
+add_test(sequant/unit/build "${CMAKE_COMMAND}" --build ${CMAKE_BINARY_DIR}
     --target ${unit_test_executable})
 
-add_test(NAME unit/run
+add_test(NAME sequant/unit/run
         COMMAND ${unit_test_executable})
-set_tests_properties(unit/run
-        PROPERTIES DEPENDS unit/build
+set_tests_properties(sequant/unit/run
+        PROPERTIES DEPENDS sequant/unit/build
         WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tests/unit)
 
 ####### Tests ########
+find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 
 # Single-Reference Coupled-Cluster equation generation (spin-orbital)
 set(example0 srcc)
 add_executable(${example0} EXCLUDE_FROM_ALL
-        examples/${example0}/${example0}.cpp
-        examples/cceqs.hpp
-        examples/cceqs.cpp)
-target_link_libraries(${example0} SeQuant ${TBB_LIBRARIES})
+        examples/${example0}/${example0}.cpp)
+target_link_libraries(${example0} SeQuant ${TBB_LIBRARIES} Eigen3::Eigen)
 
-if (TARGET tiledarray AND TARGET Libint2::libint2_cxx)
+if (TARGET tiledarray AND TARGET Libint2::cxx)
   # SRCC spin-orbital equation evaluation
   set(example1 expr_evaluation)
-  add_executable(${example1} EXCLUDE_FROM_ALL
-      examples/evaluation/${example1}.cpp
-      examples/contract/interpret/contract.hpp
-      examples/contract/scf/hartree-fock.cc)
-  target_link_libraries(${example1} SeQuant ${TBB_LIBRARIES}
-      Libint2::libint2_cxx tiledarray)
-  target_link_directories(${example1} PUBLIC ${TBB_LIBRARIES})
-  target_compile_definitions(${example1} PRIVATE SEQUANT_HAS_TILEDARRAY)
+  # add_executable(${example1} EXCLUDE_FROM_ALL
+  #     examples/evaluation/${example1}.cpp
+  #     examples/contract/interpret/contract.hpp
+  #     examples/contract/scf/hartree-fock.cc)
+  # target_link_libraries(${example1} SeQuant ${TBB_LIBRARIES}
+  #     Libint2::cxx tiledarray)
+  # target_link_directories(${example1} PUBLIC ${TBB_LIBRARIES})
+  # target_compile_definitions(${example1} PRIVATE SEQUANT_HAS_TILEDARRAY)
 
   # SRCC spin-traced equation evaluation
   set(example2 rcc_evaluation)
-  add_executable(${example2} EXCLUDE_FROM_ALL
-      examples/evaluation/${example2}.cpp
-      examples/contract/interpret/contract.hpp
-      examples/contract/scf/hartree-fock.cc)
-  target_link_libraries(${example2} SeQuant
-      ${TBB_LIBRARIES} Libint2::libint2_cxx tiledarray)
-  target_link_directories(${example2} PUBLIC ${TBB_LIBRARIES})
-  target_compile_definitions(${example2} PRIVATE SEQUANT_HAS_TILEDARRAY)
-endif (TARGET tiledarray AND TARGET Libint2::libint2_cxx)
+  # add_executable(${example2} EXCLUDE_FROM_ALL
+  #     examples/evaluation/${example2}.cpp
+  #     examples/contract/interpret/contract.hpp
+  #     examples/contract/scf/hartree-fock.cc)
+  # target_link_libraries(${example2} SeQuant
+  #     ${TBB_LIBRARIES} Libint2::cxx tiledarray)
+  # target_link_directories(${example2} PUBLIC ${TBB_LIBRARIES})
+  # target_compile_definitions(${example2} PRIVATE SEQUANT_HAS_TILEDARRAY)
+endif (TARGET tiledarray AND TARGET Libint2::cxx)
 
 set(example3 uccf12)
 add_executable(${example3} EXCLUDE_FROM_ALL
-    examples/${example3}/${example3}.cpp
-    examples/cceqs.hpp
-    examples/cceqs.cpp)
+    examples/${example3}/${example3}.cpp)
 target_link_libraries(${example3} SeQuant ${TBB_LIBRARIES})
 
-set(example4 pair_factorization)
-add_executable(${example4} EXCLUDE_FROM_ALL
-               examples/factorization/${example4}.cpp
-               examples/cceqs.hpp
-               examples/cceqs.cpp)
-target_link_libraries(${example4} SeQuant ${TBB_LIBRARIES})
-
 # add tests for running examples
-set (lastexample 5)
+set (lastexample 4)
 foreach(i RANGE ${lastexample})
     if (TARGET ${example${i}})
-        add_test(example/${example${i}}/build "${CMAKE_COMMAND}"
+        add_test(sequant/example/${example${i}}/build "${CMAKE_COMMAND}"
             --build ${CMAKE_BINARY_DIR} --target ${example${i}})
-        add_test(NAME example/${example${i}}/run
+        add_test(NAME sequant/example/${example${i}}/run
                 COMMAND ${example${i}}
                 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/examples)
-        set_tests_properties(example/${example${i}}/run
-                PROPERTIES DEPENDS example/${example${i}}/build)
+        set_tests_properties(sequant/example/${example${i}}/run
+                PROPERTIES DEPENDS sequant/example/${example${i}}/build)
     endif()
 endforeach()
 
 # target for running ALL tests
 add_custom_target_subproject(sequant check
-    USES_TERMINAL COMMAND ${CMAKE_CTEST_COMMAND} -V)
+    USES_TERMINAL COMMAND ${CMAKE_CTEST_COMMAND} -V -R "'sequant/(unit|example)'")
 
 ####### DOCS ########
 
@@ -413,3 +406,4 @@ feature_summary(WHAT ALL
 # appendix: misc details
 ###############################################################################
 SET(CMAKE_COLOR_MAKEFILE ON)
+
