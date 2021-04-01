@@ -87,9 +87,7 @@ class binary_node {
 
   binary_node<T> const& right() const { return dnode->right(); }
 
-  binary_node<T> clone() const {
-    return dnode->clone();
-  }
+  binary_node<T> clone() const { return dnode->clone(); }
 
   explicit binary_node(T d)
       : dnode{std::make_unique<data_node_leaf<T>>(std::move(d))} {}
@@ -134,6 +132,17 @@ class binary_node {
                    });
 
     *this = std::move(node);
+  }
+
+  template <typename F,
+            std::enable_if_t<std::is_invocable_v<F, binary_node<T> const&>,
+                             bool> = true>
+  void visit(F&& pred) const {
+    pred(*this);
+    if (leaf()) return;
+
+    left().visit(std::forward<F>(pred));
+    right().visit(std::forward<F>(pred));
   }
 
   template <typename F,
