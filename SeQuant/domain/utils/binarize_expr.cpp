@@ -32,39 +32,37 @@ binary_node<eval_expr> binarize_expr(const ExprPtr& expr) {
 }
 
 ExprPtr debinarize_eval_expr(binary_node<eval_expr> const& node) {
-  auto op = node->op();
+  auto const op = node->op();
   auto const& evxpr = *node;
 
-  switch (op) {
-    case eval_expr::eval_op::Id: {
-      return evxpr.scalar() == Constant{1}
-                 ? evxpr.tensor().clone()
-                 : ex<Constant>(evxpr.scalar()) * evxpr.tensor().clone();
-    }
+  if (node.leaf()) {
+    return evxpr.scalar() == Constant{1}
+               ? evxpr.tensor().clone()
+               : ex<Constant>(evxpr.scalar()) * evxpr.tensor().clone();
+  }
 
-    case eval_expr::eval_op::Prod: {
-      auto prod = Product{};
-      prod.scale(evxpr.scalar().value());
+  if (op == eval_expr::eval_op::Prod) {
+    auto prod = Product{};
+    prod.scale(evxpr.scalar().value());
 
-      auto lexpr = debinarize_eval_expr(node.left());
-      auto rexpr = debinarize_eval_expr(node.right());
+    auto lexpr = debinarize_eval_expr(node.left());
+    auto rexpr = debinarize_eval_expr(node.right());
 
-      if (lexpr->is<Tensor>())
-        prod.append(1, lexpr);
-      else
-        prod.append(lexpr);
+    if (lexpr->is<Tensor>())
+      prod.append(1, lexpr);
+    else
+      prod.append(lexpr);
 
-      if (rexpr->is<Tensor>())
-        prod.append(1, rexpr);
-      else
-        prod.append(rexpr);
+    if (rexpr->is<Tensor>())
+      prod.append(1, rexpr);
+    else
+      prod.append(rexpr);
 
-      return ex<Product>(std::move(prod));
-    }
-
-    case eval_expr::eval_op::Sum:
-      return ex<Sum>(Sum{debinarize_eval_expr(node.left()),
-                         debinarize_eval_expr(node.right())});
+    return ex<Product>(std::move(prod));
+  } else {
+    assert(op == eval_expr::eval_op::Sum && "unsupported operation type");
+    return ex<Sum>(Sum{debinarize_eval_expr(node.left()),
+                       debinarize_eval_expr(node.right())});
   }
 }
 
