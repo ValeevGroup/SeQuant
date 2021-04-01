@@ -330,7 +330,7 @@ int main(int argc, char** argv) {
   auto eval_inst_r1 = eval_instance{r1_node};
   auto eval_inst_r2 = eval_instance{r2_node};
 
-  auto yielder = leaf_yield{nocc, nvirt, fock, eri, t_vo, t_vvoo};
+  auto yielder = yield_leaf{nocc, nvirt, fock, eri, t_vo, t_vvoo};
 
   auto manager = sequant::eval::cache_manager<btas::Tensor<double>>();
 
