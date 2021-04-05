@@ -4,6 +4,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/domain/utils/binary_node.hpp>
+#include <SeQuant/domain/utils/cache_manager.hpp>
 #include <SeQuant/domain/utils/eval_expr.hpp>
 #include <range/v3/numeric.hpp>
 #include <range/v3/view.hpp>
@@ -36,6 +37,22 @@ void permute_ords(perm_type& ords, F&& callback, size_t beg = 0,
     std::swap(ords[ii], ords[beg]);
   }
 }  // permute_ords
+
+template <typename Maplike>
+void count_imeds(
+    sequant::utils::binary_node<sequant::utils::eval_expr> const& node,
+    Maplike& cmap) {
+  if (node.leaf()) return;
+
+  if (auto&& found = cmap.find(node->hash()); found != cmap.end()) {
+    ++found->second;
+    return;
+  } else {
+    cmap.emplace(node->hash(), 1);
+  }
+  count_imeds<Maplike>(node.left(), cmap);
+  count_imeds<Maplike>(node.right(), cmap);
+}  // count_imeds
 
 }  // namespace detail
 
@@ -87,133 +104,46 @@ void antisymmetrize_tensor(size_t rank, F&& callback) {
   asymm_impl(rank, std::forward<F>(callback));
 }
 
-template <typename Data_t>
-class cache_manager {
- public:
-  /**
-   * Key type to access data.
-   */
-  using key_t = size_t;
+template <typename Tensor_t>
+utils::cache_manager<Tensor_t> make_cache_man(
+    utils::binary_node<utils::eval_expr> const& node, bool persistent_leaves) {
+  container::map<size_t, size_t> hash_to_counts{};
+  detail::count_imeds(node, hash_to_counts);
 
-  /**
-   * Count type to allow max access of a stored datum.
-   */
-  using count_t = size_t;
+  auto less_repeating = [](auto const& pair) { return pair.second < 2; };
+  ranges::actions::remove_if(hash_to_counts, less_repeating);
 
-  enum struct Lifetime { Persistent, Decaying };
+  if (!persistent_leaves) return utils::cache_manager<Tensor_t>{hash_to_counts};
 
- private:
-  struct data_cache {
-    Lifetime lifetime{Lifetime::Persistent};
-    count_t max_access = 0;
-    std::unique_ptr<Data_t> ptr{nullptr};
-  };  //
+  container::svector<size_t> leaf_hashes{};
+  node.visit_leaf([&leaf_hashes](auto const& evxpr) {
+    leaf_hashes.emplace_back(evxpr.hash());
+  });
 
-  container::map<key_t, data_cache> cache{};
+  return utils::cache_manager<Tensor_t>{hash_to_counts, leaf_hashes};
+}
 
- public:
-  cache_manager() = default;
+template <typename Tensor_t, typename Iterable>
+utils::cache_manager<Tensor_t> make_cache_man(Iterable const& nodes,
+                                              bool persistent_leaves) {
+  container::map<size_t, size_t> hash_to_counts{};
 
-  void clear() { cache.clear(); }
+  for (auto const& n : nodes) detail::count_imeds(n, hash_to_counts);
 
-  void add_key_persistent(key_t k) { cache.try_emplace(k, data_cache{}); }
+  auto less_repeating = [](auto const& pair) { return pair.second < 2; };
+  ranges::actions::remove_if(hash_to_counts, less_repeating);
 
-  void add_key_persistent(container::svector<key_t> keys) {
-    for (auto k : keys) add_key_persistent(k);
-  }
+  if (!persistent_leaves) return utils::cache_manager<Tensor_t>{hash_to_counts};
 
-  void add_key_decaying(key_t k, count_t c = 1) {
-    if (c == 0) return;
-    if (auto&& found = cache.find(k); found != cache.end())
-      ++found->second.max_access;
-    else
-      cache.emplace(k, data_cache{Lifetime::Decaying, c, nullptr});
-  }
-
-  void add_key_decaying(container::map<key_t, count_t> const& counts) {
-    for (auto&& [k, c] : counts) add_key_decaying(k, c);
-  }
-
-  container::map<key_t, count_t> key_counts_decaying() const {
-    return cache | ranges::views::filter([](auto const& pair) {
-             return pair.second.lifetime == Lifetime::Decaying;
-           }) |
-           ranges::views::transform([](auto const& pair) {
-             return std::pair{pair.first, pair.second.max_access};
-           }) |
-           ranges::to<container::map<key_t, count_t>>;
-  }
-
-  container::svector<key_t> keys_persistent() const {
-    return cache | ranges::views::filter([](auto const& pair) {
-             return pair.second.lifetime == Lifetime::Persistent;
-           }) |
-           ranges::views::transform(
-               [](auto const& pair) { return pair.first; }) |
-           ranges::to<container::svector<key_t>>;
-  }
-
-  void clear_persistent() {
-    auto decaying = key_counts_decaying();
-    clear();
-    add_key_decaying(decaying);
-  }
-
-  void clear_decaying() {
-    auto persistent = keys_persistent();
-    clear();
-    add_key_persistent(persistent);
-  }
-
-  void keep_more_repeating(count_t min_count = 2) {
-    auto decaying = key_counts_decaying();
-    ranges::actions::remove_if(decaying, [min_count](auto const& pair) {
-      return pair.second <= min_count;
+  container::set<size_t> leaf_hashes{};
+  for (auto const& n : nodes) {
+    n.visit_leaf([&leaf_hashes](auto const& evxpr) {
+      if (evxpr.tensor().label() != L"t") leaf_hashes.insert(evxpr.hash());
     });
-    clear_decaying();
-    add_key_decaying(decaying);
   }
 
-  Data_t store(key_t h, Data_t val) {
-    auto&& found = cache.find(h);
-    if (found == cache.end()) return std::move(val);  // stores nothing
-
-    if (found->second.lifetime == Lifetime::Decaying &&
-        found->second.max_access == 1) {
-      cache.erase(found);
-      return std::move(val);
-    }
-
-    assert(found->second.ptr == nullptr &&
-           "re-write attempted on existing data");
-
-    found->second.ptr = std::make_unique<Data_t>(std::move(val));
-
-    if (found->second.lifetime == Lifetime::Decaying)
-      --found->second.max_access;
-
-    return *found->second.ptr;
-  }
-
-  std::optional<Data_t> access(key_t h) {
-    auto&& found = cache.find(h);
-    if (found == cache.end() || found->second.ptr == nullptr)
-      return std::nullopt;
-
-    if (found->second.lifetime == Lifetime::Persistent)
-      return *found->second.ptr;
-
-    --found->second.max_access;
-
-    if (found->second.max_access == 0) {
-      auto temp = *found->second.ptr;
-      cache.erase(found);
-      return temp;
-    } else {
-      return *found->second.ptr;
-    }
-  }
-};  // cache manager
+  return utils::cache_manager<Tensor_t>{hash_to_counts, leaf_hashes};
+}
 
 }  // namespace sequant::eval
 
