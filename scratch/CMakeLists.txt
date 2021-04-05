@@ -1,6 +1,7 @@
 add_executable(
   scratch EXCLUDE_FROM_ALL
-  # btas_eval.cpp
+
+  # ../examples/eval/btas_eval.cpp
 
   ../examples/eval/ta_eval.cpp
   ../examples/hf/hartree-fock.h

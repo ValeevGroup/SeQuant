@@ -191,6 +191,7 @@ add_library(SeQuant
         SeQuant/domain/utils/parse_expr.hpp
         SeQuant/domain/utils/rand_color.cpp
         SeQuant/domain/utils/rand_color.hpp
+        SeQuant/domain/utils/cache_manager.hpp
         SeQuant/domain/eval/eval.hpp
         SeQuant/domain/optimize/optimize.hpp
         SeQuant/domain/optimize/optimize.cpp
@@ -253,7 +254,8 @@ set(utests_src
     tests/unit/test_eval_seq.cpp
     tests/unit/test_binarize_expr.cpp
     tests/unit/test_flops_counter.cpp
-    tests/unit/test_optimize.cpp)
+    tests/unit/test_optimize.cpp
+    )
 
 set(utests_deps SeQuant)
 

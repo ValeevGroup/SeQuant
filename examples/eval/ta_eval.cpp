@@ -158,30 +158,40 @@ Tensor_t inode_evaluate_ta(
 template <typename Tensor_t>
 Tensor_t evaluate_ta(
     sequant::utils::binary_node<sequant::utils::eval_expr> const& node,
-    yield_leaf<Tensor_t>& yielder) {
-  if (node.leaf()) return yielder(node->tensor());
+    yield_leaf<Tensor_t>& yielder,
+    sequant::utils::cache_manager<Tensor_t>& cman) {
+  auto const key = node->hash();
 
-  return inode_evaluate_ta(node, evaluate_ta(node.left(), yielder),
-                           evaluate_ta(node.right(), yielder));
+  if (auto&& exists = cman.access(key); exists && exists.value())
+    return *exists.value();
+
+  return node.leaf()
+             ? cman.store(key, yielder(node->tensor()))
+             : cman.store(key,
+                          inode_evaluate_ta(
+                              node, evaluate_ta(node.left(), yielder, cman),
+                              evaluate_ta(node.right(), yielder, cman)));
 }
 
 struct eval_instance {
   sequant::utils::binary_node<sequant::utils::eval_expr> const& node;
 
-  template <typename Fetcher>
-  auto evaluate(Fetcher& f) {
-    static_assert(std::is_invocable_v<Fetcher, sequant::Tensor const&>);
+  template <typename Tensor_t, typename Fetcher>
+  auto evaluate(Fetcher& f, sequant::utils::cache_manager<Tensor_t>& man) {
+    static_assert(
+        std::is_invocable_r_v<Tensor_t, Fetcher, sequant::Tensor const&>);
 
-    auto result = evaluate_ta(node, f);
+    auto result = evaluate_ta(node, f, man);
     auto const annot = braket_to_annot(node->tensor().const_braket());
     auto scaled = decltype(result){};
     scaled(annot) = node->scalar().value().real() * result(annot);
     return scaled;
   }
 
-  template <typename Fetcher>
-  auto evaluate_asymm(Fetcher& f) {
-    auto result = evaluate(f);
+  template <typename Tensor_t, typename Fetcher>
+  auto evaluate_asymm(Fetcher& f,
+                      sequant::utils::cache_manager<Tensor_t>& man) {
+    auto result = evaluate(f, man);
 
     auto asymm_result = decltype(result){result.world(), result.trange()};
     asymm_result.fill(0);
@@ -199,9 +209,9 @@ struct eval_instance {
     return asymm_result;
   }
 
-  template <typename Fetcher>
-  auto evaluate_symm(Fetcher& f) {
-    auto result = evaluate(f);
+  template <typename Tensor_t, typename Fetcher>
+  auto evaluate_symm(Fetcher& f, sequant::utils::cache_manager<Tensor_t>& man) {
+    auto result = evaluate(f, man);
 
     auto symm_result = decltype(result){result.world(), result.trange()};
     symm_result.fill(0);
@@ -578,21 +588,30 @@ int main(int argc, char** argv) {
 
     auto cc_r = sequant::eqs::cceqvec{2, 2}(true, true, true, true);
 
-    auto node_r1 = optimize(tail_factor(cc_r[1]));
-    auto node_r2 = optimize(tail_factor(cc_r[2]));
+    auto nodes = ranges::views::tail(cc_r) |
+                 ranges::views::transform(
+                     [](auto const& n) { return optimize(tail_factor(n)); }) |
+                 ranges::to_vector;
+
+    auto const& node_r1 = nodes[0];
+    auto const& node_r2 = nodes[1];
+
+    // true: leaf tensors (other than 't' tensors) will be cached
+    // false: only intermediates will be cached
+    auto manager = sequant::eval::make_cache_man<TA::TArrayD>(nodes, true);
 
     iter = 0;
     ediff = 0.0;
     auto normdiff = 0.0;
     auto ecc = 0.0;
-    auto start = std::chrono::high_resolution_clock::now();
     auto eval_inst_r1 = eval_instance{node_r1};
     auto eval_inst_r2 = eval_instance{node_r2};
+    auto start = std::chrono::high_resolution_clock::now();
     do {
       ++iter;
 
-      auto r1 = eval_inst_r1.evaluate_asymm(yielder);
-      auto r2 = eval_inst_r2.evaluate_asymm(yielder);
+      auto r1 = eval_inst_r1.evaluate_asymm(yielder, manager);
+      auto r2 = eval_inst_r2.evaluate_asymm(yielder, manager);
 
       auto tile_r1 = r1.find(0).get();
       auto tile_r2 = r2.find(0).get();

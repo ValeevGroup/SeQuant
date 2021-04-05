@@ -198,24 +198,28 @@ template <typename Tensor_t>
 Tensor_t evaluate_btas(
     sequant::utils::binary_node<sequant::utils::eval_expr> const& node,
     yield_leaf<Tensor_t>& yielder,
-    sequant::eval::cache_manager<Tensor_t>& cman) {
-  if (auto const& exists = cman.access(node->hash()); exists)
-    return exists.value();
-  if (node.leaf() && (node->tensor().label() != L"I"))
-    return cman.store(node->hash(), yielder(node->tensor()));
-  assert((!node.leaf()) && "this shouldn't happen");
-  auto eval_result =
-      inode_evaluate_btas(node, evaluate_btas(node.left(), yielder, cman),
-                          evaluate_btas(node.right(), yielder, cman));
-  return cman.store(node->hash(), std::move(eval_result));
+    sequant::utils::cache_manager<Tensor_t>& cman) {
+  auto const key = node->hash();
+
+  auto exists = cman.access(key);
+  if (exists && exists.value()) return *exists.value();
+
+  return node.leaf()
+             ? cman.store(key, yielder(node->tensor()))
+             : cman.store(key,
+                          inode_evaluate_btas(
+                              node, evaluate_btas(node.left(), yielder, cman),
+                              evaluate_btas(node.right(), yielder, cman)));
 }
 
 struct eval_instance {
   sequant::utils::binary_node<sequant::utils::eval_expr> const& node;
 
-  template <typename Tensor_t>
-  auto evaluate(yield_leaf<Tensor_t>& yielder,
-                sequant::eval::cache_manager<Tensor_t>& cman) {
+  template <typename Tensor_t, typename Fetcher>
+  auto evaluate(Fetcher& yielder,
+                sequant::utils::cache_manager<Tensor_t>& cman) {
+    static_assert(
+        std::is_invocable_r_v<Tensor_t, Fetcher, sequant::Tensor const&>);
     auto result = evaluate_btas(node, yielder, cman);
 
     btas::scal(node->scalar().value().real(), result);
@@ -223,9 +227,9 @@ struct eval_instance {
     return result;
   }
 
-  template <typename Tensor_t>
-  auto evaluate_symm(yield_leaf<Tensor_t>& yielder,
-                     sequant::eval::cache_manager<Tensor_t>& cman) {
+  template <typename Tensor_t, typename Fetcher>
+  auto evaluate_symm(Fetcher& yielder,
+                     sequant::utils::cache_manager<Tensor_t>& cman) {
     auto pre_symm = evaluate(yielder, cman);
     auto result = decltype(pre_symm){pre_symm.range()};
     result.fill(0.);
@@ -243,9 +247,9 @@ struct eval_instance {
     return result;
   }
 
-  template <typename Tensor_t>
-  auto evaluate_asymm(yield_leaf<Tensor_t>& yielder,
-                      sequant::eval::cache_manager<Tensor_t>& cman) {
+  template <typename Tensor_t, typename Fetcher>
+  auto evaluate_asymm(Fetcher& yielder,
+                      sequant::utils::cache_manager<Tensor_t>& cman) {
     auto pre_asymm = evaluate(yielder, cman);
     auto result = decltype(pre_asymm){pre_asymm.range()};
     result.fill(0.);
@@ -267,12 +271,26 @@ struct eval_instance {
 
 };  // evaluate_btas
 
+// clang-format off
+/**
+ * <executable> fock.dat eri.dat
+ *
+ * .dat format:
+ *
+ * size_t size_t size_t         # rank, nocc, nvirt
+ * double                       # data ------
+ * ...                          # data       |
+ * ...                          # ....       |  no. of double entries = (nocc+nvirt)^rank
+ * ...                          # data       |
+ * double                       # data ------
+ */
+// clang-format on
 int main(int argc, char** argv) {
   using std::cout;
   using std::endl;
 
-  auto fock_input = "scratch/fock_h2o.dat";
-  auto eri_input = "scratch/eri_h2o.dat";
+  auto fock_input = argc > 1 ? argv[1] : "fock_h2o.dat";
+  auto eri_input = argc > 2 ? argv[2] : "eri_h2o.dat";
 
   auto fock_head = read_header(fock_input);
   auto eri_head = read_header(eri_input);
@@ -324,30 +342,24 @@ int main(int argc, char** argv) {
 
   auto cc_r = cceqvec{2, 2}(true, true, true, true);
 
-  auto r1_node = optimize(tail_factor(cc_r[1]));
-  auto r2_node = optimize(tail_factor(cc_r[2]));
+  auto nodes = ranges::views::tail(cc_r) |
+               ranges::views::transform([](auto const& seqxpr) {
+                 return optimize(tail_factor(seqxpr));
+               }) |
+               ranges::to_vector;
+
+  auto const& r1_node = nodes[0];
+  auto const& r2_node = nodes[1];
 
   auto eval_inst_r1 = eval_instance{r1_node};
   auto eval_inst_r2 = eval_instance{r2_node};
 
   auto yielder = yield_leaf{nocc, nvirt, fock, eri, t_vo, t_vvoo};
 
-  auto manager = sequant::eval::cache_manager<btas::Tensor<double>>();
-
-  auto visitor = [&manager](evxpr_node const& node) {
-    if (node->tensor().label() == L"I")
-      manager.add_key_decaying(node->hash());
-    else if (node->tensor().label() != L"t")
-      manager.add_key_persistent(node->hash());
-    else
-      return;  // tensor of type t_vo, t_vvoo
-  };
-
-  r1_node.visit(visitor);
-  r2_node.visit(visitor);
-
-  manager.keep_more_repeating();
-  auto const decaying_imeds = manager.key_counts_decaying();
+  // true: leaf tensors (other than 't' tensors) will be cached
+  // false: only intermediates will be cached
+  auto manager =
+      sequant::eval::make_cache_man<btas::Tensor<double>>(nodes, true);
 
   auto const g_vvoo =
       yielder(sequant::utils::parse_expr(L"g_{a1,a2}^{i1,i2}",
@@ -366,7 +378,6 @@ int main(int argc, char** argv) {
   auto ecc = 0.0;
 
   auto start = std::chrono::high_resolution_clock::now();
-  auto empty_manager = sequant::eval::cache_manager<btas::Tensor<double>>();
   do {
     ++iter;
     auto r1 = eval_inst_r1.evaluate_asymm(yielder, manager);
@@ -401,7 +412,7 @@ int main(int argc, char** argv) {
          << std::setprecision(std::numeric_limits<double>::max_digits10) << ecc
          << endl;
 
-    manager.add_key_decaying(decaying_imeds);
+    manager.reset_decaying();
   } while (iter < maxiter &&
            (std::fabs(normdiff) > conv || std::fabs(ediff) > conv));
 
@@ -413,53 +424,3 @@ int main(int argc, char** argv) {
 
   return 0;
 }
-
-// testing symmetrization and anti-symmetrization
-//
-// auto node = binarize_expr(r1);
-// auto eval_inst = evaluate_btas{node};
-// auto eval_res = eval_inst.evaluate(yielder);
-//
-// cout << eval_res << " norm = " << norm(eval_res) << endl;
-
-// t_vvoo.generate([]() { return static_cast<double>(std::rand()) / RAND_MAX;
-// }); cout << "norm(t_vvoo) = " << norm(t_vvoo) << endl;
-//
-// auto expr = sequant::utils::parse_expr(L"t_{a1, a2}^{i1, i2}",
-//                                        sequant::Symmetry::antisymm);
-// auto node = binarize_expr(expr);
-// auto eval_inst = evaluate_btas{node};
-//
-// // manual symmetrization
-//
-// auto manual_symm = decltype(t_vvoo){t_vvoo.range()};
-// manual_symm.fill(0.);
-//
-// auto temp = manual_symm;
-// btas::permute(t_vvoo, {0, 1, 2, 3}, temp, {0, 1, 2, 3});
-// manual_symm += temp;
-// btas::permute(t_vvoo, {0, 1, 2, 3}, temp, {1, 0, 3, 2});
-// manual_symm += temp;
-//
-// cout << "norm(manual_symm) = " << norm(manual_symm) << endl;
-// auto eval_symm = eval_inst.evaluate_symm(yielder);
-// cout << "norm(eval_symm) = " << norm(eval_symm) << endl;
-//
-// // manual anti-symmetrization
-// auto manual_asymm = decltype(t_vvoo){t_vvoo.range()};
-// manual_asymm.fill(0.);
-//
-// temp = manual_asymm;
-// btas::permute(t_vvoo, {0, 1, 2, 3}, temp, {0, 1, 2, 3});
-// manual_asymm += temp;
-// btas::permute(t_vvoo, {0, 1, 2, 3}, temp, {1, 0, 3, 2});
-// manual_asymm += temp;
-//
-// btas::permute(t_vvoo, {0, 1, 2, 3}, temp, {1, 0, 2, 3});
-// manual_asymm -= temp;
-// btas::permute(t_vvoo, {0, 1, 2, 3}, temp, {0, 1, 3, 2});
-// manual_asymm -= temp;
-//
-// cout << "norm(manual_asymm) = " << norm(manual_asymm) << endl;
-// auto eval_asymm = eval_inst.evaluate_asymm(yielder);
-// cout << "norm(eval_asymm) = " << norm(eval_asymm) << endl;
