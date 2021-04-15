@@ -169,7 +169,7 @@ inline container::map<Index, Index> compute_index_replacement_rules(
     const auto &factor = *it;
     if (factor->type_id() == Expr::get_type_id<Tensor>()) {
       const auto &tensor = static_cast<const Tensor &>(*factor);
-      if (tensor.label() == L"S") {
+      if (tensor.label() == overlap_label()) {
         assert(tensor.bra().size() == 1);
         assert(tensor.ket().size() == 1);
         const auto &bra = tensor.bra().at(0);
@@ -249,7 +249,7 @@ inline bool apply_index_replacement_rules(
         pass_mutated &=
             tensor.transform_indices(const_replrules);
 
-        if (tensor.label() == L"S") {
+        if (tensor.label() == overlap_label()) {
           const auto &bra = tensor.bra().at(0);
           const auto &ket = tensor.ket().at(0);
 

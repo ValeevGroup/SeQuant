@@ -230,42 +230,33 @@ if (SEQUANT_EVAL_TESTS)
   include(FindOrFetchLibint2)
   include(FindOrFetchTiledArray)
 endif(SEQUANT_EVAL_TESTS)
-
-if (BTAS_SOURCE_DIR)
-    add_subdirectory(scratch)
-endif(BTAS_SOURCE_DIR)
-
 enable_testing(true)
 
 set(utests_src
-    tests/unit/test_space.cpp
-    tests/unit/test_index.cpp
-    tests/unit/test_op.cpp
-    # tests/unit/test_wick.cpp
-    tests/unit/test_tensor.cpp
-    tests/unit/test_bliss.cpp
-    tests/unit/test_expr.cpp
-    tests/unit/test_iterator.cpp
-    tests/unit/test_mbpt.cpp
-    tests/unit/test_tensor_network.cpp
-    tests/unit/test_parse_expr.cpp
-    tests/unit/test_eval_expr.cpp
-    tests/unit/test_binary_node.cpp
-    tests/unit/test_eval_seq.cpp
-    tests/unit/test_binarize_expr.cpp
-    tests/unit/test_flops_counter.cpp
-    tests/unit/test_optimize.cpp
-    )
-
+         tests/unit/test_space.cpp
+         tests/unit/test_index.cpp
+         tests/unit/test_op.cpp
+         tests/unit/test_wick.cpp
+         tests/unit/test_tensor.cpp
+         tests/unit/test_bliss.cpp
+         tests/unit/test_expr.cpp
+         tests/unit/test_iterator.cpp
+         tests/unit/test_mbpt.cpp
+         tests/unit/test_tensor_network.cpp
+         tests/unit/test_tn_factorization.cpp
+         tests/unit/test_spin.cpp
+         tests/unit/test_canonicalize.cpp
+         tests/unit/test_expr.cpp
+         tests/unit/test_parse_expr.cpp
+         tests/unit/test_eval_expr.cpp
+         tests/unit/test_binary_node.cpp
+         tests/unit/test_eval_seq.cpp
+         tests/unit/test_binarize_expr.cpp
+         tests/unit/test_flops_counter.cpp
+         tests/unit/test_optimize.cpp
+        )
 set(utests_deps SeQuant)
 
-if (TARGET tiledarray)
-  list(APPEND utests_src
-      ## unit tests for evaluation
-       # tests/unit/test_evaluate_TA.cpp
-       )
-  list(APPEND utests_deps tiledarray)
-endif(TARGET tiledarray)
 
 set(unit_test_executable unit_tests)
 add_executable(${unit_test_executable} EXCLUDE_FROM_ALL
@@ -294,37 +285,13 @@ add_executable(${example0} EXCLUDE_FROM_ALL
         examples/${example0}/${example0}.cpp)
 target_link_libraries(${example0} SeQuant ${TBB_LIBRARIES} Eigen3::Eigen)
 
-if (TARGET tiledarray AND TARGET Libint2::cxx)
-  # SRCC spin-orbital equation evaluation
-  set(example1 expr_evaluation)
-  # add_executable(${example1} EXCLUDE_FROM_ALL
-  #     examples/evaluation/${example1}.cpp
-  #     examples/contract/interpret/contract.hpp
-  #     examples/contract/scf/hartree-fock.cc)
-  # target_link_libraries(${example1} SeQuant ${TBB_LIBRARIES}
-  #     Libint2::cxx tiledarray)
-  # target_link_directories(${example1} PUBLIC ${TBB_LIBRARIES})
-  # target_compile_definitions(${example1} PRIVATE SEQUANT_HAS_TILEDARRAY)
-
-  # SRCC spin-traced equation evaluation
-  set(example2 rcc_evaluation)
-  # add_executable(${example2} EXCLUDE_FROM_ALL
-  #     examples/evaluation/${example2}.cpp
-  #     examples/contract/interpret/contract.hpp
-  #     examples/contract/scf/hartree-fock.cc)
-  # target_link_libraries(${example2} SeQuant
-  #     ${TBB_LIBRARIES} Libint2::cxx tiledarray)
-  # target_link_directories(${example2} PUBLIC ${TBB_LIBRARIES})
-  # target_compile_definitions(${example2} PRIVATE SEQUANT_HAS_TILEDARRAY)
-endif (TARGET tiledarray AND TARGET Libint2::cxx)
-
-set(example3 uccf12)
-add_executable(${example3} EXCLUDE_FROM_ALL
-    examples/${example3}/${example3}.cpp)
-target_link_libraries(${example3} SeQuant ${TBB_LIBRARIES})
+set(example1 uccf12)
+add_executable(${example1} EXCLUDE_FROM_ALL
+    examples/${example1}/${example1}.cpp)
+target_link_libraries(${example1} SeQuant ${TBB_LIBRARIES})
 
 # add tests for running examples
-set (lastexample 4)
+set (lastexample 2)
 foreach(i RANGE ${lastexample})
     if (TARGET ${example${i}})
         add_test(sequant/example/${example${i}}/build "${CMAKE_COMMAND}"
