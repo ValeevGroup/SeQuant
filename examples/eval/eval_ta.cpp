@@ -1,4 +1,4 @@
-#include "../hf/hartree-fock.h"
+#include "read_tensor_ta.hpp"
 
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/domain/eqs/cceqs.hpp>
@@ -231,445 +231,168 @@ struct eval_instance {
 };  // evaluate_ta
 
 int main(int argc, char** argv) {
-  using std::cerr;
+  using sequant::example::compatible_dims;
+  using sequant::example::make_trange;
+  using sequant::example::read_header;
+  using sequant::example::read_tensor_ta;
+
+  using ranges::views::take;
+  using sequant::optimize::optimize;
+  using sequant::optimize::tail_factor;
+  using sequant::utils::binarize_expr;
+
   using std::cout;
   using std::endl;
-  //
-  using libint2::Engine;
-  using libint2::Operator;
-  using libint2::Shell;
 
-  try {
-    /*** =========================== ***/
-    /*** initialize molecule         ***/
-    /*** =========================== ***/
+  std::string_view fock_ifname = argc > 1 ? argv[1] : "fock.dat";
+  std::string_view eri_ifname = argc > 2 ? argv[2] : "eri.dat";
 
-    // read geometry from a file; by default read from h2o.xyz, else take
-    // filename (.xyz) from the command line
-    const auto filename = (argc > 1) ? argv[1] : "h2o.xyz";
-    std::vector<Atom> atoms = read_geometry(filename);
+  assert(compatible_dims(fock_ifname, eri_ifname));
 
-    // count the number of electrons
-    size_t nelectron = 0;
-    for (auto i = 0; i < atoms.size(); ++i) nelectron += atoms[i].atomic_number;
-    const size_t ndocc = nelectron / 2;
-
-    // compute the nuclear repulsion energy
-    auto enuc = 0.0;
-    for (auto i = 0; i < atoms.size(); i++)
-      for (auto j = i + 1; j < atoms.size(); j++) {
-        auto xij = atoms[i].x - atoms[j].x;
-        auto yij = atoms[i].y - atoms[j].y;
-        auto zij = atoms[i].z - atoms[j].z;
-        auto r2 = xij * xij + yij * yij + zij * zij;
-        auto r = sqrt(r2);
-        enuc += atoms[i].atomic_number * atoms[j].atomic_number / r;
-      }
-    cout << "\tNuclear repulsion energy = " << enuc << endl;
-
-    /*** =========================== ***/
-    /*** create basis set            ***/
-    /*** =========================== ***/
-
-    auto shells = make_sto3g_basis(atoms);
-    size_t nao = 0;
-    for (auto s = 0; s < shells.size(); ++s) nao += shells[s].size();
-    size_t nvirt = nao - ndocc;
-
-    /*** =========================== ***/
-    /*** compute 1-e integrals       ***/
-    /*** =========================== ***/
-
-    // initializes the Libint integrals library ... now ready to compute
-    libint2::initialize();
-
-    // compute overlap integrals
-    auto S = compute_1body_ints(shells, Operator::overlap);
-    cout << "\n\tOverlap Integrals:\n";
-    cout << S << endl;
-
-    // compute kinetic-energy integrals
-    auto T = compute_1body_ints(shells, Operator::kinetic);
-    cout << "\n\tKinetic-Energy Integrals:\n";
-    cout << T << endl;
-
-    // compute nuclear-attraction integrals
-    Matrix V = compute_1body_ints(shells, Operator::nuclear, atoms);
-    cout << "\n\tNuclear Attraction Integrals:\n";
-    cout << V << endl;
-
-    // Core Hamiltonian = T + V
-    Matrix H = T + V;
-    cout << "\n\tCore Hamiltonian:\n";
-    cout << H << endl;
-
-    // T and V no longer needed, free up the memory
-    T.resize(0, 0);
-    V.resize(0, 0);
-
-    /*** =========================== ***/
-    /*** build initial-guess density ***/
-    /*** =========================== ***/
-
-    // use core Hamiltonian eigenstates to guess density?
-    // set to true to match the result of versions 0, 1, and 2 of the code
-    // HOWEVER !!! even for medium-size molecules hcore will usually fail !!!
-    // thus set to false to use Superposition-Of-Atomic-Densities (SOAD) guess
-    const auto use_hcore_guess = false;
-
-    Matrix D;
-    Matrix C;
-    Eigen::VectorXd C_v;    // eigenvalues
-    if (use_hcore_guess) {  // hcore guess
-      // solve H C = e S C
-      Eigen::GeneralizedSelfAdjointEigenSolver<Matrix> gen_eig_solver(H, S);
-      auto eps = gen_eig_solver.eigenvalues();
-      auto C = gen_eig_solver.eigenvectors();
-      cout << "\n\tInitial C Matrix:\n";
-      cout << C << endl;
-
-      // compute density, D = C(occ) . C(occ)T
-      auto C_occ = C.leftCols(ndocc);
-      D = C_occ * C_occ.transpose();
-    } else {  // SOAD as the guess density, assumes STO-nG basis
-      D = compute_soad(atoms);
-    }
-
-    cout << "\n\tInitial Density Matrix:\n";
-    cout << D << endl;
-
-    /*** =========================== ***/
-    /*** main iterative loop         ***/
-    /*** =========================== ***/
-
-    const auto maxiter = 100;
-    const auto conv = 1e-12;
-    auto iter = 0;
-    auto rmsd = 0.0;
-    auto ediff = 0.0;
-    auto ehf = 0.0;
-    Matrix fock_mat;  // capture fock matrix for ccsd calculations
-    do {
-      const auto tstart = std::chrono::high_resolution_clock::now();
-      ++iter;
-
-      // Save a copy of the energy and the density
-      auto ehf_last = ehf;
-      auto D_last = D;
-
-      // build a new Fock matrix
-      auto F = H;
-      // F += compute_2body_fock_simple(shells, D);
-      F += compute_2body_fock(shells, D);
-      fock_mat = F;
-
-      if (iter == 1) {
-        cout << "\n\tFock Matrix:\n";
-        cout << F << endl;
-      }
-
-      // solve F C = e S C
-      Eigen::GeneralizedSelfAdjointEigenSolver<Matrix> gen_eig_solver(F, S);
-      auto eps = gen_eig_solver.eigenvalues();
-      C = gen_eig_solver.eigenvectors();
-      C_v = gen_eig_solver.eigenvalues();
-
-      // compute density, D = C(occ) . C(occ)T
-      auto C_occ = C.leftCols(ndocc);
-      D = C_occ * C_occ.transpose();
-
-      // compute HF energy
-      ehf = 0.0;
-      for (auto i = 0; i < nao; i++)
-        for (auto j = 0; j < nao; j++) ehf += D(i, j) * (H(i, j) + F(i, j));
-
-      // compute difference with last iteration
-      ediff = ehf - ehf_last;
-      rmsd = (D - D_last).norm();
-
-      const auto tstop = std::chrono::high_resolution_clock::now();
-      const std::chrono::duration<double> time_elapsed = tstop - tstart;
-
-      if (iter == 1)
-        cout << "\n\n Iter        E(elec)              E(tot)               "
-                "Delta(E)             RMS(D)         Time(s)\n";
-      printf(" %02d %20.12f %20.12f %20.12f %20.12f %10.5lf\n", iter, ehf,
-             ehf + enuc, ediff, rmsd, time_elapsed.count());
-
-    } while (((fabs(ediff) > conv) || (fabs(rmsd) > conv)) && (iter < maxiter));
-
-    libint2::finalize();  // done with libint
-
-    auto hf_final = ehf + enuc;
-    cout << endl;
-    printf("** Hartree-Fock energy = %20.12f\n", hf_final);
-
-    /*** =========================== ***/
-    /***          MP2 energy         ***/
-    /*** =========================== ***/
-    //
-
-    /* cout << "Coeff matrix is: " << endl; */
-    /* cout << C << endl << endl; */
-
-    // Initialize MADWorld
-    TA::World& world = TA::initialize(argc, argv);
-
-    auto mo_ints_tensor = compute_mo_ints(C, shells, world);
-    auto tile_ints_spatial = mo_ints_tensor.find({0, 0, 0, 0}).get();
-
-    // =====================================================
-    // from here on number of occupied and virtual orbitals
-    // is doubled as we are now working on spin basis
-    // =====================================================
-    nao *= 2;
-    nvirt *= 2;
-    size_t nocc = 2 * ndocc;  // in place of ndocc use nocc
-
-    auto spinify_ints = [&](const TA::Range& range) {
-      TA::Tensor<double> tile(range);
-      for (auto r = 0; r < nao; ++r) {
-        for (auto s = 0; s < nao; ++s) {
-          for (auto p = 0; p < nao; ++p) {
-            for (auto q = 0; q < nao; ++q) {
-              //
-              // finding the spatial orbital position
-              // corresponding to a spin orbital
-              //
-              // spin    spatial
-              // ---------------
-              // 0,1        -> 0
-              // 2,3        -> 1
-              // 4,5        -> 2
-              // 2*n, 2*n+1 -> n
-              // x          -> floor(x/2)
-              //
-              size_t p_i = floor(p / 2);
-              size_t q_i = floor(q / 2);
-              size_t r_i = floor(r / 2);
-              size_t s_i = floor(s / 2);
-
-              auto col_int = 0.0;
-              auto exc_int = 0.0;
-
-              // orbs: 0 1 2 3 4 ...
-              // spin: α β α β α ...
-              //
-              //  <01|23>: coulomb integral
-
-              if ((r % 2 == p % 2) && (s % 2 == q % 2))
-                col_int += tile_ints_spatial(r_i, s_i, p_i, q_i);
-
-              if ((r % 2 == q % 2) && (s % 2 == p % 2))
-                exc_int += tile_ints_spatial(r_i, s_i, q_i, p_i);
-
-              tile(r, s, p, q) = col_int - exc_int;
-            }
-          }
-        }
-      }
-      return tile;
-    };
-
-    TA::TArrayD ints_spin(
-        world,
-        TA::TiledRange{TA::TiledRange1{0, nao}, TA::TiledRange1{0, nao},
-                       TA::TiledRange1{0, nao}, TA::TiledRange1{0, nao}});
-
-    auto tile_spin_ints = ints_spin.world().taskq.add(
-        spinify_ints, ints_spin.trange().make_tile_range(0));
-    *(ints_spin.begin()) = tile_spin_ints;
-
-    auto spinify_fock = [&](const TA::Range& range) {
-      TA::Tensor<double> tile(range);
-      for (auto i = 0; i < nao; ++i) {
-        for (auto j = 0; j < nao; ++j)
-          tile(i, j) = (i == j) ? C_v(floor(i / 2)) : 0;
-      }
-      return tile;
-    };
-
-    TA::TArrayD fock_tensor(world, TA::TiledRange{TA::TiledRange1{0, nao},
-                                                  TA::TiledRange1{0, nao}});
-    auto tile_fock = fock_tensor.world().taskq.add(
-        spinify_fock, fock_tensor.trange().make_tile_range(0));
-    *(fock_tensor.begin()) = tile_fock;
-
-    cout << "\n"
-         << "*********************************\n"
-         << "Calculating EMP2 using TiledArray\n"
-         << "*********************************\n"
-         << endl;
-
-    auto emp2 = 0.0;
-
-    auto tile_ints_spin = ints_spin.find({0, 0, 0, 0}).get();
-    auto tile_fock_spin = fock_tensor.find({0, 0}).get();
-
-    for (auto r = 0; r < nocc; ++r) {
-      for (auto s = 0; s < nocc; ++s) {
-        for (auto p = nocc; p < nao; ++p) {
-          for (auto q = nocc; q < nao; ++q) {
-            auto calc = tile_ints_spin(r, s, p, q);
-
-            calc *= calc;
-
-            emp2 += calc / (tile_fock_spin(r, r) + tile_fock_spin(s, s) -
-                            tile_fock_spin(p, p) - tile_fock_spin(q, q));
-          }
-        }
-      }
-    }
-    emp2 /= 4.0;
-
-    cout << "E(MP2): " << emp2 << "\nFinal energy is : " << hf_final + emp2
-         << endl;
-    /******************************************************/
-
-    sequant::detail::OpIdRegistrar op_id_registrar;
-
-    sequant::mbpt::set_default_convention();
-
-    sequant::TensorCanonicalizer::register_instance(
-        std::make_shared<sequant::DefaultTensorCanonicalizer>());
-
-    using ranges::views::take;
-    using sequant::optimize::optimize;
-    using sequant::optimize::tail_factor;
-    using sequant::utils::binarize_expr;
-
-    auto D_vo = TA::TArrayD{world, TA::TiledRange{TA::TiledRange1{0, nvirt},
-                                                  TA::TiledRange1{0, nocc}}};
-    auto D_vvoo = TA::TArrayD{
-        world,
-        TA::TiledRange{TA::TiledRange1{0, nvirt}, TA::TiledRange1{0, nvirt},
-                       TA::TiledRange1{0, nocc}, TA::TiledRange1{0, nocc}}};
-
-    D_vo.fill(0);
-    D_vvoo.fill(0);
-    auto tile_D_vo = D_vo.find(0).get();
-    auto tile_D_vvoo = D_vvoo.find(0).get();
-
-    [nocc, nvirt](auto const& fock, auto& dvo_tile, auto& dvvoo_tile) {
-      auto tile_fock = fock.find(0).get();
-      for (auto a = 0; a < nvirt; ++a)
-        for (auto i = 0; i < nocc; ++i) {
-          dvo_tile(a, i) = tile_fock(i, i) - tile_fock(nocc + a, nocc + a);
-          for (auto b = 0; b < nvirt; ++b)
-            for (auto j = 0; j < nocc; ++j) {
-              dvvoo_tile(a, b, i, j) = dvo_tile(a, i) + tile_fock(j, j) -
-                                       tile_fock(nocc + b, nocc + b);
-            }
-        }
-    }(fock_tensor, tile_D_vo, tile_D_vvoo);
-
-    // cout << "norm(D_ov) = " << norm(D_vo)
-    //      << "    norm(D_oovv) = " << norm(D_vvoo) << endl;
-
-    auto t_vo = TA::TArrayD{world, TA::TiledRange{TA::TiledRange1{0, nvirt},
-                                                  TA::TiledRange1{0, nocc}}};
-    auto t_vvoo = TA::TArrayD{
-        world,
-        TA::TiledRange{TA::TiledRange1{0, nvirt}, TA::TiledRange1{0, nvirt},
-                       TA::TiledRange1{0, nocc}, TA::TiledRange1{0, nocc}}};
-    t_vo.fill(0);
-    t_vvoo.fill(0);
-
-    auto yielder =
-        yield_leaf{nocc, nvirt, fock_tensor, ints_spin, t_vo, t_vvoo};
-
-    auto const g_vvoo =
-        yielder(sequant::utils::parse_expr(L"g_{a1,a2}^{i1,i2}",
-                                           sequant::Symmetry::antisymm)
-                    ->as<sequant::Tensor>());
-    auto const f_vo = yielder(
-        sequant::utils::parse_expr(L"f_{a1}^{i1}", sequant::Symmetry::antisymm)
-            ->as<sequant::Tensor>());
-
-    auto cc_r = sequant::eqs::cceqvec{2, 2}(true, true, true, true);
-
-    auto nodes = ranges::views::tail(cc_r) |
-                 ranges::views::transform(
-                     [](auto const& n) { return optimize(tail_factor(n)); }) |
-                 ranges::to_vector;
-
-    auto const& node_r1 = nodes[0];
-    auto const& node_r2 = nodes[1];
-
-    // true: leaf tensors (other than 't' tensors) will be cached
-    // false: only intermediates will be cached
-    auto manager = sequant::eval::make_cache_man<TA::TArrayD>(nodes, true);
-
-    iter = 0;
-    ediff = 0.0;
-    auto normdiff = 0.0;
-    auto ecc = 0.0;
-    auto eval_inst_r1 = eval_instance{node_r1};
-    auto eval_inst_r2 = eval_instance{node_r2};
-    auto start = std::chrono::high_resolution_clock::now();
-    do {
-      ++iter;
-
-      auto r1 = eval_inst_r1.evaluate_asymm(yielder, manager);
-      auto r2 = eval_inst_r2.evaluate_asymm(yielder, manager);
-
-      auto tile_r1 = r1.find(0).get();
-      auto tile_r2 = r2.find(0).get();
-      auto tile_t_vo = t_vo.find(0).get();
-      auto tile_t_vvoo = t_vvoo.find(0).get();
-
-      auto norm_last = norm(t_vvoo);
-
-      // updating T1 and T2
-      for (auto i = 0; i < nocc; ++i)
-        for (auto a = 0; a < nvirt; ++a) {
-          tile_t_vo(a, i) += tile_r1(a, i) / tile_D_vo(a, i);
-          for (auto j = 0; j < nocc; ++j)
-            for (auto b = 0; b < nvirt; ++b) {
-              tile_t_vvoo(a, b, i, j) +=
-                  tile_r2(a, b, i, j) / tile_D_vvoo(a, b, i, j);
-            }
-        }
-
-      normdiff = norm_last - norm(t_vvoo);
-
-      // calculating ecc
-      auto ecc_last = ecc;
-      ecc = 0;
-      TA::TArrayD temp;
-      temp("b,j") = 0.5 * g_vvoo("a,b,i,j") * t_vo("a,i");
-
-      ecc += temp("b,j").dot(t_vo("b,j"));
-      ecc += 0.25 * g_vvoo("a,b,i,j").dot(t_vvoo("a,b,i,j"));
-      ecc += f_vo("a,i").dot(t_vo("a,i"));
-
-      cout << "E(CC) = "
-           << std::setprecision(std::numeric_limits<double>::max_digits10)
-           << ecc << endl;
-
-    } while (iter < maxiter &&
-             (std::fabs(normdiff) > conv || std::fabs(ediff) > conv));
-
-    auto stop = std::chrono::high_resolution_clock::now();
-    auto duration =
-        std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
-    cout << "\nOut of loop after " << iter << " iterations.\n"
-         << "\nTime: " << duration.count() << " microseconds." << endl;
-
-    return 0;
+  auto fock_header = read_header(fock_ifname);
+  auto eri_header = read_header(eri_ifname);
+  if (fock_header.rank > eri_header.rank) {
+    std::swap(fock_ifname, eri_ifname);
+    std::swap(fock_header, eri_header);
   }
 
-  catch (const char* ex) {
-    cerr << "caught exception: " << ex << endl;
-    return 1;
-  } catch (std::string& ex) {
-    cerr << "caught exception: " << ex << endl;
-    return 1;
-  } catch (std::exception& ex) {
-    cerr << ex.what() << endl;
-    return 1;
-  } catch (...) {
-    cerr << "caught unknown exception\n";
-    return 1;
-  }
+  assert(fock_header.rank == 2 && "Fock tensor should be rank 2");
+  assert(eri_header.rank == 4 && "Eri tensor should be rank 4");
+
+  auto const nocc = fock_header.nocc;
+  auto const nvirt = fock_header.nvirt;
+
+  auto& world = TA::initialize(argc, argv);
+
+  auto fock = TA::TArrayD{world, make_trange(fock_header.rank, nocc + nvirt)};
+
+  auto eri = TA::TArrayD{world, make_trange(eri_header.rank, nocc + nvirt)};
+
+  read_tensor_ta(fock_ifname, fock);
+  read_tensor_ta(eri_ifname, eri);
+
+  sequant::detail::OpIdRegistrar op_id_registrar;
+
+  sequant::mbpt::set_default_convention();
+
+  sequant::TensorCanonicalizer::register_instance(
+      std::make_shared<sequant::DefaultTensorCanonicalizer>());
+
+  auto D_vo = TA::TArrayD{world, TA::TiledRange{TA::TiledRange1{0, nvirt},
+                                                TA::TiledRange1{0, nocc}}};
+  auto D_vvoo = TA::TArrayD{
+      world,
+      TA::TiledRange{TA::TiledRange1{0, nvirt}, TA::TiledRange1{0, nvirt},
+                     TA::TiledRange1{0, nocc}, TA::TiledRange1{0, nocc}}};
+
+  D_vo.fill(0);
+  D_vvoo.fill(0);
+  auto tile_D_vo = D_vo.find(0).get();
+  auto tile_D_vvoo = D_vvoo.find(0).get();
+  [nocc, nvirt](auto const& fock, auto& dvo_tile, auto& dvvoo_tile) {
+    auto tile_fock = fock.find(0).get();
+    for (auto a = 0; a < nvirt; ++a)
+      for (auto i = 0; i < nocc; ++i) {
+        dvo_tile(a, i) = tile_fock(i, i) - tile_fock(nocc + a, nocc + a);
+        for (auto b = 0; b < nvirt; ++b)
+          for (auto j = 0; j < nocc; ++j) {
+            dvvoo_tile(a, b, i, j) = dvo_tile(a, i) + tile_fock(j, j) -
+                                     tile_fock(nocc + b, nocc + b);
+          }
+      }
+  }(fock, tile_D_vo, tile_D_vvoo);
+
+  auto t_vo = TA::TArrayD{world, TA::TiledRange{TA::TiledRange1{0, nvirt},
+                                                TA::TiledRange1{0, nocc}}};
+  auto t_vvoo = TA::TArrayD{
+      world,
+      TA::TiledRange{TA::TiledRange1{0, nvirt}, TA::TiledRange1{0, nvirt},
+                     TA::TiledRange1{0, nocc}, TA::TiledRange1{0, nocc}}};
+  t_vo.fill(0);
+  t_vvoo.fill(0);
+
+  auto yielder = yield_leaf{nocc, nvirt, fock, eri, t_vo, t_vvoo};
+
+  auto const g_vvoo =
+      yielder(sequant::utils::parse_expr(L"g_{a1,a2}^{i1,i2}",
+                                         sequant::Symmetry::antisymm)
+                  ->as<sequant::Tensor>());
+  auto const f_vo = yielder(
+      sequant::utils::parse_expr(L"f_{a1}^{i1}", sequant::Symmetry::antisymm)
+          ->as<sequant::Tensor>());
+
+  auto cc_r = sequant::eqs::cceqvec{2, 2}(true, true, true, true);
+
+  auto nodes = ranges::views::tail(cc_r) |
+               ranges::views::transform(
+                   [](auto const& n) { return optimize(tail_factor(n)); }) |
+               ranges::to_vector;
+
+  auto const& node_r1 = nodes[0];
+  auto const& node_r2 = nodes[1];
+
+  // true: leaf tensors (other than 't' tensors) will be cached
+  // false: only intermediates will be cached
+  auto manager = sequant::eval::make_cache_man<TA::TArrayD>(nodes, true);
+
+  const auto maxiter = 100;
+  const auto conv = 1e-12;
+  size_t iter = 0;
+  double ediff = 0.0;
+  auto normdiff = 0.0;
+  auto ecc = 0.0;
+
+  auto eval_inst_r1 = eval_instance{node_r1};
+  auto eval_inst_r2 = eval_instance{node_r2};
+  auto start = std::chrono::high_resolution_clock::now();
+  do {
+    ++iter;
+
+    auto r1 = eval_inst_r1.evaluate_asymm(yielder, manager);
+    auto r2 = eval_inst_r2.evaluate_asymm(yielder, manager);
+
+    auto tile_r1 = r1.find(0).get();
+    auto tile_r2 = r2.find(0).get();
+    auto tile_t_vo = t_vo.find(0).get();
+    auto tile_t_vvoo = t_vvoo.find(0).get();
+
+    auto norm_last = norm(t_vvoo);
+
+    // updating T1 and T2
+    for (auto i = 0; i < nocc; ++i)
+      for (auto a = 0; a < nvirt; ++a) {
+        tile_t_vo(a, i) += tile_r1(a, i) / tile_D_vo(a, i);
+        for (auto j = 0; j < nocc; ++j)
+          for (auto b = 0; b < nvirt; ++b) {
+            tile_t_vvoo(a, b, i, j) +=
+                tile_r2(a, b, i, j) / tile_D_vvoo(a, b, i, j);
+          }
+      }
+
+    normdiff = norm_last - norm(t_vvoo);
+
+    // calculating ecc
+    auto ecc_last = ecc;
+    ecc = 0;
+    TA::TArrayD temp;
+    temp("b,j") = 0.5 * g_vvoo("a,b,i,j") * t_vo("a,i");
+
+    ecc += temp("b,j").dot(t_vo("b,j"));
+    ecc += 0.25 * g_vvoo("a,b,i,j").dot(t_vvoo("a,b,i,j"));
+    ecc += f_vo("a,i").dot(t_vo("a,i"));
+
+    cout << "E(CC) = "
+         << std::setprecision(std::numeric_limits<double>::max_digits10) << ecc
+         << endl;
+
+  } while (iter < maxiter &&
+           (std::fabs(normdiff) > conv || std::fabs(ediff) > conv));
+
+  auto stop = std::chrono::high_resolution_clock::now();
+  auto duration =
+      std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+  cout << "\nOut of loop after " << iter << " iterations.\n"
+       << "\nTime: " << duration.count() << " microseconds." << endl;
+
+  return 0;
 }

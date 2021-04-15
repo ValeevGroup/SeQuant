@@ -1,3 +1,5 @@
+#include "read_tensor_btas.hpp"
+
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/domain/eqs/cceqs.hpp>
@@ -19,36 +21,6 @@
 auto const assert_imaginary_zero(sequant::Constant const& c) {
   assert(c.value().imag() == 0 && "complex scalar unsupported for real tensor");
 }
-
-std::array<size_t, 3> read_header(std::ifstream& fs) {
-  size_t rank = 0, nocc = 0, nvirt = 0;
-  std::string header{};
-  std::getline(fs, header);
-  auto hs = std::istringstream{header};
-  hs >> rank;
-  hs >> nocc;
-  hs >> nvirt;
-  return {rank, nocc, nvirt};
-}  // read_header
-
-auto read_header(std::string_view fname) {
-  auto ifs = std::ifstream{fname};
-  return read_header(ifs);
-}  // read_header
-
-auto read_tensor(std::string_view fname) {
-  auto ifs = std::ifstream{fname};
-  auto const [rank, nocc, nvirt] = read_header(ifs);
-  auto range = btas::Range{ranges::views::repeat(nocc + nvirt) |
-                           ranges::views::take(rank) | ranges::to_vector};
-  auto tensor = btas::Tensor<double>{range};
-  tensor.generate([&ifs]() {
-    double x;
-    ifs >> x;
-    return x;
-  });
-  return tensor;
-}  // read_tensor
 
 auto const norm = [](btas::Tensor<double> const& tensor) {
   return std::sqrt(btas::dot(tensor, tensor));
@@ -273,7 +245,7 @@ struct eval_instance {
 
 // clang-format off
 /**
- * <executable> fock.dat eri.dat
+ * <executable> (fock.dat eri.dat | eri.dat fock.dat)
  *
  * .dat format:
  *
@@ -286,28 +258,32 @@ struct eval_instance {
  */
 // clang-format on
 int main(int argc, char** argv) {
+  using sequant::example::compatible_dims;
+  using sequant::example::read_header;
+  using sequant::example::read_tensor_btas;
   using std::cout;
   using std::endl;
 
-  auto fock_input = argc > 1 ? argv[1] : "fock_h2o.dat";
-  auto eri_input = argc > 2 ? argv[2] : "eri_h2o.dat";
+  std::string_view fock_ifname = argc > 1 ? argv[1] : "fock.dat";
+  std::string_view eri_ifname = argc > 2 ? argv[2] : "eri.dat";
 
-  auto fock_head = read_header(fock_input);
-  auto eri_head = read_header(eri_input);
+  assert(compatible_dims(fock_ifname, eri_ifname));
 
-  assert(fock_head[0] == 2 && "Fock tensor rank != 2");
-  assert(eri_head[0] == 4 && "ERI tensor rank != 4");
+  auto fock_header = read_header(fock_ifname);
+  auto eri_header = read_header(eri_ifname);
+  if (fock_header.rank > eri_header.rank) {
+    std::swap(fock_ifname, eri_ifname);
+    std::swap(fock_header, eri_header);
+  }
 
-  for (auto&& pair :
-       ranges::views::zip(fock_head, eri_head) | ranges::views::tail)
-    assert(pair.first == pair.second &&
-           "incompatible Range1 objects in read tensors");
+  assert(fock_header.rank == 2 && "Fock tensor should be rank 2");
+  assert(eri_header.rank == 4 && "Eri tensor should be rank 4");
 
-  auto const fock = read_tensor(fock_input);
-  auto const eri = read_tensor(eri_input);
+  auto const fock = read_tensor_btas(fock_ifname);
+  auto const eri = read_tensor_btas(eri_ifname);
 
-  size_t const nocc = fock_head[1];
-  size_t const nvirt = fock_head[2];
+  size_t const nocc = fock_header.nocc;
+  size_t const nvirt = fock_header.nvirt;
 
   auto t_vo = btas::Tensor<double>{btas::Range{nvirt, nocc}};
   auto t_vvoo = btas::Tensor<double>{btas::Range{nvirt, nvirt, nocc, nocc}};
