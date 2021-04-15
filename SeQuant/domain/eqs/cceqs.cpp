@@ -253,7 +253,7 @@ compute_all::compute_all(size_t nmax) : NMAX(nmax) {}
 
 void compute_all::operator()(bool print, bool screen, bool use_topology,
                              bool use_connectivity, bool canonical_only,
-                             bool use_antisymm = true) {
+                             bool use_antisymm) {
   for (size_t N = 2; N <= NMAX; ++N)
     compute_cceqvec{N, 1, N}(print, screen, use_topology, use_connectivity,
                              canonical_only, use_antisymm);
