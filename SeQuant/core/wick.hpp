@@ -334,6 +334,7 @@ class WickTheorem {
           op_nconnections(opseq.size(), 0),
           op_topological_partition(op_toppart) {
       init_topological_partitions();
+      init_input_index_columns();
     }
 
     NontensorWickState(const NontensorWickState&) = delete;
@@ -354,6 +355,46 @@ class WickTheorem {
     container::svector<size_t>
         adjacency_matrix;  //!< number of connections between each normop, only
                            //!< lower triangle is kept
+
+    container::svector<std::pair<Index,Index>>
+        input_partner_indices;  //!< list of {cre,ann} pairs of Index objects in the input whose corresponding Op<S> objects act on the same particle
+
+    /// "merges" partner index pair from input_index_columns with contracted Index pairs in this->sp
+    auto make_target_partner_indices() const {
+      // copy all pairs in the input product
+      container::svector<std::pair<Index,Index>> result(input_partner_indices);
+      // for every contraction so far encountered ...
+      for(auto& contr: sp) {
+        // N.B. sp is composed of 1-particle contractions
+        assert(contr->template is<Tensor>() && contr->template as<Tensor>().rank() == 1 && contr->template as<Tensor>().label() == sequant::overlap_label());
+        const auto& contr_t = contr->template as<Tensor>();
+        const auto& bra_idx = contr_t.bra().at(0);
+        const auto& ket_idx = contr_t.ket().at(0);
+        // ... if both bra and ket indices were in the input list, "merge" their pairs
+        auto bra_it = ranges::find_if(result, [&bra_idx](const auto& p){
+          assert(p.first != bra_idx);
+          return p.second == bra_idx;
+        });
+        if (bra_it != result.end()) {
+          auto ket_it = ranges::find_if(result, [&ket_idx](const auto& p){
+            assert(p.second != ket_idx);
+            return p.first == ket_idx;
+          });
+          if (ket_it != result.end()) {
+            assert(bra_it != ket_it);
+            if (ket_it > bra_it) {
+              bra_it->second = std::move(ket_it->second);
+              result.erase(ket_it);
+            }
+            else {
+              ket_it->first = std::move(bra_it->first);
+              result.erase(bra_it);
+            }
+          }
+        }
+      }
+      return result;
+    }
 
     /// for each operator specifies how many connections it currently has
     /// TODO rename op -> nop to distinguish Op and NormalOperator
@@ -382,6 +423,16 @@ class WickTheorem {
       assert(ranges::any_of(topological_partitions, [](auto&& partition){
         return partition.empty();
       }) == false);
+    }
+
+    // populates target_particle_ops
+    void init_input_index_columns() {
+      // for each NormalOperator
+      for(auto& nop: opseq) {
+        for(auto&& cre_ann : ranges::views::zip(nop.creators(), nop.annihilators())) {
+          input_partner_indices.emplace_back(std::get<0>(cre_ann).index(), std::get<1>(cre_ann).index());
+        }
+      }
     }
 
     template <typename T>
@@ -518,6 +569,7 @@ class WickTheorem {
     auto result_plus_mutex = std::make_pair(&result, &mtx);
     NontensorWickState state(input_, op_topological_partition_);
     state.count_only = count_only;
+    // TODO extract index->particle maps
 
     if (Logger::get_instance().wick_contract) {
       std::wcout << "nop topological partitions: {\n";
@@ -539,7 +591,7 @@ class WickTheorem {
         ++state.count;
       }
       else {
-        auto [phase, normop] = normalize(input_);
+        auto [phase, normop] = normalize(input_, state.input_partner_indices);
         result_plus_mutex.first->push_back(std::make_pair(Product(phase, {}), std::move(normop)));
       }
     }
@@ -725,7 +777,7 @@ class WickTheorem {
                     //              << " terms" << std::endl;
                     result.second->unlock();
                   } else {
-                    auto [phase, op] = normalize(state.opseq);
+                    auto [phase, op] = normalize(state.opseq, state.make_target_partner_indices());
                     result.second->lock();
                     result.first->push_back(std::make_pair(
                         std::move(state.sp.deep_copy().scale(phase)),
