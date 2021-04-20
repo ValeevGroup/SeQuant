@@ -507,7 +507,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
             graph->find_automorphisms(stats, &bliss::aut_hook<decltype(save_aut)>, &save_aut);
           }
 
-          // use automorphisms to determine groups of topologically equivalent NormalLoperators and Indices
+          // use automorphisms to determine groups of topologically equivalent NormalOperators and Indices
           // this partitions vertices into partitions (only nontrivial partitions are reported)
           // vertex_pair_exclude is a callable that accepts 2 vertex indices and returns true if this pair of indices is to be excluded
           // the default is to not exclude any pairs
