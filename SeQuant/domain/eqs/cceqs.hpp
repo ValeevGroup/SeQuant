@@ -4,6 +4,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr_fwd.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/timer.hpp>
 
 namespace sequant::eqs {
 
@@ -41,6 +42,8 @@ class compute_all {
                   bool canonical_only = true,
                   bool use_antisymm = true);
 };  // class compute_all
+
+sequant::TimerPool<32> tpool;
 
 }  // namespace sequant::eqs
 #endif  // SEQUANT_EQS_CCEQS_HPP

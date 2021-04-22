@@ -4,13 +4,14 @@
 #include <iostream>
 
 #include <boost/math/special_functions/factorials.hpp>
-// boost/numeric/interval does not know about arm rounding .. on arm64/macos use c99 rounding
+// boost/numeric/interval does not know about arm rounding .. on arm64/macos use
+// c99 rounding
 #if defined(__arm64__) && defined(__APPLE__) && !defined(__USE_ISOC99)
-# define __USE_ISOC99 1
-# include <boost/numeric/interval.hpp>
-# undef __USE_ISOC99
+#define __USE_ISOC99 1
+#include <boost/numeric/interval.hpp>
+#undef __USE_ISOC99
 #else
-# include <boost/numeric/interval.hpp>
+#include <boost/numeric/interval.hpp>
 #endif
 
 #include <SeQuant/core/op.hpp>
@@ -151,20 +152,27 @@ class ccresidual {
           return std::initializer_list<std::pair<int, int>>{};
       };
       auto result =
-          screened_vac_av{0}(A(P) * H(antisymm), connect({}), screen, use_topology,
-                             canonical_only, antisymm) +
-          screened_vac_av{1}(A(P) * H(antisymm) * T(N, N, false, antisymm), connect({{1, 2}}), screen,
+          screened_vac_av{0}(A(P) * H(antisymm), connect({}), screen,
                              use_topology, canonical_only, antisymm) +
-          ex<Constant>(1. / 2) * screened_vac_av{2}(A(P) * H(antisymm) * T(N, N, false, antisymm) * T(N, N, false, antisymm),
-                                                    connect({{1, 2}, {1, 3}}),
-                                                    screen, use_topology,
-                                                    canonical_only) +
+          screened_vac_av{1}(A(P) * H(antisymm) * T(N, N, false, antisymm),
+                             connect({{1, 2}}), screen, use_topology,
+                             canonical_only, antisymm) +
+          ex<Constant>(1. / 2) *
+              screened_vac_av{2}(A(P) * H(antisymm) * T(N, N, false, antisymm) *
+                                     T(N, N, false, antisymm),
+                                 connect({{1, 2}, {1, 3}}), screen,
+                                 use_topology, canonical_only) +
           ex<Constant>(1. / 6) *
-              screened_vac_av{3}(A(P) * H(antisymm) * T(N, N, false, antisymm) * T(N, N, false, antisymm) * T(N, N, false, antisymm),
+              screened_vac_av{3}(A(P) * H(antisymm) * T(N, N, false, antisymm) *
+                                     T(N, N, false, antisymm) *
+                                     T(N, N, false, antisymm),
                                  connect({{1, 2}, {1, 3}, {1, 4}}), screen,
                                  use_topology, canonical_only) +
           ex<Constant>(1. / 24) *
-              screened_vac_av{4}(A(P) * H(antisymm) * T(N, N, false, antisymm) * T(N, N, false, antisymm) * T(N, N, false, antisymm) * T(N, N, false, antisymm),
+              screened_vac_av{4}(A(P) * H(antisymm) * T(N, N, false, antisymm) *
+                                     T(N, N, false, antisymm) *
+                                     T(N, N, false, antisymm) *
+                                     T(N, N, false, antisymm),
                                  connect({{1, 2}, {1, 3}, {1, 4}, {1, 5}}),
                                  screen, use_topology, canonical_only);
       simplify(result);
@@ -183,13 +191,15 @@ class ccresidual_vec {
   ccresidual_vec(size_t p, size_t pmin, size_t n) : P(p), PMIN(pmin), N(n) {}
 
   void operator()(std::vector<ExprPtr>& result, bool screen, bool use_topology,
-                  bool use_connectivity, bool canonical_only, bool use_antisymm) {
+                  bool use_connectivity, bool canonical_only,
+                  bool use_antisymm) {
     result[P] = ccresidual{P, N}(screen, use_topology, use_connectivity,
                                  canonical_only, use_antisymm);
     rapid_simplify(result[P]);
     if (P > PMIN)
       ccresidual_vec{P - 1, PMIN, N}(result, screen, use_topology,
-                                     use_connectivity, canonical_only, use_antisymm);
+                                     use_connectivity, canonical_only,
+                                     use_antisymm);
   }
 };  // class ccresidual_vec
 
@@ -216,7 +226,7 @@ std::vector<ExprPtr> cceqvec::operator()(bool screen, bool use_topology,
     throw std::runtime_error(oss.str().c_str());                   \
   }
 
-TimerPool<32> tpool;
+// TimerPool<32> tpool; Defined in header
 
 compute_cceqvec::compute_cceqvec(size_t p, size_t pmin, size_t n)
     : P(p), PMIN(pmin), N(n) {}
@@ -225,9 +235,8 @@ void compute_cceqvec::operator()(bool print, bool screen, bool use_topology,
                                  bool use_connectivity, bool canonical_only,
                                  bool use_antisymm) {
   tpool.start(N);
-  auto eqvec =
-      cceqvec{N, P}(screen, use_topology, use_connectivity,
-                    canonical_only, use_antisymm);
+  auto eqvec = cceqvec{N, P}(screen, use_topology, use_connectivity,
+                             canonical_only, use_antisymm);
   tpool.stop(N);
   std::wcout << std::boolalpha << "expS" << N << "[screen=" << screen
              << ",use_topology=" << use_topology
