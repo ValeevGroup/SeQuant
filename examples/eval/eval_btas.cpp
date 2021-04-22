@@ -316,7 +316,7 @@ int main(int argc, char** argv) {
   sequant::TensorCanonicalizer::register_instance(
       std::make_shared<sequant::DefaultTensorCanonicalizer>());
 
-  auto cc_r = cceqvec{2, 2}(true, true, true, true);
+  auto cc_r = cceqvec{2, 2}(false, true, true, true, true);
 
   auto nodes = ranges::views::tail(cc_r) |
                ranges::views::transform([](auto const& seqxpr) {

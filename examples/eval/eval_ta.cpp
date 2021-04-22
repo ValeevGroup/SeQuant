@@ -321,7 +321,7 @@ int main(int argc, char** argv) {
       sequant::utils::parse_expr(L"f_{a1}^{i1}", sequant::Symmetry::antisymm)
           ->as<sequant::Tensor>());
 
-  auto cc_r = sequant::eqs::cceqvec{2, 2}(true, true, true, true);
+  auto cc_r = sequant::eqs::cceqvec{2, 2}(false, true, true, true, true);
 
   auto nodes = ranges::views::tail(cc_r) |
                ranges::views::transform(

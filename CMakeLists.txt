@@ -78,8 +78,8 @@ set(SEQUANT_INSTALL_CMAKEDIR "lib/cmake/sequant"
 option(ENABLE_TBB "Enable TBB as an optional prerequisite for C++17's parallel STL (if PSTL is not supported will use of standard C++11 concurrency)" OFF)
 add_feature_info(TBB ENABLE_TBB "Intel Thread-Building Blocks is an optional prerequisite for C++17's parallel STL")
 
-option(SEQUANT_EVAL_TESTS "Enable building of evaluation tests (will look for and/or build Libint+TA)" OFF)
-add_feature_info(EVAL_TESTS SEQUANT_EVAL_TESTS "Build evaluation tests (will look for and/or build Libint+TA)")
+option(SEQUANT_EVAL_TESTS "Enable building of evaluation tests (will look for and/or build TA)" OFF)
+add_feature_info(EVAL_TESTS SEQUANT_EVAL_TESTS "Build evaluation tests (will look for and/or build TA)")
 
 ##########################
 # Prerequisites
@@ -227,7 +227,6 @@ add_library(SeQuant::SeQuant ALIAS SeQuant)  # to be able to use as subproject
 
 ### optional prereqs
 if (SEQUANT_EVAL_TESTS)
-  include(FindOrFetchLibint2)
   include(FindOrFetchTiledArray)
 endif(SEQUANT_EVAL_TESTS)
 enable_testing(true)
@@ -263,9 +262,9 @@ add_executable(${unit_test_executable} EXCLUDE_FROM_ALL
         tests/unit/catch.hpp
         ${utests_src})
 target_link_libraries(${unit_test_executable} ${utests_deps})
-if (TARGET tiledarray)
-  target_compile_definitions(${unit_test_executable} PRIVATE SEQUANT_HAS_TILEDARRAY)
-endif(TARGET tiledarray)
+# if (TARGET tiledarray)
+#   target_compile_definitions(${unit_test_executable} PRIVATE SEQUANT_HAS_TILEDARRAY)
+# endif(TARGET tiledarray)
 add_test(sequant/unit/build "${CMAKE_COMMAND}" --build ${CMAKE_BINARY_DIR}
     --target ${unit_test_executable})
 
@@ -289,8 +288,31 @@ add_executable(${example1} EXCLUDE_FROM_ALL
     examples/${example1}/${example1}.cpp)
 target_link_libraries(${example1} SeQuant ${TBB_LIBRARIES})
 
+if (TARGET tiledarray)
+    set(example2 eval_ta)
+    add_executable(${example2} EXCLUDE_FROM_ALL
+        examples/eval/read_tensor.hpp
+        examples/eval/read_tensor.cpp
+        examples/eval/read_tensor_ta.hpp
+        examples/eval/read_tensor_ta.cpp
+        examples/eval/eval_ta.cpp)
+    target_link_libraries(${example2} SeQuant ${TBB_LIBRARIES} tiledarray)
+endif(TARGET tiledarray)
+
+if(BTAS_SOURCE_DIR)
+    set(example3 eval_btas)
+    add_executable(${example3} EXCLUDE_FROM_ALL
+        examples/eval/read_tensor.hpp
+        examples/eval/read_tensor.cpp
+        examples/eval/read_tensor_btas.hpp
+        examples/eval/read_tensor_btas.cpp
+        examples/eval/eval_btas.cpp)
+    target_include_directories(${example3} PUBLIC ${BTAS_SOURCE_DIR} ${Boost_INCLUDE_DIRS})
+    target_link_libraries(${example3} SeQuant ${TBB_LIBRARIES})
+endif(BTAS_SOURCE_DIR)
+
 # add tests for running examples
-set (lastexample 2)
+set (lastexample 4)
 foreach(i RANGE ${lastexample})
     if (TARGET ${example${i}})
         add_test(sequant/example/${example${i}}/build "${CMAKE_COMMAND}"
