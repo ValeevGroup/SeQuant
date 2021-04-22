@@ -262,9 +262,10 @@ add_executable(${unit_test_executable} EXCLUDE_FROM_ALL
         tests/unit/catch.hpp
         ${utests_src})
 target_link_libraries(${unit_test_executable} ${utests_deps})
-# if (TARGET tiledarray)
-#   target_compile_definitions(${unit_test_executable} PRIVATE SEQUANT_HAS_TILEDARRAY)
-# endif(TARGET tiledarray)
+if (TARGET tiledarray)
+    target_link_libraries(${unit_test_executable} tiledarray)
+    target_compile_definitions(${unit_test_executable} PRIVATE SEQUANT_HAS_TILEDARRAY)
+endif(TARGET tiledarray)
 add_test(sequant/unit/build "${CMAKE_COMMAND}" --build ${CMAKE_BINARY_DIR}
     --target ${unit_test_executable})
 

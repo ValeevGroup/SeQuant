@@ -94,7 +94,7 @@ ExprPtr parse_product_term(const std::wstring& expr, Symmetry tensor_sym) {
   std::wsregex_iterator beg(expr.cbegin(), expr.cend(), tregex);
   std::wsregex_iterator end{};
 
-  auto tensors = ranges::subrange(beg, end) |
+  auto tensors = ranges::make_subrange(beg, end) |
                  ranges::views::transform([&tensor_sym](const auto& x) {
                    return make_tensor(x, tensor_sym);
                  }) |

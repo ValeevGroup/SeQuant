@@ -4,7 +4,7 @@
 namespace sequant::example {
 
 input_header_t read_header(std::string_view fname) {
-  auto ifs = std::ifstream{fname};
+  auto ifs = std::ifstream{fname.data()};
   size_t rank = 0, nocc = 0, nvirt = 0;
   std::string header{};
   std::getline(ifs, header);
