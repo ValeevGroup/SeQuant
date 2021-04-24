@@ -97,10 +97,10 @@ class cache_manager {
     return std::nullopt;
   }
 
-  Data const &store(key_t key, Data data) {
+  ptr_t store(key_t key, Data data) {
     if (auto &&found = cache_map.find(key); found != cache_map.end())
-      return *(store(found->second, std::move(data)));
-    return std::move(data);
+      return (store(found->second, std::move(data)));
+    return std::make_shared<Data>(std::move(data));
   }
 
 };  // cache_manager

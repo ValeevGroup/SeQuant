@@ -167,8 +167,8 @@ Tensor_t evaluate_ta(
     return *exists.value();
 
   return node.leaf()
-             ? cman.store(key, yielder(node->tensor()))
-             : cman.store(key,
+             ? *cman.store(key, yielder(node->tensor()))
+             : *cman.store(key,
                           inode_evaluate_ta(
                               node, evaluate_ta(node.left(), yielder, cman),
                               evaluate_ta(node.right(), yielder, cman)));

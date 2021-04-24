@@ -178,8 +178,8 @@ Tensor_t evaluate_btas(
   if (exists && exists.value()) return *exists.value();
 
   return node.leaf()
-             ? cman.store(key, yielder(node->tensor()))
-             : cman.store(key,
+             ? *cman.store(key, yielder(node->tensor()))
+             : *cman.store(key,
                           inode_evaluate_btas(
                               node, evaluate_btas(node.left(), yielder, cman),
                               evaluate_btas(node.right(), yielder, cman)));
