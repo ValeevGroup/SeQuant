@@ -16,6 +16,7 @@
 #include <range/v3/all.hpp>
 
 #include <chrono>
+#include <iomanip>
 #include <iostream>
 
 auto const assert_imaginary_zero(sequant::Constant const& c) {
