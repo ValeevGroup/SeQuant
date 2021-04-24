@@ -22,11 +22,11 @@ TEST_CASE("TEST BINARY_NODE", "[binary_node]") {
     REQUIRE_NOTHROW(*n1);
     REQUIRE(*n1 == 100);
 
-    struct {
+    struct dummy {
       void dummy_fun() const {}
-    } dummy;
+    };
 
-    auto const n2 = binary_node{dummy};
+    auto const n2 = binary_node{dummy{}};
 
     REQUIRE_NOTHROW(n2->dummy_fun());
   }
@@ -52,12 +52,12 @@ TEST_CASE("TEST BINARY_NODE", "[binary_node]") {
   SECTION("advanced construction") {
     auto constexpr leaves = std::array{3, 2, 4};
 
-    struct {
+    struct adder {
       int operator()(int x) const { return x; }
       int operator()(int x, int y) const { return x + y; }
-    } adder;
+    };
 
-    auto const node = binary_node<int>{leaves, adder};
+    auto const node = binary_node<int>{leaves, adder{}};
 
     REQUIRE(*node == 9);
     REQUIRE(*node.left() == 5);
@@ -66,7 +66,7 @@ TEST_CASE("TEST BINARY_NODE", "[binary_node]") {
     REQUIRE(*node.left().right() == 2);
 
     auto const leaves2 = ranges::views::all(leaves);
-    auto const node2 = binary_node<int>{leaves2, adder};
+    auto const node2 = binary_node<int>{leaves2, adder{}};
   }
 
   SECTION("evaluation") {
@@ -80,7 +80,7 @@ TEST_CASE("TEST BINARY_NODE", "[binary_node]") {
       arithm_val(int x) : val{x}, arithm{arithm_type::Id} {}
     };
 
-    struct {
+    struct arithm_binarizer {
       arithm_val operator()(arithm_val const& av) {
         assert(av.arithm == arithm_val::arithm_type::Id);
         return av;
@@ -89,20 +89,20 @@ TEST_CASE("TEST BINARY_NODE", "[binary_node]") {
       arithm_val operator()(arithm_val const& av1, arithm_val const& av2) {
         return arithm_val{};
       }
-    } arithm_binarizer;
+    };
 
-    struct {
+    struct arithm_evaluator {
       int operator()(arithm_val const& av) const { return av.val; }
       int operator()(arithm_val const& av, int leval, int reval) const {
         return leval + reval;
       }
-    } arithm_evaluator;
+    };
 
     auto constexpr summands = std::array{1, 2, 3, 4, 5};
 
-    auto const node = binary_node<arithm_val>{summands, arithm_binarizer};
+    auto const node = binary_node<arithm_val>{summands, arithm_binarizer{}};
 
-    REQUIRE(node.evaluate(arithm_evaluator) == 15);
+    REQUIRE(node.evaluate(arithm_evaluator{}) == 15);
 
     // another one
     struct string_holder {
@@ -111,7 +111,7 @@ TEST_CASE("TEST BINARY_NODE", "[binary_node]") {
 
     auto constexpr words = std::array{"he", "ll", "o,", " w", "or", "ld", "!"};
 
-    struct {
+    struct words_binarizer {
       string_holder operator()(std::string const& str) const {
         return string_holder{str};
       }
@@ -119,11 +119,12 @@ TEST_CASE("TEST BINARY_NODE", "[binary_node]") {
                                string_holder const& h2) const {
         return string_holder{};
       }
-    } words_binarizer;
+    };
 
-    auto const words_node = binary_node<string_holder>{words, words_binarizer};
+    auto const words_node =
+        binary_node<string_holder>{words, words_binarizer{}};
 
-    struct {
+    struct string_concat {
       std::string operator()(string_holder const& node) const {
         return node.str;
       }
@@ -132,9 +133,10 @@ TEST_CASE("TEST BINARY_NODE", "[binary_node]") {
         assert(node.str.empty());
         return lstr + rstr;
       }
-    } string_concat;
+    };
 
-    REQUIRE(words_node.evaluate(string_concat) == std::string{"hello, world!"});
+    REQUIRE(words_node.evaluate(string_concat{}) ==
+            std::string{"hello, world!"});
   }
 
   SECTION("digraph generation") {
@@ -142,16 +144,17 @@ TEST_CASE("TEST BINARY_NODE", "[binary_node]") {
       return iota(from) | take(count);
     };
 
-    struct {
+    struct make_sum {
       int operator()(int x) const { return x; }
       int operator()(int x, int y) const { return x + y; }
-    } make_sum;
+    };
 
-    auto const node1 = binary_node<int>{take_nums(1), make_sum};
-    auto const node2 = binary_node<int>{take_nums(2), make_sum};
-    auto const node3 = binary_node<int>{take_nums(3), make_sum};
-    auto const node4 = binary_node<int>{
-        6, binary_node<int>{1}, binary_node<int>{take_nums(2, 2), make_sum}};
+    auto ms = make_sum{};
+    auto const node1 = binary_node<int>{take_nums(1), ms};
+    auto const node2 = binary_node<int>{take_nums(2), ms};
+    auto const node3 = binary_node<int>{take_nums(3), ms};
+    auto const node4 = binary_node<int>{6, binary_node<int>{1},
+                                        binary_node<int>{take_nums(2, 2), ms}};
 
     auto label_gen_str = [](auto x) { return std::to_string(x); };
     auto label_gen_wstr = [](auto x) { return std::to_wstring(x); };
