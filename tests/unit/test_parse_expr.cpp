@@ -182,7 +182,7 @@ TEST_CASE("TEST_EXPR_PARSE", "[expr_parse]") {
 
   SECTION("sum") {
     auto sum_regex = std::wregex(expr_rgx_pat.at("sum"));
-    auto terms = {L"t_{i1, i2}^{a1, a2}",
+    auto terms = std::vector<std::wstring>{L"t_{i1, i2}^{a1, a2}",
                   L"g^{i1, i2}_{a1, a2}",
                   L"g123^{i1, i2}_{a1, a2}",
                   L"t_{i1}^{a1} * g^{a2}_{i2}",
