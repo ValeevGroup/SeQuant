@@ -56,11 +56,13 @@ int main(int argc, char* argv[]) {
         std::array<bool, 2>{false, true}, [=](const bool use_topology) {
           ranges::for_each(std::array<bool, 2>{false, true},
                            [=](const bool canonical_only) {
-                           sequant::eqs::tpool.clear();
-                             // comment out to run all possible combinations
-                             if (screen && use_topology && canonical_only)
-                               compute_all{NMAX}(print, screen, use_topology,
-                                                 true, canonical_only);
+                           // TODO tpool was in scope before
+                           // separting header and source files
+                           // tpool.clear();
+                           // comment out to run all possible combinations
+                           if (screen && use_topology && canonical_only)
+                           compute_all{NMAX}(print, screen, use_topology,
+                                   true, canonical_only);
                            });
         });
   });

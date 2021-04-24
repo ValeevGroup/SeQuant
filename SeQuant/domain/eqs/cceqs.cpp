@@ -226,7 +226,7 @@ std::vector<ExprPtr> cceqvec::operator()(bool screen, bool use_topology,
     throw std::runtime_error(oss.str().c_str());                   \
   }
 
-// TimerPool<32> tpool; Defined in header
+TimerPool<32> tpool;
 
 compute_cceqvec::compute_cceqvec(size_t p, size_t pmin, size_t n)
     : P(p), PMIN(pmin), N(n) {}

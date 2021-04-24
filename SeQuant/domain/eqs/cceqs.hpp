@@ -43,7 +43,5 @@ class compute_all {
                   bool use_antisymm = true);
 };  // class compute_all
 
-sequant::TimerPool<32> tpool;
-
 }  // namespace sequant::eqs
 #endif  // SEQUANT_EQS_CCEQS_HPP
