@@ -4,7 +4,7 @@
 #include <range/v3/view.hpp>
 #include <tiledarray.h>
 
-namespace sequant::example {
+namespace sequant::eval {
 
 TA::TiledRange make_trange(size_t rank, size_t nobs) {
   using ranges::views::repeat;

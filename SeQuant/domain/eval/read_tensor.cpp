@@ -1,7 +1,7 @@
 #include "read_tensor.hpp"
 #include <sstream>
 
-namespace sequant::example {
+namespace sequant::eval {
 
 input_header_t read_header(std::string_view fname) {
   auto ifs = std::ifstream{fname.data()};
@@ -22,4 +22,4 @@ bool compatible_dims(std::string_view fname1, std::string_view fname2) {
   return hf.nocc == hs.nocc && hf.nvirt == hs.nvirt;
 }
 
-} // namespace sequant::example
+}  // namespace sequant::eval

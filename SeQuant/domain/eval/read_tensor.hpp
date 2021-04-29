@@ -6,7 +6,7 @@
 #include <fstream>
 #include <string_view>
 
-namespace sequant::example {
+namespace sequant::eval {
 
 struct input_header_t {
   size_t rank;
@@ -31,9 +31,9 @@ void read_tensor(std::string_view fname, Tensor_t &tensor) {
   std::generate(std::begin(tensor), std::end(tensor), [&ifs, &x]() {
     ifs >> x;
     return x;
-  }); // generate
+  });  // generate
 }
 
-} // namespace sequant::example
+}  // namespace sequant::eval
 
-#endif // SEQUANT_EVAL_EXAMPLE_READ_TENSOR_HPP
+#endif  // SEQUANT_EVAL_EXAMPLE_READ_TENSOR_HPP

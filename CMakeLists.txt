@@ -253,8 +253,16 @@ set(utests_src
          tests/unit/test_flops_counter.cpp
          tests/unit/test_optimize.cpp
         )
-set(utests_deps SeQuant)
 
+if (TARGET tiledarray)
+    list(APPEND utests_src
+        SeQuant/domain/eval/eval.hpp
+        SeQuant/domain/eval/eval_ta.hpp
+        tests/unit/test_eval_ta.cpp
+        )
+endif(TARGET tiledarray)
+
+set(utests_deps SeQuant)
 
 set(unit_test_executable unit_tests)
 add_executable(${unit_test_executable} EXCLUDE_FROM_ALL
@@ -292,10 +300,11 @@ target_link_libraries(${example1} SeQuant ${TBB_LIBRARIES})
 if (TARGET tiledarray)
     set(example2 eval_ta)
     add_executable(${example2} EXCLUDE_FROM_ALL
-        examples/eval/read_tensor.hpp
-        examples/eval/read_tensor.cpp
-        examples/eval/read_tensor_ta.hpp
-        examples/eval/read_tensor_ta.cpp
+        SeQuant/domain/eval/read_tensor.hpp
+        SeQuant/domain/eval/read_tensor.cpp
+        SeQuant/domain/eval/read_tensor_ta.hpp
+        SeQuant/domain/eval/read_tensor_ta.cpp
+        SeQuant/domain/eval/eval_ta.hpp
         examples/eval/eval_ta.cpp)
     target_link_libraries(${example2} SeQuant ${TBB_LIBRARIES} tiledarray)
 endif(TARGET tiledarray)
@@ -303,10 +312,11 @@ endif(TARGET tiledarray)
 if(BTAS_SOURCE_DIR)
     set(example3 eval_btas)
     add_executable(${example3} EXCLUDE_FROM_ALL
-        examples/eval/read_tensor.hpp
-        examples/eval/read_tensor.cpp
-        examples/eval/read_tensor_btas.hpp
-        examples/eval/read_tensor_btas.cpp
+        SeQuant/domain/eval/read_tensor.hpp
+        SeQuant/domain/eval/read_tensor.cpp
+        SeQuant/domain/eval/read_tensor_btas.hpp
+        SeQuant/domain/eval/read_tensor_btas.cpp
+        SeQuant/domain/eval/eval_btas.hpp
         examples/eval/eval_btas.cpp)
     target_include_directories(${example3} PUBLIC ${BTAS_SOURCE_DIR} ${Boost_INCLUDE_DIRS})
     target_link_libraries(${example3} SeQuant ${TBB_LIBRARIES})

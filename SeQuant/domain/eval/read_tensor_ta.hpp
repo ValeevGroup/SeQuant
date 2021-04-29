@@ -5,7 +5,7 @@
 
 #include <tiledarray.h>
 
-namespace sequant::example {
+namespace sequant::eval {
 
 void read_tensor_ta(std::string_view fname, TA::TArrayD &tensor);
 

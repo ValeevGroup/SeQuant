@@ -6,7 +6,7 @@
 #include <btas/btas.h>
 #include <range/v3/view.hpp>
 
-namespace sequant::example {
+namespace sequant::eval {
 
 btas::Tensor<double> read_tensor_btas(std::string_view fname);
 

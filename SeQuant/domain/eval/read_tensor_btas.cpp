@@ -1,6 +1,6 @@
 #include "read_tensor_btas.hpp"
 
-namespace sequant::example {
+namespace sequant::eval {
 
 btas::Tensor<double> read_tensor_btas(std::string_view fname) {
   using ranges::views::repeat;
