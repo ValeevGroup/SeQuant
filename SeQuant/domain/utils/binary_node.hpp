@@ -190,16 +190,6 @@ class binary_node {
                         std::invoke_result_t<F, T const&> const&>,
                 bool> = true>
   auto evaluate(F&& evaluator) const {
-    using ret_type = std::invoke_result_t<F, T const&>;
-
-    // static_assert(
-    //     std::is_same_v<ret_type,
-    //                 std::invoke_result_t<F, ret_type const&,
-    //                                         ret_type const&>>,
-    //     "evaluator(T const&)"
-    //     " and evaluator(T const&, ret_type const&, ret_type const&"
-    //     " have different return types");
-
     if (leaf()) return evaluator(**this);
     return evaluator(**this, left().evaluate(std::forward<F>(evaluator)),
                      right().evaluate(std::forward<F>(evaluator)));
@@ -214,17 +204,6 @@ class binary_node {
                         std::invoke_result_t<F, binary_node<T> const&> const&>,
                 bool> = true>
   auto evaluate(F&& evaluator) const {
-    using ret_type = std::invoke_result_t<F, binary_node<T> const&>;
-
-    // static_assert(
-    //     std::is_same_v<ret_type,
-    //                    std::invoke_result_t<F, binary_node<T> const&,
-    //                                         ret_type const&, ret_type
-    //                                         const&>>,
-    //     "evaluator(binary_node<T> const&)"
-    //     " and evaluator(binary_node<T> const&, ret_type const&, ret_type
-    //     const&" " have different return types");
-
     if (leaf()) return evaluator(*this);
     return evaluator(*this, left().evaluate(std::forward<F>(evaluator)),
                      right().evaluate(std::forward<F>(evaluator)));
