@@ -17,7 +17,7 @@ int main(int argc, char* argv[]) {
   std::wcerr.sync_with_stdio(true);
   sequant::detail::OpIdRegistrar op_id_registrar;
 
-  sequant::set_default_context(SeQuant(Vacuum::Physical, IndexSpaceMetric::Unit, BraKetSymmetry::conjugate));
+  sequant::set_default_context(SeQuant(Vacuum::Physical, IndexSpaceMetric::Unit, BraKetSymmetry::conjugate, Spinbasis::spin_free));
   mbpt::set_default_convention();
 
   TensorCanonicalizer::register_instance(
@@ -47,7 +47,7 @@ try_main() {
     wick.spinfree(false)
         .full_contractions(false);
     auto result = wick.compute();
-    simplify(result);
+   simplify(result);
     return result;
   };
 
@@ -78,38 +78,89 @@ try_main() {
 
   // single commutator, needs symmetrization
   {
-    auto h = H();
+    auto h = H(false);
     auto r = R12(gg_space);
-    auto hr_comm = do_wick( ex<Constant>(2) * (h*r - r*h) );  // this assumes symmetrization includes 1/2
+    /*auto hr_comm = do_wick( ex<Constant>(2) * (h*r - r*h) );  // this assumes symmetrization includes 1/2
 
     std::wcout << "[H,R] = " << to_latex_align(hr_comm, 20)
                << std::endl;
 
     auto hr_comm_12 = keep_1_and_2_body_terms(hr_comm);
     std::wcout << "[H,R]_{1,2} = " << to_latex_align(hr_comm_12, 20)
-               << std::endl;
+               << std::endl;*/
   }
 
   // double commutator, also needs symmetrization
   {
     auto f = F();
     auto r = R12(gg_space);
-    auto fr_comm = do_wick( ex<Constant>(2) * (f*r - r*f) );
-
-    std::wcout << "[F,R] = " << to_latex_align(fr_comm, 20)
-               << std::endl;
+    auto a = ex<Constant>(0.5) * (r - adjoint(r));
+    auto fa_comm = do_wick( ex<Constant>(1) * (f*a - a*f) );
 
     {
       auto r = R12(gg_space);  // second instance of R
-      auto a = r - adjoint(r);
-      auto comm2 = do_wick(fr_comm * a - a * fr_comm);
+      auto a = ex<Constant>(0.5) * (r - adjoint(r));
+      auto comm2 = do_wick(ex<Constant>(0.5) * (fa_comm * a - a * fa_comm));
 
-      std::wcout << "[[F,R],A] = " << to_latex_align(comm2, 20) << std::endl;
 
       auto comm2_12 = keep_1_and_2_body_terms(comm2);
-      std::wcout << "[[[F,R],A]_{1,2} = " << to_latex_align(comm2_12, 20)
+      std::wcout << "[[[F,A],A]_{1,2} = " << to_latex_align(comm2_12, 20)
                  << std::endl;
     }
+    // compute terms individually
+    auto r_ = R12(gg_space);// need to make second instance.
+
+    auto fr = f * r;
+    auto frr = do_wick(ex<Constant>(1) * (fr * r_));
+    auto frr_12 = keep_1_and_2_body_terms(frr);
+    std::wcout <<  "frr term =  " << to_latex_align(frr_12,20) << std::endl;
+
+    auto rf = do_wick(ex<Constant>(1)* r * f);
+    auto rfr = do_wick(ex<Constant>(1) * (rf * r_));
+    auto rfr_12 = keep_1_and_2_body_terms(rfr);
+    std::wcout <<  "rfr term =  " << to_latex_align(rfr_12,20) << std::endl;
+
+    auto rr = do_wick(ex<Constant>(1)* r * r_);
+    auto rrf = do_wick(ex<Constant>(1) * (rr * f));
+    auto rrf_12 = keep_1_and_2_body_terms(rrf);
+    std::wcout <<  "rrf term =  " << to_latex_align(rrf_12,20) << std::endl;
+
+    auto rr_dag = do_wick(ex<Constant>(1) * (r * adjoint(r_)));
+    auto frr_dag = do_wick(ex<Constant>(1) * f * (rr_dag));
+    auto frr_dag_12 = keep_1_and_2_body_terms(frr_dag);
+    std::wcout <<  "$frr_{adj}$ term =  " << to_latex_align(frr_dag_12,20) << std::endl;
+
+    auto r_dagf = do_wick(ex<Constant>(1) * adjoint(r) * f);
+    auto r_dagfr = do_wick(ex<Constant>(1) * r_dagf * r_);
+    auto r_dagfr_12 = keep_1_and_2_body_terms(r_dagfr);
+    std::wcout <<  "$r_{adj}fr $term =  " << to_latex_align(r_dagfr_12,20) << std::endl;
+
+    auto aut_rf = do_wick(ex<Constant>(1) * r_ * f);
+    auto rfr_dag = do_wick(ex<Constant>(1) * aut_rf * adjoint(r));
+    auto rfr_dag_12 = keep_1_and_2_body_terms(rfr_dag);
+    std::wcout <<  "$rfr_{adj}$ term =  " << to_latex_align(rfr_dag_12,20) << std::endl;
+
+    auto rr_dagf = do_wick(ex<Constant>(1) * rr_dag * f);
+    auto rr_dagf_12 = keep_1_and_2_body_terms(rr_dagf);
+    std::wcout <<  "$rr_{adj}f $term =  " << to_latex_align(rr_dagf_12,20) << std::endl;
+
+    auto r_dagr_dag = do_wick(ex<Constant>(1) * adjoint(r) * adjoint(r_));
+    auto r_dagr_dagf = do_wick(ex<Constant>(1) * r_dagr_dag * f);
+    auto r_dagr_dagf_12 = keep_1_and_2_body_terms(r_dagr_dagf);
+    std::wcout <<  "$r_{adj}r_{adj}f$ term =  " << to_latex_align(r_dagr_dagf_12,20) << std::endl;
+
+
+    auto r_dagr = do_wick(ex<Constant>(1) * adjoint(r_) * r);
+    auto r_dagrf = do_wick(ex<Constant>(1) * r_dagr * f);
+    auto r_dagrf_12 = keep_1_and_2_body_terms(r_dagrf);
+    std::wcout <<  "$r_{adj}rf$ =  " << to_latex_align(r_dagrf_12,20) << std::endl;
+
+    auto fr_dag = do_wick(ex<Constant>(1) * f * adjoint(r_));
+    auto fr_dagr = do_wick(ex<Constant>(1) * fr_dag * r);
+    auto fr_dagr_12 = keep_1_and_2_body_terms(fr_dagr);
+    auto fr_dag_12 = keep_1_and_2_body_terms(fr_dag);
+    std::wcout <<  "$fr_{adj}r$ =  " << to_latex_align(fr_dagr_12,20) << std::endl;
+
   }
 
 }

@@ -46,7 +46,8 @@ class Op {
   std::wstring to_latex() const {
     std::wstring result;
     result = L"{";
-    result += (S == Statistics::FermiDirac ? L"a" : L"b");
+    //result += (S == Statistics::FermiDirac ? L"a" : L"b");
+    result += (S == Statistics::FermiDirac ? (get_default_context().spin_basis() == Spinbasis::spin_orbit ? L"a" : L"E") : L"b");
     result += (action() == Action::create ? L"^{\\dagger}_" : L"_");
     result += index().to_latex();
     result += L"}";
@@ -576,8 +577,11 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
   std::wstring to_latex() const override {
     std::wstring result;
     result = L"{";
-    result += (S == Statistics::FermiDirac
+   /* result += (S == Statistics::FermiDirac
                ? (vacuum() == Vacuum::Physical ? L"a" : L"\\tilde{a}")
+               : (vacuum() == Vacuum::Physical ? L"b" : L"\\tilde{b}"));*/
+    result += (S == Statistics::FermiDirac
+               ? (vacuum() == Vacuum::Physical ? (get_default_context().spin_basis() == Spinbasis::spin_orbit ? L"a" : L"E") : (get_default_context().spin_basis() == Spinbasis::spin_orbit ? L"\\tilde{a}" : L"\\tilde{E}"))
                : (vacuum() == Vacuum::Physical ? L"b" : L"\\tilde{b}"));
     result += L"^{";
     const auto ncreators = this->ncreators();
@@ -778,7 +782,7 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
     return ncreators();
   }
   Symmetry _symmetry() const override final {
-    return S == Statistics::FermiDirac ? Symmetry::antisymm : Symmetry::symm;
+    return(S == Statistics::FermiDirac ? (get_default_context().spin_basis() == Spinbasis::spin_orbit ? Symmetry::antisymm : Symmetry::nonsymm) : (Symmetry::symm));
   }
   BraKetSymmetry _braket_symmetry() const override final {
     return BraKetSymmetry::nonsymm;
