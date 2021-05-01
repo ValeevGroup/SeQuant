@@ -12,6 +12,88 @@
 #include <iostream>
 #include <range/v3/all.hpp>
 
+template <typename Tensor_t>
+struct yield_leaf {
+  size_t const no, nv;
+  Tensor_t const &G, &F, &t_vo, &t_vvoo;
+  yield_leaf(size_t nocc, size_t nvirt, Tensor_t const& fock,
+             Tensor_t const& eri, Tensor_t const& ampl_vo,
+             Tensor_t const& ampl_vvoo)
+      : no{nocc},
+        nv{nvirt},
+        G{eri},
+        F{fock},
+        t_vo{ampl_vo},
+        t_vvoo{ampl_vvoo}
+
+  {}
+
+  auto range1_limits(sequant::Tensor const& tensor) {
+    return tensor.const_braket() |
+           ranges::views::transform([this](auto const& idx) {
+             auto ao = sequant::IndexSpace::active_occupied;
+             auto au = sequant::IndexSpace::active_unoccupied;
+             auto sp = idx.space();
+             assert(sp == ao || sp == au);
+
+             return sp == ao ? no : nv;
+           });
+  }
+
+  Tensor_t operator()(sequant::Tensor const& tensor) {
+    if (tensor.label() == L"t") {
+      auto rank = tensor.rank();
+      assert(rank == 1 || rank == 2);
+      return rank == 1 ? t_vo : t_vvoo;
+    }
+
+    auto r1_limits = range1_limits(tensor);
+
+    auto trange_vec = r1_limits | ranges::views::transform([](auto x) {
+                        return TA::TiledRange1{0, x};
+                      }) |
+                      ranges::to_vector;
+
+    auto iter_limits =
+        r1_limits | ranges::views::transform([this](auto x) {
+          return x == no ? std::pair{size_t{0}, no} : std::pair{no, no + nv};
+        });
+
+    auto tlabel = tensor.label();
+    assert(tlabel == L"g" || tlabel == L"f");
+
+    auto const& big_tensor = tlabel == L"g" ? G : F;
+
+    auto slice =
+        TA::TArrayD{big_tensor.world(),
+                    TA::TiledRange{trange_vec.begin(), trange_vec.end()}};
+    slice.fill(0);
+    auto tile_orig = big_tensor.find(0).get();
+    auto tile_dest = slice.find(0).get();
+
+    assert(iter_limits.size() == 2 || iter_limits.size() == 4);
+    if (iter_limits.size() == 2) {
+      for (auto ii = iter_limits[0].first; ii < iter_limits[0].second; ++ii)
+        for (auto jj = iter_limits[1].first; jj < iter_limits[1].second; ++jj) {
+          tile_dest(ii - iter_limits[0].first,  //
+                    jj - iter_limits[1].first) = tile_orig(ii, jj);
+        }
+    } else {  // 4 iterations
+      for (auto ii = iter_limits[0].first; ii < iter_limits[0].second; ++ii)
+        for (auto jj = iter_limits[1].first; jj < iter_limits[1].second; ++jj)
+          for (auto kk = iter_limits[2].first; kk < iter_limits[2].second; ++kk)
+            for (auto ll = iter_limits[3].first; ll < iter_limits[3].second;
+                 ++ll) {
+              tile_dest(ii - iter_limits[0].first, jj - iter_limits[1].first,
+                        kk - iter_limits[2].first, ll - iter_limits[3].first) =
+                  tile_orig(ii, jj, kk, ll);
+            }
+    }
+
+    return slice;
+  }
+};  // yield_leaf
+
 // clang-format off
 /**
  * <executable> (fock.dat eri.dat | eri.dat fock.dat)
@@ -35,7 +117,6 @@ int main(int argc, char** argv) {
   using ranges::views::take;
   using sequant::optimize::optimize;
   using sequant::optimize::tail_factor;
-  using sequant::utils::binarize_expr;
 
   using std::cout;
   using std::endl;
@@ -107,7 +188,7 @@ int main(int argc, char** argv) {
   t_vo.fill(0);
   t_vvoo.fill(0);
 
-  auto yielder = sequant::eval::yield_leaf{nocc, nvirt, fock, eri, t_vo, t_vvoo};
+  auto yielder = yield_leaf{nocc, nvirt, fock, eri, t_vo, t_vvoo};
 
   auto const g_vvoo =
       yielder(sequant::utils::parse_expr(L"g_{a1,a2}^{i1,i2}",
@@ -138,8 +219,8 @@ int main(int argc, char** argv) {
   auto normdiff = 0.0;
   auto ecc = 0.0;
 
-  auto eval_inst_r1 = sequant::eval::eval_instance{node_r1};
-  auto eval_inst_r2 = sequant::eval::eval_instance{node_r2};
+  auto eval_inst_r1 = sequant::eval::eval_instance_ta{node_r1};
+  auto eval_inst_r2 = sequant::eval::eval_instance_ta{node_r2};
   auto start = std::chrono::high_resolution_clock::now();
   do {
     ++iter;

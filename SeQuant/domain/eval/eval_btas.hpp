@@ -11,83 +11,6 @@
 namespace sequant::eval {
 
 template <typename Tensor_t>
-class yield_leaf {
- private:
-  Tensor_t const &fock, &eri, &t_vo, &t_vvoo;
-
-  size_t const nocc, nvirt;
-
-  auto range1_limits(sequant::Tensor const& tensor) {
-    return tensor.const_braket() |
-           ranges::views::transform([this](auto const& idx) {
-             auto ao = sequant::IndexSpace::active_occupied;
-             auto au = sequant::IndexSpace::active_unoccupied;
-             auto sp = idx.space();
-             assert(sp == ao || sp == au);
-
-             return sp == ao ? nocc : nvirt;
-           });
-  }
-
- public:
-  yield_leaf(size_t no, size_t nv, Tensor_t const& F, Tensor_t const& G,
-             Tensor_t const& ampl_vo, Tensor_t const& ampl_vvoo)
-      : nocc{no},
-        nvirt{nv},
-        fock{F},
-        eri{G},
-        t_vo{ampl_vo},
-        t_vvoo{ampl_vvoo} {}
-
-  Tensor_t operator()(sequant::Tensor const& texpr) {
-    auto rank = texpr.bra_rank() + texpr.ket_rank();
-
-    if (texpr.label() == L"t") {
-      assert(rank == 2 || rank == 4 && "only t_vo and t_vvoo supported");
-      return rank == 2 ? t_vo : t_vvoo;
-    }
-
-    assert((texpr.label() == L"g" || texpr.label() == L"f") &&
-           "unsupported tensor label encountered");
-
-    auto&& big_tensor = texpr.label() == L"g" ? eri : fock;
-
-    auto r1_limits = range1_limits(texpr);
-    auto iter_limits = r1_limits | ranges::views::transform([this](auto x) {
-                         return x == nocc ? std::pair{size_t{0}, nocc}
-                                          : std::pair{nocc, nocc + nvirt};
-                       });
-
-    auto slice = Tensor_t{btas::Range{r1_limits | ranges::to_vector}};
-
-    if (iter_limits.size() == 2) {
-      auto loop1 = iter_limits[0];
-      auto loop2 = iter_limits[1];
-      for (auto i = loop1.first; i < loop1.second; ++i)
-        for (auto j = loop2.first; j < loop2.second; ++j)
-          slice(i - loop1.first, j - loop2.first) = big_tensor(i, j);
-
-    } else {  // iter_limits.size() == 4 true
-      auto loop1 = iter_limits[0];
-      auto loop2 = iter_limits[1];
-      auto loop3 = iter_limits[2];
-      auto loop4 = iter_limits[3];
-      for (auto i = loop1.first; i < loop1.second; ++i)
-        for (auto j = loop2.first; j < loop2.second; ++j)
-          for (auto k = loop3.first; k < loop3.second; ++k)
-            for (auto l = loop4.first; l < loop4.second; ++l)
-              slice(i - loop1.first,    //
-                    j - loop2.first,    //
-                    k - loop3.first,    //
-                    l - loop4.first) =  //
-                  big_tensor(i, j, k, l);
-    }
-
-    return slice;
-  }
-};  // tensor yield
-
-template <typename Tensor_t>
 Tensor_t inode_evaluate_btas(
     sequant::utils::binary_node<sequant::utils::eval_expr> const& node,
     Tensor_t const& leval, Tensor_t const& reval) {
@@ -174,7 +97,7 @@ Tensor_t evaluate_btas(
                                evaluate_btas(node.right(), yielder, cman)));
 }
 
-struct eval_instance {
+struct eval_instance_btas {
   sequant::utils::binary_node<sequant::utils::eval_expr> const& node;
 
   template <typename Tensor_t, typename Fetcher>
@@ -231,7 +154,7 @@ struct eval_instance {
     return result;
   }
 
-};  // eval_instance
+};  // eval_instance_btas
 
 }  // namespace sequant::eval
 

@@ -11,7 +11,10 @@
 #include <type_traits>
 
 namespace sequant::eval {
+using eval_node = utils::binary_node<utils::eval_expr>;
+
 using perm_type = container::svector<size_t>;
+
 using phase_type = int;
 
 struct perm_with_phase {

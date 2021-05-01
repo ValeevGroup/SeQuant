@@ -19,6 +19,83 @@
 #include <iomanip>
 #include <iostream>
 
+template <typename Tensor_t>
+class yield_leaf {
+ private:
+  Tensor_t const &fock, &eri, &t_vo, &t_vvoo;
+
+  size_t const nocc, nvirt;
+
+  auto range1_limits(sequant::Tensor const& tensor) {
+    return tensor.const_braket() |
+           ranges::views::transform([this](auto const& idx) {
+             auto ao = sequant::IndexSpace::active_occupied;
+             auto au = sequant::IndexSpace::active_unoccupied;
+             auto sp = idx.space();
+             assert(sp == ao || sp == au);
+
+             return sp == ao ? nocc : nvirt;
+           });
+  }
+
+ public:
+  yield_leaf(size_t no, size_t nv, Tensor_t const& F, Tensor_t const& G,
+             Tensor_t const& ampl_vo, Tensor_t const& ampl_vvoo)
+      : nocc{no},
+        nvirt{nv},
+        fock{F},
+        eri{G},
+        t_vo{ampl_vo},
+        t_vvoo{ampl_vvoo} {}
+
+  Tensor_t operator()(sequant::Tensor const& texpr) {
+    auto rank = texpr.bra_rank() + texpr.ket_rank();
+
+    if (texpr.label() == L"t") {
+      assert(rank == 2 || rank == 4 && "only t_vo and t_vvoo supported");
+      return rank == 2 ? t_vo : t_vvoo;
+    }
+
+    assert((texpr.label() == L"g" || texpr.label() == L"f") &&
+           "unsupported tensor label encountered");
+
+    auto&& big_tensor = texpr.label() == L"g" ? eri : fock;
+
+    auto r1_limits = range1_limits(texpr);
+    auto iter_limits = r1_limits | ranges::views::transform([this](auto x) {
+                         return x == nocc ? std::pair{size_t{0}, nocc}
+                                          : std::pair{nocc, nocc + nvirt};
+                       });
+
+    auto slice = Tensor_t{btas::Range{r1_limits | ranges::to_vector}};
+
+    if (iter_limits.size() == 2) {
+      auto loop1 = iter_limits[0];
+      auto loop2 = iter_limits[1];
+      for (auto i = loop1.first; i < loop1.second; ++i)
+        for (auto j = loop2.first; j < loop2.second; ++j)
+          slice(i - loop1.first, j - loop2.first) = big_tensor(i, j);
+
+    } else {  // iter_limits.size() == 4 true
+      auto loop1 = iter_limits[0];
+      auto loop2 = iter_limits[1];
+      auto loop3 = iter_limits[2];
+      auto loop4 = iter_limits[3];
+      for (auto i = loop1.first; i < loop1.second; ++i)
+        for (auto j = loop2.first; j < loop2.second; ++j)
+          for (auto k = loop3.first; k < loop3.second; ++k)
+            for (auto l = loop4.first; l < loop4.second; ++l)
+              slice(i - loop1.first,    //
+                    j - loop2.first,    //
+                    k - loop3.first,    //
+                    l - loop4.first) =  //
+                  big_tensor(i, j, k, l);
+    }
+
+    return slice;
+  }
+};  // yield_leaf
+
 auto const norm = [](btas::Tensor<double> const& tensor) {
   return std::sqrt(btas::dot(tensor, tensor));
 };
@@ -88,7 +165,6 @@ int main(int argc, char** argv) {
   using sequant::eqs::cceqvec;
   using sequant::optimize::optimize;
   using sequant::optimize::tail_factor;
-  using sequant::utils::binarize_expr;
   using evxpr_node = sequant::utils::binary_node<sequant::utils::eval_expr>;
 
   sequant::detail::OpIdRegistrar op_id_registrar;
@@ -107,11 +183,10 @@ int main(int argc, char** argv) {
   auto const& r1_node = nodes[0];
   auto const& r2_node = nodes[1];
 
-  auto yielder =
-      sequant::eval::yield_leaf{nocc, nvirt, fock, eri, t_vo, t_vvoo};
+  auto yielder = yield_leaf{nocc, nvirt, fock, eri, t_vo, t_vvoo};
 
-  auto eval_inst_r1 = sequant::eval::eval_instance{r1_node};
-  auto eval_inst_r2 = sequant::eval::eval_instance{r2_node};
+  auto eval_inst_r1 = sequant::eval::eval_instance_btas{r1_node};
+  auto eval_inst_r2 = sequant::eval::eval_instance_btas{r2_node};
 
   // true: leaf tensors (other than 't' tensors) will be cached
   // false: only intermediates will be cached
