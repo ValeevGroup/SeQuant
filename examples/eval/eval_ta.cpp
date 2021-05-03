@@ -224,6 +224,7 @@ int main(int argc, char** argv) {
   auto start = std::chrono::high_resolution_clock::now();
   do {
     ++iter;
+    manager.reset_decaying();
 
     auto r1 = eval_inst_r1.evaluate_asymm(yielder, manager);
     auto r2 = eval_inst_r2.evaluate_asymm(yielder, manager);
@@ -262,9 +263,9 @@ int main(int argc, char** argv) {
          << std::setprecision(std::numeric_limits<double>::max_digits10) << ecc
          << endl;
 
-    manager.reset_decaying();
   } while (iter < maxiter &&
            (std::fabs(normdiff) > conv || std::fabs(ediff) > conv));
+  manager.reset_all();
 
   auto stop = std::chrono::high_resolution_clock::now();
   auto duration =
