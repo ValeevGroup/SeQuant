@@ -75,17 +75,17 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
   auto manager = sequant::utils::cache_manager<TArrayD>{{}, {}};
 
   auto eval_bnode = [&yielder, &manager](auto const& node) {
-    auto inst = sequant::eval::eval_instance{node};
+    auto inst = sequant::eval::eval_instance_ta{node};
     return inst.evaluate(yielder, manager);
   };
 
   auto eval_bnode_sym = [&yielder, &manager](auto const& node) {
-    auto inst = sequant::eval::eval_instance{node};
+    auto inst = sequant::eval::eval_instance_ta{node};
     return inst.evaluate_symm(yielder, manager);
   };
 
   auto eval_bnode_asym = [&yielder, &manager](auto const& node) {
-    auto inst = sequant::eval::eval_instance{node};
+    auto inst = sequant::eval::eval_instance_ta{node};
     return inst.evaluate_asymm(yielder, manager);
   };
 
