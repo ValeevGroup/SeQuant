@@ -192,6 +192,7 @@ add_library(SeQuant
         SeQuant/domain/mbpt/op.cpp
         SeQuant/domain/mbpt/op.hpp
         SeQuant/domain/mbpt/spin.hpp
+        SeQuant/domain/mbpt/spin.cpp
         SeQuant/domain/mbpt/sr/sr.cpp
         SeQuant/domain/mbpt/sr/sr.hpp
         )
