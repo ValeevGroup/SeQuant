@@ -262,6 +262,7 @@ int main(int argc, char** argv) {
          << std::setprecision(std::numeric_limits<double>::max_digits10) << ecc
          << endl;
 
+    manager.reset_decaying();
   } while (iter < maxiter &&
            (std::fabs(normdiff) > conv || std::fabs(ediff) > conv));
 
