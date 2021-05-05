@@ -1077,6 +1077,21 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
     return nullptr;
 }
 
+std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
+    const std::vector<std::vector<Index>> ext_index_groups = {{}}){
+
+  if(expr->is<Constant>()){
+    return std::vector<ExprPtr>{expr};
+  }
+
+  // Form index groups
+
+
+  // Spin loop on external index groups
+      // Spin-loop on internal indices
+
+}
+
 /// @brief Transforms an expression from spin orbital to spatial orbitals
 /// @detailed Given an expression, this function extracts all indices and adds a
 /// spin attribute to all the indices in the expression. A map is generated with
