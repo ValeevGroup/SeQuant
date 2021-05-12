@@ -1157,53 +1157,39 @@ std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
   };
 
   // Index replacement in expression
-  std::vector<std::map<Index, Index>> i_rep, e_rep;
+  auto index_replacements = [&add_spin_label] (const std::vector<IndexGroup>& idx_group) {
+    auto ncases = std::pow(2, idx_group.size());
+    std::vector<std::map<Index, Index>> all_replacements(ncases);
 
-  // Spin-loop on internal indices
-  for (uint64_t int_spincase = 0; int_spincase != int_spincases;
-       ++int_spincase) {
-    std::map<Index, Index> int_idx_rep;
-
-    // Index replacement maps
-    for(size_t idxg = 0; idxg != int_index_groups.size(); ++idxg){
-      auto spin_bit = (int_spincase << (64 - idxg - 1)) >> 63;
-      assert((spin_bit == 0) || (spin_bit == 1));
-
-      for(auto& idx : int_index_groups[idxg]){
-        auto spin_idx = add_spin_label(idx, spin_bit);
-        int_idx_rep.emplace(std::make_pair(idx, spin_idx));
+    for (uint64_t i = 0; i != ncases; ++i) {
+      std::map<Index, Index> idx_rep;
+      for(size_t idxg = 0; idxg != idx_group.size(); ++idxg){
+        auto spin_bit = (i << (64 - idxg - 1)) >> 63;
+        assert((spin_bit == 0) || (spin_bit == 1));
+        for(auto& idx : idx_group[idxg]){
+          auto spin_idx = add_spin_label(idx, spin_bit);
+          idx_rep.emplace(std::make_pair(idx, spin_idx));
+        }
       }
+      all_replacements[i] = idx_rep;
     }
-    i_rep.push_back(int_idx_rep);
+    return all_replacements;
+  };
 
-    for(auto& i : int_idx_rep){ std::wcout << to_latex(i.second) << " "; }
-    std::cout << "\n";
+  // Internal and external index replacements are independent
+  auto i_rep = index_replacements(int_index_groups);
+  auto e_rep = index_replacements(ext_index_groups);
+
+  std::cout << "\n";
+  for(auto& map : i_rep){
+    for(auto& i : map){ std::wcout << to_latex(i.second) << " "; } std::cout << "\n";
   }
 
   std::cout << "\n";
-
-  // Spin loop on external index groups
-  for (uint64_t spincase_bitstr = 0; spincase_bitstr != nspincases;
-       ++spincase_bitstr) {
-    std::map<Index, Index> ext_idx_rep;
-    ExprPtr spincase_result;
-
-    for(size_t idxg = 0; idxg != ext_index_groups.size(); ++idxg){
-      auto spin_bit = (spincase_bitstr << (64 - idxg - 1)) >> 63;
-      assert((spin_bit == 0) || (spin_bit == 1));
-      for(auto& idx : ext_index_groups[idxg]){
-        auto spin_idx = add_spin_label(idx, spin_bit);
-        ext_idx_rep.emplace(std::make_pair(idx, spin_idx));
-      }
-      std::cout << "\n";
-    }
-    e_rep.push_back(ext_idx_rep);
-
-    // internal and external replacements are independent
-    for(auto& i : ext_idx_rep){ std::wcout << to_latex(i.second) << " "; }
-    std::cout << "\n";
-
+  for(auto& map : e_rep){
+    for(auto& i : map){ std::wcout << to_latex(i.second) << " "; } std::cout << "\n";
   }
+
 
   return result;
 }
