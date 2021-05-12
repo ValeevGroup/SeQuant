@@ -1175,7 +1175,13 @@ std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
   expanded_expr = expand_antisymm(expanded_expr);
   expand(expanded_expr);
   rapid_simplify(expanded_expr);
-  std::wcout << to_latex(expanded_expr) << std::endl;
+
+  auto reset_idx_tags = [](ExprPtr& expr) {
+    if (expr->is<Tensor>())
+      ranges::for_each(expr->as<Tensor>().const_braket(),
+                       [](const Index& idx) { idx.reset_tag(); });
+  };
+  expanded_expr->visit(reset_idx_tags);
 
   std::vector<ExprPtr> result{};
 
@@ -1198,57 +1204,38 @@ std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
       if (IndexSpace::instance(b.label()).qns() ==
           IndexSpace::instance(iter_ket->label()).qns()) {
         result = true;
-      } else {
+      } else
         return false;
-      }
       ++iter_ket;
     }
     return result;
   };
 
-  // Loop over e_rep
+  // Loop over external index replacement maps
   for(auto& e : e_rep){
     auto spin_expr = append_spin(expanded_expr, e);
-    std::wcout << "spin_expr: " <<  to_latex(spin_expr) << std::endl;
     Sum e_result{};
 
-    // Loop over i_rep
+    // Loop over internal index replacement maps
     for(auto& i : i_rep){
       auto spin_expr_i = append_spin(spin_expr, i);
       Sum i_result{};
       for(auto& pr : *spin_expr_i){
-        if(pr->is<Tensor>()){
-          if(is_tensor_spin_symm(pr->as<Tensor>()))
+        if (pr->is<Product>()){
+          if (product_symm(pr->as<Product>()))
             i_result.append(pr);
-        } else if (pr->is<Product>()){
-          bool pr_symm = true;
-          for(auto& t : pr->as<Product>()){
-            if(t->is<Tensor>()){
-              if(!is_tensor_spin_symm(t->as<Tensor>())){
-                pr_symm = false;
-                break;
-              }
-            } else
-              throw("non-tensor in Product.");
-          }
-          if(pr_symm)
+        } else if (pr->is<Tensor>()){
+          if (is_tensor_spin_symm(pr->as<Tensor>()))
             i_result.append(pr);
         } else if (pr->is<Constant>()){
-          i_result.append(pr);
-        }
+            i_result.append(pr);
+        } else
+          throw("Unknown ExprPtr type.");
       }
-      // std::cout<< "i.size(): " << i_result.size() << "\n";
       e_result.append(std::make_shared<Sum>(i_result));
     }
-    // std::cout<< "e.size(): " << e_result.size() << "\n";
     result.push_back(std::make_shared<Sum>(e_result));
   }
-
-  for(auto& r : result){
-    std::wcout << to_latex(r) << std::endl;
-  }
-  std::cout << "\n";
-
   return result;
 }
 
