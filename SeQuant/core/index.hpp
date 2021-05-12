@@ -222,10 +222,7 @@ class Index : public Taggable {
   /// \return a non-unique index in space @c space with label @c subscript_label
   static Index make_label_index(const IndexSpace &space,
                                 const std::wstring &subscript_label) {
-    Index result;
-    result.label_ = IndexSpace::base_key(space) + L'_' + subscript_label;
-    result.space_ = space;
-    return result;
+    return Index(IndexSpace::base_key(space) + L'_' + subscript_label, space);
   }
 
   /// @return the label
@@ -431,11 +428,10 @@ class Index : public Taggable {
  private:
   std::wstring label_{};
   IndexSpace space_{};
-  container::vector<Index>
-      proto_indices_{};  // an unordered set of unique indices on which this
-                         // index depends on
+  // an unordered set of unique indices on which this index depends on
   // whether proto_indices_ is symmetric w.r.t. permutations; if true,
   // proto_indices_ will be ordered
+  container::vector<Index> proto_indices_{};
   bool symmetric_proto_indices_ = true;
 
   mutable std::optional<std::wstring> full_label_;
