@@ -1098,9 +1098,6 @@ std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
     return std::vector<ExprPtr>{expr};
   }
 
-  std::vector<ExprPtr> result{};
-
-  // auto grand_idxlist = index_list(expr);
   container::set<Index, Index::LabelCompare> grand_idxlist;
   auto collect_indices = [&grand_idxlist](const ExprPtr& expr) {
     if (expr->is<Tensor>()) {
@@ -1136,14 +1133,7 @@ std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
 
   assert(grand_idxlist.size() == int_idxlist.size() + ext_idxlist.size());
 
-  std::cout << "Group sizes: " << int_index_groups.size() << " "
-            << ext_index_groups.size() << std::endl;
-
-  // Form index groups (for external index)
-  const uint64_t nspincases = std::pow(2, ext_index_groups.size());
-  const uint64_t int_spincases = std::pow(2, int_index_groups.size());
-
-  // add spin label
+  // Add spin label to index
   auto add_spin_label = [] (const Index& idx, const long int& spin_bit){
     auto idx_n = idx.label().substr(idx.label().find(L'_') + 1);
     std::wstring idx_n_ws(idx_n.begin(), idx_n.end());
@@ -1157,7 +1147,7 @@ std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
   };
 
   // Index replacement in expression
-  auto index_replacements = [&add_spin_label] (const std::vector<IndexGroup>& idx_group) {
+  auto spin_cases = [&add_spin_label] (const std::vector<IndexGroup>& idx_group) {
     auto ncases = std::pow(2, idx_group.size());
     std::vector<std::map<Index, Index>> all_replacements(ncases);
 
@@ -1177,19 +1167,87 @@ std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
   };
 
   // Internal and external index replacements are independent
-  auto i_rep = index_replacements(int_index_groups);
-  auto e_rep = index_replacements(ext_index_groups);
+  auto i_rep = spin_cases(int_index_groups);
+  auto e_rep = spin_cases(ext_index_groups);
 
-  std::cout << "\n";
-  for(auto& map : i_rep){
-    for(auto& i : map){ std::wcout << to_latex(i.second) << " "; } std::cout << "\n";
+  // Expand 'A' operator and 'antisymm' tensors
+  auto expanded_expr = expand_A_operator(expr);
+  expanded_expr = expand_antisymm(expanded_expr);
+  expand(expanded_expr);
+  rapid_simplify(expanded_expr);
+  std::wcout << to_latex(expanded_expr) << std::endl;
+
+  std::vector<ExprPtr> result{};
+
+  // check spin-symmetry of a product
+  auto product_symm = [] (const Product& p) {
+
+    std::vector<Index> cBra, cKet; // concat Bra and concat Ket
+    for(auto& t : p){
+      if(t->is<Tensor>()){
+        auto tnsr = t->as<Tensor>();
+        cBra.insert(cBra.end(), tnsr.bra().begin(), tnsr.bra().end());
+        cKet.insert(cKet.end(), tnsr.ket().begin(), tnsr.ket().end());
+      }
+    }
+    assert(cKet.size() == cBra.size());
+
+    bool result = false;
+    auto iter_ket = cKet.begin();
+    for(auto& b : cBra){
+      if (IndexSpace::instance(b.label()).qns() ==
+          IndexSpace::instance(iter_ket->label()).qns()) {
+        result = true;
+      } else {
+        return false;
+      }
+      ++iter_ket;
+    }
+    return result;
+  };
+
+  // Loop over e_rep
+  for(auto& e : e_rep){
+    auto spin_expr = append_spin(expanded_expr, e);
+    std::wcout << "spin_expr: " <<  to_latex(spin_expr) << std::endl;
+    Sum e_result{};
+
+    // Loop over i_rep
+    for(auto& i : i_rep){
+      auto spin_expr_i = append_spin(spin_expr, i);
+      Sum i_result{};
+      for(auto& pr : *spin_expr_i){
+        if(pr->is<Tensor>()){
+          if(is_tensor_spin_symm(pr->as<Tensor>()))
+            i_result.append(pr);
+        } else if (pr->is<Product>()){
+          bool pr_symm = true;
+          for(auto& t : pr->as<Product>()){
+            if(t->is<Tensor>()){
+              if(!is_tensor_spin_symm(t->as<Tensor>())){
+                pr_symm = false;
+                break;
+              }
+            } else
+              throw("non-tensor in Product.");
+          }
+          if(pr_symm)
+            i_result.append(pr);
+        } else if (pr->is<Constant>()){
+          i_result.append(pr);
+        }
+      }
+      // std::cout<< "i.size(): " << i_result.size() << "\n";
+      e_result.append(std::make_shared<Sum>(i_result));
+    }
+    // std::cout<< "e.size(): " << e_result.size() << "\n";
+    result.push_back(std::make_shared<Sum>(e_result));
   }
 
-  std::cout << "\n";
-  for(auto& map : e_rep){
-    for(auto& i : map){ std::wcout << to_latex(i.second) << " "; } std::cout << "\n";
+  for(auto& r : result){
+    std::wcout << to_latex(r) << std::endl;
   }
-
+  std::cout << "\n";
 
   return result;
 }
