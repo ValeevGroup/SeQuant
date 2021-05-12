@@ -1077,6 +1077,20 @@ ExprPtr closed_shell_spintrace(const ExprPtr& expression,
     return nullptr;
 }
 
+/// Collect all indices from an expression
+auto index_list(const ExprPtr& expr) {
+  container::set<Index, Index::LabelCompare> grand_idxlist;
+  if (expr->is<Tensor>()) {
+    ranges::for_each(expr->as<Tensor>().const_braket(),
+                     [&grand_idxlist](const Index& idx) {
+                       idx.reset_tag();
+                       grand_idxlist.insert(idx);
+                     });
+  }
+
+  return grand_idxlist;
+}
+
 std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
     const std::vector<std::vector<Index>> ext_index_groups = {{}}){
 
@@ -1084,12 +1098,114 @@ std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
     return std::vector<ExprPtr>{expr};
   }
 
-  // Form index groups
+  std::vector<ExprPtr> result{};
 
+  // auto grand_idxlist = index_list(expr);
+  container::set<Index, Index::LabelCompare> grand_idxlist;
+  auto collect_indices = [&grand_idxlist](const ExprPtr& expr) {
+    if (expr->is<Tensor>()) {
+      ranges::for_each(expr->as<Tensor>().const_braket(),
+                       [&grand_idxlist](const Index& idx) {
+                         idx.reset_tag();
+                         grand_idxlist.insert(idx);
+                       });
+    }
+  };
+  expr->visit(collect_indices);
+
+  container::set<Index> ext_idxlist;
+  for (auto&& idxgrp : ext_index_groups) {
+    for (auto&& idx : idxgrp) {
+      idx.reset_tag();
+      ext_idxlist.insert(idx);
+    }
+  }
+
+  container::set<Index> int_idxlist;
+  for (auto&& gidx : grand_idxlist) {
+    if (ext_idxlist.find(gidx) == ext_idxlist.end()) {
+      int_idxlist.insert(gidx);
+    }
+  }
+
+  using IndexGroup = container::vector<Index>;
+  std::vector<IndexGroup> int_index_groups;
+  for (auto&& i : int_idxlist) {
+    int_index_groups.emplace_back(IndexGroup(1, i));
+  }
+
+  assert(grand_idxlist.size() == int_idxlist.size() + ext_idxlist.size());
+
+  std::cout << "Group sizes: " << int_index_groups.size() << " "
+            << ext_index_groups.size() << std::endl;
+
+  // Form index groups (for external index)
+  const uint64_t nspincases = std::pow(2, ext_index_groups.size());
+  const uint64_t int_spincases = std::pow(2, int_index_groups.size());
+
+  // add spin label
+  auto add_spin_label = [] (const Index& idx, const long int& spin_bit){
+    auto idx_n = idx.label().substr(idx.label().find(L'_') + 1);
+    std::wstring idx_n_ws(idx_n.begin(), idx_n.end());
+
+    auto idx_type = IndexSpace::instance(idx.label()).type();
+    auto space = spin_bit == 0 ?
+                 IndexSpace::instance(idx_type, IndexSpace::alpha):
+                 IndexSpace::instance(idx_type, IndexSpace::beta);
+
+    return Index::make_label_index(space, idx_n_ws);
+  };
+
+  // Index replacement in expression
+  std::vector<std::map<Index, Index>> i_rep, e_rep;
+
+  // Spin-loop on internal indices
+  for (uint64_t int_spincase = 0; int_spincase != int_spincases;
+       ++int_spincase) {
+    std::map<Index, Index> int_idx_rep;
+
+    // Index replacement maps
+    for(size_t idxg = 0; idxg != int_index_groups.size(); ++idxg){
+      auto spin_bit = (int_spincase << (64 - idxg - 1)) >> 63;
+      assert((spin_bit == 0) || (spin_bit == 1));
+
+      for(auto& idx : int_index_groups[idxg]){
+        auto spin_idx = add_spin_label(idx, spin_bit);
+        int_idx_rep.emplace(std::make_pair(idx, spin_idx));
+      }
+    }
+    i_rep.push_back(int_idx_rep);
+
+    for(auto& i : int_idx_rep){ std::wcout << to_latex(i.second) << " "; }
+    std::cout << "\n";
+  }
+
+  std::cout << "\n";
 
   // Spin loop on external index groups
-      // Spin-loop on internal indices
+  for (uint64_t spincase_bitstr = 0; spincase_bitstr != nspincases;
+       ++spincase_bitstr) {
+    std::map<Index, Index> ext_idx_rep;
+    ExprPtr spincase_result;
 
+    for(size_t idxg = 0; idxg != ext_index_groups.size(); ++idxg){
+      auto spin_bit = (spincase_bitstr << (64 - idxg - 1)) >> 63;
+      assert((spin_bit == 0) || (spin_bit == 1));
+      for(auto& idx : ext_index_groups[idxg]){
+        auto spin_idx = add_spin_label(idx, spin_bit);
+        ext_idx_rep.emplace(std::make_pair(idx, spin_idx));
+      }
+      std::cout << "\n";
+    }
+    e_rep.push_back(ext_idx_rep);
+
+    // internal and external replacements are independent
+    for(auto& i : ext_idx_rep){ std::wcout << to_latex(i.second) << " "; }
+    std::cout << "\n";
+
+  }
+
+  return result;
 }
 
 /// @brief Transforms an expression from spin orbital to spatial orbitals
@@ -1215,16 +1331,17 @@ ExprPtr spintrace(ExprPtr expression,
         assert((spin_bit == 0) || (spin_bit == 1));
 
         for (auto&& index : index_group) {
-          IndexSpace space;
-          space = spin_bit == 0 ?
-             IndexSpace::instance(IndexSpace::instance(index.label()).type(), IndexSpace::alpha):
-             IndexSpace::instance(IndexSpace::instance(index.label()).type(), IndexSpace::beta);
-
-          // TODO: Check if valid for index with no subscripts
           auto subscript_label =
               index.label().substr(index.label().find(L'_') + 1);
           std::wstring subscript_label_ws(subscript_label.begin(), subscript_label.end());
-          Index spin_index = Index::make_label_index(space, subscript_label_ws);
+          auto idx_type = IndexSpace::instance(index.label()).type();
+
+          auto space = spin_bit == 0 ?
+             IndexSpace::instance(idx_type, IndexSpace::alpha):
+             IndexSpace::instance(idx_type, IndexSpace::beta);
+
+          auto spin_index = Index::make_label_index(space, subscript_label_ws);
+          std::wcout << index.to_latex() << " " << spin_index.to_latex() << std::endl;
           index_replacements.emplace(std::make_pair(index, spin_index));
         }
         ++index_group_count;
