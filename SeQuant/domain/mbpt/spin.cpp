@@ -196,7 +196,7 @@ ExprPtr remove_spin(ExprPtr& expr) {
     return expr;
 }
 
-inline bool is_tensor_spin_symm(const Tensor& tensor) {
+bool is_tensor_spin_symm(const Tensor& tensor) {
   bool result = false;
   assert(tensor.bra_rank() == tensor.ket_rank());
   auto iter_ket = tensor.ket().begin();
@@ -212,7 +212,7 @@ inline bool is_tensor_spin_symm(const Tensor& tensor) {
   return result;
 }
 
-inline bool can_expand(const Tensor& tensor) {
+bool can_expand(const Tensor& tensor) {
   assert(tensor.bra_rank() == tensor.ket_rank() && "can_expand failed.");
   if (tensor.bra_rank() != tensor.ket_rank()) return false;
   auto result = false;
@@ -291,7 +291,7 @@ ExprPtr expand_antisymm(const Tensor& tensor) {
   }
 }
 
-inline ExprPtr expand_antisymm(const ExprPtr& expr) {
+ExprPtr expand_antisymm(const ExprPtr& expr) {
   if (expr->is<Constant>())
     return expr;
   else if (expr->is<Tensor>())

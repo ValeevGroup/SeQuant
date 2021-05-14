@@ -154,6 +154,10 @@ ExprPtr closed_shell_spintrace(
     const ExprPtr& expression,
     const container::vector<container::vector<Index>> ext_index_groups = {{}});
 
+/// @brief Transforms Coupled cluster from spin orbital to spatial orbitals
+/// @detailed The external indices are deduced from Antisymmetrization operator
+/// @param expr ExprPtr with spin orbital indices
+/// @return an expression with spin integrated/adapted
 ExprPtr closed_shell_cc_spintrace(const ExprPtr& expr);
 
 /// Collect all indices from an expression
