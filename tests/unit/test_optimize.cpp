@@ -10,7 +10,7 @@ using namespace sequant;
 auto yield_interm_hash = [](utils::binary_node<utils::eval_expr> const& node,
                             auto& container) {
   node.visit_internal(
-      [&container](const auto& x) { container.emplace(x.hash()); });
+      [&container](const auto& n) { container.emplace(n->hash()); });
 };
 
 TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
@@ -143,15 +143,15 @@ TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
     size_t nocc = 2, nvirt = 5;
     auto opt_terms = optimize::multi_term_opt_hartono(terms, nocc, nvirt);
 
-    auto prod2_opt = std::move(*(
-        optimize::single_term_opt(prod2->as<Product>(), nocc, nvirt, {}, true)
-            .optimal_seqs.begin()));
+    auto prod2_opt = std::move(
+        *(optimize::single_term_opt(prod2->as<Product>(), nocc, nvirt, {}, true)
+              .optimal_seqs.begin()));
     auto imeds = container::set<size_t>{};
     yield_interm_hash(prod2_opt, imeds);
 
     auto prod1_opt =
-        std::move(*(optimize::single_term_opt(prod1->as<Product>(), nocc,
-                                               nvirt, imeds, true)
+        std::move(*(optimize::single_term_opt(prod1->as<Product>(), nocc, nvirt,
+                                              imeds, true)
                         .optimal_seqs.begin()));
 
     REQUIRE(**(opt_terms.at(prod2).optimal_seqs.begin()) == *prod2_opt);

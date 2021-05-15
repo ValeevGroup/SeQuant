@@ -73,10 +73,13 @@ TEST_CASE("TEST BINARY_NODE", "[binary_node]") {
     // doing simple arithmetic in a complicated way
     struct arithm_val {
       enum struct arithm_type { Id, Sum };
+
       int val{0};
+
       arithm_type arithm{arithm_type::Sum};
 
       arithm_val() = default;
+
       arithm_val(int x) : val{x}, arithm{arithm_type::Id} {}
     };
 
@@ -89,14 +92,18 @@ TEST_CASE("TEST BINARY_NODE", "[binary_node]") {
       arithm_val operator()(arithm_val const& av1, arithm_val const& av2) {
         return arithm_val{};
       }
-    };
+    };  // arithm_binarizer
 
     struct arithm_evaluator {
-      int operator()(arithm_val const& av) const { return av.val; }
-      int operator()(arithm_val const& av, int leval, int reval) const {
+      int operator()(binary_node<arithm_val> const& av) const {
+        return av->val;
+      }
+
+      int operator()(binary_node<arithm_val> const& av, int leval,
+                     int reval) const {
         return leval + reval;
       }
-    };
+    };  // arithm_evaluator
 
     auto constexpr summands = std::array{1, 2, 3, 4, 5};
 
@@ -119,21 +126,22 @@ TEST_CASE("TEST BINARY_NODE", "[binary_node]") {
                                string_holder const& h2) const {
         return string_holder{};
       }
-    };
+    };  // words_binarizer
 
     auto const words_node =
         binary_node<string_holder>{words, words_binarizer{}};
 
     struct string_concat {
-      std::string operator()(string_holder const& node) const {
-        return node.str;
+      std::string operator()(binary_node<string_holder> const& node) const {
+        return node->str;
       }
-      std::string operator()(string_holder const& node, std::string const& lstr,
+
+      std::string operator()(binary_node<string_holder> const& node,
+                             std::string const& lstr,
                              std::string const& rstr) const {
-        assert(node.str.empty());
         return lstr + rstr;
       }
-    };
+    };  // string_concat
 
     REQUIRE(words_node.evaluate(string_concat{}) ==
             std::string{"hello, world!"});
@@ -156,8 +164,8 @@ TEST_CASE("TEST BINARY_NODE", "[binary_node]") {
     auto const node4 = binary_node<int>{6, binary_node<int>{1},
                                         binary_node<int>{take_nums(2, 2), ms}};
 
-    auto label_gen_str = [](auto x) { return std::to_string(x); };
-    auto label_gen_wstr = [](auto x) { return std::to_wstring(x); };
+    auto label_gen_str = [](auto const& n) { return std::to_string(*n); };
+    auto label_gen_wstr = [](auto const& n) { return std::to_wstring(*n); };
 
     REQUIRE(node1.digraph<std::string>(label_gen_str, "node1") ==
             std::string{"digraph node1{\n"

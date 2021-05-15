@@ -138,7 +138,7 @@ container::map<ExprPtr, sto_result> multi_term_opt_hartono(
       // visit tree nodes and copy their hashes to registry
 
       opt_tree.visit_internal(
-          [&imed_hashes](const auto& x) { imed_hashes.emplace(x.hash()); });
+          [&imed_hashes](const auto& x) { imed_hashes.emplace(x->hash()); });
     }
 
     // collect result

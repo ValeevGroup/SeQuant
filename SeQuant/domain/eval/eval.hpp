@@ -119,8 +119,8 @@ utils::cache_manager<Tensor_t> make_cache_man(
   if (!persistent_leaves) return utils::cache_manager<Tensor_t>{hash_to_counts};
 
   container::svector<size_t> leaf_hashes{};
-  node.visit_leaf([&leaf_hashes](auto const& evxpr) {
-    leaf_hashes.emplace_back(evxpr.hash());
+  node.visit_leaf([&leaf_hashes](auto const& node) {
+    leaf_hashes.emplace_back(node->hash());
   });
 
   return utils::cache_manager<Tensor_t>{hash_to_counts, leaf_hashes};
@@ -140,8 +140,8 @@ utils::cache_manager<Tensor_t> make_cache_man(Iterable const& nodes,
 
   container::set<size_t> leaf_hashes{};
   for (auto const& n : nodes) {
-    n.visit_leaf([&leaf_hashes](auto const& evxpr) {
-      if (evxpr.tensor().label() != L"t") leaf_hashes.insert(evxpr.hash());
+    n.visit_leaf([&leaf_hashes](auto const& node) {
+      if (node->tensor().label() != L"t") leaf_hashes.insert(node->hash());
     });
   }
 

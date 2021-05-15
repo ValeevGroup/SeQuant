@@ -146,53 +146,26 @@ class binary_node {
   }
 
   template <typename F,
-            std::enable_if_t<std::is_invocable_v<F, T const&>, bool> = true>
-  void visit(F&& pred) const {
-    if (leaf()) {
-      pred(**this);
-      return;
-    }
-
-    left().visit(std::forward<F>(pred));
-    pred(**this);
-    right().visit(std::forward<F>(pred));
-  }
-
-  template <typename F,
-            std::enable_if_t<std::is_invocable_v<F, T const&>, bool> = true>
+            std::enable_if_t<std::is_invocable_v<F, binary_node<T> const&>,
+                             bool> = true>
   void visit_internal(F&& pred) const {
-    if (leaf()) {
-      return;
+    if (!leaf()) {
+      left().visit_internal(std::forward<F>(pred));
+      pred(*this);
+      right().visit_internal(std::forward<F>(pred));
     }
-
-    left().visit_internal(std::forward<F>(pred));
-    pred(**this);
-    right().visit_internal(std::forward<F>(pred));
   }
 
   template <typename F,
-            std::enable_if_t<std::is_invocable_v<F, T const&>, bool> = true>
+            std::enable_if_t<std::is_invocable_v<F, binary_node<T> const&>,
+                             bool> = true>
   void visit_leaf(F&& pred) const {
     if (leaf()) {
-      pred(**this);
-      return;
+      pred(*this);
+    } else {
+      left().visit_leaf(std::forward<F>(pred));
+      right().visit_leaf(std::forward<F>(pred));
     }
-
-    left().visit_leaf(std::forward<F>(pred));
-    right().visit_leaf(std::forward<F>(pred));
-  }
-
-  template <typename F,
-            std::enable_if_t<
-                std::is_invocable_v<F, T const&> &&
-                    std::is_invocable_v<
-                        F, T const&, std::invoke_result_t<F, T const&> const&,
-                        std::invoke_result_t<F, T const&> const&>,
-                bool> = true>
-  auto evaluate(F&& evaluator) const {
-    if (leaf()) return evaluator(**this);
-    return evaluator(**this, left().evaluate(std::forward<F>(evaluator)),
-                     right().evaluate(std::forward<F>(evaluator)));
   }
 
   template <typename F,
@@ -213,7 +186,7 @@ class binary_node {
   template <typename Ostream, typename F>
   [[maybe_unused]] int digraph(Ostream& os, F&& label_gen,
                                int count = 0) const {
-    os << "node" << count << "[label=" << label_gen(**this) << "];\n";
+    os << "node" << count << "[label=" << label_gen(*this) << "];\n";
 
     if (this->leaf()) return count;
 
@@ -257,8 +230,9 @@ class binary_node {
  public:
   template <typename string_t, typename F>
   string_t digraph(F&& label_gen, string_t const& graph_name = {}) const {
-    static_assert(std::is_invocable_r_v<string_t, F, T const&>,
-                  "node labels generator F(const T&) should return string_t");
+    static_assert(std::is_invocable_r_v<string_t, F, binary_node<T> const&>,
+                  "node label generator F(binary_node<T> const &) should "
+                  "return string_t");
 
     auto oss = std::basic_ostringstream{string_t{}};
 
