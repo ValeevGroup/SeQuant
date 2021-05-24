@@ -5,7 +5,7 @@
 
 using namespace sequant;
 
-#define CLOSED_SHELL_SPINTRACE 0
+#define CLOSED_SHELL_SPINTRACE 1
 #if CLOSED_SHELL_SPINTRACE
 container::vector<double> biorthogonal_tran_coeff(const int n_particles, const double& threshold);
 std::vector<std::map<Index, Index>> biorthogonal_tran_idx_map(const container::vector<container::vector<Index>> ext_index_groups);
@@ -37,7 +37,7 @@ int main(int argc, char* argv[]) {
 #endif
   const size_t NMAX = argc > 1 ? std::atoi(argv[1]) : DEFAULT_NMAX;
   // change to true to print out the resulting equations
-  constexpr bool print = true;
+  constexpr bool print = false;
   // change to true to print stats
   Logger::get_instance().wick_stats = false;
 
@@ -56,7 +56,7 @@ int main(int argc, char* argv[]) {
     });
 
 #if CLOSED_SHELL_SPINTRACE
-  auto cc_r = cceqvec{ 4, 4}(true, true, true, true, true);
+  auto cc_r = cceqvec{2, 2}(true, true, true, true, true);
 
   /// Make external index
   auto ext_idx_list = [] (const int i_max){
@@ -72,11 +72,35 @@ int main(int argc, char* argv[]) {
     return ext_idx_list;
   };
 
+//  for(auto& product_term : *cc_r[2]){
+//    auto term = remove_tensor_from_product(product_term->as<Product>(), L"A");
+//    std::wcout << to_latex(term) << "\n";
+//    const auto list = ext_idx_list(1);
+//    auto os_st = open_shell_spintrace(term, list);
+//    for(auto& t : os_st){
+//      std::wcout<< "st: " << to_latex(t) << "\n";
+//    }
+//    std::wcout << "\n";
+//  }
+//  return 0;
+
+  for (int i = 1; i <= cc_r.size(); ++i) {
+    // cc_r[i] = cc_r[i]->as<Sum>().take_n(4,1);
+    // std::wcout << "CCSD R" << i << " n3: " << to_latex(cc_r[i]) << std::endl;
+    const auto list = ext_idx_list(i);
+    auto temp = open_shell_spintrace(cc_r[i], list);
+    for(auto& t : temp){
+      std::cout << t->size() << "\n"; //  << to_latex(t) << std::endl;
+    }
+  }
+  return 0;
+
   std::vector<ExprPtr> cc_st_r(cc_r.size());
   for (int i = 1; i < cc_r.size(); ++i) {
     const auto tstart = std::chrono::high_resolution_clock::now();
     const auto list = ext_idx_list(i);
     cc_st_r[i] = closed_shell_spintrace(cc_r[i], list);
+    // cc_st_r[i] = closed_shell_cc_spintrace(cc_r[i]);
     auto tstop = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> time_elapsed = tstop - tstart;
     printf("CC R%d size: %lu spintrace: %5.6f sec.\n", i, cc_st_r[i]->size(), time_elapsed.count());
@@ -133,6 +157,7 @@ int main(int argc, char* argv[]) {
     time_elapsed = tstop - tstart;
     printf("CC R%d size: %lu simplify time: %5.6f sec.\n\n", i, cc_st_r[i]->size(), time_elapsed.count());
   }
+  std::wcout << "CCSDT: " << to_latex(*cc_st_r[3]) << std::endl;
 #endif
 
   return 0;
