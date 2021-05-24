@@ -96,10 +96,6 @@ TEST_CASE("TEST_BINARIZE_EXPR", "[binarize_expr]") {
   }
 
   SECTION("debinarization") {
-    // todo
-  }
-
-  SECTION("binarize_expr") {
     using utils::binarize_expr;
     const auto p1 = parse_expr(
         L"1/16 "
@@ -108,6 +104,43 @@ TEST_CASE("TEST_BINARIZE_EXPR", "[binarize_expr]") {
         L"* t_{a3,a4}^{i1,i2}",
         Symmetry::antisymm);
     auto node = binarize_expr(p1);
+    // auto lin = linearize(node);
+    // std::wcout << "lin = " << lin->to_latex() << std::endl;
+  }
+
+  SECTION("binarize_expr") {
+    using utils::binarize_expr;
+    auto const prod = parse_expr(
+                          L"1/4 * g_{i3,i4}^{a3,a4}"
+                          L"* t_{a1}^{i3}"
+                          L"* t_{a2}^{i4}"
+                          L"* t_{a3}^{i1}"
+                          L"* t_{a4}^{i2}",
+                          Symmetry::antisymm)
+                          ->as<Product>();
+
+    auto fac1 = ex<Product>(1.0 / 4.0, ExprPtrList{prod.factor(0)->clone(),
+                                                   prod.factor(1)->clone()});
+    auto fac2 = ex<Product>(
+        ExprPtrList{prod.factor(2)->clone(), prod.factor(3)->clone()});
+    auto fac3 = prod.factor(4)->clone();
+
+    auto expr_prod = Product(1.0, ExprPtrList{});
+    expr_prod.append(fac1);
+    expr_prod.append(fac2);
+    expr_prod.append(fac3);
+
+    auto expr = ex<Product>(expr_prod);
+
+    // std::wcout << binarize_expr(expr).digraph<std::wstring>(
+    //                   [](auto const& node) {
+    //                     return L"\"$" + node->tensor().to_latex() + L"$\"";
+    //                   })
+    //            << std::endl;
+
+    std::wcout << sequant::utils::linearize_expr(expr)->to_latex() << std::endl;
+
+    // auto node = binarize_expr(p1);
 
     // std::wcout << "$" << utils::debinarize_eval_expr(node)->to_latex() <<
     // "$\n";

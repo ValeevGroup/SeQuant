@@ -7,27 +7,40 @@
 
 namespace sequant::optimize {
 
-utils::binary_node<utils::eval_expr> optimize(ExprPtr const& expr);
+/// Optimize an expression assuming the number of virtual orbitals
+/// greater than the number of occupied orbitals.
 
-/**
- * Omit the first factor from the top level product from given expression.
- * Intended to drop "A" and "S" tensors from CC amplitudes as a preparatory step
- * for evaluation of the amplitudes.
- */
+/// \param expr Expression to be optimized.
+/// \param canonize Whether to canonicalize the expression(s) during
+///                 optimization. Leads to slightly(?) more common
+///                 sub-expressions in the optimized result, at the cost of
+///                 relabeling of the indices in the result making them
+///                 different from the original.
+/// \return A binary node with eval_expr objects as data in them.
+utils::binary_node<utils::eval_expr> optimize(ExprPtr const& expr,
+                                              bool canonize);
+
+///
+/// Omit the first factor from the top level product from given expression.
+/// Intended to drop "A" and "S" tensors from CC amplitudes as a preparatory
+/// step for evaluation of the amplitudes.
+///
 ExprPtr tail_factor(ExprPtr const& expr) noexcept;
 
-/**
- * Function object to perform flops count on binary_expr<eval_expr>.
- */
-struct bin_eval_expr_flops_counter {
+///
+/// Function object to perform flops count on binary_expr<eval_expr>.
+/// A set of hashes of intermediates is used to so that, while counting
+/// flops, any encountered intermediate if contained in the set will be
+/// counted for zero flops.
+///
+struct FlopsCounterCached {
  private:
   container::set<size_t> const& imed_hashes;
 
-  utils::flops_counter const counter;
+  utils::FlopsCounter const counter;
 
  public:
-  bin_eval_expr_flops_counter(size_t no, size_t nv,
-                              const container::set<size_t>& imeds);
+  FlopsCounterCached(size_t no, size_t nv, const container::set<size_t>& imeds);
 
   size_t operator()(utils::binary_node<utils::eval_expr> const& node) const;
 
@@ -35,46 +48,60 @@ struct bin_eval_expr_flops_counter {
                     size_t lflops, size_t rflops) const;
 };
 
-/**
- * Result of the single term optimization of a term.
- * Holds operations count.
- *
- * Iterable of one or more binary_expr<eval_expr> root node pointers
- * that lead to the same operations count.
- *
- * ie. degenerate evaluations leading to the minimal operations count are
- * stored as binary tree nodes.
- */
-struct sto_result {
+///
+/// Result of the single term optimization of a term.
+/// Holds operations count.
+///
+/// Iterable of one or more binary_expr<eval_expr> root node pointers
+/// that lead to the same operations count.
+///
+/// ie. degenerate evaluations leading to the minimal operations count are
+/// stored as binary tree nodes.
+///
+struct STOResult {
   size_t ops;
 
   container::vector<utils::binary_node<utils::eval_expr>> optimal_seqs;
 };
 
-/**
- * Holds the result of the most expensive term scan.
- */
-struct met_result {
-  // sum of operations count of less expensive terms.
+///
+/// Holds the result of the most expensive term scan.
+///
+struct METResult {
+  /// sum of operations count of less expensive terms.
   size_t ops_lets;
-  // operations count of most expensive term(s).
+  /// operations count of most expensive term(s).
   size_t ops_met;
 
-  container::map<ExprPtr, sto_result> mets;
+  /// A map from an expression to its corresponding single term optimization
+  /// results
+  container::map<ExprPtr, STOResult> mets;
 };
 
-sto_result single_term_opt(Product const& prod, size_t nocc, size_t nvirt,
-                           container::set<size_t> const& imeds_hash,
-                           bool canon = true);
+/// Perform single term optimization on a product.
 
-/**
- * @tparam Cont type of @c container.
- *
- * @param container Iterable of ExprPtr to flat Product.
- */
+/// @param nocc number of occupied orbitals.
+/// @param nvirt number of virtual orbitals.
+/// @param imeds_hash set of intermediate hashes,
+///                   for which flops should be discounted.
+/// @param canon whether to canonicalize each product before couting flops.
+///              by canonicalizing before counting flops, we increase the
+///              chance of encountering an intermediate whose hash value is
+///              already present in @c imed_hash.
+/// @return STOResult
+STOResult single_term_opt(Product const& prod, size_t nocc, size_t nvirt,
+                          container::set<size_t> const& imeds_hash, bool canon);
+
+///
+/// Find the most expensive term from an iterable of flat products.
+///
+/// @tparam Cont type of @c container.
+///
+/// @param container Iterable of ExprPtr to flat Product.
+///
 template <typename Cont>
-met_result most_expensive(Cont const& iterable, size_t nocc, size_t nvirt,
-                          container::set<size_t> const& imed_hashes) {
+METResult most_expensive(Cont const& iterable, size_t nocc, size_t nvirt,
+                         container::set<size_t> const& imed_hashes) {
   using ranges::views::transform;
 
   auto costs =
@@ -83,7 +110,7 @@ met_result most_expensive(Cont const& iterable, size_t nocc, size_t nvirt,
                                imed_hashes, true);
       });
 
-  met_result expensive{0, 0, {}};
+  METResult expensive{0, 0, {}};
   auto expr2sto = ranges::views::zip(iterable, costs);
   for (auto&& [xpr, sto] : expr2sto) {
     if (sto.ops == expensive.ops_met) {
@@ -111,15 +138,16 @@ met_result most_expensive(Cont const& iterable, size_t nocc, size_t nvirt,
 /// container is non-empty
 ///
 template <typename Cont>
-container::map<ExprPtr, sto_result> multi_term_opt_hartono(
-    Cont const& container, size_t nocc, size_t nvirt) {
+container::map<ExprPtr, STOResult> multi_term_opt_hartono(Cont const& container,
+                                                          size_t nocc,
+                                                          size_t nvirt) {
   using ranges::none_of;
   using ranges::views::addressof;
   using ranges::views::filter;
   using ranges::views::indirect;
   using ranges::views::keys;
 
-  auto optimized_terms = container::map<ExprPtr, sto_result>{};
+  auto optimized_terms = container::map<ExprPtr, STOResult>{};
 
   // initial intermediate hash registry is empty
   auto imed_hashes = container::set<size_t>{};
@@ -128,7 +156,7 @@ container::map<ExprPtr, sto_result> multi_term_opt_hartono(
 
   while (!terms_range.empty()) {
     // find the most expensive
-    met_result expensive = most_expensive(container, nocc, nvirt, imed_hashes);
+    METResult expensive = most_expensive(container, nocc, nvirt, imed_hashes);
 
     // update intermediate hashes
     for (auto&& [xpr, sto] : expensive.mets) {

@@ -9,7 +9,11 @@ namespace sequant::utils {
 
 binary_node<eval_expr> binarize_expr(ExprPtr const& expr);
 
-ExprPtr debinarize_eval_expr(binary_node<eval_expr> const& node);
+ExprPtr binarize_expr(binary_node<eval_expr> const& node);
+
+ExprPtr linearize_expr(binary_node<eval_expr> const& node);
+
+ExprPtr linearize_expr(ExprPtr const& expr);
 
 }  // namespace sequant::utils
 

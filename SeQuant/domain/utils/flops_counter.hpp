@@ -7,13 +7,13 @@
 
 namespace sequant::utils {
 
-struct flops_counter {
+struct FlopsCounter {
  private:
   const size_t nocc;
   const size_t nvirt;
 
  public:
-  flops_counter(size_t no, size_t nv);
+  FlopsCounter(size_t no, size_t nv);
 
   size_t operator()(binary_node<eval_expr> const& expr) const;
 
@@ -23,17 +23,8 @@ struct flops_counter {
  private:
   [[nodiscard]] size_t flops(size_t oidx_c, size_t vidx_c) const;
 
-  // pair: occupied indices count and virtual indices count
-  static inline auto ov_idx_count =
-      [](const auto& cont) -> std::pair<size_t, size_t> {
-    // occupied indices
-    auto oc = ranges::count_if(cont, [](const auto& idx) {
-      return idx.space() == IndexSpace::active_occupied;
-    });
-
-    return std::pair{oc, cont.size() - oc};
-  };
-
+  template <typename Iterable>
+  static std::array<size_t, 2> ov_idx_count(Iterable&& container);
 };  // flops counter
 
 }  // namespace sequant::utils

@@ -174,9 +174,11 @@ int main(int argc, char** argv) {
 
   auto cc_r = cceqvec{2, 2}(false, true, true, true, true);
 
+  // canonicalize expressions while optimizing
+  bool canon = true;
   auto nodes = ranges::views::tail(cc_r) |
-               ranges::views::transform([](auto const& seqxpr) {
-                 return optimize(tail_factor(seqxpr));
+               ranges::views::transform([canon](auto const& seqxpr) {
+                 return optimize(tail_factor(seqxpr), canon);
                }) |
                ranges::to_vector;
 

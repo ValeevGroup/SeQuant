@@ -200,9 +200,12 @@ int main(int argc, char** argv) {
 
   auto cc_r = sequant::eqs::cceqvec{2, 2}(false, true, true, true, true);
 
+  // canonicalize expressions while optimizing
+  bool canon = false;
   auto nodes = ranges::views::tail(cc_r) |
-               ranges::views::transform(
-                   [](auto const& n) { return optimize(tail_factor(n)); }) |
+               ranges::views::transform([canon](auto const& n) {
+                 return optimize(tail_factor(n), canon);
+               }) |
                ranges::to_vector;
 
   auto const& node_r1 = nodes[0];

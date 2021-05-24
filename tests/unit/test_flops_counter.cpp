@@ -10,7 +10,7 @@
 size_t evaluate_flops(
     sequant::utils::binary_node<sequant::utils::eval_expr> const& node,
     size_t nocc, size_t nvirt) {
-  return node.evaluate(sequant::utils::flops_counter{nocc, nvirt});
+  return node.evaluate(sequant::utils::FlopsCounter{nocc, nvirt});
 }
 
 size_t evaluate_flops(
@@ -19,7 +19,7 @@ size_t evaluate_flops(
   return evaluate_flops(node, std::get<0>(nov), std::get<1>(nov));
 }
 
-TEST_CASE("TEST_OPS_COUNTER", "[flops_counter]") {
+TEST_CASE("TEST_OPS_COUNTER", "[FlopsCounter]") {
   sequant::TensorCanonicalizer::register_instance(
       std::make_shared<sequant::DefaultTensorCanonicalizer>());
 

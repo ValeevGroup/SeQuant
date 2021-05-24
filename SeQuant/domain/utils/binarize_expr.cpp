@@ -31,7 +31,7 @@ binary_node<eval_expr> binarize_expr(const ExprPtr& expr) {
   return bnode;
 }
 
-ExprPtr debinarize_eval_expr(binary_node<eval_expr> const& node) {
+ExprPtr binarize_expr(binary_node<eval_expr> const& node) {
   auto const op = node->op();
   auto const& evxpr = *node;
 
@@ -45,8 +45,8 @@ ExprPtr debinarize_eval_expr(binary_node<eval_expr> const& node) {
     auto prod = Product{};
     prod.scale(evxpr.scalar().value());
 
-    auto lexpr = debinarize_eval_expr(node.left());
-    auto rexpr = debinarize_eval_expr(node.right());
+    auto lexpr = binarize_expr(node.left());
+    auto rexpr = binarize_expr(node.right());
 
     if (lexpr->is<Tensor>())
       prod.append(1, lexpr);
@@ -61,9 +61,40 @@ ExprPtr debinarize_eval_expr(binary_node<eval_expr> const& node) {
     return ex<Product>(std::move(prod));
   } else {
     assert(op == eval_expr::eval_op::Sum && "unsupported operation type");
-    return ex<Sum>(Sum{debinarize_eval_expr(node.left()),
-                       debinarize_eval_expr(node.right())});
+    return ex<Sum>(
+        Sum{binarize_expr(node.left()), binarize_expr(node.right())});
   }
+}
+
+ExprPtr linearize_expr(binary_node<eval_expr> const& node) {
+  if (node.leaf()) return binarize_expr(node);
+
+  auto lres = linearize_expr(node.left());
+  auto rres = linearize_expr(node.right());
+  if (node->op() == eval_expr::eval_op::Sum)
+    return ex<Sum>(ExprPtrList{lres, rres});
+
+  if (node.left().leaf() && node.right().leaf()) {
+    return ex<Product>(node->scalar().value(), ExprPtrList{lres, rres});
+  } else if (!node.left().leaf() && !node.right().leaf()) {
+    auto prod = Product(node->scalar().value(), ExprPtrList{});
+    prod.append(lres);
+    prod.append(rres);
+    return ex<Product>(std::move(prod));
+  } else if (node.left().leaf() && !node.right().leaf()) {
+    auto prod = Product(node->scalar().value(), ExprPtrList{lres});
+    prod.append(rres);
+    return ex<Product>(std::move(prod));
+  } else {  // (!node.left().leaf() && node.right().leaf())
+    auto& res = lres->as<Product>();
+    res.scale(node->scalar().value());
+    res.append(rres);
+    return lres;
+  }
+}
+
+ExprPtr linearize_expr(ExprPtr const& expr) {
+  return linearize_expr(binarize_expr(expr));
 }
 
 }  // namespace sequant::utils
