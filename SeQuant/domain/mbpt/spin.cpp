@@ -1140,6 +1140,21 @@ std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
     return result;
   };
 
+#if 0
+  // Check maps
+  for(auto& map : e_rep){
+    for(auto& pair : map)
+    std::wcout << to_latex(pair.second) << " ";
+    std::wcout << "\n";
+  }
+  std::wcout << "\n";
+  for(auto& map : i_rep){
+    for(auto& pair : map)
+      std::wcout << to_latex(pair.second) << " ";
+    std::wcout << "\n";
+  }
+  std::wcout << "\n";
+#endif
   // Loop over external index replacement maps
   for(auto& e : e_rep){
     auto spin_expr = append_spin(expanded_expr, e);
@@ -1164,6 +1179,11 @@ std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
       e_result.append(std::make_shared<Sum>(i_result));
     }
     result.push_back(std::make_shared<Sum>(e_result));
+  }
+  for(auto i = 0; i != result.size(); ++i){
+    result[i]->visit(reset_idx_tags);
+    canonicalize(result[i]);
+    rapid_simplify(result[i]);
   }
   return result;
 }
