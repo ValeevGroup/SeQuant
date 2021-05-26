@@ -254,7 +254,6 @@ set(utests_src
          tests/unit/test_eval_expr.cpp
          tests/unit/test_binary_node.cpp
          tests/unit/test_eval_seq.cpp
-         tests/unit/test_binarize_expr.cpp
          tests/unit/test_asy_cost.cpp
          tests/unit/test_eval_node.cpp
          tests/unit/test_optimize.cpp
