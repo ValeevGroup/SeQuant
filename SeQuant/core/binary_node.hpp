@@ -1,5 +1,5 @@
-#ifndef SEQUANT_UTILS_BINARY_NODE_HPP
-#define SEQUANT_UTILS_BINARY_NODE_HPP
+#ifndef SEQUANT_BINARY_NODE_HPP
+#define SEQUANT_BINARY_NODE_HPP
 
 #include <memory>
 #include <range/v3/numeric/accumulate.hpp>
@@ -7,29 +7,29 @@
 #include <stdexcept>
 #include <utility>
 
-namespace sequant::utils {
+namespace sequant {
 
 template <typename T>
-class binary_node {
+class BinaryNode {
   template <typename U>
-  struct data_node {
-    virtual ~data_node() = default;
+  struct DataNode {
+    virtual ~DataNode() = default;
     virtual U const& data() const = 0;
     virtual U& data() = 0;
     [[nodiscard]] virtual bool leaf() const = 0;
-    virtual binary_node<U> const& left() const = 0;
-    virtual binary_node<U> const& right() const = 0;
-    virtual binary_node<U> clone() const = 0;
-  };  // data_node<U>
+    virtual BinaryNode<U> const& left() const = 0;
+    virtual BinaryNode<U> const& right() const = 0;
+    virtual BinaryNode<U> clone() const = 0;
+  };  // DataNode<U>
 
   template <typename U>
-  class data_node_internal final : public data_node<U> {
+  class data_node_internal final : public DataNode<U> {
     U data_;
-    binary_node<U> left_;
-    binary_node<U> right_;
+    BinaryNode<U> left_;
+    BinaryNode<U> right_;
 
    public:
-    data_node_internal(U d, binary_node<U>&& l, binary_node<U>&& r)
+    data_node_internal(U d, BinaryNode<U>&& l, BinaryNode<U>&& r)
         : data_{std::move(d)}, left_{std::move(l)}, right_{std::move(r)} {}
 
     U const& data() const override { return data_; }
@@ -38,17 +38,17 @@ class binary_node {
 
     [[nodiscard]] bool leaf() const override { return false; }
 
-    binary_node<U> const& left() const override { return left_; }
+    BinaryNode<U> const& left() const override { return left_; }
 
-    binary_node<U> const& right() const override { return right_; }
+    BinaryNode<U> const& right() const override { return right_; }
 
-    binary_node<U> clone() const override {
-      return binary_node<U>{data_, left_.clone(), right_.clone()};
+    BinaryNode<U> clone() const override {
+      return BinaryNode<U>{data_, left_.clone(), right_.clone()};
     }
   };  // data_node_internal<U>
 
   template <typename U>
-  class data_node_leaf final : public data_node<U> {
+  class data_node_leaf final : public DataNode<U> {
     U data_;
 
    public:
@@ -60,19 +60,19 @@ class binary_node {
 
     [[nodiscard]] bool leaf() const override { return true; }
 
-    binary_node<U> const& left() const override {
+    BinaryNode<U> const& left() const override {
       throw std::logic_error("left() called on leaf node");
     }
 
-    binary_node<U> const& right() const override {
+    BinaryNode<U> const& right() const override {
       throw std::logic_error("right() called on leaf node");
     }
 
-    binary_node<U> clone() const override { return binary_node<U>{data_}; }
+    BinaryNode<U> clone() const override { return BinaryNode<U>{data_}; }
   };  // data_node_leaf<U>
 
  private:
-  std::unique_ptr<data_node<T>> dnode;
+  std::unique_ptr<DataNode<T>> dnode;
 
  public:
   T const& operator*() const { return dnode->data(); }
@@ -83,25 +83,25 @@ class binary_node {
 
   [[nodiscard]] bool leaf() const { return dnode->leaf(); }
 
-  binary_node<T> const& left() const { return dnode->left(); }
+  BinaryNode<T> const& left() const { return dnode->left(); }
 
-  binary_node<T> const& right() const { return dnode->right(); }
+  BinaryNode<T> const& right() const { return dnode->right(); }
 
-  binary_node<T> clone() const { return dnode->clone(); }
+  BinaryNode<T> clone() const { return dnode->clone(); }
 
-  explicit binary_node(T d)
+  explicit BinaryNode(T d)
       : dnode{std::make_unique<data_node_leaf<T>>(std::move(d))} {}
 
-  binary_node(T d, binary_node<T>&& ln, binary_node<T>&& rn)
+  BinaryNode(T d, BinaryNode<T>&& ln, BinaryNode<T>&& rn)
       : dnode{std::make_unique<data_node_internal<T>>(std::move(d),   //
                                                       std::move(ln),  //
                                                       std::move(rn))} {}
 
-  binary_node(T d, T ld, T rd)
-      : binary_node<T>{std::move(d), binary_node<T>{ld}, binary_node<T>{rd}} {}
+  BinaryNode(T d, T ld, T rd)
+      : BinaryNode<T>{std::move(d), BinaryNode<T>{ld}, BinaryNode<T>{rd}} {}
 
   template <typename Cont, typename F>
-  binary_node(Cont const& container, F&& binarize) {
+  BinaryNode(Cont const& container, F&& binarize) {
     using value_type = decltype(*ranges::begin(container));
     static_assert(std::is_invocable_v<F, value_type const&>,
                   "Binarizer to handle terminal nodes missing");
@@ -124,18 +124,18 @@ class binary_node {
 
     auto node =
         accumulate(begin(container) + 1, end(container),       // range
-                   binary_node{binarize(*begin(container))},   // init
+                   BinaryNode{binarize(*begin(container))},    // init
                    [&binarize](auto&& acc, const auto& val) {  // predicate
-                     auto rnode = binary_node{binarize(val)};
-                     return binary_node{binarize(*acc, *rnode), std::move(acc),
-                                        std::move(rnode)};
+                     auto rnode = BinaryNode{binarize(val)};
+                     return BinaryNode{binarize(*acc, *rnode), std::move(acc),
+                                       std::move(rnode)};
                    });
 
     *this = std::move(node);
   }
 
   template <typename F,
-            std::enable_if_t<std::is_invocable_v<F, binary_node<T> const&>,
+            std::enable_if_t<std::is_invocable_v<F, BinaryNode<T> const&>,
                              bool> = true>
   void visit(F&& pred) const {
     pred(*this);
@@ -146,7 +146,7 @@ class binary_node {
   }
 
   template <typename F,
-            std::enable_if_t<std::is_invocable_v<F, binary_node<T> const&>,
+            std::enable_if_t<std::is_invocable_v<F, BinaryNode<T> const&>,
                              bool> = true>
   void visit_internal(F&& pred) const {
     if (!leaf()) {
@@ -157,7 +157,7 @@ class binary_node {
   }
 
   template <typename F,
-            std::enable_if_t<std::is_invocable_v<F, binary_node<T> const&>,
+            std::enable_if_t<std::is_invocable_v<F, BinaryNode<T> const&>,
                              bool> = true>
   void visit_leaf(F&& pred) const {
     if (leaf()) {
@@ -170,11 +170,11 @@ class binary_node {
 
   template <typename F,
             std::enable_if_t<
-                std::is_invocable_v<F, binary_node<T> const&> &&
+                std::is_invocable_v<F, BinaryNode<T> const&> &&
                     std::is_invocable_v<
-                        F, binary_node<T> const&,
-                        std::invoke_result_t<F, binary_node<T> const&> const&,
-                        std::invoke_result_t<F, binary_node<T> const&> const&>,
+                        F, BinaryNode<T> const&,
+                        std::invoke_result_t<F, BinaryNode<T> const&> const&,
+                        std::invoke_result_t<F, BinaryNode<T> const&> const&>,
                 bool> = true>
   auto evaluate(F&& evaluator) const {
     if (leaf()) return evaluator(*this);
@@ -230,8 +230,8 @@ class binary_node {
  public:
   template <typename string_t, typename F>
   string_t digraph(F&& label_gen, string_t const& graph_name = {}) const {
-    static_assert(std::is_invocable_r_v<string_t, F, binary_node<T> const&>,
-                  "node label generator F(binary_node<T> const &) should "
+    static_assert(std::is_invocable_r_v<string_t, F, BinaryNode<T> const&>,
+                  "node label generator F(BinaryNode<T> const &) should "
                   "return string_t");
 
     auto oss = std::basic_ostringstream{string_t{}};
@@ -245,8 +245,8 @@ class binary_node {
   }
 
   template <typename string_t>
-  string_t tikz(std::function<string_t(binary_node<T> const&)> label_gen,
-                std::function<string_t(binary_node<T> const&)> spec_gen) const {
+  string_t tikz(std::function<string_t(BinaryNode<T> const&)> label_gen,
+                std::function<string_t(BinaryNode<T> const&)> spec_gen) const {
     auto oss = std::basic_ostringstream{string_t{}};
     oss << "\\tikz{\n\\";
     tikz(oss, label_gen, spec_gen);
@@ -255,16 +255,15 @@ class binary_node {
     return oss.str();
   }
 
-};  // binary_node<T>
+};  // BinaryNode<T>
 
 template <typename T, typename U>
-bool operator==(binary_node<T> const& lhs, binary_node<U> const& rhs) {
-  return  // (&lhs == &rhs) ||
-      ((*lhs == *rhs) &&
-       ((lhs.leaf() && rhs.leaf()) ||
-        (lhs.left() == rhs.left() && lhs.right() == rhs.right())));
+bool operator==(BinaryNode<T> const& lhs, BinaryNode<U> const& rhs) {
+  return ((*lhs == *rhs) &&
+          ((lhs.leaf() && rhs.leaf()) ||
+           (lhs.left() == rhs.left() && lhs.right() == rhs.right())));
 }
 
-}  // namespace sequant::utils
+}  // namespace sequant
 
-#endif  // SEQUANT_UTILS_BINARY_NODE_HPP
+#endif  // SEQUANT_BINARY_NODE_HPP

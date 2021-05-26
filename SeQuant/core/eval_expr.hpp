@@ -1,9 +1,9 @@
-#ifndef SEQUANT_UTILS_EVAL_EXPR_HPP
-#define SEQUANT_UTILS_EVAL_EXPR_HPP
+#ifndef SEQUANT_EVAL_EXPR_HPP
+#define SEQUANT_EVAL_EXPR_HPP
 
 #include <SeQuant/core/tensor.hpp>
 
-namespace sequant::utils {
+namespace sequant {
 
 /**
  * An object to be stored in the binary evaluation tree nodes.
@@ -11,41 +11,43 @@ namespace sequant::utils {
  * @author Bimal Gaudel
  * @version 03 Dec, 2020
  */
-class eval_expr final {
+class EvalExpr final {
  public:
+  using hash_t = size_t;
+
   /**
-   * Type of evaluation resulting into eval_expr.
+   * Type of evaluation resulting into EvalExpr.
    */
-  enum class eval_op {
+  enum class EvalOp {
     /** Identity type evaluation. */
     Id,
     /** Sum type evaluation. */
     Sum,
     /** Product type evaluation. */
     Prod,
-  };  // eval_op
+  };  // EvalOp
 
   /**
-   * Construct eval_expr that goes into the leaf nodes
+   * Construct EvalExpr that goes into the leaf nodes
    * of the binary evaluation tree.
    */
-  explicit eval_expr(const Tensor&);
+  explicit EvalExpr(const Tensor&);
 
   /**
-   * Construct eval_expr that goes into the internal nodes
+   * Construct EvalExpr that goes into the internal nodes
    * of the binary evaluation tree.
    */
-  eval_expr(const eval_expr&, const eval_expr&);
+  EvalExpr(const EvalExpr&, const EvalExpr&);
 
   /**
    * Operation type of the object.
    */
-  [[nodiscard]] eval_op op() const;
+  [[nodiscard]] EvalOp op() const;
 
   /**
    * Hash value of the object.
    */
-  [[nodiscard]] size_t hash() const;
+  [[nodiscard]] hash_t hash() const;
 
   /**
    * Tensor expression stored by the object.
@@ -56,7 +58,7 @@ class eval_expr final {
   [[nodiscard]] const Constant& scalar() const;
 
   template <typename T = std::complex<double>>
-  eval_expr& operator*=(T fac) {
+  EvalExpr& operator*=(T fac) {
     scalar_ *= Constant{std::move(fac)};
     return *this;
   }
@@ -66,7 +68,7 @@ class eval_expr final {
     scalar_ = Constant{std::move(fac)};
   }
 
-  friend inline bool operator==(const eval_expr& lhs, const eval_expr& rhs) {
+  friend inline bool operator==(const EvalExpr& lhs, const EvalExpr& rhs) {
     return lhs.hash() == rhs.hash() &&
            (lhs.tensor().to_latex() == rhs.tensor().to_latex());
   }
@@ -75,9 +77,9 @@ class eval_expr final {
   using index_container_type = container::svector<Index>;
   using braket_type = std::pair<index_container_type, index_container_type>;
 
-  eval_op op_;
+  EvalOp op_;
 
-  size_t hash_;
+  hash_t hash_;
 
   Tensor tensor_;
 
@@ -86,13 +88,13 @@ class eval_expr final {
   /**
    * Make an intermediate tensor from two expressions.
    */
-  static Tensor make_imed_expr(const eval_expr& expr1, const eval_expr& expr2,
-                               eval_op op);
+  static Tensor make_imed_expr(const EvalExpr& expr1, const EvalExpr& expr2,
+                               EvalOp op);
 
   /**
    * Figure out the type of evaluation between a pair of expressions.
    */
-  static eval_op infer_eval_op(const Tensor&, const Tensor&);
+  static EvalOp infer_eval_op(const Tensor&, const Tensor&);
 
   /**
    * Infer the symmetry of the resulting tensor after summing two tensors.
@@ -120,13 +122,13 @@ class eval_expr final {
   /**
    * Combined hash of the index spaces of the indices in a braket.
    */
-  static size_t hash_braket(
+  static hash_t hash_braket(
       const decltype(std::declval<Tensor>().const_braket())&);
 
   /**
    * Hash a tensor based on its label and index space of braket indices.
    */
-  static size_t hash_terminal_tensor(const Tensor&);
+  static hash_t hash_terminal_tensor(const Tensor&);
 
   /**
    * Hash an intermediate tensor based on the topology of braket connectivity.
@@ -139,14 +141,14 @@ class eval_expr final {
    *
    * @param op Type of evaluation operation between @c expr1 and @c expr2.
    */
-  static size_t hash_imed(const eval_expr& expr1, const eval_expr& expr2,
-                          eval_op op);
+  static hash_t hash_imed(const EvalExpr& expr1, const EvalExpr& expr2,
+                          EvalOp op);
 
   /**
    * Hash the topology of braket connectivity between a pair of tensor. The
    * positions of the connected indices in the corresponding brakets are hashed.
    */
-  static size_t hash_tensor_pair_topology(const Tensor&, const Tensor&);
+  static hash_t hash_tensor_pair_topology(const Tensor&, const Tensor&);
 
   /**
    * Figure the target braket of resulting tensor from sum between a pair of
@@ -165,8 +167,8 @@ class eval_expr final {
    * the first is the target bra.
    */
   static braket_type target_braket_prod(const Tensor&, const Tensor&);
-};  // eval_expr
+};
 
-}  // namespace sequant::utils
+}  // namespace sequant
 
-#endif  // SEQUANT_UTILS_EVAL_EXPR_HPP
+#endif  // SEQUANT_EVAL_EXPR_HPP

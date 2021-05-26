@@ -2,22 +2,20 @@
 #define SEQUANT_DOMAIN_EVAL_HPP
 
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/eval_node.hpp>
 #include <SeQuant/core/tensor.hpp>
-#include <SeQuant/domain/utils/binary_node.hpp>
 #include <SeQuant/domain/utils/cache_manager.hpp>
-#include <SeQuant/domain/utils/eval_expr.hpp>
 #include <range/v3/numeric.hpp>
 #include <range/v3/view.hpp>
 #include <type_traits>
 
 namespace sequant::eval {
-using eval_node = utils::binary_node<utils::eval_expr>;
 
 using perm_type = container::svector<size_t>;
 
 using phase_type = int;
 
-struct perm_with_phase {
+struct PermWithPhase {
   phase_type phase;
   perm_type const& perm;
 };
@@ -27,11 +25,11 @@ namespace detail {
 template <typename F>
 void permute_ords(perm_type& ords, F&& callback, size_t beg = 0,
                   size_t swaps = 0) {
-  static_assert(std::is_invocable_v<F, perm_with_phase const&>,
+  static_assert(std::is_invocable_v<F, PermWithPhase const&>,
                 "F(perm_with_phase) not possible");
 
   if (beg + 1 == ords.size())
-    callback(perm_with_phase{swaps % 2 == 0 ? 1 : -1, ords});
+    callback(PermWithPhase{swaps % 2 == 0 ? 1 : -1, ords});
 
   for (auto ii = beg; ii < ords.size(); ++ii) {
     std::swap(ords[beg], ords[ii]);
@@ -42,9 +40,7 @@ void permute_ords(perm_type& ords, F&& callback, size_t beg = 0,
 }  // permute_ords
 
 template <typename Maplike>
-void count_imeds(
-    sequant::utils::binary_node<sequant::utils::eval_expr> const& node,
-    Maplike& cmap) {
+void count_imeds(EvalNode const& node, Maplike& cmap) {
   if (node.leaf()) return;
 
   if (auto&& found = cmap.find(node->hash()); found != cmap.end()) {
@@ -81,7 +77,7 @@ void symmetrize_tensor(size_t rank, F&& callback) {
 
 template <typename F>
 void antisymmetrize_tensor(size_t rank, F&& callback) {
-  static_assert(std::is_invocable_v<F, perm_with_phase const&>);
+  static_assert(std::is_invocable_v<F, PermWithPhase const&>);
 
   auto asymm_impl = [](size_t rank, F&& callback) -> void {
     assert(rank % 2 == 0 &&
@@ -98,7 +94,7 @@ void antisymmetrize_tensor(size_t rank, F&& callback) {
       detail::permute_ords(ket_perm, [&callback, &bp](auto const& kp) {
         auto annot =
             ranges::views::concat(bp.perm, kp.perm) | ranges::to<perm_type>;
-        auto total_perm = perm_with_phase{bp.phase * kp.phase, annot};
+        auto total_perm = PermWithPhase{bp.phase * kp.phase, annot};
         std::invoke(callback, total_perm);
       });  // permute ket
     });    // permute bra
@@ -108,8 +104,8 @@ void antisymmetrize_tensor(size_t rank, F&& callback) {
 }
 
 template <typename Tensor_t>
-utils::cache_manager<Tensor_t> make_cache_man(
-    utils::binary_node<utils::eval_expr> const& node, bool persistent_leaves) {
+utils::cache_manager<Tensor_t> make_cache_man(EvalNode const& node,
+                                              bool persistent_leaves) {
   container::map<size_t, size_t> hash_to_counts{};
   detail::count_imeds(node, hash_to_counts);
 

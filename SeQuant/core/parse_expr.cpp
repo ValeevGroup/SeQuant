@@ -6,7 +6,7 @@
 #include <regex>
 #include <string>
 
-namespace sequant::utils {
+namespace sequant {
 
 namespace detail {
 
@@ -143,4 +143,8 @@ ExprPtr parse_expr(std::wstring_view raw, Symmetry tensor_sym) {
     throw std::logic_error("Expression parse error. Invalid expression spec.");
 }
 
-}  // namespace sequant::utils
+ExprPtr parse_expr_asymm(std::wstring_view raw){
+return parse_expr(raw, Symmetry::antisymm);
+}
+
+}  // namespace sequant

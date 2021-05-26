@@ -1,11 +1,12 @@
-#include <SeQuant/domain/utils/eval_seq.hpp>
+#include <SeQuant/core/binary_node.hpp>
+#include <SeQuant/core/eval_seq.hpp>
 #include <sstream>
 #include <unordered_set>
 
 #include "catch.hpp"
 
 template <typename T, typename Os>
-Os& operator<<(Os& os, const sequant::utils::eval_seq<T>& seq) {
+Os& operator<<(Os& os, const sequant::EvalSeq<T>& seq) {
   if (seq.terminal()) {
     os << seq.label();
     return os;
@@ -20,27 +21,28 @@ Os& operator<<(Os& os, const sequant::utils::eval_seq<T>& seq) {
   return os;
 }
 
-TEST_CASE("TEST_EVAL_SEQUENCE", "[eval_seq]") {
-  using namespace sequant::utils;
+TEST_CASE("TEST_EVAL_SEQUENCE", "[EvalSeq]") {
+  using sequant::BinaryNode;
+  using sequant::EvalSeq;
   auto init_rt_vec = [](size_t n) {
-    std::vector<eval_seq<size_t>> vec;
+    std::vector<EvalSeq<size_t>> vec;
     vec.reserve(n);
-    for (size_t ii = 0; ii < n; ++ii) vec.emplace_back(eval_seq<size_t>{ii});
+    for (size_t ii = 0; ii < n; ++ii) vec.emplace_back(EvalSeq<size_t>{ii});
     return vec;
   };
 
-  SECTION("eval_seq") {
-    REQUIRE_NOTHROW(eval_seq{0});
-    REQUIRE(eval_seq{0}.terminal());
-    REQUIRE(eval_seq{0}.label() == 0);
+  SECTION("EvalSeq") {
+    REQUIRE_NOTHROW(EvalSeq{0});
+    REQUIRE(EvalSeq{0}.terminal());
+    REQUIRE(EvalSeq{0}.label() == 0);
 
-    auto t0 = eval_seq{0};
-    REQUIRE_NOTHROW(t0.seque(eval_seq{1}));
+    auto t0 = EvalSeq{0};
+    REQUIRE_NOTHROW(t0.seque(EvalSeq{1}));
 
-    t0.seque(eval_seq{2});
-    t0.seque(eval_seq{3});
+    t0.seque(EvalSeq{2});
+    t0.seque(EvalSeq{3});
 
-    REQUIRE_NOTHROW(eval_seq{0, {1, 2, 3}});
+    REQUIRE_NOTHROW(EvalSeq{0, {1, 2, 3}});
   }
 
   SECTION("binarize") {
@@ -49,7 +51,7 @@ TEST_CASE("TEST_EVAL_SEQUENCE", "[eval_seq]") {
       int operator()(int x, int y) const { return (x + y) * 2; }
     } sum_and_double;
 
-    auto const nseq = eval_seq<short>{2, {3, 5, 7}};
+    auto const nseq = EvalSeq<short>{2, {3, 5, 7}};
     auto const nbinarized = nseq.binarize(sum_and_double);
     // clang-format off
         // nbinarized tree:
@@ -62,10 +64,9 @@ TEST_CASE("TEST_EVAL_SEQUENCE", "[eval_seq]") {
         // 2   3
     // clang-format on
 
-    auto const expected_node0 = binary_node<int>{
-        74,
-        binary_node<int>{30, binary_node<int>{10, 2, 3}, binary_node<int>{5}},
-        binary_node<int>{7}};
+    auto const expected_node0 = BinaryNode<int>{
+        74, BinaryNode<int>{30, BinaryNode<int>{10, 2, 3}, BinaryNode<int>{5}},
+        BinaryNode<int>{7}};
 
     REQUIRE(*nbinarized == *expected_node0);
 
@@ -74,7 +75,7 @@ TEST_CASE("TEST_EVAL_SEQUENCE", "[eval_seq]") {
       size_t operator()(size_t x, size_t y) const { return x + y; }
     } str_len;
 
-    auto const sseq1 = eval_seq<std::string_view>{"Foo", {"Bar", "Bazz"}};
+    auto const sseq1 = EvalSeq<std::string_view>{"Foo", {"Bar", "Bazz"}};
 
     auto const sbinarized1 = sseq1.binarize(str_len);
     // clang-format off
@@ -87,13 +88,13 @@ TEST_CASE("TEST_EVAL_SEQUENCE", "[eval_seq]") {
     // clang-format on
 
     auto const expected_node1 =
-        binary_node<size_t>{10,                            //
-                            binary_node<size_t>{6, 3, 3},  //
-                            binary_node<size_t>{4}};       //
+        BinaryNode<size_t>{10,                           //
+                           BinaryNode<size_t>{6, 3, 3},  //
+                           BinaryNode<size_t>{4}};       //
 
     REQUIRE(*sbinarized1 == *expected_node1);
 
-    using str_seq = eval_seq<std::string_view>;
+    using str_seq = EvalSeq<std::string_view>;
 
     auto const sseq2 = str_seq{
         "Foo", {str_seq{"Bar"}, str_seq{"Spam", {"Egg"}}, str_seq{"Bazz"}}};
@@ -121,20 +122,20 @@ TEST_CASE("TEST_EVAL_SEQUENCE", "[eval_seq]") {
     //
     // clang-format on
 
-    auto const expected_node2 = binary_node<size_t>{
+    auto const expected_node2 = BinaryNode<size_t>{
         17,
-        binary_node<size_t>{13,
-                            binary_node<size_t>{6, binary_node<size_t>{3},
-                                                binary_node<size_t>{3}},
-                            binary_node<size_t>{7, binary_node<size_t>{4},
-                                                binary_node<size_t>{3}}},
-        binary_node<size_t>{4}};
+        BinaryNode<size_t>{
+            13,
+            BinaryNode<size_t>{6, BinaryNode<size_t>{3}, BinaryNode<size_t>{3}},
+            BinaryNode<size_t>{7, BinaryNode<size_t>{4},
+                               BinaryNode<size_t>{3}}},
+        BinaryNode<size_t>{4}};
 
     REQUIRE(*expected_node2 == *sbinarized2);
   }
 
   SECTION("transform") {
-    using seq_t = eval_seq<size_t>;
+    using seq_t = EvalSeq<size_t>;
 
     auto square = [](size_t x) { return x * x; };
     auto cube = [](size_t x) { return x * x * x; };
@@ -162,7 +163,7 @@ TEST_CASE("TEST_EVAL_SEQUENCE", "[eval_seq]") {
     // to to_container
     //
     auto reap_seqs_to = [](std::unordered_set<std::string>& to_container) {
-      return [&to_container](const eval_seq<size_t>& t) -> void {
+      return [&to_container](const EvalSeq<size_t>& t) -> void {
         std::ostringstream oss;
         oss << t;
         oss.flush();
@@ -225,10 +226,10 @@ TEST_CASE("TEST_EVAL_SEQUENCE", "[eval_seq]") {
     // enumerate_eval_seq function for a given initial vector of
     // rooted trees init
     //
-    auto count_num_eval_seqs = [](const std::vector<eval_seq<size_t>>& init) {
+    auto count_num_eval_seqs = [](const std::vector<EvalSeq<size_t>>& init) {
       size_t count = 0;
       enumerate_eval_seq(
-          init, std::function([&count](const eval_seq<size_t>&) { ++count; }));
+          init, std::function([&count](const EvalSeq<size_t>&) { ++count; }));
       return count;
     };
 

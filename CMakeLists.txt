@@ -177,24 +177,27 @@ add_library(SeQuant
         SeQuant/core/utility.hpp
         SeQuant/core/bliss.hpp
         SeQuant/core/timer.hpp
+        SeQuant/core/binary_node.hpp
+        SeQuant/core/eval_seq.hpp
+        SeQuant/core/eval_expr.hpp
+        SeQuant/core/eval_expr.cpp
+        SeQuant/core/asy_cost.hpp
+        SeQuant/core/asy_cost.cpp
+        SeQuant/core/eval_node.hpp
+        SeQuant/core/eval_node.cpp
+        SeQuant/core/optimize/optimize.hpp
+        SeQuant/core/optimize/optimize.cpp
         SeQuant/domain/eqs/cceqs.hpp
         SeQuant/domain/eqs/cceqs.cpp
-        SeQuant/domain/utils/binarize_expr.cpp
-        SeQuant/domain/utils/binarize_expr.hpp
-        SeQuant/domain/utils/binary_node.hpp
-        SeQuant/domain/utils/eval_expr.cpp
-        SeQuant/domain/utils/eval_expr.hpp
-        SeQuant/domain/utils/eval_seq.hpp
-        SeQuant/domain/utils/flops_counter.cpp
-        SeQuant/domain/utils/flops_counter.hpp
-        SeQuant/domain/utils/parse_expr.cpp
-        SeQuant/domain/utils/parse_expr.hpp
+        SeQuant/domain/eval/eval.hpp
+        SeQuant/domain/eval/read_tensor.hpp
+        SeQuant/domain/eval/read_tensor.cpp
+        SeQuant/core/parse_expr.cpp
+        SeQuant/core/parse_expr.hpp
         SeQuant/domain/utils/rand_color.cpp
         SeQuant/domain/utils/rand_color.hpp
         SeQuant/domain/utils/cache_manager.hpp
         SeQuant/domain/eval/eval.hpp
-        SeQuant/domain/optimize/optimize.hpp
-        SeQuant/domain/optimize/optimize.cpp
         SeQuant/domain/mbpt/convention.cpp
         SeQuant/domain/mbpt/convention.hpp
         SeQuant/domain/mbpt/op.cpp
@@ -204,6 +207,7 @@ add_library(SeQuant
         SeQuant/domain/mbpt/sr/sr.cpp
         SeQuant/domain/mbpt/sr/sr.hpp
         )
+
 target_link_libraries(SeQuant PUBLIC range-v3::range-v3 Boost::boost SeQuant-bliss Threads::Threads)
 if (SEQUANT_HAS_EXECUTION_HEADER_STANDALONE OR SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB)
   target_compile_definitions(SeQuant PUBLIC SEQUANT_HAS_EXECUTION_HEADER)
@@ -251,13 +255,14 @@ set(utests_src
          tests/unit/test_binary_node.cpp
          tests/unit/test_eval_seq.cpp
          tests/unit/test_binarize_expr.cpp
-         tests/unit/test_flops_counter.cpp
+         tests/unit/test_asy_cost.cpp
+         tests/unit/test_eval_node.cpp
          tests/unit/test_optimize.cpp
         )
 
 if (TARGET tiledarray)
+    message("tiledarray found")
     list(APPEND utests_src
-        SeQuant/domain/eval/eval.hpp
         SeQuant/domain/eval/eval_ta.hpp
         tests/unit/test_eval_ta.cpp
         )
@@ -301,8 +306,6 @@ target_link_libraries(${example1} SeQuant ${TBB_LIBRARIES})
 if (TARGET tiledarray)
     set(example2 eval_ta)
     add_executable(${example2} EXCLUDE_FROM_ALL
-        SeQuant/domain/eval/read_tensor.hpp
-        SeQuant/domain/eval/read_tensor.cpp
         SeQuant/domain/eval/read_tensor_ta.hpp
         SeQuant/domain/eval/read_tensor_ta.cpp
         SeQuant/domain/eval/eval_ta.hpp
@@ -313,8 +316,6 @@ endif(TARGET tiledarray)
 if(BTAS_SOURCE_DIR)
     set(example3 eval_btas)
     add_executable(${example3} EXCLUDE_FROM_ALL
-        SeQuant/domain/eval/read_tensor.hpp
-        SeQuant/domain/eval/read_tensor.cpp
         SeQuant/domain/eval/read_tensor_btas.hpp
         SeQuant/domain/eval/read_tensor_btas.cpp
         SeQuant/domain/eval/eval_btas.hpp

@@ -6,9 +6,9 @@
 #include <range/v3/view.hpp>
 #include <vector>
 
-#include "binary_node.hpp"
+#include <SeQuant/core/binary_node.hpp>
 
-namespace sequant::utils {
+namespace sequant {
 
 /**
  * General ordered tree.
@@ -18,43 +18,43 @@ namespace sequant::utils {
  * @version 07 Oct 2020
  */
 template <typename T>
-class eval_seq {
+class EvalSeq {
   /** Label of the node. */
   T label_;
 
   /** Children of the node. */
-  std::vector<eval_seq> nodes_;
+  std::vector<EvalSeq> nodes_;
 
  public:
-  /** Construct eval_seq.
+  /** Construct EvalSeq.
    *
    * @param l Root label.
    */
-  explicit eval_seq(T l) : label_{std::move(l)} {}
+  explicit EvalSeq(T l) : label_{std::move(l)} {}
 
-  /** Construct eval_seq.
+  /** Construct EvalSeq.
    *
    * @param l Root label.
-   * @param children Children eval_seq objects.
+   * @param children Children EvalSeq objects.
    */
-  eval_seq(T l, std::vector<eval_seq<T>> children) : eval_seq(std::move(l)) {
+  EvalSeq(T l, std::vector<EvalSeq<T>> children) : EvalSeq(std::move(l)) {
     nodes_ = std::move(children);
   }
 
   /**
-   * Construct eval_seq.
+   * Construct EvalSeq.
    *
    * @param l Root label.
    * @param labels Children labels.
    */
-  eval_seq(T l, std::initializer_list<T> &&labels) : eval_seq(std::move(l)) {
+  EvalSeq(T l, std::initializer_list<T> &&labels) : EvalSeq(std::move(l)) {
     nodes_.reserve(labels.size());
     for (auto &&lbl : labels) nodes_.emplace_back(std::move(lbl));
   }
 
   const T &label() const { return label_; }
 
-  const std::vector<eval_seq<T>> &nodes() const { return nodes_; }
+  const std::vector<EvalSeq<T>> &nodes() const { return nodes_; }
 
   /**
    * Append a node to the sequence of evaluation.
@@ -64,7 +64,7 @@ class eval_seq {
   /**
    * Append a node to the sequence.
    */
-  void seque(eval_seq<T> n) { nodes_.emplace_back(std::move(n)); }
+  void seque(EvalSeq<T> n) { nodes_.emplace_back(std::move(n)); }
 
   /**
    * Check if the node is a terminal in the evaluation sequence.
@@ -121,20 +121,20 @@ class eval_seq {
     //
     // struct {
     //   auto operator()(T const &node) const {
-    //     return binary_node<return_data_t>{binarizer(node)};
+    //     return BinaryNode<return_data_t>{binarizer(node)};
     //   }
     //
-    //   auto operator()(binary_node<return_data_t> &&lnode,
-    //                   binary_node<return_data_t> &&rnode) const {
-    //     auto pres = binary_node<return_data_t>{binarizer(*lnode, *rnode)};
-    //     return binary_node<return_data_t>{std::move(pres), std::move(lnode),
+    //   auto operator()(BinaryNode<return_data_t> &&lnode,
+    //                   BinaryNode<return_data_t> &&rnode) const {
+    //     auto pres = BinaryNode<return_data_t>{binarizer(*lnode, *rnode)};
+    //     return BinaryNode<return_data_t>{std::move(pres), std::move(lnode),
     //                                       std::move(rnode)};
     //   }
     // } evaluator;
     //
     // return evaluate(std::forward<decltype(evaluator)>(evaluator));
 
-    auto parent_result = binary_node<return_data_t>{binarizer(label())};
+    auto parent_result = BinaryNode<return_data_t>{binarizer(label())};
 
     if (terminal()) return std::move(parent_result);
 
@@ -146,7 +146,7 @@ class eval_seq {
 
           auto bin_res = binarizer(*lexpr, *rnode);
 
-          return binary_node<return_data_t>{std::move(bin_res),
+          return BinaryNode<return_data_t>{std::move(bin_res),
                                             std::move(lexpr), std::move(rnode)};
         });
   }
@@ -161,20 +161,20 @@ class eval_seq {
     using ranges::views::transform;
 
     auto parent_result = pred(label());
-    if (terminal()) return eval_seq<return_data_t>{parent_result};
+    if (terminal()) return EvalSeq<return_data_t>{parent_result};
 
     auto children = nodes() | transform([&pred](const auto &x) {
                       return x.transform(std::forward<F>(pred));
                     }) |
-                    ranges::to<std::vector<eval_seq<return_data_t>>>;
+                    ranges::to<std::vector<EvalSeq<return_data_t>>>;
 
-    return eval_seq<return_data_t>{parent_result, std::move(children)};
+    return EvalSeq<return_data_t>{parent_result, std::move(children)};
   }
 
-};  // eval_seq<T>
+};  // EvalSeq<T>
 
 template <typename T, typename V>
-bool operator==(const eval_seq<T> &lhs, const eval_seq<V> &rhs) {
+bool operator==(const EvalSeq<T> &lhs, const EvalSeq<V> &rhs) {
   return  // (&lhs == &rhs) ||
       (lhs.label() == rhs.label() && lhs.nodes() == rhs.nodes());
 }
@@ -187,7 +187,7 @@ bool operator==(const eval_seq<T> &lhs, const eval_seq<V> &rhs) {
  * of these leaves.
  *
  * @param callback Function to be called on each enumeration. Arity one function
- * that takes const eval_seq<T>& argument.
+ * that takes const EvalSeq<T>& argument.
  *
  *
  * There are (2k - 1)!! number of ways to evaluate a product of k factors.
@@ -201,14 +201,14 @@ bool operator==(const eval_seq<T> &lhs, const eval_seq<V> &rhs) {
  */
 template <typename T, typename Comp = std::less<T>, typename F>
 void enumerate_eval_seq(
-    const std::vector<eval_seq<T>> &nodes,
-    F &&callback = [](const eval_seq<T> &) -> void {}) {
-  static_assert(std::is_invocable_v<F, const eval_seq<T> &>,
+    const std::vector<EvalSeq<T>> &nodes,
+    F &&callback = [](const EvalSeq<T> &) -> void {}) {
+  static_assert(std::is_invocable_v<F, const EvalSeq<T> &>,
                 "callback function signature doesn't match");
   if (nodes.size() == 1) callback(*nodes.begin());
   for (auto i = 0; i < nodes.size(); ++i) {
     for (auto j = i + 1; j < nodes.size(); ++j) {
-      std::vector<eval_seq<T>> new_args{nodes[i]};
+      std::vector<EvalSeq<T>> new_args{nodes[i]};
       new_args.begin()->seque(nodes[j]);
 
       bool skip_recursive_call = false;
@@ -230,6 +230,6 @@ void enumerate_eval_seq(
   }    // for i
 }  // enumerate_eval_seq
 
-}  // namespace sequant::utils
+}  // namespace sequant
 
-#endif  // SEQUANT_UTILS_EVAL_SEQ_HPP
+#endif  // SEQUANT_EVAL_SEQ_HPP

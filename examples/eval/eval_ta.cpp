@@ -1,11 +1,11 @@
 #include <SeQuant/core/op.hpp>
+#include <SeQuant/core/optimize/optimize.hpp>
+#include <SeQuant/core/parse_expr.hpp>
 #include <SeQuant/domain/eqs/cceqs.hpp>
 #include <SeQuant/domain/eval/eval.hpp>
 #include <SeQuant/domain/eval/eval_ta.hpp>
 #include <SeQuant/domain/eval/read_tensor_ta.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
-#include <SeQuant/domain/optimize/optimize.hpp>
-#include <SeQuant/domain/utils/parse_expr.hpp>
 
 #include <tiledarray.h>
 #include <iomanip>
@@ -190,13 +190,10 @@ int main(int argc, char** argv) {
 
   auto yielder = yield_leaf{nocc, nvirt, fock, eri, t_vo, t_vvoo};
 
-  auto const g_vvoo =
-      yielder(sequant::utils::parse_expr(L"g_{a1,a2}^{i1,i2}",
-                                         sequant::Symmetry::antisymm)
-                  ->as<sequant::Tensor>());
-  auto const f_vo = yielder(
-      sequant::utils::parse_expr(L"f_{a1}^{i1}", sequant::Symmetry::antisymm)
-          ->as<sequant::Tensor>());
+  auto const g_vvoo = yielder(
+      sequant::parse_expr_asymm(L"g_{a1,a2}^{i1,i2}")->as<sequant::Tensor>());
+  auto const f_vo =
+      yielder(sequant::parse_expr_asymm(L"f_{a1}^{i1}")->as<sequant::Tensor>());
 
   auto cc_r = sequant::eqs::cceqvec{2, 2}(false, true, true, true, true);
 
@@ -261,6 +258,8 @@ int main(int argc, char** argv) {
     ecc += temp("b,j").dot(t_vo("b,j"));
     ecc += 0.25 * g_vvoo("a,b,i,j").dot(t_vvoo("a,b,i,j"));
     ecc += f_vo("a,i").dot(t_vo("a,i"));
+
+    ediff = ecc_last - ecc;
 
     cout << "E(CC) = "
          << std::setprecision(std::numeric_limits<double>::max_digits10) << ecc

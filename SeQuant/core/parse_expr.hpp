@@ -1,5 +1,5 @@
-#ifndef SEQUANT_UTILS_PARSE_EXPR_HPP
-#define SEQUANT_UTILS_PARSE_EXPR_HPP
+#ifndef SEQUANT_PARSE_EXPR_HPP
+#define SEQUANT_PARSE_EXPR_HPP
 
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
@@ -14,7 +14,7 @@
  * @version: 04 Dec, 2020
  */
 
-namespace sequant::utils {
+namespace sequant {
 
 namespace detail {
 
@@ -198,6 +198,8 @@ const auto expr_rgx_pat = []() {  // a map from expr components to regex pattern
 
 ExprPtr parse_expr(std::wstring_view raw, Symmetry tensor_sym);
 
+ExprPtr parse_expr_asymm(std::wstring_view raw);
+
 }  // namespace sequant::utils
 
-#endif  // SEQUANT_UTILS_PARSE_EXPR_HPP
+#endif  // SEQUANT_PARSE_EXPR_HPP

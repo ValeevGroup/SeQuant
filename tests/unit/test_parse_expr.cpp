@@ -1,8 +1,8 @@
 #include "catch.hpp"
 
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/parse_expr.hpp>
 #include <SeQuant/core/tensor.hpp>
-#include <SeQuant/domain/utils/parse_expr.hpp>
 
 #include <range/v3/view.hpp>
 #include <regex>
@@ -13,7 +13,8 @@ auto validate_regex = [](std::wstring_view target,
 };
 
 TEST_CASE("TEST_EXPR_PARSE", "[expr_parse]") {
-  using namespace sequant::utils::detail;
+  using namespace sequant;
+  using namespace sequant::detail;
   using sequant::container::svector;
 
   SECTION("index") {
@@ -182,13 +183,14 @@ TEST_CASE("TEST_EXPR_PARSE", "[expr_parse]") {
 
   SECTION("sum") {
     auto sum_regex = std::wregex(expr_rgx_pat.at("sum"));
-    auto terms = std::vector<std::wstring>{L"t_{i1, i2}^{a1, a2}",
-                  L"g^{i1, i2}_{a1, a2}",
-                  L"g123^{i1, i2}_{a1, a2}",
-                  L"t_{i1}^{a1} * g^{a2}_{i2}",
-                  L"-1/2*t_{i1, i2}^{a1, a2} * t_{i1}^{a1} * g^{a2}_{i2}",
-                  L"- t_{i1}^{a1} * g^{a2}_{i2}",
-                  L"- t_{i1}^{a1}"};
+    auto terms = std::vector<std::wstring>{
+        L"t_{i1, i2}^{a1, a2}",
+        L"g^{i1, i2}_{a1, a2}",
+        L"g123^{i1, i2}_{a1, a2}",
+        L"t_{i1}^{a1} * g^{a2}_{i2}",
+        L"-1/2*t_{i1, i2}^{a1, a2} * t_{i1}^{a1} * g^{a2}_{i2}",
+        L"- t_{i1}^{a1} * g^{a2}_{i2}",
+        L"- t_{i1}^{a1}"};
 
     for (const auto& t : terms) {
       auto target = prune_space(t);
@@ -210,14 +212,11 @@ TEST_CASE("TEST_EXPR_PARSE", "[expr_parse]") {
 TEST_CASE("TEST_MAKE_EXPR_BY_PARSE", "[expr_parse]") {
   using namespace std::string_literals;
   using namespace sequant;
-  using utils::parse_expr;
-  using utils::detail::prune_space;
+  using namespace sequant::detail;
 
   using index_list = container::svector<Index>;
 
   SECTION("tensor") {
-    using utils::detail::parse_tensor_term;
-
     const auto& g1 =
         ex<Tensor>(Tensor{L"g", index_list{L"i_3", L"i_4"},
                           index_list{L"a_3", L"a_4"}, Symmetry::antisymm});
@@ -231,7 +230,6 @@ TEST_CASE("TEST_MAKE_EXPR_BY_PARSE", "[expr_parse]") {
   }
 
   SECTION("product") {
-    using utils::detail::parse_product_term;
     const auto& p1 = ex<Product>(Product{
         ex<Tensor>(Tensor{L"g", index_list{L"i_3", L"i_4"},
                           index_list{L"a_3", L"a_4"}, Symmetry::antisymm}),

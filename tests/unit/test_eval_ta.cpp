@@ -1,12 +1,11 @@
 #include "catch.hpp"
 
 #include <tiledarray.h>
+#include <SeQuant/core/parse_expr.hpp>
 #include <SeQuant/core/sequant.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/domain/eval/eval.hpp>
 #include <SeQuant/domain/eval/eval_ta.hpp>
-#include <SeQuant/domain/utils/binarize_expr.hpp>
-#include <SeQuant/domain/utils/parse_expr.hpp>
 
 #include <cstdlib>
 #include <string>
@@ -27,11 +26,10 @@ struct tensor_yield {
 };
 
 TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
-  using namespace sequant;
   using ranges::views::transform;
-  using sequant::utils::binarize_expr;
+  using sequant::parse_expr_asymm;
+  using sequant::to_eval_node;
   using TA::TArrayD;
-  using utils::parse_expr;
 
   // tnsr is assumed to be single tiled
   auto norm = [](TArrayD const& tnsr) { return tnsr.find(0).get().norm(); };
@@ -90,55 +88,52 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
   };
 
   SECTION("summation") {
-    auto expr1 = parse_expr(L"t_{a1}^{i1} + f_{i1}^{a1}", Symmetry::antisymm);
+    auto expr1 = parse_expr_asymm(L"t_{a1}^{i1} + f_{i1}^{a1}");
 
     auto sum1_man = TArrayD{};
     sum1_man("0,1") = t_vo("0,1") + f_ov("1,0");
 
-    auto sum1_eval = eval_bnode(binarize_expr(expr1));
+    auto sum1_eval = eval_bnode(to_eval_node(expr1));
 
     REQUIRE(norm(sum1_man) == Approx(norm(sum1_eval)));
 
-    auto expr2 =
-        parse_expr(L"2 * t_{a1}^{i1} + 1.5 * f_{i1}^{a1}", Symmetry::antisymm);
+    auto expr2 = parse_expr_asymm(L"2 * t_{a1}^{i1} + 1.5 * f_{i1}^{a1}");
 
     auto sum2_man = TArrayD{};
     sum2_man("0,1") = 2 * t_vo("0,1") + 1.5 * f_ov("1,0");
 
-    auto sum2_eval = eval_bnode(binarize_expr(expr2));
+    auto sum2_eval = eval_bnode(to_eval_node(expr2));
 
     REQUIRE(norm(sum2_man) == Approx(norm(sum2_eval)));
   }
 
   SECTION("product") {
-    auto expr1 = parse_expr(L"1/2.0 * g_{i2,i4}^{a2,a4} * t_{a1,a2}^{i1,i2}",
-                            Symmetry::antisymm);
+    auto expr1 =
+        parse_expr_asymm(L"1/2.0 * g_{i2,i4}^{a2,a4} * t_{a1,a2}^{i1,i2}");
     TArrayD prod1_man{};
     prod1_man("i4,a1,a4,i1") =
         1 / 2.0 * g_oovv("i2,i4,a2,a4") * t_vvoo("a1,a2,i1,i2");
-    auto prod1_eval = eval_bnode(binarize_expr(expr1));
+    auto prod1_eval = eval_bnode(to_eval_node(expr1));
 
     REQUIRE(norm(prod1_man) == Approx(norm(prod1_eval)));
 
-    auto expr2 = parse_expr(
-        L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}",
-        Symmetry::antisymm);
+    auto expr2 = parse_expr_asymm(
+        L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}");
 
     auto prod2_man = TArrayD{};
     prod2_man("a1,a2,i1,i2") = -1 / 4.0 * g_oovv("i3,i4,a3,a4") *
                                t_vvoo("a2,a4,i1,i2") * t_vvoo("a1,a3,i3,i4");
 
-    auto prod2_eval = eval_bnode(binarize_expr(expr2));
+    auto prod2_eval = eval_bnode(to_eval_node(expr2));
 
     REQUIRE(norm(prod2_man) == Approx(norm(prod2_eval)));
   }
 
   SECTION("sum and product") {
-    auto expr1 = parse_expr(
+    auto expr1 = parse_expr_asymm(
         L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
         " + "
-        " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2} ",
-        Symmetry::antisymm);
+        " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2} ");
 
     auto man1 = TArrayD{};
     man1("a1,a2,i1,i2") = -1.0 / 4 * g_oovv("i3,i4,a3,a4") *
@@ -146,7 +141,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
                           1.0 / 16 * g_oovv("i3,i4,a3,a4") *
                               t_vvoo("a1,a2,i3,i4") * t_vvoo("a3,a4,i1,i2");
 
-    auto eval1 = eval_bnode(binarize_expr(expr1));
+    auto eval1 = eval_bnode(to_eval_node(expr1));
 
     REQUIRE(norm(man1) == Approx(norm(eval1)));
   }
@@ -158,9 +153,9 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
 
     man1("0,1,2,3") = 0.5 * man1("0,1,2,3");
 
-    auto expr1 = parse_expr(L"0.5 * g_{i1, i2}^{a1, a2}", Symmetry::antisymm);
+    auto expr1 = parse_expr_asymm(L"0.5 * g_{i1, i2}^{a1, a2}");
 
-    auto eval1 = eval_bnode_asym(binarize_expr(expr1));
+    auto eval1 = eval_bnode_asym(to_eval_node(expr1));
 
     REQUIRE(norm(man1) == Approx(norm(eval1)));
   }
@@ -170,9 +165,9 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
     man1("0,1,2,3") = g_oovv("0,1,2,3") + g_oovv("1,0,3,2");
     man1("0,1,2,3") = 0.5 * man1("0,1,2,3");
 
-    auto expr1 = parse_expr(L"0.5 * g_{i1, i2}^{a1, a2}", Symmetry::antisymm);
+    auto expr1 = parse_expr_asymm(L"0.5 * g_{i1, i2}^{a1, a2}");
 
-    auto eval1 = eval_bnode_sym(binarize_expr(expr1));
+    auto eval1 = eval_bnode_sym(to_eval_node(expr1));
 
     REQUIRE(norm(man1) == Approx(norm(eval1)));
   }

@@ -28,11 +28,10 @@ auto const ords_to_annot = [](auto const& ords) {
 };  // ords_to_annot
 
 template <typename Tensor_t>
-Tensor_t inode_evaluate_ta(
-    sequant::utils::binary_node<sequant::utils::eval_expr> const& node,
-    Tensor_t const& leval, Tensor_t const& reval) {
-  assert((node->op() == sequant::utils::eval_expr::eval_op::Sum ||
-          node->op() == sequant::utils::eval_expr::eval_op::Prod) &&
+Tensor_t inode_evaluate_ta(EvalNode const& node, Tensor_t const& leval,
+                           Tensor_t const& reval) {
+  assert((node->op() == EvalExpr::EvalOp::Sum ||
+          node->op() == EvalExpr::EvalOp::Prod) &&
          "unsupported intermediate operation");
 
   auto assert_imaginary_zero = [](sequant::Constant const& c) {
@@ -51,7 +50,7 @@ Tensor_t inode_evaluate_ta(
   auto rscal = node.right()->scalar().value().real();
 
   auto result = Tensor_t{};
-  if (node->op() == sequant::utils::eval_expr::eval_op::Prod) {
+  if (node->op() == EvalExpr::EvalOp::Prod) {
     // prod
     result(this_annot) = (lscal * rscal) * leval(lannot) * reval(rannot);
   } else {
@@ -63,9 +62,8 @@ Tensor_t inode_evaluate_ta(
 }
 
 template <typename Tensor_t, typename Yielder>
-Tensor_t evaluate_ta(
-    sequant::utils::binary_node<sequant::utils::eval_expr> const& node,
-    Yielder& yielder, sequant::utils::cache_manager<Tensor_t>& cman) {
+Tensor_t evaluate_ta(EvalNode const& node, Yielder& yielder,
+                     sequant::utils::cache_manager<Tensor_t>& cman) {
   static_assert(
       std::is_invocable_r_v<Tensor_t, Yielder, sequant::Tensor const&>);
 
@@ -83,7 +81,7 @@ Tensor_t evaluate_ta(
 }
 
 struct eval_instance_ta {
-  sequant::utils::binary_node<sequant::utils::eval_expr> const& node;
+  EvalNode const& node;
 
   template <typename Tensor_t, typename Fetcher>
   auto evaluate(Fetcher& f, sequant::utils::cache_manager<Tensor_t>& man) {

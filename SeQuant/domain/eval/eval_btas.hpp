@@ -4,18 +4,17 @@
 #include "eval.hpp"
 
 #include <btas/btas.h>
+#include <SeQuant/core/binary_node.hpp>
 #include <SeQuant/core/tensor.hpp>
-#include <SeQuant/domain/utils/binary_node.hpp>
 #include <range/v3/all.hpp>
 
 namespace sequant::eval {
 
 template <typename Tensor_t>
-Tensor_t inode_evaluate_btas(
-    sequant::utils::binary_node<sequant::utils::eval_expr> const& node,
-    Tensor_t const& leval, Tensor_t const& reval) {
-  assert((node->op() == sequant::utils::eval_expr::eval_op::Sum ||
-          node->op() == sequant::utils::eval_expr::eval_op::Prod) &&
+Tensor_t inode_evaluate_btas(EvalNode const& node, Tensor_t const& leval,
+                             Tensor_t const& reval) {
+  assert((node->op() == EvalExpr::EvalOp::Sum ||
+          node->op() == EvalExpr::EvalOp::Prod) &&
          "unsupported intermediate operation");
 
   auto const assert_imaginary_zero = [](sequant::Constant const& c) {
@@ -36,7 +35,7 @@ Tensor_t inode_evaluate_btas(
            ranges::to_vector;
   };  // index_hash
 
-  if (node->op() == sequant::utils::eval_expr::eval_op::Prod) {
+  if (node->op() == EvalExpr::EvalOp::Prod) {
     auto scalar = node.left()->scalar().value().real() *
                   node.right()->scalar().value().real();
 
@@ -79,9 +78,8 @@ Tensor_t inode_evaluate_btas(
 }
 
 template <typename Tensor_t, typename Yielder>
-Tensor_t evaluate_btas(
-    sequant::utils::binary_node<sequant::utils::eval_expr> const& node,
-    Yielder& yielder, sequant::utils::cache_manager<Tensor_t>& cman) {
+Tensor_t evaluate_btas(EvalNode const& node, Yielder& yielder,
+                       sequant::utils::cache_manager<Tensor_t>& cman) {
   static_assert(
       std::is_invocable_r_v<Tensor_t, Yielder, sequant::Tensor const&>);
   auto const key = node->hash();
@@ -98,7 +96,7 @@ Tensor_t evaluate_btas(
 }
 
 struct eval_instance_btas {
-  sequant::utils::binary_node<sequant::utils::eval_expr> const& node;
+  EvalNode const& node;
 
   template <typename Tensor_t, typename Fetcher>
   auto evaluate(Fetcher& yielder,

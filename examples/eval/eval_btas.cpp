@@ -1,14 +1,14 @@
+#include <SeQuant/core/binary_node.hpp>
+#include <SeQuant/core/eval_expr.hpp>
 #include <SeQuant/core/op.hpp>
+#include <SeQuant/core/optimize/optimize.hpp>
+#include <SeQuant/core/parse_expr.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/domain/eqs/cceqs.hpp>
 #include <SeQuant/domain/eval/eval.hpp>
 #include <SeQuant/domain/eval/eval_btas.hpp>
 #include <SeQuant/domain/eval/read_tensor_btas.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
-#include <SeQuant/domain/optimize/optimize.hpp>
-#include <SeQuant/domain/utils/binary_node.hpp>
-#include <SeQuant/domain/utils/eval_expr.hpp>
-#include <SeQuant/domain/utils/parse_expr.hpp>
 
 #include <btas/btas.h>
 #include <btas/tensor_func.h>
@@ -22,9 +22,9 @@
 template <typename Tensor_t>
 class yield_leaf {
  private:
-  Tensor_t const &fock, &eri, &t_vo, &t_vvoo;
-
   size_t const nocc, nvirt;
+
+  Tensor_t const &fock, &eri, &t_vo, &t_vvoo;
 
   auto range1_limits(sequant::Tensor const& tensor) {
     return tensor.const_braket() |
@@ -96,10 +96,6 @@ class yield_leaf {
   }
 };  // yield_leaf
 
-auto const norm = [](btas::Tensor<double> const& tensor) {
-  return std::sqrt(btas::dot(tensor, tensor));
-};
-
 // clang-format off
 /**
  * <executable> (fock.dat eri.dat | eri.dat fock.dat)
@@ -165,7 +161,6 @@ int main(int argc, char** argv) {
   using sequant::eqs::cceqvec;
   using sequant::optimize::optimize;
   using sequant::optimize::tail_factor;
-  using evxpr_node = sequant::utils::binary_node<sequant::utils::eval_expr>;
 
   sequant::detail::OpIdRegistrar op_id_registrar;
   sequant::mbpt::set_default_convention();
@@ -195,13 +190,10 @@ int main(int argc, char** argv) {
   auto manager =
       sequant::eval::make_cache_man<btas::Tensor<double>>(nodes, true);
 
-  auto const g_vvoo =
-      yielder(sequant::utils::parse_expr(L"g_{a1,a2}^{i1,i2}",
-                                         sequant::Symmetry::antisymm)
-                  ->as<sequant::Tensor>());
-  auto const f_vo = yielder(
-      sequant::utils::parse_expr(L"f_{a1}^{i1}", sequant::Symmetry::antisymm)
-          ->as<sequant::Tensor>());
+  auto const g_vvoo = yielder(
+      sequant::parse_expr_asymm(L"g_{a1,a2}^{i1,i2}")->as<sequant::Tensor>());
+  auto const f_vo =
+      yielder(sequant::parse_expr_asymm(L"f_{a1}^{i1}")->as<sequant::Tensor>());
 
   const auto maxiter = 100;
   const auto conv = 1e-12;
