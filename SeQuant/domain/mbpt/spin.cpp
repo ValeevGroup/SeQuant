@@ -139,27 +139,25 @@ ExprPtr append_spin(ExprPtr& expr,
 }
 
 ExprPtr remove_spin(ExprPtr& expr) {
+
   auto remove_spin_from_tensor = [](const Tensor& tensor) {
-    container::svector<Index> bra;
-    container::svector<Index> ket;
+    container::svector<Index> bra, ket;
     {
       for (auto&& idx : tensor.bra()) bra.emplace_back(idx);
       for (auto&& idx : tensor.ket()) ket.emplace_back(idx);
-      auto braket_list = ranges::views::concat(bra, ket);
 
-      for (auto&& idx : braket_list) {
-        auto space = IndexSpace::instance(
-            IndexSpace::instance(idx.label()).type(), IndexSpace::nullqns);
+      for (auto&& idx : ranges::views::concat(bra, ket)) {
+        auto space = IndexSpace::instance(idx.space().type(),
+                                          IndexSpace::nullqns);
         auto subscript_label = idx.label().substr(idx.label().find(L'_') + 1);
         std::wstring subscript_label_ws(subscript_label.begin(),
                                         subscript_label.end());
         idx = Index::make_label_index(space, subscript_label_ws);
       }
     }
-    auto sft = Tensor(tensor.label(), bra, ket, tensor.symmetry(),
+    Tensor result(tensor.label(), bra, ket, tensor.symmetry(),
                       tensor.braket_symmetry());
-    auto sf_tensor = std::make_shared<Tensor>(sft);
-    return sf_tensor;
+    return std::make_shared<Tensor>(result);
   };
 
   auto remove_spin_from_product =
@@ -196,37 +194,39 @@ ExprPtr remove_spin(ExprPtr& expr) {
 }
 
 bool is_tensor_spin_symm(const Tensor& tensor) {
-  bool result = false;
   assert(tensor.bra_rank() == tensor.ket_rank());
   auto iter_ket = tensor.ket().begin();
-  for (auto&& index : tensor.bra()) {
-    if (IndexSpace::instance(index.label()).qns() ==
-        IndexSpace::instance(iter_ket->label()).qns()) {
-      result = true;
-    } else {
+  for (auto&& idx : tensor.bra()) {
+    if (idx.space().qns() != iter_ket->space().qns())
       return false;
-    }
     ++iter_ket;
   }
-  return result;
+  return true;
 }
 
 bool can_expand(const Tensor& tensor) {
   assert(tensor.bra_rank() == tensor.ket_rank() && "can_expand(Tensor) failed.");
-  if (tensor.bra_rank() != tensor.ket_rank()) return false;
-  auto result = false;
-  // TODO: Throw error if called on non-qns idx
-  auto alpha_in_bra = 0;
-  auto alpha_in_ket = 0;
-  ranges::for_each(tensor.bra(), [&alpha_in_bra](const Index& idx) {
-    if (IndexSpace::instance(idx.label()).qns() == IndexSpace::alpha)
-      ++alpha_in_bra;
-  });
-  ranges::for_each(tensor.ket(), [&alpha_in_ket](const Index& idx) {
-    if (IndexSpace::instance(idx.label()).qns() == IndexSpace::alpha)
-      ++alpha_in_ket;
-  });
-  return alpha_in_bra == alpha_in_ket;
+  if (tensor.bra_rank() != tensor.ket_rank())
+    return false;
+
+  // indices with non-qns are not allowed
+  for(auto& idx : tensor.const_braket()){
+    assert(idx.space().qns() != IndexSpace::nullqns);
+  }
+
+  // count alpha indices in bra
+  int a_bra = std::count_if(tensor.bra().begin(), tensor.bra().end(),
+                            [](const Index& idx){
+                              return idx.space().qns() == IndexSpace::alpha;
+                            });
+
+  // count alpha indices in ket
+  int a_ket = std::count_if(tensor.ket().begin(), tensor.ket().end(),
+                            [](const Index& idx){
+                              return idx.space().qns() == IndexSpace::alpha;
+                            });
+
+  return a_bra == a_ket;
 }
 
 ExprPtr expand_antisymm(const Tensor& tensor) {
@@ -237,8 +237,9 @@ ExprPtr expand_antisymm(const Tensor& tensor) {
                       tensor.particle_symmetry());
     return std::make_shared<Tensor>(new_tensor);
   }
-
-  // If all indices have the same spin label, return antisymm tensor
+#if 0
+  // If all indices have the same spin label,
+  // return the antisymm tensor
   auto same_spin_tensor = [&tensor](){
     auto braket = tensor.braket();
     auto spin_element = braket[0].space().qns();
@@ -254,33 +255,31 @@ ExprPtr expand_antisymm(const Tensor& tensor) {
   if(same_spin_tensor()){
     return std::make_shared<Tensor>(tensor);
   }
+#endif
+  assert(tensor.bra_rank() > 1);
 
   auto get_phase = [](const Tensor& t) {
-    assert(t.bra_rank() > 1);
-    container::svector<Index> bra;
-    for (auto&& bra_idx : t.bra()) bra.push_back(bra_idx);
-    container::svector<Index> ket;
-    for (auto&& ket_idx : t.ket()) ket.push_back(ket_idx);
+    container::svector<Index> bra, ket;
+    for (auto &bra_idx : t.bra()) bra.push_back(bra_idx);
+    for (auto &ket_idx : t.ket()) ket.push_back(ket_idx);
     IndexSwapper::thread_instance().reset();
     bubble_sort(std::begin(bra), std::end(bra), std::less<Index>{});
     bubble_sort(std::begin(ket), std::end(ket), std::less<Index>{});
-    bool even = IndexSwapper::thread_instance().even_num_of_swaps();
-    return (even ? 1 : -1);
+    return IndexSwapper::thread_instance().even_num_of_swaps() ? 1 : -1;
   };
 
   // Generate a sum of asymmetric tensors if the input tensor is antisymmetric
   // and greater than one body otherwise, return the tensor
-  if ((tensor.symmetry() == Symmetry::antisymm) && (tensor.bra_rank() > 1)) {
+  if (tensor.symmetry() == Symmetry::antisymm) {
     const auto prefactor = get_phase(tensor);
     container::set<Index> bra_list;
-    for (auto&& bra_idx : tensor.bra()) bra_list.insert(bra_idx);
+    for (auto& bra_idx : tensor.bra()) bra_list.insert(bra_idx);
     const auto const_bra_list = bra_list;
 
     container::set<Index> ket_list;
     for (auto&& ket_idx : tensor.ket()) ket_list.insert(ket_idx);
 
     Sum expr_sum{};
-    auto p_count = 0;
     do {
       auto bra_list2 = bra_list;
       auto new_tensor =
@@ -295,14 +294,11 @@ ExprPtr expand_antisymm(const Tensor& tensor) {
         auto new_tensor_product_ptr = ex<Product>(new_tensor_product);
         expr_sum.append(new_tensor_product_ptr);
       }
-      p_count++;
     } while (std::next_permutation(bra_list.begin(), bra_list.end()));
 
-    auto result = std::make_shared<Sum>(expr_sum);
-    return result;
+    return std::make_shared<Sum>(expr_sum);
   } else {
-    auto result = std::make_shared<Tensor>(tensor);
-    return result;
+    return std::make_shared<Tensor>(tensor);
   }
 }
 
@@ -1144,17 +1140,13 @@ std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
     }
     assert(cKet.size() == cBra.size());
 
-    bool result = false;
-    auto iter_ket = cKet.begin();
+    auto i_ket = cKet.begin();
     for(auto& b : cBra){
-      if (IndexSpace::instance(b.label()).qns() ==
-          IndexSpace::instance(iter_ket->label()).qns()) {
-        result = true;
-      } else
+      if (b.space().qns() != i_ket->space().qns())
         return false;
-      ++iter_ket;
+      ++i_ket;
     }
-    return result;
+    return true;
   };
 
   // Loop over external index replacement maps
@@ -1221,7 +1213,6 @@ ExprPtr spintrace(
     return expression;
   }
 
-  // BUG ? why does this return a contant
   auto spin_trace_tensor = [](const Tensor& tensor) {
     if (can_expand(tensor)) {
       return expand_antisymm(tensor);
