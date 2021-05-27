@@ -162,11 +162,12 @@ class Tensor : public Expr, public AbstractTensor {
 
   std::wstring to_latex() const override {
     std::wstring result;
+    bool gt = (this->label() == L"g") || (this->label() == L"t");
     result = L"{";
-    if((this->symmetry() == Symmetry::antisymm) && (this->label() == L"g"))
+    if((this->symmetry() == Symmetry::antisymm) && gt)
       result += L"\\bar{";
     result += this->label();
-    if((this->symmetry() == Symmetry::antisymm) && (this->label() == L"g"))
+    if((this->symmetry() == Symmetry::antisymm) && gt)
       result += L"}";
     result += L"^{";
     for (const auto &i : this->ket()) result += sequant::to_latex(i);
