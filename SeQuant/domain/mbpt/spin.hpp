@@ -52,6 +52,9 @@ bool is_tensor_spin_symm(const Tensor& tensor);
 bool can_expand(const Tensor& tensor);
 
 /// @brief expand an antisymmetric tensor
+///
+/// @detailed For spin-indices, the tensor is NOT expanded if all spin-labels
+/// are either alpha or beta
 /// @param tensor a tensor from a product
 /// @return an ExprPtr containing the sum of expanded terms if antisymmetric OR
 /// @return an ExprPtr containing the tensor otherwise
@@ -163,6 +166,12 @@ ExprPtr closed_shell_cc_spintrace(const ExprPtr& expr);
 /// Collect all indices from an expression
 auto index_list(const ExprPtr& expr);
 
+/// @brief Generates spin expressions to be used for open-shell coupled cluster
+/// @detailed Every spin combination of external indices will have all spin
+/// combinations of internal indices.
+/// @param expr ExprPtr with spin orbital indices
+/// @param ext_index_groups groups of external indices
+/// @return a vector of expr ptrs with spin expressions
 std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
     const std::vector<std::vector<Index>> ext_index_groups = {{}});
 

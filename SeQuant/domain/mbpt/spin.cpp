@@ -1,7 +1,6 @@
 #include "spin.hpp"
 
 #include <SeQuant/core/tensor.hpp>
-#include <SeQuant/core/tensor_network.hpp>
 #include <unordered_map>
 
 namespace sequant {
@@ -213,7 +212,7 @@ bool is_tensor_spin_symm(const Tensor& tensor) {
 }
 
 bool can_expand(const Tensor& tensor) {
-  assert(tensor.bra_rank() == tensor.ket_rank() && "can_expand failed.");
+  assert(tensor.bra_rank() == tensor.ket_rank() && "can_expand(Tensor) failed.");
   if (tensor.bra_rank() != tensor.ket_rank()) return false;
   auto result = false;
   // TODO: Throw error if called on non-qns idx
@@ -227,12 +226,11 @@ bool can_expand(const Tensor& tensor) {
     if (IndexSpace::instance(idx.label()).qns() == IndexSpace::alpha)
       ++alpha_in_ket;
   });
-  if (alpha_in_bra == alpha_in_ket) result = true;
-  return result;
+  return alpha_in_bra == alpha_in_ket;
 }
 
 ExprPtr expand_antisymm(const Tensor& tensor) {
-  assert(tensor.bra().size() == tensor.ket().size());
+  assert(tensor.bra_rank() == tensor.ket_rank());
   if (tensor.bra_rank() == 1) {
     Tensor new_tensor(tensor.label(), tensor.bra(), tensor.ket(),
                       Symmetry::nonsymm, tensor.braket_symmetry(),
@@ -240,24 +238,16 @@ ExprPtr expand_antisymm(const Tensor& tensor) {
     return std::make_shared<Tensor>(new_tensor);
   }
 
-  // If all indices have the same spin label,
-  // return antisymm tensor
+  // If all indices have the same spin label, return antisymm tensor
   auto same_spin_tensor = [&tensor](){
-    auto bra = tensor.bra();
-    auto ket = tensor.ket();
+    auto braket = tensor.braket();
+    auto spin_element = braket[0].space().qns();
 
-    // Check if tensor has spin labels
-    for(auto& i : ranges::concat_view(bra, ket)){
-      if(i.space().qns() == IndexSpace::nullqns)
+    for(auto& i : braket){
+      auto spin_i = i.space().qns();
+      if((spin_i == IndexSpace::nullqns) || (spin_i != spin_element))
         return false;
     }
-
-    auto spin_element = bra[0].space().qns();
-    for(auto& i : ranges::concat_view(bra, ket)){
-      if(i.space().qns() != spin_element)
-        return false;
-    }
-
     return true;
   };
 
@@ -1120,21 +1110,23 @@ std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
     return all_replacements;
   };
 
+  auto reset_idx_tags = [](ExprPtr& expr) {
+    if (expr->is<Tensor>())
+      ranges::for_each(expr->as<Tensor>().const_braket(),
+                       [](const Index& idx) { idx.reset_tag(); });
+  };
+
   // Internal and external index replacements are independent
   auto i_rep = spin_cases(int_index_groups);
   auto e_rep = spin_cases(ext_index_groups);
 
   // Expand 'A' operator and 'antisymm' tensors
   auto expanded_expr = expand_A_operator(expr);
-  expanded_expr = expand_antisymm(expanded_expr);
+  // expanded_expr = expand_antisymm(expanded_expr);
+  expanded_expr->visit(reset_idx_tags);
+
   expand(expanded_expr);
   rapid_simplify(expanded_expr);
-
-  auto reset_idx_tags = [](ExprPtr& expr) {
-    if (expr->is<Tensor>())
-      ranges::for_each(expr->as<Tensor>().const_braket(),
-                       [](const Index& idx) { idx.reset_tag(); });
-  };
   expanded_expr->visit(reset_idx_tags);
 
   std::vector<ExprPtr> result{};
@@ -1168,25 +1160,38 @@ std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
   // Loop over external index replacement maps
   for(auto& e : e_rep){
     auto spin_expr = append_spin(expanded_expr, e);
+    // std::wcout << "e: " << to_latex(spin_expr) << std::endl;
     Sum e_result{};
 
     // Loop over internal index replacement maps
     for(auto& i : i_rep){
       auto spin_expr_i = append_spin(spin_expr, i);
+      // std::wcout << "i: " << to_latex(spin_expr_i) << std::endl;
+      spin_expr_i = expand_antisymm(spin_expr_i);
+      expand(spin_expr_i);
+      spin_expr_i->visit(reset_idx_tags);
+      // std::wcout << "i: " << to_latex(spin_expr_i) << "\n" << std::endl;
       Sum i_result{};
-      for(auto& pr : *spin_expr_i){
-        if (pr->is<Product>()){
-          if (product_symm(pr->as<Product>()))
+
+      if(spin_expr_i->is<Tensor>()){
+        e_result.append(spin_expr_i);
+      } else if(spin_expr_i->is<Product>()){
+        e_result.append(spin_expr_i);
+      } else if(spin_expr_i->is<Sum>()){
+        for(auto& pr : *spin_expr_i){
+          if (pr->is<Product>()){
+            if (product_symm(pr->as<Product>()))
+              i_result.append(pr);
+          } else if (pr->is<Tensor>()){
+            if (is_tensor_spin_symm(pr->as<Tensor>()))
+              i_result.append(pr);
+          } else if (pr->is<Constant>()){
             i_result.append(pr);
-        } else if (pr->is<Tensor>()){
-          if (is_tensor_spin_symm(pr->as<Tensor>()))
-            i_result.append(pr);
-        } else if (pr->is<Constant>()){
-          i_result.append(pr);
-        } else
-          throw("Unknown ExprPtr type.");
+          } else
+            throw("Unknown ExprPtr type.");
+        }
+        e_result.append(std::make_shared<Sum>(i_result));
       }
-      e_result.append(std::make_shared<Sum>(i_result));
     }
     result.push_back(std::make_shared<Sum>(e_result));
   }
