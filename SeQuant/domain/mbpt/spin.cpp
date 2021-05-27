@@ -240,6 +240,31 @@ ExprPtr expand_antisymm(const Tensor& tensor) {
     return std::make_shared<Tensor>(new_tensor);
   }
 
+  // If all indices have the same spin label,
+  // return antisymm tensor
+  auto same_spin_tensor = [&tensor](){
+    auto bra = tensor.bra();
+    auto ket = tensor.ket();
+
+    // Check if tensor has spin labels
+    for(auto& i : ranges::concat_view(bra, ket)){
+      if(i.space().qns() == IndexSpace::nullqns)
+        return false;
+    }
+
+    auto spin_element = bra[0].space().qns();
+    for(auto& i : ranges::concat_view(bra, ket)){
+      if(i.space().qns() != spin_element)
+        return false;
+    }
+
+    return true;
+  };
+
+  if(same_spin_tensor()){
+    return std::make_shared<Tensor>(tensor);
+  }
+
   auto get_phase = [](const Tensor& t) {
     assert(t.bra_rank() > 1);
     container::svector<Index> bra;
