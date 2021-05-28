@@ -1129,16 +1129,13 @@ std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
 
   std::vector<ExprPtr> result{};
 
-  // return true if a product is
-  // spin-symmetric OR has an antisymmetric tensor (rank > 1)
+  // return true if a product is spin-symmetric
   auto spin_symm_product = [] (const Product& product) {
 
     std::vector<Index> cBra, cKet; // concat Bra and concat Ket
     for(auto& term : product){
       if(term->is<Tensor>()){
         auto tnsr = term->as<Tensor>();
-        if(tnsr.symmetry() == Symmetry::antisymm && tnsr.rank() > 1)
-          return true;
         cBra.insert(cBra.end(), tnsr.bra().begin(), tnsr.bra().end());
         cKet.insert(cKet.end(), tnsr.ket().begin(), tnsr.ket().end());
       }
