@@ -325,19 +325,18 @@ ExprPtr expand_antisymm(const ExprPtr& expr, bool skip_spinsymm) {
   if (expr->is<Product>())
     return expand_product(expr->as<Product>());
   else if (expr->is<Sum>()) {
-    Sum temp{};
+    Sum sum_result{};
     for (auto&& term : *expr) {
       if (term->is<Product>())
-        temp.append(expand_product(term->as<Product>()));
+        sum_result.append(expand_product(term->as<Product>()));
       else if (term->is<Tensor>())
-        temp.append(expand_antisymm(term->as<Tensor>()));
+        sum_result.append(expand_antisymm(term->as<Tensor>(), skip_spinsymm));
       else if (term->is<Constant>())
-        temp.append(term);
+        sum_result.append(term);
       else
-        temp.append(nullptr);
+        sum_result.append(nullptr);
     }
-    ExprPtr result = std::make_shared<Sum>(temp);
-    return result;
+    return std::make_shared<Sum>(sum_result);
   } else
     return nullptr;
 }
@@ -995,20 +994,21 @@ ExprPtr closed_shell_spintrace(
 }
 
 ExprPtr closed_shell_cc_spintrace(const ExprPtr& expr){
-  container::vector<container::vector<Index>> ext_index_groups;
 
+  // Generate external index list from Antisymmetrizer
   Tensor A{};
   for(auto& prod : *expr){
     if(prod->is<Product>()){
-      if(prod->as<Product>().factor(0)->as<Tensor>().label() == L"A"){
-        A = prod->as<Product>().factor(0)->as<Tensor>();
+      auto tensor = prod->as<Product>().factor(0)->as<Tensor>();
+      if(tensor.label() == L"A"){
+        A = tensor;
         break;
       }
     }
   }
 
   assert(A.bra().size() == A.ket().size());
-
+  container::vector<container::vector<Index>> ext_index_groups;
   auto b_iter = A.bra().begin();
   for(auto k : A.ket()){
     container::vector<Index> pair{k, *b_iter};
@@ -1088,7 +1088,7 @@ std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
     return Index::make_label_index(space, idx_n_ws);
   };
 
-  // Index replacement in expression
+  // Generate index replacement maps
   auto spin_cases = [&add_spin_label] (const std::vector<IndexGroup>& idx_group) {
     auto ncases = std::pow(2, idx_group.size());
     std::vector<std::map<Index, Index>> all_replacements(ncases);
@@ -1121,21 +1121,24 @@ std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
   // Expand 'A' operator and 'antisymm' tensors
   auto expanded_expr = expand_A_operator(expr);
   // expanded_expr = expand_antisymm(expanded_expr);
-  expanded_expr->visit(reset_idx_tags);
+  // expanded_expr->visit(reset_idx_tags);
 
   expand(expanded_expr);
   rapid_simplify(expanded_expr);
-  expanded_expr->visit(reset_idx_tags);
+  // expanded_expr->visit(reset_idx_tags);
 
   std::vector<ExprPtr> result{};
 
-  // check spin-symmetry of a product
-  auto product_symm = [] (const Product& p) {
+  // return true if a product is
+  // spin-symmetric OR has an antisymmetric tensor (rank > 1)
+  auto spin_symm_product = [] (const Product& product) {
 
     std::vector<Index> cBra, cKet; // concat Bra and concat Ket
-    for(auto& t : p){
-      if(t->is<Tensor>()){
-        auto tnsr = t->as<Tensor>();
+    for(auto& term : product){
+      if(term->is<Tensor>()){
+        auto tnsr = term->as<Tensor>();
+        if(tnsr.symmetry() == Symmetry::antisymm && tnsr.rank() > 1)
+          return true;
         cBra.insert(cBra.end(), tnsr.bra().begin(), tnsr.bra().end());
         cKet.insert(cKet.end(), tnsr.ket().begin(), tnsr.ket().end());
       }
@@ -1161,7 +1164,7 @@ std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
     for(auto& i : i_rep){
       auto spin_expr_i = append_spin(spin_expr, i);
       // std::wcout << "i: " << to_latex(spin_expr_i) << std::endl;
-      spin_expr_i = expand_antisymm(spin_expr_i);
+      spin_expr_i = expand_antisymm(spin_expr_i, true);
       expand(spin_expr_i);
       spin_expr_i->visit(reset_idx_tags);
       // std::wcout << "i: " << to_latex(spin_expr_i) << "\n" << std::endl;
@@ -1170,11 +1173,12 @@ std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
       if(spin_expr_i->is<Tensor>()){
         e_result.append(spin_expr_i);
       } else if(spin_expr_i->is<Product>()){
-        e_result.append(spin_expr_i);
+        if (spin_symm_product(spin_expr_i->as<Product>()))
+          e_result.append(spin_expr_i);
       } else if(spin_expr_i->is<Sum>()){
         for(auto& pr : *spin_expr_i){
           if (pr->is<Product>()){
-            if (product_symm(pr->as<Product>()))
+            if (spin_symm_product(pr->as<Product>()))
               i_result.append(pr);
           } else if (pr->is<Tensor>()){
             if (is_tensor_spin_symm(pr->as<Tensor>()))
@@ -1189,6 +1193,8 @@ std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
     }
     result.push_back(std::make_shared<Sum>(e_result));
   }
+
+  // Canonicalize and simplify all expressions
   for(auto i = 0; i != result.size(); ++i){
     result[i]->visit(reset_idx_tags);
     canonicalize(result[i]);
