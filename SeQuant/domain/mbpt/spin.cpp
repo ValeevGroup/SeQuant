@@ -229,7 +229,7 @@ bool can_expand(const Tensor& tensor) {
   return a_bra == a_ket;
 }
 
-ExprPtr expand_antisymm(const Tensor& tensor) {
+ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
   assert(tensor.bra_rank() == tensor.ket_rank());
   if (tensor.bra_rank() == 1) {
     Tensor new_tensor(tensor.label(), tensor.bra(), tensor.ket(),
@@ -237,25 +237,27 @@ ExprPtr expand_antisymm(const Tensor& tensor) {
                       tensor.particle_symmetry());
     return std::make_shared<Tensor>(new_tensor);
   }
-#if 0
+
   // If all indices have the same spin label,
   // return the antisymm tensor
-  auto same_spin_tensor = [&tensor](){
-    auto braket = tensor.braket();
-    auto spin_element = braket[0].space().qns();
+  if(skip_spinsymm) {
+    auto same_spin_tensor = [&tensor]() {
+      auto braket = tensor.braket();
+      auto spin_element = braket[0].space().qns();
 
-    for(auto& i : braket){
-      auto spin_i = i.space().qns();
-      if((spin_i == IndexSpace::nullqns) || (spin_i != spin_element))
-        return false;
+      for (auto& i : braket) {
+        auto spin_i = i.space().qns();
+        if ((spin_i == IndexSpace::nullqns) || (spin_i != spin_element))
+          return false;
+      }
+      return true;
+    };
+
+    if (same_spin_tensor()) {
+      return std::make_shared<Tensor>(tensor);
     }
-    return true;
-  };
-
-  if(same_spin_tensor()){
-    return std::make_shared<Tensor>(tensor);
   }
-#endif
+
   assert(tensor.bra_rank() > 1);
 
   auto get_phase = [](const Tensor& t) {
@@ -302,18 +304,18 @@ ExprPtr expand_antisymm(const Tensor& tensor) {
   }
 }
 
-ExprPtr expand_antisymm(const ExprPtr& expr) {
+ExprPtr expand_antisymm(const ExprPtr& expr, bool skip_spinsymm) {
   if (expr->is<Constant>())
     return expr;
   else if (expr->is<Tensor>())
-    return expand_antisymm(expr->as<Tensor>());
+    return expand_antisymm(expr->as<Tensor>(), skip_spinsymm);
 
   // Product lambda
-  auto expand_product = [](const Product& expr) {
+  auto expand_product = [&skip_spinsymm](const Product& expr) {
     Product temp{};
     temp.scale(expr.scalar());
     for (auto&& term : expr) {
-      if (term->is<Tensor>()) temp.append(expand_antisymm(term->as<Tensor>()));
+      if (term->is<Tensor>()) temp.append(expand_antisymm(term->as<Tensor>(), skip_spinsymm));
     }
     ExprPtr result = std::make_shared<Product>(temp);
     rapid_simplify(result);

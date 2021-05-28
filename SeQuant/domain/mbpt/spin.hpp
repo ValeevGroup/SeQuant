@@ -58,13 +58,13 @@ bool can_expand(const Tensor& tensor);
 /// @param tensor a tensor from a product
 /// @return an ExprPtr containing the sum of expanded terms if antisymmetric OR
 /// @return an ExprPtr containing the tensor otherwise
-ExprPtr expand_antisymm(const Tensor& tensor);
+ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm = false);
 
 // TODO: Correct this function
 /// @brief expands all antisymmetric tensors in a product
 /// @param expr an expression pointer to expand
 /// @return an expression pointer with expanded tensors as a sum
-ExprPtr expand_antisymm(const ExprPtr& expr);
+ExprPtr expand_antisymm(const ExprPtr& expr, bool skip_spinsymm = false);
 
 /// @brief Check if label A is present in an expression pointer
 /// @detail This function assumes canonical ordering of tensors
