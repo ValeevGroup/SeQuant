@@ -195,13 +195,14 @@ int main(int argc, char** argv) {
   auto const f_vo =
       yielder(sequant::parse_expr_asymm(L"f_{a1}^{i1}")->as<sequant::Tensor>());
 
-  auto cc_r = sequant::eqs::cceqvec{2, 2}(false, true, true, true, true);
+  auto cc_r = sequant::eqs::cceqvec{2, 2}(true, true, true, true, true);
 
   // canonicalize expressions while optimizing
-  bool canon = false;
+  bool canon = true;
   auto nodes = ranges::views::tail(cc_r) |
                ranges::views::transform([canon](auto const& n) {
                  return optimize(tail_factor(n), canon);
+                 // return sequant::to_eval_node(tail_factor(n));
                }) |
                ranges::to_vector;
 
@@ -211,6 +212,7 @@ int main(int argc, char** argv) {
   // true: leaf tensors (other than 't' tensors) will be cached
   // false: only intermediates will be cached
   auto manager = sequant::eval::make_cache_man<TA::TArrayD>(nodes, true);
+  // auto manager = sequant::utils::cache_manager<TA::TArrayD>{{}, {}};
 
   const auto maxiter = 100;
   const auto conv = 1e-12;
