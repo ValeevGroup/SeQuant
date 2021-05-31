@@ -16,7 +16,7 @@ class AsyCost {
     mutable int count_ = 1;
 
    public:
-    static const AsyCostEntry max();
+    static AsyCostEntry max();
 
     AsyCostEntry(size_t nocc, size_t nvirt);
 
@@ -94,9 +94,9 @@ class AsyCost {
   AsyCost(AsyCostEntry);
 
  public:
-  static const AsyCost max();
+  static AsyCost const &max();
 
-  static const AsyCost zero();
+  static AsyCost const &zero();
 
   AsyCost(size_t nocc, size_t nvirt);
 

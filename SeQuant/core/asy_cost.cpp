@@ -9,7 +9,7 @@ AsyCost::AsyCostEntry::AsyCostEntry(size_t nocc, size_t nvirt)
 AsyCost::AsyCostEntry::AsyCostEntry(size_t nocc, size_t nvirt, int count)
     : occ_{nocc}, virt_{nvirt}, count_{count} {}
 
-const AsyCost::AsyCostEntry AsyCost::AsyCostEntry::max() {
+AsyCost::AsyCostEntry AsyCost::AsyCostEntry::max() {
   return AsyCostEntry{std::numeric_limits<size_t>::max(),
                       std::numeric_limits<size_t>::max(),
                       std::numeric_limits<int>::max()};
@@ -118,12 +118,12 @@ bool AsyCost::operator>(const AsyCost &rhs) const {
   return !(*this < rhs || *this == rhs);
 }
 
-const AsyCost AsyCost::max() {
+AsyCost const &AsyCost::max() {
   static const AsyCost max = AsyCost{AsyCostEntry::max()};
   return max;
 }
 
-const AsyCost AsyCost::zero() {
+AsyCost const &AsyCost::zero() {
   static const AsyCost zero = AsyCost{0, 0};
   return zero;
 }
