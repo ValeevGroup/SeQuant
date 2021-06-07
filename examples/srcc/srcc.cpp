@@ -1,4 +1,13 @@
-#include "../sequant_setup.hpp"
+#include <SeQuant/core/op.hpp>
+#include <SeQuant/core/timer.hpp>
+#include <SeQuant/domain/eqs/cceqs.hpp>
+#include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/spin.hpp>
+
+#include <Eigen/Dense>
+#include <Eigen/Eigenvalues>
+
+#include <clocale>
 
 #include <Eigen/Dense>
 #include <Eigen/Eigenvalues>
@@ -26,6 +35,8 @@ int main(int argc, char* argv[]) {
 
   mbpt::set_default_convention();
 
+  using sequant::eqs::compute_all;
+
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
   // set_num_threads(1);
@@ -41,22 +52,24 @@ int main(int argc, char* argv[]) {
   // change to true to print stats
   Logger::get_instance().wick_stats = false;
 
-    ranges::for_each(std::array<bool, 2>{false, true}, [=](const bool screen) {
-      ranges::for_each(
-          std::array<bool, 2>{false, true}, [=](const bool use_topology) {
-            ranges::for_each(std::array<bool, 2>{false, true},
-                             [=](const bool canonical_only) {
-                               tpool.clear();
-                               // comment out to run all possible combinations
-                               if (screen && use_topology && canonical_only)
-                                 compute_all{NMAX}(print, screen, use_topology,
-                                                   true, canonical_only);
-                             });
-          });
-    });
+  ranges::for_each(std::array<bool, 2>{false, true}, [=](const bool screen) {
+    ranges::for_each(
+        std::array<bool, 2>{false, true}, [=](const bool use_topology) {
+          ranges::for_each(std::array<bool, 2>{false, true},
+                           [=](const bool canonical_only) {
+                           // TODO tpool was in scope before
+                           // separting header and source files
+                           // tpool.clear();
+                           // comment out to run all possible combinations
+                           if (screen && use_topology && canonical_only)
+                           compute_all{NMAX}(print, screen, use_topology,
+                                   true, canonical_only);
+                           });
+        });
+  });
 
 #if CLOSED_SHELL_SPINTRACE
-  auto cc_r = cceqvec{3, 3}(true, true, true, true, true);
+  auto cc_r = sequant::eqs::cceqvec{3, 3}(true, true, true, true, true);
 
   /// Make external index
   auto ext_idx_list = [] (const int i_max){

@@ -1,6 +1,7 @@
 #include "spin.hpp"
 
 #include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/tensor_network.hpp>
 #include <unordered_map>
 
 namespace sequant {
@@ -821,7 +822,7 @@ ExprPtr expand_S_operator(const ExprPtr& expr) {
 }
 
 int count_cycles(const container::svector<int, 6>& vec1,
-                        const container::svector<int, 6>& vec2) {
+                 const container::svector<int, 6>& vec2) {
   assert(vec1.size() == vec2.size());
   int n_cycles = 0;
   auto dummy_idx = 99;
