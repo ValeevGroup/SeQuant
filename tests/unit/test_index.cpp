@@ -1,6 +1,7 @@
 //
 // Created by Eduard Valeyev on 3/20/18.
 //
+#include <iostream>
 
 #include "catch.hpp"
 
@@ -114,7 +115,12 @@ TEST_CASE("Index", "[elements]") {
     auto p1B = Index(L"p_1", IndexSpace::instance(IndexSpace::all, IndexSpace::beta));
     auto p2A = Index(L"p_2", IndexSpace::instance(IndexSpace::all, IndexSpace::alpha));
     auto p2B = Index(L"p_2", IndexSpace::instance(IndexSpace::all, IndexSpace::beta));
-
+    std::wcout << "spin index: " << to_latex(p1A) << " " << to_latex(p1B) << " " << to_latex(p2A) << " " << to_latex(p2B);
+    std::cout << "\n";
+    REQUIRE(p1A.space().qns() == IndexSpace::alpha);
+    REQUIRE(p2A.space().qns() == IndexSpace::alpha);
+    REQUIRE(p1B.space().qns() == IndexSpace::beta);
+    REQUIRE(p2B.space().qns() == IndexSpace::beta);
     REQUIRE(p1A < p1B);
     REQUIRE(p2A < p1B);
     REQUIRE(p1A < p2A);

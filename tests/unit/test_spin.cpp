@@ -925,21 +925,80 @@ TEST_CASE("Spin") {
 
 
   SECTION("Open-shell spin-tracing"){
-    // A * g
 
-    // A * g * t1
+    // Tensor canonicalize
+    {
+      auto i1A = Index(L"i_1", IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::alpha));
+      auto i2B = Index(L"i_2", IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::beta));
+      auto i3A = Index(L"i_3", IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::alpha));
+      auto a2A = Index(L"a_2", IndexSpace::instance(IndexSpace::active_unoccupied, IndexSpace::alpha));
+      auto a2B = Index(L"a_2", IndexSpace::instance(IndexSpace::active_unoccupied, IndexSpace::beta));
+      auto a3A = Index(L"a_3", IndexSpace::instance(IndexSpace::active_unoccupied, IndexSpace::alpha));
 
-    // A * f_oo * t2
-    auto input = ex<Constant>(0.5) *
-        ex<Tensor>(L"f", WstrList{L"i_3"}, WstrList{L"i_1"}) *
-        ex<Tensor>(L"t", WstrList{L"a_1", L"a_2"},
-                         WstrList{L"i_2", L"i_3"}, Symmetry::antisymm);
+      ExprPtr t3 = std::make_shared<Tensor>(Tensor(L"t", {a3A, a2B, a2A}, {i1A, i2B, i3A}));
+      std::wcout << "t3 input: " << to_latex(t3) << "\n";
+      canonicalize(t3);
+      std::wcout << "t3 canon: " << to_latex(t3) << "\n";
 
-    auto result = open_shell_spintrace(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}});
-    REQUIRE(result.size() == 4);
-    for(auto& r_i : result){ // Check sizes for all terms
-      std::wcout << to_latex(r_i) << std::endl;
     }
+
+
+    //  g
+    {
+      auto input =  ex<Constant>(0.25) *
+                    ex<Tensor>(L"g", WstrList{L"a_1", L"a_2"},
+                               WstrList{L"i_1", L"i_2"}, Symmetry::antisymm);
+      auto result =
+          open_shell_spintrace(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}});
+      std::wcout << "Input: " << to_latex(input) << "\n"
+                 << "Results:\n";
+      for(auto& r : result) { std::wcout << "\t" << to_latex(r) << "\n"; }
+      std::cout << "\n";
+      REQUIRE(result.size() == 4);
+      REQUIRE(to_latex(result[0]) == L"{{{\\frac{1}{4}}}{\\bar{g}^{{i⁺_1}{i⁺_2}}_{{a⁺_1}{a⁺_2}}}}");
+      REQUIRE(to_latex(result[1]) == L"{{{\\frac{1}{4}}}{g^{{i⁺_2}{i⁻_1}}_{{a⁺_2}{a⁻_1}}}}");
+      REQUIRE(to_latex(result[2]) == L"{{{\\frac{1}{4}}}{g^{{i⁺_1}{i⁻_2}}_{{a⁺_1}{a⁻_2}}}}");
+      REQUIRE(to_latex(result[3]) == L"{{{\\frac{1}{4}}}{\\bar{g}^{{i⁻_1}{i⁻_2}}_{{a⁻_1}{a⁻_2}}}}");
+    }
+
+    // g * t1
+    {
+      auto input = ex<Constant>(0.5) *
+                   ex<Tensor>(L"g", WstrList{L"i_3", L"a_1"},
+                              WstrList{L"i_1", L"i_2"}, Symmetry::antisymm) *
+                   ex<Tensor>(L"t", WstrList{L"a_2"}, WstrList{L"i_3"});
+      auto result =
+          open_shell_spintrace(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}});
+      std::wcout << "Input: " << to_latex(input) << "\n"
+                 << "Results:\n";
+      for(auto& r : result) { std::wcout << "\t" << to_latex(r) << "\n"; }
+      std::cout << "\n";
+      REQUIRE(to_latex(result[0]) == L"{{{-\\frac{1}{2}}}{\\bar{g}^{{i⁺_1}{i⁺_2}}_{{a⁺_1}{i⁺_3}}}{t^{{i⁺_3}}_{{a⁺_2}}}}");
+      REQUIRE(to_latex(result[1]) == L"{{{-\\frac{1}{2}}}{g^{{i⁻_1}{i⁺_2}}_{{a⁻_1}{i⁺_1}}}{t^{{i⁺_1}}_{{a⁺_2}}}}");
+      REQUIRE(to_latex(result[2]) == L"{{{-\\frac{1}{2}}}{g^{{i⁺_1}{i⁻_2}}_{{a⁺_1}{i⁻_1}}}{t^{{i⁻_1}}_{{a⁻_2}}}}");
+      REQUIRE(to_latex(result[3]) == L"{{{-\\frac{1}{2}}}{\\bar{g}^{{i⁻_1}{i⁻_2}}_{{a⁻_1}{i⁻_3}}}{t^{{i⁻_3}}_{{a⁻_2}}}}");
+    }
+
+    // f_oo * t2
+    {
+      auto input = ex<Constant>(0.5) *
+                   ex<Tensor>(L"f", WstrList{L"i_3"}, WstrList{L"i_1"}) *
+                   ex<Tensor>(L"t", WstrList{L"a_1", L"a_2"},
+                              WstrList{L"i_2", L"i_3"}, Symmetry::antisymm);
+
+      auto result =
+          open_shell_spintrace(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}});
+      REQUIRE(result.size() == 4);
+      std::wcout << "Input: " << to_latex(input) << "\n"
+                 << "Results:\n";
+      for(auto& r : result) { std::wcout << "\t" << to_latex(r) << "\n"; }
+      std::cout << "\n";
+      REQUIRE(to_latex(result[0]) == L"{{{\\frac{1}{2}}}{f^{{i⁺_1}}_{{i⁺_3}}}{\\bar{t}^{{i⁺_2}{i⁺_3}}_{{a⁺_1}{a⁺_2}}}}");
+      REQUIRE(to_latex(result[1]) == L"{{{-\\frac{1}{2}}}{f^{{i⁻_1}}_{{i⁻_2}}}{t^{{i⁺_2}{i⁻_2}}_{{a⁺_2}{a⁻_1}}}}");
+      REQUIRE(to_latex(result[2]) == L"{{{-\\frac{1}{2}}}{f^{{i⁺_1}}_{{i⁺_2}}}{t^{{i⁺_2}{i⁻_2}}_{{a⁺_1}{a⁻_2}}}}");
+      REQUIRE(to_latex(result[3]) == L"{{{\\frac{1}{2}}}{f^{{i⁻_1}}_{{i⁻_3}}}{\\bar{t}^{{i⁻_2}{i⁻_3}}_{{a⁻_1}{a⁻_2}}}}");
+    }
+
   }
 
 #if 0
