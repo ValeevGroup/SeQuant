@@ -993,8 +993,7 @@ ExprPtr closed_shell_spintrace(
     return nullptr;
 }
 
-ExprPtr closed_shell_cc_spintrace(const ExprPtr& expr){
-
+container::vector<container::vector<Index>> external_indices(const ExprPtr& expr){
   // Generate external index list from Antisymmetrizer
   Tensor A{};
   for(auto& prod : *expr){
@@ -1006,8 +1005,9 @@ ExprPtr closed_shell_cc_spintrace(const ExprPtr& expr){
       }
     }
   }
-
-  assert(A.bra().size() == A.ket().size());
+  assert(A.bra_rank() != 0 && "Could not generate external index groups due to "
+         "absence of Anti-symmetrizer (A) operator in expression.");
+  assert(A.bra_rank() == A.ket_rank());
   container::vector<container::vector<Index>> ext_index_groups;
   auto b_iter = A.bra().begin();
   for(auto k : A.ket()){
@@ -1016,7 +1016,11 @@ ExprPtr closed_shell_cc_spintrace(const ExprPtr& expr){
     ++b_iter;
   }
   assert(ext_index_groups.size() == A.bra_rank());
-  return closed_shell_spintrace(expr, ext_index_groups);
+  return ext_index_groups;
+}
+
+ExprPtr closed_shell_CC_spintrace(const ExprPtr& expr){
+  return closed_shell_spintrace(expr, external_indices(expr));
 }
 
 /// Collect all indices from an expression
@@ -1125,7 +1129,7 @@ std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
 
   expand(expanded_expr);
   rapid_simplify(expanded_expr);
-  // expanded_expr->visit(reset_idx_tags);
+  expanded_expr->visit(reset_idx_tags);
 
   std::vector<ExprPtr> result{};
 
@@ -1155,6 +1159,7 @@ std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
   for(auto& e : e_rep){
     auto spin_expr = append_spin(expanded_expr, e);
     // std::wcout << "e: " << to_latex(spin_expr) << std::endl;
+    spin_expr->visit(reset_idx_tags);
     Sum e_result{};
 
     // Loop over internal index replacement maps
@@ -1198,6 +1203,10 @@ std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
     rapid_simplify(result[i]);
   }
   return result;
+}
+
+std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr){
+  return open_shell_spintrace(expr, external_indices(expr));
 }
 
 ExprPtr spintrace(

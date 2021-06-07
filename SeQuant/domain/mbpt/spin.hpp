@@ -157,11 +157,16 @@ ExprPtr closed_shell_spintrace(
     const ExprPtr& expression,
     const container::vector<container::vector<Index>> ext_index_groups = {{}});
 
+/// @brief Generates list of external indices from Antisymmetrization (A) operator
+/// @param expr ExprPtr with spin orbital indices
+/// @return external index groups to be used for spintracing
+container::vector<container::vector<Index>> external_indices(const ExprPtr& expr);
+
 /// @brief Transforms Coupled cluster from spin orbital to spatial orbitals
 /// @detailed The external indices are deduced from Antisymmetrization operator
 /// @param expr ExprPtr with spin orbital indices
 /// @return an expression with spin integrated/adapted
-ExprPtr closed_shell_cc_spintrace(const ExprPtr& expr);
+ExprPtr closed_shell_CC_spintrace(const ExprPtr& expr);
 
 /// Collect all indices from an expression
 auto index_list(const ExprPtr& expr);
@@ -174,6 +179,11 @@ auto index_list(const ExprPtr& expr);
 /// @return a vector of expr ptrs with spin expressions
 std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
     const std::vector<std::vector<Index>> ext_index_groups = {{}});
+
+/// @brief Transforms Coupled cluster from spin orbital to spatial orbitals
+/// @param expr ExprPtr with spin orbital indices
+/// @return a vector of spin expressions for open-shell reference
+std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr);
 
 /// @brief Transforms an expression from spin orbital to spatial orbitals
 /// @detailed Given an expression, this function extracts all indices and adds a

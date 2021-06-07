@@ -241,7 +241,8 @@ set(utests2_src
          tests/unit/test_canonicalize.cpp
          tests/unit/test_expr.cpp)
 
-set(utests_src tests/unit/test_spin.cpp)
+set(utests_src tests/unit/test_spin.cpp
+               tests/unit/test_index.cpp)
 
 set(utests_deps SeQuant)
 
