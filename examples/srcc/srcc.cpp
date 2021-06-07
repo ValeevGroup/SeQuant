@@ -56,7 +56,7 @@ int main(int argc, char* argv[]) {
     });
 
 #if CLOSED_SHELL_SPINTRACE
-  auto cc_r = cceqvec{2, 2}(true, true, true, true, true);
+  auto cc_r = cceqvec{3, 3}(true, true, true, true, true);
 
   /// Make external index
   auto ext_idx_list = [] (const int i_max){
@@ -72,26 +72,41 @@ int main(int argc, char* argv[]) {
     return ext_idx_list;
   };
 
-//  for(auto& product_term : *cc_r[2]){
-//    auto term = remove_tensor_from_product(product_term->as<Product>(), L"A");
-//    std::wcout << to_latex(term) << "\n";
-//    const auto list = ext_idx_list(1);
-//    auto os_st = open_shell_spintrace(term, list);
-//    for(auto& t : os_st){
-//      std::wcout<< "st: " << to_latex(t) << "\n";
-//    }
-//    std::wcout << "\n";
-//  }
-//  return 0;
+  // First 4 terms only
+//  cc_r[1] = cc_r[1]->as<Sum>().take_n(4);
+//  cc_r[2] = cc_r[2]->as<Sum>().take_n(4);
+  cc_r[3] = cc_r[3]->as<Sum>().take_n(4);
 
-  for (int i = 1; i <= cc_r.size(); ++i) {
-    // cc_r[i] = cc_r[i]->as<Sum>().take_n(4,1);
-    // std::wcout << "CCSD R" << i << " n3: " << to_latex(cc_r[i]) << std::endl;
+#if 1
+  size_t counter = 1;
+  std::vector<size_t> n_st_terms{0, 0, 0, 0};
+  const int residual = 3;
+  for(auto& product_term : *cc_r[residual]){
+    auto term = remove_tensor_from_product(product_term->as<Product>(), L"A");
+    std::wcout << counter << ": " << to_latex(term) << "\n";
+    const auto list = ext_idx_list(residual);
+    auto os_st = open_shell_spintrace(term, list);
+    for(size_t i = 0; i != os_st.size(); ++i){
+      std::wcout<< "st: " << to_latex(os_st[i]) << "\n";
+      n_st_terms[i] += os_st[i]->size();
+    }
+    std::wcout << "\n";
+    ++counter;
+  }
+  for(auto& i : n_st_terms){std::cout << i << " ";}
+  std::cout <<"\n";
+  return 0;
+#endif
+
+  for (int i = 1; i < cc_r.size(); ++i) {
     const auto list = ext_idx_list(i);
     auto temp = open_shell_spintrace(cc_r[i], list);
+    std::cout << "R" << i << ": ";
     for(auto& t : temp){
-      std::cout << t->size() << "\n"; //  << to_latex(t) << std::endl;
+      std::cout << t->size() << " ";
+      std::wcout << to_latex(t) << "\n";
     }
+    std::cout << "\n";
   }
   return 0;
 
