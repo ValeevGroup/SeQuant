@@ -928,18 +928,23 @@ TEST_CASE("Spin") {
 
     // Tensor canonicalize
     {
-      auto i1A = Index(L"i_1", IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::alpha));
-      auto i2B = Index(L"i_2", IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::beta));
-      auto i3A = Index(L"i_3", IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::alpha));
-      auto a2A = Index(L"a_2", IndexSpace::instance(IndexSpace::active_unoccupied, IndexSpace::alpha));
-      auto a2B = Index(L"a_2", IndexSpace::instance(IndexSpace::active_unoccupied, IndexSpace::beta));
-      auto a3A = Index(L"a_3", IndexSpace::instance(IndexSpace::active_unoccupied, IndexSpace::alpha));
+      const auto i1A = Index(L"i⁺_1", IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::alpha));
+      const auto i2B = Index(L"i⁻_2", IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::beta));
+      const auto i3A = Index(L"i⁺_3", IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::alpha));
+      const auto a1A = Index(L"a⁺_1", IndexSpace::instance(IndexSpace::active_unoccupied, IndexSpace::alpha));
+      const auto a2A = Index(L"a⁺_2", IndexSpace::instance(IndexSpace::active_unoccupied, IndexSpace::alpha));
+      const auto a2B = Index(L"a⁻_2", IndexSpace::instance(IndexSpace::active_unoccupied, IndexSpace::beta));
+      const auto a3A = Index(L"a⁺_3", IndexSpace::instance(IndexSpace::active_unoccupied, IndexSpace::alpha));
 
-      ExprPtr t3 = std::make_shared<Tensor>(Tensor(L"t", {a3A, a2B, a2A}, {i1A, i2B, i3A}));
+      auto t3 = ex<Tensor>(Tensor(L"t", {a3A, a2B, a2A}, {i1A, i2B, i3A}));
       std::wcout << "t3 input: " << to_latex(t3) << "\n";
       canonicalize(t3);
       std::wcout << "t3 canon: " << to_latex(t3) << "\n";
-
+      auto f = ex<Tensor>(Tensor(L"f",{a1A},{a2A}));
+      auto ft3 = f*t3;
+      std::wcout << "ft3 input: " << to_latex(ft3) << "\n";
+      canonicalize(ft3);
+      std::wcout << "ft3 canon: " << to_latex(ft3) << "\n";
     }
 
 
