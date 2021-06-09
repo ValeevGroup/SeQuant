@@ -43,6 +43,7 @@ void TensorCanonicalizer::register_instance(std::shared_ptr<TensorCanonicalizer>
 
 ExprPtr DefaultTensorCanonicalizer::apply(AbstractTensor &t) {
   // tag all indices as ext->true/ind->false
+#if 0 // Turned off due to interference with qns attribute on Index
 //  auto braket_view = braket(t);
 //  ranges::for_each(braket_view, [this](auto &idx) {
 //    auto it = external_indices_.find(std::wstring(idx.label()));
@@ -50,7 +51,7 @@ ExprPtr DefaultTensorCanonicalizer::apply(AbstractTensor &t) {
 //    idx.tag().assign(
 //        is_ext ? 0 : 1);  // ext -> 0, int -> 1, so ext will come before
 //  });
-
+#endif
   auto result = this->apply(t, std::less<Index>{});
   reset_tags(t);
 
