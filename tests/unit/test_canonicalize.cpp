@@ -191,7 +191,7 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
 
     { // Case 5: CCSDT R3: S3 * F * T3
 
-      Logger::get_instance().canonicalize = true;
+      // Logger::get_instance().canonicalize = true;
 
       { // Terms 1 and 6 from spin-traced result
         auto input =
