@@ -5,6 +5,7 @@
 #include "tensor_network.hpp"
 #include "bliss.hpp"
 #include "utility.hpp"
+#include "expr.hpp"
 
 namespace sequant {
 
@@ -360,7 +361,9 @@ ExprPtr TensorNetwork::canonicalize(
   {
     DefaultTensorCanonicalizer tensor_canonizer(named_indices);
     for (auto &tensor : tensors_) {
+      // std::wcout << __LINE__ << "L " << to_latex(*tensor) << " ";
       auto bp = tensor_canonizer.apply(*tensor);
+      // std::wcout << __LINE__ << "L " << to_latex(*tensor) << "\n";
       if (bp) *canon_biproduct *= *bp;
     }
   }

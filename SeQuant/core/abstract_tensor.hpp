@@ -228,6 +228,7 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
   /// Core of DefaultTensorCanonicalizer::apply, only does the canonicalization, i.e. no tagging/untagging
   template<typename Compare>
   ExprPtr apply(AbstractTensor &t, const Compare &comp) {
+    // std::wcout << "abstract tensor: " << to_latex(t) << "\n";
     auto s = symmetry(t);
     auto is_antisymm = (s == Symmetry::antisymm);
     const auto _bra_rank = bra_rank(t);
@@ -265,12 +266,18 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
         break;
 
       case Symmetry::nonsymm: {
-        // sort particles with bra and ket functions first, then the particleas with either bra or ket index
+        // sort particles with bra and ket functions first,
+        // then the particles with either bra or ket index
+//        std::wcout << __LINE__ << "L " << to_latex(t) << "\n";
         auto _bra = bra_range(t);
         auto _ket = ket_range(t);
+//        for(auto& i : _bra){
+//          std::wcout << to_latex(i) << " " << i.tag().has_value() << "\n";
+//        }
         auto _zip_braket = zip(take(_bra, _rank),
                                take(_ket, _rank));
         bubble_sort(begin(_zip_braket), end(_zip_braket), comp);
+//        std::wcout << __LINE__ << "L " << to_latex(t) << "\n";
         if (_bra_rank > _rank) {
           auto size_of_rest = _bra_rank - _rank;
           auto rest_of = counted(begin(_bra) + _rank, size_of_rest);
@@ -280,6 +287,7 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
           auto rest_of = counted(begin(_ket) + _rank, size_of_rest);
           bubble_sort(begin(rest_of), end(rest_of), comp);
         }
+        // std::wcout << __LINE__ << "L " << to_latex(t) << " ";
       }
         break;
 
@@ -287,6 +295,8 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
     }
 
     ExprPtr result = is_antisymm ? (even == false ? ex<Constant>(-1) : nullptr) : nullptr;
+//    if(result)
+//      std::wcout << "DefaultTensorCanonicalizer apply: " << result->to_latex() << "\n";
     return result;
   }
 
