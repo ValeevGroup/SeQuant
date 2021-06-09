@@ -237,7 +237,7 @@ if (SEQUANT_EVAL_TESTS)
 endif(SEQUANT_EVAL_TESTS)
 enable_testing(true)
 
-set(utests2_src
+set(utests_src
          tests/unit/test_space.cpp
          tests/unit/test_index.cpp
          tests/unit/test_op.cpp
@@ -259,9 +259,6 @@ set(utests2_src
          tests/unit/test_eval_node.cpp
          tests/unit/test_optimize.cpp
         )
-
-set(utests_src tests/unit/test_spin.cpp
-        tests/unit/test_index.cpp)
 
 if (TARGET tiledarray)
     message("tiledarray found")
