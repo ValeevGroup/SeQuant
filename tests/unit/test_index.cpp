@@ -123,20 +123,6 @@ TEST_CASE("Index", "[elements]") {
     REQUIRE(p2A < p1B);
     REQUIRE(p1A < p2A);
     REQUIRE(p1B < p2B);
-
-    auto i1A = Index(L"i⁺_1", IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::alpha));
-    auto i2B = Index(L"i⁻_2", IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::beta));
-    auto i3A = Index(L"i⁺_3", IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::alpha));
-
-    i2B.tag().assign(0);
-    i3A.tag().assign(1);
-    REQUIRE(i2B < i3A);
-    i3A.reset_tag();
-
-    REQUIRE(i1A < i3A);
-    REQUIRE(i1A < i2B);
-    REQUIRE(i3A < i2B);
-
   }
 
 
