@@ -85,44 +85,6 @@ int main(int argc, char* argv[]) {
     return ext_idx_list;
   };
 
-  // First 4 terms only
-//  cc_r[1] = cc_r[1]->as<Sum>().take_n(4);
-//  cc_r[2] = cc_r[2]->as<Sum>().take_n(4);
-  cc_r[3] = cc_r[3]->as<Sum>().take_n(4);
-
-#if 1
-  size_t counter = 1;
-  std::vector<size_t> n_st_terms{0, 0, 0, 0};
-  const int residual = 3;
-  for(auto& product_term : *cc_r[residual]){
-    auto term = remove_tensor_from_product(product_term->as<Product>(), L"A");
-    std::wcout << counter << ": " << to_latex(term) << "\n";
-    const auto list = ext_idx_list(residual);
-    auto os_st = open_shell_spintrace(term, list);
-    for(size_t i = 0; i != os_st.size(); ++i){
-      std::wcout<< "st: " << to_latex(os_st[i]) << "\n";
-      n_st_terms[i] += os_st[i]->size();
-    }
-    std::wcout << "\n";
-    ++counter;
-  }
-  for(auto& i : n_st_terms){std::cout << i << " ";}
-  std::cout <<"\n";
-  return 0;
-#endif
-
-  for (int i = 1; i < cc_r.size(); ++i) {
-    const auto list = ext_idx_list(i);
-    auto temp = open_shell_spintrace(cc_r[i], list);
-    std::cout << "R" << i << ": ";
-    for(auto& t : temp){
-      std::cout << t->size() << " ";
-      std::wcout << to_latex(t) << "\n";
-    }
-    std::cout << "\n";
-  }
-  return 0;
-
   std::vector<ExprPtr> cc_st_r(cc_r.size());
   for (int i = 1; i < cc_r.size(); ++i) {
     const auto tstart = std::chrono::high_resolution_clock::now();
