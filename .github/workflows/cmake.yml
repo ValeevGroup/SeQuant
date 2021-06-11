@@ -46,6 +46,7 @@ jobs:
     - name: Install prerequisites Ubuntu packages
       if: ${{ matrix.os == 'ubuntu-20.04' }}
       run: |
+        sudo apt-get update
         sudo apt-get install ninja-build g++-9 liblapack-dev libboost-dev libeigen3-dev openmpi-bin libopenmpi-dev ccache
     - name: Prepare ccache timestamp
       id: ccache_cache_timestamp
