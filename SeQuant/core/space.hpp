@@ -65,7 +65,7 @@ class IndexSpace {
     static constexpr QuantumNumbersAttr invalid() noexcept { return QuantumNumbersAttr(0xffff); }
   };
 
-  /// @brief Attr describes all attibutes of a space (occupancy + quantum numbers)
+  /// @brief Attr describes all attributes of a space (occupancy + quantum numbers)
   struct Attr : TypeAttr, QuantumNumbersAttr {
     Attr(TypeAttr type, QuantumNumbersAttr qns) noexcept : TypeAttr(type), QuantumNumbersAttr(qns) {};
     Attr(int32_t type, int32_t qns) noexcept : TypeAttr(type), QuantumNumbersAttr(qns) {};
