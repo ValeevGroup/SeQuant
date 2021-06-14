@@ -15,17 +15,18 @@ class SeQuant {
   /// @param vac a Vacuum object
   /// @param m an IndexSpaceMetric object
   /// @param bks a BraKetSymmetry object
+  /// @param spb single-particle basis (spin-free or spin-dependent)
   explicit SeQuant(Vacuum vac,
                    IndexSpaceMetric m,
                    BraKetSymmetry bks,
-                   Spinbasis spb = sequant::Spinbasis::spin_orbit)
-      : vacuum_(vac), metric_(m), braket_symmetry_(bks),spin_basis_(spb) {}
+                   SPBasis spb = sequant::SPBasis::spinorbital)
+      : vacuum_(vac), metric_(m), braket_symmetry_(bks), spbasis_(spb) {}
   ~SeQuant() = default;
 
   Vacuum vacuum() const { return vacuum_; }
   IndexSpaceMetric metric() const { return metric_; }
   BraKetSymmetry braket_symmetry() const { return braket_symmetry_; }
-  Spinbasis spin_basis() const { return spin_basis_;}
+  SPBasis spbasis() const { return spbasis_;}
   /// @return the IndexRegistry object
   std::shared_ptr<IndexRegistry> index_registry() const;
 
@@ -33,7 +34,7 @@ class SeQuant {
   Vacuum vacuum_ = Vacuum::SingleProduct;
   IndexSpaceMetric metric_ = IndexSpaceMetric::Unit;
   BraKetSymmetry braket_symmetry_ = BraKetSymmetry::conjugate;
-  Spinbasis spin_basis_ = sequant::Spinbasis::spin_orbit;
+  SPBasis spbasis_ = sequant::SPBasis::spinorbital;
 };
 
 const SeQuant &get_default_context();

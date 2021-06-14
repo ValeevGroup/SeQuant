@@ -17,7 +17,8 @@ int main(int argc, char* argv[]) {
   std::wcerr.sync_with_stdio(true);
   sequant::detail::OpIdRegistrar op_id_registrar;
 
-  sequant::set_default_context(SeQuant(Vacuum::Physical, IndexSpaceMetric::Unit, BraKetSymmetry::conjugate, Spinbasis::spin_free));
+  sequant::set_default_context(SeQuant(Vacuum::Physical, IndexSpaceMetric::Unit, BraKetSymmetry::conjugate,
+                                       SPBasis::spinfree));
   mbpt::set_default_convention();
 
   TensorCanonicalizer::register_instance(
