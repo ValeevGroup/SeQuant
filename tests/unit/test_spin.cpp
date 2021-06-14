@@ -953,29 +953,10 @@ TEST_CASE("Spin") {
                                WstrList{L"i_1", L"i_2"}, Symmetry::antisymm);
       auto result =
           open_shell_spintrace(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}});
-      REQUIRE(result.size() == 4);
+      REQUIRE(result.size() == 3);
       REQUIRE(to_latex(result[0]) == L"{{{\\frac{1}{4}}}{\\bar{g}^{{i⁺_1}{i⁺_2}}_{{a⁺_1}{a⁺_2}}}}");
-      REQUIRE(to_latex(result[1]) == L"{{{\\frac{1}{4}}}{g^{{i⁺_2}{i⁻_1}}_{{a⁺_2}{a⁻_1}}}}");
-      REQUIRE(to_latex(result[2]) == L"{{{\\frac{1}{4}}}{g^{{i⁺_1}{i⁻_2}}_{{a⁺_1}{a⁻_2}}}}");
-      REQUIRE(to_latex(result[3]) == L"{{{\\frac{1}{4}}}{\\bar{g}^{{i⁻_1}{i⁻_2}}_{{a⁻_1}{a⁻_2}}}}");
-    }
-
-    // g * t1
-    {
-      auto input = ex<Constant>(0.5) *
-                   ex<Tensor>(L"g", WstrList{L"i_3", L"a_1"},
-                              WstrList{L"i_1", L"i_2"}, Symmetry::antisymm) *
-                   ex<Tensor>(L"t", WstrList{L"a_2"}, WstrList{L"i_3"});
-      auto result =
-          open_shell_spintrace(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}});
-      std::wcout << "Input: " << to_latex(input) << "\n"
-                 << "Results:\n";
-      for(auto r : result) { std::wcout << "\t" << to_latex(r) << "\n"; }
-      std::cout << "\n";
-//      REQUIRE(to_latex(result[0]) == L"{{{-\\frac{1}{2}}}{\\bar{g}^{{i⁺_1}{i⁺_2}}_{{a⁺_1}{i⁺_3}}}{t^{{i⁺_3}}_{{a⁺_2}}}}");
-//      REQUIRE(to_latex(result[1]) == L"{{{-\\frac{1}{2}}}{g^{{i⁻_1}{i⁺_2}}_{{a⁻_1}{i⁺_1}}}{t^{{i⁺_1}}_{{a⁺_2}}}}");
-//      REQUIRE(to_latex(result[2]) == L"{{{-\\frac{1}{2}}}{g^{{i⁺_1}{i⁻_2}}_{{a⁺_1}{i⁻_1}}}{t^{{i⁻_1}}_{{a⁻_2}}}}");
-//      REQUIRE(to_latex(result[3]) == L"{{{-\\frac{1}{2}}}{\\bar{g}^{{i⁻_1}{i⁻_2}}_{{a⁻_1}{i⁻_3}}}{t^{{i⁻_3}}_{{a⁻_2}}}}");
+      REQUIRE(to_latex(result[1]) == L"{{{\\frac{1}{4}}}{g^{{i⁺_1}{i⁻_2}}_{{a⁺_1}{a⁻_2}}}}");
+      REQUIRE(to_latex(result[2]) == L"{{{\\frac{1}{4}}}{\\bar{g}^{{i⁻_1}{i⁻_2}}_{{a⁻_1}{a⁻_2}}}}");
     }
 
     // f_oo * t2
@@ -987,13 +968,46 @@ TEST_CASE("Spin") {
 
       auto result =
           open_shell_spintrace(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}});
-      REQUIRE(result.size() == 4);
+      REQUIRE(result.size() == 3);
       REQUIRE(to_latex(result[0]) == L"{{{\\frac{1}{2}}}{f^{{i⁺_1}}_{{i⁺_3}}}{\\bar{t}^{{i⁺_2}{i⁺_3}}_{{a⁺_1}{a⁺_2}}}}");
-      REQUIRE(to_latex(result[1]) == L"{{{-\\frac{1}{2}}}{f^{{i⁻_1}}_{{i⁻_2}}}{t^{{i⁺_2}{i⁻_2}}_{{a⁺_2}{a⁻_1}}}}");
-      REQUIRE(to_latex(result[2]) == L"{{{-\\frac{1}{2}}}{f^{{i⁺_1}}_{{i⁺_2}}}{t^{{i⁺_2}{i⁻_2}}_{{a⁺_1}{a⁻_2}}}}");
-      REQUIRE(to_latex(result[3]) == L"{{{\\frac{1}{2}}}{f^{{i⁻_1}}_{{i⁻_3}}}{\\bar{t}^{{i⁻_2}{i⁻_3}}_{{a⁻_1}{a⁻_2}}}}");
+      REQUIRE(to_latex(result[1]) == L"{{{-\\frac{1}{2}}}{f^{{i⁺_1}}_{{i⁺_2}}}{t^{{i⁺_2}{i⁻_2}}_{{a⁺_1}{a⁻_2}}}}");
+      REQUIRE(to_latex(result[2]) == L"{{{\\frac{1}{2}}}{f^{{i⁻_1}}_{{i⁻_3}}}{\\bar{t}^{{i⁻_2}{i⁻_3}}_{{a⁻_1}{a⁻_2}}}}");
     }
 
+    // g * t1
+    {
+      auto input = ex<Constant>(0.5) *
+          ex<Tensor>(L"g", WstrList{L"i_3", L"a_1"},
+                     WstrList{L"i_1", L"i_2"}, Symmetry::antisymm) *
+          ex<Tensor>(L"t", WstrList{L"a_2"}, WstrList{L"i_3"}, Symmetry::nonsymm);
+      auto result =
+          open_shell_spintrace(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}});
+      std::wcout << "Input: " << to_latex(input) << "\n"
+                 << "Results:\n";
+      for(auto r : result) { std::wcout << "\t" << to_latex(r) << "\n"; }
+      std::cout << "\n";
+      REQUIRE(result.size() == 3);
+//      REQUIRE(to_latex(result[0]) == L"{{{-\\frac{1}{2}}}{\\bar{g}^{{i⁺_1}{i⁺_2}}_{{a⁺_1}{i⁺_3}}}{t^{{i⁺_3}}_{{a⁺_2}}}}");
+//      REQUIRE(to_latex(result[1]) == L"{{{-\\frac{1}{2}}}{g^{{i⁺_1}{i⁻_2}}_{{a⁺_1}{i⁻_1}}}{t^{{i⁻_1}}_{{a⁻_2}}}}");
+//      REQUIRE(to_latex(result[2]) == L"{{{-\\frac{1}{2}}}{\\bar{g}^{{i⁻_1}{i⁻_2}}_{{a⁻_1}{i⁻_3}}}{t^{{i⁻_3}}_{{a⁻_2}}}}");
+    }
+
+    Logger::get_instance().canonicalize = true;
+    // f * t3
+    {
+      auto input = ex<Constant>(1./12) *
+          ex<Tensor>(L"f", WstrList{L"a_1"}, WstrList{L"a_4"}) *
+          ex<Tensor>(L"t", WstrList{L"a_2", L"a_3", L"a_4"},
+                     WstrList{L"i_1", L"i_2", L"i_3"}, Symmetry::antisymm);
+      auto result =
+          open_shell_spintrace(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
+      std::wcout << "Input: " << to_latex(input) << "\n"
+                 << "Results:\n";
+      for(auto r : result) { std::wcout << "\t" << to_latex(r) << "\n"; }
+      std::cout << "\n";
+      REQUIRE(result.size() == 4);
+    }
+    Logger::get_instance().canonicalize = false;
   }
 
 #if 0
