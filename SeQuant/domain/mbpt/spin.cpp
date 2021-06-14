@@ -1113,6 +1113,27 @@ std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
     return all_replacements;
   };
 
+  // External index replacement maps
+  auto ext_spin_cases = [&add_spin_label] (const std::vector<IndexGroup>& idx_group){
+    auto ncases = idx_group.size() + 1;
+    std::vector<std::map<Index, Index>> all_replacements; //(ncases);
+
+    std::vector<int> spins(idx_group.size(), 0);
+    for(auto i = 0; i != ncases; ++i){
+      std::map<Index, Index> idx_rep;
+      for(auto j = 0; j != idx_group.size(); ++j){
+        for(auto &idx : idx_group[j]) {
+          auto spin_idx = add_spin_label(idx, spins[j]);
+          idx_rep.emplace(std::make_pair(idx, spin_idx));
+        }
+      }
+      if(i != ncases)
+        spins[idx_group.size() - 1 - i] = 1;
+      all_replacements.push_back(idx_rep);
+    }
+    return all_replacements;
+  };
+
   auto reset_idx_tags = [](ExprPtr& expr) {
     if (expr->is<Tensor>())
       ranges::for_each(expr->as<Tensor>().const_braket(),
@@ -1121,7 +1142,7 @@ std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
 
   // Internal and external index replacements are independent
   auto i_rep = spin_cases(int_index_groups);
-  auto e_rep = spin_cases(ext_index_groups);
+  auto e_rep = ext_spin_cases(ext_index_groups);
 
   // Expand 'A' operator and 'antisymm' tensors
   auto expanded_expr = expand_A_operator(expr);
