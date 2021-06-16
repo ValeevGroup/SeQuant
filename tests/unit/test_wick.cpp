@@ -30,7 +30,7 @@ auto compute_nontensor_wick(WickTheorem<Statistics::FermiDirac>& wick) {
 }  // namespace sequant
 
 #if 1
-TEST_CASE("WickTheorem", "[algorithms]") {
+TEST_CASE("WickTheorem", "[algorithms][wick]") {
 
   using namespace sequant;
 
@@ -86,14 +86,13 @@ TEST_CASE("WickTheorem", "[algorithms]") {
   }  // SECTION("constructors")
 
   SECTION("physical vacuum") {
-
     constexpr Vacuum V = Vacuum::Physical;
 
     // three 1-body operators
     {
-      auto opseq1 =
-          FNOperatorSeq({FNOperator({L"i_1"}, {L"i_2"}, V), FNOperator({L"i_3"}, {L"i_4"}, V),
-                         FNOperator({L"i_5"}, {L"i_6"}, V)});
+      auto opseq1 = FNOperatorSeq({FNOperator({L"i_1"}, {L"i_2"}, V),
+                                   FNOperator({L"i_3"}, {L"i_4"}, V),
+                                   FNOperator({L"i_5"}, {L"i_6"}, V)});
       auto wick1 = FWickTheorem{opseq1};
       REQUIRE_NOTHROW(wick1.spinfree(false).compute());
       auto result = FWickTheorem{opseq1}.spinfree(false).compute();
@@ -103,8 +102,8 @@ TEST_CASE("WickTheorem", "[algorithms]") {
 
     // two 2-body operators
     {
-      auto opseq =
-          FNOperatorSeq({FNOperator({}, {L"i_1", L"i_2"}, V), FNOperator({L"i_3", L"i_4"}, {}, V)});
+      auto opseq = FNOperatorSeq({FNOperator({}, {L"i_1", L"i_2"}, V),
+                                  FNOperator({L"i_3", L"i_4"}, {}, V)});
       auto wick = FWickTheorem{opseq};
       REQUIRE_NOTHROW(wick.spinfree(false).compute());
       auto result = wick.spinfree(false).compute();
@@ -114,8 +113,8 @@ TEST_CASE("WickTheorem", "[algorithms]") {
 
     // two 3-body operators
     {
-      auto opseq =
-          FNOperatorSeq({FNOperator({}, {L"i_1", L"i_2", L"i_3"}, V), FNOperator({L"i_4", L"i_5", L"i_6"}, {}, V)});
+      auto opseq = FNOperatorSeq({FNOperator({}, {L"i_1", L"i_2", L"i_3"}, V),
+                                  FNOperator({L"i_4", L"i_5", L"i_6"}, {}, V)});
       auto wick = FWickTheorem{opseq};
       REQUIRE_NOTHROW(wick.spinfree(false).compute());
       auto result = wick.spinfree(false).compute();
@@ -126,7 +125,8 @@ TEST_CASE("WickTheorem", "[algorithms]") {
     // two 4-body operators
     {
       auto opseq =
-          FNOperatorSeq({FNOperator({}, {L"i_1", L"i_2", L"i_3", L"i_4"}, V), FNOperator({L"i_5", L"i_6", L"i_7", L"i_8"}, {}, V)});
+          FNOperatorSeq({FNOperator({}, {L"i_1", L"i_2", L"i_3", L"i_4"}, V),
+                         FNOperator({L"i_5", L"i_6", L"i_7", L"i_8"}, {}, V)});
       auto wick = FWickTheorem{opseq};
       REQUIRE_NOTHROW(wick.spinfree(false).compute());
       auto result = wick.spinfree(false).compute();
@@ -136,11 +136,9 @@ TEST_CASE("WickTheorem", "[algorithms]") {
 
     // 1/2 * 1 * 1/2 body ops, full contraction
     {
-      auto opseq =
-          FNOperatorSeq({FNOperator({}, {L"i_1"}, V),
-                         FNOperator({L"i_2"}, {L"i_3"}, V),
-                         FNOperator({L"i_4"}, {}, V)
-                        });
+      auto opseq = FNOperatorSeq({FNOperator({}, {L"i_1"}, V),
+                                  FNOperator({L"i_2"}, {L"i_3"}, V),
+                                  FNOperator({L"i_4"}, {}, V)});
       auto wick = FWickTheorem{opseq};
       REQUIRE_NOTHROW(wick.spinfree(false).compute());
       auto result = wick.spinfree(false).compute();
@@ -158,37 +156,40 @@ TEST_CASE("WickTheorem", "[algorithms]") {
       auto result = wick.full_contractions(false).spinfree(false).compute();
       REQUIRE(result->is<Sum>());
       REQUIRE(result->size() == 5);  // sum of 4 terms
-      REQUIRE(
-          to_latex(result) ==
-          L"{ \\bigl( - {{s^{{i_2}}_{{i_1}}}{a^{{i_4}}_{{i_3}}}} + {{s^{{i_2}}_{{i_1}}}{s^{{i_4}}_{{i_3}}}} + {{s^{{i_4}}_{{i_1}}}{a^{{i_2}}_{{i_3}}}} - {{s^{{i_4}}_{{i_3}}}{a^{{i_2}}_{{i_1}}}} + {{a^{{i_2}{i_4}}_{{i_1}{i_3}}}}\\bigr) }");
+      REQUIRE(to_latex(result) ==
+              L"{ \\bigl( - {{s^{{i_2}}_{{i_1}}}{a^{{i_4}}_{{i_3}}}} + {{s^{{i_2}}_{{i_1}}}{s^{{i_4}}_{{i_3}}}} + {{s^{{i_4}}_{{i_1}}}{a^{{i_2}}_{{i_3}}}} - {{s^{{i_4}}_{{i_3}}}{a^{{i_2}}_{{i_1}}}} - {{a^{{i_2}{i_4}}_{{i_3}{i_1}}}}\\bigr) }");
     }
 
     // three 1-body operators, partial contraction
     {
-      auto opseq1 =
-          FNOperatorSeq({FNOperator({L"i_1"}, {L"i_2"}, V), FNOperator({L"i_3"}, {L"i_4"}, V),
-                         FNOperator({L"i_5"}, {L"i_6"}, V)});
+      auto opseq1 = FNOperatorSeq({FNOperator({L"i_1"}, {L"i_2"}, V),
+                                   FNOperator({L"i_3"}, {L"i_4"}, V),
+                                   FNOperator({L"i_5"}, {L"i_6"}, V)});
       auto wick1 = FWickTheorem{opseq1};
       REQUIRE_NOTHROW(wick1.full_contractions(false).spinfree(false).compute());
-      auto result = FWickTheorem{opseq1}.full_contractions(false).spinfree(false).compute();
+      auto result = FWickTheorem{opseq1}
+                        .full_contractions(false)
+                        .spinfree(false)
+                        .compute();
       REQUIRE(result->is<Sum>());
       REQUIRE(result->size() == 5);
-      REQUIRE(
-          to_latex(result) ==
-              L"{ \\bigl({{s^{{i_3}}_{{i_2}}}{a^{{i_1}{i_5}}_{{i_4}{i_6}}}} + {{s^{{i_3}}_{{i_2}}}{s^{{i_5}}_{{i_4}}}{a^{{i_1}}_{{i_6}}}} - {{s^{{i_5}}_{{i_2}}}{a^{{i_1}{i_3}}_{{i_4}{i_6}}}} + {{s^{{i_5}}_{{i_4}}}{a^{{i_1}{i_3}}_{{i_2}{i_6}}}} + {{a^{{i_1}{i_3}{i_5}}_{{i_2}{i_4}{i_6}}}}\\bigr) }");
+      REQUIRE(to_latex(result) ==
+              L"{ \\bigl({{s^{{i_3}}_{{i_2}}}{a^{{i_1}{i_5}}_{{i_4}{i_6}}}} + {{s^{{i_3}}_{{i_2}}}{s^{{i_5}}_{{i_4}}}{a^{{i_1}}_{{i_6}}}} + {{s^{{i_5}}_{{i_2}}}{a^{{i_1}{i_3}}_{{i_6}{i_4}}}} + {{s^{{i_5}}_{{i_4}}}{a^{{i_1}{i_3}}_{{i_2}{i_6}}}} + {{a^{{i_1}{i_3}{i_5}}_{{i_2}{i_4}{i_6}}}}\\bigr) }");
     }
 
     // two 2-body operators, partial contraction: Eq. 9b of DOI 10.1063/1.474405
     {
       auto opseq =
-          FNOperatorSeq({FNOperator({L"i_1", L"i_2"}, {L"i_3", L"i_4"}, V), FNOperator({L"i_5", L"i_6"}, {L"i_7", L"i_8"}, V)});
+          FNOperatorSeq({FNOperator({L"i_1", L"i_2"}, {L"i_3", L"i_4"}, V),
+                         FNOperator({L"i_5", L"i_6"}, {L"i_7", L"i_8"}, V)});
       auto wick = FWickTheorem{opseq};
       REQUIRE_NOTHROW(wick.full_contractions(false).spinfree(false).compute());
       auto result = wick.full_contractions(false).spinfree(false).compute();
       REQUIRE(result->is<Sum>());
       REQUIRE(result->size() == 7);
       REQUIRE(
-          to_latex(result) == L"{ \\bigl({{s^{{i_5}}_{{i_4}}}{a^{{i_1}{i_2}{i_6}}_{{i_3}{i_7}{i_8}}}} - {{s^{{i_5}}_{{i_4}}}{s^{{i_6}}_{{i_3}}}{a^{{i_1}{i_2}}_{{i_7}{i_8}}}} - {{s^{{i_6}}_{{i_4}}}{a^{{i_1}{i_2}{i_5}}_{{i_3}{i_7}{i_8}}}} + {{s^{{i_6}}_{{i_4}}}{s^{{i_5}}_{{i_3}}}{a^{{i_1}{i_2}}_{{i_7}{i_8}}}} - {{s^{{i_5}}_{{i_3}}}{a^{{i_1}{i_2}{i_6}}_{{i_4}{i_7}{i_8}}}} + {{s^{{i_6}}_{{i_3}}}{a^{{i_1}{i_2}{i_5}}_{{i_4}{i_7}{i_8}}}} + {{a^{{i_1}{i_2}{i_5}{i_6}}_{{i_3}{i_4}{i_7}{i_8}}}}\\bigr) }");
+          to_latex(result) ==
+          L"{ \\bigl({{s^{{i_5}}_{{i_4}}}{a^{{i_1}{i_2}{i_6}}_{{i_3}{i_7}{i_8}}}} + {{s^{{i_5}}_{{i_4}}}{s^{{i_6}}_{{i_3}}}{a^{{i_1}{i_2}}_{{i_8}{i_7}}}} + {{s^{{i_6}}_{{i_4}}}{a^{{i_1}{i_2}{i_5}}_{{i_3}{i_8}{i_7}}}} + {{s^{{i_6}}_{{i_4}}}{s^{{i_5}}_{{i_3}}}{a^{{i_1}{i_2}}_{{i_7}{i_8}}}} + {{s^{{i_5}}_{{i_3}}}{a^{{i_1}{i_2}{i_6}}_{{i_7}{i_4}{i_8}}}} + {{s^{{i_6}}_{{i_3}}}{a^{{i_1}{i_2}{i_5}}_{{i_8}{i_4}{i_7}}}} + {{a^{{i_1}{i_2}{i_5}{i_6}}_{{i_3}{i_4}{i_7}{i_8}}}}\\bigr) }");
     }
 
   }  // SECTION("physical vacuum")
