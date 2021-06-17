@@ -39,11 +39,11 @@ TEST_CASE("TEST_RPN", "[parse_expr]") {
     REQUIRE(rpn.close());
     REQUIRE(rpn.tokens().size() == 3);
     REQUIRE(rpn.tokens().at(0)->is<Operand>());
-    REQUIRE(rpn.tokens().at(0)->as<Number>().expr()->as<Constant>() ==
-            Constant{0.5});
+    REQUIRE(rpn.tokens().at(0)->as<Number>() ==
+            sequant::ex<Constant>(0.5));
     REQUIRE(rpn.tokens().at(1)->is<Operand>());
-    REQUIRE(rpn.tokens().at(1)->as<OperandSequant>().expr()->as<Constant>() ==
-            Constant{0.3});
+    REQUIRE(rpn.tokens().at(1)->as<OperandSequant>() ==
+                sequant::ex<Constant>(0.3));
     REQUIRE(rpn.tokens().at(2)->is<Times>());
   }
 

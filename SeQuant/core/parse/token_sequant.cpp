@@ -32,7 +32,7 @@ Token::type_id_type OperandConstant::type_id() const {
 OperandConstant::OperandConstant(const Constant& expr):
                       expr_{ex<Constant>(expr)} {}
 
-ExprPtr OperandConstant::expr() const { return expr_; }
+OperandConstant::operator ExprPtr() const { return expr_; }
 
 Token::type_id_type OperandTensor::type_id() const {
   return Token::get_type_id<OperandTensor>();
@@ -40,6 +40,6 @@ Token::type_id_type OperandTensor::type_id() const {
 
 OperandTensor::OperandTensor(Tensor const& expr): expr_{ex<Tensor>(expr)} {}
 
-ExprPtr OperandTensor::expr() const { return expr_; }
+OperandTensor::operator ExprPtr() const { return expr_; }
 
 } // namespace

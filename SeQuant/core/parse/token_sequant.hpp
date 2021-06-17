@@ -34,7 +34,7 @@ class OperandSequant: public Operand {
  public:
   ~OperandSequant() override = default;
 
-  [[nodiscard]] virtual ExprPtr expr() const = 0;
+  [[nodiscard]] virtual operator ExprPtr() const = 0;
 
  protected:
   OperandSequant() = default;
@@ -45,7 +45,7 @@ class OperandConstant final: public OperandSequant {
  public:
   explicit OperandConstant(Constant const& expr);
 
-  [[nodiscard]] ExprPtr expr() const override;
+  [[nodiscard]] operator ExprPtr() const override;
 
  private:
   ExprPtr expr_;
@@ -57,7 +57,7 @@ class OperandTensor final : public OperandSequant {
  public:
   explicit OperandTensor(Tensor const & expr);
 
-  [[nodiscard]] ExprPtr expr() const override;
+  [[nodiscard]] operator ExprPtr() const override;
 
  private:
   ExprPtr expr_;
