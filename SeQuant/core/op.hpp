@@ -965,9 +965,12 @@ namespace detail {
 /// converts NormalOperatorSequence to NormalOperator
 /// @tparam S Statistics
 /// @param[in] opseq a NormalOperatorSequence<S> object
+/// @param[in] target_partner_indices ptr to sequence of Index pairs whose Op<S> will act on same particle, if possible; if null, will not be used
 /// @return @c {phase,normal_operator} , where @c phase is +1 or -1, and @c normal_operator is a NormalOperator<S>
+/// @note will try to ensure that Op<S> objects for each there is a pairs of Indices in @p target_index_columns will act on the same particle in the result
 template<Statistics S = Statistics::FermiDirac>
-std::tuple<int, std::shared_ptr<NormalOperator<S>>> normalize(const NormalOperatorSequence<S>& opseq) {
+std::tuple<int, std::shared_ptr<NormalOperator<S>>> normalize(const NormalOperatorSequence<S>& opseq,
+                                                              const container::svector<std::pair<Index,Index>>& target_partner_indices = {}) {
   int phase = 1;
   container::svector<Op<S>> creators, annihilators;
 
@@ -1013,6 +1016,32 @@ std::tuple<int, std::shared_ptr<NormalOperator<S>>> normalize(const NormalOperat
       annihilators.push_back(op);
     });
   });
+
+  // if particle_ops given, reorder to preserve the "original" pairs of Op<S>, if possible
+  if (!target_partner_indices.empty()) {
+    // for every creator Op, in reverse order, if it is in target_index_columns, locate matching annihilator, if any, and
+    const auto ncre = ranges::size(creators);
+    for(std::int64_t p = ncre-1; p >= 0; --p) {  // "reverse" particle index
+      const auto &cre_op = *(creators.begin() + p);
+      auto cre_it_in_index_cols = ranges::find_if(
+          target_partner_indices, [&cre_op](const auto &idx_pair) {
+            return idx_pair.first == cre_op.index();
+          });
+      if (cre_it_in_index_cols != target_partner_indices.end()) {
+        const auto &ann_idx = cre_it_in_index_cols->second;
+        auto ann_it_in_annihilators = ranges::find_if(
+            annihilators,
+            [&ann_idx](const auto &v) { return v.index() == ann_idx; });
+        if (ann_it_in_annihilators != annihilators.end()) {
+          const auto nskipped = ranges::distance(annihilators.begin() + p, ann_it_in_annihilators);
+          if (nskipped != 0) {
+            if (nskipped%2) phase *= -1.;
+            std::swap(*(annihilators.begin() + p), *ann_it_in_annihilators);
+          }
+        }
+      }
+    }
+  }
 
   return std::make_tuple(phase, std::make_shared<NormalOperator<S>>(std::move(creators), std::move(annihilators), vacuum));
 }

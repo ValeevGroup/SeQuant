@@ -46,6 +46,7 @@ jobs:
     - name: Install prerequisites Ubuntu packages
       if: ${{ matrix.os == 'ubuntu-20.04' }}
       run: |
+        sudo apt-get update
         sudo apt-get install ninja-build g++-9 liblapack-dev libboost-dev libeigen3-dev openmpi-bin libopenmpi-dev ccache
     - name: Prepare ccache timestamp
       id: ccache_cache_timestamp
@@ -74,7 +75,7 @@ jobs:
       working-directory: ${{github.workspace}}/build
       shell: bash
       # Execute the build.  You can specify a specific target with "--target <NAME>"
-      run: ccache -p && ccache -z && cmake --build . --config $BUILD_TYPE && ccache -s
+      run: ccache -p && ccache -z && cmake --build . && ccache -s
 
     - name: Test
       working-directory: ${{github.workspace}}/build
@@ -82,4 +83,4 @@ jobs:
       # Execute tests defined by the CMake configuration.  
       # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
       # run: ctest -C $BUILD_TYPE
-      run: cmake --build . --config $BUILD_TYPE --target check-sequant
+      run: cmake --build . --target check-sequant
