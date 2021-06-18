@@ -12,6 +12,7 @@ TEST_CASE("TEST_TOKEN", "[parse_expr]") {
   using sequant::ExprPtr;
   using sequant::IndexList;
   using sequant::Tensor;
+  using sequant::ex;
 
   SECTION("Ctor") {
     REQUIRE_NOTHROW(LeftParenthesis{});
@@ -93,7 +94,7 @@ TEST_CASE("TEST_TOKEN", "[parse_expr]") {
     REQUIRE_NOTHROW(f1->as<Operand>());
     REQUIRE_NOTHROW(f1->as<OperandConstant>());
     REQUIRE_NOTHROW(f1->as<OperandSequant>());
-    REQUIRE(f1->as<OperandSequant>() == sequant::ex<Constant>(2.0));
+    REQUIRE(f1->as<OperandSequant>() == ex<Constant>(2.0));
 
     auto const t1 = token<OperandTensor>(
         Tensor{L"t", IndexList{L"i_1"}, IndexList{L"a_1"}});
@@ -102,8 +103,8 @@ TEST_CASE("TEST_TOKEN", "[parse_expr]") {
     REQUIRE_NOTHROW(t1->as<Operand>());
     REQUIRE_NOTHROW(t1->as<OperandTensor>());
     REQUIRE_NOTHROW(t1->as<OperandSequant>());
-    REQUIRE(t1->as<OperandSequant>().expr()->as<Tensor>() ==
-            Tensor{L"t", IndexList{L"i_1"}, IndexList{L"a_1"}});
+    REQUIRE(t1->as<OperandSequant>()
+        == ex<Tensor>(L"t", IndexList{L"i_1"}, IndexList{L"a_1"}));
   }
 
   SECTION("Operator precedence") {

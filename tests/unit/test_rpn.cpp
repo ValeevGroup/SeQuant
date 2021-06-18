@@ -14,6 +14,7 @@ TEST_CASE("TEST_RPN", "[parse_expr]") {
   using Minus = OperatorMinus;
   using sequant::Constant;
   using sequant::Tensor;
+  using sequant::ex;
 
   auto rpn = ReversePolishNotation{};
 
@@ -58,13 +59,13 @@ TEST_CASE("TEST_RPN", "[parse_expr]") {
     // pos-fix notation:
     //                 '2 2/3 + 1 -'
     REQUIRE(rpn.close());
-    REQUIRE(rpn.tokens().at(0)->as<Number>().expr()->as<Constant>() ==
-            Constant{2});
-    REQUIRE(rpn.tokens().at(1)->as<Number>().expr()->as<Constant>() ==
-            Constant{3});
+    REQUIRE(rpn.tokens().at(0)->as<Number>() ==
+            ex<Constant>(2));
+    REQUIRE(rpn.tokens().at(1)->as<Number>() ==
+            ex<Constant>(3));
     REQUIRE(rpn.tokens().at(2)->is<Plus>());
-    REQUIRE(rpn.tokens().at(3)->as<Number>().expr()->as<Constant>() ==
-            Constant{1});
+    REQUIRE(rpn.tokens().at(3)->as<Number>() ==
+            ex<Constant>(1));
     REQUIRE(rpn.tokens().at(4)->is<Minus>());
   }
 
@@ -83,13 +84,13 @@ TEST_CASE("TEST_RPN", "[parse_expr]") {
     // post-fix notation:
     //             '1 2 * 3 + 3 4 * -'
     REQUIRE(rpn.close());
-    REQUIRE(rpn.tokens().at(0)->as<Number>().expr()->as<Constant>() == Constant{1});
-    REQUIRE(rpn.tokens().at(1)->as<Number>().expr()->as<Constant>() == Constant{2});
+    REQUIRE(rpn.tokens().at(0)->as<Number>() == ex<Constant>(1));
+    REQUIRE(rpn.tokens().at(1)->as<Number>() == ex<Constant>(2));
     REQUIRE(rpn.tokens().at(2)->is<Times>());
-    REQUIRE(rpn.tokens().at(3)->as<Number>().expr()->as<Constant>() == Constant{3});
+    REQUIRE(rpn.tokens().at(3)->as<Number>() == ex<Constant>(3));
     REQUIRE(rpn.tokens().at(4)->is<Plus>());
-    REQUIRE(rpn.tokens().at(5)->as<Number>().expr()->as<Constant>() == Constant{3});
-    REQUIRE(rpn.tokens().at(6)->as<Number>().expr()->as<Constant>() == Constant{4});
+    REQUIRE(rpn.tokens().at(5)->as<Number>() == ex<Constant>(3));
+    REQUIRE(rpn.tokens().at(6)->as<Number>() == ex<Constant>(4));
     REQUIRE(rpn.tokens().at(7)->is<Times>());
     REQUIRE(rpn.tokens().at(8)->is<Minus>());
   }
@@ -106,10 +107,10 @@ TEST_CASE("TEST_RPN", "[parse_expr]") {
     rpn.add_operand(token<Number>(Constant{3}));
     // post-fix notation: '1 2 + 3 *'
     REQUIRE(rpn.close());
-    REQUIRE(rpn.tokens().at(0)->as<Number>().expr()->as<Constant>() == Constant{1});
-    REQUIRE(rpn.tokens().at(1)->as<Number>().expr()->as<Constant>() == Constant{2});
+    REQUIRE(rpn.tokens().at(0)->as<Number>() == ex<Constant>(1));
+    REQUIRE(rpn.tokens().at(1)->as<Number>() == ex<Constant>(2));
     REQUIRE(rpn.tokens().at(2)->is<Plus>());
-    REQUIRE(rpn.tokens().at(3)->as<Number>().expr()->as<Constant>() == Constant{3});
+    REQUIRE(rpn.tokens().at(3)->as<Number>() == ex<Constant>(3));
     REQUIRE(rpn.tokens().at(4)->is<Times>());
 
     // expression: '(3 * (4 + 9 - 10) + 2) - 12'
@@ -132,16 +133,16 @@ TEST_CASE("TEST_RPN", "[parse_expr]") {
     // post-fix notation:
     //             '3 4 9 + 10 - * 2 + 12 -'
     REQUIRE(rpn.close());
-    REQUIRE(rpn.tokens().at(0)->as<Number>().expr()->as<Constant>() == Constant{3});
-    REQUIRE(rpn.tokens().at(1)->as<Number>().expr()->as<Constant>() == Constant{4});
-    REQUIRE(rpn.tokens().at(2)->as<Number>().expr()->as<Constant>() == Constant{9});
+    REQUIRE(rpn.tokens().at(0)->as<Number>() == ex<Constant>(3));
+    REQUIRE(rpn.tokens().at(1)->as<Number>() == ex<Constant>(4));
+    REQUIRE(rpn.tokens().at(2)->as<Number>() == ex<Constant>(9));
+    REQUIRE(rpn.tokens().at(4)->as<Number>() == ex<Constant>(10));
+    REQUIRE(rpn.tokens().at(7)->as<Number>() == ex<Constant>(2));
+    REQUIRE(rpn.tokens().at(9)->as<Number>() == ex<Constant>(12));
     REQUIRE(rpn.tokens().at(3)->is<Plus>());
-    REQUIRE(rpn.tokens().at(4)->as<Number>().expr()->as<Constant>() == Constant{10});
     REQUIRE(rpn.tokens().at(5)->is<Minus>());
     REQUIRE(rpn.tokens().at(6)->is<Times>());
-    REQUIRE(rpn.tokens().at(7)->as<Number>().expr()->as<Constant>() == Constant{2});
     REQUIRE(rpn.tokens().at(8)->is<Plus>());
-    REQUIRE(rpn.tokens().at(9)->as<Number>().expr()->as<Constant>() == Constant{12});
     REQUIRE(rpn.tokens().at(10)->is<Minus>());
   }
 }
