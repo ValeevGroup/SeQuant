@@ -4,6 +4,8 @@
 
 #include "rpn.hpp"
 
+#include <cassert>
+
 namespace sequant::parse {
 
 bool ReversePolishNotation::add_operator(token_ptr oprtr) {
