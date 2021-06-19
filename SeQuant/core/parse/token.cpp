@@ -2,6 +2,8 @@
 // Created by Bimal Gaudel on 6/12/21.
 //
 #include "token.hpp"
+#include <atomic>
+
 namespace sequant::parse {
 
 Token::type_id_type Token::get_next_type_id() {
