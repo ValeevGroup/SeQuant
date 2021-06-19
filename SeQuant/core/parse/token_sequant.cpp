@@ -29,17 +29,9 @@ Token::type_id_type OperatorMinus::type_id() const {
 Token::type_id_type OperandConstant::type_id() const {
   return Token::get_type_id<OperandConstant>();
 }
-OperandConstant::OperandConstant(const Constant& expr):
-                      expr_{ex<Constant>(expr)} {}
-
-OperandConstant::operator ExprPtr() const { return expr_; }
 
 Token::type_id_type OperandTensor::type_id() const {
   return Token::get_type_id<OperandTensor>();
 }
-
-OperandTensor::OperandTensor(Tensor const& expr): expr_{ex<Tensor>(expr)} {}
-
-OperandTensor::operator ExprPtr() const { return expr_; }
 
 } // namespace

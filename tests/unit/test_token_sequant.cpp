@@ -21,8 +21,8 @@ TEST_CASE("TEST_TOKEN", "[parse_expr]") {
     REQUIRE_NOTHROW(OperatorPlus{});
     REQUIRE_NOTHROW(OperatorMinus{});
     REQUIRE_NOTHROW(
-        OperandTensor{Tensor{L"t", IndexList{L"a_1"}, IndexList{L"i_1"}}});
-    REQUIRE_NOTHROW(OperandConstant{Constant{1.0}});
+        OperandTensor{L"t", IndexList{L"a_1"}, IndexList{L"i_1"}});
+    REQUIRE_NOTHROW(OperandConstant{1.0});
   }
 
   SECTION("Id") {
@@ -51,13 +51,15 @@ TEST_CASE("TEST_TOKEN", "[parse_expr]") {
     REQUIRE(minus.is<Operator>());
     REQUIRE_FALSE(minus.is<Operand>());
 
-    auto const fraction = OperandConstant{Constant{42}};
+    auto const fraction = OperandConstant{42};
     REQUIRE(fraction.is<OperandConstant>());
     REQUIRE(fraction.is<Operand>());
     REQUIRE_FALSE(fraction.is<Operator>());
 
     auto const tensor =
-        OperandTensor{Tensor{L"t", IndexList{L"a_1"}, IndexList{L"i_1"}}};
+        OperandTensor{L"t",
+                      IndexList{L"a_1"},
+                      IndexList{L"i_1"}};
     REQUIRE(tensor.is<OperandTensor>());
     REQUIRE(tensor.is<Operand>());
     REQUIRE_FALSE(tensor.is<Operator>());
@@ -88,23 +90,23 @@ TEST_CASE("TEST_TOKEN", "[parse_expr]") {
     REQUIRE_NOTHROW(om->as<Operator>());
     REQUIRE_NOTHROW(om->as<OperatorMinus>());
 
-    auto const f1 = token<OperandConstant>(Constant{2.0});
+    auto const f1 = token<OperandConstant>(2.0);
     REQUIRE(f1->is<Operand>());
     REQUIRE(f1->is<OperandConstant>());
     REQUIRE_NOTHROW(f1->as<Operand>());
     REQUIRE_NOTHROW(f1->as<OperandConstant>());
-    REQUIRE_NOTHROW(f1->as<OperandSequant>());
-    REQUIRE(f1->as<OperandSequant>() == ex<Constant>(2.0));
+    REQUIRE(f1->as<OperandConstant>().clone() == ex<Constant>(2.0));
 
-    auto const t1 = token<OperandTensor>(
-        Tensor{L"t", IndexList{L"i_1"}, IndexList{L"a_1"}});
+    auto const t1 = token<OperandTensor>(L"t",
+                                         IndexList{L"i_1"},
+                                         IndexList{L"a_1"});
     REQUIRE(t1->is<Operand>());
     REQUIRE(t1->is<OperandTensor>());
     REQUIRE_NOTHROW(t1->as<Operand>());
     REQUIRE_NOTHROW(t1->as<OperandTensor>());
-    REQUIRE_NOTHROW(t1->as<OperandSequant>());
-    REQUIRE(t1->as<OperandSequant>()
-        == ex<Tensor>(L"t", IndexList{L"i_1"}, IndexList{L"a_1"}));
+    REQUIRE(t1->as<OperandTensor>().clone() == ex<Tensor>(L"t",
+                                              IndexList{L"i_1"},
+                                              IndexList{L"a_1"}));
   }
 
   SECTION("Operator precedence") {

@@ -30,39 +30,24 @@ struct OperatorMinus : public Operator {
   [[nodiscard]] Token::type_id_type type_id() const override;
 };
 
-class OperandSequant: public Operand {
+class OperandConstant final: public Operand, public Constant {
  public:
-  ~OperandSequant() override = default;
-
-  [[nodiscard]] virtual operator ExprPtr() const = 0;
-
- protected:
-  OperandSequant() = default;
-};
-
-
-class OperandConstant final: public OperandSequant {
- public:
-  explicit OperandConstant(Constant const& expr);
-
-  [[nodiscard]] operator ExprPtr() const override;
+  using Constant::Constant;
+  using Operand::is;
+  using Operand::as;
 
  private:
-  ExprPtr expr_;
-
-  [[nodiscard]] Token::type_id_type type_id() const override;
+  Token::type_id_type type_id() const override;
 };
 
-class OperandTensor final : public OperandSequant {
+class OperandTensor final: public Operand, public Tensor {
  public:
-  explicit OperandTensor(Tensor const & expr);
-
-  [[nodiscard]] operator ExprPtr() const override;
+  using Tensor::Tensor;
+  using Operand::is;
+  using Operand::as;
 
  private:
-  ExprPtr expr_;
-
-  [[nodiscard]] Token::type_id_type type_id() const override;
+  Token::type_id_type type_id() const override;
 };
 
 } // namespace
