@@ -5,6 +5,7 @@
 #ifndef SEQUANT_PARSE_EXPR_TOKEN_HPP
 #define SEQUANT_PARSE_EXPR_TOKEN_HPP
 
+#include <cassert>
 #include <memory>
 #include <string>
 
@@ -49,8 +50,8 @@ class Token {
     if constexpr (std::is_same_v<std::decay_t<T>, Token>)
       return true;
     else
-      return this->type_id() == get_type_id<std::decay_t<T>>()
-          || dynamic_cast<std::decay_t<T> const *>(this);
+      return this->type_id() == get_type_id<std::decay_t<T>>() ||
+             dynamic_cast<std::decay_t<T> const *>(this);
   }
 
   /// @tparam T a Token type
@@ -62,7 +63,7 @@ class Token {
   }
 };
 
-class Operator: public Token {
+class Operator : public Token {
  public:
   ~Operator() override = default;
 
@@ -72,7 +73,7 @@ class Operator: public Token {
   Operator() = default;
 };
 
-class Operand: public Token {
+class Operand : public Token {
  public:
   ~Operand() override = default;
 
@@ -88,11 +89,11 @@ struct RightParenthesis : public Token {
   [[nodiscard]] Token::type_id_type type_id() const override;
 };
 
-template <typename T, typename ... Args>
-std::unique_ptr<Token> token(Args &&... args){
+template <typename T, typename... Args>
+std::unique_ptr<Token> token(Args &&...args) {
   return std::make_unique<T>(std::forward<Args>(args)...);
 }
 
-}  // namespace
+}  // namespace sequant::parse
 
 #endif  // SEQUANT_PARSE_EXPR_TOKEN_HPP
