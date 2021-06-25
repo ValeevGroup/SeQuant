@@ -12,21 +12,43 @@
 
 namespace sequant::parse {
 
-struct OperatorTimes : public Operator {
+class OperatorTimes : public Operator {
+ public:
   [[nodiscard]] int precedence() const override;
 
+ private:
   [[nodiscard]] Token::type_id_type type_id() const override;
 };
 
-struct OperatorPlus : public Operator {
+class OperatorPlus : public Operator {
+ public:
   [[nodiscard]] int precedence() const override;
 
+ private:
   [[nodiscard]] Token::type_id_type type_id() const override;
 };
 
-struct OperatorMinus : public Operator {
+class OperatorMinus : public Operator {
+ public:
   [[nodiscard]] int precedence() const override;
 
+ private:
+  [[nodiscard]] Token::type_id_type type_id() const override;
+};
+
+class OperatorPlusUnary: public Operator {
+ public:
+  [[nodiscard]] int precedence() const override;
+
+ private:
+  [[nodiscard]] Token::type_id_type type_id() const override;
+};
+
+class OperatorMinusUnary: public Operator {
+ public:
+  [[nodiscard]] int precedence() const override;
+
+ private:
   [[nodiscard]] Token::type_id_type type_id() const override;
 };
 

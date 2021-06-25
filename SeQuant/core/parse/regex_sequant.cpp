@@ -46,7 +46,7 @@ std::wstring_view regex_patterns::indices() {
 }
 
 std::wstring_view regex_patterns::bra_expanded() {
-  static const std::wstring bra = L"\\_\\{"s
+  static const std::wstring bra = L"_\\{"s
                                   + indices().data()
                                   + L"\\}";
   return bra;
@@ -60,7 +60,7 @@ std::wstring_view regex_patterns::ket_expanded() {
 }
 
 std::wstring_view regex_patterns::bra_expanded_capture() {
-  static const std::wstring bra = L"\\_\\{"s
+  static const std::wstring bra = L"_\\{"s
                                   + capture(indices())
                                   + L"\\}";
   return bra;
@@ -80,8 +80,9 @@ std::wstring_view regex_patterns::fraction() {
 }
 
 std::wstring_view regex_patterns::tensor_expanded() {
-  static const std::wstring bk = look_ahead(L"\\S*?"s
-                                            + bra_expanded_capture().data())
+  static const std::wstring tensor = capture(L"\\w+")
+                                     + look_ahead(L"\\S*?"s
+                                     + bra_expanded_capture().data())
                                  + look_ahead(L"\\S*?"s
                                               + ket_expanded_capture().data())
                                  + this_or_that(L""s
@@ -89,9 +90,10 @@ std::wstring_view regex_patterns::tensor_expanded() {
                                                     + ket_expanded().data(),
                                                 L""s
                                                     + ket_expanded().data()
-                                                    + bra_expanded().data());
+                                                    + bra_expanded().data())
+                                 + capture_not(L":" + capture(L"A|S|N"))
+                                 + L"?";
 
-  static const std::wstring tensor = capture(L"\\w+") + bk;
   return tensor;
 }
 
@@ -101,7 +103,9 @@ std::wstring_view regex_patterns::tensor_terse() {
                                      + capture(indices())
                                      + L";"
                                      + capture(indices())
-                                     + L"\\}";
+                                     + L"\\}"
+                                     + capture_not(L":" + capture(L"A|S|N"))
+                                     + L"?";
   return tensor;
 }
 

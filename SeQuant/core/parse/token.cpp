@@ -19,4 +19,7 @@ Token::type_id_type RightParenthesis::type_id() const {
   return Token::get_type_id<RightParenthesis>();
 }
 
+Token::type_id_type TokenDummy::type_id() const {
+  return Token::get_type_id<TokenDummy>();
+}
 }  // namespace sequant::parse

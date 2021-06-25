@@ -89,6 +89,10 @@ struct RightParenthesis : public Token {
   [[nodiscard]] Token::type_id_type type_id() const override;
 };
 
+struct TokenDummy: public Token {
+  [[nodiscard]] Token::type_id_type type_id() const override;
+};
+
 template <typename T, typename... Args>
 std::unique_ptr<Token> token(Args &&...args) {
   return std::make_unique<T>(std::forward<Args>(args)...);
