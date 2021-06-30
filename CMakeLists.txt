@@ -311,6 +311,15 @@ add_executable(${example3} EXCLUDE_FROM_ALL
     examples/${example3}/${example3}.cpp)
 target_link_libraries(${example3} SeQuant ${TBB_LIBRARIES})
 
+set(example4 antisymmetrizer_test)
+add_executable(${example4} EXCLUDE_FROM_ALL
+        examples/${example4}/antisymmetrizer.hpp
+        examples/${example4}/${example4}.cpp)
+target_link_libraries(${example4} SeQuant ${TBB_LIBRARIES})
+target_link_directories(${example4} PUBLIC ${TBB_LIBRARIES})
+target_compile_definitions(${example4} PRIVATE SEQUANT_HAS_TILEDARRAY)
+
+
 # add tests for running examples
 set (lastexample 4)
 foreach(i RANGE ${lastexample})
