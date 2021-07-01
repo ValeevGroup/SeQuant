@@ -21,28 +21,47 @@ TEST_CASE("TEST_EVAL_EXPR", "[EvalExpr]") {
     const auto& c2 = EvalExpr{p1->at(0)->as<Tensor>()};
     const auto& c3 = EvalExpr{p1->at(1)->as<Tensor>()};
 
-    REQUIRE_NOTHROW(EvalExpr{c2, c3});
+    REQUIRE_NOTHROW(EvalExpr{c2, c3, EvalOp::Prod});
   }
 
-  SECTION("Eval ops_met") {
+  SECTION("EvalExpr::EvalOp types") {
     auto t1 = parse_expr_asymm(L"t_{i1, i2}^{a1, a2}");
 
     auto x1 = EvalExpr(t1->as<Tensor>());
 
-    REQUIRE(x1.op() == EvalExpr::EvalOp::Id);
+    REQUIRE(x1.op() == EvalOp::Id);
 
     auto p1 = parse_expr_asymm(L"g_{i3,a1}^{i1,i2} * t_{a2}^{a3}");
 
     const auto& c2 = EvalExpr{p1->at(0)->as<Tensor>()};
     const auto& c3 = EvalExpr{p1->at(1)->as<Tensor>()};
-    const auto& c4 = EvalExpr{c2, c3};
-    REQUIRE(c4.op() == EvalExpr::EvalOp::Prod);
+    const auto& c4 = EvalExpr{c2, c3, EvalOp::Prod};
+    REQUIRE(c4.op() == EvalOp::Prod);
 
     const auto c5 =
         EvalExpr{parse_expr_asymm(L"I^{i3,a1}_{i1,i2}")->as<Tensor>()};
-    const auto& c6 = EvalExpr{c2, c5};
+    const auto& c6 = EvalExpr{c2, c5, EvalOp::Sum};
 
-    REQUIRE(c6.op() == EvalExpr::EvalOp::Sum);
+    REQUIRE(c6.op() == EvalOp::Sum);
+
+    auto x2 = EvalExpr(parse_expr_asymm(L"A_{a_1, a_2}^{i_1, i_2}")->as<Tensor>());
+    REQUIRE(x2.op() == EvalOp::Id);
+
+    auto p2 = parse_expr_asymm(L"A{a1,a2;i1,i2} * I{a1,a2;i1,i2}");
+    auto const x3 = EvalExpr{p2->at(0)->as<Tensor>()};
+    auto const x4 = EvalExpr{p2->at(1)->as<Tensor>()};
+    auto const x5 = EvalExpr{x3, x4, EvalOp::Antisymm};
+    std::wcout << "p2 = " << p2->to_latex() << std::endl;
+    std::wcout << "x3.tensor() = " << x3.tensor().to_latex() << std::endl;
+    std::wcout << "x4.tensor() = " << x4.tensor().to_latex() << std::endl;
+    std::wcout << "x5.tensor() = " << x5.tensor().to_latex() << std::endl;
+    REQUIRE(x5.op() == EvalOp::Antisymm);
+
+    auto p3 = parse_expr(L"S{a1,a2;i1,i2}:S * I{a1,a2;i1,i2}", Symmetry::nonsymm);
+    auto const x6 = EvalExpr{p3->at(0)->as<Tensor>()};
+    auto const x7 = EvalExpr{p3->at(1)->as<Tensor>()};
+    auto const x8 = EvalExpr{x6, x7, EvalOp::Symm};
+    REQUIRE(x8.op() == EvalOp::Symm);
   }
 
   SECTION("Sequant expression") {
@@ -58,7 +77,7 @@ TEST_CASE("TEST_EVAL_EXPR", "[EvalExpr]") {
     REQUIRE(*t1 == x1.tensor());
     REQUIRE(*t2 == x2.tensor());
 
-    const auto& x3 = EvalExpr{x1, x2};
+    const auto& x3 = EvalExpr{x1, x2, EvalOp::Prod};
 
     REQUIRE_NOTHROW(x3.tensor());
 
@@ -72,7 +91,7 @@ TEST_CASE("TEST_EVAL_EXPR", "[EvalExpr]") {
                                                  L"a_2"} |
         ranges::to<container::set<std::wstring_view>>;
 
-    REQUIRE(x3.op() == EvalExpr::EvalOp::Prod);
+    REQUIRE(x3.op() == EvalOp::Prod);
 
     REQUIRE(prod_indices == expected_indices);
 
@@ -80,8 +99,8 @@ TEST_CASE("TEST_EVAL_EXPR", "[EvalExpr]") {
     const auto t5 =
         parse_expr_asymm(L"I_{a1,a2,a3,a4}^{i1,i2,i3,i4}")->as<Tensor>();
 
-    const auto& x45 = EvalExpr{EvalExpr{t4}, EvalExpr{t5}};
-    const auto& x54 = EvalExpr{EvalExpr{t5}, EvalExpr{t4}};
+    const auto& x45 = EvalExpr{EvalExpr{t4}, EvalExpr{t5}, EvalOp::Prod};
+    const auto& x54 = EvalExpr{EvalExpr{t5}, EvalExpr{t4}, EvalOp::Prod};
 
     REQUIRE(x45.tensor().to_latex() ==
             parse_expr_asymm(L"I_{a1,a2}^{i1,i2}")->to_latex());
@@ -96,8 +115,8 @@ TEST_CASE("TEST_EVAL_EXPR", "[EvalExpr]") {
     const auto& x1 = EvalExpr{t1};
     const auto& x2 = EvalExpr{t2};
 
-    const auto& x12 = EvalExpr{x1, x2};
-    const auto& x21 = EvalExpr{x2, x1};
+    const auto& x12 = EvalExpr{x1, x2, EvalOp::Prod};
+    const auto& x21 = EvalExpr{x2, x1, EvalOp::Prod};
 
     REQUIRE(x1.hash() == x2.hash());
     REQUIRE(x12.hash() == x21.hash());
@@ -114,7 +133,7 @@ TEST_CASE("TEST_EVAL_EXPR", "[EvalExpr]") {
     const auto t1 = parse_expr_asymm(L"g_{i3,i4}^{i1,i2}")->as<Tensor>();
     const auto t2 = parse_expr_asymm(L"t_{a1,a2}^{i3,i4}")->as<Tensor>();
 
-    const auto x12 = EvalExpr{EvalExpr{t1}, EvalExpr{t2}};
+    const auto x12 = EvalExpr{EvalExpr{t1}, EvalExpr{t2}, EvalOp::Prod};
 
     REQUIRE(x12.tensor().symmetry() == Symmetry::antisymm);
 
@@ -124,7 +143,7 @@ TEST_CASE("TEST_EVAL_EXPR", "[EvalExpr]") {
     const auto t4 =
         parse_expr(L"t_{a1,a2}^{i3,i4}", Symmetry::symm)->as<Tensor>();
 
-    const auto x34 = EvalExpr{EvalExpr{t3}, EvalExpr{t4}};
+    const auto x34 = EvalExpr{EvalExpr{t3}, EvalExpr{t4}, EvalOp::Prod};
 
     REQUIRE(x34.tensor().symmetry() == Symmetry::symm);
 
@@ -132,7 +151,7 @@ TEST_CASE("TEST_EVAL_EXPR", "[EvalExpr]") {
     const auto t5 = parse_expr(L"f_{i1}^{a1}", Symmetry::nonsymm)->as<Tensor>();
     const auto t6 = parse_expr(L"f_{i2}^{a2}", Symmetry::nonsymm)->as<Tensor>();
 
-    const auto& x56 = EvalExpr{EvalExpr{t5}, EvalExpr{t6}};
+    const auto& x56 = EvalExpr{EvalExpr{t5}, EvalExpr{t6}, EvalOp::Prod};
 
     REQUIRE(x56.tensor().symmetry() == Symmetry::symm);
 
@@ -140,7 +159,7 @@ TEST_CASE("TEST_EVAL_EXPR", "[EvalExpr]") {
     const auto t7 = parse_expr_asymm(L"g_{a1,a2}^{i1,a3}")->as<Tensor>();
     const auto t8 = parse_expr_asymm(L"t_{a3}^{i2}")->as<Tensor>();
 
-    const auto x78 = EvalExpr{EvalExpr{t7}, EvalExpr{t8}};
+    const auto x78 = EvalExpr{EvalExpr{t7}, EvalExpr{t8}, EvalOp::Prod};
 
     REQUIRE(x78.tensor().symmetry() == Symmetry::nonsymm);
   }
@@ -153,7 +172,7 @@ TEST_CASE("TEST_EVAL_EXPR", "[EvalExpr]") {
     auto symmetry = [](const EvalExpr& x) { return x.tensor().symmetry(); };
 
     auto imed = [](const Tensor& t1, const Tensor& t2) {
-      return EvalExpr{EvalExpr{t1}, EvalExpr{t2}};
+      return EvalExpr{EvalExpr{t1}, EvalExpr{t2}, EvalOp::Sum};
     };
 
     const auto t1 = tensor(Symmetry::antisymm);
