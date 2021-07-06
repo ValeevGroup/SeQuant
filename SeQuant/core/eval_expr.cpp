@@ -1,10 +1,12 @@
 #include "eval_expr.hpp"
 
+#include <cassert>
+
 namespace sequant {
 
 EvalExpr::hash_t EvalExpr::hash() const { return hash_; }
 
-EvalExpr::EvalOp EvalExpr::op() const { return op_; }
+EvalOp EvalExpr::op() const { return op_; }
 
 const Tensor& EvalExpr::tensor() const { return tensor_; }
 
@@ -17,58 +19,51 @@ EvalExpr::EvalExpr(const Tensor& tnsr) : op_{EvalOp::Id}, tensor_{tnsr} {
   hash_ = EvalExpr::hash_terminal_tensor(tensor_);
 }
 
-EvalExpr::EvalExpr(const EvalExpr& expr1, const EvalExpr& expr2) {
-  const auto& sxpr1 = expr1.tensor();
-  const auto& sxpr2 = expr2.tensor();
+EvalExpr::EvalExpr(const EvalExpr& xpr1,
+                   const EvalExpr& xpr2,
+                   EvalOp op) {
+  assert(op != EvalOp::Id);
+  auto const& expr1 = xpr1.hash() < xpr2.hash() ? xpr1 : xpr2;
+  auto const& expr2 = xpr1.hash() < xpr2.hash() ? xpr2 : xpr1;
 
-  // canonicalization based on hash value
-  // re-order eval sequence ( -- doesn't swap values though)
-  // to obtain the equivalence of the kind
-  // AB == BA for a binary operation between A and B
+  auto bk = braket_type{};
+  if (op == EvalOp::Prod)
+    bk = target_braket_prod(expr1.tensor(), expr2.tensor());
+  else {
+    std::get<0>(bk) = expr1.tensor().bra()
+                      | ranges::to<index_container_type>;
+    std::get<1>(bk) = expr1.tensor().ket()
+                      | ranges::to<index_container_type>;
+  }
 
-  auto swap_on = expr2.hash() < expr1.hash();
+  auto const& t1 = expr1.tensor();
+  auto const& t2 = expr2.tensor();
+  Symmetry s = Symmetry::invalid;
+  switch (op) {
+    case EvalOp::Sum: s = infer_tensor_symmetry_sum(expr1, expr2); break;
+    case EvalOp::Prod: s = infer_tensor_symmetry_prod(expr1, expr2); break;
+    case EvalOp::Symm: s = Symmetry::symm; break;
+    case EvalOp::Antisymm: s = Symmetry::antisymm; break;
+    default: assert(false && "Unsupported operation for symmetry detect.");
+  }
+  op_ = op;
 
-  op_ = EvalExpr::infer_eval_op(sxpr1, sxpr2);
-  tensor_ = swap_on ? EvalExpr::make_imed_expr(expr2, expr1, op())
-                    : EvalExpr::make_imed_expr(expr1, expr2, op());
-  // compute phase
+  tensor_ = Tensor{L"I",
+      std::get<0>(bk),
+      std::get<1>(bk),
+      s, infer_braket_symmetry(), infer_particle_symmetry(s)};
+
+  // canonicalize and compute phase
   if (auto canon_biprod = tensor_.canonicalize(); canon_biprod)
     scalar_ *= canon_biprod->as<Constant>();
 
-  hash_ = swap_on ? EvalExpr::hash_imed(expr2, expr1, op())
-                  : EvalExpr::hash_imed(expr1, expr2, op());
+  hash_ = hash_imed(expr1, expr2, op);
 }
 
-EvalExpr::EvalOp EvalExpr::infer_eval_op(const Tensor& tnsr1,
-                                         const Tensor& tnsr2) {
-  // HELPER LAMBDA
-  // checks if a given index exists in a container
-  auto index_exists = [](const auto& container, const auto& index) -> bool {
-    return ranges::any_of(container, [l = index.label()](const auto& x) {
-      return x.label() == l;
-    });
-  };
-  // HELPER LAMBDA END
-
-  if (tnsr1.rank() == tnsr2.rank()) {
-    for (const auto& idx : tnsr1.const_braket())
-      if (!(index_exists(tnsr2.const_braket(), idx))) {
-        // found an index that doesn't exist
-        // in the other tensor
-        return EvalOp::Prod;
-      }
-
-    return EvalOp::Sum;  // all indices in any, exist in the other
-  }
-
-  // rank not equal: must be a product
-  return EvalOp::Prod;
-}
-
-Symmetry EvalExpr::infer_tensor_symmetry_sum(const Tensor& tnsr1,
-                                             const Tensor& tnsr2) {
-  auto sym1 = tnsr1.symmetry();
-  auto sym2 = tnsr2.symmetry();
+Symmetry EvalExpr::infer_tensor_symmetry_sum(EvalExpr const& xpr1,
+                                             EvalExpr const& xpr2) {
+  auto sym1 = xpr1.tensor().symmetry();
+  auto sym2 = xpr2.tensor().symmetry();
   if (sym1 == sym2)
     return sym1;  // sum of symm/symm or antisymm/antisymm tensors
 
@@ -79,8 +74,8 @@ Symmetry EvalExpr::infer_tensor_symmetry_sum(const Tensor& tnsr1,
   return Symmetry::nonsymm;
 }
 
-Symmetry EvalExpr::infer_tensor_symmetry_prod(const Tensor& tnsr1,
-                                              const Tensor& tnsr2) {
+Symmetry EvalExpr::infer_tensor_symmetry_prod(EvalExpr const& xpr1,
+                                              EvalExpr const& xpr2) {
   // HELPER LAMBDA
   // check if all the indices in cont1 are in cont2 AND vice versa
   auto all_common_indices = [](const auto& cont1, const auto& cont2) -> bool {
@@ -90,6 +85,23 @@ Symmetry EvalExpr::infer_tensor_symmetry_prod(const Tensor& tnsr1,
            (cont2 | ranges::to<container::set<Index, Index::LabelCompare>>);
   };
   // //////
+
+  auto const& tnsr1 = xpr1.tensor();
+  auto const& tnsr2 = xpr2.tensor();
+
+  if (xpr1.hash() == xpr2.hash()){
+    // potential outer product
+
+    auto const uniq_idxs = ranges::views::concat(tnsr1.const_braket(),
+                                                tnsr2.const_braket())
+                          | ranges::to<container::set<Index,
+                                                       Index::LabelCompare>>;
+
+    if (ranges::distance(uniq_idxs) == tnsr1.const_braket().size()
+                                     + tnsr2.const_braket().size()) {
+      return Symmetry::symm;
+    }
+  }
 
   bool whole_bk_contracted = (all_common_indices(tnsr1.bra(), tnsr2.ket()) ||
                               all_common_indices(tnsr1.ket(), tnsr2.bra()));
@@ -110,11 +122,6 @@ ParticleSymmetry EvalExpr::infer_particle_symmetry(Symmetry s) {
 
 BraKetSymmetry EvalExpr::infer_braket_symmetry() {
   return get_default_context().braket_symmetry();
-}
-
-EvalExpr::braket_type EvalExpr::target_braket_sum(const Tensor& tnsr1,
-                                                  const Tensor& tnsr2) {
-  return EvalExpr::braket_type{tnsr1.bra(), tnsr1.ket()};
 }
 
 EvalExpr::braket_type EvalExpr::target_braket_prod(const Tensor& tnsr1,
@@ -208,37 +215,6 @@ EvalExpr::hash_t EvalExpr::hash_imed(const EvalExpr& expr1,
   }
 
   return imedHash;
-}
-
-Tensor EvalExpr::make_imed_expr(const EvalExpr& expr1, const EvalExpr& expr2,
-                                EvalOp op) {
-  assert(op != EvalOp::Id);
-
-  const auto& t1 = expr1.tensor();
-  const auto& t2 = expr2.tensor();
-
-  auto [bra, ket] = (op == EvalOp::Sum)                        //
-                        ? EvalExpr::target_braket_sum(t1, t2)  //
-                        : EvalExpr::target_braket_prod(t1, t2);
-
-  Symmetry tensorSym;  // init only
-
-  if ((expr1.hash() == expr2.hash()) &&
-      (bra.size() + ket.size() == 2 * (t1.rank() + t2.rank()))) {
-    // outer product
-    tensorSym = Symmetry::symm;
-  } else {
-    tensorSym = (op == EvalOp::Sum)
-                    ? EvalExpr::infer_tensor_symmetry_sum(t1, t2)
-                    : EvalExpr::infer_tensor_symmetry_prod(t1, t2);
-  }
-
-  return Tensor{L"I",
-                bra,
-                ket,
-                tensorSym,
-                EvalExpr::infer_braket_symmetry(),
-                EvalExpr::infer_particle_symmetry(tensorSym)};
 }
 
 }  // namespace sequant

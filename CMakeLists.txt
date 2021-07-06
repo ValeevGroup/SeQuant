@@ -190,15 +190,23 @@ add_library(SeQuant
         SeQuant/core/asy_cost.cpp
         SeQuant/core/eval_node.hpp
         SeQuant/core/eval_node.cpp
+        SeQuant/core/parse_expr.cpp
+        SeQuant/core/parse_expr.hpp
         SeQuant/core/optimize/optimize.hpp
         SeQuant/core/optimize/optimize.cpp
+        SeQuant/core/parse/token.hpp
+        SeQuant/core/parse/token.cpp
+        SeQuant/core/parse/token_sequant.hpp
+        SeQuant/core/parse/token_sequant.cpp
+        SeQuant/core/parse/rpn.hpp
+        SeQuant/core/parse/rpn.cpp
+        SeQuant/core/parse/regex_sequant.hpp
+        SeQuant/core/parse/regex_sequant.cpp
         SeQuant/domain/eqs/cceqs.hpp
         SeQuant/domain/eqs/cceqs.cpp
         SeQuant/domain/eval/eval.hpp
         SeQuant/domain/eval/read_tensor.hpp
         SeQuant/domain/eval/read_tensor.cpp
-        SeQuant/core/parse_expr.cpp
-        SeQuant/core/parse_expr.hpp
         SeQuant/domain/utils/rand_color.cpp
         SeQuant/domain/utils/rand_color.hpp
         SeQuant/domain/utils/cache_manager.hpp
@@ -262,10 +270,11 @@ set(utests_src
          tests/unit/test_asy_cost.cpp
          tests/unit/test_eval_node.cpp
          tests/unit/test_optimize.cpp
+         tests/unit/test_token_sequant.cpp
+         tests/unit/test_rpn.cpp
         )
 
 if (TARGET tiledarray)
-    message("tiledarray found")
     list(APPEND utests_src
         SeQuant/domain/eval/eval_ta.hpp
         tests/unit/test_eval_ta.cpp
@@ -308,28 +317,36 @@ add_executable(${example1} EXCLUDE_FROM_ALL
 target_link_libraries(${example1} SeQuant ${TBB_LIBRARIES})
 
 if (TARGET tiledarray)
-    set(example2 eval_ta)
+    set(example2 eval_ta_ccsd)
     add_executable(${example2} EXCLUDE_FROM_ALL
         SeQuant/domain/eval/read_tensor_ta.hpp
         SeQuant/domain/eval/read_tensor_ta.cpp
         SeQuant/domain/eval/eval_ta.hpp
-        examples/eval/eval_ta.cpp)
+        examples/eval/eval_ta_ccsd.cpp)
     target_link_libraries(${example2} SeQuant ${TBB_LIBRARIES} tiledarray)
+
+    set(example3 eval_ta_ccsdt)
+    add_executable(${example3} EXCLUDE_FROM_ALL
+            SeQuant/domain/eval/read_tensor_ta.hpp
+            SeQuant/domain/eval/read_tensor_ta.cpp
+            SeQuant/domain/eval/eval_ta.hpp
+            examples/eval/eval_ta_ccsdt.cpp)
+    target_link_libraries(${example3} SeQuant ${TBB_LIBRARIES} tiledarray)
 endif(TARGET tiledarray)
 
 if(BTAS_SOURCE_DIR)
-    set(example3 eval_btas)
-    add_executable(${example3} EXCLUDE_FROM_ALL
+    set(example4 eval_btas)
+    add_executable(${example4} EXCLUDE_FROM_ALL
         SeQuant/domain/eval/read_tensor_btas.hpp
         SeQuant/domain/eval/read_tensor_btas.cpp
         SeQuant/domain/eval/eval_btas.hpp
         examples/eval/eval_btas.cpp)
-    target_include_directories(${example3} PUBLIC ${BTAS_SOURCE_DIR} ${Boost_INCLUDE_DIRS})
-    target_link_libraries(${example3} SeQuant ${TBB_LIBRARIES})
+    target_include_directories(${example4} PUBLIC ${BTAS_SOURCE_DIR} ${Boost_INCLUDE_DIRS})
+    target_link_libraries(${example4} SeQuant ${TBB_LIBRARIES})
 endif(BTAS_SOURCE_DIR)
 
 # add tests for running examples
-set (lastexample 4)
+set (lastexample 5)
 foreach(i RANGE ${lastexample})
     if (TARGET ${example${i}})
         add_test(sequant/example/${example${i}}/build "${CMAKE_COMMAND}"

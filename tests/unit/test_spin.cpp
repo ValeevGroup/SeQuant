@@ -26,6 +26,21 @@ TEST_CASE("Spin") {
     // TODO: Use exception for passing
     // REQUIRE_THROWS_AS(spintrace(input),std::abort());
   }
+  SECTION("String label"){
+    auto p1 = Index(L"p⁺_1", IndexSpace::instance(IndexSpace::all,
+                                                  IndexSpace::alpha));
+    auto p2 = Index(L"p⁻_2", IndexSpace::instance(IndexSpace::all,
+                                                  IndexSpace::beta));
+    auto p3 = Index(L"p⁺_3", IndexSpace::instance(IndexSpace::all,
+                                                  IndexSpace::alpha));
+    auto p4 = Index(L"p⁻_4", IndexSpace::instance(IndexSpace::all,
+                                                  IndexSpace::beta));
+
+    REQUIRE(p1.string_label() == "pa_1");
+    REQUIRE(p2.string_label() == "pb_2");
+    REQUIRE(p3.string_label() == "pa_3");
+    REQUIRE(p4.string_label() == "pb_4");
+  }
 
   SECTION("Tensor: can_expand, is_tensor_spin_symm, remove_spin") {
     auto p1 = Index(L"p⁺_1",

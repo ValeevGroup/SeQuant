@@ -100,6 +100,8 @@ class AsyCost {
 
   AsyCost(size_t nocc, size_t nvirt);
 
+  AsyCost(size_t nocc, size_t nvirt, size_t count);
+
   AsyCost(AsyCost const &) = default;
 
   AsyCost(AsyCost &&) = default;
