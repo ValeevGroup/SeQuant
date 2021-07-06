@@ -79,6 +79,7 @@ allanyB = Append[allany,particleSpin[B]];
 (* this converts spin tag into m_s *)
 Ms[particleSpin[A]]=1/2;
 Ms[particleSpin[B]]=-1/2;
+Ms[particleSpin[none]]=0;
 
 stringAppendSpin[str_,s_particleSpin]:=If[s===particleSpin[none],str, "\!\(\*SubscriptBox[\("<>str<>"\), \("<>If[s===particleSpin[A],"\[Alpha]","\[Beta]"]<>"\)]\)"];
 
@@ -180,6 +181,10 @@ indexType[a_particleIndex] :=
 (* return particleSpace of particleIndex *)
 indexSpace[a_particleIndex] :=
     Cases[a,_particleSpace][[1]];
+
+(* return spin-free particleSpace of particleIndex *)
+indexSpaceSpinFree[a_particleIndex] :=
+    DeleteCases[indexSpace[a],_particleSpin];
     
 (* return the particleType of a particleIndex *)
 indexParticle[a_particleIndex] :=
@@ -218,14 +223,16 @@ Equal[a_particleIndex,b_particleIndex] :=
     (a[[1]]===b[[1]])&&(a[[2]]===b[[2]]);
 Protect[Equal];
 
-(* canonical ordering of particleIndex objects is defined as follows: order by particleSpace first, then alphabetically by the symbol *)
-Unprotect[OrderedQ];
-OrderedQ[A_particleSpace,B_particleSpace] :=
-    If[ OrderedQ[A[[2]],B[[2]]],
-        OrderedQ[A[[1]],B[[1]]],
-        True
-    ];
-Protect[OrderedQ];
+(* canonical ordering of particleIndex objects is defined as follows: order by spin, then the rest of particleSpace, then alphabetically by the symbol.
+   particleSpace objects ordered by *)
+sqOrder[A_particleIndex,B_particleIndex] :=
+    If[ Ms[indexSpin[A]]!=Ms[indexSpin[B]],
+        If[Ms[indexSpin[A]]>Ms[indexSpin[B]],1,-1],
+    If[ Order[indexSpaceSpinFree[A],indexSpaceSpinFree[B]]==0,
+        Order[A[[1]],B[[1]]],
+        Order[indexSpaceSpinFree[A],indexSpaceSpinFree[B]]
+    ]];
+sqOrder[a_,b_]:=Order[a,b];
 
 (* this functions throws out all multiple occurences of the same index from inds *)
 uniqueIndexList[inds_List] :=
@@ -801,7 +808,7 @@ numberCR[t_CR] :=
 
 
 
-(* ::Subsection:: *)
+(* ::Subsection::Closed:: *)
 (*  Contract SQS  *)
 
 
@@ -2058,11 +2065,11 @@ orderedForm[str_SQS,intInds_List:{}] :=
         permfac = 1;
         creInds = Cases[str,a_particleIndex/;a[[3]]==indexType[cre]];
         permfac*=Signature[creInds];
-        creInds = Sort[creInds];
+        creInds = Sort[creInds,sqOrder];
         annInds = Cases[str,a_particleIndex/;a[[3]]==indexType[ann]];
         annInds = Reverse[annInds];
         permfac*=Signature[annInds];
-        annInds = Sort[annInds];
+        annInds = Sort[annInds,sqOrder];
         result = permfac*FlattenAt[SQS[FlattenAt[{creInds,Reverse[annInds]},{{1},{2}}]],{1}];
         Return[result];
     ];
@@ -2087,7 +2094,7 @@ orderedForm[oper_SQM,intInds_List:{}] :=
         result = tagIndices[oper,intInds];
         braInds = Cases[result,a_particleIndex/;a[[3]]==indexType[bra]];
         (* canonically reorder bra indices first *)
-        braIndsOrd = Ordering[braInds];
+        braIndsOrd = Ordering[braInds,Length[braInds],sqOrder];
         braInds = braInds[[braIndsOrd]];
         If[ symfac==-1,
             permfac *= Signature[braIndsOrd];
@@ -2100,7 +2107,7 @@ orderedForm[oper_SQM,intInds_List:{}] :=
            multiple permutations of the original list re ordered *)
         If[ symfac==0,
           ketInds=ketInds[[braIndsOrd]],
-          ( ketIndsOrd = Ordering[ketInds];
+          ( ketIndsOrd = Ordering[ketInds,Length[ketInds],sqOrder];
             If[ symfac==-1,
               permfac*=Signature[ketIndsOrd]
             ];
@@ -2332,7 +2339,7 @@ This strategy will only work in simple cases
 
 
 (*
-Remove diconnected terms. Connectedness is determined with respect to the Hamiltonian
+Remove disconnected terms. Connectedness is determined with respect to the Hamiltonian
 *)
 
 removeDisconnectedTerms[expr_,externalIndices_List:{},hamiltonianOpers_List:defaultHamiltonianOpers] :=
@@ -2585,7 +2592,7 @@ listMatchQ[a_List,b_List] :=
 Protect[MatchQ];
 
 
-(* ::Section::Closed:: *)
+(* ::Section:: *)
 (* Spin*)
 
 
@@ -2620,7 +2627,7 @@ result=0;
 Do[ (* for every combination of spins *)
 (* make a list of index replacements to apply (groupings are omitted) *)
 repls=
-Table[particleIndex[indexSymbol[indGroups[[g,i]]],particleSpace[space_],rest_]->particleIndex[indexSymbol[indGroups[[g,i]]],particleSpace[space,particleSpin[mstuples[[t,g]]]],rest],{g,Length[indGroups]},{i,Length[indGroups[[g]]]}];
+Table[particleIndex[indexSymbol[indGroups[[g,i]]],particleSpace[space__],rest__]->particleIndex[indexSymbol[indGroups[[g,i]]],particleSpace[space,particleSpin[mstuples[[t,g]]]],rest],{g,Length[indGroups]},{i,Length[indGroups[[g]]]}];
 repls=Flatten[repls];
 If[ SeQuantDebugLevel>=3,Print["in spintrace: t=",t," repls=",repls//TraditionalForm," expr/.repls=",TraditionalForm[expr/.repls]];
 ];
@@ -2633,26 +2640,35 @@ If[ SeQuantDebugLevel>=2,Print["in spintrace: after adding spin quantum numbers 
 
 (* convert to nonsymmetric n-body operators, e.g. Overscript[g, _] \[Rule] g *)
 (* 2-body *)
-result=result/.SQM[OHead[label_String,indexSymm[-1]],particleIndex[bra1__],particleIndex[bra2__],particleIndex[ket1__],particleIndex[ket2__]]->rhoIndex[particleIndex[bra1],particleIndex[bra2]]*rhoIndex[particleIndex[ket1],particleIndex[ket2]]*(SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[ket1],particleIndex[ket2]]-SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[ket2],particleIndex[ket1]]);
+result=result/.SQM[OHead[label_String?(RefLink[StringContainsQ,paclet:ref/StringContainsQ][#,StartOfLine~~"Overscript["~~__] &),indexSymm[-1]],particleIndex[bra1__],particleIndex[bra2__],particleIndex[ket1__],particleIndex[ket2__]]->rhoIndex[particleIndex[bra1],particleIndex[bra2]]*rhoIndex[particleIndex[ket1],particleIndex[ket2]]*(SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[ket1],particleIndex[ket2]]-SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[ket2],particleIndex[ket1]]);
 (* 3-body *)
-result=result/.SQM[OHead[label_String,indexSymm[-1]],particleIndex[bra1__],particleIndex[bra2__],particleIndex[bra3__],particleIndex[ket1__],particleIndex[ket2__],particleIndex[ket3__]]->rhoIndex[particleIndex[bra1],particleIndex[bra2]]*rhoIndex[particleIndex[bra1],particleIndex[bra3]]*rhoIndex[particleIndex[bra2],particleIndex[bra3]]*rhoIndex[particleIndex[ket1],particleIndex[ket2]]**rhoIndex[particleIndex[ket1],particleIndex[ket3]]**rhoIndex[particleIndex[ket2],particleIndex[ket3]](SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket1],particleIndex[ket2],particleIndex[ket3]]-SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket2],particleIndex[ket1],particleIndex[ket3]]-SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket1],particleIndex[ket3],particleIndex[ket2]]-SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket3],particleIndex[ket2],particleIndex[ket1]]+SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket2],particleIndex[ket3],particleIndex[ket1]]+SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket3],particleIndex[ket1],particleIndex[ket2]]);
-(* eliminate rho's if EPV terms will be avoided implcitly, but summing multiple terms *)
+result=result/.SQM[OHead[label_String?(RefLink[StringContainsQ,paclet:ref/StringContainsQ][#,StartOfLine~~"Overscript["~~__] &),indexSymm[-1]],particleIndex[bra1__],particleIndex[bra2__],particleIndex[bra3__],particleIndex[ket1__],particleIndex[ket2__],particleIndex[ket3__]]->rhoIndex[particleIndex[bra1],particleIndex[bra2]]*rhoIndex[particleIndex[bra1],particleIndex[bra3]]*rhoIndex[particleIndex[bra2],particleIndex[bra3]]*rhoIndex[particleIndex[ket1],particleIndex[ket2]]**rhoIndex[particleIndex[ket1],particleIndex[ket3]]**rhoIndex[particleIndex[ket2],particleIndex[ket3]](SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket1],particleIndex[ket2],particleIndex[ket3]]-SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket2],particleIndex[ket1],particleIndex[ket3]]-SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket1],particleIndex[ket3],particleIndex[ket2]]-SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket3],particleIndex[ket2],particleIndex[ket1]]+SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket2],particleIndex[ket3],particleIndex[ket1]]+SQM[OHead[antisymm2nonsymmSQMlabel[label],indexSymm[0]],particleIndex[bra1],particleIndex[bra2],particleIndex[bra3],particleIndex[ket3],particleIndex[ket1],particleIndex[ket2]]);
+(* eliminate rho's if EPV terms will be avoided implicitly, but summing multiple terms *)
 result=If[explicitEPV,result,(result/.rhoIndex[__]->1)];
 result=Expand[result];
+(* canonicalize to make spin tracing easier*)
+result=Map[maporder,result,2];
 If[ SeQuantDebugLevel>=2,Print["in spintrace: after expanding antisymmetric operators = ",TraditionalForm[result]];
 ];
 
 (* zero out integrals that don't conserve spin quantum numbers *)
 (* 1-body *)
-result=result/.SQM[OHead[op__],particleIndex[bra1_String,particleSpace[bra1space_,bra1spin_],bra1rest_],particleIndex[ket1_String,particleSpace[ket1space_,ket1spin_],ket1rest_]]->If[Ms[bra1spin]==Ms[ket1spin],SQM[OHead[op],particleIndex[bra1,particleSpace[bra1space,bra1spin],bra1rest],particleIndex[ket1,particleSpace[ket1space,ket1spin],ket1rest]],0];
-result=result/.rhoIndex[particleIndex[bra1_String,particleSpace[bra1space_,bra1spin_],bra1rest___],particleIndex[ket1_String,particleSpace[ket1space_,ket1spin_],ket1rest___]]->If[Ms[bra1spin]==Ms[ket1spin],rhoIndex[particleIndex[bra1,particleSpace[bra1space,bra1spin],bra1rest],particleIndex[ket1,particleSpace[ket1space,ket1spin],ket1rest]],1];
-result=result/.deltaIndex[particleIndex[bra1_String,particleSpace[bra1space_,bra1spin_],bra1rest___],particleIndex[ket1_String,particleSpace[ket1space_,ket1spin_],ket1rest___]]->If[Ms[bra1spin]==Ms[ket1spin],rhoIndex[particleIndex[bra1,particleSpace[bra1space,bra1spin],bra1rest],particleIndex[ket1,particleSpace[ket1space,ket1spin],ket1rest]],0];
-(* 2-body *)
-result=result/.SQM[OHead[label_String,indexSymm[0]],particleIndex[bra1_String,particleSpace[bra1space_,bra1spin_],bra1rest_],particleIndex[bra2_String,particleSpace[bra2space_,bra2spin_],bra2rest_],particleIndex[ket1_String,particleSpace[ket1space_,ket1spin_],ket1rest_],particleIndex[ket2_String,particleSpace[ket2space_,ket2spin_],ket2rest_]]->If[Ms[bra1spin]==Ms[ket1spin]&&Ms[bra2spin]==Ms[ket2spin],SQM[OHead[label,indexSymm[0]],particleIndex[bra1,particleSpace[bra1space,bra1spin],bra1rest],particleIndex[bra2,particleSpace[bra2space,bra2spin],bra2rest],particleIndex[ket1,particleSpace[ket1space,ket1spin],ket1rest],particleIndex[ket2,particleSpace[ket2space,ket2spin],ket2rest]],0];
-(* 3-body *)
-result=result/.SQM[OHead[label_String,indexSymm[0]],particleIndex[bra1_String,particleSpace[bra1space_,bra1spin_],bra1rest_],particleIndex[bra2_String,particleSpace[bra2space_,bra2spin_],bra2rest_],
-particleIndex[bra3_String,particleSpace[bra3space_,bra3spin_],bra3rest_],particleIndex[ket1_String,particleSpace[ket1space_,ket1spin_],ket1rest_],particleIndex[ket2_String,particleSpace[ket2space_,ket2spin_],ket2rest_],
-particleIndex[ket3_String,particleSpace[ket3space_,ket3spin_],ket3rest_]]->If[Ms[bra1spin]==Ms[ket1spin]&&Ms[bra2spin]==Ms[ket2spin]&&Ms[bra3spin]==Ms[ket3spin],SQM[OHead[label,indexSymm[0]],particleIndex[bra1,particleSpace[bra1space,bra1spin],bra1rest],particleIndex[bra2,particleSpace[bra2space,bra2spin],bra2rest],
+result=result/.SQM[OHead[op__],particleIndex[bra1_String,particleSpace[bra1space__,bra1spin_particleSpin],bra1rest_],particleIndex[ket1_String,particleSpace[ket1space__,ket1spin_particleSpin],ket1rest_]]->If[Ms[bra1spin]==Ms[ket1spin],SQM[OHead[op],particleIndex[bra1,particleSpace[bra1space,bra1spin],bra1rest],particleIndex[ket1,particleSpace[ket1space,ket1spin],ket1rest]],0];
+result=result/.SQS[particleIndex[bra1_String,particleSpace[bra1space__,bra1spin_particleSpin],bra1rest_],particleIndex[ket1_String,particleSpace[ket1space__,ket1spin_particleSpin],ket1rest_]]->If[Ms[bra1spin]==Ms[ket1spin],SQS[particleIndex[bra1,particleSpace[bra1space,bra1spin],bra1rest],particleIndex[ket1,particleSpace[ket1space,ket1spin],ket1rest]],0];
+result=result/.rhoIndex[particleIndex[bra1_String,particleSpace[bra1space__,bra1spin_particleSpin],bra1rest___],particleIndex[ket1_String,particleSpace[ket1space__,ket1spin_particleSpin],ket1rest___]]->If[Ms[bra1spin]==Ms[ket1spin],rhoIndex[particleIndex[bra1,particleSpace[bra1space,bra1spin],bra1rest],particleIndex[ket1,particleSpace[ket1space,ket1spin],ket1rest]],1];
+result=result/.deltaIndex[particleIndex[bra1_String,particleSpace[bra1space__,bra1spin_particleSpin],bra1rest___],particleIndex[ket1_String,particleSpace[ket1space__,ket1spin_particleSpin],ket1rest___]]->If[Ms[bra1spin]==Ms[ket1spin],rhoIndex[particleIndex[bra1,particleSpace[bra1space,bra1spin],bra1rest],particleIndex[ket1,particleSpace[ket1space,ket1spin],ket1rest]],0];
+(* 2-body ... N.B. SQM and SQS are canonically ordered, hence can just match spins within columns *)
+result=result/.SQM[OHead[label_String,indexSymm[0]],particleIndex[bra1_String,particleSpace[bra1space__,bra1spin_particleSpin],bra1rest_],particleIndex[bra2_String,particleSpace[bra2space__,bra2spin_particleSpin],bra2rest_],particleIndex[ket1_String,particleSpace[ket1space__,ket1spin_particleSpin],ket1rest_],particleIndex[ket2_String,particleSpace[ket2space__,ket2spin_particleSpin],ket2rest_]]->If[Ms[bra1spin]==Ms[ket1spin]&&Ms[bra2spin]==Ms[ket2spin],SQM[OHead[label,indexSymm[0]],particleIndex[bra1,particleSpace[bra1space,bra1spin],bra1rest],particleIndex[bra2,particleSpace[bra2space,bra2spin],bra2rest],particleIndex[ket1,particleSpace[ket1space,ket1spin],ket1rest],particleIndex[ket2,particleSpace[ket2space,ket2spin],ket2rest]],0];
+result=result/.SQS[particleIndex[bra1_String,particleSpace[bra1space__,bra1spin_particleSpin],bra1rest_],particleIndex[bra2_String,particleSpace[bra2space__,bra2spin_particleSpin],bra2rest_],particleIndex[ket1_String,particleSpace[ket1space__,ket1spin_particleSpin],ket1rest_],particleIndex[ket2_String,particleSpace[ket2space__,ket2spin_particleSpin],ket2rest_]]->If[Ms[bra1spin]==Ms[ket1spin]&&Ms[bra2spin]==Ms[ket2spin],SQS[particleIndex[bra1,particleSpace[bra1space,bra1spin],bra1rest],particleIndex[bra2,particleSpace[bra2space,bra2spin],bra2rest],particleIndex[ket1,particleSpace[ket1space,ket1spin],ket1rest],particleIndex[ket2,particleSpace[ket2space,ket2spin],ket2rest]],0];
+(* 3-body ... N.B. see above *)
+result=result/.SQM[OHead[label_String,indexSymm[0]],particleIndex[bra1_String,particleSpace[bra1space__,bra1spin_particleSpin],bra1rest_],particleIndex[bra2_String,particleSpace[bra2space__,bra2spin_particleSpin],bra2rest_],
+particleIndex[bra3_String,particleSpace[bra3space__,bra3spin_particleSpin],bra3rest_],particleIndex[ket1_String,particleSpace[ket1space__,ket1spin_particleSpin],ket1rest_],particleIndex[ket2_String,particleSpace[ket2space__,ket2spin_particleSpin],ket2rest_],
+particleIndex[ket3_String,particleSpace[ket3space__,ket3spin_particleSpin],ket3rest_]]->If[Ms[bra1spin]==Ms[ket1spin]&&Ms[bra2spin]==Ms[ket2spin]&&Ms[bra3spin]==Ms[ket3spin],SQM[OHead[label,indexSymm[0]],particleIndex[bra1,particleSpace[bra1space,bra1spin],bra1rest],particleIndex[bra2,particleSpace[bra2space,bra2spin],bra2rest],
+particleIndex[bra3,particleSpace[bra3space,bra3spin],bra3rest],particleIndex[ket1,particleSpace[ket1space,ket1spin],ket1rest],particleIndex[ket2,particleSpace[ket2space,ket2spin],ket2rest],
+particleIndex[ket3,particleSpace[ket3space,ket3spin],ket3rest]],0];
+result=result/.SQS[particleIndex[bra1_String,particleSpace[bra1space__,bra1spin_particleSpin],bra1rest_],particleIndex[bra2_String,particleSpace[bra2space__,bra2spin_particleSpin],bra2rest_],
+particleIndex[bra3_String,particleSpace[bra3space__,bra3spin_particleSpin],bra3rest_],particleIndex[ket1_String,particleSpace[ket1space__,ket1spin_particleSpin],ket1rest_],particleIndex[ket2_String,particleSpace[ket2space__,ket2spin_particleSpin],ket2rest_],
+particleIndex[ket3_String,particleSpace[ket3space__,ket3spin_particleSpin],ket3rest_]]->If[Ms[bra1spin]==Ms[ket1spin]&&Ms[bra2spin]==Ms[ket2spin]&&Ms[bra3spin]==Ms[ket3spin],SQS[particleIndex[bra1,particleSpace[bra1space,bra1spin],bra1rest],particleIndex[bra2,particleSpace[bra2space,bra2spin],bra2rest],
 particleIndex[bra3,particleSpace[bra3space,bra3spin],bra3rest],particleIndex[ket1,particleSpace[ket1space,ket1spin],ket1rest],particleIndex[ket2,particleSpace[ket2space,ket2spin],ket2rest],
 particleIndex[ket3,particleSpace[ket3space,ket3spin],ket3rest]],0];
 result=Expand[result];
@@ -2667,7 +2683,7 @@ If[ SeQuantDebugLevel>=2,Print["in spintrace: after dropping spin labels = ",Tra
 ];
 
 (* optionally replace rhoIndex with deltaIndex ... and reduce the deltas *)
-result=If[!rhoToDelta,result,result/.rhoIndex[particleIndex[bra1_String,particleSpace[bra1space_],bra1rest___],particleIndex[ket1_String,particleSpace[ket1space_],ket1rest___]]->(1-deltaIndex[particleIndex[bra1,particleSpace[bra1space],bra1rest],particleIndex[ket1,particleSpace[ket1space],ket1rest]])];
+result=If[!rhoToDelta,result,result/.rhoIndex[particleIndex[bra1_String,particleSpace[bra1space__],bra1rest___],particleIndex[ket1_String,particleSpace[ket1space__],ket1rest___]]->(1-deltaIndex[particleIndex[bra1,particleSpace[bra1space],bra1rest],particleIndex[ket1,particleSpace[ket1space],ket1rest]])];
 If[ rhoToDelta&&SeQuantDebugLevel>=2,Print["in spintrace: after replacing rhos with deltas = ",TraditionalForm[result]];
 ];
 result=If[!rhoToDelta,result,reduceWick[Expand[result],extInds,intInds]];
