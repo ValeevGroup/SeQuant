@@ -242,8 +242,6 @@ install(DIRECTORY SeQuant
     )
 add_library(SeQuant::SeQuant ALIAS SeQuant)  # to be able to use as subproject
 
-add_subdirectory(scratch)
-
 ### optional prereqs
 if (SEQUANT_EVAL_TESTS)
   include(FindOrFetchTiledArray)

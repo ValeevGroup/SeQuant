@@ -9,12 +9,12 @@
 namespace sequant::eval {
 
 auto const braket_to_annot = [](auto const& bk) {
-  using ranges::views::join;
-  using ranges::views::transform;
-  using ranges::views::intersperse;
-  return join(bk | transform([](auto const& idx) { return idx.label(); }) |
-              intersperse(L",")) |
-         ranges::to<std::string>;
+  std::string annot;
+  for(auto& idx : bk){
+    annot += idx.string_label() + ",";
+  }
+  annot.pop_back();
+  return annot;
 };  // braket_to_annot
 
 auto const ords_to_annot = [](auto const& ords) {

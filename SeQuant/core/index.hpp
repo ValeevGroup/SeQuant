@@ -232,6 +232,20 @@ class Index : public Taggable {
   /// @warning this does not include the proto index labels, use
   /// Index::full_label() instead
   std::wstring_view label() const { return label_; }
+
+  /// @return A string label with compatible with TiledArray
+  /// @warning not to be used with proto indices
+  /// @brief Replaces wstring superscript characters with 'a', 'b' for alpha,
+  /// beta spins, respectively.
+  std::string string_label() const {
+
+    std::wstring spin_label(label_);
+    std::replace(spin_label.begin(), spin_label.end(), L'⁺', L'a');
+    std::replace(spin_label.begin(), spin_label.end(), L'⁻', L'b');
+    std::string label_string(spin_label.begin(), spin_label.end());
+    return label_string;
+  }
+
   /// @return the full label
   /// @warning this includes the proto index labels (if any), use
   /// Index::label() instead if only want the label
