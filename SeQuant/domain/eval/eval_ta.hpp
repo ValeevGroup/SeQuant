@@ -90,9 +90,30 @@ struct eval_instance_ta {
         std::is_invocable_r_v<Tensor_t, Fetcher, sequant::Tensor const&>);
 
     auto result = evaluate_ta(node, f, man);
-    auto const annot = braket_to_annot(node->tensor().const_braket());
+    // NOTE:
+    // At this point the physical layout of `result`
+    // maybe off from what is expected in the residual tensors
+    // pre-symmetrization or anti-symmetrization
+    //
+    // eg.
+    //       i_2, i_3, i_1
+    // Result
+    //       a_1, a_2, a_3
+    //
+    // we now permute it to the layout:
+    //       i_1, i_2, i_3
+    // Result
+    //       a_1, a_2, a_3
+    //
+    auto sorted_bra = node->tensor().bra() | ranges::to_vector;
+    ranges::sort(sorted_bra, Index::LabelCompare{});
+    auto sorted_ket = node->tensor().ket() | ranges::to_vector;
+    ranges::sort(sorted_ket, Index::LabelCompare{});
+
+    auto const rannot = braket_to_annot(node->tensor().const_braket());
+    auto const lannot = braket_to_annot(ranges::views::concat(sorted_bra,sorted_ket));
     auto scaled = decltype(result){};
-    scaled(annot) = node->scalar().value().real() * result(annot);
+    scaled(lannot) = node->scalar().value().real() * result(rannot);
     return scaled;
   }
 
