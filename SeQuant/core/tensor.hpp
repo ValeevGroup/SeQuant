@@ -173,10 +173,12 @@ class Tensor : public Expr, public AbstractTensor {
     auto vir_it = uocc_list.begin();
     for (auto &idx : this->const_braket()) {
       std::wstring spin{}, label{};
+      // Spin label
       if (idx.space().qns() == IndexSpace::alpha)
         spin = L"_α";
       else if (idx.space().qns() == IndexSpace::beta)
         spin = L"_β";
+      // Space label
       if (idx.space() == IndexSpace::active_occupied) {
         label = *occ_it + spin;
         ++occ_it;
@@ -189,22 +191,16 @@ class Tensor : public Expr, public AbstractTensor {
 
     std::wstring result;
     std::wstring postfix = df ? L"[df]" : L"";
-    if (label == L"f") {
-      assert(this->const_braket().size() == 2);
-      result = L"<" + braket[0] + L"|F|" + braket[1] + L">" + postfix;
-      return result;
-    } else if (label == L"g") {
-      assert(this->const_braket().size() == 2);
-      result = L"<" + braket[0] + L" " + braket[1] + L"|G|" + braket[2] + L" " +
-               braket[3] + L">";
-      if (this->symmetry() == Symmetry::nonsymm) {
-        result += postfix;
-      } else {
+    if (this->rank() == 1){
+      result = L"<" + braket[0] + L"|F|" + braket[1] + L">";
+    } else if (this->rank() == 2){
+      result = L"<" + braket[0] + L" " + braket[1] + L"|G|" +
+          braket[2] + L" " + braket[3] + L">";
+      if (this->symmetry() == Symmetry::antisymm) {
         postfix = df ? L"[df,as]" : L"[as]";
-        result += postfix;
       }
-      return result;
     }
+    return result+postfix;
   }
 
   std::wstring to_latex() const override {
