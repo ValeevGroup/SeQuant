@@ -26,6 +26,21 @@ TEST_CASE("Spin") {
     // TODO: Use exception for passing
     // REQUIRE_THROWS_AS(spintrace(input),std::abort());
   }
+  SECTION("String label"){
+    auto p1 = Index(L"p⁺_1", IndexSpace::instance(IndexSpace::all,
+                                                  IndexSpace::alpha));
+    auto p2 = Index(L"p⁻_2", IndexSpace::instance(IndexSpace::all,
+                                                  IndexSpace::beta));
+    auto p3 = Index(L"p⁺_3", IndexSpace::instance(IndexSpace::all,
+                                                  IndexSpace::alpha));
+    auto p4 = Index(L"p⁻_4", IndexSpace::instance(IndexSpace::all,
+                                                  IndexSpace::beta));
+
+    REQUIRE(p1.string_label() == "pa_1");
+    REQUIRE(p2.string_label() == "pb_2");
+    REQUIRE(p3.string_label() == "pa_3");
+    REQUIRE(p4.string_label() == "pb_4");
+  }
 
   SECTION("Tensor: can_expand, is_tensor_spin_symm, remove_spin") {
     auto p1 = Index(L"p⁺_1",
@@ -281,7 +296,7 @@ TEST_CASE("Spin") {
           ex<Tensor>(L"t", WstrList{L"a_1", L"a_2", L"a_3"},
                      WstrList{L"i_1", L"i_2", L"i_3"}, Symmetry::antisymm);
       auto result = expand_A_operator(input);
-      REQUIRE(to_latex(result) == L"{t^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}");
+      REQUIRE(to_latex(result) == L"{\\bar{t}^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}");
 
       input = ex<Tensor>(L"A", WstrList{L"i_1", L"i_2", L"i_3"},
                          WstrList{L"a_1", L"a_2", L"a_3"}, Symmetry::antisymm) *
@@ -330,8 +345,8 @@ TEST_CASE("Spin") {
       REQUIRE(result->size() == 2);
       REQUIRE(result->is<Sum>());
       REQUIRE(to_latex(result) ==
-              L"{ \\bigl({{t^{{i_1}{i_2}}_{{a_1}{a_2}}}} + "
-              L"{{t^{{i_2}{i_1}}_{{a_2}{a_1}}}}\\bigr) }");
+              L"{ \\bigl({{\\bar{t}^{{i_1}{i_2}}_{{a_1}{a_2}}}} + "
+              L"{{\\bar{t}^{{i_2}{i_1}}_{{a_2}{a_1}}}}\\bigr) }");
     }
 
     {  // 3-body
@@ -344,12 +359,12 @@ TEST_CASE("Spin") {
       REQUIRE(result->is<Sum>());
       REQUIRE(result->size() == 6);
       REQUIRE(to_latex(result) ==
-              L"{ \\bigl({{t^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}} + "
-              L"{{t^{{i_1}{i_3}{i_2}}_{{a_1}{a_3}{a_2}}}} + "
-              L"{{t^{{i_2}{i_1}{i_3}}_{{a_2}{a_1}{a_3}}}} + "
-              L"{{t^{{i_2}{i_3}{i_1}}_{{a_2}{a_3}{a_1}}}} + "
-              L"{{t^{{i_3}{i_1}{i_2}}_{{a_3}{a_1}{a_2}}}} + "
-              L"{{t^{{i_3}{i_2}{i_1}}_{{a_3}{a_2}{a_1}}}}\\bigr) }");
+              L"{ \\bigl({{\\bar{t}^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}} + "
+              L"{{\\bar{t}^{{i_1}{i_3}{i_2}}_{{a_1}{a_3}{a_2}}}} + "
+              L"{{\\bar{t}^{{i_2}{i_1}{i_3}}_{{a_2}{a_1}{a_3}}}} + "
+              L"{{\\bar{t}^{{i_2}{i_3}{i_1}}_{{a_2}{a_3}{a_1}}}} + "
+              L"{{\\bar{t}^{{i_3}{i_1}{i_2}}_{{a_3}{a_1}{a_2}}}} + "
+              L"{{\\bar{t}^{{i_3}{i_2}{i_1}}_{{a_3}{a_2}{a_1}}}}\\bigr) }");
     }
 
     {  // 4-body
@@ -364,30 +379,30 @@ TEST_CASE("Spin") {
       REQUIRE(result->size() == 24);
       REQUIRE(result->is<Sum>());
       REQUIRE(to_latex(result) ==
-              L"{ \\bigl({{t^{{i_1}{i_2}{i_3}{i_4}}_{{a_1}{a_2}{a_3}{a_4}}}} + "
-              L"{{t^{{i_1}{i_2}{i_4}{i_3}}_{{a_1}{a_2}{a_4}{a_3}}}} + "
-              L"{{t^{{i_1}{i_3}{i_2}{i_4}}_{{a_1}{a_3}{a_2}{a_4}}}} + "
-              L"{{t^{{i_1}{i_3}{i_4}{i_2}}_{{a_1}{a_3}{a_4}{a_2}}}} + "
-              L"{{t^{{i_1}{i_4}{i_2}{i_3}}_{{a_1}{a_4}{a_2}{a_3}}}} + "
-              L"{{t^{{i_1}{i_4}{i_3}{i_2}}_{{a_1}{a_4}{a_3}{a_2}}}} + "
-              L"{{t^{{i_2}{i_1}{i_3}{i_4}}_{{a_2}{a_1}{a_3}{a_4}}}} + "
-              L"{{t^{{i_2}{i_1}{i_4}{i_3}}_{{a_2}{a_1}{a_4}{a_3}}}} + "
-              L"{{t^{{i_2}{i_3}{i_1}{i_4}}_{{a_2}{a_3}{a_1}{a_4}}}} + "
-              L"{{t^{{i_2}{i_3}{i_4}{i_1}}_{{a_2}{a_3}{a_4}{a_1}}}} + "
-              L"{{t^{{i_2}{i_4}{i_1}{i_3}}_{{a_2}{a_4}{a_1}{a_3}}}} + "
-              L"{{t^{{i_2}{i_4}{i_3}{i_1}}_{{a_2}{a_4}{a_3}{a_1}}}} + "
-              L"{{t^{{i_3}{i_1}{i_2}{i_4}}_{{a_3}{a_1}{a_2}{a_4}}}} + "
-              L"{{t^{{i_3}{i_1}{i_4}{i_2}}_{{a_3}{a_1}{a_4}{a_2}}}} + "
-              L"{{t^{{i_3}{i_2}{i_1}{i_4}}_{{a_3}{a_2}{a_1}{a_4}}}} + "
-              L"{{t^{{i_3}{i_2}{i_4}{i_1}}_{{a_3}{a_2}{a_4}{a_1}}}} + "
-              L"{{t^{{i_3}{i_4}{i_1}{i_2}}_{{a_3}{a_4}{a_1}{a_2}}}} + "
-              L"{{t^{{i_3}{i_4}{i_2}{i_1}}_{{a_3}{a_4}{a_2}{a_1}}}} + "
-              L"{{t^{{i_4}{i_1}{i_2}{i_3}}_{{a_4}{a_1}{a_2}{a_3}}}} + "
-              L"{{t^{{i_4}{i_1}{i_3}{i_2}}_{{a_4}{a_1}{a_3}{a_2}}}} + "
-              L"{{t^{{i_4}{i_2}{i_1}{i_3}}_{{a_4}{a_2}{a_1}{a_3}}}} + "
-              L"{{t^{{i_4}{i_2}{i_3}{i_1}}_{{a_4}{a_2}{a_3}{a_1}}}} + "
-              L"{{t^{{i_4}{i_3}{i_1}{i_2}}_{{a_4}{a_3}{a_1}{a_2}}}} + "
-              L"{{t^{{i_4}{i_3}{i_2}{i_1}}_{{a_4}{a_3}{a_2}{a_1}}}}\\bigr) }");
+              L"{ \\bigl({{\\bar{t}^{{i_1}{i_2}{i_3}{i_4}}_{{a_1}{a_2}{a_3}{a_4}}}} + "
+              L"{{\\bar{t}^{{i_1}{i_2}{i_4}{i_3}}_{{a_1}{a_2}{a_4}{a_3}}}} + "
+              L"{{\\bar{t}^{{i_1}{i_3}{i_2}{i_4}}_{{a_1}{a_3}{a_2}{a_4}}}} + "
+              L"{{\\bar{t}^{{i_1}{i_3}{i_4}{i_2}}_{{a_1}{a_3}{a_4}{a_2}}}} + "
+              L"{{\\bar{t}^{{i_1}{i_4}{i_2}{i_3}}_{{a_1}{a_4}{a_2}{a_3}}}} + "
+              L"{{\\bar{t}^{{i_1}{i_4}{i_3}{i_2}}_{{a_1}{a_4}{a_3}{a_2}}}} + "
+              L"{{\\bar{t}^{{i_2}{i_1}{i_3}{i_4}}_{{a_2}{a_1}{a_3}{a_4}}}} + "
+              L"{{\\bar{t}^{{i_2}{i_1}{i_4}{i_3}}_{{a_2}{a_1}{a_4}{a_3}}}} + "
+              L"{{\\bar{t}^{{i_2}{i_3}{i_1}{i_4}}_{{a_2}{a_3}{a_1}{a_4}}}} + "
+              L"{{\\bar{t}^{{i_2}{i_3}{i_4}{i_1}}_{{a_2}{a_3}{a_4}{a_1}}}} + "
+              L"{{\\bar{t}^{{i_2}{i_4}{i_1}{i_3}}_{{a_2}{a_4}{a_1}{a_3}}}} + "
+              L"{{\\bar{t}^{{i_2}{i_4}{i_3}{i_1}}_{{a_2}{a_4}{a_3}{a_1}}}} + "
+              L"{{\\bar{t}^{{i_3}{i_1}{i_2}{i_4}}_{{a_3}{a_1}{a_2}{a_4}}}} + "
+              L"{{\\bar{t}^{{i_3}{i_1}{i_4}{i_2}}_{{a_3}{a_1}{a_4}{a_2}}}} + "
+              L"{{\\bar{t}^{{i_3}{i_2}{i_1}{i_4}}_{{a_3}{a_2}{a_1}{a_4}}}} + "
+              L"{{\\bar{t}^{{i_3}{i_2}{i_4}{i_1}}_{{a_3}{a_2}{a_4}{a_1}}}} + "
+              L"{{\\bar{t}^{{i_3}{i_4}{i_1}{i_2}}_{{a_3}{a_4}{a_1}{a_2}}}} + "
+              L"{{\\bar{t}^{{i_3}{i_4}{i_2}{i_1}}_{{a_3}{a_4}{a_2}{a_1}}}} + "
+              L"{{\\bar{t}^{{i_4}{i_1}{i_2}{i_3}}_{{a_4}{a_1}{a_2}{a_3}}}} + "
+              L"{{\\bar{t}^{{i_4}{i_1}{i_3}{i_2}}_{{a_4}{a_1}{a_3}{a_2}}}} + "
+              L"{{\\bar{t}^{{i_4}{i_2}{i_1}{i_3}}_{{a_4}{a_2}{a_1}{a_3}}}} + "
+              L"{{\\bar{t}^{{i_4}{i_2}{i_3}{i_1}}_{{a_4}{a_2}{a_3}{a_1}}}} + "
+              L"{{\\bar{t}^{{i_4}{i_3}{i_1}{i_2}}_{{a_4}{a_3}{a_1}{a_2}}}} + "
+              L"{{\\bar{t}^{{i_4}{i_3}{i_2}{i_1}}_{{a_4}{a_3}{a_2}{a_1}}}}\\bigr) }");
     }
 
     {
@@ -921,6 +936,93 @@ TEST_CASE("Spin") {
       std::wcout << result->size() << " " << to_latex(result) << "\n\n";
     }
 
+  }
+
+
+  SECTION("Open-shell spin-tracing"){
+    // Logger::get_instance().canonicalize = true;
+    // Tensor canonicalize
+    {
+      const auto i1A = Index(L"i⁺_1", IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::alpha));
+      const auto i2B = Index(L"i⁻_2", IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::beta));
+      const auto i3A = Index(L"i⁺_3", IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::alpha));
+      const auto a1A = Index(L"a⁺_1", IndexSpace::instance(IndexSpace::active_unoccupied, IndexSpace::alpha));
+      const auto a2A = Index(L"a⁺_2", IndexSpace::instance(IndexSpace::active_unoccupied, IndexSpace::alpha));
+      const auto a2B = Index(L"a⁻_2", IndexSpace::instance(IndexSpace::active_unoccupied, IndexSpace::beta));
+      const auto a3A = Index(L"a⁺_3", IndexSpace::instance(IndexSpace::active_unoccupied, IndexSpace::alpha));
+
+      auto t3 = ex<Tensor>(Tensor(L"t", {a3A, a2B, a2A}, {i1A, i2B, i3A}));
+      auto f = ex<Tensor>(Tensor(L"f",{a1A},{a2A}));
+      auto ft3 = f*t3;
+      // std::wcout << "ft3 input: " << to_latex(ft3) << "\n";
+      ft3->canonicalize();
+      // std::wcout << "ft3 canon: " << to_latex(ft3) << "\n";
+      REQUIRE(to_latex(ft3) == L"{{f^{{a⁺_2}}_{{a⁺_1}}}{t^{{i⁺_3}{i⁺_1}{i⁻_2}}_{{a⁺_2}{a⁺_3}{a⁻_2}}}}");
+    }
+
+
+    //  g
+    {
+      auto input =  ex<Constant>(0.25) *
+                    ex<Tensor>(L"g", WstrList{L"a_1", L"a_2"},
+                               WstrList{L"i_1", L"i_2"}, Symmetry::antisymm);
+      auto result =
+          open_shell_spintrace(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}});
+      REQUIRE(result.size() == 3);
+      REQUIRE(to_latex(result[0]) == L"{{{\\frac{1}{4}}}{\\bar{g}^{{i⁺_1}{i⁺_2}}_{{a⁺_1}{a⁺_2}}}}");
+      REQUIRE(to_latex(result[1]) == L"{{{\\frac{1}{4}}}{g^{{i⁺_1}{i⁻_2}}_{{a⁺_1}{a⁻_2}}}}");
+      REQUIRE(to_latex(result[2]) == L"{{{\\frac{1}{4}}}{\\bar{g}^{{i⁻_1}{i⁻_2}}_{{a⁻_1}{a⁻_2}}}}");
+    }
+
+    // f_oo * t2
+    {
+      auto input = ex<Constant>(0.5) *
+                   ex<Tensor>(L"f", WstrList{L"i_3"}, WstrList{L"i_1"}) *
+                   ex<Tensor>(L"t", WstrList{L"a_1", L"a_2"},
+                              WstrList{L"i_2", L"i_3"}, Symmetry::antisymm);
+
+      auto result =
+          open_shell_spintrace(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}});
+      REQUIRE(result.size() == 3);
+      REQUIRE(to_latex(result[0]) == L"{{{\\frac{1}{2}}}{f^{{i⁺_1}}_{{i⁺_3}}}{\\bar{t}^{{i⁺_2}{i⁺_3}}_{{a⁺_1}{a⁺_2}}}}");
+      REQUIRE(to_latex(result[1]) == L"{{{-\\frac{1}{2}}}{f^{{i⁺_1}}_{{i⁺_2}}}{t^{{i⁺_2}{i⁻_2}}_{{a⁺_1}{a⁻_2}}}}");
+      REQUIRE(to_latex(result[2]) == L"{{{\\frac{1}{2}}}{f^{{i⁻_1}}_{{i⁻_3}}}{\\bar{t}^{{i⁻_2}{i⁻_3}}_{{a⁻_1}{a⁻_2}}}}");
+    }
+
+    // g * t1
+    {
+      auto input = ex<Constant>(0.5) *
+          ex<Tensor>(L"g", WstrList{L"i_3", L"a_1"},
+                     WstrList{L"i_1", L"i_2"}, Symmetry::antisymm) *
+          ex<Tensor>(L"t", WstrList{L"a_2"}, WstrList{L"i_3"}, Symmetry::nonsymm);
+      auto result =
+          open_shell_spintrace(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}});
+      std::wcout << "Input: " << to_latex(input) << "\n"
+                 << "Results:\n";
+      for(auto r : result) { std::wcout << "\t" << to_latex(r) << "\n"; }
+      std::cout << "\n";
+      REQUIRE(result.size() == 3);
+//      REQUIRE(to_latex(result[0]) == L"{{{-\\frac{1}{2}}}{\\bar{g}^{{i⁺_1}{i⁺_2}}_{{a⁺_1}{i⁺_3}}}{t^{{i⁺_3}}_{{a⁺_2}}}}");
+//      REQUIRE(to_latex(result[1]) == L"{{{-\\frac{1}{2}}}{g^{{i⁺_1}{i⁻_2}}_{{a⁺_1}{i⁻_1}}}{t^{{i⁻_1}}_{{a⁻_2}}}}");
+//      REQUIRE(to_latex(result[2]) == L"{{{-\\frac{1}{2}}}{\\bar{g}^{{i⁻_1}{i⁻_2}}_{{a⁻_1}{i⁻_3}}}{t^{{i⁻_3}}_{{a⁻_2}}}}");
+    }
+
+    Logger::get_instance().canonicalize = true;
+    // f * t3
+    {
+      auto input = ex<Constant>(1./12) *
+          ex<Tensor>(L"f", WstrList{L"a_1"}, WstrList{L"a_4"}) *
+          ex<Tensor>(L"t", WstrList{L"a_2", L"a_3", L"a_4"},
+                     WstrList{L"i_1", L"i_2", L"i_3"}, Symmetry::antisymm);
+      auto result =
+          open_shell_spintrace(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
+      std::wcout << "Input: " << to_latex(input) << "\n"
+                 << "Results:\n";
+      for(auto r : result) { std::wcout << "\t" << to_latex(r) << "\n"; }
+      std::cout << "\n";
+      REQUIRE(result.size() == 4);
+    }
+    Logger::get_instance().canonicalize = false;
   }
 
 #if 0
