@@ -314,7 +314,7 @@ target_link_libraries(${example3} SeQuant ${TBB_LIBRARIES})
 set(example4 antisymmetrizer_test)
 add_executable(${example4} EXCLUDE_FROM_ALL
         examples/${example4}/antisymmetrizer.hpp
-        examples/${example4}/${example4}.cpp)
+        examples/${example4}/${example4}.cpp examples/antisymmetrizer_test/three_body_decomp.hpp examples/antisymmetrizer_test/three_body_decomp.cpp)
 target_link_libraries(${example4} SeQuant ${TBB_LIBRARIES})
 target_link_directories(${example4} PUBLIC ${TBB_LIBRARIES})
 target_compile_definitions(${example4} PRIVATE SEQUANT_HAS_TILEDARRAY)
