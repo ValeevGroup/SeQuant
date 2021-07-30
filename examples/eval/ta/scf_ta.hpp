@@ -5,10 +5,10 @@
 #ifndef SEQUANT_EVAL_SCF_TA_HPP
 #define SEQUANT_EVAL_SCF_TA_HPP
 
+#include "SeQuant/domain/eval/eval_ta.hpp"
 #include "examples/eval/calc_info.hpp"
 #include "examples/eval/data_info.hpp"
 #include "examples/eval/scf.hpp"
-#include "examples/eval/ta/eval_ta.hpp"
 #include "examples/eval/ta/data_world_ta.hpp"
 
 #include <SeQuant/domain/eval/cache_manager.hpp>

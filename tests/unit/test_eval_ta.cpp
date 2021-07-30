@@ -5,7 +5,7 @@
 #include <SeQuant/core/sequant.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/domain/eval/eval.hpp>
-#include <examples/eval/ta/eval_ta.hpp>
+#include <SeQuant/domain/eval/eval_ta.hpp>
 
 #include <cstdlib>
 #include <string>

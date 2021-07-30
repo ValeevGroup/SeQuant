@@ -1,7 +1,7 @@
 #ifndef SEQUANT_EVAL_EVAL_TA_HPP
 #define SEQUANT_EVAL_EVAL_TA_HPP
 
-#include "SeQuant/domain/eval/eval.hpp"
+#include <SeQuant/domain/eval/eval.hpp>
 
 #include <tiledarray.h>
 #include <range/v3/all.hpp>

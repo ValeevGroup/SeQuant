@@ -273,7 +273,7 @@ set(utests_src
 
 if (TARGET tiledarray)
     list(APPEND utests_src
-        examples/eval/ta/eval_ta.hpp
+        SeQuant/domain/eval/eval_ta.hpp
         tests/unit/test_eval_ta.cpp
         )
 endif(TARGET tiledarray)
@@ -329,7 +329,7 @@ if (TARGET tiledarray)
     set(example2 eval_ta)
     add_executable(${example2} EXCLUDE_FROM_ALL
             ${example_eval_src}
-            examples/eval/ta/eval_ta.hpp
+            SeQuant/domain/eval/eval_ta.hpp
             examples/eval/ta/data_world_ta.hpp
             examples/eval/ta/scf_ta.hpp
             examples/eval/ta/main.cpp)
