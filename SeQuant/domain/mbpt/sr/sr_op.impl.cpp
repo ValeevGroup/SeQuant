@@ -69,7 +69,7 @@ ExprPtr Lambda(std::size_t Nbra, std::size_t Nket, bool complete_unoccupieds) {
 /// makes geminal excitation operator for ansatz @p ansatz
 ExprPtr R12(IndexSpace::Type gg_space, int ansatz) {
   assert(ansatz == 1 || ansatz == 2);
-  bool antisymm = (get_default_context().vacuum() != Vacuum::Physical);
+  bool antisymm = (get_default_context().spbasis() == SPBasis::spinorbital);
   return Op(OpType::R12, 2, 2)(ansatz == 2 ? IndexSpace::complete_unoccupied : IndexSpace::other_unoccupied, gg_space, antisymm);
 }
 

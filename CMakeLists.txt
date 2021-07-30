@@ -308,7 +308,7 @@ endif (TARGET tiledarray AND TARGET Libint2::cxx)
 
 set(example3 uccf12)
 add_executable(${example3} EXCLUDE_FROM_ALL
-    examples/${example3}/${example3}.cpp)
+    examples/${example3}/${example3}.cpp examples/uccf12/simplifications.h)
 target_link_libraries(${example3} SeQuant ${TBB_LIBRARIES})
 
 set(example4 antisymmetrizer_test)

@@ -9,8 +9,8 @@ namespace mbpt {
 
 std::vector<std::wstring>
     cardinal_tensor_labels() {
-  return {L"A", L"S", L"P", L"L", L"λ", L"h", L"f", L"g",
-          L"t", L"R", L"F", overlap_label(), L"a", L"ã", L"b", L"ᵬ"};
+  return {L"\\lambda",L"\\gamma",L"\\Gamma", L"A", L"S", L"P", L"L", L"λ", L"h", L"f", L"g",
+          L"t", L"R", L"F", overlap_label(), L"a", L"ã", L"b", L"ᵬ", L"E"};
 }
 
 std::wstring to_wstring(OpType op) {

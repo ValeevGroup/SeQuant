@@ -202,7 +202,7 @@ class antisymm_element {
               index_label_pos++;
             }
             auto new_tensor = ex<Tensor>(label, new_bras, new_kets);
-            new_product = new_product * new_tensor;
+            new_product = new_tensor * new_product;
             new_product->canonicalize();
           }
 
