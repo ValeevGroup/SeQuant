@@ -1,30 +1,57 @@
-#include <SeQuant/core/binary_node.hpp>
-#include <SeQuant/core/eval_expr.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/core/parse_expr.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/domain/eqs/cceqs.hpp>
-#include <SeQuant/domain/eval/eval.hpp>
-#include <SeQuant/domain/eval/eval_btas.hpp>
-#include <SeQuant/domain/eval/read_tensor_btas.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
+#include <clocale>
+#include <examples/eval/ta/eval_ta.hpp>
+#include <examples/eval/ta/read_tensor_ta.hpp>
+#include <iomanip>
+#include <iostream>
+#include <range/v3/view.hpp>
 
 #include <btas/btas.h>
 #include <btas/tensor_func.h>
-#include <fstream>
-#include <range/v3/all.hpp>
 
-#include <chrono>
-#include <iomanip>
-#include <iostream>
+namespace sequant::eval {
+
+template<typename R, typename F>
+void cartesian_foreach(const std::vector<R>& rs, F f) {
+  using container::svector;
+  using It = decltype(std::begin(rs[0]));
+  using T = typename R::value_type;
+  svector<It> its, ends;
+  for (const auto& r : rs) {
+    its.push_back(std::begin(r));
+    ends.push_back(std::end(r));
+  }
+  while (its.front() != ends.front()) {
+    svector<T> s;
+    s.reserve(its.size());
+    for (auto& it : its) {
+      s.push_back(*it);
+    }
+    f(s);
+    size_t i = its.size();
+    while (i > 0) {
+      --i;
+      ++its[i];
+      if (i == 0) break;
+      if (its[i] != ends[i]) break;
+      its[i] = std::begin(rs[i]);
+    }
+  }
+}
+
+} // namespace
 
 template <typename Tensor_t>
 class yield_leaf {
  private:
   size_t const nocc, nvirt;
 
-  Tensor_t const &fock, &eri, &t_vo, &t_vvoo;
+  Tensor_t const &fock, &eri, &t_vo, &t_vvoo, &t_vvvooo;
 
   auto range1_limits(sequant::Tensor const& tensor) {
     return tensor.const_braket() |
@@ -40,20 +67,23 @@ class yield_leaf {
 
  public:
   yield_leaf(size_t no, size_t nv, Tensor_t const& F, Tensor_t const& G,
-             Tensor_t const& ampl_vo, Tensor_t const& ampl_vvoo)
+             Tensor_t const& ampl_vo, Tensor_t const& ampl_vvoo,
+             Tensor_t const& ampl_vvvooo)
       : nocc{no},
         nvirt{nv},
         fock{F},
         eri{G},
         t_vo{ampl_vo},
-        t_vvoo{ampl_vvoo} {}
+        t_vvoo{ampl_vvoo},
+        t_vvvooo{ampl_vvvooo} {}
 
   Tensor_t operator()(sequant::Tensor const& texpr) {
-    auto rank = texpr.bra_rank() + texpr.ket_rank();
+    auto const rank = texpr.bra_rank() + texpr.ket_rank();
 
     if (texpr.label() == L"t") {
-      assert(rank == 2 || rank == 4 && "only t_vo and t_vvoo supported");
-      return rank == 2 ? t_vo : t_vvoo;
+      assert(rank == 2 || rank == 4 ||
+             rank == 6 && "only t_vo, t_vvoo, t_vvvooo supported");
+      return rank == 2 ? t_vo : rank == 4 ? t_vvoo : t_vvvooo;
     }
 
     assert((texpr.label() == L"g" || texpr.label() == L"f") &&
@@ -140,20 +170,31 @@ int main(int argc, char** argv) {
 
   auto t_vo = btas::Tensor<double>{btas::Range{nvirt, nocc}};
   auto t_vvoo = btas::Tensor<double>{btas::Range{nvirt, nvirt, nocc, nocc}};
+  auto t_vvvooo =
+      btas::Tensor<double>{btas::Range{nvirt, nvirt, nvirt, nocc, nocc, nocc}};
   t_vo.fill(0);
   t_vvoo.fill(0);
+  t_vvvooo.fill(0);
 
   auto d_vo = btas::Tensor<double>{btas::Range{nvirt, nocc}};
   auto d_vvoo = btas::Tensor<double>{btas::Range{nvirt, nvirt, nocc, nocc}};
-  d_vo.fill(0.);
-  d_vvoo.fill(0.);
+  auto d_vvvooo =
+      btas::Tensor<double>{btas::Range{nvirt, nvirt, nvirt, nocc, nocc, nocc}};
+  d_vo.fill(0);
+  d_vvoo.fill(0);
+  d_vvvooo.fill(0);
   for (auto a = 0; a < nvirt; ++a)
     for (auto i = 0; i < nocc; ++i) {
       d_vo(a, i) = fock(i, i) - fock(nocc + a, nocc + a);
       for (auto b = 0; b < nvirt; ++b)
-        for (auto j = 0; j < nocc; ++j)
+        for (auto j = 0; j < nocc; ++j) {
           d_vvoo(a, b, i, j) =
               d_vo(a, i) + fock(j, j) - fock(nocc + b, nocc + b);
+          for (auto c = 0; c < nvirt; ++c)
+            for (auto k = 0; k < nocc; ++k)
+              d_vvvooo(a, b, c, i, j, k) =
+                  d_vvoo(a, b, i, j) + fock(k, k) - fock(nocc + c, nocc + c);
+        }
     }
 
   // ============= SeQuant ==================== //
@@ -167,28 +208,27 @@ int main(int argc, char** argv) {
   sequant::TensorCanonicalizer::register_instance(
       std::make_shared<sequant::DefaultTensorCanonicalizer>());
 
-  auto cc_r = cceqvec{2, 2}(true, true, true, true, true);
+  auto cc_r = cceqvec{3, 3}(true, true, true, true, true);
 
   // canonicalize expressions while optimizing
   bool canon = true;
   auto nodes = ranges::views::tail(cc_r) |
                ranges::views::transform([canon](auto const& seqxpr) {
-                 return optimize(tail_factor(seqxpr), canon);
+                 // return optimize(tail_factor(seqxpr), canon);
+                 return sequant::to_eval_node(tail_factor(seqxpr));
                }) |
                ranges::to_vector;
 
   auto const& r1_node = nodes[0];
   auto const& r2_node = nodes[1];
+  auto const& r3_node = nodes[2];
 
-  auto yielder = yield_leaf{nocc, nvirt, fock, eri, t_vo, t_vvoo};
-
-  auto eval_inst_r1 = sequant::eval::eval_instance_btas{r1_node};
-  auto eval_inst_r2 = sequant::eval::eval_instance_btas{r2_node};
+  auto yielder = yield_leaf{nocc, nvirt, fock, eri, t_vo, t_vvoo, t_vvvooo};
 
   // true: leaf tensors (other than 't' tensors) will be cached
   // false: only intermediates will be cached
-  auto manager =
-      sequant::eval::make_cache_man<btas::Tensor<double>>(nodes, true);
+   auto manager =
+      sequant::eval::make_cache_manager<btas::Tensor<double>>(nodes, true);
 
   auto const g_vvoo = yielder(
       sequant::parse_expr_asymm(L"g_{a1,a2}^{i1,i2}")->as<sequant::Tensor>());
@@ -207,8 +247,9 @@ int main(int argc, char** argv) {
   do {
     ++iter;
     manager.reset_decaying();
-    auto r1 = eval_inst_r1.evaluate_asymm(yielder, manager);
-    auto r2 = eval_inst_r2.evaluate_asymm(yielder, manager);
+    auto r1 = sequant::eval::eval_antisymm(r1_node, yielder, manager);
+    auto r2 = sequant::eval::eval_antisymm(r2_node, yielder, manager);
+    auto r3 = sequant::eval::eval_antisymm(r3_node, yielder, manager);
 
     auto norm_last = std::sqrt(btas::dot(t_vvoo, t_vvoo));
 
@@ -217,8 +258,13 @@ int main(int argc, char** argv) {
       for (auto i = 0; i < nocc; ++i) {
         t_vo(a, i) += r1(a, i) / d_vo(a, i);
         for (auto b = 0; b < nvirt; ++b)
-          for (auto j = 0; j < nocc; ++j)
+          for (auto j = 0; j < nocc; ++j) {
             t_vvoo(a, b, i, j) += r2(a, b, i, j) / d_vvoo(a, b, i, j);
+            for (auto c = 0; c < nvirt; ++c)
+              for (auto k = 0; k < nocc; ++k)
+                t_vvvooo(a, b, c, i, j, k) +=
+                    r3(a, b, c, i, j, k) / d_vvvooo(a, b, c, i, j, k);
+          }
       }
     normdiff = norm_last - std::sqrt(btas::dot(t_vvoo, t_vvoo));
 

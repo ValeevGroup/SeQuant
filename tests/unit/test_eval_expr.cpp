@@ -202,15 +202,4 @@ TEST_CASE("TEST_EVAL_EXPR", "[EvalExpr]") {
     // sum of two nonsymmetric tensors
     REQUIRE(symmetry(imed(t5, t6)) == Symmetry::nonsymm);
   }
-
-  SECTION("Canonicalization") {
-    auto evxpr1 =
-        EvalExpr(parse_expr_asymm(L"g_{i1,i2}^{a1,a2}")->as<Tensor>());
-    auto evxpr2 =
-        EvalExpr(parse_expr_asymm(L"g_{i2,i1}^{a1,a2}")->as<Tensor>());
-
-    REQUIRE(evxpr1.tensor() == evxpr2.tensor());
-    REQUIRE_FALSE(evxpr1.scalar() == evxpr2.scalar());
-    REQUIRE(evxpr1.hash() == evxpr2.hash());
-  }
 }
