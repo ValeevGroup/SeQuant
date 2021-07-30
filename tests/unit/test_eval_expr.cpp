@@ -51,7 +51,7 @@ TEST_CASE("TEST_EVAL_EXPR", "[EvalExpr]") {
     auto const x3 = EvalExpr{p2->at(0)->as<Tensor>()};
     auto const x4 = EvalExpr{p2->at(1)->as<Tensor>()};
     auto const x5 = EvalExpr{x3, x4, EvalOp::Antisymm};
-    
+
     REQUIRE(x5.op() == EvalOp::Antisymm);
 
     auto p3 = parse_expr(L"S{a1,a2;i1,i2}:S * I{a1,a2;i1,i2}", Symmetry::nonsymm);
