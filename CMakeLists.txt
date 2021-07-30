@@ -12,10 +12,10 @@ FetchContent_Declare(
     BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/cmake/vg-build
     SUBBUILD_DIR ${CMAKE_CURRENT_BINARY_DIR}/cmake/vg-subbuild
 )
-FetchContent_GetProperties(vg_cmake_kit)
-if (NOT vg_cmake_kit_POPULATED)
-    FetchContent_MakeAvailable(vg_cmake_kit)
-endif(NOT vg_cmake_kit_POPULATED)
+# FetchContent_GetProperties(vg_cmake_kit)
+# if (NOT vg_cmake_kit_POPULATED)
+#     FetchContent_MakeAvailable(vg_cmake_kit)
+# endif(NOT vg_cmake_kit_POPULATED)
 
 # Set SeQuant version
 set(SEQUANT_MAJOR_VERSION 2)
@@ -204,12 +204,9 @@ add_library(SeQuant
         SeQuant/domain/eqs/cceqs.hpp
         SeQuant/domain/eqs/cceqs.cpp
         SeQuant/domain/eval/eval.hpp
-        SeQuant/domain/eval/read_tensor.hpp
-        SeQuant/domain/eval/read_tensor.cpp
+        SeQuant/domain/eval/cache_manager.hpp
         SeQuant/domain/utils/rand_color.cpp
         SeQuant/domain/utils/rand_color.hpp
-        SeQuant/domain/utils/cache_manager.hpp
-        SeQuant/domain/eval/eval.hpp
         SeQuant/domain/mbpt/convention.cpp
         SeQuant/domain/mbpt/convention.hpp
         SeQuant/domain/mbpt/op.cpp
@@ -246,6 +243,7 @@ add_library(SeQuant::SeQuant ALIAS SeQuant)  # to be able to use as subproject
 if (SEQUANT_EVAL_TESTS)
   include(FindOrFetchTiledArray)
 endif(SEQUANT_EVAL_TESTS)
+
 enable_testing(true)
 
 set(utests_src
@@ -275,7 +273,7 @@ set(utests_src
 
 if (TARGET tiledarray)
     list(APPEND utests_src
-        SeQuant/domain/eval/eval_ta.hpp
+        examples/eval/ta/eval_ta.hpp
         tests/unit/test_eval_ta.cpp
         )
 endif(TARGET tiledarray)
@@ -315,37 +313,43 @@ add_executable(${example1} EXCLUDE_FROM_ALL
     examples/${example1}/${example1}.cpp)
 target_link_libraries(${example1} SeQuant ${TBB_LIBRARIES})
 
-if (TARGET tiledarray)
-    set(example2 eval_ta_ccsd)
-    add_executable(${example2} EXCLUDE_FROM_ALL
-        SeQuant/domain/eval/read_tensor_ta.hpp
-        SeQuant/domain/eval/read_tensor_ta.cpp
-        SeQuant/domain/eval/eval_ta.hpp
-        examples/eval/eval_ta_ccsd.cpp)
-    target_link_libraries(${example2} SeQuant ${TBB_LIBRARIES} tiledarray)
+set(example_eval_src
+    examples/eval/eval_utils.hpp
+    examples/eval/options.hpp
+    examples/eval/options.cpp
+    examples/eval/data_info.hpp
+    examples/eval/data_info.cpp
+    examples/eval/calc_info.hpp
+    examples/eval/calc_info.cpp
+    examples/eval/scf.hpp
+    examples/eval/scf.cpp
+    )
 
-    set(example3 eval_ta_ccsdt)
-    add_executable(${example3} EXCLUDE_FROM_ALL
-            SeQuant/domain/eval/read_tensor_ta.hpp
-            SeQuant/domain/eval/read_tensor_ta.cpp
-            SeQuant/domain/eval/eval_ta.hpp
-            examples/eval/eval_ta_ccsdt.cpp)
-    target_link_libraries(${example3} SeQuant ${TBB_LIBRARIES} tiledarray)
+if (TARGET tiledarray)
+    set(example2 eval_ta)
+    add_executable(${example2} EXCLUDE_FROM_ALL
+            ${example_eval_src}
+            examples/eval/ta/eval_ta.hpp
+            examples/eval/ta/data_world_ta.hpp
+            examples/eval/ta/scf_ta.hpp
+            examples/eval/ta/main.cpp)
+    target_link_libraries(${example2} SeQuant ${TBB_LIBRARIES} tiledarray)
 endif(TARGET tiledarray)
 
 if(BTAS_SOURCE_DIR)
-    set(example4 eval_btas)
-    add_executable(${example4} EXCLUDE_FROM_ALL
-        SeQuant/domain/eval/read_tensor_btas.hpp
-        SeQuant/domain/eval/read_tensor_btas.cpp
-        SeQuant/domain/eval/eval_btas.hpp
-        examples/eval/eval_btas.cpp)
-    target_include_directories(${example4} PUBLIC ${BTAS_SOURCE_DIR} ${Boost_INCLUDE_DIRS})
-    target_link_libraries(${example4} SeQuant ${TBB_LIBRARIES})
+    set(example3 eval_btas)
+    add_executable(${example3} EXCLUDE_FROM_ALL
+            ${example_eval_src}
+            examples/eval/btas/read_tensor_btas.hpp
+            examples/eval/btas/read_tensor_btas.cpp
+            examples/eval/btas/eval_btas.hpp
+            examples/eval/btas/main.cpp)
+    target_include_directories(${example3} PUBLIC ${BTAS_SOURCE_DIR} ${Boost_INCLUDE_DIRS})
+    target_link_libraries(${example3} SeQuant ${TBB_LIBRARIES})
 endif(BTAS_SOURCE_DIR)
 
 # add tests for running examples
-set (lastexample 5)
+set (lastexample 4)
 foreach(i RANGE ${lastexample})
     if (TARGET ${example${i}})
         add_test(sequant/example/${example${i}}/build "${CMAKE_COMMAND}"

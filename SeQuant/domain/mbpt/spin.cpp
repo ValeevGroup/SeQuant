@@ -981,6 +981,31 @@ ExprPtr closed_shell_spintrace(
     return nullptr;
 }
 
+ExprPtr closedshell_cc_spintrace(const ExprPtr& expr) {
+  container::vector<container::vector<Index>> ext_index_groups;
+
+  Tensor A{};
+  for(auto& prod : *expr){
+    if(prod->is<Product>()){
+      if(prod->as<Product>().factor(0)->as<Tensor>().label() == L"A"){
+        A = prod->as<Product>().factor(0)->as<Tensor>();
+        break;
+      }
+    }
+  }
+
+  assert(A.bra().size() == A.ket().size());
+
+  auto b_iter = A.bra().begin();
+  for(auto k : A.ket()){
+    container::vector<Index> pair{k, *b_iter};
+    ext_index_groups.push_back(pair);
+    ++b_iter;
+  }
+  assert(ext_index_groups.size() == A.bra_rank());
+  return closed_shell_spintrace(expr, ext_index_groups);
+}
+
 ExprPtr spintrace(
     ExprPtr expression,
     container::vector<container::vector<Index>> ext_index_groups) {

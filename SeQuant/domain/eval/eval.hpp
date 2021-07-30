@@ -1,10 +1,10 @@
-#ifndef SEQUANT_DOMAIN_EVAL_HPP
-#define SEQUANT_DOMAIN_EVAL_HPP
+#ifndef SEQUANT_EVAL_EVAL_HPP
+#define SEQUANT_EVAL_EVAL_HPP
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval_node.hpp>
 #include <SeQuant/core/tensor.hpp>
-#include <SeQuant/domain/utils/cache_manager.hpp>
+#include <SeQuant/domain/eval/cache_manager.hpp>
 #include <range/v3/numeric.hpp>
 #include <range/v3/view.hpp>
 #include <type_traits>
@@ -104,27 +104,27 @@ void antisymmetrize_tensor(size_t rank, F&& callback) {
 }
 
 template <typename Tensor_t>
-utils::cache_manager<Tensor_t> make_cache_man(EvalNode const& node,
-                                              bool persistent_leaves) {
+CacheManager<Tensor_t> make_cache_manager(EvalNode const& node,
+                                          bool persistent_leaves) {
   container::map<size_t, size_t> hash_to_counts{};
   detail::count_imeds(node, hash_to_counts);
 
   auto less_repeating = [](auto const& pair) { return pair.second < 2; };
   ranges::actions::remove_if(hash_to_counts, less_repeating);
 
-  if (!persistent_leaves) return utils::cache_manager<Tensor_t>{hash_to_counts};
+  if (!persistent_leaves) return CacheManager<Tensor_t>{hash_to_counts};
 
   container::svector<size_t> leaf_hashes{};
   node.visit_leaf([&leaf_hashes](auto const& node) {
     leaf_hashes.emplace_back(node->hash());
   });
 
-  return utils::cache_manager<Tensor_t>{hash_to_counts, leaf_hashes};
+  return CacheManager<Tensor_t>{hash_to_counts, leaf_hashes};
 }
 
 template <typename Tensor_t, typename Iterable>
-utils::cache_manager<Tensor_t> make_cache_man(Iterable const& nodes,
-                                              bool persistent_leaves) {
+CacheManager<Tensor_t> make_cache_manager(Iterable const& nodes,
+                                          bool persistent_leaves) {
   container::map<size_t, size_t> hash_to_counts{};
 
   for (auto const& n : nodes) detail::count_imeds(n, hash_to_counts);
@@ -132,7 +132,7 @@ utils::cache_manager<Tensor_t> make_cache_man(Iterable const& nodes,
   auto less_repeating = [](auto const& pair) { return pair.second < 2; };
   ranges::actions::remove_if(hash_to_counts, less_repeating);
 
-  if (!persistent_leaves) return utils::cache_manager<Tensor_t>{hash_to_counts};
+  if (!persistent_leaves) return CacheManager<Tensor_t>{hash_to_counts};
 
   container::set<size_t> leaf_hashes{};
   for (auto const& n : nodes) {
@@ -141,9 +141,20 @@ utils::cache_manager<Tensor_t> make_cache_man(Iterable const& nodes,
     });
   }
 
-  return utils::cache_manager<Tensor_t>{hash_to_counts, leaf_hashes};
+  return CacheManager<Tensor_t>{hash_to_counts, leaf_hashes};
+}
+
+template <typename Tensor_t, typename Iterable>
+CacheManager<Tensor_t> make_cache_manager_leaves_only(Iterable const& nodes) {
+  container::set<EvalExpr::hash_t> leaf_hashes{};
+  for (auto const& n : nodes) {
+    n.visit_leaf([&leaf_hashes](auto const& node) {
+      if (node->tensor().label() != L"t") leaf_hashes.insert(node->hash());
+    });
+  }
+  return CacheManager<Tensor_t>{{}, leaf_hashes};
 }
 
 }  // namespace sequant::eval
 
-#endif  // SEQUANT_DOMAIN_EVAL_HPP
+#endif  // SEQUANT_EVAL_EVAL_HPP

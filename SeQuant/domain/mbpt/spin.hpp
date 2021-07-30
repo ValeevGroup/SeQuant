@@ -154,6 +154,8 @@ ExprPtr closed_shell_spintrace(
     const ExprPtr& expression,
     const container::vector<container::vector<Index>> ext_index_groups = {{}});
 
+ExprPtr closedshell_cc_spintrace(const ExprPtr& expr);
+
 /// @brief Transforms an expression from spin orbital to spatial orbitals
 /// @detailed Given an expression, this function extracts all indices and adds a
 /// spin attribute to all the indices in the expression. A map is generated with

@@ -37,18 +37,20 @@ void pull_scalar(sequant::ExprPtr expr) noexcept {
 
 EvalNode optimize(const ExprPtr& expr, bool canonize) {
   using ranges::views::transform;
-  if (expr->is<Tensor>()) return to_eval_node(expr);
-  if (expr->is<Product>()) {
+  if (expr->is<Tensor>())
+    return to_eval_node(expr);
+  else if (expr->is<Product>()) {
     return single_term_opt(expr->as<Product>(), canonize)
         .optimal_seqs.begin()
         ->clone();
-  } else {  // expr is sum
+  } else if (expr->is<Sum>()) {
     auto smands = *expr | transform([canonize](auto const& s) {
       return to_expr(optimize(s, canonize));
     }) | ranges::to_vector;
 
     return to_eval_node(ex<Sum>(Sum{smands.begin(), smands.end()}));
-  }
+  } else
+    throw std::runtime_error{"optimization attempted on unsupported Expr type"};
 }
 
 }  // namespace sequant::optimize
