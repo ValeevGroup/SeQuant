@@ -53,10 +53,6 @@ EvalExpr::EvalExpr(const EvalExpr& xpr1,
       std::get<1>(bk),
       s, infer_braket_symmetry(), infer_particle_symmetry(s)};
 
-  // canonicalize and compute phase
-  if (auto canon_biprod = tensor_.canonicalize(); canon_biprod)
-    scalar_ *= canon_biprod->as<Constant>();
-
   hash_ = hash_imed(expr1, expr2, op);
 }
 
