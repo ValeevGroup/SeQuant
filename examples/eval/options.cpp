@@ -124,7 +124,7 @@ std::string ParseConfigFile::help() const {
 }
 
 void ParseConfigFile::parse(std::string_view fname) {
-  auto ifs = std::ifstream{fname};
+  auto ifs = std::ifstream{fname.data()};
   if (!ifs.good()) throw std::runtime_error{"unable to read file"};
 
   auto const headers = std::vector<std::string_view>{eqs, optm, scf, log};
