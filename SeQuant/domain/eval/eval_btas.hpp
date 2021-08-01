@@ -1,14 +1,13 @@
 #ifndef SEQUANT_EVAL_BTAS_HPP
 #define SEQUANT_EVAL_BTAS_HPP
 
-#include "SeQuant/domain/eval/eval.hpp"
-
 #include <btas/btas.h>
 #include <SeQuant/core/binary_node.hpp>
 #include <SeQuant/core/tensor.hpp>
+#include <SeQuant/domain/eval/eval.hpp>
 #include <range/v3/all.hpp>
 
-namespace sequant::eval {
+namespace sequant::eval::btas {
 
 namespace detail {
 ///
@@ -27,8 +26,8 @@ auto index_hash = [](auto const& bk) {
 };  // index_hash
 
 template <typename Tensor_t>
-Tensor_t evaluate_inode_btas(EvalNode const& node, Tensor_t const& leval,
-                             Tensor_t const& reval) {
+Tensor_t eval_inode(EvalNode const& node, Tensor_t const& leval,
+                    Tensor_t const& reval) {
   assert((node->op() == EvalOp::Sum || node->op() == EvalOp::Prod) &&
          "unsupported intermediate operation");
 
@@ -50,7 +49,7 @@ Tensor_t evaluate_inode_btas(EvalNode const& node, Tensor_t const& leval,
 
     Tensor_t prod;
 
-    btas::contract(     //
+    ::btas::contract(   //
         scalar,         //
         leval, lannot,  //
         reval, rannot,  //
@@ -66,8 +65,8 @@ Tensor_t evaluate_inode_btas(EvalNode const& node, Tensor_t const& leval,
                                            auto const& child_seqt, auto scal) {
       auto pre_annot = index_hash(child_seqt.const_braket());
       Tensor_t result;
-      btas::permute(btensor, pre_annot, result, post_annot);
-      btas::scal(scal, result);
+      ::btas::permute(btensor, pre_annot, result, post_annot);
+      ::btas::scal(scal, result);
       return result;
     };
 
@@ -81,16 +80,39 @@ Tensor_t evaluate_inode_btas(EvalNode const& node, Tensor_t const& leval,
   }
 }
 
-} // namespace
-
 template <typename Tensor_t, typename Yielder>
-auto eval(EvalNode const& node, Yielder&& yielder, CacheManager<Tensor_t>& man) {
+auto eval_single_node(EvalNode const& node, Yielder&& leaf_evaluator,
+                      CacheManager<Tensor_t const>& cache_manager) {
   static_assert(
       std::is_invocable_r_v<Tensor_t, Yielder, sequant::Tensor const&>);
 
-  auto result = detail::evaluate_single_node(node,
-                                     std::forward<Yielder>(yielder),
-                                     detail::evaluate_inode_btas<Tensor_t>, man);
+  auto const key = node->hash();
+  if (auto&& exists = cache_manager.access(key); exists && exists.value())
+    return exists.value();
+  return node.leaf()
+             ? cache_manager.store(key, leaf_evaluator(node->tensor()))
+             : cache_manager.store(
+                   key,
+                   eval_inode(
+                       node,
+                       *eval_single_node(node.left(),
+                                         std::forward<Yielder>(leaf_evaluator),
+                                         cache_manager),
+                       *eval_single_node(node.right(),
+                                         std::forward<Yielder>(leaf_evaluator),
+                                         cache_manager)));
+}
+
+}  // namespace detail
+
+template <typename Tensor_t, typename Yielder>
+auto eval(EvalNode const& node, Yielder&& yielder,
+          CacheManager<Tensor_t>& man) {
+  static_assert(
+      std::is_invocable_r_v<Tensor_t, Yielder, sequant::Tensor const&>);
+
+  auto result =
+      *detail::eval_single_node(node, std::forward<Yielder>(yielder), man);
   // NOTE:
   // At this point the physical layout of `result`
   // maybe off from what is expected in the residual tensors
@@ -112,20 +134,19 @@ auto eval(EvalNode const& node, Yielder&& yielder, CacheManager<Tensor_t>& man) 
   ranges::sort(sorted_ket, Index::LabelCompare{});
 
   auto const pre_annot = detail::index_hash(node->tensor().const_braket());
-  auto const post_annot = detail::index_hash(ranges::views::concat(sorted_bra, sorted_ket));
+  auto const post_annot =
+      detail::index_hash(ranges::views::concat(sorted_bra, sorted_ket));
 
   auto scaled = decltype(result){};
-  btas::permute(result, pre_annot, scaled, post_annot);
-  btas::scal(node->scalar().value().real(), scaled);
+  ::btas::permute(result, pre_annot, scaled, post_annot);
+  ::btas::scal(node->scalar().value().real(), scaled);
   return scaled;
 }
 
 template <typename Tensor_t, typename Yielder>
-auto eval_symm(EvalNode const& node,
-               Yielder&& yielder,
+auto eval_symm(EvalNode const& node, Yielder&& yielder,
                CacheManager<Tensor_t>& man) {
-  auto pre_symm = eval(node,
-                       std::forward<Yielder>(yielder), man);
+  auto pre_symm = eval(node, std::forward<Yielder>(yielder), man);
   auto result = decltype(pre_symm){pre_symm.range()};
   result.fill(0.);
 
@@ -134,7 +155,7 @@ auto eval_symm(EvalNode const& node,
 
   auto symm_impl = [&result, &pre_symm, &lannot](auto const& annot) {
     decltype(result) temp;
-    btas::permute(pre_symm, lannot, temp, annot);
+    ::btas::permute(pre_symm, lannot, temp, annot);
     result += temp;
   };
 
@@ -143,8 +164,7 @@ auto eval_symm(EvalNode const& node,
 }
 
 template <typename Tensor_t, typename Yielder>
-auto eval_antisymm(EvalNode const& node,
-                    Yielder&& yielder,
+auto eval_antisymm(EvalNode const& node, Yielder&& yielder,
                    CacheManager<Tensor_t>& man) {
   auto pre_antisymm = eval(node, std::forward<Yielder>(yielder), man);
   auto result = decltype(pre_antisymm){pre_antisymm.range()};
@@ -154,17 +174,17 @@ auto eval_antisymm(EvalNode const& node,
                       ranges::to<sequant::eval::perm_type>;
 
   auto asymm_impl = [&result, &pre_antisymm,
-      &lannot](auto const& pwp) {  // pwp = phase with perm
+                     &lannot](auto const& pwp) {  // pwp = phase with perm
     decltype(result) temp;
-    btas::permute(pre_antisymm, lannot, temp, pwp.perm);
-    btas::scal(pwp.phase, temp);
+    ::btas::permute(pre_antisymm, lannot, temp, pwp.perm);
+    ::btas::scal(pwp.phase, temp);
     result += temp;
   };
 
-  detail::antisymmetrize_tensor(pre_antisymm.rank(), asymm_impl);
+  antisymmetrize_tensor(pre_antisymm.rank(), asymm_impl);
   return result;
 }
 
-}  // namespace sequant::eval
+}  // namespace sequant::eval::btas
 
 #endif  // SEQUANT_EVAL_BTAS_HPP

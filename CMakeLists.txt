@@ -340,9 +340,9 @@ if(BTAS_SOURCE_DIR)
     set(example3 eval_btas)
     add_executable(${example3} EXCLUDE_FROM_ALL
             ${example_eval_src}
-            examples/eval/btas/read_tensor_btas.hpp
-            examples/eval/btas/read_tensor_btas.cpp
-            examples/eval/btas/eval_btas.hpp
+            SeQuant/domain/eval/eval_btas.hpp
+            examples/eval/btas/data_world_btas.hpp
+            examples/eval/btas/scf_btas.hpp
             examples/eval/btas/main.cpp)
     target_include_directories(${example3} PUBLIC ${BTAS_SOURCE_DIR} ${Boost_INCLUDE_DIRS})
     target_link_libraries(${example3} SeQuant ${TBB_LIBRARIES})

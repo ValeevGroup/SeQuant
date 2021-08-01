@@ -43,6 +43,26 @@ void cartesian_foreach(const std::vector<R>& rs, F f) {
   }
 }
 
+///
+/// Maps the IndexSpace type of an index in the braket of a tensor
+/// to nocc (for IndexSpace::active_occupied)
+/// or nvirt (for IndexSpace::active_unoccupied)
+///
+/// \param tensor sequant::Tensor
+/// \return View of an iterable with size_t-type elements.
+///
+auto range1_limits(sequant::Tensor const& tensor, size_t nocc, size_t nvirt) {
+  static auto const ao = sequant::IndexSpace::active_occupied;
+  static auto const au = sequant::IndexSpace::active_unoccupied;
+  return tensor.const_braket() |
+  ranges::views::transform([nocc, nvirt](auto const& idx) {
+    const auto& sp = idx.space();
+    assert(sp == ao || sp == au);
+
+    return sp == ao ? nocc : nvirt;
+  });
+}
+
 template <typename Tensor_t>
 void read_tensor(std::string_view fname, Tensor_t& tensor) {
   auto ifs = std::ifstream{fname.data()};

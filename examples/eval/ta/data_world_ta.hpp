@@ -9,16 +9,15 @@
 #include "examples/eval/eval_utils.hpp"
 
 #include <tiledarray.h>
-#include <range/v3/view.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/tensor.hpp>
+#include <range/v3/view.hpp>
 
-namespace sequant::eval {
+namespace sequant::eval::ta {
 
 template <typename Tensor_t>
 class DataWorldTA {
  private:
-
   size_t const nocc;
 
   size_t const nvirt;
@@ -38,32 +37,12 @@ class DataWorldTA {
   ///
   /// \param fname Input file name
   /// \param tensor Output TA::DistArray tensor.
-  template <typename T>
-  static void read_tensor_ta(std::string_view fname, T& tensor) {
+  void read_tensor_ta(std::string_view fname, Tensor_t& tensor) {
     // TODO assert tensor single tiled or extend to handle multiply tiled case
-    auto ta_tensor = TA::Tensor<typename T::numeric_type>{tensor.trange().make_tile_range(0)};
+    auto ta_tensor = TA::Tensor<typename Tensor_t::numeric_type>{
+        tensor.trange().make_tile_range(0)};
     read_tensor(fname, ta_tensor);
     *tensor.begin() = ta_tensor;
-  }
-
-  ///
-  /// Maps the IndexSpace type of an index in the braket of a tensor
-  /// to nocc (for IndexSpace::active_occupied)
-  /// or nvirt (for IndexSpace::active_unoccupied)
-  ///
-  /// \param tensor sequant::Tensor
-  /// \return View of an iterable with size_t-type elements.
-  ///
-  auto range1_limits(sequant::Tensor const& tensor) const {
-    return tensor.const_braket() |
-           ranges::views::transform([this](auto const& idx) {
-             auto ao = sequant::IndexSpace::active_occupied;
-             auto au = sequant::IndexSpace::active_unoccupied;
-             const auto& sp = idx.space();
-             assert(sp == ao || sp == au);
-
-             return sp == ao ? nocc : nvirt;
-           });
   }
 
   ///
@@ -76,11 +55,11 @@ class DataWorldTA {
   template <typename Iterable>
   auto make_trange(Iterable const& pairs) const {
     using ranges::views::transform;
-    auto tr1s = pairs
-                | transform([](auto&& pair){
-                    auto const [lo, hi] = pair;
-        return TA::TiledRange1{lo, hi};
-    }) | ranges::to_vector;
+    auto tr1s = pairs | transform([](auto&& pair) {
+                  auto const [lo, hi] = pair;
+                  return TA::TiledRange1{lo, hi};
+                }) |
+                ranges::to_vector;
 
     return TA::TiledRange{tr1s.begin(), tr1s.end()};
   }
@@ -95,8 +74,8 @@ class DataWorldTA {
   ///
   void update_single_T(Tensor_t& T, Tensor_t const& R) {
     using namespace ranges::views;
-    assert(T.trange().rank() == R.trange().rank()
-           && "Incompatible ranks of R and T");
+    assert(T.trange().rank() == R.trange().rank() &&
+           "Incompatible ranks of R and T");
 
     assert(T.trange().rank() % 2 == 0 && "Odd rank not supported");
 
@@ -105,41 +84,39 @@ class DataWorldTA {
     auto tile_T = T.find(0).get();
     auto tile_R = R.find(0).get();
     auto tile_F = F_pq.find(0).get();
-    auto updater = [&tile_T, &tile_R, &tile_F,
-                    n, this](auto const& idx_vec){
+    auto updater = [&tile_T, &tile_R, &tile_F, n, this](auto const& idx_vec) {
       double diag = 0.;
-      for (auto x: idx_vec | take(n))
-        diag -= tile_F(x + nocc, x + nocc);
-      for (auto x: idx_vec | drop(n) | take(n))
-        diag += tile_F(x, x);
+      for (auto x : idx_vec | take(n)) diag -= tile_F(x + nocc, x + nocc);
+      for (auto x : idx_vec | drop(n) | take(n)) diag += tile_F(x, x);
 
       tile_T(idx_vec) += tile_R(idx_vec) / diag;
     };
 
-    auto virt_occ = concat(
-        repeat_n(iota(size_t{0}, nvirt) | ranges::to_vector, n),
-        repeat_n(iota(size_t{0}, nocc)  | ranges::to_vector, n))
-                    | ranges::to_vector;
+    auto virt_occ =
+        concat(repeat_n(iota(size_t{0}, nvirt) | ranges::to_vector, n),
+               repeat_n(iota(size_t{0}, nocc) | ranges::to_vector, n)) |
+        ranges::to_vector;
 
     cartesian_foreach(virt_occ, updater);
   }
 
  public:
-  DataWorldTA(TA::World& world,
-              size_t excit, DataInfo const& info):  nocc{info.nocc()},
-                                       nvirt{info.nvirt()},
-                                       fock_file{info.fock_file()},
-                                       eri_file{info.eri_file()} {
+  DataWorldTA(TA::World& world, DataInfo const& info, size_t excit,
+              bool spinify)
+      : nocc{info.nocc()},
+        nvirt{info.nvirt()},
+        fock_file{info.fock_file()},
+        eri_file{info.eri_file()} {
     using namespace ranges::views;
 
     //--------------------------------------------------------
     // read ERI and Fock tensors
     //--------------------------------------------------------
     auto const nobs = nocc + nvirt;
-    auto const fock_trange = make_trange(zip(repeat(0), repeat(nobs))
-                                         | take(DataInfo::fock_rank));
-    auto const eri_trange = make_trange(zip(repeat(0), repeat(nobs))
-                                        | take(DataInfo::eri_rank));
+    auto const fock_trange =
+        make_trange(zip(repeat(0), repeat(nobs)) | take(DataInfo::fock_rank));
+    auto const eri_trange =
+        make_trange(zip(repeat(0), repeat(nobs)) | take(DataInfo::eri_rank));
     F_pq = Tensor_t{world, fock_trange};
     G_pqrs = Tensor_t{world, eri_trange};
     read_tensor_ta(fock_file, F_pq);
@@ -153,13 +130,13 @@ class DataWorldTA {
     for (auto i = 0; i < excit; ++i) {
       size_t const bk_rank = i + 1;
       auto bra_tr1s = zip(repeat(0), repeat(nvirt)) | take(bk_rank);
-      auto ket_tr1s = zip(repeat(0), repeat(nocc))  | take(bk_rank);
+      auto ket_tr1s = zip(repeat(0), repeat(nocc)) | take(bk_rank);
       auto const trange = make_trange(concat(bra_tr1s, ket_tr1s));
       Ts.emplace_back(Tensor_t{world, trange});
       Ts[i].fill(0.);
     }
     //--------
-  } // ctor
+  }  // ctor
 
   Tensor_t operator()(sequant::Tensor const& tensor) const {
     using namespace ranges::views;
@@ -170,23 +147,21 @@ class DataWorldTA {
       return std::cref(Ts[rank - 1]);
     }
 
-    auto const r1_limits = range1_limits(tensor);
-    assert(r1_limits.size() == DataInfo::fock_rank
-           || r1_limits.size() == DataInfo::eri_rank);
+    auto const r1_limits = range1_limits(tensor, nocc, nvirt);
+    assert(r1_limits.size() == DataInfo::fock_rank ||
+           r1_limits.size() == DataInfo::eri_rank);
 
-    auto const iter_limits =  r1_limits
-                             | transform([this](auto x) {
-                                 return x == nocc ? std::pair{size_t{0}, nocc}
-                                                  : std::pair{nocc, nocc + nvirt};
-                               });
+    auto const iter_limits = r1_limits | transform([this](auto x) {
+                               return x == nocc ? std::pair{size_t{0}, nocc}
+                                                : std::pair{nocc, nocc + nvirt};
+                             });
 
     auto const tlabel = tensor.label();
     assert(tlabel == L"g" || tlabel == L"f");
 
     auto const& big_tensor = tlabel == L"g" ? G_pqrs : F_pq;
-    auto slice =
-        TA::TArrayD{big_tensor.world(),
-                    make_trange(zip(repeat(size_t{0}), r1_limits))};
+    auto slice = TA::TArrayD{big_tensor.world(),
+                             make_trange(zip(repeat(size_t{0}), r1_limits))};
     slice.fill(0);
 
     auto tile_orig = big_tensor.find(0).get();
@@ -214,19 +189,17 @@ class DataWorldTA {
   }
 
   void update_amplitudes(std::vector<Tensor_t> const& rs) {
-    assert(rs.size() == Ts.size()
-           && "Unequal number of Rs and Ts!");
+    assert(rs.size() == Ts.size() && "Unequal number of Rs and Ts!");
 
-    for (auto&& [t, r]: ranges::views::zip(Ts, rs))
-      update_single_T(t, r);
+    for (auto&& [t, r] : ranges::views::zip(Ts, rs)) update_single_T(t, r);
   }
 
   Tensor_t const& amplitude(size_t excitation) const {
-    return Ts[excitation-1];
+    return Ts[excitation - 1];
   }
 
-}; // class
+};  // class
 
-} // namespace
+}  // namespace sequant::eval::ta
 
 #endif  // SEQUANT_EVAL_DATA_WORLD_TA_HPP

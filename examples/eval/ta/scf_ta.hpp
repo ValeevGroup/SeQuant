@@ -5,15 +5,16 @@
 #ifndef SEQUANT_EVAL_SCF_TA_HPP
 #define SEQUANT_EVAL_SCF_TA_HPP
 
-#include "SeQuant/domain/eval/eval_ta.hpp"
+#include <SeQuant/core/container.hpp>
+#include <SeQuant/domain/eval/eval_ta.hpp>
+#include <SeQuant/core/eval_node.hpp>
+#include <SeQuant/core/parse_expr.hpp>
+#include <SeQuant/domain/eval/cache_manager.hpp>
+
 #include "examples/eval/calc_info.hpp"
 #include "examples/eval/data_info.hpp"
 #include "examples/eval/scf.hpp"
 #include "examples/eval/ta/data_world_ta.hpp"
-
-#include <SeQuant/domain/eval/cache_manager.hpp>
-#include <SeQuant/core/eval_node.hpp>
-#include <SeQuant/core/parse_expr.hpp>
 
 #include <chrono>
 
@@ -25,8 +26,6 @@ class SequantEvalScfTA final: public SequantEvalScf {
   container::vector<EvalNode> nodes_;
   CacheManager<Tensor_t const> cman_;
   DataWorldTA<Tensor_t> data_world_;
-
- private:
 
   Tensor_t const& f_vo() const {
     static Tensor_t tnsr = data_world_(parse_expr(L"f{a1;i1}", Symmetry::nonsymm)->as<Tensor>());
