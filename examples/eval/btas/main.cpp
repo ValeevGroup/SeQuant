@@ -39,8 +39,8 @@ int main(int argc, char* argv[]) {
               << "\n\n"
               << "Config file format\n"
               << "----\n"
-              << sequant::eval::ParseConfigFile{}.help() << "----\n";
-    return 1;
+              << sequant::eval::ParseConfigFile{}.help() << "\n----\n";
+    // return 1;
   }
 
   std::setlocale(LC_ALL, "en_US.UTF-8");
@@ -53,10 +53,16 @@ int main(int argc, char* argv[]) {
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
 
-  auto const calc_info =
-      eval::make_calc_info(argv[1], argv[2], argv[3], argc > 4 ? argv[4] : "");
+  std::string calc_config = argc > 1 ? argv[1] : "calc.inp";
+  std::string fock_file = argc > 2 ? argv[2] : "fock_so.dat";
+  std::string eri_file = argc > 3 ? argv[3] : "eri_so.dat";
+  // not yet implemented:
+  std::string out_file = argc > 4 ? argv[4] : "";
+  //
 
-  auto ofs = std::wofstream{argc > 4 ? argv[4] : ""};
+  auto const calc_info =
+      eval::make_calc_info(calc_config, fock_file, eri_file, out_file);
+
   eval::btas::SequantEvalScfBTAS<btas::Tensor<double>>{calc_info}.scf(
       std::wcout);
 

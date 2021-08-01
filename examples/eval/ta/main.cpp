@@ -13,20 +13,19 @@
 
 template <typename Os>
 Os& operator<<(Os& os, sequant::eval::CalcInfo const& info) {
-  os << std::boolalpha
-  << "[equation]\n"
-  << "excitation:" << info.eqn_opts.excit << "\n"
-  << "spintrace: " << info.eqn_opts.spintrace << "\n"
-  << "\n[optimization]\n"
-  << "single_term: " << info.optm_opts.single_term << "\n"
-  << "reuse_imeds: " << info.optm_opts.reuse_imeds << "\n"
-  << "cache_leaves: " << info.optm_opts.cache_leaves << "\n"
-  << "\n[scf]\n"
-  << "max_iter: " << info.scf_opts.max_iter << "\n"
-  << "conv: " << info.scf_opts.conv << "\n"
-  << "\n[log]\n"
-  << "level: " << info.log_opts.level << "\n"
-  << "file: " << info.log_opts.file;
+  os << std::boolalpha << "[equation]\n"
+     << "excitation:" << info.eqn_opts.excit << "\n"
+     << "spintrace: " << info.eqn_opts.spintrace << "\n"
+     << "\n[optimization]\n"
+     << "single_term: " << info.optm_opts.single_term << "\n"
+     << "reuse_imeds: " << info.optm_opts.reuse_imeds << "\n"
+     << "cache_leaves: " << info.optm_opts.cache_leaves << "\n"
+     << "\n[scf]\n"
+     << "max_iter: " << info.scf_opts.max_iter << "\n"
+     << "conv: " << info.scf_opts.conv << "\n"
+     << "\n[log]\n"
+     << "level: " << info.log_opts.level << "\n"
+     << "file: " << info.log_opts.file;
   return os;
 }
 
@@ -39,7 +38,8 @@ Os& operator<<(Os& os, sequant::eval::CalcInfo const& info) {
 /// size_t size_t size_t         # rank, nocc, nvirt
 /// double                       # data ------
 /// ...                          # data       |
-/// ...                          # ....       |  no. of double entries = (nocc+nvirt)^rank
+/// ...                          # ....       |  no. of double entries =
+/// (nocc+nvirt)^rank
 /// ...                          # data       |
 /// double                       # data ------
 /// ----------------------------
@@ -52,13 +52,13 @@ Os& operator<<(Os& os, sequant::eval::CalcInfo const& info) {
 int main(int argc, char* argv[]) {
   if (argc < 4) {
     std::cout << "\nHelp:\n"
-    << "<executable> <config_file> <fock_or_eri_file> <eri_or_fock_file> [<output_file>]"
-    << "\n\n"
-    << "Config file format\n"
-    << "----\n"
-    << sequant::eval::ParseConfigFile{}.help()
-    << "----\n";
-    return 1;
+              << "<executable> <config_file> <fock_or_eri_file> "
+                 "<eri_or_fock_file> [<output_file>]"
+              << "\n\n"
+              << "Config file format\n"
+              << "----\n"
+              << sequant::eval::ParseConfigFile{}.help() << "\n----\n";
+    // return 1;
   }
 
   std::setlocale(LC_ALL, "en_US.UTF-8");
@@ -72,13 +72,17 @@ int main(int argc, char* argv[]) {
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
 
+  std::string calc_config = argc > 1 ? argv[1] : "calc.inp";
+  std::string fock_file = argc > 2 ? argv[2] : "fock_so.dat";
+  std::string eri_file = argc > 3 ? argv[3] : "eri_so.dat";
+  // not yet implemented:
+  std::string out_file = argc > 4 ? argv[4] : "";
+  //
 
   auto const calc_info =
-      eval::make_calc_info(argv[1], argv[2], argv[3], argc > 4 ? argv[4] : "");
+      eval::make_calc_info(calc_config, fock_file, eri_file, out_file);
 
-  auto ofs = std::wofstream{argc > 4 ? argv[4] : ""};
-
-  eval::ta::SequantEvalScfTA<TA::TArrayD>{calc_info, world}.scf(std::wcout);
+  eval::ta::SequantEvalScfTA<TA::TArrayD>{world, calc_info}.scf(std::wcout);
 
   TA::finalize();
   return 0;

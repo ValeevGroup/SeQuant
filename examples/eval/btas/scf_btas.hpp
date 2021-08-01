@@ -95,7 +95,7 @@ class SequantEvalScfBTAS final : public SequantEvalScf {
   SequantEvalScfBTAS(CalcInfo const& calc_info)
       : SequantEvalScf{calc_info},
         cman_{{}, {}},
-        data_world_{calc_info.eqn_opts.excit, calc_info.fock_eri} {
+        data_world_{calc_info.fock_eri, calc_info.eqn_opts.excit} {
     assert(info_.eqn_opts.excit >= 2 &&
            "At least double excitation (CCSD) is required!");
     // todo time it

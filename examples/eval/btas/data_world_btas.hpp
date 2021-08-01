@@ -33,7 +33,7 @@ class DataWorldBTAS {
   container::vector<Tensor_t> Ts;
 
  public:
-  DataWorldBTAS(size_t excit, DataInfo const& info)
+  DataWorldBTAS(DataInfo const& info, size_t excit)
       : nocc{info.nocc()},
         nvirt{info.nvirt()},
         fock_file{info.fock_file()},
@@ -167,4 +167,4 @@ class DataWorldBTAS {
 
 }  // namespace sequant::eval::btas
 
-#endif  // SEQUANT_DATA_WORLD_BTAS_HPP
+#endif  // SEQUANT_EVAL_DATA_WORLD_BTAS_HPP

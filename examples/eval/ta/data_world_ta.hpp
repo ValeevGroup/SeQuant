@@ -101,8 +101,7 @@ class DataWorldTA {
   }
 
  public:
-  DataWorldTA(TA::World& world, DataInfo const& info, size_t excit,
-              bool spinify)
+  DataWorldTA(TA::World& world, DataInfo const& info, size_t excit)
       : nocc{info.nocc()},
         nvirt{info.nvirt()},
         fock_file{info.fock_file()},
