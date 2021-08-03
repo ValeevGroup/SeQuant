@@ -166,5 +166,12 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
         parse_expr_asymm(L"g_{i2,i3}^{i1,a2} * t_{a2}^{i2} * t_{a1}^{i3}");
     auto const n3 = to_eval_node(p3);
     REQUIRE(asy_cost(n3) == AsyCost{2, 1} + AsyCost{3, 1});
+
+    auto const t1 = parse_expr_asymm(L"I{i1,i2,i3;a1,a2,a3}");
+    auto const n4 = to_eval_node_antisymm(t1);
+    REQUIRE(asy_cost(n4) == AsyCost{3,3,36}); // 36*O^3*V^3
+
+    auto const n5 = to_eval_node_symm(t1);
+    REQUIRE(asy_cost(n5) == AsyCost{3,3,6}); // 6*O^3*V^3
   }
 }

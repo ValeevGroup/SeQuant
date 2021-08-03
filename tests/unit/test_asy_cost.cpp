@@ -55,6 +55,12 @@ TEST_CASE("TEST ASY_COST", "[AsyCost]") {
     clear();
     oss << AsyCost{1, 1} - AsyCost{2, 3} + AsyCost{2, 2};
     REQUIRE(oss.str() == L"OV + O^2V^2 - O^2V^3");
+
+    clear();
+    oss << AsyCost{1, 1, 20};
+    REQUIRE(oss.str() == L"20*OV");
+    REQUIRE(AsyCost{0,0} == AsyCost::zero());
+    REQUIRE(AsyCost{1, 1, 0} == AsyCost::zero());
   }
 
   SECTION("Comparisons") {

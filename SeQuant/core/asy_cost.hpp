@@ -110,7 +110,7 @@ class AsyCost {
 
   AsyCost &operator=(AsyCost &&) = default;
 
-  signed long long ops(unsigned short nocc, unsigned short int nvirt) const;
+  signed long long ops(unsigned short nocc, unsigned short nvirt) const;
 
   AsyCost operator+(AsyCost const &rhs) const;
 
