@@ -52,7 +52,9 @@ enum class qns { none = 0, alpha = 1, beta = 2 };
 auto qndecorate(qns qn, std::wstring_view label) {
   switch (static_cast<int>(qn)) {
     case 0: return std::wstring(label);
+//    case 1: return std::wstring(label) + L"^{\\alpha}";
     case 1: return std::wstring(label) + L"⁺";
+//    case 2: return std::wstring(label) + L"^{\\beta}";
     case 2: return std::wstring(label) + L"⁻";
     default: assert(false && "invalid quantum number");
   }

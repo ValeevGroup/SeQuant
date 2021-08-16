@@ -1,11 +1,20 @@
-#include "../sequant_setup.hpp"
+#include <SeQuant/core/op.hpp>
+#include <SeQuant/core/timer.hpp>
+#include <SeQuant/domain/eqs/cceqs.hpp>
+#include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/spin.hpp>
+
+#include <Eigen/Dense>
+#include <Eigen/Eigenvalues>
+
+#include <clocale>
 
 #include <Eigen/Dense>
 #include <Eigen/Eigenvalues>
 
 using namespace sequant;
 
-#define CLOSED_SHELL_SPINTRACE 0
+#define CLOSED_SHELL_SPINTRACE 1
 #if CLOSED_SHELL_SPINTRACE
 container::vector<double> biorthogonal_tran_coeff(const int n_particles, const double& threshold);
 std::vector<std::map<Index, Index>> biorthogonal_tran_idx_map(const container::vector<container::vector<Index>> ext_index_groups);
@@ -26,6 +35,8 @@ int main(int argc, char* argv[]) {
 
   mbpt::set_default_convention();
 
+  using sequant::eqs::compute_all;
+
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
   // set_num_threads(1);
@@ -37,26 +48,28 @@ int main(int argc, char* argv[]) {
 #endif
   const size_t NMAX = argc > 1 ? std::atoi(argv[1]) : DEFAULT_NMAX;
   // change to true to print out the resulting equations
-  constexpr bool print = true;
+  constexpr bool print = false;
   // change to true to print stats
   Logger::get_instance().wick_stats = false;
 
-    ranges::for_each(std::array<bool, 2>{false, true}, [=](const bool screen) {
-      ranges::for_each(
-          std::array<bool, 2>{false, true}, [=](const bool use_topology) {
-            ranges::for_each(std::array<bool, 2>{false, true},
-                             [=](const bool canonical_only) {
-                               tpool.clear();
-                               // comment out to run all possible combinations
-                               if (screen && use_topology && canonical_only)
-                                 compute_all{NMAX}(print, screen, use_topology,
-                                                   true, canonical_only);
-                             });
-          });
-    });
+  ranges::for_each(std::array<bool, 2>{false, true}, [=](const bool screen) {
+    ranges::for_each(
+        std::array<bool, 2>{false, true}, [=](const bool use_topology) {
+          ranges::for_each(std::array<bool, 2>{false, true},
+                           [=](const bool canonical_only) {
+                           // TODO tpool was in scope before
+                           // separting header and source files
+                           // tpool.clear();
+                           // comment out to run all possible combinations
+                           if (screen && use_topology && canonical_only)
+                           compute_all{NMAX}(print, screen, use_topology,
+                                   true, canonical_only);
+                           });
+        });
+  });
 
 #if CLOSED_SHELL_SPINTRACE
-  auto cc_r = cceqvec{ 4, 4}(true, true, true, true, true);
+  auto cc_r = sequant::eqs::cceqvec{3, 3}(true, true, true, true, true);
 
   /// Make external index
   auto ext_idx_list = [] (const int i_max){
@@ -77,6 +90,7 @@ int main(int argc, char* argv[]) {
     const auto tstart = std::chrono::high_resolution_clock::now();
     const auto list = ext_idx_list(i);
     cc_st_r[i] = closed_shell_spintrace(cc_r[i], list);
+    // cc_st_r[i] = closed_shell_cc_spintrace(cc_r[i]);
     auto tstop = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> time_elapsed = tstop - tstart;
     printf("CC R%d size: %lu spintrace: %5.6f sec.\n", i, cc_st_r[i]->size(), time_elapsed.count());
@@ -133,6 +147,7 @@ int main(int argc, char* argv[]) {
     time_elapsed = tstop - tstart;
     printf("CC R%d size: %lu simplify time: %5.6f sec.\n\n", i, cc_st_r[i]->size(), time_elapsed.count());
   }
+  std::wcout << "CCSDT: " << to_latex(*cc_st_r[3]) << std::endl;
 #endif
 
   return 0;

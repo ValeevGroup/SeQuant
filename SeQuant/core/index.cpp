@@ -42,7 +42,7 @@ Index::to_latex() const {
                L"pi",
                L"rho",
                L"varsigma",
-               L"sigma"
+               L"sigma",
                L"tau",
                L"upsilon",
                L"phi",
