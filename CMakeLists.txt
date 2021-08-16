@@ -309,10 +309,10 @@ if (TARGET tiledarray AND TARGET Libint2::cxx)
   target_compile_definitions(${example2} PRIVATE SEQUANT_HAS_TILEDARRAY)
 endif (TARGET tiledarray AND TARGET Libint2::cxx)
 
-set(example3 uccf12)
-add_executable(${example3} EXCLUDE_FROM_ALL
-    examples/${example3}/${example3}.cpp )
-target_link_libraries(${example3} SeQuant ${TBB_LIBRARIES})
+set(example5 uccf12)
+add_executable(${example5} EXCLUDE_FROM_ALL
+    examples/${example5}/${example5}.cpp )
+target_link_libraries(${example5} SeQuant ${TBB_LIBRARIES})
 
 set(example4 antisymmetrizer_test)
 add_executable(${example4} EXCLUDE_FROM_ALL

@@ -94,8 +94,21 @@ Product replace_idx(ExprPtr ex_, Index og, Index newer){
         }
         else{new_anns.push_back(ann.index());}
       }
-      auto new_op = ex<FNOperator>(new_cres,new_anns);
-      new_product = new_product * new_op;
+      if (factor->as<FNOperator>().ncreators() == 1){
+        auto o1 = make_overlap({L"p_7"},new_anns[0]);
+        auto o3 = make_overlap(new_cres[0],{L"p_9"});
+        new_product = new_product * o1 * o3;
+      }
+      else if(factor->as<FNOperator>().ncreators() == 2){
+        auto o1 = make_overlap({L"p_7"},new_anns[0]);
+        auto o2 = make_overlap({L"p_8"},new_anns[1]);
+        auto o3 = make_overlap(new_cres[0],{L"p_9"});
+        auto o4 = make_overlap(new_cres[1],{L"p_10"});
+        new_product = new_product * o1 * o2 * o3 * o4;
+      }
+      else{throw "does not handle size > 2";}
+      //auto new_op = ex<FNOperator>(new_cres,new_anns);
+      // new_product = new_product * new_op;
     }
   }
   auto result = (ex<Constant>(constant) * new_product);
@@ -304,12 +317,14 @@ ExprPtr hamiltonian_based(ExprPtr exprs){
   }
   non_canon_simplify(overlap_expr);
 
+  auto result = ex<Constant>(0);
   for (auto&& product : overlap_expr->as<Sum>().summands()){
-    std::vector<std::pair<Index,Index>> og_new;
+    auto new_product = ex<Constant>(product->as<Product>().scalar());
+   // std::vector<std::pair<Index,Index>> og_new;
     for (auto&& factor : product->as<Product>().factors()){ //loop through the factors once to learn about the indices.
       if(factor->is<Tensor>() && (factor->as<Tensor>().label() == L"E" || factor->as<Tensor>().label() == L"a")){
         factor = tens_to_op(factor);
-        int cre_iter = 1;
+        /*int cre_iter = 1;
         for (auto&& cre : factor->as<FNOperator>().creators()){
           og_new.push_back({cre.index(),new_idx(cre_iter, cre.index())});
           cre_iter +=1;
@@ -319,18 +334,39 @@ ExprPtr hamiltonian_based(ExprPtr exprs){
         for(auto&& ann : factor->as<FNOperator>().annihilators()){
           og_new.push_back({ann.index(),new_idx(ann_iter, ann.index())});
           ann_iter +=1;
+        }*/
+        if(factor->is<FNOperator>()) {
+          if (factor->as<FNOperator>().ncreators() == 1) {
+            auto o1 = make_overlap(
+                {L"p_7"}, factor->as<FNOperator>().annihilators()[0].index());
+            auto o3 = make_overlap(
+                factor->as<FNOperator>().creators()[0].index(), {L"p_9"});
+            new_product = new_product * o1 * o3;
+          } else if (factor->as<FNOperator>().ncreators() == 2) {
+            auto o1 = make_overlap(
+                {L"p_7"}, factor->as<FNOperator>().annihilators()[0].index());
+            auto o2 = make_overlap(
+                {L"p_8"}, factor->as<FNOperator>().annihilators()[1].index());
+            auto o3 = make_overlap(
+                factor->as<FNOperator>().creators()[0].index(), {L"p_9"});
+            auto o4 = make_overlap(
+                factor->as<FNOperator>().creators()[1].index(), {L"p_10"});
+            new_product = new_product * o1 * o2 * o3 * o4;
+          }
         }
       }
+      else{new_product = factor * new_product;}
     }
-    for (auto&& pair : og_new){// loop through again to update the indices
-      product->as<Product>() = replace_idx(product, pair.first, pair.second); //not sure if this equality works.
-    }
-    og_new.resize(0);
+    result = new_product + result;
+    /*for (auto&& pair : og_new){// loop through again to update the indices
+      product->as<Product>() = replace_idx(product, pair.first, pair.second);
+    }*/
+    //og_new.resize(0);
   }
 
-  non_canon_simplify(overlap_expr);
+  non_canon_simplify(result);
 
-  return overlap_expr;
+  return result;
   //std::wcout << "[H,R]12" << to_latex_align(overlap_expr, 20, 3) << std::endl;
 
 }
@@ -445,12 +481,14 @@ ExprPtr fock_based (ExprPtr exprs){
   }
   non_canon_simplify(double_overlap_expr);
 
+  auto result = ex<Constant>(0);
   for (auto&& product : double_overlap_expr->as<Sum>().summands()){
-    std::vector<std::pair<Index,Index>> og_new;
+    auto new_product = ex<Constant>(product->as<Product>().scalar());
+    // std::vector<std::pair<Index,Index>> og_new;
     for (auto&& factor : product->as<Product>().factors()){ //loop through the factors once to learn about the indices.
       if(factor->is<Tensor>() && (factor->as<Tensor>().label() == L"E" || factor->as<Tensor>().label() == L"a")){
         factor = tens_to_op(factor);
-        int cre_iter = 1;
+        /*int cre_iter = 1;
         for (auto&& cre : factor->as<FNOperator>().creators()){
           og_new.push_back({cre.index(),new_idx(cre_iter, cre.index())});
           cre_iter +=1;
@@ -460,17 +498,39 @@ ExprPtr fock_based (ExprPtr exprs){
         for(auto&& ann : factor->as<FNOperator>().annihilators()){
           og_new.push_back({ann.index(),new_idx(ann_iter, ann.index())});
           ann_iter +=1;
+        }*/
+        if(factor->is<FNOperator>()) {
+          if (factor->as<FNOperator>().ncreators() == 1) {
+            auto o1 = make_overlap(
+                {L"p_7"}, factor->as<FNOperator>().annihilators()[0].index());
+            auto o3 = make_overlap(
+                factor->as<FNOperator>().creators()[0].index(), {L"p_9"});
+            new_product = new_product * o1 * o3;
+          } else if (factor->as<FNOperator>().ncreators() == 2) {
+            auto o1 = make_overlap(
+                {L"p_7"}, factor->as<FNOperator>().annihilators()[0].index());
+            auto o2 = make_overlap(
+                {L"p_8"}, factor->as<FNOperator>().annihilators()[1].index());
+            auto o3 = make_overlap(
+                factor->as<FNOperator>().creators()[0].index(), {L"p_9"});
+            auto o4 = make_overlap(
+                factor->as<FNOperator>().creators()[1].index(), {L"p_10"});
+            new_product = new_product * o1 * o2 * o3 * o4;
+          }
         }
       }
+      else{new_product = factor * new_product;}
     }
-    for (auto&& pair : og_new){// loop through again to update the indices
-      product->as<Product>() = replace_idx(product, pair.first, pair.second); //
-    }
-    og_new.resize(0);
+    result = new_product + result;
+    /*for (auto&& pair : og_new){// loop through again to update the indices
+      product->as<Product>() = replace_idx(product, pair.first, pair.second);
+    }*/
+    //og_new.resize(0);
   }
 
-  non_canon_simplify(double_overlap_expr);
-  return double_overlap_expr;
+  non_canon_simplify(result);
+
+  return result;
 }
 }
 #ifndef SEQUANT_SIMPLIFICATIONS_H
