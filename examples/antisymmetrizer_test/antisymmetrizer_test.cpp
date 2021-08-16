@@ -2,7 +2,7 @@
 #include <SeQuant/core/wick.hpp>
 #include <iostream>
 #include "../sequant_setup.hpp"
-#include "three_body_decomp.hpp"
+#include "../../SeQuant/domain/transcorrelated/three_body_decomp.hpp"
 
 using namespace sequant;
 

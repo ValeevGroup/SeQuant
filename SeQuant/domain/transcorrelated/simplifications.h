@@ -2,8 +2,11 @@
 // Created by Conner Masteran on 7/29/21.
 //
 #include <SeQuant/core/wick.hpp>
-#include "../sequant_setup.hpp"
+#include <SeQuant/core/op.hpp>
+#include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/expr.hpp>
 
+using namespace sequant;
 //various simplifications of tensor-operator expressions based on properties of particular tensors. Also functionality for restricting our operators and densities to the orbital basis set (obs).
 namespace simplification{
 //in various transformation methods it seems as if the constants are removed or treated separatly from the main transformed hamiltonian expression.
