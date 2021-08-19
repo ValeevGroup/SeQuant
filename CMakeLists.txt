@@ -190,15 +190,23 @@ add_library(SeQuant
         SeQuant/core/asy_cost.cpp
         SeQuant/core/eval_node.hpp
         SeQuant/core/eval_node.cpp
+        SeQuant/core/parse_expr.cpp
+        SeQuant/core/parse_expr.hpp
         SeQuant/core/optimize/optimize.hpp
         SeQuant/core/optimize/optimize.cpp
+        SeQuant/core/parse/token.hpp
+        SeQuant/core/parse/token.cpp
+        SeQuant/core/parse/token_sequant.hpp
+        SeQuant/core/parse/token_sequant.cpp
+        SeQuant/core/parse/rpn.hpp
+        SeQuant/core/parse/rpn.cpp
+        SeQuant/core/parse/regex_sequant.hpp
+        SeQuant/core/parse/regex_sequant.cpp
         SeQuant/domain/eqs/cceqs.hpp
         SeQuant/domain/eqs/cceqs.cpp
         SeQuant/domain/eval/eval.hpp
         SeQuant/domain/eval/read_tensor.hpp
         SeQuant/domain/eval/read_tensor.cpp
-        SeQuant/core/parse_expr.cpp
-        SeQuant/core/parse_expr.hpp
         SeQuant/domain/utils/rand_color.cpp
         SeQuant/domain/utils/rand_color.hpp
         SeQuant/domain/utils/cache_manager.hpp
@@ -265,10 +273,11 @@ set(utests_src
          tests/unit/test_asy_cost.cpp
          tests/unit/test_eval_node.cpp
          tests/unit/test_optimize.cpp
+         tests/unit/test_token_sequant.cpp
+         tests/unit/test_rpn.cpp
         )
 
 if (TARGET tiledarray)
-    message("tiledarray found")
     list(APPEND utests_src
         SeQuant/domain/eval/eval_ta.hpp
         tests/unit/test_eval_ta.cpp

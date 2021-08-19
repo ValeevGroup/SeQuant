@@ -1,15 +1,13 @@
 #include "parse_expr.hpp"
 
-#include <SeQuant/core/expr_fwd.hpp>
-#include <SeQuant/core/tensor.hpp>
-#include <range/v3/view.hpp>
+#include <SeQuant/core/parse/regex_sequant.hpp>
+#include <SeQuant/core/parse/rpn.hpp>
+#include <SeQuant/core/parse/token_sequant.hpp>
 #include <regex>
 #include <string>
+#include <cwctype>
 
-namespace sequant {
-
-namespace detail {
-
+namespace sequant::parse {
 std::wstring prune_space(std::wstring_view raw) {
   return std::regex_replace(raw.data(), std::wregex(L"[[:space:]]+"), L"");
 }
@@ -21,130 +19,220 @@ double to_decimal(std::wstring_view numstr) {
   return wiss ? num : 0;
 }
 
-double as_fraction(std::wstring_view num, std::wstring_view denom) {
+double to_fraction(std::wsmatch const& match) {
+  auto const num = match[1].str();
+  auto const denom = match[2].str();
   return (num.empty() ? 1.0 : to_decimal(num)) /
          (denom.empty() ? 1.0 : to_decimal(denom));
 }
 
-bool validate_term(std::wstring_view expr) {
-  return std::regex_match(
-      expr.data(),
-      std::wregex(expr_rgx_pat.at("term"), std::regex_constants::nosubs));
+container::vector<Index> to_indices(std::wstring_view raw_csv_indices) {
+  using ranges::views::transform;
+  using ranges::views::split;
+    std::wostringstream oss{};
+    wchar_t last_char = L' ';
+    for (auto x: raw_csv_indices){
+      if (std::iswalpha(last_char) && std::iswdigit(x))
+        oss << L'_';
+      oss << x;
+      last_char = x;
+    }
+    auto with_uscores = oss.str();
+
+    return split(with_uscores,L',')
+           | transform([](auto&& idx_rng){
+             return Index{ranges::to<std::wstring>(idx_rng)}; })
+           | ranges::to<container::vector<Index>>;
 }
 
-bool validate_sum(std::wstring_view expr) {
-  return std::regex_match(
-      expr.data(),
-      std::wregex(expr_rgx_pat.at("sum"), std::regex_constants::nosubs));
-}
-
-ExprPtr make_tensor(const std::wsmatch& match_obj, Symmetry tensor_sym) {
-  // HELPER LAMBDAS
-  /*
-   * i1   : i_1
-   * a10  : a_10
-   * i_1  : i_1
-   * a_10 : a_10
-   */
-  auto add_underscore = [](const std::wstring& lbl) -> std::wstring {
-    auto noUscore =
-        lbl |
-        ranges::views::filter([](const auto& x) { return x != char{'_'}; }) |
-        ranges::to<std::wstring>;
-    return noUscore.substr(0, 1) + L"_" + noUscore.substr(1);
-  };
-
-  auto indices = [&](const std::wstring& bk) {
-    return bk | ranges::views::tokenize(std::wregex(expr_rgx_pat.at("index"))) |
-           ranges::views::transform(add_underscore) |
-           ranges::to<container::vector<Index>>;
-  };
-  // HELPER LAMBDAS END
-
-  const auto& lbl = match_obj[1].str();
-  const auto& bra = match_obj[2].str();
-  const auto& ket = match_obj[3].str();
-
-  return ex<Tensor>(Tensor{lbl, indices(bra), indices(ket), tensor_sym});
-}
-
-ExprPtr parse_tensor_term(const std::wstring& expr, Symmetry tensor_sym) {
-  std::wsmatch match_obj;
-  std::regex_search(expr, match_obj, std::wregex(expr_rgx_pat.at("tensor")));
-  return make_tensor(match_obj, tensor_sym);
-}
-
-ExprPtr parse_product_term(const std::wstring& expr, Symmetry tensor_sym) {
-  using namespace std::string_literals;
-  // find the scalar first
-  std::wsmatch match_obj;
-  std::regex_search(
-      expr, match_obj,
-      std::wregex(LR"(^(\+|-)?)"s +                       // optional +/- sign
-                  L"(?:" + expr_rgx_pat.at("fraction") +  // optional fraction
-                  L")?"));
-  double scalar =
-      (!match_obj[1].matched || match_obj[1].str() == L"+") ? 1.0 : -1.0;
-
-  scalar *= as_fraction(match_obj[2].matched ? match_obj[2].str() : L"1.0",
-                        match_obj[3].matched ? match_obj[3].str() : L"1.0");
-
-  // find the tensors
-  const auto& tregex = std::wregex(expr_rgx_pat.at("tensor"));
-  std::wsregex_iterator beg(expr.cbegin(), expr.cend(), tregex);
-  std::wsregex_iterator end{};
-
-  auto tensors = ranges::make_subrange(beg, end) |
-                 ranges::views::transform([&tensor_sym](const auto& x) {
-                   return make_tensor(x, tensor_sym);
-                 }) |
-                 ranges::to<container::svector<ExprPtr>>;
-
-  if (scalar == 1.0 && tensors.size() == 1) return tensors[0];
-
-  return ex<Product>(Product(scalar, tensors.begin(), tensors.end()));
-}
-
-ExprPtr parse_term(const std::wstring& expr, Symmetry tensor_sym) {
-  if (std::regex_match(expr, std::wregex(expr_rgx_pat.at("tensor_term"),
-                                         std::regex_constants::nosubs))) {
-    return parse_tensor_term(expr, tensor_sym);
-  } else if (std::regex_match(expr,
-                              std::wregex(expr_rgx_pat.at("product_term"),
-                                          std::regex_constants::nosubs))) {
-    return parse_product_term(expr, tensor_sym);
-  } else {
-    return nullptr;  // not reachable
+std::unique_ptr<Token> to_operand_tensor(std::wsmatch const& match, Symmetry s){
+  if (match[4].matched){
+    auto sm_char = match[4].str();
+    if (sm_char == L"S") s = Symmetry::symm;
+    else if (sm_char == L"A") s = Symmetry::antisymm;
+    else if (sm_char == L"N") s = Symmetry::nonsymm;
   }
+  return token<OperandTensor>(match[1].str(),
+                              to_indices(match[2].str()),
+                              to_indices(match[3].str()), s);
+}
 }
 
-ExprPtr parse_sum(const std::wstring& expr, Symmetry tensor_sym) {
-  auto summands = expr |
-                  ranges::views::tokenize(std::wregex{
-                      expr_rgx_pat.at("term"), std::regex_constants::nosubs}) |
-                  ranges::views::transform([&tensor_sym](const auto& x) {
-                    return parse_term(x, tensor_sym);
-                  });
-  return ex<Sum>(Sum{summands.begin(), summands.end()});
+namespace sequant {
+
+ExprPtr parse_expr(std::wstring_view raw_expr, Symmetry symmetry){
+  using namespace parse;
+  using pattern = regex_patterns;
+
+  auto throw_invalid_expr = []() {
+    throw std::runtime_error("Invalid expression!");
+  };
+
+  static auto const tensor_exp = std::wregex{pattern::tensor_expanded().data()};
+  static auto const tensor_terse = std::wregex{pattern::tensor_terse().data()};
+  static auto const fraction = std::wregex{pattern::fraction().data()};
+  static auto const times = std::wregex{L"\\*"};
+  static auto const plus  = std::wregex{L"\\+"};
+  static auto const minus = std::wregex{L"\\-"};
+  static auto const paren_left = std::wregex{L"\\("};
+  static auto const paren_right = std::wregex{L"\\)"};
+
+  auto const expr = parse::prune_space(raw_expr);
+
+  std::wsmatch match;
+  auto iter = expr.begin();
+  auto validate = [&iter, &match, &expr](std::wregex const& rgx) -> bool {
+    std::regex_search(iter, expr.end(), match, rgx);
+
+    if (match.empty() || iter != match.begin()->first) return false;
+    else {
+      iter = match.begin()->second;
+      return true;
+    }
+  };
+
+  auto rpn = parse::ReversePolishNotation{};
+
+  std::unique_ptr<Token> last_token = token<TokenDummy>();
+
+  auto add_times_if_needed = [&rpn, &last_token]() {
+    if (last_token->is<RightParenthesis>()
+        || last_token->is<Operand>())
+      rpn.add_operator(token<OperatorTimes>());
+  };
+
+  while (iter != expr.end()) {
+    if (validate(tensor_terse)||validate(tensor_exp)) {
+      add_times_if_needed();
+
+      rpn.add_operand(to_operand_tensor(match, symmetry));
+      last_token = token<OperandTensor>(L"Dummy",
+                                        IndexList{L"i_1"},
+                                        IndexList{L"a_1"});
+    } else if (validate(fraction)) {
+      add_times_if_needed();
+      rpn.add_operand(token<OperandConstant>(to_fraction(match)));
+      last_token = token<OperandConstant>(0); // dummy
+    } else if (validate(times)) {
+      if (last_token->is<Operator>()) throw_invalid_expr();
+      rpn.add_operator(token<OperatorTimes>());
+      last_token = token<OperatorTimes>();
+    } else if (validate(plus)) {
+      if (last_token->is<parse::Operator>()) throw_invalid_expr();
+      if (last_token->is<TokenDummy>() || last_token->is<LeftParenthesis>()) {
+        rpn.add_operator(token<OperatorPlusUnary>());
+        last_token = token<OperatorPlusUnary>();
+      }
+      else {
+        rpn.add_operator(token<OperatorPlus>());
+        last_token = token<OperatorPlus>();
+      }
+    } else if (validate(minus)) {
+      if (last_token->is<Operator>()) throw_invalid_expr();
+      if (last_token->is<TokenDummy>() || last_token->is<LeftParenthesis>()) {
+        rpn.add_operator(token<OperatorMinusUnary>());
+        last_token = token<OperatorMinusUnary>();
+      }
+      else {
+        rpn.add_operator(token<OperatorMinus>());
+        last_token = token<OperatorMinus>();
+      }
+    } else if (validate(paren_left)) {
+      add_times_if_needed();
+      rpn.add_left_parenthesis();
+      last_token = token<LeftParenthesis>();
+    } else if (validate(paren_right)){
+      if (last_token->is<Operator>()) throw_invalid_expr();
+      if (!rpn.add_right_parenthesis())
+        throw_invalid_expr();
+      last_token = token<RightParenthesis>();
+    } else {
+      throw_invalid_expr();
+    }
+  }
+
+  if (!rpn.close()) throw_invalid_expr();
+
+  if (rpn.tokens().empty())
+    return nullptr;
+
+#if 0
+  std::wcout << "RPN:\n";
+  for (auto const& t: rpn.tokens())
+    if (t->is<OperandTensor>())
+      std::wcout << t->as<OperandTensor>().to_latex();
+    else if (t->is<OperandConstant>())
+      std::wcout << t->as<OperandConstant>().to_latex();
+    else if (t->is<OperatorTimes>())
+      std::wcout << " * ";
+    else if (t->is<OperatorPlus>())
+      std::wcout << " + ";
+    else if (t->is<OperatorMinus>())
+      std::wcout << " - ";
+    else if (t->is<OperatorPlusUnary>())
+      std::wcout << " +u ";
+    else if (t->is<OperatorMinusUnary>())
+      std::wcout << " -u ";
+    else
+      std::wcout << "<invalid>";
+  std::wcout << std::endl;
+#endif //
+
+  auto result = container::vector<ExprPtr>{};
+  for (auto const& t: rpn.tokens()){
+    if (t->is<OperandTensor>())
+      result.push_back(t->as<OperandTensor>().clone());
+    else if (t->is<OperandConstant>())
+      result.push_back(t->as<OperandConstant>().clone());
+    else if (t->is<OperatorPlusUnary>()) {
+      if (result.empty()) throw_invalid_expr();
+      continue;
+    }
+    else if (t->is<OperatorMinusUnary>()){
+      if (result.empty()) throw_invalid_expr();
+      result[0] = ex<Constant>(-1)*result[0];
+    }
+    else {
+      if (result.empty()) throw_invalid_expr();
+
+      auto rhs_operand = result[result.size()-1];
+      result.pop_back();
+      auto lhs_operand = result[result.size()-1];
+      result.pop_back();
+
+      if (t->is<OperatorPlus>())
+        result.push_back(lhs_operand + rhs_operand);
+      else if (t->is<OperatorMinus>())
+        result.push_back(lhs_operand - rhs_operand);
+      else if (t->is<OperatorTimes>()) {
+        auto prod_ptr = lhs_operand->is<Product>() ? lhs_operand:
+                                                   ex<Product>(1, ExprPtrList{lhs_operand});
+        auto& prod = prod_ptr->as<Product>();
+        auto append_prod = [&prod](ExprPtr lrhs){
+          auto& p = lrhs->as<Product>();
+          prod.scale(p.scalar());
+          p.scale(1./p.scalar());
+          if (p.size() == 1)
+            prod.append(1.,p.factor(0));
+          else prod.append(lrhs);
+        };
+
+        if (rhs_operand->is<Product>())
+          append_prod(rhs_operand);
+        else prod.append(1., rhs_operand);
+
+        result.push_back(prod_ptr);
+      }
+      else assert(false && "Unknown token type");
+    }
+  }
+
+  if (result.size() != 1) throw_invalid_expr();
+  return result[0];
 }
 
-}  // namespace detail
-
-ExprPtr parse_expr(std::wstring_view raw, Symmetry tensor_sym) {
-  const auto& expr = detail::prune_space(raw);
-  using detail::expr_rgx_pat;
-  if (std::regex_match(expr, std::wregex{expr_rgx_pat.at("term"),
-                                         std::regex_constants::nosubs}))
-    return detail::parse_term(expr, tensor_sym);
-  else if (std::regex_match(expr, std::wregex(expr_rgx_pat.at("sum"),
-                                              std::regex_constants::nosubs))) {
-    return detail::parse_sum(expr, tensor_sym);
-  } else
-    throw std::logic_error("Expression parse error. Invalid expression spec.");
-}
-
-ExprPtr parse_expr_asymm(std::wstring_view raw){
-return parse_expr(raw, Symmetry::antisymm);
+ExprPtr parse_expr_asymm(std::wstring_view raw) {
+  return parse_expr(raw, Symmetry::antisymm);
 }
 
 }  // namespace sequant
