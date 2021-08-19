@@ -214,7 +214,7 @@ add_library(SeQuant
         SeQuant/domain/transcorrelated/antisymmetrizer.hpp
         SeQuant/domain/transcorrelated/simplifications.h
         SeQuant/domain/transcorrelated/three_body_decomp.hpp
-        )
+        SeQuant/domain/eqs/single_ref_uccf12.h)
 
 target_link_libraries(SeQuant PUBLIC range-v3::range-v3 Boost::boost SeQuant-bliss Threads::Threads)
 if (SEQUANT_HAS_EXECUTION_HEADER_STANDALONE OR SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB)
@@ -319,11 +319,6 @@ if (TARGET tiledarray)
         examples/eval/eval_ta.cpp)
     target_link_libraries(${example2} SeQuant ${TBB_LIBRARIES} tiledarray)
 endif(TARGET tiledarray)
-
-set(example5 uccf12)
-add_executable(${example5} EXCLUDE_FROM_ALL
-    examples/${example5}/${example5}.cpp )
-target_link_libraries(${example5} SeQuant ${TBB_LIBRARIES})
 
 set(example4 antisymmetrizer_test)
 add_executable(${example4} EXCLUDE_FROM_ALL

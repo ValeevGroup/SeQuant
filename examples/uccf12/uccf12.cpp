@@ -1,12 +1,15 @@
-#include <SeQuant/core/wick.hpp>
-#include "../sequant_setup.hpp"
 #include "../../SeQuant/domain/transcorrelated/three_body_decomp.hpp"
-#include <locale>
-#include <codecvt>
 #include "../../SeQuant/domain/transcorrelated/simplifications.h"
+#include <SeQuant/core/timer.hpp>
+#include <SeQuant/core/wick.hpp>
+#include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/sr/sr.hpp>
 
+#include <clocale>
 
 using namespace sequant;
+using namespace sequant::mbpt::sr::so;
+
 
 void try_main();
 
