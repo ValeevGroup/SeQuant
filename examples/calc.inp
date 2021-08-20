@@ -1,0 +1,14 @@
+equation
+excitation     2
+spintrace      no
+
+optimization
+single_term    yes
+reuse_imeds    yes
+cache_leaves   yes
+
+scf
+tightness      normal
+
+log
+level          1

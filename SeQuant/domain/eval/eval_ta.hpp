@@ -1,16 +1,18 @@
-#ifndef SEQUANT_EVAL_TA_HPP
-#define SEQUANT_EVAL_TA_HPP
+#ifndef SEQUANT_EVAL_EVAL_TA_HPP
+#define SEQUANT_EVAL_EVAL_TA_HPP
 
-#include "eval.hpp"
+#include <SeQuant/domain/eval/eval.hpp>
 
 #include <tiledarray.h>
 #include <range/v3/all.hpp>
 
-namespace sequant::eval {
+namespace sequant::eval::ta {
+
+namespace detail {
 
 auto const braket_to_annot = [](auto const& bk) {
   std::string annot;
-  for(auto& idx : bk){
+  for (auto& idx : bk) {
     annot += idx.string_label() + ",";
   }
   annot.pop_back();
@@ -28,10 +30,9 @@ auto const ords_to_annot = [](auto const& ords) {
 };  // ords_to_annot
 
 template <typename Tensor_t>
-Tensor_t inode_evaluate_ta(EvalNode const& node, Tensor_t const& leval,
-                           Tensor_t const& reval) {
-  assert((node->op() == EvalOp::Sum ||
-          node->op() == EvalOp::Prod) &&
+Tensor_t eval_inode(EvalNode const& node, Tensor_t const& leval,
+                    Tensor_t const& reval) {
+  assert((node->op() == EvalOp::Sum || node->op() == EvalOp::Prod) &&
          "unsupported intermediate operation");
 
   auto assert_imaginary_zero = [](sequant::Constant const& c) {
@@ -63,101 +64,112 @@ Tensor_t inode_evaluate_ta(EvalNode const& node, Tensor_t const& leval,
 }
 
 template <typename Tensor_t, typename Yielder>
-Tensor_t evaluate_ta(EvalNode const& node, Yielder& yielder,
-                     sequant::utils::cache_manager<Tensor_t>& cman) {
+Tensor_t eval_single_node(EvalNode const& node, Yielder&& leaf_evaluator,
+                          CacheManager<Tensor_t const>& cache_manager) {
   static_assert(
       std::is_invocable_r_v<Tensor_t, Yielder, sequant::Tensor const&>);
 
   auto const key = node->hash();
 
-  if (auto&& exists = cman.access(key); exists && exists.value())
+  if (auto&& exists = cache_manager.access(key); exists && exists.value())
     return *exists.value();
 
   return node.leaf()
-             ? *cman.store(key, yielder(node->tensor()))
-             : *cman.store(key,
-                           inode_evaluate_ta(
-                               node, evaluate_ta(node.left(), yielder, cman),
-                               evaluate_ta(node.right(), yielder, cman)));
+             ? *cache_manager.store(key, leaf_evaluator(node->tensor()))
+             : *cache_manager.store(
+                   key,
+                   eval_inode(
+                       node,
+                       eval_single_node(node.left(),
+                                        std::forward<Yielder>(leaf_evaluator),
+                                        cache_manager),
+                       eval_single_node(node.right(),
+                                        std::forward<Yielder>(leaf_evaluator),
+                                        cache_manager)));
 }
 
-struct eval_instance_ta {
-  EvalNode const& node;
+}  // namespace detail
 
-  template <typename Tensor_t, typename Fetcher>
-  auto evaluate(Fetcher& f, sequant::utils::cache_manager<Tensor_t>& man) {
-    static_assert(
-        std::is_invocable_r_v<Tensor_t, Fetcher, sequant::Tensor const&>);
+template <typename Tensor_t, typename Yielder>
+auto eval(EvalNode const& node, Yielder&& yielder,
+          CacheManager<Tensor_t const>& man) {
+  static_assert(
+      std::is_invocable_r_v<Tensor_t, Yielder, sequant::Tensor const&>);
 
-    auto result = evaluate_ta(node, f, man);
-    // NOTE:
-    // At this point the physical layout of `result`
-    // maybe off from what is expected in the residual tensors
-    // pre-symmetrization or anti-symmetrization
-    //
-    // eg.
-    //       i_2, i_3, i_1
-    // Result
-    //       a_1, a_2, a_3
-    //
-    // we now permute it to the layout:
-    //       i_1, i_2, i_3
-    // Result
-    //       a_1, a_2, a_3
-    //
-    auto sorted_bra = node->tensor().bra() | ranges::to_vector;
-    ranges::sort(sorted_bra, Index::LabelCompare{});
-    auto sorted_ket = node->tensor().ket() | ranges::to_vector;
-    ranges::sort(sorted_ket, Index::LabelCompare{});
+  //  Tensor_t (*evaluator)(EvalNode const&, Tensor_t const&, Tensor_t const&)
+  //       = detail::eval_inode;
 
-    auto const rannot = braket_to_annot(node->tensor().const_braket());
-    auto const lannot = braket_to_annot(ranges::views::concat(sorted_bra,sorted_ket));
-    auto scaled = decltype(result){};
-    scaled(lannot) = node->scalar().value().real() * result(rannot);
-    return scaled;
-  }
+  auto result =
+      detail::eval_single_node(node, std::forward<Yielder>(yielder), man);
+  // NOTE:
+  // At this point the physical layout of `result`
+  // maybe off from what is expected in the residual tensors
+  // pre-symmetrization or anti-symmetrization
+  //
+  // eg.
+  //       i_2, i_3, i_1
+  // Result
+  //       a_1, a_2, a_3
+  //
+  // we now permute it to the layout:
+  //       i_1, i_2, i_3
+  // Result
+  //       a_1, a_2, a_3
+  //
+  auto sorted_bra = node->tensor().bra() | ranges::to_vector;
+  ranges::sort(sorted_bra, Index::LabelCompare{});
+  auto sorted_ket = node->tensor().ket() | ranges::to_vector;
+  ranges::sort(sorted_ket, Index::LabelCompare{});
 
-  template <typename Tensor_t, typename Fetcher>
-  auto evaluate_asymm(Fetcher& f,
-                      sequant::utils::cache_manager<Tensor_t>& man) {
-    auto result = evaluate(f, man);
+  auto const rannot = detail::braket_to_annot(node->tensor().const_braket());
+  auto const lannot =
+      detail::braket_to_annot(ranges::views::concat(sorted_bra, sorted_ket));
+  auto scaled = decltype(result){};
+  scaled(lannot) = node->scalar().value().real() * result(rannot);
+  return scaled;
+}
 
-    auto asymm_result = decltype(result){result.world(), result.trange()};
-    asymm_result.fill(0);
+template <typename Tensor_t, typename Yielder>
+auto eval_symm(EvalNode const& node, Yielder&& yielder,
+               CacheManager<Tensor_t const>& man) {
+  auto result = eval(node, std::forward<Yielder>(yielder), man);
 
-    auto const lannot =
-        ords_to_annot(ranges::views::iota(size_t{0}, result.trange().rank())
-                      | ranges::to_vector);
+  auto symm_result = decltype(result){result.world(), result.trange()};
+  symm_result.fill(0);
 
-    auto asym_impl = [&result, &asymm_result,
-                      &lannot](auto const& pwp) {  // pwp = perm with phase
-      asymm_result(lannot) += pwp.phase * result(ords_to_annot(pwp.perm));
-    };
+  auto const lannot = detail::ords_to_annot(
+      ranges::views::iota(size_t{0}, result.trange().rank()) |
+      ranges::to_vector);
 
-    sequant::eval::antisymmetrize_tensor(result.trange().rank(), asym_impl);
-    return asymm_result;
-  }
+  auto sym_impl = [&result, &symm_result, &lannot](auto const& perm) {
+    symm_result(lannot) += result(detail::ords_to_annot(perm));
+  };
 
-  template <typename Tensor_t, typename Fetcher>
-  auto evaluate_symm(Fetcher& f, sequant::utils::cache_manager<Tensor_t>& man) {
-    auto result = evaluate(f, man);
+  symmetrize_tensor(result.trange().rank(), sym_impl);
+  return symm_result;
+}
 
-    auto symm_result = decltype(result){result.world(), result.trange()};
-    symm_result.fill(0);
+template <typename Tensor_t, typename Yielder>
+auto eval_antisymm(EvalNode const& node, Yielder&& yielder,
+                   CacheManager<Tensor_t const>& man) {
+  auto result = eval(node, std::forward<Yielder>(yielder), man);
 
-    auto const lannot =
-        ords_to_annot(ranges::views::iota(size_t{0}, result.trange().rank()) |
-                      ranges::to_vector);
+  auto asymm_result = decltype(result){result.world(), result.trange()};
+  asymm_result.fill(0);
 
-    auto sym_impl = [&result, &symm_result, &lannot](auto const& perm) {
-      symm_result(lannot) += result(ords_to_annot(perm));
-    };
+  auto const lannot = detail::ords_to_annot(
+      ranges::views::iota(size_t{0}, result.trange().rank()) |
+      ranges::to_vector);
 
-    sequant::eval::symmetrize_tensor(result.trange().rank(), sym_impl);
-    return symm_result;
-  }
-};  // eval_instance_ta
+  auto asym_impl = [&result, &asymm_result,
+                    &lannot](auto const& pwp) {  // pwp = perm with phase
+    asymm_result(lannot) += pwp.phase * result(detail::ords_to_annot(pwp.perm));
+  };
 
-}  // namespace sequant::eval
+  antisymmetrize_tensor(result.trange().rank(), asym_impl);
+  return asymm_result;
+}
 
-#endif  // SEQUANT_EVAL_TA_HPP
+}  // namespace sequant::eval::ta
+
+#endif  // SEQUANT_EVAL_EVAL_TA_HPP

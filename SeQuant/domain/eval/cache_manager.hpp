@@ -1,12 +1,13 @@
-#ifndef SEQUANT_UTILS_CACHE_MANAGER_HPP
-#define SEQUANT_UTILS_CACHE_MANAGER_HPP
+#ifndef SEQUANT_EVAL_CACHE_MANAGER_HPP
+#define SEQUANT_EVAL_CACHE_MANAGER_HPP
 
 #include <SeQuant/core/container.hpp>
 #include <memory>
 
-namespace sequant::utils {
+namespace sequant::eval {
+
 template <typename Data>
-class cache_manager {
+class CacheManager {
  public:
   using key_t = size_t;
   using count_t = size_t;
@@ -18,7 +19,7 @@ class cache_manager {
   template <typename D>
   class entry {
    private:
-    using ptr_t = typename cache_manager<D>::ptr_t;
+    using ptr_t = typename CacheManager<D>::ptr_t;
 
     Lifetime life_t;
 
@@ -75,7 +76,7 @@ class cache_manager {
  public:
   template <typename Iterable1 = container::map<key_t, count_t>,
             typename Iterable2 = container::svector<key_t>>
-  cache_manager(Iterable1 &&decaying, Iterable2 &&persistent = {}) {
+  CacheManager(Iterable1 &&decaying, Iterable2 &&persistent = {}) {
     for (auto &&[k, c] : decaying)
       cache_map.try_emplace(k, entry<Data>{static_cast<count_t>(c)});
 
@@ -103,8 +104,8 @@ class cache_manager {
     return std::make_shared<Data>(std::move(data));
   }
 
-};  // cache_manager
+};  // CacheManager
 
-}  // namespace sequant::utils
+}  // namespace
 
-#endif  // SEQUANT_UTILS_CACHE_MANAGER_HPP
+#endif  // SEQUANT_EVAL_CACHE_MANAGER_HPP

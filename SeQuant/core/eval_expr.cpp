@@ -12,12 +12,8 @@ const Tensor& EvalExpr::tensor() const { return tensor_; }
 
 const Constant& EvalExpr::scalar() const { return scalar_; }
 
-EvalExpr::EvalExpr(const Tensor& tnsr) : op_{EvalOp::Id}, tensor_{tnsr} {
-  if (auto canon_biprod = tensor_.canonicalize(); canon_biprod)
-    scalar_ *= canon_biprod->as<Constant>();
-
-  hash_ = EvalExpr::hash_terminal_tensor(tensor_);
-}
+EvalExpr::EvalExpr(const Tensor& tnsr) : op_{EvalOp::Id}, tensor_{tnsr},
+hash_{EvalExpr::hash_terminal_tensor(tnsr)}{}
 
 EvalExpr::EvalExpr(const EvalExpr& xpr1,
                    const EvalExpr& xpr2,
