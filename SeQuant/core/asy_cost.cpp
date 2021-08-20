@@ -35,6 +35,10 @@ AsyCost::AsyCost(size_t nocc, size_t nvirt) {
   if (!(nocc == 0 && nvirt == 0)) cost_.emplace(AsyCostEntry{nocc, nvirt});
 }
 
+AsyCost::AsyCost(size_t nocc, size_t nvirt, size_t count): AsyCost{nocc, nvirt} {
+  if (!cost_.empty()) cost_.begin()->set_count(count);
+}
+
 AsyCost::AsyCost(AsyCostEntry c) : AsyCost{0, 0} {
   cost_.emplace(std::move(c));
 }

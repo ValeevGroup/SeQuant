@@ -6,6 +6,22 @@
 namespace sequant {
 
 /**
+ * Type of evaluation resulting into EvalExpr.
+ */
+enum class EvalOp {
+  /** Identity type evaluation. */
+  Id,
+  /** Sum type evaluation. */
+  Sum,
+  /** Product type evaluation. */
+  Prod,
+  /** Symmetrization type evaluation. */
+  Symm,
+  /** Antisymmetrization type evaluation. */
+  Antisymm,
+};  // EvalOp
+
+/**
  * An object to be stored in the binary evaluation tree nodes.
  *
  * @author Bimal Gaudel
@@ -14,18 +30,6 @@ namespace sequant {
 class EvalExpr final {
  public:
   using hash_t = size_t;
-
-  /**
-   * Type of evaluation resulting into EvalExpr.
-   */
-  enum class EvalOp {
-    /** Identity type evaluation. */
-    Id,
-    /** Sum type evaluation. */
-    Sum,
-    /** Product type evaluation. */
-    Prod,
-  };  // EvalOp
 
   /**
    * Construct EvalExpr that goes into the leaf nodes
@@ -37,7 +41,7 @@ class EvalExpr final {
    * Construct EvalExpr that goes into the internal nodes
    * of the binary evaluation tree.
    */
-  EvalExpr(const EvalExpr&, const EvalExpr&);
+  EvalExpr(const EvalExpr&, const EvalExpr&, EvalOp op);
 
   /**
    * Operation type of the object.
@@ -86,25 +90,14 @@ class EvalExpr final {
   Constant scalar_{1};
 
   /**
-   * Make an intermediate tensor from two expressions.
-   */
-  static Tensor make_imed_expr(const EvalExpr& expr1, const EvalExpr& expr2,
-                               EvalOp op);
-
-  /**
-   * Figure out the type of evaluation between a pair of expressions.
-   */
-  static EvalOp infer_eval_op(const Tensor&, const Tensor&);
-
-  /**
    * Infer the symmetry of the resulting tensor after summing two tensors.
    */
-  static Symmetry infer_tensor_symmetry_sum(const Tensor&, const Tensor&);
+  static Symmetry infer_tensor_symmetry_sum(EvalExpr const&, EvalExpr const&);
 
   /**
    * Infer the symmetry of the resulting tensor from product of two tensors.
    */
-  static Symmetry infer_tensor_symmetry_prod(const Tensor&, const Tensor&);
+  static Symmetry infer_tensor_symmetry_prod(EvalExpr const&, EvalExpr const&);
 
   /**
    * Infers the particle symmetry of a tensor.
@@ -149,15 +142,6 @@ class EvalExpr final {
    * positions of the connected indices in the corresponding brakets are hashed.
    */
   static hash_t hash_tensor_pair_topology(const Tensor&, const Tensor&);
-
-  /**
-   * Figure the target braket of resulting tensor from sum between a pair of
-   * tensors.
-   *
-   * @return Pair of bra and ket index containers where
-   * the first is the target bra.
-   */
-  static braket_type target_braket_sum(const Tensor&, const Tensor&);
 
   /**
    * Figure the target braket of resulting tensor from product of a pair of

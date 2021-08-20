@@ -13,8 +13,8 @@ namespace sequant::eval {
 template <typename Tensor_t>
 Tensor_t inode_evaluate_btas(EvalNode const& node, Tensor_t const& leval,
                              Tensor_t const& reval) {
-  assert((node->op() == EvalExpr::EvalOp::Sum ||
-          node->op() == EvalExpr::EvalOp::Prod) &&
+  assert((node->op() == EvalOp::Sum ||
+          node->op() == EvalOp::Prod) &&
          "unsupported intermediate operation");
 
   auto const assert_imaginary_zero = [](sequant::Constant const& c) {
@@ -35,7 +35,7 @@ Tensor_t inode_evaluate_btas(EvalNode const& node, Tensor_t const& leval,
            ranges::to_vector;
   };  // index_hash
 
-  if (node->op() == EvalExpr::EvalOp::Prod) {
+  if (node->op() == EvalOp::Prod) {
     auto scalar = node.left()->scalar().value().real() *
                   node.right()->scalar().value().real();
 

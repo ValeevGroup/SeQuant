@@ -41,8 +41,8 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
     REQUIRE(node1.right().leaf());
     REQUIRE(node1.left().left().leaf());
     REQUIRE(node1.left().right().leaf());
-    REQUIRE(node1->op() == EvalExpr::EvalOp::Prod);
-    REQUIRE(node1.left()->op() == EvalExpr::EvalOp::Prod);
+    REQUIRE(node1->op() == EvalOp::Prod);
+    REQUIRE(node1.left()->op() == EvalOp::Prod);
 
     // 1/16 * A * (B * C)
     auto node2p = Product{p1->as<Product>().scalar(), {}};
@@ -69,8 +69,8 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
     REQUIRE(node2.left().leaf());
     REQUIRE(node2.right().right().leaf());
     REQUIRE(node2.right().left().leaf());
-    REQUIRE(node2->op() == EvalExpr::EvalOp::Prod);
-    REQUIRE(node2.right()->op() == EvalExpr::EvalOp::Prod);
+    REQUIRE(node2->op() == EvalOp::Prod);
+    REQUIRE(node2.right()->op() == EvalOp::Prod);
   }
 
   SECTION("sum") {
@@ -80,15 +80,15 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
         L"+ g_{i3,a1}^{i1,i2} * t_{a2}^{i3}");
 
     auto const node1 = to_eval_node(sum1);
-    REQUIRE(node1->op() == EvalExpr::EvalOp::Sum);
-    REQUIRE(node1.left()->op() == EvalExpr::EvalOp::Sum);
+    REQUIRE(node1->op() == EvalOp::Sum);
+    REQUIRE(node1.left()->op() == EvalOp::Sum);
     REQUIRE(validate_tensor(node1.left()->tensor(), L"I^{i1,i2}_{a1,a2}"));
     REQUIRE(
         validate_tensor(node1.left().left()->tensor(), L"X^{i1,i2}_{a1,a2}"));
     REQUIRE(
         validate_tensor(node1.left().right()->tensor(), L"Y^{i1,i2}_{a1,a2}"));
 
-    REQUIRE(node1.right()->op() == EvalExpr::EvalOp::Prod);
+    REQUIRE(node1.right()->op() == EvalOp::Prod);
     REQUIRE((validate_tensor(node1.right()->tensor(), L"I_{a2,a1}^{i1,i2}") ||
              validate_tensor(node1.right()->tensor(), L"I_{a1,a2}^{i2,i1}")));
     REQUIRE(

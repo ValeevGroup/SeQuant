@@ -9,12 +9,12 @@
 namespace sequant::eval {
 
 auto const braket_to_annot = [](auto const& bk) {
-  using ranges::views::join;
-  using ranges::views::transform;
-  using ranges::views::intersperse;
-  return join(bk | transform([](auto const& idx) { return idx.label(); }) |
-              intersperse(L",")) |
-         ranges::to<std::string>;
+  std::string annot;
+  for(auto& idx : bk){
+    annot += idx.string_label() + ",";
+  }
+  annot.pop_back();
+  return annot;
 };  // braket_to_annot
 
 auto const ords_to_annot = [](auto const& ords) {
@@ -30,8 +30,8 @@ auto const ords_to_annot = [](auto const& ords) {
 template <typename Tensor_t>
 Tensor_t inode_evaluate_ta(EvalNode const& node, Tensor_t const& leval,
                            Tensor_t const& reval) {
-  assert((node->op() == EvalExpr::EvalOp::Sum ||
-          node->op() == EvalExpr::EvalOp::Prod) &&
+  assert((node->op() == EvalOp::Sum ||
+          node->op() == EvalOp::Prod) &&
          "unsupported intermediate operation");
 
   auto assert_imaginary_zero = [](sequant::Constant const& c) {
@@ -42,19 +42,20 @@ Tensor_t inode_evaluate_ta(EvalNode const& node, Tensor_t const& leval,
   assert_imaginary_zero(node.left()->scalar());
   assert_imaginary_zero(node.right()->scalar());
 
-  auto this_annot = braket_to_annot(node->tensor().const_braket());
-  auto lannot = braket_to_annot(node.left()->tensor().const_braket());
-  auto rannot = braket_to_annot(node.right()->tensor().const_braket());
+  auto const this_annot = braket_to_annot(node->tensor().const_braket());
+  auto const lannot = braket_to_annot(node.left()->tensor().const_braket());
+  auto const rannot = braket_to_annot(node.right()->tensor().const_braket());
 
-  auto lscal = node.left()->scalar().value().real();
-  auto rscal = node.right()->scalar().value().real();
+  auto const lscal = node.left()->scalar().value().real();
+  auto const rscal = node.right()->scalar().value().real();
 
   auto result = Tensor_t{};
-  if (node->op() == EvalExpr::EvalOp::Prod) {
+  if (node->op() == EvalOp::Prod) {
     // prod
     result(this_annot) = (lscal * rscal) * leval(lannot) * reval(rannot);
   } else {
     // sum
+    assert(node->op() == EvalOp::Sum && "unsupported operation for eval");
     result(this_annot) = lscal * leval(lannot) + rscal * reval(rannot);
   }
 
@@ -89,9 +90,30 @@ struct eval_instance_ta {
         std::is_invocable_r_v<Tensor_t, Fetcher, sequant::Tensor const&>);
 
     auto result = evaluate_ta(node, f, man);
-    auto const annot = braket_to_annot(node->tensor().const_braket());
+    // NOTE:
+    // At this point the physical layout of `result`
+    // maybe off from what is expected in the residual tensors
+    // pre-symmetrization or anti-symmetrization
+    //
+    // eg.
+    //       i_2, i_3, i_1
+    // Result
+    //       a_1, a_2, a_3
+    //
+    // we now permute it to the layout:
+    //       i_1, i_2, i_3
+    // Result
+    //       a_1, a_2, a_3
+    //
+    auto sorted_bra = node->tensor().bra() | ranges::to_vector;
+    ranges::sort(sorted_bra, Index::LabelCompare{});
+    auto sorted_ket = node->tensor().ket() | ranges::to_vector;
+    ranges::sort(sorted_ket, Index::LabelCompare{});
+
+    auto const rannot = braket_to_annot(node->tensor().const_braket());
+    auto const lannot = braket_to_annot(ranges::views::concat(sorted_bra,sorted_ket));
     auto scaled = decltype(result){};
-    scaled(annot) = node->scalar().value().real() * result(annot);
+    scaled(lannot) = node->scalar().value().real() * result(rannot);
     return scaled;
   }
 
@@ -104,8 +126,8 @@ struct eval_instance_ta {
     asymm_result.fill(0);
 
     auto const lannot =
-        ords_to_annot(ranges::views::iota(size_t{0}, result.trange().rank()) |
-                      ranges::to_vector);
+        ords_to_annot(ranges::views::iota(size_t{0}, result.trange().rank())
+                      | ranges::to_vector);
 
     auto asym_impl = [&result, &asymm_result,
                       &lannot](auto const& pwp) {  // pwp = perm with phase
