@@ -126,7 +126,8 @@ try_main() {
     simplify(cumu_decomp);
 
     auto compare_h = simplification::hamiltonian_based(cumu_decomp);// simplify the expression to remove zero terms not caught by sequant core.
-    std::wcout << "$[H,R]_12$" << to_latex_align(compare_h, 20, 3) << std::endl;
+    std::wcout << "$[H,R]_12 one body$" << to_latex_align(compare_h.first, 20, 3) << std::endl;
+    std::wcout << "$[H,R]_12 two body$" << to_latex_align(compare_h.second, 20, 3) << std::endl;
     //end single comutator compute
 
     //end of of first commutator. now comes the second comutator one at a time, i.e. (1/2)[[f,A],A] = (1/2)[[f,R]_12, R]_12 + complex conjugates and their versions. if we get this term we can interpret the rest from properties of comutators.
@@ -146,8 +147,8 @@ try_main() {
     simplify(double_com_2);
     auto compare_f = simplification::fock_based(double_com_2); // fock matrix based simplifcation which has additional screening of fock matrix from Brillouin's Theory
     //end double comutator.
-    std::wcout << "$[[H,adj(R)]_12,R]_12$" << to_latex_align(compare_f,20,3) << std::endl;
-
+    std::wcout << "$[[H,adj(R)]_12,R]_12$ one_body" << to_latex_align(compare_f.first,20,3) << std::endl;
+    std::wcout << "$[[H,adj(R)]_12,R]_12$ two body" << to_latex_align(compare_f.second,20,3) << std::endl;
   }//end transformation
 
 }

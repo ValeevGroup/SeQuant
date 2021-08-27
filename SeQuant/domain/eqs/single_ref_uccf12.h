@@ -21,16 +21,16 @@ class uccf12{
   ExprPtr single_ref_approx(const ExprPtr& ex_){//densities become deltas
     auto result = ex<Constant>(0);
     for (auto&& product : ex_->as<Sum>().summands()){
-      auto new_product = ex<Constant>(1);
+      auto new_product = ex<Constant>(product->as<Product>().scalar().real());
       for (auto&& factor : product->as<Product>().factors()){
-        if (factor->as<Tensor>().label() == L"\\gamma" | factor->as<Tensor>().label() == L"\\Gamma"){
+        if (factor->as<Tensor>().label() == L"\\Gamma" || factor->as<Tensor>().label() == L"\\gamma"){
           for (size_t i = 0; i < factor->as<Tensor>().bra().size(); i++){
             new_product = new_product * make_overlap(factor->as<Tensor>().bra()[i], factor->as<Tensor>().ket()[i]);
           }
         }
         else{new_product = factor * new_product;}
       }
-      result = result + product;
+      result = result + new_product;
     }
     return result;
   }
@@ -42,7 +42,7 @@ class uccf12{
   uccf12(bool single_reference = true, bool fock_approx = true, unsigned int max_op_rank = 2){ sr = single_reference; fock = fock_approx; op_rank = max_op_rank;
     sequant::set_default_context(SeQuant(Vacuum::Physical, IndexSpaceMetric::Unit, BraKetSymmetry::conjugate,
                                          SPBasis::spinfree));
-    mbpt::set_default_convention();
+//    mbpt::set_default_convention();
     sequant::detail::OpIdRegistrar op_id_registrar;
     TensorCanonicalizer::register_instance(std::make_shared<DefaultTensorCanonicalizer>());
   }
@@ -77,7 +77,7 @@ class uccf12{
     return result;
   }
 
-  ExprPtr compute(bool print = false) {
+  std::pair<ExprPtr,ExprPtr> compute(bool print = false) {
     auto gg_space = IndexSpace::active_occupied;  // Geminal-generating space: active occupieds is the normal choice, all orbitals is the reference-independent (albeit expensive) choice
                                       // start transformation
 
@@ -92,7 +92,8 @@ class uccf12{
     simplify(cumu_decomp);
 
     auto compare_h = simplification::hamiltonian_based(cumu_decomp);// simplify the expression to remove zero terms not caught by sequant core.
-    auto first_comutator = compare_h + adjoint(compare_h);
+    auto one_body_terms = compare_h.first + adjoint(compare_h.first);
+    auto two_body_terms = compare_h.second + adjoint(compare_h.second);
     // end single comutator compute
 
 
@@ -129,20 +130,24 @@ class uccf12{
     simplify(double_com_sec_2);
     auto frr_dag = simplification::fock_based(double_com_sec_2);
 
-    auto total_double_com = frr_dag + fr_dag_r;
+    one_body_terms = frr_dag.first + fr_dag_r.first;
+    two_body_terms = frr_dag.second + fr_dag_r.second;
     // end double comutator.
 
     //add the two comutators together
-    auto total = total_double_com + first_comutator;
-    non_canon_simplify(total);
+    simplify(one_body_terms);
+    simplify(two_body_terms);
     if (sr) {
-      total = single_ref_approx(total);
-      non_canon_simplify(total);
+      one_body_terms = single_ref_approx(one_body_terms);
+      simplify(one_body_terms);
+      two_body_terms = single_ref_approx(two_body_terms);
+      simplify(two_body_terms);
     }
     if (print){
-      std::wcout << "single reference Hbar: " << to_latex_align(total,20,3) << std::endl;
+      std::wcout << "one body terms: " << to_latex_align(one_body_terms,20,2) << std::endl;
+      std::wcout << "two body terms: " << to_latex_align(two_body_terms,20,2) << std::endl;
     }
-    return total;
+    return std::pair<ExprPtr, ExprPtr>{one_body_terms, two_body_terms};
   }
 };
 

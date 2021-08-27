@@ -183,27 +183,29 @@ auto screen_densities(ExprPtr ex_){// densities probably should be non-zero if e
 auto treat_fock(ExprPtr ex_){
   auto new_ex_ = ex<Constant>(0);
   for (auto&& product : ex_->as<Sum>().summands()){
-    auto new_product = ex<Constant>(1);
-    auto scalar = product->as<Product>().scalar();
+    auto new_product = ex<Constant>(product->as<Product>().scalar());
     bool contains_density = false;
     for (auto&& factor : product->as<Product>().factors()){
-      if (factor->is<Tensor>() && factor->as<Tensor>().label() == L"\\Gamma"){
+      if (factor->as<Tensor>().label() == L"\\Gamma" || factor->as<Tensor>().label() == L"\\gamma"){
         contains_density = true;
       }
-      if (factor->is<Tensor>() && factor->as<Tensor>().label() == L"f" && contains_density && (factor->as<Tensor>().bra()[0].space().type() != IndexSpace::complete_unoccupied || factor->as<Tensor>().ket()[0].space().type() != IndexSpace::complete_unoccupied)){
+      if (factor->is<Tensor>() && factor->as<Tensor>().label() == L"f" && contains_density &&(factor->as<Tensor>().bra()[0].space().type() != IndexSpace::complete_unoccupied || factor->as<Tensor>().ket()[0].space().type() != IndexSpace::complete_unoccupied)){
         auto overlap = make_overlap(factor->as<Tensor>().bra()[0],factor->as<Tensor>().ket()[0]);
         new_product = overlap * factor * new_product;
       }
       else new_product = new_product * factor;
     }
-    new_product = ex<Constant>(scalar) * new_product;
-    non_canon_simplify(new_product);
+    //std::wcout << "problematic product: " << to_latex_align(new_product) << std::endl;
+    //simplify(new_product);
     new_ex_ = new_ex_ + new_product;
   }
-  non_canon_simplify(new_ex_);
+  //simplify(new_ex_);
   FWickTheorem wick{new_ex_};
   wick.reduce(new_ex_);
   non_canon_simplify(new_ex_);
+  std::wcout << "problem: " << to_latex_align(new_ex_) << std::endl;
+  simplify(new_ex_);
+
   return new_ex_;
 }
 //TODO generalize for arbitrary number of density matrices.
@@ -213,7 +215,7 @@ auto treat_fock(ExprPtr ex_){
 // unfortunately, simplify(result) and  wick.reduce(result) will recanonicalize the indices.
 // enforces the following obs convention. E^{p_7}_{p_9} and E^{{p_7}{p_8}}_{{p_9}{p_{10}}}
 // should allow analysis of multiple expressions who have the same normal order operator prefactor.
-ExprPtr hamiltonian_based(ExprPtr exprs){
+std::pair<ExprPtr,ExprPtr> hamiltonian_based(ExprPtr exprs){
   exprs = remove_const(exprs); // remove constant terms from the expression
   simplify(exprs);
 
@@ -257,7 +259,7 @@ ExprPtr hamiltonian_based(ExprPtr exprs){
         label_1 = factor->as<Tensor>().ket()[0].label();
         label_3 = factor->as<Tensor>().bra()[0].label();
         auto o1 = make_overlap(Index{L"p_10"},Index{label_1});
-        auto o3 = make_overlap(Index{L"p_11"},Index{label_3});
+        auto o3 = make_overlap(Index{label_3},Index{L"p_11"});
         new_product =  o1 * o3 * factor * new_product;
       }
       else if (factor->is<Tensor>() && factor->as<Tensor>().label() == L"\\Gamma" && factor->as<Tensor>().rank() == 1 && first_density){
@@ -267,7 +269,7 @@ ExprPtr hamiltonian_based(ExprPtr exprs){
         label_2 = factor->as<Tensor>().ket()[0].label();
         label_4 = factor->as<Tensor>().bra()[0].label();
         auto o1 = make_overlap(Index{L"p_9"},Index{label_2});
-        auto o3 = make_overlap(Index{L"p_12"},Index{label_4});
+        auto o3 = make_overlap(Index{label_4},Index{L"p_12"});
         new_product =  o1 * o3 * factor * new_product;
       }
       else if (factor->is<Tensor>() && factor->as<Tensor>().label() == L"\\Gamma" && factor->as<Tensor>().rank() == 1 && third_density){
@@ -277,7 +279,7 @@ ExprPtr hamiltonian_based(ExprPtr exprs){
         label_2 = factor->as<Tensor>().ket()[0].label();
         label_4 = factor->as<Tensor>().bra()[0].label();
         auto o1 = make_overlap(Index{L"p_13"},Index{label_2});
-        auto o3 = make_overlap(Index{L"p_14"},Index{label_4});
+        auto o3 = make_overlap(Index{label_4},Index{L"p_14"});
         new_product =  o1 * o3 * factor * new_product;
       }
       else if (factor->is<Tensor>() && factor->as<Tensor>().label() == L"\\Gamma" && factor->as<Tensor>().rank() == 2){
@@ -290,9 +292,9 @@ ExprPtr hamiltonian_based(ExprPtr exprs){
         label_2 = factor->as<Tensor>().ket()[1].label();
         label_4 = factor->as<Tensor>().bra()[1].label();
         auto o1 = make_overlap(Index{L"p_5"},Index{label_1});
-        auto o3 = make_overlap(Index{L"p_6"},Index{label_3});
+        auto o3 = make_overlap(Index{label_3}, Index{L"p_6"});
         auto o2 = make_overlap(Index{L"p_7"},Index{label_2});
-        auto o4 = make_overlap(Index{L"p_8"},Index{label_4});
+        auto o4 = make_overlap(Index{label_4},Index{L"p_8"});
         new_product =  o1 * o3 * o2 * o4 * factor * new_product;
       }
       else{new_product = new_product * factor;}
@@ -303,7 +305,7 @@ ExprPtr hamiltonian_based(ExprPtr exprs){
 
   FWickTheorem wick{overlap_expr};
   wick.reduce(overlap_expr);
-  non_canon_simplify(overlap_expr);
+  simplify(overlap_expr);
 
   for (auto&& product : overlap_expr->as<Sum>().summands()){
     for (auto&& factor : product->as<Product>().factors()){
@@ -315,33 +317,26 @@ ExprPtr hamiltonian_based(ExprPtr exprs){
       }
     }
   }
-  non_canon_simplify(overlap_expr);
+  //std::wcout << "overlap expr: " << to_latex_align(overlap_expr,20,2) << std::endl;
+  simplify(overlap_expr);
 
-  auto result = ex<Constant>(0);
+  auto one_body_result = ex<Constant>(0);
+  auto two_body_result = ex<Constant>(0);
   for (auto&& product : overlap_expr->as<Sum>().summands()){
-    auto new_product = ex<Constant>(product->as<Product>().scalar());
+    auto one_body_product = ex<Constant>(product->as<Product>().scalar());
+    auto two_body_product = ex<Constant>(product->as<Product>().scalar());
    // std::vector<std::pair<Index,Index>> og_new;
     for (auto&& factor : product->as<Product>().factors()){ //loop through the factors once to learn about the indices.
       if(factor->is<Tensor>() && (factor->as<Tensor>().label() == L"E" || factor->as<Tensor>().label() == L"a")){
         factor = tens_to_op(factor);
-        /*int cre_iter = 1;
-        for (auto&& cre : factor->as<FNOperator>().creators()){
-          og_new.push_back({cre.index(),new_idx(cre_iter, cre.index())});
-          cre_iter +=1;
-
-        }
-        int ann_iter = 3;
-        for(auto&& ann : factor->as<FNOperator>().annihilators()){
-          og_new.push_back({ann.index(),new_idx(ann_iter, ann.index())});
-          ann_iter +=1;
-        }*/
         if(factor->is<FNOperator>()) {
           if (factor->as<FNOperator>().ncreators() == 1) {
             auto o1 = make_overlap(
                 {L"p_7"}, factor->as<FNOperator>().annihilators()[0].index());
             auto o3 = make_overlap(
                 factor->as<FNOperator>().creators()[0].index(), {L"p_9"});
-            new_product = new_product * o1 * o3;
+            one_body_product = one_body_product * o1 * o3;
+            two_body_product = two_body_product * ex<Constant>(0);
           } else if (factor->as<FNOperator>().ncreators() == 2) {
             auto o1 = make_overlap(
                 {L"p_7"}, factor->as<FNOperator>().annihilators()[0].index());
@@ -351,22 +346,26 @@ ExprPtr hamiltonian_based(ExprPtr exprs){
                 factor->as<FNOperator>().creators()[0].index(), {L"p_9"});
             auto o4 = make_overlap(
                 factor->as<FNOperator>().creators()[1].index(), {L"p_10"});
-            new_product = new_product * o1 * o2 * o3 * o4;
+            two_body_product = two_body_product * o1 * o2 * o3 * o4;
+            one_body_product = one_body_product * ex<Constant>(0);
           }
         }
       }
-      else{new_product = factor * new_product;}
+      else{one_body_product = factor * one_body_product;
+          two_body_product = factor * two_body_product;}
     }
-    result = new_product + result;
+    one_body_result = one_body_product + one_body_result;
+    two_body_result = two_body_product + two_body_result;
     /*for (auto&& pair : og_new){// loop through again to update the indices
       product->as<Product>() = replace_idx(product, pair.first, pair.second);
     }*/
     //og_new.resize(0);
   }
 
-  non_canon_simplify(result);
+  simplify(one_body_result);
+  simplify(two_body_result);
 
-  return result;
+  return std::pair<ExprPtr,ExprPtr> {one_body_result, two_body_result};
   //std::wcout << "[H,R]12" << to_latex_align(overlap_expr, 20, 3) << std::endl;
 
 }
@@ -378,7 +377,7 @@ ExprPtr hamiltonian_based(ExprPtr exprs){
 // enforces the following obs convention. E^{p_7}_{p_9} and E^{{p_7}{p_8}}_{{p_9}{p_{10}}}
 // should allow analysis of multiple expressions who have the same normal order operator prefactor.
 
-ExprPtr fock_based (ExprPtr exprs){
+std::pair<ExprPtr,ExprPtr> fock_based (ExprPtr exprs){
   exprs = remove_const(exprs);
   auto double_overlap_expr = ex<Constant>(0); //enforce an overlap each E with elements from
   for (auto&& product : exprs->as<Sum>().summands()){// may be able to make_overlaps manually and apply them to the products. simplify may know what to do with it.
@@ -454,58 +453,57 @@ ExprPtr fock_based (ExprPtr exprs){
 
   FWickTheorem wick3{double_overlap_expr};
   wick3.reduce(double_overlap_expr);
-  non_canon_simplify(double_overlap_expr);
+  simplify(double_overlap_expr);
 
-  //std::wcout << "new: " << std::endl << to_latex_align(double_overlap_expr,20,3) << std::endl;
-  for (auto&& product : double_overlap_expr->as<Sum>().summands()){
-    for (auto&& factor : product->as<Product>().factors()){
-      if (factor->is<Tensor>() && factor->as<Tensor>().label() == L"F"){
-        factor = screen_F_tensors(factor);
-      }
-      if (factor->is<Tensor>() && factor->as<Tensor>().label() == L"\\Gamma"){
-        factor = screen_densities(factor);
-      }
-    }
-  }
-  non_canon_simplify(double_overlap_expr);
-  double_overlap_expr = treat_fock(double_overlap_expr);
-  for (auto&& product : double_overlap_expr->as<Sum>().summands()){
-    for (auto&& factor : product->as<Product>().factors()){
-      if (factor->is<Tensor>() && factor->as<Tensor>().label() == L"F"){
-        factor = screen_F_tensors(factor);
-      }
-      if (factor->is<Tensor>() && factor->as<Tensor>().label() == L"\\Gamma"){
-        factor = screen_densities(factor);
-      }
-    }
-  }
-  non_canon_simplify(double_overlap_expr);
-
-  auto result = ex<Constant>(0);
+  auto final_screen = ex<Constant>(0);
   for (auto&& product : double_overlap_expr->as<Sum>().summands()){
     auto new_product = ex<Constant>(product->as<Product>().scalar());
+    for (auto&& factor : product->as<Product>().factors()){
+      if (factor->is<Tensor>() && factor->as<Tensor>().label() == L"F"){
+        new_product = screen_F_tensors(factor) * new_product;
+      }
+      else if (factor->is<Tensor>() && factor->as<Tensor>().label() == L"\\Gamma"){
+        new_product = screen_densities(factor) * new_product;
+      }
+      else {new_product = factor * new_product;}
+    }
+    simplify(new_product);
+    final_screen = new_product + final_screen;
+  }
+  //std::wcout << "before fock: " << to_latex_align(final_screen,20,2) << std::endl;
+  simplify(final_screen);
+  /*final_screen = treat_fock(final_screen);
+  for (auto&& product : final_screen->as<Sum>().summands()){
+    for (auto&& factor : product->as<Product>().factors()){
+      if (factor->is<Tensor>() && factor->as<Tensor>().label() == L"F"){
+        factor = screen_F_tensors(factor);
+      }
+      if (factor->is<Tensor>() && factor->as<Tensor>().label() == L"\\Gamma"){
+        factor = screen_densities(factor);
+      }
+    }
+  }
+  simplify(final_screen);*/ //skip fock work for now so we can use simplify figure out why this will not canonicalize.
+
+  auto one_body_result = ex<Constant>(0);
+  auto two_body_result = ex<Constant>(0);
+  for (auto&& product : final_screen->as<Sum>().summands()){
+    auto one_body_product = ex<Constant>(product->as<Product>().scalar());
+    auto two_body_product = ex<Constant>(product->as<Product>().scalar());
     // std::vector<std::pair<Index,Index>> og_new;
     for (auto&& factor : product->as<Product>().factors()){ //loop through the factors once to learn about the indices.
       if(factor->is<Tensor>() && (factor->as<Tensor>().label() == L"E" || factor->as<Tensor>().label() == L"a")){
         factor = tens_to_op(factor);
-        /*int cre_iter = 1;
-        for (auto&& cre : factor->as<FNOperator>().creators()){
-          og_new.push_back({cre.index(),new_idx(cre_iter, cre.index())});
-          cre_iter +=1;
-
-        }
-        int ann_iter = 3;
-        for(auto&& ann : factor->as<FNOperator>().annihilators()){
-          og_new.push_back({ann.index(),new_idx(ann_iter, ann.index())});
-          ann_iter +=1;
-        }*/
         if(factor->is<FNOperator>()) {
           if (factor->as<FNOperator>().ncreators() == 1) {
             auto o1 = make_overlap(
                 {L"p_7"}, factor->as<FNOperator>().annihilators()[0].index());
             auto o3 = make_overlap(
                 factor->as<FNOperator>().creators()[0].index(), {L"p_9"});
-            new_product = new_product * o1 * o3;
+            one_body_product = one_body_product * o1 * o3;
+            two_body_product = two_body_product * ex<Constant>(0);
+            simplify(one_body_product);
+            simplify(two_body_product);
           } else if (factor->as<FNOperator>().ncreators() == 2) {
             auto o1 = make_overlap(
                 {L"p_7"}, factor->as<FNOperator>().annihilators()[0].index());
@@ -515,22 +513,30 @@ ExprPtr fock_based (ExprPtr exprs){
                 factor->as<FNOperator>().creators()[0].index(), {L"p_9"});
             auto o4 = make_overlap(
                 factor->as<FNOperator>().creators()[1].index(), {L"p_10"});
-            new_product = new_product * o1 * o2 * o3 * o4;
+            two_body_product = two_body_product * o1 * o2 * o3 * o4;
+            one_body_product = one_body_product * ex<Constant>(0);
+            simplify(one_body_product);
+            simplify(two_body_product);
           }
         }
       }
-      else{new_product = factor * new_product;}
+      else{one_body_product = factor * one_body_product;
+          simplify(one_body_product);
+          two_body_product = factor * two_body_product;
+          simplify(two_body_product);}
     }
-    result = new_product + result;
+    one_body_result = one_body_product + one_body_result;
+    two_body_result = two_body_product + two_body_result;
     /*for (auto&& pair : og_new){// loop through again to update the indices
       product->as<Product>() = replace_idx(product, pair.first, pair.second);
     }*/
     //og_new.resize(0);
   }
+  //std::wcout << "one_body expression: " << to_latex_align(one_body_result, 20, 2) << std::endl;
+  simplify(one_body_result);
+  simplify(two_body_result);
 
-  non_canon_simplify(result);
-
-  return result;
+  return std::pair<ExprPtr,ExprPtr> {one_body_result, two_body_result};
 }
 }
 #ifndef SEQUANT_SIMPLIFICATIONS_H
