@@ -167,10 +167,9 @@ next_contract:
 EvalExpr::hash_t EvalExpr::hash_braket(
     const decltype(std::declval<Tensor>().const_braket())& braket) {
   EvalExpr::hash_t bkHash = 0;
-  for (auto&& ispace : braket | ranges::views::transform([](const Index& x) {
-                         return x.space().type().to_int32();
-                       })) {
-    hash::combine(bkHash, hash::value(ispace));
+  for (auto const& idx: braket) {
+    hash::combine(bkHash, hash::value(idx.space().type().to_int32()));
+    hash::combine(bkHash, hash::value(idx.space().qns().to_int32()));
   }
   return bkHash;
 }
