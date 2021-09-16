@@ -13,7 +13,7 @@ namespace detail {
 auto const braket_to_annot = [](auto const& bk) {
   std::string annot;
   for (auto& idx : bk) {
-    annot += idx.string_label() + ",";
+    annot += idx.ascii_label() + ",";
   }
   annot.pop_back();
   return annot;
