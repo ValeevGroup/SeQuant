@@ -75,12 +75,33 @@ class SequantEvalScfTA final : public SequantEvalScf {
   }
 
   double solve() override {
+    auto bk_to_labels_sorted =
+        [](auto const& bk) -> container::svector<std::string> {
+      auto vec = bk | ranges::views::transform([](auto const& idx) {
+                   return idx.string_label();
+                 }) |
+                 ranges::to<container::svector<std::string>>;
+      ranges::sort(vec);
+      return vec;
+    };
+
+    auto tnsr_to_bk_labels_sorted =
+        [&bk_to_labels_sorted](
+            Tensor const& tnsr) -> container::svector<std::string> {
+      auto const bra_sorted = bk_to_labels_sorted(tnsr.bra());
+      auto const ket_sorted = bk_to_labels_sorted(tnsr.ket());
+      return ranges::views::concat(bra_sorted, ket_sorted) |
+             ranges::to<container::svector<std::string>>;
+    };
+
     auto rs = ranges::views::repeat_n(Tensor_t{}, info_.eqn_opts.excit) |
               ranges::to_vector;
-    for (auto&& [r, n] : ranges::views::zip(rs, nodes_))
+    for (auto&& [r, n] : ranges::views::zip(rs, nodes_)) {
+      auto const target_indices = tnsr_to_bk_labels_sorted(n->tensor());
       r = info_.eqn_opts.spintrace
-              ? eval::ta::eval_symm(n, data_world_, cman_)
-              : eval::ta::eval_antisymm(n, data_world_, cman_);
+              ? eval::ta::eval_symm(n, target_indices, data_world_, cman_)
+              : eval::ta::eval_antisymm(n, target_indices, data_world_, cman_);
+    }
     data_world_.update_amplitudes(rs);
     return info_.eqn_opts.spintrace ? energy_spin_free_orbital()
                                     : energy_spin_orbital();

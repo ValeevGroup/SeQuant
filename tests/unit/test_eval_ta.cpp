@@ -91,6 +91,10 @@ class rand_tensor_yield {
   }
 };
 
+auto index_label_list = [](std::string const& str){
+  return ranges::views::split(str, ',') | ranges::to<std::vector<std::string>>;
+};
+
 TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
   using ranges::views::transform;
   using TA::TArrayD;
@@ -116,32 +120,32 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
   // nominal(empty) cache manager
   auto manager = sequant::eval::CacheManager<TArrayD const>{{}, {}};
 
-  auto eval_bnode = [&yield, &manager](sequant::ExprPtr const& expr) {
-      return eval(to_eval_node(expr), yield, manager);
+  auto eval_bnode = [&yield, &manager](sequant::ExprPtr const& expr, std::string const& target_labels) {
+      return eval(to_eval_node(expr), index_label_list(target_labels), yield, manager);
   };
 
-  auto eval_bnode_symm = [&yield, &manager](sequant::ExprPtr const& expr) {
-      return eval_symm(to_eval_node(expr), yield, manager);
+  auto eval_bnode_symm = [&yield, &manager](sequant::ExprPtr const& expr, std::string const& target_labels) {
+      return eval_symm(to_eval_node(expr), index_label_list(target_labels), yield, manager);
   };
 
-  auto eval_bnode_antisymm = [&yield, &manager](sequant::ExprPtr const& expr) {
-      return eval_antisymm(to_eval_node(expr), yield, manager);
+  auto eval_bnode_antisymm = [&yield, &manager](sequant::ExprPtr const& expr, std::string const& target_labels) {
+      return eval_antisymm(to_eval_node(expr), index_label_list(target_labels), yield, manager);
   };
 
   SECTION("summation") {
     auto expr1 = parse_expr_asymm(L"t_{a1}^{i1} + f_{i1}^{a1}");
-    auto sum1_eval = eval_bnode(expr1);
+    auto sum1_eval = eval_bnode(expr1, "i_1,a_1");
 
     auto sum1_man = TArrayD{};
-    sum1_man("0,1") = yield(L"t_vo")("0,1") + yield(L"f_ov")("1,0");
+    sum1_man("i1,a1") = yield(L"t_vo")("a1,i1") + yield(L"f_ov")("i1,a1");
 
     REQUIRE(norm(sum1_man) == Approx(norm(sum1_eval)));
 
     auto expr2 = parse_expr_asymm(L"2 * t_{a1}^{i1} + 1.5 * f_{i1}^{a1}");
-    auto sum2_eval = eval_bnode(expr2);
+    auto sum2_eval = eval_bnode(expr2, "i_1,a_1");
 
     auto sum2_man = TArrayD{};
-    sum2_man("0,1") = 2 * yield(L"t_vo")("0,1") + 1.5 * yield(L"f_ov")("1,0");
+    sum2_man("i1,a1") = 2 * yield(L"t_vo")("a1,i1") + 1.5 * yield(L"f_ov")("i1,a1");
 
     REQUIRE(norm(sum2_man) == Approx(norm(sum2_eval)));
   }
@@ -149,7 +153,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
   SECTION("product") {
     auto expr1 =
         parse_expr_asymm(L"1/2.0 * g_{i2,i4}^{a2,a4} * t_{a1,a2}^{i1,i2}");
-    auto prod1_eval = eval_bnode(expr1);
+    auto prod1_eval = eval_bnode(expr1, "i_4,a_1,a_4,i_1");
 
     TArrayD prod1_man{};
     prod1_man("i4,a1,a4,i1") =
@@ -159,7 +163,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
 
     auto expr2 = parse_expr_asymm(
         L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}");
-    auto prod2_eval = eval_bnode(expr2);
+    auto prod2_eval = eval_bnode(expr2, "a_1,a_2,i_1,i_2");
 
     auto prod2_man = TArrayD{};
     prod2_man("a1,a2,i1,i2") = -1 / 4.0 * yield(L"g_oovv")("i3,i4,a3,a4") *
@@ -173,7 +177,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
         L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
         " + "
         " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2} ");
-    auto eval1 = eval_bnode(expr1);
+    auto eval1 = eval_bnode(expr1, "a_1,a_2,i_1,i_2");
 
     auto man1 = TArrayD{};
     man1("a1,a2,i1,i2") = -1.0 / 4 * yield(L"g_oovv")("i3,i4,a3,a4") *
@@ -186,7 +190,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
 
   SECTION("Antisymmetrization") {
     auto expr1 = parse_expr_asymm(L"0.5 * g_{i1, i2}^{a1, a2}");
-    auto eval1 = eval_bnode_antisymm(expr1);
+    auto eval1 = eval_bnode_antisymm(expr1, "i_1,i_2,a_1,a_2");
 
     auto man1 = TArrayD{};
     man1("0,1,2,3") = yield(L"g_oovv")("0,1,2,3") - yield(L"g_oovv")("1,0,2,3") +
@@ -199,62 +203,12 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
 
   SECTION("Symmetrization") {
     auto expr1 = parse_expr_asymm(L"0.5 * g_{i1, i2}^{a1, a2}");
-    auto eval1 = eval_bnode_symm(expr1);
+    auto eval1 = eval_bnode_symm(expr1, "i_1,i_2,a_1,a_2");
 
     auto man1 = TArrayD{};
     man1("0,1,2,3") = yield(L"g_oovv")("0,1,2,3") + yield(L"g_oovv")("1,0,3,2");
     man1("0,1,2,3") = 0.5 * man1("0,1,2,3");
 
     REQUIRE(norm(man1) == Approx(norm(eval1)));
-  }
-
-  SECTION("Debug") {
-    auto expr1 =
-        parse_expr_asymm(L"1/4 * g{i2,i3;a2,a3} * t{a1,a2,a3;i1,i2,i3}");
-
-    // auto const node1 = sequant::to_eval_node(expr1);
-    // std::wcout << node1.tikz<std::wstring>(
-    //                   [](auto const& n) {
-    //                     return L"$" + n->tensor().to_latex() + L"$";
-    //                   },
-    //                   [](auto const&) { return L"circle,draw"; })
-    //            << std::endl;
-
-    auto expr2 = parse_expr_asymm(
-        L"1/4 g{i3,a1;a3,a4} t{a2,a3,a4;i1,i2,i3}"
-         "+ 1/4 f{i3;a3} t{a1,a2,a3;i1,i2,i3}"
-         "+ 1/4 g{i3,i4;i1,a3} t{a1,a2,a3;i2,i3,i4}"
-         "+ 1/4 g{i3,i4;a3,a4} t{a3;i1} t{a1,a2,a4;i2,i3,i4}"
-         "+ 1/4 g{i3,i4;a3,a4} t{a3;i3} t{a1,a2,a4;i1,i2,i4}"
-         "+ 1/4 g{i3,i4;a3,a4} t{a1;i3} t{a2,a3,a4;i1,i2,i4}"
-        );
-
-    auto expr3 = parse_expr_asymm(
-        L"-1/4 g{i4,a1;i1,i2} t{a2,a3;i3,i4}"
-         "-1/4 g{a1,a2;i1,a4} t{a3,a4;i2,i3}"
-        );
-
-    auto eval1 = eval_bnode(expr1);
-    auto eval2 = eval_bnode(expr2);
-    auto eval3 = eval_bnode(expr3);
-
-    auto man1 = TArrayD{};
-    auto man2 = TArrayD{};
-    auto man3 = TArrayD{};
-
-    man1("i1,a1") =
-        1. / 4. * yield(L"g_oovv")("i2,i3,a2,a3") * yield(L"t_vvvooo")("a1,a2,a3,i1,i2,i3");
-
-    man2("i1,i2,a1,a2") =   1./4 * yield(L"g_ovvv")("i3,a1,a3,a4") * yield(L"t_vvvooo")("a2,a3,a4,i1,i2,i3")
-                          + 1./4 * yield(L"f_ov")("i3,a3") * yield(L"t_vvvooo")("a1,a2,a3,i1,i2,i3")
-                          + 1./4 * yield(L"g_ooov")("i3,i4,i1,a3") * yield(L"t_vvvooo")("a1,a2,a3,i2,i3,i4")
-                          + 1./4 * yield(L"g_oovv")("i3,i4,a3,a4") * yield(L"t_vo")("a3,i1") * yield(L"t_vvvooo")("a1,a2,a4,i2,i3,i4")
-                          + 1./4 * yield(L"g_oovv")("i3,i4,a3,a4") * yield(L"t_vo")("a3,i3") * yield(L"t_vvvooo")("a1,a2,a4,i1,i2,i4")
-                          + 1./4 * yield(L"g_oovv")("i3,i4,a3,a4") * yield(L"t_vo")("a1,i3") * yield(L"t_vvvooo")("a2,a3,a4,i1,i2,i4");
-    man3("i1,i2,i3,a1,a2,a3") = -1./4 * yield(L"g_ovoo")("i4,a1,i1,i2") * yield(L"t_vvoo")("a2,a3,i3,i4")
-                                     -1./4 * yield(L"g_vvov")("a1,a2,i1,a4") * yield(L"t_vvoo")("a3,a4,i2,i3");
-    REQUIRE(norm(man1) == Approx(norm(eval1)));
-    REQUIRE(norm(man2) == Approx(norm(eval2)));
-    REQUIRE(norm(man3) == Approx(norm(eval3)));
   }
 }

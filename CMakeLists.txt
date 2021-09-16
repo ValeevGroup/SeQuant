@@ -123,6 +123,8 @@ if (Boost_VERSION EQUAL 107000)
         "or higher, other than 1.70")
 endif()
 
+find_package(Eigen3 3.3 REQUIRED NO_MODULE)
+
 # embedded bliss-0.73
 add_library(SeQuant-bliss
         SeQuant/external/bliss/defs.cc
@@ -217,7 +219,7 @@ add_library(SeQuant
         SeQuant/domain/mbpt/sr/sr.hpp
         )
 
-target_link_libraries(SeQuant PUBLIC range-v3::range-v3 Boost::boost SeQuant-bliss Threads::Threads)
+target_link_libraries(SeQuant PUBLIC range-v3::range-v3 Boost::boost SeQuant-bliss Threads::Threads Eigen3::Eigen)
 if (SEQUANT_HAS_EXECUTION_HEADER_STANDALONE OR SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB)
   target_compile_definitions(SeQuant PUBLIC SEQUANT_HAS_EXECUTION_HEADER)
   if (SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB)
@@ -300,13 +302,12 @@ set_tests_properties(sequant/unit/run
         WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tests/unit)
 
 ####### Tests ########
-find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 
 # Single-Reference Coupled-Cluster equation generation (spin-orbital)
 set(example0 srcc)
 add_executable(${example0} EXCLUDE_FROM_ALL
         examples/${example0}/${example0}.cpp)
-target_link_libraries(${example0} SeQuant ${TBB_LIBRARIES} Eigen3::Eigen)
+target_link_libraries(${example0} SeQuant ${TBB_LIBRARIES})
 
 set(example1 uccf12)
 add_executable(${example1} EXCLUDE_FROM_ALL
