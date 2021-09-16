@@ -36,7 +36,8 @@ AsyCost::AsyCost(size_t nocc, size_t nvirt) {
 }
 
 AsyCost::AsyCost(size_t nocc, size_t nvirt, size_t count): AsyCost{nocc, nvirt} {
-  if (!cost_.empty()) cost_.begin()->set_count(count);
+  if (!cost_.empty() && count > 0) cost_.begin()->set_count(count);
+  else *this = AsyCost::zero();
 }
 
 AsyCost::AsyCost(AsyCostEntry c) : AsyCost{0, 0} {

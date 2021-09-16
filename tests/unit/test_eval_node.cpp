@@ -58,7 +58,7 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
     REQUIRE(validate_tensor(node2.left()->tensor(), L"g_{i3,i4}^{a3,a4}"));
 
     REQUIRE(validate_tensor(node2.right()->tensor(),
-                            L"I_{a1,a2,a3,a4}^{i1,i2,i3,i4}"));
+                            L"I_{a3,a4,a1,a2}^{i1,i2,i3,i4}"));
 
     REQUIRE(
         validate_tensor(node2.right().left()->tensor(), L"t_{a1,a2}^{i3,i4}"));
@@ -96,28 +96,6 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
     REQUIRE(validate_tensor(node1.right().right()->tensor(), L"t_{a2}^{i3}"));
   }
 
-  SECTION("implicit canonicalization") {
-    auto const expr1 = parse_expr_asymm(L"1/4 * g_{i2,i1}^{a1,a2}");
-
-    auto const node1 = to_eval_node(expr1);
-    //
-    // g_{i2, i1}^{a1, a2} =canonized=> -g_{i1, i2}^{a1,a2}
-    //
-
-    REQUIRE(node1->scalar() == Constant{-1.0 / 4});
-    auto const expr2 =
-        parse_expr_asymm(L"1/4 * t_{a1,a2}^{i3,i4} * g_{i4,i3}^{i1,i2}");
-    //
-    // g_{i4,i3}^{i1,i2} =canonized=> -g_{i3,i4}^{i1,i2}
-    //
-
-    auto const node2 = to_eval_node(expr2);
-
-    REQUIRE(node2->scalar() == Constant{-1.0 / 4});
-    REQUIRE(node2.left()->scalar() == Constant{1});
-    REQUIRE(node2.right()->scalar() == Constant{1});
-  }
-
   SECTION("to_expr") {
     const auto p1 = parse_expr_asymm(
         L"1/16 "
@@ -135,10 +113,9 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
     REQUIRE(to_expr(n1)->to_latex() == p1_after->to_latex());
 
     auto const p2 = parse_expr_asymm(L"1/4 * g_{i2,i1}^{a1,a2}");
-    auto const p2_after = parse_expr_asymm(L"-1/4 * g_{i1,i2}^{a1,a2}");
 
     auto const n2 = to_eval_node(p2);
-    REQUIRE(to_expr(n2)->to_latex() == p2_after->to_latex());
+    REQUIRE(to_expr(n2)->to_latex() == p2->to_latex());
   }
 
   SECTION("linearize_eval_node") {
@@ -152,7 +129,7 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
 
     auto const p2 = parse_expr_asymm(L"1/4 * g_{i2,i1}^{a1,a2}");
     REQUIRE(linearize_eval_node(to_eval_node(p2))->to_latex() ==
-            parse_expr_asymm(L"-1/4 * g_{i1,i2}^{a1,a2}")->to_latex());
+            parse_expr_asymm(L"1/4 * g_{i2,i1}^{a1,a2}")->to_latex());
   }
 
   SECTION("asy_cost_single_node") {
@@ -189,5 +166,12 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
         parse_expr_asymm(L"g_{i2,i3}^{i1,a2} * t_{a2}^{i2} * t_{a1}^{i3}");
     auto const n3 = to_eval_node(p3);
     REQUIRE(asy_cost(n3) == AsyCost{2, 1} + AsyCost{3, 1});
+
+    auto const t1 = parse_expr_asymm(L"I{i1,i2,i3;a1,a2,a3}");
+    auto const n4 = to_eval_node_antisymm(t1);
+    REQUIRE(asy_cost(n4) == AsyCost{3,3,36}); // 36*O^3*V^3
+
+    auto const n5 = to_eval_node_symm(t1);
+    REQUIRE(asy_cost(n5) == AsyCost{3,3,6}); // 6*O^3*V^3
   }
 }

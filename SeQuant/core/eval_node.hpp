@@ -15,6 +15,10 @@ using EvalNode = BinaryNode<EvalExpr>;
 
 EvalNode to_eval_node(ExprPtr const& expr);
 
+EvalNode to_eval_node_antisymm(ExprPtr const& expr);
+
+EvalNode to_eval_node_symm(ExprPtr const& expr);
+
 ExprPtr to_expr(EvalNode const& node);
 
 ExprPtr linearize_eval_node(EvalNode const& node);
@@ -26,7 +30,6 @@ template <typename F = std::function<bool(EvalNode const&)>,
                            bool> = true>
 AsyCost asy_cost(
     EvalNode const& node, F&& pred = [](auto const&) { return true; }) {
-  using ranges::views::concat;
 
   if (node.leaf() || !std::invoke(std::forward<F>(pred), node))
     return AsyCost::zero();

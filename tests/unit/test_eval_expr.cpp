@@ -51,10 +51,7 @@ TEST_CASE("TEST_EVAL_EXPR", "[EvalExpr]") {
     auto const x3 = EvalExpr{p2->at(0)->as<Tensor>()};
     auto const x4 = EvalExpr{p2->at(1)->as<Tensor>()};
     auto const x5 = EvalExpr{x3, x4, EvalOp::Antisymm};
-    std::wcout << "p2 = " << p2->to_latex() << std::endl;
-    std::wcout << "x3.tensor() = " << x3.tensor().to_latex() << std::endl;
-    std::wcout << "x4.tensor() = " << x4.tensor().to_latex() << std::endl;
-    std::wcout << "x5.tensor() = " << x5.tensor().to_latex() << std::endl;
+
     REQUIRE(x5.op() == EvalOp::Antisymm);
 
     auto p3 = parse_expr(L"S{a1,a2;i1,i2}:S * I{a1,a2;i1,i2}", Symmetry::nonsymm);
@@ -201,16 +198,5 @@ TEST_CASE("TEST_EVAL_EXPR", "[EvalExpr]") {
 
     // sum of two nonsymmetric tensors
     REQUIRE(symmetry(imed(t5, t6)) == Symmetry::nonsymm);
-  }
-
-  SECTION("Canonicalization") {
-    auto evxpr1 =
-        EvalExpr(parse_expr_asymm(L"g_{i1,i2}^{a1,a2}")->as<Tensor>());
-    auto evxpr2 =
-        EvalExpr(parse_expr_asymm(L"g_{i2,i1}^{a1,a2}")->as<Tensor>());
-
-    REQUIRE(evxpr1.tensor() == evxpr2.tensor());
-    REQUIRE_FALSE(evxpr1.scalar() == evxpr2.scalar());
-    REQUIRE(evxpr1.hash() == evxpr2.hash());
   }
 }

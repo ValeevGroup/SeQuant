@@ -10,8 +10,9 @@ EvalNode to_eval_node(ExprPtr const& expr) {
   using ranges::views::tail;
   using ranges::views::transform;
 
-  assert(!expr->is<Constant>() && "constant type expression"
-                                  "not allowed in eval node");
+  assert(!expr->is<Constant>() &&
+         "constant type expression"
+         "not allowed in eval node");
 
   if (expr->is<Tensor>()) return EvalNode{EvalExpr{expr->as<Tensor>()}};
 
@@ -42,13 +43,29 @@ EvalNode to_eval_node(ExprPtr const& expr) {
   return bnode;
 }
 
-EvalNode to_eval_node(Tensor const& tnsr, ExprPtr const& expr) {
-  assert(tnsr.label() == L"A" || tnsr.label() == L"S");
-  auto op = tnsr.label() == L"A" ? EvalOp::Antisymm : EvalOp::Symm;
-  auto lhs = BinaryNode<EvalExpr>(EvalExpr{tnsr});
+EvalNode to_eval_node(std::wstring_view label, ExprPtr const& expr) {
+  assert(label == L"A" || label == L"S");
+  auto op = label == L"A" ? EvalOp::Antisymm : EvalOp::Symm;
+
   auto rhs = to_eval_node(expr);
+  auto bra = rhs->tensor().bra();
+  auto ket = rhs->tensor().ket();
+  ranges::sort(bra, Index::LabelCompare{});
+  ranges::sort(ket, Index::LabelCompare{});
+
+  auto const tnsr = Tensor{label, bra, ket,
+                           label == L"A" ? Symmetry::antisymm : Symmetry::symm};
+  auto lhs = EvalNode{EvalExpr{tnsr}};
   auto pdata = EvalExpr{*lhs, *rhs, op};
-  return BinaryNode<EvalExpr>(std::move(pdata), std::move(lhs), std::move(rhs));
+  return EvalNode{std::move(pdata), std::move(lhs), std::move(rhs)};
+}
+
+EvalNode to_eval_node_antisymm(ExprPtr const& expr) {
+  return to_eval_node(L"A", expr);
+}
+
+EvalNode to_eval_node_symm(ExprPtr const& expr) {
+  return to_eval_node(L"S", expr);
 }
 
 ExprPtr to_expr(EvalNode const& node) {
@@ -90,8 +107,7 @@ ExprPtr linearize_eval_node(EvalNode const& node) {
 
   auto lres = to_expr(node.left());
   auto rres = to_expr(node.right());
-  if (node->op() == EvalOp::Sum)
-    return ex<Sum>(ExprPtrList{lres, rres});
+  if (node->op() == EvalOp::Sum) return ex<Sum>(ExprPtrList{lres, rres});
 
   if (node.left().leaf() && node.right().leaf()) {
     return ex<Product>(node->scalar().value(), ExprPtrList{lres, rres});
@@ -118,9 +134,8 @@ AsyCost asy_cost_single_node(EvalNode const& node) {
   auto bks = ranges::views::concat(node.left()->tensor().const_braket(),
                                    node.right()->tensor().const_braket(),
                                    node->tensor().const_braket());
-  auto const uniques = bks
-                       | ranges::to<container::set<Index,
-                                                   Index::LabelCompare>>;
+  auto const uniques =
+      bks | ranges::to<container::set<Index, Index::LabelCompare>>;
 
   size_t const nocc = ranges::count_if(uniques, [](auto&& idx) {
     return idx.space() == IndexSpace::active_occupied;
@@ -128,14 +143,16 @@ AsyCost asy_cost_single_node(EvalNode const& node) {
 
   size_t const nvirt = uniques.size() - nocc;
 
-  switch (node->op()){
+  switch (node->op()) {
     case EvalOp::Symm: {
-      auto f = static_cast<size_t>(boost::math::factorial<double>(node->tensor().rank()));
+      auto f = static_cast<size_t>(
+          boost::math::factorial<double>(node->tensor().rank()));
       return AsyCost{nocc, nvirt, f};
     }
     case EvalOp::Antisymm: {
-      auto f = static_cast<size_t>(boost::math::factorial<double>(node->tensor().rank()));
-      return AsyCost{nocc, nvirt, f*f};
+      auto f = static_cast<size_t>(
+          boost::math::factorial<double>(node->tensor().rank()));
+      return AsyCost{nocc, nvirt, f * f};
     }
     default:
       return AsyCost{nocc, nvirt};
