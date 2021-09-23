@@ -107,48 +107,63 @@ try_main() {
     }
     else return input;
   };
+  auto compute_double_com = [&](ExprPtr e1, ExprPtr e2, ExprPtr e3){
+    auto first_com = do_wick((e1 * e2) - (e2 * e1));
+    auto first_com_clone = first_com->clone();
+    auto second_com_1 = do_wick((first_com_clone * e3));
+    auto second_com_2 = do_wick(e3 * first_com);
+    auto second_com = second_com_1 - second_com_2;
+    simplify(second_com);
+    second_com = keep_up_to_3_body_terms(second_com);
+    second_com = decompositions::three_body_substitution(second_com,2);
+    simplify(second_com);
+    return second_com;
+  };
 
-  auto gg_space = IndexSpace::active_occupied;  // Geminal-generating space: active occupieds is the normal choice, all orbitals is the reference-independent (albeit expensive) choice
+  auto gg_space = IndexSpace::occupied;  // Geminal-generating space: active occupieds is the normal choice, all orbitals is the reference-independent (albeit expensive) choice
   //start transformation
   {
     auto h = H(false);
     std::wcout << "H = " << to_latex_align(h, 20)<< std::endl;
     auto r = R12(gg_space);
+    auto r_1 = R12(gg_space);
     std::wcout << "r = " << to_latex_align(r, 20)<< std::endl;
+    //way 1
+    auto A = r - adjoint(r);
+    auto H_A = do_wick((h * A) - (A * h));
+    auto H_A_adj = do_wick((h * adjoint(r)) - (adjoint(r_1) * h));
+     auto H_A_3 = keep_up_to_3_body_terms(H_A);
+    auto H_A_2 = decompositions::three_body_substitution(H_A_3,2);
+    simplify(H_A_2);
+    auto com_1 = simplification::hamiltonian_based(H_A_2);
 
-    //start single comutator compute.
-    auto hr_comm = do_wick( ex<Constant>(1) * (h*r - r*h) );
-    std::wcout << "[H,R] = " << to_latex_align(hr_comm, 20)
-               << std::endl;
+    std::wcout << "h A one body: " << to_latex_align(com_1.first,20,2) << std::endl;
+    std::wcout << "h A two body: " << to_latex_align(com_1.second,20,2) << std::endl;
 
-    auto hr_comm_12 = keep_up_to_3_body_terms(hr_comm);
-    auto cumu_decomp = decompositions::three_body_substitution(hr_comm_12,2); // apply the cumulant decompostition to the expression
-    simplify(cumu_decomp);
+    auto fFF = compute_double_com(F(),r,r_1);
+    auto fFFt = compute_double_com(F(),r,ex<Constant>(-1.) * adjoint(r_1));
+    auto fFtFt = compute_double_com(F(),ex<Constant>(-1.) * adjoint(r),ex<Constant>(-1.) * adjoint(r_1));
+    auto fFtF = compute_double_com(F(),ex<Constant>(-1.) * adjoint(r),r_1);
 
-    auto compare_h = simplification::hamiltonian_based(cumu_decomp);// simplify the expression to remove zero terms not caught by sequant core.
-    std::wcout << "$[H,R]_12 one body$" << to_latex_align(compare_h.first, 20, 3) << std::endl;
-    std::wcout << "$[H,R]_12 two body$" << to_latex_align(compare_h.second, 20, 3) << std::endl;
-    //end single comutator compute
+    auto fFF_sim = simplification::fock_based(fFF);
+   // std::wcout << "FF: " << to_latex_align(fFF_sim.second,20,2) << std::endl;
+    auto fFFt_sim = simplification::fock_based(fFFt);
+    std::wcout << "FFt one body: " << to_latex_align(fFFt_sim.first,20,2) << std::endl;
+    std::wcout << "FFt two body: " << to_latex_align(fFFt_sim.second,20,2) << std::endl;
+    auto fFtFt_sim = simplification::fock_based(fFtFt);
+    //std::wcout << "FtFt: " << to_latex_align(fFtFt_sim.second,20,2) << std::endl;
+    auto fFtF_sim = simplification::fock_based(fFtF);
+    std::wcout << "FtF one body: " << to_latex_align(fFtF_sim.first,20,2) << std::endl;
+    std::wcout << "FtF two body: " << to_latex_align(fFtF_sim.second,20,2) << std::endl;
 
-    //end of of first commutator. now comes the second comutator one at a time, i.e. (1/2)[[f,A],A] = (1/2)[[f,R]_12, R]_12 + complex conjugates and their versions. if we get this term we can interpret the rest from properties of comutators.
-    auto com_f_a = do_wick(ex<Constant>(0.5) * (F() * adjoint(r) - adjoint(r) * F()));
-    auto com_f_a_3 = keep_up_to_3_body_terms(com_f_a);
-    auto com_f_a_2 = decompositions::three_body_substitution(com_f_a_3,2);
-    simplify(com_f_a_2);
-    //start double comutator
-    auto r_ = R12(gg_space); //a new unique expression pointer is needed here.
-    //odd, but wick needs these terms evaluated separatly
-    auto comr_ = do_wick(com_f_a_2 * r_);
-    auto r_com = do_wick(r_ * com_f_a_2);
-    auto double_com = comr_ - r_com;
-    simplify(double_com);
-    auto double_com_3 = keep_up_to_3_body_terms(double_com);
-    auto double_com_2 = decompositions::three_body_substitution(double_com_3,2);
-    simplify(double_com_2);
-    auto compare_f = simplification::fock_based(double_com_2); // fock matrix based simplifcation which has additional screening of fock matrix from Brillouin's Theory
-    //end double comutator.
-    std::wcout << "$[[H,adj(R)]_12,R]_12$ one_body" << to_latex_align(compare_f.first,20,3) << std::endl;
-    std::wcout << "$[[H,adj(R)]_12,R]_12$ two body" << to_latex_align(compare_f.second,20,3) << std::endl;
+
+    auto one_body = com_1.first + ex<Constant>(0.5) * (fFF_sim.first + fFFt_sim.first + fFtFt_sim.first + fFtF_sim.first);
+    auto two_body = com_1.second + ex<Constant>(0.5) * (fFF_sim.second + fFFt_sim.second + fFtFt_sim.second + fFtF_sim.second);
+    non_canon_simplify(one_body);
+    non_canon_simplify(two_body);
+    std::wcout << "one body terms: " << to_latex_align(one_body,20,2) << std::endl;
+    std::wcout << "two body terms: " << to_latex_align(two_body,20,2) << std::endl;
+
   }//end transformation
 
 }
