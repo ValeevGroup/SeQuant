@@ -52,16 +52,19 @@ bool is_tensor_spin_symm(const Tensor& tensor);
 bool can_expand(const Tensor& tensor);
 
 /// @brief expand an antisymmetric tensor
+///
+/// @detailed For spin-indices, the tensor is NOT expanded if all spin-labels
+/// are either alpha or beta
 /// @param tensor a tensor from a product
 /// @return an ExprPtr containing the sum of expanded terms if antisymmetric OR
 /// @return an ExprPtr containing the tensor otherwise
-ExprPtr expand_antisymm(const Tensor& tensor);
+ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm = false);
 
 // TODO: Correct this function
 /// @brief expands all antisymmetric tensors in a product
 /// @param expr an expression pointer to expand
 /// @return an expression pointer with expanded tensors as a sum
-ExprPtr expand_antisymm(const ExprPtr& expr);
+ExprPtr expand_antisymm(const ExprPtr& expr, bool skip_spinsymm = false);
 
 /// @brief Check if label A is present in an expression pointer
 /// @detail This function assumes canonical ordering of tensors
@@ -154,27 +157,33 @@ ExprPtr closed_shell_spintrace(
     const ExprPtr& expression,
     const container::vector<container::vector<Index>> ext_index_groups = {{}});
 
-ExprPtr closedshell_cc_spintrace(const ExprPtr& expr);
+/// @brief Generates list of external indices from Antisymmetrization (A) operator
+/// @param expr ExprPtr with spin orbital indices
+/// @return external index groups to be used for spintracing
+container::vector<container::vector<Index>> external_indices(const ExprPtr& expr);
 
-// clang-format off
-/// @brief Perform biorthogonal transformation on an arbitrary
-/// residual equation (http://arxiv.org/abs/1805.00565)
-/// @param expr A spin-traced and canonicalized residual equation
-/// @param n_particles Rank of the amplitude
-/// @param ext_index_groups Indices of the left-projector
-/// @param threshold Parameter for calculating scalar coefficients
-/// @return result A biorthogonally transformed SeQuant expression
-// clang-format on
-ExprPtr biorthogonal_transform(
-    const ExprPtr &expr, const int n_particles,
-    const std::vector<std::vector<sequant::Index>> &ext_index_groups = {{}},
-    double threshold = 1.e-12);
+/// @brief Transforms Coupled cluster from spin orbital to spatial orbitals
+/// @detailed The external indices are deduced from Antisymmetrization operator
+/// @param expr ExprPtr with spin orbital indices
+/// @return an expression with spin integrated/adapted
+ExprPtr closed_shell_CC_spintrace(const ExprPtr& expr);
 
-// Multiply an expression by S operator, which is generated from external
-// indices
-ExprPtr symmetrize_expr(ExprPtr& expr,
-    const std::vector<std::vector<sequant::Index>>& ext_index_groups);
+/// Collect all indices from an expression
+auto index_list(const ExprPtr& expr);
 
+/// @brief Generates spin expressions to be used for open-shell coupled cluster
+/// @detailed Every spin combination of external indices will have all spin
+/// combinations of internal indices.
+/// @param expr ExprPtr with spin orbital indices
+/// @param ext_index_groups groups of external indices
+/// @return a vector of expr ptrs with spin expressions
+std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
+    const std::vector<std::vector<Index>> ext_index_groups = {{}});
+
+/// @brief Transforms Coupled cluster from spin orbital to spatial orbitals
+/// @param expr ExprPtr with spin orbital indices
+/// @return a vector of spin expressions for open-shell reference
+std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr);
 
 /// @brief Transforms an expression from spin orbital to spatial orbitals
 /// @detailed Given an expression, this function extracts all indices and adds a

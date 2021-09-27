@@ -2,6 +2,7 @@
 #include <SeQuant/core/timer.hpp>
 #include <SeQuant/domain/eqs/cceqs.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/spin.hpp>
 
 #include <Eigen/Dense>
 #include <Eigen/Eigenvalues>
@@ -13,7 +14,7 @@
 
 using namespace sequant;
 
-#define CLOSED_SHELL_SPINTRACE 0
+#define CLOSED_SHELL_SPINTRACE 1
 #if CLOSED_SHELL_SPINTRACE
 container::vector<double> biorthogonal_tran_coeff(const int n_particles, const double& threshold);
 std::vector<std::map<Index, Index>> biorthogonal_tran_idx_map(const container::vector<container::vector<Index>> ext_index_groups);
@@ -47,48 +48,97 @@ int main(int argc, char* argv[]) {
 #endif
   const size_t NMAX = argc > 1 ? std::atoi(argv[1]) : DEFAULT_NMAX;
   // change to true to print out the resulting equations
-  constexpr bool print = true;
+  constexpr bool print = false;
   // change to true to print stats
   Logger::get_instance().wick_stats = false;
-
+#if !CLOSED_SHELL_SPINTRACE
   ranges::for_each(std::array<bool, 2>{false, true}, [=](const bool screen) {
     ranges::for_each(
         std::array<bool, 2>{false, true}, [=](const bool use_topology) {
           ranges::for_each(std::array<bool, 2>{false, true},
                            [=](const bool canonical_only) {
-                           // TODO tpool was in scope before
-                           // separting header and source files
-                           // tpool.clear();
-                           // comment out to run all possible combinations
-                           if (screen && use_topology && canonical_only)
-                           compute_all{NMAX}(print, screen, use_topology,
-                                   true, canonical_only);
+                             // TODO tpool was in scope before
+                             // separting header and source files
+                             // tpool.clear();
+                             // comment out to run all possible combinations
+                             if (screen && use_topology && canonical_only)
+                               compute_all{NMAX}(print, screen, use_topology,
+                                                 true, canonical_only);
                            });
         });
   });
-
-#if CLOSED_SHELL_SPINTRACE
-  auto cc_r = cceqvec{ 4, 4}(true, true, true, true, true);
+#else
+  auto cc_r = sequant::eqs::cceqvec{3, 3}(true, true, true, true, true);
 
   /// Make external index
-  auto ext_idx_list = [] (const int i_max){
+  auto ext_idx_list = [](const int i_max) {
     container::vector<container::vector<Index>> ext_idx_list;
 
-    for(size_t i = 1; i <= i_max; ++i) {
+    for (size_t i = 1; i <= i_max; ++i) {
       auto label = std::to_wstring(i);
-      auto occ_i = Index::make_label_index(IndexSpace::instance(IndexSpace::active_occupied), label);
-      auto virt_i = Index::make_label_index(IndexSpace::instance(IndexSpace::active_unoccupied), label);
+      auto occ_i = Index::make_label_index(
+          IndexSpace::instance(IndexSpace::active_occupied), label);
+      auto virt_i = Index::make_label_index(
+          IndexSpace::instance(IndexSpace::active_unoccupied), label);
       container::vector<Index> pair = {occ_i, virt_i};
       ext_idx_list.push_back(pair);
     }
     return ext_idx_list;
   };
 
+#if 0
+  // First 4 terms only
+    cc_r[1] = cc_r[1]->as<Sum>().take_n(5);
+    cc_r[2] = cc_r[2]->as<Sum>().take_n(5);
+  //  cc_r[3] = cc_r[3]->as<Sum>().take_n(4);
+
+  for (int i = 1; i < cc_r.size(); ++i) {
+  // size_t counter = 1;
+  std::vector<size_t> n_st_terms(i+1,0);
+  for (auto& product_term : *cc_r[i]) {
+    // auto term = remove_tensor_from_product(product_term->as<Product>(), L"A");
+    auto term = product_term;
+     std::wcout << "Input: " << to_latex(term) << "\n";
+    const auto list = ext_idx_list(i);
+    auto os_st = open_shell_spintrace(term, list);
+    for (size_t j = 0; j != os_st.size(); ++j) {
+       std::wcout<< "st: " << to_latex(os_st[j]) << "\n";
+      n_st_terms[j] += os_st[j]->size();
+    }
+      std::wcout << "\n";
+  }
+  std::cout << "CC R" << i << ": ";
+  size_t n_terms_R = 0;
+  for (auto& n_terms : n_st_terms) {
+    n_terms_R += n_terms;
+    std::cout << n_terms << " ";
+  }
+  std::cout << ": " << n_terms_R << std::endl;
+}
+  return 0;
+#endif
+
+#if 0 // Open-shell
+  for (int i = 1; i < cc_r.size(); ++i) {
+    const auto list = ext_idx_list(i);
+    auto temp = open_shell_spintrace(cc_r[i], list);
+    std::cout << "R" << i << ": ";
+    for(auto& t : temp){
+      std::cout << t->size() << " ";
+      // std::wcout << to_latex(t) << "\n";
+    }
+    std::cout << "\n";
+  }
+  return 0;
+#endif
+
+  // Closed-shell coupled cluster spin-trace
   std::vector<ExprPtr> cc_st_r(cc_r.size());
   for (int i = 1; i < cc_r.size(); ++i) {
     const auto tstart = std::chrono::high_resolution_clock::now();
     const auto list = ext_idx_list(i);
     cc_st_r[i] = closed_shell_spintrace(cc_r[i], list);
+    // cc_st_r[i] = closed_shell_cc_spintrace(cc_r[i]);
     auto tstop = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> time_elapsed = tstop - tstart;
     printf("CC R%d size: %lu spintrace: %5.6f sec.\n", i, cc_st_r[i]->size(), time_elapsed.count());
@@ -145,6 +195,7 @@ int main(int argc, char* argv[]) {
     time_elapsed = tstop - tstart;
     printf("CC R%d size: %lu simplify time: %5.6f sec.\n\n", i, cc_st_r[i]->size(), time_elapsed.count());
   }
+  std::wcout << "CCSDT: " << to_latex(*cc_st_r[3]) << std::endl;
 #endif
 
   return 0;

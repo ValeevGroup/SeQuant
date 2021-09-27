@@ -160,13 +160,57 @@ class Tensor : public Expr, public AbstractTensor {
     return bra_rank();
   }
 
+  /// @Brief Convert Fock and Coulomb integrals to std::wstring formula compatible with MPQC v4
+  /// @param df return density-fitted or regular integals
+  /// @return formula in wstring format
+  std::wstring to_mpqc_formula(bool df = false) const {
+    auto label = this->label();
+    assert(label == L"f" || label == L"g");
+    static const std::vector<std::wstring> occ_list = {L"i", L"j", L"k", L"l"};
+    static const std::vector<std::wstring> uocc_list = {L"a", L"b", L"c", L"d"};
+    std::vector<std::wstring> braket;
+    auto occ_it = occ_list.begin();
+    auto vir_it = uocc_list.begin();
+    for (auto &idx : this->const_braket()) {
+      std::wstring spin{}, label{};
+      // Spin label
+      if (idx.space().qns() == IndexSpace::alpha)
+        spin = L"_α";
+      else if (idx.space().qns() == IndexSpace::beta)
+        spin = L"_β";
+      // Space label
+      if (idx.space() == IndexSpace::active_occupied) {
+        label = *occ_it + spin;
+        ++occ_it;
+      } else if (idx.space() == IndexSpace::active_unoccupied) {
+        label = *vir_it + spin;
+        ++vir_it;
+      }
+      braket.push_back(label);
+    }
+
+    std::wstring result;
+    std::wstring postfix = df ? L"[df]" : L"";
+    if (this->rank() == 1){
+      result = L"<" + braket[0] + L"|F|" + braket[1] + L">";
+    } else if (this->rank() == 2){
+      result = L"<" + braket[0] + L" " + braket[1] + L"|G|" +
+          braket[2] + L" " + braket[3] + L">";
+      if (this->symmetry() == Symmetry::antisymm) {
+        postfix = df ? L"[df,as]" : L"[as]";
+      }
+    }
+    return result+postfix;
+  }
+
   std::wstring to_latex() const override {
     std::wstring result;
+    bool gt = (this->label() == L"g") || (this->label() == L"t" && this->rank() > 1);
     result = L"{";
-    if((this->symmetry() == Symmetry::antisymm) && (this->label() == L"g"))
+    if((this->symmetry() == Symmetry::antisymm) && gt)
       result += L"\\bar{";
     result += this->label();
-    if((this->symmetry() == Symmetry::antisymm) && (this->label() == L"g"))
+    if((this->symmetry() == Symmetry::antisymm) && gt)
       result += L"}";
     result += L"^{";
     for (const auto &i : this->ket()) result += sequant::to_latex(i);
