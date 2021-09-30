@@ -185,6 +185,8 @@ add_library(SeQuant
         SeQuant/core/bliss.hpp
         SeQuant/core/timer.hpp
         SeQuant/core/binary_node.hpp
+        SeQuant/core/clone.hpp
+        SeQuant/core/clone.cpp
         SeQuant/core/eval_seq.hpp
         SeQuant/core/eval_expr.hpp
         SeQuant/core/eval_expr.cpp
@@ -272,6 +274,7 @@ set(utests_src
          tests/unit/test_optimize.cpp
          tests/unit/test_token_sequant.cpp
          tests/unit/test_rpn.cpp
+         tests/unit/test_clone.cpp
         )
 
 if (TARGET tiledarray)
