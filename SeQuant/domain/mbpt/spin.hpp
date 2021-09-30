@@ -155,7 +155,7 @@ int count_cycles(const container::svector<int, 6>& vec1,
 /// @return an expression with spin integrated/adapted
 ExprPtr closed_shell_spintrace(
     const ExprPtr& expression,
-    const container::vector<container::vector<Index>> ext_index_groups = {{}});
+    container::vector<container::vector<Index>> ext_index_groups = {{}});
 
 /// @brief Generates list of external indices from Antisymmetrization (A) operator
 /// @param expr ExprPtr with spin orbital indices
@@ -178,7 +178,7 @@ auto index_list(const ExprPtr& expr);
 /// @param ext_index_groups groups of external indices
 /// @return a vector of expr ptrs with spin expressions
 std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
-    const std::vector<std::vector<Index>> ext_index_groups = {{}});
+    std::vector<std::vector<Index>> ext_index_groups = {{}});
 
 /// @brief Transforms Coupled cluster from spin orbital to spatial orbitals
 /// @param expr ExprPtr with spin orbital indices
@@ -206,8 +206,8 @@ ExprPtr spintrace(
 /// @return ExprPtr with terms with S operator as a factor
 ExprPtr factorize_S_operator(
     const ExprPtr& expression,
-    const std::initializer_list<IndexList> ext_index_groups = {{}},
-    const bool fast_method = true);
+    std::initializer_list<IndexList> ext_index_groups = {{}},
+    bool fast_method = true);
 
 }  // namespace sequant
 
