@@ -520,13 +520,20 @@ ExprPtr densities_to_occ(const ExprPtr& ex_){//densities become diagonal two bod
     for (auto&& factor : product->as<Product>().factors()){
       if (factor->as<Tensor>().label() == L"\\Gamma" || factor->as<Tensor>().label() == L"\\gamma"){
         for (size_t i = 0; i < factor->as<Tensor>().bra().size(); i++) {
-          new_product = new_product *
-                        make_overlap(factor->as<Tensor>().bra()[i],
-                                     Index::make_tmp_index(IndexSpace::instance(
-                                         IndexSpace::occupied))) *
-                        make_overlap(factor->as<Tensor>().ket()[i],
-                                     Index::make_tmp_index(IndexSpace::instance(
-                                         IndexSpace::occupied)));
+          if(factor->as<Tensor>().bra()[i].space() == IndexSpace::all) {
+            new_product =
+                new_product *
+                make_overlap(factor->as<Tensor>().bra()[i],
+                             Index::make_tmp_index(
+                                 IndexSpace::instance(IndexSpace::occupied)));
+          }
+          if(factor->as<Tensor>().ket()[i].space() == IndexSpace::all){
+            new_product =
+                new_product *
+                make_overlap(factor->as<Tensor>().ket()[i],
+                             Index::make_tmp_index(
+                                 IndexSpace::instance(IndexSpace::occupied)));
+          }
         }
       }
       new_product = factor * new_product;
@@ -645,7 +652,7 @@ Product find_f12_interms(ExprPtr ex_){
       }
     }
     bool intermediate = false;
-    if(result->is<Tensor>() && (result->as<Tensor>().label() == L"B" || result->as<Tensor>().label() == L"X" || result->as<Tensor>().label() == L"V")) {
+    /*if(result->is<Tensor>() && (result->as<Tensor>().label() == L"B" || result->as<Tensor>().label() == L"X" || result->as<Tensor>().label() == L"V")) {
       auto bra_result = ex<Constant>(1.);
       auto ket_result = ex<Constant>(1.);
       for (auto&& bra : result->as<Tensor>().bra()) {
@@ -661,7 +668,7 @@ Product find_f12_interms(ExprPtr ex_){
         }
       }
       result = bra_result * ket_result * result;
-    }
+    }*/
 
     result = result * ex_;
     FWickTheorem wick {result};
@@ -669,7 +676,7 @@ Product find_f12_interms(ExprPtr ex_){
     simplify(result);
     return result->as<Product>();
   }
-  else{return ex_->as<Product>();}
+  return ex_->as<Product>();
 }
 
 //in hamiltonian based transformations, it is important to retain the original form of the hamiltonian operator. that is h^p_q E^q_p + 1/2 g^{pq}_{rs} E^{rs}_{pq}.
@@ -741,10 +748,15 @@ ExprPtr screen_F12_and_density(ExprPtr exprs){
 // enforces the following obs convention. E^{p_7}_{p_9} and E^{{p_7}{p_8}}_{{p_9}{p_{10}}}
 // should allow analysis of multiple expressions who have the same normal order operator prefactor.
 std::pair<ExprPtr,ExprPtr> hamiltonian_based(ExprPtr exprs){
+ // std::wcout << "pre remove constants: " << to_latex_align(exprs,20,2) << std::endl;
   exprs = remove_const(exprs);
+//  std::wcout << "post remove constants: " << to_latex_align(exprs,20,2) << std::endl;
   exprs = overlap_with_obs(exprs);
+ // std::wcout << "post obs: " << to_latex_align(exprs,20,2) << std::endl;
   exprs = screen_F12_and_density(exprs);
+ // std::wcout << "post screen F12 and density: " << to_latex_align(exprs,20,2) << std::endl;
   exprs = densities_to_occ(exprs);
+//  std::wcout << "densities to occ: " << to_latex_align(exprs,20,2) << std::endl;
   for (auto&& product : exprs->as<Sum>().summands()){
     product->as<Product>() = simplification::find_f12_interms(product);
   }
@@ -791,10 +803,13 @@ if(final_screen->is<Constant>()){
 
   //enforce that densities are in the occupied space since they are only non-zero in occ
   final_screen = densities_to_occ(final_screen);
+  std::wcout << "pre intermediates: " << to_latex_align(final_screen) << std::endl;
   //find the special f12 intermediates that cannot efficiently be solved directly.
   for (auto&& product : final_screen->as<Sum>().summands()){
     product->as<Product>() = simplification::find_f12_interms(product);
   }
+  std::wcout << "post intermediates: " << to_latex_align(final_screen) << std::endl;
+
   return fnop_to_overlap(final_screen);
   }
 }

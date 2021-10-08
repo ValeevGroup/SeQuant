@@ -114,13 +114,14 @@ try_main() {
     auto second_com_2 = do_wick(e3 * first_com);
     auto second_com = second_com_1 - second_com_2;
     simplify(second_com);
+    std::wcout << "double com" << to_latex_align(second_com,20,2) <<std::endl;
     second_com = keep_up_to_3_body_terms(second_com);
     second_com = decompositions::three_body_substitution(second_com,2);
     simplify(second_com);
     return second_com;
   };
 
-  auto gg_space = IndexSpace::occupied;  // Geminal-generating space: active occupieds is the normal choice, all orbitals is the reference-independent (albeit expensive) choice
+  auto gg_space = IndexSpace::active_occupied;  // Geminal-generating space: active occupieds is the normal choice, all orbitals is the reference-independent (albeit expensive) choice
   //start transformation
   {
     auto h = H(false);
@@ -129,10 +130,14 @@ try_main() {
     auto r_1 = R12(gg_space);
     std::wcout << "r = " << to_latex_align(r, 20)<< std::endl;
     //way 1
-    auto A = r - adjoint(r);
+    auto A = r - adjoint(r_1);
     auto H_A = do_wick((h * A) - (A * h));
     auto H_A_adj = do_wick((h * adjoint(r)) - (adjoint(r_1) * h));
+    auto H_r = do_wick((h * r_1) - (r * h));
+    auto single_Comm = H_r - H_A_adj;
+    simplify(single_Comm);
      auto H_A_3 = keep_up_to_3_body_terms(H_A);
+     //std::wcout << "pre decomp: " << to_latex_align(single_Comm,20,2) << std::endl;
     auto H_A_2 = decompositions::three_body_substitution(H_A_3,2);
     simplify(H_A_2);
     auto com_1 = simplification::hamiltonian_based(H_A_2);

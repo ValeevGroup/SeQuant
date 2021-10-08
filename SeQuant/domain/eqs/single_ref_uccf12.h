@@ -87,15 +87,15 @@ class uccf12{
   }
 
   std::pair<ExprPtr,ExprPtr> compute(bool print = false) {
-    auto gg_space = IndexSpace::occupied;  // Geminal-generating space: active occupieds is the normal choice, all orbitals is the reference-independent (albeit expensive) choice
+    auto gg_space = IndexSpace::active_occupied;  // Geminal-generating space: active occupieds is the normal choice, all orbitals is the reference-independent (albeit expensive) choice
                                       // start transformation
 
     auto h = H(false);
     auto r = R12(gg_space);
     auto r_1 = R12(gg_space);
 
-    auto A = r - adjoint(r_1);
-    auto H_A = do_wick(ex<Constant>(1.) *((h * A) - (A * h)));
+    auto A = r - adjoint(r);
+    auto H_A = do_wick(ex<Constant>(1.) * ((h * A) - (A * h)));
     auto H_A_3 = keep_up_to_3_body_terms(H_A);
     auto H_A_2 = decompositions::three_body_substitution(H_A_3,2);
     simplify(H_A_2);
@@ -116,8 +116,8 @@ class uccf12{
     //std::wcout << "FtF: " << to_latex_align(fFtF_sim.second,20,2) << std::endl;
 
 
-    auto one_body = com_1.first + ex<Constant>(.5) * (fFF_sim.first  +fFFt_sim.first + fFtFt_sim.first + fFtF_sim.first);
-    auto two_body = com_1.second + ex<Constant>(.5) * (fFF_sim.second + fFFt_sim.second + fFtFt_sim.second + fFtF_sim.second);
+    auto one_body = com_1.first/* + ex<Constant>(0.5) * (fFF_sim.first  +fFFt_sim.first + fFtFt_sim.first + fFtF_sim.first)*/;
+    auto two_body = com_1.second/* + ex<Constant>(0.5) * (fFF_sim.second + fFFt_sim.second + fFtFt_sim.second + fFtF_sim.second)*/;
 
     non_canon_simplify(one_body);
     non_canon_simplify(two_body);
