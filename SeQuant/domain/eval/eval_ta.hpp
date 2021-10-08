@@ -90,49 +90,75 @@ Tensor_t eval_single_node(EvalNode const& node, Yielder&& leaf_evaluator,
 
 }  // namespace detail
 
-template <typename Tensor_t, typename Yielder>
-auto eval(EvalNode const& node, Yielder&& yielder,
-          CacheManager<Tensor_t const>& man) {
+///
+/// Evaluate a node.
+///
+/// \tparam Tensor_t The data tensor type. eg. TA::TArrayD from TiledArray.
+/// \param node sequant::binary_node<sequant::EvalExpr> object
+///            that is the evaluation tree in essence.
+/// \param target_indx_labels The string labels iterable of the target indices
+///                           that appear in the node->tensor().const_braket().
+///                               set(node->tensor().const_braket()) =
+///                                         set(target_indx_labels)
+///                           This paramter is to allow to set the final
+///                           physical layout of the evaluated tensor in
+///                           the desired permutation.
+/// \param yielder That returns Tensor_t for leaf SeQuant Tensor(g, f, t, ...).
+/// \param man The cache manager.
+/// \return Tensor_t
+template <typename Tensor_t, typename Iterable, typename Yielder>
+auto eval(EvalNode const& node, Iterable const& target_indx_labels,
+          Yielder&& yielder, CacheManager<Tensor_t const>& man) {
   static_assert(
       std::is_invocable_r_v<Tensor_t, Yielder, sequant::Tensor const&>);
 
-  //  Tensor_t (*evaluator)(EvalNode const&, Tensor_t const&, Tensor_t const&)
-  //       = detail::eval_inode;
+  auto ti_sorted_input =
+      target_indx_labels | ranges::to<container::svector<std::string>>;
+  ranges::sort(ti_sorted_input);
+  auto ti_sorted_node = node->tensor().const_braket() |
+                        ranges::views::transform([](auto const& idx) {
+                          return idx.ascii_label();
+                        }) |
+                        ranges::to<container::svector<std::string>>;
+  ranges::sort(ti_sorted_node);
+
+  assert(ti_sorted_input == ti_sorted_node && "Invalid target indices");
 
   auto result =
       detail::eval_single_node(node, std::forward<Yielder>(yielder), man);
-  // NOTE:
-  // At this point the physical layout of `result`
-  // maybe off from what is expected in the residual tensors
-  // pre-symmetrization or anti-symmetrization
-  //
-  // eg.
-  //       i_2, i_3, i_1
-  // Result
-  //       a_1, a_2, a_3
-  //
-  // we now permute it to the layout:
-  //       i_1, i_2, i_3
-  // Result
-  //       a_1, a_2, a_3
-  //
-  auto sorted_bra = node->tensor().bra() | ranges::to_vector;
-  ranges::sort(sorted_bra, Index::LabelCompare{});
-  auto sorted_ket = node->tensor().ket() | ranges::to_vector;
-  ranges::sort(sorted_ket, Index::LabelCompare{});
 
   auto const rannot = detail::braket_to_annot(node->tensor().const_braket());
-  auto const lannot =
-      detail::braket_to_annot(ranges::views::concat(sorted_bra, sorted_ket));
+
+  std::string lannot = ranges::front(target_indx_labels);
+  for (auto const& lbl : ranges::views::tail(target_indx_labels))
+    lannot += std::string{','} + lbl;
+
   auto scaled = decltype(result){};
   scaled(lannot) = node->scalar().value().real() * result(rannot);
   return scaled;
 }
 
-template <typename Tensor_t, typename Yielder>
-auto eval_symm(EvalNode const& node, Yielder&& yielder,
-               CacheManager<Tensor_t const>& man) {
-  auto result = eval(node, std::forward<Yielder>(yielder), man);
+///
+/// Evaluate a node and symmetrize the result.
+///
+/// \tparam Tensor_t The data tensor type. eg. TA::TArrayD from TiledArray.
+/// \param node sequant::binary_node<sequant::EvalExpr> object
+///            that is the evaluation tree in essence.
+/// \param target_indx_labels The string labels iterable of the target indices
+///                           that appear in the node->tensor().const_braket().
+///                               set(node->tensor().const_braket()) =
+///                                         set(target_indx_labels)
+///                           This paramter is to allow to set the final
+///                           physical layout of the evaluated tensor in
+///                           the desired permutation.
+/// \param yielder That returns Tensor_t for leaf SeQuant Tensor(g, f, t, ...).
+/// \param man The cache manager.
+/// \return Tensor_t
+template <typename Tensor_t, typename Iterable, typename Yielder>
+auto eval_symm(EvalNode const& node, Iterable const& target_indx_labels,
+               Yielder&& yielder, CacheManager<Tensor_t const>& man) {
+  auto result =
+      eval(node, target_indx_labels, std::forward<Yielder>(yielder), man);
 
   auto symm_result = decltype(result){result.world(), result.trange()};
   symm_result.fill(0);
@@ -149,10 +175,27 @@ auto eval_symm(EvalNode const& node, Yielder&& yielder,
   return symm_result;
 }
 
-template <typename Tensor_t, typename Yielder>
-auto eval_antisymm(EvalNode const& node, Yielder&& yielder,
-                   CacheManager<Tensor_t const>& man) {
-  auto result = eval(node, std::forward<Yielder>(yielder), man);
+///
+/// Evaluate a node and anit-symmetrize the result.
+///
+/// \tparam Tensor_t The data tensor type. eg. TA::TArrayD from TiledArray.
+/// \param node sequant::binary_node<sequant::EvalExpr> object
+///            that is the evaluation tree in essence.
+/// \param target_indx_labels The string labels iterable of the target indices
+///                           that appear in the node->tensor().const_braket().
+///                               set(node->tensor().const_braket()) =
+///                                         set(target_indx_labels)
+///                           This paramter is to allow to set the final
+///                           physical layout of the evaluated tensor in
+///                           the desired permutation.
+/// \param yielder That returns Tensor_t for leaf SeQuant Tensor(g, f, t, ...).
+/// \param man The cache manager.
+/// \return Tensor_t
+template <typename Tensor_t, typename Iterable, typename Yielder>
+auto eval_antisymm(EvalNode const& node, Iterable const& target_indx_labels,
+                   Yielder&& yielder, CacheManager<Tensor_t const>& man) {
+  auto result =
+      eval(node, target_indx_labels, std::forward<Yielder>(yielder), man);
 
   auto asymm_result = decltype(result){result.world(), result.trange()};
   asymm_result.fill(0);
