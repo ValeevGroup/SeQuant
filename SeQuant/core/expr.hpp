@@ -635,6 +635,15 @@ class Product : public Expr {
     for (auto it = begin(factors); it != end(factors); ++it) append(1, *it);
   }
 
+  /// construct a Product out of zero or more factors (multiplied by 1)
+  /// @param rng a range of factors
+  template <typename Range, typename = std::enable_if_t<meta::is_range_v<std::decay_t<Range>> && !std::is_same_v<std::remove_reference_t<Range>,ExprPtrList>> >
+  explicit Product(Range&& rng) {
+    using ranges::begin;
+    using ranges::end;
+    for (auto&& v: rng) append(1, std::forward<decltype(v)>(v));
+  }
+
   /// construct a Product out of zero or more factors multiplied by a scalar
   /// @tparam T a numeric type; it must be able to multiply std::complex<double>
   /// @param scalar a scalar of type T
@@ -981,7 +990,7 @@ class Sum : public Expr {
 
   /// construct a Sum out of a range of summands
   /// @param rng a range
-  template <typename Range, typename = std::enable_if_t<!std::is_same_v<std::remove_reference_t<Range>,ExprPtrList>> >
+  template <typename Range, typename = std::enable_if_t<meta::is_range_v<std::decay_t<Range>> && !std::is_same_v<std::remove_reference_t<Range>,ExprPtrList>> >
   explicit Sum(Range&& rng) {
     // use append to flatten out Sum summands
     for (auto&& v: rng) {
