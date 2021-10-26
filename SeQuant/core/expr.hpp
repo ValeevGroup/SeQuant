@@ -637,7 +637,7 @@ class Product : public Expr {
 
   /// construct a Product out of zero or more factors (multiplied by 1)
   /// @param rng a range of factors
-  template <typename Range, typename = std::enable_if_t<meta::is_range_v<std::decay_t<Range>> && !std::is_same_v<std::remove_reference_t<Range>,ExprPtrList>> >
+  template <typename Range, typename = std::enable_if_t<meta::is_range_v<std::decay_t<Range>> && !std::is_same_v<std::remove_reference_t<Range>,ExprPtrList> && !std::is_same_v<std::remove_reference_t<Range>,Product>> >
   explicit Product(Range&& rng) {
     using ranges::begin;
     using ranges::end;

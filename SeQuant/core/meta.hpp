@@ -10,6 +10,8 @@
 #include <type_traits>
 #include <range/v3/range/access.hpp>
 
+#include <range/v3/range/access.hpp>
+
 namespace sequant {
 namespace meta {
 
