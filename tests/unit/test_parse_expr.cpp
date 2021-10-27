@@ -37,6 +37,15 @@ TEST_CASE("TEST_PARSE_EXPR", "[parse_expr]"){
     REQUIRE(*expr == *parse(L"t{\ti1, \ti2; \na1,\t a2 \t}"));
   }
 
+  SECTION ("Tensor with symmetry annotation") {
+    auto expr1 = parse (L"t{a1;i1}:A");
+    auto expr2 = parse (L"t{a1;i1}:S");
+    auto expr3 = parse (L"t{a1;i1}:N");
+    REQUIRE(expr1->as<Tensor>().symmetry() == sequant::Symmetry::antisymm);
+    REQUIRE(expr2->as<Tensor>().symmetry() == sequant::Symmetry::symm);
+    REQUIRE(expr3->as<Tensor>().symmetry() == sequant::Symmetry::nonsymm);
+  }
+
   SECTION("Constant") {
       REQUIRE(parse(L"1/2")->is<Constant>());
       REQUIRE(parse(L"0.1")->is<Constant>());
