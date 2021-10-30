@@ -283,7 +283,15 @@ std::pair<ExprPtr, std::pair<std::vector<Index>, std::vector<Index>>> three_body
   return {_ex, initial_pairing};
 }
 
+// in general a three body substitution can be approximated with 1, 2, or 3 body terms(3 body has no approximation).
+// this is achieved by replacing densities with with particle number > rank by the each successive cumulant approximation followed by neglect of the particle rank sized term.
+// TODO this implementation is ambitious and currently we only support rank 2 decompositions.
+//TODO there may be a faster way to implement this given knowledge of the resulting expression. could have a "fast" and a "rigourous" implementation
 ExprPtr three_body_substitution (ExprPtr &input, int rank){
+  //just return back if the input is zero.
+  if(input == ex<Constant>(0)){
+    return input;
+  }
   std::pair<std::vector<Index>, std::vector<Index>> initial_pairing;
   if(input->is<Sum>()) {
     for (auto&& product : input->as<Sum>().summands()) {

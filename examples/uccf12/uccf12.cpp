@@ -114,8 +114,14 @@ try_main() {
     auto second_com_2 = do_wick(e3 * first_com);
     auto second_com = second_com_1 - second_com_2;
     simplify(second_com);
-    std::wcout << "double com" << to_latex_align(second_com,20,2) <<std::endl;
     second_com = keep_up_to_3_body_terms(second_com);
+    //std::wcout << to_latex_align(second_com,20,2) << std::endl;
+    second_com = second_com + ex<Constant>(0.);//make a sum to avoid heavy code duplication for product and sum variants.
+    second_com = simplification::overlap_with_obs(second_com);
+    second_com = second_com + ex<Constant>(0.);
+    second_com = simplification::screen_F12_and_density(second_com);
+   // std::wcout << to_latex_align(second_com,20,2) << std::endl;
+    second_com = simplification::tens_to_FNOps(second_com);
     second_com = decompositions::three_body_substitution(second_com,2);
     simplify(second_com);
     return second_com;
@@ -137,7 +143,14 @@ try_main() {
     auto single_Comm = H_r - H_A_adj;
     simplify(single_Comm);
      auto H_A_3 = keep_up_to_3_body_terms(H_A);
-     //std::wcout << "pre decomp: " << to_latex_align(single_Comm,20,2) << std::endl;
+     std::wcout << "pre decomp: " << to_latex_align(single_Comm,20,2) << std::endl;
+     H_A_3 = simplification::overlap_with_obs(H_A_3);
+     std::wcout << "post overlap: " << to_latex_align(H_A_3,20,2) << std::endl;
+
+     H_A_3 = H_A_3 + ex<Constant>(0.);
+     H_A_3 = simplification::screen_F12_and_density(H_A_3);
+     std::wcout << to_latex_align(H_A_3,20,2) << std::endl;
+     H_A_3 = simplification::tens_to_FNOps(H_A_3);
     auto H_A_2 = decompositions::three_body_substitution(H_A_3,2);
     simplify(H_A_2);
     auto com_1 = simplification::hamiltonian_based(H_A_2);
@@ -153,13 +166,13 @@ try_main() {
     auto fFF_sim = simplification::fock_based(fFF);
    // std::wcout << "FF: " << to_latex_align(fFF_sim.second,20,2) << std::endl;
     auto fFFt_sim = simplification::fock_based(fFFt);
-    std::wcout << "FFt one body: " << to_latex_align(fFFt_sim.first,20,2) << std::endl;
-    std::wcout << "FFt two body: " << to_latex_align(fFFt_sim.second,20,2) << std::endl;
+    //std::wcout << "FFt one body: " << to_latex_align(fFFt_sim.first,20,2) << std::endl;
+    //std::wcout << "FFt two body: " << to_latex_align(fFFt_sim.second,20,2) << std::endl;
     auto fFtFt_sim = simplification::fock_based(fFtFt);
     //std::wcout << "FtFt: " << to_latex_align(fFtFt_sim.second,20,2) << std::endl;
     auto fFtF_sim = simplification::fock_based(fFtF);
-    std::wcout << "FtF one body: " << to_latex_align(fFtF_sim.first,20,2) << std::endl;
-    std::wcout << "FtF two body: " << to_latex_align(fFtF_sim.second,20,2) << std::endl;
+    //std::wcout << "FtF one body: " << to_latex_align(fFtF_sim.first,20,2) << std::endl;
+    //std::wcout << "FtF two body: " << to_latex_align(fFtF_sim.second,20,2) << std::endl;
 
 
     auto one_body = com_1.first + ex<Constant>(0.5) * (fFF_sim.first + fFFt_sim.first + fFtFt_sim.first + fFtF_sim.first);
