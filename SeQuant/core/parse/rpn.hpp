@@ -2,8 +2,8 @@
 // Created by Bimal Gaudel on 6/13/21.
 //
 
-#ifndef CPPLAB_RPN_HPP
-#define CPPLAB_RPN_HPP
+#ifndef SEQUANT_PARSE_RPN_HPP
+#define SEQUANT_PARSE_RPN_HPP
 
 #include "token.hpp"
 
@@ -40,4 +40,4 @@ class ReversePolishNotation {
 
 } // namespace
 
-#endif  // CPPLAB_RPN_HPP
+#endif  // SEQUANT_PARSE_RPN_HPP
