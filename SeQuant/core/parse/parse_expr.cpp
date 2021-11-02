@@ -168,7 +168,8 @@ ExprPtr parse_expr(std::wstring_view raw_expr, Symmetry symmetry){
     }
     else if (t->is<OperatorMinusUnary>()){
       if (result.empty()) throw_invalid_expr();
-      result[0] = ex<Constant>(-1)*result[0];
+      auto liter = result.end() - 1;
+      *liter = ex<Constant>(-1)*(*liter);
     }
     else {
       if (result.empty()) throw_invalid_expr();

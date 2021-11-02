@@ -51,6 +51,16 @@ TEST_CASE("TEST_TOKEN", "[parse_expr]") {
     REQUIRE(minus.is<Operator>());
     REQUIRE_FALSE(minus.is<Operand>());
 
+    auto const uplus = OperatorPlusUnary{};
+    REQUIRE(uplus.is<OperatorPlusUnary>());
+    REQUIRE(uplus.is<Operator>());
+    REQUIRE_FALSE(uplus.is<Operand>());
+
+    auto const uminus = OperatorMinusUnary{};
+    REQUIRE(uminus.is<OperatorMinusUnary>());
+    REQUIRE(uminus.is<Operator>());
+    REQUIRE_FALSE(uminus.is<Operand>());
+
     auto const fraction = OperandConstant{42};
     REQUIRE(fraction.is<OperandConstant>());
     REQUIRE(fraction.is<Operand>());
@@ -89,6 +99,18 @@ TEST_CASE("TEST_TOKEN", "[parse_expr]") {
     REQUIRE(om->is<OperatorMinus>());
     REQUIRE_NOTHROW(om->as<Operator>());
     REQUIRE_NOTHROW(om->as<OperatorMinus>());
+
+    auto const uop = token<OperatorPlusUnary>();
+    REQUIRE(uop->is<Operator>());
+    REQUIRE(uop->is<OperatorPlusUnary>());
+    REQUIRE_NOTHROW(uop->as<Operator>());
+    REQUIRE_NOTHROW(uop->as<OperatorPlusUnary>());
+
+    auto const uom = token<OperatorMinusUnary>();
+    REQUIRE(uom->is<Operator>());
+    REQUIRE(uom->is<OperatorMinusUnary>());
+    REQUIRE_NOTHROW(uom->as<Operator>());
+    REQUIRE_NOTHROW(uom->as<OperatorMinusUnary>());
 
     auto const f1 = token<OperandConstant>(2.0);
     REQUIRE(f1->is<Operand>());

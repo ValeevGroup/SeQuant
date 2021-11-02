@@ -51,7 +51,7 @@ bool ReversePolishNotation::close() {
   return true;
 }
 const std::vector<ReversePolishNotation::token_ptr>&
-    ReversePolishNotation::tokens() {
+    ReversePolishNotation::tokens() const {
   return token_vec_;
 }
 

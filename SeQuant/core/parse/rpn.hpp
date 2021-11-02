@@ -28,12 +28,12 @@ class ReversePolishNotation {
 
   [[nodiscard]] bool close();
 
-  [[nodiscard]] std::vector<token_ptr> const& tokens();
+  [[nodiscard]] std::vector<token_ptr> const& tokens() const;
 
   void reset();
 
  private:
-  std::stack<token_ptr> operator_stack_;
+  std::stack<token_ptr,std::vector<token_ptr>> operator_stack_;
 
   std::vector<token_ptr> token_vec_;
 };
