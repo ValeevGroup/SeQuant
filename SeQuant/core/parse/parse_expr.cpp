@@ -1,4 +1,4 @@
-#include "parse_expr.hpp"
+#include "SeQuant/core/parse_expr.hpp"
 
 #include <SeQuant/core/parse/regex_sequant.hpp>
 #include <SeQuant/core/parse/rpn.hpp>
@@ -155,28 +155,6 @@ ExprPtr parse_expr(std::wstring_view raw_expr, Symmetry symmetry){
 
   if (rpn.tokens().empty())
     return nullptr;
-
-#if 0
-  std::wcout << "RPN:\n";
-  for (auto const& t: rpn.tokens())
-    if (t->is<OperandTensor>())
-      std::wcout << t->as<OperandTensor>().to_latex();
-    else if (t->is<OperandConstant>())
-      std::wcout << t->as<OperandConstant>().to_latex();
-    else if (t->is<OperatorTimes>())
-      std::wcout << " * ";
-    else if (t->is<OperatorPlus>())
-      std::wcout << " + ";
-    else if (t->is<OperatorMinus>())
-      std::wcout << " - ";
-    else if (t->is<OperatorPlusUnary>())
-      std::wcout << " +u ";
-    else if (t->is<OperatorMinusUnary>())
-      std::wcout << " -u ";
-    else
-      std::wcout << "<invalid>";
-  std::wcout << std::endl;
-#endif //
 
   auto result = container::vector<ExprPtr>{};
   for (auto const& t: rpn.tokens()){

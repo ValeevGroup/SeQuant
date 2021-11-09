@@ -194,9 +194,9 @@ add_library(SeQuant
         SeQuant/core/asy_cost.cpp
         SeQuant/core/eval_node.hpp
         SeQuant/core/eval_node.cpp
-        SeQuant/core/parse_expr.cpp
         SeQuant/core/parse_expr.hpp
-        SeQuant/core/optimize/optimize.hpp
+        SeQuant/core/parse/parse_expr.cpp
+        SeQuant/core/optimize.hpp
         SeQuant/core/optimize/optimize.cpp
         SeQuant/core/parse/token.hpp
         SeQuant/core/parse/token.cpp

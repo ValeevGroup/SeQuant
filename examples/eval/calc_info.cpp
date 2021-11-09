@@ -9,7 +9,7 @@ namespace sequant::eval {
 
 EvalNode CalcInfo::node_(const ExprPtr& expr, size_t rank) const {
   auto trimmed = optimize::tail_factor(expr);
-  return optm_opts.single_term ? optimize::optimize(trimmed, false)
+  return optm_opts.single_term ? optimize::optimize(trimmed)
                                : to_eval_node(trimmed);
 }
 
@@ -28,7 +28,7 @@ container::vector<ExprPtr> CalcInfo::exprs() const {
                                                             true, true);
   return exprs | ranges::views::tail |
          ranges::views::transform([this](ExprPtr const& xpr) {
-           return eqn_opts.spintrace ? closedshell_cc_spintrace(xpr) : xpr;
+           return eqn_opts.spintrace ? closed_shell_CC_spintrace(xpr) : xpr;
          }) |
          ranges::to<container::vector<ExprPtr>>;
 }
