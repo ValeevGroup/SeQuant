@@ -7,11 +7,10 @@ prerequisites:
     * a C++17 compiler
     * a recent (1.67 or later) Boost library (N.B. Boost.Container is broken in 1.70)
     * a recent Range-V3 library (see https://github.com/ericniebler/range-v3.git), *if not found, SeQuant will download and build Range-V3*
+    * Eigen, version 3.
   * optional:
     * for building coupled-cluster evaluation tests:
       * TiledArray library + its prerequisites
-    * for the `srcc` example:
-      * Eigen, version 3.
 
 for the impatient:
   * `cmake -B build -S .`
