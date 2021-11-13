@@ -30,7 +30,8 @@ container::vector<Index> to_indices(std::wstring_view raw_csv_indices) {
     std::wostringstream oss{};
     wchar_t last_char = L' ';
     for (auto x: raw_csv_indices){
-      if (std::iswalpha(last_char) && std::iswdigit(x))
+      if ((std::iswalpha(last_char) && std::iswdigit(x))
+          || ((last_char == L'⁻' || last_char == L'⁺') && std::iswdigit(x)))
         oss << L'_';
       oss << x;
       last_char = x;
