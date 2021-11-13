@@ -10,7 +10,8 @@ prerequisites:
   * optional:
     * for building coupled-cluster evaluation tests:
       * TiledArray library + its prerequisites
-      * Libint library + its prerequisites:
+    * for the `srcc` example:
+      * Eigen, version 3.
 
 for the impatient:
   * `cmake -B build -S .`

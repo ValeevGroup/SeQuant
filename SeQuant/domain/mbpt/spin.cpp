@@ -1276,8 +1276,9 @@ std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
           idx_rep.emplace(std::make_pair(idx, spin_idx));
         }
       }
-      if(i != ncases)
+      if(i < idx_group.size()) {
         spins[idx_group.size() - 1 - i] = 1;
+      }
       all_replacements.push_back(idx_rep);
     }
     return all_replacements;
