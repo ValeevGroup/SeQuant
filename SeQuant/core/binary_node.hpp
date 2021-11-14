@@ -89,6 +89,19 @@ class BinaryNode {
 
   BinaryNode<T> clone() const { return dnode->clone(); }
 
+  BinaryNode(BinaryNode<T> const& other) noexcept {
+    *this = other.clone();
+  }
+
+  BinaryNode& operator=(BinaryNode<T> const& other) noexcept {
+    *this = other.clone();
+    return *this;
+  }
+
+  BinaryNode(BinaryNode<T>&& other) noexcept = default;
+
+  BinaryNode& operator=(BinaryNode<T>&& other) noexcept = default;
+
   explicit BinaryNode(T d)
       : dnode{std::make_unique<data_node_leaf<T>>(std::move(d))} {}
 
