@@ -604,7 +604,7 @@ Product find_f12_interms(ExprPtr ex_){
     if(result->is<Tensor>() && result->as<Tensor>().label() == L"B"){
       for (auto&& factors : ex_->as<Product>().factors()){//have to find fock matrix and remove. factor 1/2 because a product only finds 1/2 of the B tensor, a sum of two products.
         if(factors->is<Tensor>() && factors->as<Tensor>().label() == L"f"){
-          factors = ex<Constant>(1./2);
+          factors = ex<Constant>(1.);
         }
       }
     }
@@ -717,7 +717,7 @@ ExprPtr screen_F12_and_density(ExprPtr exprs){
     return return_sum;
   }
   else if(exprs->is<Product>()) {
-    auto new_product = ex<Constant>(1.);
+    auto new_product = ex<Constant>(exprs->as<Product>().scalar());
     for (auto&& factor : exprs->as<Product>().factors()) {
       auto temp_factor = ex<Constant>(1.);
         if (factor->is<Tensor>() && factor->as<Tensor>().label() == L"F") {

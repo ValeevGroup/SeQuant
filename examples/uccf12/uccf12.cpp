@@ -108,19 +108,22 @@ try_main() {
     else return input;
   };
   auto compute_double_com = [&](ExprPtr e1, ExprPtr e2, ExprPtr e3){
+    std::wcout << to_latex_align(e1) << std::endl << "next: " << to_latex_align(e2) << std::endl << " next: " << to_latex_align(e3) << std::endl;
     auto first_com = do_wick((e1 * e2) - (e2 * e1));
+    std::wcout << "after first wick: " << to_latex_align(first_com) << std::endl;
     auto first_com_clone = first_com->clone();
-    auto second_com_1 = do_wick((first_com_clone * e3));
+    auto second_com_1 = do_wick((first_com * e3));
     auto second_com_2 = do_wick(e3 * first_com);
     auto second_com = second_com_1 - second_com_2;
     simplify(second_com);
     second_com = keep_up_to_3_body_terms(second_com);
-    //std::wcout << to_latex_align(second_com,20,2) << std::endl;
+    std::wcout << to_latex_align(second_com,20,2) << std::endl;
     second_com = second_com + ex<Constant>(0.);//make a sum to avoid heavy code duplication for product and sum variants.
     second_com = simplification::overlap_with_obs(second_com);
+    std::wcout << "overlap with obs" << to_latex_align(second_com) << std::endl;
     second_com = second_com + ex<Constant>(0.);
     second_com = simplification::screen_F12_and_density(second_com);
-   // std::wcout << to_latex_align(second_com,20,2) << std::endl;
+    std::wcout << to_latex_align(second_com,20,2) << std::endl;
     second_com = simplification::tens_to_FNOps(second_com);
     second_com = decompositions::three_body_substitution(second_com,2);
     simplify(second_com);
@@ -175,8 +178,8 @@ try_main() {
     //std::wcout << "FtF two body: " << to_latex_align(fFtF_sim.second,20,2) << std::endl;
 
 
-    auto one_body = com_1.first + ex<Constant>(0.5) * (fFF_sim.first + fFFt_sim.first + fFtFt_sim.first + fFtF_sim.first);
-    auto two_body = com_1.second + ex<Constant>(0.5) * (fFF_sim.second + fFFt_sim.second + fFtFt_sim.second + fFtF_sim.second);
+    auto one_body = com_1.first + ex<Constant>(1./2) * (fFF_sim.first + fFFt_sim.first + fFtFt_sim.first + fFtF_sim.first);
+    auto two_body = com_1.second + ex<Constant>(1./2) * (fFF_sim.second + fFFt_sim.second + fFtFt_sim.second + fFtF_sim.second);
     non_canon_simplify(one_body);
     non_canon_simplify(two_body);
     std::wcout << "one body terms: " << to_latex_align(one_body,20,2) << std::endl;

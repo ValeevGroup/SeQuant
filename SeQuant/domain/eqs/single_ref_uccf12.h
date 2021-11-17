@@ -34,7 +34,7 @@ class uccf12{
   ExprPtr compute_double_com(ExprPtr e1, ExprPtr e2, ExprPtr e3){
     auto first_com = do_wick((e1 * e2) - (e2 * e1));
     auto first_com_clone = first_com->clone();
-    auto second_com_1 = do_wick((first_com_clone * e3));
+    auto second_com_1 = do_wick((first_com * e3));
     auto second_com_2 = do_wick(e3 * first_com);
     auto second_com = second_com_1 - second_com_2;
     simplify(second_com);
@@ -48,6 +48,7 @@ class uccf12{
     //std::wcout << to_latex_align(second_com,20,2) << std::endl;
     second_com = simplification::tens_to_FNOps(second_com);
     second_com = decompositions::three_body_substitution(second_com,2);
+    second_com = ex<Constant>(1./2) * second_com;
     simplify(second_com);
     return second_com;
   }
@@ -130,8 +131,8 @@ class uccf12{
     std::wcout << "FtF: " << to_latex_align(fFtF_sim.second,20,2) << std::endl;
 
 
-    auto one_body = com_1.first + ex<Constant>(0.5) * (fFF_sim.first  +fFFt_sim.first + fFtFt_sim.first + fFtF_sim.first);
-    auto two_body = com_1.second + ex<Constant>(0.5) * (fFF_sim.second + fFFt_sim.second + fFtFt_sim.second + fFtF_sim.second);
+    auto one_body = com_1.first + ex<Constant>(1./2) * (fFF_sim.first  +fFFt_sim.first + fFtFt_sim.first + fFtF_sim.first);
+    auto two_body = com_1.second + ex<Constant>(1./2) * (fFF_sim.second + fFFt_sim.second + fFtFt_sim.second + fFtF_sim.second);
 
     non_canon_simplify(one_body);
     non_canon_simplify(two_body);
