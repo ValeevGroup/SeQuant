@@ -162,7 +162,7 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
       REQUIRE(to_latex(input) ==
               L"{ "
               "\\bigl({{\\bar{g}^{{i_1}{a_3}}_{{i_3}{i_4}}}{t^{{i_3}}_{{a_2}}}{"
-              "t^{{i_2}{i_4}}_{{a_1}{a_3}}}}\\bigr) }");
+              "\\bar{t}^{{i_2}{i_4}}_{{a_1}{a_3}}}}\\bigr) }");
     }
 
     // Case 4: permuted indices from CCSD R2 biorthogonal configuration
@@ -191,7 +191,7 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
 
     { // Case 5: CCSDT R3: S3 * F * T3
 
-      Logger::get_instance().canonicalize = true;
+      // Logger::get_instance().canonicalize = true;
 
       { // Terms 1 and 6 from spin-traced result
         auto input =

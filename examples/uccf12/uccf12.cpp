@@ -1,7 +1,13 @@
+#include <SeQuant/core/op.hpp>
+#include <SeQuant/core/timer.hpp>
 #include <SeQuant/core/wick.hpp>
-#include "../sequant_setup.hpp"
+#include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/sr/sr.hpp>
+
+#include <clocale>
 
 using namespace sequant;
+using namespace sequant::mbpt::sr::so;
 
 void try_main();
 
@@ -17,35 +23,31 @@ int main(int argc, char* argv[]) {
   std::wcerr.sync_with_stdio(true);
   sequant::detail::OpIdRegistrar op_id_registrar;
 
-  sequant::set_default_context(SeQuant(Vacuum::Physical, IndexSpaceMetric::Unit, BraKetSymmetry::conjugate));
+  sequant::set_default_context(SeQuant(Vacuum::Physical, IndexSpaceMetric::Unit,
+                                       BraKetSymmetry::conjugate));
   mbpt::set_default_convention();
 
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
   // WARNING some code is not thread safe ...
-  //set_num_threads(1);
+  // set_num_threads(1);
 
   try {
     try_main();
-  }
-  catch(std::exception& ex) {
+  } catch (std::exception& ex) {
     std::cerr << "caught a std::exception: " << ex.what();
-  }
-  catch(...) {
+  } catch (...) {
     std::cerr << "caught an unknown exception, ouch";
   }
 
   return 0;
 }
 
-void
-try_main() {
-
+void try_main() {
   auto do_wick = [](ExprPtr expr) {
     using sequant::FWickTheorem;
     FWickTheorem wick{expr};
-    wick.spinfree(false)
-        .full_contractions(false);
+    wick.spinfree(false).full_contractions(false);
     auto result = wick.compute();
     simplify(result);
     return result;
@@ -55,16 +57,17 @@ try_main() {
   auto keep_1_and_2_body_terms = [](const ExprPtr& input) {
     assert(input->is<Sum>());
     auto filtered_summands =
-        input->as<Sum>().summands() | ranges::views::remove_if([](const ExprPtr &ptr) {
+        input->as<Sum>().summands() |
+        ranges::views::remove_if([](const ExprPtr& ptr) {
           assert(ptr->is<Product>());
           bool keep = false;
           bool found_operator = false;
-          for(auto&& factor : ptr->as<Product>().factors()) {
+          for (auto&& factor : ptr->as<Product>().factors()) {
             if (factor->is<FNOperator>()) {
               assert(!found_operator);
               found_operator = true;
               const auto rank = factor->as<FNOperator>().rank();
-              keep = (rank >= 1 && rank <=2);
+              keep = (rank >= 1 && rank <= 2);
             }
           }
           return !keep;
@@ -74,16 +77,21 @@ try_main() {
     return result;
   };
 
-  auto gg_space = IndexSpace::active_occupied;  // Geminal-generating space: active occupieds is the normal choice, all orbitals is the reference-independent (albeit expensive) choice
+  auto gg_space =
+      IndexSpace::active_occupied;  // Geminal-generating space: active
+                                    // occupieds is the normal choice, all
+                                    // orbitals is the reference-independent
+                                    // (albeit expensive) choice
 
   // single commutator, needs symmetrization
   {
     auto h = H();
     auto r = R12(gg_space);
-    auto hr_comm = do_wick( ex<Constant>(2) * (h*r - r*h) );  // this assumes symmetrization includes 1/2
+    auto hr_comm =
+        do_wick(ex<Constant>(2) *
+                (h * r - r * h));  // this assumes symmetrization includes 1/2
 
-    std::wcout << "[H,R] = " << to_latex_align(hr_comm, 20)
-               << std::endl;
+    std::wcout << "[H,R] = " << to_latex_align(hr_comm, 20) << std::endl;
 
     auto hr_comm_12 = keep_1_and_2_body_terms(hr_comm);
     std::wcout << "[H,R]_{1,2} = " << to_latex_align(hr_comm_12, 20)
@@ -94,10 +102,9 @@ try_main() {
   {
     auto f = F();
     auto r = R12(gg_space);
-    auto fr_comm = do_wick( ex<Constant>(2) * (f*r - r*f) );
+    auto fr_comm = do_wick(ex<Constant>(2) * (f * r - r * f));
 
-    std::wcout << "[F,R] = " << to_latex_align(fr_comm, 20)
-               << std::endl;
+    std::wcout << "[F,R] = " << to_latex_align(fr_comm, 20) << std::endl;
 
     {
       auto r = R12(gg_space);  // second instance of R
@@ -111,5 +118,4 @@ try_main() {
                  << std::endl;
     }
   }
-
 }
