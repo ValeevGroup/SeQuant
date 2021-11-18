@@ -635,6 +635,15 @@ class Product : public Expr {
     for (auto it = begin(factors); it != end(factors); ++it) append(1, *it);
   }
 
+  /// construct a Product out of zero or more factors (multiplied by 1)
+  /// @param rng a range of factors
+  template <typename Range, typename = std::enable_if_t<meta::is_range_v<std::decay_t<Range>> && !std::is_same_v<std::remove_reference_t<Range>,ExprPtrList> && !std::is_same_v<std::remove_reference_t<Range>,Product>> >
+  explicit Product(Range&& rng) {
+    using ranges::begin;
+    using ranges::end;
+    for (auto&& v: rng) append(1, std::forward<decltype(v)>(v));
+  }
+
   /// construct a Product out of zero or more factors multiplied by a scalar
   /// @tparam T a numeric type; it must be able to multiply std::complex<double>
   /// @param scalar a scalar of type T
@@ -979,6 +988,16 @@ class Sum : public Expr {
     }
   }
 
+  /// construct a Sum out of a range of summands
+  /// @param rng a range
+  template <typename Range, typename = std::enable_if_t<meta::is_range_v<std::decay_t<Range>> && !std::is_same_v<std::remove_reference_t<Range>,ExprPtrList>> >
+  explicit Sum(Range&& rng) {
+    // use append to flatten out Sum summands
+    for (auto&& v: rng) {
+      append(std::forward<decltype(v)>(v));
+    }
+  }
+
   /// append a summand to the sum
   /// @param summand the summand
   Sum &append(ExprPtr summand) {
@@ -1055,6 +1074,14 @@ class Sum : public Expr {
     const auto b = (offset >= summands_.size() ? summands_.end() : (summands_.begin() + offset));
     const auto e = (offset_plus_count >= summands_.size() ? summands_.end() : (summands_.begin() + offset_plus_count));
     return ex<Sum>(b, e);
+  }
+
+  /// @tparam Filter a boolean predicate type, such `Filter(const ExprPtr&)` evaluates to true
+  /// @param f an object of Filter type
+  /// Selects elements {`e`} for which `f(e)` is true
+  template <typename Filter>
+  ExprPtr filter(Filter&& f) const {
+    return ex<Sum>(summands_ | ranges::views::filter(f));
   }
 
   /// @return true if the number of factors is zero
@@ -1267,7 +1294,7 @@ std::decay_t<Sequence> clone(Sequence &&exprseq) {
   return std::decay_t<Sequence>(ranges::begin(cloned_seq), ranges::end(cloned_seq));
 }
 
-};  // namespace sequant
+}  // namespace sequant
 
 #include "expr_operator.hpp"
 

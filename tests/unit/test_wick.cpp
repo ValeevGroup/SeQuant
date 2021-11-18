@@ -36,6 +36,7 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
 
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
+  Index::reset_tmp_index();
 
   SECTION("Op contractions") {
 
@@ -564,16 +565,16 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
       expand(wick_result_2);
       REQUIRE(to_latex(wick_result_2) ==
               L"{ "
-              L"\\bigl({{\\bar{g}^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_"
+              L"\\bigl({{\\bar{g}^{{p_3}{p_4}}_{{p_1}{p_2}}}{\\bar{t}^{{i_4}{i_5}}_{{a_4}{a_"
               L"5}}}{s^{{p_1}}_{{i_5}}}{s^{{p_2}}_{{i_4}}}{s^{{a_4}}_{{p_4}}}{"
               L"s^{{a_5}}_{{p_3}}}} - {"
-              L"{\\bar{g}^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{s^{{"
+              L"{\\bar{g}^{{p_3}{p_4}}_{{p_1}{p_2}}}{\\bar{t}^{{i_4}{i_5}}_{{a_4}{a_5}}}{s^{{"
               L"p_1}}_{{i_5}}}{s^{{p_2}}_{{i_4}}}{s^{{a_5}}_{{p_4}}}{s^{{a_4}}_"
               L"{{p_3}}}} - {"
-              L"{\\bar{g}^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{s^{{"
+              L"{\\bar{g}^{{p_3}{p_4}}_{{p_1}{p_2}}}{\\bar{t}^{{i_4}{i_5}}_{{a_4}{a_5}}}{s^{{"
               L"p_1}}_{{i_4}}}{s^{{p_2}}_{{i_5}}}{s^{{a_4}}_{{p_4}}}{s^{{a_5}}_"
               L"{{p_3}}}} + "
-              L"{{\\bar{g}^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{i_4}{i_5}}_{{a_4}{a_5}}}{s^{"
+              L"{{\\bar{g}^{{p_3}{p_4}}_{{p_1}{p_2}}}{\\bar{t}^{{i_4}{i_5}}_{{a_4}{a_5}}}{s^{"
               L"{p_1}}_{{i_4}}}{s^{{p_2}}_{{i_5}}}{s^{{a_5}}_{{p_4}}}{s^{{a_4}}"
               L"_{{p_3}}}}\\bigr) }");
       wick.reduce(wick_result_2);
@@ -587,7 +588,7 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
       std::wcout << L"H2*T2 = " << to_wolfram(wick_result_2) << std::endl;
       REQUIRE(to_latex(wick_result_2) ==
               L"{{{4}}"
-              L"{\\bar{g}^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{{a_1}{a_2}}}}");
+              L"{\\bar{g}^{{a_1}{a_2}}_{{i_1}{i_2}}}{\\bar{t}^{{i_1}{i_2}}_{{a_1}{a_2}}}}");
     });
 
     // 2-body ^ 1-body ^ 1-body

@@ -11,6 +11,7 @@
 #include <optional>
 #include <set>
 #include <string>
+#include <unordered_map>
 
 #include <range/v3/all.hpp>
 
@@ -222,16 +223,56 @@ class Index : public Taggable {
   /// \return a non-unique index in space @c space with label @c subscript_label
   static Index make_label_index(const IndexSpace &space,
                                 const std::wstring &subscript_label) {
-    Index result;
-    result.label_ = IndexSpace::base_key(space) + L'_' + subscript_label;
-    result.space_ = space;
-    return result;
+    return Index(IndexSpace::base_key(space) + L'_' + subscript_label, space);
   }
 
   /// @return the label
   /// @warning this does not include the proto index labels, use
   /// Index::full_label() instead
   std::wstring_view label() const { return label_; }
+
+  /// @return A string label representable in ASCII encoding
+  /// @warning not to be used with proto indices
+  /// @brief Replaces non-ascii wstring characters with human-readable analogs,
+  ///        each such UTF-8 character will be encoded by one or more chars.
+  /// @note Maps: `⁺` -> `a`, `⁻` -> `b`, and all greek characters to their
+  ///       english language equivalents (e.g. `α` -> `alpha`, `Ξ` -> `XI`, etc.)
+  std::string ascii_label() const {
+    static const std::unordered_map<wchar_t, std::string>
+        greek_to_english_name = {
+            {L'Α', "ALPHA"}, {L'Β', "BETA"},    {L'Γ', "GAMMA"},
+            {L'Δ', "DELTA"}, {L'Ε', "EPSILON"}, {L'Ζ', "ZETA"},
+            {L'Η', "ETA"},   {L'Θ', "THETA"},   {L'Ι', "IOTA"},
+            {L'Κ', "KAPPA"}, {L'Λ', "LAMBDA"},  {L'Μ', "MU"},
+            {L'Ν', "NU"},    {L'Ξ', "XI"},      {L'Ο', "OMICRON"},
+            {L'Π', "PI"},    {L'Ρ', "RHO"},     {L'Σ', "SIGMA"},
+            {L'Τ', "TAU"},   {L'Υ', "UPSILON"}, {L'Φ', "PHI"},
+            {L'Χ', "CHI"},   {L'Ψ', "PSI"},     {L'Ω', "OMEGA"},
+            {L'α', "alpha"}, {L'β', "beta"},    {L'γ', "gamma"},
+            {L'δ', "delta"}, {L'ε', "epsilon"}, {L'ζ', "zeta"},
+            {L'η', "eta"},   {L'θ', "theta"},   {L'ι', "iota"},
+            {L'κ', "kappa"}, {L'λ', "lambda"},  {L'μ', "mu"},
+            {L'ν', "nu"},    {L'ξ', "xi"},      {L'ο', "omicron"},
+            {L'π', "pi"},    {L'ρ', "rho"},     {L'σ', "sigma"},
+            {L'τ', "tau"},   {L'υ', "upsilon"}, {L'φ', "phi"},
+            {L'χ', "chi"},   {L'ψ', "psi"},     {L'ω', "omega"}};
+
+    std::wstring label(label_);
+    std::replace(label.begin(), label.end(), L'⁺', L'a');
+    std::replace(label.begin(), label.end(), L'⁻', L'b');
+    std::string label_ascii;
+    for(auto it = label.begin(); it != label.end(); ++it) {
+      auto pos = greek_to_english_name.find(*it);
+      if (pos != greek_to_english_name.end()) {
+        label_ascii.append(pos->second);
+      }
+      else {
+        label_ascii.push_back(*it);
+      }
+    }
+    return label_ascii;
+  }
+
   /// @return the full label
   /// @warning this includes the proto index labels (if any), use
   /// Index::label() instead if only want the label
@@ -431,11 +472,10 @@ class Index : public Taggable {
  private:
   std::wstring label_{};
   IndexSpace space_{};
-  container::vector<Index>
-      proto_indices_{};  // an unordered set of unique indices on which this
-                         // index depends on
+  // an unordered set of unique indices on which this index depends on
   // whether proto_indices_ is symmetric w.r.t. permutations; if true,
   // proto_indices_ will be ordered
+  container::vector<Index> proto_indices_{};
   bool symmetric_proto_indices_ = true;
 
   mutable std::optional<std::wstring> full_label_;
@@ -494,12 +534,19 @@ inline bool operator!=(const Index &i1, const Index &i2) { return !(i1 == i2); }
 /// @brief The ordering operator
 
 /// @return true if @c i1 preceeds @c i2 in the canonical order; Index objects
-/// are ordered lexicographically, first by tags (if defined for both), then
+/// are ordered lexicographically, first by qns, followed by tags (if defined for both), then
 /// by space, then by label, then by protoindices (if any)
 inline bool operator<(const Index &i1, const Index &i2) {
-  // compare tags first
-  const bool have_tags = i1.tag().has_value() && i2.tag().has_value();
-  if (!have_tags || i1.tag() == i2.tag()) {
+  // compare qns, tags and spaces in that sequence
+  assert(i1.space().attr().is_valid());
+  assert(i2.space().attr().is_valid());
+
+  auto i1_Q = i1.space().qns();
+  auto i2_Q = i2.space().qns();
+  const bool have_qns = i1_Q != IndexSpace::nullqns ||
+                        i2_Q != IndexSpace::nullqns;
+
+  auto compare_space = [&i1, &i2] () {
     if (i1.space() == i2.space()) {
       if (i1.label() == i2.label()) {
         return i1.proto_indices() < i2.proto_indices();
@@ -509,6 +556,16 @@ inline bool operator<(const Index &i1, const Index &i2) {
     } else {
       return i1.space() < i2.space();
     }
+  };
+
+  if(have_qns || (i1_Q != i2_Q)){
+    return compare_space();
+  }
+  const bool have_tags = i1.tag().has_value() &&
+      i2.tag().has_value();
+
+  if (!have_tags || i1.tag() == i2.tag()) {
+    return compare_space();
   } else {
     return i1.tag() < i2.tag();
   }

@@ -7,6 +7,10 @@
 
 namespace sequant {
 
+inline bool operator==(const ExprPtr &left, const ExprPtr &right) {
+  return *left == *right;
+}
+
 inline ExprPtr operator*(const ExprPtr &left, const ExprPtr &right) {
   auto left_is_product = left->is<Product>();
   auto right_is_product = right->is<Product>();
