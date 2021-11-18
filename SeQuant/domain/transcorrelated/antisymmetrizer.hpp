@@ -327,13 +327,13 @@ namespace antisymm {
   }
 
   //for the mnemonic rules of spin summing to work, each individual tensor/FNOperator needs to maximally
-  //resemble the original tensor, so indicies may need to be swapped (and the sign changed).
-  // this does not matter for spin-orbit expressions, but the rules become incredibly simple if things stay maximally the same.
-  // @param1 orginal upper indices
-  // @param2 orginal lower indices
+  //resemble the original tensor, so indices may need to be swapped (and the sign changed).
+  // this does not matter for spin-orbital expressions, but the rules become incredibly simple if things stay maximally the same.
+  // @param1 original upper indices
+  // @param2 original lower indices
   // @param3 starting expression
-  ExprPtr max_similarity(std::vector<Index> original_upper,std::vector<Index> original_lower, ExprPtr expression){
-    //index pairing is originaly understood as a position in the original vectors, but for this case, a map may do better.
+  ExprPtr max_similarity(const std::vector<Index>& original_upper, const std::vector<Index>& original_lower, ExprPtr expression){
+    //index pairing is originally understood as a position in the original vectors, but for this case, a map may do better.
     std::map<std::wstring,std::wstring> original_map;
     for (int i = 0; i < original_upper.size(); i++){
       original_map.emplace(original_upper[i].to_latex(), original_lower[i].to_latex());
@@ -347,6 +347,7 @@ namespace antisymm {
           std::vector<Index> current_lower;
           if(factor->as<Tensor>().rank() == 2){
             for(int i = 0; i < 2; i++){
+              assert(original_map.find(factor->as<Tensor>().ket()[i].to_latex()) != original_map.end());
               if(original_map.find(factor->as<Tensor>().ket()[i].to_latex())->second == factor->as<Tensor>().bra()[i].to_latex()){
                 og_pairs += 1;
               }
@@ -355,6 +356,7 @@ namespace antisymm {
             }
             std::iter_swap(current_lower.begin(), current_lower.begin() + 1);
             for(int i = 0; i < 2; i++){
+              assert(original_map.find(current_upper[i].to_latex()) != original_map.end());
               if(original_map.find(current_upper[i].to_latex())->second == current_lower[i].to_latex()){
                 new_pairs += 1;
               }
@@ -368,15 +370,30 @@ namespace antisymm {
           std::vector<Index> current_upper;
           std::vector<Index> current_lower;
           if(factor->as<FNOperator>().rank() == 2){
-            for(int i = 0; i < 2; i++){
-              if(original_map.find(factor->as<FNOperator>().creators()[i].to_latex())->second == factor->as<FNOperator>().annihilators()[i].to_latex()){
+            for(int i = 0; i < 2; i++) {
+              assert(original_map.find(factor->as<FNOperator>()
+                                           .creators()[i]
+                                           .index()
+                                           .to_latex()) != original_map.end());
+              if (original_map
+                      .find(factor->as<FNOperator>()
+                                .creators()[i]
+                                .index()
+                                .to_latex())
+                      ->second == factor->as<FNOperator>()
+                                      .annihilators()[i]
+                                      .index()
+                                      .to_latex()) {
                 og_pairs += 1;
               }
-              current_upper.push_back(factor->as<FNOperator>().creators()[i].index());
-              current_lower.push_back(factor->as<FNOperator>().annihilators()[i].index());
+              current_upper.push_back(
+                  factor->as<FNOperator>().creators()[i].index());
+              current_lower.push_back(
+                  factor->as<FNOperator>().annihilators()[i].index());
             }
             std::iter_swap(current_lower.begin(), current_lower.begin() + 1);
             for(int i = 0; i < 2; i++){
+              assert(original_map.find(current_upper[i].to_latex()) != original_map.end());
               if(original_map.find(current_upper[i].to_latex())->second == current_lower[i].to_latex()){
                 new_pairs += 1;
               }
