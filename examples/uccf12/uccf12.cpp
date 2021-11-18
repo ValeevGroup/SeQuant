@@ -1,5 +1,5 @@
-#include "../../SeQuant/domain/transcorrelated/three_body_decomp.hpp"
-#include "../../SeQuant/domain/transcorrelated/simplifications.h"
+#include <SeQuant/domain/transcorrelated/three_body_decomp.hpp>
+#include <SeQuant/domain/transcorrelated/simplifications.h>
 #include <SeQuant/core/timer.hpp>
 #include <SeQuant/core/wick.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
