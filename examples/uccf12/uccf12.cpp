@@ -1,4 +1,5 @@
-#include <SeQuant/core/op.hpp>
+#include "../../SeQuant/domain/transcorrelated/three_body_decomp.hpp"
+#include "../../SeQuant/domain/transcorrelated/simplifications.h"
 #include <SeQuant/core/timer.hpp>
 #include <SeQuant/core/wick.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -8,6 +9,7 @@
 
 using namespace sequant;
 using namespace sequant::mbpt::sr::so;
+
 
 void try_main();
 
@@ -30,24 +32,29 @@ int main(int argc, char* argv[]) {
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
   // WARNING some code is not thread safe ...
-  // set_num_threads(1);
+  //set_num_threads(1);
 
   try {
     try_main();
-  } catch (std::exception& ex) {
+  }
+  catch(std::exception& ex) {
     std::cerr << "caught a std::exception: " << ex.what();
-  } catch (...) {
+  }
+  catch(...) {
     std::cerr << "caught an unknown exception, ouch";
   }
 
   return 0;
 }
 
-void try_main() {
+void
+try_main() {
+
   auto do_wick = [](ExprPtr expr) {
     using sequant::FWickTheorem;
     FWickTheorem wick{expr};
-    wick.spinfree(false).full_contractions(false);
+    wick.spinfree(false)
+        .full_contractions(false);
     auto result = wick.compute();
     simplify(result);
     return result;
@@ -57,17 +64,16 @@ void try_main() {
   auto keep_1_and_2_body_terms = [](const ExprPtr& input) {
     assert(input->is<Sum>());
     auto filtered_summands =
-        input->as<Sum>().summands() |
-        ranges::views::remove_if([](const ExprPtr& ptr) {
+        input->as<Sum>().summands() | ranges::views::remove_if([](const ExprPtr &ptr) {
           assert(ptr->is<Product>());
           bool keep = false;
           bool found_operator = false;
-          for (auto&& factor : ptr->as<Product>().factors()) {
+          for(auto&& factor : ptr->as<Product>().factors()) {
             if (factor->is<FNOperator>()) {
               assert(!found_operator);
               found_operator = true;
               const auto rank = factor->as<FNOperator>().rank();
-              keep = (rank >= 1 && rank <= 2);
+              keep = (rank >= 1 && rank <=2);
             }
           }
           return !keep;
@@ -77,95 +83,108 @@ void try_main() {
     return result;
   };
 
-  auto gg_space =
-      IndexSpace::active_occupied;  // Geminal-generating space: active
-                                    // occupieds is the normal choice, all
-                                    // orbitals is the reference-independent
-                                    // (albeit expensive) choice
+  auto keep_up_to_3_body_terms = [](const ExprPtr& input) {
+    if(input->is<Sum>()) {
+      auto filtered_summands =
+          input->as<Sum>().summands() |
+          ranges::views::remove_if([](const ExprPtr& ptr) {
+            assert(ptr->is<Product>());
+            bool keep = false;
+            bool found_operator = false;
+            for (auto&& factor : ptr->as<Product>().factors()) {
+              if (factor->is<FNOperator>()) {
+                assert(!found_operator);
+                found_operator = true;
+                const auto rank = factor->as<FNOperator>().rank();
+                keep = (rank <= 3);
+              }
+            }
+            return !keep;
+          });
+      auto result = ex<Sum>(ranges::begin(filtered_summands),
+                            ranges::end(filtered_summands));
+      return result;
+    }
+    else return input;
+  };
+  auto compute_double_com = [&](ExprPtr e1, ExprPtr e2, ExprPtr e3){
+    std::wcout << to_latex_align(e1) << std::endl << "next: " << to_latex_align(e2) << std::endl << " next: " << to_latex_align(e3) << std::endl;
+    auto first_com = do_wick((e1 * e2) - (e2 * e1));
+    std::wcout << "after first wick: " << to_latex_align(first_com) << std::endl;
+    auto first_com_clone = first_com->clone();
+    auto second_com_1 = do_wick((first_com * e3));
+    auto second_com_2 = do_wick(e3 * first_com);
+    auto second_com = second_com_1 - second_com_2;
+    simplify(second_com);
+    second_com = keep_up_to_3_body_terms(second_com);
+    std::wcout << to_latex_align(second_com,20,2) << std::endl;
+    second_com = second_com + ex<Constant>(0.);//make a sum to avoid heavy code duplication for product and sum variants.
+    second_com = simplification::overlap_with_obs(second_com);
+    std::wcout << "overlap with obs" << to_latex_align(second_com) << std::endl;
+    second_com = second_com + ex<Constant>(0.);
+    second_com = simplification::screen_F12_and_density(second_com);
+    std::wcout << to_latex_align(second_com,20,2) << std::endl;
+    second_com = simplification::tens_to_FNOps(second_com);
+    second_com = decompositions::three_body_substitution(second_com,2);
+    simplify(second_com);
+    return second_com;
+  };
 
-  // single commutator, needs symmetrization
+  auto gg_space = IndexSpace::active_occupied;  // Geminal-generating space: active occupieds is the normal choice, all orbitals is the reference-independent (albeit expensive) choice
+  //start transformation
   {
     auto h = H(false);
+    std::wcout << "H = " << to_latex_align(h, 20)<< std::endl;
     auto r = R12(gg_space);
-    auto hr_comm = do_wick( ex<Constant>(2) * (h*r - r*h) );  // this assumes symmetrization includes 1/2
+    auto r_1 = R12(gg_space);
+    std::wcout << "r = " << to_latex_align(r, 20)<< std::endl;
+    //way 1
+    auto A = r - adjoint(r_1);
+    auto H_A = do_wick((h * A) - (A * h));
+    auto H_A_adj = do_wick((h * adjoint(r)) - (adjoint(r_1) * h));
+    auto H_r = do_wick((h * r_1) - (r * h));
+    auto single_Comm = H_r - H_A_adj;
+    simplify(single_Comm);
+     auto H_A_3 = keep_up_to_3_body_terms(H_A);
+     std::wcout << "pre decomp: " << to_latex_align(single_Comm,20,2) << std::endl;
+     H_A_3 = simplification::overlap_with_obs(H_A_3);
+     std::wcout << "post overlap: " << to_latex_align(H_A_3,20,2) << std::endl;
 
-    std::wcout << "[H,R] = " << to_latex_align(hr_comm, 20) << std::endl;
+     H_A_3 = H_A_3 + ex<Constant>(0.);
+     H_A_3 = simplification::screen_F12_and_density(H_A_3);
+     std::wcout << to_latex_align(H_A_3,20,2) << std::endl;
+     H_A_3 = simplification::tens_to_FNOps(H_A_3);
+    auto H_A_2 = decompositions::three_body_substitution(H_A_3,2);
+    simplify(H_A_2);
+    auto com_1 = simplification::hamiltonian_based(H_A_2);
 
-    auto hr_comm_12 = keep_1_and_2_body_terms(hr_comm);
-    std::wcout << "[H,R]_{1,2} = " << to_latex_align(hr_comm_12, 20)
-               << std::endl;
-  }
+    std::wcout << "h A one body: " << to_latex_align(com_1.first,20,2) << std::endl;
+    std::wcout << "h A two body: " << to_latex_align(com_1.second,20,2) << std::endl;
 
-  // double commutator, also needs symmetrization
-  {
-    auto f = F();
-    auto r = R12(gg_space);
-    auto a = ex<Constant>(0.5) * (r - adjoint(r));
-    auto fa_comm = do_wick( ex<Constant>(1) * (f*a - a*f) );
+    auto fFF = compute_double_com(F(),r,r_1);
+    auto fFFt = compute_double_com(F(),r,ex<Constant>(-1.) * adjoint(r_1));
+    auto fFtFt = compute_double_com(F(),ex<Constant>(-1.) * adjoint(r),ex<Constant>(-1.) * adjoint(r_1));
+    auto fFtF = compute_double_com(F(),ex<Constant>(-1.) * adjoint(r),r_1);
 
-    {
-      auto r = R12(gg_space);  // second instance of R
-      auto a = ex<Constant>(0.5) * (r - adjoint(r));
-      auto comm2 = do_wick(ex<Constant>(0.5) * (fa_comm * a - a * fa_comm));
-
-
-      auto comm2_12 = keep_1_and_2_body_terms(comm2);
-      std::wcout << "[[[F,A],A]_{1,2} = " << to_latex_align(comm2_12, 20)
-                 << std::endl;
-    }
-    // compute terms individually
-    auto r_ = R12(gg_space);// need to make second instance.
-
-    auto fr = f * r;
-    auto frr = do_wick(ex<Constant>(1) * (fr * r_));
-    auto frr_12 = keep_1_and_2_body_terms(frr);
-    std::wcout <<  "frr term =  " << to_latex_align(frr_12,20) << std::endl;
-
-    auto rf = do_wick(ex<Constant>(1)* r * f);
-    auto rfr = do_wick(ex<Constant>(1) * (rf * r_));
-    auto rfr_12 = keep_1_and_2_body_terms(rfr);
-    std::wcout <<  "rfr term =  " << to_latex_align(rfr_12,20) << std::endl;
-
-    auto rr = do_wick(ex<Constant>(1)* r * r_);
-    auto rrf = do_wick(ex<Constant>(1) * (rr * f));
-    auto rrf_12 = keep_1_and_2_body_terms(rrf);
-    std::wcout <<  "rrf term =  " << to_latex_align(rrf_12,20) << std::endl;
-
-    auto rr_dag = do_wick(ex<Constant>(1) * (r * adjoint(r_)));
-    auto frr_dag = do_wick(ex<Constant>(1) * f * (rr_dag));
-    auto frr_dag_12 = keep_1_and_2_body_terms(frr_dag);
-    std::wcout <<  "$frr_{adj}$ term =  " << to_latex_align(frr_dag_12,20) << std::endl;
-
-    auto r_dagf = do_wick(ex<Constant>(1) * adjoint(r) * f);
-    auto r_dagfr = do_wick(ex<Constant>(1) * r_dagf * r_);
-    auto r_dagfr_12 = keep_1_and_2_body_terms(r_dagfr);
-    std::wcout <<  "$r_{adj}fr $term =  " << to_latex_align(r_dagfr_12,20) << std::endl;
-
-    auto aut_rf = do_wick(ex<Constant>(1) * r_ * f);
-    auto rfr_dag = do_wick(ex<Constant>(1) * aut_rf * adjoint(r));
-    auto rfr_dag_12 = keep_1_and_2_body_terms(rfr_dag);
-    std::wcout <<  "$rfr_{adj}$ term =  " << to_latex_align(rfr_dag_12,20) << std::endl;
-
-    auto rr_dagf = do_wick(ex<Constant>(1) * rr_dag * f);
-    auto rr_dagf_12 = keep_1_and_2_body_terms(rr_dagf);
-    std::wcout <<  "$rr_{adj}f $term =  " << to_latex_align(rr_dagf_12,20) << std::endl;
-
-    auto r_dagr_dag = do_wick(ex<Constant>(1) * adjoint(r) * adjoint(r_));
-    auto r_dagr_dagf = do_wick(ex<Constant>(1) * r_dagr_dag * f);
-    auto r_dagr_dagf_12 = keep_1_and_2_body_terms(r_dagr_dagf);
-    std::wcout <<  "$r_{adj}r_{adj}f$ term =  " << to_latex_align(r_dagr_dagf_12,20) << std::endl;
+    auto fFF_sim = simplification::fock_based(fFF);
+   // std::wcout << "FF: " << to_latex_align(fFF_sim.second,20,2) << std::endl;
+    auto fFFt_sim = simplification::fock_based(fFFt);
+    //std::wcout << "FFt one body: " << to_latex_align(fFFt_sim.first,20,2) << std::endl;
+    //std::wcout << "FFt two body: " << to_latex_align(fFFt_sim.second,20,2) << std::endl;
+    auto fFtFt_sim = simplification::fock_based(fFtFt);
+    //std::wcout << "FtFt: " << to_latex_align(fFtFt_sim.second,20,2) << std::endl;
+    auto fFtF_sim = simplification::fock_based(fFtF);
+    //std::wcout << "FtF one body: " << to_latex_align(fFtF_sim.first,20,2) << std::endl;
+    //std::wcout << "FtF two body: " << to_latex_align(fFtF_sim.second,20,2) << std::endl;
 
 
-    auto r_dagr = do_wick(ex<Constant>(1) * adjoint(r_) * r);
-    auto r_dagrf = do_wick(ex<Constant>(1) * r_dagr * f);
-    auto r_dagrf_12 = keep_1_and_2_body_terms(r_dagrf);
-    std::wcout <<  "$r_{adj}rf$ =  " << to_latex_align(r_dagrf_12,20) << std::endl;
+    auto one_body = com_1.first + ex<Constant>(1./2) * (fFF_sim.first + fFFt_sim.first + fFtFt_sim.first + fFtF_sim.first);
+    auto two_body = com_1.second + ex<Constant>(1./2) * (fFF_sim.second + fFFt_sim.second + fFtFt_sim.second + fFtF_sim.second);
+    non_canon_simplify(one_body);
+    non_canon_simplify(two_body);
+    std::wcout << "one body terms: " << to_latex_align(one_body,20,2) << std::endl;
+    std::wcout << "two body terms: " << to_latex_align(two_body,20,2) << std::endl;
 
-    auto fr_dag = do_wick(ex<Constant>(1) * f * adjoint(r_));
-    auto fr_dagr = do_wick(ex<Constant>(1) * fr_dag * r);
-    auto fr_dagr_12 = keep_1_and_2_body_terms(fr_dagr);
-    auto fr_dag_12 = keep_1_and_2_body_terms(fr_dag);
-    std::wcout <<  "$fr_{adj}r$ =  " << to_latex_align(fr_dagr_12,20) << std::endl;
+  }//end transformation
 
-  }
 }

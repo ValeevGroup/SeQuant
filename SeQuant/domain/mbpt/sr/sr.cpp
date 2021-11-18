@@ -85,7 +85,7 @@ ExprPtr make_op::operator()(IndexSpace::Type unocc, IndexSpace::Type occ, bool a
   const auto opsymm = antisymm ? Symmetry::antisymm : Symmetry::nonsymm;
   return ex<Constant>(1. / mult) *
          ex<Tensor>(to_wstring(op), braidxs, ketidxs, opsymm) *
-         ex<FNOperator>(braidxs, ketidxs, Vacuum::SingleProduct);
+         ex<FNOperator>(braidxs, ketidxs, get_default_context().vacuum());
 }
 
 make_op Op(OpType _Op, std::size_t Nbra, std::size_t Nket) {
