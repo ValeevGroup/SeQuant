@@ -1076,6 +1076,14 @@ class Sum : public Expr {
     return ex<Sum>(b, e);
   }
 
+  /// @tparam Filter a boolean predicate type, such `Filter(const ExprPtr&)` evaluates to true
+  /// @param f an object of Filter type
+  /// Selects elements {`e`} for which `f(e)` is true
+  template <typename Filter>
+  ExprPtr filter(Filter&& f) const {
+    return ex<Sum>(summands_ | ranges::views::filter(f));
+  }
+
   /// @return true if the number of factors is zero
   bool empty() const { return summands_.empty(); }
 
@@ -1286,7 +1294,7 @@ std::decay_t<Sequence> clone(Sequence &&exprseq) {
   return std::decay_t<Sequence>(ranges::begin(cloned_seq), ranges::end(cloned_seq));
 }
 
-};  // namespace sequant
+}  // namespace sequant
 
 #include "expr_operator.hpp"
 

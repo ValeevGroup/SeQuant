@@ -13,10 +13,10 @@ FetchContent_Declare(
     BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/cmake/vg-build
     SUBBUILD_DIR ${CMAKE_CURRENT_BINARY_DIR}/cmake/vg-subbuild
 )
-FetchContent_GetProperties(vg_cmake_kit)
-if (NOT vg_cmake_kit_POPULATED)
-    FetchContent_MakeAvailable(vg_cmake_kit)
-endif(NOT vg_cmake_kit_POPULATED)
+# FetchContent_GetProperties(vg_cmake_kit)
+# if (NOT vg_cmake_kit_POPULATED)
+#     FetchContent_MakeAvailable(vg_cmake_kit)
+# endif(NOT vg_cmake_kit_POPULATED)
 
 # Set SeQuant version
 set(SEQUANT_MAJOR_VERSION 2)
@@ -83,8 +83,8 @@ set(SEQUANT_INSTALL_CMAKEDIR "lib/cmake/sequant"
 option(ENABLE_TBB "Enable TBB as an optional prerequisite for C++17's parallel STL (if PSTL is not supported will use of standard C++11 concurrency)" OFF)
 add_feature_info(TBB ENABLE_TBB "Intel Thread-Building Blocks is an optional prerequisite for C++17's parallel STL")
 
-option(SEQUANT_EVAL_TESTS "Enable building of evaluation tests (will look for and/or build Libint+TA)" OFF)
-add_feature_info(EVAL_TESTS SEQUANT_EVAL_TESTS "Build evaluation tests (will look for and/or build Libint+TA)")
+option(SEQUANT_EVAL_TESTS "Enable building of evaluation tests (will look for and/or build TA)" OFF)
+add_feature_info(EVAL_TESTS SEQUANT_EVAL_TESTS "Build evaluation tests (will look for and/or build TA)")
 
 ##########################
 # Prerequisites
@@ -110,12 +110,15 @@ check_cxx_execution_header(SEQUANT)
 # Ranges-V3
 include(FindOrFetchRangeV3)
 
-# need Boost.ContainerHash
+# need Boost.ContainerHash and Boost.Regex
 # NB Boost.Container is broken in v1.70
-find_package(Boost ${SEQUANT_TRACKED_BOOST_VERSION} CONFIG)
-if (Boost_VERSION_STRING VERSION_LESS ${SEQUANT_TRACKED_BOOST_VERSION} OR NOT TARGET Boost::boost)
-  find_package(Boost ${SEQUANT_TRACKED_BOOST_VERSION} REQUIRED)
+find_package(Boost ${SEQUANT_TRACKED_BOOST_VERSION} CONFIG COMPONENTS regex)
+if (Boost_VERSION_STRING VERSION_LESS ${SEQUANT_TRACKED_BOOST_VERSION} OR NOT TARGET Boost::boost OR NOT TARGET Boost::regex)
+  find_package(Boost ${SEQUANT_TRACKED_BOOST_VERSION} REQUIRED COMPONENTS regex)
+  message(STATUS "Found Boost (version ${Boost_VERSION}) via FindBoost module")
   set(Boost_USE_CONFIG FALSE)
+else()
+  message(STATUS "Found Boost (version ${Boost_VERSION}) via CONFIG ${Boost_CONFIG}")
   set(Boost_USE_CONFIG TRUE)
 endif()
 if (Boost_VERSION EQUAL 107000)
@@ -123,6 +126,8 @@ if (Boost_VERSION EQUAL 107000)
         "use any version ${SEQUANT_TRACKED_BOOST_VERSION} "
         "or higher, other than 1.70")
 endif()
+
+find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 
 # embedded bliss-0.73
 add_library(SeQuant-bliss
@@ -182,24 +187,45 @@ add_library(SeQuant
         SeQuant/core/utility.hpp
         SeQuant/core/bliss.hpp
         SeQuant/core/timer.hpp
-        SeQuant/domain/evaluate/eval_fwd.hpp
-        SeQuant/domain/evaluate/eval_tree.hpp
-        SeQuant/domain/evaluate/eval_tree.cpp
-        SeQuant/domain/evaluate/eval_tree_node.hpp
-        SeQuant/domain/evaluate/eval_tree_node.cpp
-        SeQuant/domain/factorize/factorizer.hpp
-        SeQuant/domain/factorize/factorizer.cpp
-        SeQuant/domain/evaluate/path_tree.hpp
-        SeQuant/domain/evaluate/path_tree.cpp
+        SeQuant/core/binary_node.hpp
+        SeQuant/core/clone.hpp
+        SeQuant/core/clone.cpp
+        SeQuant/core/eval_seq.hpp
+        SeQuant/core/eval_expr.hpp
+        SeQuant/core/eval_expr.cpp
+        SeQuant/core/asy_cost.hpp
+        SeQuant/core/asy_cost.cpp
+        SeQuant/core/eval_node.hpp
+        SeQuant/core/eval_node.cpp
+        SeQuant/core/parse_expr.hpp
+        SeQuant/core/parse/parse_expr.cpp
+        SeQuant/core/optimize.hpp
+        SeQuant/core/optimize/optimize.cpp
+        SeQuant/core/parse/token.hpp
+        SeQuant/core/parse/token.cpp
+        SeQuant/core/parse/token_sequant.hpp
+        SeQuant/core/parse/token_sequant.cpp
+        SeQuant/core/parse/rpn.hpp
+        SeQuant/core/parse/rpn.cpp
+        SeQuant/core/parse/regex_sequant.hpp
+        SeQuant/core/parse/regex_sequant.cpp
+        SeQuant/domain/eqs/cceqs.hpp
+        SeQuant/domain/eqs/cceqs.cpp
+        SeQuant/domain/eval/eval.hpp
+        SeQuant/domain/eval/cache_manager.hpp
+        SeQuant/domain/utils/rand_color.cpp
+        SeQuant/domain/utils/rand_color.hpp
         SeQuant/domain/mbpt/convention.cpp
         SeQuant/domain/mbpt/convention.hpp
         SeQuant/domain/mbpt/op.cpp
         SeQuant/domain/mbpt/op.hpp
         SeQuant/domain/mbpt/spin.hpp
+        SeQuant/domain/mbpt/spin.cpp
         SeQuant/domain/mbpt/sr/sr.cpp
         SeQuant/domain/mbpt/sr/sr.hpp
         )
-target_link_libraries(SeQuant PUBLIC range-v3::range-v3 Boost::boost SeQuant-bliss Threads::Threads)
+
+target_link_libraries(SeQuant PUBLIC range-v3::range-v3 Boost::regex Boost::boost SeQuant-bliss Threads::Threads Eigen3::Eigen)
 if (SEQUANT_HAS_EXECUTION_HEADER_STANDALONE OR SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB)
   target_compile_definitions(SeQuant PUBLIC SEQUANT_HAS_EXECUTION_HEADER)
   if (SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB)
@@ -223,9 +249,9 @@ add_library(SeQuant::SeQuant ALIAS SeQuant)  # to be able to use as subproject
 
 ### optional prereqs
 if (SEQUANT_EVAL_TESTS)
-  include(FindOrFetchLibint2)
   include(FindOrFetchTiledArray)
 endif(SEQUANT_EVAL_TESTS)
+
 enable_testing(true)
 
 set(utests_src
@@ -239,21 +265,29 @@ set(utests_src
          tests/unit/test_iterator.cpp
          tests/unit/test_mbpt.cpp
          tests/unit/test_tensor_network.cpp
-         tests/unit/test_tn_factorization.cpp
          tests/unit/test_spin.cpp
          tests/unit/test_canonicalize.cpp
-         tests/unit/test_expr.cpp)
-
-set(utests_deps SeQuant)
+         tests/unit/test_expr.cpp
+         tests/unit/test_parse_expr.cpp
+         tests/unit/test_eval_expr.cpp
+         tests/unit/test_binary_node.cpp
+         tests/unit/test_eval_seq.cpp
+         tests/unit/test_asy_cost.cpp
+         tests/unit/test_eval_node.cpp
+         tests/unit/test_optimize.cpp
+         tests/unit/test_token_sequant.cpp
+         tests/unit/test_rpn.cpp
+         tests/unit/test_clone.cpp
+        )
 
 if (TARGET tiledarray)
-  list(APPEND utests_src
-      ## unit tests for evaluation
-      tests/unit/test_eval_tree.cpp
-      tests/unit/test_path_tree.cpp
-      )
-  list(APPEND utests_deps tiledarray)
+    list(APPEND utests_src
+        SeQuant/domain/eval/eval_ta.hpp
+        tests/unit/test_eval_ta.cpp
+        )
 endif(TARGET tiledarray)
+
+set(utests_deps SeQuant)
 
 set(unit_test_executable unit_tests)
 add_executable(${unit_test_executable} EXCLUDE_FROM_ALL
@@ -262,7 +296,8 @@ add_executable(${unit_test_executable} EXCLUDE_FROM_ALL
         ${utests_src})
 target_link_libraries(${unit_test_executable} ${utests_deps})
 if (TARGET tiledarray)
-  target_compile_definitions(${unit_test_executable} PRIVATE SEQUANT_HAS_TILEDARRAY)
+    target_link_libraries(${unit_test_executable} tiledarray)
+    target_compile_definitions(${unit_test_executable} PRIVATE SEQUANT_HAS_TILEDARRAY)
 endif(TARGET tiledarray)
 add_test(sequant/unit/build "${CMAKE_COMMAND}" --build ${CMAKE_BINARY_DIR}
     --target ${unit_test_executable})
@@ -274,42 +309,52 @@ set_tests_properties(sequant/unit/run
         WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tests/unit)
 
 ####### Tests ########
-find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 
 # Single-Reference Coupled-Cluster equation generation (spin-orbital)
 set(example0 srcc)
 add_executable(${example0} EXCLUDE_FROM_ALL
         examples/${example0}/${example0}.cpp)
-target_link_libraries(${example0} SeQuant ${TBB_LIBRARIES} Eigen3::Eigen)
+target_link_libraries(${example0} SeQuant ${TBB_LIBRARIES})
 
-if (TARGET tiledarray AND TARGET Libint2::cxx)
-  # SRCC spin-orbital equation evaluation
-  set(example1 expr_evaluation)
-  add_executable(${example1} EXCLUDE_FROM_ALL
-      examples/evaluation/${example1}.cpp
-      examples/contract/interpret/contract.hpp
-      examples/contract/scf/hartree-fock.cc)
-  target_link_libraries(${example1} SeQuant ${TBB_LIBRARIES}
-      Libint2::cxx tiledarray)
-  target_link_directories(${example1} PUBLIC ${TBB_LIBRARIES})
-  target_compile_definitions(${example1} PRIVATE SEQUANT_HAS_TILEDARRAY)
+set(example1 uccf12)
+add_executable(${example1} EXCLUDE_FROM_ALL
+    examples/${example1}/${example1}.cpp)
+target_link_libraries(${example1} SeQuant ${TBB_LIBRARIES})
 
-  # SRCC spin-traced equation evaluation
-  set(example2 rcc_evaluation)
-  add_executable(${example2} EXCLUDE_FROM_ALL
-      examples/evaluation/${example2}.cpp
-      examples/contract/interpret/contract.hpp
-      examples/contract/scf/hartree-fock.cc)
-  target_link_libraries(${example2} SeQuant
-      ${TBB_LIBRARIES} Libint2::cxx tiledarray)
-  target_link_directories(${example2} PUBLIC ${TBB_LIBRARIES})
-  target_compile_definitions(${example2} PRIVATE SEQUANT_HAS_TILEDARRAY)
-endif (TARGET tiledarray AND TARGET Libint2::cxx)
+set(example_eval_src
+    examples/eval/eval_utils.hpp
+    examples/eval/options.hpp
+    examples/eval/options.cpp
+    examples/eval/data_info.hpp
+    examples/eval/data_info.cpp
+    examples/eval/calc_info.hpp
+    examples/eval/calc_info.cpp
+    examples/eval/scf.hpp
+    examples/eval/scf.cpp
+    )
 
-set(example3 uccf12)
-add_executable(${example3} EXCLUDE_FROM_ALL
-    examples/${example3}/${example3}.cpp)
-target_link_libraries(${example3} SeQuant ${TBB_LIBRARIES})
+if (TARGET tiledarray)
+    set(example2 eval_ta)
+    add_executable(${example2} EXCLUDE_FROM_ALL
+            ${example_eval_src}
+            SeQuant/domain/eval/eval_ta.hpp
+            examples/eval/ta/data_world_ta.hpp
+            examples/eval/ta/scf_ta.hpp
+            examples/eval/ta/main.cpp)
+    target_link_libraries(${example2} SeQuant ${TBB_LIBRARIES} tiledarray)
+endif(TARGET tiledarray)
+
+if(BTAS_SOURCE_DIR)
+    set(example3 eval_btas)
+    add_executable(${example3} EXCLUDE_FROM_ALL
+            ${example_eval_src}
+            SeQuant/domain/eval/eval_btas.hpp
+            examples/eval/btas/data_world_btas.hpp
+            examples/eval/btas/scf_btas.hpp
+            examples/eval/btas/main.cpp)
+    target_include_directories(${example3} PUBLIC ${BTAS_SOURCE_DIR} ${Boost_INCLUDE_DIRS})
+    target_link_libraries(${example3} SeQuant ${TBB_LIBRARIES})
+endif(BTAS_SOURCE_DIR)
 
 # add tests for running examples
 set (lastexample 4)

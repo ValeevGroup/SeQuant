@@ -228,6 +228,7 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
   /// Core of DefaultTensorCanonicalizer::apply, only does the canonicalization, i.e. no tagging/untagging
   template<typename Compare>
   ExprPtr apply(AbstractTensor &t, const Compare &comp) {
+    // std::wcout << "abstract tensor: " << to_latex(t) << "\n";
     auto s = symmetry(t);
     auto is_antisymm = (s == Symmetry::antisymm);
     const auto _bra_rank = bra_rank(t);
@@ -265,7 +266,8 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
         break;
 
       case Symmetry::nonsymm: {
-        // sort particles with bra and ket functions first, then the particleas with either bra or ket index
+        // sort particles with bra and ket functions first,
+        // then the particles with either bra or ket index
         auto _bra = bra_range(t);
         auto _ket = ket_range(t);
         auto _zip_braket = zip(take(_bra, _rank),
