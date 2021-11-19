@@ -17,7 +17,7 @@ using namespace sequant;
 #define CLOSED_SHELL_SPINTRACE 1
 
 int main(int argc, char* argv[]) {
-  std::setlocale(LC_ALL, "en_US.UTF-8");
+  std::locale::global(std::locale("en_US.UTF-8"));
   std::wcout.precision(std::numeric_limits<double>::max_digits10);
   std::wcerr.precision(std::numeric_limits<double>::max_digits10);
   std::wcout.sync_with_stdio(false);
