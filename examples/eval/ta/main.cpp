@@ -61,7 +61,7 @@ int main(int argc, char* argv[]) {
     // return 1;
   }
 
-  std::setlocale(LC_ALL, "en_US.UTF-8");
+  std::locale::global(std::locale("en_US.UTF-8"));
   std::wcout.imbue(std::locale("en_US.UTF-8"));
   std::wcerr.imbue(std::locale("en_US.UTF-8"));
 

@@ -1,6 +1,6 @@
 #include "catch.hpp"
 
-#include <SeQuant/core/optimize/optimize.hpp>
+#include <SeQuant/core/optimize.hpp>
 #include <SeQuant/core/parse_expr.hpp>
 #include <iostream>
 

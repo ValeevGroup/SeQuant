@@ -10,7 +10,7 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval_node.hpp>
-#include <SeQuant/core/optimize/optimize.hpp>
+#include <SeQuant/core/optimize.hpp>
 #include <SeQuant/domain/eval/cache_manager.hpp>
 #include <SeQuant/domain/eval/eval.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
