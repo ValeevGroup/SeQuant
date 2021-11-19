@@ -1,57 +1,66 @@
 #include "asy_cost.hpp"
-#include <iostream>
 
 namespace sequant {
 
-AsyCost::AsyCostEntry::AsyCostEntry(size_t nocc, size_t nvirt)
-    : occ_{nocc}, virt_{nvirt} {}
-
-AsyCost::AsyCostEntry::AsyCostEntry(size_t nocc, size_t nvirt, int count)
-    : occ_{nocc}, virt_{nvirt}, count_{count} {}
-
-AsyCost::AsyCostEntry AsyCost::AsyCostEntry::max() {
-  return AsyCostEntry{std::numeric_limits<size_t>::max(),
-                      std::numeric_limits<size_t>::max(),
-                      std::numeric_limits<int>::max()};
+AsyCostEntry::AsyCostEntry(size_t nocc, size_t nvirt,
+                           boost::rational<int> count)
+    : occ_{nocc}, virt_{nvirt}, count_{count} {
+  if (count_ == 0 || (occ_ == 0 && virt_ == 0)) {
+    occ_ = 0;
+    virt_ = 0;
+    occ_ = 0;
+  }
 }
 
-size_t AsyCost::AsyCostEntry::occ() const { return occ_; }
+AsyCostEntry const &AsyCostEntry::max() {
+  static AsyCostEntry const max_cost = AsyCostEntry{
+      std::numeric_limits<size_t>::max(), std::numeric_limits<size_t>::max(),
+      boost::rational<int>{std::numeric_limits<int>::max(),
+                           std::numeric_limits<int>::max()}};
+  return max_cost;
+}
 
-size_t AsyCost::AsyCostEntry::virt() const { return virt_; }
+AsyCostEntry const &AsyCostEntry::zero() {
+  static AsyCostEntry const zero_cost = AsyCostEntry{0, 0, 0};
+  return zero_cost;
+}
 
-int AsyCost::AsyCostEntry::count() const { return count_; }
+size_t AsyCostEntry::occ() const { return occ_; }
 
-void AsyCost::AsyCostEntry::set_count(int n) const { count_ = n; }
+size_t AsyCostEntry::virt() const { return virt_; }
 
-bool AsyCost::AsyCostEntry::operator<(const AsyCost::AsyCostEntry &rhs) const {
+boost::rational<int> AsyCostEntry::count() const { return count_; }
+
+void AsyCostEntry::set_count(boost::rational<int> n) const { count_ = n; }
+
+bool AsyCostEntry::operator<(const AsyCostEntry &rhs) const {
   return virt() < rhs.virt() || (virt() == rhs.virt() && occ() < rhs.occ());
 }
 
-bool AsyCost::AsyCostEntry::operator==(const AsyCost::AsyCostEntry &rhs) const {
+bool AsyCostEntry::operator==(const AsyCostEntry &rhs) const {
   return occ() == rhs.occ() && virt() == rhs.virt();
 }
 
-AsyCost::AsyCost(size_t nocc, size_t nvirt) {
-  if (!(nocc == 0 && nvirt == 0)) cost_.emplace(AsyCostEntry{nocc, nvirt});
+bool AsyCostEntry::operator!=(const AsyCostEntry &rhs) const {
+  return !(*this == rhs);
 }
 
-AsyCost::AsyCost(size_t nocc, size_t nvirt, size_t count): AsyCost{nocc, nvirt} {
-  if (!cost_.empty() && count > 0) cost_.begin()->set_count(count);
-  else *this = AsyCost::zero();
+AsyCost::AsyCost(AsyCostEntry c) {
+  if (c != AsyCostEntry::zero()) cost_.emplace(c);
 }
 
-AsyCost::AsyCost(AsyCostEntry c) : AsyCost{0, 0} {
-  cost_.emplace(std::move(c));
-}
+AsyCost::AsyCost(size_t nocc, size_t nvirt, boost::rational<int> count)
+    : AsyCost{AsyCostEntry{nocc, nvirt, count}} {}
 
-signed long long AsyCost::ops(unsigned short nocc, unsigned short nvirt) const {
-  auto total = 0;
+boost::rational<long long int> AsyCost::ops(unsigned short nocc,
+                                            unsigned short nvirt) const {
+  boost::rational<long long int> total = 0;
   for (auto &&c : cost_) {
     auto temp = 1;
     if (c.occ() > 0) temp *= static_cast<int>(std::pow(nocc, c.occ()));
     if (c.virt() > 0) temp *= static_cast<int>(std::pow(nvirt, c.virt()));
     // 2 * c.count() because matrix operations flops
-    total += temp > 1 ? 2 * c.count() * temp : 0;
+    total += temp > 1 ? 2 * boost::rational_cast<int>(c.count()) * temp : 0;
   }
   return total;
 }
@@ -129,7 +138,7 @@ AsyCost const &AsyCost::max() {
 }
 
 AsyCost const &AsyCost::zero() {
-  static const AsyCost zero = AsyCost{0, 0};
+  static const AsyCost zero = AsyCost{AsyCostEntry::zero()};
   return zero;
 }
 

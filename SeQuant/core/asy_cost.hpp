@@ -2,79 +2,104 @@
 #define SEQUANT_ASY_COST_HPP
 
 #include <SeQuant/core/container.hpp>
+#include <boost/rational.hpp>
 #include <range/v3/algorithm.hpp>
 #include <range/v3/view.hpp>
 #include <sstream>
 
 namespace sequant {
 
-class AsyCost {
- private:
-  class AsyCostEntry {
-    size_t occ_;
-    size_t virt_;
-    mutable int count_ = 1;
+class AsyCostEntry {
+  size_t occ_;
+  size_t virt_;
+  mutable boost::rational<int> count_;
 
-   public:
-    static AsyCostEntry max();
+ public:
+  template <typename Os, typename IntType>
+  static Os &stream_out_rational(Os &os, boost::rational<IntType> r) {
+    os << r.numerator();
+    if (r.denominator() != IntType{1}) {
+      os << '/';
+      os << r.denominator();
+    }
+    return os;
+  }
 
-    AsyCostEntry(size_t nocc, size_t nvirt);
+  static AsyCostEntry const &max();
 
-    AsyCostEntry(size_t nocc, size_t nvirt, int count);
+  static AsyCostEntry const &zero();
 
-    AsyCostEntry(AsyCostEntry const &) = default;
+  AsyCostEntry(size_t nocc, size_t nvirt, boost::rational<int> count);
 
-    AsyCostEntry(AsyCostEntry &&) = default;
+  AsyCostEntry(AsyCostEntry const &) = default;
 
-    AsyCostEntry &operator=(AsyCostEntry const &) = default;
+  AsyCostEntry(AsyCostEntry &&) = default;
 
-    AsyCostEntry &operator=(AsyCostEntry &&) = default;
+  AsyCostEntry &operator=(AsyCostEntry const &) = default;
 
-    size_t occ() const;
+  AsyCostEntry &operator=(AsyCostEntry &&) = default;
 
-    size_t virt() const;
+  size_t occ() const;
 
-    int count() const;
+  size_t virt() const;
 
-    void set_count(int n) const;
+  boost::rational<int> count() const;
 
-    bool operator<(AsyCostEntry const &rhs) const;
+  void set_count(boost::rational<int> n) const;
 
-    bool operator==(AsyCostEntry const &rhs) const;
+  bool operator<(AsyCostEntry const &rhs) const;
 
-    template <typename String_t>
-    String_t text() const {
-      auto oss = std::basic_ostringstream<typename String_t::value_type>{};
-      if (*this == AsyCostEntry::max()) {
-        oss << "max";
+  bool operator==(AsyCostEntry const &rhs) const;
+
+  bool operator!=(AsyCostEntry const& rhs) const;
+
+  template <typename String_t>
+  String_t text() const {
+    auto oss = std::basic_ostringstream<typename String_t::value_type>{};
+
+    if (*this == AsyCostEntry::max()) {
+      oss << "max";
+    } else if (*this == AsyCostEntry::zero()) {
+      oss << "zero";
+    } else {
+      auto abs_c = boost::abs(count_);
+      oss << (count_ < abs_c ? "- " : "");
+      if (abs_c == 1) {
+        // do nothing
       } else {
-        if (count_ < 0) {
-          if (count_ == -1)
-            oss << "- ";
-          else
-            oss << "- " << std::abs(count_) << "*";
-        } else if (count_ > 1) {
-          oss << count_ << "*";
-        }
-        oss << (occ_ > 0 ? "O" : "");
-        if (occ_ > 1) oss << "^" << occ_;
-
-        oss << (virt_ > 0 ? "V" : "");
-        if (virt_ > 1) oss << "^" << virt_;
+        AsyCostEntry::stream_out_rational(oss, abs_c);
+        oss << "*";
       }
-      return oss.str();
+      oss << (occ_ > 0 ? "O" : "");
+      if (occ_ > 1) oss << "^" << occ_;
+
+      oss << (virt_ > 0 ? "V" : "");
+      if (virt_ > 1) oss << "^" << virt_;
     }
 
-    template <typename String_t>
-    String_t to_latex() const {
-      auto oss = std::basic_ostringstream<typename String_t::value_type>{};
+    return oss.str();
+  }
 
-      if (*this == AsyCostEntry::max()) {
-        oss << "max";
+  template <typename String_t>
+  String_t to_latex() const {
+    auto oss = std::basic_ostringstream<typename String_t::value_type>{};
+
+    if (*this == AsyCostEntry::max()) {
+      oss << "\\texttt{max}";
+    } else if (*this == AsyCostEntry::zero()) {
+      oss << "\\texttt{zero}";
+    } else {
+      auto abs_c = boost::abs(count_);
+      oss << (count_ < abs_c ? "- " : "");
+      if (abs_c == 1) {
+        // do nothing
       } else {
-        if (count_ < 0) oss << "- ";
-        oss << "{";
-        if (std::abs(count_) != 1) oss << std::abs(count_) << " ";
+        bool frac_mode = abs_c.denominator() != 1;
+        oss << (frac_mode ? "\\frac{" : "");
+        oss << count_.numerator();
+        if (frac_mode) {
+          oss << "}{" << count_.denominator() << "}";
+        }
         oss << (occ_ > 0 ? "O" : "");
         if (occ_ > 1) {
           oss << "^{" << occ_ << "}";
@@ -85,22 +110,24 @@ class AsyCost {
         }
         oss << "}";
       }
-      return oss.str();
     }
-  };
+    return oss.str();
+  }
+};
 
-  sequant::container::set<AsyCostEntry> cost_;
-
-  AsyCost(AsyCostEntry);
-
+class AsyCost {
  public:
   static AsyCost const &max();
 
   static AsyCost const &zero();
 
-  AsyCost(size_t nocc, size_t nvirt);
+ private:
+  sequant::container::set<AsyCostEntry> cost_;
 
-  AsyCost(size_t nocc, size_t nvirt, size_t count);
+ public:
+  AsyCost(AsyCostEntry = AsyCostEntry::zero());
+
+  AsyCost(size_t nocc, size_t nvirt, boost::rational<int> count = 1);
 
   AsyCost(AsyCost const &) = default;
 
@@ -110,7 +137,8 @@ class AsyCost {
 
   AsyCost &operator=(AsyCost &&) = default;
 
-  signed long long ops(unsigned short nocc, unsigned short nvirt) const;
+  [[nodiscard]] boost::rational<long long int> ops(unsigned short nocc,
+                                                   unsigned short nvirt) const;
 
   AsyCost operator+(AsyCost const &rhs) const;
 
@@ -151,7 +179,7 @@ class AsyCost {
 
 template <typename Os>
 Os &operator<<(Os &os, AsyCost const &cost) {
-  if (cost.cost_.empty()) {
+  if (cost == AsyCost::zero()) {
     os << 0;
     return os;
   }

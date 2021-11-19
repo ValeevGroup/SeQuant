@@ -1,16 +1,15 @@
 #include "catch.hpp"
 
 #include <SeQuant/core/asy_cost.hpp>
-
 #include <sstream>
 
 struct MatFlops {
   size_t occ_range_size;
   size_t virt_range_size;
-  size_t operator()(unsigned short nocc, unsigned short nvirt) const {
-    size_t ops = 1;
-    if (nocc > 0) ops *= static_cast<size_t>(std::pow(occ_range_size, nocc));
-    if (nvirt > 0) ops *= static_cast<size_t>(std::pow(virt_range_size, nvirt));
+  long long int operator()(unsigned short nocc, unsigned short nvirt) const {
+    long long int ops = 1;
+    if (nocc > 0) ops *= static_cast<int>(std::pow(occ_range_size, nocc));
+    if (nvirt > 0) ops *= static_cast<int>(std::pow(virt_range_size, nvirt));
     return ops > 1 ? 2 * ops : 0;
   }
 };
@@ -22,6 +21,10 @@ TEST_CASE("TEST ASY_COST", "[AsyCost]") {
     auto clear = [&oss]() { oss.str(std::wstring{}); };
 
     oss << AsyCost{0, 0};
+    REQUIRE(oss.str() == L"0");
+
+    clear();
+    oss << AsyCost{};
     REQUIRE(oss.str() == L"0");
 
     clear();
@@ -58,8 +61,9 @@ TEST_CASE("TEST ASY_COST", "[AsyCost]") {
 
     clear();
     oss << AsyCost{1, 1, 20};
+
     REQUIRE(oss.str() == L"20*OV");
-    REQUIRE(AsyCost{0,0} == AsyCost::zero());
+    REQUIRE(AsyCost{0, 0} == AsyCost::zero());
     REQUIRE(AsyCost{1, 1, 0} == AsyCost::zero());
   }
 

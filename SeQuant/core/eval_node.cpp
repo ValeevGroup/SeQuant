@@ -128,8 +128,8 @@ ExprPtr linearize_eval_node(EvalNode const& node) {
   }
 }
 
-AsyCost asy_cost_single_node(EvalNode const& node) {
-  if (node.leaf()) return AsyCost::zero();
+AsyCostEntry asy_cost_single_node(EvalNode const& node) {
+  if (node.leaf()) return AsyCostEntry::zero();
 
   auto bks = ranges::views::concat(node.left()->tensor().const_braket(),
                                    node.right()->tensor().const_braket(),
@@ -145,18 +145,44 @@ AsyCost asy_cost_single_node(EvalNode const& node) {
 
   switch (node->op()) {
     case EvalOp::Symm: {
-      auto f = static_cast<size_t>(
+      auto f = static_cast<int>(
           boost::math::factorial<double>(node->tensor().rank()));
-      return AsyCost{nocc, nvirt, f};
+      return AsyCostEntry{nocc, nvirt, static_cast<int>(f)};
     }
     case EvalOp::Antisymm: {
-      auto f = static_cast<size_t>(
+      auto f = static_cast<int>(
           boost::math::factorial<double>(node->tensor().rank()));
-      return AsyCost{nocc, nvirt, f * f};
+      return AsyCostEntry{nocc, nvirt, static_cast<int>(f * f)};
     }
     default:
-      return AsyCost{nocc, nvirt};
+      return AsyCostEntry{nocc, nvirt, 1};
   }
+}
+
+AsyCostEntry asy_cost_single_node_symmetry(const EvalNode& node) {
+  auto cost = asy_cost_single_node(node);
+  auto factorial = [](auto x) {
+    return static_cast<int>(boost::math::factorial<double>(x));
+  };
+  auto const psym = node->tensor().symmetry();
+  auto const pbrank = node->tensor().bra_rank();
+  auto const pkrank = node->tensor().ket_rank();
+  if (psym == sequant::Symmetry::symm &&
+      node.left()->tensor().symmetry() == psym &&
+      node.right()->tensor().symmetry() == psym &&
+      node->op() == sequant::EvalOp::Prod)
+    cost.set_count(cost.count() /
+                        (factorial(pbrank) * factorial(pkrank)));
+
+  else if (psym == sequant::Symmetry::symm)
+    cost.set_count(cost.count() / factorial(pbrank));
+  else if (psym == sequant::Symmetry::antisymm)
+    cost.set_count(cost.count() /
+                        (factorial(pbrank) * factorial(pkrank)));
+  else {
+    // do nothing.
+  }
+  return cost;
 }
 
 }  // namespace sequant

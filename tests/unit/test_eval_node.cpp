@@ -135,23 +135,27 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
   SECTION("asy_cost_single_node") {
     auto const p1 =
         parse_expr_asymm(L"g_{i2, a1}^{a2, a3} * t_{a2, a3}^{i1, i2}");
-    REQUIRE(asy_cost_single_node(to_eval_node(p1)) == AsyCost{2, 3});
+    REQUIRE(AsyCost{asy_cost_single_node(to_eval_node(p1))} == AsyCost{2, 3});
 
     auto const p2 = parse_expr_asymm(
         L"g_{i2,i3}^{a2,a3} * t_{a2}^{i1} * t_{a1,a3}^{i2,i3}");
     auto const n2 = to_eval_node(p2);
 
-    REQUIRE(asy_cost_single_node(n2) == AsyCost{3, 2});
-    REQUIRE(asy_cost_single_node(n2.left()) == AsyCost{3, 2});
+    REQUIRE(AsyCost{asy_cost_single_node(n2)} == AsyCost{3, 2});
+    REQUIRE(AsyCost{asy_cost_single_node(n2.left())} == AsyCost{3, 2});
 
     auto const p3 =
         parse_expr_asymm(L"g_{i2,i3}^{i1,a2} * t_{a2}^{i2} * t_{a1}^{i3}");
     auto const n3 = to_eval_node(p3);
-    REQUIRE(asy_cost_single_node(n3) == AsyCost{2, 1});
-    REQUIRE(asy_cost_single_node(n3.left()) == AsyCost{3, 1});
+    REQUIRE(AsyCost{asy_cost_single_node(n3)} == AsyCost{2, 1});
+    REQUIRE(AsyCost{asy_cost_single_node(n3.left())} == AsyCost{3, 1});
   }
 
   SECTION("asy_cost") {
+    auto asy_cost_no_exploit_sym = [](EvalNode const& n) {
+      return asy_cost(
+          n, [](auto const& n) { return true; }, false);
+    };
     auto const p1 =
         parse_expr_asymm(L"g_{i2, a1}^{a2, a3} * t_{a2, a3}^{i1, i2}");
     REQUIRE(asy_cost(to_eval_node(p1)) == AsyCost{2, 3});
@@ -169,9 +173,10 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
 
     auto const t1 = parse_expr_asymm(L"I{i1,i2,i3;a1,a2,a3}");
     auto const n4 = to_eval_node_antisymm(t1);
-    REQUIRE(asy_cost(n4) == AsyCost{3,3,36}); // 36*O^3*V^3
+
+    REQUIRE(asy_cost_no_exploit_sym(n4) == AsyCost{3, 3, 36});  // 36*O^3*V^3
 
     auto const n5 = to_eval_node_symm(t1);
-    REQUIRE(asy_cost(n5) == AsyCost{3,3,6}); // 6*O^3*V^3
+    REQUIRE(asy_cost_no_exploit_sym(n5) == AsyCost{3, 3, 6});  // 6*O^3*V^3
   }
 }
