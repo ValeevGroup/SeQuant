@@ -150,7 +150,7 @@ TEST_CASE("TEST_EVAL_EXPR", "[EvalExpr]") {
 
     const auto& x56 = EvalExpr{EvalExpr{t5}, EvalExpr{t6}, EvalOp::Prod};
 
-    REQUIRE(x56.tensor().symmetry() == Symmetry::symm);
+    REQUIRE(x56.tensor().symmetry() == Symmetry::antisymm);
 
     // contraction of some indices from a bra to a ket
     const auto t7 = parse_expr_asymm(L"g_{a1,a2}^{i1,a3}")->as<Tensor>();
