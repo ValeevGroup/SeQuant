@@ -17,8 +17,10 @@ TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
   sequant::TensorCanonicalizer::register_instance(
       std::make_shared<sequant::DefaultTensorCanonicalizer>());
 
+  auto parse_expr_antisymm = [](auto const& xpr){return parse_expr(xpr, Symmetry::antisymm);};
+
   SECTION("Single term optimization") {
-    const auto prod1 = parse_expr_asymm(
+    const auto prod1 = parse_expr_antisymm(
                            L"g_{i3,i4}^{a3,a4}"     // T1
                            " * t_{a1,a2}^{i3,i4}"   // T2
                            " * t_{a3,a4}^{i1,i2}")  // T3
@@ -48,7 +50,7 @@ TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
     REQUIRE(to_eval_node(prod1_opt) == result1.optimal_seqs.at(0));
 
     //
-    const auto prod2 = parse_expr_asymm(
+    const auto prod2 = parse_expr_antisymm(
                            L"   g_{i3,i4}^{a3,a4}"
                            L" * t_{a3,a4}^{i1,i2}"
                            L" * t_{a1}^{i3}"
@@ -77,9 +79,9 @@ TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
     REQUIRE(result2_discounted.cost < result2_naive.cost);
 
     // yet another example
-    auto prod3 = parse_expr_asymm(
+    auto prod3 = parse_expr_antisymm(
         L"t_{a1,a2}^{i1,i2} * g_{i2,i3}^{a2,a3} * t_{a3}^{i4}");
-    auto prod4 = parse_expr_asymm(L"t_{a1,a2}^{i1,i2} * g_{i2,i3}^{a2,a3}");
+    auto prod4 = parse_expr_antisymm(L"t_{a1,a2}^{i1,i2} * g_{i2,i3}^{a2,a3}");
     // we show that two the evaluation trees for prod3
     //  - one: single term optimized on prod3 alone
     //  - two: single term optimized on prod3 with the intermediate from prod4

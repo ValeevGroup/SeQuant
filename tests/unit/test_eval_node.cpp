@@ -6,15 +6,17 @@
 
 // validates if x is constructible from tspec using parse_expr
 auto validate_tensor = [](const auto& x, std::wstring_view tspec) -> bool {
-  return x.to_latex() == sequant::parse_expr_asymm(tspec)->to_latex();
+  return x.to_latex() == sequant::parse_expr(tspec, sequant::Symmetry::antisymm)->to_latex();
 };
 
 TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
   using namespace sequant;
 
+  auto parse_expr_antisymm = [](auto const& xpr){return parse_expr(xpr, Symmetry::antisymm);};
+
   SECTION("product") {
     // 1/16 * (A * B) * C
-    const auto p1 = parse_expr_asymm(
+    const auto p1 = parse_expr_antisymm(
         L"1/16 "
         L"* g_{i3, i4}^{a3, a4}"
         L"* t_{a1, a2}^{i3, i4}"
@@ -72,7 +74,7 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
   }
 
   SECTION("sum") {
-    auto const sum1 = parse_expr_asymm(
+    auto const sum1 = parse_expr_antisymm(
         L"X^{i1,i2}_{a1,a2} "
         L"+ Y^{i1, i2}_{a1,a2}"
         L"+ g_{i3,a1}^{i1,i2} * t_{a2}^{i3}");
@@ -95,7 +97,7 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
   }
 
   SECTION("to_expr") {
-    const auto p1 = parse_expr_asymm(
+    const auto p1 = parse_expr_antisymm(
         L"1/16 "
         L"* g_{i3, i4}^{a3, a4}"
         L"* t_{a1, a2}^{i3, i4}"
@@ -110,14 +112,14 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
 
     REQUIRE(to_expr(n1)->to_latex() == p1_after->to_latex());
 
-    auto const p2 = parse_expr_asymm(L"1/4 * g_{i2,i1}^{a1,a2}");
+    auto const p2 = parse_expr_antisymm(L"1/4 * g_{i2,i1}^{a1,a2}");
 
     auto const n2 = to_eval_node(p2);
     REQUIRE(to_expr(n2)->to_latex() == p2->to_latex());
   }
 
   SECTION("linearize_eval_node") {
-    const auto p1 = parse_expr_asymm(
+    const auto p1 = parse_expr_antisymm(
         L"1/16 "
         L"* g_{i3, i4}^{a3, a4}"
         L"* t_{a1, a2}^{i3, i4}"
@@ -125,17 +127,17 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
     REQUIRE(linearize_eval_node(to_eval_node(p1))->to_latex() ==
             p1->to_latex());
 
-    auto const p2 = parse_expr_asymm(L"1/4 * g_{i2,i1}^{a1,a2}");
+    auto const p2 = parse_expr_antisymm(L"1/4 * g_{i2,i1}^{a1,a2}");
     REQUIRE(linearize_eval_node(to_eval_node(p2))->to_latex() ==
-            parse_expr_asymm(L"1/4 * g_{i2,i1}^{a1,a2}")->to_latex());
+            parse_expr_antisymm(L"1/4 * g_{i2,i1}^{a1,a2}")->to_latex());
   }
 
   SECTION("asy_cost_single_node") {
     auto const p1 =
-        parse_expr_asymm(L"g_{i2, a1}^{a2, a3} * t_{a2, a3}^{i1, i2}");
+        parse_expr_antisymm(L"g_{i2, a1}^{a2, a3} * t_{a2, a3}^{i1, i2}");
     REQUIRE(AsyCost{asy_cost_single_node(to_eval_node(p1))} == AsyCost{2, 3});
 
-    auto const p2 = parse_expr_asymm(
+    auto const p2 = parse_expr_antisymm(
         L"g_{i2,i3}^{a2,a3} * t_{a2}^{i1} * t_{a1,a3}^{i2,i3}");
     auto const n2 = to_eval_node(p2);
 
@@ -143,7 +145,7 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
     REQUIRE(AsyCost{asy_cost_single_node(n2.left())} == AsyCost{3, 2});
 
     auto const p3 =
-        parse_expr_asymm(L"g_{i2,i3}^{i1,a2} * t_{a2}^{i2} * t_{a1}^{i3}");
+        parse_expr_antisymm(L"g_{i2,i3}^{i1,a2} * t_{a2}^{i2} * t_{a1}^{i3}");
     auto const n3 = to_eval_node(p3);
     REQUIRE(AsyCost{asy_cost_single_node(n3)} == AsyCost{2, 1});
     REQUIRE(AsyCost{asy_cost_single_node(n3.left())} == AsyCost{3, 1});
@@ -151,21 +153,21 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
 
   SECTION("asy_cost") {
     auto const p1 =
-        parse_expr_asymm(L"g_{i2, a1}^{a2, a3} * t_{a2, a3}^{i1, i2}");
+        parse_expr_antisymm(L"g_{i2, a1}^{a2, a3} * t_{a2, a3}^{i1, i2}");
     REQUIRE(asy_cost(to_eval_node(p1)) == AsyCost{2, 3});
 
-    auto const p2 = parse_expr_asymm(
+    auto const p2 = parse_expr_antisymm(
         L"g_{i2,i3}^{a2,a3} * t_{a2}^{i1} * t_{a1,a3}^{i2,i3}");
 
     auto const np2 = to_eval_node(p2);
     REQUIRE(asy_cost(np2) == AsyCost{3, 2} + AsyCost{3, 2});
 
     auto const p3 =
-        parse_expr_asymm(L"g_{i2,i3}^{i1,a2} * t_{a2}^{i2} * t_{a1}^{i3}");
+        parse_expr_antisymm(L"g_{i2,i3}^{i1,a2} * t_{a2}^{i2} * t_{a1}^{i3}");
     auto const np3 = to_eval_node(p3);
     REQUIRE(asy_cost(np3) == AsyCost{2, 1} + AsyCost{3, 1});
 
-    auto const t1 = parse_expr_asymm(L"I{i1,i2,i3;a1,a2,a3}");
+    auto const t1 = parse_expr_antisymm(L"I{i1,i2,i3;a1,a2,a3}");
     auto const nt1a = to_eval_node_antisymm(t1);
 
     REQUIRE(asy_cost_symm_off(nt1a) == AsyCost{3, 3, 36});  // 36*O^3*V^3
