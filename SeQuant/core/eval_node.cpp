@@ -128,8 +128,8 @@ ExprPtr linearize_eval_node(EvalNode const& node) {
   }
 }
 
-AsyCostEntry asy_cost_single_node(EvalNode const& node) {
-  if (node.leaf()) return AsyCostEntry::zero();
+AsyCost asy_cost_single_node_symm_off(EvalNode const& node) {
+  if (node.leaf()) return AsyCost::zero();
 
   auto bks = ranges::views::concat(node.left()->tensor().const_braket(),
                                    node.right()->tensor().const_braket(),
@@ -147,41 +147,58 @@ AsyCostEntry asy_cost_single_node(EvalNode const& node) {
     case EvalOp::Symm: {
       auto f = static_cast<int>(
           boost::math::factorial<double>(node->tensor().rank()));
-      return AsyCostEntry{nocc, nvirt, static_cast<int>(f)};
+      return AsyCost{nocc, nvirt, static_cast<int>(f)};
     }
     case EvalOp::Antisymm: {
       auto f = static_cast<int>(
           boost::math::factorial<double>(node->tensor().rank()));
-      return AsyCostEntry{nocc, nvirt, static_cast<int>(f * f)};
+      return AsyCost{nocc, nvirt, static_cast<int>(f * f)};
     }
     default:
-      return AsyCostEntry{nocc, nvirt, 1};
+      return AsyCost{nocc, nvirt, 1};
   }
 }
 
-AsyCostEntry asy_cost_single_node_symmetry(const EvalNode& node) {
-  auto cost = asy_cost_single_node(node);
+AsyCost asy_cost_single_node(const EvalNode& node) {
+  auto cost = asy_cost_single_node_symm_off(node);
   auto factorial = [](auto x) {
     return static_cast<int>(boost::math::factorial<double>(x));
   };
+  // parent node symmetry
   auto const psym = node->tensor().symmetry();
+  // parent node bra symmetry
   auto const pbrank = node->tensor().bra_rank();
+  // parent node ket symmetry
   auto const pkrank = node->tensor().ket_rank();
-  if (psym == sequant::Symmetry::symm &&
-      node.left()->tensor().symmetry() == psym &&
-      node.right()->tensor().symmetry() == psym &&
-      node->op() == sequant::EvalOp::Prod)
-    cost.set_count(cost.count() /
-                        (factorial(pbrank) * factorial(pkrank)));
 
-  else if (psym == sequant::Symmetry::symm)
-    cost.set_count(cost.count() / factorial(pbrank));
-  else if (psym == sequant::Symmetry::antisymm)
-    cost.set_count(cost.count() /
-                        (factorial(pbrank) * factorial(pkrank)));
-  else {
-    // do nothing.
+  if (psym == Symmetry::nonsymm || psym == Symmetry::invalid) {
+    // do nothing
+  } else {
+    // ------
+    // psym is Symmetry::symm or Symmetry::antisymm
+    //
+    // the rules of cost reduction are taken from
+    //   doi:10.1016/j.procs.2012.04.044
+    // ------
+
+    auto const op = node->op();
+    if (op == EvalOp::Sum) {
+      cost = psym == Symmetry::symm
+                 ? cost / (factorial(pbrank) * factorial(pkrank))
+                 : cost / factorial(pbrank);
+    } else if (op == EvalOp::Prod) {
+      auto const lsym = node.left()->tensor().symmetry();
+      auto const rsym = node.right()->tensor().symmetry();
+      cost = (lsym == rsym && lsym == Symmetry::nonsymm)
+                 ? cost / factorial(pbrank)
+                 : cost / (factorial(pbrank) * factorial(pkrank));
+    } else {
+      assert(
+          false &&
+          "Unsupported evaluation operation for asymptotic cost computation.");
+    }
   }
+
   return cost;
 }
 

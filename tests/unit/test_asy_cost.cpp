@@ -16,10 +16,11 @@ struct MatFlops {
 
 TEST_CASE("TEST ASY_COST", "[AsyCost]") {
   using sequant::AsyCost;
-  SECTION("to_text") {
-    std::wostringstream oss{};
-    auto clear = [&oss]() { oss.str(std::wstring{}); };
 
+  std::wostringstream oss{};
+  auto clear = [&oss]() { oss.str(std::wstring{}); };
+
+  SECTION("to_text") {
     oss << AsyCost{0, 0};
     REQUIRE(oss.str() == L"0");
 
@@ -53,11 +54,11 @@ TEST_CASE("TEST ASY_COST", "[AsyCost]") {
 
     clear();
     oss << AsyCost{2, 2} + AsyCost{3, 2} + AsyCost{2, 3} + AsyCost{3, 3};
-    REQUIRE(oss.str() == L"O^2V^2 + O^3V^2 + O^2V^3 + O^3V^3");
+    REQUIRE(oss.str() == L"O^3V^3 + O^2V^3 + O^3V^2 + O^2V^2");
 
     clear();
     oss << AsyCost{1, 1} - AsyCost{2, 3} + AsyCost{2, 2};
-    REQUIRE(oss.str() == L"OV + O^2V^2 - O^2V^3");
+    REQUIRE(oss.str() == L"- O^2V^3 + O^2V^2 + OV");
 
     clear();
     oss << AsyCost{1, 1, 20};
@@ -98,5 +99,28 @@ TEST_CASE("TEST ASY_COST", "[AsyCost]") {
 
     auto const cost = AsyCost{3, 1} + AsyCost{2, 1};
     REQUIRE(cost.ops(nocc, nvirt) == flops(3, 1) + flops(2, 1));
+  }
+
+  SECTION("Fractional costs") {
+    clear();
+    oss << AsyCost{2,4,{1,2}};
+    REQUIRE(oss.str() == L"1/2*O^2V^4");
+
+    auto const c1 = AsyCost{1,2} * boost::rational<int>{2, 3};
+    clear();
+    oss << c1 ;
+    REQUIRE(oss.str() == L"2/3*OV^2");
+
+    auto const c2 = AsyCost{1,2} / boost::rational<int>{2, 3};
+    clear();
+    oss << c2 ;
+    REQUIRE(oss.str() == L"3/2*OV^2");
+
+    auto const c3 = (AsyCost{1, 2} + AsyCost{2, 4}) * 2;
+    clear();
+    oss << c3;
+    REQUIRE(oss.str() == L"2*O^2V^4 + 2*OV^2");
+
+    clear();
   }
 }
