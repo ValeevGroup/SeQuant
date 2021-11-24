@@ -1,6 +1,8 @@
 #include "SeQuant/core/optimize.hpp"
 
-namespace sequant::optimize {
+namespace sequant {
+
+namespace opt {
 
 ExprPtr tail_factor(ExprPtr const& expr) noexcept {
   if (expr->is<Tensor>())
@@ -35,15 +37,14 @@ void pull_scalar(sequant::ExprPtr expr) noexcept {
   prod.scale(scal);
 }
 
+}  // namespace opt
+
 EvalNode optimize(const ExprPtr& expr) {
   using ranges::views::transform;
   if (expr->is<Tensor>())
     return to_eval_node(expr);
   else if (expr->is<Product>()) {
-    // canonicalization within sto doesn't seem beneficial
-    bool canonize = false;
-    return *(
-        single_term_opt(expr->as<Product>(), canonize).optimal_seqs.begin());
+    return *(opt::single_term_opt(expr->as<Product>()).optimal_seqs.begin());
   } else if (expr->is<Sum>()) {
     auto smands = *expr | transform([](auto const& s) {
       return to_expr(optimize(s));
@@ -54,4 +55,4 @@ EvalNode optimize(const ExprPtr& expr) {
     throw std::runtime_error{"optimization attempted on unsupported Expr type"};
 }
 
-}  // namespace sequant::optimize
+}  // namespace sequant
