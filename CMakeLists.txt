@@ -223,7 +223,10 @@ add_library(SeQuant
         SeQuant/domain/mbpt/spin.cpp
         SeQuant/domain/mbpt/sr/sr.cpp
         SeQuant/domain/mbpt/sr/sr.hpp
-        )
+        SeQuant/domain/transcorrelated/antisymmetrizer.hpp
+        SeQuant/domain/transcorrelated/simplifications.h
+        SeQuant/domain/transcorrelated/three_body_decomp.hpp
+        SeQuant/domain/eqs/single_ref_uccf12.h)
 
 target_link_libraries(SeQuant PUBLIC range-v3::range-v3 Boost::regex Boost::boost SeQuant-bliss Threads::Threads Eigen3::Eigen)
 if (SEQUANT_HAS_EXECUTION_HEADER_STANDALONE OR SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB)
@@ -343,6 +346,13 @@ if (TARGET tiledarray)
             examples/eval/ta/main.cpp)
     target_link_libraries(${example2} SeQuant ${TBB_LIBRARIES} tiledarray)
 endif(TARGET tiledarray)
+
+set(example4 antisymmetrizer_test)
+add_executable(${example4} EXCLUDE_FROM_ALL
+        examples/${example4}/${example4}.cpp )
+target_link_libraries(${example4} SeQuant ${TBB_LIBRARIES})
+target_link_directories(${example4} PUBLIC ${TBB_LIBRARIES})
+target_compile_definitions(${example4} PRIVATE SEQUANT_HAS_TILEDARRAY)
 
 if(BTAS_SOURCE_DIR)
     set(example3 eval_btas)
