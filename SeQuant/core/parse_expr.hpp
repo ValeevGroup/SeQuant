@@ -2,10 +2,8 @@
 #define SEQUANT_PARSE_EXPR_HPP
 
 #include <SeQuant/core/attr.hpp>
-#include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr_fwd.hpp>
-#include <regex>
-#include <string>
+#include <string_view>
 
 ///
 ///  Create SeQuant expression from string input.

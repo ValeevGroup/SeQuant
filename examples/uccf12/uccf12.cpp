@@ -1,5 +1,5 @@
-#include "../../SeQuant/domain/transcorrelated/three_body_decomp.hpp"
-#include "../../SeQuant/domain/transcorrelated/simplifications.h"
+#include <SeQuant/domain/transcorrelated/three_body_decomp.hpp>
+#include <SeQuant/domain/transcorrelated/simplifications.h>
 #include <SeQuant/core/timer.hpp>
 #include <SeQuant/core/wick.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -14,7 +14,7 @@ using namespace sequant::mbpt::sr::so;
 void try_main();
 
 int main(int argc, char* argv[]) {
-  std::setlocale(LC_ALL, "en_US.UTF-8");
+  std::locale::global(std::locale("en_US.UTF-8"));
   std::wcout.precision(std::numeric_limits<double>::max_digits10);
   std::wcerr.precision(std::numeric_limits<double>::max_digits10);
   std::wcout.sync_with_stdio(false);
@@ -56,7 +56,7 @@ try_main() {
     wick.spinfree(false)
         .full_contractions(false);
     auto result = wick.compute();
-   simplify(result);
+    simplify(result);
     return result;
   };
 

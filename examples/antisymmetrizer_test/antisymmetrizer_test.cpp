@@ -1,8 +1,11 @@
 
 #include <SeQuant/core/wick.hpp>
+#include <SeQuant/domain/transcorrelated/three_body_decomp.hpp>
+#include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/sr/sr.hpp>
+
 #include <iostream>
-#include "../sequant_setup.hpp"
-#include "../../SeQuant/domain/transcorrelated/three_body_decomp.hpp"
+#include <clocale>
 
 using namespace sequant;
 

@@ -34,7 +34,7 @@ std::wstring regex_patterns::look_ahead(std::wstring_view pat) {
 }
 
 std::wstring_view regex_patterns::index() {
-  static const std::wstring idx = L"[ia]_?\\d+";
+  static const std::wstring idx = L"[ia][⁺⁻]?_?\\d+";
   return idx;
 }
 

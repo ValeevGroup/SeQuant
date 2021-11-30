@@ -3,13 +3,11 @@
 #include <SeQuant/core/parse/regex_sequant.hpp>
 #include <SeQuant/core/parse/rpn.hpp>
 #include <SeQuant/core/parse/token_sequant.hpp>
-#include <regex>
-#include <string>
-#include <cwctype>
+#include <boost/regex.hpp>
 
 namespace sequant::parse {
-std::wstring prune_space(std::wstring_view raw) {
-  return std::regex_replace(raw.data(), std::wregex(L"[[:space:]]+"), L"");
+std::wstring prune_space(std::wstring const& raw) {
+  return boost::regex_replace(raw, boost::wregex(L"[[:space:]]+"), L"");
 }
 
 double to_decimal(std::wstring_view numstr) {
@@ -19,7 +17,7 @@ double to_decimal(std::wstring_view numstr) {
   return wiss ? num : 0;
 }
 
-double to_fraction(std::wsmatch const& match) {
+double to_fraction(boost::wsmatch const& match) {
   auto const num = match[1].str();
   auto const denom = match[2].str();
   return (num.empty() ? 1.0 : to_decimal(num)) /
@@ -32,7 +30,8 @@ container::vector<Index> to_indices(std::wstring_view raw_csv_indices) {
     std::wostringstream oss{};
     wchar_t last_char = L' ';
     for (auto x: raw_csv_indices){
-      if (std::iswalpha(last_char) && std::iswdigit(x))
+      if ((std::iswalpha(last_char) && std::iswdigit(x))
+          || ((last_char == L'⁻' || last_char == L'⁺') && std::iswdigit(x)))
         oss << L'_';
       oss << x;
       last_char = x;
@@ -45,7 +44,7 @@ container::vector<Index> to_indices(std::wstring_view raw_csv_indices) {
            | ranges::to<container::vector<Index>>;
 }
 
-std::unique_ptr<Token> to_operand_tensor(std::wsmatch const& match, Symmetry s){
+std::unique_ptr<Token> to_operand_tensor(boost::wsmatch const& match, Symmetry s){
   if (match[4].matched){
     auto sm_char = match[4].str();
     if (sm_char == L"S") s = Symmetry::symm;
@@ -68,21 +67,21 @@ ExprPtr parse_expr(std::wstring_view raw_expr, Symmetry symmetry){
     throw std::runtime_error("Invalid expression!");
   };
 
-  static auto const tensor_exp = std::wregex{pattern::tensor_expanded().data()};
-  static auto const tensor_terse = std::wregex{pattern::tensor_terse().data()};
-  static auto const fraction = std::wregex{pattern::fraction().data()};
-  static auto const times = std::wregex{L"\\*"};
-  static auto const plus  = std::wregex{L"\\+"};
-  static auto const minus = std::wregex{L"\\-"};
-  static auto const paren_left = std::wregex{L"\\("};
-  static auto const paren_right = std::wregex{L"\\)"};
+  static auto const tensor_exp = boost::wregex{pattern::tensor_expanded().data()};
+  static auto const tensor_terse = boost::wregex{pattern::tensor_terse().data()};
+  static auto const fraction = boost::wregex{pattern::fraction().data()};
+  static auto const times = boost::wregex{L"\\*"};
+  static auto const plus  = boost::wregex{L"\\+"};
+  static auto const minus = boost::wregex{L"\\-"};
+  static auto const paren_left = boost::wregex{L"\\("};
+  static auto const paren_right = boost::wregex{L"\\)"};
 
-  auto const expr = parse::prune_space(raw_expr);
+  auto const expr = parse::prune_space(raw_expr.data());
 
-  std::wsmatch match;
+  boost::wsmatch match;
   auto iter = expr.begin();
-  auto validate = [&iter, &match, &expr](std::wregex const& rgx) -> bool {
-    std::regex_search(iter, expr.end(), match, rgx);
+  auto validate = [&iter, &match, &expr](boost::wregex const& rgx) -> bool {
+    boost::regex_search(iter, expr.end(), match, rgx);
 
     if (match.empty() || iter != match.begin()->first) return false;
     else {
@@ -168,7 +167,8 @@ ExprPtr parse_expr(std::wstring_view raw_expr, Symmetry symmetry){
     }
     else if (t->is<OperatorMinusUnary>()){
       if (result.empty()) throw_invalid_expr();
-      result[0] = ex<Constant>(-1)*result[0];
+      auto liter = result.end() - 1;
+      *liter = ex<Constant>(-1)*(*liter);
     }
     else {
       if (result.empty()) throw_invalid_expr();

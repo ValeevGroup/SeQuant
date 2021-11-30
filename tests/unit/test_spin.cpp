@@ -1026,7 +1026,25 @@ TEST_CASE("Spin") {
       std::cout << "\n";
       REQUIRE(result.size() == 4);
     }
-    Logger::get_instance().canonicalize = false;
+
+    {
+      // CCk open-shell energy expression
+      auto tau = ex<Constant>(0.25) *
+                     ex<Tensor>(L"t", WstrList{L"a_1", L"a_2"}, WstrList{L"i_1", L"i_2"}, Symmetry::antisymm) +
+                 ex<Constant>(0.5) *
+                     ex<Tensor>(L"t", WstrList{L"a_1"}, WstrList{L"i_1"}, Symmetry::nonsymm) *
+                     ex<Tensor>(L"t", WstrList{L"a_2"}, WstrList{L"i_2"}, Symmetry::nonsymm);
+
+      auto E_cck = ex<Tensor>(L"f", WstrList{L"i_1"}, WstrList{L"a_1"}) *
+          ex<Tensor>(L"t", WstrList{L"a_1"}, WstrList{L"i_1"}, Symmetry::nonsymm) +
+          ex<Tensor>(L"g", WstrList{L"i_1", L"i_2"},
+                     WstrList{L"a_1", L"a_2"}, Symmetry::antisymm) * tau;
+      simplify(E_cck);
+      std::wcout << "Spin-orbital energy: " << to_latex(E_cck) << std::endl;
+      auto result = open_shell_spintrace(E_cck);
+      std::wcout << "Open-shell energy: " << to_latex(result.at(0)) << std::endl;
+    }
+
   }
 
 #if 0

@@ -155,12 +155,26 @@ int count_cycles(const container::svector<int, 6>& vec1,
 /// @return an expression with spin integrated/adapted
 ExprPtr closed_shell_spintrace(
     const ExprPtr& expression,
-    const container::vector<container::vector<Index>> ext_index_groups = {{}});
+    container::vector<container::vector<Index>> ext_index_groups = {{}});
 
 /// @brief Generates list of external indices from Antisymmetrization (A) operator
 /// @param expr ExprPtr with spin orbital indices
 /// @return external index groups to be used for spintracing
 container::vector<container::vector<Index>> external_indices(const ExprPtr& expr);
+
+// clang-format off
+/// @brief Perform biorthogonal transformation on an arbitrary
+/// residual equation (http://arxiv.org/abs/1805.00565)
+/// @param expr A spin-traced and canonicalized residual equation
+/// @param n_particles Rank of the amplitude
+/// @param ext_index_groups Indices of the left-projector
+/// @param threshold Parameter for calculating scalar coefficients
+/// @return result A biorthogonally transformed SeQuant expression
+// clang-format on
+ExprPtr biorthogonal_transform(
+    const ExprPtr &expr, const int n_particles,
+    const std::vector<std::vector<sequant::Index>> &ext_index_groups = {{}},
+    double threshold = 1.e-12);
 
 /// @brief Transforms Coupled cluster from spin orbital to spatial orbitals
 /// @detailed The external indices are deduced from Antisymmetrization operator
@@ -171,6 +185,11 @@ ExprPtr closed_shell_CC_spintrace(const ExprPtr& expr);
 /// Collect all indices from an expression
 auto index_list(const ExprPtr& expr);
 
+// Multiply an expression by S operator, which is generated from external
+// indices
+ExprPtr symmetrize_expr(ExprPtr& expr,
+                        const std::vector<std::vector<sequant::Index>>& ext_index_groups);
+
 /// @brief Generates spin expressions to be used for open-shell coupled cluster
 /// @detailed Every spin combination of external indices will have all spin
 /// combinations of internal indices.
@@ -178,7 +197,7 @@ auto index_list(const ExprPtr& expr);
 /// @param ext_index_groups groups of external indices
 /// @return a vector of expr ptrs with spin expressions
 std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
-    const std::vector<std::vector<Index>> ext_index_groups = {{}});
+    std::vector<std::vector<Index>> ext_index_groups = {{}});
 
 /// @brief Transforms Coupled cluster from spin orbital to spatial orbitals
 /// @param expr ExprPtr with spin orbital indices
@@ -206,8 +225,8 @@ ExprPtr spintrace(
 /// @return ExprPtr with terms with S operator as a factor
 ExprPtr factorize_S_operator(
     const ExprPtr& expression,
-    const std::initializer_list<IndexList> ext_index_groups = {{}},
-    const bool fast_method = true);
+    std::initializer_list<IndexList> ext_index_groups = {{}},
+    bool fast_method = true);
 
 }  // namespace sequant
 
