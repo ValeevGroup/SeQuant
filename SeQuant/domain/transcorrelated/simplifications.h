@@ -60,12 +60,18 @@ ExprPtr overlap_with_obs(ExprPtr ex_){
         label_4 = factor->as<FNOperator>().creators()[0].index().label();
         label_5 = factor->as<FNOperator>().creators()[1].index().label();
         label_6 = factor->as<FNOperator>().creators()[2].index().label();
-        auto o1 = make_overlap(Index{L"p_1"},Index{label_1});
-        auto o2 = make_overlap(Index{L"p_2"},Index{label_2});
-        auto o3 = make_overlap(Index{L"p_3"},Index{label_3});
-        auto o4 = make_overlap(Index{L"p_4"},Index{label_4});
-        auto o5 = make_overlap(Index{L"p_5"},Index{label_5});
-        auto o6 = make_overlap(Index{L"p_6"},Index{label_6});
+        auto o1 = make_overlap(Index::make_tmp_index(IndexSpace::instance(
+                                   IndexSpace::all)),Index{label_1});
+        auto o2 = make_overlap(Index::make_tmp_index(IndexSpace::instance(
+                                   IndexSpace::all)),Index{label_2});
+        auto o3 = make_overlap(Index::make_tmp_index(IndexSpace::instance(
+                                   IndexSpace::all)),Index{label_3});
+        auto o4 = make_overlap(Index::make_tmp_index(IndexSpace::instance(
+                                   IndexSpace::all)),Index{label_4});
+        auto o5 = make_overlap(Index::make_tmp_index(IndexSpace::instance(
+                                   IndexSpace::all)),Index{label_5});
+        auto o6 = make_overlap(Index::make_tmp_index(IndexSpace::instance(
+                                   IndexSpace::all)),Index{label_6});
         new_product = o1 * o2 * o3 * o4 * o5 * o6 * new_product * op_to_tens(factor);
       }
       else if (it == product->as<Product>().factors().size() - 1 && factor->is<FNOperator>() &&factor->as<FNOperator>().rank() == 2){
@@ -77,10 +83,14 @@ ExprPtr overlap_with_obs(ExprPtr ex_){
         label_2 = factor->as<FNOperator>().annihilators()[1].index().label();
         label_3 = factor->as<FNOperator>().creators()[0].index().label();
         label_4 = factor->as<FNOperator>().creators()[1].index().label();
-        auto o1 = make_overlap(Index{L"p_1"},Index{label_1});
-        auto o2 = make_overlap(Index{L"p_2"},Index{label_2});
-        auto o3 = make_overlap(Index{L"p_4"},Index{label_3});
-        auto o4 = make_overlap(Index{L"p_5"},Index{label_4});
+        auto o1 = make_overlap(Index::make_tmp_index(IndexSpace::instance(
+                                   IndexSpace::all)),Index{label_1});
+        auto o2 = make_overlap(Index::make_tmp_index(IndexSpace::instance(
+                                   IndexSpace::all)),Index{label_2});
+        auto o3 = make_overlap(Index::make_tmp_index(IndexSpace::instance(
+                                   IndexSpace::all)),Index{label_3});
+        auto o4 = make_overlap(Index::make_tmp_index(IndexSpace::instance(
+                                   IndexSpace::all)),Index{label_4});
         new_product = o1 * o2 * o3 * o4 * new_product * op_to_tens(factor);
       }
       else if (it == product->as<Product>().factors().size() - 1 && factor->is<FNOperator>() && factor->as<FNOperator>().rank() == 1){
@@ -88,8 +98,10 @@ ExprPtr overlap_with_obs(ExprPtr ex_){
         std::wstring label_3;
         label_1 = factor->as<FNOperator>().annihilators()[0].index().label();
         label_3 = factor->as<FNOperator>().creators()[0].index().label();
-        auto o1 = make_overlap(Index{L"p_1"},Index{label_1});
-        auto o3 = make_overlap(Index{L"p_4"},Index{label_3});
+        auto o1 = make_overlap(Index::make_tmp_index(IndexSpace::instance(
+                                   IndexSpace::all)),Index{label_1});
+        auto o3 = make_overlap(Index::make_tmp_index(IndexSpace::instance(
+                                   IndexSpace::all)),Index{label_3});
         new_product = o1 * o3 * new_product * op_to_tens(factor);
       }
       else if (factor->is<Tensor>() && factor->as<Tensor>().label() == L"\\Gamma" && factor->as<Tensor>().rank() == 1){
@@ -129,8 +141,9 @@ ExprPtr overlap_with_obs(ExprPtr ex_){
   }
 
   FWickTheorem wick{overlap_expr};
+  std::wcout << to_latex_align(overlap_expr,20,2) << std::endl;
   wick.reduce(overlap_expr);
-  simplify(overlap_expr);
+  non_canon_simplify(overlap_expr);
   return overlap_expr;
 }
 
@@ -149,7 +162,7 @@ ExprPtr remove_const(const ExprPtr ex_){
       if (has_fnop){ new_expression = new_expression + product;}
     }
   }
-  simplify(new_expression);
+  non_canon_simplify(new_expression);
   return new_expression;
 }
 
@@ -538,7 +551,7 @@ ExprPtr densities_to_occ(const ExprPtr& ex_){
 
   FWickTheorem wick {result};
   wick.reduce(result);
-  simplify (result);
+  non_canon_simplify (result);
   return result;
 }
 
@@ -600,6 +613,7 @@ Product find_f12_interms(ExprPtr ex_){
   }
   assert(T1_T2.size() <= 2);
   if (T1_T2.size() == 2){
+    assert(counter == 2);
     auto result = biproduct_intermediate(T1_T2[0], T1_T2[1]);
     if(result->is<Tensor>() && result->as<Tensor>().label() == L"B"){
       for (auto&& factors : ex_->as<Product>().factors()){//have to find fock matrix and remove. factor 1/2 because a product only finds 1/2 of the B tensor, a sum of two products.
@@ -610,7 +624,7 @@ Product find_f12_interms(ExprPtr ex_){
     }
 
     result = result * ex_;
-    simplify(result);
+    non_canon_simplify(result);
     return result->as<Product>();
   }
   return ex_->as<Product>();
@@ -657,8 +671,8 @@ std::pair<ExprPtr,ExprPtr> fnop_to_overlap(ExprPtr exprs){
     one_body_result = one_body_product + one_body_result;
     two_body_result = two_body_product + two_body_result;
   }
-  simplify(one_body_result);
-  simplify(two_body_result);
+  non_canon_simplify(one_body_result);
+  non_canon_simplify(two_body_result);
   return {one_body_result, two_body_result};
 }
 
@@ -699,21 +713,21 @@ ExprPtr screen_F12_and_density(ExprPtr exprs){
           FWickTheorem wick_f{product_clone};
           wick_f.reduce(product_clone);
           //std::wcout << " product clone after reduce: " << to_latex_align(product_clone) << std::endl;
-          simplify(product_clone);
+          non_canon_simplify(product_clone);
           product_clone = screen_F12_and_density(product_clone);
           return_sum = product_clone + return_sum;
           new_product = ex<Constant>(0.);
           break;
         }
         new_product = temp_factor * new_product;
-        simplify(new_product);
+        non_canon_simplify(new_product);
 
       }
       //std::wcout <<"new_product: " << to_latex_align(new_product) << std::endl;
       return_sum = new_product + return_sum;
     }
     //std::wcout << "return sum before reduce: " << to_latex_align(return_sum,20,2) << std::endl;
-    simplify(return_sum);
+    non_canon_simplify(return_sum);
     return return_sum;
   }
   else if(exprs->is<Product>()) {
@@ -731,7 +745,7 @@ ExprPtr screen_F12_and_density(ExprPtr exprs){
           //std::wcout << " product clone: " << to_latex_align(product_clone) << std::endl;
           FWickTheorem wick_f{product_clone};
           wick_f.reduce(product_clone);
-          simplify(product_clone);
+          non_canon_simplify(product_clone);
           //std::wcout << " product clone after reduce: " << to_latex_align(product_clone) << std::endl;
           product_clone = screen_F12_and_density(product_clone);
           new_product = product_clone;
@@ -807,6 +821,47 @@ ExprPtr tens_to_FNOps(ExprPtr ex_){
   return ex_;
 }
 
+ExprPtr split_f(ExprPtr exprs){
+  assert(exprs->is<Tensor>());
+  assert(exprs->as<Tensor>().label() == L"F");
+  auto result = ex<Constant>(0);
+  //std::wcout << "before split: " << to_latex_align(exprs,20,2) << std::endl;
+  if((exprs->as<Tensor>().const_braket()[2].space() == sequant::IndexSpace::complete_unoccupied || exprs->as<Tensor>().const_braket()[2].space() == sequant::IndexSpace::other_unoccupied) || exprs->as<Tensor>().const_braket()[3].space() == sequant::IndexSpace::complete_unoccupied || exprs->as<Tensor>().const_braket()[3].space() == sequant::IndexSpace::other_unoccupied) {
+    auto T1 =  ex<Constant>(3./8) * ex<Tensor>(L"F",std::vector<Index>{exprs->as<Tensor>().const_braket()[0],exprs->as<Tensor>().const_braket()[1]},std::vector<Index>{exprs->as<Tensor>().const_braket()[2],exprs->as<Tensor>().const_braket()[3]});
+    auto T2 = ex<Constant>(1./8) * ex<Tensor>(L"F",std::vector<Index>{exprs->as<Tensor>().const_braket()[1],exprs->as<Tensor>().const_braket()[0]},std::vector<Index>{exprs->as<Tensor>().const_braket()[2],exprs->as<Tensor>().const_braket()[3]});
+    result = T1 + T2;
+    //std::wcout << "after split: " << to_latex_align(result,20,2) << std::endl;
+    return result;
+  }
+  else{// otherwise the geminal generating space must be in the upper indices. so include exchange for those.
+    assert((exprs->as<Tensor>().const_braket()[0].space() == sequant::IndexSpace::complete_unoccupied || exprs->as<Tensor>().const_braket()[0].space() == sequant::IndexSpace::other_unoccupied) || (exprs->as<Tensor>().const_braket()[1].space() == sequant::IndexSpace::complete_unoccupied || exprs->as<Tensor>().const_braket()[1].space() == sequant::IndexSpace::other_unoccupied));
+    auto T1 =  ex<Constant>(3./8) * ex<Tensor>(L"F",std::vector<Index>{exprs->as<Tensor>().const_braket()[0],exprs->as<Tensor>().const_braket()[1]},std::vector<Index>{exprs->as<Tensor>().const_braket()[2],exprs->as<Tensor>().const_braket()[3]});
+    auto T2 = ex<Constant>(1./8) * ex<Tensor>(L"F",std::vector<Index>{exprs->as<Tensor>().const_braket()[0],exprs->as<Tensor>().const_braket()[1]},std::vector<Index>{exprs->as<Tensor>().const_braket()[3],exprs->as<Tensor>().const_braket()[2]});
+    result = T1 + T2;
+    //std::wcout << "after split: " << to_latex_align(result,20,2) << std::endl;
+    return result;
+  }
+  return result;
+}
+
+ExprPtr partition_f(ExprPtr exprs){
+   if(!exprs->is<Sum>()){
+    return exprs;
+  }
+ // std::wcout << "pre partition: " << to_latex_align(exprs,20,2) << std::endl;
+
+  for (auto&& product : exprs->as<Sum>().summands()){
+    for (auto&& factor : product->as<Product>().factors()){
+      if(factor->is<Tensor>() && factor->as<Tensor>().label() == L"F") {
+        factor = split_f(factor);
+      }
+    }
+  }
+  non_canon_simplify(exprs);
+  //std::wcout << " post partition: " << to_latex_align(exprs,20,2) << std::endl;
+  return(exprs);
+}
+
 //TODO generalize for spin-orbital basis
 //simplification to deal with hamiltonian based expressions. involving one body h and two body g tensors.
 // not rigorous for more than 2 body operators or more than 2 density matrices whose rank must be <= 2.
@@ -818,16 +873,22 @@ std::pair<ExprPtr,ExprPtr> hamiltonian_based(ExprPtr exprs){
   //exprs = remove_const(exprs);
 //  std::wcout << "post remove constants: " << to_latex_align(exprs,20,2) << std::endl;
   exprs = FNOPs_to_tens(exprs);
+  non_canon_simplify(exprs);
   //exprs = overlap_with_obs(exprs);
- // std::wcout << "post obs: " << to_latex_align(exprs,20,2) << std::endl;
+  exprs = partition_f(exprs);
+  std::wcout << "post convert to tensor: " << to_latex_align(exprs,20,2) << std::endl;
   exprs = screen_F12_and_density(exprs);
+  std::wcout << "post screen f12: " << to_latex_align(exprs,20,2) << std::endl;
   exprs = screen_densities(exprs);
- // std::wcout << "post screen F12 and density: " << to_latex_align(exprs,20,2) << std::endl;
+  std::wcout << "post screen density: " << to_latex_align(exprs,20,2) << std::endl;
   exprs = densities_to_occ(exprs);
-//  std::wcout << "densities to occ: " << to_latex_align(exprs,20,2) << std::endl;
+ std::wcout << "densities to occ: " << to_latex_align(exprs,20,2) << std::endl;
   for (auto&& product : exprs->as<Sum>().summands()){
     product->as<Product>() = simplification::find_f12_interms(product);
   }
+  std::wcout << "post intermediates: " << to_latex_align(exprs,20,2) << std::endl;
+
+  non_canon_simplify(exprs);
   return fnop_to_overlap(exprs);
 }
 
@@ -842,9 +903,12 @@ std::pair<ExprPtr,ExprPtr> fock_based (ExprPtr exprs){
   //exprs = remove_const(exprs);
   //std::wcout << "after screening constant: " << to_latex_align(exprs) << std::endl;
   exprs = FNOPs_to_tens(exprs);
+  non_canon_simplify(exprs);
+  //std::wcout << "fnop to tensor: " << to_latex_align(exprs,20,2) << std::endl;
   if(exprs->is<Constant>()){
     return std::pair<ExprPtr,ExprPtr> {exprs, exprs};
   }
+  exprs = partition_f(exprs);
   //exprs = overlap_with_obs(exprs);
   auto final_screen = exprs;
   //in some cases, there will now be no contributing terms left so return zero to one and two body.
@@ -852,16 +916,26 @@ if(final_screen->is<Constant>()){
   return std::pair<ExprPtr,ExprPtr> {final_screen, final_screen};
 }
   final_screen = screen_F12_and_density(final_screen);
+  non_canon_simplify(final_screen);
+  //std::wcout << "screen F12: " << to_latex_align(final_screen,20,2) << std::endl;
   final_screen = treat_fock(final_screen);
+  non_canon_simplify(final_screen);
+  //std::wcout << "screen fock: " << to_latex_align(final_screen,20,2) << std::endl;
   final_screen = screen_densities(final_screen);
+  non_canon_simplify(final_screen);
+  //std::wcout << "screen densities: " << to_latex_align(final_screen,20,2) << std::endl;
+  non_canon_simplify(final_screen);
   //enforce that densities are in the occupied space since they are only non-zero in occ
   final_screen = densities_to_occ(final_screen);
-  std::wcout << "pre intermediates: " << to_latex_align(final_screen,20,2) << std::endl;
-  //find the special f12 intermediates that cannot efficiently be solved directly.
+  non_canon_simplify(final_screen);
+  //std::wcout << "screen densities to occ: " << to_latex_align(final_screen,20,2) << std::endl;
+ // std::wcout << "pre intermediates: " << to_latex_align(final_screen,20,2) << std::endl;
+  //find the special f12 intermediates that cannot efficiently be solved directly. This seems to work already for the general case!
   for (auto&& product : final_screen->as<Sum>().summands()){
     product->as<Product>() = simplification::find_f12_interms(product);
   }
-  std::wcout << "post intermediates: " << to_latex_align(final_screen,20,2) << std::endl;
+  //::wcout << "post intermediates: " << to_latex_align(final_screen,20,2) << std::endl;
+  non_canon_simplify(final_screen);
 
   return fnop_to_overlap(final_screen);
   }

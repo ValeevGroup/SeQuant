@@ -98,6 +98,7 @@ class uccf12{
   std::pair<ExprPtr,ExprPtr> compute(bool print = false) {
     auto gg_space = IndexSpace::active_occupied;  // Geminal-generating space: active occupieds is the normal choice, all orbitals is the reference-independent (albeit expensive) choice
                                       // start transformation
+    auto gg_obs = IndexSpace::all;
 
     auto h = H(false);
     auto r = R12(gg_space);
@@ -116,10 +117,14 @@ class uccf12{
     simplify(H_A_2);
     auto com_1 = simplification::hamiltonian_based(H_A_2);
 
-    auto fFF = compute_double_com(F(),r,r_1);
-    auto fFFt = compute_double_com(F(),r,ex<Constant>(-1.) * adjoint(r_1));
-    auto fFtFt = compute_double_com(F(),ex<Constant>(-1.) * adjoint(r),ex<Constant>(-1.) * adjoint(r_1));
-    auto fFtF = compute_double_com(F(),ex<Constant>(-1.) * adjoint(r),r_1);
+    auto fFF = ex<Constant>(1./2) * compute_double_com(F(),r,r_1);
+    non_canon_simplify(fFF);
+    auto fFFt = ex<Constant>(1./2) * compute_double_com(F(),r,ex<Constant>(-1.) * adjoint(r_1));
+    non_canon_simplify(fFFt);
+    auto fFtFt = ex<Constant>(1./2) * compute_double_com(F(),ex<Constant>(-1.) * adjoint(r),ex<Constant>(-1.) * adjoint(r_1));
+    non_canon_simplify(fFtFt);
+    auto fFtF = ex<Constant>(1./2) * compute_double_com(F(),ex<Constant>(-1.) * adjoint(r),r_1);
+    non_canon_simplify(fFtF);
 
     auto fFF_sim = simplification::fock_based(fFF);
     std::wcout << "FF: " << to_latex_align(fFF_sim.second,20,2) << std::endl;
@@ -131,11 +136,12 @@ class uccf12{
     std::wcout << "FtF: " << to_latex_align(fFtF_sim.second,20,2) << std::endl;
 
 
-    auto one_body = com_1.first + ex<Constant>(1./2) * (fFF_sim.first  +fFFt_sim.first + fFtFt_sim.first + fFtF_sim.first);
-    auto two_body = com_1.second + ex<Constant>(1./2) * (fFF_sim.second + fFFt_sim.second + fFtFt_sim.second + fFtF_sim.second);
+    auto one_body = com_1.first +  (fFF_sim.first  +fFFt_sim.first + fFtFt_sim.first + fFtF_sim.first);
+    auto two_body = com_1.second +  (fFF_sim.second + fFFt_sim.second + fFtFt_sim.second + fFtF_sim.second);
 
-    non_canon_simplify(one_body);
-    non_canon_simplify(two_body);
+    //cannot use non_canon_simplify here because of B term.
+    simplify(one_body);
+    simplify(two_body);
 
     if (print){
       std::wcout << "one body terms: " << to_latex_align(one_body,20,2) << std::endl;
