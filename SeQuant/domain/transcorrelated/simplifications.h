@@ -141,7 +141,7 @@ ExprPtr overlap_with_obs(ExprPtr ex_){
   }
 
   FWickTheorem wick{overlap_expr};
-  std::wcout << to_latex_align(overlap_expr,20,2) << std::endl;
+  //std::wcout << to_latex_align(overlap_expr,20,2) << std::endl;
   wick.reduce(overlap_expr);
   non_canon_simplify(overlap_expr);
   return overlap_expr;
@@ -876,17 +876,17 @@ std::pair<ExprPtr,ExprPtr> hamiltonian_based(ExprPtr exprs){
   non_canon_simplify(exprs);
   //exprs = overlap_with_obs(exprs);
   exprs = partition_f(exprs);
-  std::wcout << "post convert to tensor: " << to_latex_align(exprs,20,2) << std::endl;
+  //std::wcout << "post convert to tensor: " << to_latex_align(exprs,20,2) << std::endl;
   exprs = screen_F12_and_density(exprs);
-  std::wcout << "post screen f12: " << to_latex_align(exprs,20,2) << std::endl;
+  //std::wcout << "post screen f12: " << to_latex_align(exprs,20,2) << std::endl;
   exprs = screen_densities(exprs);
-  std::wcout << "post screen density: " << to_latex_align(exprs,20,2) << std::endl;
+  //std::wcout << "post screen density: " << to_latex_align(exprs,20,2) << std::endl;
   exprs = densities_to_occ(exprs);
- std::wcout << "densities to occ: " << to_latex_align(exprs,20,2) << std::endl;
+ //std::wcout << "densities to occ: " << to_latex_align(exprs,20,2) << std::endl;
   for (auto&& product : exprs->as<Sum>().summands()){
     product->as<Product>() = simplification::find_f12_interms(product);
   }
-  std::wcout << "post intermediates: " << to_latex_align(exprs,20,2) << std::endl;
+  //std::wcout << "post intermediates: " << to_latex_align(exprs,20,2) << std::endl;
 
   non_canon_simplify(exprs);
   return fnop_to_overlap(exprs);

@@ -127,13 +127,13 @@ class uccf12{
     non_canon_simplify(fFtF);
 
     auto fFF_sim = simplification::fock_based(fFF);
-    std::wcout << "FF: " << to_latex_align(fFF_sim.second,20,2) << std::endl;
+    //std::wcout << "FF: " << to_latex_align(fFF_sim.second,20,2) << std::endl;
     auto fFFt_sim = simplification::fock_based(fFFt);
-    std::wcout << "FFt: " << to_latex_align(fFFt_sim.second,20,2) << std::endl;
+    //std::wcout << "FFt: " << to_latex_align(fFFt_sim.second,20,2) << std::endl;
     auto fFtFt_sim = simplification::fock_based(fFtFt);
-    std::wcout << "FtFt: " << to_latex_align(fFtFt_sim.second,20,2) << std::endl;
+    //std::wcout << "FtFt: " << to_latex_align(fFtFt_sim.second,20,2) << std::endl;
     auto fFtF_sim = simplification::fock_based(fFtF);
-    std::wcout << "FtF: " << to_latex_align(fFtF_sim.second,20,2) << std::endl;
+    //std::wcout << "FtF: " << to_latex_align(fFtF_sim.second,20,2) << std::endl;
 
 
     auto one_body = com_1.first +  (fFF_sim.first  +fFFt_sim.first + fFtFt_sim.first + fFtF_sim.first);
