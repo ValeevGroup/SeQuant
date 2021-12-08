@@ -143,7 +143,7 @@ ExprPtr overlap_with_obs(ExprPtr ex_){
   FWickTheorem wick{overlap_expr};
   //std::wcout << to_latex_align(overlap_expr,20,2) << std::endl;
   wick.reduce(overlap_expr);
-  non_canon_simplify(overlap_expr);
+  simplify(overlap_expr);
   return overlap_expr;
 }
 
@@ -395,7 +395,7 @@ auto treat_fock(ExprPtr ex_){
   return new_ex_;
 }
 //to Identify the relavant F12 intermediates, the number of connections,the connected space, and the resulting ket() and bra() of the intermediate tensor are needed.
-std::tuple<int, IndexSpace::Type,std::vector<Index>,std::vector<Index>> ncon_spa_extket_extbra(Tensor T1, Tensor T2,bool print_ = false){
+std::tuple<int, IndexSpace::Type,std::vector<Index>,std::vector<Index>,bool> ncon_spa_extket_extbra(Tensor T1, Tensor T2,bool print_ = false){
   //connected space. in each example in f12, the connected space is the same between two tensors.
   auto space = IndexSpace::occupied; // just a default used for construction.
   //depreciated should be a braket function somewhere in Tensor.
@@ -404,7 +404,9 @@ std::tuple<int, IndexSpace::Type,std::vector<Index>,std::vector<Index>> ncon_spa
   //ordered list of ket and bra indices which construct the resulting intermediate.
   std::vector<Index> external_ket;
   std::vector<Index> external_bra;
-
+  //do the external ket indices correspond to T1?
+  // only need for intermediates and only works for V or X.
+  bool T1_ket;
   //unique list of connected indices. list is searched often to see if a given index is connected.
   std::vector<Index> connected_indices;
 
@@ -433,7 +435,7 @@ std::tuple<int, IndexSpace::Type,std::vector<Index>,std::vector<Index>> ncon_spa
   if ( nconnects == 0){
     external_ket = T1_is;
     external_bra = T2_is;
-    std::tuple zero{nconnects, space,external_ket, external_bra};
+    std::tuple zero{nconnects, space,external_ket, external_bra,T1_ket};
     return zero;
   }
 //which indices in the T1  bra and ket are connected? what corresponding ket or bra is it connected to in T2?
@@ -441,6 +443,7 @@ std::tuple<int, IndexSpace::Type,std::vector<Index>,std::vector<Index>> ncon_spa
 for(int i = 0; i < T1.bra().size(); i++){
   //is the bra T1 index a connected index?
   if (in_list(T1.bra()[i],connected_indices).first){
+    T1_ket = true;
     for(int j = 0; j < T2.ket().size(); j++){
       if(T2.ket()[j].label() == T1.bra()[i].label()){
         external_ket.push_back(T1.ket()[i]);
@@ -450,6 +453,7 @@ for(int i = 0; i < T1.bra().size(); i++){
   }
   // is the ket T1 index a connected index?
   else if(in_list(T1.ket()[i],connected_indices).first){
+    T1_ket = false;
     for(int j = 0; j < T2.ket().size(); j++){
       if(T2.bra()[j].label() == T1.ket()[i].label()){
         external_ket.push_back(T2.ket()[i]);
@@ -512,11 +516,11 @@ for(int i = 0; i < T2.ket().size(); i++){
       external_ket.push_back(T1.ket()[0]);
       external_ket.push_back(T1.ket()[1]);
       external_bra.push_back(T2.bra()[0]);
-      external_bra.push_back(T2.ket()[1]);
+      external_bra.push_back(T2.bra()[1]);
     }
   }
   assert(nconnects <= 2);
-  return {nconnects, space, external_ket, external_bra};
+  return {nconnects, space, external_ket, external_bra,T1_ket};
 }
 //densities are enforced to map obs -> occ since the obs includes frozen core orbitals.
 ExprPtr densities_to_occ(const ExprPtr& ex_){
@@ -560,12 +564,42 @@ ExprPtr biproduct_intermediate(ExprPtr T1,ExprPtr T2){
   assert (T1->is<Tensor>());
   assert (T2->is<Tensor>());
   auto result = ex<Constant>(1);
-  auto [nconnects,space, external_ket, external_bra] = ncon_spa_extket_extbra(T1->as<Tensor>(),T2->as<Tensor>());
+  auto [nconnects,space, external_ket, external_bra,T1_ket] = ncon_spa_extket_extbra(T1->as<Tensor>(),T2->as<Tensor>());
   if (T1->as<Tensor>().label() == L"g" || T2->as<Tensor>().label() == L"g"){
     if (nconnects == 2 && space == IndexSpace::complete_unoccupied){
       //V^pq_ij
-        auto V_pqij = ex<Tensor>(L"V", IDX_list{external_bra[0],external_bra[1]}, IDX_list{external_ket[0],external_ket[1]});
-        return V_pqij;
+        //auto V_pqij = ex<Tensor>(L"V", IDX_list{external_bra[0],external_bra[1]}, IDX_list{external_ket[0],external_ket[1]});
+        //return V_pqij;
+      if(T1_ket){
+        auto GR_ijpq = ex<Tensor>(L"GR", IDX_list{external_bra[0],external_bra[1]}, IDX_list{external_ket[0],external_ket[1]});
+        auto F_ijrs = ex<Tensor>(L"F", IDX_list{external_bra[0],external_bra[1]},
+                                 IDX_list{L"p_11",L"p_12"});
+        auto g_rspq = ex<Tensor>(L"g",IDX_list{L"p_11",L"p_12"},
+                                 IDX_list{external_ket[0],external_ket[1]});
+        auto F_ijmc = ex<Tensor>(L"F", IDX_list{external_bra[0],external_bra[1]},
+                                 IDX_list{L"m_6", L"α'_4"});
+        auto g_mcpq = ex<Tensor>(L"g",IDX_list{L"m_6", L"α'_4"},
+                                 IDX_list{external_ket[0],external_ket[1]});
+        auto F_jicm = ex<Tensor>(L"F", IDX_list{external_bra[1],external_bra[0]}, IDX_list{L"α'_4",L"m_6"});
+        auto g_cmqp = ex<Tensor>(L"g",IDX_list{L"α'_4",L"m_6"},IDX_list{external_ket[1],external_ket[0]});
+
+        auto V = GR_ijpq - F_ijrs * g_rspq - F_ijmc * g_mcpq - F_jicm * g_cmqp;
+        non_canon_simplify(V);
+        return V;
+      }
+      else{
+        auto GR_pqij = ex<Tensor>(L"GR", IDX_list{external_bra[0],external_bra[1]}, IDX_list{external_ket[0],external_ket[1]});
+        auto F_rsij = ex<Tensor>(L"F",IDX_list{L"p_11",L"p_12"},IDX_list{external_ket[0],external_ket[1]});
+        auto g_pqrs = ex<Tensor>(L"g",IDX_list{external_bra[0],external_bra[1]},IDX_list{L"p_11",L"p_12"});
+        auto F_mcij = ex<Tensor>(L"F", IDX_list{L"m_6", L"α'_4"}, IDX_list{external_ket[0],external_ket[1]});
+        auto g_pqmc = ex<Tensor>(L"g",IDX_list{external_bra[0],external_bra[1]},IDX_list{L"m_6", L"α'_4"});
+        auto F_cmji = ex<Tensor>(L"F",IDX_list{L"α'_4",L"m_6"},IDX_list{external_ket[1],external_ket[0]});
+        auto g_qpcm = ex<Tensor>(L"g",IDX_list{external_bra[1],external_bra[0]},IDX_list{L"α'_4",L"m_6"});
+
+        auto V = GR_pqij - F_rsij * g_pqrs - F_mcij * g_pqmc - F_cmji * g_qpcm;
+        non_canon_simplify(V);
+        return V;
+      }
     }
     else{
       result = T1 * T2;
@@ -593,7 +627,7 @@ ExprPtr biproduct_intermediate(ExprPtr T1,ExprPtr T2){
   }
   return result;
 }
-Product find_f12_interms(ExprPtr ex_){
+ExprPtr find_f12_interms(ExprPtr ex_){
   assert(ex_->is<Product>());
   int counter = 0;
   std::vector<ExprPtr> T1_T2;
@@ -625,9 +659,9 @@ Product find_f12_interms(ExprPtr ex_){
 
     result = result * ex_;
     non_canon_simplify(result);
-    return result->as<Product>();
+    return result;
   }
-  return ex_->as<Product>();
+  return ex_;
 }
 
 //in hamiltonian based transformations, it is important to retain the original form of the hamiltonian operator. that is h^p_q E^q_p + 1/2 g^{pq}_{rs} E^{rs}_{pq}.
@@ -719,7 +753,7 @@ ExprPtr screen_F12_and_density(ExprPtr exprs){
           new_product = ex<Constant>(0.);
           break;
         }
-        new_product = temp_factor * new_product;
+        new_product = new_product * temp_factor;
         non_canon_simplify(new_product);
 
       }
@@ -751,7 +785,7 @@ ExprPtr screen_F12_and_density(ExprPtr exprs){
           new_product = product_clone;
           break;
         }
-        new_product = temp_factor * new_product;
+        new_product = new_product * temp_factor;
     }
     return new_product;
   }
@@ -769,11 +803,11 @@ ExprPtr FNOPs_to_tens(ExprPtr ex_){
           assert(!new_factor->is<FNOperator>());
         }
         else{new_factor = factor;}
-        new_product = new_factor * new_product;
+        new_product = new_product * new_factor;
       }
       new_sum = new_product + new_sum;
     }
-    simplify(new_sum);
+    non_canon_simplify(new_sum);
     return new_sum;
   }
   else if(ex_->is<Product>()){
@@ -841,7 +875,6 @@ ExprPtr split_f(ExprPtr exprs){
     //std::wcout << "after split: " << to_latex_align(result,20,2) << std::endl;
     return result;
   }
-  return result;
 }
 
 ExprPtr partition_f(ExprPtr exprs){
@@ -876,20 +909,26 @@ std::pair<ExprPtr,ExprPtr> hamiltonian_based(ExprPtr exprs){
   non_canon_simplify(exprs);
   //exprs = overlap_with_obs(exprs);
   exprs = partition_f(exprs);
+  non_canon_simplify(exprs);
   //std::wcout << "post convert to tensor: " << to_latex_align(exprs,20,2) << std::endl;
-  exprs = screen_F12_and_density(exprs);
+  //exprs = screen_F12_and_density(exprs);
   //std::wcout << "post screen f12: " << to_latex_align(exprs,20,2) << std::endl;
+  non_canon_simplify(exprs);
   exprs = screen_densities(exprs);
   //std::wcout << "post screen density: " << to_latex_align(exprs,20,2) << std::endl;
-  exprs = densities_to_occ(exprs);
+  //exprs = densities_to_occ(exprs);
+  //f12 interms needs a particular canonical ordering
+  non_canon_simplify(exprs);
  //std::wcout << "densities to occ: " << to_latex_align(exprs,20,2) << std::endl;
+  auto exprs_intmed = ex<Constant>(0.0);
   for (auto&& product : exprs->as<Sum>().summands()){
-    product->as<Product>() = simplification::find_f12_interms(product);
+     auto new_product = simplification::find_f12_interms(product);
+     exprs_intmed = new_product + exprs_intmed;
   }
   //std::wcout << "post intermediates: " << to_latex_align(exprs,20,2) << std::endl;
 
-  non_canon_simplify(exprs);
-  return fnop_to_overlap(exprs);
+  non_canon_simplify(exprs_intmed);
+  return fnop_to_overlap(exprs_intmed);
 }
 
 //TODO generalize for spin-orbital basis
@@ -911,11 +950,12 @@ std::pair<ExprPtr,ExprPtr> fock_based (ExprPtr exprs){
   exprs = partition_f(exprs);
   //exprs = overlap_with_obs(exprs);
   auto final_screen = exprs;
+  non_canon_simplify(final_screen);
   //in some cases, there will now be no contributing terms left so return zero to one and two body.
 if(final_screen->is<Constant>()){
   return std::pair<ExprPtr,ExprPtr> {final_screen, final_screen};
 }
-  final_screen = screen_F12_and_density(final_screen);
+  //final_screen = screen_F12_and_density(final_screen);
   non_canon_simplify(final_screen);
   //std::wcout << "screen F12: " << to_latex_align(final_screen,20,2) << std::endl;
   final_screen = treat_fock(final_screen);
@@ -923,21 +963,21 @@ if(final_screen->is<Constant>()){
   //std::wcout << "screen fock: " << to_latex_align(final_screen,20,2) << std::endl;
   final_screen = screen_densities(final_screen);
   non_canon_simplify(final_screen);
-  //std::wcout << "screen densities: " << to_latex_align(final_screen,20,2) << std::endl;
-  non_canon_simplify(final_screen);
   //enforce that densities are in the occupied space since they are only non-zero in occ
-  final_screen = densities_to_occ(final_screen);
-  non_canon_simplify(final_screen);
+  //final_screen = densities_to_occ(final_screen);
+  //non_canon_simplify(final_screen);
   //std::wcout << "screen densities to occ: " << to_latex_align(final_screen,20,2) << std::endl;
  // std::wcout << "pre intermediates: " << to_latex_align(final_screen,20,2) << std::endl;
   //find the special f12 intermediates that cannot efficiently be solved directly. This seems to work already for the general case!
+  auto last_screen = ex<Constant>(0.0);
   for (auto&& product : final_screen->as<Sum>().summands()){
-    product->as<Product>() = simplification::find_f12_interms(product);
+    auto new_product = simplification::find_f12_interms(product);
+    last_screen = last_screen + new_product;
   }
   //::wcout << "post intermediates: " << to_latex_align(final_screen,20,2) << std::endl;
-  non_canon_simplify(final_screen);
+  non_canon_simplify(last_screen);
 
-  return fnop_to_overlap(final_screen);
+  return fnop_to_overlap(last_screen);
   }
 }
 #ifndef SEQUANT_SIMPLIFICATIONS_H

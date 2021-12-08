@@ -95,10 +95,28 @@ class uccf12{
     return result;
   }
 
-  std::pair<ExprPtr,ExprPtr> compute(bool print = false) {
-    auto gg_space = IndexSpace::active_occupied;  // Geminal-generating space: active occupieds is the normal choice, all orbitals is the reference-independent (albeit expensive) choice
-                                      // start transformation
-    auto gg_obs = IndexSpace::all;
+  std::pair<ExprPtr,ExprPtr> compute(std::string gg_label, bool print = false) {
+    //auto gg_space = IndexSpace::active_occupied;  // Geminal-generating space: active occupieds is the normal choice, all orbitals is the reference-independent (albeit expensive) choice
+
+    auto gg_space = IndexSpace::frozen_occupied;
+    if(gg_label == "act_occ"){
+      gg_space = IndexSpace::active_occupied;
+    }
+    else if(gg_label == "occ"){
+      gg_space = IndexSpace::occupied;
+    }
+    else if(gg_label == "all"){
+      gg_space = IndexSpace::all;
+    }
+    else if(gg_label == "fz"){
+      gg_space = IndexSpace::frozen_occupied;
+    }
+    else if(gg_label == "uocc"){
+      gg_space = IndexSpace::unoccupied;
+    }
+    else {
+      throw " USUPPORTED SPACE LABEL! CHECK ABOVE FOR VALID ENTRIES";
+    }
 
     auto h = H(false);
     auto r = R12(gg_space);
@@ -140,8 +158,8 @@ class uccf12{
     auto two_body = com_1.second +  (fFF_sim.second + fFFt_sim.second + fFtFt_sim.second + fFtF_sim.second);
 
     //cannot use non_canon_simplify here because of B term.
-    simplify(one_body);
-    simplify(two_body);
+    non_canon_simplify(one_body);
+    non_canon_simplify(two_body);
 
     if (print){
       std::wcout << "one body terms: " << to_latex_align(one_body,20,2) << std::endl;
