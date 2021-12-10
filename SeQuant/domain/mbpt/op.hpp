@@ -22,7 +22,8 @@ enum class OpType {
   S,   //!< particle symmetrizer
   L,   //!< left-hand eigenstate
   R,   //!< right-hand eigenstate
-  R12  //!< geminal kernel
+  R12, //!< geminal kernel
+  GR   //!< GR kernel from f12 theory
 };
 
 /// Operator character relative to Fermi vacuum

@@ -95,9 +95,28 @@ class uccf12{
     return result;
   }
 
-  std::pair<ExprPtr,ExprPtr> compute(bool print = false) {
-    auto gg_space = IndexSpace::active_occupied;  // Geminal-generating space: active occupieds is the normal choice, all orbitals is the reference-independent (albeit expensive) choice
-                                      // start transformation
+  std::pair<ExprPtr,ExprPtr> compute(std::string gg_label, bool print = false) {
+    //auto gg_space = IndexSpace::active_occupied;  // Geminal-generating space: active occupieds is the normal choice, all orbitals is the reference-independent (albeit expensive) choice
+
+    auto gg_space = IndexSpace::frozen_occupied;
+    if(gg_label == "act_occ"){
+      gg_space = IndexSpace::active_occupied;
+    }
+    else if(gg_label == "occ"){
+      gg_space = IndexSpace::occupied;
+    }
+    else if(gg_label == "all"){
+      gg_space = IndexSpace::all;
+    }
+    else if(gg_label == "fz"){
+      gg_space = IndexSpace::frozen_occupied;
+    }
+    else if(gg_label == "uocc"){
+      gg_space = IndexSpace::unoccupied;
+    }
+    else {
+      throw " USUPPORTED SPACE LABEL! CHECK ABOVE FOR VALID ENTRIES";
+    }
 
     auto h = H(false);
     auto r = R12(gg_space);
@@ -116,24 +135,29 @@ class uccf12{
     simplify(H_A_2);
     auto com_1 = simplification::hamiltonian_based(H_A_2);
 
-    auto fFF = compute_double_com(F(),r,r_1);
-    auto fFFt = compute_double_com(F(),r,ex<Constant>(-1.) * adjoint(r_1));
-    auto fFtFt = compute_double_com(F(),ex<Constant>(-1.) * adjoint(r),ex<Constant>(-1.) * adjoint(r_1));
-    auto fFtF = compute_double_com(F(),ex<Constant>(-1.) * adjoint(r),r_1);
+    auto fFF = ex<Constant>(1./2) * compute_double_com(F(),r,r_1);
+    non_canon_simplify(fFF);
+    auto fFFt = ex<Constant>(1./2) * compute_double_com(F(),r,ex<Constant>(-1.) * adjoint(r_1));
+    non_canon_simplify(fFFt);
+    auto fFtFt = ex<Constant>(1./2) * compute_double_com(F(),ex<Constant>(-1.) * adjoint(r),ex<Constant>(-1.) * adjoint(r_1));
+    non_canon_simplify(fFtFt);
+    auto fFtF = ex<Constant>(1./2) * compute_double_com(F(),ex<Constant>(-1.) * adjoint(r),r_1);
+    non_canon_simplify(fFtF);
 
     auto fFF_sim = simplification::fock_based(fFF);
-    std::wcout << "FF: " << to_latex_align(fFF_sim.second,20,2) << std::endl;
+    //std::wcout << "FF: " << to_latex_align(fFF_sim.second,20,2) << std::endl;
     auto fFFt_sim = simplification::fock_based(fFFt);
-    std::wcout << "FFt: " << to_latex_align(fFFt_sim.second,20,2) << std::endl;
+    //std::wcout << "FFt: " << to_latex_align(fFFt_sim.second,20,2) << std::endl;
     auto fFtFt_sim = simplification::fock_based(fFtFt);
-    std::wcout << "FtFt: " << to_latex_align(fFtFt_sim.second,20,2) << std::endl;
+    //std::wcout << "FtFt: " << to_latex_align(fFtFt_sim.second,20,2) << std::endl;
     auto fFtF_sim = simplification::fock_based(fFtF);
-    std::wcout << "FtF: " << to_latex_align(fFtF_sim.second,20,2) << std::endl;
+    //std::wcout << "FtF: " << to_latex_align(fFtF_sim.second,20,2) << std::endl;
 
 
-    auto one_body = com_1.first + ex<Constant>(1./2) * (fFF_sim.first  +fFFt_sim.first + fFtFt_sim.first + fFtF_sim.first);
-    auto two_body = com_1.second + ex<Constant>(1./2) * (fFF_sim.second + fFFt_sim.second + fFtFt_sim.second + fFtF_sim.second);
+    auto one_body = com_1.first +  (fFF_sim.first  +fFFt_sim.first + fFtFt_sim.first + fFtF_sim.first);
+    auto two_body = com_1.second +  (fFF_sim.second + fFFt_sim.second + fFtFt_sim.second + fFtF_sim.second);
 
+    //cannot use non_canon_simplify here because of B term.
     non_canon_simplify(one_body);
     non_canon_simplify(two_body);
 

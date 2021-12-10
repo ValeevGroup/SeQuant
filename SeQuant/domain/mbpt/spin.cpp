@@ -1291,57 +1291,55 @@ std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
   };
 
   // Internal and external index replacements are independent
-  auto i_rep = spin_cases(int_index_groups);
-  auto e_rep = ext_spin_cases(ext_index_groups);
+  auto int_replacements = spin_cases(int_index_groups);
+  auto ext_replacements = ext_spin_cases(ext_index_groups);
 
-  // Expand 'A' operator and 'antisymm' tensors
-  auto expanded_expr = expand_A_operator(expr);
-  // expanded_expr = expand_antisymm(expanded_expr);
-  // expanded_expr->visit(reset_idx_tags);
-
-  expand(expanded_expr);
-  rapid_simplify(expanded_expr);
-  expanded_expr->visit(reset_idx_tags);
+  // Expand 'A' operator only.
+  // Antisymmetric tensors are not expanded
+  auto A_expanded_expr = expand_A_operator(expr);
+  expand(A_expanded_expr);
+  rapid_simplify(A_expanded_expr);
+  A_expanded_expr->visit(reset_idx_tags);
+  // std::wcout << "A_expanded_expr: " << to_latex(A_expanded_expr) << std::endl;
 
   std::vector<ExprPtr> result{};
 
   // return true if a product is spin-symmetric
+  // i.e. Spin-labels on bra and ket match for all tensors
   auto spin_symm_product = [] (const Product& product) {
 
-    std::vector<Index> cBra, cKet; // concat Bra and concat Ket
     for(auto& term : product){
       if(term->is<Tensor>()){
         auto tnsr = term->as<Tensor>();
-        cBra.insert(cBra.end(), tnsr.bra().begin(), tnsr.bra().end());
-        cKet.insert(cKet.end(), tnsr.ket().begin(), tnsr.ket().end());
+        assert(tnsr.bra_rank() == tnsr.ket_rank());
+        auto bra_it = tnsr.bra().begin();
+        auto ket_it = tnsr.ket().begin();
+        while(bra_it != tnsr.bra().end()){
+          if(bra_it->space().qns() != ket_it->space().qns()){
+            return false;
+          }
+          ++bra_it; ++ket_it;
+        }
       }
-    }
-    assert(cKet.size() == cBra.size());
-
-    auto i_ket = cKet.begin();
-    for(auto& b : cBra){
-      if (b.space().qns() != i_ket->space().qns())
-        return false;
-      ++i_ket;
     }
     return true;
   };
 
   // Loop over external index replacement maps
-  for(auto& e : e_rep){
-    auto spin_expr = append_spin(expanded_expr, e);
-    // std::wcout << "e: " << to_latex(spin_expr) << std::endl;
+  for(auto& e_rep : ext_replacements){
+    auto spin_expr = append_spin(A_expanded_expr, e_rep);
+    // std::wcout << "e_rep: " << to_latex(spin_expr) << std::endl;
     spin_expr->visit(reset_idx_tags);
     Sum e_result{};
 
     // Loop over internal index replacement maps
-    for(auto& i : i_rep){
-      auto spin_expr_i = append_spin(spin_expr, i);
-      // std::wcout << "i: " << to_latex(spin_expr_i) << std::endl;
+    for(auto& i_rep : int_replacements){
+      auto spin_expr_i = append_spin(spin_expr, i_rep);
+      // std::wcout << "i_rep: " << to_latex(spin_expr_i) << std::endl;
       spin_expr_i = expand_antisymm(spin_expr_i, true);
       expand(spin_expr_i);
       spin_expr_i->visit(reset_idx_tags);
-      // std::wcout << "i: " << to_latex(spin_expr_i) << "\n" << std::endl;
+      // std::wcout << "i_rep: " << to_latex(spin_expr_i) << "\n" << std::endl;
       Sum i_result{};
 
       if(spin_expr_i->is<Tensor>()){
