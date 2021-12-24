@@ -171,13 +171,20 @@ class Tensor : public Expr, public AbstractTensor {
     std::vector<std::wstring> braket;
     auto occ_it = occ_list.begin();
     auto vir_it = uocc_list.begin();
+    bool has_spin = false;
+    bool is_alpha = false;
     for (auto &idx : this->const_braket()) {
       std::wstring spin{}, label{};
       // Spin label
-      if (idx.space().qns() == IndexSpace::alpha)
+      if (idx.space().qns() == IndexSpace::alpha) {
         spin = L"_α";
-      else if (idx.space().qns() == IndexSpace::beta)
+        has_spin = true;
+        is_alpha = true;
+      } else if (idx.space().qns() == IndexSpace::beta) {
         spin = L"_β";
+        has_spin = true;
+      }
+
       // Space label
       if (idx.space() == IndexSpace::active_occupied) {
         label = *occ_it + spin;
@@ -192,7 +199,12 @@ class Tensor : public Expr, public AbstractTensor {
     std::wstring result;
     std::wstring postfix = df ? L"[df]" : L"";
     if (this->rank() == 1){
-      result = L"<" + braket[0] + L"|F|" + braket[1] + L">";
+      if(!has_spin){
+        result = L"<" + braket[0] + L"|F|" + braket[1] + L">";
+      } else {
+        std::wstring spin_label = is_alpha ? L"α" : L"β";
+        result = L"<" + braket[0] + L"|F(" + spin_label + L")|" + braket[1] + L">";
+      }
     } else if (this->rank() == 2){
       result = L"<" + braket[0] + L" " + braket[1] + L"|G|" +
           braket[2] + L" " + braket[3] + L">";
