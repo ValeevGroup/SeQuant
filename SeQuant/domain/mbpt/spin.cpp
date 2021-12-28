@@ -1,7 +1,6 @@
 #include "spin.hpp"
 
 #include <SeQuant/core/tensor.hpp>
-#include <SeQuant/core/tensor_network.hpp>
 #include <unordered_map>
 
 namespace sequant {
@@ -98,7 +97,7 @@ ExprPtr swap_bra_ket(const ExprPtr& expr) {
     }
     return result;
   } else
-    throw("Reached end of swap_bra_ket function in spin.hpp");
+    throw("Unknown expression type.");
 }
 
 ExprPtr append_spin(ExprPtr& expr,
@@ -346,20 +345,16 @@ bool has_A_label(const ExprPtr& expr) {
   if (expr->is<Constant>()) return false;
 
   if (expr->is<Tensor>())
-    return (expr->as<Tensor>().label() == L"A") ? true : false;
+    return expr->as<Tensor>().label() == L"A";
   else if (expr->is<Product>())
-    return ((expr->as<Product>().factor(0))->as<Tensor>().label() == L"A")
-               ? true
-               : false;
+    return (expr->as<Product>().factor(0))->as<Tensor>().label() == L"A";
   else if (expr->is<Sum>()) {
     bool result = false;
     for (auto&& term : *expr) {
       if (term->is<Product>())
-        result = ((term->as<Product>().factor(0))->as<Tensor>().label() == L"A")
-                     ? true
-                     : false;
+        result = (term->as<Product>().factor(0))->as<Tensor>().label() == L"A";
       if (term->is<Tensor>())
-        result = (expr->as<Tensor>().label() == L"A") ? true : false;
+        result = expr->as<Tensor>().label() == L"A";
       if (result) return result;
     }
     return result;
@@ -997,7 +992,7 @@ ExprPtr closed_shell_spintrace(
 container::vector<container::vector<Index>> external_indices(const ExprPtr& expr){
   // Generate external index list from Antisymmetrizer
   Tensor A{};
-  for(auto& prod : *expr){
+  for(const auto& prod : *expr){
     if(prod->is<Product>()){
       auto tensor = prod->as<Product>().factor(0)->as<Tensor>();
       if(tensor.label() == L"A"){
@@ -1011,7 +1006,7 @@ container::vector<container::vector<Index>> external_indices(const ExprPtr& expr
   assert(A.bra_rank() == A.ket_rank());
   container::vector<container::vector<Index>> ext_index_groups;
   auto b_iter = A.bra().begin();
-  for(auto k : A.ket()){
+  for(const auto &k : A.ket()){
     container::vector<Index> pair{k, *b_iter};
     ext_index_groups.push_back(pair);
     ++b_iter;
@@ -1095,7 +1090,7 @@ std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
 
   // Generate index replacement maps
   auto spin_cases = [&add_spin_label] (const std::vector<IndexGroup>& idx_group) {
-    auto ncases = std::pow(2, idx_group.size());
+    int ncases = std::pow(2, idx_group.size());
     std::vector<std::map<Index, Index>> all_replacements(ncases);
 
     for (uint64_t i = 0; i != ncases; ++i) {
@@ -1219,10 +1214,10 @@ std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
   }
 
   // Canonicalize and simplify all expressions
-  for(auto i = 0; i != result.size(); ++i){
-    result[i]->visit(reset_idx_tags);
-    canonicalize(result[i]);
-    rapid_simplify(result[i]);
+  for(auto& term: result){
+    term->visit(reset_idx_tags);
+    canonicalize(term);
+    rapid_simplify(term);
   }
   return result;
 }
@@ -1374,7 +1369,7 @@ ExprPtr spintrace(
         result->append(spin_removed);
       } else if (spin_expr->is<Product>()) {
         auto temp = spin_trace_product(spin_expr->as<Product>());
-        if (!(temp->size() == 0)) {
+        if (temp->size() != 0) {
           result->append(remove_spin(temp));
         }
       } else if (spin_expr->is<Sum>()) {
@@ -1644,7 +1639,7 @@ ExprPtr factorize_S_operator(
 
       for (auto&& hash0 : hash0_list) {
         int n_matches = 0;
-        container::svector<int> idx_vec;
+        container::svector<size_t> idx_vec;
         for (auto find_it = it + 1; find_it != expr->end(); ++find_it) {
           auto idx = std::distance(expr->begin(), find_it);
           (*find_it)->canonicalize();
