@@ -366,33 +366,31 @@ bool has_A_label(const ExprPtr& expr) {
 bool has_tensor_label(const ExprPtr& expr, std::wstring label) {
   if (expr->is<Constant>()) return false;
 
-  auto check_tensor = [&label](const Tensor& tensor) {
-    if (tensor.label() == label)
-      return true;
-    else
-      return false;
-  };
-
-  auto check_product = [&check_tensor](const Product& product) {
+  auto check_product = [&label](const Product& product) {
     bool result = false;
-    for (auto&& term : product) {
+    for (auto& term : product) {
       if (term->is<Tensor>()) {
-        auto tensor = term->as<Tensor>();
-        if (check_tensor(tensor)) return true;
+        if (term->as<Tensor>().label() == label)
+          return true;
       }
     }
     return result;
   };
 
   if (expr->is<Tensor>()) {
-    return check_tensor(expr->as<Tensor>());
+    return expr->as<Tensor>().label() == label;
   } else if (expr->is<Product>()) {
     return check_product(expr->as<Product>());
   } else if (expr->is<Sum>()) {
     bool result = false;
     for (auto&& term : *expr) {
-      if (term->is<Product>()) result = check_product(term->as<Product>());
-      if (result) return true;
+      if (term->is<Product>()) {
+        result = check_product(term->as<Product>());
+      } else if (term->is<Tensor>()){
+        result = term->as<Tensor>().label() == label;
+      }
+      if (result)
+        return true;
     }
     return result;
   } else
@@ -1040,6 +1038,7 @@ std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
     return std::vector<ExprPtr>{expr};
   }
 
+  // Grand index list contains both internal and external indices
   container::set<Index, Index::LabelCompare> grand_idxlist;
   auto collect_indices = [&grand_idxlist](const ExprPtr& expr) {
     if (expr->is<Tensor>()) {
@@ -1141,9 +1140,6 @@ std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
 
   // Expand 'A' operator and 'antisymm' tensors
   auto expanded_expr = expand_A_operator(expr);
-  // expanded_expr = expand_antisymm(expanded_expr);
-  // expanded_expr->visit(reset_idx_tags);
-
   expand(expanded_expr);
   rapid_simplify(expanded_expr);
   expanded_expr->visit(reset_idx_tags);
@@ -1172,21 +1168,26 @@ std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
     return true;
   };
 
+  //
+  // SPIN-TRACING algorithm begins here
+  //
+
   // Loop over external index replacement maps
   for(auto& e : e_rep){
+
+    // Add spin labels to external indices
     auto spin_expr = append_spin(expanded_expr, e);
-    // std::wcout << "e: " << to_latex(spin_expr) << std::endl;
     spin_expr->visit(reset_idx_tags);
     Sum e_result{};
 
     // Loop over internal index replacement maps
     for(auto& i : i_rep){
+
+      // Add spin labels to internal indices, expand antisymmetric tensors
       auto spin_expr_i = append_spin(spin_expr, i);
-      // std::wcout << "i: " << to_latex(spin_expr_i) << std::endl;
       spin_expr_i = expand_antisymm(spin_expr_i, true);
       expand(spin_expr_i);
       spin_expr_i->visit(reset_idx_tags);
-      // std::wcout << "i: " << to_latex(spin_expr_i) << "\n" << std::endl;
       Sum i_result{};
 
       if(spin_expr_i->is<Tensor>()){
@@ -1209,15 +1210,16 @@ std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
         }
         e_result.append(std::make_shared<Sum>(i_result));
       }
-    }
+
+    } // loop over internal indices
     result.push_back(std::make_shared<Sum>(e_result));
-  }
+  } // loop over external indices
 
   // Canonicalize and simplify all expressions
-  for(auto& term: result){
-    term->visit(reset_idx_tags);
-    canonicalize(term);
-    rapid_simplify(term);
+  for(auto& expression: result){
+    expression->visit(reset_idx_tags);
+    canonicalize(expression);
+    rapid_simplify(expression);
   }
   return result;
 }
