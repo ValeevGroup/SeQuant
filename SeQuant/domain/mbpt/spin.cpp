@@ -195,13 +195,20 @@ ExprPtr remove_spin(ExprPtr& expr) {
 
 bool is_tensor_spin_symm(const Tensor& tensor) {
   assert(tensor.bra_rank() == tensor.ket_rank());
-  auto iter_ket = tensor.ket().begin();
-  for (auto&& idx : tensor.bra()) {
-    if (idx.space().qns() != iter_ket->space().qns())
-      return false;
-    ++iter_ket;
+  for(auto i = 0; i != tensor.rank(); ++i){
+    if(tensor.bra()[i].space().qns() != tensor.ket()[i].space().qns())
+       return false;
   }
   return true;
+}
+
+bool same_spin_tensor(const Tensor& tensor){
+  auto braket = tensor.braket();
+  auto spin_element = braket[0].space().qns();
+  return std::all_of(braket.begin(), braket.end(),
+                     [&spin_element](const auto& idx){
+    return idx.space().qns() == spin_element;
+  });
 }
 
 bool can_expand(const Tensor& tensor) {
@@ -241,29 +248,15 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
   // If all indices have the same spin label,
   // return the antisymm tensor
   if(skip_spinsymm) {
-    auto same_spin_tensor = [&tensor]() {
-      auto braket = tensor.braket();
-      auto spin_element = braket[0].space().qns();
-
-      for (auto& i : braket) {
-        auto spin_i = i.space().qns();
-        if ((spin_i == IndexSpace::nullqns) || (spin_i != spin_element))
-          return false;
-      }
-      return true;
-    };
-
-    if (same_spin_tensor()) {
+    if (same_spin_tensor(tensor))
       return std::make_shared<Tensor>(tensor);
-    }
   }
 
   assert(tensor.bra_rank() > 1);
 
   auto get_phase = [](const Tensor& t) {
-    container::svector<Index> bra, ket;
-    for (auto &bra_idx : t.bra()) bra.push_back(bra_idx);
-    for (auto &ket_idx : t.ket()) ket.push_back(ket_idx);
+    container::svector<Index> bra(t.bra().begin(), t.bra().end());
+    container::svector<Index> ket(t.ket().begin(), t.ket().end());
     IndexSwapper::thread_instance().reset();
     bubble_sort(std::begin(bra), std::end(bra), std::less<Index>{});
     bubble_sort(std::begin(ket), std::end(ket), std::less<Index>{});
@@ -413,12 +406,11 @@ bool has_operator_label(const ExprPtr& expr, std::wstring label) {
         if ((term->as<Product>().factor(0))->is<Tensor>()) {
           result =
               (term->as<Product>().factor(0))->as<Tensor>().label() == label;
-          if (result) return true;
         }
       } else if (term->is<Tensor>()) {
         result = term->as<Tensor>().label() == label;
-        if (result) return true;
       }
+      if (result) return true;
     }
   }
   return result;
@@ -432,8 +424,8 @@ std::vector<std::map<Index, Index>> A_replacement_map(const Tensor& A) {
   std::iota(std::begin(bra_int_list), std::end(bra_int_list), 0);
   auto ket_int_list = bra_int_list;
   std::vector<std::map<Index, Index>> result;
-  container::svector<Index> A_braket;
-  for (auto& idx : A.const_braket()) A_braket.push_back(idx);
+  container::svector<Index> A_braket(A.const_braket().begin(),
+                                     A.const_braket().end());
 
   do {
     do {
@@ -488,14 +480,15 @@ ExprPtr expand_A_operator(const Product& product) {
   auto new_result = std::make_shared<Sum>();
   for (auto&& map : map_list) {
     // Get phase of the transformation
-    bool even;
+    int phase;
     {
       container::svector<Index> transformed_list;
-      for (auto&& element : map) transformed_list.push_back(element.second);
+      for (const auto& [key, val] : map) transformed_list.push_back(val);
+
       IndexSwapper::thread_instance().reset();
       bubble_sort(std::begin(transformed_list), std::end(transformed_list),
                   std::less<Index>{});
-      even = IndexSwapper::thread_instance().even_num_of_swaps();
+      phase = IndexSwapper::thread_instance().even_num_of_swaps() ? 1 : -1;
     }
 
     Product new_product{};
@@ -508,7 +501,7 @@ ExprPtr expand_A_operator(const Product& product) {
         new_product.append(1, ex<Tensor>(new_tensor));
       }
     }
-    new_product.scale((even ? 1 : -1));
+    new_product.scale(phase);
     new_result->append(ex<Product>(new_product));
   }  // map_list
   return new_result;
@@ -539,11 +532,10 @@ ExprPtr expr_symmetrize(const Product& product) {
     size_t n = (A_tensor.bra_rank() < A_tensor.ket_rank())
                    ? A_tensor.bra_rank()
                    : A_tensor.ket_rank();
-    container::svector<Index> bra_list, ket_list;
-    for (size_t idx = 0; idx != n; ++idx) {
-      bra_list.push_back(A_tensor.bra()[idx]);
-      ket_list.push_back(A_tensor.ket()[idx]);
-    }
+    container::svector<Index> bra_list(A_tensor.bra().begin(),
+                                       A_tensor.bra().end());
+    container::svector<Index> ket_list(A_tensor.ket().begin(),
+                                       A_tensor.ket().end());
     S = Tensor(L"S", bra_list, ket_list, Symmetry::nonsymm);
   }
 
@@ -572,11 +564,10 @@ ExprPtr expr_symmetrize(const Product& product) {
   auto get_phase = [](const std::map<Index, Index>& map) {
     bool even;
     container::svector<Index> idx_list;
-    for (auto&& pair : map) idx_list.push_back(pair.second);
+    for (const auto& [key, val] : map) idx_list.push_back(val);
     IndexSwapper::thread_instance().reset();
     bubble_sort(std::begin(idx_list), std::end(idx_list), std::less<Index>{});
-    even = IndexSwapper::thread_instance().even_num_of_swaps();
-    return even;
+    return IndexSwapper::thread_instance().even_num_of_swaps() ? 1 : -1;
   };
 
   std::vector<std::map<Index, Index>> maps;
@@ -592,11 +583,9 @@ ExprPtr expr_symmetrize(const Product& product) {
   }
   assert(!maps.empty());
   for (auto&& map : maps) {
-    auto even = get_phase(map);
     Product new_product{};
     new_product.scale(product.scalar());
-    even ? new_product.append(1, ex<Tensor>(S))
-         : new_product.append(-1, ex<Tensor>(S));
+    new_product.append(get_phase(map), ex<Tensor>(S));
     auto temp_product = remove_tensor_from_product(product, L"A");
     for (auto&& term : *temp_product) {
       if (term->is<Tensor>()) {
@@ -653,8 +642,8 @@ std::vector<std::map<Index, Index>> P_replacement_map(const Tensor& P) {
   container::svector<int> int_list(P.bra().size());
   std::iota(std::begin(int_list), std::end(int_list), 0);
   std::vector<std::map<Index, Index>> result;
-  container::svector<Index> P_braket;
-  for (auto& idx : P.const_braket()) P_braket.push_back(idx);
+  container::svector<Index> P_braket(P.const_braket().begin(),
+                                     P.const_braket().end());
 
   do {
     auto P_braket_ptr = P_braket.begin();
@@ -1002,14 +991,10 @@ container::vector<container::vector<Index>> external_indices(const ExprPtr& expr
   assert(A.bra_rank() != 0 && "Could not generate external index groups due to "
          "absence of Anti-symmetrizer (A) operator in expression.");
   assert(A.bra_rank() == A.ket_rank());
-  container::vector<container::vector<Index>> ext_index_groups;
-  auto b_iter = A.bra().begin();
-  for(const auto &k : A.ket()){
-    container::vector<Index> pair{k, *b_iter};
-    ext_index_groups.push_back(pair);
-    ++b_iter;
+  container::vector<container::vector<Index>> ext_index_groups(A.rank());
+  for(auto i = 0; i != A.rank(); ++i){
+    ext_index_groups[i] = container::vector<Index>{A.ket()[i], A.bra()[i]};
   }
-  assert(ext_index_groups.size() == A.bra_rank());
   return ext_index_groups;
 }
 
