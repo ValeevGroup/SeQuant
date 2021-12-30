@@ -1099,7 +1099,7 @@ std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
     std::vector<int> spins(idx_group.size(), 0);
     for(size_t i = 0; i <= idx_group.size(); ++i){
       std::vector<int> spins(idx_group.size(), 0);
-      std::fill(spins.end()-i,spins.rend(), 1);
+      std::fill(spins.end()-i,spins.end(), 1);
 
       std::map<Index, Index> idx_rep;
       for(size_t j = 0; j != idx_group.size(); ++j){
