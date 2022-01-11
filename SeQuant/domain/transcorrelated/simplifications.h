@@ -838,7 +838,7 @@ ExprPtr tens_to_FNOps(ExprPtr ex_){
       }
       new_sum = new_product + new_sum;
     }
-    simplify(new_sum);
+    non_canon_simplify(new_sum);
     return new_sum;
   }
   else if(ex_->is<Product>()){
@@ -911,7 +911,7 @@ std::pair<ExprPtr,ExprPtr> hamiltonian_based(ExprPtr exprs){
   exprs = partition_f(exprs);
   non_canon_simplify(exprs);
   //std::wcout << "post convert to tensor: " << to_latex_align(exprs,20,2) << std::endl;
-  //exprs = screen_F12_and_density(exprs);
+  exprs = screen_F12_and_density(exprs);
   //std::wcout << "post screen f12: " << to_latex_align(exprs,20,2) << std::endl;
   non_canon_simplify(exprs);
   exprs = screen_densities(exprs);
@@ -926,7 +926,7 @@ std::pair<ExprPtr,ExprPtr> hamiltonian_based(ExprPtr exprs){
      exprs_intmed = new_product + exprs_intmed;
   }
   //std::wcout << "post intermediates: " << to_latex_align(exprs,20,2) << std::endl;
-
+  //tens_to_FNOps(exprs_intmed);
   non_canon_simplify(exprs_intmed);
   return fnop_to_overlap(exprs_intmed);
 }
@@ -976,7 +976,7 @@ if(final_screen->is<Constant>()){
   }
   //::wcout << "post intermediates: " << to_latex_align(final_screen,20,2) << std::endl;
   non_canon_simplify(last_screen);
-
+  //tens_to_FNOps(last_screen);
   return fnop_to_overlap(last_screen);
   }
 }

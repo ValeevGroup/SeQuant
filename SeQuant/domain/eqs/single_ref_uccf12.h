@@ -48,7 +48,7 @@ class uccf12{
     //std::wcout << to_latex_align(second_com,20,2) << std::endl;
     second_com = simplification::tens_to_FNOps(second_com);
     second_com = decompositions::three_body_substitution(second_com,2);
-    second_com = ex<Constant>(1./2) * second_com;
+    second_com = ex<Constant>(1./1) * second_com;
     simplify(second_com);
     return second_com;
   }
@@ -160,6 +160,14 @@ class uccf12{
     //cannot use non_canon_simplify here because of B term.
     non_canon_simplify(one_body);
     non_canon_simplify(two_body);
+    int term_count = 0;
+    for (auto i =0; i < one_body->as<Sum>().summands().size(); i++){
+      term_count +=1;
+    }
+    for (auto i =0; i < two_body->as<Sum>().summands().size(); i++){
+      term_count +=1;
+    }
+    std::cout << "number of terms: " << term_count << std::endl;
 
     if (print){
       std::wcout << "one body terms: " << to_latex_align(one_body,20,2) << std::endl;

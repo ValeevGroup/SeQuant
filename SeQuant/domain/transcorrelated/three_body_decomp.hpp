@@ -173,8 +173,6 @@ std::pair<ExprPtr, std::pair<std::vector<Index>, std::vector<Index>>> three_body
     else{
     }
   }
-
-  temp_result->canonicalize();
   simplify(temp_result);
   for (auto&& product : temp_result->as<Sum>().summands()){//replace the one body terms with the substituted expression
     if(product->is<Product>()) {
@@ -227,7 +225,6 @@ std::pair<ExprPtr, std::pair<std::vector<Index>, std::vector<Index>>> three_body
     auto ex_pair = three_body_decomp(_ex,true);
     _ex = ex_pair.first;
     initial_pairing = ex_pair.second;
-    _ex->canonicalize();
     simplify(_ex);
     for (auto&& product : _ex->as<Sum>().summands()) {
       if (product->is<Product>()) {
@@ -250,7 +247,6 @@ std::pair<ExprPtr, std::pair<std::vector<Index>, std::vector<Index>>> three_body
         }
       }
     }
-    _ex->canonicalize();
     simplify(_ex);
     //std::wcout << " cumulant replacment: " << to_latex_align(_ex,20, 7) << std::endl;
   } else if (rank == 1) {
