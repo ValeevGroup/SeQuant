@@ -35,14 +35,6 @@ namespace sequant {
 /// \return SeQuant expression.
 ExprPtr parse_expr(std::wstring_view raw, Symmetry tensor_sym);
 
-///
-/// \param raw A tensor algebra expression.
-/// \return SeQuant expression with all atomic tensors annotated
-///         sequant::Symmetry::antisymm unless explicitly annotated differently
-///         in the @c raw expression.
-/// \see parse_expr
-ExprPtr parse_expr_asymm(std::wstring_view raw);
-
 }  // namespace sequant::utils
 
 #endif  // SEQUANT_PARSE_EXPR_HPP

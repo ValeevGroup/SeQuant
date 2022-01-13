@@ -128,7 +128,7 @@ ExprPtr linearize_eval_node(EvalNode const& node) {
   }
 }
 
-AsyCost asy_cost_single_node(EvalNode const& node) {
+AsyCost asy_cost_single_node_symm_off(EvalNode const& node) {
   if (node.leaf()) return AsyCost::zero();
 
   auto bks = ranges::views::concat(node.left()->tensor().const_braket(),
@@ -145,18 +145,61 @@ AsyCost asy_cost_single_node(EvalNode const& node) {
 
   switch (node->op()) {
     case EvalOp::Symm: {
-      auto f = static_cast<size_t>(
+      auto f = static_cast<int>(
           boost::math::factorial<double>(node->tensor().rank()));
-      return AsyCost{nocc, nvirt, f};
+      return AsyCost{nocc, nvirt, static_cast<int>(f)};
     }
     case EvalOp::Antisymm: {
-      auto f = static_cast<size_t>(
+      auto f = static_cast<int>(
           boost::math::factorial<double>(node->tensor().rank()));
-      return AsyCost{nocc, nvirt, f * f};
+      return AsyCost{nocc, nvirt, static_cast<int>(f * f)};
     }
     default:
-      return AsyCost{nocc, nvirt};
+      return AsyCost{nocc, nvirt, 1};
   }
+}
+
+AsyCost asy_cost_single_node(const EvalNode& node) {
+  auto cost = asy_cost_single_node_symm_off(node);
+  auto factorial = [](auto x) {
+    return static_cast<int>(boost::math::factorial<double>(x));
+  };
+  // parent node symmetry
+  auto const psym = node->tensor().symmetry();
+  // parent node bra symmetry
+  auto const pbrank = node->tensor().bra_rank();
+  // parent node ket symmetry
+  auto const pkrank = node->tensor().ket_rank();
+
+  if (psym == Symmetry::nonsymm || psym == Symmetry::invalid) {
+    // do nothing
+  } else {
+    // ------
+    // psym is Symmetry::symm or Symmetry::antisymm
+    //
+    // the rules of cost reduction are taken from
+    //   doi:10.1016/j.procs.2012.04.044
+    // ------
+
+    auto const op = node->op();
+    if (op == EvalOp::Sum) {
+      cost = psym == Symmetry::symm
+                 ? cost / (factorial(pbrank) * factorial(pkrank))
+                 : cost / factorial(pbrank);
+    } else if (op == EvalOp::Prod) {
+      auto const lsym = node.left()->tensor().symmetry();
+      auto const rsym = node.right()->tensor().symmetry();
+      cost = (lsym == rsym && lsym == Symmetry::nonsymm)
+                 ? cost / factorial(pbrank)
+                 : cost / (factorial(pbrank) * factorial(pkrank));
+    } else {
+      assert(
+          false &&
+          "Unsupported evaluation operation for asymptotic cost computation.");
+    }
+  }
+
+  return cost;
 }
 
 }  // namespace sequant

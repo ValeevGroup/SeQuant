@@ -98,11 +98,11 @@ auto index_label_list = [](std::string const& str){
 TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
   using ranges::views::transform;
   using TA::TArrayD;
-  using sequant::parse_expr_asymm;
   using sequant::to_eval_node;
   using sequant::eval::ta::eval;
   using sequant::eval::ta::eval_antisymm;
   using sequant::eval::ta::eval_symm;
+  auto parse_expr_antisymm = [](auto const& xpr){ return parse_expr(xpr, sequant::Symmetry::antisymm); };
 
   // tnsr is assumed to be single-tiled
   auto norm = [](TArrayD const& tnsr) { return tnsr.find(0).get().norm(); };
@@ -133,7 +133,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
   };
 
   SECTION("summation") {
-    auto expr1 = parse_expr_asymm(L"t_{a1}^{i1} + f_{i1}^{a1}");
+    auto expr1 = parse_expr_antisymm(L"t_{a1}^{i1} + f_{i1}^{a1}");
     auto sum1_eval = eval_bnode(expr1, "i_1,a_1");
 
     auto sum1_man = TArrayD{};
@@ -141,7 +141,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
 
     REQUIRE(norm(sum1_man) == Approx(norm(sum1_eval)));
 
-    auto expr2 = parse_expr_asymm(L"2 * t_{a1}^{i1} + 1.5 * f_{i1}^{a1}");
+    auto expr2 = parse_expr_antisymm(L"2 * t_{a1}^{i1} + 1.5 * f_{i1}^{a1}");
     auto sum2_eval = eval_bnode(expr2, "i_1,a_1");
 
     auto sum2_man = TArrayD{};
@@ -152,7 +152,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
 
   SECTION("product") {
     auto expr1 =
-        parse_expr_asymm(L"1/2.0 * g_{i2,i4}^{a2,a4} * t_{a1,a2}^{i1,i2}");
+        parse_expr_antisymm(L"1/2.0 * g_{i2,i4}^{a2,a4} * t_{a1,a2}^{i1,i2}");
     auto prod1_eval = eval_bnode(expr1, "i_4,a_1,a_4,i_1");
 
     TArrayD prod1_man{};
@@ -161,7 +161,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
 
     REQUIRE(norm(prod1_man) == Approx(norm(prod1_eval)));
 
-    auto expr2 = parse_expr_asymm(
+    auto expr2 = parse_expr_antisymm(
         L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}");
     auto prod2_eval = eval_bnode(expr2, "a_1,a_2,i_1,i_2");
 
@@ -173,7 +173,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
   }
 
   SECTION("sum and product") {
-    auto expr1 = parse_expr_asymm(
+    auto expr1 = parse_expr_antisymm(
         L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
         " + "
         " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2} ");
@@ -189,7 +189,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
   }
 
   SECTION("Antisymmetrization") {
-    auto expr1 = parse_expr_asymm(L"0.5 * g_{i1, i2}^{a1, a2}");
+    auto expr1 = parse_expr_antisymm(L"0.5 * g_{i1, i2}^{a1, a2}");
     auto eval1 = eval_bnode_antisymm(expr1, "i_1,i_2,a_1,a_2");
 
     auto man1 = TArrayD{};
@@ -202,7 +202,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
   }
 
   SECTION("Symmetrization") {
-    auto expr1 = parse_expr_asymm(L"0.5 * g_{i1, i2}^{a1, a2}");
+    auto expr1 = parse_expr_antisymm(L"0.5 * g_{i1, i2}^{a1, a2}");
     auto eval1 = eval_bnode_symm(expr1, "i_1,i_2,a_1,a_2");
 
     auto man1 = TArrayD{};

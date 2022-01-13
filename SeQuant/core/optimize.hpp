@@ -8,14 +8,15 @@
 #include <SeQuant/core/eval_node.hpp>
 #include <SeQuant/core/eval_seq.hpp>
 
-namespace sequant::optimize {
-
+namespace sequant {
 /// Optimize an expression assuming the number of virtual orbitals
 /// greater than the number of occupied orbitals.
 
 /// \param expr Expression to be optimized.
 /// \return EvalNode object.
 EvalNode optimize(ExprPtr const& expr);
+
+namespace opt {
 
 ///
 /// Omit the first factor from the top level product from given expression.
@@ -47,18 +48,13 @@ struct STOResult {
 };
 
 /// Perform single term optimization on a product.
-
-/// @param canon whether to canonicalize each product before couting flops.
-///              by canonicalizing before counting flops, we increase the
-///              chance of encountering an intermediate whose hash value is
-///              already present in @c imed_hash.
+///
 /// @return STOResult
 template <typename F = std::function<bool(EvalNode const&)>,
           std::enable_if_t<std::is_invocable_r_v<bool, F, EvalNode const&>,
                            bool> = true>
 STOResult single_term_opt(
-    Product const& prod, bool canon,
-    F&& pred = [](auto const&) { return true; }) {
+    Product const& prod, F&& pred = [](auto const&) { return true; }) {
   using ranges::to_vector;
   using ranges::views::iota;
   using ranges::views::take;
@@ -81,12 +77,8 @@ STOResult single_term_opt(
 
   auto result = STOResult{AsyCost::max(), {}};
 
-  auto finder = [&result, &fold_prod, &pred, prod, canon](auto const& seq) {
+  auto finder = [&result, &fold_prod, &pred, prod](auto const& seq) {
     auto expr = seq.evaluate(fold_prod);
-    if (canon) {
-      expr->canonicalize();
-      pull_scalar(expr);
-    }
 
     if (prod.scalar() != 1.) {
       if (!expr->template is<Product>())  // in case expr is non-product
@@ -117,6 +109,7 @@ STOResult single_term_opt(
   return result;
 }
 
-}  // namespace sequant::optimize
+}  // namespace opt
+}  // namespace sequant
 
 #endif  // SEQUANT_OPTIMIZE_OPTIMIZE_HPP

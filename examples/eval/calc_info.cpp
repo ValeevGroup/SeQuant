@@ -8,8 +8,8 @@
 namespace sequant::eval {
 
 EvalNode CalcInfo::node_(const ExprPtr& expr, size_t rank) const {
-  auto trimmed = optimize::tail_factor(expr);
-  return optm_opts.single_term ? optimize::optimize(trimmed)
+  auto trimmed = opt::tail_factor(expr);
+  return optm_opts.single_term ? optimize(trimmed)
                                : to_eval_node(trimmed);
 }
 

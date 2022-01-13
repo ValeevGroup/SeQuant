@@ -121,20 +121,20 @@ class EvalSeq {
     //
     // struct {
     //   auto operator()(T const &node) const {
-    //     return BinaryNode<return_data_t>{binarizer(node)};
+    //     return FullBinaryNode<return_data_t>{binarizer(node)};
     //   }
     //
-    //   auto operator()(BinaryNode<return_data_t> &&lnode,
-    //                   BinaryNode<return_data_t> &&rnode) const {
-    //     auto pres = BinaryNode<return_data_t>{binarizer(*lnode, *rnode)};
-    //     return BinaryNode<return_data_t>{std::move(pres), std::move(lnode),
+    //   auto operator()(FullBinaryNode<return_data_t> &&lnode,
+    //                   FullBinaryNode<return_data_t> &&rnode) const {
+    //     auto pres = FullBinaryNode<return_data_t>{binarizer(*lnode, *rnode)};
+    //     return FullBinaryNode<return_data_t>{std::move(pres), std::move(lnode),
     //                                       std::move(rnode)};
     //   }
     // } evaluator;
     //
     // return evaluate(std::forward<decltype(evaluator)>(evaluator));
 
-    auto parent_result = BinaryNode<return_data_t>{binarizer(label())};
+    auto parent_result = FullBinaryNode<return_data_t>{binarizer(label())};
 
     if (terminal()) return std::move(parent_result);
 
@@ -146,7 +146,7 @@ class EvalSeq {
 
           auto bin_res = binarizer(*lexpr, *rnode);
 
-          return BinaryNode<return_data_t>{std::move(bin_res),
+          return FullBinaryNode<return_data_t>{std::move(bin_res),
                                             std::move(lexpr), std::move(rnode)};
         });
   }

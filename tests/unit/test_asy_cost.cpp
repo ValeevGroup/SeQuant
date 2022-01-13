@@ -1,27 +1,31 @@
 #include "catch.hpp"
 
 #include <SeQuant/core/asy_cost.hpp>
-
 #include <sstream>
 
 struct MatFlops {
   size_t occ_range_size;
   size_t virt_range_size;
-  size_t operator()(unsigned short nocc, unsigned short nvirt) const {
-    size_t ops = 1;
-    if (nocc > 0) ops *= static_cast<size_t>(std::pow(occ_range_size, nocc));
-    if (nvirt > 0) ops *= static_cast<size_t>(std::pow(virt_range_size, nvirt));
+  long long int operator()(unsigned short nocc, unsigned short nvirt) const {
+    long long int ops = 1;
+    if (nocc > 0) ops *= static_cast<int>(std::pow(occ_range_size, nocc));
+    if (nvirt > 0) ops *= static_cast<int>(std::pow(virt_range_size, nvirt));
     return ops > 1 ? 2 * ops : 0;
   }
 };
 
 TEST_CASE("TEST ASY_COST", "[AsyCost]") {
   using sequant::AsyCost;
-  SECTION("to_text") {
-    std::wostringstream oss{};
-    auto clear = [&oss]() { oss.str(std::wstring{}); };
 
+  std::wostringstream oss{};
+  auto clear = [&oss]() { oss.str(std::wstring{}); };
+
+  SECTION("to_text") {
     oss << AsyCost{0, 0};
+    REQUIRE(oss.str() == L"0");
+
+    clear();
+    oss << AsyCost{};
     REQUIRE(oss.str() == L"0");
 
     clear();
@@ -50,16 +54,17 @@ TEST_CASE("TEST ASY_COST", "[AsyCost]") {
 
     clear();
     oss << AsyCost{2, 2} + AsyCost{3, 2} + AsyCost{2, 3} + AsyCost{3, 3};
-    REQUIRE(oss.str() == L"O^2V^2 + O^3V^2 + O^2V^3 + O^3V^3");
+    REQUIRE(oss.str() == L"O^3V^3 + O^2V^3 + O^3V^2 + O^2V^2");
 
     clear();
     oss << AsyCost{1, 1} - AsyCost{2, 3} + AsyCost{2, 2};
-    REQUIRE(oss.str() == L"OV + O^2V^2 - O^2V^3");
+    REQUIRE(oss.str() == L"- O^2V^3 + O^2V^2 + OV");
 
     clear();
     oss << AsyCost{1, 1, 20};
+
     REQUIRE(oss.str() == L"20*OV");
-    REQUIRE(AsyCost{0,0} == AsyCost::zero());
+    REQUIRE(AsyCost{0, 0} == AsyCost::zero());
     REQUIRE(AsyCost{1, 1, 0} == AsyCost::zero());
   }
 
@@ -94,5 +99,28 @@ TEST_CASE("TEST ASY_COST", "[AsyCost]") {
 
     auto const cost = AsyCost{3, 1} + AsyCost{2, 1};
     REQUIRE(cost.ops(nocc, nvirt) == flops(3, 1) + flops(2, 1));
+  }
+
+  SECTION("Fractional costs") {
+    clear();
+    oss << AsyCost{2,4,{1,2}};
+    REQUIRE(oss.str() == L"1/2*O^2V^4");
+
+    auto const c1 = AsyCost{1,2} * boost::rational<int>{2, 3};
+    clear();
+    oss << c1 ;
+    REQUIRE(oss.str() == L"2/3*OV^2");
+
+    auto const c2 = AsyCost{1,2} / boost::rational<int>{2, 3};
+    clear();
+    oss << c2 ;
+    REQUIRE(oss.str() == L"3/2*OV^2");
+
+    auto const c3 = (AsyCost{1, 2} + AsyCost{2, 4}) * 2;
+    clear();
+    oss << c3;
+    REQUIRE(oss.str() == L"2*O^2V^4 + 2*OV^2");
+
+    clear();
   }
 }
