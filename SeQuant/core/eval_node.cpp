@@ -192,6 +192,10 @@ AsyCost asy_cost_single_node(const EvalNode& node) {
       cost = (lsym == rsym && lsym == Symmetry::nonsymm)
                  ? cost / factorial(pbrank)
                  : cost / (factorial(pbrank) * factorial(pkrank));
+    } else if (op == EvalOp::Symm) {
+      cost = cost / factorial(pbrank);
+    } else if (op == EvalOp::Antisymm) {
+      cost = cost / (factorial(pbrank) * factorial(pkrank));
     } else {
       assert(
           false &&

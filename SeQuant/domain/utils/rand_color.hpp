@@ -16,7 +16,7 @@ namespace sequant::utils {
  * @author Bimal Gaudel
  * @version 29 Sep 2020
  */
-class rand_color {
+class RandColor {
  private:
   static constexpr double GOLDEN_RATIO_CONJ = 0.618033988749895;
 
@@ -27,7 +27,9 @@ class rand_color {
   std::set<double> hue_cache_;
 
  public:
-  rand_color();
+  RandColor();
+
+  explicit RandColor(int seed);
 
   /**
    * Get a random color RGB hexcode for a given saturation level
