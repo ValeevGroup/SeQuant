@@ -32,6 +32,9 @@ enum class Symmetry { symm, antisymm, nonsymm, invalid };
 ///       index for a single particle, only whole bra-ket swaps are considered.
 enum class BraKetSymmetry { symm, conjugate, nonsymm, invalid };
 
+/// describes type of single-particle basis
+enum class SPBasis { spinorbital, spinfree };
+
 inline std::wstring to_wolfram(const Symmetry& symmetry) {
   std::wstring result;
   switch (symmetry) {

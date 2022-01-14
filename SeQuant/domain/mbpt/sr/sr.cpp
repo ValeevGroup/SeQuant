@@ -85,7 +85,7 @@ ExprPtr make_op::operator()(IndexSpace::Type unocc, IndexSpace::Type occ, bool a
   const auto opsymm = antisymm ? Symmetry::antisymm : Symmetry::nonsymm;
   return ex<Constant>(1. / mult) *
          ex<Tensor>(to_wstring(op), braidxs, ketidxs, opsymm) *
-         ex<FNOperator>(braidxs, ketidxs, Vacuum::SingleProduct);
+         ex<FNOperator>(braidxs, ketidxs, get_default_context().vacuum());
 }
 
 make_op Op(OpType _Op, std::size_t Nbra, std::size_t Nket) {
@@ -98,7 +98,7 @@ make_op Op(OpType _Op, std::size_t Nbra, std::size_t Nket) {
 #include "sr_op.impl.cpp"
 
 ExprPtr H1() {
-  return get_default_context().vacuum() == Vacuum::Physical ? Op(OpType::h, 1)() : Op(OpType::f, 1)();
+  return get_default_context().vacuum() == Vacuum::Physical ? Op(OpType::h, 1)(false,false) : Op(OpType::f, 1)(false,false);
 }
 
 ExprPtr H2(bool antisymm) {
@@ -116,7 +116,7 @@ ExprPtr H1mp(bool antisymm) {
 }
 
 ExprPtr F() {
-  return Op(OpType::f, 1)();
+  return Op(OpType::f, 1)(false,false);
 }
 
 ExprPtr W(bool antisymm) {
