@@ -67,6 +67,8 @@ eval_seq_t single_term_opt_v2(TensorNetwork const& network, size_t nocc,
                               size_t nvirt) {
   // number of terms
   auto const nt = network.tensors().size();
+  if (nt == 1) return eval_seq_t{0};
+  if (nt == 2) return eval_seq_t{0,1,-1};
   auto nth_tensor_indices = container::vector<container::vector<Index>>{};
   nth_tensor_indices.reserve(nt);
 
@@ -80,10 +82,7 @@ eval_seq_t single_term_opt_v2(TensorNetwork const& network, size_t nocc,
   double const log_nocc = std::log10(nocc);
   double const log_nvirt = std::log10(nvirt);
 
-  // initialize result
-  container::vector<OptRes> result{};
-  result.reserve(1 << nt);
-  result[0] = OptRes{{}, 0, {}};
+  container::vector<OptRes> result((1<<nt), OptRes{{},0,{}});
 
   // power_pos is used, and incremented, only when the
   // result[1<<0]
@@ -133,6 +132,7 @@ eval_seq_t single_term_opt_v2(TensorNetwork const& network, size_t nocc,
 }
 
 ExprPtr single_term_opt_v2(Product const& prod, size_t nocc, size_t nvirt) {
+  if (prod.factors().size() < 3) return clone_packed(prod);
   auto seq = single_term_opt_v2(TensorNetwork{prod}, nocc, nvirt);
   auto result = container::vector<ExprPtr>{};
   for (auto i: seq)
