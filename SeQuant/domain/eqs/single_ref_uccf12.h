@@ -2,8 +2,9 @@
 // Created by Conner Masteran on 8/16/21.
 //
 
-#ifndef SEQUANT_SINGLE_REF_UCCF12_H
-#define SEQUANT_SINGLE_REF_UCCF12_H
+#ifndef SEQUANT_DOMAIN_SINGLE_REF_UCCF12_H
+#define SEQUANT_DOMAIN_SINGLE_REF_UCCF12_H
+
 #include "../transcorrelated/three_body_decomp.hpp"
 #include "../transcorrelated/simplifications.h"
 #include <SeQuant/core/timer.hpp>
@@ -115,7 +116,7 @@ class uccf12{
       gg_space = IndexSpace::unoccupied;
     }
     else {
-      throw " USUPPORTED SPACE LABEL! CHECK ABOVE FOR VALID ENTRIES";
+      throw std::runtime_error("uccf12::compute(gg_label) unsupported space label");
     }
 
     auto h = H(false);
@@ -169,4 +170,4 @@ class uccf12{
   }
 };
 
-#endif  // SEQUANT_SINGLE_REF_UCCF12_H
+#endif  // SEQUANT_DOMAIN_SINGLE_REF_UCCF12_H
