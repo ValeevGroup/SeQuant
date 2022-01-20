@@ -224,8 +224,6 @@ eval_seq_t single_term_opt_v2(TensorNetwork const& network,
     ranges::sort(bk, Index::LabelCompare{});
     nth_tensor_indices.emplace_back(std::move(bk));
   }
-  //  double const log_nocc = std::log10(nocc);
-  //  double const log_nvirt = std::log10(nvirt);
 
   auto log_flops_ = [&idxsz](container::vector<Index> const& commons,
                              container::vector<Index> const& diffs) {
@@ -281,7 +279,13 @@ eval_seq_t single_term_opt_v2(TensorNetwork const& network,
   return result[(1 << nt) - 1].sequence;
 }
 
-// @c prod is assumed to consist of only Tensor expressions
+///
+/// \param prod  Product to be optimized.
+/// \param idxsz An invocable object that maps an Index object to size.
+/// \return Parenthesized product expression.
+///
+/// @note @c prod is assumed to consist of only Tensor expressions
+///
 template <typename IdxToSz,
           std::enable_if_t<std::is_invocable_v<IdxToSz, Index>, bool> = true>
 ExprPtr single_term_opt_v2(Product const& prod, IdxToSz const& idxsz) {
@@ -308,6 +312,10 @@ ExprPtr single_term_opt_v2(Product const& prod, IdxToSz const& idxsz) {
 
 }  // namespace opt
 
+///
+/// \param expr  Expression to be optimized.
+/// \param idxsz An invocable object that maps an Index object to size.
+/// \return Optimized expression converted to EvalNode.
 template <typename IdxToSz,
           std::enable_if_t<std::is_invocable_v<IdxToSz, Index>, bool> = true>
 EvalNode optimize(const ExprPtr& expr, IdxToSz const& idxsz) {
