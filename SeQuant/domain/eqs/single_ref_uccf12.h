@@ -26,7 +26,16 @@ class uccf12{
   uccf12(bool single_reference = true, bool fock_approx = true, unsigned int max_op_rank = 2){ sr = single_reference; fock = fock_approx; op_rank = max_op_rank;
     sequant::set_default_context(SeQuant(Vacuum::Physical, IndexSpaceMetric::Unit, BraKetSymmetry::conjugate,
                                          SPBasis::spinfree));
-//    mbpt::set_default_convention();
+    //mbpt::set_default_convention();
+    std::setlocale(LC_ALL, "en_US.UTF-8");
+    std::wcout.precision(std::numeric_limits<double>::max_digits10);
+    std::wcerr.precision(std::numeric_limits<double>::max_digits10);
+    std::wcout.sync_with_stdio(false);
+    std::wcerr.sync_with_stdio(false);
+    std::wcout.imbue(std::locale("en_US.UTF-8"));
+    std::wcerr.imbue(std::locale("en_US.UTF-8"));
+    std::wcout.sync_with_stdio(true);
+    std::wcerr.sync_with_stdio(true);
     sequant::detail::OpIdRegistrar op_id_registrar;
     TensorCanonicalizer::register_instance(std::make_shared<DefaultTensorCanonicalizer>());
   }
@@ -155,7 +164,11 @@ class uccf12{
       gg_space = IndexSpace::frozen_occupied;
     } else if (gg_label == "uocc") {
       gg_space = IndexSpace::unoccupied;
-    } else {
+    }
+    // currently not supported, but needs to be.
+    else if (gg_label == "act_obs") {
+      gg_space = IndexSpace::all_active;
+  } else {
       throw " USUPPORTED SPACE LABEL! CHECK ABOVE FOR VALID ENTRIES";
     }
 

@@ -411,7 +411,7 @@ auto treat_fock(ExprPtr ex_){
     auto new_product = ex<Constant>(real);
     for (auto&& factor : product->as<Product>().factors()){
       if (factor->is<Tensor>() && factor->as<Tensor>().label() == L"f"){
-        // TODO This might not be exactly correct, in the case of f_i^p, this should actually set p to all occupied m.
+        // TODO do not assume EBC
         auto space = intersection(factor->as<Tensor>().bra()[0].space(), factor->as<Tensor>().ket()[0].space());
         if(space.type().none()){
           new_product = ex<Constant>(0) * new_product;
