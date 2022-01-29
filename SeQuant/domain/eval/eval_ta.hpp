@@ -10,14 +10,36 @@ namespace sequant::eval::ta {
 
 namespace detail {
 
-auto const braket_to_annot = [](auto const& bk) {
-  std::string annot;
-  for (auto& idx : bk) {
-    annot += idx.ascii_label() + ",";
+///
+/// Given an iterable of Index objects, generate a string annotation
+/// that can be used for TiledArray tensor expressions. Tensor-of-tensors also
+/// supported.
+template <typename Indices_t>
+std::string braket_to_annot(Indices_t const& indices) {
+  // make a comma-separated and concatenated string out of an iterable of strings
+  auto add_commas = [](auto const& strs) -> std::string {
+    std::string result{ranges::front(strs)};
+    for (auto&& s: ranges::views::tail(strs))
+      result += "," + s;
+    return result;
+  };
+
+  container::vector<std::string> outer_labels{}, inner_labels{};
+  for (auto&& idx: indices) {
+    inner_labels.emplace_back(idx.ascii_label());
+    for (auto&& pidx: idx.proto_indices())
+      outer_labels.emplace_back(pidx.ascii_label());
   }
-  annot.pop_back();
-  return annot;
-};  // braket_to_annot
+
+  if (outer_labels.empty())
+    return add_commas(inner_labels);
+
+  // support CSV methods
+  ranges::sort(outer_labels);
+  ranges::sort(inner_labels);
+  auto outer_labels_updated = ranges::views::set_difference(outer_labels, inner_labels);
+  return add_commas(outer_labels_updated) + ";" + add_commas(inner_labels);
+}
 
 auto const ords_to_annot = [](auto const& ords) {
   using ranges::accumulate;
