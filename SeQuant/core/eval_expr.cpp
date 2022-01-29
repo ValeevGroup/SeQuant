@@ -13,7 +13,7 @@ const Tensor& EvalExpr::tensor() const { return tensor_; }
 const Constant& EvalExpr::scalar() const { return scalar_; }
 
 EvalExpr::EvalExpr(const Tensor& tnsr) : op_{EvalOp::Id}, tensor_{tnsr},
-hash_{EvalExpr::hash_terminal_tensor(tnsr)}{}
+hash_{EvalExpr::hash_terminal_tensor(tnsr)}, annot_{braket_to_annot(tnsr.const_braket())}{}
 
 EvalExpr::EvalExpr(const EvalExpr& xpr1,
                    const EvalExpr& xpr2,
@@ -50,6 +50,8 @@ EvalExpr::EvalExpr(const EvalExpr& xpr1,
       s, infer_braket_symmetry(), infer_particle_symmetry(s)};
 
   hash_ = hash_imed(expr1, expr2, op);
+
+  annot_ = braket_to_annot(tensor_.const_braket());
 }
 
 Symmetry EvalExpr::infer_tensor_symmetry_sum(EvalExpr const& xpr1,
