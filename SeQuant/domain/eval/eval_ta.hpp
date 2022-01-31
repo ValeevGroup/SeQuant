@@ -65,12 +65,11 @@ Tensor_t eval_inode(EvalNode const& node, Tensor_t const& leval,
   assert_imaginary_zero(node.left()->scalar());
   assert_imaginary_zero(node.right()->scalar());
 
-  auto const this_annot = braket_to_annot(node->tensor().const_braket());
-  auto const lannot = braket_to_annot(node.left()->tensor().const_braket());
-  auto const rannot = braket_to_annot(node.right()->tensor().const_braket());
-
   auto const lscal = node.left()->scalar().value().real();
   auto const rscal = node.right()->scalar().value().real();
+  auto const& this_annot = node->annot();
+  auto const& lannot = node.left()->annot();
+  auto const& rannot = node.right()->annot();
 
   auto result = Tensor_t{};
   if (node->op() == EvalOp::Prod) {
@@ -149,14 +148,12 @@ auto eval(EvalNode const& node, Iterable const& target_indx_labels,
   auto result =
       detail::eval_single_node(node, std::forward<Yielder>(yielder), man);
 
-  auto const rannot = detail::braket_to_annot(node->tensor().const_braket());
-
   std::string lannot = ranges::front(target_indx_labels);
   for (auto const& lbl : ranges::views::tail(target_indx_labels))
     lannot += std::string{','} + lbl;
 
   auto scaled = decltype(result){};
-  scaled(lannot) = node->scalar().value().real() * result(rannot);
+  scaled(lannot) = node->scalar().value().real() * result(node->annot());
   return scaled;
 }
 
