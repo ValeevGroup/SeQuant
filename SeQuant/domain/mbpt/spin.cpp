@@ -635,7 +635,8 @@ ExprPtr expand_A_operator(const ExprPtr& expr) {
     throw("Unknown arg Type for expand_A_operator.");
 }
 
-std::vector<std::map<Index, Index>> P_replacement_map(const Tensor& P) {
+std::vector<std::map<Index, Index>> P_replacement_map(const Tensor& P,
+                                                      bool keep_canonical) {
   assert(P.label() == L"P");
   assert(P.bra_rank() > 1);
   assert(P.bra().size() == P.ket().size());
@@ -659,10 +660,14 @@ std::vector<std::map<Index, Index>> P_replacement_map(const Tensor& P) {
     result.push_back(replacement_map);
   } while (std::next_permutation(int_list.begin(), int_list.end()));
 
+  if(!keep_canonical){
+    result.erase(result.begin());
+  }
   return result;
 }
 
-ExprPtr expand_P_operator(const Product& product) {
+ExprPtr expand_P_operator(const Product& product,
+                          bool keep_canonical) {
   bool has_P_operator = false;
 
   // Check P and build a replacement map
@@ -672,7 +677,7 @@ ExprPtr expand_P_operator(const Product& product) {
       auto P = term->as<Tensor>();
       if ((P.label() == L"P") && (P.bra().size() > 1)) {
         has_P_operator = true;
-        map_list = P_replacement_map(P);
+        map_list = P_replacement_map(P, keep_canonical);
         break;
       } else if ((P.label() == L"P") && (P.bra().size() == 1)) {
         return remove_tensor_from_product(product, L"P");
@@ -699,7 +704,7 @@ ExprPtr expand_P_operator(const Product& product) {
   return result;
 }
 
-ExprPtr expand_P_operator(const ExprPtr& expr) {
+ExprPtr expand_P_operator(const ExprPtr& expr, bool keep_canonical) {
   if (expr->is<Constant>() || expr->is<Tensor>()) return expr;
 
   if (expr->is<Product>())
@@ -708,7 +713,8 @@ ExprPtr expand_P_operator(const ExprPtr& expr) {
     auto result = std::make_shared<Sum>();
     for (auto&& summand : *expr) {
       if (summand->is<Product>())
-        result->append(expand_P_operator(summand->as<Product>()));
+        result->append(expand_P_operator(summand->as<Product>(),
+                                         keep_canonical));
       else
         result->append(summand);
     }
