@@ -70,6 +70,13 @@ int main(int argc, char* argv[]) {
 #else
   auto cc_r = sequant::eqs::cceqvec{3, 3}(true, true, true, true, true);
 
+  // reset index tags
+  auto reset_idx_tags = [](ExprPtr& expr) {
+    if (expr->is<Tensor>())
+      ranges::for_each(expr->as<Tensor>().const_braket(),
+                       [](const Index& idx) { idx.reset_tag(); });
+  };
+
   /// Make external index
   auto ext_idx_list = [](const int i_max) {
     container::vector<container::vector<Index>> ext_idx_list;
@@ -86,27 +93,241 @@ int main(int argc, char* argv[]) {
     return ext_idx_list;
   };
 
-#if 0
-  // First 4 terms only
-    cc_r[1] = cc_r[1]->as<Sum>().take_n(5);
-    cc_r[2] = cc_r[2]->as<Sum>().take_n(5);
-  //  cc_r[3] = cc_r[3]->as<Sum>().take_n(4);
 
-  for (int i = 1; i < cc_r.size(); ++i) {
-  // size_t counter = 1;
-  std::vector<size_t> n_st_terms(i+1,0);
-  for (auto& product_term : *cc_r[i]) {
-    // auto term = remove_tensor_from_product(product_term->as<Product>(), L"A");
-    auto term = product_term;
-     std::wcout << "Input: " << to_latex(term) << "\n";
-    const auto list = ext_idx_list(i);
-    auto os_st = open_shell_spintrace(term, list);
-    for (size_t j = 0; j != os_st.size(); ++j) {
-       std::wcout<< "st: " << to_latex(os_st[j]) << "\n";
-      n_st_terms[j] += os_st[j]->size();
+#define PERMUTATION_TEST 1
+
+#if PERMUTATION_TEST
+  auto P13_b = ex<Tensor>(L"P", WstrList{L"i_98", L"i_99"},
+                          WstrList{L"a_1", L"a_3"},
+                          Symmetry::nonsymm);
+  auto P13_k = ex<Tensor>(L"P", WstrList{L"i_1", L"i_3"},
+                          WstrList{L"a_98", L"a_99"},
+                          Symmetry::nonsymm);
+  auto P12_b = ex<Tensor>(L"P", WstrList{L"i_98", L"i_99"},
+                          WstrList{L"a_1", L"a_2"},
+                          Symmetry::nonsymm);
+  auto P12_k = ex<Tensor>(L"P", WstrList{L"i_1", L"i_2"},
+                          WstrList{L"a_98", L"a_99"},
+                          Symmetry::nonsymm);
+
+  auto P23_b = ex<Tensor>(L"P", WstrList{L"i_98", L"i_99"},
+                          WstrList{L"a_2", L"a_3"},
+                          Symmetry::nonsymm);
+  auto P23_k = ex<Tensor>(L"P", WstrList{L"i_2", L"i_3"},
+                          WstrList{L"a_98", L"a_99"},
+                          Symmetry::nonsymm);
+
+  auto P4_1313 = ex<Tensor>(L"P", WstrList{L"i_1", L"i_3"},
+                            WstrList{L"a_1", L"a_3"},
+                            Symmetry::nonsymm);
+  auto P4_1323 = ex<Tensor>(L"P", WstrList{L"i_1", L"i_3"},
+                            WstrList{L"a_2", L"a_3"},
+                            Symmetry::nonsymm);
+  auto P4_2313 = ex<Tensor>(L"P", WstrList{L"i_2", L"i_3"},
+                            WstrList{L"a_1", L"a_3"},
+                            Symmetry::nonsymm);
+  auto P4_2323 = ex<Tensor>(L"P", WstrList{L"i_2", L"i_3"},
+                            WstrList{L"a_2", L"a_3"},
+                            Symmetry::nonsymm);
+
+  auto P4_1212 = ex<Tensor>(L"P", WstrList{L"i_1", L"i_2"},
+                            WstrList{L"a_1", L"a_2"},
+                            Symmetry::nonsymm);
+  auto P4_1213 = ex<Tensor>(L"P", WstrList{L"i_1", L"i_2"},
+                            WstrList{L"a_1", L"a_3"},
+                            Symmetry::nonsymm);
+  auto P4_1312 = ex<Tensor>(L"P", WstrList{L"i_1", L"i_3"},
+                            WstrList{L"a_1", L"a_2"},
+                            Symmetry::nonsymm);
+
+  auto p_aab = ex<Constant>(1.) - P13_b - P23_b - P13_k - P23_k +
+      P4_1313 + P4_1323 + P4_2313 + P4_2323;
+
+  auto p_abb = ex<Constant>(1.) - P13_b - P12_b - P13_k - P12_k +
+      P4_1212 + P4_1213 + P4_1312 + P4_1313;
+
+  auto A_12 = ex<Tensor>(L"A", WstrList{L"i_1", L"i_2"}, WstrList{L"a_1", L"a_2"}, Symmetry::antisymm);
+  auto A_23 = ex<Tensor>(L"A", WstrList{L"i_2", L"i_3"}, WstrList{L"a_2", L"a_3"}, Symmetry::antisymm);
+  auto A3 = ex<Tensor>(L"A", WstrList{L"i_1", L"i_2", L"i_3"}, WstrList{L"a_1", L"a_2", L"a_3"}, Symmetry::antisymm);
+
+
+  auto occA = IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::alpha);
+  auto virA = IndexSpace::instance(IndexSpace::active_unoccupied, IndexSpace::alpha);
+  auto occB = IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::beta);
+  auto virB = IndexSpace::instance(IndexSpace::active_unoccupied, IndexSpace::beta);
+  const auto i1A = Index(L"i⁺_1", occA);
+  const auto i2A = Index(L"i⁺_2", occA);
+  const auto a1A = Index(L"a⁺_1", virA);
+  const auto a2A = Index(L"a⁺_2", virA);
+  const auto a2B = Index(L"a⁻_2", virB);
+  const auto a3B = Index(L"a⁻_3", virB);
+  const auto i2B = Index(L"i⁻_2", occB);
+  const auto i3B = Index(L"i⁻_3", occB);
+  auto A2_aa = Tensor(L"A", {i1A, i2A}, {a1A, a2A}, Symmetry::antisymm);
+  auto A2_bb = Tensor(L"A", {i2B, i3B}, {a2B, a3B}, Symmetry::antisymm);
+
+  size_t n_aab = 0;
+  size_t n_abb = 0;
+  for (auto& product_term : *cc_r[3]) {
+    if(product_term->is<Product>()){
+      auto input = remove_tensor_from_product(product_term->as<Product>(), L"A");
+      std::wcout << "input: " << to_latex(input) << std::endl;
+      auto aab_input = p_aab * input;
+      expand(aab_input);
+      aab_input = expand_P_operator(aab_input, false);
+      aab_input->visit(reset_idx_tags);
+      simplify(aab_input);
+
+      auto aab_result = open_shell_spintrace(aab_input,ext_idx_list(3));
+      expand(aab_result[1]);
+      aab_result[1] = expand_A_operator(aab_result[1]);
+      aab_result[1]->visit(reset_idx_tags);
+      simplify(aab_result[1]);
+      n_aab += aab_result[1]->size();
+      // std::wcout << "aab_result:\n" << to_latex(aab_result[1]) << "\n";
+
+      auto aab_final = ex<Tensor>(A2_aa) * aab_result[1];
+      // std::wcout << "aab_final:\n" << to_latex(aab_final) << "\n";
+      expand(aab_final);
+      aab_final = expand_A_operator(aab_final);
+      aab_final->visit(reset_idx_tags);
+      simplify(aab_final);
+      // std::wcout << "aab_final:\n" << to_latex(aab_final) << "\n";
+
+      auto abb_input = p_abb * input;
+      expand(abb_input);
+      abb_input = expand_P_operator(abb_input, false);
+      abb_input->visit(reset_idx_tags);
+      simplify(abb_input);
+
+      auto abb_result = open_shell_spintrace(abb_input,ext_idx_list(3));
+      expand(abb_result[2]);
+      abb_result[2] = expand_A_operator(abb_result[2]);
+      abb_result[2]->visit(reset_idx_tags);
+      simplify(abb_result[2]);
+      n_abb += abb_result[2]->size();
+      // std::wcout << "abb_result:\n" << to_latex(abb_result[2]) << "\n";
+
+      auto abb_final = ex<Tensor>(A2_bb) * abb_result[2];
+      // std::wcout << "abb_final:\n" << to_latex(abb_final) << "\n";
+      expand(abb_final);
+      abb_final = expand_A_operator(abb_final);
+      abb_final->visit(reset_idx_tags);
+      simplify(abb_final);
+      // std::wcout << "abb_final:\n" << to_latex(abb_final) << "\n";
+
+//       auto st_with_A = open_shell_spintrace(product_term, ext_idx_list(3));
+
+//      if(to_latex(aab_final) != to_latex(st_with_A[1])){
+//        std::wcout << "aab_final:    " << to_latex(aab_final) << "\n";
+//        std::wcout << "st_with_A[1]: " << to_latex(st_with_A[1]) << "\n\n";
+//      }
+//      if(to_latex(abb_final) != to_latex(st_with_A[2])){
+//        std::wcout << "abb_final:    " << to_latex(abb_final) << "\n";
+//        std::wcout << "st_with_A[2]: " << to_latex(st_with_A[2]) << "\n\n";
+//      }
+
     }
-      std::wcout << "\n";
+
   }
+  std::cout << n_aab << " " << n_abb << std::endl;
+  return 0;
+#endif
+
+
+#define PRINT_PRODUCT_TERMS 0
+#if PRINT_PRODUCT_TERMS
+  for (int i = 3; i < cc_r.size(); ++i){
+    size_t term_counter = 0;
+    for(auto term : *cc_r[i]) {
+      std::wcout /*<< term_counter << ": " */ << "$$" << to_latex(term) << "$$ \n";
+      ++term_counter;
+    }
+    std::cout << "\n";
+  }
+  // return 0;
+#endif
+
+
+#define OPEN_SHELL_TEST 0
+#if OPEN_SHELL_TEST
+  auto occA = IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::alpha);
+  auto virA = IndexSpace::instance(IndexSpace::active_unoccupied, IndexSpace::alpha);
+  auto occB = IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::beta);
+  auto virB = IndexSpace::instance(IndexSpace::active_unoccupied, IndexSpace::beta);
+  const auto i1A = Index(L"i⁺_1", occA);
+  const auto i2A = Index(L"i⁺_2", occA);
+  const auto i3A = Index(L"i⁺_3", occA);
+  const auto a1A = Index(L"a⁺_1", virA);
+  const auto a2A = Index(L"a⁺_2", virA);
+  const auto a3A = Index(L"a⁺_3", virA);
+
+  const auto i1B = Index(L"i⁻_1", occB);
+  const auto i2B = Index(L"i⁻_2", occB);
+  const auto i3B = Index(L"i⁻_3", occB);
+  const auto a1B = Index(L"a⁻_1", virB);
+  const auto a2B = Index(L"a⁻_2", virB);
+  const auto a3B = Index(L"a⁻_3", virB);
+
+  auto A2_alpha = Tensor(L"A", {i1A, i2A}, {a1A, a2A}, Symmetry::antisymm);
+  auto A2_beta = Tensor(L"A", {i1B, i2B}, {a1B, a2B}, Symmetry::antisymm);
+
+  auto A3_alpha = Tensor(L"A", {i1A, i2A, i3A}, {a1A, a2A, a3A}, Symmetry::antisymm);
+  auto A3_beta = Tensor(L"A", {i1B, i2B, i3B}, {a1B, a2B, a3B}, Symmetry::antisymm);
+
+  auto A3_aab = Tensor(L"A", {i1A, i2A, i3B}, {a1A, a2A, a3B}, Symmetry::antisymm);
+  auto A3_abb = Tensor(L"A", {i1A, i2B, i3B}, {a1A, a2B, a3B}, Symmetry::antisymm);
+
+
+  for (int i = 3; i < 4 /*cc_r.size()*/; ++i) {
+  size_t counter = 0;
+  std::vector<size_t> n_st_terms(i+1,0);
+  std::vector<size_t> n_st_with_A_terms(i+1,0);
+  const auto list = ext_idx_list(i);
+
+  for (auto& product_term : *cc_r[i]) {
+    ExprPtr term;
+    if(product_term->is<Product>())
+      term = remove_tensor_from_product(product_term->as<Product>(), L"A");
+
+    // auto term = product_term;
+    // std::wcout << "Input " << counter << ": " << to_latex(term) << std::endl;
+
+    auto os_st = open_shell_spintrace(term, list);
+    auto st_with_A = open_shell_spintrace(product_term, list);
+
+    // for (size_t j = 0; j != os_st.size(); ++j) {
+    for (size_t j : {0,3} /* all same spin blocks only*/) {
+      // std::wcout << __LINE__ << " " << os_st[j]->size() << ": " << to_latex(os_st[j]) << "\n";
+
+      ExprPtr new_expr{};
+      if (j==0)
+        new_expr = ex<Tensor>(A3_alpha) * os_st[j];
+      else if (j==1)
+        new_expr = ex<Tensor>(A3_aab) * os_st[j];
+      else if (j==2)
+        new_expr = ex<Tensor>(A3_abb) * os_st[j];
+      else if (j==3)
+        new_expr = ex<Tensor>(A3_beta) * os_st[j];
+
+      expand(new_expr);
+      new_expr = expand_A_operator(new_expr);
+      new_expr->visit(reset_idx_tags);
+      canonicalize(new_expr);
+      rapid_simplify(new_expr);
+
+      assert(new_expr->size() == st_with_A[j]->size());
+      assert(to_latex(new_expr) == to_latex(st_with_A[j]));
+      n_st_terms[j] += os_st[j]->size();
+      n_st_with_A_terms[j] += st_with_A[j]->size();
+    }
+      ++counter;
+  }
+  std::cout << "Full expansion: " << n_st_with_A_terms[0] << " " << n_st_with_A_terms[3] << "\n";
+  std::cout << "Preserve A2: " << n_st_terms[0] << " " << n_st_terms[3] << "\n";
+
+  return 0;
+
   std::cout << "CC R" << i << ": ";
   size_t n_terms_R = 0;
   for (auto& n_terms : n_st_terms) {
