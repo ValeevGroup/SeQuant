@@ -6,7 +6,7 @@
 #include <tiledarray.h>
 #include <range/v3/all.hpp>
 
-namespace sequant::eval::ta {
+namespace sequant::eval {
 
 namespace detail {
 
@@ -235,6 +235,6 @@ auto eval_antisymm(EvalNode const& node, Iterable const& target_indx_labels,
   return antisymm_result;
 }
 
-}  // namespace sequant::eval::ta
+}  // namespace sequant::eval
 
 #endif  // SEQUANT_EVAL_EVAL_TA_HPP

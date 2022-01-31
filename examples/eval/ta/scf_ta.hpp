@@ -18,7 +18,7 @@
 
 #include <chrono>
 
-namespace sequant::eval::ta {
+namespace sequant::eval {
 
 template <typename Tensor_t>
 class SequantEvalScfTA final : public SequantEvalScf {
@@ -99,8 +99,8 @@ class SequantEvalScfTA final : public SequantEvalScf {
     for (auto&& [r, n] : ranges::views::zip(rs, nodes_)) {
       auto const target_indices = tnsr_to_bk_labels_sorted(n->tensor());
       r = info_.eqn_opts.spintrace
-              ? eval::ta::eval_symm(n, target_indices, data_world_, cman_)
-              : eval::ta::eval_antisymm(n, target_indices, data_world_, cman_);
+              ? eval::eval_symm(n, target_indices, data_world_, cman_)
+              : eval::eval_antisymm(n, target_indices, data_world_, cman_);
     }
     data_world_.update_amplitudes(rs);
     return info_.eqn_opts.spintrace ? energy_spin_free_orbital()
