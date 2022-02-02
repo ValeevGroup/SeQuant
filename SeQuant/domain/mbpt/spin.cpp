@@ -1022,6 +1022,63 @@ auto index_list(const ExprPtr& expr) {
   return grand_idxlist;
 }
 
+ExprPtr open_shell_P_operator(const int& r, const int& n){
+  std::vector<int> i_alpha(r), i_beta(n-r);
+  std::iota(i_alpha.begin(), i_alpha.end(), 0);
+  std::iota(i_beta.begin(), i_beta.end(), r);
+  assert( r < n && n < 7);
+  assert( 2*r != n && "Same number of alpha and beta spins not supported at the moment. "
+         "Please completely expand A-opertor for this case.");
+
+  // Index list of act_occ, act_uocc
+  std::vector<Index> bra{Index(L"i_1"), Index(L"i_2"), Index(L"i_3"),
+                         Index(L"i_4"), Index(L"i_5"), Index(L"i_6")};
+  std::vector<Index> ket{Index(L"a_1"), Index(L"a_2"), Index(L"a_3"),
+                         Index(L"a_4"), Index(L"a_5"), Index(L"a_6")};
+
+  // Dummy index vectors of size 2
+  std::vector<Index> bra_dummy{Index(L"i_98"), Index(L"i_99")};
+  std::vector<Index> ket_dummy{Index(L"a_98"), Index(L"a_99")};
+
+  // Generate permutation pairs
+  std::vector<std::vector<Index>> bras{}, kets{};
+  for(auto& i : i_alpha){
+    for(auto& j : i_beta){
+      bras.insert(bras.end(),std::vector{bra[i], bra[j]});
+      kets.insert(kets.end(),std::vector{ket[i], ket[j]});
+    }
+  }
+
+  std::vector<std::vector<Index>> brakets{};
+  for(auto& bra_pair : bras){
+    for(auto& ket_pair : kets){
+      brakets.insert(brakets.end(),
+                       std::vector{bra_pair[0],bra_pair[1],
+                                      ket_pair[0],ket_pair[1]});
+    }
+  }
+
+  Sum result{};
+  result.append(ex<Constant>(1));
+
+  for(auto& bra_pair : bras){
+    result.append(ex<Constant>(-1) *
+                  ex<Tensor>(Tensor(L"P",bra_pair,ket_dummy)));
+  }
+
+  for(auto& ket_pair : kets){
+    result.append(ex<Constant>(-1) *
+                  ex<Tensor>(Tensor(L"P",bra_dummy,ket_pair)));
+  }
+
+  for(auto& bk : brakets){
+    result.append(ex<Tensor>(Tensor(L"P",{bk[0], bk[1]},{bk[2], bk[3]})));
+  }
+
+  // std::wcout << to_latex(result) << "\n";
+  return ex<Sum>(result);
+}
+
 std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
                                           const std::vector<std::vector<Index>> ext_index_groups){
 

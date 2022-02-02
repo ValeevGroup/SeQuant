@@ -177,6 +177,17 @@ ExprPtr closed_shell_CC_spintrace(const ExprPtr& expr);
 /// Collect all indices from an expression
 auto index_list(const ExprPtr& expr);
 
+/// @brief Generate the permutation expression from partial expansion of
+/// antisymmstrizer
+/// @detailed The antisymmetrizer need not be fully expanded to spin-trace for
+/// open-shell case. By expanding only the unlike spin terms, the
+/// antisymmetrizer is pereserved for same-spin particle indices.
+/// @param r number of alpha spins
+/// @param n n-particle Antisymmetrizer
+/// @return a sum of permutation operators as a sum
+/// @warning This function assumes the antisymmetrizer (A) has a canonical form
+ExprPtr open_shell_P_operator(const int& r, const int& n);
+
 /// @brief Generates spin expressions to be used for open-shell coupled cluster
 /// @detailed Every spin combination of external indices will have all spin
 /// combinations of internal indices.
