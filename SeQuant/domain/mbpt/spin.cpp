@@ -141,10 +141,11 @@ ExprPtr append_spin(ExprPtr& expr,
 ExprPtr remove_spin(ExprPtr& expr) {
 
   auto remove_spin_from_tensor = [](const Tensor& tensor) {
-    container::svector<Index> bra, ket;
+    container::svector<Index> bra(tensor.bra().begin(),
+                                  tensor.bra().end());
+    container::svector<Index> ket(tensor.ket().begin(),
+                                  tensor.ket().end());
     {
-      for (auto&& idx : tensor.bra()) bra.emplace_back(idx);
-      for (auto&& idx : tensor.ket()) ket.emplace_back(idx);
 
       for (auto&& idx : ranges::views::concat(bra, ket)) {
         auto space = IndexSpace::instance(idx.space().type(),
