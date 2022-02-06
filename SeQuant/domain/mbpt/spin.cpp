@@ -1023,6 +1023,76 @@ auto index_list(const ExprPtr& expr) {
   return grand_idxlist;
 }
 
+Tensor swap_spin(const Tensor& t){
+
+  auto is_null_qns = [](const Index& i){
+    return i.space().qns() == IndexSpace::nullqns;
+  };
+
+  // Return tensor if there are no spin labels
+  if(std::all_of(t.const_braket().begin(),
+                 t.const_braket().end(), is_null_qns)){
+    return t;
+  }
+
+  // Return new index where the spin-label is flipped
+  auto spin_flipped_idx = [] (const Index& idx) {
+    assert(idx.space().qns() != IndexSpace::nullqns);
+
+    auto idx_type = idx.space().type();
+    auto qns = idx.space().qns() == IndexSpace::alpha ?
+              IndexSpace::beta: IndexSpace::alpha;
+    auto label_int =
+        idx.label().substr(idx.label().find(L'_') + 1);
+    std::wstring label_int_ws(label_int.begin(), label_int.end());
+
+    return Index::make_label_index(IndexSpace(idx_type, qns), label_int_ws);
+  };
+
+  std::vector<Index> bra(t.rank()), ket(t.rank());
+
+  for(auto i = 0; i < t.rank(); ++i){
+    bra.at(i) = spin_flipped_idx(t.bra().at(i));
+    ket.at(i) = spin_flipped_idx(t.ket().at(i));
+  }
+
+  return {t.label(), bra, ket,
+          t.symmetry(), t.braket_symmetry(),
+          t.particle_symmetry()};
+}
+
+ExprPtr swap_spin(const ExprPtr& expr){
+  if(expr->is<Constant>())
+    return expr;
+
+  auto swap_tensor = [] (const Tensor& t) {
+    return ex<Tensor>(swap_spin(t));
+  };
+
+  auto swap_product = [&swap_tensor] (const Product& p){
+    Product result{};
+    result.scale(p.scalar());
+    for(auto& t : p){
+      assert(t->is<Tensor>());
+      result.append(swap_tensor(t->as<Tensor>()));
+    }
+    return ex<Product>(result);
+  };
+
+  if(expr->is<Tensor>())
+    return swap_tensor(expr->as<Tensor>());
+  else if (expr->is<Product>())
+    return swap_product(expr->as<Product>());
+  else if (expr->is<Sum>()){
+    Sum result;
+    for(auto& term : *expr){
+      result.append(swap_spin(term));
+    }
+    return ex<Sum>(result);
+  } else
+    return nullptr;
+}
+
 ExprPtr open_shell_P_operator(const int& r, const int& n){
   std::vector<int> i_alpha(r), i_beta(n-r);
   std::iota(i_alpha.begin(), i_alpha.end(), 0);

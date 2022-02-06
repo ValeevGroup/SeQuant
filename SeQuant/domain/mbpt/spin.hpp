@@ -177,6 +177,12 @@ ExprPtr closed_shell_CC_spintrace(const ExprPtr& expr);
 /// Collect all indices from an expression
 auto index_list(const ExprPtr& expr);
 
+/// @brief Swap spin labels in a tensor
+Tensor swap_spin(const Tensor& t);
+
+/// @brief Swap spin labels in an expression
+ExprPtr swap_spin(const ExprPtr& expr);
+
 /// @brief Generate the permutation expression from partial expansion of
 /// antisymmstrizer
 /// @detailed The antisymmetrizer need not be fully expanded to spin-trace for
