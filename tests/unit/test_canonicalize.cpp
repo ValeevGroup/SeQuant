@@ -210,9 +210,11 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
                 ex<Tensor>(L"f", WstrList{L"i_4"}, WstrList{L"i_1"}) *
                 ex<Tensor>(L"t", WstrList{L"a_1", L"a_2", L"a_3"},
                            WstrList{L"i_2", L"i_4", L"i_3"}, Symmetry::nonsymm);
-        std::wcout << __LINE__ << "L " << to_latex(input) << "\n";
         canonicalize(input);
-        std::wcout << __LINE__ << "L " << to_latex(input) << "\n\n";
+        REQUIRE(to_latex(input) ==
+                L"{ \\bigl( - "
+                L"{{{8}}{S^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}{f^{{i_3}}_{{i_"
+                L"4}}}{t^{{i_1}{i_4}{i_2}}_{{a_1}{a_2}{a_3}}}}\\bigr) }");
       }
 
       {

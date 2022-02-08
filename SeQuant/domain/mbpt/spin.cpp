@@ -458,6 +458,24 @@ ExprPtr remove_tensor_from_product(const Product& product, std::wstring label) {
   return new_product;
 }
 
+ExprPtr remove_tensor_from_expr(const ExprPtr& expr, std::wstring label){
+
+  if (expr->is<Sum>()){
+    Sum result{};
+    for(auto& term : *expr){
+      result.append(remove_tensor_from_expr(term, label));
+    }
+    return ex<Sum>(result);
+  } else if (expr->is<Product>())
+    return remove_tensor_from_product(expr->as<Product>(), label);
+  else if (expr->is<Tensor>())
+    return expr->as<Tensor>().label() == label ? ex<Constant>(1) : expr;
+  else if (expr->is<Constant>())
+    return expr;
+  else
+    return nullptr;
+}
+
 ExprPtr expand_A_operator(const Product& product) {
   bool has_A_operator = false;
 
@@ -1091,6 +1109,23 @@ ExprPtr swap_spin(const ExprPtr& expr){
     return ex<Sum>(result);
   } else
     return nullptr;
+}
+
+ExprPtr merge_operators(const Tensor& O1, const Tensor& O2){
+  assert(O1.label() == O2.label());
+  assert(O1.symmetry() == O2.symmetry());
+  Tensor O;
+  if(O1.bra_rank() + O2.bra_rank() == O1.ket_rank() + O2.ket_rank()){
+    auto bra = ranges::views::concat(O1.bra(), O2.bra());
+    auto ket = ranges::views::concat(O1.ket(), O2.ket());
+    assert(bra.size() == ket.size());
+    O = Tensor(O1.label(), bra, ket, O1.symmetry());
+    return ex<Tensor>(O);
+  } else {
+    // FIXME: Other cases with dummy index
+  }
+
+  return ex<Tensor>(O);
 }
 
 ExprPtr open_shell_P_operator(const int& r, const int& n){

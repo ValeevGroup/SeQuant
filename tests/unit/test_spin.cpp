@@ -60,12 +60,16 @@ TEST_CASE("Spin") {
     REQUIRE(can_expand(input->as<Tensor>()) == true);
     REQUIRE(is_tensor_spin_symm(input->as<Tensor>()) == true);
 
+    auto spin_swap_tensor = swap_spin(input->as<Tensor>());
+    REQUIRE(to_latex(spin_swap_tensor) == L"{t^{{p⁻_3}{p⁺_4}}_{{p⁻_1}{p⁺_2}}}");
+
     auto result = remove_spin(input);
-    for (auto i : result->as<Tensor>().const_braket())
+    for (auto& i : result->as<Tensor>().const_braket())
       REQUIRE(i.space() ==
               IndexSpace::instance(IndexSpace::all, IndexSpace::nullqns));
 
     input = ex<Tensor>(L"t", IndexList{p1, p3}, IndexList{p2, p4});
+    REQUIRE(to_latex(swap_spin(input)) == L"{t^{{p⁺_2}{p⁺_4}}_{{p⁻_1}{p⁻_3}}}");
     REQUIRE(can_expand(input->as<Tensor>()) == false);
     REQUIRE(is_tensor_spin_symm(input->as<Tensor>()) == false);
   }
@@ -115,6 +119,7 @@ TEST_CASE("Spin") {
     REQUIRE(result->is<Constant>());
     REQUIRE(result->is_atom());
     REQUIRE(to_latex(result) == L"{{{\\frac{1}{4}}}}");
+    REQUIRE(to_latex(swap_spin(exprPtr)) == L"{{{\\frac{1}{4}}}}");
   }
 
   SECTION("Tensor") {
@@ -992,6 +997,16 @@ TEST_CASE("Spin") {
       L"{P^{{a_1}{a_4}}_{{i_1}{i_4}}}\\bigr) }");
   }
 
+  SECTION("Merge P opertors"){
+      auto P1  = Tensor(L"P", WstrList{L"i_1", L"i_2"}, {});
+      auto P2  = Tensor(L"P", {}, WstrList{L"a_1", L"a_2"});
+      auto P3  = Tensor(L"P", WstrList{L"i_1", L"i_2"}, WstrList{L"a_1", L"a_2"});
+      auto P4  = Tensor(L"P", {}, {});
+      auto P12 = merge_operators(P1, P2);
+      auto P34 = merge_operators(P3, P4);
+      REQUIRE(to_latex(P12) == L"{P^{{a_1}{a_2}}_{{i_1}{i_2}}}");
+      REQUIRE(to_latex(P34) == L"{P^{{a_1}{a_2}}_{{i_1}{i_2}}}");
+  }
 
   SECTION("Open-shell spin-tracing"){
     // Logger::get_instance().canonicalize = true;

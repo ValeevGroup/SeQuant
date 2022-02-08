@@ -102,6 +102,12 @@ std::vector<std::map<Index, Index>> A_replacement_map(const Tensor& A);
 /// @return ExprPtr with the tensor removed
 ExprPtr remove_tensor_from_product(const Product& product, std::wstring label);
 
+/// @brief Removes tensor with a certain label from an expression
+/// @param expr An expression pointer
+/// @param label Label of the tensor to remove
+/// @return ExprPtr with the tensor removed
+ExprPtr remove_tensor_from_expr(const ExprPtr& expr, std::wstring label);
+
 /// @brief Expand a product containing the Antisymmetrization (A) operator
 /// @param A product term with/without A operator
 /// @return an ExprPtr containing sum of expanded terms if A is present
@@ -182,6 +188,9 @@ Tensor swap_spin(const Tensor& t);
 
 /// @brief Swap spin labels in an expression
 ExprPtr swap_spin(const ExprPtr& expr);
+
+/// @brief Merge operators into a single operator (designed for P operator)
+ExprPtr merge_operators(const Tensor& O1, const Tensor& O2);
 
 /// @brief Generate the permutation expression from partial expansion of
 /// antisymmstrizer
