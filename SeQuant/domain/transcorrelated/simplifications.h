@@ -40,6 +40,7 @@ ExprPtr op_to_tens(ExprPtr ex_){
 
 //all densities and the Hamiltonian operators are confined to a given orbital basis in second quantized notation.
 //thus any index on a Normal Ordered operator or density must be confined to the obs.
+///TODO this dictates that the resulting hamiltonian will be in a particular basis.
 ExprPtr overlap_with_obs(ExprPtr ex_){
   auto overlap_expr = ex<Constant>(0); //enforce an overlap each E with elements from
   for (auto&& product : ex_->as<Sum>().summands()){// may be able to make_overlaps manually and apply them to the products. simplify may know what to do with it.
@@ -144,6 +145,7 @@ ExprPtr overlap_with_obs(ExprPtr ex_){
   //std::wcout << to_latex_align(overlap_expr,20,2) << std::endl;
   wick.reduce(overlap_expr);
   simplify(overlap_expr);
+  //std::wcout << to_latex_align(overlap_expr,20,2) << std::endl;
   return overlap_expr;
 }
 
@@ -955,19 +957,19 @@ std::pair<ExprPtr,ExprPtr> hamiltonian_based_projector_2(ExprPtr exprs){
   //exprs = remove_const(exprs);
 //  std::wcout << "post remove constants: " << to_latex_align(exprs,20,2) << std::endl;
   exprs = FNOPs_to_tens(exprs);
-  non_canon_simplify(exprs);
+  simplify(exprs);
   //exprs = overlap_with_obs(exprs);
   exprs = partition_f(exprs);
-  non_canon_simplify(exprs);
+  simplify(exprs);
   //std::wcout << "post convert to tensor: " << to_latex_align(exprs,20,2) << std::endl;
   exprs = screen_F12_and_density(exprs,2);
   //std::wcout << "post screen f12: " << to_latex_align(exprs,20,2) << std::endl;
-  non_canon_simplify(exprs);
+  simplify(exprs);
   exprs = screen_densities(exprs);
   //std::wcout << "post screen density: " << to_latex_align(exprs,20,2) << std::endl;
   //exprs = densities_to_occ(exprs);
   //f12 interms needs a particular canonical ordering
-  non_canon_simplify(exprs);
+  simplify(exprs);
  //std::wcout << "densities to occ: " << to_latex_align(exprs,20,2) << std::endl;
   auto exprs_intmed = ex<Constant>(0.0);
   for (auto&& product : exprs->as<Sum>().summands()){
@@ -976,43 +978,43 @@ std::pair<ExprPtr,ExprPtr> hamiltonian_based_projector_2(ExprPtr exprs){
   }
   //std::wcout << "post intermediates: " << to_latex_align(exprs,20,2) << std::endl;
   //tens_to_FNOps(exprs_intmed);
-  non_canon_simplify(exprs_intmed);
+  simplify(exprs_intmed);
   return fnop_to_overlap(exprs_intmed);
 }
 
 // here G can only have projection to the alpha and Beta space otherwise projector constructs it to be be zero.
 std::pair<ExprPtr,ExprPtr> hamiltonian_based_projector_1(ExprPtr exprs){
   exprs = FNOPs_to_tens(exprs);
-  non_canon_simplify(exprs);
+  simplify(exprs);
   exprs = partition_f(exprs);
-  non_canon_simplify(exprs);;
+  simplify(exprs);;
   exprs = screen_F12_and_density(exprs,1);
-  non_canon_simplify(exprs);
+  simplify(exprs);
   auto exprs_intmed = ex<Constant>(0.0);
   for (auto&& product : exprs->as<Sum>().summands()){
     auto new_product = simplification::find_f12_interms(product);
     exprs_intmed = new_product + exprs_intmed;
   }
-  non_canon_simplify(exprs_intmed);
+  simplify(exprs_intmed);
   return fnop_to_overlap(exprs_intmed);
 }
 //G can only project to alpha and Beta space. still need to use fock based expression.
 std::pair<ExprPtr,ExprPtr> fock_based_projector_1(ExprPtr exprs){
   exprs = FNOPs_to_tens(exprs);
-  non_canon_simplify(exprs);
+  simplify(exprs);
   if(exprs->is<Constant>()){
     return std::pair<ExprPtr,ExprPtr> {exprs, exprs};
   }
   exprs = partition_f(exprs);
   auto final_screen = exprs;
-  non_canon_simplify(final_screen);
+  simplify(final_screen);
   //in some cases, there will now be no contributing terms left so return zero to one and two body.
   if(final_screen->is<Constant>()){
     return std::pair<ExprPtr,ExprPtr> {final_screen, final_screen};
   }
-  non_canon_simplify(final_screen);
-  final_screen = treat_fock(final_screen);
-  non_canon_simplify(final_screen);
+  simplify(final_screen);
+  //final_screen = treat_fock(final_screen);
+  simplify(final_screen);
   //find the special f12 intermediates that cannot efficiently be solved directly. This seems to work already for the general case!
   auto last_screen = ex<Constant>(0.0);
   for (auto&& product : final_screen->as<Sum>().summands()){
@@ -1020,7 +1022,7 @@ std::pair<ExprPtr,ExprPtr> fock_based_projector_1(ExprPtr exprs){
     last_screen = last_screen + new_product;
   }
   //::wcout << "post intermediates: " << to_latex_align(final_screen,20,2) << std::endl;
-  non_canon_simplify(last_screen);
+  simplify(last_screen);
   return fnop_to_overlap(last_screen);
 }
 //TODO generalize for spin-orbital basis
@@ -1034,7 +1036,7 @@ std::pair<ExprPtr,ExprPtr> fock_based_projector_2(ExprPtr exprs){
   //exprs = remove_const(exprs);
   //std::wcout << "after screening constant: " << to_latex_align(exprs) << std::endl;
   exprs = FNOPs_to_tens(exprs);
-  non_canon_simplify(exprs);
+  simplify(exprs);
   //std::wcout << "fnop to tensor: " << to_latex_align(exprs,20,2) << std::endl;
   if(exprs->is<Constant>()){
     return std::pair<ExprPtr,ExprPtr> {exprs, exprs};
@@ -1042,19 +1044,20 @@ std::pair<ExprPtr,ExprPtr> fock_based_projector_2(ExprPtr exprs){
   exprs = partition_f(exprs);
   //exprs = overlap_with_obs(exprs);
   auto final_screen = exprs;
-  non_canon_simplify(final_screen);
+  simplify(final_screen);
   //in some cases, there will now be no contributing terms left so return zero to one and two body.
 if(final_screen->is<Constant>()){
   return std::pair<ExprPtr,ExprPtr> {final_screen, final_screen};
 }
   //final_screen = screen_F12_and_density(final_screen);
-  non_canon_simplify(final_screen);
+  simplify(final_screen);
   //std::wcout << "screen F12: " << to_latex_align(final_screen,20,2) << std::endl;
-  final_screen = treat_fock(final_screen);
-  non_canon_simplify(final_screen);
+  //final_screen = treat_fock(final_screen);
+  final_screen = FNOPs_to_tens(final_screen);
+  simplify(final_screen);
   //std::wcout << "screen fock: " << to_latex_align(final_screen,20,2) << std::endl;
   final_screen = screen_densities(final_screen);
-  non_canon_simplify(final_screen);
+  simplify(final_screen);
   //enforce that densities are in the occupied space since they are only non-zero in occ
   //final_screen = densities_to_occ(final_screen);
   //non_canon_simplify(final_screen);
@@ -1067,7 +1070,7 @@ if(final_screen->is<Constant>()){
     last_screen = last_screen + new_product;
   }
   //::wcout << "post intermediates: " << to_latex_align(final_screen,20,2) << std::endl;
-  non_canon_simplify(last_screen);
+  simplify(last_screen);
   //tens_to_FNOps(last_screen);
   return fnop_to_overlap(last_screen);
   }

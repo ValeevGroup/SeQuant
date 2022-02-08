@@ -42,9 +42,15 @@ class uccf12{
   //[[e1,e2],e3]_12
   ExprPtr compute_double_com(ExprPtr e1, ExprPtr e2, ExprPtr e3, int ansatz = 2){
     auto first_com = do_wick((e1 * e2) - (e2 * e1));
-    auto first_com_clone = first_com->clone();
-    auto second_com_1 = do_wick((first_com * e3));
-    auto second_com_2 = do_wick(e3 * first_com);
+    simplify(first_com);
+    std::wcout << to_latex_align(first_com,20,2) << std::endl;
+    auto second_com_1 = first_com * e3;
+    //non_canon_simplify(second_com_1);
+    simplify(second_com_1);
+    second_com_1 = do_wick(second_com_1);
+    auto second_com_2 = e3 * first_com;
+    simplify(second_com_2);
+    second_com_2 = do_wick(second_com_2);
     auto second_com = second_com_1 - second_com_2;
     simplify(second_com);
     if(ansatz == 2) {
@@ -150,7 +156,109 @@ class uccf12{
     return result;
   }
 
-  std::pair<ExprPtr,ExprPtr> compute(std::string gg_label,int ansatz = 2, bool print = false) {
+  // produces a uniquely indexed version of the given expression.
+  //assumes same number of upper and lower indices for operators and tensors
+  // do not simplify(expr) after use! this will cannonicalize labeling, undoing this work.
+  ExprPtr relable(ExprPtr expr) {
+    if (expr->is<Sum>()){
+      auto new_sum = ex<Constant>(0.0);
+      for(auto && product : expr->as<Sum>().summands()){
+        auto new_product = relable(product);
+        new_sum = new_sum + new_product;
+      }
+      return new_sum;
+    }
+
+    //product does not benefit from recursion
+    // must reproduce same connectivity to produce identical expressions.
+    else if(expr->is<Product>()){
+      std::vector<Index> changed_indices;//list of original indices
+      std::vector<Index> original_indices; // list of new indices
+      auto new_product = ex<Constant>(expr->as<Product>().scalar());
+      for (auto && factor : expr->as<Product>().factors()){
+        std::pair<std::vector<Index>,std::vector<Index>> new_up_low;
+        if (factor->is<Tensor>()){
+          for (int i = 0; i < factor->as<Tensor>().bra().size(); i++){
+            auto in_where_bra = simplification::in_list(factor->as<Tensor>().bra()[i], original_indices);
+            if(in_where_bra.first){
+              new_up_low.first.push_back(changed_indices[in_where_bra.second]);
+            }
+            else{
+              original_indices.push_back(factor->as<Tensor>().bra()[i]);
+              changed_indices.push_back(Index::make_tmp_index(IndexSpace::instance(factor->as<Tensor>().bra()[i].space().attr())));
+              new_up_low.first.push_back(
+                  changed_indices[changed_indices.size() - 1]);
+            }
+            auto in_where_ket = simplification::in_list(factor->as<Tensor>().ket()[i], original_indices);
+            if(in_where_ket.first){
+              new_up_low.second.push_back(changed_indices[in_where_ket.second]);
+            }
+            else{
+              original_indices.push_back(factor->as<Tensor>().ket()[i]);
+              changed_indices.push_back(Index::make_tmp_index(IndexSpace::instance(factor->as<Tensor>().ket()[i].space().attr())));
+              new_up_low.second.push_back(
+                  changed_indices[changed_indices.size() - 1]);
+            }
+          }
+          auto new_factor = ex<Tensor>(factor->as<Tensor>().label(), new_up_low.first, new_up_low.second);
+          new_product = new_product * new_factor;
+        }
+        else if (factor->is<FNOperator>()){
+          for (int i = 0; i < factor->as<FNOperator>().nannihilators(); i++){
+              auto in_where_ann = simplification::in_list(factor->as<FNOperator>().annihilators()[i].index(),
+                original_indices);
+              if(in_where_ann.first){
+                new_up_low.first.push_back(
+                    changed_indices[in_where_ann.second]);
+              }
+              else{
+                original_indices.push_back(factor->as<FNOperator>().annihilators()[i].index());
+                changed_indices.push_back(Index::make_tmp_index(IndexSpace::instance(factor->as<FNOperator>().annihilators()[i].index().space().attr())));
+                new_up_low.first.push_back(
+                    changed_indices[changed_indices.size() - 1]);
+              }
+              auto in_where_cre = simplification::in_list(factor->as<FNOperator>().creators()[i].index(),
+                  original_indices);
+              if(in_where_cre.first){
+                new_up_low.second.push_back(
+                    changed_indices[in_where_cre.second]);
+              }
+              else{
+                original_indices.push_back(factor->as<FNOperator>().creators()[i].index());
+                changed_indices.push_back(Index::make_tmp_index(IndexSpace::instance(factor->as<FNOperator>().creators()[i].index().space().attr())));
+                new_up_low.second.push_back(
+                    changed_indices[changed_indices.size() - 1]);
+              }
+          }
+          auto new_factor = ex<FNOperator>(new_up_low.second, new_up_low.first);
+          new_product = new_product * new_factor;
+        }
+        else{throw "unsupported factor type";}
+      }
+      return new_product;
+    }
+    else if(expr->is<Tensor>()){
+        std::pair<std::vector<Index>,std::vector<Index>> new_bra_ket;
+        for (int i = 0; i < expr->as<Tensor>().bra().size(); i++){
+            new_bra_ket.first.push_back(Index::make_tmp_index(IndexSpace::instance(expr->as<Tensor>().bra()[i].space().attr())));
+            new_bra_ket.second.push_back(Index::make_tmp_index(IndexSpace::instance(expr->as<Tensor>().ket()[i].space().attr())));
+        }
+        return ex<Tensor>(expr->as<Tensor>().label(), new_bra_ket.first, new_bra_ket.second);
+    }
+    else if(expr->is<FNOperator>()){
+      std::pair<std::vector<Index>,std::vector<Index>> new_ann_cre;
+      for (int i = 0; i < expr->as<FNOperator>().nannihilators(); i++){
+        new_ann_cre.first.push_back(Index::make_tmp_index(IndexSpace::instance(expr->as<FNOperator>().annihilators()[i].index().space().attr())));
+        new_ann_cre.second.push_back(Index::make_tmp_index(IndexSpace::instance(expr->as<FNOperator>().creators()[i].index().space().attr())));
+      }
+      return ex<FNOperator>(new_ann_cre.first, new_ann_cre.second);
+    }
+    else if(expr->is<Constant>()){
+      return expr;
+    }
+  }
+
+  std::pair<ExprPtr,ExprPtr> compute(std::string gg_label,int ansatz = 2, bool print = false,bool singles=false) {
     // auto gg_space = IndexSpace::active_occupied;  // Geminal-generating space: active occupieds is the normal choice, all orbitals is the reference-independent (albeit expensive) choice
 
     auto gg_space = IndexSpace::frozen_occupied;
@@ -171,13 +279,31 @@ class uccf12{
   } else {
       throw " USUPPORTED SPACE LABEL! CHECK ABOVE FOR VALID ENTRIES";
     }
+    auto single = ex<Constant>(0.0);
+    auto single_ = ex<Constant>(0.0);
+    if(singles){
+      // this might need to be complete space if we don't have a solution to the particular blocks of interest.
+      auto C = ex<Tensor>(L"C",std::initializer_list<Index>{Index::make_tmp_index(IndexSpace::instance(IndexSpace::all))},std::initializer_list<Index>{Index::make_tmp_index(IndexSpace::instance(IndexSpace::other_unoccupied))});
+      auto E_pa = ex<FNOperator> (std::initializer_list<Index>{C->as<Tensor>().bra()[0]},std::initializer_list<Index>{C->as<Tensor>().ket()[0]});
+      auto C_Epa = C * E_pa;
+      auto anti_herm_C = C_Epa - adjoint(C_Epa);
+      single = single + anti_herm_C;
+      simplify(single);
+      std::wcout << "single term" << to_latex_align(single) << std::endl;
+
+      auto single_2 = single->clone();
+      single_2 = relable(single_2);
+      std::wcout << "single after relable" << to_latex_align(single_2) << std::endl;
+      single_ = single_2;
+    }
 
     if (ansatz == 2) {
       auto h = H(false);
       auto r = R12(gg_space);
       auto r_1 = R12(gg_space);
 
-      auto A = r - adjoint(r);
+      auto A = (r - adjoint(r)) + single;
+      auto A_ = (r_1 - adjoint(r_1)) + single_;
       auto H_A = do_wick(ex<Constant>(1.) * ((h * A) - (A * h)));
       auto H_A_3 = keep_up_to_3_body_terms(H_A);
       // std::wcout << "pre decomp: " << to_latex_align(single_Comm,20,2) << std::endl;
@@ -189,33 +315,12 @@ class uccf12{
       auto H_A_2 = decompositions::three_body_substitution(H_A_3, 2);
       simplify(H_A_2);
       auto com_1 = simplification::hamiltonian_based_projector_2(H_A_2);
+      auto full_double_com = ex<Constant>(1./2) * compute_double_com(F(),A,A_);
 
-      auto fFF = ex<Constant>(1. / 2) * compute_double_com(F(), r, r_1);
-      non_canon_simplify(fFF);
-      auto fFFt = ex<Constant>(1. / 2) *
-                  compute_double_com(F(), r, ex<Constant>(-1.) * adjoint(r_1));
-      non_canon_simplify(fFFt);
-      auto fFtFt = ex<Constant>(1. / 2) *
-                   compute_double_com(F(), ex<Constant>(-1.) * adjoint(r),
-                                      ex<Constant>(-1.) * adjoint(r_1));
-      non_canon_simplify(fFtFt);
-      auto fFtF = ex<Constant>(1. / 2) *
-                  compute_double_com(F(), ex<Constant>(-1.) * adjoint(r), r_1);
-      non_canon_simplify(fFtF);
+      auto sim = simplification::fock_based_projector_2(full_double_com);
 
-      auto fFF_sim = simplification::fock_based_projector_2(fFF);
-      // std::wcout << "FF: " << to_latex_align(fFF_sim.second,20,2) << std::endl;
-      auto fFFt_sim = simplification::fock_based_projector_2(fFFt);
-      // std::wcout << "FFt: " << to_latex_align(fFFt_sim.second,20,2) << std::endl;
-      auto fFtFt_sim = simplification::fock_based_projector_2(fFtFt);
-      // std::wcout << "FtFt: " << to_latex_align(fFtFt_sim.second,20,2) << std::endl;
-      auto fFtF_sim = simplification::fock_based_projector_2(fFtF);
-      // std::wcout << "FtF: " << to_latex_align(fFtF_sim.second,20,2) << std::endl;
-
-      auto one_body = com_1.first + (fFF_sim.first + fFFt_sim.first +
-                                     fFtFt_sim.first + fFtF_sim.first);
-      auto two_body = com_1.second + (fFF_sim.second + fFFt_sim.second +
-                                      fFtFt_sim.second + fFtF_sim.second);
+      auto one_body = com_1.first + (sim.first);
+      auto two_body = com_1.second + (sim.second);
 
       // cannot use non_canon_simplify here because of B term.
       non_canon_simplify(one_body);
