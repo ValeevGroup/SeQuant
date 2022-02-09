@@ -657,9 +657,13 @@ ExprPtr expand_A_operator(const ExprPtr& expr) {
 std::vector<std::map<Index, Index>> P_replacement_map(const Tensor& P,
                                                       bool keep_canonical) {
   assert(P.label() == L"P");
-  assert(P.bra_rank() > 1);
-  assert(P.bra().size() == P.ket().size());
-  container::svector<int> int_list(P.bra().size());
+  size_t size;
+  if (P.bra_rank() == 0 || P.ket_rank() == 0)
+    size = std::max(P.bra_rank(), P.ket_rank());
+  else
+    size = std::min(P.bra_rank(), P.ket_rank());
+
+  container::svector<int> int_list(size);
   std::iota(std::begin(int_list), std::end(int_list), 0);
   std::vector<std::map<Index, Index>> result;
   container::svector<Index> P_braket(P.const_braket().begin(),
@@ -669,12 +673,16 @@ std::vector<std::map<Index, Index>> P_replacement_map(const Tensor& P,
     auto P_braket_ptr = P_braket.begin();
     std::map<Index, Index> replacement_map;
     for (auto&& i : int_list) {
-      replacement_map.emplace(std::make_pair(*P_braket_ptr, P.bra()[i]));
-      P_braket_ptr++;
+      if(i < P.bra_rank()) {
+        replacement_map.emplace(std::make_pair(*P_braket_ptr, P.bra()[i]));
+        P_braket_ptr++;
+      }
     }
     for (auto&& i : int_list) {
-      replacement_map.emplace(std::make_pair(*P_braket_ptr, P.ket()[i]));
-      P_braket_ptr++;
+      if(i < P.ket_rank()) {
+        replacement_map.emplace(std::make_pair(*P_braket_ptr, P.ket()[i]));
+        P_braket_ptr++;
+      }
     }
     result.push_back(replacement_map);
   } while (std::next_permutation(int_list.begin(), int_list.end()));
@@ -690,15 +698,16 @@ ExprPtr expand_P_operator(const Product& product,
   bool has_P_operator = false;
 
   // Check P and build a replacement map
+  // Assuming a product can have multiple P operators
   std::vector<std::map<Index, Index>> map_list;
   for (auto& term : product) {
     if (term->is<Tensor>()) {
       auto P = term->as<Tensor>();
-      if ((P.label() == L"P") && (P.bra().size() > 1)) {
+      if ((P.label() == L"P") && (P.bra_rank() > 1 || (P.ket_rank() > 1))) {
         has_P_operator = true;
-        map_list = P_replacement_map(P, keep_canonical);
-        break;
-      } else if ((P.label() == L"P") && (P.bra().size() == 1)) {
+        auto map = P_replacement_map(P, keep_canonical);
+        map_list.insert(map_list.end(), map.begin(), map.end());
+      } else if ((P.label() == L"P") && (P.bra_rank() == 1 && (P.ket_rank() == 1))) {
         return remove_tensor_from_product(product, L"P");
       }
     }
@@ -724,18 +733,14 @@ ExprPtr expand_P_operator(const Product& product,
 }
 
 ExprPtr expand_P_operator(const ExprPtr& expr, bool keep_canonical) {
-  if (expr->is<Constant>() || expr->is<Tensor>()) return expr;
-
-  if (expr->is<Product>())
+  if (expr->is<Constant>() || expr->is<Tensor>())
+    return expr;
+  else if (expr->is<Product>())
     return expand_P_operator(expr->as<Product>());
   else if (expr->is<Sum>()) {
     auto result = std::make_shared<Sum>();
-    for (auto&& summand : *expr) {
-      if (summand->is<Product>())
-        result->append(expand_P_operator(summand->as<Product>(),
-                                         keep_canonical));
-      else
-        result->append(summand);
+    for (auto& summand : *expr) {
+        result->append(expand_P_operator(summand, keep_canonical));
     }
     return result;
   } else
