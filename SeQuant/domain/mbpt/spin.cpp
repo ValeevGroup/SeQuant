@@ -1133,8 +1133,9 @@ ExprPtr merge_operators(const Tensor& O1, const Tensor& O2){
   return ex<Tensor>(O);
 }
 
-ExprPtr open_shell_P_operator(const int& r, const int& n){
+ExprPtr open_shell_P_operator(const int r, const int n){
   std::vector<int> i_alpha(r), i_beta(n-r);
+  assert(!i_alpha.empty() && !i_beta.empty());
   std::iota(i_alpha.begin(), i_alpha.end(), 0);
   std::iota(i_beta.begin(), i_beta.end(), r);
   assert( r < n && n < 7);
@@ -1191,7 +1192,8 @@ ExprPtr open_shell_P_operator(const int& r, const int& n){
 }
 
 std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
-                                          const std::vector<std::vector<Index>> ext_index_groups){
+                                          const std::vector<std::vector<Index>> ext_index_groups,
+                                          const int single_spin_case){
 
   if(expr->is<Constant>()){
     return std::vector<ExprPtr>{expr};
@@ -1297,6 +1299,14 @@ std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
   auto i_rep = spin_cases(int_index_groups);
   auto e_rep = ext_spin_cases(ext_index_groups);
 
+  // For a single spin case, keep only the relevant spin case
+  // PS: all alpha indexing start at 0
+  if(single_spin_case){
+    auto external_replacement_map = e_rep.at(single_spin_case);
+    e_rep.clear();
+    e_rep.push_back(external_replacement_map);
+  }
+
   // Expand 'A' operator and 'antisymm' tensors
   auto expanded_expr = expand_A_operator(expr);
   expand(expanded_expr);
@@ -1373,6 +1383,10 @@ std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
     } // loop over internal indices
     result.push_back(std::make_shared<Sum>(e_result));
   } // loop over external indices
+
+  if(single_spin_case){
+    assert(result.size() == 1 && "Spin-specific case must return one expression.");
+  }
 
   // Canonicalize and simplify all expressions
   for(auto& expression: result){

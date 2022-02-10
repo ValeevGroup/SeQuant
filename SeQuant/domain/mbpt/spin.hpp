@@ -201,16 +201,19 @@ ExprPtr merge_operators(const Tensor& O1, const Tensor& O2);
 /// @param n n-particle Antisymmetrizer
 /// @return a sum of permutation operators as a sum
 /// @warning This function assumes the antisymmetrizer (A) has a canonical form
-ExprPtr open_shell_P_operator(const int& r, const int& n);
+ExprPtr open_shell_P_operator(const int r, const int n);
 
 /// @brief Generates spin expressions to be used for open-shell coupled cluster
 /// @detailed Every spin combination of external indices will have all spin
 /// combinations of internal indices.
 /// @param expr ExprPtr with spin orbital indices
 /// @param ext_index_groups groups of external indices
+/// @param single_spin_case Calculate open-shell expression for a specific spin
+/// case
 /// @return a vector of expr ptrs with spin expressions
 std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
-    const std::vector<std::vector<Index>> ext_index_groups = {{}});
+    const std::vector<std::vector<Index>> ext_index_groups = {{}},
+    const int single_spin_case = 0);
 
 /// @brief Transforms Coupled cluster from spin orbital to spatial orbitals
 /// @param expr ExprPtr with spin orbital indices
