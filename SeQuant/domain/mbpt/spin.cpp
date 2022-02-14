@@ -1133,6 +1133,95 @@ ExprPtr merge_operators(const Tensor& O1, const Tensor& O2){
   return ex<Tensor>(O);
 }
 
+std::vector<ExprPtr> open_shell_P_op_vector(const Tensor &A){
+
+  // N+1 spin-cases for corresponding residual
+  std::vector<ExprPtr> result_vector(A.bra_rank() + 1);
+
+  // List of indices
+  const auto rank = A.bra_rank();
+  std::vector<int> idx(rank);
+  auto bra = A.bra();
+  auto ket = A.ket();
+  std::iota(idx.begin(), idx.end(), 0);
+
+  // Anti-symmetrizer is preserved for all identical spin cases,
+  // So return a constant
+  result_vector.at(0) = ex<Constant>(1); // all alpha
+  result_vector.at(rank) = ex<Constant>(1);  // all beta
+
+  // This loop generates all the remaining spin cases
+  for (auto i = 1; i < rank; ++i) {
+    std::vector<int> alpha_spin(idx.begin(), idx.end() - i);
+    std::vector<int> beta_spin(idx.end() - i, idx.end());
+
+    std::vector<Tensor> P_bra_list, P_ket_list;
+    for (auto& j : alpha_spin) {
+      for (auto& k : beta_spin) {
+        if (!alpha_spin.empty() && !beta_spin.empty()) {
+          P_bra_list.emplace_back(Tensor(L"P", {bra.at(j), bra.at(k)}, {}));
+          P_ket_list.emplace_back(Tensor(L"P", {}, {ket.at(j), ket.at(k)}));
+        }
+      }
+    }
+
+    // The P4 terms
+    if (alpha_spin.size() > 1 && beta_spin.size() > 1) {
+      for(auto a = 0; a != alpha_spin.size() - 1; ++a){
+        auto i1 = alpha_spin[a];
+        for(auto b = a+1; b != alpha_spin.size(); ++b){
+          auto i2 = alpha_spin[b];
+        for(auto c = 0; c != beta_spin.size() - 1; ++c){
+          auto i3 = beta_spin[c];
+          for(auto d = c+1; d != beta_spin.size(); ++d) {
+            auto i4 = beta_spin[d];
+            P_bra_list.emplace_back(
+                Tensor(L"P", {bra.at(i1), bra.at(i3),
+                              bra.at(i2), bra.at(i4)}, {}));
+            P_ket_list.emplace_back(
+                Tensor(L"P", {}, {ket.at(i1), ket.at(i3),
+                        ket.at(i2), ket.at(i4)}));
+          }
+        }
+        }
+      }
+    }
+
+    Sum bra_permutations{};
+    bra_permutations.append(ex<Constant>(1.));
+    Sum ket_permutations{};
+    ket_permutations.append(ex<Constant>(1.));
+
+    for(auto& p : P_bra_list) {
+      bra_permutations.append(ex<Constant>(-1.) * ex<Tensor>(p));
+    }
+
+    for(auto& p : P_ket_list) {
+      ket_permutations.append(ex<Constant>(-1.) * ex<Tensor>(p));
+    }
+
+    ExprPtr spin_case_result = ex<Sum>(bra_permutations) * ex<Sum>(ket_permutations);
+    simplify(spin_case_result);
+
+    // Merge P operators if it encounters alpha_spin product of operators
+    for(auto& term : *spin_case_result){
+      if(term->is<Product>()){
+        std::vector<Tensor> t_list;
+        for(auto& t : *term){
+          t_list.push_back(t->as<Tensor>());
+        }
+        if(t_list.size() == 2){
+          term = merge_operators(t_list[0], t_list[1]);
+        }
+      }
+    }
+
+    result_vector.at(i) = spin_case_result;
+  }
+
+  return result_vector;
+}
+
 ExprPtr open_shell_P_operator(const int r, const int n){
   std::vector<int> i_alpha(r), i_beta(n-r);
   assert(!i_alpha.empty() && !i_beta.empty());
