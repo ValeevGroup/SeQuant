@@ -133,17 +133,22 @@ ExprPtr expand_A_operator(const ExprPtr& expr);
 /// @param P A particle permutation operator (with > 2 particle indices)
 /// @return Vector of replacement maps
 std::vector<std::map<Index, Index>> P_replacement_map(const Tensor& P,
-                                                      bool keep_canonical = true);
+                                                      bool keep_canonical = true,
+                                                      bool pair_wise = false);
 
 /// @brief Expand a product containing the particle permutation (P) operator
 /// @param A product term with/without P operator
 /// @return an ExprPtr containing sum of expanded terms if P is present
-ExprPtr expand_P_operator(const Product& product, bool keep_canonical = true);
+ExprPtr expand_P_operator(const Product& product,
+                          bool keep_canonical = true,
+                          bool pair_wise = true);
 
 /// @brief Expand an expression containing the particle permutation (P) operator
 /// @param expr any ExprPtr
 /// @return an ExprPtr containing sum of expanded terms if P is present
-ExprPtr expand_P_operator(const ExprPtr& expr, bool keep_canonical = true);
+ExprPtr expand_P_operator(const ExprPtr& expr,
+                          bool keep_canonical = true,
+                          bool pair_wise = true);
 
 std::vector<std::map<Index, Index>> S_replacement_maps(const Tensor& S);
 

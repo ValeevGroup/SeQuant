@@ -655,8 +655,26 @@ ExprPtr expand_A_operator(const ExprPtr& expr) {
 }
 
 std::vector<std::map<Index, Index>> P_replacement_map(const Tensor& P,
-                                                      bool keep_canonical) {
+                                                      bool keep_canonical,
+                                                      bool pair_wise) {
   assert(P.label() == L"P");
+
+  if(pair_wise){
+    // Return pair-wise replacements (this is the preferred method)
+    // P_ij -> {{i,j},{j,i}}
+    // P_ijkl -> {{i,j},{j,i},{k,l},{l,k}}
+    // P_ij^ab -> {{i,j},{j,i},{a,b},{b,a}}
+    assert(P.bra_rank() % 2 == 0 && P.ket_rank() % 2 == 0);
+    std::map<Index, Index> idx_rep;
+    for(auto i = 0; i != P.const_braket().size(); i+=2 ){
+      idx_rep.insert({P.const_braket().at(i), P.const_braket().at(i + 1)});
+      idx_rep.insert({P.const_braket().at(i+1), P.const_braket().at(i)});
+    }
+
+    assert(idx_rep.size() == (P.bra_rank() + P.ket_rank()));
+    return std::vector<std::map<Index, Index>>{idx_rep};
+  }
+
   size_t size;
   if (P.bra_rank() == 0 || P.ket_rank() == 0)
     size = std::max(P.bra_rank(), P.ket_rank());
@@ -694,7 +712,7 @@ std::vector<std::map<Index, Index>> P_replacement_map(const Tensor& P,
 }
 
 ExprPtr expand_P_operator(const Product& product,
-                          bool keep_canonical) {
+                          bool keep_canonical, bool pair_wise) {
   bool has_P_operator = false;
 
   // Check P and build a replacement map
@@ -705,7 +723,7 @@ ExprPtr expand_P_operator(const Product& product,
       auto P = term->as<Tensor>();
       if ((P.label() == L"P") && (P.bra_rank() > 1 || (P.ket_rank() > 1))) {
         has_P_operator = true;
-        auto map = P_replacement_map(P, keep_canonical);
+        auto map = P_replacement_map(P, keep_canonical, pair_wise);
         map_list.insert(map_list.end(), map.begin(), map.end());
       } else if ((P.label() == L"P") && (P.bra_rank() == 1 && (P.ket_rank() == 1))) {
         return remove_tensor_from_product(product, L"P");
@@ -732,15 +750,15 @@ ExprPtr expand_P_operator(const Product& product,
   return result;
 }
 
-ExprPtr expand_P_operator(const ExprPtr& expr, bool keep_canonical) {
+ExprPtr expand_P_operator(const ExprPtr& expr, bool keep_canonical, bool pair_wise) {
   if (expr->is<Constant>() || expr->is<Tensor>())
     return expr;
   else if (expr->is<Product>())
-    return expand_P_operator(expr->as<Product>());
+    return expand_P_operator(expr->as<Product>(), keep_canonical, pair_wise);
   else if (expr->is<Sum>()) {
     auto result = std::make_shared<Sum>();
     for (auto& summand : *expr) {
-        result->append(expand_P_operator(summand, keep_canonical));
+        result->append(expand_P_operator(summand, keep_canonical, pair_wise));
     }
     return result;
   } else
@@ -1119,21 +1137,13 @@ ExprPtr swap_spin(const ExprPtr& expr){
 ExprPtr merge_operators(const Tensor& O1, const Tensor& O2){
   assert(O1.label() == O2.label());
   assert(O1.symmetry() == O2.symmetry());
-  Tensor O;
-  if(O1.bra_rank() + O2.bra_rank() == O1.ket_rank() + O2.ket_rank()){
-    auto bra = ranges::views::concat(O1.bra(), O2.bra());
-    auto ket = ranges::views::concat(O1.ket(), O2.ket());
-    assert(bra.size() == ket.size());
-    O = Tensor(O1.label(), bra, ket, O1.symmetry());
-    return ex<Tensor>(O);
-  } else {
-    // FIXME: Other cases with dummy index
-  }
-
-  return ex<Tensor>(O);
+  auto bra = ranges::views::concat(O1.bra(), O2.bra());
+  auto ket = ranges::views::concat(O1.ket(), O2.ket());
+  return ex<Tensor>(Tensor(O1.label(), bra, ket, O1.symmetry()));
 }
 
 std::vector<ExprPtr> open_shell_P_op_vector(const Tensor &A){
+  assert(A.label() == L"A");
 
   // N+1 spin-cases for corresponding residual
   std::vector<ExprPtr> result_vector(A.bra_rank() + 1);
@@ -1193,11 +1203,13 @@ std::vector<ExprPtr> open_shell_P_op_vector(const Tensor &A){
     ket_permutations.append(ex<Constant>(1.));
 
     for(auto& p : P_bra_list) {
-      bra_permutations.append(ex<Constant>(-1.) * ex<Tensor>(p));
+      int prefactor = (p.bra_rank() + p.ket_rank() == 4) ? 1 : -1;
+      bra_permutations.append(ex<Constant>(prefactor) * ex<Tensor>(p));
     }
 
     for(auto& p : P_ket_list) {
-      ket_permutations.append(ex<Constant>(-1.) * ex<Tensor>(p));
+      int prefactor = (p.bra_rank() + p.ket_rank() == 4) ? 1 : -1;
+      ket_permutations.append(ex<Constant>(prefactor) * ex<Tensor>(p));
     }
 
     ExprPtr spin_case_result = ex<Sum>(bra_permutations) * ex<Sum>(ket_permutations);
@@ -1205,20 +1217,17 @@ std::vector<ExprPtr> open_shell_P_op_vector(const Tensor &A){
 
     // Merge P operators if it encounters alpha_spin product of operators
     for(auto& term : *spin_case_result){
-      if(term->is<Product>()){
-        std::vector<Tensor> t_list;
-        for(auto& t : *term){
-          t_list.push_back(t->as<Tensor>());
-        }
-        if(t_list.size() == 2){
-          term = merge_operators(t_list[0], t_list[1]);
+      if(term->is<Product>()) {
+        auto P = term->as<Product>();
+        if(P.factors().size() == 2){
+          auto P1 = P.factor(0)->as<Tensor>();
+          auto P2 = P.factor(1)->as<Tensor>();
+          term = merge_operators(P1, P2);
         }
       }
     }
-
     result_vector.at(i) = spin_case_result;
   }
-
   return result_vector;
 }
 
