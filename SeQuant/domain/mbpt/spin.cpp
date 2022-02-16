@@ -433,11 +433,11 @@ std::vector<std::map<Index, Index>> A_replacement_map(const Tensor& A) {
       std::map<Index, Index> replacement_map;
       auto A_braket_ptr = A_braket.begin();
       for (auto&& idx : bra_int_list) {
-        replacement_map.emplace(std::make_pair(*A_braket_ptr, A.bra()[idx]));
+        replacement_map.insert({*A_braket_ptr, A.bra()[idx]});
         A_braket_ptr++;
       }
       for (auto&& idx : ket_int_list) {
-        replacement_map.emplace(std::make_pair(*A_braket_ptr, A.ket()[idx]));
+        replacement_map.insert({*A_braket_ptr, A.ket()[idx]});
         A_braket_ptr++;
       }
       result.push_back(replacement_map);
@@ -569,7 +569,7 @@ ExprPtr expr_symmetrize(const Product& product) {
       std::map<Index, Index> map;
       auto list_ptr = list.begin();
       for (auto&& i : int_list) {
-        map.emplace(std::make_pair(*list_ptr, list[i]));
+        map.insert({*list_ptr, list[i]});
         list_ptr++;
       }
       result.push_back(map);
@@ -692,13 +692,13 @@ std::vector<std::map<Index, Index>> P_replacement_map(const Tensor& P,
     std::map<Index, Index> replacement_map;
     for (auto&& i : int_list) {
       if(i < P.bra_rank()) {
-        replacement_map.emplace(std::make_pair(*P_braket_ptr, P.bra()[i]));
+        replacement_map.insert({*P_braket_ptr, P.bra()[i]});
         P_braket_ptr++;
       }
     }
     for (auto&& i : int_list) {
       if(i < P.ket_rank()) {
-        replacement_map.emplace(std::make_pair(*P_braket_ptr, P.ket()[i]));
+        replacement_map.insert({*P_braket_ptr, P.ket()[i]});
         P_braket_ptr++;
       }
     }
@@ -778,9 +778,9 @@ std::vector<std::map<Index, Index>> S_replacement_maps(const Tensor& S) {
     auto S_bra_ptr = S.bra().begin();
     auto S_ket_ptr = S.ket().begin();
     for (auto&& i : int_list) {
-      map.emplace(std::make_pair(*S_bra_ptr, S.bra()[i]));
+      map.insert({*S_bra_ptr, S.bra()[i]});
       ++S_bra_ptr;
-      map.emplace(std::make_pair(*S_ket_ptr, S.ket()[i]));
+      map.insert({*S_ket_ptr, S.ket()[i]});
       ++S_ket_ptr;
     }
     maps.push_back(map);
@@ -1358,7 +1358,7 @@ std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
         assert((spin_bit == 0) || (spin_bit == 1));
         for(auto& idx : idx_group[idxg]){
           auto spin_idx = add_spin_label(idx, spin_bit);
-          idx_rep.emplace(std::make_pair(idx, spin_idx));
+          idx_rep.insert({idx, spin_idx});
         }
       }
       all_replacements[i] = idx_rep;
@@ -1379,7 +1379,7 @@ std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
       for(size_t j = 0; j != idx_group.size(); ++j){
         for(auto &idx : idx_group[j]) {
           auto spin_idx = add_spin_label(idx, spins[j]);
-          idx_rep.emplace(std::make_pair(idx, spin_idx));
+          idx_rep.insert({idx, spin_idx});
         }
       }
       all_replacements.push_back(idx_rep);
@@ -1627,7 +1627,7 @@ ExprPtr spintrace(
           std::wstring subscript_label_ws(subscript_label.begin(),
                                           subscript_label.end());
           Index spin_index = Index::make_label_index(space, subscript_label_ws);
-          index_replacements.emplace(std::make_pair(index, spin_index));
+          index_replacements.insert({index, spin_index});
         }
         ++index_group_count;
       }
@@ -1750,9 +1750,8 @@ ExprPtr factorize_S_operator(
     for (auto it = expr->begin(); it != expr->end(); ++it) {
       (*it)->canonicalize();
       auto hash = (*it)->hash_value();
-      // summands_hash_list.insert(hash);
       summands_hash_list.push_back(hash);
-      summands_hash_map.emplace(std::make_pair(hash, *it));
+      summands_hash_map.insert({hash, *it});
     }
     assert(summands_hash_list.size() == expr->size());
     assert(summands_hash_map.size() == expr->size());
