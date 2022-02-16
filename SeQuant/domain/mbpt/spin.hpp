@@ -195,24 +195,21 @@ Tensor swap_spin(const Tensor& t);
 ExprPtr swap_spin(const ExprPtr& expr);
 
 /// @brief Merge operators into a single operator (designed for P operator)
+/// @warning Repetition of indices is allowed in a bra or a ket
 ExprPtr merge_operators(const Tensor& O1, const Tensor& O2);
 
 /// @brief Vector of Anti-symmetrizers for spin-traced open-shell expr
 std::vector<ExprPtr> open_shell_A_op(const Tensor& A);
 
-/// @brief Generate a vector of permutation operators for all spin-cases
-std::vector<ExprPtr> open_shell_P_op_vector(const Tensor &A);
-
-/// @brief Generate the permutation expression from partial expansion of
+/// @brief Generate a vector of permutation operators for partial expansion of
 /// antisymmstrizer
 /// @detailed The antisymmetrizer need not be fully expanded to spin-trace for
 /// open-shell case. By expanding only the unlike spin terms, the
 /// antisymmetrizer is pereserved for same-spin particle indices.
-/// @param r number of alpha spins
-/// @param n n-particle Antisymmetrizer
-/// @return a sum of permutation operators as a sum
+/// @param A Antisymmetrizer tensor produced in Coupled Cluster
+/// @return a vector of expression pointers containing permutation operators as a sum
 /// @warning This function assumes the antisymmetrizer (A) has a canonical form
-ExprPtr open_shell_P_operator(const int r, const int n);
+std::vector<ExprPtr> open_shell_P_op_vector(const Tensor &A);
 
 /// @brief Generates spin expressions to be used for open-shell coupled cluster
 /// @detailed Every spin combination of external indices will have all spin
