@@ -323,23 +323,6 @@ TEST_CASE("Spin") {
       REQUIRE(result->size() == 36);
     }
 
-#if 0
-    // A3 * f * t3
-    {
-      auto input = ex<Constant>(1./12) *
-          ex<Tensor>(L"A", WstrList{L"i_1", L"i_2", L"i_3"},
-                           WstrList{L"a_1", L"a_2", L"a_3"}, Symmetry::antisymm) *
-          ex<Tensor>(L"f", WstrList{L"i_4"}, WstrList{L"i_1"}) *
-          ex<Tensor>(L"t", WstrList{L"a_1", L"a_2", L"a_3"},
-                     WstrList{L"i_2", L"i_3", L"i_4"}, Symmetry::antisymm);
-      std::wcout << __LINE__  << " Input: " << to_latex(input) << "\n";
-      auto result = expand_A_operator(input);
-      result->visit(reset_idx_tags);
-      simplify(result);
-      std::wcout << __LINE__ << " Result: " << to_latex(result) << "\n";
-    }
-#endif
-
     {  // 4-body
       const auto input =
           ex<Tensor>(L"A", WstrList{L"i_1", L"i_2", L"i_3", L"i_4"},
