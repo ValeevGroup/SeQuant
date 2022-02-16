@@ -14,12 +14,9 @@
 
 using namespace sequant;
 
-#define CLOSED_SHELL_SPINTRACE 1
-#if CLOSED_SHELL_SPINTRACE
 container::vector<double> biorthogonal_tran_coeff(const int n_particles, const double& threshold);
 std::vector<std::map<Index, Index>> biorthogonal_tran_idx_map(const container::vector<container::vector<Index>> ext_index_groups);
 ExprPtr symmetrize_expr(ExprPtr& expr, const container::vector<container::vector<Index>> ext_index_groups = {{}});
-#endif
 
 int main(int argc, char* argv[]) {
   std::setlocale(LC_ALL, "en_US.UTF-8");
@@ -42,7 +39,7 @@ int main(int argc, char* argv[]) {
   // set_num_threads(1);
 
 #ifndef NDEBUG
-  const size_t DEFAULT_NMAX = 3;
+  const size_t DEFAULT_NMAX = 4;
 #else
   const size_t DEFAULT_NMAX = 4;
 #endif
@@ -51,7 +48,7 @@ int main(int argc, char* argv[]) {
   constexpr bool print = false;
   // change to true to print stats
   Logger::get_instance().wick_stats = false;
-#if !CLOSED_SHELL_SPINTRACE
+
   ranges::for_each(std::array<bool, 2>{false, true}, [=](const bool screen) {
     ranges::for_each(
         std::array<bool, 2>{false, true}, [=](const bool use_topology) {
@@ -67,8 +64,6 @@ int main(int argc, char* argv[]) {
                            });
         });
   });
-#else
-  auto cc_r = sequant::eqs::cceqvec{3, 3}(true, true, true, true, true);
 
   // reset index tags
   auto reset_idx_tags = [](ExprPtr& expr) {
@@ -93,336 +88,128 @@ int main(int argc, char* argv[]) {
     return ext_idx_list;
   };
 
+  // Spin-orbital coupled cluster
+  auto cc_r = sequant::eqs::cceqvec{NMAX, NMAX}(true, true, true, true, true);
 
-#define PERMUTATION_TEST 1
-
-#if PERMUTATION_TEST
-  auto P13_b = ex<Tensor>(L"P", WstrList{L"i_98", L"i_99"},
-                          WstrList{L"a_1", L"a_3"},
-                          Symmetry::nonsymm);
-  auto P13_k = ex<Tensor>(L"P", WstrList{L"i_1", L"i_3"},
-                          WstrList{L"a_98", L"a_99"},
-                          Symmetry::nonsymm);
-  auto P12_b = ex<Tensor>(L"P", WstrList{L"i_98", L"i_99"},
-                          WstrList{L"a_1", L"a_2"},
-                          Symmetry::nonsymm);
-  auto P12_k = ex<Tensor>(L"P", WstrList{L"i_1", L"i_2"},
-                          WstrList{L"a_98", L"a_99"},
-                          Symmetry::nonsymm);
-
-  auto P23_b = ex<Tensor>(L"P", WstrList{L"i_98", L"i_99"},
-                          WstrList{L"a_2", L"a_3"},
-                          Symmetry::nonsymm);
-  auto P23_k = ex<Tensor>(L"P", WstrList{L"i_2", L"i_3"},
-                          WstrList{L"a_98", L"a_99"},
-                          Symmetry::nonsymm);
-
-  auto P4_1313 = ex<Tensor>(L"P", WstrList{L"i_1", L"i_3"},
-                            WstrList{L"a_1", L"a_3"},
-                            Symmetry::nonsymm);
-  auto P4_1323 = ex<Tensor>(L"P", WstrList{L"i_1", L"i_3"},
-                            WstrList{L"a_2", L"a_3"},
-                            Symmetry::nonsymm);
-  auto P4_2313 = ex<Tensor>(L"P", WstrList{L"i_2", L"i_3"},
-                            WstrList{L"a_1", L"a_3"},
-                            Symmetry::nonsymm);
-  auto P4_2323 = ex<Tensor>(L"P", WstrList{L"i_2", L"i_3"},
-                            WstrList{L"a_2", L"a_3"},
-                            Symmetry::nonsymm);
-
-  auto P4_1212 = ex<Tensor>(L"P", WstrList{L"i_1", L"i_2"},
-                            WstrList{L"a_1", L"a_2"},
-                            Symmetry::nonsymm);
-  auto P4_1213 = ex<Tensor>(L"P", WstrList{L"i_1", L"i_2"},
-                            WstrList{L"a_1", L"a_3"},
-                            Symmetry::nonsymm);
-  auto P4_1312 = ex<Tensor>(L"P", WstrList{L"i_1", L"i_3"},
-                            WstrList{L"a_1", L"a_2"},
-                            Symmetry::nonsymm);
-
-  auto p_aab = ex<Constant>(1.) - P13_b - P23_b - P13_k - P23_k +
-      P4_1313 + P4_1323 + P4_2313 + P4_2323;
-
-  auto p_abb = ex<Constant>(1.) - P13_b - P12_b - P13_k - P12_k +
-      P4_1212 + P4_1213 + P4_1312 + P4_1313;
-
-  auto A_12 = ex<Tensor>(L"A", WstrList{L"i_1", L"i_2"}, WstrList{L"a_1", L"a_2"}, Symmetry::antisymm);
-  auto A_23 = ex<Tensor>(L"A", WstrList{L"i_2", L"i_3"}, WstrList{L"a_2", L"a_3"}, Symmetry::antisymm);
-  auto A3 = ex<Tensor>(L"A", WstrList{L"i_1", L"i_2", L"i_3"}, WstrList{L"a_1", L"a_2", L"a_3"}, Symmetry::antisymm);
-
-
-  auto occA = IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::alpha);
-  auto virA = IndexSpace::instance(IndexSpace::active_unoccupied, IndexSpace::alpha);
-  auto occB = IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::beta);
-  auto virB = IndexSpace::instance(IndexSpace::active_unoccupied, IndexSpace::beta);
-  const auto i1A = Index(L"i⁺_1", occA);
-  const auto i2A = Index(L"i⁺_2", occA);
-  const auto a1A = Index(L"a⁺_1", virA);
-  const auto a2A = Index(L"a⁺_2", virA);
-  const auto a2B = Index(L"a⁻_2", virB);
-  const auto a3B = Index(L"a⁻_3", virB);
-  const auto i2B = Index(L"i⁻_2", occB);
-  const auto i3B = Index(L"i⁻_3", occB);
-  auto A2_aa = Tensor(L"A", {i1A, i2A}, {a1A, a2A}, Symmetry::antisymm);
-  auto A2_bb = Tensor(L"A", {i2B, i3B}, {a2B, a3B}, Symmetry::antisymm);
-
-  size_t n_aab = 0;
-  size_t n_abb = 0;
-  for (auto& product_term : *cc_r[3]) {
-    if(product_term->is<Product>()){
-      auto input = remove_tensor_from_product(product_term->as<Product>(), L"A");
-      std::wcout << "input: " << to_latex(input) << std::endl;
-      auto aab_input = p_aab * input;
-      expand(aab_input);
-      aab_input = expand_P_operator(aab_input, false);
-      aab_input->visit(reset_idx_tags);
-      simplify(aab_input);
-
-      auto aab_result = open_shell_spintrace(aab_input,ext_idx_list(3));
-      expand(aab_result[1]);
-      aab_result[1] = expand_A_operator(aab_result[1]);
-      aab_result[1]->visit(reset_idx_tags);
-      simplify(aab_result[1]);
-      n_aab += aab_result[1]->size();
-      // std::wcout << "aab_result:\n" << to_latex(aab_result[1]) << "\n";
-
-      auto aab_final = ex<Tensor>(A2_aa) * aab_result[1];
-      // std::wcout << "aab_final:\n" << to_latex(aab_final) << "\n";
-      expand(aab_final);
-      aab_final = expand_A_operator(aab_final);
-      aab_final->visit(reset_idx_tags);
-      simplify(aab_final);
-      // std::wcout << "aab_final:\n" << to_latex(aab_final) << "\n";
-
-      auto abb_input = p_abb * input;
-      expand(abb_input);
-      abb_input = expand_P_operator(abb_input, false);
-      abb_input->visit(reset_idx_tags);
-      simplify(abb_input);
-
-      auto abb_result = open_shell_spintrace(abb_input,ext_idx_list(3));
-      expand(abb_result[2]);
-      abb_result[2] = expand_A_operator(abb_result[2]);
-      abb_result[2]->visit(reset_idx_tags);
-      simplify(abb_result[2]);
-      n_abb += abb_result[2]->size();
-      // std::wcout << "abb_result:\n" << to_latex(abb_result[2]) << "\n";
-
-      auto abb_final = ex<Tensor>(A2_bb) * abb_result[2];
-      // std::wcout << "abb_final:\n" << to_latex(abb_final) << "\n";
-      expand(abb_final);
-      abb_final = expand_A_operator(abb_final);
-      abb_final->visit(reset_idx_tags);
-      simplify(abb_final);
-      // std::wcout << "abb_final:\n" << to_latex(abb_final) << "\n";
-
-//       auto st_with_A = open_shell_spintrace(product_term, ext_idx_list(3));
-
-//      if(to_latex(aab_final) != to_latex(st_with_A[1])){
-//        std::wcout << "aab_final:    " << to_latex(aab_final) << "\n";
-//        std::wcout << "st_with_A[1]: " << to_latex(st_with_A[1]) << "\n\n";
-//      }
-//      if(to_latex(abb_final) != to_latex(st_with_A[2])){
-//        std::wcout << "abb_final:    " << to_latex(abb_final) << "\n";
-//        std::wcout << "st_with_A[2]: " << to_latex(st_with_A[2]) << "\n\n";
-//      }
-
-    }
-
-  }
-  std::cout << n_aab << " " << n_abb << std::endl;
-  return 0;
-#endif
-
-
-#define PRINT_PRODUCT_TERMS 0
-#if PRINT_PRODUCT_TERMS
-  for (int i = 3; i < cc_r.size(); ++i){
-    size_t term_counter = 0;
-    for(auto term : *cc_r[i]) {
-      std::wcout /*<< term_counter << ": " */ << "$$" << to_latex(term) << "$$ \n";
-      ++term_counter;
-    }
-    std::cout << "\n";
-  }
-  // return 0;
-#endif
-
-
-#define OPEN_SHELL_TEST 0
-#if OPEN_SHELL_TEST
-  auto occA = IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::alpha);
-  auto virA = IndexSpace::instance(IndexSpace::active_unoccupied, IndexSpace::alpha);
-  auto occB = IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::beta);
-  auto virB = IndexSpace::instance(IndexSpace::active_unoccupied, IndexSpace::beta);
-  const auto i1A = Index(L"i⁺_1", occA);
-  const auto i2A = Index(L"i⁺_2", occA);
-  const auto i3A = Index(L"i⁺_3", occA);
-  const auto a1A = Index(L"a⁺_1", virA);
-  const auto a2A = Index(L"a⁺_2", virA);
-  const auto a3A = Index(L"a⁺_3", virA);
-
-  const auto i1B = Index(L"i⁻_1", occB);
-  const auto i2B = Index(L"i⁻_2", occB);
-  const auto i3B = Index(L"i⁻_3", occB);
-  const auto a1B = Index(L"a⁻_1", virB);
-  const auto a2B = Index(L"a⁻_2", virB);
-  const auto a3B = Index(L"a⁻_3", virB);
-
-  auto A2_alpha = Tensor(L"A", {i1A, i2A}, {a1A, a2A}, Symmetry::antisymm);
-  auto A2_beta = Tensor(L"A", {i1B, i2B}, {a1B, a2B}, Symmetry::antisymm);
-
-  auto A3_alpha = Tensor(L"A", {i1A, i2A, i3A}, {a1A, a2A, a3A}, Symmetry::antisymm);
-  auto A3_beta = Tensor(L"A", {i1B, i2B, i3B}, {a1B, a2B, a3B}, Symmetry::antisymm);
-
-  auto A3_aab = Tensor(L"A", {i1A, i2A, i3B}, {a1A, a2A, a3B}, Symmetry::antisymm);
-  auto A3_abb = Tensor(L"A", {i1A, i2B, i3B}, {a1A, a2B, a3B}, Symmetry::antisymm);
-
-
-  for (int i = 3; i < 4 /*cc_r.size()*/; ++i) {
-  size_t counter = 0;
-  std::vector<size_t> n_st_terms(i+1,0);
-  std::vector<size_t> n_st_with_A_terms(i+1,0);
-  const auto list = ext_idx_list(i);
-
-  for (auto& product_term : *cc_r[i]) {
-    ExprPtr term;
-    if(product_term->is<Product>())
-      term = remove_tensor_from_product(product_term->as<Product>(), L"A");
-
-    // auto term = product_term;
-    // std::wcout << "Input " << counter << ": " << to_latex(term) << std::endl;
-
-    auto os_st = open_shell_spintrace(term, list);
-    auto st_with_A = open_shell_spintrace(product_term, list);
-
-    // for (size_t j = 0; j != os_st.size(); ++j) {
-    for (size_t j : {0,3} /* all same spin blocks only*/) {
-      // std::wcout << __LINE__ << " " << os_st[j]->size() << ": " << to_latex(os_st[j]) << "\n";
-
-      ExprPtr new_expr{};
-      if (j==0)
-        new_expr = ex<Tensor>(A3_alpha) * os_st[j];
-      else if (j==1)
-        new_expr = ex<Tensor>(A3_aab) * os_st[j];
-      else if (j==2)
-        new_expr = ex<Tensor>(A3_abb) * os_st[j];
-      else if (j==3)
-        new_expr = ex<Tensor>(A3_beta) * os_st[j];
-
-      expand(new_expr);
-      new_expr = expand_A_operator(new_expr);
-      new_expr->visit(reset_idx_tags);
-      canonicalize(new_expr);
-      rapid_simplify(new_expr);
-
-      assert(new_expr->size() == st_with_A[j]->size());
-      assert(to_latex(new_expr) == to_latex(st_with_A[j]));
-      n_st_terms[j] += os_st[j]->size();
-      n_st_with_A_terms[j] += st_with_A[j]->size();
-    }
-      ++counter;
-  }
-  std::cout << "Full expansion: " << n_st_with_A_terms[0] << " " << n_st_with_A_terms[3] << "\n";
-  std::cout << "Preserve A2: " << n_st_terms[0] << " " << n_st_terms[3] << "\n";
-
-  return 0;
-
-  std::cout << "CC R" << i << ": ";
-  size_t n_terms_R = 0;
-  for (auto& n_terms : n_st_terms) {
-    n_terms_R += n_terms;
-    std::cout << n_terms << " ";
-  }
-  std::cout << ": " << n_terms_R << std::endl;
-}
-  return 0;
-#endif
-
-#if 0 // Open-shell
-  for (int i = 1; i < cc_r.size(); ++i) {
-    const auto list = ext_idx_list(i);
-    auto temp = open_shell_spintrace(cc_r[i], list);
-    std::cout << "R" << i << ": ";
-    for(auto& t : temp){
-      std::cout << t->size() << " ";
-      // std::wcout << to_latex(t) << "\n";
-    }
-    std::cout << "\n";
-  }
-  return 0;
-#endif
-
-  // Closed-shell coupled cluster spin-trace
+#if 0
+  //
+  // Closed-shell spintrace (fast)
+  //
   std::vector<ExprPtr> cc_st_r(cc_r.size());
-  for (int i = 1; i < cc_r.size(); ++i) {
+  for (size_t i = 1; i < cc_r.size(); ++i) {
     const auto tstart = std::chrono::high_resolution_clock::now();
-    const auto list = ext_idx_list(i);
-    cc_st_r[i] = closed_shell_spintrace(cc_r[i], list);
-    // cc_st_r[i] = closed_shell_cc_spintrace(cc_r[i]);
-    auto tstop = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> time_elapsed = tstop - tstart;
-    printf("CC R%d size: %lu spintrace: %5.6f sec.\n", i, cc_st_r[i]->size(), time_elapsed.count());
+    auto ext_idx = ext_idx_list(i);
+    cc_st_r[i] = sequant::closed_shell_CC_spintrace(cc_r[i]);
     canonicalize(cc_st_r[i]);
-    tstop = std::chrono::high_resolution_clock::now();
-    time_elapsed = tstop - tstart;
-    printf("CC R%d size: %lu canonicalize: %5.6f sec.\n", i, cc_st_r[i]->size(), time_elapsed.count());
 
     // Remove S operator
-    for(auto&& term: *cc_st_r[i]){
-      if(term->is<Product>()) term = remove_tensor_from_product(term->as<Product>(), L"S");
+    for (auto& term : *cc_st_r[i]) {
+      if (term->is<Product>())
+        term = sequant::remove_tensor_from_product(term->as<Product>(), L"S");
     }
 
-    // Checks if the replacement map is a canonical sequence
-    auto is_canonical = [] (const std::map<Index, Index>& idx_map){
-      bool canonical = true;
-      for(auto&& pair: idx_map) if(pair.first != pair.second) return false;
-      return canonical;
-    };
+    // Biorthogonal transformation
+    cc_st_r[i] = biorthogonal_transform(cc_st_r[i], i, ext_idx);
 
-    // Get coefficients and replacement maps
-    auto btc = biorthogonal_tran_coeff(list.size(), 1.e-12);
-
-    auto idx_map = biorthogonal_tran_idx_map(list);
-    assert(btc.size() == idx_map.size());
-
-    // Append scale and append all transformations
-    Sum bt_expr{};
-    auto btc_ptr = btc.begin();
-    for(auto&& map: idx_map){
-      ExprPtr transformed_expr{};
-      if(is_canonical(map))
-        transformed_expr = ex<Constant>(*btc_ptr) * cc_st_r[i];
-      else
-        transformed_expr = ex<Constant>(*btc_ptr) * transform_expression(cc_st_r[i], map);
-      btc_ptr++;
-      bt_expr.append(transformed_expr);
-    }
-    cc_st_r[i] = std::make_shared<Sum>(bt_expr);
-
-    tstop = std::chrono::high_resolution_clock::now();
-    time_elapsed = tstop - tstart;
-    printf("CC R%d size: %lu biorthogonal transform time: %5.6f sec.\n", i, cc_st_r[i]->size(), time_elapsed.count());
-
-    if(i != 1)
-      cc_st_r[i] = symmetrize_expr(cc_st_r[i], list);
-
-    tstop = std::chrono::high_resolution_clock::now();
-    time_elapsed = tstop - tstart;
-    printf("CC R%d size: %lu S time: %5.6f sec.\n", i, cc_st_r[i]->size(), time_elapsed.count());
+    // The symmetrizer operator is required for canonicalizer to give the
+    // correct result
+    if (i != 1) cc_st_r[i] = symmetrize_expr(cc_st_r[i], ext_idx);
     simplify(cc_st_r[i]);
 
-    tstop = std::chrono::high_resolution_clock::now();
-    time_elapsed = tstop - tstart;
-    printf("CC R%d size: %lu simplify time: %5.6f sec.\n\n", i, cc_st_r[i]->size(), time_elapsed.count());
+    // Remove S operator
+    for (auto& term : *cc_st_r[i]) {
+      if (term->is<Product>())
+        term = remove_tensor_from_product(term->as<Product>(), L"S");
+    }
+
+    auto tstop = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> time_elapsed = tstop - tstart;
+    printf("CC R%lu size: %lu time: %5.3f sec.\n", i,
+                                  cc_st_r[i]->size(), time_elapsed.count());
   }
-  std::wcout << "CCSDT: " << to_latex(*cc_st_r[3]) << std::endl;
 #endif
 
-  return 0;
+  //
+  // Open-shell spintrace
+  //
+  std::cout << "Open-shell coupled cluster: nterms per spin blocks: " << std::endl;
+  std::vector<std::vector<ExprPtr>> os_cc_st_r(cc_r.size());
+  for (auto i = 1; i < cc_r.size(); ++i) {
+    Tensor A = cc_r[i]->as<Sum>().summand(0)->as<Product>().factors()[0]->as<Tensor>();
+    assert(A.label() == L"A");
+    auto P_vec = open_shell_P_op_vector(A);
+    auto A_vec = open_shell_A_op(A);
+    assert(P_vec.size() == i+1);
+
+    std::vector<Sum> concat_terms(i + 1);
+    size_t n_spin_orbital_term = 0;
+    for (auto& product_term : *cc_r[i]) {
+      auto term = remove_tensor_from_product(product_term->as<Product>(), L"A");
+      std::vector<ExprPtr> os_st(i+1);
+
+      // Apply the P operators on the product term without the A,
+      // Expand the P operators and spin-trace the expression
+      // Then apply A operator, canonicalize and remove A operator
+      for (int s = 0; s != os_st.size(); ++s) {
+        os_st.at(s) = P_vec.at(s) * term;
+        expand(os_st.at(s));
+        os_st.at(s) = expand_P_operator(os_st.at(s), false, true);
+        os_st.at(s) = open_shell_spintrace(os_st.at(s),
+                                           ext_idx_list(i), s).at(0);
+        if (i > 2) {
+          os_st.at(s) = A_vec.at(s) * os_st.at(s);
+          simplify(os_st.at(s));
+          os_st.at(s) = remove_tensor_from_expr(os_st.at(s), L"A");
+        }
+      }
+
+      for (size_t j = 0; j != os_st.size(); ++j) {
+        concat_terms.at(j).append(os_st.at(j));
+      }
+      ++n_spin_orbital_term;
+    }
+
+    // Combine spin-traced terms for the current residual
+    std::vector<ExprPtr> expr_vec;
+    std::cout << "CC R" << i << ": ";
+    for (auto& spin_case : concat_terms) {
+      auto ptr = sequant::ex<Sum>(spin_case);
+      expr_vec.push_back(ptr);
+      std::cout << ptr->size() << " ";
+    }
+
+    os_cc_st_r.at(i) = std::move(expr_vec);
+    std::cout << "\n";
+  }
+
+#define runtime_assert(tf)                                         \
+  if (!(tf)) {                                                     \
+    std::ostringstream oss;                                        \
+    oss << "failed assert at line " << __LINE__ << " in SRCC example"; \
+    throw std::runtime_error(oss.str().c_str());                   \
+  }
+
+  if (NMAX == 4) {
+    runtime_assert(os_cc_st_r.size() == 5);
+    runtime_assert(os_cc_st_r.at(1).at(0)->size() == 30);
+    runtime_assert(os_cc_st_r.at(2).at(1)->size() == 130);
+    runtime_assert(os_cc_st_r.at(2).at(2)->size() == 74);
+    runtime_assert(os_cc_st_r.at(3).at(1)->size() == 249);
+    runtime_assert(os_cc_st_r.at(3).at(3)->size() == 124);
+    runtime_assert(os_cc_st_r.at(4).at(1)->size() == 356);
+    runtime_assert(os_cc_st_r.at(4).at(2)->size() == 386);
+    runtime_assert(os_cc_st_r.at(4).at(4)->size() == 156);
+  } else if (NMAX == 3) {
+    runtime_assert(os_cc_st_r.size() == 4);
+    runtime_assert(os_cc_st_r.at(1).at(0)->size() == 30);
+    runtime_assert(os_cc_st_r.at(2).at(0)->size() == 65);
+    runtime_assert(os_cc_st_r.at(2).at(1)->size() == 122);
+    runtime_assert(os_cc_st_r.at(3).at(2)->size() == 209);
+    runtime_assert(os_cc_st_r.at(3).at(3)->size() == 75);
+  }
+
 }
 
-#if CLOSED_SHELL_SPINTRACE
 // Generate S operator from external index list
 ExprPtr symmetrize_expr(ExprPtr& expr, const container::vector<container::vector<Index>> ext_index_groups){
 
@@ -510,5 +297,4 @@ std::vector<std::map<Index, Index>> biorthogonal_tran_idx_map(const container::v
   } while(std::next_permutation(idx_list.begin(), idx_list.end()));
   return result;
 }
-#endif
 
