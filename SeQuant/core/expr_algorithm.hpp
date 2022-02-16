@@ -403,6 +403,11 @@ inline void simplify(ExprPtr& expr) {
   rapid_simplify(expr);
 }
 
+inline void non_canon_simplify(ExprPtr& expr){
+  expand(expr);
+  rapid_simplify(expr);
+}
+
 }  // namespace sequant
 
 #endif //SEQUANT_EXPR_ALGORITHM_HPP

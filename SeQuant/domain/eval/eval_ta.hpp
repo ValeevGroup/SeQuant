@@ -197,20 +197,20 @@ auto eval_antisymm(EvalNode const& node, Iterable const& target_indx_labels,
   auto result =
       eval(node, target_indx_labels, std::forward<Yielder>(yielder), man);
 
-  auto asymm_result = decltype(result){result.world(), result.trange()};
-  asymm_result.fill(0);
+  auto antisymm_result = decltype(result){result.world(), result.trange()};
+  antisymm_result.fill(0);
 
   auto const lannot = detail::ords_to_annot(
       ranges::views::iota(size_t{0}, result.trange().rank()) |
       ranges::to_vector);
 
-  auto asym_impl = [&result, &asymm_result,
+  auto asym_impl = [&result, &antisymm_result,
                     &lannot](auto const& pwp) {  // pwp = perm with phase
-    asymm_result(lannot) += pwp.phase * result(detail::ords_to_annot(pwp.perm));
+    antisymm_result(lannot) += pwp.phase * result(detail::ords_to_annot(pwp.perm));
   };
 
   antisymmetrize_tensor(result.trange().rank(), asym_impl);
-  return asymm_result;
+  return antisymm_result;
 }
 
 }  // namespace sequant::eval::ta
