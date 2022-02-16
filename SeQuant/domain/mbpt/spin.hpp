@@ -197,6 +197,9 @@ ExprPtr swap_spin(const ExprPtr& expr);
 /// @brief Merge operators into a single operator (designed for P operator)
 ExprPtr merge_operators(const Tensor& O1, const Tensor& O2);
 
+/// @brief Vector of Anti-symmetrizers for spin-traced open-shell expr
+std::vector<ExprPtr> open_shell_A_op(const Tensor& A);
+
 /// @brief Generate a vector of permutation operators for all spin-cases
 std::vector<ExprPtr> open_shell_P_op_vector(const Tensor &A);
 

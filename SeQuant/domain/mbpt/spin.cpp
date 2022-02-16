@@ -43,17 +43,9 @@ ExprPtr transform_expression(const ExprPtr& expr,
     return result;
   } else if (expr->is<Sum>()) {
     auto result = std::make_shared<Sum>();
-    for (auto&& term : *expr) {
-      if (term->is<Constant>())
-        result->append(ex<Constant>(scaling_factor) * term);
-      else if (term->is<Tensor>()) {
-        auto transformed_tensor =
-            ex<Constant>(scaling_factor) * transform_tensor(term->as<Tensor>());
-        result->append(transformed_tensor);
-      } else if (term->is<Product>()) {
-        auto transformed_product = transform_product(term->as<Product>());
-        result->append(transformed_product);
-      }
+    for (auto& term : *expr) {
+      result->append(
+          transform_expression(term, index_replacements, scaling_factor));
     }
     return result;
   } else
@@ -148,12 +140,12 @@ ExprPtr remove_spin(ExprPtr& expr) {
     {
 
       for (auto&& idx : ranges::views::concat(bra, ket)) {
-        auto space = IndexSpace::instance(idx.space().type(),
-                                          IndexSpace::nullqns);
+        auto type = idx.space().type();
         auto subscript_label = idx.label().substr(idx.label().find(L'_') + 1);
-        std::wstring subscript_label_ws(subscript_label.begin(),
+        std::wstring subscript(subscript_label.begin(),
                                         subscript_label.end());
-        idx = Index::make_label_index(space, subscript_label_ws);
+        idx = Index::make_label_index(IndexSpace(type, IndexSpace::nullqns),
+                                      subscript);
       }
     }
     Tensor result(tensor.label(), bra, ket, tensor.symmetry(),
@@ -223,16 +215,17 @@ bool can_expand(const Tensor& tensor) {
   }
 
   // count alpha indices in bra
+  auto is_alpha = [](const Index& idx){
+    return idx.space().qns() == IndexSpace::alpha;
+  };
+
+  // count alpha indices in bra
   int a_bra = std::count_if(tensor.bra().begin(), tensor.bra().end(),
-                            [](const Index& idx){
-                              return idx.space().qns() == IndexSpace::alpha;
-                            });
+                            is_alpha);
 
   // count alpha indices in ket
   int a_ket = std::count_if(tensor.ket().begin(), tensor.ket().end(),
-                            [](const Index& idx){
-                              return idx.space().qns() == IndexSpace::alpha;
-                            });
+                            is_alpha);
 
   return a_bra == a_ket;
 }
@@ -839,9 +832,7 @@ ExprPtr expand_S_operator(const ExprPtr& expr) {
     for (auto&& term : *expr) {
       if (term->is<Product>()) {
         result->append(expand_S_product(term->as<Product>()));
-      } else if (term->is<Tensor>()) {
-        result->append(term);
-      } else if (term->is<Constant>()) {
+      } else if (term->is<Tensor>() || term->is<Constant>()) {
         result->append(term);
       }
     }
@@ -1142,6 +1133,51 @@ ExprPtr merge_operators(const Tensor& O1, const Tensor& O2){
   return ex<Tensor>(Tensor(O1.label(), bra, ket, O1.symmetry()));
 }
 
+std::vector<ExprPtr> open_shell_A_op(const Tensor& A){
+  assert(A.label() == L"A");
+  assert(A.bra_rank() == A.ket_rank());
+  auto rank = A.bra_rank();
+
+  // Add spin label alpha to index
+  auto add_alpha = [] (const Index& idx){
+    std::wstring idx_n_ws(idx.label().substr(idx.label().find(L'_') + 1));
+    auto space = IndexSpace::instance(idx.space().type(),
+                                      IndexSpace::alpha);
+    return Index::make_label_index(space, idx_n_ws);
+  };
+  // Add spin label beta to index
+  auto add_beta = [] (const Index& idx){
+    std::wstring idx_n_ws(idx.label().substr(idx.label().find(L'_') + 1));
+    auto idx_type = idx.space().type();
+    auto space = IndexSpace::instance(idx.space().type(),
+                                      IndexSpace::beta);
+    return Index::make_label_index(space, idx_n_ws);
+  };
+
+  std::vector<ExprPtr> result(rank+1);
+  result.at(0) = ex<Constant>(1.0);
+  result.at(rank) = ex<Constant>(1.0);
+
+  for(auto i = 1; i < rank; ++i){
+    auto spin_bra = A.bra();
+    auto spin_ket = A.ket();
+    std::transform(spin_bra.begin(), spin_bra.end() - i,
+                   spin_bra.begin(), add_alpha);
+    std::transform(spin_ket.begin(), spin_ket.end() - i,
+                   spin_ket.begin(), add_alpha);
+    std::transform(spin_bra.end() - i, spin_bra.end(),
+                   spin_bra.end() - i, add_beta);
+    std::transform(spin_ket.end() - i, spin_ket.end(),
+                   spin_ket.end() - i, add_beta);
+    ranges::for_each(spin_bra, [](const Index& i){i.reset_tag();});
+    ranges::for_each(spin_ket, [](const Index& i){i.reset_tag();});
+    result.at(i) = ex<Tensor>(Tensor(L"A", spin_bra, spin_ket, Symmetry::antisymm));
+    // std::wcout << to_latex(result.at(i)) << " ";
+  }
+  // std::wcout << "\n" << std::endl;
+  return result;
+}
+
 std::vector<ExprPtr> open_shell_P_op_vector(const Tensor &A){
   assert(A.label() == L"A");
 
@@ -1181,18 +1217,18 @@ std::vector<ExprPtr> open_shell_P_op_vector(const Tensor &A){
         auto i1 = alpha_spin[a];
         for(auto b = a+1; b != alpha_spin.size(); ++b){
           auto i2 = alpha_spin[b];
-        for(auto c = 0; c != beta_spin.size() - 1; ++c){
-          auto i3 = beta_spin[c];
-          for(auto d = c+1; d != beta_spin.size(); ++d) {
-            auto i4 = beta_spin[d];
-            P_bra_list.emplace_back(
-                Tensor(L"P", {bra.at(i1), bra.at(i3),
-                              bra.at(i2), bra.at(i4)}, {}));
-            P_ket_list.emplace_back(
-                Tensor(L"P", {}, {ket.at(i1), ket.at(i3),
-                        ket.at(i2), ket.at(i4)}));
+          for(auto c = 0; c != beta_spin.size() - 1; ++c){
+            auto i3 = beta_spin[c];
+            for(auto d = c+1; d != beta_spin.size(); ++d) {
+              auto i4 = beta_spin[d];
+              P_bra_list.emplace_back(
+                  Tensor(L"P", {bra.at(i1), bra.at(i3),
+                                bra.at(i2), bra.at(i4)}, {}));
+              P_ket_list.emplace_back(
+                  Tensor(L"P", {}, {ket.at(i1), ket.at(i3),
+                          ket.at(i2), ket.at(i4)}));
+            }
           }
-        }
         }
       }
     }
@@ -1370,7 +1406,7 @@ std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
   auto ext_spin_cases = [&add_spin_label] (const std::vector<IndexGroup>& idx_group){
     std::vector<std::map<Index, Index>> all_replacements;
 
-    std::vector<int> spins(idx_group.size(), 0);
+    // std::vector<int> spins(idx_group.size(), 0);
     for(size_t i = 0; i <= idx_group.size(); ++i){
       std::vector<int> spins(idx_group.size(), 0);
       std::fill(spins.end()-i,spins.end(), 1);
@@ -1612,21 +1648,15 @@ ExprPtr spintrace(
         assert((spin_bit == 0) || (spin_bit == 1));
 
         for (auto&& index : index_group) {
-          IndexSpace space;
-          space = spin_bit == 0
-                      ? IndexSpace::instance(
-                            IndexSpace::instance(index.label()).type(),
-                            IndexSpace::alpha)
-                      : IndexSpace::instance(
-                            IndexSpace::instance(index.label()).type(),
-                            IndexSpace::beta);
+          auto type = index.space().type();
+          auto qns = spin_bit == 0 ? IndexSpace::alpha : IndexSpace::beta;
 
-          // TODO: Check if valid for index with no subscripts
+          // This assumes index has a subscript
           auto subscript_label =
               index.label().substr(index.label().find(L'_') + 1);
-          std::wstring subscript_label_ws(subscript_label.begin(),
+          std::wstring subscript(subscript_label.begin(),
                                           subscript_label.end());
-          Index spin_index = Index::make_label_index(space, subscript_label_ws);
+          Index spin_index = Index::make_label_index(IndexSpace(type, qns), subscript);
           index_replacements.insert({index, spin_index});
         }
         ++index_group_count;
