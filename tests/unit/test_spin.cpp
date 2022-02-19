@@ -53,7 +53,7 @@ TEST_CASE("Spin") {
     REQUIRE(alpha1.ascii_label() == "alphaa_1");
   }
 
-  SECTION("Tensor: can_expand, is_tensor_spin_symm, remove_spin") {
+  SECTION("Tensor: can_expand, spin_symm_tensor, remove_spin") {
     auto p1 = Index(L"p⁺_1",
                     IndexSpace::instance(IndexSpace::all, IndexSpace::alpha));
     auto p2 =
@@ -65,7 +65,7 @@ TEST_CASE("Spin") {
 
     auto input = ex<Tensor>(L"t", IndexList{p1, p2}, IndexList{p3, p4});
     REQUIRE(can_expand(input->as<Tensor>()) == true);
-    REQUIRE(is_tensor_spin_symm(input->as<Tensor>()) == true);
+    REQUIRE(spin_symm_tensor(input->as<Tensor>()) == true);
 
     auto spin_swap_tensor = swap_spin(input->as<Tensor>());
     REQUIRE(to_latex(spin_swap_tensor) == L"{t^{{p⁻_3}{p⁺_4}}_{{p⁻_1}{p⁺_2}}}");
@@ -78,7 +78,7 @@ TEST_CASE("Spin") {
     input = ex<Tensor>(L"t", IndexList{p1, p3}, IndexList{p2, p4});
     REQUIRE(to_latex(swap_spin(input)) == L"{t^{{p⁺_2}{p⁺_4}}_{{p⁻_1}{p⁻_3}}}");
     REQUIRE(can_expand(input->as<Tensor>()) == false);
-    REQUIRE(is_tensor_spin_symm(input->as<Tensor>()) == false);
+    REQUIRE(spin_symm_tensor(input->as<Tensor>()) == false);
   }
 
   SECTION("Tensor: expand_antisymm") {
@@ -208,14 +208,14 @@ TEST_CASE("Spin") {
     // 0-body
     {
       auto input = ex<Constant>(1);
-      auto result = expand_A_operator(input);
+      auto result = expand_A_op(input);
       REQUIRE(result->size() == 0);
       REQUIRE(result->is_atom());
 
       input =
           ex<Constant>(1) * ex<Tensor>(L"A", WstrList{L"i_1"}, WstrList{L"a_1"},
                                        Symmetry::antisymm);
-      result = expand_A_operator(input);
+      result = expand_A_op(input);
       REQUIRE(result->size() == 0);
       REQUIRE(result->is_atom());
     }
@@ -226,7 +226,7 @@ TEST_CASE("Spin") {
                               Symmetry::antisymm) *
                    ex<Tensor>(L"t", WstrList{L"a_1"}, WstrList{L"i_1"},
                               Symmetry::antisymm);
-      auto result = expand_A_operator(input);
+      auto result = expand_A_op(input);
       REQUIRE(result->size() == 1);
       REQUIRE(!result->is<Sum>());
     }
@@ -236,7 +236,7 @@ TEST_CASE("Spin") {
       auto input = ex<Constant>(1. / 4.) *
                    ex<Tensor>(L"g", WstrList{L"i_1", L"i_2"},
                               WstrList{L"a_1", L"a_2"}, Symmetry::antisymm);
-      auto result = expand_A_operator(input);
+      auto result = expand_A_op(input);
       REQUIRE(result->size() == 1);
       REQUIRE(to_latex(result) ==
               L"{{{\\frac{1}{4}}}{\\bar{g}^{{a_1}{a_2}}_{{i_1}{i_2}}}}");
@@ -246,7 +246,7 @@ TEST_CASE("Spin") {
                          WstrList{L"i_1", L"i_2"}, Symmetry::antisymm) *
               ex<Tensor>(L"g", WstrList{L"i_1", L"i_2"},
                          WstrList{L"a_1", L"a_2"}, Symmetry::antisymm);
-      result = expand_A_operator(input);
+      result = expand_A_op(input);
       REQUIRE(result->size() == 4);
       REQUIRE(result->is<Sum>());
       REQUIRE(
@@ -264,7 +264,7 @@ TEST_CASE("Spin") {
                          WstrList{L"a_3", L"a_4"}, Symmetry::antisymm) *
               ex<Tensor>(L"t", WstrList{L"a_3"}, WstrList{L"i_1"}) *
               ex<Tensor>(L"t", WstrList{L"a_4"}, WstrList{L"i_2"});
-      result = expand_A_operator(input);
+      result = expand_A_op(input);
       REQUIRE(result->is<Sum>());
       REQUIRE(result->size() == 4);
       REQUIRE(to_latex(result) ==
@@ -288,7 +288,7 @@ TEST_CASE("Spin") {
               ex<Tensor>(L"t", WstrList{L"a_4"}, WstrList{L"i_2"}) *
               ex<Tensor>(L"t", WstrList{L"a_1"}, WstrList{L"i_3"}) *
               ex<Tensor>(L"t", WstrList{L"a_2"}, WstrList{L"i_4"});
-      result = expand_A_operator(input);
+      result = expand_A_op(input);
       REQUIRE(result->is<Sum>());
       REQUIRE(result->size() == 4);
       REQUIRE(
@@ -311,14 +311,14 @@ TEST_CASE("Spin") {
       auto input =
           ex<Tensor>(L"t", WstrList{L"a_1", L"a_2", L"a_3"},
                      WstrList{L"i_1", L"i_2", L"i_3"}, Symmetry::antisymm);
-      auto result = expand_A_operator(input);
+      auto result = expand_A_op(input);
       REQUIRE(to_latex(result) == L"{\\bar{t}^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}");
 
       input = ex<Tensor>(L"A", WstrList{L"i_1", L"i_2", L"i_3"},
                          WstrList{L"a_1", L"a_2", L"a_3"}, Symmetry::antisymm) *
               ex<Tensor>(L"t", WstrList{L"a_1", L"a_2", L"a_3"},
                          WstrList{L"i_1", L"i_2", L"i_3"}, Symmetry::antisymm);
-      result = expand_A_operator(input);
+      result = expand_A_op(input);
       REQUIRE(result->is<Sum>());
       REQUIRE(result->size() == 36);
     }
@@ -331,7 +331,7 @@ TEST_CASE("Spin") {
           ex<Tensor>(L"t", WstrList{L"a_1", L"a_2", L"a_3", L"a_4"},
                      WstrList{L"i_1", L"i_2", L"i_3", L"i_4"},
                      Symmetry::antisymm);
-      auto asm_input = expand_A_operator(input);
+      auto asm_input = expand_A_op(input);
       REQUIRE(asm_input->size() == 576);
       REQUIRE(asm_input->is<Sum>());
     }
@@ -344,7 +344,7 @@ TEST_CASE("Spin") {
           ex<Tensor>(L"t", WstrList{L"a_1", L"a_2", L"a_3", L"a_4", L"a_5"},
                      WstrList{L"i_1", L"i_2", L"i_3", L"i_4", L"i_5"},
                      Symmetry::antisymm);
-      auto asm_input = expand_A_operator(input);
+      auto asm_input = expand_A_op(input);
       REQUIRE(asm_input->size() == 14400);
       REQUIRE(asm_input->is<Sum>());
     }
@@ -357,7 +357,7 @@ TEST_CASE("Spin") {
                      Symmetry::nonsymm) *
           ex<Tensor>(L"t", WstrList{L"a_1", L"a_2"}, WstrList{L"i_1", L"i_2"},
                      Symmetry::antisymm);
-      auto result = expand_S_operator(input);
+      auto result = S_maps(input);
       REQUIRE(result->size() == 2);
       REQUIRE(result->is<Sum>());
       REQUIRE(to_latex(result) ==
@@ -371,7 +371,7 @@ TEST_CASE("Spin") {
                      WstrList{L"a_1", L"a_2", L"a_3"}, Symmetry::nonsymm) *
           ex<Tensor>(L"t", WstrList{L"a_1", L"a_2", L"a_3"},
                      WstrList{L"i_1", L"i_2", L"i_3"}, Symmetry::antisymm);
-      auto result = expand_S_operator(input);
+      auto result = S_maps(input);
       REQUIRE(result->is<Sum>());
       REQUIRE(result->size() == 6);
       REQUIRE(to_latex(result) ==
@@ -391,7 +391,7 @@ TEST_CASE("Spin") {
           ex<Tensor>(L"t", WstrList{L"a_1", L"a_2", L"a_3", L"a_4"},
                      WstrList{L"i_1", L"i_2", L"i_3", L"i_4"},
                      Symmetry::antisymm);
-      auto result = expand_S_operator(input);
+      auto result = S_maps(input);
       REQUIRE(result->size() == 24);
       REQUIRE(result->is<Sum>());
       REQUIRE(to_latex(result) ==
@@ -431,7 +431,7 @@ TEST_CASE("Spin") {
           ex<Tensor>(L"t", WstrList{L"a_4"}, WstrList{L"i_2"}) *
           ex<Tensor>(L"t", WstrList{L"a_1", L"a_2"}, WstrList{L"i_5", L"i_3"});
       // std::wcout << "Input: " << to_latex(input) << "\n";
-      auto result = expand_S_operator(input);
+      auto result = S_maps(input);
       REQUIRE(result->is<Sum>());
       REQUIRE(result->size() == 6);
       result->canonicalize();
@@ -447,7 +447,8 @@ TEST_CASE("Spin") {
           ex<Tensor>(L"t", WstrList{L"a_3"}, WstrList{L"i_2"}) +
           ex<Tensor>(L"g", WstrList{L"a_2", L"a_1"}, WstrList{L"i_2", L"a_3"}, Symmetry::symm) *
           ex<Tensor>(L"t", WstrList{L"a_3"}, WstrList{L"i_1"});
-      auto result = factorize_S_operator(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}}, true);
+      auto result =
+          factorize_S(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}}, true);
       REQUIRE(result->is<Sum>() == false);
       REQUIRE(to_latex(result) == L"{{S^{{a_1}{a_2}}_{{i_1}{i_2}}}{g^{{i_2}{a_3}}_{{a_1}{a_2}}}{t^{{i_1}}_{{a_3}}}}");
     }
@@ -462,7 +463,8 @@ TEST_CASE("Spin") {
               ex<Tensor>(L"t", WstrList{L"a_2"}, WstrList{L"i_3"}) *
               ex<Tensor>(L"t", WstrList{L"a_1"}, WstrList{L"i_4"}) *
               ex<Tensor>(L"t", WstrList{L"a_3"}, WstrList{L"i_1"});
-      auto result = factorize_S_operator(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}}, true);
+      auto result =
+          factorize_S(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}}, true);
       REQUIRE(result->is<Sum>() == false);
       REQUIRE(to_latex(result) == L"{{S^{{a_2}{a_1}}_{{i_3}{i_4}}}{g^{{i_4}{a_3}}_{{i_1}{i_2}}}{t^{{i_1}}_{{a_1}}}{t^{{i_2}}_{{a_2}}}{t^{{i_3}}_{{a_3}}}}");
     }
@@ -479,7 +481,8 @@ TEST_CASE("Spin") {
               ex<Tensor>(L"t", WstrList{L"a_3"}, WstrList{L"i_3"}) *
               ex<Tensor>(L"t", WstrList{L"a_1"}, WstrList{L"i_4"}) *
               ex<Tensor>(L"t", WstrList{L"a_2", L"a_4"}, WstrList{L"i_2", L"i_1"});
-      auto result = factorize_S_operator(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}}, true);
+      auto result =
+          factorize_S(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}}, true);
       REQUIRE(result->is<Sum>() == false);
       REQUIRE(to_latex(result) == L"{{{2}}{S^{{a_1}{a_2}}_{{i_1}{i_2}}}{g^{{a_3}{a_4}}_{{i_3}{i_4}}}{t^{{i_3}}_{{a_4}}}{t^{{i_4}}_{{a_2}}}{t^{{i_1}{i_2}}_{{a_1}{a_3}}}}");
     }
@@ -504,7 +507,7 @@ TEST_CASE("Spin") {
 
     std::map<Index, Index> idxmap = {{Index{L"i_1"}, Index{L"i_2"}},
                                      {Index{L"i_2"}, Index{L"i_1"}}};
-    auto transformed_result = transform_expression(result, idxmap);
+    auto transformed_result = transform_expr(result, idxmap);
     REQUIRE(transformed_result->is<Sum>());
     REQUIRE(transformed_result->size() == 2);
     REQUIRE(
@@ -583,7 +586,7 @@ TEST_CASE("Spin") {
 
       std::map<Index, Index> idxmap = {{Index{L"i_1"}, Index{L"i_2"}},
                                        {Index{L"i_2"}, Index{L"i_1"}}};
-      auto transformed_result = transform_expression(result, idxmap);
+      auto transformed_result = transform_expr(result, idxmap);
       REQUIRE(transformed_result->is<Sum>());
       REQUIRE(transformed_result->size() == 2);
       REQUIRE(
@@ -817,7 +820,7 @@ TEST_CASE("Spin") {
           ex<Tensor>(L"f", WstrList{L"i_4"}, WstrList{L"i_1"}) *
           ex<Tensor>(L"t", WstrList{L"a_1", L"a_2", L"a_3"}, WstrList{L"i_2", L"i_3", L"i_4"}, Symmetry::antisymm);
 
-      auto result = expand_A_operator(input);
+      auto result = expand_A_op(input);
       REQUIRE(result->size() == 36);
       result = expand_antisymm(result);
       result = closed_shell_spintrace(
@@ -841,7 +844,7 @@ TEST_CASE("Spin") {
               ex<Tensor>(L"t", WstrList{L"a_1", L"a_2", L"a_3"},
                          WstrList{L"i_2", L"i_3", L"i_4"}, Symmetry::antisymm);
 
-      auto result = expand_A_operator(input);
+      auto result = expand_A_op(input);
       REQUIRE(result->size() == 2);
       result = expand_antisymm(result);
       result = closed_shell_spintrace(
@@ -856,7 +859,7 @@ TEST_CASE("Spin") {
           ex<Tensor>(L"A", WstrList{L"i_1", L"i_2", L"i_3"}, WstrList{L"a_1", L"a_2", L"a_3"}, Symmetry::antisymm) *
           ex<Tensor>(L"g", WstrList{L"i_4", L"a_1"}, WstrList{L"i_1", L"a_4"}, Symmetry::antisymm) *
           ex<Tensor>(L"t", WstrList{L"a_2", L"a_3", L"a_4"}, WstrList{L"i_2", L"i_3", L"i_4"}, Symmetry::antisymm);
-      auto result = expand_A_operator(input);
+      auto result = expand_A_op(input);
       REQUIRE(result->size() == 36);
       result = expand_antisymm(result);
       result = closed_shell_spintrace(
@@ -869,7 +872,7 @@ TEST_CASE("Spin") {
     { // g * t3
       auto input = ex<Tensor>(L"g", WstrList{L"i_4", L"a_1"}, WstrList{L"i_1", L"a_4"}, Symmetry::antisymm) *
           ex<Tensor>(L"t", WstrList{L"a_2", L"a_3", L"a_4"}, WstrList{L"i_2", L"i_3", L"i_4"}, Symmetry::antisymm);
-      auto result = expand_A_operator(input);
+      auto result = expand_A_op(input);
       REQUIRE(result->size() == 2);
       result = expand_antisymm(result);
       result = closed_shell_spintrace(
@@ -916,6 +919,7 @@ TEST_CASE("Spin") {
       assert(P4[0]->size() == 0);
       assert(P4[1]->size() == 16);
       assert(P4[2]->size() == 36);
+      std::wcout << __LINE__ << "\n" << to_latex(P4[2]) << std::endl;
       assert(P4[3]->size() == 16);
       assert(P4[4]->size() == 0);
 
@@ -987,7 +991,7 @@ TEST_CASE("Spin") {
 
       auto p6_input = p_aab * input;
       expand(p6_input);
-      auto p6_result = expand_P_operator(p6_input, false);
+      auto p6_result = expand_P_op(p6_input, false);
       p6_result->visit(reset_idx_tags);
       simplify(p6_result);
 
@@ -1001,24 +1005,24 @@ TEST_CASE("Spin") {
       p6_result = A_12 * p6_result;
       expand(p6_result);
       canonicalize(p6_result);
-      p6_result = expand_A_operator(p6_result);
+      p6_result = expand_A_op(p6_result);
       p6_result->visit(reset_idx_tags);
       simplify(p6_result);
 
       auto p7_input = p_abb * input;
       expand(p7_input);
-      auto p7_result = expand_P_operator(p7_input, false);
+      auto p7_result = expand_P_op(p7_input, false);
       p7_result->visit(reset_idx_tags);
       simplify(p7_result);
 
       p7_result = A_23 * p7_result;
       expand(p7_result);
-      p7_result = expand_A_operator(p7_result);
+      p7_result = expand_A_op(p7_result);
       p7_result->visit(reset_idx_tags);
       simplify(p7_result);
 
       auto expanded_A = A3 * input;
-      expanded_A = expand_A_operator(expanded_A);
+      expanded_A = expand_A_op(expanded_A);
       expanded_A->visit(reset_idx_tags);
       simplify(expanded_A);
       assert(to_latex(p6_result) == to_latex(p7_result));
@@ -1043,7 +1047,7 @@ TEST_CASE("Spin") {
     for (auto& P : {P1, P2, P3, P4, P5}) {
       auto term = ex<Tensor>(P) * input;
       expand(term);
-      auto result = expand_P_operator(term);
+      auto result = expand_P_op(term);
       switch (n_p) {
         case 0 : REQUIRE(to_latex(result) ==
                   L"{ "
@@ -1079,7 +1083,7 @@ TEST_CASE("Spin") {
                             WstrList{L"i_1", L"i_2"}, Symmetry::antisymm);
     auto term = ex<Tensor>(P2) * input2;
     expand(term);
-    auto result = expand_P_operator(term);
+    auto result = expand_P_op(term);
     REQUIRE(to_latex(result) ==
             L"{ \\bigl({{\\bar{g}^{{i_2}{i_1}}_{{a_1}{a_2}}}}\\bigr) }");
 }
@@ -1203,7 +1207,7 @@ TEST_CASE("Spin") {
       auto t3 = Tensor(L"t", {a1A, a2A, a3B}, {i3A,i4A,i3B}, Symmetry::nonsymm);
 
       auto input = ex<Constant>(1./12) * ex<Tensor>(A2_aab) * ex<Tensor>(g) * ex<Tensor>(t3);
-      auto result = expand_A_operator(input);
+      auto result = expand_A_op(input);
       result->visit(reset_idx_tags);
       canonicalize(result);
       rapid_simplify(result);
@@ -1215,7 +1219,7 @@ TEST_CASE("Spin") {
       t3 = Tensor(L"t", {a1A, a2A, a3B}, {i4A,i5A,i3B}, Symmetry::nonsymm);
 
       input = ex<Constant>(1./12) * ex<Tensor>(A2_aab) * ex<Tensor>(g) * ex<Tensor>(t3);
-      result = expand_A_operator(input);
+      result = expand_A_op(input);
       result->visit(reset_idx_tags);
       canonicalize(result);
       rapid_simplify(result);
@@ -1241,7 +1245,7 @@ TEST_CASE("Spin") {
       auto A3_aaa = Tensor(L"A",{i1A,i2A,i3A},{a1A,a2A,a3A},Symmetry::antisymm);
       auto result2 = ex<Tensor>(A3_aaa) * result[0];
       expand(result2);
-      result2 = expand_A_operator(result2);
+      result2 = expand_A_op(result2);
       result2->visit(reset_idx_tags);
       canonicalize(result2);
       rapid_simplify(result2);
@@ -1250,7 +1254,7 @@ TEST_CASE("Spin") {
       auto A3_bbb = Tensor(L"A",{i1B,i2B,i3B},{a1B,a2B,a3B},Symmetry::antisymm);
       auto result3 = ex<Tensor>(A3_bbb) * result[3];
       expand(result3);
-      result3 = expand_A_operator(result3);
+      result3 = expand_A_op(result3);
       result3->visit(reset_idx_tags);
       canonicalize(result3);
       rapid_simplify(result3);
@@ -1278,7 +1282,7 @@ TEST_CASE("Spin") {
           ex<Tensor>(L"t", WstrList{L"a_2",L"a_3", L"a_5"},
                      WstrList{L"i_3", L"i_4",L"i_5"}, Symmetry::antisymm);
 
-      input = expand_P_operator(input);
+      input = expand_P_op(input);
       input->visit(reset_idx_tags);
       auto result =
           open_shell_spintrace(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
@@ -1286,7 +1290,7 @@ TEST_CASE("Spin") {
       auto result_aab = ex<Tensor>(Tensor(L"A", {i1A, i2A},
                                    {a1A, a2A}, Symmetry::antisymm)) * result[1];
       expand(result_aab);
-      result_aab = expand_A_operator(result_aab);
+      result_aab = expand_A_op(result_aab);
       result_aab->visit(reset_idx_tags);
       canonicalize(result_aab);
       rapid_simplify(result_aab);

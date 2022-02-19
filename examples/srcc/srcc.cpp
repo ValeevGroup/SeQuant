@@ -144,7 +144,7 @@ int main(int argc, char* argv[]) {
     std::vector<Sum> concat_terms(i + 1);
     size_t n_spin_orbital_term = 0;
     for (auto& product_term : *cc_r[i]) {
-      auto term = remove_tensor_from_product(product_term->as<Product>(), L"A");
+      auto term = remove_tensor(product_term->as<Product>(), L"A");
       std::vector<ExprPtr> os_st(i+1);
 
       // Apply the P operators on the product term without the A,
@@ -153,13 +153,13 @@ int main(int argc, char* argv[]) {
       for (int s = 0; s != os_st.size(); ++s) {
         os_st.at(s) = P_vec.at(s) * term;
         expand(os_st.at(s));
-        os_st.at(s) = expand_P_operator(os_st.at(s), false, true);
+        os_st.at(s) = expand_P_op(os_st.at(s), false, true);
         os_st.at(s) = open_shell_spintrace(os_st.at(s),
                                            ext_idx_list(i), s).at(0);
         if (i > 2) {
           os_st.at(s) = A_vec.at(s) * os_st.at(s);
           simplify(os_st.at(s));
-          os_st.at(s) = remove_tensor_from_expr(os_st.at(s), L"A");
+          os_st.at(s) = remove_tensor(os_st.at(s), L"A");
         }
       }
 

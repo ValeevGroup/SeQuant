@@ -16,9 +16,9 @@ namespace sequant {
 /// @param index_replacements index replacement map
 /// @param scaling_factor to scale the result
 /// @return a substituted and scaled expression pointer
-ExprPtr transform_expression(const ExprPtr& expr,
-                             const std::map<Index, Index>& index_replacements,
-                             double scaling_factor = 1.0);
+ExprPtr transform_expr(const ExprPtr& expr,
+                       const std::map<Index, Index>& index_replacements,
+                       double scaling_factor = 1.0);
 
 /// @brief Preserving particle symmetry, swaps bra and ket labels on all tensors
 /// in an expression
@@ -43,7 +43,7 @@ ExprPtr remove_spin(ExprPtr& expr);
 /// particle in tensor notation
 /// @param tensor a tensor with indices containing spin labels
 /// @return true if spin symmetry matches for all pairs of indices
-bool is_tensor_spin_symm(const Tensor& tensor);
+bool spin_symm_tensor(const Tensor& tensor);
 
 /// @brief Checks if spin labels on a tensor are same
 /// @param tensor a tensor with indices containing spin labels
@@ -76,89 +76,88 @@ ExprPtr expand_antisymm(const ExprPtr& expr, bool skip_spinsymm = false);
 /// in product for performance
 /// @input expr an expression pointer
 /// @return true if A is present in input
-bool has_A_label(const ExprPtr& expr);
+bool has_A_op(const ExprPtr& expr);
 
 /// @brief Check if a tensor with a certain label is present in an expression
 /// @param expr input expression
 /// @param label tensor label to find in the expression
 /// @return true if tensor with given label is found
-bool has_tensor_label(const ExprPtr& expr, std::wstring label);
+bool has_tensor(const ExprPtr& expr, std::wstring label);
 
 /// @brief Check if an operator with a certain label is present in an expression
 /// @detailed Specifically designed for
 /// @param expr input expression
 /// @param label tensor label to find in the expression
 /// @return true if tensor with given label is found
-bool has_operator_label(const ExprPtr& expr, std::wstring label);
+bool has_operator(const ExprPtr& expr, std::wstring label);
 
 /// @brief Generates a vector of replacement maps for Antisymmetrizer operator
 /// @param A An antisymmetrizer tensor (A) (with > 2 particle indices)
 /// @return Vector of replacement maps
-std::vector<std::map<Index, Index>> A_replacement_map(const Tensor& A);
+std::vector<std::map<Index, Index>> A_maps(const Tensor& A);
 
 /// @brief Removes tensor with a certain label from product
 /// @param product A product expression
 /// @param label Label of the tensor to remove
 /// @return ExprPtr with the tensor removed
-ExprPtr remove_tensor_from_product(const Product& product, std::wstring label);
+ExprPtr remove_tensor(const Product& product, std::wstring label);
 
 /// @brief Removes tensor with a certain label from an expression
 /// @param expr An expression pointer
 /// @param label Label of the tensor to remove
 /// @return ExprPtr with the tensor removed
-ExprPtr remove_tensor_from_expr(const ExprPtr& expr, std::wstring label);
+ExprPtr remove_tensor(const ExprPtr& expr, std::wstring label);
 
 /// @brief Expand a product containing the Antisymmetrization (A) operator
 /// @param A product term with/without A operator
 /// @return an ExprPtr containing sum of expanded terms if A is present
-ExprPtr expand_A_operator(const Product& product);
+ExprPtr expand_A_op(const Product& product);
 
 /// @brief Write expression in terms of Symmetrizer (S operator)
 /// @param product
 /// @return expression pointer with Symmstrizer operator
-ExprPtr expr_symmetrize(const Product& product);
+ExprPtr symmetrize_expr(const Product& product);
 
 /// @brief Expand an expression containing the Antisymmetrization (A) operator
 /// @param expr any ExprPtr
 /// @return an ExprPtr containing sum of expanded terms if A is present
-ExprPtr expr_symmetrize(const ExprPtr& expr);
+ExprPtr symmetrize_expr(const ExprPtr& expr);
 
 /// @brief Expand an expression containing the Antisymmetrization (A) operator
 /// @param expr any ExprPtr
 /// @return an ExprPtr containing sum of expanded terms if A is present
-ExprPtr expand_A_operator(const ExprPtr& expr);
+ExprPtr expand_A_op(const ExprPtr& expr);
 
 /// @brief Generates a vector of replacement maps for particle permutation
 /// operator
 /// @param P A particle permutation operator (with > 2 particle indices)
 /// @return Vector of replacement maps
-std::vector<std::map<Index, Index>> P_replacement_map(const Tensor& P,
+std::vector<std::map<Index, Index>> P_maps(const Tensor& P,
                                                       bool keep_canonical = true,
                                                       bool pair_wise = false);
 
 /// @brief Expand a product containing the particle permutation (P) operator
 /// @param A product term with/without P operator
 /// @return an ExprPtr containing sum of expanded terms if P is present
-ExprPtr expand_P_operator(const Product& product,
-                          bool keep_canonical = true,
-                          bool pair_wise = true);
+ExprPtr expand_P_op(const Product& product, bool keep_canonical = true,
+                    bool pair_wise = true);
 
 /// @brief Expand an expression containing the particle permutation (P) operator
 /// @param expr any ExprPtr
 /// @return an ExprPtr containing sum of expanded terms if P is present
-ExprPtr expand_P_operator(const ExprPtr& expr,
-                          bool keep_canonical = true,
-                          bool pair_wise = true);
+ExprPtr expand_P_op(const ExprPtr& expr, bool keep_canonical = true,
+                    bool pair_wise = true);
 
 std::vector<std::map<Index, Index>> S_replacement_maps(const Tensor& S);
 
 /// @brief Expand S operator
-ExprPtr expand_S_operator(const ExprPtr& expr);
+ExprPtr S_maps(const ExprPtr& expr);
 
 /// @brief Returns the number of cycles
-/// @detailed
-/// @param
-/// @return
+/// @detailed Count the number of closed loops between two stacked vectors
+/// @param vec1 First vector of integers
+/// @param vec2 Second vector of integrs
+/// @return The number of closed loops
 int count_cycles(const container::svector<int, 6>& vec1,
                  const container::svector<int, 6>& vec2);
 
@@ -220,7 +219,7 @@ std::vector<ExprPtr> open_shell_P_op_vector(const Tensor &A);
 /// case
 /// @return a vector of expr ptrs with spin expressions
 std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
-    const std::vector<std::vector<Index>> ext_index_groups = {{}},
+    const std::vector<std::vector<Index>> &ext_index_groups,
     const int single_spin_case = 0);
 
 /// @brief Transforms Coupled cluster from spin orbital to spatial orbitals
@@ -237,8 +236,7 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr);
 /// @param expr ExprPtr with spin orbital indices
 /// @param ext_index_groups groups of external indices
 /// @return an expression with spin integrated/adapted
-ExprPtr spintrace(
-    ExprPtr expression,
+ExprPtr spintrace(const ExprPtr &expression,
     container::vector<container::vector<Index>> ext_index_groups = {{}});
 
 /// @brief Factorize S out of terms
@@ -247,10 +245,9 @@ ExprPtr spintrace(
 /// @param fast_method use hash maps (memory intensive) for faster evaluation
 /// @param ext_index_groups External index groups to geenrate S operator
 /// @return ExprPtr with terms with S operator as a factor
-ExprPtr factorize_S_operator(
-    const ExprPtr& expression,
-    const std::initializer_list<IndexList> ext_index_groups = {{}},
-    const bool fast_method = true);
+ExprPtr factorize_S(const ExprPtr& expression,
+                    std::initializer_list<IndexList> ext_index_groups,
+                    bool fast_method = true);
 
 }  // namespace sequant
 
