@@ -89,7 +89,125 @@ int main(int argc, char* argv[]) {
   };
 
   // Spin-orbital coupled cluster
-  auto cc_r = sequant::eqs::cceqvec{NMAX, NMAX}(true, true, true, true, true);
+  auto cc_r = sequant::eqs::cceqvec{3, 3}(true, true, true, true, true);
+
+  auto A3 = ex<Tensor>(Tensor(L"A",
+                              WstrList{L"i_1", L"i_2", L"i_3"},
+                              WstrList{L"a_1", L"a_2", L"a_3"}, Symmetry::antisymm));
+  // Bra or ket for P operators don't matter
+  auto P_ab = ex<Tensor>(Tensor(L"P",WstrList{L"a_1", L"a_2"},{}));
+  auto P_ac = ex<Tensor>(Tensor(L"P",WstrList{L"a_1", L"a_3"},{}));
+  auto P_bc = ex<Tensor>(Tensor(L"P",WstrList{L"a_2", L"a_3"},{}));
+  auto P_ij = ex<Tensor>(Tensor(L"P",WstrList{L"i_1", L"i_2"},{}));
+  auto P_ik = ex<Tensor>(Tensor(L"P",WstrList{L"i_1", L"i_3"},{}));
+  auto P_jk = ex<Tensor>(Tensor(L"P",WstrList{L"i_2", L"i_3"},{}));
+
+  // G and t are kept consistent with the SeQuant CC notation
+  auto G_oovv = ex<Tensor>(Tensor(L"g",
+                                  WstrList{L"i_4", L"i_5"}, WstrList{L"a_4", L"a_5"},
+                                  Symmetry::antisymm));
+
+  auto t2_a1 = ex<Tensor>(Tensor(L"t",
+                                 WstrList{L"a_4", L"a_1"},
+                                 WstrList{L"i_4", L"i_1"}, Symmetry::antisymm));
+  auto t3_a1 = ex<Tensor>(Tensor(L"t",
+                                 WstrList{L"a_1", L"a_2", L"a_3"},
+                                 WstrList{L"i_5", L"i_2", L"i_3"}, Symmetry::antisymm));
+
+  auto t2_a2 = ex<Tensor>(Tensor(L"t",
+                                 WstrList{L"a_1", L"a_2"},
+                                 WstrList{L"i_1", L"i_4"}, Symmetry::antisymm));
+  auto t3_a2 = ex<Tensor>(Tensor(L"t",
+                                 WstrList{L"a_4", L"a_5", L"a_3"},
+                                 WstrList{L"i_2", L"i_5", L"i_3"}, Symmetry::antisymm));
+
+  auto t2_b1 = ex<Tensor>(Tensor(L"t",
+                                 WstrList{L"a_4", L"a_5"},
+                                 WstrList{L"i_1", L"i_2"}, Symmetry::antisymm));
+  auto t3_b1 = ex<Tensor>(Tensor(L"t",
+                                 WstrList{L"a_1", L"a_2", L"a_3"},
+                                 WstrList{L"i_4", L"i_5", L"i_3"}, Symmetry::antisymm));
+
+  auto t2_b2 = ex<Tensor>(Tensor(L"t",
+                                 WstrList{L"a_1", L"a_2"},
+                                 WstrList{L"i_4", L"i_5"}, Symmetry::antisymm));
+  auto t3_b2 = ex<Tensor>(Tensor(L"t",
+                                 WstrList{L"a_4", L"a_5", L"a_3"},
+                                 WstrList{L"i_2", L"i_5", L"i_3"}, Symmetry::antisymm));
+
+  auto t2_c1 = ex<Tensor>(Tensor(L"t",
+                                 WstrList{L"a_4", L"a_1"},
+                                 WstrList{L"i_4", L"i_5"}, Symmetry::antisymm));
+  auto t3_c1 = ex<Tensor>(Tensor(L"t",
+                                 WstrList{L"a_5", L"a_2", L"a_3"},
+                                 WstrList{L"i_1", L"i_2", L"i_3"}, Symmetry::antisymm));
+
+  auto t2_c2 = ex<Tensor>(Tensor(L"t",
+                                 WstrList{L"a_1", L"a_4"},
+                                 WstrList{L"i_1", L"i_2"}, Symmetry::antisymm));
+  auto t3_c2 = ex<Tensor>(Tensor(L"t",
+                                 WstrList{L"a_2", L"a_5", L"a_3"},
+                                 WstrList{L"i_4", L"i_5", L"i_3"}, Symmetry::antisymm));
+
+  auto t2_d1 = ex<Tensor>(Tensor(L"t",
+                                 WstrList{L"a_1", L"a_4"},
+                                 WstrList{L"i_1", L"i_4"}, Symmetry::antisymm));
+  auto t3_d1 = ex<Tensor>(Tensor(L"t",
+                                 WstrList{L"a_5", L"a_2", L"a_3"},
+                                 WstrList{L"i_5", L"i_2", L"i_3"}, Symmetry::antisymm));
+
+  // Terms
+  auto a1 = ex<Constant> (-0.5) * (ex<Constant>(1.0) - P_ij - P_ik) *
+           G_oovv * t2_a1 * t3_a1;
+  auto a2 = ex<Constant> (-0.5) * (ex<Constant>(1.0) - P_ij - P_ik) *
+           (ex<Constant>(1.0) - P_ac - P_bc) *
+           G_oovv * t2_a2 * t3_a2;
+  auto b1 = ex<Constant> (0.25) * (ex<Constant>(1.0) - P_ij - P_ik) *
+           G_oovv * t2_b1 * t3_b1;
+  auto b2 = ex<Constant> (0.25) * (ex<Constant>(1.0) - P_bc - P_ac) *
+           G_oovv * t2_b2 * t3_b2;
+  auto c1 = ex<Constant> (-0.5) * (ex<Constant>(1.0) - P_ab - P_ac) *
+            G_oovv * t2_c1 * t3_c1;
+  auto c2 = ex<Constant> (-0.5) * (ex<Constant>(1.0) - P_ik - P_jk)  *
+            (ex<Constant>(1.0) - P_ab - P_ac)  *
+             G_oovv * t2_c2 * t3_c2;
+  auto d1 = (ex<Constant>(1.0) - P_ij - P_ik)  *
+            (ex<Constant>(1.0) - P_ab - P_ac)  *
+            G_oovv * t2_d1 * t3_d1;
+
+  for(auto &t : {a1,a2,b1,b2,c1,c2,d1}){
+    std::wcout << to_latex(t) << std::endl;
+  }
+
+  // Full term that needs to be subtracted from SeQuant derived CCSDT R3
+  auto w_t2_t3 = a1 + a2 + b1 + b2 + c1 + c2 + d1;
+
+  // p_CCSDT correction
+  auto pCCSDT_correction = [&](const std::vector<int>& params){
+    assert(params.size() == 3);
+    auto correction = ex<Constant>(0.5) * a1 +
+                      ex<Constant>(0.5) * a2 +
+                      ex<Constant>(params[0]) * (ex<Constant>(0.5) * a1 + b1) +
+                      ex<Constant>(params[1]) * (ex<Constant>(0.5) * a2 + b2) +
+                      ex<Constant>(params[2]) * (c1 + c2 + d1);
+    simplify(correction);
+    return correction;
+  };
+
+  // Operations to simplify the correction term
+#if 0
+  expand(c1);
+  c1 = expand_P_op(c1);
+  c1 = A3 * c1;
+  expand(c1);
+  canonicalize(c1);
+  c1->visit(reset_idx_tags);
+  c1 = remove_tensor(c1, L"A");
+#endif
+
+  // pCCSDT R3 expression
+  auto r3 = cc_r[3] - w_t2_t3 + pCCSDT_correction({1, 1, 0});
+
 
 #if 0
   //
@@ -127,7 +245,6 @@ int main(int argc, char* argv[]) {
     printf("CC R%lu size: %lu time: %5.3f sec.\n", i,
                                   cc_st_r[i]->size(), time_elapsed.count());
   }
-#endif
 
   //
   // Open-shell spintrace
@@ -207,7 +324,7 @@ int main(int argc, char* argv[]) {
     runtime_assert(os_cc_st_r.at(3).at(2)->size() == 209);
     runtime_assert(os_cc_st_r.at(3).at(3)->size() == 75);
   }
-
+#endif
 }
 
 // Generate S operator from external index list
