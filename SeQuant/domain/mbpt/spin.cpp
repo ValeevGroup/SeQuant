@@ -296,40 +296,13 @@ ExprPtr expand_antisymm(const ExprPtr& expr, bool skip_spinsymm) {
     return nullptr;
 }
 
-bool has_A_op(const ExprPtr& expr) {
-  if (expr->is<Constant>()) return false;
-
-  if (expr->is<Tensor>())
-    return expr->as<Tensor>().label() == L"A";
-  else if (expr->is<Product>())
-    return (expr->as<Product>().factor(0))->as<Tensor>().label() == L"A";
-  else if (expr->is<Sum>()) {
-    bool result = false;
-    for (auto&& term : *expr) {
-      if (term->is<Product>())
-        result = (term->as<Product>().factor(0))->as<Tensor>().label() == L"A";
-      if (term->is<Tensor>())
-        result = expr->as<Tensor>().label() == L"A";
-      if (result) return result;
-    }
-    return result;
-  } else
-    throw("control reached end of check_A_label function.");  // TODO: Catch
-                                                              // exception
-}
-
 bool has_tensor(const ExprPtr& expr, std::wstring label) {
   if (expr->is<Constant>()) return false;
 
-  auto check_product = [&label](const Product& product) {
-    bool result = false;
-    for (auto& term : product) {
-      if (term->is<Tensor>()) {
-        if (term->as<Tensor>().label() == label)
-          return true;
-      }
-    }
-    return result;
+  auto check_product = [&label](const Product& p) {
+    return std::any_of(p.factors().begin(), p.factors().end(),
+                       [&label] (const auto& t){
+      return (t->template as<Tensor>()).label() == label;});
   };
 
   if (expr->is<Tensor>()) {
@@ -337,45 +310,12 @@ bool has_tensor(const ExprPtr& expr, std::wstring label) {
   } else if (expr->is<Product>()) {
     return check_product(expr->as<Product>());
   } else if (expr->is<Sum>()) {
-    bool result = false;
-    for (auto&& term : *expr) {
-      if (term->is<Product>()) {
-        result = check_product(term->as<Product>());
-      } else if (term->is<Tensor>()){
-        result = term->as<Tensor>().label() == label;
-      }
-      if (result)
-        return true;
-    }
-    return result;
+    return std::any_of(expr->begin(), expr->end(),
+                       [&label] (const auto& term){
+      return has_tensor(term, label);
+    });
   } else
     return false;
-}
-
-bool has_operator(const ExprPtr& expr, std::wstring label) {
-  bool result = false;
-
-  if (expr->is<Constant>())
-    return result;
-  else if (expr->is<Tensor>())
-    return expr->as<Tensor>().label() == label;
-  else if (expr->is<Product>()) {
-    if (expr->as<Product>().factor(0)->is<Tensor>())
-      return expr->as<Product>().factor(0)->as<Tensor>().label() == label;
-  } else if (expr->is<Sum>()) {
-    for (auto&& term : *expr) {
-      if (term->is<Product>()) {
-        if ((term->as<Product>().factor(0))->is<Tensor>()) {
-          result =
-              (term->as<Product>().factor(0))->as<Tensor>().label() == label;
-        }
-      } else if (term->is<Tensor>()) {
-        result = term->as<Tensor>().label() == label;
-      }
-      if (result) return true;
-    }
-  }
-  return result;
 }
 
 std::vector<std::map<Index, Index>> A_maps(const Tensor& A) {
@@ -588,10 +528,7 @@ ExprPtr symmetrize_expr(const ExprPtr& expr) {
   else if (expr->is<Sum>()) {
     auto result = std::make_shared<Sum>();
     for (auto&& summand : *expr) {
-      if (summand->is<Product>())
-        result->append(symmetrize_expr(summand->as<Product>()));
-      else
-        result->append(summand);
+        result->append(symmetrize_expr(summand));
     }
     return result;
   } else
@@ -850,7 +787,7 @@ ExprPtr closed_shell_spintrace(
   // Symmetrize the expr and keep S operator
   auto symm_and_expand = [](const ExprPtr& expr) {
     auto temp = expr;
-    if (has_A_op(temp)) temp = symmetrize_expr(temp);
+    if (has_tensor(temp, L"A")) temp = symmetrize_expr(temp);
     temp = expand_antisymm(temp);
     rapid_simplify(temp);
     return temp;
@@ -1638,7 +1575,7 @@ ExprPtr factorize_S(const ExprPtr& expression,
   // canonicalize(expr);
 
   // If expression has S operator, do nothing and exit
-  if (has_operator(expr, L"S")) return expr;
+  if (has_tensor(expr, L"S")) return expr;
 
   // If S operator is absent: generate from ext_index_groups
   Tensor S{};

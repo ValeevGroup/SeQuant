@@ -71,25 +71,11 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm = false);
 /// @return an expression pointer with expanded tensors as a sum
 ExprPtr expand_antisymm(const ExprPtr& expr, bool skip_spinsymm = false);
 
-/// @brief Check if label A is present in an expression pointer
-/// @detail This function assumes canonical ordering of tensors
-/// in product for performance
-/// @input expr an expression pointer
-/// @return true if A is present in input
-bool has_A_op(const ExprPtr& expr);
-
 /// @brief Check if a tensor with a certain label is present in an expression
 /// @param expr input expression
 /// @param label tensor label to find in the expression
 /// @return true if tensor with given label is found
 bool has_tensor(const ExprPtr& expr, std::wstring label);
-
-/// @brief Check if an operator with a certain label is present in an expression
-/// @detailed Specifically designed for
-/// @param expr input expression
-/// @param label tensor label to find in the expression
-/// @return true if tensor with given label is found
-bool has_operator(const ExprPtr& expr, std::wstring label);
 
 /// @brief Generates a vector of replacement maps for Antisymmetrizer operator
 /// @param A An antisymmetrizer tensor (A) (with > 2 particle indices)
