@@ -17,7 +17,7 @@ class cceqvec {
   std::vector<sequant::ExprPtr> operator()(bool screen, bool use_topology,
                                            bool use_connectivity,
                                            bool canonical_only,
-                                           bool use_antisymm);
+                                           bool use_antisymm, bool r12);
 };  // class cceqvec
 
 class compute_cceqvec {
@@ -28,7 +28,7 @@ class compute_cceqvec {
 
   void operator()(bool print, bool screen, bool use_topology,
                   bool use_connectivity, bool canonical_only,
-                  bool use_antisymm);
+                  bool use_antisymm, bool r12);
 };  // class compute_cceqvec
 
 class compute_all {
@@ -40,7 +40,7 @@ class compute_all {
   void operator()(bool print = true, bool screen = true,
                   bool use_topology = true, bool use_connectivity = true,
                   bool canonical_only = true,
-                  bool use_antisymm = true);
+                  bool use_antisymm = true, bool r12 = false);
 };  // class compute_all
 
 }  // namespace sequant::eqs
