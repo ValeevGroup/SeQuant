@@ -42,8 +42,13 @@ class uccf12{
   //[[e1,e2],e3]_12
   ExprPtr compute_double_com(ExprPtr e1, ExprPtr e2, ExprPtr e3, int ansatz = 2){
     auto first_com = do_wick((e1 * e2) - (e2 * e1));
-    simplify(first_com);
-    std::wcout << to_latex_align(first_com,20,2) << std::endl;
+    /*auto second_com = (((e1 * e2) - (e2 * e1)) * e3) - (e3 * ((e1 * e2) - (e2 * e1)));
+    non_canon_simplify(second_com);
+    std::wcout << "second com: " << to_latex_align(second_com,20,2) << std::endl;
+    second_com = do_wick(second_com);
+    simplify(second_com);
+    std::wcout << "second com: " << to_latex_align(second_com,20,2) << std::endl;
+    */simplify(first_com);
     auto second_com_1 = first_com * e3;
     //non_canon_simplify(second_com_1);
     simplify(second_com_1);
@@ -53,9 +58,10 @@ class uccf12{
     second_com_2 = do_wick(second_com_2);
     auto second_com = second_com_1 - second_com_2;
     simplify(second_com);
+    std::wcout << "second com: " << to_latex_align(second_com,20,2) << std::endl;
     if(ansatz == 2) {
       second_com = keep_up_to_3_body_terms(second_com);
-      // std::wcout << to_latex_align(second_com,20,2) << std::endl;
+      std::wcout << to_latex_align(second_com,20,2) << std::endl;
       second_com = second_com + ex<Constant>(0.);  // make a sum to avoid heavy code duplication for product and sum variants.
       second_com = simplification::overlap_with_obs(second_com);
       // std::wcout << to_latex_align(second_com,20,2) << std::endl;
@@ -280,21 +286,21 @@ class uccf12{
       throw " USUPPORTED SPACE LABEL! CHECK ABOVE FOR VALID ENTRIES";
     }
     auto single = ex<Constant>(0.0);
-    auto single_ = ex<Constant>(0.0);
+    //auto single_ = ex<Constant>(0.0);
     if(singles){
       // this might need to be complete space if we don't have a solution to the particular blocks of interest.
       auto C = ex<Tensor>(L"C",std::initializer_list<Index>{Index::make_tmp_index(IndexSpace::instance(IndexSpace::all))},std::initializer_list<Index>{Index::make_tmp_index(IndexSpace::instance(IndexSpace::other_unoccupied))});
       auto E_pa = ex<FNOperator> (std::initializer_list<Index>{C->as<Tensor>().bra()[0]},std::initializer_list<Index>{C->as<Tensor>().ket()[0]});
       auto C_Epa = C * E_pa;
-      auto anti_herm_C = C_Epa - adjoint(C_Epa);
+      auto anti_herm_C = C_Epa/* - adjoint(C_Epa)*/;
       single = single + anti_herm_C;
-      simplify(single);
+      //simplify(single);
       std::wcout << "single term" << to_latex_align(single) << std::endl;
 
-      auto single_2 = single->clone();
-      single_2 = relable(single_2);
-      std::wcout << "single after relable" << to_latex_align(single_2) << std::endl;
-      single_ = single_2;
+      //auto single_2 = single->clone();
+      //single_2 = relable(single_2);
+      //std::wcout << "single after relable" << to_latex_align(single_2) << std::endl;
+      //single_ = single_2;
     }
 
     if (ansatz == 2) {
@@ -303,7 +309,11 @@ class uccf12{
       auto r_1 = R12(gg_space);
 
       auto A = (r - adjoint(r)) + single;
-      auto A_ = (r_1 - adjoint(r_1)) + single_;
+      std::wcout << "A: " << to_latex_align(A,20,2) << std::endl;
+      auto A_ = A->clone();
+      A_ = relable(A_);
+      std::wcout << "A_: " << to_latex_align(A_,20,2) << std::endl;
+      //auto A_ = (r_1 - adjoint(r_1)) + single_;
       auto H_A = do_wick(ex<Constant>(1.) * ((h * A) - (A * h)));
       auto H_A_3 = keep_up_to_3_body_terms(H_A);
       // std::wcout << "pre decomp: " << to_latex_align(single_Comm,20,2) << std::endl;
