@@ -4,42 +4,13 @@
 #include <SeQuant/domain/eval/eval.hpp>
 
 #include <tiledarray.h>
+#include <TiledArray/expressions/index_list.h>
+#include <TiledArray/expressions/einsum.h>
 #include <range/v3/all.hpp>
 
 namespace sequant::eval {
 
 namespace detail {
-
-///
-/// Given an iterable of Index objects, generate a string annotation
-/// that can be used for TiledArray tensor expressions. Tensor-of-tensors also
-/// supported.
-template <typename Indices_t>
-std::string braket_to_annot(Indices_t const& indices) {
-  // make a comma-separated and concatenated string out of an iterable of strings
-  auto add_commas = [](auto const& strs) -> std::string {
-    std::string result{ranges::front(strs)};
-    for (auto&& s: ranges::views::tail(strs))
-      result += "," + s;
-    return result;
-  };
-
-  container::vector<std::string> outer_labels{}, inner_labels{};
-  for (auto&& idx: indices) {
-    inner_labels.emplace_back(idx.ascii_label());
-    for (auto&& pidx: idx.proto_indices())
-      outer_labels.emplace_back(pidx.ascii_label());
-  }
-
-  if (outer_labels.empty())
-    return add_commas(inner_labels);
-
-  // support CSV methods
-  ranges::sort(outer_labels);
-  ranges::sort(inner_labels);
-  auto outer_labels_updated = ranges::views::set_difference(outer_labels, inner_labels);
-  return add_commas(outer_labels_updated) + ";" + add_commas(inner_labels);
-}
 
 auto const ords_to_annot = [](auto const& ords) {
   using ranges::accumulate;
@@ -59,7 +30,7 @@ Tensor_t eval_inode(EvalNode const& node, Tensor_t const& leval,
 
   auto assert_imaginary_zero = [](sequant::Constant const& c) {
     assert(c.value().imag() == 0 &&
-           "complex scalar unsupported for real tensor");
+           "complex scalar unsupported");
   };
 
   assert_imaginary_zero(node.left()->scalar());
@@ -77,10 +48,43 @@ Tensor_t eval_inode(EvalNode const& node, Tensor_t const& leval,
     result(this_annot) = (lscal * rscal) * leval(lannot) * reval(rannot);
   } else {
     // sum
-    assert(node->op() == EvalOp::Sum && "unsupported operation for eval");
     result(this_annot) = lscal * leval(lannot) + rscal * reval(rannot);
   }
 
+  return result;
+}
+
+template <typename Tensor_t>
+Tensor_t eval_inode_tot(EvalNode const& node, Tensor_t const& leval,
+                        Tensor_t const& reval) {
+  assert((node->op() == EvalOp::Sum || node->op() == EvalOp::Prod) &&
+         "unsupported intermediate operation");
+
+  auto assert_imaginary_zero = [](sequant::Constant const& c) {
+    assert(c.value().imag() == 0 &&
+           "complex scalar unsupported");
+  };
+
+  assert_imaginary_zero(node.left()->scalar());
+  assert_imaginary_zero(node.right()->scalar());
+
+  auto const lscal = node.left()->scalar().value().real();
+  auto const rscal = node.right()->scalar().value().real();
+  auto const& this_annot = node->annot();
+  auto const& lannot = node.left()->annot();
+  auto const& rannot = node.right()->annot();
+
+  auto result = Tensor_t{};
+  if (node->op() == EvalOp::Prod) {
+    // prod
+    // result(this_annot) = (lscal * rscal) * leval(lannot) * reval(rannot);
+    decltype(result) unscaled = TA::expressions::einsum(leval(lannot),
+                                                        reval(rannot), this_annot);
+    result(this_annot) = (lscal * rscal) * unscaled(this_annot);
+  } else {
+    // sum
+    result(this_annot) = lscal * leval(lannot) + rscal * reval(rannot);
+  }
   return result;
 }
 
@@ -105,6 +109,31 @@ Tensor_t eval_single_node(EvalNode const& node, Yielder&& leaf_evaluator,
                                         std::forward<Yielder>(leaf_evaluator),
                                         cache_manager),
                        eval_single_node(node.right(),
+                                        std::forward<Yielder>(leaf_evaluator),
+                                        cache_manager)));
+}
+
+template <typename Tensor_t, typename Yielder>
+Tensor_t eval_single_node_tot(EvalNode const& node, Yielder&& leaf_evaluator,
+                          CacheManager<Tensor_t const>& cache_manager) {
+  static_assert(
+      std::is_invocable_r_v<Tensor_t, Yielder, sequant::Tensor const&>);
+
+  auto const key = node->hash();
+
+  if (auto&& exists = cache_manager.access(key); exists && exists.value())
+    return *exists.value();
+
+  return node.leaf()
+             ? *cache_manager.store(key, leaf_evaluator(node->tensor()))
+             : *cache_manager.store(
+                   key,
+                   eval_inode_tot(
+                       node,
+                       eval_single_node_tot(node.left(),
+                                        std::forward<Yielder>(leaf_evaluator),
+                                        cache_manager),
+                       eval_single_node_tot(node.right(),
                                         std::forward<Yielder>(leaf_evaluator),
                                         cache_manager)));
 }
@@ -155,6 +184,34 @@ auto eval(EvalNode const& node, Iterable const& target_indx_labels,
   auto scaled = decltype(result){};
   scaled(lannot) = node->scalar().value().real() * result(node->annot());
   return scaled;
+}
+
+template <typename Tensor_t,
+          typename Iterable1,
+          typename Iterable2,
+          typename Yielder,
+          std::enable_if_t<std::is_invocable_r_v<Tensor_t,
+                                                 Yielder,
+                                                 sequant::Tensor const&>,
+                           bool> = true>
+Tensor_t eval_tot(EvalNode const& node,
+          Iterable1 const& outer_indx_labels,
+          Iterable2 const& inner_indx_labels,
+          Yielder&& yielder, CacheManager<Tensor_t const>& man) {
+    auto bpindx_rcvd = TA::expressions::BipartiteIndexList{outer_indx_labels, inner_indx_labels};
+    auto bpindx_exst = TA::expressions::BipartiteIndexList{node->annot()};
+    assert(bpindx_exst.first().is_permutation(bpindx_exst.first())
+            && bpindx_exst.second().is_permutation(bpindx_exst.second())
+            && "Invalid target index labels");
+
+    auto result = detail::eval_single_node_tot(node, std::forward<Yielder>(yielder), man);
+
+    auto const lannot = bpindx_rcvd.first().string()
+                        + ";"
+                        + bpindx_rcvd.second().string();
+    auto scaled = decltype(result){};
+    scaled(lannot) = node->scalar().value().real() * result(node->annot());
+    return scaled;
 }
 
 ///
