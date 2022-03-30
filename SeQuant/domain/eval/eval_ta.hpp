@@ -51,6 +51,7 @@ Tensor_t eval_inode(EvalNode const& node, Tensor_t const& leval,
     result(this_annot) = lscal * leval(lannot) + rscal * reval(rannot);
   }
 
+  TA::get_default_world().gop.fence();
   return result;
 }
 
@@ -85,6 +86,7 @@ Tensor_t eval_inode_tot(EvalNode const& node, Tensor_t const& leval,
     // sum
     result(this_annot) = lscal * leval(lannot) + rscal * reval(rannot);
   }
+  TA::get_default_world().gop.fence();
   return result;
 }
 
@@ -183,6 +185,7 @@ auto eval(EvalNode const& node, Iterable const& target_indx_labels,
 
   auto scaled = decltype(result){};
   scaled(lannot) = node->scalar().value().real() * result(node->annot());
+  TA::get_default_world().gop.fence();
   return scaled;
 }
 
@@ -211,6 +214,7 @@ Tensor_t eval_tot(EvalNode const& node,
                         + bpindx_rcvd.second().string();
     auto scaled = decltype(result){};
     scaled(lannot) = node->scalar().value().real() * result(node->annot());
+    TA::get_default_world().gop.fence();
     return scaled;
 }
 
@@ -248,6 +252,7 @@ auto eval_symm(EvalNode const& node, Iterable const& target_indx_labels,
   };
 
   symmetrize_tensor(result.trange().rank(), sym_impl);
+  TA::get_default_world().gop.fence();
   return symm_result;
 }
 
@@ -286,6 +291,7 @@ auto eval_antisymm(EvalNode const& node, Iterable const& target_indx_labels,
   };
 
   antisymmetrize_tensor(result.trange().rank(), asym_impl);
+  TA::get_default_world().gop.fence();
   return antisymm_result;
 }
 
