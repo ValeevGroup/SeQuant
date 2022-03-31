@@ -159,7 +159,7 @@ try_main() {
      H_A_3 = simplification::tens_to_FNOps(H_A_3);
     auto H_A_2 = decompositions::three_body_substitution(H_A_3,2);
     simplify(H_A_2);
-    auto com_1 = simplification::hamiltonian_based(H_A_2);
+    auto com_1 = simplification::hamiltonian_based_projector_2(H_A_2);
 
     std::wcout << "h A one body: " << to_latex_align(com_1.first,20,2) << std::endl;
     std::wcout << "h A two body: " << to_latex_align(com_1.second,20,2) << std::endl;
@@ -169,14 +169,14 @@ try_main() {
     auto fFtFt = compute_double_com(F(),ex<Constant>(-1.) * adjoint(r),ex<Constant>(-1.) * adjoint(r_1));
     auto fFtF = compute_double_com(F(),ex<Constant>(-1.) * adjoint(r),r_1);
 
-    auto fFF_sim = simplification::fock_based(fFF);
+    auto fFF_sim = simplification::fock_based_projector_2(fFF);
    // std::wcout << "FF: " << to_latex_align(fFF_sim.second,20,2) << std::endl;
-    auto fFFt_sim = simplification::fock_based(fFFt);
+    auto fFFt_sim = simplification::fock_based_projector_2(fFFt);
     std::wcout << "FFt one body: " << to_latex_align(fFFt_sim.first,20,2) << std::endl;
     std::wcout << "FFt two body: " << to_latex_align(fFFt_sim.second,20,2) << std::endl;
-    auto fFtFt_sim = simplification::fock_based(fFtFt);
+    auto fFtFt_sim = simplification::fock_based_projector_2(fFtFt);
     //std::wcout << "FtFt: " << to_latex_align(fFtFt_sim.second,20,2) << std::endl;
-    auto fFtF_sim = simplification::fock_based(fFtF);
+    auto fFtF_sim = simplification::fock_based_projector_2(fFtF);
     //std::wcout << "FtF one body: " << to_latex_align(fFtF_sim.first,20,2) << std::endl;
     //std::wcout << "FtF two body: " << to_latex_align(fFtF_sim.second,20,2) << std::endl;
 

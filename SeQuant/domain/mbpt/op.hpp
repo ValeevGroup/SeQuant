@@ -23,7 +23,8 @@ enum class OpType {
   L,   //!< left-hand eigenstate
   R,   //!< right-hand eigenstate
   R12, //!< geminal kernel
-  GR   //!< GR kernel from f12 theory
+  GR,   //!< GR kernel from f12 theory
+  C    //!< cabs singles op
 };
 
 /// Operator character relative to Fermi vacuum

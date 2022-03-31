@@ -40,6 +40,7 @@ ExprPtr op_to_tens(ExprPtr ex_){
 
 //all densities and the Hamiltonian operators are confined to a given orbital basis in second quantized notation.
 //thus any index on a Normal Ordered operator or density must be confined to the obs.
+///TODO this dictates that the resulting hamiltonian will be in a particular basis.
 ExprPtr overlap_with_obs(ExprPtr ex_){
   auto overlap_expr = ex<Constant>(0); //enforce an overlap each E with elements from
   for (auto&& product : ex_->as<Sum>().summands()){// may be able to make_overlaps manually and apply them to the products. simplify may know what to do with it.
@@ -144,6 +145,7 @@ ExprPtr overlap_with_obs(ExprPtr ex_){
   //std::wcout << to_latex_align(overlap_expr,20,2) << std::endl;
   wick.reduce(overlap_expr);
   simplify(overlap_expr);
+  //std::wcout << to_latex_align(overlap_expr,20,2) << std::endl;
   return overlap_expr;
 }
 
@@ -236,76 +238,124 @@ ExprPtr tens_to_op(ExprPtr ex_) {
 }
 // F tensors must contain contain indices in the bra with space > all. this includes complete, completeunoccupied, and inactiveunoccupied.
 // and if one of the particle indices is connected to the obs virtual space, then the other must be from the CABS set. i.e. if G^{a \beta}_{ij} -> G^{a a'}_{ij}
-ExprPtr screen_F_tensors(ExprPtr ex_) {
+ExprPtr screen_F_tensors(ExprPtr ex_, int ansatz = 2) {
   assert(ex_->is<Tensor>());
   assert(ex_->as<Tensor>().label() == L"F");
   auto overlap = ex<Constant>(1);
   bool good = false;
   bool bra_good = false;
-  for (int i = 0; i < ex_->as<Tensor>().bra().size(); i++) {
-    auto bra = ex_->as<Tensor>().bra()[i];
-    if (bra.space().type() == IndexSpace::complete || bra.space().type() == IndexSpace::complete_unoccupied) {
-      good = true;
-      bra_good = true;
-    }
-    else if(bra.space().type() == IndexSpace::complete ||
-             bra.space().type() == IndexSpace::complete_unoccupied ||
-             bra.space().type() == IndexSpace::other_unoccupied){
-      good = true;
-    }
-  }
-
-    for (int i = 0; i < ex_->as<Tensor>().bra().size(); i++){
+  if(ansatz == 2) {
+    for (int i = 0; i < ex_->as<Tensor>().bra().size(); i++) {
       auto bra = ex_->as<Tensor>().bra()[i];
-    if ((bra.space().type() == IndexSpace::unoccupied || bra.space().type() ==
-        IndexSpace::all) && bra_good && (bra.space().type() != IndexSpace::complete_unoccupied)) {  // if one of the upper indices is explicitly outside of CABs, create an overlap with the other index and the CABs space.
-      if (i == 0) {
-        overlap = make_overlap(Index::make_tmp_index(IndexSpace::instance(
-                                   IndexSpace::other_unoccupied)),
-                               ex_->as<Tensor>().bra()[1]);
-      }
-      if (i == 1) {
-        overlap = make_overlap(Index::make_tmp_index(IndexSpace::instance(
-                                   IndexSpace::other_unoccupied)),
-                               ex_->as<Tensor>().bra()[0]);
+      if (bra.space().type() == IndexSpace::complete ||
+          bra.space().type() == IndexSpace::complete_unoccupied) {
+        good = true;
+        bra_good = true;
+      } else if (bra.space().type() == IndexSpace::complete ||
+                 bra.space().type() == IndexSpace::complete_unoccupied ||
+                 bra.space().type() == IndexSpace::other_unoccupied) {
+        good = true;
       }
     }
-  }
 
-  bool ket_good = false;
-  for (int j = 0; j <ex_->as<Tensor>().ket().size(); j++) {
-    auto ket = ex_->as<Tensor>().ket()[j];
-    if (ket.space().type() == IndexSpace::complete ||
-        ket.space().type() == IndexSpace::complete_unoccupied) {
-      good = true;
-      ket_good = true;
+    for (int i = 0; i < ex_->as<Tensor>().bra().size(); i++) {
+      auto bra = ex_->as<Tensor>().bra()[i];
+      if ((bra.space().type() == IndexSpace::unoccupied ||
+           bra.space().type() == IndexSpace::all) &&
+          bra_good &&
+          (bra.space().type() !=
+           IndexSpace::complete_unoccupied)) {  // if one of the upper indices is explicitly outside of CABs, create an overlap with the other index and the CABs space.
+        if (i == 0) {
+          overlap = make_overlap(Index::make_tmp_index(IndexSpace::instance(
+                                     IndexSpace::other_unoccupied)),
+                                 ex_->as<Tensor>().bra()[1]);
+        }
+        if (i == 1) {
+          overlap = make_overlap(Index::make_tmp_index(IndexSpace::instance(
+                                     IndexSpace::other_unoccupied)),
+                                 ex_->as<Tensor>().bra()[0]);
+        }
+      }
     }
-    else if (ket.space().type() == IndexSpace::complete ||
-        ket.space().type() == IndexSpace::complete_unoccupied ||
-        ket.space().type() == IndexSpace::other_unoccupied) {
-      good = true;
-    }
-  }
-    for (int j = 0; j <ex_->as<Tensor>().ket().size(); j++){
+
+    bool ket_good = false;
+    for (int j = 0; j < ex_->as<Tensor>().ket().size(); j++) {
       auto ket = ex_->as<Tensor>().ket()[j];
-    if ((ket.space().type() == IndexSpace::unoccupied || ket.space().type() == IndexSpace::all) && ket_good && (ket.space().type() != IndexSpace::complete_unoccupied)) {
-      if (j == 0) {
-        overlap = make_overlap(Index::make_tmp_index(IndexSpace::instance(
-                                   IndexSpace::other_unoccupied)),
-                               ex_->as<Tensor>().ket()[1]);
-      }
-      if (j == 1) {
-        overlap = make_overlap(Index::make_tmp_index(IndexSpace::instance(
-                                   IndexSpace::other_unoccupied)),
-                               ex_->as<Tensor>().ket()[0]);
+      if (ket.space().type() == IndexSpace::complete ||
+          ket.space().type() == IndexSpace::complete_unoccupied) {
+        good = true;
+        ket_good = true;
+      } else if (ket.space().type() == IndexSpace::complete ||
+                 ket.space().type() == IndexSpace::complete_unoccupied ||
+                 ket.space().type() == IndexSpace::other_unoccupied) {
+        good = true;
       }
     }
+    for (int j = 0; j < ex_->as<Tensor>().ket().size(); j++) {
+      auto ket = ex_->as<Tensor>().ket()[j];
+      if ((ket.space().type() == IndexSpace::unoccupied ||
+           ket.space().type() == IndexSpace::all) &&
+          ket_good && (ket.space().type() != IndexSpace::complete_unoccupied)) {
+        if (j == 0) {
+          overlap = make_overlap(Index::make_tmp_index(IndexSpace::instance(
+                                     IndexSpace::other_unoccupied)),
+                                 ex_->as<Tensor>().ket()[1]);
+        }
+        if (j == 1) {
+          overlap = make_overlap(Index::make_tmp_index(IndexSpace::instance(
+                                     IndexSpace::other_unoccupied)),
+                                 ex_->as<Tensor>().ket()[0]);
+        }
+      }
+    }
+    if (good) {
+      return ex_ * overlap;
+    } else {
+      return ex<Constant>(0);
+    }
   }
-  if(good){
-    return ex_ * overlap;
-  }
-  else{
-    return ex<Constant>(0);
+  else if (ansatz == 1){
+    bool non_zero = false;
+    bool bra_proj_space = false;// perhaps a better way would be to create a child class of tensor for G tensor which can keep track of geminal generating and projector at construction.
+    for (int i = 0; i < ex_->as<Tensor>().bra().size(); i++) {
+      auto bra = ex_->as<Tensor>().bra()[i];
+      if(bra.space().type() == IndexSpace::complete ||
+          bra.space().type() == IndexSpace::complete_unoccupied ||
+          bra.space().type() == IndexSpace::other_unoccupied){
+        bra_proj_space = true;
+        non_zero = true;
+      }
+    }
+    if (bra_proj_space){
+      for (int i = 0; i < ex_->as<Tensor>().bra().size(); i++) {
+        auto bra = ex_->as<Tensor>().bra()[i];
+        auto overlap1 = make_overlap(Index::make_tmp_index(IndexSpace::instance(IndexSpace::other_unoccupied)),bra);
+        ex_ = overlap1 * ex_;
+      }
+    }
+    bool ket_proj_space = false;// perhaps a better way would be to create a child class of tensor for G tensor which can keep track of geminal generating and projector at construction.
+    for (int i = 0; i < ex_->as<Tensor>().ket().size(); i++) {
+      auto ket = ex_->as<Tensor>().ket()[i];
+      if(ket.space().type() == IndexSpace::complete ||
+          ket.space().type() == IndexSpace::complete_unoccupied ||
+          ket.space().type() == IndexSpace::other_unoccupied){
+        ket_proj_space = true;
+        non_zero = true;
+      }
+    }
+    if (ket_proj_space){
+      for (int i = 0; i < ex_->as<Tensor>().ket().size(); i++) {
+        auto ket = ex_->as<Tensor>().ket()[i];
+        auto overlap1 = make_overlap(Index::make_tmp_index(IndexSpace::instance(IndexSpace::other_unoccupied)),ket);
+        ex_ = overlap1 * ex_;
+      }
+    }
+    if (non_zero){
+      return ex_;
+    }
+    else{
+      return ex<Constant>(0.0);
+    }
   }
 }
 
@@ -363,7 +413,7 @@ auto treat_fock(ExprPtr ex_){
     auto new_product = ex<Constant>(real);
     for (auto&& factor : product->as<Product>().factors()){
       if (factor->is<Tensor>() && factor->as<Tensor>().label() == L"f"){
-        // TODO This might not be exactly correct, in the case of f_i^p, this should actually set p to all occupied m.
+        // TODO do not assume EBC
         auto space = intersection(factor->as<Tensor>().bra()[0].space(), factor->as<Tensor>().ket()[0].space());
         if(space.type().none()){
           new_product = ex<Constant>(0) * new_product;
@@ -728,7 +778,7 @@ std::pair<bool,ExprPtr> contains_tens(ExprPtr ex_, std::wstring label){
 //re-implimentation as a recursive function which gets called every time a delta is found, simplifies/reduces the product and returns.
 //products are const and two deltas acting on the same index makes this difficult. logically the product needs to update within its own loop, but it cannot. Alternatively, two delta's to the same index need to occur in the same product, but that breaks things.
 //work around. make a copy of product which can be modified? break out of product loop?
-ExprPtr screen_F12_and_density(ExprPtr exprs){
+ExprPtr screen_F12_and_density(ExprPtr exprs,int ansatz = 2){
   if(exprs->is<Sum>()) {
     auto return_sum = ex<Constant>(0);
     for (auto&& product : exprs->as<Sum>().summands()) {
@@ -736,7 +786,7 @@ ExprPtr screen_F12_and_density(ExprPtr exprs){
       for (auto&& factor : product->as<Product>().factors()) {
         auto temp_factor = ex<Constant>(1.);
         if (factor->is<Tensor>() && factor->as<Tensor>().label() == L"F") {
-          temp_factor = screen_F_tensors(factor);  // screen F tensors should just provide the delta.
+          temp_factor = screen_F_tensors(factor,ansatz);  // screen F tensors should just provide the delta.
         }
         else {temp_factor = factor;}
         auto product_clone = product->clone();
@@ -748,7 +798,7 @@ ExprPtr screen_F12_and_density(ExprPtr exprs){
           wick_f.reduce(product_clone);
           //std::wcout << " product clone after reduce: " << to_latex_align(product_clone) << std::endl;
           non_canon_simplify(product_clone);
-          product_clone = screen_F12_and_density(product_clone);
+          product_clone = screen_F12_and_density(product_clone,ansatz);
           return_sum = product_clone + return_sum;
           new_product = ex<Constant>(0.);
           break;
@@ -769,7 +819,7 @@ ExprPtr screen_F12_and_density(ExprPtr exprs){
     for (auto&& factor : exprs->as<Product>().factors()) {
       auto temp_factor = ex<Constant>(1.);
         if (factor->is<Tensor>() && factor->as<Tensor>().label() == L"F") {
-          temp_factor = screen_F_tensors(factor);  // screen F tensors should just provide the delta.
+          temp_factor = screen_F_tensors(factor,ansatz);  // screen F tensors should just provide the delta.
         }
         else {temp_factor = factor;}
         auto product_clone = exprs->clone();
@@ -781,7 +831,7 @@ ExprPtr screen_F12_and_density(ExprPtr exprs){
           wick_f.reduce(product_clone);
           non_canon_simplify(product_clone);
           //std::wcout << " product clone after reduce: " << to_latex_align(product_clone) << std::endl;
-          product_clone = screen_F12_and_density(product_clone);
+          product_clone = screen_F12_and_density(product_clone,ansatz);
           new_product = product_clone;
           break;
         }
@@ -791,6 +841,7 @@ ExprPtr screen_F12_and_density(ExprPtr exprs){
   }
   else return exprs;
 }
+
 ExprPtr FNOPs_to_tens(ExprPtr ex_){
   if(ex_->is<Sum>()){
     auto new_sum = ex<Constant>(0);
@@ -901,24 +952,24 @@ ExprPtr partition_f(ExprPtr exprs){
 // unfortunately, simplify(result) and  wick.reduce(result) will recanonicalize the indices.
 // enforces the following obs convention. E^{p_7}_{p_9} and E^{{p_7}{p_8}}_{{p_9}{p_{10}}}
 // should allow analysis of multiple expressions who have the same normal order operator prefactor.
-std::pair<ExprPtr,ExprPtr> hamiltonian_based(ExprPtr exprs){
+std::pair<ExprPtr,ExprPtr> hamiltonian_based_projector_2(ExprPtr exprs){
   //std::wcout << "pre remove constants: " << to_latex_align(exprs,20,2) << std::endl;
   //exprs = remove_const(exprs);
 //  std::wcout << "post remove constants: " << to_latex_align(exprs,20,2) << std::endl;
   exprs = FNOPs_to_tens(exprs);
-  non_canon_simplify(exprs);
+  simplify(exprs);
   //exprs = overlap_with_obs(exprs);
   exprs = partition_f(exprs);
-  non_canon_simplify(exprs);
+  simplify(exprs);
   //std::wcout << "post convert to tensor: " << to_latex_align(exprs,20,2) << std::endl;
-  exprs = screen_F12_and_density(exprs);
+  exprs = screen_F12_and_density(exprs,2);
   //std::wcout << "post screen f12: " << to_latex_align(exprs,20,2) << std::endl;
-  non_canon_simplify(exprs);
+  simplify(exprs);
   exprs = screen_densities(exprs);
   //std::wcout << "post screen density: " << to_latex_align(exprs,20,2) << std::endl;
   //exprs = densities_to_occ(exprs);
   //f12 interms needs a particular canonical ordering
-  non_canon_simplify(exprs);
+  simplify(exprs);
  //std::wcout << "densities to occ: " << to_latex_align(exprs,20,2) << std::endl;
   auto exprs_intmed = ex<Constant>(0.0);
   for (auto&& product : exprs->as<Sum>().summands()){
@@ -927,22 +978,65 @@ std::pair<ExprPtr,ExprPtr> hamiltonian_based(ExprPtr exprs){
   }
   //std::wcout << "post intermediates: " << to_latex_align(exprs,20,2) << std::endl;
   //tens_to_FNOps(exprs_intmed);
-  non_canon_simplify(exprs_intmed);
+  simplify(exprs_intmed);
   return fnop_to_overlap(exprs_intmed);
 }
 
+// here G can only have projection to the alpha and Beta space otherwise projector constructs it to be be zero.
+std::pair<ExprPtr,ExprPtr> hamiltonian_based_projector_1(ExprPtr exprs){
+  exprs = FNOPs_to_tens(exprs);
+  simplify(exprs);
+  exprs = partition_f(exprs);
+  simplify(exprs);;
+  exprs = screen_F12_and_density(exprs,1);
+  simplify(exprs);
+  auto exprs_intmed = ex<Constant>(0.0);
+  for (auto&& product : exprs->as<Sum>().summands()){
+    auto new_product = simplification::find_f12_interms(product);
+    exprs_intmed = new_product + exprs_intmed;
+  }
+  simplify(exprs_intmed);
+  return fnop_to_overlap(exprs_intmed);
+}
+//G can only project to alpha and Beta space. still need to use fock based expression.
+std::pair<ExprPtr,ExprPtr> fock_based_projector_1(ExprPtr exprs){
+  exprs = FNOPs_to_tens(exprs);
+  simplify(exprs);
+  if(exprs->is<Constant>()){
+    return std::pair<ExprPtr,ExprPtr> {exprs, exprs};
+  }
+  exprs = partition_f(exprs);
+  auto final_screen = exprs;
+  simplify(final_screen);
+  //in some cases, there will now be no contributing terms left so return zero to one and two body.
+  if(final_screen->is<Constant>()){
+    return std::pair<ExprPtr,ExprPtr> {final_screen, final_screen};
+  }
+  simplify(final_screen);
+  //final_screen = treat_fock(final_screen);
+  simplify(final_screen);
+  //find the special f12 intermediates that cannot efficiently be solved directly. This seems to work already for the general case!
+  auto last_screen = ex<Constant>(0.0);
+  for (auto&& product : final_screen->as<Sum>().summands()){
+    auto new_product = simplification::find_f12_interms(product);
+    last_screen = last_screen + new_product;
+  }
+  //::wcout << "post intermediates: " << to_latex_align(final_screen,20,2) << std::endl;
+  simplify(last_screen);
+  return fnop_to_overlap(last_screen);
+}
 //TODO generalize for spin-orbital basis
 //simplification to deal with fock based expressions. involving one body fock operator.
 // not rigorous for more than 2 body operators or more than 2 density matrices whose rank must be <= 2.
 // unfortunately, simplify(result) and wick.reduce(result) will recanonicalize the indices.
 // enforces the following obs convention. E^{p_7}_{p_9} and E^{{p_7}{p_8}}_{{p_9}{p_{10}}}
 // should allow analysis of multiple expressions who have the same normal order operator prefactor.
-std::pair<ExprPtr,ExprPtr> fock_based (ExprPtr exprs){
+std::pair<ExprPtr,ExprPtr> fock_based_projector_2(ExprPtr exprs){
   //std::wcout << "expression before removing constants: " << to_latex_align(exprs,20,2) << std::endl;
   //exprs = remove_const(exprs);
   //std::wcout << "after screening constant: " << to_latex_align(exprs) << std::endl;
   exprs = FNOPs_to_tens(exprs);
-  non_canon_simplify(exprs);
+  simplify(exprs);
   //std::wcout << "fnop to tensor: " << to_latex_align(exprs,20,2) << std::endl;
   if(exprs->is<Constant>()){
     return std::pair<ExprPtr,ExprPtr> {exprs, exprs};
@@ -950,19 +1044,20 @@ std::pair<ExprPtr,ExprPtr> fock_based (ExprPtr exprs){
   exprs = partition_f(exprs);
   //exprs = overlap_with_obs(exprs);
   auto final_screen = exprs;
-  non_canon_simplify(final_screen);
+  simplify(final_screen);
   //in some cases, there will now be no contributing terms left so return zero to one and two body.
 if(final_screen->is<Constant>()){
   return std::pair<ExprPtr,ExprPtr> {final_screen, final_screen};
 }
   //final_screen = screen_F12_and_density(final_screen);
-  non_canon_simplify(final_screen);
+  simplify(final_screen);
   //std::wcout << "screen F12: " << to_latex_align(final_screen,20,2) << std::endl;
-  final_screen = treat_fock(final_screen);
-  non_canon_simplify(final_screen);
+  //final_screen = treat_fock(final_screen);
+  final_screen = FNOPs_to_tens(final_screen);
+  simplify(final_screen);
   //std::wcout << "screen fock: " << to_latex_align(final_screen,20,2) << std::endl;
   final_screen = screen_densities(final_screen);
-  non_canon_simplify(final_screen);
+  simplify(final_screen);
   //enforce that densities are in the occupied space since they are only non-zero in occ
   //final_screen = densities_to_occ(final_screen);
   //non_canon_simplify(final_screen);
@@ -975,7 +1070,7 @@ if(final_screen->is<Constant>()){
     last_screen = last_screen + new_product;
   }
   //::wcout << "post intermediates: " << to_latex_align(final_screen,20,2) << std::endl;
-  non_canon_simplify(last_screen);
+  simplify(last_screen);
   //tens_to_FNOps(last_screen);
   return fnop_to_overlap(last_screen);
   }

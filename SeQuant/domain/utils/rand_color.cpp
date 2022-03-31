@@ -6,18 +6,21 @@
 
 namespace sequant::utils {
 
-rand_color::rand_color()
+RandColor::RandColor()
     : randEngine{[]() {
         std::random_device seeder;
         const auto seed = seeder.entropy() ? seeder() : std::time(nullptr);
         return static_cast<std::mt19937_64::result_type>(seed);
       }()} {}
 
-std::array<size_t, 3> rand_color::rand_rgb(double sat, double brit) {
-  return rand_color::hsv_to_rgb(rand_hue(), sat, brit);
+RandColor::RandColor(int seed)
+    : randEngine{static_cast<std::mt19937_64::result_type>(seed)} {}
+
+std::array<size_t, 3> RandColor::rand_rgb(double sat, double brit) {
+  return RandColor::hsv_to_rgb(rand_hue(), sat, brit);
 }
 
-double rand_color::rand_hue() {
+double RandColor::rand_hue() {
   auto attempt = [this]() {
     auto hue = GOLDEN_RATIO_CONJ + uniRealDist(randEngine);
     return hue_cache_.emplace(hue > 1 ? hue - 1 : hue);
@@ -31,7 +34,7 @@ double rand_color::rand_hue() {
   return *result.first;
 }
 
-std::array<size_t, 3> rand_color::hsv_to_rgb(double h, double s, double v) {
+std::array<size_t, 3> RandColor::hsv_to_rgb(double h, double s, double v) {
   // https://martin.ankerl.com/2009/12/09/how-to-create-random-colors-programmatically/
   size_t h_i = (size_t)(h * 6);
   double f = h * 6 - h_i;

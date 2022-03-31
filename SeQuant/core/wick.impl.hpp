@@ -182,7 +182,13 @@ inline container::map<Index, Index> compute_index_replacement_rules(
             ranges::end(external_indices);
 
         const auto intersection_space = intersection(bra.space(), ket.space());
-        assert(intersection_space != IndexSpace::null_instance());
+
+        if (intersection_space == IndexSpace::null_instance()){
+          throw zero_result{};
+        }
+
+        // not sure why this doesn't return zero_result like every other example. seems like a bug.
+        //assert(intersection_space != IndexSpace::null_instance());
 
         if (!bra_is_ext && !ket_is_ext) {  // int + int
           const auto new_dummy = idxfac.make(intersection_space);

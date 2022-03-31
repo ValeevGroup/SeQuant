@@ -91,7 +91,7 @@ Symmetry EvalExpr::infer_tensor_symmetry_prod(EvalExpr const& xpr1,
 
     if (ranges::distance(uniq_idxs) == tnsr1.const_braket().size()
                                      + tnsr2.const_braket().size()) {
-      return Symmetry::symm;
+      return Symmetry::antisymm;
     }
   }
 
