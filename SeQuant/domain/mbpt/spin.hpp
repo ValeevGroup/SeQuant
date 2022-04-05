@@ -119,8 +119,8 @@ ExprPtr expand_A_op(const ExprPtr& expr);
 /// @param P A particle permutation operator (with > 2 particle indices)
 /// @return Vector of replacement maps
 std::vector<std::map<Index, Index>> P_maps(const Tensor& P,
-                                                      bool keep_canonical = true,
-                                                      bool pair_wise = false);
+                                           bool keep_canonical = true,
+                                           bool pair_wise = false);
 
 /// @brief Expand a product containing the particle permutation (P) operator
 /// @param A product term with/without P operator
@@ -159,10 +159,12 @@ ExprPtr closed_shell_spintrace(
     const ExprPtr& expression,
     const container::vector<container::vector<Index>> ext_index_groups = {{}});
 
-/// @brief Generates list of external indices from Antisymmetrization (A) operator
+/// @brief Generates list of external indices from Antisymmetrization (A)
+/// operator
 /// @param expr ExprPtr with spin orbital indices
 /// @return external index groups to be used for spintracing
-container::vector<container::vector<Index>> external_indices(const ExprPtr& expr);
+container::vector<container::vector<Index>> external_indices(
+    const ExprPtr& expr);
 
 /// @brief Transforms Coupled cluster from spin orbital to spatial orbitals
 /// @detailed The external indices are deduced from Antisymmetrization operator
@@ -192,9 +194,10 @@ std::vector<ExprPtr> open_shell_A_op(const Tensor& A);
 /// open-shell case. By expanding only the unlike spin terms, the
 /// antisymmetrizer is pereserved for same-spin particle indices.
 /// @param A Antisymmetrizer tensor produced in Coupled Cluster
-/// @return a vector of expression pointers containing permutation operators as a sum
+/// @return a vector of expression pointers containing permutation operators as
+/// a sum
 /// @warning This function assumes the antisymmetrizer (A) has a canonical form
-std::vector<ExprPtr> open_shell_P_op_vector(const Tensor &A);
+std::vector<ExprPtr> open_shell_P_op_vector(const Tensor& A);
 
 /// @brief Generates spin expressions to be used for open-shell coupled cluster
 /// @detailed Every spin combination of external indices will have all spin
@@ -204,8 +207,9 @@ std::vector<ExprPtr> open_shell_P_op_vector(const Tensor &A);
 /// @param single_spin_case Calculate open-shell expression for a specific spin
 /// case
 /// @return a vector of expr ptrs with spin expressions
-std::vector<ExprPtr> open_shell_spintrace(const ExprPtr& expr,
-    const std::vector<std::vector<Index>> &ext_index_groups,
+std::vector<ExprPtr> open_shell_spintrace(
+    const ExprPtr& expr,
+    const std::vector<std::vector<Index>>& ext_index_groups,
     const int single_spin_case = 0);
 
 /// @brief Transforms Coupled cluster from spin orbital to spatial orbitals
@@ -222,7 +226,8 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr);
 /// @param expr ExprPtr with spin orbital indices
 /// @param ext_index_groups groups of external indices
 /// @return an expression with spin integrated/adapted
-ExprPtr spintrace(const ExprPtr &expression,
+ExprPtr spintrace(
+    const ExprPtr& expression,
     container::vector<container::vector<Index>> ext_index_groups = {{}});
 
 /// @brief Factorize S out of terms
