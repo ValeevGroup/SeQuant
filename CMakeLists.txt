@@ -121,7 +121,7 @@ else()
   message(STATUS "Found Boost (version ${Boost_VERSION}) via CONFIG ${Boost_CONFIG}")
   set(Boost_USE_CONFIG TRUE)
 endif()
-if (Boost_VERSION EQUAL 107000)
+if (Boost_VERSION_MACRO EQUAL 107000)
     message(FATAL_ERROR "Found Boost 1.70, but its Boost.Container is broken: "
         "use any version ${SEQUANT_TRACKED_BOOST_VERSION} "
         "or higher, other than 1.70")
