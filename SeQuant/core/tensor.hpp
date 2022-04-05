@@ -163,9 +163,10 @@ class Tensor : public Expr, public AbstractTensor {
   /// @Brief Convert Fock and Coulomb integrals to std::wstring formula compatible with MPQC v4
   /// @param df return density-fitted or regular integals
   /// @return formula in wstring format
+  /// @pre `rank() <= 2 && (label()=="f" || label()=="g")`
   std::wstring to_mpqc_formula(bool df = false) const {
     auto label = this->label();
-    assert(label == L"f" || label == L"g");
+    assert(this->rank() <= 2 && (label == L"f" || label == L"g"));
     static const std::vector<std::wstring> occ_list = {L"i", L"j", L"k", L"l"};
     static const std::vector<std::wstring> uocc_list = {L"a", L"b", L"c", L"d"};
     std::vector<std::wstring> braket;
@@ -174,7 +175,7 @@ class Tensor : public Expr, public AbstractTensor {
     bool has_spin = false;
     bool is_alpha = false;
     for (auto &idx : this->const_braket()) {
-      std::wstring spin{}, label{};
+      std::wstring spin, label;
       // Spin label
       if (idx.space().qns() == IndexSpace::alpha) {
         spin = L"_α";
@@ -212,6 +213,7 @@ class Tensor : public Expr, public AbstractTensor {
         postfix = df ? L"[df,as]" : L"[as]";
       }
     }
+
     return result+postfix;
   }
 
