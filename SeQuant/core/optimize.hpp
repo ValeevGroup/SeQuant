@@ -14,13 +14,8 @@ namespace sequant::optimize {
 /// greater than the number of occupied orbitals.
 
 /// \param expr Expression to be optimized.
-/// \param canonize Whether to canonicalize the expression(s) during
-///                 optimization. Leads to slightly(?) more common
-///                 sub-expressions in the optimized result, at the cost of
-///                 relabeling of the indices in the result making them
-///                 different from the original.
 /// \return EvalNode object.
-EvalNode optimize(ExprPtr const& expr, bool canonize);
+EvalNode optimize(ExprPtr const& expr);
 
 ///
 /// Omit the first factor from the top level product from given expression.

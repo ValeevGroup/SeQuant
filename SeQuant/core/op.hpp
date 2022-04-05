@@ -42,11 +42,17 @@ class Op {
     action_ = sequant::adjoint(action_);
   }
 
+  static std::wstring core_label() {
+    return get_default_context().spbasis() == SPBasis::spinorbital
+           ? (S == Statistics::FermiDirac ? L"a" : L"b")
+           : L"E";
+  }
+
   /// @return the string representation of @c this in LaTeX format
   std::wstring to_latex() const {
     std::wstring result;
     result = L"{";
-    result += (S == Statistics::FermiDirac ? L"a" : L"b");
+    result += core_label();
     result += (action() == Action::create ? L"^{\\dagger}_" : L"_");
     result += index().to_latex();
     result += L"}";
@@ -576,9 +582,14 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
   std::wstring to_latex() const override {
     std::wstring result;
     result = L"{";
-    result += (S == Statistics::FermiDirac
-               ? (vacuum() == Vacuum::Physical ? L"a" : L"\\tilde{a}")
-               : (vacuum() == Vacuum::Physical ? L"b" : L"\\tilde{b}"));
+    if (vacuum() == Vacuum::Physical) {
+      result += Op<S>::core_label();
+    }
+    else {
+      result += L"\\tilde{";
+      result += Op<S>::core_label();
+      result += L"}";
+    }
     result += L"^{";
     const auto ncreators = this->ncreators();
     const auto nannihilators = this->nannihilators();
@@ -778,7 +789,11 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
     return ncreators();
   }
   Symmetry _symmetry() const override final {
-    return S == Statistics::FermiDirac ? Symmetry::antisymm : Symmetry::symm;
+    return (S == Statistics::FermiDirac
+                ? (get_default_context().spbasis() == SPBasis::spinorbital
+                       ? Symmetry::antisymm
+                       : Symmetry::nonsymm)
+                : (Symmetry::symm));
   }
   BraKetSymmetry _braket_symmetry() const override final {
     return BraKetSymmetry::nonsymm;

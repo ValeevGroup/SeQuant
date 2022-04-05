@@ -90,6 +90,22 @@ Tensor_t eval_single_node(EvalNode const& node, Yielder&& leaf_evaluator,
 
 }  // namespace detail
 
+///
+/// Evaluate a node.
+///
+/// \tparam Tensor_t The data tensor type. eg. TA::TArrayD from TiledArray.
+/// \param node sequant::binary_node<sequant::EvalExpr> object
+///            that is the evaluation tree in essence.
+/// \param target_indx_labels The string labels iterable of the target indices
+///                           that appear in the node->tensor().const_braket().
+///                               set(node->tensor().const_braket()) =
+///                                         set(target_indx_labels)
+///                           This paramter is to allow to set the final
+///                           physical layout of the evaluated tensor in
+///                           the desired permutation.
+/// \param yielder That returns Tensor_t for leaf SeQuant Tensor(g, f, t, ...).
+/// \param man The cache manager.
+/// \return Tensor_t
 template <typename Tensor_t, typename Iterable, typename Yielder>
 auto eval(EvalNode const& node, Iterable const& target_indx_labels,
           Yielder&& yielder, CacheManager<Tensor_t const>& man) {
@@ -122,6 +138,22 @@ auto eval(EvalNode const& node, Iterable const& target_indx_labels,
   return scaled;
 }
 
+///
+/// Evaluate a node and symmetrize the result.
+///
+/// \tparam Tensor_t The data tensor type. eg. TA::TArrayD from TiledArray.
+/// \param node sequant::binary_node<sequant::EvalExpr> object
+///            that is the evaluation tree in essence.
+/// \param target_indx_labels The string labels iterable of the target indices
+///                           that appear in the node->tensor().const_braket().
+///                               set(node->tensor().const_braket()) =
+///                                         set(target_indx_labels)
+///                           This paramter is to allow to set the final
+///                           physical layout of the evaluated tensor in
+///                           the desired permutation.
+/// \param yielder That returns Tensor_t for leaf SeQuant Tensor(g, f, t, ...).
+/// \param man The cache manager.
+/// \return Tensor_t
 template <typename Tensor_t, typename Iterable, typename Yielder>
 auto eval_symm(EvalNode const& node, Iterable const& target_indx_labels,
                Yielder&& yielder, CacheManager<Tensor_t const>& man) {
@@ -143,6 +175,22 @@ auto eval_symm(EvalNode const& node, Iterable const& target_indx_labels,
   return symm_result;
 }
 
+///
+/// Evaluate a node and anit-symmetrize the result.
+///
+/// \tparam Tensor_t The data tensor type. eg. TA::TArrayD from TiledArray.
+/// \param node sequant::binary_node<sequant::EvalExpr> object
+///            that is the evaluation tree in essence.
+/// \param target_indx_labels The string labels iterable of the target indices
+///                           that appear in the node->tensor().const_braket().
+///                               set(node->tensor().const_braket()) =
+///                                         set(target_indx_labels)
+///                           This paramter is to allow to set the final
+///                           physical layout of the evaluated tensor in
+///                           the desired permutation.
+/// \param yielder That returns Tensor_t for leaf SeQuant Tensor(g, f, t, ...).
+/// \param man The cache manager.
+/// \return Tensor_t
 template <typename Tensor_t, typename Iterable, typename Yielder>
 auto eval_antisymm(EvalNode const& node, Iterable const& target_indx_labels,
                    Yielder&& yielder, CacheManager<Tensor_t const>& man) {

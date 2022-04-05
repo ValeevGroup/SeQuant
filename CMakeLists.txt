@@ -110,12 +110,15 @@ check_cxx_execution_header(SEQUANT)
 # Ranges-V3
 include(FindOrFetchRangeV3)
 
-# need Boost.ContainerHash
+# need Boost.ContainerHash and Boost.Regex
 # NB Boost.Container is broken in v1.70
-find_package(Boost ${SEQUANT_TRACKED_BOOST_VERSION} CONFIG)
-if (Boost_VERSION_STRING VERSION_LESS ${SEQUANT_TRACKED_BOOST_VERSION} OR NOT TARGET Boost::boost)
-  find_package(Boost ${SEQUANT_TRACKED_BOOST_VERSION} REQUIRED)
+find_package(Boost ${SEQUANT_TRACKED_BOOST_VERSION} CONFIG COMPONENTS regex)
+if (Boost_VERSION_STRING VERSION_LESS ${SEQUANT_TRACKED_BOOST_VERSION} OR NOT TARGET Boost::boost OR NOT TARGET Boost::regex)
+  find_package(Boost ${SEQUANT_TRACKED_BOOST_VERSION} REQUIRED COMPONENTS regex)
+  message(STATUS "Found Boost (version ${Boost_VERSION}) via FindBoost module")
   set(Boost_USE_CONFIG FALSE)
+else()
+  message(STATUS "Found Boost (version ${Boost_VERSION}) via CONFIG ${Boost_CONFIG}")
   set(Boost_USE_CONFIG TRUE)
 endif()
 if (Boost_VERSION_MACRO EQUAL 107000)
@@ -185,6 +188,8 @@ add_library(SeQuant
         SeQuant/core/bliss.hpp
         SeQuant/core/timer.hpp
         SeQuant/core/binary_node.hpp
+        SeQuant/core/clone.hpp
+        SeQuant/core/clone.cpp
         SeQuant/core/eval_seq.hpp
         SeQuant/core/eval_expr.hpp
         SeQuant/core/eval_expr.cpp
@@ -192,9 +197,9 @@ add_library(SeQuant
         SeQuant/core/asy_cost.cpp
         SeQuant/core/eval_node.hpp
         SeQuant/core/eval_node.cpp
-        SeQuant/core/parse_expr.cpp
         SeQuant/core/parse_expr.hpp
-        SeQuant/core/optimize/optimize.hpp
+        SeQuant/core/parse/parse_expr.cpp
+        SeQuant/core/optimize.hpp
         SeQuant/core/optimize/optimize.cpp
         SeQuant/core/parse/token.hpp
         SeQuant/core/parse/token.cpp
@@ -218,9 +223,12 @@ add_library(SeQuant
         SeQuant/domain/mbpt/spin.cpp
         SeQuant/domain/mbpt/sr/sr.cpp
         SeQuant/domain/mbpt/sr/sr.hpp
-        )
+        SeQuant/domain/transcorrelated/antisymmetrizer.hpp
+        SeQuant/domain/transcorrelated/simplifications.h
+        SeQuant/domain/transcorrelated/three_body_decomp.hpp
+        SeQuant/domain/eqs/single_ref_uccf12.h)
 
-target_link_libraries(SeQuant PUBLIC range-v3::range-v3 Boost::boost SeQuant-bliss Threads::Threads Eigen3::Eigen)
+target_link_libraries(SeQuant PUBLIC range-v3::range-v3 Boost::regex Boost::boost SeQuant-bliss Threads::Threads Eigen3::Eigen)
 if (SEQUANT_HAS_EXECUTION_HEADER_STANDALONE OR SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB)
   target_compile_definitions(SeQuant PUBLIC SEQUANT_HAS_EXECUTION_HEADER)
   if (SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB)
@@ -272,6 +280,7 @@ set(utests_src
          tests/unit/test_optimize.cpp
          tests/unit/test_token_sequant.cpp
          tests/unit/test_rpn.cpp
+         tests/unit/test_clone.cpp
         )
 
 if (TARGET tiledarray)
@@ -337,6 +346,13 @@ if (TARGET tiledarray)
             examples/eval/ta/main.cpp)
     target_link_libraries(${example2} SeQuant ${TBB_LIBRARIES} tiledarray)
 endif(TARGET tiledarray)
+
+set(example4 antisymmetrizer_test)
+add_executable(${example4} EXCLUDE_FROM_ALL
+        examples/${example4}/${example4}.cpp )
+target_link_libraries(${example4} SeQuant ${TBB_LIBRARIES})
+target_link_directories(${example4} PUBLIC ${TBB_LIBRARIES})
+target_compile_definitions(${example4} PRIVATE SEQUANT_HAS_TILEDARRAY)
 
 if(BTAS_SOURCE_DIR)
     set(example3 eval_btas)

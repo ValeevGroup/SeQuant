@@ -36,6 +36,7 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
 
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
+  Index::reset_tmp_index();
 
   SECTION("Op contractions") {
 
