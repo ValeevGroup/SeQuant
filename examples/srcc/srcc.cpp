@@ -4,19 +4,27 @@
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
-#include <Eigen/Dense>
 #include <Eigen/Eigenvalues>
 
 #include <clocale>
 
-#include <Eigen/Dense>
-#include <Eigen/Eigenvalues>
-
 using namespace sequant;
 
-container::vector<double> biorthogonal_tran_coeff(const int n_particles, const double& threshold);
-std::vector<std::map<Index, Index>> biorthogonal_tran_idx_map(const container::vector<container::vector<Index>> ext_index_groups);
+#define CLOSED_SHELL_SPINTRACE 1
+#if CLOSED_SHELL_SPINTRACE
+ExprPtr biorthogonal_transform(
+    const sequant::ExprPtr& expr, const int n_particles,
+    const std::vector<std::vector<sequant::Index>>& ext_index_groups = {{}},
+    const double threshold = 1.e-12);
 ExprPtr symmetrize_expr(ExprPtr& expr, const container::vector<container::vector<Index>> ext_index_groups = {{}});
+#endif
+
+#define runtime_assert(tf)                                         \
+  if (!(tf)) {                                                     \
+    std::ostringstream oss;                                        \
+    oss << "failed assert at line " << __LINE__ << " in SRCC example"; \
+    throw std::runtime_error(oss.str().c_str());                   \
+  }
 
 int main(int argc, char* argv[]) {
   std::setlocale(LC_ALL, "en_US.UTF-8");
@@ -39,7 +47,7 @@ int main(int argc, char* argv[]) {
   // set_num_threads(1);
 
 #ifndef NDEBUG
-  const size_t DEFAULT_NMAX = 4;
+  const size_t DEFAULT_NMAX = 3;
 #else
   const size_t DEFAULT_NMAX = 4;
 #endif
@@ -65,13 +73,6 @@ int main(int argc, char* argv[]) {
         });
   });
 
-  // reset index tags
-  auto reset_idx_tags = [](ExprPtr& expr) {
-    if (expr->is<Tensor>())
-      ranges::for_each(expr->as<Tensor>().const_braket(),
-                       [](const Index& idx) { idx.reset_tag(); });
-  };
-
   /// Make external index
   auto ext_idx_list = [](const int i_max) {
     container::vector<container::vector<Index>> ext_idx_list;
@@ -91,7 +92,7 @@ int main(int argc, char* argv[]) {
   // Spin-orbital coupled cluster
   auto cc_r = sequant::eqs::cceqvec{NMAX, NMAX}(true, true, true, true, true);
 
-#if 0
+#if CLOSED_SHELL_SPINTRACE
   //
   // Closed-shell spintrace (fast)
   //
@@ -105,7 +106,7 @@ int main(int argc, char* argv[]) {
     // Remove S operator
     for (auto& term : *cc_st_r[i]) {
       if (term->is<Product>())
-        term = sequant::remove_tensor_from_product(term->as<Product>(), L"S");
+        term = remove_tensor(term->as<Product>(), L"S");
     }
 
     // Biorthogonal transformation
@@ -119,7 +120,7 @@ int main(int argc, char* argv[]) {
     // Remove S operator
     for (auto& term : *cc_st_r[i]) {
       if (term->is<Product>())
-        term = remove_tensor_from_product(term->as<Product>(), L"S");
+        term = remove_tensor(term->as<Product>(), L"S");
     }
 
     auto tstop = std::chrono::high_resolution_clock::now();
@@ -127,8 +128,21 @@ int main(int argc, char* argv[]) {
     printf("CC R%lu size: %lu time: %5.3f sec.\n", i,
                                   cc_st_r[i]->size(), time_elapsed.count());
   }
-#endif
 
+  if (NMAX == 4) {
+    runtime_assert(cc_st_r.size() == 5);
+    runtime_assert(cc_st_r.at(1)->size() == 30); // T1
+    runtime_assert(cc_st_r.at(2)->size() == 78); // T2
+    runtime_assert(cc_st_r.at(3)->size() == 567); // T3
+    runtime_assert(cc_st_r.at(4)->size() == 2150); // T4
+  } else if (NMAX == 3) {
+    runtime_assert(cc_st_r.size() == 4);
+    runtime_assert(cc_st_r.at(1)->size() == 30); // T1
+    runtime_assert(cc_st_r.at(2)->size() == 73); // T2
+    runtime_assert(cc_st_r.at(3)->size() == 490); // T3
+  }
+
+#else
   //
   // Open-shell spintrace
   //
@@ -182,13 +196,6 @@ int main(int argc, char* argv[]) {
     std::cout << "\n";
   }
 
-#define runtime_assert(tf)                                         \
-  if (!(tf)) {                                                     \
-    std::ostringstream oss;                                        \
-    oss << "failed assert at line " << __LINE__ << " in SRCC example"; \
-    throw std::runtime_error(oss.str().c_str());                   \
-  }
-
   if (NMAX == 4) {
     runtime_assert(os_cc_st_r.size() == 5);
     runtime_assert(os_cc_st_r.at(1).at(0)->size() == 30);
@@ -207,7 +214,118 @@ int main(int argc, char* argv[]) {
     runtime_assert(os_cc_st_r.at(3).at(2)->size() == 209);
     runtime_assert(os_cc_st_r.at(3).at(3)->size() == 75);
   }
+#endif
+}
 
+#if CLOSED_SHELL_SPINTRACE
+ExprPtr biorthogonal_transform(
+    const sequant::ExprPtr& expr, const int n_particles,
+    const std::vector<std::vector<sequant::Index>>& ext_index_groups,
+    const double threshold) {
+  assert(n_particles != 0);
+  assert(!ext_index_groups.empty());
+
+  using sequant::container::svector;
+
+  // Coefficients
+  std::vector<double> bt_coeff_vec;
+  {
+    using namespace Eigen;
+    // Dimension of permutation matrix is n_particles!
+    int n = std::tgamma(n_particles + 1);
+
+    // Permutation matrix
+    Eigen::Matrix<double, Dynamic, Dynamic> M(n, n);
+    {
+      M.setZero();
+      size_t n_row = 0;
+      svector<int, 6> v(n_particles), v1(n_particles);
+      std::iota(v.begin(), v.end(), 0);
+      std::iota(v1.begin(), v1.end(), 0);
+      do {
+        std::vector<double> permutation_vector;
+        do {
+          auto cycles = sequant::count_cycles(v1, v);
+          permutation_vector.push_back(std::pow(-2, cycles));
+        } while (std::next_permutation(v.begin(), v.end()));
+        Eigen::VectorXd pv_eig = Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(
+            permutation_vector.data(), permutation_vector.size());
+        M.row(n_row) = pv_eig;
+        ++n_row;
+      } while (std::next_permutation(v1.begin(), v1.end()));
+      M *= std::pow(-1, n_particles);
+    }
+
+    // Normalization constant
+    double scalar;
+    {
+      auto nonZero = [&threshold](const double& d) {
+        return abs(d) > threshold;
+      };
+
+      // Solve system of equations
+      SelfAdjointEigenSolver<MatrixXd> eig_solver(M);
+      std::vector<double> eig_vals(eig_solver.eigenvalues().size());
+      VectorXd::Map(&eig_vals[0], eig_solver.eigenvalues().size()) =
+          eig_solver.eigenvalues();
+
+      double non0count =
+          std::count_if(eig_vals.begin(), eig_vals.end(), nonZero);
+      scalar = eig_vals.size() / non0count;
+    }
+
+    // Find Pseudo Inverse, get 1st row only
+    MatrixXd pinv = M.completeOrthogonalDecomposition().pseudoInverse();
+    bt_coeff_vec.resize(pinv.rows());
+    VectorXd::Map(&bt_coeff_vec[0], bt_coeff_vec.size()) = pinv.row(0) * scalar;
+  }
+
+  // Transformation maps
+  std::vector<std::map<Index, Index>> bt_maps;
+  {
+    std::vector<Index> idx_list(ext_index_groups.size());
+
+    for (auto i = 0; i != ext_index_groups.size(); ++i){
+      idx_list[i] = *ext_index_groups[i].begin();
+    }
+
+    const std::vector<Index> const_idx_list = idx_list;
+
+    do {
+      std::map<Index, Index> map;
+      auto const_list_ptr = const_idx_list.begin();
+      for (auto& i : idx_list) {
+        map.emplace(std::make_pair(*const_list_ptr, i));
+        const_list_ptr++;
+      }
+      bt_maps.push_back(map);
+    } while (std::next_permutation(idx_list.begin(), idx_list.end()));
+  }
+
+  // If this assertion fails, change the threshold parameter
+  assert(bt_coeff_vec.size() == bt_maps.size());
+
+  // Checks if the replacement map is a canonical sequence
+  auto is_canonical = [](const std::map<Index, Index>& idx_map) {
+    bool canonical = true;
+    for (auto&& pair : idx_map)
+      if (pair.first != pair.second) return false;
+    return canonical;
+  };
+
+  // Scale transformed expressions and append
+  Sum bt_expr{};
+  auto coeff_it = bt_coeff_vec.begin();
+  for (auto&& map : bt_maps) {
+    if (is_canonical(map))
+      bt_expr.append(ex<Constant>(*coeff_it) * expr->clone());
+    else
+      bt_expr.append(ex<Constant>(*coeff_it) *
+                     sequant::transform_expr(expr->clone(), map));
+    coeff_it++;
+  }
+  ExprPtr result = std::make_shared<Sum>(bt_expr);
+  return result;
 }
 
 // Generate S operator from external index list
@@ -223,78 +341,5 @@ ExprPtr symmetrize_expr(ExprPtr& expr, const container::vector<container::vector
   auto S = Tensor(L"S", bra_list, ket_list, Symmetry::nonsymm);
   return ex<Tensor>(S) * expr;
 }
-
-container::vector<double> biorthogonal_tran_coeff(const int n_particles, const double& threshold){
-  using namespace Eigen;
-
-  int n = std::tgamma(n_particles + 1); // <- Dimension of permutation matrix is n_particles!
-  // Permutation matrix
-  Eigen::MatrixXd M(n,n);
-  {
-    M.setZero();
-    size_t n_row = 0;
-    container::svector<int, 6> v(n_particles), v1(n_particles);
-    std::iota(v.begin(), v.end(), 0);
-    std::iota(v1.begin(), v1.end(), 0);
-    do {
-      container::vector<double> permutation_vector;
-      do {
-        auto cycles = count_cycles(v1, v);
-        permutation_vector.push_back(std::pow(-2, cycles));
-      } while (std::next_permutation(v.begin(), v.end()));
-      Eigen::VectorXd pv_eig = Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(permutation_vector.data(),
-                                                                             permutation_vector.size());
-      M.row(n_row) = pv_eig;
-      ++n_row;
-    } while (std::next_permutation(v1.begin(), v1.end()));
-    M *= std::pow(-1, n_particles);
-    // std::cout << "permutation_matrix:\n" << M << std::endl;
-  }
-
-  // Normalization constant
-  double scalar;
-  {
-    // inline bool nonZero(double d) { return abs(d) > threshold ? true : false; }
-    auto nonZero = [&threshold] (const double d) { return abs(d) > threshold ? true : false; };
-
-    // Solve system of equations
-    SelfAdjointEigenSolver<MatrixXd> eig_solver(M);
-    container::vector<double> eig_vals(eig_solver.eigenvalues().size());
-    VectorXd::Map(&eig_vals[0], eig_solver.eigenvalues().size()) =
-        eig_solver.eigenvalues();
-
-    double non0count = std::count_if(eig_vals.begin(), eig_vals.end(), nonZero);
-    scalar = eig_vals.size() / non0count;
-  }
-  // std::cout << "scalar: " << scalar << std::endl;
-  // Find Pseudo Inverse, get 1st row only
-  MatrixXd pinv = M.completeOrthogonalDecomposition().pseudoInverse();
-  container::vector<double> result(pinv.rows());
-  VectorXd::Map(&result[0], result.size()) = pinv.row(0) * scalar;
-  return result;
-}
-
-/// @brief Biorthogonal transformation map
-std::vector<std::map<Index, Index>> biorthogonal_tran_idx_map(const container::vector<container::vector<Index>> ext_index_groups){
-  //Check size of external index group; catch exception otherwise
-  if(ext_index_groups.size() == 0) throw( "Cannot compute index map since " && "ext_index_groups.size() == 0");
-  assert(ext_index_groups.size() > 0);
-
-  std::vector<Index> idx_list;
-  for(auto&& idx_group : ext_index_groups) idx_list.push_back(*idx_group.begin());
-
-  const container::vector<Index> const_idx_list = idx_list;
-  // Do permutations and append to map
-  std::vector<std::map<Index, Index>> result;
-  do{
-    std::map<Index, Index> map;
-    auto const_list_ptr = const_idx_list.begin();
-    for(auto&& i : idx_list){
-      map.emplace(std::make_pair(*const_list_ptr, i));
-      const_list_ptr++;
-    }
-    result.push_back(map);
-  } while(std::next_permutation(idx_list.begin(), idx_list.end()));
-  return result;
-}
+#endif
 
