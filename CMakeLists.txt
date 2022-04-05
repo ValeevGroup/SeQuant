@@ -126,6 +126,13 @@ if (Boost_VERSION_MACRO EQUAL 107000)
         "use any version ${SEQUANT_TRACKED_BOOST_VERSION} "
         "or higher, other than 1.70")
 endif()
+# Boost.Move is broken in 1.77 and 1.78 unless using c++20
+# fixed in 1.79 via https://github.com/boostorg/move/commit/78f26da1f3a5a3831e9e70efe83f9c56eef94e8c
+if (CMAKE_CXX_STANDARD LESS 20)
+    if (Boost_VERSION_MACRO GREATER_EQUAL 107700 AND Boost_VERSION_MACRO LESS 107900)
+        message(FATAL_ERROR "Found Boost 1.77 <= version < 1.79, but its Boost.Move is broken with pre-C++20: use a version older than 1.77 or newer than 1.78")
+    endif()
+endif()
 
 find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 
