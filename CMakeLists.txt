@@ -282,6 +282,11 @@ set(utests_src
          tests/unit/test_rpn.cpp
          tests/unit/test_clone.cpp
         )
+#set(utests_src tests/unit/test_spin.cpp
+#        tests/unit/test_op.cpp
+#        tests/unit/test_index.cpp
+#        tests/unit/test_wick.cpp
+#        tests/unit/test_tensor.cpp)
 
 if (TARGET tiledarray)
     list(APPEND utests_src
@@ -323,6 +328,11 @@ set(example1 uccf12)
 add_executable(${example1} EXCLUDE_FROM_ALL
     examples/${example1}/${example1}.cpp)
 target_link_libraries(${example1} SeQuant ${TBB_LIBRARIES})
+
+set(example3 ccf12)
+add_executable(${example3} EXCLUDE_FROM_ALL
+        examples/${example3}/${example3}.cpp)
+target_link_libraries(${example3} SeQuant ${TBB_LIBRARIES})
 
 set(example_eval_src
     examples/eval/eval_utils.hpp
