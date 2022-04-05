@@ -16,14 +16,16 @@ ExprPtr biorthogonal_transform(
     const sequant::ExprPtr& expr, const int n_particles,
     const std::vector<std::vector<sequant::Index>>& ext_index_groups = {{}},
     const double threshold = 1.e-12);
-ExprPtr symmetrize_expr(ExprPtr& expr, const container::vector<container::vector<Index>> ext_index_groups = {{}});
+ExprPtr symmetrize_expr(
+    ExprPtr& expr,
+    const container::vector<container::vector<Index>> ext_index_groups = {{}});
 #endif
 
-#define runtime_assert(tf)                                         \
-  if (!(tf)) {                                                     \
-    std::ostringstream oss;                                        \
+#define runtime_assert(tf)                                             \
+  if (!(tf)) {                                                         \
+    std::ostringstream oss;                                            \
     oss << "failed assert at line " << __LINE__ << " in SRCC example"; \
-    throw std::runtime_error(oss.str().c_str());                   \
+    throw std::runtime_error(oss.str().c_str());                       \
   }
 
 int main(int argc, char* argv[]) {
@@ -105,8 +107,7 @@ int main(int argc, char* argv[]) {
 
     // Remove S operator
     for (auto& term : *cc_st_r[i]) {
-      if (term->is<Product>())
-        term = remove_tensor(term->as<Product>(), L"S");
+      if (term->is<Product>()) term = remove_tensor(term->as<Product>(), L"S");
     }
 
     // Biorthogonal transformation
@@ -119,47 +120,48 @@ int main(int argc, char* argv[]) {
 
     // Remove S operator
     for (auto& term : *cc_st_r[i]) {
-      if (term->is<Product>())
-        term = remove_tensor(term->as<Product>(), L"S");
+      if (term->is<Product>()) term = remove_tensor(term->as<Product>(), L"S");
     }
 
     auto tstop = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> time_elapsed = tstop - tstart;
-    printf("CC R%lu size: %lu time: %5.3f sec.\n", i,
-                                  cc_st_r[i]->size(), time_elapsed.count());
+    printf("CC R%lu size: %lu time: %5.3f sec.\n", i, cc_st_r[i]->size(),
+           time_elapsed.count());
   }
 
   if (NMAX == 4) {
     runtime_assert(cc_st_r.size() == 5);
-    runtime_assert(cc_st_r.at(1)->size() == 30); // T1
-    runtime_assert(cc_st_r.at(2)->size() == 78); // T2
-    runtime_assert(cc_st_r.at(3)->size() == 567); // T3
-    runtime_assert(cc_st_r.at(4)->size() == 2150); // T4
+    runtime_assert(cc_st_r.at(1)->size() == 30);    // T1
+    runtime_assert(cc_st_r.at(2)->size() == 78);    // T2
+    runtime_assert(cc_st_r.at(3)->size() == 567);   // T3
+    runtime_assert(cc_st_r.at(4)->size() == 2150);  // T4
   } else if (NMAX == 3) {
     runtime_assert(cc_st_r.size() == 4);
-    runtime_assert(cc_st_r.at(1)->size() == 30); // T1
-    runtime_assert(cc_st_r.at(2)->size() == 73); // T2
-    runtime_assert(cc_st_r.at(3)->size() == 490); // T3
+    runtime_assert(cc_st_r.at(1)->size() == 30);   // T1
+    runtime_assert(cc_st_r.at(2)->size() == 73);   // T2
+    runtime_assert(cc_st_r.at(3)->size() == 490);  // T3
   }
 
 #else
   //
   // Open-shell spintrace
   //
-  std::cout << "Open-shell coupled cluster: nterms per spin blocks: " << std::endl;
+  std::cout << "Open-shell coupled cluster: nterms per spin blocks: "
+            << std::endl;
   std::vector<std::vector<ExprPtr>> os_cc_st_r(cc_r.size());
   for (auto i = 1; i < cc_r.size(); ++i) {
-    Tensor A = cc_r[i]->as<Sum>().summand(0)->as<Product>().factors()[0]->as<Tensor>();
+    Tensor A =
+        cc_r[i]->as<Sum>().summand(0)->as<Product>().factors()[0]->as<Tensor>();
     assert(A.label() == L"A");
     auto P_vec = open_shell_P_op_vector(A);
     auto A_vec = open_shell_A_op(A);
-    assert(P_vec.size() == i+1);
+    assert(P_vec.size() == i + 1);
 
     std::vector<Sum> concat_terms(i + 1);
     size_t n_spin_orbital_term = 0;
     for (auto& product_term : *cc_r[i]) {
       auto term = remove_tensor(product_term->as<Product>(), L"A");
-      std::vector<ExprPtr> os_st(i+1);
+      std::vector<ExprPtr> os_st(i + 1);
 
       // Apply the P operators on the product term without the A,
       // Expand the P operators and spin-trace the expression
@@ -168,8 +170,8 @@ int main(int argc, char* argv[]) {
         os_st.at(s) = P_vec.at(s) * term;
         expand(os_st.at(s));
         os_st.at(s) = expand_P_op(os_st.at(s), false, true);
-        os_st.at(s) = open_shell_spintrace(os_st.at(s),
-                                           ext_idx_list(i), s).at(0);
+        os_st.at(s) =
+            open_shell_spintrace(os_st.at(s), ext_idx_list(i), s).at(0);
         if (i > 2) {
           os_st.at(s) = A_vec.at(s) * os_st.at(s);
           simplify(os_st.at(s));
@@ -285,7 +287,7 @@ ExprPtr biorthogonal_transform(
   {
     std::vector<Index> idx_list(ext_index_groups.size());
 
-    for (auto i = 0; i != ext_index_groups.size(); ++i){
+    for (auto i = 0; i != ext_index_groups.size(); ++i) {
       idx_list[i] = *ext_index_groups[i].begin();
     }
 
@@ -329,10 +331,11 @@ ExprPtr biorthogonal_transform(
 }
 
 // Generate S operator from external index list
-ExprPtr symmetrize_expr(ExprPtr& expr, const container::vector<container::vector<Index>> ext_index_groups){
-
+ExprPtr symmetrize_expr(
+    ExprPtr& expr,
+    const container::vector<container::vector<Index>> ext_index_groups) {
   container::vector<Index> bra_list, ket_list;
-  for(auto&& idx_group : ext_index_groups) {
+  for (auto&& idx_group : ext_index_groups) {
     bra_list.push_back(*idx_group.begin());
     ket_list.push_back(*(idx_group.begin() + 1));
   }
@@ -342,4 +345,3 @@ ExprPtr symmetrize_expr(ExprPtr& expr, const container::vector<container::vector
   return ex<Tensor>(S) * expr;
 }
 #endif
-
