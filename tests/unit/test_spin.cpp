@@ -4,6 +4,7 @@
 
 #include "SeQuant/domain/mbpt/spin.cpp"
 #include "catch.hpp"
+#include "test_config.hpp"
 
 TEST_CASE("Spin") {
   using namespace sequant;
@@ -345,6 +346,7 @@ TEST_CASE("Spin") {
       REQUIRE(asm_input->is<Sum>());
     }
 
+#ifndef SEQUANT_SKIP_LONG_TESTS
     {  // 5-body
       const auto input =
           ex<Tensor>(L"A", WstrList{L"i_1", L"i_2", L"i_3", L"i_4", L"i_5"},
@@ -357,6 +359,7 @@ TEST_CASE("Spin") {
       REQUIRE(asm_input->size() == 14400);
       REQUIRE(asm_input->is<Sum>());
     }
+#endif
   }
 
   SECTION("Expand Symmetrizer") {

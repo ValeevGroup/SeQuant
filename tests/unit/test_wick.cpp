@@ -7,9 +7,7 @@
 #include "SeQuant/core/timer.hpp"
 #include "SeQuant/core/wick.hpp"
 #include "catch.hpp"
-
-// comment out if want to run long tests
-//#define SEQUANT_SKIP_LONG_TESTS 1
+#include "test_config.hpp"
 
 namespace sequant {
 struct WickAccessor {};

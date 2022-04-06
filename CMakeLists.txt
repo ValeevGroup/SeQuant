@@ -314,6 +314,7 @@ if (BUILD_TESTING)
     add_executable(${unit_test_executable} EXCLUDE_FROM_ALL
             tests/unit/test_main.cpp
             tests/unit/catch.hpp
+            tests/unit/test_config.hpp
             ${utests_src})
     target_link_libraries(${unit_test_executable} ${utests_deps})
     if (TARGET tiledarray)
