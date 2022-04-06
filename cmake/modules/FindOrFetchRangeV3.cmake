@@ -23,5 +23,5 @@ endif(TARGET range-v3::range-v3)
 
 # postcond check
 if (NOT TARGET range-v3::range-v3)
-message(FATAL_ERROR "FindOrFetchRangeV3 could not make range-v3::range-v3 target available")
+  message(FATAL_ERROR "FindOrFetchRangeV3 could not make range-v3::range-v3 target available")
 endif(NOT TARGET range-v3::range-v3)
