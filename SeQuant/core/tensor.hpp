@@ -160,7 +160,7 @@ class Tensor : public Expr, public AbstractTensor {
     return bra_rank();
   }
 
-  /// @Brief Convert Fock and Coulomb integrals to std::wstring formula
+  /// @brief Convert Fock and Coulomb integrals to std::wstring formula
   /// compatible with MPQC v4
   /// @param df return density-fitted or regular integals
   /// @return formula in wstring format
