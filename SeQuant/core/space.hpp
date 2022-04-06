@@ -274,16 +274,17 @@ class IndexSpace {
     return *this;
   }
 
+  /// @brief constructs an instance of an IndexSpace object
+  IndexSpace(Type type, QuantumNumbers qns) noexcept : attr_(type, qns) {
+    assert(attr_.is_valid());
+  }
+
  private:
 
   Attr attr_ = Attr::invalid();
   /// @brief constructs an instance of an IndexSpace object
   explicit IndexSpace(Attr attr) noexcept : attr_(attr) {
     assert(attr.is_valid());
-  }
-  /// @brief constructs an instance of an IndexSpace object
-  IndexSpace(Type type, QuantumNumbers qns) noexcept : attr_(type, qns) {
-    assert(attr_.is_valid());
   }
 
   static container::map<Attr, std::wstring> keys_;
