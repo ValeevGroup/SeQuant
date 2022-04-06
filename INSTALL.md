@@ -9,7 +9,7 @@ prerequisites:
     * [Range-V3](https://github.com/ericniebler/range-v3.git), tag d800a032132512a54c291ce55a2a43e0460591c7, *if not found, SeQuant will download and build Range-V3*
   * optional:
     * for building coupled-cluster evaluation tests:
-      * [TiledArray](https://github.com/ValeevGroup/tiledarray.git), tag 5c768a7b121886dfe406c6dd6a38acaa8782ae6e
+      * [TiledArray](https://github.com/ValeevGroup/tiledarray.git), tag 36e2ad205c21c339434dd0ef8f4f1467e7e26037
 
 for the impatient:
   * `cmake -B build -S .`
