@@ -66,9 +66,9 @@ with open(version_cmake_path) as inf:
                 boost_new_version = tokens[2]
         elif tokens[1].find('TRACKED_TILEDARRAY') != -1:
             if tokens[1].find('PREVIOUS') != -1:
-                ta_old_version = tokens[2]
+                ta_old_tag = tokens[2]
             else:
-                ta_new_version = tokens[2]
+                ta_new_tag = tokens[2]
         elif tokens[1].find('RANGEV3') != -1:
             if tokens[1].find('PREVIOUS') != -1:
                 rangev3_old_tag = tokens[2]
