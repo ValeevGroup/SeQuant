@@ -6,8 +6,8 @@
 #define SEQUANT_LATEX_HPP
 
 #include <type_traits>
-#include "wstring.hpp"
 #include "meta.hpp"
+#include "wstring.hpp"
 
 namespace sequant {
 
@@ -39,14 +39,15 @@ to_latex(T&& t) {
   std::wstring result = L"{";
   using ::sequant::to_wstring;
 
-  if (std::floor(t) == t)  // exact integer
-    result += to_wstring(t) + L"}";
+  const long round_t = std::lround(t);
+  if (std::abs(round_t - t) < eps_sqrt)  // exact integer
+    result += to_wstring(round_t) + L"}";
   else {  // TODO detect rationals
     const auto inv_t = Real(1) / t;
-    const auto round_inv_t = round(inv_t);
+    const long round_inv_t = std::lround(inv_t);
     if (std::abs(round_inv_t - inv_t) < eps_sqrt) {  // exact inverse of an
                                                      // integer
-      long denom = long(round_inv_t);
+      long denom = round_inv_t;
       using namespace std::literals;
       result += (std::signbit(t) ? L"-"s : L""s) + L"\\frac{1}{"s +
                 std::to_wstring(std::abs(denom)) + L"}}"s;
@@ -70,4 +71,4 @@ std::wstring to_latex(const std::complex<T>& t) {
 
 }  // namespace sequant
 
-#endif //SEQUANT_LATEX_HPP
+#endif  // SEQUANT_LATEX_HPP
