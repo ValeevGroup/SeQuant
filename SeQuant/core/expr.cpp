@@ -176,36 +176,6 @@ ExprPtr Product::rapid_canonicalize() {
   return this->canonicalize_impl(/* rapid = */ true);
 }
 
-// ExprPtr Product::rapid_canonicalize() {
-//  // recursively canonicalize subfactors ...
-//  ranges::for_each(factors_, [this](auto &factor) {
-//    auto bp = factor->canonicalize();
-//    if (bp) {
-//      assert(bp->template is<Constant>());
-//      this->scalar_ *= std::static_pointer_cast<Constant>(bp)->value();
-//    }
-//  });
-//
-//  // ... then resort
-//  using std::begin;
-//  using std::end;
-//  // default sorts by type, then by hash
-//  // TODO for same types see if that type's operator< is defined, otherwise
-//  use hashes std::stable_sort(begin(factors_), end(factors_), [](const auto
-//  &first, const auto &second) {
-//    const auto first_id = first->type_id();
-//    const auto second_id = second->type_id();
-//    if (first_id == second_id) {
-//      return first->hash_value() < second->hash_value();
-//    } else // first_id != second_id
-//      return first_id < second_id;
-//  });
-//
-//  // TODO evaluate product of Tensors (turn this into Products of Products
-//
-//  return {};  // side effects are absorbed into the scalar_
-//}
-
 void CProduct::adjoint() {
   auto adj_scalar = conj(scalar());
   using namespace ranges;
