@@ -615,7 +615,7 @@ using ConstantPtr = std::shared_ptr<Constant>;
 /// noncommutative Product, respectively)
 class Product : public Expr {
  public:
-  using scalar_type = std::complex<double>;
+  using scalar_type = Constant::scalar_type;
 
   Product() = default;
   virtual ~Product() = default;
