@@ -30,7 +30,8 @@ class Tensor : public Expr, public AbstractTensor {
     }
     return result;
   }
-  static auto make_indices(std::initializer_list<const wchar_t *> index_labels) {
+  static auto make_indices(
+      std::initializer_list<const wchar_t *> index_labels) {
     index_container_type result;
     result.reserve(index_labels.size());
     for (const auto &label : index_labels) {
@@ -57,14 +58,15 @@ class Tensor : public Expr, public AbstractTensor {
   void assert_nonreserved_label(std::wstring_view label) const;
 
   // utility for disaptching to private ctor
-  struct reserved_tag{};
+  struct reserved_tag {};
 
   // list of friends who can make Tensor objects with reserved labels
   friend ExprPtr make_overlap(const Index &bra_index, const Index &ket_index);
 
   template <typename IndexContainer1, typename IndexContainer2>
   Tensor(std::wstring_view label, IndexContainer1 &&bra_indices,
-         IndexContainer2 &&ket_indices, reserved_tag, Symmetry s = Symmetry::nonsymm,
+         IndexContainer2 &&ket_indices, reserved_tag,
+         Symmetry s = Symmetry::nonsymm,
          BraKetSymmetry bks = get_default_context().braket_symmetry(),
          ParticleSymmetry ps = ParticleSymmetry::symm)
       : label_(label),
@@ -94,11 +96,9 @@ class Tensor : public Expr, public AbstractTensor {
          IndexContainer &&ket_indices, Symmetry s = Symmetry::nonsymm,
          BraKetSymmetry bks = get_default_context().braket_symmetry(),
          ParticleSymmetry ps = ParticleSymmetry::symm)
-      : Tensor(label,
-               std::forward<IndexContainer>(bra_indices),
-               std::forward<IndexContainer>(ket_indices),
-               reserved_tag{},
-               s, bks, ps) {
+      : Tensor(label, std::forward<IndexContainer>(bra_indices),
+               std::forward<IndexContainer>(ket_indices), reserved_tag{}, s,
+               bks, ps) {
     assert_nonreserved_label(label_);
   }
 
@@ -221,13 +221,12 @@ class Tensor : public Expr, public AbstractTensor {
 
   std::wstring to_latex() const override {
     std::wstring result;
-    bool gt = (this->label() == L"g") || (this->label() == L"t" && this->rank() > 1);
+    bool gt =
+        (this->label() == L"g") || (this->label() == L"t" && this->rank() > 1);
     result = L"{";
-    if((this->symmetry() == Symmetry::antisymm) && gt)
-      result += L"\\bar{";
+    if ((this->symmetry() == Symmetry::antisymm) && gt) result += L"\\bar{";
     result += this->label();
-    if((this->symmetry() == Symmetry::antisymm) && gt)
-      result += L"}";
+    if ((this->symmetry() == Symmetry::antisymm) && gt) result += L"}";
     result += L"^{";
     for (const auto &i : this->ket()) result += sequant::to_latex(i);
     result += L"}_{";
@@ -290,7 +289,7 @@ class Tensor : public Expr, public AbstractTensor {
   /// @brief Adds tensors if their hash values match
   /// @param other tensor to compare
   /// @return an expression pointer of type Product
-  ExprPtr add_identical(const std::shared_ptr<Tensor> &other){
+  ExprPtr add_identical(const std::shared_ptr<Tensor> &other) {
     assert(this->hash_value() == other->hash_value());
     ExprPtr result = ex<Constant>(2.0) * ex<Tensor>(this->as<Tensor>());
     return result;
@@ -307,7 +306,8 @@ class Tensor : public Expr, public AbstractTensor {
       bra_hash_value_;  // memoized byproduct of memoizing_hash()
 
   void validate_symmetries() {
-    // (anti)symmetric bra or ket makes sense only for particle-symmetric tensors
+    // (anti)symmetric bra or ket makes sense only for particle-symmetric
+    // tensors
     if (symmetry_ == Symmetry::symm || symmetry_ == Symmetry::antisymm)
       assert(particle_symmetry_ == ParticleSymmetry::symm);
   }
@@ -398,7 +398,8 @@ class Tensor : public Expr, public AbstractTensor {
   bool _is_cnumber() const override final { return true; }
   std::wstring _label() const override final { return label_; }
   std::wstring _to_latex() const override final { return to_latex(); }
-  bool _transform_indices(const container::map<Index, Index> &index_map) override final {
+  bool _transform_indices(
+      const container::map<Index, Index> &index_map) override final {
     return transform_indices(index_map);
   }
   void _reset_tags() override final { reset_tags(); }
@@ -428,12 +429,12 @@ using TensorPtr = std::shared_ptr<Tensor>;
 
 /// make_overlap tensor label is reserved since it is used by low-level SeQuant
 /// machinery. Users can create make_overlap Tensor using make_overlap()
-inline std::wstring overlap_label() {
-  return L"s";
-}
+inline std::wstring overlap_label() { return L"s"; }
 
 inline ExprPtr make_overlap(const Index &bra_index, const Index &ket_index) {
-  return ex<Tensor>(Tensor(overlap_label(), std::array<Index, 1>{{bra_index}}, std::array<Index, 1>{{ket_index}}, Tensor::reserved_tag{}));
+  return ex<Tensor>(Tensor(overlap_label(), std::array<Index, 1>{{bra_index}},
+                           std::array<Index, 1>{{ket_index}},
+                           Tensor::reserved_tag{}));
 }
 
 }  // namespace sequant
