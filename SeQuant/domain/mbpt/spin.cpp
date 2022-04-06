@@ -1375,8 +1375,9 @@ ExprPtr spintrace(
   auto check_proto_index = [](const ExprPtr& expr) {
     if (expr->is<Tensor>()) {
       ranges::for_each(expr->as<Tensor>().const_braket(), [](const Index& idx) {
-        assert(!idx.has_proto_indices() &&
-               "Proto index not supported in spintrace function.");
+        if (idx.has_proto_indices())
+          throw std::logic_error(
+              "sequant::spintrace(input): proto indices not supported");
       });
     }
   };

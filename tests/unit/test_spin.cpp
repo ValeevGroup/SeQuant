@@ -30,8 +30,7 @@ TEST_CASE("Spin") {
              {a1, a2});
 
     const auto input = ex<Tensor>(L"t", IndexList{i3}, IndexList{a3});
-    // TODO: Use exception for passing
-    // REQUIRE_THROWS_AS(spintrace(input),std::abort());
+    REQUIRE_THROWS_AS(spintrace(input), std::logic_error);
   }
 
   SECTION("ASCII label") {
