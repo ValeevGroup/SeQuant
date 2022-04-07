@@ -158,7 +158,7 @@ TEST_CASE("TensorNetwork", "[elements]") {
     // create dot
     std::basic_ostringstream<wchar_t> oss;
     REQUIRE_NOTHROW(graph->write_dot(oss, vlabels));
-    std::wcout << "oss.str() = " << std::endl << oss.str() << std::endl;
+    //std::wcout << "oss.str() = " << std::endl << oss.str() << std::endl;
     REQUIRE(oss.str() ==
             L"graph g {\n"
             "v0 [label=\"{a_{102}}\"; color=\"#4f1,dd0\"];\n"

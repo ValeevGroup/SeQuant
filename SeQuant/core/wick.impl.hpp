@@ -10,7 +10,7 @@
 #include "utility.hpp"
 
 #ifdef SEQUANT_HAS_EXECUTION_HEADER
-# include <execution>
+#include <execution>
 #endif
 
 namespace sequant {
@@ -25,13 +25,14 @@ struct zero_result : public std::exception {};
 /// summations can be reduced by index replacements. Reducing sums over dummy
 /// (internal) indices uses 2 rules:
 /// - if a Kronecker delta binds 2 internal indices I and J, replace them with a
-/// new internal index
-///   representing intersection of spaces of I and J, !!remove delta!!
+///   new internal index representing intersection of spaces of I and J,
+///   !!remove delta!!
 /// - if a Kronecker delta binds an internal index J and an external index I:
 ///   - if space of J includes space of I, replace J with I, !!remove delta!!
 ///   - if space of J is a subset of space of I, replace J with a new internal
 ///     index representing intersection of spaces of I and J, !!keep the delta!!
-/// @throw zero_result if @c product is zero
+/// @throw zero_result if @c product is zero for any reason, e.g. because
+///        it includes an overlap of 2 indices from nonoverlapping spaces
 inline container::map<Index, Index> compute_index_replacement_rules(
     std::shared_ptr<Product> &product,
     const container::set<Index> &external_indices,
@@ -69,14 +70,13 @@ inline container::map<Index, Index> compute_index_replacement_rules(
   };
 
   // adds src->dst or src->intersection(dst,current_dst)
-  auto add_rule = [&result, &proto, &make_intersection_index](const Index &src,
-                                                              const Index &dst) {
+  auto add_rule = [&result, &proto, &make_intersection_index](
+                      const Index &src, const Index &dst) {
     auto src_it = result.find(src);
     if (src_it == result.end()) {  // if brand new, add the rule
       auto insertion_result = result.emplace(src, proto(dst, src));
       assert(insertion_result.second);
-    }
-    else {  // else modify the destination of the existing rule to the
+    } else {  // else modify the destination of the existing rule to the
       // intersection
       const auto &old_dst = src_it->second;
       assert(old_dst.proto_indices() == src.proto_indices());
@@ -136,8 +136,8 @@ inline container::map<Index, Index> compute_index_replacement_rules(
       const auto &old_dst2 = src2_it->second;
       const auto new_dst_space =
           (dst.space() != old_dst1.space() || dst.space() != old_dst2.space())
-          ? intersection(old_dst1.space(), old_dst2.space(), dst.space())
-          : dst.space();
+              ? intersection(old_dst1.space(), old_dst2.space(), dst.space())
+              : dst.space();
       if (new_dst_space == IndexSpace::null_instance()) throw zero_result{};
       Index new_dst;
       if (new_dst_space == old_dst1.space()) {
@@ -157,15 +157,14 @@ inline container::map<Index, Index> compute_index_replacement_rules(
         new_dst = dst;
       } else
         new_dst = idxfac.make(new_dst_space);
-      result[src1] = proto(new_dst,dst1_proto);
-      result[src2] = proto(new_dst,dst2_proto);
+      result[src1] = proto(new_dst, dst1_proto);
+      result[src2] = proto(new_dst, dst2_proto);
     }
   };
 
   /// this makes the list of replacements ... we do not mutate the expressions
   /// to keep the information about which indices are related
-  for (auto it = ranges::begin(exrng); it != ranges::end(exrng);
-       ++it) {
+  for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
     const auto &factor = *it;
     if (factor->type_id() == Expr::get_type_id<Tensor>()) {
       const auto &tensor = static_cast<const Tensor &>(*factor);
@@ -177,12 +176,16 @@ inline container::map<Index, Index> compute_index_replacement_rules(
         assert(bra != ket);
 
         const auto bra_is_ext = ranges::find(external_indices, bra) !=
-            ranges::end(external_indices);
+                                ranges::end(external_indices);
         const auto ket_is_ext = ranges::find(external_indices, ket) !=
-            ranges::end(external_indices);
+                                ranges::end(external_indices);
 
         const auto intersection_space = intersection(bra.space(), ket.space());
-        assert(intersection_space != IndexSpace::null_instance());
+
+        // if overlap's indices are from non-overlapping spaces, return zero
+        if (intersection_space == IndexSpace::null_instance()) {
+          throw zero_result{};
+        }
 
         if (!bra_is_ext && !ket_is_ext) {  // int + int
           const auto new_dummy = idxfac.make(intersection_space);
@@ -246,8 +249,7 @@ inline bool apply_index_replacement_rules(
         auto &tensor = factor->as<Tensor>();
 
         /// replace indices
-        pass_mutated &=
-            tensor.transform_indices(const_replrules);
+        pass_mutated &= tensor.transform_indices(const_replrules);
 
         if (tensor.label() == overlap_label()) {
           const auto &bra = tensor.bra().at(0);
@@ -298,8 +300,7 @@ inline bool apply_index_replacement_rules(
 #endif
               }
             } else {  // ext + ext
-              if (bra == ket)
-                erase_it = true;
+              if (bra == ket) erase_it = true;
             }
 
             if (erase_it) {
@@ -329,8 +330,8 @@ inline bool apply_index_replacement_rules(
   ranges::for_each(
       all_indices, [&const_replrules, &all_indices_new](const Index &idx) {
         auto dst_it = const_replrules.find(idx);
-        [[maybe_unused]] auto insertion_result = all_indices_new.emplace(dst_it != const_replrules.end() ? dst_it->second
-                                                                                        : idx);
+        [[maybe_unused]] auto insertion_result = all_indices_new.emplace(
+            dst_it != const_replrules.end() ? dst_it->second : idx);
       });
   std::swap(all_indices_new, all_indices);
 
@@ -353,7 +354,8 @@ inline void reduce_wick_impl(std::shared_ptr<Product> &expr,
         if (factor->template is<Tensor>()) {
           ranges::for_each(factor->template as<const Tensor>().braket(),
                            [&all_indices](const Index &idx) {
-                             [[maybe_unused]] auto result = all_indices.insert(idx);
+                             [[maybe_unused]] auto result =
+                                 all_indices.insert(idx);
                            });
         }
       });
@@ -361,7 +363,7 @@ inline void reduce_wick_impl(std::shared_ptr<Product> &expr,
       const auto replacement_rules =
           compute_index_replacement_rules(expr, external_indices, all_indices);
 
-      if (Logger::get_instance().wick_reduce){
+      if (Logger::get_instance().wick_reduce) {
         std::wcout << "reduce_wick_impl(expr, external_indices):\n  expr = "
                    << expr->to_latex() << "\n  external_indices = ";
         ranges::for_each(external_indices, [](auto &index) {
@@ -396,9 +398,13 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
   // have an Expr as input? Apply recursively ...
   if (expr_input_) {
     /// expand, then apply recursively to products
-    if (Logger::get_instance().wick_harness) std::wcout << "WickTheorem<S>::compute: input (before expand) = " << to_latex_align(expr_input_) << std::endl;
+    if (Logger::get_instance().wick_harness)
+      std::wcout << "WickTheorem<S>::compute: input (before expand) = "
+                 << to_latex_align(expr_input_) << std::endl;
     expand(expr_input_);
-    if (Logger::get_instance().wick_harness) std::wcout << "WickTheorem<S>::compute: input (after expand) = " << to_latex_align(expr_input_) << std::endl;
+    if (Logger::get_instance().wick_harness)
+      std::wcout << "WickTheorem<S>::compute: input (after expand) = "
+                 << to_latex_align(expr_input_) << std::endl;
     // if sum, canonicalize and apply to each summand ...
     if (expr_input_->is<Sum>()) {
       canonicalize(expr_input_);
@@ -409,7 +415,10 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
       std::mutex result_mtx;  // serializes updates of result
       auto summands = expr_input_->as<Sum>().summands();
 
-      if (Logger::get_instance().wick_harness) std::wcout << "WickTheorem<S>::compute: input (after canonicalize) has " << summands.size() << " terms = " << to_latex_align(result) << std::endl;
+      if (Logger::get_instance().wick_harness)
+        std::wcout << "WickTheorem<S>::compute: input (after canonicalize) has "
+                   << summands.size() << " terms = " << to_latex_align(result)
+                   << std::endl;
 
 #ifdef SEQUANT_HAS_EXECUTION_HEADER
       auto wick_task = [&result, &result_mtx, this,
@@ -453,24 +462,24 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
     // ...
     else if (expr_input_->is<Product>()) {
       auto canon_byproduct = expr_input_->rapid_canonicalize();
-      assert(canon_byproduct == nullptr);  // canonicalization of Product always returns nullptr
+      assert(canon_byproduct ==
+             nullptr);  // canonicalization of Product always returns nullptr
       // NormalOperators should be all at the end
       auto first_nop_it = ranges::find_if(
           *expr_input_,
           [](const ExprPtr &expr) { return expr->is<NormalOperator<S>>(); });
       // if have ops, split into prefactor and op sequence
       if (first_nop_it != ranges::end(*expr_input_)) {
-
-        // compute and record/analyze topological NormalOperator and Index partitions
+        // compute and record/analyze topological NormalOperator and Index
+        // partitions
         if (use_topology_) {
-
           // construct graph representation of the tensor product
           TensorNetwork tn(expr_input_->as<Product>().factors());
           auto [graph, vlabels, vcolors, vtypes] = tn.make_bliss_graph();
           const auto n = vlabels.size();
           assert(vtypes.size() == n);
-          const auto& tn_edges = tn.edges();
-          const auto& tn_tensors = tn.tensors();
+          const auto &tn_edges = tn.edges();
+          const auto &tn_tensors = tn.tensors();
 
           // identify vertex indices of NormalOperators and Indices
           container::set<size_t> nop_vertex_idx;
@@ -500,19 +509,23 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
             graph->set_splitting_heuristic(bliss::Graph::shs_fsm);
 
             auto save_aut = [&aut_generators](const unsigned int n,
-                                              const unsigned int* aut) {
+                                              const unsigned int *aut) {
               aut_generators.emplace_back(aut, aut + n);
             };
 
-            graph->find_automorphisms(stats, &bliss::aut_hook<decltype(save_aut)>, &save_aut);
+            graph->find_automorphisms(
+                stats, &bliss::aut_hook<decltype(save_aut)>, &save_aut);
           }
 
-          // use automorphisms to determine groups of topologically equivalent NormalOperators and Indices
-          // this partitions vertices into partitions (only nontrivial partitions are reported)
-          // vertex_pair_exclude is a callable that accepts 2 vertex indices and returns true if this pair of indices is to be excluded
-          // the default is to not exclude any pairs
-          auto compute_partitions = [&aut_generators](const container::set<size_t>& vertices,
-              auto&& vertex_pair_exclude) {
+          // use automorphisms to determine groups of topologically equivalent
+          // NormalOperators and Indices this partitions vertices into
+          // partitions (only nontrivial partitions are reported)
+          // vertex_pair_exclude is a callable that accepts 2 vertex indices and
+          // returns true if this pair of indices is to be excluded the default
+          // is to not exclude any pairs
+          auto compute_partitions = [&aut_generators](
+                                        const container::set<size_t> &vertices,
+                                        auto &&vertex_pair_exclude) {
             container::map<size_t, size_t> vertex_to_partition_idx;
             int next_partition_idx = -1;
 
@@ -521,7 +534,11 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
               // update partitions
               for (const auto v1 : vertices) {
                 const auto v2 = aut[v1];
-                if (v2 != v1 && !vertex_pair_exclude(v1, v2)) {  // if the automorphism maps this vertex to another ... they both must be in the same partition
+                if (v2 != v1 &&
+                    !vertex_pair_exclude(
+                        v1, v2)) {  // if the automorphism maps this vertex to
+                                    // another ... they both must be in the same
+                                    // partition
                   assert(vertices.find(v2) != vertices.end());
                   auto v1_partition_it = vertex_to_partition_idx.find(v1);
                   auto v2_partition_it = vertex_to_partition_idx.find(v2);
@@ -530,11 +547,16 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
                   const bool v2_has_partition =
                       v2_partition_it != vertex_to_partition_idx.end();
                   if (v1_has_partition &&
-                      v2_has_partition) {  // both are in partitions? make sure they are in the same partition. N.B. this may leave gaps in partition indices ... no biggie
+                      v2_has_partition) {  // both are in partitions? make sure
+                                           // they are in the same partition.
+                                           // N.B. this may leave gaps in
+                                           // partition indices ... no biggie
                     const auto v1_part_idx = v1_partition_it->second;
                     const auto v2_part_idx = v2_partition_it->second;
                     if (v1_part_idx !=
-                        v2_part_idx) {  // if they have different partition indices, change the larger of the two indices to match the lower
+                        v2_part_idx) {  // if they have different partition
+                                        // indices, change the larger of the two
+                                        // indices to match the lower
                       const auto target_part_idx =
                           std::min(v1_part_idx, v2_part_idx);
                       for (auto &v : vertex_to_partition_idx) {
@@ -542,13 +564,16 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
                           v.second = target_part_idx;
                       }
                     }
-                  } else if (v1_has_partition) {  // only v1 is in a partition? place v2 in it
+                  } else if (v1_has_partition) {  // only v1 is in a partition?
+                                                  // place v2 in it
                     const auto v1_part_idx = v1_partition_it->second;
                     vertex_to_partition_idx.emplace(v2, v1_part_idx);
-                  } else if (v2_has_partition) {  // only v2 is in a partition? place v1 in it
+                  } else if (v2_has_partition) {  // only v2 is in a partition?
+                                                  // place v1 in it
                     const auto v2_part_idx = v2_partition_it->second;
                     vertex_to_partition_idx.emplace(v1, v2_part_idx);
-                  } else {  // neither is in a partition? place both in the next available partition
+                  } else {  // neither is in a partition? place both in the next
+                            // available partition
                     const size_t target_part_idx = ++next_partition_idx;
                     vertex_to_partition_idx.emplace(v1, target_part_idx);
                     vertex_to_partition_idx.emplace(v2, target_part_idx);
@@ -559,27 +584,33 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
             return std::make_tuple(vertex_to_partition_idx, next_partition_idx);
           };
 
-          // compute NormalOperator->partition map, convert to partition lists (if any),
-          // and register via set_op_partitions to be used in full contractions
-          auto [nop_to_partition_idx, max_nop_partition_idx] = compute_partitions(nop_vertex_idx, [](size_t v1, size_t v2) { return false; });
+          // compute NormalOperator->partition map, convert to partition lists
+          // (if any), and register via set_op_partitions to be used in full
+          // contractions
+          auto [nop_to_partition_idx, max_nop_partition_idx] =
+              compute_partitions(nop_vertex_idx,
+                                 [](size_t v1, size_t v2) { return false; });
           if (!nop_to_partition_idx.empty()) {
             container::vector<container::vector<size_t>> nop_partitions;
 
             assert(max_nop_partition_idx > -1);
             const size_t max_partition_index = max_nop_partition_idx;
             nop_partitions.reserve(max_partition_index);
-            // iterate over all partition indices ... note that there may be gaps so count the actual partitions
+            // iterate over all partition indices ... note that there may be
+            // gaps so count the actual partitions
             size_t partition_cnt = 0;
-            for(size_t p=0; p<=max_partition_index; ++p) {
+            for (size_t p = 0; p <= max_partition_index; ++p) {
               bool p_found = false;
-              for(const auto& nop_part: nop_to_partition_idx) {
+              for (const auto &nop_part : nop_to_partition_idx) {
                 if (nop_part.second == p) {
-                  // !!remember to map the vertex index into the operator index!!
-                  const auto nop_idx = nop_vertex_idx.find(nop_part.first) - nop_vertex_idx.begin();
+                  // !!remember to map the vertex index into the operator
+                  // index!!
+                  const auto nop_idx = nop_vertex_idx.find(nop_part.first) -
+                                       nop_vertex_idx.begin();
                   if (p_found == false) {  // first time this is found
-                    nop_partitions.emplace_back(container::vector<size_t>{static_cast<size_t>(nop_idx)});
-                  }
-                  else
+                    nop_partitions.emplace_back(container::vector<size_t>{
+                        static_cast<size_t>(nop_idx)});
+                  } else
                     nop_partitions[partition_cnt].emplace_back(nop_idx);
                   p_found = true;
                 }
@@ -587,24 +618,28 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
               if (p_found) ++partition_cnt;
             }
 
-//            std::wcout << "topological nop partitions:{\n";
-//            ranges::for_each(nop_partitions, [](auto&& part) {
-//              std::wcout << "{";
-//              ranges::for_each(part, [](auto&& p) {
-//                std::wcout << p << " ";
-//              });
-//              std::wcout << "}";
-//            });
-//            std::wcout << "}" << std::endl;
+            //            std::wcout << "topological nop partitions:{\n";
+            //            ranges::for_each(nop_partitions, [](auto&& part) {
+            //              std::wcout << "{";
+            //              ranges::for_each(part, [](auto&& p) {
+            //                std::wcout << p << " ";
+            //              });
+            //              std::wcout << "}";
+            //            });
+            //            std::wcout << "}" << std::endl;
 
             this->set_op_partitions(nop_partitions);
           }
 
-          // compute Index->partition map, and convert to partition lists (if any), and check that use_topology_ is compatible with index partitions
-          // Index partitions are constructed to *only* include Index objects attached to the bra/ket of the same NormalOperator!
-          // hence need to use filter in computing partitions
-          auto exclude_index_vertex_pair = [&tn_tensors,&tn_edges](size_t v1, size_t v2) {
-            // v1 and v2 are vertex indices and also index the edges in the TensorNetwork
+          // compute Index->partition map, and convert to partition lists (if
+          // any), and check that use_topology_ is compatible with index
+          // partitions Index partitions are constructed to *only* include Index
+          // objects attached to the bra/ket of the same NormalOperator! hence
+          // need to use filter in computing partitions
+          auto exclude_index_vertex_pair = [&tn_tensors, &tn_edges](size_t v1,
+                                                                    size_t v2) {
+            // v1 and v2 are vertex indices and also index the edges in the
+            // TensorNetwork
             assert(v1 < tn_edges.size());
             assert(v2 < tn_edges.size());
             const auto &edge1 = *(tn_edges.begin() + v1);
@@ -628,45 +663,56 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
           };
           container::map<size_t, size_t> index_to_partition_idx;
           int max_index_partition_idx;
-          std::tie(index_to_partition_idx, max_index_partition_idx) = compute_partitions(index_vertex_idx, exclude_index_vertex_pair);
+          std::tie(index_to_partition_idx, max_index_partition_idx) =
+              compute_partitions(index_vertex_idx, exclude_index_vertex_pair);
           {
             // use_topology_=true in full contractions will assume that all
-            // equivalent indices in NormalOperator's bra or ket are topologically
-            // equivalent (see Hugenholtz vertex and associated code)
-            // here we make sure that this is indeed the case
+            // equivalent indices in NormalOperator's bra or ket are
+            // topologically equivalent (see Hugenholtz vertex and associated
+            // code) here we make sure that this is indeed the case
             assert(use_topology_);  // since we are here, use_topology_ is true
-            // this reports whether bra/ket of tensor @c t is in the same partition
-            auto is_nop_braket_singlepartition = [&tn_edges,&index_to_partition_idx](auto&& tensor_ptr, BraKetPos bkpos) {
+            // this reports whether bra/ket of tensor @c t is in the same
+            // partition
+            auto is_nop_braket_singlepartition = [&tn_edges,
+                                                  &index_to_partition_idx](
+                                                     auto &&tensor_ptr,
+                                                     BraKetPos bkpos) {
               auto expr_ptr = std::dynamic_pointer_cast<Expr>(tensor_ptr);
               assert(expr_ptr);
-              auto bkrange = bkpos == BraKetPos::bra ? bra(*tensor_ptr) : ket(*tensor_ptr);
+              auto bkrange =
+                  bkpos == BraKetPos::bra ? bra(*tensor_ptr) : ket(*tensor_ptr);
               assert(ranges::size(bkrange) > 1);
               int partition = -1;  // will be set to the actual partition index
-              for(auto&& idx: bkrange) {
+              for (auto &&idx : bkrange) {
                 auto idx_full_label = idx.full_label();
                 auto edge_it = tn_edges.find(idx_full_label);
                 assert(edge_it != tn_edges.end());
-                auto vertex = edge_it - tn_edges.begin();  // vertex idx for this Index
+                auto vertex =
+                    edge_it - tn_edges.begin();  // vertex idx for this Index
                 auto idx_part_it = index_to_partition_idx.find(vertex);
-                if (idx_part_it != index_to_partition_idx.end()) {  // is part of a partition
+                if (idx_part_it !=
+                    index_to_partition_idx.end()) {  // is part of a partition
                   if (partition == -1)               // first index
                     partition = idx_part_it->second;
-                  else if (partition != idx_part_it->second)  // compare to the first index's partition #
+                  else if (partition !=
+                           idx_part_it->second)  // compare to the first index's
+                                                 // partition #
                     return false;
-                }
-                else  // not part of a partition? fail
+                } else  // not part of a partition? fail
                   return false;
               }
               return true;
             };
             bool multipartition_nop_braket = false;
-            for(auto&& tensor: tn_tensors) {
-              auto nop_ptr = std::dynamic_pointer_cast<NormalOperator<S>>(tensor);
+            for (auto &&tensor : tn_tensors) {
+              auto nop_ptr =
+                  std::dynamic_pointer_cast<NormalOperator<S>>(tensor);
               if (nop_ptr) {  // if NormalOperator<S>
 
-                auto make_logic_error =[&nop_ptr](BraKetPos pos) {
+                auto make_logic_error = [&nop_ptr](BraKetPos pos) {
                   std::basic_stringstream<wchar_t> oss;
-                  oss << "WickTheorem<S>::use_topology is true but NormalOperator "
+                  oss << "WickTheorem<S>::use_topology is true but "
+                         "NormalOperator "
                       << nop_ptr->to_latex() << " has "
                       << (pos == BraKetPos::bra ? "bra" : "ket")
                       << " whose indices are not topologically equivalent";
@@ -690,7 +736,6 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
                   throw make_logic_error(BraKetPos::ket);
               }
             }
-
           }
         }
 
@@ -760,8 +805,7 @@ void WickTheorem<S>::reduce(ExprPtr &expr) const {
       try {
         detail::reduce_wick_impl(subexpr_cast, external_indices_);
         subexpr = subexpr_cast;
-      }
-      catch (detail::zero_result &) {
+      } catch (detail::zero_result &) {
         subexpr = std::make_shared<Constant>(0);
       }
     }
