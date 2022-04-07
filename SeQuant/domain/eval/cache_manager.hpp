@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/container.hpp>
 #include <memory>
+#include <optional>
 
 namespace sequant::eval {
 
