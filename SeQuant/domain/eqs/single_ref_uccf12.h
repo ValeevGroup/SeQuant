@@ -43,15 +43,8 @@ class uccf12{
   //[[e1,e2],e3]_12
   ExprPtr compute_double_com(ExprPtr e1, ExprPtr e2, ExprPtr e3, int ansatz = 2){
     auto first_com = do_wick((e1 * e2) - (e2 * e1));
-    /*auto second_com = (((e1 * e2) - (e2 * e1)) * e3) - (e3 * ((e1 * e2) - (e2 * e1)));
-    non_canon_simplify(second_com);
-    std::wcout << "second com: " << to_latex_align(second_com,20,2) << std::endl;
-    second_com = do_wick(second_com);
-    simplify(second_com);
-    std::wcout << "second com: " << to_latex_align(second_com,20,2) << std::endl;
-    */simplify(first_com);
+    simplify(first_com);
     auto second_com_1 = first_com * e3;
-    //non_canon_simplify(second_com_1);
     simplify(second_com_1);
     second_com_1 = do_wick(second_com_1);
     auto second_com_2 = e3 * first_com;
@@ -59,16 +52,12 @@ class uccf12{
     second_com_2 = do_wick(second_com_2);
     auto second_com = second_com_1 - second_com_2;
     simplify(second_com);
-    std::wcout << "second com: " << to_latex_align(second_com,20,2) << std::endl;
     if(ansatz == 2) {
       second_com = keep_up_to_3_body_terms(second_com);
-      std::wcout << to_latex_align(second_com,20,2) << std::endl;
       second_com = second_com + ex<Constant>(0.);  // make a sum to avoid heavy code duplication for product and sum variants.
       second_com = simplification::overlap_with_obs(second_com);
-      // std::wcout << to_latex_align(second_com,20,2) << std::endl;
       second_com = second_com + ex<Constant>(0.);
-      second_com = simplification::screen_F12_and_density(second_com,2);
-      // std::wcout << to_latex_align(second_com,20,2) << std::endl;
+      second_com = simplification::screen_F12_proj(second_com, 2);
       second_com = simplification::tens_to_FNOps(second_com);
       second_com = decompositions::three_body_substitution(second_com, 2);
       simplify(second_com);
@@ -81,7 +70,7 @@ class uccf12{
       second_com = simplification::overlap_with_obs(second_com);
       // std::wcout << to_latex_align(second_com,20,2) << std::endl;
       second_com = second_com + ex<Constant>(0.);
-      second_com = simplification::screen_F12_and_density(second_com,1);
+      second_com = simplification::screen_F12_proj(second_com, 1);
       // std::wcout << to_latex_align(second_com,20,2) << std::endl;
       second_com = simplification::tens_to_FNOps(second_com);
       simplify(second_com);
@@ -120,6 +109,7 @@ class uccf12{
         }
       }
     }
+    else{return input;}
   }
   ExprPtr keep_up_to_2_body_terms(const ExprPtr& input) {
     if (input->is<Sum>()) {auto filtered_summands = input->as<Sum>().summands() |
@@ -265,9 +255,9 @@ class uccf12{
     }
   }
 
-  std::pair<ExprPtr,ExprPtr> compute(std::string gg_label,int ansatz = 2, bool print = false,bool singles=false) {
+  std::pair<ExprPtr,ExprPtr> compute(std::string gg_label,int ansatz = 2, bool print = false,bool singles=false,bool doubles=true) {
     // auto gg_space = IndexSpace::active_occupied;  // Geminal-generating space: active occupieds is the normal choice, all orbitals is the reference-independent (albeit expensive) choice
-
+    assert(singles == true || doubles == true);
     auto gg_space = IndexSpace::frozen_occupied;
     if (gg_label == "act_occ") {
       gg_space = IndexSpace::active_occupied;
@@ -288,21 +278,13 @@ class uccf12{
     }
 
     auto single = ex<Constant>(0.0);
-    //auto single_ = ex<Constant>(0.0);
     if(singles){
       // this might need to be complete space if we don't have a solution to the particular blocks of interest.
       auto C = ex<Tensor>(L"C",std::initializer_list<Index>{Index::make_tmp_index(IndexSpace::instance(IndexSpace::all))},std::initializer_list<Index>{Index::make_tmp_index(IndexSpace::instance(IndexSpace::other_unoccupied))});
       auto E_pa = ex<FNOperator> (std::initializer_list<Index>{C->as<Tensor>().bra()[0]},std::initializer_list<Index>{C->as<Tensor>().ket()[0]});
       auto C_Epa = C * E_pa;
-      auto anti_herm_C = C_Epa/* - adjoint(C_Epa)*/;
+      auto anti_herm_C = C_Epa - adjoint(C_Epa);
       single = single + anti_herm_C;
-      //simplify(single);
-      std::wcout << "single term" << to_latex_align(single) << std::endl;
-
-      //auto single_2 = single->clone();
-      //single_2 = relable(single_2);
-      //std::wcout << "single after relable" << to_latex_align(single_2) << std::endl;
-      //single_ = single_2;
     }
 
     if (ansatz == 2) {
@@ -310,27 +292,28 @@ class uccf12{
       auto r = R12(gg_space);
       auto r_1 = R12(gg_space);
 
-      auto A = (r - adjoint(r)) + single;
-      std::wcout << "A: " << to_latex_align(A,20,2) << std::endl;
+      ExprPtr A = ex<Constant>(0.0);
+      if(doubles) {
+        A = A + (r - adjoint(r)) + single;
+      }
+      else{A =  A + single;}
       auto A_ = A->clone();
       A_ = relable(A_);
-      std::wcout << "A_: " << to_latex_align(A_,20,2) << std::endl;
-      //auto A_ = (r_1 - adjoint(r_1)) + single_;
+
+      //first commutator in eq 9. Chem. Phys. 136, 084107 (2012).
       auto H_A = do_wick(ex<Constant>(1.) * ((h * A) - (A * h)));
       auto H_A_3 = keep_up_to_3_body_terms(H_A);
-      // std::wcout << "pre decomp: " << to_latex_align(single_Comm,20,2) << std::endl;
       H_A_3 = simplification::overlap_with_obs(H_A_3);
       H_A_3 = H_A_3 + ex<Constant>(0.);
-      H_A_3 = simplification::screen_F12_and_density(H_A_3,2);
-      // std::wcout << to_latex_align(H_A_3,20,2) << std::endl;
+      H_A_3 = simplification::screen_F12_proj(H_A_3, 2);
       H_A_3 = simplification::tens_to_FNOps(H_A_3);
       auto H_A_2 = decompositions::three_body_substitution(H_A_3, 2);
       simplify(H_A_2);
       auto com_1 = simplification::hamiltonian_based_projector_2(H_A_2);
+
+      // double commutator in eq. 9. Chem. Phys. 136, 084107 (2012).
       auto full_double_com = ex<Constant>(1./2) * compute_double_com(F(),A,A_);
-
       auto sim = simplification::fock_based_projector_2(full_double_com);
-
       auto one_body = com_1.first + (sim.first);
       auto two_body = com_1.second + (sim.second);
 
@@ -367,8 +350,7 @@ class uccf12{
 
       H_A_3 = simplification::overlap_with_obs(H_A_3);
       H_A_3 = H_A_3 + ex<Constant>(0.);
-      H_A_3 = simplification::screen_F12_and_density(H_A_3,1);
-      // std::wcout << to_latex_align(H_A_3,20,2) << std::endl;
+      H_A_3 = simplification::screen_F12_proj(H_A_3, 1);
       H_A_3 = simplification::tens_to_FNOps(H_A_3);
       simplify(H_A_3);
       auto com_1 = simplification::hamiltonian_based_projector_1(H_A_3);

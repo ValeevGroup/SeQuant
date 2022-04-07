@@ -362,18 +362,18 @@ ExprPtr screen_F_tensors(ExprPtr ex_, int ansatz = 2) {
 ExprPtr screen_density(ExprPtr ex_){// densities probably should be non-zero if each index has a chance to be occupied, in other words, screen out densities containing unoccupied labels.
   assert(ex_->is<Tensor>());
   assert(ex_->as<Tensor>().label() == L"\\Gamma" || ex_->as<Tensor>().label() == L"\\gamma");
-  bool good = true;
+  bool occ_space = true;
   for (auto&& bra : ex_->as<Tensor>().bra()){
     if (bra.space().type() == IndexSpace::unoccupied || bra.space().type() == IndexSpace::complete_unoccupied){
-      good = false;
+      occ_space = false;
     }
   }
   for (auto&& ket : ex_->as<Tensor>().ket()){
     if (ket.space().type() == IndexSpace::unoccupied || ket.space().type() == IndexSpace::complete_unoccupied){
-      good = false;
+      occ_space = false;
     }
   }
-  if(good){
+  if(occ_space){
     return ex_;
   }
   else{return ex<Constant>(0);}
@@ -433,11 +433,8 @@ auto treat_fock(ExprPtr ex_){
       }
       else new_product = new_product * factor;
     }
-    //std::wcout << "problematic product: " << to_latex_align(new_product) << std::endl;
-    //simplify(new_product);
     new_ex_ = new_ex_ + new_product;
   }
-  //simplify(new_ex_);
    FWickTheorem wick{new_ex_};
   wick.reduce(new_ex_);
   non_canon_simplify(new_ex_);
@@ -618,8 +615,7 @@ ExprPtr biproduct_intermediate(ExprPtr T1,ExprPtr T2){
   if (T1->as<Tensor>().label() == L"g" || T2->as<Tensor>().label() == L"g"){
     if (nconnects == 2 && space == IndexSpace::complete_unoccupied){
       //V^pq_ij
-        //auto V_pqij = ex<Tensor>(L"V", IDX_list{external_bra[0],external_bra[1]}, IDX_list{external_ket[0],external_ket[1]});
-        //return V_pqij;
+      //intermediate decomposition handled by SeQuant so space labels can be properly handled
       if(T1_ket){
         auto GR_ijpq = ex<Tensor>(L"GR", IDX_list{external_bra[0],external_bra[1]}, IDX_list{external_ket[0],external_ket[1]});
         auto F_ijrs = ex<Tensor>(L"F", IDX_list{external_bra[0],external_bra[1]},
@@ -677,7 +673,11 @@ ExprPtr biproduct_intermediate(ExprPtr T1,ExprPtr T2){
   }
   return result;
 }
-ExprPtr find_f12_interms(ExprPtr ex_){
+// identify F12 intermediates
+//intermediates we generate contain either 2 F or g tensors.
+// those expressions are biproduct intermediate for further screening.
+// special case of B intermediate is handled by an additional check for the fock operator f
+ExprPtr find_F12_interms(ExprPtr ex_){
   assert(ex_->is<Product>());
   int counter = 0;
   std::vector<ExprPtr> T1_T2;
@@ -773,12 +773,12 @@ std::pair<bool,ExprPtr> contains_tens(ExprPtr ex_, std::wstring label){
 
 }
 
-//TODO this should be a geneeralized procedure since the screening process is different for each number of F tensors.
+//TODO this should be a generalized procedure since the screening process is different for each number of F tensors.
 // I suppose generally, this should be a product level screening, which first finds the number of F tensors and then picks the correct screening method.
 //re-implimentation as a recursive function which gets called every time a delta is found, simplifies/reduces the product and returns.
 //products are const and two deltas acting on the same index makes this difficult. logically the product needs to update within its own loop, but it cannot. Alternatively, two delta's to the same index need to occur in the same product, but that breaks things.
 //work around. make a copy of product which can be modified? break out of product loop?
-ExprPtr screen_F12_and_density(ExprPtr exprs,int ansatz = 2){
+ExprPtr screen_F12_proj(ExprPtr exprs,int ansatz = 2){
   if(exprs->is<Sum>()) {
     auto return_sum = ex<Constant>(0);
     for (auto&& product : exprs->as<Sum>().summands()) {
@@ -792,13 +792,10 @@ ExprPtr screen_F12_and_density(ExprPtr exprs,int ansatz = 2){
         auto product_clone = product->clone();
         if (contains_tens(temp_factor, L"s").first) {
           product_clone = product_clone * contains_tens(temp_factor,L"s").second;
-          //std::wcout << "factor: " << to_latex_align(temp_factor) << std::endl;
-          //std::wcout << " product clone: " << to_latex_align(product_clone) << std::endl;
           FWickTheorem wick_f{product_clone};
           wick_f.reduce(product_clone);
-          //std::wcout << " product clone after reduce: " << to_latex_align(product_clone) << std::endl;
           non_canon_simplify(product_clone);
-          product_clone = screen_F12_and_density(product_clone,ansatz);
+          product_clone = screen_F12_proj(product_clone, ansatz);
           return_sum = product_clone + return_sum;
           new_product = ex<Constant>(0.);
           break;
@@ -807,10 +804,8 @@ ExprPtr screen_F12_and_density(ExprPtr exprs,int ansatz = 2){
         non_canon_simplify(new_product);
 
       }
-      //std::wcout <<"new_product: " << to_latex_align(new_product) << std::endl;
       return_sum = new_product + return_sum;
     }
-    //std::wcout << "return sum before reduce: " << to_latex_align(return_sum,20,2) << std::endl;
     non_canon_simplify(return_sum);
     return return_sum;
   }
@@ -825,13 +820,10 @@ ExprPtr screen_F12_and_density(ExprPtr exprs,int ansatz = 2){
         auto product_clone = exprs->clone();
         if (contains_tens(temp_factor, L"s").first) {
           product_clone = product_clone * contains_tens(temp_factor,L"s").second;
-          //std::wcout << "factor: " << to_latex_align(factor) << std::endl;
-          //std::wcout << " product clone: " << to_latex_align(product_clone) << std::endl;
           FWickTheorem wick_f{product_clone};
           wick_f.reduce(product_clone);
           non_canon_simplify(product_clone);
-          //std::wcout << " product clone after reduce: " << to_latex_align(product_clone) << std::endl;
-          product_clone = screen_F12_and_density(product_clone,ansatz);
+          product_clone = screen_F12_proj(product_clone, ansatz);
           new_product = product_clone;
           break;
         }
@@ -906,16 +898,16 @@ ExprPtr tens_to_FNOps(ExprPtr ex_){
   return ex_;
 }
 
-ExprPtr split_f(ExprPtr exprs){
+//split F12 operator into its 2 components seen in eq 11. of Chem. Phys. 136, 084107 (2012).
+// neccessary in some cases where particles get excited from different spaces.
+ExprPtr split_F12(ExprPtr exprs){
   assert(exprs->is<Tensor>());
   assert(exprs->as<Tensor>().label() == L"F");
   auto result = ex<Constant>(0);
-  //std::wcout << "before split: " << to_latex_align(exprs,20,2) << std::endl;
   if((exprs->as<Tensor>().const_braket()[2].space() == sequant::IndexSpace::complete_unoccupied || exprs->as<Tensor>().const_braket()[2].space() == sequant::IndexSpace::other_unoccupied) || exprs->as<Tensor>().const_braket()[3].space() == sequant::IndexSpace::complete_unoccupied || exprs->as<Tensor>().const_braket()[3].space() == sequant::IndexSpace::other_unoccupied) {
     auto T1 =  ex<Constant>(3./8) * ex<Tensor>(L"F",std::vector<Index>{exprs->as<Tensor>().const_braket()[0],exprs->as<Tensor>().const_braket()[1]},std::vector<Index>{exprs->as<Tensor>().const_braket()[2],exprs->as<Tensor>().const_braket()[3]});
     auto T2 = ex<Constant>(1./8) * ex<Tensor>(L"F",std::vector<Index>{exprs->as<Tensor>().const_braket()[1],exprs->as<Tensor>().const_braket()[0]},std::vector<Index>{exprs->as<Tensor>().const_braket()[2],exprs->as<Tensor>().const_braket()[3]});
     result = T1 + T2;
-    //std::wcout << "after split: " << to_latex_align(result,20,2) << std::endl;
     return result;
   }
   else{// otherwise the geminal generating space must be in the upper indices. so include exchange for those.
@@ -923,26 +915,23 @@ ExprPtr split_f(ExprPtr exprs){
     auto T1 =  ex<Constant>(3./8) * ex<Tensor>(L"F",std::vector<Index>{exprs->as<Tensor>().const_braket()[0],exprs->as<Tensor>().const_braket()[1]},std::vector<Index>{exprs->as<Tensor>().const_braket()[2],exprs->as<Tensor>().const_braket()[3]});
     auto T2 = ex<Constant>(1./8) * ex<Tensor>(L"F",std::vector<Index>{exprs->as<Tensor>().const_braket()[0],exprs->as<Tensor>().const_braket()[1]},std::vector<Index>{exprs->as<Tensor>().const_braket()[3],exprs->as<Tensor>().const_braket()[2]});
     result = T1 + T2;
-    //std::wcout << "after split: " << to_latex_align(result,20,2) << std::endl;
     return result;
   }
 }
 
-ExprPtr partition_f(ExprPtr exprs){
+ExprPtr partition_F12(ExprPtr exprs){
    if(!exprs->is<Sum>()){
     return exprs;
   }
- // std::wcout << "pre partition: " << to_latex_align(exprs,20,2) << std::endl;
 
   for (auto&& product : exprs->as<Sum>().summands()){
     for (auto&& factor : product->as<Product>().factors()){
       if(factor->is<Tensor>() && factor->as<Tensor>().label() == L"F") {
-        factor = split_f(factor);
+        factor = split_F12(factor);
       }
     }
   }
   non_canon_simplify(exprs);
-  //std::wcout << " post partition: " << to_latex_align(exprs,20,2) << std::endl;
   return(exprs);
 }
 
@@ -953,31 +942,19 @@ ExprPtr partition_f(ExprPtr exprs){
 // enforces the following obs convention. E^{p_7}_{p_9} and E^{{p_7}{p_8}}_{{p_9}{p_{10}}}
 // should allow analysis of multiple expressions who have the same normal order operator prefactor.
 std::pair<ExprPtr,ExprPtr> hamiltonian_based_projector_2(ExprPtr exprs){
-  //std::wcout << "pre remove constants: " << to_latex_align(exprs,20,2) << std::endl;
-  //exprs = remove_const(exprs);
-//  std::wcout << "post remove constants: " << to_latex_align(exprs,20,2) << std::endl;
   exprs = FNOPs_to_tens(exprs);
   simplify(exprs);
-  //exprs = overlap_with_obs(exprs);
-  exprs = partition_f(exprs);
+  exprs = partition_F12(exprs);
   simplify(exprs);
-  //std::wcout << "post convert to tensor: " << to_latex_align(exprs,20,2) << std::endl;
-  exprs = screen_F12_and_density(exprs,2);
-  //std::wcout << "post screen f12: " << to_latex_align(exprs,20,2) << std::endl;
+  exprs = screen_F12_proj(exprs, 2);
   simplify(exprs);
   exprs = screen_densities(exprs);
-  //std::wcout << "post screen density: " << to_latex_align(exprs,20,2) << std::endl;
-  //exprs = densities_to_occ(exprs);
-  //f12 interms needs a particular canonical ordering
   simplify(exprs);
- //std::wcout << "densities to occ: " << to_latex_align(exprs,20,2) << std::endl;
   auto exprs_intmed = ex<Constant>(0.0);
   for (auto&& product : exprs->as<Sum>().summands()){
-     auto new_product = simplification::find_f12_interms(product);
+     auto new_product = simplification::find_F12_interms(product);
      exprs_intmed = new_product + exprs_intmed;
   }
-  //std::wcout << "post intermediates: " << to_latex_align(exprs,20,2) << std::endl;
-  //tens_to_FNOps(exprs_intmed);
   simplify(exprs_intmed);
   return fnop_to_overlap(exprs_intmed);
 }
@@ -986,13 +963,13 @@ std::pair<ExprPtr,ExprPtr> hamiltonian_based_projector_2(ExprPtr exprs){
 std::pair<ExprPtr,ExprPtr> hamiltonian_based_projector_1(ExprPtr exprs){
   exprs = FNOPs_to_tens(exprs);
   simplify(exprs);
-  exprs = partition_f(exprs);
+  exprs = partition_F12(exprs);
   simplify(exprs);;
-  exprs = screen_F12_and_density(exprs,1);
+  exprs = screen_F12_proj(exprs, 1);
   simplify(exprs);
   auto exprs_intmed = ex<Constant>(0.0);
   for (auto&& product : exprs->as<Sum>().summands()){
-    auto new_product = simplification::find_f12_interms(product);
+    auto new_product = simplification::find_F12_interms(product);
     exprs_intmed = new_product + exprs_intmed;
   }
   simplify(exprs_intmed);
@@ -1005,7 +982,7 @@ std::pair<ExprPtr,ExprPtr> fock_based_projector_1(ExprPtr exprs){
   if(exprs->is<Constant>()){
     return std::pair<ExprPtr,ExprPtr> {exprs, exprs};
   }
-  exprs = partition_f(exprs);
+  exprs = partition_F12(exprs);
   auto final_screen = exprs;
   simplify(final_screen);
   //in some cases, there will now be no contributing terms left so return zero to one and two body.
@@ -1013,15 +990,12 @@ std::pair<ExprPtr,ExprPtr> fock_based_projector_1(ExprPtr exprs){
     return std::pair<ExprPtr,ExprPtr> {final_screen, final_screen};
   }
   simplify(final_screen);
-  //final_screen = treat_fock(final_screen);
-  simplify(final_screen);
   //find the special f12 intermediates that cannot efficiently be solved directly. This seems to work already for the general case!
   auto last_screen = ex<Constant>(0.0);
   for (auto&& product : final_screen->as<Sum>().summands()){
-    auto new_product = simplification::find_f12_interms(product);
+    auto new_product = simplification::find_F12_interms(product);
     last_screen = last_screen + new_product;
   }
-  //::wcout << "post intermediates: " << to_latex_align(final_screen,20,2) << std::endl;
   simplify(last_screen);
   return fnop_to_overlap(last_screen);
 }
@@ -1032,46 +1006,29 @@ std::pair<ExprPtr,ExprPtr> fock_based_projector_1(ExprPtr exprs){
 // enforces the following obs convention. E^{p_7}_{p_9} and E^{{p_7}{p_8}}_{{p_9}{p_{10}}}
 // should allow analysis of multiple expressions who have the same normal order operator prefactor.
 std::pair<ExprPtr,ExprPtr> fock_based_projector_2(ExprPtr exprs){
-  //std::wcout << "expression before removing constants: " << to_latex_align(exprs,20,2) << std::endl;
-  //exprs = remove_const(exprs);
-  //std::wcout << "after screening constant: " << to_latex_align(exprs) << std::endl;
   exprs = FNOPs_to_tens(exprs);
   simplify(exprs);
-  //std::wcout << "fnop to tensor: " << to_latex_align(exprs,20,2) << std::endl;
   if(exprs->is<Constant>()){
     return std::pair<ExprPtr,ExprPtr> {exprs, exprs};
   }
-  exprs = partition_f(exprs);
-  //exprs = overlap_with_obs(exprs);
+  exprs = partition_F12(exprs);
   auto final_screen = exprs;
   simplify(final_screen);
   //in some cases, there will now be no contributing terms left so return zero to one and two body.
 if(final_screen->is<Constant>()){
   return std::pair<ExprPtr,ExprPtr> {final_screen, final_screen};
 }
-  //final_screen = screen_F12_and_density(final_screen);
-  simplify(final_screen);
-  //std::wcout << "screen F12: " << to_latex_align(final_screen,20,2) << std::endl;
-  //final_screen = treat_fock(final_screen);
   final_screen = FNOPs_to_tens(final_screen);
   simplify(final_screen);
-  //std::wcout << "screen fock: " << to_latex_align(final_screen,20,2) << std::endl;
   final_screen = screen_densities(final_screen);
   simplify(final_screen);
-  //enforce that densities are in the occupied space since they are only non-zero in occ
-  //final_screen = densities_to_occ(final_screen);
-  //non_canon_simplify(final_screen);
-  //std::wcout << "screen densities to occ: " << to_latex_align(final_screen,20,2) << std::endl;
- // std::wcout << "pre intermediates: " << to_latex_align(final_screen,20,2) << std::endl;
   //find the special f12 intermediates that cannot efficiently be solved directly. This seems to work already for the general case!
   auto last_screen = ex<Constant>(0.0);
   for (auto&& product : final_screen->as<Sum>().summands()){
-    auto new_product = simplification::find_f12_interms(product);
+    auto new_product = simplification::find_F12_interms(product);
     last_screen = last_screen + new_product;
   }
-  //::wcout << "post intermediates: " << to_latex_align(final_screen,20,2) << std::endl;
   simplify(last_screen);
-  //tens_to_FNOps(last_screen);
   return fnop_to_overlap(last_screen);
   }
 }

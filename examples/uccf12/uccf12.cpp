@@ -123,7 +123,7 @@ try_main() {
     second_com = simplification::overlap_with_obs(second_com);
    // std::wcout << "overlap with obs" << to_latex_align(second_com) << std::endl;
     second_com = second_com + ex<Constant>(0.);
-    second_com = simplification::screen_F12_and_density(second_com);
+    second_com = simplification::screen_F12_proj(second_com);
     std::wcout << to_latex_align(second_com,20,2) << std::endl;
     second_com = simplification::tens_to_FNOps(second_com);
     second_com = decompositions::three_body_substitution(second_com,2);
@@ -154,7 +154,7 @@ try_main() {
      std::wcout << "post overlap: " << to_latex_align(H_A_3,20,2) << std::endl;
 
      H_A_3 = H_A_3 + ex<Constant>(0.);
-     H_A_3 = simplification::screen_F12_and_density(H_A_3);
+     H_A_3 = simplification::screen_F12_proj(H_A_3);
      std::wcout << to_latex_align(H_A_3,20,2) << std::endl;
      H_A_3 = simplification::tens_to_FNOps(H_A_3);
     auto H_A_2 = decompositions::three_body_substitution(H_A_3,2);
