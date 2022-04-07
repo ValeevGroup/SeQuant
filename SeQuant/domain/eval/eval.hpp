@@ -132,7 +132,7 @@ CacheManager<Tensor_t> make_cache_manager(Iterable const& nodes,
   auto less_repeating = [](auto const& pair) { return pair.second < 2; };
   ranges::actions::remove_if(hash_to_counts, less_repeating);
 
-  if (!persistent_leaves) return CacheManager<Tensor_t>{hash_to_counts};
+  if (!persistent_leaves) return CacheManager<Tensor_t>{hash_to_counts,{}};
 
   container::set<size_t> leaf_hashes{};
   for (auto const& n : nodes) {
