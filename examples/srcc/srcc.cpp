@@ -4,20 +4,32 @@
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
-#include <Eigen/Dense>
 #include <Eigen/Eigenvalues>
 
 #include <clocale>
 
-#include <Eigen/Dense>
-#include <Eigen/Eigenvalues>
-
 using namespace sequant;
 
 #define CLOSED_SHELL_SPINTRACE 1
+#if CLOSED_SHELL_SPINTRACE
+ExprPtr biorthogonal_transform(
+    const sequant::ExprPtr& expr, const int n_particles,
+    const std::vector<std::vector<sequant::Index>>& ext_index_groups = {{}},
+    const double threshold = 1.e-12);
+ExprPtr symmetrize_expr(
+    ExprPtr& expr,
+    const container::vector<container::vector<Index>> ext_index_groups = {{}});
+#endif
+
+#define runtime_assert(tf)                                             \
+  if (!(tf)) {                                                         \
+    std::ostringstream oss;                                            \
+    oss << "failed assert at line " << __LINE__ << " in SRCC example"; \
+    throw std::runtime_error(oss.str().c_str());                       \
+  }
 
 int main(int argc, char* argv[]) {
-  std::locale::global(std::locale("en_US.UTF-8"));
+  std::setlocale(LC_ALL, "en_US.UTF-8");
   std::wcout.precision(std::numeric_limits<double>::max_digits10);
   std::wcerr.precision(std::numeric_limits<double>::max_digits10);
   std::wcout.sync_with_stdio(false);
@@ -46,7 +58,7 @@ int main(int argc, char* argv[]) {
   constexpr bool print = false;
   // change to true to print stats
   Logger::get_instance().wick_stats = false;
-#if !CLOSED_SHELL_SPINTRACE
+
   ranges::for_each(std::array<bool, 2>{false, true}, [=](const bool screen) {
     ranges::for_each(
         std::array<bool, 2>{false, true}, [=](const bool use_topology) {
@@ -62,8 +74,6 @@ int main(int argc, char* argv[]) {
                            });
         });
   });
-#else
-  auto cc_r = sequant::eqs::cceqvec{3, 3}(true, true, true, true, true);
 
   /// Make external index
   auto ext_idx_list = [](const int i_max) {
@@ -81,64 +91,257 @@ int main(int argc, char* argv[]) {
     return ext_idx_list;
   };
 
-#if 0
-  // First 4 terms only
-    cc_r[1] = cc_r[1]->as<Sum>().take_n(5);
-    cc_r[2] = cc_r[2]->as<Sum>().take_n(5);
-  //  cc_r[3] = cc_r[3]->as<Sum>().take_n(4);
+  // Spin-orbital coupled cluster
+  auto cc_r = sequant::eqs::cceqvec{NMAX, NMAX}(true, true, true, true, true);
 
-  for (int i = 1; i < cc_r.size(); ++i) {
-  // size_t counter = 1;
-  std::vector<size_t> n_st_terms(i+1,0);
-  for (auto& product_term : *cc_r[i]) {
-    // auto term = remove_tensor_from_product(product_term->as<Product>(), L"A");
-    auto term = product_term;
-     std::wcout << "Input: " << to_latex(term) << "\n";
-    const auto list = ext_idx_list(i);
-    auto os_st = open_shell_spintrace(term, list);
-    for (size_t j = 0; j != os_st.size(); ++j) {
-       std::wcout<< "st: " << to_latex(os_st[j]) << "\n";
-      n_st_terms[j] += os_st[j]->size();
-    }
-      std::wcout << "\n";
-  }
-  std::cout << "CC R" << i << ": ";
-  size_t n_terms_R = 0;
-  for (auto& n_terms : n_st_terms) {
-    n_terms_R += n_terms;
-    std::cout << n_terms << " ";
-  }
-  std::cout << ": " << n_terms_R << std::endl;
-}
-  return 0;
-#endif
-
-#if 0 // Open-shell
-  for (int i = 1; i < cc_r.size(); ++i) {
-    const auto list = ext_idx_list(i);
-    auto temp = open_shell_spintrace(cc_r[i], list);
-    std::cout << "R" << i << ": ";
-    for(auto& t : temp){
-      std::cout << t->size() << " ";
-      // std::wcout << to_latex(t) << "\n";
-    }
-    std::cout << "\n";
-  }
-  return 0;
-#endif
-
-  // Closed-shell coupled cluster spin-trace
-  std::vector<ExprPtr> cc_st_r(cc_r.size(),nullptr);
-  for (int i = 1; i < cc_r.size(); ++i) {
+#if CLOSED_SHELL_SPINTRACE
+  //
+  // Closed-shell spintrace (fast)
+  //
+  std::vector<ExprPtr> cc_st_r(cc_r.size());
+  for (size_t i = 1; i < cc_r.size(); ++i) {
     const auto tstart = std::chrono::high_resolution_clock::now();
-    cc_st_r[i] = closed_shell_CC_spintrace(cc_r[i]);
+    auto ext_idx = ext_idx_list(i);
+    cc_st_r[i] = sequant::closed_shell_CC_spintrace(cc_r[i]);
+    canonicalize(cc_st_r[i]);
+
+    // Remove S operator
+    for (auto& term : *cc_st_r[i]) {
+      if (term->is<Product>()) term = remove_tensor(term->as<Product>(), L"S");
+    }
+
+    // Biorthogonal transformation
+    cc_st_r[i] = biorthogonal_transform(cc_st_r[i], i, ext_idx);
+
+    // The symmetrizer operator is required for canonicalizer to give the
+    // correct result
+    if (i != 1) cc_st_r[i] = symmetrize_expr(cc_st_r[i], ext_idx);
+    simplify(cc_st_r[i]);
+
+    // Remove S operator
+    for (auto& term : *cc_st_r[i]) {
+      if (term->is<Product>()) term = remove_tensor(term->as<Product>(), L"S");
+    }
+
     auto tstop = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> time_elapsed = tstop - tstart;
-    printf("CC R%d size: %lu closed-shell spin-trace with biorthogonal transformation time: %5.6f sec.\n\n", i, cc_st_r[i]->size(),
+    printf("CC R%lu size: %lu time: %5.3f sec.\n", i, cc_st_r[i]->size(),
            time_elapsed.count());
   }
-  std::wcout << "CCSDT: " << to_latex(*cc_st_r[3]) << std::endl;
-#endif
 
-  return 0;
+  if (NMAX == 4) {
+    runtime_assert(cc_st_r.size() == 5);
+    runtime_assert(cc_st_r.at(1)->size() == 30);    // T1
+    runtime_assert(cc_st_r.at(2)->size() == 78);    // T2
+    runtime_assert(cc_st_r.at(3)->size() == 567);   // T3
+    runtime_assert(cc_st_r.at(4)->size() == 2150);  // T4
+  } else if (NMAX == 3) {
+    runtime_assert(cc_st_r.size() == 4);
+    runtime_assert(cc_st_r.at(1)->size() == 30);   // T1
+    runtime_assert(cc_st_r.at(2)->size() == 73);   // T2
+    runtime_assert(cc_st_r.at(3)->size() == 490);  // T3
+  }
+
+#else
+  //
+  // Open-shell spintrace
+  //
+  std::cout << "Open-shell coupled cluster: nterms per spin blocks: "
+            << std::endl;
+  std::vector<std::vector<ExprPtr>> os_cc_st_r(cc_r.size());
+  for (auto i = 1; i < cc_r.size(); ++i) {
+    Tensor A =
+        cc_r[i]->as<Sum>().summand(0)->as<Product>().factors()[0]->as<Tensor>();
+    assert(A.label() == L"A");
+    auto P_vec = open_shell_P_op_vector(A);
+    auto A_vec = open_shell_A_op(A);
+    assert(P_vec.size() == i + 1);
+
+    std::vector<Sum> concat_terms(i + 1);
+    size_t n_spin_orbital_term = 0;
+    for (auto& product_term : *cc_r[i]) {
+      auto term = remove_tensor(product_term->as<Product>(), L"A");
+      std::vector<ExprPtr> os_st(i + 1);
+
+      // Apply the P operators on the product term without the A,
+      // Expand the P operators and spin-trace the expression
+      // Then apply A operator, canonicalize and remove A operator
+      for (int s = 0; s != os_st.size(); ++s) {
+        os_st.at(s) = P_vec.at(s) * term;
+        expand(os_st.at(s));
+        os_st.at(s) = expand_P_op(os_st.at(s), false, true);
+        os_st.at(s) =
+            open_shell_spintrace(os_st.at(s), ext_idx_list(i), s).at(0);
+        if (i > 2) {
+          os_st.at(s) = A_vec.at(s) * os_st.at(s);
+          simplify(os_st.at(s));
+          os_st.at(s) = remove_tensor(os_st.at(s), L"A");
+        }
+      }
+
+      for (size_t j = 0; j != os_st.size(); ++j) {
+        concat_terms.at(j).append(os_st.at(j));
+      }
+      ++n_spin_orbital_term;
+    }
+
+    // Combine spin-traced terms for the current residual
+    std::vector<ExprPtr> expr_vec;
+    std::cout << "CC R" << i << ": ";
+    for (auto& spin_case : concat_terms) {
+      auto ptr = sequant::ex<Sum>(spin_case);
+      expr_vec.push_back(ptr);
+      std::cout << ptr->size() << " ";
+    }
+
+    os_cc_st_r.at(i) = std::move(expr_vec);
+    std::cout << "\n";
+  }
+
+  if (NMAX == 4) {
+    runtime_assert(os_cc_st_r.size() == 5);
+    runtime_assert(os_cc_st_r.at(1).at(0)->size() == 30);
+    runtime_assert(os_cc_st_r.at(2).at(1)->size() == 130);
+    runtime_assert(os_cc_st_r.at(2).at(2)->size() == 74);
+    runtime_assert(os_cc_st_r.at(3).at(1)->size() == 249);
+    runtime_assert(os_cc_st_r.at(3).at(3)->size() == 124);
+    runtime_assert(os_cc_st_r.at(4).at(1)->size() == 356);
+    runtime_assert(os_cc_st_r.at(4).at(2)->size() == 386);
+    runtime_assert(os_cc_st_r.at(4).at(4)->size() == 156);
+  } else if (NMAX == 3) {
+    runtime_assert(os_cc_st_r.size() == 4);
+    runtime_assert(os_cc_st_r.at(1).at(0)->size() == 30);
+    runtime_assert(os_cc_st_r.at(2).at(0)->size() == 65);
+    runtime_assert(os_cc_st_r.at(2).at(1)->size() == 122);
+    runtime_assert(os_cc_st_r.at(3).at(2)->size() == 209);
+    runtime_assert(os_cc_st_r.at(3).at(3)->size() == 75);
+  }
+#endif
 }
+
+#if CLOSED_SHELL_SPINTRACE
+ExprPtr biorthogonal_transform(
+    const sequant::ExprPtr& expr, const int n_particles,
+    const std::vector<std::vector<sequant::Index>>& ext_index_groups,
+    const double threshold) {
+  assert(n_particles != 0);
+  assert(!ext_index_groups.empty());
+
+  using sequant::container::svector;
+
+  // Coefficients
+  std::vector<double> bt_coeff_vec;
+  {
+    using namespace Eigen;
+    // Dimension of permutation matrix is n_particles!
+    int n = std::tgamma(n_particles + 1);
+
+    // Permutation matrix
+    Eigen::Matrix<double, Dynamic, Dynamic> M(n, n);
+    {
+      M.setZero();
+      size_t n_row = 0;
+      svector<int, 6> v(n_particles), v1(n_particles);
+      std::iota(v.begin(), v.end(), 0);
+      std::iota(v1.begin(), v1.end(), 0);
+      do {
+        std::vector<double> permutation_vector;
+        do {
+          auto cycles = sequant::count_cycles(v1, v);
+          permutation_vector.push_back(std::pow(-2, cycles));
+        } while (std::next_permutation(v.begin(), v.end()));
+        Eigen::VectorXd pv_eig = Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(
+            permutation_vector.data(), permutation_vector.size());
+        M.row(n_row) = pv_eig;
+        ++n_row;
+      } while (std::next_permutation(v1.begin(), v1.end()));
+      M *= std::pow(-1, n_particles);
+    }
+
+    // Normalization constant
+    double scalar;
+    {
+      auto nonZero = [&threshold](const double& d) {
+        return abs(d) > threshold;
+      };
+
+      // Solve system of equations
+      SelfAdjointEigenSolver<MatrixXd> eig_solver(M);
+      std::vector<double> eig_vals(eig_solver.eigenvalues().size());
+      VectorXd::Map(&eig_vals[0], eig_solver.eigenvalues().size()) =
+          eig_solver.eigenvalues();
+
+      double non0count =
+          std::count_if(eig_vals.begin(), eig_vals.end(), nonZero);
+      scalar = eig_vals.size() / non0count;
+    }
+
+    // Find Pseudo Inverse, get 1st row only
+    MatrixXd pinv = M.completeOrthogonalDecomposition().pseudoInverse();
+    bt_coeff_vec.resize(pinv.rows());
+    VectorXd::Map(&bt_coeff_vec[0], bt_coeff_vec.size()) = pinv.row(0) * scalar;
+  }
+
+  // Transformation maps
+  std::vector<std::map<Index, Index>> bt_maps;
+  {
+    std::vector<Index> idx_list(ext_index_groups.size());
+
+    for (auto i = 0; i != ext_index_groups.size(); ++i) {
+      idx_list[i] = *ext_index_groups[i].begin();
+    }
+
+    const std::vector<Index> const_idx_list = idx_list;
+
+    do {
+      std::map<Index, Index> map;
+      auto const_list_ptr = const_idx_list.begin();
+      for (auto& i : idx_list) {
+        map.emplace(std::make_pair(*const_list_ptr, i));
+        const_list_ptr++;
+      }
+      bt_maps.push_back(map);
+    } while (std::next_permutation(idx_list.begin(), idx_list.end()));
+  }
+
+  // If this assertion fails, change the threshold parameter
+  assert(bt_coeff_vec.size() == bt_maps.size());
+
+  // Checks if the replacement map is a canonical sequence
+  auto is_canonical = [](const std::map<Index, Index>& idx_map) {
+    bool canonical = true;
+    for (auto&& pair : idx_map)
+      if (pair.first != pair.second) return false;
+    return canonical;
+  };
+
+  // Scale transformed expressions and append
+  Sum bt_expr{};
+  auto coeff_it = bt_coeff_vec.begin();
+  for (auto&& map : bt_maps) {
+    if (is_canonical(map))
+      bt_expr.append(ex<Constant>(*coeff_it) * expr->clone());
+    else
+      bt_expr.append(ex<Constant>(*coeff_it) *
+                     sequant::transform_expr(expr->clone(), map));
+    coeff_it++;
+  }
+  ExprPtr result = std::make_shared<Sum>(bt_expr);
+  return result;
+}
+
+// Generate S operator from external index list
+ExprPtr symmetrize_expr(
+    ExprPtr& expr,
+    const container::vector<container::vector<Index>> ext_index_groups) {
+  container::vector<Index> bra_list, ket_list;
+  for (auto&& idx_group : ext_index_groups) {
+    bra_list.push_back(*idx_group.begin());
+    ket_list.push_back(*(idx_group.begin() + 1));
+  }
+
+  assert(bra_list.size() == ket_list.size());
+  auto S = Tensor(L"S", bra_list, ket_list, Symmetry::nonsymm);
+  return ex<Tensor>(S) * expr;
+}
+#endif

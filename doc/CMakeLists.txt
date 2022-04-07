@@ -1,4 +1,4 @@
-find_package(Doxygen 1.8.12)
+find_package(Doxygen 1.9.3)
 if(DOXYGEN_FOUND)
   configure_file(Doxyfile.in Doxyfile @ONLY IMMEDIATE)
   add_custom_target_subproject(sequant html USES_TERMINAL
