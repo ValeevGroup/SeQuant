@@ -13,7 +13,7 @@ const Tensor& EvalExpr::tensor() const { return tensor_; }
 const Constant& EvalExpr::scalar() const { return scalar_; }
 
 EvalExpr::EvalExpr(const Tensor& tnsr) : op_{EvalOp::Id}, tensor_{tnsr},
-hash_{EvalExpr::hash_terminal_tensor(tnsr)}{}
+hash_{EvalExpr::hash_terminal_tensor(tnsr)}, annot_{braket_to_annot(tnsr.const_braket())}{}
 
 EvalExpr::EvalExpr(const EvalExpr& xpr1,
                    const EvalExpr& xpr2,
@@ -50,6 +50,8 @@ EvalExpr::EvalExpr(const EvalExpr& xpr1,
       s, infer_braket_symmetry(), infer_particle_symmetry(s)};
 
   hash_ = hash_imed(expr1, expr2, op);
+
+  annot_ = braket_to_annot(tensor_.const_braket());
 }
 
 Symmetry EvalExpr::infer_tensor_symmetry_sum(EvalExpr const& xpr1,
@@ -68,13 +70,13 @@ Symmetry EvalExpr::infer_tensor_symmetry_sum(EvalExpr const& xpr1,
 
 Symmetry EvalExpr::infer_tensor_symmetry_prod(EvalExpr const& xpr1,
                                               EvalExpr const& xpr2) {
+  using index_set_t = container::set<Index, Index::LabelCompare>;
   // HELPER LAMBDA
   // check if all the indices in cont1 are in cont2 AND vice versa
   auto all_common_indices = [](const auto& cont1, const auto& cont2) -> bool {
-    if (cont1.size() != cont2.size()) return false;
-
-    return (cont1 | ranges::to<container::set<Index, Index::LabelCompare>>) ==
-           (cont2 | ranges::to<container::set<Index, Index::LabelCompare>>);
+    return (cont1.size() == cont2.size()) &&
+           (cont1 | ranges::to<index_set_t>) ==
+               (cont2 | ranges::to<index_set_t>);
   };
   // //////
 
@@ -86,8 +88,7 @@ Symmetry EvalExpr::infer_tensor_symmetry_prod(EvalExpr const& xpr1,
 
     auto const uniq_idxs = ranges::views::concat(tnsr1.const_braket(),
                                                 tnsr2.const_braket())
-                          | ranges::to<container::set<Index,
-                                                       Index::LabelCompare>>;
+                          | ranges::to<index_set_t>;
 
     if (ranges::distance(uniq_idxs) == tnsr1.const_braket().size()
                                      + tnsr2.const_braket().size()) {

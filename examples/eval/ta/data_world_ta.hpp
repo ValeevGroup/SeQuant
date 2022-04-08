@@ -13,7 +13,7 @@
 #include <SeQuant/core/tensor.hpp>
 #include <range/v3/view.hpp>
 
-namespace sequant::eval::ta {
+namespace sequant::eval {
 
 template <typename Tensor_t>
 class DataWorldTA {

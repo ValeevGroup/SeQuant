@@ -99,9 +99,9 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
   using ranges::views::transform;
   using TA::TArrayD;
   using sequant::to_eval_node;
-  using sequant::eval::ta::eval;
-  using sequant::eval::ta::eval_antisymm;
-  using sequant::eval::ta::eval_symm;
+  using sequant::eval::eval;
+  using sequant::eval::eval_antisymm;
+  using sequant::eval::eval_symm;
   auto parse_expr_antisymm = [](auto const& xpr){ return parse_expr(xpr, sequant::Symmetry::antisymm); };
 
   // tnsr is assumed to be single-tiled

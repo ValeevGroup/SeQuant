@@ -82,7 +82,7 @@ int main(int argc, char* argv[]) {
   auto const calc_info =
       eval::make_calc_info(calc_config, fock_file, eri_file, out_file);
 
-  eval::ta::SequantEvalScfTA<TA::TArrayD>{world, calc_info}.scf(std::wcout);
+  eval::SequantEvalScfTA<TA::TArrayD>{world, calc_info}.scf(std::wcout);
 
   TA::finalize();
   return 0;

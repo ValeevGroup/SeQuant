@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/container.hpp>
 #include <memory>
+#include <optional>
 
 namespace sequant::eval {
 
@@ -59,6 +60,8 @@ class CacheManager {
       }
     }
 
+    [[nodiscard]] count_t life_count() const noexcept { return life_c; }
+
    private:
     [[nodiscard]] int decay() noexcept {
       return life_t == Lifetime::Persistent ? -1 : (life_c > 0 ? --life_c : 0);
@@ -71,38 +74,40 @@ class CacheManager {
     return entry.access();
   }
 
-  container::map<key_t, entry<Data>> cache_map;
+  container::map<key_t, entry<Data>> cache_map_;
 
  public:
   template <typename Iterable1 = container::map<key_t, count_t>,
             typename Iterable2 = container::svector<key_t>>
-  CacheManager(Iterable1 &&decaying, Iterable2 &&persistent = {}) {
+  CacheManager(Iterable1 &&decaying, Iterable2 &&persistent) {
     for (auto &&[k, c] : decaying)
-      cache_map.try_emplace(k, entry<Data>{static_cast<count_t>(c)});
+      cache_map_.try_emplace(k, entry<Data>{static_cast<count_t>(c)});
 
-    for (auto &&k : persistent) cache_map.try_emplace(k, entry<Data>{});
+    for (auto &&k : persistent) cache_map_.try_emplace(k, entry<Data>{});
   }
 
   void reset_all() {
-    for (auto &&[k, v] : cache_map) v.reset(false);
+    for (auto &&[k, v] : cache_map_) v.reset(false);
   }
 
   void reset_decaying() {
-    for (auto &&[k, v] : cache_map) v.reset(true);
+    for (auto &&[k, v] : cache_map_) v.reset(true);
   }
 
   std::optional<ptr_t> access(key_t key) noexcept {
-    if (auto &&found = cache_map.find(key); found != cache_map.end())
+    if (auto &&found = cache_map_.find(key); found != cache_map_.end())
       return found->second.access();
 
     return std::nullopt;
   }
 
   ptr_t store(key_t key, Data data) {
-    if (auto &&found = cache_map.find(key); found != cache_map.end())
-      return (store(found->second, std::move(data)));
+    if (auto &&found = cache_map_.find(key); found != cache_map_.end())
+      return store(found->second, std::move(data));
     return std::make_shared<Data>(std::move(data));
   }
+
+  auto const& cache_map() const { return cache_map_; }
 
 };  // CacheManager
 

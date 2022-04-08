@@ -16,14 +16,17 @@ namespace sequant::utils {
  * @author Bimal Gaudel
  * @version 29 Sep 2020
  */
+
 class RandColor {
  private:
+  /// Used for better color distribution
   static constexpr double GOLDEN_RATIO_CONJ = 0.618033988749895;
 
   std::uniform_real_distribution<double> uniRealDist;
 
   std::mt19937_64 randEngine;
 
+  /// Do not return the same hue again from this object.
   std::set<double> hue_cache_;
 
  public:

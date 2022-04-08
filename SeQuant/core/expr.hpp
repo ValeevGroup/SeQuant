@@ -87,7 +87,10 @@ class Expr : public std::enable_shared_from_this<Expr>,
   virtual std::wstring to_wolfram() const;
 
   /// @return a clone of this object
-  /// @note must be overridden in the derived class
+  /// @note - must be overridden in the derived class.
+  ///       - flattens out the nested structure
+  ///         for example, a product of products will be
+  ///         just a product of tensors
   virtual ExprPtr clone() const;
 
   /// Canonicalizes @c this and returns the biproduct of canonicalization (e.g.
