@@ -83,28 +83,36 @@ Symmetry EvalExpr::infer_tensor_symmetry_prod(EvalExpr const& xpr1,
   auto const& tnsr1 = xpr1.tensor();
   auto const& tnsr2 = xpr2.tensor();
 
-  if (xpr1.hash() == xpr2.hash()){
+  auto imed_sym = Symmetry::invalid;
+  if (xpr1.hash() == xpr2.hash()) {
     // potential outer product
+    auto const uniq_idxs =
+        ranges::views::concat(tnsr1.const_braket(), tnsr2.const_braket()) |
+        ranges::to<index_set_t>;
 
-    auto const uniq_idxs = ranges::views::concat(tnsr1.const_braket(),
-                                                tnsr2.const_braket())
-                          | ranges::to<index_set_t>;
+    if (ranges::distance(uniq_idxs) ==
+        tnsr1.const_braket().size() + tnsr2.const_braket().size()) {
+      // outer product confirmed
+      imed_sym = Symmetry::antisymm;
+    }
+  } else {
+    bool whole_bk_contracted = (all_common_indices(tnsr1.bra(), tnsr2.ket()) ||
+                                all_common_indices(tnsr1.ket(), tnsr2.bra()));
+    auto sym1 = tnsr1.symmetry();
+    auto sym2 = tnsr2.symmetry();
+    assert(sym1 != Symmetry::invalid);
+    assert(sym2 != Symmetry::invalid);
+    if (whole_bk_contracted &&
+        !(sym1 == Symmetry::nonsymm || sym2 == Symmetry::nonsymm)) {
+      imed_sym = sym1 == sym2 ? sym1 : Symmetry::symm;
 
-    if (ranges::distance(uniq_idxs) == tnsr1.const_braket().size()
-                                     + tnsr2.const_braket().size()) {
-      return Symmetry::antisymm;
+    } else {
+      imed_sym = Symmetry::nonsymm;
     }
   }
 
-  bool whole_bk_contracted = (all_common_indices(tnsr1.bra(), tnsr2.ket()) ||
-                              all_common_indices(tnsr1.ket(), tnsr2.bra()));
-
-  // sym/sym or antisym/antisym with whole braket contraction
-  if (whole_bk_contracted && tnsr1.symmetry() == tnsr2.symmetry())
-    return tnsr1.symmetry();
-
-  // non symmetric intermediate
-  return Symmetry::nonsymm;
+  assert(imed_sym != Symmetry::invalid);
+  return imed_sym;
 }
 
 ParticleSymmetry EvalExpr::infer_particle_symmetry(Symmetry s) {
