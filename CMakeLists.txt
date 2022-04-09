@@ -299,6 +299,7 @@ if (BUILD_TESTING)
             tests/unit/test_token_sequant.cpp
             tests/unit/test_rpn.cpp
             tests/unit/test_clone_packed.cpp
+            tests/unit/test_cache_manager.cpp
             )
 
     if (TARGET tiledarray)
