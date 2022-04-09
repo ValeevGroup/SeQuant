@@ -4,13 +4,29 @@
 
 #include "catch.hpp"
 
+using data_type = int;
+
+namespace sequant::eval {
+struct TestCacheManager {};
+
+template <>
+template <>
+struct CacheManager<data_type>::template access_by<TestCacheManager>{
+  auto const& map(CacheManager<data_type> const& man) const {
+    return man.cache_map_;
+  }
+};
+} //
+
 TEST_CASE("TEST_CACHE_MANAGER", "[cache_manager]") {
   using ranges::views::concat;
   using ranges::views::zip;
-  using data_type = int;
   using manager_type = sequant::eval::CacheManager<data_type>;
   using key_type = manager_type::key_t;
   using count_type = manager_type::count_t;
+  using tester_type = manager_type::access_by<sequant::eval::TestCacheManager>;
+
+  auto const tester = tester_type{};
 
   size_t constexpr n_persistent = 4;  // arbitrary
   size_t constexpr n_decaying = 4;    // arbitrary
@@ -34,17 +50,19 @@ TEST_CASE("TEST_CACHE_MANAGER", "[cache_manager]") {
 
   SECTION("Construction") {
     auto const& man = man_const;
+    auto const& map = tester.map(man); // access private map object
 
-    REQUIRE(man.cache_map().size() == n_persistent + n_decaying);
+    REQUIRE(map.size() == n_persistent + n_decaying);
 
     // verifying the life count of decaying entries
     for (auto&& [k, c] : zip(decaying_keys, decaying_repeats))
-      REQUIRE(man.cache_map().find(k)->second.life_count() == c);
+      REQUIRE(map.find(k)->second.life_count() == c);
   }
 
   SECTION("Data Access") {
     // need a non-const manager object
     auto man = man_const;
+    auto const& map = tester.map(man); // access private map object
     // filling data
     for (auto&& [k, v] : zip(concat(decaying_keys, persistent_keys),
                              concat(decaying_vals, persistent_vals))) {
@@ -64,8 +82,8 @@ TEST_CASE("TEST_CACHE_MANAGER", "[cache_manager]") {
         REQUIRE(entry);          // optional<shared_ptr<..>>
         REQUIRE(entry.value());  // shared_ptr<..>
         REQUIRE(*entry.value() == v);
-        auto iter = man.cache_map().find(k);
-        REQUIRE(iter != man.cache_map().end());
+        auto iter = map.find(k);
+        REQUIRE(iter != map.end());
         REQUIRE(iter->second.life_count() == i - 1);
       }
     }
@@ -74,7 +92,7 @@ TEST_CASE("TEST_CACHE_MANAGER", "[cache_manager]") {
     // accessing each decaying entry one more time should release
     // their *data* from the memory
     for (auto&& k : decaying_keys) {
-      auto iter = man.cache_map().find(k);
+      auto iter = map.find(k);
       REQUIRE(iter->second.life_count() == 1);
       REQUIRE(man.access(k).value());  // accessed once. non-null ptr returned
       REQUIRE_FALSE(man.access(k).value());  // nullptr returned
@@ -88,7 +106,7 @@ TEST_CASE("TEST_CACHE_MANAGER", "[cache_manager]") {
     // now we reset the decaying entries which restores thier lifetimes
     man.reset_decaying();
     for (auto&& [k, c] : zip(decaying_keys, decaying_repeats))
-      REQUIRE(man.cache_map().find(k)->second.life_count() == c);
+      REQUIRE(map.find(k)->second.life_count() == c);
 
     // now we reset all entries
     man.reset_all();
