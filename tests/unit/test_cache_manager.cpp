@@ -64,8 +64,10 @@ TEST_CASE("TEST_CACHE_MANAGER", "[cache_manager]") {
     auto man = man_const;
     auto const& map = tester.map(man); // access private map object
     // filling data
-    for (auto&& [k, v] : zip(concat(decaying_keys, persistent_keys),
-                             concat(decaying_vals, persistent_vals))) {
+    auto const kvs = zip(concat(decaying_keys, persistent_keys),
+                         concat(decaying_vals, persistent_vals))
+                     | ranges::to<sequant::container::map<key_type,data_type>>;
+    for (auto&& [k, v] : kvs) {
       // NOTE: man.store() calls man.access() implicitly and
       // returns a shared_ptr to data
       // hence, a count of lifetime is lost right here
