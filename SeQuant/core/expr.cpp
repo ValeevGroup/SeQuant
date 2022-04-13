@@ -264,24 +264,22 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
       assert(nidentical > 1);
       auto reduce_range = [first_it, this, nidentical](auto &begin, auto &end) {
         if ((*first_it)->template is<Tensor>()) {
-          assert((*first_it)->template is<Tensor>());
           Product tensor_as_Product{};
           tensor_as_Product.append(static_cast<double>(nidentical),
                                    (*first_it)->as<Tensor>());
           (*first_it) = std::make_shared<Product>(tensor_as_Product);
           this->summands_.erase(first_it + 1, end);
         } else if ((*first_it)->template is<Product>()) {
-          const auto first_prefactor =
-              (*first_it)->template as<Product>().scalar();
-          // add prefactors of each product
-          const auto sum_of_prefactors = std::accumulate(
-              begin, end, Product::scalar_type(0),
-              [](auto &acc, const auto &prod) {
-                assert(prod->template is<Product>());
-                return acc + prod->template as<Product>().scalar();
-              });
-          (*first_it)->template as<Product>() *=
-              Constant(sum_of_prefactors / first_prefactor);
+          for (auto it = begin + 1; it != end; ++it) {
+            if ((*it)->template is<Tensor>()) {
+              Product tensor_as_Product{};
+              tensor_as_Product.append(1.0, (*it)->template as<Tensor>());
+              (*it) = std::make_shared<Product>(tensor_as_Product);
+            } else if ((*it)->template is<Product>()) {
+              std::static_pointer_cast<Product>(*first_it)->add_identical(
+                  std::static_pointer_cast<Product>(*it));
+            }
+          }
           this->summands_.erase(first_it + 1, end);
         }
       };
