@@ -4,16 +4,29 @@
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
+#include <clocale>
+
 using namespace sequant;
 
-#define runtime_assert(tf)                                             \
-  if (!(tf)) {                                                         \
-    std::ostringstream oss;                                            \
-    oss << "failed assert at line " << __LINE__ << " in SRCC example"; \
-    throw std::runtime_error(oss.str().c_str());                       \
+#define runtime_assert(tf)                                       \
+  if (!(tf)) {                                                   \
+    std::ostringstream oss;                                      \
+    oss << "failed assert at line " << __LINE__                  \
+        << " in open-shell spin-traced coupled cluster example"; \
+    throw std::runtime_error(oss.str().c_str());                 \
   }
 
 int main(int argc, char* argv[]) {
+  std::setlocale(LC_ALL, "en_US.UTF-8");
+  std::wcout.precision(std::numeric_limits<double>::max_digits10);
+  std::wcerr.precision(std::numeric_limits<double>::max_digits10);
+  std::wcout.sync_with_stdio(false);
+  std::wcerr.sync_with_stdio(false);
+  std::wcout.imbue(std::locale("en_US.UTF-8"));
+  std::wcerr.imbue(std::locale("en_US.UTF-8"));
+  std::wcout.sync_with_stdio(true);
+  std::wcerr.sync_with_stdio(true);
+
   mbpt::set_default_convention();
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
@@ -100,21 +113,21 @@ int main(int argc, char* argv[]) {
   }
 
   if (NMAX == 4) {
-    runtime_assert(os_cc_st_r.size() == 5)
-    runtime_assert(os_cc_st_r.at(1).at(0)->size() == 30)
-    runtime_assert(os_cc_st_r.at(2).at(1)->size() == 130)
-    runtime_assert(os_cc_st_r.at(2).at(2)->size() == 74)
-    runtime_assert(os_cc_st_r.at(3).at(1)->size() == 249)
-    runtime_assert(os_cc_st_r.at(3).at(3)->size() == 124)
-    runtime_assert(os_cc_st_r.at(4).at(1)->size() == 356)
-    runtime_assert(os_cc_st_r.at(4).at(2)->size() == 386)
-    runtime_assert(os_cc_st_r.at(4).at(4)->size() == 156)
+    runtime_assert(os_cc_st_r.size() ==
+                   5) runtime_assert(os_cc_st_r.at(1).at(0)->size() == 30)
+        runtime_assert(os_cc_st_r.at(2).at(1)->size() == 130) runtime_assert(
+            os_cc_st_r.at(2).at(2)->size() ==
+            74) runtime_assert(os_cc_st_r.at(3).at(1)->size() == 249)
+            runtime_assert(os_cc_st_r.at(3).at(3)->size() == 124)
+                runtime_assert(os_cc_st_r.at(4).at(1)->size() == 356)
+                    runtime_assert(os_cc_st_r.at(4).at(2)->size() == 386)
+                        runtime_assert(os_cc_st_r.at(4).at(4)->size() == 156)
   } else if (NMAX == 3) {
     runtime_assert(os_cc_st_r.size() == 4)
-    runtime_assert(os_cc_st_r.at(1).at(0)->size() == 30)
-    runtime_assert(os_cc_st_r.at(2).at(0)->size() == 65)
-    runtime_assert(os_cc_st_r.at(2).at(1)->size() == 122)
-    runtime_assert(os_cc_st_r.at(3).at(2)->size() == 209)
-    runtime_assert(os_cc_st_r.at(3).at(3)->size() == 75)
+        runtime_assert(os_cc_st_r.at(1).at(0)->size() == 30)
+            runtime_assert(os_cc_st_r.at(2).at(0)->size() == 65)
+                runtime_assert(os_cc_st_r.at(2).at(1)->size() == 122)
+                    runtime_assert(os_cc_st_r.at(3).at(2)->size() == 209)
+                        runtime_assert(os_cc_st_r.at(3).at(3)->size() == 75)
   }
 }
