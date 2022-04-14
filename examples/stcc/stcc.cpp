@@ -66,10 +66,14 @@ int main(int argc, char* argv[]) {
 
   // Spin-orbital coupled cluster
   auto cc_r = sequant::eqs::cceqvec{NMAX, NMAX}(true, true, true, true, true);
+  for (auto i = 1; i < cc_r.size(); ++i) {
+    std::cout << "Spin-orbital CC R" << i << " size: " << cc_r[i]->size() << "\n";
+  }
 
   //
   // Closed-shell spintrace (fast)
   //
+  std::cout << "\nClosed-shell coupled cluster:\n";
   std::vector<ExprPtr> cc_st_r(cc_r.size());
   for (auto i = 1; i < cc_r.size(); ++i) {
     const auto tstart = std::chrono::high_resolution_clock::now();
@@ -142,8 +146,8 @@ ExprPtr biorthogonal_transform(
       do {
         std::vector<double> permutation_vector;
         do {
-          auto cycles = sequant::count_cycles(v1, v);
-          permutation_vector.push_back(std::pow(-2, cycles));
+          permutation_vector.push_back(
+              std::pow(-2, sequant::count_cycles(v1, v)));
         } while (std::next_permutation(v.begin(), v.end()));
         Eigen::VectorXd pv_eig = Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(
             permutation_vector.data(), permutation_vector.size());

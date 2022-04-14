@@ -56,14 +56,18 @@ int main(int argc, char* argv[]) {
 
   // Spin-orbital coupled cluster
   auto cc_r = sequant::eqs::cceqvec{NMAX, NMAX}(true, true, true, true, true);
+  for (auto i = 1; i < cc_r.size(); ++i) {
+    std::cout << "Spin-orbital CC R" << i << " size: " << cc_r[i]->size() << "\n";
+  }
 
   //
   // Open-shell spintrace
   //
-  std::cout << "Open-shell coupled cluster: nterms per spin blocks: "
+  std::cout << "\nOpen-shell coupled cluster: nterms per spin blocks: "
             << std::endl;
   std::vector<std::vector<ExprPtr>> os_cc_st_r(cc_r.size());
   for (auto i = 1; i < cc_r.size(); ++i) {
+    const auto tstart = std::chrono::high_resolution_clock::now();
     Tensor A =
         cc_r[i]->as<Sum>().summand(0)->as<Product>().factors()[0]->as<Tensor>();
     assert(A.label() == L"A");
@@ -109,7 +113,9 @@ int main(int argc, char* argv[]) {
     }
 
     os_cc_st_r.at(i) = std::move(expr_vec);
-    std::cout << "\n";
+    auto tstop = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> time_elapsed = tstop - tstart;
+    printf(" time:  %5.3f sec.\n", time_elapsed.count());
   }
 
   if (NMAX == 4) {
