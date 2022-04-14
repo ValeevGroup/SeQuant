@@ -113,21 +113,21 @@ int main(int argc, char* argv[]) {
   }
 
   if (NMAX == 4) {
-    runtime_assert(os_cc_st_r.size() ==
-                   5) runtime_assert(os_cc_st_r.at(1).at(0)->size() == 30)
-        runtime_assert(os_cc_st_r.at(2).at(1)->size() == 130) runtime_assert(
-            os_cc_st_r.at(2).at(2)->size() ==
-            74) runtime_assert(os_cc_st_r.at(3).at(1)->size() == 249)
-            runtime_assert(os_cc_st_r.at(3).at(3)->size() == 124)
-                runtime_assert(os_cc_st_r.at(4).at(1)->size() == 356)
-                    runtime_assert(os_cc_st_r.at(4).at(2)->size() == 386)
-                        runtime_assert(os_cc_st_r.at(4).at(4)->size() == 156)
+    runtime_assert(os_cc_st_r.size() == 5)
+    runtime_assert(os_cc_st_r.at(1).at(0)->size() == 30)   // T1a
+    runtime_assert(os_cc_st_r.at(2).at(1)->size() == 130)  // T2ab
+    runtime_assert(os_cc_st_r.at(2).at(2)->size() == 74)   // T2bb
+    runtime_assert(os_cc_st_r.at(3).at(1)->size() == 249)  // T3aab
+    runtime_assert(os_cc_st_r.at(3).at(3)->size() == 124)  // T3bbb
+    runtime_assert(os_cc_st_r.at(4).at(1)->size() == 356)  // T4aaab
+    runtime_assert(os_cc_st_r.at(4).at(2)->size() == 386)  // T4aabb
+    runtime_assert(os_cc_st_r.at(4).at(4)->size() == 156)  // T4bbbb
   } else if (NMAX == 3) {
     runtime_assert(os_cc_st_r.size() == 4)
-        runtime_assert(os_cc_st_r.at(1).at(0)->size() == 30)
-            runtime_assert(os_cc_st_r.at(2).at(0)->size() == 65)
-                runtime_assert(os_cc_st_r.at(2).at(1)->size() == 122)
-                    runtime_assert(os_cc_st_r.at(3).at(2)->size() == 209)
-                        runtime_assert(os_cc_st_r.at(3).at(3)->size() == 75)
+    runtime_assert(os_cc_st_r.at(1).at(0)->size() == 30)   // T1a
+    runtime_assert(os_cc_st_r.at(2).at(0)->size() == 65)   // T2aa
+    runtime_assert(os_cc_st_r.at(2).at(1)->size() == 122)  // T2ab
+    runtime_assert(os_cc_st_r.at(3).at(2)->size() == 209)  // T3abb
+    runtime_assert(os_cc_st_r.at(3).at(3)->size() == 75)   // T3bbb
   }
 }
