@@ -9,12 +9,22 @@
 
 namespace sequant {
 
+///
+/// Represents an symbolic asymptotic cost in terms of active_occupied
+/// and the rest orbitals.
+/// eg.
+///     - AsyCost{2,4} implies scaling of $O^2V^4$. In other words, the cost
+///       scales by the second power in the number of active_occupied orbitals
+///       and the fourth power in the number of the rest orbitals.
+///     - AsyCost{2, 4, boost::rational<int>{1,2}} implies the same scaling as
+///       above except the numeric value obtained by substituting $O$ and $V$
+///       numbers is then halved.
 class AsyCost {
  private:
   class AsyCostEntry {
-    size_t occ_;
-    size_t virt_;
-    mutable boost::rational<int> count_;
+    size_t occ_; // power of active_occupied
+    size_t virt_; // power of the rest orbitals
+    mutable boost::rational<int> count_; // count of this asymptotic symbol
 
    public:
     template <typename Os, typename IntType>
@@ -118,18 +128,28 @@ class AsyCost {
   };
 
  private:
-  sequant::container::set<AsyCostEntry> cost_;
+  container::set<AsyCostEntry> cost_;
 
   AsyCost(AsyCostEntry);
 
  public:
+  ///
+  /// \return The infinitely scaling cost.
   static AsyCost const &max();
 
+  ///
+  /// \return The zero cost.
   static AsyCost const &zero();
 
+  ///
+  /// Default construct to zero cost.
   AsyCost();
 
-  AsyCost(size_t nocc, size_t nvirt, boost::rational<int> count = 1);
+  ///
+  /// \param nocc Asymptotic scaling exponent in the active occupied orbitals.
+  /// \param nrest Asymptotic scaling exponent in the rest orbitals.
+  /// \param count Rational number of times this cost repeats.
+  AsyCost(size_t nocc, size_t nrest, boost::rational<int> count = 1);
 
   AsyCost(AsyCost const &) = default;
 
@@ -139,6 +159,10 @@ class AsyCost {
 
   AsyCost &operator=(AsyCost &&) = default;
 
+  ///
+  /// \param nocc Substitute $O$ by nocc.
+  /// \param nvirt Substitute $V$ by nvirt.
+  /// \return Scaled asymptotic cost.
   [[nodiscard]] boost::rational<long long int> ops(unsigned short nocc,
                                                    unsigned short nvirt) const;
 

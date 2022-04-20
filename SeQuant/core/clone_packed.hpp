@@ -17,11 +17,15 @@ namespace sequant {
 /// \return a cloned copy of \c expr
 ExprPtr clone_packed(ExprPtr expr);
 
+///
+/// Clone a sum by preserving nested structures.
+///
 ExprPtr clone_packed(Sum const&);
 
+///
+/// Clone a product by preserving nested structures.
+///
 ExprPtr clone_packed(Product const&);
-
-ExprPtr clone_packed(Tensor const&);
 
 } // namespace
 

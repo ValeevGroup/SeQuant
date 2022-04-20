@@ -161,6 +161,14 @@ TEST_CASE("TEST_EVAL_EXPR", "[EvalExpr]") {
     const auto x78 = EvalExpr{EvalExpr{t7}, EvalExpr{t8}, EvalOp::Prod};
 
     REQUIRE(x78.tensor().symmetry() == Symmetry::nonsymm);
+
+    // whole bra <-> ket contraction between symmetric and antisymmetric tensors
+    auto const t9 = parse_expr(L"g_{a1,a2}^{a3,a4}",
+                               Symmetry::antisymm)->as<Tensor>();
+    auto const t10 = parse_expr(L"t_{a3,a4}^{i1,i2}",
+                                Symmetry::symm)->as<Tensor>();
+    auto const x910 = EvalExpr{EvalExpr{t9}, EvalExpr{t10}, EvalOp::Prod};
+    REQUIRE(x910.tensor().symmetry() == Symmetry::symm);
   }
 
   SECTION("Symmetry of sum") {

@@ -9,6 +9,12 @@
 
 namespace sequant {
 
+///
+/// @brief Represents a node with data of @c T type in a full-binary tree.
+///
+/// A full binary tree is a binary tree in which each node has two children
+/// or no children.
+///
 template <typename T>
 class FullBinaryNode {
  public:
@@ -36,18 +42,40 @@ class FullBinaryNode {
   }
 
  public:
+  ///
+  /// Construct an internal node with emtpy left and right nodes.
+  ///
+  /// \param d Data in the internal node.
   FullBinaryNode(T d) : data_{std::move(d)} {}
 
+  ///
+  /// Construct an internal node with left and right node data.
+  ///
+  /// \param d Data in the internal node.
+  /// \param l Data in the left node.
+  /// \param r Data in the right node.
   FullBinaryNode(T d, T l, T r)
       : data_{std::move(d)},
         left_{std::make_unique<FullBinaryNode>(std::move(l))},
         right_{std::make_unique<FullBinaryNode>(std::move(r))} {}
 
+  ///
+  /// Constructs an internal node with left and right nodes.
+  ///
+  /// \param d Data in the internal node.
+  /// \param l Left node.
+  /// \param r Right node
   FullBinaryNode(T d, FullBinaryNode<T> l, FullBinaryNode<T> r)
       : data_{std::move(d)},
         left_{std::make_unique<FullBinaryNode<T>>(std::move(l))},
         right_{std::make_unique<FullBinaryNode<T>>(std::move(r))} {}
 
+  ///
+  /// Constructs an internal node with left and right node pointers.
+  ///
+  /// \param d Data in the internal node.
+  /// \param l Left node pointer.
+  /// \param r Right node pointer.
   FullBinaryNode(T d, node_ptr&& l, node_ptr&& r)
       : data_{std::move(d)}, left_{std::move(l)}, right_{std::move(r)} {}
 
@@ -75,14 +103,32 @@ class FullBinaryNode {
 
   bool leaf() const { return !(left_ || right_); }
 
+  ///
+  /// \return Returns the data stored by the node.
   T const& operator*() const { return data_; }
 
+  ///
+  /// \return Returns the data stored by the node.
   T& operator*() { return data_; }
 
+  ///
+  /// \return Returns the pointer to the data stored by the node.
   T const* operator->() const { return &data_; }
 
+  ///
+  /// \return Returns the pointer to the data stored by the node.
   T* operator->() { return &data_; }
 
+  ///
+  /// Left-fold a container to make a full-binary node.
+  ///
+  /// \param container To be binarized.
+  /// \param binarize Fold function.
+  ///        \c binarize needs to support:
+  ///          - unary function call with a return value (say of type R)
+  ///             to the element type of the container (say of type V)
+  ///          - binary function call of kind f(R,V) that returns R type
+  ///
   template <typename Cont, typename F>
   FullBinaryNode(Cont const& container, F&& binarize) {
     using value_type = decltype(*ranges::begin(container));
