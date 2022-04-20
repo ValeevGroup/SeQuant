@@ -183,8 +183,7 @@ inline container::map<Index, Index> compute_index_replacement_rules(
         const auto intersection_space = intersection(bra.space(), ket.space());
 
         // if overlap's indices are from non-overlapping spaces, return zero
-        if (intersection_space == IndexSpace::null_instance()) {
-          throw zero_result{};
+        if (intersection_space == IndexSpace::null_instance()) {throw zero_result{};
         }
 
         if (!bra_is_ext && !ket_is_ext) {  // int + int
