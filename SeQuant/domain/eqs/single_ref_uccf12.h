@@ -50,15 +50,15 @@ class uccf12 {
   ExprPtr compute_double_com(ExprPtr e1, ExprPtr e2, ExprPtr e3,
                              int ansatz = 2) {
     auto first_com = do_wick((e1 * e2) - (e2 * e1));
-    non_canon_simplify(first_com);
+    simplify(first_com);
     auto second_com_1 = first_com * e3;
-    non_canon_simplify(second_com_1);
+    simplify(second_com_1);
     second_com_1 = do_wick(second_com_1);
     auto second_com_2 = e3 * first_com;
-    non_canon_simplify(second_com_2);
+    simplify(second_com_2);
     second_com_2 = do_wick(second_com_2);
     auto second_com = second_com_1 - second_com_2;
-    non_canon_simplify(second_com);
+    simplify(second_com);
     if (ansatz == 2) {
       second_com = keep_up_to_3_body_terms(second_com);
       second_com =
@@ -66,11 +66,11 @@ class uccf12 {
           ex<Constant>(0.);  // make a sum to avoid heavy code duplication for
                              // product and sum variants.
       second_com = simplification::overlap_with_obs(second_com);
-      //second_com = second_com + ex<Constant>(0.);
-      //second_com = simplification::screen_F12_proj(second_com, 2);
-      //second_com = simplification::tens_to_FNOps(second_com);
-      //second_com = decompositions::three_body_substitution(second_com, 2);
-      non_canon_simplify(second_com);
+      second_com = second_com + ex<Constant>(0.);
+      second_com = simplification::screen_F12_proj(second_com, 2);
+      second_com = simplification::tens_to_FNOps(second_com);
+      second_com = decompositions::three_body_substitution(second_com, 2);
+      simplify(second_com);
       return second_com;
     }
     if (ansatz == 1) {
@@ -165,7 +165,7 @@ class uccf12 {
     FWickTheorem wick{expr};
     wick.spinfree(false).full_contractions(false);
     auto result = wick.compute();
-    non_canon_simplify(result);
+    simplify(result);
     return result;
   }
 
@@ -308,7 +308,6 @@ class uccf12 {
     } else if (gg_label == "uocc") {
       gg_space = IndexSpace::unoccupied;
     }
-    // currently not supported, but needs to be
     else if (gg_label == "act_obs") {
       gg_space = IndexSpace::all_active;
     } else {
@@ -342,9 +341,10 @@ class uccf12 {
       ExprPtr A = ex<Constant>(0.0);
       if (doubles) {
         A = A + (r - adjoint(r)) + single;
+        simplify(A);
       } else {
         A = A + single;
-        non_canon_simplify(A);
+        simplify(A);
       }
       auto A_ = A->clone();
       A_ = relable(A_);
@@ -369,8 +369,8 @@ class uccf12 {
       auto two_body = com_1.second + (sim.second);
 
       // cannot use non_canon_simplify here because of B term.
-      simplify(one_body);
-      simplify(two_body);
+      non_canon_simplify(one_body);
+      non_canon_simplify(two_body);
       int term_count = 0;
       if(!one_body->is<Sum>()){
         term_count += 1;
@@ -415,23 +415,23 @@ class uccf12 {
       H_A_3 = H_A_3 + ex<Constant>(0.);
       H_A_3 = simplification::screen_F12_proj(H_A_3, 1);
       H_A_3 = simplification::tens_to_FNOps(H_A_3);
-      non_canon_simplify(H_A_3);
+      simplify(H_A_3);
       auto com_1 = simplification::hamiltonian_based_projector_1(H_A_3);
 
       auto fFF = ex<Constant>(1. / 2) * compute_double_com(F(), r, r_1, 1);
-      non_canon_simplify(fFF);
+      simplify(fFF);
       auto fFFt =
           ex<Constant>(1. / 2) *
           compute_double_com(F(), r, ex<Constant>(-1.) * adjoint(r_1), 1);
-      non_canon_simplify(fFFt);
+      simplify(fFFt);
       auto fFtFt = ex<Constant>(1. / 2) *
                    compute_double_com(F(), ex<Constant>(-1.) * adjoint(r),
                                       ex<Constant>(-1.) * adjoint(r_1), 1);
-      non_canon_simplify(fFtFt);
+      simplify(fFtFt);
       auto fFtF =
           ex<Constant>(1. / 2) *
           compute_double_com(F(), ex<Constant>(-1.) * adjoint(r), r_1, 1);
-      non_canon_simplify(fFtF);
+      simplify(fFtF);
 
       auto fFF_sim = simplification::fock_based_projector_1(fFF);
       // std::wcout << "FF: " << to_latex_align(fFF_sim.second,20,2) <<

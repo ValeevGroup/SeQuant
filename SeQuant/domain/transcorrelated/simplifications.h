@@ -180,7 +180,7 @@ ExprPtr overlap_with_obs(ExprPtr ex_) {
   FWickTheorem wick{overlap_expr};
   // std::wcout << to_latex_align(overlap_expr,20,2) << std::endl;
   wick.reduce(overlap_expr);
-  non_canon_simplify(overlap_expr);
+  simplify(overlap_expr);
   // std::wcout << to_latex_align(overlap_expr,20,2) << std::endl;
   return overlap_expr;
 }
@@ -203,7 +203,7 @@ ExprPtr remove_const(const ExprPtr ex_) {
       }
     }
   }
-  non_canon_simplify(new_expression);
+  simplify(new_expression);
   return new_expression;
 }
 
@@ -281,7 +281,7 @@ ExprPtr tens_to_op(ExprPtr ex_) {
       ex<FNOperator>(ex_->as<Tensor>().ket(), ex_->as<Tensor>().bra());
   return result;
 }
-// F tensors must contain contain indices in the bra with space > all. this
+// F tensors must contain indices in the bra with space > all. this
 // includes complete, completeunoccupied, and inactiveunoccupied. and if one of
 // the particle indices is connected to the obs virtual space, then the other
 // must be from the CABS set. i.e. if G^{a \beta}_{ij} -> G^{a a'}_{ij}
@@ -504,7 +504,7 @@ auto treat_fock(ExprPtr ex_) {
   }
   FWickTheorem wick{new_ex_};
   wick.reduce(new_ex_);
-  non_canon_simplify(new_ex_);
+  simplify(new_ex_);
 
   return new_ex_;
 }
@@ -684,7 +684,7 @@ ExprPtr densities_to_occ(const ExprPtr& ex_) {
 
   FWickTheorem wick{result};
   wick.reduce(result);
-  non_canon_simplify(result);
+  simplify(result);
   return result;
 }
 
@@ -722,7 +722,7 @@ ExprPtr biproduct_intermediate(ExprPtr T1, ExprPtr T2) {
                                  IDX_list{external_ket[1], external_ket[0]});
 
         auto V = GR_ijpq - F_ijrs * g_rspq - F_ijmc * g_mcpq - F_jicm * g_cmqp;
-        non_canon_simplify(V);
+        simplify(V);
         return V;
       } else {
         auto GR_pqij =
@@ -745,7 +745,7 @@ ExprPtr biproduct_intermediate(ExprPtr T1, ExprPtr T2) {
                        IDX_list{L"α'_4", L"m_6"});
 
         auto V = GR_pqij - F_rsij * g_pqrs - F_mcij * g_pqmc - F_cmji * g_qpcm;
-        non_canon_simplify(V);
+        simplify(V);
         return V;
       }
     } else {
@@ -817,7 +817,7 @@ ExprPtr find_F12_interms(ExprPtr ex_) {
     }
 
     result = result * ex_;
-    non_canon_simplify(result);
+    simplify(result);
     return result;
   }
   return ex_;
@@ -918,18 +918,18 @@ ExprPtr screen_F12_proj(ExprPtr exprs, int ansatz = 2) {
               product_clone * contains_tens(temp_factor, L"s").second;
           FWickTheorem wick_f{product_clone};
           wick_f.reduce(product_clone);
-          non_canon_simplify(product_clone);
+          simplify(product_clone);
           product_clone = screen_F12_proj(product_clone, ansatz);
           return_sum = product_clone + return_sum;
           new_product = ex<Constant>(0.);
           break;
         }
         new_product = new_product * temp_factor;
-        non_canon_simplify(new_product);
+        simplify(new_product);
       }
       return_sum = new_product + return_sum;
     }
-    non_canon_simplify(return_sum);
+    simplify(return_sum);
     return return_sum;
   } else if (exprs->is<Product>()) {
     auto new_product = ex<Constant>(exprs->as<Product>().scalar());
@@ -975,7 +975,7 @@ ExprPtr FNOPs_to_tens(ExprPtr ex_) {
       }
       new_sum = new_product + new_sum;
     }
-    simplify(new_sum);
+    non_canon_simplify(new_sum);
     return new_sum;
   } else if (ex_->is<Product>()) {
     for (auto&& factor : ex_->as<Product>().factors()) {
@@ -1007,7 +1007,7 @@ ExprPtr tens_to_FNOps(ExprPtr ex_) {
       }
       new_sum = new_product + new_sum;
     }
-    simplify(new_sum);
+    non_canon_simplify(new_sum);
     return new_sum;
   } else if (ex_->is<Product>()) {
     for (auto&& factor : ex_->as<Product>().factors()) {
@@ -1097,7 +1097,7 @@ ExprPtr partition_F12(ExprPtr exprs) {
       }
     }
   }
-  non_canon_simplify(exprs);
+  simplify(exprs);
   return (exprs);
 }
 
@@ -1135,7 +1135,6 @@ std::pair<ExprPtr, ExprPtr> hamiltonian_based_projector_1(ExprPtr exprs) {
   simplify(exprs);
   exprs = partition_F12(exprs);
   simplify(exprs);
-  ;
   exprs = screen_F12_proj(exprs, 1);
   simplify(exprs);
   auto exprs_intmed = ex<Constant>(0.0);
@@ -1143,7 +1142,7 @@ std::pair<ExprPtr, ExprPtr> hamiltonian_based_projector_1(ExprPtr exprs) {
     auto new_product = simplification::find_F12_interms(product);
     exprs_intmed = new_product + exprs_intmed;
   }
-  simplify(exprs_intmed);
+  non_canon_simplify(exprs_intmed);
   return fnop_to_overlap(exprs_intmed);
 }
 // G can only project to alpha and Beta space. still need to use fock based
@@ -1196,8 +1195,6 @@ std::pair<ExprPtr, ExprPtr> fock_based_projector_2(ExprPtr exprs) {
   if (final_screen->is<Constant>()) {
     return std::pair<ExprPtr, ExprPtr>{final_screen, final_screen};
   }
-  final_screen = FNOPs_to_tens(final_screen);
-  simplify(final_screen);
   final_screen = screen_densities(final_screen);
   simplify(final_screen);
   // find the special f12 intermediates that cannot efficiently be solved

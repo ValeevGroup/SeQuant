@@ -195,7 +195,6 @@ three_body_decomp(ExprPtr ex_, bool approx = true) {
   }
 
   auto temp_result = sum_of_terms.result;
-  temp_result->canonicalize();
   simplify(temp_result);
   // std::wcout << "result before substitiutions: " <<
   // to_latex_align(temp_result) << std::endl;
@@ -241,7 +240,6 @@ three_body_decomposition(ExprPtr _ex, int rank) {
     auto ex_pair = three_body_decomp(_ex);
     _ex = ex_pair.first;
     initial_pairing = ex_pair.second;
-    _ex->canonicalize();
     simplify(_ex);
     for (auto&& product : _ex->as<Sum>().summands()) {
       if (product->is<Product>()) {
@@ -263,7 +261,6 @@ three_body_decomposition(ExprPtr _ex, int rank) {
         }
       }
     }
-    _ex->canonicalize();
     simplify(_ex);
   } else if (rank == 2) {
     auto ex_pair = three_body_decomp(_ex, true);
@@ -296,7 +293,6 @@ three_body_decomposition(ExprPtr _ex, int rank) {
     auto ex_pair = three_body_decomp(_ex, true);
     _ex = ex_pair.first;
     initial_pairing = ex_pair.second;
-    _ex->canonicalize();
     simplify(_ex);
     for (auto&& product : _ex->as<Sum>().summands()) {
       if (product->is<Product>()) {
@@ -314,7 +310,6 @@ three_body_decomposition(ExprPtr _ex, int rank) {
         }
       }
     }
-    _ex->canonicalize();
     simplify(_ex);
   } else {
     throw "rank not supported!";
@@ -350,7 +345,6 @@ ExprPtr three_body_substitution(ExprPtr& input, int rank) {
             if (get_default_context().spbasis() == SPBasis::spinfree) {
               factor = antisymm::spin_sum(initial_pairing.second,
                                           initial_pairing.first, factor);
-              factor->canonicalize();
               simplify(factor);
             }
           }
@@ -371,7 +365,6 @@ ExprPtr three_body_substitution(ExprPtr& input, int rank) {
         if (get_default_context().spbasis() == SPBasis::spinfree) {
           factor = antisymm::spin_sum(initial_pairing.second,
                                       initial_pairing.first, factor);
-          factor->canonicalize();
           simplify(factor);
         }
       }
@@ -385,7 +378,6 @@ ExprPtr three_body_substitution(ExprPtr& input, int rank) {
       // std::wcout << to_latex_align(input,20) << std::endl;
       input = antisymm::spin_sum(initial_pairing.second, initial_pairing.first,
                                  input);
-      input->canonicalize();
       simplify(input);
     }
   } else {
