@@ -47,7 +47,7 @@ ExprPtr op_to_tens(ExprPtr ex_) {
 /// TODO this dictates that the resulting hamiltonian will be in a particular
 /// basis.
 ExprPtr overlap_with_obs(ExprPtr ex_) {
-  std::wcout << to_latex_align(ex_,20,4) << std::endl;
+  //std::wcout << to_latex_align(ex_,20,4) << std::endl;
   auto overlap_expr =
       ex<Constant>(0);  // enforce an overlap each E with elements from
   for (auto&& product :
@@ -180,7 +180,7 @@ ExprPtr overlap_with_obs(ExprPtr ex_) {
   FWickTheorem wick{overlap_expr};
   // std::wcout << to_latex_align(overlap_expr,20,2) << std::endl;
   wick.reduce(overlap_expr);
-  simplify(overlap_expr);
+  non_canon_simplify(overlap_expr);
   // std::wcout << to_latex_align(overlap_expr,20,2) << std::endl;
   return overlap_expr;
 }
@@ -203,7 +203,7 @@ ExprPtr remove_const(const ExprPtr ex_) {
       }
     }
   }
-  simplify(new_expression);
+  non_canon_simplify(new_expression);
   return new_expression;
 }
 
@@ -448,10 +448,13 @@ ExprPtr screen_densities(ExprPtr ex_) {
   if (ex_->is<Sum>()) {
     for (auto&& product : ex_->as<Sum>().summands()) {
       for (auto&& factor : product->as<Product>()) {
-        if (factor->as<Tensor>().label() == L"\\Gamma" ||
-            factor->as<Tensor>().label() == L"\\gamma") {
-          factor = screen_density(factor);
+        if(factor->is<Tensor>()) {
+          if (factor->as<Tensor>().label() == L"\\Gamma" ||
+              factor->as<Tensor>().label() == L"\\gamma") {
+            factor = screen_density(factor);
+          }
         }
+        else{std::wcout <<"problematic factor" << to_latex_align(factor);}
       }
     }
     return ex_;
@@ -697,10 +700,10 @@ ExprPtr biproduct_intermediate(ExprPtr T1, ExprPtr T2) {
   auto [nconnects, space, external_ket, external_bra, T1_ket] =
       ncon_spa_extket_extbra(T1->as<Tensor>(), T2->as<Tensor>());
   if (T1->as<Tensor>().label() == L"g" || T2->as<Tensor>().label() == L"g") {
+    // V^pq_ij
+    // intermediate decomposition handled by SeQuant so space labels can be
+    // properly handled
     if (nconnects == 2 && space == IndexSpace::complete_unoccupied) {
-      // V^pq_ij
-      // intermediate decomposition handled by SeQuant so space labels can be
-      // properly handled
       if (T1_ket) {
         auto GR_ijpq =
             ex<Tensor>(L"GR", IDX_list{external_bra[0], external_bra[1]},
@@ -817,7 +820,7 @@ ExprPtr find_F12_interms(ExprPtr ex_) {
     }
 
     result = result * ex_;
-    simplify(result);
+    non_canon_simplify(result);
     return result;
   }
   return ex_;
@@ -925,11 +928,11 @@ ExprPtr screen_F12_proj(ExprPtr exprs, int ansatz = 2) {
           break;
         }
         new_product = new_product * temp_factor;
-        simplify(new_product);
+        non_canon_simplify(new_product);
       }
       return_sum = new_product + return_sum;
     }
-    simplify(return_sum);
+    non_canon_simplify(return_sum);
     return return_sum;
   } else if (exprs->is<Product>()) {
     auto new_product = ex<Constant>(exprs->as<Product>().scalar());
@@ -966,10 +969,10 @@ ExprPtr FNOPs_to_tens(ExprPtr ex_) {
       for (auto factor : product->as<Product>().factors()) {
         auto new_factor = ex<Constant>(0);
         if (factor->is<FNOperator>()) {
-          new_factor = op_to_tens(factor);
+          new_factor = op_to_tens(factor) + new_factor;
           assert(!new_factor->is<FNOperator>());
         } else {
-          new_factor = factor;
+          new_factor = factor + new_factor;
         }
         new_product = new_product * new_factor;
       }
@@ -1112,13 +1115,13 @@ ExprPtr partition_F12(ExprPtr exprs) {
 //  operator prefactor.
 std::pair<ExprPtr, ExprPtr> hamiltonian_based_projector_2(ExprPtr exprs) {
   exprs = FNOPs_to_tens(exprs);
-  simplify(exprs);
-  exprs = partition_F12(exprs);
-  simplify(exprs);
-  exprs = screen_F12_proj(exprs, 2);
-  simplify(exprs);
+  non_canon_simplify(exprs);
   exprs = screen_densities(exprs);
-  simplify(exprs);
+  non_canon_simplify(exprs);
+  exprs = screen_F12_proj(exprs, 2);
+  //simplify(exprs);
+  //exprs = partition_F12(exprs);
+  non_canon_simplify(exprs);
   auto exprs_intmed = ex<Constant>(0.0);
   for (auto&& product : exprs->as<Sum>().summands()) {
     auto new_product = simplification::find_F12_interms(product);
@@ -1182,21 +1185,24 @@ std::pair<ExprPtr, ExprPtr> fock_based_projector_1(ExprPtr exprs) {
 //  allow analysis of multiple expressions who have the same normal order
 //  operator prefactor.
 std::pair<ExprPtr, ExprPtr> fock_based_projector_2(ExprPtr exprs) {
-  exprs = FNOPs_to_tens(exprs);
-  simplify(exprs);
   if (exprs->is<Constant>()) {
     return std::pair<ExprPtr, ExprPtr>{exprs, exprs};
   }
-  exprs = partition_F12(exprs);
+  non_canon_simplify(exprs);
+  exprs = FNOPs_to_tens(exprs);
+  non_canon_simplify(exprs);
+  exprs = screen_densities(exprs);
+  non_canon_simplify(exprs);
+  //std::wcout << "pre partition expression: " << to_latex_align(exprs,30,3) << std::endl;
+  //exprs = partition_F12(exprs);
   auto final_screen = exprs;
-  simplify(final_screen);
+  non_canon_simplify(final_screen);
   // in some cases, there will now be no contributing terms left so return zero
   // to one and two body.
   if (final_screen->is<Constant>()) {
     return std::pair<ExprPtr, ExprPtr>{final_screen, final_screen};
   }
-  final_screen = screen_densities(final_screen);
-  simplify(final_screen);
+  non_canon_simplify(final_screen);
   // find the special f12 intermediates that cannot efficiently be solved
   // directly. This seems to work already for the general case!
   auto last_screen = ex<Constant>(0.0);
@@ -1204,7 +1210,7 @@ std::pair<ExprPtr, ExprPtr> fock_based_projector_2(ExprPtr exprs) {
     auto new_product = simplification::find_F12_interms(product);
     last_screen = last_screen + new_product;
   }
-  simplify(last_screen);
+  non_canon_simplify(last_screen);
   return fnop_to_overlap(last_screen);
 }
 }  // namespace simplification

@@ -345,7 +345,7 @@ ExprPtr three_body_substitution(ExprPtr& input, int rank) {
             if (get_default_context().spbasis() == SPBasis::spinfree) {
               factor = antisymm::spin_sum(initial_pairing.second,
                                           initial_pairing.first, factor);
-              simplify(factor);
+              non_canon_simplify(factor);
             }
           }
         }
@@ -365,7 +365,7 @@ ExprPtr three_body_substitution(ExprPtr& input, int rank) {
         if (get_default_context().spbasis() == SPBasis::spinfree) {
           factor = antisymm::spin_sum(initial_pairing.second,
                                       initial_pairing.first, factor);
-          simplify(factor);
+          non_canon_simplify(factor);
         }
       }
     }
@@ -378,7 +378,7 @@ ExprPtr three_body_substitution(ExprPtr& input, int rank) {
       // std::wcout << to_latex_align(input,20) << std::endl;
       input = antisymm::spin_sum(initial_pairing.second, initial_pairing.first,
                                  input);
-      simplify(input);
+      non_canon_simplify(input);
     }
   } else {
     throw "cannot handle this type";
