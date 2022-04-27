@@ -17,6 +17,10 @@ class regex_patterns {
 
   static std::wstring_view fraction();
 
+  static std::wstring pure_index();
+
+  static std::wstring index_capture();
+
  private:
   static std::wstring capture(std::wstring_view pat);
 
@@ -29,7 +33,13 @@ class regex_patterns {
 
   static std::wstring look_ahead(std::wstring_view pat);
 
-  static std::wstring_view index();
+  static std::wstring pure_indices();
+
+  static std::wstring proto_indices();
+
+  static std::wstring proto_indices_capture();
+
+  static std::wstring index();
 
   static std::wstring_view indices();
 

@@ -33,9 +33,29 @@ std::wstring regex_patterns::look_ahead(std::wstring_view pat) {
   return L"(?="s + pat.data() + L")";
 }
 
-std::wstring_view regex_patterns::index() {
-  static const std::wstring idx = L"[ia][⁺⁻]?_?\\d+";
-  return idx;
+std::wstring regex_patterns::pure_index() {
+    return L"[ia][⁺⁻]?_?\\d+";
+}
+
+std::wstring regex_patterns::pure_indices() {
+  return pure_index() + zero_or_more_non_greedy(L"," + pure_index());
+}
+
+std::wstring regex_patterns::proto_indices() {
+  return L"<" + pure_indices() + L">";
+}
+
+std::wstring regex_patterns::proto_indices_capture() {
+  return L"<" + capture(pure_indices()) + L">";
+}
+
+std::wstring regex_patterns::index() {
+  // index with optional proto-indices
+  return pure_index() + capture_not(proto_indices()) + L"?";
+}
+
+std::wstring regex_patterns::index_capture() {
+  return capture(pure_index()) + capture_not(proto_indices_capture()) + L"?";
 }
 
 std::wstring_view regex_patterns::indices() {

@@ -6,6 +6,10 @@
 #include <boost/regex.hpp>
 
 namespace sequant::parse {
+auto throw_invalid_expr = []() {
+  throw std::runtime_error("Invalid expression!");
+};
+
 std::wstring prune_space(std::wstring const& raw) {
   return boost::regex_replace(raw, boost::wregex(L"[[:space:]]+"), L"");
 }
@@ -24,24 +28,55 @@ double to_fraction(boost::wsmatch const& match) {
          (denom.empty() ? 1.0 : to_decimal(denom));
 }
 
-container::vector<Index> to_indices(std::wstring_view raw_csv_indices) {
-  using ranges::views::transform;
-  using ranges::views::split;
-    std::wostringstream oss{};
-    wchar_t last_char = L' ';
-    for (auto x: raw_csv_indices){
-      if ((std::iswalpha(last_char) && std::iswdigit(x))
-          || ((last_char == L'⁻' || last_char == L'⁺') && std::iswdigit(x)))
-        oss << L'_';
-      oss << x;
-      last_char = x;
-    }
-    auto with_uscores = oss.str();
+// add underscore characters to a terse index string
+// so the normalized string becomes what sequant::Index constructor expects
+std::wstring normalize_idx_label(boost::wssub_match const& mo) {
+  std::wostringstream oss{};
+  wchar_t last_char = L' ';
+  for (auto x: mo) {
+    if ((std::iswalpha(last_char) && std::iswdigit(x)) ||
+        ((last_char == L'⁻' || last_char == L'⁺') && std::iswdigit(x)))
+      oss << L'_';
+    oss << x;
+    last_char = x;
+  }
 
-    return split(with_uscores,L',')
-           | transform([](auto&& idx_rng){
-             return Index{ranges::to<std::wstring>(idx_rng)}; })
-           | ranges::to<container::vector<Index>>;
+  return oss.str();
+
+}
+
+Index parse_pure_index(boost::wssub_match const& mo) {
+  return Index{normalize_idx_label(mo)};
+}
+
+container::vector<Index> parse_pure_indices(boost::wssub_match const& mo) {
+  auto result = container::vector<Index>{};
+  auto rgx = boost::wregex{regex_patterns::pure_index()};
+  auto end = boost::wsregex_iterator{};
+  for (auto iter = boost::wsregex_iterator{mo.begin(), mo.end(), rgx};
+       iter != end; ++iter) {
+    result.emplace_back(parse_pure_index((*iter)[0]));
+  }
+  return result;
+}
+
+container::vector<Index> parse_indices(boost::wssub_match const& mo) {
+  auto result = container::vector<Index>{};
+  auto rgx = boost::wregex{regex_patterns::index_capture()};
+  auto end = boost::wsregex_iterator{};
+  for (auto iter = boost::wsregex_iterator{mo.begin(), mo.end(), rgx};
+       iter != end; ++iter) {
+    if ((*iter)[2].matched) {
+      auto proto_indices = parse_pure_indices((*iter)[2]);
+      auto ispace = proto_indices.begin()->space();
+      if (! ranges::all_of(proto_indices, [ispace](auto const& idx){return idx.space() == ispace;}))
+        throw_invalid_expr();
+      result.emplace_back(Index{normalize_idx_label((*iter)[1]), ispace, std::move(proto_indices)});
+    } else {
+      result.emplace_back(parse_pure_index((*iter)[1]));
+    }
+  }
+  return result;
 }
 
 std::unique_ptr<Token> to_operand_tensor(boost::wsmatch const& match, Symmetry s){
@@ -52,8 +87,8 @@ std::unique_ptr<Token> to_operand_tensor(boost::wsmatch const& match, Symmetry s
     else if (sm_char == L"N") s = Symmetry::nonsymm;
   }
   return token<OperandTensor>(match[1].str(),
-                              to_indices(match[2].str()),
-                              to_indices(match[3].str()), s);
+                              parse_indices(match[2]),
+                              parse_indices(match[3]), s);
 }
 }
 
@@ -62,10 +97,6 @@ namespace sequant {
 ExprPtr parse_expr(std::wstring_view raw_expr, Symmetry symmetry){
   using namespace parse;
   using pattern = regex_patterns;
-
-  auto throw_invalid_expr = []() {
-    throw std::runtime_error("Invalid expression!");
-  };
 
   static auto const tensor_exp = boost::wregex{pattern::tensor_expanded().data()};
   static auto const tensor_terse = boost::wregex{pattern::tensor_terse().data()};
