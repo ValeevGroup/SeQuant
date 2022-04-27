@@ -88,13 +88,15 @@ TEST_CASE("Index", "[elements]") {
 
     // 'g' is not a standard base key, but we can associate it with an existing
     // space to be able to extend the index vocabulary
-    REQUIRE_THROWS(Index{L"g"});
+#ifndef NDEBUG
+    REQUIRE_THROWS(Index{L"h"});
+#endif
     REQUIRE_NOTHROW(IndexSpace::register_key(
-        L"g",
+        L"h",
         IndexSpace::all));  // can assign additional key to a space already
                             // registered, this does not redefine base key
     // and now ...
-    REQUIRE_NOTHROW(Index{L"g"});
+    REQUIRE_NOTHROW(Index{L"h"});
   }
 
   SECTION("equality") {
