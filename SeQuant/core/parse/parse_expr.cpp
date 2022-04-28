@@ -197,6 +197,8 @@ std::wstring deparse_expr(Sum const& sum, bool annot_sym) {
   return str;
 }
 
+}  // namespace deparse
+
 ExprPtr parse_expr(std::wstring_view raw_expr, Symmetry symmetry) {
   using namespace parse;
   using pattern = regex_patterns;
@@ -352,7 +354,5 @@ std::wstring deparse_expr(ExprPtr expr, bool annot_sym) {
   else
     throw std::runtime_error("Unsupported expr type for deparse!");
 }
-
-}  // namespace deparse
 
 }  // namespace sequant
