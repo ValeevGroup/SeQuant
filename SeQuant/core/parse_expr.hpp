@@ -14,6 +14,7 @@
 
 namespace sequant {
 
+// clang-format off
 ///
 /// \param raw A tensor algebra expression. A valid expression is
 ///            a product, a sum or a mix of those including parentheses.
@@ -39,8 +40,18 @@ namespace sequant {
 ///                       'g{i1, a1; i2, a2}:S' tensor with 'sequant::Symmetry::symm' annotation
 ///                       'g{i1, a1; i2, a2}:N' tensor with 'sequant::Symmetry::nonsymm' annotation
 /// \return SeQuant expression.
+// clang-format on
 ExprPtr parse_expr(std::wstring_view raw, Symmetry tensor_sym);
 
-}  // namespace sequant::utils
+///
+/// Get a parsable string from an expression.
+///
+/// \param expr Expression to stringify that can re-parsed to itself.
+/// \param annot_sym Whether to add sequant::Symmetry annotation
+///                  to each Tensor string.
+/// \return wstring of the expression.
+std::wstring deparse_expr(ExprPtr expr, bool annot_sym);
+
+}  // namespace sequant
 
 #endif  // SEQUANT_PARSE_EXPR_HPP
