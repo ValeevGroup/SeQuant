@@ -93,10 +93,15 @@ std::wstring_view regex_patterns::ket_expanded_capture() {
   return ket;
 }
 
-std::wstring_view regex_patterns::fraction() {
-  static const std::wstring frac =
-      LR"=((\d+(?:\.\d*)?|\.\d+)(?:\/(\d+(?:\.\d*)?|\.\d+))?)="s;
-  return frac;
+std::wstring_view regex_patterns::abs_real_frac() {
+  static std::wstring frac =
+      std::wstring{} + abs_real_num().data()
+      + capture_not(std::wstring{}
+                    + LR"(\/)"
+                    + capture(abs_real_num()).data())
+      + L"?";
+
+  return frac; // guranteed numerator and optional denominator
 }
 
 std::wstring_view regex_patterns::tensor_expanded() {

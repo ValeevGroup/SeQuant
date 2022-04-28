@@ -15,7 +15,13 @@ class regex_patterns {
 
   static std::wstring_view tensor_terse();
 
-  static std::wstring_view fraction();
+  constexpr static std::wstring_view abs_real_num() {
+    return LR"=(((?:\d+(?:\.\d*)?)|(?:\.\d+)))=";
+  }
+
+  /// Capture group 1: numerator
+  /// If captured, group 2: denominator
+  static std::wstring_view abs_real_frac();
 
   static std::wstring pure_index();
 
