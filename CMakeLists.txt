@@ -107,10 +107,13 @@ find_package(Threads REQUIRED)
 # PSTL (used by g++-9 and clang++-8 in c++17 mode) needs TBB
 if ((${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU" AND
         ${CMAKE_CXX_COMPILER_VERSION} VERSION_GREATER 9) OR
-(${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang" AND
+    (${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang" AND
         ${CMAKE_CXX_COMPILER_VERSION} VERSION_GREATER 8))
     if (ENABLE_TBB)  # but user must enable the search for TBB since this is an additional source of build entropy
         find_package(TBB REQUIRED)
+        # TBB::tbb by default is not GLOBAL, so to allow users of LINALG_LIBRARIES to safely use it we need to make it global
+        # more discussion here: https://gitlab.kitware.com/cmake/cmake/-/issues/17256
+        set_target_properties(TBB::tbb PROPERTIES IMPORTED_GLOBAL TRUE)
     endif (ENABLE_TBB)
 endif ()
 # check of <execution> header is usable
