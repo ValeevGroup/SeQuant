@@ -28,11 +28,20 @@ TEST_CASE("IndexSpace", "[elements]") {
     REQUIRE(IndexSpace::instance_exists(L"κ_48"));
   }
 
+  SECTION("register_key") {
+    REQUIRE_NOTHROW(IndexSpace::register_key(
+        L"g",
+        IndexSpace::all));  // can assign additional key to a space already
+                            // registered, this does not redefine base key
+    REQUIRE(IndexSpace::instance(L"g") == IndexSpace::instance(L"p"));
+  }
+
   SECTION("equality") {
     REQUIRE(IndexSpace::instance(L"i") == IndexSpace::instance(L"i"));
     REQUIRE(IndexSpace::instance(L"i") != IndexSpace::instance(L"p"));
 
-    REQUIRE(IndexSpace::null_instance() == IndexSpace::instance(IndexSpace::null_key()));
+    REQUIRE(IndexSpace::null_instance() ==
+            IndexSpace::instance(IndexSpace::null_key()));
 
     REQUIRE(IndexSpace::instance(L"i").type() == IndexSpace::active_occupied);
     REQUIRE(IndexSpace::instance(L"i") == IndexSpace::active_occupied);
@@ -59,10 +68,14 @@ TEST_CASE("IndexSpace", "[elements]") {
     {
       auto i = IndexSpace::instance(L"i");
       auto a = IndexSpace::instance(L"a");
-      auto iA = IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::alpha);
-      auto iB = IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::beta);
-      auto aA = IndexSpace::instance(IndexSpace::active_unoccupied, IndexSpace::alpha);
-      auto aB = IndexSpace::instance(IndexSpace::active_unoccupied, IndexSpace::beta);
+      auto iA =
+          IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::alpha);
+      auto iB =
+          IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::beta);
+      auto aA = IndexSpace::instance(IndexSpace::active_unoccupied,
+                                     IndexSpace::alpha);
+      auto aB =
+          IndexSpace::instance(IndexSpace::active_unoccupied, IndexSpace::beta);
 
       REQUIRE(iA < aA);
       REQUIRE(iB < aB);
@@ -73,16 +86,22 @@ TEST_CASE("IndexSpace", "[elements]") {
       REQUIRE(!(iA < iA));
       REQUIRE(i < iA);
       REQUIRE(i < iB);
-
     }
   }
 
   SECTION("set operations") {
-    REQUIRE(IndexSpace::instance(L"i") == intersection(IndexSpace::instance(L"i"), IndexSpace::instance(L"p")));
-    REQUIRE(IndexSpace::null_instance() == intersection(IndexSpace::instance(L"a"), IndexSpace::instance(L"i")));
-    REQUIRE(IndexSpace::null_instance() == intersection(IndexSpace::instance(L"a"), IndexSpace::instance(L"α'")));
+    REQUIRE(
+        IndexSpace::instance(L"i") ==
+        intersection(IndexSpace::instance(L"i"), IndexSpace::instance(L"p")));
+    REQUIRE(
+        IndexSpace::null_instance() ==
+        intersection(IndexSpace::instance(L"a"), IndexSpace::instance(L"i")));
+    REQUIRE(
+        IndexSpace::null_instance() ==
+        intersection(IndexSpace::instance(L"a"), IndexSpace::instance(L"α'")));
 
-    REQUIRE(IndexSpace::instance(L"κ") == unIon(IndexSpace::instance(L"m"), IndexSpace::instance(L"α")));
+    REQUIRE(IndexSpace::instance(L"κ") ==
+            unIon(IndexSpace::instance(L"m"), IndexSpace::instance(L"α")));
 
     REQUIRE(includes(IndexSpace::instance(L"κ"), IndexSpace::instance(L"m")));
     REQUIRE(!includes(IndexSpace::instance(L"m"), IndexSpace::instance(L"κ")));

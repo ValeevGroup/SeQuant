@@ -5,8 +5,8 @@
 #ifndef SEQUANT_SPACE_H
 #define SEQUANT_SPACE_H
 
-#include <cassert>
 #include <bitset>
+#include <cassert>
 
 #include "attr.hpp"
 #include "container.hpp"
@@ -18,21 +18,23 @@ namespace sequant {
 /// IndexSpace is a set of attributes associated 1-to-1 with keys
 class IndexSpace {
  public:
-
   /// @brief TypeAttr is the type of index space.
   ///
-  /// The type is described as a set of (orthogonal) attributes; for simplicity it is encoded as a bitset for ease of
-  /// computing.
+  /// The type is described as a set of (orthogonal) attributes; for simplicity
+  /// it is encoded as a bitset for ease of computing.
   struct TypeAttr : std::bitset<32> {
-    constexpr explicit TypeAttr(int32_t value) noexcept : std::bitset<32>(static_cast<unsigned long long>(value)) {}
+    constexpr explicit TypeAttr(int32_t value) noexcept
+        : std::bitset<32>(static_cast<unsigned long long>(value)) {}
     operator int64_t() const { return static_cast<int64_t>(this->to_ulong()); }
     int32_t to_int32() const { return static_cast<int32_t>(this->to_ulong()); }
-    TypeAttr intersection(TypeAttr other) const { return TypeAttr(this->to_int32() & other.to_int32()); }
-    TypeAttr unIon(TypeAttr other) const { return TypeAttr(this->to_int32() | other.to_int32()); }
-    /// @return true if \c other is included in this object
-    bool includes(TypeAttr other) const {
-      return intersection(other) == other;
+    TypeAttr intersection(TypeAttr other) const {
+      return TypeAttr(this->to_int32() & other.to_int32());
     }
+    TypeAttr unIon(TypeAttr other) const {
+      return TypeAttr(this->to_int32() | other.to_int32());
+    }
+    /// @return true if \c other is included in this object
+    bool includes(TypeAttr other) const { return intersection(other) == other; }
     /// @return true if in canonical order this object preceeds \c other
     bool operator<(TypeAttr other) const {
       return this->to_int32() < other.to_int32();
@@ -43,8 +45,11 @@ class IndexSpace {
   };
   /// denotes other quantum numbers (particle type, spin, etc.)
   struct QuantumNumbersAttr : std::bitset<32> {
-    constexpr explicit QuantumNumbersAttr(int32_t value) noexcept : std::bitset<32>(static_cast<unsigned long long>(value)) {}
-    explicit operator int64_t() const { return static_cast<int64_t>(this->to_ulong()); }
+    constexpr explicit QuantumNumbersAttr(int32_t value) noexcept
+        : std::bitset<32>(static_cast<unsigned long long>(value)) {}
+    explicit operator int64_t() const {
+      return static_cast<int64_t>(this->to_ulong());
+    }
     int32_t to_int32() const { return static_cast<int32_t>(this->to_ulong()); }
     QuantumNumbersAttr intersection(QuantumNumbersAttr other) const {
       return QuantumNumbersAttr(this->to_int32() & other.to_int32());
@@ -62,44 +67,67 @@ class IndexSpace {
     }
 
     /// @return an invalid TypeAttr
-    static constexpr QuantumNumbersAttr invalid() noexcept { return QuantumNumbersAttr(0xffff); }
+    static constexpr QuantumNumbersAttr invalid() noexcept {
+      return QuantumNumbersAttr(0xffff);
+    }
   };
 
-  /// @brief Attr describes all attributes of a space (occupancy + quantum numbers)
+  /// @brief Attr describes all attributes of a space (occupancy + quantum
+  /// numbers)
   struct Attr : TypeAttr, QuantumNumbersAttr {
-    Attr(TypeAttr type, QuantumNumbersAttr qns) noexcept : TypeAttr(type), QuantumNumbersAttr(qns) {};
-    Attr(int32_t type, int32_t qns) noexcept : TypeAttr(type), QuantumNumbersAttr(qns) {};
-//    explicit Attr(int64_t value) : TypeAttr((value & 0xffffffff00000000) >> 32), QuantumNumbersAttr(value & 0x00000000ffffffff) {}
+    Attr(TypeAttr type, QuantumNumbersAttr qns) noexcept
+        : TypeAttr(type), QuantumNumbersAttr(qns){};
+    Attr(int32_t type, int32_t qns) noexcept
+        : TypeAttr(type), QuantumNumbersAttr(qns){};
+    //    explicit Attr(int64_t value) : TypeAttr((value & 0xffffffff00000000)
+    //    >> 32), QuantumNumbersAttr(value & 0x00000000ffffffff) {}
     Attr(const Attr &) = default;
     Attr(Attr &&) = default;
     Attr &operator=(const Attr &) = default;
     Attr &operator=(Attr &&) = default;
 
-    const TypeAttr &type() const { return static_cast<const TypeAttr &>(*this); }
+    const TypeAttr &type() const {
+      return static_cast<const TypeAttr &>(*this);
+    }
     TypeAttr &type() { return static_cast<TypeAttr &>(*this); }
-    const QuantumNumbersAttr &qns() const { return static_cast<const QuantumNumbersAttr &>(*this); }
-    QuantumNumbersAttr &qns() { return static_cast<QuantumNumbersAttr &>(*this); }
+    const QuantumNumbersAttr &qns() const {
+      return static_cast<const QuantumNumbersAttr &>(*this);
+    }
+    QuantumNumbersAttr &qns() {
+      return static_cast<QuantumNumbersAttr &>(*this);
+    }
 
     explicit operator int64_t() const {
-      return (static_cast<int64_t>(this->type()) << 32) + static_cast<int64_t>(this->qns());
+      return (static_cast<int64_t>(this->type()) << 32) +
+             static_cast<int64_t>(this->qns());
     }
 
     Attr intersection(Attr other) const {
       return Attr(this->type().intersection(other.type()),
                   this->qns().intersection(other.qns()));
     }
-    Attr unIon(Attr other) const { return Attr(this->type().unIon(other.type()), this->qns().unIon(other.qns())); }
+    Attr unIon(Attr other) const {
+      return Attr(this->type().unIon(other.type()),
+                  this->qns().unIon(other.qns()));
+    }
 
     /// @return true if \c other is included in this object
     bool includes(Attr other) const {
-      return this->type().includes(other.type()) && this->qns().includes(other.qns());
+      return this->type().includes(other.type()) &&
+             this->qns().includes(other.qns());
     }
 
-    bool operator==(Attr other) const { return this->type() == other.type() && this->qns() == other.qns(); }
+    bool operator==(Attr other) const {
+      return this->type() == other.type() && this->qns() == other.qns();
+    }
     bool operator!=(Attr other) const { return !(*this == other); }
 
-    static Attr null() noexcept { return Attr{TypeAttr{0}, QuantumNumbersAttr{0}}; }
-    static Attr invalid() noexcept { return Attr{TypeAttr::invalid(), QuantumNumbersAttr::invalid()}; }
+    static Attr null() noexcept {
+      return Attr{TypeAttr{0}, QuantumNumbersAttr{0}};
+    }
+    static Attr invalid() noexcept {
+      return Attr{TypeAttr::invalid(), QuantumNumbersAttr::invalid()};
+    }
     bool is_valid() const noexcept { return *this != Attr::invalid(); }
 
     /// Attr objects are ordered by quantum numbers, then by type
@@ -114,7 +142,8 @@ class IndexSpace {
   using Type = TypeAttr;
   using QuantumNumbers = QuantumNumbersAttr;
 
-  /// standard space tags are predefined that helps implement set theory of standard spaces as binary ops on bitsets
+  /// standard space tags are predefined that helps implement set theory of
+  /// standard spaces as binary ops on bitsets
   static Type frozen_occupied;
   static Type inactive_occupied;
   static Type active_occupied;
@@ -127,19 +156,24 @@ class IndexSpace {
   static Type other_unoccupied;
   static Type complete_unoccupied;
   static Type complete;
-  template <int32_t typeint> static const constexpr bool is_standard_type() {
+  template <int32_t typeint>
+  static const constexpr bool is_standard_type() {
     const Type type{typeint};
-    return (type == frozen_occupied || type == inactive_occupied || type == active_occupied ||
-        type == occupied || type == active_unoccupied || type == inactive_unoccupied ||
-        type == unoccupied || type == all_active || type == all || type == other_unoccupied ||
-        type == complete_unoccupied || type == complete);
+    return (type == frozen_occupied || type == inactive_occupied ||
+            type == active_occupied || type == occupied ||
+            type == active_unoccupied || type == inactive_unoccupied ||
+            type == unoccupied || type == all_active || type == all ||
+            type == other_unoccupied || type == complete_unoccupied ||
+            type == complete);
   }
 
-  /// standard space tags are predefined that helps implement set theory of standard spaces as binary ops on bitsets
+  /// standard space tags are predefined that helps implement set theory of
+  /// standard spaces as binary ops on bitsets
   static QuantumNumbers nullqns;  //!< no quantum numbers
-  static QuantumNumbers alpha;  //!< spin-up
-  static QuantumNumbers beta;  //!< spin-down
-  template <int32_t qnsint> static const constexpr bool is_standard_qns() {
+  static QuantumNumbers alpha;    //!< spin-up
+  static QuantumNumbers beta;     //!< spin-down
+  template <int32_t qnsint>
+  static const constexpr bool is_standard_qns() {
     const QuantumNumbers qns{qnsint};
     return (qns == nullqns || qns == alpha || qns == beta);
   }
@@ -151,24 +185,31 @@ class IndexSpace {
     bad_attr() : std::invalid_argument("bad attribute") {}
   };
 
+  struct KeyCompare {
+    using is_transparent = void;
+    bool operator()(const std::wstring &a, const std::wstring &b) const {
+      return a < b;
+    }
+    bool operator()(const std::wstring &a, const std::wstring_view &b) const {
+      return a < b;
+    }
+    bool operator()(const std::wstring_view &a, const std::wstring &b) const {
+      return a < b;
+    }
+  };
+
   /// IndexSpace needs null IndexSpace
-  static const IndexSpace &null_instance() {
-    return null_instance_;
-  }
+  static const IndexSpace &null_instance() { return null_instance_; }
   /// the null IndexSpace is keyed by this key
-  static std::wstring null_key() {
-    return L"";
-  }
+  static std::wstring null_key() { return L""; }
 
   /// @brief returns the instance of an IndexSpace object
   /// @param attr the space attribute
   /// @throw bad_key if key not found
   static const IndexSpace &instance(Attr attr) {
     assert(attr.is_valid());
-    if (attr == Attr::null())
-      return null_instance();
-    if (!instance_exists(attr))
-      throw bad_attr();
+    if (attr == Attr::null()) return null_instance();
+    if (!instance_exists(attr)) throw bad_attr();
     return instances_.find(attr)->second;
   }
 
@@ -179,38 +220,40 @@ class IndexSpace {
   static const IndexSpace &instance(Type type, QuantumNumbers qns = nullqns) {
     const auto attr = Attr(type, qns);
     assert(attr.is_valid());
-    if (attr == Attr::null())
-      return null_instance();
-    if (!instance_exists(attr))
-      throw bad_attr();
+    if (attr == Attr::null()) return null_instance();
+    if (!instance_exists(attr)) throw bad_attr();
     return instances_.find(attr)->second;
   }
 
-  /// @brief returns the instance of an IndexSpace object
-  /// @param key a string key describing a particular space that has been registered before
+  /// @brief returns the instance of an IndexSpace object associated
+  ///        with the given key
+  /// @param key the key associated with this space; this can be either
+  ///            the base key used to invoke `IndexSpace::register_instance()`
+  ///            or a key used to invoke `IndexSpace::register_key()`
   /// @throw bad_key if key not found
   static const IndexSpace &instance(const std::wstring_view key) {
-    if (key == null_key())
-      return null_instance();
+    if (key == null_key()) return null_instance();
     const auto attr = to_attr(reduce_key(key));
     assert(attr.is_valid());
-    if (!instance_exists(attr))
-      throw bad_key();
+    if (!instance_exists(attr)) throw bad_key();
     return instances_.find(attr)->second;
   }
 
-  /// @brief returns the instance of an IndexSpace object
-  /// @param key string key describing a particular space
-  static void register_instance(const std::wstring_view key,
-                                Type type,
+  /// @brief constructs a registered instance of an IndexSpace object,
+  ///        associates it with a base key
+  /// @param base_key string key that will be used as the "base key" for this
+  ///        particular space, i.e. the default used for example for
+  ///        constructing temporary indices for this space
+  static void register_instance(const std::wstring_view base_key, Type type,
                                 QuantumNumbers qn = nullqns,
                                 bool throw_if_already_registered = true) {
     const auto attr = Attr(type, qn);
     assert(attr.is_valid());
-    if (instance_exists(attr) && throw_if_already_registered)
-      throw bad_key();
-    const auto irreducible_key = reduce_key(key);
-    keys_[attr] = to_wstring(irreducible_key);
+    if (instance_exists(attr) && throw_if_already_registered) throw bad_key();
+    const auto irreducible_basekey = reduce_key(base_key);
+    const auto irreducible_basekey_str = to_wstring(irreducible_basekey);
+    attr2basekey_[attr] = irreducible_basekey_str;
+    key2attr_.emplace(irreducible_basekey_str, attr);
     instances_.emplace(std::make_pair(attr, IndexSpace(attr)));
   }
 
@@ -218,34 +261,47 @@ class IndexSpace {
     return instance_exists(to_attr(reduce_key(key)));
   }
 
+  /// @brief associate a given key with the IndexSpace
+  /// @note every IndexSpace constructed via
+  ///       `register_instance(base_key,...)` is associated
+  ///       with `base_key`; this allows to associated additional
+  ///       keys to map to the same IndexSpace
+  /// @param key string key that will map to this particular space
+  static void register_key(const std::wstring_view key, Type type,
+                           QuantumNumbers qn = nullqns,
+                           bool throw_if_already_registered = true) {
+    const auto attr = Attr(type, qn);
+    assert(attr.is_valid());
+    const auto irreducible_key = reduce_key(key);
+    const auto irreducible_key_str = to_wstring(irreducible_key);
+    if (key2attr_.find(irreducible_key_str) != key2attr_.end() &&
+        throw_if_already_registered)
+      throw bad_key();
+    key2attr_.emplace(irreducible_key_str, attr);
+  }
+
   Attr attr() const noexcept {
     assert(attr_.is_valid());
     return attr_;
   }
-  Type type() const noexcept {
-    return attr().type();
-  }
-  QuantumNumbers qns() const noexcept {
-    return attr().qns();
-  }
+  Type type() const noexcept { return attr().type(); }
+  QuantumNumbers qns() const noexcept { return attr().qns(); }
 
   /// @brief returns the base key for IndexSpace objects
   /// @param space an IndexSpace object
-  /// @throw bad_key if this space has not beed registered
-  static std::wstring base_key(const IndexSpace& space) {
+  /// @throw bad_key if this space has not been registered
+  static std::wstring base_key(const IndexSpace &space) {
     return base_key(space.attr());
   }
 
   /// @brief returns the base key for IndexSpace objects of the given attribute
   /// @param attr the space attribute
-  /// @throw bad_key if this object has not beed registered
+  /// @throw bad_key if this object has not been registered
   static std::wstring base_key(Attr attr) {
     assert(attr.is_valid());
-    if (attr == Attr::null())
-      return L"";
-    if (!instance_exists(attr))
-      throw bad_attr();
-    return keys_.find(attr)->second;
+    if (attr == Attr::null()) return L"";
+    if (!instance_exists(attr)) throw bad_attr();
+    return attr2basekey_.find(attr)->second;
   }
 
   /// Default ctor creates an invalid space
@@ -253,23 +309,27 @@ class IndexSpace {
 
   IndexSpace(const IndexSpace &other) {
     if (!other.attr().is_valid())
-      throw std::invalid_argument("IndexSpace copy ctor received invalid argument");
+      throw std::invalid_argument(
+          "IndexSpace copy ctor received invalid argument");
     attr_ = other.attr_;
   }
   IndexSpace(IndexSpace &&other) {
     if (!other.attr().is_valid())
-      throw std::invalid_argument("IndexSpace move ctor received invalid argument");
+      throw std::invalid_argument(
+          "IndexSpace move ctor received invalid argument");
     attr_ = other.attr_;
   }
   IndexSpace &operator=(const IndexSpace &other) {
     if (!other.attr().is_valid())
-      throw std::invalid_argument("IndexSpace copy assignment operator received invalid argument");
+      throw std::invalid_argument(
+          "IndexSpace copy assignment operator received invalid argument");
     attr_ = other.attr_;
     return *this;
   }
   IndexSpace &operator=(IndexSpace &&other) {
     if (!other.attr().is_valid())
-      throw std::invalid_argument("IndexSpace move assignment operator received invalid argument");
+      throw std::invalid_argument(
+          "IndexSpace move assignment operator received invalid argument");
     attr_ = other.attr_;
     return *this;
   }
@@ -280,14 +340,14 @@ class IndexSpace {
   }
 
  private:
-
   Attr attr_ = Attr::invalid();
   /// @brief constructs an instance of an IndexSpace object
   explicit IndexSpace(Attr attr) noexcept : attr_(attr) {
     assert(attr.is_valid());
   }
 
-  static container::map<Attr, std::wstring> keys_;
+  static container::map<Attr, std::wstring> attr2basekey_;
+  static container::map<std::wstring, Attr, KeyCompare> key2attr_;
   static container::map<Attr, IndexSpace> instances_;
   static IndexSpace null_instance_;
 
@@ -296,11 +356,14 @@ class IndexSpace {
     return key.substr(0, underscore_position);
   }
 
+  /// @param key the key associated with a registered IndexSpace; this can be
+  /// either
+  ///            the base key used to invoke `IndexSpace::register_instance()`
+  ///            or a key used to invoke `IndexSpace::register_key()`
+  /// @return the attribute of the IndexSpace object corresponding to @p key
   static Attr to_attr(std::wstring_view key) {
-    for (const auto &attr_key: keys_) {
-      if (attr_key.second == key)
-        return attr_key.first;
-    }
+    const auto found_it = key2attr_.find(key);
+    if (found_it != key2attr_.end()) return found_it->second;
     throw bad_key();
   }
 
@@ -311,7 +374,6 @@ class IndexSpace {
   static bool instance_exists(Attr attr) {
     return instances_.find(attr) != instances_.end();
   }
-
 };
 
 inline bool operator==(const IndexSpace &space, IndexSpace::Type t) {
@@ -326,16 +388,20 @@ inline bool operator!=(const IndexSpace &space, IndexSpace::Type t) {
 inline bool operator!=(IndexSpace::Type t, const IndexSpace &space) {
   return !(t == space);
 }
-inline bool operator==(const IndexSpace &space, IndexSpace::QuantumNumbers qns) {
+inline bool operator==(const IndexSpace &space,
+                       IndexSpace::QuantumNumbers qns) {
   return space.qns() == qns;
 }
-inline bool operator==(IndexSpace::QuantumNumbers qns, const IndexSpace &space) {
+inline bool operator==(IndexSpace::QuantumNumbers qns,
+                       const IndexSpace &space) {
   return space.qns() == qns;
 }
-inline bool operator!=(const IndexSpace &space, IndexSpace::QuantumNumbers qns) {
+inline bool operator!=(const IndexSpace &space,
+                       IndexSpace::QuantumNumbers qns) {
   return !(space == qns);
 }
-inline bool operator!=(IndexSpace::QuantumNumbers qns, const IndexSpace &space) {
+inline bool operator!=(IndexSpace::QuantumNumbers qns,
+                       const IndexSpace &space) {
   return !(qns == space);
 }
 inline bool operator==(const IndexSpace &space1, const IndexSpace &space2) {
@@ -344,51 +410,66 @@ inline bool operator==(const IndexSpace &space1, const IndexSpace &space2) {
 inline bool operator!=(const IndexSpace &space1, const IndexSpace &space2) {
   return !(space1 == space2);
 }
-inline IndexSpace::Type intersection(IndexSpace::Type type1, IndexSpace::Type type2) {
+inline IndexSpace::Type intersection(IndexSpace::Type type1,
+                                     IndexSpace::Type type2) {
   return type1.intersection(type2);
 }
-inline IndexSpace::QuantumNumbers intersection(IndexSpace::QuantumNumbers v1, IndexSpace::QuantumNumbers v2) {
+inline IndexSpace::QuantumNumbers intersection(IndexSpace::QuantumNumbers v1,
+                                               IndexSpace::QuantumNumbers v2) {
   return v1.intersection(v2);
 }
-inline const IndexSpace &intersection(const IndexSpace &space1, const IndexSpace &space2) {
+inline const IndexSpace &intersection(const IndexSpace &space1,
+                                      const IndexSpace &space2) {
   return IndexSpace::instance(space1.attr().intersection(space2.attr()));
 }
-inline const IndexSpace &intersection(const IndexSpace &space1, const IndexSpace &space2, const IndexSpace &space3) {
-  return IndexSpace::instance(space1.attr().intersection(space2.attr().intersection(space3.attr())));
+inline const IndexSpace &intersection(const IndexSpace &space1,
+                                      const IndexSpace &space2,
+                                      const IndexSpace &space3) {
+  return IndexSpace::instance(
+      space1.attr().intersection(space2.attr().intersection(space3.attr())));
 }
 inline IndexSpace::Type unIon(IndexSpace::Type type1, IndexSpace::Type type2) {
   return type1.unIon(type2);
 }
-inline IndexSpace::QuantumNumbers unIon(IndexSpace::QuantumNumbers qns1, IndexSpace::QuantumNumbers qns2) {
+inline IndexSpace::QuantumNumbers unIon(IndexSpace::QuantumNumbers qns1,
+                                        IndexSpace::QuantumNumbers qns2) {
   return qns1.unIon(qns2);
 }
-inline const IndexSpace &unIon(const IndexSpace &space1, const IndexSpace &space2) {
+inline const IndexSpace &unIon(const IndexSpace &space1,
+                               const IndexSpace &space2) {
   return IndexSpace::instance(space1.attr().unIon(space2.attr()));
 }
-/// @return true if type2 is included in type1, i.e. intersection(type1, type2) == type2
+/// @return true if type2 is included in type1, i.e. intersection(type1, type2)
+/// == type2
 inline bool includes(IndexSpace::Type type1, IndexSpace::Type type2) {
   return type1.includes(type2);
 }
-/// @return true if qns2 is included in qns1, i.e. \code intersection(qns1, qns2) == qns2 \endcode is true
-inline bool includes(IndexSpace::QuantumNumbers qns1, IndexSpace::QuantumNumbers qns2) {
+/// @return true if qns2 is included in qns1, i.e. \code intersection(qns1,
+/// qns2) == qns2 \endcode is true
+inline bool includes(IndexSpace::QuantumNumbers qns1,
+                     IndexSpace::QuantumNumbers qns2) {
   return qns1.includes(qns2);
 }
-/// @return true if space2 is included in space1, i.e. intersection(space1, space2) == space2
+/// @return true if space2 is included in space1, i.e. intersection(space1,
+/// space2) == space2
 inline bool includes(const IndexSpace &space1, const IndexSpace &space2) {
   return space1.attr().includes(space2.attr());
 }
 
-/// IndexSpace are ordered by their attributes (i.e. labels do not matter one bit)
+/// IndexSpace are ordered by their attributes (i.e. labels do not matter one
+/// bit)
 inline bool operator<(const IndexSpace &space1, const IndexSpace &space2) {
   return space1.attr() < space2.attr();
 }
 
-
-/// @return -1 if @c space includes no orbitals with zero occupancy, +1 if it includes only orbitals with zero occupancy,
+/// @return -1 if @c space includes no orbitals with zero occupancy, +1 if it
+/// includes only orbitals with zero occupancy,
 ///         and 0 of it includes some orbitals with zero occupancy.
-inline int occupancy_class(const IndexSpace& space) {
-  const auto included_in_occupied = includes(IndexSpace::occupied, space.type());
-  const auto included_in_unoccupied = includes(IndexSpace::complete_unoccupied, space.type());
+inline int occupancy_class(const IndexSpace &space) {
+  const auto included_in_occupied =
+      includes(IndexSpace::occupied, space.type());
+  const auto included_in_unoccupied =
+      includes(IndexSpace::complete_unoccupied, space.type());
   assert(!(included_in_occupied && included_in_unoccupied));
   if (included_in_occupied && !included_in_unoccupied)
     return -1;
@@ -396,11 +477,11 @@ inline int occupancy_class(const IndexSpace& space) {
     return 0;
   else if (!included_in_occupied && included_in_unoccupied)
     return 1;
-  abort(); // unreachable
+  abort();  // unreachable
 }
 
 std::wstring to_wolfram(const IndexSpace &space);
 
 }  // namespace sequant
 
-#endif //SEQUANT_SPACE_H
+#endif  // SEQUANT_SPACE_H
