@@ -193,6 +193,7 @@ class EvalExpr final {
     ranges::sort(inner_labels);
     ranges::sort(outer_labels);
     ranges::actions::unique(outer_labels);
+    ranges::actions::unique(inner_labels);
     return add_commas(outer_labels) + ";" + add_commas(inner_labels);
   }
 
