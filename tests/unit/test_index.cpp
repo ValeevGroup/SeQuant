@@ -9,7 +9,6 @@
 #include "SeQuant/core/latex.hpp"
 
 TEST_CASE("Index", "[elements]") {
-
   using namespace sequant;
 
   SECTION("constructors") {
@@ -86,6 +85,18 @@ TEST_CASE("Index", "[elements]") {
       REQUIRE_THROWS(Index(L"i_5", {L"i_1", L"i_1"}));
 #endif
     }
+
+    // 'g' is not a standard base key, but we can associate it with an existing
+    // space to be able to extend the index vocabulary
+#ifndef NDEBUG
+    REQUIRE_THROWS(Index{L"h"});
+#endif
+    REQUIRE_NOTHROW(IndexSpace::register_key(
+        L"h",
+        IndexSpace::all));  // can assign additional key to a space already
+                            // registered, this does not redefine base key
+    // and now ...
+    REQUIRE_NOTHROW(Index{L"h"});
   }
 
   SECTION("equality") {
@@ -110,11 +121,15 @@ TEST_CASE("Index", "[elements]") {
     REQUIRE(!(a1 < i1));
   }
 
-  SECTION("qns ordering"){
-    auto p1A = Index(L"p⁺_1", IndexSpace::instance(IndexSpace::all, IndexSpace::alpha));
-    auto p1B = Index(L"p⁻_1", IndexSpace::instance(IndexSpace::all, IndexSpace::beta));
-    auto p2A = Index(L"p⁺_2", IndexSpace::instance(IndexSpace::all, IndexSpace::alpha));
-    auto p2B = Index(L"p⁻_2", IndexSpace::instance(IndexSpace::all, IndexSpace::beta));
+  SECTION("qns ordering") {
+    auto p1A = Index(L"p⁺_1",
+                     IndexSpace::instance(IndexSpace::all, IndexSpace::alpha));
+    auto p1B =
+        Index(L"p⁻_1", IndexSpace::instance(IndexSpace::all, IndexSpace::beta));
+    auto p2A = Index(L"p⁺_2",
+                     IndexSpace::instance(IndexSpace::all, IndexSpace::alpha));
+    auto p2B =
+        Index(L"p⁻_2", IndexSpace::instance(IndexSpace::all, IndexSpace::beta));
     REQUIRE(p1A.space().qns() == IndexSpace::alpha);
     REQUIRE(p2A.space().qns() == IndexSpace::alpha);
     REQUIRE(p1B.space().qns() == IndexSpace::beta);
@@ -124,7 +139,6 @@ TEST_CASE("Index", "[elements]") {
     REQUIRE(p1A < p2A);
     REQUIRE(p1B < p2B);
   }
-
 
   SECTION("hashing") {
     REQUIRE_NOTHROW(hash_value(Index{}));
@@ -175,27 +189,37 @@ TEST_CASE("Index", "[elements]") {
     Index i1(L"i_1");
     std::wstring i1_str;
     REQUIRE_NOTHROW(i1_str = i1.to_wolfram());
-    REQUIRE(i1_str == L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(i\\), \\(1\\)]\\)\",particleSpace[occupied]]");
+    REQUIRE(i1_str ==
+            L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(i\\), "
+            L"\\(1\\)]\\)\",particleSpace[occupied]]");
     REQUIRE(i1.to_wolfram(Action::create) ==
-            L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(i\\), \\(1\\)]\\)\",particleSpace[occupied],indexType[cre]]");
+            L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(i\\), "
+            L"\\(1\\)]\\)\",particleSpace[occupied],indexType[cre]]");
     REQUIRE(i1.to_wolfram(BraKetPos::ket) ==
-            L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(i\\), \\(1\\)]\\)\",particleSpace[occupied],indexType[ket]]");
+            L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(i\\), "
+            L"\\(1\\)]\\)\",particleSpace[occupied],indexType[ket]]");
     REQUIRE(i1.to_wolfram(Action::annihilate) ==
-            L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(i\\), \\(1\\)]\\)\",particleSpace[occupied],indexType[ann]]");
+            L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(i\\), "
+            L"\\(1\\)]\\)\",particleSpace[occupied],indexType[ann]]");
     REQUIRE(i1.to_wolfram(BraKetPos::bra) ==
-            L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(i\\), \\(1\\)]\\)\",particleSpace[occupied],indexType[bra]]");
+            L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(i\\), "
+            L"\\(1\\)]\\)\",particleSpace[occupied],indexType[bra]]");
 
     REQUIRE(Index(L"a_1").to_wolfram() ==
-            L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(a\\), \\(1\\)]\\)\",particleSpace[virtual]]");
+            L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(a\\), "
+            L"\\(1\\)]\\)\",particleSpace[virtual]]");
     REQUIRE(Index(L"p_1").to_wolfram() ==
-            L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(p\\), \\(1\\)]\\)\",particleSpace[occupied,virtual]]");
+            L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(p\\), "
+            L"\\(1\\)]\\)\",particleSpace[occupied,virtual]]");
     REQUIRE(Index(L"α'_1").to_wolfram() ==
-            L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(α'\\), \\(1\\)]\\)\",particleSpace[othervirtual]]");
+            L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(α'\\), "
+            L"\\(1\\)]\\)\",particleSpace[othervirtual]]");
     REQUIRE(Index(L"α_1").to_wolfram() ==
-            L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(α\\), \\(1\\)]\\)\",particleSpace[virtual,othervirtual]]");
-    REQUIRE(
-        Index(L"κ_1").to_wolfram() ==
-        L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(κ\\), \\(1\\)]\\)\",particleSpace[occupied,virtual,othervirtual]]");
+            L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(α\\), "
+            L"\\(1\\)]\\)\",particleSpace[virtual,othervirtual]]");
+    REQUIRE(Index(L"κ_1").to_wolfram() ==
+            L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(κ\\), "
+            L"\\(1\\)]\\)\",particleSpace[occupied,virtual,othervirtual]]");
   }
 
 }  // TEST_CASE("Index")
