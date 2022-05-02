@@ -50,15 +50,15 @@ class uccf12 {
   ExprPtr compute_double_com(ExprPtr e1, ExprPtr e2, ExprPtr e3,
                              int ansatz = 2) {
     auto first_com = do_wick((e1 * e2) - (e2 * e1));
-    simplify(first_com);
+    non_canon_simplify(first_com);
     auto second_com_1 = first_com * e3;
-    simplify(second_com_1);
+    non_canon_simplify(second_com_1);
     second_com_1 = do_wick(second_com_1);
     auto second_com_2 = e3 * first_com;
-    simplify(second_com_2);
+    non_canon_simplify(second_com_2);
     second_com_2 = do_wick(second_com_2);
     auto second_com = second_com_1 - second_com_2;
-    simplify(second_com);
+    non_canon_simplify(second_com);
     if (ansatz == 2) {
       second_com = keep_up_to_3_body_terms(second_com);
       second_com =
@@ -70,7 +70,7 @@ class uccf12 {
       second_com = simplification::screen_F12_proj(second_com, 2);
       second_com = simplification::tens_to_FNOps(second_com);
       second_com = decompositions::three_body_substitution(second_com, 2);
-      simplify(second_com);
+      non_canon_simplify(second_com);
       return second_com;
     }
     if (ansatz == 1) {
@@ -348,7 +348,7 @@ class uccf12 {
       }
       auto A_ = A->clone();
       A_ = relable(A_);
-      std::wcout << "singles_A: " << to_latex_align(A_, 20,4) << std::endl;
+      //std::wcout << "singles_A: " << to_latex_align(A_, 20,4) << std::endl;
        // first commutator in eq 9. Chem. Phys. 136, 084107 (2012).
       auto H_A = do_wick(ex<Constant>(1.) * ((h * A) - (A * h)));
       auto H_A_3 = keep_up_to_3_body_terms(H_A);
