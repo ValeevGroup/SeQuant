@@ -108,7 +108,8 @@ class uccf12 {
       second_com = simplification::overlap_with_obs(second_com);
       second_com = second_com + ex<Constant>(0.);
       second_com = simplification::screen_F12_proj(second_com, 2);
-      second_com = simplification::tens_to_FNOps(second_com);
+      second_com = simplification::detail::tens_to_FNOps(second_com);
+      //std::wcout << to_latex_align(second_com,20,3) << std::endl;
       second_com = decompositions::three_body_substitution(second_com, 2);
       non_canon_simplify(second_com);
       return second_com;
@@ -125,7 +126,7 @@ class uccf12 {
       second_com = second_com + ex<Constant>(0.);
       second_com = simplification::screen_F12_proj(second_com, 1);
       // std::wcout << to_latex_align(second_com,20,2) << std::endl;
-      second_com = simplification::tens_to_FNOps(second_com);
+      second_com = simplification::detail::tens_to_FNOps(second_com);
       simplify(second_com);
       return second_com;
     }
@@ -233,7 +234,7 @@ class uccf12 {
         std::pair<std::vector<Index>, std::vector<Index>> new_up_low;
         if (factor->is<Tensor>()) {
           for (int i = 0; i < factor->as<Tensor>().bra().size(); i++) {
-            auto in_where_bra = simplification::in_list(
+            auto in_where_bra = simplification::detail::in_list(
                 factor->as<Tensor>().bra()[i], original_indices);
             if (in_where_bra.first) {
               new_up_low.first.push_back(changed_indices[in_where_bra.second]);
@@ -245,7 +246,7 @@ class uccf12 {
               new_up_low.first.push_back(
                   changed_indices[changed_indices.size() - 1]);
             }
-            auto in_where_ket = simplification::in_list(
+            auto in_where_ket = simplification::detail::in_list(
                 factor->as<Tensor>().ket()[i], original_indices);
             if (in_where_ket.first) {
               new_up_low.second.push_back(changed_indices[in_where_ket.second]);
@@ -263,7 +264,7 @@ class uccf12 {
           new_product = new_product * new_factor;
         } else if (factor->is<FNOperator>()) {
           for (int i = 0; i < factor->as<FNOperator>().nannihilators(); i++) {
-            auto in_where_ann = simplification::in_list(
+            auto in_where_ann = simplification::detail::in_list(
                 factor->as<FNOperator>().annihilators()[i].index(),
                 original_indices);
             if (in_where_ann.first) {
@@ -280,7 +281,7 @@ class uccf12 {
               new_up_low.first.push_back(
                   changed_indices[changed_indices.size() - 1]);
             }
-            auto in_where_cre = simplification::in_list(
+            auto in_where_cre = simplification::detail::in_list(
                 factor->as<FNOperator>().creators()[i].index(),
                 original_indices);
             if (in_where_cre.first) {
@@ -334,8 +335,6 @@ class uccf12 {
 
     auto single = ex<Constant>(0.0);
     if (singles_) {
-      // this might need to be complete space if we don't have a solution to the
-      // particular blocks of interest.
       auto C = ex<Tensor>(
           L"C",
           std::initializer_list<Index>{
@@ -372,7 +371,7 @@ class uccf12 {
       H_A_3 = simplification::overlap_with_obs(H_A_3);
       H_A_3 = H_A_3 + ex<Constant>(0.);
       H_A_3 = simplification::screen_F12_proj(H_A_3, 2);
-      H_A_3 = simplification::tens_to_FNOps(H_A_3);
+      H_A_3 = simplification::detail::tens_to_FNOps(H_A_3);
       simplify(H_A_3);
       auto H_A_2 = decompositions::three_body_substitution(H_A_3, 2);
       simplify(H_A_2);
@@ -431,7 +430,7 @@ class uccf12 {
       H_A_3 = simplification::overlap_with_obs(H_A_3);
       H_A_3 = H_A_3 + ex<Constant>(0.);
       H_A_3 = simplification::screen_F12_proj(H_A_3, 1);
-      H_A_3 = simplification::tens_to_FNOps(H_A_3);
+      H_A_3 = simplification::detail::tens_to_FNOps(H_A_3);
       simplify(H_A_3);
       auto com_1 = simplification::hamiltonian_based_projector_1(H_A_3);
 

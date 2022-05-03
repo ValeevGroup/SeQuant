@@ -11,6 +11,7 @@ using namespace sequant;
 // particular tensors. Also functionality for restricting our operators and
 // densities to the orbital basis set (obs).
 namespace simplification {
+namespace detail{
 template <typename vec_type>
 std::pair<bool, int> in_list(Index idx, vec_type ref_list) {
   bool inlist = false;
@@ -24,168 +25,10 @@ std::pair<bool, int> in_list(Index idx, vec_type ref_list) {
   std::pair<bool, int> result{inlist, where_inlist};
   return result;
 }
+
 // convert a sequant::FNOperator to a sequant::tensor object
-ExprPtr op_to_tens(ExprPtr ex_) {
-  assert(ex_->is<FNOperator>());
-  std::vector<Index> bra_indices;
-  std::vector<Index> ket_indices;
-  for (auto&& ann : ex_->as<FNOperator>().annihilators()) {
-    bra_indices.push_back(ann.index());
-  }
-  for (auto&& cre : ex_->as<FNOperator>().creators()) {
-    ket_indices.push_back(cre.index());
-  }
-  auto label =
-      get_default_context().spbasis() == SPBasis::spinfree ? L"E" : L"a";
-  auto result = ex<Tensor>(label, bra_indices, ket_indices);
-  return result;
-}
 
-// all densities and the Hamiltonian operators are confined to a given orbital
-// basis in second quantized notation. thus any index on a Normal Ordered
-// operator or density must be confined to the obs.
-/// TODO this dictates that the resulting hamiltonian will be in a particular
-/// basis.
-ExprPtr overlap_with_obs(ExprPtr ex_) {
-  //std::wcout << to_latex_align(ex_,20,4) << std::endl;
-  auto overlap_expr =
-      ex<Constant>(0);  // enforce an overlap each E with elements from
-  for (auto&& product :
-       ex_->as<Sum>().summands()) {  // may be able to make_overlaps manually
-                                     // and apply them to the products. simplify
-                                     // may know what to do with it.
-    auto new_product = ex<Constant>(product->as<Product>().scalar());
-    for (int it = product->as<Product>().factors().size() - 1; it >= 0;
-         it--) {  // loop backwards through the products.
-      auto factor = product->as<Product>().factor(it);
 
-      if (it == product->as<Product>().factors().size() - 1 &&
-          factor->is<FNOperator>() && factor->as<FNOperator>().rank() == 3) {
-        std::wstring label_1;
-        std::wstring label_2;
-        std::wstring label_3;
-        std::wstring label_4;
-        std::wstring label_5;
-        std::wstring label_6;
-        label_1 = factor->as<FNOperator>().annihilators()[0].index().label();
-        label_2 = factor->as<FNOperator>().annihilators()[1].index().label();
-        label_3 = factor->as<FNOperator>().annihilators()[2].index().label();
-        label_4 = factor->as<FNOperator>().creators()[0].index().label();
-        label_5 = factor->as<FNOperator>().creators()[1].index().label();
-        label_6 = factor->as<FNOperator>().creators()[2].index().label();
-        auto o1 = make_overlap(
-            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
-            Index{label_1});
-        auto o2 = make_overlap(
-            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
-            Index{label_2});
-        auto o3 = make_overlap(
-            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
-            Index{label_3});
-        auto o4 = make_overlap(
-            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
-            Index{label_4});
-        auto o5 = make_overlap(
-            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
-            Index{label_5});
-        auto o6 = make_overlap(
-            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
-            Index{label_6});
-        new_product =
-            o1 * o2 * o3 * o4 * o5 * o6 * new_product * op_to_tens(factor);
-      } else if (it == product->as<Product>().factors().size() - 1 &&
-                 factor->is<FNOperator>() &&
-                 factor->as<FNOperator>().rank() == 2) {
-        std::wstring label_1;
-        std::wstring label_2;
-        std::wstring label_3;
-        std::wstring label_4;
-        label_1 = factor->as<FNOperator>().annihilators()[0].index().label();
-        label_2 = factor->as<FNOperator>().annihilators()[1].index().label();
-        label_3 = factor->as<FNOperator>().creators()[0].index().label();
-        label_4 = factor->as<FNOperator>().creators()[1].index().label();
-        auto o1 = make_overlap(
-            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
-            Index{label_1});
-        auto o2 = make_overlap(
-            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
-            Index{label_2});
-        auto o3 = make_overlap(
-            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
-            Index{label_3});
-        auto o4 = make_overlap(
-            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
-            Index{label_4});
-        new_product = o1 * o2 * o3 * o4 * new_product * op_to_tens(factor);
-      } else if (it == product->as<Product>().factors().size() - 1 &&
-                 factor->is<FNOperator>() &&
-                 factor->as<FNOperator>().rank() == 1) {
-        std::wstring label_1;
-        std::wstring label_3;
-        label_1 = factor->as<FNOperator>().annihilators()[0].index().label();
-        label_3 = factor->as<FNOperator>().creators()[0].index().label();
-        auto o1 = make_overlap(
-            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
-            Index{label_1});
-        auto o3 = make_overlap(
-            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
-            Index{label_3});
-        new_product = o1 * o3 * new_product * op_to_tens(factor);
-      } else if (factor->is<Tensor>() &&
-                 factor->as<Tensor>().label() == L"\\Gamma" &&
-                 factor->as<Tensor>().rank() == 1) {
-        std::wstring label_2;
-        std::wstring label_4;
-        label_2 = factor->as<Tensor>().ket()[0].label();
-        label_4 = factor->as<Tensor>().bra()[0].label();
-        auto o1 = make_overlap(
-            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
-            Index{label_2});
-        auto o3 = make_overlap(
-            Index{label_4},
-            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)));
-        new_product = o1 * o3 * factor * new_product;
-      } else if (factor->is<Tensor>() &&
-                 factor->as<Tensor>().label() == L"\\Gamma" &&
-                 factor->as<Tensor>().rank() == 2) {
-        std::wstring label_1;
-        std::wstring label_3;
-        std::wstring label_2;
-        std::wstring label_4;
-        label_1 = factor->as<Tensor>().ket()[0].label();
-        label_3 = factor->as<Tensor>().bra()[0].label();
-        label_2 = factor->as<Tensor>().ket()[1].label();
-        label_4 = factor->as<Tensor>().bra()[1].label();
-        auto o1 = make_overlap(
-            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
-            Index{label_1});
-        auto o3 = make_overlap(
-            Index{label_3},
-            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)));
-        auto o2 = make_overlap(
-            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
-            Index{label_2});
-        auto o4 = make_overlap(
-            Index{label_4},
-            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)));
-        new_product = o1 * o3 * o2 * o4 * factor * new_product;
-      } else {
-        new_product = new_product * factor;
-      }
-    }
-    new_product = new_product;
-    overlap_expr = overlap_expr + new_product;
-  }
-
-  FWickTheorem wick{overlap_expr};
-  // std::wcout << to_latex_align(overlap_expr,20,2) << std::endl;
-  wick.reduce(overlap_expr);
-  non_canon_simplify(overlap_expr);
-  // std::wcout << to_latex_align(overlap_expr,20,2) << std::endl;
-  return overlap_expr;
-}
-
-using IDX_list = std::initializer_list<Index>;
 // in various transformation methods it seems as if the constants are removed or
 // treated separatly from the main transformed hamiltonian expression.
 ExprPtr remove_const(const ExprPtr ex_) {
@@ -206,7 +49,6 @@ ExprPtr remove_const(const ExprPtr ex_) {
   non_canon_simplify(new_expression);
   return new_expression;
 }
-
 // params ex_ : a product to replace indices on.
 //  og: original index in the product to be replaced
 //  newer: the new index which replaces the original index.
@@ -275,12 +117,248 @@ Product replace_idx(ExprPtr ex_, Index og, Index newer) {
 }
 
 // convert a sequant::Tensor to a sequant::FNOperator
+ExprPtr op_to_tens(ExprPtr ex_) {
+  assert(ex_->is<FNOperator>());
+  std::vector<Index> bra_indices;
+  std::vector<Index> ket_indices;
+  for (auto&& ann : ex_->as<FNOperator>().annihilators()) {
+    bra_indices.push_back(ann.index());
+  }
+  for (auto&& cre : ex_->as<FNOperator>().creators()) {
+    ket_indices.push_back(cre.index());
+  }
+  auto label =
+      get_default_context().spbasis() == SPBasis::spinfree ? L"E" : L"a";
+  auto result = ex<Tensor>(label, bra_indices, ket_indices);
+  return result;
+}
+
+ExprPtr FNOPs_to_tens(ExprPtr ex_) {
+  if (ex_->is<Sum>()) {
+    auto new_sum = ex<Constant>(0);
+    for (auto&& product : ex_->as<Sum>().summands()) {
+      auto new_product = ex<Constant>(product->as<Product>().scalar());
+      for (auto factor : product->as<Product>().factors()) {
+        auto new_factor = ex<Constant>(0);
+        if (factor->is<FNOperator>()) {
+          new_factor = op_to_tens(factor) + new_factor;
+          assert(!new_factor->is<FNOperator>());
+        } else {
+          new_factor = factor + new_factor;
+        }
+        new_product = new_product * new_factor;
+      }
+      new_sum = new_product + new_sum;
+    }
+    non_canon_simplify(new_sum);
+    return new_sum;
+  } else if (ex_->is<Product>()) {
+    for (auto&& factor : ex_->as<Product>().factors()) {
+      if (factor->is<FNOperator>()) {
+        factor = op_to_tens(factor);
+      }
+    }
+  } else if (ex_->is<FNOperator>()) {
+    ex_ = detail::op_to_tens(ex_);
+  } else {
+    return ex_;
+  }
+  return ex_;
+}
+
 ExprPtr tens_to_op(ExprPtr ex_) {
   assert(ex_->is<Tensor>());
   auto result =
       ex<FNOperator>(ex_->as<Tensor>().ket(), ex_->as<Tensor>().bra());
   return result;
 }
+
+ExprPtr tens_to_FNOps(ExprPtr ex_) {
+  if (ex_->is<Sum>()) {
+    auto new_sum = ex<Constant>(0);
+    for (auto&& product : ex_->as<Sum>().summands()) {
+      auto new_product = ex<Constant>(product->as<Product>().scalar());
+      for (auto factor : product->as<Product>().factors()) {
+        auto new_factor = ex<Constant>(0);
+        if (factor->is<Tensor>() && (factor->as<Tensor>().label() == L"E" ||
+                                     factor->as<Tensor>().label() == L"a")) {
+          new_factor = tens_to_op(factor);
+        } else {
+          new_factor = factor;
+        }
+        new_product = new_factor * new_product;
+      }
+      new_sum = new_product + new_sum;
+    }
+    non_canon_simplify(new_sum);
+    return new_sum;
+  } else if (ex_->is<Product>()) {
+    for (auto&& factor : ex_->as<Product>().factors()) {
+      if (factor->is<Tensor>() && (factor->as<Tensor>().label() == L"E" ||
+                                   factor->as<Tensor>().label() == L"a")) {
+        factor = tens_to_op(factor);
+      }
+    }
+  } else if (ex_->is<Tensor>() && (ex_->as<Tensor>().label() == L"E" ||
+                                   ex_->as<Tensor>().label() == L"a")) {
+    ex_ = detail::tens_to_op(ex_);
+  } else {
+    return ex_;
+  }
+  return ex_;
+}
+
+}
+
+
+// all densities and the Hamiltonian operators are confined to a given orbital
+// basis in second quantized notation. thus any index on a Normal Ordered
+// operator or density must be confined to the obs.
+/// TODO this dictates that the resulting hamiltonian will be in a particular
+/// basis.
+ExprPtr overlap_with_obs(ExprPtr ex_) {
+  //std::wcout << to_latex_align(ex_,20,4) << std::endl;
+  auto overlap_expr =
+      ex<Constant>(0);  // enforce an overlap each E with elements from
+  for (auto&& product :
+       ex_->as<Sum>().summands()) {  // may be able to make_overlaps manually
+                                     // and apply them to the products. simplify
+                                     // may know what to do with it.
+    auto new_product = ex<Constant>(product->as<Product>().scalar());
+    for (int it = product->as<Product>().factors().size() - 1; it >= 0;
+         it--) {  // loop backwards through the products.
+      auto factor = product->as<Product>().factor(it);
+
+      if (it == product->as<Product>().factors().size() - 1 &&
+          factor->is<FNOperator>() && factor->as<FNOperator>().rank() == 3) {
+        std::wstring label_1;
+        std::wstring label_2;
+        std::wstring label_3;
+        std::wstring label_4;
+        std::wstring label_5;
+        std::wstring label_6;
+        label_1 = factor->as<FNOperator>().annihilators()[0].index().label();
+        label_2 = factor->as<FNOperator>().annihilators()[1].index().label();
+        label_3 = factor->as<FNOperator>().annihilators()[2].index().label();
+        label_4 = factor->as<FNOperator>().creators()[0].index().label();
+        label_5 = factor->as<FNOperator>().creators()[1].index().label();
+        label_6 = factor->as<FNOperator>().creators()[2].index().label();
+        auto o1 = make_overlap(
+            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
+            Index{label_1});
+        auto o2 = make_overlap(
+            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
+            Index{label_2});
+        auto o3 = make_overlap(
+            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
+            Index{label_3});
+        auto o4 = make_overlap(
+            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
+            Index{label_4});
+        auto o5 = make_overlap(
+            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
+            Index{label_5});
+        auto o6 = make_overlap(
+            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
+            Index{label_6});
+        new_product =
+            o1 * o2 * o3 * o4 * o5 * o6 * new_product * detail::op_to_tens(factor);
+      } else if (it == product->as<Product>().factors().size() - 1 &&
+                 factor->is<FNOperator>() &&
+                 factor->as<FNOperator>().rank() == 2) {
+        std::wstring label_1;
+        std::wstring label_2;
+        std::wstring label_3;
+        std::wstring label_4;
+        label_1 = factor->as<FNOperator>().annihilators()[0].index().label();
+        label_2 = factor->as<FNOperator>().annihilators()[1].index().label();
+        label_3 = factor->as<FNOperator>().creators()[0].index().label();
+        label_4 = factor->as<FNOperator>().creators()[1].index().label();
+        auto o1 = make_overlap(
+            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
+            Index{label_1});
+        auto o2 = make_overlap(
+            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
+            Index{label_2});
+        auto o3 = make_overlap(
+            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
+            Index{label_3});
+        auto o4 = make_overlap(
+            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
+            Index{label_4});
+        new_product = o1 * o2 * o3 * o4 * new_product * detail::op_to_tens(factor);
+      } else if (it == product->as<Product>().factors().size() - 1 &&
+                 factor->is<FNOperator>() &&
+                 factor->as<FNOperator>().rank() == 1) {
+        std::wstring label_1;
+        std::wstring label_3;
+        label_1 = factor->as<FNOperator>().annihilators()[0].index().label();
+        label_3 = factor->as<FNOperator>().creators()[0].index().label();
+        auto o1 = make_overlap(
+            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
+            Index{label_1});
+        auto o3 = make_overlap(
+            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
+            Index{label_3});
+        new_product = o1 * o3 * new_product * detail::op_to_tens(factor);
+      } else if (factor->is<Tensor>() &&
+                 factor->as<Tensor>().label() == L"\\Gamma" &&
+                 factor->as<Tensor>().rank() == 1) {
+        std::wstring label_1;
+        std::wstring label_3;
+        label_1 = factor->as<Tensor>().ket()[0].label();
+        label_3 = factor->as<Tensor>().bra()[0].label();
+        auto o1 = make_overlap(
+            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
+            Index{label_1});
+        auto o3 = make_overlap(
+            Index{label_3},
+            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)));
+        new_product = o1 * o3 * factor * new_product;
+      } else if (factor->is<Tensor>() &&
+                 factor->as<Tensor>().label() == L"\\Gamma" &&
+                 factor->as<Tensor>().rank() == 2) {
+        std::wstring label_1;
+        std::wstring label_3;
+        std::wstring label_2;
+        std::wstring label_4;
+        label_1 = factor->as<Tensor>().ket()[0].label();
+        label_3 = factor->as<Tensor>().bra()[0].label();
+        label_2 = factor->as<Tensor>().ket()[1].label();
+        label_4 = factor->as<Tensor>().bra()[1].label();
+        auto o1 = make_overlap(
+            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
+            Index{label_1});
+        auto o3 = make_overlap(
+            Index{label_3},
+            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)));
+        auto o2 = make_overlap(
+            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
+            Index{label_2});
+        auto o4 = make_overlap(
+            Index{label_4},
+            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)));
+        new_product = o1 * o3 * o2 * o4 * factor * new_product;
+      } else {
+        new_product = new_product * factor;
+      }
+    }
+    new_product = new_product;
+    overlap_expr = overlap_expr + new_product;
+  }
+
+  FWickTheorem wick{overlap_expr};
+  // std::wcout << to_latex_align(overlap_expr,20,2) << std::endl;
+  wick.reduce(overlap_expr);
+  non_canon_simplify(overlap_expr);
+  // std::wcout << to_latex_align(overlap_expr,20,2) << std::endl;
+  return overlap_expr;
+}
+
+using IDX_list = std::initializer_list<Index>;
+
+
+
 // F tensors must contain indices in the bra with space > all. this
 // includes complete, completeunoccupied, and inactiveunoccupied. and if one of
 // the particle indices is connected to the obs virtual space, then the other
@@ -418,8 +496,7 @@ ExprPtr screen_F_tensors(ExprPtr ex_, int ansatz = 2) {
   }
 }
 
-ExprPtr screen_density(
-    ExprPtr ex_) {  // densities probably should be non-zero if each index has a
+ExprPtr screen_density(ExprPtr ex_) {  // densities probably should be non-zero if each index has a
                     // chance to be occupied, in other words, screen out
                     // densities containing unoccupied labels.
   assert(ex_->is<Tensor>());
@@ -483,7 +560,6 @@ auto treat_fock(ExprPtr ex_) {
     auto new_product = ex<Constant>(real);
     for (auto&& factor : product->as<Product>().factors()) {
       if (factor->is<Tensor>() && factor->as<Tensor>().label() == L"f") {
-        // TODO do not assume EBC
         auto space = intersection(factor->as<Tensor>().bra()[0].space(),
                                   factor->as<Tensor>().ket()[0].space());
         if (space.type().none()) {
@@ -567,7 +643,7 @@ ncon_spa_extket_extbra(Tensor T1, Tensor T2, bool print_ = false) {
   //  list.
   for (int i = 0; i < T1.bra().size(); i++) {
     // is the bra T1 index a connected index?
-    if (in_list(T1.bra()[i], connected_indices).first) {
+    if (detail::in_list(T1.bra()[i], connected_indices).first) {
       T1_ket = true;
       for (int j = 0; j < T2.ket().size(); j++) {
         if (T2.ket()[j].label() == T1.bra()[i].label()) {
@@ -577,7 +653,7 @@ ncon_spa_extket_extbra(Tensor T1, Tensor T2, bool print_ = false) {
       }
     }
     // is the ket T1 index a connected index?
-    else if (in_list(T1.ket()[i], connected_indices).first) {
+    else if (detail::in_list(T1.ket()[i], connected_indices).first) {
       T1_ket = false;
       for (int j = 0; j < T2.ket().size(); j++) {
         if (T2.bra()[j].label() == T1.ket()[i].label()) {
@@ -596,13 +672,13 @@ ncon_spa_extket_extbra(Tensor T1, Tensor T2, bool print_ = false) {
   for (int i = 0; i < T2.ket().size(); i++) {
     // if the ket index is connected, do nothing because the external index is
     // already accounted for
-    if (in_list(T2.ket()[i], connected_indices).first ||
-        in_list(T2.ket()[i], external_ket).first) {
+    if (detail::in_list(T2.ket()[i], connected_indices).first ||
+        detail::in_list(T2.ket()[i], external_ket).first) {
     }
     // if the bra index is connected, do nothing because the external index is
     // already accounted for
-    else if (in_list(T2.bra()[i], connected_indices).first ||
-             in_list(T2.bra()[i], external_bra).first) {
+    else if (detail::in_list(T2.bra()[i], connected_indices).first ||
+             detail::in_list(T2.bra()[i], external_bra).first) {
     }
     // if niether the bra or the ket are connected or made the external lists by
     // now, add them.
@@ -627,12 +703,12 @@ ncon_spa_extket_extbra(Tensor T1, Tensor T2, bool print_ = false) {
     bool bra_connected = false;
     bool ket_connected = false;
     for (int i = 0; i < T1.bra().size(); i++) {
-      if (in_list(T1.bra()[i], connected_indices).first) {
+      if (detail::in_list(T1.bra()[i], connected_indices).first) {
         bra_connected = true;
       }
     }
     for (int j = 0; j < T1.ket().size(); j++) {
-      if (in_list(T1.ket()[j], connected_indices).first) {
+      if (detail::in_list(T1.ket()[j], connected_indices).first) {
         ket_connected = true;
       }
     }
@@ -841,7 +917,7 @@ std::pair<ExprPtr, ExprPtr> fnop_to_overlap(ExprPtr exprs) {
     for (auto&& factor : product->as<Product>().factors()) {
       if (factor->is<Tensor>() && (factor->as<Tensor>().label() == L"E" ||
                                    factor->as<Tensor>().label() == L"a")) {
-        factor = tens_to_op(factor);
+        factor = detail::tens_to_op(factor);
         if (factor->is<FNOperator>()) {
           if (factor->as<FNOperator>().ncreators() == 1) {
             auto o1 = make_overlap(
@@ -961,72 +1037,7 @@ ExprPtr screen_F12_proj(ExprPtr exprs, int ansatz = 2) {
     return exprs;
 }
 
-ExprPtr FNOPs_to_tens(ExprPtr ex_) {
-  if (ex_->is<Sum>()) {
-    auto new_sum = ex<Constant>(0);
-    for (auto&& product : ex_->as<Sum>().summands()) {
-      auto new_product = ex<Constant>(product->as<Product>().scalar());
-      for (auto factor : product->as<Product>().factors()) {
-        auto new_factor = ex<Constant>(0);
-        if (factor->is<FNOperator>()) {
-          new_factor = op_to_tens(factor) + new_factor;
-          assert(!new_factor->is<FNOperator>());
-        } else {
-          new_factor = factor + new_factor;
-        }
-        new_product = new_product * new_factor;
-      }
-      new_sum = new_product + new_sum;
-    }
-    non_canon_simplify(new_sum);
-    return new_sum;
-  } else if (ex_->is<Product>()) {
-    for (auto&& factor : ex_->as<Product>().factors()) {
-      if (factor->is<FNOperator>()) {
-        factor = op_to_tens(factor);
-      }
-    }
-  } else if (ex_->is<FNOperator>()) {
-    ex_ = op_to_tens(ex_);
-  } else {
-    return ex_;
-  }
-  return ex_;
-}
-ExprPtr tens_to_FNOps(ExprPtr ex_) {
-  if (ex_->is<Sum>()) {
-    auto new_sum = ex<Constant>(0);
-    for (auto&& product : ex_->as<Sum>().summands()) {
-      auto new_product = ex<Constant>(product->as<Product>().scalar());
-      for (auto factor : product->as<Product>().factors()) {
-        auto new_factor = ex<Constant>(0);
-        if (factor->is<Tensor>() && (factor->as<Tensor>().label() == L"E" ||
-                                     factor->as<Tensor>().label() == L"a")) {
-          new_factor = tens_to_op(factor);
-        } else {
-          new_factor = factor;
-        }
-        new_product = new_factor * new_product;
-      }
-      new_sum = new_product + new_sum;
-    }
-    non_canon_simplify(new_sum);
-    return new_sum;
-  } else if (ex_->is<Product>()) {
-    for (auto&& factor : ex_->as<Product>().factors()) {
-      if (factor->is<Tensor>() && (factor->as<Tensor>().label() == L"E" ||
-                                   factor->as<Tensor>().label() == L"a")) {
-        factor = tens_to_op(factor);
-      }
-    }
-  } else if (ex_->is<Tensor>() && (ex_->as<Tensor>().label() == L"E" ||
-                                   ex_->as<Tensor>().label() == L"a")) {
-    ex_ = tens_to_op(ex_);
-  } else {
-    return ex_;
-  }
-  return ex_;
-}
+
 
 // split F12 operator into its 2 components seen in eq 11. of Chem. Phys. 136,
 // 084107 (2012).
@@ -1114,13 +1125,9 @@ ExprPtr partition_F12(ExprPtr exprs) {
 //  allow analysis of multiple expressions who have the same normal order
 //  operator prefactor.
 std::pair<ExprPtr, ExprPtr> hamiltonian_based_projector_2(ExprPtr exprs) {
-  exprs = FNOPs_to_tens(exprs);
+  exprs = detail::FNOPs_to_tens(exprs);
   non_canon_simplify(exprs);
   exprs = screen_densities(exprs);
-  non_canon_simplify(exprs);
-  exprs = screen_F12_proj(exprs, 2);
-  //simplify(exprs);
-  //exprs = partition_F12(exprs);
   non_canon_simplify(exprs);
   auto exprs_intmed = ex<Constant>(0.0);
   for (auto&& product : exprs->as<Sum>().summands()) {
@@ -1134,9 +1141,7 @@ std::pair<ExprPtr, ExprPtr> hamiltonian_based_projector_2(ExprPtr exprs) {
 // here G can only have projection to the alpha and Beta space otherwise
 // projector constructs it to be be zero.
 std::pair<ExprPtr, ExprPtr> hamiltonian_based_projector_1(ExprPtr exprs) {
-  exprs = FNOPs_to_tens(exprs);
-  simplify(exprs);
-  exprs = partition_F12(exprs);
+  exprs = detail::FNOPs_to_tens(exprs);
   simplify(exprs);
   exprs = screen_F12_proj(exprs, 1);
   simplify(exprs);
@@ -1151,7 +1156,7 @@ std::pair<ExprPtr, ExprPtr> hamiltonian_based_projector_1(ExprPtr exprs) {
 // G can only project to alpha and Beta space. still need to use fock based
 // expression.
 std::pair<ExprPtr, ExprPtr> fock_based_projector_1(ExprPtr exprs) {
-  exprs = FNOPs_to_tens(exprs);
+  exprs = detail::FNOPs_to_tens(exprs);
   simplify(exprs);
   if (exprs->is<Constant>()) {
     return std::pair<ExprPtr, ExprPtr>{exprs, exprs};
@@ -1189,7 +1194,7 @@ std::pair<ExprPtr, ExprPtr> fock_based_projector_2(ExprPtr exprs) {
     return std::pair<ExprPtr, ExprPtr>{exprs, exprs};
   }
   non_canon_simplify(exprs);
-  exprs = FNOPs_to_tens(exprs);
+  exprs = detail::FNOPs_to_tens(exprs);
   non_canon_simplify(exprs);
   exprs = screen_densities(exprs);
   non_canon_simplify(exprs);
