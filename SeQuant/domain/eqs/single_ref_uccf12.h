@@ -22,13 +22,31 @@ class uccf12 {
   bool sr;
   bool fock;
   unsigned int op_rank;
+  //no default constructor
+  IndexSpace::TypeAttr gg_space = IndexSpace::all;
+  int ansatz_;
+  bool print_;
+  bool singles_;
+  bool doubles_;
+
+  //default constructor
+  uccf12(){}
+
   // TODO implement logic for non-default variables. should also include logic
   // for spin-orbital expressions.
-  uccf12(bool single_reference = true, bool fock_approx = true,
+  uccf12(std::string gg_label, int ansatz = 2,
+         bool print = false, bool singles = false,
+         bool doubles = true,bool single_reference = true, bool fock_approx = true,
          unsigned int max_op_rank = 2) {
     sr = single_reference;
     fock = fock_approx;
     op_rank = max_op_rank;
+    ansatz_ = ansatz;
+    print_ = print;
+    singles_ = singles;
+    doubles_ = doubles;
+
+
     sequant::set_default_context(
         SeQuant(Vacuum::Physical, IndexSpaceMetric::Unit,
                 BraKetSymmetry::conjugate, SPBasis::spinfree));
@@ -45,6 +63,28 @@ class uccf12 {
     sequant::detail::OpIdRegistrar op_id_registrar;
     TensorCanonicalizer::register_instance(
         std::make_shared<DefaultTensorCanonicalizer>());
+
+    // auto gg_space = IndexSpace::active_occupied;  // Geminal-generating
+    // space: active occupieds is the normal choice, all orbitals is the
+    // reference-independent (albeit expensive) choice
+    assert(singles_ == true || doubles_ == true);
+    if (gg_label == "act_occ") {
+      gg_space = IndexSpace::active_occupied;
+    } else if (gg_label == "occ") {
+      gg_space = IndexSpace::occupied;
+    } else if (gg_label == "all") {
+      gg_space = IndexSpace::all;
+    } else if (gg_label == "fz") {
+      gg_space = IndexSpace::frozen_occupied;
+    } else if (gg_label == "uocc") {
+      gg_space = IndexSpace::unoccupied;
+    }
+    else if (gg_label == "act_obs") {
+      gg_space = IndexSpace::all_active;
+    } else {
+      throw std::runtime_error(
+          "uccf12::compute(gg_label) unsupported space label");
+    }
   }
   //[[e1,e2],e3]_12
   ExprPtr compute_double_com(ExprPtr e1, ExprPtr e2, ExprPtr e3,
@@ -289,34 +329,11 @@ class uccf12 {
     }
   }
 
-  std::pair<ExprPtr, ExprPtr> compute(std::string gg_label, int ansatz = 2,
-                                      bool print = false, bool singles = false,
-                                      bool doubles = true) {
-    // auto gg_space = IndexSpace::active_occupied;  // Geminal-generating
-    // space: active occupieds is the normal choice, all orbitals is the
-    // reference-independent (albeit expensive) choice
-    assert(singles == true || doubles == true);
-    auto gg_space = IndexSpace::frozen_occupied;
-    if (gg_label == "act_occ") {
-      gg_space = IndexSpace::active_occupied;
-    } else if (gg_label == "occ") {
-      gg_space = IndexSpace::occupied;
-    } else if (gg_label == "all") {
-      gg_space = IndexSpace::all;
-    } else if (gg_label == "fz") {
-      gg_space = IndexSpace::frozen_occupied;
-    } else if (gg_label == "uocc") {
-      gg_space = IndexSpace::unoccupied;
-    }
-    else if (gg_label == "act_obs") {
-      gg_space = IndexSpace::all_active;
-    } else {
-      throw std::runtime_error(
-          "uccf12::compute(gg_label) unsupported space label");
-    }
+  std::pair<ExprPtr, ExprPtr> compute() {
+
 
     auto single = ex<Constant>(0.0);
-    if (singles) {
+    if (singles_) {
       // this might need to be complete space if we don't have a solution to the
       // particular blocks of interest.
       auto C = ex<Tensor>(
@@ -333,13 +350,13 @@ class uccf12 {
       single = single + anti_herm_C;
       }
 
-    if (ansatz == 2) {
+    if (ansatz_ == 2) {
       auto h = H(false);
       auto r = R12(gg_space);
       auto r_1 = R12(gg_space);
 
       ExprPtr A = ex<Constant>(0.0);
-      if (doubles) {
+      if (doubles_) {
         A = A + (r - adjoint(r)) + single;
         simplify(A);
       } else {
@@ -390,7 +407,7 @@ class uccf12 {
       }
       std::cout << "number of terms: " << term_count << std::endl;
 
-      if (print) {
+      if (print_) {
         std::wcout << "one body terms: " << to_latex_align(one_body, 20, 2)
                    << std::endl;
         std::wcout << "two body terms: " << to_latex_align(two_body, 20, 2)
@@ -402,7 +419,7 @@ class uccf12 {
     // they will happen to contain off diagonal G elements. we would get the
     // same result if we kept the decomposition and simplified, but this should
     // save time.
-    if (ansatz == 1) {
+    if (ansatz_ == 1) {
       auto h = H(false);
       auto r = R12(gg_space);
       auto r_1 = R12(gg_space);
@@ -461,7 +478,7 @@ class uccf12 {
       }
       std::cout << "number of terms: " << term_count << std::endl;
 
-      if (print) {
+      if (print_) {
         std::wcout << "one body terms: " << to_latex_align(one_body, 20, 2)
                    << std::endl;
         std::wcout << "two body terms: " << to_latex_align(two_body, 20, 2)

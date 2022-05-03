@@ -830,7 +830,7 @@ ExprPtr find_F12_interms(ExprPtr ex_) {
 // form of the hamiltonian operator. that is h^p_q E^q_p + 1/2 g^{pq}_{rs}
 // E^{rs}_{pq}. to achieve this form, the tensor part of the expression must
 // contain overlaps in place of the normal ordered operators. here we chose a
-// canonical form for E^{p_7}_{p_9} and E^{p_7 p_8}_{p_9 p_10}
+// canonical form for E^{p_7}_{p_9} and E^{p_7 p_8}_{p_9 p_10} as the external indicies
 //  this also simultaneously partitions the result into one and two body terms.
 std::pair<ExprPtr, ExprPtr> fnop_to_overlap(ExprPtr exprs) {
   auto one_body_result = ex<Constant>(0);
