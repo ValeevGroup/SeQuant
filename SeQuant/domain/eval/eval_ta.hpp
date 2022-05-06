@@ -95,7 +95,8 @@ tot_result_t<DA_tot, DA> eval_inode_tot(EvalNode const& node,
       return tot_result_t_{result};
     }
     tot_result_t_ operator()(DA_tot const& lhs, DA const& rhs) {
-      throw std::runtime_error("Attempted tos tensor-of-tensor with tensor!");
+      throw std::runtime_error(
+          "Attempted to sum tensor-of-tensor with tensor!");
     }
     tot_result_t_ operator()(DA const& lhs, DA_tot const& rhs) {
       return operator()(rhs, lhs);
@@ -103,8 +104,8 @@ tot_result_t<DA_tot, DA> eval_inode_tot(EvalNode const& node,
   } visitor_for_sum{lannot, rannot, this_annot, lscal, rscal};
 
   struct {
-    std::string const& lannot;
-    std::string const& rannot;
+    std::string lannot;
+    std::string rannot;
     std::string const& this_annot;
     double lscal;
     double rscal;
@@ -115,6 +116,7 @@ tot_result_t<DA_tot, DA> eval_inode_tot(EvalNode const& node,
       return tot_result_t_{scaled};
     }
     tot_result_t_ operator()(DA_tot const& lhs, DA const& rhs) {
+      std::swap(lannot, rannot);
       return operator()(rhs, lhs);
     }
     tot_result_t_ operator()(DA const& lhs, DA_tot const& rhs) {
