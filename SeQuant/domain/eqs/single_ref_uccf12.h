@@ -340,7 +340,7 @@ class uccf12 {
           std::initializer_list<Index>{
               Index::make_tmp_index(IndexSpace::instance(IndexSpace::all))},
           std::initializer_list<Index>{Index::make_tmp_index(
-              IndexSpace::instance(IndexSpace::complete_unoccupied))});
+              IndexSpace::instance(IndexSpace::other_unoccupied))});
       auto E_pa = ex<FNOperator>(
           std::initializer_list<Index>{C->as<Tensor>().bra()[0]},
           std::initializer_list<Index>{C->as<Tensor>().ket()[0]});
@@ -360,7 +360,7 @@ class uccf12 {
         simplify(A);
       } else {
         A = A + single;
-        simplify(A);
+        non_canon_simplify(A);
       }
       auto A_ = A->clone();
       A_ = relable(A_);
@@ -372,7 +372,7 @@ class uccf12 {
       H_A_3 = H_A_3 + ex<Constant>(0.);
       H_A_3 = simplification::screen_F12_proj(H_A_3, 2);
       H_A_3 = simplification::detail::tens_to_FNOps(H_A_3);
-      simplify(H_A_3);
+      non_canon_simplify(H_A_3);
       auto H_A_2 = decompositions::three_body_substitution(H_A_3, 2);
       simplify(H_A_2);
       auto com_1 = simplification::hamiltonian_based_projector_2(H_A_2);

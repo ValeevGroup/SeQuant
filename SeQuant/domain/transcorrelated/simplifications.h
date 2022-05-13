@@ -367,19 +367,17 @@ ExprPtr screen_F_tensors(ExprPtr ex_, int ansatz = 2) {
   assert(ex_->is<Tensor>());
   assert(ex_->as<Tensor>().label() == L"F");
   auto overlap = ex<Constant>(1);
-  bool good = false;
-  bool bra_good = false;
   if (ansatz == 2) {
+    bool non_zero = false;
+    bool bra_good = false;
     for (int i = 0; i < ex_->as<Tensor>().bra().size(); i++) {
       auto bra = ex_->as<Tensor>().bra()[i];
       if (bra.space().type() == IndexSpace::complete ||
           bra.space().type() == IndexSpace::complete_unoccupied) {
-        good = true;
+        non_zero = true;
         bra_good = true;
-      } else if (bra.space().type() == IndexSpace::complete ||
-                 bra.space().type() == IndexSpace::complete_unoccupied ||
-                 bra.space().type() == IndexSpace::other_unoccupied) {
-        good = true;
+      } else if (bra.space().type() == IndexSpace::other_unoccupied) {
+        non_zero = true;
       }
     }
 
@@ -412,12 +410,10 @@ ExprPtr screen_F_tensors(ExprPtr ex_, int ansatz = 2) {
       auto ket = ex_->as<Tensor>().ket()[j];
       if (ket.space().type() == IndexSpace::complete ||
           ket.space().type() == IndexSpace::complete_unoccupied) {
-        good = true;
+        non_zero = true;
         ket_good = true;
-      } else if (ket.space().type() == IndexSpace::complete ||
-                 ket.space().type() == IndexSpace::complete_unoccupied ||
-                 ket.space().type() == IndexSpace::other_unoccupied) {
-        good = true;
+      } else if (ket.space().type() == IndexSpace::other_unoccupied) {
+        non_zero = true;
       }
     }
     for (int j = 0; j < ex_->as<Tensor>().ket().size(); j++) {
@@ -437,7 +433,7 @@ ExprPtr screen_F_tensors(ExprPtr ex_, int ansatz = 2) {
         }
       }
     }
-    if (good) {
+    if (non_zero) {
       return ex_ * overlap;
     } else {
       return ex<Constant>(0);
