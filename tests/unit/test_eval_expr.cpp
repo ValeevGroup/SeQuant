@@ -209,4 +209,15 @@ TEST_CASE("TEST_EVAL_EXPR", "[EvalExpr]") {
     // sum of two nonsymmetric tensors
     REQUIRE(symmetry(imed(t5, t6)) == Symmetry::nonsymm);
   }
+
+  SECTION("Debug") {
+    auto t1 =
+        EvalExpr{parse_expr(L"O{a_1<i_1,i_2>;a_1<i_3,i_2>}", Symmetry::nonsymm)
+                     ->as<Tensor>()};
+    auto t2 =
+        EvalExpr{parse_expr(L"O{a_2<i_1,i_2>;a_2<i_3,i_2>}", Symmetry::nonsymm)
+                     ->as<Tensor>()};
+
+    REQUIRE_NOTHROW(EvalExpr{t1, t2, EvalOp::Prod});
+  }
 }

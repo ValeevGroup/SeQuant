@@ -83,7 +83,6 @@ Symmetry EvalExpr::infer_tensor_symmetry_prod(EvalExpr const& xpr1,
   auto const& tnsr1 = xpr1.tensor();
   auto const& tnsr2 = xpr2.tensor();
 
-  auto imed_sym = Symmetry::invalid;
   if (xpr1.hash() == xpr2.hash()) {
     // potential outer product
     auto const uniq_idxs =
@@ -93,22 +92,24 @@ Symmetry EvalExpr::infer_tensor_symmetry_prod(EvalExpr const& xpr1,
     if (ranges::distance(uniq_idxs) ==
         tnsr1.const_braket().size() + tnsr2.const_braket().size()) {
       // outer product confirmed
-      imed_sym = Symmetry::antisymm;
+      return Symmetry::antisymm;
     }
-  } else {
-    bool whole_bk_contracted = (all_common_indices(tnsr1.bra(), tnsr2.ket()) ||
-                                all_common_indices(tnsr1.ket(), tnsr2.bra()));
-    auto sym1 = tnsr1.symmetry();
-    auto sym2 = tnsr2.symmetry();
-    assert(sym1 != Symmetry::invalid);
-    assert(sym2 != Symmetry::invalid);
-    if (whole_bk_contracted &&
-        !(sym1 == Symmetry::nonsymm || sym2 == Symmetry::nonsymm)) {
-      imed_sym = sym1 == sym2 ? sym1 : Symmetry::symm;
+  }
 
-    } else {
-      imed_sym = Symmetry::nonsymm;
-    }
+  // not an outer product of same tensor confirmed
+  auto imed_sym = Symmetry::invalid;
+  bool whole_bk_contracted = (all_common_indices(tnsr1.bra(), tnsr2.ket()) ||
+                              all_common_indices(tnsr1.ket(), tnsr2.bra()));
+  auto sym1 = tnsr1.symmetry();
+  auto sym2 = tnsr2.symmetry();
+  assert(sym1 != Symmetry::invalid);
+  assert(sym2 != Symmetry::invalid);
+  if (whole_bk_contracted &&
+      !(sym1 == Symmetry::nonsymm || sym2 == Symmetry::nonsymm)) {
+    imed_sym = sym1 == sym2 ? sym1 : Symmetry::symm;
+
+  } else {
+    imed_sym = Symmetry::nonsymm;
   }
 
   assert(imed_sym != Symmetry::invalid);

@@ -64,7 +64,7 @@ class EvalExpr final {
   ///
   /// annotation for TiledArray
   ///
-  std::string annot() const {return annot_; }
+  std::string const& annot() const {return annot_; }
 
   template <typename T = std::complex<double>>
   EvalExpr& operator*=(T fac) {
