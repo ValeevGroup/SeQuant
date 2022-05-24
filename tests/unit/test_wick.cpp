@@ -89,10 +89,20 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
                                        Vacuum::SingleProduct));
     REQUIRE(!FWickTheorem::can_contract(fann(L"p_1"), fann(L"i_2"),
                                         Vacuum::SingleProduct));
+
+    REQUIRE(BWickTheorem::can_contract(bann(L"i_1"), bcre(L"i_2"),
+                                       Vacuum::Physical));
+    REQUIRE(!BWickTheorem::can_contract(bcre(L"i_1"), bcre(L"i_2"),
+                                        Vacuum::Physical));
+    REQUIRE(!BWickTheorem::can_contract(bcre(L"i_1"), bann(L"i_2"),
+                                        Vacuum::Physical));
+    REQUIRE(!BWickTheorem::can_contract(bann(L"i_1"), bann(L"i_2"),
+                                        Vacuum::Physical));
   }
 
   SECTION("constructors") {
     REQUIRE_NOTHROW(FWickTheorem{FNOperatorSeq{}});
+    REQUIRE_NOTHROW(BWickTheorem{BNOperatorSeq{}});
 
     {
       auto opseq1 = FNOperatorSeq({FNOperator({L"i_1"}, {L"i_2"}),
@@ -107,6 +117,78 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
 
   SECTION("physical vacuum") {
     constexpr Vacuum V = Vacuum::Physical;
+
+    // number operator
+    {
+      {
+        auto opseq1 = FNOperatorSeq(
+          {FNOperator({L"i_1"}, {}, V), FNOperator({}, {L"i_2"}, V)});
+        auto wick1 = FWickTheorem{opseq1};
+        REQUIRE_NOTHROW(wick1.spinfree(false).compute());
+        // full contractions = null (N is already in normal form)
+        auto full_contractions = FWickTheorem{opseq1}.spinfree(false).compute();
+        REQUIRE(full_contractions->is<Constant>());
+        REQUIRE(full_contractions->as<Constant>().value<int>() == 0);
+        // partial contractions = N
+        auto partial_contractions = FWickTheorem{opseq1}.full_contractions(false).spinfree(false).compute();
+        //std::wcout << "partial_contractions=" << to_latex(partial_contractions) << std::endl;
+        REQUIRE(partial_contractions->is<Product>());
+        REQUIRE(partial_contractions->as<Product>().size() == 1);
+      }
+      {
+        auto opseq1 = BNOperatorSeq(
+          {BNOperator({L"i_1"}, {}, V), BNOperator({}, {L"i_2"}, V)});
+        auto wick1 = BWickTheorem{opseq1};
+        REQUIRE_NOTHROW(wick1.spinfree(false).compute());
+        // full contractions = null
+        auto full_contractions = BWickTheorem{opseq1}.spinfree(false).compute();
+        REQUIRE(full_contractions->is<Constant>());
+        REQUIRE(full_contractions->as<Constant>().value<int>() == 0);
+        // partial contractions = N
+        auto partial_contractions = BWickTheorem{opseq1}.full_contractions(false).spinfree(false).compute();
+        //std::wcout << "partial_contractions=" << to_latex(partial_contractions) << std::endl;
+        REQUIRE(partial_contractions->is<Product>());
+        REQUIRE(partial_contractions->as<Product>().size() == 1);
+      }
+    }
+
+    // hole number operator
+    {
+      {
+        auto opseq1 = FNOperatorSeq(
+          {FNOperator({}, {L"i_1"}, V), FNOperator({L"i_2"}, {}, V)});
+        auto wick1 = FWickTheorem{opseq1};
+        REQUIRE_NOTHROW(wick1.spinfree(false).compute());
+        // full contractions = delta
+        auto full_contractions = FWickTheorem{opseq1}.spinfree(false).compute();
+        REQUIRE(full_contractions->is<Product>());
+        REQUIRE(full_contractions->as<Product>().size() == 1);
+        // partial contractions = delta - N
+        auto partial_contractions = FWickTheorem{opseq1}.full_contractions(false).spinfree(false).compute();
+        //std::wcout << "partial_contractions=" << to_latex(partial_contractions) << std::endl;
+        REQUIRE(partial_contractions->is<Sum>());
+        REQUIRE(partial_contractions->as<Sum>().size() == 2);
+        REQUIRE(to_latex(partial_contractions) ==
+            L"{ \\bigl({{s^{{i_2}}_{{i_1}}}} - {{a^{{i_2}}_{{i_1}}}}\\bigr) }");
+      }
+      {
+        auto opseq1 = BNOperatorSeq(
+          {BNOperator({}, {L"i_1"}, V), BNOperator({L"i_2"}, {}, V)});
+        auto wick1 = BWickTheorem{opseq1};
+        REQUIRE_NOTHROW(wick1.spinfree(false).compute());
+        // full contractions = delta
+        auto full_contractions = BWickTheorem{opseq1}.spinfree(false).compute();
+        REQUIRE(full_contractions->is<Product>());
+        REQUIRE(full_contractions->as<Product>().size() == 1);
+        // partial contractions = delta + N
+        auto partial_contractions = BWickTheorem{opseq1}.full_contractions(false).spinfree(false).compute();
+        //std::wcout << "partial_contractions=" << to_latex(partial_contractions) << std::endl;
+        REQUIRE(partial_contractions->is<Sum>());
+        REQUIRE(partial_contractions->as<Sum>().size() == 2);
+        REQUIRE(to_latex(partial_contractions) ==
+                L"{ \\bigl({{s^{{i_2}}_{{i_1}}}} + {{b^{{i_2}}_{{i_1}}}}\\bigr) }");
+      }
+    }
 
     // three 1-body operators
     {
