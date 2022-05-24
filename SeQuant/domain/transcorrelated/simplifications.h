@@ -905,6 +905,7 @@ ExprPtr find_F12_interms(ExprPtr ex_) {
 // canonical form for E^{p_7}_{p_9} and E^{p_7 p_8}_{p_9 p_10} as the external indicies
 //  this also simultaneously partitions the result into one and two body terms.
 std::pair<ExprPtr, ExprPtr> fnop_to_overlap(ExprPtr exprs) {
+  //std::wcout << to_latex_align(exprs,20,3) << std::endl;
   auto one_body_result = ex<Constant>(0);
   auto two_body_result = ex<Constant>(0);
   for (auto&& product : exprs->as<Sum>().summands()) {
@@ -943,8 +944,8 @@ std::pair<ExprPtr, ExprPtr> fnop_to_overlap(ExprPtr exprs) {
     one_body_result = one_body_product + one_body_result;
     two_body_result = two_body_product + two_body_result;
   }
-  non_canon_simplify(one_body_result);
-  non_canon_simplify(two_body_result);
+  simplify(one_body_result);
+  simplify(two_body_result);
   return {one_body_result, two_body_result};
 }
 
