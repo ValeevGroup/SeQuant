@@ -24,6 +24,7 @@ class uccf12 {
   unsigned int op_rank;
   //no default constructor
   IndexSpace::TypeAttr gg_space = IndexSpace::all;
+  IndexSpace::TypeAttr singles_gg_space = IndexSpace::all;
   int ansatz_;
   bool print_;
   bool singles_;
@@ -35,7 +36,7 @@ class uccf12 {
   // TODO implement logic for non-default variables. should also include logic
   // for spin-orbital expressions.
   uccf12(std::string gg_label, int ansatz = 2,
-         bool print = false, bool singles = false,
+         bool print = false, bool singles = false, std::string singles_gg = "all",
          bool doubles = true,bool single_reference = true, bool fock_approx = true,
          unsigned int max_op_rank = 2) {
     sr = single_reference;
@@ -68,6 +69,7 @@ class uccf12 {
     // space: active occupieds is the normal choice, all orbitals is the
     // reference-independent (albeit expensive) choice
     assert(singles_ == true || doubles_ == true);
+    //doubles space options
     if (gg_label == "act_occ") {
       gg_space = IndexSpace::active_occupied;
     } else if (gg_label == "occ") {
@@ -85,6 +87,20 @@ class uccf12 {
       throw std::runtime_error(
           "uccf12::compute(gg_label) unsupported space label");
     }
+    //singles space options
+    if (singles_gg == "all"){
+      singles_gg_space = IndexSpace::all;
+    }
+    else if (singles_gg == "occ") {
+      singles_gg_space = IndexSpace::occupied;
+    }
+    else if (singles_gg == "all_active"){
+      singles_gg_space = IndexSpace::all_active;
+    }
+    else if(singles_gg == "occ_active"){
+      singles_gg_space = IndexSpace::active_occupied;
+    }
+    else{throw "singles index space not supported!";}
   }
   //[[e1,e2],e3]_12
   ExprPtr compute_double_com(ExprPtr e1, ExprPtr e2, ExprPtr e3,
@@ -338,7 +354,7 @@ class uccf12 {
       auto C = ex<Tensor>(
           L"C",
           std::initializer_list<Index>{
-              Index::make_tmp_index(IndexSpace::instance(IndexSpace::all))},
+              Index::make_tmp_index(IndexSpace::instance(singles_gg_space))},
           std::initializer_list<Index>{Index::make_tmp_index(
               IndexSpace::instance(IndexSpace::other_unoccupied))});
       auto E_pa = ex<FNOperator>(
