@@ -103,24 +103,20 @@ class AsyCost {
       } else {
         auto abs_c = boost::abs(count_);
         oss << (count_ < abs_c ? "- " : "");
-        if (abs_c == 1) {
-          // do nothing
-        } else {
-          bool frac_mode = abs_c.denominator() != 1;
-          oss << (frac_mode ? "\\frac{" : "");
+        bool frac_mode = abs_c.denominator() != 1;
+        if (!frac_mode && (abs_c != 1))
           oss << count_.numerator();
-          if (frac_mode) {
-            oss << "}{" << count_.denominator() << "}";
-          }
-          oss << (occ_ > 0 ? "O" : "");
-          if (occ_ > 1) {
-            oss << "^{" << occ_ << "}";
-          }
-          oss << (virt_ > 0 ? "V" : "");
-          if (virt_ > 1) {
-            oss << "^{" << virt_ << "}";
-          }
-          oss << "}";
+        if (frac_mode) {
+          oss << "\\frac{" << std::abs(count_.numerator()) << "}{"
+              << count_.denominator() << "}";
+        }
+        oss << (occ_ > 0 ? "O" : "");
+        if (occ_ > 1) {
+          oss << "^{" << occ_ << "}";
+        }
+        oss << (virt_ > 0 ? "V" : "");
+        if (virt_ > 1) {
+          oss << "^{" << virt_ << "}";
         }
       }
       return oss.str();
@@ -182,6 +178,7 @@ class AsyCost {
         }
     }
     // oss << "}";
+    auto str = oss.str();
     return oss.str();
   }
 
