@@ -61,9 +61,9 @@ class WickTheorem {
   }
 
   /// Controls whether next call to compute() will full contractions only or all
-  /// (including partial) contractions. By default compute() generates all
-  /// contractions.
-  /// @param sf if true, will complete full contractions only.
+  /// (including partial) contractions. By default compute() generates full
+  /// contractions only.
+  /// @param sf if false, will evaluate all contractions.
   /// @return reference to @c *this , for daisy-chaining
   WickTheorem &full_contractions(bool fc) {
     full_contractions_ = fc;
