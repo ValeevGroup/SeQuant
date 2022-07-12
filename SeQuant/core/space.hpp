@@ -412,32 +412,38 @@ inline bool operator!=(const IndexSpace &space1, const IndexSpace &space2) {
 }
 inline IndexSpace::Type intersection(IndexSpace::Type type1,
                                      IndexSpace::Type type2) {
-  return type1.intersection(type2);
+  return type1 == type2 ? type1 : type1.intersection(type2);
 }
 inline IndexSpace::QuantumNumbers intersection(IndexSpace::QuantumNumbers v1,
                                                IndexSpace::QuantumNumbers v2) {
-  return v1.intersection(v2);
+  return v1 == v2 ? v1 : v1.intersection(v2);
 }
 inline const IndexSpace &intersection(const IndexSpace &space1,
                                       const IndexSpace &space2) {
-  return IndexSpace::instance(space1.attr().intersection(space2.attr()));
+  return space1 == space2
+             ? space1
+             : IndexSpace::instance(space1.attr().intersection(space2.attr()));
 }
 inline const IndexSpace &intersection(const IndexSpace &space1,
                                       const IndexSpace &space2,
                                       const IndexSpace &space3) {
-  return IndexSpace::instance(
-      space1.attr().intersection(space2.attr().intersection(space3.attr())));
+  return space1 == space2 && space1 == space3
+             ? space1
+             : IndexSpace::instance(space1.attr().intersection(
+                   space2.attr().intersection(space3.attr())));
 }
 inline IndexSpace::Type unIon(IndexSpace::Type type1, IndexSpace::Type type2) {
-  return type1.unIon(type2);
+  return type1 == type2 ? type1 : type1.unIon(type2);
 }
 inline IndexSpace::QuantumNumbers unIon(IndexSpace::QuantumNumbers qns1,
                                         IndexSpace::QuantumNumbers qns2) {
-  return qns1.unIon(qns2);
+  return qns1 == qns2 ? qns1 : qns1.unIon(qns2);
 }
 inline const IndexSpace &unIon(const IndexSpace &space1,
                                const IndexSpace &space2) {
-  return IndexSpace::instance(space1.attr().unIon(space2.attr()));
+  return space1 == space2
+             ? space1
+             : IndexSpace::instance(space1.attr().unIon(space2.attr()));
 }
 /// @return true if type2 is included in type1, i.e. intersection(type1, type2)
 /// == type2
