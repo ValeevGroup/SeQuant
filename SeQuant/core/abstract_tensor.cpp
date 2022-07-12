@@ -8,18 +8,20 @@ namespace sequant {
 
 TensorCanonicalizer::~TensorCanonicalizer() = default;
 
-container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>> &TensorCanonicalizer::instance_map_accessor() {
-  static container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>> map_;
+container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>>
+    &TensorCanonicalizer::instance_map_accessor() {
+  static container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>>
+      map_;
   return map_;
 }
 
 container::vector<std::wstring>
-&TensorCanonicalizer::cardinal_tensor_labels_accessor() {
+    &TensorCanonicalizer::cardinal_tensor_labels_accessor() {
   static container::vector<std::wstring> ctlabels_;
   return ctlabels_;
 }
 
-std::shared_ptr<TensorCanonicalizer> TensorCanonicalizer::instance(
+std::shared_ptr<TensorCanonicalizer> TensorCanonicalizer::instance_ptr(
     std::wstring_view label) {
   auto &map = instance_map_accessor();
   // look for label-specific canonicalizer
@@ -32,14 +34,24 @@ std::shared_ptr<TensorCanonicalizer> TensorCanonicalizer::instance(
       return it->second;
     }
   }
-  throw std::runtime_error("must first register canonicalizer via TensorCanonicalizer::register_instance(...)");
+  return {};
 }
 
-void TensorCanonicalizer::register_instance(std::shared_ptr<TensorCanonicalizer> can, std::wstring_view label) {
+std::shared_ptr<TensorCanonicalizer> TensorCanonicalizer::instance(
+    std::wstring_view label) {
+  auto inst_ptr = instance_ptr(label);
+  if (!inst_ptr)
+    throw std::runtime_error(
+        "must first register canonicalizer via "
+        "TensorCanonicalizer::register_instance(...)");
+  return inst_ptr;
+}
+
+void TensorCanonicalizer::register_instance(
+    std::shared_ptr<TensorCanonicalizer> can, std::wstring_view label) {
   auto &map = instance_map_accessor();
   map[std::wstring{label}] = can;
 }
-
 
 ExprPtr DefaultTensorCanonicalizer::apply(AbstractTensor &t) {
   // tag all indices as ext->true/ind->false
