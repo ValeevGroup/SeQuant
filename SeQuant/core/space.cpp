@@ -16,6 +16,8 @@ sequant::IndexSpace sequant::IndexSpace::null_instance_{
 
 namespace sequant {
 
+IndexSpace::Type IndexSpace::nulltype = Type{0};
+IndexSpace::Type IndexSpace::nonnulltype = Type{0x7fffffff};
 IndexSpace::Type IndexSpace::frozen_occupied = Type{0b000001};
 IndexSpace::Type IndexSpace::inactive_occupied = Type{0b000010};
 IndexSpace::Type IndexSpace::active_occupied = Type{0b000100};

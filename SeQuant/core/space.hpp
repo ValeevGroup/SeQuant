@@ -68,7 +68,7 @@ class IndexSpace {
 
     /// @return an invalid TypeAttr
     static constexpr QuantumNumbersAttr invalid() noexcept {
-      return QuantumNumbersAttr(0xffff);
+      return QuantumNumbersAttr(-0);
     }
   };
 
@@ -122,9 +122,7 @@ class IndexSpace {
     }
     bool operator!=(Attr other) const { return !(*this == other); }
 
-    static Attr null() noexcept {
-      return Attr{TypeAttr{0}, QuantumNumbersAttr{0}};
-    }
+    static Attr null() noexcept { return Attr{nulltype, nullqns}; }
     static Attr invalid() noexcept {
       return Attr{TypeAttr::invalid(), QuantumNumbersAttr::invalid()};
     }
@@ -144,6 +142,7 @@ class IndexSpace {
 
   /// standard space tags are predefined that helps implement set theory of
   /// standard spaces as binary ops on bitsets
+  static Type nulltype;
   static Type frozen_occupied;
   static Type inactive_occupied;
   static Type active_occupied;
@@ -156,6 +155,7 @@ class IndexSpace {
   static Type other_unoccupied;
   static Type complete_unoccupied;
   static Type complete;
+  static Type nonnulltype;
   template <int32_t typeint>
   static const constexpr bool is_standard_type() {
     const Type type{typeint};
@@ -164,7 +164,7 @@ class IndexSpace {
             type == active_unoccupied || type == inactive_unoccupied ||
             type == unoccupied || type == all_active || type == all ||
             type == other_unoccupied || type == complete_unoccupied ||
-            type == complete);
+            type == complete || type == nulltype || type == nonnulltype);
   }
 
   /// standard space tags are predefined that helps implement set theory of
@@ -304,8 +304,8 @@ class IndexSpace {
     return attr2basekey_.find(attr)->second;
   }
 
-  /// Default ctor creates an invalid space
-  IndexSpace() : attr_(Attr::invalid()) {}
+  /// Default ctor creates space with nonnull type and null quantum numbers
+  IndexSpace() noexcept : attr_(nonnulltype, nullqns) {}
 
   IndexSpace(const IndexSpace &other) {
     if (!other.attr().is_valid())
