@@ -594,35 +594,39 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
       result += Op<S>::core_label();
       result += L"}";
     }
-    result += L"^{";
     const auto ncreators = this->ncreators();
     const auto nannihilators = this->nannihilators();
-    if (ncreators <
-        nannihilators) {  // pad on the left with square underbrackets, i.e. ⎵
-      const auto iend = nannihilators - ncreators;
-      if (iend > 0) result += L"\\textvisiblespace";
-      for (size_t i = 1; i != iend; ++i) {
-        result += L"\\,\\textvisiblespace";
-      }
-      if (ncreators > 0) {
+    if (ncreators > 0) {
+      result += L"^{";
+      if (ncreators <
+          nannihilators) {  // if have more annihilators than creators pad on
+                            // the left with square underbrackets, i.e. ⎵
+        const auto iend = nannihilators - ncreators;
+        if (iend > 0) result += L"\\textvisiblespace";
+        for (size_t i = 1; i != iend; ++i) {
+          result += L"\\,\\textvisiblespace";
+        }
         result += L"\\,";
       }
+      for (const auto &o : creators()) result += o.index().to_latex();
+      result += L"}";
     }
-    for (const auto &o : creators()) result += o.index().to_latex();
-    result += L"}_{";
-    if (ncreators >
-        nannihilators) {  // pad on the left with square underbrackets, i.e. ⎵
-      const auto iend = ncreators - nannihilators;
-      if (iend > 0) result += L"\\textvisiblespace";
-      for (size_t i = 1; i != iend; ++i) {
-        result += L"\\,\\textvisiblespace";
-      }
-      if (nannihilators > 0) {
+    if (nannihilators > 0) {
+      result += L"_{";
+      if (ncreators >
+          nannihilators) {  // if have more creators than annihilators pad on
+                            // the left with square underbrackets, i.e. ⎵
+        const auto iend = ncreators - nannihilators;
+        if (iend > 0) result += L"\\textvisiblespace";
+        for (size_t i = 1; i != iend; ++i) {
+          result += L"\\,\\textvisiblespace";
+        }
         result += L"\\,";
       }
+      for (const auto &o : annihilators()) result += o.index().to_latex();
+      result += L"}";
     }
-    for (const auto &o : annihilators()) result += o.index().to_latex();
-    result += L"}}";
+    result += L"}";
     return result;
   }
 
