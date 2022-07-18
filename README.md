@@ -37,8 +37,12 @@ target_link_libraries(your_executable_or_library_target PUBLIC SeQuant::SeQuant)
 
 ## Using
 
-To get started let's use SeQuant to apply Wick's theorem to a product of elementary (creation and annihilation)
-operators:
+To get started let's use SeQuant to apply Wick's theorem to a simple product of elementary (creation and annihilation)
+ fermionic operators:
+
+![a_{p_3} a_{p_4} a^\dagger_{p_1} a^\dagger_{p_2}](doc/images/tut-expr1.svg) ,
+
+This is achieved by the following SeQuant program:
 
 ```c++
 #include <SeQuant/core/sequant.hpp>
@@ -54,12 +58,30 @@ int main() {
   auto cp1 = fcrex(p1), cp2 = fcrex(p2);
   auto ap3 = fannx(p3), ap4 = fannx(p4);
 
-  std::wcout << to_latex(ap3 * ap4 * cp1 * cp2) << " = " << to_latex(FWickTheorem{ap3 * ap4 * cp1 * cp2}.set_external_indices(std::array{p1, p2, p3, p4}).full_contractions(false).compute()) << std::endl;
+  std::wcout << to_latex(ap3 * ap4 * cp1 * cp2) << " = "
+             << to_latex(FWickTheorem{ap3 * ap4 * cp1 * cp2}
+                             .set_external_indices(std::array{p1, p2, p3, p4})
+                             .full_contractions(false)
+                             .compute())
+             << std::endl;
   
   return 0;
 }
 ```
-Running this program should produce ![this expression](doc/images/tut-img1.svg) .
+
+Running this program should produce a LaTeX expression for this formula:
+
+![{{a^{}_{{p_3}}}{a^{}_{{p_4}}}{a^{{p_1}}_{}}{a^{{p_2}}_{}}} = { \bigl( - {{a^{{p_1}{p_2}}_{{p_3}{p_4}}}} - {{s^{{p_1}}_{{p_3}}}{s^{{p_2}}_{{p_4}}}} + {{s^{{p_1}}_{{p_3}}}{a^{{p_2}}_{{p_4}}}} - {{s^{{p_1}}_{{p_4}}}{a^{{p_2}}_{{p_3}}}} + {{s^{{p_2}}_{{p_3}}}{s^{{p_1}}_{{p_4}}}} - {{s^{{p_2}}_{{p_3}}}{a^{{p_1}}_{{p_4}}}} + {{s^{{p_2}}_{{p_4}}}{a^{{p_1}}_{{p_3}}}}\bigr) }](doc/images/tut-expr1-result1.svg) ,
+
+where the tensor notation is used to denote elementary and composite _normal_ operators,
+
+![a^p \equiv \, & a_p^\dagger \\ a^{p_1 p_2 \dots p_c}_{q_1 q_2 \dots q_a} \equiv \, & a_{p_1}^\dagger  a_{p_2}^\dagger \dots a_{p_c}^\dagger a_{q_a} \dots a_{q_2} a_{q_1}](doc/images/tut-notation-eq1.svg) ,
+
+and
+
+![s^p_q \equiv \langle q | p \rangle](doc/images/tut-notation-eq2.svg)
+
+denote 1-particle state inner products (overlaps).
 
 # Developers
 
