@@ -13,6 +13,8 @@
 #include "expr.hpp"
 #include "index.hpp"
 
+#include <thread>
+
 namespace sequant {
 
 class TensorCanonicalizer;
@@ -194,28 +196,54 @@ using AbstractTensorPtr = std::shared_ptr<AbstractTensor>;
 class TensorCanonicalizer {
  public:
   virtual ~TensorCanonicalizer();
+
   /// @return ptr to the TensorCanonicalizer object, if any, that had been
   /// previously registered via TensorCanonicalizer::register_instance()
   /// with @c label , or to the default canonicalizer, if any
   static std::shared_ptr<TensorCanonicalizer> instance_ptr(
       std::wstring_view label = L"");
+
+  /// @return ptr to the TensorCanonicalizer object, if any, that had been
+  /// previously registered via TensorCanonicalizer::register_instance()
+  /// with @c label
+  /// @sa instance_ptr
+  static std::shared_ptr<TensorCanonicalizer> nondefault_instance_ptr(
+      std::wstring_view label);
+
   /// @return a TensorCanonicalizer previously registered via
   /// TensorCanonicalizer::register_instance() with @c label or to the default
   /// canonicalizer
   /// @throw std::runtime_error if no canonicalizer has been registered
   static std::shared_ptr<TensorCanonicalizer> instance(
       std::wstring_view label = L"");
-  /// registers @c canonicalizer to be applied to Tensor objects with label @c
-  /// label ; leave the label empty if @c canonicalizer is to apply to Tensor
+
+  /// registers @c canonicalizer to be applied to Tensor objects with label
+  /// @c label ; leave the label empty if @c canonicalizer is to apply to Tensor
   /// objects with any label
+  /// @note if a canonicalizer registered with label @c label exists, it is
+  /// replaced
   static void register_instance(
       std::shared_ptr<TensorCanonicalizer> canonicalizer,
       std::wstring_view label = L"");
+
+  /// tries to register @c canonicalizer to be applied to Tensor objects
+  /// with label @c label ; leave the label empty if @c canonicalizer is to
+  /// apply to Tensor objects with any label
+  /// @return false if there is already a canonicalizer registered with @c label
+  /// @sa regiter_instance
+  static bool try_register_instance(
+      std::shared_ptr<TensorCanonicalizer> canonicalizer,
+      std::wstring_view label = L"");
+
+  /// deregisters canonicalizer (if any) registered previously
+  /// to be applied to tensors with label @c label
+  static void deregister_instance(std::wstring_view label = L"");
 
   /// @return a list of Tensor labels with lexicographic preference (in order)
   static const auto& cardinal_tensor_labels() {
     return cardinal_tensor_labels_accessor();
   }
+
   /// @param cardinal_tensor_labels a list of Tensor labels with lexicographic
   /// preference (in order)
   static void set_cardinal_tensor_labels(
@@ -235,8 +263,10 @@ class TensorCanonicalizer {
   inline auto ket_range(AbstractTensor& t) { return t._ket_mutable(); }
 
  private:
-  static container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>>&
-  instance_map_accessor();
+  static std::pair<
+      container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>>*,
+      std::unique_lock<std::recursive_mutex>>
+  instance_map_accessor();  // map* + locked recursive mutex
   static container::vector<std::wstring>& cardinal_tensor_labels_accessor();
 };
 
