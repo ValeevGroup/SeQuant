@@ -1069,8 +1069,8 @@ std::tuple<int, std::shared_ptr<NormalOperator<S>>> normalize(
     ++opseq_view_iter;
   }
 
-  // convert annihilator_groups to annihilators N.B. the NormalOperator ctor
-  // expects annihilators in reverse order!
+  // convert annihilator_groups to annihilators
+  // N.B. the NormalOperator ctor expects annihilators in reverse order!
   ranges::for_each(annihilator_groups | ranges::views::reverse,
                    [&annihilators](const auto &agrp) {
                      ranges::for_each(agrp | ranges::views::reverse,
@@ -1080,32 +1080,67 @@ std::tuple<int, std::shared_ptr<NormalOperator<S>>> normalize(
                    });
 
   // if particle_ops given, reorder to preserve the "original" pairs of Op<S>,
-  // if possible
+  // if possible. Max number of such pairs (annihilator/creator columns,
+  // in tensor notation) = min(#cre,#ann)
   if (!target_partner_indices.empty()) {
-    // for every creator Op, in reverse order, if it is in target_index_columns,
-    // locate matching annihilator, if any, and
     const auto ncre = ranges::size(creators);
-    for (std::int64_t p = ncre - 1; p >= 0; --p) {  // "reverse" particle index
-      const auto &cre_op = *(creators.begin() + p);
-      auto cre_it_in_index_cols = ranges::find_if(
-          target_partner_indices, [&cre_op](const auto &idx_pair) {
-            return idx_pair.first == cre_op.index();
-          });
-      if (cre_it_in_index_cols != target_partner_indices.end()) {
-        const auto &ann_idx = cre_it_in_index_cols->second;
-        auto ann_it_in_annihilators = ranges::find_if(
-            annihilators,
-            [&ann_idx](const auto &v) { return v.index() == ann_idx; });
-        if (ann_it_in_annihilators != annihilators.end()) {
-          const auto nskipped = ranges::distance(annihilators.begin() + p,
-                                                 ann_it_in_annihilators);
-          if (nskipped != 0) {
-            if (nskipped % 2) phase *= -1.;
-            std::swap(*(annihilators.begin() + p), *ann_it_in_annihilators);
+    const auto nann = ranges::size(annihilators);
+    const auto rank = std::min(ncre, nann);
+
+    // for every creator/annihilator, in reverse/forward order, if it is in
+    // target_index_columns, locate matching annihilator/creator, if any, and
+    // place in the
+    if (ncre == rank) {
+      const auto nann_extra = nann - rank;
+      for (std::int64_t p = rank - 1; p >= 0;
+           --p) {  // "reverse" particle index
+        const auto &cre_op = *(creators.begin() + p);
+        auto cre_it_in_index_cols = ranges::find_if(
+            target_partner_indices, [&cre_op](const auto &idx_pair) {
+              return idx_pair.first == cre_op.index();
+            });
+        if (cre_it_in_index_cols != target_partner_indices.end()) {
+          const auto &ann_idx = cre_it_in_index_cols->second;
+          auto source_ann_it = ranges::find_if(
+              annihilators,
+              [&ann_idx](const auto &v) { return v.index() == ann_idx; });
+          if (source_ann_it != annihilators.end()) {
+            assert(p + nann_extra < annihilators.size());
+            const auto target_ann_it = annihilators.begin() + p + nann_extra;
+            if (target_ann_it != source_ann_it) {
+              if (S == Statistics::FermiDirac) phase *= -1.;  // 1 swap
+              std::swap(*source_ann_it, *target_ann_it);
+            }
           }
         }
       }
-    }
+    }       // ncre == rank
+    else {  // nann == rank
+      assert(nann == rank);
+      const auto ncre_extra = ncre - rank;
+      for (std::int64_t p = rank - 1; p >= 0;
+           --p) {  // "reverse" particle index
+        const auto &ann_op = *(annihilators.begin() + p);
+        auto ann_it_in_index_cols = ranges::find_if(
+            target_partner_indices, [&ann_op](const auto &idx_pair) {
+              return idx_pair.second == ann_op.index();
+            });
+        if (ann_it_in_index_cols != target_partner_indices.end()) {
+          const auto &cre_idx = ann_it_in_index_cols->first;
+          auto source_cre_it = ranges::find_if(
+              creators,
+              [&cre_idx](const auto &v) { return v.index() == cre_idx; });
+          if (source_cre_it != creators.end()) {
+            assert(p + ncre_extra < creators.size());
+            const auto target_cre_it = creators.begin() + p + ncre_extra;
+            if (source_cre_it != target_cre_it) {
+              if (S == Statistics::FermiDirac) phase *= -1.;  // 1 swap
+              std::swap(*source_cre_it, *target_cre_it);
+            }
+          }
+        }
+      }
+    }  // nann == rank
   }
 
   return std::make_tuple(
