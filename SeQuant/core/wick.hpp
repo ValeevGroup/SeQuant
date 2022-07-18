@@ -455,11 +455,23 @@ class WickTheorem {
     void init_input_index_columns() {
       // for each NormalOperator
       for (auto &nop : opseq) {
+        using ranges::views::reverse;
+        using ranges::views::zip;
+
+        // zip in reverse order to handle non-number-conserving ops (i.e.
+        // nop.creators().size() != nop.annihilators().size()) reverse after
+        // insertion to restore canonical partner index order (in the order of
+        // particle indices in the normal operators) 7/18/2022 N.B. reverse(zip)
+        // for some reason is broken, hence the ugliness
+        std::size_t ninserted = 0;
         for (auto &&cre_ann :
-             ranges::views::zip(nop.creators(), nop.annihilators())) {
+             zip(reverse(nop.creators()), reverse(nop.annihilators()))) {
           input_partner_indices.emplace_back(std::get<0>(cre_ann).index(),
                                              std::get<1>(cre_ann).index());
+          ++ninserted;
         }
+        std::reverse(input_partner_indices.rbegin(),
+                     input_partner_indices.rbegin() + ninserted);
       }
     }
 
