@@ -223,6 +223,7 @@ class WickTheorem {
   /// Constant.
   /// @return the result of applying Wick's theorem; either a Constant, a
   /// Product, or a Sum
+  /// @warning this is not reentrant, but is optionally threaded internally
   ExprPtr compute(const bool count_only = false);
 
   /// Collects compute statistics
