@@ -270,6 +270,14 @@ class TensorCanonicalizer {
   static container::vector<std::wstring>& cardinal_tensor_labels_accessor();
 };
 
+/// @brief null Tensor canonicalizer does nothing
+class NullTensorCanonicalizer : public TensorCanonicalizer {
+ public:
+  virtual ~NullTensorCanonicalizer() = default;
+
+  ExprPtr apply(AbstractTensor&) override;
+};
+
 class DefaultTensorCanonicalizer : public TensorCanonicalizer {
  public:
   DefaultTensorCanonicalizer() = default;

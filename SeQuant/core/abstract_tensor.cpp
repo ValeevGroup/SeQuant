@@ -76,6 +76,8 @@ void TensorCanonicalizer::deregister_instance(std::wstring_view label) {
   }
 }
 
+ExprPtr NullTensorCanonicalizer::apply(AbstractTensor&) { return {}; }
+
 ExprPtr DefaultTensorCanonicalizer::apply(AbstractTensor& t) {
   // tag all indices as ext->true/ind->false
   auto braket_view = braket(t);
