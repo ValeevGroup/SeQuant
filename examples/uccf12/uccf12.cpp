@@ -125,7 +125,7 @@ try_main() {
     second_com = second_com + ex<Constant>(0.);
     second_com = simplification::screen_F12_proj(second_com);
     std::wcout << to_latex_align(second_com,20,2) << std::endl;
-    second_com = simplification::tens_to_FNOps(second_com);
+    second_com = simplification::detail::tens_to_FNOps(second_com);
     second_com = decompositions::three_body_substitution(second_com,2);
     simplify(second_com);
    std::wcout << "three body decomp: " << to_latex_align(second_com,20,2) << std::endl;
@@ -156,7 +156,7 @@ try_main() {
      H_A_3 = H_A_3 + ex<Constant>(0.);
      H_A_3 = simplification::screen_F12_proj(H_A_3);
      std::wcout << to_latex_align(H_A_3,20,2) << std::endl;
-     H_A_3 = simplification::tens_to_FNOps(H_A_3);
+     H_A_3 = simplification::detail::tens_to_FNOps(H_A_3);
     auto H_A_2 = decompositions::three_body_substitution(H_A_3,2);
     simplify(H_A_2);
     auto com_1 = simplification::hamiltonian_based_projector_2(H_A_2);

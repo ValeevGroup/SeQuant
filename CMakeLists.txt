@@ -314,7 +314,7 @@ if (BUILD_TESTING)
 
     set(utests_deps SeQuant)
 
-    set(unit_test_executable unit_tests)
+    set(unit_test_executable unit_tests-sequant)
     add_executable(${unit_test_executable} EXCLUDE_FROM_ALL
             tests/unit/test_main.cpp
             tests/unit/catch.hpp

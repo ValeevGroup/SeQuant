@@ -1241,7 +1241,7 @@ inline std::wstring to_latex_align(const ExprPtr &exprptr,
   std::wstring result = to_latex(exprptr);
   if (exprptr->is<Sum>()) {
     result.erase(0, 7);  // remove leading  "{ \bigl"
-    result.replace(result.size() - 9, 9,
+    result.replace(result.size() - 8, 8,
                    L")");  // replace trailing "\bigr) }" with ")"
     result = std::wstring(L"\\begin{align}\n& ") + result;
     // assume no inner sums

@@ -61,9 +61,9 @@ class WickTheorem {
   }
 
   /// Controls whether next call to compute() will full contractions only or all
-  /// (including partial) contractions. By default compute() generates all
-  /// contractions.
-  /// @param sf if true, will complete full contractions only.
+  /// (including partial) contractions. By default compute() generates full
+  /// contractions only.
+  /// @param sf if false, will evaluate all contractions.
   /// @return reference to @c *this , for daisy-chaining
   WickTheorem &full_contractions(bool fc) {
     full_contractions_ = fc;
@@ -223,6 +223,7 @@ class WickTheorem {
   /// Constant.
   /// @return the result of applying Wick's theorem; either a Constant, a
   /// Product, or a Sum
+  /// @warning this is not reentrant, but is optionally threaded internally
   ExprPtr compute(const bool count_only = false);
 
   /// Collects compute statistics
@@ -454,11 +455,23 @@ class WickTheorem {
     void init_input_index_columns() {
       // for each NormalOperator
       for (auto &nop : opseq) {
+        using ranges::views::reverse;
+        using ranges::views::zip;
+
+        // zip in reverse order to handle non-number-conserving ops (i.e.
+        // nop.creators().size() != nop.annihilators().size()) reverse after
+        // insertion to restore canonical partner index order (in the order of
+        // particle indices in the normal operators) 7/18/2022 N.B. reverse(zip)
+        // for some reason is broken, hence the ugliness
+        std::size_t ninserted = 0;
         for (auto &&cre_ann :
-             ranges::views::zip(nop.creators(), nop.annihilators())) {
+             zip(reverse(nop.creators()), reverse(nop.annihilators()))) {
           input_partner_indices.emplace_back(std::get<0>(cre_ann).index(),
                                              std::get<1>(cre_ann).index());
+          ++ninserted;
         }
+        std::reverse(input_partner_indices.rbegin(),
+                     input_partner_indices.rbegin() + ninserted);
       }
     }
 

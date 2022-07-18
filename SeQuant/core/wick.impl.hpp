@@ -183,7 +183,8 @@ inline container::map<Index, Index> compute_index_replacement_rules(
         const auto intersection_space = intersection(bra.space(), ket.space());
 
         // if overlap's indices are from non-overlapping spaces, return zero
-        if (intersection_space == IndexSpace::null_instance()) {throw zero_result{};
+        if (intersection_space == IndexSpace::null_instance()) {
+          throw zero_result{};
         }
 
         if (!bra_is_ext && !ket_is_ext) {  // int + int
@@ -390,10 +391,44 @@ inline void reduce_wick_impl(std::shared_ptr<Product> &expr,
     abort();  // programming error?
 }
 
+template <Statistics S>
+struct NullNormalOperatorCanonicalizerDeregister {
+  void operator()(void *) {
+    const auto nop_labels = NormalOperator<S>::labels();
+    TensorCanonicalizer::deregister_instance(nop_labels[0]);
+    TensorCanonicalizer::deregister_instance(nop_labels[1]);
+  }
+};
+
 }  // namespace detail
 
 template <Statistics S>
 ExprPtr WickTheorem<S>::compute(const bool count_only) {
+  // avoid recanonicalization of operators produced by WickTheorem
+  // by rapid canonicalization to avoid undoing all the good
+  // the NormalOperator<S>::normalize did
+  std::unique_ptr<void *, detail::NullNormalOperatorCanonicalizerDeregister<S>>
+      raii_tmp;
+  {
+    static std::mutex mtx;
+    static std::atomic<bool> disabled_canonicalization_of_normal_operators =
+        false;
+    if (!disabled_canonicalization_of_normal_operators) {
+      std::scoped_lock lk(mtx);
+      const auto nop_labels = NormalOperator<S>::labels();
+      assert(nop_labels.size() == 2);
+      if (!disabled_canonicalization_of_normal_operators) {
+        TensorCanonicalizer::try_register_instance(
+            std::make_shared<NullTensorCanonicalizer>(), nop_labels[0]);
+        TensorCanonicalizer::try_register_instance(
+            std::make_shared<NullTensorCanonicalizer>(), nop_labels[1]);
+        disabled_canonicalization_of_normal_operators = true;
+        raii_tmp = decltype(raii_tmp)(
+            nullptr, detail::NullNormalOperatorCanonicalizerDeregister<S>{});
+      }
+    }
+  }
+
   // have an Expr as input? Apply recursively ...
   if (expr_input_) {
     /// expand, then apply recursively to products
