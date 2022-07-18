@@ -440,14 +440,19 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
   /// constructs an identity operator
   NormalOperator(Vacuum v = get_default_context().vacuum()) {}
 
+  /// @tparam IndexSequence1 type representing a sequence of indices
+  /// @tparam IndexSequence2 type representing a sequence of indices
   /// @param creators sequence of creator indices
   /// @param annihilators sequence of annihilator indices (in order of particle
   /// indices, see the class documentation for more info).
-  template <typename IndexContainer,
-            typename = std::enable_if_t<std::is_same_v<
-                typename std::decay_t<IndexContainer>::value_type, Index>>>
-  NormalOperator(IndexContainer &&creator_indices,
-                 IndexContainer &&annihilator_indices,
+  template <typename IndexSequence1, typename IndexSequence2,
+            typename = std::enable_if_t<
+                std::is_same_v<
+                    typename std::decay_t<IndexSequence1>::value_type, Index> &&
+                std::is_same_v<
+                    typename std::decay_t<IndexSequence2>::value_type, Index>>>
+  NormalOperator(IndexSequence1 &&creator_indices,
+                 IndexSequence2 &&annihilator_indices,
                  Vacuum v = get_default_context().vacuum())
       : Operator<S>{}, vacuum_(v), ncreators_(creator_indices.size()) {
     this->reserve(creator_indices.size() + annihilator_indices.size());
@@ -459,16 +464,21 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
     }
   }
 
+  /// @tparam OpSequence1 type representing a sequence of Op<S> objects
+  /// @tparam OpSequence2 type representing a sequence of Op<S> objects
   /// @param creators sequence of creators
   /// @param annihilators sequence of annihilators (in order of particle
   /// indices, see the class documentation for more info).
-  template <typename OpContainer>
+  template <typename OpSequence1, typename OpSequence2>
   NormalOperator(
-      OpContainer &&creators, OpContainer &&annihilators,
+      OpSequence1 &&creators, OpSequence2 &&annihilators,
       Vacuum v = get_default_context().vacuum(),
       std::enable_if_t<
-          !std::is_same_v<std::decay_t<OpContainer>, NormalOperator> &&
-          std::is_same_v<typename std::decay_t<OpContainer>::value_type, Op<S>>>
+          !std::is_same_v<std::decay_t<OpSequence1>, NormalOperator> &&
+          !std::is_same_v<std::decay_t<OpSequence2>, NormalOperator> &&
+          std::is_same_v<typename std::decay_t<OpSequence1>::value_type,
+                         Op<S>> &&
+          std::is_same_v<typename std::decay_t<OpSequence2>::value_type, Op<S>>>
           * = nullptr)
       : Operator<S>{}, vacuum_(v), ncreators_(ranges::size(creators)) {
     for (const auto &op : creators) {

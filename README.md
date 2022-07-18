@@ -81,7 +81,25 @@ and
 
 ![s^p_q \equiv \langle q | p \rangle](doc/images/tut-notation-eq2.svg)
 
-denote 1-particle state inner products (overlaps).
+denote 1-particle state inner products (overlaps). Wick's theorem can of course be applied to directly to products of normal composite operators, e.g,
+
+```c++
+  auto nop1 = ex<FNOperator>(std::array{p1, p2}, std::array{p3, p4});
+  auto nop2 = ex<FNOperator>(std::array{p5}, std::array{p6, p7});
+
+  std::wcout << to_latex(nop1 * nop2) << " = "
+             << to_latex(FWickTheorem{nop1 * nop2}
+                             .set_external_indices(
+                                 std::array{p1, p2, p3, p4, p5, p6, p7})
+                             .full_contractions(false)
+                             .compute())
+             << std::endl;
+```
+
+produces
+
+![{{a^{{p_1}{p_2}}_{{p_3}{p_4}}}{a^{\textvisiblespace\,{p_5}}_{{p_6}{p_7}}}} = { \bigl({a^{\textvisiblespace\,{p_1}{p_2}{p_5}}_{{p_3}{p_4}{p_6}{p_7}}} - {{s^{{p_5}}_{{p_4}}}{a^{\textvisiblespace\,{p_1}{p_2}}_{{p_3}{p_6}{p_7}}}} + {{s^{{p_5}}_{{p_3}}}{a^{\textvisiblespace\,{p_1}{p_2}}_{{p_4}{p_6}{p_7}}}}\bigr) }](doc/images/tut-expr2-result1.svg)
+
 
 # Developers
 
