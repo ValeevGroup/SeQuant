@@ -98,8 +98,28 @@ denote 1-particle state inner products (overlaps). Wick's theorem can of course 
 
 produces
 
-![{{a^{{p_1}{p_2}}_{{p_3}{p_4}}}{a^{\textvisiblespace\,{p_5}}_{{p_6}{p_7}}}} = { \bigl({a^{\textvisiblespace\,{p_1}{p_2}{p_5}}_{{p_3}{p_4}{p_6}{p_7}}} - {{s^{{p_5}}_{{p_4}}}{a^{\textvisiblespace\,{p_1}{p_2}}_{{p_3}{p_6}{p_7}}}} + {{s^{{p_5}}_{{p_3}}}{a^{\textvisiblespace\,{p_1}{p_2}}_{{p_4}{p_6}{p_7}}}}\bigr) }](doc/images/tut-expr2-result1.svg)
+![{{a^{{p_1}{p_2}}_{{p_3}{p_4}}}{a^{\textvisiblespace\,{p_5}}_{{p_6}{p_7}}}} = { \bigl({a^{\textvisiblespace\,{p_1}{p_2}{p_5}}_{{p_3}{p_4}{p_6}{p_7}}} - {{s^{{p_5}}_{{p_4}}}{a^{\textvisiblespace\,{p_1}{p_2}}_{{p_3}{p_6}{p_7}}}} + {{s^{{p_5}}_{{p_3}}}{a^{\textvisiblespace\,{p_1}{p_2}}_{{p_4}{p_6}{p_7}}}}\bigr) }](doc/images/tut-expr2-result1.svg) .
 
+where `␣` is used in number-nonconserving operators to point out the empty "slots":
+
+Of course, same functionality can be used for bosons:
+
+![{{b^{{p_1}{p_2}}_{{p_3}{p_4}}}{b^{{p_5}{p_6}}_{\textvisiblespace\,{p_7}}}} = { \bigl({b^{{p_5}{p_1}{p_2}{p_6}}_{\textvisiblespace\,{p_3}{p_4}{p_7}}} + {{s^{{p_6}}_{{p_3}}}{b^{{p_5}{p_2}{p_1}}_{\textvisiblespace\,{p_4}{p_7}}}} + {{s^{{p_5}}_{{p_3}}}{b^{{p_1}{p_2}{p_6}}_{\textvisiblespace\,{p_4}{p_7}}}} + {{s^{{p_6}}_{{p_4}}}{b^{{p_5}{p_1}{p_2}}_{\textvisiblespace\,{p_3}{p_7}}}} + {{s^{{p_5}}_{{p_4}}}{b^{{p_2}{p_1}{p_6}}_{\textvisiblespace\,{p_3}{p_7}}}} + {{s^{{p_5}}_{{p_3}}}{s^{{p_6}}_{{p_4}}}{b^{{p_1}{p_2}}_{\textvisiblespace\,{p_7}}}} + {{s^{{p_6}}_{{p_3}}}{s^{{p_5}}_{{p_4}}}{b^{{p_2}{p_1}}_{\textvisiblespace\,{p_7}}}}\bigr) }](doc/images/tut-expr3-result1.svg) ,
+
+where `b` denotes normal bosonic operators constructed analogously with the normal fermionic operators `a`, is obtained via
+
+```c++
+  auto nop3 = ex<BNOperator>(std::array{p1, p2}, std::array{p3, p4});
+  auto nop4 = ex<BNOperator>(std::array{p5, p6}, std::array{p7});
+
+  std::wcout << to_latex(nop3 * nop4) << " = "
+             << to_latex(BWickTheorem{nop3 * nop4}
+                             .set_external_indices(
+                                 std::array{p1, p2, p3, p4, p5, p6, p7})
+                             .full_contractions(false)
+                             .compute())
+             << std::endl;
+```
 
 # Developers
 
