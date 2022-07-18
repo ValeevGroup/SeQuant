@@ -186,7 +186,7 @@ ExprPtr tens_to_FNOps(ExprPtr ex_) {
         } else {
           new_factor = factor;
         }
-        new_product = new_factor * new_product;
+        new_product = new_product * new_factor;
       }
       new_sum = new_product + new_sum;
     }
@@ -217,6 +217,8 @@ ExprPtr tens_to_FNOps(ExprPtr ex_) {
 /// TODO this dictates that the resulting hamiltonian will be in a particular
 /// basis.
 ExprPtr overlap_with_obs(ExprPtr ex_) {
+  //this function expects operators.
+
   //std::wcout << to_latex_align(ex_,20,4) << std::endl;
   auto overlap_expr =
       ex<Constant>(0);  // enforce an overlap each E with elements from
@@ -346,12 +348,11 @@ ExprPtr overlap_with_obs(ExprPtr ex_) {
     new_product = new_product;
     overlap_expr = overlap_expr + new_product;
   }
-
   FWickTheorem wick{overlap_expr};
   // std::wcout << to_latex_align(overlap_expr,20,2) << std::endl;
   wick.reduce(overlap_expr);
   non_canon_simplify(overlap_expr);
-  // std::wcout << to_latex_align(overlap_expr,20,2) << std::endl;
+   //std::wcout << "overlap after reduce" << to_latex_align(overlap_expr,20,2) << std::endl;
   return overlap_expr;
 }
 
@@ -765,7 +766,7 @@ ExprPtr densities_to_occ(const ExprPtr& ex_) {
 
 // constructs a biproduct intermediate tensor from a given two tensors in an
 // expression.
-ExprPtr biproduct_intermediate(ExprPtr T1, ExprPtr T2) {
+std::pair<ExprPtr,bool> biproduct_intermediate(ExprPtr T1, ExprPtr T2) {
   assert(T1->is<Tensor>());
   assert(T2->is<Tensor>());
   auto result = ex<Constant>(1);
@@ -775,53 +776,74 @@ ExprPtr biproduct_intermediate(ExprPtr T1, ExprPtr T2) {
     // V^pq_ij
     // intermediate decomposition handled by SeQuant so space labels can be
     // properly handled
+    std::wcout << "T1: " << to_latex_align(T1) << std::endl;
+    std::wcout << "T2: " << to_latex_align(T2) << std::endl;
     if (nconnects == 2 && space == IndexSpace::complete_unoccupied) {
-      if (T1_ket) {
+      // I believe that I overplayed the importance of external indicies here. V fundamental terms have free indices which always correspond to a particular tensor label "G" or "F"
+      auto g = ex<Constant>(0.0); auto F = ex<Constant>(0.0);
+      if (T1->as<Tensor>().label() == L"g"){
+        g = T1;
+        F = T2;
+      }
+      else {
+        g = T2;
+        F = T1;
+      }
+      // deciding this split can be entirely defined by were one tensor has the cabs + unocc orbitals.
+      if (F->as<Tensor>().ket()[0].space() == IndexSpace::complete_unoccupied) {
+        /*auto V_ijpq = ex<Tensor>(L"V",IDX_list{F->as<Tensor>().bra()[0], F->as<Tensor>().bra()[1]},IDX_list{g->as<Tensor>().ket()[0], g->as<Tensor>().ket()[1]});
+        result = V_ijpq;
+        return V_ijpq;*/
         auto GR_ijpq =
-            ex<Tensor>(L"GR", IDX_list{external_bra[0], external_bra[1]},
-                       IDX_list{external_ket[0], external_ket[1]});
+            ex<Tensor>(L"GR",IDX_list{F->as<Tensor>().bra()[0], F->as<Tensor>().bra()[1]},IDX_list{g->as<Tensor>().ket()[0], g->as<Tensor>().ket()[1]}
+                       );
         auto F_ijrs =
-            ex<Tensor>(L"F", IDX_list{external_bra[0], external_bra[1]},
+            ex<Tensor>(L"F",
+                       IDX_list{F->as<Tensor>().bra()[0], F->as<Tensor>().bra()[1]},
                        IDX_list{L"p_11", L"p_12"});
         auto g_rspq = ex<Tensor>(L"g", IDX_list{L"p_11", L"p_12"},
-                                 IDX_list{external_ket[0], external_ket[1]});
+                                 IDX_list{g->as<Tensor>().ket()[0], g->as<Tensor>().ket()[1]});
         auto F_ijmc =
-            ex<Tensor>(L"F", IDX_list{external_bra[0], external_bra[1]},
+            ex<Tensor>(L"F", IDX_list{F->as<Tensor>().bra()[0], F->as<Tensor>().bra()[1]},
                        IDX_list{L"m_6", L"α'_4"});
         auto g_mcpq = ex<Tensor>(L"g", IDX_list{L"m_6", L"α'_4"},
-                                 IDX_list{external_ket[0], external_ket[1]});
+                                 IDX_list{g->as<Tensor>().ket()[0], g->as<Tensor>().ket()[1]});
         auto F_jicm =
-            ex<Tensor>(L"F", IDX_list{external_bra[1], external_bra[0]},
-                       IDX_list{L"α'_4", L"m_6"});
-        auto g_cmqp = ex<Tensor>(L"g", IDX_list{L"α'_4", L"m_6"},
-                                 IDX_list{external_ket[1], external_ket[0]});
+            ex<Tensor>(L"F", IDX_list{F->as<Tensor>().bra()[1], F->as<Tensor>().bra()[0]},
+                       IDX_list{L"α'_4",L"m_6"});
+        auto g_cmqp = ex<Tensor>(L"g", IDX_list{L"α'_4",L"m_6"},
+                                 IDX_list{g->as<Tensor>().ket()[1], g->as<Tensor>().ket()[0]});
 
-        auto V = GR_ijpq - F_ijrs * g_rspq - F_ijmc * g_mcpq - F_jicm * g_cmqp;
+        auto V = GR_ijpq- F_ijrs * g_rspq - F_ijmc * g_mcpq - F_jicm * g_cmqp;
         simplify(V);
-        return V;
+        std::wcout << "V: " << to_latex_align(V,10,5) << std::endl;
+        return {V,false};
       } else {
+        /*auto V_pqij = ex<Tensor>(L"V",IDX_list{g->as<Tensor>().bra()[0], g->as<Tensor>().bra()[1]}, IDX_list{F->as<Tensor>().ket()[0], F->as<Tensor>().ket()[1]});
+        result = V_pqij;
+        return V_pqij;*/
         auto GR_pqij =
-            ex<Tensor>(L"GR", IDX_list{external_bra[0], external_bra[1]},
-                       IDX_list{external_ket[0], external_ket[1]});
+            ex<Tensor>(L"GR",IDX_list{g->as<Tensor>().bra()[0], g->as<Tensor>().bra()[1]},IDX_list{F->as<Tensor>().ket()[0], F->as<Tensor>().ket()[1]});
         auto F_rsij = ex<Tensor>(L"F", IDX_list{L"p_11", L"p_12"},
-                                 IDX_list{external_ket[0], external_ket[1]});
+                                 IDX_list{F->as<Tensor>().ket()[0], F->as<Tensor>().ket()[1]});
         auto g_pqrs =
-            ex<Tensor>(L"g", IDX_list{external_bra[0], external_bra[1]},
+            ex<Tensor>(L"g", IDX_list{g->as<Tensor>().bra()[0], g->as<Tensor>().bra()[1]},
                        IDX_list{L"p_11", L"p_12"});
         auto F_mcij = ex<Tensor>(L"F", IDX_list{L"m_6", L"α'_4"},
-                                 IDX_list{external_ket[0], external_ket[1]});
+                                 IDX_list{F->as<Tensor>().ket()[0], F->as<Tensor>().ket()[1]});
         auto g_pqmc =
-            ex<Tensor>(L"g", IDX_list{external_bra[0], external_bra[1]},
+            ex<Tensor>(L"g", IDX_list{g->as<Tensor>().bra()[0], g->as<Tensor>().bra()[1]},
                        IDX_list{L"m_6", L"α'_4"});
-        auto F_cmji = ex<Tensor>(L"F", IDX_list{L"α'_4", L"m_6"},
-                                 IDX_list{external_ket[1], external_ket[0]});
+        auto F_cmji = ex<Tensor>(L"F", IDX_list{L"α'_4",L"m_6"},
+                                 IDX_list{F->as<Tensor>().ket()[1], F->as<Tensor>().ket()[0]});
         auto g_qpcm =
-            ex<Tensor>(L"g", IDX_list{external_bra[1], external_bra[0]},
-                       IDX_list{L"α'_4", L"m_6"});
+            ex<Tensor>(L"g", IDX_list{g->as<Tensor>().bra()[1], g->as<Tensor>().bra()[0]},
+                       IDX_list{ L"α'_4",L"m_6"});
 
         auto V = GR_pqij - F_rsij * g_pqrs - F_mcij * g_pqmc - F_cmji * g_qpcm;
         simplify(V);
-        return V;
+        std::wcout << "V: " << to_latex_align(V,10,5) << std::endl;
+        return {V,false};
       }
     } else {
       result = T1 * T2;
@@ -829,15 +851,347 @@ ExprPtr biproduct_intermediate(ExprPtr T1, ExprPtr T2) {
   } else {
     if (nconnects == 2 && space == IndexSpace::complete_unoccupied) {
       // X^kl_ij
-      auto X_klij = ex<Tensor>(L"X", IDX_list{external_bra[0], external_bra[1]},
-                               IDX_list{external_ket[0], external_ket[1]});
-      result = X_klij;
+      if ( T1->as<Tensor>().bra()[0].space() ==IndexSpace::complete_unoccupied) {
+        /*auto X_klij =
+            ex<Tensor>(L"X", IDX_list{T2->as<Tensor>().bra()[0], T2->as<Tensor>().bra()[1]},
+                       IDX_list{T1->as<Tensor>().ket()[0],T1->as<Tensor>().ket()[1]});
+        result = X_klij;*/
+        auto F2_ijpq = ex<Tensor>(
+            L"R2",
+            IDX_list{T2->as<Tensor>().bra()[0], T2->as<Tensor>().bra()[1]},
+            IDX_list{T1->as<Tensor>().ket()[0],T1->as<Tensor>().ket()[1]});
+        auto F_ijrs = ex<Tensor>(
+            L"F", IDX_list{T2->as<Tensor>().bra()[0], T2->as<Tensor>().bra()[1]},
+            IDX_list{L"p_11", L"p_12"});
+        auto F_rspq = ex<Tensor>(
+            L"F", IDX_list{L"p_11", L"p_12"},
+            IDX_list{T1->as<Tensor>().ket()[0],T1->as<Tensor>().ket()[1]});
+        auto F_ijmc = ex<Tensor>(
+            L"F", IDX_list{T2->as<Tensor>().bra()[0], T2->as<Tensor>().bra()[1]},
+            IDX_list{L"m_6", L"α'_4"});
+        auto F_mcpq = ex<Tensor>(
+            L"F", IDX_list{L"m_6", L"α'_4"},
+            IDX_list{T1->as<Tensor>().ket()[0],T1->as<Tensor>().ket()[1]});
+        auto F_jicm = ex<Tensor>(
+            L"F", IDX_list{T2->as<Tensor>().bra()[1], T2->as<Tensor>().bra()[0]},
+            IDX_list{L"α'_4", L"m_6"});
+        auto F_cmqp = ex<Tensor>(
+            L"F", IDX_list{L"α'_4", L"m_6"},
+            IDX_list{T1->as<Tensor>().ket()[0],T1->as<Tensor>().ket()[1]});
+
+        auto X = F2_ijpq - F_ijrs * F_rspq - F_ijmc * F_mcpq - F_jicm * F_cmqp;
+        return {X,false};
+      }
+      else {
+        /*auto X_klij =
+            ex<Tensor>(L"X", IDX_list{T1->as<Tensor>().bra()[0], T1->as<Tensor>().bra()[1]},
+                       IDX_list{T2->as<Tensor>().ket()[0],T2->as<Tensor>().ket()[1]});
+        result = X_klij;*/
+        auto F2_ijpq = ex<Tensor>(
+            L"R2",
+            IDX_list{T1->as<Tensor>().bra()[0], T1->as<Tensor>().bra()[1]},
+            IDX_list{T2->as<Tensor>().ket()[0],T2->as<Tensor>().ket()[1]});
+        auto F_ijrs = ex<Tensor>(
+            L"F", IDX_list{T1->as<Tensor>().bra()[0], T1->as<Tensor>().bra()[1]},
+            IDX_list{L"p_11", L"p_12"});
+        auto F_rspq = ex<Tensor>(
+            L"F", IDX_list{L"p_11", L"p_12"},
+            IDX_list{T2->as<Tensor>().ket()[0],T2->as<Tensor>().ket()[1]});
+        auto F_ijmc = ex<Tensor>(
+            L"F", IDX_list{T1->as<Tensor>().bra()[0], T1->as<Tensor>().bra()[1]},
+            IDX_list{L"m_6", L"α'_4"});
+        auto F_mcpq = ex<Tensor>(
+            L"F", IDX_list{L"m_6", L"α'_4"},
+            IDX_list{T2->as<Tensor>().ket()[0],T2->as<Tensor>().ket()[1]});
+        auto F_jicm = ex<Tensor>(
+            L"F", IDX_list{T1->as<Tensor>().bra()[1], T1->as<Tensor>().bra()[0]},
+            IDX_list{L"α'_4", L"m_6"});
+        auto F_cmqp = ex<Tensor>(
+            L"F", IDX_list{L"α'_4", L"m_6"},
+            IDX_list{T2->as<Tensor>().ket()[0],T2->as<Tensor>().ket()[1]});
+
+        auto X = F2_ijpq - F_ijrs * F_rspq - F_ijmc * F_mcpq - F_jicm * F_cmqp;
+        return {X,false};
+      }
 
     } else if (nconnects == 1 && space == IndexSpace::complete_unoccupied) {
-      // B^kl_ij
-      auto B_klij = ex<Tensor>(L"B", IDX_list{external_bra[0], external_bra[1]},
-                               IDX_list{external_ket[0], external_ket[1]});
-      result = B_klij;
+      if(T1->as<Tensor>().ket()[0].space() == space) {
+        // B^kl_ij approximation C
+        auto B_klij = ex<Tensor>(L"B", IDX_list{external_bra[0],
+        external_bra[1]}, IDX_list{external_ket[0], external_ket[1]});
+        result = B_klij; return {B_klij,true};
+        auto dR2 = ex<Tensor>(
+            L"dR2",
+            IDX_list{T1->as<Tensor>().bra()[0], T1->as<Tensor>().bra()[1]},
+            IDX_list{T2->as<Tensor>().ket()[0], T2->as<Tensor>().ket()[1]});
+        ///
+        auto hj = ex<Tensor>(L"hJ", IDX_list{L"κ_1"},
+                             IDX_list{T2->as<Tensor>().ket()[0]});
+        auto R2 = ex<Tensor>(
+            L"R2",
+            IDX_list{T1->as<Tensor>().bra()[0], T1->as<Tensor>().bra()[1]},
+            IDX_list{L"κ_1", T2->as<Tensor>().ket()[1]});
+        //
+        auto hj_j = ex<Tensor>(L"hJ", IDX_list{L"κ_1"},
+                               IDX_list{T2->as<Tensor>().ket()[1]});
+        auto R2_ilk = ex<Tensor>(
+            L"R2",
+            IDX_list{T1->as<Tensor>().bra()[1], T1->as<Tensor>().bra()[0]},
+            IDX_list{L"κ_1", T2->as<Tensor>().ket()[0]});
+        ///
+        auto F_ijPQ = ex<Tensor>(
+            L"F",
+            IDX_list{T1->as<Tensor>().bra()[0], T1->as<Tensor>().bra()[1]},
+            IDX_list{L"κ_1", L"κ_2"});
+        auto K = ex<Tensor>(L"K", IDX_list{L"κ_1"}, IDX_list{L"κ_3"});
+        auto F_RQkl = ex<Tensor>(
+            L"F", IDX_list{L"κ_3", L"κ_2"},
+            IDX_list{T2->as<Tensor>().ket()[0], T2->as<Tensor>().ket()[1]});
+        //
+        auto F_jiPQ = ex<Tensor>(
+            L"F",
+            IDX_list{T1->as<Tensor>().bra()[1], T1->as<Tensor>().bra()[0]},
+            IDX_list{L"κ_1", L"κ_2"});
+        auto F_RQlk = ex<Tensor>(
+            L"F", IDX_list{L"κ_3", L"κ_2"},
+            IDX_list{T2->as<Tensor>().ket()[1], T2->as<Tensor>().ket()[0]});
+        ///
+        auto F_ijPm = ex<Tensor>(
+            L"F",
+            IDX_list{T1->as<Tensor>().bra()[0], T1->as<Tensor>().bra()[1]},
+            IDX_list{L"κ_1", L"m_11"});
+        auto f = ex<Tensor>(L"f", IDX_list{L"κ_1"}, IDX_list{L"κ_3"});
+        auto F_Rmkl = ex<Tensor>(
+            L"F", IDX_list{L"κ_3", L"m_11"},
+            IDX_list{T2->as<Tensor>().ket()[0], T2->as<Tensor>().ket()[1]});
+        //
+        auto F_jiPm = ex<Tensor>(
+            L"F",
+            IDX_list{T1->as<Tensor>().bra()[1], T1->as<Tensor>().bra()[0]},
+            IDX_list{L"κ_1", L"m_11"});
+        auto F_Rmlk = ex<Tensor>(
+            L"F", IDX_list{L"κ_3", L"m_11"},
+            IDX_list{T2->as<Tensor>().ket()[1], T2->as<Tensor>().ket()[0]});
+        ///
+        auto F_ijmc = ex<Tensor>(
+            L"F",
+            IDX_list{T1->as<Tensor>().bra()[0], T1->as<Tensor>().bra()[1]},
+            IDX_list{L"m_11", L"α'_11"});
+        auto f_mP = ex<Tensor>(L"f", IDX_list{L"m_11"}, IDX_list{L"κ_1"});
+        auto F_Pckl = ex<Tensor>(
+            L"F", IDX_list{L"κ_1", L"α'_11"},
+            IDX_list{T2->as<Tensor>().ket()[0], T2->as<Tensor>().ket()[1]});
+        //
+        auto F_jimc = ex<Tensor>(
+            L"F",
+            IDX_list{T1->as<Tensor>().bra()[1], T1->as<Tensor>().bra()[0]},
+            IDX_list{L"m_11", L"α'_11"});
+        auto F_Pclk = ex<Tensor>(
+            L"F", IDX_list{L"κ_1", L"α'_11"},
+            IDX_list{T2->as<Tensor>().ket()[1], T2->as<Tensor>().ket()[0]});
+        ///
+        auto F_ijpa = ex<Tensor>(
+            L"F",
+            IDX_list{T1->as<Tensor>().bra()[0], T1->as<Tensor>().bra()[1]},
+            IDX_list{L"p_11", L"e_11"});
+        auto f_pr = ex<Tensor>(L"f", IDX_list{L"p_11"}, IDX_list{L"p_12"});
+        auto F_rakl = ex<Tensor>(
+            L"F", IDX_list{L"p_12", L"e_11"},
+            IDX_list{T2->as<Tensor>().ket()[0], T2->as<Tensor>().ket()[1]});
+        //
+        auto F_jipa = ex<Tensor>(
+            L"F",
+            IDX_list{T1->as<Tensor>().bra()[1], T1->as<Tensor>().bra()[0]},
+            IDX_list{L"p_11", L"e_11"});
+        auto F_ralk = ex<Tensor>(
+            L"F", IDX_list{L"p_12", L"e_11"},
+            IDX_list{T2->as<Tensor>().ket()[1], T2->as<Tensor>().ket()[0]});
+        ///
+        auto F_ijmc2 = ex<Tensor>(
+            L"F",
+            IDX_list{T1->as<Tensor>().bra()[0], T1->as<Tensor>().bra()[1]},
+            IDX_list{L"m_11", L"α'_11"});
+        auto f_mn = ex<Tensor>(L"f", IDX_list{L"m_11"}, IDX_list{L"m_12"});
+        auto F_nckl = ex<Tensor>(
+            L"F", IDX_list{L"m_12", L"α'_11"},
+            IDX_list{T2->as<Tensor>().ket()[0], T2->as<Tensor>().ket()[1]});
+        //
+        auto F_jimc2 = ex<Tensor>(
+            L"F",
+            IDX_list{T1->as<Tensor>().bra()[1], T1->as<Tensor>().bra()[0]},
+            IDX_list{L"m_11", L"α'_11"});
+        auto F_nclk = ex<Tensor>(
+            L"F", IDX_list{L"m_12", L"α'_11"},
+            IDX_list{T2->as<Tensor>().ket()[1], T2->as<Tensor>().ket()[0]});
+        ///
+        auto F_ijpa2 = ex<Tensor>(
+            L"F",
+            IDX_list{T1->as<Tensor>().bra()[0], T1->as<Tensor>().bra()[1]},
+            IDX_list{L"p_11", L"e_11"});
+        auto f_pc = ex<Tensor>(L"f", IDX_list{L"p_11"}, IDX_list{L"α'_11"});
+        auto F_cakl = ex<Tensor>(
+            L"F", IDX_list{L"α'_11", L"e_11"},
+            IDX_list{T2->as<Tensor>().ket()[0], T2->as<Tensor>().ket()[1]});
+        //
+        auto F_jipa2 = ex<Tensor>(
+            L"F",
+            IDX_list{T1->as<Tensor>().bra()[1], T1->as<Tensor>().bra()[0]},
+            IDX_list{L"p_11", L"e_11"});
+        auto F_calk = ex<Tensor>(
+            L"F", IDX_list{L"α'11", L"e_11"},
+            IDX_list{T2->as<Tensor>().ket()[1], T2->as<Tensor>().ket()[0]});
+        ///
+        auto B1 = dR2 + ex<Constant>(2.0) * (hj * R2 - F_ijPQ * K * F_RQkl - F_ijPm * f * F_Rmkl -
+                  ex<Constant>(2.) * F_ijmc * f_mP * F_Pckl -
+                  F_ijpa * f_pr * F_rakl + F_ijmc2 * f_mn * F_nckl -
+                  ex<Constant>(2.) * F_ijpa2 * f_pc * F_cakl);
+        auto B2 = hj_j * R2_ilk - F_jiPQ * K * F_RQlk - F_jiPm * f * F_Rmlk -
+                  ex<Constant>(2.) * F_jimc * f_mP * F_Pclk -
+                  F_jipa * f_pr * F_ralk + F_jimc2 * f_mn * F_nclk -
+                  ex<Constant>(2.) * F_jipa2 * f_pc * F_calk;
+        auto B = B1/* + B2*/;
+        non_canon_simplify(B);
+        return {B,true};
+      }
+      else {
+        // B^kl_ij approximation C
+        auto B_klij = ex<Tensor>(L"B", IDX_list{external_bra[0],
+        external_bra[1]}, IDX_list{external_ket[0], external_ket[1]});
+        result = B_klij; return {B_klij,true};
+        auto dR2 = ex<Tensor>(
+            L"dR2",
+            IDX_list{T2->as<Tensor>().bra()[0], T2->as<Tensor>().bra()[1]},
+            IDX_list{T1->as<Tensor>().ket()[0], T1->as<Tensor>().ket()[1]});
+        ///
+        auto hj = ex<Tensor>(L"hJ", IDX_list{L"κ_1"},
+                             IDX_list{T1->as<Tensor>().ket()[0]});
+        auto R2 = ex<Tensor>(
+            L"R2",
+            IDX_list{T2->as<Tensor>().bra()[0], T2->as<Tensor>().bra()[1]},
+            IDX_list{L"κ_1", T1->as<Tensor>().ket()[1]});
+        //
+        auto hj_j = ex<Tensor>(L"hJ", IDX_list{L"κ_1"},
+                               IDX_list{T1->as<Tensor>().ket()[1]});
+        auto R2_ilk = ex<Tensor>(
+            L"R2",
+            IDX_list{T2->as<Tensor>().bra()[1], T2->as<Tensor>().bra()[0]},
+            IDX_list{L"κ_1", T1->as<Tensor>().ket()[0]});
+        ///
+        auto F_ijPQ = ex<Tensor>(
+            L"F",
+            IDX_list{T2->as<Tensor>().bra()[0], T2->as<Tensor>().bra()[1]},
+            IDX_list{L"κ_1", L"κ_2"});
+        auto K = ex<Tensor>(L"K", IDX_list{L"κ_1"}, IDX_list{L"κ_3"});
+        auto F_RQkl = ex<Tensor>(
+            L"F", IDX_list{L"κ_3", L"κ_2"},
+            IDX_list{T1->as<Tensor>().ket()[0], T1->as<Tensor>().ket()[1]});
+        //
+        auto F_jiPQ = ex<Tensor>(
+            L"F",
+            IDX_list{T2->as<Tensor>().bra()[1], T2->as<Tensor>().bra()[0]},
+            IDX_list{L"κ_1", L"κ_2"});
+        auto F_RQlk = ex<Tensor>(
+            L"F", IDX_list{L"κ_3", L"κ_2"},
+            IDX_list{T1->as<Tensor>().ket()[1], T1->as<Tensor>().ket()[0]});
+        ///
+        auto F_ijPm = ex<Tensor>(
+            L"F",
+            IDX_list{T2->as<Tensor>().bra()[0], T2->as<Tensor>().bra()[1]},
+            IDX_list{L"κ_1", L"m_11"});
+        auto f = ex<Tensor>(L"f", IDX_list{L"κ_1"}, IDX_list{L"κ_3"});
+        auto F_Rmkl = ex<Tensor>(
+            L"F", IDX_list{L"κ_3", L"m_11"},
+            IDX_list{T1->as<Tensor>().ket()[0], T1->as<Tensor>().ket()[1]});
+        //
+        auto F_jiPm = ex<Tensor>(
+            L"F",
+            IDX_list{T2->as<Tensor>().bra()[1], T2->as<Tensor>().bra()[0]},
+            IDX_list{L"κ_1", L"m_11"});
+        auto F_Rmlk = ex<Tensor>(
+            L"F", IDX_list{L"κ_3", L"m_11"},
+            IDX_list{T1->as<Tensor>().ket()[1], T1->as<Tensor>().ket()[0]});
+        ///
+        auto F_ijmc = ex<Tensor>(
+            L"F",
+            IDX_list{T2->as<Tensor>().bra()[0], T2->as<Tensor>().bra()[1]},
+            IDX_list{L"m_11", L"α'_11"});
+        auto f_mP = ex<Tensor>(L"f", IDX_list{L"m_11"}, IDX_list{L"κ_1"});
+        auto F_Pckl = ex<Tensor>(
+            L"F", IDX_list{L"κ_1", L"α'_11"},
+            IDX_list{T1->as<Tensor>().ket()[0], T1->as<Tensor>().ket()[1]});
+        //
+        auto F_jimc = ex<Tensor>(
+            L"F",
+            IDX_list{T2->as<Tensor>().bra()[1], T2->as<Tensor>().bra()[0]},
+            IDX_list{L"m_11", L"α'_11"});
+        auto F_Pclk = ex<Tensor>(
+            L"F", IDX_list{L"κ_1", L"α'_11"},
+            IDX_list{T1->as<Tensor>().ket()[1], T1->as<Tensor>().ket()[0]});
+        ///
+        auto F_ijpa = ex<Tensor>(
+            L"F",
+            IDX_list{T2->as<Tensor>().bra()[0], T2->as<Tensor>().bra()[1]},
+            IDX_list{L"p_11", L"e_11"});
+        auto f_pr = ex<Tensor>(L"f", IDX_list{L"p_11"}, IDX_list{L"p_12"});
+        auto F_rakl = ex<Tensor>(
+            L"F", IDX_list{L"p_12", L"e_11"},
+            IDX_list{T1->as<Tensor>().ket()[0], T1->as<Tensor>().ket()[1]});
+        //
+        auto F_jipa = ex<Tensor>(
+            L"F",
+            IDX_list{T2->as<Tensor>().bra()[1], T2->as<Tensor>().bra()[0]},
+            IDX_list{L"p_11", L"e_11"});
+        auto F_ralk = ex<Tensor>(
+            L"F", IDX_list{L"p_12", L"e_11"},
+            IDX_list{T1->as<Tensor>().ket()[1], T1->as<Tensor>().ket()[0]});
+        ///
+        auto F_ijmc2 = ex<Tensor>(
+            L"F",
+            IDX_list{T2->as<Tensor>().bra()[0], T2->as<Tensor>().bra()[1]},
+            IDX_list{L"m_11", L"α'_11"});
+        auto f_mn = ex<Tensor>(L"f", IDX_list{L"m_11"}, IDX_list{L"m_12"});
+        auto F_nckl = ex<Tensor>(
+            L"F", IDX_list{L"m_12", L"α'_11"},
+            IDX_list{T1->as<Tensor>().ket()[0], T1->as<Tensor>().ket()[1]});
+        //
+        auto F_jimc2 = ex<Tensor>(
+            L"F",
+            IDX_list{T2->as<Tensor>().bra()[1], T2->as<Tensor>().bra()[0]},
+            IDX_list{L"m_11", L"α'_11"});
+        auto F_nclk = ex<Tensor>(
+            L"F", IDX_list{L"m_12", L"α'_11"},
+            IDX_list{T1->as<Tensor>().ket()[1], T1->as<Tensor>().ket()[0]});
+        ///
+        auto F_ijpa2 = ex<Tensor>(
+            L"F",
+            IDX_list{T2->as<Tensor>().bra()[0], T2->as<Tensor>().bra()[1]},
+            IDX_list{L"p_11", L"e_11"});
+        auto f_pc = ex<Tensor>(L"f", IDX_list{L"p_11"}, IDX_list{L"α'_11"});
+        auto F_cakl = ex<Tensor>(
+            L"F", IDX_list{L"α'_11", L"e_11"},
+            IDX_list{T1->as<Tensor>().ket()[0], T1->as<Tensor>().ket()[1]});
+        //
+        auto F_jipa2 = ex<Tensor>(
+            L"F",
+            IDX_list{T2->as<Tensor>().bra()[1], T2->as<Tensor>().bra()[0]},
+            IDX_list{L"p_11", L"e_11"});
+        auto F_calk = ex<Tensor>(
+            L"F", IDX_list{L"α'_11", L"e_11"},
+            IDX_list{T1->as<Tensor>().ket()[1], T1->as<Tensor>().ket()[0]});
+        ///
+        auto B1 = dR2 + ex<Constant>(2.0) *(hj * R2 - F_ijPQ * K * F_RQkl - F_ijPm * f * F_Rmkl -
+                  ex<Constant>(2.) * F_ijmc * f_mP * F_Pckl -
+                  F_ijpa * f_pr * F_rakl + F_ijmc2 * f_mn * F_nckl -
+                  ex<Constant>(2.) * F_ijpa2 * f_pc * F_cakl);
+        auto B2 = hj_j * R2_ilk - F_jiPQ * K * F_RQlk - F_jiPm * f * F_Rmlk -
+                  ex<Constant>(2.) * F_jimc * f_mP * F_Pclk -
+                  F_jipa * f_pr * F_ralk + F_jimc2 * f_mn * F_nclk -
+                  ex<Constant>(2.) * F_jipa2 * f_pc * F_calk;
+        auto B = B1/* + B2*/;
+        std::wcout << "B: " << to_latex_align(B,20,3) << std::endl;
+        non_canon_simplify(B);
+        return {B,true};
+      }
     } else if (nconnects == 0) {
       // return original expression (no simplifications to be made)
       result = T1 * T2;
@@ -845,7 +1199,7 @@ ExprPtr biproduct_intermediate(ExprPtr T1, ExprPtr T2) {
       result = T1 * T2;
     }
   }
-  return result;
+  return {result,false};
 }
 // identify F12 intermediates
 // intermediates we generate contain either 2 F or g tensors.
@@ -879,7 +1233,7 @@ ExprPtr find_F12_interms(ExprPtr ex_) {
   if (T1_T2.size() == 2) {
     assert(counter == 2);
     auto result = biproduct_intermediate(T1_T2[0], T1_T2[1]);
-    if (result->is<Tensor>() && result->as<Tensor>().label() == L"B") {
+    if (result.second) {
       for (auto&& factors :
            ex_->as<Product>()
                .factors()) {  // have to find fock matrix and remove. factor 1/2
@@ -891,9 +1245,9 @@ ExprPtr find_F12_interms(ExprPtr ex_) {
       }
     }
 
-    result = result * ex_;
-    non_canon_simplify(result);
-    return result;
+    result.first = result.first * ex_;
+    non_canon_simplify(result.first);
+    return result.first;
   }
   return ex_;
 }
@@ -944,8 +1298,8 @@ std::pair<ExprPtr, ExprPtr> fnop_to_overlap(ExprPtr exprs) {
     one_body_result = one_body_product + one_body_result;
     two_body_result = two_body_product + two_body_result;
   }
-  simplify(one_body_result);
-  simplify(two_body_result);
+  non_canon_simplify(one_body_result);
+  non_canon_simplify(two_body_result);
   return {one_body_result, two_body_result};
 }
 

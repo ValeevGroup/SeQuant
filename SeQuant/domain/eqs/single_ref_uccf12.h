@@ -26,6 +26,7 @@ class uccf12 {
   IndexSpace::TypeAttr gg_space = IndexSpace::all;
   IndexSpace::TypeAttr singles_gg_space = IndexSpace::all;
   int ansatz_;
+  int comutator_order_;
   bool print_;
   bool singles_;
   bool doubles_;
@@ -37,15 +38,13 @@ class uccf12 {
   // for spin-orbital expressions.
   uccf12(std::string gg_label, int ansatz = 2,
          bool print = false, bool singles = false, std::string singles_gg = "all",
-         bool doubles = true,bool single_reference = true, bool fock_approx = true,
-         unsigned int max_op_rank = 2) {
-    sr = single_reference;
-    fock = fock_approx;
-    op_rank = max_op_rank;
+         bool doubles = true, int comutator_order = 2) {
     ansatz_ = ansatz;
     print_ = print;
     singles_ = singles;
     doubles_ = doubles;
+    comutator_order_ = comutator_order;
+
 
 
     sequant::set_default_context(
@@ -226,6 +225,45 @@ class uccf12 {
     return result;
   }
 
+  ExprPtr do_com (ExprPtr t1, ExprPtr t2, int ansatz = 2){
+    // wick's theorm
+    auto expression = (t1 * t2) - (t2 * t1);
+    non_canon_simplify(expression);
+    auto first_com = do_wick(expression);
+    // simplification
+    non_canon_simplify(first_com);
+    return first_com;
+  }
+
+  ExprPtr post_wick_sim(ExprPtr first_com, int ansatz = 2){
+    if (ansatz == 2) {
+      first_com = keep_up_to_3_body_terms(first_com);
+      first_com = first_com + ex<Constant>(0.);// make a sum to avoid heavy code duplication for product and sum variants.
+      first_com = simplification::overlap_with_obs(first_com);
+      first_com = first_com + ex<Constant>(0.);
+      non_canon_simplify(first_com);
+      first_com = simplification::screen_F12_proj(first_com, 2);
+      non_canon_simplify(first_com);
+      first_com = simplification::detail::tens_to_FNOps(first_com);
+      non_canon_simplify(first_com);
+      first_com = decompositions::three_body_substitution(first_com, 2);
+      non_canon_simplify(first_com);
+      return first_com;
+    }
+    if (ansatz == 1) {
+      first_com = keep_up_to_2_body_terms(first_com);
+      first_com =
+          first_com +
+          ex<Constant>(0.);
+      first_com = simplification::overlap_with_obs(first_com);
+      first_com = first_com + ex<Constant>(0.);
+      first_com = simplification::screen_F12_proj(first_com, 1);
+      first_com = simplification::detail::tens_to_FNOps(first_com);
+      simplify(first_com);
+      return first_com;
+    }
+  }
+
   // produces a uniquely indexed version of the given expression.
   // assumes same number of upper and lower indices for operators and tensors
   // do not simplify(expr) after use! this will cannonicalize labeling, undoing
@@ -372,35 +410,71 @@ class uccf12 {
 
       ExprPtr A = ex<Constant>(0.0);
       if (doubles_) {
-        A = A + (r - adjoint(r)) + single;
+        A = A + (r - adjoint(r_1)) + single;
         simplify(A);
       } else {
         A = A + single;
         non_canon_simplify(A);
       }
-      auto A_ = A->clone();
-      A_ = relable(A_);
-      //std::wcout << "singles_A: " << to_latex_align(A_, 20,4) << std::endl;
-       // first commutator in eq 9. Chem. Phys. 136, 084107 (2012).
-      auto H_A = do_wick(ex<Constant>(1.) * ((h * A) - (A * h)));
-      auto H_A_3 = keep_up_to_3_body_terms(H_A);
-      H_A_3 = simplification::overlap_with_obs(H_A_3);
-      H_A_3 = H_A_3 + ex<Constant>(0.);
-      H_A_3 = simplification::screen_F12_proj(H_A_3, 2);
-      H_A_3 = simplification::detail::tens_to_FNOps(H_A_3);
-      non_canon_simplify(H_A_3);
-      auto H_A_2 = decompositions::three_body_substitution(H_A_3, 2);
-      simplify(H_A_2);
-      auto com_1 = simplification::hamiltonian_based_projector_2(H_A_2);
-
+        // std::wcout << "singles_A: " << to_latex_align(A_, 20,4) << std::endl;
+        //  first commutator in eq 9. Chem. Phys. 136, 084107 (2012).
+        /*auto H_A = do_wick(ex<Constant>(1.) * ((F() * A) - (A * F())));
+        auto H_A_3 = keep_up_to_3_body_terms(H_A);
+        H_A_3 = simplification::overlap_with_obs(H_A_3);
+        H_A_3 = H_A_3 + ex<Constant>(0.);
+        H_A_3 = simplification::screen_F12_proj(H_A_3, 2);
+        H_A_3 = simplification::detail::tens_to_FNOps(H_A_3);
+        non_canon_simplify(H_A_3);
+        auto H_A_2 = decompositions::three_body_substitution(H_A_3, 2);
+        simplify(H_A_2);
+        auto com_1 = simplification::hamiltonian_based_projector_2(H_A_2);*/
+        auto full_single_com = do_com(h,A);
+        simplify(full_single_com);
+        full_single_com = post_wick_sim(full_single_com);
+        auto com_1 = simplification::hamiltonian_based_projector_2(full_single_com);
+        auto one_body = com_1.first;
+        auto two_body = com_1.second;
       // double commutator in eq. 9. Chem. Phys. 136, 084107 (2012).
-      auto full_double_com =
-          ex<Constant>(1. / 2) * compute_double_com(F(), A, A_);
-      auto sim = simplification::fock_based_projector_2(full_double_com);
-      auto one_body = com_1.first + (sim.first);
-      auto two_body = com_1.second + (sim.second);
-
-      // cannot use non_canon_simplify here because of B term.
+      if (comutator_order_ >= 2) {
+        auto full_double_com = ex<Constant>(1. / 2) * do_com(do_com(H(),relable(A)),relable(A));
+        simplify(full_double_com);
+        full_double_com = post_wick_sim(full_double_com);
+        auto double_com = simplification::fock_based_projector_2(full_double_com);
+        one_body = one_body + double_com.first;
+        two_body = two_body + double_com.second;
+        if(comutator_order_ >= 3){
+          auto full_triple_com =  ex<Constant>(1. / 6) * do_com(do_com(do_com(H(),A),relable(A)),relable(A));
+          simplify(full_triple_com);
+          full_triple_com = post_wick_sim(full_triple_com);
+          auto triple_com = simplification::fock_based_projector_2(full_triple_com);
+          one_body = one_body + triple_com.first;
+          two_body = two_body + triple_com.second;
+          if (comutator_order_ >= 4){
+            auto full_quadruple_com = ex<Constant>(1. / 24) * do_com(do_com(do_com(do_com(H(),A),relable(A)),relable(A)),relable(A));
+            simplify(full_quadruple_com);
+            full_quadruple_com = post_wick_sim(full_quadruple_com);
+            auto quadruple_com = simplification::fock_based_projector_2(full_quadruple_com);
+            one_body = one_body + quadruple_com.first;
+            two_body = two_body + quadruple_com.second;
+            if (comutator_order_ >= 5){
+              auto full_quintuple_com = ex<Constant>(1. / 120) * do_com(do_com(do_com(do_com(do_com(F(),A),relable(A)),relable(A)),relable(A)),relable(A));
+              simplify(full_quintuple_com);
+              full_quintuple_com = post_wick_sim(full_quintuple_com);
+              auto quintuple_com = simplification::fock_based_projector_2(full_quintuple_com);
+              one_body = one_body + quintuple_com.first;
+              two_body = two_body + quintuple_com.second;
+              if (comutator_order_ >= 6){
+                auto full_six_com = ex<Constant>(1. / 720) * do_com(do_com(do_com(do_com(do_com(do_com(F(),A),relable(A)),relable(A)),relable(A)),relable(A)),relable(A));
+                simplify(full_six_com);
+                full_six_com = post_wick_sim(full_six_com);
+                auto six_com = simplification::fock_based_projector_2(full_six_com);
+                one_body = one_body + six_com.first;
+                two_body = two_body + six_com.second;
+              }
+            }
+          }
+        }
+      }
       non_canon_simplify(one_body);
       non_canon_simplify(two_body);
       int term_count = 0;
