@@ -18,7 +18,9 @@ int main(int argc, char* argv[]) {
   std::wcout.sync_with_stdio(true);
   std::wcerr.sync_with_stdio(true);
   sequant::detail::OpIdRegistrar op_id_registrar;
-
+  sequant::set_default_context(
+      SeQuant(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
+              BraKetSymmetry::conjugate, SPBasis::spinorbital));
   mbpt::set_default_convention();
 
   using sequant::eqs::compute_all;

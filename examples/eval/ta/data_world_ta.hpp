@@ -13,7 +13,7 @@
 #include <SeQuant/core/tensor.hpp>
 #include <range/v3/view.hpp>
 
-namespace sequant::eval::ta {
+namespace sequant::eval {
 
 template <typename Tensor_t>
 class DataWorldTA {
@@ -39,7 +39,7 @@ class DataWorldTA {
   /// \param tensor Output TA::DistArray tensor.
   void read_tensor_ta(std::string_view fname, Tensor_t& tensor) {
     // TODO assert tensor single tiled or extend to handle multiply tiled case
-    auto ta_tensor = TA::Tensor<typename Tensor_t::numeric_type>{
+    auto ta_tensor = TA::Tensor<typename Tensor_t::scalar_type>{
         tensor.trange().make_tile_range(0)};
     read_tensor(fname, ta_tensor);
     *tensor.begin() = ta_tensor;

@@ -69,6 +69,9 @@ int main(int argc, char* argv[]) {
   using namespace sequant;
   detail::OpIdRegistrar op_id_registrar;
   mbpt::set_default_convention();
+  sequant::set_default_context(
+      SeQuant(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
+              BraKetSymmetry::conjugate, SPBasis::spinorbital));
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
 
@@ -82,7 +85,7 @@ int main(int argc, char* argv[]) {
   auto const calc_info =
       eval::make_calc_info(calc_config, fock_file, eri_file, out_file);
 
-  eval::ta::SequantEvalScfTA<TA::TArrayD>{world, calc_info}.scf(std::wcout);
+  eval::SequantEvalScfTA<TA::TArrayD>{world, calc_info}.scf(std::wcout);
 
   TA::finalize();
   return 0;

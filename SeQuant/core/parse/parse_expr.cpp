@@ -209,8 +209,4 @@ ExprPtr parse_expr(std::wstring_view raw_expr, Symmetry symmetry){
   return result[0];
 }
 
-ExprPtr parse_expr_asymm(std::wstring_view raw) {
-  return parse_expr(raw, Symmetry::antisymm);
-}
-
 }  // namespace sequant

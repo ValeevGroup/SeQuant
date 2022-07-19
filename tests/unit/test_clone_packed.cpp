@@ -2,18 +2,16 @@
 // Created by Bimal Gaudel on 9/22/21.
 //
 #include "catch.hpp"
-#include <SeQuant/core/clone.hpp>
+#include <SeQuant/core/clone_packed.hpp>
 #include <SeQuant/core/tensor.hpp>
 
-TEST_CASE("TEST_CLONE", "[clone]") {
+TEST_CASE("TEST_CLONE_PACKED", "[clone_packed]") {
   using namespace sequant;
   SECTION("Tensor") {
-    REQUIRE(clone(ex<Tensor>(L"t",
-                     IndexList{L"i_1"},
-                     IndexList{L"a_1"}))->is<Tensor>());
+    REQUIRE(clone_packed(ex<Tensor>(L"t", IndexList{L"i_1"}, IndexList{L"a_1"}))->is<Tensor>());
   }
   SECTION("Constant") {
-    REQUIRE(clone(ex<Constant>(1))->is<Constant>());
+    REQUIRE(clone_packed(ex<Constant>(1))->is<Constant>());
   }
 
   SECTION("Product") {
@@ -27,7 +25,7 @@ TEST_CASE("TEST_CLONE", "[clone]") {
                            IndexList{L"a_2"},
                            IndexList{L"i_1"});
     auto prod1 = ex<Product>(ExprPtrList{t1,t2,t3});
-    REQUIRE(prod1 == clone(prod1));
+    REQUIRE(prod1 == clone_packed(prod1));
 
     auto prod2 = ex<Product>(1./2,ExprPtrList{});
     prod2->as<Product>().append(t1);
@@ -36,7 +34,7 @@ TEST_CASE("TEST_CLONE", "[clone]") {
     REQUIRE(prod2->at(0)->is<Tensor>());
     REQUIRE(prod2->at(1)->is<Product>());
 
-    REQUIRE(*clone(prod2) == *prod2);
+    REQUIRE(*clone_packed(prod2) == *prod2);
   }
 
   SECTION("Sum") {
@@ -59,6 +57,6 @@ TEST_CASE("TEST_CLONE", "[clone]") {
     auto prod1 = ex<Product>(-1, ExprPtrList{g1, t1});
     auto prod2 = ex<Product>(-1./2, ExprPtrList{g2,t2,t3});
     auto sum = ex<Sum>(ExprPtrList{prod1, prod2});
-    REQUIRE(*sum == *clone(sum));
+    REQUIRE(*sum == *clone_packed(sum));
   }
 }

@@ -98,7 +98,7 @@ ExprPtr TensorNetwork::canonicalize(
   // fast and slow canonizations produce index replacements for anonymous
   // indices
   idxrepl_.clear();
-  auto& idxrepl = idxrepl_;
+  auto &idxrepl = idxrepl_;
 
   // index factory to generate anonymous indices
   IndexFactory idxfac(is_anonymous_index,
@@ -358,9 +358,15 @@ ExprPtr TensorNetwork::canonicalize(
 
   // - re-canonize tensors
   {
-    DefaultTensorCanonicalizer tensor_canonizer(named_indices);
+    // override the default canonicalizer
+    DefaultTensorCanonicalizer default_tensor_canonizer(named_indices);
     for (auto &tensor : tensors_) {
-      auto bp = tensor_canonizer.apply(*tensor);
+      auto nondefault_canonizer_ptr =
+          TensorCanonicalizer::nondefault_instance_ptr(tensor->_label());
+      TensorCanonicalizer *tensor_canonizer =
+          nondefault_canonizer_ptr ? nondefault_canonizer_ptr.get()
+                                   : &default_tensor_canonizer;
+      auto bp = tensor_canonizer->apply(*tensor);
       if (bp) *canon_biproduct *= *bp;
     }
   }
@@ -585,22 +591,22 @@ TensorNetwork::make_bliss_graph(
   });
   // - link up tensors
   tensor_cnt = 0;
-  ranges::for_each(tensors_, [&graph, &tensor_cnt,
-                              &tensor_vertex_offset](const auto &t) {
-    const auto vertex_offset = tensor_vertex_offset.at(tensor_cnt);
-    // for each braket terminal linker
-    auto &tref = *t;
-    const size_t nbk = symmetry(tref) == Symmetry::nonsymm
-                           ? std::max(bra_rank(tref), ket_rank(tref))
-                           : 1;
-    for (size_t bk = 1; bk <= nbk; ++bk) {
-      const int bk_vertex = vertex_offset + 3 * bk;
-      graph->add_edge(vertex_offset, bk_vertex);  // core
-      graph->add_edge(bk_vertex - 2, bk_vertex);  // bra
-      graph->add_edge(bk_vertex - 1, bk_vertex);  // ket
-    }
-    ++tensor_cnt;
-  });
+  ranges::for_each(
+      tensors_, [&graph, &tensor_cnt, &tensor_vertex_offset](const auto &t) {
+        const auto vertex_offset = tensor_vertex_offset.at(tensor_cnt);
+        // for each braket terminal linker
+        auto &tref = *t;
+        const size_t nbk = symmetry(tref) == Symmetry::nonsymm
+                               ? std::max(bra_rank(tref), ket_rank(tref))
+                               : 1;
+        for (size_t bk = 1; bk <= nbk; ++bk) {
+          const int bk_vertex = vertex_offset + 3 * bk;
+          graph->add_edge(vertex_offset, bk_vertex);  // core
+          graph->add_edge(bk_vertex - 2, bk_vertex);  // bra
+          graph->add_edge(bk_vertex - 1, bk_vertex);  // ket
+        }
+        ++tensor_cnt;
+      });
 
   // compress vertex colors to 32 bits, as required by Bliss, by hashing
   size_t v_cnt = 0;

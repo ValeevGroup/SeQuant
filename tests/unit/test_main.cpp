@@ -4,19 +4,18 @@
 
 #define CATCH_CONFIG_RUNNER
 #include <clocale>
-#include "SeQuant/core/runtime.hpp"
 #include "SeQuant/core/op.hpp"
+#include "SeQuant/core/runtime.hpp"
 #include "SeQuant/core/space.hpp"
 #include "SeQuant/core/utility.hpp"
 #include "SeQuant/domain/mbpt/convention.hpp"
 #include "catch.hpp"
 
 #ifdef SEQUANT_HAS_TILEDARRAY
-#  include <tiledarray.h>
+#include <tiledarray.h>
 #endif
 
-int main( int argc, char* argv[] )
-{
+int main(int argc, char* argv[]) {
   using namespace std;
   using namespace sequant;
 
@@ -33,13 +32,15 @@ int main( int argc, char* argv[] )
   std::wcout.sync_with_stdio(true);
   std::wcerr.sync_with_stdio(true);
   detail::OpIdRegistrar op_id_registrar;
-
+  sequant::set_default_context(
+      SeQuant(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
+              BraKetSymmetry::conjugate, SPBasis::spinorbital));
   mbpt::set_default_convention();
 
   // uncomment to enable verbose output ...
-  //Logger::set_instance(1);
+  // Logger::set_instance(1);
   // ... or can instead selectively set/unset particular logging flags
-  //Logger::get_instance().wick_contract = true;
+  // Logger::get_instance().wick_contract = true;
 
 #ifdef SEQUANT_HAS_TILEDARRAY
   auto& world = TA::initialize(argc, argv);

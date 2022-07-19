@@ -7,9 +7,19 @@
 
 namespace sequant::eval {
 
+struct IndexToSize {
+  static const size_t nocc = 10;
+  static const size_t nvirt = 100;
+  auto operator()(Index const& idx) const {
+    if (idx.space() == IndexSpace::active_occupied) return nocc;
+    else if (idx.space() == IndexSpace::active_unoccupied) return nvirt;
+    else throw std::runtime_error("Unsupported IndexSpace type encountered");
+  }
+};
+
 EvalNode CalcInfo::node_(const ExprPtr& expr, size_t rank) const {
-  auto trimmed = optimize::tail_factor(expr);
-  return optm_opts.single_term ? optimize::optimize(trimmed)
+  auto trimmed = opt::tail_factor(expr);
+  return optm_opts.single_term ? optimize(trimmed, IndexToSize{})
                                : to_eval_node(trimmed);
 }
 

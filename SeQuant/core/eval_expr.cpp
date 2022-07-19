@@ -13,7 +13,7 @@ const Tensor& EvalExpr::tensor() const { return tensor_; }
 const Constant& EvalExpr::scalar() const { return scalar_; }
 
 EvalExpr::EvalExpr(const Tensor& tnsr) : op_{EvalOp::Id}, tensor_{tnsr},
-hash_{EvalExpr::hash_terminal_tensor(tnsr)}{}
+hash_{EvalExpr::hash_terminal_tensor(tnsr)}, annot_{braket_to_annot(tnsr.const_braket())}{}
 
 EvalExpr::EvalExpr(const EvalExpr& xpr1,
                    const EvalExpr& xpr2,
@@ -50,6 +50,8 @@ EvalExpr::EvalExpr(const EvalExpr& xpr1,
       s, infer_braket_symmetry(), infer_particle_symmetry(s)};
 
   hash_ = hash_imed(expr1, expr2, op);
+
+  annot_ = braket_to_annot(tensor_.const_braket());
 }
 
 Symmetry EvalExpr::infer_tensor_symmetry_sum(EvalExpr const& xpr1,
@@ -68,42 +70,49 @@ Symmetry EvalExpr::infer_tensor_symmetry_sum(EvalExpr const& xpr1,
 
 Symmetry EvalExpr::infer_tensor_symmetry_prod(EvalExpr const& xpr1,
                                               EvalExpr const& xpr2) {
+  using index_set_t = container::set<Index, Index::LabelCompare>;
   // HELPER LAMBDA
   // check if all the indices in cont1 are in cont2 AND vice versa
   auto all_common_indices = [](const auto& cont1, const auto& cont2) -> bool {
-    if (cont1.size() != cont2.size()) return false;
-
-    return (cont1 | ranges::to<container::set<Index, Index::LabelCompare>>) ==
-           (cont2 | ranges::to<container::set<Index, Index::LabelCompare>>);
+    return (cont1.size() == cont2.size()) &&
+           (cont1 | ranges::to<index_set_t>) ==
+               (cont2 | ranges::to<index_set_t>);
   };
   // //////
 
   auto const& tnsr1 = xpr1.tensor();
   auto const& tnsr2 = xpr2.tensor();
 
-  if (xpr1.hash() == xpr2.hash()){
+  auto imed_sym = Symmetry::invalid;
+  if (xpr1.hash() == xpr2.hash()) {
     // potential outer product
+    auto const uniq_idxs =
+        ranges::views::concat(tnsr1.const_braket(), tnsr2.const_braket()) |
+        ranges::to<index_set_t>;
 
-    auto const uniq_idxs = ranges::views::concat(tnsr1.const_braket(),
-                                                tnsr2.const_braket())
-                          | ranges::to<container::set<Index,
-                                                       Index::LabelCompare>>;
+    if (ranges::distance(uniq_idxs) ==
+        tnsr1.const_braket().size() + tnsr2.const_braket().size()) {
+      // outer product confirmed
+      imed_sym = Symmetry::antisymm;
+    }
+  } else {
+    bool whole_bk_contracted = (all_common_indices(tnsr1.bra(), tnsr2.ket()) ||
+                                all_common_indices(tnsr1.ket(), tnsr2.bra()));
+    auto sym1 = tnsr1.symmetry();
+    auto sym2 = tnsr2.symmetry();
+    assert(sym1 != Symmetry::invalid);
+    assert(sym2 != Symmetry::invalid);
+    if (whole_bk_contracted &&
+        !(sym1 == Symmetry::nonsymm || sym2 == Symmetry::nonsymm)) {
+      imed_sym = sym1 == sym2 ? sym1 : Symmetry::symm;
 
-    if (ranges::distance(uniq_idxs) == tnsr1.const_braket().size()
-                                     + tnsr2.const_braket().size()) {
-      return Symmetry::symm;
+    } else {
+      imed_sym = Symmetry::nonsymm;
     }
   }
 
-  bool whole_bk_contracted = (all_common_indices(tnsr1.bra(), tnsr2.ket()) ||
-                              all_common_indices(tnsr1.ket(), tnsr2.bra()));
-
-  // sym/sym or antisym/antisym with whole braket contraction
-  if (whole_bk_contracted && tnsr1.symmetry() == tnsr2.symmetry())
-    return tnsr1.symmetry();
-
-  // non symmetric intermediate
-  return Symmetry::nonsymm;
+  assert(imed_sym != Symmetry::invalid);
+  return imed_sym;
 }
 
 ParticleSymmetry EvalExpr::infer_particle_symmetry(Symmetry s) {

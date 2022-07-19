@@ -22,8 +22,8 @@ Os& operator<<(Os& os, const sequant::EvalSeq<T>& seq) {
 }
 
 TEST_CASE("TEST_EVAL_SEQUENCE", "[EvalSeq]") {
-  using sequant::BinaryNode;
   using sequant::EvalSeq;
+  using sequant::FullBinaryNode;
   auto init_rt_vec = [](size_t n) {
     std::vector<EvalSeq<size_t>> vec;
     vec.reserve(n);
@@ -64,9 +64,11 @@ TEST_CASE("TEST_EVAL_SEQUENCE", "[EvalSeq]") {
         // 2   3
     // clang-format on
 
-    auto const expected_node0 = BinaryNode<int>{
-        74, BinaryNode<int>{30, BinaryNode<int>{10, 2, 3}, BinaryNode<int>{5}},
-        BinaryNode<int>{7}};
+    auto const expected_node0 = FullBinaryNode<int>{
+        74,
+        FullBinaryNode<int>{30, FullBinaryNode<int>{10, 2, 3},
+                            FullBinaryNode<int>{5}},
+        FullBinaryNode<int>{7}};
 
     REQUIRE(*nbinarized == *expected_node0);
 
@@ -88,9 +90,9 @@ TEST_CASE("TEST_EVAL_SEQUENCE", "[EvalSeq]") {
     // clang-format on
 
     auto const expected_node1 =
-        BinaryNode<size_t>{10,                           //
-                           BinaryNode<size_t>{6, 3, 3},  //
-                           BinaryNode<size_t>{4}};       //
+        FullBinaryNode<size_t>{10,                           //
+                               FullBinaryNode<size_t>{6, 3, 3},  //
+                               FullBinaryNode<size_t>{4}};       //
 
     REQUIRE(*sbinarized1 == *expected_node1);
 
@@ -122,14 +124,15 @@ TEST_CASE("TEST_EVAL_SEQUENCE", "[EvalSeq]") {
     //
     // clang-format on
 
-    auto const expected_node2 = BinaryNode<size_t>{
+    auto const expected_node2 = FullBinaryNode<size_t>{
         17,
-        BinaryNode<size_t>{
+        FullBinaryNode<size_t>{
             13,
-            BinaryNode<size_t>{6, BinaryNode<size_t>{3}, BinaryNode<size_t>{3}},
-            BinaryNode<size_t>{7, BinaryNode<size_t>{4},
-                               BinaryNode<size_t>{3}}},
-        BinaryNode<size_t>{4}};
+            FullBinaryNode<size_t>{6, FullBinaryNode<size_t>{3},
+                                   FullBinaryNode<size_t>{3}},
+            FullBinaryNode<size_t>{7, FullBinaryNode<size_t>{4},
+                                   FullBinaryNode<size_t>{3}}},
+        FullBinaryNode<size_t>{4}};
 
     REQUIRE(*expected_node2 == *sbinarized2);
   }

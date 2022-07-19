@@ -12,15 +12,14 @@ void Tensor::assert_nonreserved_label(std::wstring_view label) const {
   assert(label != overlap_label());
 }
 
-void
-Tensor::adjoint() {
+void Tensor::adjoint() {
   std::swap(bra_, ket_);
   reset_hash_value();
 }
 
 ExprPtr Tensor::canonicalize() {
-  const auto &canonicalizer = TensorCanonicalizer::instance(label_);
-  return canonicalizer->apply(*this);
+  auto canonicalizer_ptr = TensorCanonicalizer::instance_ptr(label_);
+  return canonicalizer_ptr ? canonicalizer_ptr->apply(*this) : ExprPtr{};
 }
 
 }  // namespace sequant

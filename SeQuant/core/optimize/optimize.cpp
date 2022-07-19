@@ -1,6 +1,19 @@
-#include "SeQuant/core/optimize.hpp"
+#include <SeQuant/core/optimize.hpp>
+#include <SeQuant/core/clone_packed.hpp>
 
-namespace sequant::optimize {
+namespace sequant {
+
+namespace opt {
+
+namespace detail {
+std::vector<size_t> on_bits_pos(size_t n, size_t num_bits) {
+  auto result = std::vector<size_t>{};
+  result.reserve(num_bits);
+  for (auto i = 0; i < num_bits; ++i)
+    if (n & (1 << i)) result.push_back(i);
+  return result;
+}
+}  // namespace detail
 
 ExprPtr tail_factor(ExprPtr const& expr) noexcept {
   if (expr->is<Tensor>())
@@ -18,8 +31,7 @@ ExprPtr tail_factor(ExprPtr const& expr) noexcept {
   }
 }
 
-void pull_scalar(sequant::ExprPtr expr) noexcept {
-  using sequant::Product;
+void pull_scalar(ExprPtr expr) noexcept {
   if (!expr->is<Product>()) return;
   auto& prod = expr->as<Product>();
 
@@ -35,24 +47,6 @@ void pull_scalar(sequant::ExprPtr expr) noexcept {
   prod.scale(scal);
 }
 
-EvalNode optimize(const ExprPtr& expr) {
-  using ranges::views::transform;
-  if (expr->is<Tensor>())
-    return to_eval_node(expr);
-  else if (expr->is<Product>()) {
-    // canonicalization within sto doesn't seem beneficial
-    bool canonize = false;
-    return single_term_opt(expr->as<Product>(), canonize)
-        .optimal_seqs.begin()
-        ->clone();
-  } else if (expr->is<Sum>()) {
-    auto smands = *expr | transform([](auto const& s) {
-      return to_expr(optimize(s));
-    }) | ranges::to_vector;
+}  // namespace opt
 
-    return to_eval_node(ex<Sum>(Sum{smands.begin(), smands.end()}));
-  } else
-    throw std::runtime_error{"optimization attempted on unsupported Expr type"};
-}
-
-}  // namespace sequant::optimize
+}  // namespace sequant
