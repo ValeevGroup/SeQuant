@@ -27,6 +27,9 @@ int main(int argc, char* argv[]) {
   std::wcout.sync_with_stdio(true);
   std::wcerr.sync_with_stdio(true);
 
+  sequant::set_default_context(
+      SeQuant(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
+              BraKetSymmetry::conjugate, SPBasis::spinorbital));
   mbpt::set_default_convention();
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
@@ -57,7 +60,8 @@ int main(int argc, char* argv[]) {
   // Spin-orbital coupled cluster
   auto cc_r = sequant::eqs::cceqvec{NMAX, NMAX}(true, true, true, true, true);
   for (auto i = 1; i < cc_r.size(); ++i) {
-    std::cout << "Spin-orbital CC R" << i << " size: " << cc_r[i]->size() << "\n";
+    std::cout << "Spin-orbital CC R" << i << " size: " << cc_r[i]->size()
+              << "\n";
   }
 
   //
