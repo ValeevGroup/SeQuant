@@ -219,7 +219,6 @@ ExprPtr tens_to_FNOps(ExprPtr ex_) {
 ExprPtr overlap_with_obs(ExprPtr ex_) {
   //this function expects operators.
 
-  //std::wcout << to_latex_align(ex_,20,4) << std::endl;
   auto overlap_expr =
       ex<Constant>(0);  // enforce an overlap each E with elements from
   for (auto&& product :
@@ -349,10 +348,8 @@ ExprPtr overlap_with_obs(ExprPtr ex_) {
     overlap_expr = overlap_expr + new_product;
   }
   FWickTheorem wick{overlap_expr};
-  // std::wcout << to_latex_align(overlap_expr,20,2) << std::endl;
   wick.reduce(overlap_expr);
   non_canon_simplify(overlap_expr);
-   //std::wcout << "overlap after reduce" << to_latex_align(overlap_expr,20,2) << std::endl;
   return overlap_expr;
 }
 
@@ -776,8 +773,6 @@ std::pair<ExprPtr,bool> biproduct_intermediate(ExprPtr T1, ExprPtr T2) {
     // V^pq_ij
     // intermediate decomposition handled by SeQuant so space labels can be
     // properly handled
-    std::wcout << "T1: " << to_latex_align(T1) << std::endl;
-    std::wcout << "T2: " << to_latex_align(T2) << std::endl;
     if (nconnects == 2 && space == IndexSpace::complete_unoccupied) {
       // I believe that I overplayed the importance of external indicies here. V fundamental terms have free indices which always correspond to a particular tensor label "G" or "F"
       auto g = ex<Constant>(0.0); auto F = ex<Constant>(0.0);
@@ -816,7 +811,6 @@ std::pair<ExprPtr,bool> biproduct_intermediate(ExprPtr T1, ExprPtr T2) {
 
         auto V = GR_ijpq- F_ijrs * g_rspq - F_ijmc * g_mcpq - F_jicm * g_cmqp;
         simplify(V);
-        std::wcout << "V: " << to_latex_align(V,10,5) << std::endl;
         return {V,false};
       } else {
         /*auto V_pqij = ex<Tensor>(L"V",IDX_list{g->as<Tensor>().bra()[0], g->as<Tensor>().bra()[1]}, IDX_list{F->as<Tensor>().ket()[0], F->as<Tensor>().ket()[1]});
@@ -842,7 +836,6 @@ std::pair<ExprPtr,bool> biproduct_intermediate(ExprPtr T1, ExprPtr T2) {
 
         auto V = GR_pqij - F_rsij * g_pqrs - F_mcij * g_pqmc - F_cmji * g_qpcm;
         simplify(V);
-        std::wcout << "V: " << to_latex_align(V,10,5) << std::endl;
         return {V,false};
       }
     } else {
@@ -1190,7 +1183,6 @@ std::pair<ExprPtr,bool> biproduct_intermediate(ExprPtr T1, ExprPtr T2) {
                   F_jipa * f_pr * F_ralk + F_jimc2 * f_mn * F_nclk -
                   ex<Constant>(2.) * F_jipa2 * f_pc * F_calk;
         auto B = B1/* + B2*/;
-        std::wcout << "B: " << to_latex_align(B,20,3) << std::endl;
         non_canon_simplify(B);
         return {B,true};
       }
@@ -1261,7 +1253,6 @@ ExprPtr find_F12_interms(ExprPtr ex_) {
 // canonical form for E^{p_7}_{p_9} and E^{p_7 p_8}_{p_9 p_10} as the external indicies
 //  this also simultaneously partitions the result into one and two body terms.
 std::pair<ExprPtr, ExprPtr> fnop_to_overlap(ExprPtr exprs) {
-  //std::wcout << to_latex_align(exprs,20,3) << std::endl;
   auto one_body_result = ex<Constant>(0);
   auto two_body_result = ex<Constant>(0);
   for (auto&& product : exprs->as<Sum>().summands()) {
@@ -1551,7 +1542,6 @@ std::pair<ExprPtr, ExprPtr> fock_based_projector_2(ExprPtr exprs) {
   non_canon_simplify(exprs);
   exprs = screen_densities(exprs);
   non_canon_simplify(exprs);
-  //std::wcout << "pre partition expression: " << to_latex_align(exprs,30,3) << std::endl;
   //exprs = partition_F12(exprs);
   auto final_screen = exprs;
   non_canon_simplify(final_screen);
