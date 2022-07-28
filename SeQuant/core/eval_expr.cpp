@@ -218,4 +218,20 @@ EvalExpr::hash_t EvalExpr::hash_imed(const EvalExpr& expr1,
   return imedHash;
 }
 
+container::vector<std::string> EvalExpr::unique_idxs(
+    container::vector<std::string> const& idxs) {
+  container::vector<bool> non_uniq(idxs.size(), false);
+  for (auto i = 0; i < idxs.size(); ++i) {
+    for (auto j = i + 1; j < idxs.size(); ++j) {
+      if (!non_uniq[j] && (idxs[i] == idxs[j])) non_uniq[j] = true;
+    }
+  }
+  container::vector<std::string> result;
+  result.reserve(idxs.size());
+  for (auto i = 0; i < non_uniq.size(); ++i)
+    if (!non_uniq[i]) result.push_back(idxs[i]);
+  result.shrink_to_fit();
+  return result;
+}
+
 }  // namespace sequant

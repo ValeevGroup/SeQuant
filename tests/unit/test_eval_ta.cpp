@@ -347,14 +347,14 @@ TEST_CASE("TEST_EVAL_TOT_USING_TA", "[eval_tot]") {
         " +  f{a_1<i_1,i_2>;a_3<i_1,i_2>}"       //
         " * t{a_3<i_1,i_2>,a_2<i_1,i_2>;i_1,i_2}"
         " - f{i_3;i_1}"  //
-        " * t{a_1<i_3,i_2>,a_2<i_3,i_2>;i_3,i_2}"
-        " * O{a_1<i_1,i_2>;a_1<i_3,i_2>}"
-        " * O{a_2<i_1,i_2>;a_2<i_3,i_2>}";
+        " * t{a_3<i_3,i_2>,a_4<i_3,i_2>;i_3,i_2}"
+        " * O{a_1<i_1,i_2>;a_3<i_3,i_2>}"
+        " * O{a_2<i_1,i_2>;a_4<i_3,i_2>}";
 
     auto expr = parse_expr(pno_mp2_expr, Symmetry::nonsymm);
 
     auto& world = TA::get_default_world();
-    auto tensor_yield = rand_tensor_of_tensor_yield<5, 20>{world};
+    auto tensor_yield = rand_tensor_of_tensor_yield<3, 5>{world};
 
     using tot_result_t = decltype(tensor_yield)::tot_result_t;
     auto cman = eval::CacheManager<tot_result_t>{{}, {}};
@@ -387,23 +387,30 @@ TEST_CASE("TEST_EVAL_TOT_USING_TA", "[eval_tot]") {
     rhs = std::get<DA_tot>(tensor_yield(L"t{v<o,o>,v<o,o>;o,o}"));
 
     TA::expressions::einsum(temp("i1,i2;a1,a2"), lhs("i1,i2;a1,a3"),
-                            rhs("i1,i2;a2,a3"));
+                            rhs("i1,i2;a3,a2"));
     man_result("i1,i2;a1,a2") += temp("i1,i2;a1,a2");
+
+//     " - f{i_3;i_1}"
+//    " * t{a_3<i_3,i_2>,a_4<i_3,i_2>;i_3,i_2}"
+//    " * O{a_1<i_1,i_2>;a_3<i_3,i_2>}"
+//    " * O{a_2<i_1,i_2>;a_4<i_3,i_2>}";
 
     // third term evaluated manually
     // using rhs from above as the T2 amplitude
     DA_tot temp2;
-    TA::expressions::einsum(temp2("i1,i2,i3;a1,a2"),
+    TA::expressions::einsum(temp2("i1,i2,i3;a3,a4"),
                             std::get<DA>(tensor_yield(L"f{o;o}"))("i3,i1"),
-                            rhs("i2,i3;a1,a2"));
+                            rhs("i2,i3;a3,a4"));
     DA_tot temp3;
     TA::expressions::einsum(
-        temp3("i1,i2,i3;a1,a2"), temp2("i1,i2,i3;a1,a2"),
-        std::get<DA_tot>(tensor_yield(L"O{v<o,o>;v<o,o>}"))("i1,i2,i3;a1"));
+        temp3("i1,i2,i3;a1,a4"), temp2("i1,i2,i3;a3,a4"),
+        std::get<DA_tot>(tensor_yield(L"O{v<o,o>;v<o,o>}"))("i1,i2,i3;a1,a3"));
     TA::expressions::einsum(
-        temp("i1,i2;a1,a2"), temp3("i1,i2,i3;a1,a2"),
-        std::get<DA_tot>(tensor_yield(L"O{v<o,o>;v<o,o>}"))("i1,i2,i3;a2"));
+        temp("i1,i2;a1,a2"), temp3("i1,i2,i3;a1,a4"),
+        std::get<DA_tot>(tensor_yield(L"O{v<o,o>;v<o,o>}"))("i1,i2,i3;a2,a4"));
     man_result("i1,i2;a1,a2") -= temp("i1,i2;a1,a2");
+
+    TA::get_default_world().gop.fence();
 
     verify_equal_tot_tile(eval_result.find(0).get(), man_result.find(0).get());
 
@@ -417,6 +424,7 @@ TEST_CASE("TEST_EVAL_TOT_USING_TA", "[eval_tot]") {
     man_result_symm_tot("0,1;2,3") += eval_result("0,1;2,3");
     man_result_symm_tot("0,1;2,3") += eval_result("1,0;3,2");
 
+    TA::get_default_world().gop.fence();
     verify_equal_tot_tile(eval_result_symm_tot.find(0).get(),
                           man_result_symm_tot.find(0).get());
 
@@ -433,6 +441,7 @@ TEST_CASE("TEST_EVAL_TOT_USING_TA", "[eval_tot]") {
     man_result_antisymm_tot("0,1;2,3") += eval_result("1,0;3,2");
     man_result_antisymm_tot("0,1;2,3") -= eval_result("0,1;3,2");
 
+    TA::get_default_world().gop.fence();
     verify_equal_tot_tile(eval_result_antisymm_tot.find(0).get(),
                           man_result_antisymm_tot.find(0).get());
   }

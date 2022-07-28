@@ -160,6 +160,12 @@ class EvalExpr final {
   static braket_type target_braket_prod(const Tensor&, const Tensor&);
 
   ///
+  /// \param idxs vector with non-unique indices.
+  /// \return unique indices with the same order as they appear in the input
+  static container::vector<std::string> unique_idxs(
+      container::vector<std::string> const& idxs);
+
+  ///
   /// Given an iterable of Index objects, generate a string annotation
   /// that can be used for TiledArray tensor expressions.
   /// Tensor-of-tensors also supported.
@@ -177,24 +183,24 @@ class EvalExpr final {
 
     container::vector<std::string> outer_labels{}, inner_labels{};
     for (auto&& idx: indices) {
-      if (idx.has_proto_indices()) {
+      if (idx.has_proto_indices())
         inner_labels.emplace_back(idx.ascii_label());
-        for (auto&& pidx : idx.proto_indices())
-          outer_labels.emplace_back(pidx.ascii_label());
-      } else {
+      else
         outer_labels.emplace_back(idx.ascii_label());
-      }
+    }
+    for (auto&& idx: indices) {
+      for (auto&& pidx: idx.proto_indices())
+        outer_labels.emplace_back(pidx.ascii_label());
     }
 
-    if (inner_labels.empty())
+    if (inner_labels.empty()) {
+      // tensor of scalars type expressions
       return add_commas(outer_labels);
-
-    // support CSV methods
-    ranges::sort(inner_labels);
-    ranges::sort(outer_labels);
-    ranges::actions::unique(outer_labels);
-    ranges::actions::unique(inner_labels);
-    return add_commas(outer_labels) + ";" + add_commas(inner_labels);
+    } else {
+      // tensor-of-tensor type expressions.
+      auto olbls = unique_idxs(outer_labels);
+      return add_commas(olbls) + ";" + add_commas(inner_labels);
+    }
   }
 
 };
