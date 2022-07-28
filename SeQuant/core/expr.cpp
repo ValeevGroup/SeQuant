@@ -262,6 +262,7 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
           });
       const auto nidentical = plast_it - first_it;
       assert(nidentical > 1);
+      /// TODO sometimes lets zero products through such that a divide by zero error occurs at sum of prefactors / first prefactor
       auto reduce_range = [first_it, this, nidentical](auto &begin, auto &end) {
         if ((*first_it)->template is<Tensor>()) {
           assert((*first_it)->template is<Tensor>());

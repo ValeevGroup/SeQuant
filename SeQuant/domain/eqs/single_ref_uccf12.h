@@ -116,6 +116,10 @@ class uccf12 {
     non_canon_simplify(second_com);
     if (ansatz == 2) {
       second_com = keep_up_to_3_body_terms(second_com);
+      simplify(second_com);
+      second_com = simplification::detail::tens_to_FNOps(second_com);
+      second_com = decompositions::three_body_substitution(second_com, 2);
+      simplify(second_com);
       second_com =
           second_com +
           ex<Constant>(0.);  // make a sum to avoid heavy code duplication for
@@ -123,10 +127,7 @@ class uccf12 {
       second_com = simplification::overlap_with_obs(second_com);
       second_com = second_com + ex<Constant>(0.);
       second_com = simplification::screen_F12_proj(second_com, 2);
-      second_com = simplification::detail::tens_to_FNOps(second_com);
       //std::wcout << to_latex_align(second_com,20,3) << std::endl;
-      second_com = decompositions::three_body_substitution(second_com, 2);
-      non_canon_simplify(second_com);
       return second_com;
     }
     if (ansatz == 1) {
@@ -241,14 +242,21 @@ class uccf12 {
       first_com = first_com + ex<Constant>(0.);// make a sum to avoid heavy code duplication for product and sum variants.
       first_com = simplification::overlap_with_obs(first_com);
       first_com = first_com + ex<Constant>(0.);
-      non_canon_simplify(first_com);
+      simplify(first_com);
       first_com = simplification::screen_F12_proj(first_com, 2);
       non_canon_simplify(first_com);
       first_com = simplification::detail::tens_to_FNOps(first_com);
       non_canon_simplify(first_com);
       first_com = decompositions::three_body_substitution(first_com, 2);
       non_canon_simplify(first_com);
-      return first_com;
+      auto temp = ex<Constant>(0.0);
+      for (auto&& product : first_com->as<Sum>().summands()){
+        auto temp_temp = product + ex<Constant>(0.0);
+        simplify(temp_temp);
+        temp = temp_temp + temp;
+      }
+      simplify(temp);
+      return temp;
     }
     if (ansatz == 1) {
       first_com = keep_up_to_2_body_terms(first_com);
@@ -436,21 +444,21 @@ class uccf12 {
         auto two_body = com_1.second;
       // double commutator in eq. 9. Chem. Phys. 136, 084107 (2012).
       if (comutator_order_ >= 2) {
-        auto full_double_com = ex<Constant>(1. / 2) * do_com(do_com(H(),relable(A)),relable(A));
+        auto full_double_com = ex<Constant>(1. / 2) * do_com(do_com(F(),relable(A)),relable(A));
         simplify(full_double_com);
         full_double_com = post_wick_sim(full_double_com);
         auto double_com = simplification::fock_based_projector_2(full_double_com);
         one_body = one_body + double_com.first;
         two_body = two_body + double_com.second;
         if(comutator_order_ >= 3){
-          auto full_triple_com =  ex<Constant>(1. / 6) * do_com(do_com(do_com(H(),A),relable(A)),relable(A));
+          auto full_triple_com =  ex<Constant>(1. / 6) * do_com(do_com(do_com(F(),A),relable(A)),relable(A));
           simplify(full_triple_com);
           full_triple_com = post_wick_sim(full_triple_com);
           auto triple_com = simplification::fock_based_projector_2(full_triple_com);
           one_body = one_body + triple_com.first;
           two_body = two_body + triple_com.second;
           if (comutator_order_ >= 4){
-            auto full_quadruple_com = ex<Constant>(1. / 24) * do_com(do_com(do_com(do_com(H(),A),relable(A)),relable(A)),relable(A));
+            auto full_quadruple_com = ex<Constant>(1. / 24) * do_com(do_com(do_com(do_com(F(),A),relable(A)),relable(A)),relable(A));
             simplify(full_quadruple_com);
             full_quadruple_com = post_wick_sim(full_quadruple_com);
             auto quadruple_com = simplification::fock_based_projector_2(full_quadruple_com);

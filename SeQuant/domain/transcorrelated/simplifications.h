@@ -793,7 +793,7 @@ std::pair<ExprPtr,bool> biproduct_intermediate(ExprPtr T1, ExprPtr T2) {
       if (F->as<Tensor>().ket()[0].space() == IndexSpace::complete_unoccupied) {
         /*auto V_ijpq = ex<Tensor>(L"V",IDX_list{F->as<Tensor>().bra()[0], F->as<Tensor>().bra()[1]},IDX_list{g->as<Tensor>().ket()[0], g->as<Tensor>().ket()[1]});
         result = V_ijpq;
-        return V_ijpq;*/
+        return {V_ijpq,false};*/
         auto GR_ijpq =
             ex<Tensor>(L"GR",IDX_list{F->as<Tensor>().bra()[0], F->as<Tensor>().bra()[1]},IDX_list{g->as<Tensor>().ket()[0], g->as<Tensor>().ket()[1]}
                        );
@@ -821,7 +821,7 @@ std::pair<ExprPtr,bool> biproduct_intermediate(ExprPtr T1, ExprPtr T2) {
       } else {
         /*auto V_pqij = ex<Tensor>(L"V",IDX_list{g->as<Tensor>().bra()[0], g->as<Tensor>().bra()[1]}, IDX_list{F->as<Tensor>().ket()[0], F->as<Tensor>().ket()[1]});
         result = V_pqij;
-        return V_pqij;*/
+        return {V_pqij,false};*/
         auto GR_pqij =
             ex<Tensor>(L"GR",IDX_list{g->as<Tensor>().bra()[0], g->as<Tensor>().bra()[1]},IDX_list{F->as<Tensor>().ket()[0], F->as<Tensor>().ket()[1]});
         auto F_rsij = ex<Tensor>(L"F", IDX_list{L"p_11", L"p_12"},
@@ -852,10 +852,11 @@ std::pair<ExprPtr,bool> biproduct_intermediate(ExprPtr T1, ExprPtr T2) {
     if (nconnects == 2 && space == IndexSpace::complete_unoccupied) {
       // X^kl_ij
       if ( T1->as<Tensor>().bra()[0].space() ==IndexSpace::complete_unoccupied) {
-        /*auto X_klij =
+        auto X_klij =
             ex<Tensor>(L"X", IDX_list{T2->as<Tensor>().bra()[0], T2->as<Tensor>().bra()[1]},
                        IDX_list{T1->as<Tensor>().ket()[0],T1->as<Tensor>().ket()[1]});
-        result = X_klij;*/
+        result = X_klij;
+        return {X_klij,false};
         auto F2_ijpq = ex<Tensor>(
             L"R2",
             IDX_list{T2->as<Tensor>().bra()[0], T2->as<Tensor>().bra()[1]},
@@ -883,10 +884,11 @@ std::pair<ExprPtr,bool> biproduct_intermediate(ExprPtr T1, ExprPtr T2) {
         return {X,false};
       }
       else {
-        /*auto X_klij =
+        auto X_klij =
             ex<Tensor>(L"X", IDX_list{T1->as<Tensor>().bra()[0], T1->as<Tensor>().bra()[1]},
                        IDX_list{T2->as<Tensor>().ket()[0],T2->as<Tensor>().ket()[1]});
-        result = X_klij;*/
+        result = X_klij;
+        return {X_klij,false};
         auto F2_ijpq = ex<Tensor>(
             L"R2",
             IDX_list{T1->as<Tensor>().bra()[0], T1->as<Tensor>().bra()[1]},
