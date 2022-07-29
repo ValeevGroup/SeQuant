@@ -398,15 +398,15 @@ TEST_CASE("TEST_EVAL_TOT_USING_TA", "[eval_tot]") {
     // third term evaluated manually
     // using rhs from above as the T2 amplitude
     DA_tot temp2;
-    TA::expressions::einsum(temp2("i1,i2,i3;a3,a4"),
+    TA::expressions::einsum(temp2("i2,i1,i3;a4,a3"),
                             std::get<DA>(tensor_yield(L"f{o;o}"))("i3,i1"),
-                            rhs("i2,i3;a3,a4"));
+                            rhs("i3,i2;a3,a4"));
     DA_tot temp3;
     TA::expressions::einsum(
-        temp3("i1,i2,i3;a1,a4"), temp2("i1,i2,i3;a3,a4"),
+        temp3("i2,i1,i3;a4,a1"), temp2("i2,i1,i3;a4,a3"),
         std::get<DA_tot>(tensor_yield(L"O{v<o,o>;v<o,o>}"))("i1,i2,i3;a1,a3"));
     TA::expressions::einsum(
-        temp("i1,i2;a1,a2"), temp3("i1,i2,i3;a1,a4"),
+        temp("i1,i2;a1,a2"), temp3("i2,i1,i3;a4,a1"),
         std::get<DA_tot>(tensor_yield(L"O{v<o,o>;v<o,o>}"))("i1,i2,i3;a2,a4"));
     man_result("i1,i2;a1,a2") -= temp("i1,i2;a1,a2");
 
