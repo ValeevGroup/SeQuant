@@ -22,13 +22,31 @@ class uccf12 {
   bool sr;
   bool fock;
   unsigned int op_rank;
+  //no default constructor
+  IndexSpace::TypeAttr gg_space = IndexSpace::all;
+  IndexSpace::TypeAttr singles_gg_space = IndexSpace::all;
+  int ansatz_;
+  int comutator_order_;
+  bool print_;
+  bool singles_;
+  bool doubles_;
+
+  //default constructor
+  uccf12(){}
+
   // TODO implement logic for non-default variables. should also include logic
   // for spin-orbital expressions.
-  uccf12(bool single_reference = true, bool fock_approx = true,
-         unsigned int max_op_rank = 2) {
-    sr = single_reference;
-    fock = fock_approx;
-    op_rank = max_op_rank;
+  uccf12(std::string gg_label, int ansatz = 2,
+         bool print = false, bool singles = false, std::string singles_gg = "all",
+         bool doubles = true, int comutator_order = 2) {
+    ansatz_ = ansatz;
+    print_ = print;
+    singles_ = singles;
+    doubles_ = doubles;
+    comutator_order_ = comutator_order;
+
+
+
     sequant::set_default_context(
         SeQuant(Vacuum::Physical, IndexSpaceMetric::Unit,
                 BraKetSymmetry::conjugate, SPBasis::spinfree));
@@ -45,6 +63,43 @@ class uccf12 {
     sequant::detail::OpIdRegistrar op_id_registrar;
     TensorCanonicalizer::register_instance(
         std::make_shared<DefaultTensorCanonicalizer>());
+
+    // auto gg_space = IndexSpace::active_occupied;  // Geminal-generating
+    // space: active occupieds is the normal choice, all orbitals is the
+    // reference-independent (albeit expensive) choice
+    assert(singles_ == true || doubles_ == true);
+    //doubles space options
+    if (gg_label == "act_occ") {
+      gg_space = IndexSpace::active_occupied;
+    } else if (gg_label == "occ") {
+      gg_space = IndexSpace::occupied;
+    } else if (gg_label == "all") {
+      gg_space = IndexSpace::all;
+    } else if (gg_label == "fz") {
+      gg_space = IndexSpace::frozen_occupied;
+    } else if (gg_label == "uocc") {
+      gg_space = IndexSpace::unoccupied;
+    }
+    else if (gg_label == "act_obs") {
+      gg_space = IndexSpace::all_active;
+    } else {
+      throw std::runtime_error(
+          "uccf12::compute(gg_label) unsupported space label");
+    }
+    //singles space options
+    if (singles_gg == "all"){
+      singles_gg_space = IndexSpace::all;
+    }
+    else if (singles_gg == "occ") {
+      singles_gg_space = IndexSpace::occupied;
+    }
+    else if (singles_gg == "all_active"){
+      singles_gg_space = IndexSpace::all_active;
+    }
+    else if(singles_gg == "occ_active"){
+      singles_gg_space = IndexSpace::active_occupied;
+    }
+    else{throw "singles index space not supported!";}
   }
   //[[e1,e2],e3]_12
   ExprPtr compute_double_com(ExprPtr e1, ExprPtr e2, ExprPtr e3,
@@ -61,6 +116,10 @@ class uccf12 {
     non_canon_simplify(second_com);
     if (ansatz == 2) {
       second_com = keep_up_to_3_body_terms(second_com);
+      simplify(second_com);
+      second_com = simplification::detail::tens_to_FNOps(second_com);
+      second_com = decompositions::three_body_substitution(second_com, 2);
+      simplify(second_com);
       second_com =
           second_com +
           ex<Constant>(0.);  // make a sum to avoid heavy code duplication for
@@ -68,9 +127,7 @@ class uccf12 {
       second_com = simplification::overlap_with_obs(second_com);
       second_com = second_com + ex<Constant>(0.);
       second_com = simplification::screen_F12_proj(second_com, 2);
-      second_com = simplification::tens_to_FNOps(second_com);
-      second_com = decompositions::three_body_substitution(second_com, 2);
-      non_canon_simplify(second_com);
+      //std::wcout << to_latex_align(second_com,20,3) << std::endl;
       return second_com;
     }
     if (ansatz == 1) {
@@ -85,7 +142,7 @@ class uccf12 {
       second_com = second_com + ex<Constant>(0.);
       second_com = simplification::screen_F12_proj(second_com, 1);
       // std::wcout << to_latex_align(second_com,20,2) << std::endl;
-      second_com = simplification::tens_to_FNOps(second_com);
+      second_com = simplification::detail::tens_to_FNOps(second_com);
       simplify(second_com);
       return second_com;
     }
@@ -169,6 +226,52 @@ class uccf12 {
     return result;
   }
 
+  ExprPtr do_com (ExprPtr t1, ExprPtr t2, int ansatz = 2){
+    // wick's theorm
+    auto expression = (t1 * t2) - (t2 * t1);
+    non_canon_simplify(expression);
+    auto first_com = do_wick(expression);
+    // simplification
+    non_canon_simplify(first_com);
+    return first_com;
+  }
+
+  ExprPtr post_wick_sim(ExprPtr first_com, int ansatz = 2){
+    if (ansatz == 2) {
+      first_com = keep_up_to_3_body_terms(first_com);
+      first_com = first_com + ex<Constant>(0.);// make a sum to avoid heavy code duplication for product and sum variants.
+      first_com = simplification::overlap_with_obs(first_com);
+      first_com = first_com + ex<Constant>(0.);
+      simplify(first_com);
+      first_com = simplification::screen_F12_proj(first_com, 2);
+      non_canon_simplify(first_com);
+      first_com = simplification::detail::tens_to_FNOps(first_com);
+      non_canon_simplify(first_com);
+      first_com = decompositions::three_body_substitution(first_com, 2);
+      non_canon_simplify(first_com);
+      auto temp = ex<Constant>(0.0);
+      for (auto&& product : first_com->as<Sum>().summands()){
+        auto temp_temp = product + ex<Constant>(0.0);
+        simplify(temp_temp);
+        temp = temp_temp + temp;
+      }
+      simplify(temp);
+      return temp;
+    }
+    if (ansatz == 1) {
+      first_com = keep_up_to_2_body_terms(first_com);
+      first_com =
+          first_com +
+          ex<Constant>(0.);
+      first_com = simplification::overlap_with_obs(first_com);
+      first_com = first_com + ex<Constant>(0.);
+      first_com = simplification::screen_F12_proj(first_com, 1);
+      first_com = simplification::detail::tens_to_FNOps(first_com);
+      simplify(first_com);
+      return first_com;
+    }
+  }
+
   // produces a uniquely indexed version of the given expression.
   // assumes same number of upper and lower indices for operators and tensors
   // do not simplify(expr) after use! this will cannonicalize labeling, undoing
@@ -193,7 +296,7 @@ class uccf12 {
         std::pair<std::vector<Index>, std::vector<Index>> new_up_low;
         if (factor->is<Tensor>()) {
           for (int i = 0; i < factor->as<Tensor>().bra().size(); i++) {
-            auto in_where_bra = simplification::in_list(
+            auto in_where_bra = simplification::detail::in_list(
                 factor->as<Tensor>().bra()[i], original_indices);
             if (in_where_bra.first) {
               new_up_low.first.push_back(changed_indices[in_where_bra.second]);
@@ -205,7 +308,7 @@ class uccf12 {
               new_up_low.first.push_back(
                   changed_indices[changed_indices.size() - 1]);
             }
-            auto in_where_ket = simplification::in_list(
+            auto in_where_ket = simplification::detail::in_list(
                 factor->as<Tensor>().ket()[i], original_indices);
             if (in_where_ket.first) {
               new_up_low.second.push_back(changed_indices[in_where_ket.second]);
@@ -223,7 +326,7 @@ class uccf12 {
           new_product = new_product * new_factor;
         } else if (factor->is<FNOperator>()) {
           for (int i = 0; i < factor->as<FNOperator>().nannihilators(); i++) {
-            auto in_where_ann = simplification::in_list(
+            auto in_where_ann = simplification::detail::in_list(
                 factor->as<FNOperator>().annihilators()[i].index(),
                 original_indices);
             if (in_where_ann.first) {
@@ -240,7 +343,7 @@ class uccf12 {
               new_up_low.first.push_back(
                   changed_indices[changed_indices.size() - 1]);
             }
-            auto in_where_cre = simplification::in_list(
+            auto in_where_cre = simplification::detail::in_list(
                 factor->as<FNOperator>().creators()[i].index(),
                 original_indices);
             if (in_where_cre.first) {
@@ -289,42 +392,17 @@ class uccf12 {
     }
   }
 
-  std::pair<ExprPtr, ExprPtr> compute(std::string gg_label, int ansatz = 2,
-                                      bool print = false, bool singles = false,
-                                      bool doubles = true) {
-    // auto gg_space = IndexSpace::active_occupied;  // Geminal-generating
-    // space: active occupieds is the normal choice, all orbitals is the
-    // reference-independent (albeit expensive) choice
-    assert(singles == true || doubles == true);
-    auto gg_space = IndexSpace::frozen_occupied;
-    if (gg_label == "act_occ") {
-      gg_space = IndexSpace::active_occupied;
-    } else if (gg_label == "occ") {
-      gg_space = IndexSpace::occupied;
-    } else if (gg_label == "all") {
-      gg_space = IndexSpace::all;
-    } else if (gg_label == "fz") {
-      gg_space = IndexSpace::frozen_occupied;
-    } else if (gg_label == "uocc") {
-      gg_space = IndexSpace::unoccupied;
-    }
-    else if (gg_label == "act_obs") {
-      gg_space = IndexSpace::all_active;
-    } else {
-      throw std::runtime_error(
-          "uccf12::compute(gg_label) unsupported space label");
-    }
+  std::pair<ExprPtr, ExprPtr> compute() {
+
 
     auto single = ex<Constant>(0.0);
-    if (singles) {
-      // this might need to be complete space if we don't have a solution to the
-      // particular blocks of interest.
+    if (singles_) {
       auto C = ex<Tensor>(
           L"C",
           std::initializer_list<Index>{
-              Index::make_tmp_index(IndexSpace::instance(IndexSpace::all))},
+              Index::make_tmp_index(IndexSpace::instance(singles_gg_space))},
           std::initializer_list<Index>{Index::make_tmp_index(
-              IndexSpace::instance(IndexSpace::complete_unoccupied))});
+              IndexSpace::instance(IndexSpace::other_unoccupied))});
       auto E_pa = ex<FNOperator>(
           std::initializer_list<Index>{C->as<Tensor>().bra()[0]},
           std::initializer_list<Index>{C->as<Tensor>().ket()[0]});
@@ -333,42 +411,78 @@ class uccf12 {
       single = single + anti_herm_C;
       }
 
-    if (ansatz == 2) {
+    if (ansatz_ == 2) {
       auto h = H(false);
       auto r = R12(gg_space);
       auto r_1 = R12(gg_space);
 
       ExprPtr A = ex<Constant>(0.0);
-      if (doubles) {
-        A = A + (r - adjoint(r)) + single;
+      if (doubles_) {
+        A = A + (r - adjoint(r_1)) + single;
         simplify(A);
       } else {
         A = A + single;
-        simplify(A);
+        non_canon_simplify(A);
       }
-      auto A_ = A->clone();
-      A_ = relable(A_);
-      //std::wcout << "singles_A: " << to_latex_align(A_, 20,4) << std::endl;
-       // first commutator in eq 9. Chem. Phys. 136, 084107 (2012).
-      auto H_A = do_wick(ex<Constant>(1.) * ((h * A) - (A * h)));
-      auto H_A_3 = keep_up_to_3_body_terms(H_A);
-      H_A_3 = simplification::overlap_with_obs(H_A_3);
-      H_A_3 = H_A_3 + ex<Constant>(0.);
-      H_A_3 = simplification::screen_F12_proj(H_A_3, 2);
-      H_A_3 = simplification::tens_to_FNOps(H_A_3);
-      simplify(H_A_3);
-      auto H_A_2 = decompositions::three_body_substitution(H_A_3, 2);
-      simplify(H_A_2);
-      auto com_1 = simplification::hamiltonian_based_projector_2(H_A_2);
-
+        // std::wcout << "singles_A: " << to_latex_align(A_, 20,4) << std::endl;
+        //  first commutator in eq 9. Chem. Phys. 136, 084107 (2012).
+        /*auto H_A = do_wick(ex<Constant>(1.) * ((F() * A) - (A * F())));
+        auto H_A_3 = keep_up_to_3_body_terms(H_A);
+        H_A_3 = simplification::overlap_with_obs(H_A_3);
+        H_A_3 = H_A_3 + ex<Constant>(0.);
+        H_A_3 = simplification::screen_F12_proj(H_A_3, 2);
+        H_A_3 = simplification::detail::tens_to_FNOps(H_A_3);
+        non_canon_simplify(H_A_3);
+        auto H_A_2 = decompositions::three_body_substitution(H_A_3, 2);
+        simplify(H_A_2);
+        auto com_1 = simplification::hamiltonian_based_projector_2(H_A_2);*/
+        auto full_single_com = do_com(h,A);
+        simplify(full_single_com);
+        full_single_com = post_wick_sim(full_single_com);
+        auto com_1 = simplification::hamiltonian_based_projector_2(full_single_com);
+        auto one_body = com_1.first;
+        auto two_body = com_1.second;
       // double commutator in eq. 9. Chem. Phys. 136, 084107 (2012).
-      auto full_double_com =
-          ex<Constant>(1. / 2) * compute_double_com(F(), A, A_);
-      auto sim = simplification::fock_based_projector_2(full_double_com);
-      auto one_body = com_1.first + (sim.first);
-      auto two_body = com_1.second + (sim.second);
-
-      // cannot use non_canon_simplify here because of B term.
+      if (comutator_order_ >= 2) {
+        auto full_double_com = ex<Constant>(1. / 2) * do_com(do_com(F(),relable(A)),relable(A));
+        simplify(full_double_com);
+        full_double_com = post_wick_sim(full_double_com);
+        auto double_com = simplification::fock_based_projector_2(full_double_com);
+        one_body = one_body + double_com.first;
+        two_body = two_body + double_com.second;
+        if(comutator_order_ >= 3){
+          auto full_triple_com =  ex<Constant>(1. / 6) * do_com(do_com(do_com(F(),A),relable(A)),relable(A));
+          simplify(full_triple_com);
+          full_triple_com = post_wick_sim(full_triple_com);
+          auto triple_com = simplification::fock_based_projector_2(full_triple_com);
+          one_body = one_body + triple_com.first;
+          two_body = two_body + triple_com.second;
+          if (comutator_order_ >= 4){
+            auto full_quadruple_com = ex<Constant>(1. / 24) * do_com(do_com(do_com(do_com(F(),A),relable(A)),relable(A)),relable(A));
+            simplify(full_quadruple_com);
+            full_quadruple_com = post_wick_sim(full_quadruple_com);
+            auto quadruple_com = simplification::fock_based_projector_2(full_quadruple_com);
+            one_body = one_body + quadruple_com.first;
+            two_body = two_body + quadruple_com.second;
+            if (comutator_order_ >= 5){
+              auto full_quintuple_com = ex<Constant>(1. / 120) * do_com(do_com(do_com(do_com(do_com(F(),A),relable(A)),relable(A)),relable(A)),relable(A));
+              simplify(full_quintuple_com);
+              full_quintuple_com = post_wick_sim(full_quintuple_com);
+              auto quintuple_com = simplification::fock_based_projector_2(full_quintuple_com);
+              one_body = one_body + quintuple_com.first;
+              two_body = two_body + quintuple_com.second;
+              if (comutator_order_ >= 6){
+                auto full_six_com = ex<Constant>(1. / 720) * do_com(do_com(do_com(do_com(do_com(do_com(F(),A),relable(A)),relable(A)),relable(A)),relable(A)),relable(A));
+                simplify(full_six_com);
+                full_six_com = post_wick_sim(full_six_com);
+                auto six_com = simplification::fock_based_projector_2(full_six_com);
+                one_body = one_body + six_com.first;
+                two_body = two_body + six_com.second;
+              }
+            }
+          }
+        }
+      }
       non_canon_simplify(one_body);
       non_canon_simplify(two_body);
       int term_count = 0;
@@ -390,7 +504,7 @@ class uccf12 {
       }
       std::cout << "number of terms: " << term_count << std::endl;
 
-      if (print) {
+      if (print_) {
         std::wcout << "one body terms: " << to_latex_align(one_body, 20, 2)
                    << std::endl;
         std::wcout << "two body terms: " << to_latex_align(two_body, 20, 2)
@@ -402,7 +516,7 @@ class uccf12 {
     // they will happen to contain off diagonal G elements. we would get the
     // same result if we kept the decomposition and simplified, but this should
     // save time.
-    if (ansatz == 1) {
+    if (ansatz_ == 1) {
       auto h = H(false);
       auto r = R12(gg_space);
       auto r_1 = R12(gg_space);
@@ -414,7 +528,7 @@ class uccf12 {
       H_A_3 = simplification::overlap_with_obs(H_A_3);
       H_A_3 = H_A_3 + ex<Constant>(0.);
       H_A_3 = simplification::screen_F12_proj(H_A_3, 1);
-      H_A_3 = simplification::tens_to_FNOps(H_A_3);
+      H_A_3 = simplification::detail::tens_to_FNOps(H_A_3);
       simplify(H_A_3);
       auto com_1 = simplification::hamiltonian_based_projector_1(H_A_3);
 
@@ -461,7 +575,7 @@ class uccf12 {
       }
       std::cout << "number of terms: " << term_count << std::endl;
 
-      if (print) {
+      if (print_) {
         std::wcout << "one body terms: " << to_latex_align(one_body, 20, 2)
                    << std::endl;
         std::wcout << "two body terms: " << to_latex_align(two_body, 20, 2)

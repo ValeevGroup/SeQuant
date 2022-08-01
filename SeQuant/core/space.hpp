@@ -68,7 +68,7 @@ class IndexSpace {
 
     /// @return an invalid TypeAttr
     static constexpr QuantumNumbersAttr invalid() noexcept {
-      return QuantumNumbersAttr(0xffff);
+      return QuantumNumbersAttr(-0);
     }
   };
 
@@ -122,9 +122,7 @@ class IndexSpace {
     }
     bool operator!=(Attr other) const { return !(*this == other); }
 
-    static Attr null() noexcept {
-      return Attr{TypeAttr{0}, QuantumNumbersAttr{0}};
-    }
+    static Attr null() noexcept { return Attr{nulltype, nullqns}; }
     static Attr invalid() noexcept {
       return Attr{TypeAttr::invalid(), QuantumNumbersAttr::invalid()};
     }
@@ -144,6 +142,7 @@ class IndexSpace {
 
   /// standard space tags are predefined that helps implement set theory of
   /// standard spaces as binary ops on bitsets
+  static Type nulltype;
   static Type frozen_occupied;
   static Type inactive_occupied;
   static Type active_occupied;
@@ -156,6 +155,7 @@ class IndexSpace {
   static Type other_unoccupied;
   static Type complete_unoccupied;
   static Type complete;
+  static Type nonnulltype;
   template <int32_t typeint>
   static const constexpr bool is_standard_type() {
     const Type type{typeint};
@@ -164,7 +164,7 @@ class IndexSpace {
             type == active_unoccupied || type == inactive_unoccupied ||
             type == unoccupied || type == all_active || type == all ||
             type == other_unoccupied || type == complete_unoccupied ||
-            type == complete);
+            type == complete || type == nulltype || type == nonnulltype);
   }
 
   /// standard space tags are predefined that helps implement set theory of
@@ -304,8 +304,8 @@ class IndexSpace {
     return attr2basekey_.find(attr)->second;
   }
 
-  /// Default ctor creates an invalid space
-  IndexSpace() : attr_(Attr::invalid()) {}
+  /// Default ctor creates space with nonnull type and null quantum numbers
+  IndexSpace() noexcept : attr_(nonnulltype, nullqns) {}
 
   IndexSpace(const IndexSpace &other) {
     if (!other.attr().is_valid())
@@ -412,32 +412,38 @@ inline bool operator!=(const IndexSpace &space1, const IndexSpace &space2) {
 }
 inline IndexSpace::Type intersection(IndexSpace::Type type1,
                                      IndexSpace::Type type2) {
-  return type1.intersection(type2);
+  return type1 == type2 ? type1 : type1.intersection(type2);
 }
 inline IndexSpace::QuantumNumbers intersection(IndexSpace::QuantumNumbers v1,
                                                IndexSpace::QuantumNumbers v2) {
-  return v1.intersection(v2);
+  return v1 == v2 ? v1 : v1.intersection(v2);
 }
 inline const IndexSpace &intersection(const IndexSpace &space1,
                                       const IndexSpace &space2) {
-  return IndexSpace::instance(space1.attr().intersection(space2.attr()));
+  return space1 == space2
+             ? space1
+             : IndexSpace::instance(space1.attr().intersection(space2.attr()));
 }
 inline const IndexSpace &intersection(const IndexSpace &space1,
                                       const IndexSpace &space2,
                                       const IndexSpace &space3) {
-  return IndexSpace::instance(
-      space1.attr().intersection(space2.attr().intersection(space3.attr())));
+  return space1 == space2 && space1 == space3
+             ? space1
+             : IndexSpace::instance(space1.attr().intersection(
+                   space2.attr().intersection(space3.attr())));
 }
 inline IndexSpace::Type unIon(IndexSpace::Type type1, IndexSpace::Type type2) {
-  return type1.unIon(type2);
+  return type1 == type2 ? type1 : type1.unIon(type2);
 }
 inline IndexSpace::QuantumNumbers unIon(IndexSpace::QuantumNumbers qns1,
                                         IndexSpace::QuantumNumbers qns2) {
-  return qns1.unIon(qns2);
+  return qns1 == qns2 ? qns1 : qns1.unIon(qns2);
 }
 inline const IndexSpace &unIon(const IndexSpace &space1,
                                const IndexSpace &space2) {
-  return IndexSpace::instance(space1.attr().unIon(space2.attr()));
+  return space1 == space2
+             ? space1
+             : IndexSpace::instance(space1.attr().unIon(space2.attr()));
 }
 /// @return true if type2 is included in type1, i.e. intersection(type1, type2)
 /// == type2

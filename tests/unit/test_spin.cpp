@@ -2,7 +2,7 @@
 // Created by Nakul Teke on 12/20/19.
 //
 
-#include "SeQuant/domain/mbpt/spin.cpp"
+#include "SeQuant/domain/mbpt/spin.hpp"
 #include "catch.hpp"
 #include "test_config.hpp"
 

@@ -49,6 +49,9 @@ int main(int argc, char* argv[]) {
 
   using namespace sequant;
   detail::OpIdRegistrar op_id_registrar;
+  sequant::set_default_context(
+      SeQuant(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
+              BraKetSymmetry::conjugate, SPBasis::spinorbital));
   mbpt::set_default_convention();
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());

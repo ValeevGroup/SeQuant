@@ -11,6 +11,7 @@ using namespace sequant;
 // particular tensors. Also functionality for restricting our operators and
 // densities to the orbital basis set (obs).
 namespace simplification {
+namespace detail{
 template <typename vec_type>
 std::pair<bool, int> in_list(Index idx, vec_type ref_list) {
   bool inlist = false;
@@ -24,168 +25,10 @@ std::pair<bool, int> in_list(Index idx, vec_type ref_list) {
   std::pair<bool, int> result{inlist, where_inlist};
   return result;
 }
+
 // convert a sequant::FNOperator to a sequant::tensor object
-ExprPtr op_to_tens(ExprPtr ex_) {
-  assert(ex_->is<FNOperator>());
-  std::vector<Index> bra_indices;
-  std::vector<Index> ket_indices;
-  for (auto&& ann : ex_->as<FNOperator>().annihilators()) {
-    bra_indices.push_back(ann.index());
-  }
-  for (auto&& cre : ex_->as<FNOperator>().creators()) {
-    ket_indices.push_back(cre.index());
-  }
-  auto label =
-      get_default_context().spbasis() == SPBasis::spinfree ? L"E" : L"a";
-  auto result = ex<Tensor>(label, bra_indices, ket_indices);
-  return result;
-}
 
-// all densities and the Hamiltonian operators are confined to a given orbital
-// basis in second quantized notation. thus any index on a Normal Ordered
-// operator or density must be confined to the obs.
-/// TODO this dictates that the resulting hamiltonian will be in a particular
-/// basis.
-ExprPtr overlap_with_obs(ExprPtr ex_) {
-  //std::wcout << to_latex_align(ex_,20,4) << std::endl;
-  auto overlap_expr =
-      ex<Constant>(0);  // enforce an overlap each E with elements from
-  for (auto&& product :
-       ex_->as<Sum>().summands()) {  // may be able to make_overlaps manually
-                                     // and apply them to the products. simplify
-                                     // may know what to do with it.
-    auto new_product = ex<Constant>(product->as<Product>().scalar());
-    for (int it = product->as<Product>().factors().size() - 1; it >= 0;
-         it--) {  // loop backwards through the products.
-      auto factor = product->as<Product>().factor(it);
 
-      if (it == product->as<Product>().factors().size() - 1 &&
-          factor->is<FNOperator>() && factor->as<FNOperator>().rank() == 3) {
-        std::wstring label_1;
-        std::wstring label_2;
-        std::wstring label_3;
-        std::wstring label_4;
-        std::wstring label_5;
-        std::wstring label_6;
-        label_1 = factor->as<FNOperator>().annihilators()[0].index().label();
-        label_2 = factor->as<FNOperator>().annihilators()[1].index().label();
-        label_3 = factor->as<FNOperator>().annihilators()[2].index().label();
-        label_4 = factor->as<FNOperator>().creators()[0].index().label();
-        label_5 = factor->as<FNOperator>().creators()[1].index().label();
-        label_6 = factor->as<FNOperator>().creators()[2].index().label();
-        auto o1 = make_overlap(
-            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
-            Index{label_1});
-        auto o2 = make_overlap(
-            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
-            Index{label_2});
-        auto o3 = make_overlap(
-            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
-            Index{label_3});
-        auto o4 = make_overlap(
-            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
-            Index{label_4});
-        auto o5 = make_overlap(
-            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
-            Index{label_5});
-        auto o6 = make_overlap(
-            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
-            Index{label_6});
-        new_product =
-            o1 * o2 * o3 * o4 * o5 * o6 * new_product * op_to_tens(factor);
-      } else if (it == product->as<Product>().factors().size() - 1 &&
-                 factor->is<FNOperator>() &&
-                 factor->as<FNOperator>().rank() == 2) {
-        std::wstring label_1;
-        std::wstring label_2;
-        std::wstring label_3;
-        std::wstring label_4;
-        label_1 = factor->as<FNOperator>().annihilators()[0].index().label();
-        label_2 = factor->as<FNOperator>().annihilators()[1].index().label();
-        label_3 = factor->as<FNOperator>().creators()[0].index().label();
-        label_4 = factor->as<FNOperator>().creators()[1].index().label();
-        auto o1 = make_overlap(
-            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
-            Index{label_1});
-        auto o2 = make_overlap(
-            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
-            Index{label_2});
-        auto o3 = make_overlap(
-            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
-            Index{label_3});
-        auto o4 = make_overlap(
-            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
-            Index{label_4});
-        new_product = o1 * o2 * o3 * o4 * new_product * op_to_tens(factor);
-      } else if (it == product->as<Product>().factors().size() - 1 &&
-                 factor->is<FNOperator>() &&
-                 factor->as<FNOperator>().rank() == 1) {
-        std::wstring label_1;
-        std::wstring label_3;
-        label_1 = factor->as<FNOperator>().annihilators()[0].index().label();
-        label_3 = factor->as<FNOperator>().creators()[0].index().label();
-        auto o1 = make_overlap(
-            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
-            Index{label_1});
-        auto o3 = make_overlap(
-            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
-            Index{label_3});
-        new_product = o1 * o3 * new_product * op_to_tens(factor);
-      } else if (factor->is<Tensor>() &&
-                 factor->as<Tensor>().label() == L"\\Gamma" &&
-                 factor->as<Tensor>().rank() == 1) {
-        std::wstring label_2;
-        std::wstring label_4;
-        label_2 = factor->as<Tensor>().ket()[0].label();
-        label_4 = factor->as<Tensor>().bra()[0].label();
-        auto o1 = make_overlap(
-            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
-            Index{label_2});
-        auto o3 = make_overlap(
-            Index{label_4},
-            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)));
-        new_product = o1 * o3 * factor * new_product;
-      } else if (factor->is<Tensor>() &&
-                 factor->as<Tensor>().label() == L"\\Gamma" &&
-                 factor->as<Tensor>().rank() == 2) {
-        std::wstring label_1;
-        std::wstring label_3;
-        std::wstring label_2;
-        std::wstring label_4;
-        label_1 = factor->as<Tensor>().ket()[0].label();
-        label_3 = factor->as<Tensor>().bra()[0].label();
-        label_2 = factor->as<Tensor>().ket()[1].label();
-        label_4 = factor->as<Tensor>().bra()[1].label();
-        auto o1 = make_overlap(
-            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
-            Index{label_1});
-        auto o3 = make_overlap(
-            Index{label_3},
-            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)));
-        auto o2 = make_overlap(
-            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
-            Index{label_2});
-        auto o4 = make_overlap(
-            Index{label_4},
-            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)));
-        new_product = o1 * o3 * o2 * o4 * factor * new_product;
-      } else {
-        new_product = new_product * factor;
-      }
-    }
-    new_product = new_product;
-    overlap_expr = overlap_expr + new_product;
-  }
-
-  FWickTheorem wick{overlap_expr};
-  // std::wcout << to_latex_align(overlap_expr,20,2) << std::endl;
-  wick.reduce(overlap_expr);
-  non_canon_simplify(overlap_expr);
-  // std::wcout << to_latex_align(overlap_expr,20,2) << std::endl;
-  return overlap_expr;
-}
-
-using IDX_list = std::initializer_list<Index>;
 // in various transformation methods it seems as if the constants are removed or
 // treated separatly from the main transformed hamiltonian expression.
 ExprPtr remove_const(const ExprPtr ex_) {
@@ -206,7 +49,6 @@ ExprPtr remove_const(const ExprPtr ex_) {
   non_canon_simplify(new_expression);
   return new_expression;
 }
-
 // params ex_ : a product to replace indices on.
 //  og: original index in the product to be replaced
 //  newer: the new index which replaces the original index.
@@ -275,12 +117,246 @@ Product replace_idx(ExprPtr ex_, Index og, Index newer) {
 }
 
 // convert a sequant::Tensor to a sequant::FNOperator
+ExprPtr op_to_tens(ExprPtr ex_) {
+  assert(ex_->is<FNOperator>());
+  std::vector<Index> bra_indices;
+  std::vector<Index> ket_indices;
+  for (auto&& ann : ex_->as<FNOperator>().annihilators()) {
+    bra_indices.push_back(ann.index());
+  }
+  for (auto&& cre : ex_->as<FNOperator>().creators()) {
+    ket_indices.push_back(cre.index());
+  }
+  auto label =
+      get_default_context().spbasis() == SPBasis::spinfree ? L"E" : L"a";
+  auto result = ex<Tensor>(label, bra_indices, ket_indices);
+  return result;
+}
+
+ExprPtr FNOPs_to_tens(ExprPtr ex_) {
+  if (ex_->is<Sum>()) {
+    auto new_sum = ex<Constant>(0);
+    for (auto&& product : ex_->as<Sum>().summands()) {
+      auto new_product = ex<Constant>(product->as<Product>().scalar());
+      for (auto factor : product->as<Product>().factors()) {
+        auto new_factor = ex<Constant>(0);
+        if (factor->is<FNOperator>()) {
+          new_factor = op_to_tens(factor) + new_factor;
+          assert(!new_factor->is<FNOperator>());
+        } else {
+          new_factor = factor + new_factor;
+        }
+        new_product = new_product * new_factor;
+      }
+      new_sum = new_product + new_sum;
+    }
+    non_canon_simplify(new_sum);
+    return new_sum;
+  } else if (ex_->is<Product>()) {
+    for (auto&& factor : ex_->as<Product>().factors()) {
+      if (factor->is<FNOperator>()) {
+        factor = op_to_tens(factor);
+      }
+    }
+  } else if (ex_->is<FNOperator>()) {
+    ex_ = detail::op_to_tens(ex_);
+  } else {
+    return ex_;
+  }
+  return ex_;
+}
+
 ExprPtr tens_to_op(ExprPtr ex_) {
   assert(ex_->is<Tensor>());
   auto result =
       ex<FNOperator>(ex_->as<Tensor>().ket(), ex_->as<Tensor>().bra());
   return result;
 }
+
+ExprPtr tens_to_FNOps(ExprPtr ex_) {
+  if (ex_->is<Sum>()) {
+    auto new_sum = ex<Constant>(0);
+    for (auto&& product : ex_->as<Sum>().summands()) {
+      auto new_product = ex<Constant>(product->as<Product>().scalar());
+      for (auto factor : product->as<Product>().factors()) {
+        auto new_factor = ex<Constant>(0);
+        if (factor->is<Tensor>() && (factor->as<Tensor>().label() == L"E" ||
+                                     factor->as<Tensor>().label() == L"a")) {
+          new_factor = tens_to_op(factor);
+        } else {
+          new_factor = factor;
+        }
+        new_product = new_product * new_factor;
+      }
+      new_sum = new_product + new_sum;
+    }
+    non_canon_simplify(new_sum);
+    return new_sum;
+  } else if (ex_->is<Product>()) {
+    for (auto&& factor : ex_->as<Product>().factors()) {
+      if (factor->is<Tensor>() && (factor->as<Tensor>().label() == L"E" ||
+                                   factor->as<Tensor>().label() == L"a")) {
+        factor = tens_to_op(factor);
+      }
+    }
+  } else if (ex_->is<Tensor>() && (ex_->as<Tensor>().label() == L"E" ||
+                                   ex_->as<Tensor>().label() == L"a")) {
+    ex_ = detail::tens_to_op(ex_);
+  } else {
+    return ex_;
+  }
+  return ex_;
+}
+
+}
+
+
+// all densities and the Hamiltonian operators are confined to a given orbital
+// basis in second quantized notation. thus any index on a Normal Ordered
+// operator or density must be confined to the obs.
+/// TODO this dictates that the resulting hamiltonian will be in a particular
+/// basis.
+ExprPtr overlap_with_obs(ExprPtr ex_) {
+  //this function expects operators.
+
+  auto overlap_expr =
+      ex<Constant>(0);  // enforce an overlap each E with elements from
+  for (auto&& product :
+       ex_->as<Sum>().summands()) {  // may be able to make_overlaps manually
+                                     // and apply them to the products. simplify
+                                     // may know what to do with it.
+    auto new_product = ex<Constant>(product->as<Product>().scalar());
+    for (int it = product->as<Product>().factors().size() - 1; it >= 0;
+         it--) {  // loop backwards through the products.
+      auto factor = product->as<Product>().factor(it);
+
+      if (it == product->as<Product>().factors().size() - 1 &&
+          factor->is<FNOperator>() && factor->as<FNOperator>().rank() == 3) {
+        std::wstring label_1;
+        std::wstring label_2;
+        std::wstring label_3;
+        std::wstring label_4;
+        std::wstring label_5;
+        std::wstring label_6;
+        label_1 = factor->as<FNOperator>().annihilators()[0].index().label();
+        label_2 = factor->as<FNOperator>().annihilators()[1].index().label();
+        label_3 = factor->as<FNOperator>().annihilators()[2].index().label();
+        label_4 = factor->as<FNOperator>().creators()[0].index().label();
+        label_5 = factor->as<FNOperator>().creators()[1].index().label();
+        label_6 = factor->as<FNOperator>().creators()[2].index().label();
+        auto o1 = make_overlap(
+            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
+            Index{label_1});
+        auto o2 = make_overlap(
+            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
+            Index{label_2});
+        auto o3 = make_overlap(
+            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
+            Index{label_3});
+        auto o4 = make_overlap(
+            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
+            Index{label_4});
+        auto o5 = make_overlap(
+            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
+            Index{label_5});
+        auto o6 = make_overlap(
+            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
+            Index{label_6});
+        new_product =
+            o1 * o2 * o3 * o4 * o5 * o6 * new_product * detail::op_to_tens(factor);
+      } else if (it == product->as<Product>().factors().size() - 1 &&
+                 factor->is<FNOperator>() &&
+                 factor->as<FNOperator>().rank() == 2) {
+        std::wstring label_1;
+        std::wstring label_2;
+        std::wstring label_3;
+        std::wstring label_4;
+        label_1 = factor->as<FNOperator>().annihilators()[0].index().label();
+        label_2 = factor->as<FNOperator>().annihilators()[1].index().label();
+        label_3 = factor->as<FNOperator>().creators()[0].index().label();
+        label_4 = factor->as<FNOperator>().creators()[1].index().label();
+        auto o1 = make_overlap(
+            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
+            Index{label_1});
+        auto o2 = make_overlap(
+            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
+            Index{label_2});
+        auto o3 = make_overlap(
+            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
+            Index{label_3});
+        auto o4 = make_overlap(
+            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
+            Index{label_4});
+        new_product = o1 * o2 * o3 * o4 * new_product * detail::op_to_tens(factor);
+      } else if (it == product->as<Product>().factors().size() - 1 &&
+                 factor->is<FNOperator>() &&
+                 factor->as<FNOperator>().rank() == 1) {
+        std::wstring label_1;
+        std::wstring label_3;
+        label_1 = factor->as<FNOperator>().annihilators()[0].index().label();
+        label_3 = factor->as<FNOperator>().creators()[0].index().label();
+        auto o1 = make_overlap(
+            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
+            Index{label_1});
+        auto o3 = make_overlap(
+            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
+            Index{label_3});
+        new_product = o1 * o3 * new_product * detail::op_to_tens(factor);
+      } else if (factor->is<Tensor>() &&
+                 factor->as<Tensor>().label() == L"\\Gamma" &&
+                 factor->as<Tensor>().rank() == 1) {
+        std::wstring label_1;
+        std::wstring label_3;
+        label_1 = factor->as<Tensor>().ket()[0].label();
+        label_3 = factor->as<Tensor>().bra()[0].label();
+        auto o1 = make_overlap(
+            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
+            Index{label_1});
+        auto o3 = make_overlap(
+            Index{label_3},
+            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)));
+        new_product = o1 * o3 * factor * new_product;
+      } else if (factor->is<Tensor>() &&
+                 factor->as<Tensor>().label() == L"\\Gamma" &&
+                 factor->as<Tensor>().rank() == 2) {
+        std::wstring label_1;
+        std::wstring label_3;
+        std::wstring label_2;
+        std::wstring label_4;
+        label_1 = factor->as<Tensor>().ket()[0].label();
+        label_3 = factor->as<Tensor>().bra()[0].label();
+        label_2 = factor->as<Tensor>().ket()[1].label();
+        label_4 = factor->as<Tensor>().bra()[1].label();
+        auto o1 = make_overlap(
+            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
+            Index{label_1});
+        auto o3 = make_overlap(
+            Index{label_3},
+            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)));
+        auto o2 = make_overlap(
+            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)),
+            Index{label_2});
+        auto o4 = make_overlap(
+            Index{label_4},
+            Index::make_tmp_index(IndexSpace::instance(IndexSpace::all)));
+        new_product = o1 * o3 * o2 * o4 * factor * new_product;
+      } else {
+        new_product = new_product * factor;
+      }
+    }
+    new_product = new_product;
+    overlap_expr = overlap_expr + new_product;
+  }
+  FWickTheorem wick{overlap_expr};
+  wick.reduce(overlap_expr);
+  non_canon_simplify(overlap_expr);
+  return overlap_expr;
+}
+
+using IDX_list = std::initializer_list<Index>;
+
+
+
 // F tensors must contain indices in the bra with space > all. this
 // includes complete, completeunoccupied, and inactiveunoccupied. and if one of
 // the particle indices is connected to the obs virtual space, then the other
@@ -289,19 +365,17 @@ ExprPtr screen_F_tensors(ExprPtr ex_, int ansatz = 2) {
   assert(ex_->is<Tensor>());
   assert(ex_->as<Tensor>().label() == L"F");
   auto overlap = ex<Constant>(1);
-  bool good = false;
-  bool bra_good = false;
   if (ansatz == 2) {
+    bool non_zero = false;
+    bool bra_good = false;
     for (int i = 0; i < ex_->as<Tensor>().bra().size(); i++) {
       auto bra = ex_->as<Tensor>().bra()[i];
       if (bra.space().type() == IndexSpace::complete ||
           bra.space().type() == IndexSpace::complete_unoccupied) {
-        good = true;
+        non_zero = true;
         bra_good = true;
-      } else if (bra.space().type() == IndexSpace::complete ||
-                 bra.space().type() == IndexSpace::complete_unoccupied ||
-                 bra.space().type() == IndexSpace::other_unoccupied) {
-        good = true;
+      } else if (bra.space().type() == IndexSpace::other_unoccupied) {
+        non_zero = true;
       }
     }
 
@@ -334,12 +408,10 @@ ExprPtr screen_F_tensors(ExprPtr ex_, int ansatz = 2) {
       auto ket = ex_->as<Tensor>().ket()[j];
       if (ket.space().type() == IndexSpace::complete ||
           ket.space().type() == IndexSpace::complete_unoccupied) {
-        good = true;
+        non_zero = true;
         ket_good = true;
-      } else if (ket.space().type() == IndexSpace::complete ||
-                 ket.space().type() == IndexSpace::complete_unoccupied ||
-                 ket.space().type() == IndexSpace::other_unoccupied) {
-        good = true;
+      } else if (ket.space().type() == IndexSpace::other_unoccupied) {
+        non_zero = true;
       }
     }
     for (int j = 0; j < ex_->as<Tensor>().ket().size(); j++) {
@@ -359,7 +431,7 @@ ExprPtr screen_F_tensors(ExprPtr ex_, int ansatz = 2) {
         }
       }
     }
-    if (good) {
+    if (non_zero) {
       return ex_ * overlap;
     } else {
       return ex<Constant>(0);
@@ -418,8 +490,7 @@ ExprPtr screen_F_tensors(ExprPtr ex_, int ansatz = 2) {
   }
 }
 
-ExprPtr screen_density(
-    ExprPtr ex_) {  // densities probably should be non-zero if each index has a
+ExprPtr screen_density(ExprPtr ex_) {  // densities probably should be non-zero if each index has a
                     // chance to be occupied, in other words, screen out
                     // densities containing unoccupied labels.
   assert(ex_->is<Tensor>());
@@ -483,7 +554,6 @@ auto treat_fock(ExprPtr ex_) {
     auto new_product = ex<Constant>(real);
     for (auto&& factor : product->as<Product>().factors()) {
       if (factor->is<Tensor>() && factor->as<Tensor>().label() == L"f") {
-        // TODO do not assume EBC
         auto space = intersection(factor->as<Tensor>().bra()[0].space(),
                                   factor->as<Tensor>().ket()[0].space());
         if (space.type().none()) {
@@ -567,7 +637,7 @@ ncon_spa_extket_extbra(Tensor T1, Tensor T2, bool print_ = false) {
   //  list.
   for (int i = 0; i < T1.bra().size(); i++) {
     // is the bra T1 index a connected index?
-    if (in_list(T1.bra()[i], connected_indices).first) {
+    if (detail::in_list(T1.bra()[i], connected_indices).first) {
       T1_ket = true;
       for (int j = 0; j < T2.ket().size(); j++) {
         if (T2.ket()[j].label() == T1.bra()[i].label()) {
@@ -577,7 +647,7 @@ ncon_spa_extket_extbra(Tensor T1, Tensor T2, bool print_ = false) {
       }
     }
     // is the ket T1 index a connected index?
-    else if (in_list(T1.ket()[i], connected_indices).first) {
+    else if (detail::in_list(T1.ket()[i], connected_indices).first) {
       T1_ket = false;
       for (int j = 0; j < T2.ket().size(); j++) {
         if (T2.bra()[j].label() == T1.ket()[i].label()) {
@@ -596,13 +666,13 @@ ncon_spa_extket_extbra(Tensor T1, Tensor T2, bool print_ = false) {
   for (int i = 0; i < T2.ket().size(); i++) {
     // if the ket index is connected, do nothing because the external index is
     // already accounted for
-    if (in_list(T2.ket()[i], connected_indices).first ||
-        in_list(T2.ket()[i], external_ket).first) {
+    if (detail::in_list(T2.ket()[i], connected_indices).first ||
+        detail::in_list(T2.ket()[i], external_ket).first) {
     }
     // if the bra index is connected, do nothing because the external index is
     // already accounted for
-    else if (in_list(T2.bra()[i], connected_indices).first ||
-             in_list(T2.bra()[i], external_bra).first) {
+    else if (detail::in_list(T2.bra()[i], connected_indices).first ||
+             detail::in_list(T2.bra()[i], external_bra).first) {
     }
     // if niether the bra or the ket are connected or made the external lists by
     // now, add them.
@@ -627,12 +697,12 @@ ncon_spa_extket_extbra(Tensor T1, Tensor T2, bool print_ = false) {
     bool bra_connected = false;
     bool ket_connected = false;
     for (int i = 0; i < T1.bra().size(); i++) {
-      if (in_list(T1.bra()[i], connected_indices).first) {
+      if (detail::in_list(T1.bra()[i], connected_indices).first) {
         bra_connected = true;
       }
     }
     for (int j = 0; j < T1.ket().size(); j++) {
-      if (in_list(T1.ket()[j], connected_indices).first) {
+      if (detail::in_list(T1.ket()[j], connected_indices).first) {
         ket_connected = true;
       }
     }
@@ -693,7 +763,7 @@ ExprPtr densities_to_occ(const ExprPtr& ex_) {
 
 // constructs a biproduct intermediate tensor from a given two tensors in an
 // expression.
-ExprPtr biproduct_intermediate(ExprPtr T1, ExprPtr T2) {
+std::pair<ExprPtr,bool> biproduct_intermediate(ExprPtr T1, ExprPtr T2) {
   assert(T1->is<Tensor>());
   assert(T2->is<Tensor>());
   auto result = ex<Constant>(1);
@@ -704,52 +774,69 @@ ExprPtr biproduct_intermediate(ExprPtr T1, ExprPtr T2) {
     // intermediate decomposition handled by SeQuant so space labels can be
     // properly handled
     if (nconnects == 2 && space == IndexSpace::complete_unoccupied) {
-      if (T1_ket) {
+      // I believe that I overplayed the importance of external indicies here. V fundamental terms have free indices which always correspond to a particular tensor label "G" or "F"
+      auto g = ex<Constant>(0.0); auto F = ex<Constant>(0.0);
+      if (T1->as<Tensor>().label() == L"g"){
+        g = T1;
+        F = T2;
+      }
+      else {
+        g = T2;
+        F = T1;
+      }
+      // deciding this split can be entirely defined by were one tensor has the cabs + unocc orbitals.
+      if (F->as<Tensor>().ket()[0].space() == IndexSpace::complete_unoccupied) {
+        /*auto V_ijpq = ex<Tensor>(L"V",IDX_list{F->as<Tensor>().bra()[0], F->as<Tensor>().bra()[1]},IDX_list{g->as<Tensor>().ket()[0], g->as<Tensor>().ket()[1]});
+        result = V_ijpq;
+        return {V_ijpq,false};*/
         auto GR_ijpq =
-            ex<Tensor>(L"GR", IDX_list{external_bra[0], external_bra[1]},
-                       IDX_list{external_ket[0], external_ket[1]});
+            ex<Tensor>(L"GR",IDX_list{F->as<Tensor>().bra()[0], F->as<Tensor>().bra()[1]},IDX_list{g->as<Tensor>().ket()[0], g->as<Tensor>().ket()[1]}
+                       );
         auto F_ijrs =
-            ex<Tensor>(L"F", IDX_list{external_bra[0], external_bra[1]},
+            ex<Tensor>(L"F",
+                       IDX_list{F->as<Tensor>().bra()[0], F->as<Tensor>().bra()[1]},
                        IDX_list{L"p_11", L"p_12"});
         auto g_rspq = ex<Tensor>(L"g", IDX_list{L"p_11", L"p_12"},
-                                 IDX_list{external_ket[0], external_ket[1]});
+                                 IDX_list{g->as<Tensor>().ket()[0], g->as<Tensor>().ket()[1]});
         auto F_ijmc =
-            ex<Tensor>(L"F", IDX_list{external_bra[0], external_bra[1]},
+            ex<Tensor>(L"F", IDX_list{F->as<Tensor>().bra()[0], F->as<Tensor>().bra()[1]},
                        IDX_list{L"m_6", L"α'_4"});
         auto g_mcpq = ex<Tensor>(L"g", IDX_list{L"m_6", L"α'_4"},
-                                 IDX_list{external_ket[0], external_ket[1]});
+                                 IDX_list{g->as<Tensor>().ket()[0], g->as<Tensor>().ket()[1]});
         auto F_jicm =
-            ex<Tensor>(L"F", IDX_list{external_bra[1], external_bra[0]},
-                       IDX_list{L"α'_4", L"m_6"});
-        auto g_cmqp = ex<Tensor>(L"g", IDX_list{L"α'_4", L"m_6"},
-                                 IDX_list{external_ket[1], external_ket[0]});
+            ex<Tensor>(L"F", IDX_list{F->as<Tensor>().bra()[1], F->as<Tensor>().bra()[0]},
+                       IDX_list{L"α'_4",L"m_6"});
+        auto g_cmqp = ex<Tensor>(L"g", IDX_list{L"α'_4",L"m_6"},
+                                 IDX_list{g->as<Tensor>().ket()[1], g->as<Tensor>().ket()[0]});
 
-        auto V = GR_ijpq - F_ijrs * g_rspq - F_ijmc * g_mcpq - F_jicm * g_cmqp;
+        auto V = GR_ijpq- F_ijrs * g_rspq - F_ijmc * g_mcpq - F_jicm * g_cmqp;
         simplify(V);
-        return V;
+        return {V,false};
       } else {
+        /*auto V_pqij = ex<Tensor>(L"V",IDX_list{g->as<Tensor>().bra()[0], g->as<Tensor>().bra()[1]}, IDX_list{F->as<Tensor>().ket()[0], F->as<Tensor>().ket()[1]});
+        result = V_pqij;
+        return {V_pqij,false};*/
         auto GR_pqij =
-            ex<Tensor>(L"GR", IDX_list{external_bra[0], external_bra[1]},
-                       IDX_list{external_ket[0], external_ket[1]});
+            ex<Tensor>(L"GR",IDX_list{g->as<Tensor>().bra()[0], g->as<Tensor>().bra()[1]},IDX_list{F->as<Tensor>().ket()[0], F->as<Tensor>().ket()[1]});
         auto F_rsij = ex<Tensor>(L"F", IDX_list{L"p_11", L"p_12"},
-                                 IDX_list{external_ket[0], external_ket[1]});
+                                 IDX_list{F->as<Tensor>().ket()[0], F->as<Tensor>().ket()[1]});
         auto g_pqrs =
-            ex<Tensor>(L"g", IDX_list{external_bra[0], external_bra[1]},
+            ex<Tensor>(L"g", IDX_list{g->as<Tensor>().bra()[0], g->as<Tensor>().bra()[1]},
                        IDX_list{L"p_11", L"p_12"});
         auto F_mcij = ex<Tensor>(L"F", IDX_list{L"m_6", L"α'_4"},
-                                 IDX_list{external_ket[0], external_ket[1]});
+                                 IDX_list{F->as<Tensor>().ket()[0], F->as<Tensor>().ket()[1]});
         auto g_pqmc =
-            ex<Tensor>(L"g", IDX_list{external_bra[0], external_bra[1]},
+            ex<Tensor>(L"g", IDX_list{g->as<Tensor>().bra()[0], g->as<Tensor>().bra()[1]},
                        IDX_list{L"m_6", L"α'_4"});
-        auto F_cmji = ex<Tensor>(L"F", IDX_list{L"α'_4", L"m_6"},
-                                 IDX_list{external_ket[1], external_ket[0]});
+        auto F_cmji = ex<Tensor>(L"F", IDX_list{L"α'_4",L"m_6"},
+                                 IDX_list{F->as<Tensor>().ket()[1], F->as<Tensor>().ket()[0]});
         auto g_qpcm =
-            ex<Tensor>(L"g", IDX_list{external_bra[1], external_bra[0]},
-                       IDX_list{L"α'_4", L"m_6"});
+            ex<Tensor>(L"g", IDX_list{g->as<Tensor>().bra()[1], g->as<Tensor>().bra()[0]},
+                       IDX_list{ L"α'_4",L"m_6"});
 
         auto V = GR_pqij - F_rsij * g_pqrs - F_mcij * g_pqmc - F_cmji * g_qpcm;
         simplify(V);
-        return V;
+        return {V,false};
       }
     } else {
       result = T1 * T2;
@@ -757,15 +844,348 @@ ExprPtr biproduct_intermediate(ExprPtr T1, ExprPtr T2) {
   } else {
     if (nconnects == 2 && space == IndexSpace::complete_unoccupied) {
       // X^kl_ij
-      auto X_klij = ex<Tensor>(L"X", IDX_list{external_bra[0], external_bra[1]},
-                               IDX_list{external_ket[0], external_ket[1]});
-      result = X_klij;
+      if ( T1->as<Tensor>().bra()[0].space() ==IndexSpace::complete_unoccupied) {
+        auto X_klij =
+            ex<Tensor>(L"X", IDX_list{T2->as<Tensor>().bra()[0], T2->as<Tensor>().bra()[1]},
+                       IDX_list{T1->as<Tensor>().ket()[0],T1->as<Tensor>().ket()[1]});
+        result = X_klij;
+        return {X_klij,false};
+        auto F2_ijpq = ex<Tensor>(
+            L"R2",
+            IDX_list{T2->as<Tensor>().bra()[0], T2->as<Tensor>().bra()[1]},
+            IDX_list{T1->as<Tensor>().ket()[0],T1->as<Tensor>().ket()[1]});
+        auto F_ijrs = ex<Tensor>(
+            L"F", IDX_list{T2->as<Tensor>().bra()[0], T2->as<Tensor>().bra()[1]},
+            IDX_list{L"p_11", L"p_12"});
+        auto F_rspq = ex<Tensor>(
+            L"F", IDX_list{L"p_11", L"p_12"},
+            IDX_list{T1->as<Tensor>().ket()[0],T1->as<Tensor>().ket()[1]});
+        auto F_ijmc = ex<Tensor>(
+            L"F", IDX_list{T2->as<Tensor>().bra()[0], T2->as<Tensor>().bra()[1]},
+            IDX_list{L"m_6", L"α'_4"});
+        auto F_mcpq = ex<Tensor>(
+            L"F", IDX_list{L"m_6", L"α'_4"},
+            IDX_list{T1->as<Tensor>().ket()[0],T1->as<Tensor>().ket()[1]});
+        auto F_jicm = ex<Tensor>(
+            L"F", IDX_list{T2->as<Tensor>().bra()[1], T2->as<Tensor>().bra()[0]},
+            IDX_list{L"α'_4", L"m_6"});
+        auto F_cmqp = ex<Tensor>(
+            L"F", IDX_list{L"α'_4", L"m_6"},
+            IDX_list{T1->as<Tensor>().ket()[0],T1->as<Tensor>().ket()[1]});
+
+        auto X = F2_ijpq - F_ijrs * F_rspq - F_ijmc * F_mcpq - F_jicm * F_cmqp;
+        return {X,false};
+      }
+      else {
+        auto X_klij =
+            ex<Tensor>(L"X", IDX_list{T1->as<Tensor>().bra()[0], T1->as<Tensor>().bra()[1]},
+                       IDX_list{T2->as<Tensor>().ket()[0],T2->as<Tensor>().ket()[1]});
+        result = X_klij;
+        return {X_klij,false};
+        auto F2_ijpq = ex<Tensor>(
+            L"R2",
+            IDX_list{T1->as<Tensor>().bra()[0], T1->as<Tensor>().bra()[1]},
+            IDX_list{T2->as<Tensor>().ket()[0],T2->as<Tensor>().ket()[1]});
+        auto F_ijrs = ex<Tensor>(
+            L"F", IDX_list{T1->as<Tensor>().bra()[0], T1->as<Tensor>().bra()[1]},
+            IDX_list{L"p_11", L"p_12"});
+        auto F_rspq = ex<Tensor>(
+            L"F", IDX_list{L"p_11", L"p_12"},
+            IDX_list{T2->as<Tensor>().ket()[0],T2->as<Tensor>().ket()[1]});
+        auto F_ijmc = ex<Tensor>(
+            L"F", IDX_list{T1->as<Tensor>().bra()[0], T1->as<Tensor>().bra()[1]},
+            IDX_list{L"m_6", L"α'_4"});
+        auto F_mcpq = ex<Tensor>(
+            L"F", IDX_list{L"m_6", L"α'_4"},
+            IDX_list{T2->as<Tensor>().ket()[0],T2->as<Tensor>().ket()[1]});
+        auto F_jicm = ex<Tensor>(
+            L"F", IDX_list{T1->as<Tensor>().bra()[1], T1->as<Tensor>().bra()[0]},
+            IDX_list{L"α'_4", L"m_6"});
+        auto F_cmqp = ex<Tensor>(
+            L"F", IDX_list{L"α'_4", L"m_6"},
+            IDX_list{T2->as<Tensor>().ket()[0],T2->as<Tensor>().ket()[1]});
+
+        auto X = F2_ijpq - F_ijrs * F_rspq - F_ijmc * F_mcpq - F_jicm * F_cmqp;
+        return {X,false};
+      }
 
     } else if (nconnects == 1 && space == IndexSpace::complete_unoccupied) {
-      // B^kl_ij
-      auto B_klij = ex<Tensor>(L"B", IDX_list{external_bra[0], external_bra[1]},
-                               IDX_list{external_ket[0], external_ket[1]});
-      result = B_klij;
+      if(T1->as<Tensor>().ket()[0].space() == space) {
+        // B^kl_ij approximation C
+        auto B_klij = ex<Tensor>(L"B", IDX_list{external_bra[0],
+        external_bra[1]}, IDX_list{external_ket[0], external_ket[1]});
+        result = B_klij; return {B_klij,true};
+        auto dR2 = ex<Tensor>(
+            L"dR2",
+            IDX_list{T1->as<Tensor>().bra()[0], T1->as<Tensor>().bra()[1]},
+            IDX_list{T2->as<Tensor>().ket()[0], T2->as<Tensor>().ket()[1]});
+        ///
+        auto hj = ex<Tensor>(L"hJ", IDX_list{L"κ_1"},
+                             IDX_list{T2->as<Tensor>().ket()[0]});
+        auto R2 = ex<Tensor>(
+            L"R2",
+            IDX_list{T1->as<Tensor>().bra()[0], T1->as<Tensor>().bra()[1]},
+            IDX_list{L"κ_1", T2->as<Tensor>().ket()[1]});
+        //
+        auto hj_j = ex<Tensor>(L"hJ", IDX_list{L"κ_1"},
+                               IDX_list{T2->as<Tensor>().ket()[1]});
+        auto R2_ilk = ex<Tensor>(
+            L"R2",
+            IDX_list{T1->as<Tensor>().bra()[1], T1->as<Tensor>().bra()[0]},
+            IDX_list{L"κ_1", T2->as<Tensor>().ket()[0]});
+        ///
+        auto F_ijPQ = ex<Tensor>(
+            L"F",
+            IDX_list{T1->as<Tensor>().bra()[0], T1->as<Tensor>().bra()[1]},
+            IDX_list{L"κ_1", L"κ_2"});
+        auto K = ex<Tensor>(L"K", IDX_list{L"κ_1"}, IDX_list{L"κ_3"});
+        auto F_RQkl = ex<Tensor>(
+            L"F", IDX_list{L"κ_3", L"κ_2"},
+            IDX_list{T2->as<Tensor>().ket()[0], T2->as<Tensor>().ket()[1]});
+        //
+        auto F_jiPQ = ex<Tensor>(
+            L"F",
+            IDX_list{T1->as<Tensor>().bra()[1], T1->as<Tensor>().bra()[0]},
+            IDX_list{L"κ_1", L"κ_2"});
+        auto F_RQlk = ex<Tensor>(
+            L"F", IDX_list{L"κ_3", L"κ_2"},
+            IDX_list{T2->as<Tensor>().ket()[1], T2->as<Tensor>().ket()[0]});
+        ///
+        auto F_ijPm = ex<Tensor>(
+            L"F",
+            IDX_list{T1->as<Tensor>().bra()[0], T1->as<Tensor>().bra()[1]},
+            IDX_list{L"κ_1", L"m_11"});
+        auto f = ex<Tensor>(L"f", IDX_list{L"κ_1"}, IDX_list{L"κ_3"});
+        auto F_Rmkl = ex<Tensor>(
+            L"F", IDX_list{L"κ_3", L"m_11"},
+            IDX_list{T2->as<Tensor>().ket()[0], T2->as<Tensor>().ket()[1]});
+        //
+        auto F_jiPm = ex<Tensor>(
+            L"F",
+            IDX_list{T1->as<Tensor>().bra()[1], T1->as<Tensor>().bra()[0]},
+            IDX_list{L"κ_1", L"m_11"});
+        auto F_Rmlk = ex<Tensor>(
+            L"F", IDX_list{L"κ_3", L"m_11"},
+            IDX_list{T2->as<Tensor>().ket()[1], T2->as<Tensor>().ket()[0]});
+        ///
+        auto F_ijmc = ex<Tensor>(
+            L"F",
+            IDX_list{T1->as<Tensor>().bra()[0], T1->as<Tensor>().bra()[1]},
+            IDX_list{L"m_11", L"α'_11"});
+        auto f_mP = ex<Tensor>(L"f", IDX_list{L"m_11"}, IDX_list{L"κ_1"});
+        auto F_Pckl = ex<Tensor>(
+            L"F", IDX_list{L"κ_1", L"α'_11"},
+            IDX_list{T2->as<Tensor>().ket()[0], T2->as<Tensor>().ket()[1]});
+        //
+        auto F_jimc = ex<Tensor>(
+            L"F",
+            IDX_list{T1->as<Tensor>().bra()[1], T1->as<Tensor>().bra()[0]},
+            IDX_list{L"m_11", L"α'_11"});
+        auto F_Pclk = ex<Tensor>(
+            L"F", IDX_list{L"κ_1", L"α'_11"},
+            IDX_list{T2->as<Tensor>().ket()[1], T2->as<Tensor>().ket()[0]});
+        ///
+        auto F_ijpa = ex<Tensor>(
+            L"F",
+            IDX_list{T1->as<Tensor>().bra()[0], T1->as<Tensor>().bra()[1]},
+            IDX_list{L"p_11", L"e_11"});
+        auto f_pr = ex<Tensor>(L"f", IDX_list{L"p_11"}, IDX_list{L"p_12"});
+        auto F_rakl = ex<Tensor>(
+            L"F", IDX_list{L"p_12", L"e_11"},
+            IDX_list{T2->as<Tensor>().ket()[0], T2->as<Tensor>().ket()[1]});
+        //
+        auto F_jipa = ex<Tensor>(
+            L"F",
+            IDX_list{T1->as<Tensor>().bra()[1], T1->as<Tensor>().bra()[0]},
+            IDX_list{L"p_11", L"e_11"});
+        auto F_ralk = ex<Tensor>(
+            L"F", IDX_list{L"p_12", L"e_11"},
+            IDX_list{T2->as<Tensor>().ket()[1], T2->as<Tensor>().ket()[0]});
+        ///
+        auto F_ijmc2 = ex<Tensor>(
+            L"F",
+            IDX_list{T1->as<Tensor>().bra()[0], T1->as<Tensor>().bra()[1]},
+            IDX_list{L"m_11", L"α'_11"});
+        auto f_mn = ex<Tensor>(L"f", IDX_list{L"m_11"}, IDX_list{L"m_12"});
+        auto F_nckl = ex<Tensor>(
+            L"F", IDX_list{L"m_12", L"α'_11"},
+            IDX_list{T2->as<Tensor>().ket()[0], T2->as<Tensor>().ket()[1]});
+        //
+        auto F_jimc2 = ex<Tensor>(
+            L"F",
+            IDX_list{T1->as<Tensor>().bra()[1], T1->as<Tensor>().bra()[0]},
+            IDX_list{L"m_11", L"α'_11"});
+        auto F_nclk = ex<Tensor>(
+            L"F", IDX_list{L"m_12", L"α'_11"},
+            IDX_list{T2->as<Tensor>().ket()[1], T2->as<Tensor>().ket()[0]});
+        ///
+        auto F_ijpa2 = ex<Tensor>(
+            L"F",
+            IDX_list{T1->as<Tensor>().bra()[0], T1->as<Tensor>().bra()[1]},
+            IDX_list{L"p_11", L"e_11"});
+        auto f_pc = ex<Tensor>(L"f", IDX_list{L"p_11"}, IDX_list{L"α'_11"});
+        auto F_cakl = ex<Tensor>(
+            L"F", IDX_list{L"α'_11", L"e_11"},
+            IDX_list{T2->as<Tensor>().ket()[0], T2->as<Tensor>().ket()[1]});
+        //
+        auto F_jipa2 = ex<Tensor>(
+            L"F",
+            IDX_list{T1->as<Tensor>().bra()[1], T1->as<Tensor>().bra()[0]},
+            IDX_list{L"p_11", L"e_11"});
+        auto F_calk = ex<Tensor>(
+            L"F", IDX_list{L"α'11", L"e_11"},
+            IDX_list{T2->as<Tensor>().ket()[1], T2->as<Tensor>().ket()[0]});
+        ///
+        auto B1 = dR2 + ex<Constant>(2.0) * (hj * R2 - F_ijPQ * K * F_RQkl - F_ijPm * f * F_Rmkl -
+                  ex<Constant>(2.) * F_ijmc * f_mP * F_Pckl -
+                  F_ijpa * f_pr * F_rakl + F_ijmc2 * f_mn * F_nckl -
+                  ex<Constant>(2.) * F_ijpa2 * f_pc * F_cakl);
+        auto B2 = hj_j * R2_ilk - F_jiPQ * K * F_RQlk - F_jiPm * f * F_Rmlk -
+                  ex<Constant>(2.) * F_jimc * f_mP * F_Pclk -
+                  F_jipa * f_pr * F_ralk + F_jimc2 * f_mn * F_nclk -
+                  ex<Constant>(2.) * F_jipa2 * f_pc * F_calk;
+        auto B = B1/* + B2*/;
+        non_canon_simplify(B);
+        return {B,true};
+      }
+      else {
+        // B^kl_ij approximation C
+        auto B_klij = ex<Tensor>(L"B", IDX_list{external_bra[0],
+        external_bra[1]}, IDX_list{external_ket[0], external_ket[1]});
+        result = B_klij; return {B_klij,true};
+        auto dR2 = ex<Tensor>(
+            L"dR2",
+            IDX_list{T2->as<Tensor>().bra()[0], T2->as<Tensor>().bra()[1]},
+            IDX_list{T1->as<Tensor>().ket()[0], T1->as<Tensor>().ket()[1]});
+        ///
+        auto hj = ex<Tensor>(L"hJ", IDX_list{L"κ_1"},
+                             IDX_list{T1->as<Tensor>().ket()[0]});
+        auto R2 = ex<Tensor>(
+            L"R2",
+            IDX_list{T2->as<Tensor>().bra()[0], T2->as<Tensor>().bra()[1]},
+            IDX_list{L"κ_1", T1->as<Tensor>().ket()[1]});
+        //
+        auto hj_j = ex<Tensor>(L"hJ", IDX_list{L"κ_1"},
+                               IDX_list{T1->as<Tensor>().ket()[1]});
+        auto R2_ilk = ex<Tensor>(
+            L"R2",
+            IDX_list{T2->as<Tensor>().bra()[1], T2->as<Tensor>().bra()[0]},
+            IDX_list{L"κ_1", T1->as<Tensor>().ket()[0]});
+        ///
+        auto F_ijPQ = ex<Tensor>(
+            L"F",
+            IDX_list{T2->as<Tensor>().bra()[0], T2->as<Tensor>().bra()[1]},
+            IDX_list{L"κ_1", L"κ_2"});
+        auto K = ex<Tensor>(L"K", IDX_list{L"κ_1"}, IDX_list{L"κ_3"});
+        auto F_RQkl = ex<Tensor>(
+            L"F", IDX_list{L"κ_3", L"κ_2"},
+            IDX_list{T1->as<Tensor>().ket()[0], T1->as<Tensor>().ket()[1]});
+        //
+        auto F_jiPQ = ex<Tensor>(
+            L"F",
+            IDX_list{T2->as<Tensor>().bra()[1], T2->as<Tensor>().bra()[0]},
+            IDX_list{L"κ_1", L"κ_2"});
+        auto F_RQlk = ex<Tensor>(
+            L"F", IDX_list{L"κ_3", L"κ_2"},
+            IDX_list{T1->as<Tensor>().ket()[1], T1->as<Tensor>().ket()[0]});
+        ///
+        auto F_ijPm = ex<Tensor>(
+            L"F",
+            IDX_list{T2->as<Tensor>().bra()[0], T2->as<Tensor>().bra()[1]},
+            IDX_list{L"κ_1", L"m_11"});
+        auto f = ex<Tensor>(L"f", IDX_list{L"κ_1"}, IDX_list{L"κ_3"});
+        auto F_Rmkl = ex<Tensor>(
+            L"F", IDX_list{L"κ_3", L"m_11"},
+            IDX_list{T1->as<Tensor>().ket()[0], T1->as<Tensor>().ket()[1]});
+        //
+        auto F_jiPm = ex<Tensor>(
+            L"F",
+            IDX_list{T2->as<Tensor>().bra()[1], T2->as<Tensor>().bra()[0]},
+            IDX_list{L"κ_1", L"m_11"});
+        auto F_Rmlk = ex<Tensor>(
+            L"F", IDX_list{L"κ_3", L"m_11"},
+            IDX_list{T1->as<Tensor>().ket()[1], T1->as<Tensor>().ket()[0]});
+        ///
+        auto F_ijmc = ex<Tensor>(
+            L"F",
+            IDX_list{T2->as<Tensor>().bra()[0], T2->as<Tensor>().bra()[1]},
+            IDX_list{L"m_11", L"α'_11"});
+        auto f_mP = ex<Tensor>(L"f", IDX_list{L"m_11"}, IDX_list{L"κ_1"});
+        auto F_Pckl = ex<Tensor>(
+            L"F", IDX_list{L"κ_1", L"α'_11"},
+            IDX_list{T1->as<Tensor>().ket()[0], T1->as<Tensor>().ket()[1]});
+        //
+        auto F_jimc = ex<Tensor>(
+            L"F",
+            IDX_list{T2->as<Tensor>().bra()[1], T2->as<Tensor>().bra()[0]},
+            IDX_list{L"m_11", L"α'_11"});
+        auto F_Pclk = ex<Tensor>(
+            L"F", IDX_list{L"κ_1", L"α'_11"},
+            IDX_list{T1->as<Tensor>().ket()[1], T1->as<Tensor>().ket()[0]});
+        ///
+        auto F_ijpa = ex<Tensor>(
+            L"F",
+            IDX_list{T2->as<Tensor>().bra()[0], T2->as<Tensor>().bra()[1]},
+            IDX_list{L"p_11", L"e_11"});
+        auto f_pr = ex<Tensor>(L"f", IDX_list{L"p_11"}, IDX_list{L"p_12"});
+        auto F_rakl = ex<Tensor>(
+            L"F", IDX_list{L"p_12", L"e_11"},
+            IDX_list{T1->as<Tensor>().ket()[0], T1->as<Tensor>().ket()[1]});
+        //
+        auto F_jipa = ex<Tensor>(
+            L"F",
+            IDX_list{T2->as<Tensor>().bra()[1], T2->as<Tensor>().bra()[0]},
+            IDX_list{L"p_11", L"e_11"});
+        auto F_ralk = ex<Tensor>(
+            L"F", IDX_list{L"p_12", L"e_11"},
+            IDX_list{T1->as<Tensor>().ket()[1], T1->as<Tensor>().ket()[0]});
+        ///
+        auto F_ijmc2 = ex<Tensor>(
+            L"F",
+            IDX_list{T2->as<Tensor>().bra()[0], T2->as<Tensor>().bra()[1]},
+            IDX_list{L"m_11", L"α'_11"});
+        auto f_mn = ex<Tensor>(L"f", IDX_list{L"m_11"}, IDX_list{L"m_12"});
+        auto F_nckl = ex<Tensor>(
+            L"F", IDX_list{L"m_12", L"α'_11"},
+            IDX_list{T1->as<Tensor>().ket()[0], T1->as<Tensor>().ket()[1]});
+        //
+        auto F_jimc2 = ex<Tensor>(
+            L"F",
+            IDX_list{T2->as<Tensor>().bra()[1], T2->as<Tensor>().bra()[0]},
+            IDX_list{L"m_11", L"α'_11"});
+        auto F_nclk = ex<Tensor>(
+            L"F", IDX_list{L"m_12", L"α'_11"},
+            IDX_list{T1->as<Tensor>().ket()[1], T1->as<Tensor>().ket()[0]});
+        ///
+        auto F_ijpa2 = ex<Tensor>(
+            L"F",
+            IDX_list{T2->as<Tensor>().bra()[0], T2->as<Tensor>().bra()[1]},
+            IDX_list{L"p_11", L"e_11"});
+        auto f_pc = ex<Tensor>(L"f", IDX_list{L"p_11"}, IDX_list{L"α'_11"});
+        auto F_cakl = ex<Tensor>(
+            L"F", IDX_list{L"α'_11", L"e_11"},
+            IDX_list{T1->as<Tensor>().ket()[0], T1->as<Tensor>().ket()[1]});
+        //
+        auto F_jipa2 = ex<Tensor>(
+            L"F",
+            IDX_list{T2->as<Tensor>().bra()[1], T2->as<Tensor>().bra()[0]},
+            IDX_list{L"p_11", L"e_11"});
+        auto F_calk = ex<Tensor>(
+            L"F", IDX_list{L"α'_11", L"e_11"},
+            IDX_list{T1->as<Tensor>().ket()[1], T1->as<Tensor>().ket()[0]});
+        ///
+        auto B1 = dR2 + ex<Constant>(2.0) *(hj * R2 - F_ijPQ * K * F_RQkl - F_ijPm * f * F_Rmkl -
+                  ex<Constant>(2.) * F_ijmc * f_mP * F_Pckl -
+                  F_ijpa * f_pr * F_rakl + F_ijmc2 * f_mn * F_nckl -
+                  ex<Constant>(2.) * F_ijpa2 * f_pc * F_cakl);
+        auto B2 = hj_j * R2_ilk - F_jiPQ * K * F_RQlk - F_jiPm * f * F_Rmlk -
+                  ex<Constant>(2.) * F_jimc * f_mP * F_Pclk -
+                  F_jipa * f_pr * F_ralk + F_jimc2 * f_mn * F_nclk -
+                  ex<Constant>(2.) * F_jipa2 * f_pc * F_calk;
+        auto B = B1/* + B2*/;
+        non_canon_simplify(B);
+        return {B,true};
+      }
     } else if (nconnects == 0) {
       // return original expression (no simplifications to be made)
       result = T1 * T2;
@@ -773,7 +1193,7 @@ ExprPtr biproduct_intermediate(ExprPtr T1, ExprPtr T2) {
       result = T1 * T2;
     }
   }
-  return result;
+  return {result,false};
 }
 // identify F12 intermediates
 // intermediates we generate contain either 2 F or g tensors.
@@ -807,7 +1227,7 @@ ExprPtr find_F12_interms(ExprPtr ex_) {
   if (T1_T2.size() == 2) {
     assert(counter == 2);
     auto result = biproduct_intermediate(T1_T2[0], T1_T2[1]);
-    if (result->is<Tensor>() && result->as<Tensor>().label() == L"B") {
+    if (result.second) {
       for (auto&& factors :
            ex_->as<Product>()
                .factors()) {  // have to find fock matrix and remove. factor 1/2
@@ -819,9 +1239,9 @@ ExprPtr find_F12_interms(ExprPtr ex_) {
       }
     }
 
-    result = result * ex_;
-    non_canon_simplify(result);
-    return result;
+    result.first = result.first * ex_;
+    non_canon_simplify(result.first);
+    return result.first;
   }
   return ex_;
 }
@@ -830,7 +1250,7 @@ ExprPtr find_F12_interms(ExprPtr ex_) {
 // form of the hamiltonian operator. that is h^p_q E^q_p + 1/2 g^{pq}_{rs}
 // E^{rs}_{pq}. to achieve this form, the tensor part of the expression must
 // contain overlaps in place of the normal ordered operators. here we chose a
-// canonical form for E^{p_7}_{p_9} and E^{p_7 p_8}_{p_9 p_10}
+// canonical form for E^{p_7}_{p_9} and E^{p_7 p_8}_{p_9 p_10} as the external indicies
 //  this also simultaneously partitions the result into one and two body terms.
 std::pair<ExprPtr, ExprPtr> fnop_to_overlap(ExprPtr exprs) {
   auto one_body_result = ex<Constant>(0);
@@ -841,7 +1261,7 @@ std::pair<ExprPtr, ExprPtr> fnop_to_overlap(ExprPtr exprs) {
     for (auto&& factor : product->as<Product>().factors()) {
       if (factor->is<Tensor>() && (factor->as<Tensor>().label() == L"E" ||
                                    factor->as<Tensor>().label() == L"a")) {
-        factor = tens_to_op(factor);
+        factor = detail::tens_to_op(factor);
         if (factor->is<FNOperator>()) {
           if (factor->as<FNOperator>().ncreators() == 1) {
             auto o1 = make_overlap(
@@ -961,72 +1381,7 @@ ExprPtr screen_F12_proj(ExprPtr exprs, int ansatz = 2) {
     return exprs;
 }
 
-ExprPtr FNOPs_to_tens(ExprPtr ex_) {
-  if (ex_->is<Sum>()) {
-    auto new_sum = ex<Constant>(0);
-    for (auto&& product : ex_->as<Sum>().summands()) {
-      auto new_product = ex<Constant>(product->as<Product>().scalar());
-      for (auto factor : product->as<Product>().factors()) {
-        auto new_factor = ex<Constant>(0);
-        if (factor->is<FNOperator>()) {
-          new_factor = op_to_tens(factor) + new_factor;
-          assert(!new_factor->is<FNOperator>());
-        } else {
-          new_factor = factor + new_factor;
-        }
-        new_product = new_product * new_factor;
-      }
-      new_sum = new_product + new_sum;
-    }
-    non_canon_simplify(new_sum);
-    return new_sum;
-  } else if (ex_->is<Product>()) {
-    for (auto&& factor : ex_->as<Product>().factors()) {
-      if (factor->is<FNOperator>()) {
-        factor = op_to_tens(factor);
-      }
-    }
-  } else if (ex_->is<FNOperator>()) {
-    ex_ = op_to_tens(ex_);
-  } else {
-    return ex_;
-  }
-  return ex_;
-}
-ExprPtr tens_to_FNOps(ExprPtr ex_) {
-  if (ex_->is<Sum>()) {
-    auto new_sum = ex<Constant>(0);
-    for (auto&& product : ex_->as<Sum>().summands()) {
-      auto new_product = ex<Constant>(product->as<Product>().scalar());
-      for (auto factor : product->as<Product>().factors()) {
-        auto new_factor = ex<Constant>(0);
-        if (factor->is<Tensor>() && (factor->as<Tensor>().label() == L"E" ||
-                                     factor->as<Tensor>().label() == L"a")) {
-          new_factor = tens_to_op(factor);
-        } else {
-          new_factor = factor;
-        }
-        new_product = new_factor * new_product;
-      }
-      new_sum = new_product + new_sum;
-    }
-    non_canon_simplify(new_sum);
-    return new_sum;
-  } else if (ex_->is<Product>()) {
-    for (auto&& factor : ex_->as<Product>().factors()) {
-      if (factor->is<Tensor>() && (factor->as<Tensor>().label() == L"E" ||
-                                   factor->as<Tensor>().label() == L"a")) {
-        factor = tens_to_op(factor);
-      }
-    }
-  } else if (ex_->is<Tensor>() && (ex_->as<Tensor>().label() == L"E" ||
-                                   ex_->as<Tensor>().label() == L"a")) {
-    ex_ = tens_to_op(ex_);
-  } else {
-    return ex_;
-  }
-  return ex_;
-}
+
 
 // split F12 operator into its 2 components seen in eq 11. of Chem. Phys. 136,
 // 084107 (2012).
@@ -1114,13 +1469,9 @@ ExprPtr partition_F12(ExprPtr exprs) {
 //  allow analysis of multiple expressions who have the same normal order
 //  operator prefactor.
 std::pair<ExprPtr, ExprPtr> hamiltonian_based_projector_2(ExprPtr exprs) {
-  exprs = FNOPs_to_tens(exprs);
+  exprs = detail::FNOPs_to_tens(exprs);
   non_canon_simplify(exprs);
   exprs = screen_densities(exprs);
-  non_canon_simplify(exprs);
-  exprs = screen_F12_proj(exprs, 2);
-  //simplify(exprs);
-  //exprs = partition_F12(exprs);
   non_canon_simplify(exprs);
   auto exprs_intmed = ex<Constant>(0.0);
   for (auto&& product : exprs->as<Sum>().summands()) {
@@ -1134,9 +1485,7 @@ std::pair<ExprPtr, ExprPtr> hamiltonian_based_projector_2(ExprPtr exprs) {
 // here G can only have projection to the alpha and Beta space otherwise
 // projector constructs it to be be zero.
 std::pair<ExprPtr, ExprPtr> hamiltonian_based_projector_1(ExprPtr exprs) {
-  exprs = FNOPs_to_tens(exprs);
-  simplify(exprs);
-  exprs = partition_F12(exprs);
+  exprs = detail::FNOPs_to_tens(exprs);
   simplify(exprs);
   exprs = screen_F12_proj(exprs, 1);
   simplify(exprs);
@@ -1151,7 +1500,7 @@ std::pair<ExprPtr, ExprPtr> hamiltonian_based_projector_1(ExprPtr exprs) {
 // G can only project to alpha and Beta space. still need to use fock based
 // expression.
 std::pair<ExprPtr, ExprPtr> fock_based_projector_1(ExprPtr exprs) {
-  exprs = FNOPs_to_tens(exprs);
+  exprs = detail::FNOPs_to_tens(exprs);
   simplify(exprs);
   if (exprs->is<Constant>()) {
     return std::pair<ExprPtr, ExprPtr>{exprs, exprs};
@@ -1189,11 +1538,10 @@ std::pair<ExprPtr, ExprPtr> fock_based_projector_2(ExprPtr exprs) {
     return std::pair<ExprPtr, ExprPtr>{exprs, exprs};
   }
   non_canon_simplify(exprs);
-  exprs = FNOPs_to_tens(exprs);
+  exprs = detail::FNOPs_to_tens(exprs);
   non_canon_simplify(exprs);
   exprs = screen_densities(exprs);
   non_canon_simplify(exprs);
-  //std::wcout << "pre partition expression: " << to_latex_align(exprs,30,3) << std::endl;
   //exprs = partition_F12(exprs);
   auto final_screen = exprs;
   non_canon_simplify(final_screen);

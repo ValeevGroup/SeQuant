@@ -25,27 +25,26 @@ namespace sequant {
 ///
 /// Op = Index + Action
 /// @tparam S specifies the particle statistics
-template<Statistics S = Statistics::FermiDirac>
+template <Statistics S = Statistics::FermiDirac>
 class Op {
  public:
   static constexpr Statistics statistics = S;
 
   Op() = default;
-  Op(Index index, Action action) noexcept : index_(std::move(index)), action_(action) {}
+  Op(Index index, Action action) noexcept
+      : index_(std::move(index)), action_(action) {}
 
   const Index &index() const { return index_; }
   Index &index() { return index_; }
   const Action &action() const { return action_; }
 
   /// @brief changes this to its (Hermitian) adjoint
-  void adjoint() {
-    action_ = sequant::adjoint(action_);
-  }
+  void adjoint() { action_ = sequant::adjoint(action_); }
 
   static std::wstring core_label() {
     return get_default_context().spbasis() == SPBasis::spinorbital
-           ? (S == Statistics::FermiDirac ? L"a" : L"b")
-           : L"E";
+               ? (S == Statistics::FermiDirac ? L"a" : L"b")
+               : L"E";
   }
 
   /// @return the string representation of @c this in LaTeX format
@@ -97,15 +96,13 @@ inline bool operator<(const Op<S1> &op1, const Op<S2> &op2) {
     if (op1.action() == op2.action()) {
       if (op1.index() == op2.index()) {
         return false;
-      }
-      else {
+      } else {
         return op1.index() < op2.index();
       }
     } else {
       return op1.action() < op2.action();
     }
-  }
-  else
+  } else
     return S1 < S2;
 }
 
@@ -122,12 +119,12 @@ inline auto hash_value(const Op<S> &op) {
   return val;
 }
 
-template<Statistics S>
+template <Statistics S>
 bool operator==(const Op<S> &op1, const Op<S> &op2) {
   return op1.index() == op2.index() && op1.action() == op2.action();
 }
 
-template<Statistics S>
+template <Statistics S>
 bool operator!=(const Op<S> &op1, const Op<S> &op2) {
   return !(op1 == op2);
 }
@@ -289,7 +286,7 @@ class NormalOperator;
 /// @brief Operator is a sequence of Op objects
 ///
 /// @tparam S specifies the particle statistics
-template<Statistics S = Statistics::FermiDirac>
+template <Statistics S = Statistics::FermiDirac>
 class Operator : public container::svector<Op<S>>, public Expr {
  public:
   using base_type = container::svector<Op<S>>;
@@ -299,20 +296,18 @@ class Operator : public container::svector<Op<S>>, public Expr {
   using iterator = typename base_type::iterator;
   using const_iterator = typename base_type::const_iterator;
 
+  using base_type::at;
   using base_type::begin;
-  using base_type::end;
   using base_type::cbegin;
   using base_type::cend;
   using base_type::empty;
+  using base_type::end;
   using base_type::size;
-  using base_type::at;
   using base_type::operator[];
 
   Operator() = default;
-  explicit Operator(std::initializer_list<Op<S>> ops)
-      : base_type(ops) {}
-  explicit Operator(base_type &&ops)
-      : base_type(std::move(ops)) {}
+  explicit Operator(std::initializer_list<Op<S>> ops) : base_type(ops) {}
+  explicit Operator(base_type &&ops) : base_type(std::move(ops)) {}
   template <typename I>
   Operator(Action action, std::initializer_list<I> indices)
       : base_type(make_ops(action, indices)) {}
@@ -320,7 +315,8 @@ class Operator : public container::svector<Op<S>>, public Expr {
   operator base_type &() const & { return *this; }
   operator base_type &&() && { return *this; }
 
-  /// @brief adjoint of an Operator is a reversed string of the adjoints of its ops
+  /// @brief adjoint of an Operator is a reversed string of the adjoints of its
+  /// ops
   virtual void adjoint() override {
     std::reverse(this->begin(), this->end());
     std::for_each(this->begin(), this->end(), [](Op<S> &op) { op.adjoint(); });
@@ -331,33 +327,24 @@ class Operator : public container::svector<Op<S>>, public Expr {
   std::wstring to_latex() const override {
     std::wstring result;
     result = L"{";
-    for (const auto &o : *this)
-      result += o.to_latex();
+    for (const auto &o : *this) result += o.to_latex();
     result += L"}";
     return result;
   }
 
-  type_id_type type_id() const override {
-    return get_type_id<Operator>();
-  };
+  type_id_type type_id() const override { return get_type_id<Operator>(); };
 
-  ExprPtr clone() const override {
-    return std::make_shared<Operator>(*this);
-  }
+  ExprPtr clone() const override { return std::make_shared<Operator>(*this); }
 
  private:
-  base_type make_ops(Action action,
-                     IndexList indices) {
+  base_type make_ops(Action action, IndexList indices) {
     base_type result;
     result.reserve(indices.size());
-    for (const auto &idx : indices)
-      result.emplace_back(idx, action);
+    for (const auto &idx : indices) result.emplace_back(idx, action);
     return result;
   }
 
-  base_type
-  make_ops(Action action,
-           WstrList index_labels) {
+  base_type make_ops(Action action, WstrList index_labels) {
     base_type result;
     result.reserve(index_labels.size());
     for (const auto &idx_label : index_labels)
@@ -367,18 +354,15 @@ class Operator : public container::svector<Op<S>>, public Expr {
 
   bool static_equal(const Expr &that) const override;
 
-  bool is_cnumber() const override {
-    return false;
-  }
+  bool is_cnumber() const override { return false; }
 
-  bool commutes_with_atom(const Expr& that) const override {
+  bool commutes_with_atom(const Expr &that) const override {
     bool result = true;
     /// does not commute with Operator<S>
     /// TODO implement checks of commutativity with Operator<S>
     if (that.is<Operator<S>>()) {
       result = false;
-    }
-    else if (that.is<NormalOperator<S>>()) {
+    } else if (that.is<NormalOperator<S>>()) {
       result = that.as<NormalOperator<S>>().commutes_with_atom(*this);
     }
     return result;
@@ -387,14 +371,13 @@ class Operator : public container::svector<Op<S>>, public Expr {
   hash_type memoizing_hash() const override {
     using std::begin;
     using std::end;
-    const auto& ops = static_cast<const base_type&>(*this);
+    const auto &ops = static_cast<const base_type &>(*this);
     return hash::range(begin(ops), end(ops));
   }
-
 };
 
-template<Statistics S>
-inline bool operator==(const Operator<S>& one, const Operator<S>& another) {
+template <Statistics S>
+inline bool operator==(const Operator<S> &one, const Operator<S> &another) {
   using base_type = container::svector<Op<S>>;
   if (one.size() == another.size()) {
     if (one.empty()) return true;
@@ -409,7 +392,7 @@ inline bool operator==(const Operator<S>& one, const Operator<S>& another) {
     return false;
 }
 
-template<Statistics S>
+template <Statistics S>
 bool Operator<S>::static_equal(const Expr &that) const {
   const auto &that_cast = static_cast<const Operator &>(that);
   return *this == that_cast;
@@ -434,35 +417,42 @@ bool Operator<S>::static_equal(const Expr &that) const {
 /// ann(q1) ann(q2) is represented as a^{⎵ p1}_{q1 q2}.
 ///
 /// @tparam S specifies the particle statistics
-template<Statistics S>
+template <Statistics S>
 class NormalOperator : public Operator<S>, public AbstractTensor {
  public:
   static constexpr Statistics statistics = S;
   using base_type = Operator<S>;
+  using vector_type = typename Operator<S>::base_type;
 
   // iterate over this using the base_type
   using iterator = typename Operator<S>::iterator;
   using const_iterator = typename Operator<S>::const_iterator;
 
+  using base_type::at;
   using base_type::begin;
-  using base_type::end;
   using base_type::cbegin;
   using base_type::cend;
   using base_type::empty;
+  using base_type::end;
   using base_type::size;
-  using base_type::at;
   using base_type::operator[];
 
   /// constructs an identity operator
   NormalOperator(Vacuum v = get_default_context().vacuum()) {}
 
+  /// @tparam IndexSequence1 type representing a sequence of indices
+  /// @tparam IndexSequence2 type representing a sequence of indices
   /// @param creators sequence of creator indices
-  /// @param annihilators sequence of annihilator indices (in order of particle indices, see the class documentation for more info).
-  template <
-      typename IndexContainer,
-      typename = std::enable_if_t<std::is_same_v<typename std::decay_t<IndexContainer>::value_type, Index>>>
-  NormalOperator(IndexContainer &&creator_indices,
-                 IndexContainer &&annihilator_indices,
+  /// @param annihilators sequence of annihilator indices (in order of particle
+  /// indices, see the class documentation for more info).
+  template <typename IndexSequence1, typename IndexSequence2,
+            typename = std::enable_if_t<
+                std::is_same_v<
+                    typename std::decay_t<IndexSequence1>::value_type, Index> &&
+                std::is_same_v<
+                    typename std::decay_t<IndexSequence2>::value_type, Index>>>
+  NormalOperator(IndexSequence1 &&creator_indices,
+                 IndexSequence2 &&annihilator_indices,
                  Vacuum v = get_default_context().vacuum())
       : Operator<S>{}, vacuum_(v), ncreators_(creator_indices.size()) {
     this->reserve(creator_indices.size() + annihilator_indices.size());
@@ -474,13 +464,23 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
     }
   }
 
+  /// @tparam OpSequence1 type representing a sequence of Op<S> objects
+  /// @tparam OpSequence2 type representing a sequence of Op<S> objects
   /// @param creators sequence of creators
-  /// @param annihilators sequence of annihilators (in order of particle indices, see the class documentation for more info).
-  template <typename OpContainer>
-  NormalOperator(OpContainer &&creators,
-                 OpContainer &&annihilators,
-                 Vacuum v = get_default_context().vacuum(),
-  std::enable_if_t<!std::is_same_v<std::decay_t<OpContainer>, NormalOperator> && std::is_same_v<typename std::decay_t<OpContainer>::value_type, Op<S>>>* = nullptr) : Operator<S>{}, vacuum_(v), ncreators_(ranges::size(creators)) {
+  /// @param annihilators sequence of annihilators (in order of particle
+  /// indices, see the class documentation for more info).
+  template <typename OpSequence1, typename OpSequence2>
+  NormalOperator(
+      OpSequence1 &&creators, OpSequence2 &&annihilators,
+      Vacuum v = get_default_context().vacuum(),
+      std::enable_if_t<
+          !std::is_same_v<std::decay_t<OpSequence1>, NormalOperator> &&
+          !std::is_same_v<std::decay_t<OpSequence2>, NormalOperator> &&
+          std::is_same_v<typename std::decay_t<OpSequence1>::value_type,
+                         Op<S>> &&
+          std::is_same_v<typename std::decay_t<OpSequence2>::value_type, Op<S>>>
+          * = nullptr)
+      : Operator<S>{}, vacuum_(v), ncreators_(ranges::size(creators)) {
     for (const auto &op : creators) {
       assert(op.action() == Action::create);
     }
@@ -488,15 +488,18 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
       assert(op.action() == Action::annihilate);
     }
     this->reserve(ranges::size(creators) + ranges::size(annihilators));
-    static_cast<container::svector<Op<S>>*>(this)->insert(this->end(), ranges::cbegin(creators), ranges::cend(creators));
-    static_cast<container::svector<Op<S>>*>(this)->insert(this->end(), ranges::crbegin(annihilators), ranges::crend(annihilators));
+    static_cast<vector_type *>(this)->insert(
+        this->end(), ranges::cbegin(creators), ranges::cend(creators));
+    static_cast<vector_type *>(this)->insert(this->end(),
+                                             ranges::crbegin(annihilators),
+                                             ranges::crend(annihilators));
   }
 
   /// @param creators initializer_list of creator indices
-  /// @param annihilators initializer_list of annihilator indices (in order of particle indices, see the class documentation for more info).
-  template <
-      typename I,
-      typename = std::enable_if_t<!std::is_same_v<std::decay_t<I>,Op<S>>>>
+  /// @param annihilators initializer_list of annihilator indices (in order of
+  /// particle indices, see the class documentation for more info).
+  template <typename I, typename = std::enable_if_t<
+                            !std::is_same_v<std::decay_t<I>, Op<S>>>>
   NormalOperator(std::initializer_list<I> creator_indices,
                  std::initializer_list<I> annihilator_indices,
                  Vacuum v = get_default_context().vacuum())
@@ -511,19 +514,23 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
   }
 
   /// @param creators initializer_list of creators
-  /// @param annihilators initializer_list of annihilators (in order of particle indices, see the class documentation for more info).
+  /// @param annihilators initializer_list of annihilators (in order of particle
+  /// indices, see the class documentation for more info).
   NormalOperator(std::initializer_list<Op<S>> creators,
                  std::initializer_list<Op<S>> annihilators,
-                 Vacuum v = get_default_context().vacuum()) : Operator<S>{}, vacuum_(v), ncreators_(size(creators)) {
+                 Vacuum v = get_default_context().vacuum())
+      : Operator<S>{}, vacuum_(v), ncreators_(std::size(creators)) {
     for (const auto &op : creators) {
       assert(op.action() == Action::create);
     }
     for (const auto &op : annihilators) {
       assert(op.action() == Action::annihilate);
     }
-    this->reserve(size(creators) + size(annihilators));
-    this->insert(this->end(), cbegin(creators), cend(creators));
-    this->insert(this->end(), crbegin(annihilators), crend(annihilators));
+    this->reserve(std::size(creators) + std::size(annihilators));
+    static_cast<vector_type *>(this)->insert(this->end(), std::cbegin(creators),
+                                             std::cend(creators));
+    static_cast<vector_type *>(this)->insert(
+        this->end(), std::crbegin(annihilators), std::crend(annihilators));
   }
   NormalOperator(const NormalOperator &other)
       : Operator<S>(other),
@@ -540,12 +547,18 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
     return *this;
   }
 
-  /// @return the vacuum state with respect to which the operator is normal-ordered.
+  /// @return the vacuum state with respect to which the operator is
+  /// normal-ordered.
   Vacuum vacuum() const { return vacuum_; }
   /// @return the range of creators, in the order of increasing particle index
-  auto creators() const { return ranges::views::counted(this->cbegin(), ncreators()); }
-  /// @return the range of annihilators, in the order of increasing particle index
-  auto annihilators() const { return ranges::views::counted(this->crbegin(), nannihilators()); }
+  auto creators() const {
+    return ranges::views::counted(this->cbegin(), ncreators());
+  }
+  /// @return the range of annihilators, in the order of increasing particle
+  /// index
+  auto annihilators() const {
+    return ranges::views::counted(this->crbegin(), nannihilators());
+  }
   /// @return the number of creators
   auto ncreators() const { return ncreators_; }
   /// @return the number of annihilators
@@ -556,10 +569,12 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
   }
 
   /// @return number of creators/annihilators
-  /// @throw std::logic_error if the operator is not particle number conserving (i.e. if ncreators() != nannihilators() )
+  /// @throw std::logic_error if the operator is not particle number conserving
+  /// (i.e. if ncreators() != nannihilators() )
   auto rank() const {
     if (ncreators() != nannihilators()) {
-      throw std::logic_error("NormalOperator::rank(): ncreators != nannihilators");
+      throw std::logic_error(
+          "NormalOperator::rank(): ncreators != nannihilators");
     }
     return ncreators();
   }
@@ -575,7 +590,7 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
   }
 
   /// @return all possible values returned by label() for this operator type
-  static const container::vector<std::wstring>& labels();
+  static const container::vector<std::wstring> &labels();
 
   std::wstring label() const;
 
@@ -584,43 +599,44 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
     result = L"{";
     if (vacuum() == Vacuum::Physical) {
       result += Op<S>::core_label();
-    }
-    else {
+    } else {
       result += L"\\tilde{";
       result += Op<S>::core_label();
       result += L"}";
     }
-    result += L"^{";
     const auto ncreators = this->ncreators();
     const auto nannihilators = this->nannihilators();
-    if (ncreators <
-        nannihilators) {  // pad on the left with square underbrackets, i.e. ⎵
-      const auto iend = nannihilators - ncreators;
-      if (iend > 0) result += L"\\textvisiblespace";
-      for (size_t i = 1; i != iend; ++i) {
-        result += L"\\,\\textvisiblespace";
-      }
-      if (ncreators > 0) {
+    if (ncreators > 0) {
+      result += L"^{";
+      if (ncreators <
+          nannihilators) {  // if have more annihilators than creators pad on
+                            // the left with square underbrackets, i.e. ⎵
+        const auto iend = nannihilators - ncreators;
+        if (iend > 0) result += L"\\textvisiblespace";
+        for (size_t i = 1; i != iend; ++i) {
+          result += L"\\,\\textvisiblespace";
+        }
         result += L"\\,";
       }
+      for (const auto &o : creators()) result += o.index().to_latex();
+      result += L"}";
     }
-    for (const auto &o : creators())
-      result += o.index().to_latex();
-    result += L"}_{";
-    if (ncreators >
-        nannihilators) {  // pad on the left with square underbrackets, i.e. ⎵
-      const auto iend = ncreators - nannihilators;
-      if (iend > 0) result += L"\\textvisiblespace";
-      for (size_t i = 1; i != iend; ++i) {
-        result += L"\\,\\textvisiblespace";
-      }
-      if (nannihilators > 0) {
+    if (nannihilators > 0) {
+      result += L"_{";
+      if (ncreators >
+          nannihilators) {  // if have more creators than annihilators pad on
+                            // the left with square underbrackets, i.e. ⎵
+        const auto iend = ncreators - nannihilators;
+        if (iend > 0) result += L"\\textvisiblespace";
+        for (size_t i = 1; i != iend; ++i) {
+          result += L"\\,\\textvisiblespace";
+        }
         result += L"\\,";
       }
+      for (const auto &o : annihilators()) result += o.index().to_latex();
+      result += L"}";
     }
-    for (const auto &o : annihilators())
-      result += o.index().to_latex();
-    result += L"}}";
+    result += L"}";
     return result;
   }
 
@@ -658,17 +674,17 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
   /// Replaces indices using the index map
   /// @param index_map maps Index to Index
   /// @return true if one or more indices changed
-  /// @pre indices are not tagged, or (if want to protect them from replacement) tagged with (int)0
+  /// @pre indices are not tagged, or (if want to protect them from replacement)
+  /// tagged with (int)0
   /// @post indices that were replaced will be tagged with (int)0
   template <template <typename, typename, typename... Args> class Map,
-      typename... Args>
+            typename... Args>
   bool transform_indices(const Map<Index, Index, Args...> &index_map) {
     bool mutated = false;
     ranges::for_each(*this, [&](auto &&op) {
       if (op.index().transform(index_map)) mutated = true;
     });
-    if (mutated)
-      this->reset_hash_value();
+    if (mutated) this->reset_hash_value();
     return mutated;
   }
 
@@ -681,8 +697,7 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
   bool static_equal(const Expr &that) const override;
 
   bool static_less_than(const Expr &that) const override {
-
-    auto range_hash = [](const auto& sized_range) {
+    auto range_hash = [](const auto &sized_range) {
       using ranges::begin;
       using ranges::size;
       auto b = begin(sized_range);
@@ -690,7 +705,8 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
       auto val = hash::range(b, e);
       return val;
     };
-    auto range_compare = [](const auto& sized_range1, const auto& sized_range2) {
+    auto range_compare = [](const auto &sized_range1,
+                            const auto &sized_range2) {
       using ranges::begin;
       using ranges::size;
       auto b1 = begin(sized_range1);
@@ -705,7 +721,8 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
     if (this == &that) return false;
     if (this->ncreators() == that_cast.ncreators()) {
       if (this->nannihilators() == that_cast.nannihilators()) {
-        // unlike Tensor comparison, we don't memoize hashes of creators and annihilators separately
+        // unlike Tensor comparison, we don't memoize hashes of creators and
+        // annihilators separately
         auto cre_hash = range_hash(this->creators());
         auto that_cre_hash = range_hash(that_cast.creators());
         if (cre_hash == that_cre_hash) {
@@ -714,10 +731,10 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
           if (ann_hash == that_ann_hash)
             return false;
           else {
-            return range_compare(this->annihilators(), that_cast.annihilators());
+            return range_compare(this->annihilators(),
+                                 that_cast.annihilators());
           }
-        }
-        else {
+        } else {
           return range_compare(this->creators(), that_cast.creators());
         }
       } else {
@@ -749,7 +766,7 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
     if (that.is<Operator<S>>()) {
       result = false;
     } else if (that.is<NormalOperator<S>>()) {
-      const auto& op_that = that.as<NormalOperator<S>>();
+      const auto &op_that = that.as<NormalOperator<S>>();
       if (vacuum() ==
           op_that.vacuum()) {  // can only check commutativity for same vacua
         for (auto &&op_l : *this) {
@@ -773,21 +790,17 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
                [](auto &&op) -> const Index & { return op.index(); });
   }
   AbstractTensor::const_any_view_randsz _ket() const override final {
-    return creators() | ranges::views::transform([](auto &&op) -> const Index & {
-             return op.index();
-           });
+    return creators() |
+           ranges::views::transform(
+               [](auto &&op) -> const Index & { return op.index(); });
   }
   AbstractTensor::const_any_view_rand _braket() const override final {
     return ranges::views::concat(annihilators(), creators()) |
            ranges::views::transform(
                [](auto &&op) -> const Index & { return op.index(); });
   }
-  std::size_t _bra_rank() const override final {
-    return nannihilators();
-  }
-  std::size_t _ket_rank() const override final {
-    return ncreators();
-  }
+  std::size_t _bra_rank() const override final { return nannihilators(); }
+  std::size_t _ket_rank() const override final { return ncreators(); }
   Symmetry _symmetry() const override final {
     return (S == Statistics::FermiDirac
                 ? (get_default_context().spbasis() == SPBasis::spinorbital
@@ -804,29 +817,23 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
   std::size_t _color() const override final {
     return S == Statistics::FermiDirac ? 1 : 2;
   }
-  bool _is_cnumber() const override final {
-    return false;
-  }
-  std::wstring _label() const override final {
-    return label();
-  }
-  std::wstring _to_latex() const override final {
-    return to_latex();
-  }
-  bool _transform_indices(const container::map<Index, Index>& index_map) override final {
+  bool _is_cnumber() const override final { return false; }
+  std::wstring _label() const override final { return label(); }
+  std::wstring _to_latex() const override final { return to_latex(); }
+  bool _transform_indices(
+      const container::map<Index, Index> &index_map) override final {
     return transform_indices(index_map);
   }
   void _reset_tags() override final {
     ranges::for_each(*this, [](const auto &op) { op.index().reset_tag(); });
   }
-  bool operator<(const AbstractTensor& other) const override final {
-    auto* other_nop = dynamic_cast<const NormalOperator<S>*>(&other);
+  bool operator<(const AbstractTensor &other) const override final {
+    auto *other_nop = dynamic_cast<const NormalOperator<S> *>(&other);
     if (other_nop) {
-      const Expr* other_expr = static_cast<const Expr*>(other_nop);
+      const Expr *other_expr = static_cast<const Expr *>(other_nop);
       return this->static_less_than(*other_expr);
-    }
-    else
-      return false; // TODO do we compare typeid? labels? probably the latter
+    } else
+      return false;  // TODO do we compare typeid? labels? probably the latter
   }
 
   AbstractTensor::any_view_randsz _bra_mutable() override final {
@@ -841,10 +848,9 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
            ranges::views::transform(
                [](auto &&op) -> Index & { return op.index(); });
   }
-
 };
 
-template<Statistics S>
+template <Statistics S>
 bool operator==(const NormalOperator<S> &op1, const NormalOperator<S> &op2) {
   using base_type = Operator<S>;
   if (op1.vacuum() == op2.vacuum() && op1.ncreators() == op2.ncreators()) {
@@ -854,9 +860,8 @@ bool operator==(const NormalOperator<S> &op1, const NormalOperator<S> &op2) {
     return false;
 }
 
-template<Statistics S>
-bool
-NormalOperator<S>::static_equal(const Expr &that) const {
+template <Statistics S>
+bool NormalOperator<S>::static_equal(const Expr &that) const {
   const auto &that_cast = static_cast<const NormalOperator &>(that);
   return *this == that_cast;
 }
@@ -865,19 +870,20 @@ NormalOperator<S>::static_equal(const Expr &that) const {
 /// ordered with respect to same vacuum
 ///
 /// @tparam S specifies the particle statistics
-template<Statistics S = Statistics::FermiDirac>
-class NormalOperatorSequence : public container::svector<NormalOperator<S>>, public Expr {
+template <Statistics S = Statistics::FermiDirac>
+class NormalOperatorSequence : public container::svector<NormalOperator<S>>,
+                               public Expr {
  public:
   using base_type = container::svector<NormalOperator<S>>;
   static constexpr Statistics statistics = S;
 
+  using base_type::at;
   using base_type::begin;
-  using base_type::end;
   using base_type::cbegin;
   using base_type::cend;
   using base_type::empty;
+  using base_type::end;
   using base_type::size;
-  using base_type::at;
   using base_type::operator[];
 
   /// constructs an empty sequence
@@ -904,18 +910,19 @@ class NormalOperatorSequence : public container::svector<NormalOperator<S>>, pub
     return opsz;
   }
 
-  /// @brief adjoint of a NormalOperatorSequence is a reversed sequence of adjoints
+  /// @brief adjoint of a NormalOperatorSequence is a reversed sequence of
+  /// adjoints
   virtual void adjoint() override {
     std::reverse(this->begin(), this->end());
-    std::for_each(this->begin(), this->end(), [](NormalOperator<S> &op) { op.adjoint(); });
+    std::for_each(this->begin(), this->end(),
+                  [](NormalOperator<S> &op) { op.adjoint(); });
     reset_hash_value();
   }
 
   std::wstring to_latex() const override {
     std::wstring result;
     result = L"{";
-    for (const auto &op: *this)
-      result += op.to_latex();
+    for (const auto &op : *this) result += op.to_latex();
     result += L"}";
     return result;
   }
@@ -928,14 +935,16 @@ class NormalOperatorSequence : public container::svector<NormalOperator<S>>, pub
   Vacuum vacuum_ = Vacuum::Invalid;
   /// ensures that all operators use same vacuum, and sets vacuum_
   void check_vacuum() {
-    vacuum_ =
-        std::accumulate(this->cbegin(), this->cend(), Vacuum::Invalid, [](Vacuum v1, const NormalOperator<S> &v2) {
+    vacuum_ = std::accumulate(
+        this->cbegin(), this->cend(), Vacuum::Invalid,
+        [](Vacuum v1, const NormalOperator<S> &v2) {
           if (v1 == Vacuum::Invalid) {
             return v2.vacuum();
           } else {
             if (v1 != v2.vacuum())
               throw std::invalid_argument(
-                  "NormalOperatorSequence expects all constituent NormalOperator objects to use same vacuum");
+                  "NormalOperatorSequence expects all constituent "
+                  "NormalOperator objects to use same vacuum");
             else
               return v1;
           }
@@ -943,15 +952,17 @@ class NormalOperatorSequence : public container::svector<NormalOperator<S>>, pub
   }
 
   bool static_equal(const Expr &that) const override {
-    const auto& that_cast = static_cast<const NormalOperatorSequence&>(that);
+    const auto &that_cast = static_cast<const NormalOperatorSequence &>(that);
     if (this->vacuum() == that_cast.vacuum()) {
       if (this->empty()) return true;
       if (this->hash_value() == that.hash_value())
-        return static_cast<const base_type&>(*this) == static_cast<const base_type&>(*this);
-       else return false;
-    } else return false;
+        return static_cast<const base_type &>(*this) ==
+               static_cast<const base_type &>(*this);
+      else
+        return false;
+    } else
+      return false;
   }
-
 };
 
 using BOperator = Operator<Statistics::BoseEinstein>;
@@ -961,31 +972,54 @@ using FOperator = Operator<Statistics::FermiDirac>;
 using FNOperator = NormalOperator<Statistics::FermiDirac>;
 using FNOperatorSeq = NormalOperatorSequence<Statistics::FermiDirac>;
 
-template<Statistics S>
+template <typename... Attr>
+inline ExprPtr bcrex(Index i, Attr &&...attr) {
+  return ex<BNOperator>(BNOperator({bcre(i, std::forward<Attr>(attr)...)}, {}));
+}
+template <typename... Attr>
+inline ExprPtr bannx(Index i, Attr &&...attr) {
+  return ex<BNOperator>(BNOperator({}, {bann(i, std::forward<Attr>(attr)...)}));
+}
+template <typename... Attr>
+inline ExprPtr fcrex(Index i, Attr &&...attr) {
+  return ex<FNOperator>(FNOperator({fcre(i, std::forward<Attr>(attr)...)}, {}));
+}
+template <typename... Attr>
+inline ExprPtr fannx(Index i, Attr &&...attr) {
+  return ex<FNOperator>(FNOperator({}, {fann(i, std::forward<Attr>(attr)...)}));
+}
+
+template <Statistics S>
 std::wstring to_latex(const NormalOperator<S> &op) {
   return op.to_latex();
 }
 
-template<Statistics S>
+template <Statistics S>
 std::wstring to_latex(const NormalOperatorSequence<S> &opseq) {
   return opseq.to_latex();
 }
 
 namespace detail {
-  struct OpIdRegistrar {
-    OpIdRegistrar();
-  };
+struct OpIdRegistrar {
+  OpIdRegistrar();
+};
 }  // namespace detail
 
 /// converts NormalOperatorSequence to NormalOperator
 /// @tparam S Statistics
 /// @param[in] opseq a NormalOperatorSequence<S> object
-/// @param[in] target_partner_indices ptr to sequence of Index pairs whose Op<S> will act on same particle, if possible; if null, will not be used
-/// @return @c {phase,normal_operator} , where @c phase is +1 or -1, and @c normal_operator is a NormalOperator<S>
-/// @note will try to ensure that Op<S> objects for each there is a pairs of Indices in @p target_index_columns will act on the same particle in the result
-template<Statistics S = Statistics::FermiDirac>
-std::tuple<int, std::shared_ptr<NormalOperator<S>>> normalize(const NormalOperatorSequence<S>& opseq,
-                                                              const container::svector<std::pair<Index,Index>>& target_partner_indices = {}) {
+/// @param[in] target_partner_indices ptr to sequence of Index pairs whose Op<S>
+/// will act on same particle, if possible; if null, will not be used
+/// @return @c {phase,normal_operator} , where @c phase is +1 or -1, and @c
+/// normal_operator is a NormalOperator<S>
+/// @note will try to ensure that Op<S> objects for each there is a pairs of
+/// Indices in @p target_index_columns will act on the same particle in the
+/// result
+template <Statistics S = Statistics::FermiDirac>
+std::tuple<int, std::shared_ptr<NormalOperator<S>>> normalize(
+    const NormalOperatorSequence<S> &opseq,
+    const container::svector<std::pair<Index, Index>> &target_partner_indices =
+        {}) {
   int phase = 1;
   container::svector<Op<S>> creators, annihilators;
 
@@ -997,27 +1031,37 @@ std::tuple<int, std::shared_ptr<NormalOperator<S>>> normalize(const NormalOperat
   auto opseq_view_iter = begin(opseq_view);
   auto opseq_view_end = end(opseq_view);
   std::size_t pos = 0;
-  const auto nops = opseq.opsize(); // # of Op<S>
-  const auto nnops = opseq.size();  // # of NormalOperator<S>
+  const auto nops = opseq.opsize();  // # of Op<S>
+  const auto nnops = opseq.size();   // # of NormalOperator<S>
   assert(nnops > 0);
   auto vacuum = opseq.vacuum();
   container::svector<container::svector<Op<S>>> annihilator_groups(nnops);
   while (opseq_view_iter != opseq_view_end) {
-    // creators: since they go left, concat them to preserve the order of NormalOperators and creators within Operators ...
+    // creators: since they go left, concat them to preserve the order of
+    // NormalOperators and creators within Operators ...
     if (is_creator(*opseq_view_iter)) {
       creators.push_back(*opseq_view_iter);
-    } // annihilators: rev-concat the groups corresponding to NormalOperators to obtain the desired order of normalized NormalOperators, but within each group simply concat to preserve the original order
+    }  // annihilators: rev-concat the groups corresponding to NormalOperators
+       // to obtain the desired order of normalized NormalOperators, but within
+       // each group simply concat to preserve the original order
     else {
       assert(is_annihilator(*opseq_view_iter));
 
-      // distance from the given Op to the end of NOpSeq (to rev-concat NOps we are pushing to the first available group ...
-      // since we are using vector we are filling Op groups from the back, but this does not create any extra phase)
+      // distance from the given Op to the end of NOpSeq (to rev-concat NOps we
+      // are pushing to the first available group ... since we are using vector
+      // we are filling Op groups from the back, but this does not create any
+      // extra phase)
       const auto distance_to_end = nops - pos - 1;
-      const auto op_group = nnops - ranges::get_cursor(opseq_view_iter).range_ordinal() - 1;  // group idx = reverse of the NOp index within NopSeq
+      const auto op_group =
+          nnops - ranges::get_cursor(opseq_view_iter).range_ordinal() -
+          1;  // group idx = reverse of the NOp index within NopSeq
       assert(op_group < nnops);
-      const auto total_distance = distance_to_end + annihilator_groups[op_group].size();  // we are fwd-concating Ops within groups, hence extra phase
+      const auto total_distance =
+          distance_to_end + annihilator_groups[op_group]
+                                .size();  // we are fwd-concating Ops within
+                                          // groups, hence extra phase
       annihilator_groups[op_group].push_back(*opseq_view_iter);
-      if (S == Statistics::FermiDirac && total_distance%2==1) {
+      if (S == Statistics::FermiDirac && total_distance % 2 == 1) {
         phase *= -1;
       }
     }
@@ -1025,50 +1069,93 @@ std::tuple<int, std::shared_ptr<NormalOperator<S>>> normalize(const NormalOperat
     ++opseq_view_iter;
   }
 
-  // convert annihilator_groups to annihilators N.B. the NormalOperator ctor expects annihilators in reverse order!
-  ranges::for_each(annihilator_groups | ranges::views::reverse, [&annihilators](const auto&agrp) {
-    ranges::for_each(agrp | ranges::views::reverse, [&annihilators](const auto& op) {
-      annihilators.push_back(op);
-    });
-  });
+  // convert annihilator_groups to annihilators
+  // N.B. the NormalOperator ctor expects annihilators in reverse order!
+  ranges::for_each(annihilator_groups | ranges::views::reverse,
+                   [&annihilators](const auto &agrp) {
+                     ranges::for_each(agrp | ranges::views::reverse,
+                                      [&annihilators](const auto &op) {
+                                        annihilators.push_back(op);
+                                      });
+                   });
 
-  // if particle_ops given, reorder to preserve the "original" pairs of Op<S>, if possible
+  // if particle_ops given, reorder to preserve the "original" pairs of Op<S>,
+  // if possible. Max number of such pairs (annihilator/creator columns,
+  // in tensor notation) = min(#cre,#ann)
   if (!target_partner_indices.empty()) {
-    // for every creator Op, in reverse order, if it is in target_index_columns, locate matching annihilator, if any, and
     const auto ncre = ranges::size(creators);
-    for(std::int64_t p = ncre-1; p >= 0; --p) {  // "reverse" particle index
-      const auto &cre_op = *(creators.begin() + p);
-      auto cre_it_in_index_cols = ranges::find_if(
-          target_partner_indices, [&cre_op](const auto &idx_pair) {
-            return idx_pair.first == cre_op.index();
-          });
-      if (cre_it_in_index_cols != target_partner_indices.end()) {
-        const auto &ann_idx = cre_it_in_index_cols->second;
-        auto ann_it_in_annihilators = ranges::find_if(
-            annihilators,
-            [&ann_idx](const auto &v) { return v.index() == ann_idx; });
-        if (ann_it_in_annihilators != annihilators.end()) {
-          const auto nskipped = ranges::distance(annihilators.begin() + p, ann_it_in_annihilators);
-          if (nskipped != 0) {
-            if (nskipped%2) phase *= -1.;
-            std::swap(*(annihilators.begin() + p), *ann_it_in_annihilators);
+    const auto nann = ranges::size(annihilators);
+    const auto rank = std::min(ncre, nann);
+
+    // for every creator/annihilator, in reverse/forward order, if it is in
+    // target_index_columns, locate matching annihilator/creator, if any, and
+    // place in the
+    if (ncre == rank) {
+      const auto nann_extra = nann - rank;
+      for (std::int64_t p = rank - 1; p >= 0;
+           --p) {  // "reverse" particle index
+        const auto &cre_op = *(creators.begin() + p);
+        auto cre_it_in_index_cols = ranges::find_if(
+            target_partner_indices, [&cre_op](const auto &idx_pair) {
+              return idx_pair.first == cre_op.index();
+            });
+        if (cre_it_in_index_cols != target_partner_indices.end()) {
+          const auto &ann_idx = cre_it_in_index_cols->second;
+          auto source_ann_it = ranges::find_if(
+              annihilators,
+              [&ann_idx](const auto &v) { return v.index() == ann_idx; });
+          if (source_ann_it != annihilators.end()) {
+            assert(p + nann_extra < annihilators.size());
+            const auto target_ann_it = annihilators.begin() + p + nann_extra;
+            if (target_ann_it != source_ann_it) {
+              if (S == Statistics::FermiDirac) phase *= -1.;  // 1 swap
+              std::swap(*source_ann_it, *target_ann_it);
+            }
           }
         }
       }
-    }
+    }       // ncre == rank
+    else {  // nann == rank
+      assert(nann == rank);
+      const auto ncre_extra = ncre - rank;
+      for (std::int64_t p = rank - 1; p >= 0;
+           --p) {  // "reverse" particle index
+        const auto &ann_op = *(annihilators.begin() + p);
+        auto ann_it_in_index_cols = ranges::find_if(
+            target_partner_indices, [&ann_op](const auto &idx_pair) {
+              return idx_pair.second == ann_op.index();
+            });
+        if (ann_it_in_index_cols != target_partner_indices.end()) {
+          const auto &cre_idx = ann_it_in_index_cols->first;
+          auto source_cre_it = ranges::find_if(
+              creators,
+              [&cre_idx](const auto &v) { return v.index() == cre_idx; });
+          if (source_cre_it != creators.end()) {
+            assert(p + ncre_extra < creators.size());
+            const auto target_cre_it = creators.begin() + p + ncre_extra;
+            if (source_cre_it != target_cre_it) {
+              if (S == Statistics::FermiDirac) phase *= -1.;  // 1 swap
+              std::swap(*source_cre_it, *target_cre_it);
+            }
+          }
+        }
+      }
+    }  // nann == rank
   }
 
-  return std::make_tuple(phase, std::make_shared<NormalOperator<S>>(std::move(creators), std::move(annihilators), vacuum));
+  return std::make_tuple(
+      phase, std::make_shared<NormalOperator<S>>(
+                 std::move(creators), std::move(annihilators), vacuum));
 }
 
 template <typename T>
-std::decay_t<T> adjoint(T&& t, std::void_t<decltype(std::declval<T&>().adjoint())>* = nullptr) {
+std::decay_t<T> adjoint(
+    T &&t, std::void_t<decltype(std::declval<T &>().adjoint())> * = nullptr) {
   if constexpr (std::is_reference_v<T>) {
     std::decay_t<T> t_copy(t);
     t_copy.adjoint();
     return t_copy;
-  }
-  else {
+  } else {
     t.adjoint();
     return std::move(t);
   }
@@ -1076,4 +1163,4 @@ std::decay_t<T> adjoint(T&& t, std::void_t<decltype(std::declval<T&>().adjoint()
 
 }  // namespace sequant
 
-#endif // SEQUANT_CORE_OP_H
+#endif  // SEQUANT_CORE_OP_H
