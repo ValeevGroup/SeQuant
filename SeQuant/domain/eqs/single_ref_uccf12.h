@@ -424,18 +424,6 @@ class uccf12 {
         A = A + single;
         non_canon_simplify(A);
       }
-        // std::wcout << "singles_A: " << to_latex_align(A_, 20,4) << std::endl;
-        //  first commutator in eq 9. Chem. Phys. 136, 084107 (2012).
-        /*auto H_A = do_wick(ex<Constant>(1.) * ((F() * A) - (A * F())));
-        auto H_A_3 = keep_up_to_3_body_terms(H_A);
-        H_A_3 = simplification::overlap_with_obs(H_A_3);
-        H_A_3 = H_A_3 + ex<Constant>(0.);
-        H_A_3 = simplification::screen_F12_proj(H_A_3, 2);
-        H_A_3 = simplification::detail::tens_to_FNOps(H_A_3);
-        non_canon_simplify(H_A_3);
-        auto H_A_2 = decompositions::three_body_substitution(H_A_3, 2);
-        simplify(H_A_2);
-        auto com_1 = simplification::hamiltonian_based_projector_2(H_A_2);*/
         auto full_single_com = do_com(h,A);
         simplify(full_single_com);
         full_single_com = post_wick_sim(full_single_com);
