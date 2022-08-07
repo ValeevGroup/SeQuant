@@ -200,7 +200,7 @@ TEST_CASE("TEST_EVAL_EXPR", "[EvalExpr]") {
     // sum of two symmetric tensors
     REQUIRE(symmetry(imed(t3, t4)) == Symmetry::symm);
 
-    // sum of one antisymmetric and one one nonsymmetric tensors
+    // sum of an antisymmetric and a nonsymmetric tensors
     REQUIRE(symmetry(imed(t1, t5)) == Symmetry::nonsymm);
 
     // sum of one symmetric and one nonsymmetric tensors
