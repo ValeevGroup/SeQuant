@@ -219,6 +219,8 @@ add_library(SeQuant
         SeQuant/core/parse/parse_expr.cpp
         SeQuant/core/optimize.hpp
         SeQuant/core/optimize/optimize.cpp
+        SeQuant/core/optimize/fusion.hpp
+        SeQuant/core/optimize/fusion.cpp
         SeQuant/core/parse/token.hpp
         SeQuant/core/parse/token.cpp
         SeQuant/core/parse/token_sequant.hpp
@@ -299,6 +301,7 @@ if (BUILD_TESTING)
             tests/unit/test_asy_cost.cpp
             tests/unit/test_eval_node.cpp
             tests/unit/test_optimize.cpp
+            tests/unit/test_fusion.cpp
             tests/unit/test_token_sequant.cpp
             tests/unit/test_rpn.cpp
             tests/unit/test_clone_packed.cpp
