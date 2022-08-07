@@ -17,6 +17,8 @@ using EvalNode = FullBinaryNode<EvalExpr>;
 
 EvalNode to_eval_node(ExprPtr const& expr);
 
+EvalNode to_eval_node(EvalNode l, EvalNode r, EvalOp op);
+
 EvalNode to_eval_node_antisymm(ExprPtr const& expr);
 
 EvalNode to_eval_node_symm(ExprPtr const& expr);

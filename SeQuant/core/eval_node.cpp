@@ -43,6 +43,10 @@ EvalNode to_eval_node(ExprPtr const& expr) {
   return bnode;
 }
 
+EvalNode to_eval_node(EvalNode l, EvalNode r, EvalOp op) {
+  return EvalNode{EvalExpr{*l, *r, op}, std::move(l), std::move(r)};
+}
+
 EvalNode to_eval_node(std::wstring_view label, ExprPtr const& expr) {
   assert(label == L"A" || label == L"S");
   auto op = label == L"A" ? EvalOp::Antisymm : EvalOp::Symm;
