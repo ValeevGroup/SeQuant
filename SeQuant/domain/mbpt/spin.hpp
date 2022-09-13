@@ -183,7 +183,7 @@ ExprPtr swap_spin(const ExprPtr& expr);
 
 /// @brief Merge operators into a single operator (designed for P operator)
 /// @warning Repetition of indices is allowed in a bra or a ket
-ExprPtr merge_operators(const Tensor& O1, const Tensor& O2);
+ExprPtr merge_tensors(const Tensor& O1, const Tensor& O2);
 
 /// @brief Vector of Anti-symmetrizers for spin-traced open-shell expr
 std::vector<ExprPtr> open_shell_A_op(const Tensor& A);
