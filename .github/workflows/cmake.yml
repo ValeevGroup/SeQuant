@@ -30,7 +30,7 @@ jobs:
         -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
         -DBUILD_SHARED_LIBS=OFF
         -DMPIEXEC_PREFLAGS='--bind-to;none;--allow-run-as-root'
-        -DCMAKE_PREFIX_PATH='/usr/local/Cellar/boost@1.76/1.76.0_1'
+        -DCMAKE_PREFIX_PATH='/usr/local/opt/boost@1.76'
         -DSEQUANT_EVAL_TESTS=ON
     steps:
     - uses: actions/checkout@v2
