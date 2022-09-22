@@ -9,8 +9,8 @@
 #include <SeQuant/core/wick.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/sr/sr.hpp>
-#include "../transcorrelated/simplifications.h"
-#include "../transcorrelated/three_body_decomp.hpp"
+#include <Sequant/domain/transcorrelated/simplifications.h>
+#include <SeQuant/domain/transcorrelated/three_body_decomp.hpp>
 
 #include <clocale>
 
@@ -243,10 +243,12 @@ class uccf12 {
       first_com = simplification::overlap_with_obs(first_com);
       first_com = first_com + ex<Constant>(0.);
       simplify(first_com);
+      std::wcout << "post overlap with obs: " << to_latex_align(first_com, 20,3) << std::endl;
       first_com = simplification::screen_F12_proj(first_com, 2);
       non_canon_simplify(first_com);
       first_com = simplification::detail::tens_to_FNOps(first_com);
       non_canon_simplify(first_com);
+      std::wcout << "pre substitution: " << to_latex_align(first_com,20,3) << std::endl;
       first_com = decompositions::three_body_substitution(first_com, 2);
       non_canon_simplify(first_com);
       auto temp = ex<Constant>(0.0);

@@ -207,6 +207,26 @@ ExprPtr tens_to_FNOps(ExprPtr ex_) {
   }
   return ex_;
 }
+ExprPtr test_fock(ExprPtr ex_, IndexSpace::TypeAttr keep){
+  auto new_ex = ex<Constant>(0.0);
+  for (auto&& product : ex_->as<Sum>().summands()){
+    //auto new_product = ex<Constant>(product->as<Product>().scalar());
+    bool keep_product = false;
+    for (auto&& factor : product->as<Product>().factors()){
+      if(factor->is<Tensor>()) {
+        if (factor->as<Tensor>().label() == L"f") {
+          if (factor->as<Tensor>().bra()[0].space() == keep) {
+            keep_product = true;
+          }
+        }
+      }
+    }
+    if(keep_product){
+      new_ex = new_ex + product;
+    }
+  }
+  return new_ex;
+}
 
 }
 
@@ -547,34 +567,73 @@ ExprPtr screen_densities(ExprPtr ex_) {
 // based on Brillouin's Theory, the fock matrix should be block diagonal.
 //  generalized says that complete unoccupied might be non-zero with obs unocc,
 //  but zero with occ and complete unocc. lets assume normal Brillouin's Theory.
-auto treat_fock(ExprPtr ex_) {
+auto treat_fock(ExprPtr ex_, bool ebc) {
   auto new_ex_ = ex<Constant>(0);
   for (auto&& product : ex_->as<Sum>().summands()) {
     double real = product->as<Product>().scalar().real();
     auto new_product = ex<Constant>(real);
-    for (auto&& factor : product->as<Product>().factors()) {
-      if (factor->is<Tensor>() && factor->as<Tensor>().label() == L"f") {
-        auto space = intersection(factor->as<Tensor>().bra()[0].space(),
-                                  factor->as<Tensor>().ket()[0].space());
-        if (space.type().none()) {
-          new_product = ex<Constant>(0) * new_product;
-        } else {
-          auto bra_index =
-              Index::make_tmp_index(IndexSpace::instance(space.type()));
-          auto ket_index =
-              Index::make_tmp_index(IndexSpace::instance(space.type()));
+      for (auto&& factor : product->as<Product>().factors()) {
+        if (factor->is<Tensor>() && factor->as<Tensor>().label() == L"f") {
+          if(ebc){//extended Brillouin condition
+          auto space = intersection(factor->as<Tensor>().bra()[0].space(),
+                                    factor->as<Tensor>().ket()[0].space());
+          if (space.type().none()) {
+            new_product = ex<Constant>(0) * new_product;
+          } else {
+            auto bra_index =
+                Index::make_tmp_index(IndexSpace::instance(space.type()));
+            auto ket_index =
+                Index::make_tmp_index(IndexSpace::instance(space.type()));
 
-          auto bra_overlap =
-              make_overlap(factor->as<Tensor>().bra()[0], bra_index);
-          auto ket_overlap =
-              make_overlap(factor->as<Tensor>().ket()[0], ket_index);
-          new_product = bra_overlap * ket_overlap * factor * new_product;
+            auto bra_overlap =
+                make_overlap(factor->as<Tensor>().bra()[0], bra_index);
+            auto ket_overlap =
+                make_overlap(factor->as<Tensor>().ket()[0], ket_index);
+            new_product = bra_overlap * ket_overlap * factor * new_product;
+          }
         }
-      } else
-        new_product = new_product * factor;
+        else{// standard Brillouin Condition complicated logic
+          if (factor->as<Tensor>().bra()[0].space() == factor->as<Tensor>().ket()[0].space()){ // if each space is the same, keep the same.
+            new_product = new_product * factor;
+          }
+          else if(factor->as<Tensor>().bra()[0].space() == IndexSpace::occupied || factor->as<Tensor>().bra()[0].space() == IndexSpace::active_occupied ||
+                   factor->as<Tensor>().ket()[0].space() == IndexSpace::occupied || factor->as<Tensor>().ket()[0].space() == IndexSpace::active_occupied){ // if one space is a flavor of occupied, use an overlap like ebc.
+            auto space = intersection(factor->as<Tensor>().bra()[0].space(),
+                                      factor->as<Tensor>().ket()[0].space());
+            if (space.type().none()) {
+              new_product = ex<Constant>(0) * new_product;
+            } else {
+              auto bra_index =
+                  Index::make_tmp_index(IndexSpace::instance(space.type()));
+              auto ket_index =
+                  Index::make_tmp_index(IndexSpace::instance(space.type()));
+
+              auto bra_overlap =
+                  make_overlap(factor->as<Tensor>().bra()[0], bra_index);
+              auto ket_overlap =
+                  make_overlap(factor->as<Tensor>().ket()[0], ket_index);
+              new_product = bra_overlap * ket_overlap * factor * new_product;
+            }
+          }
+          else if(factor->as<Tensor>().bra()[0].space() == IndexSpace::all || factor->as<Tensor>().bra()[0].space() == IndexSpace::all_active ||
+                   factor->as<Tensor>().ket()[0].space() == IndexSpace::all || factor->as<Tensor>().ket()[0].space() == IndexSpace::all_active){ // if only one index is all, then force it to be unocc.
+            if(factor->as<Tensor>().bra()[0].space() == IndexSpace::all || factor->as<Tensor>().bra()[0].space() == IndexSpace::all_active){
+              new_product = make_overlap(factor->as<Tensor>().bra()[0],Index::make_tmp_index(IndexSpace::instance(IndexSpace::unoccupied))) * new_product * factor;
+            }
+            else{
+            new_product = make_overlap(factor->as<Tensor>().ket()[0],Index::make_tmp_index(IndexSpace::instance(IndexSpace::unoccupied))) * new_product * factor;
+            }
+          }
+          else{ // keep whats left
+            new_product = new_product * factor;
+          }
+        }
+        }
+        else
+          new_product = new_product * factor;
+      }
+      new_ex_ = new_ex_ + new_product;
     }
-    new_ex_ = new_ex_ + new_product;
-  }
   FWickTheorem wick{new_ex_};
   wick.reduce(new_ex_);
   simplify(new_ex_);
@@ -1495,6 +1554,10 @@ std::pair<ExprPtr, ExprPtr> hamiltonian_based_projector_1(ExprPtr exprs) {
     exprs_intmed = new_product + exprs_intmed;
   }
   non_canon_simplify(exprs_intmed);
+  exprs_intmed = screen_densities(exprs_intmed);
+  non_canon_simplify(exprs_intmed);
+  exprs_intmed = simplification::screen_F12_proj(exprs_intmed, 2);
+  non_canon_simplify(exprs_intmed);
   return fnop_to_overlap(exprs_intmed);
 }
 // G can only project to alpha and Beta space. still need to use fock based
@@ -1542,7 +1605,6 @@ std::pair<ExprPtr, ExprPtr> fock_based_projector_2(ExprPtr exprs) {
   non_canon_simplify(exprs);
   exprs = screen_densities(exprs);
   non_canon_simplify(exprs);
-  //exprs = partition_F12(exprs);
   auto final_screen = exprs;
   non_canon_simplify(final_screen);
   // in some cases, there will now be no contributing terms left so return zero
@@ -1558,7 +1620,11 @@ std::pair<ExprPtr, ExprPtr> fock_based_projector_2(ExprPtr exprs) {
     auto new_product = simplification::find_F12_interms(product);
     last_screen = last_screen + new_product;
   }
-  non_canon_simplify(last_screen);
+  simplify(last_screen);
+
+  last_screen = treat_fock(last_screen,true);
+  simplify(last_screen);
+  last_screen = screen_densities(last_screen);
   return fnop_to_overlap(last_screen);
 }
 }  // namespace simplification
