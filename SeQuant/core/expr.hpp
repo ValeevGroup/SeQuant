@@ -868,6 +868,11 @@ class Product : public Expr {
     return *this;
   }
 
+  void add_identical(const std::shared_ptr<Product> &other) {
+    assert(this->hash_value() == other->hash_value());
+    scalar_ += other->scalar_;
+  }
+
  private:
   scalar_type scalar_ = {1.0, 0.0};
   container::svector<ExprPtr, 2> factors_{};
