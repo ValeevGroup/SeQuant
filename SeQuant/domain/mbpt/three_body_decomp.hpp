@@ -1,7 +1,7 @@
 //
 // Created by Conner Masteran on 7/1/21.
 //
-#include "antisymmetrizer.hpp"
+#include <SeQuant/domain/mbpt/antisymmetrizer.hpp>
 namespace sequant {
 namespace decompositions {
 
