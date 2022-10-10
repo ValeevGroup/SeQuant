@@ -185,7 +185,7 @@ Index z1(L"z_1");  // <- represents IndexSpace::complete_unoccupied
 auto op_oo_oo = ex<FNOperator>(WstrList{L"y_1", L"y_2"}, WstrList{L"y_3", L"y_4"});
 ```
 
-To simplify index registration we provide support for a particular convention that the SeQuant developers prefer that we call the "Quantum Chemistry in Fock Space" (QCiFS), so called after the [series of articles](http://doi.org/10.1063/1.444231) by Werner Kutzelnigg that introduced its essential elements. It can be loaded in 1 line:
+To simplify index registration we provide support for a particular convention that the SeQuant developers prefer that we call the "Quantum Chemistry in Fock Space" (QCiFS), named after the [series of articles](http://doi.org/10.1063/1.444231) by Werner Kutzelnigg that introduced its essential elements. It can be loaded in 1 line:
 
 ```c++
 #include <SeQuant/core/sequant.hpp>
