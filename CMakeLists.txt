@@ -241,10 +241,9 @@ add_library(SeQuant
         SeQuant/domain/mbpt/spin.cpp
         SeQuant/domain/mbpt/sr/sr.cpp
         SeQuant/domain/mbpt/sr/sr.hpp
-        SeQuant/domain/transcorrelated/antisymmetrizer.hpp
-        SeQuant/domain/transcorrelated/simplifications.h
-        SeQuant/domain/transcorrelated/three_body_decomp.hpp
-        SeQuant/domain/eqs/single_ref_uccf12.h)
+        SeQuant/domain/mbpt/antisymmetrizer.hpp
+        SeQuant/domain/mbpt/three_body_decomp.hpp
+        )
 
 target_link_libraries(SeQuant PUBLIC range-v3::range-v3 Boost::regex Boost::boost SeQuant-bliss Threads::Threads)
 if (SEQUANT_HAS_EXECUTION_HEADER_STANDALONE OR SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB)
