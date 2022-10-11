@@ -242,7 +242,7 @@ add_library(SeQuant
         SeQuant/domain/mbpt/sr/sr.cpp
         SeQuant/domain/mbpt/sr/sr.hpp
         SeQuant/domain/mbpt/antisymmetrizer.hpp
-        SeQuant/domain/mbpt/three_body_decomp.hpp
+        SeQuant/domain/mbpt/rdm.hpp
         )
 
 target_link_libraries(SeQuant PUBLIC range-v3::range-v3 Boost::regex Boost::boost SeQuant-bliss Threads::Threads)
