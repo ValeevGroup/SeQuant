@@ -333,7 +333,7 @@ if (BUILD_TESTING)
             PROPERTIES DEPENDS sequant/unit/build
             WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tests/unit)
 
-    ####### Tests ########
+    ####### Integration tests aka "examples" ########
 
     # Single-Reference Coupled-Cluster equation generation
     # (spin-orbital)
@@ -364,10 +364,7 @@ if (BUILD_TESTING)
             examples/${example3}/${example3}.cpp)
     target_link_libraries(${example3} SeQuant)
 
-    set(example4 uccf12)
-    add_executable(${example4} EXCLUDE_FROM_ALL
-            examples/${example4}/${example4}.cpp)
-    target_link_libraries(${example4} SeQuant ${TBB_LIBRARIES})
+    # uccf12 example moved to MPQC
 
     set(example_eval_src
             examples/eval/eval_utils.hpp
