@@ -396,6 +396,7 @@ TEST_CASE("Expr", "[elements]") {
   }
 
   SECTION("visitor") {
+    // read-only visitor
     {
       const auto ex5_init = std::vector<std::shared_ptr<Constant>>{
           std::make_shared<Constant>(1.0), std::make_shared<Constant>(2.0),
@@ -422,6 +423,20 @@ TEST_CASE("Expr", "[elements]") {
       REQUIRE(v2.result ==
               L"{{{1}}}{{{2}}}{{{3}}}{{{1}}}{{{"
               L"2}}}{{{3}}}");
+    }
+
+    // mutating visitor
+    {
+      auto x = (ex<Constant>(1.0) + ex<Constant>(2.0)) *
+               (ex<Constant>(3.0) + ex<Constant>(4.0));
+      x->visit([](ExprPtr &expr) {
+        if (expr->is<Constant>()) {
+          expr = ex<Constant>(2. * expr->as<Constant>().value());
+        }
+      });
+      CHECK_NOTHROW(simplify(x));
+      CHECK(x->is<Constant>());
+      CHECK(x->as<Constant>().value() == 84.);
     }
   }
 
