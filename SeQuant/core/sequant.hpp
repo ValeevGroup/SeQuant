@@ -16,8 +16,9 @@ class SeQuant {
   /// @param m an IndexSpaceMetric object
   /// @param bks a BraKetSymmetry object
   /// @param spb single-particle basis (spin-free or spin-dependent)
-  explicit SeQuant(Vacuum vac, IndexSpaceMetric m, BraKetSymmetry bks,
-                   SPBasis spb = sequant::SPBasis::spinorbital)
+  explicit SeQuant(Vacuum vac, IndexSpaceMetric m = IndexSpaceMetric::Unit,
+                   BraKetSymmetry bks = BraKetSymmetry::conjugate,
+                   SPBasis spb = SPBasis::spinorbital)
       : vacuum_(vac), metric_(m), braket_symmetry_(bks), spbasis_(spb) {}
   ~SeQuant() = default;
 
@@ -35,9 +36,35 @@ class SeQuant {
   SPBasis spbasis_ = sequant::SPBasis::spinorbital;
 };
 
-const SeQuant &get_default_context();
-void set_default_context(const SeQuant &ctx);
+/// SeQuant object equality comparison
+/// \param ctx1
+/// \param ctx2
+/// \return true if \p ctx1 and \p ctx2 are equal
+/// \warning does not compare index registries
+bool operator==(const SeQuant& ctx1, const SeQuant& ctx2);
+
+/// SeQuant object inequality comparison
+/// \param ctx1
+/// \param ctx2
+/// \return true if \p ctx1 and \p ctx2 are not equal
+/// \warning does not compare index registries
+bool operator!=(const SeQuant& ctx1, const SeQuant& ctx2);
+
+const SeQuant& get_default_context();
+void set_default_context(const SeQuant& ctx);
 void reset_default_context();
+
+namespace detail {
+struct ContextResetter {
+  ContextResetter() noexcept;
+  ~ContextResetter() noexcept;
+
+ private:
+  SeQuant previous_ctx_;
+};
+}  // namespace detail
+
+detail::ContextResetter set_scoped_default_context(const SeQuant& ctx);
 
 }  // namespace sequant
 

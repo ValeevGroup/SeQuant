@@ -302,6 +302,7 @@ if (BUILD_TESTING)
             tests/unit/test_rpn.cpp
             tests/unit/test_clone_packed.cpp
             tests/unit/test_cache_manager.cpp
+            tests/unit/test_runtime.cpp
             )
 
     if (TARGET tiledarray)
