@@ -1,12 +1,14 @@
 //
 // Created by Conner Masteran on 7/1/21.
 //
+
+#ifndef SEQUANT_DOMAIN_MBPT_RDM_HPP
+#define SEQUANT_DOMAIN_MBPT_RDM_HPP
+
 #include <SeQuant/domain/mbpt/antisymmetrizer.hpp>
 namespace sequant {
 namespace decompositions {
 
-#ifndef SEQUANT_THREE_BODY_DECOMP_H
-#define SEQUANT_THREE_BODY_DECOMP_H
 ExprPtr cumu_to_density(ExprPtr ex_) {
   assert(ex_->is<Tensor>());
   assert(ex_->as<Tensor>().rank() == 1);
@@ -392,6 +394,7 @@ ExprPtr three_body_substitution(ExprPtr& input, int rank) {
 
   return input;
 };
-}
-}
-#endif  // SEQUANT_THREE_BODY_DECOMP_H
+}  // namespace decompositions
+}  // namespace sequant
+
+#endif  // SEQUANT_DOMAIN_MBPT_RDM_HPP
