@@ -10,32 +10,28 @@
 
 struct Dummy : public sequant::Expr {
   virtual ~Dummy() = default;
-  std::wstring to_latex() const override {
-    return L"{\\text{Dummy}}";
-  }
-  std::wstring to_wolfram() const override {
-    return L"Dummy[]";
-  }
+  std::wstring to_latex() const override { return L"{\\text{Dummy}}"; }
+  std::wstring to_wolfram() const override { return L"Dummy[]"; }
   type_id_type type_id() const override { return get_type_id<Dummy>(); };
   sequant::ExprPtr clone() const override { return sequant::ex<Dummy>(); }
   bool static_equal(const sequant::Expr &that) const override { return true; }
 };
 
-template<typename T>
+template <typename T>
 struct VecExpr : public std::vector<T>, public sequant::Expr {
   using base_type = std::vector<T>;
   using base_type::begin;
   using base_type::end;
 
   VecExpr() = default;
-  template<typename U>
+  template <typename U>
   VecExpr(std::initializer_list<U> elements) : std::vector<T>(elements) {}
-  template<typename Iter>
+  template <typename Iter>
   VecExpr(Iter begin, Iter end) : std::vector<T>(begin, end) {}
   virtual ~VecExpr() = default;
   std::wstring to_latex() const override {
     std::wstring result = L"{\\text{VecExpr}\\{";
-    for (const auto &e: *this) {
+    for (const auto &e : *this) {
       if constexpr (sequant::Expr::is_shared_ptr_of_expr_or_derived<T>::value) {
         result += e->to_latex() + L" ";
       } else {
@@ -48,7 +44,7 @@ struct VecExpr : public std::vector<T>, public sequant::Expr {
   std::wstring to_wolfram() const override {
     std::wstring result = L"VecExpr[";
     size_t count = 1;
-    for (const auto &e: *this) {
+    for (const auto &e : *this) {
       const auto last_it = count == this->std::vector<T>::size();
       if constexpr (sequant::Expr::is_shared_ptr_of_expr_or_derived<T>::value) {
         result += e->to_wolfram() + (last_it ? L"" : L",");
@@ -61,21 +57,21 @@ struct VecExpr : public std::vector<T>, public sequant::Expr {
     return result;
   }
 
-  type_id_type type_id() const override{
-    return get_type_id<VecExpr<T>>();
-  };
+  type_id_type type_id() const override { return get_type_id<VecExpr<T>>(); };
 
  private:
   cursor begin_cursor() const override {
     if constexpr (sequant::Expr::is_shared_ptr_of_expr<T>::value) {
-      return base_type::empty() ? Expr::begin_cursor() : cursor{&base_type::at(0)};
+      return base_type::empty() ? Expr::begin_cursor()
+                                : cursor{&base_type::at(0)};
     } else {
       return Expr::begin_cursor();
     }
   };
   cursor end_cursor() const override {
     if constexpr (sequant::Expr::is_shared_ptr_of_expr<T>::value) {
-      return base_type::empty() ? Expr::end_cursor() : cursor{&base_type::at(0) + base_type::size()};
+      return base_type::empty() ? Expr::end_cursor()
+                                : cursor{&base_type::at(0) + base_type::size()};
     } else {
       return Expr::end_cursor();
     }
@@ -88,9 +84,9 @@ struct VecExpr : public std::vector<T>, public sequant::Expr {
   };
 
   bool static_equal(const sequant::Expr &that) const override {
-    return static_cast<const base_type&>(*this) == static_cast<const base_type&>(static_cast<const VecExpr&>(that));
+    return static_cast<const base_type &>(*this) ==
+           static_cast<const base_type &>(static_cast<const VecExpr &>(that));
   }
-
 };
 
 struct Adjointable : public sequant::Expr {
@@ -104,22 +100,25 @@ struct Adjointable : public sequant::Expr {
     return L"Adjointable[" + std::to_wstring(v) + L"]";
   }
   type_id_type type_id() const override { return get_type_id<Adjointable>(); };
-  sequant::ExprPtr clone() const override { return sequant::ex<Adjointable>(v); }
-  bool static_equal(const sequant::Expr &that) const override { return v == that.as<Adjointable>().v; }
+  sequant::ExprPtr clone() const override {
+    return sequant::ex<Adjointable>(v);
+  }
+  bool static_equal(const sequant::Expr &that) const override {
+    return v == that.as<Adjointable>().v;
+  }
   void adjoint() override { v = -v; };
 
   int v = 1;
 };
 
 struct latex_visitor {
-  void operator()(const std::shared_ptr<sequant::Expr>& expr) {
+  void operator()(const std::shared_ptr<sequant::Expr> &expr) {
     result += expr->to_latex();
   }
-  std::wstring result {};
+  std::wstring result{};
 };
 
 TEST_CASE("Expr", "[elements]") {
-
   using namespace sequant;
 
   SECTION("constructors") {
@@ -127,13 +126,18 @@ TEST_CASE("Expr", "[elements]") {
     const auto ex2 = std::make_shared<Constant>(2);
     REQUIRE_NOTHROW(std::make_shared<VecExpr<double>>());
     const auto ex3 = std::make_shared<VecExpr<double>>();
-    REQUIRE_NOTHROW(std::make_shared<VecExpr<double>>(std::initializer_list<double>{1.0, 2.0, 3.0}));
-    const auto ex4 = std::make_shared<VecExpr<double>>(std::initializer_list<double>{1.0, 2.0, 3.0});
-    REQUIRE_NOTHROW(std::make_shared<VecExpr<std::shared_ptr<Constant>>>(std::initializer_list<std::shared_ptr<Constant>>{
-        std::make_shared<Constant>(1.0), std::make_shared<Constant>(2.0), std::make_shared<Constant>(3.0)}));
-    const auto ex5 =
-        std::make_shared<VecExpr<std::shared_ptr<Constant>>>(std::initializer_list<std::shared_ptr<Constant>>{
-            std::make_shared<Constant>(1.0), std::make_shared<Constant>(2.0), std::make_shared<Constant>(3.0)});
+    REQUIRE_NOTHROW(std::make_shared<VecExpr<double>>(
+        std::initializer_list<double>{1.0, 2.0, 3.0}));
+    const auto ex4 = std::make_shared<VecExpr<double>>(
+        std::initializer_list<double>{1.0, 2.0, 3.0});
+    REQUIRE_NOTHROW(std::make_shared<VecExpr<std::shared_ptr<Constant>>>(
+        std::initializer_list<std::shared_ptr<Constant>>{
+            std::make_shared<Constant>(1.0), std::make_shared<Constant>(2.0),
+            std::make_shared<Constant>(3.0)}));
+    const auto ex5 = std::make_shared<VecExpr<std::shared_ptr<Constant>>>(
+        std::initializer_list<std::shared_ptr<Constant>>{
+            std::make_shared<Constant>(1.0), std::make_shared<Constant>(2.0),
+            std::make_shared<Constant>(3.0)});
     REQUIRE_NOTHROW(std::make_shared<Dummy>());
     const auto ex1 = std::make_shared<Dummy>();
   }
@@ -144,7 +148,8 @@ TEST_CASE("Expr", "[elements]") {
       REQUIRE(ex->is_atom());
     }
     {
-      const auto ex = std::make_shared<VecExpr<double>>(std::initializer_list<double>{1.0, 2.0, 3.0});
+      const auto ex = std::make_shared<VecExpr<double>>(
+          std::initializer_list<double>{1.0, 2.0, 3.0});
       REQUIRE(ex->is_atom());
     }
     {
@@ -154,22 +159,24 @@ TEST_CASE("Expr", "[elements]") {
   }
 
   SECTION("comparison") {
-
     {
       const auto ex1 = std::make_shared<Constant>(1);
       const auto ex2 = std::make_shared<Constant>(2);
       const auto ex3 = std::make_shared<Constant>(1);
       const auto ex4 = std::make_shared<VecExpr<double>>();
-      const auto ex5 =
-          std::make_shared<VecExpr<ExprPtr>>(ExprPtrList{
-              std::make_shared<Constant>(1.0), std::make_shared<Constant>(2.0), std::make_shared<Constant>(3.0)});
+      const auto ex5 = std::make_shared<VecExpr<ExprPtr>>(ExprPtrList{
+          std::make_shared<Constant>(1.0), std::make_shared<Constant>(2.0),
+          std::make_shared<Constant>(3.0)});
       const auto ex0 = std::make_shared<Dummy>();
 
-      // type ids get assigned in the order of use, which is program dependent, only check basic relations here
+      // type ids get assigned in the order of use, which is program dependent,
+      // only check basic relations here
       REQUIRE(ex0->type_id() == Expr::get_type_id<Dummy>());
       REQUIRE(ex1->type_id() == Expr::get_type_id<Constant>());
       REQUIRE(ex4->type_id() == Expr::get_type_id<VecExpr<double>>());
-      REQUIRE(ex4->type_id() < Expr::get_type_id<VecExpr<float>>());  // VecExpr<float> had not been used yet
+      REQUIRE(ex4->type_id() <
+              Expr::get_type_id<VecExpr<float>>());  // VecExpr<float> had not
+                                                     // been used yet
 
       REQUIRE(*ex0 == *ex0);
       REQUIRE(*ex1 == *ex1);
@@ -178,9 +185,7 @@ TEST_CASE("Expr", "[elements]") {
       REQUIRE(*ex4 == *ex4);
       REQUIRE(*ex5 == *ex5);
       REQUIRE(*ex0 != *ex1);
-
     }
-
   }
 
   SECTION("iteration") {
@@ -200,28 +205,31 @@ TEST_CASE("Expr", "[elements]") {
     REQUIRE(begin(ex3->expr()) == end(ex3->expr()));
     REQUIRE(size(ex3->expr()) == 0);
 
-    const auto ex4 = std::make_shared<VecExpr<double>>(std::initializer_list<double>{1.0, 2.0, 3.0});
+    const auto ex4 = std::make_shared<VecExpr<double>>(
+        std::initializer_list<double>{1.0, 2.0, 3.0});
     REQUIRE(begin(*ex4) != end(*ex4));
     REQUIRE(size(*ex4) == 3);
     REQUIRE(begin(ex4->expr()) == end(ex4->expr()));
     REQUIRE(size(ex4->expr()) == 0);
 
-    const auto ex5_init =
-        std::vector<std::shared_ptr<Constant>>{std::make_shared<Constant>(1.0), std::make_shared<Constant>(2.0),
-                                               std::make_shared<Constant>(3.0)};
-    const auto ex5 = std::make_shared<VecExpr<std::shared_ptr<Constant>>>(begin(ex5_init), end(ex5_init));
+    const auto ex5_init = std::vector<std::shared_ptr<Constant>>{
+        std::make_shared<Constant>(1.0), std::make_shared<Constant>(2.0),
+        std::make_shared<Constant>(3.0)};
+    const auto ex5 = std::make_shared<VecExpr<std::shared_ptr<Constant>>>(
+        begin(ex5_init), end(ex5_init));
     REQUIRE(begin(*ex5) != end(*ex5));
     REQUIRE(size(*ex5) == 3);
     REQUIRE(begin(ex5->expr()) == end(ex5->expr()));
     REQUIRE(size(ex5->expr()) == 0);
 
     {
-      auto ex6 = std::make_shared<VecExpr<ExprPtr>>(begin(ex5_init), end(ex5_init));
+      auto ex6 =
+          std::make_shared<VecExpr<ExprPtr>>(begin(ex5_init), end(ex5_init));
       REQUIRE(begin(*ex6) != end(*ex6));
       REQUIRE(size(*ex6) == 3);
       REQUIRE(begin(ex6->expr()) != end(ex6->expr()));
       REQUIRE(size(ex6->expr()) == 3);
-      const auto& front_ptr = *begin(ex6->expr());
+      const auto &front_ptr = *begin(ex6->expr());
       auto front_ptr_cast = std::dynamic_pointer_cast<Constant>(front_ptr);
       REQUIRE(front_ptr_cast);
       REQUIRE(front_ptr_cast->value() == 1.0);
@@ -242,7 +250,8 @@ TEST_CASE("Expr", "[elements]") {
     REQUIRE(ex->value<std::complex<int>>() == std::complex<int>{2, 0});
     REQUIRE_THROWS_AS(ex->value<Dummy>(), std::invalid_argument);
     REQUIRE_THROWS_AS(ex->value<bool>(), boost::numeric::positive_overflow);
-    REQUIRE_THROWS_AS(std::make_shared<Constant>(-2)->value<unsigned int>(), boost::numeric::negative_overflow);
+    REQUIRE_THROWS_AS(std::make_shared<Constant>(-2)->value<unsigned int>(),
+                      boost::numeric::negative_overflow);
   }
 
   SECTION("scaled_product") {
@@ -264,48 +273,48 @@ TEST_CASE("Expr", "[elements]") {
   }
 
   SECTION("adjoint") {
-    {   // not implemented by default
+    {  // not implemented by default
       const auto e = std::make_shared<Dummy>();
       REQUIRE_THROWS_AS(e->adjoint(), std::logic_error);
     }
-    {   // implemented in Adjointable
+    {  // implemented in Adjointable
       const auto e = std::make_shared<Adjointable>();
       REQUIRE_NOTHROW(e->adjoint());
       REQUIRE_NOTHROW(adjoint(e));  // check free-function adjoint
     }
-    {   // Constant
-      const auto e = std::make_shared<Constant>(std::complex<double>{1,2});
+    {  // Constant
+      const auto e = std::make_shared<Constant>(std::complex<double>{1, 2});
       REQUIRE_NOTHROW(e->adjoint());
-      REQUIRE(e->value() == std::complex<double>{1,-2});
+      REQUIRE(e->value() == std::complex<double>{1, -2});
     }
-    {   // Product
+    {  // Product
       const auto e = std::make_shared<Product>();
-      e->append(std::complex<double>{2,-1}, ex<Adjointable>());
+      e->append(std::complex<double>{2, -1}, ex<Adjointable>());
       e->append(1, ex<Adjointable>(-2));
       REQUIRE_NOTHROW(e->adjoint());
-      REQUIRE(e->scalar() == std::complex<double>{2,1});
+      REQUIRE(e->scalar() == std::complex<double>{2, 1});
       REQUIRE(e->factors()[0]->as<Adjointable>().v == 2);
       REQUIRE(e->factors()[1]->as<Adjointable>().v == -1);
     }
-    {   // CProduct
+    {  // CProduct
       const auto e = std::make_shared<CProduct>();
-      e->append(std::complex<double>{2,-1}, ex<Adjointable>());
+      e->append(std::complex<double>{2, -1}, ex<Adjointable>());
       e->append(1, ex<Adjointable>(-2));
       REQUIRE_NOTHROW(e->adjoint());
-      REQUIRE(e->scalar() == std::complex<double>{2,1});
+      REQUIRE(e->scalar() == std::complex<double>{2, 1});
       REQUIRE(e->factors()[0]->as<Adjointable>().v == -1);
       REQUIRE(e->factors()[1]->as<Adjointable>().v == 2);
     }
-    {   // NCProduct
+    {  // NCProduct
       const auto e = std::make_shared<NCProduct>();
-      e->append(std::complex<double>{2,-1}, ex<Adjointable>());
+      e->append(std::complex<double>{2, -1}, ex<Adjointable>());
       e->append(1, ex<Adjointable>(-2));
       REQUIRE_NOTHROW(e->adjoint());
-      REQUIRE(e->scalar() == std::complex<double>{2,1});
+      REQUIRE(e->scalar() == std::complex<double>{2, 1});
       REQUIRE(e->factors()[0]->as<Adjointable>().v == 2);
       REQUIRE(e->factors()[1]->as<Adjointable>().v == -1);
     }
-    {   // Sum
+    {  // Sum
       const auto e = std::make_shared<Sum>();
       e->append(ex<Adjointable>());
       e->append(ex<Adjointable>(-2));
@@ -322,13 +331,51 @@ TEST_CASE("Expr", "[elements]") {
 
     // VecExpr<ExprPtr>
     {
-      const auto ex5_init =
-          std::vector<std::shared_ptr<Constant>>{std::make_shared<Constant>(1.0), std::make_shared<Constant>(2.0),
-                                                 std::make_shared<Constant>(3.0)};
+      const auto ex5_init = std::vector<std::shared_ptr<Constant>>{
+          std::make_shared<Constant>(1.0), std::make_shared<Constant>(2.0),
+          std::make_shared<Constant>(3.0)};
       auto ex6 =
           std::make_shared<VecExpr<ExprPtr>>(begin(ex5_init), end(ex5_init));
       REQUIRE(ex6->to_latex() ==
               L"{\\text{VecExpr}\\{{{{1}}} {{{2}}} {{{3}}} \\}}");
+    }
+
+    // to_latex_align
+    {
+      const auto e = std::make_shared<Sum>();
+      e->append(ex<Adjointable>(1));
+      e->append(ex<Adjointable>(2));
+      e->append(ex<Adjointable>(3));
+      e->append(ex<Adjointable>(4));
+      // std::wcout << "to_latex(e) = " << to_latex(e) << std::endl;
+      REQUIRE(to_latex(e) ==
+              L"{ \\bigl({\\text{Adjointable}{1}} + {\\text{Adjointable}{2}} + "
+              L"{\\text{Adjointable}{3}} + {\\text{Adjointable}{4}}\\bigr) }");
+      // std::wcout << "to_latex_align(e) = " << to_latex_align(e) << std::endl;
+      REQUIRE(to_latex_align(e) ==
+              L"\\begin{align}\n"
+              "& ({\\text{Adjointable}{1}} \\\\\n"
+              "& + {\\text{Adjointable}{2}} \\\\\n"
+              "& + {\\text{Adjointable}{3}} \\\\\n"
+              "& + {\\text{Adjointable}{4}})\n"
+              "\\end{align}");
+      // std::wcout << "to_latex_align(e,5,2) = " << to_latex_align(e,5,2) <<
+      // std::endl;
+      REQUIRE(to_latex_align(e, 5, 2) ==
+              L"\\begin{align}\n"
+              "& ({\\text{Adjointable}{1}} + {\\text{Adjointable}{2}} \\\\\n"
+              "& + {\\text{Adjointable}{3}} + {\\text{Adjointable}{4}})\n"
+              "\\end{align}");
+      // std::wcout << "to_latex_align(e,1,2) = " << to_latex_align(e,1,2) <<
+      // std::endl;
+      REQUIRE(to_latex_align(e, 1, 2) ==
+              L"\\begin{align}\n"
+              "& ({\\text{Adjointable}{1}} + {\\text{Adjointable}{2}} \\\\\n"
+              "& + {\\text{Adjointable}{3}} \n"
+              "\\end{align}\n"
+              "\\begin{align}\n"
+              "& + {\\text{Adjointable}{4}})\n"
+              "\\end{align}");
     }
   }
 
@@ -339,27 +386,30 @@ TEST_CASE("Expr", "[elements]") {
 
     // VecExpr<ExprPtr>
     {
-      const auto ex5_init =
-          std::vector<std::shared_ptr<Constant>>{std::make_shared<Constant>(1.0), std::make_shared<Constant>(2.0),
-                                                 std::make_shared<Constant>(3.0)};
-      auto ex6 = std::make_shared<VecExpr<ExprPtr>>(begin(ex5_init), end(ex5_init));
+      const auto ex5_init = std::vector<std::shared_ptr<Constant>>{
+          std::make_shared<Constant>(1.0), std::make_shared<Constant>(2.0),
+          std::make_shared<Constant>(3.0)};
+      auto ex6 =
+          std::make_shared<VecExpr<ExprPtr>>(begin(ex5_init), end(ex5_init));
       REQUIRE(ex6->to_wolfram() == L"VecExpr[1,2,3]");
     }
   }
 
   SECTION("visitor") {
+    // read-only visitor
     {
-      const auto ex5_init =
-          std::vector<std::shared_ptr<Constant>>{std::make_shared<Constant>(1.0), std::make_shared<Constant>(2.0),
-                                                 std::make_shared<Constant>(3.0)};
-      ExprPtr ex6 = std::make_shared<VecExpr<ExprPtr>>(begin(ex5_init), end(ex5_init));
+      const auto ex5_init = std::vector<std::shared_ptr<Constant>>{
+          std::make_shared<Constant>(1.0), std::make_shared<Constant>(2.0),
+          std::make_shared<Constant>(3.0)};
+      ExprPtr ex6 =
+          std::make_shared<VecExpr<ExprPtr>>(begin(ex5_init), end(ex5_init));
 
       auto ex = ex6 + ex6;
 
       latex_visitor v1{};
       ex->visit(v1);
 
-//      std::wcout << "v1.result = " << v1.result << std::endl;
+      //      std::wcout << "v1.result = " << v1.result << std::endl;
       REQUIRE(
           v1.result ==
           L"{{{1}}}{{{2}}}{{{3}}}{\\text{VecExpr}\\{{{{1}}} {{{2}}} {{{3}}} "
@@ -374,10 +424,23 @@ TEST_CASE("Expr", "[elements]") {
               L"{{{1}}}{{{2}}}{{{3}}}{{{1}}}{{{"
               L"2}}}{{{3}}}");
     }
+
+    // mutating visitor
+    {
+      auto x = (ex<Constant>(1.0) + ex<Constant>(2.0)) *
+               (ex<Constant>(3.0) + ex<Constant>(4.0));
+      x->visit([](ExprPtr &expr) {
+        if (expr->is<Constant>()) {
+          expr = ex<Constant>(2. * expr->as<Constant>().value());
+        }
+      });
+      CHECK_NOTHROW(simplify(x));
+      CHECK(x->is<Constant>());
+      CHECK(x->as<Constant>().value() == 84.);
+    }
   }
 
   SECTION("range") {
-
     {
       REQUIRE_NOTHROW(expr_range{});
       expr_range exrng{};
@@ -385,17 +448,22 @@ TEST_CASE("Expr", "[elements]") {
       REQUIRE(ranges::begin(exrng) == ranges::end(exrng));
     }
 
-    // compares indices in address provided by cursor::address() to a list of indices
-    auto compare = [](const container::svector<std::pair<ExprPtr*,int64_t>>& address1,
-        std::initializer_list<int> address2) {
-      return address1.size() == address2.size() &&
-          std::equal(begin(address1), end(address1), begin(address2), [](const auto& parent_and_index1, const auto& index2) {
-            return parent_and_index1.second == index2;
-          });
-    };
+    // compares indices in address provided by cursor::address() to a list of
+    // indices
+    auto compare =
+        [](const container::svector<std::pair<ExprPtr *, int64_t>> &address1,
+           std::initializer_list<int> address2) {
+          return address1.size() == address2.size() &&
+                 std::equal(
+                     begin(address1), end(address1), begin(address2),
+                     [](const auto &parent_and_index1, const auto &index2) {
+                       return parent_and_index1.second == index2;
+                     });
+        };
 
     {
-      auto x = (ex<Constant>(1.0) + ex<Constant>(2.0)) * (ex<Constant>(3.0) + ex<Constant>(4.0));
+      auto x = (ex<Constant>(1.0) + ex<Constant>(2.0)) *
+               (ex<Constant>(3.0) + ex<Constant>(4.0));
       REQUIRE_NOTHROW(expr_range{x});
       expr_range exrng{x};
       REQUIRE(ranges::begin(exrng) == ranges::begin(exrng));
@@ -434,7 +502,7 @@ TEST_CASE("Expr", "[elements]") {
         switch (i) {
           case 0:
             REQUIRE(to_latex(*it) == L"{{{1}}}");
-            REQUIRE( compare(ranges::get_cursor(it).address(), {0,0}) );
+            REQUIRE(compare(ranges::get_cursor(it).address(), {0, 0}));
             REQUIRE(ranges::get_cursor(it).ordinal() == 0);
             break;
           case 1:
@@ -462,7 +530,7 @@ TEST_CASE("Expr", "[elements]") {
           case 5:
             REQUIRE(to_latex(*it) == L"{\\text{Dummy}}");
             REQUIRE(compare(ranges::get_cursor(it).address(), {1, 1, 0, 1}));
-            REQUIRE( ranges::get_cursor(it).ordinal() == 5 );
+            REQUIRE(ranges::get_cursor(it).ordinal() == 5);
             break;
         }
         ++i;
@@ -490,14 +558,14 @@ TEST_CASE("Expr", "[elements]") {
           (ex<Constant>(1.0) +
            ex<Constant>(2.0) * (ex<Constant>(3.0) - ex<Dummy>())) *
           (ex<Constant>(5.0) * (ex<Constant>(6.0) + ex<Dummy>()) + ex<Dummy>());
-      //std::wcout << "x = " << to_latex(x) << std::endl;
+      // std::wcout << "x = " << to_latex(x) << std::endl;
       REQUIRE(to_latex(x) ==
               L"{{ \\bigl({{{1}}} + {{{2}}{ \\bigl({{{3}}} - {"
               L"{\\text{Dummy}}}\\bigr) }}\\bigr) }{ \\bigl({{{5}}"
               L"{ \\bigl({{{6}}} + {\\text{Dummy}}\\bigr) }} + "
               L"{\\text{Dummy}}\\bigr) }}");
       expand(x);
-      //std::wcout << "ex = " << to_latex(x) << std::endl;
+      // std::wcout << "ex = " << to_latex(x) << std::endl;
       REQUIRE(to_latex(x) ==
               L"{ \\bigl({{{30}}} + {{{5}}{\\text{Dummy}}} + "
               L"{{\\text{Dummy}}} + {{{180}}} + {{{30}}"
@@ -509,13 +577,13 @@ TEST_CASE("Expr", "[elements]") {
   }
 
   SECTION("hashing") {
-    const auto ex5_init =
-        std::vector<std::shared_ptr<Constant>>{std::make_shared<Constant>(1.0), std::make_shared<Constant>(2.0),
-                                               std::make_shared<Constant>(3.0)};
+    const auto ex5_init = std::vector<std::shared_ptr<Constant>>{
+        std::make_shared<Constant>(1.0), std::make_shared<Constant>(2.0),
+        std::make_shared<Constant>(3.0)};
     REQUIRE_NOTHROW(hash_value(ex5_init));
     REQUIRE(hash_value(ex5_init) != hash_value(ex<Constant>(1)));
 
-    auto hasher = [](const std::shared_ptr<const Expr>&) ->unsigned int {
+    auto hasher = [](const std::shared_ptr<const Expr> &) -> unsigned int {
       return 0;
     };
     REQUIRE_NOTHROW(ex<Constant>(1)->hash_value(hasher) == 0);

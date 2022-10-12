@@ -87,7 +87,10 @@ class Expr : public std::enable_shared_from_this<Expr>,
   virtual std::wstring to_wolfram() const;
 
   /// @return a clone of this object
-  /// @note must be overridden in the derived class
+  /// @note - must be overridden in the derived class.
+  ///       - flattens out the nested structure
+  ///         for example, a product of products will be
+  ///         just a product of tensors
   virtual ExprPtr clone() const;
 
   /// Canonicalizes @c this and returns the biproduct of canonicalization (e.g.
@@ -865,6 +868,11 @@ class Product : public Expr {
     return *this;
   }
 
+  void add_identical(const std::shared_ptr<Product> &other) {
+    assert(this->hash_value() == other->hash_value());
+    scalar_ += other->scalar_;
+  }
+
  private:
   scalar_type scalar_ = {1.0, 0.0};
   container::svector<ExprPtr, 2> factors_{};
@@ -1238,7 +1246,7 @@ inline std::wstring to_latex_align(const ExprPtr &exprptr,
   std::wstring result = to_latex(exprptr);
   if (exprptr->is<Sum>()) {
     result.erase(0, 7);  // remove leading  "{ \bigl"
-    result.replace(result.size() - 9, 9,
+    result.replace(result.size() - 8, 8,
                    L")");  // replace trailing "\bigr) }" with ")"
     result = std::wstring(L"\\begin{align}\n& ") + result;
     // assume no inner sums

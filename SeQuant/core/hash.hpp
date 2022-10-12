@@ -9,8 +9,8 @@
 
 #include <type_traits>
 
-#include <boost/functional/hash.hpp>
 #include <boost/container_hash/hash.hpp>
+#include <boost/functional/hash.hpp>
 
 #include "meta.hpp"
 
@@ -93,20 +93,27 @@ inline void combine(std::size_t& seed, T const& v) {
   if constexpr (sizeof(std::size_t) == sizeof(boost::uint32_t) &&
                 sizeof(decltype(hasher(v))) == sizeof(boost::uint32_t)) {
     const boost::uint32_t value = hasher(v);
-    boost::hash_detail::hash_combine_impl
 #if BOOST_VERSION >= 107800
-        <32>::fn
+    seed = boost::hash_detail::hash_combine_impl<32>::fn(
+        static_cast<boost::uint32_t>(seed), value);
+#else
+    // N.B. seed passed by reference
+    boost::hash_detail::hash_combine_impl(
+        reinterpret_cast<boost::uint32_t&>(seed), value);
 #endif
-        (reinterpret_cast<boost::uint32_t&>(seed), value);
     return;
   } else if constexpr (sizeof(std::size_t) == sizeof(boost::uint64_t) &&
                        sizeof(decltype(hasher(v))) == sizeof(boost::uint64_t)) {
     const boost::uint64_t value = hasher(v);
-    boost::hash_detail::hash_combine_impl
+
 #if BOOST_VERSION >= 107800
-        <64>::fn
+    seed = boost::hash_detail::hash_combine_impl<64>::fn(
+        static_cast<boost::uint64_t>(seed), value);
+#else
+    // N.B. seed passed by reference
+    boost::hash_detail::hash_combine_impl(
+        reinterpret_cast<boost::uint64_t&>(seed), value);
 #endif
-        (reinterpret_cast<boost::uint64_t&>(seed), value);
     return;
   } else {
     seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
@@ -137,17 +144,17 @@ inline void range(std::size_t& seed, It first, It last) {
 //  assert(seed == seed_ref);
 }
 
-/// specialization of boost::hash_range(begin,end) that guarantees to hash a _range_ consisting of a single
-/// object to the same value as the hash of that object itself
+/// specialization of boost::hash_range(begin,end) that guarantees to hash a
+/// _range_ consisting of a single object to the same value as the hash of that
+/// object itself
 template <typename It>
 std::size_t hash_range(It begin, It end) {
   if (begin != end) {
     using boost::hash_value;
     std::size_t seed = hash_value(*begin);
-    boost::hash_range(seed, begin+1, end);
+    boost::hash_range(seed, begin + 1, end);
     return seed;
-  }
-  else
+  } else
     return boost::hash_range(begin, end);
 }
 
@@ -158,12 +165,14 @@ void hash_range(size_t& seed, It begin, It end) {
 }
 
 template <typename T>
-struct _<T, std::enable_if_t<!(detail::has_hash_value_v<T>) && meta::is_range_v<T>>> {
+struct _<
+    T, std::enable_if_t<!(detail::has_hash_value_v<T>)&&meta::is_range_v<T>>> {
   std::size_t operator()(T const& v) const { return range(begin(v), end(v)); }
 };
 
 template <typename T>
-struct _<T, std::enable_if_t<!(!(detail::has_hash_value_v<T>) && meta::is_range_v<T>)>> {
+struct _<T, std::enable_if_t<!(
+                !(detail::has_hash_value_v<T>)&&meta::is_range_v<T>)>> {
   std::size_t operator()(T const& v) const {
     using boost::hash_value;
     return hash_value(v);
@@ -179,4 +188,4 @@ auto value(const T& obj) {
 
 }  // namespace sequant
 
-#endif //SEQUANT_HASH_HPP
+#endif  // SEQUANT_HASH_HPP

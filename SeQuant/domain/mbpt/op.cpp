@@ -10,7 +10,7 @@ namespace mbpt {
 std::vector<std::wstring>
     cardinal_tensor_labels() {
   return {L"\\lambda",L"\\gamma",L"\\Gamma", L"A", L"S", L"P", L"L", L"λ", L"h", L"f", L"g",
-          L"t", L"R", L"F",L"X", L"V", L"B", L"U", overlap_label(), L"a", L"ã", L"b", L"ᵬ", L"E"};
+          L"t", L"R", L"F",L"X", L"V", L"B", L"U",L"GR",L"C", overlap_label(), L"a", L"ã", L"b", L"ᵬ", L"E"};
 }
 
 std::wstring to_wstring(OpType op) {
@@ -33,6 +33,10 @@ std::wstring to_wstring(OpType op) {
       return L"R";
     case OpType::R12:
       return L"F";
+    case OpType::GR:
+      return L"GR";
+    case OpType::C:
+        return L"C";
     default:
       throw std::invalid_argument("to_wstring(OpType op): invalid op");
   }

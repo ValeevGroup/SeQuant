@@ -206,8 +206,8 @@ add_library(SeQuant
         SeQuant/core/bliss.hpp
         SeQuant/core/timer.hpp
         SeQuant/core/binary_node.hpp
-        SeQuant/core/clone.hpp
-        SeQuant/core/clone.cpp
+        SeQuant/core/clone_packed.hpp
+        SeQuant/core/clone_packed.cpp
         SeQuant/core/eval_seq.hpp
         SeQuant/core/eval_expr.hpp
         SeQuant/core/eval_expr.cpp
@@ -241,10 +241,9 @@ add_library(SeQuant
         SeQuant/domain/mbpt/spin.cpp
         SeQuant/domain/mbpt/sr/sr.cpp
         SeQuant/domain/mbpt/sr/sr.hpp
-        SeQuant/domain/transcorrelated/antisymmetrizer.hpp
-        SeQuant/domain/transcorrelated/simplifications.h
-        SeQuant/domain/transcorrelated/three_body_decomp.hpp
-        SeQuant/domain/eqs/single_ref_uccf12.h)
+        SeQuant/domain/mbpt/antisymmetrizer.hpp
+        SeQuant/domain/mbpt/rdm.hpp
+        )
 
 target_link_libraries(SeQuant PUBLIC range-v3::range-v3 Boost::regex Boost::boost SeQuant-bliss Threads::Threads)
 if (SEQUANT_HAS_EXECUTION_HEADER_STANDALONE OR SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB)
@@ -301,7 +300,9 @@ if (BUILD_TESTING)
             tests/unit/test_optimize.cpp
             tests/unit/test_token_sequant.cpp
             tests/unit/test_rpn.cpp
-            tests/unit/test_clone.cpp
+            tests/unit/test_clone_packed.cpp
+            tests/unit/test_cache_manager.cpp
+            tests/unit/test_runtime.cpp
             )
 
     if (TARGET tiledarray)
@@ -313,7 +314,7 @@ if (BUILD_TESTING)
 
     set(utests_deps SeQuant)
 
-    set(unit_test_executable unit_tests)
+    set(unit_test_executable unit_tests-sequant)
     add_executable(${unit_test_executable} EXCLUDE_FROM_ALL
             tests/unit/test_main.cpp
             tests/unit/catch.hpp
@@ -333,19 +334,38 @@ if (BUILD_TESTING)
             PROPERTIES DEPENDS sequant/unit/build
             WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tests/unit)
 
-    ####### Tests ########
+    ####### Integration tests aka "examples" ########
 
-    # Single-Reference Coupled-Cluster equation generation (spin-orbital)
+    # Single-Reference Coupled-Cluster equation generation
+    # (spin-orbital)
     set(example0 srcc)
     add_executable(${example0} EXCLUDE_FROM_ALL
             examples/${example0}/${example0}.cpp)
-    find_package(Eigen3 3.0 REQUIRED NO_MODULE)
-    target_link_libraries(${example0} SeQuant Eigen3::Eigen ${TBB_LIBRARIES})
+    target_link_libraries(${example0} SeQuant)
 
-    set(example1 uccf12)
+    # Single-Reference closed-shell Coupled-Cluster equation
+    # generation (fast spin-traced)
+    set(example1 stcc)
     add_executable(${example1} EXCLUDE_FROM_ALL
             examples/${example1}/${example1}.cpp)
-    target_link_libraries(${example1} SeQuant ${TBB_LIBRARIES})
+    find_package(Eigen3 3.0 REQUIRED NO_MODULE)
+    target_link_libraries(${example1} SeQuant Eigen3::Eigen)
+
+    # Single-Reference closed-shell Coupled-Cluster equation
+    # generation (rigorous spin-traced)
+    set(example2 stcc_rigorous)
+    add_executable(${example2} EXCLUDE_FROM_ALL
+            examples/${example2}/${example2}.cpp)
+    find_package(Eigen3 3.0 REQUIRED NO_MODULE)
+    target_link_libraries(${example2} SeQuant Eigen3::Eigen)
+
+    # Single-Reference open-shell equation generation (spin-traced)
+    set(example3 osstcc)
+    add_executable(${example3} EXCLUDE_FROM_ALL
+            examples/${example3}/${example3}.cpp)
+    target_link_libraries(${example3} SeQuant)
+
+    # uccf12 example moved to MPQC
 
     set(example_eval_src
             examples/eval/eval_utils.hpp
@@ -360,37 +380,36 @@ if (BUILD_TESTING)
             )
 
     if (TARGET tiledarray)
-        set(example2 eval_ta)
-        add_executable(${example2} EXCLUDE_FROM_ALL
+        set(example5 eval_ta)
+        add_executable(${example5} EXCLUDE_FROM_ALL
                 ${example_eval_src}
                 SeQuant/domain/eval/eval_ta.hpp
                 examples/eval/ta/data_world_ta.hpp
                 examples/eval/ta/scf_ta.hpp
                 examples/eval/ta/main.cpp)
-        target_link_libraries(${example2} SeQuant ${TBB_LIBRARIES} tiledarray)
+        target_link_libraries(${example5} SeQuant tiledarray)
     endif (TARGET tiledarray)
 
-    set(example4 antisymmetrizer_test)
-    add_executable(${example4} EXCLUDE_FROM_ALL
-            examples/${example4}/${example4}.cpp)
-    target_link_libraries(${example4} SeQuant ${TBB_LIBRARIES})
-    target_link_directories(${example4} PUBLIC ${TBB_LIBRARIES})
-    target_compile_definitions(${example4} PRIVATE SEQUANT_HAS_TILEDARRAY)
+    set(example6 antisymmetrizer_test)
+    add_executable(${example6} EXCLUDE_FROM_ALL
+            examples/${example6}/${example6}.cpp)
+    target_link_libraries(${example6} SeQuant)
+    target_compile_definitions(${example6} PRIVATE SEQUANT_HAS_TILEDARRAY)
 
     if (BTAS_SOURCE_DIR)
-        set(example3 eval_btas)
-        add_executable(${example3} EXCLUDE_FROM_ALL
+        set(example7 eval_btas)
+        add_executable(${example7} EXCLUDE_FROM_ALL
                 ${example_eval_src}
                 SeQuant/domain/eval/eval_btas.hpp
                 examples/eval/btas/data_world_btas.hpp
                 examples/eval/btas/scf_btas.hpp
                 examples/eval/btas/main.cpp)
-        target_include_directories(${example3} PUBLIC ${BTAS_SOURCE_DIR} ${Boost_INCLUDE_DIRS})
-        target_link_libraries(${example3} SeQuant ${TBB_LIBRARIES})
+        target_include_directories(${example7} PUBLIC ${BTAS_SOURCE_DIR} ${Boost_INCLUDE_DIRS})
+        target_link_libraries(${example7} SeQuant)
     endif (BTAS_SOURCE_DIR)
 
     # add tests for running examples
-    set(lastexample 4)
+    set(lastexample 8)
     foreach (i RANGE ${lastexample})
         if (TARGET ${example${i}})
             add_test(sequant/example/${example${i}}/build "${CMAKE_COMMAND}"
