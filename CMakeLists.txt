@@ -387,14 +387,13 @@ if (BUILD_TESTING)
                 examples/eval/ta/data_world_ta.hpp
                 examples/eval/ta/scf_ta.hpp
                 examples/eval/ta/main.cpp)
-        target_link_libraries(${example5} SeQuant ${TBB_LIBRARIES} tiledarray)
+        target_link_libraries(${example5} SeQuant tiledarray)
     endif (TARGET tiledarray)
 
     set(example6 antisymmetrizer_test)
     add_executable(${example6} EXCLUDE_FROM_ALL
             examples/${example6}/${example6}.cpp)
-    target_link_libraries(${example6} SeQuant ${TBB_LIBRARIES})
-    target_link_directories(${example6} PUBLIC ${TBB_LIBRARIES})
+    target_link_libraries(${example6} SeQuant)
     target_compile_definitions(${example6} PRIVATE SEQUANT_HAS_TILEDARRAY)
 
     if (BTAS_SOURCE_DIR)
@@ -406,7 +405,7 @@ if (BUILD_TESTING)
                 examples/eval/btas/scf_btas.hpp
                 examples/eval/btas/main.cpp)
         target_include_directories(${example7} PUBLIC ${BTAS_SOURCE_DIR} ${Boost_INCLUDE_DIRS})
-        target_link_libraries(${example7} SeQuant ${TBB_LIBRARIES})
+        target_link_libraries(${example7} SeQuant)
     endif (BTAS_SOURCE_DIR)
 
     # add tests for running examples
