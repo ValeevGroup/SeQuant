@@ -5,22 +5,24 @@
 #ifndef SEQUANT_SRC_SEQUANT_VERSION_H_IN_H
 #define SEQUANT_SRC_SEQUANT_VERSION_H_IN_H
 
-/* Defines a string with the Git SHA1 revision hash tag of SeQuant */
-#define SEQUANT_REVISION "@SEQUANT_REVISION@"
-
-/* TiledArray version X.Y.Z-id */
+/* SeQuant version X.Y.Z-id */
 #define SEQUANT_VERSION "@SEQUANT_VERSION@"
 
-/* TiledArray major version */
+/* SeQuant major version */
 #define SEQUANT_MAJOR_VERSION @SEQUANT_MAJOR_VERSION@
 
-/* TiledArray minor version */
+/* SeQuant minor version */
 #define SEQUANT_MINOR_VERSION @SEQUANT_MINOR_VERSION@
 
-/* TiledArray micro version */
+/* SeQuant micro version */
 #define SEQUANT_MICRO_VERSION @SEQUANT_MICRO_VERSION@
 
-/* TiledArray prerelease id */
+/* SeQuant prerelease id */
 #define SEQUANT_PRERELEASE_ID "@SEQUANT_PRERELEASE_ID@"
+
+namespace sequant {
+/** \return a string with the Git SHA1 revision hash tag of SeQuant */
+const char* revision() noexcept;
+}  // namespace sequant
 
 #endif  // SEQUANT_SRC_SEQUANT_VERSION_H_IN_H

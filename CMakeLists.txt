@@ -32,6 +32,19 @@ else (SEQUANT_PRERELEASE_ID)
     set(SEQUANT_EXT_VERSION "${SEQUANT_VERSION}")
 endif (SEQUANT_PRERELEASE_ID)
 
+# extract git revision
+if (EXISTS ${PROJECT_SOURCE_DIR}/.git)
+    find_package(Git REQUIRED)
+    execute_process(
+            COMMAND ${GIT_EXECUTABLE} rev-parse -q HEAD
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            OUTPUT_VARIABLE SEQUANT_REVISION)
+    string(REGEX MATCH "[0-9a-f]*"
+            SEQUANT_REVISION "${SEQUANT_REVISION}")
+else ()
+    set(SEQUANT_REVISION "unknown")
+endif ()
+
 # make SeQuant project
 project(SeQuant LANGUAGES CXX VERSION "${SEQUANT_VERSION}" DESCRIPTION "SEcond QUANTization toolkit")
 
@@ -170,6 +183,8 @@ add_library(SeQuant-bliss
         )
 
 add_library(SeQuant
+        ${PROJECT_BINARY_DIR}/SeQuant/version.hpp
+        SeQuant/version.cpp
         SeQuant/core/sequant.cpp
         SeQuant/core/sequant.hpp
         SeQuant/core/attr.hpp
@@ -244,6 +259,12 @@ add_library(SeQuant
         SeQuant/domain/mbpt/antisymmetrizer.hpp
         SeQuant/domain/mbpt/rdm.hpp
         )
+# feed SEQUANT_REVISION to SeQuant/version.cpp only to avoid recompiling everything
+set_property(
+        SOURCE SeQuant/version.cpp
+        PROPERTY COMPILE_DEFINITIONS
+        SEQUANT_REVISION=\"${SEQUANT_REVISION}\"
+)
 
 target_link_libraries(SeQuant PUBLIC range-v3::range-v3 Boost::regex Boost::boost SeQuant-bliss Threads::Threads)
 if (SEQUANT_HAS_EXECUTION_HEADER_STANDALONE OR SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB)
@@ -255,6 +276,7 @@ if (SEQUANT_HAS_EXECUTION_HEADER_STANDALONE OR SEQUANT_HAS_EXECUTION_HEADER_WITH
 endif ()
 target_include_directories(SeQuant PUBLIC
         $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>
+        $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>)
 target_compile_features(SeQuant INTERFACE "cxx_std_17")
 install(TARGETS SeQuant-bliss EXPORT sequant COMPONENT sequant LIBRARY DESTINATION ${SEQUANT_INSTALL_LIBDIR})
@@ -437,18 +459,6 @@ add_subdirectory(doc)
 ##########################
 # export SeQuant
 ##########################
-
-if (EXISTS ${PROJECT_SOURCE_DIR}/.git)
-    find_package(Git REQUIRED)
-    execute_process(
-            COMMAND ${GIT_EXECUTABLE} rev-parse -q HEAD
-            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-            OUTPUT_VARIABLE SEQUANT_REVISION)
-    string(REGEX MATCH "[0-9a-f]*"
-            SEQUANT_REVISION "${SEQUANT_REVISION}")
-else ()
-    set(SEQUANT_REVISION "unknown")
-endif ()
 
 configure_file(
         ${PROJECT_SOURCE_DIR}/SeQuant/version.hpp.in
