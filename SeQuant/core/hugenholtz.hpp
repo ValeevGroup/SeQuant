@@ -10,9 +10,9 @@ namespace sequant {
 /// @brief HugenholtzVertex represents a sequence of edges arranged into groups
 /// by (topological) equivalence.
 /// @tparam Edge the edge type; it must be EqualityComparable
-/// @tparam EdgeEquality type of equality tester for Edge objects; @code
-/// EdgeEquality(const Edge&, const Edge&) @endcode must be implicitly
-/// convertible to bool and evaluate to true for equivalent arguments.
+/// @tparam EdgeEquality type of equality tester for Edge objects;
+///         `EdgeEquality(const Edge&, const Edge&)` must be implicitly
+///         convertible to bool and evaluate to true for equivalent arguments.
 template <typename Edge, typename EdgeEquality>
 class HugenholtzVertex {
   using Group = std::pair<Edge, container::set<size_t>>;
