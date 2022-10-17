@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.15.0) # need list(PREPEND for toolchains
 ###############################################################################
 # Bring ValeevGroup cmake toolkit
 ###############################################################################
+include(external/versions.cmake)
 include(FetchContent)
 if (DEFINED PROJECT_BINARY_DIR)
     set(VG_CMAKE_KIT_PREFIX_DIR PROJECT_BINARY_DIR)
@@ -13,6 +14,7 @@ FetchContent_Declare(
         vg_cmake_kit
         QUIET
         GIT_REPOSITORY      https://github.com/ValeevGroup/kit-cmake.git
+        GIT_TAG             ${SEQUANT_TRACKED_VGCMAKEKIT_TAG}
         SOURCE_DIR ${${VG_CMAKE_KIT_PREFIX_DIR}}/cmake/vg
         BINARY_DIR ${${VG_CMAKE_KIT_PREFIX_DIR}}/cmake/vg-build
         SUBBUILD_DIR ${${VG_CMAKE_KIT_PREFIX_DIR}}/cmake/vg-subbuild
@@ -32,18 +34,9 @@ else (SEQUANT_PRERELEASE_ID)
     set(SEQUANT_EXT_VERSION "${SEQUANT_VERSION}")
 endif (SEQUANT_PRERELEASE_ID)
 
-# extract git revision
-if (EXISTS ${PROJECT_SOURCE_DIR}/.git)
-    find_package(Git REQUIRED)
-    execute_process(
-            COMMAND ${GIT_EXECUTABLE} rev-parse -q HEAD
-            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-            OUTPUT_VARIABLE SEQUANT_REVISION)
-    string(REGEX MATCH "[0-9a-f]*"
-            SEQUANT_REVISION "${SEQUANT_REVISION}")
-else ()
-    set(SEQUANT_REVISION "unknown")
-endif ()
+# extract git metadata
+include(GetGitMetadata)
+vgkit_cmake_git_metadata()
 
 # make SeQuant project
 project(SeQuant LANGUAGES CXX VERSION "${SEQUANT_VERSION}" DESCRIPTION "SEcond QUANTization toolkit")
@@ -79,7 +72,6 @@ include(FetchContent)
 include(AddCustomTargetSubproject)
 include(FeatureSummary)
 include(CMakePackageConfigHelpers)
-include(external/versions.cmake)
 
 ##########################
 # Standard build variables
@@ -259,11 +251,11 @@ add_library(SeQuant
         SeQuant/domain/mbpt/antisymmetrizer.hpp
         SeQuant/domain/mbpt/rdm.hpp
         )
-# feed SEQUANT_REVISION to SeQuant/version.cpp only to avoid recompiling everything
-set_property(
-        SOURCE SeQuant/version.cpp
-        PROPERTY COMPILE_DEFINITIONS
-        SEQUANT_REVISION=\"${SEQUANT_REVISION}\"
+# feed SEQUANT_GIT_REVISION and SEQUANT_GIT_DESCRIPTION to SeQuant/version.cpp only to avoid recompiling everything
+set_source_files_properties(
+        SeQuant/version.cpp
+        PROPERTIES COMPILE_DEFINITIONS
+        "SEQUANT_GIT_REVISION=\"${SEQUANT_GIT_REVISION}\";SEQUANT_GIT_DESCRIPTION=\"${SEQUANT_GIT_DESCRIPTION}\""
 )
 
 target_link_libraries(SeQuant PUBLIC range-v3::range-v3 Boost::regex Boost::boost SeQuant-bliss Threads::Threads)
