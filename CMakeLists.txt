@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.15.0) # need list(PREPEND for toolchains
 ###############################################################################
 # Bring ValeevGroup cmake toolkit
 ###############################################################################
+include(external/versions.cmake)
 include(FetchContent)
 if (DEFINED PROJECT_BINARY_DIR)
     set(VG_CMAKE_KIT_PREFIX_DIR PROJECT_BINARY_DIR)
@@ -13,6 +14,7 @@ FetchContent_Declare(
         vg_cmake_kit
         QUIET
         GIT_REPOSITORY      https://github.com/ValeevGroup/kit-cmake.git
+        GIT_TAG             ${SEQUANT_TRACKED_VGCMAKEKIT_TAG}
         SOURCE_DIR ${${VG_CMAKE_KIT_PREFIX_DIR}}/cmake/vg
         BINARY_DIR ${${VG_CMAKE_KIT_PREFIX_DIR}}/cmake/vg-build
         SUBBUILD_DIR ${${VG_CMAKE_KIT_PREFIX_DIR}}/cmake/vg-subbuild
