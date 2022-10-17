@@ -7,8 +7,13 @@
 namespace sequant {
 
 const char* revision() noexcept {
-  static const char revision[] = SEQUANT_REVISION;
+  static const char revision[] = SEQUANT_GIT_REVISION;
   return revision;
+}
+
+const char* git_description() noexcept {
+  static const char description[] = SEQUANT_GIT_DESCRIPTION;
+  return description;
 }
 
 }  // namespace sequant
