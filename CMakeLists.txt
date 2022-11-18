@@ -41,16 +41,17 @@ vgkit_cmake_git_metadata()
 # make SeQuant project
 project(SeQuant LANGUAGES CXX VERSION "${SEQUANT_VERSION}" DESCRIPTION "SEcond QUANTization toolkit")
 
-if (NOT DEFINED CMAKE_CXX_STANDARD)
-    set(CMAKE_CXX_STANDARD 17)
-else()
-    if (CMAKE_CXX_STANDARD LESS 17)
-         message(FATAL_ERROR "SeQuant requires C++17, but CMAKE_CXX_STANDARD=${CMAKE_CXX_STANDARD}")
-    endif()
+# need C++17, insist on strict standard
+set(CMAKE_CXX_STANDARD 17 CACHE STRING "C++ ISO Standard version")
+if (NOT(CMAKE_CXX_STANDARD EQUAL 17 OR CMAKE_CXX_STANDARD EQUAL 20))
+    message(FATAL_ERROR "C++ 2017 ISO Standard or higher is required to compile TiledArray")
 endif()
-if (NOT DEFINED CMAKE_CXX_EXTENSIONS)
-    set(CMAKE_CXX_EXTENSIONS OFF)
+# C++20 is only configurable via compile features with cmake 3.12 and older
+if (CMAKE_CXX_STANDARD EQUAL 20 AND CMAKE_VERSION VERSION_LESS 3.12.0)
+    cmake_minimum_required (VERSION 3.12.0)
 endif()
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF CACHE BOOL  "Whether to use extensions of C++  ISO Standard version")
 
 # Enable ccache if not already enabled by symlink masquerading
 if (NOT CMAKE_CXX_COMPILER MATCHES ".*/ccache$")
