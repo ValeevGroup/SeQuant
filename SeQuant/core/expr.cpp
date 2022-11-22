@@ -3,52 +3,45 @@
 //
 
 #include "expr.hpp"
-#include "tensor_network.hpp"
 #include "tensor.hpp"
+#include "tensor_network.hpp"
 #include "utility.hpp"
 
 namespace sequant {
 
-std::logic_error
-Expr::not_implemented(const char* fn) const {
+std::logic_error Expr::not_implemented(const char *fn) const {
   std::ostringstream oss;
-  oss << "Expr::" << fn << " not implemented in this derived class (type_name=" << type_name() << ")";
+  oss << "Expr::" << fn
+      << " not implemented in this derived class (type_name=" << type_name()
+      << ")";
   return std::logic_error(oss.str().c_str());
 }
 
-std::wstring Expr::to_latex() const {
-  throw not_implemented("to_latex");
-}
+std::wstring Expr::to_latex() const { throw not_implemented("to_latex"); }
 
-std::wstring Expr::to_wolfram() const{
-  throw not_implemented("to_wolfram");
-}
+std::wstring Expr::to_wolfram() const { throw not_implemented("to_wolfram"); }
 
-ExprPtr Expr::clone() const {
-  throw not_implemented("clone");
-}
+ExprPtr Expr::clone() const { throw not_implemented("clone"); }
 
-void Expr::adjoint() {
-  throw not_implemented("adjoint");
-}
+void Expr::adjoint() { throw not_implemented("adjoint"); }
 
-Expr& Expr::operator*=(const Expr &that) {
+Expr &Expr::operator*=(const Expr &that) {
   throw not_implemented("operator*=");
 }
 
-Expr& Expr::operator^=(const Expr &that) {
+Expr &Expr::operator^=(const Expr &that) {
   throw not_implemented("operator^=");
 }
 
-Expr& Expr::operator+=(const Expr &that) {
+Expr &Expr::operator+=(const Expr &that) {
   throw not_implemented("operator+=");
 }
 
-Expr& Expr::operator-=(const Expr &that) {
+Expr &Expr::operator-=(const Expr &that) {
   throw not_implemented("operator-=");
 }
 
-ExprPtr adjoint(const ExprPtr& expr) {
+ExprPtr adjoint(const ExprPtr &expr) {
   auto result = expr->clone();
   result->adjoint();
   return result;
@@ -62,8 +55,8 @@ void Constant::adjoint() {
 bool Product::is_commutative() const {
   bool result = true;
   const auto nfactors = size();
-  for(size_t f=0; f!= nfactors; ++f) {
-    for(size_t s=1; result && s != nfactors; ++s) {
+  for (size_t f = 0; f != nfactors; ++f) {
+    for (size_t s = 1; result && s != nfactors; ++s) {
       result &= factors_[f]->commutes_with(*factors_[s]);
     }
   }
@@ -85,7 +78,8 @@ ExprPtr Product::canonicalize_impl(bool rapid) {
                << ") input: " << to_latex() << std::endl;
   }
 
-  try {  // tensor network canonization is a special case that's done in TensorNetwork
+  try {  // tensor network canonization is a special case that's done in
+         // TensorNetwork
     TensorNetwork tn(factors_);
     auto canon_factor =
         tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), rapid);
@@ -94,11 +88,12 @@ ExprPtr Product::canonicalize_impl(bool rapid) {
     assert(size(tensors) == size(factors_));
     using std::begin;
     using std::end;
-    std::transform(begin(tensors), end(tensors), begin(factors_), [](const auto& tptr) {
-      auto exprptr = std::dynamic_pointer_cast<Expr>(tptr);
-      assert(exprptr);
-      return exprptr;
-    });
+    std::transform(begin(tensors), end(tensors), begin(factors_),
+                   [](const auto &tptr) {
+                     auto exprptr = std::dynamic_pointer_cast<Expr>(tptr);
+                     assert(exprptr);
+                     return exprptr;
+                   });
     if (canon_factor) scalar_ *= canon_factor->as<Constant>().value();
     this->reset_hash_value();
   } catch (std::logic_error
@@ -163,9 +158,12 @@ void Product::adjoint() {
   assert(static_commutativity() == false);  // assert no slicing
   auto adj_scalar = conj(scalar());
   using namespace ranges;
-  auto adj_factors = factors() | views::reverse | views::transform([](auto& expr) { return ::sequant::adjoint(expr); });
+  auto adj_factors =
+      factors() | views::reverse |
+      views::transform([](auto &expr) { return ::sequant::adjoint(expr); });
   using std::swap;
-  *this = Product(adj_scalar, ranges::begin(adj_factors), ranges::end(adj_factors));
+  *this =
+      Product(adj_scalar, ranges::begin(adj_factors), ranges::end(adj_factors));
 }
 
 ExprPtr Product::canonicalize() {
@@ -176,134 +174,126 @@ ExprPtr Product::rapid_canonicalize() {
   return this->canonicalize_impl(/* rapid = */ true);
 }
 
-// ExprPtr Product::rapid_canonicalize() {
-//  // recursively canonicalize subfactors ...
-//  ranges::for_each(factors_, [this](auto &factor) {
-//    auto bp = factor->canonicalize();
-//    if (bp) {
-//      assert(bp->template is<Constant>());
-//      this->scalar_ *= std::static_pointer_cast<Constant>(bp)->value();
-//    }
-//  });
-//
-//  // ... then resort
-//  using std::begin;
-//  using std::end;
-//  // default sorts by type, then by hash
-//  // TODO for same types see if that type's operator< is defined, otherwise
-//  use hashes std::stable_sort(begin(factors_), end(factors_), [](const auto
-//  &first, const auto &second) {
-//    const auto first_id = first->type_id();
-//    const auto second_id = second->type_id();
-//    if (first_id == second_id) {
-//      return first->hash_value() < second->hash_value();
-//    } else // first_id != second_id
-//      return first_id < second_id;
-//  });
-//
-//  // TODO evaluate product of Tensors (turn this into Products of Products
-//
-//  return {};  // side effects are absorbed into the scalar_
-//}
-
 void CProduct::adjoint() {
   auto adj_scalar = conj(scalar());
   using namespace ranges;
   // no need to reverse for commutative product
-  auto adj_factors = factors() | views::transform([](auto&& expr) { return ::sequant::adjoint(expr); });
-  *this = CProduct(adj_scalar, ranges::begin(adj_factors), ranges::end(adj_factors));
+  auto adj_factors = factors() | views::transform([](auto &&expr) {
+                       return ::sequant::adjoint(expr);
+                     });
+  *this = CProduct(adj_scalar, ranges::begin(adj_factors),
+                   ranges::end(adj_factors));
 }
 
 void NCProduct::adjoint() {
   auto adj_scalar = conj(scalar());
   using namespace ranges;
   // no need to reverse for commutative product
-  auto adj_factors = factors() | views::reverse | views::transform([](auto&& expr) { return ::sequant::adjoint(expr); });
-  *this = NCProduct(adj_scalar, ranges::begin(adj_factors), ranges::end(adj_factors));
+  auto adj_factors =
+      factors() | views::reverse |
+      views::transform([](auto &&expr) { return ::sequant::adjoint(expr); });
+  *this = NCProduct(adj_scalar, ranges::begin(adj_factors),
+                    ranges::end(adj_factors));
 }
 
 void Sum::adjoint() {
   using namespace ranges;
-  auto adj_summands = summands() | views::transform([](auto&& expr) { return ::sequant::adjoint(expr); });
+  auto adj_summands = summands() | views::transform([](auto &&expr) {
+                        return ::sequant::adjoint(expr);
+                      });
   *this = Sum(ranges::begin(adj_summands), ranges::end(adj_summands));
 }
 
 ExprPtr Sum::canonicalize_impl(bool multipass) {
-
-  if (Logger::get_instance().canonicalize) std::wcout << "Sum::canonicalize_impl: input = " << to_latex_align(shared_from_this()) << std::endl;
+  if (Logger::get_instance().canonicalize)
+    std::wcout << "Sum::canonicalize_impl: input = "
+               << to_latex_align(shared_from_this()) << std::endl;
 
   const auto npasses = multipass ? 3 : 1;
   for (auto pass = 0; pass != npasses; ++pass) {
     // recursively canonicalize summands ...
     const auto nsubexpr = ranges::size(*this);
     for (std::size_t i = 0; i != nsubexpr; ++i) {
-      auto bp = (pass % 2 == 0) ? summands_[i]->rapid_canonicalize() : summands_[i]->canonicalize();
+      auto bp = (pass % 2 == 0) ? summands_[i]->rapid_canonicalize()
+                                : summands_[i]->canonicalize();
       if (bp) {
         assert(bp->template is<Constant>());
-        summands_[i] = ex<Product>(std::static_pointer_cast<Constant>(bp)->value(), ExprPtrList{summands_[i]});
+        summands_[i] =
+            ex<Product>(std::static_pointer_cast<Constant>(bp)->value(),
+                        ExprPtrList{summands_[i]});
       }
     };
 
-    if (Logger::get_instance().canonicalize) std::wcout << "Sum::canonicalize_impl (pass=" << pass << "): after canonicalizing summands = " << to_latex_align(shared_from_this()) << std::endl;
+    if (Logger::get_instance().canonicalize)
+      std::wcout << "Sum::canonicalize_impl (pass=" << pass
+                 << "): after canonicalizing summands = "
+                 << to_latex_align(shared_from_this()) << std::endl;
 
     // ... then resort according to size, then hash values
     using std::begin;
     using std::end;
-    std::stable_sort(begin(summands_), end(summands_), [](const auto &first, const auto &second) {
-      const auto first_size = ranges::size(*first);
-      const auto second_size = ranges::size(*second);
+    std::stable_sort(begin(summands_), end(summands_),
+                     [](const auto &first, const auto &second) {
+                       const auto first_size = ranges::size(*first);
+                       const auto second_size = ranges::size(*second);
 
-      return (first_size == second_size) ? *first < *second : first_size < second_size;
-    });
+                       return (first_size == second_size)
+                                  ? *first < *second
+                                  : first_size < second_size;
+                     });
 
-    if (Logger::get_instance().canonicalize) std::wcout << "Sum::canonicalize_impl (pass=" << pass << "): after hash-sorting summands = " << to_latex_align(shared_from_this()) << std::endl;
+    if (Logger::get_instance().canonicalize)
+      std::wcout << "Sum::canonicalize_impl (pass=" << pass
+                 << "): after hash-sorting summands = "
+                 << to_latex_align(shared_from_this()) << std::endl;
 
     // ... then reduce terms whose hash values are identical
     auto first_it = begin(summands_);
     auto hash_comparer = [](const auto &first, const auto &second) {
       return first->hash_value() == second->hash_value();
     };
-    while ((first_it = std::adjacent_find(first_it, end(summands_), hash_comparer)) != end(summands_)) {
+    while ((first_it = std::adjacent_find(first_it, end(summands_),
+                                          hash_comparer)) != end(summands_)) {
       assert((*first_it)->hash_value() == (*(first_it + 1))->hash_value());
       // find first element whose hash is not equal to (*first_it)->hash_value()
-      auto plast_it = std::find_if_not(first_it + 1, end(summands_), [first_it](const auto &elem) {
-        return (*first_it)->hash_value() == elem->hash_value();
-      });
-      assert(plast_it - first_it > 1);
-      auto reduce_range = [first_it, this](auto &begin, auto &end) {
-
-        // Converting tensor into a product; TODO: Use separate add_identical function for Tensor
-        if ((*first_it)->template is<Tensor>()){
-          assert((*first_it)->template is<Tensor>());
+      auto plast_it = std::find_if_not(
+          first_it + 1, end(summands_), [first_it](const auto &elem) {
+            return (*first_it)->hash_value() == elem->hash_value();
+          });
+      const auto nidentical = plast_it - first_it;
+      assert(nidentical > 1);
+      /// TODO sometimes lets zero products through such that a divide by zero error occurs at sum of prefactors / first prefactor
+      auto reduce_range = [first_it, this, nidentical](auto &begin, auto &end) {
+        if ((*first_it)->template is<Tensor>()) {
           Product tensor_as_Product{};
-          tensor_as_Product.append(1.0,(*first_it)->as<Tensor>());
+          tensor_as_Product.append(static_cast<double>(nidentical),
+                                   (*first_it)->as<Tensor>());
           (*first_it) = std::make_shared<Product>(tensor_as_Product);
-        }
-
-        assert((*first_it)->template is<Product>());
-        for (auto it = begin; it != end; ++it) {
-          if (it != first_it) {
-            if ((*it)->template is<Tensor>()){
-              assert((*it)->template is<Tensor>());
+          this->summands_.erase(first_it + 1, end);
+        } else if ((*first_it)->template is<Product>()) {
+          for (auto it = begin + 1; it != end; ++it) {
+            if ((*it)->template is<Tensor>()) {
               Product tensor_as_Product{};
-              tensor_as_Product.append(1.0,(*it)->template as<Tensor>());
+              tensor_as_Product.append(1.0, (*it)->template as<Tensor>());
               (*it) = std::make_shared<Product>(tensor_as_Product);
+            } else if ((*it)->template is<Product>()) {
+              std::static_pointer_cast<Product>(*first_it)->add_identical(
+                  std::static_pointer_cast<Product>(*it));
             }
-            assert((*it)->template is<Product>());
-            std::static_pointer_cast<Product>(*first_it)->add_identical(std::static_pointer_cast<Product>(*it));
           }
+          this->summands_.erase(first_it + 1, end);
         }
-        this->summands_.erase(first_it + 1, end);
       };
       reduce_range(first_it, plast_it);
     }
 
-    if (Logger::get_instance().canonicalize) std::wcout << "Sum::canonicalize_impl (pass=" << pass << "): after reducing summands = " << to_latex_align(shared_from_this()) << std::endl;
-
+    if (Logger::get_instance().canonicalize)
+      std::wcout << "Sum::canonicalize_impl (pass=" << pass
+                 << "): after reducing summands = "
+                 << to_latex_align(shared_from_this()) << std::endl;
   }
 
   return {};  // side effects are absorbed into summands
 }
-
 
 }  // namespace sequant

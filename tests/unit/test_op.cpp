@@ -9,7 +9,6 @@
 #include "SeQuant/core/op.hpp"
 
 TEST_CASE("Op", "[elements]") {
-
   using namespace sequant;
 
   SECTION("constructors") {
@@ -64,10 +63,12 @@ TEST_CASE("Op", "[elements]") {
     REQUIRE(nop1.annihilators()[0] == fann(L"a_1"));
 
     // 2 body
-    REQUIRE_NOTHROW(FNOperator({Index{L"i_1"}, Index{L"i_2"}},
-                               {Index{L"a_1", {L"i_1", L"i_2"}}, Index{L"a_2", {L"i_1", L"i_2"}}}));
-    auto nop2 =
-        FNOperator({Index{L"i_1"}, Index{L"i_2"}}, {Index{L"a_1", {L"i_1", L"i_2"}}, Index{L"a_2", {L"i_1", L"i_2"}}});
+    REQUIRE_NOTHROW(FNOperator(
+        {Index{L"i_1"}, Index{L"i_2"}},
+        {Index{L"a_1", {L"i_1", L"i_2"}}, Index{L"a_2", {L"i_1", L"i_2"}}}));
+    auto nop2 = FNOperator(
+        {Index{L"i_1"}, Index{L"i_2"}},
+        {Index{L"a_1", {L"i_1", L"i_2"}}, Index{L"a_2", {L"i_1", L"i_2"}}});
     REQUIRE(nop2.creators().size() == 2);
     REQUIRE(nop2.annihilators().size() == 2);
     REQUIRE(nop2.creators()[0] == fcre(L"i_1"));
@@ -89,10 +90,12 @@ TEST_CASE("Op", "[elements]") {
 
     /////////////////// normal op sequence
     // can include N-conserving ...
-    REQUIRE_NOTHROW(FNOperatorSeq({FNOperator({L"i_1"}, {L"i_2"}), FNOperator({L"i_3"}, {L"i_4"}),
+    REQUIRE_NOTHROW(FNOperatorSeq({FNOperator({L"i_1"}, {L"i_2"}),
+                                   FNOperator({L"i_3"}, {L"i_4"}),
                                    FNOperator({L"i_5"}, {L"i_6"})}));
-    auto nopseq1 =
-        FNOperatorSeq({FNOperator({L"i_1"}, {L"i_2"}), FNOperator({L"i_3"}, {L"i_4"}), FNOperator({L"i_5"}, {L"i_6"})});
+    auto nopseq1 = FNOperatorSeq({FNOperator({L"i_1"}, {L"i_2"}),
+                                  FNOperator({L"i_3"}, {L"i_4"}),
+                                  FNOperator({L"i_5"}, {L"i_6"})});
     REQUIRE(nopseq1.size() == 3);
     REQUIRE(nopseq1[0] == FNOperator({L"i_1"}, {L"i_2"}));
     REQUIRE(nopseq1[1] == FNOperator({L"i_3"}, {L"i_4"}));
@@ -107,9 +110,10 @@ TEST_CASE("Op", "[elements]") {
     REQUIRE(nopseq2[0] == FNOperator({}, {L"i_1"}));
 
     // but all vacua must match
-    REQUIRE_THROWS(FNOperatorSeq({FNOperator({L"i_1"}, {L"i_2"}, Vacuum::Physical),
-                                  FNOperator({L"i_3"}, {L"i_4"}, Vacuum::SingleProduct),
-                                  FNOperator({L"i_5"}, {L"i_6"})}));
+    REQUIRE_THROWS(
+        FNOperatorSeq({FNOperator({L"i_1"}, {L"i_2"}, Vacuum::Physical),
+                       FNOperator({L"i_3"}, {L"i_4"}, Vacuum::SingleProduct),
+                       FNOperator({L"i_5"}, {L"i_6"})}));
   }
 
   SECTION("adjoint") {
@@ -119,7 +123,8 @@ TEST_CASE("Op", "[elements]") {
     REQUIRE(o1.action() == Action::annihilate);
     o1.adjoint();
     REQUIRE(o1.action() == Action::create);
-    o1.adjoint(); o1.adjoint();
+    o1.adjoint();
+    o1.adjoint();
     REQUIRE(o1.action() == Action::create);
 
     auto oper1 = adjoint(FOperator{fcre(L"i_1"), fann(L"i_2")});
@@ -128,16 +133,17 @@ TEST_CASE("Op", "[elements]") {
     REQUIRE(oper1[0] == fcre(L"i_2"));
     REQUIRE(oper1[1] == fann(L"i_1"));
 
-    auto nop2 =
-        adjoint(FNOperator({Index{L"i_1"}}, {Index{L"a_1", {L"i_1"}}, Index{L"a_2", {L"i_1"}}}));
+    auto nop2 = adjoint(FNOperator(
+        {Index{L"i_1"}}, {Index{L"a_1", {L"i_1"}}, Index{L"a_2", {L"i_1"}}}));
     REQUIRE(nop2.creators().size() == 2);
     REQUIRE(nop2.annihilators().size() == 1);
     REQUIRE(nop2.annihilators()[0] == fann(L"i_1"));
     REQUIRE(nop2.creators()[0] == fcre(Index{L"a_1", {L"i_1"}}));
     REQUIRE(nop2.creators()[1] == fcre(Index{L"a_2", {L"i_1"}}));
 
-    auto nopseq1 = adjoint(FNOperatorSeq({FNOperator({L"i_1"}, {L"i_2"}), FNOperator({L"i_3"}, {L"i_4"}),
-                                  FNOperator({L"i_5"}, {L"i_6"})}));
+    auto nopseq1 = adjoint(FNOperatorSeq({FNOperator({L"i_1"}, {L"i_2"}),
+                                          FNOperator({L"i_3"}, {L"i_4"}),
+                                          FNOperator({L"i_5"}, {L"i_6"})}));
     REQUIRE(nopseq1.size() == 3);
     REQUIRE(nopseq1[2] == adjoint(FNOperator({L"i_1"}, {L"i_2"})));
     REQUIRE(nopseq1[1] == adjoint(FNOperator({L"i_3"}, {L"i_4"})));
@@ -145,8 +151,9 @@ TEST_CASE("Op", "[elements]") {
   }
 
   SECTION("conversion") {
-    auto nop1 =
-        FNOperator({Index{L"i_1"}, Index{L"i_2"}}, {Index{L"a_1", {L"i_1", L"i_2"}}, Index{L"a_2", {L"i_1", L"i_2"}}});
+    auto nop1 = FNOperator(
+        {Index{L"i_1"}, Index{L"i_2"}},
+        {Index{L"a_1", {L"i_1", L"i_2"}}, Index{L"a_2", {L"i_1", L"i_2"}}});
     REQUIRE_NOTHROW(static_cast<FOperator>(nop1));
     FOperator op1(static_cast<FOperator>(nop1));
     REQUIRE(op1.size() == 4);
@@ -188,12 +195,18 @@ TEST_CASE("Op", "[elements]") {
       REQUIRE(is_pure_qpannihilator(fann(L"a_1"), V));
       REQUIRE(!is_pure_qpannihilator(fann(L"p_1"), V));
 
-      REQUIRE(qpannihilator_space(fann(L"i_1"), V) == IndexSpace::null_instance());
-      REQUIRE(qpannihilator_space(fcre(L"i_1"), V) == IndexSpace::instance(IndexSpace::active_occupied));
-      REQUIRE(qpannihilator_space(fcre(L"a_1"), V) == IndexSpace::null_instance());
-      REQUIRE(qpannihilator_space(fann(L"a_1"), V) == IndexSpace::instance(IndexSpace::active_unoccupied));
-      REQUIRE(qpannihilator_space(fcre(L"p_1"), V) == IndexSpace::instance(IndexSpace::occupied));
-      REQUIRE(qpannihilator_space(fann(L"p_1"), V) == IndexSpace::instance(IndexSpace::unoccupied));
+      REQUIRE(qpannihilator_space(fann(L"i_1"), V) ==
+              IndexSpace::null_instance());
+      REQUIRE(qpannihilator_space(fcre(L"i_1"), V) ==
+              IndexSpace::instance(IndexSpace::active_occupied));
+      REQUIRE(qpannihilator_space(fcre(L"a_1"), V) ==
+              IndexSpace::null_instance());
+      REQUIRE(qpannihilator_space(fann(L"a_1"), V) ==
+              IndexSpace::instance(IndexSpace::active_unoccupied));
+      REQUIRE(qpannihilator_space(fcre(L"p_1"), V) ==
+              IndexSpace::instance(IndexSpace::occupied));
+      REQUIRE(qpannihilator_space(fann(L"p_1"), V) ==
+              IndexSpace::instance(IndexSpace::unoccupied));
     }
     {
       constexpr const Vacuum V = Vacuum::Physical;
@@ -249,8 +262,10 @@ TEST_CASE("Op", "[elements]") {
     REQUIRE(hash_value(fc1) == hash_value(fc1_copy));
     REQUIRE(hash_value(fc1) != hash_value(fa1));
     REQUIRE(hash_value(fc1) != hash_value(fc2));
-    REQUIRE(hash_value(fc1) != hash_value(bc1));  // hash is depends on statistics
-    REQUIRE(hash_value(fa1) != hash_value(ba1));  // hash is depends on statistics
+    REQUIRE(hash_value(fc1) !=
+            hash_value(bc1));  // hash is depends on statistics
+    REQUIRE(hash_value(fa1) !=
+            hash_value(ba1));  // hash is depends on statistics
     REQUIRE(hash_value(fc1) == hash_value(adjoint(fa1)));
   }
 
@@ -378,34 +393,43 @@ TEST_CASE("Op", "[elements]") {
     auto oper1 = FOperator{fcre(L"i_1"), fann(L"i_1")};
     REQUIRE(to_latex(oper1) == L"{{a^{\\dagger}_{i_1}}{a_{i_1}}}");
 
-    auto nop1 = FNOperator({L"i_1", L"i_2"}, {L"a_1", L"a_2"}, Vacuum::SingleProduct);
+    auto nop1 =
+        FNOperator({L"i_1", L"i_2"}, {L"a_1", L"a_2"}, Vacuum::SingleProduct);
     REQUIRE(to_latex(nop1) == L"{\\tilde{a}^{{i_1}{i_2}}_{{a_1}{a_2}}}");
 
-    auto nop2 =
-        FNOperator({Index{L"i_1"}, Index{L"i_2"}}, {Index{L"a_1", {L"i_1", L"i_2"}}, Index{L"a_2", {L"i_1", L"i_2"}}}, Vacuum::SingleProduct);
-    REQUIRE(to_latex(nop2) == L"{\\tilde{a}^{{i_1}{i_2}}_{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}}");
+    auto nop2 = FNOperator(
+        {Index{L"i_1"}, Index{L"i_2"}},
+        {Index{L"a_1", {L"i_1", L"i_2"}}, Index{L"a_2", {L"i_1", L"i_2"}}},
+        Vacuum::SingleProduct);
+    REQUIRE(
+        to_latex(nop2) ==
+        L"{\\tilde{a}^{{i_1}{i_2}}_{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}}");
 
     auto nop3 = FNOperator({L"i_1", L"i_2"}, {L"a_2"}, Vacuum::SingleProduct);
-    REQUIRE(to_latex(nop3) == L"{\\tilde{a}^{{i_1}{i_2}}_{\\textvisiblespace\\,{a_2}}}");
+    REQUIRE(to_latex(nop3) ==
+            L"{\\tilde{a}^{{i_1}{i_2}}_{\\textvisiblespace\\,{a_2}}}");
 
     auto nop4 = FNOperator({L"i_2"}, {L"a_1", L"a_2"}, Vacuum::SingleProduct);
-    REQUIRE(to_latex(nop4) == L"{\\tilde{a}^{\\textvisiblespace\\,{i_2}}_{{a_1}{a_2}}}");
+    REQUIRE(to_latex(nop4) ==
+            L"{\\tilde{a}^{\\textvisiblespace\\,{i_2}}_{{a_1}{a_2}}}");
 
     auto nop5 = FNOperator({L"i_1"}, {}, Vacuum::SingleProduct);
-    REQUIRE(to_latex(nop5) == L"{\\tilde{a}^{{i_1}}_{\\textvisiblespace}}");
+    REQUIRE(to_latex(nop5) == L"{\\tilde{a}^{{i_1}}}");
 
     auto nop6 = FNOperator({}, {L"a_1"}, Vacuum::SingleProduct);
-    REQUIRE(to_latex(nop6) == L"{\\tilde{a}^{\\textvisiblespace}_{{a_1}}}");
+    REQUIRE(to_latex(nop6) == L"{\\tilde{a}_{{a_1}}}");
 
     auto nopseq1 = FNOperatorSeq({nop1, nop2});
-    REQUIRE(to_latex(nopseq1)
-                == L"{{\\tilde{a}^{{i_1}{i_2}}_{{a_1}{a_2}}}{\\tilde{a}^{{i_1}{i_2}}_{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}}}");
+    REQUIRE(to_latex(nopseq1) ==
+            L"{{\\tilde{a}^{{i_1}{i_2}}_{{a_1}{a_2}}}{\\tilde{a}^{{i_1}{i_2}}_{"
+            L"{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}}}");
   }
 
   SECTION("commutativity") {
     auto nop1 = FNOperator({L"i_1"}, {L"a_1"});
-    auto nop2 =
-        FNOperator({Index{L"i_1"}, Index{L"i_2"}}, {Index{L"a_1", {L"i_1", L"i_2"}}, Index{L"a_2", {L"i_1", L"i_2"}}});
+    auto nop2 = FNOperator(
+        {Index{L"i_1"}, Index{L"i_2"}},
+        {Index{L"a_1", {L"i_1", L"i_2"}}, Index{L"a_2", {L"i_1", L"i_2"}}});
 
     REQUIRE(nop1.commutes_with(nop1));
     REQUIRE(nop1.commutes_with(nop2));

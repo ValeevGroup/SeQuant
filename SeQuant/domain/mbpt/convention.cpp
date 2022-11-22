@@ -52,7 +52,9 @@ enum class qns { none = 0, alpha = 1, beta = 2 };
 auto qndecorate(qns qn, std::wstring_view label) {
   switch (static_cast<int>(qn)) {
     case 0: return std::wstring(label);
+//    case 1: return std::wstring(label) + L"^{\\alpha}";
     case 1: return std::wstring(label) + L"⁺";
+//    case 2: return std::wstring(label) + L"^{\\beta}";
     case 2: return std::wstring(label) + L"⁻";
     default: assert(false && "invalid quantum number");
   }
@@ -72,6 +74,7 @@ void register_standard_instances() {
     IndexSpace::register_instance(declab(L"m"), IndexSpace::occupied, qnattr, do_not_throw);
     IndexSpace::register_instance(declab(L"a"), IndexSpace::active_unoccupied, qnattr, do_not_throw);
     IndexSpace::register_instance(declab(L"e"), IndexSpace::unoccupied, qnattr, do_not_throw);
+    IndexSpace::register_instance(declab(L"x"), IndexSpace::all_active, qnattr, do_not_throw);
     IndexSpace::register_instance(declab(L"p"), IndexSpace::all, qnattr, do_not_throw);
     IndexSpace::register_instance(declab(L"α'"), IndexSpace::other_unoccupied, qnattr, do_not_throw);
     IndexSpace::register_instance(declab(L"α"), IndexSpace::complete_unoccupied, qnattr, do_not_throw);
@@ -92,6 +95,7 @@ void make_default_indexregistry() {
     register_index(idxreg_ref, Index{declab(L"m")}, 110);
     register_index(idxreg_ref, Index{declab(L"a")}, 1000);
     register_index(idxreg_ref, Index{declab(L"e")}, 1000);
+    register_index(idxreg_ref, Index{declab(L"x")}, 1100);
     register_index(idxreg_ref, Index{declab(L"p")}, 1110);
     register_index(idxreg_ref, Index{declab(L"α'")}, 3000);
     register_index(idxreg_ref, Index{declab(L"α")}, 4000);

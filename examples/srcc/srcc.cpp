@@ -1,4 +1,9 @@
-#include "../sequant_setup.hpp"
+#include <SeQuant/core/op.hpp>
+#include <SeQuant/core/timer.hpp>
+#include <SeQuant/domain/eqs/cceqs.hpp>
+#include <SeQuant/domain/mbpt/convention.hpp>
+
+#include <clocale>
 
 using namespace sequant;
 
@@ -13,8 +18,12 @@ int main(int argc, char* argv[]) {
   std::wcout.sync_with_stdio(true);
   std::wcerr.sync_with_stdio(true);
   sequant::detail::OpIdRegistrar op_id_registrar;
-
+  sequant::set_default_context(
+      SeQuant(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
+              BraKetSymmetry::conjugate, SPBasis::spinorbital));
   mbpt::set_default_convention();
+
+  using sequant::eqs::compute_all;
 
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
@@ -27,31 +36,23 @@ int main(int argc, char* argv[]) {
 #endif
   const size_t NMAX = argc > 1 ? std::atoi(argv[1]) : DEFAULT_NMAX;
   // change to true to print out the resulting equations
-  constexpr bool print = true;
+  constexpr bool print = false;
   // change to true to print stats
   Logger::get_instance().wick_stats = false;
 
-    ranges::for_each(std::array<bool, 2>{false, true}, [=](const bool screen) {
-      ranges::for_each(
-          std::array<bool, 2>{false, true}, [=](const bool use_topology) {
-            ranges::for_each(std::array<bool, 2>{false, true},
-                             [=](const bool canonical_only) {
-                               tpool.clear();
-                               // comment out to run all possible combinations
-                               if (screen && use_topology && canonical_only)
-                                 compute_all{NMAX}(print, screen, use_topology,
-                                                   true, canonical_only);
-                             });
-          });
-    });
-
-  auto cc_r = cceqvec{ 3, 3 }(true, true, true, true);
-  auto prod = (*cc_r[2]->begin())->as<Product>();
-  for (const auto& fac: prod){
-    auto tensor = fac->as<Tensor>();
-    std::wcout << "symmetry = " << int(tensor.symmetry())
-    << " braket_symmetry = "
-    << int(tensor.braket_symmetry()) << std::endl;
-  }
-  return 0;
+  ranges::for_each(std::array<bool, 2>{false, true}, [=](const bool screen) {
+    ranges::for_each(
+        std::array<bool, 2>{false, true}, [=](const bool use_topology) {
+          ranges::for_each(std::array<bool, 2>{false, true},
+                           [=](const bool canonical_only) {
+                             // TODO tpool was in scope before
+                             // separting header and source files
+                             // tpool.clear();
+                             // comment out to run all possible combinations
+                             if (screen && use_topology && canonical_only)
+                               compute_all{NMAX}(print, screen, use_topology,
+                                                 true, canonical_only);
+                           });
+        });
+  });
 }

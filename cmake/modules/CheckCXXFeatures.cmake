@@ -8,16 +8,15 @@ macro(check_cxx_execution_header _prefix)
   # compilation checks
   ##############################################
   set(_prereq_list "_STANDALONE")
-  if (TBB_FOUND)
+  if (TARGET TBB::tbb)
     list(APPEND _prereq_list _WITH_TBB)
-  endif (TBB_FOUND)
+  endif ()
 
   foreach (_prereq ${_prereq_list})
     cmake_push_check_state()
 
     if (_prereq STREQUAL _WITH_TBB)
-      list(APPEND CMAKE_REQUIRED_LIBRARIES ${TBB_LIBRARIES})
-      list(APPEND CMAKE_REQUIRED_INCLUDES ${TBB_INCLUDE_DIRS})
+      list(APPEND CMAKE_REQUIRED_LIBRARIES TBB::tbb)
     endif ()
 
     CHECK_CXX_SOURCE_COMPILES(

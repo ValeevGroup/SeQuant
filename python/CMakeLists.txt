@@ -8,8 +8,8 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(pybind11)
 
-set(CMAKE_CXX_STANDARD 17)
-add_compile_options(-Wall)
+#set(CMAKE_CXX_STANDARD 17)
+#add_compile_options(-Wall)
 # Python2.7 has register in Python.h
 add_compile_options(-Wno-register)
 
@@ -24,12 +24,27 @@ set_target_properties(
   OUTPUT_NAME _sequant
   )
 
-enable_testing()
+if (BUILD_TESTING)
+  add_test(sequant/unit/python/build "${CMAKE_COMMAND}" --build ${CMAKE_BINARY_DIR} --target python-sequant)
+  set_tests_properties(sequant/unit/python/build PROPERTIES FIXTURES_SETUP PYSEQUANT_MODULE)
 
-# add the executable
-add_test(
-  NAME test_sequant
-  # need to use pytest to find sequant module properly
-  COMMAND ${PYTHON_EXECUTABLE} ${PROJECT_SOURCE_DIR}/test_sequant.py
-  WORKING_DIRECTORY ${PROJECT_BINARY_DIR}
+  set(SEQUANT_TEST_PYTHON_ENVVARS "PYTHONPATH=${PROJECT_BINARY_DIR}:$ENV{PYTHONPATH}")
+  if (DEFINED SEQUANT_TEST_EXTRA_ENVVARS)
+    list(APPEND SEQUANT_TEST_PYTHON_ENVVARS ${SEQUANT_TEST_EXTRA_ENVVARS})
+  endif()
+
+  # basic test
+  set(test_name sequant/unit/python/basic/run)
+  add_test(NAME ${test_name}
+           COMMAND ${PYTHON_EXECUTABLE} test_sequant.py
   )
+  set_tests_properties(${test_name} PROPERTIES
+           WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+           FIXTURES_REQUIRED PYSEQUANT_MODULE
+           ENVIRONMENT "${SEQUANT_TEST_PYTHON_ENVVARS}")
+
+  unset(MPQC_TEST_PYTHON_ENVVARS)
+
+  add_dependencies(check-sequant python-sequant)
+
+endif (BUILD_TESTING)
