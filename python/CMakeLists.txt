@@ -8,8 +8,10 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(pybind11)
 
-#set(CMAKE_CXX_STANDARD 17)
-#add_compile_options(-Wall)
+if (NOT(CMAKE_CXX_STANDARD GREATER_EQUAL 17))
+  message(FATAL_ERROR "C++ 2017 ISO Standard or higher is required to compile PySeQuant")
+endif()
+
 # Python2.7 has register in Python.h
 add_compile_options(-Wno-register)
 
