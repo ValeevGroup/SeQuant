@@ -12,7 +12,6 @@
 #include "SeQuant/domain/mbpt/sr/sr.hpp"
 
 TEST_CASE("TensorNetwork", "[elements]") {
-
   using namespace sequant;
 
   using namespace sequant::mbpt::sr::so;
@@ -36,10 +35,10 @@ TEST_CASE("TensorNetwork", "[elements]") {
       REQUIRE_NOTHROW(TensorNetwork(*t1_x_t2));
     }
 
-    { // with Tensors and NormalOperators
+    {  // with Tensors and NormalOperators
       auto tmp = A(2) * H2() * T_(2) * T_(2);
       REQUIRE_NOTHROW(TensorNetwork(tmp->as<Product>().factors()));
-    };
+    }
 
   }  // SECTION("constructors")
 
@@ -68,7 +67,8 @@ TEST_CASE("TensorNetwork", "[elements]") {
       REQUIRE(*std::dynamic_pointer_cast<Expr>(tensors[0]) == *t1);
       REQUIRE(*std::dynamic_pointer_cast<Expr>(tensors[1]) == *t2);
 
-      // index replacements performed by canonicalize() ... since canonicalize() not invoked this is empty
+      // index replacements performed by canonicalize() ... since canonicalize()
+      // not invoked this is empty
       auto idxrepl = tn.idxrepl();
       REQUIRE(idxrepl.size() == 0);
     }
@@ -88,12 +88,15 @@ TEST_CASE("TensorNetwork", "[elements]") {
         REQUIRE(size(tn.tensors()) == 2);
         REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[0]));
         REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[1]));
-//        std::wcout << to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) << std::endl;
-//        std::wcout << to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) << std::endl;
+        //        std::wcout <<
+        //        to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) <<
+        //        std::endl; std::wcout <<
+        //        to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) <<
+        //        std::endl;
         REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) ==
-            L"{F^{{i_1}}_{{i_2}}}");
+                L"{F^{{i_1}}_{{i_2}}}");
         REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) ==
-            L"{\\tilde{a}^{{i_2}}_{{i_1}}}");
+                L"{\\tilde{a}^{{i_2}}_{{i_1}}}");
         REQUIRE(tn.idxrepl().size() == 2);
       }
 
@@ -112,8 +115,11 @@ TEST_CASE("TensorNetwork", "[elements]") {
           REQUIRE(size(tn.tensors()) == 2);
           REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[0]));
           REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[1]));
-          // std::wcout << to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) << std::endl;
-          // std::wcout << to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) << std::endl;
+          // std::wcout <<
+          // to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) <<
+          // std::endl; std::wcout <<
+          // to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) <<
+          // std::endl;
           REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) ==
                   L"{\\tilde{a}^{{i_1}}_{{i_3}}}");
           REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) ==
@@ -133,8 +139,11 @@ TEST_CASE("TensorNetwork", "[elements]") {
           REQUIRE(size(tn.tensors()) == 2);
           REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[0]));
           REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[1]));
-          //        std::wcout << to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) << std::endl;
-          //        std::wcout << to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) << std::endl;
+          //        std::wcout <<
+          //        to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0]))
+          //        << std::endl; std::wcout <<
+          //        to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1]))
+          //        << std::endl;
           REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) ==
                   L"{\\tilde{a}^{{i_2}}_{{i_1}}}");
           REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) ==
@@ -142,13 +151,59 @@ TEST_CASE("TensorNetwork", "[elements]") {
         }
       }
     }
-  }  // SECTION("accessors")
+  }  // SECTION("canonicalizer")
+
+  // print automorphisms
+  auto print_auts =
+      [](const std::vector<std::vector<unsigned int>>& aut_generators,
+         auto&& stream, auto&& vlabels, bool use_labels) {
+        ranges::for_each(
+            aut_generators, [&stream, &vlabels, &use_labels](auto&& gen) {
+              // see bliss::print_permutation
+              auto print = [&stream, &vlabels, &use_labels](
+                               const std::vector<unsigned int>& perm) {
+                const unsigned int offset = 0;
+                const unsigned int N = perm.size();
+                for (unsigned int i = 0; i < N; i++) {
+                  unsigned int j = perm[i];
+                  if (j == i) continue;
+                  bool is_first = true;
+                  while (j != i) {
+                    if (j < i) {
+                      is_first = false;
+                      break;
+                    }
+                    j = perm[j];
+                  }
+                  if (!is_first) continue;
+                  stream << "("
+                         << (use_labels ? vlabels.at(i)
+                                        : std::to_wstring(i + offset))
+                         << ",";
+                  j = perm[i];
+                  while (j != i) {
+                    stream << (use_labels ? vlabels.at(j)
+                                          : std::to_wstring(j + offset));
+                    j = perm[j];
+                    if (j != i) stream << ",";
+                  }
+                  stream << ")";
+                }
+              };
+
+              print(gen);
+              stream << std::endl;
+            });
+      };
 
   SECTION("bliss graph") {
     Index::reset_tmp_index();
-    // to generate expressions in specified (i.e., platform-independent) manner can't use operator expression, must use initializer list
-    auto tmp = ex<Product, std::initializer_list<ExprPtr>>({A(2), H2(), T_(2), T_(2), T_(2)});
-    //std::wcout << "A2*H2*T2*T2*T2 = " << to_latex(tmp) << std::endl;
+    // to generate expressions in specified (i.e., platform-independent) manner
+    // can't use operator expression (due to unspecified order of evaluation of
+    // function arguments), must use initializer list
+    auto tmp = ex<Product, std::initializer_list<ExprPtr>>(
+        {A(2), H2(), T_(2), T_(2), T_(2)});
+    // std::wcout << "A2*H2*T2*T2*T2 = " << to_latex(tmp) << std::endl;
     TensorNetwork tn(tmp->as<Product>().factors());
 
     // make graph
@@ -158,7 +213,7 @@ TEST_CASE("TensorNetwork", "[elements]") {
     // create dot
     std::basic_ostringstream<wchar_t> oss;
     REQUIRE_NOTHROW(graph->write_dot(oss, vlabels));
-    //std::wcout << "oss.str() = " << std::endl << oss.str() << std::endl;
+    // std::wcout << "oss.str() = " << std::endl << oss.str() << std::endl;
     REQUIRE(oss.str() ==
             L"graph g {\n"
             "v0 [label=\"{a_{102}}\"; color=\"#4f1,dd0\"];\n"
@@ -303,53 +358,10 @@ TEST_CASE("TensorNetwork", "[elements]") {
                                         const unsigned int* aut) {
         aut_generators.emplace_back(aut, aut + n);
       };
-      graph->find_automorphisms(stats, &bliss::aut_hook<decltype(save_aut)>, &save_aut);
-
-      // print automorphisms
-      auto print_auts = [&aut_generators](auto&& stream, auto&& vlabels,
-                                          bool use_labels) {
-        ranges::for_each(aut_generators, [&stream, &vlabels,
-                                          &use_labels](auto&& gen) {
-
-          // see bliss::print_permutation
-          auto print = [&stream, &vlabels,
-                        &use_labels](const std::vector<unsigned int>& perm) {
-            const unsigned int offset = 0;
-            const unsigned int N = perm.size();
-            for (unsigned int i = 0; i < N; i++) {
-              unsigned int j = perm[i];
-              if (j == i) continue;
-              bool is_first = true;
-              while (j != i) {
-                if (j < i) {
-                  is_first = false;
-                  break;
-                }
-                j = perm[j];
-              }
-              if (!is_first) continue;
-              stream << "("
-                     << (use_labels ? vlabels.at(i)
-                                    : std::to_wstring(i + offset))
-                     << ",";
-              j = perm[i];
-              while (j != i) {
-                stream << (use_labels ? vlabels.at(j)
-                                      : std::to_wstring(j + offset));
-                j = perm[j];
-                if (j != i) stream << ",";
-              }
-              stream << ")";
-            }
-          };
-
-          print(gen);
-          stream << std::endl;
-
-        });
-      };
+      graph->find_automorphisms(stats, &bliss::aut_hook<decltype(save_aut)>,
+                                &save_aut);
       std::basic_ostringstream<wchar_t> oss;
-      print_auts(oss, vlabels, false);
+      print_auts(aut_generators, oss, vlabels, false);
       REQUIRE(oss.str() ==
               L"(18,19)\n"
               "(16,17)\n"
@@ -361,12 +373,14 @@ TEST_CASE("TensorNetwork", "[elements]") {
               "(6,7)\n"
               "(12,13)\n"
               "(14,15)\n"
-              "(4,6)(5,7)(12,14)(13,15)(44,52)(45,53)(46,54)(47,55)(48,56)(49,57)(50,58)(51,59)\n"
-              "(2,4)(3,5)(10,12)(11,13)(36,44)(37,45)(38,46)(39,47)(40,48)(41,49)(42,50)(43,51)\n");
+              "(4,6)(5,7)(12,14)(13,15)(44,52)(45,53)(46,54)(47,55)(48,56)(49,"
+              "57)(50,58)(51,59)\n"
+              "(2,4)(3,5)(10,12)(11,13)(36,44)(37,45)(38,46)(39,47)(40,48)(41,"
+              "49)(42,50)(43,51)\n");
       // change to 1 to user vertex labels rather than indices
       if (0) {
         std::basic_ostringstream<wchar_t> oss2;
-        print_auts(oss2, vlabels, true);
+        print_auts(aut_generators, oss2, vlabels, true);
         std::wcout << oss2.str() << std::endl;
       }
     }
@@ -385,7 +399,7 @@ TEST_CASE("TensorNetwork", "[elements]") {
                            WstrList{L"i_3", L"i_4"}, Symmetry::antisymm);
 
       auto tmp = g * ta * tb;
-      //std::wcout << "TN1 = " << to_latex(tmp) << std::endl;
+      // std::wcout << "TN1 = " << to_latex(tmp) << std::endl;
       TensorNetwork tn(tmp->as<Product>().factors());
 
       // make graph
@@ -399,7 +413,7 @@ TEST_CASE("TensorNetwork", "[elements]") {
       {
         std::basic_ostringstream<wchar_t> oss;
         REQUIRE_NOTHROW(graph->write_dot(oss, vlabels));
-        //std::wcout << "oss.str() = " << std::endl << oss.str() << std::endl;
+        // std::wcout << "oss.str() = " << std::endl << oss.str() << std::endl;
       }
 
       bliss::Stats stats;
@@ -412,12 +426,13 @@ TEST_CASE("TensorNetwork", "[elements]") {
       };
       graph->find_automorphisms(stats, &bliss::aut_hook<decltype(save_aut)>,
                                 &save_aut);
-      CHECK(aut_generators.size() == 2);  // there are 2 generators, i1<->i2, i3<->i4
+      CHECK(aut_generators.size() ==
+            2);  // there are 2 generators, i1<->i2, i3<->i4
 
       std::basic_ostringstream<wchar_t> oss;
       print_auts(aut_generators, oss, vlabels, true);
       CHECK(oss.str() == L"({i_3},{i_4})\n({i_1},{i_2})\n");
-      //std::wcout << oss.str() << std::endl;
+      // std::wcout << oss.str() << std::endl;
     }
   }  // SECTION("misc1")
 
