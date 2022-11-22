@@ -373,4 +373,52 @@ TEST_CASE("TensorNetwork", "[elements]") {
 
   }  // SECTION("bliss graph")
 
+  SECTION("misc1") {
+    if (true) {
+      Index::reset_tmp_index();
+      // TN1 from manuscript
+      auto g = ex<Tensor>(L"g", WstrList{L"i_3", L"i_4"},
+                          WstrList{L"a_3", L"a_4"}, Symmetry::antisymm);
+      auto ta = ex<Tensor>(L"t", WstrList{L"a_1", L"a_3"},
+                           WstrList{L"i_1", L"i_2"}, Symmetry::antisymm);
+      auto tb = ex<Tensor>(L"t", WstrList{L"a_2", L"a_4"},
+                           WstrList{L"i_3", L"i_4"}, Symmetry::antisymm);
+
+      auto tmp = g * ta * tb;
+      //std::wcout << "TN1 = " << to_latex(tmp) << std::endl;
+      TensorNetwork tn(tmp->as<Product>().factors());
+
+      // make graph
+      // N.B. treat all indices as dummy so that the automorphism ignores the
+      using named_indices_t = TensorNetwork::named_indices_t;
+      named_indices_t indices{};
+      REQUIRE_NOTHROW(tn.make_bliss_graph(&indices));
+      auto [graph, vlabels, vcolors, vtypes] = tn.make_bliss_graph(&indices);
+
+      // create dot
+      {
+        std::basic_ostringstream<wchar_t> oss;
+        REQUIRE_NOTHROW(graph->write_dot(oss, vlabels));
+        //std::wcout << "oss.str() = " << std::endl << oss.str() << std::endl;
+      }
+
+      bliss::Stats stats;
+      graph->set_splitting_heuristic(bliss::Graph::shs_fsm);
+
+      std::vector<std::vector<unsigned int>> aut_generators;
+      auto save_aut = [&aut_generators](const unsigned int n,
+                                        const unsigned int* aut) {
+        aut_generators.emplace_back(aut, aut + n);
+      };
+      graph->find_automorphisms(stats, &bliss::aut_hook<decltype(save_aut)>,
+                                &save_aut);
+      CHECK(aut_generators.size() == 2);  // there are 2 generators, i1<->i2, i3<->i4
+
+      std::basic_ostringstream<wchar_t> oss;
+      print_auts(aut_generators, oss, vlabels, true);
+      CHECK(oss.str() == L"({i_3},{i_4})\n({i_1},{i_2})\n");
+      //std::wcout << oss.str() << std::endl;
+    }
+  }  // SECTION("misc1")
+
 }  // TEST_CASE("Tensor")
