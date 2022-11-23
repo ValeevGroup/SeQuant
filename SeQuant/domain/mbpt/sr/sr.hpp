@@ -57,7 +57,7 @@ ExprPtr H(bool antisymm = (get_default_context().vacuum() != Vacuum::Physical));
 /// @param[in] op_connections specifies the connectivity to be ensured
 /// @param[in] use_top if true, topological equivalence will be utilized
 /// @return the VEV
-ExprPtr vac_av(ExprPtr expr, std::initializer_list<std::pair<int,int>> op_connections = {}, bool use_top = true);
+ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int,int>> op_connections = {}, bool use_top = true);
 
 namespace csv {
 

@@ -44,7 +44,7 @@ project(SeQuant LANGUAGES CXX VERSION "${SEQUANT_VERSION}" DESCRIPTION "SEcond Q
 # need C++17, insist on strict standard
 set(CMAKE_CXX_STANDARD 17 CACHE STRING "C++ ISO Standard version")
 if (NOT(CMAKE_CXX_STANDARD EQUAL 17 OR CMAKE_CXX_STANDARD EQUAL 20))
-    message(FATAL_ERROR "C++ 2017 ISO Standard or higher is required to compile TiledArray")
+    message(FATAL_ERROR "C++ 2017 ISO Standard or higher is required to compile SeQuant")
 endif()
 # C++20 is only configurable via compile features with cmake 3.12 and older
 if (CMAKE_CXX_STANDARD EQUAL 20 AND CMAKE_VERSION VERSION_LESS 3.12.0)
@@ -101,6 +101,9 @@ add_feature_info(TBB ENABLE_TBB "Intel Thread-Building Blocks is an optional pre
 
 option(SEQUANT_EVAL_TESTS "Enable building of evaluation tests (if true, will look for and/or build TA)" OFF)
 add_feature_info(EVAL_TESTS SEQUANT_EVAL_TESTS "Build evaluation tests (if true, will look for and/or build TA)")
+
+option(SEQUANT_PYTHON "Build SeQuant python module" OFF)
+add_feature_info(PYTHON SEQUANT_PYTHON "PySeQuant: Python bindings to SeQuant")
 
 ##########################
 # Prerequisites
@@ -443,6 +446,15 @@ if (BUILD_TESTING)
 else (BUILD_TESTING)
     add_custom_target_subproject(sequant check USES_TERMINAL COMMAND echo "WARNING: SeQuant testing disabled. To enable, give -DBUILD_TESTING=ON to cmake")
 endif (BUILD_TESTING)
+
+####### Python ########
+
+if (SEQUANT_PYTHON)
+    if (NOT CMAKE_POSITION_INDEPENDENT_CODE)
+        message(FATAL_ERROR "Python module requires CMAKE_POSITION_INDEPENDENT_CODE=ON")
+    endif()
+    add_subdirectory(python)
+endif()
 
 ####### DOCS ########
 
