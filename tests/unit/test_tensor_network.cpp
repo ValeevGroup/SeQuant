@@ -11,6 +11,8 @@
 #include "SeQuant/core/tensor_network.hpp"
 #include "SeQuant/domain/mbpt/sr/sr.hpp"
 
+#include "SeQuant/core/timer.hpp"
+
 TEST_CASE("TensorNetwork", "[elements]") {
   using namespace sequant;
 
@@ -388,7 +390,7 @@ TEST_CASE("TensorNetwork", "[elements]") {
   }  // SECTION("bliss graph")
 
   SECTION("misc1") {
-    if (true) {
+    if (false) {
       Index::reset_tmp_index();
       // TN1 from manuscript
       auto g = ex<Tensor>(L"g", WstrList{L"i_3", L"i_4"},
@@ -434,6 +436,151 @@ TEST_CASE("TensorNetwork", "[elements]") {
       CHECK(oss.str() == L"({i_3},{i_4})\n({i_1},{i_2})\n");
       // std::wcout << oss.str() << std::endl;
     }
+
+    // profile canonicalization for synthetic tests in
+    // DOI 10.1016/j.cpc.2018.02.014
+    if (false) {
+      for (auto testcase : {0, 1, 2, 3}) {
+        // - testcase=0,2 are "equivalent" and correspond to the "frustrated"
+        //   case in Section 5.3 of DOI 10.1016/j.cpc.2018.02.014
+        // - testcase=1 corresponds to the "frustrated" case in Section 5.4 of
+        //   DOI 10.1016/j.cpc.2018.02.014
+        // - testcase=3 corresponds to the "No symmetry dummy"
+        //   case in Section 5.1 of DOI 10.1016/j.cpc.2018.02.014
+        if (testcase == 0)
+          std::wcout
+              << "canonicalizing network with 1 totally-symmetric tensor with "
+                 "N indices and 1 asymmetric tensor with N indices\n";
+        else if (testcase == 3)
+          std::wcout << "canonicalizing network with 1 asymmetric tensor with "
+                        "N indices and 1 asymmetric tensor with N indices\n";
+        else
+          std::wcout << "canonicalizing network with n equivalent asymmetric "
+                        "tensors with N/n indices each and 1 asymmetric tensor "
+                        "with N indices\n";
+
+        std::wcout << "N,n,min_time,geommean_time,max_time\n";
+
+        for (auto N :
+             {1, 2, 4, 8, 16, 32, 64, 128, 256}) {  // total number of indices
+
+          int n;
+          switch (testcase) {
+            case 0:
+              n = 1;
+              break;
+            case 1:
+              n = N / 2;
+              break;
+            case 2:
+              n = N;
+              break;
+            case 3:
+              n = 1;
+              break;
+            default:
+              abort();
+          }
+          if (n == 0 || n > N) continue;
+
+          auto ctx_resetter = set_scoped_default_context(
+              (N > Index::min_tmp_index())
+                  ? SeQuant(get_default_context())
+                        .set_first_dummy_index_ordinal(N + 1)
+                  : get_default_context());
+
+          // make list of indices
+          std::vector<Index> indices;
+          for (auto i = 0; i != N; ++i) {
+            std::wostringstream oss;
+            oss << "i_" << i;
+            indices.emplace_back(oss.str());
+          }
+          std::random_device rd;
+
+          // randomly sample connectivity between bra and ket tensors
+          const auto S = 10;  // how many samples to take
+
+          auto product_time =
+              1.;  // product of all times, need to get geometric mean
+          auto min_time =
+              std::numeric_limits<double>::max();  // total time for all samples
+          auto max_time =
+              std::numeric_limits<double>::min();  // total time for all samples
+          for (auto s = 0; s != S; ++s) {
+            // make tensors of independently (and randomly) permuted
+            // contravariant and covariant indices
+            auto contravariant_indices = indices;
+            auto covariant_indices = indices;
+
+            std::shuffle(contravariant_indices.begin(),
+                         contravariant_indices.end(), std::mt19937{rd()});
+            std::shuffle(covariant_indices.begin(), covariant_indices.end(),
+                         std::mt19937{rd()});
+
+            auto utensors =
+                covariant_indices | ranges::views::chunk(N / n) |
+                ranges::views::transform([&](const auto& idxs) {
+                  return ex<Tensor>(
+                      L"u", idxs, std::vector<Index>{},
+                      (testcase == 3
+                           ? Symmetry::nonsymm
+                           : ((n == 1) ? Symmetry::symm : Symmetry::nonsymm)));
+                }) |
+                ranges::to_vector;
+            CHECK(utensors.size() == n);
+            auto dtensors = contravariant_indices | ranges::views::chunk(N) |
+                            ranges::views::transform([&](const auto& idxs) {
+                              return ex<Tensor>(L"d", std::vector<Index>{},
+                                                idxs, Symmetry::nonsymm);
+                            }) |
+                            ranges::to_vector;
+            CHECK(dtensors.size() == 1);
+
+            ExprPtr expr;
+            for (auto g = 0; g != n; ++g) {
+              if (g == 0)
+                expr = utensors[0] * dtensors[0];
+              else
+                expr = expr * utensors[g];
+            }
+
+            TensorNetwork tn(expr->as<Product>().factors());
+
+            // produce misc data for publication
+            if (false && s == 0) {
+              std::wcout << "N=" << N << " n=" << n << " expr:\n"
+                         << expr->to_latex() << std::endl;
+
+              // make graph
+              REQUIRE_NOTHROW(tn.make_bliss_graph());
+              auto [graph, vlabels, vcolors, vtypes] = tn.make_bliss_graph();
+
+              // create dot
+              std::basic_ostringstream<wchar_t> oss;
+              REQUIRE_NOTHROW(graph->write_dot(oss, vlabels));
+              std::wcout << "bliss graph:" << std::endl
+                         << oss.str() << std::endl;
+            }
+
+            sequant::TimerPool<> timer;
+            timer.start();
+            tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
+                            false);
+            timer.stop();
+            const auto elapsed_seconds = timer.read();
+            product_time *= elapsed_seconds;
+            min_time = std::min(min_time, elapsed_seconds);
+            max_time = std::max(max_time, elapsed_seconds);
+          }
+
+          const auto geommean_time = std::pow(product_time, 1. / S);
+          std::wcout << N << "," << n << "," << min_time << "," << geommean_time
+                     << "," << max_time << "\n";
+        }
+      }
+    }
+
   }  // SECTION("misc1")
 
 }  // TEST_CASE("Tensor")
