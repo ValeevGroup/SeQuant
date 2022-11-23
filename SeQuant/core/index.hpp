@@ -20,7 +20,6 @@
 #include "hash.hpp"
 #include "space.hpp"
 #include "tag.hpp"
-#include "hash.hpp"
 
 // change to 1 to make thread-safe
 #define SEQUANT_INDEX_THREADSAFE 1
@@ -236,7 +235,8 @@ class Index : public Taggable {
   /// @brief Replaces non-ascii wstring characters with human-readable analogs,
   ///        each such UTF-8 character will be encoded by one or more chars.
   /// @note Maps: `⁺` -> `a`, `⁻` -> `b`, and all greek characters to their
-  ///       english language equivalents (e.g. `α` -> `alpha`, `Ξ` -> `XI`, etc.)
+  ///       english language equivalents (e.g. `α` -> `alpha`, `Ξ` -> `XI`,
+  ///       etc.)
   std::string ascii_label() const {
     static const std::unordered_map<wchar_t, std::string>
         greek_to_english_name = {
@@ -261,12 +261,11 @@ class Index : public Taggable {
     std::replace(label.begin(), label.end(), L'⁺', L'a');
     std::replace(label.begin(), label.end(), L'⁻', L'b');
     std::string label_ascii;
-    for(auto it = label.begin(); it != label.end(); ++it) {
+    for (auto it = label.begin(); it != label.end(); ++it) {
       auto pos = greek_to_english_name.find(*it);
       if (pos != greek_to_english_name.end()) {
         label_ascii.append(pos->second);
-      }
-      else {
+      } else {
         label_ascii.push_back(*it);
       }
     }
@@ -303,7 +302,7 @@ class Index : public Taggable {
   std::wstring to_latex() const;
 
   template <typename... Attrs>
-  std::wstring to_wolfram(Attrs &&... attrs) const {
+  std::wstring to_wolfram(Attrs &&...attrs) const {
     auto protect_subscript = [](const std::wstring_view str) {
       auto subsc_pos = str.find(L'_');
       if (subsc_pos == std::wstring_view::npos)
@@ -341,7 +340,7 @@ class Index : public Taggable {
           return int64_t(idx.space().attr());
         });
     return hash::range(ranges::begin(space_attr_view),
-                      ranges::end(space_attr_view));
+                       ranges::end(space_attr_view));
   }
 
   /// Color of an Index = hashed IndexSpace + IndexSpace objects of the
@@ -359,7 +358,7 @@ class Index : public Taggable {
   }
 
   /// @return the smallest index of a generated index
-  static constexpr std::size_t min_tmp_index() { return 100; }
+  static const std::size_t min_tmp_index();
 
   /// @return a unique temporary index, its value is equal to or greater than
   /// that returned by min_tmp_index()
@@ -369,15 +368,17 @@ class Index : public Taggable {
   /// next_tmp_index() will return the value returned by min_tmp_index()
   /// @warning should only to be used when reproducibility matters (e.g. unit
   /// testing)
-  static void reset_tmp_index() { tmp_index_accessor() = min_tmp_index() - 1; }
+  static void reset_tmp_index();
 
   /// @brief index replacement
   /// replaces this object with its image in the Index map.
   /// If this object was not found in the map, tries replacing its subindices.
   /// @param index_map maps Index to Index
   /// @return false if no replacements were made
-  /// @pre  \code this->tag().has_value() == false || (this->tag().has_value() == true && this->tag().value<int>() == 0) \endcode
-  /// @post if return value is true: \code this->tag().has_value() == true && this->tag().value<int>() == 0 \endcode
+  /// @pre  \code this->tag().has_value() == false || (this->tag().has_value()
+  /// == true && this->tag().value<int>() == 0) \endcode
+  /// @post if return value is true: \code this->tag().has_value() == true &&
+  /// this->tag().value<int>() == 0 \endcode
   template <template <typename, typename, typename... Args> class Map,
             typename... Args>
   bool transform(const Map<Index, Index, Args...> &index_map) {
@@ -409,8 +410,7 @@ class Index : public Taggable {
     if (!mutated) {
       bool proto_indices_transformed = false;
       for (auto &&subidx : proto_indices_) {
-        if (subidx.transform(index_map))
-          proto_indices_transformed = true;
+        if (subidx.transform(index_map)) proto_indices_transformed = true;
       }
       if (proto_indices_transformed) {
         mutated = true;
@@ -534,8 +534,8 @@ inline bool operator!=(const Index &i1, const Index &i2) { return !(i1 == i2); }
 /// @brief The ordering operator
 
 /// @return true if @c i1 preceeds @c i2 in the canonical order; Index objects
-/// are ordered lexicographically, first by qns, followed by tags (if defined for both), then
-/// by space, then by label, then by protoindices (if any)
+/// are ordered lexicographically, first by qns, followed by tags (if defined
+/// for both), then by space, then by label, then by protoindices (if any)
 inline bool operator<(const Index &i1, const Index &i2) {
   // compare qns, tags and spaces in that sequence
   assert(i1.space().attr().is_valid());
@@ -543,10 +543,10 @@ inline bool operator<(const Index &i1, const Index &i2) {
 
   auto i1_Q = i1.space().qns();
   auto i2_Q = i2.space().qns();
-  const bool have_qns = i1_Q != IndexSpace::nullqns ||
-                        i2_Q != IndexSpace::nullqns;
+  const bool have_qns =
+      i1_Q != IndexSpace::nullqns || i2_Q != IndexSpace::nullqns;
 
-  auto compare_space = [&i1, &i2] () {
+  auto compare_space = [&i1, &i2]() {
     if (i1.space() == i2.space()) {
       if (i1.label() == i2.label()) {
         return i1.proto_indices() < i2.proto_indices();
@@ -558,11 +558,10 @@ inline bool operator<(const Index &i1, const Index &i2) {
     }
   };
 
-  if(have_qns || (i1_Q != i2_Q)){
+  if (have_qns || (i1_Q != i2_Q)) {
     return compare_space();
   }
-  const bool have_tags = i1.tag().has_value() &&
-      i2.tag().has_value();
+  const bool have_tags = i1.tag().has_value() && i2.tag().has_value();
 
   if (!have_tags || i1.tag() == i2.tag()) {
     return compare_space();
@@ -746,7 +745,7 @@ class IndexRegistry {
 
   /// updates an existing entry, or creates a new one if it does not exist
   template <typename... Args>
-  void update(const Index &idx, Args &&... args) {
+  void update(const Index &idx, Args &&...args) {
     auto it = registry_.find(idx);
     if (it != registry_.end()) {
       registry_.erase(it);
@@ -756,7 +755,7 @@ class IndexRegistry {
   }
   /// creates a new entry
   template <typename... Args>
-  void make(const Index &idx, Args &&... args) {
+  void make(const Index &idx, Args &&...args) {
     auto insertion_result =
         registry_.try_emplace(idx, std::forward<Args>(args)...);
     assert(insertion_result.second);
