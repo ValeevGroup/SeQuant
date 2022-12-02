@@ -44,9 +44,9 @@ detail::ContextResetter::~ContextResetter() noexcept {
 
 detail::ContextResetter set_scoped_default_context(const SeQuant& ctx) {
   if (detail::default_context_instance() != ctx) {
-    detail::ContextResetter resetter(detail::default_context_instance());
+    auto previous_ctx = detail::default_context_instance();
     detail::default_context_instance() = ctx;
-    return resetter;
+    return previous_ctx;
   } else
     return {};
 }

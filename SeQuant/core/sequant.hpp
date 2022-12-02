@@ -109,6 +109,10 @@ struct ContextResetter {
   ContextResetter(const SeQuant& previous_ctx) noexcept;
   ~ContextResetter() noexcept;
 
+  // ContextResetter is move-only
+  ContextResetter(const ContextResetter&) = delete;
+  ContextResetter& operator=(const ContextResetter&) = delete;
+
  private:
   std::optional<SeQuant> previous_ctx_;
 };
