@@ -39,13 +39,15 @@ class Tensor : public Expr, public AbstractTensor {
     }
     return result;
   }
-  template <typename IndexContainer>
-  static index_container_type make_indices(IndexContainer &&indices) {
+  template <typename IndexRange>
+  static index_container_type make_indices(IndexRange &&indices) {
     if constexpr (std::is_same_v<index_container_type,
-                                 std::decay_t<IndexContainer>>) {
-      return std::forward<IndexContainer>(indices);
+                                 std::decay_t<IndexRange>>) {
+      return std::forward<IndexRange>(indices);
     } else {
-      return index_container_type(std::begin(indices), std::end(indices));
+      using ranges::begin;
+      using ranges::end;
+      return index_container_type(begin(indices), end(indices));
     }
   }
 
@@ -63,9 +65,9 @@ class Tensor : public Expr, public AbstractTensor {
   // list of friends who can make Tensor objects with reserved labels
   friend ExprPtr make_overlap(const Index &bra_index, const Index &ket_index);
 
-  template <typename IndexContainer1, typename IndexContainer2>
-  Tensor(std::wstring_view label, IndexContainer1 &&bra_indices,
-         IndexContainer2 &&ket_indices, reserved_tag,
+  template <typename IndexRange1, typename IndexRange2>
+  Tensor(std::wstring_view label, IndexRange1 &&bra_indices,
+         IndexRange2 &&ket_indices, reserved_tag,
          Symmetry s = Symmetry::nonsymm,
          BraKetSymmetry bks = get_default_context().braket_symmetry(),
          ParticleSymmetry ps = ParticleSymmetry::symm)
@@ -89,16 +91,17 @@ class Tensor : public Expr, public AbstractTensor {
   /// to indices)
   /// @param symmetry the symmetry of bra or ket
   /// @param braket_symmetry the symmetry with respect to bra-ket exchange
-  template <typename IndexContainer,
+  template <typename IndexRange1, typename IndexRange2,
             typename = std::enable_if_t<
-                !meta::is_initializer_list_v<std::decay_t<IndexContainer>>>>
-  Tensor(std::wstring_view label, IndexContainer &&bra_indices,
-         IndexContainer &&ket_indices, Symmetry s = Symmetry::nonsymm,
+                !meta::is_initializer_list_v<std::decay_t<IndexRange1>> &&
+                !meta::is_initializer_list_v<std::decay_t<IndexRange2>>>>
+  Tensor(std::wstring_view label, IndexRange1 &&bra_indices,
+         IndexRange2 &&ket_indices, Symmetry s = Symmetry::nonsymm,
          BraKetSymmetry bks = get_default_context().braket_symmetry(),
          ParticleSymmetry ps = ParticleSymmetry::symm)
-      : Tensor(label, std::forward<IndexContainer>(bra_indices),
-               std::forward<IndexContainer>(ket_indices), reserved_tag{}, s,
-               bks, ps) {
+      : Tensor(label, std::forward<IndexRange1>(bra_indices),
+               std::forward<IndexRange2>(ket_indices), reserved_tag{}, s, bks,
+               ps) {
     assert_nonreserved_label(label_);
   }
 
