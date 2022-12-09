@@ -868,6 +868,11 @@ class Product : public Expr {
     return *this;
   }
 
+  void add_identical(const std::shared_ptr<Product> &other) {
+    assert(this->hash_value() == other->hash_value());
+    scalar_ += other->scalar_;
+  }
+
  private:
   scalar_type scalar_ = {1.0, 0.0};
   container::svector<ExprPtr, 2> factors_{};
@@ -1245,8 +1250,8 @@ inline std::wstring to_latex_align(const ExprPtr &exprptr,
                    L")");  // replace trailing "\bigr) }" with ")"
     result = std::wstring(L"\\begin{align}\n& ") + result;
     // assume no inner sums
-    int line_counter = 0;
-    int term_counter = 0;
+    size_t line_counter = 0;
+    size_t term_counter = 0;
     std::wstring::size_type pos = 0;
     std::wstring::size_type plus_pos = 0;
     std::wstring::size_type minus_pos = 0;

@@ -1,12 +1,14 @@
 //
 // Created by Conner Masteran on 7/1/21.
 //
-#include "antisymmetrizer.hpp"
+
+#ifndef SEQUANT_DOMAIN_MBPT_RDM_HPP
+#define SEQUANT_DOMAIN_MBPT_RDM_HPP
+
+#include <SeQuant/domain/mbpt/antisymmetrizer.hpp>
 namespace sequant {
 namespace decompositions {
 
-#ifndef SEQUANT_THREE_BODY_DECOMP_H
-#define SEQUANT_THREE_BODY_DECOMP_H
 ExprPtr cumu_to_density(ExprPtr ex_) {
   assert(ex_->is<Tensor>());
   assert(ex_->as<Tensor>().rank() == 1);
@@ -101,7 +103,8 @@ ExprPtr one_body_sub(
   const auto a = ex<FNOperator>(std::initializer_list<Index>{up_0},
                                 std::initializer_list<Index>{down_0});
   const auto cumu1 =
-      ex<Tensor>(L"\\lambda", std::initializer_list<Index>{down_0}, std::initializer_list<Index>{up_0});
+      ex<Tensor>(L"\\lambda", std::initializer_list<Index>{down_0},
+                 std::initializer_list<Index>{up_0});
 
   auto result = a + (ex<Constant>(-1) * cumu1);
   return (result);
@@ -121,9 +124,11 @@ ExprPtr two_body_decomp(
   auto up_1 = ex_->as<FNOperator>().creators()[1].index();
 
   const auto cumu1 =
-      ex<Tensor>(L"\\lambda", std::initializer_list<Index>{down_0}, std::initializer_list<Index>{up_0});
+      ex<Tensor>(L"\\lambda", std::initializer_list<Index>{down_0},
+                 std::initializer_list<Index>{up_0});
   const auto cumu2 =
-      ex<Tensor>(L"\\lambda", std::initializer_list<Index>{down_1}, std::initializer_list<Index>{up_1});
+      ex<Tensor>(L"\\lambda", std::initializer_list<Index>{down_1},
+                 std::initializer_list<Index>{up_1});
   const auto a = ex<FNOperator>(std::initializer_list<Index>{up_1},
                                 std::initializer_list<Index>{down_1});
   const auto a2 = ex<FNOperator>(std::initializer_list<Index>{up_0, up_1},
@@ -162,15 +167,16 @@ three_body_decomp(ExprPtr ex_, bool approx = true) {
   std::vector<Index> initial_upper{up_0, up_1, up_2};
 
   const auto cumulant =
-      ex<Tensor>(L"\\lambda", std::initializer_list<Index>{down_0}, std::initializer_list<Index>{up_0});
+      ex<Tensor>(L"\\lambda", std::initializer_list<Index>{down_0},
+                 std::initializer_list<Index>{up_0});
   const auto a = ex<FNOperator>(std::initializer_list<Index>{up_1, up_2},
                                 std::initializer_list<Index>{down_1, down_2});
   auto a_cumulant = cumulant * a;
 
-  auto cumulant2 =
-      ex<Tensor>(L"\\lambda", std::initializer_list<Index>{down_1}, std::initializer_list<Index>{up_1});
-  auto cumulant3 =
-      ex<Tensor>(L"\\lambda", std::initializer_list<Index>{down_2}, std::initializer_list<Index>{up_2});
+  auto cumulant2 = ex<Tensor>(L"\\lambda", std::initializer_list<Index>{down_1},
+                              std::initializer_list<Index>{up_1});
+  auto cumulant3 = ex<Tensor>(L"\\lambda", std::initializer_list<Index>{down_2},
+                              std::initializer_list<Index>{up_2});
   auto cumulant_3x = cumulant * cumulant2 * cumulant3;
 
   auto a1 = ex<FNOperator>(std::initializer_list<Index>{up_0},
@@ -346,8 +352,9 @@ ExprPtr three_body_substitution(ExprPtr& input, int rank) {
               factor = antisymm::spin_sum(initial_pairing.second,
                                           initial_pairing.first, factor);
               non_canon_simplify(factor);
+            } else {
+              throw " wrong spin basis";
             }
-            else {throw " wrong spin basis";}
           }
         }
       }
@@ -387,6 +394,7 @@ ExprPtr three_body_substitution(ExprPtr& input, int rank) {
 
   return input;
 };
-}
-}
-#endif  // SEQUANT_THREE_BODY_DECOMP_H
+}  // namespace decompositions
+}  // namespace sequant
+
+#endif  // SEQUANT_DOMAIN_MBPT_RDM_HPP

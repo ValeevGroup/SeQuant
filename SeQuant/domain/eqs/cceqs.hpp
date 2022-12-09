@@ -39,8 +39,7 @@ class compute_all {
 
   void operator()(bool print = true, bool screen = true,
                   bool use_topology = true, bool use_connectivity = true,
-                  bool canonical_only = true,
-                  bool use_antisymm = true);
+                  bool canonical_only = true, bool use_antisymm = true);
 };  // class compute_all
 
 }  // namespace sequant::eqs

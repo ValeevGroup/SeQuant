@@ -429,7 +429,7 @@ class WickTheorem {
     /// before any contractions have occurred)
     /// - when an operator is connected it's removed from the partition
     /// - when it is disconnected fully it's re-added to the partition
-    container::svector<container::set<size_t>> topological_partitions;
+    container::vector<container::set<size_t>> topological_partitions;
 
     // populates partitions using the data from op_topological_partition
     void init_topological_partitions() {
@@ -464,10 +464,9 @@ class WickTheorem {
         // particle indices in the normal operators) 7/18/2022 N.B. reverse(zip)
         // for some reason is broken, hence the ugliness
         std::size_t ninserted = 0;
-        for (auto &&cre_ann :
+        for (auto &&[cre, ann] :
              zip(reverse(nop.creators()), reverse(nop.annihilators()))) {
-          input_partner_indices.emplace_back(std::get<0>(cre_ann).index(),
-                                             std::get<1>(cre_ann).index());
+          input_partner_indices.emplace_back(cre.index(), ann.index());
           ++ninserted;
         }
         std::reverse(input_partner_indices.rbegin(),

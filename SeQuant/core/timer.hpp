@@ -14,7 +14,7 @@ namespace sequant {
 /// stages of a computation with high resolution
 /// @tparam N the number of timers
 /// @note member functions are not reentrant, use one Timers object per thread
-template<size_t N = 1>
+template <size_t N = 1>
 class TimerPool {
  public:
   typedef std::chrono::duration<double> dur_t;
@@ -65,18 +65,17 @@ class TimerPool {
   // adjust reported timings is you need fine-grained timing
 };
 
-}   // namespace sequant
+}  // namespace sequant
 
-#define SEQUANT_PROFILE_SINGLE(id, call)                                    \
-    {                                                                        \
-    sequant::TimerPool<> timer;                                             \
-    timer.start();                                                           \
-    { (call); }                                                              \
-    timer.stop();                                                            \
-    auto elapsed_seconds = timer.read();                                     \
-    std::wcout << id ": elapsed_time = " << std::scientific                  \
-               << elapsed_seconds << " seconds" << std::endl;                \
-    }
+#define SEQUANT_PROFILE_SINGLE(id, call)                       \
+  {                                                            \
+    sequant::TimerPool<> timer;                                \
+    timer.start();                                             \
+    { (call); }                                                \
+    timer.stop();                                              \
+    auto elapsed_seconds = timer.read();                       \
+    std::wcout << id << ": elapsed_time = " << std::scientific \
+               << elapsed_seconds << " seconds" << std::endl;  \
+  }
 
-
-#endif //SEQUANT_TIMER_HPP
+#endif  // SEQUANT_TIMER_HPP

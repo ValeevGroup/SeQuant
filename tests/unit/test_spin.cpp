@@ -953,9 +953,9 @@ SECTION("Merge P operators") {
   auto P2 = Tensor(L"P", {}, WstrList{L"a_1", L"a_2"});
   auto P3 = Tensor(L"P", WstrList{L"i_1", L"i_2"}, WstrList{L"a_1", L"a_2"});
   auto P4 = Tensor(L"P", {}, {});
-  auto P12 = merge_operators(P1, P2);
-  auto P34 = merge_operators(P3, P4);
-  auto P11 = merge_operators(P1, P1);
+  auto P12 = merge_tensors(P1, P2);
+  auto P34 = merge_tensors(P3, P4);
+  auto P11 = merge_tensors(P1, P1);
   REQUIRE(to_latex(P12) == L"{P^{{a_1}{a_2}}_{{i_1}{i_2}}}");
   REQUIRE(to_latex(P34) == L"{P^{{a_1}{a_2}}_{{i_1}{i_2}}}");
   REQUIRE(to_latex(P11) == L"{P^{}_{{i_1}{i_2}{i_1}{i_2}}}");

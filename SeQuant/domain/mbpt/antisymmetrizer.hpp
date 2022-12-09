@@ -2,6 +2,9 @@
 // created by Conner Masteran 06/1/2021
 //
 
+#ifndef SEQUANT_DOMAIN_MBPT_ANTISYMMETRIZER_HPP
+#define SEQUANT_DOMAIN_MBPT_ANTISYMMETRIZER_HPP
+
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/tensor.hpp>
@@ -532,3 +535,5 @@ ExprPtr spin_sum(std::vector<Index> original_upper,
 }
 }  // namespace antisymm
 }  // namespace sequant
+
+#endif  // SEQUANT_DOMAIN_MBPT_ANTISYMMETRIZER_HPP
