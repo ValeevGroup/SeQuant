@@ -66,6 +66,8 @@ void scan_biparts_some_bits(std::vector<size_t> const& bs, F&& scanner) {
 /// given a number @c n, return a vector of ON bit positions
 /// only first num_bits bits will be checked from right to left
 /// in the bit representation of @c n
+/// By default the value of @c num_bits is the total number of bits in
+/// the representation of @c n.
 std::vector<size_t> on_bits_pos(size_t n, size_t num_bits = sizeof(size_t) * 8);
 
 }  // namespace detail
@@ -99,6 +101,14 @@ struct STOResult {
   container::vector<EvalNode> optimal_seqs;
 };
 
+///
+/// \tparam IdxToSz map-like {IndexSpace : size_t}
+/// \param idxsz see @c IdxToSz
+/// \param commons Index objects
+/// \param diffs   Index objects
+/// \return logarithm of the flops
+/// @note @c commons and @c diffs have unique indices individually as well as
+///       combined
 template <typename IdxToSz,
           std::enable_if_t<std::is_invocable_r_v<size_t, IdxToSz, Index>,
                            bool> = true>
@@ -173,11 +183,30 @@ STOResult single_term_opt(
   return result;
 }
 
+///
+/// any element in the vector belongs to the integral range [-1,N]
+/// where N is the length of the [Expr] (ie. the iterable of expressions)
+///   * only applicable for binary evaluations
+///   * the integer -1 can appear in certain places: it implies the binary
+///     operation between the last two expressions
+///   * eg.
+///         * {0,1,-1,2,-1} => ( (e[0], e[1]), e[2])
+///         * {0,1,-1,2,3,-1,-1} => ((e[0], e[1]), (e[2],e[3]))
+///
 using eval_seq_t = container::vector<int>;
 
+///
+/// Represents a result of optimization on a range of expressions
+/// for a binary evaluation
+///
 struct OptRes {
+  /// Free indices remaining upon evaluation
   container::vector<sequant::Index> indices;
+
+  /// The flops count of evaluation
   double flops;
+
+  /// The evaluation sequence
   eval_seq_t sequence;
 };
 
@@ -323,7 +352,6 @@ EvalNode optimize(const ExprPtr& expr, IdxToSz const& idxsz) {
   if (expr->is<Tensor>())
     return to_eval_node(expr);
   else if (expr->is<Product>()) {
-    // return *(opt::single_term_opt(expr->as<Product>()).optimal_seqs.begin());
     auto opt_expr = opt::single_term_opt_v2(expr->as<Product>(), idxsz);
     return to_eval_node(opt_expr);
   } else if (expr->is<Sum>()) {
