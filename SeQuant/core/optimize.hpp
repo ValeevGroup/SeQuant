@@ -106,19 +106,20 @@ struct STOResult {
 /// \param idxsz see @c IdxToSz
 /// \param commons Index objects
 /// \param diffs   Index objects
-/// \return logarithm of the flops
+/// \return flops count
 /// @note @c commons and @c diffs have unique indices individually as well as
 ///       combined
 template <typename IdxToSz,
           std::enable_if_t<std::is_invocable_r_v<size_t, IdxToSz, Index>,
                            bool> = true>
-double log_flops(IdxToSz const& idxsz,
+double ops_count(IdxToSz const& idxsz,
                  container::vector<Index> const& commons,
                  container::vector<Index> const& diffs) {
-  double res = 0;
-  for (auto&& idx : ranges::views::concat(commons, diffs))
-    res += std::log10(std::invoke(idxsz, idx));
-  return res;
+  double ops = 1.0;
+  for (auto&& idx: ranges::views::concat(commons,diffs))
+    ops *= std::invoke(idxsz,idx);
+  // ops == 1.0 implies both commons and diffs empty
+  return ops == 1.0 ? 0 : ops;
 }
 
 /// Perform single term optimization on a product. Deprecated.
@@ -254,11 +255,6 @@ eval_seq_t single_term_opt_v2(TensorNetwork const& network,
     nth_tensor_indices.emplace_back(std::move(bk));
   }
 
-  auto log_flops_ = [&idxsz](container::vector<Index> const& commons,
-                             container::vector<Index> const& diffs) {
-    return log_flops(idxsz, commons, diffs);
-  };
-
   container::vector<OptRes> result((1 << nt), OptRes{{}, 0, {}});
 
   // power_pos is used, and incremented, only when the
@@ -274,10 +270,11 @@ eval_seq_t single_term_opt_v2(TensorNetwork const& network,
     container::vector<Index> tindices{};
     detail::scan_biparts_some_bits(
         on_bits, [&result = std::as_const(result), &tindices, &idxsz,
-                  &log_flops_, &cost, &p1, &p2](auto p1_, auto p2_) {
+                  &cost, &p1, &p2](auto p1_, auto p2_) {
           auto [commons, diffs] =
               common_indices(result[p1_].indices, result[p2_].indices);
-          auto new_cost = log_flops_(commons, diffs) + result[p1_].flops +
+          auto new_cost =
+              ops_count(idxsz, commons, diffs) + result[p1_].flops +
                           result[p2_].flops;
           if (new_cost < cost) {
             cost = new_cost;
