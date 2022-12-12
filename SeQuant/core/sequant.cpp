@@ -89,3 +89,7 @@ SeQuant& SeQuant::set_first_dummy_index_ordinal(
 }
 
 }  // namespace sequant
+
+#ifdef SEQUANT_HAS_MIMALLOC
+#include "mimalloc-new-delete.h"
+#endif
