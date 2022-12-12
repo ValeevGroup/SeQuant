@@ -1,13 +1,14 @@
 import unittest
-import _sequant as sequant
+import _sequant as sq
 from _sequant import Tensor, Sum, Product, Expr
 
-#sequant.IndexSpace.occupied = "i"
+#sq.IndexSpace.occupied = "i"
 
 def visit(visitor, expr):
   if isinstance(expr,Sum): return visitor.Sum(*expr.summands)
-  if isinstance(expr,Product): return visitor.Product(*expr.factors)
+  if isinstance(expr,Product): return visitor.Product(expr.scalar,*expr.factors)
   if isinstance(expr,Tensor): return visitor.Tensor(expr)
+  if isinstance(expr,Constant): return visitor.Constant(expr)
   assert False, expr
 
 class TestSequant(unittest.TestCase):
@@ -29,17 +30,21 @@ class TestSequant(unittest.TestCase):
     self.assertTrue((p+s).latex)
 
   def test_ccsd(self):
-    from _sequant.mbpt import A,H,T,VacuumAverage
-    ccd = VacuumAverage( A(2) * H() * T(2) * T(2), [(1, 2), (1, 3)] );
-    print (ccd.latex)
+    from _sequant.mbpt import A,H,T,T_,VacuumAverage
+    ccd = VacuumAverage( A(2) * H() * T_(2) * T_(2), [(1, 2), (1, 3)] );
+    ccsd = VacuumAverage( A(2) * H() * T(2) * T(2), [(1, 2), (1, 3)] );
+    print (ccsd.latex)
 
     class String:
       def Sum(self,*args):
         return "(%s)" % " + ".join(visit(self,a) for a in args)
-      def Product(self,*args):
-        return " * ".join(visit(self,a) for a in args)
+      def Product(self,pfac,*factors):
+        pfac_str = (str(pfac) + " * ") if pfac != 1 else ""
+        return pfac_str + " * ".join(visit(self,a) for a in factors)
       def Tensor(self,arg):
         return '%s[%s]' % (arg.label,",".join('"%s"' % a for a in arg.braket))
+      def Constant(self,arg):
+        return '%s' % arg
 
     s = visit(String(), ccd)
     print (s)
