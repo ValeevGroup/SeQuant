@@ -14,10 +14,11 @@ class cceqvec {
  public:
   cceqvec(size_t n, size_t p = std::numeric_limits<size_t>::max(),
           size_t pmin = 1);
-  std::vector<sequant::ExprPtr> operator()(bool screen, bool use_topology,
-                                           bool use_connectivity,
-                                           bool canonical_only,
-                                           bool use_antisymm);
+  std::vector<sequant::ExprPtr> operator()(bool screen = true,
+                                           bool use_topology = true,
+                                           bool use_connectivity = true,
+                                           bool canonical_only = true,
+                                           bool use_antisymm = true);
 };  // class cceqvec
 
 class compute_cceqvec {
@@ -41,6 +42,8 @@ class compute_all {
                   bool use_topology = true, bool use_connectivity = true,
                   bool canonical_only = true, bool use_antisymm = true);
 };  // class compute_all
+
+extern TimerPool<32> tpool;
 
 }  // namespace sequant::eqs
 #endif  // SEQUANT_EQS_CCEQS_HPP

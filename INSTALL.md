@@ -21,3 +21,4 @@ useful CMake variables:
   * `BUILD_TESTING` --- enables unit tests targets, e.g. `check-sequant` [default=ON]
   * `CMAKE_CXX_COMPILER` --- specifies the C++ compiler to use
   * `CMAKE_PREFIX_PATH` --- this semicolon-separated list specifies search paths for dependencies (Boost, Range-V3, etc.)
+  * `SEQUANT_MIMALLOC` --- use [mimalloc](https://github.com/microsoft/mimalloc) for fast memory allocation

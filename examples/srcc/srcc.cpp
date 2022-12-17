@@ -1,4 +1,5 @@
 #include <SeQuant/core/op.hpp>
+#include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/timer.hpp>
 #include <SeQuant/domain/eqs/cceqs.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -47,7 +48,7 @@ int main(int argc, char* argv[]) {
                            [=](const bool canonical_only) {
                              // TODO tpool was in scope before
                              // separting header and source files
-                             // tpool.clear();
+                             sequant::eqs::tpool.clear();
                              // comment out to run all possible combinations
                              if (screen && use_topology && canonical_only)
                                compute_all{NMAX}(print, screen, use_topology,

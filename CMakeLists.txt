@@ -290,6 +290,12 @@ if (SEQUANT_EVAL_TESTS)
     include(FindOrFetchTiledArray)
 endif (SEQUANT_EVAL_TESTS)
 
+if (SEQUANT_MIMALLOC)
+    find_package(mimalloc REQUIRED)
+    target_link_libraries(SeQuant PUBLIC mimalloc)
+    target_compile_definitions(SeQuant PUBLIC SEQUANT_HAS_MIMALLOC=1)
+endif()
+
 ### unit tests
 include(CTest)
 

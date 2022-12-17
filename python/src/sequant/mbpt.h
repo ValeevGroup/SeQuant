@@ -34,6 +34,7 @@ inline void __init__(py::module m) {
 
   m.def(SR_OP(A));
   m.def(SR_OP(T));
+  m.def(SR_OP(T_));
 
   m.def("VacuumAverage", &VacuumAverage<>);
   m.def("VacuumAverage", &VacuumAverage<std::vector<std::pair<int, int> > >);
