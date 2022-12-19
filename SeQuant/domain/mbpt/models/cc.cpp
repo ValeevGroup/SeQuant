@@ -1,4 +1,4 @@
-#include "cceqs.hpp"
+#include <SeQuant/domain/mbpt/models/cc.hpp>
 
 #include <clocale>
 #include <iostream>
@@ -15,16 +15,13 @@
 #endif
 
 #include <SeQuant/core/op.hpp>
-#include <SeQuant/core/timer.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/models/cc.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
 #include <SeQuant/domain/mbpt/sr/sr.hpp>
 
-namespace sequant::eqs {
-
-using namespace sequant;
-using namespace sequant::mbpt::sr::so;
+namespace sequant::mbpt::sr::so {
 
 namespace {
 
@@ -144,6 +141,11 @@ class ccresidual {
 
   ExprPtr operator()(bool screen, bool use_topology, bool use_connectivity,
                      bool canonical_only, bool antisymm) {
+    // currently topological equivalence of indices within a normal operator is
+    // not detected, assumed based on use_topology ... so turn off use of
+    // topology if antisymm=false
+    if (!antisymm) use_topology = false;
+
     auto ahbar = [=](const bool screen) {
       auto connect = [=](std::initializer_list<std::pair<int, int>> connlist) {
         if (use_connectivity)
@@ -191,80 +193,32 @@ class ccresidual_vec {
   ccresidual_vec(size_t p, size_t pmin, size_t n) : P(p), PMIN(pmin), N(n) {}
 
   void operator()(std::vector<ExprPtr>& result, bool screen, bool use_topology,
-                  bool use_connectivity, bool canonical_only,
-                  bool use_antisymm) {
+                  bool use_connectivity, bool canonical_only, bool antisymm) {
     result[P] = ccresidual{P, N}(screen, use_topology, use_connectivity,
-                                 canonical_only, use_antisymm);
+                                 canonical_only, antisymm);
     rapid_simplify(result[P]);
     if (P > PMIN)
       ccresidual_vec{P - 1, PMIN, N}(result, screen, use_topology,
                                      use_connectivity, canonical_only,
-                                     use_antisymm);
+                                     antisymm);
   }
 };  // class ccresidual_vec
 
 }  // namespace
 
-cceqvec::cceqvec(size_t n, size_t p, size_t pmin)
-    : N(n), P(p == std::numeric_limits<size_t>::max() ? n : p), PMIN(pmin) {}
+cceqvec::cceqvec(size_t n, bool antisymm, size_t p, size_t pmin)
+    : N(n),
+      P(p == std::numeric_limits<size_t>::max() ? n : p),
+      PMIN(pmin),
+      antisymm(antisymm) {}
 
 std::vector<ExprPtr> cceqvec::operator()(bool screen, bool use_topology,
                                          bool use_connectivity,
-                                         bool canonical_only,
-                                         bool use_antisymm) {
+                                         bool canonical_only) {
   std::vector<ExprPtr> result(P + 1);
   ccresidual_vec{P, PMIN, N}(result, screen, use_topology, use_connectivity,
-                             canonical_only, use_antisymm);
+                             canonical_only, antisymm);
   return result;
 }
 
-#define runtime_assert(tf)                                         \
-  if (!(tf)) {                                                     \
-    std::ostringstream oss;                                        \
-    oss << "failed assert at line " << __LINE__ << " in function " \
-        << __func__;                                               \
-    throw std::runtime_error(oss.str().c_str());                   \
-  }
-
-TimerPool<32> tpool;
-
-compute_cceqvec::compute_cceqvec(size_t p, size_t pmin, size_t n)
-    : P(p), PMIN(pmin), N(n) {}
-
-void compute_cceqvec::operator()(bool print, bool screen, bool use_topology,
-                                 bool use_connectivity, bool canonical_only,
-                                 bool use_antisymm) {
-  tpool.start(N);
-  auto eqvec = cceqvec{N, P}(screen, use_topology, use_connectivity,
-                             canonical_only, use_antisymm);
-  tpool.stop(N);
-  std::wcout << std::boolalpha << "expS" << N << "[screen=" << screen
-             << ",use_topology=" << use_topology
-             << ",use_connectivity=" << use_connectivity
-             << ",canonical_only=" << canonical_only
-             << ",use_antisymm=" << use_antisymm << "] computed in "
-             << tpool.read(N) << " seconds" << std::endl;
-  for (size_t R = PMIN; R <= P; ++R) {
-    std::wcout << "R" << R << "(expS" << N << ") has " << eqvec[R]->size()
-               << " terms:" << std::endl;
-    if (print) std::wcout << to_latex_align(eqvec[R], 20, 3) << std::endl;
-
-    // validate known sizes of some CC residuals
-    if (R == 1 && N == 2) runtime_assert(eqvec[R]->size() == 14);
-    if (R == 2 && N == 2) runtime_assert(eqvec[R]->size() == 31);
-    if (R == 3 && N == 3) runtime_assert(eqvec[R]->size() == 47);
-    if (R == 4 && N == 4) runtime_assert(eqvec[R]->size() == 74);
-    if (R == 5 && N == 5) runtime_assert(eqvec[R]->size() == 99);
-  }
-}
-
-compute_all::compute_all(size_t nmax) : NMAX(nmax) {}
-
-void compute_all::operator()(bool print, bool screen, bool use_topology,
-                             bool use_connectivity, bool canonical_only,
-                             bool use_antisymm) {
-  for (size_t N = 2; N <= NMAX; ++N)
-    compute_cceqvec{N, 1, N}(print, screen, use_topology, use_connectivity,
-                             canonical_only, use_antisymm);
-}
-}  // namespace sequant::eqs
+}  // namespace sequant::mbpt::sr::so
