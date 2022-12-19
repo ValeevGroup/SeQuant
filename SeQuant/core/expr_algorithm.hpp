@@ -431,6 +431,16 @@ inline ExprPtr& simplify(ExprPtr& expr) {
   return expr;
 }
 
+/// Simplifies an Expr by a combination of expansion, canonicalization, and
+/// rapid_simplify; like mutating simplify() but works for temporary expressions
+/// @param[in] expr_rv rvalue-ref-to-expression to be simplified
+/// @return simplified form of \p expr_rv
+inline ExprPtr simplify(ExprPtr&& expr_rv) {
+  auto expr = std::move(expr_rv);
+  simplify(expr);
+  return std::move(expr);
+}
+
 /// Simplifies an Expr by a combination of expansion and
 /// rapid_simplify
 /// @param[in,out] expr expression to be simplified; may be

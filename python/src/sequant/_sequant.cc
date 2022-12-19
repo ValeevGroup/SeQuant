@@ -57,6 +57,9 @@ py::object factors(ExprPtr &expr) {
   return py::none();
 }
 
+// disambiguates sequant::simplify
+ExprPtr &simplify(ExprPtr &expr) { return sequant::simplify(expr); }
+
 }  // namespace sequant::python
 
 PYBIND11_MODULE(_sequant, m) {
@@ -107,7 +110,7 @@ PYBIND11_MODULE(_sequant, m) {
 
   py::class_<Sum, std::shared_ptr<Sum>, Expr>(m, "Sum");
 
-  m.def("simplify", &sequant::simplify);
+  m.def("simplify", &sequant::python::simplify);
 
   python::mbpt::__init__(m.def_submodule("mbpt"));
 }
