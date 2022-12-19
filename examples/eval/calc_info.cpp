@@ -3,7 +3,7 @@
 //
 
 #include "calc_info.hpp"
-#include <SeQuant/domain/eqs/cceqs.hpp>
+#include <SeQuant/domain/mbpt/models/cc.hpp>
 
 namespace sequant::eval {
 
@@ -11,9 +11,12 @@ struct IndexToSize {
   static const size_t nocc = 10;
   static const size_t nvirt = 100;
   auto operator()(Index const& idx) const {
-    if (idx.space() == IndexSpace::active_occupied) return nocc;
-    else if (idx.space() == IndexSpace::active_unoccupied) return nvirt;
-    else throw std::runtime_error("Unsupported IndexSpace type encountered");
+    if (idx.space() == IndexSpace::active_occupied)
+      return nocc;
+    else if (idx.space() == IndexSpace::active_unoccupied)
+      return nvirt;
+    else
+      throw std::runtime_error("Unsupported IndexSpace type encountered");
   }
 };
 
@@ -34,8 +37,8 @@ container::vector<EvalNode> CalcInfo::nodes(
 }
 
 container::vector<ExprPtr> CalcInfo::exprs() const {
-  auto exprs = eqs::cceqvec{eqn_opts.excit, eqn_opts.excit}(true, true, true,
-                                                            true, true);
+  auto exprs = mbpt::sr::so::cceqvec{eqn_opts.excit, /* antisymm = */ true,
+                                     eqn_opts.excit}();
   return exprs | ranges::views::tail |
          ranges::views::transform([this](ExprPtr const& xpr) {
            return eqn_opts.spintrace ? closed_shell_CC_spintrace(xpr) : xpr;
