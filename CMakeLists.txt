@@ -242,8 +242,8 @@ add_library(SeQuant
         SeQuant/domain/eqs/cceqs.cpp
         SeQuant/domain/eval/eval.hpp
         SeQuant/domain/eval/cache_manager.hpp
-        SeQuant/domain/utils/rand_color.cpp
-        SeQuant/domain/utils/rand_color.hpp
+        SeQuant/core/util/rand_color.cpp
+        SeQuant/core/util/rand_color.hpp
         SeQuant/domain/mbpt/convention.cpp
         SeQuant/domain/mbpt/convention.hpp
         SeQuant/domain/mbpt/op.cpp
