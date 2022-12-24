@@ -1,11 +1,11 @@
-#ifndef SEQUANT_UTIL_RAND_COLOR_HPP
-#define SEQUANT_UTIL_RAND_COLOR_HPP
+#ifndef SEQUANT_UTILS_RAND_COLOR_HPP
+#define SEQUANT_UTILS_RAND_COLOR_HPP
 
 #include <array>
 #include <random>
 #include <set>
 
-namespace sequant::utils {
+namespace sequant {
 
 /**
  * Random color generator.
@@ -67,6 +67,6 @@ class RandColor {
                                           double brightness);
 };
 
-}  // namespace sequant::utils
+}  // namespace sequant
 
-#endif  // SEQUANT_UTIL_RAND_COLOR_HPP
+#endif  // SEQUANT_UTILS_RAND_COLOR_HPP

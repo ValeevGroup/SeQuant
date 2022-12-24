@@ -1,10 +1,10 @@
-#include "rand_color.hpp"
+#include <SeQuant/core/util/rand_color.hpp>
 
 #include <array>
 #include <ctime>
 #include <random>
 
-namespace sequant::utils {
+namespace sequant {
 
 RandColor::RandColor()
     : randEngine{[]() {
@@ -78,4 +78,4 @@ std::array<size_t, 3> RandColor::hsv_to_rgb(double h, double s, double v) {
   };
 };
 
-}  // namespace sequant::utils
+}  // namespace sequant

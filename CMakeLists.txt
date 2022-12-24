@@ -58,9 +58,9 @@ if (NOT CMAKE_CXX_COMPILER MATCHES ".*/ccache$")
     find_program(CCACHE_EXECUTABLE ccache)
     if (CCACHE_EXECUTABLE)
         mark_as_advanced(CCACHE_EXECUTABLE)
-        set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ${CCACHE_EXECUTABLE})
-        set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK ${CCACHE_EXECUTABLE})
         message(STATUS "Found ccache: ${CCACHE_EXECUTABLE}")
+        set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_EXECUTABLE}" CACHE STRING "Compiler launcher to use for compiling C++")
+        set(CMAKE_C_COMPILER_LAUNCHER "${CCACHE_EXECUTABLE}" CACHE STRING "Compiler launcher to use for compiling C")
     else ()
         set(CCACHE_EXECUTABLE "")
     endif ()
@@ -240,12 +240,12 @@ add_library(SeQuant
         SeQuant/core/parse/rpn.cpp
         SeQuant/core/parse/regex_sequant.hpp
         SeQuant/core/parse/regex_sequant.cpp
-        SeQuant/domain/eqs/cceqs.hpp
-        SeQuant/domain/eqs/cceqs.cpp
+        SeQuant/core/util/rand_color.cpp
+        SeQuant/core/util/rand_color.hpp
+        SeQuant/domain/mbpt/models/cc.cpp
+        SeQuant/domain/mbpt/models/cc.hpp
         SeQuant/domain/eval/eval.hpp
         SeQuant/domain/eval/cache_manager.hpp
-        SeQuant/domain/utils/rand_color.cpp
-        SeQuant/domain/utils/rand_color.hpp
         SeQuant/domain/mbpt/convention.cpp
         SeQuant/domain/mbpt/convention.hpp
         SeQuant/domain/mbpt/op.cpp
@@ -291,6 +291,12 @@ add_library(SeQuant::SeQuant ALIAS SeQuant)  # to be able to use as subproject
 if (SEQUANT_EVAL_TESTS)
     include(FindOrFetchTiledArray)
 endif (SEQUANT_EVAL_TESTS)
+
+if (SEQUANT_MIMALLOC)
+    find_package(mimalloc REQUIRED)
+    target_link_libraries(SeQuant PUBLIC mimalloc)
+    target_compile_definitions(SeQuant PUBLIC SEQUANT_HAS_MIMALLOC=1)
+endif()
 
 ### unit tests
 include(CTest)

@@ -1,7 +1,7 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/timer.hpp>
-#include <SeQuant/domain/eqs/cceqs.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/models/cc.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
 #include <clocale>
@@ -58,7 +58,7 @@ int main(int argc, char* argv[]) {
   };
 
   // Spin-orbital coupled cluster
-  auto cc_r = sequant::eqs::cceqvec{NMAX, NMAX}(true, true, true, true, true);
+  auto cc_r = sequant::mbpt::sr::so::cceqvec{NMAX, true}();
   for (auto i = 1; i < cc_r.size(); ++i) {
     std::cout << "Spin-orbital CC R" << i << " size: " << cc_r[i]->size()
               << "\n";
@@ -124,20 +124,20 @@ int main(int argc, char* argv[]) {
 
   if (NMAX == 4) {
     runtime_assert(os_cc_st_r.size() == 5)
-    runtime_assert(os_cc_st_r.at(1).at(0)->size() == 30)   // T1a
-    runtime_assert(os_cc_st_r.at(2).at(1)->size() == 130)  // T2ab
-    runtime_assert(os_cc_st_r.at(2).at(2)->size() == 74)   // T2bb
-    runtime_assert(os_cc_st_r.at(3).at(1)->size() == 249)  // T3aab
-    runtime_assert(os_cc_st_r.at(3).at(3)->size() == 124)  // T3bbb
-    runtime_assert(os_cc_st_r.at(4).at(1)->size() == 356)  // T4aaab
-    runtime_assert(os_cc_st_r.at(4).at(2)->size() == 386)  // T4aabb
-    runtime_assert(os_cc_st_r.at(4).at(4)->size() == 156)  // T4bbbb
+        runtime_assert(os_cc_st_r.at(1).at(0)->size() == 30)   // T1a
+        runtime_assert(os_cc_st_r.at(2).at(1)->size() == 130)  // T2ab
+        runtime_assert(os_cc_st_r.at(2).at(2)->size() == 74)   // T2bb
+        runtime_assert(os_cc_st_r.at(3).at(1)->size() == 249)  // T3aab
+        runtime_assert(os_cc_st_r.at(3).at(3)->size() == 124)  // T3bbb
+        runtime_assert(os_cc_st_r.at(4).at(1)->size() == 356)  // T4aaab
+        runtime_assert(os_cc_st_r.at(4).at(2)->size() == 386)  // T4aabb
+        runtime_assert(os_cc_st_r.at(4).at(4)->size() == 156)  // T4bbbb
   } else if (NMAX == 3) {
     runtime_assert(os_cc_st_r.size() == 4)
-    runtime_assert(os_cc_st_r.at(1).at(0)->size() == 30)   // T1a
-    runtime_assert(os_cc_st_r.at(2).at(0)->size() == 65)   // T2aa
-    runtime_assert(os_cc_st_r.at(2).at(1)->size() == 122)  // T2ab
-    runtime_assert(os_cc_st_r.at(3).at(2)->size() == 209)  // T3abb
-    runtime_assert(os_cc_st_r.at(3).at(3)->size() == 75)   // T3bbb
+        runtime_assert(os_cc_st_r.at(1).at(0)->size() == 30)   // T1a
+        runtime_assert(os_cc_st_r.at(2).at(0)->size() == 65)   // T2aa
+        runtime_assert(os_cc_st_r.at(2).at(1)->size() == 122)  // T2ab
+        runtime_assert(os_cc_st_r.at(3).at(2)->size() == 209)  // T3abb
+        runtime_assert(os_cc_st_r.at(3).at(3)->size() == 75)   // T3bbb
   }
 }

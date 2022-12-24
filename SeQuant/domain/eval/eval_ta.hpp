@@ -3,15 +3,12 @@
 
 #include <SeQuant/domain/eval/eval.hpp>
 
-#include <TiledArray/expressions/contraction_helpers.h>
+#include <TiledArray/expressions/einsum.h>
 #include <TiledArray/expressions/index_list.h>
 #include <tiledarray.h>
 #include <range/v3/all.hpp>
 
 namespace sequant::eval {
-
-template <typename DistArrayTot, typename DistArray>
-using tot_result_t = std::variant<DistArrayTot, DistArray>;
 
 namespace detail {
 
@@ -44,24 +41,24 @@ Tensor_t eval_inode(EvalNode const& node, Tensor_t const& leval,
   auto const& lannot = node.left()->annot();
   auto const& rannot = node.right()->annot();
 
-  auto result = Tensor_t{};
-  if (node->op() == EvalOp::Prod) {
-    // prod
-    result(this_annot) = (lscal * rscal) * leval(lannot) * reval(rannot);
-  } else {
-    // sum
-    result(this_annot) = lscal * leval(lannot) + rscal * reval(rannot);
+  Tensor_t result;
+  {
+    if (node->op() == EvalOp::Prod) {
+      // prod
+      result(this_annot) = (lscal * rscal) * leval(lannot) * reval(rannot);
+    } else {
+      // sum
+      result(this_annot) = lscal * leval(lannot) + rscal * reval(rannot);
+    }
   }
+  Tensor_t::wait_for_lazy_cleanup(result.world());
 
-  TA::get_default_world().gop.fence();
   return result;
 }
 
-template <typename DA_tot, typename DA>
-tot_result_t<DA_tot, DA> eval_inode_tot(EvalNode const& node,
-                                        tot_result_t<DA_tot, DA> const& leval,
-                                        tot_result_t<DA_tot, DA> const& reval) {
-  using tot_result_t_ = tot_result_t<DA_tot, DA>;
+template <typename Tensor_t>
+Tensor_t eval_inode_tot(EvalNode const& node, Tensor_t const& leval,
+                        Tensor_t const& reval) {
   assert((node->op() == EvalOp::Sum || node->op() == EvalOp::Prod) &&
          "unsupported intermediate operation");
 
@@ -78,74 +75,27 @@ tot_result_t<DA_tot, DA> eval_inode_tot(EvalNode const& node,
   auto const& lannot = node.left()->annot();
   auto const& rannot = node.right()->annot();
 
-  struct {
-    std::string const& lannot;
-    std::string const& rannot;
-    std::string const& this_annot;
-    double lscal;
-    double rscal;
-    tot_result_t_ operator()(DA_tot const& lhs, DA_tot const& rhs) {
-      DA_tot result{};
-      result(this_annot) = lscal * lhs(lannot) + rscal * rhs(rannot);
-      return tot_result_t_{result};
+  Tensor_t result;
+  {
+    if (node->op() == EvalOp::Prod) {
+      // prod
+      // result(this_annot) = (lscal * rscal) * leval(lannot) * reval(rannot);
+      decltype(result) unscaled =
+          TA::expressions::einsum(leval(lannot), reval(rannot), this_annot);
+      result(this_annot) = (lscal * rscal) * unscaled(this_annot);
+    } else {
+      // sum
+      result(this_annot) = lscal * leval(lannot) + rscal * reval(rannot);
     }
-    tot_result_t_ operator()(DA const& lhs, DA const& rhs) {
-      DA result{};
-      result(this_annot) = lscal * lhs(lannot) + rscal * rhs(rannot);
-      return tot_result_t_{result};
-    }
-    tot_result_t_ operator()(DA_tot const& lhs, DA const& rhs) {
-      throw std::runtime_error(
-          "Attempted to sum tensor-of-tensor with tensor!");
-    }
-    tot_result_t_ operator()(DA const& lhs, DA_tot const& rhs) {
-      return operator()(rhs, lhs);
-    }
-  } visitor_for_sum{lannot, rannot, this_annot, lscal, rscal};
+  }
+  Tensor_t::wait_for_lazy_cleanup(result.world());
 
-  struct {
-    std::string lannot;
-    std::string rannot;
-    std::string const& this_annot;
-    double lscal;
-    double rscal;
-    tot_result_t_ operator()(DA_tot const& lhs, DA_tot const& rhs) {
-      DA_tot unscaled{}, scaled{};
-      TA::expressions::einsum(unscaled(this_annot), lhs(lannot), rhs(rannot));
-      scaled(this_annot) = (lscal * rscal) * unscaled(this_annot);
-      return tot_result_t_{scaled};
-    }
-    tot_result_t_ operator()(DA_tot const& lhs, DA const& rhs) {
-      std::swap(lannot, rannot);
-      return operator()(rhs, lhs);
-    }
-    tot_result_t_ operator()(DA const& lhs, DA_tot const& rhs) {
-      DA_tot unscaled{}, scaled{};
-      TA::expressions::einsum(unscaled(this_annot), lhs(lannot), rhs(rannot));
-      scaled(this_annot) = (lscal * rscal) * unscaled(this_annot);
-      return tot_result_t_{scaled};
-    }
-    tot_result_t_ operator()(DA const& lhs, DA const& rhs) {
-      DA scaled{};
-      scaled(this_annot) = (lscal * rscal) * lhs(lannot) * rhs(rannot);
-      return tot_result_t_{scaled};
-    }
-  } visitor_for_prod{lannot, rannot, this_annot, lscal, rscal};
-
-  if (node->op() == EvalOp::Sum) {
-    auto result = std::visit(visitor_for_sum, leval, reval);
-    TA::get_default_world().gop.fence();
-    return result;
-  } else /* node->op() == EvalOp::Prod */ {
-    auto result = std::visit(visitor_for_prod, leval, reval);
-    TA::get_default_world().gop.fence();
-    return result;
-  }  // else { // unreachable }
+  return result;
 }
 
 template <typename Tensor_t, typename Yielder>
 Tensor_t eval_single_node(EvalNode const& node, Yielder&& leaf_evaluator,
-                          CacheManager<Tensor_t>& cache_manager) {
+                          CacheManager<Tensor_t const>& cache_manager) {
   static_assert(
       std::is_invocable_r_v<Tensor_t, Yielder, sequant::Tensor const&>);
 
@@ -154,44 +104,55 @@ Tensor_t eval_single_node(EvalNode const& node, Yielder&& leaf_evaluator,
   if (auto&& exists = cache_manager.access(key); exists && exists.value())
     return *exists.value();
 
-  return node.leaf()
-             ? *cache_manager.store(key, leaf_evaluator(node->tensor()))
-             : *cache_manager.store(
-                   key,
-                   eval_inode(
-                       node,
-                       eval_single_node(node.left(),
-                                        std::forward<Yielder>(leaf_evaluator),
-                                        cache_manager),
-                       eval_single_node(node.right(),
-                                        std::forward<Yielder>(leaf_evaluator),
-                                        cache_manager)));
+  Tensor_t result;
+  {
+    result =
+        node.leaf()
+            ? *cache_manager.store(key, leaf_evaluator(node->tensor()))
+            : *cache_manager.store(
+                  key,
+                  eval_inode(
+                      node,
+                      eval_single_node(node.left(),
+                                       std::forward<Yielder>(leaf_evaluator),
+                                       cache_manager),
+                      eval_single_node(node.right(),
+                                       std::forward<Yielder>(leaf_evaluator),
+                                       cache_manager)));
+  }
+  Tensor_t::wait_for_lazy_cleanup(result.world());
+  return result;
 }
 
-template <typename DA_tot, typename DA, typename Yielder>
-tot_result_t<DA_tot, DA> eval_single_node_tot(
-    EvalNode const& node, Yielder&& leaf_evaluator,
-    CacheManager<tot_result_t<DA_tot, DA>>& cache_manager) {
-  static_assert(std::is_invocable_r_v<tot_result_t<DA_tot, DA>, Yielder,
-                                      sequant::Tensor const&>);
+template <typename Tensor_t, typename Yielder>
+Tensor_t eval_single_node_tot(EvalNode const& node, Yielder&& leaf_evaluator,
+                              CacheManager<Tensor_t const>& cache_manager) {
+  static_assert(
+      std::is_invocable_r_v<Tensor_t, Yielder, sequant::Tensor const&>);
 
   auto const key = node->hash();
 
   if (auto&& exists = cache_manager.access(key); exists && exists.value())
     return *exists.value();
 
-  return node.leaf()
-             ? *cache_manager.store(key, leaf_evaluator(node->tensor()))
-             : *cache_manager.store(
-                   key,
-                   eval_inode_tot(
-                       node,
-                       eval_single_node_tot(
-                           node.left(), std::forward<Yielder>(leaf_evaluator),
-                           cache_manager),
-                       eval_single_node_tot(
-                           node.right(), std::forward<Yielder>(leaf_evaluator),
-                           cache_manager)));
+  Tensor_t result;
+  {
+    result =
+        node.leaf()
+            ? *cache_manager.store(key, leaf_evaluator(node->tensor()))
+            : *cache_manager.store(
+                  key,
+                  eval_inode_tot(
+                      node,
+                      eval_single_node_tot(
+                          node.left(), std::forward<Yielder>(leaf_evaluator),
+                          cache_manager),
+                      eval_single_node_tot(
+                          node.right(), std::forward<Yielder>(leaf_evaluator),
+                          cache_manager)));
+  }
+  Tensor_t::wait_for_lazy_cleanup(result.world());
+  return result;
 }
 
 }  // namespace detail
@@ -214,10 +175,11 @@ tot_result_t<DA_tot, DA> eval_single_node_tot(
 /// \return Tensor_t
 template <typename Tensor_t, typename Iterable, typename Yielder>
 auto eval(EvalNode const& node, Iterable const& target_indx_labels,
-          Yielder&& yielder, CacheManager<Tensor_t>& man) {
+          Yielder&& yielder, CacheManager<Tensor_t const>& man) {
   static_assert(
       std::is_invocable_r_v<Tensor_t, Yielder, sequant::Tensor const&>);
 
+#ifndef NDEBUG
   auto ti_sorted_input =
       target_indx_labels | ranges::to<container::svector<std::string>>;
   ranges::sort(ti_sorted_input);
@@ -228,29 +190,33 @@ auto eval(EvalNode const& node, Iterable const& target_indx_labels,
   ranges::sort(ti_sorted_node);
 
   assert(ti_sorted_input == ti_sorted_node && "Invalid target indices");
+#endif
 
-  auto result =
-      detail::eval_single_node(node, std::forward<Yielder>(yielder), man);
+  Tensor_t scaled;
+  {
+    auto result =
+        detail::eval_single_node(node, std::forward<Yielder>(yielder), man);
 
-  std::string lannot = ranges::front(target_indx_labels);
-  for (auto const& lbl : ranges::views::tail(target_indx_labels))
-    lannot += std::string{','} + lbl;
+    std::string lannot = ranges::front(target_indx_labels);
+    for (auto const& lbl : ranges::views::tail(target_indx_labels))
+      lannot += std::string{','} + lbl;
 
-  auto scaled = decltype(result){};
-  scaled(lannot) = node->scalar().value().real() * result(node->annot());
-  TA::get_default_world().gop.fence();
+    scaled = decltype(result){};
+    scaled(lannot) = node->scalar().value().real() * result(node->annot());
+  }
+  Tensor_t::wait_for_lazy_cleanup(scaled.world());
+
   return scaled;
 }
 
-template <
-    typename DA_tot, typename DA, typename Iterable1, typename Iterable2,
-    typename Yielder,
-    std::enable_if_t<std::is_invocable_r_v<tot_result_t<DA_tot, DA>, Yielder,
-                                           sequant::Tensor const&>,
-                     bool> = true>
-DA_tot eval_tot(EvalNode const& node, Iterable1 const& outer_indx_labels,
-                Iterable2 const& inner_indx_labels, Yielder&& yielder,
-                CacheManager<tot_result_t<DA_tot, DA>>& man) {
+template <typename Tensor_t, typename Iterable1, typename Iterable2,
+          typename Yielder,
+          std::enable_if_t<
+              std::is_invocable_r_v<Tensor_t, Yielder, sequant::Tensor const&>,
+              bool> = true>
+Tensor_t eval_tot(EvalNode const& node, Iterable1 const& outer_indx_labels,
+                  Iterable2 const& inner_indx_labels, Yielder&& yielder,
+                  CacheManager<Tensor_t const>& man) {
   auto bpindx_rcvd =
       TA::expressions::BipartiteIndexList{outer_indx_labels, inner_indx_labels};
   auto bpindx_exst = TA::expressions::BipartiteIndexList{node->annot()};
@@ -258,15 +224,18 @@ DA_tot eval_tot(EvalNode const& node, Iterable1 const& outer_indx_labels,
          bpindx_exst.second().is_permutation(bpindx_exst.second()) &&
          "Invalid target index labels");
 
-  auto result_ =
-      detail::eval_single_node_tot(node, std::forward<Yielder>(yielder), man);
-  DA_tot result = std::get<DA_tot>(result_);
+  Tensor_t scaled;
+  {
+    auto result =
+        detail::eval_single_node_tot(node, std::forward<Yielder>(yielder), man);
 
-  auto const lannot = static_cast<std::string>(bpindx_rcvd);
+    auto const lannot =
+        bpindx_rcvd.first().string() + ";" + bpindx_rcvd.second().string();
+    scaled = decltype(result){};
+    scaled(lannot) = node->scalar().value().real() * result(node->annot());
+  }
+  Tensor_t::wait_for_lazy_cleanup(scaled.world());
 
-  auto scaled = decltype(result){};
-  scaled(lannot) = node->scalar().value().real() * result(node->annot());
-  TA::get_default_world().gop.fence();
   return scaled;
 }
 
@@ -288,57 +257,28 @@ DA_tot eval_tot(EvalNode const& node, Iterable1 const& outer_indx_labels,
 /// \return Tensor_t
 template <typename Tensor_t, typename Iterable, typename Yielder>
 auto eval_symm(EvalNode const& node, Iterable const& target_indx_labels,
-               Yielder&& yielder, CacheManager<Tensor_t>& man) {
-  auto result =
-      eval(node, target_indx_labels, std::forward<Yielder>(yielder), man);
+               Yielder&& yielder, CacheManager<Tensor_t const>& man) {
+  Tensor_t symm_result;
+  {
+    auto result =
+        eval(node, target_indx_labels, std::forward<Yielder>(yielder), man);
 
-  auto symm_result = decltype(result){result.world(), result.trange()};
-  symm_result.fill(0);
+    symm_result = decltype(result){result.world(), result.trange()};
+    symm_result.fill(0);
 
-  auto const lannot = detail::ords_to_annot(
-      ranges::views::iota(size_t{0}, result.trange().rank()) |
-      ranges::to_vector);
+    auto const lannot = detail::ords_to_annot(
+        ranges::views::iota(size_t{0}, result.trange().rank()) |
+        ranges::to_vector);
 
-  auto sym_impl = [&result, &symm_result, &lannot](auto const& perm) {
-    symm_result(lannot) += result(detail::ords_to_annot(perm));
-  };
+    auto sym_impl = [&result, &symm_result, &lannot](auto const& perm) {
+      symm_result(lannot) += result(detail::ords_to_annot(perm));
+    };
 
-  symmetrize_tensor(result.trange().rank(), sym_impl);
-  TA::get_default_world().gop.fence();
+    symmetrize_tensor(result.trange().rank(), sym_impl);
+  }
+  Tensor_t::wait_for_lazy_cleanup(symm_result.world());
+
   return symm_result;
-}
-
-template <typename DA_tot, typename DA, typename Iterable1, typename Iterable2,
-          typename Yielder>
-auto eval_symm_tot(EvalNode const& node, Iterable1 const& outer_indx_labels,
-                   Iterable2 const& inner_indx_labels, Yielder&& yielder,
-                   CacheManager<tot_result_t<DA_tot, DA>>& man) {
-  assert(node->tensor().bra_rank() == node->tensor().ket_rank() &&
-         "Cannot do particle symmetrization on tensor with unequal bra and ket "
-         "ranks!");
-  size_t const rank = node->tensor().bra_rank();
-  auto const lannot_outer =
-      detail::ords_to_annot(ranges::views::iota(size_t{0}, rank));
-  auto const lannot_inner =
-      detail::ords_to_annot(ranges::views::iota(size_t{rank}, 2 * rank));
-  auto const lannot = lannot_outer + ";" + lannot_inner;
-
-  auto const eval_result = eval_tot(node, outer_indx_labels, inner_indx_labels,
-                                    std::forward<Yielder>(yielder), man);
-  auto result = eval_result;
-  result(lannot) -= eval_result(lannot);  // zero tot with the shape of result
-
-  auto symm_tot_impl = [rank, &result, &lannot,
-                        &eval_result](eval::perm_type const& perm) {
-    auto const rannot =
-        detail::ords_to_annot(perm | ranges::views::take(rank)) + ";" +
-        detail::ords_to_annot(perm | ranges::views::drop(rank));
-    result(lannot) += eval_result(rannot);
-  };
-
-  symmetrize_tensor(rank * 2, symm_tot_impl);
-  TA::get_default_world().gop.fence();
-  return result;
 }
 
 ///
@@ -359,66 +299,30 @@ auto eval_symm_tot(EvalNode const& node, Iterable1 const& outer_indx_labels,
 /// \return Tensor_t
 template <typename Tensor_t, typename Iterable, typename Yielder>
 auto eval_antisymm(EvalNode const& node, Iterable const& target_indx_labels,
-                   Yielder&& yielder, CacheManager<Tensor_t>& man) {
-  auto result =
-      eval(node, target_indx_labels, std::forward<Yielder>(yielder), man);
+                   Yielder&& yielder, CacheManager<Tensor_t const>& man) {
+  Tensor_t antisymm_result;
+  {
+    auto result =
+        eval(node, target_indx_labels, std::forward<Yielder>(yielder), man);
 
-  auto antisymm_result = decltype(result){result.world(), result.trange()};
-  antisymm_result.fill(0);
+    antisymm_result = decltype(result){result.world(), result.trange()};
+    antisymm_result.fill(0);
 
-  auto const lannot = detail::ords_to_annot(
-      ranges::views::iota(size_t{0}, result.trange().rank()) |
-      ranges::to_vector);
+    auto const lannot = detail::ords_to_annot(
+        ranges::views::iota(size_t{0}, result.trange().rank()) |
+        ranges::to_vector);
 
-  auto asym_impl = [&result, &antisymm_result,
-                    &lannot](auto const& pwp) {  // pwp = perm with phase
-    antisymm_result(lannot) +=
-        pwp.phase * result(detail::ords_to_annot(pwp.perm));
-  };
+    auto asym_impl = [&result, &antisymm_result,
+                      &lannot](auto const& pwp) {  // pwp = perm with phase
+      antisymm_result(lannot) +=
+          pwp.phase * result(detail::ords_to_annot(pwp.perm));
+    };
 
-  antisymmetrize_tensor(result.trange().rank(), asym_impl);
-  TA::get_default_world().gop.fence();
+    antisymmetrize_tensor(result.trange().rank(), asym_impl);
+  }
+  Tensor_t::wait_for_lazy_cleanup(antisymm_result.world());
+
   return antisymm_result;
-}
-
-template <typename DA_tot, typename DA, typename Iterable1, typename Iterable2,
-          typename Yielder>
-auto eval_antisymm_tot(EvalNode const& node, Iterable1 const& outer_indx_labels,
-                       Iterable2 const& inner_indx_labels, Yielder&& yielder,
-                       CacheManager<tot_result_t<DA_tot, DA>>& man) {
-  auto const eval_result = eval_tot(node, outer_indx_labels, inner_indx_labels,
-                                    std::forward<Yielder>(yielder), man);
-  size_t nouter_idx = ranges::distance(outer_indx_labels);
-  size_t ninner_idx = ranges::distance(inner_indx_labels);
-
-  auto const outer_ords =
-      ranges::views::iota(size_t{0}, nouter_idx) | ranges::to<perm_type>;
-
-  auto const inner_ords =
-      ranges::views::iota(nouter_idx, nouter_idx + ninner_idx) |
-      ranges::to<perm_type>;
-
-  auto const lannot = detail::ords_to_annot(outer_ords) + ";" +
-                      detail::ords_to_annot(inner_ords);
-
-  auto result = eval_result;
-  result(lannot) -=
-      eval_result(lannot);  // balance out extraneous eval_result addition
-
-  auto permute_inner_and_add = [&eval_result, &result, &lannot,
-                                &inner_ords](PermWithPhase const& pwp_outer) {
-    auto perm_vec = inner_ords;
-    detail::permute_ords(perm_vec, [&](PermWithPhase const& pwp_inner) {
-      auto const rannot = detail::ords_to_annot(pwp_outer.perm) + ";" +
-                          detail::ords_to_annot(pwp_inner.perm);
-      result(lannot) +=
-          (pwp_outer.phase * pwp_inner.phase) * eval_result(rannot);
-    });
-  };
-
-  auto outer_perm = outer_ords;
-  detail::permute_ords(outer_perm, permute_inner_and_add);
-  return result;
 }
 
 }  // namespace sequant::eval

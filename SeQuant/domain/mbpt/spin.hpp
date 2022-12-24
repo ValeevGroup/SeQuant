@@ -60,9 +60,10 @@ bool can_expand(const Tensor& tensor);
 ///
 /// @details For spin-indices, the tensor is NOT expanded if all spin-labels
 /// are either alpha or beta
-/// @param tensor a tensor from a product
-/// @return an ExprPtr containing the sum of expanded terms if antisymmetric OR
-/// @return an ExprPtr containing the tensor otherwise
+/// @param[in] tensor a tensor
+/// @param[in] skip_spinsymm is true, will not expand tensors whose indices
+///            all have the same spin [default=false]
+/// @return an ExprPtr containing the sum of expanded terms, if antisymmetric
 ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm = false);
 
 // TODO: Correct this function

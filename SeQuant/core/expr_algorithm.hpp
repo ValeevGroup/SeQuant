@@ -8,13 +8,15 @@
 namespace sequant {
 
 /// Recursively canonicalizes an Expr and replaces it as needed
-/// @param[in,out] expr expression to be canonicalized; will be replaced if
-/// canonicalization is impure
-inline void canonicalize(ExprPtr& expr) {
+/// @param[in,out] expr expression to be canonicalized; may be
+/// _replaced_ (i.e. `&expr` may be mutated by call)
+/// @return \p expr to facilitate chaining
+inline ExprPtr& canonicalize(ExprPtr& expr) {
   const auto biproduct = expr->canonicalize();
   if (biproduct && biproduct->is<Constant>()) {
     expr = biproduct * expr;
   }
+  return expr;
 }
 
 namespace detail {
@@ -142,10 +144,13 @@ struct expand_visitor {
 };  // namespace detail
 
 /// Recursively expands products of sums
-inline void expand(ExprPtr& expr) {
+/// @param[in,out] expr expression to be expanded
+/// @return \p expr to facilitate chaining
+inline ExprPtr& expand(ExprPtr& expr) {
   detail::expand_visitor expander{};
   expr->visit(expander);
   expander(expr);
+  return expr;
 }
 
 /// @brief a view of the leaves/atoms of an Expr tree
@@ -401,28 +406,51 @@ struct rapid_simplify_visitor {
 
 /// Simplifies an Expr by applying cheap transformations (e.g. eliminating
 /// trivial math, flattening sums and products, etc.)
-/// @param[in,out] expr expression to be simplified
+/// @param[in,out] expr expression to be simplified; may be
+/// _replaced_ (i.e. `&expr` may be mutated by call)
 /// @sa simplify()
-inline void rapid_simplify(ExprPtr& expr) {
+/// @return \p expr to facilitate chaining
+inline ExprPtr& rapid_simplify(ExprPtr& expr) {
   detail::rapid_simplify_visitor simplifier{};
   expr->visit(simplifier);
   simplifier(expr);
+  return expr;
 }
 
 /// Simplifies an Expr by a combination of expansion, canonicalization, and
 /// rapid_simplify
-/// @param[in,out] expr expression to be simplified
+/// @param[in,out] expr expression to be simplified; may be
+/// _replaced_ (i.e. `&expr` may be mutated by call)
 /// @sa rapid_simplify()
-inline void simplify(ExprPtr& expr) {
+/// @return \p expr to facilitate chaining
+inline ExprPtr& simplify(ExprPtr& expr) {
   expand(expr);
   rapid_simplify(expr);
   canonicalize(expr);
   rapid_simplify(expr);
+  return expr;
 }
 
-inline void non_canon_simplify(ExprPtr& expr) {
+/// Simplifies an Expr by a combination of expansion, canonicalization, and
+/// rapid_simplify; like mutating simplify() but works for temporary expressions
+/// @param[in] expr_rv rvalue-ref-to-expression to be simplified
+/// @return simplified form of \p expr_rv
+inline ExprPtr simplify(ExprPtr&& expr_rv) {
+  auto expr = std::move(expr_rv);
+  simplify(expr);
+  return std::move(expr);
+}
+
+/// Simplifies an Expr by a combination of expansion and
+/// rapid_simplify
+/// @param[in,out] expr expression to be simplified; may be
+/// _replaced_ (i.e. `&expr` may be mutated by call)
+/// @sa simplify()
+/// @return \p expr to facilitate chaining
+inline ExprPtr& non_canon_simplify(ExprPtr& expr) {
   expand(expr);
   rapid_simplify(expr);
+  return expr;
 }
 
 }  // namespace sequant
