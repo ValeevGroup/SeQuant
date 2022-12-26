@@ -390,11 +390,6 @@ TEST_CASE("TEST_EVAL_TOT_USING_TA", "[eval_tot]") {
                             rhs("i1,i2;a3,a2"));
     man_result("i1,i2;a1,a2") += temp("i1,i2;a1,a2");
 
-//     " - f{i_3;i_1}"
-//    " * t{a_3<i_3,i_2>,a_4<i_3,i_2>;i_3,i_2}"
-//    " * O{a_1<i_1,i_2>;a_3<i_3,i_2>}"
-//    " * O{a_2<i_1,i_2>;a_4<i_3,i_2>}";
-
     // third term evaluated manually
     // using rhs from above as the T2 amplitude
     DA_tot temp2;
