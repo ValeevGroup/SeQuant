@@ -143,15 +143,9 @@ tot_result_t<DA_tot, DA> eval_inode_tot(EvalNode const& node,
 
   if (node->op() == EvalOp::Sum) {
     return std::visit(visitor_for_sum, leval, reval);
-    //    auto result = std::visit(visitor_for_sum, leval, reval);
-    //    TA::get_default_world().gop.fence();
-    //    return result;
-  } else /* node->op() == EvalOp::Prod */ {
-    //    auto result = std::visit(visitor_for_prod, leval, reval);
-    //    TA::get_default_world().gop.fence();
-    //    return result;
+  } else {
     return std::visit(visitor_for_prod, leval, reval);
-  }  // else { // unreachable }
+  }
 }
 
 template <typename Tensor_t, typename Yielder>
@@ -165,23 +159,19 @@ Tensor_t eval_single_node(EvalNode const& node, Yielder&& leaf_evaluator,
   if (auto&& exists = cache_manager.access(key); exists && exists.value())
     return *exists.value();
 
-  Tensor_t result;
-  {
-    result =
-        node.leaf()
-            ? *cache_manager.store(key, leaf_evaluator(node->tensor()))
-            : *cache_manager.store(
-                  key,
-                  eval_inode(
-                      node,
-                      eval_single_node(node.left(),
-                                       std::forward<Yielder>(leaf_evaluator),
-                                       cache_manager),
-                      eval_single_node(node.right(),
-                                       std::forward<Yielder>(leaf_evaluator),
-                                       cache_manager)));
-  }
+  if (node.leaf())
+    return *cache_manager.store(key, leaf_evaluator(node->tensor()));
+
+  Tensor_t leval = eval_single_node(
+      node.left(), std::forward<Yielder>(leaf_evaluator), cache_manager);
+
+  Tensor_t reval = eval_single_node(
+      node.right(), std::forward<Yielder>(leaf_evaluator), cache_manager);
+
+  Tensor_t result = *cache_manager.store(key, eval_inode(node, leval, reval));
+
   Tensor_t::wait_for_lazy_cleanup(result.world());
+
   return result;
 }
 
@@ -199,19 +189,17 @@ tot_result_t<DA_tot, DA> eval_single_node_tot(
   if (auto&& exists = cache_manager.access(key); exists && exists.value())
     return *exists.value();
 
+  if (node.leaf())
+    return *cache_manager.store(key, leaf_evaluator(node->tensor()));
+
+  variant_t leval = eval_single_node_tot(
+      node.left(), std::forward<Yielder>(leaf_evaluator), cache_manager);
+
+  variant_t reval = eval_single_node_tot(
+      node.right(), std::forward<Yielder>(leaf_evaluator), cache_manager);
+
   variant_t result =
-      node.leaf()
-          ? *cache_manager.store(key, leaf_evaluator(node->tensor()))
-          : *cache_manager.store(
-                key,
-                eval_inode_tot(
-                    node,
-                    eval_single_node_tot(node.left(),
-                                         std::forward<Yielder>(leaf_evaluator),
-                                         cache_manager),
-                    eval_single_node_tot(node.right(),
-                                         std::forward<Yielder>(leaf_evaluator),
-                                         cache_manager)));
+      *cache_manager.store(key, eval_inode_tot(node, leval, reval));
 
   // cleanup
   struct {
