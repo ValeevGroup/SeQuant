@@ -11,10 +11,17 @@
 
 namespace sequant::eval {
 
+/// Represents permutation of a sequence.
+/// Equivalent to the range [0, N) where N is the length of the sequence to be
+/// permuted.
 using perm_type = container::svector<size_t>;
 
+/// Even or odd permuation. Negative if odd, positive if even.
 using phase_type = int;
 
+///
+/// Keeps a permutation and its phase together
+///
 struct PermWithPhase {
   phase_type phase;
   perm_type const& perm;
@@ -55,6 +62,13 @@ void count_imeds(EvalNode const& node, Maplike& cmap) {
 
 }  // namespace detail
 
+///
+/// \tparam F Type of the callable.
+/// \param rank Rank of the tensor to be particle-symmetrized.
+///             Needed for permutation vector length determination.
+/// \param callback A function that takes @c perm_type object and does
+///                 something. For example call TiledArray to perform actual
+///                 symmetrization of a DistArray.
 template <typename F>
 void symmetrize_tensor(size_t rank, F&& callback) {
   static_assert(std::is_invocable_v<F, perm_type>);
@@ -75,6 +89,13 @@ void symmetrize_tensor(size_t rank, F&& callback) {
   } while (std::next_permutation(perm_vec.begin(), perm_vec.end()));
 }
 
+///
+/// \tparam F Type of the callable.
+/// \param rank Rank of the tensor to be particle-antisymmetrized.
+///             Needed for permutation vector length determination.
+/// \param callback A function that takes @c PermWithPhase object and does
+///                 something. For example call TiledArray to perform actual
+///                 antisymmetrization of a DistArray.
 template <typename F>
 void antisymmetrize_tensor(size_t rank, F&& callback) {
   static_assert(std::is_invocable_v<F, PermWithPhase const&>);
@@ -103,28 +124,53 @@ void antisymmetrize_tensor(size_t rank, F&& callback) {
   asymm_impl(rank, std::forward<F>(callback));
 }
 
-template <typename Tensor_t>
-CacheManager<Tensor_t> make_cache_manager(EvalNode const& node,
-                                          bool persistent_leaves) {
+///
+/// \tparam T type of the objects to be cached associated with an
+///                  intermediate or a leaf node.
+///
+/// \param node An @c EvalNode object.
+/// \param persistent_leaves Whether the cache manager should store the data
+///                          associated with the leaf nodes indefinitely.
+/// \return A cache manager object. @see CacheManager.
+template <typename T>
+CacheManager<T> make_cache_manager(EvalNode const& node,
+                                   bool persistent_leaves) {
   container::map<size_t, size_t> hash_to_counts{};
   detail::count_imeds(node, hash_to_counts);
 
   auto less_repeating = [](auto const& pair) { return pair.second < 2; };
   ranges::actions::remove_if(hash_to_counts, less_repeating);
 
-  if (!persistent_leaves) return CacheManager<Tensor_t>{hash_to_counts,{}};
+  if (!persistent_leaves) return CacheManager<T>{hash_to_counts, {}};
 
   container::svector<size_t> leaf_hashes{};
   node.visit_leaf([&leaf_hashes](auto const& node) {
     leaf_hashes.emplace_back(node->hash());
   });
 
-  return CacheManager<Tensor_t>{hash_to_counts, leaf_hashes};
+  return CacheManager<T>{hash_to_counts, leaf_hashes};
 }
 
-template <typename Tensor_t, typename Iterable>
-CacheManager<Tensor_t> make_cache_manager(Iterable const& nodes,
-                                          bool persistent_leaves) {
+///
+/// Make a @c CacheManager object that caches the data associated with an
+/// intermediate for a certain number of accesses. After that many accesses, the
+/// associated resource is freed. Also, optionally store the data associated
+/// with the leaf nodes for indefinitely many accesses. This is a specific
+/// use-case function intended to be used in Coupled-Cluster calculations.
+/// Because the amplitude tensors (the leaf nodes whose tensor has the label
+/// 't') are updated every iteration, their data should never be reused -- and
+/// thus stored. This fact is taken into consideration by this function.
+/// \tparam  T type of the objects to be cached associated with an intermediate
+///            or a leaf node.
+///
+/// \param nodes An iterable of @c EvalNode objects.
+/// \param persistent_leaves Whether the cache manager should store the data
+///                          associated with the leaf nodes indefinitely.
+/// \return A cache manager object. @see CacheManager.
+///
+template <typename T, typename Iterable>
+CacheManager<T> make_cache_manager(Iterable const& nodes,
+                                   bool persistent_leaves) {
   container::map<size_t, size_t> hash_to_counts{};
 
   for (auto const& n : nodes) detail::count_imeds(n, hash_to_counts);
@@ -132,7 +178,7 @@ CacheManager<Tensor_t> make_cache_manager(Iterable const& nodes,
   auto less_repeating = [](auto const& pair) { return pair.second < 2; };
   ranges::actions::remove_if(hash_to_counts, less_repeating);
 
-  if (!persistent_leaves) return CacheManager<Tensor_t>{hash_to_counts,{}};
+  if (!persistent_leaves) return CacheManager<T>{hash_to_counts, {}};
 
   container::set<size_t> leaf_hashes{};
   for (auto const& n : nodes) {
@@ -141,18 +187,31 @@ CacheManager<Tensor_t> make_cache_manager(Iterable const& nodes,
     });
   }
 
-  return CacheManager<Tensor_t>{hash_to_counts, leaf_hashes};
+  return CacheManager<T>{hash_to_counts, leaf_hashes};
 }
 
-template <typename Tensor_t, typename Iterable>
-CacheManager<Tensor_t> make_cache_manager_leaves_only(Iterable const& nodes) {
+///
+/// Make @c CacheManager object that persistently stores the data associated
+/// with the leaf nodes of an  @c EvalNode object. This is a specific use-case
+/// function intended to be used in Coupled-Cluster calculations. Because the
+/// amplitude tensors (the leaf nodes whose tensor has the label 't') are
+/// updated every iteration, their data should never be reused -- and thus
+/// stored. This fact is taken into consideration by this function.
+///
+/// \tparam T type of the objects to be cached associated with the leaf nodes.
+///
+/// \param nodes An iterable of @c EvalNode objects.
+/// \return A cache manager object. @see CacheManager.
+///
+template <typename T, typename Iterable>
+CacheManager<T> make_cache_manager_leaves_only(Iterable const& nodes) {
   container::set<EvalExpr::hash_t> leaf_hashes{};
   for (auto const& n : nodes) {
     n.visit_leaf([&leaf_hashes](auto const& node) {
       if (node->tensor().label() != L"t") leaf_hashes.insert(node->hash());
     });
   }
-  return CacheManager<Tensor_t>{{}, leaf_hashes};
+  return CacheManager<T>{{}, leaf_hashes};
 }
 
 }  // namespace sequant::eval

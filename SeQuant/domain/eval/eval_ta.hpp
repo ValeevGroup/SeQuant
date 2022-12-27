@@ -215,7 +215,18 @@ tot_result_t<DA_tot, DA> eval_single_node_tot(
 }  // namespace detail
 
 ///
-/// Evaluate a node.
+///
+/// Evaluate expressions from left to right as they appear in @c Expr.
+/// The @c Expr corresponding a @c EvalNode can be generated using @c to_expr
+/// function.
+///
+/// A node a full-binary tree @see EvalNode. The evaluation
+/// occurs in a left-to-right order. This can also be thought of in terms of
+/// post-order traversal (a binary tree traversal technique, see Wikipedia).
+/// If the current EvalNode object has not yet been evaluated earlier (tested
+/// by checking the cache), then the left node is first evaluated, followed
+/// by the right node. The result of the left and the right evaluations are
+/// then used to evaluate this node.
 ///
 /// \tparam Tensor_t The data tensor type. eg. TA::TArrayD from TiledArray.
 /// \param node sequant::binary_node<sequant::EvalExpr> object
@@ -230,6 +241,8 @@ tot_result_t<DA_tot, DA> eval_single_node_tot(
 /// \param yielder That returns Tensor_t for leaf SeQuant Tensor(g, f, t, ...).
 /// \param man The cache manager.
 /// \return Tensor_t
+/// @see @c to_expr
+///
 template <typename Tensor_t, typename Iterable, typename Yielder>
 auto eval(EvalNode const& node, Iterable const& target_indx_labels,
           Yielder&& yielder, CacheManager<Tensor_t const>& man) {
@@ -266,6 +279,23 @@ auto eval(EvalNode const& node, Iterable const& target_indx_labels,
   return scaled;
 }
 
+///
+/// Evaluates PNO-like expressions from left to right as they appear in @c Expr.
+///
+/// \tparam DA_tot Tensor-of-tensor type. eg. TA::DArray<TA::Tensor<TA::Tensor>>
+/// \tparam DA Simple tensor type. eg. TA::DArray<TA::Tensor>
+/// \param node @c EvalNode to be evaluated.
+/// \param outer_indx_labels The outer index labels in terms of how
+/// tensor-of-tensor
+///                   operations are supported in TiledArray.
+/// \param inner_indx_labels The inner index labels in terms of how
+/// tensor-of-tensor
+///                   operations are supported in TiledArray.
+/// \param yielder That returns Tensor_t for leaf SeQuant Tensor(g, f, t, ...).
+/// \param man The cache manager.
+/// \return DA_tot type result.
+/// @see @c eval
+///
 template <
     typename DA_tot, typename DA, typename Iterable1, typename Iterable2,
     typename Yielder,
@@ -299,7 +329,8 @@ DA_tot eval_tot(EvalNode const& node, Iterable1 const& outer_indx_labels,
 }
 
 ///
-/// Evaluate a node and symmetrize the result.
+/// Evaluate expressions from left to right as they appear in @c Expr and
+/// particle-symmetrize the result.
 ///
 /// \tparam Tensor_t The data tensor type. eg. TA::TArrayD from TiledArray.
 /// \param node sequant::binary_node<sequant::EvalExpr> object
@@ -314,6 +345,8 @@ DA_tot eval_tot(EvalNode const& node, Iterable1 const& outer_indx_labels,
 /// \param yielder That returns Tensor_t for leaf SeQuant Tensor(g, f, t, ...).
 /// \param man The cache manager.
 /// \return Tensor_t
+/// @see @c eval
+///
 template <typename Tensor_t, typename Iterable, typename Yielder>
 auto eval_symm(EvalNode const& node, Iterable const& target_indx_labels,
                Yielder&& yielder, CacheManager<Tensor_t const>& man) {
@@ -340,6 +373,24 @@ auto eval_symm(EvalNode const& node, Iterable const& target_indx_labels,
   return symm_result;
 }
 
+///
+/// Evaluate PNO-like expressions from left to right as they appear in @c Expr
+/// and particle-symmetrize the result.
+///
+/// \tparam DA_tot Tensor-of-tensor type. eg. TA::DArray<TA::Tensor<TA::Tensor>>
+/// \tparam DA Simple tensor type. eg. TA::DArray<TA::Tensor>
+/// \param node @c EvalNode to be evaluated.
+/// \param outer_indx_labels The outer index labels in terms of how
+/// tensor-of-tensor
+///                   operations are supported in TiledArray.
+/// \param inner_indx_labels The inner index labels in terms of how
+/// tensor-of-tensor
+///                   operations are supported in TiledArray.
+/// \param yielder That returns Tensor_t for leaf SeQuant Tensor(g, f, t, ...).
+/// \param man The cache manager.
+/// \return DA_tot type result.
+/// @see @c eval
+///
 template <typename DA_tot, typename DA, typename Iterable1, typename Iterable2,
           typename Yielder>
 auto eval_symm_tot(EvalNode const& node, Iterable1 const& outer_indx_labels,
@@ -376,7 +427,8 @@ auto eval_symm_tot(EvalNode const& node, Iterable1 const& outer_indx_labels,
 }
 
 ///
-/// Evaluate a node and anit-symmetrize the result.
+/// Evaluate expressions from left to right as they appear in @c Expr and
+/// particle-antisymmetrize the result.
 ///
 /// \tparam Tensor_t The data tensor type. eg. TA::TArrayD from TiledArray.
 /// \param node sequant::binary_node<sequant::EvalExpr> object
@@ -391,6 +443,8 @@ auto eval_symm_tot(EvalNode const& node, Iterable1 const& outer_indx_labels,
 /// \param yielder That returns Tensor_t for leaf SeQuant Tensor(g, f, t, ...).
 /// \param man The cache manager.
 /// \return Tensor_t
+/// @see @c eval
+///
 template <typename Tensor_t, typename Iterable, typename Yielder>
 auto eval_antisymm(EvalNode const& node, Iterable const& target_indx_labels,
                    Yielder&& yielder, CacheManager<Tensor_t const>& man) {
@@ -419,6 +473,24 @@ auto eval_antisymm(EvalNode const& node, Iterable const& target_indx_labels,
   return antisymm_result;
 }
 
+///
+/// Evaluate PNO-like expressions from left to right as they appear in @c Expr
+/// and particle-antisymmetrize the result.
+///
+/// \tparam DA_tot Tensor-of-tensor type. eg. TA::DArray<TA::Tensor<TA::Tensor>>
+/// \tparam DA Simple tensor type. eg. TA::DArray<TA::Tensor>
+/// \param node @c EvalNode to be evaluated.
+/// \param outer_indx_labels The outer index labels in terms of how
+/// tensor-of-tensor
+///                   operations are supported in TiledArray.
+/// \param inner_indx_labels The inner index labels in terms of how
+/// tensor-of-tensor
+///                   operations are supported in TiledArray.
+/// \param yielder That returns Tensor_t for leaf SeQuant Tensor(g, f, t, ...).
+/// \param man The cache manager.
+/// \return DA_tot type result.
+/// @see @c eval
+///
 template <typename DA_tot, typename DA, typename Iterable1, typename Iterable2,
           typename Yielder>
 auto eval_antisymm_tot(EvalNode const& node, Iterable1 const& outer_indx_labels,
