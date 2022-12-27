@@ -364,9 +364,11 @@ TEST_CASE("TEST_EVAL_TOT_USING_TA", "[eval_tot]") {
     auto verify_equal_tot_tile = [](auto const& lhs, auto const& rhs) {
       REQUIRE(lhs.range() == rhs.range());
       for (auto&& [t1, t2] : ranges::views::zip(lhs, rhs)) {
-        for (auto&& [e1, e2] : ranges::views::zip(t1, t2))
-          if (e1 != 0.0)  // Catch2 flagged (0.0 == Approx(0.0) to be false.
-            REQUIRE(e1 == Approx(e2));
+        for (auto&& [e1, e2] : ranges::views::zip(t1, t2)) {
+          // https://github.com/catchorg/Catch2/blob/devel/docs/comparing-floating-point-numbers.md
+          // https://codingnest.com/the-little-things-comparing-floating-point-numbers/
+          REQUIRE_THAT(e1, Catch::Matchers::WithinAbs(e2, 1e-12));
+        }
       }
     };
 
