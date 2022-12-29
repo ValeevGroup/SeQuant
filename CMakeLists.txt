@@ -132,27 +132,29 @@ check_cxx_execution_header(SEQUANT)
 # Ranges-V3
 include(FindOrFetchRangeV3)
 
-# need Boost.ContainerHash and Boost.Regex
+# need header-only Boost + (compiled) Boost.Regex and Boost.Locale
 # NB Boost.Container is broken in v1.70
-find_package(Boost ${SEQUANT_TRACKED_BOOST_VERSION} CONFIG COMPONENTS regex)
-if (Boost_VERSION_STRING VERSION_LESS ${SEQUANT_TRACKED_BOOST_VERSION} OR NOT TARGET Boost::boost OR NOT TARGET Boost::regex)
-    find_package(Boost ${SEQUANT_TRACKED_BOOST_VERSION} REQUIRED COMPONENTS regex)
-    message(STATUS "Found Boost (version ${Boost_VERSION}) via FindBoost module")
-    set(Boost_USE_CONFIG FALSE)
-else ()
-    message(STATUS "Found Boost (version ${Boost_VERSION}) via CONFIG ${Boost_CONFIG}")
-    set(Boost_USE_CONFIG TRUE)
-endif ()
-if (Boost_VERSION_MACRO EQUAL 107000)
-    message(FATAL_ERROR "Found Boost 1.70, but its Boost.Container is broken: "
-            "use any version ${SEQUANT_TRACKED_BOOST_VERSION} "
-            "or higher, other than 1.70")
-endif ()
-# Boost.Move is broken in 1.77 and 1.78 unless using c++20
-# fixed in 1.79 via https://github.com/boostorg/move/commit/78f26da1f3a5a3831e9e70efe83f9c56eef94e8c
-if (CMAKE_CXX_STANDARD LESS 20)
-    if (Boost_VERSION_MACRO GREATER_EQUAL 107700 AND Boost_VERSION_MACRO LESS 107900)
-        message(FATAL_ERROR "Found Boost 1.77 <= version < 1.79, but its Boost.Move is broken with pre-C++20: use a version older than 1.77 or newer than 1.78")
+if (NOT TARGET Boost::boost OR NOT TARGET Boost::regex OR NOT TARGET Boost::locale)
+    find_package(Boost ${SEQUANT_TRACKED_BOOST_VERSION} CONFIG COMPONENTS regex locale)
+    if (Boost_VERSION_STRING VERSION_LESS ${SEQUANT_TRACKED_BOOST_VERSION} OR NOT TARGET Boost::boost OR NOT TARGET Boost::regex OR NOT TARGET Boost::locale)
+        find_package(Boost ${SEQUANT_TRACKED_BOOST_VERSION} REQUIRED COMPONENTS regex locale)
+        message(STATUS "Found Boost (version ${Boost_VERSION}) via FindBoost module")
+        set(Boost_USE_CONFIG FALSE)
+    else ()
+        message(STATUS "Found Boost (version ${Boost_VERSION}) via CONFIG ${Boost_CONFIG}")
+        set(Boost_USE_CONFIG TRUE)
+    endif ()
+    if (Boost_VERSION_MACRO EQUAL 107000)
+        message(FATAL_ERROR "Found Boost 1.70, but its Boost.Container is broken: "
+                "use any version ${SEQUANT_TRACKED_BOOST_VERSION} "
+                "or higher, other than 1.70")
+    endif ()
+    # Boost.Move is broken in 1.77 and 1.78 unless using c++20
+    # fixed in 1.79 via https://github.com/boostorg/move/commit/78f26da1f3a5a3831e9e70efe83f9c56eef94e8c
+    if (CMAKE_CXX_STANDARD LESS 20)
+        if (Boost_VERSION_MACRO GREATER_EQUAL 107700 AND Boost_VERSION_MACRO LESS 107900)
+            message(FATAL_ERROR "Found Boost 1.77 <= version < 1.79, but its Boost.Move is broken with pre-C++20: use a version older than 1.77 or newer than 1.78")
+        endif ()
     endif ()
 endif ()
 
@@ -229,6 +231,8 @@ add_library(SeQuant
         SeQuant/core/parse_expr.hpp
         SeQuant/core/parse/parse_expr.cpp
         SeQuant/core/optimize.hpp
+        SeQuant/core/wstring.cpp
+        SeQuant/core/wstring.hpp
         SeQuant/core/optimize/optimize.cpp
         SeQuant/core/optimize/fusion.hpp
         SeQuant/core/optimize/fusion.cpp
@@ -264,7 +268,7 @@ set_source_files_properties(
         "SEQUANT_GIT_REVISION=\"${SEQUANT_GIT_REVISION}\";SEQUANT_GIT_DESCRIPTION=\"${SEQUANT_GIT_DESCRIPTION}\""
 )
 
-target_link_libraries(SeQuant PUBLIC range-v3::range-v3 Boost::regex Boost::boost SeQuant-bliss Threads::Threads)
+target_link_libraries(SeQuant PUBLIC range-v3::range-v3 Boost::regex Boost::locale Boost::boost SeQuant-bliss Threads::Threads)
 if (SEQUANT_HAS_EXECUTION_HEADER_STANDALONE OR SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB)
     target_compile_definitions(SeQuant PUBLIC SEQUANT_HAS_EXECUTION_HEADER)
     if (SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB)

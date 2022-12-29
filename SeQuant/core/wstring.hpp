@@ -5,6 +5,8 @@
 #ifndef SEQUANT_WSTRING_HPP
 #define SEQUANT_WSTRING_HPP
 
+#include <cmath>
+#include <string>
 #include <type_traits>
 
 namespace sequant {
@@ -26,6 +28,11 @@ to_wstring(T&& t) {
   else
     return std::to_wstring(t);
 }
+
+/// @brief (potentially) narrowing character converter.
+///
+/// Converts a UTF-8 encoded std::wstring to a UTF-8 encoded std::string
+std::string to_string(const std::wstring& wstr_utf8);
 
 }  // namespace sequant
 

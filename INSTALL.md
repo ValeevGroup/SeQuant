@@ -5,7 +5,9 @@ prerequisites:
   * mandatory:
     * CMake 3.15 or later
     * a C++17 compiler
-    * [Boost](https://www.boost.org/), version 1.67 or higher (N.B. critical bugs make the following versions unusable: 1.70, 1.77, 1.78)
+    * [Boost](https://www.boost.org/), version 1.67 or higher (N.B. critical bugs make the following versions unusable: 1.70, 1.77, 1.78); the following non-header-only Boost libraries are required:
+      - [Boost.Regex](https://www.boost.org/doc/libs/master/libs/regex/doc/html/index.html)
+      - [Boost.Locale](https://www.boost.org/doc/libs/master/libs/locale/doc/html/index.html)
     * [Range-V3](https://github.com/ericniebler/range-v3.git), tag d800a032132512a54c291ce55a2a43e0460591c7, *if not found, SeQuant will download and build Range-V3*
   * optional:
     * unless CMake variable `BUILD_TESTING` is set to `FALSE`
