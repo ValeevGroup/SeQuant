@@ -24,3 +24,4 @@ useful CMake variables:
   * `CMAKE_CXX_COMPILER` --- specifies the C++ compiler to use
   * `CMAKE_PREFIX_PATH` --- this semicolon-separated list specifies search paths for dependencies (Boost, Range-V3, etc.)
   * `SEQUANT_MIMALLOC` --- use [mimalloc](https://github.com/microsoft/mimalloc) for fast memory allocation
+  * `SEQUANT_EVAL_TRACE` --- enables tracing of expression interpretation; especially useful in combination with TiledArray's memory tracing mechanism (configure TiledArray with `TA_TENSOR_MEM_PROFILE=ON` to enable that)

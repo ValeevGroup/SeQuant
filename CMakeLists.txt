@@ -99,11 +99,14 @@ set(SEQUANT_INSTALL_CMAKEDIR "lib/cmake/sequant"
 option(ENABLE_TBB "Enable TBB as an optional prerequisite for C++17's parallel STL (if PSTL is not supported will use of standard C++11 concurrency)" OFF)
 add_feature_info(TBB ENABLE_TBB "Intel Thread-Building Blocks is an optional prerequisite for C++17's parallel STL")
 
-option(SEQUANT_EVAL_TESTS "Enable building of evaluation tests (if true, will look for and/or build TA)" OFF)
-add_feature_info(EVAL_TESTS SEQUANT_EVAL_TESTS "Build evaluation tests (if true, will look for and/or build TA)")
+option(SEQUANT_EVAL_TESTS "Enable building of evaluation tests (if true, will look for and/or build TiledArray)" OFF)
+add_feature_info(EVAL_TESTS SEQUANT_EVAL_TESTS "Build evaluation tests (if true, will look for and/or build TiledArray)")
 
 option(SEQUANT_PYTHON "Build SeQuant python module" OFF)
 add_feature_info(PYTHON SEQUANT_PYTHON "PySeQuant: Python bindings to SeQuant")
+
+option(SEQUANT_EVAL_TRACE "Enable tracing of the expression interpretation (configure TiledArray with TA_TENSOR_MEM_PROFILE=ON to trace memory use)" OFF)
+add_feature_info(EVAL_TRACE SEQUANT_EVAL_TRACE "Trace expression interpretation")
 
 ##########################
 # Prerequisites
@@ -281,6 +284,9 @@ target_include_directories(SeQuant PUBLIC
         $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>)
 target_compile_features(SeQuant INTERFACE "cxx_std_17")
+if (SEQUANT_EVAL_TRACE)
+    target_compile_definitions(SeQuant PUBLIC SEQUANT_EVAL_TRACE=1)
+endif()
 install(TARGETS SeQuant-bliss EXPORT sequant COMPONENT sequant LIBRARY DESTINATION ${SEQUANT_INSTALL_LIBDIR})
 install(TARGETS SeQuant EXPORT sequant COMPONENT sequant LIBRARY DESTINATION ${SEQUANT_INSTALL_LIBDIR})
 install(DIRECTORY SeQuant

@@ -3,6 +3,8 @@
 
 #include <SeQuant/domain/eval/eval.hpp>
 
+#include <SeQuant/core/wstring.hpp>
+
 #include <TiledArray/expressions/einsum.h>
 #include <TiledArray/expressions/index_list.h>
 #include <tiledarray.h>
@@ -55,6 +57,24 @@ Tensor_t eval_inode(EvalNode const& node, Tensor_t const& leval,
     }
   }
   Tensor_t::wait_for_lazy_cleanup(result.world());
+
+#ifdef SEQUANT_EVAL_TRACE
+  std::cout << "eval_inode: evaluated "
+            << to_string(to_latex_align(to_expr(node)))
+            << " worldobj.id=" << result.id();
+#ifdef TA_TENSOR_MEM_PROFILE
+  std::cout << " TA::Tensor allocated {"
+            << "hw="
+            << TA::hostEnv::instance()->host_allocator().getHighWatermark()
+            << ","
+            << "cur="
+            << TA::hostEnv::instance()->host_allocator().getCurrentSize() << ","
+            << "act="
+            << TA::hostEnv::instance()->host_allocator().getActualSize() << "}"
+            << " bytes";
+#endif  // TA_TENSOR_MEM_PROFILE
+  std::cout << std::endl;
+#endif  // SEQUANT_EVAL_TRACE
 
   return result;
 }
