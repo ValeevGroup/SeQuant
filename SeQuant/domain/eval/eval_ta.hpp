@@ -179,18 +179,41 @@ Tensor_t eval_single_node(EvalNode const& node, Yielder&& leaf_evaluator,
   if (auto&& exists = cache_manager.access(key); exists && exists.value())
     return *exists.value();
 
-  if (node.leaf())
-    return *cache_manager.store(key, leaf_evaluator(node->tensor()));
+  Tensor_t result;
+  {
+    Tensor_t value;
+    if (node.leaf())
+      value = leaf_evaluator(node->tensor());
+    else {
+      Tensor_t leval = eval_single_node(
+          node.left(), std::forward<Yielder>(leaf_evaluator), cache_manager);
 
-  Tensor_t leval = eval_single_node(
-      node.left(), std::forward<Yielder>(leaf_evaluator), cache_manager);
+      Tensor_t reval = eval_single_node(
+          node.right(), std::forward<Yielder>(leaf_evaluator), cache_manager);
 
-  Tensor_t reval = eval_single_node(
-      node.right(), std::forward<Yielder>(leaf_evaluator), cache_manager);
-
-  Tensor_t result = *cache_manager.store(key, eval_inode(node, leval, reval));
-
+      value = eval_inode(node, std::move(leval), std::move(reval));
+    }
+    result = *cache_manager.store(key, std::move(value));
+  }
   Tensor_t::wait_for_lazy_cleanup(result.world());
+
+#ifdef SEQUANT_EVAL_TRACE
+  std::cout << "eval_single_node: evaluated "
+            << to_string(to_latex_align(to_expr(node)))
+            << " worldobj.id=" << result.id();
+#ifdef TA_TENSOR_MEM_PROFILE
+  std::cout << " TA::Tensor allocated {"
+            << "hw="
+            << TA::hostEnv::instance()->host_allocator().getHighWatermark()
+            << ","
+            << "cur="
+            << TA::hostEnv::instance()->host_allocator().getCurrentSize() << ","
+            << "act="
+            << TA::hostEnv::instance()->host_allocator().getActualSize() << "}"
+            << " bytes";
+#endif  // TA_TENSOR_MEM_PROFILE
+  std::cout << std::endl;
+#endif  // SEQUANT_EVAL_TRACE
 
   return result;
 }
@@ -296,6 +319,23 @@ auto eval(EvalNode const& node, Iterable const& target_indx_labels,
   }
   Tensor_t::wait_for_lazy_cleanup(scaled.world());
 
+#ifdef SEQUANT_EVAL_TRACE
+  std::cout << "eval: evaluated " << to_string(to_latex_align(to_expr(node)))
+            << " worldobj.id=" << scaled.id();
+#ifdef TA_TENSOR_MEM_PROFILE
+  std::cout << " TA::Tensor allocated {"
+            << "hw="
+            << TA::hostEnv::instance()->host_allocator().getHighWatermark()
+            << ","
+            << "cur="
+            << TA::hostEnv::instance()->host_allocator().getCurrentSize() << ","
+            << "act="
+            << TA::hostEnv::instance()->host_allocator().getActualSize() << "}"
+            << " bytes";
+#endif  // TA_TENSOR_MEM_PROFILE
+  std::cout << std::endl;
+#endif  // SEQUANT_EVAL_TRACE
+
   return scaled;
 }
 
@@ -384,11 +424,30 @@ auto eval_symm(EvalNode const& node, Iterable const& target_indx_labels,
 
     auto sym_impl = [&result, &symm_result, &lannot](auto const& perm) {
       symm_result(lannot) += result(detail::ords_to_annot(perm));
+      Tensor_t::wait_for_lazy_cleanup(symm_result.world());
     };
 
     symmetrize_tensor(result.trange().rank(), sym_impl);
   }
   Tensor_t::wait_for_lazy_cleanup(symm_result.world());
+
+#ifdef SEQUANT_EVAL_TRACE
+  std::cout << "eval_symm: evaluated "
+            << to_string(to_latex_align(to_expr(node)))
+            << " worldobj.id=" << symm_result.id();
+#ifdef TA_TENSOR_MEM_PROFILE
+  std::cout << " TA::Tensor allocated {"
+            << "hw="
+            << TA::hostEnv::instance()->host_allocator().getHighWatermark()
+            << ","
+            << "cur="
+            << TA::hostEnv::instance()->host_allocator().getCurrentSize() << ","
+            << "act="
+            << TA::hostEnv::instance()->host_allocator().getActualSize() << "}"
+            << " bytes";
+#endif  // TA_TENSOR_MEM_PROFILE
+  std::cout << std::endl;
+#endif  // SEQUANT_EVAL_TRACE
 
   return symm_result;
 }
@@ -484,11 +543,30 @@ auto eval_antisymm(EvalNode const& node, Iterable const& target_indx_labels,
                       &lannot](auto const& pwp) {  // pwp = perm with phase
       antisymm_result(lannot) +=
           pwp.phase * result(detail::ords_to_annot(pwp.perm));
+      Tensor_t::wait_for_lazy_cleanup(antisymm_result.world());
     };
 
     antisymmetrize_tensor(result.trange().rank(), asym_impl);
   }
   Tensor_t::wait_for_lazy_cleanup(antisymm_result.world());
+
+#ifdef SEQUANT_EVAL_TRACE
+  std::cout << "eval_antisymm: evaluated "
+            << to_string(to_latex_align(to_expr(node)))
+            << " worldobj.id=" << antisymm_result.id();
+#ifdef TA_TENSOR_MEM_PROFILE
+  std::cout << " TA::Tensor allocated {"
+            << "hw="
+            << TA::hostEnv::instance()->host_allocator().getHighWatermark()
+            << ","
+            << "cur="
+            << TA::hostEnv::instance()->host_allocator().getCurrentSize() << ","
+            << "act="
+            << TA::hostEnv::instance()->host_allocator().getActualSize() << "}"
+            << " bytes";
+#endif  // TA_TENSOR_MEM_PROFILE
+  std::cout << std::endl;
+#endif  // SEQUANT_EVAL_TRACE
 
   return antisymm_result;
 }
