@@ -10,7 +10,7 @@
 namespace sequant {
 
 ///
-/// Represents an symbolic asymptotic cost in terms of active_occupied
+/// Represents a symbolic asymptotic cost in terms of active_occupied
 /// and the rest orbitals.
 /// eg.
 ///     - AsyCost{2,4} implies scaling of $O^2V^4$. In other words, the cost

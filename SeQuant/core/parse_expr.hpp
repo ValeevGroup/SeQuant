@@ -46,7 +46,7 @@ ExprPtr parse_expr(std::wstring_view raw, Symmetry tensor_sym);
 ///
 /// Get a parsable string from an expression.
 ///
-/// \param expr Expression to stringify that can re-parsed to itself.
+/// \param expr Expression to stringify that can be re-parsed to itself.
 /// \param annot_sym Whether to add sequant::Symmetry annotation
 ///                  to each Tensor string.
 /// \return wstring of the expression.
