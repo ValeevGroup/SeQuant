@@ -13,7 +13,7 @@ prerequisites:
     * unless CMake variable `BUILD_TESTING` is set to `FALSE`
       * [Eigen](http://eigen.tuxfamily.org/), version 3
     * for building coupled-cluster evaluation tests:
-      * [TiledArray](https://github.com/ValeevGroup/tiledarray.git), tag 36e2ad205c21c339434dd0ef8f4f1467e7e26037
+      * [TiledArray](https://github.com/ValeevGroup/tiledarray.git), tag e5e66eb01e7754b6ec62c8202d949ef6a82cc3d7
 
 for the impatient (from the top of the SeQuant source directory):
   * `cmake -B build -S .`
