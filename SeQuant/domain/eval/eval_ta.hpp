@@ -298,7 +298,7 @@ auto eval(EvalNode const& node, Iterable const& target_indx_labels,
   ranges::sort(ti_sorted_input);
   auto ti_sorted_node = node->tensor().const_braket() |
                         ranges::views::transform(
-                            [](auto const& idx) { return idx.ascii_label(); }) |
+                            [](auto const& idx) { return idx.to_string(); }) |
                         ranges::to<container::svector<std::string>>;
   ranges::sort(ti_sorted_node);
 

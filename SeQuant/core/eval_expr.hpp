@@ -64,7 +64,7 @@ class EvalExpr final {
   ///
   /// annotation for TiledArray
   ///
-  std::string const& annot() const {return annot_; }
+  std::string const& annot() const { return annot_; }
 
   template <typename T = std::complex<double>>
   EvalExpr& operator*=(T fac) {
@@ -176,21 +176,20 @@ class EvalExpr final {
     // make a comma-separated string out of an iterable of strings
     auto add_commas = [](auto const& strs) -> std::string {
       auto result = std::string{ranges::front(strs)};
-      for (auto&& s: ranges::views::tail(strs))
-        result += "," + s;
+      for (auto&& s : ranges::views::tail(strs)) result += "," + s;
       return result;
     };
 
     container::vector<std::string> outer_labels{}, inner_labels{};
-    for (auto&& idx: indices) {
+    for (auto&& idx : indices) {
       if (idx.has_proto_indices())
-        inner_labels.emplace_back(idx.ascii_label());
+        inner_labels.emplace_back(idx.to_string());
       else
-        outer_labels.emplace_back(idx.ascii_label());
+        outer_labels.emplace_back(idx.to_string());
     }
-    for (auto&& idx: indices) {
-      for (auto&& pidx: idx.proto_indices())
-        outer_labels.emplace_back(pidx.ascii_label());
+    for (auto&& idx : indices) {
+      for (auto&& pidx : idx.proto_indices())
+        outer_labels.emplace_back(pidx.to_string());
     }
 
     if (inner_labels.empty()) {
@@ -202,7 +201,6 @@ class EvalExpr final {
       return add_commas(olbls) + ";" + add_commas(inner_labels);
     }
   }
-
 };
 
 }  // namespace sequant

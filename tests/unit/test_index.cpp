@@ -34,6 +34,7 @@ TEST_CASE("Index", "[elements]") {
       Index i3(L"i_3", IndexSpace::instance(IndexSpace::active_occupied),
                {i1, i2});
       REQUIRE(i3.label() == L"i_3");
+      REQUIRE(i3.to_string() == "i_3");
       REQUIRE(i3.space() == IndexSpace::instance(IndexSpace::active_occupied));
       REQUIRE(i3.has_proto_indices());
       REQUIRE(i3.proto_indices().size() == 2);
@@ -43,6 +44,7 @@ TEST_CASE("Index", "[elements]") {
       REQUIRE_NOTHROW(Index(L"i_4", {L"i_1", L"i_2"}));
       Index i4(L"i_4", {L"i_1", L"i_2"});
       REQUIRE(i4.label() == L"i_4");
+      REQUIRE(i4.to_string() == "i_4");
       REQUIRE(i4.space() == IndexSpace::instance(IndexSpace::active_occupied));
       REQUIRE(i4.has_proto_indices());
       REQUIRE(i4.proto_indices().size() == 2);
@@ -168,6 +170,12 @@ TEST_CASE("Index", "[elements]") {
     REQUIRE(i0_13 == Index{L"i_0", {L"i_2", L"i_3"}});
     REQUIRE(i1_13.transform(map));
     REQUIRE(i1_13 == Index{L"i_1", {L"i_2", L"i_3"}});
+  }
+
+  SECTION("to_string") {
+    Index alpha(L"α");
+    REQUIRE(alpha.to_string() == "α");
+    REQUIRE(alpha.ascii_label() == "alpha");
   }
 
   SECTION("latex") {
