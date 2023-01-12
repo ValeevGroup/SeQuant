@@ -234,7 +234,6 @@ add_library(SeQuant
         SeQuant/core/parse_expr.hpp
         SeQuant/core/parse/parse_expr.cpp
         SeQuant/core/optimize.hpp
-        SeQuant/core/wstring.cpp
         SeQuant/core/wstring.hpp
         SeQuant/core/optimize/optimize.cpp
         SeQuant/core/optimize/fusion.hpp

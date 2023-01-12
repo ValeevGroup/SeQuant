@@ -112,12 +112,11 @@ struct STOResult {
 template <typename IdxToSz,
           std::enable_if_t<std::is_invocable_r_v<size_t, IdxToSz, Index>,
                            bool> = true>
-double ops_count(IdxToSz const& idxsz,
-                 container::vector<Index> const& commons,
+double ops_count(IdxToSz const& idxsz, container::vector<Index> const& commons,
                  container::vector<Index> const& diffs) {
   double ops = 1.0;
-  for (auto&& idx: ranges::views::concat(commons,diffs))
-    ops *= std::invoke(idxsz,idx);
+  for (auto&& idx : ranges::views::concat(commons, diffs))
+    ops *= std::invoke(idxsz, idx);
   // ops == 1.0 implies both commons and diffs empty
   return ops == 1.0 ? 0 : ops;
 }
@@ -128,7 +127,7 @@ double ops_count(IdxToSz const& idxsz,
 template <typename F = std::function<bool(EvalNode const&)>,
           std::enable_if_t<std::is_invocable_r_v<bool, F, EvalNode const&>,
                            bool> = true>
-STOResult single_term_opt(
+[[deprecated]] STOResult single_term_opt(
     Product const& prod, F&& pred = [](auto const&) { return true; }) {
   using ranges::to_vector;
   using ranges::views::iota;
@@ -269,12 +268,11 @@ eval_seq_t single_term_opt_v2(TensorNetwork const& network,
     size_t p1 = 0, p2 = 0;
     container::vector<Index> tindices{};
     detail::scan_biparts_some_bits(
-        on_bits, [&result = std::as_const(result), &tindices, &idxsz,
-                  &cost, &p1, &p2](auto p1_, auto p2_) {
+        on_bits, [&result = std::as_const(result), &tindices, &idxsz, &cost,
+                  &p1, &p2](auto p1_, auto p2_) {
           auto [commons, diffs] =
               common_indices(result[p1_].indices, result[p2_].indices);
-          auto new_cost =
-              ops_count(idxsz, commons, diffs) + result[p1_].flops +
+          auto new_cost = ops_count(idxsz, commons, diffs) + result[p1_].flops +
                           result[p2_].flops;
           if (new_cost < cost) {
             cost = new_cost;

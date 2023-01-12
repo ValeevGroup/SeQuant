@@ -7,7 +7,10 @@
 
 #include <cmath>
 #include <string>
+#include <string_view>
 #include <type_traits>
+
+#include <boost/locale/encoding_utf.hpp>
 
 namespace sequant {
 
@@ -31,8 +34,26 @@ to_wstring(T&& t) {
 
 /// @brief (potentially) narrowing character converter.
 ///
-/// Converts a UTF-8 encoded std::wstring to a UTF-8 encoded std::string
-std::string to_string(const std::wstring& wstr_utf8);
+/// Converts a UTF-8 encoded std::basic_string_view<Char> to a UTF-8 encoded
+/// std::string
+template <typename Char, typename Traits>
+std::string to_string(
+    const std::basic_string_view<Char, Traits>& str_utf8_view) {
+  using boost::locale::conv::utf_to_utf;
+  return utf_to_utf<char>(str_utf8_view.data(),
+                          str_utf8_view.data() + str_utf8_view.size());
+}
+
+/// @brief (potentially) narrowing character converter.
+///
+/// Converts a UTF-8 encoded std::basic_string_view<Char> to a UTF-8 encoded
+/// std::string
+template <typename Char, typename Traits, typename Allocator>
+std::string to_string(
+    const std::basic_string<Char, Traits, Allocator>& str_utf8) {
+  using boost::locale::conv::utf_to_utf;
+  return utf_to_utf<char>(str_utf8.data(), str_utf8.data() + str_utf8.size());
+}
 
 }  // namespace sequant
 

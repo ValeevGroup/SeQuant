@@ -75,7 +75,8 @@ class Index : public Taggable {
   /// @param symmetric_proto_indices if true, proto_indices can be permuted at
   /// will and will always be sorted
   Index(std::wstring_view label, const IndexSpace &space,
-        container::vector<Index> proto_indices, bool symmetric_proto_indices = true)
+        container::vector<Index> proto_indices,
+        bool symmetric_proto_indices = true)
       : label_(label),
         space_(space),
         proto_indices_(std::move(proto_indices)),
@@ -243,7 +244,7 @@ class Index : public Taggable {
     return Index(IndexSpace::base_key(space) + L'_' + subscript_label, space);
   }
 
-  /// @return the label
+  /// @return the label as a UTF-8 encoded wide-character string
   /// @warning this does not include the proto index labels, use
   /// Index::full_label() instead
   std::wstring_view label() const { return label_; }
@@ -255,9 +256,17 @@ class Index : public Taggable {
   /// @note Maps: `⁺` -> `a`, `⁻` -> `b`, and all greek characters to their
   ///       english language equivalents (e.g. `α` -> `alpha`, `Ξ` -> `XI`,
   ///       etc.)
-  std::string ascii_label() const;
+  [[deprecated(
+      "use to_string to produce TiledArray-compatible index label "
+      "representation")]] std::string
+  ascii_label() const;
 
-  /// @return the full label
+  /// @return A UTF-8 encoded narrow-character string label
+  /// @warning not to be used with proto indices
+  /// @note equivalent to `sequant::to_string(this->label())`
+  std::string to_string() const;
+
+  /// @return the full label as a UTF-8 encoded wide-character string
   /// @warning this includes the proto index labels (if any), use
   /// Index::label() instead if only want the label
   std::wstring_view full_label() const {

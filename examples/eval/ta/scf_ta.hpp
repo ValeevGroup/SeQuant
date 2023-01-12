@@ -78,7 +78,7 @@ class SequantEvalScfTA final : public SequantEvalScf {
     auto bk_to_labels_sorted =
         [](auto const& bk) -> container::svector<std::string> {
       auto vec = bk | ranges::views::transform([](auto const& idx) {
-                   return idx.ascii_label();
+                   return idx.to_string();
                  }) |
                  ranges::to<container::svector<std::string>>;
       ranges::sort(vec);

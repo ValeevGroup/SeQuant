@@ -123,7 +123,7 @@ Tensor_t eval_inode(EvalNodeTA const& node, Tensor_t const& leval,
 #ifdef TA_TENSOR_MEM_PROFILE
   std::cout << " TA::Tensor allocated {"
             << "hw="
-            << TA::hostEnv::instance()->host_allocator().getHighWatermark()
+            << TA::hostEnv::instance()->host_allocator_getActualHighWatermark()
             << ","
             << "cur="
             << TA::hostEnv::instance()->host_allocator().getCurrentSize() << ","
@@ -262,7 +262,7 @@ Tensor_t eval_single_node(EvalNodeTA const& node, Yielder&& leaf_evaluator,
 #ifdef TA_TENSOR_MEM_PROFILE
   std::cout << " TA::Tensor allocated {"
             << "hw="
-            << TA::hostEnv::instance()->host_allocator().getHighWatermark()
+            << TA::hostEnv::instance()->host_allocator_getActualHighWatermark()
             << ","
             << "cur="
             << TA::hostEnv::instance()->host_allocator().getCurrentSize() << ","
@@ -356,7 +356,7 @@ auto eval(EvalNodeTA const& node, Iterable const& target_indx_labels,
   ranges::sort(ti_sorted_input);
   auto ti_sorted_node = node->tensor().const_braket() |
                         ranges::views::transform(
-                            [](auto const& idx) { return idx.ascii_label(); }) |
+                            [](auto const& idx) { return idx.to_string(); }) |
                         ranges::to<container::svector<std::string>>;
   ranges::sort(ti_sorted_node);
 
@@ -383,7 +383,7 @@ auto eval(EvalNodeTA const& node, Iterable const& target_indx_labels,
 #ifdef TA_TENSOR_MEM_PROFILE
   std::cout << " TA::Tensor allocated {"
             << "hw="
-            << TA::hostEnv::instance()->host_allocator().getHighWatermark()
+            << TA::hostEnv::instance()->host_allocator_getActualHighWatermark()
             << ","
             << "cur="
             << TA::hostEnv::instance()->host_allocator().getCurrentSize() << ","
@@ -496,7 +496,7 @@ auto eval_symm(EvalNodeTA const& node, Iterable const& target_indx_labels,
 #ifdef TA_TENSOR_MEM_PROFILE
   std::cout << " TA::Tensor allocated {"
             << "hw="
-            << TA::hostEnv::instance()->host_allocator().getHighWatermark()
+            << TA::hostEnv::instance()->host_allocator_getActualHighWatermark()
             << ","
             << "cur="
             << TA::hostEnv::instance()->host_allocator().getCurrentSize() << ","
@@ -615,7 +615,7 @@ auto eval_antisymm(EvalNodeTA const& node, Iterable const& target_indx_labels,
 #ifdef TA_TENSOR_MEM_PROFILE
   std::cout << " TA::Tensor allocated {"
             << "hw="
-            << TA::hostEnv::instance()->host_allocator().getHighWatermark()
+            << TA::hostEnv::instance()->host_allocator_getActualHighWatermark()
             << ","
             << "cur="
             << TA::hostEnv::instance()->host_allocator().getCurrentSize() << ","

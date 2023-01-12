@@ -6,6 +6,8 @@
 
 #include "../../SeQuant/core/sequant.hpp"
 
+#include "../../SeQuant/core/wstring.hpp"
+
 namespace sequant {
 
 const std::size_t Index::min_tmp_index() {
@@ -110,6 +112,10 @@ std::string Index::ascii_label() const {
     }
   }
   return label_ascii;
+}
+
+std::string Index::to_string() const {
+  return sequant::to_string(this->label());
 }
 
 }  // namespace sequant
