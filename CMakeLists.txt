@@ -262,8 +262,7 @@ add_library(SeQuant
         SeQuant/domain/mbpt/sr/sr.cpp
         SeQuant/domain/mbpt/sr/sr.hpp
         SeQuant/domain/mbpt/antisymmetrizer.hpp
-        SeQuant/domain/mbpt/rdm.hpp
-        )
+        SeQuant/domain/mbpt/rdm.hpp)
 # feed SEQUANT_GIT_REVISION and SEQUANT_GIT_DESCRIPTION to SeQuant/version.cpp only to avoid recompiling everything
 set_source_files_properties(
         SeQuant/version.cpp
@@ -345,6 +344,7 @@ if (BUILD_TESTING)
     if (TARGET tiledarray)
         list(APPEND utests_src
                 SeQuant/domain/eval/eval_ta.hpp
+                SeQuant/domain/eval/eval_ta.cpp
                 tests/unit/test_eval_ta.cpp
                 )
     endif (TARGET tiledarray)
@@ -421,6 +421,7 @@ if (BUILD_TESTING)
         add_executable(${example5} EXCLUDE_FROM_ALL
                 ${example_eval_src}
                 SeQuant/domain/eval/eval_ta.hpp
+                SeQuant/domain/eval/eval_ta.cpp
                 examples/eval/ta/data_world_ta.hpp
                 examples/eval/ta/scf_ta.hpp
                 examples/eval/ta/main.cpp)

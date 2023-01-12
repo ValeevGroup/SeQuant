@@ -1,9 +1,10 @@
 #ifndef SEQUANT_EVAL_EVAL_TA_HPP
 #define SEQUANT_EVAL_EVAL_TA_HPP
 
-#include <SeQuant/domain/eval/eval.hpp>
-
+#include <SeQuant/core/binary_node.hpp>
+#include <SeQuant/core/eval_expr.hpp>
 #include <SeQuant/core/wstring.hpp>
+#include <SeQuant/domain/eval/eval.hpp>
 
 #include <TiledArray/expressions/einsum.h>
 #include <TiledArray/expressions/index_list.h>
@@ -12,23 +13,80 @@
 
 namespace sequant::eval {
 
+///
+/// Given an iterable of Index objects, generate a string annotation
+/// that can be used for TiledArray tensor expressions.
+/// Tensor-of-tensors also supported.
+template <typename Indices>
+std::string braket_to_annot(Indices&& indices) {
+  // make a comma-separated string out of an iterable of strings
+  auto add_commas = [](auto const& strs) -> std::string {
+    using ranges::views::intersperse;
+    using ranges::views::join;
+    return strs | intersperse(",") | join | ranges::to<std::string>;
+  };
+
+  container::svector<std::string> idxs{}, pidxs{};
+  for (auto&& idx : indices) {
+    idxs.emplace_back(idx.ascii_label());
+    for (auto&& pidx : idx.proto_indices())
+      pidxs.emplace_back(pidx.ascii_label());
+  }
+
+  if (pidxs.empty()) {
+    // not a tensor-of-tensor type expression
+    return add_commas(idxs);
+  } else {
+    ranges::stable_sort(pidxs);
+    ranges::unique(pidxs);
+    return add_commas(pidxs) + ";" + add_commas(idxs);
+  }
+}
+
+class EvalExprTA final : public EvalExpr {
+ public:
+  ///
+  /// annotation for TiledArray
+  ///
+  [[no_discard]] std::string const& annot() const;
+
+  ///
+  /// Whether this object represents a tensor-of-tensor kind expression
+  ///
+  [[no_discard]] bool tot() const;
+
+  explicit EvalExprTA(Tensor const&);
+
+  EvalExprTA(EvalExprTA const&, EvalExprTA const&, EvalOp);
+
+ private:
+  std::string annot_;
+
+  bool tot_;
+};
+
+using EvalNodeTA = FullBinaryNode<EvalExprTA>;
+
 template <typename DistArrayTot, typename DistArray>
 using tot_result_t = std::variant<DistArrayTot, DistArray>;
 
+EvalNodeTA to_eval_node_ta(ExprPtr const& expr);
+
+EvalNodeTA to_eval_node_ta(EvalNode const& node);
+
 namespace detail {
 
-auto const ords_to_annot = [](auto const& ords) {
-  using ranges::accumulate;
+auto ords_to_annot = [](auto const& ords) -> std::string {
   using ranges::views::intersperse;
   using ranges::views::transform;
+  using ranges::views::join;
   auto to_str = [](auto x) { return std::to_string(x); };
-  return ranges::accumulate(
-      ords | transform(to_str) | intersperse(std::string{","}), std::string{},
-      std::plus{});
+  return ords | transform(to_str) | intersperse(std::string{","}) | join |
+         ranges::to<std::string>;
 };  // ords_to_annot
 
 template <typename Tensor_t>
-Tensor_t eval_inode(EvalNode const& node, Tensor_t const& leval,
+Tensor_t eval_inode(EvalNodeTA const& node, Tensor_t const& leval,
                     Tensor_t const& reval) {
   assert((node->op() == EvalOp::Sum || node->op() == EvalOp::Prod) &&
          "unsupported intermediate operation");
@@ -80,7 +138,7 @@ Tensor_t eval_inode(EvalNode const& node, Tensor_t const& leval,
 }
 
 template <typename DA_tot, typename DA>
-tot_result_t<DA_tot, DA> eval_inode_tot(EvalNode const& node,
+tot_result_t<DA_tot, DA> eval_inode_tot(EvalNodeTA const& node,
                                         tot_result_t<DA_tot, DA> const& leval,
                                         tot_result_t<DA_tot, DA> const& reval) {
   using variant_t = tot_result_t<DA_tot, DA>;
@@ -169,7 +227,7 @@ tot_result_t<DA_tot, DA> eval_inode_tot(EvalNode const& node,
 }
 
 template <typename Tensor_t, typename Yielder>
-Tensor_t eval_single_node(EvalNode const& node, Yielder&& leaf_evaluator,
+Tensor_t eval_single_node(EvalNodeTA const& node, Yielder&& leaf_evaluator,
                           CacheManager<Tensor_t const>& cache_manager) {
   static_assert(
       std::is_invocable_r_v<Tensor_t, Yielder, sequant::Tensor const&>);
@@ -220,7 +278,7 @@ Tensor_t eval_single_node(EvalNode const& node, Yielder&& leaf_evaluator,
 
 template <typename DA_tot, typename DA, typename Yielder>
 tot_result_t<DA_tot, DA> eval_single_node_tot(
-    EvalNode const& node, Yielder&& leaf_evaluator,
+    EvalNodeTA const& node, Yielder&& leaf_evaluator,
     CacheManager<tot_result_t<DA_tot, DA>>& cache_manager) {
   static_assert(std::is_invocable_r_v<tot_result_t<DA_tot, DA>, Yielder,
                                       sequant::Tensor const&>);
@@ -260,13 +318,13 @@ tot_result_t<DA_tot, DA> eval_single_node_tot(
 ///
 ///
 /// Evaluate expressions from left to right as they appear in @c Expr.
-/// The @c Expr corresponding a @c EvalNode can be generated using @c to_expr
+/// The @c Expr corresponding a @c EvalNodeTA can be generated using @c to_expr
 /// function.
 ///
-/// A node a full-binary tree @see EvalNode. The evaluation
+/// A node a full-binary tree @see EvalNodeTA. The evaluation
 /// occurs in a left-to-right order. This can also be thought of in terms of
 /// post-order traversal (a binary tree traversal technique, see Wikipedia).
-/// If the current EvalNode object has not yet been evaluated earlier (tested
+/// If the current EvalNodeTA object has not yet been evaluated earlier (tested
 /// by checking the cache), then the left node is first evaluated, followed
 /// by the right node. The result of the left and the right evaluations are
 /// then used to evaluate this node.
@@ -287,7 +345,7 @@ tot_result_t<DA_tot, DA> eval_single_node_tot(
 /// @see @c to_expr
 ///
 template <typename Tensor_t, typename Iterable, typename Yielder>
-auto eval(EvalNode const& node, Iterable const& target_indx_labels,
+auto eval(EvalNodeTA const& node, Iterable const& target_indx_labels,
           Yielder&& yielder, CacheManager<Tensor_t const>& man) {
   static_assert(
       std::is_invocable_r_v<Tensor_t, Yielder, sequant::Tensor const&>);
@@ -344,7 +402,7 @@ auto eval(EvalNode const& node, Iterable const& target_indx_labels,
 ///
 /// \tparam DA_tot Tensor-of-tensor type. eg. TA::DArray<TA::Tensor<TA::Tensor>>
 /// \tparam DA Simple tensor type. eg. TA::DArray<TA::Tensor>
-/// \param node @c EvalNode to be evaluated.
+/// \param node @c EvalNodeTA to be evaluated.
 /// \param outer_indx_labels The outer index labels in terms of how
 /// tensor-of-tensor
 ///                   operations are supported in TiledArray.
@@ -362,7 +420,7 @@ template <
     std::enable_if_t<std::is_invocable_r_v<tot_result_t<DA_tot, DA>, Yielder,
                                            sequant::Tensor const&>,
                      bool> = true>
-DA_tot eval_tot(EvalNode const& node, Iterable1 const& outer_indx_labels,
+DA_tot eval_tot(EvalNodeTA const& node, Iterable1 const& outer_indx_labels,
                 Iterable2 const& inner_indx_labels, Yielder&& yielder,
                 CacheManager<tot_result_t<DA_tot, DA>>& man) {
   auto bpindx_rcvd =
@@ -408,7 +466,7 @@ DA_tot eval_tot(EvalNode const& node, Iterable1 const& outer_indx_labels,
 /// @see @c eval
 ///
 template <typename Tensor_t, typename Iterable, typename Yielder>
-auto eval_symm(EvalNode const& node, Iterable const& target_indx_labels,
+auto eval_symm(EvalNodeTA const& node, Iterable const& target_indx_labels,
                Yielder&& yielder, CacheManager<Tensor_t const>& man) {
   Tensor_t symm_result;
   {
@@ -458,7 +516,7 @@ auto eval_symm(EvalNode const& node, Iterable const& target_indx_labels,
 ///
 /// \tparam DA_tot Tensor-of-tensor type. eg. TA::DArray<TA::Tensor<TA::Tensor>>
 /// \tparam DA Simple tensor type. eg. TA::DArray<TA::Tensor>
-/// \param node @c EvalNode to be evaluated.
+/// \param node @c EvalNodeTA to be evaluated.
 /// \param outer_indx_labels The outer index labels in terms of how
 /// tensor-of-tensor
 ///                   operations are supported in TiledArray.
@@ -472,7 +530,7 @@ auto eval_symm(EvalNode const& node, Iterable const& target_indx_labels,
 ///
 template <typename DA_tot, typename DA, typename Iterable1, typename Iterable2,
           typename Yielder>
-auto eval_symm_tot(EvalNode const& node, Iterable1 const& outer_indx_labels,
+auto eval_symm_tot(EvalNodeTA const& node, Iterable1 const& outer_indx_labels,
                    Iterable2 const& inner_indx_labels, Yielder&& yielder,
                    CacheManager<tot_result_t<DA_tot, DA>>& man) {
   assert(node->tensor().bra_rank() == node->tensor().ket_rank() &&
@@ -525,7 +583,7 @@ auto eval_symm_tot(EvalNode const& node, Iterable1 const& outer_indx_labels,
 /// @see @c eval
 ///
 template <typename Tensor_t, typename Iterable, typename Yielder>
-auto eval_antisymm(EvalNode const& node, Iterable const& target_indx_labels,
+auto eval_antisymm(EvalNodeTA const& node, Iterable const& target_indx_labels,
                    Yielder&& yielder, CacheManager<Tensor_t const>& man) {
   Tensor_t antisymm_result;
   {
@@ -577,7 +635,7 @@ auto eval_antisymm(EvalNode const& node, Iterable const& target_indx_labels,
 ///
 /// \tparam DA_tot Tensor-of-tensor type. eg. TA::DArray<TA::Tensor<TA::Tensor>>
 /// \tparam DA Simple tensor type. eg. TA::DArray<TA::Tensor>
-/// \param node @c EvalNode to be evaluated.
+/// \param node @c EvalNodeTA to be evaluated.
 /// \param outer_indx_labels The outer index labels in terms of how
 /// tensor-of-tensor
 ///                   operations are supported in TiledArray.
@@ -591,7 +649,8 @@ auto eval_antisymm(EvalNode const& node, Iterable const& target_indx_labels,
 ///
 template <typename DA_tot, typename DA, typename Iterable1, typename Iterable2,
           typename Yielder>
-auto eval_antisymm_tot(EvalNode const& node, Iterable1 const& outer_indx_labels,
+auto eval_antisymm_tot(EvalNodeTA const& node,
+                       Iterable1 const& outer_indx_labels,
                        Iterable2 const& inner_indx_labels, Yielder&& yielder,
                        CacheManager<tot_result_t<DA_tot, DA>>& man) {
   auto const eval_result = eval_tot(node, outer_indx_labels, inner_indx_labels,

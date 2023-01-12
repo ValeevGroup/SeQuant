@@ -12,12 +12,12 @@ const Tensor& EvalExpr::tensor() const { return tensor_; }
 
 const Constant& EvalExpr::scalar() const { return scalar_; }
 
-EvalExpr::EvalExpr(const Tensor& tnsr) : op_{EvalOp::Id}, tensor_{tnsr},
-hash_{EvalExpr::hash_terminal_tensor(tnsr)}, annot_{braket_to_annot(tnsr.const_braket())}{}
+EvalExpr::EvalExpr(const Tensor& tnsr)
+    : op_{EvalOp::Id},
+      tensor_{tnsr},
+      hash_{EvalExpr::hash_terminal_tensor(tnsr)} {}
 
-EvalExpr::EvalExpr(const EvalExpr& xpr1,
-                   const EvalExpr& xpr2,
-                   EvalOp op) {
+EvalExpr::EvalExpr(const EvalExpr& xpr1, const EvalExpr& xpr2, EvalOp op) {
   assert(op != EvalOp::Id);
   auto const& expr1 = xpr1.hash() < xpr2.hash() ? xpr1 : xpr2;
   auto const& expr2 = xpr1.hash() < xpr2.hash() ? xpr2 : xpr1;
@@ -26,32 +26,35 @@ EvalExpr::EvalExpr(const EvalExpr& xpr1,
   if (op == EvalOp::Prod)
     bk = target_braket_prod(expr1.tensor(), expr2.tensor());
   else {
-    std::get<0>(bk) = expr1.tensor().bra()
-                      | ranges::to<index_container_type>;
-    std::get<1>(bk) = expr1.tensor().ket()
-                      | ranges::to<index_container_type>;
+    std::get<0>(bk) = expr1.tensor().bra() | ranges::to<index_container_type>;
+    std::get<1>(bk) = expr1.tensor().ket() | ranges::to<index_container_type>;
   }
 
   auto const& t1 = expr1.tensor();
   auto const& t2 = expr2.tensor();
   Symmetry s = Symmetry::invalid;
   switch (op) {
-    case EvalOp::Sum: s = infer_tensor_symmetry_sum(expr1, expr2); break;
-    case EvalOp::Prod: s = infer_tensor_symmetry_prod(expr1, expr2); break;
-    case EvalOp::Symm: s = Symmetry::symm; break;
-    case EvalOp::Antisymm: s = Symmetry::antisymm; break;
-    default: assert(false && "Unsupported operation for symmetry detect.");
+    case EvalOp::Sum:
+      s = infer_tensor_symmetry_sum(expr1, expr2);
+      break;
+    case EvalOp::Prod:
+      s = infer_tensor_symmetry_prod(expr1, expr2);
+      break;
+    case EvalOp::Symm:
+      s = Symmetry::symm;
+      break;
+    case EvalOp::Antisymm:
+      s = Symmetry::antisymm;
+      break;
+    default:
+      assert(false && "Unsupported operation for symmetry detect.");
   }
   op_ = op;
 
-  tensor_ = Tensor{L"I",
-      std::get<0>(bk),
-      std::get<1>(bk),
-      s, infer_braket_symmetry(), infer_particle_symmetry(s)};
+  tensor_ = Tensor{L"I", std::get<0>(bk),         std::get<1>(bk),
+                   s,    infer_braket_symmetry(), infer_particle_symmetry(s)};
 
   hash_ = hash_imed(expr1, expr2, op);
-
-  annot_ = braket_to_annot(tensor_.const_braket());
 }
 
 Symmetry EvalExpr::infer_tensor_symmetry_sum(EvalExpr const& xpr1,
@@ -173,7 +176,7 @@ next_contract:
 EvalExpr::hash_t EvalExpr::hash_braket(
     const decltype(std::declval<Tensor>().const_braket())& braket) {
   EvalExpr::hash_t bkHash = 0;
-  for (auto const& idx: braket) {
+  for (auto const& idx : braket) {
     hash::combine(bkHash, hash::value(idx.space().type().to_int32()));
     hash::combine(bkHash, hash::value(idx.space().qns().to_int32()));
   }
@@ -216,22 +219,6 @@ EvalExpr::hash_t EvalExpr::hash_imed(const EvalExpr& expr1,
   }
 
   return imedHash;
-}
-
-container::vector<std::string> EvalExpr::unique_idxs(
-    container::vector<std::string> const& idxs) {
-  container::vector<bool> non_uniq(idxs.size(), false);
-  for (auto i = 0; i < idxs.size(); ++i) {
-    for (auto j = i + 1; j < idxs.size(); ++j) {
-      if (!non_uniq[j] && (idxs[i] == idxs[j])) non_uniq[j] = true;
-    }
-  }
-  container::vector<std::string> result;
-  result.reserve(idxs.size());
-  for (auto i = 0; i < non_uniq.size(); ++i)
-    if (!non_uniq[i]) result.push_back(idxs[i]);
-  result.shrink_to_fit();
-  return result;
 }
 
 }  // namespace sequant
