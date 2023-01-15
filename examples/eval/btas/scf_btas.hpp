@@ -104,7 +104,7 @@ class SequantEvalScfBTAS final : public SequantEvalScf {
     // todo time it
     nodes_ = info_.nodes(exprs);
 
-    cman_ = info_.cache_manager<Tensor_t const>(nodes_);
+    cman_ = info_.cache_manager_scf<Tensor_t const>(nodes_);
   }
 };
 

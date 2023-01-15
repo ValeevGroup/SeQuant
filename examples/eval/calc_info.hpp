@@ -43,12 +43,19 @@ struct CalcInfo {
       container::vector<ExprPtr> const& exprs) const;
 
   template <typename Data_t>
-  CacheManager<Data_t> cache_manager(
+  CacheManager<Data_t> cache_manager_scf(
       container::vector<EvalNode> const& nodes) const {
     if (optm_opts.reuse_imeds)
-      return make_cache_manager<Data_t>(nodes, optm_opts.cache_leaves);
+      return cache_manager<Data_t>(nodes, UncacheAmplitudeTensors{},
+                                   optm_opts.cache_leaves);
     else if (optm_opts.cache_leaves)
-      return make_cache_manager_leaves_only<Data_t>(nodes);
+      return cache_manager<Data_t>(
+          nodes,
+          [](auto&& n) {  // only cache if it's leaf and it's not T tensor
+            static const UncacheAmplitudeTensors notT{};
+            return n.leaf() && notT(n);
+          },
+          optm_opts.cache_leaves);
     else
       return CacheManager<Data_t>{{}, {}};
   }

@@ -126,7 +126,7 @@ class SequantEvalScfTA final : public SequantEvalScf {
         ranges::views::transform([](auto&& n) { return to_eval_node_ta(n); }) |
         ranges::to<decltype(nodes_)>;
 
-    cman_ = info_.cache_manager<Tensor_t const>(ns);
+    cman_ = info_.cache_manager_scf<Tensor_t const>(ns);
   }
 };
 

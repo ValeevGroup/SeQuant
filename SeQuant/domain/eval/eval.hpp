@@ -125,94 +125,82 @@ void antisymmetrize_tensor(size_t rank, F&& callback) {
 }
 
 ///
+/// Make a @c CacheManager object that caches the data associated with an
+/// intermediate for a certain number of accesses. After that many accesses, the
+/// associated resource is freed. Aditionally, store the data associated with
+/// the leaf nodes for indefinitely many accesses if @c persistent_leaves in on.
+///
 /// \tparam T type of the objects to be cached associated with an
 ///                  intermediate or a leaf node.
 ///
-/// \param node An @c EvalNode object.
+/// \param nodes Range of FullBinaryNode objects. Elements of @c nodes should
+///              have a method named <code> hash() </code> that returns size_t.
+///
+/// \param proj Only cache data for nodes that <code> proj(node) </code>
+///             evaluates to true. Useful to avoid caching trivially computable
+///             intermediates or the leaves that should not be cached at all.
+///             For example the 't' amplitude tensors in coupled-cluster
+///             expressions. @note @c proj is called on both internal and leaf
+///             nodes.
 /// \param persistent_leaves Whether the cache manager should store the data
 ///                          associated with the leaf nodes indefinitely.
-/// \return A cache manager object. @see CacheManager.
-template <typename T>
-CacheManager<T> make_cache_manager(EvalNode const& node,
-                                   bool persistent_leaves) {
-  container::map<size_t, size_t> hash_to_counts{};
-  detail::count_imeds(node, hash_to_counts);
+/// \param min_repeats Only cache intermediates that repeats at least this many
+///                    times.
+///
+/// \todo Restrictions on template params.
+///
+template <typename T, typename NodesRng, typename P>
+CacheManager<T> cache_manager(NodesRng const& nodes, P&& proj,
+                              bool persistent_leaves, size_t min_repeats = 2) {
+  using key_t = typename CacheManager<T>::key_t;
+  using count_t = typename CacheManager<T>::count_t;
+  using map_t = container::map<key_t, count_t>;
 
-  auto less_repeating = [](auto const& pair) { return pair.second < 2; };
-  ranges::actions::remove_if(hash_to_counts, less_repeating);
+  auto imed_counts = map_t{};
 
-  if (!persistent_leaves) return CacheManager<T>{hash_to_counts, {}};
+  // counts number of times each internal node appears in
+  // all of @c nodes trees
+  auto imed_visitor = [&proj, &imed_counts](auto&& n) {
+    if (!std::invoke(std::forward<P>(proj), n)) return;
 
-  container::svector<size_t> leaf_hashes{};
-  node.visit_leaf([&leaf_hashes](auto const& node) {
-    leaf_hashes.emplace_back(node->hash());
+    auto&& end = imed_counts.end();
+    auto&& h = n->hash();
+    if (auto&& found = imed_counts.find(h); found != end)
+      ++found->second;
+    else
+      imed_counts.emplace(h, 1);
+  };
+
+  ranges::for_each(nodes, [&imed_visitor](auto&& tree) {
+    tree.visit_internal(imed_visitor);
   });
 
-  return CacheManager<T>{hash_to_counts, leaf_hashes};
+  // remove less repeating imeds
+  auto less_repeating = [min_repeats](auto&& pair) {
+    return pair.second < min_repeats;
+  };
+  ranges::actions::remove_if(imed_counts, less_repeating);
+
+  auto leafs = container::set<key_t>{};
+  auto leaf_visitor = [&proj, &leafs](auto&& n) {
+    if (std::invoke(std::forward<P>(proj), n)) {
+      leafs.emplace(n->hash());
+    }
+  };
+
+  if (persistent_leaves)
+    ranges::for_each(
+        nodes, [&leaf_visitor](auto&& tree) { tree.visit_leaf(leaf_visitor); });
+
+  return {imed_counts, leafs};
 }
 
-///
-/// Make a @c CacheManager object that caches the data associated with an
-/// intermediate for a certain number of accesses. After that many accesses, the
-/// associated resource is freed. Also, optionally store the data associated
-/// with the leaf nodes for indefinitely many accesses. This is a specific
-/// use-case function intended to be used in Coupled-Cluster calculations.
-/// Because the amplitude tensors (the leaf nodes whose tensor has the label
-/// 't') are updated every iteration, their data should never be reused -- and
-/// thus stored. This fact is taken into consideration by this function.
-/// \tparam  T type of the objects to be cached associated with an intermediate
-///            or a leaf node.
-///
-/// \param nodes An iterable of @c EvalNode objects.
-/// \param persistent_leaves Whether the cache manager should store the data
-///                          associated with the leaf nodes indefinitely.
-/// \return A cache manager object. @see CacheManager.
-///
-template <typename T, typename Iterable>
-CacheManager<T> make_cache_manager(Iterable const& nodes,
-                                   bool persistent_leaves) {
-  container::map<size_t, size_t> hash_to_counts{};
-
-  for (auto const& n : nodes) detail::count_imeds(n, hash_to_counts);
-
-  auto less_repeating = [](auto const& pair) { return pair.second < 2; };
-  ranges::actions::remove_if(hash_to_counts, less_repeating);
-
-  if (!persistent_leaves) return CacheManager<T>{hash_to_counts, {}};
-
-  container::set<size_t> leaf_hashes{};
-  for (auto const& n : nodes) {
-    n.visit_leaf([&leaf_hashes](auto const& node) {
-      if (node->tensor().label() != L"t") leaf_hashes.insert(node->hash());
-    });
+struct UncacheAmplitudeTensors {
+  template <typename N>
+  [[nodiscard]] bool operator()(N&& node) const noexcept {
+    return node->tensor().label() != L"t";
   }
-
-  return CacheManager<T>{hash_to_counts, leaf_hashes};
-}
-
-///
-/// Make @c CacheManager object that persistently stores the data associated
-/// with the leaf nodes of an  @c EvalNode object. This is a specific use-case
-/// function intended to be used in Coupled-Cluster calculations. Because the
-/// amplitude tensors (the leaf nodes whose tensor has the label 't') are
-/// updated every iteration, their data should never be reused -- and thus
-/// stored. This fact is taken into consideration by this function.
-///
-/// \tparam T type of the objects to be cached associated with the leaf nodes.
-///
-/// \param nodes An iterable of @c EvalNode objects.
-/// \return A cache manager object. @see CacheManager.
-///
-template <typename T, typename Iterable>
-CacheManager<T> make_cache_manager_leaves_only(Iterable const& nodes) {
-  container::set<EvalExpr::hash_t> leaf_hashes{};
-  for (auto const& n : nodes) {
-    n.visit_leaf([&leaf_hashes](auto const& node) {
-      if (node->tensor().label() != L"t") leaf_hashes.insert(node->hash());
-    });
-  }
-  return CacheManager<T>{{}, leaf_hashes};
-}
+};
 
 }  // namespace sequant::eval
 
