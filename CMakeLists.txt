@@ -183,7 +183,7 @@ add_library(SeQuant-bliss
         SeQuant/external/bliss/bliss_C.h
         )
 
-add_library(SeQuant
+set(SeQuant_src
         ${PROJECT_BINARY_DIR}/SeQuant/version.hpp
         SeQuant/version.cpp
         SeQuant/core/sequant.cpp
@@ -261,7 +261,19 @@ add_library(SeQuant
         SeQuant/domain/mbpt/sr/sr.cpp
         SeQuant/domain/mbpt/sr/sr.hpp
         SeQuant/domain/mbpt/antisymmetrizer.hpp
-        SeQuant/domain/mbpt/rdm.hpp)
+        SeQuant/domain/mbpt/rdm.hpp
+        )
+
+if (TARGET tiledarray)
+    list(APPEND SeQuant_src
+            SeQuant/domain/eval/eval_ta.hpp
+            SeQuant/domain/eval/eval_ta.cpp
+            )
+endif()
+
+add_library(SeQuant
+        ${SeQuant_src}
+        )
 # feed SEQUANT_GIT_REVISION and SEQUANT_GIT_DESCRIPTION to SeQuant/version.cpp only to avoid recompiling everything
 set_source_files_properties(
         SeQuant/version.cpp
@@ -270,6 +282,9 @@ set_source_files_properties(
 )
 
 target_link_libraries(SeQuant PUBLIC range-v3::range-v3 Boost::regex Boost::locale Boost::boost SeQuant-bliss Threads::Threads)
+if (TARGET tiledarray)
+    target_link_libraries(SeQuant PUBLIC tiledarray)
+endif()
 if (SEQUANT_HAS_EXECUTION_HEADER_STANDALONE OR SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB)
     target_compile_definitions(SeQuant PUBLIC SEQUANT_HAS_EXECUTION_HEADER)
     if (SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB)
