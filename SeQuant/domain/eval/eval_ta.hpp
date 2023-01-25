@@ -76,14 +76,15 @@ EvalNodeTA to_eval_node_ta(EvalNode const& node);
 
 namespace detail {
 
-auto ords_to_annot = [](auto const& ords) -> std::string {
+template <typename RngOfOrdinals>
+auto ords_to_annot(RngOfOrdinals const& ords) {
   using ranges::views::intersperse;
   using ranges::views::transform;
   using ranges::views::join;
   auto to_str = [](auto x) { return std::to_string(x); };
   return ords | transform(to_str) | intersperse(std::string{","}) | join |
          ranges::to<std::string>;
-};  // ords_to_annot
+}
 
 template <typename Tensor_t>
 Tensor_t eval_inode(EvalNodeTA const& node, Tensor_t const& leval,
