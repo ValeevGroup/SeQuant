@@ -48,12 +48,12 @@ class EvalExprTA final : public EvalExpr {
   ///
   /// annotation for TiledArray
   ///
-  [[no_discard]] std::string const& annot() const;
+  [[nodiscard]] std::string const& annot() const;
 
   ///
   /// Whether this object represents a tensor-of-tensor kind expression
   ///
-  [[no_discard]] bool tot() const;
+  [[nodiscard]] bool tot() const;
 
   explicit EvalExprTA(Tensor const&);
 
