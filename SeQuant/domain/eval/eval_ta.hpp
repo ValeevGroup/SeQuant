@@ -79,8 +79,8 @@ namespace detail {
 template <typename RngOfOrdinals>
 auto ords_to_annot(RngOfOrdinals const& ords) {
   using ranges::views::intersperse;
-  using ranges::views::transform;
   using ranges::views::join;
+  using ranges::views::transform;
   auto to_str = [](auto x) { return std::to_string(x); };
   return ords | transform(to_str) | intersperse(std::string{","}) | join |
          ranges::to<std::string>;
@@ -195,8 +195,8 @@ tot_result_t<DA_tot, DA> eval_inode_tot(EvalNodeTA const& node,
     double lscal;
     double rscal;
     variant_t operator()(DA_tot const& lhs, DA_tot const& rhs) {
-      DA_tot unscaled, scaled;
-      TA::expressions::einsum(unscaled(this_annot), lhs(lannot), rhs(rannot));
+      auto unscaled = TA::einsum(lhs(lannot), rhs(rannot), this_annot);
+      DA_tot scaled;
       scaled(this_annot) = (lscal * rscal) * unscaled(this_annot);
       DA_tot::wait_for_lazy_cleanup(scaled.world());
       return variant_t{scaled};
@@ -206,11 +206,13 @@ tot_result_t<DA_tot, DA> eval_inode_tot(EvalNodeTA const& node,
       return operator()(rhs, lhs);
     }
     variant_t operator()(DA const& lhs, DA_tot const& rhs) {
-      DA_tot unscaled, scaled;
-      TA::expressions::einsum(unscaled(this_annot), lhs(lannot), rhs(rannot));
-      scaled(this_annot) = (lscal * rscal) * unscaled(this_annot);
-      DA_tot::wait_for_lazy_cleanup(scaled.world());
-      return variant_t{scaled};
+      throw std::runtime_error("Not fully implemented because TA has withdrawn support.");
+      return {};
+//      auto unscaled = TA::einsum(lhs(lannot), rhs(rannot), this_annot);
+//      DA_tot scaled;
+//      scaled(this_annot) = (lscal * rscal) * unscaled(this_annot);
+//      DA_tot::wait_for_lazy_cleanup(scaled.world());
+//      return variant_t{scaled};
     }
     variant_t operator()(DA const& lhs, DA const& rhs) {
       DA scaled;
