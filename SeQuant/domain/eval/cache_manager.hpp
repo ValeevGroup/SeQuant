@@ -90,7 +90,7 @@ class CacheManager {
       return decay() == 0 ? std::move(data_p) : data_p;
     }
 
-    void store(D data) {
+    void store(D data) noexcept {
       data_p = std::make_shared<D>(std::move(data));
     }
 
@@ -115,7 +115,7 @@ class CacheManager {
 
   };  // entry
 
-  ptr_t store(entry<Data> &entry, Data data) {
+  ptr_t store(entry<Data> &entry, Data data) noexcept {
     entry.store(std::move(data));
     return entry.access();
   }
@@ -135,7 +135,7 @@ class CacheManager {
   ///        undefined behavior.
   template <typename Iterable1 = container::map<key_t, count_t>,
             typename Iterable2 = container::svector<key_t>>
-  CacheManager(Iterable1 &&decaying, Iterable2 &&persistent) {
+  CacheManager(Iterable1 &&decaying, Iterable2 &&persistent) noexcept {
     for (auto &&[k, c] : decaying)
       cache_map_.try_emplace(k, entry<Data>{static_cast<count_t>(c)});
 
@@ -145,14 +145,14 @@ class CacheManager {
   ///
   /// Resets all cached data.
   ///
-  void reset_all() {
+  void reset_all() noexcept {
     for (auto &&[k, v] : cache_map_) v.reset(false);
   }
 
   ///
   /// Only resets decaying cached data, which restores their lifetimes to the
   /// values they were constructed with.
-  void reset_decaying() {
+  void reset_decaying() noexcept {
     for (auto &&[k, v] : cache_map_) v.reset(true);
   }
 
@@ -179,18 +179,27 @@ class CacheManager {
   ///         entry. Passing @c key that was not present during construction of
   ///         this CacheManager object, stores nothing, but still returns a
   ///         valid pointer to @c data.
-  ptr_t store(key_t key, Data data) {
+  ptr_t store(key_t key, Data data) noexcept {
     if (auto &&found = cache_map_.find(key); found != cache_map_.end())
       return store(found->second, std::move(data));
     return std::make_shared<Data>(std::move(data));
   }
 
+  ///
+  /// Get an empty cache manager.
+  ///
+  static CacheManager<Data> empty() noexcept {
+    return CacheManager<Data>{{}, {}};
+  }
+
   // for unit testing
-  template <typename T> struct access_by;
-  template <typename T> friend struct access_by;
+  template <typename T>
+  struct access_by;
+  template <typename T>
+  friend struct access_by;
 
 };  // CacheManager
 
-}  // namespace
+}  // namespace sequant::eval
 
 #endif  // SEQUANT_EVAL_CACHE_MANAGER_HPP

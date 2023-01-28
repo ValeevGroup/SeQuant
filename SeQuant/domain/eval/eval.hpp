@@ -125,33 +125,30 @@ void antisymmetrize_tensor(size_t rank, F&& callback) {
 }
 
 ///
-/// Make a @c CacheManager object that caches the data associated with an
-/// intermediate for a certain number of accesses. After that many accesses, the
-/// associated resource is freed. Aditionally, store the data associated with
-/// the leaf nodes for indefinitely many accesses if @c persistent_leaves in on.
+/// \tparam T Type of the cached data.
+/// \tparam MinRepeat Cache intermediates that repeat at least this many times.
+///                   Default value 2.
+/// \param nodes A range of eval node objects. Must support a .hash(void)
+///              method that returns a size_t value.
+/// \param pred_leaf Cache leaf node data for which pred_leaf(node) returns
+///                  true. By default do not cache leaf data.
+/// \param pred_imed Cache imed node data for which pred_imed(node) returns
+///                  true. By default cache all repeating intermediate's data.
+/// \return CacheManager<T> object.
+/// \see CacheManager
 ///
-/// \tparam T type of the objects to be cached associated with an
-///                  intermediate or a leaf node.
-///
-/// \param nodes Range of FullBinaryNode objects. Elements of @c nodes should
-///              have a method named <code> hash() </code> that returns size_t.
-///
-/// \param proj Only cache data for nodes that <code> proj(node) </code>
-///             evaluates to true. Useful to avoid caching trivially computable
-///             intermediates or the leaves that should not be cached at all.
-///             For example the 't' amplitude tensors in coupled-cluster
-///             expressions. @note @c proj is called on both internal and leaf
-///             nodes.
-/// \param persistent_leaves Whether the cache manager should store the data
-///                          associated with the leaf nodes indefinitely.
-/// \param min_repeats Only cache intermediates that repeats at least this many
-///                    times.
-///
-/// \todo Restrictions on template params.
-///
-template <typename T, typename NodesRng, typename P>
-CacheManager<T> cache_manager(NodesRng const& nodes, P&& proj,
-                              bool persistent_leaves, size_t min_repeats = 2) {
+template <typename T,
+          size_t MinRepeat = 2,  //
+          typename NodesRng,     //
+          typename PredLeaf,     //
+          typename PredImed>
+CacheManager<T> cache_manager(NodesRng const& nodes,  //
+                              PredLeaf&& pred_leaf,   //
+                              PredImed&& pred_imed) {
+  using value_type = decltype(*ranges::begin(nodes));
+  static_assert(std::is_invocable_r_v<bool, PredLeaf, value_type>);
+  static_assert(std::is_invocable_r_v<bool, PredImed, value_type>);
+
   using key_t = typename CacheManager<T>::key_t;
   using count_t = typename CacheManager<T>::count_t;
   using map_t = container::map<key_t, count_t>;
@@ -160,8 +157,8 @@ CacheManager<T> cache_manager(NodesRng const& nodes, P&& proj,
 
   // counts number of times each internal node appears in
   // all of @c nodes trees
-  auto imed_visitor = [&proj, &imed_counts](auto&& n) {
-    if (!std::invoke(std::forward<P>(proj), n)) return;
+  auto imed_visitor = [&pred_imed, &imed_counts](auto&& n) {
+    if (!std::invoke(std::forward<PredImed>(pred_imed), n)) return;
 
     auto&& end = imed_counts.end();
     auto&& h = n->hash();
@@ -169,38 +166,51 @@ CacheManager<T> cache_manager(NodesRng const& nodes, P&& proj,
       ++found->second;
     else
       imed_counts.emplace(h, 1);
-  };
+  };  // imed_visitor
 
+  // visit imeds
   ranges::for_each(nodes, [&imed_visitor](auto&& tree) {
     tree.visit_internal(imed_visitor);
   });
 
   // remove less repeating imeds
-  auto less_repeating = [min_repeats](auto&& pair) {
-    return pair.second < min_repeats;
-  };
+  auto less_repeating = [](auto&& pair) { return pair.second < MinRepeat; };
   ranges::actions::remove_if(imed_counts, less_repeating);
 
   auto leafs = container::set<key_t>{};
-  auto leaf_visitor = [&proj, &leafs](auto&& n) {
-    if (std::invoke(std::forward<P>(proj), n)) {
+
+  // find leave tensors to be cached
+  auto leaf_visitor = [&pred_leaf, &leafs](auto&& n) {
+    if (std::invoke(std::forward<PredLeaf>(pred_leaf), n)) {
       leafs.emplace(n->hash());
     }
   };
 
-  if (persistent_leaves)
-    ranges::for_each(
-        nodes, [&leaf_visitor](auto&& tree) { tree.visit_leaf(leaf_visitor); });
+  // visit leaves
+  ranges::for_each(
+      nodes, [&leaf_visitor](auto&& tree) { tree.visit_leaf(leaf_visitor); });
 
   return {imed_counts, leafs};
 }
 
-struct UncacheAmplitudeTensors {
-  template <typename N>
-  [[nodiscard]] bool operator()(N&& node) const noexcept {
-    return node->tensor().label() != L"t";
-  }
-};
+template <typename T,
+          size_t MinRepeat = 2,  //
+          typename NodesRng,     //
+          typename PredLeaf>
+CacheManager<T> cache_manager(NodesRng&& nodes, PredLeaf&& pred_leaf) {
+  return cache_manager<T, MinRepeat>(nodes, std::forward<PredLeaf>(pred_leaf),
+                                     [](auto&&) { return true; });
+}
+
+template <typename T,
+          size_t MinRepeat = 2,  //
+          typename NodesRng>
+CacheManager<T> cache_manager(NodesRng&& nodes) {
+  return cache_manager<T, MinRepeat>(
+      nodes,                         //
+      [](auto&&) { return false; },  //
+      [](auto&&) { return true; });
+}
 
 }  // namespace sequant::eval
 
