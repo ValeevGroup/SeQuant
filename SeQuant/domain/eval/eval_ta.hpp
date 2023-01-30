@@ -19,10 +19,13 @@ namespace sequant::eval {
 /// Tensor-of-tensors also supported.
 template <typename Indices>
 std::string braket_to_annot(Indices&& indices) {
+  using ranges::find;
+  using ranges::views::filter;
+  using ranges::views::intersperse;
+  using ranges::views::join;
+
   // make a comma-separated string out of an iterable of strings
   auto add_commas = [](auto const& strs) -> std::string {
-    using ranges::views::intersperse;
-    using ranges::views::join;
     return strs | intersperse(",") | join | ranges::to<std::string>;
   };
 
@@ -38,8 +41,12 @@ std::string braket_to_annot(Indices&& indices) {
     return add_commas(idxs);
   } else {
     ranges::stable_sort(pidxs);
-    ranges::unique(pidxs);
-    return add_commas(pidxs) + ";" + add_commas(idxs);
+    ranges::actions::unique(pidxs);
+    auto not_in_pidx = [&pidxs](auto&& l) {
+      return find(pidxs, l) == pidxs.end();
+    };
+    return add_commas(pidxs) + ";" +
+           add_commas(idxs | filter(not_in_pidx) | ranges::to<decltype(idxs)>);
   }
 }
 
@@ -206,13 +213,14 @@ tot_result_t<DA_tot, DA> eval_inode_tot(EvalNodeTA const& node,
       return operator()(rhs, lhs);
     }
     variant_t operator()(DA const& lhs, DA_tot const& rhs) {
-      throw std::runtime_error("Not fully implemented because TA has withdrawn support.");
+      throw std::runtime_error(
+          "Not fully implemented because TA has withdrawn support.");
       return {};
-//      auto unscaled = TA::einsum(lhs(lannot), rhs(rannot), this_annot);
-//      DA_tot scaled;
-//      scaled(this_annot) = (lscal * rscal) * unscaled(this_annot);
-//      DA_tot::wait_for_lazy_cleanup(scaled.world());
-//      return variant_t{scaled};
+      //      auto unscaled = TA::einsum(lhs(lannot), rhs(rannot), this_annot);
+      //      DA_tot scaled;
+      //      scaled(this_annot) = (lscal * rscal) * unscaled(this_annot);
+      //      DA_tot::wait_for_lazy_cleanup(scaled.world());
+      //      return variant_t{scaled};
     }
     variant_t operator()(DA const& lhs, DA const& rhs) {
       DA scaled;
