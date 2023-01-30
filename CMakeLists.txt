@@ -9,12 +9,12 @@ if (DEFINED PROJECT_BINARY_DIR)
     set(VG_CMAKE_KIT_PREFIX_DIR PROJECT_BINARY_DIR)
 else ()
     set(VG_CMAKE_KIT_PREFIX_DIR CMAKE_CURRENT_BINARY_DIR)
-endif()
+endif ()
 FetchContent_Declare(
         vg_cmake_kit
         QUIET
-        GIT_REPOSITORY      https://github.com/ValeevGroup/kit-cmake.git
-        GIT_TAG             ${SEQUANT_TRACKED_VGCMAKEKIT_TAG}
+        GIT_REPOSITORY https://github.com/ValeevGroup/kit-cmake.git
+        GIT_TAG ${SEQUANT_TRACKED_VGCMAKEKIT_TAG}
         SOURCE_DIR ${${VG_CMAKE_KIT_PREFIX_DIR}}/cmake/vg
         BINARY_DIR ${${VG_CMAKE_KIT_PREFIX_DIR}}/cmake/vg-build
         SUBBUILD_DIR ${${VG_CMAKE_KIT_PREFIX_DIR}}/cmake/vg-subbuild
@@ -43,15 +43,15 @@ project(SeQuant LANGUAGES CXX VERSION "${SEQUANT_VERSION}" DESCRIPTION "SEcond Q
 
 # need C++17, insist on strict standard
 set(CMAKE_CXX_STANDARD 17 CACHE STRING "C++ ISO Standard version")
-if (NOT(CMAKE_CXX_STANDARD EQUAL 17 OR CMAKE_CXX_STANDARD EQUAL 20))
+if (NOT (CMAKE_CXX_STANDARD EQUAL 17 OR CMAKE_CXX_STANDARD EQUAL 20))
     message(FATAL_ERROR "C++ 2017 ISO Standard or higher is required to compile SeQuant")
-endif()
+endif ()
 # C++20 is only configurable via compile features with cmake 3.12 and older
 if (CMAKE_CXX_STANDARD EQUAL 20 AND CMAKE_VERSION VERSION_LESS 3.12.0)
-    cmake_minimum_required (VERSION 3.12.0)
-endif()
+    cmake_minimum_required(VERSION 3.12.0)
+endif ()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF CACHE BOOL  "Whether to use extensions of C++  ISO Standard version")
+set(CMAKE_CXX_EXTENSIONS OFF CACHE BOOL "Whether to use extensions of C++  ISO Standard version")
 
 # Enable ccache if not already enabled by symlink masquerading
 if (NOT CMAKE_CXX_COMPILER MATCHES ".*/ccache$")
@@ -119,7 +119,7 @@ find_package(Threads REQUIRED)
 # PSTL (used by g++-9 and clang++-8 in c++17 mode) needs TBB
 if ((${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU" AND
         ${CMAKE_CXX_COMPILER_VERSION} VERSION_GREATER 9) OR
-    (${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang" AND
+(${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang" AND
         ${CMAKE_CXX_COMPILER_VERSION} VERSION_GREATER 8))
     if (ENABLE_TBB)  # but user must enable the search for TBB since this is an additional source of build entropy
         find_package(TBB REQUIRED)
@@ -137,9 +137,9 @@ include(FindOrFetchRangeV3)
 
 # need header-only Boost + (compiled) Boost.Regex and Boost.Locale
 # NB Boost.Container is broken in v1.70
-if (NOT TARGET Boost::boost OR NOT TARGET Boost::regex)
+if (NOT TARGET Boost::boost OR NOT TARGET Boost::regex OR NOT TARGET Boost::locale)
     find_package(Boost ${SEQUANT_TRACKED_BOOST_VERSION} CONFIG COMPONENTS regex locale)
-    if (Boost_VERSION_STRING VERSION_LESS ${SEQUANT_TRACKED_BOOST_VERSION} OR NOT TARGET Boost::boost OR NOT TARGET Boost::regex)
+    if (Boost_VERSION_STRING VERSION_LESS ${SEQUANT_TRACKED_BOOST_VERSION} OR NOT TARGET Boost::boost OR NOT TARGET Boost::regex OR NOT TARGET Boost::locale)
         find_package(Boost ${SEQUANT_TRACKED_BOOST_VERSION} REQUIRED COMPONENTS regex locale)
         message(STATUS "Found Boost (version ${Boost_VERSION}) via FindBoost module")
         set(Boost_USE_CONFIG FALSE)
@@ -264,12 +264,23 @@ set(SeQuant_src
         SeQuant/domain/mbpt/rdm.hpp
         )
 
+### optional prereqs
+if (SEQUANT_EVAL_TESTS)
+    include(FindOrFetchTiledArray)
+endif (SEQUANT_EVAL_TESTS)
+
+
 if (TARGET tiledarray)
     list(APPEND SeQuant_src
             SeQuant/domain/eval/eval_ta.hpp
             SeQuant/domain/eval/eval_ta.cpp
             )
-endif()
+endif ()
+if (BTAS_SOURCE_DIR)
+    list(APPEND SeQuant_src
+            SeQuant/domain/eval/eval_btas.hpp
+            )
+endif ()
 
 add_library(SeQuant
         ${SeQuant_src}
@@ -281,10 +292,10 @@ set_source_files_properties(
         "SEQUANT_GIT_REVISION=\"${SEQUANT_GIT_REVISION}\";SEQUANT_GIT_DESCRIPTION=\"${SEQUANT_GIT_DESCRIPTION}\""
 )
 
-target_link_libraries(SeQuant PUBLIC range-v3::range-v3 Boost::regex Boost::boost SeQuant-bliss Threads::Threads)
+target_link_libraries(SeQuant PUBLIC range-v3::range-v3 Boost::regex Boost::locale Boost::boost SeQuant-bliss Threads::Threads)
 if (TARGET tiledarray)
     target_link_libraries(SeQuant PUBLIC tiledarray)
-endif()
+endif ()
 if (SEQUANT_HAS_EXECUTION_HEADER_STANDALONE OR SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB)
     target_compile_definitions(SeQuant PUBLIC SEQUANT_HAS_EXECUTION_HEADER)
     if (SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB)
@@ -299,7 +310,7 @@ target_include_directories(SeQuant PUBLIC
 target_compile_features(SeQuant INTERFACE "cxx_std_17")
 if (SEQUANT_EVAL_TRACE)
     target_compile_definitions(SeQuant PUBLIC SEQUANT_EVAL_TRACE=1)
-endif()
+endif ()
 install(TARGETS SeQuant-bliss EXPORT sequant COMPONENT sequant LIBRARY DESTINATION ${SEQUANT_INSTALL_LIBDIR})
 install(TARGETS SeQuant EXPORT sequant COMPONENT sequant LIBRARY DESTINATION ${SEQUANT_INSTALL_LIBDIR})
 install(DIRECTORY SeQuant
@@ -310,16 +321,11 @@ install(DIRECTORY SeQuant
         )
 add_library(SeQuant::SeQuant ALIAS SeQuant)  # to be able to use as subproject
 
-### optional prereqs
-if (SEQUANT_EVAL_TESTS)
-    include(FindOrFetchTiledArray)
-endif (SEQUANT_EVAL_TESTS)
-
 if (SEQUANT_MIMALLOC)
     find_package(mimalloc REQUIRED)
     target_link_libraries(SeQuant PUBLIC mimalloc)
     target_compile_definitions(SeQuant PUBLIC SEQUANT_HAS_MIMALLOC=1)
-endif()
+endif ()
 
 ### unit tests
 include(CTest)
@@ -357,8 +363,6 @@ if (BUILD_TESTING)
 
     if (TARGET tiledarray)
         list(APPEND utests_src
-                SeQuant/domain/eval/eval_ta.hpp
-                SeQuant/domain/eval/eval_ta.cpp
                 tests/unit/test_eval_ta.cpp
                 )
     endif (TARGET tiledarray)
@@ -434,8 +438,6 @@ if (BUILD_TESTING)
         set(example5 eval_ta)
         add_executable(${example5} EXCLUDE_FROM_ALL
                 ${example_eval_src}
-                SeQuant/domain/eval/eval_ta.hpp
-                SeQuant/domain/eval/eval_ta.cpp
                 examples/eval/ta/data_world_ta.hpp
                 examples/eval/ta/scf_ta.hpp
                 examples/eval/ta/main.cpp)
@@ -452,7 +454,6 @@ if (BUILD_TESTING)
         set(example7 eval_btas)
         add_executable(${example7} EXCLUDE_FROM_ALL
                 ${example_eval_src}
-                SeQuant/domain/eval/eval_btas.hpp
                 examples/eval/btas/data_world_btas.hpp
                 examples/eval/btas/scf_btas.hpp
                 examples/eval/btas/main.cpp)
@@ -486,9 +487,9 @@ endif (BUILD_TESTING)
 if (SEQUANT_PYTHON)
     if (NOT CMAKE_POSITION_INDEPENDENT_CODE)
         message(FATAL_ERROR "Python module requires CMAKE_POSITION_INDEPENDENT_CODE=ON")
-    endif()
+    endif ()
     add_subdirectory(python)
-endif()
+endif ()
 
 ####### DOCS ########
 
