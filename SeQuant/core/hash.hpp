@@ -16,6 +16,16 @@
 
 namespace sequant {
 
+/// @return the version of hashing used by SeQuant, depends on the version of
+/// Boost
+constexpr int hash_version() {
+#if BOOST_VERSION < 108100
+  return 1;
+#else
+  return 2;
+#endif
+}
+
 class Expr;
 
 namespace detail {
@@ -31,11 +41,13 @@ template <typename T>
 static constexpr bool has_hash_value_member_fn_v =
     detail::has_hash_value_member_fn_helper<T>::value;
 
-template <typename T>
-auto hash_value(const T& obj,
-                std::enable_if_t<has_hash_value_member_fn_v<T>>* = nullptr) {
+#if BOOST_VERSION < 108100
+template <typename T,
+          typename = std::enable_if_t<has_hash_value_member_fn_v<T>>>
+auto hash_value(const T& obj) {
   return obj.hash_value();
 }
+#endif
 
 namespace detail {
 
@@ -84,9 +96,13 @@ struct _;
 
 template <class T>
 inline void combine(std::size_t& seed, T const& v) {
-//  std::size_t seed_ref = seed;
-//  boost::hash_combine(seed_ref, v);
+  //  std::size_t seed_ref = seed;
+  //  boost::hash_combine(seed_ref, v);
   _<T> hasher;
+
+#if BOOST_VERSION >= 108100
+  boost::hash_combine(seed, hasher(v));
+#else  // older boost workarounds
   // in boost 1.78 hash_combine_impl implementation changed
   // https://github.com/boostorg/container_hash/commit/21f2b5e1db1a118c83a3690055c110d0f5637da3
   // probably no longer need these acrobatics
@@ -118,30 +134,32 @@ inline void combine(std::size_t& seed, T const& v) {
   } else {
     seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
   }
-//  assert(seed == seed_ref);
+#endif  // older boost workarounds
+
+  //  assert(seed == seed_ref);
 }
 
 template <class It>
 inline std::size_t range(It first, It last) {
-//  const std::size_t seed_ref = boost::hash_range(first, last);
+  //  const std::size_t seed_ref = boost::hash_range(first, last);
   std::size_t seed = 0;
 
   for (; first != last; ++first) {
     hash::combine(seed, *first);
   }
 
-//  assert(seed == seed_ref);
+  //  assert(seed == seed_ref);
   return seed;
 }
 
 template <class It>
 inline void range(std::size_t& seed, It first, It last) {
-//  std::size_t seed_ref = seed;
-//  boost::hash_range(seed_ref, first, last);
+  //  std::size_t seed_ref = seed;
+  //  boost::hash_range(seed_ref, first, last);
   for (; first != last; ++first) {
     hash::combine(seed, *first);
   }
-//  assert(seed == seed_ref);
+  //  assert(seed == seed_ref);
 }
 
 /// specialization of boost::hash_range(begin,end) that guarantees to hash a
@@ -150,8 +168,13 @@ inline void range(std::size_t& seed, It first, It last) {
 template <typename It>
 std::size_t hash_range(It begin, It end) {
   if (begin != end) {
-    using boost::hash_value;
-    std::size_t seed = hash_value(*begin);
+    std::size_t seed;
+    if constexpr (has_hash_value_member_fn_v<std::decay_t<decltype(*begin)>>)
+      seed = begin->hash_value();
+    else {
+      using boost::hash_value;
+      std::size_t seed = hash_value(*begin);
+    }
     boost::hash_range(seed, begin + 1, end);
     return seed;
   } else
@@ -174,8 +197,12 @@ template <typename T>
 struct _<T, std::enable_if_t<!(
                 !(detail::has_hash_value_v<T>)&&meta::is_range_v<T>)>> {
   std::size_t operator()(T const& v) const {
-    using boost::hash_value;
-    return hash_value(v);
+    if constexpr (has_hash_value_member_fn_v<T>)
+      return v.hash_value();
+    else {
+      using boost::hash_value;
+      return hash_value(v);
+    }
   }
 };
 
