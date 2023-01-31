@@ -23,18 +23,17 @@ EvalExprTA::EvalExprTA(const EvalExprTA& left, const EvalExprTA& right,
     // Either left, or right is a tensor-of-tensor implies the product
     // is going to be a tensor-of-tensor too.
     tot_ = left.tot() || right.tot();
-    auto lbpt = BipartiteIndexList(left.annot());
-    auto rbpt = BipartiteIndexList(right.annot());
-    auto pbpt = BipartiteIndexList(braket_to_annot(tensor().const_braket()));
-    auto outer = GEMMPermutationOptimizer(pbpt.first(), lbpt.first(), rbpt.first());
-    auto inner = GEMMPermutationOptimizer(lbpt.second(), rbpt.second());
-    annot_ = inner.target_result_indices()
-                 ? outer.target_result_indices().string() + ";" +
-                       inner.target_result_indices().string()
-                 : outer.target_result_indices().string();
+    if (tot()) {
+      braket_to_annot(this->tensor().const_braket());
+    } else {
+      annot_ =
+          GEMMPermutationOptimizer(Tidxs{left.annot()}, Tidxs{right.annot()})
+              .target_result_indices()
+              .string();
+    }
   } else {
     assert(left.tot() == right.tot() &&
-           "Summation of tot with tot, or non-tot with non-tot possible.");
+           "Cannot sum tensor-of-tensor with a tensor");
     tot_ = left.tot();
     annot_ = left.annot();
   }
