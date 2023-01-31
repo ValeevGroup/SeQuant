@@ -25,7 +25,8 @@ EvalExprTA::EvalExprTA(const EvalExprTA& left, const EvalExprTA& right,
     tot_ = left.tot() || right.tot();
     auto lbpt = BipartiteIndexList(left.annot());
     auto rbpt = BipartiteIndexList(right.annot());
-    auto outer = GEMMPermutationOptimizer(lbpt.first(), rbpt.first());
+    auto pbpt = BipartiteIndexList(braket_to_annot(tensor().const_braket()));
+    auto outer = GEMMPermutationOptimizer(pbpt.first(), lbpt.first(), rbpt.first());
     auto inner = GEMMPermutationOptimizer(lbpt.second(), rbpt.second());
     annot_ = inner.target_result_indices()
                  ? outer.target_result_indices().string() + ";" +
