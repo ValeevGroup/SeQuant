@@ -31,9 +31,9 @@ std::string braket_to_annot(Indices&& indices) {
 
   container::svector<std::string> idxs{}, pidxs{};
   for (auto&& idx : indices) {
-    idxs.emplace_back(idx.ascii_label());
+    idxs.emplace_back(sequant::to_string(idx.label()));
     for (auto&& pidx : idx.proto_indices())
-      pidxs.emplace_back(pidx.ascii_label());
+      pidxs.emplace_back(sequant::to_string(pidx.label()));
   }
 
   if (pidxs.empty()) {
