@@ -31,8 +31,6 @@ class EvalExpr {
  public:
   using hash_t = size_t;
 
-  virtual ~EvalExpr() = default;
-
   /**
    * Construct EvalExpr that goes into the leaf nodes
    * of the binary evaluation tree.
