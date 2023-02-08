@@ -53,7 +53,7 @@ class EvalExpr {
   /**
    * Hash value of the object.
    */
-  [[nodiscard]] hash_t hash() const;
+  [[nodiscard]] hash_t hash_value() const;
 
   /**
    * Tensor expression stored by the object.
@@ -77,7 +77,7 @@ class EvalExpr {
   }
 
   friend inline bool operator==(const EvalExpr& lhs, const EvalExpr& rhs) {
-    return lhs.hash() == rhs.hash() &&
+    return lhs.hash_value() == rhs.hash_value() &&
            (lhs.tensor().to_latex() == rhs.tensor().to_latex());
   }
 

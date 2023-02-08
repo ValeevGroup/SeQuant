@@ -117,14 +117,14 @@ TEST_CASE("TEST_EVAL_EXPR", "[EvalExpr]") {
     const auto& x12 = EvalExpr{x1, x2, EvalOp::Prod};
     const auto& x21 = EvalExpr{x2, x1, EvalOp::Prod};
 
-    REQUIRE(x1.hash() == x2.hash());
-    REQUIRE(x12.hash() == x21.hash());
+    REQUIRE(x1.hash_value() == x2.hash_value());
+    REQUIRE(x12.hash_value() == x21.hash_value());
 
     const auto& x3 = EvalExpr{t3};
     // const auto& x123 = EvalExpr{x12, x3};
 
-    REQUIRE_FALSE(x1.hash() == x3.hash());
-    REQUIRE_FALSE(x12.hash() == x3.hash());
+    REQUIRE_FALSE(x1.hash_value() == x3.hash_value());
+    REQUIRE_FALSE(x12.hash_value() == x3.hash_value());
   }
 
   SECTION("Symmetry of product") {

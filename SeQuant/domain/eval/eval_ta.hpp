@@ -243,7 +243,7 @@ Tensor_t eval_single_node(EvalNodeTA const& node, Yielder&& leaf_evaluator,
   static_assert(
       std::is_invocable_r_v<Tensor_t, Yielder, sequant::Tensor const&>);
 
-  auto const key = node->hash();
+  auto const key = node->hash_value();
 
   if (auto&& exists = cache_manager.access(key); exists && exists.value())
     return *exists.value();
@@ -296,7 +296,7 @@ tot_result_t<DA_tot, DA> eval_single_node_tot(
 
   using variant_t = tot_result_t<DA_tot, DA>;
 
-  auto const key = node->hash();
+  auto const key = node->hash_value();
 
   if (auto&& exists = cache_manager.access(key); exists && exists.value())
     return *exists.value();

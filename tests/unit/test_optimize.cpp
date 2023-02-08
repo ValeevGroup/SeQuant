@@ -6,7 +6,7 @@
 
 auto yield_interm_hash = [](sequant::EvalNode const& node) {
   auto cont = sequant::container::set<sequant::EvalExpr::hash_t>{};
-  node.visit_internal([&cont](const auto& n) { cont.emplace(n->hash()); });
+  node.visit_internal([&cont](const auto& n) { cont.emplace(n->hash_value()); });
   return cont;
 };
 
@@ -68,8 +68,8 @@ TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
         prod2, //
         [&imed_hashes_prod1](
             auto const& n) {  // discount existing intermediate costs
-          if (imed_hashes_prod1.contains(n->hash())) return false;
-          imed_hashes_prod1.emplace(n->hash());
+          if (imed_hashes_prod1.contains(n->hash_value())) return false;
+          imed_hashes_prod1.emplace(n->hash_value());
           return true;
         });
     REQUIRE(result2_discounted.cost < result2_naive.cost);
@@ -94,7 +94,7 @@ TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
     auto prod3_sto_with_imeds = std::move(
         *single_term_opt(prod3->as<Product>(),
                          [&imeds_prod4](auto const& n) {
-                           return !((imeds_prod4.contains(n->hash())));
+                           return !((imeds_prod4.contains(n->hash_value())));
                          })
              .optimal_seqs.begin());
 
