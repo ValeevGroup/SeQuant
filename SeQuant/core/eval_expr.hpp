@@ -63,12 +63,14 @@ class EvalExpr {
   /** Factor to scale tensor by. */
   [[nodiscard]] const Constant& scalar() const;
 
+  /** Scale the scalar prefactor by @c fac. */
   template <typename T = std::complex<double>>
   EvalExpr& operator*=(T fac) {
     scalar_ *= Constant{std::move(fac)};
     return *this;
   }
 
+  /** Set the scalar prefactor to @c fac. */
   template <typename T = std::complex<double>>
   void scale(T fac) {
     scalar_ = Constant{std::move(fac)};
