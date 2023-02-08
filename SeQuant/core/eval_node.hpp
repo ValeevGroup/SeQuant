@@ -17,11 +17,11 @@ using EvalNode = FullBinaryNode<EvalExpr>;
 
 EvalNode to_eval_node(ExprPtr const& expr);
 
-EvalNode to_eval_node(EvalNode l, EvalNode r, EvalOp op);
+[[deprecated("Unused function")]] EvalNode to_eval_node(EvalNode l, EvalNode r, EvalOp op);
 
-EvalNode to_eval_node_antisymm(ExprPtr const& expr);
+[[deprecated]]EvalNode to_eval_node_antisymm(ExprPtr const& expr);
 
-EvalNode to_eval_node_symm(ExprPtr const& expr);
+[[deprecated]]EvalNode to_eval_node_symm(ExprPtr const& expr);
 
 ExprPtr to_expr(EvalNode const& node);
 
@@ -86,6 +86,6 @@ AsyCost asy_cost(
   return detail::asy_cost_impl(node, true, std::forward<F>(pred));
 }
 
-};  // namespace sequant
+}  // namespace sequant
 
 #endif  // SEQUANT_EVAL_NODE_HPP
