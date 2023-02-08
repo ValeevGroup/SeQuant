@@ -19,7 +19,7 @@ auto index_label_list(std::string const& str) {
 }
 
 auto tensor_to_key(sequant::Tensor const& tnsr) {
-  static auto const idx_rgx = boost::wregex{L"([ia])([⁺⁻])?(_?\\d+)"};
+  static auto const idx_rgx = boost::wregex{L"([ia])([↑↓])?(_?\\d+)"};
   auto formatter = [](boost::wsmatch mo) -> std::wstring {
     return (mo[1].str() == L"i" ? L"o" : L"v") + mo[2].str();
   };
@@ -193,11 +193,11 @@ class rand_tensor_of_tensor_yield {
 auto print_node_ta = [](sequant::ExprPtr const& expr) {
   auto node = sequant::eval::to_eval_node_ta(expr);
   std::cout << node.tikz<std::string>(
-      [](auto&& n) { return "$" + n->annot() + "$"; },
-      [](auto&& n) {
-        return "label={left:" +
-               sequant::to_string(n->scalar().to_latex()) + "$}";
-      })
+                   [](auto&& n) { return "$" + n->annot() + "$"; },
+                   [](auto&& n) {
+                     return "label={left:" +
+                            sequant::to_string(n->scalar().to_latex()) + "$}";
+                   })
             << std::endl;
 };
 
@@ -366,7 +366,7 @@ TEST_CASE("TEST_EVAL_TOT_USING_TA", "[eval_tot]") {
         " * O{a_2<i_1,i_2>;a_4<i_3,i_2>}";
 
     auto expr = parse_expr(pno_mp2_expr, Symmetry::nonsymm);
-//    print_node_ta(expr);
+    //    print_node_ta(expr);
     /*
 
     auto& world = TA::get_default_world();
@@ -381,8 +381,10 @@ TEST_CASE("TEST_EVAL_TOT_USING_TA", "[eval_tot]") {
       REQUIRE(lhs.range() == rhs.range());
       for (auto&& [t1, t2] : ranges::views::zip(lhs, rhs)) {
         for (auto&& [e1, e2] : ranges::views::zip(t1, t2)) {
-          // https://github.com/catchorg/Catch2/blob/devel/docs/comparing-floating-point-numbers.md
-          // https://codingnest.com/the-little-things-comparing-floating-point-numbers/
+          //
+    https://github.com/catchorg/Catch2/blob/devel/docs/comparing-floating-point-numbers.md
+          //
+    https://codingnest.com/the-little-things-comparing-floating-point-numbers/
           REQUIRE_THAT(e1, Catch::Matchers::WithinAbs(e2, 1e-12));
         }
       }

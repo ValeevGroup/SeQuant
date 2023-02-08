@@ -124,14 +124,14 @@ TEST_CASE("Index", "[elements]") {
   }
 
   SECTION("qns ordering") {
-    auto p1A = Index(L"p⁺_1",
+    auto p1A = Index(L"p↑_1",
                      IndexSpace::instance(IndexSpace::all, IndexSpace::alpha));
     auto p1B =
-        Index(L"p⁻_1", IndexSpace::instance(IndexSpace::all, IndexSpace::beta));
-    auto p2A = Index(L"p⁺_2",
+        Index(L"p↓_1", IndexSpace::instance(IndexSpace::all, IndexSpace::beta));
+    auto p2A = Index(L"p↑_2",
                      IndexSpace::instance(IndexSpace::all, IndexSpace::alpha));
     auto p2B =
-        Index(L"p⁻_2", IndexSpace::instance(IndexSpace::all, IndexSpace::beta));
+        Index(L"p↓_2", IndexSpace::instance(IndexSpace::all, IndexSpace::beta));
     REQUIRE(p1A.space().qns() == IndexSpace::alpha);
     REQUIRE(p2A.space().qns() == IndexSpace::alpha);
     REQUIRE(p1B.space().qns() == IndexSpace::beta);
@@ -191,6 +191,10 @@ TEST_CASE("Index", "[elements]") {
     Index a1(L"a_1", {i1, i2});
     std::wstring a1_str = to_latex(a1);
     REQUIRE(a1_str == L"{a_1^{{i_1}{i_2^{{i_3}{i_4}}}}}");
+
+    Index a1_up(L"a↑_1", {i1, i2});
+    std::wstring a1_up_str = to_latex(a1_up);
+    REQUIRE(a1_up_str == L"{a↑_1^{{i_1}{i_2^{{i_3}{i_4}}}}}");
   }
 
   SECTION("wolfram") {

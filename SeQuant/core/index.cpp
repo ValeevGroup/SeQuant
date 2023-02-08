@@ -100,8 +100,8 @@ std::string Index::ascii_label() const {
 
   std::wstring label(label_);
 
-  std::replace(label.begin(), label.end(), L'⁺', L'a');
-  std::replace(label.begin(), label.end(), L'⁻', L'b');
+  std::replace(label.begin(), label.end(), L'↑', L'a');
+  std::replace(label.begin(), label.end(), L'↓', L'b');
   std::string label_ascii;
   for (auto it = label.begin(); it != label.end(); ++it) {
     auto pos = greek_to_english_name.find(*it);

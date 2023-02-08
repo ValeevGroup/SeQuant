@@ -253,7 +253,7 @@ class Index : public Taggable {
   /// @warning not to be used with proto indices
   /// @brief Replaces non-ascii wstring characters with human-readable analogs,
   ///        each such UTF-8 character will be encoded by one or more chars.
-  /// @note Maps: `⁺` -> `a`, `⁻` -> `b`, and all greek characters to their
+  /// @note Maps: `↑` -> `a`, `↓` -> `b`, and all greek characters to their
   ///       english language equivalents (e.g. `α` -> `alpha`, `Ξ` -> `XI`,
   ///       etc.)
   [[deprecated(

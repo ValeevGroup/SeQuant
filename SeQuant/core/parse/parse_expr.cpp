@@ -38,7 +38,7 @@ std::wstring normalize_idx_label(boost::wssub_match const& mo) {
   wchar_t last_char = L' ';
   for (auto x : mo) {
     if ((std::iswalpha(last_char) && std::iswdigit(x)) ||
-        ((last_char == L'⁻' || last_char == L'⁺') && std::iswdigit(x)))
+        ((last_char == L'↓' || last_char == L'↑') && std::iswdigit(x)))
       oss << L'_';
     oss << x;
     last_char = x;
