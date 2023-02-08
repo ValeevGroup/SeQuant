@@ -31,8 +31,6 @@ class EvalExpr {
  public:
   using hash_t = size_t;
 
-  virtual ~EvalExpr() = default;
-
   /**
    * Construct EvalExpr that goes into the leaf nodes
    * of the binary evaluation tree.
@@ -53,7 +51,7 @@ class EvalExpr {
   /**
    * Hash value of the object.
    */
-  [[nodiscard]] hash_t hash() const;
+  [[nodiscard]] hash_t hash_value() const;
 
   /**
    * Tensor expression stored by the object.
@@ -63,19 +61,21 @@ class EvalExpr {
   /** Factor to scale tensor by. */
   [[nodiscard]] const Constant& scalar() const;
 
+  /** Scale the scalar prefactor by @c fac. */
   template <typename T = std::complex<double>>
   EvalExpr& operator*=(T fac) {
     scalar_ *= Constant{std::move(fac)};
     return *this;
   }
 
+  /** Set the scalar prefactor to @c fac. */
   template <typename T = std::complex<double>>
   void scale(T fac) {
     scalar_ = Constant{std::move(fac)};
   }
 
   friend inline bool operator==(const EvalExpr& lhs, const EvalExpr& rhs) {
-    return lhs.hash() == rhs.hash() &&
+    return lhs.hash_value() == rhs.hash_value() &&
            (lhs.tensor().to_latex() == rhs.tensor().to_latex());
   }
 

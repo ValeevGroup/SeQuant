@@ -176,7 +176,8 @@ std::wstring deparse_expr(Product const& prod, bool annot_sym) {
     else if (scalar_text == L"1")
       scalar_text.pop_back();
 
-    if (*scalar_text.rbegin() != L' ') scalar_text += L" * ";
+    if (*scalar_text.rbegin() != L' ' && !scalar_text.empty())
+      scalar_text += L" * ";
     str += scalar_text;
   }
 

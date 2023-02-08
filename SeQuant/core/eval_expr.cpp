@@ -4,7 +4,7 @@
 
 namespace sequant {
 
-EvalExpr::hash_t EvalExpr::hash() const { return hash_; }
+EvalExpr::hash_t EvalExpr::hash_value() const { return hash_; }
 
 EvalOp EvalExpr::op() const { return op_; }
 
@@ -19,8 +19,8 @@ EvalExpr::EvalExpr(const Tensor& tnsr)
 
 EvalExpr::EvalExpr(const EvalExpr& xpr1, const EvalExpr& xpr2, EvalOp op) {
   assert(op != EvalOp::Id);
-  auto const& expr1 = xpr1.hash() < xpr2.hash() ? xpr1 : xpr2;
-  auto const& expr2 = xpr1.hash() < xpr2.hash() ? xpr2 : xpr1;
+  auto const& expr1 = xpr1.hash_value() < xpr2.hash_value() ? xpr1 : xpr2;
+  auto const& expr2 = xpr1.hash_value() < xpr2.hash_value() ? xpr2 : xpr1;
 
   auto bk = braket_type{};
   if (op == EvalOp::Prod)
@@ -86,7 +86,7 @@ Symmetry EvalExpr::infer_tensor_symmetry_prod(EvalExpr const& xpr1,
   auto const& tnsr1 = xpr1.tensor();
   auto const& tnsr2 = xpr2.tensor();
 
-  if (xpr1.hash() == xpr2.hash()) {
+  if (xpr1.hash_value() == xpr2.hash_value()) {
     // potential outer product
     auto const uniq_idxs =
         ranges::views::concat(tnsr1.const_braket(), tnsr2.const_braket()) |
@@ -203,8 +203,8 @@ EvalExpr::hash_t EvalExpr::hash_tensor_pair_topology(const Tensor& tnsr1,
 EvalExpr::hash_t EvalExpr::hash_imed(const EvalExpr& expr1,
                                      const EvalExpr& expr2, EvalOp op) {
   EvalExpr::hash_t imedHash = 0;
-  hash::combine(imedHash, expr1.hash());
-  hash::combine(imedHash, expr2.hash());
+  hash::combine(imedHash, expr1.hash_value());
+  hash::combine(imedHash, expr2.hash_value());
 
   const auto& t1 = expr1.tensor();
   const auto& t2 = expr2.tensor();

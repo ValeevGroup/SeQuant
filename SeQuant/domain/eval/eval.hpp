@@ -50,11 +50,11 @@ template <typename Maplike>
 void count_imeds(EvalNode const& node, Maplike& cmap) {
   if (node.leaf()) return;
 
-  if (auto&& found = cmap.find(node->hash()); found != cmap.end()) {
+  if (auto&& found = cmap.find(node->hash_value()); found != cmap.end()) {
     ++found->second;
     return;
   } else {
-    cmap.emplace(node->hash(), 1);
+    cmap.emplace(node->hash_value(), 1);
   }
   count_imeds<Maplike>(node.left(), cmap);
   count_imeds<Maplike>(node.right(), cmap);
@@ -128,7 +128,7 @@ void antisymmetrize_tensor(size_t rank, F&& callback) {
 /// \tparam T Type of the cached data.
 /// \tparam MinRepeat Cache intermediates that repeat at least this many times.
 ///                   Default value 2.
-/// \param nodes A range of eval node objects. Must support a .hash(void)
+/// \param nodes A range of eval node objects. Must support a .hash_value(void)
 ///              method that returns a size_t value.
 /// \param pred_leaf Cache leaf node data for which pred_leaf(node) returns
 ///                  true. By default do not cache leaf data.
@@ -161,7 +161,7 @@ CacheManager<T> cache_manager(NodesRng const& nodes,  //
     if (!std::invoke(std::forward<PredImed>(pred_imed), n)) return;
 
     auto&& end = imed_counts.end();
-    auto&& h = n->hash();
+    auto&& h = n->hash_value();
     if (auto&& found = imed_counts.find(h); found != end)
       ++found->second;
     else
@@ -182,7 +182,7 @@ CacheManager<T> cache_manager(NodesRng const& nodes,  //
   // find leave tensors to be cached
   auto leaf_visitor = [&pred_leaf, &leafs](auto&& n) {
     if (std::invoke(std::forward<PredLeaf>(pred_leaf), n)) {
-      leafs.emplace(n->hash());
+      leafs.emplace(n->hash_value());
     }
   };
 

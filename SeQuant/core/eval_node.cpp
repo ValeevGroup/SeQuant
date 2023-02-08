@@ -72,66 +72,6 @@ EvalNode to_eval_node_symm(ExprPtr const& expr) {
   return to_eval_node(L"S", expr);
 }
 
-ExprPtr to_expr(EvalNode const& node) {
-  auto const op = node->op();
-  auto const& evxpr = *node;
-
-  if (node.leaf()) {
-    return evxpr.scalar() == Constant{1}
-               ? evxpr.tensor().clone()
-               : ex<Constant>(evxpr.scalar()) * evxpr.tensor().clone();
-  }
-
-  if (op == EvalOp::Prod || op == EvalOp::Symm || op == EvalOp::Antisymm) {
-    auto prod = Product{};
-    prod.scale(evxpr.scalar().value());
-
-    auto lexpr = to_expr(node.left());
-    auto rexpr = to_expr(node.right());
-
-    if (lexpr->is<Tensor>())
-      prod.append(1, lexpr);
-    else
-      prod.append(lexpr);
-
-    if (rexpr->is<Tensor>())
-      prod.append(1, rexpr);
-    else
-      prod.append(rexpr);
-
-    return ex<Product>(std::move(prod));
-  } else {
-    assert(op == EvalOp::Sum && "unsupported operation type");
-    return ex<Sum>(Sum{to_expr(node.left()), to_expr(node.right())});
-  }
-}
-
-ExprPtr linearize_eval_node(EvalNode const& node) {
-  if (node.leaf()) return to_expr(node);
-
-  auto lres = to_expr(node.left());
-  auto rres = to_expr(node.right());
-  if (node->op() == EvalOp::Sum) return ex<Sum>(ExprPtrList{lres, rres});
-
-  if (node.left().leaf() && node.right().leaf()) {
-    return ex<Product>(node->scalar().value(), ExprPtrList{lres, rres});
-  } else if (!node.left().leaf() && !node.right().leaf()) {
-    auto prod = Product(node->scalar().value(), ExprPtrList{});
-    prod.append(lres);
-    prod.append(rres);
-    return ex<Product>(std::move(prod));
-  } else if (node.left().leaf() && !node.right().leaf()) {
-    auto prod = Product(node->scalar().value(), ExprPtrList{lres});
-    prod.append(rres);
-    return ex<Product>(std::move(prod));
-  } else {  // (!node.left().leaf() && node.right().leaf())
-    auto& res = lres->as<Product>();
-    res.scale(node->scalar().value());
-    res.append(rres);
-    return lres;
-  }
-}
-
 AsyCost asy_cost_single_node_symm_off(EvalNode const& node) {
   if (node.leaf()) return AsyCost::zero();
 

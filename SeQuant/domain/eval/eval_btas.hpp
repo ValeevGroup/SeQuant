@@ -86,7 +86,7 @@ auto eval_single_node(EvalNode const& node, Yielder&& leaf_evaluator,
   static_assert(
       std::is_invocable_r_v<Tensor_t, Yielder, sequant::Tensor const&>);
 
-  auto const key = node->hash();
+  auto const key = node->hash_value();
   if (auto&& exists = cache_manager.access(key); exists && exists.value())
     return exists.value();
   return node.leaf()
