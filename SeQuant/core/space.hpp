@@ -352,7 +352,7 @@ class IndexSpace {
   static IndexSpace null_instance_;
 
   static std::wstring_view reduce_key(std::wstring_view key) {
-    const auto underscore_position = key.find(L'_');
+    const auto underscore_position = key.rfind(L'_');
     return key.substr(0, underscore_position);
   }
 

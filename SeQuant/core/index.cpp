@@ -18,7 +18,7 @@ void Index::reset_tmp_index() { tmp_index_accessor() = min_tmp_index() - 1; }
 
 std::wstring Index::to_latex() const {
   auto protect_subscript = [](const std::wstring_view str) {
-    auto subsc_pos = str.find(L'_');
+    auto subsc_pos = str.rfind(L'_');
     if (subsc_pos == std::wstring_view::npos)
       return std::wstring(str);
     else {

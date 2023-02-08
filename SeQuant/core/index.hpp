@@ -298,7 +298,7 @@ class Index : public Taggable {
   template <typename... Attrs>
   std::wstring to_wolfram(Attrs &&...attrs) const {
     auto protect_subscript = [](const std::wstring_view str) {
-      auto subsc_pos = str.find(L'_');
+      auto subsc_pos = str.rfind(L'_');
       if (subsc_pos == std::wstring_view::npos)
         return std::wstring(str);
       else {
@@ -492,7 +492,7 @@ class Index : public Taggable {
   }
 
   static std::optional<std::size_t> label_index(std::wstring_view label) {
-    const auto underscore_position = label.find(L'_');
+    const auto underscore_position = label.rfind(L'_');
     if (underscore_position != std::wstring::npos) {
       assert(underscore_position + 1 <
              label.size());  // check that there is at least one char past the
