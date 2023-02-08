@@ -27,8 +27,6 @@ std::wstring to_wstring(OpType op) {
       return L"λ";
     case OpType::A:
       return L"A";
-    case OpType::S:
-      return L"S";
     case OpType::L:
       return L"L";
     case OpType::R:
