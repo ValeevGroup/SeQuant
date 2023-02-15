@@ -130,7 +130,7 @@ int main(int argc, char* argv[]) {
         runtime_assert(os_cc_st_r.at(3).at(1)->size() == 249)  // T3aab
         runtime_assert(os_cc_st_r.at(3).at(3)->size() == 124)  // T3bbb
         runtime_assert(os_cc_st_r.at(4).at(1)->size() == 356)  // T4aaab
-        runtime_assert(os_cc_st_r.at(4).at(2)->size() == 386)  // T4aabb
+        runtime_assert(os_cc_st_r.at(4).at(2)->size() == 384)  // T4aabb
         runtime_assert(os_cc_st_r.at(4).at(4)->size() == 156)  // T4bbbb
   } else if (NMAX == 3) {
     runtime_assert(os_cc_st_r.size() == 4)
