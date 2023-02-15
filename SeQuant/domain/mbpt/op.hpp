@@ -19,11 +19,10 @@ enum class OpType {
   t,   //!< cluster amplitudes
   l,   //!< deexcitation cluster amplitudes
   A,   //!< antisymmetrizer
-  S,   //!< particle symmetrizer
   L,   //!< left-hand eigenstate
   R,   //!< right-hand eigenstate
   R12, //!< geminal kernel
-  GR,   //!< GR kernel from f12 theory
+  GR,  //!< GR kernel from f12 theory
   C    //!< cabs singles op
 };
 
@@ -39,4 +38,4 @@ OpClass to_class(OpType op);
 }  // namespace mbpt
 }  // namespace sequant
 
-#endif //SEQUANT_DOMAIN_MBPT_OP_HPP
+#endif  // SEQUANT_DOMAIN_MBPT_OP_HPP

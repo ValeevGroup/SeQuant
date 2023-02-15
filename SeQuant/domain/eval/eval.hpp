@@ -11,10 +11,17 @@
 
 namespace sequant::eval {
 
+/// Represents permutation of a sequence.
+/// Equivalent to the range [0, N) where N is the length of the sequence to be
+/// permuted.
 using perm_type = container::svector<size_t>;
 
+/// Even or odd permuation. Negative if odd, positive if even.
 using phase_type = int;
 
+///
+/// Keeps a permutation and its phase together
+///
 struct PermWithPhase {
   phase_type phase;
   perm_type const& perm;
@@ -43,11 +50,11 @@ template <typename Maplike>
 void count_imeds(EvalNode const& node, Maplike& cmap) {
   if (node.leaf()) return;
 
-  if (auto&& found = cmap.find(node->hash()); found != cmap.end()) {
+  if (auto&& found = cmap.find(node->hash_value()); found != cmap.end()) {
     ++found->second;
     return;
   } else {
-    cmap.emplace(node->hash(), 1);
+    cmap.emplace(node->hash_value(), 1);
   }
   count_imeds<Maplike>(node.left(), cmap);
   count_imeds<Maplike>(node.right(), cmap);
@@ -55,6 +62,13 @@ void count_imeds(EvalNode const& node, Maplike& cmap) {
 
 }  // namespace detail
 
+///
+/// \tparam F Type of the callable.
+/// \param rank Rank of the tensor to be particle-symmetrized.
+///             Needed for permutation vector length determination.
+/// \param callback A function that takes @c perm_type object and does
+///                 something. For example call TiledArray to perform actual
+///                 symmetrization of a DistArray.
 template <typename F>
 void symmetrize_tensor(size_t rank, F&& callback) {
   static_assert(std::is_invocable_v<F, perm_type>);
@@ -75,6 +89,13 @@ void symmetrize_tensor(size_t rank, F&& callback) {
   } while (std::next_permutation(perm_vec.begin(), perm_vec.end()));
 }
 
+///
+/// \tparam F Type of the callable.
+/// \param rank Rank of the tensor to be particle-antisymmetrized.
+///             Needed for permutation vector length determination.
+/// \param callback A function that takes @c PermWithPhase object and does
+///                 something. For example call TiledArray to perform actual
+///                 antisymmetrization of a DistArray.
 template <typename F>
 void antisymmetrize_tensor(size_t rank, F&& callback) {
   static_assert(std::is_invocable_v<F, PermWithPhase const&>);
@@ -103,56 +124,92 @@ void antisymmetrize_tensor(size_t rank, F&& callback) {
   asymm_impl(rank, std::forward<F>(callback));
 }
 
-template <typename Tensor_t>
-CacheManager<Tensor_t> make_cache_manager(EvalNode const& node,
-                                          bool persistent_leaves) {
-  container::map<size_t, size_t> hash_to_counts{};
-  detail::count_imeds(node, hash_to_counts);
+///
+/// \tparam T Type of the cached data.
+/// \tparam MinRepeat Cache intermediates that repeat at least this many times.
+///                   Default value 2.
+/// \param nodes A range of eval node objects. Must support a .hash_value(void)
+///              method that returns a size_t value.
+/// \param pred_leaf Cache leaf node data for which pred_leaf(node) returns
+///                  true. By default do not cache leaf data.
+/// \param pred_imed Cache imed node data for which pred_imed(node) returns
+///                  true. By default cache all repeating intermediate's data.
+/// \return CacheManager<T> object.
+/// \see CacheManager
+///
+template <typename T,
+          size_t MinRepeat = 2,  //
+          typename NodesRng,     //
+          typename PredLeaf,     //
+          typename PredImed>
+CacheManager<T> cache_manager(NodesRng const& nodes,  //
+                              PredLeaf&& pred_leaf,   //
+                              PredImed&& pred_imed) {
+  using value_type = decltype(*ranges::begin(nodes));
+  static_assert(std::is_invocable_r_v<bool, PredLeaf, value_type>);
+  static_assert(std::is_invocable_r_v<bool, PredImed, value_type>);
 
-  auto less_repeating = [](auto const& pair) { return pair.second < 2; };
-  ranges::actions::remove_if(hash_to_counts, less_repeating);
+  using key_t = typename CacheManager<T>::key_t;
+  using count_t = typename CacheManager<T>::count_t;
+  using map_t = container::map<key_t, count_t>;
 
-  if (!persistent_leaves) return CacheManager<Tensor_t>{hash_to_counts,{}};
+  auto imed_counts = map_t{};
 
-  container::svector<size_t> leaf_hashes{};
-  node.visit_leaf([&leaf_hashes](auto const& node) {
-    leaf_hashes.emplace_back(node->hash());
+  // counts number of times each internal node appears in
+  // all of @c nodes trees
+  auto imed_visitor = [&pred_imed, &imed_counts](auto&& n) {
+    if (!std::invoke(std::forward<PredImed>(pred_imed), n)) return;
+
+    auto&& end = imed_counts.end();
+    auto&& h = n->hash_value();
+    if (auto&& found = imed_counts.find(h); found != end)
+      ++found->second;
+    else
+      imed_counts.emplace(h, 1);
+  };  // imed_visitor
+
+  // visit imeds
+  ranges::for_each(nodes, [&imed_visitor](auto&& tree) {
+    tree.visit_internal(imed_visitor);
   });
 
-  return CacheManager<Tensor_t>{hash_to_counts, leaf_hashes};
+  // remove less repeating imeds
+  auto less_repeating = [](auto&& pair) { return pair.second < MinRepeat; };
+  ranges::actions::remove_if(imed_counts, less_repeating);
+
+  auto leafs = container::set<key_t>{};
+
+  // find leave tensors to be cached
+  auto leaf_visitor = [&pred_leaf, &leafs](auto&& n) {
+    if (std::invoke(std::forward<PredLeaf>(pred_leaf), n)) {
+      leafs.emplace(n->hash_value());
+    }
+  };
+
+  // visit leaves
+  ranges::for_each(
+      nodes, [&leaf_visitor](auto&& tree) { tree.visit_leaf(leaf_visitor); });
+
+  return {imed_counts, leafs};
 }
 
-template <typename Tensor_t, typename Iterable>
-CacheManager<Tensor_t> make_cache_manager(Iterable const& nodes,
-                                          bool persistent_leaves) {
-  container::map<size_t, size_t> hash_to_counts{};
-
-  for (auto const& n : nodes) detail::count_imeds(n, hash_to_counts);
-
-  auto less_repeating = [](auto const& pair) { return pair.second < 2; };
-  ranges::actions::remove_if(hash_to_counts, less_repeating);
-
-  if (!persistent_leaves) return CacheManager<Tensor_t>{hash_to_counts,{}};
-
-  container::set<size_t> leaf_hashes{};
-  for (auto const& n : nodes) {
-    n.visit_leaf([&leaf_hashes](auto const& node) {
-      if (node->tensor().label() != L"t") leaf_hashes.insert(node->hash());
-    });
-  }
-
-  return CacheManager<Tensor_t>{hash_to_counts, leaf_hashes};
+template <typename T,
+          size_t MinRepeat = 2,  //
+          typename NodesRng,     //
+          typename PredLeaf>
+CacheManager<T> cache_manager(NodesRng&& nodes, PredLeaf&& pred_leaf) {
+  return cache_manager<T, MinRepeat>(nodes, std::forward<PredLeaf>(pred_leaf),
+                                     [](auto&&) { return true; });
 }
 
-template <typename Tensor_t, typename Iterable>
-CacheManager<Tensor_t> make_cache_manager_leaves_only(Iterable const& nodes) {
-  container::set<EvalExpr::hash_t> leaf_hashes{};
-  for (auto const& n : nodes) {
-    n.visit_leaf([&leaf_hashes](auto const& node) {
-      if (node->tensor().label() != L"t") leaf_hashes.insert(node->hash());
-    });
-  }
-  return CacheManager<Tensor_t>{{}, leaf_hashes};
+template <typename T,
+          size_t MinRepeat = 2,  //
+          typename NodesRng>
+CacheManager<T> cache_manager(NodesRng&& nodes) {
+  return cache_manager<T, MinRepeat>(
+      nodes,                         //
+      [](auto&&) { return false; },  //
+      [](auto&&) { return true; });
 }
 
 }  // namespace sequant::eval

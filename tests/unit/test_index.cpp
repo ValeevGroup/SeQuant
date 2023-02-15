@@ -34,6 +34,7 @@ TEST_CASE("Index", "[elements]") {
       Index i3(L"i_3", IndexSpace::instance(IndexSpace::active_occupied),
                {i1, i2});
       REQUIRE(i3.label() == L"i_3");
+      REQUIRE(i3.to_string() == "i_3");
       REQUIRE(i3.space() == IndexSpace::instance(IndexSpace::active_occupied));
       REQUIRE(i3.has_proto_indices());
       REQUIRE(i3.proto_indices().size() == 2);
@@ -43,6 +44,7 @@ TEST_CASE("Index", "[elements]") {
       REQUIRE_NOTHROW(Index(L"i_4", {L"i_1", L"i_2"}));
       Index i4(L"i_4", {L"i_1", L"i_2"});
       REQUIRE(i4.label() == L"i_4");
+      REQUIRE(i4.to_string() == "i_4");
       REQUIRE(i4.space() == IndexSpace::instance(IndexSpace::active_occupied));
       REQUIRE(i4.has_proto_indices());
       REQUIRE(i4.proto_indices().size() == 2);
@@ -122,14 +124,14 @@ TEST_CASE("Index", "[elements]") {
   }
 
   SECTION("qns ordering") {
-    auto p1A = Index(L"p⁺_1",
+    auto p1A = Index(L"p↑_1",
                      IndexSpace::instance(IndexSpace::all, IndexSpace::alpha));
     auto p1B =
-        Index(L"p⁻_1", IndexSpace::instance(IndexSpace::all, IndexSpace::beta));
-    auto p2A = Index(L"p⁺_2",
+        Index(L"p↓_1", IndexSpace::instance(IndexSpace::all, IndexSpace::beta));
+    auto p2A = Index(L"p↑_2",
                      IndexSpace::instance(IndexSpace::all, IndexSpace::alpha));
     auto p2B =
-        Index(L"p⁻_2", IndexSpace::instance(IndexSpace::all, IndexSpace::beta));
+        Index(L"p↓_2", IndexSpace::instance(IndexSpace::all, IndexSpace::beta));
     REQUIRE(p1A.space().qns() == IndexSpace::alpha);
     REQUIRE(p2A.space().qns() == IndexSpace::alpha);
     REQUIRE(p1B.space().qns() == IndexSpace::beta);
@@ -170,6 +172,12 @@ TEST_CASE("Index", "[elements]") {
     REQUIRE(i1_13 == Index{L"i_1", {L"i_2", L"i_3"}});
   }
 
+  SECTION("to_string") {
+    Index alpha(L"α");
+    REQUIRE(alpha.to_string() == "α");
+    REQUIRE(alpha.ascii_label() == "alpha");
+  }
+
   SECTION("latex") {
     Index i1(L"i_1");
     std::wstring i1_str;
@@ -183,6 +191,10 @@ TEST_CASE("Index", "[elements]") {
     Index a1(L"a_1", {i1, i2});
     std::wstring a1_str = to_latex(a1);
     REQUIRE(a1_str == L"{a_1^{{i_1}{i_2^{{i_3}{i_4}}}}}");
+
+    Index a1_up(L"a↑_1", {i1, i2});
+    std::wstring a1_up_str = to_latex(a1_up);
+    REQUIRE(a1_up_str == L"{a↑_1^{{i_1}{i_2^{{i_3}{i_4}}}}}");
   }
 
   SECTION("wolfram") {

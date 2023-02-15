@@ -23,7 +23,7 @@ namespace sequant::eval {
 template <typename Tensor_t>
 class SequantEvalScfTA final : public SequantEvalScf {
  private:
-  container::vector<EvalNode> nodes_;
+  container::vector<EvalNodeTA> nodes_;
   CacheManager<Tensor_t const> cman_;
   DataWorldTA<Tensor_t> data_world_;
 
@@ -78,7 +78,7 @@ class SequantEvalScfTA final : public SequantEvalScf {
     auto bk_to_labels_sorted =
         [](auto const& bk) -> container::svector<std::string> {
       auto vec = bk | ranges::views::transform([](auto const& idx) {
-                   return idx.ascii_label();
+                   return idx.to_string();
                  }) |
                  ranges::to<container::svector<std::string>>;
       ranges::sort(vec);
@@ -119,12 +119,17 @@ class SequantEvalScfTA final : public SequantEvalScf {
 
     auto const exprs = info_.exprs();
 
-    nodes_ = info_.nodes(exprs);
+    auto ns = info_.nodes(exprs);
 
-    cman_ = info_.cache_manager<Tensor_t const>(nodes_);
+    nodes_ =
+        ns |
+        ranges::views::transform([](auto&& n) { return to_eval_node_ta(n); }) |
+        ranges::to<decltype(nodes_)>;
+
+    cman_ = info_.cache_manager_scf<Tensor_t const>(ns);
   }
 };
 
-}  // namespace sequant::eval::ta
+}  // namespace sequant::eval
 
 #endif  // SEQUANT_EVAL_SCF_TA_HPP

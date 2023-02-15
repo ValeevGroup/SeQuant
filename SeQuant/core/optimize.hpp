@@ -2,6 +2,7 @@
 #define SEQUANT_OPTIMIZE_OPTIMIZE_HPP
 
 #include <ios>
+#include <iostream>
 #include <limits>
 #include <utility>
 
@@ -22,51 +23,37 @@ namespace sequant {
 namespace opt {
 
 namespace detail {
-///
-/// For n number of bits, assuming all of them are on,
-/// bipartition them into all possibilities, except for
-/// the trivial (all zero bits, all one bits) partition
-/// eg. for n = 3
-///       (001, 110)
-///       (010, 101)
-///       (011, 100)
-///
-template <typename F,
-          std::enable_if_t<std::is_invocable_v<F, size_t, size_t>, bool> = true>
-void scan_biparts_all_bits(size_t n, F&& scanner) {
-  auto ulim = (1 << n);
-  for (auto i = 1; i < ulim / 2; ++i)
-    std::invoke(std::forward<F>(scanner), i, (ulim - 1 - i));
-}
 
 ///
-/// given positions of bits that are on,
-/// P = {i, j,...,m}
-/// generate binary partitions of the positions
-/// such as {m} and {i, j, ...} (= P - {m}) and so on
-/// except for the trivial {i, j,...,m} {} partition
+/// Non-trivial, unique bipartitions of the bits in an unsigned integral.
+///  eg.
+///  decimal (binary) => [{decimal (binary)}...]
+///  -------------------------------------------
+///         3 (11) => [{1 (01), 2 (10)}]
+///      11 (1011) => [{1  (0001), 10 (1010)},
+///                     {2 (0010), {9 (1001)},
+///                     {3 (0011), {8 (1000)}]
+///      0 (0)     => [] (empty: no partitions possible)
+///      2 (10)    => [] (empty)
+///      4 (100)   => [] (empty)
 ///
-template <typename F,
-          std::enable_if_t<std::is_invocable_v<F, size_t, size_t>, bool> = true>
-void scan_biparts_some_bits(std::vector<size_t> const& bs, F&& scanner) {
-  scan_biparts_all_bits(bs.size(), [&scanner, &bs](size_t a1, size_t _) {
-    size_t p1{0}, p2{0};
-    for (auto i = 0; i < bs.size(); ++i) {
-      // if ith bit is on, ith elem in bs is included in p1
-      //                       else it is included in p2
-      if ((1 << i) & a1)
-        p1 |= (1 << bs[i]);
-      else
-        p2 |= (1 << bs[i]);
-    }
-    std::invoke(std::forward<F>(scanner), p1, p2);
-  });
+/// \tparam I Unsigned integral type.
+/// \param n Represents a bit set.
+/// \param func func is function that takes two arguments of type I.
+///
+template <
+    typename I, typename F,
+    typename = std::enable_if_t<std::is_integral_v<I> && std::is_unsigned_v<I>>,
+    typename = std::enable_if_t<std::is_invocable_v<F, int, int>>>
+void biparts(I n, F&& func) {
+  if (n == 0) return;
+  I const h = static_cast<I>(std::ceil(n / 2.0));
+  for (auto n_ = 1; n_ <= h; ++n_) {
+    auto const l = n & n_;
+    auto const r = (n - n_) & n;
+    if ((l | r) == n) std::invoke(std::forward<F>(func), l, r);
+  }
 }
-
-/// given a number @c n, return a vector of ON bit positions
-/// only first num_bits bits will be checked from right to left
-/// in the bit representation of @c n
-std::vector<size_t> on_bits_pos(size_t n, size_t num_bits = sizeof(size_t) * 8);
 
 }  // namespace detail
 
@@ -99,16 +86,24 @@ struct STOResult {
   container::vector<EvalNode> optimal_seqs;
 };
 
+///
+/// \tparam IdxToSz map-like {IndexSpace : size_t}
+/// \param idxsz see @c IdxToSz
+/// \param commons Index objects
+/// \param diffs   Index objects
+/// \return flops count
+/// @note @c commons and @c diffs have unique indices individually as well as
+///       combined
 template <typename IdxToSz,
           std::enable_if_t<std::is_invocable_r_v<size_t, IdxToSz, Index>,
                            bool> = true>
-double log_flops(IdxToSz const& idxsz,
-                 container::vector<Index> const& commons,
-                 container::vector<Index> const& diffs) {
-  double res = 0;
+double ops_count(IdxToSz const& idxsz, container::svector<Index> const& commons,
+                 container::svector<Index> const& diffs) {
+  double ops = 1.0;
   for (auto&& idx : ranges::views::concat(commons, diffs))
-    res += std::log10(std::invoke(idxsz, idx));
-  return res;
+    ops *= std::invoke(idxsz, idx);
+  // ops == 1.0 implies both commons and diffs empty
+  return ops == 1.0 ? 0 : ops;
 }
 
 /// Perform single term optimization on a product. Deprecated.
@@ -117,7 +112,7 @@ double log_flops(IdxToSz const& idxsz,
 template <typename F = std::function<bool(EvalNode const&)>,
           std::enable_if_t<std::is_invocable_r_v<bool, F, EvalNode const&>,
                            bool> = true>
-STOResult single_term_opt(
+[[deprecated]] STOResult single_term_opt(
     Product const& prod, F&& pred = [](auto const&) { return true; }) {
   using ranges::to_vector;
   using ranges::views::iota;
@@ -173,11 +168,30 @@ STOResult single_term_opt(
   return result;
 }
 
-using eval_seq_t = container::vector<int>;
+///
+/// any element in the vector belongs to the integral range [-1,N)
+/// where N is the length of the [Expr] (ie. the iterable of expressions)
+///   * only applicable for binary evaluations
+///   * the integer -1 can appear in certain places: it implies the binary
+///     operation between the last two expressions
+///   * eg.
+///         * {0,1,-1,2,-1} => ( (e[0], e[1]), e[2])
+///         * {0,1,-1,2,3,-1,-1} => ((e[0], e[1]), (e[2],e[3]))
+///
+using eval_seq_t = container::svector<int>;
 
+///
+/// Represents a result of optimization on a range of expressions
+/// for a binary evaluation
+///
 struct OptRes {
-  container::vector<sequant::Index> indices;
+  /// Free indices remaining upon evaluation
+  container::svector<sequant::Index> indices;
+
+  /// The flops count of evaluation
   double flops;
+
+  /// The evaluation sequence
   eval_seq_t sequence;
 };
 
@@ -189,13 +203,13 @@ struct OptRes {
 /// @note I1 and I2 containers are assumed to be sorted by using
 /// Index::LabelCompare{};
 template <typename I1, typename I2>
-std::pair<container::vector<Index>, container::vector<Index>> common_indices(
+std::pair<container::svector<Index>, container::svector<Index>> common_indices(
     I1 const& idxs1, I2 const& idxs2) {
   container::vector<Index> i1vec(ranges::begin(idxs1), ranges::end(idxs1)),
       i2vec(ranges::begin(idxs2), ranges::end(idxs2));
   if (i1vec.empty() || i2vec.empty()) return {{}, {}};
 
-  container::vector<Index> commons, diffs;
+  container::svector<Index> commons, diffs;
   std::set_intersection(std::begin(i1vec), std::end(i1vec), std::begin(i2vec),
                         std::end(i2vec), std::back_inserter(commons),
                         Index::LabelCompare{});
@@ -214,23 +228,18 @@ eval_seq_t single_term_opt_v2(TensorNetwork const& network,
   auto const nt = network.tensors().size();
   if (nt == 1) return eval_seq_t{0};
   if (nt == 2) return eval_seq_t{0, 1, -1};
-  auto nth_tensor_indices = container::vector<container::vector<Index>>{};
+  auto nth_tensor_indices = container::vector<container::svector<Index>>{};
   nth_tensor_indices.reserve(nt);
 
   for (auto i = 0; i < nt; ++i) {
-    auto bk = container::vector<Index>{};
+    auto bk = container::svector<Index>{};
     for (auto idx : braket(*network.tensors().at(i))) bk.push_back(idx);
 
     ranges::sort(bk, Index::LabelCompare{});
     nth_tensor_indices.emplace_back(std::move(bk));
   }
 
-  auto log_flops_ = [&idxsz](container::vector<Index> const& commons,
-                             container::vector<Index> const& diffs) {
-    return log_flops(idxsz, commons, diffs);
-  };
-
-  container::vector<OptRes> result((1 << nt), OptRes{{}, 0, {}});
+  container::vector<OptRes> results((1 << nt), OptRes{{}, 0, {}});
 
   // power_pos is used, and incremented, only when the
   // result[1<<0]
@@ -238,45 +247,53 @@ eval_seq_t single_term_opt_v2(TensorNetwork const& network,
   // result[1<<2]
   // and so on are set
   size_t power_pos = 0;
-  for (auto n = 1; n < (1 << nt); ++n) {
-    double cost = std::numeric_limits<double>::max();
-    auto const on_bits = detail::on_bits_pos(n, nt);
-    size_t p1 = 0, p2 = 0;
-    container::vector<Index> tindices{};
-    detail::scan_biparts_some_bits(
-        on_bits, [&result = std::as_const(result), &tindices, &idxsz,
-                  &log_flops_, &cost, &p1, &p2](auto p1_, auto p2_) {
-          auto [commons, diffs] =
-              common_indices(result[p1_].indices, result[p2_].indices);
-          auto new_cost = log_flops_(commons, diffs) + result[p1_].flops +
-                          result[p2_].flops;
-          if (new_cost < cost) {
-            cost = new_cost;
-            tindices = std::move(diffs);
-            p1 = p1_;
-            p2 = p2_;
-          }
-        });  //
+  for (size_t n = 1; n < (1 << nt); ++n) {
+    double curr_cost = std::numeric_limits<double>::max();
+    std::pair<size_t, size_t> curr_parts{0, 0};
+    container::svector<Index> curr_indices{};
 
-    auto seq = eval_seq_t{};
-    if (tindices.empty()) {
-      cost = 0;
-      tindices = std::move(nth_tensor_indices[power_pos]);
-      seq = eval_seq_t{static_cast<int>(power_pos++)};
+    // function to find the optimal partition
+    auto scan_parts = [&curr_cost,                              //
+                       &curr_parts,                             //
+                       &curr_indices,                           //
+                           & results = std::as_const(results),  //
+                       &idxsz](                                 //
+                          size_t lpart, size_t rpart) {
+      auto [commons,                                         //
+            diffs] = common_indices(results[lpart].indices,  //
+                                    results[rpart].indices);
+      auto new_cost = ops_count(idxsz,           //
+                                commons, diffs)  //
+                      + results[lpart].flops     //
+                      + results[rpart].flops;
+      if (new_cost < curr_cost) {
+        curr_cost = new_cost;
+        curr_parts = decltype(curr_parts){lpart, rpart};
+        curr_indices = std::move(diffs);
+      }
+    };
+
+    detail::biparts(n, scan_parts);
+
+    auto& curr_result = results[n];
+    if (curr_indices.empty()) {
+      // evaluation of a single atomic tensor
+      curr_result.flops = 0;
+      curr_result.indices = std::move(nth_tensor_indices[power_pos]);
+      curr_result.sequence = eval_seq_t{static_cast<int>(power_pos++)};
     } else {
-      // cost set
-      // tindices set
-      seq = ranges::views::concat(result[p1].sequence, result[p2].sequence) |
-            ranges::to<eval_seq_t>;
-      seq.push_back(-1);
+      curr_result.flops = curr_cost;
+      curr_result.indices = std::move(curr_indices);
+      curr_result.sequence =
+          ranges::views::concat(results[curr_parts.first].sequence,
+                                results[curr_parts.second].sequence) |
+          ranges::to<eval_seq_t>;
+      // implies binary operation. @see eval_seq_t
+      curr_result.sequence.push_back(-1);
     }
-
-    result[n].flops = cost;
-    result[n].indices = std::move(tindices);
-    result[n].sequence = std::move(seq);
   }
 
-  return result[(1 << nt) - 1].sequence;
+  return results[(1 << nt) - 1].sequence;
 }
 
 ///
@@ -323,7 +340,6 @@ EvalNode optimize(const ExprPtr& expr, IdxToSz const& idxsz) {
   if (expr->is<Tensor>())
     return to_eval_node(expr);
   else if (expr->is<Product>()) {
-    // return *(opt::single_term_opt(expr->as<Product>()).optimal_seqs.begin());
     auto opt_expr = opt::single_term_opt_v2(expr->as<Product>(), idxsz);
     return to_eval_node(opt_expr);
   } else if (expr->is<Sum>()) {

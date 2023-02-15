@@ -117,14 +117,14 @@ TEST_CASE("TEST_EVAL_EXPR", "[EvalExpr]") {
     const auto& x12 = EvalExpr{x1, x2, EvalOp::Prod};
     const auto& x21 = EvalExpr{x2, x1, EvalOp::Prod};
 
-    REQUIRE(x1.hash() == x2.hash());
-    REQUIRE(x12.hash() == x21.hash());
+    REQUIRE(x1.hash_value() == x2.hash_value());
+    REQUIRE(x12.hash_value() == x21.hash_value());
 
     const auto& x3 = EvalExpr{t3};
     // const auto& x123 = EvalExpr{x12, x3};
 
-    REQUIRE_FALSE(x1.hash() == x3.hash());
-    REQUIRE_FALSE(x12.hash() == x3.hash());
+    REQUIRE_FALSE(x1.hash_value() == x3.hash_value());
+    REQUIRE_FALSE(x12.hash_value() == x3.hash_value());
   }
 
   SECTION("Symmetry of product") {
@@ -200,7 +200,7 @@ TEST_CASE("TEST_EVAL_EXPR", "[EvalExpr]") {
     // sum of two symmetric tensors
     REQUIRE(symmetry(imed(t3, t4)) == Symmetry::symm);
 
-    // sum of one antisymmetric and one one nonsymmetric tensors
+    // sum of an antisymmetric and a nonsymmetric tensors
     REQUIRE(symmetry(imed(t1, t5)) == Symmetry::nonsymm);
 
     // sum of one symmetric and one nonsymmetric tensors
@@ -208,5 +208,16 @@ TEST_CASE("TEST_EVAL_EXPR", "[EvalExpr]") {
 
     // sum of two nonsymmetric tensors
     REQUIRE(symmetry(imed(t5, t6)) == Symmetry::nonsymm);
+  }
+
+  SECTION("Debug") {
+    auto t1 =
+        EvalExpr{parse_expr(L"O{a_1<i_1,i_2>;a_1<i_3,i_2>}", Symmetry::nonsymm)
+                     ->as<Tensor>()};
+    auto t2 =
+        EvalExpr{parse_expr(L"O{a_2<i_1,i_2>;a_2<i_3,i_2>}", Symmetry::nonsymm)
+                     ->as<Tensor>()};
+
+    REQUIRE_NOTHROW(EvalExpr{t1, t2, EvalOp::Prod});
   }
 }

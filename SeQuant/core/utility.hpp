@@ -5,10 +5,9 @@
 #ifndef SEQUANT_UTILITY_HPP
 #define SEQUANT_UTILITY_HPP
 
-#include <boost/locale/encoding_utf.hpp>
-
 namespace sequant {
 
+// clang-format off
 /// @brief Singleton base class
 /// To create a singleton class @c A do:
 /// \code
@@ -25,9 +24,11 @@ namespace sequant {
 /// A* the_instance_ptr = A::get_instance_ptr();  // returns nullptr if the instance of A had not been created
 /// // the instance of A will be destroyed with other static-linkage objects
 /// \endcode
+// clang-format on
 template <typename Derived>
 class Singleton {
-  // can't use std::is_default_constructible since Derived's ctors should be private
+  // can't use std::is_default_constructible since Derived's ctors should be
+  // private
   template <typename T, typename Enabler = void>
   struct is_default_constructible_helper : public std::false_type {};
   template <typename T>
@@ -38,7 +39,9 @@ class Singleton {
 
  public:
   /// @return reference to the instance
-  /// @throw std::logic_error if the reference has not been contructed (because Derived is not default-constructible and set_instance() had not been called)
+  /// @throw std::logic_error if the reference has not been contructed (because
+  /// Derived is not default-constructible and set_instance() had not been
+  /// called)
   static Derived& get_instance() {
     const auto& result_ptr = instance_accessor();
     if (result_ptr != nullptr) return *result_ptr;
@@ -51,7 +54,8 @@ class Singleton {
           "has not been called");
   }
 
-  /// @return pointer to the instance, or nullptr if it has not yet been constructed
+  /// @return pointer to the instance, or nullptr if it has not yet been
+  /// constructed
   static Derived* get_instance_ptr() {
     const auto result_ptr = instance_accessor();
     if (result_ptr != nullptr) return result_ptr.get();
@@ -62,7 +66,8 @@ class Singleton {
       return nullptr;
   }
 
-  /// Constructs the instance. This must be called if Derived is not default-constructible.
+  /// Constructs the instance. This must be called if Derived is not
+  /// default-constructible.
   /// @tparam Args a parameter pack type
   /// @param args a parameter pack
   template <typename... Args>
@@ -92,6 +97,7 @@ struct Logger : public Singleton<Logger> {
   bool canonicalize_dot = false;
   bool simplify = false;
   bool tensor_network = false;
+
  private:
   friend class Singleton<Logger>;
   Logger(int log_level = 0) {
@@ -107,17 +113,6 @@ struct Logger : public Singleton<Logger> {
   }
 };
 
-/// @brief (potentially) narrowing character converter.
-///
-/// Converts a UTF-8 encoded std::basic_string<Char> to a UTF-8 encoded std::basic_string<char>
-/// \tparam Char character type: wchar_t or char
-template <typename Char>
-inline std::basic_string<char> to_string(const std::basic_string<Char>& str_utf8) {
-  using boost::locale::conv::utf_to_utf;
-  return utf_to_utf<char>(str_utf8.c_str(),
-                          str_utf8.c_str() + str_utf8.size());
-}
+}  // namespace sequant
 
-}
-
-#endif //SEQUANT_UTILITY_HPP
+#endif  // SEQUANT_UTILITY_HPP

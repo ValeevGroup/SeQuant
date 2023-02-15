@@ -6,8 +6,8 @@
 #define SEQUANT_LATEX_HPP
 
 #include <type_traits>
-#include "meta.hpp"
-#include "wstring.hpp"
+#include "SeQuant/core/meta.hpp"
+#include "SeQuant/core/wstring.hpp"
 
 namespace sequant {
 

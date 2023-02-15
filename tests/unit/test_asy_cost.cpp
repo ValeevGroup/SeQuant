@@ -123,4 +123,17 @@ TEST_CASE("TEST ASY_COST", "[AsyCost]") {
 
     clear();
   }
+
+  SECTION("LaTeX") {
+    auto cost = AsyCost{2,3, {1,4}};
+    REQUIRE(cost.to_latex<std::string>() == "\\frac{1}{4}O^{2}V^{3}");
+    cost = AsyCost{2,3};
+    REQUIRE(cost.to_latex<std::string>() == "O^{2}V^{3}");
+    cost = AsyCost{2,3,{1,1}};
+    REQUIRE(cost.to_latex<std::string>() == "O^{2}V^{3}");
+    cost = AsyCost{2,3,{-1,1}};
+    REQUIRE(cost.to_latex<std::string>() == "- O^{2}V^{3}");
+    cost = AsyCost{2,3,{-1,4}};
+    REQUIRE(cost.to_latex<std::string>() == "- \\frac{1}{4}O^{2}V^{3}");
+  }
 }

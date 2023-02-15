@@ -4,7 +4,7 @@
 
 namespace sequant {
 
-EvalExpr::hash_t EvalExpr::hash() const { return hash_; }
+EvalExpr::hash_t EvalExpr::hash_value() const { return hash_; }
 
 EvalOp EvalExpr::op() const { return op_; }
 
@@ -12,46 +12,49 @@ const Tensor& EvalExpr::tensor() const { return tensor_; }
 
 const Constant& EvalExpr::scalar() const { return scalar_; }
 
-EvalExpr::EvalExpr(const Tensor& tnsr) : op_{EvalOp::Id}, tensor_{tnsr},
-hash_{EvalExpr::hash_terminal_tensor(tnsr)}, annot_{braket_to_annot(tnsr.const_braket())}{}
+EvalExpr::EvalExpr(const Tensor& tnsr)
+    : op_{EvalOp::Id},
+      tensor_{tnsr},
+      hash_{EvalExpr::hash_terminal_tensor(tnsr)} {}
 
-EvalExpr::EvalExpr(const EvalExpr& xpr1,
-                   const EvalExpr& xpr2,
-                   EvalOp op) {
+EvalExpr::EvalExpr(const EvalExpr& xpr1, const EvalExpr& xpr2, EvalOp op) {
   assert(op != EvalOp::Id);
-  auto const& expr1 = xpr1.hash() < xpr2.hash() ? xpr1 : xpr2;
-  auto const& expr2 = xpr1.hash() < xpr2.hash() ? xpr2 : xpr1;
+  auto const& expr1 = xpr1.hash_value() < xpr2.hash_value() ? xpr1 : xpr2;
+  auto const& expr2 = xpr1.hash_value() < xpr2.hash_value() ? xpr2 : xpr1;
 
   auto bk = braket_type{};
   if (op == EvalOp::Prod)
     bk = target_braket_prod(expr1.tensor(), expr2.tensor());
   else {
-    std::get<0>(bk) = expr1.tensor().bra()
-                      | ranges::to<index_container_type>;
-    std::get<1>(bk) = expr1.tensor().ket()
-                      | ranges::to<index_container_type>;
+    std::get<0>(bk) = expr1.tensor().bra() | ranges::to<index_container_type>;
+    std::get<1>(bk) = expr1.tensor().ket() | ranges::to<index_container_type>;
   }
 
   auto const& t1 = expr1.tensor();
   auto const& t2 = expr2.tensor();
   Symmetry s = Symmetry::invalid;
   switch (op) {
-    case EvalOp::Sum: s = infer_tensor_symmetry_sum(expr1, expr2); break;
-    case EvalOp::Prod: s = infer_tensor_symmetry_prod(expr1, expr2); break;
-    case EvalOp::Symm: s = Symmetry::symm; break;
-    case EvalOp::Antisymm: s = Symmetry::antisymm; break;
-    default: assert(false && "Unsupported operation for symmetry detect.");
+    case EvalOp::Sum:
+      s = infer_tensor_symmetry_sum(expr1, expr2);
+      break;
+    case EvalOp::Prod:
+      s = infer_tensor_symmetry_prod(expr1, expr2);
+      break;
+    case EvalOp::Symm:
+      s = Symmetry::symm;
+      break;
+    case EvalOp::Antisymm:
+      s = Symmetry::antisymm;
+      break;
+    default:
+      assert(false && "Unsupported operation for symmetry detect.");
   }
   op_ = op;
 
-  tensor_ = Tensor{L"I",
-      std::get<0>(bk),
-      std::get<1>(bk),
-      s, infer_braket_symmetry(), infer_particle_symmetry(s)};
+  tensor_ = Tensor{L"I", std::get<0>(bk),         std::get<1>(bk),
+                   s,    infer_braket_symmetry(), infer_particle_symmetry(s)};
 
   hash_ = hash_imed(expr1, expr2, op);
-
-  annot_ = braket_to_annot(tensor_.const_braket());
 }
 
 Symmetry EvalExpr::infer_tensor_symmetry_sum(EvalExpr const& xpr1,
@@ -83,8 +86,7 @@ Symmetry EvalExpr::infer_tensor_symmetry_prod(EvalExpr const& xpr1,
   auto const& tnsr1 = xpr1.tensor();
   auto const& tnsr2 = xpr2.tensor();
 
-  auto imed_sym = Symmetry::invalid;
-  if (xpr1.hash() == xpr2.hash()) {
+  if (xpr1.hash_value() == xpr2.hash_value()) {
     // potential outer product
     auto const uniq_idxs =
         ranges::views::concat(tnsr1.const_braket(), tnsr2.const_braket()) |
@@ -93,22 +95,24 @@ Symmetry EvalExpr::infer_tensor_symmetry_prod(EvalExpr const& xpr1,
     if (ranges::distance(uniq_idxs) ==
         tnsr1.const_braket().size() + tnsr2.const_braket().size()) {
       // outer product confirmed
-      imed_sym = Symmetry::antisymm;
+      return Symmetry::antisymm;
     }
-  } else {
-    bool whole_bk_contracted = (all_common_indices(tnsr1.bra(), tnsr2.ket()) ||
-                                all_common_indices(tnsr1.ket(), tnsr2.bra()));
-    auto sym1 = tnsr1.symmetry();
-    auto sym2 = tnsr2.symmetry();
-    assert(sym1 != Symmetry::invalid);
-    assert(sym2 != Symmetry::invalid);
-    if (whole_bk_contracted &&
-        !(sym1 == Symmetry::nonsymm || sym2 == Symmetry::nonsymm)) {
-      imed_sym = sym1 == sym2 ? sym1 : Symmetry::symm;
+  }
 
-    } else {
-      imed_sym = Symmetry::nonsymm;
-    }
+  // not an outer product of same tensor confirmed
+  auto imed_sym = Symmetry::invalid;
+  bool whole_bk_contracted = (all_common_indices(tnsr1.bra(), tnsr2.ket()) ||
+                              all_common_indices(tnsr1.ket(), tnsr2.bra()));
+  auto sym1 = tnsr1.symmetry();
+  auto sym2 = tnsr2.symmetry();
+  assert(sym1 != Symmetry::invalid);
+  assert(sym2 != Symmetry::invalid);
+  if (whole_bk_contracted &&
+      !(sym1 == Symmetry::nonsymm || sym2 == Symmetry::nonsymm)) {
+    imed_sym = sym1 == sym2 ? sym1 : Symmetry::symm;
+
+  } else {
+    imed_sym = Symmetry::nonsymm;
   }
 
   assert(imed_sym != Symmetry::invalid);
@@ -172,7 +176,7 @@ next_contract:
 EvalExpr::hash_t EvalExpr::hash_braket(
     const decltype(std::declval<Tensor>().const_braket())& braket) {
   EvalExpr::hash_t bkHash = 0;
-  for (auto const& idx: braket) {
+  for (auto const& idx : braket) {
     hash::combine(bkHash, hash::value(idx.space().type().to_int32()));
     hash::combine(bkHash, hash::value(idx.space().qns().to_int32()));
   }
@@ -199,8 +203,8 @@ EvalExpr::hash_t EvalExpr::hash_tensor_pair_topology(const Tensor& tnsr1,
 EvalExpr::hash_t EvalExpr::hash_imed(const EvalExpr& expr1,
                                      const EvalExpr& expr2, EvalOp op) {
   EvalExpr::hash_t imedHash = 0;
-  hash::combine(imedHash, expr1.hash());
-  hash::combine(imedHash, expr2.hash());
+  hash::combine(imedHash, expr1.hash_value());
+  hash::combine(imedHash, expr2.hash_value());
 
   const auto& t1 = expr1.tensor();
   const auto& t2 = expr2.tensor();

@@ -21,6 +21,13 @@
 
 namespace sequant::eval {
 
+struct NoCacheAmplitudeTensor {
+  template <typename N>
+  [[nodiscard]] bool operator()(N&& node) const noexcept {
+    return node->tensor().label() != L"t";
+  }
+};
+
 struct CalcInfo {
   OptionsEquations const eqn_opts;
 
@@ -43,14 +50,24 @@ struct CalcInfo {
       container::vector<ExprPtr> const& exprs) const;
 
   template <typename Data_t>
-  CacheManager<Data_t> cache_manager(
+  CacheManager<Data_t> cache_manager_scf(
       container::vector<EvalNode> const& nodes) const {
-    if (optm_opts.reuse_imeds)
-      return make_cache_manager<Data_t>(nodes, optm_opts.cache_leaves);
-    else if (optm_opts.cache_leaves)
-      return make_cache_manager_leaves_only<Data_t>(nodes);
-    else
-      return CacheManager<Data_t>{{}, {}};
+    auto cl = optm_opts.cache_leaves;
+    auto ci = optm_opts.reuse_imeds;
+
+    if (!(cl || ci)) return CacheManager<Data_t>::empty();
+
+    return cache_manager<Data_t>(
+        nodes,
+        [cl](auto&& n) {
+          // if cache leaves requested cache all leaves except the amplitude
+          // tensors
+          return cl && NoCacheAmplitudeTensor{}(n);
+        },
+        [ci](auto&&) {
+          // true if reuse of intermediates requested
+          return ci;
+        });
   }
 
  private:

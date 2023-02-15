@@ -1,19 +1,9 @@
-#include <SeQuant/core/optimize.hpp>
 #include <SeQuant/core/clone_packed.hpp>
+#include <SeQuant/core/optimize.hpp>
 
 namespace sequant {
 
 namespace opt {
-
-namespace detail {
-std::vector<size_t> on_bits_pos(size_t n, size_t num_bits) {
-  auto result = std::vector<size_t>{};
-  result.reserve(num_bits);
-  for (auto i = 0; i < num_bits; ++i)
-    if (n & (1 << i)) result.push_back(i);
-  return result;
-}
-}  // namespace detail
 
 ExprPtr tail_factor(ExprPtr const& expr) noexcept {
   if (expr->is<Tensor>())

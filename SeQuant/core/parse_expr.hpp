@@ -14,6 +14,7 @@
 
 namespace sequant {
 
+// clang-format off
 ///
 /// \param raw A tensor algebra expression. A valid expression is
 ///            a product, a sum or a mix of those including parentheses.
@@ -25,16 +26,32 @@ namespace sequant {
 ///                'A{i1,i2; a3,a4} * B{a3,a4; a1,a2}' a product of tensors
 ///                'A{i1,i2; a3,a4} * B{a3,a4; a1,a2} + C{i1,i2;a1,a2}' a sum and a product of tensors
 ///                'A{i1,i2; a3,a4} * (B{a3,a4; a1,a2} + C{a3,a4; a1,a2}) a parenthesized expression
+///                '0.5 * t{i1;a1} * f{i1; a1}' tensor product with a scalar
+///                '1/2 * t{i1;a1} * f{i1; a1}' same as above (fractions supported)
+///                '1./2. * t{i1;a1} * f{i1; a1}' same as above num. and denom. are automatically cast to double
+///                '1.0/2.0 * t{i1;a1} * f{i1; a1}' same as above
+///                't{i1,i2; a1<i1,i2>, a2<i1,i2>}' a tensor having indices with proto indices.
+///                                                a1<i1,i2> is an index with i1 and i2 as proto-indices.
 /// \param tensor_sym The symmetry of all atomic tensors in the
 ///                   @c raw expression. Explicit tensor symmetry can
-///                   be annotated in the expression itself. In which case, the
+///                   be annotated in the expression itself. In that case, the
 ///                   annotated symmetry will be used.
 ///                   eg. 'g{i1, a1; i2, a2}:A' tensor with 'sequant::Symmetry::antisymm' annotation
 ///                       'g{i1, a1; i2, a2}:S' tensor with 'sequant::Symmetry::symm' annotation
 ///                       'g{i1, a1; i2, a2}:N' tensor with 'sequant::Symmetry::nonsymm' annotation
 /// \return SeQuant expression.
+// clang-format on
 ExprPtr parse_expr(std::wstring_view raw, Symmetry tensor_sym);
 
-}  // namespace sequant::utils
+///
+/// Get a parsable string from an expression.
+///
+/// \param expr Expression to stringify that can be re-parsed to itself.
+/// \param annot_sym Whether to add sequant::Symmetry annotation
+///                  to each Tensor string.
+/// \return wstring of the expression.
+std::wstring deparse_expr(ExprPtr expr, bool annot_sym);
+
+}  // namespace sequant
 
 #endif  // SEQUANT_PARSE_EXPR_HPP

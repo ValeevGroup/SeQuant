@@ -27,7 +27,7 @@ enum class EvalOp {
  * @author Bimal Gaudel
  * @version 03 Dec, 2020
  */
-class EvalExpr final {
+class EvalExpr {
  public:
   using hash_t = size_t;
 
@@ -51,7 +51,7 @@ class EvalExpr final {
   /**
    * Hash value of the object.
    */
-  [[nodiscard]] hash_t hash() const;
+  [[nodiscard]] hash_t hash_value() const;
 
   /**
    * Tensor expression stored by the object.
@@ -61,24 +61,21 @@ class EvalExpr final {
   /** Factor to scale tensor by. */
   [[nodiscard]] const Constant& scalar() const;
 
-  ///
-  /// annotation for TiledArray
-  ///
-  std::string annot() const {return annot_; }
-
+  /** Scale the scalar prefactor by @c fac. */
   template <typename T = std::complex<double>>
   EvalExpr& operator*=(T fac) {
     scalar_ *= Constant{std::move(fac)};
     return *this;
   }
 
+  /** Set the scalar prefactor to @c fac. */
   template <typename T = std::complex<double>>
   void scale(T fac) {
     scalar_ = Constant{std::move(fac)};
   }
 
   friend inline bool operator==(const EvalExpr& lhs, const EvalExpr& rhs) {
-    return lhs.hash() == rhs.hash() &&
+    return lhs.hash_value() == rhs.hash_value() &&
            (lhs.tensor().to_latex() == rhs.tensor().to_latex());
   }
 
@@ -93,8 +90,6 @@ class EvalExpr final {
   Tensor tensor_;
 
   Constant scalar_{1};
-
-  std::string annot_;
 
   /**
    * Infer the symmetry of the resulting tensor after summing two tensors.
@@ -158,43 +153,6 @@ class EvalExpr final {
    * the first is the target bra.
    */
   static braket_type target_braket_prod(const Tensor&, const Tensor&);
-
-  ///
-  /// Given an iterable of Index objects, generate a string annotation
-  /// that can be used for TiledArray tensor expressions.
-  /// Tensor-of-tensors also supported.
-  template <typename Indices_t>
-  static std::string braket_to_annot(Indices_t const& indices) {
-    using ranges::views::transform;
-
-    // make a comma-separated string out of an iterable of strings
-    auto add_commas = [](auto const& strs) -> std::string {
-      auto result = std::string{ranges::front(strs)};
-      for (auto&& s: ranges::views::tail(strs))
-        result += "," + s;
-      return result;
-    };
-
-    container::vector<std::string> outer_labels{}, inner_labels{};
-    for (auto&& idx: indices) {
-      if (idx.has_proto_indices()) {
-        inner_labels.emplace_back(idx.ascii_label());
-        for (auto&& pidx : idx.proto_indices())
-          outer_labels.emplace_back(pidx.ascii_label());
-      } else {
-        outer_labels.emplace_back(idx.ascii_label());
-      }
-    }
-
-    if (inner_labels.empty())
-      return add_commas(outer_labels);
-
-    // support CSV methods
-    ranges::sort(inner_labels);
-    ranges::sort(outer_labels);
-    ranges::actions::unique(outer_labels);
-    return add_commas(outer_labels) + ";" + add_commas(inner_labels);
-  }
 
 };
 

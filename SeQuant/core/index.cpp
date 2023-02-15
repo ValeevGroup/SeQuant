@@ -6,6 +6,8 @@
 
 #include "../../SeQuant/core/sequant.hpp"
 
+#include "../../SeQuant/core/wstring.hpp"
+
 namespace sequant {
 
 const std::size_t Index::min_tmp_index() {
@@ -16,7 +18,7 @@ void Index::reset_tmp_index() { tmp_index_accessor() = min_tmp_index() - 1; }
 
 std::wstring Index::to_latex() const {
   auto protect_subscript = [](const std::wstring_view str) {
-    auto subsc_pos = str.find(L'_');
+    auto subsc_pos = str.rfind(L'_');
     if (subsc_pos == std::wstring_view::npos)
       return std::wstring(str);
     else {
@@ -98,8 +100,8 @@ std::string Index::ascii_label() const {
 
   std::wstring label(label_);
 
-  std::replace(label.begin(), label.end(), L'⁺', L'a');
-  std::replace(label.begin(), label.end(), L'⁻', L'b');
+  std::replace(label.begin(), label.end(), L'↑', L'a');
+  std::replace(label.begin(), label.end(), L'↓', L'b');
   std::string label_ascii;
   for (auto it = label.begin(); it != label.end(); ++it) {
     auto pos = greek_to_english_name.find(*it);
@@ -110,6 +112,10 @@ std::string Index::ascii_label() const {
     }
   }
   return label_ascii;
+}
+
+std::string Index::to_string() const {
+  return sequant::to_string(this->label());
 }
 
 }  // namespace sequant

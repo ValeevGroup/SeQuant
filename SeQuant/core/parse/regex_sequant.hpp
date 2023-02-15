@@ -15,7 +15,17 @@ class regex_patterns {
 
   static std::wstring_view tensor_terse();
 
-  static std::wstring_view fraction();
+  constexpr static std::wstring_view abs_real_num() {
+    return LR"=(((?:\d+(?:\.\d*)?)|(?:\.\d+)))=";
+  }
+
+  /// Capture group 1: numerator
+  /// If captured, group 2: denominator
+  static std::wstring_view abs_real_frac();
+
+  static std::wstring pure_index();
+
+  static std::wstring index_capture();
 
  private:
   static std::wstring capture(std::wstring_view pat);
@@ -29,7 +39,13 @@ class regex_patterns {
 
   static std::wstring look_ahead(std::wstring_view pat);
 
-  static std::wstring_view index();
+  static std::wstring pure_indices();
+
+  static std::wstring proto_indices();
+
+  static std::wstring proto_indices_capture();
+
+  static std::wstring index();
 
   static std::wstring_view indices();
 
