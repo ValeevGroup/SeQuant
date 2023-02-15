@@ -262,7 +262,6 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
           });
       const auto nidentical = plast_it - first_it;
       assert(nidentical > 1);
-      /// TODO sometimes lets zero products through such that a divide by zero error occurs at sum of prefactors / first prefactor
       auto reduce_range = [first_it, this, nidentical](auto &begin, auto &end) {
         if ((*first_it)->template is<Tensor>()) {
           Product tensor_as_Product{};
@@ -271,17 +270,21 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
           (*first_it) = std::make_shared<Product>(tensor_as_Product);
           this->summands_.erase(first_it + 1, end);
         } else if ((*first_it)->template is<Product>()) {
+          auto &prod = (*first_it)->template as<Product>();
           for (auto it = begin + 1; it != end; ++it) {
             if ((*it)->template is<Tensor>()) {
               Product tensor_as_Product{};
               tensor_as_Product.append(1.0, (*it)->template as<Tensor>());
               (*it) = std::make_shared<Product>(tensor_as_Product);
-            } else if ((*it)->template is<Product>()) {
-              std::static_pointer_cast<Product>(*first_it)->add_identical(
-                  std::static_pointer_cast<Product>(*it));
+            }
+            if ((*it)->template is<Product>()) {
+              prod.add_identical((*it)->template as<Product>());
             }
           }
-          this->summands_.erase(first_it + 1, end);
+          auto summands_to_erase = std::pair{first_it + 1, end};
+          if (prod.is_zero()) summands_to_erase.first = first_it;
+          this->summands_.erase(summands_to_erase.first,
+                                summands_to_erase.second);
         }
       };
       reduce_range(first_it, plast_it);
