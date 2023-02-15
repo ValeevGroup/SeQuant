@@ -594,7 +594,18 @@ class Constant : public Expr {
     return *this;
   }
 
-  bool is_zero() const { return value_ == decltype(value_){0, 0}; }
+  /// @param[in] v a scalar
+  /// @return true if this is a soft zero, i.e. its magnitude is less than
+  /// `std::sqrt(std::numeric_limits<float>::epsilon())`
+  static bool is_zero(scalar_type v) {
+    static const auto threshold =
+        std::sqrt(std::numeric_limits<float>::epsilon());
+    using std::abs;
+    return abs(v) <= threshold;
+  }
+
+  /// @return `Constant::is_zero(this->value())`
+  bool is_zero() const { return is_zero(this->value()); }
 
  private:
   hash_type memoizing_hash() const override {
@@ -773,6 +784,10 @@ class Product : public Expr {
   }
 
   const auto &scalar() const { return scalar_; }
+
+  /// @return `Constant::is_zero(this->scalar())`
+  bool is_zero() const { return Constant::is_zero(this->scalar()); }
+
   const auto &factors() const { return factors_; }
   auto &factors() { return factors_; }
 
@@ -866,6 +881,11 @@ class Product : public Expr {
       scalar_ *= that.as<Constant>().value();
     }
     return *this;
+  }
+
+  void add_identical(const Product &other) {
+    assert(this->hash_value() == other.hash_value());
+    scalar_ += other.scalar_;
   }
 
   void add_identical(const std::shared_ptr<Product> &other) {
