@@ -24,7 +24,7 @@ EvalExprTA::EvalExprTA(const EvalExprTA& left, const EvalExprTA& right,
     // is going to be a tensor-of-tensor too.
     tot_ = left.tot() || right.tot();
     if (tot()) {
-      braket_to_annot(this->tensor().const_braket());
+      annot_ = braket_to_annot(this->tensor().const_braket());
     } else {
       annot_ =
           GEMMPermutationOptimizer(Tidxs{left.annot()}, Tidxs{right.annot()})
