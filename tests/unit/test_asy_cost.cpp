@@ -4,13 +4,13 @@
 #include <sstream>
 
 struct MatFlops {
-  size_t occ_range_size;
-  size_t virt_range_size;
-  long long int operator()(unsigned short nocc, unsigned short nvirt) const {
-    long long int ops = 1;
-    if (nocc > 0) ops *= static_cast<int>(std::pow(occ_range_size, nocc));
-    if (nvirt > 0) ops *= static_cast<int>(std::pow(virt_range_size, nvirt));
-    return ops > 1 ? 2 * ops : 0;
+  double occ_range_size;
+  double virt_range_size;
+  double operator()(unsigned short nocc, unsigned short nvirt) const {
+    double ops = 1;
+    if (nocc > 0) ops *= std::pow(occ_range_size, nocc);
+    if (nvirt > 0) ops *= std::pow(virt_range_size, nvirt);
+    return ops > 1 ? ops : 0;
   }
 };
 

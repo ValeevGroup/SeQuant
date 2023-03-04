@@ -99,7 +99,9 @@ AsyCost asy_cost_single_node_symm_off(EvalNode const& node) {
       return AsyCost{nocc, nvirt, static_cast<int>(f * f)};
     }
     default:
-      return AsyCost{nocc, nvirt, 1};
+      // for matrix multiplication the flops will be doubled
+      // to account for the summation ops in a `dot(row, col)` operation
+      return AsyCost{nocc, nvirt, node->op() == EvalOp::Prod ? 2 : 1};
   }
 }
 
