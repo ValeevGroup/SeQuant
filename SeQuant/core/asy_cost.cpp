@@ -3,7 +3,7 @@
 namespace sequant {
 
 AsyCost::AsyCostEntry::AsyCostEntry(size_t nocc, size_t nvirt,
-                           boost::rational<int> count)
+                                    boost::rational<int> count)
     : occ_{nocc}, virt_{nvirt}, count_{count} {
   if (count_ == 0 || (occ_ == 0 && virt_ == 0)) {
     occ_ = 0;
@@ -31,7 +31,9 @@ size_t AsyCost::AsyCostEntry::virt() const { return virt_; }
 
 boost::rational<int> AsyCost::AsyCostEntry::count() const { return count_; }
 
-void AsyCost::AsyCostEntry::set_count(boost::rational<int> n) const { count_ = n; }
+void AsyCost::AsyCostEntry::set_count(boost::rational<int> n) const {
+  count_ = n;
+}
 
 bool AsyCost::AsyCostEntry::operator<(const AsyCost::AsyCostEntry &rhs) const {
   return virt() < rhs.virt() || (virt() == rhs.virt() && occ() < rhs.occ());
@@ -49,20 +51,18 @@ AsyCost::AsyCost(AsyCostEntry c) {
   if (c != AsyCostEntry::zero()) cost_.emplace(c);
 }
 
-AsyCost::AsyCost(): AsyCost{AsyCostEntry::zero()} {}
+AsyCost::AsyCost() : AsyCost{AsyCostEntry::zero()} {}
 
 AsyCost::AsyCost(size_t nocc, size_t nvirt, boost::rational<int> count)
     : AsyCost{AsyCostEntry{nocc, nvirt, count}} {}
 
-boost::rational<long long int> AsyCost::ops(unsigned short nocc,
-                                            unsigned short nvirt) const {
-  boost::rational<long long int> total = 0;
+double AsyCost::ops(size_t nocc, size_t nvirt) const {
+  double total = 0;
   for (auto &&c : cost_) {
-    auto temp = 1;
-    if (c.occ() > 0) temp *= static_cast<int>(std::pow(nocc, c.occ()));
-    if (c.virt() > 0) temp *= static_cast<int>(std::pow(nvirt, c.virt()));
-    // 2 * c.count() because matrix operations flops
-    total += temp > 1 ? 2 * boost::rational_cast<int>(c.count()) * temp : 0;
+    double temp = 1;
+    temp *= std::pow(nocc, c.occ());
+    temp *= std::pow(nvirt, c.virt());
+    total += temp > 1 ? boost::rational_cast<double>(c.count()) * temp : 0;
   }
   return total;
 }
@@ -77,7 +77,7 @@ AsyCost const &AsyCost::zero() {
   return zero;
 }
 
-AsyCost operator+(AsyCost const& lhs, AsyCost const &rhs) {
+AsyCost operator+(AsyCost const &lhs, AsyCost const &rhs) {
   auto sum = lhs;
   auto &data = sum.cost_;
   for (auto const &c : rhs.cost_) {
@@ -91,26 +91,25 @@ AsyCost operator+(AsyCost const& lhs, AsyCost const &rhs) {
   return sum;
 }
 
-AsyCost operator-(AsyCost const& lhs, AsyCost const& rhs) {
+AsyCost operator-(AsyCost const &lhs, AsyCost const &rhs) {
   return lhs + (-1 * rhs);
 }
 
-AsyCost operator*(AsyCost const& cost, boost::rational<int> scale) {
+AsyCost operator*(AsyCost const &cost, boost::rational<int> scale) {
   auto ac = cost;
-  for (auto& c: ac.cost_)
-    c.set_count(c.count() * scale);
+  for (auto &c : ac.cost_) c.set_count(c.count() * scale);
   return ac;
 }
 
-AsyCost operator*(boost::rational<int> scale, AsyCost const& cost) {
+AsyCost operator*(boost::rational<int> scale, AsyCost const &cost) {
   return cost * scale;
 }
 
-AsyCost operator/(AsyCost const& cost, boost::rational<int> scale) {
+AsyCost operator/(AsyCost const &cost, boost::rational<int> scale) {
   return cost * (1 / scale);
 }
 
-bool operator<(AsyCost const& lhs, AsyCost const &rhs) {
+bool operator<(AsyCost const &lhs, AsyCost const &rhs) {
   using ranges::views::reverse;
   using ranges::views::zip;
 
@@ -129,13 +128,15 @@ bool operator<(AsyCost const& lhs, AsyCost const &rhs) {
   return lhs.cost_.size() < rhs.cost_.size();
 }
 
-bool operator==(AsyCost const& lhs, AsyCost const &rhs) {
+bool operator==(AsyCost const &lhs, AsyCost const &rhs) {
   return lhs.cost_.size() == rhs.cost_.size() && !(lhs < rhs || rhs < lhs);
 }
 
-bool operator!=(AsyCost const& lhs, AsyCost const &rhs) { return !(lhs == rhs); }
+bool operator!=(AsyCost const &lhs, AsyCost const &rhs) {
+  return !(lhs == rhs);
+}
 
-bool operator>(AsyCost const& lhs, AsyCost const &rhs) {
+bool operator>(AsyCost const &lhs, AsyCost const &rhs) {
   return !(lhs < rhs || lhs == rhs);
 }
 
