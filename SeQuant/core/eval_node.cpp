@@ -91,17 +91,17 @@ AsyCost asy_cost_single_node_symm_off(EvalNode const& node) {
     case EvalOp::Symm: {
       auto f = static_cast<int>(
           boost::math::factorial<double>(node->tensor().rank()));
-      return AsyCost{nocc, nvirt, static_cast<int>(f)};
+      return AsyCost{static_cast<int>(f), nocc, nvirt};
     }
     case EvalOp::Antisymm: {
       auto f = static_cast<int>(
           boost::math::factorial<double>(node->tensor().rank()));
-      return AsyCost{nocc, nvirt, static_cast<int>(f * f)};
+      return AsyCost{static_cast<int>(f * f), nocc, nvirt};
     }
     default:
       // for matrix multiplication the flops will be doubled
       // to account for the summation ops in a `dot(row, col)` operation
-      return AsyCost{nocc, nvirt, node->op() == EvalOp::Prod ? 2 : 1};
+      return AsyCost{node->op() == EvalOp::Prod ? 2 : 1, nocc, nvirt};
   }
 }
 

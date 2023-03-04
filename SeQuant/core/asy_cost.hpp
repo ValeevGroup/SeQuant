@@ -140,11 +140,18 @@ class AsyCost {
   /// Default construct to zero cost.
   AsyCost();
 
+  // AsyCost(size_t nocc, size_t nrest, boost::rational<int> count = 1);
+
+  ///
+  /// \param count Rational number of times this cost repeats.
+  /// \param nocc Asymptotic scaling exponent in the active occupied orbitals.
+  /// \param nvirt Asymptotic scaling exponent in the active unoccupied orbitals.
+  AsyCost(boost::rational<int> count, size_t nocc, size_t nvirt);
+
   ///
   /// \param nocc Asymptotic scaling exponent in the active occupied orbitals.
-  /// \param nrest Asymptotic scaling exponent in the rest orbitals.
-  /// \param count Rational number of times this cost repeats.
-  AsyCost(size_t nocc, size_t nrest, boost::rational<int> count = 1);
+  /// \param nvirt Asymptotic scaling exponent in the active unoccupied orbitals.
+  AsyCost(size_t nocc, size_t nvirt);
 
   AsyCost(AsyCost const &) = default;
 
@@ -158,7 +165,7 @@ class AsyCost {
   /// \param nocc Substitute $O$ by nocc.
   /// \param nvirt Substitute $V$ by nvirt.
   /// \return Scaled asymptotic cost.
-  double ops(size_t nocc, size_t nvirt) const;
+  [[nodiscard]] double ops(size_t nocc, size_t nvirt) const;
 
   template <typename String_t>
   String_t to_latex() const {

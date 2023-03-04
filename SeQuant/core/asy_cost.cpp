@@ -53,8 +53,10 @@ AsyCost::AsyCost(AsyCostEntry c) {
 
 AsyCost::AsyCost() : AsyCost{AsyCostEntry::zero()} {}
 
-AsyCost::AsyCost(size_t nocc, size_t nvirt, boost::rational<int> count)
+AsyCost::AsyCost(boost::rational<int> count, size_t nocc, size_t nvirt)
     : AsyCost{AsyCostEntry{nocc, nvirt, count}} {}
+
+AsyCost::AsyCost(size_t nocc, size_t nvirt) : AsyCost{1, nocc, nvirt} {}
 
 double AsyCost::ops(size_t nocc, size_t nvirt) const {
   double total = 0;

@@ -61,11 +61,11 @@ TEST_CASE("TEST ASY_COST", "[AsyCost]") {
     REQUIRE(oss.str() == L"- O^2V^3 + O^2V^2 + OV");
 
     clear();
-    oss << AsyCost{1, 1, 20};
+    oss << AsyCost{20, 1, 1};
 
     REQUIRE(oss.str() == L"20*OV");
     REQUIRE(AsyCost{0, 0} == AsyCost::zero());
-    REQUIRE(AsyCost{1, 1, 0} == AsyCost::zero());
+    REQUIRE(AsyCost{0, 1, 1} == AsyCost::zero());
   }
 
   SECTION("Comparisons") {
@@ -103,17 +103,17 @@ TEST_CASE("TEST ASY_COST", "[AsyCost]") {
 
   SECTION("Fractional costs") {
     clear();
-    oss << AsyCost{2,4,{1,2}};
+    oss << AsyCost{{1, 2}, 2, 4};
     REQUIRE(oss.str() == L"1/2*O^2V^4");
 
-    auto const c1 = AsyCost{1,2} * boost::rational<int>{2, 3};
+    auto const c1 = AsyCost{1, 2} * boost::rational<int>{2, 3};
     clear();
-    oss << c1 ;
+    oss << c1;
     REQUIRE(oss.str() == L"2/3*OV^2");
 
-    auto const c2 = AsyCost{1,2} / boost::rational<int>{2, 3};
+    auto const c2 = AsyCost{1, 2} / boost::rational<int>{2, 3};
     clear();
-    oss << c2 ;
+    oss << c2;
     REQUIRE(oss.str() == L"3/2*OV^2");
 
     auto const c3 = (AsyCost{1, 2} + AsyCost{2, 4}) * 2;
@@ -125,15 +125,15 @@ TEST_CASE("TEST ASY_COST", "[AsyCost]") {
   }
 
   SECTION("LaTeX") {
-    auto cost = AsyCost{2,3, {1,4}};
+    auto cost = AsyCost{{1, 4}, 2, 3};
     REQUIRE(cost.to_latex<std::string>() == "\\frac{1}{4}O^{2}V^{3}");
-    cost = AsyCost{2,3};
+    cost = AsyCost{2, 3};
     REQUIRE(cost.to_latex<std::string>() == "O^{2}V^{3}");
-    cost = AsyCost{2,3,{1,1}};
+    cost = AsyCost{{1, 1}, 2, 3};
     REQUIRE(cost.to_latex<std::string>() == "O^{2}V^{3}");
-    cost = AsyCost{2,3,{-1,1}};
+    cost = AsyCost{{-1, 1}, 2, 3};
     REQUIRE(cost.to_latex<std::string>() == "- O^{2}V^{3}");
-    cost = AsyCost{2,3,{-1,4}};
+    cost = AsyCost{{-1, 4}, 2, 3};
     REQUIRE(cost.to_latex<std::string>() == "- \\frac{1}{4}O^{2}V^{3}");
   }
 }
