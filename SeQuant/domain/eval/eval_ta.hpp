@@ -10,6 +10,7 @@
 #include <TiledArray/expressions/index_list.h>
 #include <tiledarray.h>
 #include <range/v3/all.hpp>
+#include <utility>
 
 namespace sequant::eval {
 
@@ -74,12 +75,41 @@ class EvalExprTA final : public EvalExpr {
 
 using EvalNodeTA = FullBinaryNode<EvalExprTA>;
 
-template <typename DistArrayTot, typename DistArray>
-using tot_result_t = std::variant<DistArrayTot, DistArray>;
-
 EvalNodeTA to_eval_node_ta(ExprPtr const& expr);
 
 EvalNodeTA to_eval_node_ta(EvalNode const& node);
+
+namespace {
+template <typename T, typename = void>
+struct WithAnnotMethod : std::false_type {};
+
+template <typename T>
+struct WithAnnotMethod<
+    T,
+    std::enable_if_t<std::is_same_v<
+        std::string, std::remove_cvref_t<decltype(std::declval<T>().annot())>>>>
+    : std::true_type {};
+
+template <typename T>
+constexpr bool HasAnnotMethod = WithAnnotMethod<T>::value;
+
+template <typename N>
+bool constexpr IsFbNode =
+    std::is_same_v<std::remove_cvref_t<N>, FullBinaryNode<typename N::value_type>>;
+
+template <typename N>
+bool constexpr IsEvaluable =
+    IsFbNode<N> && std::is_convertible_v<typename N::value_type, EvalExpr>;
+
+}  // namespace
+
+template <typename N, typename = std::enable_if_t<IsEvaluable<N>>>
+std::string annot(N const& node) {
+  if constexpr (HasAnnotMethod<typename N::value_type>)
+    return node->annot();
+  else
+    return braket_to_annot(node->tensor().const_braket());
+}
 
 namespace detail {
 
@@ -93,8 +123,9 @@ auto ords_to_annot(RngOfOrdinals const& ords) {
          ranges::to<std::string>;
 }
 
-template <typename Tensor_t>
-Tensor_t eval_inode(EvalNodeTA const& node, Tensor_t const& leval,
+template <typename N, typename Tensor_t,
+          typename = std::enable_if_t<IsEvaluable<N>>>
+Tensor_t eval_inode(N const& node, Tensor_t const& leval,
                     Tensor_t const& reval) {
   assert((node->op() == EvalOp::Sum || node->op() == EvalOp::Prod) &&
          "unsupported intermediate operation");
@@ -108,9 +139,9 @@ Tensor_t eval_inode(EvalNodeTA const& node, Tensor_t const& leval,
 
   auto const lscal = node.left()->scalar().value().real();
   auto const rscal = node.right()->scalar().value().real();
-  auto const& this_annot = node->annot();
-  auto const& lannot = node.left()->annot();
-  auto const& rannot = node.right()->annot();
+  auto const& this_annot = annot(node);
+  auto const& lannot = annot(node.left());
+  auto const& rannot = annot(node.right());
 
   Tensor_t result;
   {
@@ -145,8 +176,9 @@ Tensor_t eval_inode(EvalNodeTA const& node, Tensor_t const& leval,
   return result;
 }
 
-template <typename Tensor_t, typename Yielder>
-Tensor_t eval_single_node(EvalNodeTA const& node, Yielder&& leaf_evaluator,
+template <typename N, typename Tensor_t, typename Yielder,
+          typename = std::enable_if_t<IsEvaluable<N>>>
+Tensor_t eval_single_node(N const& node, Yielder&& leaf_evaluator,
                           CacheManager<Tensor_t const>& cache_manager) {
   static_assert(
       std::is_invocable_r_v<Tensor_t, Yielder, sequant::Tensor const&>);
@@ -226,9 +258,10 @@ Tensor_t eval_single_node(EvalNodeTA const& node, Yielder&& leaf_evaluator,
 /// \return Tensor_t
 /// @see @c to_expr
 ///
-template <typename Tensor_t, typename Iterable, typename Yielder>
-auto eval(EvalNodeTA const& node, Iterable const& target_indx_labels,
-          Yielder&& yielder, CacheManager<Tensor_t const>& man) {
+template <typename N, typename Tensor_t, typename Iterable, typename Yielder,
+          typename = std::enable_if_t<IsEvaluable<N>>>
+auto eval(N const& node, Iterable const& target_indx_labels, Yielder&& yielder,
+          CacheManager<Tensor_t const>& man) {
   static_assert(
       std::is_invocable_r_v<Tensor_t, Yielder, sequant::Tensor const&>);
 
@@ -255,7 +288,7 @@ auto eval(EvalNodeTA const& node, Iterable const& target_indx_labels,
       lannot += std::string{','} + lbl;
 
     scaled = decltype(result){};
-    scaled(lannot) = node->scalar().value().real() * result(node->annot());
+    scaled(lannot) = node->scalar().value().real() * result(annot(node));
   }
   Tensor_t::wait_for_lazy_cleanup(scaled.world());
 
@@ -298,8 +331,9 @@ auto eval(EvalNodeTA const& node, Iterable const& target_indx_labels,
 /// \return Tensor_t
 /// @see @c eval
 ///
-template <typename Tensor_t, typename Iterable, typename Yielder>
-auto eval_symm(EvalNodeTA const& node, Iterable const& target_indx_labels,
+template <typename N, typename Tensor_t, typename Iterable, typename Yielder,
+          typename = std::enable_if_t<IsEvaluable<N>>>
+auto eval_symm(N const& node, Iterable const& target_indx_labels,
                Yielder&& yielder, CacheManager<Tensor_t const>& man) {
   Tensor_t symm_result;
   {
@@ -362,8 +396,9 @@ auto eval_symm(EvalNodeTA const& node, Iterable const& target_indx_labels,
 /// \return Tensor_t
 /// @see @c eval
 ///
-template <typename Tensor_t, typename Iterable, typename Yielder>
-auto eval_antisymm(EvalNodeTA const& node, Iterable const& target_indx_labels,
+template <typename N, typename Tensor_t, typename Iterable, typename Yielder,
+          typename = std::enable_if_t<IsEvaluable<N>>>
+auto eval_antisymm(N const& node, Iterable const& target_indx_labels,
                    Yielder&& yielder, CacheManager<Tensor_t const>& man) {
   Tensor_t antisymm_result;
   {

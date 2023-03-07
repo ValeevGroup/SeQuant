@@ -19,6 +19,7 @@ template <typename T>
 class FullBinaryNode {
  public:
   using node_ptr = std::unique_ptr<FullBinaryNode<T>>;
+  using value_type = T;
 
  private:
   T data_;
