@@ -31,8 +31,8 @@ namespace detail {
 ///  -------------------------------------------
 ///         3 (11) => [{1 (01), 2 (10)}]
 ///      11 (1011) => [{1  (0001), 10 (1010)},
-///                     {2 (0010), {9 (1001)},
-///                     {3 (0011), {8 (1000)}]
+///                     {2 (0010), 9 (1001)},
+///                     {3 (0011), 8 (1000)}]
 ///      0 (0)     => [] (empty: no partitions possible)
 ///      2 (10)    => [] (empty)
 ///      4 (100)   => [] (empty)
@@ -44,7 +44,7 @@ namespace detail {
 template <
     typename I, typename F,
     typename = std::enable_if_t<std::is_integral_v<I> && std::is_unsigned_v<I>>,
-    typename = std::enable_if_t<std::is_invocable_v<F, int, int>>>
+    typename = std::enable_if_t<std::is_invocable_v<F, I, I>>>
 void biparts(I n, F&& func) {
   if (n == 0) return;
   I const h = static_cast<I>(std::ceil(n / 2.0));
