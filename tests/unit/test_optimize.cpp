@@ -2,22 +2,33 @@
 
 #include <SeQuant/core/optimize.hpp>
 #include <SeQuant/core/parse_expr.hpp>
-#include <iostream>
 
-auto yield_interm_hash = [](sequant::EvalNode const& node) {
-  auto cont = sequant::container::set<sequant::EvalExpr::hash_t>{};
-  node.visit_internal([&cont](const auto& n) { cont.emplace(n->hash_value()); });
-  return cont;
-};
+sequant::ExprPtr extract(sequant::ExprPtr expr,
+                         std::initializer_list<size_t> const& idxs) {
+  using namespace sequant;
+  ExprPtr result = expr;
+  for (auto s : idxs) result = result->at(s);
+  return result;
+}
 
 TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
   using namespace sequant;
-  using opt::single_term_opt;
 
-  sequant::TensorCanonicalizer::register_instance(
-      std::make_shared<sequant::DefaultTensorCanonicalizer>());
+  auto idx2size = [nocc = 4, nvirt = 140](Index const& idx) {
+    if (idx.space() == IndexSpace::active_occupied) return nocc;
+    if (idx.space() == IndexSpace::active_unoccupied)
+      return nvirt;
+    else
+      throw std::runtime_error("Unsupported IndexSpace type encountered");
+  };
 
-  auto parse_expr_antisymm = [](auto const& xpr){return parse_expr(xpr, Symmetry::antisymm);};
+  auto single_term_opt = [&idx2size](Product const& prod) {
+    return opt::single_term_opt(prod, idx2size);
+  };
+
+  auto parse_expr_antisymm = [](auto const& xpr) {
+    return parse_expr(xpr, Symmetry::antisymm);
+  };
 
   SECTION("Single term optimization") {
     const auto prod1 = parse_expr_antisymm(
@@ -33,20 +44,14 @@ TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
     // this is the one we want to find
     // ((T1 * T3) * T2)  : 2 * O^4 * V^2  best if nvirt > nocc
     //
-    // ((T2 * T3) * T1)  : 2 * O^4 * V^4  worst sequence of evaluation
+    // (T1 * (T2 * T3))  : 2 * O^4 * V^4  worst sequence of evaluation
     //
 
-    const auto result1 = single_term_opt(prod1);
+    const auto res1 = single_term_opt(prod1);
 
-    REQUIRE(result1.cost != sequant::AsyCost::max());
-
-    // there are no degenerate evaluation sequences
-    REQUIRE(result1.optimal_seqs.size() == 1);
-
-    auto prod1_opt = ex<Product>(
-        sequant::ExprPtrList{prod1.at(0), prod1.at(2), prod1.at(1)});
-
-    REQUIRE(to_eval_node(prod1_opt) == result1.optimal_seqs.at(0));
+    REQUIRE(extract(res1, {0, 0}) == prod1.at(0));
+    REQUIRE(extract(res1, {0, 1}) == prod1.at(2));
+    REQUIRE(extract(res1, {1}) == prod1.at(1));
 
     const auto prod2 = parse_expr_antisymm(
                            L"   g_{i3,i4}^{a3,a4}"
@@ -55,49 +60,26 @@ TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
                            L" * t_{a2}^{i4}")
                            ->as<Product>();
 
-    const auto result2_naive = single_term_opt(prod2);
+    const auto res2 = single_term_opt(prod2);
 
-    // there will be two degenerate evaluation sequences for prod2
-    REQUIRE(result2_naive.optimal_seqs.size() == 2);
+    REQUIRE(extract(res2, {0, 0, 0}) == prod2.at(0));
+    REQUIRE(extract(res2, {0, 0, 1}) == prod2.at(1));
+    REQUIRE(extract(res2, {0, 1}) == prod2.at(2));
+    REQUIRE(extract(res2, {1}) == prod2.at(3));
 
-    // now let's reuse intermediates from the optimal sequence of evaluation of
-    // prod1, to compute the optimal sequence for prod2
-    auto imed_hashes_prod1 = yield_interm_hash(result1.optimal_seqs.at(0));
+    const auto prod3 = parse_expr_antisymm(
+                           L""                   //
+                           " g_{i3,i4}^{a3,a4}"  //
+                           " t_{a1}^{i3}"        //
+                           " t_{a2}^{i4}"        //
+                           " t_{a3,a4}^{i1,i2}"  //
+                           )
+                           ->as<Product>();
+    auto res3 = single_term_opt(prod3);
 
-    const auto result2_discounted = single_term_opt(
-        prod2, //
-        [&imed_hashes_prod1](
-            auto const& n) {  // discount existing intermediate costs
-          if (imed_hashes_prod1.contains(n->hash_value())) return false;
-          imed_hashes_prod1.emplace(n->hash_value());
-          return true;
-        });
-    REQUIRE(result2_discounted.cost < result2_naive.cost);
-
-    // yet another example
-    auto prod3 = parse_expr_antisymm(
-        L"t_{a1,a2}^{i1,i2} * g_{i2,i3}^{a2,a3} * t_{a3}^{i4}");
-    auto prod4 = parse_expr_antisymm(L"t_{a1,a2}^{i1,i2} * g_{i2,i3}^{a2,a3}");
-    // we show that two the evaluation trees for prod3
-    //  - one: single term optimized on prod3 alone
-    //  - two: single term optimized on prod3 with the intermediate from prod4
-    //  are not the same.
-    auto prod3_sto = std::move(
-        *(single_term_opt(prod3->as<Product>()).optimal_seqs.begin()));
-
-    // finding the intermediate from the evaluation tree of prod4
-    auto prod4_sto = std::move(
-        *(single_term_opt(prod4->as<Product>()).optimal_seqs.begin()));
-
-    auto imeds_prod4 = yield_interm_hash(prod4_sto);
-
-    auto prod3_sto_with_imeds = std::move(
-        *single_term_opt(prod3->as<Product>(),
-                         [&imeds_prod4](auto const& n) {
-                           return !((imeds_prod4.contains(n->hash_value())));
-                         })
-             .optimal_seqs.begin());
-
-    REQUIRE_FALSE(*prod3_sto == *prod3_sto_with_imeds);
+    REQUIRE(extract(res3, {0, 0, 0}) == prod3.at(0));
+    REQUIRE(extract(res3, {0, 0, 1}) == prod3.at(3));
+    REQUIRE(extract(res3, {0, 1}) == prod3.at(1));
+    REQUIRE(extract(res3, {1}) == prod3.at(2));
   }
 }

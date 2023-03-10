@@ -22,8 +22,8 @@ struct IndexToSize {
 
 EvalNode CalcInfo::node_(const ExprPtr& expr, size_t rank) const {
   auto trimmed = opt::tail_factor(expr);
-  return optm_opts.single_term ? optimize(trimmed, IndexToSize{})
-                               : to_eval_node(trimmed);
+  return to_eval_node(optm_opts.single_term ? optimize(trimmed, IndexToSize{})
+                                            : trimmed);
 }
 
 container::vector<EvalNode> CalcInfo::nodes(
