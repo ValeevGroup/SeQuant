@@ -9,7 +9,6 @@
 #include <SeQuant/core/clone_packed.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval_node.hpp>
-#include <SeQuant/core/eval_seq.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 
 namespace sequant {

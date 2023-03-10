@@ -1,7 +1,6 @@
 #include "catch.hpp"
 
 #include <SeQuant/core/eval_node.hpp>
-#include <SeQuant/core/eval_seq.hpp>
 #include <SeQuant/core/parse_expr.hpp>
 
 // validates if x is constructible from tspec using parse_expr

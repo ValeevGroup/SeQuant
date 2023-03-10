@@ -224,7 +224,6 @@ set(SeQuant_src
         SeQuant/core/binary_node.hpp
         SeQuant/core/clone_packed.hpp
         SeQuant/core/clone_packed.cpp
-        SeQuant/core/eval_seq.hpp
         SeQuant/core/eval_expr.hpp
         SeQuant/core/eval_expr.cpp
         SeQuant/core/asy_cost.hpp
@@ -246,8 +245,6 @@ set(SeQuant_src
         SeQuant/core/parse/rpn.cpp
         SeQuant/core/parse/regex_sequant.hpp
         SeQuant/core/parse/regex_sequant.cpp
-        SeQuant/core/util/rand_color.cpp
-        SeQuant/core/util/rand_color.hpp
         SeQuant/domain/mbpt/models/cc.cpp
         SeQuant/domain/mbpt/models/cc.hpp
         SeQuant/domain/eval/eval.hpp
@@ -349,7 +346,6 @@ if (BUILD_TESTING)
             tests/unit/test_parse_expr.cpp
             tests/unit/test_eval_expr.cpp
             tests/unit/test_binary_node.cpp
-            tests/unit/test_eval_seq.cpp
             tests/unit/test_asy_cost.cpp
             tests/unit/test_eval_node.cpp
             tests/unit/test_optimize.cpp
