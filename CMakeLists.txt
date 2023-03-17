@@ -269,13 +269,8 @@ endif (SEQUANT_EVAL_TESTS)
 
 if (TARGET tiledarray)
     list(APPEND SeQuant_src
-            SeQuant/domain/eval/eval_ta.hpp
-            SeQuant/domain/eval/eval_ta.cpp
-            )
-endif ()
-if (BTAS_SOURCE_DIR)
-    list(APPEND SeQuant_src
-            SeQuant/domain/eval/eval_btas.hpp
+            SeQuant/domain/eval/eval.hpp
+            SeQuant/domain/eval/eval.cpp
             )
 endif ()
 
@@ -360,6 +355,7 @@ if (BUILD_TESTING)
     if (TARGET tiledarray)
         list(APPEND utests_src
                 tests/unit/test_eval_ta.cpp
+                tests/unit/test_eval_btas.cpp
                 )
     endif (TARGET tiledarray)
 

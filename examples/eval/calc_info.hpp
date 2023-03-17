@@ -11,8 +11,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval_node.hpp>
 #include <SeQuant/core/optimize.hpp>
-#include <SeQuant/domain/eval/cache_manager.hpp>
-#include <SeQuant/domain/eval/eval.hpp>
+#include <SeQuant/domain/eval/eval_ta.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 #include <range/v3/view.hpp>
 
@@ -52,22 +51,8 @@ struct CalcInfo {
   template <typename Data_t>
   CacheManager<Data_t> cache_manager_scf(
       container::vector<EvalNode> const& nodes) const {
-    auto cl = optm_opts.cache_leaves;
-    auto ci = optm_opts.reuse_imeds;
-
-    if (!(cl || ci)) return CacheManager<Data_t>::empty();
-
-    return cache_manager<Data_t>(
-        nodes,
-        [cl](auto&& n) {
-          // if cache leaves requested cache all leaves except the amplitude
-          // tensors
-          return cl && NoCacheAmplitudeTensor{}(n);
-        },
-        [ci](auto&&) {
-          // true if reuse of intermediates requested
-          return ci;
-        });
+    return optm_opts.reuse_imeds ? cache_manager<Data_t const>(nodes)
+                                 : CacheManager<Data_t const>::empty();
   }
 
  private:

@@ -1,23 +1,18 @@
 #include "catch.hpp"
 
-#include <TiledArray/expressions/contraction_helpers.h>
-#include <tiledarray.h>
 #include <SeQuant/core/parse_expr.hpp>
 #include <SeQuant/core/sequant.hpp>
 #include <SeQuant/core/tensor.hpp>
-#include <SeQuant/core/wstring.hpp>
 #include <SeQuant/domain/eval/eval.hpp>
-#include <SeQuant/domain/eval/eval_ta.hpp>
+
 #include <boost/regex.hpp>
+#include <tiledarray.h>
 
 #include <cstdlib>
 #include <string>
 #include <vector>
 
-auto index_label_list(std::string const& str) {
-  return ranges::views::split(str, ',') | ranges::to<std::vector<std::string>>;
-}
-
+namespace {
 auto tensor_to_key(sequant::Tensor const& tnsr) {
   static auto const idx_rgx = boost::wregex{L"([ia])([↑↓])?(_?\\d+)"};
   auto formatter = [](boost::wsmatch mo) -> std::wstring {
@@ -42,7 +37,7 @@ class rand_tensor_yield {
   std::map<std::wstring, Tensor_t> label_to_tnsr_;
 
  public:
-  Tensor_t make_rand_tensor(sequant::Tensor const& tnsr) const {
+  [[nodiscard]] Tensor_t make_rand_tensor(sequant::Tensor const& tnsr) const {
     using ranges::views::transform;
     using sequant::IndexSpace;
 
@@ -75,12 +70,25 @@ class rand_tensor_yield {
   Tensor_t const& operator()(sequant::Tensor const& tnsr) {
     std::wstring const label = tensor_to_key(tnsr);
     if (auto&& found = label_to_tnsr_.find(label);
-        found != label_to_tnsr_.end())
+        found != label_to_tnsr_.end()) {
+      //      std::wcout << "label = [" << label << "] FOUND in cache.
+      //      Returning.."
+      //                 << std::endl;
       return found->second;
+    }
     auto&& success =
         label_to_tnsr_.template emplace(label, make_rand_tensor(tnsr));
     assert(success.second && "couldn't store tensor!");
+    //    std::wcout << "label = [" << label << "] NotFound in cache.
+    //    Creating.."
+    //               << std::endl;
     return success.first->second;
+  }
+
+  template <typename T,
+            typename = std::enable_if_t<sequant::eval::IsEvaluable<T>>>
+  Tensor_t const& operator()(T const& node) {
+    return (*this)(node->tensor());
   }
 
   ///
@@ -98,68 +106,48 @@ class rand_tensor_yield {
     return found->second;
   }
 };
-
-auto print_node_ta = [](sequant::ExprPtr const& expr) {
-  auto node = sequant::eval::to_eval_node_ta(expr);
-  std::cout << node.tikz<std::string>(
-                   [](auto&& n) { return "$" + n->annot() + "$"; },
-                   [](auto&& n) {
-                     return "label={left:" +
-                            sequant::to_string(n->scalar().to_latex()) + "$}";
-                   })
-            << std::endl;
-};
+}  // namespace
 
 TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
   using ranges::views::transform;
   using sequant::to_eval_node;
-  using sequant::eval::eval;
-  using sequant::eval::eval_antisymm;
-  using sequant::eval::eval_symm;
+  using sequant::eval::evaluate;
+  using sequant::eval::evaluate_antisymm;
+  using sequant::eval::evaluate_symm;
   using sequant::eval::to_eval_node_ta;
   using TA::TArrayD;
-  auto parse_expr_antisymm = [](auto const& xpr) {
+  auto parse_antisymm = [](auto const& xpr) {
     return parse_expr(xpr, sequant::Symmetry::antisymm);
   };
 
   // tnsr is assumed to be single-tiled
-  auto norm = [](TArrayD const& tnsr) { return tnsr.find(0).get().norm(); };
+  auto norm = [](TArrayD const& tnsr) { return TA::norm2(tnsr); };
 
   std::srand(2021);
-
-  sequant::TensorCanonicalizer::register_instance(
-      std::make_shared<sequant::DefaultTensorCanonicalizer>());
 
   auto& world = TA::get_default_world();
 
   const size_t nocc = 2, nvirt = 20;
   auto yield = rand_tensor_yield<TArrayD>{world, nocc, nvirt};
 
-  // nominal(empty) cache manager
-  auto manager = sequant::eval::CacheManager<TArrayD const>{{}, {}};
-
-  auto eval_bnode = [&yield, &manager](sequant::ExprPtr const& expr,
-                                       std::string const& target_labels) {
-    return eval(to_eval_node_ta(expr), index_label_list(target_labels), yield,
-                manager);
+  auto eval = [&yield](sequant::ExprPtr const& expr,
+                       std::string const& target_labels) {
+    return evaluate(to_eval_node_ta(expr), target_labels, yield);
   };
 
-  auto eval_bnode_symm = [&yield, &manager](sequant::ExprPtr const& expr,
-                                            std::string const& target_labels) {
-    return eval_symm(to_eval_node_ta(expr), index_label_list(target_labels),
-                     yield, manager);
+  auto eval_symm = [&yield](sequant::ExprPtr const& expr,
+                            std::string const& target_labels) {
+    return evaluate_symm(to_eval_node_ta(expr), target_labels, yield);
   };
 
-  auto eval_bnode_antisymm = [&yield, &manager](
-                                 sequant::ExprPtr const& expr,
-                                 std::string const& target_labels) {
-    return eval_antisymm(to_eval_node_ta(expr), index_label_list(target_labels),
-                         yield, manager);
+  auto eval_antisymm = [&yield](sequant::ExprPtr const& expr,
+                                std::string const& target_labels) {
+    return evaluate_antisymm(to_eval_node_ta(expr), target_labels, yield);
   };
 
   SECTION("summation") {
-    auto expr1 = parse_expr_antisymm(L"t_{a1}^{i1} + f_{i1}^{a1}");
-    auto sum1_eval = eval_bnode(expr1, "i_1,a_1");
+    auto expr1 = parse_antisymm(L"t_{a1}^{i1} + f_{i1}^{a1}");
+    auto sum1_eval = eval(expr1, "i_1,a_1");
 
     auto sum1_man = TArrayD{};
     sum1_man("i1,a1") =
@@ -167,8 +155,8 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
 
     REQUIRE(norm(sum1_man) == Approx(norm(sum1_eval)));
 
-    auto expr2 = parse_expr_antisymm(L"2 * t_{a1}^{i1} + 1.5 * f_{i1}^{a1}");
-    auto sum2_eval = eval_bnode(expr2, "i_1,a_1");
+    auto expr2 = parse_antisymm(L"2 * t_{a1}^{i1} + 1.5 * f_{i1}^{a1}");
+    auto sum2_eval = eval(expr2, "i_1,a_1");
 
     auto sum2_man = TArrayD{};
     sum2_man("i1,a1") =
@@ -179,8 +167,8 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
 
   SECTION("product") {
     auto expr1 =
-        parse_expr_antisymm(L"1/2.0 * g_{i2,i4}^{a2,a4} * t_{a1,a2}^{i1,i2}");
-    auto prod1_eval = eval_bnode(expr1, "i_4,a_1,a_4,i_1");
+        parse_antisymm(L"1/2.0 * g_{i2,i4}^{a2,a4} * t_{a1,a2}^{i1,i2}");
+    auto prod1_eval = eval(expr1, "i_4,a_1,a_4,i_1");
 
     TArrayD prod1_man{};
     prod1_man("i4,a1,a4,i1") = 1 / 2.0 *
@@ -189,9 +177,9 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
 
     REQUIRE(norm(prod1_man) == Approx(norm(prod1_eval)));
 
-    auto expr2 = parse_expr_antisymm(
+    auto expr2 = parse_antisymm(
         L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}");
-    auto prod2_eval = eval_bnode(expr2, "a_1,a_2,i_1,i_2");
+    auto prod2_eval = eval(expr2, "a_1,a_2,i_1,i_2");
 
     auto prod2_man = TArrayD{};
     prod2_man("a1,a2,i1,i2") = -1 / 4.0 *
@@ -203,11 +191,11 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
   }
 
   SECTION("sum and product") {
-    auto expr1 = parse_expr_antisymm(
+    auto expr1 = parse_antisymm(
         L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
         " + "
         " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2} ");
-    auto eval1 = eval_bnode(expr1, "a_1,a_2,i_1,i_2");
+    auto eval1 = eval(expr1, "a_1,a_2,i_1,i_2");
 
     auto man1 = TArrayD{};
     man1("a1,a2,i1,i2") = -1.0 / 4 * yield(L"g{i3,i4;a3,a4}")("i3,i4,a3,a4") *
@@ -221,8 +209,8 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
   }
 
   SECTION("Antisymmetrization") {
-    auto expr1 = parse_expr_antisymm(L"0.5 * g_{i1, i2}^{a1, a2}");
-    auto eval1 = eval_bnode_antisymm(expr1, "i_1,i_2,a_1,a_2");
+    auto expr1 = parse_antisymm(L"0.5 * g_{i1, i2}^{a1, a2}");
+    auto eval1 = eval_antisymm(expr1, "i_1,i_2,a_1,a_2");
 
     auto man1 = TArrayD{};
     man1("0,1,2,3") = yield(L"g{i1,i2;a1,a2}")("0,1,2,3") -
@@ -236,8 +224,8 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
   }
 
   SECTION("Symmetrization") {
-    auto expr1 = parse_expr_antisymm(L"0.5 * g_{i1, i2}^{a1, a2}");
-    auto eval1 = eval_bnode_symm(expr1, "i_1,i_2,a_1,a_2");
+    auto expr1 = parse_antisymm(L"0.5 * g_{i1, i2}^{a1, a2}");
+    auto eval1 = eval_symm(expr1, "i_1,i_2,a_1,a_2");
 
     auto man1 = TArrayD{};
     man1("0,1,2,3") = yield(L"g{i1,i2;a1,a2}")("0,1,2,3") +
@@ -245,5 +233,22 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
     man1("0,1,2,3") = 0.5 * man1("0,1,2,3");
 
     REQUIRE(norm(man1) == Approx(norm(eval1)));
+  }
+
+  SECTION("Others") {
+    auto expr1 = parse_antisymm(
+        L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
+        " + "
+        " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2} ");
+
+    auto eval1 = evaluate(to_eval_node(expr1), "i_1,i_2,a_1,a_2", yield);
+
+    auto nodes1 = *expr1 | ranges::views::transform([](auto&& x) {
+      return to_eval_node(x);
+    }) | ranges::to_vector;
+
+    auto eval2 = evaluate(nodes1, "i_1,i_2,a_1,a_2", yield);
+
+    REQUIRE(norm(eval1) == Approx(norm(eval2)));
   }
 }

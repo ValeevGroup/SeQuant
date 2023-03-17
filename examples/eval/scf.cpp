@@ -70,7 +70,7 @@ void SequantEvalScf::scf(std::basic_ostream<wchar_t>& log) {
     auto t_beg_iter = HRC::now();
 
     ++iter;
-    reset_cache_decaying();
+    reset_cache();
 
     auto norm_last = norm();
     auto energy_last = energy_;
@@ -87,7 +87,7 @@ void SequantEvalScf::scf(std::basic_ostream<wchar_t>& log) {
     if (info_.log_opts.level > 0)
       log_iter(iter, energy_, ediff, norm_diff, t_beg_iter, t_end_iter);
   } while (!converged_ && iter < info_.scf_opts.max_iter);
-  reset_cache_all();
+//  reset_cache_all();
   auto t_end_scf = HRC::now();
   if (info_.log_opts.level > 0)
     log << std::wstring(20, L'-') << "\n"

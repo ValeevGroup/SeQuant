@@ -32,9 +32,7 @@ class SequantEvalScf {
 
   [[nodiscard]] virtual double norm() const = 0;
 
-  virtual void reset_cache_decaying() = 0;
-
-  virtual void reset_cache_all() = 0;
+  virtual void reset_cache() = 0;
 
   virtual double solve() = 0;
 
