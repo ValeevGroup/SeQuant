@@ -668,7 +668,7 @@ template <typename NodeT, typename Le, typename... Args>
 EvalResultT<NodeT, Le> evaluate_impl(NodeT const& n, Le&& lev, Args&&... args) {
 #ifndef NDEBUG
   assert_imaginary_zero(n->scalar());
-#endif NDEBUG
+#endif
   if (n.leaf()) return std::invoke(std::forward<Le>(lev), n);
   EvalResultT<NodeT, Le> lres = evaluate_core(n.left(), std::forward<Le>(lev),
                                               std::forward<Args>(args)...);
