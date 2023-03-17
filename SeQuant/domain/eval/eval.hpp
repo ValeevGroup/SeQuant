@@ -134,8 +134,8 @@ template <typename C,
           typename = std::enable_if_t<std::is_same_v<C, sequant::Constant>>>
 void assert_imaginary_zero(C const& c) {
   assert(c.value().imag() == 0 && "complex scalar unsupported");
-};
-#endif NDEBUG
+}
+#endif
 
 template <typename BidirIt,
           typename Comp = std::less<decltype(*std::declval<BidirIt>())>>
