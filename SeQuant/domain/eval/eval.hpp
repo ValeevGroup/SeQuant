@@ -739,7 +739,9 @@ template <typename NodeT, typename AnnotT, typename Le, typename... Args,
           std::enable_if_t<IsAnnot<AnnotT>, bool> = true>
 EvalResultT<NodeT, Le> evaluate(NodeT const& n, AnnotT const& annot, Le&& leval,
                                 Args&&... args) {
+#ifndef NDEBUG
   assert_imaginary_zero(n->scalar());
+#endif
   return kernel::scale(
       n, annot,
       evaluate_core(n, std::forward<Le>(leval), std::forward<Args>(args)...));
