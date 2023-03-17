@@ -5,10 +5,11 @@
 #ifndef SEQUANT_EVAL_SCF_TA_HPP
 #define SEQUANT_EVAL_SCF_TA_HPP
 
+#include <SeQuant/domain/eval/eval.hpp>
+
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval_node.hpp>
 #include <SeQuant/core/parse_expr.hpp>
-#include <SeQuant/domain/eval/eval_ta.hpp>
 
 #include "examples/eval/calc_info.hpp"
 #include "examples/eval/data_info.hpp"

@@ -11,8 +11,9 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval_node.hpp>
 #include <SeQuant/core/optimize.hpp>
-#include <SeQuant/domain/eval/eval_ta.hpp>
+#include <SeQuant/domain/eval/eval.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
+
 #include <range/v3/view.hpp>
 
 #include <cstddef>

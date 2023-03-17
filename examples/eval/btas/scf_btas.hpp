@@ -5,19 +5,20 @@
 #ifndef SEQUANT_EVAL_SCF_BTAS_HPP
 #define SEQUANT_EVAL_SCF_BTAS_HPP
 
-#include <btas/btas.h>
-#include <memory>
-
-#include <SeQuant/core/container.hpp>
-#include <SeQuant/core/eval_node.hpp>
-#include <SeQuant/core/parse_expr.hpp>
-#include <SeQuant/domain/eval/cache_manager.hpp>
-#include <SeQuant/domain/eval/eval_btas.hpp>
-
 #include "examples/eval/btas/data_world_btas.hpp"
 #include "examples/eval/calc_info.hpp"
 #include "examples/eval/data_info.hpp"
 #include "examples/eval/scf.hpp"
+
+#include <SeQuant/domain/eval/cache_manager.hpp>
+#include <SeQuant/domain/eval/eval.hpp>
+
+#include <SeQuant/core/container.hpp>
+#include <SeQuant/core/eval_node.hpp>
+#include <SeQuant/core/parse_expr.hpp>
+
+#include <btas/btas.h>
+#include <memory>
 
 namespace sequant::eval::btas {
 
@@ -88,14 +89,16 @@ class SequantEvalScfBTAS final : public SequantEvalScf {
       auto k = tnsr.ket() | ranges::to_vector;
       ranges::sort(b, Index::LabelCompare{});
       ranges::sort(k, Index::LabelCompare{});
-//      std::wcout << "Sorted braket: " << sequant::to_latex(Tensor{L"I", b, k}) << std::endl;
+      //      std::wcout << "Sorted braket: " << sequant::to_latex(Tensor{L"I",
+      //      b, k}) << std::endl;
       return index_hash(concat(b, k));
     };
 
     auto rs = repeat_n(Tensor_t{}, info_.eqn_opts.excit) | ranges::to_vector;
     for (auto&& [r, n] : zip(rs, nodes_)) {
       auto const target_indices = sorted_annot(n->tensor());
-//      std::wcout << "Root tensor: " << sequant::to_latex(n->tensor()) << std::endl;
+      //      std::wcout << "Root tensor: " << sequant::to_latex(n->tensor()) <<
+      //      std::endl;
       auto st = info_.eqn_opts.spintrace;
       auto cm = info_.optm_opts.reuse_imeds;
       if (st && cm) {
