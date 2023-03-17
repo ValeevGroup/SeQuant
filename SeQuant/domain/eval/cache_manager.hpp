@@ -3,90 +3,41 @@
 
 #include <SeQuant/core/container.hpp>
 #include <memory>
-#include <optional>
 
 namespace sequant::eval {
 
 ///
 /// This class implements a cache manager useful for the cases when the number
-/// of times the cached objects will be accessed, and/or they need to be cached
-/// for indefinitely many accesses.
-///
-/// \tparam Data Type of the data to be cached.
-/// @details
-///          - It is a wrapper around a map structure.
-///          - The keys of the map, which are provided by the user at
-///            construction, are used to store and access data.
-///          - The mapped values(MVs) of the map are a special objects with
-///            the following properties:
-///             - MV has a store method that takes a key and the cached data.
-///               Storing a data implicitly accesses it after storing. This a
-///               design decision made based on the use case of this class. So,
-///               decaying entries start decaying right from the storing. See
-///               below for more on decaying entries.
-///             - MV has an access method that returns a pointer to the cached
-///               data.
-///             - MV has a tag to identify itself as having either a persistent
-///               or a decaying lifetime.
-///             - If MV has a decaying lifetime:
-///               - It takes a count at construction aka max_life.
-///               - The current lifetime count is set to max_life
-///                 at construction.
-///               - Accessing the cached data dcreases the MV's current
-///                 lifetime count.
-///               - Once the current lifetime reaches zero, the pointer to the
-///                 cached data becomes equivalent to a nullptr thereby freeing
-///                 the cache memory.
-///               - It has a reset method that restores the current lifetime to
-///                 the max_life. Reseting also resets the cached data pointer.
-///               - Calling store method with zero lifetime count in the MV
-///                 will store nothing.
-///             - If MV has a persistent lifetime:
-///               - It takes no param at construction.
-///               - Allows indefinitely many accesses to the cached data.
-///               - Calling reset method resets the cached data pointer.
+/// of times the cached objects will be accessed.
 ///
 template <typename Data>
 class CacheManager {
  public:
-  using key_t = size_t;
-  using count_t = size_t;
-  using ptr_t = std::shared_ptr<Data>;
+  using ptr_type = std::shared_ptr<Data>;
+  using cached_type = Data;
+  using key_type = size_t;
 
  private:
-  enum struct Lifetime { Persistent, Decaying };
-
   template <typename D>
   class entry {
    private:
-    using ptr_t = typename CacheManager<D>::ptr_t;
+    using ptr_type = typename CacheManager<D>::ptr_type;
 
-    Lifetime life_t;
+    size_t max_life;
 
-    count_t max_life;
+    size_t life_c;
 
-    count_t life_c;
-
-    ptr_t data_p;
+    ptr_type data_p;
 
    public:
-    entry() noexcept
-        : life_t{Lifetime::Persistent},  //
-          max_life{0},                   //
-          life_c{0},
+    entry(size_t count) noexcept
+        : max_life{count},  //
+          life_c{count},    //
           data_p{nullptr} {}
 
-    entry(count_t count) noexcept
-        : life_t{Lifetime::Decaying},  //
-          max_life{count},             //
-          life_c{count},               //
-          data_p{nullptr} {}
+    ptr_type access() noexcept {
+      if (!data_p) return nullptr;
 
-    ptr_t access() noexcept {
-      if (!data_p) return data_p;
-
-      // decay() < 0 implies persistent lifetime
-      // decay() >= 0 implies decaying lifetime
       return decay() == 0 ? std::move(data_p) : data_p;
     }
 
@@ -94,81 +45,58 @@ class CacheManager {
       data_p = std::make_shared<D>(std::move(data));
     }
 
-    void reset(bool decaying_only) noexcept {
-      if ((decaying_only && (life_t == Lifetime::Decaying)) || !decaying_only) {
-        life_c = max_life;
-        data_p = nullptr;
-      }
+    void reset() noexcept {
+      life_c = max_life;
+      data_p = nullptr;
     }
 
-    [[nodiscard]] count_t life_count() const noexcept { return life_c; }
+    [[nodiscard]] size_t life_count() const noexcept { return life_c; }
+
+    [[nodiscard]] size_t max_life_count() const noexcept { return max_life; }
+
+#ifndef NDEBUG
+    ///
+    /// When data outlives life-time, it's a zombie entry: a bad state of
+    /// cache_manager. Use it for debugging.
+    ///
+    [[nodiscard]] bool zombie() const noexcept { return life_c == 0 && data_p; }
+#endif
 
    private:
-    ///
-    /// @details life_c == 0 for objects with Lifetime::Decaying implies full
-    ///          decay. They don't decay beyond zero.
-    /// \return If object has persistent lifetime return -1 else
-    ///         decrement lifetime, if it hasn't fully decayed and return life_c
-    [[nodiscard]] int decay() noexcept {
-      return life_t == Lifetime::Persistent ? -1 : (life_c > 0 ? --life_c : 0);
-    }
+    [[nodiscard]] int decay() noexcept { return life_c > 0 ? --life_c : 0; }
 
   };  // entry
 
-  ptr_t store(entry<Data> &entry, Data data) noexcept {
+  ptr_type store(entry<Data> &entry, Data data) noexcept {
     entry.store(std::move(data));
     return entry.access();
   }
 
-  container::map<key_t, entry<Data>> cache_map_;
+  container::map<key_type, entry<Data>> cache_map_;
 
  public:
-  ///
-  /// @brief Construct a cache manager.
-  ///        CacheManger<>::key_t type keys are expected for construction.
-  ///
-  /// @param decaying A map-like iterable that maps the keys to the maximum
-  ///                 number of times the associated data should be accessed.
-  /// @param persistent An iterable of keys to the data that are to be accessed
-  ///                   an indefinitely many times.
-  /// @note  Repeating keys in @c decaying and @c persistent leads to an
-  ///        undefined behavior.
-  template <typename Iterable1 = container::map<key_t, count_t>,
-            typename Iterable2 = container::svector<key_t>>
-  CacheManager(Iterable1 &&decaying, Iterable2 &&persistent) noexcept {
-    for (auto &&[k, c] : decaying)
-      cache_map_.try_emplace(k, entry<Data>{static_cast<count_t>(c)});
-
-    for (auto &&k : persistent) cache_map_.try_emplace(k, entry<Data>{});
+  template <typename Iterable1 = container::map<size_t, size_t>>
+  explicit CacheManager(Iterable1 &&decaying) noexcept {
+    for (auto &&[k, c] : decaying) cache_map_.try_emplace(k, entry<Data>{c});
   }
 
   ///
   /// Resets all cached data.
   ///
-  void reset_all() noexcept {
-    for (auto &&[k, v] : cache_map_) v.reset(false);
-  }
-
-  ///
-  /// Only resets decaying cached data, which restores their lifetimes to the
-  /// values they were constructed with.
-  void reset_decaying() noexcept {
-    for (auto &&[k, v] : cache_map_) v.reset(true);
+  void reset() noexcept {
+    for (auto &&[k, v] : cache_map_) v.reset();
   }
 
   ///
   /// @brief Access cached data.
   ///
   /// @param key The that identifies the cached data.
-  /// @return Optional object to the pointer to the cached data. Only if @c key
-  ///         doesn't exist in the cache database, nullopt is returned.
-  ///         In other words if @c key was not passed during construction, the
-  ///         return value is a std::nullopt object.
-  std::optional<ptr_t> access(key_t key) noexcept {
+  /// @retur shared_ptr to the cached data if it exists, nullptr otherwise.
+  ptr_type access(key_type key) noexcept {
     if (auto &&found = cache_map_.find(key); found != cache_map_.end())
       return found->second.access();
 
-    return std::nullopt;
+    return nullptr;
   }
 
   ///
@@ -179,18 +107,48 @@ class CacheManager {
   ///         entry. Passing @c key that was not present during construction of
   ///         this CacheManager object, stores nothing, but still returns a
   ///         valid pointer to @c data.
-  ptr_t store(key_t key, Data data) noexcept {
+  [[nodiscard]] ptr_type store(key_type key, Data data) noexcept {
     if (auto &&found = cache_map_.find(key); found != cache_map_.end())
       return store(found->second, std::move(data));
     return std::make_shared<Data>(std::move(data));
   }
 
+  [[nodiscard]] bool exists(key_type key) const noexcept {
+    return cache_map_.find(key) != cache_map_.end();
+  }
+
+#ifndef NDEBUG
+  ///
+  /// When data outlives life-time, it's a zombie entry: a bad state of
+  /// cache_manager. Use it for debugging.
+  ///
+  [[nodiscard]] bool zombie(key_type key) const noexcept {
+    auto iter = cache_map_.find(key);
+    return iter != cache_map_.end() && !iter->second.zombie();
+  }
+#endif
+
+  /// if the key exists in the database, return the current lifetime count of
+  /// the cached data otherwise return -1
+  [[nodiscard]] int life(key_type key) const noexcept {
+    auto iter = cache_map_.find(key);
+    auto end = cache_map_.end();
+    return iter == end ? -1 : iter->second.life_count();
+  }
+
+  /// if the key exists in the database, return the maximum lifetime count of
+  /// the cached data that implies the maximum number of accesses allowed for
+  /// this key before the cache is released. This value was set by the c'tor.
+  [[nodiscard]] int max_life(key_type key) const noexcept {
+    auto iter = cache_map_.find(key);
+    auto end = cache_map_.end();
+    return iter == end ? -1 : iter->second.max_life_count();
+  }
+
   ///
   /// Get an empty cache manager.
   ///
-  static CacheManager<Data> empty() noexcept {
-    return CacheManager<Data>{{}, {}};
-  }
+  static CacheManager<Data> empty() noexcept { return CacheManager<Data>{{}}; }
 
   // for unit testing
   template <typename T>
