@@ -4,6 +4,7 @@
 #include <SeQuant/core/parse_expr.hpp>
 
 namespace {
+
 // validates if x is constructible from tspec using parse_expr
 auto validate_tensor = [](const auto& x, std::wstring_view tspec) -> bool {
   return x.to_latex() ==
@@ -11,7 +12,7 @@ auto validate_tensor = [](const auto& x, std::wstring_view tspec) -> bool {
 };
 
 auto eval_node(sequant::ExprPtr const& expr) {
-  return to_eval_node<sequant::EvalExpr>(expr);
+  return sequant::to_eval_node<sequant::EvalExpr>(expr);
 }
 
 }  // namespace

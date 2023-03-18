@@ -14,7 +14,7 @@
 
 namespace {
 auto eval_node(sequant::ExprPtr const& expr) {
-  return to_eval_node<sequant::EvalExpr>(expr);
+  return sequant::to_eval_node<sequant::EvalExpr>(expr);
 }
 
 auto tensor_to_key(sequant::Tensor const& tnsr) {
