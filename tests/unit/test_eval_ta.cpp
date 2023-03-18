@@ -5,14 +5,18 @@
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/domain/eval/eval.hpp>
 
-#include <boost/regex.hpp>
 #include <tiledarray.h>
+#include <boost/regex.hpp>
 
 #include <cstdlib>
 #include <string>
 #include <vector>
 
 namespace {
+auto eval_node(sequant::ExprPtr const& expr) {
+  return to_eval_node<sequant::EvalExpr>(expr);
+}
+
 auto tensor_to_key(sequant::Tensor const& tnsr) {
   static auto const idx_rgx = boost::wregex{L"([ia])([↑↓])?(_?\\d+)"};
   auto formatter = [](boost::wsmatch mo) -> std::wstring {
@@ -110,11 +114,11 @@ class rand_tensor_yield {
 
 TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
   using ranges::views::transform;
-  using sequant::to_eval_node;
+  using sequant::eval::EvalExprTA;
   using sequant::eval::evaluate;
   using sequant::eval::evaluate_antisymm;
   using sequant::eval::evaluate_symm;
-  using sequant::eval::to_eval_node_ta;
+
   using TA::TArrayD;
   auto parse_antisymm = [](auto const& xpr) {
     return parse_expr(xpr, sequant::Symmetry::antisymm);
@@ -132,17 +136,17 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
 
   auto eval = [&yield](sequant::ExprPtr const& expr,
                        std::string const& target_labels) {
-    return evaluate(to_eval_node_ta(expr), target_labels, yield);
+    return evaluate(eval_node(expr), target_labels, yield);
   };
 
   auto eval_symm = [&yield](sequant::ExprPtr const& expr,
                             std::string const& target_labels) {
-    return evaluate_symm(to_eval_node_ta(expr), target_labels, yield);
+    return evaluate_symm(eval_node(expr), target_labels, yield);
   };
 
   auto eval_antisymm = [&yield](sequant::ExprPtr const& expr,
                                 std::string const& target_labels) {
-    return evaluate_antisymm(to_eval_node_ta(expr), target_labels, yield);
+    return evaluate_antisymm(eval_node(expr), target_labels, yield);
   };
 
   SECTION("summation") {
@@ -241,10 +245,10 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
         " + "
         " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2} ");
 
-    auto eval1 = evaluate(to_eval_node(expr1), "i_1,i_2,a_1,a_2", yield);
+    auto eval1 = evaluate(eval_node(expr1), "i_1,i_2,a_1,a_2", yield);
 
     auto nodes1 = *expr1 | ranges::views::transform([](auto&& x) {
-      return to_eval_node(x);
+      return eval_node(x);
     }) | ranges::to_vector;
 
     auto eval2 = evaluate(nodes1, "i_1,i_2,a_1,a_2", yield);

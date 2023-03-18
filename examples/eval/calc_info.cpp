@@ -7,33 +7,17 @@
 
 namespace sequant::eval {
 
-struct IndexToSize {
-  static const size_t nocc = 10;
-  static const size_t nvirt = 100;
-  auto operator()(Index const& idx) const {
-    if (idx.space() == IndexSpace::active_occupied)
-      return nocc;
-    else if (idx.space() == IndexSpace::active_unoccupied)
-      return nvirt;
-    else
-      throw std::runtime_error("Unsupported IndexSpace type encountered");
-  }
-};
+const size_t IndexToSize::nocc = 10;
 
-EvalNode CalcInfo::node_(const ExprPtr& expr, size_t rank) const {
-  auto trimmed = opt::tail_factor(expr);
-  return to_eval_node(optm_opts.single_term ? optimize(trimmed, IndexToSize{})
-                                            : trimmed);
-}
+const size_t IndexToSize::nvirt = 10;
 
-container::vector<EvalNode> CalcInfo::nodes(
-    const container::vector<sequant::ExprPtr>& exprs) const {
-  using namespace ranges::views;
-  assert(exprs.size() == eqn_opts.excit);
-  return zip(exprs, iota(size_t{1}, eqn_opts.excit + 1)) |
-         transform(
-             [this](auto&& pair) { return node_(pair.first, pair.second); }) |
-         ranges::to<container::vector<EvalNode>>;
+size_t IndexToSize::operator()(Index const& idx) const {
+  if (idx.space() == IndexSpace::active_occupied)
+    return nocc;
+  else if (idx.space() == IndexSpace::active_unoccupied)
+    return nvirt;
+  else
+    throw std::runtime_error("Unsupported IndexSpace type encountered");
 }
 
 container::vector<ExprPtr> CalcInfo::exprs() const {

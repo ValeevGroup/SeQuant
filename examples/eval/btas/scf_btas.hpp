@@ -24,8 +24,10 @@ namespace sequant::eval::btas {
 
 template <typename Tensor_t>
 class SequantEvalScfBTAS final : public SequantEvalScf {
+ public:
+  using ExprT = EvalExpr;
  private:
-  container::vector<EvalNode> nodes_;
+  container::vector<EvalNode<ExprT>> nodes_;
   CacheManager<Tensor_t const> cman_;
   DataWorldBTAS<Tensor_t> data_world_;
 
@@ -127,7 +129,7 @@ class SequantEvalScfBTAS final : public SequantEvalScf {
     auto const exprs = info_.exprs();
 
     // todo time it
-    nodes_ = info_.nodes(exprs);
+    nodes_ = info_.nodes<ExprT>(exprs);
 
     cman_ = info_.cache_manager_scf<Tensor_t const>(nodes_);
   }
