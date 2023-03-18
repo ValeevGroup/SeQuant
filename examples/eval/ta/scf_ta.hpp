@@ -22,6 +22,10 @@ namespace sequant::eval {
 
 template <typename Tensor_t>
 class SequantEvalScfTA final : public SequantEvalScf {
+ public:
+  using ExprT = EvalExprTA;
+  using EvalNodeTA = EvalNode<ExprT>;
+
  private:
   container::vector<EvalNodeTA> nodes_;
   CacheManager<Tensor_t const> cman_;
@@ -122,14 +126,10 @@ class SequantEvalScfTA final : public SequantEvalScf {
 
     auto const exprs = info_.exprs();
 
-    auto ns = info_.nodes(exprs);
-
-    nodes_ =
-        ns |
-        ranges::views::transform([](auto&& n) { return to_eval_node_ta(n); }) |
-        ranges::to<decltype(nodes_)>;
+    auto ns = info_.nodes<ExprT>(exprs);
 
     cman_ = info_.cache_manager_scf<Tensor_t const>(ns);
+    nodes_ = std::move(ns);
   }
 };
 

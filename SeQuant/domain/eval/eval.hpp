@@ -302,12 +302,6 @@ class EvalExprTA final : public EvalExpr {
   bool tot_;
 };
 
-using EvalNodeTA = FullBinaryNode<EvalExprTA>;
-
-EvalNodeTA to_eval_node_ta(ExprPtr const& expr);
-
-EvalNodeTA to_eval_node_ta(EvalNode const& node);
-
 template <typename T>
 constexpr bool HasAnnotMethod =
     HasAnnotMethod_<std::remove_reference_t<T>>::value;

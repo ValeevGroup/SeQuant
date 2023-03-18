@@ -13,6 +13,10 @@
 
 namespace {
 
+auto eval_node(sequant::ExprPtr const& expr) {
+  return to_eval_node<sequant::EvalExpr>(expr);
+}
+
 static auto const idx_rgx = boost::wregex{L"([ia])([↑↓])?_?(\\d+)"};
 auto tensor_to_key(sequant::Tensor const& tnsr) {
   auto formatter = [](boost::wsmatch mo) -> std::wstring {
@@ -168,17 +172,17 @@ TEST_CASE("TEST_EVAL_USING_BTAS", "[eval]") {
 
   auto eval = [&yield](sequant::ExprPtr const& expr,
                        auto const& target_labels) {
-    return evaluate(to_eval_node(expr), target_labels, yield);
+    return evaluate(eval_node(expr), target_labels, yield);
   };
 
   auto eval_symm = [&yield](sequant::ExprPtr const& expr,
                             auto const& target_labels) {
-    return evaluate_symm(to_eval_node(expr), target_labels, yield);
+    return evaluate_symm(eval_node(expr), target_labels, yield);
   };
 
   auto eval_antisymm = [&yield](sequant::ExprPtr const& expr,
                                 auto const& target_labels) {
-    return evaluate_antisymm(to_eval_node(expr), target_labels, yield);
+    return evaluate_antisymm(eval_node(expr), target_labels, yield);
   };
 
   auto parse_antisymm = [](auto const& xpr) {
@@ -326,10 +330,10 @@ TEST_CASE("TEST_EVAL_USING_BTAS", "[eval]") {
 
     auto tidx1 = tidxs(L"i1,i2,a1,a2");
 
-    auto const eval1 = evaluate(to_eval_node(expr1), tidx1, yield);
+    auto const eval1 = evaluate(eval_node(expr1), tidx1, yield);
 
     auto nodes1 = *expr1 | ranges::views::transform([](auto&& x) {
-      return to_eval_node(x);
+      return eval_node(x);
     }) | ranges::to_vector;
 
     auto const eval2 = evaluate(nodes1, tidx1, yield);
