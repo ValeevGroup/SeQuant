@@ -372,13 +372,17 @@ auto sum(NodeT const& n, TA::DistArray<Args...> const& lhs,
   auto const& lannot = annot(n.left());
   auto const& rannot = annot(n.right());
   auto const& pannot = annot(n);
+
 #ifdef SEQUANT_EVAL_TRACE
   std::cout << "[EVAL] " << n->label() << "(" << pannot << ") = " << lscal
             << "*" << n.left()->label() << "(" << lannot << ") + " << rscal
             << "*" << n.right()->label() << "(" << rannot << ")" << std::endl;
 #endif
+
   result(pannot) = lscal * lhs(lannot) + rscal * rhs(rannot);
-  decltype(result)::wait_for_lazy_cleanup(result.world());
+
+  TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
+
   return result;
 }
 
@@ -397,16 +401,15 @@ void add_to(TA::DistArray<Args...>& lhs, TA::DistArray<Args...> const& rhs,
   //  auto const annot = iota(size_t{0}, lhs.trange().rank()) |
   //               transform([](auto x) { return std::to_string(x); }) |
   //               intersperse(",") | join | ranges::to<std::string>;
-  // Or, this -> ?
+  // Or, this? ->
   auto const annot = TA::detail::dummy_annotation(lhs.trange().rank());
 
-  lhs(annot) += rhs(annot);
-
 #ifdef SEQUANT_EVAL_TRACE
-  std::cout << "[EVAL] " << lnode->label() << "(" << eval::annot(lnode)
-            << ") += " << rnode->label() << "(" << eval::annot(rnode) << ")"
+  std::cout << "[EVAL] " << lnode->label() << " += " << rnode->label()
             << std::endl;
 #endif
+
+  lhs(annot) += rhs(annot);
 
   TA::DistArray<Args...>::wait_for_lazy_cleanup(lhs.world());
 }
@@ -419,13 +422,17 @@ auto prod(NodeT const& n, TA::DistArray<Args...> const& lhs,
   auto const& lannot = annot(n.left());
   auto const& rannot = annot(n.right());
   auto const& pannot = annot(n);
+
 #ifdef SEQUANT_EVAL_TRACE
   std::cout << "[EVAL] " << n->label() << "(" << pannot
             << ") = " << n.left()->label() << "(" << lannot << ") * "
             << n.right()->label() << "(" << rannot << ")" << std::endl;
 #endif
+
   result(pannot) = lhs(lannot) * rhs(rannot);
-  decltype(result)::wait_for_lazy_cleanup(result.world());
+
+  TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
+
   return result;
 }
 
@@ -435,11 +442,16 @@ auto scale(NodeT const& n, std::string const& annot,
            TA::DistArray<Args...> const& arr) {
   TA::DistArray<Args...> result;
   auto scalar = n->scalar().value().real();
+
 #ifdef SEQUANT_EVAL_TRACE
   std::cout << "[EVAL] " << n->label() << "(" << annot << ") = " << scalar
             << "*" << n->label() << "(" << eval::annot(n) << ")" << std::endl;
 #endif
+
   result(annot) = scalar * arr(eval::annot(n));
+
+  TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
+
   return result;
 }
 
@@ -458,7 +470,10 @@ auto symmetrize(TA::DistArray<Args...> const& arr) {
 #ifdef SEQUANT_EVAL_TRACE
   std::cout << "[EVAL] symmetrizing rank-" << rank << " tensor" << std::endl;
 #endif
+
   symmetric_permutation(rank / 2, symmetrizer);
+
+  TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
 
   return result;
 }
@@ -483,7 +498,11 @@ auto antisymmetrize(TA::DistArray<Args...> const& arr) {
   std::cout << "[EVAL] antisymmetrizing rank-" << rank << " tensor"
             << std::endl;
 #endif
+
+
   antisymmetric_permutation(rank / 2, antisymmetrizer);
+
+  TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
 
   return result;
 }
@@ -686,6 +705,7 @@ template <typename NodeT, typename Le, typename Cm, typename>
 EvalResultT<NodeT, Le> evaluate_core(NodeT const& n, Le&& lev, Cm&& cm) {
   auto h = hash::value(*n);
   if (auto ptr = std::forward<Cm>(cm).access(h); ptr) {
+
 #ifdef SEQUANT_EVAL_TRACE
     auto const max_c = std::forward<Cm>(cm).max_life(h);
     auto const curr_c = std::forward<Cm>(cm).life(h);
@@ -696,10 +716,12 @@ EvalResultT<NodeT, Le> evaluate_core(NodeT const& n, Le&& lev, Cm&& cm) {
       std::cout << "[EVAL] [RELEASED] intermediate for " << n->label() << "("
                 << annot(n) << ") using key: " << hash::value(*n) << std::endl;
 #endif
+
     return *ptr;
   }
 
   if (std::forward<Cm>(cm).exists(h)) {
+
 #ifdef SEQUANT_EVAL_TRACE
     auto const max_c = std::forward<Cm>(cm).max_life(h);
     // curr_c will be reduced by one right when it is stored
@@ -708,10 +730,12 @@ EvalResultT<NodeT, Le> evaluate_core(NodeT const& n, Le&& lev, Cm&& cm) {
               << "(" << annot(n) << ") using key: " << hash::value(*n) << " ["
               << curr_c << "/" << max_c << "] accesses remain" << std::endl;
 #endif
+
     return *std::forward<Cm>(cm).store(
         h, std::move(
                evaluate_impl(n, std::forward<Le>(lev), std::forward<Cm>(cm))));
   }
+
 #ifndef NDEBUG
   if (auto const curr_c = std::forward<Cm>(cm).life(h); curr_c == 0) {
     auto const max_c = std::forward<Cm>(cm).max_life(h);
@@ -719,9 +743,11 @@ EvalResultT<NodeT, Le> evaluate_core(NodeT const& n, Le&& lev, Cm&& cm) {
               << annot(n) << ") using key: " << hash::value(*n) << " ["
               << curr_c << "/" << max_c << "] accesses remain" << std::endl;
   }
+
   assert(!std::forward<Cm>(cm).zombie(h) &&
          "Cached data outlives lifetime. Cache manager is in invalid state!");
 #endif
+
   return evaluate_impl(n, std::forward<Le>(lev), std::forward<Cm>(cm));
 }
 // =============================================================================
