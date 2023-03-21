@@ -440,6 +440,27 @@ class Index : public Taggable {
     }
   };
 
+  ///
+  /// Compare labels of indices but by assuming the tailing numeric string
+  /// as a number.
+  /// eg.
+  /// Using LabelCompare: i_10 < i_9
+  /// Using LabelCompareCardinal: i_9 < 10
+  ///
+  struct LabelCompareCardinal {
+    using is_transparent = void;
+    bool operator()(const Index &first, const Index &second) const {
+      auto const &fl = first.label_;
+      auto const &sl = second.label_;
+
+      auto f_ = fl.rfind(L'_');
+      auto s_ = sl.rfind(L'_');
+
+      return std::wcsncmp(fl.c_str(), sl.c_str(), f_) ||
+             (std::stoi(fl.substr(f_ + 1)) < std::stoi(sl.substr(s_ + 1)));
+    }
+  };
+
   /// compares Index objects using type only (but since type is defined by the
   /// *values* of proto indices those are not ignored)
   struct TypeCompare {
