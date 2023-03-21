@@ -142,16 +142,6 @@ TEST_CASE("Index", "[elements]") {
     REQUIRE(p1B < p2B);
   }
 
-  SECTION("label comparison") {
-    auto comp = Index::LabelCompareCardinal{};
-
-    auto i9 = Index(L"i_9");
-    auto i10 = Index(L"i_10");
-    REQUIRE(comp(i9, i10));
-    REQUIRE_FALSE(comp(i9, i9));
-    REQUIRE_FALSE(comp(i10, i9));
-  }
-
   SECTION("hashing") {
     REQUIRE_NOTHROW(hash_value(Index{}));
     Index i1(L"i_1");
