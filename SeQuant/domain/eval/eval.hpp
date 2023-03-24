@@ -499,7 +499,6 @@ auto antisymmetrize(TA::DistArray<Args...> const& arr) {
             << std::endl;
 #endif
 
-
   antisymmetric_permutation(rank / 2, antisymmetrizer);
 
   TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
@@ -689,11 +688,9 @@ EvalResultT<NodeT, Le> evaluate_impl(NodeT const& n, Le&& lev, Args&&... args) {
                                               std::forward<Args>(args)...);
   if (n->op() == EvalOp::Sum) {
     return kernel::sum(n, lres, rres);
-  } else if (n->op() == EvalOp::Prod) {
-    return kernel::prod(n, lres, rres);
-  } else {
-    assert(false && "Unsupported evaluation type.");
   }
+  assert(n->op() == EvalOp::Prod);
+  return kernel::prod(n, lres, rres);
 }
 
 template <typename NodeT, typename Le>
@@ -705,7 +702,6 @@ template <typename NodeT, typename Le, typename Cm, typename>
 EvalResultT<NodeT, Le> evaluate_core(NodeT const& n, Le&& lev, Cm&& cm) {
   auto h = hash::value(*n);
   if (auto ptr = std::forward<Cm>(cm).access(h); ptr) {
-
 #ifdef SEQUANT_EVAL_TRACE
     auto const max_c = std::forward<Cm>(cm).max_life(h);
     auto const curr_c = std::forward<Cm>(cm).life(h);
@@ -721,7 +717,6 @@ EvalResultT<NodeT, Le> evaluate_core(NodeT const& n, Le&& lev, Cm&& cm) {
   }
 
   if (std::forward<Cm>(cm).exists(h)) {
-
 #ifdef SEQUANT_EVAL_TRACE
     auto const max_c = std::forward<Cm>(cm).max_life(h);
     // curr_c will be reduced by one right when it is stored
