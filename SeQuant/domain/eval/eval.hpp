@@ -708,7 +708,7 @@ EvalResultT<NodeT, Le> evaluate_core(NodeT const& n, Le&& lev, Cm&& cm) {
     std::cout << "[EVAL] [ACCESSED] intermediate for " << n->label() << "("
               << annot(n) << ") using key: " << hash::value(*n) << " ["
               << curr_c << "/" << max_c << "] accesses remain" << std::endl;
-    if (std::forward<Cm>(cm).life(h) == 0)
+    if (curr_c == 0)
       std::cout << "[EVAL] [RELEASED] intermediate for " << n->label() << "("
                 << annot(n) << ") using key: " << hash::value(*n) << std::endl;
 #endif
@@ -787,8 +787,8 @@ auto evaluate(NodesT const& nodes, AnnotT const& annot, Le&& leval,
 }
 
 template <typename NodeT, typename AnnotT, typename Le, typename... Args>
-EvalResultT<NodeT, Le> evaluate_symm(NodeT const& nodes, AnnotT const& annot,
-                                     Le&& le, Args&&... args) {
+auto evaluate_symm(NodeT const& nodes, AnnotT const& annot, Le&& le,
+                   Args&&... args) {
   using ranges::views::concat;
   // using ranges::views::iota;
   using ranges::views::transform;
@@ -798,7 +798,7 @@ EvalResultT<NodeT, Le> evaluate_symm(NodeT const& nodes, AnnotT const& annot,
            "Odd ranked tensor symmetrization not supported");
   };
   if constexpr (IsIterableOfEvaluableNodes<NodeT>)
-    even_rank_assert(std::begin(nodes)->tensor());
+    even_rank_assert((*std::begin(nodes))->tensor());
   else {
     static_assert(IsEvaluable<NodeT>);
     even_rank_assert(nodes->tensor());
@@ -809,15 +809,15 @@ EvalResultT<NodeT, Le> evaluate_symm(NodeT const& nodes, AnnotT const& annot,
 }
 
 template <typename NodeT, typename StrT, typename Le, typename... Args>
-EvalResultT<NodeT, Le> evaluate_antisymm(NodeT const& nodes, StrT const& annot,
-                                         Le&& le, Args&&... args) {
+auto evaluate_antisymm(NodeT const& nodes, StrT const& annot, Le&& le,
+                       Args&&... args) {
 #ifndef NDEBUG
   auto even_rank_assert = [](Tensor const& t) {
     assert((t.bra_rank() + t.ket_rank()) % 2 == 0 &&
            "Odd ranked tensor anti-symmetrization not supported");
   };
   if constexpr (IsIterableOfEvaluableNodes<NodeT>)
-    even_rank_assert(std::begin(nodes)->tensor());
+    even_rank_assert((*std::begin(nodes))->tensor());
   else {
     static_assert(IsEvaluable<NodeT>);
     even_rank_assert(nodes->tensor());
