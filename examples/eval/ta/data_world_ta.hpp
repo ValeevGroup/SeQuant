@@ -32,6 +32,8 @@ class DataWorldTA {
 
   container::vector<Tensor_t> Ts;
 
+  container::map<size_t, Tensor_t> cache_;
+
   ///
   /// Read tensor data from a file to a TA::DistArray tensor.
   ///
@@ -185,6 +187,18 @@ class DataWorldTA {
     }
 
     return slice;
+  }
+
+  template <typename NodeT, typename = std::enable_if_t<IsEvaluable<NodeT>>>
+  Tensor_t operator()(NodeT const& n) {
+    auto h = hash::value(*n);
+    if (auto exists = cache_.find(h); exists != cache_.end())
+      return exists->second;
+    else {
+      auto stored = cache_.emplace(h, (*this)(n->tensor()));
+      assert(stored.second && "failed to store tensor");
+      return stored.first->second;
+    }
   }
 
   void update_amplitudes(std::vector<Tensor_t> const& rs) {

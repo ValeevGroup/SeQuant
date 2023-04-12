@@ -11,6 +11,7 @@
 #include <btas/btas.h>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/tensor.hpp>
+#include <SeQuant/domain/eval/eval.hpp>
 #include <range/v3/view.hpp>
 
 namespace sequant::eval::btas {
@@ -31,6 +32,8 @@ class DataWorldBTAS {
   Tensor_t F_pq;
 
   container::vector<Tensor_t> Ts;
+
+  container::map<size_t, Tensor_t> cache_;
 
  public:
   DataWorldBTAS(DataInfo const& info, size_t excit)
@@ -151,6 +154,19 @@ class DataWorldBTAS {
                   big_tensor(i, j, k, l);
     }
     return slice;
+  }
+
+  template <typename NodeT, typename = std::enable_if_t<IsEvaluable<NodeT>>>
+  Tensor_t operator()(NodeT const& n) {
+    if (n->tensor().label() == L"t") return (*this)(n->tensor());
+    auto h = hash::value(*n);
+    if (auto exists = cache_.find(h); exists != cache_.end())
+      return exists->second;
+    else {
+      auto stored = cache_.emplace(h, (*this)(n->tensor()));
+      assert(stored.second && "failed to store tensor");
+      return stored.first->second;
+    }
   }
 
   void update_amplitudes(std::vector<Tensor_t> const& rs) {

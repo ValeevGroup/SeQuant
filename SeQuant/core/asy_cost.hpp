@@ -22,9 +22,9 @@ namespace sequant {
 class AsyCost {
  private:
   class AsyCostEntry {
-    size_t occ_; // power of active_occupied
-    size_t virt_; // power of the rest orbitals
-    mutable boost::rational<int> count_; // count of this asymptotic symbol
+    size_t occ_;                          // power of active_occupied
+    size_t virt_;                         // power of the rest orbitals
+    mutable boost::rational<int> count_;  // count of this asymptotic symbol
 
    public:
     template <typename Os, typename IntType>
@@ -104,8 +104,7 @@ class AsyCost {
         auto abs_c = boost::abs(count_);
         oss << (count_ < abs_c ? "- " : "");
         bool frac_mode = abs_c.denominator() != 1;
-        if (!frac_mode && (abs_c != 1))
-          oss << count_.numerator();
+        if (!frac_mode && (abs_c != 1)) oss << count_.numerator();
         if (frac_mode) {
           oss << "\\frac{" << std::abs(count_.numerator()) << "}{"
               << count_.denominator() << "}";
@@ -141,11 +140,18 @@ class AsyCost {
   /// Default construct to zero cost.
   AsyCost();
 
+  // AsyCost(size_t nocc, size_t nrest, boost::rational<int> count = 1);
+
+  ///
+  /// \param count Rational number of times this cost repeats.
+  /// \param nocc Asymptotic scaling exponent in the active occupied orbitals.
+  /// \param nvirt Asymptotic scaling exponent in the active unoccupied orbitals.
+  AsyCost(boost::rational<int> count, size_t nocc, size_t nvirt);
+
   ///
   /// \param nocc Asymptotic scaling exponent in the active occupied orbitals.
-  /// \param nrest Asymptotic scaling exponent in the rest orbitals.
-  /// \param count Rational number of times this cost repeats.
-  AsyCost(size_t nocc, size_t nrest, boost::rational<int> count = 1);
+  /// \param nvirt Asymptotic scaling exponent in the active unoccupied orbitals.
+  AsyCost(size_t nocc, size_t nvirt);
 
   AsyCost(AsyCost const &) = default;
 
@@ -159,8 +165,7 @@ class AsyCost {
   /// \param nocc Substitute $O$ by nocc.
   /// \param nvirt Substitute $V$ by nvirt.
   /// \return Scaled asymptotic cost.
-  [[nodiscard]] boost::rational<long long int> ops(unsigned short nocc,
-                                                   unsigned short nvirt) const;
+  [[nodiscard]] double ops(size_t nocc, size_t nvirt) const;
 
   template <typename String_t>
   String_t to_latex() const {

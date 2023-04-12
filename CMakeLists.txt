@@ -224,13 +224,11 @@ set(SeQuant_src
         SeQuant/core/binary_node.hpp
         SeQuant/core/clone_packed.hpp
         SeQuant/core/clone_packed.cpp
-        SeQuant/core/eval_seq.hpp
         SeQuant/core/eval_expr.hpp
         SeQuant/core/eval_expr.cpp
         SeQuant/core/asy_cost.hpp
         SeQuant/core/asy_cost.cpp
         SeQuant/core/eval_node.hpp
-        SeQuant/core/eval_node.cpp
         SeQuant/core/parse_expr.hpp
         SeQuant/core/parse/parse_expr.cpp
         SeQuant/core/optimize.hpp
@@ -246,8 +244,6 @@ set(SeQuant_src
         SeQuant/core/parse/rpn.cpp
         SeQuant/core/parse/regex_sequant.hpp
         SeQuant/core/parse/regex_sequant.cpp
-        SeQuant/core/util/rand_color.cpp
-        SeQuant/core/util/rand_color.hpp
         SeQuant/domain/mbpt/models/cc.cpp
         SeQuant/domain/mbpt/models/cc.hpp
         SeQuant/domain/eval/eval.hpp
@@ -272,13 +268,8 @@ endif (SEQUANT_EVAL_TESTS)
 
 if (TARGET tiledarray)
     list(APPEND SeQuant_src
-            SeQuant/domain/eval/eval_ta.hpp
-            SeQuant/domain/eval/eval_ta.cpp
-            )
-endif ()
-if (BTAS_SOURCE_DIR)
-    list(APPEND SeQuant_src
-            SeQuant/domain/eval/eval_btas.hpp
+            SeQuant/domain/eval/eval.hpp
+            SeQuant/domain/eval/eval.cpp
             )
 endif ()
 
@@ -349,7 +340,6 @@ if (BUILD_TESTING)
             tests/unit/test_parse_expr.cpp
             tests/unit/test_eval_expr.cpp
             tests/unit/test_binary_node.cpp
-            tests/unit/test_eval_seq.cpp
             tests/unit/test_asy_cost.cpp
             tests/unit/test_eval_node.cpp
             tests/unit/test_optimize.cpp
@@ -364,6 +354,7 @@ if (BUILD_TESTING)
     if (TARGET tiledarray)
         list(APPEND utests_src
                 tests/unit/test_eval_ta.cpp
+                tests/unit/test_eval_btas.cpp
                 )
     endif (TARGET tiledarray)
 

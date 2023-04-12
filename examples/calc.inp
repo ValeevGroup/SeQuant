@@ -5,7 +5,6 @@ spintrace      no
 optimization
 single_term    yes
 reuse_imeds    yes
-cache_leaves   yes
 
 scf
 tightness      normal

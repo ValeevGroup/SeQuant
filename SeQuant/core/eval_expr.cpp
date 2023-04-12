@@ -1,23 +1,84 @@
 #include "eval_expr.hpp"
 
+#include <SeQuant/core/wstring.hpp>
 #include <cassert>
 
 namespace sequant {
 
-EvalExpr::hash_t EvalExpr::hash_value() const { return hash_; }
+size_t EvalExpr::global_id = {};
 
-EvalOp EvalExpr::op() const { return op_; }
+size_t EvalExpr::id() const noexcept { return id_; }
 
-const Tensor& EvalExpr::tensor() const { return tensor_; }
+std::string EvalExpr::label(std::string_view sep) const noexcept {
+  return to_string(tensor().label()) +
+         (op() == EvalOp::Id ? "" : sep.data() + std::to_string(id_));
+}
 
-const Constant& EvalExpr::scalar() const { return scalar_; }
+EvalExpr::hash_t EvalExpr::hash_value() const noexcept { return hash_; }
 
-EvalExpr::EvalExpr(const Tensor& tnsr)
-    : op_{EvalOp::Id},
+EvalOp EvalExpr::op() const noexcept { return op_; }
+
+const Tensor& EvalExpr::tensor() const noexcept { return tensor_; }
+
+const Constant& EvalExpr::scalar() const noexcept { return scalar_; }
+
+#ifdef DEBUG_EVAL_EXPR
+EvalExpr::~EvalExpr() noexcept {
+  if (id() != 0) std::cout << "Dtor called on [" << id() << "]" << std::endl;
+}
+
+EvalExpr::EvalExpr(EvalExpr&& other) noexcept {
+  id_ = other.id_;
+  op_ = other.op_;
+  hash_ = other.hash_;
+  tensor_ = std::move(other.tensor_);
+  scalar_ = std::move(other.scalar_);
+  if (id() != 0)
+    std::cout << "Move ctor called on [" << id() << "]" << std::endl;
+}
+
+EvalExpr::EvalExpr(const EvalExpr& other) noexcept {
+  id_ = other.id_;
+  op_ = other.op_;
+  hash_ = other.hash_;
+  tensor_ = other.tensor_;
+  scalar_ = other.scalar_;
+  if (id() != 0)
+    std::cout << "Copy ctor called on [" << id() << "]" << std::endl;
+}
+
+EvalExpr& EvalExpr::operator=(EvalExpr&& other) noexcept {
+  id_ = other.id_;
+  op_ = other.op_;
+  hash_ = other.hash_;
+  tensor_ = std::move(other.tensor_);
+  scalar_ = std::move(other.scalar_);
+  if (id() != 0)
+    std::cout << "Move assign called on [" << id() << "]" << std::endl;
+  return *this;
+}
+
+EvalExpr& EvalExpr::operator=(EvalExpr const& other) noexcept {
+  id_ = other.id_;
+  op_ = other.op_;
+  hash_ = other.hash_;
+  tensor_ = other.tensor_;
+  scalar_ = other.scalar_;
+  if (id() != 0)
+    std::cout << "Copy assign called on [" << id() << "]" << std::endl;
+  return *this;
+}
+#endif
+
+EvalExpr::EvalExpr(const Tensor& tnsr) noexcept
+    : id_{0},
+      op_{EvalOp::Id},
       tensor_{tnsr},
       hash_{EvalExpr::hash_terminal_tensor(tnsr)} {}
 
-EvalExpr::EvalExpr(const EvalExpr& xpr1, const EvalExpr& xpr2, EvalOp op) {
+EvalExpr::EvalExpr(const EvalExpr& xpr1, const EvalExpr& xpr2,
+                   EvalOp op) noexcept
+    : id_{++global_id} {
   assert(op != EvalOp::Id);
   auto const& expr1 = xpr1.hash_value() < xpr2.hash_value() ? xpr1 : xpr2;
   auto const& expr2 = xpr1.hash_value() < xpr2.hash_value() ? xpr2 : xpr1;
@@ -58,7 +119,7 @@ EvalExpr::EvalExpr(const EvalExpr& xpr1, const EvalExpr& xpr2, EvalOp op) {
 }
 
 Symmetry EvalExpr::infer_tensor_symmetry_sum(EvalExpr const& xpr1,
-                                             EvalExpr const& xpr2) {
+                                             EvalExpr const& xpr2) noexcept {
   auto sym1 = xpr1.tensor().symmetry();
   auto sym2 = xpr2.tensor().symmetry();
   if (sym1 == sym2)
@@ -72,7 +133,7 @@ Symmetry EvalExpr::infer_tensor_symmetry_sum(EvalExpr const& xpr1,
 }
 
 Symmetry EvalExpr::infer_tensor_symmetry_prod(EvalExpr const& xpr1,
-                                              EvalExpr const& xpr2) {
+                                              EvalExpr const& xpr2) noexcept {
   using index_set_t = container::set<Index, Index::LabelCompare>;
   // HELPER LAMBDA
   // check if all the indices in cont1 are in cont2 AND vice versa
@@ -119,18 +180,18 @@ Symmetry EvalExpr::infer_tensor_symmetry_prod(EvalExpr const& xpr1,
   return imed_sym;
 }
 
-ParticleSymmetry EvalExpr::infer_particle_symmetry(Symmetry s) {
+ParticleSymmetry EvalExpr::infer_particle_symmetry(Symmetry s) noexcept {
   return (s == Symmetry::symm || s == Symmetry::antisymm)
              ? ParticleSymmetry::symm
              : ParticleSymmetry::nonsymm;
 }
 
-BraKetSymmetry EvalExpr::infer_braket_symmetry() {
+BraKetSymmetry EvalExpr::infer_braket_symmetry() noexcept {
   return get_default_context().braket_symmetry();
 }
 
-EvalExpr::braket_type EvalExpr::target_braket_prod(const Tensor& tnsr1,
-                                                   const Tensor& tnsr2) {
+EvalExpr::braket_type EvalExpr::target_braket_prod(
+    const Tensor& tnsr1, const Tensor& tnsr2) noexcept {
   using ranges::views::keys;
   using ranges::views::values;
   using ranges::views::zip;
@@ -174,7 +235,7 @@ next_contract:
 }
 
 EvalExpr::hash_t EvalExpr::hash_braket(
-    const decltype(std::declval<Tensor>().const_braket())& braket) {
+    const decltype(std::declval<Tensor>().const_braket())& braket) noexcept {
   EvalExpr::hash_t bkHash = 0;
   for (auto const& idx : braket) {
     hash::combine(bkHash, hash::value(idx.space().type().to_int32()));
@@ -183,15 +244,15 @@ EvalExpr::hash_t EvalExpr::hash_braket(
   return bkHash;
 }
 
-EvalExpr::hash_t EvalExpr::hash_terminal_tensor(const Tensor& tnsr) {
+EvalExpr::hash_t EvalExpr::hash_terminal_tensor(const Tensor& tnsr) noexcept {
   EvalExpr::hash_t tHash = 0;
   hash::combine(tHash, hash::value<std::wstring>(tnsr.label().data()));
   hash::combine(tHash, EvalExpr::hash_braket(tnsr.const_braket()));
   return tHash;
 }
 
-EvalExpr::hash_t EvalExpr::hash_tensor_pair_topology(const Tensor& tnsr1,
-                                                     const Tensor& tnsr2) {
+EvalExpr::hash_t EvalExpr::hash_tensor_pair_topology(
+    const Tensor& tnsr1, const Tensor& tnsr2) noexcept {
   EvalExpr::hash_t hashTopo = 0;
   for (auto&& [pos1, idx1] : tnsr1.const_braket() | ranges::views::enumerate)
     for (auto&& [pos2, idx2] : tnsr2.const_braket() | ranges::views::enumerate)
@@ -201,7 +262,8 @@ EvalExpr::hash_t EvalExpr::hash_tensor_pair_topology(const Tensor& tnsr1,
 }
 
 EvalExpr::hash_t EvalExpr::hash_imed(const EvalExpr& expr1,
-                                     const EvalExpr& expr2, EvalOp op) {
+                                     const EvalExpr& expr2,
+                                     EvalOp op) noexcept {
   EvalExpr::hash_t imedHash = 0;
   hash::combine(imedHash, expr1.hash_value());
   hash::combine(imedHash, expr2.hash_value());

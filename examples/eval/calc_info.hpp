@@ -11,9 +11,9 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval_node.hpp>
 #include <SeQuant/core/optimize.hpp>
-#include <SeQuant/domain/eval/cache_manager.hpp>
 #include <SeQuant/domain/eval/eval.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
+
 #include <range/v3/view.hpp>
 
 #include <cstddef>
@@ -26,6 +26,12 @@ struct NoCacheAmplitudeTensor {
   [[nodiscard]] bool operator()(N&& node) const noexcept {
     return node->tensor().label() != L"t";
   }
+};
+
+struct IndexToSize {
+  static const size_t nocc;
+  static const size_t nvirt;
+  size_t operator()(Index const& idx) const;
 };
 
 struct CalcInfo {
@@ -46,32 +52,32 @@ struct CalcInfo {
 
   [[nodiscard]] container::vector<ExprPtr> exprs() const;
 
-  [[nodiscard]] container::vector<EvalNode> nodes(
-      container::vector<ExprPtr> const& exprs) const;
+  template <typename ExprT>
+  container::vector<EvalNode<ExprT>> nodes(
+      const container::vector<sequant::ExprPtr>& exprs) const {
+    using namespace ranges::views;
+    assert(exprs.size() == eqn_opts.excit);
+    return zip(exprs, iota(size_t{1}, eqn_opts.excit + 1)) |
+           transform([this](auto&& pair) {
+             return node_<ExprT>(pair.first, pair.second);
+           }) |
+           ranges::to<container::vector<EvalNode<ExprT>>>;
+  }
 
-  template <typename Data_t>
+  template <typename Data_t, typename ExprT>
   CacheManager<Data_t> cache_manager_scf(
-      container::vector<EvalNode> const& nodes) const {
-    auto cl = optm_opts.cache_leaves;
-    auto ci = optm_opts.reuse_imeds;
-
-    if (!(cl || ci)) return CacheManager<Data_t>::empty();
-
-    return cache_manager<Data_t>(
-        nodes,
-        [cl](auto&& n) {
-          // if cache leaves requested cache all leaves except the amplitude
-          // tensors
-          return cl && NoCacheAmplitudeTensor{}(n);
-        },
-        [ci](auto&&) {
-          // true if reuse of intermediates requested
-          return ci;
-        });
+      container::vector<EvalNode<ExprT>> const& nodes) const {
+    return optm_opts.reuse_imeds ? cache_manager<Data_t const>(nodes)
+                                 : CacheManager<Data_t const>::empty();
   }
 
  private:
-  [[nodiscard]] EvalNode node_(ExprPtr const& expr, size_t rank) const;
+  template <typename ExprT>
+  [[nodiscard]] EvalNode<ExprT> node_(ExprPtr const& expr, size_t rank) const {
+    auto trimmed = opt::tail_factor(expr);
+    return to_eval_node<ExprT>(
+        optm_opts.single_term ? optimize(trimmed, IndexToSize{}) : trimmed);
+  }
 };
 
 CalcInfo make_calc_info(std::string_view config_file,
