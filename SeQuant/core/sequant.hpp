@@ -19,6 +19,9 @@ class SeQuant {
     constexpr static auto braket_symmetry = BraKetSymmetry::conjugate;
     constexpr static auto spbasis = sequant::SPBasis::spinorbital;
     constexpr static auto first_dummy_index_ordinal = 100;
+
+    constexpr static auto csv_formalism = CSVFormalism::NonCSV;
+    constexpr static auto sum_over_uocc_ = SumOverUocc::Truncated;
   };
 
   /// @param vac a Vacuum object
@@ -53,6 +56,22 @@ class SeQuant {
   /// Index::next_tmp_index when this context is active
   std::size_t first_dummy_index_ordinal() const;
 
+  ///
+  /// \return the two-body interactions treatment by operator: ie whether
+  ///         they are antisymmetric or not. It is antisymmetric for
+  ///         non-physical vacua
+  ///
+  TwoBodyInteraction two_body_interaction() const;
+
+  /// \return whether the formalism is to sum over complete unoccupieds or
+  ///         their truncation.
+  SumOverUocc sum_over_uocc() const;
+
+  /// \return whether to use cluster-specific-virtuals formalism or not.
+  CSVFormalism csv_formalism() const;
+
+
+
   /// Sets the Vacuum for this context, convenient for chaining
   /// \param vacuum Vacuum
   /// \return ref to `*this`, for chaining
@@ -74,6 +93,10 @@ class SeQuant {
   /// \return ref to `*this`, for chaining
   SeQuant& set_first_dummy_index_ordinal(std::size_t first_dummy_index_ordinal);
 
+  SeQuant& set(SumOverUocc sou);
+
+  SeQuant& set(CSVFormalism csvf);
+
   /// @return the IndexRegistry object
   std::shared_ptr<IndexRegistry> index_registry() const;
 
@@ -83,6 +106,9 @@ class SeQuant {
   BraKetSymmetry braket_symmetry_ = Defaults::braket_symmetry;
   SPBasis spbasis_ = Defaults::spbasis;
   std::size_t first_dummy_index_ordinal_ = Defaults::first_dummy_index_ordinal;
+  SumOverUocc sum_over_uocc_ = Defaults::sum_over_uocc_;
+  CSVFormalism csv_formalism_ = Defaults::csv_formalism;
+  TwoBodyInteraction two_body_interaction_ = TwoBodyInteraction::Antisymm;
 };
 
 /// SeQuant object equality comparison

@@ -68,7 +68,7 @@ int main(int argc, char* argv[]) {
   };
 
   // Spin-orbital coupled cluster
-  auto cc_r = sequant::mbpt::sr::so::cceqvec{NMAX, true}();
+  auto cc_r = sequant::mbpt::sr::so::cceqvec{NMAX}();
   for (auto i = 1; i < cc_r.size(); ++i) {
     std::cout << "Spin-orbital CC R" << i << " size: " << cc_r[i]->size()
               << "\n";
@@ -99,9 +99,10 @@ int main(int argc, char* argv[]) {
     simplify(cc_st_r[i]);
 
     // Remove S operator
-    for (auto& term : *cc_st_r[i]) {
-      if (term->is<Product>()) term = remove_tensor(term->as<Product>(), L"S");
-    }
+    //    for (auto& term : *cc_st_r[i]) {
+    //      if (term->is<Product>()) term = remove_tensor(term->as<Product>(),
+    //      L"S");
+    //    }
 
     auto tstop = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> time_elapsed = tstop - tstart;

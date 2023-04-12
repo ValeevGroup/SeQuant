@@ -13,8 +13,8 @@ class cceqvec {
   bool antisymm;
 
  public:
-  cceqvec(size_t n, bool antisymm = true,
-          size_t p = std::numeric_limits<size_t>::max(), size_t pmin = 1);
+  cceqvec(size_t n, size_t p = std::numeric_limits<size_t>::max(),
+          size_t pmin = 1);
   std::vector<sequant::ExprPtr> operator()(bool screen = true,
                                            bool use_topology = true,
                                            bool use_connectivity = true,

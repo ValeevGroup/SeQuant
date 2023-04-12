@@ -72,12 +72,17 @@ inline std::wstring to_wolfram(Action a) {
   return L"indexType["s + (a == Action::create ? L"cre" : L"ann") + L"]";
 }
 
-enum class Vacuum {
-  Physical,
-  SingleProduct,
-  MultiProduct,
-  Invalid
-};
+enum class Vacuum { Physical, SingleProduct, MultiProduct, Invalid };
+
+/// Whether to employ antisymmetric operators while considering two-body
+/// interactions.
+enum class TwoBodyInteraction { Antisymm, Nonsymm };
+
+/// Whether to sum over complete unoccupied orbitals.
+enum class SumOverUocc { Complete, Truncated };
+
+/// Whether to use cluster-specific virtual formalism.
+enum class CSVFormalism { CSV, NonCSV };
 
 inline std::wstring to_string(Vacuum V) {
   switch (V) {
@@ -96,4 +101,4 @@ inline std::wstring to_string(Vacuum V) {
 
 }  // namespace sequant
 
-#endif //SEQUANT_ATTR_HPP
+#endif  // SEQUANT_ATTR_HPP

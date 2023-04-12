@@ -21,24 +21,29 @@ inline constexpr size_t fac(std::size_t n) {
     return n * fac(n - 1);
 }
 
-make_op::make_op(std::size_t nbra, std::size_t nket, OpType op, bool csv)
-    : nbra_(nbra), nket_(nket), op_(op), csv_(csv) {}
+make_op::make_op(std::size_t nbra, std::size_t nket, OpType op)
+    : nbra_(nbra), nket_(nket), op_(op) {}
 
-ExprPtr make_op::operator()(bool complete_unoccupieds, bool antisymm) const {
-  const auto unocc = complete_unoccupieds ? IndexSpace::complete_unoccupied
-                                          : IndexSpace::active_unoccupied;
+ExprPtr make_op::operator()() const {
+  const auto unocc =
+      get_default_context().sum_over_uocc() == SumOverUocc::Complete
+          ? IndexSpace::complete_unoccupied
+          : IndexSpace::active_unoccupied;
   const auto occ = IndexSpace::active_occupied;
-  return (*this)(unocc, occ, antisymm);
+  return (*this)(unocc, occ);
 }
 
-ExprPtr make_op::operator()(IndexSpace::Type unocc, IndexSpace::Type occ,
-                            bool antisymm) const {
+ExprPtr make_op::operator()(IndexSpace::Type unocc,
+                            IndexSpace::Type occ) const {
+  bool antisymm = get_default_context().two_body_interaction() ==
+                  TwoBodyInteraction::Antisymm;
+  bool csv = get_default_context().csv_formalism() == CSVFormalism::CSV;
+
   // not sure what it means to use nonsymmetric operator if nbra != nket
   if (!antisymm) assert(nbra_ == nket_);
 
   const auto nbra = nbra_;
   const auto nket = nket_;
-  const auto csv = csv_;
   OpType op = op_;
   auto make_idx_vector = [](size_t n, IndexSpace::Type spacetype) {
     auto space = IndexSpace::instance(spacetype);
@@ -93,37 +98,37 @@ make_op Op(OpType _Op, std::size_t Nbra, std::size_t Nket) {
   const auto Nket_ =
       Nket == std::numeric_limits<std::size_t>::max() ? Nbra : Nket;
   assert(Nbra > 0 || Nket_ > 0);
-  return make_op{Nbra, Nket_, _Op, false};
+  return make_op{Nbra, Nket_, _Op};
 }
 
 #include "sr_op.impl.cpp"
 
 ExprPtr H1() {
   return get_default_context().vacuum() == Vacuum::Physical
-             ? Op(OpType::h, 1)(false, false)
-             : Op(OpType::f, 1)(false, false);
+             ? Op(OpType::h, 1)()
+             : Op(OpType::f, 1)();
 }
 
-ExprPtr H2(bool antisymm) { return Op(OpType::g, 2)(false, antisymm); }
+ExprPtr H2() { return Op(OpType::g, 2)(); }
 
 ExprPtr H0mp() {
   assert(get_default_context().vacuum() == Vacuum::SingleProduct);
   return H1();
 }
 
-ExprPtr H1mp(bool antisymm) {
+ExprPtr H1mp() {
   assert(get_default_context().vacuum() == Vacuum::SingleProduct);
-  return H2(antisymm);
+  return H2();
 }
 
-ExprPtr F() { return Op(OpType::f, 1)(false, false); }
+ExprPtr F() { return Op(OpType::f, 1)(); }
 
-ExprPtr W(bool antisymm) {
+ExprPtr W() {
   assert(get_default_context().vacuum() == Vacuum::SingleProduct);
-  return H1mp(antisymm);
+  return H1mp();
 }
 
-ExprPtr H(bool antisymm) { return H1() + H2(antisymm); }
+ExprPtr H() { return H1() + H2(); }
 
 ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> op_connections,
                bool use_top) {
@@ -139,27 +144,6 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> op_connections,
   }
   return result;
 }
-
-namespace csv {
-
-make_op Op(OpType _Op, std::size_t Nbra, std::size_t Nket) {
-  assert(Nbra > 0 && Nbra < std::numeric_limits<std::size_t>::max());
-  const auto Nket_ =
-      Nket == std::numeric_limits<std::size_t>::max() ? Nbra : Nket;
-  assert(Nket_ > 0);
-  return make_op{Nbra, Nket_, _Op, true};
-}
-
-#include "sr_op.impl.cpp"
-
-using sequant::mbpt::sr::so::H;
-using sequant::mbpt::sr::so::H0mp;
-using sequant::mbpt::sr::so::H1;
-using sequant::mbpt::sr::so::H1mp;
-using sequant::mbpt::sr::so::H2;
-using sequant::mbpt::sr::so::vac_av;
-
-}  // namespace csv
 
 }  // namespace so
 }  // namespace sr

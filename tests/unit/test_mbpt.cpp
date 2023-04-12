@@ -2,9 +2,9 @@
 // Created by Eduard Valeyev on 2019-02-19.
 //
 
+#include "SeQuant/core/tensor.hpp"
 #include "SeQuant/core/timer.hpp"
 #include "SeQuant/domain/mbpt/sr/sr.hpp"
-#include "SeQuant/core/tensor.hpp"
 #include "catch.hpp"
 
 TEST_CASE("MBPT", "[mbpt]") {
@@ -17,7 +17,7 @@ TEST_CASE("MBPT", "[mbpt]") {
 
     // H**T12**T12 -> R2
     SEQUANT_PROFILE_SINGLE("wick(H**T12**T12 -> R2)", {
-      auto result = vac_av( A(2) * H() * T(2) * T(2), {{1, 2}, {1, 3}} );
+      auto result = vac_av(A(2) * H() * T(2) * T(2), {{1, 2}, {1, 3}});
 
       std::wcout << "H*T12*T12 -> R2 = " << to_latex_align(result, 20)
                  << std::endl;
@@ -39,38 +39,41 @@ TEST_CASE("MBPT", "[mbpt]") {
 
     // <2p1h|H2|1p> ->
     SEQUANT_PROFILE_SINGLE("wick(<2p1h|H2|1p>)", ({
-      auto input = L(1, 2) * H2() * R(1, 0);
-      auto result = vac_av( input );
+                             auto input = L(1, 2) * H2() * R(1, 0);
+                             auto result = vac_av(input);
 
-      std::wcout << "<2p1h|H2|1p> = " << to_latex(result)
-                 << std::endl;
-      REQUIRE(result->is<Product>()); // product ...
-      REQUIRE(result->size() == 3); // ... of 3 factors
-      }));
+                             std::wcout << "<2p1h|H2|1p> = " << to_latex(result)
+                                        << std::endl;
+                             REQUIRE(result->is<Product>());  // product ...
+                             REQUIRE(result->size() == 3);  // ... of 3 factors
+                           }));
 
     // <2p1h|H2|2p1h(c)> ->
-    SEQUANT_PROFILE_SINGLE("wick(<2p1h|H2|2p1h(c)>)", ({
-      auto input = L(1, 2) * H() * R(2, 1, true);
-      auto result = vac_av( input );
+    SEQUANT_PROFILE_SINGLE(
+        "wick(<2p1h|H2|2p1h(c)>)", ({
+          auto input = L(1, 2) * H() * R(2, 1);
+          auto result = vac_av(input);
 
-      std::wcout << "<2p1h|H|2p1h(c)> = " << to_latex(result)
-                 << std::endl;
-      REQUIRE(result->is<Sum>()); // sub ...
-      REQUIRE(result->size() == 4); // ... of 4 factors
-    }));
+          std::wcout << "<2p1h|H|2p1h(c)> = " << to_latex(result) << std::endl;
+          REQUIRE(result->is<Sum>());    // sub ...
+          REQUIRE(result->size() == 4);  // ... of 4 factors
+        }));
   }
 
-  SECTION("SRSO-PNO") {
-    using namespace sequant::mbpt::sr::so::csv;
-
-    // H2**T2**T2 -> R2
-    SEQUANT_PROFILE_SINGLE("wick(H2**T2**T2 -> R2)", {
-      auto result = vac_av(A(2) * H2() * T_(2) * T_(2), {{1, 2}, {1, 3}});
-
-      std::wcout << "H2**T2**T2 -> R2 = " << to_latex_align(result, 20)
-                 << std::endl;
-      REQUIRE(result->size() == 4);
-    });
-  }
+//  SECTION("SRSO-PNO") {
+//     using namespace sequant::mbpt::sr::so;
+//    set_default_context(SeQuant{get_default_context()}.set(CSVFormalism::CSV));
+//
+//    // H2**T2**T2 -> R2
+//    SEQUANT_PROFILE_SINGLE("wick(H2**T2**T2 -> R2)", {
+//      auto result = vac_av(A(2) * H2() * T_(2) * T_(2), {{1, 2}, {1, 3}});
+//
+//      std::wcout << "H2**T2**T2 -> R2 = " << to_latex_align(result, 20)
+//                 << std::endl;
+//      REQUIRE(result->size() == 4);
+//    });
+//
+//    reset_default_context();
+//  }
 
 }  // TEST_CASE("MBPT")

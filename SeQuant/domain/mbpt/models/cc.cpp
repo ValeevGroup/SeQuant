@@ -38,7 +38,7 @@ class screened_vac_av {
   ExprPtr operator()(const ExprPtr& expr,
                      std::initializer_list<std::pair<int, int>> op_connections,
                      bool screen = true, bool use_topology = true,
-                     bool canonical_only = true, bool antisymm = true) {
+                     bool canonical_only = true) {
     // TODO: Implement antisymm here
     if (!screen)
       return sequant::mbpt::sr::so::vac_av(expr, op_connections, use_topology);
@@ -94,7 +94,7 @@ class screened_vac_av {
         if (canonical_only) {
           if (current_rank < prev_rank)  // if T ranks are not increasing, omit
             canonical = false;
-          else {  // else keep track of degeneracy
+          else {                         // else keep track of degeneracy
             assert(current_rank != 0);
             if (current_rank == prev_rank) {
               ++current_partition_size;
@@ -154,29 +154,23 @@ class ccresidual {
           return std::initializer_list<std::pair<int, int>>{};
       };
       auto result =
-          screened_vac_av{0}(A(P) * H(antisymm), connect({}), screen,
-                             use_topology, canonical_only, antisymm) +
-          screened_vac_av{1}(A(P) * H(antisymm) * T(N, N, false, antisymm),
-                             connect({{1, 2}}), screen, use_topology,
-                             canonical_only, antisymm) +
+          screened_vac_av{0}(A(P) * H(), connect({}), screen, use_topology,
+                             canonical_only) +
+          screened_vac_av{1}(A(P) * H() * T(N, N), connect({{1, 2}}), screen,
+                             use_topology, canonical_only) +
           ex<Constant>(1. / 2) *
-              screened_vac_av{2}(A(P) * H(antisymm) * T(N, N, false, antisymm) *
-                                     T(N, N, false, antisymm),
+              screened_vac_av{2}(A(P) * H() * T(N, N) * T(N, N),
                                  connect({{1, 2}, {1, 3}}), screen,
                                  use_topology, canonical_only) +
           ex<Constant>(1. / 6) *
-              screened_vac_av{3}(A(P) * H(antisymm) * T(N, N, false, antisymm) *
-                                     T(N, N, false, antisymm) *
-                                     T(N, N, false, antisymm),
+              screened_vac_av{3}(A(P) * H() * T(N, N) * T(N, N) * T(N, N),
                                  connect({{1, 2}, {1, 3}, {1, 4}}), screen,
                                  use_topology, canonical_only) +
           ex<Constant>(1. / 24) *
-              screened_vac_av{4}(A(P) * H(antisymm) * T(N, N, false, antisymm) *
-                                     T(N, N, false, antisymm) *
-                                     T(N, N, false, antisymm) *
-                                     T(N, N, false, antisymm),
-                                 connect({{1, 2}, {1, 3}, {1, 4}, {1, 5}}),
-                                 screen, use_topology, canonical_only);
+              screened_vac_av{4}(
+                  A(P) * H() * T(N, N) * T(N, N) * T(N, N) * T(N, N),
+                  connect({{1, 2}, {1, 3}, {1, 4}, {1, 5}}), screen,
+                  use_topology, canonical_only);
       simplify(result);
 
       return result;
@@ -206,7 +200,7 @@ class ccresidual_vec {
 
 }  // namespace
 
-cceqvec::cceqvec(size_t n, bool antisymm, size_t p, size_t pmin)
+cceqvec::cceqvec(size_t n, size_t p, size_t pmin)
     : N(n),
       P(p == std::numeric_limits<size_t>::max() ? n : p),
       PMIN(pmin),

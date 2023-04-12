@@ -30,17 +30,15 @@ class compute_cceqvec {
   compute_cceqvec(size_t p, size_t pmin, size_t n) : P(p), PMIN(pmin), N(n) {}
 
   void operator()(bool print, bool screen, bool use_topology,
-                  bool use_connectivity, bool canonical_only,
-                  bool use_antisymm) {
+                  bool use_connectivity, bool canonical_only) {
     tpool.start(N);
-    auto eqvec = cceqvec{N, use_antisymm, P, 1}(
+    auto eqvec = cceqvec{N, P, 1}(
         screen, use_topology, use_connectivity, canonical_only);
     tpool.stop(N);
     std::wcout << std::boolalpha << "expS" << N << "[screen=" << screen
                << ",use_topology=" << use_topology
                << ",use_connectivity=" << use_connectivity
-               << ",canonical_only=" << canonical_only
-               << ",use_antisymm=" << use_antisymm << "] computed in "
+               << ",canonical_only=" << canonical_only << "] computed in "
                << tpool.read(N) << " seconds" << std::endl;
     for (size_t R = PMIN; R <= P; ++R) {
       std::wcout << "R" << R << "(expS" << N << ") has " << eqvec[R]->size()
@@ -50,7 +48,8 @@ class compute_cceqvec {
       // validate known sizes of some CC residuals
       // N.B. # of equations depends on whether we use symmetric or
       // antisymmetric amplitudes
-      if (use_antisymm) {
+      if (get_default_context().two_body_interaction() ==
+          TwoBodyInteraction::Antisymm) {
         if (R == 1 && N == 2) runtime_assert(eqvec[R]->size() == 14);
         if (R == 2 && N == 2) runtime_assert(eqvec[R]->size() == 31);
         if (R == 1 && N == 3) runtime_assert(eqvec[R]->size() == 15);
@@ -79,10 +78,10 @@ class compute_all {
 
   void operator()(bool print = true, bool screen = true,
                   bool use_topology = true, bool use_connectivity = true,
-                  bool canonical_only = true, bool use_antisymm = true) {
+                  bool canonical_only = true) {
     for (size_t N = 2; N <= NMAX; ++N)
       compute_cceqvec{N, 1, N}(print, screen, use_topology, use_connectivity,
-                               canonical_only, use_antisymm);
+                               canonical_only);
   }
 };  // class compute_all
 

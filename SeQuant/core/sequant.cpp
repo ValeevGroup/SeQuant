@@ -63,6 +63,14 @@ Vacuum SeQuant::vacuum() const { return vacuum_; }
 IndexSpaceMetric SeQuant::metric() const { return metric_; }
 BraKetSymmetry SeQuant::braket_symmetry() const { return braket_symmetry_; }
 SPBasis SeQuant::spbasis() const { return spbasis_; }
+TwoBodyInteraction SeQuant::two_body_interaction() const {
+  return two_body_interaction_;
+}
+
+SumOverUocc SeQuant::sum_over_uocc() const { return sum_over_uocc_; }
+
+CSVFormalism SeQuant::csv_formalism() const { return csv_formalism_; }
+
 std::size_t SeQuant::first_dummy_index_ordinal() const {
   return first_dummy_index_ordinal_;
 }
@@ -82,6 +90,17 @@ SeQuant& SeQuant::set(SPBasis spbasis) {
   spbasis_ = spbasis;
   return *this;
 }
+
+SeQuant& SeQuant::set(SumOverUocc sou) {
+  sum_over_uocc_ = sou;
+  return *this;
+}
+
+SeQuant& SeQuant::set(CSVFormalism csvf) {
+  csv_formalism_ = csvf;
+  return *this;
+}
+
 SeQuant& SeQuant::set_first_dummy_index_ordinal(
     std::size_t first_dummy_index_ordinal) {
   first_dummy_index_ordinal_ = first_dummy_index_ordinal;

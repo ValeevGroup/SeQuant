@@ -21,7 +21,7 @@ size_t IndexToSize::operator()(Index const& idx) const {
 }
 
 container::vector<ExprPtr> CalcInfo::exprs() const {
-  auto exprs = mbpt::sr::so::cceqvec{eqn_opts.excit, /* antisymm = */ true,
+  auto exprs = mbpt::sr::so::cceqvec{eqn_opts.excit,
                                      eqn_opts.excit}();
   return exprs | ranges::views::tail |
          ranges::views::transform([this](ExprPtr const& xpr) {
