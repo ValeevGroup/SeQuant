@@ -60,20 +60,19 @@ TEST_CASE("MBPT", "[mbpt]") {
         }));
   }
 
-//  SECTION("SRSO-PNO") {
-//     using namespace sequant::mbpt::sr::so;
-//    set_default_context(SeQuant{get_default_context()}.set(CSVFormalism::CSV));
-//
-//    // H2**T2**T2 -> R2
-//    SEQUANT_PROFILE_SINGLE("wick(H2**T2**T2 -> R2)", {
-//      auto result = vac_av(A(2) * H2() * T_(2) * T_(2), {{1, 2}, {1, 3}});
-//
-//      std::wcout << "H2**T2**T2 -> R2 = " << to_latex_align(result, 20)
-//                 << std::endl;
-//      REQUIRE(result->size() == 4);
-//    });
-//
-//    reset_default_context();
-//  }
+  SECTION("SRSO-PNO") {
+    using namespace sequant::mbpt::sr::so;
+    auto resetter = set_scoped_default_context(
+        SeQuant{get_default_context()}.set(CSVFormalism::CSV));
+
+    // H2**T2**T2 -> R2
+    SEQUANT_PROFILE_SINGLE("wick(H2**T2**T2 -> R2)", {
+      auto result = vac_av(A(2) * H2() * T_(2) * T_(2), {{1, 2}, {1, 3}});
+
+      std::wcout << "H2**T2**T2 -> R2 = " << to_latex_align(result, 20)
+                 << std::endl;
+      REQUIRE(result->size() == 4);
+    });
+  }
 
 }  // TEST_CASE("MBPT")
