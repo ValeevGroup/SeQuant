@@ -1,4 +1,5 @@
 #include <SeQuant/domain/mbpt/models/cc.hpp>
+#include <SeQuant/domain/mbpt/formalism.hpp>
 
 #include <clocale>
 #include <iostream>
@@ -144,7 +145,7 @@ class ccresidual {
     // currently topological equivalence of indices within a normal operator is
     // not detected, assumed based on use_topology ... so turn off use of
     // topology if antisymm=false
-    if (get_default_context().two_body_interaction() !=
+    if (get_default_formalism().two_body_interaction() !=
         TwoBodyInteraction::Antisymm)
       use_topology = false;
 

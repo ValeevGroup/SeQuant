@@ -2,6 +2,7 @@
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/timer.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/formalism.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 
 #include <clocale>
@@ -48,8 +49,8 @@ class compute_cceqvec {
       // validate known sizes of some CC residuals
       // N.B. # of equations depends on whether we use symmetric or
       // antisymmetric amplitudes
-      if (get_default_context().two_body_interaction() ==
-          TwoBodyInteraction::Antisymm) {
+      if (mbpt::get_default_formalism().two_body_interaction() ==
+          mbpt::TwoBodyInteraction::Antisymm) {
         if (R == 1 && N == 2) runtime_assert(eqvec[R]->size() == 14);
         if (R == 2 && N == 2) runtime_assert(eqvec[R]->size() == 31);
         if (R == 1 && N == 3) runtime_assert(eqvec[R]->size() == 15);
@@ -102,6 +103,7 @@ int main(int argc, char* argv[]) {
       SeQuant(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
               BraKetSymmetry::conjugate, SPBasis::spinorbital));
   mbpt::set_default_convention();
+  mbpt::set_default_formalism();
 
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());

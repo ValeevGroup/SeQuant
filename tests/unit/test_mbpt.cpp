@@ -4,6 +4,7 @@
 
 #include "SeQuant/core/tensor.hpp"
 #include "SeQuant/core/timer.hpp"
+#include "SeQuant/domain/mbpt/formalism.hpp"
 #include "SeQuant/domain/mbpt/sr/sr.hpp"
 #include "catch.hpp"
 
@@ -62,8 +63,9 @@ TEST_CASE("MBPT", "[mbpt]") {
 
   SECTION("SRSO-PNO") {
     using namespace sequant::mbpt::sr::so;
-    auto resetter = set_scoped_default_context(
-        SeQuant{get_default_context()}.set(CSVFormalism::CSV));
+    using namespace sequant::mbpt;
+    auto resetter = set_scoped_default_formalism(
+        Formalism::make_default().set(CSVFormalism::CSV));
 
     // H2**T2**T2 -> R2
     SEQUANT_PROFILE_SINGLE("wick(H2**T2**T2 -> R2)", {

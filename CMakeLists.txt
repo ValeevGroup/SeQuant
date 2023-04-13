@@ -250,6 +250,8 @@ set(SeQuant_src
         SeQuant/domain/eval/cache_manager.hpp
         SeQuant/domain/mbpt/convention.cpp
         SeQuant/domain/mbpt/convention.hpp
+        SeQuant/domain/mbpt/formalism.hpp
+        SeQuant/domain/mbpt/formalism.cpp
         SeQuant/domain/mbpt/op.cpp
         SeQuant/domain/mbpt/op.hpp
         SeQuant/domain/mbpt/spin.hpp

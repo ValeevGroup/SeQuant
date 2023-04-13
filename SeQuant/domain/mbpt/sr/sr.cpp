@@ -8,6 +8,7 @@
 #include "SeQuant/core/op.hpp"
 #include "SeQuant/core/tensor.hpp"
 #include "SeQuant/core/wick.hpp"
+#include "SeQuant/domain/mbpt/formalism.hpp"
 
 namespace sequant {
 namespace mbpt {
@@ -26,7 +27,7 @@ make_op::make_op(std::size_t nbra, std::size_t nket, OpType op)
 
 ExprPtr make_op::operator()() const {
   const auto unocc =
-      get_default_context().sum_over_uocc() == SumOverUocc::Complete
+      get_default_formalism().sum_over_uocc() == SumOverUocc::Complete
           ? IndexSpace::complete_unoccupied
           : IndexSpace::active_unoccupied;
   const auto occ = IndexSpace::active_occupied;
@@ -35,9 +36,9 @@ ExprPtr make_op::operator()() const {
 
 ExprPtr make_op::operator()(IndexSpace::Type unocc,
                             IndexSpace::Type occ) const {
-  bool antisymm = get_default_context().two_body_interaction() ==
+  bool antisymm = get_default_formalism().two_body_interaction() ==
                   TwoBodyInteraction::Antisymm;
-  bool csv = get_default_context().csv_formalism() == CSVFormalism::CSV;
+  bool csv = get_default_formalism().csv_formalism() == CSVFormalism::CSV;
 
   // not sure what it means to use nonsymmetric operator if nbra != nket
   if (!antisymm) assert(nbra_ == nket_);
