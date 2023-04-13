@@ -140,11 +140,13 @@ class ccresidual {
   ccresidual(size_t p, size_t n) : P(p), N(n) {}
 
   ExprPtr operator()(bool screen, bool use_topology, bool use_connectivity,
-                     bool canonical_only, bool antisymm) {
+                     bool canonical_only) {
     // currently topological equivalence of indices within a normal operator is
     // not detected, assumed based on use_topology ... so turn off use of
     // topology if antisymm=false
-    if (!antisymm) use_topology = false;
+    if (get_default_context().two_body_interaction() !=
+        TwoBodyInteraction::Antisymm)
+      use_topology = false;
 
     auto ahbar = [=](const bool screen) {
       auto connect = [=](std::initializer_list<std::pair<int, int>> connlist) {
@@ -187,14 +189,13 @@ class ccresidual_vec {
   ccresidual_vec(size_t p, size_t pmin, size_t n) : P(p), PMIN(pmin), N(n) {}
 
   void operator()(std::vector<ExprPtr>& result, bool screen, bool use_topology,
-                  bool use_connectivity, bool canonical_only, bool antisymm) {
+                  bool use_connectivity, bool canonical_only) {
     result[P] = ccresidual{P, N}(screen, use_topology, use_connectivity,
-                                 canonical_only, antisymm);
+                                 canonical_only);
     rapid_simplify(result[P]);
     if (P > PMIN)
       ccresidual_vec{P - 1, PMIN, N}(result, screen, use_topology,
-                                     use_connectivity, canonical_only,
-                                     antisymm);
+                                     use_connectivity, canonical_only);
   }
 };  // class ccresidual_vec
 
@@ -203,15 +204,14 @@ class ccresidual_vec {
 cceqvec::cceqvec(size_t n, size_t p, size_t pmin)
     : N(n),
       P(p == std::numeric_limits<size_t>::max() ? n : p),
-      PMIN(pmin),
-      antisymm(antisymm) {}
+      PMIN(pmin) {}
 
 std::vector<ExprPtr> cceqvec::operator()(bool screen, bool use_topology,
                                          bool use_connectivity,
                                          bool canonical_only) {
   std::vector<ExprPtr> result(P + 1);
   ccresidual_vec{P, PMIN, N}(result, screen, use_topology, use_connectivity,
-                             canonical_only, antisymm);
+                             canonical_only);
   return result;
 }
 

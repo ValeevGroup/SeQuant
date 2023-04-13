@@ -10,7 +10,6 @@ namespace sequant::mbpt::sr::so {
 
 class cceqvec {
   size_t N, P, PMIN;
-  bool antisymm;
 
  public:
   cceqvec(size_t n, size_t p = std::numeric_limits<size_t>::max(),
