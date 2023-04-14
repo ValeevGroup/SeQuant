@@ -384,6 +384,11 @@ if (BUILD_TESTING)
 
     ####### Integration tests aka "examples" ########
 
+    # if target examples-sequant does not exist yet, create it
+    if (NOT TARGET examples-sequant)
+        add_custom_target_subproject(sequant examples)
+    endif()
+
     # Single-Reference Coupled-Cluster equation generation
     # (spin-orbital)
     set(example0 srcc)
@@ -458,6 +463,7 @@ if (BUILD_TESTING)
     set(lastexample 8)
     foreach (i RANGE ${lastexample})
         if (TARGET ${example${i}})
+            add_dependencies(examples-sequant ${example${i}})
             add_test(sequant/example/${example${i}}/build "${CMAKE_COMMAND}"
                     --build ${CMAKE_BINARY_DIR} --target ${example${i}})
             add_test(NAME sequant/example/${example${i}}/run
