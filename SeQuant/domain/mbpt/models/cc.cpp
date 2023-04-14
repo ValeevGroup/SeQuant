@@ -206,6 +206,54 @@ class cceqs_t {
   }
 };  // class cceqs_t
 
+class cceqs_λ {
+  size_t P, N;
+
+ public:
+  cceqs_λ(size_t p, size_t n) : P(p), N(n) {}
+
+  /// Evaluate the coupled-cluster lambda amplitude equations,
+  /// <0|(1+Λ)exp(T(N))_c|P>
+  /// \return the result more dox to be added!
+
+  ExprPtr operator()(bool screen, bool use_topology, bool use_connectivity,
+                     bool canonical_only) {
+    if (get_default_formalism().two_body_interaction() !=
+        TwoBodyInteraction::Antisymm)
+      use_topology = false;
+
+    auto ahbar = [=](const bool screen) {
+      auto connect = [=](std::initializer_list<std::pair<int, int>> connlist) {
+        if (use_connectivity)
+          return connlist;
+        else
+          return std::initializer_list<std::pair<int, int>>{};
+      };
+      const auto One = ex<Constant>(1);
+      auto result =
+          screened_vac_av{0}((One + Lambda(N, N)) * H() * adjoint(A(P)),
+                             connect({}), screen, use_topology,
+                             canonical_only) +
+          screened_vac_av{1}(
+              (One + Lambda(N, N)) * H() * T(N, N) * adjoint(A(P)),
+              connect({{1, 2}}), screen, use_topology, canonical_only) +
+          ex<Constant>(1. / 2) *
+              screened_vac_av{2}((One + Lambda(N, N)) * H() * T(N, N) *
+                                     T(N, N) * adjoint(A(P)),
+                                 connect({{1, 2}, {1, 3}}), screen,
+                                 use_topology, canonical_only) +
+          ex<Constant>(1. / 6) *
+              screened_vac_av{3}((One + Lambda(N, N)) * H() * T(N, N) *
+                                     T(N, N) * T(N, N) * adjoint(A(P)),
+                                 connect({{1, 2}, {1, 3}, {1, 4}}), screen,
+                                 use_topology, canonical_only);
+      simplify(result);
+      return result;
+    };
+    return ahbar(screen);
+  }
+};  // class cceqs_λ
+
 }  // namespace
 
 cceqs::cceqs(size_t n, size_t p, size_t pmin)
