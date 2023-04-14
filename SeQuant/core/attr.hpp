@@ -72,12 +72,7 @@ inline std::wstring to_wolfram(Action a) {
   return L"indexType["s + (a == Action::create ? L"cre" : L"ann") + L"]";
 }
 
-enum class Vacuum {
-  Physical,
-  SingleProduct,
-  MultiProduct,
-  Invalid
-};
+enum class Vacuum { Physical, SingleProduct, MultiProduct, Invalid };
 
 inline std::wstring to_string(Vacuum V) {
   switch (V) {
@@ -96,4 +91,4 @@ inline std::wstring to_string(Vacuum V) {
 
 }  // namespace sequant
 
-#endif //SEQUANT_ATTR_HPP
+#endif  // SEQUANT_ATTR_HPP

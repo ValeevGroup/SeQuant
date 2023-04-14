@@ -7,6 +7,7 @@
 #include <btas/btas.h>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/formalism.hpp>
 
 #include "examples/eval/btas/scf_btas.hpp"
 #include "examples/eval/calc_info.hpp"
@@ -53,6 +54,7 @@ int main(int argc, char* argv[]) {
       SeQuant(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
               BraKetSymmetry::conjugate, SPBasis::spinorbital));
   mbpt::set_default_convention();
+  mbpt::set_default_formalism();
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
 

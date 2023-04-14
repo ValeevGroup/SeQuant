@@ -82,6 +82,7 @@ SeQuant& SeQuant::set(SPBasis spbasis) {
   spbasis_ = spbasis;
   return *this;
 }
+
 SeQuant& SeQuant::set_first_dummy_index_ordinal(
     std::size_t first_dummy_index_ordinal) {
   first_dummy_index_ordinal_ = first_dummy_index_ordinal;

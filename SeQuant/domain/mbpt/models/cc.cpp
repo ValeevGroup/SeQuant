@@ -1,3 +1,4 @@
+#include <SeQuant/domain/mbpt/formalism.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 
 #include <clocale>
@@ -27,18 +28,31 @@ namespace {
 
 /// computes VEV for A(P)*H*T(N)^K using excitation level screening (unless @c
 /// screen is set) + computes only canonical (with T ranks increasing) terms
-
 class screened_vac_av {
  private:
   size_t K;
 
  public:
+  /// \param k power of T in the A(P)*H*T(N)^K
   screened_vac_av(size_t k) : K(k) {}
 
+  /// computes VEV for A(P)*H*T(N)^K using excitation-level screening,
+  /// including only canonical terms
+  /// and
+  /// \param expr input expression, must contain `A`, `H` (`f` or `g`),
+  ///        and `K` `T`'s
+  /// \param op_connections specifies the connectivity
+  /// \param screen if false, will use brute-force evaluation
+  /// \param use_topology if true, forces topological optimization
+  /// \param canonical_only if true AND \p screen is true then optimize
+  ///        evaluation by combining equivalent terms such that VEV evaluation
+  ///        only involves canonical products (e.g., evaluate only H*T1*T2 and
+  ///        not H*T2*T1)
+  /// \return the resulting VEV
   ExprPtr operator()(const ExprPtr& expr,
                      std::initializer_list<std::pair<int, int>> op_connections,
                      bool screen = true, bool use_topology = true,
-                     bool canonical_only = true, bool antisymm = true) {
+                     bool canonical_only = true) {
     // TODO: Implement antisymm here
     if (!screen)
       return sequant::mbpt::sr::so::vac_av(expr, op_connections, use_topology);
@@ -133,18 +147,30 @@ class screened_vac_av {
   }
 };  // screened_vac_av
 
-class ccresidual {
+/// Evaluates coupled-cluster amplitude equation, `<P|(H exp(T(N))_c|0>`,
+/// for particular `P` and `N`
+class cceqs_t {
   size_t P, N;
 
  public:
-  ccresidual(size_t p, size_t n) : P(p), N(n) {}
+  cceqs_t(size_t p, size_t n) : P(p), N(n) {}
 
+  /// Evalaute the coupled-cluster amplitude equations, <P|(H exp(T(N))_c|0>
+  /// \param screen if true, will use screening (see `screened_vac_av`)
+  /// \param use_topology if true, forces topological optimization
+  /// \param use_connectivity if true, will tell Wick engine to prune search
+  ///                         tree using known connectivity information
+  /// \param canonical_only if true AND \p screen is true then combine
+  ///                       equivalent terms (see `screened_vac_av`)
+  /// \return the result
   ExprPtr operator()(bool screen, bool use_topology, bool use_connectivity,
-                     bool canonical_only, bool antisymm) {
+                     bool canonical_only) {
     // currently topological equivalence of indices within a normal operator is
     // not detected, assumed based on use_topology ... so turn off use of
     // topology if antisymm=false
-    if (!antisymm) use_topology = false;
+    if (get_default_formalism().two_body_interaction() !=
+        TwoBodyInteraction::Antisymm)
+      use_topology = false;
 
     auto ahbar = [=](const bool screen) {
       auto connect = [=](std::initializer_list<std::pair<int, int>> connlist) {
@@ -154,29 +180,23 @@ class ccresidual {
           return std::initializer_list<std::pair<int, int>>{};
       };
       auto result =
-          screened_vac_av{0}(A(P) * H(antisymm), connect({}), screen,
-                             use_topology, canonical_only, antisymm) +
-          screened_vac_av{1}(A(P) * H(antisymm) * T(N, N, false, antisymm),
-                             connect({{1, 2}}), screen, use_topology,
-                             canonical_only, antisymm) +
+          screened_vac_av{0}(A(P) * H(), connect({}), screen, use_topology,
+                             canonical_only) +
+          screened_vac_av{1}(A(P) * H() * T(N, N), connect({{1, 2}}), screen,
+                             use_topology, canonical_only) +
           ex<Constant>(1. / 2) *
-              screened_vac_av{2}(A(P) * H(antisymm) * T(N, N, false, antisymm) *
-                                     T(N, N, false, antisymm),
+              screened_vac_av{2}(A(P) * H() * T(N, N) * T(N, N),
                                  connect({{1, 2}, {1, 3}}), screen,
                                  use_topology, canonical_only) +
           ex<Constant>(1. / 6) *
-              screened_vac_av{3}(A(P) * H(antisymm) * T(N, N, false, antisymm) *
-                                     T(N, N, false, antisymm) *
-                                     T(N, N, false, antisymm),
+              screened_vac_av{3}(A(P) * H() * T(N, N) * T(N, N) * T(N, N),
                                  connect({{1, 2}, {1, 3}, {1, 4}}), screen,
                                  use_topology, canonical_only) +
           ex<Constant>(1. / 24) *
-              screened_vac_av{4}(A(P) * H(antisymm) * T(N, N, false, antisymm) *
-                                     T(N, N, false, antisymm) *
-                                     T(N, N, false, antisymm) *
-                                     T(N, N, false, antisymm),
-                                 connect({{1, 2}, {1, 3}, {1, 4}, {1, 5}}),
-                                 screen, use_topology, canonical_only);
+              screened_vac_av{4}(
+                  A(P) * H() * T(N, N) * T(N, N) * T(N, N) * T(N, N),
+                  connect({{1, 2}, {1, 3}, {1, 4}, {1, 5}}), screen,
+                  use_topology, canonical_only);
       simplify(result);
 
       return result;
@@ -184,40 +204,21 @@ class ccresidual {
 
     return ahbar(screen);
   }
-};  // class ccresidual
-
-class ccresidual_vec {
-  size_t P, PMIN, N;
-
- public:
-  ccresidual_vec(size_t p, size_t pmin, size_t n) : P(p), PMIN(pmin), N(n) {}
-
-  void operator()(std::vector<ExprPtr>& result, bool screen, bool use_topology,
-                  bool use_connectivity, bool canonical_only, bool antisymm) {
-    result[P] = ccresidual{P, N}(screen, use_topology, use_connectivity,
-                                 canonical_only, antisymm);
-    rapid_simplify(result[P]);
-    if (P > PMIN)
-      ccresidual_vec{P - 1, PMIN, N}(result, screen, use_topology,
-                                     use_connectivity, canonical_only,
-                                     antisymm);
-  }
-};  // class ccresidual_vec
+};  // class cceqs_t
 
 }  // namespace
 
-cceqvec::cceqvec(size_t n, bool antisymm, size_t p, size_t pmin)
-    : N(n),
-      P(p == std::numeric_limits<size_t>::max() ? n : p),
-      PMIN(pmin),
-      antisymm(antisymm) {}
+cceqs::cceqs(size_t n, size_t p, size_t pmin)
+    : N(n), P(p == std::numeric_limits<size_t>::max() ? n : p), PMIN(pmin) {}
 
-std::vector<ExprPtr> cceqvec::operator()(bool screen, bool use_topology,
-                                         bool use_connectivity,
-                                         bool canonical_only) {
+std::vector<ExprPtr> cceqs::t(bool screen, bool use_topology,
+                              bool use_connectivity, bool canonical_only) {
   std::vector<ExprPtr> result(P + 1);
-  ccresidual_vec{P, PMIN, N}(result, screen, use_topology, use_connectivity,
-                             canonical_only, antisymm);
+  for (auto p = P; p >= PMIN; --p) {
+    result.at(p) =
+        cceqs_t{p, N}(screen, use_topology, use_connectivity, canonical_only);
+    rapid_simplify(result[p]);
+  }
   return result;
 }
 

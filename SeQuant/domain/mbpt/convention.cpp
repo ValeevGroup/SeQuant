@@ -61,7 +61,7 @@ auto qndecorate(qns qn, std::wstring_view label) {
   }
   abort();  // unreachable
 };
-};  // namespace
+};          // namespace
 
 /// @brief registers standard instances of IndexSpace objects
 void register_standard_instances() {

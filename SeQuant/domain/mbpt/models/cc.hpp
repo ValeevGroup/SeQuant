@@ -8,18 +8,19 @@
 
 namespace sequant::mbpt::sr::so {
 
-class cceqvec {
+/// derives equations of traditional coupled-cluster method
+class cceqs {
   size_t N, P, PMIN;
-  bool antisymm;
 
  public:
-  cceqvec(size_t n, bool antisymm = true,
-          size_t p = std::numeric_limits<size_t>::max(), size_t pmin = 1);
-  std::vector<sequant::ExprPtr> operator()(bool screen = true,
-                                           bool use_topology = true,
-                                           bool use_connectivity = true,
-                                           bool canonical_only = true);
-};  // class cceqvec
+  cceqs(size_t n, size_t p = std::numeric_limits<size_t>::max(),
+        size_t pmin = 1);
+
+  /// derives t amplitude equations
+  std::vector<sequant::ExprPtr> t(bool screen = true, bool use_topology = true,
+                                  bool use_connectivity = true,
+                                  bool canonical_only = true);
+};  // class cceqs
 
 }  // namespace sequant::mbpt::sr::so
 

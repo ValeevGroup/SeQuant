@@ -1,6 +1,7 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/timer.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/formalism.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
@@ -41,6 +42,7 @@ int main(int argc, char* argv[]) {
       SeQuant(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
               BraKetSymmetry::conjugate, SPBasis::spinorbital));
   mbpt::set_default_convention();
+  mbpt::set_default_formalism();
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
 
@@ -68,7 +70,7 @@ int main(int argc, char* argv[]) {
   };
 
   // Spin-orbital coupled cluster
-  auto cc_r = sequant::mbpt::sr::so::cceqvec{NMAX, true}();
+  auto cc_r = sequant::mbpt::sr::so::cceqs{NMAX}.t();
   for (auto i = 1; i < cc_r.size(); ++i) {
     std::cout << "Spin-orbital CC R" << i << " size: " << cc_r[i]->size()
               << "\n";
@@ -99,9 +101,10 @@ int main(int argc, char* argv[]) {
     simplify(cc_st_r[i]);
 
     // Remove S operator
-    for (auto& term : *cc_st_r[i]) {
-      if (term->is<Product>()) term = remove_tensor(term->as<Product>(), L"S");
-    }
+    //    for (auto& term : *cc_st_r[i]) {
+    //      if (term->is<Product>()) term = remove_tensor(term->as<Product>(),
+    //      L"S");
+    //    }
 
     auto tstop = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> time_elapsed = tstop - tstart;

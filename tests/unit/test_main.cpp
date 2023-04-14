@@ -9,6 +9,7 @@
 #include "SeQuant/core/space.hpp"
 #include "SeQuant/core/utility.hpp"
 #include "SeQuant/domain/mbpt/convention.hpp"
+#include "SeQuant/domain/mbpt/formalism.hpp"
 #include "catch.hpp"
 
 #ifdef SEQUANT_HAS_TILEDARRAY
@@ -36,6 +37,7 @@ int main(int argc, char* argv[]) {
       SeQuant(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
               BraKetSymmetry::conjugate, SPBasis::spinorbital));
   mbpt::set_default_convention();
+  mbpt::set_default_formalism();
 
   // uncomment to enable verbose output ...
   // Logger::set_instance(1);

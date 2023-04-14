@@ -2,6 +2,7 @@
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/timer.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/formalism.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 
 #include <clocale>
@@ -30,17 +31,15 @@ class compute_cceqvec {
   compute_cceqvec(size_t p, size_t pmin, size_t n) : P(p), PMIN(pmin), N(n) {}
 
   void operator()(bool print, bool screen, bool use_topology,
-                  bool use_connectivity, bool canonical_only,
-                  bool use_antisymm) {
+                  bool use_connectivity, bool canonical_only) {
     tpool.start(N);
-    auto eqvec = cceqvec{N, use_antisymm, P, 1}(
-        screen, use_topology, use_connectivity, canonical_only);
+    auto eqvec = cceqs{N, P, 1}.t(screen, use_topology, use_connectivity,
+                                  canonical_only);
     tpool.stop(N);
     std::wcout << std::boolalpha << "expS" << N << "[screen=" << screen
                << ",use_topology=" << use_topology
                << ",use_connectivity=" << use_connectivity
-               << ",canonical_only=" << canonical_only
-               << ",use_antisymm=" << use_antisymm << "] computed in "
+               << ",canonical_only=" << canonical_only << "] computed in "
                << tpool.read(N) << " seconds" << std::endl;
     for (size_t R = PMIN; R <= P; ++R) {
       std::wcout << "R" << R << "(expS" << N << ") has " << eqvec[R]->size()
@@ -50,7 +49,8 @@ class compute_cceqvec {
       // validate known sizes of some CC residuals
       // N.B. # of equations depends on whether we use symmetric or
       // antisymmetric amplitudes
-      if (use_antisymm) {
+      if (mbpt::get_default_formalism().two_body_interaction() ==
+          mbpt::TwoBodyInteraction::Antisymm) {
         if (R == 1 && N == 2) runtime_assert(eqvec[R]->size() == 14);
         if (R == 2 && N == 2) runtime_assert(eqvec[R]->size() == 31);
         if (R == 1 && N == 3) runtime_assert(eqvec[R]->size() == 15);
@@ -79,10 +79,10 @@ class compute_all {
 
   void operator()(bool print = true, bool screen = true,
                   bool use_topology = true, bool use_connectivity = true,
-                  bool canonical_only = true, bool use_antisymm = true) {
+                  bool canonical_only = true) {
     for (size_t N = 2; N <= NMAX; ++N)
       compute_cceqvec{N, 1, N}(print, screen, use_topology, use_connectivity,
-                               canonical_only, use_antisymm);
+                               canonical_only);
   }
 };  // class compute_all
 
@@ -103,6 +103,7 @@ int main(int argc, char* argv[]) {
       SeQuant(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
               BraKetSymmetry::conjugate, SPBasis::spinorbital));
   mbpt::set_default_convention();
+  mbpt::set_default_formalism();
 
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
