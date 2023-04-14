@@ -212,9 +212,10 @@ class cceqs_λ {
  public:
   cceqs_λ(size_t p, size_t n) : P(p), N(n) {}
 
-  /// Evaluate the coupled-cluster lambda amplitude equations,
-  /// <0|(1+Λ)exp(T(N))_c|P>
-  /// \return the result more dox to be added!
+  /// Evaluates coupled-cluster λ amplitude equation, <0|(1+Λ)(H exp(T(N))_c|P>
+  /// for particular `P` and `N`
+  /// \return the result
+  /// more dox to be added!
 
   ExprPtr operator()(bool screen, bool use_topology, bool use_connectivity,
                      bool canonical_only) {
@@ -265,6 +266,17 @@ std::vector<ExprPtr> cceqs::t(bool screen, bool use_topology,
   for (auto p = P; p >= PMIN; --p) {
     result.at(p) =
         cceqs_t{p, N}(screen, use_topology, use_connectivity, canonical_only);
+    rapid_simplify(result[p]);
+  }
+  return result;
+}
+
+std::vector<ExprPtr> cceqs::λ(bool screen, bool use_topology,
+                              bool use_connectivity, bool canonical_only) {
+  std::vector<ExprPtr> result(P + 1);
+  for (auto p = P; p >= PMIN; --p) {
+    result.at(p) =
+        cceqs_λ{p, N}(screen, use_topology, use_connectivity, canonical_only);
     rapid_simplify(result[p]);
   }
   return result;
