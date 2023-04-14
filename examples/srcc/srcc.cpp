@@ -33,8 +33,8 @@ class compute_cceqvec {
   void operator()(bool print, bool screen, bool use_topology,
                   bool use_connectivity, bool canonical_only) {
     tpool.start(N);
-    auto eqvec = cceqvec{N, P, 1}(
-        screen, use_topology, use_connectivity, canonical_only);
+    auto eqvec = cceqs{N, P, 1}.t(screen, use_topology, use_connectivity,
+                                  canonical_only);
     tpool.stop(N);
     std::wcout << std::boolalpha << "expS" << N << "[screen=" << screen
                << ",use_topology=" << use_topology

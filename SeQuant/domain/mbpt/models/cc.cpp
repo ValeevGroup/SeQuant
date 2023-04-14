@@ -1,5 +1,5 @@
-#include <SeQuant/domain/mbpt/models/cc.hpp>
 #include <SeQuant/domain/mbpt/formalism.hpp>
+#include <SeQuant/domain/mbpt/models/cc.hpp>
 
 #include <clocale>
 #include <iostream>
@@ -28,14 +28,27 @@ namespace {
 
 /// computes VEV for A(P)*H*T(N)^K using excitation level screening (unless @c
 /// screen is set) + computes only canonical (with T ranks increasing) terms
-
 class screened_vac_av {
  private:
   size_t K;
 
  public:
+  /// \param k power of T in the A(P)*H*T(N)^K
   screened_vac_av(size_t k) : K(k) {}
 
+  /// computes VEV for A(P)*H*T(N)^K using excitation-level screening,
+  /// including only canonical terms
+  /// and
+  /// \param expr input expression, must contain `A`, `H` (`f` or `g`),
+  ///        and `K` `T`'s
+  /// \param op_connections specifies the connectivity
+  /// \param screen if false, will use brute-force evaluation
+  /// \param use_topology if true, forces topological optimization
+  /// \param canonical_only if true AND \p screen is true then optimize
+  ///        evaluation by combining equivalent terms such that VEV evaluation
+  ///        only involves canonical products (e.g., evaluate only H*T1*T2 and
+  ///        not H*T2*T1)
+  /// \return the resulting VEV
   ExprPtr operator()(const ExprPtr& expr,
                      std::initializer_list<std::pair<int, int>> op_connections,
                      bool screen = true, bool use_topology = true,
@@ -95,7 +108,7 @@ class screened_vac_av {
         if (canonical_only) {
           if (current_rank < prev_rank)  // if T ranks are not increasing, omit
             canonical = false;
-          else {                         // else keep track of degeneracy
+          else {  // else keep track of degeneracy
             assert(current_rank != 0);
             if (current_rank == prev_rank) {
               ++current_partition_size;
@@ -134,12 +147,22 @@ class screened_vac_av {
   }
 };  // screened_vac_av
 
-class ccresidual {
+/// Evaluates coupled-cluster amplitude equation, `<P|(H exp(T(N))_c|0>`,
+/// for particular `P` and `N`
+class cceqs_t {
   size_t P, N;
 
  public:
-  ccresidual(size_t p, size_t n) : P(p), N(n) {}
+  cceqs_t(size_t p, size_t n) : P(p), N(n) {}
 
+  /// Evalaute the coupled-cluster amplitude equations, <P|(H exp(T(N))_c|0>
+  /// \param screen if true, will use screening (see `screened_vac_av`)
+  /// \param use_topology if true, forces topological optimization
+  /// \param use_connectivity if true, will tell Wick engine to prune search
+  ///                         tree using known connectivity information
+  /// \param canonical_only if true AND \p screen is true then combine
+  ///                       equivalent terms (see `screened_vac_av`)
+  /// \return the result
   ExprPtr operator()(bool screen, bool use_topology, bool use_connectivity,
                      bool canonical_only) {
     // currently topological equivalence of indices within a normal operator is
@@ -181,38 +204,21 @@ class ccresidual {
 
     return ahbar(screen);
   }
-};  // class ccresidual
-
-class ccresidual_vec {
-  size_t P, PMIN, N;
-
- public:
-  ccresidual_vec(size_t p, size_t pmin, size_t n) : P(p), PMIN(pmin), N(n) {}
-
-  void operator()(std::vector<ExprPtr>& result, bool screen, bool use_topology,
-                  bool use_connectivity, bool canonical_only) {
-    result[P] = ccresidual{P, N}(screen, use_topology, use_connectivity,
-                                 canonical_only);
-    rapid_simplify(result[P]);
-    if (P > PMIN)
-      ccresidual_vec{P - 1, PMIN, N}(result, screen, use_topology,
-                                     use_connectivity, canonical_only);
-  }
-};  // class ccresidual_vec
+};  // class cceqs_t
 
 }  // namespace
 
-cceqvec::cceqvec(size_t n, size_t p, size_t pmin)
-    : N(n),
-      P(p == std::numeric_limits<size_t>::max() ? n : p),
-      PMIN(pmin) {}
+cceqs::cceqs(size_t n, size_t p, size_t pmin)
+    : N(n), P(p == std::numeric_limits<size_t>::max() ? n : p), PMIN(pmin) {}
 
-std::vector<ExprPtr> cceqvec::operator()(bool screen, bool use_topology,
-                                         bool use_connectivity,
-                                         bool canonical_only) {
+std::vector<ExprPtr> cceqs::t(bool screen, bool use_topology,
+                              bool use_connectivity, bool canonical_only) {
   std::vector<ExprPtr> result(P + 1);
-  ccresidual_vec{P, PMIN, N}(result, screen, use_topology, use_connectivity,
-                             canonical_only);
+  for (auto p = P; p >= PMIN; --p) {
+    result.at(p) =
+        cceqs_t{p, N}(screen, use_topology, use_connectivity, canonical_only);
+    rapid_simplify(result[p]);
+  }
   return result;
 }
 
