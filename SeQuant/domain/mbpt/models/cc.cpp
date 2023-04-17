@@ -26,17 +26,20 @@ namespace sequant::mbpt::sr::so {
 
 namespace {
 
-/// computes VEV for A(P)*H*T(N)^K using excitation level screening (unless @c
+/// computes VEV using excitation level screening (unless @c
 /// screen is set) + computes only canonical (with T ranks increasing) terms
-
-/// dox needs updating after changes for lambda equations
 class screened_vac_av {
  private:
   size_t K;
 
  public:
-  /// \param k power of T in the A(P)*H*T(N)^K
+  /// \param k power of T
   screened_vac_av(size_t k) : K(k) {}
+
+  //  ExprPtr operator()(const ExprPtr& expr,
+  //                     std::initializer_list<std::pair<int, int>>
+  //                     op_connections, bool screen = true, bool use_topology =
+  //                     true, bool canonical_only = true) {}
 
   /// computes VEV for A(P)*H*T(N)^K using excitation-level screening,
   /// including only canonical terms
@@ -51,13 +54,6 @@ class screened_vac_av {
   ///        only involves canonical products (e.g., evaluate only H*T1*T2 and
   ///        not H*T2*T1)
   /// \return the resulting VEV
-
-  //  ExprPtr operator()(const ExprPtr& expr,
-  //                     std::initializer_list<std::pair<int, int>>
-  //                     op_connections, bool screen = true, bool use_topology =
-  //                     true, bool canonical_only = true) {}
-
-  /// for deriving t amplitude equations
   ExprPtr t(const ExprPtr& expr,
             std::initializer_list<std::pair<int, int>> op_connections,
             bool screen = true, bool use_topology = true,
@@ -153,9 +149,21 @@ class screened_vac_av {
       return sequant::mbpt::sr::so::vac_av(screened_input, op_connections,
                                            use_topology);
     }
-  }  // t
+  }  // screened_vac_av_t
 
-  /// for deriving λ amplitude equations
+  /// computes VEV for (1+Λ)*H*T(N)^K*adj(A(P)) using excitation-level
+  /// screening, including only canonical terms
+  /// and
+  /// \param expr input expression, must contain `A`, `H` (`f` or `g`), `Λ`,
+  ///        and `K` `T`'s
+  /// \param op_connections specifies the connectivity
+  /// \param screen if false, will use brute-force evaluation
+  /// \param use_topology if true, forces topological optimization
+  /// \param canonical_only if true AND \p screen is true then optimize
+  ///        evaluation by combining equivalent terms such that VEV evaluation
+  ///        only involves canonical products (e.g., evaluate only H*T1*T2 and
+  ///        not H*T2*T1)
+  /// \return the resulting VEV
   ExprPtr λ(const ExprPtr& expr,
             std::initializer_list<std::pair<int, int>> op_connections,
             bool screen = true, bool use_topology = true,
@@ -183,7 +191,7 @@ class screened_vac_av {
       assert(term_prod.factor(term_prod.factors().size() - 1)
                  ->as<Tensor>()
                  .label() == L"A");
-      const auto P =
+      const int P =
           term_prod.factor(term_prod.factors().size() - 1)->as<Tensor>().rank();
 
       // locate hamiltonian
@@ -202,7 +210,7 @@ class screened_vac_av {
       const int R = h_term.rank();
       const int max_exlev_R = R - K;
 
-      int exlev = -P;
+      auto exlev = -P;
 
       bool canonical = true;
       double degeneracy =
@@ -259,7 +267,7 @@ class screened_vac_av {
       return sequant::mbpt::sr::so::vac_av(screened_input, op_connections,
                                            use_topology);
     }
-  }  // λ
+  }  // screened_vac_av_λ
 
 };   // screened_vac_av
 
@@ -338,7 +346,6 @@ class cceqs_λ {
   /// \param canonical_only if true AND \p screen is true then combine
   ///                       equivalent terms (see `screened_vac_av`)
   /// \return the result
-  /// more dox to be added!
 
   ExprPtr operator()(bool screen, bool use_topology, bool use_connectivity,
                      bool canonical_only) {
