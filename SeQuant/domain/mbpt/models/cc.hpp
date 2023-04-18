@@ -21,9 +21,10 @@ class cceqs {
                                   bool use_connectivity = true,
                                   bool canonical_only = true);
   /// derives λ amplitude equations
-  std::vector<sequant::ExprPtr> λ(bool screen = true, bool use_topology = true,
-                                  bool use_connectivity = true,
-                                  bool canonical_only = true);
+  std::vector<sequant::ExprPtr> lambda(bool screen = true,
+                                       bool use_topology = true,
+                                       bool use_connectivity = true,
+                                       bool canonical_only = true);
 };  // class cceqs
 
 }  // namespace sequant::mbpt::sr::so

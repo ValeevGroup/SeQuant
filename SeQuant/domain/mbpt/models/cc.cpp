@@ -164,10 +164,10 @@ class screened_vac_av {
   ///        only involves canonical products (e.g., evaluate only H*T1*T2 and
   ///        not H*T2*T1)
   /// \return the resulting VEV
-  ExprPtr λ(const ExprPtr& expr,
-            std::initializer_list<std::pair<int, int>> op_connections,
-            bool screen = true, bool use_topology = true,
-            bool canonical_only = true) {
+  ExprPtr lambda(const ExprPtr& expr,
+                 std::initializer_list<std::pair<int, int>> op_connections,
+                 bool screen = true, bool use_topology = true,
+                 bool canonical_only = true) {
     if (!screen)
       return sequant::mbpt::sr::so::vac_av(expr, op_connections, use_topology);
 
@@ -267,7 +267,7 @@ class screened_vac_av {
       return sequant::mbpt::sr::so::vac_av(screened_input, op_connections,
                                            use_topology);
     }
-  }  // screened_vac_av_λ
+  }  // screened_vac_av_lambda
 
 };   // screened_vac_av
 
@@ -332,11 +332,11 @@ class cceqs_t {
 
 /// Evaluates coupled-cluster λ amplitude equation, `<0|(1+Λ)(H exp(T(N))_c|P>`,
 /// for particular `P` and `N`
-class cceqs_λ {
+class cceqs_lambda {
   size_t P, N;
 
  public:
-  cceqs_λ(size_t p, size_t n) : P(p), N(n) {}
+  cceqs_lambda(size_t p, size_t n) : P(p), N(n) {}
 
   /// Evaluate the coupled-cluster λ amplitude equations,
   /// `<0|(1+Λ)(H exp(T(N))_c|P>` for particular `P` and `N`
@@ -362,22 +362,22 @@ class cceqs_λ {
       };
       const auto One = ex<Constant>(1);
       auto result =
-          screened_vac_av{0}.λ((One + Lambda(N, N)) * H() * adjoint(A(P)),
-                               connect({}), screen, use_topology,
-                               canonical_only) +
-          screened_vac_av{1}.λ(
+          screened_vac_av{0}.lambda((One + Lambda(N, N)) * H() * adjoint(A(P)),
+                                    connect({}), screen, use_topology,
+                                    canonical_only) +
+          screened_vac_av{1}.lambda(
               (One + Lambda(N, N)) * H() * T(N, N) * adjoint(A(P)),
               connect({{1, 2}}), screen, use_topology, canonical_only) +
           ex<Constant>(1. / 2) *
-              screened_vac_av{2}.λ((One + Lambda(N, N)) * H() * T(N, N) *
-                                       T(N, N) * adjoint(A(P)),
-                                   connect({{1, 2}, {1, 3}}), screen,
-                                   use_topology, canonical_only) +
+              screened_vac_av{2}.lambda((One + Lambda(N, N)) * H() * T(N, N) *
+                                            T(N, N) * adjoint(A(P)),
+                                        connect({{1, 2}, {1, 3}}), screen,
+                                        use_topology, canonical_only) +
           ex<Constant>(1. / 6) *
-              screened_vac_av{3}.λ((One + Lambda(N, N)) * H() * T(N, N) *
-                                       T(N, N) * T(N, N) * adjoint(A(P)),
-                                   connect({{1, 2}, {1, 3}, {1, 4}}), screen,
-                                   use_topology, canonical_only);
+              screened_vac_av{3}.lambda((One + Lambda(N, N)) * H() * T(N, N) *
+                                            T(N, N) * T(N, N) * adjoint(A(P)),
+                                        connect({{1, 2}, {1, 3}, {1, 4}}),
+                                        screen, use_topology, canonical_only);
       simplify(result);
       return result;
     };
@@ -401,12 +401,12 @@ std::vector<ExprPtr> cceqs::t(bool screen, bool use_topology,
   return result;
 }
 
-std::vector<ExprPtr> cceqs::λ(bool screen, bool use_topology,
-                              bool use_connectivity, bool canonical_only) {
+std::vector<ExprPtr> cceqs::lambda(bool screen, bool use_topology,
+                                   bool use_connectivity, bool canonical_only) {
   std::vector<ExprPtr> result(P + 1);
   for (auto p = P; p >= PMIN; --p) {
-    result.at(p) =
-        cceqs_λ{p, N}(screen, use_topology, use_connectivity, canonical_only);
+    result.at(p) = cceqs_lambda{p, N}(screen, use_topology, use_connectivity,
+                                      canonical_only);
     rapid_simplify(result[p]);
   }
   return result;
