@@ -36,11 +36,6 @@ class screened_vac_av {
   /// \param k power of T
   screened_vac_av(size_t k) : K(k) {}
 
-  //  ExprPtr operator()(const ExprPtr& expr,
-  //                     std::initializer_list<std::pair<int, int>>
-  //                     op_connections, bool screen = true, bool use_topology =
-  //                     true, bool canonical_only = true) {}
-
   /// computes VEV for A(P)*H*T(N)^K using excitation-level screening,
   /// including only canonical terms
   /// and
@@ -383,7 +378,7 @@ class cceqs_lambda {
     };
     return ahbar(screen);
   }
-};  // class cceqs_λ
+};  // class cceqs_lambda
 
 }  // namespace
 
