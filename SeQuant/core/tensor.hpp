@@ -224,8 +224,9 @@ class Tensor : public Expr, public AbstractTensor {
 
   std::wstring to_latex() const override {
     std::wstring result;
-    bool gt =
-        (this->label() == L"g") || (this->label() == L"t" && this->rank() > 1);
+    bool gt = (this->label() == L"g") ||
+              (this->label() == L"t" && this->rank() > 1) ||
+              (this->label() == L"λ" && this->rank() > 1);
     result = L"{";
     if ((this->symmetry() == Symmetry::antisymm) && gt) result += L"\\bar{";
     result += this->label();
