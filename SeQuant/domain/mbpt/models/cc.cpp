@@ -355,24 +355,38 @@ class cceqs_lambda {
         else
           return std::initializer_list<std::pair<int, int>>{};
       };
-      const auto One = ex<Constant>(1);
       auto result =
-          screened_vac_av{0}.lambda((One + Lambda(N, N)) * H() * adjoint(A(P)),
-                                    connect({}), screen, use_topology,
+          screened_vac_av{0}.lambda(H() * adjoint(A(P)), connect({{0, 1}}),
+                                    screen, use_topology, canonical_only) +
+          screened_vac_av{0}.lambda(Lambda(N, N) * H() * adjoint(A(P)),
+                                    connect({{1, 2}}), screen, use_topology,
                                     canonical_only) +
+          screened_vac_av{1}.lambda(H() * T(N, N) * adjoint(A(P)),
+                                    connect({{0, 1}, {0, 2}}), screen,
+                                    use_topology, canonical_only) +
           screened_vac_av{1}.lambda(
-              (One + Lambda(N, N)) * H() * T(N, N) * adjoint(A(P)),
-              connect({{1, 2}}), screen, use_topology, canonical_only) +
+              Lambda(N, N) * H() * T(N, N) * adjoint(A(P)),
+              connect({{1, 2}, {1, 3}}), screen, use_topology, canonical_only) +
           ex<Constant>(1. / 2) *
-              screened_vac_av{2}.lambda((One + Lambda(N, N)) * H() * T(N, N) *
-                                            T(N, N) * adjoint(A(P)),
-                                        connect({{1, 2}, {1, 3}}), screen,
-                                        use_topology, canonical_only) +
+              screened_vac_av{2}.lambda(H() * T(N, N) * T(N, N) * adjoint(A(P)),
+                                        connect({{0, 1}, {0, 2}, {0, 3}}),
+                                        screen, use_topology, canonical_only) +
+          ex<Constant>(1. / 2) *
+              screened_vac_av{2}.lambda(
+                  Lambda(N, N) * H() * T(N, N) * T(N, N) * adjoint(A(P)),
+                  connect({{1, 2}, {1, 3}, {1, 4}}), screen, use_topology,
+                  canonical_only) +
           ex<Constant>(1. / 6) *
-              screened_vac_av{3}.lambda((One + Lambda(N, N)) * H() * T(N, N) *
-                                            T(N, N) * T(N, N) * adjoint(A(P)),
-                                        connect({{1, 2}, {1, 3}, {1, 4}}),
-                                        screen, use_topology, canonical_only);
+              screened_vac_av{3}.lambda(
+                  H() * T(N, N) * T(N, N) * T(N, N) * adjoint(A(P)),
+                  connect({{0, 1}, {0, 2}, {0, 3}, {0, 4}}), screen,
+                  use_topology, canonical_only) +
+          ex<Constant>(1. / 6) * screened_vac_av{3}.lambda(
+                                     Lambda(N, N) * H() * T(N, N) * T(N, N) *
+                                         T(N, N) * adjoint(A(P)),
+                                     connect({{1, 2}, {1, 3}, {1, 4}, {1, 5}}),
+                                     screen, use_topology, canonical_only);
+
       simplify(result);
       return result;
     };
