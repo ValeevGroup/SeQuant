@@ -186,26 +186,44 @@ class screened_vac_av {
       assert(term_prod.factor(term_prod.factors().size() - 1)
                  ->as<Tensor>()
                  .label() == L"A");
+      // obtaining rank from the projector
       const int P =
           term_prod.factor(term_prod.factors().size() - 1)->as<Tensor>().rank();
 
-      // locate hamiltonian
-      // can be the first or the third factor because of (1 + Λ)
+      // initialize h_factor and l_factor
+      sequant::Tensor h_factor; // just Tensor should be enough
+      sequant::Tensor l_factor;
+
+      // locate hamiltonian and λ factors - the hamiltonian factor could be
+      // first or third depending on if λ amplitudes are present
       assert(term_prod.factor(0)->is<Tensor>());
-      auto h_term = term_prod.factor(0)->as<Tensor>();
-      if (h_term.label() != L"f" &&
-          h_term.label() != L"g") {  // if term has λ amplitudes
-        h_term = term_prod.factor(2)->as<Tensor>();
+      if (term_prod.factor(0)->as<Tensor>().label() == L"λ"){
+        // if first factor is λ, third factor should be f or g
+        assert(term_prod.factor(2)->as<Tensor>().label() == L"f" ||
+               term_prod.factor(2)->as<Tensor>().label() == L"g");
+        // assert term size
         assert(term_prod.factors().size() == 6 + 2 * K);
-      } else {  // if term has no λ amplitudes
+        h_factor = term_prod.factor(2)->as<Tensor>();
+        l_factor = term_prod.factor(0)->as<Tensor>();
+      }
+      else{
+        // else, the first factor should be from hamiltonian
+        assert(term_prod.factor(0)->as<Tensor>().label() == L"f" ||
+               term_prod.factor(0)->as<Tensor>().label() == L"g");
+        // assert term size
         assert(term_prod.factors().size() == 4 + 2 * K);
+        h_factor = term_prod.factor(0)->as<Tensor>();
+        // no λ amplitudes will be present
       }
 
-      assert(h_term.label() == L"f" || h_term.label() == L"g");
-      const int R = h_term.rank();
-      const int max_exlev_R = R - K;
+      const int R = h_factor.rank();
+      const int L = l_factor.rank(); // ? l_factor.rank() : 0;
 
-      auto exlev = -P;
+//      const int max_exlev_R = R - K;
+      const int max_exlev_R = R - (K - L);
+
+//      auto exlev = -P;
+      auto exlev = -P - L;
 
       bool canonical = true;
       double degeneracy =
@@ -246,7 +264,8 @@ class screened_vac_av {
       if (canonical_only)
         degeneracy /= boost::math::factorial<double>(
             current_partition_size);  // account for the last partition
-      const int min_exlev_R = std::max(-R, R - 2 * total_T_rank);
+//      const int min_exlev_R = std::max(-R, R - 2 * total_T_rank);
+      const int min_exlev_R = std::max(-R - L, R - 2 * total_T_rank - 2 * L);
       if (canonical || !canonical_only) {
         if (exlev + min_exlev_R <= 0 && 0 <= exlev + max_exlev_R) {  // VEV != 0
           assert(min_exlev_R <= max_exlev_R);
@@ -263,7 +282,6 @@ class screened_vac_av {
                                            use_topology);
     }
   }  // screened_vac_av_lambda
-
 };   // screened_vac_av
 
 /// Evaluates coupled-cluster amplitude equation, `<P|(H exp(T(N))_c|0>`,
