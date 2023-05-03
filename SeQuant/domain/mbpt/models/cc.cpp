@@ -26,6 +26,8 @@ namespace sequant::mbpt::sr::so {
 
 namespace {
 
+// TODO: generalize screening logic
+
 /// computes VEV using excitation level screening (unless @c
 /// screen is set) + computes only canonical (with T ranks increasing) terms
 class screened_vac_av {
@@ -163,6 +165,9 @@ class screened_vac_av {
                  std::initializer_list<std::pair<int, int>> op_connections,
                  bool screen = true, bool use_topology = true,
                  bool canonical_only = true) {
+    // screening for lambda is not available now
+    assert(!screen &&
+           "screening for λ residual equations is not available now");
     if (!screen)
       return sequant::mbpt::sr::so::vac_av(expr, op_connections, use_topology);
 
@@ -191,13 +196,13 @@ class screened_vac_av {
           term_prod.factor(term_prod.factors().size() - 1)->as<Tensor>().rank();
 
       // initialize h_factor and l_factor
-      sequant::Tensor h_factor; // just Tensor should be enough
+      sequant::Tensor h_factor;  // just Tensor should be enough
       sequant::Tensor l_factor;
 
       // locate hamiltonian and λ factors - the hamiltonian factor could be
       // first or third depending on if λ amplitudes are present
       assert(term_prod.factor(0)->is<Tensor>());
-      if (term_prod.factor(0)->as<Tensor>().label() == L"λ"){
+      if (term_prod.factor(0)->as<Tensor>().label() == L"λ") {
         // if first factor is λ, third factor should be f or g
         assert(term_prod.factor(2)->as<Tensor>().label() == L"f" ||
                term_prod.factor(2)->as<Tensor>().label() == L"g");
@@ -205,8 +210,7 @@ class screened_vac_av {
         assert(term_prod.factors().size() == 6 + 2 * K);
         h_factor = term_prod.factor(2)->as<Tensor>();
         l_factor = term_prod.factor(0)->as<Tensor>();
-      }
-      else{
+      } else {
         // else, the first factor should be from hamiltonian
         assert(term_prod.factor(0)->as<Tensor>().label() == L"f" ||
                term_prod.factor(0)->as<Tensor>().label() == L"g");
@@ -217,13 +221,11 @@ class screened_vac_av {
       }
 
       const int R = h_factor.rank();
-      const int L = l_factor.rank(); // ? l_factor.rank() : 0;
+      const int L = l_factor.rank();
 
-//      const int max_exlev_R = R - K;
-      const int max_exlev_R = R - (K - L);
+      const int max_exlev_R = R - K;
 
-//      auto exlev = -P;
-      auto exlev = -P - L;
+      auto exlev = -P;
 
       bool canonical = true;
       double degeneracy =
@@ -264,8 +266,7 @@ class screened_vac_av {
       if (canonical_only)
         degeneracy /= boost::math::factorial<double>(
             current_partition_size);  // account for the last partition
-//      const int min_exlev_R = std::max(-R, R - 2 * total_T_rank);
-      const int min_exlev_R = std::max(-R - L, R - 2 * total_T_rank - 2 * L);
+      const int min_exlev_R = std::max(-R, R - 2 * total_T_rank);
       if (canonical || !canonical_only) {
         if (exlev + min_exlev_R <= 0 && 0 <= exlev + max_exlev_R) {  // VEV != 0
           assert(min_exlev_R <= max_exlev_R);
@@ -282,6 +283,7 @@ class screened_vac_av {
                                            use_topology);
     }
   }  // screened_vac_av_lambda
+
 };   // screened_vac_av
 
 /// Evaluates coupled-cluster amplitude equation, `<P|(H exp(T(N))_c|0>`,
