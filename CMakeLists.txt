@@ -260,6 +260,7 @@ set(SeQuant_src
         SeQuant/domain/mbpt/sr/sr.hpp
         SeQuant/domain/mbpt/antisymmetrizer.hpp
         SeQuant/domain/mbpt/rdm.hpp
+        SeQuant/external/boost/interval.hpp
         )
 
 ### optional prereqs

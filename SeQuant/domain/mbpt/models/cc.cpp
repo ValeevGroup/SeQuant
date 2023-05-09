@@ -5,15 +5,6 @@
 #include <iostream>
 
 #include <boost/math/special_functions/factorials.hpp>
-// boost/numeric/interval does not know about arm rounding .. on arm64/macos use
-// c99 rounding
-#if defined(__arm64__) && defined(__APPLE__) && !defined(__USE_ISOC99)
-#define __USE_ISOC99 1
-#include <boost/numeric/interval.hpp>
-#undef __USE_ISOC99
-#else
-#include <boost/numeric/interval.hpp>
-#endif
 
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -110,7 +101,7 @@ class screened_vac_av {
         if (canonical_only) {
           if (current_rank < prev_rank)  // if T ranks are not increasing, omit
             canonical = false;
-          else {                         // else keep track of degeneracy
+          else {  // else keep track of degeneracy
             assert(current_rank != 0);
             if (current_rank == prev_rank)
               ++current_partition_size;
@@ -249,7 +240,7 @@ class screened_vac_av {
         if (canonical_only) {
           if (current_rank < prev_rank)  // if T ranks are not increasing, omit
             canonical = false;
-          else {                         // else keep track of degeneracy
+          else {  // else keep track of degeneracy
             assert(current_rank != 0);
             if (current_rank == prev_rank) {
               ++current_partition_size;
@@ -284,7 +275,7 @@ class screened_vac_av {
     }
   }  // screened_vac_av_lambda
 
-};   // screened_vac_av
+};  // screened_vac_av
 
 /// Evaluates coupled-cluster amplitude equation, `<P|(H exp(T(N))_c|0>`,
 /// for particular `P` and `N`
