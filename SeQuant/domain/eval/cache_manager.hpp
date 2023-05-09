@@ -8,7 +8,7 @@ namespace sequant::eval {
 
 ///
 /// This class implements a cache manager useful for the cases when the number
-/// of times the cached objects will be accessed.
+/// of times the cached objects will be accessed is known.
 ///
 template <typename Data>
 class CacheManager {
