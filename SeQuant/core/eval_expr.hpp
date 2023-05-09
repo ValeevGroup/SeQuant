@@ -15,10 +15,6 @@ enum class EvalOp {
   Sum,
   /** Product type evaluation. */
   Prod,
-  /** Symmetrization type evaluation. */
-  Symm,
-  /** Antisymmetrization type evaluation. */
-  Antisymm,
 };  // EvalOp
 
 /**

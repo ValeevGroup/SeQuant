@@ -101,12 +101,6 @@ EvalExpr::EvalExpr(const EvalExpr& xpr1, const EvalExpr& xpr2,
     case EvalOp::Prod:
       s = infer_tensor_symmetry_prod(expr1, expr2);
       break;
-    case EvalOp::Symm:
-      s = Symmetry::symm;
-      break;
-    case EvalOp::Antisymm:
-      s = Symmetry::antisymm;
-      break;
     default:
       assert(false && "Unsupported operation for symmetry detect.");
   }

@@ -68,7 +68,7 @@ ExprPtr to_expr(EvalNode<ExprT> const& node) {
                : ex<Constant>(evxpr.scalar()) * evxpr.tensor().clone();
   }
 
-  if (op == EvalOp::Prod || op == EvalOp::Symm || op == EvalOp::Antisymm) {
+  if (op == EvalOp::Prod) {
     auto prod = Product{};
     prod.scale(evxpr.scalar().value());
 
@@ -147,7 +147,7 @@ AsyCost asy_cost_impl(EvalNode<ExprT> const& node, bool exploit_symmetry,
   return AsyCost{exploit_symmetry ? asy_cost_single_node(node)
                                   : asy_cost_single_node_symm_off(node)} +  //
          asy_cost_impl(node.left(), exploit_symmetry,
-                       std::forward<F>(pred)) +  //
+                       std::forward<F>(pred)) +                             //
          asy_cost_impl(node.right(), exploit_symmetry, std::forward<F>(pred));
 }
 }  // namespace detail
@@ -168,22 +168,7 @@ AsyCost asy_cost_single_node_symm_off(EvalNode<ExprT> const& node) {
 
   size_t const nvirt = uniques.size() - nocc;
 
-  switch (node->op()) {
-    case EvalOp::Symm: {
-      auto f = static_cast<int>(
-          boost::math::factorial<double>(node->tensor().rank()));
-      return AsyCost{static_cast<int>(f), nocc, nvirt};
-    }
-    case EvalOp::Antisymm: {
-      auto f = static_cast<int>(
-          boost::math::factorial<double>(node->tensor().rank()));
-      return AsyCost{static_cast<int>(f * f), nocc, nvirt};
-    }
-    default:
-      // for matrix multiplication the flops will be doubled
-      // to account for the summation ops in a `dot(row, col)` operation
-      return AsyCost{node->op() == EvalOp::Prod ? 2 : 1, nocc, nvirt};
-  }
+  return AsyCost{node->op() == EvalOp::Prod ? 2 : 1, nocc, nvirt};
 }
 
 template <typename ExprT>
@@ -220,10 +205,6 @@ AsyCost asy_cost_single_node(EvalNode<ExprT> const& node) {
       cost = (lsym == rsym && lsym == Symmetry::nonsymm)
                  ? cost / factorial(pbrank)
                  : cost / (factorial(pbrank) * factorial(pkrank));
-    } else if (op == EvalOp::Symm) {
-      cost = cost / factorial(pbrank);
-    } else if (op == EvalOp::Antisymm) {
-      cost = cost / (factorial(pbrank) * factorial(pkrank));
     } else {
       assert(
           false &&

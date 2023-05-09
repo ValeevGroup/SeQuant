@@ -48,19 +48,6 @@ TEST_CASE("TEST_EVAL_EXPR", "[EvalExpr]") {
 
     auto x2 = EvalExpr(parse_expr_antisymm(L"A_{a_1, a_2}^{i_1, i_2}")->as<Tensor>());
     REQUIRE(x2.op() == EvalOp::Id);
-
-    auto p2 = parse_expr_antisymm(L"A{a1,a2;i1,i2} * I{a1,a2;i1,i2}");
-    auto const x3 = EvalExpr{p2->at(0)->as<Tensor>()};
-    auto const x4 = EvalExpr{p2->at(1)->as<Tensor>()};
-    auto const x5 = EvalExpr{x3, x4, EvalOp::Antisymm};
-
-    REQUIRE(x5.op() == EvalOp::Antisymm);
-
-    auto p3 = parse_expr(L"S{a1,a2;i1,i2}:S * I{a1,a2;i1,i2}", Symmetry::nonsymm);
-    auto const x6 = EvalExpr{p3->at(0)->as<Tensor>()};
-    auto const x7 = EvalExpr{p3->at(1)->as<Tensor>()};
-    auto const x8 = EvalExpr{x6, x7, EvalOp::Symm};
-    REQUIRE(x8.op() == EvalOp::Symm);
   }
 
   SECTION("Sequant expression") {
