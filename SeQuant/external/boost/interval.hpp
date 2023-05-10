@@ -11,4 +11,17 @@
 #include <boost/numeric/interval.hpp>
 #endif
 
+namespace boost::numeric {
+
+template <typename T>
+inline auto hash_value(const interval<T>& i) {
+  using boost::hash_value;
+  auto val = hash_value(i.lower());
+  using boost::hash_combine;
+  hash_combine(val, i.upper());
+  return val;
+}
+
+}  // namespace boost::numeric
+
 #endif  // SEQUANT_EXTERNAL_BOOST_INTERVAL_H
