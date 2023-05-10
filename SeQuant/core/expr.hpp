@@ -517,6 +517,17 @@ using ExprPtrVector = container::svector<ExprPtr>;
 /// @return the adjoint of @p expr
 ExprPtr adjoint(const ExprPtr &expr);
 
+/// An object with a string label that be used for defining a canonical order of
+/// expressions (defined at runtime)
+class Labeled {
+ public:
+  Labeled() = default;
+  virtual ~Labeled() = default;
+
+  virtual std::wstring_view label() const = 0;
+};
+
+/// a scalar constant
 class Constant : public Expr {
  public:
   using scalar_type = std::complex<double>;

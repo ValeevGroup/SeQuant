@@ -32,13 +32,17 @@ NormalOperator<Statistics::BoseEinstein>::labels() {
 }
 
 template <>
-std::wstring NormalOperator<Statistics::FermiDirac>::label() const {
-  return vacuum() == Vacuum::Physical ? L"a" : L"ã";
+std::wstring_view NormalOperator<Statistics::FermiDirac>::label() const {
+  static const std::wstring a = L"a";
+  static const std::wstring atilde = L"ã";
+  return vacuum() == Vacuum::Physical ? a : atilde;
 }
 
 template <>
-std::wstring NormalOperator<Statistics::BoseEinstein>::label() const {
-  return vacuum() == Vacuum::Physical ? L"b" : L"ᵬ";
+std::wstring_view NormalOperator<Statistics::BoseEinstein>::label() const {
+  static const std::wstring b = L"b";
+  static const std::wstring btilde = L"ᵬ";
+  return vacuum() == Vacuum::Physical ? b : btilde;
 }
 
 }  // namespace sequant

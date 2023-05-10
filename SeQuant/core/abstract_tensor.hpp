@@ -103,7 +103,7 @@ class AbstractTensor {
   virtual bool _is_cnumber() const {
     throw missing_instantiation_for("_is_cnumber");
   }
-  virtual std::wstring _label() const {
+  virtual std::wstring_view _label() const {
     throw missing_instantiation_for("_label");
   }
   virtual std::wstring _to_latex() const {

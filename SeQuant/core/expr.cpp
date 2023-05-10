@@ -104,22 +104,31 @@ ExprPtr Product::canonicalize_impl(bool rapid) {
         TensorCanonicalizer::cardinal_tensor_labels();
     auto local_compare = [&cardinal_tensor_labels](const ExprPtr &first,
                                                    const ExprPtr &second) {
-      if (first->is<Tensor>() && second->is<Tensor>()) {
+      if (first->is<Labeled>() && second->is<Labeled>()) {
         const auto first_label = first->as<Tensor>().label();
         const auto second_label = second->as<Tensor>().label();
-        const bool first_is_cardinal = ranges::any_of(
+        if (first_label == second_label) return *first < *second;
+        const auto first_is_cardinal_it = ranges::find_if(
             cardinal_tensor_labels,
             [&first_label](const std::wstring &l) { return l == first_label; });
-        const bool second_is_cardinal = ranges::any_of(
+        const auto first_is_cardinal =
+            first_is_cardinal_it != ranges::end(cardinal_tensor_labels);
+        const auto second_is_cardinal_it = ranges::find_if(
             cardinal_tensor_labels, [&second_label](const std::wstring &l) {
               return l == second_label;
             });
-        if (!(first_is_cardinal ^ second_is_cardinal))
-          return *first < *second;
-        else if (first_is_cardinal)
+        const auto second_is_cardinal =
+            second_is_cardinal_it != ranges::end(cardinal_tensor_labels);
+        if (first_is_cardinal && second_is_cardinal)
+          return first_is_cardinal_it < second_is_cardinal_it;
+        else if (first_is_cardinal && !second_is_cardinal)
           return true;
-        else  // if (second_is_cardinal)
+        else if (!first_is_cardinal && second_is_cardinal)
           return false;
+        else {
+          assert(!first_is_cardinal && !second_is_cardinal);
+          return *first < *second;
+        }
       } else
         return *first < *second;
     };
