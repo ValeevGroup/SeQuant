@@ -81,5 +81,18 @@ TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
     REQUIRE(extract(res3, {0, 0, 1}) == prod3.at(3));
     REQUIRE(extract(res3, {0, 1}) == prod3.at(1));
     REQUIRE(extract(res3, {1}) == prod3.at(2));
+
+    //
+    // single-term optimization when a dot product occurs in the tensor network
+    // ========================
+
+    auto prod4 =
+        parse_expr_antisymm(L"1/4 λ{i1;a1} g{i2,i3;a2,a3} t{a2,a3;i2,i3}")
+            ->as<Product>();
+    auto res4 = single_term_opt(prod4);
+
+    REQUIRE(extract(res4, {0}) == prod4.at(0));
+    REQUIRE(extract(res4, {1, 0}) == prod4.at(1));
+    REQUIRE(extract(res4, {1, 1}) == prod4.at(2));
   }
 }

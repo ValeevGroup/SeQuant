@@ -101,31 +101,50 @@ struct OptRes {
   eval_seq_t sequence;
 };
 
-/// returns a pair of index vectors
-/// first element of the pair is the vector of common indices compared by labels
-/// second element of the pair is the set symmetric difference of the input
-/// index vectors if either of the input index container is empty, the result is
-/// a pair of empty vectors
+///
+/// returns a vector of Index objects that are common in @c idxs1 and @c idxs2.
+///
 /// @note I1 and I2 containers are assumed to be sorted by using
 /// Index::LabelCompare{};
 template <typename I1, typename I2>
-std::pair<container::svector<Index>, container::svector<Index>> common_indices(
-    I1 const& idxs1, I2 const& idxs2) {
+container::svector<Index> common_indices(I1 const& idxs1, I2 const& idxs2) {
   using std::back_inserter;
   using std::begin;
   using std::end;
+  using std::set_intersection;
 
-  container::vector<Index> i1vec(begin(idxs1), end(idxs1)),
-      i2vec(begin(idxs2), end(idxs2));
-  if (i1vec.empty() || i2vec.empty()) return {{}, {}};
+  auto result = container::svector<Index>{};
 
-  container::svector<Index> commons, diffs;
-  std::set_intersection(begin(i1vec), end(i1vec), begin(i2vec), end(i2vec),
-                        back_inserter(commons), Index::LabelCompare{});
-  std::set_symmetric_difference(begin(i1vec), end(i1vec), begin(i2vec),
-                                end(i2vec), back_inserter(diffs),
-                                Index::LabelCompare{});
-  return {commons, diffs};
+  set_intersection(begin(idxs1), end(idxs1), begin(idxs2), end(idxs2),
+                   back_inserter(result), Index::LabelCompare{});
+  return result;
+}
+
+///
+/// returns a vector of Index objects that are common in @c idxs1 and @c idxs2.
+///
+/// @note I1 and I2 containers are assumed to be sorted by using
+/// Index::LabelCompare{};
+template <typename I1, typename I2>
+container::svector<Index> diff_indices(I1 const& idxs1, I2 const& idxs2) {
+  using std::back_inserter;
+  using std::begin;
+  using std::end;
+  using std::set_symmetric_difference;
+
+  auto result = container::svector<Index>{};
+
+  set_symmetric_difference(begin(idxs1), end(idxs1), begin(idxs2), end(idxs2),
+                 back_inserter(result), Index::LabelCompare{});
+  return result;
+}
+
+/// T is integral type
+/// TODO: Use C++20 <bit> header when possible
+template <typename T>
+bool has_single_bit(T x) noexcept
+{
+  return x != 0 && (x & (x - 1)) == 0;
 }
 
 ///
@@ -143,7 +162,7 @@ eval_seq_t single_term_opt(TensorNetwork const& network, IdxToSz const& idxsz) {
   auto const nt = network.tensors().size();
   if (nt == 1) return eval_seq_t{0};
   if (nt == 2) return eval_seq_t{0, 1, -1};
-  auto nth_tensor_indices = container::vector<container::svector<Index>>{};
+  auto nth_tensor_indices = container::svector<container::svector<Index>>{};
   nth_tensor_indices.reserve(nt);
 
   for (auto i = 0; i < nt; ++i) {
@@ -156,7 +175,7 @@ eval_seq_t single_term_opt(TensorNetwork const& network, IdxToSz const& idxsz) {
     nth_tensor_indices.emplace_back(std::move(bk));
   }
 
-  container::vector<OptRes> results((1 << nt), OptRes{{}, 0, {}});
+  container::svector<OptRes> results((1 << nt), OptRes{{}, 0, {}});
 
   // power_pos is used, and incremented, only when the
   // result[1<<0]
@@ -176,9 +195,12 @@ eval_seq_t single_term_opt(TensorNetwork const& network, IdxToSz const& idxsz) {
                            & results = std::as_const(results),  //
                        &idxsz](                                 //
                           size_t lpart, size_t rpart) {
-      auto [commons,                                         //
-            diffs] = common_indices(results[lpart].indices,  //
-                                    results[rpart].indices);
+      auto commons =
+          common_indices(results[lpart].indices, results[rpart].indices);
+      auto diffs = diff_indices(results[lpart].indices, results[rpart].indices);
+      //      auto [commons,                                            //
+      //            diffs] = common_indices(results[lpart].indices,     //
+      //                                    results[rpart].indices);
       auto new_cost = ops_count(idxsz,           //
                                 commons, diffs)  //
                       + results[lpart].flops     //
@@ -193,7 +215,7 @@ eval_seq_t single_term_opt(TensorNetwork const& network, IdxToSz const& idxsz) {
     biparts(n, scan_parts);
 
     auto& curr_result = results[n];
-    if (curr_indices.empty()) {
+    if (curr_indices.empty() && has_single_bit(n)) {
       // evaluation of a single atomic tensor
       curr_result.flops = 0;
       curr_result.indices = std::move(nth_tensor_indices[power_pos]);
@@ -242,7 +264,7 @@ template <typename IdxToSz,
 ExprPtr single_term_opt(Product const& prod, IdxToSz const& idxsz) {
   if (prod.factors().size() < 3) return clone_packed(prod);
   auto seq = single_term_opt(TensorNetwork{prod}, idxsz);
-  auto result = container::vector<ExprPtr>{};
+  auto result = container::svector<ExprPtr>{};
   for (auto i : seq)
     if (i == -1) {
       auto rexpr = *result.rbegin();
