@@ -19,6 +19,18 @@ inline ExprPtr& canonicalize(ExprPtr& expr) {
   return expr;
 }
 
+/// Recursively canonicalizes an Expr; like mutating canonicalize() but works
+/// for temporary expressions
+/// @param[in] expr_rv rvalue-ref-to-expression to be canonicalized
+/// @return canonicalized form of \p expr_rv
+inline ExprPtr canonicalize(ExprPtr&& expr_rv) {
+  const auto biproduct = expr_rv->canonicalize();
+  if (biproduct && biproduct->is<Constant>()) {
+    expr_rv = biproduct * expr_rv;
+  }
+  return std::move(expr_rv);
+}
+
 namespace detail {
 struct expand_visitor {
   void operator()(ExprPtr& expr) {
