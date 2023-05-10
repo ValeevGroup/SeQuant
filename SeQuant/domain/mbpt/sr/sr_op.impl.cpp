@@ -13,7 +13,25 @@ ExprPtr Lambda_(std::size_t Nbra, std::size_t Nket) {
   assert(Nket > 0);
   const auto Nket_ =
       Nket == std::numeric_limits<std::size_t>::max() ? Nbra : Nket;
-  return Op(OpType::l, Nbra, Nket_)();
+  return Op(OpType::lambda, Nbra, Nket_)();
+}
+
+/// makes R excitation operator of bra/ket ranks @c Nbra/Nket
+ExprPtr R_(std::size_t Nbra, std::size_t Nket) {
+  assert(Nbra < std::numeric_limits<std::size_t>::max());
+  const auto Nket_ =
+      Nket == std::numeric_limits<std::size_t>::max() ? Nbra : Nket;
+  assert(Nbra > 0 || Nket_ > 0);
+  return Op(OpType::R, Nbra, Nket_)();
+}
+
+/// makes L deexcitation operator of bra/ket ranks @c Nbra/Nket
+ExprPtr L_(std::size_t Nbra, std::size_t Nket) {
+  assert(Nbra < std::numeric_limits<std::size_t>::max());
+  const auto Nket_ =
+      Nket == std::numeric_limits<std::size_t>::max() ? Nbra : Nket;
+  assert(Nbra > 0 || Nket_ > 0);
+  return Op(OpType::L, Nbra, Nket_)();
 }
 
 namespace detail {
@@ -36,8 +54,12 @@ class op_impl {
   void operator()(ExprPtr& result) {
     if (op_ == OpType::t)
       result = result ? result + T_(nbra_, nket_) : T_(nbra_, nket_);
-    else if (op_ == OpType::l)
+    else if (op_ == OpType::lambda)
       result = result ? result + Lambda_(nbra_, nket_) : Lambda_(nbra_, nket_);
+    else if (op_ == OpType::R)
+      result = result ? result + R_(nbra_, nket_) : R_(nbra_, nket_);
+    else if (op_ == OpType::L)
+      result = result ? result + L_(nbra_, nket_) : L_(nbra_, nket_);
     else
       assert(false && "unsupported op value");
 
@@ -49,8 +71,8 @@ class op_impl {
 
 }  // namespace detail
 
-/// makes excitation operator of all bra/ket ranks up to (and including) @c
-/// Nbra/Nket
+/// makes excitation operator of all bra/ket ranks up to (and including)
+/// @c Nbra/Nket
 ExprPtr T(std::size_t Nbra, std::size_t Nket) {
   assert(Nbra > 0 && Nbra < std::numeric_limits<std::size_t>::max());
   const auto Nket_ =
@@ -61,15 +83,15 @@ ExprPtr T(std::size_t Nbra, std::size_t Nket) {
   return result;
 }
 
-/// makes deexcitation operator of all bra/ket ranks up to (and including) @c
-/// Nbra/Nket
+/// makes deexcitation operator of all bra/ket ranks up to (and including)
+/// @c Nbra/Nket
 ExprPtr Lambda(std::size_t Nbra, std::size_t Nket) {
   assert(Nbra > 0 && Nbra < std::numeric_limits<std::size_t>::max());
   const auto Nket_ =
       Nket == std::numeric_limits<std::size_t>::max() ? Nbra : Nket;
   assert(Nket_ > 0);
   ExprPtr result;
-  detail::op_impl{OpType::l, Nbra, Nket_}(result);
+  detail::op_impl{OpType::lambda, Nbra, Nket_}(result);
   return result;
 }
 
@@ -90,20 +112,26 @@ ExprPtr A(std::size_t Nbra, std::size_t Nket) {
   return Op(OpType::A, Nbra, Nket_)();
 }
 
-/// makes L deexcitation operator of bra/ket ranks @c Nbra/Nket
-ExprPtr L(std::size_t Nbra, std::size_t Nket) {
-  assert(Nbra < std::numeric_limits<std::size_t>::max());
+/// makes excitation operator of all bra/ket ranks up to (and including)
+/// @c Nbra/Nket
+ExprPtr R(std::size_t Nbra, std::size_t Nket) {
+  assert(Nbra > 0 && Nbra < std::numeric_limits<std::size_t>::max());
   const auto Nket_ =
       Nket == std::numeric_limits<std::size_t>::max() ? Nbra : Nket;
-  assert(Nbra > 0 || Nket_ > 0);
-  return Op(OpType::L, Nbra, Nket_)();
+  assert(Nket_ > 0);
+  ExprPtr result;
+  detail::op_impl{OpType::R, Nbra, Nket_}(result);
+  return result;
 }
 
-/// makes R excitation operator of bra/ket ranks @c Nbra/Nket
-ExprPtr R(std::size_t Nbra, std::size_t Nket) {
-  assert(Nbra < std::numeric_limits<std::size_t>::max());
+/// makes deexcitation operator of all bra/ket ranks up to (and including)
+/// @c Nbra/Nket
+ExprPtr L(std::size_t Nbra, std::size_t Nket) {
+  assert(Nbra > 0 && Nbra < std::numeric_limits<std::size_t>::max());
   const auto Nket_ =
       Nket == std::numeric_limits<std::size_t>::max() ? Nbra : Nket;
-  assert(Nbra > 0 || Nket_ > 0);
-  return Op(OpType::R, Nbra, Nket_)();
+  assert(Nket_ > 0);
+  ExprPtr result;
+  detail::op_impl{OpType::L, Nbra, Nket_}(result);
+  return result;
 }
