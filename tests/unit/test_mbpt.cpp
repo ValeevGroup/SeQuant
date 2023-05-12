@@ -168,16 +168,16 @@ TEST_CASE("NBodyOp", "[mbpt]") {
                             qns += qns_t{{+1, +1}, {2, 2}};
                           });
 
-    REQUIRE((to_latex(f) == L"{\\hat{f}}"));
-    REQUIRE((to_latex(t1) == L"{\\hat{t}_{1}}"));
-    REQUIRE((to_latex(t2) == L"{\\hat{t}_{2}}"));
-    REQUIRE((to_latex(lambda1) == L"{\\hat{\\lambda}_{1}}"));
-    REQUIRE((to_latex(lambda2) == L"{\\hat{\\lambda}_{2}}"));
-    std::wcout << "to_latex(r_2_1) = " << to_latex(r_2_1) << std::endl;
-    std::wcout << "to_latex(r_2_1->tensor_form()) = "
-               << to_latex(r_2_1->as<op_t>().tensor_form()) << std::endl;
-    REQUIRE((to_latex(r_2_1) == L"{\\hat{R}_{-2}^{1}}"));
-    REQUIRE((to_latex(r_1_2) == L"{\\hat{R}_{-1}^{2}}"));
+    REQUIRE(to_latex(f) == L"{\\hat{f}}");
+    REQUIRE(to_latex(t1) == L"{\\hat{t}_{1}}");
+    REQUIRE(to_latex(t2) == L"{\\hat{t}_{2}}");
+    REQUIRE(to_latex(lambda1) == L"{\\hat{\\lambda}_{1}}");
+    REQUIRE(to_latex(lambda2) == L"{\\hat{\\lambda}_{2}}");
+    //    std::wcout << "to_latex(r_2_1) = " << to_latex(r_2_1) << std::endl;
+    //    std::wcout << "to_latex(r_2_1->tensor_form()) = "
+    //               << to_latex(r_2_1->as<op_t>().tensor_form()) << std::endl;
+    REQUIRE(to_latex(r_2_1) == L"{\\hat{R}_{-2}^{1}}");
+    REQUIRE(to_latex(r_1_2) == L"{\\hat{R}_{-1}^{2}}");
   }
 
   SECTION("canonicalize") {
@@ -211,21 +211,21 @@ TEST_CASE("NBodyOp", "[mbpt]") {
     //    std::wcout << "f1 * t2 * t1=" << to_latex(f1 * t2 * t1) << std::endl;
     //    std::wcout << "canonicalize(f1 * t2 * t1)=" <<
     //    to_latex(canonicalize(f1 * t2 * t1)) << std::endl;
-    REQUIRE((to_latex(f * t1 * t2) == to_latex(canonicalize(f * t2 * t1))));
+    REQUIRE(to_latex(f * t1 * t2) == to_latex(canonicalize(f * t2 * t1)));
 
-    REQUIRE((to_latex(ex<Constant>(3) * f * t1 * t2) ==
-             to_latex(simplify(ex<Constant>(2) * f * t2 * t1 + f * t1 * t2))));
+    REQUIRE(to_latex(ex<Constant>(3) * f * t1 * t2) ==
+            to_latex(simplify(ex<Constant>(2) * f * t2 * t1 + f * t1 * t2)));
     auto t = t1 + t2;
     // std::wcout << "\\hat{f} \\hat{t} \\hat{t} = " << to_latex(simplify(f1 * t
     // * t)) << std::endl;
     REQUIRE(
-        (to_latex(simplify(f * t * t)) ==
-         to_latex(ex<Constant>(2) * f * t1 * t2 + f * t1 * t1 + f * t2 * t2)));
+        to_latex(simplify(f * t * t)) ==
+        to_latex(ex<Constant>(2) * f * t1 * t2 + f * t1 * t1 + f * t2 * t2));
     // std::wcout << "\\hat{f} \\hat{t} \\hat{t} \\hat{t} = " <<
     // to_latex(simplify(f * t * t * t)) << std::endl;
-    REQUIRE((to_latex(simplify(f * t * t * t)) ==
-             to_latex(f * t2 * t2 * t2 + ex<Constant>(3) * f * t1 * t1 * t2 +
-                      f * t1 * t1 * t1 + ex<Constant>(3) * f * t1 * t2 * t2)));
+    REQUIRE(to_latex(simplify(f * t * t * t)) ==
+            to_latex(f * t2 * t2 * t2 + ex<Constant>(3) * f * t1 * t1 * t2 +
+                     f * t1 * t1 * t1 + ex<Constant>(3) * f * t1 * t2 * t2));
   }
 }
 
