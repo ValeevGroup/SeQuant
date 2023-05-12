@@ -234,6 +234,7 @@ set(SeQuant_src
         SeQuant/core/parse/parse_expr.cpp
         SeQuant/core/optimize.hpp
         SeQuant/core/wstring.hpp
+        SeQuant/core/interval.hpp
         SeQuant/core/optimize/optimize.cpp
         SeQuant/core/optimize/fusion.hpp
         SeQuant/core/optimize/fusion.cpp
@@ -261,7 +262,6 @@ set(SeQuant_src
         SeQuant/domain/mbpt/sr/sr.hpp
         SeQuant/domain/mbpt/antisymmetrizer.hpp
         SeQuant/domain/mbpt/rdm.hpp
-        SeQuant/external/boost/interval.hpp
         )
 
 ### optional prereqs

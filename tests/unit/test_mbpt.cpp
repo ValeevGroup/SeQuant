@@ -8,7 +8,6 @@
 #include "SeQuant/domain/mbpt/formalism.hpp"
 #include "SeQuant/domain/mbpt/op.hpp"
 #include "SeQuant/domain/mbpt/sr/sr.hpp"
-#include "SeQuant/external/boost/interval.hpp"
 
 #include "catch.hpp"
 
@@ -220,12 +219,12 @@ TEST_CASE("NBodyOp", "[mbpt]") {
     // * t)) << std::endl;
     REQUIRE(
         to_latex(simplify(f * t * t)) ==
-        to_latex(ex<Constant>(2) * f * t1 * t2 + f * t1 * t1 + f * t2 * t2));
+        to_latex(f * t1 * t1 + f * t2 * t2 + ex<Constant>(2) * f * t1 * t2));
     // std::wcout << "\\hat{f} \\hat{t} \\hat{t} \\hat{t} = " <<
     // to_latex(simplify(f * t * t * t)) << std::endl;
     REQUIRE(to_latex(simplify(f * t * t * t)) ==
-            to_latex(f * t2 * t2 * t2 + ex<Constant>(3) * f * t1 * t1 * t2 +
-                     f * t1 * t1 * t1 + ex<Constant>(3) * f * t1 * t2 * t2));
+            to_latex(f * t1 * t1 * t1 + ex<Constant>(3) * f * t1 * t2 * t2 +
+                     f * t2 * t2 * t2 + ex<Constant>(3) * f * t1 * t1 * t2));
   }
 }
 

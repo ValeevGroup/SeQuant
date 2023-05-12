@@ -11,7 +11,7 @@
 #include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/expr.hpp>
-#include <SeQuant/external/boost/interval.hpp>
+#include <SeQuant/core/interval.hpp>
 
 namespace sequant {
 namespace mbpt {

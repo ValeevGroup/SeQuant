@@ -85,7 +85,7 @@ using boost::hash_value;
 // - 64-bit: container_hash/hash.hpp:336
 // n.b. The latter is disabled if int64_t is not available or 32-bit gcc is used
 // Somehow Macos clang dispatches to the first version, but everywhere else (Linux) dispatch ends up to the last one.
-// This skips the first version. Since boost::hash_range is implemented in terms of boost::hash_range must reimplement
+// This skips the first version. Since boost::hash_range is implemented in terms of boost::hash_combine must reimplement
 // that also.
 // clang-format on
 
