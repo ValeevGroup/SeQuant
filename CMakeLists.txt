@@ -217,6 +217,7 @@ set(SeQuant_src
         SeQuant/core/algorithm.hpp
         SeQuant/core/tensor_network.cpp
         SeQuant/core/tensor_network.hpp
+        SeQuant/core/runtime.cpp
         SeQuant/core/runtime.hpp
         SeQuant/core/utility.hpp
         SeQuant/core/bliss.hpp
