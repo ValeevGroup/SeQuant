@@ -135,15 +135,14 @@ container::svector<Index> diff_indices(I1 const& idxs1, I2 const& idxs2) {
   auto result = container::svector<Index>{};
 
   set_symmetric_difference(begin(idxs1), end(idxs1), begin(idxs2), end(idxs2),
-                 back_inserter(result), Index::LabelCompare{});
+                           back_inserter(result), Index::LabelCompare{});
   return result;
 }
 
 /// T is integral type
 /// TODO: Use C++20 <bit> header when possible
 template <typename T>
-bool has_single_bit(T x) noexcept
-{
+bool has_single_bit(T x) noexcept {
   return x != 0 && (x & (x - 1)) == 0;
 }
 
@@ -198,9 +197,6 @@ eval_seq_t single_term_opt(TensorNetwork const& network, IdxToSz const& idxsz) {
       auto commons =
           common_indices(results[lpart].indices, results[rpart].indices);
       auto diffs = diff_indices(results[lpart].indices, results[rpart].indices);
-      //      auto [commons,                                            //
-      //            diffs] = common_indices(results[lpart].indices,     //
-      //                                    results[rpart].indices);
       auto new_cost = ops_count(idxsz,           //
                                 commons, diffs)  //
                       + results[lpart].flops     //
@@ -215,7 +211,8 @@ eval_seq_t single_term_opt(TensorNetwork const& network, IdxToSz const& idxsz) {
     biparts(n, scan_parts);
 
     auto& curr_result = results[n];
-    if (curr_indices.empty() && has_single_bit(n)) {
+    if (has_single_bit(n)) {
+      assert(curr_indices.empty());
       // evaluation of a single atomic tensor
       curr_result.flops = 0;
       curr_result.indices = std::move(nth_tensor_indices[power_pos]);
