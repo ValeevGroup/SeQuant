@@ -16,9 +16,8 @@
 namespace boost::numeric {
 
 template <typename T>
-inline auto hash_value(const interval<T>& i) {
-  using boost::hash_value;
-  auto val = hash_value(i.lower());
+inline auto hash_value(const boost::numeric::interval<T>& i) {
+  auto val = sequant::hash::value(i.lower());
   sequant::hash::combine(val, i.upper());
   return val;
 }

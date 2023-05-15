@@ -199,11 +199,9 @@ class ParticleNumberChange
 
   auto hash_value() const {
     static_assert(N > 0);
-    using boost::hash_value;
-    auto val = hash_value(this->operator[](0));
+    auto val = sequant::hash::value(this->operator[](0));
     for (std::size_t c = 1; c != N; ++c) {
-      using boost::hash_combine;
-      hash_combine(val, hash_value(this->operator[](c)));
+      sequant::hash::combine(val, sequant::hash::value(this->operator[](c)));
     }
     return val;
   }
@@ -369,10 +367,8 @@ class Operator : public Operator<void> {
     using std::begin;
     using std::end;
     auto qns = (*this)(QuantumNumbers{});
-    using boost::hash_value;
-    auto val = hash_value(qns);
-    using boost::hash_combine;
-    hash_combine(val, std::wstring(this->label()));
+    auto val = sequant::hash::value(qns);
+    sequant::hash::combine(val, std::wstring(this->label()));
     hash_value_ = val;
     return *hash_value_;
   }
