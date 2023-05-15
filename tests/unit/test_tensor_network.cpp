@@ -216,7 +216,7 @@ TEST_CASE("TensorNetwork", "[elements]") {
     std::basic_ostringstream<wchar_t> oss;
     REQUIRE_NOTHROW(graph->write_dot(oss, vlabels));
     // std::wcout << "oss.str() = " << std::endl << oss.str() << std::endl;
-    if constexpr (hash_version() == 1)
+    if constexpr (hash_version() == hash::Impl::BoostPre181)
       REQUIRE(oss.str() ==
               L"graph g {\n"
               "v0 [label=\"{a_{102}}\"; color=\"#4f1,dd0\"];\n"

@@ -16,13 +16,20 @@
 
 namespace sequant {
 
+namespace hash {
+
+/// the hashing versions known to SeQuant (N.B. hashing changed in Boost 1.81)
+enum class Impl { BoostPre181 = 1, Boost181OrLater = 2 };
+
+}  // namespace hash
+
 /// @return the version of hashing used by SeQuant, depends on the version of
 /// Boost
-constexpr int hash_version() {
+constexpr hash::Impl hash_version() {
 #if BOOST_VERSION < 108100
-  return 1;
+  return hash::Impl::BoostPre181;
 #else
-  return 2;
+  return hash::Impl::Boost181OrLater;
 #endif
 }
 
@@ -100,6 +107,37 @@ inline void combine(std::size_t& seed, T const& v) {
   //  boost::hash_combine(seed_ref, v);
   _<T> hasher;
 
+//#define SEQUANT_HASH_IMPL_BUILTIN 1
+#ifdef SEQUANT_HASH_IMPL_BUILTIN
+  // Boost 1.81 implementation
+  auto mix = [](auto x) {
+    if constexpr (sizeof(x) == 4) {
+      std::uint32_t const m1 = 0x21f0aaad;
+      std::uint32_t const m2 = 0x735a2d97;
+
+      x ^= x >> 16;
+      x *= m1;
+      x ^= x >> 15;
+      x *= m2;
+      x ^= x >> 15;
+
+      return x;
+    } else if constexpr (sizeof(x) == 8) {
+      std::uint64_t const m = (std::uint64_t(0xe9846af) << 32) + 0x9b1a615d;
+
+      x ^= x >> 32;
+      x *= m;
+      x ^= x >> 32;
+      x *= m;
+      x ^= x >> 28;
+
+      return x;
+    } else
+      abort();  //
+  };
+
+  seed = mix(seed + 0x9e3779b9 + hasher(v));
+#else  // !SEQUANT_HASH_IMPL_BUILTIN
 #if BOOST_VERSION >= 108100
   boost::hash_combine(seed, hasher(v));
 #else  // older boost workarounds
@@ -135,6 +173,7 @@ inline void combine(std::size_t& seed, T const& v) {
     seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
   }
 #endif  // older boost workarounds
+#endif  // !SEQUANT_HASH_IMPL_BUILTIN
 
   //  assert(seed == seed_ref);
 }

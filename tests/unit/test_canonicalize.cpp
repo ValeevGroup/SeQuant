@@ -87,7 +87,7 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
                        ex<Tensor>(L"t", IndexList{{L"p_4"}},
                                   IndexList{{L"p_2"}}, Symmetry::nonsymm);
       canonicalize(input);
-      if constexpr (hash_version() == 1)
+      if constexpr (hash_version() == hash::Impl::BoostPre181)
         REQUIRE(
             to_latex(input) ==
             L"{ "

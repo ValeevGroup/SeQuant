@@ -138,7 +138,7 @@ TEST_CASE("Spin", "[spin]") {
     REQUIRE(result->is<Sum>());
     canonicalize(result);
     REQUIRE(result->size() == 2);
-    if constexpr (hash_version() == 1)
+    if constexpr (hash_version() == hash::Impl::BoostPre181)
       REQUIRE(to_latex(result) ==
               L"{ \\bigl({{{2}}{g^{{p_3}{p_4}}_{{p_1}{p_2}}}} - "
               L"{{{2}}{g^{{p_4}{p_3}}_{{p_1}"
@@ -205,7 +205,7 @@ TEST_CASE("Spin", "[spin]") {
     canonicalize(result);
     REQUIRE(result->is<Sum>());
     REQUIRE(result->size() == 5);
-    if constexpr (hash_version() == 1)
+    if constexpr (hash_version() == hash::Impl::BoostPre181)
       REQUIRE(
           to_latex(result) ==
           L"{ \\bigl( - "
@@ -458,7 +458,7 @@ SECTION("Expand Symmetrizer") {
     REQUIRE(result->size() == 6);
     result->canonicalize();
     rapid_simplify(result);
-    if constexpr (hash_version() == 1)
+    if constexpr (hash_version() == hash::Impl::BoostPre181)
       REQUIRE(
           to_latex(result) ==
           L"{ "
@@ -567,7 +567,7 @@ SECTION("Transform expression") {
   expand(result);
   rapid_simplify(result);
   canonicalize(result);
-  if constexpr (hash_version() == 1)
+  if constexpr (hash_version() == hash::Impl::BoostPre181)
     REQUIRE(
         to_latex(result) ==
         L"{ \\bigl({{{2}}{g^{{i_1}{a_2}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}} - "
@@ -583,7 +583,7 @@ SECTION("Transform expression") {
   auto transformed_result = transform_expr(result, idxmap);
   REQUIRE(transformed_result->is<Sum>());
   REQUIRE(transformed_result->size() == 2);
-  if constexpr (hash_version() == 1)
+  if constexpr (hash_version() == hash::Impl::BoostPre181)
     REQUIRE(
         to_latex(transformed_result) ==
         L"{ \\bigl({{{2}}{g^{{i_2}{a_2}}_{{a_1}{i_1}}}{t^{{i_1}}_{{a_2}}}} - "
@@ -667,7 +667,7 @@ SECTION("Closed-shell spintrace CCSD") {
     auto result = ex<Constant>(0.5) * spintrace(input, {{L"i_1", L"a_1"}});
     simplify(result);
 
-    if constexpr (hash_version() == 1)
+    if constexpr (hash_version() == hash::Impl::BoostPre181)
       REQUIRE(
           to_latex(result) ==
           L"{ \\bigl({{{2}}{g^{{i_1}{a_2}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}} - "
@@ -683,7 +683,7 @@ SECTION("Closed-shell spintrace CCSD") {
     auto transformed_result = transform_expr(result, idxmap);
     REQUIRE(transformed_result->is<Sum>());
     REQUIRE(transformed_result->size() == 2);
-    if constexpr (hash_version() == 1)
+    if constexpr (hash_version() == hash::Impl::BoostPre181)
       REQUIRE(
           to_latex(transformed_result) ==
           L"{ \\bigl({{{2}}{g^{{i_2}{a_2}}_{{a_1}{i_1}}}{t^{{i_1}}_{{a_2}}}} - "
@@ -757,7 +757,7 @@ SECTION("Closed-shell spintrace CCSD") {
     rapid_simplify(result);
     canonicalize(result);
 
-    if constexpr (hash_version() == 1)
+    if constexpr (hash_version() == hash::Impl::BoostPre181)
       REQUIRE(to_latex(result) ==
               L"{ "
               L"\\bigl({{{2}}{g^{{a_3}{a_2}}_{{a_1}{i_2}}}{t^{{i_2}{i_1}}_{{a_"
@@ -783,7 +783,7 @@ SECTION("Closed-shell spintrace CCSD") {
     expand(result);
     rapid_simplify(result);
     canonicalize(result);
-    if constexpr (hash_version() == 1)
+    if constexpr (hash_version() == hash::Impl::BoostPre181)
       REQUIRE(
           to_latex(result) ==
           L"{ \\bigl({{{2}}{f^{{a_2}}_{{i_2}}}{t^{{i_1}{i_2}}_{{a_1}{a_2}}}} - "
@@ -866,7 +866,7 @@ SECTION("Closed-shell spintrace CCSD") {
     expand(result);
     rapid_simplify(result);
     canonicalize(result);
-    if constexpr (hash_version() == 1)
+    if constexpr (hash_version() == hash::Impl::BoostPre181)
       REQUIRE(to_latex(result) ==
               L"{ "
               L"\\bigl({{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_2}}_{{a_1}}}{t^{{i_"
@@ -917,7 +917,7 @@ SECTION("Closed-shell spintrace CCSD") {
     expand(result);
     rapid_simplify(result);
     canonicalize(result);
-    if constexpr (hash_version() == 1)
+    if constexpr (hash_version() == hash::Impl::BoostPre181)
       REQUIRE(to_latex(result) ==
               L"{ \\bigl( - "
               L"{{{2}}{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_2}}_{{a_2}}}{t^{{i_3}"
@@ -953,7 +953,7 @@ SECTION("Closed-shell spintrace CCSD") {
     expand(result);
     rapid_simplify(result);
     canonicalize(result);
-    if constexpr (hash_version() == 1)
+    if constexpr (hash_version() == hash::Impl::BoostPre181)
       REQUIRE(to_latex(result) ==
               L"{ "
               L"\\bigl({{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_2}}_{{a_1}}}{t^{{i_"
@@ -987,7 +987,7 @@ SECTION("Closed-shell spintrace CCSDT terms") {
         input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
     simplify(result);
     REQUIRE(result->size() == 4);
-    if constexpr (hash_version() == 1)
+    if constexpr (hash_version() == hash::Impl::BoostPre181)
       REQUIRE(to_latex(result) ==
               L"{ "
               L"\\bigl({{{2}}{S^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}{f^{"
@@ -1374,7 +1374,7 @@ SECTION("Open-shell spin-tracing") {
     REQUIRE(to_latex(result[0]) ==
             L"{{{\\frac{1}{12}}}{f^{{a↑_4}}_{{a↑_1}}}{\\bar{t}^{{i↑_1}{i↑_2}{"
             L"i↑_3}}_{{a↑_2}{a↑_3}{a↑_4}}}}");
-    if constexpr (hash_version() == 1) {
+    if constexpr (hash_version() == hash::Impl::BoostPre181) {
       REQUIRE(to_latex(result[1]) ==
               L"{ \\bigl( - "
               L"{{{\\frac{1}{12}}}{f^{{a↑_3}}_{{a↑_1}}}{t^{{i↑_1}{i↑_2}{i↓_3}}_"
