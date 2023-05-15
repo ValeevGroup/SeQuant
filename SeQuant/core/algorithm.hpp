@@ -5,6 +5,11 @@
 #ifndef SEQUANT_ALGORITHM_HPP
 #define SEQUANT_ALGORITHM_HPP
 
+#include <type_traits>
+#include <tuple>
+#include <functional>
+#include <iterator>
+
 namespace sequant {
 
 /// @brief bubble sort that uses swap exclusively
@@ -56,6 +61,46 @@ void bubble_sort(ForwardIter begin, Sentinel end, Compare comp) {
       }
     }
   } while (swapped);
+}
+
+///
+/// Just like std::next_permutation but capture the parity (even/odd-ness)
+/// of the next permutation in the parameter @c parity.
+///
+/// Set the initial value of @c parity to an odd number only if the initial
+/// sequence [first, last) is an odd permutation of the lexicographically
+/// first sequence constructible from [first, last).
+/// @see https://en.wikipedia.org/wiki/Permutation#Generation_in_lexicographic_order
+///
+template <typename BidirIt,
+          typename Comp = std::less<decltype(*std::declval<BidirIt>())>>
+bool next_permutation_parity(int& parity, BidirIt first, BidirIt last,
+                             Comp&& comp = {}) {
+  BidirIt i = last;
+  if (first == last || first == --i) return false;
+
+  for (;;) {
+    BidirIt ii = i;
+    --i;
+    if (std::invoke(std::forward<Comp>(comp), *i, *ii)) {
+      BidirIt j = last;
+
+      while (!std::invoke(std::forward<Comp>(comp), *i, *(--j))) {
+        // do nothing here
+      }
+
+      int p = parity + 1 /* for the single iter_swap */
+                   + std::distance(ii, last) / 2;
+      parity = p % 2;
+      std::iter_swap(i, j);
+      std::reverse(ii, last);
+      return true;
+    }
+    if (i == first) {
+      std::reverse(first, last);
+      return false;
+    }
+  }
 }
 
 }  // namespace sequant

@@ -1,6 +1,7 @@
 #ifndef SEQUANT_EVAL_EVAL_HPP
 #define SEQUANT_EVAL_EVAL_HPP
 
+#include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval_node.hpp>
 #include <SeQuant/core/tensor.hpp>
@@ -136,37 +137,6 @@ void assert_imaginary_zero(C const& c) {
   assert(c.value().imag() == 0 && "complex scalar unsupported");
 }
 #endif
-
-template <typename BidirIt,
-          typename Comp = std::less<decltype(*std::declval<BidirIt>())>>
-bool next_permutation_parity(int& init_parity, BidirIt first, BidirIt last,
-                             Comp&& comp = {}) {
-  BidirIt i = last;
-  if (first == last || first == --i) return false;
-
-  for (;;) {
-    BidirIt ii = i;
-    --i;
-    if (std::invoke(std::forward<Comp>(comp), *i, *ii)) {
-      BidirIt j = last;
-
-      while (!std::invoke(std::forward<Comp>(comp), *i, *(--j))) {
-        // do nothing here
-      }
-
-      int parity = init_parity + 1 /* for the single iter_swap */
-                   + std::distance(ii, last) / 2;
-      init_parity = parity % 2;
-      std::iter_swap(i, j);
-      std::reverse(ii, last);
-      return true;
-    }
-    if (i == first) {
-      std::reverse(first, last);
-      return false;
-    }
-  }
-}
 
 template <typename F,
           typename = std::enable_if_t<std::is_invocable_v<F, perm_type const&>>>
