@@ -360,7 +360,10 @@ class Operator : public Operator<void> {
       }
       result += L"}";
       return result;
-    }
+    } else
+      throw std::runtime_error(
+          "mbpt::Operator::to_latex: only implemented for the single-reference "
+          "case");
   }
 
   hash_type memoizing_hash() const override {
