@@ -30,7 +30,7 @@ inline void __init__(py::module m) {
       std::make_shared<DefaultTensorCanonicalizer>());
 
   m.def("F", &sequant::mbpt::sr::F);
-  m.def("H", &sequant::mbpt::sr::H, py::arg("antisymmetric") = false);
+  m.def("H", &sequant::mbpt::sr::H);
 
   m.def(SR_OP(A));
   m.def(SR_OP(T));
