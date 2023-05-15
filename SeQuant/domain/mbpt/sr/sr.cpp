@@ -13,7 +13,6 @@
 namespace sequant {
 namespace mbpt {
 namespace sr {
-namespace so {
 
 inline constexpr size_t fac(std::size_t n) {
   if (n == 1 || n == 0)
@@ -146,7 +145,71 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> op_connections,
   return result;
 }
 
-}  // namespace so
+namespace op {
+
+ExprPtr H1() {
+  return ex<op_t>(
+      [vacuum = get_default_context().vacuum()]() -> std::wstring_view {
+        return vacuum == Vacuum::Physical ? L"h" : L"f";
+      },
+      [=]() -> ExprPtr {
+        using namespace sequant::mbpt::sr;
+        return mbpt::sr::H1();
+      },
+      [=](qns_t& qns) {
+        qns += qns_t{{0, 0}, {-1, +1}};
+      });
+}
+
+ExprPtr H2() {
+  return ex<op_t>([]() -> std::wstring_view { return L"g"; },
+                  [=]() -> ExprPtr {
+                    using namespace sequant::mbpt::sr;
+                    return mbpt::sr::H2();
+                  },
+                  [=](qns_t& qns) {
+                    qns += qns_t{{0, 0}, {-2, +2}};
+                  });
+}
+
+ExprPtr H() { return H1() + H2(); }
+
+ExprPtr T_(std::size_t K) {
+  assert(K > 0);
+  return ex<op_t>([]() -> std::wstring_view { return L"t"; },
+                  [=]() -> ExprPtr {
+                    using namespace sequant::mbpt::sr;
+                    return mbpt::sr::T_(K);
+                  },
+                  [=](qns_t& qns) {
+                    qns += qns_t{size_t{0}, K};
+                  });
+}
+
+ExprPtr T(std::size_t K) {
+  assert(K > 0);
+
+  ExprPtr result;
+  for (auto k = 1ul; k <= K; ++k) {
+    result = k > 1 ? result + T_(k) : T_(k);
+  }
+  return result;
+}
+
+ExprPtr A(std::size_t K) {
+  assert(K > 0);
+  return ex<op_t>([]() -> std::wstring_view { return L"A"; },
+                  [=]() -> ExprPtr {
+                    using namespace sequant::mbpt::sr;
+                    return mbpt::sr::A(K);
+                  },
+                  [=](qns_t& qns) {
+                    qns += qns_t{size_t{0}, -K};
+                  });
+}
+
+}  // namespace op
+
 }  // namespace sr
 }  // namespace mbpt
 }  // namespace sequant

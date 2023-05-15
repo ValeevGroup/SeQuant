@@ -13,7 +13,7 @@
 
 #include <SeQuant/domain/mbpt/sr/sr.hpp>
 
-namespace sequant::mbpt::sr::so {
+namespace sequant::mbpt::sr {
 
 namespace {
 
@@ -48,7 +48,7 @@ class screened_vac_av {
             bool canonical_only = true) {
     // TODO: Implement antisymm here
     if (!screen)
-      return sequant::mbpt::sr::so::vac_av(expr, op_connections, use_topology);
+      return sequant::mbpt::sr::vac_av(expr, op_connections, use_topology);
 
     ExprPtr input = expr;
     // expand, if possible
@@ -134,8 +134,8 @@ class screened_vac_av {
     if (screened_input->size() == 0)
       return ex<Constant>(0);
     else {
-      return sequant::mbpt::sr::so::vac_av(screened_input, op_connections,
-                                           use_topology);
+      return sequant::mbpt::sr::vac_av(screened_input, op_connections,
+                                       use_topology);
     }
   }  // screened_vac_av_t
 
@@ -160,7 +160,7 @@ class screened_vac_av {
     assert(!screen &&
            "screening for λ residual equations is not available now");
     if (!screen)
-      return sequant::mbpt::sr::so::vac_av(expr, op_connections, use_topology);
+      return sequant::mbpt::sr::vac_av(expr, op_connections, use_topology);
 
     ExprPtr input = expr;
     // expand, if possible
@@ -270,8 +270,8 @@ class screened_vac_av {
     if (screened_input->size() == 0)
       return ex<Constant>(0);
     else {
-      return sequant::mbpt::sr::so::vac_av(screened_input, op_connections,
-                                           use_topology);
+      return sequant::mbpt::sr::vac_av(screened_input, op_connections,
+                                       use_topology);
     }
   }  // screened_vac_av_lambda
 
@@ -412,13 +412,82 @@ cceqs::cceqs(size_t n, size_t p, size_t pmin)
 
 std::vector<ExprPtr> cceqs::t(bool screen, bool use_topology,
                               bool use_connectivity, bool canonical_only) {
-  std::vector<ExprPtr> result(P + 1);
-  for (auto p = P; p >= PMIN; --p) {
-    result.at(p) =
-        cceqs_t{p, N}(screen, use_topology, use_connectivity, canonical_only);
-    rapid_simplify(result[p]);
+  constexpr bool use_ops = false;
+  if (use_ops) {
+    // 1. construct hbar(op) in canonical form
+    auto hbar = op::H();
+    auto H_Tk = hbar;
+    for (auto k = 1; k <= 4; ++k) {
+      H_Tk = simplify(ex<Constant>(1. / k) * H_Tk * op::T(N));
+      hbar = hbar + H_Tk;
+      ++k;
+    }
+
+    // 2. project onto each manifold, screen, lower to tensor form and wick it
+    for (auto p = P; p >= PMIN; --p) {
+      // 2.a. screen out terms that cannot give nonzero after projection onto
+      // <P|
+      std::shared_ptr<Sum> hbar_scr;
+      for (auto& term : *hbar) {
+        assert(term->is<Product>() || term->is<op_t>());
+
+        auto contains_rank_op_product = [](const Product& op_product,
+                                           const unsigned long k) {
+          qns_t qns{0, 0};
+          for (auto& op_ptr : ranges::views::reverse(op_product.factors())) {
+            assert(op_ptr->template is<op_t>());
+            const auto& op = op_ptr->template as<op_t>();
+            qns = op(qns);
+          }
+          return qns.in(std::array{0ul, k});
+        };
+
+        auto contains_rank_op = [](const op_t& op, const unsigned long k) {
+          qns_t qns{0, 0};
+          qns = op(qns);
+          return qns.in(std::array{0ul, k});
+        };
+
+        if ((term->is<Product>() &&
+             contains_rank_op_product(term->as<Product>(), p)) ||
+            (term->is<op_t>() && contains_rank_op(term->as<op_t>(), p))) {
+          if (!hbar_scr)
+            hbar_scr = std::make_shared<Sum>(ExprPtrList{term});
+          else
+            hbar_scr->append(term);
+        }
+      }
+      hbar = hbar_scr;
+
+      // 2.b multiply by A(P)
+      auto A_hbar = simplify(op::A(p) * hbar);
+
+      // 2.c lower to tensor form
+      std::wcout << "A_hbar(k=" << p << ") = " << to_latex_align(A_hbar, 0, 5)
+                 << std::endl;
+      auto lower_to_tensor_form = [](ExprPtr& expr) {
+        auto op_lowerer = [](ExprPtr& leaf) {
+          if (leaf->is<op_t>()) leaf = leaf->as<op_t>().tensor_form();
+        };
+        expr->visit(op_lowerer, /* atoms only = */ true);
+      };
+      lower_to_tensor_form(A_hbar);
+      A_hbar = simplify(A_hbar);
+      std::wcout << "tensor form of A_hbar(k=" << p
+                 << ") = " << to_latex_align(A_hbar, 0, 5) << std::endl;
+
+      // 2.d compute vacuum average
+      abort();  // not yet implemented, need connect, etc.
+    }
+  } else {
+    std::vector<ExprPtr> result(P + 1);
+    for (auto p = P; p >= PMIN; --p) {
+      result.at(p) =
+          cceqs_t{p, N}(screen, use_topology, use_connectivity, canonical_only);
+      rapid_simplify(result[p]);
+    }
+    return result;
   }
-  return result;
 }
 
 std::vector<ExprPtr> cceqs::lambda(bool screen, bool use_topology,
@@ -432,4 +501,4 @@ std::vector<ExprPtr> cceqs::lambda(bool screen, bool use_topology,
   return result;
 }
 
-}  // namespace sequant::mbpt::sr::so
+}  // namespace sequant::mbpt::sr

@@ -112,7 +112,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
     using op_t = mbpt::Operator<qns_t>;
     auto f = ex<op_t>([]() -> std::wstring_view { return L"f"; },
                       []() -> ExprPtr {
-                        using namespace sequant::mbpt::sr::so;
+                        using namespace sequant::mbpt::sr;
                         return F();
                       },
                       [](qns_t& qns) {
@@ -120,7 +120,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
                       });
     auto t1 = ex<op_t>([]() -> std::wstring_view { return L"t"; },
                        []() -> ExprPtr {
-                         using namespace sequant::mbpt::sr::so;
+                         using namespace sequant::mbpt::sr;
                          return T_(1);
                        },
                        [](qns_t& qns) {
@@ -128,7 +128,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
                        });
     auto t2 = ex<op_t>([]() -> std::wstring_view { return L"t"; },
                        []() -> ExprPtr {
-                         using namespace sequant::mbpt::sr::so;
+                         using namespace sequant::mbpt::sr;
                          return T_(2);
                        },
                        [](qns_t& qns) {
@@ -136,7 +136,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
                        });
     auto lambda1 = ex<op_t>([]() -> std::wstring_view { return L"λ"; },
                             []() -> ExprPtr {
-                              using namespace sequant::mbpt::sr::so;
+                              using namespace sequant::mbpt::sr;
                               return Lambda_(1);
                             },
                             [](qns_t& qns) {
@@ -144,7 +144,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
                             });
     auto lambda2 = ex<op_t>([]() -> std::wstring_view { return L"λ"; },
                             []() -> ExprPtr {
-                              using namespace sequant::mbpt::sr::so;
+                              using namespace sequant::mbpt::sr;
                               return Lambda_(2);
                             },
                             [](qns_t& qns) {
@@ -152,7 +152,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
                             });
     auto r_2_1 = ex<op_t>([]() -> std::wstring_view { return L"R"; },
                           []() -> ExprPtr {
-                            using namespace sequant::mbpt::sr::so;
+                            using namespace sequant::mbpt::sr;
                             return R_(1, 2);
                           },
                           [](qns_t& qns) {
@@ -160,7 +160,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
                           });
     auto r_1_2 = ex<op_t>([]() -> std::wstring_view { return L"R"; },
                           []() -> ExprPtr {
-                            using namespace sequant::mbpt::sr::so;
+                            using namespace sequant::mbpt::sr;
                             return R_(2, 1);
                           },
                           [](qns_t& qns) {
@@ -184,7 +184,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
     using op_t = mbpt::Operator<qns_t>;
     auto f = ex<op_t>([]() -> std::wstring_view { return L"f"; },
                       []() -> ExprPtr {
-                        using namespace sequant::mbpt::sr::so;
+                        using namespace sequant::mbpt::sr;
                         return F();
                       },
                       [](qns_t& qns) {
@@ -192,7 +192,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
                       });
     auto t1 = ex<op_t>([]() -> std::wstring_view { return L"t"; },
                        []() -> ExprPtr {
-                         using namespace sequant::mbpt::sr::so;
+                         using namespace sequant::mbpt::sr;
                          return T_(1);
                        },
                        [](qns_t& qns) {
@@ -200,7 +200,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
                        });
     auto t2 = ex<op_t>([]() -> std::wstring_view { return L"t"; },
                        []() -> ExprPtr {
-                         using namespace sequant::mbpt::sr::so;
+                         using namespace sequant::mbpt::sr;
                          return T_(2);
                        },
                        [](qns_t& qns) {
@@ -246,7 +246,7 @@ TEST_CASE("MBPT", "[mbpt]") {
       std::make_shared<DefaultTensorCanonicalizer>());
 
   SECTION("SRSO") {
-    using namespace sequant::mbpt::sr::so;
+    using namespace sequant::mbpt::sr;
 
     // H**T12**T12 -> R2
     SEQUANT_PROFILE_SINGLE("wick(H**T12**T12 -> R2)", {
@@ -268,7 +268,7 @@ TEST_CASE("MBPT", "[mbpt]") {
   }
 
   SECTION("SRSO Fock") {
-    using namespace sequant::mbpt::sr::so;
+    using namespace sequant::mbpt::sr;
 
     // <2p1h|H2|1p> ->
     SEQUANT_PROFILE_SINGLE("wick(<2p1h|H2|1p>)", ({
@@ -294,7 +294,7 @@ TEST_CASE("MBPT", "[mbpt]") {
   }
 
   SECTION("SRSO-PNO") {
-    using namespace sequant::mbpt::sr::so;
+    using namespace sequant::mbpt::sr;
     using namespace sequant::mbpt;
     auto resetter = set_scoped_default_formalism(
         Formalism::make_default().set(CSVFormalism::CSV));

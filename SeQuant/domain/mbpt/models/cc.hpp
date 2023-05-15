@@ -6,7 +6,7 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/timer.hpp>
 
-namespace sequant::mbpt::sr::so {
+namespace sequant::mbpt::sr {
 
 /// derives equations of traditional coupled-cluster method
 class cceqs {
@@ -27,6 +27,6 @@ class cceqs {
                                        bool canonical_only = true);
 };  // class cceqs
 
-}  // namespace sequant::mbpt::sr::so
+}  // namespace sequant::mbpt::sr
 
 #endif  // SEQUANT_DOMAIN_MBPT_MODELS_CC_HPP
