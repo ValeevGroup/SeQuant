@@ -9,6 +9,7 @@
 #include <tuple>
 #include <functional>
 #include <iterator>
+#include <algorithm>
 
 namespace sequant {
 
