@@ -420,7 +420,6 @@ std::vector<ExprPtr> cceqs::t(bool screen, bool use_topology,
     for (auto k = 1; k <= 4; ++k) {
       H_Tk = simplify(ex<Constant>(1. / k) * H_Tk * op::T(N));
       hbar += H_Tk;
-      ++k;
     }
 
     // 2. project onto each manifold, screen, lower to tensor form and wick it
