@@ -197,6 +197,15 @@ class ParticleNumberChange
     return true;
   }
 
+  /// @param i an array of N intervals
+  /// @return true if `i[k]` overlaps with `*this[k]` for all `k`
+  bool overlaps(std::array<interval_t, N> i) {
+    for (std::size_t c = 0; c != N; ++c) {
+      if (!boost::numeric::overlap(i[c], this->operator[](c))) return false;
+    }
+    return true;
+  }
+
   auto hash_value() const {
     static_assert(N > 0);
     auto val = sequant::hash::value(this->operator[](0));

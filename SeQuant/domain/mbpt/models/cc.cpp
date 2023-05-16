@@ -412,73 +412,51 @@ cceqs::cceqs(size_t n, size_t p, size_t pmin)
 
 std::vector<ExprPtr> cceqs::t(bool screen, bool use_topology,
                               bool use_connectivity, bool canonical_only) {
-  constexpr bool use_ops = false;
+  constexpr bool use_ops = true;
   if (use_ops) {
     // 1. construct hbar(op) in canonical form
     auto hbar = op::H();
     auto H_Tk = hbar;
     for (auto k = 1; k <= 4; ++k) {
       H_Tk = simplify(ex<Constant>(1. / k) * H_Tk * op::T(N));
-      hbar = hbar + H_Tk;
-      ++k;
+      hbar += H_Tk;
     }
 
     // 2. project onto each manifold, screen, lower to tensor form and wick it
+    std::vector<ExprPtr> result(P + 1);
     for (auto p = P; p >= PMIN; --p) {
       // 2.a. screen out terms that cannot give nonzero after projection onto
       // <P|
-      std::shared_ptr<Sum> hbar_scr;
+      std::shared_ptr<Sum>
+          hbar_p;  // products that can produce excitations of rank p
+      std::shared_ptr<Sum>
+          hbar_le_p;  // keeps products that can produce excitations rank <=p
       for (auto& term : *hbar) {
         assert(term->is<Product>() || term->is<op_t>());
 
-        auto contains_rank_op_product = [](const Product& op_product,
-                                           const unsigned long k) {
-          qns_t qns{0, 0};
-          for (auto& op_ptr : ranges::views::reverse(op_product.factors())) {
-            assert(op_ptr->template is<op_t>());
-            const auto& op = op_ptr->template as<op_t>();
-            qns = op(qns);
-          }
-          return qns.in(std::array{0ul, k});
-        };
-
-        auto contains_rank_op = [](const op_t& op, const unsigned long k) {
-          qns_t qns{0, 0};
-          qns = op(qns);
-          return qns.in(std::array{0ul, k});
-        };
-
-        if ((term->is<Product>() &&
-             contains_rank_op_product(term->as<Product>(), p)) ||
-            (term->is<op_t>() && contains_rank_op(term->as<op_t>(), p))) {
-          if (!hbar_scr)
-            hbar_scr = std::make_shared<Sum>(ExprPtrList{term});
+        if (op::contains_up_to_rank(term, p)) {
+          if (!hbar_le_p)
+            hbar_le_p = std::make_shared<Sum>(ExprPtrList{term});
           else
-            hbar_scr->append(term);
+            hbar_le_p->append(term);
+          if (op::contains_rank(term, p)) {
+            if (!hbar_p)
+              hbar_p = std::make_shared<Sum>(ExprPtrList{term});
+            else
+              hbar_p->append(term);
+          }
         }
       }
-      hbar = hbar_scr;
+      hbar = hbar_le_p;
 
       // 2.b multiply by A(P)
-      auto A_hbar = simplify(op::A(p) * hbar);
+      auto A_hbar = simplify(op::A(p) * hbar_p);
 
-      // 2.c lower to tensor form
-      std::wcout << "A_hbar(k=" << p << ") = " << to_latex_align(A_hbar, 0, 5)
-                 << std::endl;
-      auto lower_to_tensor_form = [](ExprPtr& expr) {
-        auto op_lowerer = [](ExprPtr& leaf) {
-          if (leaf->is<op_t>()) leaf = leaf->as<op_t>().tensor_form();
-        };
-        expr->visit(op_lowerer, /* atoms only = */ true);
-      };
-      lower_to_tensor_form(A_hbar);
-      A_hbar = simplify(A_hbar);
-      std::wcout << "tensor form of A_hbar(k=" << p
-                 << ") = " << to_latex_align(A_hbar, 0, 5) << std::endl;
-
-      // 2.d compute vacuum average
-      abort();  // not yet implemented, need connect, etc.
+      // 2.c compute vacuum average
+      result.at(p) = op::vac_av(A_hbar);
+      // rapid_simplify(result[p]);
     }
+    return result;
   } else {
     std::vector<ExprPtr> result(P + 1);
     for (auto p = P; p >= PMIN; --p) {

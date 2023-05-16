@@ -27,6 +27,76 @@
 
 namespace sequant {
 
+/// ExprPtr is a multiple-owner smart pointer to Expr
+
+/// It can be used mostly interchangeably with `std::shared_ptr<Expr>`, but
+/// also provides convenient mathematical operators (`+=`, etc.)
+class ExprPtr : public std::shared_ptr<Expr> {
+ public:
+  using base_type = std::shared_ptr<Expr>;
+  using base_type::operator->;
+  using base_type::base_type;
+
+  ExprPtr() = default;
+  template <typename E, typename = std::enable_if_t<
+                            std::is_same_v<std::remove_const_t<E>, Expr> ||
+                            std::is_base_of_v<Expr, std::remove_const_t<E>>>>
+  ExprPtr(const std::shared_ptr<E> &other_sptr) : base_type(other_sptr) {}
+  template <typename E, typename = std::enable_if_t<
+                            std::is_same_v<std::remove_const_t<E>, Expr> ||
+                            std::is_base_of_v<Expr, std::remove_const_t<E>>>>
+  ExprPtr(std::shared_ptr<E> &&other_sptr) : base_type(std::move(other_sptr)) {}
+  template <typename E, typename = std::enable_if_t<
+                            std::is_same_v<std::remove_const_t<E>, Expr> ||
+                            std::is_base_of_v<Expr, std::remove_const_t<E>>>>
+  ExprPtr &operator=(const std::shared_ptr<E> &other_sptr) {
+    as_shared_ptr() = other_sptr;
+    return *this;
+  }
+  template <typename E, typename = std::enable_if_t<
+                            std::is_same_v<std::remove_const_t<E>, Expr> ||
+                            std::is_base_of_v<Expr, std::remove_const_t<E>>>>
+  ExprPtr &operator=(std::shared_ptr<E> &&other_sptr) {
+    as_shared_ptr() = std::move(other_sptr);
+    return *this;
+  }
+
+  ~ExprPtr() = default;
+
+  base_type &as_shared_ptr() &;
+  const base_type &as_shared_ptr() const &;
+  base_type &&as_shared_ptr() &&;
+
+  ExprPtr &operator+=(const ExprPtr &);
+  ExprPtr &operator-=(const ExprPtr &);
+  ExprPtr &operator*=(const ExprPtr &);
+
+  /// @tparam T an Expr type
+  /// @return true if this object is of type @c T
+  template <typename T>
+  bool is() const;
+
+  /// @tparam T an Expr type
+  /// @return this object cast to type @c T
+  template <typename T>
+  const T &as() const;
+
+  /// @tparam T an Expr type
+  /// @return this object cast to type @c T
+  template <typename T>
+  T &as();
+};
+
+/// ExprPtr is equal to a null pointer if it's uninitialized
+inline bool operator==(const ExprPtr &x, std::nullptr_t) {
+  return x.get() == nullptr;
+}
+
+/// ExprPtr is equal to a null pointer if it's uninitialized
+inline bool operator==(std::nullptr_t, const ExprPtr &x) {
+  return x.get() == nullptr;
+}
+
 /// @brief Base expression class
 
 /// Expr represents the interface needed to form expression trees. Classes that
@@ -492,6 +562,12 @@ class Expr : public std::enable_shared_from_this<Expr>,
   /// fn is missing from this type
   std::logic_error not_implemented(const char *fn) const;
 };  // class Expr
+
+template <>
+struct Expr::is_shared_ptr_of_expr<ExprPtr, void> : std::true_type {};
+template <>
+struct Expr::is_shared_ptr_of_expr_or_derived<ExprPtr, void> : std::true_type {
+};
 
 /// make an ExprPtr to a new object of type T
 /// @tparam T a class derived from Expr
@@ -1341,6 +1417,23 @@ std::decay_t<Sequence> clone(Sequence &&exprseq) {
                     });
   return std::decay_t<Sequence>(ranges::begin(cloned_seq),
                                 ranges::end(cloned_seq));
+}
+
+// finish off ExprPtr members that depend on Expr
+
+template <typename T>
+bool ExprPtr::is() const {
+  return as_shared_ptr()->is<T>();
+}
+
+template <typename T>
+const T &ExprPtr::as() const {
+  return as_shared_ptr()->as<T>();
+}
+
+template <typename T>
+T &ExprPtr::as() {
+  return as_shared_ptr()->as<T>();
 }
 
 }  // namespace sequant

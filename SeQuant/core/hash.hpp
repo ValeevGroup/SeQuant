@@ -8,6 +8,7 @@
 #ifdef SEQUANT_USE_SYSTEM_BOOST_HASH
 #include <boost/container_hash/hash.hpp>
 namespace sequant_boost = boost;
+#define SEQUANT_BOOST_VERSION BOOST_VERSION
 #else
 #include <SeQuant/external/boost/container_hash/hash.hpp>
 #endif
@@ -27,7 +28,7 @@ enum class Impl { BoostPre181 = 1, Boost181OrLater = 2 };
 /// Boost
 constexpr hash::Impl hash_version() {
 #ifdef SEQUANT_USE_SYSTEM_BOOST_HASH
-#if BOOST_VERSION < 108100
+#if SEQUANT_BOOST_VERSION < 108100
   return hash::Impl::BoostPre181;
 #else
   return hash::Impl::Boost181OrLater;
@@ -53,7 +54,7 @@ static constexpr bool has_hash_value_member_fn_v =
     detail::has_hash_value_member_fn_helper<T>::value;
 
 #ifdef SEQUANT_USE_SYSTEM_BOOST_HASH
-#if BOOST_VERSION < 108100
+#if SEQUANT_BOOST_VERSION < 108100
 template <typename T,
           typename = std::enable_if_t<has_hash_value_member_fn_v<T>>>
 auto hash_value(const T& obj) {
@@ -114,7 +115,7 @@ inline void combine(std::size_t& seed, T const& v) {
   _<T> hasher;
 
 #ifdef SEQUANT_USE_SYSTEM_BOOST_HASH
-#if BOOST_VERSION >= 108100
+#if SEQUANT_BOOST_VERSION >= 108100
   boost::hash_combine(seed, hasher(v));
 #else  // older boost workarounds
   // in boost 1.78 hash_combine_impl implementation changed
@@ -123,7 +124,7 @@ inline void combine(std::size_t& seed, T const& v) {
   if constexpr (sizeof(std::size_t) == sizeof(boost::uint32_t) &&
                 sizeof(decltype(hasher(v))) == sizeof(boost::uint32_t)) {
     const boost::uint32_t value = hasher(v);
-#if BOOST_VERSION >= 107800
+#if SEQUANT_BOOST_VERSION >= 107800
     seed = boost::hash_detail::hash_combine_impl<32>::fn(
         static_cast<boost::uint32_t>(seed), value);
 #else
@@ -136,7 +137,7 @@ inline void combine(std::size_t& seed, T const& v) {
                        sizeof(decltype(hasher(v))) == sizeof(boost::uint64_t)) {
     const boost::uint64_t value = hasher(v);
 
-#if BOOST_VERSION >= 107800
+#if SEQUANT_BOOST_VERSION >= 107800
     seed = boost::hash_detail::hash_combine_impl<64>::fn(
         static_cast<boost::uint64_t>(seed), value);
 #else

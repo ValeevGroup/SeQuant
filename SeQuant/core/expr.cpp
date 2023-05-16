@@ -9,6 +9,31 @@
 
 namespace sequant {
 
+ExprPtr::base_type &ExprPtr::as_shared_ptr() & {
+  return static_cast<base_type &>(*this);
+}
+const ExprPtr::base_type &ExprPtr::as_shared_ptr() const & {
+  return static_cast<const base_type &>(*this);
+}
+ExprPtr::base_type &&ExprPtr::as_shared_ptr() && {
+  return static_cast<base_type &&>(*this);
+}
+
+ExprPtr &ExprPtr::operator+=(const ExprPtr &other) {
+  as_shared_ptr()->operator+=(*other);
+  return *this;
+}
+
+ExprPtr &ExprPtr::operator-=(const ExprPtr &other) {
+  as_shared_ptr()->operator-=(*other);
+  return *this;
+}
+
+ExprPtr &ExprPtr::operator*=(const ExprPtr &other) {
+  as_shared_ptr()->operator*=(*other);
+  return *this;
+}
+
 std::logic_error Expr::not_implemented(const char *fn) const {
   std::ostringstream oss;
   oss << "Expr::" << fn

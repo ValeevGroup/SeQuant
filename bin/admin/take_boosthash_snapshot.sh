@@ -33,6 +33,9 @@ find tmp/boost -type f -print0 | xargs -0 sed -i "" 's/ BOOST_\(.*\)_INCLUDED/ S
 find tmp/boost -type f -print0 | xargs -0 sed -i "" 's/ BOOST_\(.*\)_HPP/ SEQUANT_BOOST_\1_HPP/g'
 # 3. renaming other macros
 find tmp/boost -type f -print0 | xargs -0 sed -i "" 's/BOOST_HAS_TRIVIAL_/SEQUANT_BOOST_HAS_TRIVIAL_/g'
+find tmp/boost -type f -print0 | xargs -0 sed -i "" 's/BOOST_HAS_NOTHROW_/SEQUANT_BOOST_HAS_NOTHROW_/g'
+find tmp/boost/version.hpp -type f -print0 | xargs -0 sed -i "" 's/ BOOST_VERSION/ SEQUANT_BOOST_VERSION/g'
+find tmp/boost/version.hpp -type f -print0 | xargs -0 sed -i "" 's/ BOOST_LIB_VERSION/ SEQUANT_BOOST_LIB_VERSION/g'
 cd tmp
 tar -cvzf boost.tar.gz boost/
 mv boost.tar.gz ../../../../SeQuant/external
