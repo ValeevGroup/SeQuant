@@ -32,6 +32,7 @@ jobs:
         -DMPIEXEC_PREFLAGS='--bind-to;none;--allow-run-as-root'
         -DCMAKE_PREFIX_PATH='/usr/local/opt/boost@1.76'
         -DSEQUANT_EVAL_TESTS=ON
+        -DSEQUANT_USE_SYSTEM_BOOST_HASH=OFF
     steps:
     - uses: actions/checkout@v2
 
