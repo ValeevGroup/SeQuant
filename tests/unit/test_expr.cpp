@@ -606,4 +606,45 @@ TEST_CASE("Expr", "[elements]") {
     REQUIRE(ex2->commutes_with(*ex2));
   }
 
-}  // TEST_CASE("Expr"
+}  // TEST_CASE("Expr")
+
+TEST_CASE("ExprPtr", "[elements]") {
+  using namespace sequant;
+
+  SECTION("constructors") {
+    REQUIRE_NOTHROW(ExprPtr{});
+    REQUIRE_NOTHROW(ExprPtr{std::make_shared<Constant>(2)});
+    const auto ex_two = std::make_shared<Constant>(2);
+    REQUIRE_NOTHROW(ExprPtr{ex_two});
+    ExprPtr ex;
+    REQUIRE_NOTHROW(ex = std::make_shared<Constant>(2));
+    REQUIRE_NOTHROW(ex = ex_two);
+    ExprPtr ex2 = std::make_shared<Constant>(1);
+    REQUIRE_NOTHROW(ExprPtr{ex2});
+    REQUIRE_NOTHROW(ex = ex2);
+  }
+
+  SECTION("basic use") {
+    ExprPtr ex1 = ex<Constant>(1);
+    REQUIRE_NOTHROW(to_latex(ex1));
+    REQUIRE_NOTHROW(ex1->to_latex());
+  }
+
+  SECTION("operators") {
+    ExprPtr ex1 = ex<Constant>(1);
+    ExprPtr ex2 = ex<Constant>(2);
+    REQUIRE_NOTHROW(ex1 + ex2);
+    REQUIRE_NOTHROW(ex1 - ex2);
+    REQUIRE_NOTHROW(ex1 * ex2);
+    REQUIRE_NOTHROW(ex1 += ex2);
+    REQUIRE_NOTHROW(ex1 -= ex2);
+    REQUIRE_NOTHROW(ex1 *= ex2);
+    ex1 = ex<Constant>(1);
+    ex1 += ex2;
+    REQUIRE(ex1 == ex<Constant>(3));
+    ex1 -= ex2;
+    REQUIRE(ex1 == ex<Constant>(1));
+    ex1 *= ex2;
+    REQUIRE(ex1 == ex<Constant>(2));
+  }
+}  // TEST_CASE("ExprPtr")

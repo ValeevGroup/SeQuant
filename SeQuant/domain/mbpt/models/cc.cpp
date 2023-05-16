@@ -419,7 +419,7 @@ std::vector<ExprPtr> cceqs::t(bool screen, bool use_topology,
     auto H_Tk = hbar;
     for (auto k = 1; k <= 4; ++k) {
       H_Tk = simplify(ex<Constant>(1. / k) * H_Tk * op::T(N));
-      hbar = hbar + H_Tk;
+      hbar += H_Tk;
       ++k;
     }
 
