@@ -79,7 +79,3 @@ detail::FormalismResetter set_scoped_default_formalism(const Formalism& f) {
 }
 
 }  // namespace sequant::mbpt
-
-#ifdef SEQUANT_HAS_MIMALLOC
-#include "mimalloc-new-delete.h"
-#endif
