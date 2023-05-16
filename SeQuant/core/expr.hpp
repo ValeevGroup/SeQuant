@@ -70,6 +70,21 @@ class ExprPtr : public std::shared_ptr<Expr> {
   ExprPtr &operator+=(const ExprPtr &);
   ExprPtr &operator-=(const ExprPtr &);
   ExprPtr &operator*=(const ExprPtr &);
+
+  /// @tparam T an Expr type
+  /// @return true if this object is of type @c T
+  template <typename T>
+  bool is() const;
+
+  /// @tparam T an Expr type
+  /// @return this object cast to type @c T
+  template <typename T>
+  const T &as() const;
+
+  /// @tparam T an Expr type
+  /// @return this object cast to type @c T
+  template <typename T>
+  T &as();
 };
 
 /// ExprPtr is equal to a null pointer if it's uninitialized
@@ -1402,6 +1417,23 @@ std::decay_t<Sequence> clone(Sequence &&exprseq) {
                     });
   return std::decay_t<Sequence>(ranges::begin(cloned_seq),
                                 ranges::end(cloned_seq));
+}
+
+// finish off ExprPtr members that depend on Expr
+
+template <typename T>
+bool ExprPtr::is() const {
+  return as_shared_ptr()->is<T>();
+}
+
+template <typename T>
+const T &ExprPtr::as() const {
+  return as_shared_ptr()->as<T>();
+}
+
+template <typename T>
+T &ExprPtr::as() {
+  return as_shared_ptr()->as<T>();
 }
 
 }  // namespace sequant
