@@ -86,6 +86,25 @@ ExprPtr T(std::size_t K);
 /// makes deexcitation operator of rank \p K
 ExprPtr A(std::size_t K);
 
+/// @return true if \p op_or_op_product can produce determinant of excitation
+/// rank \p k when applied to reference
+bool contains_rank(const ExprPtr& op_or_op_product, const unsigned long k);
+
+/// @return true if \p op_or_op_product can produce determinant of excitation
+/// rank up to \p k when applied to reference
+bool contains_up_to_rank(const ExprPtr& op_or_op_product,
+                         const unsigned long k);
+
+/// computes the vacuum expectation value (VEV)
+
+/// @param[in] expr input expression
+/// @param[in] op_connections list of pairs of operators to connect
+/// @return the VEV
+ExprPtr vac_av(
+    ExprPtr expr,
+    std::vector<std::pair<std::wstring, std::wstring>> op_connections = {
+        {L"h", L"t"}, {L"f", L"t"}, {L"g", L"t"}});
+
 }  // namespace op
 
 }  // namespace sr
