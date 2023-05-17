@@ -11,6 +11,8 @@
 #include <thread>
 #include <vector>
 
+#include <SeQuant/core/ranges.hpp>
+
 namespace sequant {
 
 namespace detail {
@@ -57,8 +59,8 @@ void parallel_do(Lambda&& lambda) {
     threads[thread_id].join();
 }
 
-/// Fires off @c ntasks instances of lambda in parallel, with at most @c
-/// nthreads instances executing concurrently, where @c nthreads is the value
+/// Fires off @c ntasks instances of lambda in parallel, with at most
+/// @c nthreads instances executing concurrently, where @c nthreads is the value
 /// returned by get_num_threads() .
 /// @tparam Lambda a function type for which @c Lambda(int) is valid
 /// @param lambda the function object to execute, each will be invoked as @c
@@ -67,13 +69,18 @@ void parallel_do(Lambda&& lambda) {
 ///        lambda(t2) if @c t1<t2 .
 /// @node The load is balanced dynamically.
 /// @sa get_num_threads()
-template <typename Lambda>
-void parallel_for_each(Lambda&& lambda, const size_t ntasks) {
+template <typename SizedRange, typename Lambda>
+void parallel_for_each(SizedRange&& rng, Lambda&& lambda) {
+  using ranges::begin;
+  using ranges::end;
+#ifdef SEQUANT_HAS_EXECUTION_HEADER
+  std::for_each(std::execution::par_unseq, begin(rng), end(rng), lambda);
+#else
   std::atomic<size_t> work = 0;
-  auto task = [&work, &lambda, ntasks](int thread_id) {
+  auto task = [&work, &lambda, &rng, ntasks = ranges::size(rng)]() {
     size_t task_id = work.fetch_add(1);
     while (task_id < ntasks) {
-      std::forward<Lambda>(lambda)(task_id);
+      std::forward<Lambda>(lambda)(rng[task_id]);
       task_id = work.fetch_add(1);
     }
   };
@@ -82,12 +89,61 @@ void parallel_for_each(Lambda&& lambda, const size_t ntasks) {
   std::vector<std::thread> threads;
   for (int thread_id = 0; thread_id != nthreads; ++thread_id) {
     if (thread_id != nthreads - 1)
-      threads.push_back(std::thread(task, thread_id));
+      threads.push_back(std::thread(task));
     else
-      task(thread_id);
+      task();
   }  // threads_id
   for (int thread_id = 0; thread_id < nthreads - 1; ++thread_id)
     threads[thread_id].join();
+#endif
+}
+
+/// Does map+reduce (i.e., std::transform_reduce) on a range
+/// using up to get_num_threads() threads.
+/// @tparam SizedRange a sized range
+/// @tparam MapLambda a function type such that `map(*begin(rng))`, where `map`
+/// is an object of type `MapLambda`, is valid
+/// @tparam ReduceLambda a function type such that
+/// `reduce(identity,map(*begin(rng)))`, where `reduce` and `identity` are
+/// objects of type `ReduceLambda` and `Identity`, respectively, is valid
+/// @tparam Result a result type of \p ReduceLambda
+/// @param rng the \p Range object
+/// @param map the \p MapLambda object
+/// @param reduce the \p ReduceLambda object
+/// @sa get_num_threads()
+template <typename SizedRange, typename MapLambda, typename ReduceLambda,
+          typename Result>
+auto parallel_map_reduce(SizedRange&& rng, MapLambda&& map,
+                         ReduceLambda&& reduce, Result identity) {
+  std::atomic<size_t> work = 0;
+  std::mutex mtx;
+  Result result = identity;
+  auto task = [&work, &map, &reduce, &rng, &mtx, &result,
+               ntasks = ranges::size(rng)]() {
+    size_t task_id = work.fetch_add(1);
+    while (task_id < ntasks) {
+      const auto& item = rng[task_id];
+      auto mapped_item = std::forward<MapLambda>(map)(item);
+      {  // critical section
+        std::scoped_lock<std::mutex> lock(mtx);
+        result = reduce(result, mapped_item);
+      }
+      task_id = work.fetch_add(1);
+    }
+  };
+
+  const auto nthreads = num_threads();
+  std::vector<std::thread> threads;
+  for (int thread_id = 0; thread_id != nthreads; ++thread_id) {
+    if (thread_id != nthreads - 1)
+      threads.push_back(std::thread(task));
+    else
+      task();
+  }  // threads_id
+  for (int thread_id = 0; thread_id < nthreads - 1; ++thread_id)
+    threads[thread_id].join();
+
+  return result;
 }
 
 void set_locale();
