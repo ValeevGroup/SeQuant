@@ -464,7 +464,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
           result->append(task_result);
         }
       };
-      parallel_for_each(summands, wick_task);
+      sequant::for_each(summands, wick_task);
 
       // if the sum is empty return zero
       // if the sum has 1 summand, return it directly

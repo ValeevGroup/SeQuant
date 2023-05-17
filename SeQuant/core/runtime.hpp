@@ -59,28 +59,35 @@ void parallel_do(Lambda&& lambda) {
     threads[thread_id].join();
 }
 
-/// Fires off @c ntasks instances of lambda in parallel, with at most
+/// Parallel version of std::for_each , using either parallel C++ algorithms
+/// or manual threaded implementation with at most
 /// @c nthreads instances executing concurrently, where @c nthreads is the value
 /// returned by get_num_threads() .
-/// @tparam Lambda a function type for which @c Lambda(int) is valid
-/// @param lambda the function object to execute, each will be invoked as @c
-/// lambda(task_id) where @c task_id is an integer in
-///        @c [0,ntasks) . @c lambda(t1) will be commenced not after @c
-///        lambda(t2) if @c t1<t2 .
+/// @tparam SizedRange a sied range
+/// @tparam UnaryOp a function type for which @c Lambda(int) is valid
+/// @param rng the \p SizedRange object
+/// @param op the function object to execute, each will be invoked as
+/// @c op(std::advance(begin(rng) + task_id)) where @c task_id is an integer in
+///        @c [0,size(rng)) . @c op(t1) will be commenced not
+/// after @c op(t2) if @c t1<t2 .
 /// @node The load is balanced dynamically.
 /// @sa get_num_threads()
-template <typename SizedRange, typename Lambda>
-void parallel_for_each(SizedRange&& rng, Lambda&& lambda) {
+template <typename SizedRange, typename UnaryOp>
+void for_each(SizedRange& rng, const UnaryOp& op) {
   using ranges::begin;
   using ranges::end;
 #ifdef SEQUANT_HAS_EXECUTION_HEADER
   std::for_each(std::execution::par_unseq, begin(rng), end(rng), lambda);
 #else
   std::atomic<size_t> work = 0;
-  auto task = [&work, &lambda, &rng, ntasks = ranges::size(rng)]() {
+  auto task = [&work, &op, &rng, ntasks = ranges::size(rng)]() {
+    auto it = ranges::begin(rng);
+    size_t prev_task_id = 0;
     size_t task_id = work.fetch_add(1);
     while (task_id < ntasks) {
-      std::forward<Lambda>(lambda)(rng[task_id]);
+      std::advance(it, task_id - prev_task_id);
+      op(*it);
+      prev_task_id = task_id;
       task_id = work.fetch_add(1);
     }
   };
@@ -101,29 +108,36 @@ void parallel_for_each(SizedRange&& rng, Lambda&& lambda) {
 /// Does map+reduce (i.e., std::transform_reduce) on a range
 /// using up to get_num_threads() threads.
 /// @tparam SizedRange a sized range
-/// @tparam MapLambda a function type such that `map(*begin(rng))`, where `map`
-/// is an object of type `MapLambda`, is valid
-/// @tparam ReduceLambda a function type such that
+/// @tparam BinaryReductionOp a function type such that
 /// `reduce(identity,map(*begin(rng)))`, where `reduce` and `identity` are
 /// objects of type `ReduceLambda` and `Identity`, respectively, is valid
-/// @tparam Result a result type of \p ReduceLambda
+/// @tparam UnaryMapOp a function type such that `map(*begin(rng))`, where `map`
+/// is an object of type `MapLambda`, is valid
+/// @tparam T a result type of \p ReduceLambda
 /// @param rng the \p Range object
-/// @param map the \p MapLambda object
+/// @param init the initial value for reduction
 /// @param reduce the \p ReduceLambda object
+/// @param map the \p MapLambda object
 /// @sa get_num_threads()
-template <typename SizedRange, typename MapLambda, typename ReduceLambda,
-          typename Result>
-auto parallel_map_reduce(SizedRange&& rng, MapLambda&& map,
-                         ReduceLambda&& reduce, Result identity) {
+template <typename SizedRange, typename T, typename BinaryReductionOp,
+          typename UnaryMapOp>
+T transform_reduce(SizedRange&& rng, T init, const BinaryReductionOp& reduce,
+                   const UnaryMapOp& map) {
+  using ranges::begin;
+  using ranges::end;
+#ifdef SEQUANT_HAS_EXECUTION_HEADER
+  return std::transform_reduce(std::execution::par_unseq, begin(rng), end(rng),
+                               init, reduce, map);
+#else
   std::atomic<size_t> work = 0;
   std::mutex mtx;
-  Result result = identity;
+  T result = init;
   auto task = [&work, &map, &reduce, &rng, &mtx, &result,
                ntasks = ranges::size(rng)]() {
     size_t task_id = work.fetch_add(1);
     while (task_id < ntasks) {
       const auto& item = rng[task_id];
-      auto mapped_item = std::forward<MapLambda>(map)(item);
+      auto mapped_item = map(item);
       {  // critical section
         std::scoped_lock<std::mutex> lock(mtx);
         result = reduce(result, mapped_item);
@@ -144,6 +158,7 @@ auto parallel_map_reduce(SizedRange&& rng, MapLambda&& map,
     threads[thread_id].join();
 
   return result;
+#endif
 }
 
 void set_locale();
