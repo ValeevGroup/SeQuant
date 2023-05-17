@@ -309,15 +309,14 @@ ExprPtr vac_av(
   if (expr.is<Product>()) {
     return vac_av_product(expr);
   } else if (expr.is<Sum>()) {
-    result = parallel_map_reduce(
-        *expr,
-        [&op_connections](const auto& op_product) {
-          return vac_av(op_product, op_connections);
-        },
+    result = sequant::transform_reduce(
+        *expr, ex<Sum>(),
         [](const ExprPtr& running_total, const ExprPtr& summand) {
           return running_total + summand;
         },
-        ex<Sum>());
+        [&op_connections](const auto& op_product) {
+          return vac_av(op_product, op_connections);
+        });
     return result;
   } else if (expr.is<op_t>()) {
     return ex<Constant>(
