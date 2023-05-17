@@ -103,8 +103,12 @@ ExprPtr Product::canonicalize_impl(bool rapid) {
                << ") input: " << to_latex() << std::endl;
   }
 
-  try {  // tensor network canonization is a special case that's done in
-         // TensorNetwork
+  auto contains_nontensors = ranges::any_of(factors_, [](const auto &factor) {
+    return std::dynamic_pointer_cast<AbstractTensor>(factor) == nullptr;
+  });
+  if (!contains_nontensors) {  // tensor network canonization is a special case
+                               // that's done in
+                               // TensorNetwork
     TensorNetwork tn(factors_);
     auto canon_factor =
         tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), rapid);
@@ -121,8 +125,7 @@ ExprPtr Product::canonicalize_impl(bool rapid) {
                    });
     if (canon_factor) scalar_ *= canon_factor->as<Constant>().value();
     this->reset_hash_value();
-  } catch (std::logic_error
-               &) {  // if contains non-tensors, do commutation-checking resort
+  } else {  // if contains non-tensors, do commutation-checking resort
 
     // comparer that respects cardinal tensor labels
     auto &cardinal_tensor_labels =
