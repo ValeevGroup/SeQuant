@@ -17,9 +17,15 @@ namespace sequant {
 
 namespace detail {
 inline int& nthreads_accessor() {
-  static int nthreads = std::thread::hardware_concurrency() > 0
-                            ? std::thread::hardware_concurrency()
-                            : 1;
+  auto init_nthreads = []() {
+    const auto nthreads_cstr = std::getenv("SEQUANT_NUM_THREADS");
+    int nthreads = nthreads_cstr ? std::atoi(nthreads_cstr)
+                                 : (std::thread::hardware_concurrency() > 0
+                                        ? std::thread::hardware_concurrency()
+                                        : 1);
+    return nthreads;
+  };
+  static int nthreads = init_nthreads();
   return nthreads;
 }
 }  // namespace detail
