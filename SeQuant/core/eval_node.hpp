@@ -9,7 +9,7 @@
 #include "binary_node.hpp"
 #include "eval_expr.hpp"
 
-#include <boost/math/special_functions/factorials.hpp>
+#include <SeQuant/core/math.hpp>
 
 namespace sequant {
 
@@ -44,8 +44,8 @@ EvalNode<ExprT> to_eval_node(ExprPtr const& expr) {
           pxpr *= lnode->scalar();
           pxpr *= rnode->scalar();
 
-          lnode->scale(1.0);
-          rnode->scale(1.0);
+          lnode->scale(1);
+          rnode->scale(1);
         }
 
         return EvalNode<ExprT>(std::move(pxpr), std::move(lnode),
@@ -170,14 +170,12 @@ AsyCost asy_cost_single_node_symm_off(EvalNode<ExprT> const& node) {
 
   switch (node->op()) {
     case EvalOp::Symm: {
-      auto f = static_cast<int>(
-          boost::math::factorial<double>(node->tensor().rank()));
-      return AsyCost{static_cast<int>(f), nocc, nvirt};
+      auto f = sequant::factorial(node->tensor().rank());
+      return AsyCost{f, nocc, nvirt};
     }
     case EvalOp::Antisymm: {
-      auto f = static_cast<int>(
-          boost::math::factorial<double>(node->tensor().rank()));
-      return AsyCost{static_cast<int>(f * f), nocc, nvirt};
+      auto f = sequant::factorial(node->tensor().rank());
+      return AsyCost{f * f, nocc, nvirt};
     }
     default:
       // for matrix multiplication the flops will be doubled
@@ -189,9 +187,7 @@ AsyCost asy_cost_single_node_symm_off(EvalNode<ExprT> const& node) {
 template <typename ExprT>
 AsyCost asy_cost_single_node(EvalNode<ExprT> const& node) {
   auto cost = asy_cost_single_node_symm_off(node);
-  auto factorial = [](auto x) {
-    return static_cast<int>(boost::math::factorial<double>(x));
-  };
+  auto factorial = [](auto x) { return sequant::factorial(x); };
   // parent node symmetry
   auto const psym = node->tensor().symmetry();
   // parent node bra symmetry

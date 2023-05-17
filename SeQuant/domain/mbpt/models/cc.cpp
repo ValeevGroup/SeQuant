@@ -4,7 +4,7 @@
 #include <clocale>
 #include <iostream>
 
-#include <boost/math/special_functions/factorials.hpp>
+#include <SeQuant/core/math.hpp>
 
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -84,12 +84,13 @@ class screened_vac_av {
       // number of possible permutations within same-rank partitions of T
       // number of possible permutations other than these
       // degeneracy = M1! M2! .. where M1, M2 ... are sizes of each partition
-      double degeneracy =
-          canonical_only ? boost::math::factorial<double>(K) : 1;
+      rational degeneracy = canonical_only ? sequant::factorial(K) : 1;
       int total_T_rank = 0;
       int prev_rank = 0;
       int current_partition_size =
           1;  // size of current same-rank partition of T
+      const bool A5_g_t_t = P == 5 && K == 2 && hlabel == L"g";
+      uint64_t t_ranks_bitset = 0;
       for (size_t k = 0; k != K && canonical; ++k) {
         auto p = 4 + 2 * k;
         assert(term_prod.factor(p)->is<Tensor>());
@@ -97,6 +98,7 @@ class screened_vac_av {
         const auto current_rank = term_prod.factor(p)->as<Tensor>().rank();
         exlev += current_rank;
         total_T_rank += current_rank;
+        t_ranks_bitset |= 1 << (current_rank - 1);
         // screen out the noncanonical terms, if needed
         if (canonical_only) {
           if (current_rank < prev_rank)  // if T ranks are not increasing, omit
@@ -107,16 +109,17 @@ class screened_vac_av {
               ++current_partition_size;
             else {
               if (current_partition_size > 1)
-                degeneracy /=
-                    boost::math::factorial<double>(current_partition_size);
+                degeneracy /= sequant::factorial(current_partition_size);
               current_partition_size = 1;
               prev_rank = current_rank;
             }
           }
         }
       }
+      const auto A5_g_t2_t5 =
+          A5_g_t_t && total_T_rank == 7 && t_ranks_bitset == 0b10010;
       if (canonical_only)
-        degeneracy /= boost::math::factorial<double>(
+        degeneracy /= sequant::factorial(
             current_partition_size);  // account for the last partition
       const int min_exlev_R = std::max(
           -R,
@@ -125,8 +128,10 @@ class screened_vac_av {
       if (canonical || !canonical_only) {
         if (exlev + min_exlev_R <= 0 && 0 <= exlev + max_exlev_R) {  // VEV != 0
           assert(min_exlev_R <= max_exlev_R);
-          screened_input->append(
-              degeneracy == 1 ? term : ex<Constant>(degeneracy) * term);
+          if (A5_g_t2_t5) {
+            screened_input->append(
+                degeneracy == 1 ? term : ex<Constant>(degeneracy) * term);
+          }
         }
       }
     }  // term loop
@@ -219,8 +224,7 @@ class screened_vac_av {
       auto exlev = -P;
 
       bool canonical = true;
-      double degeneracy =
-          canonical_only ? boost::math::factorial<double>(K) : 1;
+      rational degeneracy = canonical_only ? sequant::factorial(K) : 1;
       int total_T_rank = 0;
       int prev_rank = 0;
       int current_partition_size = 1;
@@ -246,8 +250,7 @@ class screened_vac_av {
               ++current_partition_size;
             } else {
               if (current_partition_size > 1)
-                degeneracy /=
-                    boost::math::factorial<double>(current_partition_size);
+                degeneracy /= sequant::factorial(current_partition_size);
               current_partition_size = 1;
               prev_rank = current_rank;
             }
@@ -255,7 +258,7 @@ class screened_vac_av {
         }
       }
       if (canonical_only)
-        degeneracy /= boost::math::factorial<double>(
+        degeneracy /= sequant::factorial(
             current_partition_size);  // account for the last partition
       const int min_exlev_R = std::max(-R, R - 2 * total_T_rank);
       if (canonical || !canonical_only) {
@@ -314,15 +317,15 @@ class cceqs_t {
                                canonical_only) +
           screened_vac_av{1}.t(A(P) * H() * T(N, N), connect({{1, 2}}), screen,
                                use_topology, canonical_only) +
-          ex<Constant>(1. / 2) *
+          ex<Constant>(rational{1, 2}) *
               screened_vac_av{2}.t(A(P) * H() * T(N, N) * T(N, N),
                                    connect({{1, 2}, {1, 3}}), screen,
                                    use_topology, canonical_only) +
-          ex<Constant>(1. / 6) *
+          ex<Constant>(rational{1, 6}) *
               screened_vac_av{3}.t(A(P) * H() * T(N, N) * T(N, N) * T(N, N),
                                    connect({{1, 2}, {1, 3}, {1, 4}}), screen,
                                    use_topology, canonical_only) +
-          ex<Constant>(1. / 24) *
+          ex<Constant>(rational{1, 24}) *
               screened_vac_av{4}.t(
                   A(P) * H() * T(N, N) * T(N, N) * T(N, N) * T(N, N),
                   connect({{1, 2}, {1, 3}, {1, 4}, {1, 5}}), screen,
@@ -378,25 +381,26 @@ class cceqs_lambda {
           screened_vac_av{1}.lambda(
               Lambda(N, N) * H() * T(N, N) * adjoint(A(P)),
               connect({{1, 2}, {1, 3}}), screen, use_topology, canonical_only) +
-          ex<Constant>(1. / 2) *
+          ex<Constant>(rational{1, 2}) *
               screened_vac_av{2}.lambda(H() * T(N, N) * T(N, N) * adjoint(A(P)),
                                         connect({{0, 1}, {0, 2}, {0, 3}}),
                                         screen, use_topology, canonical_only) +
-          ex<Constant>(1. / 2) *
+          ex<Constant>(rational{1, 2}) *
               screened_vac_av{2}.lambda(
                   Lambda(N, N) * H() * T(N, N) * T(N, N) * adjoint(A(P)),
                   connect({{1, 2}, {1, 3}, {1, 4}}), screen, use_topology,
                   canonical_only) +
-          ex<Constant>(1. / 6) *
+          ex<Constant>(rational{1, 6}) *
               screened_vac_av{3}.lambda(
                   H() * T(N, N) * T(N, N) * T(N, N) * adjoint(A(P)),
                   connect({{0, 1}, {0, 2}, {0, 3}, {0, 4}}), screen,
                   use_topology, canonical_only) +
-          ex<Constant>(1. / 6) * screened_vac_av{3}.lambda(
-                                     Lambda(N, N) * H() * T(N, N) * T(N, N) *
-                                         T(N, N) * adjoint(A(P)),
-                                     connect({{1, 2}, {1, 3}, {1, 4}, {1, 5}}),
-                                     screen, use_topology, canonical_only);
+          ex<Constant>(rational{1, 6}) *
+              screened_vac_av{3}.lambda(
+                  Lambda(N, N) * H() * T(N, N) * T(N, N) * T(N, N) *
+                      adjoint(A(P)),
+                  connect({{1, 2}, {1, 3}, {1, 4}, {1, 5}}), screen,
+                  use_topology, canonical_only);
 
       simplify(result);
       return result;
@@ -417,8 +421,8 @@ std::vector<ExprPtr> cceqs::t(bool screen, bool use_topology,
     // 1. construct hbar(op) in canonical form
     auto hbar = op::H();
     auto H_Tk = hbar;
-    for (auto k = 1; k <= 4; ++k) {
-      H_Tk = simplify(ex<Constant>(1. / k) * H_Tk * op::T(N));
+    for (int64_t k = 1; k <= 4; ++k) {
+      H_Tk = simplify(ex<Constant>(rational{1, k}) * H_Tk * op::T(N));
       hbar += H_Tk;
     }
 

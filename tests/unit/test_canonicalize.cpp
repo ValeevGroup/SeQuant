@@ -72,14 +72,14 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
   SECTION("sum of products") {
     {
       // CASE 1: Non-symmetric tensors
-      auto input = ex<Constant>(0.5) *
+      auto input = ex<Constant>(rational{1, 2}) *
                        ex<Tensor>(L"g", WstrList{L"p_1", L"p_2"},
                                   WstrList{L"p_3", L"p_4"}, Symmetry::nonsymm) *
                        ex<Tensor>(L"t", IndexList{{L"p_3"}},
                                   IndexList{{L"p_1"}}, Symmetry::nonsymm) *
                        ex<Tensor>(L"t", IndexList{{L"p_4"}},
                                   IndexList{{L"p_2"}}, Symmetry::nonsymm) +
-                   ex<Constant>(0.5) *
+                   ex<Constant>(rational{1, 2}) *
                        ex<Tensor>(L"g", WstrList{L"p_2", L"p_1"},
                                   WstrList{L"p_4", L"p_3"}, Symmetry::nonsymm) *
                        ex<Tensor>(L"t", IndexList{{L"p_3"}},
@@ -102,14 +102,14 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
 
     // CASE 2: Symmetric tensors
     {
-      auto input = ex<Constant>(0.5) *
+      auto input = ex<Constant>(rational{1, 2}) *
                        ex<Tensor>(L"g", WstrList{L"p_1", L"p_2"},
                                   WstrList{L"p_3", L"p_4"}, Symmetry::symm) *
                        ex<Tensor>(L"t", IndexList{{L"p_3"}},
                                   IndexList{{L"p_1"}}, Symmetry::nonsymm) *
                        ex<Tensor>(L"t", IndexList{{L"p_4"}},
                                   IndexList{{L"p_2"}}, Symmetry::nonsymm) +
-                   ex<Constant>(0.5) *
+                   ex<Constant>(rational{1, 2}) *
                        ex<Tensor>(L"g", WstrList{L"p_2", L"p_1"},
                                   WstrList{L"p_4", L"p_3"}, Symmetry::symm) *
                        ex<Tensor>(L"t", IndexList{{L"p_3"}},
@@ -126,14 +126,14 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
     // Case 3: Anti-symmetric tensors
     {
       auto input =
-          ex<Constant>(0.5) *
+          ex<Constant>(rational{1, 2}) *
               ex<Tensor>(L"g", WstrList{L"p_1", L"p_2"},
                          WstrList{L"p_3", L"p_4"}, Symmetry::antisymm) *
               ex<Tensor>(L"t", IndexList{{L"p_3"}}, IndexList{{L"p_1"}},
                          Symmetry::nonsymm) *
               ex<Tensor>(L"t", IndexList{{L"p_4"}}, IndexList{{L"p_2"}},
                          Symmetry::nonsymm) +
-          ex<Constant>(0.5) *
+          ex<Constant>(rational{1, 2}) *
               ex<Tensor>(L"g", WstrList{L"p_2", L"p_1"},
                          WstrList{L"p_4", L"p_3"}, Symmetry::antisymm) *
               ex<Tensor>(L"t", IndexList{{L"p_3"}}, IndexList{{L"p_1"}},
@@ -151,14 +151,14 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
     // Case 4: permuted indices
     {
       auto input =
-          ex<Constant>(4. / 3.) *
+          ex<Constant>(rational{4, 3}) *
               ex<Tensor>(L"g", WstrList{L"i_3", L"i_4"},
                          WstrList{L"a_3", L"i_1"}, Symmetry::antisymm) *
               ex<Tensor>(L"t", IndexList{{L"a_2"}}, IndexList{{L"i_3"}},
                          Symmetry::nonsymm) *
               ex<Tensor>(L"t", IndexList{L"a_1", L"a_3"},
                          IndexList{L"i_4", L"i_2"}, Symmetry::antisymm) -
-          ex<Constant>(1. / 3.) *
+          ex<Constant>(rational{1, 3}) *
               ex<Tensor>(L"g", WstrList{L"i_3", L"i_4"},
                          WstrList{L"i_1", L"a_3"}, Symmetry::antisymm) *
               ex<Tensor>(L"t", IndexList{{L"a_2"}}, IndexList{{L"i_4"}},
@@ -176,14 +176,14 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
     // Case 4: permuted indices from CCSD R2 biorthogonal configuration
     {
       auto input =
-          ex<Constant>(4. / 3.) *
+          ex<Constant>(rational{4, 3}) *
               ex<Tensor>(L"g", WstrList{L"i_3", L"i_4"},
                          WstrList{L"a_3", L"i_1"}, Symmetry::nonsymm) *
               ex<Tensor>(L"t", IndexList{{L"a_2"}}, IndexList{{L"i_3"}},
                          Symmetry::nonsymm) *
               ex<Tensor>(L"t", IndexList{L"a_1", L"a_3"},
                          IndexList{L"i_4", L"i_2"}, Symmetry::nonsymm) -
-          ex<Constant>(1. / 3.) *
+          ex<Constant>(rational{1, 3}) *
               ex<Tensor>(L"g", WstrList{L"i_3", L"i_4"},
                          WstrList{L"i_1", L"a_3"}, Symmetry::nonsymm) *
               ex<Tensor>(L"t", IndexList{{L"a_2"}}, IndexList{{L"i_4"}},
@@ -205,7 +205,7 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
 
       {  // Terms 1 and 6 from spin-traced result
         auto input =
-            ex<Constant>(-4.) *
+            ex<Constant>(-4) *
                 ex<Tensor>(L"S", WstrList{L"i_1", L"i_2", L"i_3"},
                            WstrList{L"a_1", L"a_2", L"a_3"},
                            Symmetry::nonsymm) *
@@ -213,7 +213,7 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
                 ex<Tensor>(L"t", WstrList{L"a_1", L"a_2", L"a_3"},
                            WstrList{L"i_3", L"i_2", L"i_4"},
                            Symmetry::nonsymm) +
-            ex<Constant>(-4.) *
+            ex<Constant>(-4) *
                 ex<Tensor>(L"S", WstrList{L"i_1", L"i_2", L"i_3"},
                            WstrList{L"a_1", L"a_2", L"a_3"},
                            Symmetry::nonsymm) *
@@ -229,14 +229,14 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
 
       {
         auto term1 =
-            ex<Constant>(-4.) *
+            ex<Constant>(-4) *
             ex<Tensor>(L"S", WstrList{L"i_1", L"i_2", L"i_3"},
                        WstrList{L"a_1", L"a_2", L"a_3"}, Symmetry::nonsymm) *
             ex<Tensor>(L"f", WstrList{L"i_4"}, WstrList{L"i_1"}) *
             ex<Tensor>(L"t", WstrList{L"a_1", L"a_2", L"a_3"},
                        WstrList{L"i_3", L"i_2", L"i_4"}, Symmetry::nonsymm);
         auto term2 =
-            ex<Constant>(-4.) *
+            ex<Constant>(-4) *
             ex<Tensor>(L"S", WstrList{L"i_1", L"i_2", L"i_3"},
                        WstrList{L"a_1", L"a_2", L"a_3"}, Symmetry::nonsymm) *
             ex<Tensor>(L"f", WstrList{L"i_4"}, WstrList{L"i_1"}) *
@@ -259,7 +259,7 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
 
       {  // Terms 2 and 4 from spin-traced result
         auto input =
-            ex<Constant>(2.) *
+            ex<Constant>(2) *
                 ex<Tensor>(L"S", WstrList{L"i_1", L"i_2", L"i_3"},
                            WstrList{L"a_1", L"a_2", L"a_3"},
                            Symmetry::nonsymm) *
@@ -267,7 +267,7 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
                 ex<Tensor>(L"t", WstrList{L"a_1", L"a_2", L"a_3"},
                            WstrList{L"i_3", L"i_4", L"i_2"},
                            Symmetry::nonsymm) +
-            ex<Constant>(2.) *
+            ex<Constant>(2) *
                 ex<Tensor>(L"S", WstrList{L"i_1", L"i_2", L"i_3"},
                            WstrList{L"a_1", L"a_2", L"a_3"},
                            Symmetry::nonsymm) *

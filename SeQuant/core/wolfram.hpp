@@ -33,6 +33,18 @@ std::wstring to_wolfram(const std::complex<T> &t) {
            to_wstring(t.imag()) + L"]";
 }
 
+template <typename T>
+std::wstring to_wolfram(const boost::rational<T> &t) {
+  using ::sequant::to_wstring;
+  if (t.denominator() == 1) {
+    // n.b. use to_string to skip extra braces so that output agrees with code
+    // that used scalars return to_wolfram(t.numerator());
+    return to_wstring(t.numerator());
+  } else
+    return std::wstring(L"Rational[") + to_wolfram(t.numerator()) + L"," +
+           to_wolfram(t.denominator()) + L"]";
+}
+
 }  // namespace sequant
 
 #endif  // SEQUANT_WOLFRAM_HPP

@@ -302,8 +302,7 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
       auto reduce_range = [first_it, this, nidentical](auto &begin, auto &end) {
         if ((*first_it)->template is<Tensor>()) {
           Product tensor_as_Product{};
-          tensor_as_Product.append(static_cast<double>(nidentical),
-                                   (*first_it)->as<Tensor>());
+          tensor_as_Product.append(nidentical, (*first_it)->as<Tensor>());
           (*first_it) = std::make_shared<Product>(tensor_as_Product);
           this->summands_.erase(first_it + 1, end);
         } else if ((*first_it)->template is<Product>()) {
@@ -311,7 +310,7 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
           for (auto it = begin + 1; it != end; ++it) {
             if ((*it)->template is<Tensor>()) {
               Product tensor_as_Product{};
-              tensor_as_Product.append(1.0, (*it)->template as<Tensor>());
+              tensor_as_Product.append(1, (*it)->template as<Tensor>());
               (*it) = std::make_shared<Product>(tensor_as_Product);
             }
             if ((*it)->template is<Product>()) {

@@ -366,8 +366,8 @@ template <typename NodeT, typename = std::enable_if_t<IsEvaluable<NodeT>>,
           typename... Args>
 auto sum(NodeT const& n, TA::DistArray<Args...> const& lhs,
          TA::DistArray<Args...> const& rhs) {
-  auto lscal = n.left()->scalar().value().real();
-  auto rscal = n.right()->scalar().value().real();
+  auto lscal = n.left()->scalar().template value<double>();
+  auto rscal = n.right()->scalar().template value<double>();
   TA::DistArray<Args...> result;
   auto const& lannot = annot(n.left());
   auto const& rannot = annot(n.right());
@@ -441,7 +441,7 @@ template <typename NodeT, typename = std::enable_if_t<IsEvaluable<NodeT>>,
 auto scale(NodeT const& n, std::string const& annot,
            TA::DistArray<Args...> const& arr) {
   TA::DistArray<Args...> result;
-  auto scalar = n->scalar().value().real();
+  auto scalar = n->scalar().template value<double>();
 
 #ifdef SEQUANT_EVAL_TRACE
   std::cout << "[EVAL] " << n->label() << "(" << annot << ") = " << scalar
@@ -554,8 +554,8 @@ auto sum(NodeT const& n, btas::Tensor<Args...> const& lhs,
     return result;
   };
   ///
-  auto lscal = n.left()->scalar().value().real();
-  auto rscal = n.right()->scalar().value().real();
+  auto lscal = n.left()->scalar().template value<double>();
+  auto rscal = n.right()->scalar().template value<double>();
 
   auto sum = permute_and_scale(lhs, n.left()->tensor(), lscal);
   sum += permute_and_scale(rhs, n.right()->tensor(), rscal);
@@ -593,10 +593,11 @@ template <typename NodeT, typename AnnotT,
           typename = std::enable_if_t<IsEvaluable<NodeT>>, typename... Args>
 auto scale(NodeT const& n, AnnotT const& annot,
            btas::Tensor<Args...> const& arr) {
-  btas::Tensor<Args...> result;
+  using tensor_t = btas::Tensor<Args...>;
+  tensor_t result;
   auto const pre_annot = index_hash(n->tensor().const_braket());
   btas::permute(arr, pre_annot, result, annot);
-  btas::scal(n->scalar().value().real(), result);
+  btas::scal(n->scalar().template value<double>(), result);
   return result;
 }
 

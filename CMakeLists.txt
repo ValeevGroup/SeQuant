@@ -238,6 +238,9 @@ set(SeQuant_src
         SeQuant/core/optimize.hpp
         SeQuant/core/wstring.hpp
         SeQuant/core/interval.hpp
+        SeQuant/core/complex.hpp
+        SeQuant/core/rational.hpp
+        SeQuant/core/math.hpp
         SeQuant/core/optimize/optimize.cpp
         SeQuant/core/optimize/fusion.hpp
         SeQuant/core/optimize/fusion.cpp
