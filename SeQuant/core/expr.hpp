@@ -88,6 +88,8 @@ class ExprPtr : public std::shared_ptr<Expr> {
   /// @return this object cast to type @c T
   template <typename T>
   T &as();
+
+  std::wstring to_latex() const;
 };
 
 /// ExprPtr is equal to a null pointer if it's uninitialized

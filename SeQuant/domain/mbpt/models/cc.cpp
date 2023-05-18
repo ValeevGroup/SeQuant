@@ -89,8 +89,6 @@ class screened_vac_av {
       int prev_rank = 0;
       int current_partition_size =
           1;  // size of current same-rank partition of T
-      const bool A5_g_t_t = P == 5 && K == 2 && hlabel == L"g";
-      uint64_t t_ranks_bitset = 0;
       for (size_t k = 0; k != K && canonical; ++k) {
         auto p = 4 + 2 * k;
         assert(term_prod.factor(p)->is<Tensor>());
@@ -98,7 +96,6 @@ class screened_vac_av {
         const auto current_rank = term_prod.factor(p)->as<Tensor>().rank();
         exlev += current_rank;
         total_T_rank += current_rank;
-        t_ranks_bitset |= 1 << (current_rank - 1);
         // screen out the noncanonical terms, if needed
         if (canonical_only) {
           if (current_rank < prev_rank)  // if T ranks are not increasing, omit
@@ -116,8 +113,6 @@ class screened_vac_av {
           }
         }
       }
-      const auto A5_g_t2_t5 =
-          A5_g_t_t && total_T_rank == 7 && t_ranks_bitset == 0b10010;
       if (canonical_only)
         degeneracy /= sequant::factorial(
             current_partition_size);  // account for the last partition
@@ -128,10 +123,8 @@ class screened_vac_av {
       if (canonical || !canonical_only) {
         if (exlev + min_exlev_R <= 0 && 0 <= exlev + max_exlev_R) {  // VEV != 0
           assert(min_exlev_R <= max_exlev_R);
-          if (A5_g_t2_t5) {
-            screened_input->append(
-                degeneracy == 1 ? term : ex<Constant>(degeneracy) * term);
-          }
+          screened_input->append(
+              degeneracy == 1 ? term : ex<Constant>(degeneracy) * term);
         }
       }
     }  // term loop

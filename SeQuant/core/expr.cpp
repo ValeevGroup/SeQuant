@@ -34,6 +34,8 @@ ExprPtr &ExprPtr::operator*=(const ExprPtr &other) {
   return *this;
 }
 
+std::wstring ExprPtr::to_latex() const { return as_shared_ptr()->to_latex(); }
+
 std::logic_error Expr::not_implemented(const char *fn) const {
   std::ostringstream oss;
   oss << "Expr::" << fn

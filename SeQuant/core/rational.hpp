@@ -14,6 +14,22 @@ inline auto hash_value(const boost::rational<T>& i) {
   return val;
 }
 
+template <typename T>
+std::string to_string(const boost::rational<T>& i) {
+  using std::to_string;
+  return i.denominator() == 1
+             ? to_string(i.numerator())
+             : to_string(i.numerator()) + "/" + to_string(i.denominator());
+}
+
+template <typename T>
+std::wstring to_wstring(const boost::rational<T>& i) {
+  using std::to_wstring;
+  return i.denominator() == 1
+             ? to_wstring(i.numerator())
+             : to_wstring(i.numerator()) + L"/" + to_wstring(i.denominator());
+}
+
 }  // namespace boost
 
 namespace sequant {
