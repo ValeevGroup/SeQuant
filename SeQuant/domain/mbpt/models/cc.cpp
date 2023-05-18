@@ -451,15 +451,15 @@ std::vector<ExprPtr> cceqs::t(bool screen, bool use_topology,
 
       // 2.c compute vacuum average
       result.at(p) = op::vac_av(A_hbar);
-      // rapid_simplify(result[p]);
+      simplify(result.at(p));
     }
+
     return result;
   } else {
     std::vector<ExprPtr> result(P + 1);
     for (auto p = P; p >= PMIN; --p) {
       result.at(p) =
           cceqs_t{p, N}(screen, use_topology, use_connectivity, canonical_only);
-      rapid_simplify(result[p]);
     }
     return result;
   }
