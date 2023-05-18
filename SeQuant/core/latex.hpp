@@ -5,9 +5,11 @@
 #ifndef SEQUANT_LATEX_HPP
 #define SEQUANT_LATEX_HPP
 
+#include <SeQuant/core/meta.hpp>
+#include <SeQuant/core/wstring.hpp>
 #include <type_traits>
-#include "SeQuant/core/meta.hpp"
-#include "SeQuant/core/wstring.hpp"
+
+#include <boost/rational.hpp>
 
 namespace sequant {
 
@@ -66,6 +68,31 @@ std::wstring to_latex(const std::complex<T>& t) {
   } else if (t.imag() < 0)
     result += L" - i " + to_latex(-t.imag());
   result += L"}";
+  return result;
+}
+
+template <typename T>
+std::wstring to_latex(const boost::rational<T>& t) {
+  // n.b. skip enclosing braces to make Constant::to_latex to produce same
+  // output as before std::wstring result = L"{";
+  std::wstring result;
+  if (t.denominator() == 1)
+    result += to_latex(t.numerator());
+  else {
+    const auto num = t.numerator();
+    // n.b. extra braces around \frac and use of to_wstring instead of to_latex
+    // to avoid extra braces around args to \frac
+    if (num > 0) {
+      result += L"{\\frac{" + to_wstring(t.numerator()) + L"}{" +
+                to_wstring(t.denominator()) + L"}}";
+    } else if (num < 0) {
+      result += L"{-\\frac{" + to_wstring(-num) + L"}{" +
+                to_wstring(t.denominator()) + L"}}";
+    } else
+      result += L"0";
+  }
+  // n.b.
+  // result += L"}";
   return result;
 }
 
