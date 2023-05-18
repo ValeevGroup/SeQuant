@@ -1,5 +1,5 @@
-#ifndef SEQUANT_EXTERNAL_BOOST_INTERVAL_H
-#define SEQUANT_EXTERNAL_BOOST_INTERVAL_H
+#ifndef SEQUANT_CORE_INTERVAL_H
+#define SEQUANT_CORE_INTERVAL_H
 
 #include <SeQuant/core/hash.hpp>
 
@@ -24,4 +24,4 @@ inline auto hash_value(const boost::numeric::interval<T>& i) {
 
 }  // namespace boost::numeric
 
-#endif  // SEQUANT_EXTERNAL_BOOST_INTERVAL_H
+#endif  // SEQUANT_CORE_INTERVAL_H

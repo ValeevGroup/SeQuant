@@ -642,7 +642,7 @@ class WickTheorem {
     ExprPtr result_expr;
     if (count_only) {  // count only? return the total number as a Constant
       assert(result.empty());
-      result_expr = ex<Constant>(state.count);
+      result_expr = ex<Constant>(state.count.load());
     } else if (result.size() == 1) {  // if result.size() == 1, return Product
       auto product = std::make_shared<Product>(std::move(result.at(0).first));
       if (full_contractions_)
@@ -761,7 +761,7 @@ class WickTheorem {
 
           // check if can contract these indices and
           // check connectivity constraints (if needed)
-          size_t top_degen;
+          int64_t top_degen;
           if (can_contract(*op_left_iter, *op_right_iter, input_.vacuum()) &&
               (top_degen = topological_degeneracy()) > 0 &&
               state.connect(op_connections_, ranges::get_cursor(op_right_iter),
@@ -776,7 +776,7 @@ class WickTheorem {
             }
 
             // update the phase, if needed
-            double phase = 1;
+            int64_t phase = 1;
             if (statistics == Statistics::FermiDirac) {
               const auto distance =
                   ranges::get_cursor(op_right_iter).ordinal() -

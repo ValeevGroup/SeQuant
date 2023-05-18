@@ -1,6 +1,6 @@
 import unittest
 import _sequant as sq
-from _sequant import Tensor, Sum, Product, Expr
+from _sequant import Tensor, Sum, Product, Constant, Expr, zRational
 
 #sq.IndexSpace.occupied = "i"
 
@@ -44,6 +44,8 @@ class TestSequant(unittest.TestCase):
       def Tensor(self,arg):
         return '%s[%s]' % (arg.label,",".join('"%s"' % a for a in arg.braket))
       def Constant(self,arg):
+        return '%s' % arg
+      def zRational(self,arg):
         return '%s' % arg
 
     s = visit(String(), ccd)

@@ -356,6 +356,7 @@ class Operator : public Operator<void> {
                                    dN_total - dN_second.lower());
       if (dN_definite) {
         if (dN_total == 0) {  // N-conserving
+          using std::abs;
           result += L"_{" + std::to_wstring(abs(dN_first.lower())) + L"}";
         } else {  // N-nonconserving
           result += L"_{" + std::to_wstring(dN_first.lower()) + L"}^{" +

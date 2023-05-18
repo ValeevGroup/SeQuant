@@ -5,6 +5,7 @@
 #include "sr.hpp"
 
 #include "SeQuant/core/expr.hpp"
+#include "SeQuant/core/math.hpp"
 #include "SeQuant/core/op.hpp"
 #include "SeQuant/core/tensor.hpp"
 #include "SeQuant/core/wick.hpp"
@@ -14,12 +15,7 @@ namespace sequant {
 namespace mbpt {
 namespace sr {
 
-inline constexpr size_t fac(std::size_t n) {
-  if (n == 1 || n == 0)
-    return 1;
-  else
-    return n * fac(n - 1);
-}
+inline constexpr int64_t fac(std::size_t n) { return sequant::factorial(n); }
 
 make_op::make_op(std::size_t nbra, std::size_t nket, OpType op)
     : nbra_(nbra), nket_(nket), op_(op) {}
@@ -88,7 +84,7 @@ ExprPtr make_op::operator()(IndexSpace::Type unocc,
   }
   const auto mult = antisymm ? fac(nbra) * fac(nket) : fac(nbra);
   const auto opsymm = antisymm ? Symmetry::antisymm : Symmetry::nonsymm;
-  return ex<Constant>(1. / mult) *
+  return ex<Constant>(rational{1, mult}) *
          ex<Tensor>(to_wstring(op), braidxs, ketidxs, opsymm) *
          ex<FNOperator>(braidxs, ketidxs, get_default_context().vacuum());
 }
@@ -240,6 +236,9 @@ bool contains_rank(const ExprPtr& op_or_op_product, const unsigned long k) {
 ExprPtr vac_av(
     ExprPtr expr,
     std::vector<std::pair<std::wstring, std::wstring>> op_connections) {
+  // use cloned expr to avoid side effects
+  expr = expr->clone();
+
   auto vac_av_product = [&op_connections](ExprPtr expr) {
     assert(expr.is<Product>());
     // compute connections
@@ -320,7 +319,7 @@ ExprPtr vac_av(
     return result;
   } else if (expr.is<op_t>()) {
     return ex<Constant>(
-        0.);  // expectation value of a normal-ordered operator is 0
+        0);  // expectation value of a normal-ordered operator is 0
   } else if (expr.is<Constant>()) {
     return expr;  // vacuum is normalized
   }
