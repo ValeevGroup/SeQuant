@@ -380,6 +380,7 @@ if (BUILD_TESTING)
             tests/unit/test_clone_packed.cpp
             tests/unit/test_cache_manager.cpp
             tests/unit/test_runtime.cpp
+            tests/unit/test_math.cpp
             )
 
     if (TARGET tiledarray)
