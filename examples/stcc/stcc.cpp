@@ -1,3 +1,4 @@
+#include <SeQuant/core/math.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/timer.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -225,10 +226,11 @@ ExprPtr biorthogonal_transform(
   Sum bt_expr{};
   auto coeff_it = bt_coeff_vec.begin();
   for (auto&& map : bt_maps) {
+    const auto v = to_rational(*coeff_it, threshold);
     if (is_canonical(map))
-      bt_expr.append(ex<Constant>(*coeff_it) * expr->clone());
+      bt_expr.append(ex<Constant>(v) * expr->clone());
     else
-      bt_expr.append(ex<Constant>(*coeff_it) *
+      bt_expr.append(ex<Constant>(v) *
                      sequant::transform_expr(expr->clone(), map));
     coeff_it++;
   }

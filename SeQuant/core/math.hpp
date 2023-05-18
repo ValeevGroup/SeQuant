@@ -9,6 +9,12 @@
 #include <cstdint>
 
 namespace sequant {
+
+constexpr auto pow2(size_t n) {
+  assert(n <= 63);
+  return 1ul << n;
+}
+
 constexpr inline int64_t factorial(int64_t n) {
   assert(n >= 0 && n <= 20);
   const int64_t values[] = {1,

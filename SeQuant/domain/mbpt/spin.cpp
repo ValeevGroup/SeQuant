@@ -4,10 +4,6 @@
 #include <SeQuant/core/tensor.hpp>
 #include <unordered_map>
 
-namespace {
-constexpr auto pow2(size_t n) { return 1ul << n; }
-}  // namespace
-
 namespace sequant {
 
 ExprPtr transform_expr(const ExprPtr& expr,
