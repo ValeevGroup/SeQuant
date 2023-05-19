@@ -100,7 +100,7 @@ class screened_vac_av {
         if (canonical_only) {
           if (current_rank < prev_rank)  // if T ranks are not increasing, omit
             canonical = false;
-          else {  // else keep track of degeneracy
+          else {                         // else keep track of degeneracy
             assert(current_rank != 0);
             if (current_rank == prev_rank)
               ++current_partition_size;
@@ -237,7 +237,7 @@ class screened_vac_av {
         if (canonical_only) {
           if (current_rank < prev_rank)  // if T ranks are not increasing, omit
             canonical = false;
-          else {  // else keep track of degeneracy
+          else {                         // else keep track of degeneracy
             assert(current_rank != 0);
             if (current_rank == prev_rank) {
               ++current_partition_size;
@@ -271,7 +271,7 @@ class screened_vac_av {
     }
   }  // screened_vac_av_lambda
 
-};  // screened_vac_av
+};   // screened_vac_av
 
 /// Evaluates coupled-cluster amplitude equation, `<P|(H exp(T(N))_c|0>`,
 /// for particular `P` and `N`
@@ -425,7 +425,7 @@ std::vector<ExprPtr> cceqs::t(bool screen, bool use_topology,
       // 2.a. screen out terms that cannot give nonzero after projection onto
       // <P|
       std::shared_ptr<Sum>
-          hbar_p;  // products that can produce excitations of rank p
+          hbar_p;     // products that can produce excitations of rank p
       std::shared_ptr<Sum>
           hbar_le_p;  // keeps products that can produce excitations rank <=p
       for (auto& term : *hbar) {
@@ -467,13 +467,63 @@ std::vector<ExprPtr> cceqs::t(bool screen, bool use_topology,
 
 std::vector<ExprPtr> cceqs::lambda(bool screen, bool use_topology,
                                    bool use_connectivity, bool canonical_only) {
-  std::vector<ExprPtr> result(P + 1);
-  for (auto p = P; p >= PMIN; --p) {
-    result.at(p) = cceqs_lambda{p, N}(screen, use_topology, use_connectivity,
-                                      canonical_only);
-    rapid_simplify(result[p]);
+  constexpr bool use_ops = false;
+  auto One = ex<Constant>(1);
+  if (use_ops) {  // in development
+    // constructing h_bar(op) in canonical form
+    auto hbar = op::H();
+    auto lambda_H_Tk = hbar;
+    for (int64_t k = 1; k <= 3; ++k) {
+      lambda_H_Tk =
+          simplify(ex<Constant>(rational{1, k}) * (One + op::Lambda(N)) *
+                   ex<Constant>(rational{1, k}) * lambda_H_Tk * op::T(N));
+    }
+    // project onto the manifold on the right hand side, lower to tensor form
+    // and apply WT
+    std::vector<ExprPtr> result(P + 1);
+    for (auto p = P; p >= PMIN; --p) {
+      std::shared_ptr<Sum>
+          hbar_p;     // products than can produce excitations of rank p
+      std::shared_ptr<Sum>
+          hbar_le_p;  // keeps products than can produce excitations rank <= p
+      for (auto& term : *hbar) {
+        assert(term->is<Product>() || term->is<op_t>());
+
+        if (op::contains_up_to_rank(term, p)) {
+          if (!hbar_le_p)
+            hbar_le_p = std::make_shared<Sum>(ExprPtrList{term});
+          else
+            hbar_le_p->append(term);
+          if (op::contains_rank(term, p)) {
+            if (!hbar_p)
+              hbar_p = std::make_shared<Sum>(ExprPtrList{term});
+            else
+              hbar_p->append(term);
+          }
+        }
+      }
+      hbar = hbar_le_p;
+
+      auto hbar_A = simplify(hbar_p * adjoint(op::A(p)));
+
+      result.at(p) = op::vac_av(hbar_A, {{L"h", L"t"},
+                                         {L"f", L"t"},
+                                         {L"g", L"t"},
+                                         {L"h", L"A"},
+                                         {L"f", L"A"},
+                                         {L"g", L"A"}}); // additional connections b/w hamiltonian and A
+      simplify(result.at(p));
+    }
+    return result;
+  } else {
+    std::vector<ExprPtr> result(P + 1);
+    for (auto p = P; p >= PMIN; --p) {
+      result.at(p) = cceqs_lambda{p, N}(screen, use_topology, use_connectivity,
+                                        canonical_only);
+      rapid_simplify(result[p]);
+    }
+    return result;
   }
-  return result;
 }
 
 }  // namespace sequant::mbpt::sr
