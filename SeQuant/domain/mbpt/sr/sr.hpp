@@ -83,6 +83,14 @@ ExprPtr T_(std::size_t K);
 /// K
 ExprPtr T(std::size_t K);
 
+/// makes particle-conserving deexcitation operator of rank \p K
+ExprPtr Lambda_(std::size_t K);
+
+/// makes sum of particle-conserving deexcitation operators of all ranks up to
+/// \p
+/// K
+ExprPtr Lambda(std::size_t K);
+
 /// makes deexcitation operator of rank \p K
 ExprPtr A(std::size_t K);
 

@@ -192,6 +192,28 @@ ExprPtr T(std::size_t K) {
   return result;
 }
 
+ExprPtr Lambda_(std::size_t K) {
+  assert(K > 0);
+  return ex<op_t>([]() -> std::wstring_view { return L"λ"; },
+                  [=]() -> ExprPtr {
+                    using namespace sequant::mbpt::sr;
+                    return mbpt::sr::Lambda_(K);
+                  },
+                  [=](qns_t& qns) {
+                    qns += qns_t{size_t{0}, -K};
+                  });
+}
+
+ExprPtr Lambda(std::size_t K) {
+  assert(K > 0);
+
+  ExprPtr result;
+  for (auto k = 1ul; k <= K; ++k) {
+    result = k > 1 ? result + Lambda_(k) : Lambda_(k);
+  }
+  return result;
+}
+
 ExprPtr A(std::size_t K) {
   assert(K > 0);
   return ex<op_t>([]() -> std::wstring_view { return L"A"; },
@@ -295,10 +317,8 @@ ExprPtr vac_av(
     // currently topological equivalence of indices within a normal operator is
     // not detected, assumed based on use_topology ... so turn off use of
     // topology if antisymm=false
-    const bool use_topology = (get_default_formalism().two_body_interaction() !=
-                               TwoBodyInteraction::Antisymm)
-                                  ? false
-                                  : true;
+    const bool use_topology = get_default_formalism().two_body_interaction() ==
+                              TwoBodyInteraction::Antisymm;
 
     // compute VEV
     return mbpt::sr::vac_av(expr, connections, use_topology);
