@@ -86,11 +86,10 @@ class FullBinaryNode {
         right_{other.right_ ? other.right_->deep_copy() : nullptr} {}
 
   FullBinaryNode& operator=(FullBinaryNode<T> const& other) {
-    data_ = other.data_;
-    if (!other.leaf()) {
-      left_.reset(new FullBinaryNode<T>{*other.left()});
-      right_.reset(new FullBinaryNode<T>{*other.right()});
-    }
+    auto temp = other.deep_copy();
+    data_ = std::move(temp->data_);
+    left_ = std::move(temp->left_);
+    right_ = std::move(temp->right_);
     return *this;
   }
 
