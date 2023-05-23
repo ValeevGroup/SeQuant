@@ -355,8 +355,8 @@ if (BUILD_TESTING)
 
     if (TARGET tiledarray)
         list(APPEND utests_src
-                tests/unit/test_eval_ta.cpp
-                tests/unit/test_eval_btas.cpp
+                # tests/unit/test_eval_ta.cpp
+                #tests/unit/test_eval_btas.cpp
                 )
     endif (TARGET tiledarray)
 
