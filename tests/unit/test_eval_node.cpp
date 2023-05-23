@@ -15,10 +15,35 @@ auto eval_node(sequant::ExprPtr const& expr) {
   return sequant::to_eval_node<sequant::EvalExpr>(expr);
 }
 
+enum struct NodePos {
+  L,  // Left
+  R   // Right
+};
+
+sequant::EvalExpr node(sequant::EvalNode<sequant::EvalExpr> const& n,
+                       std::initializer_list<NodePos> const& pos) {
+  if (pos.size() == 0) return *n;
+  auto n_ = n;
+  for (auto p : pos) {
+    assert(!n_.leaf() && "Accessing child of leaf!");
+    n_ = p == NodePos::L ? n_.left() : n_.right();
+  }
+
+  return *n_;
+}
+
+std::wstring tikz(sequant::EvalNode<sequant::EvalExpr> const& n) noexcept {
+  return n.tikz<std::wstring>(
+      [](auto&& n) { return L"$" + n->expr()->to_latex() + L"$"; },
+      [](auto&&) { return L""; });
+}
+
 }  // namespace
 
 TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
   using namespace sequant;
+  using NodePos::L;
+  using NodePos::R;
 
   auto parse_expr_antisymm = [](auto const& xpr) {
     return parse_expr(xpr, Symmetry::antisymm);
@@ -34,25 +59,24 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
 
     auto node1 = eval_node(p1);
 
-    REQUIRE(node1->scalar() == Constant{1.0 / 16});
+    REQUIRE(validate_tensor(node(node1, {}).as_tensor(), L"I_{a1,a2}^{i1,i2}"));
 
-    REQUIRE(validate_tensor(node1->tensor(), L"I_{a1,a2}^{i1,i2}"));
-
-    REQUIRE(validate_tensor(node1.left()->tensor(), L"I_{a1,a2}^{a3,a4}"));
-
-    REQUIRE(validate_tensor(node1.right()->tensor(), L"t_{a3,a4}^{i1,i2}"));
+    REQUIRE(node(node1, {R}).as_constant() == Constant{1.0 / 16});
 
     REQUIRE(
-        validate_tensor(node1.left().left()->tensor(), L"g_{i3,i4}^{a3,a4}"));
+        validate_tensor(node(node1, {L}).as_tensor(), L"I_{a1,a2}^{i1,i2}"));
 
     REQUIRE(
-        validate_tensor(node1.left().right()->tensor(), L"t_{a1,a2}^{i3,i4}"));
+        validate_tensor(node(node1, {L, L}).as_tensor(), L"I_{a1,a2}^{a3,a4}"));
 
-    REQUIRE(node1.right().leaf());
-    REQUIRE(node1.left().left().leaf());
-    REQUIRE(node1.left().right().leaf());
-    REQUIRE(node1->op() == EvalOp::Prod);
-    REQUIRE(node1.left()->op() == EvalOp::Prod);
+    REQUIRE(
+        validate_tensor(node(node1, {L, R}).as_tensor(), L"t_{a3,a4}^{i1,i2}"));
+
+    REQUIRE(validate_tensor(node(node1, {L, L, L}).as_tensor(),
+                            L"g_{i3,i4}^{a3,a4}"));
+
+    REQUIRE(validate_tensor(node(node1, {L, L, R}).as_tensor(),
+                            L"t_{a1,a2}^{i3,i4}"));
 
     // 1/16 * A * (B * C)
     auto node2p = Product{p1->as<Product>().scalar(), {}};
@@ -61,26 +85,24 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
 
     auto const node2 = eval_node(ex<Product>(node2p));
 
-    REQUIRE(node2->scalar() == Constant{1.0 / 16});
-
-    REQUIRE(validate_tensor(node2->tensor(), L"I_{a1,a2}^{i1,i2}"));
-
-    REQUIRE(validate_tensor(node2.left()->tensor(), L"g_{i3,i4}^{a3,a4}"));
-
-    REQUIRE(validate_tensor(node2.right()->tensor(),
-                            L"I_{a3,a4,a1,a2}^{i1,i2,i3,i4}"));
+    REQUIRE(validate_tensor(node(node2, {}).as_tensor(), L"I_{a1,a2}^{i1,i2}"));
 
     REQUIRE(
-        validate_tensor(node2.right().left()->tensor(), L"t_{a1,a2}^{i3,i4}"));
+        validate_tensor(node(node2, {L}).as_tensor(), L"I_{a1,a2}^{i1,i2}"));
+
+    REQUIRE(node(node2, {R}).as_constant() == Constant{1. / 16});
 
     REQUIRE(
-        validate_tensor(node2.right().right()->tensor(), L"t_{a3,a4}^{i1,i2}"));
+        validate_tensor(node(node2, {L, L}).as_tensor(), L"g{i3,i4; a3,a4}"));
 
-    REQUIRE(node2.left().leaf());
-    REQUIRE(node2.right().right().leaf());
-    REQUIRE(node2.right().left().leaf());
-    REQUIRE(node2->op() == EvalOp::Prod);
-    REQUIRE(node2.right()->op() == EvalOp::Prod);
+    REQUIRE(validate_tensor(node(node2, {L, R}).as_tensor(),
+                            L"I{a3,a4,a1,a2;i1,i2,i3,i4}"));
+
+    REQUIRE(validate_tensor(node(node2, {L, R, L}).as_tensor(),
+                            L"t{a1,a2;i3,i4}"));
+
+    REQUIRE(validate_tensor(node(node2, {L, R, R}).as_tensor(),
+                            L"t{a3,a4;i1,i2}"));
   }
 
   SECTION("sum") {
@@ -90,20 +112,22 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
         L"+ g_{i3,a1}^{i1,i2} * t_{a2}^{i3}");
 
     auto const node1 = eval_node(sum1);
-    REQUIRE(node1->op() == EvalOp::Sum);
-    REQUIRE(node1.left()->op() == EvalOp::Sum);
-    REQUIRE(validate_tensor(node1.left()->tensor(), L"I^{i1,i2}_{a1,a2}"));
-    REQUIRE(
-        validate_tensor(node1.left().left()->tensor(), L"X^{i1,i2}_{a1,a2}"));
-    REQUIRE(
-        validate_tensor(node1.left().right()->tensor(), L"Y^{i1,i2}_{a1,a2}"));
+    REQUIRE(node1->op_type() == EvalOp::Sum);
+    REQUIRE(node1.left()->op_type() == EvalOp::Sum);
+    REQUIRE(validate_tensor(node1.left()->as_tensor(), L"I^{i1,i2}_{a1,a2}"));
+    REQUIRE(validate_tensor(node1.left().left()->as_tensor(),
+                            L"X^{i1,i2}_{a1,a2}"));
+    REQUIRE(validate_tensor(node1.left().right()->as_tensor(),
+                            L"Y^{i1,i2}_{a1,a2}"));
 
-    REQUIRE(node1.right()->op() == EvalOp::Prod);
-    REQUIRE((validate_tensor(node1.right()->tensor(), L"I_{a2,a1}^{i1,i2}") ||
-             validate_tensor(node1.right()->tensor(), L"I_{a1,a2}^{i2,i1}")));
+    REQUIRE(node1.right()->op_type() == EvalOp::Prod);
     REQUIRE(
-        validate_tensor(node1.right().left()->tensor(), L"g_{i3,a1}^{i1,i2}"));
-    REQUIRE(validate_tensor(node1.right().right()->tensor(), L"t_{a2}^{i3}"));
+        (validate_tensor(node1.right()->as_tensor(), L"I_{a2,a1}^{i1,i2}") ||
+         validate_tensor(node1.right()->as_tensor(), L"I_{a1,a2}^{i2,i1}")));
+    REQUIRE(validate_tensor(node1.right().left()->as_tensor(),
+                            L"g_{i3,a1}^{i1,i2}"));
+    REQUIRE(
+        validate_tensor(node1.right().right()->as_tensor(), L"t_{a2}^{i3}"));
   }
 
   SECTION("to_expr") {

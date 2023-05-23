@@ -92,7 +92,7 @@ class rand_tensor_yield {
   template <typename T,
             typename = std::enable_if_t<sequant::eval::IsEvaluable<T>>>
   Tensor_t const& operator()(T const& node) {
-    return (*this)(node->tensor());
+    return (*this)(node->expr()->template as<sequant::Tensor>());
   }
 
   ///

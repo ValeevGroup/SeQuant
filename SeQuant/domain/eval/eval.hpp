@@ -257,11 +257,6 @@ class EvalExprTA final : public EvalExpr {
   ///
   [[nodiscard]] std::string const& annot() const;
 
-  ///
-  /// Whether this object represents a tensor-of-tensor kind expression
-  ///
-  [[nodiscard]] bool tot() const;
-
   explicit EvalExprTA(Tensor const&);
 
   EvalExprTA(EvalExprTA const&, EvalExprTA const&, EvalOp);
@@ -269,7 +264,6 @@ class EvalExprTA final : public EvalExpr {
  private:
   std::string annot_;
 
-  bool tot_;
 };
 
 template <typename T>
@@ -318,7 +312,7 @@ std::string annot(N const& node) {
   if constexpr (HasAnnotMethod<typename N::value_type>)
     return node->annot();
   else
-    return braket_to_annot(node->tensor().const_braket());
+    return braket_to_annot(node->as_tensor().const_braket());
 }
 
 template <typename RngOfOrdinals>
@@ -336,8 +330,8 @@ template <typename NodeT, typename = std::enable_if_t<IsEvaluable<NodeT>>,
           typename... Args>
 auto sum(NodeT const& n, TA::DistArray<Args...> const& lhs,
          TA::DistArray<Args...> const& rhs) {
-  auto lscal = n.left()->scalar().value().real();
-  auto rscal = n.right()->scalar().value().real();
+  auto lscal = 1.;// n.left()->scalar().value().real();
+  auto rscal = 1.;// n.right()->scalar().value().real();
   TA::DistArray<Args...> result;
   auto const& lannot = annot(n.left());
   auto const& rannot = annot(n.right());
@@ -411,7 +405,7 @@ template <typename NodeT, typename = std::enable_if_t<IsEvaluable<NodeT>>,
 auto scale(NodeT const& n, std::string const& annot,
            TA::DistArray<Args...> const& arr) {
   TA::DistArray<Args...> result;
-  auto scalar = n->scalar().value().real();
+  auto scalar = 1.0;
 
 #ifdef SEQUANT_EVAL_TRACE
   std::cout << "[EVAL] " << n->label() << "(" << annot << ") = " << scalar
@@ -514,7 +508,7 @@ template <typename NodeT, typename = std::enable_if_t<IsEvaluable<NodeT>>,
 auto sum(NodeT const& n, btas::Tensor<Args...> const& lhs,
          btas::Tensor<Args...> const& rhs) {
   ///
-  auto const post_annot = index_hash(n->tensor().const_braket());
+  auto const post_annot = index_hash(n->as_tensor().const_braket());
   auto permute_and_scale = [&post_annot](auto const& btensor,
                                          auto const& child_seqt, auto scal) {
     auto pre_annot = index_hash(child_seqt.const_braket());
@@ -524,11 +518,11 @@ auto sum(NodeT const& n, btas::Tensor<Args...> const& lhs,
     return result;
   };
   ///
-  auto lscal = n.left()->scalar().value().real();
-  auto rscal = n.right()->scalar().value().real();
+  auto lscal = 1.;// n.left()->scalar().value().real();
+  auto rscal = 1.;// n.right()->scalar().value().real();
 
-  auto sum = permute_and_scale(lhs, n.left()->tensor(), lscal);
-  sum += permute_and_scale(rhs, n.right()->tensor(), rscal);
+  auto sum = permute_and_scale(lhs, n.left()->as_tensor(), lscal);
+  sum += permute_and_scale(rhs, n.right()->as_tensor(), rscal);
 
   return sum;
 }
@@ -544,9 +538,9 @@ template <typename NodeT, typename = std::enable_if_t<IsEvaluable<NodeT>>,
           typename... Args>
 auto prod(NodeT const& n, btas::Tensor<Args...> const& lhs,
           btas::Tensor<Args...> const& rhs) {
-  auto lannot = index_hash(n.left()->tensor().const_braket());
-  auto rannot = index_hash(n.right()->tensor().const_braket());
-  auto this_annot = index_hash(n->tensor().const_braket());
+  auto lannot = index_hash(n.left()->expr()->as_tensor().const_braket());
+  auto rannot = index_hash(n.right()->expr()->as_tensor().const_braket());
+  auto this_annot = index_hash(n->expr()->as_tensor().const_braket());
 
   btas::Tensor<Args...> prod;
 
@@ -564,9 +558,9 @@ template <typename NodeT, typename AnnotT,
 auto scale(NodeT const& n, AnnotT const& annot,
            btas::Tensor<Args...> const& arr) {
   btas::Tensor<Args...> result;
-  auto const pre_annot = index_hash(n->tensor().const_braket());
+  auto const pre_annot = index_hash(n->expr()->as_tensor().const_braket());
   btas::permute(arr, pre_annot, result, annot);
-  btas::scal(n->scalar().value().real(), result);
+  btas::scal(n->expr()->as_constant().value().real(), result);
   return result;
 }
 
@@ -648,18 +642,18 @@ EvalResultT<NodeT, Le> evaluate_core(NodeT const& n, Le&& lev, Cm&& cm);
 
 template <typename NodeT, typename Le, typename... Args>
 EvalResultT<NodeT, Le> evaluate_impl(NodeT const& n, Le&& lev, Args&&... args) {
-#ifndef NDEBUG
-  assert_imaginary_zero(n->scalar());
-#endif
+//#ifndef NDEBUG
+//  assert_imaginary_zero(n->scalar());
+//#endif
   if (n.leaf()) return std::invoke(std::forward<Le>(lev), n);
   EvalResultT<NodeT, Le> lres = evaluate_core(n.left(), std::forward<Le>(lev),
                                               std::forward<Args>(args)...);
   EvalResultT<NodeT, Le> rres = evaluate_core(n.right(), std::forward<Le>(lev),
                                               std::forward<Args>(args)...);
-  if (n->op() == EvalOp::Sum) {
+  if (n->op_type() == EvalOp::Sum) {
     return kernel::sum(n, lres, rres);
   }
-  assert(n->op() == EvalOp::Prod);
+  assert(n->op_type() == EvalOp::Prod);
   return kernel::prod(n, lres, rres);
 }
 
@@ -724,9 +718,9 @@ template <typename NodeT, typename AnnotT, typename Le, typename... Args,
           std::enable_if_t<IsAnnot<AnnotT>, bool> = true>
 EvalResultT<NodeT, Le> evaluate(NodeT const& n, AnnotT const& annot, Le&& leval,
                                 Args&&... args) {
-#ifndef NDEBUG
-  assert_imaginary_zero(n->scalar());
-#endif
+// #ifndef NDEBUG
+// assert_imaginary_zero(n->scalar());
+// #endif
   return kernel::scale(
       n, annot,
       evaluate_core(n, std::forward<Le>(leval), std::forward<Args>(args)...));
@@ -771,7 +765,7 @@ auto evaluate_symm(NodeT const& nodes, AnnotT const& annot, Le&& le,
     even_rank_assert((*std::begin(nodes))->tensor());
   else {
     static_assert(IsEvaluable<NodeT>);
-    even_rank_assert(nodes->tensor());
+    even_rank_assert(nodes->expr()->as_tensor());
   }
 #endif
   return kernel::symmetrize(evaluate(nodes, annot, std::forward<Le>(le),
@@ -790,7 +784,7 @@ auto evaluate_antisymm(NodeT const& nodes, StrT const& annot, Le&& le,
     even_rank_assert((*std::begin(nodes))->tensor());
   else {
     static_assert(IsEvaluable<NodeT>);
-    even_rank_assert(nodes->tensor());
+    even_rank_assert(nodes->expr()->as_tensor());
   }
 #endif
   return kernel::antisymmetrize(evaluate(nodes, annot, std::forward<Le>(le),

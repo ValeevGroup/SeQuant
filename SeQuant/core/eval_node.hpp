@@ -23,57 +23,57 @@ EvalNode<ExprT> to_eval_node(ExprPtr const& expr) {
   using ranges::views::tail;
   using ranges::views::transform;
 
-  assert(!expr->is<Constant>() &&
-         "constant type expression"
-         "not allowed in eval node");
-
   if (expr->is<Tensor>()) return EvalNode<ExprT>{ExprT{expr->as<Tensor>()}};
+  if (expr->is<Constant>()) return EvalNode<ExprT>{ExprT{expr->as<Constant>()}};
+  assert(expr->is<Sum>() || expr->is<Product>());
 
   auto subxprs = *expr | ranges::views::transform([](auto const& x) {
     return to_eval_node<ExprT>(x);
   }) | ranges::to_vector;
 
-  assert(expr->is<Sum>() || expr->is<Product>());
+  if (expr->is<Product>()) {
+    auto const& prod = expr->as<Product>();
+    if (prod.scalar() != 1.0)
+      subxprs.emplace_back(to_eval_node<ExprT>(ex<Constant>(prod.scalar())));
+  }
+
   auto const op = expr->is<Sum>() ? EvalOp::Sum : EvalOp::Prod;
 
   auto bnode = ranges::accumulate(
       ranges::views::tail(subxprs), std::move(*subxprs.begin()),
       [op](auto& lnode, auto& rnode) {
         auto pxpr = ExprT{*lnode, *rnode, op};
-        if (pxpr.op() == EvalOp::Prod) {
-          pxpr *= lnode->scalar();
-          pxpr *= rnode->scalar();
-
-          lnode->scale(1.0);
-          rnode->scale(1.0);
-        }
-
         return EvalNode<ExprT>(std::move(pxpr), std::move(lnode),
                                std::move(rnode));
       });
-
-  if (expr->is<Product>()) *bnode *= expr->as<Product>().scalar();
 
   return bnode;
 }
 
 template <typename ExprT>
 ExprPtr to_expr(EvalNode<ExprT> const& node) {
-  auto const op = node->op();
+  auto const op = node->op_type();
   auto const& evxpr = *node;
 
-  if (node.leaf()) {
-    return evxpr.scalar() == Constant{1}
-               ? evxpr.tensor().clone()
-               : ex<Constant>(evxpr.scalar()) * evxpr.tensor().clone();
-  }
+  if (node.leaf()) return evxpr.expr()->clone();
 
   if (op == EvalOp::Prod) {
-    auto prod = Product{};
-    prod.scale(evxpr.scalar().value());
-
     ExprPtr lexpr = to_expr(node.left());
     ExprPtr rexpr = to_expr(node.right());
+
+    if (lexpr->is<Constant>() && rexpr->is<Product>()) {
+      auto& p = rexpr->as<Product>();
+      p.scale(p.scalar() * lexpr->as<Constant>().value());
+      return rexpr;
+    }
+
+    if (lexpr->is<Product>() && rexpr->is<Constant>()) {
+      auto& p = lexpr->as<Product>();
+      p.scale(p.scalar() * rexpr->as<Constant>().value());
+      return lexpr;
+    }
+
+    auto prod = Product{};
 
     if (lexpr->is<Tensor>())
       prod.append(1, lexpr);
@@ -94,29 +94,66 @@ ExprPtr to_expr(EvalNode<ExprT> const& node) {
 
 template <typename ExprT>
 ExprPtr linearize_eval_node(EvalNode<ExprT> const& node) {
+  auto extend_product = [](Product& prod, ExprPtr const& factors) {
+    for (auto&& f : *factors)
+      if (f->is<Tensor>())
+        prod.append(1., f);
+      else
+        prod.append(f);
+  };
+
   if (node.leaf()) return to_expr(node);
 
-  ExprPtr lres = to_expr(node.left());
-  ExprPtr rres = to_expr(node.right());
-  if (node->op() == EvalOp::Sum) return ex<Sum>(ExprPtrList{lres, rres});
+  ExprPtr lres = linearize_eval_node(node.left());
+  ExprPtr rres = linearize_eval_node(node.right());
 
-  if (node.left().leaf() && node.right().leaf()) {
-    return ex<Product>(node->scalar().value(), ExprPtrList{lres, rres});
-  } else if (!node.left().leaf() && !node.right().leaf()) {
-    auto prod = Product(node->scalar().value(), ExprPtrList{});
-    prod.append(lres);
-    prod.append(rres);
-    return ex<Product>(std::move(prod));
-  } else if (node.left().leaf() && !node.right().leaf()) {
-    auto prod = Product(node->scalar().value(), ExprPtrList{lres});
-    prod.append(rres);
-    return ex<Product>(std::move(prod));
-  } else {  // (!node.left().leaf() && node.right().leaf())
-    auto& res = lres->as<Product>();
-    res.scale(node->scalar().value());
-    res.append(rres);
+  assert(lres);
+  assert(rres);
+
+  if (node->op_type() == EvalOp::Sum) return ex<Sum>(ExprPtrList{lres, rres});
+
+  if (lres->is<Constant>() && rres->is<Product>()) {
+    auto& prod = rres->as<Product>();
+    prod.scale(prod.scalar() * lres->as<Constant>().value());
+    return rres;
+  }
+
+  if (lres->is<Product>() && rres->is<Constant>()) {
+    auto& prod = lres->as<Product>();
+    prod.scale(prod.scalar() * rres->as<Constant>().value());
     return lres;
   }
+
+  if (lres->is<Product>() && rres->is<Product>()) {
+    auto& lprod = lres->as<Product>();
+    auto& rprod = rres->as<Product>();
+
+    auto scal = lprod.scalar() * rprod.scalar();
+
+    auto result = Product{};
+    extend_product(result, lres);
+    extend_product(result, rres);
+    return result.clone();
+  }
+
+  if (lres->is<Tensor>() && rres->is<Product>()) {
+    auto result = Product{};
+    result.scale(rres->as<Product>().scalar());
+    result.append(1., lres);
+    extend_product(result, rres);
+    return result.clone();
+  }
+
+  if (lres->is<Product>() && rres->is<Tensor>()) {
+    auto& prod = lres->as<Product>();
+    prod.append(1., rres);
+    return lres;
+  }
+
+  auto prod = Product{};
+  prod.append(lres);
+  prod.append(rres);
+  return prod.clone();
 }
 
 namespace detail {
@@ -156,9 +193,10 @@ template <typename ExprT>
 AsyCost asy_cost_single_node_symm_off(EvalNode<ExprT> const& node) {
   if (node.leaf()) return AsyCost::zero();
 
-  auto bks = ranges::views::concat(node.left()->tensor().const_braket(),
-                                   node.right()->tensor().const_braket(),
-                                   node->tensor().const_braket());
+  auto bks = ranges::views::concat(
+      node.left()->expr()->template as<Tensor>().const_braket(),
+      node.right()->expr()->template as<Tensor>().const_braket(),
+      node->expr()->template as<Tensor>().const_braket());
   auto const uniques =
       bks | ranges::to<container::set<Index, Index::LabelCompare>>;
 
@@ -168,7 +206,7 @@ AsyCost asy_cost_single_node_symm_off(EvalNode<ExprT> const& node) {
 
   size_t const nvirt = uniques.size() - nocc;
 
-  return AsyCost{node->op() == EvalOp::Prod ? 2 : 1, nocc, nvirt};
+  return AsyCost{node->op_type() == EvalOp::Prod ? 2 : 1, nocc, nvirt};
 }
 
 template <typename ExprT>
@@ -177,12 +215,13 @@ AsyCost asy_cost_single_node(EvalNode<ExprT> const& node) {
   auto factorial = [](auto x) {
     return static_cast<int>(boost::math::factorial<double>(x));
   };
+  auto const& ptensor = node->expr()->template as<Tensor>();
   // parent node symmetry
-  auto const psym = node->tensor().symmetry();
+  auto const psym = ptensor.symmetry();
   // parent node bra symmetry
-  auto const pbrank = node->tensor().bra_rank();
+  auto const pbrank = ptensor.bra_rank();
   // parent node ket symmetry
-  auto const pkrank = node->tensor().ket_rank();
+  auto const pkrank = ptensor.ket_rank();
 
   if (psym == Symmetry::nonsymm || psym == Symmetry::invalid) {
     // do nothing
@@ -194,14 +233,14 @@ AsyCost asy_cost_single_node(EvalNode<ExprT> const& node) {
     //   doi:10.1016/j.procs.2012.04.044
     // ------
 
-    auto const op = node->op();
+    auto const op = node->op_type();
     if (op == EvalOp::Sum) {
       cost = psym == Symmetry::symm
                  ? cost / (factorial(pbrank) * factorial(pkrank))
                  : cost / factorial(pbrank);
     } else if (op == EvalOp::Prod) {
-      auto const lsym = node.left()->tensor().symmetry();
-      auto const rsym = node.right()->tensor().symmetry();
+      auto const lsym = node.left()->expr()->template as<Tensor>().symmetry();
+      auto const rsym = node.right()->expr()->template as<Tensor>().symmetry();
       cost = (lsym == rsym && lsym == Symmetry::nonsymm)
                  ? cost / factorial(pbrank)
                  : cost / (factorial(pbrank) * factorial(pkrank));

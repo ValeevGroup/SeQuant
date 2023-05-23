@@ -8,9 +8,7 @@ namespace sequant::eval {
 std::string const& EvalExprTA::annot() const { return annot_; }
 
 EvalExprTA::EvalExprTA(Tensor const& tnsr)
-    : EvalExpr(tnsr), annot_{braket_to_annot(tnsr.braket())} {
-  tot_ = std::find(annot().begin(), annot().end(), ';') != annot().end();
-}
+    : EvalExpr(tnsr), annot_{braket_to_annot(tnsr.braket())} {}
 
 EvalExprTA::EvalExprTA(const EvalExprTA& left, const EvalExprTA& right,
                        EvalOp op)
@@ -19,30 +17,20 @@ EvalExprTA::EvalExprTA(const EvalExprTA& left, const EvalExprTA& right,
   using TA::expressions::BipartiteIndexList;
   using TA::expressions::GEMMPermutationOptimizer;
 
-  if (op == EvalOp::Prod) {
-    // Either left, or right is a tensor-of-tensor implies the product
-    // is going to be a tensor-of-tensor too.
-    tot_ = left.tot() || right.tot();
+  if (result_type() == EvalResult::Tensor) {
     if (tot()) {
-      annot_ = braket_to_annot(this->tensor().const_braket());
+      annot_ = braket_to_annot(expr()->as<Tensor>().const_braket());
     } else {
       annot_ =
           GEMMPermutationOptimizer(Tidxs{left.annot()}, Tidxs{right.annot()})
               .target_result_indices()
               .string();
     }
-  } else {
-    assert(left.tot() == right.tot() &&
-           "Cannot sum tensor-of-tensor with a tensor");
-    tot_ = left.tot();
-    annot_ = left.annot();
   }
 }
 
-bool EvalExprTA::tot() const { return tot_; }
-
 //
-//EvalNodeTA to_eval_node_ta(EvalNode const& node) {
+// EvalNodeTA to_eval_node_ta(EvalNode const& node) {
 //  if (node.leaf()) {
 //    auto result = EvalNodeTA{EvalExprTA{node->tensor()}};
 //    result->scale(node->scalar());
@@ -60,7 +48,7 @@ bool EvalExprTA::tot() const { return tot_; }
 //  return EvalNodeTA{std::move(curr), std::move(left), std::move(right)};
 //}
 //
-//EvalNodeTA to_eval_node_ta(ExprPtr const& expr) {
+// EvalNodeTA to_eval_node_ta(ExprPtr const& expr) {
 //  return to_eval_node_ta(to_eval_node(expr));
 //}
 
