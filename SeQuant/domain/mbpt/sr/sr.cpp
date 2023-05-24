@@ -150,7 +150,7 @@ ExprPtr H1() {
       },
       [=]() -> ExprPtr {
         using namespace sequant::mbpt::sr;
-        return mbpt::sr::H1();
+        return sr::H1();
       },
       [=](qns_t& qns) {
         qns += qns_t{{0, 0}, {-1, +1}};
@@ -161,7 +161,7 @@ ExprPtr H2() {
   return ex<op_t>([]() -> std::wstring_view { return L"g"; },
                   [=]() -> ExprPtr {
                     using namespace sequant::mbpt::sr;
-                    return mbpt::sr::H2();
+                    return sr::H2();
                   },
                   [=](qns_t& qns) {
                     qns += qns_t{{0, 0}, {-2, +2}};
@@ -175,7 +175,7 @@ ExprPtr T_(std::size_t K) {
   return ex<op_t>([]() -> std::wstring_view { return L"t"; },
                   [=]() -> ExprPtr {
                     using namespace sequant::mbpt::sr;
-                    return mbpt::sr::T_(K);
+                    return sr::T_(K);
                   },
                   [=](qns_t& qns) {
                     qns += qns_t{size_t{0}, K};
@@ -197,7 +197,7 @@ ExprPtr Lambda_(std::size_t K) {
   return ex<op_t>([]() -> std::wstring_view { return L"λ"; },
                   [=]() -> ExprPtr {
                     using namespace sequant::mbpt::sr;
-                    return mbpt::sr::Lambda_(K);
+                    return sr::Lambda_(K);
                   },
                   [=](qns_t& qns) {
                     qns += qns_t{size_t{0}, -K};
@@ -219,7 +219,7 @@ ExprPtr A(std::size_t K) {
   return ex<op_t>([]() -> std::wstring_view { return L"A"; },
                   [=]() -> ExprPtr {
                     using namespace sequant::mbpt::sr;
-                    return mbpt::sr::A(K);
+                    return sr::A(K);
                   },
                   [=](qns_t& qns) {
                     qns += qns_t{size_t{0}, -K};
