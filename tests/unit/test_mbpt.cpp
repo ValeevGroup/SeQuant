@@ -237,7 +237,91 @@ TEST_CASE("NBodyOp", "[mbpt]") {
               to_latex(f * t1 * t1 * t1 + ex<Constant>(3) * f * t1 * t2 * t2 +
                        f * t2 * t2 * t2 + ex<Constant>(3) * f * t1 * t1 * t2));
     }
-  }
+  }  // SECTION("canonicalize")
+
+  SECTION("adjoint") {
+    using qns_t = mbpt::ParticleNumberChange<2>;
+    using op_t = mbpt::Operator<qns_t>;
+    op_t f([]() -> std::wstring_view { return L"f"; },
+           []() -> ExprPtr {
+             using namespace sequant::mbpt::sr;
+             return F();
+           },
+           [](qns_t& qns) {
+             qns += qns_t{{0, 0}, {-1, 1}};
+           });
+    op_t t1([]() -> std::wstring_view { return L"t"; },
+            []() -> ExprPtr {
+              using namespace sequant::mbpt::sr;
+              return T_(1);
+            },
+            [](qns_t& qns) {
+              qns += qns_t{{0, 0}, {1, 1}};
+            });
+    op_t lambda2([]() -> std::wstring_view { return L"λ"; },
+                 []() -> ExprPtr {
+                   using namespace sequant::mbpt::sr;
+                   return Lambda_(2);
+                 },
+                 [](qns_t& qns) {
+                   qns += qns_t{{0, 0}, {-2, -2}};
+                 });
+    op_t r_1_2([]() -> std::wstring_view { return L"R"; },
+               []() -> ExprPtr {
+                 using namespace sequant::mbpt::sr;
+                 return R_(2, 1);
+               },
+               [](qns_t& qns) {
+                 qns += qns_t{{+1, +1}, {2, 2}};
+               });
+
+    REQUIRE_NOTHROW(adjoint(f));
+    REQUIRE_NOTHROW(adjoint(t1));
+    REQUIRE_NOTHROW(adjoint(lambda2));
+    REQUIRE_NOTHROW(adjoint(r_1_2));
+
+    REQUIRE(adjoint(f)(qns_t{}) == qns_t{{0, 0}, {-1, 1}});
+    REQUIRE(adjoint(t1)(qns_t{}) == qns_t{{0, 0}, {-1, -1}});
+    REQUIRE(adjoint(lambda2)(qns_t{}) == qns_t{{0, 0}, {2, 2}});
+    REQUIRE(adjoint(r_1_2)(qns_t{}) == qns_t{{-1, -1}, {-2, -2}});
+
+    // adjoint(adjoint(op)) = op
+    REQUIRE(adjoint(adjoint(t1))(qns_t{}) == t1(qns_t{}));
+    REQUIRE(adjoint(adjoint(r_1_2))(qns_t{}) == r_1_2(qns_t{}));
+
+    // tensor_form()
+    //    std::wcout << to_latex(simplify(r_1_2.tensor_form())) << std::endl;
+    //    std::wcout << to_latex(simplify(adjoint(r_1_2).tensor_form())) <<
+    //    std::endl; std::wcout << to_latex(simplify(mbpt::sr::T_(1))) <<
+    //    std::endl; std::wcout <<
+    //    to_latex(simplify(adjoint(r_1_2.tensor_form()))) << std::endl;
+
+    REQUIRE(to_latex(simplify(adjoint(t1).tensor_form())) ==
+            L"{{t^{{a_1}}_{{i_1}}}{\\tilde{a}^{{i_1}}_{{a_1}}}}");
+    REQUIRE((simplify(adjoint(t1).tensor_form())) ==
+            (simplify(adjoint(t1.tensor_form()))));
+    REQUIRE(to_latex(simplify(adjoint(lambda2).tensor_form())) ==
+            L"{{{\\frac{1}{4}}}{\\bar{λ}^{{i_1}{i_2}}_{{a_1}{a_2}}}{\\tilde{a}^"
+            L"{{a_2}{a_1}}_{{i_2}{i_1}}}}");
+    REQUIRE(simplify(adjoint(lambda2).tensor_form()) ==
+            simplify(adjoint(lambda2.tensor_form())));
+    REQUIRE(to_latex(simplify(adjoint(r_1_2).tensor_form())) ==
+            L"{{{-\\frac{1}{2}}}{R^{{a_1}{a_2}}_{{i_1}}}{\\tilde{a}^{"
+            L"\\textvisiblespace\\,{i_1}}_{{a_2}{a_1}}}}");
+    REQUIRE(simplify(adjoint(r_1_2).tensor_form()) ==
+            simplify(adjoint(r_1_2.tensor_form())));
+
+    // to_latex()
+    REQUIRE(to_latex(f.as<Expr>()) == L"{\\hat{f}}");
+    REQUIRE(to_latex(t1.as<Expr>()) == L"{\\hat{t}_{1}}");
+    REQUIRE(to_latex(lambda2.as<Expr>()) == L"{\\hat{\\lambda}_{2}}");
+    REQUIRE(to_latex(r_1_2.as<Expr>()) == L"{\\hat{R}_{-1}^{2}}");
+    //    std::wcout << "t1: " << to_latex(t1.as<Expr>()) << std::endl;
+    //    std::wcout << "lambda2: " << to_latex(lambda2.as<Expr>()) <<
+    //    std::endl; std::wcout << "r_1_2: " << to_latex(r_1_2.as<Expr>()) <<
+    //    std::endl; std::wcout << "f: " << to_latex(f.as<Expr>()) << std::endl;
+
+  }  // SECTION("adjoint")
 }
 
 TEST_CASE("MBPT", "[mbpt]") {
