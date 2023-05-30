@@ -32,7 +32,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
         // REQUIRE(f1(qns_t{0, 0}) == 1);   // this is not same as below, due to
         // Catch interference
         REQUIRE(operator==(f1(qns_t{0, 0}),
-                           1));  // can produce single excitation
+                           1));   // can produce single excitation
         REQUIRE(operator==(f1(qns_t{0, 0}),
                            -1));  // can produce single de-excitation
         REQUIRE(operator==(
@@ -96,7 +96,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
       REQUIRE(f1(qns_t{}).in(std::array{0, -1}));
       REQUIRE(f1(qns_t{}).in(std::array{
           0, 0}));  // f1 is normal, so must excite/deexcite, but there is no
-                    // way to exclude 0 from boost::interbal    }
+                    // way to exclude 0 from boost::interval    }
       REQUIRE(
           f1(qns_t{0, 1}).in(std::array{0, 0}));  // can produce reference when
                                                   // acting on singly-excited
@@ -105,6 +105,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
                                             // acting on doubly-excited
     };
     test2(mbpt::ParticleNumberChange<2>{});
+
   }  // SECTION("constructor")
 
   SECTION("to_latex") {
@@ -172,12 +173,10 @@ TEST_CASE("NBodyOp", "[mbpt]") {
     REQUIRE(to_latex(t2) == L"{\\hat{t}_{2}}");
     REQUIRE(to_latex(lambda1) == L"{\\hat{\\lambda}_{1}}");
     REQUIRE(to_latex(lambda2) == L"{\\hat{\\lambda}_{2}}");
-    //    std::wcout << "to_latex(r_2_1) = " << to_latex(r_2_1) << std::endl;
-    //    std::wcout << "to_latex(r_2_1->tensor_form()) = "
-    //               << to_latex(r_2_1->as<op_t>().tensor_form()) << std::endl;
     REQUIRE(to_latex(r_2_1) == L"{\\hat{R}_{-2}^{1}}");
     REQUIRE(to_latex(r_1_2) == L"{\\hat{R}_{-1}^{2}}");
-  }
+
+  }  // SECTION("to_latex")
 
   SECTION("canonicalize") {
     using qns_t = mbpt::ParticleNumberChange<2>;
@@ -207,16 +206,12 @@ TEST_CASE("NBodyOp", "[mbpt]") {
                          qns += qns_t{{0, 0}, {2, 2}};
                        });
 
-    //    std::wcout << "f1 * t2 * t1=" << to_latex(f1 * t2 * t1) << std::endl;
-    //    std::wcout << "canonicalize(f1 * t2 * t1)=" <<
-    //    to_latex(canonicalize(f1 * t2 * t1)) << std::endl;
     REQUIRE(to_latex(f * t1 * t2) == to_latex(canonicalize(f * t2 * t1)));
 
     REQUIRE(to_latex(ex<Constant>(3) * f * t1 * t2) ==
             to_latex(simplify(ex<Constant>(2) * f * t2 * t1 + f * t1 * t2)));
     auto t = t1 + t2;
-    // std::wcout << "\\hat{f} \\hat{t} \\hat{t} = " << to_latex(simplify(f1 * t
-    // * t)) << std::endl;
+
     if constexpr (hash_version() == hash::Impl::BoostPre181) {
       REQUIRE(
           to_latex(simplify(f * t * t)) ==
@@ -226,8 +221,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
           to_latex(simplify(f * t * t)) ==
           to_latex(f * t1 * t1 + f * t2 * t2 + ex<Constant>(2) * f * t1 * t2));
     }
-    // std::wcout << "\\hat{f} \\hat{t} \\hat{t} \\hat{t} = " <<
-    // to_latex(simplify(f * t * t * t)) << std::endl;
+
     if constexpr (hash_version() == hash::Impl::BoostPre181) {
       REQUIRE(to_latex(simplify(f * t * t * t)) ==
               to_latex(ex<Constant>(3) * f * t1 * t2 * t2 + f * t1 * t1 * t1 +
@@ -290,12 +284,6 @@ TEST_CASE("NBodyOp", "[mbpt]") {
     REQUIRE(adjoint(adjoint(r_1_2))(qns_t{}) == r_1_2(qns_t{}));
 
     // tensor_form()
-    //    std::wcout << to_latex(simplify(r_1_2.tensor_form())) << std::endl;
-    //    std::wcout << to_latex(simplify(adjoint(r_1_2).tensor_form())) <<
-    //    std::endl; std::wcout << to_latex(simplify(mbpt::sr::T_(1))) <<
-    //    std::endl; std::wcout <<
-    //    to_latex(simplify(adjoint(r_1_2.tensor_form()))) << std::endl;
-
     REQUIRE(to_latex(simplify(adjoint(t1).tensor_form())) ==
             L"{{t^{{a_1}}_{{i_1}}}{\\tilde{a}^{{i_1}}_{{a_1}}}}");
     REQUIRE((simplify(adjoint(t1).tensor_form())) ==
@@ -316,13 +304,9 @@ TEST_CASE("NBodyOp", "[mbpt]") {
     REQUIRE(to_latex(t1.as<Expr>()) == L"{\\hat{t}_{1}}");
     REQUIRE(to_latex(lambda2.as<Expr>()) == L"{\\hat{\\lambda}_{2}}");
     REQUIRE(to_latex(r_1_2.as<Expr>()) == L"{\\hat{R}_{-1}^{2}}");
-    //    std::wcout << "t1: " << to_latex(t1.as<Expr>()) << std::endl;
-    //    std::wcout << "lambda2: " << to_latex(lambda2.as<Expr>()) <<
-    //    std::endl; std::wcout << "r_1_2: " << to_latex(r_1_2.as<Expr>()) <<
-    //    std::endl; std::wcout << "f: " << to_latex(f.as<Expr>()) << std::endl;
 
   }  // SECTION("adjoint")
-}
+}  // TEST_CASE("NBodyOp")
 
 TEST_CASE("MBPT", "[mbpt]") {
   using namespace sequant;
@@ -349,7 +333,7 @@ TEST_CASE("MBPT", "[mbpt]") {
                  << std::endl;
       REQUIRE(result->size() == 4);
     });
-  }
+  }  // SECTION ("SRSO")
 
   SECTION("SRSO Fock") {
     using namespace sequant::mbpt::sr;
@@ -375,7 +359,7 @@ TEST_CASE("MBPT", "[mbpt]") {
           REQUIRE(result->is<Sum>());    // sub ...
           REQUIRE(result->size() == 4);  // ... of 4 factors
         }));
-  }
+  }                                      // SECTION("SRSO Fock")
 
   SECTION("SRSO-PNO") {
     using namespace sequant::mbpt::sr;
@@ -391,6 +375,6 @@ TEST_CASE("MBPT", "[mbpt]") {
                  << std::endl;
       REQUIRE(result->size() == 4);
     });
-  }
+  }  // SECTION("SRSO-PNO")
 
 }  // TEST_CASE("MBPT")
