@@ -109,7 +109,7 @@ constexpr bool
 
 template <typename NodeT, typename E,
           typename = std::enable_if_t<IsEvaluable<NodeT>>>
-using EvalResultT = remove_cvref_t<std::invoke_result_t<E, NodeT const&>>;
+using EvalResultT = std::variant<double,remove_cvref_t<std::invoke_result_t<E, NodeT const&>>>;
 
 template <typename StrT>
 constexpr bool IsString = IsString_<StrT>::value;
@@ -247,6 +247,46 @@ CacheManager<DataT> cache_manager(
   return CacheManager<DataT>{imed_counts};
 }
 
+namespace kernel {
+
+template <typename NodeT,    //
+          typename ResultT,  //
+          typename LhsT,     //
+          typename RhsT,     //
+          typename = std::enable_if_t<IsEvaluable<NodeT>>>
+ResultT sum(NodeT const&, LhsT const&, RhsT const&);
+
+template <typename NodeT,    //
+          typename ResultT,  //
+          typename LhsT,     //
+          typename RhsT,     //
+          typename = std::enable_if_t<IsEvaluable<NodeT>>>
+ResultT prod(NodeT const&, LhsT const&, RhsT const&);
+
+template <typename NodeT,  //
+          typename ResultT, typename = std::enable_if_t<IsEvaluable<NodeT>>>
+double dot(NodeT const&, ResultT const&, ResultT const&);
+
+template <typename ResultT>
+ResultT scale(double, ResultT const&);
+
+template <typename NodeT,    //
+          typename ResultT,  //
+          typename = std::enable_if_t<IsEvaluable<NodeT>>>
+void add_to(ResultT& lhs, ResultT const& rhs);
+
+template <typename NodeT>
+double sum(NodeT const&, double l, double r) {
+  return l + r;
+}
+
+template <typename NodeT>
+double prod(NodeT const&, double l, double r) {
+  return l * r;
+}
+
+}  // namespace kernel
+
 //==============================================================================
 //                     TA::DistArray kernel definitions
 //==============================================================================
@@ -263,7 +303,6 @@ class EvalExprTA final : public EvalExpr {
 
  private:
   std::string annot_;
-
 };
 
 template <typename T>
@@ -326,96 +365,74 @@ std::string ords_to_annot(RngOfOrdinals const& ords) {
 }
 
 namespace kernel {
-template <typename NodeT, typename = std::enable_if_t<IsEvaluable<NodeT>>,
-          typename... Args>
-auto sum(NodeT const& n, TA::DistArray<Args...> const& lhs,
-         TA::DistArray<Args...> const& rhs) {
-  auto lscal = 1.;// n.left()->scalar().value().real();
-  auto rscal = 1.;// n.right()->scalar().value().real();
+
+template <typename NodeT, typename... Args>
+TA::DistArray<Args...> sum(NodeT const& n,                     //
+                           TA::DistArray<Args...> const& lhs,  //
+                           TA::DistArray<Args...> const& rhs) {
+  auto const pannot = annot(n);
+  auto const lannot = annot(n.left());
+  auto const rannot = annot(n.right());
+
   TA::DistArray<Args...> result;
-  auto const& lannot = annot(n.left());
-  auto const& rannot = annot(n.right());
-  auto const& pannot = annot(n);
 
-#ifdef SEQUANT_EVAL_TRACE
-  std::cout << "[EVAL] " << n->label() << "(" << pannot << ") = " << lscal
-            << "*" << n.left()->label() << "(" << lannot << ") + " << rscal
-            << "*" << n.right()->label() << "(" << rannot << ")" << std::endl;
-#endif
-
-  result(pannot) = lscal * lhs(lannot) + rscal * rhs(rannot);
-
-  TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
+  result(pannot) = lhs(lannot) + rhs(rannot);
+  decltype(result)::wait_for_lazy_cleanup(result.world());
 
   return result;
 }
 
 template <typename NodeT, typename... Args>
-void add_to(TA::DistArray<Args...>& lhs, TA::DistArray<Args...> const& rhs,
-            NodeT const& lnode, NodeT const& rnode) {
-  using ranges::views::intersperse;
-  using ranges::views::iota;
-  using ranges::views::join;
-  using ranges::views::transform;
+TA::DistArray<Args...> prod(NodeT const& n,                     //
+                            TA::DistArray<Args...> const& lhs,  //
+                            TA::DistArray<Args...> const& rhs) {
+  auto const pannot = annot(n);
+  auto const lannot = annot(n.left());
+  auto const rannot = annot(n.right());
 
-  assert(lhs.trange() == rhs.trange());
-
-  // Caveat:
-  // This ->
-  //  auto const annot = iota(size_t{0}, lhs.trange().rank()) |
-  //               transform([](auto x) { return std::to_string(x); }) |
-  //               intersperse(",") | join | ranges::to<std::string>;
-  // Or, this? ->
-  auto const annot = TA::detail::dummy_annotation(lhs.trange().rank());
-
-#ifdef SEQUANT_EVAL_TRACE
-  std::cout << "[EVAL] " << lnode->label() << " += " << rnode->label()
-            << std::endl;
-#endif
-
-  lhs(annot) += rhs(annot);
-
-  TA::DistArray<Args...>::wait_for_lazy_cleanup(lhs.world());
+  TA::DistArray<Args...> result;
+  result(pannot) = lhs(lannot) * rhs(rannot);
+  decltype(result)::wait_for_lazy_cleanup(result.world());
+  return result;
 }
 
-template <typename NodeT, typename = std::enable_if_t<IsEvaluable<NodeT>>,
-          typename... Args>
-auto prod(NodeT const& n, TA::DistArray<Args...> const& lhs,
-          TA::DistArray<Args...> const& rhs) {
+template <typename NodeT, typename... Args>
+TA::DistArray<Args...> prod(NodeT const& n,  //
+                            double f,        //
+                            TA::DistArray<Args...> const& tnsr) {
+  auto const annot = TA::detail::dummy_annotation(tnsr.trange().rank());
+
   TA::DistArray<Args...> result;
-  auto const& lannot = annot(n.left());
-  auto const& rannot = annot(n.right());
-  auto const& pannot = annot(n);
+  result(annot) = f * tnsr(annot);
 
-#ifdef SEQUANT_EVAL_TRACE
-  std::cout << "[EVAL] " << n->label() << "(" << pannot
-            << ") = " << n.left()->label() << "(" << lannot << ") * "
-            << n.right()->label() << "(" << rannot << ")" << std::endl;
-#endif
-
-  result(pannot) = lhs(lannot) * rhs(rannot);
-
-  TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
+  TA::DistArray<Args...>::wait_for_lazy_cleanup(tnsr.world());
 
   return result;
 }
 
-template <typename NodeT, typename = std::enable_if_t<IsEvaluable<NodeT>>,
-          typename... Args>
-auto scale(NodeT const& n, std::string const& annot,
-           TA::DistArray<Args...> const& arr) {
+template <typename NodeT, typename... Args>
+TA::DistArray<Args...> prod(NodeT const& n,                      //
+                            TA::DistArray<Args...> const& tnsr,  //
+                            double f) {
+  return prod(n, f, tnsr);
+}
+
+template <typename NodeT, typename... Args>
+double dot(NodeT const& n,                     //
+           TA::DistArray<Args...> const& lhs,  //
+           TA::DistArray<Args...> const& rhs) {
+  auto const lannot = annot(n.left());
+  auto const& rannot = annot(n.right());
+  return TA::dot(lhs(lannot), rhs(rannot));
+}
+
+template <typename... Args>
+TA::DistArray<Args...> scale(double f,  //
+                             TA::DistArray<Args...> const& lhs) {
+  auto const ann = TA::detail::dummy_annotation(lhs.trange().rank());
   TA::DistArray<Args...> result;
-  auto scalar = 1.0;
-
-#ifdef SEQUANT_EVAL_TRACE
-  std::cout << "[EVAL] " << n->label() << "(" << annot << ") = " << scalar
-            << "*" << n->label() << "(" << eval::annot(n) << ")" << std::endl;
-#endif
-
-  result(annot) = scalar * arr(eval::annot(n));
-
-  TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
-
+  result(ann) = f * lhs(ann);
+  decltype(result)::wait_for_lazy_cleanup();
   return result;
 }
 
@@ -475,164 +492,11 @@ auto antisymmetrize(TA::DistArray<Args...> const& arr) {
 //==============================================================================
 
 //=============================================================================
-//                    btas::Tensor kernel definitions
-//=============================================================================
-///
-/// \param bk iterable of Index objects.
-/// \return vector of long-type hash values
-///         of the labels of indices in \c bk
-///
-template <typename Iterable>
-auto index_hash(Iterable const& bk) {
-  return ranges::views::transform(
-             bk,
-             [](auto const& idx) {
-               //
-               // WARNING!
-               // The BTAS expects index types to be long by default.
-               // There is no straight-forward way to turn the default.
-               // Hence here we explicitly cast the size_t values to long
-               // Which is a potentailly narrowing conversion leading to
-               // integral overflow. Hence, the values in the returned
-               // container are mixed negative and positive integers (long type)
-               //
-               return static_cast<long>(hash::value(idx.label()));
-             }) |
-         ranges::to<container::svector<long>>;
-}  // index_hash
-
-namespace kernel {
-
-template <typename NodeT, typename = std::enable_if_t<IsEvaluable<NodeT>>,
-          typename... Args>
-auto sum(NodeT const& n, btas::Tensor<Args...> const& lhs,
-         btas::Tensor<Args...> const& rhs) {
-  ///
-  auto const post_annot = index_hash(n->as_tensor().const_braket());
-  auto permute_and_scale = [&post_annot](auto const& btensor,
-                                         auto const& child_seqt, auto scal) {
-    auto pre_annot = index_hash(child_seqt.const_braket());
-    btas::Tensor<Args...> result;
-    btas::permute(btensor, pre_annot, result, post_annot);
-    btas::scal(scal, result);
-    return result;
-  };
-  ///
-  auto lscal = 1.;// n.left()->scalar().value().real();
-  auto rscal = 1.;// n.right()->scalar().value().real();
-
-  auto sum = permute_and_scale(lhs, n.left()->as_tensor(), lscal);
-  sum += permute_and_scale(rhs, n.right()->as_tensor(), rscal);
-
-  return sum;
-}
-
-template <typename NodeT, typename = std::enable_if_t<IsEvaluable<NodeT>>,
-          typename... Args>
-void add_to(btas::Tensor<Args...>& lhs, btas::Tensor<Args...> const& rhs,
-            NodeT const&, NodeT const&) {
-  lhs += rhs;
-}
-
-template <typename NodeT, typename = std::enable_if_t<IsEvaluable<NodeT>>,
-          typename... Args>
-auto prod(NodeT const& n, btas::Tensor<Args...> const& lhs,
-          btas::Tensor<Args...> const& rhs) {
-  auto lannot = index_hash(n.left()->expr()->as_tensor().const_braket());
-  auto rannot = index_hash(n.right()->expr()->as_tensor().const_braket());
-  auto this_annot = index_hash(n->expr()->as_tensor().const_braket());
-
-  btas::Tensor<Args...> prod;
-
-  btas::contract(   //
-      1.0,          //
-      lhs, lannot,  //
-      rhs, rannot,  //
-      0.0,          //
-      prod, this_annot);
-  return prod;
-}
-
-template <typename NodeT, typename AnnotT,
-          typename = std::enable_if_t<IsEvaluable<NodeT>>, typename... Args>
-auto scale(NodeT const& n, AnnotT const& annot,
-           btas::Tensor<Args...> const& arr) {
-  btas::Tensor<Args...> result;
-  auto const pre_annot = index_hash(n->expr()->as_tensor().const_braket());
-  btas::permute(arr, pre_annot, result, annot);
-  btas::scal(n->expr()->as_constant().value().real(), result);
-  return result;
-}
-
-template <typename... Args>
-auto symmetrize(btas::Tensor<Args...> const& arr) {
-  using ranges::views::iota;
-
-  size_t const rank = arr.rank();
-  // Caveat:
-  // clang-format off
-  // auto const lannot = iota(size_t{0}, rank) | ranges::to<perm_type>;
-  // clang-format on
-  auto const lannot = [rank]() {
-    auto p = perm_type(rank);
-    for (auto i = 0; i < rank; ++i) p[i] = i;
-    return p;
-  }();
-
-  auto result = btas::Tensor<Args...>{arr.range()};
-  result.fill(0);
-
-  auto symmetrizer = [&result, &lannot, &arr](auto const& permutation) {
-    auto const& rannot = permutation;
-    btas::Tensor<Args...> temp;
-    btas::permute(arr, lannot, temp, rannot);
-    result += temp;
-  };
-
-  symmetric_permutation(rank / 2, symmetrizer);
-
-  return result;
-}
-
-template <typename... Args>
-auto antisymmetrize(btas::Tensor<Args...> const& arr) {
-  using ranges::views::iota;
-
-  size_t const rank = arr.rank();
-  // Caveat:
-  // auto const lannot = iota(size_t{0}, rank) | ranges::to<perm_type>;
-  //
-  auto const lannot = [rank]() {
-    auto p = perm_type(rank);
-    for (auto i = 0; i < rank; ++i) p[i] = i;
-    return p;
-  }();
-
-  auto result = btas::Tensor<Args...>{arr.range()};
-  result.fill(0);
-
-  auto antisymmetrizer = [&result, &lannot, &arr](auto phase,
-                                                  auto const& permutation) {
-    auto const& rannot = permutation;
-    btas::Tensor<Args...> temp;
-    btas::permute(arr, lannot, temp, rannot);
-    btas::scal(phase, temp);
-    result += temp;
-  };
-
-  antisymmetric_permutation(rank / 2, antisymmetrizer);
-
-  return result;
-}
-
-}  // namespace kernel
-
-//
-//=============================================================================
 
 // =============================================================================
 //                           Evaluation backend
 // =============================================================================
+
 template <typename NodeT, typename Le>
 EvalResultT<NodeT, Le> evaluate_core(NodeT const& n, Le&& lev);
 
@@ -642,10 +506,12 @@ EvalResultT<NodeT, Le> evaluate_core(NodeT const& n, Le&& lev, Cm&& cm);
 
 template <typename NodeT, typename Le, typename... Args>
 EvalResultT<NodeT, Le> evaluate_impl(NodeT const& n, Le&& lev, Args&&... args) {
-//#ifndef NDEBUG
-//  assert_imaginary_zero(n->scalar());
-//#endif
-  if (n.leaf()) return std::invoke(std::forward<Le>(lev), n);
+  if (n.leaf()) {
+    if (n->result_type() == EvalResult::Constant)
+      return n->as_constant().value();
+    else
+      return std::invoke(std::forward<Le>(lev), n);
+  }
   EvalResultT<NodeT, Le> lres = evaluate_core(n.left(), std::forward<Le>(lev),
                                               std::forward<Args>(args)...);
   EvalResultT<NodeT, Le> rres = evaluate_core(n.right(), std::forward<Le>(lev),
@@ -654,7 +520,12 @@ EvalResultT<NodeT, Le> evaluate_impl(NodeT const& n, Le&& lev, Args&&... args) {
     return kernel::sum(n, lres, rres);
   }
   assert(n->op_type() == EvalOp::Prod);
-  return kernel::prod(n, lres, rres);
+  if (n->result_type() == EvalResult::Constant &&       //
+      n.left()->result_type() == EvalResult::Tensor &&  //
+      n.right()->result_type() == EvalResult::Tensor)
+    return kernel::dot(n, lres, rres);
+  else
+    return kernel::prod(n, lres, rres);
 }
 
 template <typename NodeT, typename Le>
@@ -718,9 +589,9 @@ template <typename NodeT, typename AnnotT, typename Le, typename... Args,
           std::enable_if_t<IsAnnot<AnnotT>, bool> = true>
 EvalResultT<NodeT, Le> evaluate(NodeT const& n, AnnotT const& annot, Le&& leval,
                                 Args&&... args) {
-// #ifndef NDEBUG
-// assert_imaginary_zero(n->scalar());
-// #endif
+  // #ifndef NDEBUG
+  // assert_imaginary_zero(n->scalar());
+  // #endif
   return kernel::scale(
       n, annot,
       evaluate_core(n, std::forward<Le>(leval), std::forward<Args>(args)...));
@@ -742,10 +613,8 @@ auto evaluate(NodesT const& nodes, AnnotT const& annot, Le&& leval,
 
   iter = std::next(iter);
   for (; iter != end; ++iter) {
-    kernel::add_to(result,
-                   evaluate(*iter, annot, std::forward<Le>(leval),
-                            std::forward<Args>(args)...),
-                   *beg, *iter);
+    kernel::add_to(result, evaluate(*iter, annot, std::forward<Le>(leval),
+                                    std::forward<Args>(args)...));
   }
   return result;
 }
@@ -765,7 +634,7 @@ auto evaluate_symm(NodeT const& nodes, AnnotT const& annot, Le&& le,
     even_rank_assert((*std::begin(nodes))->tensor());
   else {
     static_assert(IsEvaluable<NodeT>);
-    even_rank_assert(nodes->expr()->as_tensor());
+    even_rank_assert(nodes->as_tensor());
   }
 #endif
   return kernel::symmetrize(evaluate(nodes, annot, std::forward<Le>(le),
@@ -784,7 +653,7 @@ auto evaluate_antisymm(NodeT const& nodes, StrT const& annot, Le&& le,
     even_rank_assert((*std::begin(nodes))->tensor());
   else {
     static_assert(IsEvaluable<NodeT>);
-    even_rank_assert(nodes->expr()->as_tensor());
+    even_rank_assert(nodes->as_tensor());
   }
 #endif
   return kernel::antisymmetrize(evaluate(nodes, annot, std::forward<Le>(le),
