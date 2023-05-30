@@ -300,10 +300,10 @@ TEST_CASE("NBodyOp", "[mbpt]") {
             simplify(adjoint(r_1_2.tensor_form())));
 
     // to_latex()
-    REQUIRE(to_latex(f.as<Expr>()) == L"{\\hat{f}}");
-    REQUIRE(to_latex(t1.as<Expr>()) == L"{\\hat{t}_{1}}");
-    REQUIRE(to_latex(lambda2.as<Expr>()) == L"{\\hat{\\lambda}_{2}}");
-    REQUIRE(to_latex(r_1_2.as<Expr>()) == L"{\\hat{R}_{-1}^{2}}");
+    REQUIRE(to_latex(adjoint(f).as<Expr>()) == L"{\\hat{f}}");
+    REQUIRE(to_latex(adjoint(t1).as<Expr>()) == L"{\\hat{t}_{1}}");
+    REQUIRE(to_latex(adjoint(lambda2).as<Expr>()) == L"{\\hat{\\lambda}_{2}}");
+    REQUIRE(to_latex(adjoint(r_1_2).as<Expr>()) == L"{\\hat{R}_{1}^{-2}}");
 
   }  // SECTION("adjoint")
 }  // TEST_CASE("NBodyOp")
