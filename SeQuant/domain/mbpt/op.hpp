@@ -316,6 +316,30 @@ class Operator : public Operator<void> {
     }
   }
 
+  void adjoint() override {
+    if constexpr (std::is_same_v<QuantumNumbers,
+                                 mbpt::ParticleNumberChange<2>>) {
+      const auto dN = (*this)(QuantumNumbers{});
+      using qns_t = std::decay_t<decltype(dN)>;
+
+      const auto lbl = this->label();
+      const auto tnsr = this->tensor_form();
+      *this = Operator{
+          [=]() -> std::wstring_view { return lbl; },  // return same label
+          [=]() -> ExprPtr {
+            return sequant::adjoint(tnsr);  // return adjoint of tensor form
+          },
+          [=](qns_t& qn) {
+            qn = qns_t{{dN[0].upper() * -1, dN[0].lower() * -1},
+                       {dN[1].upper() * -1, dN[1].lower() * -1}};
+            return qn;  // return modified qns
+          }};
+    } else
+      throw std::runtime_error(
+          "mbpt::Operator::adjoint: only implemented for the single-reference "
+          "case");
+  }
+
  private:
   std::function<void(QuantumNumbers&)> qn_action_;
 
@@ -339,7 +363,7 @@ class Operator : public Operator<void> {
       auto lbl = std::wstring(this->label());
       std::wstring result = L"{\\hat{" + lbl + L"}";
       auto it = label2optype.find(lbl);
-      if (it != label2optype.end()) {  // handle special cases
+      if (it != label2optype.end()) {    // handle special cases
         const auto optype = it->second;
         if (optype == OpType::lambda) {  // λ -> \lambda
           result = L"{\\hat{\\lambda}";
