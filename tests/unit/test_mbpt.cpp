@@ -279,7 +279,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
     REQUIRE(adjoint(lambda2)(qns_t{}) == qns_t{{0, 0}, {2, 2}});
     REQUIRE(adjoint(r_1_2)(qns_t{}) == qns_t{{-1, -1}, {-2, -2}});
 
-    // adjoint(adjoint(op)) = op
+    // adjoint(adjoint(Op)) = Op
     REQUIRE(adjoint(adjoint(t1))(qns_t{}) == t1(qns_t{}));
     REQUIRE(adjoint(adjoint(r_1_2))(qns_t{}) == r_1_2(qns_t{}));
 

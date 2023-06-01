@@ -282,7 +282,7 @@ ExprPtr vac_av(
           }
           ++pos;
         } else if (factor.is<FNOperator>() || factor.is<BNOperator>()) {
-          ++pos;
+          ++pos; // skip FNOperator and BNOperator
         }
       }
 

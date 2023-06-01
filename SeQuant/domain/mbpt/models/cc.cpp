@@ -467,26 +467,33 @@ std::vector<ExprPtr> cceqs::t(bool screen, bool use_topology,
 
 std::vector<ExprPtr> cceqs::lambda(bool screen, bool use_topology,
                                    bool use_connectivity, bool canonical_only) {
-  constexpr bool use_ops = false;
-  auto One = ex<Constant>(1);
-  if (use_ops) {  // in development
-    // constructing h_bar(op) in canonical form
+  constexpr bool use_ops = true;
+  if (use_ops) { // in development
+    // construct hbar
     auto hbar = op::H();
-    auto lambda_H_Tk = hbar;
+    auto H_Tk = hbar;
     for (int64_t k = 1; k <= 3; ++k) {
-      lambda_H_Tk =
-          simplify(ex<Constant>(rational{1, k}) * (One + op::Lambda(N)) *
-                   ex<Constant>(rational{1, k}) * lambda_H_Tk * op::T(N));
+      H_Tk = simplify(ex<Constant>(rational{1, k}) * H_Tk * op::T(N));
+      hbar += H_Tk;
     }
-    // project onto the manifold on the right hand side, lower to tensor form
-    // and apply WT
+
+//    std::wcout << "hbar: \n" << to_latex_align(hbar, 0, 4) << std::endl;
+    // multiply with (1 + Λ)
+    const auto One = ex<Constant>(1);
+    auto lhbar = simplify((One + op::Lambda(N)) * hbar);
+
+//    std::wcout << "lhbar: \n" << to_latex_align(lhbar, 0, 4) << std::endl;
+
+    // 2. project onto each manifold, screen, lower to tensor form and wick it
     std::vector<ExprPtr> result(P + 1);
     for (auto p = P; p >= PMIN; --p) {
+      // 2.a. screen out terms that cannot give nonzero after projection onto
+      // <P|
       std::shared_ptr<Sum>
-          hbar_p;     // products than can produce excitations of rank p
+          hbar_p;     // products that can produce excitations of rank p
       std::shared_ptr<Sum>
-          hbar_le_p;  // keeps products than can produce excitations rank <= p
-      for (auto& term : *hbar) {
+          hbar_le_p;  // keeps products that can produce excitations rank <=p
+      for (auto& term : *lhbar) {  // pick terms from lhbar
         assert(term->is<Product>() || term->is<op_t>());
 
         if (op::contains_up_to_rank(term, p)) {
@@ -502,17 +509,28 @@ std::vector<ExprPtr> cceqs::lambda(bool screen, bool use_topology,
           }
         }
       }
-      hbar = hbar_le_p;
+      lhbar = hbar_le_p; // not needed
 
-      auto hbar_A = simplify(hbar_p * adjoint(op::A(p)));
+//      std::wcout << "p = " << p << std::endl;
+//      std::wcout << "hbar-le-p: \n"
+//                 << to_latex_align(hbar_le_p, 0, 4) << std::endl;
+//      std::wcout << "hbar-p: \n" << to_latex_align(hbar_p, 0, 4) << std::endl;
 
-      result.at(p) = op::vac_av(hbar_A, {{L"h", L"t"},
-                                         {L"f", L"t"},
-                                         {L"g", L"t"},
-                                         {L"h", L"A"},
-                                         {L"f", L"A"},
-                                         {L"g", L"A"}}); // additional connections b/w hamiltonian and A
+      // 2.b multiply by adjoint of A(P) on the right side
+
+      auto A_hbar = simplify(hbar_p * adjoint(op::A(p)));
+//      std::wcout << "Ahbar: \n" << to_latex_align(A_hbar, 0, 4) << std::endl;
+
+      // temp
+      std::vector<std::pair<std::wstring, std::wstring>> new_op_connect = {
+          {L"h", L"t"}, {L"f", L"t"}, {L"g", L"t"},
+          {L"h", L"A"}, {L"f", L"A"}, {L"g", L"A"}};
+
+      // 2.c compute vacuum average
+      result.at(p) = op::vac_av(A_hbar, new_op_connect);
       simplify(result.at(p));
+//      std::wcout << "result.at(p): \n"
+//                 << to_latex_align(result.at(p), 0, 4) << std::endl;
     }
     return result;
   } else {
@@ -520,7 +538,6 @@ std::vector<ExprPtr> cceqs::lambda(bool screen, bool use_topology,
     for (auto p = P; p >= PMIN; --p) {
       result.at(p) = cceqs_lambda{p, N}(screen, use_topology, use_connectivity,
                                         canonical_only);
-      rapid_simplify(result[p]);
     }
     return result;
   }
