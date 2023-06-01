@@ -330,7 +330,7 @@ class Operator : public Operator<void> {
             return sequant::adjoint(tnsr);  // return adjoint of tensor form
           },
           [=](qns_t& qn) {
-            qn = qns_t{{dN[0].upper() * -1, dN[0].lower() * -1},
+            qn += qns_t{{dN[0].upper() * -1, dN[0].lower() * -1},
                        {dN[1].upper() * -1, dN[1].lower() * -1}};
             return qn;  // return modified qns
           }};
