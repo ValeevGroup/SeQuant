@@ -311,8 +311,41 @@ class Operator : public Operator<void> {
       return true;
     else {
       auto& that_op = that.as<this_type>();
-      return (*this)(that_op(QuantumNumbers{})) ==
-             that_op((*this)(QuantumNumbers{}));
+      // if this has annihilators/creators in same space as that has
+      // creator/annihilators return false
+      const auto delta_this = (*this)(QuantumNumbers{});
+      const auto delta_that = (that_op)(QuantumNumbers{});
+      auto gtzero = [](const auto& interval) {
+        using interval_type = std::decay_t<decltype(interval)>;
+        using base_type = typename interval_type::base_type;
+        return boost::numeric::overlap(
+            interval, interval_type{1, std::numeric_limits<base_type>::max()});
+      };
+      auto ltzero = [](const auto& interval) {
+        using interval_type = std::decay_t<decltype(interval)>;
+        using base_type = typename interval_type::base_type;
+        return boost::numeric::overlap(
+            interval, interval_type{std::numeric_limits<base_type>::min(), -1});
+      };
+      bool this_has_cre_0 = gtzero(delta_this[1]);
+      bool this_has_ann_0 = ltzero(delta_this[1]);
+      bool that_has_cre_0 = gtzero(delta_that[1]);
+      bool that_has_ann_0 = ltzero(delta_that[1]);
+      bool this_has_cre_1 = gtzero(delta_this[0] - delta_this[1]);
+      bool this_has_ann_1 = ltzero(delta_this[0] - delta_this[1]);
+      bool that_has_cre_1 = gtzero(delta_that[0] - delta_that[1]);
+      bool that_has_ann_1 = ltzero(delta_that[0] - delta_that[1]);
+      auto result = !((this_has_cre_0 && that_has_ann_0) ||
+                      (that_has_cre_0 && this_has_ann_0) ||
+                      (this_has_cre_1 && that_has_ann_1) ||
+                      (that_has_cre_1 && this_has_ann_1));
+      if (result == true)
+        std::wcout << this->to_latex() << " commutes with " << that.to_latex()
+                   << std::endl;
+      else
+        std::wcout << this->to_latex() << " does NOT commute with "
+                   << that.to_latex() << std::endl;
+      return result;
     }
   }
 
@@ -331,7 +364,7 @@ class Operator : public Operator<void> {
           },
           [=](qns_t& qn) {
             qn += qns_t{{dN[0].upper() * -1, dN[0].lower() * -1},
-                       {dN[1].upper() * -1, dN[1].lower() * -1}};
+                        {dN[1].upper() * -1, dN[1].lower() * -1}};
             return qn;  // return modified qns
           }};
     } else
@@ -363,7 +396,7 @@ class Operator : public Operator<void> {
       auto lbl = std::wstring(this->label());
       std::wstring result = L"{\\hat{" + lbl + L"}";
       auto it = label2optype.find(lbl);
-      if (it != label2optype.end()) {    // handle special cases
+      if (it != label2optype.end()) {  // handle special cases
         const auto optype = it->second;
         if (optype == OpType::lambda) {  // λ -> \lambda
           result = L"{\\hat{\\lambda}";

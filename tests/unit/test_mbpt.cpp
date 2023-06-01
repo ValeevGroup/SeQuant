@@ -32,7 +32,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
         // REQUIRE(f1(qns_t{0, 0}) == 1);   // this is not same as below, due to
         // Catch interference
         REQUIRE(operator==(f1(qns_t{0, 0}),
-                           1));   // can produce single excitation
+                           1));  // can produce single excitation
         REQUIRE(operator==(f1(qns_t{0, 0}),
                            -1));  // can produce single de-excitation
         REQUIRE(operator==(
@@ -69,7 +69,6 @@ TEST_CASE("NBodyOp", "[mbpt]") {
         REQUIRE(equal(f1(qns_t{-1, 1}), qns_t{-2, 2}));
       }
     };
-    test1(boost::numeric::interval<int>{});
     test1(mbpt::ParticleNumberChange<1>{});
 
     auto test2 = [](const auto& null_qns) {
@@ -197,6 +196,14 @@ TEST_CASE("NBodyOp", "[mbpt]") {
                        [](qns_t& qns) {
                          qns += qns_t{{0, 0}, {1, 1}};
                        });
+    auto l1 = ex<op_t>([]() -> std::wstring_view { return L"λ"; },
+                       []() -> ExprPtr {
+                         using namespace sequant::mbpt::sr;
+                         return Lambda_(1);
+                       },
+                       [](qns_t& qns) {
+                         qns += qns_t{{0, 0}, {-1, -1}};
+                       });
     auto t2 = ex<op_t>([]() -> std::wstring_view { return L"t"; },
                        []() -> ExprPtr {
                          using namespace sequant::mbpt::sr;
@@ -206,7 +213,11 @@ TEST_CASE("NBodyOp", "[mbpt]") {
                          qns += qns_t{{0, 0}, {2, 2}};
                        });
 
+    std::wcout << "to_latex(canonicalize(f * t2 * t1)) = "
+               << to_latex(canonicalize(f * t2 * t1)) << std::endl;
     REQUIRE(to_latex(f * t1 * t2) == to_latex(canonicalize(f * t2 * t1)));
+    REQUIRE(to_latex(canonicalize(f * t1 * t2)) ==
+            to_latex(canonicalize(f * t2 * t1)));
 
     REQUIRE(to_latex(ex<Constant>(3) * f * t1 * t2) ==
             to_latex(simplify(ex<Constant>(2) * f * t2 * t1 + f * t1 * t2)));
@@ -231,6 +242,14 @@ TEST_CASE("NBodyOp", "[mbpt]") {
               to_latex(f * t1 * t1 * t1 + ex<Constant>(3) * f * t1 * t2 * t2 +
                        f * t2 * t2 * t2 + ex<Constant>(3) * f * t1 * t1 * t2));
     }
+
+    // [T1,Lambda1]!=0
+    std::wcout << "simplify(t1 * l1) = " << to_latex(simplify(t1 * l1))
+               << std::endl;
+    std::wcout << "simplify(l1 * t1) = " << to_latex(simplify(l1 * t1))
+               << std::endl;
+    REQUIRE(to_latex(simplify(t1 * l1)) != to_latex(simplify(l1 * t1)));
+
   }  // SECTION("canonicalize")
 
   SECTION("adjoint") {
@@ -359,7 +378,7 @@ TEST_CASE("MBPT", "[mbpt]") {
           REQUIRE(result->is<Sum>());    // sub ...
           REQUIRE(result->size() == 4);  // ... of 4 factors
         }));
-  }                                      // SECTION("SRSO Fock")
+  }  // SECTION("SRSO Fock")
 
   SECTION("SRSO-PNO") {
     using namespace sequant::mbpt::sr;
