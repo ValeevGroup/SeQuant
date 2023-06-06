@@ -212,6 +212,14 @@ TEST_CASE("NBodyOp", "[mbpt]") {
                        [](qns_t& qns) {
                          qns += qns_t{{0, 0}, {2, 2}};
                        });
+    auto l2 = ex<op_t>([]() -> std::wstring_view { return L"λ"; },
+                       []() -> ExprPtr {
+                         using namespace sequant::mbpt::sr;
+                         return Lambda_(2);
+                       },
+                       [](qns_t& qns) {
+                         qns += qns_t{{0, 0}, {-2, -2}};
+                       });
 
     //    std::wcout << "to_latex(canonicalize(f * t2 * t1)) = "
     //               << to_latex(canonicalize(f * t2 * t1)) << std::endl;
@@ -221,6 +229,20 @@ TEST_CASE("NBodyOp", "[mbpt]") {
 
     REQUIRE(to_latex(ex<Constant>(3) * f * t1 * t2) ==
             to_latex(simplify(ex<Constant>(2) * f * t2 * t1 + f * t1 * t2)));
+
+    //    std::wcout << "simplify(t1 * l1) = " << to_latex(simplify(t1 * l1))
+    //               << std::endl;
+    //    std::wcout << "simplify(l1 * t1) = " << to_latex(simplify(l1 * t1))
+    //               << std::endl;
+
+    REQUIRE(to_latex(simplify(t1 * l1)) != to_latex(simplify(l1 * t1)));
+    REQUIRE(to_latex(simplify(t1 * l2)) != to_latex(simplify(l2 * t1)));
+
+    REQUIRE(to_latex(simplify(l2 * t1)) ==
+            L"{{\\hat{\\lambda}_{2}}{\\hat{t}_{1}}}");
+    REQUIRE(to_latex(simplify(t1 * l2)) ==
+            L"{{\\hat{t}_{1}}{\\hat{\\lambda}_{2}}}");
+
     auto t = t1 + t2;
 
     if constexpr (hash_version() == hash::Impl::BoostPre181) {
