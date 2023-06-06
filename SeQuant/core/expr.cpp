@@ -178,7 +178,7 @@ ExprPtr Product::canonicalize_impl(bool rapid) {
           [&local_compare](const ExprPtr &first, const ExprPtr &second) {
             bool result = (first->commutes_with(*second))
                               ? local_compare(first, second)
-                              : true;
+                              : false;
             return result;
           });
     }

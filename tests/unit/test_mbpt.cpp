@@ -250,6 +250,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
                << std::endl;
     REQUIRE(to_latex(simplify(t1 * l1)) != to_latex(simplify(l1 * t1)));
 
+
   }  // SECTION("canonicalize")
 
   SECTION("adjoint") {
@@ -325,6 +326,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
     REQUIRE(to_latex(adjoint(r_1_2).as<Expr>()) == L"{\\hat{R}_{1}^{-2}}");
 
   }  // SECTION("adjoint")
+
 }  // TEST_CASE("NBodyOp")
 
 TEST_CASE("MBPT", "[mbpt]") {
