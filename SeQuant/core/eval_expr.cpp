@@ -25,7 +25,7 @@ size_t EvalExpr::global_id_{};
 
 EvalExpr::EvalExpr(Tensor const& tnsr)
     : op_type_{EvalOp::Id},
-      result_type_{EvalResult::Tensor},
+      result_type_{ResultType::Tensor},
       hash_value_{hash_terminal_tensor(tnsr)},
       id_{++global_id_},
       expr_{tnsr.clone()},
@@ -33,7 +33,7 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
 
 EvalExpr::EvalExpr(Constant const& c)
     : op_type_{EvalOp::Id},
-      result_type_{EvalResult::Constant},
+      result_type_{ResultType::Constant},
       hash_value_{hash::value(c)},
       id_{++global_id_},
       expr_{c.clone()},
@@ -45,13 +45,13 @@ EvalExpr::EvalExpr(EvalExpr const& left, EvalExpr const& right, EvalOp op)
       id_{++global_id_},
       expr_{make_imed(left, right, op)} {
   result_type_ =
-      expr_->is<Tensor>() ? EvalResult::Tensor : EvalResult::Constant;
+      expr_->is<Tensor>() ? ResultType::Tensor : ResultType::Constant;
   tot_ = expr_->is<Tensor>() && is_tot(expr_->as<Tensor>());
 }
 
 EvalOp EvalExpr::op_type() const noexcept { return op_type_; }
 
-EvalResult EvalExpr::result_type() const noexcept { return result_type_; }
+ResultType EvalExpr::result_type() const noexcept { return result_type_; }
 
 size_t EvalExpr::hash_value() const noexcept { return hash_value_; }
 
@@ -135,8 +135,8 @@ size_t hash_imed(sequant::EvalExpr const& left, sequant::EvalExpr const& right,
   hash::combine(h, lh < rh ? lh : rh);
   hash::combine(h, lh < rh ? rh : lh);
 
-  if (left.result_type() == EvalResult::Tensor &&
-      right.result_type() == EvalResult::Tensor)
+  if (left.result_type() == ResultType::Tensor &&
+      right.result_type() == ResultType::Tensor)
     hash::combine(h, hash_tensor_pair_topology(left.expr()->as<Tensor>(),
                                                right.expr()->as<Tensor>()));
   return h;
@@ -315,18 +315,18 @@ sequant::ExprPtr make_imed(sequant::EvalExpr const& left,
   auto lres = left.result_type();
   auto rres = right.result_type();
 
-  if (lres == EvalResult::Constant && rres == EvalResult::Constant) {
+  if (lres == ResultType::Constant && rres == ResultType::Constant) {
     // scalar (+|*) scalar
 
     return sequant::ex<sequant::Constant>(1);
 
-  } else if (lres == EvalResult::Constant && rres == EvalResult::Tensor) {
+  } else if (lres == ResultType::Constant && rres == ResultType::Tensor) {
     // scalar (*) tensor
 
     assert(op == EvalOp::Prod && "scalar + tensor not supported");
     return right.expr()->clone();
 
-  } else if (lres == EvalResult::Tensor && rres == EvalResult::Constant) {
+  } else if (lres == ResultType::Tensor && rres == ResultType::Constant) {
     // tensor (*) scalar
 
     assert(op == EvalOp::Prod && "scalar + tensor not supported");

@@ -10,6 +10,8 @@ std::string const& EvalExprTA::annot() const { return annot_; }
 EvalExprTA::EvalExprTA(Tensor const& tnsr)
     : EvalExpr(tnsr), annot_{braket_to_annot(tnsr.braket())} {}
 
+EvalExprTA::EvalExprTA(Constant const& c) : EvalExpr(c), annot_{} {}
+
 EvalExprTA::EvalExprTA(const EvalExprTA& left, const EvalExprTA& right,
                        EvalOp op)
     : EvalExpr{left, right, op} {
@@ -17,7 +19,7 @@ EvalExprTA::EvalExprTA(const EvalExprTA& left, const EvalExprTA& right,
   using TA::expressions::BipartiteIndexList;
   using TA::expressions::GEMMPermutationOptimizer;
 
-  if (result_type() == EvalResult::Tensor) {
+  if (result_type() == ResultType::Tensor) {
     if (tot()) {
       annot_ = braket_to_annot(expr()->as<Tensor>().const_braket());
     } else {

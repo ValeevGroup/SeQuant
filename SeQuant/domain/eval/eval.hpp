@@ -1,6 +1,8 @@
 #ifndef SEQUANT_EVAL_EVAL_HPP
 #define SEQUANT_EVAL_EVAL_HPP
 
+#include "eval_result.hpp"
+
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval_node.hpp>
@@ -13,7 +15,9 @@
 #include <range/v3/numeric.hpp>
 #include <range/v3/view.hpp>
 
+#include <any>
 #include <iostream>
+#include <stdexcept>
 #include <type_traits>
 
 namespace sequant {
@@ -109,7 +113,7 @@ constexpr bool
 
 template <typename NodeT, typename E,
           typename = std::enable_if_t<IsEvaluable<NodeT>>>
-using EvalResultT = std::variant<double,remove_cvref_t<std::invoke_result_t<E, NodeT const&>>>;
+using EvalResultT = remove_cvref_t<std::invoke_result_t<E, NodeT const&>>;
 
 template <typename StrT>
 constexpr bool IsString = IsString_<StrT>::value;
@@ -130,13 +134,13 @@ template <typename NodeT, typename Le, typename Cm,
               EvalResultT<NodeT, Le>>>>
 constexpr bool IsCacheManager = true;
 
-#ifndef NDEBUG
 template <typename C,
           typename = std::enable_if_t<std::is_same_v<C, sequant::Constant>>>
 void assert_imaginary_zero(C const& c) {
+#ifndef NDEBUG
   assert(c.value().imag() == 0 && "complex scalar unsupported");
-}
 #endif
+}
 
 template <typename F,
           typename = std::enable_if_t<std::is_invocable_v<F, perm_type const&>>>
@@ -247,49 +251,6 @@ CacheManager<DataT> cache_manager(
   return CacheManager<DataT>{imed_counts};
 }
 
-namespace kernel {
-
-template <typename NodeT,    //
-          typename ResultT,  //
-          typename LhsT,     //
-          typename RhsT,     //
-          typename = std::enable_if_t<IsEvaluable<NodeT>>>
-ResultT sum(NodeT const&, LhsT const&, RhsT const&);
-
-template <typename NodeT,    //
-          typename ResultT,  //
-          typename LhsT,     //
-          typename RhsT,     //
-          typename = std::enable_if_t<IsEvaluable<NodeT>>>
-ResultT prod(NodeT const&, LhsT const&, RhsT const&);
-
-template <typename NodeT,  //
-          typename ResultT, typename = std::enable_if_t<IsEvaluable<NodeT>>>
-double dot(NodeT const&, ResultT const&, ResultT const&);
-
-template <typename ResultT>
-ResultT scale(double, ResultT const&);
-
-template <typename NodeT,    //
-          typename ResultT,  //
-          typename = std::enable_if_t<IsEvaluable<NodeT>>>
-void add_to(ResultT& lhs, ResultT const& rhs);
-
-template <typename NodeT>
-double sum(NodeT const&, double l, double r) {
-  return l + r;
-}
-
-template <typename NodeT>
-double prod(NodeT const&, double l, double r) {
-  return l * r;
-}
-
-}  // namespace kernel
-
-//==============================================================================
-//                     TA::DistArray kernel definitions
-//==============================================================================
 class EvalExprTA final : public EvalExpr {
  public:
   ///
@@ -298,6 +259,8 @@ class EvalExprTA final : public EvalExpr {
   [[nodiscard]] std::string const& annot() const;
 
   explicit EvalExprTA(Tensor const&);
+
+  explicit EvalExprTA(Constant const&);
 
   EvalExprTA(EvalExprTA const&, EvalExprTA const&, EvalOp);
 
@@ -350,8 +313,10 @@ template <typename N, typename = std::enable_if_t<IsEvaluable<N>>>
 std::string annot(N const& node) {
   if constexpr (HasAnnotMethod<typename N::value_type>)
     return node->annot();
-  else
-    return braket_to_annot(node->as_tensor().const_braket());
+  else if (node->expr()->template is<Constant>())
+    return "";
+  assert(node->expr()->template is<Tensor>());
+  return braket_to_annot(node->as_tensor().const_braket());
 }
 
 template <typename RngOfOrdinals>
@@ -364,76 +329,16 @@ std::string ords_to_annot(RngOfOrdinals const& ords) {
          ranges::to<std::string>;
 }
 
-namespace kernel {
-
-template <typename NodeT, typename... Args>
-TA::DistArray<Args...> sum(NodeT const& n,                     //
-                           TA::DistArray<Args...> const& lhs,  //
-                           TA::DistArray<Args...> const& rhs) {
-  auto const pannot = annot(n);
-  auto const lannot = annot(n.left());
-  auto const rannot = annot(n.right());
-
-  TA::DistArray<Args...> result;
-
-  result(pannot) = lhs(lannot) + rhs(rannot);
-  decltype(result)::wait_for_lazy_cleanup(result.world());
-
-  return result;
-}
-
-template <typename NodeT, typename... Args>
-TA::DistArray<Args...> prod(NodeT const& n,                     //
-                            TA::DistArray<Args...> const& lhs,  //
-                            TA::DistArray<Args...> const& rhs) {
-  auto const pannot = annot(n);
-  auto const lannot = annot(n.left());
-  auto const rannot = annot(n.right());
-
-  TA::DistArray<Args...> result;
-  result(pannot) = lhs(lannot) * rhs(rannot);
-  decltype(result)::wait_for_lazy_cleanup(result.world());
-  return result;
-}
-
-template <typename NodeT, typename... Args>
-TA::DistArray<Args...> prod(NodeT const& n,  //
-                            double f,        //
-                            TA::DistArray<Args...> const& tnsr) {
-  auto const annot = TA::detail::dummy_annotation(tnsr.trange().rank());
-
-  TA::DistArray<Args...> result;
-  result(annot) = f * tnsr(annot);
-
-  TA::DistArray<Args...>::wait_for_lazy_cleanup(tnsr.world());
-
-  return result;
-}
-
-template <typename NodeT, typename... Args>
-TA::DistArray<Args...> prod(NodeT const& n,                      //
-                            TA::DistArray<Args...> const& tnsr,  //
-                            double f) {
-  return prod(n, f, tnsr);
-}
-
-template <typename NodeT, typename... Args>
-double dot(NodeT const& n,                     //
-           TA::DistArray<Args...> const& lhs,  //
-           TA::DistArray<Args...> const& rhs) {
-  auto const lannot = annot(n.left());
-  auto const& rannot = annot(n.right());
-  return TA::dot(lhs(lannot), rhs(rannot));
-}
+namespace {
 
 template <typename... Args>
-TA::DistArray<Args...> scale(double f,  //
-                             TA::DistArray<Args...> const& lhs) {
-  auto const ann = TA::detail::dummy_annotation(lhs.trange().rank());
-  TA::DistArray<Args...> result;
-  result(ann) = f * lhs(ann);
-  decltype(result)::wait_for_lazy_cleanup();
-  return result;
+auto permute(TA::DistArray<Args...> const& pre,  //
+             std::string const& pre_annot,       //
+             std::string const& post_annot) noexcept {
+  TA::DistArray<Args...> post;
+  post(post_annot) = pre(pre_annot);
+  decltype(post)::wait_for_lazy_cleanup(post.world());
+  return post;
 }
 
 template <typename... Args>
@@ -487,180 +392,101 @@ auto antisymmetrize(TA::DistArray<Args...> const& arr) {
   return result;
 }
 
-}  // namespace kernel
+template <typename... Args>
+void add_to(TA::DistArray<Args...>& lhs, TA::DistArray<Args...> const& rhs) {
+  assert(lhs.trange() == rhs.trange());
 
-//==============================================================================
+  auto const annot = TA::detail::dummy_annotation(lhs.trange().rank());
 
-//=============================================================================
+  lhs(annot) += rhs(annot);
 
-// =============================================================================
-//                           Evaluation backend
-// =============================================================================
-
-template <typename NodeT, typename Le>
-EvalResultT<NodeT, Le> evaluate_core(NodeT const& n, Le&& lev);
-
-template <typename NodeT, typename Le, typename Cm,
-          typename = std::enable_if_t<IsCacheManager<NodeT, Le, Cm>>>
-EvalResultT<NodeT, Le> evaluate_core(NodeT const& n, Le&& lev, Cm&& cm);
-
-template <typename NodeT, typename Le, typename... Args>
-EvalResultT<NodeT, Le> evaluate_impl(NodeT const& n, Le&& lev, Args&&... args) {
-  if (n.leaf()) {
-    if (n->result_type() == EvalResult::Constant)
-      return n->as_constant().value();
-    else
-      return std::invoke(std::forward<Le>(lev), n);
-  }
-  EvalResultT<NodeT, Le> lres = evaluate_core(n.left(), std::forward<Le>(lev),
-                                              std::forward<Args>(args)...);
-  EvalResultT<NodeT, Le> rres = evaluate_core(n.right(), std::forward<Le>(lev),
-                                              std::forward<Args>(args)...);
-  if (n->op_type() == EvalOp::Sum) {
-    return kernel::sum(n, lres, rres);
-  }
-  assert(n->op_type() == EvalOp::Prod);
-  if (n->result_type() == EvalResult::Constant &&       //
-      n.left()->result_type() == EvalResult::Tensor &&  //
-      n.right()->result_type() == EvalResult::Tensor)
-    return kernel::dot(n, lres, rres);
-  else
-    return kernel::prod(n, lres, rres);
+  TA::DistArray<Args...>::wait_for_lazy_cleanup(lhs.world());
 }
 
-template <typename NodeT, typename Le>
-EvalResultT<NodeT, Le> evaluate_core(NodeT const& n, Le&& lev) {
-  return evaluate_impl(n, std::forward<Le>(lev));
+}  // namespace
+
+///
+/// \tparam NodeT Node type. eg. FullBinaryNode<EvalExpr>
+/// \tparam Le    Leaf evaluator type.
+/// \param node   Node to evaluate
+/// \param le     Leaf evaluator: returns result for leaf nodes.
+/// \return
+template <typename NodeT, typename Le,
+          typename = std::enable_if_t<IsEvaluable<NodeT>>>
+ERPtr evaluate_(NodeT const& node, Le&& le) {
+  using numeric_type = typename EvalResultT<NodeT, Le>::numeric_type;
+  using constant_type = EvalConstant<numeric_type>;
+  if (node.leaf()) {
+    if (node->result_type() == ResultType::Constant) {
+      auto n = constant_type{node->as_constant().value().real()}.value();
+      return eval_result<constant_type>(n);
+    } else {
+      assert(node->result_type() == ResultType::Tensor);
+      return eval_result<EvalTensorTA<EvalResultT<NodeT, Le>>>(
+          std::forward<Le>(le)(node));
+    }
+  } else {
+    auto const left = evaluate_(node.left(), std::forward<Le>(le));
+    auto const right = evaluate_(node.right(), std::forward<Le>(le));
+
+    std::array<std::any, 3> ann{annot(node.left()),   //
+                                annot(node.right()),  //
+                                annot(node)};
+
+    if (node->op_type() == EvalOp::Sum) {
+      return left->sum(*right, ann);
+    } else {
+      assert(node->op_type() == EvalOp::Prod);
+      return left->prod(*right, ann);
+    }
+  }
 }
 
-template <typename NodeT, typename Le, typename Cm, typename>
-EvalResultT<NodeT, Le> evaluate_core(NodeT const& n, Le&& lev, Cm&& cm) {
-  auto h = hash::value(*n);
-  if (auto ptr = std::forward<Cm>(cm).access(h); ptr) {
-#ifdef SEQUANT_EVAL_TRACE
-    auto const max_c = std::forward<Cm>(cm).max_life(h);
-    auto const curr_c = std::forward<Cm>(cm).life(h);
-    std::cout << "[EVAL] [ACCESSED] intermediate for " << n->label() << "("
-              << annot(n) << ") using key: " << hash::value(*n) << " ["
-              << curr_c << "/" << max_c << "] accesses remain" << std::endl;
-    if (curr_c == 0)
-      std::cout << "[EVAL] [RELEASED] intermediate for " << n->label() << "("
-                << annot(n) << ") using key: " << hash::value(*n) << std::endl;
-#endif
-
-    return *ptr;
-  }
-
-  if (std::forward<Cm>(cm).exists(h)) {
-#ifdef SEQUANT_EVAL_TRACE
-    auto const max_c = std::forward<Cm>(cm).max_life(h);
-    // curr_c will be reduced by one right when it is stored
-    auto const curr_c = std::forward<Cm>(cm).life(h) - 1;
-    std::cout << "[EVAL] [STORED] [ACCESSED] intermediate for " << n->label()
-              << "(" << annot(n) << ") using key: " << hash::value(*n) << " ["
-              << curr_c << "/" << max_c << "] accesses remain" << std::endl;
-#endif
-
-    return *std::forward<Cm>(cm).store(
-        h, std::move(
-               evaluate_impl(n, std::forward<Le>(lev), std::forward<Cm>(cm))));
-  }
-
-#ifndef NDEBUG
-  if (auto const curr_c = std::forward<Cm>(cm).life(h); curr_c == 0) {
-    auto const max_c = std::forward<Cm>(cm).max_life(h);
-    std::cout << "[EVAL] [MISSED] intermediate for " << n->label() << "("
-              << annot(n) << ") using key: " << hash::value(*n) << " ["
-              << curr_c << "/" << max_c << "] accesses remain" << std::endl;
-  }
-
-  assert(!std::forward<Cm>(cm).zombie(h) &&
-         "Cached data outlives lifetime. Cache manager is in invalid state!");
-#endif
-
-  return evaluate_impl(n, std::forward<Le>(lev), std::forward<Cm>(cm));
-}
-// =============================================================================
-
-// =============================================================================
-//                         Evaluation frontend
-// =============================================================================
-template <typename NodeT, typename AnnotT, typename Le, typename... Args,
-          std::enable_if_t<IsAnnot<AnnotT>, bool> = true>
-EvalResultT<NodeT, Le> evaluate(NodeT const& n, AnnotT const& annot, Le&& leval,
-                                Args&&... args) {
-  // #ifndef NDEBUG
-  // assert_imaginary_zero(n->scalar());
-  // #endif
-  return kernel::scale(
-      n, annot,
-      evaluate_core(n, std::forward<Le>(leval), std::forward<Args>(args)...));
+template <typename NodeT, typename Annot, typename Le,
+          std::enable_if_t<IsAnnot<Annot> && IsEvaluable<NodeT>, bool> = true>
+auto evaluate(NodeT const& node,    //
+              Annot const& layout,  //
+              Le&& le) {
+  auto const pre = evaluate_(node, std::forward<Le>(le))
+                       ->template get<EvalResultT<NodeT, Le>>();
+  return permute(pre, annot(node), layout);
 }
 
-template <
-    typename NodesT, typename AnnotT, typename Le, typename... Args,
-    std::enable_if_t<IsAnnot<AnnotT> && IsIterableOfEvaluableNodes<NodesT>,
-                     bool> = true>
-auto evaluate(NodesT const& nodes, AnnotT const& annot, Le&& leval,
-              Args&&... args) {
+template <typename NodesT, typename Annot, typename Le,
+          std::enable_if_t<IsAnnot<Annot> && IsIterableOfEvaluableNodes<NodesT>,
+                           bool> = true>
+auto evaluate(NodesT const& nodes,  //
+              Annot const& layout,  //
+              Le&& le) {
   auto beg = std::cbegin(nodes);
   auto iter = std::begin(nodes);
   auto end = std::end(nodes);
   assert(iter != end);
 
-  auto result = evaluate(*iter, annot, std::forward<Le>(leval),
-                         std::forward<Args>(args)...);
+  auto result = evaluate(*iter, layout, std::forward<Le>(le));
 
   iter = std::next(iter);
   for (; iter != end; ++iter) {
-    kernel::add_to(result, evaluate(*iter, annot, std::forward<Le>(leval),
-                                    std::forward<Args>(args)...));
+    add_to(result, evaluate(*iter, layout, std::forward<Le>(le)));
   }
   return result;
 }
 
-template <typename NodeT, typename AnnotT, typename Le, typename... Args>
-auto evaluate_symm(NodeT const& nodes, AnnotT const& annot, Le&& le,
-                   Args&&... args) {
-  using ranges::views::concat;
-  // using ranges::views::iota;
-  using ranges::views::transform;
-#ifndef NDEBUG
-  auto even_rank_assert = [](Tensor const& t) {
-    assert((t.bra_rank() + t.ket_rank()) % 2 == 0 &&
-           "Odd ranked tensor symmetrization not supported");
-  };
-  if constexpr (IsIterableOfEvaluableNodes<NodeT>)
-    even_rank_assert((*std::begin(nodes))->tensor());
-  else {
-    static_assert(IsEvaluable<NodeT>);
-    even_rank_assert(nodes->as_tensor());
-  }
-#endif
-  return kernel::symmetrize(evaluate(nodes, annot, std::forward<Le>(le),
-                                     std::forward<Args>(args)...));
+template <typename NodeT, typename Annot, typename Le>
+auto evaluate_symm(NodeT const& node,    //
+                   Annot const& layout,  //
+                   Le&& le) {
+  auto const pre = evaluate(node, layout, std::forward<Le>(le));
+  return symmetrize(pre);
 }
 
-template <typename NodeT, typename StrT, typename Le, typename... Args>
-auto evaluate_antisymm(NodeT const& nodes, StrT const& annot, Le&& le,
-                       Args&&... args) {
-#ifndef NDEBUG
-  auto even_rank_assert = [](Tensor const& t) {
-    assert((t.bra_rank() + t.ket_rank()) % 2 == 0 &&
-           "Odd ranked tensor anti-symmetrization not supported");
-  };
-  if constexpr (IsIterableOfEvaluableNodes<NodeT>)
-    even_rank_assert((*std::begin(nodes))->tensor());
-  else {
-    static_assert(IsEvaluable<NodeT>);
-    even_rank_assert(nodes->as_tensor());
-  }
-#endif
-  return kernel::antisymmetrize(evaluate(nodes, annot, std::forward<Le>(le),
-                                         std::forward<Args>(args)...));
+template <typename NodeT, typename Annot, typename Le>
+auto evaluate_antisymm(NodeT const& node,    //
+                       Annot const& layout,  //
+                       Le&& le) {
+  auto const pre = evaluate(node, layout, std::forward<Le>(le));
+  return antisymmetrize(pre);
 }
-
-// =============================================================================
 
 }  // namespace sequant::eval
 

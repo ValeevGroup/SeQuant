@@ -8,12 +8,12 @@ namespace sequant {
 
 enum class EvalOp { Id, Sum, Prod };
 
-enum class EvalResult { Tensor, Constant };
+enum class ResultType { Tensor, Constant };
 
 class EvalExpr {
  private:
   EvalOp op_type_;
-  EvalResult result_type_;
+  ResultType result_type_;
   size_t hash_value_;
   size_t id_;
   ExprPtr expr_;
@@ -30,7 +30,7 @@ class EvalExpr {
 
   [[nodiscard]] EvalOp op_type() const noexcept;
 
-  [[nodiscard]] EvalResult result_type() const noexcept;
+  [[nodiscard]] ResultType result_type() const noexcept;
 
   [[nodiscard]] size_t hash_value() const noexcept;
 

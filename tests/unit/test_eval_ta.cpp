@@ -114,6 +114,7 @@ class rand_tensor_yield {
 
 TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
   using ranges::views::transform;
+  using sequant::eval::annot;
   using sequant::eval::EvalExprTA;
   using sequant::eval::evaluate;
   using sequant::eval::evaluate_antisymm;
@@ -139,15 +140,15 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
     return evaluate(eval_node(expr), target_labels, yield);
   };
 
-  auto eval_symm = [&yield](sequant::ExprPtr const& expr,
-                            std::string const& target_labels) {
-    return evaluate_symm(eval_node(expr), target_labels, yield);
-  };
+    auto eval_symm = [&yield](sequant::ExprPtr const& expr,
+                              std::string const& target_labels) {
+      return evaluate_symm(eval_node(expr), target_labels, yield);
+    };
 
-  auto eval_antisymm = [&yield](sequant::ExprPtr const& expr,
-                                std::string const& target_labels) {
-    return evaluate_antisymm(eval_node(expr), target_labels, yield);
-  };
+    auto eval_antisymm = [&yield](sequant::ExprPtr const& expr,
+                                  std::string const& target_labels) {
+      return evaluate_antisymm(eval_node(expr), target_labels, yield);
+    };
 
   SECTION("summation") {
     auto expr1 = parse_antisymm(L"t_{a1}^{i1} + f_{i1}^{a1}");
@@ -251,8 +252,9 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
       return eval_node(x);
     }) | ranges::to_vector;
 
-    auto eval2 = evaluate(nodes1, "i_1,i_2,a_1,a_2", yield);
+    auto eval2 = evaluate(nodes1, std::string{"i_1,i_2,a_1,a_2"}, yield);
 
     REQUIRE(norm(eval1) == Approx(norm(eval2)));
   }
+
 }

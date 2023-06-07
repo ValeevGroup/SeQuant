@@ -246,20 +246,20 @@ set(SeQuant_src
         SeQuant/core/parse/regex_sequant.cpp
         SeQuant/domain/mbpt/models/cc.cpp
         SeQuant/domain/mbpt/models/cc.hpp
-        SeQuant/domain/eval/eval.hpp
         SeQuant/domain/eval/cache_manager.hpp
+        SeQuant/domain/eval/eval.hpp
+        SeQuant/domain/mbpt/antisymmetrizer.hpp
         SeQuant/domain/mbpt/convention.cpp
         SeQuant/domain/mbpt/convention.hpp
-        SeQuant/domain/mbpt/formalism.hpp
         SeQuant/domain/mbpt/formalism.cpp
+        SeQuant/domain/mbpt/formalism.hpp
         SeQuant/domain/mbpt/op.cpp
         SeQuant/domain/mbpt/op.hpp
-        SeQuant/domain/mbpt/spin.hpp
+        SeQuant/domain/mbpt/rdm.hpp
         SeQuant/domain/mbpt/spin.cpp
+        SeQuant/domain/mbpt/spin.hpp
         SeQuant/domain/mbpt/sr/sr.cpp
         SeQuant/domain/mbpt/sr/sr.hpp
-        SeQuant/domain/mbpt/antisymmetrizer.hpp
-        SeQuant/domain/mbpt/rdm.hpp
         )
 
 ### optional prereqs
@@ -272,6 +272,8 @@ if (TARGET tiledarray)
     list(APPEND SeQuant_src
             SeQuant/domain/eval/eval.hpp
             SeQuant/domain/eval/eval.cpp
+            SeQuant/domain/eval/eval_result.cpp
+            SeQuant/domain/eval/eval_result.hpp
             )
 endif ()
 
@@ -355,7 +357,7 @@ if (BUILD_TESTING)
 
     if (TARGET tiledarray)
         list(APPEND utests_src
-                # tests/unit/test_eval_ta.cpp
+                tests/unit/test_eval_ta.cpp
                 #tests/unit/test_eval_btas.cpp
                 )
     endif (TARGET tiledarray)

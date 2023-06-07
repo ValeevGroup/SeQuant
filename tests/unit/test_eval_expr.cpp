@@ -52,7 +52,7 @@ TEST_CASE("TEST_EVAL_EXPR", "[EvalExpr]") {
     REQUIRE(x2.op_type() == EvalOp::Id);
   }
 
-  SECTION("EvalResult types") {
+  SECTION("ResultType types") {
     auto T = [](std::wstring_view xpr) {
       return EvalExpr{parse_expr(xpr, Symmetry::nonsymm)->as<Tensor>()};
     };
@@ -62,7 +62,7 @@ TEST_CASE("TEST_EVAL_EXPR", "[EvalExpr]") {
 
     auto result_type = [](EvalExpr const& left,   //
                           EvalExpr const& right,  //
-                          EvalOp op) -> EvalResult {
+                          EvalOp op) -> ResultType {
       return EvalExpr{left, right, op}.result_type();
     };
 
@@ -70,7 +70,7 @@ TEST_CASE("TEST_EVAL_EXPR", "[EvalExpr]") {
                 T(L"X{i1;a1}"),  //
                 T(L"Y{i1;a1}"),  //
                 EvalOp::Sum      //
-                ) == EvalResult::Tensor);
+                ) == ResultType::Tensor);
 
     auto x = EvalExpr{T(L"X{i1;a1}"), T(L"Y{a1;i1}"), EvalOp::Prod};
 
@@ -78,19 +78,19 @@ TEST_CASE("TEST_EVAL_EXPR", "[EvalExpr]") {
                 T(L"X{i1;a1}"),  //
                 T(L"Y{a1;i1}"),  //
                 EvalOp::Prod     //
-                ) == EvalResult::Constant);
+                ) == ResultType::Constant);
 
     REQUIRE(result_type(         //
                 T(L"X{i1;a1}"),  //
                 T(L"Y{a1;i1}"),  //
                 EvalOp::Prod     //
-                ) == EvalResult::Constant);
+                ) == ResultType::Constant);
 
     REQUIRE(result_type(                //
                 T(L"X{i1,i2; a3,a4}"),  //
                 T(L"Y{a3,a4; a1,a2}"),  //
                 EvalOp::Prod            //
-                ) == EvalResult::Tensor);
+                ) == ResultType::Tensor);
   }
 
   SECTION("Sequant expression") {
