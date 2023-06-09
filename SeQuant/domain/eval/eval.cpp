@@ -20,14 +20,15 @@ EvalExprTA::EvalExprTA(const EvalExprTA& left, const EvalExprTA& right,
   using TA::expressions::GEMMPermutationOptimizer;
 
   if (result_type() == ResultType::Tensor) {
-    if (tot()) {
-      annot_ = braket_to_annot(expr()->as<Tensor>().const_braket());
-    } else {
-      annot_ =
-          GEMMPermutationOptimizer(Tidxs{left.annot()}, Tidxs{right.annot()})
-              .target_result_indices()
-              .string();
-    }
+    annot_ = braket_to_annot(as_tensor().const_braket());
+    // TODO: Fix the bug that occurs when the following block is uncommented
+    //    if (left.result_type() == right.result_type() &&
+    //        op_type() == EvalOp::Prod && !tot()) {
+    //      annot_ = GEMMPermutationOptimizer(Tidxs{left.annot()},  //
+    //                                        Tidxs{right.annot()})
+    //                   .target_result_indices()
+    //                   .string();
+    //    }
   }
 }
 

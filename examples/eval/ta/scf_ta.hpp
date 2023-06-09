@@ -27,8 +27,8 @@ class SequantEvalScfTA final : public SequantEvalScf {
   using EvalNodeTA = EvalNode<ExprT>;
 
  private:
-  container::vector<EvalNodeTA> nodes_;
-  CacheManager<Tensor_t const> cman_;
+  container::vector<container::vector<EvalNodeTA>> nodes_;
+  CacheManager<ERPtr> cman_;
   DataWorldTA<Tensor_t> data_world_;
 
   Tensor_t const& f_vo() const {
@@ -96,7 +96,8 @@ class SequantEvalScfTA final : public SequantEvalScf {
 
     auto rs = repeat_n(Tensor_t{}, info_.eqn_opts.excit) | ranges::to_vector;
     for (auto&& [r, n] : zip(rs, nodes_)) {
-      std::string const target_indices = tnsr_to_bk_labels_sorted(n->tensor());
+      std::string const target_indices =
+          tnsr_to_bk_labels_sorted((*n.begin())->as_tensor());
       auto st = info_.eqn_opts.spintrace;
       auto cm = info_.optm_opts.reuse_imeds;
       if (st && cm) {
@@ -128,8 +129,21 @@ class SequantEvalScfTA final : public SequantEvalScf {
 
     auto ns = info_.nodes<ExprT>(exprs);
 
-    cman_ = info_.cache_manager_scf<Tensor_t const>(ns);
-    nodes_ = std::move(ns);
+    cman_ = info_.cache_manager_scf(ns);
+    nodes_ = [this]() {
+      auto exprs = info_.exprs();
+      for (auto&& x : exprs) x = opt::tail_factor(x);
+
+      container::vector<container::vector<EvalNodeTA>> result;
+      for (auto&& xpr : exprs) {
+        auto inner = *xpr | ranges::views::transform([](auto&& x) {
+          auto n = to_eval_node<ExprT>(x);
+          return to_eval_node<ExprT>(x);
+        }) | ranges::to<container::vector<EvalNodeTA>>;
+        result.push_back(inner);
+      }
+      return result;
+    }();
   }
 };
 

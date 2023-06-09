@@ -130,8 +130,7 @@ constexpr bool IsIterableOfEvaluableNodes<
 
 template <typename NodeT, typename Le, typename Cm,
           typename = std::enable_if_t<std::is_convertible_v<
-              typename std::remove_reference_t<Cm>::cached_type,
-              EvalResultT<NodeT, Le>>>>
+              typename std::remove_reference_t<Cm>::cached_type, ERPtr>>>
 constexpr bool IsCacheManager = true;
 
 template <typename C,
@@ -214,12 +213,12 @@ void antisymmetric_permutation(size_t half_rank, F&& antisymmetrizer) noexcept {
                                    std::end(bra_perm_vec)));
 }
 
-template <typename DataT, typename NodesI,
+template <typename NodesI,
           typename Pred = std::function<bool(IteredT<NodesI> const&)>,
           typename = std::enable_if_t<
               IsIterableOfEvaluableNodes<NodesI> &&
               std::is_invocable_r_v<bool, Pred, IteredT<NodesI> const&>>>
-CacheManager<DataT> cache_manager(
+CacheManager<ERPtr> cache_manager(
     NodesI const& nodes, Pred&& pred = [](auto&&) { return true; },
     size_t min_repeats = 2) noexcept {
   auto imed_counts = container::map<size_t, size_t>{};
@@ -248,7 +247,7 @@ CacheManager<DataT> cache_manager(
   };
   ranges::actions::remove_if(imed_counts, less_repeating);
 
-  return CacheManager<DataT>{imed_counts};
+  return CacheManager<ERPtr>{imed_counts};
 }
 
 class EvalExprTA final : public EvalExpr {
@@ -393,7 +392,8 @@ auto antisymmetrize(TA::DistArray<Args...> const& arr) {
 }
 
 template <typename... Args>
-void add_to(TA::DistArray<Args...>& lhs, TA::DistArray<Args...> const& rhs) {
+void add_inplace(TA::DistArray<Args...>& lhs,
+                 TA::DistArray<Args...> const& rhs) {
   assert(lhs.trange() == rhs.trange());
 
   auto const annot = TA::detail::dummy_annotation(lhs.trange().rank());
@@ -405,19 +405,20 @@ void add_to(TA::DistArray<Args...>& lhs, TA::DistArray<Args...> const& rhs) {
 
 }  // namespace
 
-///
-/// \tparam NodeT Node type. eg. FullBinaryNode<EvalExpr>
-/// \tparam Le    Leaf evaluator type.
-/// \param node   Node to evaluate
-/// \param le     Leaf evaluator: returns result for leaf nodes.
-/// \return
-template <typename NodeT, typename Le,
-          typename = std::enable_if_t<IsEvaluable<NodeT>>>
-ERPtr evaluate_(NodeT const& node, Le&& le) {
+template <typename NodeT, typename Le>
+ERPtr evaluate_crust(NodeT const&, Le&&);
+
+template <typename NodeT, typename Le, typename Cm>
+ERPtr evaluate_crust(NodeT const&, Le&&, Cm&&);
+
+template <typename NodeT, typename Le, typename... Args>
+ERPtr evaluate_core(NodeT const& node, Le&& le, Args&&... args) {
+  // TODO: make it work for non-TA::DistArray types
   using numeric_type = typename EvalResultT<NodeT, Le>::numeric_type;
   using constant_type = EvalConstant<numeric_type>;
   if (node.leaf()) {
     if (node->result_type() == ResultType::Constant) {
+      // TODO: make it generic so it works for complex<...> types as well
       auto n = constant_type{node->as_constant().value().real()}.value();
       return eval_result<constant_type>(n);
     } else {
@@ -426,8 +427,10 @@ ERPtr evaluate_(NodeT const& node, Le&& le) {
           std::forward<Le>(le)(node));
     }
   } else {
-    auto const left = evaluate_(node.left(), std::forward<Le>(le));
-    auto const right = evaluate_(node.right(), std::forward<Le>(le));
+    auto const left = evaluate_crust(node.left(), std::forward<Le>(le),
+                                     std::forward<Args>(args)...);
+    auto const right = evaluate_crust(node.right(), std::forward<Le>(le),
+                                      std::forward<Args>(args)...);
 
     std::array<std::any, 3> ann{annot(node.left()),   //
                                 annot(node.right()),  //
@@ -442,49 +445,75 @@ ERPtr evaluate_(NodeT const& node, Le&& le) {
   }
 }
 
-template <typename NodeT, typename Annot, typename Le,
-          std::enable_if_t<IsAnnot<Annot> && IsEvaluable<NodeT>, bool> = true>
+template <typename NodeT, typename Le>
+ERPtr evaluate_crust(NodeT const& node, Le&& le) {
+  return evaluate_core(node, std::forward<Le>(le));
+}
+
+template <typename NodeT, typename Le, typename Cm>
+ERPtr evaluate_crust(NodeT const& node, Le&& le, Cm&& cm) {
+  auto&& cache = std::forward<Cm>(cm);
+  auto const h = hash::value(*node);
+  if (auto ptr = cache.access(h); ptr) {
+    return *ptr;
+  } else if (cache.exists(h)) {
+    return *cache.store(
+        h, evaluate_core(node, std::forward<Le>(le), std::forward<Cm>(cm)));
+  } else {
+    return evaluate_core(node, std::forward<Le>(le), std::forward<Cm>(cm));
+  }
+}
+
+template <typename NodeT, typename Annot, typename Le, typename... Args,
+          std::enable_if_t<IsEvaluable<NodeT>, bool> = true>
 auto evaluate(NodeT const& node,    //
               Annot const& layout,  //
-              Le&& le) {
-  auto const pre = evaluate_(node, std::forward<Le>(le))
-                       ->template get<EvalResultT<NodeT, Le>>();
+              Le&& le, Args&&... args) {
+  auto const pre =
+      evaluate_crust(node, std::forward<Le>(le), std::forward<Args>(args)...)
+          ->template get<EvalResultT<NodeT, Le>>();
   return permute(pre, annot(node), layout);
 }
 
-template <typename NodesT, typename Annot, typename Le,
-          std::enable_if_t<IsAnnot<Annot> && IsIterableOfEvaluableNodes<NodesT>,
+template <typename NodesT, typename Annot, typename Le, typename... Args,
+          std::enable_if_t<IsIterableOfEvaluableNodes<NodesT>,
                            bool> = true>
 auto evaluate(NodesT const& nodes,  //
               Annot const& layout,  //
-              Le&& le) {
+              Le&& le, Args&&... args) {
+
   auto beg = std::cbegin(nodes);
   auto iter = std::begin(nodes);
   auto end = std::end(nodes);
   assert(iter != end);
 
-  auto result = evaluate(*iter, layout, std::forward<Le>(le));
+  auto result = evaluate(*iter, layout, std::forward<Le>(le),
+                         std::forward<Args>(args)...);
 
   iter = std::next(iter);
   for (; iter != end; ++iter) {
-    add_to(result, evaluate(*iter, layout, std::forward<Le>(le)));
+    add_inplace(result, evaluate(*iter, layout, std::forward<Le>(le),
+                                 std::forward<Args>(args)...));
   }
   return result;
 }
 
-template <typename NodeT, typename Annot, typename Le>
+template <typename NodeT, typename Annot, typename Le, typename... Args>
 auto evaluate_symm(NodeT const& node,    //
                    Annot const& layout,  //
-                   Le&& le) {
-  auto const pre = evaluate(node, layout, std::forward<Le>(le));
+                   Le&& le, Args&&... args) {
+  auto const pre =
+      evaluate(node, layout, std::forward<Le>(le), std::forward<Args>(args)...);
   return symmetrize(pre);
 }
 
-template <typename NodeT, typename Annot, typename Le>
+template <typename NodeT, typename Annot, typename Le,
+          typename... Args>
 auto evaluate_antisymm(NodeT const& node,    //
                        Annot const& layout,  //
-                       Le&& le) {
-  auto const pre = evaluate(node, layout, std::forward<Le>(le));
+                       Le&& le, Args&&... args) {
+  auto const pre =
+      evaluate(node, layout, std::forward<Le>(le), std::forward<Args>(args)...);
   return antisymmetrize(pre);
 }
 

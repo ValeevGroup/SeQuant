@@ -14,9 +14,7 @@ sequant::ExprPtr make_imed(sequant::EvalExpr const&, sequant::EvalExpr const&,
                            sequant::EvalOp) noexcept;
 
 bool is_tot(sequant::Tensor const& t) noexcept {
-  for (auto const& idx : t.const_braket())
-    if (idx.has_proto_indices()) return true;
-  return false;
+  return ranges::any_of(t.const_braket(), &sequant::Index::has_proto_indices);
 }
 
 namespace sequant {
@@ -271,6 +269,9 @@ sequant::ParticleSymmetry particle_symmetry(sequant::Symmetry s) noexcept {
 sequant::ExprPtr make_sum(sequant::EvalExpr const& left,
                           sequant::EvalExpr const& right) noexcept {
   using namespace sequant;
+
+  assert(left.expr()->is<Tensor>());
+  assert(right.expr()->is<Tensor>());
 
   auto const& t1 = left.expr()->as<Tensor>();
   auto const& t2 = right.expr()->as<Tensor>();

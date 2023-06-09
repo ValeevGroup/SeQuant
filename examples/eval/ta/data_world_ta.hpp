@@ -195,7 +195,7 @@ class DataWorldTA {
     if (auto exists = cache_.find(h); exists != cache_.end())
       return exists->second;
     else {
-      auto stored = cache_.emplace(h, (*this)(n->tensor()));
+      auto stored = cache_.emplace(h, (*this)(n->as_tensor()));
       assert(stored.second && "failed to store tensor");
       return stored.first->second;
     }

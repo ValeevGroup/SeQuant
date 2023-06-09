@@ -64,11 +64,11 @@ struct CalcInfo {
            ranges::to<container::vector<EvalNode<ExprT>>>;
   }
 
-  template <typename Data_t, typename ExprT>
-  CacheManager<Data_t> cache_manager_scf(
+  template <typename ExprT>
+  CacheManager<ERPtr> cache_manager_scf(
       container::vector<EvalNode<ExprT>> const& nodes) const {
-    return optm_opts.reuse_imeds ? cache_manager<Data_t const>(nodes)
-                                 : CacheManager<Data_t const>::empty();
+    return optm_opts.reuse_imeds ? cache_manager(nodes)
+                                 : CacheManager<ERPtr>::empty();
   }
 
  private:

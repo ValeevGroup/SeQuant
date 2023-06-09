@@ -17,11 +17,11 @@ std::logic_error invalid_operand(
 
 struct EvalResult;
 
-using ERPtr = std::unique_ptr<EvalResult>;
+using ERPtr = std::shared_ptr<EvalResult>;
 
 template <typename T, typename... Args>
 ERPtr eval_result(Args&&... args) noexcept {
-  return std::make_unique<T>(std::forward<Args>(args)...);
+  return std::make_shared<T>(std::forward<Args>(args)...);
 }
 
 class EvalResult {
