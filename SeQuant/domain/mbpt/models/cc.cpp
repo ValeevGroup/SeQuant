@@ -496,6 +496,8 @@ std::vector<ExprPtr> cceqs::lambda(bool screen, bool use_topology,
       for (auto& term : *lhbar) {  // pick terms from lhbar
         assert(term->is<Product>() || term->is<op_t>());
 
+//        auto which_term = to_latex(term);
+
         if (op::contains_up_to_rank(term, p)) {
           if (!hbar_le_p)
             hbar_le_p = std::make_shared<Sum>(ExprPtrList{term});
@@ -511,10 +513,13 @@ std::vector<ExprPtr> cceqs::lambda(bool screen, bool use_topology,
       }
       lhbar = hbar_le_p; // not needed
 
-//      std::wcout << "p = " << p << std::endl;
-//      std::wcout << "hbar-le-p: \n"
-//                 << to_latex_align(hbar_le_p, 0, 4) << std::endl;
-//      std::wcout << "hbar-p: \n" << to_latex_align(hbar_p, 0, 4) << std::endl;
+      if (p == 2) {
+        std::wcout << "p = " << p << std::endl;
+        std::wcout << "hbar-le-p (" << hbar_le_p->size() << "): \n"
+                   << to_latex_align(hbar_le_p, 0, 4) << std::endl;
+        std::wcout << "hbar-p (" << hbar_p->size() << "): \n"
+                   << to_latex_align(hbar_p, 0, 4) << std::endl;
+      }
 
       // 2.b multiply by adjoint of A(P) on the right side
 
