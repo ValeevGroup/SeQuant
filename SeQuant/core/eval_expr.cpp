@@ -338,8 +338,8 @@ sequant::ExprPtr make_imed(sequant::EvalExpr const& left,
 
     auto lh = hash::value(left);
     auto rh = hash::value(right);
-    auto const& left_ = lh < rh ? left : right;
-    auto const& right_ = lh < rh ? right : left;
+    auto const& left_  = lh <= rh ? left : right;
+    auto const& right_ = lh <= rh ? right : left;
 
     if (op == EvalOp::Sum) {
       // tensor (+) tensor

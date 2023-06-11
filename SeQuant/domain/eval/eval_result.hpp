@@ -156,9 +156,10 @@ class EvalTensorTA final : public EvalResult {
       EvalResult const& other,
       std::array<std::any, 3> const& annot) const override {
     if (other.is<EvalConstant<numeric_type>>()) {
+      auto const a = Annot{annot};
+
       auto result = get<T>();
-      auto const ann = TA::detail::dummy_annotation(result.trange().rank());
-      result(ann) = other.get<double>() * result(ann);
+      result(a.this_annot) = other.get<double>() * result(a.lannot);
       decltype(result)::wait_for_lazy_cleanup(result.world());
       return eval_result<EvalTensorTA<T>>(std::move(result));
     }

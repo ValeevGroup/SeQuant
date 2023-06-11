@@ -481,15 +481,12 @@ template <typename NodesT, typename Annot, typename Le, typename... Args,
 auto evaluate(NodesT const& nodes,  //
               Annot const& layout,  //
               Le&& le, Args&&... args) {
-
-  auto beg = std::cbegin(nodes);
   auto iter = std::begin(nodes);
   auto end = std::end(nodes);
   assert(iter != end);
 
   auto result = evaluate(*iter, layout, std::forward<Le>(le),
                          std::forward<Args>(args)...);
-
   iter = std::next(iter);
   for (; iter != end; ++iter) {
     add_inplace(result, evaluate(*iter, layout, std::forward<Le>(le),

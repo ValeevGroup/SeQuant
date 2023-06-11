@@ -21,14 +21,18 @@ EvalExprTA::EvalExprTA(const EvalExprTA& left, const EvalExprTA& right,
 
   if (result_type() == ResultType::Tensor) {
     annot_ = braket_to_annot(as_tensor().const_braket());
-    // TODO: Fix the bug that occurs when the following block is uncommented
-    //    if (left.result_type() == right.result_type() &&
-    //        op_type() == EvalOp::Prod && !tot()) {
-    //      annot_ = GEMMPermutationOptimizer(Tidxs{left.annot()},  //
-    //                                        Tidxs{right.annot()})
-    //                   .target_result_indices()
-    //                   .string();
-    //    }
+    if (left.result_type() == right.result_type() &&
+        op_type() == EvalOp::Prod && !tot()) {
+      // tensor x tensor confirmed
+      auto lh = hash::value(left);
+      auto rh = hash::value(right);
+      auto const& left_ = lh <= rh ? left : right;
+      auto const& right_ = lh <= rh ? right : left;
+      annot_ = GEMMPermutationOptimizer(Tidxs{left_.annot()},  //
+                                        Tidxs{right_.annot()})
+                   .target_result_indices()
+                   .string();
+    }
   }
 }
 
