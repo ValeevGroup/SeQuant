@@ -8,9 +8,11 @@
 #include "examples/eval/data_info.hpp"
 #include "examples/eval/eval_utils.hpp"
 
-#include <tiledarray.h>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/tensor.hpp>
+#include <SeQuant/domain/eval/eval_result.hpp>
+
+#include <tiledarray.h>
 #include <range/v3/view.hpp>
 
 namespace sequant::eval {
@@ -30,9 +32,9 @@ class DataWorldTA {
 
   Tensor_t F_pq;
 
-  container::vector<Tensor_t> Ts;
+  container::vector<ERPtr> Ts;
 
-  container::map<size_t, Tensor_t> cache_;
+  container::map<size_t, ERPtr> cache_;
 
   ///
   /// Read tensor data from a file to a TA::DistArray tensor.
@@ -133,8 +135,10 @@ class DataWorldTA {
       auto bra_tr1s = zip(repeat(0), repeat(nvirt)) | take(bk_rank);
       auto ket_tr1s = zip(repeat(0), repeat(nocc)) | take(bk_rank);
       auto const trange = make_trange(concat(bra_tr1s, ket_tr1s));
-      Ts.emplace_back(Tensor_t{world, trange});
-      Ts[i].fill(0.);
+      Ts.emplace_back(
+          eval_result<EvalTensorTA<Tensor_t>>(Tensor_t{world, trange}));
+      auto& t = Ts[i]->template get<Tensor_t>();
+      t.fill(0);
     }
     //--------
   }  // ctor
@@ -142,11 +146,7 @@ class DataWorldTA {
   Tensor_t operator()(sequant::Tensor const& tensor) const {
     using namespace ranges::views;
 
-    if (tensor.label() == L"t") {
-      auto rank = tensor.rank();
-      assert(rank <= Ts.size());
-      return std::cref(Ts[rank - 1]);
-    }
+    assert(tensor.label() != L"t");
 
     auto const r1_limits = range1_limits(tensor, nocc, nvirt);
     assert(r1_limits.size() == DataInfo::fock_rank ||
@@ -190,29 +190,53 @@ class DataWorldTA {
   }
 
   template <typename NodeT, typename = std::enable_if_t<IsEvaluable<NodeT>>>
-  Tensor_t operator()(NodeT const& n) {
+  ERPtr operator()(NodeT const& n) {
+    if (n->result_type() == ResultType::Constant) {
+      assert(n->expr()->template is<Constant>());
+      return eval_result<EvalConstant<typename Tensor_t::numeric_type>>(
+          // todo '.real' is always double
+          n->as_constant().value().real());
+    }
+
+    assert(n->result_type() == ResultType::Tensor &&
+           n->expr()->template is<Tensor>());
+
+    if (auto t = n->as_tensor(); t.label() == L"t") {
+      auto rank = t.rank();
+      assert(rank <= Ts.size());
+      return Ts[rank - 1];
+    }
+
     auto h = hash::value(*n);
     if (auto exists = cache_.find(h); exists != cache_.end())
       return exists->second;
     else {
-      auto stored = cache_.emplace(h, (*this)(n->as_tensor()));
+      auto tnsr = eval_result<EvalTensorTA<Tensor_t>>((*this)(n->as_tensor()));
+      auto stored = cache_.emplace(h, std::move(tnsr));
       assert(stored.second && "failed to store tensor");
       return stored.first->second;
     }
   }
 
   void update_amplitudes(std::vector<Tensor_t> const& rs) {
+    using ranges::views::transform;
+    using ranges::views::zip;
+
     assert(rs.size() == Ts.size() && "Unequal number of Rs and Ts!");
 
-    for (auto&& [t, r] : ranges::views::zip(Ts, rs)) update_single_T(t, r);
+    for (auto&& [t, r] : zip(Ts | transform([](auto&& res) -> Tensor_t& {
+                               return res->template get<Tensor_t>();
+                             }),
+                             rs))
+      update_single_T(t, r);
   }
 
   Tensor_t const& amplitude(size_t excitation) const {
-    return Ts[excitation - 1];
+    return Ts[excitation - 1]->template get<Tensor_t>();
   }
 
 };  // class
 
-}  // namespace sequant::eval::ta
+}  // namespace sequant::eval
 
 #endif  // SEQUANT_EVAL_DATA_WORLD_TA_HPP

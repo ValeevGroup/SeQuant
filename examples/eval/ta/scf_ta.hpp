@@ -96,18 +96,22 @@ class SequantEvalScfTA final : public SequantEvalScf {
 
     auto rs = repeat_n(Tensor_t{}, info_.eqn_opts.excit) | ranges::to_vector;
     for (auto&& [r, n] : zip(rs, nodes_)) {
-      std::string const target_indices =
+      auto const target_indices =
           tnsr_to_bk_labels_sorted((*n.begin())->as_tensor());
       auto st = info_.eqn_opts.spintrace;
       auto cm = info_.optm_opts.reuse_imeds;
       if (st && cm) {
-        r = eval::evaluate_symm(n, target_indices, data_world_, cman_);
+        r = eval::evaluate_symm(n, target_indices, data_world_, cman_)
+                ->template get<Tensor_t>();
       } else if (st && !cm) {
-        r = eval::evaluate_symm(n, target_indices, data_world_);
+        r = eval::evaluate_symm(n, target_indices, data_world_)
+                ->template get<Tensor_t>();
       } else if (!st && cm) {
-        r = eval::evaluate_antisymm(n, target_indices, data_world_, cman_);
+        r = eval::evaluate_antisymm(n, target_indices, data_world_, cman_)
+                ->template get<Tensor_t>();
       } else {
-        r = eval::evaluate_antisymm(n, target_indices, data_world_);
+        r = eval::evaluate_antisymm(n, target_indices, data_world_)
+                ->template get<Tensor_t>();
       }
     }
     data_world_.update_amplitudes(rs);
@@ -128,8 +132,8 @@ class SequantEvalScfTA final : public SequantEvalScf {
     auto const exprs = info_.exprs();
 
     auto ns = info_.nodes<ExprT>(exprs);
-
     cman_ = info_.cache_manager_scf(ns);
+
     nodes_ = [this]() {
       auto exprs = info_.exprs();
       for (auto&& x : exprs) x = opt::tail_factor(x);
