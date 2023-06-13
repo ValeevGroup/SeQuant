@@ -21,7 +21,7 @@ enum struct NodePos {
 };
 
 sequant::EvalExpr node(sequant::EvalNode<sequant::EvalExpr> const& n,
-                       std::initializer_list<NodePos> const& pos) {
+                       std::initializer_list<NodePos> pos) {
   if (pos.size() == 0) return *n;
   auto n_ = n;
   for (auto p : pos) {
@@ -42,8 +42,8 @@ std::wstring tikz(sequant::EvalNode<sequant::EvalExpr> const& n) noexcept {
 
 TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
   using namespace sequant;
-  using NodePos::L;
-  using NodePos::R;
+  auto L = NodePos::L;
+  auto R = NodePos::R;
 
   auto parse_expr_antisymm = [](auto const& xpr) {
     return parse_expr(xpr, Symmetry::antisymm);
