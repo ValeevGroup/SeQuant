@@ -36,4 +36,23 @@ EvalExprTA::EvalExprTA(const EvalExprTA& left, const EvalExprTA& right,
   }
 }
 
+EvalExprBTAS::annot_t const& EvalExprBTAS::annot() const noexcept {
+  return annot_;
+}
+
+EvalExprBTAS::EvalExprBTAS(Tensor const& t) noexcept
+    : EvalExpr{t}, annot_{index_hash(t.const_braket()) | ranges::to<annot_t>} {}
+
+EvalExprBTAS::EvalExprBTAS(Constant const& c) noexcept : EvalExpr{c} {}
+
+EvalExprBTAS::EvalExprBTAS(EvalExprBTAS const& left,   //
+                           EvalExprBTAS const& right,  //
+                           EvalOp op) noexcept
+    : EvalExpr{left, right, op} {
+  if (result_type() == ResultType::Tensor) {
+    assert(!tot() && "Tensor of tensor not supported in BTAS");
+    annot_ = index_hash(as_tensor().const_braket()) | ranges::to<annot_t>;
+  }
+}
+
 }  // namespace sequant::eval

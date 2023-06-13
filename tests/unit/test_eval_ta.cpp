@@ -14,7 +14,7 @@
 
 namespace {
 auto eval_node(sequant::ExprPtr const& expr) {
-  return sequant::to_eval_node<sequant::EvalExpr>(expr);
+  return sequant::to_eval_node<sequant::eval::EvalExprTA>(expr);
 }
 
 auto tensor_to_key(sequant::Tensor const& tnsr) {
@@ -38,7 +38,7 @@ class rand_tensor_yield {
   TA::World& world_;
   size_t const nocc_;
   size_t const nvirt_;
-  std::map<std::wstring, Tensor_t> label_to_tnsr_;
+  std::map<std::wstring, sequant::eval::ERPtr> label_to_tnsr_;
 
  public:
   [[nodiscard]] Tensor_t make_rand_tensor(sequant::Tensor const& tnsr) const {
@@ -71,28 +71,37 @@ class rand_tensor_yield {
   rand_tensor_yield(TA::World& world, size_t noccupied, size_t nvirtual)
       : world_{world}, nocc_{noccupied}, nvirt_{nvirtual} {}
 
-  Tensor_t const& operator()(sequant::Tensor const& tnsr) {
+  sequant::eval::ERPtr operator()(sequant::Tensor const& tnsr) {
+    using result_t = sequant::eval::EvalTensorTA<TA::TArrayD>;
     std::wstring const label = tensor_to_key(tnsr);
     if (auto&& found = label_to_tnsr_.find(label);
         found != label_to_tnsr_.end()) {
-      //      std::wcout << "label = [" << label << "] FOUND in cache.
-      //      Returning.."
-      //                 << std::endl;
+      //      std::cout << "label = [" << sequant::to_string(label)
+      //                << "] FOUND in cache. Returning.." << std::endl;
       return found->second;
     }
-    auto&& success =
-        label_to_tnsr_.template emplace(label, make_rand_tensor(tnsr));
+    Tensor_t t = make_rand_tensor(tnsr);
+    auto success = label_to_tnsr_.emplace(
+        label, sequant::eval::eval_result<result_t>(std::move(t)));
     assert(success.second && "couldn't store tensor!");
-    //    std::wcout << "label = [" << label << "] NotFound in cache.
-    //    Creating.."
-    //               << std::endl;
+    //    std::cout << "label = [" << sequant::to_string(label)
+    //              << "] NotFound in cache. Creating.." << std::endl;
     return success.first->second;
   }
 
   template <typename T,
             typename = std::enable_if_t<sequant::eval::IsEvaluable<T>>>
-  Tensor_t const& operator()(T const& node) {
-    return (*this)(node->expr()->template as<sequant::Tensor>());
+  sequant::eval::ERPtr operator()(T const& node) {
+    using namespace sequant::eval;
+    if (node->result_type() == sequant::ResultType::Tensor) {
+      assert(node->expr()->template is<sequant::Tensor>());
+      return (*this)(node->as_tensor());
+    }
+
+    using result_t = EvalConstant<double>;
+
+    assert(node->expr()->template is<sequant::Constant>());
+    return eval_result<result_t>(node->as_constant().value().real());
   }
 
   ///
@@ -101,7 +110,7 @@ class rand_tensor_yield {
   /// \note The tensor should be already present in the yielder cache
   ///       otherwise throws assertion error. To avoid that use the other
   ///       overload of operator() that takes sequant::Tensor const&
-  Tensor_t const& operator()(std::wstring_view label) const {
+  sequant::eval::ERPtr operator()(std::wstring_view label) const {
     auto&& found = label_to_tnsr_.find(label.data());
     if (found == label_to_tnsr_.end())
       found = label_to_tnsr_.find(tensor_to_key(label));
@@ -114,7 +123,6 @@ class rand_tensor_yield {
 
 TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
   using ranges::views::transform;
-  using sequant::eval::annot;
   using sequant::eval::EvalExprTA;
   using sequant::eval::evaluate;
   using sequant::eval::evaluate_antisymm;
@@ -133,25 +141,31 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
   auto& world = TA::get_default_world();
 
   const size_t nocc = 2, nvirt = 20;
-  auto yield = rand_tensor_yield<TArrayD>{world, nocc, nvirt};
-
-  auto eval = [&yield](sequant::ExprPtr const& expr,
-                       std::string const& target_labels) {
-    return evaluate(eval_node(expr), target_labels, yield);
+  auto yield_ = rand_tensor_yield<TArrayD>{world, nocc, nvirt};
+  auto yield = [&yield_](std::wstring_view lbl) -> TA::TArrayD const& {
+    return yield_(lbl)->get<TA::TArrayD>();
   };
 
-    auto eval_symm = [&yield](sequant::ExprPtr const& expr,
-                              std::string const& target_labels) {
-      return evaluate_symm(eval_node(expr), target_labels, yield);
-    };
+  auto eval = [&yield_](sequant::ExprPtr const& expr,
+                        std::string const& target_labels) {
+    return evaluate(eval_node(expr), target_labels, yield_)->get<TA::TArrayD>();
+  };
 
-    auto eval_antisymm = [&yield](sequant::ExprPtr const& expr,
-                                  std::string const& target_labels) {
-      return evaluate_antisymm(eval_node(expr), target_labels, yield);
-    };
+  auto eval_symm = [&yield_](sequant::ExprPtr const& expr,
+                             std::string const& target_labels) {
+    return evaluate_symm(eval_node(expr), target_labels, yield_)
+        ->get<TA::TArrayD>();
+  };
+
+  auto eval_antisymm = [&yield_](sequant::ExprPtr const& expr,
+                                 std::string const& target_labels) {
+    return evaluate_antisymm(eval_node(expr), target_labels, yield_)
+        ->get<TA::TArrayD>();
+  };
 
   SECTION("summation") {
     auto expr1 = parse_antisymm(L"t_{a1}^{i1} + f_{i1}^{a1}");
+
     auto sum1_eval = eval(expr1, "i_1,a_1");
 
     auto sum1_man = TArrayD{};
@@ -161,6 +175,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
     REQUIRE(norm(sum1_man) == Approx(norm(sum1_eval)));
 
     auto expr2 = parse_antisymm(L"2 * t_{a1}^{i1} + 1.5 * f_{i1}^{a1}");
+
     auto sum2_eval = eval(expr2, "i_1,a_1");
 
     auto sum2_man = TArrayD{};
@@ -183,7 +198,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
     REQUIRE(norm(prod1_man) == Approx(norm(prod1_eval)));
 
     auto expr2 = parse_antisymm(
-        L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}");
+        L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{ i3, i4}");
     auto prod2_eval = eval(expr2, "a_1,a_2,i_1,i_2");
 
     auto prod2_man = TArrayD{};
@@ -199,7 +214,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
     auto expr1 = parse_antisymm(
         L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
         " + "
-        " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2} ");
+        " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2}");
     auto eval1 = eval(expr1, "a_1,a_2,i_1,i_2");
 
     auto man1 = TArrayD{};
@@ -241,20 +256,22 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
   }
 
   SECTION("Others") {
+    using namespace std::string_literals;
     auto expr1 = parse_antisymm(
         L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
         " + "
-        " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2} ");
+        " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2}");
 
-    auto eval1 = evaluate(eval_node(expr1), "i_1,i_2,a_1,a_2", yield);
+    auto eval1 = evaluate(eval_node(expr1), "i_1,i_2,a_1,a_2"s, yield_)
+                     ->get<TA::TArrayD>();
 
     auto nodes1 = *expr1 | ranges::views::transform([](auto&& x) {
       return eval_node(x);
     }) | ranges::to_vector;
 
-    auto eval2 = evaluate(nodes1, std::string{"i_1,i_2,a_1,a_2"}, yield);
+    auto eval2 =
+        evaluate(nodes1, "i_1,i_2,a_1,a_2"s, yield_)->get<TA::TArrayD>();
 
     REQUIRE(norm(eval1) == Approx(norm(eval2)));
   }
-
 }

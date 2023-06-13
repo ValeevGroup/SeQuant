@@ -3,6 +3,7 @@
 #include <SeQuant/core/optimize.hpp>
 #include <SeQuant/core/parse_expr.hpp>
 #include <SeQuant/domain/eval/eval.hpp>
+#include <SeQuant/domain/eval/eval_result.hpp>
 
 #include <btas/btas.h>
 #include <btas/tensor_func.h>
@@ -14,7 +15,7 @@
 namespace {
 
 auto eval_node(sequant::ExprPtr const& expr) {
-  return sequant::to_eval_node<sequant::EvalExpr>(expr);
+  return sequant::to_eval_node<sequant::eval::EvalExprBTAS>(expr);
 }
 
 static auto const idx_rgx = boost::wregex{L"([ia])([↑↓])?_?(\\d+)"};
@@ -37,7 +38,7 @@ class rand_tensor_yield {
  private:
   size_t const nocc_;
   size_t const nvirt_;
-  std::map<std::wstring, Tensor_t> label_to_tnsr_;
+  std::map<std::wstring, sequant::eval::ERPtr> label_to_tnsr_;
 
  public:
   rand_tensor_yield(size_t noccupied, size_t nvirtual)
@@ -67,7 +68,8 @@ class rand_tensor_yield {
     return result;
   }
 
-  Tensor_t const& operator()(sequant::Tensor const& tnsr) {
+  sequant::eval::ERPtr operator()(sequant::Tensor const& tnsr) {
+    using namespace sequant::eval;
     std::wstring const label = tensor_to_key(tnsr);
     if (auto&& found = label_to_tnsr_.find(label);
         found != label_to_tnsr_.end()) {
@@ -76,8 +78,9 @@ class rand_tensor_yield {
       //                 << std::endl;
       return found->second;
     }
-    auto&& success =
-        label_to_tnsr_.template emplace(label, make_rand_tensor(tnsr));
+    auto t = make_rand_tensor(tnsr);
+    auto&& success = label_to_tnsr_.emplace(
+        label, eval_result<EvalTensorBTAS<Tensor_t>>(std::move(t)));
     assert(success.second && "couldn't store tensor!");
     //    std::wcout << "label = [" << label << "] NotFound in cache.
     //    Creating.."
@@ -87,8 +90,17 @@ class rand_tensor_yield {
 
   template <typename T,
             typename = std::enable_if_t<sequant::eval::IsEvaluable<T>>>
-  Tensor_t const& operator()(T const& node) {
-    return (*this)(node->expr()->template as<sequant::Tensor>());
+  sequant::eval::ERPtr operator()(T const& node) {
+    using namespace sequant::eval;
+    if (node->result_type() == sequant::ResultType::Tensor) {
+      assert(node->expr()->template is<sequant::Tensor>());
+      return (*this)(node->expr()->template as<sequant::Tensor>());
+    }
+
+    using result_t = EvalConstant<double>;
+
+    assert(node->expr()->template is<sequant::Constant>());
+    return eval_result<result_t>(node->as_constant().value().real());
   }
 
   ///
@@ -97,13 +109,10 @@ class rand_tensor_yield {
   /// \note The tensor should be already present in the yielder cache
   ///       otherwise throws assertion error. To avoid that use the other
   ///       overload of operator() that takes sequant::Tensor const&
-  Tensor_t const& operator()(std::wstring_view label) const {
+  sequant::eval::ERPtr operator()(std::wstring_view label) const {
     auto&& found = label_to_tnsr_.find(label.data());
     if (found == label_to_tnsr_.end()) {
-      std::wcout << "Only following labels exist in cache:\n";
-      for (auto&& [k, _] : label_to_tnsr_) std::wcout << k << "\n";
       assert(false && "attempted access of non-existent tensor!");
-      abort();
     }
     return found->second;
   }
@@ -115,15 +124,18 @@ template <
     typename Iterable,
     std::enable_if_t<std::is_convertible_v<eval::IteredT<Iterable>, Index>,
                      bool> = true>
-auto tidxs(Iterable const& indices) noexcept {
-  return sequant::eval::index_hash(indices);
+container::svector<long> tidxs(Iterable const& indices) noexcept {
+  return sequant::eval::index_hash(indices) |
+         ranges::to<container::svector<long>>;
 }
 
-auto tidxs(Tensor const& tnsr) noexcept {
-  return sequant::eval::index_hash(tnsr.const_braket());
+container::svector<long> tidxs(Tensor const& tnsr) noexcept {
+  return sequant::eval::index_hash(tnsr.const_braket()) |
+         ranges::to<container::svector<long>>;
 }
 
-auto tidxs(ExprPtr expr, std::initializer_list<size_t> tnsr_coords) noexcept {
+container::svector<long> tidxs(
+    ExprPtr expr, std::initializer_list<size_t> tnsr_coords) noexcept {
   auto tnsr_p = expr;
   for (auto i : tnsr_coords) tnsr_p = tnsr_p->at(i);
   assert(tnsr_p->is<Tensor>());
@@ -134,7 +146,7 @@ template <typename Iterable,
           std::enable_if_t<
               std::is_convertible_v<eval::IteredT<Iterable>, std::wstring>,
               bool> = true>
-auto tidxs(Iterable const& strings) noexcept {
+container::svector<long> tidxs(Iterable const& strings) noexcept {
   return tidxs(strings | ranges::views::transform(
                              [](auto const& s) { return Index{s}; }));
 }
@@ -146,7 +158,7 @@ auto terse_index = [](std::wstring const& spec) {
   return boost::regex_replace(spec, idx_rgx, formatter);
 };
 
-auto tidxs(std::wstring const& csv) noexcept {
+container::svector<long> tidxs(std::wstring const& csv) noexcept {
   using ranges::views::all;
   using ranges::views::split;
   using ranges::views::transform;
@@ -168,29 +180,32 @@ TEST_CASE("TEST_EVAL_USING_BTAS", "[eval]") {
 
   std::srand(2023);
   const size_t nocc = 2, nvirt = 20;
-  auto yield = rand_tensor_yield<BTensorD>{nocc, nvirt};
-
-  auto eval = [&yield](sequant::ExprPtr const& expr,
-                       auto const& target_labels) {
-    return evaluate(eval_node(expr), target_labels, yield);
+  auto yield_ = rand_tensor_yield<BTensorD>{nocc, nvirt};
+  auto yield = [&yield_](std::wstring_view lbl) -> BTensorD const& {
+    return yield_(lbl)->get<BTensorD>();
   };
 
-  auto eval_symm = [&yield](sequant::ExprPtr const& expr,
-                            auto const& target_labels) {
-    return evaluate_symm(eval_node(expr), target_labels, yield);
+  auto eval = [&yield_](sequant::ExprPtr const& expr,
+                        container::svector<long> const& target_labels) {
+    return evaluate(eval_node(expr), target_labels, yield_)->get<BTensorD>();
   };
 
-  auto eval_antisymm = [&yield](sequant::ExprPtr const& expr,
-                                auto const& target_labels) {
-    return evaluate_antisymm(eval_node(expr), target_labels, yield);
+  auto eval_symm = [&yield_](sequant::ExprPtr const& expr,
+                             container::svector<long> const& target_labels) {
+    return evaluate_symm(eval_node(expr), target_labels, yield_)
+        ->get<BTensorD>();
+  };
+
+  auto eval_antisymm = [&yield_](
+                           sequant::ExprPtr const& expr,
+                           container::svector<long> const& target_labels) {
+    return evaluate_antisymm(eval_node(expr), target_labels, yield_)
+        ->get<BTensorD>();
   };
 
   auto parse_antisymm = [](auto const& xpr) {
     return parse_expr(xpr, sequant::Symmetry::antisymm);
   };
-
-  using std::endl;
-  using std::wcout;
 
   SECTION("Summation") {
     auto expr1 = parse_antisymm(L"t_{a1}^{i1} + f_{i1}^{a1}");
@@ -216,7 +231,8 @@ TEST_CASE("TEST_EVAL_USING_BTAS", "[eval]") {
   }
 
   SECTION("Product") {
-    auto expr1 = parse_antisymm(L"0.5 * g_{i2,i4}^{a2,a4} * t_{a1,a2}^{i1,i2}");
+    auto expr1 =
+        parse_antisymm(L"0.5 * g_{i2,i4}^{a2,a4} * t_{a1,a2}^{ i1, i2}");
     auto const tidx1 = tidxs(L"i1,i4,a1,a4");
     auto eval1 = eval(expr1, tidx1);
 
@@ -233,7 +249,7 @@ TEST_CASE("TEST_EVAL_USING_BTAS", "[eval]") {
     REQUIRE(norm(eval1) == Approx(norm(man1)));
 
     auto expr2 = parse_antisymm(
-        L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a1,a3}^{i3,i4} * t_{a2,a4}^{i1,i2}");
+        L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a1,a3}^{i3,i4} * t_{a2,a4}^{ i1, i2}");
     auto tidx2 = tidxs(L"i1,i2,a1,a2");
     auto eval2 = eval(expr2, tidx2);
 
@@ -249,7 +265,7 @@ TEST_CASE("TEST_EVAL_USING_BTAS", "[eval]") {
     auto expr1 = parse_antisymm(
         L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
         " + "
-        " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2} ");
+        " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2}");
     auto tidx1 = tidxs(L"i1,i2,a1,a2");
     auto eval1 = eval(expr1, tidx1);
 
@@ -326,17 +342,18 @@ TEST_CASE("TEST_EVAL_USING_BTAS", "[eval]") {
     auto expr1 = parse_antisymm(
         L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
         " + "
-        " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2} ");
+        " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2}");
 
     auto tidx1 = tidxs(L"i1,i2,a1,a2");
 
-    auto const eval1 = evaluate(eval_node(expr1), tidx1, yield);
+    auto const eval1 =
+        evaluate(eval_node(expr1), tidx1, yield_)->get<BTensorD>();
 
     auto nodes1 = *expr1 | ranges::views::transform([](auto&& x) {
       return eval_node(x);
     }) | ranges::to_vector;
 
-    auto const eval2 = evaluate(nodes1, tidx1, yield);
+    auto const eval2 = evaluate(nodes1, tidx1, yield_)->get<BTensorD>();
 
     REQUIRE(norm(eval1) == Approx(norm(eval1)));
   }

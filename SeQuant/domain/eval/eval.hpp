@@ -3,7 +3,6 @@
 
 #include "eval_result.hpp"
 
-#include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval_node.hpp>
 #include <SeQuant/core/tensor.hpp>
@@ -48,38 +47,7 @@ struct IsFbNode_ : std::false_type {};
 template <typename T>
 struct IsFbNode_<FullBinaryNode<T>> : std::true_type {};
 
-template <typename T>
-struct IsString_ : public std::disjunction<
-                       std::is_same<char*, typename std::decay_t<T>>,
-                       std::is_same<const char*, typename std::decay_t<T>>,
-                       std::is_same<std::string, typename std::decay_t<T>>> {};
-
-template <typename T, typename = void>
-struct IsAnnot_ : std::false_type {};
-
-template <typename T>
-struct IsAnnot_<T, std::enable_if_t<IsString_<T>::value>> : std::true_type {};
-
-template <typename T>
-struct IsAnnot_<std::initializer_list<T>,
-                std::enable_if_t<std::is_integral_v<T>>> : std::true_type {};
-
-template <typename T>
-struct IsAnnot_<container::svector<T>, std::enable_if_t<std::is_integral_v<T>>>
-    : std::true_type {};
-
-template <typename T, typename = void>
-struct HasAnnotMethod_ : std::false_type {};
-
-template <typename T>
-struct HasAnnotMethod_<
-    T, std::enable_if_t<std::is_same_v<
-           std::string, remove_cvref_t<decltype(std::declval<T>().annot())>>>>
-    : std::true_type {};
-
 }  // namespace
-
-using perm_type = container::svector<size_t>;
 
 template <typename T, typename = void>
 constexpr bool IsIterable{};
@@ -115,12 +83,6 @@ template <typename NodeT, typename E,
           typename = std::enable_if_t<IsEvaluable<NodeT>>>
 using EvalResultT = remove_cvref_t<std::invoke_result_t<E, NodeT const&>>;
 
-template <typename StrT>
-constexpr bool IsString = IsString_<StrT>::value;
-
-template <typename T>
-constexpr bool IsAnnot = IsAnnot_<T>::value;
-
 template <typename Iterable, typename = void>
 constexpr bool IsIterableOfEvaluableNodes{};
 
@@ -132,14 +94,6 @@ template <typename NodeT, typename Le, typename Cm,
           typename = std::enable_if_t<std::is_convertible_v<
               typename std::remove_reference_t<Cm>::cached_type, ERPtr>>>
 constexpr bool IsCacheManager = true;
-
-template <typename C,
-          typename = std::enable_if_t<std::is_same_v<C, sequant::Constant>>>
-void assert_imaginary_zero(C const& c) {
-#ifndef NDEBUG
-  assert(c.value().imag() == 0 && "complex scalar unsupported");
-#endif
-}
 
 template <typename F,
           typename = std::enable_if_t<std::is_invocable_v<F, perm_type const&>>>
@@ -250,27 +204,6 @@ CacheManager<ERPtr> cache_manager(
   return CacheManager<ERPtr>{imed_counts};
 }
 
-class EvalExprTA final : public EvalExpr {
- public:
-  ///
-  /// annotation for TiledArray
-  ///
-  [[nodiscard]] std::string const& annot() const;
-
-  explicit EvalExprTA(Tensor const&);
-
-  explicit EvalExprTA(Constant const&);
-
-  EvalExprTA(EvalExprTA const&, EvalExprTA const&, EvalOp);
-
- private:
-  std::string annot_;
-};
-
-template <typename T>
-constexpr bool HasAnnotMethod =
-    HasAnnotMethod_<std::remove_reference_t<T>>::value;
-
 ///
 /// Given an iterable of Index objects, generate a string annotation
 /// that can be used for TiledArray tensor expressions.
@@ -308,102 +241,41 @@ std::string braket_to_annot(Indices const& indices) {
   }
 }
 
-template <typename N, typename = std::enable_if_t<IsEvaluable<N>>>
-std::string annot(N const& node) {
-  if constexpr (HasAnnotMethod<typename N::value_type>)
-    return node->annot();
-  else if (node->expr()->template is<Constant>())
-    return "";
-  assert(node->expr()->template is<Tensor>());
-  return braket_to_annot(node->as_tensor().const_braket());
-}
+class EvalExprTA final : public EvalExpr {
+ public:
+  ///
+  /// annotation for TiledArray
+  ///
+  [[nodiscard]] std::string const& annot() const;
 
-template <typename RngOfOrdinals>
-std::string ords_to_annot(RngOfOrdinals const& ords) {
-  using ranges::views::intersperse;
-  using ranges::views::join;
-  using ranges::views::transform;
-  auto to_str = [](auto x) { return std::to_string(x); };
-  return ords | transform(to_str) | intersperse(std::string{","}) | join |
-         ranges::to<std::string>;
-}
+  explicit EvalExprTA(Tensor const&);
 
-namespace {
+  explicit EvalExprTA(Constant const&);
 
-template <typename... Args>
-auto permute(TA::DistArray<Args...> const& pre,  //
-             std::string const& pre_annot,       //
-             std::string const& post_annot) noexcept {
-  TA::DistArray<Args...> post;
-  post(post_annot) = pre(pre_annot);
-  decltype(post)::wait_for_lazy_cleanup(post.world());
-  return post;
-}
+  EvalExprTA(EvalExprTA const&, EvalExprTA const&, EvalOp);
 
-template <typename... Args>
-auto symmetrize(TA::DistArray<Args...> const& arr) {
-  auto result = TA::DistArray<Args...>{arr.world(), arr.trange()};
-  result.fill(0);
-  size_t rank = arr.trange().rank();
-  auto const lannot = ords_to_annot(ranges::views::iota(size_t{0}, rank));
+ private:
+  std::string annot_;
+};
 
-  auto symmetrizer = [&result, &lannot, &arr](auto const& permutation) {
-    auto const rannot = ords_to_annot(permutation);
-    result(lannot) += arr(rannot);
-  };
+class EvalExprBTAS final : public EvalExpr {
+ public:
+  using annot_t = container::svector<long>;
 
-#ifdef SEQUANT_EVAL_TRACE
-  std::cout << "[EVAL] symmetrizing rank-" << rank << " tensor" << std::endl;
-#endif
+  ///
+  /// annotation for BTAS tensor
+  ///
+  [[nodiscard]] annot_t const& annot() const noexcept;
 
-  symmetric_permutation(rank / 2, symmetrizer);
+  explicit EvalExprBTAS(Tensor const&) noexcept;
 
-  TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
+  explicit EvalExprBTAS(Constant const&) noexcept;
 
-  return result;
-}
+  EvalExprBTAS(EvalExprBTAS const&, EvalExprBTAS const&, EvalOp) noexcept;
 
-template <typename... Args>
-auto antisymmetrize(TA::DistArray<Args...> const& arr) {
-  using ranges::views::iota;
-
-  size_t const rank = arr.trange().rank();
-  auto const lannot = ords_to_annot(iota(size_t{0}, rank));
-
-  auto result = TA::DistArray<Args...>{arr.world(), arr.trange()};
-  result.fill(0);
-
-  auto antisymmetrizer = [&result, &lannot, &arr](auto phase,
-                                                  auto const& permutation) {
-    auto const rannot = ords_to_annot(permutation);
-    result(lannot) += phase * arr(rannot);
-  };
-
-#ifdef SEQUANT_EVAL_TRACE
-  std::cout << "[EVAL] antisymmetrizing rank-" << rank << " tensor"
-            << std::endl;
-#endif
-
-  antisymmetric_permutation(rank / 2, antisymmetrizer);
-
-  TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
-
-  return result;
-}
-
-template <typename... Args>
-void add_inplace(TA::DistArray<Args...>& lhs,
-                 TA::DistArray<Args...> const& rhs) {
-  assert(lhs.trange() == rhs.trange());
-
-  auto const annot = TA::detail::dummy_annotation(lhs.trange().rank());
-
-  lhs(annot) += rhs(annot);
-
-  TA::DistArray<Args...>::wait_for_lazy_cleanup(lhs.world());
-}
-
-}  // namespace
+ private:
+  annot_t annot_;
+};
 
 template <typename NodeT, typename Le>
 ERPtr evaluate_crust(NodeT const&, Le&&);
@@ -413,28 +285,19 @@ ERPtr evaluate_crust(NodeT const&, Le&&, Cm&&);
 
 template <typename NodeT, typename Le, typename... Args>
 ERPtr evaluate_core(NodeT const& node, Le&& le, Args&&... args) {
-  // TODO: make it work for non-TA::DistArray types
-  using numeric_type = typename EvalResultT<NodeT, Le>::numeric_type;
-  using constant_type = EvalConstant<numeric_type>;
   if (node.leaf()) {
-    if (node->result_type() == ResultType::Constant) {
-      // TODO: make it generic so it works for complex<...> types as well
-      auto n = constant_type{node->as_constant().value().real()}.value();
-      return eval_result<constant_type>(n);
-    } else {
-      assert(node->result_type() == ResultType::Tensor);
-      return eval_result<EvalTensorTA<EvalResultT<NodeT, Le>>>(
-          std::forward<Le>(le)(node));
-    }
+    return std::invoke(std::forward<Le>(le), node);
   } else {
-    auto const left = evaluate_crust(node.left(), std::forward<Le>(le),
-                                     std::forward<Args>(args)...);
-    auto const right = evaluate_crust(node.right(), std::forward<Le>(le),
+    ERPtr const left = evaluate_crust(node.left(), std::forward<Le>(le),
                                       std::forward<Args>(args)...);
+    ERPtr const right = evaluate_crust(node.right(), std::forward<Le>(le),
+                                       std::forward<Args>(args)...);
 
-    std::array<std::any, 3> ann{annot(node.left()),   //
-                                annot(node.right()),  //
-                                annot(node)};
+    assert(left);
+    assert(right);
+
+    std::array<std::any, 3> const ann{node.left()->annot(),
+                                      node.right()->annot(), node->annot()};
 
     if (node->op_type() == EvalOp::Sum) {
       return left->sum(*right, ann);
@@ -469,10 +332,8 @@ template <typename NodeT, typename Annot, typename Le, typename... Args,
 auto evaluate(NodeT const& node,    //
               Annot const& layout,  //
               Le&& le, Args&&... args) {
-  auto const pre =
-      evaluate_crust(node, std::forward<Le>(le), std::forward<Args>(args)...)
-          ->template get<EvalResultT<NodeT, Le>>();
-  return permute(pre, annot(node), layout);
+  return evaluate_crust(node, std::forward<Le>(le), std::forward<Args>(args)...)
+      ->permute(std::array<std::any, 2>{node->annot(), layout});
 }
 
 template <typename NodesT, typename Annot, typename Le, typename... Args,
@@ -489,8 +350,8 @@ auto evaluate(NodesT const& nodes,  //
                          std::forward<Args>(args)...);
   iter = std::next(iter);
   for (; iter != end; ++iter) {
-    add_inplace(result, evaluate(*iter, layout, std::forward<Le>(le),
-                                 std::forward<Args>(args)...));
+    result->add_inplace(*evaluate(*iter, layout, std::forward<Le>(le),
+                                  std::forward<Args>(args)...));
   }
   return result;
 }
@@ -499,9 +360,9 @@ template <typename NodeT, typename Annot, typename Le, typename... Args>
 auto evaluate_symm(NodeT const& node,    //
                    Annot const& layout,  //
                    Le&& le, Args&&... args) {
-  auto const pre =
-      evaluate(node, layout, std::forward<Le>(le), std::forward<Args>(args)...);
-  return symmetrize(pre);
+  return evaluate(node, layout, std::forward<Le>(le),
+                  std::forward<Args>(args)...)
+      ->symmetrize();
 }
 
 template <typename NodeT, typename Annot, typename Le,
@@ -509,9 +370,9 @@ template <typename NodeT, typename Annot, typename Le,
 auto evaluate_antisymm(NodeT const& node,    //
                        Annot const& layout,  //
                        Le&& le, Args&&... args) {
-  auto const pre =
-      evaluate(node, layout, std::forward<Le>(le), std::forward<Args>(args)...);
-  return antisymmetrize(pre);
+  return evaluate(node, layout, std::forward<Le>(le),
+                  std::forward<Args>(args)...)
+      ->antisymmetrize();
 }
 
 }  // namespace sequant::eval

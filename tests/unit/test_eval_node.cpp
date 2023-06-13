@@ -96,7 +96,7 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
         validate_tensor(node(node2, {L, L}).as_tensor(), L"g{i3,i4; a3,a4}"));
 
     REQUIRE(validate_tensor(node(node2, {L, R}).as_tensor(),
-                            L"I{a3,a4,a1,a2;i1,i2,i3,i4}"));
+                            L"I{a1,a2,a3,a4;i3,i4,i1,i2}"));
 
     REQUIRE(validate_tensor(node(node2, {L, R, L}).as_tensor(),
                             L"t{a1,a2;i3,i4}"));
