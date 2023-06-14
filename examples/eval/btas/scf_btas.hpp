@@ -45,18 +45,14 @@ class SequantEvalScfBTAS final : public SequantEvalScf {
     return tnsr;
   }
 
-  double energy_spin_orbital() const {
-    auto const& T1 = data_world_.amplitude(1);
-    auto const& T2 = data_world_.amplitude(2);
-    auto const& G_vvoo = g_vvoo();
-    auto const& F_vo = f_vo();
+  double energy_spin_orbital() {
+    static const std::wstring_view energy_expr =
+        L"f{i1;a1} * t{a1;i1} + g{i1,i2;a1,a2} * "
+        L"(1/4 * t{a1,a2;i1,i2} + 1/2 t{a1;i1} * t{a2;i2})";
+    static auto const node =
+        to_eval_node<EvalExprBTAS>(parse_expr(energy_expr, Symmetry::antisymm));
 
-    Tensor_t temp;
-    ::btas::contract(1.0, G_vvoo, {'a', 'b', 'i', 'j'},  //
-                     T1, {'a', 'i'},                     //
-                     0.0, temp, {'b', 'j'});
-    return 0.5 * ::btas::dot(temp, T1) + 0.25 * ::btas::dot(G_vvoo, T2) +
-           ::btas::dot(F_vo, T1);
+    return evaluate(node, data_world_)->template get<double>();
   }
 
   double energy_spin_free_orbital() const {

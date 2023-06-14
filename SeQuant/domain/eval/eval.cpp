@@ -5,6 +5,46 @@
 
 namespace sequant::eval {
 
+namespace {
+
+///
+/// Given an iterable of Index objects, generate a string annotation
+/// that can be used for TiledArray tensor expressions.
+/// Tensor-of-tensors also supported.
+template <typename Indices>
+std::string braket_to_annot(Indices const& indices) {
+  using ranges::find;
+  using ranges::views::filter;
+  using ranges::views::intersperse;
+  using ranges::views::join;
+
+  // make a comma-separated string out of an iterable of strings
+  auto add_commas = [](auto const& strs) -> std::string {
+    return strs | intersperse(",") | join | ranges::to<std::string>;
+  };
+
+  container::svector<std::string> idxs{}, pidxs{};
+  for (auto&& idx : indices) {
+    idxs.emplace_back(sequant::to_string(idx.label()));
+    for (auto&& pidx : idx.proto_indices())
+      pidxs.emplace_back(sequant::to_string(pidx.label()));
+  }
+
+  if (pidxs.empty()) {
+    // not a tensor-of-tensor type expression
+    return add_commas(idxs);
+  } else {
+    ranges::stable_sort(pidxs);
+    ranges::actions::unique(pidxs);
+    auto not_in_pidx = [&pidxs](auto&& l) {
+      return find(pidxs, l) == pidxs.end();
+    };
+    return add_commas(pidxs) + ";" +
+           add_commas(idxs | filter(not_in_pidx) | ranges::to<decltype(idxs)>);
+  }
+}
+}  // namespace
+
 std::string const& EvalExprTA::annot() const { return annot_; }
 
 EvalExprTA::EvalExprTA(Tensor const& tnsr)

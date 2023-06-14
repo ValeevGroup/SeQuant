@@ -95,78 +95,6 @@ template <typename NodeT, typename Le, typename Cm,
               typename std::remove_reference_t<Cm>::cached_type, ERPtr>>>
 constexpr bool IsCacheManager = true;
 
-template <typename F,
-          typename = std::enable_if_t<std::is_invocable_v<F, perm_type const&>>>
-void symmetric_permutation(size_t half_rank, F&& symmetrizer) noexcept {
-  using ranges::views::concat;
-  // using ranges::views::iota;
-  using ranges::views::transform;
-
-  // this vector contains indices from 0...rank/2 where rank is that
-  // of the tensor being symmetrized
-  //
-  // Caveat:
-  // creating perm_vec this way is not allowed in gcc-11,
-  // sth to do with container::svector (boost::svector)
-  // clang-format off
-  // auto perm_vec = iota(size_t{0}, half_rank) | ranges::to<perm_type>;
-  // clang-format on
-  //
-  auto perm_vec = perm_type(half_rank);
-  for (auto i = 0; i < half_rank; ++i) perm_vec[i] = i;
-
-  auto add_half_rank = [half_rank](auto x) { return x + half_rank; };
-  do {
-    auto const total_perm =
-        concat(perm_vec, perm_vec | transform(add_half_rank)) |
-        ranges::to<perm_type>;
-    std::forward<F>(symmetrizer)(total_perm);
-  } while (std::next_permutation(std::begin(perm_vec), std::end(perm_vec)));
-}
-
-template <typename F, typename = std::enable_if_t<
-                          std::is_invocable_v<F, double, perm_type const&>>>
-void antisymmetric_permutation(size_t half_rank, F&& antisymmetrizer) noexcept {
-  using phase_type = double;
-
-  using ranges::views::concat;
-  //  using ranges::views::iota;
-  using ranges::views::join;
-
-  int bra_parity = 0;
-  //
-  // Caveat:
-  // creating bra_perm_vec this way is not allowed in gcc-11,
-  // sth to do with container::svector (boost::svector)
-  // clang-format off
-  // auto bra_perm_vec = iota(size_t{0}, half_rank) | ranges::to<perm_type>;
-  // clang-format on
-  //
-  auto bra_perm_vec = perm_type(half_rank);
-  for (auto i = 0; i < half_rank; ++i) bra_perm_vec[i] = i;
-
-  do {
-    int ket_parity = 0;
-    // same problem as with bra_perm_vec
-    // clang-format off
-    // auto ket_perm_vec = iota(half_rank, 2 * half_rank) | ranges::to<perm_type>;
-    // clang-format on
-    auto ket_perm_vec = perm_type(half_rank);
-    for (auto i = 0; i < half_rank; ++i) ket_perm_vec[i] = i + half_rank;
-    do {
-      phase_type const phase_factor =
-          (bra_parity + ket_parity) % 2 == 0 ? 1 : -1;
-      auto const perm_vec =
-          concat(bra_perm_vec, ket_perm_vec) | ranges::to<perm_type>;
-      std::forward<F>(antisymmetrizer)(phase_factor, perm_vec);
-    } while (next_permutation_parity(ket_parity,
-                                     std::begin(ket_perm_vec),  //
-                                     std::end(ket_perm_vec)));
-  } while (next_permutation_parity(bra_parity,
-                                   std::begin(bra_perm_vec),  //
-                                   std::end(bra_perm_vec)));
-}
-
 template <typename NodesI,
           typename Pred = std::function<bool(IteredT<NodesI> const&)>,
           typename = std::enable_if_t<
@@ -202,43 +130,6 @@ CacheManager<ERPtr> cache_manager(
   ranges::actions::remove_if(imed_counts, less_repeating);
 
   return CacheManager<ERPtr>{imed_counts};
-}
-
-///
-/// Given an iterable of Index objects, generate a string annotation
-/// that can be used for TiledArray tensor expressions.
-/// Tensor-of-tensors also supported.
-template <typename Indices>
-std::string braket_to_annot(Indices const& indices) {
-  using ranges::find;
-  using ranges::views::filter;
-  using ranges::views::intersperse;
-  using ranges::views::join;
-
-  // make a comma-separated string out of an iterable of strings
-  auto add_commas = [](auto const& strs) -> std::string {
-    return strs | intersperse(",") | join | ranges::to<std::string>;
-  };
-
-  container::svector<std::string> idxs{}, pidxs{};
-  for (auto&& idx : indices) {
-    idxs.emplace_back(sequant::to_string(idx.label()));
-    for (auto&& pidx : idx.proto_indices())
-      pidxs.emplace_back(sequant::to_string(pidx.label()));
-  }
-
-  if (pidxs.empty()) {
-    // not a tensor-of-tensor type expression
-    return add_commas(idxs);
-  } else {
-    ranges::stable_sort(pidxs);
-    ranges::actions::unique(pidxs);
-    auto not_in_pidx = [&pidxs](auto&& l) {
-      return find(pidxs, l) == pidxs.end();
-    };
-    return add_commas(pidxs) + ";" +
-           add_commas(idxs | filter(not_in_pidx) | ranges::to<decltype(idxs)>);
-  }
 }
 
 class EvalExprTA final : public EvalExpr {
@@ -348,8 +239,7 @@ auto evaluate(NodesT const& nodes,  //
 
   auto result = evaluate(*iter, layout, std::forward<Le>(le),
                          std::forward<Args>(args)...);
-  iter = std::next(iter);
-  for (; iter != end; ++iter) {
+  for (++iter; iter != end; ++iter) {
     result->add_inplace(*evaluate(*iter, layout, std::forward<Le>(le),
                                   std::forward<Args>(args)...));
   }
@@ -373,6 +263,31 @@ auto evaluate_antisymm(NodeT const& node,    //
   return evaluate(node, layout, std::forward<Le>(le),
                   std::forward<Args>(args)...)
       ->antisymmetrize();
+}
+
+template <typename NodeT, typename Le, typename... Args,
+          std::enable_if_t<IsEvaluable<NodeT>, bool> = true>
+auto evaluate(NodeT const& node, Le&& le, Args&&... args) {
+  return evaluate_crust(node, std::forward<Le>(le),
+                        std::forward<Args>(args)...);
+}
+
+template <typename NodesT, typename Le, typename... Args,
+          std::enable_if_t<IsIterableOfEvaluableNodes<NodesT>, bool> = true>
+auto evaluate(NodesT const& nodes, Le&& le, Args&&... args) {
+  auto iter = std::begin(nodes);
+  auto end = std::end(nodes);
+  assert(iter != end);
+
+  auto result = evaluate(*iter,                 //
+                         std::forward<Le>(le),  //
+                         std::forward<Args>(args)...);
+  for (++iter; iter != end; ++iter) {
+    result->add_inplace(*evaluate(*iter,                 //
+                                  std::forward<Le>(le),  //
+                                  std::forward<Args>(args)...));
+  }
+  return result;
 }
 
 }  // namespace sequant::eval

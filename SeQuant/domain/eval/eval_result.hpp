@@ -375,8 +375,9 @@ class EvalConstant final : public EvalResult {
     throw unimplemented_method("permute");
   }
 
-  void add_inplace(EvalResult const&) override {
-    throw unimplemented_method("add_inplace");
+  void add_inplace(EvalResult const& other) override {
+    auto& val = get<T>();
+    val += other.get<T>();
   }
 
   [[nodiscard]] ERPtr symmetrize() const override {
