@@ -193,9 +193,9 @@ class DataWorldTA {
   ERPtr operator()(NodeT const& n) {
     if (n->result_type() == ResultType::Constant) {
       assert(n->expr()->template is<Constant>());
-      return eval_result<EvalConstant<typename Tensor_t::numeric_type>>(
-          // todo '.real' is always double
+      auto d = boost::rational_cast<typename Tensor_t::numeric_type>(
           n->as_constant().value().real());
+      return eval_result<EvalConstant<typename Tensor_t::numeric_type>>(d);
     }
 
     assert(n->result_type() == ResultType::Tensor &&

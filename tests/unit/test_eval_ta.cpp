@@ -101,7 +101,8 @@ class rand_tensor_yield {
     using result_t = EvalConstant<double>;
 
     assert(node->expr()->template is<sequant::Constant>());
-    return eval_result<result_t>(node->as_constant().value().real());
+    auto d = boost::rational_cast<double>(node->as_constant().value().real());
+    return eval_result<result_t>(d);
   }
 
   ///
@@ -174,7 +175,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
 
     REQUIRE(norm(sum1_man) == Approx(norm(sum1_eval)));
 
-    auto expr2 = parse_antisymm(L"2 * t_{a1}^{i1} + 1.5 * f_{i1}^{a1}");
+    auto expr2 = parse_antisymm(L"2 * t_{a1}^{i1} + 3/2 * f_{i1}^{a1}");
 
     auto sum2_eval = eval(expr2, "i_1,a_1");
 
@@ -187,7 +188,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
 
   SECTION("product") {
     auto expr1 =
-        parse_antisymm(L"1/2.0 * g_{i2,i4}^{a2,a4} * t_{a1,a2}^{i1,i2}");
+        parse_antisymm(L"1/2 * g_{i2,i4}^{a2,a4} * t_{a1,a2}^{i1,i2}");
     auto prod1_eval = eval(expr1, "i_4,a_1,a_4,i_1");
 
     TArrayD prod1_man{};
@@ -229,7 +230,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
   }
 
   SECTION("Antisymmetrization") {
-    auto expr1 = parse_antisymm(L"0.5 * g_{i1, i2}^{a1, a2}");
+    auto expr1 = parse_antisymm(L"1/2 * g_{i1, i2}^{a1, a2}");
     auto eval1 = eval_antisymm(expr1, "i_1,i_2,a_1,a_2");
 
     auto man1 = TArrayD{};
@@ -244,7 +245,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
   }
 
   SECTION("Symmetrization") {
-    auto expr1 = parse_antisymm(L"0.5 * g_{i1, i2}^{a1, a2}");
+    auto expr1 = parse_antisymm(L"1/2 * g_{i1, i2}^{a1, a2}");
     auto eval1 = eval_symm(expr1, "i_1,i_2,a_1,a_2");
 
     auto man1 = TArrayD{};

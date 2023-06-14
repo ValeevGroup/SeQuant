@@ -100,7 +100,8 @@ class rand_tensor_yield {
     using result_t = EvalConstant<double>;
 
     assert(node->expr()->template is<sequant::Constant>());
-    return eval_result<result_t>(node->as_constant().value().real());
+    auto d = boost::rational_cast<double>(node->as_constant().value().real());
+    return eval_result<result_t>(d);
   }
 
   ///
@@ -217,7 +218,7 @@ TEST_CASE("TEST_EVAL_USING_BTAS", "[eval]") {
 
     REQUIRE(norm(eval1) == Approx(norm(man1)));
 
-    auto expr2 = parse_antisymm(L"2 * t_{a1}^{i1} + 1.5 * f_{i1}^{a1}");
+    auto expr2 = parse_antisymm(L"2 * t_{a1}^{i1} + 3/2 * f_{i1}^{a1}");
     auto const tidx2 = tidxs(expr2, {0, 0});
     auto eval2 = eval(expr2, tidx2);
 
@@ -232,7 +233,7 @@ TEST_CASE("TEST_EVAL_USING_BTAS", "[eval]") {
 
   SECTION("Product") {
     auto expr1 =
-        parse_antisymm(L"0.5 * g_{i2,i4}^{a2,a4} * t_{a1,a2}^{ i1, i2}");
+        parse_antisymm(L"1/2 * g_{i2,i4}^{a2,a4} * t_{a1,a2}^{ i1, i2}");
     auto const tidx1 = tidxs(L"i1,i4,a1,a4");
     auto eval1 = eval(expr1, tidx1);
 
@@ -291,7 +292,7 @@ TEST_CASE("TEST_EVAL_USING_BTAS", "[eval]") {
   SECTION("Antisymmetrization") {
     using btas::permute;
 
-    auto expr1 = parse_antisymm(L"0.5 * g_{i1, i2}^{a1, a2}");
+    auto expr1 = parse_antisymm(L"1/2 * g_{i1, i2}^{a1, a2}");
     auto tidx1 = tidxs(L"i_1,i_2,a_1,a_2");
     auto eval1 = eval_antisymm(expr1, tidx1);
 
@@ -322,7 +323,7 @@ TEST_CASE("TEST_EVAL_USING_BTAS", "[eval]") {
   SECTION("Symmetrization") {
     using btas::permute;
 
-    auto expr1 = parse_antisymm(L"0.5 * g_{i1, i2}^{a1, a2}");
+    auto expr1 = parse_antisymm(L"1/2 * g_{i1, i2}^{a1, a2}");
     auto tidx1 = tidxs(L"i_1,i_2,a_1,a_2");
     auto eval1 = eval_symm(expr1, tidx1);
 

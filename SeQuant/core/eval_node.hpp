@@ -33,7 +33,7 @@ EvalNode<ExprT> to_eval_node(ExprPtr const& expr) {
 
   if (expr->is<Product>()) {
     auto const& prod = expr->as<Product>();
-    if (prod.scalar() != 1.0)
+    if (prod.scalar() != 1)
       subxprs.emplace_back(to_eval_node<ExprT>(ex<Constant>(prod.scalar())));
   }
 
@@ -97,7 +97,7 @@ ExprPtr linearize_eval_node(EvalNode<ExprT> const& node) {
   auto extend_product = [](Product& prod, ExprPtr const& factors) {
     for (auto&& f : *factors)
       if (f->is<Tensor>())
-        prod.append(1., f);
+        prod.append(1, f);
       else
         prod.append(f);
   };
@@ -139,14 +139,14 @@ ExprPtr linearize_eval_node(EvalNode<ExprT> const& node) {
   if (lres->is<Tensor>() && rres->is<Product>()) {
     auto result = Product{};
     result.scale(rres->as<Product>().scalar());
-    result.append(1., lres);
+    result.append(1, lres);
     extend_product(result, rres);
     return result.clone();
   }
 
   if (lres->is<Product>() && rres->is<Tensor>()) {
     auto& prod = lres->as<Product>();
-    prod.append(1., rres);
+    prod.append(1, rres);
     return lres;
   }
 

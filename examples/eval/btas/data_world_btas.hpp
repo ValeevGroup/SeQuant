@@ -157,9 +157,9 @@ class DataWorldBTAS {
   ERPtr operator()(NodeT const& n) {
     if (n->result_type() == ResultType::Constant) {
       assert(n->expr()->template is<Constant>());
-      return eval_result<EvalConstant<typename Tensor_t::numeric_type>>(
-          // todo '.real' is always double
+      auto d = boost::rational_cast<typename Tensor_t::numeric_type>(
           n->as_constant().value().real());
+      return eval_result<EvalConstant<typename Tensor_t::numeric_type>>(d);
     }
 
     assert(n->result_type() == ResultType::Tensor &&
@@ -174,7 +174,8 @@ class DataWorldBTAS {
     if (auto exists = cache_.find(h); exists != cache_.end())
       return exists->second;
     else {
-      auto tnsr = eval_result<EvalTensorBTAS<Tensor_t>>((*this)(n->as_tensor()));
+      auto tnsr =
+          eval_result<EvalTensorBTAS<Tensor_t>>((*this)(n->as_tensor()));
       auto stored = cache_.emplace(h, std::move(tnsr));
       assert(stored.second && "failed to store tensor");
       return stored.first->second;
@@ -182,7 +183,6 @@ class DataWorldBTAS {
   }
 
   void update_amplitudes(std::vector<Tensor_t> const& rs) {
-
     using ranges::views::transform;
     using ranges::views::zip;
 
@@ -193,7 +193,6 @@ class DataWorldBTAS {
                              }),
                              rs))
       update_single_T(t, r);
-
   }
 
   Tensor_t const& amplitude(size_t excitation) const {
