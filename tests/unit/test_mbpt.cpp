@@ -387,11 +387,15 @@ TEST_CASE("NBodyOp", "[mbpt]") {
     using namespace sequant::mbpt::sr::op;
 
     auto g_t2_t2 = H2() * T_(2) * T_(2);
-    REQUIRE(contains_rank(g_t2_t2, 2));
-    REQUIRE(contains_up_to_rank(g_t2_t2, 2));
+    REQUIRE(raises_vacuum_to_rank(g_t2_t2, 2));
+    REQUIRE(raises_vacuum_up_to_rank(g_t2_t2, 2));
 
     auto g_t2 = H2() * T_(2);
-    REQUIRE(contains_rank(g_t2, 3));
+    REQUIRE(raises_vacuum_to_rank(g_t2, 3));
+
+    auto lambda2_f = Lambda_(2) * H1();
+    REQUIRE(lowers_rank_to_vacuum(lambda2_f, 2));
+
   }  // SECTION("screen")
 
 }  // TEST_CASE("NBodyOp")

@@ -170,12 +170,23 @@ ExprPtr A(std::size_t K);
 
 /// @return true if \p op_or_op_product can produce determinant of excitation
 /// rank \p k when applied to reference
-bool contains_rank(const ExprPtr& op_or_op_product, const unsigned long k);
+bool raises_vacuum_to_rank(const ExprPtr& op_or_op_product,
+                           const unsigned long k);
 
 /// @return true if \p op_or_op_product can produce determinant of excitation
-/// rank up to \p k when applied to reference
-bool contains_up_to_rank(const ExprPtr& op_or_op_product,
-                         const unsigned long k);
+/// rank up to \p k when applied to vacuum
+bool raises_vacuum_up_to_rank(const ExprPtr& op_or_op_product,
+                              const unsigned long k);
+
+/// @return true if \p op_or_op_product can produce vacuum from determinant of
+/// excitation rank \p k
+bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product,
+                           const unsigned long k);
+
+/// @return true if \p op_or_op_product can produce vacuum from determinant of
+/// excitation rank up to \p k
+bool lowers_rank_or_lower_to_vacuum(const ExprPtr& op_or_op_product,
+                                    const unsigned long k);
 
 /// computes the vacuum expectation value (VEV)
 

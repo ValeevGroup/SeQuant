@@ -307,8 +307,9 @@ ExprPtr A(std::size_t K) {
                   });
 }
 
-bool contains_qns(const ExprPtr& op_or_op_product, const qns_t target_qns) {
-  qns_t qns;
+bool can_change_qns(const ExprPtr& op_or_op_product, const qns_t target_qns,
+                    const qns_t source_qns = {}) {
+  qns_t qns = source_qns;
   if (op_or_op_product.is<Product>()) {
     const auto& op_product = op_or_op_product.as<Product>();
     for (auto& op_ptr : ranges::views::reverse(op_product.factors())) {
@@ -327,16 +328,30 @@ bool contains_qns(const ExprPtr& op_or_op_product, const qns_t target_qns) {
         "must be mbpt::sr::op_t or Product thereof");
 }
 
-bool contains_up_to_rank(const ExprPtr& op_or_op_product,
-                         const unsigned long k) {
+bool raises_vacuum_up_to_rank(const ExprPtr& op_or_op_product,
+                              const unsigned long k) {
   assert(op_or_op_product.is<op_t>() || op_or_op_product.is<Product>());
-  return contains_qns(op_or_op_product,
-                      qns_t{{0ul, 0ul}, {0ul, k}, {0ul, k}, {0ul, 0ul}});
+  return can_change_qns(op_or_op_product,
+                        qns_t{{0ul, 0ul}, {0ul, k}, {0ul, k}, {0ul, 0ul}});
 }
 
-bool contains_rank(const ExprPtr& op_or_op_product, const unsigned long k) {
+bool lowers_rank_or_lower_to_vacuum(const ExprPtr& op_or_op_product,
+                                    const unsigned long k) {
   assert(op_or_op_product.is<op_t>() || op_or_op_product.is<Product>());
-  return contains_qns(op_or_op_product, qns_t{0ul, k, k, 0ul});
+  return can_change_qns(op_or_op_product, qns_t{},
+                        qns_t{{0ul, 0ul}, {0ul, k}, {0ul, k}, {0ul, 0ul}});
+}
+
+bool raises_vacuum_to_rank(const ExprPtr& op_or_op_product,
+                           const unsigned long k) {
+  assert(op_or_op_product.is<op_t>() || op_or_op_product.is<Product>());
+  return can_change_qns(op_or_op_product, qns_t{0ul, k, k, 0ul});
+}
+
+bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product,
+                           const unsigned long k) {
+  assert(op_or_op_product.is<op_t>() || op_or_op_product.is<Product>());
+  return can_change_qns(op_or_op_product, qns_t{}, qns_t{0ul, k, k, 0ul});
 }
 
 ExprPtr vac_av(

@@ -431,12 +431,12 @@ std::vector<ExprPtr> cceqs::t(bool screen, bool use_topology,
       for (auto& term : *hbar) {
         assert(term->is<Product>() || term->is<op_t>());
 
-        if (op::contains_up_to_rank(term, p)) {
+        if (op::raises_vacuum_up_to_rank(term, p)) {
           if (!hbar_le_p)
             hbar_le_p = std::make_shared<Sum>(ExprPtrList{term});
           else
             hbar_le_p->append(term);
-          if (op::contains_rank(term, p)) {
+          if (op::raises_vacuum_to_rank(term, p)) {
             if (!hbar_p)
               hbar_p = std::make_shared<Sum>(ExprPtrList{term});
             else
@@ -468,7 +468,7 @@ std::vector<ExprPtr> cceqs::t(bool screen, bool use_topology,
 std::vector<ExprPtr> cceqs::lambda(bool screen, bool use_topology,
                                    bool use_connectivity, bool canonical_only) {
   constexpr bool use_ops = true;
-  if (use_ops) {  // in development
+  if (use_ops) {
     // construct hbar
     auto hbar = op::H();
     auto H_Tk = hbar;
@@ -477,12 +477,8 @@ std::vector<ExprPtr> cceqs::lambda(bool screen, bool use_topology,
       hbar += H_Tk;
     }
 
-    //    std::wcout << "hbar: \n" << to_latex_align(hbar, 0, 4) << std::endl;
-    // multiply with (1 + Λ)
     const auto One = ex<Constant>(1);
     auto lhbar = simplify((One + op::Lambda(N)) * hbar);
-
-    //    std::wcout << "lhbar: \n" << to_latex_align(lhbar, 0, 4) << std::endl;
 
     // 2. project onto each manifold, screen, lower to tensor form and wick it
     std::vector<ExprPtr> result(P + 1);
@@ -496,14 +492,12 @@ std::vector<ExprPtr> cceqs::lambda(bool screen, bool use_topology,
       for (auto& term : *lhbar) {  // pick terms from lhbar
         assert(term->is<Product>() || term->is<op_t>());
 
-        //        auto which_term = to_latex(term);
-
-        if (op::contains_up_to_rank(term, p)) {
+        if (op::lowers_rank_or_lower_to_vacuum(term, p)) {
           if (!hbar_le_p)
             hbar_le_p = std::make_shared<Sum>(ExprPtrList{term});
           else
             hbar_le_p->append(term);
-          if (op::contains_rank(term, p)) {
+          if (op::lowers_rank_to_vacuum(term, p)) {
             if (!hbar_p)
               hbar_p = std::make_shared<Sum>(ExprPtrList{term});
             else
@@ -513,19 +507,9 @@ std::vector<ExprPtr> cceqs::lambda(bool screen, bool use_topology,
       }
       lhbar = hbar_le_p;  // not needed
 
-      if (p == 2) {
-        std::wcout << "p = " << p << std::endl;
-        std::wcout << "hbar-le-p (" << hbar_le_p->size() << "): \n"
-                   << to_latex_align(hbar_le_p, 0, 4) << std::endl;
-        std::wcout << "hbar-p (" << hbar_p->size() << "): \n"
-                   << to_latex_align(hbar_p, 0, 4) << std::endl;
-      }
-
       // 2.b multiply by adjoint of A(P) on the right side
 
       auto A_hbar = simplify(hbar_p * adjoint(op::A(p)));
-      //      std::wcout << "Ahbar: \n" << to_latex_align(A_hbar, 0, 4) <<
-      //      std::endl;
 
       // temp
       std::vector<std::pair<std::wstring, std::wstring>> new_op_connect = {
@@ -535,8 +519,6 @@ std::vector<ExprPtr> cceqs::lambda(bool screen, bool use_topology,
       // 2.c compute vacuum average
       result.at(p) = op::vac_av(A_hbar, new_op_connect);
       simplify(result.at(p));
-      //      std::wcout << "result.at(p): \n"
-      //                 << to_latex_align(result.at(p), 0, 4) << std::endl;
     }
     return result;
   } else {
