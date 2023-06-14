@@ -63,9 +63,6 @@ template <typename I, typename = std::enable_if_t<IsIterable<I>>>
 using IteredT =
     std::remove_reference_t<decltype(*std::begin(std::declval<I>()))>;
 
-template <typename N>
-constexpr bool IsFbNode = IsFbNode_<N>::value;
-
 template <typename, typename = void>
 constexpr bool IsEvaluable{};
 
@@ -79,21 +76,38 @@ constexpr bool
     IsEvaluable<const FullBinaryNode<T>,
                 std::enable_if_t<std::is_convertible_v<T, EvalExpr>>> = true;
 
-template <typename NodeT, typename E,
-          typename = std::enable_if_t<IsEvaluable<NodeT>>>
-using EvalResultT = remove_cvref_t<std::invoke_result_t<E, NodeT const&>>;
-
-template <typename Iterable, typename = void>
+template <typename, typename = void>
 constexpr bool IsIterableOfEvaluableNodes{};
 
 template <typename Iterable>
 constexpr bool IsIterableOfEvaluableNodes<
     Iterable, std::enable_if_t<IsEvaluable<IteredT<Iterable>>>> = true;
 
-template <typename NodeT, typename Le, typename Cm,
-          typename = std::enable_if_t<std::is_convertible_v<
-              typename std::remove_reference_t<Cm>::cached_type, ERPtr>>>
-constexpr bool IsCacheManager = true;
+template <typename, typename, typename = void>
+constexpr bool IsLeafEvaluator{};
+
+template <typename NodeT>
+constexpr bool IsLeafEvaluator<NodeT, CacheManager<ERPtr>, void>{};
+
+template <typename NodeT, typename Le>
+constexpr bool IsLeafEvaluator<
+    NodeT, Le,
+    std::enable_if_t<
+        IsEvaluable<NodeT> &&
+        std::is_same_v<
+            ERPtr, std::remove_reference_t<std::invoke_result_t<Le, NodeT>>>>> =
+    true;
+
+// template <typename, typename = void>
+// constexpr bool IsCacheManager{};
+// template <typename Cm>
+// constexpr bool IsCacheManager<Cm, bool> = true;
+
+// template <typename Cm>
+// constexpr bool IsCacheManager<
+//     Cm, std::enable_if_t<std::is_convertible_v<
+//             typename std::remove_reference_t<Cm>::cached_type, ERPtr>>> =
+//             true;
 
 template <typename NodesI,
           typename Pred = std::function<bool(IteredT<NodesI> const&)>,
@@ -168,13 +182,16 @@ class EvalExprBTAS final : public EvalExpr {
   annot_t annot_;
 };
 
-template <typename NodeT, typename Le>
+template <typename NodeT, typename Le,
+          std::enable_if_t<IsLeafEvaluator<NodeT, Le>, bool> = true>
 ERPtr evaluate_crust(NodeT const&, Le&&);
 
-template <typename NodeT, typename Le, typename Cm>
-ERPtr evaluate_crust(NodeT const&, Le&&, Cm&&);
+template <typename NodeT, typename Le,
+          std::enable_if_t<IsLeafEvaluator<NodeT, Le>, bool> = true>
+ERPtr evaluate_crust(NodeT const&, Le&&, CacheManager<ERPtr>&);
 
-template <typename NodeT, typename Le, typename... Args>
+template <typename NodeT, typename Le, typename... Args,
+          std::enable_if_t<IsLeafEvaluator<NodeT, Le>, bool> = true>
 ERPtr evaluate_core(NodeT const& node, Le&& le, Args&&... args) {
   if (node.leaf()) {
     return std::invoke(std::forward<Le>(le), node);
@@ -199,27 +216,27 @@ ERPtr evaluate_core(NodeT const& node, Le&& le, Args&&... args) {
   }
 }
 
-template <typename NodeT, typename Le>
+template <typename NodeT, typename Le,
+          std::enable_if_t<IsLeafEvaluator<NodeT, Le>, bool>>
 ERPtr evaluate_crust(NodeT const& node, Le&& le) {
   return evaluate_core(node, std::forward<Le>(le));
 }
 
-template <typename NodeT, typename Le, typename Cm>
-ERPtr evaluate_crust(NodeT const& node, Le&& le, Cm&& cm) {
-  auto&& cache = std::forward<Cm>(cm);
+template <typename NodeT, typename Le,
+          std::enable_if_t<IsLeafEvaluator<NodeT, Le>, bool>>
+ERPtr evaluate_crust(NodeT const& node, Le&& le, CacheManager<ERPtr>& cache) {
   auto const h = hash::value(*node);
   if (auto ptr = cache.access(h); ptr) {
     return *ptr;
   } else if (cache.exists(h)) {
-    return *cache.store(
-        h, evaluate_core(node, std::forward<Le>(le), std::forward<Cm>(cm)));
+    return *cache.store(h, evaluate_core(node, std::forward<Le>(le), cache));
   } else {
-    return evaluate_core(node, std::forward<Le>(le), std::forward<Cm>(cm));
+    return evaluate_core(node, std::forward<Le>(le), cache);
   }
 }
 
 template <typename NodeT, typename Annot, typename Le, typename... Args,
-          std::enable_if_t<IsEvaluable<NodeT>, bool> = true>
+          std::enable_if_t<IsLeafEvaluator<NodeT, Le>, bool> = true>
 auto evaluate(NodeT const& node,    //
               Annot const& layout,  //
               Le&& le, Args&&... args) {
@@ -266,7 +283,7 @@ auto evaluate_antisymm(NodeT const& node,    //
 }
 
 template <typename NodeT, typename Le, typename... Args,
-          std::enable_if_t<IsEvaluable<NodeT>, bool> = true>
+          std::enable_if_t<IsLeafEvaluator<NodeT, Le>, bool> = true>
 auto evaluate(NodeT const& node, Le&& le, Args&&... args) {
   return evaluate_crust(node, std::forward<Le>(le),
                         std::forward<Args>(args)...);
