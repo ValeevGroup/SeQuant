@@ -8,7 +8,7 @@
 #include <clocale>
 
 using namespace sequant;
-using namespace sequant::mbpt::sr::so;
+using namespace sequant::mbpt::sr;
 
 namespace {
 

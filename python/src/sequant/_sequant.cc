@@ -1,3 +1,4 @@
+#include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/sequant.hpp>
 #include <SeQuant/core/tensor.hpp>
 
@@ -24,7 +25,7 @@ std::shared_ptr<Tensor> make_tensor(std::wstring label,
 }
 
 std::shared_ptr<Constant> make_constant(py::float_ number) {
-  return std::make_shared<Constant>(number.cast<double>());
+  return std::make_shared<Constant>(to_rational(number.cast<double>()));
 }
 
 inline ExprPtr pow(const ExprPtr &b, int n) {
@@ -60,7 +61,33 @@ py::object factors(ExprPtr &expr) {
 // disambiguates sequant::simplify
 ExprPtr &simplify(ExprPtr &expr) { return sequant::simplify(expr); }
 
+py::object rational_to_fraction(const rational &r) {
+  py::object Fraction = py::module::import("fractions").attr("Fraction");
+  return Fraction(r.numerator(), r.denominator());
+}
+
+std::string complex_to_string(const Complex<rational> &z) {
+  return z.imag() != 0 ? (to_string(z.real()) + "1j * " + to_string(z.imag()))
+                       : to_string(z.real());
+}
+
 }  // namespace sequant::python
+
+NAMESPACE_BEGIN(PYBIND11_NAMESPACE)
+NAMESPACE_BEGIN(detail)
+
+template <>
+struct is_holder_type<sequant::Expr, sequant::ExprPtr> : std::true_type {};
+
+template <>
+struct always_construct_holder<sequant::ExprPtr>
+    : always_construct_holder<void> {};
+template <>
+class type_caster<sequant::ExprPtr>
+    : public type_caster_holder<sequant::Expr, sequant::ExprPtr> {};
+
+NAMESPACE_END(detail)
+NAMESPACE_END(PYBIND11_NAMESPACE)
 
 PYBIND11_MODULE(_sequant, m) {
   using namespace sequant;
@@ -78,6 +105,12 @@ PYBIND11_MODULE(_sequant, m) {
           SEQUANT_PYTHON_INDEXSPACE_TYPE_PROPERTY(occupied)
               SEQUANT_PYTHON_INDEXSPACE_TYPE_PROPERTY(unoccupied);
 
+  py::class_<ExprPtr>(m, "ExprPtr")
+      .def_property_readonly("latex", &ExprPtr::to_latex)
+      .def("__add__", [](const ExprPtr &l, const ExprPtr &r) { return l + r; })
+      .def("__sub__", [](const ExprPtr &l, const ExprPtr &r) { return l - r; })
+      .def("__mul__", [](const ExprPtr &l, const ExprPtr &r) { return l * r; });
+
   py::class_<Expr, ExprPtr>(m, "Expr")
       .def_property_readonly("summands", &summands)
       .def_property_readonly("factors", &factors)
@@ -87,7 +120,7 @@ PYBIND11_MODULE(_sequant, m) {
       .def("__mul__", [](const ExprPtr &l, const ExprPtr &r) { return l * r; })
       .def("__pow__", [](const ExprPtr &b, int n) { return pow(b, n); });
 
-  py::class_<Index, std::shared_ptr<Index> >(m, "Index")
+  py::class_<Index, std::shared_ptr<Index>>(m, "Index")
       .def("__str__", &Index::label)
       .def("__repr__", &Index::label)
       .def_property_readonly("space", &Index::space);
@@ -101,6 +134,19 @@ PYBIND11_MODULE(_sequant, m) {
         auto braket = t.braket();
         return std::vector<Index>(braket.begin(), braket.end());
       });
+
+  py::class_<Complex<rational>>(m, "zRational")
+      .def_property_readonly("real",
+                             [](const Complex<rational> &r) {
+                               return rational_to_fraction(r.real());
+                             })
+      .def_property_readonly("imag",
+                             [](const Complex<rational> &r) {
+                               return rational_to_fraction(r.imag());
+                             })
+      .def_property_readonly("latex", &Complex<rational>::to_latex)
+      .def("__str__", &python::complex_to_string)
+      .def("__repr__", &python::complex_to_string);
 
   py::class_<Constant, std::shared_ptr<Constant>, Expr>(m, "Constant")
       .def(py::init(&python::make_constant));

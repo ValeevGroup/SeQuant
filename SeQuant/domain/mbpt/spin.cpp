@@ -1,5 +1,6 @@
-#include "spin.hpp"
+#include <SeQuant/domain/mbpt/spin.hpp>
 
+#include <SeQuant/core/math.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <unordered_map>
 
@@ -7,7 +8,7 @@ namespace sequant {
 
 ExprPtr transform_expr(const ExprPtr& expr,
                        const std::map<Index, Index>& index_replacements,
-                       double scaling_factor) {
+                       Constant::scalar_type scaling_factor) {
   if (expr->is<Constant>()) {
     return ex<Constant>(scaling_factor) * expr;
   }
@@ -470,7 +471,7 @@ ExprPtr symmetrize_expr(const Product& product) {
       }
       result.push_back(map);
     } while (std::next_permutation(int_list.begin(), int_list.end()));
-    assert(result.size() == std::tgamma(list.size() + 1));
+    assert(result.size() == sequant::factorial(list.size()));
     return result;
   };
 
@@ -898,7 +899,7 @@ ExprPtr closed_shell_spintrace(
     auto n_cycles = count_cycles(product_kets, product_bras);
 
     auto result = std::make_shared<Product>(product);
-    result->scale(std::pow(2, n_cycles));
+    result->scale(pow2(n_cycles));
     return result;
   };
 
@@ -906,7 +907,7 @@ ExprPtr closed_shell_spintrace(
     return expr;
   else if (expr->is<Tensor>())
     return trace_product(
-        (ex<Constant>(1.) * expr)->as<Product>());  // expand_all(expr);
+        (ex<Constant>(1) * expr)->as<Product>());  // expand_all(expr);
   else if (expr->is<Product>())
     return trace_product(expr->as<Product>());
   else if (expr->is<Sum>()) {
@@ -916,7 +917,7 @@ ExprPtr closed_shell_spintrace(
         result->append(trace_product(summand->as<Product>()));
       } else if (summand->is<Tensor>()) {
         result->append(
-            trace_product((ex<Constant>(1.) * summand)->as<Product>()));
+            trace_product((ex<Constant>(1) * summand)->as<Product>()));
       } else  // summand->is<Constant>()
         result->append(summand);
     }
@@ -1063,8 +1064,8 @@ std::vector<ExprPtr> open_shell_A_op(const Tensor& A) {
   };
 
   std::vector<ExprPtr> result(rank + 1);
-  result.at(0) = ex<Constant>(1.0);
-  result.at(rank) = ex<Constant>(1.0);
+  result.at(0) = ex<Constant>(1);
+  result.at(rank) = ex<Constant>(1);
 
   for (auto i = 1; i < rank; ++i) {
     auto spin_bra = A.bra();
@@ -1141,9 +1142,9 @@ std::vector<ExprPtr> open_shell_P_op_vector(const Tensor& A) {
     }
 
     Sum bra_permutations{};
-    bra_permutations.append(ex<Constant>(1.));
+    bra_permutations.append(ex<Constant>(1));
     Sum ket_permutations{};
-    ket_permutations.append(ex<Constant>(1.));
+    ket_permutations.append(ex<Constant>(1));
 
     for (auto& p : P_bra_list) {
       int prefactor = (p.bra_rank() + p.ket_rank() == 4) ? 1 : -1;
@@ -1235,7 +1236,7 @@ std::vector<ExprPtr> open_shell_spintrace(
   // Generate index replacement maps
   auto spin_cases =
       [&add_spin_label](const std::vector<IndexGroup>& idx_group) {
-        int ncases = std::pow(2, idx_group.size());
+        const auto ncases = pow2(idx_group.size());
         std::vector<std::map<Index, Index>> all_replacements(ncases);
 
         for (uint64_t i = 0; i != ncases; ++i) {
@@ -1490,7 +1491,7 @@ ExprPtr spintrace(
 
     // EFV: for each spincase (loop over integer from 0 to 2^n-1, n=#of index
     // groups)
-    const uint64_t nspincases = std::pow(2, index_groups.size());
+    const uint64_t nspincases = pow2(index_groups.size());
 
     auto result = std::make_shared<Sum>();
     for (uint64_t spincase_bitstr = 0; spincase_bitstr != nspincases;
@@ -1648,7 +1649,7 @@ ExprPtr factorize_S(const ExprPtr& expression,
     // if(hash1 present in summands_hash_list) remove hash0, hash1
     // else continue
     int n_symm_terms = 0;
-    auto symm_factor = std::tgamma(S.bra_rank() + 1);
+    auto symm_factor = sequant::factorial(S.bra_rank());
     for (auto it = expr->begin(); it != expr->end(); ++it) {
       // Exclude summand with value zero
       while ((*it)->hash_value() == ex<Constant>(0)->hash_value()) {
@@ -1663,7 +1664,7 @@ ExprPtr factorize_S(const ExprPtr& expression,
                                          summands_hash_list.end(), hash0));
       auto new_product = (*it)->clone();
       new_product =
-          ex<Constant>(1.0 / symm_factor) * ex<Tensor>(S) * new_product;
+          ex<Constant>(rational{1, symm_factor}) * ex<Tensor>(S) * new_product;
 
       // CONTAINER OF HASH VALUES AND SYMMETRIZED TERMS
       // FOR GENERALIZED EXPRESSION WITH ARBITRATY S OPERATOR
@@ -1725,7 +1726,7 @@ ExprPtr factorize_S(const ExprPtr& expression,
           auto term = summands_hash_map.find(hash1)->second;
 
           for (auto&& summand : *expr) {
-            if (summand->hash_value() == hash1) summand = ex<Constant>(0.0);
+            if (summand->hash_value() == hash1) summand = ex<Constant>(0);
           }
         });
       }

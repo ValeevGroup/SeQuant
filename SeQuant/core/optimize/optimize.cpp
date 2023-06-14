@@ -30,10 +30,10 @@ void pull_scalar(ExprPtr expr) noexcept {
     if (x->is<Product>()) {
       auto& p = x->as<Product>();
       scal *= p.scalar();
-      p.scale(1.0 / p.scalar());
+      p.scale(1 / p.scalar());
     }
 
-  prod.scale(1.0 / prod.scalar());
+  prod.scale(1 / prod.scalar());
   prod.scale(scal);
 }
 

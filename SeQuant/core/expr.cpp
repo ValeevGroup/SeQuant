@@ -9,6 +9,33 @@
 
 namespace sequant {
 
+ExprPtr::base_type &ExprPtr::as_shared_ptr() & {
+  return static_cast<base_type &>(*this);
+}
+const ExprPtr::base_type &ExprPtr::as_shared_ptr() const & {
+  return static_cast<const base_type &>(*this);
+}
+ExprPtr::base_type &&ExprPtr::as_shared_ptr() && {
+  return static_cast<base_type &&>(*this);
+}
+
+ExprPtr &ExprPtr::operator+=(const ExprPtr &other) {
+  as_shared_ptr()->operator+=(*other);
+  return *this;
+}
+
+ExprPtr &ExprPtr::operator-=(const ExprPtr &other) {
+  as_shared_ptr()->operator-=(*other);
+  return *this;
+}
+
+ExprPtr &ExprPtr::operator*=(const ExprPtr &other) {
+  as_shared_ptr()->operator*=(*other);
+  return *this;
+}
+
+std::wstring ExprPtr::to_latex() const { return as_shared_ptr()->to_latex(); }
+
 std::logic_error Expr::not_implemented(const char *fn) const {
   std::ostringstream oss;
   oss << "Expr::" << fn
@@ -78,8 +105,12 @@ ExprPtr Product::canonicalize_impl(bool rapid) {
                << ") input: " << to_latex() << std::endl;
   }
 
-  try {  // tensor network canonization is a special case that's done in
-         // TensorNetwork
+  auto contains_nontensors = ranges::any_of(factors_, [](const auto &factor) {
+    return std::dynamic_pointer_cast<AbstractTensor>(factor) == nullptr;
+  });
+  if (!contains_nontensors) {  // tensor network canonization is a special case
+                               // that's done in
+                               // TensorNetwork
     TensorNetwork tn(factors_);
     auto canon_factor =
         tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), rapid);
@@ -96,30 +127,38 @@ ExprPtr Product::canonicalize_impl(bool rapid) {
                    });
     if (canon_factor) scalar_ *= canon_factor->as<Constant>().value();
     this->reset_hash_value();
-  } catch (std::logic_error
-               &) {  // if contains non-tensors, do commutation-checking resort
+  } else {  // if contains non-tensors, do commutation-checking resort
 
     // comparer that respects cardinal tensor labels
     auto &cardinal_tensor_labels =
         TensorCanonicalizer::cardinal_tensor_labels();
     auto local_compare = [&cardinal_tensor_labels](const ExprPtr &first,
                                                    const ExprPtr &second) {
-      if (first->is<Tensor>() && second->is<Tensor>()) {
+      if (first->is<Labeled>() && second->is<Labeled>()) {
         const auto first_label = first->as<Tensor>().label();
         const auto second_label = second->as<Tensor>().label();
-        const bool first_is_cardinal = ranges::any_of(
+        if (first_label == second_label) return *first < *second;
+        const auto first_is_cardinal_it = ranges::find_if(
             cardinal_tensor_labels,
             [&first_label](const std::wstring &l) { return l == first_label; });
-        const bool second_is_cardinal = ranges::any_of(
+        const auto first_is_cardinal =
+            first_is_cardinal_it != ranges::end(cardinal_tensor_labels);
+        const auto second_is_cardinal_it = ranges::find_if(
             cardinal_tensor_labels, [&second_label](const std::wstring &l) {
               return l == second_label;
             });
-        if (!(first_is_cardinal ^ second_is_cardinal))
-          return *first < *second;
-        else if (first_is_cardinal)
+        const auto second_is_cardinal =
+            second_is_cardinal_it != ranges::end(cardinal_tensor_labels);
+        if (first_is_cardinal && second_is_cardinal)
+          return first_is_cardinal_it < second_is_cardinal_it;
+        else if (first_is_cardinal && !second_is_cardinal)
           return true;
-        else  // if (second_is_cardinal)
+        else if (!first_is_cardinal && second_is_cardinal)
           return false;
+        else {
+          assert(!first_is_cardinal && !second_is_cardinal);
+          return *first < *second;
+        }
       } else
         return *first < *second;
     };
@@ -139,7 +178,7 @@ ExprPtr Product::canonicalize_impl(bool rapid) {
           [&local_compare](const ExprPtr &first, const ExprPtr &second) {
             bool result = (first->commutes_with(*second))
                               ? local_compare(first, second)
-                              : true;
+                              : false;
             return result;
           });
     }
@@ -265,8 +304,7 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
       auto reduce_range = [first_it, this, nidentical](auto &begin, auto &end) {
         if ((*first_it)->template is<Tensor>()) {
           Product tensor_as_Product{};
-          tensor_as_Product.append(static_cast<double>(nidentical),
-                                   (*first_it)->as<Tensor>());
+          tensor_as_Product.append(nidentical, (*first_it)->as<Tensor>());
           (*first_it) = std::make_shared<Product>(tensor_as_Product);
           this->summands_.erase(first_it + 1, end);
         } else if ((*first_it)->template is<Product>()) {
@@ -274,7 +312,7 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
           for (auto it = begin + 1; it != end; ++it) {
             if ((*it)->template is<Tensor>()) {
               Product tensor_as_Product{};
-              tensor_as_Product.append(1.0, (*it)->template as<Tensor>());
+              tensor_as_Product.append(1, (*it)->template as<Tensor>());
               (*it) = std::make_shared<Product>(tensor_as_Product);
             }
             if ((*it)->template is<Product>()) {

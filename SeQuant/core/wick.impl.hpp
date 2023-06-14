@@ -454,7 +454,6 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
                    << summands.size() << " terms = " << to_latex_align(result)
                    << std::endl;
 
-#ifdef SEQUANT_HAS_EXECUTION_HEADER
       auto wick_task = [&result, &result_mtx, this,
                         &count_only](const ExprPtr &input) {
         WickTheorem wt(input->clone(), *this);
@@ -465,22 +464,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
           result->append(task_result);
         }
       };
-      std::for_each(std::execution::par_unseq, begin(summands), end(summands),
-                    wick_task);
-#else
-      auto wick_task = [&summands, &result, &result_mtx, this,
-                        &count_only](size_t task_id) {
-        auto &summand = summands[task_id];
-        WickTheorem wt(summand->clone(), *this);
-        auto task_result = wt.compute(count_only);
-        stats() += wt.stats();
-        if (task_result) {
-          std::scoped_lock<std::mutex> lock(result_mtx);
-          result->append(task_result);
-        }
-      };
-      parallel_for_each(wick_task, summands.size());
-#endif
+      sequant::for_each(summands, wick_task);
 
       // if the sum is empty return zero
       // if the sum has 1 summand, return it directly

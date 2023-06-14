@@ -4,6 +4,7 @@
 
 #include <SeQuant/core/parse/rpn.hpp>
 #include <SeQuant/core/parse/token_sequant.hpp>
+#include <SeQuant/core/rational.hpp>
 #include "catch.hpp"
 
 TEST_CASE("TEST_RPN", "[parse_expr]") {
@@ -13,8 +14,8 @@ TEST_CASE("TEST_RPN", "[parse_expr]") {
   using Plus = OperatorPlus;
   using Minus = OperatorMinus;
   using sequant::Constant;
-  using sequant::Tensor;
   using sequant::ex;
+  using sequant::Tensor;
 
   auto rpn = ReversePolishNotation{};
 
@@ -31,18 +32,20 @@ TEST_CASE("TEST_RPN", "[parse_expr]") {
 
   SECTION("add tokens: simple") {
     rpn.reset();
-    rpn.add_operand(token<Number>(0.5));
+    rpn.add_operand(token<Number>(sequant::rational{1, 2}));
     rpn.add_operator(token<Times>());
-    rpn.add_operand(token<Number>(0.3));
+    rpn.add_operand(token<Number>(sequant::rational{3, 10}));
     // expression: '1/2 * 1/3'
     // post-fix notation (aka Reverse Polish Notation):
     //                   '1/2 1/3 *'
     REQUIRE(rpn.close());
     REQUIRE(rpn.tokens().size() == 3);
     REQUIRE(rpn.tokens().at(0)->is<Operand>());
-    REQUIRE(rpn.tokens().at(0)->as<Number>().clone() == ex<Constant>(0.5));
+    REQUIRE(rpn.tokens().at(0)->as<Number>().clone() ==
+            ex<Constant>(sequant::rational{1, 2}));
     REQUIRE(rpn.tokens().at(1)->is<Operand>());
-    REQUIRE(rpn.tokens().at(1)->as<Number>().clone() == ex<Constant>(0.3));
+    REQUIRE(rpn.tokens().at(1)->as<Number>().clone() ==
+            ex<Constant>(sequant::rational{3, 10}));
     REQUIRE(rpn.tokens().at(2)->is<Times>());
   }
 
@@ -57,13 +60,10 @@ TEST_CASE("TEST_RPN", "[parse_expr]") {
     // pos-fix notation:
     //                 '2 2/3 + 1 -'
     REQUIRE(rpn.close());
-    REQUIRE(rpn.tokens().at(0)->as<Number>().clone() ==
-            ex<Constant>(2));
-    REQUIRE(rpn.tokens().at(1)->as<Number>().clone() ==
-            ex<Constant>(3));
+    REQUIRE(rpn.tokens().at(0)->as<Number>().clone() == ex<Constant>(2));
+    REQUIRE(rpn.tokens().at(1)->as<Number>().clone() == ex<Constant>(3));
     REQUIRE(rpn.tokens().at(2)->is<Plus>());
-    REQUIRE(rpn.tokens().at(3)->as<Number>().clone() ==
-            ex<Constant>(1));
+    REQUIRE(rpn.tokens().at(3)->as<Number>().clone() == ex<Constant>(1));
     REQUIRE(rpn.tokens().at(4)->is<Minus>());
   }
 

@@ -18,7 +18,7 @@ namespace sequant {
 /// @return a substituted and scaled expression pointer
 ExprPtr transform_expr(const ExprPtr& expr,
                        const std::map<Index, Index>& index_replacements,
-                       double scaling_factor = 1.0);
+                       Constant::scalar_type scaling_factor = 1);
 
 /// @brief Preserving particle symmetry, swaps bra and ket labels on all tensors
 /// in an expression

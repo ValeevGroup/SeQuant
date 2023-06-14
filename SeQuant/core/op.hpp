@@ -418,7 +418,9 @@ bool Operator<S>::static_equal(const Expr &that) const {
 ///
 /// @tparam S specifies the particle statistics
 template <Statistics S>
-class NormalOperator : public Operator<S>, public AbstractTensor {
+class NormalOperator : public Operator<S>,
+                       public AbstractTensor,
+                       public Labeled {
  public:
   static constexpr Statistics statistics = S;
   using base_type = Operator<S>;
@@ -592,7 +594,7 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
   /// @return all possible values returned by label() for this operator type
   static const container::vector<std::wstring> &labels();
 
-  std::wstring label() const;
+  std::wstring_view label() const override;
 
   std::wstring to_latex() const override {
     std::wstring result;
@@ -818,7 +820,7 @@ class NormalOperator : public Operator<S>, public AbstractTensor {
     return S == Statistics::FermiDirac ? 1 : 2;
   }
   bool _is_cnumber() const override final { return false; }
-  std::wstring _label() const override final { return label(); }
+  std::wstring_view _label() const override final { return label(); }
   std::wstring _to_latex() const override final { return to_latex(); }
   bool _transform_indices(
       const container::map<Index, Index> &index_map) override final {

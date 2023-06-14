@@ -19,6 +19,18 @@ inline ExprPtr& canonicalize(ExprPtr& expr) {
   return expr;
 }
 
+/// Recursively canonicalizes an Expr; like mutating canonicalize() but works
+/// for temporary expressions
+/// @param[in] expr_rv rvalue-ref-to-expression to be canonicalized
+/// @return canonicalized form of \p expr_rv
+inline ExprPtr canonicalize(ExprPtr&& expr_rv) {
+  const auto biproduct = expr_rv->canonicalize();
+  if (biproduct && biproduct->is<Constant>()) {
+    expr_rv = biproduct * expr_rv;
+  }
+  return std::move(expr_rv);
+}
+
 namespace detail {
 struct expand_visitor {
   void operator()(ExprPtr& expr) {
@@ -333,7 +345,7 @@ struct rapid_simplify_visitor {
     const auto expr_size = ranges::size(*expr);
     auto expr_product = std::static_pointer_cast<Product>(expr);
     if (expr_product->scalar() ==
-        0.) {  // if scalar = 0, make it 0 (too aggressive?)
+        0) {  // if scalar = 0, make it 0 (too aggressive?)
       expr = ex<Constant>(0);
       expr_changed = true;
     } else if (expr_size ==
@@ -341,8 +353,8 @@ struct rapid_simplify_visitor {
       expr = ex<Constant>(expr_product->scalar());
       expr_changed = true;
     } else if (expr_size == 1 &&
-               expr_product->scalar() == 1.) {  // if product has 1 term and the
-                                                // scalar is 1, lift the factor
+               expr_product->scalar() == 1) {  // if product has 1 term and the
+                                               // scalar is 1, lift the factor
       expr = (*expr)[0];
       expr_changed = true;
     }

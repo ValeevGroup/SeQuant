@@ -30,8 +30,8 @@ inline ExprPtr operator*(const ExprPtr &left, const ExprPtr &right) {
   abort();  // unreachable
 }
 
-/// Unlike @code operator*(const ExprPtr&, const ExprPtr&) @endcode this produces
-/// a non-commutative product (i.e. NCProduct)
+/// Unlike @code operator*(const ExprPtr&, const ExprPtr&) @endcode this
+/// produces a non-commutative product (i.e. NCProduct)
 inline ExprPtr operator^(const ExprPtr &left, const ExprPtr &right) {
   auto left_is_product = left->is<Product>();
   auto right_is_product = right->is<Product>();
@@ -76,14 +76,14 @@ inline ExprPtr operator-(const ExprPtr &left, const ExprPtr &right) {
     return ex<Sum>(ExprPtrList{
         left,
         (right->is<Constant>() ? ex<Constant>(-right->as<Constant>().value())
-                               : ex<Product>(-1.0, ExprPtrList{right}))});
+                               : ex<Product>(-1, ExprPtrList{right}))});
   } else if (left_is_sum) {
     auto left_sum = std::static_pointer_cast<Sum>(left);
     auto result = std::make_shared<Sum>(*left_sum);
     if (right->is<Constant>())
       result->append(ex<Constant>(-right->as<Constant>().value()));
     else
-      result->append(ex<Product>(-1.0, ExprPtrList{right}));
+      result->append(ex<Product>(-1, ExprPtrList{right}));
     return result;
   }
   abort();  // unreachable

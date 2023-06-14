@@ -108,6 +108,9 @@ add_feature_info(PYTHON SEQUANT_PYTHON "PySeQuant: Python bindings to SeQuant")
 option(SEQUANT_EVAL_TRACE "Enable tracing of the expression interpretation (configure TiledArray with TA_TENSOR_MEM_PROFILE=ON to trace memory use)" OFF)
 add_feature_info(EVAL_TRACE SEQUANT_EVAL_TRACE "Trace expression interpretation")
 
+option(SEQUANT_USE_SYSTEM_BOOST_HASH "Use system Boost for hashing? Set to OFF to make hashing independent of Boost, thus value-portable" ON)
+add_feature_info(SEQUANT_USE_SYSTEM_BOOST_HASH SEQUANT_USE_SYSTEM_BOOST_HASH "SeQuant uses system Boost for hashing (thus results depend on the Boost version)")
+
 ##########################
 # Prerequisites
 ##########################
@@ -217,6 +220,7 @@ set(SeQuant_src
         SeQuant/core/algorithm.hpp
         SeQuant/core/tensor_network.cpp
         SeQuant/core/tensor_network.hpp
+        SeQuant/core/runtime.cpp
         SeQuant/core/runtime.hpp
         SeQuant/core/utility.hpp
         SeQuant/core/bliss.hpp
@@ -233,6 +237,10 @@ set(SeQuant_src
         SeQuant/core/parse/parse_expr.cpp
         SeQuant/core/optimize.hpp
         SeQuant/core/wstring.hpp
+        SeQuant/core/interval.hpp
+        SeQuant/core/complex.hpp
+        SeQuant/core/rational.hpp
+        SeQuant/core/math.hpp
         SeQuant/core/optimize/optimize.cpp
         SeQuant/core/optimize/fusion.hpp
         SeQuant/core/optimize/fusion.cpp
@@ -306,6 +314,27 @@ target_compile_features(SeQuant INTERFACE "cxx_std_17")
 if (SEQUANT_EVAL_TRACE)
     target_compile_definitions(SeQuant PUBLIC SEQUANT_EVAL_TRACE=1)
 endif ()
+if (SEQUANT_USE_SYSTEM_BOOST_HASH)
+    target_compile_definitions(SeQuant PUBLIC SEQUANT_USE_SYSTEM_BOOST_HASH=1)
+else()
+    # if not to use Boost Hash, unpack bundled Boost ContainerHash 1.81
+    file(MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/SeQuant/external)
+    execute_process(
+            COMMAND ${CMAKE_COMMAND} -E tar xzf ${PROJECT_SOURCE_DIR}/SeQuant/external/boost.tar.gz
+            WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/SeQuant/external
+            RESULT_VARIABLE UNPACK_BOOST_RESULT
+            OUTPUT_VARIABLE UNPACK_BOOST_OUTPUT
+            ERROR_VARIABLE UNPACK_BOOST_OUTPUT
+    )
+    if (NOT UNPACK_BOOST_RESULT EQUAL 0)
+        message(FATAL_ERROR "Failed to unpack the bundled Boost! The tar command output:\n${UNPACK_BOOST_OUTPUT}")
+    endif()
+    install(DIRECTORY ${PROJECT_BINARY_DIR}/SeQuant
+            COMPONENT sequant
+            DESTINATION "${SEQUANT_INSTALL_INCLUDEDIR}"
+            FILES_MATCHING PATTERN "*.hpp"
+            )
+endif ()
 install(TARGETS SeQuant-bliss EXPORT sequant COMPONENT sequant LIBRARY DESTINATION ${SEQUANT_INSTALL_LIBDIR})
 install(TARGETS SeQuant EXPORT sequant COMPONENT sequant LIBRARY DESTINATION ${SEQUANT_INSTALL_LIBDIR})
 install(DIRECTORY SeQuant
@@ -353,6 +382,7 @@ if (BUILD_TESTING)
             tests/unit/test_clone_packed.cpp
             tests/unit/test_cache_manager.cpp
             tests/unit/test_runtime.cpp
+            tests/unit/test_math.cpp
             )
 
     if (TARGET tiledarray)

@@ -15,11 +15,11 @@ auto make_sr_op(F f) {
 
 template <class... Args>
 ExprPtr VacuumAverage(const ExprPtr& e, const Args&... args) {
-  return sequant::mbpt::sr::so::vac_av(e, args...);
+  return sequant::mbpt::sr::vac_av(e, args...);
 }
 
 #define SR_OP(OP) \
-#OP, [](size_t Bra) { return sequant::mbpt::sr::so::OP(Bra); }, py::arg("Bra")
+#OP, [](size_t Bra) { return sequant::mbpt::sr::OP(Bra); }, py::arg("Bra")
 
 inline void __init__(py::module m) {
   sequant::mbpt::set_default_convention();
@@ -29,8 +29,8 @@ inline void __init__(py::module m) {
   sequant::TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
 
-  m.def("F", &sequant::mbpt::sr::so::F);
-  m.def("H", &sequant::mbpt::sr::so::H, py::arg("antisymmetric") = false);
+  m.def("F", &sequant::mbpt::sr::F);
+  m.def("H", &sequant::mbpt::sr::H);
 
   m.def(SR_OP(A));
   m.def(SR_OP(T));

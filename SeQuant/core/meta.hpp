@@ -7,12 +7,16 @@
 
 #include <complex>
 #include <memory>
-#include <type_traits>
 #include <range/v3/range/access.hpp>
+#include <type_traits>
 
 #include <range/v3/range/access.hpp>
 
 namespace sequant {
+
+template <typename T>
+struct Complex;
+
 namespace meta {
 
 template <typename T>
@@ -89,6 +93,8 @@ struct is_complex : std::false_type {};
 template <class T>
 struct is_complex<std::complex<T>> : std::true_type {};
 template <class T>
+struct is_complex<sequant::Complex<T>> : std::true_type {};
+template <class T>
 static constexpr bool is_complex_v = is_complex<T>::value;
 
 ///////// is_less_than_comparable /////////
@@ -131,7 +137,8 @@ static constexpr bool tuple_has_type_v = tuple_has_type<T, Tuple>::value;
 
 ///////// tuple_index_of /////////
 
-/// tuple_index_of<T, Tuple>::value evaluates to the position of the first appearance of T in Tuple, or, if not found, to a negative number
+/// tuple_index_of<T, Tuple>::value evaluates to the position of the first
+/// appearance of T in Tuple, or, if not found, to a negative number
 template <typename T, typename Tuple>
 struct tuple_index_of;
 
@@ -204,4 +211,4 @@ static constexpr bool is_range_v =
 }  // namespace meta
 }  // namespace sequant
 
-#endif //SEQUANT_META_HPP
+#endif  // SEQUANT_META_HPP
