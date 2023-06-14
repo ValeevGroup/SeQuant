@@ -17,10 +17,84 @@ namespace sequant {
 namespace mbpt {
 namespace sr {
 
-/// single reference operator algebra can be screened by tracking total
-/// _particle_ number and number of quasiparticles in occupied/unoccupied space
-using qns_t = mbpt::ParticleNumberChange<2>;
-using op_t = mbpt::Operator<qns_t>;
+using tag_t = struct {};
+
+// clang-format off
+/// single reference operator algebra can be screened by tracking the number of creators and annihilators in the occupied and unoccupied space
+/// the order of of elements is {# of occupied creators, # of occupied annihilators, # of unoccupied creators, # of unoccupied annihilators}
+/// \note use signed integer, although could use unsigned in this case, so that can represent quantum numbers and their changes by the same type
+// clang-format on
+using qns_t = mbpt::QuantumNumberChange<4, tag_t, std::int64_t>;
+/// changes in quantum number represented by quantum numbers themselves
+using qnc_t = qns_t;
+using op_t = mbpt::Operator<qnc_t>;
+
+// clang-format off
+/// @return the number of creators in \p qns acting on space \p s
+/// @pre `(s.type()==IndexSpace::Type::active_occupied || s.type()==IndexSpace::Type::active_unoccupied)&&s.qns()==IndexSpace::null_qns`
+// clang-format on
+qninterval_t ncre(qns_t qns, const IndexSpace& s);
+
+// clang-format off
+/// @return the number of creators in \p qns acting on space \p s
+/// @pre `s==IndexSpace::Type::active_occupied || s==IndexSpace::Type::active_unoccupied`
+// clang-format on
+qninterval_t ncre(qns_t qns, const IndexSpace::Type& s);
+
+// clang-format off
+/// @return the number of creators in \p qns acting on the occupied space
+// clang-format on
+qninterval_t ncre_occ(qns_t qns);
+
+// clang-format off
+/// @return the number of creators in \p qns acting on the unoccupied space
+// clang-format on
+qninterval_t ncre_uocc(qns_t qns);
+
+// clang-format off
+/// @return the total number of creators in \p qns
+// clang-format on
+qninterval_t ncre(qns_t qns);
+
+// clang-format off
+/// @return the number of annihilators in \p qns acting on space \p s
+/// @pre `(s.type()==IndexSpace::Type::active_occupied || s.type()==IndexSpace::Type::active_unoccupied)&&s.qns()==IndexSpace::null_qns`
+// clang-format on
+qninterval_t nann(qns_t qns, const IndexSpace& s);
+
+// clang-format off
+/// @return the number of annihilators in \p qns acting on space \p s
+/// @pre `s==IndexSpace::Type::active_occupied || s==IndexSpace::Type::active_unoccupied`
+// clang-format on
+qninterval_t nann(qns_t qns, const IndexSpace::Type& s);
+
+// clang-format off
+/// @return the number of annihilators in \p qns acting on the occupied space
+// clang-format on
+qninterval_t nann_occ(qns_t qns);
+
+// clang-format off
+/// @return the number of annihilators in \p qns acting on the unoccupied space
+// clang-format on
+qninterval_t nann_uocc(qns_t qns);
+
+// clang-format off
+/// @return the total number of annihilators in \p qns
+// clang-format on
+qninterval_t nann(qns_t qns);
+
+/// combines 2 sets of quantum numbers using Wick's theorem
+qns_t combine(qns_t, qns_t);
+
+}  // namespace sr
+}  // namespace mbpt
+
+/// @param qns the quantum numbers to adjoint
+/// @return the adjoint of \p qns
+mbpt::sr::qns_t adjoint(mbpt::sr::qns_t);
+
+namespace mbpt {
+namespace sr {
 
 class make_op {
   std::size_t nbra_, nket_;
@@ -116,6 +190,10 @@ ExprPtr vac_av(
 }  // namespace op
 
 }  // namespace sr
+
+extern template class Operator<sr::qns_t, Statistics::FermiDirac>;
+extern template class Operator<sr::qns_t, Statistics::BoseEinstein>;
+
 }  // namespace mbpt
 }  // namespace sequant
 

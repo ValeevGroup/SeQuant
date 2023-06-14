@@ -15,6 +15,87 @@ namespace sequant {
 namespace mbpt {
 namespace sr {
 
+qninterval_t ncre(qns_t qns, const IndexSpace::Type& s) {
+  assert(s == IndexSpace::active_occupied ||
+         s == IndexSpace::active_unoccupied);
+  return s == IndexSpace::active_occupied ? qns[0] : qns[2];
+}
+
+qninterval_t ncre(qns_t qns, const IndexSpace& s) {
+  assert((s.type() == IndexSpace::active_occupied ||
+          s.type() == IndexSpace::active_unoccupied) &&
+         s.qns() == IndexSpace::nullqns);
+  return s.type() == IndexSpace::active_occupied ? qns[0] : qns[2];
+}
+
+qninterval_t ncre_occ(qns_t qns) {
+  return ncre(qns, IndexSpace::active_occupied);
+}
+
+qninterval_t ncre_uocc(qns_t qns) {
+  return ncre(qns, IndexSpace::active_unoccupied);
+}
+
+qninterval_t ncre(qns_t qns) { return ncre_occ(qns) + ncre_uocc(qns); }
+
+qninterval_t nann(qns_t qns, const IndexSpace::Type& s) {
+  assert(s == IndexSpace::active_occupied ||
+         s == IndexSpace::active_unoccupied);
+  return s == IndexSpace::active_occupied ? qns[1] : qns[3];
+}
+
+qninterval_t nann(qns_t qns, const IndexSpace& s) {
+  assert((s.type() == IndexSpace::active_occupied ||
+          s.type() == IndexSpace::active_unoccupied) &&
+         s.qns() == IndexSpace::nullqns);
+  return s.type() == IndexSpace::active_occupied ? qns[1] : qns[3];
+}
+
+qninterval_t nann_occ(qns_t qns) {
+  return nann(qns, IndexSpace::active_occupied);
+}
+
+qninterval_t nann_uocc(qns_t qns) {
+  return nann(qns, IndexSpace::active_unoccupied);
+}
+
+qninterval_t nann(qns_t qns) { return nann_occ(qns) + nann_uocc(qns); }
+
+qns_t combine(qns_t a, qns_t b) {
+  const auto ncontr_uocc =
+      qninterval_t{0, std::min(ncre(b, IndexSpace::active_unoccupied).upper(),
+                               nann(a, IndexSpace::active_unoccupied).upper())};
+  const auto ncontr_occ =
+      qninterval_t{0, std::min(nann(b, IndexSpace::active_occupied).upper(),
+                               ncre(a, IndexSpace::active_occupied).upper())};
+  const auto nc_occ =
+      nonnegative(ncre(a, IndexSpace::active_occupied) +
+                  ncre(b, IndexSpace::active_occupied) - ncontr_occ);
+  const auto nc_uocc =
+      nonnegative(ncre(a, IndexSpace::active_unoccupied) +
+                  ncre(b, IndexSpace::active_unoccupied) - ncontr_uocc);
+  const auto na_occ =
+      nonnegative(nann(a, IndexSpace::active_occupied) +
+                  nann(b, IndexSpace::active_occupied) - ncontr_occ);
+  const auto na_uocc =
+      nonnegative(nann(a, IndexSpace::active_unoccupied) +
+                  nann(b, IndexSpace::active_unoccupied) - ncontr_uocc);
+  return qns_t{nc_occ, na_occ, nc_uocc, na_uocc};
+}
+
+}  // namespace sr
+}  // namespace mbpt
+
+mbpt::sr::qns_t adjoint(mbpt::sr::qns_t qns) {
+  return mbpt::sr::qns_t{nann(qns, IndexSpace::active_occupied),
+                         ncre(qns, IndexSpace::active_occupied),
+                         nann(qns, IndexSpace::active_unoccupied),
+                         ncre(qns, IndexSpace::active_unoccupied)};
+}
+
+namespace mbpt {
+namespace sr {
+
 inline constexpr int64_t fac(std::size_t n) { return sequant::factorial(n); }
 
 make_op::make_op(std::size_t nbra, std::size_t nket, OpType op)
@@ -152,8 +233,8 @@ ExprPtr H1() {
         using namespace sequant::mbpt::sr;
         return sr::H1();
       },
-      [=](qns_t& qns) {
-        qns += qns_t{{0, 0}, {-1, +1}};
+      [=](qnc_t& qns) {
+        qns = combine(qnc_t{{0, 1}, {0, 1}, {0, 1}, {0, 1}}, qns);
       });
 }
 
@@ -163,8 +244,8 @@ ExprPtr H2() {
                     using namespace sequant::mbpt::sr;
                     return sr::H2();
                   },
-                  [=](qns_t& qns) {
-                    qns += qns_t{{0, 0}, {-2, +2}};
+                  [=](qnc_t& qns) {
+                    qns = combine(qnc_t{{0, 2}, {0, 2}, {0, 2}, {0, 2}}, qns);
                   });
 }
 
@@ -177,8 +258,8 @@ ExprPtr T_(std::size_t K) {
                     using namespace sequant::mbpt::sr;
                     return sr::T_(K);
                   },
-                  [=](qns_t& qns) {
-                    qns += qns_t{size_t{0}, K};
+                  [=](qnc_t& qns) {
+                    qns = combine(qnc_t{0ul, K, K, 0ul}, qns);
                   });
 }
 
@@ -199,8 +280,8 @@ ExprPtr Lambda_(std::size_t K) {
                     using namespace sequant::mbpt::sr;
                     return sr::Lambda_(K);
                   },
-                  [=](qns_t& qns) {
-                    qns += qns_t{size_t{0}, -K};
+                  [=](qnc_t& qns) {
+                    qns = combine(qnc_t{K, 0ul, 0ul, K}, qns);
                   });
 }
 
@@ -221,13 +302,13 @@ ExprPtr A(std::size_t K) {
                     using namespace sequant::mbpt::sr;
                     return sr::A(K);
                   },
-                  [=](qns_t& qns) {
-                    qns += qns_t{size_t{0}, -K};
+                  [=](qnc_t& qns) {
+                    qns = combine(qnc_t{K, 0ul, 0ul, K}, qns);
                   });
 }
 
-bool contains_rank(const ExprPtr& op_or_op_product, qns_t::interval_t k) {
-  qns_t qns{0, 0};
+bool contains_qns(const ExprPtr& op_or_op_product, const qns_t target_qns) {
+  qns_t qns;
   if (op_or_op_product.is<Product>()) {
     const auto& op_product = op_or_op_product.as<Product>();
     for (auto& op_ptr : ranges::views::reverse(op_product.factors())) {
@@ -235,11 +316,11 @@ bool contains_rank(const ExprPtr& op_or_op_product, qns_t::interval_t k) {
       const auto& op = op_ptr->template as<op_t>();
       qns = op(qns);
     }
-    return qns.overlaps(std::array{qns_t::interval_t{0, 0}, k});
+    return qns.overlaps_with(target_qns);
   } else if (op_or_op_product.is<op_t>()) {
     const auto& op = op_or_op_product.as<op_t>();
-    qns = op(qns);
-    return qns.overlaps(std::array{qns_t::interval_t{0, 0}, k});
+    qns = op();
+    return qns.overlaps_with(target_qns);
   } else
     throw std::invalid_argument(
         "sequant::mbpt::sr::contains_rank(op_or_op_product): op_or_op_product "
@@ -248,11 +329,14 @@ bool contains_rank(const ExprPtr& op_or_op_product, qns_t::interval_t k) {
 
 bool contains_up_to_rank(const ExprPtr& op_or_op_product,
                          const unsigned long k) {
-  return contains_rank(op_or_op_product, qns_t::interval_t{0ul, k});
+  assert(op_or_op_product.is<op_t>() || op_or_op_product.is<Product>());
+  return contains_qns(op_or_op_product,
+                      qns_t{{0ul, 0ul}, {0ul, k}, {0ul, k}, {0ul, 0ul}});
 }
 
 bool contains_rank(const ExprPtr& op_or_op_product, const unsigned long k) {
-  return contains_rank(op_or_op_product, qns_t::interval_t{k, k});
+  assert(op_or_op_product.is<op_t>() || op_or_op_product.is<Product>());
+  return contains_qns(op_or_op_product, qns_t{0ul, k, k, 0ul});
 }
 
 ExprPtr vac_av(
@@ -282,7 +366,7 @@ ExprPtr vac_av(
           }
           ++pos;
         } else if (factor.is<FNOperator>() || factor.is<BNOperator>()) {
-          ++pos; // skip FNOperator and BNOperator
+          ++pos;  // skip FNOperator and BNOperator
         }
       }
 
@@ -350,5 +434,87 @@ ExprPtr vac_av(
 }  // namespace op
 
 }  // namespace sr
+
+// must be defined including op.ipp since it's used there
+template <>
+bool is_vacuum<sr::qns_t>(sr::qns_t qns) {
+  return qns == sr::qns_t{};
+}
+
+}  // namespace mbpt
+
+template <Statistics S>
+std::wstring to_latex(const mbpt::Operator<mbpt::sr::qns_t, S>& op) {
+  using namespace sequant::mbpt;
+  using namespace sequant::mbpt::sr;
+
+  auto lbl = std::wstring(op.label());
+  std::wstring result = L"{\\hat{" + lbl + L"}";
+  auto it = label2optype.find(lbl);
+  OpType optype = OpType::invalid;
+  if (it != label2optype.end()) {  // handle special cases
+    optype = it->second;
+    if (optype == OpType::lambda) {  // λ -> \lambda
+      result = L"{\\hat{\\lambda}";
+    }
+    if (to_class(optype) == OpClass::gen) {
+      result += L"}";
+      return result;
+    }
+  }
+
+  // generic operator ... can only handle definite case
+  const auto dN = op();
+  if (!is_definite(ncre_occ(dN)) || !is_definite(nann_occ(dN)) ||
+      !is_definite(ncre_uocc(dN)) || !is_definite(nann_uocc(dN))) {
+    throw std::invalid_argument(
+        "to_latex(const Operator<qns_t, S>& op): "
+        "can only handle  generic operators with definite cre/ann numbers");
+  }
+  // pure quasiparticle creator/annihilator?
+  const auto qprank_cre = nann_occ(dN).lower() + ncre_uocc(dN).lower();
+  const auto qprank_ann = ncre_occ(dN).lower() + nann_uocc(dN).lower();
+  const auto qppure = qprank_cre == 0 || qprank_ann == 0;
+  auto qpaction = to_class(optype);
+  if (qppure) {
+    if (qprank_cre) {
+      // if operator's action implied by the label and actual action agrees, use
+      // subscript always
+      std::wstring baseline_char = (qpaction != OpClass::deex ? L"_" : L"^");
+      if (nann_occ(dN).lower() == ncre_uocc(dN).lower())
+        result +=
+            baseline_char + L"{" + std::to_wstring(nann_occ(dN).lower()) + L"}";
+      else
+        result += baseline_char + L"{" + std::to_wstring(nann_occ(dN).lower()) +
+                  L"," + std::to_wstring(ncre_uocc(dN).lower()) + L"}";
+    } else {
+      // if operator's action implied by the label and actual action agrees, use
+      // subscript always
+      std::wstring baseline_char = (qpaction != OpClass::deex ? L"^" : L"_");
+      if (nann_uocc(dN).lower() == ncre_occ(dN).lower()) {
+        result +=
+            baseline_char + L"{" + std::to_wstring(ncre_occ(dN).lower()) + L"}";
+      } else
+        result += baseline_char + L"{" + std::to_wstring(ncre_occ(dN).lower()) +
+                  L"," + std::to_wstring(nann_uocc(dN).lower()) + L"}";
+    }
+  } else {  // not pure qp creator/annihilator
+    result += L"_{" + std::to_wstring(nann_occ(dN).lower()) + L"," +
+              std::to_wstring(ncre_uocc(dN).lower()) + L"}^{" +
+              std::to_wstring(ncre_occ(dN).lower()) + L"," +
+              std::to_wstring(nann_uocc(dN).lower()) + L"}";
+  }
+  result += L"}";
+  return result;
+}
+
+}  // namespace sequant
+
+#include "SeQuant/domain/mbpt/op.ipp"
+
+namespace sequant {
+namespace mbpt {
+template class Operator<sr::qns_t, Statistics::FermiDirac>;
+template class Operator<sr::qns_t, Statistics::BoseEinstein>;
 }  // namespace mbpt
 }  // namespace sequant

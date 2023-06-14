@@ -100,7 +100,7 @@ class screened_vac_av {
         if (canonical_only) {
           if (current_rank < prev_rank)  // if T ranks are not increasing, omit
             canonical = false;
-          else {                         // else keep track of degeneracy
+          else {  // else keep track of degeneracy
             assert(current_rank != 0);
             if (current_rank == prev_rank)
               ++current_partition_size;
@@ -237,7 +237,7 @@ class screened_vac_av {
         if (canonical_only) {
           if (current_rank < prev_rank)  // if T ranks are not increasing, omit
             canonical = false;
-          else {                         // else keep track of degeneracy
+          else {  // else keep track of degeneracy
             assert(current_rank != 0);
             if (current_rank == prev_rank) {
               ++current_partition_size;
@@ -271,7 +271,7 @@ class screened_vac_av {
     }
   }  // screened_vac_av_lambda
 
-};   // screened_vac_av
+};  // screened_vac_av
 
 /// Evaluates coupled-cluster amplitude equation, `<P|(H exp(T(N))_c|0>`,
 /// for particular `P` and `N`
@@ -423,9 +423,9 @@ std::vector<ExprPtr> cceqs::t(bool screen, bool use_topology,
     std::vector<ExprPtr> result(P + 1);
     for (auto p = P; p >= PMIN; --p) {
       // 2.a. screen out terms that cannot give nonzero after projection onto
-      // <P|
+      // <p|
       std::shared_ptr<Sum>
-          hbar_p;     // products that can produce excitations of rank p
+          hbar_p;  // products that can produce excitations of rank p
       std::shared_ptr<Sum>
           hbar_le_p;  // keeps products that can produce excitations rank <=p
       for (auto& term : *hbar) {
@@ -468,7 +468,7 @@ std::vector<ExprPtr> cceqs::t(bool screen, bool use_topology,
 std::vector<ExprPtr> cceqs::lambda(bool screen, bool use_topology,
                                    bool use_connectivity, bool canonical_only) {
   constexpr bool use_ops = true;
-  if (use_ops) { // in development
+  if (use_ops) {  // in development
     // construct hbar
     auto hbar = op::H();
     auto H_Tk = hbar;
@@ -477,12 +477,12 @@ std::vector<ExprPtr> cceqs::lambda(bool screen, bool use_topology,
       hbar += H_Tk;
     }
 
-//    std::wcout << "hbar: \n" << to_latex_align(hbar, 0, 4) << std::endl;
+    //    std::wcout << "hbar: \n" << to_latex_align(hbar, 0, 4) << std::endl;
     // multiply with (1 + Λ)
     const auto One = ex<Constant>(1);
     auto lhbar = simplify((One + op::Lambda(N)) * hbar);
 
-//    std::wcout << "lhbar: \n" << to_latex_align(lhbar, 0, 4) << std::endl;
+    //    std::wcout << "lhbar: \n" << to_latex_align(lhbar, 0, 4) << std::endl;
 
     // 2. project onto each manifold, screen, lower to tensor form and wick it
     std::vector<ExprPtr> result(P + 1);
@@ -490,13 +490,13 @@ std::vector<ExprPtr> cceqs::lambda(bool screen, bool use_topology,
       // 2.a. screen out terms that cannot give nonzero after projection onto
       // <P|
       std::shared_ptr<Sum>
-          hbar_p;     // products that can produce excitations of rank p
+          hbar_p;  // products that can produce excitations of rank p
       std::shared_ptr<Sum>
           hbar_le_p;  // keeps products that can produce excitations rank <=p
       for (auto& term : *lhbar) {  // pick terms from lhbar
         assert(term->is<Product>() || term->is<op_t>());
 
-//        auto which_term = to_latex(term);
+        //        auto which_term = to_latex(term);
 
         if (op::contains_up_to_rank(term, p)) {
           if (!hbar_le_p)
@@ -511,7 +511,7 @@ std::vector<ExprPtr> cceqs::lambda(bool screen, bool use_topology,
           }
         }
       }
-      lhbar = hbar_le_p; // not needed
+      lhbar = hbar_le_p;  // not needed
 
       if (p == 2) {
         std::wcout << "p = " << p << std::endl;
@@ -524,7 +524,8 @@ std::vector<ExprPtr> cceqs::lambda(bool screen, bool use_topology,
       // 2.b multiply by adjoint of A(P) on the right side
 
       auto A_hbar = simplify(hbar_p * adjoint(op::A(p)));
-//      std::wcout << "Ahbar: \n" << to_latex_align(A_hbar, 0, 4) << std::endl;
+      //      std::wcout << "Ahbar: \n" << to_latex_align(A_hbar, 0, 4) <<
+      //      std::endl;
 
       // temp
       std::vector<std::pair<std::wstring, std::wstring>> new_op_connect = {
@@ -534,8 +535,8 @@ std::vector<ExprPtr> cceqs::lambda(bool screen, bool use_topology,
       // 2.c compute vacuum average
       result.at(p) = op::vac_av(A_hbar, new_op_connect);
       simplify(result.at(p));
-//      std::wcout << "result.at(p): \n"
-//                 << to_latex_align(result.at(p), 0, 4) << std::endl;
+      //      std::wcout << "result.at(p): \n"
+      //                 << to_latex_align(result.at(p), 0, 4) << std::endl;
     }
     return result;
   } else {

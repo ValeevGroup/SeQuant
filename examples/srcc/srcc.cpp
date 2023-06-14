@@ -51,6 +51,7 @@ class compute_cceqvec {
       // antisymmetric amplitudes
       if (mbpt::get_default_formalism().two_body_interaction() ==
           mbpt::TwoBodyInteraction::Antisymm) {
+        if (R == 1 && N == 1) runtime_assert(eqvec[R]->size() == 8);
         if (R == 1 && N == 2) runtime_assert(eqvec[R]->size() == 14);
         if (R == 2 && N == 2) runtime_assert(eqvec[R]->size() == 31);
         if (R == 1 && N == 3) runtime_assert(eqvec[R]->size() == 15);
@@ -80,7 +81,7 @@ class compute_all {
   void operator()(bool print = true, bool screen = true,
                   bool use_topology = true, bool use_connectivity = true,
                   bool canonical_only = true) {
-    for (size_t N = 2; N <= NMAX; ++N)
+    for (size_t N = 1; N <= NMAX; ++N)
       compute_cceqvec{N, 1, N}(print, screen, use_topology, use_connectivity,
                                canonical_only);
   }

@@ -34,6 +34,8 @@ std::wstring to_wstring(const boost::rational<T>& i) {
 
 namespace sequant {
 using rational = boost::rational<std::int64_t>;
+/// shorter=sweeter? sometimes
+using ratio = rational;
 
 template <typename T, typename = std::enable_if_t<std::is_floating_point_v<T>>>
 inline constexpr rational to_rational(
@@ -79,6 +81,12 @@ inline constexpr rational to_rational(
 template <typename T, typename = std::enable_if_t<std::is_integral_v<T>>>
 constexpr rational to_rational(T t) {
   return rational{t};
+}
+
+template <typename T, typename = std::enable_if_t<std::is_floating_point_v<T> ||
+                                                  std::is_integral_v<T>>>
+inline constexpr ratio to_ratio(T t) {
+  return to_rational(t);
 }
 
 }  // namespace sequant

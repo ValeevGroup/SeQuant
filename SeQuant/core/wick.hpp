@@ -930,7 +930,7 @@ class WickTheorem {
     }
   }
 
-  /// @param[in,out] on input, Wick theorem result, on output the result of
+  /// @param[in,out] on input, Wick's theorem result, on output the result of
   /// reducing the overlaps
   void reduce(ExprPtr &expr) const;
 };

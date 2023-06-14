@@ -262,6 +262,7 @@ set(SeQuant_src
         SeQuant/domain/mbpt/formalism.cpp
         SeQuant/domain/mbpt/op.cpp
         SeQuant/domain/mbpt/op.hpp
+        SeQuant/domain/mbpt/op.ipp
         SeQuant/domain/mbpt/spin.hpp
         SeQuant/domain/mbpt/spin.cpp
         SeQuant/domain/mbpt/sr/sr.cpp
