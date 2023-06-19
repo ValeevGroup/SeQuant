@@ -32,11 +32,11 @@ TEST_CASE("NBodyOp", "[mbpt]") {
 
       REQUIRE(f1.label() == L"f");
 
-      {  // exact compare
+      {                                          // exact compare
         using namespace boost::numeric::interval_lib::compare::possible;
         REQUIRE(operator==(f1(), qns_t{1, 1}));  // produces single replacement
-        REQUIRE(operator!=
-                (f1(), qns_t{2, 2}));  // cannot produce double replacement
+        REQUIRE(operator!=(f1(),
+                           qns_t{2, 2}));  // cannot produce double replacement
         REQUIRE(operator==(f1(qns_t{5, 0}), qns_t{{5, 6}, {0, 1}}));
       }
     }
@@ -287,9 +287,15 @@ TEST_CASE("NBodyOp", "[mbpt]") {
           to_latex(simplify(f * t * t)) ==
           to_latex(ex<Constant>(2) * f * t1 * t2 + f * t1 * t1 + f * t2 * t2));
     } else {
+      //      std::wcout << "to_latex(simplify(f * t * t)): "
+      //                 << to_latex(simplify(f * t * t)) << std::endl;
+      //      REQUIRE(
+      //          to_latex(simplify(f * t * t)) ==
+      //          to_latex(f * t1 * t1 + f * t2 * t2 + ex<Constant>(2) * f * t1
+      //          * t2));
       REQUIRE(
           to_latex(simplify(f * t * t)) ==
-          to_latex(f * t1 * t1 + f * t2 * t2 + ex<Constant>(2) * f * t1 * t2));
+          to_latex(ex<Constant>(2) * f * t1 * t2 + f * t2 * t2 + f * t1 * t1));
     }
 
     if constexpr (hash_version() == hash::Impl::BoostPre181) {
@@ -297,9 +303,16 @@ TEST_CASE("NBodyOp", "[mbpt]") {
               to_latex(f * t1 * t1 * t1 + ex<Constant>(3) * f * t1 * t2 * t2 +
                        f * t2 * t2 * t2 + ex<Constant>(3) * f * t1 * t1 * t2));
     } else {
+      //      std::wcout << "to_latex(simplify(f * t * t * t): "
+      //                 << to_latex(simplify(f * t * t * t)) << std::endl;
+      //            REQUIRE(to_latex(simplify(f * t * t * t)) ==
+      //                    to_latex(f * t1 * t1 * t1 + ex<Constant>(3) * f * t1
+      //                    * t2 *
+      //         t2 + f * t2 * t2 * t2 + ex<Constant>(3) * f * t1 * t1 * t2));
       REQUIRE(to_latex(simplify(f * t * t * t)) ==
-              to_latex(f * t1 * t1 * t1 + ex<Constant>(3) * f * t1 * t2 * t2 +
-                       f * t2 * t2 * t2 + ex<Constant>(3) * f * t1 * t1 * t2));
+              to_latex(f * t2 * t2 * t2 + f * t1 * t1 * t1 +
+                       ex<Constant>(3) * f * t1 * t1 * t2 +
+                       ex<Constant>(3) * f * t1 * t2 * t2));
     }
 
   }  // SECTION("canonicalize")
@@ -496,7 +509,7 @@ TEST_CASE("MBPT", "[mbpt]") {
           REQUIRE(result->is<Sum>());    // sub ...
           REQUIRE(result->size() == 4);  // ... of 4 factors
         }));
-  }  // SECTION("SRSO Fock")
+  }                                      // SECTION("SRSO Fock")
 
   SECTION("SRSO-PNO") {
     using namespace sequant::mbpt::sr;
