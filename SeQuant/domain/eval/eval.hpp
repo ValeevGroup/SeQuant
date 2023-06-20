@@ -39,16 +39,6 @@ using remove_cvref_t = std::remove_cvref_t<T>;
 
 namespace sequant::eval {
 
-namespace {
-
-template <typename N, typename = void>
-struct IsFbNode_ : std::false_type {};
-
-template <typename T>
-struct IsFbNode_<FullBinaryNode<T>> : std::true_type {};
-
-}  // namespace
-
 template <typename T, typename = void>
 constexpr bool IsIterable{};
 
@@ -64,17 +54,26 @@ using IteredT =
     std::remove_reference_t<decltype(*std::begin(std::declval<I>()))>;
 
 template <typename, typename = void>
+constexpr bool HasAnnotMethod{};
+
+template <typename T>
+constexpr bool HasAnnotMethod<
+    T, std::void_t<decltype(std::declval<remove_cvref_t<T>>().annot())>> = true;
+
+template <typename, typename = void>
 constexpr bool IsEvaluable{};
 
 template <typename T>
 constexpr bool IsEvaluable<
-    FullBinaryNode<T>, std::enable_if_t<std::is_convertible_v<T, EvalExpr>>> =
+    FullBinaryNode<T>,
+    std::enable_if_t<std::is_convertible_v<T, EvalExpr> && HasAnnotMethod<T>>> =
     true;
 
 template <typename T>
-constexpr bool
-    IsEvaluable<const FullBinaryNode<T>,
-                std::enable_if_t<std::is_convertible_v<T, EvalExpr>>> = true;
+constexpr bool IsEvaluable<
+    const FullBinaryNode<T>,
+    std::enable_if_t<std::is_convertible_v<T, EvalExpr> && HasAnnotMethod<T>>> =
+    true;
 
 template <typename, typename = void>
 constexpr bool IsIterableOfEvaluableNodes{};
@@ -97,17 +96,6 @@ constexpr bool IsLeafEvaluator<
         std::is_same_v<
             ERPtr, std::remove_reference_t<std::invoke_result_t<Le, NodeT>>>>> =
     true;
-
-// template <typename, typename = void>
-// constexpr bool IsCacheManager{};
-// template <typename Cm>
-// constexpr bool IsCacheManager<Cm, bool> = true;
-
-// template <typename Cm>
-// constexpr bool IsCacheManager<
-//     Cm, std::enable_if_t<std::is_convertible_v<
-//             typename std::remove_reference_t<Cm>::cached_type, ERPtr>>> =
-//             true;
 
 template <typename NodesI,
           typename Pred = std::function<bool(IteredT<NodesI> const&)>,

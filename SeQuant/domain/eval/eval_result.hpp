@@ -7,6 +7,8 @@
 
 #include <btas/btas.h>
 #include <tiledarray.h>
+#include <range/v3/algorithm.hpp>
+#include <range/v3/numeric.hpp>
 #include <range/v3/view.hpp>
 
 #include <any>
@@ -38,81 +40,164 @@ struct Annot {
   T const this_annot;
 };
 
+// It is an iterator type
+template <typename It>
+struct IterPair {
+  It first, second;
+  IterPair(It beg, It end) noexcept : first{beg}, second{end} {};
+};
+
+template <typename It>
+void swap(IterPair<It>& l, IterPair<It>& r) {
+  using std::iter_swap;
+  std::iter_swap(l.first, r.first);
+  std::iter_swap(l.second, r.second);
+}
+
+template <typename It>
+bool operator<(IterPair<It> const& l, IterPair<It> const& r) noexcept {
+  return *l.first < *r.first;
+}
+
 }  // namespace
 
 namespace {
 
-using perm_type = container::svector<size_t>;
+using perm_t = container::svector<size_t>;
+using perm_group_t = container::svector<perm_t>;
+using range_t = std::array<size_t, 2>;
+using symmetric_range_t = std::array<size_t, 3>;
 
 template <typename F,
-          typename = std::enable_if_t<std::is_invocable_v<F, perm_type const&>>>
-void symmetric_permutation(size_t half_rank, F&& symmetrizer) noexcept {
-  using ranges::views::concat;
-  // using ranges::views::iota;
-  using ranges::views::transform;
+          std::enable_if_t<std::is_invocable_v<F, int>, bool> = true>
+void antisymmetric_permutation(
+    container::svector<std::pair<perm_t::iterator, perm_t::iterator>> const&
+        groups,
+    F&& call_back) {
+  auto const n = groups.size();
+  if (n == 0) return;
 
-  // this vector contains indices from 0...rank/2 where rank is that
-  // of the tensor being symmetrized
-  //
-  // Caveat:
-  // creating perm_vec this way is not allowed in gcc-11,
-  // sth to do with container::svector (boost::svector)
-  // clang-format off
-  // auto perm_vec = iota(size_t{0}, half_rank) | ranges::to<perm_type>;
-  // clang-format on
-  //
-  auto perm_vec = perm_type(half_rank);
-  for (auto i = 0; i < half_rank; ++i) perm_vec[i] = i;
+  // parities
+  container::svector<int> ps(n, 0);
 
-  auto add_half_rank = [half_rank](auto x) { return x + half_rank; };
-  do {
-    auto const total_perm =
-        concat(perm_vec, perm_vec | transform(add_half_rank)) |
-        ranges::to<perm_type>;
-    std::forward<F>(symmetrizer)(total_perm);
-  } while (std::next_permutation(std::begin(perm_vec), std::end(perm_vec)));
+  // is a group exhausted for next permutation?
+  container::svector<bool> perms_remain(n, true);
+
+  while (perms_remain[0]) {
+    int const parity = ranges::accumulate(ps, 0) % 2;
+    std::forward<F>(call_back)(parity);
+    auto i = n;
+    while (i > 0) {
+      --i;
+
+      auto& p = ps[i];
+      auto beg = groups[i].first;
+      auto end = groups[i].second;
+      perms_remain[i] = next_permutation_parity(p, beg, end);
+
+      if (i == 0) break;
+      if (perms_remain[i]) break;
+    }
+  }
 }
-template <typename F, typename = std::enable_if_t<
-                          std::is_invocable_v<F, double, perm_type const&>>>
 
-void antisymmetric_permutation(size_t half_rank, F&& antisymmetrizer) noexcept {
-  using phase_type = double;
+template <typename F, std::enable_if_t<std::is_invocable_v<F>, bool> = true>
+void symmetric_permutation(
+    container::svector<
+        std::tuple<perm_t::iterator, perm_t::iterator, size_t>> const& groups,
+    F&& call_back) {
+  using ranges::views::iota;
+  using ranges::views::join;
+  using ranges::views::transform;
+  using ranges::views::zip;
 
-  using ranges::views::concat;
-  //  using ranges::views::iota;
+  auto const n = groups.size();
+  if (n == 0) return;
 
-  int bra_parity = 0;
-  //
-  // Caveat:
-  // creating bra_perm_vec this way is not allowed in gcc-11,
-  // sth to do with container::svector (boost::svector)
-  // clang-format off
-  // auto bra_perm_vec = iota(size_t{0}, half_rank) | ranges::to<perm_type>;
-  // clang-format on
-  //
-  auto bra_perm_vec = perm_type(half_rank);
-  for (auto i = 0; i < half_rank; ++i) bra_perm_vec[i] = i;
+  assert(ranges::all_of(groups,
+                        [](auto&& tpl) {
+                          using std::distance;
+                          using std::get;
 
-  do {
-    int ket_parity = 0;
-    // same problem as with bra_perm_vec
-    // clang-format off
-    // auto ket_perm_vec = iota(half_rank, 2 * half_rank) | ranges::to<perm_type>;
-    // clang-format on
-    auto ket_perm_vec = perm_type(half_rank);
-    for (auto i = 0; i < half_rank; ++i) ket_perm_vec[i] = i + half_rank;
-    do {
-      phase_type const phase_factor =
-          (bra_parity + ket_parity) % 2 == 0 ? 1 : -1;
-      auto const perm_vec =
-          concat(bra_perm_vec, ket_perm_vec) | ranges::to<perm_type>;
-      std::forward<F>(antisymmetrizer)(phase_factor, perm_vec);
-    } while (next_permutation_parity(ket_parity,
-                                     std::begin(ket_perm_vec),  //
-                                     std::end(ket_perm_vec)));
-  } while (next_permutation_parity(bra_parity,
-                                   std::begin(bra_perm_vec),  //
-                                   std::end(bra_perm_vec)));
+                          auto b1 = get<0>(tpl);
+                          auto b2 = get<1>(tpl);
+                          auto l = get<2>(tpl);
+
+                          return distance(b1, b1 + l) == distance(b2, b2 + l);
+                        })
+
+  );
+
+  auto iter_pairs = [](auto&& tpl) {
+    auto b1 = std::get<0>(tpl);
+    auto b2 = std::get<1>(tpl);
+    auto l = std::get<2>(tpl);
+    return iota(size_t{0}, l) | transform([b1, b2](auto i) {
+             return IterPair{b1 + i, b2 + i};
+           }) |
+           ranges::to_vector;
+  };
+
+  auto groups_vec = groups | transform(iter_pairs) | ranges::to_vector;
+
+  // is a group exhausted for next permutation?
+  container::svector<bool> perms_remain(n, true);
+
+  while (perms_remain[0]) {
+    std::forward<F>(call_back)();
+    auto i = n;
+    while (i > 0) {
+      --i;
+      auto beg = groups_vec[i].begin();
+      auto end = groups_vec[i].end();
+      perms_remain[i] = std::next_permutation(beg, end);
+
+      if (i == 0) break;
+      if (perms_remain[i]) break;
+    }
+  }
+}
+
+template <
+    typename F,
+    std::enable_if_t<std::is_invocable_v<F, int, perm_t const&>, bool> = true>
+void antisymmetrize_backend(size_t rank,
+                            container::svector<range_t> const& groups,
+                            F&& call_back) {
+  using ranges::views::iota;
+  auto perm = iota(size_t{0}, rank) | ranges::to<perm_t>;
+
+  auto groups_vec =
+      container::svector<std::pair<perm_t::iterator, perm_t::iterator>>{};
+  groups_vec.reserve(groups.size());
+  auto beg = perm.begin();
+  for (auto&& g : groups) {
+    groups_vec.emplace_back(beg + g[0], beg + g[1]);
+  }
+  antisymmetric_permutation(groups_vec,
+                            [&call_back, &perm = std::as_const(perm)](int p) {
+                              std::forward<F>(call_back)(p, perm);
+                            });
+}
+
+template <typename F,
+          std::enable_if_t<std::is_invocable_v<F, perm_t const&>, bool> = true>
+void symmetrize_backend(size_t rank,
+                        container::svector<symmetric_range_t> const& groups,
+                        F&& call_back) {
+  using ranges::views::iota;
+  auto perm = iota(size_t{0}, rank) | ranges::to<perm_t>;
+  auto groups_vec = container::svector<
+      std::tuple<perm_t::iterator, perm_t::iterator, size_t>>{};
+  groups_vec.reserve(groups.size());
+  auto beg = perm.begin();
+  for (auto&& g : groups) {
+    groups_vec.emplace_back(beg + g[0], beg + g[1], g[2]);
+  }
+  symmetric_permutation(groups_vec,
+                        [&call_back, &perm = std::as_const(perm)]() {
+                          std::forward<F>(call_back)(perm);
+                        });
 }
 
 template <typename RngOfOrdinals>
@@ -147,22 +232,28 @@ auto index_hash(Iterable const& bk) {
 }
 
 template <typename... Args>
-auto symmetrize_ta(TA::DistArray<Args...> const& arr) {
+auto symmetrize_ta(TA::DistArray<Args...> const& arr,
+                   container::svector<symmetric_range_t> const& groups = {}) {
+  using ranges::views::iota;
+
   auto result = TA::DistArray<Args...>{arr.world(), arr.trange()};
   result.fill(0);
-  size_t rank = arr.trange().rank();
-  auto const lannot = ords_to_annot(ranges::views::iota(size_t{0}, rank));
 
-  auto symmetrizer = [&result, &lannot, &arr](auto const& permutation) {
-    auto const rannot = ords_to_annot(permutation);
+  size_t const rank = arr.trange().rank();
+  size_t const half_rank = rank / 2;
+
+  auto const lannot = ords_to_annot(iota(size_t{0}, rank));
+
+  auto call_back = [&result, &lannot, &arr](perm_t const& perm) {
+    auto const rannot = ords_to_annot(perm);
     result(lannot) += arr(rannot);
   };
 
-#ifdef SEQUANT_EVAL_TRACE
-  std::cout << "[EVAL] symmetrizing rank-" << rank << " tensor" << std::endl;
-#endif
-
-  symmetric_permutation(rank / 2, symmetrizer);
+  if (groups.empty()) {
+    symmetrize_backend(rank, {{0, half_rank, half_rank}}, call_back);
+  } else {
+    symmetrize_backend(rank, groups, call_back);
+  }
 
   TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
 
@@ -170,27 +261,33 @@ auto symmetrize_ta(TA::DistArray<Args...> const& arr) {
 }
 
 template <typename... Args>
-auto antisymmetrize_ta(TA::DistArray<Args...> const& arr) {
+auto antisymmetrize_ta(TA::DistArray<Args...> const& arr,
+                       container::svector<range_t> const& groups = {}) {
+  using perm_it = perm_t::iterator;
+  using iter_pairs_t = container::svector<std::pair<perm_it, perm_it>>;
   using ranges::views::iota;
+  using ranges::views::transform;
+  using ranges::views::zip;
 
   size_t const rank = arr.trange().rank();
-  auto const lannot = ords_to_annot(iota(size_t{0}, rank));
+  assert(rank % 2 == 0);
+  size_t const half_rank = rank / 2;
 
-  auto result = TA::DistArray<Args...>{arr.world(), arr.trange()};
+  auto result = TA::DistArray<Args...>(arr.world(), arr.trange());
   result.fill(0);
 
-  auto antisymmetrizer = [&result, &lannot, &arr](auto phase,
-                                                  auto const& permutation) {
-    auto const rannot = ords_to_annot(permutation);
-    result(lannot) += phase * arr(rannot);
+  auto const lannot = ords_to_annot(iota(size_t{0}, rank));
+
+  auto call_back = [&lannot, &arr, &result](int p, perm_t const& perm) {
+    typename decltype(result)::numeric_type p_ = p == 0 ? 1 : -1;
+    result(lannot) += p_ * arr(ords_to_annot(perm));
   };
 
-#ifdef SEQUANT_EVAL_TRACE
-  std::cout << "[EVAL] antisymmetrizing rank-" << rank << " tensor"
-            << std::endl;
-#endif
-
-  antisymmetric_permutation(rank / 2, antisymmetrizer);
+  if (groups.empty()) {
+    antisymmetrize_backend(rank, {{0, half_rank}, {half_rank, rank}},
+                           call_back);
+  } else
+    antisymmetrize_backend(rank, groups, call_back);
 
   TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
 
@@ -198,16 +295,18 @@ auto antisymmetrize_ta(TA::DistArray<Args...> const& arr) {
 }
 
 template <typename... Args>
-auto symmetrize_btas(btas::Tensor<Args...> const& arr) {
+auto symmetrize_btas(btas::Tensor<Args...> const& arr,
+                     container::svector<symmetric_range_t> const& groups = {}) {
   using ranges::views::iota;
 
   size_t const rank = arr.rank();
+  size_t const half_rank = rank / 2;
   // Caveat:
   // clang-format off
-  // auto const lannot = iota(size_t{0}, rank) | ranges::to<perm_type>;
+  // auto const lannot = iota(size_t{0}, rank) | ranges::to<perm_t>;
   // clang-format on
   auto const lannot = [rank]() {
-    auto p = perm_type(rank);
+    auto p = perm_t(rank);
     for (auto i = 0; i < rank; ++i) p[i] = i;
     return p;
   }();
@@ -215,28 +314,34 @@ auto symmetrize_btas(btas::Tensor<Args...> const& arr) {
   auto result = btas::Tensor<Args...>{arr.range()};
   result.fill(0);
 
-  auto symmetrizer = [&result, &lannot, &arr](auto const& permutation) {
+  auto call_back = [&result, &lannot, &arr](auto const& permutation) {
     auto const& rannot = permutation;
     btas::Tensor<Args...> temp;
     btas::permute(arr, lannot, temp, rannot);
     result += temp;
   };
 
-  symmetric_permutation(rank / 2, symmetrizer);
+  if (groups.empty()) {
+    symmetrize_backend(rank, {{0, half_rank, half_rank}}, call_back);
+  } else {
+    symmetrize_backend(rank, groups, call_back);
+  }
 
   return result;
 }
 
 template <typename... Args>
-auto antisymmetrize_btas(btas::Tensor<Args...> const& arr) {
+auto antisymmetrize_btas(btas::Tensor<Args...> const& arr,
+                         container::svector<range_t> const& groups = {}) {
   using ranges::views::iota;
 
   size_t const rank = arr.rank();
+  size_t const half_rank = rank / 2;
   // Caveat:
-  // auto const lannot = iota(size_t{0}, rank) | ranges::to<perm_type>;
+  // auto const lannot = iota(size_t{0}, rank) | ranges::to<perm_t>;
   //
   auto const lannot = [rank]() {
-    auto p = perm_type(rank);
+    auto p = perm_t(rank);
     for (auto i = 0; i < rank; ++i) p[i] = i;
     return p;
   }();
@@ -244,16 +349,21 @@ auto antisymmetrize_btas(btas::Tensor<Args...> const& arr) {
   auto result = btas::Tensor<Args...>{arr.range()};
   result.fill(0);
 
-  auto antisymmetrizer = [&result, &lannot, &arr](auto phase,
-                                                  auto const& permutation) {
-    auto const& rannot = permutation;
+  auto call_back = [&result, &lannot, &arr](int p, perm_t const& perm) {
+    typename decltype(result)::numeric_type p_ = p == 0 ? 1 : -1;
+    auto const& rannot = perm;
     btas::Tensor<Args...> temp;
     btas::permute(arr, lannot, temp, rannot);
-    btas::scal(phase, temp);
+    btas::scal(p_, temp);
     result += temp;
   };
 
-  antisymmetric_permutation(rank / 2, antisymmetrizer);
+  if (groups.empty()) {
+    antisymmetrize_backend(rank, {{0, half_rank}, {half_rank, rank}},
+                           call_back);
+  } else {
+    antisymmetrize_backend(rank, groups, call_back);
+  }
 
   return result;
 }

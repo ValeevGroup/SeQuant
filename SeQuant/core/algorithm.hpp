@@ -99,6 +99,8 @@ bool next_permutation_parity(int& parity, BidirIt first, BidirIt last,
     }
     if (i == first) {
       std::reverse(first, last);
+      int p = parity + std::distance(first, last) / 2;
+      parity = p % 2;
       return false;
     }
   }
