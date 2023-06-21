@@ -98,95 +98,115 @@ namespace sr {
 
 inline constexpr int64_t fac(std::size_t n) { return sequant::factorial(n); }
 
-make_op::make_op(std::size_t nbra, std::size_t nket, OpType op)
-    : nbra_(nbra), nket_(nket), op_(op) {}
+make_op::make_op(OpType op, std::size_t nbra, std::size_t nket) : op_(op) {
+  nket = nket == std::numeric_limits<std::size_t>::max() ? nbra : nket;
+  assert(nbra > 0 || nket > 0);
 
-ExprPtr make_op::operator()() const {
   const auto unocc =
       get_default_formalism().sum_over_uocc() == SumOverUocc::Complete
           ? IndexSpace::complete_unoccupied
           : IndexSpace::active_unoccupied;
   const auto occ = IndexSpace::active_occupied;
-  return (*this)(unocc, occ);
+  switch (to_class(op)) {
+    case OpClass::ex:
+      bra_spaces_ = decltype(bra_spaces_)(nbra, unocc);
+      ket_spaces_ = decltype(ket_spaces_)(nket, occ);
+      break;
+    case OpClass::deex:
+      bra_spaces_ = decltype(bra_spaces_)(nbra, occ);
+      ket_spaces_ = decltype(ket_spaces_)(nket, unocc);
+      break;
+    case OpClass::gen:
+      bra_spaces_ = decltype(bra_spaces_)(nbra, IndexSpace::complete);
+      ket_spaces_ = decltype(ket_spaces_)(nket, IndexSpace::complete);
+      break;
+  }
 }
 
-ExprPtr make_op::operator()(IndexSpace::Type unocc,
-                            IndexSpace::Type occ) const {
-  bool antisymm = get_default_formalism().two_body_interaction() ==
-                  TwoBodyInteraction::Antisymm;
-  bool csv = get_default_formalism().csv_formalism() == CSVFormalism::CSV;
+make_op::make_op(OpType op, std::initializer_list<IndexSpace::Type> bras,
+                 std::initializer_list<IndexSpace::Type> kets)
+    : op_(op),
+      bra_spaces_(bras.begin(), bras.end()),
+      ket_spaces_(kets.begin(), kets.end()) {
+  assert(nbra() > 0 || nket() > 0);
+}
+
+ExprPtr make_op::operator()() const {
+  const bool antisymm = get_default_formalism().two_body_interaction() ==
+                        TwoBodyInteraction::Antisymm;
+  const bool csv = get_default_formalism().csv_formalism() == CSVFormalism::CSV;
+  bool csv_bra = false;
+  bool csv_ket = false;
+  if (csv) {  // validate spaces
+    if (to_class(op_) == OpClass::ex) {
+      for (auto&& s : bra_spaces_) {
+        assert(s == IndexSpace::complete_unoccupied ||
+               s == IndexSpace::active_unoccupied);
+      }
+      csv_bra = true;
+    } else if (to_class(op_) == OpClass::deex) {
+      for (auto&& s : ket_spaces_) {
+        assert(s == IndexSpace::complete_unoccupied ||
+               s == IndexSpace::active_unoccupied);
+      }
+      csv_ket = true;
+    }
+  }
 
   // not sure what it means to use nonsymmetric operator if nbra != nket
-  if (!antisymm) assert(nbra_ == nket_);
+  if (!antisymm) assert(nbra() == nket());
 
-  const auto nbra = nbra_;
-  const auto nket = nket_;
-  OpType op = op_;
-  auto make_idx_vector = [](size_t n, IndexSpace::Type spacetype) {
-    auto space = IndexSpace::instance(spacetype);
+  auto make_idx_vector = [](const auto& spacetypes) {
     std::vector<Index> result;
+    const auto n = spacetypes.size();
     result.reserve(n);
     for (size_t i = 0; i != n; ++i) {
+      auto space = IndexSpace::instance(spacetypes[i]);
       result.push_back(Index::make_tmp_index(space));
     }
     return result;
   };
-  auto make_depidx_vector = [](size_t n, IndexSpace::Type spacetype,
-                               auto&& protoidxs) {
-    auto space = IndexSpace::instance(spacetype);
+
+  auto make_depidx_vector = [](const auto& spacetypes, auto&& protoidxs) {
+    const auto n = spacetypes.size();
     std::vector<Index> result;
     result.reserve(n);
     for (size_t i = 0; i != n; ++i) {
+      auto space = IndexSpace::instance(spacetypes[i]);
       result.push_back(Index::make_tmp_index(space, protoidxs, true));
     }
     return result;
   };
-  std::vector<Index> braidxs;
-  std::vector<Index> ketidxs;
-  if (to_class(op) == OpClass::gen) {
-    braidxs = make_idx_vector(nbra, IndexSpace::complete);
-    ketidxs = make_idx_vector(nket, IndexSpace::complete);
+
+  std::vector<Index> braidxs, ketidxs;
+  if (csv_bra) {
+    ketidxs = make_idx_vector(ket_spaces_);
+    braidxs = make_depidx_vector(bra_spaces_, ketidxs);
+  } else if (csv_ket) {
+    braidxs = make_idx_vector(bra_spaces_);
+    ketidxs = make_depidx_vector(ket_spaces_, braidxs);
   } else {
-    auto make_occidxs = [&make_idx_vector, &occ](size_t n) {
-      return make_idx_vector(n, occ);
-    };
-    auto make_uoccidxs = [csv, &unocc, &make_idx_vector, &make_depidx_vector](
-                             size_t n, auto&& occidxs) {
-      return csv ? make_depidx_vector(n, unocc, occidxs)
-                 : make_idx_vector(n, unocc);
-    };
-    if (to_class(op) == OpClass::ex) {
-      ketidxs = make_occidxs(nket);
-      braidxs = make_uoccidxs(nbra, ketidxs);
-    } else {
-      braidxs = make_occidxs(nbra);
-      ketidxs = make_uoccidxs(nket, braidxs);
-    }
+    braidxs = make_idx_vector(bra_spaces_);
+    ketidxs = make_idx_vector(ket_spaces_);
   }
-  const auto mult = antisymm ? fac(nbra) * fac(nket) : fac(nbra);
+
+  const auto mult = antisymm ? fac(nbra()) * fac(nket()) : fac(nbra());
   const auto opsymm = antisymm ? Symmetry::antisymm : Symmetry::nonsymm;
   return ex<Constant>(rational{1, mult}) *
-         ex<Tensor>(to_wstring(op), braidxs, ketidxs, opsymm) *
-         ex<FNOperator>(braidxs, ketidxs, get_default_context().vacuum());
-}
-
-make_op Op(OpType _Op, std::size_t Nbra, std::size_t Nket) {
-  assert(Nbra < std::numeric_limits<std::size_t>::max());
-  const auto Nket_ =
-      Nket == std::numeric_limits<std::size_t>::max() ? Nbra : Nket;
-  assert(Nbra > 0 || Nket_ > 0);
-  return make_op{Nbra, Nket_, _Op};
+         ex<Tensor>(to_wstring(op_), braidxs, ketidxs, opsymm) *
+         ex<FNOperator>(/* creators */ braidxs, /* annihilators */ ketidxs,
+                        get_default_context().vacuum());
 }
 
 #include "sr_op.impl.cpp"
 
 ExprPtr H1() {
   return get_default_context().vacuum() == Vacuum::Physical
-             ? Op(OpType::h, 1)()
-             : Op(OpType::f, 1)();
+             ? make_op(OpType::h, 1)()
+             : make_op(OpType::f, 1)();
 }
 
-ExprPtr H2() { return Op(OpType::g, 2)(); }
+ExprPtr H2() { return make_op(OpType::g, 2)(); }
 
 ExprPtr H0mp() {
   assert(get_default_context().vacuum() == Vacuum::SingleProduct);
@@ -198,7 +218,7 @@ ExprPtr H1mp() {
   return H2();
 }
 
-ExprPtr F() { return Op(OpType::f, 1)(); }
+ExprPtr F() { return make_op(OpType::f, 1)(); }
 
 ExprPtr W() {
   assert(get_default_context().vacuum() == Vacuum::SingleProduct);
