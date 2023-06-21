@@ -128,32 +128,32 @@ class WickTheorem {
 
   /// @tparam IndexPairContainer a sequence of std::pair<Integer,Integer>
   template <typename IndexPairContainer>
-  WickTheorem &set_op_connections(IndexPairContainer &&op_index_pairs) {
-    if (expr_input_ == nullptr || !op_connections_input_.empty()) {
+  WickTheorem &set_nop_connections(IndexPairContainer &&op_index_pairs) {
+    if (expr_input_ == nullptr || !nop_connections_input_.empty()) {
       for (const auto &opidx_pair : op_index_pairs) {
         if (opidx_pair.first < 0 || opidx_pair.first >= input_.size()) {
           throw std::invalid_argument(
-              "WickTheorem::set_op_connections: op index out of range");
+              "WickTheorem::set_nop_connections: nop index out of range");
         }
         if (opidx_pair.second < 0 || opidx_pair.second >= input_.size()) {
           throw std::invalid_argument(
-              "WickTheorem::set_op_connections: op index out of range");
+              "WickTheorem::set_nop_connections: nop index out of range");
         }
       }
       if (op_index_pairs.size() != 0) {
-        op_connections_.resize(input_.size());
-        for (auto &v : op_connections_) {
+        nop_connections_.resize(input_.size());
+        for (auto &v : nop_connections_) {
           v.set();
         }
         for (const auto &opidx_pair : op_index_pairs) {
-          op_connections_[opidx_pair.first].reset(opidx_pair.second);
-          op_connections_[opidx_pair.second].reset(opidx_pair.first);
+          nop_connections_[opidx_pair.first].reset(opidx_pair.second);
+          nop_connections_[opidx_pair.second].reset(opidx_pair.first);
         }
       }
-      op_connections_input_.clear();
+      nop_connections_input_.clear();
     } else {
       ranges::for_each(op_index_pairs, [this](const auto &idxpair) {
-        op_connections_input_.push_back(idxpair);
+        nop_connections_input_.push_back(idxpair);
       });
     }
 
@@ -162,9 +162,9 @@ class WickTheorem {
 
   /// @tparam Integer an integral type
   template <typename Integer = long>
-  WickTheorem &set_op_connections(
+  WickTheorem &set_nop_connections(
       std::initializer_list<std::pair<Integer, Integer>> op_index_pairs) {
-    return this->set_op_connections<const decltype(op_index_pairs) &>(
+    return this->set_nop_connections<const decltype(op_index_pairs) &>(
         op_index_pairs);
   }
   ///@}
@@ -179,7 +179,7 @@ class WickTheorem {
   /// @note if this partitions are not given, every operator is assumed to be in
   /// its own partition
   /// @internal this performs only the first phase of initialization of
-  /// op_topological_partition_
+  /// nop_topological_partition_
   ///           since the number of operators is not guaranteed to be known
   ///           until compute() is called (e.g. if op product is given as an
   ///           Expr ). The second initialization phase (i.e. resizing to make
@@ -195,14 +195,14 @@ class WickTheorem {
   WickTheorem &set_op_partitions(IndexListContainer &&op_partitions) {
     using std::size;
     size_t partition_cnt = 0;
-    auto current_nops = size(op_topological_partition_);
+    auto current_nops = size(nop_topological_partition_);
     for (auto &&partition : op_partitions) {
       for (auto &&op_idx : partition) {
         assert(op_idx >= 0);
         if (op_idx >= current_nops) {
-          current_nops = upsize_op_topological_partition(op_idx + 1);
+          current_nops = upsize_nop_topological_partition(op_idx + 1);
         }
-        op_topological_partition_[op_idx] = partition_cnt + 1;
+        nop_topological_partition_[op_idx] = partition_cnt + 1;
       }
       ++partition_cnt;
     }
@@ -285,28 +285,26 @@ class WickTheorem {
   container::set<Index> external_indices_;
   // for each operator specifies the reverse bitmask of target connections
   // (0 = must connect)
-  /// TODO rename op -> nop to distinguish Op and NormalOperator
-  container::svector<std::bitset<max_input_size>> op_connections_;
-  /// TODO rename op -> nop to distinguish Op and NormalOperator
+  container::svector<std::bitset<max_input_size>> nop_connections_;
   container::vector<std::pair<size_t, size_t>>
-      op_connections_input_;  // only used to cache input to set_op_connections_
+      nop_connections_input_;  // only used to cache input to
+                               // set_nop_connections_
 
   // for each operator specifies its topological partition (0 = topologically
   // unique)
-  /// TODO rename op -> nop to distinguish Op and NormalOperator
-  mutable container::svector<size_t> op_topological_partition_;
+  mutable container::svector<size_t> nop_topological_partition_;
 
-  /// upsizes op_topological_partition_, filling new entries with zeroes
+  /// upsizes nop_topological_partition_, filling new entries with zeroes
   /// noop if current size > new_size
-  /// @return the (updated) size of op_topological_partition_
+  /// @return the (updated) size of nop_topological_partition_
   /// TODO rename op -> nop to distinguish Op and NormalOperator
-  size_t upsize_op_topological_partition(size_t new_size) const {
+  size_t upsize_nop_topological_partition(size_t new_size) const {
     using std::size;
-    const auto current_size = size(op_topological_partition_);
+    const auto current_size = size(nop_topological_partition_);
     if (new_size > current_size) {
-      op_topological_partition_.resize(new_size);
+      nop_topological_partition_.resize(new_size);
       for (size_t i = current_size; i != new_size; ++i)
-        op_topological_partition_[i] = 0;
+        nop_topological_partition_[i] = 0;
       return new_size;
     } else
       return current_size;
@@ -318,12 +316,12 @@ class WickTheorem {
     if (spinfree_)
       throw std::logic_error(
           "WickTheorem::compute: spinfree=true not yet supported");
-    // process cached op_connections_input_, if needed
-    if (!op_connections_input_.empty())
-      const_cast<WickTheorem<S> &>(*this).set_op_connections(
-          op_connections_input_);
-    // size op_topological_partition_ to match input_, if needed
-    upsize_op_topological_partition(input_.size());
+    // process cached nop_connections_input_, if needed
+    if (!nop_connections_input_.empty())
+      const_cast<WickTheorem<S> &>(*this).set_nop_connections(
+          nop_connections_input_);
+    // size nop_topological_partition_ to match input_, if needed
+    upsize_nop_topological_partition(input_.size());
     // now compute
     auto result = compute_nontensor_wick(count_only);
     return std::move(result);
@@ -341,10 +339,10 @@ class WickTheorem {
           left_op_offset(0),
           count_only(false),
           count(0),
-          op_connections(opseq.size()),
-          adjacency_matrix(opseq.size() * (opseq.size() - 1) / 2, 0),
-          op_nconnections(opseq.size(), 0),
-          op_topological_partition(op_toppart) {
+          nop_connections(opseq.size()),
+          nop_adjacency_matrix(opseq.size() * (opseq.size() - 1) / 2, 0),
+          nop_nconnections(opseq.size(), 0),
+          nop_topological_partition(op_toppart) {
       init_topological_partitions();
       init_input_index_columns();
     }
@@ -364,14 +362,14 @@ class WickTheorem {
                       //!< of contractions (if normal wick result is wanted) or
                       //!< the number of complete constractions (if want
                       //!< complete contractions only)
-    std::atomic<size_t> count;  //!< if count_only is true, will countain the
+    std::atomic<size_t> count;  //!< if count_only is true, will count the
                                 //!< total number of terms
-    /// TODO rename op -> nop to distinguish Op and NormalOperator
     container::svector<std::bitset<max_input_size>>
-        op_connections;  //!< bitmask of connections for each op (1 = connected)
+        nop_connections;  //!< bitmask of connections for each nop (1 =
+                          //!< connected)
     container::svector<size_t>
-        adjacency_matrix;  //!< number of connections between each normop, only
-                           //!< lower triangle is kept
+        nop_adjacency_matrix;  //!< number of connections between each nop, only
+                               //!< lower triangle is kept
 
     container::svector<std::pair<Index, Index>>
         input_partner_indices;  //!< list of {cre,ann} pairs of Index objects in
@@ -420,32 +418,30 @@ class WickTheorem {
     }
 
     /// for each operator specifies how many connections it currently has
-    /// TODO rename op -> nop to distinguish Op and NormalOperator
-    container::svector<size_t> op_nconnections;
+    container::svector<size_t> nop_nconnections;
     /// maps op to its topological partition index (1-based, 0 = no partition)
-    /// TODO rename op -> nop to distinguish Op and NormalOperator
-    container::svector<size_t> op_topological_partition;
-    /// current state of partitions (will only match op_topological_partition
+    container::svector<size_t> nop_topological_partition;
+    /// current state of partitions (will only match nop_topological_partition
     /// before any contractions have occurred)
     /// - when an operator is connected it's removed from the partition
     /// - when it is disconnected fully it's re-added to the partition
     container::vector<container::set<size_t>> topological_partitions;
 
-    // populates partitions using the data from op_topological_partition
+    // populates partitions using the data from nop_topological_partition
     void init_topological_partitions() {
-      // partition indices in op_topological_partition are 1-based
-      const auto npartitions = *ranges::max_element(op_topological_partition);
+      // partition indices in nop_topological_partition are 1-based
+      const auto npartitions = *ranges::max_element(nop_topological_partition);
       topological_partitions.resize(npartitions);
       size_t op_cnt = 0;
       ranges::for_each(
-          op_topological_partition, [this, &op_cnt](size_t toppart_idx) {
+          nop_topological_partition, [this, &op_cnt](size_t toppart_idx) {
             if (toppart_idx > 0) {  // in a partition
               topological_partitions.at(toppart_idx - 1).insert(op_cnt);
             }
             ++op_cnt;
           });
       // assert that we don't have empty partitions due to invalid contents of
-      // op_topological_partition
+      // nop_topological_partition
       assert(ranges::any_of(topological_partitions, [](auto &&partition) {
                return partition.empty();
              }) == false);
@@ -488,14 +484,14 @@ class WickTheorem {
     /// the state unchanged and return false
     template <typename Cursor>
     inline bool connect(const container::svector<std::bitset<max_input_size>>
-                            &target_op_connections,
+                            &target_nop_connections,
                         const Cursor &op1_cursor, const Cursor &op2_cursor) {
       auto update_topology = [this](size_t op_idx) {
-        const auto nconnections = op_nconnections[op_idx];
+        const auto nconnections = nop_nconnections[op_idx];
         // if using topological partitions for normal ops, and this operator is
         // in one of them, remove it on first connection
         if (!topological_partitions.empty()) {
-          auto partition_idx = op_topological_partition[op_idx];
+          auto partition_idx = nop_topological_partition[op_idx];
           if (nconnections == 0 && partition_idx > 0) {
             --partition_idx;  // to 0-based
             assert(topological_partitions.at(partition_idx).size() > 0);
@@ -503,24 +499,24 @@ class WickTheorem {
             assert(removed);
           }
         }
-        ++op_nconnections[op_idx];
+        ++nop_nconnections[op_idx];
       };
 
       // local vars
       const auto op1_idx = op1_cursor.range_ordinal();
       const auto op2_idx = op2_cursor.range_ordinal();
-      if (target_op_connections
+      if (target_nop_connections
               .empty()) {  // if no constraints, all is fair game
         update_topology(op1_idx);
         update_topology(op2_idx);
         return true;
       }
-      const auto op1_op2_connected = op_connections[op1_idx].test(op2_idx);
+      const auto op1_op2_connected = nop_connections[op1_idx].test(op2_idx);
 
       // update the connectivity
       if (!op1_op2_connected) {
-        op_connections[op1_idx].set(op2_idx);
-        op_connections[op2_idx].set(op1_idx);
+        nop_connections[op1_idx].set(op2_idx);
+        nop_connections[op2_idx].set(op1_idx);
       }
 
       // test if op1 has enough remaining indices to satisfy
@@ -528,13 +524,13 @@ class WickTheorem {
           op1_cursor.range_iter()->size() -
           1;  // how many indices op1 has minus this index
       const auto nidx_op1_needs =
-          (op_connections[op1_idx] | target_op_connections[op1_idx])
+          (nop_connections[op1_idx] | target_nop_connections[op1_idx])
               .flip()
               .count();
       if (nidx_op1_needs > nidx_op1_remain) {
         if (!op1_op2_connected) {
-          op_connections[op1_idx].reset(op2_idx);
-          op_connections[op2_idx].reset(op1_idx);
+          nop_connections[op1_idx].reset(op2_idx);
+          nop_connections[op2_idx].reset(op1_idx);
         }
         return false;
       }
@@ -544,18 +540,18 @@ class WickTheorem {
           op2_cursor.range_iter()->size() -
           1;  // how many indices op2 has minus this index
       const auto nidx_op2_needs =
-          (op_connections[op2_idx] | target_op_connections[op2_idx])
+          (nop_connections[op2_idx] | target_nop_connections[op2_idx])
               .flip()
               .count();
       if (nidx_op2_needs > nidx_op2_remain) {
         if (!op1_op2_connected) {
-          op_connections[op1_idx].reset(op2_idx);
-          op_connections[op2_idx].reset(op1_idx);
+          nop_connections[op1_idx].reset(op2_idx);
+          nop_connections[op2_idx].reset(op1_idx);
         }
         return false;
       }
 
-      adjacency_matrix[lowtri_idx(op1_idx, op2_idx)] += 1;
+      nop_adjacency_matrix[lowtri_idx(op1_idx, op2_idx)] += 1;
       update_topology(op1_idx);
       update_topology(op2_idx);
 
@@ -564,13 +560,13 @@ class WickTheorem {
     /// @brief Updates connectivity when contraction is reversed
     template <typename Cursor>
     inline void disconnect(const container::svector<std::bitset<max_input_size>>
-                               &target_op_connections,
+                               &target_nop_connections,
                            const Cursor &op1_cursor, const Cursor &op2_cursor) {
       auto update_topology = [this](size_t op_idx) {
-        assert(op_nconnections.at(op_idx) > 0);
-        const auto nconnections = --op_nconnections[op_idx];
+        assert(nop_nconnections.at(op_idx) > 0);
+        const auto nconnections = --nop_nconnections[op_idx];
         if (!topological_partitions.empty()) {
-          auto partition_idx = op_topological_partition[op_idx];
+          auto partition_idx = nop_topological_partition[op_idx];
           if (nconnections == 0 && partition_idx > 0) {
             --partition_idx;  // to 0-based
             auto inserted =
@@ -585,17 +581,17 @@ class WickTheorem {
       const auto op2_idx = op2_cursor.range_ordinal();
       update_topology(op1_idx);
       update_topology(op2_idx);
-      if (target_op_connections.empty())  // if no constraints, we don't keep
-                                          // track of individual connections
+      if (target_nop_connections.empty())  // if no constraints, we don't keep
+                                           // track of individual connections
         return;
-      assert(op_connections[op1_idx].test(op2_idx));
+      assert(nop_connections[op1_idx].test(op2_idx));
 
-      auto &adjval = adjacency_matrix[lowtri_idx(op1_idx, op2_idx)];
+      auto &adjval = nop_adjacency_matrix[lowtri_idx(op1_idx, op2_idx)];
       assert(adjval > 0);
       adjval -= 1;
       if (adjval == 0) {
-        op_connections[op1_idx].reset(op2_idx);
-        op_connections[op2_idx].reset(op1_idx);
+        nop_connections[op1_idx].reset(op2_idx);
+        nop_connections[op2_idx].reset(op1_idx);
       }
     }
   };  // NontensorWickState
@@ -608,7 +604,7 @@ class WickTheorem {
         result;      //!< current value of the result
     std::mutex mtx;  // used in critical sections updating the result
     auto result_plus_mutex = std::make_pair(&result, &mtx);
-    NontensorWickState state(input_, op_topological_partition_);
+    NontensorWickState state(input_, nop_topological_partition_);
     state.count_only = count_only;
     // TODO extract index->particle maps
 
@@ -731,7 +727,7 @@ class WickTheorem {
               auto opseq_right_idx =
                   ranges::get_cursor(op_right_iter)
                       .range_ordinal();  // the index of normal operator
-              auto opseq_right_toppart_idx = state.op_topological_partition.at(
+              auto opseq_right_toppart_idx = state.nop_topological_partition.at(
                   opseq_right_idx);  // the partition to which this normal
                                      // operator belongs to (0 = none)
               if (opseq_right_toppart_idx > 0) {  // if part of a partition ...
@@ -762,110 +758,115 @@ class WickTheorem {
           // check if can contract these indices and
           // check connectivity constraints (if needed)
           int64_t top_degen;
-          if (can_contract(*op_left_iter, *op_right_iter, input_.vacuum()) &&
-              (top_degen = topological_degeneracy()) > 0 &&
-              state.connect(op_connections_, ranges::get_cursor(op_right_iter),
-                            ranges::get_cursor(op_left_iter))) {
-            if (Logger::get_instance().wick_contract) {
-              std::wcout << "level " << state.level << ":contracting "
-                         << to_latex(*op_left_iter) << " with "
-                         << to_latex(*op_right_iter)
-                         << " (top_degen=" << top_degen << ")" << std::endl;
-              std::wcout << " current opseq = " << to_latex(state.opseq)
-                         << std::endl;
-            }
+          if (can_contract(*op_left_iter, *op_right_iter, input_.vacuum())) {
+            if ((top_degen = topological_degeneracy()) > 0) {
+              if (state.connect(nop_connections_,
+                                ranges::get_cursor(op_right_iter),
+                                ranges::get_cursor(op_left_iter))) {
+                if (Logger::get_instance().wick_contract) {
+                  std::wcout << "level " << state.level << ":contracting "
+                             << to_latex(*op_left_iter) << " with "
+                             << to_latex(*op_right_iter)
+                             << " (top_degen=" << top_degen << ")" << std::endl;
+                  std::wcout << " current opseq = " << to_latex(state.opseq)
+                             << std::endl;
+                }
 
-            // update the phase, if needed
-            int64_t phase = 1;
-            if (statistics == Statistics::FermiDirac) {
-              const auto distance =
-                  ranges::get_cursor(op_right_iter).ordinal() -
-                  ranges::get_cursor(op_left_iter).ordinal() - 1;
-              if (distance % 2) {
-                phase *= -1;
-              }
-            }
-
-            // update the prefactor and opseq
-            Product sp_copy = state.sp;
-            state.sp.append(
-                top_degen * phase,
-                contract(*op_left_iter, *op_right_iter, input_.vacuum()));
-
-            // update the stats
-            ++stats_.num_attempted_contractions;
-
-            // remove from back to front
-            Op<S> right = *op_right_iter;
-            ranges::get_cursor(op_right_iter).erase();
-            --state.opseq_size;
-            Op<S> left = *op_left_iter;
-            ranges::get_cursor(op_left_iter).erase();
-            --state.opseq_size;
-
-            //            std::wcout << "  opseq after contraction = " <<
-            //            to_latex(state.opseq) << std::endl;
-
-            // if have a nonzero result ...
-            if (!state.sp.empty()) {
-              // update the result if nothing left to contract and
-              if (!full_contractions_ ||
-                  (full_contractions_ && state.opseq_size == 0)) {
-                if (!state.count_only) {
-                  if (full_contractions_) {
-                    result.second->lock();
-                    //              std::wcout << "got " << to_latex(state.sp)
-                    //              << std::endl;
-                    result.first->push_back(
-                        std::make_pair(std::move(state.sp.deep_copy()),
-                                       std::shared_ptr<NormalOperator<S>>{}));
-                    //              std::wcout << "now up to " <<
-                    //              result.first->size()
-                    //              << " terms" << std::endl;
-                    result.second->unlock();
-                  } else {
-                    auto [phase, op] = normalize(
-                        state.opseq, state.make_target_partner_indices());
-                    result.second->lock();
-                    result.first->push_back(std::make_pair(
-                        std::move(state.sp.deep_copy().scale(phase)),
-                        op->empty() ? nullptr : std::move(op)));
-                    result.second->unlock();
+                // update the phase, if needed
+                int64_t phase = 1;
+                if (statistics == Statistics::FermiDirac) {
+                  const auto distance =
+                      ranges::get_cursor(op_right_iter).ordinal() -
+                      ranges::get_cursor(op_left_iter).ordinal() - 1;
+                  if (distance % 2) {
+                    phase *= -1;
                   }
-                } else
-                  ++state.count;
+                }
 
-                // update the stats: count this contraction as useful
-                ++stats_.num_useful_contractions;
-              }
-            }
+                // update the prefactor and opseq
+                Product sp_copy = state.sp;
+                state.sp.append(
+                    top_degen * phase,
+                    contract(*op_left_iter, *op_right_iter, input_.vacuum()));
 
-            if (state.opseq_size != 0) {
-              const auto current_num_useful_contractions =
-                  stats_.num_useful_contractions.load();
-              ++state.level;
-              state.left_op_offset = left_op_offset;
-              recursive_nontensor_wick(result, state);
-              --state.level;
-              // this contraction is useful if it leads to useful contractions
-              // as a result
-              if (current_num_useful_contractions !=
-                  stats_.num_useful_contractions.load())
-                ++stats_.num_useful_contractions;
-            }
+                // update the stats
+                ++stats_.num_attempted_contractions;
 
-            // restore the prefactor and opseq
-            state.sp = std::move(sp_copy);
-            // restore from front to back
-            ranges::get_cursor(op_left_iter).insert(std::move(left));
-            ++state.opseq_size;
-            ranges::get_cursor(op_right_iter).insert(std::move(right));
-            ++state.opseq_size;
-            state.disconnect(op_connections_, ranges::get_cursor(op_right_iter),
-                             ranges::get_cursor(op_left_iter));
-            //            std::wcout << "  restored opseq = " <<
-            //            to_latex(state.opseq) << std::endl;
-          }
+                // remove from back to front
+                Op<S> right = *op_right_iter;
+                ranges::get_cursor(op_right_iter).erase();
+                --state.opseq_size;
+                Op<S> left = *op_left_iter;
+                ranges::get_cursor(op_left_iter).erase();
+                --state.opseq_size;
+
+                //            std::wcout << "  opseq after contraction = " <<
+                //            to_latex(state.opseq) << std::endl;
+
+                // if have a nonzero result ...
+                if (!state.sp.empty()) {
+                  // update the result if nothing left to contract and
+                  if (!full_contractions_ ||
+                      (full_contractions_ && state.opseq_size == 0)) {
+                    if (!state.count_only) {
+                      if (full_contractions_) {
+                        result.second->lock();
+                        //              std::wcout << "got " <<
+                        //              to_latex(state.sp)
+                        //              << std::endl;
+                        result.first->push_back(std::make_pair(
+                            std::move(state.sp.deep_copy()),
+                            std::shared_ptr<NormalOperator<S>>{}));
+                        //              std::wcout << "now up to " <<
+                        //              result.first->size()
+                        //              << " terms" << std::endl;
+                        result.second->unlock();
+                      } else {
+                        auto [phase, op] = normalize(
+                            state.opseq, state.make_target_partner_indices());
+                        result.second->lock();
+                        result.first->push_back(std::make_pair(
+                            std::move(state.sp.deep_copy().scale(phase)),
+                            op->empty() ? nullptr : std::move(op)));
+                        result.second->unlock();
+                      }
+                    } else
+                      ++state.count;
+
+                    // update the stats: count this contraction as useful
+                    ++stats_.num_useful_contractions;
+                  }
+                }
+
+                if (state.opseq_size != 0) {
+                  const auto current_num_useful_contractions =
+                      stats_.num_useful_contractions.load();
+                  ++state.level;
+                  state.left_op_offset = left_op_offset;
+                  recursive_nontensor_wick(result, state);
+                  --state.level;
+                  // this contraction is useful if it leads to useful
+                  // contractions as a result
+                  if (current_num_useful_contractions !=
+                      stats_.num_useful_contractions.load())
+                    ++stats_.num_useful_contractions;
+                }
+
+                // restore the prefactor and opseq
+                state.sp = std::move(sp_copy);
+                // restore from front to back
+                ranges::get_cursor(op_left_iter).insert(std::move(left));
+                ++state.opseq_size;
+                ranges::get_cursor(op_right_iter).insert(std::move(right));
+                ++state.opseq_size;
+                state.disconnect(nop_connections_,
+                                 ranges::get_cursor(op_right_iter),
+                                 ranges::get_cursor(op_left_iter));
+                //            std::wcout << "  restored opseq = " <<
+                //            to_latex(state.opseq) << std::endl;
+              }  // connect succeeded
+            }    // topologically-unique contraction
+          }      // can_contract
           ++op_right_iter;
         } else {
           ++op_right_iter;

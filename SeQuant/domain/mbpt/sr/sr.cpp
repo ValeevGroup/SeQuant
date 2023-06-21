@@ -207,10 +207,11 @@ ExprPtr W() {
 
 ExprPtr H() { return H1() + H2(); }
 
-ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> op_connections,
+ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
                bool use_top) {
   FWickTheorem wick{expr};
-  wick.spinfree(false).use_topology(use_top).set_op_connections(op_connections);
+  wick.spinfree(false).use_topology(use_top).set_nop_connections(
+      nop_connections);
   auto result = wick.compute();
   simplify(result);
   if (Logger::get_instance().wick_stats) {

@@ -128,11 +128,12 @@ ExprPtr H();
 /// computes the vacuum expectation value (VEV)
 
 /// @param[in] expr input expression
-/// @param[in] op_connections specifies the connectivity to be ensured
+/// @param[in] nop_connections specifies the pairs of normal operators to be
+/// connected
 /// @param[in] use_top if true, topological equivalence will be utilized
 /// @return the VEV
 ExprPtr vac_av(ExprPtr expr,
-               std::vector<std::pair<int, int>> op_connections = {},
+               std::vector<std::pair<int, int>> nop_connections = {},
                bool use_top = true);
 
 // these produce operator-level expressions
@@ -141,6 +142,9 @@ namespace op {
 ExprPtr H1();
 
 ExprPtr H2();
+ExprPtr H2_oo_vv();
+ExprPtr H2_vv_vv();
+
 // TODO: Implement rest of the functions
 ExprPtr H0mp();
 ExprPtr H1mp();
@@ -191,7 +195,8 @@ bool lowers_rank_or_lower_to_vacuum(const ExprPtr& op_or_op_product,
 /// computes the vacuum expectation value (VEV)
 
 /// @param[in] expr input expression
-/// @param[in] op_connections list of pairs of operators to connect
+/// @param[in] op_connections list of pairs of labels of operators to be
+/// connected
 /// @return the VEV
 ExprPtr vac_av(
     ExprPtr expr,

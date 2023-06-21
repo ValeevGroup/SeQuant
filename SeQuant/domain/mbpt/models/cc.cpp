@@ -34,21 +34,21 @@ class screened_vac_av {
   /// and
   /// \param expr input expression, must contain `A`, `H` (`f` or `g`),
   ///        and `K` `T`'s
-  /// \param op_connections specifies the connectivity
-  /// \param screen if false, will use brute-force evaluation
-  /// \param use_topology if true, forces topological optimization
-  /// \param canonical_only if true AND \p screen is true then optimize
+  /// \param nop_connections specifies which pairs of normal operators to be
+  /// connected \param screen if false, will use brute-force evaluation \param
+  /// use_topology if true, forces topological optimization \param
+  /// canonical_only if true AND \p screen is true then optimize
   ///        evaluation by combining equivalent terms such that VEV evaluation
   ///        only involves canonical products (e.g., evaluate only H*T1*T2 and
   ///        not H*T2*T1)
   /// \return the resulting VEV
   ExprPtr t(const ExprPtr& expr,
-            std::initializer_list<std::pair<int, int>> op_connections,
+            std::initializer_list<std::pair<int, int>> nop_connections,
             bool screen = true, bool use_topology = true,
             bool canonical_only = true) {
     // TODO: Implement antisymm here
     if (!screen)
-      return sequant::mbpt::sr::vac_av(expr, op_connections, use_topology);
+      return sequant::mbpt::sr::vac_av(expr, nop_connections, use_topology);
 
     ExprPtr input = expr;
     // expand, if possible
@@ -132,7 +132,7 @@ class screened_vac_av {
     if (screened_input->size() == 0)
       return ex<Constant>(0);
     else {
-      return sequant::mbpt::sr::vac_av(screened_input, op_connections,
+      return sequant::mbpt::sr::vac_av(screened_input, nop_connections,
                                        use_topology);
     }
   }  // screened_vac_av_t
@@ -142,23 +142,23 @@ class screened_vac_av {
   /// and
   /// \param expr input expression, must contain `A`, `H` (`f` or `g`), `Λ`,
   ///        and `K` `T`'s
-  /// \param op_connections specifies the connectivity
-  /// \param screen if false, will use brute-force evaluation
-  /// \param use_topology if true, forces topological optimization
-  /// \param canonical_only if true AND \p screen is true then optimize
+  /// \param nop_connections specifies which pairs of normal operators to be
+  /// connected \param screen if false, will use brute-force evaluation \param
+  /// use_topology if true, forces topological optimization \param
+  /// canonical_only if true AND \p screen is true then optimize
   ///        evaluation by combining equivalent terms such that VEV evaluation
   ///        only involves canonical products (e.g., evaluate only H*T1*T2 and
   ///        not H*T2*T1)
   /// \return the resulting VEV
   ExprPtr lambda(const ExprPtr& expr,
-                 std::initializer_list<std::pair<int, int>> op_connections,
+                 std::initializer_list<std::pair<int, int>> nop_connections,
                  bool screen = true, bool use_topology = true,
                  bool canonical_only = true) {
     // screening for lambda is not available now
     assert(!screen &&
            "screening for λ residual equations is not available now");
     if (!screen)
-      return sequant::mbpt::sr::vac_av(expr, op_connections, use_topology);
+      return sequant::mbpt::sr::vac_av(expr, nop_connections, use_topology);
 
     ExprPtr input = expr;
     // expand, if possible
@@ -266,7 +266,7 @@ class screened_vac_av {
     if (screened_input->size() == 0)
       return ex<Constant>(0);
     else {
-      return sequant::mbpt::sr::vac_av(screened_input, op_connections,
+      return sequant::mbpt::sr::vac_av(screened_input, nop_connections,
                                        use_topology);
     }
   }  // screened_vac_av_lambda

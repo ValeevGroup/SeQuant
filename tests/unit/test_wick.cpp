@@ -538,7 +538,7 @@ SECTION("fermi vacuum") {
     REQUIRE(result1->size() == 9);
     auto wick2 = FWickTheorem{opseq};
     auto result2 = wick2.set_external_indices(ext_indices)
-                       .set_op_connections({{1, 2}, {1, 3}})
+                       .set_nop_connections({{1, 2}, {1, 3}})
                        .spinfree(false)
                        .compute();
     REQUIRE(result2->is<Sum>());
@@ -825,7 +825,7 @@ SECTION("Expression Reduction") {
              IndexList{L"i_5", L"i_6"}, V)});
     auto wick = FWickTheorem{opseq};
     wick.spinfree(false)
-        .set_op_connections({{1, 2}, {1, 3}})
+        .set_nop_connections({{1, 2}, {1, 3}})
         .use_topology(true);
 
     if (use_op_partitions) wick.set_op_partitions({{2, 3}});
@@ -894,7 +894,7 @@ SECTION("Expression Reduction") {
                              WstrList{L"i_6", L"i_7", L"i_8"}, V);
     FWickTheorem wick{P3 * H2 * T2 * T3};
     wick.spinfree(false).use_topology(topology);
-    if (connected_only) wick.set_op_connections({{1, 2}, {1, 3}});
+    if (connected_only) wick.set_nop_connections({{1, 2}, {1, 3}});
     auto wick_result = wick.compute();
 
     std::wcout << "P3*H2*T2*T3 = " << to_latex_align(wick_result, 20)
