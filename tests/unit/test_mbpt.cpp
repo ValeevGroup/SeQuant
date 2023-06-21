@@ -412,8 +412,8 @@ TEST_CASE("MBPT", "[mbpt]") {
     SEQUANT_PROFILE_SINGLE("wick(H**T12**T12 -> R2)", {
       auto result = vac_av(A(2) * H() * T(2) * T(2), {{1, 2}, {1, 3}});
 
-      std::wcout << "H*T12*T12 -> R2 = " << to_latex_align(result, 20)
-                 << std::endl;
+      //      std::wcout << "H*T12*T12 -> R2 = " << to_latex_align(result, 20)
+      //                 << std::endl;
       REQUIRE(result->size() == 15);
     });
 
