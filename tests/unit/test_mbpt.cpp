@@ -10,6 +10,7 @@
 #include "SeQuant/domain/mbpt/sr/sr.hpp"
 
 #include "catch.hpp"
+#include "test_config.hpp"
 
 TEST_CASE("NBodyOp", "[mbpt]") {
   using namespace sequant;
@@ -425,6 +426,50 @@ TEST_CASE("MBPT", "[mbpt]") {
                  << std::endl;
       REQUIRE(result->size() == 4);
     });
+
+    const std::vector<std::pair<std::wstring, std::wstring>> new_op_connect = {
+        {L"h", L"t"}, {L"f", L"t"}, {L"g", L"t"}};
+
+#ifndef SEQUANT_SKIP_LONG_TESTS
+    // the longest term in CCSDTQP
+    // H2**T2**T2**T3 -> R5
+    {
+      ExprPtr ref_result;
+      SEQUANT_PROFILE_SINGLE("wick(H2**T2**T2**T3 -> R5)", {
+        ref_result =
+            op::vac_av(op::A(5) * op::H2() * op::T_(2) * op::T_(2) * op::T_(3),
+                       new_op_connect);
+        REQUIRE(ref_result->size() == 7);
+      });
+      // now computed using specific component of H2
+      SEQUANT_PROFILE_SINGLE("wick(H2(oo;vv)**T2**T2**T3 -> R5)", {
+        auto result = op::vac_av(
+            op::A(5) * op::H2_oo_vv() * op::T_(2) * op::T_(2) * op::T_(3),
+            new_op_connect);
+        REQUIRE(result->size() == ref_result->size());
+      });
+    }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
+
+    // troubleshooting the use of topology in WickTheorem
+    // H2**T2**T2 -> R4
+    {
+      ExprPtr result;
+      //      Logger::get_instance().wick_harness = true;
+      //      Logger::get_instance().wick_stats = true;
+      //      Logger::get_instance().wick_topology = true;
+      //      Logger::get_instance().wick_contract = true;
+      SEQUANT_PROFILE_SINGLE("wick(H2(vv;vv)**T2**T2 -> R4)", {
+        result = op::vac_av(op::A(4) * op::H2_vv_vv() * op::T_(2) * op::T_(2),
+                            new_op_connect);
+        REQUIRE(result->size() == 4);  // single term
+      });
+      //      Logger::get_instance().wick_harness = false;
+      //      Logger::get_instance().wick_stats = false;
+      //      Logger::get_instance().wick_topology = false;
+      //      Logger::get_instance().wick_contract = false;
+    }
+
   }  // SECTION ("SRSO")
 
   SECTION("SRSO Fock") {

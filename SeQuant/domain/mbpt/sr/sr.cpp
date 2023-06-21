@@ -270,6 +270,36 @@ ExprPtr H2() {
                   });
 }
 
+ExprPtr H2_oo_vv() {
+  return ex<op_t>(
+      []() -> std::wstring_view { return L"g"; },
+      [=]() -> ExprPtr {
+        using namespace sequant::mbpt::sr;
+        return make_op(
+            OpType::g,
+            {IndexSpace::active_occupied, IndexSpace::active_occupied},
+            {IndexSpace::active_unoccupied, IndexSpace::active_unoccupied})();
+      },
+      [=](qnc_t& qns) {
+        qns = combine(qnc_t{2, 0, 0, 2}, qns);
+      });
+}
+
+ExprPtr H2_vv_vv() {
+  return ex<op_t>(
+      []() -> std::wstring_view { return L"g"; },
+      [=]() -> ExprPtr {
+        using namespace sequant::mbpt::sr;
+        return make_op(
+            OpType::g,
+            {IndexSpace::active_unoccupied, IndexSpace::active_unoccupied},
+            {IndexSpace::active_unoccupied, IndexSpace::active_unoccupied})();
+      },
+      [=](qnc_t& qns) {
+        qns = combine(qnc_t{0, 0, 2, 2}, qns);
+      });
+}
+
 ExprPtr H() { return H1() + H2(); }
 
 ExprPtr T_(std::size_t K) {

@@ -121,7 +121,6 @@ class make_op {
   const auto nket() const { return ket_spaces_.size(); };
 
  public:
-
   // clang-format off
   /// @param[in] op the operator type:
   /// - if @p op is a (pure) excitation operator bra/ket indices
@@ -131,13 +130,15 @@ class make_op {
   /// @param[in] nbra number of bra indices/creators
   /// @param[in] nket number of ket indices/annihilators; if not specified, will be set to @p nbra
   // clang-format on
-  make_op(OpType op, std::size_t nbra, std::size_t nket  = std::numeric_limits<std::size_t>::max());
+  make_op(OpType op, std::size_t nbra,
+          std::size_t nket = std::numeric_limits<std::size_t>::max());
 
   /// @param[in] bras the bra indices/creators
   /// @param[in] kets the ket indices/annihilators
   /// @param[in] op the operator type
   /// @warning this operator is only to be used for general @p op
-  make_op(OpType op, std::initializer_list<IndexSpace::Type> bras, std::initializer_list<IndexSpace::Type> kets);
+  make_op(OpType op, std::initializer_list<IndexSpace::Type> bras,
+          std::initializer_list<IndexSpace::Type> kets);
 
   ExprPtr operator()() const;
 };
@@ -173,6 +174,8 @@ namespace op {
 ExprPtr H1();
 
 ExprPtr H2();
+ExprPtr H2_oo_vv();
+ExprPtr H2_vv_vv();
 
 // TODO: Implement rest of the functions
 ExprPtr H0mp();
