@@ -89,6 +89,7 @@ class Singleton {
 
 struct Logger : public Singleton<Logger> {
   bool wick_harness = false;
+  bool wick_topology = false;
   bool wick_contract = false;
   bool wick_reduce = false;
   bool wick_stats = false;
@@ -102,6 +103,7 @@ struct Logger : public Singleton<Logger> {
   friend class Singleton<Logger>;
   Logger(int log_level = 0) {
     if (log_level > 0) {
+      wick_topology = true;
       wick_contract = true;
       wick_reduce = true;
       wick_stats = true;

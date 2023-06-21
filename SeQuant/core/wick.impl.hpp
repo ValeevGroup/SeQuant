@@ -717,6 +717,21 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
           int max_index_partition_idx;
           std::tie(index_to_partition_idx, max_index_partition_idx) =
               compute_partitions(index_vertex_idx, exclude_index_vertex_pair);
+
+          if (Logger::get_instance().wick_topology) {
+            std::wcout
+                << "WickTheorem<S>::compute: topological index partitions:{\n";
+            ranges::for_each(index_to_partition_idx,
+                             [&tn_edges](auto &&vidx_pidx) {
+                               auto &&[vidx, pidx] = vidx_pidx;
+                               assert(vidx < tn_edges.size());
+                               auto &idx = (tn_edges.begin() + vidx)->idx();
+                               std::wcout << "Index " << idx.full_label()
+                                          << " -> partition " << pidx << "\n";
+                             });
+            std::wcout << "}" << std::endl;
+          }
+
           {
             // use_topology_=true in full contractions will assume that all
             // equivalent indices in NormalOperator's bra or ket are
@@ -806,6 +821,12 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
               }
             });
         if (!input_.empty()) {
+          if (Logger::get_instance().wick_contract) {
+            std::wcout
+                << "WickTheorem<S>::compute: input to compute_nopseq = {\n";
+            for (auto &&nop : input_) std::wcout << to_latex(nop) << "\n";
+            std::wcout << "}" << std::endl;
+          }
           auto result = compute_nopseq(count_only);
           if (result) {  // simplify if obtained nonzero ...
             result = prefactor * result;
