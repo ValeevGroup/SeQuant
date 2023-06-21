@@ -719,16 +719,16 @@ SECTION("Expression Reduction") {
 
   // 2-body ^ 1-body ^ 1-body
   SEQUANT_PROFILE_SINGLE("wick(H2*T1*T1)", {
-    constexpr bool use_op_partitions = true;
+    constexpr bool use_nop_partitions = true;
     auto opseq = FNOperatorSeq(
         {FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}, V),
          FNOperator({L"a_4"}, {L"i_4"}, V), FNOperator({L"a_5"}, {L"i_5"}, V)});
     auto wick = FWickTheorem{opseq};
     wick.spinfree(false).use_topology(true);
-    if (use_op_partitions) wick.set_op_partitions({{1, 2}});
+    if (use_nop_partitions) wick.set_nop_partitions({{1, 2}});
     auto wick_result = wick.compute();
     REQUIRE(wick_result->is<Sum>());
-    REQUIRE(wick_result->size() == (use_op_partitions ? 2 : 4));
+    REQUIRE(wick_result->size() == (use_nop_partitions ? 2 : 4));
 
     // multiply tensor factors and expand
     auto wick_result_2 =
@@ -810,7 +810,7 @@ SECTION("Expression Reduction") {
 
   // 2=body ^ 2-body ^ 2-body ^ 2-body with dependent (PNO) indices
   SEQUANT_PROFILE_SINGLE("wick(P2*H2*T2*T2)", {
-    constexpr bool use_op_partitions = true;
+    constexpr bool use_nop_partitions = true;
     auto opseq = FNOperatorSeq(
         {FNOperator(
              IndexList{L"i_1", L"i_2"},
@@ -828,10 +828,10 @@ SECTION("Expression Reduction") {
         .set_nop_connections({{1, 2}, {1, 3}})
         .use_topology(true);
 
-    if (use_op_partitions) wick.set_op_partitions({{2, 3}});
+    if (use_nop_partitions) wick.set_nop_partitions({{2, 3}});
     auto wick_result = wick.compute();
     REQUIRE(wick_result->is<Sum>());
-    REQUIRE(wick_result->size() == (use_op_partitions ? 17 : 34));
+    REQUIRE(wick_result->size() == (use_nop_partitions ? 17 : 34));
 
     // multiply tensor factors and expand
     auto wick_result_2 =

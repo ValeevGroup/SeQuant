@@ -84,14 +84,14 @@ class WickTheorem {
   /// Tensor objects are
   ///   considered equivalent. (If a NormalOperatorSequence is given as input,
   ///   such use of topological equivalence if enabled by invoking
-  ///   set_op_partitions() ).
+  ///   set_nop_partitions() ).
   ///
   /// This is useful to to eliminate the topologically-equivalent contractions
   /// when fully-contracted result (i.e. the vacuum average) is sought.
   /// By default the use of topology is not enabled.
   /// @param sf if true, will utilize the topology to minimize work.
   /// @warning currently is only supported if full contractions are requested
-  /// @sa set_op_partitions()
+  /// @sa set_nop_partitions()
   WickTheorem &use_topology(bool ut) {
     assert(full_contractions_);
     use_topology_ = ut;
@@ -123,7 +123,6 @@ class WickTheorem {
   /// @param op_index_pairs the list of pairs of op indices to be connected in
   /// the result
   ///
-  /// TODO rename op -> nop to distinguish Op and NormalOperator
   ///@{
 
   /// @tparam IndexPairContainer a sequence of std::pair<Integer,Integer>
@@ -187,12 +186,11 @@ class WickTheorem {
   ///           not mentioned in @c op_partitions) will be completed in
   ///           compute_nopseq().
   ///
-  /// TODO rename op -> nop to distinguish Op and NormalOperator
   ///@{
 
   /// @tparam IndexListContainer a sequence of sequences of Integer types
   template <typename IndexListContainer>
-  WickTheorem &set_op_partitions(IndexListContainer &&op_partitions) {
+  WickTheorem &set_nop_partitions(IndexListContainer &&op_partitions) {
     using std::size;
     size_t partition_cnt = 0;
     auto current_nops = size(nop_topological_partition_);
@@ -211,9 +209,9 @@ class WickTheorem {
 
   /// @tparam Integer an integral type
   template <typename Integer = long>
-  WickTheorem &set_op_partitions(
+  WickTheorem &set_nop_partitions(
       std::initializer_list<std::initializer_list<Integer>> op_partitions) {
-    return this->set_op_partitions<const decltype(op_partitions) &>(
+    return this->set_nop_partitions<const decltype(op_partitions) &>(
         op_partitions);
   }
   ///@}
@@ -329,20 +327,18 @@ class WickTheorem {
 
   /// carries state down the stack of recursive calls
   struct NontensorWickState {
-    NontensorWickState(
-        const NormalOperatorSequence<S> &opseq,
-        /// TODO rename op -> nop to distinguish Op and NormalOperator
-        const container::svector<size_t> &op_toppart)
-        : opseq(opseq),
-          opseq_size(opseq.opsize()),
+    NontensorWickState(const NormalOperatorSequence<S> &nopseq,
+                       const container::svector<size_t> &nop_toppart)
+        : nopseq(nopseq),
+          nopseq_size(nopseq.opsize()),
           level(0),
           left_op_offset(0),
           count_only(false),
           count(0),
-          nop_connections(opseq.size()),
-          nop_adjacency_matrix(opseq.size() * (opseq.size() - 1) / 2, 0),
-          nop_nconnections(opseq.size(), 0),
-          nop_topological_partition(op_toppart) {
+          nop_connections(nopseq.size()),
+          nop_adjacency_matrix(nopseq.size() * (nopseq.size() - 1) / 2, 0),
+          nop_nconnections(nopseq.size(), 0),
+          nop_topological_partition(nop_toppart) {
       init_topological_partitions();
       init_input_index_columns();
     }
@@ -352,10 +348,10 @@ class WickTheorem {
     NontensorWickState &operator=(const NontensorWickState &) = delete;
     NontensorWickState &operator=(NontensorWickState &&) = delete;
 
-    NormalOperatorSequence<S> opseq;  //!< current state of operator sequence
-    std::size_t opseq_size;           //!< current size of opseq
-    Product sp;                       //!< current prefactor
-    int level;                        //!< level in recursive wick call stack
+    NormalOperatorSequence<S> nopseq;  //!< current state of operator sequence
+    std::size_t nopseq_size;           //!< current size of opseq
+    Product sp;                        //!< current prefactor
+    int level;                         //!< level in recursive wick call stack
     size_t left_op_offset;  //!< where to start looking for contractions
     bool count_only;  //!< if true, only track the total number of summands in
                       //!< the result (i.e. 1 (the normal product) + the number
@@ -450,7 +446,7 @@ class WickTheorem {
     // populates target_particle_ops
     void init_input_index_columns() {
       // for each NormalOperator
-      for (auto &nop : opseq) {
+      for (auto &nop : nopseq) {
         using ranges::views::reverse;
         using ranges::views::zip;
 
@@ -678,7 +674,7 @@ class WickTheorem {
           std::mutex *> &result,
       NontensorWickState &state) const {
     using opseq_view_type = flattened_rangenest<NormalOperatorSequence<S>>;
-    auto opseq_view = opseq_view_type(&state.opseq);
+    auto opseq_view = opseq_view_type(&state.nopseq);
     using std::begin;
     using std::end;
 
@@ -768,7 +764,7 @@ class WickTheorem {
                              << to_latex(*op_left_iter) << " with "
                              << to_latex(*op_right_iter)
                              << " (top_degen=" << top_degen << ")" << std::endl;
-                  std::wcout << " current opseq = " << to_latex(state.opseq)
+                  std::wcout << " current opseq = " << to_latex(state.nopseq)
                              << std::endl;
                 }
 
@@ -795,10 +791,10 @@ class WickTheorem {
                 // remove from back to front
                 Op<S> right = *op_right_iter;
                 ranges::get_cursor(op_right_iter).erase();
-                --state.opseq_size;
+                --state.nopseq_size;
                 Op<S> left = *op_left_iter;
                 ranges::get_cursor(op_left_iter).erase();
-                --state.opseq_size;
+                --state.nopseq_size;
 
                 //            std::wcout << "  opseq after contraction = " <<
                 //            to_latex(state.opseq) << std::endl;
@@ -807,7 +803,7 @@ class WickTheorem {
                 if (!state.sp.empty()) {
                   // update the result if nothing left to contract and
                   if (!full_contractions_ ||
-                      (full_contractions_ && state.opseq_size == 0)) {
+                      (full_contractions_ && state.nopseq_size == 0)) {
                     if (!state.count_only) {
                       if (full_contractions_) {
                         result.second->lock();
@@ -823,7 +819,7 @@ class WickTheorem {
                         result.second->unlock();
                       } else {
                         auto [phase, op] = normalize(
-                            state.opseq, state.make_target_partner_indices());
+                            state.nopseq, state.make_target_partner_indices());
                         result.second->lock();
                         result.first->push_back(std::make_pair(
                             std::move(state.sp.deep_copy().scale(phase)),
@@ -838,7 +834,7 @@ class WickTheorem {
                   }
                 }
 
-                if (state.opseq_size != 0) {
+                if (state.nopseq_size != 0) {
                   const auto current_num_useful_contractions =
                       stats_.num_useful_contractions.load();
                   ++state.level;
@@ -856,9 +852,9 @@ class WickTheorem {
                 state.sp = std::move(sp_copy);
                 // restore from front to back
                 ranges::get_cursor(op_left_iter).insert(std::move(left));
-                ++state.opseq_size;
+                ++state.nopseq_size;
                 ranges::get_cursor(op_right_iter).insert(std::move(right));
-                ++state.opseq_size;
+                ++state.nopseq_size;
                 state.disconnect(nop_connections_,
                                  ranges::get_cursor(op_right_iter),
                                  ranges::get_cursor(op_left_iter));

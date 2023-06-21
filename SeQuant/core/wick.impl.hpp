@@ -633,7 +633,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
           };
 
           // compute NormalOperator->partition map, convert to partition lists
-          // (if any), and register via set_op_partitions to be used in full
+          // (if any), and register via set_nop_partitions to be used in full
           // contractions
           auto [nop_to_partition_idx, max_nop_partition_idx] =
               compute_partitions(nop_vertex_idx,
@@ -678,7 +678,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
               std::wcout << "}" << std::endl;
             }
 
-            this->set_op_partitions(nop_partitions);
+            this->set_nop_partitions(nop_partitions);
           }
 
           // compute Index->partition map, and convert to partition lists (if
