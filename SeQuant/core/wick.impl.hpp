@@ -404,30 +404,32 @@ struct NullNormalOperatorCanonicalizerDeregister {
 
 template <Statistics S>
 ExprPtr WickTheorem<S>::compute(const bool count_only) {
-  // avoid recanonicalization of operators produced by WickTheorem
+  // this is used to detect whether this is part of compute() applied to a Sum
+  static bool applied_to_sum = false;
+
+  // need to avoid recanonicalization of operators produced by WickTheorem
   // by rapid canonicalization to avoid undoing all the good
-  // the NormalOperator<S>::normalize did
-  std::unique_ptr<void *, detail::NullNormalOperatorCanonicalizerDeregister<S>>
-      raii_tmp;
-  {
-    static std::mutex mtx;
-    static std::atomic<bool> disabled_canonicalization_of_normal_operators =
-        false;
-    if (!disabled_canonicalization_of_normal_operators) {
-      std::scoped_lock lk(mtx);
+  // the NormalOperator<S>::normalize did ... use RAII
+  // 1. detail::NullNormalOperatorCanonicalizerDeregister<S> will restore state
+  // of tensor canonicalizer
+  // 2. this is the RAII object whose destruction will restore state of
+  // the tensor canonicalizer
+  std::unique_ptr<void, detail::NullNormalOperatorCanonicalizerDeregister<S>>
+      raii_null_nop_canonicalizer;
+  // 3. this makes the RAII object  ... NOT reentrant, only to be called in
+  // top-level WickTheorem after initial canonicalization
+  auto disable_nop_canonicalization = [&raii_null_nop_canonicalizer]() {
+    if (!raii_null_nop_canonicalizer) {
       const auto nop_labels = NormalOperator<S>::labels();
       assert(nop_labels.size() == 2);
-      if (!disabled_canonicalization_of_normal_operators) {
-        TensorCanonicalizer::try_register_instance(
-            std::make_shared<NullTensorCanonicalizer>(), nop_labels[0]);
-        TensorCanonicalizer::try_register_instance(
-            std::make_shared<NullTensorCanonicalizer>(), nop_labels[1]);
-        disabled_canonicalization_of_normal_operators = true;
-        raii_tmp = decltype(raii_tmp)(
-            nullptr, detail::NullNormalOperatorCanonicalizerDeregister<S>{});
-      }
+      TensorCanonicalizer::try_register_instance(
+          std::make_shared<NullTensorCanonicalizer>(), nop_labels[0]);
+      TensorCanonicalizer::try_register_instance(
+          std::make_shared<NullTensorCanonicalizer>(), nop_labels[1]);
+      raii_null_nop_canonicalizer = decltype(raii_null_nop_canonicalizer)(
+          (void *)&raii_null_nop_canonicalizer, {});
     }
-  }
+  };
 
   // have an Expr as input? Apply recursively ...
   if (expr_input_) {
@@ -441,8 +443,15 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
                  << to_latex_align(expr_input_) << std::endl;
     // if sum, canonicalize and apply to each summand ...
     if (expr_input_->is<Sum>()) {
+      assert(applied_to_sum == false);
+      applied_to_sum = true;
+
+      // initial full canonicalization
       canonicalize(expr_input_);
       assert(!expr_input_->as<Sum>().empty());
+
+      // NOW disable canonicalization of normal operators
+      disable_nop_canonicalization();
 
       // parallelize over summands
       auto result = std::make_shared<Sum>();
@@ -474,14 +483,24 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
       }
       if (result->summands().size() == 1)
         result_expr = std::move(result->summands()[0]);
+
+      assert(applied_to_sum == true);
+      applied_to_sum = false;
+
       return result_expr;
     }
     // ... else if a product, find NormalOperatorSequence, if any, and compute
     // ...
     else if (expr_input_->is<Product>()) {
-      auto canon_byproduct = expr_input_->rapid_canonicalize();
-      assert(canon_byproduct ==
-             nullptr);  // canonicalization of Product always returns nullptr
+      if (!applied_to_sum) {  // no need to canonicalize if this is part of
+                              // compute() on a Sum
+        auto canon_byproduct = expr_input_->rapid_canonicalize();
+        assert(canon_byproduct ==
+               nullptr);  // canonicalization of Product always returns nullptr
+        // NOW disable canonicalization of normal operators
+        disable_nop_canonicalization();
+      }
+
       // NormalOperators should be all at the end
       auto first_nop_it = ranges::find_if(
           *expr_input_,
@@ -491,6 +510,11 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
         // compute and record/analyze topological NormalOperator and Index
         // partitions
         if (use_topology_) {
+          if (Logger::get_instance().wick_topology)
+            std::wcout
+                << "WickTheorem<S>::compute: input to topology computation = "
+                << to_latex(expr_input_) << std::endl;
+
           // construct graph representation of the tensor product
           TensorNetwork tn(expr_input_->as<Product>().factors());
           auto [graph, vlabels, vcolors, vtypes] = tn.make_bliss_graph();
@@ -500,8 +524,14 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
           const auto &tn_tensors = tn.tensors();
 
           // identify vertex indices of NormalOperators and Indices
-          container::set<size_t> nop_vertex_idx;
-          container::set<size_t> index_vertex_idx;
+          container::set<size_t> nop_vertex_idx;  // list of vertex indices
+                                                  // corresponding to
+                                                  // NormalOperator objects on
+                                                  // the TN graph
+          container::set<size_t>
+              index_vertex_idx;  // list of vertex indices
+                                 // corresponding to
+                                 // Index objects on the TN graph
           {
             const auto &nop_labels = NormalOperator<S>::labels();
             const auto nop_labels_begin = begin(nop_labels);
@@ -636,15 +666,17 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
               if (p_found) ++partition_cnt;
             }
 
-            //            std::wcout << "topological nop partitions:{\n";
-            //            ranges::for_each(nop_partitions, [](auto&& part) {
-            //              std::wcout << "{";
-            //              ranges::for_each(part, [](auto&& p) {
-            //                std::wcout << p << " ";
-            //              });
-            //              std::wcout << "}";
-            //            });
-            //            std::wcout << "}" << std::endl;
+            if (Logger::get_instance().wick_topology) {
+              std::wcout
+                  << "WickTheorem<S>::compute: topological nop partitions:{\n";
+              ranges::for_each(nop_partitions, [](auto &&part) {
+                std::wcout << "{";
+                ranges::for_each(part,
+                                 [](auto &&p) { std::wcout << p << " "; });
+                std::wcout << "}";
+              });
+              std::wcout << "}" << std::endl;
+            }
 
             this->set_op_partitions(nop_partitions);
           }
@@ -679,7 +711,9 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
                   connected_to_same_nop(edge1.second(), edge2.second()));
             return exclude;
           };
-          container::map<size_t, size_t> index_to_partition_idx;
+          container::map<size_t, size_t>
+              index_to_partition_idx;  // maps vertex index (see
+                                       // index_vertex_idx) to partition index
           int max_index_partition_idx;
           std::tie(index_to_partition_idx, max_index_partition_idx) =
               compute_partitions(index_vertex_idx, exclude_index_vertex_pair);
