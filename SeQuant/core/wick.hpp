@@ -191,17 +191,18 @@ class WickTheorem {
 
   /// @tparam IndexListContainer a sequence of sequences of Integer types
   template <typename IndexListContainer>
-  WickTheorem &set_nop_partitions(IndexListContainer &&op_partitions) {
+  WickTheorem &set_nop_partitions(IndexListContainer &&nop_partitions) {
     using std::size;
     size_t partition_cnt = 0;
-    auto current_nops = size(nop_topological_partition_);
-    for (auto &&partition : op_partitions) {
+    auto current_nops = size(nop_topological_partitions_);
+    for (auto &&partition : nop_partitions) {
       for (auto &&op_idx : partition) {
         assert(op_idx >= 0);
         if (op_idx >= current_nops) {
-          current_nops = upsize_nop_topological_partition(op_idx + 1);
+          current_nops = upsize_topological_partitions(
+              op_idx + 1, TopologicalPartitionType::NormalOperator);
         }
-        nop_topological_partition_[op_idx] = partition_cnt + 1;
+        nop_topological_partitions_[op_idx] = partition_cnt + 1;
       }
       ++partition_cnt;
     }
@@ -211,9 +212,49 @@ class WickTheorem {
   /// @tparam Integer an integral type
   template <typename Integer = long>
   WickTheorem &set_nop_partitions(
-      std::initializer_list<std::initializer_list<Integer>> op_partitions) {
-    return this->set_nop_partitions<const decltype(op_partitions) &>(
-        op_partitions);
+      std::initializer_list<std::initializer_list<Integer>> nop_partitions) {
+    return this->set_nop_partitions<const decltype(nop_partitions) &>(
+        nop_partitions);
+  }
+  ///@}
+
+  /// @name specifiers of partitions composed of topologically-equivalent
+  ///       normal operators
+  ///
+  /// Specifies sets of topologically-equivalent indices that can be used to
+  /// produce topologically-unique Wick contractions
+  /// @param index_partitions list of index partitions
+  /// @note if this partitions are not given, every Index is assumed to be in
+  /// its own partition
+  ///
+  ///@{
+
+  /// @tparam IndexListContainer a sequence of sequences of Integer types
+  template <typename IndexListContainer>
+  WickTheorem &set_index_partitions(IndexListContainer &&index_partitions) {
+    using std::size;
+    size_t partition_cnt = 0;
+    auto current_size = size(index_topological_partitions_);
+    for (auto &&partition : index_partitions) {
+      for (auto &&idx : partition) {
+        assert(idx >= 0);
+        if (idx >= current_size) {
+          current_size = upsize_topological_partitions(
+              idx + 1, TopologicalPartitionType::Index);
+        }
+        index_topological_partitions_[idx] = partition_cnt + 1;
+      }
+      ++partition_cnt;
+    }
+    return *this;
+  }
+
+  /// @tparam Integer an integral type
+  template <typename Integer = long>
+  WickTheorem &set_index_partitions(
+      std::initializer_list<std::initializer_list<Integer>> index_partitions) {
+    return this->set_index_partitions<const decltype(index_partitions) &>(
+        index_partitions);
   }
   ///@}
 
@@ -289,21 +330,36 @@ class WickTheorem {
       nop_connections_input_;  // only used to cache input to
                                // set_nop_connections_
 
+  enum class TopologicalPartitionType { NormalOperator, Index };
+
   // for each operator specifies its topological partition (0 = topologically
   // unique)
-  mutable container::svector<size_t> nop_topological_partition_;
+  mutable container::svector<size_t> nop_topological_partitions_;
 
-  /// upsizes nop_topological_partition_, filling new entries with zeroes
-  /// noop if current size > new_size
-  /// @return the (updated) size of nop_topological_partition_
-  /// TODO rename op -> nop to distinguish Op and NormalOperator
-  size_t upsize_nop_topological_partition(size_t new_size) const {
+  // for each index specifies its topological partition (0 = topologically
+  // unique)
+  mutable container::svector<size_t> index_topological_partitions_;
+
+  /// upsizes `{nop,index}_topological_partition_`, filling new entries with
+  /// zeroes noop if current size > new_size
+  /// @param new_size the number of items in
+  /// `{nop,index}_topological_partition_`
+  /// @param type the type of partitions to update; if
+  /// `type==TopologicalPartitionType::NormalOperator` updates
+  /// `nop_topological_partitions_`, else updates index_topological_partitions_`
+  /// @return the (updated) size of `{nop,index}_topological_partition_`
+  size_t upsize_topological_partitions(size_t new_size,
+                                       TopologicalPartitionType type) const {
+    auto &topological_partitions =
+        type == TopologicalPartitionType::NormalOperator
+            ? nop_topological_partitions_
+            : index_topological_partitions_;
     using std::size;
-    const auto current_size = size(nop_topological_partition_);
+    const auto current_size = size(topological_partitions);
     if (new_size > current_size) {
-      nop_topological_partition_.resize(new_size);
+      topological_partitions.resize(new_size);
       for (size_t i = current_size; i != new_size; ++i)
-        nop_topological_partition_[i] = 0;
+        topological_partitions[i] = 0;
       return new_size;
     } else
       return current_size;
@@ -320,7 +376,8 @@ class WickTheorem {
       const_cast<WickTheorem<S> &>(*this).set_nop_connections(
           nop_connections_input_);
     // size nop_topological_partition_ to match input_, if needed
-    upsize_nop_topological_partition(input_.size());
+    upsize_topological_partitions(input_.size(),
+                                  TopologicalPartitionType::NormalOperator);
     // now compute
     auto result = compute_nontensor_wick(count_only);
     return std::move(result);
@@ -367,6 +424,10 @@ class WickTheorem {
     container::svector<size_t>
         nop_adjacency_matrix;  //!< number of connections between each nop, only
                                //!< lower triangle is kept
+    container::svector<size_t>
+        idxgrp_adjacency_matrix;  //!< number of connections between each
+                                  //!< (topologically-equivalent) index group,
+                                  //!< only lower triangle is kept
 
     container::svector<std::pair<Index, Index>>
         input_partner_indices;  //!< list of {cre,ann} pairs of Index objects in
@@ -601,7 +662,7 @@ class WickTheorem {
         result;      //!< current value of the result
     std::mutex mtx;  // used in critical sections updating the result
     auto result_plus_mutex = std::make_pair(&result, &mtx);
-    NontensorWickState state(input_, nop_topological_partition_);
+    NontensorWickState state(input_, nop_topological_partitions_);
     state.count_only = count_only;
     // TODO extract index->particle maps
 

@@ -717,42 +717,49 @@ SECTION("Expression Reduction") {
             L"1}{a_2}}}}");
   });
 
-  // 2-body ^ 1-body ^ 1-body
+  // 2-body ^ 1-body ^ 1-body, with/without using topology
   SEQUANT_PROFILE_SINGLE("wick(H2*T1*T1)", {
-    constexpr bool use_nop_partitions = true;
-    auto opseq = FNOperatorSeq(
-        {FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}, V),
-         FNOperator({L"a_4"}, {L"i_4"}, V), FNOperator({L"a_5"}, {L"i_5"}, V)});
-    auto wick = FWickTheorem{opseq};
-    wick.spinfree(false).use_topology(true);
-    if (use_nop_partitions) wick.set_nop_partitions({{1, 2}});
-    auto wick_result = wick.compute();
-    REQUIRE(wick_result->is<Sum>());
-    REQUIRE(wick_result->size() == (use_nop_partitions ? 2 : 4));
+    for (auto&& use_nop_partitions : {true, false}) {
+      for (auto&& use_index_partitions : {true, false}) {
+        auto opseq =
+            FNOperatorSeq({FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}, V),
+                           FNOperator({L"a_4"}, {L"i_4"}, V),
+                           FNOperator({L"a_5"}, {L"i_5"}, V)});
+        auto wick = FWickTheorem{opseq};
+        wick.spinfree(false).use_topology(use_nop_partitions ||
+                                          use_index_partitions);
+        if (use_nop_partitions) wick.set_nop_partitions({{1, 2}});
+        if (use_index_partitions) wick.set_index_partitions({{1, 2}, {3, 4}});
+        auto wick_result = wick.compute();
+        REQUIRE(wick_result->is<Sum>());
+        REQUIRE(wick_result->size() == (use_nop_partitions ? 2 : 4));
 
-    // multiply tensor factors and expand
-    auto wick_result_2 =
-        ex<Tensor>(L"g", WstrList{L"p_1", L"p_2"}, WstrList{L"p_3", L"p_4"},
-                   Symmetry::antisymm) *
-        ex<Tensor>(L"t", WstrList{L"a_4"}, WstrList{L"i_4"},
-                   Symmetry::antisymm) *
-        ex<Tensor>(L"t", WstrList{L"a_5"}, WstrList{L"i_5"},
-                   Symmetry::antisymm) *
-        wick_result;
-    expand(wick_result_2);
-    wick.reduce(wick_result_2);
-    rapid_simplify(wick_result_2);
-    TensorCanonicalizer::register_instance(
-        std::make_shared<DefaultTensorCanonicalizer>(std::vector<Index>{}));
-    canonicalize(wick_result_2);
-    rapid_simplify(wick_result_2);
+        // multiply tensor factors and expand
+        auto wick_result_2 =
+            ex<Tensor>(L"g", WstrList{L"p_1", L"p_2"}, WstrList{L"p_3", L"p_4"},
+                       Symmetry::antisymm) *
+            ex<Tensor>(L"t", WstrList{L"a_4"}, WstrList{L"i_4"},
+                       Symmetry::antisymm) *
+            ex<Tensor>(L"t", WstrList{L"a_5"}, WstrList{L"i_5"},
+                       Symmetry::antisymm) *
+            wick_result;
+        expand(wick_result_2);
+        wick.reduce(wick_result_2);
+        rapid_simplify(wick_result_2);
+        TensorCanonicalizer::register_instance(
+            std::make_shared<DefaultTensorCanonicalizer>(std::vector<Index>{}));
+        canonicalize(wick_result_2);
+        rapid_simplify(wick_result_2);
 
-    print("H2*T1*T1 = ", wick_result_2);
-    REQUIRE(to_latex(wick_result_2) ==
+        print("H2*T1*T1 = ", wick_result_2);
+        REQUIRE(
+            to_latex(wick_result_2) ==
             L"{{{4}}"
             L"{\\bar{g}^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}}_{{a_1}}}{t^{{i_"
             L"2}}_{{a_"
             L"2}}}}");
+      }  // use_index_partitions
+    }    // use_nop_partitions
   });
 
   // 2=body ^ 1-body ^ 2-body with dependent (PNO) indices
