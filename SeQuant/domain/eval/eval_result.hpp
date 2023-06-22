@@ -140,21 +140,17 @@ void symmetric_permutation(
 
   auto groups_vec = groups | transform(iter_pairs) | ranges::to_vector;
 
-  // is a group exhausted for next permutation?
-  container::svector<bool> perms_remain(n, true);
+  std::forward<F>(call_back)();
 
-  while (perms_remain[0]) {
-    std::forward<F>(call_back)();
-    auto i = n;
-    while (i > 0) {
-      --i;
-      auto beg = groups_vec[i].begin();
-      auto end = groups_vec[i].end();
-      perms_remain[i] = std::next_permutation(beg, end);
-
-      if (i == 0) break;
-      if (perms_remain[i]) break;
-    }
+  // using reverse iterator (instead of indices) not allowed for some reason
+  for (auto I = 0; I < n; ++I) {
+    // iter from the end group
+    auto i = n - I - 1;
+    auto beg = groups_vec[i].begin();
+    auto end = groups_vec[i].end();
+    auto yn = std::next_permutation(beg, end);
+    for (; yn; yn = std::next_permutation(beg, end))
+      std::forward<F>(call_back)();
   }
 }
 
@@ -172,7 +168,7 @@ void antisymmetrize_backend(size_t rank,
   groups_vec.reserve(groups.size());
   auto beg = perm.begin();
   for (auto&& g : groups) {
-    groups_vec.emplace_back(beg + g[0], beg + g[1]);
+    groups_vec.emplace_back(beg + g[0], beg + g[0] + g[1]);
   }
   antisymmetric_permutation(groups_vec,
                             [&call_back, &perm = std::as_const(perm)](int p) {
@@ -284,7 +280,7 @@ auto antisymmetrize_ta(TA::DistArray<Args...> const& arr,
   };
 
   if (groups.empty()) {
-    antisymmetrize_backend(rank, {{0, half_rank}, {half_rank, rank}},
+    antisymmetrize_backend(rank, {{0, half_rank}, {half_rank, half_rank}},
                            call_back);
   } else
     antisymmetrize_backend(rank, groups, call_back);
@@ -359,7 +355,7 @@ auto antisymmetrize_btas(btas::Tensor<Args...> const& arr,
   };
 
   if (groups.empty()) {
-    antisymmetrize_backend(rank, {{0, half_rank}, {half_rank, rank}},
+    antisymmetrize_backend(rank, {{0, half_rank}, {half_rank, half_rank}},
                            call_back);
   } else {
     antisymmetrize_backend(rank, groups, call_back);
@@ -396,19 +392,52 @@ class EvalResult {
     return static_cast<T const&>(*this);
   }
 
+  ///
+  /// @note In std::array<std::any, 3> is expected to be [l,r,res] where
+  ///       the elements are the annotations for left, right and result
+  ///       respectively.
+  ///
   [[nodiscard]] virtual ERPtr sum(EvalResult const&,
                                   std::array<std::any, 3> const&) const = 0;
 
+  ///
+  /// @note In std::array<std::any, 3> is expected to be [l,r,res] where
+  ///       the elements are the annotations for left, right and result
+  ///       respectively.
+  ///
   [[nodiscard]] virtual ERPtr prod(EvalResult const&,
                                    std::array<std::any, 3> const&) const = 0;
 
+  ///
+  /// @note In std::array<std::any, 2> is expected to be [pre,post] where
+  ///       the elements are the annotations for the eval result before
+  ///       permutation and after permutation respectively.
+  ///
   [[nodiscard]] virtual ERPtr permute(std::array<std::any, 2> const&) const = 0;
 
   virtual void add_inplace(EvalResult const&) = 0;
 
-  [[nodiscard]] virtual ERPtr symmetrize() const = 0;
+  ///
+  /// @note vector<array<size_t,3>> represents list of particle
+  ///       symmetry index groups. array<size_t, 3> is expected to be
+  ///         [b1, b2, len]
+  ///       where b1, and b2 are the zero-based positions of the tensor indices.
+  ///       [b1, b1+len) and [b2, b2+len) are two ranges that will be permuted
+  ///       simultaneously and at the equivalent positions.
+  ///
+  [[nodiscard]] virtual ERPtr symmetrize(
+      container::svector<std::array<size_t, 3>> const&) const = 0;
 
-  [[nodiscard]] virtual ERPtr antisymmetrize() const = 0;
+  ///
+  /// @note vector<array<size_t,2>> represents list of antisymmetric index
+  ///       groups. array<size_t,2> is expected to be
+  ///         [b,len]
+  ///       where b is the zero-based position of the tensor index and [b,b+len)
+  ///       is the range that will be permuted by tracking the
+  ///       parity (even/odd)-ness of the permutation.
+  ///
+  [[nodiscard]] virtual ERPtr antisymmetrize(
+      container::svector<std::array<size_t, 2>> const&) const = 0;
 
   [[nodiscard]] bool has_value() const noexcept;
 
@@ -490,11 +519,13 @@ class EvalConstant final : public EvalResult {
     val += other.get<T>();
   }
 
-  [[nodiscard]] ERPtr symmetrize() const override {
+  [[nodiscard]] ERPtr symmetrize(
+      container::svector<std::array<size_t, 3>> const&) const override {
     throw unimplemented_method("symmetrize");
   }
 
-  [[nodiscard]] ERPtr antisymmetrize() const override {
+  [[nodiscard]] ERPtr antisymmetrize(
+      container::svector<std::array<size_t, 2>> const&) const override {
     throw unimplemented_method("antisymmetrize");
   }
 
@@ -575,12 +606,14 @@ class EvalTensorTA final : public EvalResult {
     T::wait_for_lazy_cleanup(t.world());
   }
 
-  [[nodiscard]] ERPtr symmetrize() const override {
-    return eval_result<EvalTensorTA<T>>(symmetrize_ta(get<T>()));
+  [[nodiscard]] ERPtr symmetrize(
+      container::svector<std::array<size_t, 3>> const& groups) const override {
+    return eval_result<EvalTensorTA<T>>(symmetrize_ta(get<T>(), groups));
   }
 
-  [[nodiscard]] ERPtr antisymmetrize() const override {
-    return eval_result<EvalTensorTA<T>>(antisymmetrize_ta(get<T>()));
+  [[nodiscard]] ERPtr antisymmetrize(
+      container::svector<std::array<size_t, 2>> const& groups) const override {
+    return eval_result<EvalTensorTA<T>>(antisymmetrize_ta(get<T>(), groups));
   }
 };
 
@@ -657,12 +690,15 @@ class EvalTensorBTAS final : public EvalResult {
     t += o;
   }
 
-  [[nodiscard]] ERPtr symmetrize() const override {
-    return eval_result<EvalTensorBTAS<T>>(symmetrize_btas(get<T>()));
+  [[nodiscard]] ERPtr symmetrize(
+      container::svector<std::array<size_t, 3>> const& groups) const override {
+    return eval_result<EvalTensorBTAS<T>>(symmetrize_btas(get<T>(), groups));
   }
 
-  [[nodiscard]] ERPtr antisymmetrize() const override {
-    return eval_result<EvalTensorBTAS<T>>(antisymmetrize_btas(get<T>()));
+  [[nodiscard]] ERPtr antisymmetrize(
+      container::svector<std::array<size_t, 2>> const& groups) const override {
+    return eval_result<EvalTensorBTAS<T>>(
+        antisymmetrize_btas(get<T>(), groups));
   }
 };
 

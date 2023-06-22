@@ -252,22 +252,28 @@ auto evaluate(NodesT const& nodes,  //
 }
 
 template <typename NodeT, typename Annot, typename Le, typename... Args>
-auto evaluate_symm(NodeT const& node,    //
-                   Annot const& layout,  //
-                   Le&& le, Args&&... args) {
+auto evaluate_symm(
+    NodeT const& node,    //
+    Annot const& layout,  //
+    Le&& le,              //
+    Args&&... args,       //
+    container::svector<std::array<size_t, 3>> const& groups = {}) {
   return evaluate(node, layout, std::forward<Le>(le),
                   std::forward<Args>(args)...)
-      ->symmetrize();
+      ->symmetrize(groups);
 }
 
 template <typename NodeT, typename Annot, typename Le,
           typename... Args>
-auto evaluate_antisymm(NodeT const& node,    //
-                       Annot const& layout,  //
-                       Le&& le, Args&&... args) {
+auto evaluate_antisymm(
+    NodeT const& node,    //
+    Annot const& layout,  //
+    Le&& le,
+    Args&&... args,       //
+    container::svector<std::array<size_t, 2>> const& groups = {}) {
   return evaluate(node, layout, std::forward<Le>(le),
                   std::forward<Args>(args)...)
-      ->antisymmetrize();
+      ->antisymmetrize(groups);
 }
 
 template <typename NodeT, typename Le, typename... Args,

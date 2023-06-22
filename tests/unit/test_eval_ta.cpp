@@ -152,17 +152,21 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
     return evaluate(eval_node(expr), target_labels, yield_)->get<TA::TArrayD>();
   };
 
-  auto eval_symm = [&yield_](sequant::ExprPtr const& expr,
-                             std::string const& target_labels) {
-    return evaluate_symm(eval_node(expr), target_labels, yield_)
-        ->get<TA::TArrayD>();
-  };
+  auto eval_symm =
+      [&yield_](sequant::ExprPtr const& expr, std::string const& target_labels,
+                sequant::container::svector<std::array<size_t, 3>> const&
+                    groups = {}) {
+        return evaluate_symm(eval_node(expr), target_labels, yield_, groups)
+            ->get<TA::TArrayD>();
+      };
 
-  auto eval_antisymm = [&yield_](sequant::ExprPtr const& expr,
-                                 std::string const& target_labels) {
-    return evaluate_antisymm(eval_node(expr), target_labels, yield_)
-        ->get<TA::TArrayD>();
-  };
+  auto eval_antisymm =
+      [&yield_](sequant::ExprPtr const& expr, std::string const& target_labels,
+                sequant::container::svector<std::array<size_t, 2>> const&
+                    groups = {}) {
+        return evaluate_antisymm(eval_node(expr), target_labels, yield_, groups)
+            ->get<TA::TArrayD>();
+      };
 
   SECTION("summation") {
     auto expr1 = parse_antisymm(L"t_{a1}^{i1} + f_{i1}^{a1}");
@@ -187,8 +191,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
   }
 
   SECTION("product") {
-    auto expr1 =
-        parse_antisymm(L"1/2 * g_{i2,i4}^{a2,a4} * t_{a1,a2}^{i1,i2}");
+    auto expr1 = parse_antisymm(L"1/2 * g_{i2,i4}^{a2,a4} * t_{a1,a2}^{i1,i2}");
     auto prod1_eval = eval(expr1, "i_4,a_1,a_4,i_1");
 
     TArrayD prod1_man{};
@@ -232,28 +235,91 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
   SECTION("Antisymmetrization") {
     auto expr1 = parse_antisymm(L"1/2 * g_{i1, i2}^{a1, a2}");
     auto eval1 = eval_antisymm(expr1, "i_1,i_2,a_1,a_2");
+    auto const& arr1 = yield(L"g{i1,i2;a1,a2}");
 
     auto man1 = TArrayD{};
-    man1("0,1,2,3") = yield(L"g{i1,i2;a1,a2}")("0,1,2,3") -
-                      yield(L"g{i1,i2;a1,a2}")("1,0,2,3") +
-                      yield(L"g{i1,i2;a1,a2}")("1,0,3,2") -
-                      yield(L"g{i1,i2;a1,a2}")("0,1,3,2");
+    man1("0,1,2,3") =
+        arr1("0,1,2,3") - arr1("1,0,2,3") + arr1("1,0,3,2") - arr1("0,1,3,2");
 
     man1("0,1,2,3") = 0.5 * man1("0,1,2,3");
 
     REQUIRE(norm(man1) == Approx(norm(eval1)));
+
+    TArrayD zero1;
+    zero1("0,1,2,3") = man1("0,1,2,3") - eval1("0,1,2,3");
+
+    REQUIRE(Approx(norm(zero1)) == 0);
+
+    // partial antisymmetrization
+
+    // g("0,1,2,3,4,5")
+    // suppose "0,1,2" form an antisymmetric group
+    // and "4,5" form another antisymmetric group
+    auto expr2 = parse_antisymm(L"g_{i1,i2,i3}^{a1,a2,a3}");
+    auto eval2 =
+        eval_antisymm(expr2, "i_1,i_2,i_3,a_1,a_2,a_3", {{0, 3}, {4, 2}});
+    auto const& arr2 = yield(L"g{i1,i2,i3;a1,a2,a3}");
+    auto man2 = TArrayD{};
+    man2("0,1,2,3,4,5") = arr2("0,1,2,3,4,5")    //
+                          - arr2("0,1,2,3,5,4")  //
+                          - arr2("0,2,1,3,4,5")  //
+                          + arr2("0,2,1,3,5,4")  //
+                          - arr2("1,0,2,3,4,5")  //
+                          + arr2("1,0,2,3,5,4")  //
+                          + arr2("1,2,0,3,4,5")  //
+                          - arr2("1,2,0,3,5,4")  //
+                          + arr2("2,0,1,3,4,5")  //
+                          - arr2("2,0,1,3,5,4")  //
+                          - arr2("2,1,0,3,4,5")  //
+                          + arr2("2,1,0,3,5,4");
+
+    REQUIRE(norm(man2) == Approx(norm(eval2)));
+
+    TArrayD zero2;
+    zero2("0,1,2,3,4,5") = man2("0,1,2,3,4,5") - eval2("0,1,2,3,4,5");
+    REQUIRE(Approx(norm(zero2)) == 0);
   }
 
   SECTION("Symmetrization") {
     auto expr1 = parse_antisymm(L"1/2 * g_{i1, i2}^{a1, a2}");
     auto eval1 = eval_symm(expr1, "i_1,i_2,a_1,a_2");
+    auto const& arr1 = yield(L"g{i1,i2;a1,a2}");
 
     auto man1 = TArrayD{};
-    man1("0,1,2,3") = yield(L"g{i1,i2;a1,a2}")("0,1,2,3") +
-                      yield(L"g{i1,i2;a1,a2}")("1,0,3,2");
+    man1("0,1,2,3") = arr1("0,1,2,3") + arr1("1,0,3,2");
     man1("0,1,2,3") = 0.5 * man1("0,1,2,3");
 
     REQUIRE(norm(man1) == Approx(norm(eval1)));
+
+    TArrayD zero1;
+    zero1("0,1,2,3") = man1("0,1,2,3") - eval1("0,1,2,3");
+    REQUIRE(Approx(norm(zero1)) == 0);
+
+    // partial symmetrization
+
+    // g("0,1,2,3,4,5,6,7")
+    //    |-| |-| |-| |-|
+    //     ^-------^
+    //         ^-------^
+    // suppose [0,1] and [4,5] form a particle symmetric pair of index ranges
+    // and, [2,3] and [6,7] form another particle symmetric pair of index ranges
+
+    auto expr2 = parse_antisymm(L"g_{i1,i2,i3,i4}^{a1,a2,a3,a4}");
+    //                                0  1  2  3    4  5  6  7
+
+    auto eval2 = eval_symm(expr2, "i_1,i_2,i_3,i_4,a_1,a_2,a_3,a_4",
+                           {{0, 4, 2}, {2, 6, 2}});
+    auto const& arr2 = yield(L"g{i1,i2,i3,i4;a1,a2,a3,a4}");
+    TArrayD man2;
+    man2("i,j,k,l,a,b,c,d") = arr2("i,j,k,l,a,b,c,d") +
+                              arr2("i,j,l,k,a,b,d,c") + arr2("j,i,k,l,b,a,c,d");
+
+    REQUIRE(norm(man2) == Approx(norm(eval2)));
+
+    TArrayD zero2;
+    zero2("i,j,k,l,a,b,c,d") =
+        man2("i,j,k,l,a,b,c,d") - eval2("i,j,k,l,a,b,c,d");
+    REQUIRE(Approx(norm(zero2)) == 0);
   }
 
   SECTION("Others") {
