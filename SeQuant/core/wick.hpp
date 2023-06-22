@@ -168,13 +168,14 @@ class WickTheorem {
   }
   ///@}
 
-  /// @name topological partition specifiers
+  /// @name specifiers of partitions composed of topologically-equivalent
+  ///       normal operators
   ///
   /// Specifies topological partition of normal operators; free (non-connected)
   /// operators in the same partition are considered topologically equivalent,
   /// hence if only full contractions are needed only contractions to the first
   /// available operator in a partition is needed (multiplied by the degeneracy)
-  /// @param op_partitions list of operator partitions
+  /// @param nop_partitions list of normal operator partitions
   /// @note if this partitions are not given, every operator is assumed to be in
   /// its own partition
   /// @internal this performs only the first phase of initialization of

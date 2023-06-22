@@ -18,15 +18,15 @@ namespace sequant {
 
 /// @brief A (non-directed) graph view of a sequence of AbstractTensor objects
 
-/// @note The main role of this is to canonize itself. Since Tensor objects can be connected
-/// by multiple Index'es (thus edges are colored), what is canonized is actually
-/// the graph of indices (roughly the dual of the tensor graph), with Tensor objects
-/// represented by one or more vertices.
+/// @note The main role of this is to canonize itself. Since Tensor objects can
+/// be connected by multiple Index'es (thus edges are colored), what is
+/// canonized is actually the graph of indices (roughly the dual of the tensor
+/// graph), with Tensor objects represented by one or more vertices.
 class TensorNetwork {
  public:
-
   constexpr static size_t max_rank = 256;
 
+  // clang-format off
   /// @brief Edge in a TensorNetwork = the Index annotating it + a pair of indices to identify which Tensor terminals it's connected to
 
   /// @note tensor terminals in a sequence of tensors are indexed as follows:
@@ -38,6 +38,7 @@ class TensorNetwork {
   /// terminals (always 0 for symmetric/antisymmetric tensors) Terminal indices
   /// are sorted by the tensor index (i.e. by the absolute value of the terminal
   /// index), followed by position
+  // clang-format on
   class Edge {
    public:
     Edge() = default;
@@ -55,11 +56,13 @@ class TensorNetwork {
 
     Edge &connect_to(int terminal_idx, int position = 0) {
       assert(terminal_idx != 0);  // valid idx
-      if (second_ == 0) {  // unconnected Edge
+      if (second_ == 0) {         // unconnected Edge
         second_ = terminal_idx;
         second_position_ = position;
-      } else if (std::abs(second_) < std::abs(terminal_idx)) {  // connected to 2 Edges? ensure first_ < second_
-        assert(first_ == 0);  // there are slots left
+      } else if (std::abs(second_) <
+                 std::abs(terminal_idx)) {  // connected to 2 Edges? ensure
+                                            // first_ < second_
+        assert(first_ == 0);                // there are slots left
         first_ = second_;
         first_position_ = second_position_;
         second_ = terminal_idx;
@@ -131,13 +134,14 @@ class TensorNetwork {
   /// @note uses RTTI
   template <typename ExprPtrRange>
   TensorNetwork(ExprPtrRange &exprptr_range) {
-    for (auto&&ex : exprptr_range) {
+    for (auto &&ex : exprptr_range) {
       auto t = std::dynamic_pointer_cast<AbstractTensor>(ex);
       if (t) {
         tensors_.emplace_back(t);
-      }
-      else {
-        throw std::logic_error("TensorNetwork::TensorNetwork: non-tensors in the given expression range");
+      } else {
+        throw std::logic_error(
+            "TensorNetwork::TensorNetwork: non-tensors in the given expression "
+            "range");
       }
     }
   }
@@ -156,20 +160,21 @@ class TensorNetwork {
   /// @param named_indices specifies the indices that cannot be renamed, i.e.
   /// their labels are meaningful; default is nullptr, which results in external
   /// indices treated as named indices
-  /// @return biproduct of canonicalization (e.g. phase); if none, returns nullptr
+  /// @return biproduct of canonicalization (e.g. phase); if none, returns
+  /// nullptr
   ExprPtr canonicalize(
       const container::vector<std::wstring> &cardinal_tensor_labels = {},
-      bool fast = true,
-      const named_indices_t* named_indices = nullptr
-      );
+      bool fast = true, const named_indices_t *named_indices = nullptr);
 
   /// Factorizes tensor network
-  /// @return sequence of binary products; each element encodes the tensors to be
+  /// @return sequence of binary products; each element encodes the tensors to
+  /// be
   ///         multiplied (values >0 refer to the tensors in tensors(),
-  ///         values <0 refer to the elements of this sequence. E.g. sequences @c {{0,1},{-1,2},{-2,3}}
-  ///         , @c {{0,2},{1,3},{-1,-2}} , @c {{3,1},{2,-1},{0,-2}}
-  ///         encode the following respective factorizations @c (((T0*T1)*T2)*T3) , @c ((T0*T2)*(T1*T3)) ,
-  ///         and @c (((T3*T1)*T2)*T0) .
+  ///         values <0 refer to the elements of this sequence. E.g. sequences
+  ///         @c {{0,1},{-1,2},{-2,3}} , @c {{0,2},{1,3},{-1,-2}} , @c
+  ///         {{3,1},{2,-1},{0,-2}} encode the following respective
+  ///         factorizations @c (((T0*T1)*T2)*T3) , @c ((T0*T2)*(T1*T3)) , and
+  ///         @c (((T3*T1)*T2)*T0) .
   container::vector<std::pair<long, long>> factorize();
 
  private:
@@ -178,16 +183,13 @@ class TensorNetwork {
 
   struct FullLabelCompare {
     using is_transparent = void;
-    bool operator()(const Edge &first,
-                    const Edge &second) const {
+    bool operator()(const Edge &first, const Edge &second) const {
       return first.idx().full_label() < second.idx().full_label();
     }
-    bool operator()(const Edge &first,
-                    const std::wstring_view &second) const {
+    bool operator()(const Edge &first, const std::wstring_view &second) const {
       return first.idx().full_label() < second;
     }
-    bool operator()(const std::wstring_view &first,
-                    const Edge &second) const {
+    bool operator()(const std::wstring_view &first, const Edge &second) const {
       return first < second.idx().full_label();
     }
   };
@@ -201,7 +203,8 @@ class TensorNetwork {
   // have unique labels (not full labels)
   mutable named_indices_t ext_indices_;
 
-  // replacements of anonymous indices produced by the last call to canonicalize()
+  // replacements of anonymous indices produced by the last call to
+  // canonicalize()
   container::map<Index, Index> idxrepl_;
 
   /// initializes edges_ and ext_indices_
@@ -209,31 +212,37 @@ class TensorNetwork {
 
  public:
   /// accessor for the Edge object sequence
-  /// @return const reference to the sequence container of Edge objects, sorted by their Index's full label
+  /// @return const reference to the sequence container of Edge objects, sorted
+  /// by their Index's full label
   /// @sa Edge
-  const auto& edges() const {
+  const auto &edges() const {
     init_edges();
     return edges_;
   }
 
-  /// @brief Returns a range of external indices, i.e. those indices that do not connect tensors
+  /// @brief Returns a range of external indices, i.e. those indices that do not
+  /// connect tensors
 
-  /// @note The external indices are sorted by *label* (not full label) of the corresponding value (Index)
-  const auto& ext_indices() const {
-    if (edges_.empty())
-      init_edges();
+  /// @note The external indices are sorted by *label* (not full label) of the
+  /// corresponding value (Index)
+  const auto &ext_indices() const {
+    if (edges_.empty()) init_edges();
     return ext_indices_;
   }
 
-  /// accessor for the list of anonymous index replacements performed by the last call to canonicalize()
-  /// @return replacements of anonymous indices performed by the last call to canonicalize()
-  const auto& idxrepl() const { return idxrepl_; };
+  /// accessor for the list of anonymous index replacements performed by the
+  /// last call to canonicalize()
+  /// @return replacements of anonymous indices performed by the last call to
+  /// canonicalize()
+  const auto &idxrepl() const { return idxrepl_; };
 
  public:
-  /// @brief converts the network into a Bliss graph whose vertices are indices and
-  /// tensor vertex representations
-  /// @param[in] named_indices pointer to the set of named indices (ordinarily, this includes all external indices);
-  ///            default is nullptr, which means use all external indices for named indices
+  /// @brief converts the network into a Bliss graph whose vertices are indices
+  /// and tensor vertex representations
+  /// @param[in] named_indices pointer to the set of named indices (ordinarily,
+  /// this includes all external indices);
+  ///            default is nullptr, which means use all external indices for
+  ///            named indices
   /// @return {shared_ptr to Graph, vector of vertex labels, vector of vertex
   /// colors, vector of vertex types}
 
@@ -254,7 +263,7 @@ class TensorNetwork {
   ///     terminal's type (bra/ket).
   std::tuple<std::shared_ptr<bliss::Graph>, std::vector<std::wstring>,
              std::vector<std::size_t>, std::vector<VertexType>>
-  make_bliss_graph(const named_indices_t* named_indices = nullptr) const;
+  make_bliss_graph(const named_indices_t *named_indices = nullptr) const;
 };
 
 }  // namespace sequant
