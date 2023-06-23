@@ -252,28 +252,65 @@ auto evaluate(NodesT const& nodes,  //
 }
 
 template <typename NodeT, typename Annot, typename Le, typename... Args>
-auto evaluate_symm(
-    NodeT const& node,    //
-    Annot const& layout,  //
-    Le&& le,              //
-    Args&&... args,       //
-    container::svector<std::array<size_t, 3>> const& groups = {}) {
+auto evaluate_symm(NodeT const& node, Annot const& layout,
+                   container::svector<std::array<size_t, 3>> const& perm_groups,
+                   Le&& le, Args&&... args) {
+  if (perm_groups.empty()) {
+    // asked for symmetrization without specifying particle symmetric index
+    // ranges
+
+    ExprPtr expr_ptr{};
+    if constexpr (IsIterableOfEvaluableNodes<NodeT>) {
+      expr_ptr = (*std::begin(node))->expr();
+    } else {
+      expr_ptr = node->expr();
+    }
+    assert(expr_ptr->is<Tensor>());
+    auto const& t = expr_ptr->as<Tensor>();
+    assert(t.bra_rank() == t.ket_rank());
+
+    size_t const half_rank = t.bra_rank();
+    return evaluate(node, layout, std::forward<Le>(le),
+                    std::forward<Args>(args)...)
+        ->symmetrize({{0, half_rank, half_rank}});
+  }
+
   return evaluate(node, layout, std::forward<Le>(le),
                   std::forward<Args>(args)...)
-      ->symmetrize(groups);
+      ->symmetrize(perm_groups);
 }
 
 template <typename NodeT, typename Annot, typename Le,
           typename... Args>
 auto evaluate_antisymm(
-    NodeT const& node,    //
-    Annot const& layout,  //
-    Le&& le,
-    Args&&... args,       //
-    container::svector<std::array<size_t, 2>> const& groups = {}) {
+    NodeT const& node,                                             //
+    Annot const& layout,                                           //
+    container::svector<std::array<size_t, 2>> const& perm_groups,  //
+    Le&& le,                                                       //
+    Args&&... args) {
+  if (perm_groups.empty()) {
+    // Asked for antisymmetrization without specifying particle antisymmetric
+    // index ranges.
+    // Assume both bra indices and ket indices are antisymmetric in
+    // the particle exchange.
+    ExprPtr expr_ptr{};
+    if constexpr (IsIterableOfEvaluableNodes<NodeT>) {
+      expr_ptr = (*std::begin(node))->expr();
+    } else {
+      expr_ptr = node->expr();
+    }
+    assert(expr_ptr->is<Tensor>());
+    auto const& t = expr_ptr->as<Tensor>();
+
+    size_t const b = t.bra_rank();
+    size_t const k = t.ket_rank();
+    return evaluate(node, layout, std::forward<Le>(le),
+                    std::forward<Args>(args)...)
+        ->antisymmetrize({{0, b}, {b, k}});
+  }
   return evaluate(node, layout, std::forward<Le>(le),
                   std::forward<Args>(args)...)
-      ->antisymmetrize(groups);
+      ->antisymmetrize(perm_groups);
 }
 
 template <typename NodeT, typename Le, typename... Args,

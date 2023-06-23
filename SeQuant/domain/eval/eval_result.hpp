@@ -229,14 +229,13 @@ auto index_hash(Iterable const& bk) {
 
 template <typename... Args>
 auto symmetrize_ta(TA::DistArray<Args...> const& arr,
-                   container::svector<symmetric_range_t> const& groups = {}) {
+                   container::svector<symmetric_range_t> const& groups) {
   using ranges::views::iota;
 
   auto result = TA::DistArray<Args...>{arr.world(), arr.trange()};
   result.fill(0);
 
   size_t const rank = arr.trange().rank();
-  size_t const half_rank = rank / 2;
 
   auto const lannot = ords_to_annot(iota(size_t{0}, rank));
 
@@ -245,11 +244,7 @@ auto symmetrize_ta(TA::DistArray<Args...> const& arr,
     result(lannot) += arr(rannot);
   };
 
-  if (groups.empty()) {
-    symmetrize_backend(rank, {{0, half_rank, half_rank}}, call_back);
-  } else {
-    symmetrize_backend(rank, groups, call_back);
-  }
+  symmetrize_backend(rank, groups, call_back);
 
   TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
 
@@ -266,8 +261,6 @@ auto antisymmetrize_ta(TA::DistArray<Args...> const& arr,
   using ranges::views::zip;
 
   size_t const rank = arr.trange().rank();
-  assert(rank % 2 == 0);
-  size_t const half_rank = rank / 2;
 
   auto result = TA::DistArray<Args...>(arr.world(), arr.trange());
   result.fill(0);
@@ -279,11 +272,7 @@ auto antisymmetrize_ta(TA::DistArray<Args...> const& arr,
     result(lannot) += p_ * arr(ords_to_annot(perm));
   };
 
-  if (groups.empty()) {
-    antisymmetrize_backend(rank, {{0, half_rank}, {half_rank, half_rank}},
-                           call_back);
-  } else
-    antisymmetrize_backend(rank, groups, call_back);
+  antisymmetrize_backend(rank, groups, call_back);
 
   TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
 
@@ -292,11 +281,10 @@ auto antisymmetrize_ta(TA::DistArray<Args...> const& arr,
 
 template <typename... Args>
 auto symmetrize_btas(btas::Tensor<Args...> const& arr,
-                     container::svector<symmetric_range_t> const& groups = {}) {
+                     container::svector<symmetric_range_t> const& groups) {
   using ranges::views::iota;
 
   size_t const rank = arr.rank();
-  size_t const half_rank = rank / 2;
   // Caveat:
   // clang-format off
   // auto const lannot = iota(size_t{0}, rank) | ranges::to<perm_t>;
@@ -317,12 +305,7 @@ auto symmetrize_btas(btas::Tensor<Args...> const& arr,
     result += temp;
   };
 
-  if (groups.empty()) {
-    symmetrize_backend(rank, {{0, half_rank, half_rank}}, call_back);
-  } else {
-    symmetrize_backend(rank, groups, call_back);
-  }
-
+  symmetrize_backend(rank, groups, call_back);
   return result;
 }
 
@@ -332,7 +315,6 @@ auto antisymmetrize_btas(btas::Tensor<Args...> const& arr,
   using ranges::views::iota;
 
   size_t const rank = arr.rank();
-  size_t const half_rank = rank / 2;
   // Caveat:
   // auto const lannot = iota(size_t{0}, rank) | ranges::to<perm_t>;
   //
@@ -354,12 +336,7 @@ auto antisymmetrize_btas(btas::Tensor<Args...> const& arr,
     result += temp;
   };
 
-  if (groups.empty()) {
-    antisymmetrize_backend(rank, {{0, half_rank}, {half_rank, half_rank}},
-                           call_back);
-  } else {
-    antisymmetrize_backend(rank, groups, call_back);
-  }
+  antisymmetrize_backend(rank, groups, call_back);
 
   return result;
 }
