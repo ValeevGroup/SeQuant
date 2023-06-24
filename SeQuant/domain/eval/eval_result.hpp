@@ -59,44 +59,68 @@ bool operator<(IterPair<It> const& l, IterPair<It> const& r) noexcept {
   return *l.first < *r.first;
 }
 
+auto valid_particle_range = [](auto const& tpl) -> bool {
+  using std::distance;
+  auto [b1, b2, l] = tpl;
+  return distance(b1, b1 + l) == distance(b2, b2 + l);
+};
+
+auto iter_pairs = [](auto&& tpl) {
+  using ranges::views::iota;
+  using ranges::views::transform;
+  using std::get;
+
+  auto b1 = get<0>(tpl);
+  auto b2 = get<1>(tpl);
+  auto l = get<2>(tpl);
+
+  return iota(size_t{0}, l) | transform([b1, b2](auto i) {
+           return IterPair{b1 + i, b2 + i};
+         }) |
+         ranges::to_vector;
+};
+
 }  // namespace
 
 namespace {
 
 using perm_t = container::svector<size_t>;
-using perm_group_t = container::svector<perm_t>;
-using range_t = std::array<size_t, 2>;
-using symmetric_range_t = std::array<size_t, 3>;
+using particle_range_t = std::array<size_t, 3>;
 
 template <typename F,
           std::enable_if_t<std::is_invocable_v<F, int>, bool> = true>
 void antisymmetric_permutation(
-    container::svector<std::pair<perm_t::iterator, perm_t::iterator>> const&
-        groups,
+    container::svector<
+        std::tuple<perm_t::iterator, perm_t::iterator, size_t>> const& groups,
     F&& call_back) {
+  using ranges::views::transform;
+
   auto const n = groups.size();
   if (n == 0) return;
 
-  // parities
-  container::svector<int> ps(n, 0);
+  assert(ranges::all_of(groups, valid_particle_range));
 
-  // is a group exhausted for next permutation?
-  container::svector<bool> perms_remain(n, true);
+  std::forward<F>(call_back)(0);
 
-  while (perms_remain[0]) {
-    int const parity = ranges::accumulate(ps, 0) % 2;
-    std::forward<F>(call_back)(parity);
-    auto i = n;
-    while (i > 0) {
-      --i;
+  for (int i = n - 1; i >= 0; --i) {
+    auto [bra_beg, ket_beg, len] = groups[i];
 
-      auto& p = ps[i];
-      auto beg = groups[i].first;
-      auto end = groups[i].second;
-      perms_remain[i] = next_permutation_parity(p, beg, end);
+    auto bra_end = bra_beg + len;
+    auto ket_end = ket_beg + len;
 
-      if (i == 0) break;
-      if (perms_remain[i]) break;
+    int bra_p = 0;
+    auto outer = 0;
+
+    for (auto bra_yn = true; bra_yn;
+         bra_yn = next_permutation_parity(bra_p, bra_beg, bra_end), ++outer) {
+      auto inner = 0;
+      int ket_p = 0;
+
+      for (auto ket_yn = true; ket_yn;
+           ket_yn = next_permutation_parity(ket_p, ket_beg, ket_end), ++inner) {
+        if (!(outer == 0 && inner == 0))
+          std::forward<F>(call_back)((bra_p + ket_p) % 2);
+      }
     }
   }
 }
@@ -106,46 +130,20 @@ void symmetric_permutation(
     container::svector<
         std::tuple<perm_t::iterator, perm_t::iterator, size_t>> const& groups,
     F&& call_back) {
-  using ranges::views::iota;
-  using ranges::views::join;
   using ranges::views::transform;
-  using ranges::views::zip;
 
   auto const n = groups.size();
   if (n == 0) return;
 
-  assert(ranges::all_of(groups,
-                        [](auto&& tpl) {
-                          using std::distance;
-                          using std::get;
-
-                          auto b1 = get<0>(tpl);
-                          auto b2 = get<1>(tpl);
-                          auto l = get<2>(tpl);
-
-                          return distance(b1, b1 + l) == distance(b2, b2 + l);
-                        })
-
-  );
-
-  auto iter_pairs = [](auto&& tpl) {
-    auto b1 = std::get<0>(tpl);
-    auto b2 = std::get<1>(tpl);
-    auto l = std::get<2>(tpl);
-    return iota(size_t{0}, l) | transform([b1, b2](auto i) {
-             return IterPair{b1 + i, b2 + i};
-           }) |
-           ranges::to_vector;
-  };
+  assert(ranges::all_of(groups, valid_particle_range));
 
   auto groups_vec = groups | transform(iter_pairs) | ranges::to_vector;
 
   std::forward<F>(call_back)();
 
   // using reverse iterator (instead of indices) not allowed for some reason
-  for (auto I = 0; I < n; ++I) {
-    // iter from the end group
-    auto i = n - I - 1;
+  // iter from the end group
+  for (int i = n - 1; i >= 0; --i) {
     auto beg = groups_vec[i].begin();
     auto end = groups_vec[i].end();
     auto yn = std::next_permutation(beg, end);
@@ -158,17 +156,17 @@ template <
     typename F,
     std::enable_if_t<std::is_invocable_v<F, int, perm_t const&>, bool> = true>
 void antisymmetrize_backend(size_t rank,
-                            container::svector<range_t> const& groups,
+                            container::svector<particle_range_t> const& groups,
                             F&& call_back) {
   using ranges::views::iota;
   auto perm = iota(size_t{0}, rank) | ranges::to<perm_t>;
 
-  auto groups_vec =
-      container::svector<std::pair<perm_t::iterator, perm_t::iterator>>{};
+  auto groups_vec = container::svector<
+      std::tuple<perm_t::iterator, perm_t::iterator, size_t>>{};
   groups_vec.reserve(groups.size());
   auto beg = perm.begin();
   for (auto&& g : groups) {
-    groups_vec.emplace_back(beg + g[0], beg + g[0] + g[1]);
+    groups_vec.emplace_back(beg + g[0], beg + g[1], g[2]);
   }
   antisymmetric_permutation(groups_vec,
                             [&call_back, &perm = std::as_const(perm)](int p) {
@@ -179,7 +177,7 @@ void antisymmetrize_backend(size_t rank,
 template <typename F,
           std::enable_if_t<std::is_invocable_v<F, perm_t const&>, bool> = true>
 void symmetrize_backend(size_t rank,
-                        container::svector<symmetric_range_t> const& groups,
+                        container::svector<particle_range_t> const& groups,
                         F&& call_back) {
   using ranges::views::iota;
   auto perm = iota(size_t{0}, rank) | ranges::to<perm_t>;
@@ -229,7 +227,7 @@ auto index_hash(Iterable const& bk) {
 
 template <typename... Args>
 auto symmetrize_ta(TA::DistArray<Args...> const& arr,
-                   container::svector<symmetric_range_t> const& groups) {
+                   container::svector<particle_range_t> const& groups) {
   using ranges::views::iota;
 
   auto result = TA::DistArray<Args...>{arr.world(), arr.trange()};
@@ -252,10 +250,9 @@ auto symmetrize_ta(TA::DistArray<Args...> const& arr,
 }
 
 template <typename... Args>
-auto antisymmetrize_ta(TA::DistArray<Args...> const& arr,
-                       container::svector<range_t> const& groups = {}) {
-  using perm_it = perm_t::iterator;
-  using iter_pairs_t = container::svector<std::pair<perm_it, perm_it>>;
+auto antisymmetrize_ta(
+    TA::DistArray<Args...> const& arr,
+    container::svector<particle_range_t> const& groups = {}) {
   using ranges::views::iota;
   using ranges::views::transform;
   using ranges::views::zip;
@@ -281,7 +278,7 @@ auto antisymmetrize_ta(TA::DistArray<Args...> const& arr,
 
 template <typename... Args>
 auto symmetrize_btas(btas::Tensor<Args...> const& arr,
-                     container::svector<symmetric_range_t> const& groups) {
+                     container::svector<particle_range_t> const& groups) {
   using ranges::views::iota;
 
   size_t const rank = arr.rank();
@@ -310,8 +307,9 @@ auto symmetrize_btas(btas::Tensor<Args...> const& arr,
 }
 
 template <typename... Args>
-auto antisymmetrize_btas(btas::Tensor<Args...> const& arr,
-                         container::svector<range_t> const& groups = {}) {
+auto antisymmetrize_btas(
+    btas::Tensor<Args...> const& arr,
+    container::svector<particle_range_t> const& groups = {}) {
   using ranges::views::iota;
 
   size_t const rank = arr.rank();
@@ -406,15 +404,16 @@ class EvalResult {
       container::svector<std::array<size_t, 3>> const&) const = 0;
 
   ///
-  /// @note vector<array<size_t,2>> represents list of antisymmetric index
-  ///       groups. array<size_t,2> is expected to be
-  ///         [b,len]
-  ///       where b is the zero-based position of the tensor index and [b,b+len)
-  ///       is the range that will be permuted by tracking the
-  ///       parity (even/odd)-ness of the permutation.
+  /// @note vector<array<size_t,3>> represents list of antisymmetric index
+  ///       groups. array<size_t,3> is expected to be
+  ///         [b1,b2,len]
+  ///       where b1, and b2 are the zero-based positions of the tensor indices.
+  ///       [b1, b1+len) and [b2, b2+len) are two ranges that will be permuted
+  ///       by keeping track of the parity (even/odd)-ness of the total
+  ///       permutation.
   ///
   [[nodiscard]] virtual ERPtr antisymmetrize(
-      container::svector<std::array<size_t, 2>> const&) const = 0;
+      container::svector<std::array<size_t, 3>> const&) const = 0;
 
   [[nodiscard]] bool has_value() const noexcept;
 
@@ -502,7 +501,7 @@ class EvalConstant final : public EvalResult {
   }
 
   [[nodiscard]] ERPtr antisymmetrize(
-      container::svector<std::array<size_t, 2>> const&) const override {
+      container::svector<std::array<size_t, 3>> const&) const override {
     throw unimplemented_method("antisymmetrize");
   }
 
@@ -589,7 +588,7 @@ class EvalTensorTA final : public EvalResult {
   }
 
   [[nodiscard]] ERPtr antisymmetrize(
-      container::svector<std::array<size_t, 2>> const& groups) const override {
+      container::svector<std::array<size_t, 3>> const& groups) const override {
     return eval_result<EvalTensorTA<T>>(antisymmetrize_ta(get<T>(), groups));
   }
 };
@@ -673,7 +672,7 @@ class EvalTensorBTAS final : public EvalResult {
   }
 
   [[nodiscard]] ERPtr antisymmetrize(
-      container::svector<std::array<size_t, 2>> const& groups) const override {
+      container::svector<std::array<size_t, 3>> const& groups) const override {
     return eval_result<EvalTensorBTAS<T>>(
         antisymmetrize_btas(get<T>(), groups));
   }

@@ -285,7 +285,7 @@ template <typename NodeT, typename Annot, typename Le,
 auto evaluate_antisymm(
     NodeT const& node,                                             //
     Annot const& layout,                                           //
-    container::svector<std::array<size_t, 2>> const& perm_groups,  //
+    container::svector<std::array<size_t, 3>> const& perm_groups,  //
     Le&& le,                                                       //
     Args&&... args) {
   if (perm_groups.empty()) {
@@ -303,10 +303,10 @@ auto evaluate_antisymm(
     auto const& t = expr_ptr->as<Tensor>();
 
     size_t const b = t.bra_rank();
-    size_t const k = t.ket_rank();
+    assert(b == t.ket_rank());
     return evaluate(node, layout, std::forward<Le>(le),
                     std::forward<Args>(args)...)
-        ->antisymmetrize({{0, b}, {b, k}});
+        ->antisymmetrize({{0, b, b}});
   }
   return evaluate(node, layout, std::forward<Le>(le),
                   std::forward<Args>(args)...)
