@@ -9,6 +9,9 @@
 #include "catch.hpp"
 #include "test_config.hpp"
 
+// TODO fix use_op_partitions code
+constexpr bool use_op_partitions_works = false;
+
 namespace sequant {
 struct WickAccessor {};
 
@@ -473,11 +476,6 @@ SECTION("fermi vacuum") {
     wick.spinfree(false)
         .set_external_indices(IndexList{L"i_1", L"a_3", L"a_4", L"a_2"})
         .use_topology(true);
-    REQUIRE_THROWS_AS(
-        wick.compute(),
-        std::invalid_argument);  // use_topology requires that every index
-                                 // within bra/ket of a NormalOperator
-    wick.use_topology(false);
     ExprPtr result;
     REQUIRE_NOTHROW(result = wick.compute());
     // std::wcout << "result = " << to_latex(result) << std::endl;
@@ -720,19 +718,42 @@ SECTION("Expression Reduction") {
   // 2-body ^ 1-body ^ 1-body, with/without using topology
   SEQUANT_PROFILE_SINGLE("wick(H2*T1*T1)", {
     for (auto&& use_nop_partitions : {true, false}) {
-      for (auto&& use_index_partitions : {true, false}) {
+      for (auto&& use_op_partitions : {false}) {
+        std::wostringstream oss;
+        oss << "use_{nop,op}_partitions={" << use_nop_partitions << ","
+            << use_op_partitions << "}: H2*T1*T1 = ";
+
         auto opseq =
             FNOperatorSeq({FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}, V),
                            FNOperator({L"a_4"}, {L"i_4"}, V),
                            FNOperator({L"a_5"}, {L"i_5"}, V)});
         auto wick = FWickTheorem{opseq};
         wick.spinfree(false).use_topology(use_nop_partitions ||
-                                          use_index_partitions);
+                                          use_op_partitions);
         if (use_nop_partitions) wick.set_nop_partitions({{1, 2}});
-        if (use_index_partitions) wick.set_index_partitions({{1, 2}, {3, 4}});
+        if (use_op_partitions) wick.set_op_partitions({{0, 1}, {2, 3}});
         auto wick_result = wick.compute();
-        REQUIRE(wick_result->is<Sum>());
-        REQUIRE(wick_result->size() == (use_nop_partitions ? 2 : 4));
+        print(oss.str() + L" (nopseq only) ", wick_result);
+        if (use_op_partitions_works) {
+          if (use_nop_partitions && use_op_partitions)
+            REQUIRE(wick_result->is<Product>());
+          else
+            REQUIRE(wick_result->is<Sum>());
+          if (!use_op_partitions)
+            REQUIRE(wick_result->size() == (use_nop_partitions ? 2 : 4));
+          else
+            REQUIRE(wick_result->size() ==
+                    (use_nop_partitions ? 4 /* factors */ : 2 /* summands */));
+        } else {
+          if (use_op_partitions)
+            REQUIRE(wick_result->is<Product>());
+          else
+            REQUIRE(wick_result->is<Sum>());
+          if (!use_op_partitions)
+            REQUIRE(wick_result->size() == (use_nop_partitions ? 2 : 4));
+          else
+            REQUIRE(wick_result->size() == 4 /* factors */);
+        }
 
         // multiply tensor factors and expand
         auto wick_result_2 =
@@ -751,14 +772,23 @@ SECTION("Expression Reduction") {
         canonicalize(wick_result_2);
         rapid_simplify(wick_result_2);
 
-        print("H2*T1*T1 = ", wick_result_2);
-        REQUIRE(
-            to_latex(wick_result_2) ==
-            L"{{{4}}"
-            L"{\\bar{g}^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}}_{{a_1}}}{t^{{i_"
-            L"2}}_{{a_"
-            L"2}}}}");
-      }  // use_index_partitions
+        print(oss.str(), wick_result_2);
+        if (use_op_partitions_works) {
+          if (!use_op_partitions)
+            REQUIRE(wick_result->size() == (use_nop_partitions ? 2 : 4));
+          else
+            REQUIRE(wick_result->size() ==
+                    (use_nop_partitions ? 4 /* factors */ : 2 /* summands */));
+        } else {
+          if (!use_op_partitions)
+            REQUIRE(to_latex(wick_result_2) ==
+                    L"{{{4}}"
+                    L"{\\bar{g}^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}}_{{a_1}}}{"
+                    L"t^{{i_"
+                    L"2}}_{{a_"
+                    L"2}}}}");
+        }
+      }  // use_op_partitions
     }    // use_nop_partitions
   });
 
@@ -817,61 +847,83 @@ SECTION("Expression Reduction") {
 
   // 2=body ^ 2-body ^ 2-body ^ 2-body with dependent (PNO) indices
   SEQUANT_PROFILE_SINGLE("wick(P2*H2*T2*T2)", {
-    constexpr bool use_nop_partitions = true;
-    auto opseq = FNOperatorSeq(
-        {FNOperator(
-             IndexList{L"i_1", L"i_2"},
-             {Index(L"a_1", {L"i_1", L"i_2"}), Index(L"a_2", {L"i_1", L"i_2"})},
-             V),
-         FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}, V),
-         FNOperator(
-             {Index(L"a_3", {L"i_3", L"i_4"}), Index(L"a_4", {L"i_3", L"i_4"})},
-             IndexList{L"i_3", L"i_4"}, V),
-         FNOperator(
-             {Index(L"a_5", {L"i_5", L"i_6"}), Index(L"a_6", {L"i_5", L"i_6"})},
-             IndexList{L"i_5", L"i_6"}, V)});
-    auto wick = FWickTheorem{opseq};
-    wick.spinfree(false)
-        .set_nop_connections({{1, 2}, {1, 3}})
-        .use_topology(true);
+    for (auto&& use_nop_partitions : {true, false}) {
+      for (auto&& use_op_partitions : {false}) {
+        std::wostringstream oss;
+        oss << "use_{nop,op}_partitions={" << use_nop_partitions << ","
+            << use_op_partitions << "}: P2*H2*T2*T2(PNO) = ";
 
-    if (use_nop_partitions) wick.set_nop_partitions({{2, 3}});
-    auto wick_result = wick.compute();
-    REQUIRE(wick_result->is<Sum>());
-    REQUIRE(wick_result->size() == (use_nop_partitions ? 17 : 34));
+        auto opseq =
+            FNOperatorSeq({FNOperator(IndexList{L"i_1", L"i_2"},
+                                      {Index(L"a_1", {L"i_1", L"i_2"}),
+                                       Index(L"a_2", {L"i_1", L"i_2"})},
+                                      V),
+                           FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}, V),
+                           FNOperator({Index(L"a_3", {L"i_3", L"i_4"}),
+                                       Index(L"a_4", {L"i_3", L"i_4"})},
+                                      IndexList{L"i_3", L"i_4"}, V),
+                           FNOperator({Index(L"a_5", {L"i_5", L"i_6"}),
+                                       Index(L"a_6", {L"i_5", L"i_6"})},
+                                      IndexList{L"i_5", L"i_6"}, V)});
+        auto wick = FWickTheorem{opseq};
+        wick.spinfree(false)
+            .set_nop_connections({{1, 2}, {1, 3}})
+            .use_topology(true);
 
-    // multiply tensor factors and expand
-    auto wick_result_2 =
-        ex<Constant>(rational{1, 256}) *
-        ex<Tensor>(
-            L"A", IndexList{L"i_1", L"i_2"},
-            IndexList{{L"a_1", {L"i_1", L"i_2"}}, {L"a_2", {L"i_1", L"i_2"}}},
-            Symmetry::antisymm) *
-        ex<Tensor>(L"g", WstrList{L"p_1", L"p_2"}, WstrList{L"p_3", L"p_4"},
-                   Symmetry::antisymm) *
-        ex<Tensor>(
-            L"t",
-            IndexList{{L"a_3", {L"i_3", L"i_4"}}, {L"a_4", {L"i_3", L"i_4"}}},
-            IndexList{L"i_3", L"i_4"}, Symmetry::antisymm) *
-        ex<Tensor>(
-            L"t",
-            IndexList{{L"a_5", {L"i_5", L"i_6"}}, {L"a_6", {L"i_5", L"i_6"}}},
-            IndexList{L"i_5", L"i_6"}, Symmetry::antisymm) *
-        wick_result;
-    expand(wick_result_2);
-    wick.reduce(wick_result_2);
-    rapid_simplify(wick_result_2);
-    TensorCanonicalizer::register_instance(
-        std::make_shared<DefaultTensorCanonicalizer>());
-    canonicalize(wick_result_2);
-    canonicalize(wick_result_2);
-    canonicalize(wick_result_2);
-    rapid_simplify(wick_result_2);
+        if (use_nop_partitions) wick.set_nop_partitions({{2, 3}});
+        if (use_op_partitions)
+          wick.set_op_partitions({{0, 1},
+                                  {2, 3},
+                                  {4, 5},
+                                  {6, 7},
+                                  {8, 9},
+                                  {10, 11},
+                                  {12, 13},
+                                  {14, 15}});
+        auto wick_result = wick.compute();
+        REQUIRE(wick_result->is<Sum>());
+        if (use_op_partitions) {  // TODO update for use_op_partitions case
+          REQUIRE(wick_result->size() == (use_nop_partitions ? 17 : 34));
+        } else {
+          REQUIRE(wick_result->size() == (use_nop_partitions ? 272 : 544));
+        }
 
-    std::wcout << L"P2*H2*T2*T2(PNO) = " << to_latex_align(wick_result_2, 20)
-               << std::endl;
-    REQUIRE(wick_result_2->is<Sum>());
-    REQUIRE(wick_result_2->size() == 4);
+        // multiply tensor factors and expand
+        auto wick_result_2 =
+            ex<Constant>(rational{1, 256}) *
+            ex<Tensor>(L"A", IndexList{L"i_1", L"i_2"},
+                       IndexList{{L"a_1", {L"i_1", L"i_2"}},
+                                 {L"a_2", {L"i_1", L"i_2"}}},
+                       Symmetry::antisymm) *
+            ex<Tensor>(L"g", WstrList{L"p_1", L"p_2"}, WstrList{L"p_3", L"p_4"},
+                       Symmetry::antisymm) *
+            ex<Tensor>(L"t",
+                       IndexList{{L"a_3", {L"i_3", L"i_4"}},
+                                 {L"a_4", {L"i_3", L"i_4"}}},
+                       IndexList{L"i_3", L"i_4"}, Symmetry::antisymm) *
+            ex<Tensor>(L"t",
+                       IndexList{{L"a_5", {L"i_5", L"i_6"}},
+                                 {L"a_6", {L"i_5", L"i_6"}}},
+                       IndexList{L"i_5", L"i_6"}, Symmetry::antisymm) *
+            wick_result;
+        expand(wick_result_2);
+        wick.reduce(wick_result_2);
+        rapid_simplify(wick_result_2);
+        TensorCanonicalizer::register_instance(
+            std::make_shared<DefaultTensorCanonicalizer>());
+        canonicalize(wick_result_2);
+        canonicalize(wick_result_2);
+        canonicalize(wick_result_2);
+        rapid_simplify(wick_result_2);
+
+        std::wcout << oss.str() << to_latex_align(wick_result_2, 20)
+                   << std::endl;
+        if (!use_op_partitions) {  // TODO update for use_op_partitions case
+          REQUIRE(wick_result_2->is<Sum>());
+          REQUIRE(wick_result_2->size() == 4);
+        }
+      }
+    }
   });
 
 #if 1

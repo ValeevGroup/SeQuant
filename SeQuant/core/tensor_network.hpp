@@ -55,8 +55,9 @@ class TensorNetwork {
     //    Edge& operator=(Edge&&) = default;
 
     Edge &connect_to(int terminal_idx, int position = 0) {
-      assert(terminal_idx != 0);  // valid idx
-      if (second_ == 0) {         // unconnected Edge
+      assert(first_ == 0 || second_ == 0);  // not connected yet
+      assert(terminal_idx != 0);            // valid idx
+      if (second_ == 0) {                   // unconnected Edge
         second_ = terminal_idx;
         second_position_ = position;
       } else if (std::abs(second_) <
