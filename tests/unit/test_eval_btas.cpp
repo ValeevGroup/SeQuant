@@ -100,7 +100,7 @@ class rand_tensor_yield {
     using result_t = EvalConstant<double>;
 
     assert(node->expr()->template is<sequant::Constant>());
-    auto d = boost::rational_cast<double>(node->as_constant().value().real());
+    auto d = node->as_constant().template value<double>();
     return eval_result<result_t>(d);
   }
 
