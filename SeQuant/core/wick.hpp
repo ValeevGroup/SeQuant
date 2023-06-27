@@ -988,7 +988,7 @@ class WickTheorem {
                 // op2_partition (op1_partition<op2_partition) if there is
                 // another partition p>op2_partition that op1_partition
                 // is connected to
-                constexpr bool use_op_partition_groups = false;
+                constexpr bool use_op_partition_groups = true;
                 constexpr bool test_vs_old_code = true;
 
                 size_t ref_result = 1;

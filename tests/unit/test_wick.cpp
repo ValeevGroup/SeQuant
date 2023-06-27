@@ -718,7 +718,7 @@ SECTION("Expression Reduction") {
   // 2-body ^ 1-body ^ 1-body, with/without using topology
   SEQUANT_PROFILE_SINGLE("wick(H2*T1*T1)", {
     for (auto&& use_nop_partitions : {true, false}) {
-      for (auto&& use_op_partitions : {false}) {
+      for (auto&& use_op_partitions : {true, false}) {
         std::wostringstream oss;
         oss << "use_{nop,op}_partitions={" << use_nop_partitions << ","
             << use_op_partitions << "}: H2*T1*T1 = ";
@@ -779,15 +779,15 @@ SECTION("Expression Reduction") {
           else
             REQUIRE(wick_result->size() ==
                     (use_nop_partitions ? 4 /* factors */ : 2 /* summands */));
-        } else {
-          if (!use_op_partitions)
-            REQUIRE(to_latex(wick_result_2) ==
-                    L"{{{4}}"
-                    L"{\\bar{g}^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}}_{{a_1}}}{"
-                    L"t^{{i_"
-                    L"2}}_{{a_"
-                    L"2}}}}");
         }
+        REQUIRE(wick_result_2->size() == 3 /* factors */);
+        if (!use_op_partitions || use_op_partitions_works)
+          REQUIRE(to_latex(wick_result_2) ==
+                  L"{{{4}}"
+                  L"{\\bar{g}^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}}_{{a_1}}}{"
+                  L"t^{{i_"
+                  L"2}}_{{a_"
+                  L"2}}}}");
       }  // use_op_partitions
     }    // use_nop_partitions
   });
@@ -848,7 +848,7 @@ SECTION("Expression Reduction") {
   // 2=body ^ 2-body ^ 2-body ^ 2-body with dependent (PNO) indices
   SEQUANT_PROFILE_SINGLE("wick(P2*H2*T2*T2)", {
     for (auto&& use_nop_partitions : {true, false}) {
-      for (auto&& use_op_partitions : {false}) {
+      for (auto&& use_op_partitions : {true, false}) {
         std::wostringstream oss;
         oss << "use_{nop,op}_partitions={" << use_nop_partitions << ","
             << use_op_partitions << "}: P2*H2*T2*T2(PNO) = ";
@@ -883,7 +883,7 @@ SECTION("Expression Reduction") {
         auto wick_result = wick.compute();
         REQUIRE(wick_result->is<Sum>());
         if (use_op_partitions) {  // TODO update for use_op_partitions case
-          REQUIRE(wick_result->size() == (use_nop_partitions ? 17 : 34));
+          REQUIRE(wick_result->size() == (use_nop_partitions ? 10 : 14));
         } else {
           REQUIRE(wick_result->size() == (use_nop_partitions ? 272 : 544));
         }
@@ -918,12 +918,10 @@ SECTION("Expression Reduction") {
 
         std::wcout << oss.str() << to_latex_align(wick_result_2, 20)
                    << std::endl;
-        if (!use_op_partitions) {  // TODO update for use_op_partitions case
-          REQUIRE(wick_result_2->is<Sum>());
-          REQUIRE(wick_result_2->size() == 4);
-        }
-      }
-    }
+        REQUIRE(wick_result_2->is<Sum>());
+        REQUIRE(wick_result_2->size() == 4);
+      }  // use_op_partitions
+    }    // use_nop_partitions
   });
 
 #if 1
