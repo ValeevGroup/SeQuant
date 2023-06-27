@@ -289,16 +289,15 @@ ExprPtr single_term_opt(Product const& prod, IdxToSz const& idxsz) {
 template <typename IdxToSize,
           typename =
               std::enable_if_t<std::is_invocable_r_v<size_t, IdxToSize, Index>>>
-ExprPtr optimize(ExprPtr const& expr, IdxToSize&& idx2size) {
+ExprPtr optimize(ExprPtr const& expr, IdxToSize const& idx2size) {
   using ranges::views::transform;
   if (expr->is<Tensor>())
     return expr->clone();
   else if (expr->is<Product>())
-    return opt::single_term_opt(expr->as<Product>(),
-                                std::forward<IdxToSize>(idx2size));
+    return opt::single_term_opt(expr->as<Product>(), idx2size);
   else if (expr->is<Sum>()) {
     auto smands = *expr | transform([&idx2size](auto&& s) {
-      return optimize(s, std::forward<IdxToSize>(idx2size));
+      return optimize(s, idx2size);
     }) | ranges::to_vector;
     return ex<Sum>(Sum{smands.begin(), smands.end()});
   } else
