@@ -109,7 +109,7 @@ class compute_all {
   void operator()(bool print = true, bool screen = true,
                   bool use_topology = true, bool use_connectivity = true,
                   bool canonical_only = true) {
-    for (size_t N = NMAX; N <= NMAX; ++N)
+    for (size_t N = 1; N <= NMAX; ++N)
       compute_cceqvec{N, 1, N, type}(print, screen, use_topology,
                                      use_connectivity, canonical_only);
   }
