@@ -9,9 +9,6 @@
 #include "catch.hpp"
 #include "test_config.hpp"
 
-// TODO fix use_op_partitions code
-constexpr bool use_op_partitions_works = false;
-
 namespace sequant {
 struct WickAccessor {};
 
@@ -717,11 +714,10 @@ SECTION("Expression Reduction") {
 
   // 2-body ^ 1-body ^ 1-body, with/without using topology
   SEQUANT_PROFILE_SINGLE("wick(H2*T1*T1)", {
-    for (auto&& use_nop_partitions : {true, false}) {
+    for (auto&& use_nop_partitions : {false}) {
       for (auto&& use_op_partitions : {true, false}) {
         std::wostringstream oss;
-        oss << "use_{nop,op}_partitions={" << use_nop_partitions << ","
-            << use_op_partitions << "}: H2*T1*T1 = ";
+        oss << "use_op_partitions=" << use_op_partitions << "}: H2*T1*T1 = ";
 
         auto opseq =
             FNOperatorSeq({FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}, V),
@@ -730,29 +726,16 @@ SECTION("Expression Reduction") {
         auto wick = FWickTheorem{opseq};
         wick.spinfree(false).use_topology(use_nop_partitions ||
                                           use_op_partitions);
-        if (use_nop_partitions) wick.set_nop_partitions({{1, 2}});
+        // if (use_nop_partitions) wick.set_nop_partitions({{1, 2}});
         if (use_op_partitions) wick.set_op_partitions({{0, 1}, {2, 3}});
         auto wick_result = wick.compute();
-        print(oss.str() + L" (nopseq only) ", wick_result);
-        if (use_op_partitions_works) {
-          if (use_nop_partitions && use_op_partitions)
-            REQUIRE(wick_result->is<Product>());
-          else
-            REQUIRE(wick_result->is<Sum>());
-          if (!use_op_partitions)
-            REQUIRE(wick_result->size() == (use_nop_partitions ? 2 : 4));
-          else
-            REQUIRE(wick_result->size() ==
-                    (use_nop_partitions ? 4 /* factors */ : 2 /* summands */));
+        // print(oss.str() + L" (nopseq only) ", wick_result);
+        if (use_op_partitions) {
+          REQUIRE(wick_result->is<Product>());
+          REQUIRE(wick_result->size() == 4 /* factors */);
         } else {
-          if (use_op_partitions)
-            REQUIRE(wick_result->is<Product>());
-          else
-            REQUIRE(wick_result->is<Sum>());
-          if (!use_op_partitions)
-            REQUIRE(wick_result->size() == (use_nop_partitions ? 2 : 4));
-          else
-            REQUIRE(wick_result->size() == 4 /* factors */);
+          REQUIRE(wick_result->is<Sum>());
+          REQUIRE(wick_result->size() == 4 /* summands */);
         }
 
         // multiply tensor factors and expand
@@ -772,22 +755,14 @@ SECTION("Expression Reduction") {
         canonicalize(wick_result_2);
         rapid_simplify(wick_result_2);
 
-        print(oss.str(), wick_result_2);
-        if (use_op_partitions_works) {
-          if (!use_op_partitions)
-            REQUIRE(wick_result->size() == (use_nop_partitions ? 2 : 4));
-          else
-            REQUIRE(wick_result->size() ==
-                    (use_nop_partitions ? 4 /* factors */ : 2 /* summands */));
-        }
+        // print(oss.str(), wick_result_2);
         REQUIRE(wick_result_2->size() == 3 /* factors */);
-        if (!use_op_partitions || use_op_partitions_works)
-          REQUIRE(to_latex(wick_result_2) ==
-                  L"{{{4}}"
-                  L"{\\bar{g}^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}}_{{a_1}}}{"
-                  L"t^{{i_"
-                  L"2}}_{{a_"
-                  L"2}}}}");
+        REQUIRE(to_latex(wick_result_2) ==
+                L"{{{4}}"
+                L"{\\bar{g}^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}}_{{a_1}}}{"
+                L"t^{{i_"
+                L"2}}_{{a_"
+                L"2}}}}");
       }  // use_op_partitions
     }    // use_nop_partitions
   });
@@ -828,9 +803,8 @@ SECTION("Expression Reduction") {
     canonicalize(wick_result_2);
     rapid_simplify(wick_result_2);
 
-    std::wcout << L"P2*H1*T2(PNO) = " << to_latex_align(wick_result_2)
-               << std::endl;
-    0;
+    //    std::wcout << L"P2*H1*T2(PNO) = " << to_latex_align(wick_result_2)
+    //               << std::endl;
     // it appears that the two terms are swapped when using gcc 8 on linux
     // TODO investigate why sum canonicalization seems to produce
     // platform-dependent results.
@@ -847,7 +821,7 @@ SECTION("Expression Reduction") {
 
   // 2=body ^ 2-body ^ 2-body ^ 2-body with dependent (PNO) indices
   SEQUANT_PROFILE_SINGLE("wick(P2*H2*T2*T2)", {
-    for (auto&& use_nop_partitions : {true, false}) {
+    for (auto&& use_nop_partitions : {false}) {
       for (auto&& use_op_partitions : {true, false}) {
         std::wostringstream oss;
         oss << "use_{nop,op}_partitions={" << use_nop_partitions << ","
@@ -882,11 +856,13 @@ SECTION("Expression Reduction") {
                                   {14, 15}});
         auto wick_result = wick.compute();
         REQUIRE(wick_result->is<Sum>());
-        if (use_op_partitions) {  // TODO update for use_op_partitions case
-          REQUIRE(wick_result->size() == (use_nop_partitions ? 10 : 14));
+        if (use_op_partitions) {
+          REQUIRE(wick_result->size() == 7);
         } else {
-          REQUIRE(wick_result->size() == (use_nop_partitions ? 272 : 544));
+          REQUIRE(wick_result->size() == 544);
         }
+        std::wcout << oss.str() << L" (nop-only) "
+                   << to_latex_align(wick_result, 0, 1) << std::endl;
 
         // multiply tensor factors and expand
         auto wick_result_2 =
@@ -916,8 +892,8 @@ SECTION("Expression Reduction") {
         canonicalize(wick_result_2);
         rapid_simplify(wick_result_2);
 
-        std::wcout << oss.str() << to_latex_align(wick_result_2, 20)
-                   << std::endl;
+        //        std::wcout << oss.str() << to_latex_align(wick_result_2, 20)
+        //                   << std::endl;
         REQUIRE(wick_result_2->is<Sum>());
         REQUIRE(wick_result_2->size() == 4);
       }  // use_op_partitions

@@ -9,6 +9,7 @@
 #include <mutex>
 #include <utility>
 
+#include "SeQuant/core/math.hpp"
 #include "op.hpp"
 #include "ranges.hpp"
 #include "runtime.hpp"
@@ -531,7 +532,7 @@ class WickTheorem {
 
     const WickTheorem<S> &wick;        //!< the WickTheorem object using this
     NormalOperatorSequence<S> nopseq;  //!< current state of operator sequence
-    std::size_t nopseq_size;           //!< current size of opseq
+    std::size_t nopseq_size;           //!< current size of nopseq
     Product sp;                        //!< current prefactor
     int level;                         //!< level in recursive wick call stack
     size_t left_op_offset;  //!< where to start looking for contractions
@@ -560,10 +561,11 @@ class WickTheorem {
     container::vector<container::set<size_t>> nop_partitions;
 
     container::svector<size_t>
-        op_partition_adjacency_matrix;  //!< number of contractions between each
-                                        //!< topologically-equivalent group
-                                        //!< of Op<S> objects, only the lower
-                                        //!< triangle is kept
+        op_partition_cdeg_matrix_;  //!< contraction degree
+                                    //!< (number of contractions) between
+                                    //!< each topologically-equivalent group
+                                    //!< of Op<S> objects, only the upper
+                                    //!< triangle is kept
 
     /// for each Op<S> partition specifies how many contractions it currently
     /// has
@@ -643,8 +645,8 @@ class WickTheorem {
         // partition indices in nop_to_partition are 1-based
         // unlike nops, each op is in a partition
         const auto npartitions = wick.op_npartitions_;
-        op_partition_adjacency_matrix.resize(ntri(npartitions));
-        ranges::fill(op_partition_adjacency_matrix, 0);
+        op_partition_cdeg_matrix_.resize(ntri(npartitions));
+        ranges::fill(op_partition_cdeg_matrix_, 0);
         op_partition_ncontractions.resize(npartitions);
         ranges::fill(op_partition_ncontractions, 0);
       }
@@ -717,10 +719,10 @@ class WickTheorem {
           assert(op1_ord < op2_ord);
           assert(op1_partition_idx < op2_partition_idx);
 
-          assert(op_partition_adjacency_matrix.size() >
+          assert(op_partition_cdeg_matrix_.size() >
                  uptri_op(op1_partition_idx, op2_partition_idx));
-          op_partition_adjacency_matrix[uptri_op(op1_partition_idx,
-                                                 op2_partition_idx)] += 1;
+          op_partition_cdeg_matrix_[uptri_op(op1_partition_idx,
+                                             op2_partition_idx)] += 1;
           ++op_partition_ncontractions[op1_partition_idx];
           ++op_partition_ncontractions[op2_partition_idx];
         }
@@ -822,12 +824,12 @@ class WickTheorem {
           assert(op1_ord < op2_ord);
           assert(op1_partition_idx < op2_partition_idx);
 
-          assert(op_partition_adjacency_matrix.size() >
+          assert(op_partition_cdeg_matrix_.size() >
                  uptri_op(op1_partition_idx, op2_partition_idx));
-          assert(op_partition_adjacency_matrix[uptri_op(
-                     op1_partition_idx, op2_partition_idx)] > 0);
-          op_partition_adjacency_matrix[uptri_op(op1_partition_idx,
-                                                 op2_partition_idx)] -= 1;
+          assert(op_partition_cdeg_matrix_[uptri_op(op1_partition_idx,
+                                                    op2_partition_idx)] > 0);
+          op_partition_cdeg_matrix_[uptri_op(op1_partition_idx,
+                                             op2_partition_idx)] -= 1;
           assert(op_partition_ncontractions[op1_partition_idx] > 0);
           assert(op_partition_ncontractions[op2_partition_idx] > 0);
           --op_partition_ncontractions[op1_partition_idx];
@@ -937,23 +939,23 @@ class WickTheorem {
           std::vector<std::pair<Product, std::shared_ptr<NormalOperator<S>>>> *,
           std::mutex *> &result,
       NontensorWickState &state) const {
-    using opseq_view_type = flattened_rangenest<NormalOperatorSequence<S>>;
-    auto opseq_view = opseq_view_type(&state.nopseq);
+    using nopseq_view_type = flattened_rangenest<NormalOperatorSequence<S>>;
+    auto nopseq_view = nopseq_view_type(&state.nopseq);
     using std::begin;
     using std::end;
 
     // if full contractions needed, make contractions involving first index with
     // another index, else contract any index i with index j (i<j)
     auto left_op_offset = state.left_op_offset;
-    auto op_left_iter =
-        ranges::next(begin(opseq_view), left_op_offset);  // left op to contract
+    auto op_left_iter = ranges::next(begin(nopseq_view),
+                                     left_op_offset);  // left op to contract
 
     // optimization: can't contract fully if first op is not a qp annihilator
     if (full_contractions_ && !is_qpannihilator(*op_left_iter, input_.vacuum()))
       return;
 
     const auto op_left_iter_fence =
-        full_contractions_ ? ranges::next(op_left_iter) : end(opseq_view);
+        full_contractions_ ? ranges::next(op_left_iter) : end(nopseq_view);
     for (; op_left_iter != op_left_iter_fence;
          ++op_left_iter, ++left_op_offset) {
       auto &op_left_cursor = ranges::get_cursor(op_left_iter);
@@ -962,7 +964,7 @@ class WickTheorem {
               ->second;  // ordinal of op_left in input_
 
       auto op_right_iter = ranges::next(op_left_iter);
-      for (; op_right_iter != end(opseq_view);) {
+      for (; op_right_iter != end(nopseq_view);) {
         auto &op_right_cursor = ranges::get_cursor(op_right_iter);
         const auto op_right_input_ordinal =
             op_to_input_ordinal_.find(*op_right_iter)
@@ -973,111 +975,109 @@ class WickTheorem {
                 op_right_cursor
                     .range_iter()  // can't contract within same normop
         ) {
-          // computes topological degeneracy:
-          // 0 = nonunique index
-          // n>0 = unique index in a group of n indices
-          auto topological_degeneracy = [&]() {
-            size_t result = 1;
+          // clang-format off
+          /// reports whether the contraction specified by `op_{left,right}_cursors` is unique;
+          /// @return `{is_unique, nop_topological_weight}` where `is_unique` is true if the contraction is unique;
+          ///         for unique_contractions `nop_topological_weight` specifies the topological weight for the contraction due to equivalences of NormalOperator's
+          // clang-format on
+          auto is_topologically_unique = [&]() {
+            // with current way I exploit op symmetry, equivalence of nops is
+            // not exploitable for pruning search tree early ... this is due to
+            // the fact that nonuniqueness of contractions due to nop symmetry
+            // can only be decided when final contraction matrix order is
+            // available
+            constexpr bool use_nop_symmetry = false;
+            std::size_t nop_topological_weight = 1;
+
+            bool is_unique = true;
             if (use_topology_) {
               auto &nop_right = *(op_right_cursor.range_iter());
               auto &op_right_it = op_right_cursor.elem_iter();
 
               // check against the degeneracy deduced by index partition
+              constexpr bool use_op_partition_groups = true;
+              constexpr bool test_vs_old_code = false;
+
+              size_t ref_op_psymm_weight = 1;
+              if constexpr (test_vs_old_code) {
+                auto op_right_idx_in_opseq =
+                    op_right_it - ranges::begin(nop_right);
+                auto &hug_right = nop_right.hug();
+                auto &group_right = hug_right->group(op_right_idx_in_opseq);
+                if (group_right.second.find(op_right_idx_in_opseq) ==
+                    group_right.second.begin())
+                  ref_op_psymm_weight =
+                      hug_right->group_size(op_right_idx_in_opseq);
+                else
+                  ref_op_psymm_weight = 0;
+              }
+
               {
+                const auto op_left_partition_idx =
+                    state.wick.op_partition_idx_[op_left_input_ordinal] - 1;
+                const auto op_right_partition_idx =
+                    state.wick.op_partition_idx_[op_right_input_ordinal] - 1;
+                const auto past_op_right_partition_idx =
+                    op_right_partition_idx + 1;
+
                 // skip contractions that would connect op1_partition with
                 // op2_partition (op1_partition<op2_partition) if there is
                 // another partition p>op2_partition that op1_partition
                 // is connected to
-                constexpr bool use_op_partition_groups = true;
-                constexpr bool test_vs_old_code = true;
+                if (use_op_partition_groups &&
+                    past_op_right_partition_idx < this->op_npartitions_) {
+                  const auto left_partition_ncontr_past_right_partition =
+                      ranges::span<size_t>(
+                          state.op_partition_cdeg_matrix_.data() +
+                              state.uptri_op(op_left_partition_idx,
+                                             past_op_right_partition_idx),
+                          op_npartitions_ - past_op_right_partition_idx);
 
-                size_t ref_result = 1;
-                {
-                  auto op_right_idx_in_opseq =
-                      op_right_it - ranges::begin(nop_right);
-                  auto &hug_right = nop_right.hug();
-                  auto &group_right = hug_right->group(op_right_idx_in_opseq);
-                  if (group_right.second.find(op_right_idx_in_opseq) ==
-                      group_right.second.begin())
-                    ref_result = hug_right->group_size(op_right_idx_in_opseq);
-                  else
-                    ref_result = 0;
+                  if (ranges::any_of(
+                          left_partition_ncontr_past_right_partition,
+                          [](auto x) {
+                            return x > 0;
+                          })) {  // only contract with a partition if had not
+                                 // already contracted to partitions past it
+                    is_unique = false;
+                  }
                 }
 
-                {
-                  const auto op_left_partition_idx =
-                      state.wick.op_partition_idx_[op_left_input_ordinal] - 1;
-                  const auto op_right_partition_idx =
-                      state.wick.op_partition_idx_[op_right_input_ordinal] - 1;
-                  const auto past_op_right_partition_idx =
-                      op_right_partition_idx + 1;
-                  if (past_op_right_partition_idx < this->op_npartitions_) {
-                    const auto left_partition_ncontr_past_right_partition =
-                        ranges::span<size_t>(
-                            state.op_partition_adjacency_matrix.data() +
-                                state.uptri_op(op_left_partition_idx,
-                                               past_op_right_partition_idx),
-                            op_npartitions_ - past_op_right_partition_idx);
+                // contract to the first free op in a partition
+                // and scale by the number of free ops
+                if (is_unique) {
+                  const auto right_partition_ncontr_total =
+                      state.op_partition_ncontractions[op_right_partition_idx];
+                  const auto &op_right_partition =
+                      state.wick.op_partitions_[op_right_partition_idx];
+                  const auto op_right_ord_in_partition =
+                      op_right_partition.find(op_right_input_ordinal) -
+                      op_right_partition.begin();
+                  is_unique =
+                      right_partition_ncontr_total == op_right_ord_in_partition;
 
-                    if (use_op_partition_groups &&
-                        ranges::any_of(
-                            left_partition_ncontr_past_right_partition,
-                            [](auto x) {
-                              return x > 0;
-                            })) {  // only contract with a partition if had not
-                                   // already contracted to partitions past it
-                      result = 0;
-                    } else {  // contract to the first free op in a partition
-                              // and scale by the number of free ops
-                      const auto right_partition_ncontr_total =
-                          state.op_partition_ncontractions
-                              [op_right_partition_idx];
-                      const auto &op_right_partition =
-                          state.wick.op_partitions_[op_right_partition_idx];
-                      const auto op_right_ord_in_partition =
-                          op_right_partition.find(op_right_input_ordinal) -
-                          op_right_partition.begin();
-                      if (right_partition_ncontr_total ==
-                          op_right_ord_in_partition) {
-                        result = op_right_partition.size() -
-                                 op_right_ord_in_partition;
-                      } else
-                        result = 0;
-
-                      if (test_vs_old_code) {
-                        // old code assumes bra/ket of each NormalOperator forms
-                        // a single partition
-                        const auto nop_right_input =
-                            input_.at(op_right_cursor.range_ordinal());
-                        const auto op_right_ord_in_nop_input =
-                            ranges::find(nop_right_input, *op_right_it) -
-                            ranges::begin(nop_right_input);
-                        if (op_right_partition.size() ==
-                            nop_right_input.hug()->group_size(
-                                op_right_ord_in_nop_input)) {
-                          //                            const auto
-                          //                            op_right_ord_in_nop =
-                          //                                op_right_it -
-                          //                                ranges::begin(nop_right);
-                          //                            auto &hug_right =
-                          //                            nop_right.hug(); auto
-                          //                            &group_right =
-                          //                                hug_right->group(op_right_ord_in_nop);
-                          //                            assert(
-                          //                                group_right.second.find(op_right_ord_in_nop)
-                          //                                ==
-                          //                                group_right.second.begin());
-                          //                            assert(result ==
-                          //                                   hug_right->group_size(op_right_ord_in_nop));
-                          assert(ref_result == result);
-                        }
-                      }
+                  if (is_unique && test_vs_old_code) {
+                    // old code assumes bra/ket of each NormalOperator forms
+                    // a single partition
+                    const auto nop_right_input =
+                        input_.at(op_right_cursor.range_ordinal());
+                    const auto op_right_ord_in_nop_input =
+                        ranges::find(nop_right_input, *op_right_it) -
+                        ranges::begin(nop_right_input);
+                    if (op_right_partition.size() ==
+                        nop_right_input.hug()->group_size(
+                            op_right_ord_in_nop_input)) {
+                      assert(ref_op_psymm_weight ==
+                             op_right_partition.size() -
+                                 op_right_ord_in_partition);
                     }
                   }
                 }
               }
+
               // account for topologically-equivalent normal operators
-              if (result > 0 && !state.nop_partitions.empty()) {
+              if (use_nop_symmetry && is_unique &&
+                  !state.nop_partitions.empty()) {
                 auto nop_right_idx =
                     ranges::get_cursor(op_right_iter)
                         .range_ordinal();  // the index of normal operator
@@ -1100,11 +1100,34 @@ class WickTheorem {
                         // account for the entire partition by scaling the
                         // contribution from the first contraction from this
                         // normal operator
-                        result *= nop_right_partition.size();
+                        nop_topological_weight = nop_right_partition.size();
                       } else
-                        result = 0;
+                        is_unique = false;
                     }
                   }
+                }
+              }  // use_nop_symmetry
+
+            }  // use_topology
+            return std::make_tuple(is_unique, nop_topological_weight);
+          };
+
+          // clang-format off
+          /// @return the permutational symmetry factor of a contraction order matrix
+          // clang-format on
+          auto op_permutational_degeneracy = [&]() {
+            rational result = 1;
+            const auto &contraction_order_matrix_uptri =
+                state.op_partition_cdeg_matrix_;
+            for (auto i :
+                 ranges::views::iota(std::size_t{0}, op_npartitions_)) {
+              const auto partition_i_size = op_partitions_[i].size();
+              if (partition_i_size > 1) {
+                result *= factorial(partition_i_size);
+                for (auto j : ranges::views::iota(i + 1, op_npartitions_)) {
+                  const auto ncontr_ij =
+                      contraction_order_matrix_uptri[state.uptri_op(i, j)];
+                  if (ncontr_ij > 1) result /= factorial(ncontr_ij);
                 }
               }
             }
@@ -1113,9 +1136,9 @@ class WickTheorem {
 
           // check if can contract these indices and
           // check connectivity constraints (if needed)
-          int64_t top_degen;
           if (can_contract(*op_left_iter, *op_right_iter, input_.vacuum())) {
-            if ((top_degen = topological_degeneracy()) > 0) {
+            auto &&[is_unique, nop_top_degen] = is_topologically_unique();
+            if (is_unique) {
               if (state.connect(nop_connections_,
                                 ranges::get_cursor(op_left_iter),
                                 ranges::get_cursor(op_right_iter))) {
@@ -1123,8 +1146,9 @@ class WickTheorem {
                   std::wcout << "level " << state.level << ":contracting "
                              << to_latex(*op_left_iter) << " with "
                              << to_latex(*op_right_iter)
-                             << " (top_degen=" << top_degen << ")" << std::endl;
-                  std::wcout << " current opseq = " << to_latex(state.nopseq)
+                             << " (nop_top_degen=" << nop_top_degen << ")"
+                             << std::endl;
+                  std::wcout << " current nopseq = " << to_latex(state.nopseq)
                              << std::endl;
                 }
 
@@ -1139,10 +1163,10 @@ class WickTheorem {
                   }
                 }
 
-                // update the prefactor and opseq
+                // update the prefactor and nopseq
                 Product sp_copy = state.sp;
                 state.sp.append(
-                    top_degen * phase,
+                    static_cast<int64_t>(nop_top_degen) * phase,
                     contract(*op_left_iter, *op_right_iter, input_.vacuum()));
 
                 // update the stats
@@ -1156,7 +1180,7 @@ class WickTheorem {
                 ranges::get_cursor(op_left_iter).erase();
                 --state.nopseq_size;
 
-                //            std::wcout << "  opseq after contraction = " <<
+                //            std::wcout << "  nopseq after contraction = " <<
                 //            to_latex(state.opseq) << std::endl;
 
                 // if have a nonzero result ...
@@ -1171,7 +1195,8 @@ class WickTheorem {
                         //              to_latex(state.sp)
                         //              << std::endl;
                         result.first->push_back(std::make_pair(
-                            std::move(state.sp.deep_copy()),
+                            std::move(state.sp.deep_copy().scale(
+                                op_permutational_degeneracy())),
                             std::shared_ptr<NormalOperator<S>>{}));
                         //              std::wcout << "now up to " <<
                         //              result.first->size()
@@ -1182,7 +1207,8 @@ class WickTheorem {
                             state.nopseq, state.make_target_partner_indices());
                         result.second->lock();
                         result.first->push_back(std::make_pair(
-                            std::move(state.sp.deep_copy().scale(phase)),
+                            std::move(state.sp.deep_copy().scale(
+                                phase * op_permutational_degeneracy())),
                             op->empty() ? nullptr : std::move(op)));
                         result.second->unlock();
                       }
@@ -1208,7 +1234,7 @@ class WickTheorem {
                     ++stats_.num_useful_contractions;
                 }
 
-                // restore the prefactor and opseq
+                // restore the prefactor and nopseq
                 state.sp = std::move(sp_copy);
                 // restore from front to back
                 ranges::get_cursor(op_left_iter).insert(std::move(left));
@@ -1218,7 +1244,7 @@ class WickTheorem {
                 state.disconnect(nop_connections_,
                                  ranges::get_cursor(op_left_iter),
                                  ranges::get_cursor(op_right_iter));
-                //            std::wcout << "  restored opseq = " <<
+                //            std::wcout << "  restored nopseq = " <<
                 //            to_latex(state.opseq) << std::endl;
               }  // connect succeeded
             }    // topologically-unique contraction

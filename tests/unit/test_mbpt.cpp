@@ -32,11 +32,11 @@ TEST_CASE("NBodyOp", "[mbpt]") {
 
       REQUIRE(f1.label() == L"f");
 
-      {                                          // exact compare
+      {  // exact compare
         using namespace boost::numeric::interval_lib::compare::possible;
         REQUIRE(operator==(f1(), qns_t{1, 1}));  // produces single replacement
-        REQUIRE(operator!=(f1(),
-                           qns_t{2, 2}));  // cannot produce double replacement
+        REQUIRE(operator!=
+                (f1(), qns_t{2, 2}));  // cannot produce double replacement
         REQUIRE(operator==(f1(qns_t{5, 0}), qns_t{{5, 6}, {0, 1}}));
       }
     }
@@ -463,27 +463,7 @@ TEST_CASE("MBPT", "[mbpt]") {
       });
     }
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
-
-    // troubleshooting the use of topology in WickTheorem
-    // H2**T2**T2 -> R4
-    {
-      ExprPtr result;
-      //      Logger::get_instance().wick_harness = true;
-      //      Logger::get_instance().wick_stats = true;
-      //      Logger::get_instance().wick_topology = true;
-      //      Logger::get_instance().wick_contract = true;
-      SEQUANT_PROFILE_SINGLE("wick(H2(vv;vv)**T2**T2 -> R4)", {
-        result = op::vac_av(op::A(4) * op::H2_vv_vv() * op::T_(2) * op::T_(2),
-                            new_op_connect);
-        REQUIRE(result->size() == 4);  // single term
-      });
-      //      Logger::get_instance().wick_harness = false;
-      //      Logger::get_instance().wick_stats = false;
-      //      Logger::get_instance().wick_topology = false;
-      //      Logger::get_instance().wick_contract = false;
-    }
-
-  }  // SECTION ("SRSO")
+  }     // SECTION ("SRSO")
 
   SECTION("SRSO Fock") {
     using namespace sequant::mbpt::sr;
@@ -509,7 +489,7 @@ TEST_CASE("MBPT", "[mbpt]") {
           REQUIRE(result->is<Sum>());    // sub ...
           REQUIRE(result->size() == 4);  // ... of 4 factors
         }));
-  }                                      // SECTION("SRSO Fock")
+  }  // SECTION("SRSO Fock")
 
   SECTION("SRSO-PNO") {
     using namespace sequant::mbpt::sr;

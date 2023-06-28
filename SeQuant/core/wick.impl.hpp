@@ -501,28 +501,24 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
         disable_nop_canonicalization();
       }
 
-      // NormalOperators should be all at the end
+      // split off NormalOperators into input_
       auto first_nop_it = ranges::find_if(
           *expr_input_,
           [](const ExprPtr &expr) { return expr->is<NormalOperator<S>>(); });
-      // if have ops, split into prefactor and op sequence
+      // if have ops, split into nop sequence and cnumber "prefactor"
       if (first_nop_it != ranges::end(*expr_input_)) {
         // extract into prefactor and op sequence
         ExprPtr prefactor =
             ex<CProduct>(expr_input_->as<Product>().scalar(), ExprPtrList{});
-        bool found_op = false;
         decltype(input_) nopseq;
-        ranges::for_each(*expr_input_, [this, &found_op, &prefactor,
-                                        &nopseq](const ExprPtr &factor) {
-          if (factor->is<NormalOperator<S>>()) {
-            nopseq.push_back(factor->as<NormalOperator<S>>());
-            found_op = true;
+        for (const auto &factor : *expr_input_) {
+          if (factor->template is<NormalOperator<S>>()) {
+            nopseq.push_back(factor->template as<NormalOperator<S>>());
           } else {
             assert(factor->is_cnumber());
-            assert(!found_op);  // make sure that ops are at the end
             *prefactor *= *factor;
           }
-        });
+        }
         init_input(nopseq);
 
         // compute and record/analyze topological NormalOperator and Index
