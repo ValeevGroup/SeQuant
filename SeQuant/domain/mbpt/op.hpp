@@ -278,7 +278,7 @@ inline bool operator!=(const QuantumNumberChange<N, Tag, QNV>& a, I b) {
 //////////////////////// define "ovearloadable" typedefs for the physical vacuum
 /// case
 
-using tag_t = struct {};
+struct qns_tag {};
 
 // clang-format off
 /// algebra of operators normal order with respect to physical vacuum
@@ -287,7 +287,7 @@ using tag_t = struct {};
 /// \note use signed integer, although could use unsigned in this case,
 /// so that can represent quantum numbers and their changes by the same type
 // clang-format on
-using qns_t = mbpt::QuantumNumberChange<2, tag_t, std::int64_t>;
+using qns_t = mbpt::QuantumNumberChange<2, qns_tag, std::int64_t>;
 using qninterval_t = typename qns_t::interval_t;
 /// changes in quantum number represented by quantum numbers themselves
 using qnc_t = qns_t;

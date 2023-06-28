@@ -17,14 +17,14 @@ namespace sequant {
 namespace mbpt {
 namespace sr {
 
-using tag_t = struct {};
+struct qns_tag;
 
 // clang-format off
 /// single reference operator algebra can be screened by tracking the number of creators and annihilators in the occupied and unoccupied space
 /// the order of of elements is {# of occupied creators, # of occupied annihilators, # of unoccupied creators, # of unoccupied annihilators}
 /// \note use signed integer, although could use unsigned in this case, so that can represent quantum numbers and their changes by the same type
 // clang-format on
-using qns_t = mbpt::QuantumNumberChange<4, tag_t, std::int64_t>;
+using qns_t = mbpt::QuantumNumberChange<4, qns_tag, std::int64_t>;
 /// changes in quantum number represented by quantum numbers themselves
 using qnc_t = qns_t;
 using op_t = mbpt::Operator<qnc_t>;
