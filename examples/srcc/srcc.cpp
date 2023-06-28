@@ -33,6 +33,10 @@ inline const std::map<EqnType, std::wstring> type2str = {
 inline const std::map<std::string, EqnType> str2type = {
     {"t", EqnType::t}, {"lambda", EqnType::lambda}};
 
+/// maps unoccupied basis type string to enum
+inline const std::map<std::string, mbpt::CSVFormalism> str2uocc = {
+    {"std", mbpt::CSVFormalism::NonCSV}, {"csv", mbpt::CSVFormalism::CSV}};
+
 // profiles evaluation of all CC equations for a given ex rank N with projection
 // ex rank PMIN .. P
 class compute_cceqvec {
@@ -146,6 +150,11 @@ int main(int argc, char* argv[]) {
   const size_t NMAX = argc > 1 ? std::atoi(argv[1]) : DEFAULT_NMAX;
   const std::string eqn_type_str = argc > 2 ? argv[2] : "t";
   const EqnType eqn_type = str2type.at(eqn_type_str);
+  const std::string uocc_type_str = argc > 3 ? argv[3] : "std";
+  const mbpt::CSVFormalism uocc_type = str2uocc.at(uocc_type_str);
+  auto resetter = set_scoped_default_formalism(
+      mbpt::Formalism::make_default().set(uocc_type));
+
   // change to true to print out the resulting equations
   constexpr bool print = false;
   // change to true to print stats
