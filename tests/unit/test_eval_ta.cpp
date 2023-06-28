@@ -350,8 +350,8 @@ TEST_CASE("TEST_EVAL_USINT_TA_COMPLEX", "[eval]") {
 
   auto yield_ = rand_tensor_yield<TArrayC>{world, nocc, nvirt};
 
-  auto yield = [&yield_](std::wstring_view lbl) -> TA::TArrayC const& {
-    return yield_(lbl)->get<TA::TArrayC>();
+  auto yield = [&yield_](std::wstring_view lbl) -> TArrayC const& {
+    return yield_(lbl)->get<TArrayC>();
   };
 
   auto eval = [&yield_](sequant::ExprPtr const& expr,
@@ -388,7 +388,7 @@ TEST_CASE("TEST_EVAL_USINT_TA_COMPLEX", "[eval]") {
         yield(L"t{a1;i1}")("a1,i1") + yield(L"f{i1;a1}")("i1,a1");
 
     // todo:
-    // REQUIRE(norm(sum1_man) == Approx(norm(sum1_eval)));
+    REQUIRE(norm(sum1_man) == Approx(norm(sum1_eval)));
 
     auto expr2 = parse_expr(L"2 * t_{a1}^{i1} + 3/2 * f_{i1}^{a1}");
 
@@ -398,7 +398,7 @@ TEST_CASE("TEST_EVAL_USINT_TA_COMPLEX", "[eval]") {
     sum2_man("i1,a1") = std::complex<double>{2} * yield(L"t{a1;i1}")("a1,i1") +
                         std::complex<double>{1.5} * yield(L"f{i1;a1}")("i1,a1");
 
-    //    REQUIRE(norm(sum2_man) == Approx(norm(sum2_eval)));
+    REQUIRE(norm(sum2_man) == Approx(norm(sum2_eval)));
   }
 
   SECTION("product") {
@@ -410,7 +410,7 @@ TEST_CASE("TEST_EVAL_USINT_TA_COMPLEX", "[eval]") {
                                yield(L"g{i2,i4;a2,a4}")("i2,i4,a2,a4") *
                                yield(L"t{a1,a2;i1,i2}")("a1,a2,i1,i2");
 
-    //    REQUIRE(norm(prod1_man) == Approx(norm(prod1_eval)));
+    REQUIRE(norm(prod1_man) == Approx(norm(prod1_eval)));
 
     auto expr2 = parse_expr(
         L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{ i3, i4}");
@@ -422,7 +422,7 @@ TEST_CASE("TEST_EVAL_USINT_TA_COMPLEX", "[eval]") {
                                yield(L"t{a2,a4;i1,i2}")("a2,a4,i1,i2") *
                                yield(L"t{a1,a3;i3,i4}")("a1,a3,i3,i4");
 
-    //    REQUIRE(norm(prod2_man) == Approx(norm(prod2_eval)));
+    REQUIRE(norm(prod2_man) == Approx(norm(prod2_eval)));
   }
 
   SECTION("sum and product") {
@@ -442,7 +442,7 @@ TEST_CASE("TEST_EVAL_USINT_TA_COMPLEX", "[eval]") {
                               yield(L"t{a1,a2;i3,i4}")("a1,a2,i3,i4") *
                               yield(L"t{a3,a4;i1,i2}")("a3,a4,i1,i2");
 
-    //    REQUIRE(norm(man1) == Approx(norm(eval1)));
+    REQUIRE(norm(man1) == Approx(norm(eval1)));
   }
 
   SECTION("Antisymmetrization") {
@@ -456,7 +456,7 @@ TEST_CASE("TEST_EVAL_USINT_TA_COMPLEX", "[eval]") {
 
     man1("0,1,2,3") = std::complex<double>{0.5} * man1("0,1,2,3");
 
-    //    REQUIRE(norm(man1) == Approx(norm(eval1)));
+    REQUIRE(norm(man1) == Approx(norm(eval1)));
 
     TArrayC zero1;
     zero1("0,1,2,3") = man1("0,1,2,3") - eval1("0,1,2,3");
@@ -536,16 +536,15 @@ TEST_CASE("TEST_EVAL_USINT_TA_COMPLEX", "[eval]") {
         " + "
         " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2}");
 
-    auto eval1 = evaluate(eval_node(expr1), "i_1,i_2,a_1,a_2"s, yield_)
-                     ->get<TA::TArrayC>();
+    auto eval1 =
+        evaluate(eval_node(expr1), "i_1,i_2,a_1,a_2"s, yield_)->get<TArrayC>();
 
     auto nodes1 = *expr1 | ranges::views::transform([](auto&& x) {
       return eval_node(x);
     }) | ranges::to_vector;
 
-    auto eval2 =
-        evaluate(nodes1, "i_1,i_2,a_1,a_2"s, yield_)->get<TA::TArrayC>();
+    auto eval2 = evaluate(nodes1, "i_1,i_2,a_1,a_2"s, yield_)->get<TArrayC>();
 
-    // REQUIRE(norm(eval1) == Approx(norm(eval2)));
+    REQUIRE(norm(eval1) == Approx(norm(eval2)));
   }
 }
