@@ -34,21 +34,21 @@ class screened_vac_av {
   /// and
   /// \param expr input expression, must contain `A`, `H` (`f` or `g`),
   ///        and `K` `T`'s
-  /// \param op_connections specifies the connectivity
-  /// \param screen if false, will use brute-force evaluation
-  /// \param use_topology if true, forces topological optimization
-  /// \param canonical_only if true AND \p screen is true then optimize
+  /// \param nop_connections specifies which pairs of normal operators to be
+  /// connected \param screen if false, will use brute-force evaluation \param
+  /// use_topology if true, forces topological optimization \param
+  /// canonical_only if true AND \p screen is true then optimize
   ///        evaluation by combining equivalent terms such that VEV evaluation
   ///        only involves canonical products (e.g., evaluate only H*T1*T2 and
   ///        not H*T2*T1)
   /// \return the resulting VEV
   ExprPtr t(const ExprPtr& expr,
-            std::initializer_list<std::pair<int, int>> op_connections,
+            std::initializer_list<std::pair<int, int>> nop_connections,
             bool screen = true, bool use_topology = true,
             bool canonical_only = true) {
     // TODO: Implement antisymm here
     if (!screen)
-      return sequant::mbpt::sr::vac_av(expr, op_connections, use_topology);
+      return sequant::mbpt::sr::vac_av(expr, nop_connections, use_topology);
 
     ExprPtr input = expr;
     // expand, if possible
@@ -100,7 +100,7 @@ class screened_vac_av {
         if (canonical_only) {
           if (current_rank < prev_rank)  // if T ranks are not increasing, omit
             canonical = false;
-          else {                         // else keep track of degeneracy
+          else {  // else keep track of degeneracy
             assert(current_rank != 0);
             if (current_rank == prev_rank)
               ++current_partition_size;
@@ -132,7 +132,7 @@ class screened_vac_av {
     if (screened_input->size() == 0)
       return ex<Constant>(0);
     else {
-      return sequant::mbpt::sr::vac_av(screened_input, op_connections,
+      return sequant::mbpt::sr::vac_av(screened_input, nop_connections,
                                        use_topology);
     }
   }  // screened_vac_av_t
@@ -142,23 +142,23 @@ class screened_vac_av {
   /// and
   /// \param expr input expression, must contain `A`, `H` (`f` or `g`), `Λ`,
   ///        and `K` `T`'s
-  /// \param op_connections specifies the connectivity
-  /// \param screen if false, will use brute-force evaluation
-  /// \param use_topology if true, forces topological optimization
-  /// \param canonical_only if true AND \p screen is true then optimize
+  /// \param nop_connections specifies which pairs of normal operators to be
+  /// connected \param screen if false, will use brute-force evaluation \param
+  /// use_topology if true, forces topological optimization \param
+  /// canonical_only if true AND \p screen is true then optimize
   ///        evaluation by combining equivalent terms such that VEV evaluation
   ///        only involves canonical products (e.g., evaluate only H*T1*T2 and
   ///        not H*T2*T1)
   /// \return the resulting VEV
   ExprPtr lambda(const ExprPtr& expr,
-                 std::initializer_list<std::pair<int, int>> op_connections,
+                 std::initializer_list<std::pair<int, int>> nop_connections,
                  bool screen = true, bool use_topology = true,
                  bool canonical_only = true) {
     // screening for lambda is not available now
     assert(!screen &&
            "screening for λ residual equations is not available now");
     if (!screen)
-      return sequant::mbpt::sr::vac_av(expr, op_connections, use_topology);
+      return sequant::mbpt::sr::vac_av(expr, nop_connections, use_topology);
 
     ExprPtr input = expr;
     // expand, if possible
@@ -237,7 +237,7 @@ class screened_vac_av {
         if (canonical_only) {
           if (current_rank < prev_rank)  // if T ranks are not increasing, omit
             canonical = false;
-          else {                         // else keep track of degeneracy
+          else {  // else keep track of degeneracy
             assert(current_rank != 0);
             if (current_rank == prev_rank) {
               ++current_partition_size;
@@ -266,12 +266,12 @@ class screened_vac_av {
     if (screened_input->size() == 0)
       return ex<Constant>(0);
     else {
-      return sequant::mbpt::sr::vac_av(screened_input, op_connections,
+      return sequant::mbpt::sr::vac_av(screened_input, nop_connections,
                                        use_topology);
     }
   }  // screened_vac_av_lambda
 
-};   // screened_vac_av
+};  // screened_vac_av
 
 /// Evaluates coupled-cluster amplitude equation, `<P|(H exp(T(N))_c|0>`,
 /// for particular `P` and `N`
@@ -423,20 +423,20 @@ std::vector<ExprPtr> cceqs::t(bool screen, bool use_topology,
     std::vector<ExprPtr> result(P + 1);
     for (auto p = P; p >= PMIN; --p) {
       // 2.a. screen out terms that cannot give nonzero after projection onto
-      // <P|
+      // <p|
       std::shared_ptr<Sum>
-          hbar_p;     // products that can produce excitations of rank p
+          hbar_p;  // products that can produce excitations of rank p
       std::shared_ptr<Sum>
           hbar_le_p;  // keeps products that can produce excitations rank <=p
       for (auto& term : *hbar) {
         assert(term->is<Product>() || term->is<op_t>());
 
-        if (op::contains_up_to_rank(term, p)) {
+        if (op::raises_vacuum_up_to_rank(term, p)) {
           if (!hbar_le_p)
             hbar_le_p = std::make_shared<Sum>(ExprPtrList{term});
           else
             hbar_le_p->append(term);
-          if (op::contains_rank(term, p)) {
+          if (op::raises_vacuum_to_rank(term, p)) {
             if (!hbar_p)
               hbar_p = std::make_shared<Sum>(ExprPtrList{term});
             else
@@ -468,7 +468,7 @@ std::vector<ExprPtr> cceqs::t(bool screen, bool use_topology,
 std::vector<ExprPtr> cceqs::lambda(bool screen, bool use_topology,
                                    bool use_connectivity, bool canonical_only) {
   constexpr bool use_ops = true;
-  if (use_ops) { // in development
+  if (use_ops) {
     // construct hbar
     auto hbar = op::H();
     auto H_Tk = hbar;
@@ -477,12 +477,8 @@ std::vector<ExprPtr> cceqs::lambda(bool screen, bool use_topology,
       hbar += H_Tk;
     }
 
-//    std::wcout << "hbar: \n" << to_latex_align(hbar, 0, 4) << std::endl;
-    // multiply with (1 + Λ)
     const auto One = ex<Constant>(1);
     auto lhbar = simplify((One + op::Lambda(N)) * hbar);
-
-//    std::wcout << "lhbar: \n" << to_latex_align(lhbar, 0, 4) << std::endl;
 
     // 2. project onto each manifold, screen, lower to tensor form and wick it
     std::vector<ExprPtr> result(P + 1);
@@ -490,20 +486,18 @@ std::vector<ExprPtr> cceqs::lambda(bool screen, bool use_topology,
       // 2.a. screen out terms that cannot give nonzero after projection onto
       // <P|
       std::shared_ptr<Sum>
-          hbar_p;     // products that can produce excitations of rank p
+          hbar_p;  // products that can produce excitations of rank p
       std::shared_ptr<Sum>
           hbar_le_p;  // keeps products that can produce excitations rank <=p
       for (auto& term : *lhbar) {  // pick terms from lhbar
         assert(term->is<Product>() || term->is<op_t>());
 
-//        auto which_term = to_latex(term);
-
-        if (op::contains_up_to_rank(term, p)) {
+        if (op::lowers_rank_or_lower_to_vacuum(term, p)) {
           if (!hbar_le_p)
             hbar_le_p = std::make_shared<Sum>(ExprPtrList{term});
           else
             hbar_le_p->append(term);
-          if (op::contains_rank(term, p)) {
+          if (op::lowers_rank_to_vacuum(term, p)) {
             if (!hbar_p)
               hbar_p = std::make_shared<Sum>(ExprPtrList{term});
             else
@@ -511,20 +505,11 @@ std::vector<ExprPtr> cceqs::lambda(bool screen, bool use_topology,
           }
         }
       }
-      lhbar = hbar_le_p; // not needed
-
-      if (p == 2) {
-        std::wcout << "p = " << p << std::endl;
-        std::wcout << "hbar-le-p (" << hbar_le_p->size() << "): \n"
-                   << to_latex_align(hbar_le_p, 0, 4) << std::endl;
-        std::wcout << "hbar-p (" << hbar_p->size() << "): \n"
-                   << to_latex_align(hbar_p, 0, 4) << std::endl;
-      }
+      lhbar = hbar_le_p;  // not needed
 
       // 2.b multiply by adjoint of A(P) on the right side
 
       auto A_hbar = simplify(hbar_p * adjoint(op::A(p)));
-//      std::wcout << "Ahbar: \n" << to_latex_align(A_hbar, 0, 4) << std::endl;
 
       // temp
       std::vector<std::pair<std::wstring, std::wstring>> new_op_connect = {
@@ -534,8 +519,6 @@ std::vector<ExprPtr> cceqs::lambda(bool screen, bool use_topology,
       // 2.c compute vacuum average
       result.at(p) = op::vac_av(A_hbar, new_op_connect);
       simplify(result.at(p));
-//      std::wcout << "result.at(p): \n"
-//                 << to_latex_align(result.at(p), 0, 4) << std::endl;
     }
     return result;
   } else {

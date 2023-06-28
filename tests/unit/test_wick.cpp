@@ -473,11 +473,6 @@ SECTION("fermi vacuum") {
     wick.spinfree(false)
         .set_external_indices(IndexList{L"i_1", L"a_3", L"a_4", L"a_2"})
         .use_topology(true);
-    REQUIRE_THROWS_AS(
-        wick.compute(),
-        std::invalid_argument);  // use_topology requires that every index
-                                 // within bra/ket of a NormalOperator
-    wick.use_topology(false);
     ExprPtr result;
     REQUIRE_NOTHROW(result = wick.compute());
     // std::wcout << "result = " << to_latex(result) << std::endl;
@@ -538,7 +533,7 @@ SECTION("fermi vacuum") {
     REQUIRE(result1->size() == 9);
     auto wick2 = FWickTheorem{opseq};
     auto result2 = wick2.set_external_indices(ext_indices)
-                       .set_op_connections({{1, 2}, {1, 3}})
+                       .set_nop_connections({{1, 2}, {1, 3}})
                        .spinfree(false)
                        .compute();
     REQUIRE(result2->is<Sum>());
@@ -717,42 +712,59 @@ SECTION("Expression Reduction") {
             L"1}{a_2}}}}");
   });
 
-  // 2-body ^ 1-body ^ 1-body
+  // 2-body ^ 1-body ^ 1-body, with/without using topology
   SEQUANT_PROFILE_SINGLE("wick(H2*T1*T1)", {
-    constexpr bool use_op_partitions = true;
-    auto opseq = FNOperatorSeq(
-        {FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}, V),
-         FNOperator({L"a_4"}, {L"i_4"}, V), FNOperator({L"a_5"}, {L"i_5"}, V)});
-    auto wick = FWickTheorem{opseq};
-    wick.spinfree(false).use_topology(true);
-    if (use_op_partitions) wick.set_op_partitions({{1, 2}});
-    auto wick_result = wick.compute();
-    REQUIRE(wick_result->is<Sum>());
-    REQUIRE(wick_result->size() == (use_op_partitions ? 2 : 4));
+    for (auto&& use_nop_partitions : {false}) {
+      for (auto&& use_op_partitions : {true, false}) {
+        std::wostringstream oss;
+        oss << "use_op_partitions=" << use_op_partitions << "}: H2*T1*T1 = ";
 
-    // multiply tensor factors and expand
-    auto wick_result_2 =
-        ex<Tensor>(L"g", WstrList{L"p_1", L"p_2"}, WstrList{L"p_3", L"p_4"},
-                   Symmetry::antisymm) *
-        ex<Tensor>(L"t", WstrList{L"a_4"}, WstrList{L"i_4"},
-                   Symmetry::antisymm) *
-        ex<Tensor>(L"t", WstrList{L"a_5"}, WstrList{L"i_5"},
-                   Symmetry::antisymm) *
-        wick_result;
-    expand(wick_result_2);
-    wick.reduce(wick_result_2);
-    rapid_simplify(wick_result_2);
-    TensorCanonicalizer::register_instance(
-        std::make_shared<DefaultTensorCanonicalizer>(std::vector<Index>{}));
-    canonicalize(wick_result_2);
-    rapid_simplify(wick_result_2);
+        auto opseq =
+            FNOperatorSeq({FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}, V),
+                           FNOperator({L"a_4"}, {L"i_4"}, V),
+                           FNOperator({L"a_5"}, {L"i_5"}, V)});
+        auto wick = FWickTheorem{opseq};
+        wick.spinfree(false).use_topology(use_nop_partitions ||
+                                          use_op_partitions);
+        // if (use_nop_partitions) wick.set_nop_partitions({{1, 2}});
+        if (use_op_partitions) wick.set_op_partitions({{0, 1}, {2, 3}});
+        auto wick_result = wick.compute();
+        // print(oss.str() + L" (nopseq only) ", wick_result);
+        if (use_op_partitions) {
+          REQUIRE(wick_result->is<Product>());
+          REQUIRE(wick_result->size() == 4 /* factors */);
+        } else {
+          REQUIRE(wick_result->is<Sum>());
+          REQUIRE(wick_result->size() == 4 /* summands */);
+        }
 
-    print("H2*T1*T1 = ", wick_result_2);
-    REQUIRE(to_latex(wick_result_2) ==
-            L"{{{4}}"
-            L"{\\bar{g}^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}}_{{a_1}}}{t^{{i_"
-            L"2}}_{{a_"
-            L"2}}}}");
+        // multiply tensor factors and expand
+        auto wick_result_2 =
+            ex<Tensor>(L"g", WstrList{L"p_1", L"p_2"}, WstrList{L"p_3", L"p_4"},
+                       Symmetry::antisymm) *
+            ex<Tensor>(L"t", WstrList{L"a_4"}, WstrList{L"i_4"},
+                       Symmetry::antisymm) *
+            ex<Tensor>(L"t", WstrList{L"a_5"}, WstrList{L"i_5"},
+                       Symmetry::antisymm) *
+            wick_result;
+        expand(wick_result_2);
+        wick.reduce(wick_result_2);
+        rapid_simplify(wick_result_2);
+        TensorCanonicalizer::register_instance(
+            std::make_shared<DefaultTensorCanonicalizer>(std::vector<Index>{}));
+        canonicalize(wick_result_2);
+        rapid_simplify(wick_result_2);
+
+        // print(oss.str(), wick_result_2);
+        REQUIRE(wick_result_2->size() == 3 /* factors */);
+        REQUIRE(to_latex(wick_result_2) ==
+                L"{{{4}}"
+                L"{\\bar{g}^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}}_{{a_1}}}{"
+                L"t^{{i_"
+                L"2}}_{{a_"
+                L"2}}}}");
+      }  // use_op_partitions
+    }    // use_nop_partitions
   });
 
   // 2=body ^ 1-body ^ 2-body with dependent (PNO) indices
@@ -791,9 +803,8 @@ SECTION("Expression Reduction") {
     canonicalize(wick_result_2);
     rapid_simplify(wick_result_2);
 
-    std::wcout << L"P2*H1*T2(PNO) = " << to_latex_align(wick_result_2)
-               << std::endl;
-    0;
+    //    std::wcout << L"P2*H1*T2(PNO) = " << to_latex_align(wick_result_2)
+    //               << std::endl;
     // it appears that the two terms are swapped when using gcc 8 on linux
     // TODO investigate why sum canonicalization seems to produce
     // platform-dependent results.
@@ -810,61 +821,83 @@ SECTION("Expression Reduction") {
 
   // 2=body ^ 2-body ^ 2-body ^ 2-body with dependent (PNO) indices
   SEQUANT_PROFILE_SINGLE("wick(P2*H2*T2*T2)", {
-    constexpr bool use_op_partitions = true;
-    auto opseq = FNOperatorSeq(
-        {FNOperator(
-             IndexList{L"i_1", L"i_2"},
-             {Index(L"a_1", {L"i_1", L"i_2"}), Index(L"a_2", {L"i_1", L"i_2"})},
-             V),
-         FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}, V),
-         FNOperator(
-             {Index(L"a_3", {L"i_3", L"i_4"}), Index(L"a_4", {L"i_3", L"i_4"})},
-             IndexList{L"i_3", L"i_4"}, V),
-         FNOperator(
-             {Index(L"a_5", {L"i_5", L"i_6"}), Index(L"a_6", {L"i_5", L"i_6"})},
-             IndexList{L"i_5", L"i_6"}, V)});
-    auto wick = FWickTheorem{opseq};
-    wick.spinfree(false)
-        .set_op_connections({{1, 2}, {1, 3}})
-        .use_topology(true);
+    for (auto&& use_nop_partitions : {false}) {
+      for (auto&& use_op_partitions : {true, false}) {
+        std::wostringstream oss;
+        oss << "use_{nop,op}_partitions={" << use_nop_partitions << ","
+            << use_op_partitions << "}: P2*H2*T2*T2(PNO) = ";
 
-    if (use_op_partitions) wick.set_op_partitions({{2, 3}});
-    auto wick_result = wick.compute();
-    REQUIRE(wick_result->is<Sum>());
-    REQUIRE(wick_result->size() == (use_op_partitions ? 17 : 34));
+        auto opseq =
+            FNOperatorSeq({FNOperator(IndexList{L"i_1", L"i_2"},
+                                      {Index(L"a_1", {L"i_1", L"i_2"}),
+                                       Index(L"a_2", {L"i_1", L"i_2"})},
+                                      V),
+                           FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}, V),
+                           FNOperator({Index(L"a_3", {L"i_3", L"i_4"}),
+                                       Index(L"a_4", {L"i_3", L"i_4"})},
+                                      IndexList{L"i_3", L"i_4"}, V),
+                           FNOperator({Index(L"a_5", {L"i_5", L"i_6"}),
+                                       Index(L"a_6", {L"i_5", L"i_6"})},
+                                      IndexList{L"i_5", L"i_6"}, V)});
+        auto wick = FWickTheorem{opseq};
+        wick.spinfree(false)
+            .set_nop_connections({{1, 2}, {1, 3}})
+            .use_topology(true);
 
-    // multiply tensor factors and expand
-    auto wick_result_2 =
-        ex<Constant>(rational{1, 256}) *
-        ex<Tensor>(
-            L"A", IndexList{L"i_1", L"i_2"},
-            IndexList{{L"a_1", {L"i_1", L"i_2"}}, {L"a_2", {L"i_1", L"i_2"}}},
-            Symmetry::antisymm) *
-        ex<Tensor>(L"g", WstrList{L"p_1", L"p_2"}, WstrList{L"p_3", L"p_4"},
-                   Symmetry::antisymm) *
-        ex<Tensor>(
-            L"t",
-            IndexList{{L"a_3", {L"i_3", L"i_4"}}, {L"a_4", {L"i_3", L"i_4"}}},
-            IndexList{L"i_3", L"i_4"}, Symmetry::antisymm) *
-        ex<Tensor>(
-            L"t",
-            IndexList{{L"a_5", {L"i_5", L"i_6"}}, {L"a_6", {L"i_5", L"i_6"}}},
-            IndexList{L"i_5", L"i_6"}, Symmetry::antisymm) *
-        wick_result;
-    expand(wick_result_2);
-    wick.reduce(wick_result_2);
-    rapid_simplify(wick_result_2);
-    TensorCanonicalizer::register_instance(
-        std::make_shared<DefaultTensorCanonicalizer>());
-    canonicalize(wick_result_2);
-    canonicalize(wick_result_2);
-    canonicalize(wick_result_2);
-    rapid_simplify(wick_result_2);
+        if (use_nop_partitions) wick.set_nop_partitions({{2, 3}});
+        if (use_op_partitions)
+          wick.set_op_partitions({{0, 1},
+                                  {2, 3},
+                                  {4, 5},
+                                  {6, 7},
+                                  {8, 9},
+                                  {10, 11},
+                                  {12, 13},
+                                  {14, 15}});
+        auto wick_result = wick.compute();
+        REQUIRE(wick_result->is<Sum>());
+        if (use_op_partitions) {
+          REQUIRE(wick_result->size() == 7);
+        } else {
+          REQUIRE(wick_result->size() == 544);
+        }
+        std::wcout << oss.str() << L" (nop-only) "
+                   << to_latex_align(wick_result, 0, 1) << std::endl;
 
-    std::wcout << L"P2*H2*T2*T2(PNO) = " << to_latex_align(wick_result_2, 20)
-               << std::endl;
-    REQUIRE(wick_result_2->is<Sum>());
-    REQUIRE(wick_result_2->size() == 4);
+        // multiply tensor factors and expand
+        auto wick_result_2 =
+            ex<Constant>(rational{1, 256}) *
+            ex<Tensor>(L"A", IndexList{L"i_1", L"i_2"},
+                       IndexList{{L"a_1", {L"i_1", L"i_2"}},
+                                 {L"a_2", {L"i_1", L"i_2"}}},
+                       Symmetry::antisymm) *
+            ex<Tensor>(L"g", WstrList{L"p_1", L"p_2"}, WstrList{L"p_3", L"p_4"},
+                       Symmetry::antisymm) *
+            ex<Tensor>(L"t",
+                       IndexList{{L"a_3", {L"i_3", L"i_4"}},
+                                 {L"a_4", {L"i_3", L"i_4"}}},
+                       IndexList{L"i_3", L"i_4"}, Symmetry::antisymm) *
+            ex<Tensor>(L"t",
+                       IndexList{{L"a_5", {L"i_5", L"i_6"}},
+                                 {L"a_6", {L"i_5", L"i_6"}}},
+                       IndexList{L"i_5", L"i_6"}, Symmetry::antisymm) *
+            wick_result;
+        expand(wick_result_2);
+        wick.reduce(wick_result_2);
+        rapid_simplify(wick_result_2);
+        TensorCanonicalizer::register_instance(
+            std::make_shared<DefaultTensorCanonicalizer>());
+        canonicalize(wick_result_2);
+        canonicalize(wick_result_2);
+        canonicalize(wick_result_2);
+        rapid_simplify(wick_result_2);
+
+        //        std::wcout << oss.str() << to_latex_align(wick_result_2, 20)
+        //                   << std::endl;
+        REQUIRE(wick_result_2->is<Sum>());
+        REQUIRE(wick_result_2->size() == 4);
+      }  // use_op_partitions
+    }    // use_nop_partitions
   });
 
 #if 1
@@ -894,7 +927,7 @@ SECTION("Expression Reduction") {
                              WstrList{L"i_6", L"i_7", L"i_8"}, V);
     FWickTheorem wick{P3 * H2 * T2 * T3};
     wick.spinfree(false).use_topology(topology);
-    if (connected_only) wick.set_op_connections({{1, 2}, {1, 3}});
+    if (connected_only) wick.set_nop_connections({{1, 2}, {1, 3}});
     auto wick_result = wick.compute();
 
     std::wcout << "P3*H2*T2*T3 = " << to_latex_align(wick_result, 20)

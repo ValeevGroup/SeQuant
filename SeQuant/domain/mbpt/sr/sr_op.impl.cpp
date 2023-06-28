@@ -1,37 +1,27 @@
 /// makes excitation operator of bra/ket ranks @c Nbra/Nket
 ExprPtr T_(std::size_t Nbra, std::size_t Nket) {
-  assert(Nbra > 0 && Nbra < std::numeric_limits<std::size_t>::max());
+  assert(Nbra > 0);
   assert(Nket > 0);
-  const auto Nket_ =
-      Nket == std::numeric_limits<std::size_t>::max() ? Nbra : Nket;
-  return Op(OpType::t, Nbra, Nket_)();
+  return make_op(OpType::t, Nbra, Nket)();
 }
 
 /// makes lambda deexcitation operator of bra/ket ranks @c Nbra/Nket
 ExprPtr Lambda_(std::size_t Nbra, std::size_t Nket) {
-  assert(Nbra > 0 && Nbra < std::numeric_limits<std::size_t>::max());
+  assert(Nbra > 0);
   assert(Nket > 0);
-  const auto Nket_ =
-      Nket == std::numeric_limits<std::size_t>::max() ? Nbra : Nket;
-  return Op(OpType::lambda, Nbra, Nket_)();
+  return make_op(OpType::lambda, Nbra, Nket)();
 }
 
 /// makes R excitation operator of bra/ket ranks @c Nbra/Nket
 ExprPtr R_(std::size_t Nbra, std::size_t Nket) {
-  assert(Nbra < std::numeric_limits<std::size_t>::max());
-  const auto Nket_ =
-      Nket == std::numeric_limits<std::size_t>::max() ? Nbra : Nket;
-  assert(Nbra > 0 || Nket_ > 0);
-  return Op(OpType::R, Nbra, Nket_)();
+  assert(Nbra > 0 || Nket > 0);
+  return make_op(OpType::R, Nbra, Nket)();
 }
 
 /// makes L deexcitation operator of bra/ket ranks @c Nbra/Nket
 ExprPtr L_(std::size_t Nbra, std::size_t Nket) {
-  assert(Nbra < std::numeric_limits<std::size_t>::max());
-  const auto Nket_ =
-      Nket == std::numeric_limits<std::size_t>::max() ? Nbra : Nket;
-  assert(Nbra > 0 || Nket_ > 0);
-  return Op(OpType::L, Nbra, Nket_)();
+  assert(Nbra > 0 || Nket > 0);
+  return make_op(OpType::L, Nbra, Nket)();
 }
 
 namespace detail {
@@ -98,18 +88,22 @@ ExprPtr Lambda(std::size_t Nbra, std::size_t Nket) {
 /// makes geminal excitation operator for ansatz @p ansatz
 ExprPtr R12(IndexSpace::Type gg_space, int ansatz) {
   assert(ansatz == 1 || ansatz == 2);
-  return Op(OpType::R12, 2, 2)(ansatz == 2 ? IndexSpace::complete_unoccupied
-                                           : IndexSpace::other_unoccupied,
-                               gg_space);
+  if (ansatz == 2)
+    return make_op(
+        OpType::R12,
+        {IndexSpace::complete_unoccupied, IndexSpace::complete_unoccupied},
+        {gg_space, gg_space})();
+  else
+    return make_op(OpType::R12,
+                   {IndexSpace::other_unoccupied, IndexSpace::other_unoccupied},
+                   {gg_space, gg_space})();
 }
 
 /// makes deexcitation operator of bra/ket ranks @c Nbra/Nket
 ExprPtr A(std::size_t Nbra, std::size_t Nket) {
-  assert(Nbra > 0 && Nbra < std::numeric_limits<std::size_t>::max());
-  const auto Nket_ =
-      Nket == std::numeric_limits<std::size_t>::max() ? Nbra : Nket;
-  assert(Nket_ > 0);
-  return Op(OpType::A, Nbra, Nket_)();
+  assert(Nbra > 0);
+  assert(Nket > 0);
+  return make_op(OpType::A, Nbra, Nket)();
 }
 
 /// makes excitation operator of all bra/ket ranks up to (and including)

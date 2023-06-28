@@ -13,6 +13,10 @@
 
 #include <SeQuant/core/ranges.hpp>
 
+#ifdef SEQUANT_HAS_EXECUTION_HEADER
+#include <execution>
+#endif
+
 namespace sequant {
 
 namespace detail {
@@ -83,7 +87,7 @@ void for_each(SizedRange& rng, const UnaryOp& op) {
   using ranges::begin;
   using ranges::end;
 #ifdef SEQUANT_HAS_EXECUTION_HEADER
-  std::for_each(std::execution::par_unseq, begin(rng), end(rng), lambda);
+  std::for_each(std::execution::par_unseq, begin(rng), end(rng), op);
 #else
   std::atomic<size_t> work = 0;
   auto task = [&work, &op, &rng, ntasks = ranges::size(rng)]() {
