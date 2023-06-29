@@ -1,6 +1,8 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/runtime.hpp>
+#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/timer.hpp>
+#include <SeQuant/core/wick.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/formalism.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
@@ -51,10 +53,95 @@ class compute_cceqvec {
                   bool use_connectivity, bool canonical_only) {
     tpool.start(N);
     std::vector<ExprPtr> eqvec;
+    constexpr auto debug = false;
     switch (type) {
       case EqnType::t:
         eqvec = cceqs{N, P, PMIN}.t(screen, use_topology, use_connectivity,
                                     canonical_only);
+        if constexpr (debug) {
+          // troubleshoot against non-CSV CCSDTQ
+          for (auto R = PMIN; R <= P; ++R) {
+            std::wcout << "# of R" << R
+                       << " terms in CSV-CC = " << eqvec.at(R)->size()
+                       << std::endl;
+          }
+          ranges::for_each(eqvec, [](ExprPtr& eq) {
+            if (eq) {
+              decsv(eq);
+            }
+          });
+          auto resetter = set_scoped_default_formalism(
+              mbpt::Formalism::make_default().set(mbpt::CSVFormalism::NonCSV));
+          auto eqvec_ref = cceqs{N, P, PMIN}.t(
+              screen, use_topology, use_connectivity, canonical_only);
+          for (auto R = PMIN; R <= P; ++R) {
+            std::wcout << "# of R" << R
+                       << " terms in CC = " << eqvec_ref.at(R)->size()
+                       << std::endl;
+          }
+          for (auto R = PMIN; R <= P; ++R) {
+            auto diff = eqvec[R] - eqvec_ref[R];
+            simplify(diff);
+            std::wcout << "R" << R << "(expS" << N
+                       << "): difference between standard and de-CSV'ed eqn "
+                          "versions = "
+                       << to_latex_align(diff, 0, 1) << std::endl;
+            ranges::for_each(diff->expr(), [](const auto& summand) {
+              std::wcout << "hash_value(" << to_latex(summand)
+                         << ") = " << summand->hash_value() << std::endl;
+              if (summand.template is<Product>()) {
+                ranges::for_each(
+                    summand.template as<Product>().factors(),
+                    [](const auto& factor) {
+                      std::wcout << "  hash_value(" << to_latex(factor)
+                                 << ") = " << factor->hash_value() << std::endl;
+                      if (factor.template is<Tensor>()) {
+                        ranges::for_each(factor.template as<Tensor>().braket(),
+                                         [](const auto& idx) {
+                                           std::wcout
+                                               << "    hash_value("
+                                               << to_latex(idx)
+                                               << ") = " << hash_value(idx)
+                                               << std::endl;
+                                         });
+                      }
+                    });
+              }
+            });
+            // compare term by term
+            canonicalize(eqvec[R]);
+            canonicalize(eqvec_ref[R]);
+            ranges::for_each(eqvec[R].as<Sum>().summands(), [&eqvec_ref,
+                                                             R](const auto&
+                                                                    summand) {
+              // std::wcout << "summand = " << to_latex(*summand) << std::endl;
+              auto hash = summand->hash_value();
+              auto it_by_hash = ranges::find_if(
+                  eqvec_ref[R]->expr(),
+                  [hash](const auto& s) { return s->hash_value() == hash; });
+              auto it_by_hash_and_prefactor = ranges::find_if(
+                  eqvec_ref[R]->expr(), [hash, &summand](const auto& s) {
+                    return s->hash_value() == hash &&
+                           s.template as<Product>().scalar() ==
+                               summand.template as<Product>().scalar();
+                  });
+              if (it_by_hash == eqvec_ref[R]->expr().end()) {
+                std::wcout << "summand " << to_latex(summand)
+                           << " not found in reference eqn" << std::endl;
+              } else if (it_by_hash_and_prefactor ==
+                         eqvec_ref[R]->expr().end()) {
+                std::wcout
+                    << "summand " << to_latex(summand)
+                    << " found in reference eqn with different prefactor, as "
+                    << to_latex(*it_by_hash) << std::endl;
+              } else {
+                //                std::wcout << "summand " << to_latex(*summand)
+                //                           << " found in reference eqn" <<
+                //                           std::endl;
+              }
+            });
+          }
+        }
         break;
       case EqnType::lambda:
         eqvec = cceqs{N, P, PMIN}.lambda(screen, use_topology, use_connectivity,
@@ -100,6 +187,44 @@ class compute_cceqvec {
       }
     }
   }
+
+ private:
+  static void decsv(ExprPtr& eq) {
+    auto decsv_visitor = [](ExprPtr& expr) -> void {
+      if (expr.is<Tensor>()) {  // remove protoindices
+        const auto& tensor = expr.as<Tensor>();
+        // visitation is depth-first, must skip overlaps
+        if (ranges::any_of(tensor.braket(),
+                           [](auto& idx) { return idx.has_proto_indices(); })) {
+          auto protoindexfree_bra = tensor.bra() |
+                                    ranges::views::transform([](auto& idx) {
+                                      return idx.drop_proto_indices();
+                                    }) |
+                                    ranges::to<container::svector<Index>>;
+          auto protoindexfree_ket = tensor.ket() |
+                                    ranges::views::transform([](auto& idx) {
+                                      return idx.drop_proto_indices();
+                                    }) |
+                                    ranges::to<container::svector<Index>>;
+          auto protoindexfree_tensor = std::make_shared<Tensor>(
+              tensor.label(), protoindexfree_bra, protoindexfree_ket,
+              tensor.symmetry(), tensor.braket_symmetry(),
+              tensor.particle_symmetry());
+          expr = protoindexfree_tensor;
+        }
+      }
+    };
+    eq->visit(decsv_visitor, /* atoms_only = */ false);
+    // std::wcout << "decsv(eq) = " << to_latex(eq) << std::endl;
+    FWickTheorem wk(eq);
+    wk.reduce(eq);  // this reduces the overlaps
+    // std::wcout << "decsv+reduce(eq) = " << to_latex(eq) << std::endl;
+    simplify(eq);
+    // std::wcout << "decsv+reduce+simplify(eq) = " << to_latex(eq) <<
+    // std::endl;
+    std::wcout << "eq.size() = " << eq->size() << std::endl;
+  };
+
 };  // class compute_cceqvec
 
 // profiles evaluation of all CC equations with ex rank 2 .. N

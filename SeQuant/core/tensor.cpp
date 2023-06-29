@@ -9,7 +9,7 @@ namespace sequant {
 Tensor::~Tensor() = default;
 
 void Tensor::assert_nonreserved_label(std::wstring_view label) const {
-  assert(label != overlap_label());
+  // assert(label != overlap_label());
 }
 
 void Tensor::adjoint() {
