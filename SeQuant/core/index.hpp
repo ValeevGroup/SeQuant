@@ -292,6 +292,11 @@ class Index : public Taggable {
   /// @return true if the index is symmetric with respect to the permutation of
   /// protoindices
   bool symmetric_proto_indices() const { return symmetric_proto_indices_; }
+  /// drops the proto indices from this Index
+  /// @return a copy of this Index without proto indices
+  Index drop_proto_indices() const {
+    return Index(this->label(), this->space());
+  }
 
   std::wstring to_latex() const;
 
