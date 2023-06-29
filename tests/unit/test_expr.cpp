@@ -87,6 +87,10 @@ struct VecExpr : public std::vector<T>, public sequant::Expr {
     return static_cast<const base_type &>(*this) ==
            static_cast<const base_type &>(static_cast<const VecExpr &>(that));
   }
+
+  sequant::ExprPtr clone() const override {
+    return sequant::ex<VecExpr>(this->begin(), this->end());
+  }
 };
 
 struct Adjointable : public sequant::Expr {

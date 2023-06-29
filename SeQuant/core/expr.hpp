@@ -90,7 +90,7 @@ class ExprPtr : public std::shared_ptr<Expr> {
   T &as();
 
   std::wstring to_latex() const;
-};
+};  // class ExprPtr
 
 /// ExprPtr is equal to a null pointer if it's uninitialized
 inline bool operator==(const ExprPtr &x, std::nullptr_t) {
@@ -806,7 +806,7 @@ class Product : public Expr {
         scalar_ *= factor_constant.value();
         // no need to reset the hash since scalar is not hashed!
       } else {
-        factors_.push_back(std::move(factor));
+        factors_.push_back(factor->clone());
         reset_hash_value();
       }
     } else {  // factor is a product also ... flatten recursively
@@ -828,7 +828,7 @@ class Product : public Expr {
       auto factor_constant = factor->as<Constant>();
       scalar_ *= factor_constant.value();
     } else {
-      factors_.push_back(std::move(factor));
+      factors_.push_back(factor->clone());
       reset_hash_value();
     }
 
@@ -857,7 +857,7 @@ class Product : public Expr {
         scalar_ *= factor_constant->value();
         // no need to reset the hash since scalar is not hashed!
       } else {
-        factors_.insert(factors_.begin(), std::move(factor));
+        factors_.insert(factors_.begin(), factor->clone());
         reset_hash_value();
       }
     } else {  // factor is a product also  ... flatten recursively
@@ -1143,12 +1143,12 @@ class Sum : public Expr {
           *(summands_[*constant_summand_idx_]) += *summand;
         } else {
           if (!summand_constant->is_zero()) {
-            summands_.push_back(std::move(summand));
+            summands_.push_back(summand->clone());
             constant_summand_idx_ = summands_.size() - 1;
           }
         }
       } else {
-        summands_.push_back(std::move(summand));
+        summands_.push_back(summand->clone());
       }
       reset_hash_value();
     } else {  // this recursively flattens Sum summands
@@ -1170,12 +1170,12 @@ class Sum : public Expr {
         } else {  // or include the nonzero constant and update
                   // constant_summand_idx_
           if (!summand_constant->is_zero()) {
-            summands_.insert(summands_.begin(), std::move(summand));
+            summands_.insert(summands_.begin(), summand->clone());
             constant_summand_idx_ = 0;
           }
         }
       } else {
-        summands_.insert(summands_.begin(), std::move(summand));
+        summands_.insert(summands_.begin(), summand->clone());
         if (constant_summand_idx_)  // if have a constant, update its position
           ++*constant_summand_idx_;
       }
