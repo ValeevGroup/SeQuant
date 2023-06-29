@@ -53,12 +53,12 @@ class compute_cceqvec {
     std::vector<ExprPtr> eqvec;
     switch (type) {
       case EqnType::t:
-        eqvec = cceqs{N, P, 1}.t(screen, use_topology, use_connectivity,
-                                 canonical_only);
+        eqvec = cceqs{N, P, PMIN}.t(screen, use_topology, use_connectivity,
+                                    canonical_only);
         break;
       case EqnType::lambda:
-        eqvec = cceqs{N, P, 1}.lambda(screen, use_topology, use_connectivity,
-                                      canonical_only);
+        eqvec = cceqs{N, P, PMIN}.lambda(screen, use_topology, use_connectivity,
+                                         canonical_only);
         break;
     }
     tpool.stop(N);
