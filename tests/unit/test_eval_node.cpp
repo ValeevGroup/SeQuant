@@ -34,7 +34,7 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
 
     auto node1 = eval_node(p1);
 
-    REQUIRE(node1->scalar() == Constant{1.0 / 16});
+    REQUIRE(node1->scalar() == Constant{rational{1, 16}});
 
     REQUIRE(validate_tensor(node1->tensor(), L"I_{a1,a2}^{i1,i2}"));
 
@@ -61,7 +61,7 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
 
     auto const node2 = eval_node(ex<Product>(node2p));
 
-    REQUIRE(node2->scalar() == Constant{1.0 / 16});
+    REQUIRE(node2->scalar() == Constant{rational{1, 16}});
 
     REQUIRE(validate_tensor(node2->tensor(), L"I_{a1,a2}^{i1,i2}"));
 
@@ -113,7 +113,7 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
         L"* t_{a1, a2}^{i3, i4}"
         L"* t_{a3,a4}^{i1,i2}");
 
-    auto p1_after = ex<Product>(1. / 16, ExprPtrList{});
+    auto p1_after = ex<Product>(rational{1, 16}, ExprPtrList{});
     p1_after->as<Product>().append(
         ex<Product>(ExprPtrList{p1->at(0)->clone(), p1->at(1)->clone()}));
     p1_after->as<Product>().append(p1->at(2)->clone());

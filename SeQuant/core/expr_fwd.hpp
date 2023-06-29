@@ -9,7 +9,7 @@
 
 namespace sequant {
 class Expr;
-using ExprPtr = std::shared_ptr<Expr>;
-}
+class ExprPtr;
+}  // namespace sequant
 
 #endif  // SEQUANT_SRC_SEQUANT_CORE_EXPR_WFD_H

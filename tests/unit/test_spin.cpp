@@ -122,7 +122,7 @@ TEST_CASE("Spin", "[spin]") {
   }
 
   SECTION("Constant") {
-    auto exprPtr = ex<Constant>(1. / 4);
+    auto exprPtr = ex<Constant>(rational{1, 4});
     auto result = spintrace(exprPtr);
     REQUIRE(result->is<Constant>());
     REQUIRE(result->is_atom());
@@ -131,14 +131,14 @@ TEST_CASE("Spin", "[spin]") {
   }
 
   SECTION("Tensor") {
-    const auto expr = ex<Constant>(0.25) *
+    const auto expr = ex<Constant>(rational{1, 4}) *
                       ex<Tensor>(L"g", WstrList{L"p_1", L"p_2"},
                                  WstrList{L"p_3", L"p_4"}, Symmetry::antisymm);
     auto result = spintrace(expr);
     REQUIRE(result->is<Sum>());
     canonicalize(result);
     REQUIRE(result->size() == 2);
-    if constexpr (hash_version() == 1)
+    if constexpr (hash_version() == hash::Impl::BoostPre181)
       REQUIRE(to_latex(result) ==
               L"{ \\bigl({{{2}}{g^{{p_3}{p_4}}_{{p_1}{p_2}}}} - "
               L"{{{2}}{g^{{p_4}{p_3}}_{{p_1}"
@@ -164,7 +164,7 @@ TEST_CASE("Spin", "[spin]") {
     {
       // 1/2 * g * t1 * t1
       const auto expr =
-          ex<Constant>(1. / 2) *
+          ex<Constant>(rational{1, 2}) *
           ex<Tensor>(L"g", WstrList{L"i_1", L"i_2"}, WstrList{L"a_1", L"a_2"},
                      Symmetry::antisymm) *
           ex<Tensor>(L"t", WstrList{L"a_1"}, WstrList{L"i_1"}) *
@@ -187,25 +187,25 @@ TEST_CASE("Spin", "[spin]") {
     // f * t1 + 1/2 * g * t1 * t1 + 1/4 * g * t2
     const auto ex1 = ex<Tensor>(L"f", WstrList{L"i_1"}, WstrList{L"a_1"}) *
                      ex<Tensor>(L"t", WstrList{L"a_1"}, WstrList{L"i_1"});
-    const auto ex2 = ex<Constant>(1. / 2) *
+    const auto ex2 = ex<Constant>(rational{1, 2}) *
                      ex<Tensor>(L"g", WstrList{L"i_1", L"i_2"},
                                 WstrList{L"a_1", L"a_2"}, Symmetry::antisymm) *
                      ex<Tensor>(L"t", WstrList{L"a_1"}, WstrList{L"i_1"}) *
                      ex<Tensor>(L"t", WstrList{L"a_2"}, WstrList{L"i_2"});
-    const auto ex3 = ex<Constant>(1. / 4) *
+    const auto ex3 = ex<Constant>(rational{1, 4}) *
                      ex<Tensor>(L"g", WstrList{L"i_1", L"i_2"},
                                 WstrList{L"a_1", L"a_2"}, Symmetry::antisymm) *
                      ex<Tensor>(L"t", WstrList{L"a_1", L"a_2"},
                                 WstrList{L"i_1", L"i_2"}, Symmetry::antisymm);
 
     auto expr = ex1 + ex2 + ex3;
-    auto result = ex<Constant>(0.5) * spintrace(expr);
+    auto result = ex<Constant>(rational{1, 2}) * spintrace(expr);
     expand(result);
     rapid_simplify(result);
     canonicalize(result);
     REQUIRE(result->is<Sum>());
     REQUIRE(result->size() == 5);
-    if constexpr (hash_version() == 1)
+    if constexpr (hash_version() == hash::Impl::BoostPre181)
       REQUIRE(
           to_latex(result) ==
           L"{ \\bigl( - "
@@ -254,7 +254,7 @@ TEST_CASE("Spin", "[spin]") {
 
 // 2-body
 {
-  auto input = ex<Constant>(1. / 4.) *
+  auto input = ex<Constant>(rational{1, 4}) *
                ex<Tensor>(L"g", WstrList{L"i_1", L"i_2"},
                           WstrList{L"a_1", L"a_2"}, Symmetry::antisymm);
   auto result = expand_A_op(input);
@@ -262,7 +262,7 @@ TEST_CASE("Spin", "[spin]") {
   REQUIRE(to_latex(result) ==
           L"{{{\\frac{1}{4}}}{\\bar{g}^{{a_1}{a_2}}_{{i_1}{i_2}}}}");
 
-  input = ex<Constant>(1. / 4.) *
+  input = ex<Constant>(rational{1, 4}) *
           ex<Tensor>(L"A", WstrList{L"a_1", L"a_2"}, WstrList{L"i_1", L"i_2"},
                      Symmetry::antisymm) *
           ex<Tensor>(L"g", WstrList{L"i_1", L"i_2"}, WstrList{L"a_1", L"a_2"},
@@ -277,7 +277,7 @@ TEST_CASE("Spin", "[spin]") {
           L"{{{\\frac{1}{4}}}{\\bar{g}^{{a_2}{a_1}}_{{i_2}{i_1}}}}\\bigr) }");
 
   // 1/4 * A * g * t1 * t1
-  input = ex<Constant>(1. / 4.) *
+  input = ex<Constant>(rational{1, 4}) *
           ex<Tensor>(L"A", WstrList{L"a_1", L"a_2"}, WstrList{L"i_1", L"i_2"},
                      Symmetry::antisymm) *
           ex<Tensor>(L"g", WstrList{L"a_1", L"a_2"}, WstrList{L"a_3", L"a_4"},
@@ -299,7 +299,7 @@ TEST_CASE("Spin", "[spin]") {
           L"_{{a_3}}}{t^{{i_1}}_{{a_4}}}}\\bigr) }");
 
   // 1/4 * A * g * t1 * t1 * t1 * t1
-  input = ex<Constant>(1. / 4.) *
+  input = ex<Constant>(rational{1, 4}) *
           ex<Tensor>(L"A", WstrList{L"i_1", L"i_2"}, WstrList{L"a_1", L"a_2"},
                      Symmetry::antisymm) *
           ex<Tensor>(L"g", WstrList{L"i_3", L"i_4"}, WstrList{L"a_3", L"a_4"},
@@ -444,7 +444,7 @@ SECTION("Expand Symmetrizer") {
 
   {
     const auto input =
-        ex<Constant>(4.0) *
+        ex<Constant>(4) *
         ex<Tensor>(L"S", WstrList{L"i_1", L"i_2", L"i_3"},
                    WstrList{L"a_1", L"a_2", L"a_3"}, Symmetry::nonsymm) *
         ex<Tensor>(L"g", WstrList{L"i_4", L"i_5"}, WstrList{L"a_4", L"a_5"},
@@ -458,7 +458,7 @@ SECTION("Expand Symmetrizer") {
     REQUIRE(result->size() == 6);
     result->canonicalize();
     rapid_simplify(result);
-    if constexpr (hash_version() == 1)
+    if constexpr (hash_version() == hash::Impl::BoostPre181)
       REQUIRE(
           to_latex(result) ==
           L"{ "
@@ -532,14 +532,14 @@ SECTION("Symmetrize expression") {
 
   {
     // g * t1 * t1 * t2 + g * t1 * t1 * t2
-    auto input = ex<Constant>(2.0) *
+    auto input = ex<Constant>(2) *
                      ex<Tensor>(L"g", WstrList{L"i_3", L"i_4"},
                                 WstrList{L"a_3", L"a_4"}, Symmetry::symm) *
                      ex<Tensor>(L"t", WstrList{L"a_3"}, WstrList{L"i_3"}) *
                      ex<Tensor>(L"t", WstrList{L"a_2"}, WstrList{L"i_4"}) *
                      ex<Tensor>(L"t", WstrList{L"a_1", L"a_4"},
                                 WstrList{L"i_1", L"i_2"}) +
-                 ex<Constant>(2.0) *
+                 ex<Constant>(2) *
                      ex<Tensor>(L"g", WstrList{L"i_3", L"i_4"},
                                 WstrList{L"a_3", L"a_4"}, Symmetry::symm) *
                      ex<Tensor>(L"t", WstrList{L"a_3"}, WstrList{L"i_3"}) *
@@ -563,11 +563,12 @@ SECTION("Transform expression") {
                      ex<Tensor>(L"g", WstrList{L"i_2", L"a_1"},
                                 WstrList{L"i_1", L"a_2"}, Symmetry::antisymm) *
                      ex<Tensor>(L"t", WstrList{L"a_2"}, WstrList{L"i_2"});
-  auto result = ex<Constant>(0.5) * spintrace(input, {{L"i_1", L"a_1"}});
+  auto result =
+      ex<Constant>(rational{1, 2}) * spintrace(input, {{L"i_1", L"a_1"}});
   expand(result);
   rapid_simplify(result);
   canonicalize(result);
-  if constexpr (hash_version() == 1)
+  if constexpr (hash_version() == hash::Impl::BoostPre181)
     REQUIRE(
         to_latex(result) ==
         L"{ \\bigl({{{2}}{g^{{i_1}{a_2}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}} - "
@@ -583,7 +584,7 @@ SECTION("Transform expression") {
   auto transformed_result = transform_expr(result, idxmap);
   REQUIRE(transformed_result->is<Sum>());
   REQUIRE(transformed_result->size() == 2);
-  if constexpr (hash_version() == 1)
+  if constexpr (hash_version() == hash::Impl::BoostPre181)
     REQUIRE(
         to_latex(transformed_result) ==
         L"{ \\bigl({{{2}}{g^{{i_2}{a_2}}_{{a_1}{i_1}}}{t^{{i_1}}_{{a_2}}}} - "
@@ -598,7 +599,7 @@ SECTION("Transform expression") {
 SECTION("Swap bra kets") {
   // Constant
   {
-    auto input = ex<Constant>(0.5);
+    auto input = ex<Constant>(rational{1, 2});
     auto result = swap_bra_ket(input);
     REQUIRE(result->is_atom());
     REQUIRE(result->is<Constant>());
@@ -648,7 +649,8 @@ SECTION("Closed-shell spintrace CCSD") {
     // A * f
     const auto input = ex<Tensor>(L"A", WstrList{L"i_1"}, WstrList{L"a_1"}) *
                        ex<Tensor>(L"f", WstrList{L"a_1"}, WstrList{L"i_1"});
-    auto result = ex<Constant>(0.5) * spintrace(input, {{L"i_1", L"a_1"}});
+    auto result =
+        ex<Constant>(rational{1, 2}) * spintrace(input, {{L"i_1", L"a_1"}});
     expand(result);
     rapid_simplify(result);
     canonicalize(result);
@@ -664,10 +666,11 @@ SECTION("Closed-shell spintrace CCSD") {
         ex<Tensor>(L"g", WstrList{L"i_2", L"a_1"}, WstrList{L"i_1", L"a_2"},
                    Symmetry::antisymm) *
         ex<Tensor>(L"t", WstrList{L"a_2"}, WstrList{L"i_2"});
-    auto result = ex<Constant>(0.5) * spintrace(input, {{L"i_1", L"a_1"}});
+    auto result =
+        ex<Constant>(rational{1, 2}) * spintrace(input, {{L"i_1", L"a_1"}});
     simplify(result);
 
-    if constexpr (hash_version() == 1)
+    if constexpr (hash_version() == hash::Impl::BoostPre181)
       REQUIRE(
           to_latex(result) ==
           L"{ \\bigl({{{2}}{g^{{i_1}{a_2}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}} - "
@@ -683,7 +686,7 @@ SECTION("Closed-shell spintrace CCSD") {
     auto transformed_result = transform_expr(result, idxmap);
     REQUIRE(transformed_result->is<Sum>());
     REQUIRE(transformed_result->size() == 2);
-    if constexpr (hash_version() == 1)
+    if constexpr (hash_version() == hash::Impl::BoostPre181)
       REQUIRE(
           to_latex(transformed_result) ==
           L"{ \\bigl({{{2}}{g^{{i_2}{a_2}}_{{a_1}{i_1}}}{t^{{i_1}}_{{a_2}}}} - "
@@ -701,7 +704,8 @@ SECTION("Closed-shell spintrace CCSD") {
                        ex<Tensor>(L"A", WstrList{L"i_1"}, WstrList{L"a_1"}) *
                        ex<Tensor>(L"f", WstrList{L"i_2"}, WstrList{L"i_1"}) *
                        ex<Tensor>(L"t", WstrList{L"a_1"}, WstrList{L"i_2"});
-    auto result = ex<Constant>(0.5) * spintrace(input, {{L"i_1", L"a_1"}});
+    auto result =
+        ex<Constant>(rational{1, 2}) * spintrace(input, {{L"i_1", L"a_1"}});
     expand(result);
     rapid_simplify(result);
     canonicalize(result);
@@ -714,7 +718,8 @@ SECTION("Closed-shell spintrace CCSD") {
     const auto input = ex<Tensor>(L"A", WstrList{L"i_1"}, WstrList{L"a_1"}) *
                        ex<Tensor>(L"f", WstrList{L"a_1"}, WstrList{L"a_2"}) *
                        ex<Tensor>(L"t", WstrList{L"a_2"}, WstrList{L"i_1"});
-    auto result = ex<Constant>(0.5) * spintrace(input, {{L"i_1", L"a_1"}});
+    auto result =
+        ex<Constant>(rational{1, 2}) * spintrace(input, {{L"i_1", L"a_1"}});
     expand(result);
     rapid_simplify(result);
     canonicalize(result);
@@ -725,13 +730,14 @@ SECTION("Closed-shell spintrace CCSD") {
   {
     // -1/2 * A * g * t2
     const auto input =
-        ex<Constant>(-1. / 2.) *
+        ex<Constant>(rational{-1, 2}) *
         ex<Tensor>(L"A", WstrList{L"i_1"}, WstrList{L"a_1"}) *
         ex<Tensor>(L"g", WstrList{L"i_2", L"i_3"}, WstrList{L"i_1", L"a_2"},
                    Symmetry::antisymm) *
         ex<Tensor>(L"t", WstrList{L"a_1", L"a_2"}, WstrList{L"i_2", L"i_3"},
                    Symmetry::antisymm);
-    auto result = ex<Constant>(0.5) * spintrace(input, {{L"i_1", L"a_1"}});
+    auto result =
+        ex<Constant>(rational{1, 2}) * spintrace(input, {{L"i_1", L"a_1"}});
     expand(result);
     rapid_simplify(result);
     canonicalize(result);
@@ -746,18 +752,19 @@ SECTION("Closed-shell spintrace CCSD") {
   {
     // -1/2 * A * g * t2
     const auto input =
-        ex<Constant>(-0.5) *
+        ex<Constant>(rational{-1, 2}) *
         ex<Tensor>(L"A", WstrList{L"i_1"}, WstrList{L"a_1"}) *
         ex<Tensor>(L"g", WstrList{L"i_2", L"a_1"}, WstrList{L"a_2", L"a_3"},
                    Symmetry::antisymm) *
         ex<Tensor>(L"t", WstrList{L"a_2", L"a_3"}, WstrList{L"i_1", L"i_2"},
                    Symmetry::antisymm);
-    auto result = ex<Constant>(0.5) * spintrace(input, {{L"i_1", L"a_1"}});
+    auto result =
+        ex<Constant>(rational{1, 2}) * spintrace(input, {{L"i_1", L"a_1"}});
     expand(result);
     rapid_simplify(result);
     canonicalize(result);
 
-    if constexpr (hash_version() == 1)
+    if constexpr (hash_version() == hash::Impl::BoostPre181)
       REQUIRE(to_latex(result) ==
               L"{ "
               L"\\bigl({{{2}}{g^{{a_3}{a_2}}_{{a_1}{i_2}}}{t^{{i_2}{i_1}}_{{a_"
@@ -779,11 +786,12 @@ SECTION("Closed-shell spintrace CCSD") {
                                   Symmetry::antisymm) *
                        ex<Tensor>(L"t", WstrList{L"a_1", L"a_2"},
                                   WstrList{L"i_1", L"i_2"}, Symmetry::antisymm);
-    auto result = ex<Constant>(0.5) * spintrace(input, {{L"i_1", L"a_1"}});
+    auto result =
+        ex<Constant>(rational{1, 2}) * spintrace(input, {{L"i_1", L"a_1"}});
     expand(result);
     rapid_simplify(result);
     canonicalize(result);
-    if constexpr (hash_version() == 1)
+    if constexpr (hash_version() == hash::Impl::BoostPre181)
       REQUIRE(
           to_latex(result) ==
           L"{ \\bigl({{{2}}{f^{{a_2}}_{{i_2}}}{t^{{i_1}{i_2}}_{{a_1}{a_2}}}} - "
@@ -803,7 +811,8 @@ SECTION("Closed-shell spintrace CCSD") {
                    Symmetry::antisymm) *
         ex<Tensor>(L"t", WstrList{L"a_2"}, WstrList{L"i_2"}) *
         ex<Tensor>(L"t", WstrList{L"a_3"}, WstrList{L"i_1"});
-    auto result = ex<Constant>(0.5) * spintrace(input, {{L"i_1", L"a_1"}});
+    auto result =
+        ex<Constant>(rational{1, 2}) * spintrace(input, {{L"i_1", L"a_1"}});
     expand(result);
     rapid_simplify(result);
     canonicalize(result);
@@ -823,7 +832,8 @@ SECTION("Closed-shell spintrace CCSD") {
                    Symmetry::antisymm) *
         ex<Tensor>(L"t", WstrList{L"a_2"}, WstrList{L"i_2"}) *
         ex<Tensor>(L"t", WstrList{L"a_1"}, WstrList{L"i_3"});
-    auto result = ex<Constant>(0.5) * spintrace(input, {{L"i_1", L"a_1"}});
+    auto result =
+        ex<Constant>(rational{1, 2}) * spintrace(input, {{L"i_1", L"a_1"}});
     expand(result);
     rapid_simplify(result);
     canonicalize(result);
@@ -842,7 +852,8 @@ SECTION("Closed-shell spintrace CCSD") {
                        ex<Tensor>(L"f", WstrList{L"i_2"}, WstrList{L"a_2"}) *
                        ex<Tensor>(L"t", WstrList{L"a_2"}, WstrList{L"i_1"}) *
                        ex<Tensor>(L"t", WstrList{L"a_1"}, WstrList{L"i_2"});
-    auto result = ex<Constant>(0.5) * spintrace(input, {{L"i_1", L"a_1"}});
+    auto result =
+        ex<Constant>(rational{1, 2}) * spintrace(input, {{L"i_1", L"a_1"}});
     expand(result);
     rapid_simplify(result);
     canonicalize(result);
@@ -855,18 +866,19 @@ SECTION("Closed-shell spintrace CCSD") {
   {
     // -1/2 * A * g * t1 * t2
     const auto input =
-        ex<Constant>(-1. / 2.) *
+        ex<Constant>(rational{-1, 2}) *
         ex<Tensor>(L"A", WstrList{L"i_1"}, WstrList{L"a_1"}) *
         ex<Tensor>(L"g", WstrList{L"i_2", L"i_3"}, WstrList{L"a_2", L"a_3"},
                    Symmetry::antisymm) *
         ex<Tensor>(L"t", WstrList{L"a_1"}, WstrList{L"i_2"}) *
         ex<Tensor>(L"t", WstrList{L"a_2", L"a_3"}, WstrList{L"i_1", L"i_3"},
                    Symmetry::antisymm);
-    auto result = ex<Constant>(0.5) * spintrace(input, {{L"i_1", L"a_1"}});
+    auto result =
+        ex<Constant>(rational{1, 2}) * spintrace(input, {{L"i_1", L"a_1"}});
     expand(result);
     rapid_simplify(result);
     canonicalize(result);
-    if constexpr (hash_version() == 1)
+    if constexpr (hash_version() == hash::Impl::BoostPre181)
       REQUIRE(to_latex(result) ==
               L"{ "
               L"\\bigl({{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_2}}_{{a_1}}}{t^{{i_"
@@ -885,14 +897,15 @@ SECTION("Closed-shell spintrace CCSD") {
   {
     // -1/2 * A * g * t1 * t2
     const auto input =
-        ex<Constant>(-1. / 2.) *
+        ex<Constant>(rational{-1, 2}) *
         ex<Tensor>(L"A", WstrList{L"i_1"}, WstrList{L"a_1"}) *
         ex<Tensor>(L"g", WstrList{L"i_2", L"i_3"}, WstrList{L"a_2", L"a_3"},
                    Symmetry::antisymm) *
         ex<Tensor>(L"t", WstrList{L"a_2"}, WstrList{L"i_1"}) *
         ex<Tensor>(L"t", WstrList{L"a_1", L"a_3"}, WstrList{L"i_2", L"i_3"},
                    Symmetry::antisymm);
-    auto result = ex<Constant>(0.5) * spintrace(input, {{L"i_1", L"a_1"}});
+    auto result =
+        ex<Constant>(rational{1, 2}) * spintrace(input, {{L"i_1", L"a_1"}});
     expand(result);
     rapid_simplify(result);
     canonicalize(result);
@@ -913,11 +926,12 @@ SECTION("Closed-shell spintrace CCSD") {
         ex<Tensor>(L"t", WstrList{L"a_2"}, WstrList{L"i_2"}) *
         ex<Tensor>(L"t", WstrList{L"a_1", L"a_3"}, WstrList{L"i_1", L"i_3"},
                    Symmetry::antisymm);
-    auto result = ex<Constant>(0.5) * spintrace(input, {{L"i_1", L"a_1"}});
+    auto result =
+        ex<Constant>(rational{1, 2}) * spintrace(input, {{L"i_1", L"a_1"}});
     expand(result);
     rapid_simplify(result);
     canonicalize(result);
-    if constexpr (hash_version() == 1)
+    if constexpr (hash_version() == hash::Impl::BoostPre181)
       REQUIRE(to_latex(result) ==
               L"{ \\bigl( - "
               L"{{{2}}{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_2}}_{{a_2}}}{t^{{i_3}"
@@ -943,17 +957,18 @@ SECTION("Closed-shell spintrace CCSD") {
 
   {
     // - A * g * t1 * t1 * t1
-    auto input = ex<Constant>(-1.) *
+    auto input = ex<Constant>(-1) *
                  ex<Tensor>(L"g", WstrList{L"i_2", L"i_3"},
                             WstrList{L"a_2", L"a_3"}, Symmetry::antisymm) *
                  ex<Tensor>(L"t", WstrList{L"a_2"}, WstrList{L"i_2"}) *
                  ex<Tensor>(L"t", WstrList{L"a_3"}, WstrList{L"i_1"}) *
                  ex<Tensor>(L"t", WstrList{L"a_1"}, WstrList{L"i_3"});
-    auto result = ex<Constant>(0.5) * spintrace(input, {{L"i_1", L"a_1"}});
+    auto result =
+        ex<Constant>(rational{1, 2}) * spintrace(input, {{L"i_1", L"a_1"}});
     expand(result);
     rapid_simplify(result);
     canonicalize(result);
-    if constexpr (hash_version() == 1)
+    if constexpr (hash_version() == hash::Impl::BoostPre181)
       REQUIRE(to_latex(result) ==
               L"{ "
               L"\\bigl({{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_2}}_{{a_1}}}{t^{{i_"
@@ -973,7 +988,7 @@ SECTION("Closed-shell spintrace CCSD") {
 SECTION("Closed-shell spintrace CCSDT terms") {
   {  // A3 * f * t3
     auto input =
-        ex<Constant>(1. / 12) *
+        ex<Constant>(rational{1, 12}) *
         ex<Tensor>(L"A", WstrList{L"i_1", L"i_2", L"i_3"},
                    WstrList{L"a_1", L"a_2", L"a_3"}, Symmetry::antisymm) *
         ex<Tensor>(L"f", WstrList{L"i_4"}, WstrList{L"i_1"}) *
@@ -987,7 +1002,7 @@ SECTION("Closed-shell spintrace CCSDT terms") {
         input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
     simplify(result);
     REQUIRE(result->size() == 4);
-    if constexpr (hash_version() == 1)
+    if constexpr (hash_version() == hash::Impl::BoostPre181)
       REQUIRE(to_latex(result) ==
               L"{ "
               L"\\bigl({{{2}}{S^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}{f^{"
@@ -1029,7 +1044,7 @@ SECTION("Closed-shell spintrace CCSDT terms") {
 
   {  // A * g * t3
     auto input =
-        ex<Constant>(-1. / 4) *
+        ex<Constant>(rational{-1, 4}) *
         ex<Tensor>(L"A", WstrList{L"i_1", L"i_2", L"i_3"},
                    WstrList{L"a_1", L"a_2", L"a_3"}, Symmetry::antisymm) *
         ex<Tensor>(L"g", WstrList{L"i_4", L"a_1"}, WstrList{L"i_1", L"a_4"},
@@ -1154,10 +1169,10 @@ SECTION("Relation in spin P operators") {
   auto P4_1312 = ex<Tensor>(L"P", WstrList{L"i_1", L"i_3"},
                             WstrList{L"a_1", L"a_2"}, Symmetry::nonsymm);
 
-  auto p_aab = ex<Constant>(1.) - P13_b - P23_b - P13_k - P23_k + P4_1313 +
+  auto p_aab = ex<Constant>(1) - P13_b - P23_b - P13_k - P23_k + P4_1313 +
                P4_1323 + P4_2313 + P4_2323;
 
-  auto p_abb = ex<Constant>(1.) - P13_b - P12_b - P13_k - P12_k + P4_1212 +
+  auto p_abb = ex<Constant>(1) - P13_b - P12_b - P13_k - P12_k + P4_1212 +
                P4_1213 + P4_1312 + P4_1313;
 
   auto p6_input = p_aab * input;
@@ -1304,9 +1319,9 @@ SECTION("Open-shell spin-tracing") {
 
   //  g
   {
-    auto input = ex<Constant>(0.25) * ex<Tensor>(L"g", WstrList{L"a_1", L"a_2"},
-                                                 WstrList{L"i_1", L"i_2"},
-                                                 Symmetry::antisymm);
+    auto input = ex<Constant>(rational{1, 4}) *
+                 ex<Tensor>(L"g", WstrList{L"a_1", L"a_2"},
+                            WstrList{L"i_1", L"i_2"}, Symmetry::antisymm);
     auto result =
         open_shell_spintrace(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}});
     REQUIRE(result.size() == 3);
@@ -1320,7 +1335,7 @@ SECTION("Open-shell spin-tracing") {
 
   // f_oo * t2
   {
-    auto input = ex<Constant>(0.5) *
+    auto input = ex<Constant>(rational{1, 2}) *
                  ex<Tensor>(L"f", WstrList{L"i_3"}, WstrList{L"i_1"}) *
                  ex<Tensor>(L"t", WstrList{L"a_1", L"a_2"},
                             WstrList{L"i_2", L"i_3"}, Symmetry::antisymm);
@@ -1342,7 +1357,7 @@ SECTION("Open-shell spin-tracing") {
   // g * t1
   {
     auto input =
-        ex<Constant>(0.5) *
+        ex<Constant>(rational{1, 2}) *
         ex<Tensor>(L"g", WstrList{L"i_3", L"a_1"}, WstrList{L"i_1", L"i_2"},
                    Symmetry::antisymm) *
         ex<Tensor>(L"t", WstrList{L"a_2"}, WstrList{L"i_3"}, Symmetry::nonsymm);
@@ -1364,7 +1379,7 @@ SECTION("Open-shell spin-tracing") {
   // f * t3
   {
     auto input =
-        ex<Constant>(1. / 12) *
+        ex<Constant>(rational{1, 12}) *
         ex<Tensor>(L"f", WstrList{L"a_1"}, WstrList{L"a_4"}) *
         ex<Tensor>(L"t", WstrList{L"a_2", L"a_3", L"a_4"},
                    WstrList{L"i_1", L"i_2", L"i_3"}, Symmetry::antisymm);
@@ -1374,7 +1389,7 @@ SECTION("Open-shell spin-tracing") {
     REQUIRE(to_latex(result[0]) ==
             L"{{{\\frac{1}{12}}}{f^{{a↑_4}}_{{a↑_1}}}{\\bar{t}^{{i↑_1}{i↑_2}{"
             L"i↑_3}}_{{a↑_2}{a↑_3}{a↑_4}}}}");
-    if constexpr (hash_version() == 1) {
+    if constexpr (hash_version() == hash::Impl::BoostPre181) {
       REQUIRE(to_latex(result[1]) ==
               L"{ \\bigl( - "
               L"{{{\\frac{1}{12}}}{f^{{a↑_3}}_{{a↑_1}}}{t^{{i↑_1}{i↑_2}{i↓_3}}_"
@@ -1407,8 +1422,8 @@ SECTION("Open-shell spin-tracing") {
     auto g = Tensor(L"g", {i3A, i4A}, {i1A, i2A}, Symmetry::antisymm);
     auto t3 = Tensor(L"t", {a1A, a2A, a3B}, {i3A, i4A, i3B}, Symmetry::nonsymm);
 
-    auto input = ex<Constant>(1. / 12) * ex<Tensor>(A2_aab) * ex<Tensor>(g) *
-                 ex<Tensor>(t3);
+    auto input = ex<Constant>(rational{1, 12}) * ex<Tensor>(A2_aab) *
+                 ex<Tensor>(g) * ex<Tensor>(t3);
     auto result = expand_A_op(input);
     result->visit(reset_idx_tags);
     canonicalize(result);
@@ -1420,7 +1435,7 @@ SECTION("Open-shell spin-tracing") {
     g = Tensor(L"g", {i4A, i5A}, {i1A, i2A}, Symmetry::antisymm);
     t3 = Tensor(L"t", {a1A, a2A, a3B}, {i4A, i5A, i3B}, Symmetry::nonsymm);
 
-    input = ex<Constant>(1. / 12) * ex<Tensor>(A2_aab) * ex<Tensor>(g) *
+    input = ex<Constant>(rational{1, 12}) * ex<Tensor>(A2_aab) * ex<Tensor>(g) *
             ex<Tensor>(t3);
     result = expand_A_op(input);
     result->visit(reset_idx_tags);
@@ -1434,7 +1449,7 @@ SECTION("Open-shell spin-tracing") {
   // CCSDT R3 10 aaa, bbb
   {
     auto input =
-        ex<Constant>(1. / 8) *
+        ex<Constant>(rational{1, 8}) *
         ex<Tensor>(L"g", WstrList{L"i_4", L"i_5"}, WstrList{L"a_4", L"a_5"},
                    Symmetry::antisymm) *
         ex<Tensor>(L"t", WstrList{L"a_1", L"a_4"}, WstrList{L"i_1", L"i_2"},
@@ -1470,7 +1485,7 @@ SECTION("Open-shell spin-tracing") {
   // CCSDT R3 10 aab
   {
     auto input =
-        ex<Constant>(1. / 8) *
+        ex<Constant>(rational{1, 8}) *
             ex<Tensor>(L"P", WstrList{L"i_1", L"i_3"}, WstrList{L"a_1", L"a_3"},
                        Symmetry::nonsymm) *
             ex<Tensor>(L"g", WstrList{L"i_4", L"i_5"}, WstrList{L"a_4", L"a_5"},
@@ -1479,7 +1494,7 @@ SECTION("Open-shell spin-tracing") {
                        Symmetry::antisymm) *
             ex<Tensor>(L"t", WstrList{L"a_2", L"a_3", L"a_5"},
                        WstrList{L"i_3", L"i_4", L"i_5"}, Symmetry::antisymm) +
-        ex<Constant>(1. / 8) *
+        ex<Constant>(rational{1, 8}) *
             ex<Tensor>(L"P", WstrList{L"i_2", L"i_3"}, WstrList{L"a_2", L"a_3"},
                        Symmetry::nonsymm) *
             ex<Tensor>(L"g", WstrList{L"i_4", L"i_5"}, WstrList{L"a_4", L"a_5"},
@@ -1505,7 +1520,7 @@ SECTION("Open-shell spin-tracing") {
     REQUIRE(result_aab->size() == 18);
 
     auto input2 =
-        ex<Constant>(1. / 8) *
+        ex<Constant>(rational{1, 8}) *
         ex<Tensor>(L"A", WstrList{L"i_1", L"i_2", L"i_3"},
                    WstrList{L"a_1", L"a_2", L"a_3"}, Symmetry::antisymm) *
         ex<Tensor>(L"g", WstrList{L"i_4", L"i_5"}, WstrList{L"a_4", L"a_5"},

@@ -6,6 +6,7 @@
 #define SEQUANT_DOMAIN_MBPT_ANTISYMMETRIZER_HPP
 
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/math.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <algorithm>
@@ -144,7 +145,7 @@ class antisymm_element {
   antisymm_element(ExprPtr ex_) {
     current_product = ex_;
     assert(ex_->is<Product>());
-    auto starting_constant = 1.0;
+    Constant::scalar_type starting_constant = 1;
     unsigned long begining_index = 0;
     for (auto it = begin(*ex_); it != end(*ex_); it++) {
       if (it->get()->is<Tensor>()) {
@@ -161,8 +162,7 @@ class antisymm_element {
         starting_constant *=
             it->get()
                 ->as<Constant>()
-                .value()
-                .real();  // not sure what to do for imaginary part if needed
+                .value();  // not sure what to do for imaginary part if needed
       }
 
       else if (it->get()->is<NormalOperator<Statistics::FermiDirac>>()) {
@@ -183,7 +183,7 @@ class antisymm_element {
     unique_bras_list = gen_antisymm_unique(sorted_bra_indices);
     unique_kets_list = gen_antisymm_unique(sorted_ket_indices);
 
-    auto new_sum = ex<Constant>(0.0);
+    auto new_sum = ex<Constant>(0);
 
     auto summand_exists =
         [&new_sum](ExprPtr ex) {  // check whether a summand has already been
@@ -270,7 +270,7 @@ class antisymm_element {
 //@brief simple class to call antisymm_element on only products
 class antisymmetrize {
  public:
-  ExprPtr result = ex<Constant>(0.0);
+  ExprPtr result = ex<Constant>(0);
 
   antisymmetrize(ExprPtr s) {
     if (s->is<Sum>()) {
@@ -490,10 +490,10 @@ ExprPtr spin_sum(std::vector<Index> original_upper,
     // Operator/Tensor
     auto return_val = ex<Constant>(0);
     for (auto&& product : expression->as<Sum>().summands()) {
-      auto prefactor =
-          ex<Constant>(0.125);  // each term in the 3 body decomp, should have
-                                // (1 /2^n) prefactor where n is rank of product
-                                // so product rank always 3 for 3 body decomp
+      auto prefactor = ex<Constant>(
+          rational{1, 8});  // each term in the 3 body decomp, should have
+                            // (1 /2^n) prefactor where n is rank of product
+                            // so product rank always 3 for 3 body decomp
       std::vector<Index> new_upper;
       std::vector<Index> new_lower;
       for (auto&& factor : product->as<Product>().factors()) {
@@ -523,7 +523,7 @@ ExprPtr spin_sum(std::vector<Index> original_upper,
       // std::wcout  << "nloops: " << nloops << std::endl;
       if (nloops == 0) {
       } else {
-        prefactor = ex<Constant>(std::pow(2, nloops)) * prefactor;
+        prefactor = ex<Constant>(pow2(nloops)) * prefactor;
       }
       return_val = (product * prefactor) + return_val;
     }

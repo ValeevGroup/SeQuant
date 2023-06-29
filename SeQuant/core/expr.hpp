@@ -17,6 +17,9 @@
 #include <boost/core/demangle.hpp>
 #include <boost/numeric/conversion/cast.hpp>
 
+#include <SeQuant/core/rational.hpp>
+
+#include <SeQuant/core/complex.hpp>
 #include "container.hpp"
 #include "expr_fwd.hpp"
 #include "hash.hpp"
@@ -26,6 +29,78 @@
 #include "wolfram.hpp"
 
 namespace sequant {
+
+/// ExprPtr is a multiple-owner smart pointer to Expr
+
+/// It can be used mostly interchangeably with `std::shared_ptr<Expr>`, but
+/// also provides convenient mathematical operators (`+=`, etc.)
+class ExprPtr : public std::shared_ptr<Expr> {
+ public:
+  using base_type = std::shared_ptr<Expr>;
+  using base_type::operator->;
+  using base_type::base_type;
+
+  ExprPtr() = default;
+  template <typename E, typename = std::enable_if_t<
+                            std::is_same_v<std::remove_const_t<E>, Expr> ||
+                            std::is_base_of_v<Expr, std::remove_const_t<E>>>>
+  ExprPtr(const std::shared_ptr<E> &other_sptr) : base_type(other_sptr) {}
+  template <typename E, typename = std::enable_if_t<
+                            std::is_same_v<std::remove_const_t<E>, Expr> ||
+                            std::is_base_of_v<Expr, std::remove_const_t<E>>>>
+  ExprPtr(std::shared_ptr<E> &&other_sptr) : base_type(std::move(other_sptr)) {}
+  template <typename E, typename = std::enable_if_t<
+                            std::is_same_v<std::remove_const_t<E>, Expr> ||
+                            std::is_base_of_v<Expr, std::remove_const_t<E>>>>
+  ExprPtr &operator=(const std::shared_ptr<E> &other_sptr) {
+    as_shared_ptr() = other_sptr;
+    return *this;
+  }
+  template <typename E, typename = std::enable_if_t<
+                            std::is_same_v<std::remove_const_t<E>, Expr> ||
+                            std::is_base_of_v<Expr, std::remove_const_t<E>>>>
+  ExprPtr &operator=(std::shared_ptr<E> &&other_sptr) {
+    as_shared_ptr() = std::move(other_sptr);
+    return *this;
+  }
+
+  ~ExprPtr() = default;
+
+  base_type &as_shared_ptr() &;
+  const base_type &as_shared_ptr() const &;
+  base_type &&as_shared_ptr() &&;
+
+  ExprPtr &operator+=(const ExprPtr &);
+  ExprPtr &operator-=(const ExprPtr &);
+  ExprPtr &operator*=(const ExprPtr &);
+
+  /// @tparam T an Expr type
+  /// @return true if this object is of type @c T
+  template <typename T>
+  bool is() const;
+
+  /// @tparam T an Expr type
+  /// @return this object cast to type @c T
+  template <typename T>
+  const T &as() const;
+
+  /// @tparam T an Expr type
+  /// @return this object cast to type @c T
+  template <typename T>
+  T &as();
+
+  std::wstring to_latex() const;
+};
+
+/// ExprPtr is equal to a null pointer if it's uninitialized
+inline bool operator==(const ExprPtr &x, std::nullptr_t) {
+  return x.get() == nullptr;
+}
+
+/// ExprPtr is equal to a null pointer if it's uninitialized
+inline bool operator==(std::nullptr_t, const ExprPtr &x) {
+  return x.get() == nullptr;
+}
 
 /// @brief Base expression class
 
@@ -493,6 +568,12 @@ class Expr : public std::enable_shared_from_this<Expr>,
   std::logic_error not_implemented(const char *fn) const;
 };  // class Expr
 
+template <>
+struct Expr::is_shared_ptr_of_expr<ExprPtr, void> : std::true_type {};
+template <>
+struct Expr::is_shared_ptr_of_expr_or_derived<ExprPtr, void> : std::true_type {
+};
+
 /// make an ExprPtr to a new object of type T
 /// @tparam T a class derived from Expr
 /// @tparam Args a parameter pack type such that T(std::forward<Args>...) is
@@ -517,15 +598,26 @@ using ExprPtrVector = container::svector<ExprPtr>;
 /// @return the adjoint of @p expr
 ExprPtr adjoint(const ExprPtr &expr);
 
+/// An object with a string label that be used for defining a canonical order of
+/// expressions (defined at runtime)
+class Labeled {
+ public:
+  Labeled() = default;
+  virtual ~Labeled() = default;
+
+  virtual std::wstring_view label() const = 0;
+};
+
+/// a scalar constant
 class Constant : public Expr {
  public:
-  using scalar_type = std::complex<double>;
+  using scalar_type = Complex<sequant::rational>;
 
  private:
   scalar_type value_;
 
  public:
-  Constant() = default;
+  Constant() = delete;
   virtual ~Constant() = default;
   Constant(const Constant &) = default;
   Constant(Constant &&) = default;
@@ -534,6 +626,19 @@ class Constant : public Expr {
   template <typename U>
   explicit Constant(U &&value) : value_(std::forward<U>(value)) {}
 
+ private:
+  template <typename X>
+  static X numeric_cast(const sequant::rational &r) {
+    if constexpr (std::is_integral_v<X>) {
+      assert(r.denominator() == 1);
+      return boost::numeric_cast<X>(r.numerator());
+    } else {
+      return boost::numeric_cast<X>(r.numerator()) /
+             boost::numeric_cast<X>(r.denominator());
+    }
+  };
+
+ public:
   /// @tparam T the result type; default to the type of value_
   /// @return the value cast to ResultType
   /// @throw std::invalid_argument if conversion to T is not possible
@@ -543,10 +648,10 @@ class Constant : public Expr {
   auto value() const {
     if constexpr (std::is_arithmetic_v<T>) {
       assert(value_.imag() == 0);
-      return boost::numeric_cast<T>(value_.real());
+      return numeric_cast<T>(value_.real());
     } else if constexpr (meta::is_complex_v<T>) {
-      return T(boost::numeric_cast<typename T::value_type>(value_.real()),
-               boost::numeric_cast<typename T::value_type>(value_.imag()));
+      return T(numeric_cast<typename T::value_type>(value_.real()),
+               numeric_cast<typename T::value_type>(value_.imag()));
     } else
       throw std::invalid_argument(
           "Constant::value<T>: cannot convert value to type T");
@@ -597,12 +702,7 @@ class Constant : public Expr {
   /// @param[in] v a scalar
   /// @return true if this is a soft zero, i.e. its magnitude is less than
   /// `std::sqrt(std::numeric_limits<float>::epsilon())`
-  static bool is_zero(scalar_type v) {
-    static const auto threshold =
-        std::sqrt(std::numeric_limits<float>::epsilon());
-    using std::abs;
-    return abs(v) <= threshold;
-  }
+  static bool is_zero(scalar_type v) { return v.is_zero(); }
 
   /// @return `Constant::is_zero(this->value())`
   bool is_zero() const { return is_zero(this->value()); }
@@ -822,9 +922,9 @@ class Product : public Expr {
   std::wstring to_latex(bool negate) const {
     std::wstring result;
     result = L"{";
-    if (scalar() != 0.) {
+    if (!scalar().is_zero()) {
       const auto scal = negate ? -scalar() : scalar();
-      if (scal != 1.) {
+      if (!scal.is_identity()) {
         result += sequant::to_latex(scal);
       }
       for (const auto &i : factors()) {
@@ -894,7 +994,7 @@ class Product : public Expr {
   }
 
  private:
-  scalar_type scalar_ = {1.0, 0.0};
+  scalar_type scalar_ = {1, 0};
   container::svector<ExprPtr, 2> factors_{};
 
   cursor begin_cursor() override {
@@ -1330,6 +1430,23 @@ std::decay_t<Sequence> clone(Sequence &&exprseq) {
                     });
   return std::decay_t<Sequence>(ranges::begin(cloned_seq),
                                 ranges::end(cloned_seq));
+}
+
+// finish off ExprPtr members that depend on Expr
+
+template <typename T>
+bool ExprPtr::is() const {
+  return as_shared_ptr()->is<T>();
+}
+
+template <typename T>
+const T &ExprPtr::as() const {
+  return as_shared_ptr()->as<T>();
+}
+
+template <typename T>
+T &ExprPtr::as() {
+  return as_shared_ptr()->as<T>();
 }
 
 }  // namespace sequant

@@ -17,18 +17,11 @@ std::wstring prune_space(std::wstring const& raw) {
   return boost::regex_replace(raw, boost::wregex(L"[[:space:]]+"), L"");
 }
 
-double to_decimal(std::wstring_view numstr) {
-  double num;
-  std::wistringstream wiss{numstr.data()};
-  wiss >> num;
-  return wiss ? num : 0;
-}
-
-double to_fraction(boost::wsmatch const& match) {
+sequant::rational to_fraction(boost::wsmatch const& match) {
   auto const num = match[1].str();
   auto const denom = match[2].str();
-  return (num.empty() ? 1.0 : to_decimal(num)) /
-         (denom.empty() ? 1.0 : to_decimal(denom));
+  return {num.empty() ? 1 : std::stol(num),
+          denom.empty() ? 1 : std::stol(denom)};
 }
 
 // add underscore characters to a terse index string
@@ -148,7 +141,7 @@ std::wstring deparse_expr(Product const& prod, bool annot_sym) {
   auto str = std::wstring{};
 
   auto scal = prod.scalar();
-  if (scal != Product::scalar_type{1., 0.}) {
+  if (scal != Product::scalar_type{1}) {
     std::wstring scalar_latex = Constant{scal}.to_latex();
 
     static auto const decimal_rgx =
@@ -322,9 +315,9 @@ ExprPtr parse_expr(std::wstring_view raw_expr, Symmetry symmetry) {
         auto append_prod = [&prod](ExprPtr lrhs) {
           auto& p = lrhs->as<Product>();
           prod.scale(p.scalar());
-          p.scale(1. / p.scalar());
+          p.scale(1 / p.scalar());
           if (p.size() == 1)
-            prod.append(1., p.factor(0));
+            prod.append(1, p.factor(0));
           else
             prod.append(lrhs);
         };
@@ -332,7 +325,7 @@ ExprPtr parse_expr(std::wstring_view raw_expr, Symmetry symmetry) {
         if (rhs_operand->is<Product>())
           append_prod(rhs_operand);
         else
-          prod.append(1., rhs_operand);
+          prod.append(1, rhs_operand);
 
         result.push_back(prod_ptr);
       } else

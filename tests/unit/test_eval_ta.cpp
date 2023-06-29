@@ -159,7 +159,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
 
     REQUIRE(norm(sum1_man) == Approx(norm(sum1_eval)));
 
-    auto expr2 = parse_antisymm(L"2 * t_{a1}^{i1} + 1.5 * f_{i1}^{a1}");
+    auto expr2 = parse_antisymm(L"2 * t_{a1}^{i1} + (3/2) * f_{i1}^{a1}");
     auto sum2_eval = eval(expr2, "i_1,a_1");
 
     auto sum2_man = TArrayD{};
@@ -170,13 +170,11 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
   }
 
   SECTION("product") {
-    auto expr1 =
-        parse_antisymm(L"1/2.0 * g_{i2,i4}^{a2,a4} * t_{a1,a2}^{i1,i2}");
+    auto expr1 = parse_antisymm(L"1/2 * g_{i2,i4}^{a2,a4} * t_{a1,a2}^{i1,i2}");
     auto prod1_eval = eval(expr1, "i_4,a_1,a_4,i_1");
 
     TArrayD prod1_man{};
-    prod1_man("i4,a1,a4,i1") = 1 / 2.0 *
-                               yield(L"g{i2,i4;a2,a4}")("i2,i4,a2,a4") *
+    prod1_man("i4,a1,a4,i1") = 0.5 * yield(L"g{i2,i4;a2,a4}")("i2,i4,a2,a4") *
                                yield(L"t{a1,a2;i1,i2}")("a1,a2,i1,i2");
 
     REQUIRE(norm(prod1_man) == Approx(norm(prod1_eval)));
@@ -186,8 +184,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
     auto prod2_eval = eval(expr2, "a_1,a_2,i_1,i_2");
 
     auto prod2_man = TArrayD{};
-    prod2_man("a1,a2,i1,i2") = -1 / 4.0 *
-                               yield(L"g{i3,i4;a3,a4}")("i3,i4,a3,a4") *
+    prod2_man("a1,a2,i1,i2") = -0.25 * yield(L"g{i3,i4;a3,a4}")("i3,i4,a3,a4") *
                                yield(L"t{a2,a4;i1,i2}")("a2,a4,i1,i2") *
                                yield(L"t{a1,a3;i3,i4}")("a1,a3,i3,i4");
 
@@ -202,10 +199,10 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
     auto eval1 = eval(expr1, "a_1,a_2,i_1,i_2");
 
     auto man1 = TArrayD{};
-    man1("a1,a2,i1,i2") = -1.0 / 4 * yield(L"g{i3,i4;a3,a4}")("i3,i4,a3,a4") *
+    man1("a1,a2,i1,i2") = -0.25 * yield(L"g{i3,i4;a3,a4}")("i3,i4,a3,a4") *
                               yield(L"t{a2,a4;i1,i2}")("a2,a4,i1,i2") *
                               yield(L"t{a1,a3;i3,i4}")("a1,a3,i3,i4") +
-                          1.0 / 16 * yield(L"g{i3,i4;a3,a4}")("i3,i4,a3,a4") *
+                          (1.0 / 16) * yield(L"g{i3,i4;a3,a4}")("i3,i4,a3,a4") *
                               yield(L"t{a1,a2;i3,i4}")("a1,a2,i3,i4") *
                               yield(L"t{a3,a4;i1,i2}")("a3,a4,i1,i2");
 
@@ -213,7 +210,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
   }
 
   SECTION("Antisymmetrization") {
-    auto expr1 = parse_antisymm(L"0.5 * g_{i1, i2}^{a1, a2}");
+    auto expr1 = parse_antisymm(L"(1/2) * g_{i1, i2}^{a1, a2}");
     auto eval1 = eval_antisymm(expr1, "i_1,i_2,a_1,a_2");
 
     auto man1 = TArrayD{};
@@ -228,7 +225,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
   }
 
   SECTION("Symmetrization") {
-    auto expr1 = parse_antisymm(L"0.5 * g_{i1, i2}^{a1, a2}");
+    auto expr1 = parse_antisymm(L"(1/2) * g_{i1, i2}^{a1, a2}");
     auto eval1 = eval_symm(expr1, "i_1,i_2,a_1,a_2");
 
     auto man1 = TArrayD{};

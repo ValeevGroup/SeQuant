@@ -404,30 +404,32 @@ struct NullNormalOperatorCanonicalizerDeregister {
 
 template <Statistics S>
 ExprPtr WickTheorem<S>::compute(const bool count_only) {
-  // avoid recanonicalization of operators produced by WickTheorem
+  // this is used to detect whether this is part of compute() applied to a Sum
+  static bool applied_to_sum = false;
+
+  // need to avoid recanonicalization of operators produced by WickTheorem
   // by rapid canonicalization to avoid undoing all the good
-  // the NormalOperator<S>::normalize did
-  std::unique_ptr<void *, detail::NullNormalOperatorCanonicalizerDeregister<S>>
-      raii_tmp;
-  {
-    static std::mutex mtx;
-    static std::atomic<bool> disabled_canonicalization_of_normal_operators =
-        false;
-    if (!disabled_canonicalization_of_normal_operators) {
-      std::scoped_lock lk(mtx);
+  // the NormalOperator<S>::normalize did ... use RAII
+  // 1. detail::NullNormalOperatorCanonicalizerDeregister<S> will restore state
+  // of tensor canonicalizer
+  // 2. this is the RAII object whose destruction will restore state of
+  // the tensor canonicalizer
+  std::unique_ptr<void, detail::NullNormalOperatorCanonicalizerDeregister<S>>
+      raii_null_nop_canonicalizer;
+  // 3. this makes the RAII object  ... NOT reentrant, only to be called in
+  // top-level WickTheorem after initial canonicalization
+  auto disable_nop_canonicalization = [&raii_null_nop_canonicalizer]() {
+    if (!raii_null_nop_canonicalizer) {
       const auto nop_labels = NormalOperator<S>::labels();
       assert(nop_labels.size() == 2);
-      if (!disabled_canonicalization_of_normal_operators) {
-        TensorCanonicalizer::try_register_instance(
-            std::make_shared<NullTensorCanonicalizer>(), nop_labels[0]);
-        TensorCanonicalizer::try_register_instance(
-            std::make_shared<NullTensorCanonicalizer>(), nop_labels[1]);
-        disabled_canonicalization_of_normal_operators = true;
-        raii_tmp = decltype(raii_tmp)(
-            nullptr, detail::NullNormalOperatorCanonicalizerDeregister<S>{});
-      }
+      TensorCanonicalizer::try_register_instance(
+          std::make_shared<NullTensorCanonicalizer>(), nop_labels[0]);
+      TensorCanonicalizer::try_register_instance(
+          std::make_shared<NullTensorCanonicalizer>(), nop_labels[1]);
+      raii_null_nop_canonicalizer = decltype(raii_null_nop_canonicalizer)(
+          (void *)&raii_null_nop_canonicalizer, {});
     }
-  }
+  };
 
   // have an Expr as input? Apply recursively ...
   if (expr_input_) {
@@ -441,8 +443,15 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
                  << to_latex_align(expr_input_) << std::endl;
     // if sum, canonicalize and apply to each summand ...
     if (expr_input_->is<Sum>()) {
+      assert(applied_to_sum == false);
+      applied_to_sum = true;
+
+      // initial full canonicalization
       canonicalize(expr_input_);
       assert(!expr_input_->as<Sum>().empty());
+
+      // NOW disable canonicalization of normal operators
+      disable_nop_canonicalization();
 
       // parallelize over summands
       auto result = std::make_shared<Sum>();
@@ -454,7 +463,6 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
                    << summands.size() << " terms = " << to_latex_align(result)
                    << std::endl;
 
-#ifdef SEQUANT_HAS_EXECUTION_HEADER
       auto wick_task = [&result, &result_mtx, this,
                         &count_only](const ExprPtr &input) {
         WickTheorem wt(input->clone(), *this);
@@ -465,22 +473,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
           result->append(task_result);
         }
       };
-      std::for_each(std::execution::par_unseq, begin(summands), end(summands),
-                    wick_task);
-#else
-      auto wick_task = [&summands, &result, &result_mtx, this,
-                        &count_only](size_t task_id) {
-        auto &summand = summands[task_id];
-        WickTheorem wt(summand->clone(), *this);
-        auto task_result = wt.compute(count_only);
-        stats() += wt.stats();
-        if (task_result) {
-          std::scoped_lock<std::mutex> lock(result_mtx);
-          result->append(task_result);
-        }
-      };
-      parallel_for_each(wick_task, summands.size());
-#endif
+      sequant::for_each(summands, wick_task);
 
       // if the sum is empty return zero
       // if the sum has 1 summand, return it directly
@@ -490,23 +483,52 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
       }
       if (result->summands().size() == 1)
         result_expr = std::move(result->summands()[0]);
+
+      assert(applied_to_sum == true);
+      applied_to_sum = false;
+
       return result_expr;
     }
     // ... else if a product, find NormalOperatorSequence, if any, and compute
     // ...
     else if (expr_input_->is<Product>()) {
-      auto canon_byproduct = expr_input_->rapid_canonicalize();
-      assert(canon_byproduct ==
-             nullptr);  // canonicalization of Product always returns nullptr
-      // NormalOperators should be all at the end
+      if (!applied_to_sum) {  // no need to canonicalize if this is part of
+                              // compute() on a Sum
+        auto canon_byproduct = expr_input_->rapid_canonicalize();
+        assert(canon_byproduct ==
+               nullptr);  // canonicalization of Product always returns nullptr
+        // NOW disable canonicalization of normal operators
+        disable_nop_canonicalization();
+      }
+
+      // split off NormalOperators into input_
       auto first_nop_it = ranges::find_if(
           *expr_input_,
           [](const ExprPtr &expr) { return expr->is<NormalOperator<S>>(); });
-      // if have ops, split into prefactor and op sequence
+      // if have ops, split into nop sequence and cnumber "prefactor"
       if (first_nop_it != ranges::end(*expr_input_)) {
+        // extract into prefactor and op sequence
+        ExprPtr prefactor =
+            ex<CProduct>(expr_input_->as<Product>().scalar(), ExprPtrList{});
+        decltype(input_) nopseq;
+        for (const auto &factor : *expr_input_) {
+          if (factor->template is<NormalOperator<S>>()) {
+            nopseq.push_back(factor->template as<NormalOperator<S>>());
+          } else {
+            assert(factor->is_cnumber());
+            *prefactor *= *factor;
+          }
+        }
+        init_input(nopseq);
+
         // compute and record/analyze topological NormalOperator and Index
         // partitions
         if (use_topology_) {
+          if (Logger::get_instance().wick_topology)
+            std::wcout
+                << "WickTheorem<S>::compute: input to topology computation = "
+                << to_latex(expr_input_) << std::endl;
+
           // construct graph representation of the tensor product
           TensorNetwork tn(expr_input_->as<Product>().factors());
           auto [graph, vlabels, vcolors, vtypes] = tn.make_bliss_graph();
@@ -515,23 +537,51 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
           const auto &tn_edges = tn.edges();
           const auto &tn_tensors = tn.tensors();
 
-          // identify vertex indices of NormalOperators and Indices
-          container::set<size_t> nop_vertex_idx;
-          container::set<size_t> index_vertex_idx;
+          // identify vertex indices of NormalOperator objects and Indices
+          // 1. list of vertex indices corresponding to NormalOperator objects
+          //    on the TN graph and their ordinals in NormalOperatorSequence
+          //    N.B. for NormalOperators the vertex indices coincide with
+          //    the ordinals
+          container::map<size_t, size_t> nop_vidx_ord;
+          // 2. list of vertex indices corresponding to Index objects on the TN
+          //    graph that appear in NormalOperatorsSequence and
+          //    their ordinals therein
+          //    N.B. for Index objects the vertex indices do NOT coincide with
+          //         the ordinals
+          container::map<size_t, size_t> index_vidx_ord;
           {
             const auto &nop_labels = NormalOperator<S>::labels();
             const auto nop_labels_begin = begin(nop_labels);
             const auto nop_labels_end = end(nop_labels);
+
+            using opseq_view_type =
+                flattened_rangenest<NormalOperatorSequence<S>>;
+            auto opseq_view = opseq_view_type(&input_);
+            const auto opseq_view_begin = ranges::begin(opseq_view);
+            const auto opseq_view_end = ranges::end(opseq_view);
+
+            // NormalOperators are not reordered by canonicalization, hence the
+            // ordinal can be computed by counting
+            std::size_t nop_ord = 0;
             for (size_t v = 0; v != n; ++v) {
               if (vtypes[v] == TensorNetwork::VertexType::TensorCore &&
                   (std::find(nop_labels_begin, nop_labels_end, vlabels[v]) !=
                    nop_labels_end)) {
-                auto insertion_result = nop_vertex_idx.insert(v);
+                auto insertion_result = nop_vidx_ord.emplace(v, nop_ord++);
                 assert(insertion_result.second);
               }
-              if (vtypes[v] == TensorNetwork::VertexType::Index) {
-                auto insertion_result = index_vertex_idx.insert(v);
-                assert(insertion_result.second);
+              if (vtypes[v] == TensorNetwork::VertexType::Index &&
+                  !input_.empty()) {
+                auto &idx = (tn_edges.begin() + v)->idx();
+                auto idx_it_in_opseq = ranges::find_if(
+                    opseq_view,
+                    [&idx](const auto &v) { return v.index() == idx; });
+                if (idx_it_in_opseq != opseq_view_end) {
+                  const auto ord =
+                      ranges::distance(opseq_view_begin, idx_it_in_opseq);
+                  auto insertion_result = index_vidx_ord.emplace(v, ord);
+                  assert(insertion_result.second);
+                }
               }
             }
           }
@@ -551,14 +601,24 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
                 stats, &bliss::aut_hook<decltype(save_aut)>, &save_aut);
           }
 
-          // use automorphisms to determine groups of topologically equivalent
-          // NormalOperators and Indices this partitions vertices into
-          // partitions (only nontrivial partitions are reported)
-          // vertex_pair_exclude is a callable that accepts 2 vertex indices and
-          // returns true if this pair of indices is to be excluded the default
-          // is to not exclude any pairs
+          /// Use automorphisms to determine groups of topologically equivalent
+          /// NormalOperator and Op objects.
+          /// @param vertices maps vertex indices of the objects to their
+          ///        ordinals in the sequence of such objects within
+          ///        the NormalOperatorSequence
+          /// @param nontrivial_partitions_only if true, only partitions with
+          /// more than one element, are reported, else even trivial
+          /// partitions with a single partition will be reported
+          /// @param vertex_pair_exclude a callable that accepts 2 vertex
+          /// indices and returns true if the automorphism of this pair
+          /// of indices is to be ignored
+          /// @return the \c {vertex_to_partition_idx,npartitions} pair in
+          /// which \c vertex_to_partition_idx maps vertex indices that are
+          /// part of nontrivial partitions to their (1-based) partition indices
           auto compute_partitions = [&aut_generators](
-                                        const container::set<size_t> &vertices,
+                                        const container::map<size_t, size_t>
+                                            &vertices,
+                                        bool nontrivial_partitions_only,
                                         auto &&vertex_pair_exclude) {
             container::map<size_t, size_t> vertex_to_partition_idx;
             int next_partition_idx = -1;
@@ -566,7 +626,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
             // using each automorphism generator
             for (auto &&aut : aut_generators) {
               // update partitions
-              for (const auto v1 : vertices) {
+              for (auto &&[v1, ord1] : vertices) {
                 const auto v2 = aut[v1];
                 if (v2 != v1 &&
                     !vertex_pair_exclude(
@@ -615,60 +675,109 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
                 }
               }
             }
-            return std::make_tuple(vertex_to_partition_idx, next_partition_idx);
+            if (!nontrivial_partitions_only) {
+              ranges::for_each(vertices, [&](const auto &vidx_ord) {
+                auto &&[vidx, ord] = vidx_ord;
+                if (vertex_to_partition_idx.find(vidx) ==
+                    vertex_to_partition_idx.end()) {
+                  vertex_to_partition_idx.emplace(vidx, ++next_partition_idx);
+                }
+              });
+            }
+            const auto npartitions = next_partition_idx;
+            return std::make_tuple(vertex_to_partition_idx, npartitions);
           };
 
           // compute NormalOperator->partition map, convert to partition lists
-          // (if any), and register via set_op_partitions to be used in full
+          // (if any), and register via set_nop_partitions to be used in full
           // contractions
-          auto [nop_to_partition_idx, max_nop_partition_idx] =
-              compute_partitions(nop_vertex_idx,
-                                 [](size_t v1, size_t v2) { return false; });
-          if (!nop_to_partition_idx.empty()) {
-            container::vector<container::vector<size_t>> nop_partitions;
+          auto do_not_skip_elements = [](size_t v1, size_t v2) {
+            return false;
+          };
+          auto [nop_vidx2pidx, nop_npartitions] = compute_partitions(
+              nop_vidx_ord, /* nontrivial_partitions_only = */ true,
+              do_not_skip_elements);
 
-            assert(max_nop_partition_idx > -1);
-            const size_t max_partition_index = max_nop_partition_idx;
-            nop_partitions.reserve(max_partition_index);
+          /// converts vertex ordinal to partition key map into a sequence of
+          /// partitions, each composed of the corresponding ordinals of the
+          /// vertices in the vertex_list sequence
+          /// @param vidx2pidx a map from vertex index (in TN) to its
+          ///        (1-based) partition index
+          /// @param npartitions the total number of partitions
+          /// @param vidx_ord ordered sequence of vertex indices, object
+          /// with vertex index `vidx` will be mapped to ordinal
+          /// `vidx_ord[vidx]`
+          /// @return sequence of partitions, sorted by the smallest ordinal
+          auto extract_partitions = [](const auto &vidx2pidx,
+                                       const auto npartitions,
+                                       const auto &vidx_ord) {
+            container::vector<container::vector<size_t>> partitions;
+
+            assert(npartitions > -1);
+            const size_t max_pidx = npartitions;
+            partitions.reserve(max_pidx);
+
             // iterate over all partition indices ... note that there may be
             // gaps so count the actual partitions
             size_t partition_cnt = 0;
-            for (size_t p = 0; p <= max_partition_index; ++p) {
+            for (size_t p = 0; p <= max_pidx; ++p) {
               bool p_found = false;
-              for (const auto &nop_part : nop_to_partition_idx) {
-                if (nop_part.second == p) {
+              for (const auto &[vidx, pidx] : vidx2pidx) {
+                if (pidx == p) {
                   // !!remember to map the vertex index into the operator
                   // index!!
-                  const auto nop_idx = nop_vertex_idx.find(nop_part.first) -
-                                       nop_vertex_idx.begin();
+                  assert(vidx_ord.find(vidx) != vidx_ord.end());
+                  const auto ordinal = vidx_ord.find(vidx)->second;
                   if (p_found == false) {  // first time this is found
-                    nop_partitions.emplace_back(container::vector<size_t>{
-                        static_cast<size_t>(nop_idx)});
+                    partitions.emplace_back(container::vector<size_t>{
+                        static_cast<size_t>(ordinal)});
                   } else
-                    nop_partitions[partition_cnt].emplace_back(nop_idx);
+                    partitions[partition_cnt].emplace_back(ordinal);
                   p_found = true;
                 }
               }
               if (p_found) ++partition_cnt;
             }
 
-            //            std::wcout << "topological nop partitions:{\n";
-            //            ranges::for_each(nop_partitions, [](auto&& part) {
-            //              std::wcout << "{";
-            //              ranges::for_each(part, [](auto&& p) {
-            //                std::wcout << p << " ";
-            //              });
-            //              std::wcout << "}";
-            //            });
-            //            std::wcout << "}" << std::endl;
+            // sort each partition
+            for (auto &partition : partitions) {
+              ranges::sort(partition);
+            }
 
-            this->set_op_partitions(nop_partitions);
+            // sort partitions in the order of increasing first element
+            ranges::sort(partitions, [](const auto &p1, const auto &p2) {
+              return p1.front() < p2.front();
+            });
+
+            return partitions;
+          };
+
+          if (!nop_vidx2pidx.empty()) {
+            container::vector<container::vector<size_t>> nop_partitions;
+
+            nop_partitions = extract_partitions(nop_vidx2pidx, nop_npartitions,
+                                                nop_vidx_ord);
+
+            if (Logger::get_instance().wick_topology) {
+              std::wcout
+                  << "WickTheorem<S>::compute: topological nop partitions:{\n";
+              ranges::for_each(nop_partitions, [](auto &&part) {
+                std::wcout << "{";
+                ranges::for_each(part,
+                                 [](auto &&p) { std::wcout << p << " "; });
+                std::wcout << "}";
+              });
+              std::wcout << "}" << std::endl;
+            }
+
+            this->set_nop_partitions(nop_partitions);
           }
 
           // compute Index->partition map, and convert to partition lists (if
           // any), and check that use_topology_ is compatible with index
-          // partitions Index partitions are constructed to *only* include Index
-          // objects attached to the bra/ket of the same NormalOperator! hence
+          // partitions
+          // Index partitions are constructed to *only* include Index
+          // objects attached to the bra/ket of any NormalOperator! hence
           // need to use filter in computing partitions
           auto exclude_index_vertex_pair = [&tn_tensors, &tn_edges](size_t v1,
                                                                     size_t v2) {
@@ -695,99 +804,45 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
                   connected_to_same_nop(edge1.second(), edge2.second()));
             return exclude;
           };
-          container::map<size_t, size_t> index_to_partition_idx;
-          int max_index_partition_idx;
-          std::tie(index_to_partition_idx, max_index_partition_idx) =
-              compute_partitions(index_vertex_idx, exclude_index_vertex_pair);
-          {
-            // use_topology_=true in full contractions will assume that all
-            // equivalent indices in NormalOperator's bra or ket are
-            // topologically equivalent (see Hugenholtz vertex and associated
-            // code) here we make sure that this is indeed the case
-            assert(use_topology_);  // since we are here, use_topology_ is true
-            // this reports whether bra/ket of tensor @c t is in the same
-            // partition
-            auto is_nop_braket_singlepartition = [&tn_edges,
-                                                  &index_to_partition_idx](
-                                                     auto &&tensor_ptr,
-                                                     BraKetPos bkpos) {
-              auto expr_ptr = std::dynamic_pointer_cast<Expr>(tensor_ptr);
-              assert(expr_ptr);
-              auto bkrange =
-                  bkpos == BraKetPos::bra ? bra(*tensor_ptr) : ket(*tensor_ptr);
-              assert(ranges::size(bkrange) > 1);
-              int partition = -1;  // will be set to the actual partition index
-              for (auto &&idx : bkrange) {
-                auto idx_full_label = idx.full_label();
-                auto edge_it = tn_edges.find(idx_full_label);
-                assert(edge_it != tn_edges.end());
-                auto vertex =
-                    edge_it - tn_edges.begin();  // vertex idx for this Index
-                auto idx_part_it = index_to_partition_idx.find(vertex);
-                if (idx_part_it !=
-                    index_to_partition_idx.end()) {  // is part of a partition
-                  if (partition == -1)               // first index
-                    partition = idx_part_it->second;
-                  else if (partition !=
-                           idx_part_it->second)  // compare to the first index's
-                                                 // partition #
-                    return false;
-                } else  // not part of a partition? fail
-                  return false;
-              }
-              return true;
-            };
-            bool multipartition_nop_braket = false;
-            for (auto &&tensor : tn_tensors) {
-              auto nop_ptr =
-                  std::dynamic_pointer_cast<NormalOperator<S>>(tensor);
-              if (nop_ptr) {  // if NormalOperator<S>
 
-                auto make_logic_error = [&nop_ptr](BraKetPos pos) {
-                  std::basic_stringstream<wchar_t> oss;
-                  oss << "WickTheorem<S>::use_topology is true but "
-                         "NormalOperator "
-                      << nop_ptr->to_latex() << " has "
-                      << (pos == BraKetPos::bra ? "bra" : "ket")
-                      << " whose indices are not topologically equivalent";
-                  return std::invalid_argument(to_string(oss.str()));
-                };
+          // index_vidx2pidx maps vertex index (see
+          // index_vidx_ord) to partition index
+          container::map<size_t, size_t> index_vidx2pidx;
+          int index_npartitions = -1;
+          std::tie(index_vidx2pidx, index_npartitions) = compute_partitions(
+              index_vidx_ord, /* nontrivial_partitions_only = */ false,
+              exclude_index_vertex_pair);
 
-                auto brank = bra_rank(*tensor);
-                if (brank > 1) {
-                  if (!is_nop_braket_singlepartition(tensor, BraKetPos::bra))
-                    multipartition_nop_braket = true;
-                }
-                if (multipartition_nop_braket)
-                  throw make_logic_error(BraKetPos::bra);
+          if (!index_vidx2pidx.empty()) {
+            container::vector<container::vector<size_t>> index_partitions;
 
-                auto krank = ket_rank(*tensor);
-                if (krank > 1) {
-                  if (!is_nop_braket_singlepartition(tensor, BraKetPos::ket))
-                    multipartition_nop_braket = true;
-                }
-                if (multipartition_nop_braket)
-                  throw make_logic_error(BraKetPos::ket);
-              }
+            index_partitions = extract_partitions(
+                index_vidx2pidx, index_npartitions, index_vidx_ord);
+
+            if (Logger::get_instance().wick_topology) {
+              std::wcout << "WickTheorem<S>::compute: topological index "
+                            "partitions:{\n";
+              ranges::for_each(index_vidx2pidx, [&tn_edges](auto &&vidx_pidx) {
+                auto &&[vidx, pidx] = vidx_pidx;
+                assert(vidx < tn_edges.size());
+                auto &idx = (tn_edges.begin() + vidx)->idx();
+                std::wcout << "Index " << idx.full_label() << " -> partition "
+                           << pidx << "\n";
+              });
+              std::wcout << "}" << std::endl;
             }
+
+            this->set_op_partitions(index_partitions);
           }
         }
 
-        ExprPtr prefactor =
-            ex<CProduct>(expr_input_->as<Product>().scalar(), ExprPtrList{});
-        bool found_op = false;
-        ranges::for_each(
-            *expr_input_, [this, &found_op, &prefactor](const ExprPtr &factor) {
-              if (factor->is<NormalOperator<S>>()) {
-                input_.push_back(factor->as<NormalOperator<S>>());
-                found_op = true;
-              } else {
-                assert(factor->is_cnumber());
-                assert(!found_op);  // make sure that ops are at the end
-                *prefactor *= *factor;
-              }
-            });
         if (!input_.empty()) {
+          if (Logger::get_instance().wick_contract) {
+            std::wcout
+                << "WickTheorem<S>::compute: input to compute_nopseq = {\n";
+            for (auto &&nop : input_) std::wcout << to_latex(nop) << "\n";
+            std::wcout << "}" << std::endl;
+          }
           auto result = compute_nopseq(count_only);
           if (result) {  // simplify if obtained nonzero ...
             result = prefactor * result;
@@ -808,7 +863,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
     }
     // ... else if NormalOperatorSequence already, compute ...
     else if (expr_input_->is<NormalOperatorSequence<S>>()) {
-      input_ = expr_input_->as<NormalOperatorSequence<S>>();
+      init_input(expr_input_->as<NormalOperatorSequence<S>>());
       // NB no simplification possible for a bare product w/ full contractions
       // ... partial contractions will need simplification
       return compute_nopseq(count_only);

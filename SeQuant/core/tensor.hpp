@@ -18,7 +18,7 @@
 namespace sequant {
 
 /// @brief particle-symmetric Tensor, i.e. permuting
-class Tensor : public Expr, public AbstractTensor {
+class Tensor : public Expr, public AbstractTensor, public Labeled {
  private:
   using index_container_type = container::svector<Index, 4>;
   static auto make_indices(IndexList indices) { return indices; }
@@ -59,7 +59,7 @@ class Tensor : public Expr, public AbstractTensor {
   /// @param label a Tensor label candidate
   void assert_nonreserved_label(std::wstring_view label) const;
 
-  // utility for disaptching to private ctor
+  // utility for dispatching to private ctor
   struct reserved_tag {};
 
   // list of friends who can make Tensor objects with reserved labels
@@ -125,7 +125,7 @@ class Tensor : public Expr, public AbstractTensor {
     assert_nonreserved_label(label_);
   }
 
-  std::wstring_view label() const { return label_; }
+  std::wstring_view label() const override { return label_; }
   const auto &bra() const { return bra_; }
   const auto &ket() const { return ket_; }
   /// @return joined view of the bra and ket index ranges
@@ -224,8 +224,9 @@ class Tensor : public Expr, public AbstractTensor {
 
   std::wstring to_latex() const override {
     std::wstring result;
-    bool gt =
-        (this->label() == L"g") || (this->label() == L"t" && this->rank() > 1);
+    bool gt = (this->label() == L"g") ||
+              (this->label() == L"t" && this->rank() > 1) ||
+              (this->label() == L"λ" && this->rank() > 1);
     result = L"{";
     if ((this->symmetry() == Symmetry::antisymm) && gt) result += L"\\bar{";
     result += this->label();
@@ -390,7 +391,7 @@ class Tensor : public Expr, public AbstractTensor {
   }
   std::size_t _color() const override final { return 0; }
   bool _is_cnumber() const override final { return true; }
-  std::wstring _label() const override final { return label_; }
+  std::wstring_view _label() const override final { return label_; }
   std::wstring _to_latex() const override final { return to_latex(); }
   bool _transform_indices(
       const container::map<Index, Index> &index_map) override final {

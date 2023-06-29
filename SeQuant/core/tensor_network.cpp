@@ -374,8 +374,8 @@ ExprPtr TensorNetwork::canonicalize(
   ext_indices_.clear();
 
   assert(canon_biproduct->is<Constant>());
-  return (canon_biproduct->as<Constant>().value() == 1.) ? nullptr
-                                                         : canon_biproduct;
+  return (canon_biproduct->as<Constant>().value() == 1) ? nullptr
+                                                        : canon_biproduct;
 }
 
 std::tuple<std::shared_ptr<bliss::Graph>, std::vector<std::wstring>,

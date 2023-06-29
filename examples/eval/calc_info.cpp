@@ -21,7 +21,7 @@ size_t IndexToSize::operator()(Index const& idx) const {
 }
 
 container::vector<ExprPtr> CalcInfo::exprs() const {
-  auto exprs = mbpt::sr::so::cceqs{eqn_opts.excit, eqn_opts.excit}.t();
+  auto exprs = mbpt::sr::cceqs{eqn_opts.excit, eqn_opts.excit}.t();
   return exprs | ranges::views::tail |
          ranges::views::transform([this](ExprPtr const& xpr) {
            return eqn_opts.spintrace ? closed_shell_CC_spintrace(xpr) : xpr;
