@@ -447,7 +447,10 @@ TensorNetwork::make_bliss_graph(
       const auto named_index_rank = named_index_it - named_indices.begin();
       vertex_color.at(index_cnt) = 2 * max_rank + named_index_rank;
     }
-    // each symmetric proto index bundle will have a vertex
+    // each symmetric proto index bundle will have a vertex ...
+    // for now only store the unique protoindex bundles in
+    // symmetric_protoindex_bundles, then commit their data to
+    // vertex_{labels,type,color} later
     if (idx.has_proto_indices()) {
       assert(idx.symmetric_proto_indices());  // only symmetric protoindices are
                                               // supported right now
@@ -456,21 +459,24 @@ TensorNetwork::make_bliss_graph(
               .end()) {  // new bundle? make a vertex for it
         auto graph = symmetric_protoindex_bundles.insert(idx.proto_indices());
         assert(graph.second);
-        ++nv;
-        std::wstring spbundle_label = L"{";
-        for (auto &&pi : idx.proto_indices()) {
-          spbundle_label += pi.to_latex();
-        }
-        spbundle_label += L"}";
-        vertex_labels.push_back(spbundle_label);
-        vertex_type.push_back(VertexType::SPBundle);
-        const auto idx_proto_indices_color = idx.proto_indices_color();
-        assert(nonreserved_color(idx_proto_indices_color));
-        vertex_color.push_back(idx_proto_indices_color);
-        spbundle_cnt++;
       }
     }
     index_cnt++;
+  });
+  // now commit protoindex bundle metadata
+  ranges::for_each(symmetric_protoindex_bundles, [&](const auto &bundle) {
+    ++nv;  // each symmetric protoindex bundle is a vertex
+    std::wstring spbundle_label = L"{";
+    for (auto &&pi : bundle) {
+      spbundle_label += pi.to_latex();
+    }
+    spbundle_label += L"}";
+    vertex_labels.push_back(spbundle_label);
+    vertex_type.push_back(VertexType::SPBundle);
+    const auto idx_proto_indices_color = Index::proto_indices_color(bundle);
+    assert(nonreserved_color(idx_proto_indices_color));
+    vertex_color.push_back(idx_proto_indices_color);
+    spbundle_cnt++;
   });
   // now account for vertex representation of tensors
   size_t tensor_cnt = 0;
