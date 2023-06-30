@@ -53,7 +53,7 @@ class compute_cceqvec {
                   bool use_connectivity, bool canonical_only) {
     tpool.start(N);
     std::vector<ExprPtr> eqvec;
-    constexpr auto debug = false;
+    constexpr auto debug = true;
     switch (type) {
       case EqnType::t:
         eqvec = cceqs{N, P, PMIN}.t(screen, use_topology, use_connectivity,
@@ -64,6 +64,90 @@ class compute_cceqvec {
             std::wcout << "# of R" << R
                        << " terms in CSV-CC = " << eqvec.at(R)->size()
                        << std::endl;
+          }
+          if (N == 4) {
+            auto r4_g_t3_t3_equiv_terms = std::make_shared<Sum>();
+            ranges::for_each(eqvec.at(4)->expr(), [&](auto& summand) {
+              if (summand->at(2).template as<Tensor>().rank() == 3 &&
+                  summand->at(3).template as<Tensor>().rank() == 3 &&
+                  summand.template as<Product>().scalar() == rational(1, 96)) {
+                r4_g_t3_t3_equiv_terms->append(summand);
+              }
+            });
+            std::wcout << "R4 CSV-CC terms that should have been reduced = "
+                       << to_latex_align(r4_g_t3_t3_equiv_terms, 0, 1)
+                       << std::endl;
+            simplify(r4_g_t3_t3_equiv_terms);
+            std::wcout << "simplify(r4_g_t3_t3_equiv_terms).size() = "
+                       << r4_g_t3_t3_equiv_terms->size() << std::endl;
+
+            // print automorphisms
+            auto print_auts =
+                [](const std::vector<std::vector<unsigned int>>& aut_generators,
+                   auto&& stream, auto&& vlabels, bool use_labels) {
+                  ranges::for_each(aut_generators, [&stream, &vlabels,
+                                                    &use_labels](auto&& gen) {
+                    // see bliss::print_permutation
+                    auto print = [&stream, &vlabels, &use_labels](
+                                     const std::vector<unsigned int>& perm) {
+                      const unsigned int offset = 0;
+                      const unsigned int N = perm.size();
+                      for (unsigned int i = 0; i < N; i++) {
+                        unsigned int j = perm[i];
+                        if (j == i) continue;
+                        bool is_first = true;
+                        while (j != i) {
+                          if (j < i) {
+                            is_first = false;
+                            break;
+                          }
+                          j = perm[j];
+                        }
+                        if (!is_first) continue;
+                        stream << "("
+                               << (use_labels ? vlabels.at(i)
+                                              : std::to_wstring(i + offset))
+                               << ",";
+                        j = perm[i];
+                        while (j != i) {
+                          stream << (use_labels ? vlabels.at(j)
+                                                : std::to_wstring(j + offset));
+                          j = perm[j];
+                          if (j != i) stream << ",";
+                        }
+                        stream << ")";
+                      }
+                    };
+
+                    print(gen);
+                    stream << std::endl;
+                  });
+                };
+
+            for (auto& term : r4_g_t3_t3_equiv_terms->expr()) {
+              std::wcout << "term = " << to_latex_align(term, 0, 1)
+                         << std::endl;
+              TensorNetwork tn(term->as<Product>().factors());
+              auto [graph, vlabels, vcolors, vtypes] = tn.make_bliss_graph();
+
+              std::basic_ostringstream<wchar_t> oss;
+              graph->write_dot(oss, vlabels);
+              std::wcout << "colored graph's dot = " << oss.str() << std::endl;
+
+              bliss::Stats stats;
+              graph->set_splitting_heuristic(bliss::Graph::shs_fsm);
+
+              std::vector<std::vector<unsigned int>> aut_generators;
+              auto save_aut = [&aut_generators](const unsigned int n,
+                                                const unsigned int* aut) {
+                aut_generators.emplace_back(aut, aut + n);
+              };
+              graph->find_automorphisms(
+                  stats, &bliss::aut_hook<decltype(save_aut)>, &save_aut);
+              std::basic_ostringstream<wchar_t> oss2;
+              print_auts(aut_generators, oss2, vlabels, true);
+              std::wcout << oss2.str() << std::endl;
+            }
           }
           ranges::for_each(eqvec, [](ExprPtr& eq) {
             if (eq) {
@@ -109,12 +193,19 @@ class compute_cceqvec {
               }
             });
             // compare term by term
-            canonicalize(eqvec[R]);
-            canonicalize(eqvec_ref[R]);
+            std::wcout << "eqvec[R].size() = " << eqvec[R]->size() << std::endl;
+            std::wcout << "eqvec_ref[R].size() = " << eqvec_ref[R]->size()
+                       << std::endl;
             ranges::for_each(eqvec[R].as<Sum>().summands(), [&eqvec_ref,
-                                                             R](const auto&
-                                                                    summand) {
-              // std::wcout << "summand = " << to_latex(*summand) << std::endl;
+                                                             R](auto&
+                                                                    _summand) {
+              auto summand = _summand->clone();
+              // std::wcout << "summand = " << to_latex(summand) << std::endl;
+              summand->rapid_canonicalize();
+              canonicalize(summand);
+              summand->rapid_canonicalize();
+              // std::wcout << "canonicalize(summand) = " << to_latex(summand)
+              // << std::endl;
               auto hash = summand->hash_value();
               auto it_by_hash = ranges::find_if(
                   eqvec_ref[R]->expr(),
@@ -218,11 +309,10 @@ class compute_cceqvec {
     // std::wcout << "decsv(eq) = " << to_latex(eq) << std::endl;
     FWickTheorem wk(eq);
     wk.reduce(eq);  // this reduces the overlaps
-    // std::wcout << "decsv+reduce(eq) = " << to_latex(eq) << std::endl;
-    simplify(eq);
-    // std::wcout << "decsv+reduce+simplify(eq) = " << to_latex(eq) <<
-    // std::endl;
-    std::wcout << "eq.size() = " << eq->size() << std::endl;
+    std::wcout << "decsv+reduce(eq).size() = " << eq->size() << std::endl;
+    //    simplify(eq);
+    //    std::wcout << "decsv+reduce+simplify(eq).size() = " << eq->size() <<
+    //    std::endl;
   };
 
 };  // class compute_cceqvec
