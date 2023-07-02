@@ -75,15 +75,8 @@ ExprPtr to_expr(EvalNode<ExprT> const& node) {
     ExprPtr lexpr = to_expr(node.left());
     ExprPtr rexpr = to_expr(node.right());
 
-    if (lexpr->is<Tensor>())
-      prod.append(1, lexpr);
-    else
-      prod.append(lexpr);
-
-    if (rexpr->is<Tensor>())
-      prod.append(1, rexpr);
-    else
-      prod.append(rexpr);
+    prod.append(1, lexpr, Product::Flatten::No);
+    prod.append(1, rexpr, Product::Flatten::No);
 
     return ex<Product>(std::move(prod));
   } else {
@@ -101,20 +94,18 @@ ExprPtr linearize_eval_node(EvalNode<ExprT> const& node) {
   if (node->op() == EvalOp::Sum) return ex<Sum>(ExprPtrList{lres, rres});
 
   if (node.left().leaf() && node.right().leaf()) {
-    return ex<Product>(node->scalar().value(), ExprPtrList{lres, rres});
+    return ex<Product>(node->scalar().value(), ExprPtrList{lres, rres},
+                       Product::Flatten::No);
   } else if (!node.left().leaf() && !node.right().leaf()) {
-    auto prod = Product(node->scalar().value(), ExprPtrList{});
-    prod.append(lres);
-    prod.append(rres);
-    return ex<Product>(std::move(prod));
+    return ex<Product>(node->scalar().value(), ExprPtrList{lres, rres},
+                       Product::Flatten::No);
   } else if (node.left().leaf() && !node.right().leaf()) {
-    auto prod = Product(node->scalar().value(), ExprPtrList{lres});
-    prod.append(rres);
-    return ex<Product>(std::move(prod));
+    return ex<Product>(node->scalar().value(), ExprPtrList{lres, rres},
+                       Product::Flatten::No);
   } else {  // (!node.left().leaf() && node.right().leaf())
     auto& res = lres->as<Product>();
     res.scale(node->scalar().value());
-    res.append(rres);
+    res.append(1, rres, Product::Flatten::No);
     return lres;
   }
 }
