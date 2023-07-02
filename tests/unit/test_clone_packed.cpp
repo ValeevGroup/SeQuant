@@ -25,13 +25,21 @@ TEST_CASE("TEST_CLONE_PACKED", "[clone_packed]") {
     REQUIRE(prod1 == clone_packed(prod1));
 
     auto prod2 = ex<Product>(rational{1, 2}, ExprPtrList{});
-    prod2->as<Product>().append(t1);
+    prod2->as<Product>().append(1, t1, Product::Flatten::No);
     prod2->as<Product>().append(
-        ex<Product>(rational{1, 3}, ExprPtrList{t2, t3}));
+        1, ex<Product>(rational{1, 3}, ExprPtrList{t2, t3}),
+        Product::Flatten::No);
 
     REQUIRE(prod2->at(0)->is<Tensor>());
     REQUIRE(prod2->at(1)->is<Product>());
 
+    REQUIRE(prod2->clone()->is<Product>());
+    REQUIRE(prod2->clone().is<Product>());
+    REQUIRE(prod2->clone()->at(0)->is<Tensor>());
+    REQUIRE(prod2->clone()->at(1)->is<Product>());
+
+    // clone_packed is now equivalent to clone
+    REQUIRE(*(prod2->clone()) == *prod2);
     REQUIRE(*clone_packed(prod2) == *prod2);
   }
 

@@ -56,8 +56,9 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
 
     // 1/16 * A * (B * C)
     auto node2p = Product{p1->as<Product>().scalar(), {}};
-    node2p.append(p1->at(0));
-    node2p.append(ex<Product>(Product{p1->at(1), p1->at(2)}));
+    node2p.append(1, p1->at(0), Product::Flatten::No);
+    node2p.append(1, ex<Product>(Product{p1->at(1), p1->at(2)}),
+                  Product::Flatten::No);
 
     auto const node2 = eval_node(ex<Product>(node2p));
 
@@ -115,8 +116,9 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
 
     auto p1_after = ex<Product>(rational{1, 16}, ExprPtrList{});
     p1_after->as<Product>().append(
-        ex<Product>(ExprPtrList{p1->at(0)->clone(), p1->at(1)->clone()}));
-    p1_after->as<Product>().append(p1->at(2)->clone());
+        1, ex<Product>(ExprPtrList{p1->at(0)->clone(), p1->at(1)->clone()}),
+        Product::Flatten::No);
+    p1_after->as<Product>().append(1, p1->at(2)->clone(), Product::Flatten::No);
 
     auto const n1 = eval_node(p1);
 

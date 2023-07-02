@@ -319,7 +319,7 @@ ExprPtr parse_expr(std::wstring_view raw_expr, Symmetry symmetry) {
           if (p.size() == 1)
             prod.append(1, p.factor(0));
           else
-            prod.append(lrhs);
+            prod.append(1, lrhs, Product::Flatten::No);
         };
 
         if (rhs_operand->is<Product>())
