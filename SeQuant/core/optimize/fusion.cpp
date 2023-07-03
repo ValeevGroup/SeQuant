@@ -1,5 +1,4 @@
 #include "fusion.hpp"
-#include <SeQuant/core/clone_packed.hpp>
 #include <range/v3/action.hpp>
 #include <range/v3/view.hpp>
 
@@ -11,8 +10,10 @@ using ranges::views::zip;
 
 // convert a Product of single tensor and scalar == 1 into a tensor exprptr
 auto lift_tensor = [](Product const& p) -> ExprPtr {
-  return (p.scalar() == 1 && p.size() == 1) ? p.factor(0)->clone()
-                                            : clone_packed(p);
+  return p.scalar() == 1 && p.size() == 1
+             ? p.factor(0)
+             : ex<Product>(Product{p.scalar(), p.factors().begin(),
+                                   p.factors().end(), Product::Flatten::No});
 };
 
 Fusion::Fusion(Product const& lhs, Product const& rhs)
