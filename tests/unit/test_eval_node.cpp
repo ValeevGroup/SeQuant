@@ -99,11 +99,11 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
     REQUIRE(validate_tensor(node(node2, {L, R}).as_tensor(),
                             L"I{a1,a2,a3,a4;i3,i4,i1,i2}"));
 
-    REQUIRE(validate_tensor(node(node2, {L, R, L}).as_tensor(),
-                            L"t{a1,a2;i3,i4}"));
+    REQUIRE(
+        validate_tensor(node(node2, {L, R, L}).as_tensor(), L"t{a1,a2;i3,i4}"));
 
-    REQUIRE(validate_tensor(node(node2, {L, R, R}).as_tensor(),
-                            L"t{a3,a4;i1,i2}"));
+    REQUIRE(
+        validate_tensor(node(node2, {L, R, R}).as_tensor(), L"t{a3,a4;i1,i2}"));
   }
 
   SECTION("sum") {
@@ -138,7 +138,7 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
         L"* t_{a1, a2}^{i3, i4}"
         L"* t_{a3,a4}^{i1,i2}");
 
-    auto p1_after = ex<Product>(rational{1,16}, ExprPtrList{});
+    auto p1_after = ex<Product>(rational{1, 16}, ExprPtrList{});
     p1_after->as<Product>().append(
         1, ex<Product>(ExprPtrList{p1->at(0)->clone(), p1->at(1)->clone()}),
         Product::Flatten::No);
@@ -163,8 +163,7 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
     REQUIRE(linearize_eval_node(eval_node(p1))->to_latex() == p1->to_latex());
 
     auto const p2 = parse_expr_antisymm(L"1/4 * g_{i2,i1}^{a1,a2}");
-    REQUIRE(linearize_eval_node(eval_node(p2))->to_latex() ==
-            parse_expr_antisymm(L"1/4 * g_{i2,i1}^{a1,a2}")->to_latex());
+    REQUIRE(linearize_eval_node(eval_node(p2))->to_latex() == p2->to_latex());
   }
 
   SECTION("asy_cost_single_node") {

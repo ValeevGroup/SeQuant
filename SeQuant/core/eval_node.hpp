@@ -55,11 +55,10 @@ ExprPtr to_expr(EvalNode<ExprT> const& node) {
   auto const op = node->op_type();
   auto const& evxpr = *node;
 
-  if (node.leaf()) return evxpr.expr()->clone();
+  if (node.leaf()) return evxpr.expr();
 
   if (op == EvalOp::Prod) {
     auto prod = Product{};
-    prod.scale(evxpr.scalar().value());
 
     ExprPtr lexpr = to_expr(node.left());
     ExprPtr rexpr = to_expr(node.right());
@@ -67,7 +66,15 @@ ExprPtr to_expr(EvalNode<ExprT> const& node) {
     prod.append(1, lexpr, Product::Flatten::No);
     prod.append(1, rexpr, Product::Flatten::No);
 
-    return ex<Product>(std::move(prod));
+    assert(!prod.empty());
+
+    if (prod.size() == 1 && !prod.factor(0)->is<Tensor>()) {
+      return ex<Product>(Product{prod.scalar(), prod.factor(0)->begin(),
+                                 prod.factor(0)->end(), Product::Flatten::No});
+    } else {
+      return ex<Product>(std::move(prod));
+    }
+
   } else {
     assert(op == EvalOp::Sum && "unsupported operation type");
     return ex<Sum>(Sum{to_expr(node.left()), to_expr(node.right())});
@@ -84,21 +91,10 @@ ExprPtr linearize_eval_node(EvalNode<ExprT> const& node) {
   assert(lres);
   assert(rres);
 
-  if (node.left().leaf() && node.right().leaf()) {
-    return ex<Product>(node->scalar().value(), ExprPtrList{lres, rres},
-                       Product::Flatten::No);
-  } else if (!node.left().leaf() && !node.right().leaf()) {
-    return ex<Product>(node->scalar().value(), ExprPtrList{lres, rres},
-                       Product::Flatten::No);
-  } else if (node.left().leaf() && !node.right().leaf()) {
-    return ex<Product>(node->scalar().value(), ExprPtrList{lres, rres},
-                       Product::Flatten::No);
-  } else {  // (!node.left().leaf() && node.right().leaf())
-    auto& res = lres->as<Product>();
-    res.scale(node->scalar().value());
-    res.append(1, rres, Product::Flatten::No);
-    return lres;
-  }
+  if (node->op_type() == EvalOp::Sum) return ex<Sum>(ExprPtrList{lres, rres});
+  assert(node->op_type() == EvalOp::Prod);
+  return ex<Product>(
+      Product{1, ExprPtrList{lres, rres}, Product::Flatten::Yes});
 }
 
 namespace detail {
@@ -129,7 +125,7 @@ AsyCost asy_cost_impl(EvalNode<ExprT> const& node, bool exploit_symmetry,
   return AsyCost{exploit_symmetry ? asy_cost_single_node(node)
                                   : asy_cost_single_node_symm_off(node)} +  //
          asy_cost_impl(node.left(), exploit_symmetry,
-                       std::forward<F>(pred)) +  //
+                       std::forward<F>(pred)) +                             //
          asy_cost_impl(node.right(), exploit_symmetry, std::forward<F>(pred));
 }
 }  // namespace detail
@@ -157,13 +153,13 @@ AsyCost asy_cost_single_node_symm_off(EvalNode<ExprT> const& node) {
 template <typename ExprT>
 AsyCost asy_cost_single_node(EvalNode<ExprT> const& node) {
   auto cost = asy_cost_single_node_symm_off(node);
-  auto factorial = [](auto x) { return sequant::factorial(x); };
+  auto const& ptensor = node->expr()->template as<Tensor>();
   // parent node symmetry
-  auto const psym = node->tensor().symmetry();
+  auto const psym = ptensor.symmetry();
   // parent node bra symmetry
-  auto const pbrank = node->tensor().bra_rank();
+  auto const pbrank = ptensor.bra_rank();
   // parent node ket symmetry
-  auto const pkrank = node->tensor().ket_rank();
+  auto const pkrank = ptensor.ket_rank();
 
   if (psym == Symmetry::nonsymm || psym == Symmetry::invalid) {
     // do nothing

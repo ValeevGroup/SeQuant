@@ -193,9 +193,9 @@ eval_seq_t single_term_opt(TensorNetwork const& network, IdxToSz const& idxsz) {
                            & results = std::as_const(results),  //
                        &idxsz](                                 //
                           size_t lpart, size_t rpart) {
-      auto [commons,                                         //
-            diffs] = common_indices(results[lpart].indices,  //
-                                    results[rpart].indices);
+      auto commons =
+          common_indices(results[lpart].indices, results[rpart].indices);
+      auto diffs = diff_indices(results[lpart].indices, results[rpart].indices);
       auto new_cost = ops_count(idxsz,           //
                                 commons, diffs)  //
                       + results[lpart].flops     //
