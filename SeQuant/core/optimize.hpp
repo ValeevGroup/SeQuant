@@ -6,7 +6,6 @@
 #include <limits>
 #include <utility>
 
-#include <SeQuant/core/clone_packed.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval_node.hpp>
 #include <SeQuant/core/tensor_network.hpp>
@@ -176,12 +175,12 @@ eval_seq_t single_term_opt(TensorNetwork const& network, IdxToSz const& idxsz) {
                            & results = std::as_const(results),  //
                        &idxsz](                                 //
                           size_t lpart, size_t rpart) {
-      auto [commons,                                         //
-            diffs] = common_indices(results[lpart].indices,  //
+      auto [commons,                                            //
+            diffs] = common_indices(results[lpart].indices,     //
                                     results[rpart].indices);
-      auto new_cost = ops_count(idxsz,           //
-                                commons, diffs)  //
-                      + results[lpart].flops     //
+      auto new_cost = ops_count(idxsz,                          //
+                                commons, diffs)                 //
+                      + results[lpart].flops                    //
                       + results[rpart].flops;
       if (new_cost <= curr_cost) {
         curr_cost = new_cost;
@@ -240,7 +239,9 @@ void pull_scalar(sequant::ExprPtr expr) noexcept;
 template <typename IdxToSz,
           std::enable_if_t<std::is_invocable_v<IdxToSz, Index>, bool> = true>
 ExprPtr single_term_opt(Product const& prod, IdxToSz const& idxsz) {
-  if (prod.factors().size() < 3) return clone_packed(prod);
+  if (prod.factors().size() < 3)
+    return ex<Product>(Product{prod.scalar(), prod.factors().begin(),
+                               prod.factors().end(), Product::Flatten::No});
   auto seq = single_term_opt(TensorNetwork{prod}, idxsz);
   auto result = container::vector<ExprPtr>{};
   for (auto i : seq)
@@ -250,7 +251,9 @@ ExprPtr single_term_opt(Product const& prod, IdxToSz const& idxsz) {
       auto lexpr = *result.rbegin();
       result.pop_back();
       auto p = Product{1, ExprPtrList{lexpr, rexpr}, Product::Flatten::No};
-      result.push_back(clone_packed(p));
+      result.push_back(
+          ex<Product>(Product{prod.scalar(), p.factors().begin(),
+                              p.factors().end(), Product::Flatten::No}));
     } else {
       result.push_back(prod.at(i));
     }

@@ -1,4 +1,3 @@
-#include <SeQuant/core/clone_packed.hpp>
 #include <SeQuant/core/optimize.hpp>
 
 namespace sequant {
