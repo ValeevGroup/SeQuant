@@ -249,9 +249,7 @@ ExprPtr single_term_opt(Product const& prod, IdxToSz const& idxsz) {
       result.pop_back();
       auto lexpr = *result.rbegin();
       result.pop_back();
-      auto p = Product{};
-      p.append(lexpr);
-      p.append(rexpr);
+      auto p = Product{1, ExprPtrList{lexpr, rexpr}, Product::Flatten::No};
       result.push_back(clone_packed(p));
     } else {
       result.push_back(prod.at(i));

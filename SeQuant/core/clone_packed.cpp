@@ -10,38 +10,33 @@ namespace sequant {
 
 using ranges::views::transform;
 
-ExprPtr clone_packed(Tensor const& t) {
-  return t.clone();
-}
+ExprPtr clone_packed(Tensor const& t) { return t.clone(); }
 
 ExprPtr clone_packed(Sum const& s) {
-  auto const smands = s
-                      | transform([](ExprPtr x){return clone_packed(x);})
-                      | ranges::to_vector;
+  auto const smands = s | transform([](ExprPtr x) { return clone_packed(x); }) |
+                      ranges::to_vector;
   return ex<Sum>(smands.begin(), smands.end());
 }
 
 ExprPtr clone_packed(Product const& p) {
-  auto const facs = p
-                    | transform([](ExprPtr x){return clone_packed(x);});
+  auto const facs = p | transform([](ExprPtr x) { return clone_packed(x); });
   auto const scal = p.scalar();
 
   auto result = ex<Product>(scal, ExprPtrList{});
-  for (auto&& f: facs)
-    result->as<Product>().append(f);
+  for (auto&& f : facs)
+    result->as<Product>().append(1, f, Product::Flatten::No);
   return result;
 }
 
 ExprPtr clone_packed(ExprPtr expr) {
-
-  if (!expr) return nullptr;
-  else if (expr->is<Sum>()){
+  if (!expr)
+    return nullptr;
+  else if (expr->is<Sum>()) {
     return clone_packed(expr->as<Sum>());
-  }
-  else if (expr->is<Product>()){
+  } else if (expr->is<Product>()) {
     return clone_packed(expr->as<Product>());
-  }
-  else return expr->clone();
+  } else
+    return expr->clone();
 }
 
-} //
+}  // namespace sequant

@@ -292,6 +292,11 @@ class Index : public Taggable {
   /// @return true if the index is symmetric with respect to the permutation of
   /// protoindices
   bool symmetric_proto_indices() const { return symmetric_proto_indices_; }
+  /// drops the proto indices from this Index
+  /// @return a copy of this Index without proto indices
+  Index drop_proto_indices() const {
+    return Index(this->label(), this->space());
+  }
 
   std::wstring to_latex() const;
 
@@ -326,15 +331,23 @@ class Index : public Taggable {
     return result;
   }
 
+  /// @param protoindex_range a range of Index objects
   /// @return the color of the protoindices
   /// @sa Index::color()
-  auto proto_indices_color() const {
+  template <typename Range>
+  static auto proto_indices_color(const Range &protoindex_range) {
     auto space_attr_view =
-        proto_indices_ | ranges::views::transform([](const Index &idx) {
+        protoindex_range | ranges::views::transform([](const Index &idx) {
           return int64_t(idx.space().attr());
         });
     return hash::range(ranges::begin(space_attr_view),
                        ranges::end(space_attr_view));
+  }
+
+  /// @return the color of the protoindices
+  /// @sa Index::color()
+  auto proto_indices_color() const {
+    return proto_indices_color(proto_indices_);
   }
 
   /// Color of an Index = hashed IndexSpace + IndexSpace objects of the

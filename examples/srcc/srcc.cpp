@@ -1,6 +1,8 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/runtime.hpp>
+#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/timer.hpp>
+#include <SeQuant/core/wick.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/formalism.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
@@ -53,12 +55,12 @@ class compute_cceqvec {
     std::vector<ExprPtr> eqvec;
     switch (type) {
       case EqnType::t:
-        eqvec = cceqs{N, P, 1}.t(screen, use_topology, use_connectivity,
-                                 canonical_only);
+        eqvec = cceqs{N, P, PMIN}.t(screen, use_topology, use_connectivity,
+                                    canonical_only);
         break;
       case EqnType::lambda:
-        eqvec = cceqs{N, P, 1}.lambda(screen, use_topology, use_connectivity,
-                                      canonical_only);
+        eqvec = cceqs{N, P, PMIN}.lambda(screen, use_topology, use_connectivity,
+                                         canonical_only);
         break;
     }
     tpool.stop(N);
@@ -100,6 +102,7 @@ class compute_cceqvec {
       }
     }
   }
+
 };  // class compute_cceqvec
 
 // profiles evaluation of all CC equations with ex rank 2 .. N
