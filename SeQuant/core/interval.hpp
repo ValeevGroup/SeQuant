@@ -22,6 +22,17 @@ inline auto hash_value(const boost::numeric::interval<T>& i) {
   return val;
 }
 
+template <typename T>
+inline auto is_definite(const boost::numeric::interval<T>& i) {
+  return i.lower() == i.upper();
+}
+
+template <typename T>
+inline auto nonnegative(const boost::numeric::interval<T>& i) {
+  assert(i.upper() >= 0);
+  return boost::numeric::interval<T>{std::max(T(0), i.lower()), i.upper()};
+}
+
 }  // namespace boost::numeric
 
 #endif  // SEQUANT_CORE_INTERVAL_H

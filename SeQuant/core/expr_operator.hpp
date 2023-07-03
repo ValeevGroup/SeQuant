@@ -17,13 +17,11 @@ inline ExprPtr operator*(const ExprPtr &left, const ExprPtr &right) {
   if (!left_is_product && !right_is_product) {
     return ex<Product>(ExprPtrList{left, right});
   } else if (left_is_product) {
-    auto left_product = std::static_pointer_cast<Product>(left);
-    auto result = std::make_shared<Product>(*left_product);
+    auto result = std::static_pointer_cast<Product>(left->clone());
     result->append(1, right);
     return result;
   } else {  // right_is_product
-    auto right_product = std::static_pointer_cast<Product>(right);
-    auto result = std::make_shared<Product>(*right_product);
+    auto result = std::static_pointer_cast<Product>(right->clone());
     result->prepend(1, left);
     return result;
   }
@@ -38,13 +36,11 @@ inline ExprPtr operator^(const ExprPtr &left, const ExprPtr &right) {
   if (!left_is_product && !right_is_product) {
     return ex<NCProduct>(ExprPtrList{left, right});
   } else if (left_is_product) {
-    auto left_product = std::static_pointer_cast<Product>(left);
-    auto result = std::make_shared<NCProduct>(*left_product);
+    auto result = std::make_shared<NCProduct>(left->clone().as<Product>());
     result->append(1, right);
     return result;
   } else {  // right_is_product
-    auto right_product = std::static_pointer_cast<Product>(right);
-    auto result = std::make_shared<NCProduct>(*right_product);
+    auto result = std::make_shared<NCProduct>(right->clone().as<Product>());
     result->prepend(1, left);
     return result;
   }
@@ -57,13 +53,11 @@ inline ExprPtr operator+(const ExprPtr &left, const ExprPtr &right) {
   if (!left_is_sum && !right_is_sum) {
     return ex<Sum>(ExprPtrList{left, right});
   } else if (left_is_sum) {
-    auto left_sum = std::static_pointer_cast<Sum>(left);
-    auto result = std::make_shared<Sum>(*left_sum);
+    auto result = std::static_pointer_cast<Sum>(left->clone());
     result->append(right);
     return result;
   } else {  // right_is_sum
-    auto right_sum = std::static_pointer_cast<Sum>(right);
-    auto result = std::make_shared<Sum>(*right_sum);
+    auto result = std::static_pointer_cast<Sum>(right->clone());
     result->prepend(left);
     return result;
   }
@@ -78,8 +72,7 @@ inline ExprPtr operator-(const ExprPtr &left, const ExprPtr &right) {
         (right->is<Constant>() ? ex<Constant>(-right->as<Constant>().value())
                                : ex<Product>(-1, ExprPtrList{right}))});
   } else if (left_is_sum) {
-    auto left_sum = std::static_pointer_cast<Sum>(left);
-    auto result = std::make_shared<Sum>(*left_sum);
+    auto result = std::static_pointer_cast<Sum>(left->clone());
     if (right->is<Constant>())
       result->append(ex<Constant>(-right->as<Constant>().value()));
     else

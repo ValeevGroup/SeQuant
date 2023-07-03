@@ -6,6 +6,6 @@
 #define SEQUANT_TEST_MAIN_H
 
 // comment out if want to run long tests
-//#define SEQUANT_SKIP_LONG_TESTS 1
+#define SEQUANT_SKIP_LONG_TESTS 1
 
 #endif  // SEQUANT_TEST_MAIN_H

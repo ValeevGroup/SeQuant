@@ -34,12 +34,18 @@ std::wstring to_wstring(const boost::rational<T>& i) {
 
 namespace sequant {
 using rational = boost::rational<std::int64_t>;
+/// shorter=sweeter? sometimes
+using ratio = rational;
 
 template <typename T, typename = std::enable_if_t<std::is_floating_point_v<T>>>
 inline constexpr rational to_rational(
     T t, T eps = std::sqrt(std::numeric_limits<T>::epsilon()),
     std::size_t max_niter = 1000) {
-  assert(!std::isnan(t) && !std::isinf(t));
+  if (std::isnan(t) || std::isinf(t)) {
+    throw std::invalid_argument(
+        "sequant::to_rational: cannot make a rational out of " +
+        std::to_string(t));
+  }
   // e.g.
   // https://gist.github.com/mikeando/7073d62385a34a61a6f7#file-main2-cpp-L42
   auto sbtree = [max_niter](T f, T tol) {
@@ -79,6 +85,12 @@ inline constexpr rational to_rational(
 template <typename T, typename = std::enable_if_t<std::is_integral_v<T>>>
 constexpr rational to_rational(T t) {
   return rational{t};
+}
+
+template <typename T, typename = std::enable_if_t<std::is_floating_point_v<T> ||
+                                                  std::is_integral_v<T>>>
+inline constexpr ratio to_ratio(T t) {
+  return to_rational(t);
 }
 
 }  // namespace sequant

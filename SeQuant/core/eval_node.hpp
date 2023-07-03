@@ -9,7 +9,7 @@
 #include "binary_node.hpp"
 #include "eval_expr.hpp"
 
-#include <boost/math/special_functions/factorials.hpp>
+#include <SeQuant/core/math.hpp>
 
 namespace sequant {
 
@@ -58,32 +58,14 @@ ExprPtr to_expr(EvalNode<ExprT> const& node) {
   if (node.leaf()) return evxpr.expr()->clone();
 
   if (op == EvalOp::Prod) {
+    auto prod = Product{};
+    prod.scale(evxpr.scalar().value());
+
     ExprPtr lexpr = to_expr(node.left());
     ExprPtr rexpr = to_expr(node.right());
 
-    if (lexpr->is<Constant>() && rexpr->is<Product>()) {
-      auto& p = rexpr->as<Product>();
-      p.scale(p.scalar() * lexpr->as<Constant>().value());
-      return rexpr;
-    }
-
-    if (lexpr->is<Product>() && rexpr->is<Constant>()) {
-      auto& p = lexpr->as<Product>();
-      p.scale(p.scalar() * rexpr->as<Constant>().value());
-      return lexpr;
-    }
-
-    auto prod = Product{};
-
-    if (lexpr->is<Tensor>())
-      prod.append(1, lexpr);
-    else
-      prod.append(lexpr);
-
-    if (rexpr->is<Tensor>())
-      prod.append(1, rexpr);
-    else
-      prod.append(rexpr);
+    prod.append(1, lexpr, Product::Flatten::No);
+    prod.append(1, rexpr, Product::Flatten::No);
 
     return ex<Product>(std::move(prod));
   } else {
@@ -94,14 +76,6 @@ ExprPtr to_expr(EvalNode<ExprT> const& node) {
 
 template <typename ExprT>
 ExprPtr linearize_eval_node(EvalNode<ExprT> const& node) {
-  auto extend_product = [](Product& prod, ExprPtr const& factors) {
-    for (auto&& f : *factors)
-      if (f->is<Tensor>())
-        prod.append(1, f);
-      else
-        prod.append(f);
-  };
-
   if (node.leaf()) return to_expr(node);
 
   ExprPtr lres = linearize_eval_node(node.left());
@@ -110,50 +84,21 @@ ExprPtr linearize_eval_node(EvalNode<ExprT> const& node) {
   assert(lres);
   assert(rres);
 
-  if (node->op_type() == EvalOp::Sum) return ex<Sum>(ExprPtrList{lres, rres});
-
-  if (lres->is<Constant>() && rres->is<Product>()) {
-    auto& prod = rres->as<Product>();
-    prod.scale(prod.scalar() * lres->as<Constant>().value());
-    return rres;
-  }
-
-  if (lres->is<Product>() && rres->is<Constant>()) {
-    auto& prod = lres->as<Product>();
-    prod.scale(prod.scalar() * rres->as<Constant>().value());
+  if (node.left().leaf() && node.right().leaf()) {
+    return ex<Product>(node->scalar().value(), ExprPtrList{lres, rres},
+                       Product::Flatten::No);
+  } else if (!node.left().leaf() && !node.right().leaf()) {
+    return ex<Product>(node->scalar().value(), ExprPtrList{lres, rres},
+                       Product::Flatten::No);
+  } else if (node.left().leaf() && !node.right().leaf()) {
+    return ex<Product>(node->scalar().value(), ExprPtrList{lres, rres},
+                       Product::Flatten::No);
+  } else {  // (!node.left().leaf() && node.right().leaf())
+    auto& res = lres->as<Product>();
+    res.scale(node->scalar().value());
+    res.append(1, rres, Product::Flatten::No);
     return lres;
   }
-
-  if (lres->is<Product>() && rres->is<Product>()) {
-    auto& lprod = lres->as<Product>();
-    auto& rprod = rres->as<Product>();
-
-    auto scal = lprod.scalar() * rprod.scalar();
-
-    auto result = Product{};
-    extend_product(result, lres);
-    extend_product(result, rres);
-    return result.clone();
-  }
-
-  if (lres->is<Tensor>() && rres->is<Product>()) {
-    auto result = Product{};
-    result.scale(rres->as<Product>().scalar());
-    result.append(1, lres);
-    extend_product(result, rres);
-    return result.clone();
-  }
-
-  if (lres->is<Product>() && rres->is<Tensor>()) {
-    auto& prod = lres->as<Product>();
-    prod.append(1, rres);
-    return lres;
-  }
-
-  auto prod = Product{};
-  prod.append(lres);
-  prod.append(rres);
-  return prod.clone();
 }
 
 namespace detail {
@@ -184,7 +129,7 @@ AsyCost asy_cost_impl(EvalNode<ExprT> const& node, bool exploit_symmetry,
   return AsyCost{exploit_symmetry ? asy_cost_single_node(node)
                                   : asy_cost_single_node_symm_off(node)} +  //
          asy_cost_impl(node.left(), exploit_symmetry,
-                       std::forward<F>(pred)) +                             //
+                       std::forward<F>(pred)) +  //
          asy_cost_impl(node.right(), exploit_symmetry, std::forward<F>(pred));
 }
 }  // namespace detail
@@ -212,16 +157,13 @@ AsyCost asy_cost_single_node_symm_off(EvalNode<ExprT> const& node) {
 template <typename ExprT>
 AsyCost asy_cost_single_node(EvalNode<ExprT> const& node) {
   auto cost = asy_cost_single_node_symm_off(node);
-  auto factorial = [](auto x) {
-    return static_cast<int>(boost::math::factorial<double>(x));
-  };
-  auto const& ptensor = node->expr()->template as<Tensor>();
+  auto factorial = [](auto x) { return sequant::factorial(x); };
   // parent node symmetry
-  auto const psym = ptensor.symmetry();
+  auto const psym = node->tensor().symmetry();
   // parent node bra symmetry
-  auto const pbrank = ptensor.bra_rank();
+  auto const pbrank = node->tensor().bra_rank();
   // parent node ket symmetry
-  auto const pkrank = ptensor.ket_rank();
+  auto const pkrank = node->tensor().ket_rank();
 
   if (psym == Symmetry::nonsymm || psym == Symmetry::invalid) {
     // do nothing

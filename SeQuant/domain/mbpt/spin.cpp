@@ -68,7 +68,9 @@ ExprPtr swap_bra_ket(const ExprPtr& expr) {
     auto result = std::make_shared<Product>();
     result->scale(product.scalar());
     for (auto&& term : product) {
-      if (term->is<Tensor>()) result->append(tensor_swap(term->as<Tensor>()));
+      if (term->is<Tensor>())
+        result->append(1, tensor_swap(term->as<Tensor>()),
+                       Product::Flatten::No);
     }
     return result;
   };
@@ -274,7 +276,8 @@ ExprPtr expand_antisymm(const ExprPtr& expr, bool skip_spinsymm) {
     temp.scale(expr.scalar());
     for (auto&& term : expr) {
       if (term->is<Tensor>())
-        temp.append(expand_antisymm(term->as<Tensor>(), skip_spinsymm));
+        temp.append(1, expand_antisymm(term->as<Tensor>(), skip_spinsymm),
+                    Product::Flatten::No);
     }
     ExprPtr result = std::make_shared<Product>(temp);
     rapid_simplify(result);
@@ -848,7 +851,7 @@ ExprPtr closed_shell_spintrace(
     if (product.factor(0)->as<Tensor>().label() == L"S") {
       for (auto&& term : product.factors()) {
         if (term->is<Tensor>() && term->as<Tensor>().label() != L"S")
-          temp_product.append(term);
+          temp_product.append(1, term, Product::Flatten::No);
       }
     } else {
       temp_product = product;
@@ -1017,7 +1020,7 @@ ExprPtr swap_spin(const ExprPtr& expr) {
     result.scale(p.scalar());
     for (auto& t : p) {
       assert(t->is<Tensor>());
-      result.append(swap_tensor(t->as<Tensor>()));
+      result.append(1, swap_tensor(t->as<Tensor>()), Product::Flatten::No);
     }
     return ex<Product>(result);
   };
@@ -1682,7 +1685,8 @@ ExprPtr factorize_S(const ExprPtr& expression,
           for (auto&& t : product) {
             if (t->is<Tensor>())
               S_product.append(
-                  transform_tensor(t->as<Tensor>(), replacement_map));
+                  1, transform_tensor(t->as<Tensor>(), replacement_map),
+                  Product::Flatten::No);
           }
           auto new_product_expr = ex<Product>(S_product);
           new_product_expr->canonicalize();
@@ -1777,7 +1781,8 @@ ExprPtr factorize_S(const ExprPtr& expression,
           for (auto&& t : product) {
             if (t->is<Tensor>())
               S_product.append(
-                  transform_tensor(t->as<Tensor>(), replacement_map));
+                  1, transform_tensor(t->as<Tensor>(), replacement_map),
+                  Product::Flatten::No);
           }
           auto new_product_expr = ex<Product>(S_product);
           new_product_expr->canonicalize();

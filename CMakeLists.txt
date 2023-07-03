@@ -226,8 +226,6 @@ set(SeQuant_src
         SeQuant/core/bliss.hpp
         SeQuant/core/timer.hpp
         SeQuant/core/binary_node.hpp
-        SeQuant/core/clone_packed.hpp
-        SeQuant/core/clone_packed.cpp
         SeQuant/core/eval_expr.hpp
         SeQuant/core/eval_expr.cpp
         SeQuant/core/asy_cost.hpp
@@ -263,6 +261,7 @@ set(SeQuant_src
         SeQuant/domain/mbpt/formalism.hpp
         SeQuant/domain/mbpt/op.cpp
         SeQuant/domain/mbpt/op.hpp
+        SeQuant/domain/mbpt/op.ipp
         SeQuant/domain/mbpt/rdm.hpp
         SeQuant/domain/mbpt/spin.cpp
         SeQuant/domain/mbpt/spin.hpp
@@ -379,7 +378,6 @@ if (BUILD_TESTING)
             tests/unit/test_fusion.cpp
             tests/unit/test_token_sequant.cpp
             tests/unit/test_rpn.cpp
-            tests/unit/test_clone_packed.cpp
             tests/unit/test_cache_manager.cpp
             tests/unit/test_runtime.cpp
             tests/unit/test_math.cpp

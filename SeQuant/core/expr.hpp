@@ -90,7 +90,7 @@ class ExprPtr : public std::shared_ptr<Expr> {
   T &as();
 
   std::wstring to_latex() const;
-};
+};  // class ExprPtr
 
 /// ExprPtr is equal to a null pointer if it's uninitialized
 inline bool operator==(const ExprPtr &x, std::nullptr_t) {
@@ -161,11 +161,9 @@ class Expr : public std::enable_shared_from_this<Expr>,
   /// format
   virtual std::wstring to_wolfram() const;
 
-  /// @return a clone of this object
+  /// @return a clone of this object, i.e. an object that is equal to @c this
   /// @note - must be overridden in the derived class.
-  ///       - flattens out the nested structure
-  ///         for example, a product of products will be
-  ///         just a product of tensors
+  ///       - the default implementation throws an exception
   virtual ExprPtr clone() const;
 
   /// Canonicalizes @c this and returns the biproduct of canonicalization (e.g.
@@ -723,12 +721,16 @@ using ConstantPtr = std::shared_ptr<Constant>;
 /// @brief generalized product, i.e. a scalar times a product of zero or more
 /// terms.
 ///
-/// Product is distributive over addition (see Sum). It is associative and is
-/// flattened automatically. It's commutativity is checked at runtime for each
-/// factor (see CProduct and NCProduct for statically commutative and
-/// noncommutative Product, respectively)
+/// Product is distributive over addition (see Sum). It is associative.
+/// All constructors and mutating methods (append/prepend) will by default
+/// flatten its factors recursively (but this can be fully controlled
+/// by specifying the flatten tag). The commutativity of factors is checked at
+/// runtime for each factor (see CProduct and NCProduct for statically
+/// commutative and noncommutative Product, respectively)
 class Product : public Expr {
  public:
+  enum class Flatten { Once, Recursively, Yes = Recursively, No };
+
   using scalar_type = Constant::scalar_type;
 
   Product() = default;
@@ -740,42 +742,49 @@ class Product : public Expr {
 
   /// construct a Product out of zero or more factors (multiplied by 1)
   /// @param factors the factors
-  Product(ExprPtrList factors) {
+  /// @param flatten_tag if Flatten::Yes, flatten the factors
+  Product(ExprPtrList factors, Flatten flatten_tag = Flatten::Yes) {
     using std::begin;
     using std::end;
-    for (auto it = begin(factors); it != end(factors); ++it) append(1, *it);
+    for (auto it = begin(factors); it != end(factors); ++it)
+      append(1, *it, flatten_tag);
   }
 
   /// construct a Product out of zero or more factors (multiplied by 1)
   /// @param rng a range of factors
+  /// @param flatten_tag if Flatten::Yes, flatten the factors
   template <typename Range,
             typename = std::enable_if_t<
                 meta::is_range_v<std::decay_t<Range>> &&
                 !std::is_same_v<std::remove_reference_t<Range>, ExprPtrList> &&
                 !std::is_same_v<std::remove_reference_t<Range>, Product>>>
-  explicit Product(Range &&rng) {
+  explicit Product(Range &&rng, Flatten flatten_tag = Flatten::Yes) {
     using ranges::begin;
     using ranges::end;
-    for (auto &&v : rng) append(1, std::forward<decltype(v)>(v));
+    for (auto &&v : rng) append(1, std::forward<decltype(v)>(v), flatten_tag);
   }
 
   /// construct a Product out of zero or more factors multiplied by a scalar
   /// @tparam T a numeric type; it must be able to multiply Product::scalar_type
   /// @param scalar a scalar of type T
   /// @param factors an initializer list of factors
+  /// @param flatten_tag if Flatten::Yes, flatten the factors
   template <typename T>
-  Product(T scalar, ExprPtrList factors) : scalar_(std::move(scalar)) {
+  Product(T scalar, ExprPtrList factors, Flatten flatten_tag = Flatten::Yes)
+      : scalar_(std::move(scalar)) {
     using std::begin;
     using std::end;
-    for (auto it = begin(factors); it != end(factors); ++it) append(1, *it);
+    for (auto it = begin(factors); it != end(factors); ++it)
+      append(1, *it, flatten_tag);
   }
 
   /// construct a Product out of a range of factors
   /// @param begin the begin iterator
   /// @param end the end iterator
+  /// @param flatten_tag specifies whether (and how) to flatten the argument(s)
   template <typename Iterator>
-  Product(Iterator begin, Iterator end) {
-    for (auto it = begin; it != end; ++it) append(1, *it);
+  Product(Iterator begin, Iterator end, Flatten flatten_tag = Flatten::Yes) {
+    for (auto it = begin; it != end; ++it) append(1, *it, flatten_tag);
   }
 
   /// construct a Product out of a range of factors
@@ -783,12 +792,17 @@ class Product : public Expr {
   /// @param scalar a scalar of type T
   /// @param begin the begin iterator
   /// @param end the end iterator
+  /// @param flatten_tag specifies whether (and how) to flatten the argument(s)
   template <typename T, typename Iterator>
-  Product(T scalar, Iterator begin, Iterator end) : scalar_(std::move(scalar)) {
-    for (auto it = begin; it != end; ++it) append(1, *it);
+  Product(T scalar, Iterator begin, Iterator end,
+          Flatten flatten_tag = Flatten::Yes)
+      : scalar_(std::move(scalar)) {
+    for (auto it = begin; it != end; ++it) append(1, *it, flatten_tag);
   }
 
   /// multiplies the product by @c scalar
+  /// @param scalar a scalar by which to multiply the product
+  /// @return @c *this
   template <typename T>
   Product &scale(T scalar) {
     scalar_ *= scalar;
@@ -796,8 +810,13 @@ class Product : public Expr {
   }
 
   /// (post-)multiplies the product by @c scalar times @c factor
+  /// @param scalar a scalar by which to multiply the product
+  /// @param factor a factor by which to multiply the product
+  /// @param flatten_tag specifies whether (and how) to flatten the argument(s)
+  /// @return @c *this
   template <typename T>
-  Product &append(T scalar, ExprPtr factor) {
+  Product &append(T scalar, ExprPtr factor,
+                  Flatten flatten_tag = Flatten::Yes) {
     assert(factor);
     scalar_ *= scalar;
     if (!factor->is<Product>()) {
@@ -806,49 +825,52 @@ class Product : public Expr {
         scalar_ *= factor_constant.value();
         // no need to reset the hash since scalar is not hashed!
       } else {
-        factors_.push_back(std::move(factor));
+        factors_.push_back(factor->clone());
         reset_hash_value();
       }
-    } else {  // factor is a product also ... flatten recursively
-      auto factor_product = factor->as<Product>();
-      scalar_ *= factor_product.scalar_;
-      for (auto &&subfactor : factor_product) this->append(1, subfactor);
-      //      using std::end;
-      //      using std::cbegin;
-      //      using std::cend;
-      //      factors_.insert(end(factors_), cbegin(factor_product->factors_),
-      //      cend(factor_product->factors_));
+    } else {                             // factor is a product also ..
+      if (flatten_tag != Flatten::No) {  // flatten, once or recursively
+        const auto &factor_product = factor->as<Product>();
+        scalar_ *= factor_product.scalar_;
+        for (auto &&subfactor : factor_product)
+          this->append(1, subfactor,
+                       flatten_tag == Flatten::Once ? Flatten::No
+                                                    : Flatten::Recursively);
+      } else {
+        factors_.push_back(factor->clone());
+        reset_hash_value();
+      }
     }
-    return *this;
-  }
-
-  /// append @c factor without flattening
-  Product &append(ExprPtr factor) {
-    if (factor->is<Constant>()) {
-      auto factor_constant = factor->as<Constant>();
-      scalar_ *= factor_constant.value();
-    } else {
-      factors_.push_back(std::move(factor));
-      reset_hash_value();
-    }
-
     return *this;
   }
 
   /// (post-)multiplies the product by @c scalar times @c factor
+  /// @param scalar a scalar by which to multiply the product
+  /// @param factor a factor by which to multiply the product
+  /// @param flatten_tag specifies whether (and how) to flatten the argument(s)
+  /// @return @c *this
+  /// @warning if @p factor is a Product, it is flattened recursively
   template <typename T, typename Factor,
             typename = std::enable_if_t<
                 std::is_base_of_v<Expr, std::remove_reference_t<Factor>>>>
-  Product &append(T scalar, Factor &&factor) {
+  Product &append(T scalar, Factor &&factor,
+                  Flatten flatten_tag = Flatten::Yes) {
     return this->append(scalar,
                         std::static_pointer_cast<Expr>(
-                            std::forward<Factor>(factor).shared_from_this()));
+                            std::forward<Factor>(factor).shared_from_this()),
+                        flatten_tag);
   }
 
-  /// (pre-)multiplies the product by @c scalar times @c factor ; less efficient
-  /// than append()
+  /// (pre-)multiplies the product by @c scalar times @c factor
+  /// @param scalar a scalar by which to multiply the product
+  /// @param factor a factor by which to multiply the product
+  /// @param flatten_tag specifies whether (and how) to flatten the argument(s)
+  /// @return @c *this
+  /// @warning if @p factor is a Product, it is flattened recursively
+  /// @note this is less efficient than append()
   template <typename T>
-  Product &prepend(T scalar, ExprPtr factor) {
+  Product &prepend(T scalar, ExprPtr factor,
+                   Flatten flatten_tag = Flatten::Yes) {
     assert(factor);
     scalar_ *= scalar;
     if (!factor->is<Product>()) {
@@ -857,30 +879,41 @@ class Product : public Expr {
         scalar_ *= factor_constant->value();
         // no need to reset the hash since scalar is not hashed!
       } else {
-        factors_.insert(factors_.begin(), std::move(factor));
+        factors_.insert(factors_.begin(), factor->clone());
         reset_hash_value();
       }
     } else {  // factor is a product also  ... flatten recursively
-      auto factor_product = std::static_pointer_cast<Product>(factor);
-      scalar_ *= factor_product->scalar_;
-      for (auto &subfactor : *factor_product) this->prepend(1, subfactor);
-      //      using std::begin;
-      //      using std::cbegin;
-      //      using std::cend;
-      //      factors_.insert(begin(factors_), cbegin(factor_product->factors_),
-      //      cend(factor_product->factors_));
+      const auto &factor_product = factor->as<Product>();
+      scalar_ *= factor_product.scalar_;
+      if (flatten_tag != Flatten::No) {  // flatten, once or recursively
+        for (auto &&subfactor : factor_product)
+          this->prepend(1, subfactor,
+                        flatten_tag == Flatten::Once ? Flatten::No
+                                                     : Flatten::Recursively);
+      } else {
+        factors_.insert(factors_.begin(), factor->clone());
+        reset_hash_value();
+      }
     }
     return *this;
   }
 
   /// (pre-)multiplies the product by @c scalar times @c factor
+  /// @param scalar a scalar by which to multiply the product
+  /// @param factor a factor by which to multiply the product
+  /// @param flatten_tag specifies whether (and how) to flatten the argument(s)
+  /// @return @c *this
+  /// @warning if @p factor is a Product, it is flattened recursively
+  /// @note this is less efficient than append()
   template <typename T, typename Factor,
             typename = std::enable_if_t<
                 std::is_base_of_v<Expr, std::remove_reference_t<Factor>>>>
-  Product &prepend(T scalar, Factor &&factor) {
+  Product &prepend(T scalar, Factor &&factor,
+                   Flatten flatten_tag = Flatten::Yes) {
     return this->prepend(scalar,
                          std::static_pointer_cast<Expr>(
-                             std::forward<Factor>(factor).shared_from_this()));
+                             std::forward<Factor>(factor).shared_from_this()),
+                         flatten_tag);
   }
 
   const auto &scalar() const { return scalar_; }
@@ -956,22 +989,22 @@ class Product : public Expr {
 
   type_id_type type_id() const override { return get_type_id<Product>(); };
 
-  ExprPtr clone() const override {
-    auto cloned_factors =
-        factors() | ranges::views::transform([](const ExprPtr &ptr) {
-          return ptr ? ptr->clone() : nullptr;
-        });
-    return ex<Product>(this->scalar(), ranges::begin(cloned_factors),
-                       ranges::end(cloned_factors));
-  }
+  /// @return an identical clone of this Product (a deep copy allocated on the
+  ///         heap)
+  /// @note this does not flatten the product
+  ExprPtr clone() const override { return ex<Product>(this->deep_copy()); }
 
   Product deep_copy() const {
     auto cloned_factors =
         factors() | ranges::views::transform([](const ExprPtr &ptr) {
           return ptr ? ptr->clone() : nullptr;
         });
-    return Product(this->scalar(), ranges::begin(cloned_factors),
-                   ranges::end(cloned_factors));
+    Product result(this->scalar(), ExprPtrList{});
+    ranges::for_each(cloned_factors, [&](const auto &cloned_factor) {
+      if (cloned_factor.template is<Product>()) std::cout << "";
+      result.append(1, std::move(cloned_factor), Flatten::No);
+    });
+    return result;
   }
 
   virtual Expr &operator*=(const Expr &that) override {
@@ -1143,12 +1176,12 @@ class Sum : public Expr {
           *(summands_[*constant_summand_idx_]) += *summand;
         } else {
           if (!summand_constant->is_zero()) {
-            summands_.push_back(std::move(summand));
+            summands_.push_back(summand->clone());
             constant_summand_idx_ = summands_.size() - 1;
           }
         }
       } else {
-        summands_.push_back(std::move(summand));
+        summands_.push_back(summand->clone());
       }
       reset_hash_value();
     } else {  // this recursively flattens Sum summands
@@ -1170,12 +1203,12 @@ class Sum : public Expr {
         } else {  // or include the nonzero constant and update
                   // constant_summand_idx_
           if (!summand_constant->is_zero()) {
-            summands_.insert(summands_.begin(), std::move(summand));
+            summands_.insert(summands_.begin(), summand->clone());
             constant_summand_idx_ = 0;
           }
         }
       } else {
-        summands_.insert(summands_.begin(), std::move(summand));
+        summands_.insert(summands_.begin(), summand->clone());
         if (constant_summand_idx_)  // if have a constant, update its position
           ++*constant_summand_idx_;
       }
