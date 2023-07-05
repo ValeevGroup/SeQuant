@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/hash.hpp>
 
+#include <boost/multiprecision/cpp_int.hpp>
 #include <boost/rational.hpp>
 
 namespace boost {
@@ -33,12 +34,31 @@ std::wstring to_wstring(const boost::rational<T>& i) {
 }  // namespace boost
 
 namespace sequant {
-using rational = boost::rational<std::int64_t>;
+
+// introducing multiprecision
+using namespace boost::multiprecision;
+
+// typedef boost::multiprecision::number<
+//     cpp_int_backend<0, 0, signed_magnitude, checked, void>>
+//     mp_int_type;
+
+// try high fixed precision
+typedef int512_t mp_int_type;
+
+using rational = boost::rational<mp_int_type>;
+
+// using rational = boost::rational<std::int64_t>;
+
 /// shorter=sweeter? sometimes
 using ratio = rational;
 
+// clang-format off
+///@note: boost::multiprecision::cpp_int only has limited support for constexpr
+/// see: https://www.boost.org/doc/libs/1_82_0/libs/multiprecision/doc/html/boost_multiprecision/tut/lits.html
+// clang-format on
+
 template <typename T, typename = std::enable_if_t<std::is_floating_point_v<T>>>
-inline constexpr rational to_rational(
+inline rational to_rational(
     T t, T eps = std::sqrt(std::numeric_limits<T>::epsilon()),
     std::size_t max_niter = 1000) {
   if (std::isnan(t) || std::isinf(t)) {
@@ -83,13 +103,13 @@ inline constexpr rational to_rational(
 }
 
 template <typename T, typename = std::enable_if_t<std::is_integral_v<T>>>
-constexpr rational to_rational(T t) {
+rational to_rational(T t) {
   return rational{t};
 }
 
 template <typename T, typename = std::enable_if_t<std::is_floating_point_v<T> ||
                                                   std::is_integral_v<T>>>
-inline constexpr ratio to_ratio(T t) {
+inline ratio to_ratio(T t) {
   return to_rational(t);
 }
 
