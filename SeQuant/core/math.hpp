@@ -18,7 +18,7 @@ constexpr std::size_t pow2(std::size_t n) {
 
 using int128_t = boost::multiprecision::int128_t;
 constexpr inline int128_t factorial(std::size_t n) {
-  assert(n >= 0 && n <= 20);
+  assert(n >= 0);
   const int128_t values[] = {1,
                              1,
                              2,
@@ -40,7 +40,18 @@ constexpr inline int128_t factorial(std::size_t n) {
                              6402373705728000,
                              121645100408832000,
                              2432902008176640000};
-  return values[n];
+  if (n < 20)
+    return values[n];
+  else {
+    auto fac = [](std::size_t n) {
+      int128_t result = 1;
+      for (auto i = 2; i <= n; ++i) {
+        result *= i;
+      }
+      return result;
+    };
+    return fac(n);
+  }
 }
 
 }  // namespace sequant

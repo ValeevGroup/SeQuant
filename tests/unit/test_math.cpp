@@ -6,6 +6,7 @@
 
 #include <iostream>
 
+#include "SeQuant/core/math.hpp"
 #include "SeQuant/core/rational.hpp"
 #include "SeQuant/core/wstring.hpp"
 
@@ -27,3 +28,13 @@ TEST_CASE("Rational", "[elements]") {
   }
 
 }  // TEST_CASE("Rational")
+
+TEST_CASE("Factorial", "[math]") {
+  using namespace sequant;
+  SECTION("factorial") {
+    REQUIRE(sequant::to_string(sequant::factorial(21)) ==
+            "51090942171709440000");
+    REQUIRE(sequant::to_string(sequant::factorial(30)) ==
+            "265252859812191058636308480000000");
+  }
+}  // TEST_CASE("Factorial")
