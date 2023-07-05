@@ -37,17 +37,9 @@ namespace sequant {
 
 // introducing multiprecision
 using namespace boost::multiprecision;
-
-// typedef boost::multiprecision::number<
-//     cpp_int_backend<0, 0, signed_magnitude, checked, void>>
-//     mp_int_type;
-
-// try high fixed precision
-typedef int512_t mp_int_type;
+using mp_int_type = int512_t;
 
 using rational = boost::rational<mp_int_type>;
-
-// using rational = boost::rational<std::int64_t>;
 
 /// shorter=sweeter? sometimes
 using ratio = rational;
@@ -71,7 +63,7 @@ inline rational to_rational(
   auto sbtree = [max_niter](T f, T tol) {
     using fraction = rational;
     using Int = typename rational::int_type;
-    Int base = std::floor(f);
+    Int base = std::floor(f); // does not work
     f -= base;
     if (f < tol) return fraction(base, 1);
     if (1 - tol < f) return fraction(base + 1, 1);
