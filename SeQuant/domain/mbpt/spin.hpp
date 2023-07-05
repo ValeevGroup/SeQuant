@@ -241,6 +241,11 @@ ExprPtr factorize_S(const ExprPtr& expression,
                     std::initializer_list<IndexList> ext_index_groups,
                     bool fast_method = true);
 
+ExprPtr biorthogonal_transform(
+    const sequant::ExprPtr& expr, int n_particles,
+    const std::vector<std::vector<sequant::Index>>& ext_index_groups = {{}},
+    double threshold = 1.e-12);
+
 }  // namespace sequant
 
 #endif  // SEQUANT_SPIN_HPP
