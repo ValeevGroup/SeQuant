@@ -141,7 +141,8 @@ ExprPtr biorthogonal_transform(
   {
     using namespace Eigen;
     // Dimension of permutation matrix is n_particles!
-    const auto n = sequant::factorial(n_particles);
+    const auto n =
+        boost::numeric_cast<std::intmax_t>(sequant::factorial(n_particles));
 
     // Permutation matrix
     Eigen::Matrix<double, Dynamic, Dynamic> M(n, n);
