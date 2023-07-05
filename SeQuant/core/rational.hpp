@@ -2,43 +2,40 @@
 #define SEQUANT_CORE_RATIONAL_H
 
 #include <SeQuant/core/hash.hpp>
+#include <SeQuant/core/wstring.hpp>
 
+#include <boost/multiprecision/cpp_int.hpp>
 #include <boost/rational.hpp>
 
 namespace boost {
 
-template <typename T>
-inline auto hash_value(const boost::rational<T>& i) {
-  auto val = sequant::hash::value(i.numerator());
-  sequant::hash::combine(val, i.denominator());
+inline auto hash_value(const boost::multiprecision::cpp_rational& i) {
+  auto val = sequant::hash::value(numerator(i));
+  sequant::hash::combine(val, denominator(i));
   return val;
-}
-
-template <typename T>
-std::string to_string(const boost::rational<T>& i) {
-  using std::to_string;
-  return i.denominator() == 1
-             ? to_string(i.numerator())
-             : to_string(i.numerator()) + "/" + to_string(i.denominator());
-}
-
-template <typename T>
-std::wstring to_wstring(const boost::rational<T>& i) {
-  using std::to_wstring;
-  return i.denominator() == 1
-             ? to_wstring(i.numerator())
-             : to_wstring(i.numerator()) + L"/" + to_wstring(i.denominator());
 }
 
 }  // namespace boost
 
 namespace sequant {
-using rational = boost::rational<std::int64_t>;
+
+using rational = boost::multiprecision::cpp_rational;
+
 /// shorter=sweeter? sometimes
 using ratio = rational;
 
+/// convert a floating-point number to a rational number to a given precision
+
+/// @param t the floating-point number to convert
+/// @param eps the target precision, i.e. the largest permitted value of
+/// `T(result)-t`; the default is the `sqrt` of the machine epsilon for `T`;
+/// set to 0 to obtain exact representation of `t` as a rational number
+/// @param max_niter the maximum number of iterations to use to construct
+/// inexact representation by refining the Stern-Brocot tree
+/// (see https://mathworld.wolfram.com/Stern-BrocotTree.html)
+/// @return the rational number within @p eps of @p t
 template <typename T, typename = std::enable_if_t<std::is_floating_point_v<T>>>
-inline constexpr rational to_rational(
+inline rational to_rational(
     T t, T eps = std::sqrt(std::numeric_limits<T>::epsilon()),
     std::size_t max_niter = 1000) {
   if (std::isnan(t) || std::isinf(t)) {
@@ -50,8 +47,9 @@ inline constexpr rational to_rational(
   // https://gist.github.com/mikeando/7073d62385a34a61a6f7#file-main2-cpp-L42
   auto sbtree = [max_niter](T f, T tol) {
     using fraction = rational;
-    using Int = typename rational::int_type;
-    Int base = std::floor(f);
+    using Int = rational::value_type;
+    auto base = std::floor(f);
+    auto base_Int = boost::numeric_cast<Int>(base);
     f -= base;
     if (f < tol) return fraction(base, 1);
     if (1 - tol < f) return fraction(base + 1, 1);
@@ -60,17 +58,19 @@ inline constexpr rational to_rational(
     fraction upper(1, 1);
 
     std::size_t niter = 0;
+    const auto f_plus_top_exact = fraction(f + tol);
+    const auto f_minus_top_exact = fraction(f - tol);
     while (niter < max_niter) {
-      fraction middle(lower.numerator() + upper.numerator(),
-                      lower.denominator() + upper.denominator());
+      fraction middle(numerator(lower) + numerator(upper),
+                      denominator(lower) + denominator(upper));
 
-      if (middle.denominator() * (f + tol) < middle.numerator()) {
+      if (denominator(middle) * f_plus_top_exact < numerator(middle)) {
         upper = middle;
-      } else if (middle.numerator() < middle.denominator() * (f - tol)) {
+      } else if (numerator(middle) < denominator(middle) * f_minus_top_exact) {
         lower = middle;
       } else {
-        return fraction(middle.denominator() * base + middle.numerator(),
-                        middle.denominator());
+        return fraction(denominator(middle) * base_Int + numerator(middle),
+                        denominator(middle));
       }
       ++niter;
     }
@@ -79,18 +79,89 @@ inline constexpr rational to_rational(
         " to eps=" + std::to_string(tol) + " in " + std::to_string(max_niter) +
         " iterations");  // unreachable
   };
-  return sbtree(t, eps);
+  if (eps == 0)  // exact conversion ... rarely what's desired
+    return rational(t);
+  else
+    return sbtree(t, eps);
 }
 
 template <typename T, typename = std::enable_if_t<std::is_integral_v<T>>>
-constexpr rational to_rational(T t) {
+rational to_rational(T t) {
   return rational{t};
 }
 
 template <typename T, typename = std::enable_if_t<std::is_floating_point_v<T> ||
                                                   std::is_integral_v<T>>>
-inline constexpr ratio to_ratio(T t) {
+inline ratio to_ratio(T t) {
   return to_rational(t);
+}
+
+inline std::string to_string(const boost::multiprecision::cpp_rational& i) {
+  return boost::lexical_cast<std::string>(i);
+}
+
+template <typename Backend>
+inline std::string to_string(const boost::multiprecision::number<Backend>& i) {
+  return boost::lexical_cast<std::string>(i);
+}
+
+inline std::wstring to_wstring(const boost::multiprecision::cpp_rational& i) {
+  return ::sequant::to_wstring(boost::lexical_cast<std::string>(i));
+}
+
+template <typename Backend>
+inline std::wstring to_wstring(
+    const boost::multiprecision::number<Backend>& i) {
+  return ::sequant::to_wstring(boost::lexical_cast<std::string>(i));
+}
+
+template <typename Backend>
+inline std::wstring to_latex(const boost::multiprecision::number<Backend>& t) {
+  std::wstring result = L"{";
+  using ::sequant::to_wstring;
+  result += to_wstring(t) + L"}";
+  return result;
+}
+
+inline std::wstring to_latex(const boost::multiprecision::cpp_rational& t) {
+  // n.b. skip enclosing braces to make Constant::to_latex to produce same
+  // output as before std::wstring result = L"{";
+  std::wstring result;
+  if (denominator(t) == 1)
+    result += to_latex(numerator(t));
+  else {
+    const auto num = numerator(t);
+    // n.b. extra braces around \frac and use of to_wstring instead of to_latex
+    // to avoid extra braces around args to \frac
+    if (num > 0) {
+      result += L"{\\frac{" + to_wstring(numerator(t)) + L"}{" +
+                to_wstring(denominator(t)) + L"}}";
+    } else if (num < 0) {
+      result += L"{-\\frac{" + to_wstring(-num) + L"}{" +
+                to_wstring(denominator(t)) + L"}}";
+    } else
+      result += L"0";
+  }
+  // n.b.
+  // result += L"}";
+  return result;
+}
+
+template <typename Backend>
+inline std::wstring to_wolfram(
+    const boost::multiprecision::number<Backend>& t) {
+  return ::sequant::to_wstring(t);
+}
+
+inline std::wstring to_wolfram(const boost::multiprecision::cpp_rational& t) {
+  using ::sequant::to_wstring;
+  if (denominator(t) == 1) {
+    // n.b. use to_string to skip extra braces so that output agrees with code
+    // that used scalars return to_wolfram(t.numerator());
+    return to_wstring(numerator(t));
+  } else
+    return std::wstring(L"Rational[") + to_wolfram(numerator(t)) + L"," +
+           to_wolfram(denominator(t)) + L"]";
 }
 
 }  // namespace sequant
