@@ -11,7 +11,6 @@
 #include <type_traits>
 
 #include <boost/locale/encoding_utf.hpp>
-#include <SeQuant/core/rational.hpp>
 
 namespace sequant {
 
@@ -31,14 +30,6 @@ to_wstring(T&& t) {
     return std::to_wstring(static_cast<long long>(t));
   else
     return std::to_wstring(t);
-}
-/// for multiprecison integer
-template <typename T>
-std::enable_if_t<
-    std::is_same_v<std::decay_t<T>, sequant::mp_int_type>,
-    std::wstring>
-to_wstring(T&& t) {
-  return std::to_wstring(boost::numeric_cast<double>(t));
 }
 
 /// @brief (potentially) narrowing character converter.
@@ -62,6 +53,30 @@ std::string to_string(
     const std::basic_string<Char, Traits, Allocator>& str_utf8) {
   using boost::locale::conv::utf_to_utf;
   return utf_to_utf<char>(str_utf8.data(), str_utf8.data() + str_utf8.size());
+}
+
+/// @brief (potentially) narrowing character converter.
+///
+/// Converts a UTF-8 encoded std::basic_string_view<Char> to a UTF-8 encoded
+/// std::wstring
+template <typename SourceChar, typename SourceTraits>
+std::wstring to_wstring(
+    const std::basic_string_view<SourceChar, SourceTraits>& str_utf8_view) {
+  using boost::locale::conv::utf_to_utf;
+  return utf_to_utf<wchar_t>(str_utf8_view.data(),
+                             str_utf8_view.data() + str_utf8_view.size());
+}
+
+/// @brief (potentially) narrowing character converter.
+///
+/// Converts a UTF-8 encoded std::basic_string_view<Char> to a UTF-8 encoded
+/// std::wstring
+template <typename SourceChar, typename SourceTraits, typename SourceAllocator>
+std::wstring to_wstring(const std::basic_string<SourceChar, SourceTraits,
+                                                SourceAllocator>& str_utf8) {
+  using boost::locale::conv::utf_to_utf;
+  return utf_to_utf<wchar_t>(str_utf8.data(),
+                             str_utf8.data() + str_utf8.size());
 }
 
 }  // namespace sequant

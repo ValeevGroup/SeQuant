@@ -13,8 +13,8 @@ TEST_CASE("Rational", "[elements]") {
   using namespace sequant;
 
   auto print = [](rational r) {
-    return sequant::to_wstring(r.numerator()) + L"/" +
-           sequant::to_wstring(r.denominator());
+    return sequant::to_wstring(numerator(r)) + L"/" +
+           sequant::to_wstring(denominator(r));
   };
   SECTION("to_rational") {
     REQUIRE(to_rational(1. / 3) == rational{1, 3});

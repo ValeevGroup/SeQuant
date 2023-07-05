@@ -628,11 +628,11 @@ class Constant : public Expr {
   template <typename X>
   static X numeric_cast(const sequant::rational &r) {
     if constexpr (std::is_integral_v<X>) {
-      assert(r.denominator() == 1);
-      return boost::numeric_cast<X>(r.numerator());
+      assert(denominator(r) == 1);
+      return boost::numeric_cast<X>(numerator(r));
     } else {
-      return boost::numeric_cast<X>(r.numerator()) /
-             boost::numeric_cast<X>(r.denominator());
+      return boost::numeric_cast<X>(numerator(r)) /
+             boost::numeric_cast<X>(denominator(r));
     }
   };
 
