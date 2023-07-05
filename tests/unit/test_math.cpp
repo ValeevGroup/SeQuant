@@ -18,6 +18,8 @@ TEST_CASE("Rational", "[elements]") {
   };
   SECTION("to_rational") {
     REQUIRE(to_rational(1. / 3) == rational{1, 3});
+    REQUIRE(to_rational(1. / 3, 0.) ==
+            rational{6004799503160661ull, 18014398509481984ull});
     REQUIRE(to_rational(1. / 7) == rational{1, 7});
     REQUIRE(to_rational(M_PI) == rational{99023, 31520});
     REQUIRE(to_rational(M_E) == rational{23225, 8544});
