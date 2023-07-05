@@ -40,7 +40,7 @@ constexpr inline int128_t factorial(std::size_t n) {
                              6402373705728000,
                              121645100408832000,
                              2432902008176640000};
-  if (n < 20)
+  if (n <= 20)
     return values[n];
   else {
     auto fac = [](std::size_t n) {
