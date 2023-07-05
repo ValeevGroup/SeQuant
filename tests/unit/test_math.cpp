@@ -7,13 +7,14 @@
 #include <iostream>
 
 #include "SeQuant/core/rational.hpp"
+#include "SeQuant/core/wstring.hpp"
 
 TEST_CASE("Rational", "[elements]") {
   using namespace sequant;
 
   auto print = [](rational r) {
-    return std::to_wstring(r.numerator()) + L"/" +
-           std::to_wstring(r.denominator());
+    return sequant::to_wstring(r.numerator()) + L"/" +
+           sequant::to_wstring(r.denominator());
   };
   SECTION("to_rational") {
     REQUIRE(to_rational(1. / 3) == rational{1, 3});
