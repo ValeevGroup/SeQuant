@@ -26,7 +26,7 @@ int main(int argc, char* argv[]) {
   std::wcout.precision(std::numeric_limits<double>::max_digits10);
   std::wcerr.precision(std::numeric_limits<double>::max_digits10);
   sequant::set_locale();
-  detail::OpIdRegistrar op_id_registrar;
+  sequant::detail::OpIdRegistrar op_id_registrar;
   sequant::set_default_context(
       SeQuant(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
               BraKetSymmetry::conjugate, SPBasis::spinorbital));
