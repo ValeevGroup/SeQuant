@@ -527,6 +527,21 @@ TEST_CASE("TEST_EVAL_USINT_TA_COMPLEX", "[eval]") {
         man2("i,j,k,l,a,b,c,d") - eval2("i,j,k,l,a,b,c,d");
     // todo: update catch2
     // REQUIRE(Approx(norm(zero2)) == 0);
+
+    auto expr3 = parse_expr(L"g_{i1,i2,i3}^{a1,a2,a3}");
+    auto eval3 = eval_symm(expr3, "i_1,i_2,i_3,a_1,a_2,a_3", {{0,3,3}});
+    auto const& arr3 = yield(L"g{i1,i2,i3;a1,a2,a3}");
+    TArrayC man3;
+    man3("i,j,k,a,b,c") =   arr3("i,j,k,a,b,c")
+                          + arr3("i,k,j,a,c,b")
+                          + arr3("j,i,k,b,a,c")
+                          + arr3("j,k,i,b,c,a")
+                          + arr3("k,i,j,c,a,b")
+                          + arr3("k,j,i,c,b,a");
+    REQUIRE(norm(man3) == Approx(norm(eval3)));
+    TArrayC zero3;
+    zero3("i,j,k,a,b,c") = eval3("i,j,k,a,b,c") - man3("i,j,k,a,b,c");
+    std::cout << "norm(zero3) = " << norm(zero3) << std::endl;
   }
 
   SECTION("Others") {
