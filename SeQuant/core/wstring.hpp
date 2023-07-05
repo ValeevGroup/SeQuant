@@ -11,6 +11,7 @@
 #include <type_traits>
 
 #include <boost/locale/encoding_utf.hpp>
+#include <SeQuant/core/rational.hpp>
 
 namespace sequant {
 
@@ -30,6 +31,14 @@ to_wstring(T&& t) {
     return std::to_wstring(static_cast<long long>(t));
   else
     return std::to_wstring(t);
+}
+/// for multiprecison integer
+template <typename T>
+std::enable_if_t<
+    std::is_same_v<std::decay_t<T>, sequant::mp_int_type>,
+    std::wstring>
+to_wstring(T&& t) {
+  return std::to_wstring(boost::numeric_cast<double>(t));
 }
 
 /// @brief (potentially) narrowing character converter.

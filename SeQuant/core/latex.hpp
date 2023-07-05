@@ -29,6 +29,17 @@ to_latex(T&& t) {
   result += to_wstring(t) + L"}";
   return result;
 }
+/// for multiprecison integer
+template <typename T>
+std::enable_if_t<
+    std::is_same_v<std::decay_t<T>, sequant::mp_int_type>,
+    std::wstring>
+to_latex(T&& t) {
+  std::wstring result = L"{";
+  using ::sequant::to_wstring;
+  result += to_wstring(t) + L"}";
+  return result;
+}
 
 template <typename T>
 std::enable_if_t<std::is_arithmetic_v<std::decay_t<T>> &&

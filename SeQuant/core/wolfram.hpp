@@ -22,6 +22,14 @@ to_wolfram(T &&t) {
   using ::sequant::to_wstring;
   return to_wstring(t);
 }
+/// for multiprecison integer
+template <typename T>
+std::enable_if_t<std::is_same_v<std::decay_t<T>, sequant::mp_int_type>,
+                 std::wstring>
+to_wolfram(T &&t) {
+  using ::sequant::to_wstring;
+  return to_wstring(t);
+}
 
 template <typename T>
 std::wstring to_wolfram(const std::complex<T> &t) {
