@@ -64,7 +64,9 @@ inline constexpr rational to_rational(
   auto sbtree = [max_niter](T f, T tol) {
     using fraction = rational;
     using Int = typename rational::int_type;
-    Int base = std::floor(f); // does not work
+    Int base = std::floor(f);
+    // here, base is a double/float coming from std::floor
+    // double/float to cpp_int conversion is not straight-forward
     f -= base;
     if (f < tol) return fraction(base, 1);
     if (1 - tol < f) return fraction(base + 1, 1);
