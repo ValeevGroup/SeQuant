@@ -37,7 +37,8 @@ namespace sequant {
 
 // introducing multiprecision
 using namespace boost::multiprecision;
-using mp_int_type = int512_t;
+using mp_int_type =
+    number<cpp_int_backend<512, 512, signed_magnitude, unchecked, void>>;
 
 using rational = boost::rational<mp_int_type>;
 
@@ -50,7 +51,7 @@ using ratio = rational;
 // clang-format on
 
 template <typename T, typename = std::enable_if_t<std::is_floating_point_v<T>>>
-inline rational to_rational(
+inline constexpr rational to_rational(
     T t, T eps = std::sqrt(std::numeric_limits<T>::epsilon()),
     std::size_t max_niter = 1000) {
   if (std::isnan(t) || std::isinf(t)) {
@@ -95,13 +96,13 @@ inline rational to_rational(
 }
 
 template <typename T, typename = std::enable_if_t<std::is_integral_v<T>>>
-rational to_rational(T t) {
+constexpr rational to_rational(T t) {
   return rational{t};
 }
 
 template <typename T, typename = std::enable_if_t<std::is_floating_point_v<T> ||
                                                   std::is_integral_v<T>>>
-inline ratio to_ratio(T t) {
+inline constexpr ratio to_ratio(T t) {
   return to_rational(t);
 }
 
