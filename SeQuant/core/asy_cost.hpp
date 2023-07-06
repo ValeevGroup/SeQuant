@@ -32,7 +32,7 @@ class AsyCost {
     static std::ostream &stream_out_rational(std::ostream &os,
                                              rational const &r);
 
-    static AsyCostEntry const &max();
+    static AsyCostEntry max();
 
     static AsyCostEntry const &zero();
 

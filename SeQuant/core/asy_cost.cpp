@@ -12,7 +12,7 @@ AsyCost::AsyCostEntry::AsyCostEntry(size_t nocc, size_t nvirt, rational count)
   }
 }
 
-AsyCost::AsyCostEntry const &AsyCost::AsyCostEntry::max() {
+AsyCost::AsyCostEntry AsyCost::AsyCostEntry::max() {
   return AsyCostEntry{std::numeric_limits<size_t>::max(),
                       std::numeric_limits<size_t>::max(),
                       std::numeric_limits<intmax_t>::max()};
