@@ -138,7 +138,8 @@ ExprPtr biorthogonal_transform(
   {
     auto factorial = [](auto x) {
       if (x > 20)
-        throw std::runtime_error("std::intmax_t running out of precision");
+        throw std::invalid_argument(
+            "20! cannot be represented by std::intmax_t");
       return boost::numeric_cast<std::intmax_t>(sequant::factorial(x));
     };
 

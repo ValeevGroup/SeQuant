@@ -185,7 +185,7 @@ AsyCost asy_cost_single_node(EvalNode<ExprT> const& node) {
   auto cost = asy_cost_single_node_symm_off(node);
   auto factorial = [](auto x) {
     if (x > 20)
-      throw std::runtime_error("std::intmax_t running out of precision");
+      throw std::invalid_argument("20! cannot be represented by std::intmax_t");
     return boost::numeric_cast<std::intmax_t>(sequant::factorial(x));
   };
   // parent node symmetry

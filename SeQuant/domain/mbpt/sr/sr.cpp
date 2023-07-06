@@ -96,9 +96,7 @@ mbpt::sr::qns_t adjoint(mbpt::sr::qns_t qns) {
 namespace mbpt {
 namespace sr {
 
-inline constexpr sequant::int128_t fac(std::size_t n) {
-  return sequant::factorial(n);
-}
+inline auto fac(std::size_t n) { return sequant::factorial(n); }
 
 make_op::make_op(OpType op, std::size_t nbra, std::size_t nket) : op_(op) {
   nket = nket == std::numeric_limits<std::size_t>::max() ? nbra : nket;
