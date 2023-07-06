@@ -145,6 +145,11 @@ AsyCost asy_cost_impl(EvalNode<ExprT> const& node, bool exploit_symmetry,
 
 template <typename ExprT>
 AsyCost asy_cost_single_node_symm_off(EvalNode<ExprT> const& node) {
+  auto factorial = [](auto x) {
+    if (x > 20)
+      throw std::runtime_error("std::intmax_t running out of precision");
+    return boost::numeric_cast<std::intmax_t>(sequant::factorial(x));
+  };
   if (node.leaf()) return AsyCost::zero();
 
   auto bks = ranges::views::concat(node.left()->tensor().const_braket(),
@@ -161,11 +166,11 @@ AsyCost asy_cost_single_node_symm_off(EvalNode<ExprT> const& node) {
 
   switch (node->op()) {
     case EvalOp::Symm: {
-      auto f = sequant::factorial(node->tensor().rank());
+      auto f = factorial(node->tensor().rank());
       return AsyCost{f, nocc, nvirt};
     }
     case EvalOp::Antisymm: {
-      auto f = sequant::factorial(node->tensor().rank());
+      auto f = factorial(node->tensor().rank());
       return AsyCost{f * f, nocc, nvirt};
     }
     default:
@@ -178,7 +183,11 @@ AsyCost asy_cost_single_node_symm_off(EvalNode<ExprT> const& node) {
 template <typename ExprT>
 AsyCost asy_cost_single_node(EvalNode<ExprT> const& node) {
   auto cost = asy_cost_single_node_symm_off(node);
-  auto factorial = [](auto x) { return sequant::factorial(x); };
+  auto factorial = [](auto x) {
+    if (x > 20)
+      throw std::invalid_argument("20! cannot be represented by std::intmax_t");
+    return boost::numeric_cast<std::intmax_t>(sequant::factorial(x));
+  };
   // parent node symmetry
   auto const psym = node->tensor().symmetry();
   // parent node bra symmetry

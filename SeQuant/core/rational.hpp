@@ -5,11 +5,25 @@
 #include <SeQuant/core/wstring.hpp>
 
 #include <boost/multiprecision/cpp_int.hpp>
-#include <boost/rational.hpp>
+
+#include <memory>
+#include <mutex>
+
+namespace sequant {
+
+using rational = boost::multiprecision::cpp_rational;
+
+/// shorter=sweeter? sometimes
+using ratio = rational;
+
+/// the integer type supporting the rational
+using intmax_t = rational::value_type;
+
+}  // namespace sequant
 
 namespace boost {
 
-inline auto hash_value(const boost::multiprecision::cpp_rational& i) {
+inline auto hash_value(const sequant::rational& i) {
   auto val = sequant::hash::value(numerator(i));
   sequant::hash::combine(val, denominator(i));
   return val;
@@ -18,11 +32,6 @@ inline auto hash_value(const boost::multiprecision::cpp_rational& i) {
 }  // namespace boost
 
 namespace sequant {
-
-using rational = boost::multiprecision::cpp_rational;
-
-/// shorter=sweeter? sometimes
-using ratio = rational;
 
 /// convert a floating-point number to a rational number to a given precision
 
@@ -96,7 +105,7 @@ inline ratio to_ratio(T t) {
   return to_rational(t);
 }
 
-inline std::string to_string(const boost::multiprecision::cpp_rational& i) {
+inline std::string to_string(const rational& i) {
   return boost::lexical_cast<std::string>(i);
 }
 
@@ -105,7 +114,7 @@ inline std::string to_string(const boost::multiprecision::number<Backend>& i) {
   return boost::lexical_cast<std::string>(i);
 }
 
-inline std::wstring to_wstring(const boost::multiprecision::cpp_rational& i) {
+inline std::wstring to_wstring(const rational& i) {
   return ::sequant::to_wstring(boost::lexical_cast<std::string>(i));
 }
 
@@ -123,7 +132,7 @@ inline std::wstring to_latex(const boost::multiprecision::number<Backend>& t) {
   return result;
 }
 
-inline std::wstring to_latex(const boost::multiprecision::cpp_rational& t) {
+inline std::wstring to_latex(const rational& t) {
   // n.b. skip enclosing braces to make Constant::to_latex to produce same
   // output as before std::wstring result = L"{";
   std::wstring result;
@@ -153,7 +162,7 @@ inline std::wstring to_wolfram(
   return ::sequant::to_wstring(t);
 }
 
-inline std::wstring to_wolfram(const boost::multiprecision::cpp_rational& t) {
+inline std::wstring to_wolfram(const rational& t) {
   using ::sequant::to_wstring;
   if (denominator(t) == 1) {
     // n.b. use to_string to skip extra braces so that output agrees with code

@@ -6,7 +6,9 @@
 
 #include <iostream>
 
+#include "SeQuant/core/math.hpp"
 #include "SeQuant/core/rational.hpp"
+#include "SeQuant/core/runtime.hpp"
 #include "SeQuant/core/wstring.hpp"
 
 TEST_CASE("Rational", "[elements]") {
@@ -27,3 +29,28 @@ TEST_CASE("Rational", "[elements]") {
   }
 
 }  // TEST_CASE("Rational")
+
+TEST_CASE("Factorial", "[math]") {
+  using namespace sequant;
+  SECTION("factorial") {
+    REQUIRE(sequant::to_string(sequant::factorial(30)) ==
+            "265252859812191058636308480000000");
+    // 21! has been memoized by now
+    REQUIRE(sequant::to_string(sequant::factorial(21)) ==
+            "51090942171709440000");
+
+    // try to stress-test reentrancy of memoization
+    auto rng = ranges::views::iota(31, 100);
+    sequant::for_each(rng, [](const auto& i) {
+      REQUIRE_NOTHROW(sequant::to_string(sequant::factorial(i)));
+      REQUIRE(sequant::to_string(sequant::factorial(30)) ==
+              "265252859812191058636308480000000");
+    });
+
+    // 100! has been memoized by now
+    REQUIRE(sequant::to_string(sequant::factorial(100)) ==
+            "933262154439441526816992388562667004907159682643816214685929638952"
+            "175999932299156089414639761565182862536979208272237582511852109168"
+            "64000000000000000000000000");
+  }
+}  // TEST_CASE("Factorial")
