@@ -476,7 +476,7 @@ ExprPtr symmetrize_expr(const Product& product) {
       }
       result.push_back(map);
     } while (std::next_permutation(int_list.begin(), int_list.end()));
-    assert(result.size() == sequant::factorial(list.size()));
+    assert(result.size() == boost::numeric_cast<size_t>(factorial(list.size())));
     return result;
   };
 
@@ -1654,7 +1654,7 @@ ExprPtr factorize_S(const ExprPtr& expression,
     // if(hash1 present in summands_hash_list) remove hash0, hash1
     // else continue
     int n_symm_terms = 0;
-    auto symm_factor = sequant::factorial(S.bra_rank());
+    auto symm_factor = factorial(S.bra_rank());
     for (auto it = expr->begin(); it != expr->end(); ++it) {
       // Exclude summand with value zero
       while ((*it)->hash_value() == ex<Constant>(0)->hash_value()) {
@@ -1854,7 +1854,7 @@ ExprPtr biorthogonal_transform(
   {
     using namespace Eigen;
     // Dimension of permutation matrix is n_particles!
-    const auto n = sequant::factorial(n_particles);
+    const auto n = boost::numeric_cast<Eigen::Index>(factorial(n_particles));
 
     // Permutation matrix
     Eigen::Matrix<double, Dynamic, Dynamic> M(n, n);
