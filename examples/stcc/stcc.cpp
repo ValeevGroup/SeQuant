@@ -139,16 +139,9 @@ ExprPtr biorthogonal_transform(
   // Coefficients
   std::vector<double> bt_coeff_vec;
   {
-    auto factorial = [](auto x) {
-      if (x > 20)
-        throw std::invalid_argument(
-            "20! cannot be represented by std::intmax_t");
-      return boost::numeric_cast<std::intmax_t>(sequant::factorial(x));
-    };
-
     using namespace Eigen;
     // Dimension of permutation matrix is n_particles!
-    const auto n = factorial(n_particles);
+    const auto n = boost::numeric_cast<Eigen::Index>(factorial(n_particles));
 
     // Permutation matrix
     Eigen::Matrix<double, Dynamic, Dynamic> M(n, n);
