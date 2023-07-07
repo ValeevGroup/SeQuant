@@ -11,6 +11,8 @@
 #include "attr.hpp"
 #include "container.hpp"
 
+#include <range/v3/algorithm/any_of.hpp>
+
 namespace sequant {
 
 /// @brief TypeAttr denotes the type of index space.
@@ -175,49 +177,125 @@ class IndexSpace {
   using Type = TypeAttr;
   using QuantumNumbers = QuantumNumbersAttr;
 
+  /// \name default space tags
+
+  /// @{
+  // clang-format off
+  /// null space (empty subset), needed to define intersection operation
+  static constexpr Type nulltype{0};
+  /// represents any space, standard (see below) or otherwise
+  static constexpr Type nonnulltype{0x7fffffff};
+  /// @}
+
   /// \name standard space tags
 
   /// standard space tags are predefined that helps implement set theory of
   /// standard spaces as binary ops on bitsets
   /// @{
-  static Type nulltype;
-  static Type frozen_occupied;
-  static Type inactive_occupied;
-  static Type active_occupied;
-  static Type active;
-  static Type occupied;
-  static Type active_unoccupied;
-  static Type inactive_unoccupied;
-  static Type unoccupied;
-  static Type all_active;
-  static Type all;
-  static Type other_unoccupied;
-  static Type complete_unoccupied;
-  static Type complete;
-  static Type nonnulltype;
+  // clang-format off
+  /// space of sp states that are fully occupied (i.e., non-correlated) in the reference (vacuum) state and are "frozen" in their reference form
+  static constexpr Type frozen_occupied{0b0000001};
+  /// space of sp states that are fully occupied (i.e., non-correlated) in the reference (vacuum) state but
+  /// can be rotated by mixing with the rest of non-frozen orbitals
+  static constexpr Type inactive_occupied{0b0000010};
+  /// space of sp states that are fully occupied (i.e., non-correlated) in the reference (vacuum) state but
+  /// can be correlated and rotated by mixing with the rest of non-frozen orbitals
+  static constexpr Type active_occupied{0b0000100};
+  /// space of sp states that are partially occupied (i.e., correlated, or open shells in spin-free single-determinant reference) in the reference (vacuum) state;
+  static constexpr Type active{0b0001000};
+  /// space of sp states that are fully occupied in the reference (vacuum) state
+  /// @note this is the union of IndexSpace::frozen_occupied , IndexSpace::inactive_occupied , IndexSpace::active_occupied
+  static constexpr Type occupied = IndexSpace::frozen_occupied.unIon(IndexSpace::inactive_occupied).unIon(IndexSpace::active_occupied);
+  /// space of sp states that are fully or partially occupied in the reference (vacuum) state
+  /// @note this is the union of IndexSpace::occupied and IndexSpace::active
+  static constexpr Type maybe_occupied = IndexSpace::occupied.unIon(IndexSpace::active);
+  /// space of sp states that are fully or partially occupied in the reference (vacuum) state and can be correlated
+  /// @note this is the union of IndexSpace::active_occupied and IndexSpace::active
+  static constexpr Type active_maybe_occupied = IndexSpace::active_occupied.unIon(IndexSpace::active);
+  /// space of sp states that are not used to define the reference (vacuum) state (i.e., they are unoccupied) but
+  /// can be correlated and rotated by mixing with the rest of non-frozen orbitals
+  /// @note unlike IndexSpace::other_unoccupied, these states are supported by a finite computational basis
+  static constexpr Type active_unoccupied{0b0010000};
+  /// space of sp states that are not used to define the reference (vacuum) state (i.e., they are unoccupied) but
+  /// can be rotated by mixing with the rest of non-frozen orbitals
+  /// @note unlike IndexSpace::other_unoccupied, these states are supported by a finite computational basis
+  static constexpr Type inactive_unoccupied{0b0100000};
+  /// space of sp states that are fully unoccupied in the reference (vacuum) state
+  /// @note this is the union of IndexSpace::inactive_unoccupied and IndexSpace::active_unoccupied
+  /// @note unlike IndexSpace::other_unoccupied, these states are supported by a finite computational basis
+  static constexpr Type unoccupied = IndexSpace::active_unoccupied.unIon(IndexSpace::inactive_unoccupied);
+  /// space of sp states that are fully or partially unoccupied in the reference (vacuum) state
+  /// @note this is the union of IndexSpace::unoccupied  and IndexSpace::active
+  /// @note unlike IndexSpace::other_unoccupied, these states are supported by a finite computational basis
+  static constexpr Type maybe_unoccupied = IndexSpace::unoccupied.unIon(IndexSpace::active);
+  /// space of sp states that are fully or partially unoccupied in the reference (vacuum) state and can be correlated
+  /// @note this is the union of IndexSpace::active_unoccupied and IndexSpace::active
+  static constexpr Type active_maybe_unoccupied = IndexSpace::active_unoccupied.unIon(IndexSpace::active);
+  /// space of sp states that can be correlated
+  /// @note this is the union of IndexSpace::active_occupied , IndexSpace::active_unoccupied and IndexSpace::active
+  static constexpr Type all_active = IndexSpace::active_occupied.unIon(IndexSpace::active_unoccupied).unIon(IndexSpace::active);
+  /// space of sp states represented in computational basis
+  /// @note this is the union of IndexSpace::maybe_occupied and IndexSpace::maybe_unoccupied
+  static constexpr Type all = IndexSpace::maybe_occupied.unIon(IndexSpace::maybe_unoccupied);
+  /// space of sp states that are not used to define the reference (vacuum) state (i.e., they are unoccupied) and not supported
+  /// by a supported by a finite computational basis; i.e., these states are the rest of the sp Hilbert space
+  static constexpr Type other_unoccupied{0b1000000};
+  /// set of all fully unoccupied states
+  /// @note this is a union of IndexSpace::unoccupied and IndexSpace::other_unoccupied
+  static constexpr Type complete_unoccupied = IndexSpace::unoccupied.unIon(IndexSpace::other_unoccupied);
+  /// set of arbitrary fully or partially unoccupied states
+/// @note this is a union of IndexSpace::complete_unoccupied and IndexSpace::active
+  static constexpr Type complete_maybe_unoccupied = IndexSpace::complete_unoccupied.unIon(IndexSpace::active);
+  /// union of all previous spaces
+  /// @note this is a union of IndexSpace::all and IndexSpace::other_unoccupied
+  static constexpr Type complete = IndexSpace::all.unIon(IndexSpace::other_unoccupied);
+  // clang-format on
+
+  /// list of all standard types
+  static constexpr Type standard_types[] = {frozen_occupied,
+                                            inactive_occupied,
+                                            active_occupied,
+                                            occupied,
+                                            active,
+                                            maybe_occupied,
+                                            active_maybe_occupied,
+                                            active_unoccupied,
+                                            inactive_unoccupied,
+                                            unoccupied,
+                                            maybe_unoccupied,
+                                            active_maybe_unoccupied,
+                                            all_active,
+                                            all,
+                                            other_unoccupied,
+                                            complete_unoccupied,
+                                            complete_maybe_unoccupied,
+                                            complete};
 
   template <int32_t typeint>
-  static const constexpr bool is_standard_type() {
-    const Type type{typeint};
-    return (type == frozen_occupied || type == inactive_occupied ||
-            type == active_occupied || type == occupied ||
-            type == active_unoccupied || type == inactive_unoccupied ||
-            type == unoccupied || type == all_active || type == all ||
-            type == other_unoccupied || type == complete_unoccupied ||
-            type == complete || type == nulltype || type == nonnulltype);
+  static constexpr bool is_standard_type() {
+    return ranges::any_of(standard_types,
+                          [](const auto t) { return t == Type{typeint}; });
   }
   /// @}
 
-  /// standard space tags are predefined that helps implement set theory of
-  /// standard spaces as binary ops on bitsets
-  static QuantumNumbers nullqns;  //!< no quantum numbers
-  static QuantumNumbers alpha;    //!< spin-up
-  static QuantumNumbers beta;     //!< spin-down
+  /// \name standard quantum numbers tags
+  /// @{
+  /// no quantum numbers
+  constexpr static QuantumNumbers nullqns{0b000000};
+  /// spin-up
+  constexpr static QuantumNumbers alpha{0b000001};
+  /// spin-down
+  constexpr static QuantumNumbers beta{0b000010};
+
+  /// list of all standard quantum numbers
+  static constexpr QuantumNumbers standard_qns[] = {nullqns, alpha, beta};
+
   template <int32_t qnsint>
   static const constexpr bool is_standard_qns() {
-    const QuantumNumbers qns{qnsint};
-    return (qns == nullqns || qns == alpha || qns == beta);
+    return ranges::any_of(
+        standard_qns, [](const auto t) { return t == QuantumNumbers{qnsint}; });
   }
+  /// @}
 
   struct bad_key : std::invalid_argument {
     bad_key() : std::invalid_argument("bad key") {}

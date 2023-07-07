@@ -101,7 +101,7 @@ TEST_CASE("IndexSpace", "[elements]") {
         intersection(IndexSpace::instance(L"a"), IndexSpace::instance(L"α'")));
 
     REQUIRE(IndexSpace::instance(L"κ") ==
-            unIon(IndexSpace::instance(L"m"), IndexSpace::instance(L"α")));
+            unIon(IndexSpace::instance(L"p"), IndexSpace::instance(L"α'")));
 
     REQUIRE(includes(IndexSpace::instance(L"κ"), IndexSpace::instance(L"m")));
     REQUIRE(!includes(IndexSpace::instance(L"m"), IndexSpace::instance(L"κ")));
