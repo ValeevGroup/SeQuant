@@ -6,6 +6,7 @@
 #define SEQUANT_CORE_MATH_HPP
 
 #include <assert.h>
+#include <SeQuant/core/rational.hpp>
 #include <cstddef>
 
 namespace sequant {
@@ -15,30 +16,75 @@ constexpr std::size_t pow2(std::size_t n) {
   return 1ul << n;
 }
 
-constexpr inline std::size_t factorial(std::size_t n) {
-  assert(n >= 0 && n <= 20);
-  const std::size_t values[] = {1,
-                                1,
-                                2,
-                                6,
-                                24,
-                                120,
-                                720,
-                                5040,
-                                40320,
-                                362880,
-                                3628800,
-                                39916800,
-                                479001600,
-                                6227020800,
-                                87178291200,
-                                1307674368000,
-                                20922789888000,
-                                355687428096000,
-                                6402373705728000,
-                                121645100408832000,
-                                2432902008176640000};
-  return values[n];
+/// Returns the factorial of `n`
+
+/// @param n the argument; there is no practical limit on the supported
+/// magnitude of `n`
+/// @return `n!`
+/// @internal uses pretabulated factorials for up to `n=20`, and memoized values
+/// for `n>20`.
+/// @note this function is reentrant
+inline sequant::intmax_t factorial(std::size_t n) {
+  using result_t = sequant::intmax_t;
+  constexpr std::size_t n_max_precomputed =
+      20;  // 20! is the largest factorial that fits into uint64_t
+  const result_t values[n_max_precomputed + 1] = {1ull,
+                                                  1ull,
+                                                  2ull,
+                                                  6ull,
+                                                  24ull,
+                                                  120ull,
+                                                  720ull,
+                                                  5040ull,
+                                                  40320ull,
+                                                  362880ull,
+                                                  3628800ull,
+                                                  39916800ull,
+                                                  479001600ull,
+                                                  6227020800ull,
+                                                  87178291200ull,
+                                                  1307674368000ull,
+                                                  20922789888000ull,
+                                                  355687428096000ull,
+                                                  6402373705728000ull,
+                                                  121645100408832000ull,
+                                                  2432902008176640000ull};
+  if (n <= n_max_precomputed)
+    return values[n];
+  else {
+    // this memoizes values for n>n_max_precomputed
+    static std::shared_ptr<std::vector<sequant::intmax_t>> memvals;
+    // used to serialize access to memvals
+    static std::mutex memvals_mutex;
+
+    const std::size_t n_in_memvals = n - n_max_precomputed - 1;
+    const auto memvals_handle = std::atomic_load(&memvals);
+    if (memvals_handle && memvals_handle->size() > n_in_memvals) {
+      return (*memvals_handle)[n_in_memvals];
+    } else {
+      std::lock_guard<std::mutex> lock(memvals_mutex);
+      // memvals might have been updated while we were waiting for the lock
+      // hence reload the state
+      const auto memvals_handle =
+          memvals;  // nonatomic read OK since I'm the only writer
+      if (memvals_handle && memvals_handle->size() > n_in_memvals) {
+        return (*memvals_handle)[n_in_memvals];
+      } else {
+        decltype(memvals) new_memvals =
+            std::make_shared<std::vector<sequant::intmax_t>>(
+                memvals_handle
+                    ? *memvals_handle
+                    : std::vector<sequant::intmax_t>{});  // copy old memvals
+        new_memvals->reserve(n_in_memvals + 1);
+        for (auto i = new_memvals->size(); i <= n_in_memvals; ++i)
+          new_memvals->emplace_back(
+              (i == 0 ? values[n_max_precomputed] : new_memvals->back()) *
+              (i + n_max_precomputed + 1));
+        std::atomic_store(&memvals, new_memvals);
+        return (*new_memvals)[n_in_memvals];
+      }
+    }
+  }
 }
 
 }  // namespace sequant

@@ -861,8 +861,6 @@ SECTION("Expression Reduction") {
         } else {
           REQUIRE(wick_result->size() == 544);
         }
-        std::wcout << oss.str() << L" (nop-only) "
-                   << to_latex_align(wick_result, 0, 1) << std::endl;
 
         // multiply tensor factors and expand
         auto wick_result_2 =
