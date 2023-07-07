@@ -155,11 +155,11 @@ class DataWorldBTAS {
 
   template <typename NodeT, typename = std::enable_if_t<IsEvaluable<NodeT>>>
   ERPtr operator()(NodeT const& n) {
+    using numeric_type = typename Tensor_t::numeric_type;
     if (n->result_type() == ResultType::Constant) {
       assert(n->expr()->template is<Constant>());
-      auto d = boost::rational_cast<typename Tensor_t::numeric_type>(
-          n->as_constant().value().real());
-      return eval_result<EvalConstant<typename Tensor_t::numeric_type>>(d);
+      auto d = n->as_constant().template value<numeric_type>();
+      return eval_result<EvalConstant<numeric_type>>(d);
     }
 
     assert(n->result_type() == ResultType::Tensor &&
