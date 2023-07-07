@@ -25,7 +25,9 @@ class IndexSpace {
   struct TypeAttr : std::bitset<32> {
     constexpr explicit TypeAttr(int32_t value) noexcept
         : std::bitset<32>(static_cast<unsigned long long>(value)) {}
-    operator int64_t() const { return static_cast<int64_t>(this->to_ulong()); }
+    explicit operator int64_t() const {
+      return static_cast<int64_t>(this->to_ulong());
+    }
     int32_t to_int32() const { return static_cast<int32_t>(this->to_ulong()); }
     TypeAttr intersection(TypeAttr other) const {
       return TypeAttr(this->to_int32() & other.to_int32());
@@ -140,12 +142,16 @@ class IndexSpace {
   using Type = TypeAttr;
   using QuantumNumbers = QuantumNumbersAttr;
 
+  /// \name standard space tags
+
   /// standard space tags are predefined that helps implement set theory of
   /// standard spaces as binary ops on bitsets
+  /// @{
   static Type nulltype;
   static Type frozen_occupied;
   static Type inactive_occupied;
   static Type active_occupied;
+  static Type active;
   static Type occupied;
   static Type active_unoccupied;
   static Type inactive_unoccupied;
@@ -156,6 +162,7 @@ class IndexSpace {
   static Type complete_unoccupied;
   static Type complete;
   static Type nonnulltype;
+
   template <int32_t typeint>
   static const constexpr bool is_standard_type() {
     const Type type{typeint};
@@ -166,6 +173,7 @@ class IndexSpace {
             type == other_unoccupied || type == complete_unoccupied ||
             type == complete || type == nulltype || type == nonnulltype);
   }
+  /// @}
 
   /// standard space tags are predefined that helps implement set theory of
   /// standard spaces as binary ops on bitsets

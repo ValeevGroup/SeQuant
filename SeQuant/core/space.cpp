@@ -18,18 +18,19 @@ namespace sequant {
 
 IndexSpace::Type IndexSpace::nulltype = Type{0};
 IndexSpace::Type IndexSpace::nonnulltype = Type{0x7fffffff};
-IndexSpace::Type IndexSpace::frozen_occupied = Type{0b000001};
-IndexSpace::Type IndexSpace::inactive_occupied = Type{0b000010};
-IndexSpace::Type IndexSpace::active_occupied = Type{0b000100};
-IndexSpace::Type IndexSpace::occupied = Type{0b000111};
-IndexSpace::Type IndexSpace::active_unoccupied = Type{0b001000};
-IndexSpace::Type IndexSpace::inactive_unoccupied = Type{0b010000};
-IndexSpace::Type IndexSpace::unoccupied = Type{0b011000};
-IndexSpace::Type IndexSpace::all_active = Type{0b001100};
-IndexSpace::Type IndexSpace::all = Type{0b011111};
-IndexSpace::Type IndexSpace::other_unoccupied = Type{0b100000};
-IndexSpace::Type IndexSpace::complete_unoccupied = Type{0b111000};
-IndexSpace::Type IndexSpace::complete = Type{0b111111};
+IndexSpace::Type IndexSpace::frozen_occupied = Type{0b0000001};
+IndexSpace::Type IndexSpace::inactive_occupied = Type{0b0000010};
+IndexSpace::Type IndexSpace::active_occupied = Type{0b0000100};
+IndexSpace::Type IndexSpace::active = Type{0b0001000};
+IndexSpace::Type IndexSpace::occupied = Type{0b0001111};
+IndexSpace::Type IndexSpace::active_unoccupied = Type{0b0010000};
+IndexSpace::Type IndexSpace::inactive_unoccupied = Type{0b0100000};
+IndexSpace::Type IndexSpace::unoccupied = Type{0b0110000};
+IndexSpace::Type IndexSpace::all_active = Type{0b0011100};
+IndexSpace::Type IndexSpace::all = Type{0b0111111};
+IndexSpace::Type IndexSpace::other_unoccupied = Type{0b1000000};
+IndexSpace::Type IndexSpace::complete_unoccupied = Type{0b1110000};
+IndexSpace::Type IndexSpace::complete = Type{0b1111111};
 
 IndexSpace::QuantumNumbers IndexSpace::nullqns =
     IndexSpace::QuantumNumbers{0b000000};  //!< no quantum numbers
