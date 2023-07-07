@@ -13,66 +13,99 @@
 
 namespace sequant {
 
+/// @brief TypeAttr denotes the type of index space.
+///
+/// This class models a host (complete) space partitioned into disjoint
+/// subspaces. To simplify implementation of set operations
+/// (intersection, union, etc.) it is encoded as a fixed-width (32) bitset.
+struct TypeAttr {
+  int32_t bitset = 0;
+
+  constexpr explicit TypeAttr(int32_t value) noexcept : bitset(value) {}
+
+  constexpr explicit operator int64_t() const {
+    return static_cast<int64_t>(bitset);
+  }
+  constexpr int32_t to_int32() const { return bitset; }
+  constexpr TypeAttr intersection(TypeAttr other) const {
+    return TypeAttr(this->to_int32() & other.to_int32());
+  }
+  constexpr TypeAttr unIon(TypeAttr other) const {
+    return TypeAttr(this->to_int32() | other.to_int32());
+  }
+
+  friend constexpr bool operator==(TypeAttr, TypeAttr);
+  friend constexpr bool operator!=(TypeAttr, TypeAttr);
+
+  /// @return true if \c other is included in this object
+  constexpr bool includes(TypeAttr other) const {
+    return intersection(other) == other;
+  }
+  /// @return true if in canonical order this object preceeds \c other
+  constexpr bool operator<(TypeAttr other) const {
+    return this->to_int32() < other.to_int32();
+  }
+
+  /// @return an invalid TypeAttr
+  static constexpr TypeAttr invalid() noexcept { return TypeAttr(0xffff); }
+};
+
+constexpr bool operator==(TypeAttr lhs, TypeAttr rhs) {
+  return lhs.to_int32() == rhs.to_int32();
+}
+
+constexpr bool operator!=(TypeAttr lhs, TypeAttr rhs) { return !(lhs == rhs); }
+
+/// denotes other quantum numbers (particle type, spin, etc.)
+struct QuantumNumbersAttr {
+  int32_t bitset = 0;
+
+  constexpr explicit QuantumNumbersAttr(int32_t value) noexcept
+      : bitset(value) {}
+  constexpr explicit operator int64_t() const {
+    return static_cast<int64_t>(bitset);
+  }
+  constexpr int32_t to_int32() const { return bitset; }
+  constexpr QuantumNumbersAttr intersection(QuantumNumbersAttr other) const {
+    return QuantumNumbersAttr(this->to_int32() & other.to_int32());
+  }
+  constexpr QuantumNumbersAttr unIon(QuantumNumbersAttr other) const {
+    return QuantumNumbersAttr(this->to_int32() | other.to_int32());
+  }
+
+  friend constexpr bool operator==(QuantumNumbersAttr, QuantumNumbersAttr);
+  friend constexpr bool operator!=(QuantumNumbersAttr, QuantumNumbersAttr);
+
+  /// @return true if \c other is included in this object
+  constexpr bool includes(QuantumNumbersAttr other) const {
+    return intersection(other) == other;
+  }
+  /// @return true if in canonical order this object preceeds \c other
+  constexpr bool operator<(QuantumNumbersAttr other) const {
+    return this->to_int32() < other.to_int32();
+  }
+
+  /// @return an invalid TypeAttr
+  static constexpr QuantumNumbersAttr invalid() noexcept {
+    return QuantumNumbersAttr(-0);
+  }
+};
+
+constexpr bool operator==(QuantumNumbersAttr lhs, QuantumNumbersAttr rhs) {
+  return lhs.to_int32() == rhs.to_int32();
+}
+
+constexpr bool operator!=(QuantumNumbersAttr lhs, QuantumNumbersAttr rhs) {
+  return !(lhs == rhs);
+}
+
 /// @brief space of Index objects
 ///
 /// IndexSpace is a set of attributes associated 1-to-1 with keys
 class IndexSpace {
  public:
-  /// @brief TypeAttr is the type of index space.
-  ///
-  /// The type is described as a set of (orthogonal) attributes; for simplicity
-  /// it is encoded as a bitset for ease of computing.
-  struct TypeAttr : std::bitset<32> {
-    constexpr explicit TypeAttr(int32_t value) noexcept
-        : std::bitset<32>(static_cast<unsigned long long>(value)) {}
-    explicit operator int64_t() const {
-      return static_cast<int64_t>(this->to_ulong());
-    }
-    int32_t to_int32() const { return static_cast<int32_t>(this->to_ulong()); }
-    TypeAttr intersection(TypeAttr other) const {
-      return TypeAttr(this->to_int32() & other.to_int32());
-    }
-    TypeAttr unIon(TypeAttr other) const {
-      return TypeAttr(this->to_int32() | other.to_int32());
-    }
-    /// @return true if \c other is included in this object
-    bool includes(TypeAttr other) const { return intersection(other) == other; }
-    /// @return true if in canonical order this object preceeds \c other
-    bool operator<(TypeAttr other) const {
-      return this->to_int32() < other.to_int32();
-    }
-
-    /// @return an invalid TypeAttr
-    static constexpr TypeAttr invalid() noexcept { return TypeAttr(0xffff); }
-  };
-  /// denotes other quantum numbers (particle type, spin, etc.)
-  struct QuantumNumbersAttr : std::bitset<32> {
-    constexpr explicit QuantumNumbersAttr(int32_t value) noexcept
-        : std::bitset<32>(static_cast<unsigned long long>(value)) {}
-    explicit operator int64_t() const {
-      return static_cast<int64_t>(this->to_ulong());
-    }
-    int32_t to_int32() const { return static_cast<int32_t>(this->to_ulong()); }
-    QuantumNumbersAttr intersection(QuantumNumbersAttr other) const {
-      return QuantumNumbersAttr(this->to_int32() & other.to_int32());
-    }
-    QuantumNumbersAttr unIon(QuantumNumbersAttr other) const {
-      return QuantumNumbersAttr(this->to_int32() | other.to_int32());
-    }
-    /// @return true if \c other is included in this object
-    bool includes(QuantumNumbersAttr other) const {
-      return intersection(other) == other;
-    }
-    /// @return true if in canonical order this object preceeds \c other
-    bool operator<(QuantumNumbersAttr other) const {
-      return this->to_int32() < other.to_int32();
-    }
-
-    /// @return an invalid TypeAttr
-    static constexpr QuantumNumbersAttr invalid() noexcept {
-      return QuantumNumbersAttr(-0);
-    }
-  };
+  using TypeAttr = sequant::TypeAttr;
+  using QuantumNumbersAttr = sequant::QuantumNumbersAttr;
 
   /// @brief Attr describes all attributes of a space (occupancy + quantum
   /// numbers)
@@ -113,7 +146,7 @@ class IndexSpace {
                   this->qns().unIon(other.qns()));
     }
 
-    /// @return true if \c other is included in this object
+    /// @return true if \p other is included in this object
     bool includes(Attr other) const {
       return this->type().includes(other.type()) &&
              this->qns().includes(other.qns());
