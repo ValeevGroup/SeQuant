@@ -61,9 +61,9 @@ auto qndecorate(qns qn, std::wstring_view label) {
   }
   abort();  // unreachable
 };
-};          // namespace
+};  // namespace
 
-/// @brief registers standard instances of IndexSpace objects
+/// @brief registers "standard" instances of IndexSpace objects
 void register_standard_instances() {
   const bool do_not_throw = true;
   for (int s = 0; s <= 2; ++s) {
@@ -72,23 +72,49 @@ void register_standard_instances() {
     auto declab = [s](auto&& label) {
       return qndecorate(static_cast<qns>(s), label);
     };
-    IndexSpace::register_instance(declab(L"i"), IndexSpace::active_occupied,
-                                  qnattr, do_not_throw);
-    IndexSpace::register_instance(declab(L"m"), IndexSpace::occupied, qnattr,
-                                  do_not_throw);
-    IndexSpace::register_instance(declab(L"a"), IndexSpace::active_unoccupied,
-                                  qnattr, do_not_throw);
-    IndexSpace::register_instance(declab(L"e"), IndexSpace::unoccupied, qnattr,
-                                  do_not_throw);
-    IndexSpace::register_instance(declab(L"x"), IndexSpace::all_active, qnattr,
-                                  do_not_throw);
+    // these spaces are used in Fock space methods
+    // based on single-determinant references
+    // p,q,r... for OBS spstates introduced in DOI 10.1063/1.444231 (QCiFS I)
     IndexSpace::register_instance(declab(L"p"), IndexSpace::all, qnattr,
                                   do_not_throw);
-    IndexSpace::register_instance(declab(L"α'"), IndexSpace::other_unoccupied,
+    // {i,j,k.../a,b,c...} for active {occupied/unoccupied} spstates introduced
+    // in DOI 10.1063/1.446736 (QCiFS III)
+    IndexSpace::register_instance(declab(L"i"), IndexSpace::active_occupied,
                                   qnattr, do_not_throw);
+    IndexSpace::register_instance(declab(L"a"), IndexSpace::active_unoccupied,
+                                  qnattr, do_not_throw);
+    // {α,β.../κ,𝛌...} for complete {unoccupied/any} spstates introduced in
+    // DOI 10.1063/1.459921 (MP2-R12 I)
     IndexSpace::register_instance(declab(L"α"), IndexSpace::complete_unoccupied,
                                   qnattr, do_not_throw);
     IndexSpace::register_instance(declab(L"κ"), IndexSpace::complete, qnattr,
+                                  do_not_throw);
+    // for orthogonal complement to p introduced in
+    // DOI 10.1016/j.cplett.2004.07.061 (CABS)
+    IndexSpace::register_instance(declab(L"α'"), IndexSpace::other_unoccupied,
+                                  qnattr, do_not_throw);
+    // m,n... for all occupied (including inactive/frozen orbitals) de facto
+    // introduced in [DOI 10.1016/j.cplett.2004.07.061
+    // (CABS)](https://dx.doi.org/10.1016/j.cplett.2004.07.061), though formally
+    // not explicitly defined so
+    IndexSpace::register_instance(declab(L"m"), IndexSpace::occupied, qnattr,
+                                  do_not_throw);
+    // introduced in MPQC LCAOWavefunction
+    IndexSpace::register_instance(declab(L"e"), IndexSpace::unoccupied, qnattr,
+                                  do_not_throw);
+    // introduced in MPQC for GF, CT-F12, and other ad hoc uses
+    IndexSpace::register_instance(declab(L"x"), IndexSpace::all_active, qnattr,
+                                  do_not_throw);
+    // e.g. see DOI 10.1063/5.0067511
+    IndexSpace::register_instance(declab(L"u"), IndexSpace::active, qnattr,
+                                  do_not_throw);
+    // DOI 10.1063/5.0067511 uses I,J,K... and A,B,C... for these
+    // although QCiFS uses capital letters for spin-free indices, using I/A this
+    // way seems preferable
+    IndexSpace::register_instance(
+        declab(L"I"), IndexSpace::active_maybe_occupied, qnattr, do_not_throw);
+    IndexSpace::register_instance(declab(L"A"),
+                                  IndexSpace::active_maybe_unoccupied, qnattr,
                                   do_not_throw);
   }
 }
@@ -102,15 +128,18 @@ void make_default_indexregistry() {
     auto declab = [s](auto&& label) {
       return qndecorate(static_cast<qns>(s), label);
     };
+    register_index(idxreg_ref, Index{declab(L"u")}, 20);
     register_index(idxreg_ref, Index{declab(L"i")}, 100);
+    register_index(idxreg_ref, Index{declab(L"I")}, 120);
     register_index(idxreg_ref, Index{declab(L"m")}, 110);
     register_index(idxreg_ref, Index{declab(L"a")}, 1000);
     register_index(idxreg_ref, Index{declab(L"e")}, 1000);
-    register_index(idxreg_ref, Index{declab(L"x")}, 1100);
-    register_index(idxreg_ref, Index{declab(L"p")}, 1110);
+    register_index(idxreg_ref, Index{declab(L"A")}, 1020);
+    register_index(idxreg_ref, Index{declab(L"x")}, 1120);
+    register_index(idxreg_ref, Index{declab(L"p")}, 1130);
     register_index(idxreg_ref, Index{declab(L"α'")}, 3000);
     register_index(idxreg_ref, Index{declab(L"α")}, 4000);
-    register_index(idxreg_ref, Index{declab(L"κ")}, 4110);
+    register_index(idxreg_ref, Index{declab(L"κ")}, 4130);
   }
 }
 
