@@ -476,7 +476,8 @@ ExprPtr symmetrize_expr(const Product& product) {
       }
       result.push_back(map);
     } while (std::next_permutation(int_list.begin(), int_list.end()));
-    assert(result.size() == boost::numeric_cast<size_t>(factorial(list.size())));
+    assert(result.size() ==
+           boost::numeric_cast<size_t>(factorial(list.size())));
     return result;
   };
 
@@ -770,7 +771,7 @@ int count_cycles(const container::svector<int, 6>& vec1,
 
 ExprPtr closed_shell_spintrace(
     const ExprPtr& expression,
-    const container::vector<container::vector<Index>> ext_index_groups) {
+    const container::vector<container::vector<Index>>& ext_index_groups) {
   // NOT supported for Proto indices
   auto check_proto_index = [](const ExprPtr& expr) {
     if (expr->is<Tensor>()) {
@@ -955,8 +956,44 @@ container::vector<container::vector<Index>> external_indices(
   return ext_index_groups;
 }
 
-ExprPtr closed_shell_CC_spintrace(const ExprPtr& expr) {
-  return closed_shell_spintrace(expr, external_indices(expr));
+container::vector<container::vector<Index>> external_indices(
+    size_t nparticles) {
+  container::vector<container::vector<Index>> ext_idx_list;
+
+  for (size_t i = 1; i <= nparticles; ++i) {
+    auto label = std::to_wstring(i);
+    auto occ_i = Index::make_label_index(
+        IndexSpace::instance(IndexSpace::active_occupied), label);
+    auto virt_i = Index::make_label_index(
+        IndexSpace::instance(IndexSpace::active_unoccupied), label);
+    container::vector<Index> pair = {occ_i, virt_i};
+    ext_idx_list.push_back(pair);
+  }
+  return ext_idx_list;
+}
+
+ExprPtr closed_shell_CC_spintrace(const ExprPtr& expr, size_t nparticles) {
+  using ranges::views::transform;
+
+  auto const ext_idxs = external_indices(nparticles);
+  auto st_expr = closed_shell_spintrace(expr, ext_idxs);
+  canonicalize(st_expr);
+
+  // Remove S operator
+  for (auto& term : *st_expr) {
+    if (term->is<Product>()) term = remove_tensor(term->as<Product>(), L"S");
+  }
+
+  // Biorthogonal transformation
+  st_expr = biorthogonal_transform(st_expr, nparticles, ext_idxs);
+
+  auto bixs = ext_idxs | transform([](auto&& vec){return vec[0];});
+  auto kixs = ext_idxs | transform([](auto&& vec){return vec[1];});
+  st_expr = ex<Tensor>(Tensor{L"S", bixs, kixs}) * st_expr;
+
+  simplify(st_expr);
+
+  return st_expr;
 }
 
 /// Collect all indices from an expression

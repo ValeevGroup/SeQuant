@@ -158,7 +158,7 @@ int count_cycles(const container::svector<int, 6>& vec1,
 /// @return an expression with spin integrated/adapted
 ExprPtr closed_shell_spintrace(
     const ExprPtr& expression,
-    const container::vector<container::vector<Index>> ext_index_groups = {{}});
+    const container::vector<container::vector<Index>>& ext_index_groups = {{}});
 
 /// @brief Generates list of external indices from Antisymmetrization (A)
 /// operator
@@ -167,11 +167,19 @@ ExprPtr closed_shell_spintrace(
 container::vector<container::vector<Index>> external_indices(
     const ExprPtr& expr);
 
+///
+/// @param nparticles Number of indices in bra of the target tensor. That must
+///                   be equal to the same in the ket.
+///
+container::vector<container::vector<Index>> external_indices(size_t nparticles);
+
 /// @brief Transforms Coupled cluster from spin orbital to spatial orbitals
 /// @details The external indices are deduced from Antisymmetrization operator
 /// @param expr ExprPtr with spin orbital indices
+/// @param nparticles Number of indices in bra (that must be equal
+///                   to the same in the ket)
 /// @return an expression with spin integrated/adapted
-ExprPtr closed_shell_CC_spintrace(const ExprPtr& expr);
+ExprPtr closed_shell_CC_spintrace(const ExprPtr& expr, size_t nparticles);
 
 /// Collect all indices from an expression
 auto index_list(const ExprPtr& expr);
