@@ -41,7 +41,7 @@ int main(int argc, char* argv[]) {
       std::make_shared<DefaultTensorCanonicalizer>());
 
 #ifndef NDEBUG
-  const size_t DEFAULT_NMAX = 4;
+  const size_t DEFAULT_NMAX = 3;
 #else
   const size_t DEFAULT_NMAX = 4;
 #endif
