@@ -109,18 +109,15 @@ namespace sr {
 /// and indices \f$ \{ b_i \} \f$ / \f$ \{ k_i \} \f$.
 /// @note The choice of unoccupied indices/spaces can be controlled by the default Formalism:
 /// - if `get_default_formalism().sum_over_uocc() == SumOverUocc::Complete` IndexSpace::complete_unoccupied will be used instead of IndexSpace::active_unoccupied
-/// - if `get_default_formalism().csv_formalism() == CSVFormalism::CSV` will use cluster-specific (e.g., PNO) unoccupied indices
+/// - if `get_default_formalism().csv() == CSVFormalism::CSV` will use cluster-specific (e.g., PNO) unoccupied indices
 /// @warning Tensor \f$ T \f$ will be antisymmetrized if `get_default_context().spbasis() == SPBasis::spinorbital`, else it will be particle-symmetric; the latter is only valid if # of bra and ket indices coincide.
 // clang-format on
-class make_op {
-  OpType op_;
-  std::vector<IndexSpace::Type> bra_spaces_;
-  std::vector<IndexSpace::Type> ket_spaces_;
-
-  const auto nbra() const { return bra_spaces_.size(); };
-  const auto nket() const { return ket_spaces_.size(); };
-
+class OpMaker : public mbpt::OpMaker<Statistics::FermiDirac> {
  public:
+  using base_type = mbpt::OpMaker<Statistics::FermiDirac>;
+
+  using base_type::base_type;
+
   // clang-format off
   /// @param[in] op the operator type:
   /// - if @p op is a (pure) excitation operator bra/ket indices
@@ -130,17 +127,10 @@ class make_op {
   /// @param[in] nbra number of bra indices/creators
   /// @param[in] nket number of ket indices/annihilators; if not specified, will be set to @p nbra
   // clang-format on
-  make_op(OpType op, std::size_t nbra,
+  OpMaker(OpType op, std::size_t nbra,
           std::size_t nket = std::numeric_limits<std::size_t>::max());
 
-  /// @param[in] bras the bra indices/creators
-  /// @param[in] kets the ket indices/annihilators
-  /// @param[in] op the operator type
-  /// @warning this operator is only to be used for general @p op
-  make_op(OpType op, std::initializer_list<IndexSpace::Type> bras,
-          std::initializer_list<IndexSpace::Type> kets);
-
-  ExprPtr operator()() const;
+  using base_type::operator();
 };
 
 #include "../mbpt/sr/op.impl.hpp"

@@ -70,7 +70,6 @@ int main(int argc, char* argv[]) {
   using namespace sequant;
   detail::OpIdRegistrar op_id_registrar;
   mbpt::set_default_convention();
-  mbpt::set_default_formalism();
   sequant::set_default_context(
       SeQuant(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
               BraKetSymmetry::conjugate, SPBasis::spinorbital));

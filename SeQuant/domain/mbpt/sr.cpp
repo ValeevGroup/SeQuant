@@ -96,16 +96,12 @@ mbpt::sr::qns_t adjoint(mbpt::sr::qns_t qns) {
 namespace mbpt {
 namespace sr {
 
-inline auto fac(std::size_t n) { return sequant::factorial(n); }
-
-make_op::make_op(OpType op, std::size_t nbra, std::size_t nket) : op_(op) {
+OpMaker::OpMaker(OpType op, std::size_t nbra, std::size_t nket)
+    : base_type(op) {
   nket = nket == std::numeric_limits<std::size_t>::max() ? nbra : nket;
   assert(nbra > 0 || nket > 0);
 
-  const auto unocc =
-      get_default_formalism().sum_over_uocc() == SumOverUocc::Complete
-          ? IndexSpace::complete_unoccupied
-          : IndexSpace::active_unoccupied;
+  const auto unocc = IndexSpace::active_unoccupied;
   const auto occ = IndexSpace::active_occupied;
   switch (to_class(op)) {
     case OpClass::ex:
@@ -123,90 +119,15 @@ make_op::make_op(OpType op, std::size_t nbra, std::size_t nket) : op_(op) {
   }
 }
 
-make_op::make_op(OpType op, std::initializer_list<IndexSpace::Type> bras,
-                 std::initializer_list<IndexSpace::Type> kets)
-    : op_(op),
-      bra_spaces_(bras.begin(), bras.end()),
-      ket_spaces_(kets.begin(), kets.end()) {
-  assert(nbra() > 0 || nket() > 0);
-}
-
-ExprPtr make_op::operator()() const {
-  const bool antisymm = get_default_formalism().two_body_interaction() ==
-                        TwoBodyInteraction::Antisymm;
-  const bool csv = get_default_formalism().csv_formalism() == CSVFormalism::CSV;
-  bool csv_bra = false;
-  bool csv_ket = false;
-  if (csv) {  // validate spaces
-    if (to_class(op_) == OpClass::ex) {
-      for (auto&& s : bra_spaces_) {
-        assert(s == IndexSpace::complete_unoccupied ||
-               s == IndexSpace::active_unoccupied);
-      }
-      csv_bra = true;
-    } else if (to_class(op_) == OpClass::deex) {
-      for (auto&& s : ket_spaces_) {
-        assert(s == IndexSpace::complete_unoccupied ||
-               s == IndexSpace::active_unoccupied);
-      }
-      csv_ket = true;
-    }
-  }
-
-  // not sure what it means to use nonsymmetric operator if nbra != nket
-  if (!antisymm) assert(nbra() == nket());
-
-  auto make_idx_vector = [](const auto& spacetypes) {
-    std::vector<Index> result;
-    const auto n = spacetypes.size();
-    result.reserve(n);
-    for (size_t i = 0; i != n; ++i) {
-      auto space = IndexSpace::instance(spacetypes[i]);
-      result.push_back(Index::make_tmp_index(space));
-    }
-    return result;
-  };
-
-  auto make_depidx_vector = [](const auto& spacetypes, auto&& protoidxs) {
-    const auto n = spacetypes.size();
-    std::vector<Index> result;
-    result.reserve(n);
-    for (size_t i = 0; i != n; ++i) {
-      auto space = IndexSpace::instance(spacetypes[i]);
-      result.push_back(Index::make_tmp_index(space, protoidxs, true));
-    }
-    return result;
-  };
-
-  std::vector<Index> braidxs, ketidxs;
-  if (csv_bra) {
-    ketidxs = make_idx_vector(ket_spaces_);
-    braidxs = make_depidx_vector(bra_spaces_, ketidxs);
-  } else if (csv_ket) {
-    braidxs = make_idx_vector(bra_spaces_);
-    ketidxs = make_depidx_vector(ket_spaces_, braidxs);
-  } else {
-    braidxs = make_idx_vector(bra_spaces_);
-    ketidxs = make_idx_vector(ket_spaces_);
-  }
-
-  const auto mult = antisymm ? fac(nbra()) * fac(nket()) : fac(nbra());
-  const auto opsymm = antisymm ? Symmetry::antisymm : Symmetry::nonsymm;
-  return ex<Constant>(rational{1, mult}) *
-         ex<Tensor>(to_wstring(op_), braidxs, ketidxs, opsymm) *
-         ex<FNOperator>(/* creators */ braidxs, /* annihilators */ ketidxs,
-                        get_default_context().vacuum());
-}
-
 #include "../mbpt/sr/op.impl.cpp"
 
 ExprPtr H1() {
   return get_default_context().vacuum() == Vacuum::Physical
-             ? make_op(OpType::h, 1)()
-             : make_op(OpType::f, 1)();
+             ? OpMaker(OpType::h, 1)()
+             : OpMaker(OpType::f, 1)();
 }
 
-ExprPtr H2() { return make_op(OpType::g, 2)(); }
+ExprPtr H2() { return OpMaker(OpType::g, 2)(); }
 
 ExprPtr H0mp() {
   assert(get_default_context().vacuum() == Vacuum::SingleProduct);
@@ -218,7 +139,7 @@ ExprPtr H1mp() {
   return H2();
 }
 
-ExprPtr F() { return make_op(OpType::f, 1)(); }
+ExprPtr F() { return OpMaker(OpType::f, 1)(); }
 
 ExprPtr W() {
   assert(get_default_context().vacuum() == Vacuum::SingleProduct);
@@ -275,7 +196,7 @@ ExprPtr H2_oo_vv() {
       []() -> std::wstring_view { return L"g"; },
       [=]() -> ExprPtr {
         using namespace sequant::mbpt::sr;
-        return make_op(
+        return OpMaker(
             OpType::g,
             {IndexSpace::active_occupied, IndexSpace::active_occupied},
             {IndexSpace::active_unoccupied, IndexSpace::active_unoccupied})();
@@ -290,7 +211,7 @@ ExprPtr H2_vv_vv() {
       []() -> std::wstring_view { return L"g"; },
       [=]() -> ExprPtr {
         using namespace sequant::mbpt::sr;
-        return make_op(
+        return OpMaker(
             OpType::g,
             {IndexSpace::active_unoccupied, IndexSpace::active_unoccupied},
             {IndexSpace::active_unoccupied, IndexSpace::active_unoccupied})();
@@ -464,14 +385,8 @@ ExprPtr vac_av(
     lower_to_tensor_form(expr);
     expr = simplify(expr);
 
-    // currently topological equivalence of indices within a normal operator is
-    // not detected, assumed based on use_topology ... so turn off use of
-    // topology if antisymm=false
-    const bool use_topology = get_default_formalism().two_body_interaction() ==
-                              TwoBodyInteraction::Antisymm;
-
     // compute VEV
-    return mbpt::sr::vac_av(expr, connections, use_topology);
+    return mbpt::sr::vac_av(expr, connections, /* use_topology = */ true);
   };
 
   ExprPtr result;

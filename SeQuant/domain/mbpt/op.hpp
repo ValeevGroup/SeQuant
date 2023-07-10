@@ -338,6 +338,52 @@ mbpt::qns_t adjoint(mbpt::qns_t);
 
 namespace mbpt {
 
+// clang-format off
+/// @brief makes a tensor-level many-body operator
+
+/// A many-body operator has the following generic form:
+/// \f$ \frac{1}{P} T_{b_1 b_2 \dots b_B}^{k_1 k_2 \dots k_K} A^{b_1 b_2 \dots b_B}_{k_1 k_2 \dots k_K} \f$
+/// where \f$ \{B,K\} \f$ are number of bra/ket indices of \f$ T \f$ or, equivalently, the number of creators/annihilators
+/// of normal-ordered (w.r.t. the default vacuum) operator \f$ A \f$.
+/// Hence \f$ \{ b_i \} \f$ / \f$ \{ k_i \} \f$ are (quasi)particle creation/annihilation indices.
+/// For example, for fermionic operators relative to Fermi vacuum these are:
+/// - (pure) _excitation_: (active) unoccupied/occupied, respectively;
+/// - (pure) _deexcitation_: occupied/unoccupied, respectively;
+/// For _generic_ operators (neither excitation nor deexcitation) complete basis indices are assumed by default.
+///
+/// \f$ P \f$ is the "normalization" factor and depends on the vacuum used to define \f$ A \f$,
+/// and indices \f$ \{ b_i \} \f$ / \f$ \{ k_i \} \f$.
+/// @note The choice of computational basis can be controlled by the default Formalism:
+/// - if `get_default_formalism().sum_over_uocc() == SumOverUocc::Complete` IndexSpace::complete_unoccupied will be used instead of IndexSpace::active_unoccupied
+/// - if `get_default_formalism().csv() == CSVFormalism::CSV` will use cluster-specific (e.g., PNO) unoccupied indices
+/// @warning Tensor \f$ T \f$ will be antisymmetrized if `get_default_context().spbasis() == SPBasis::spinorbital`, else it will be particle-symmetric; the latter is only valid if # of bra and ket indices coincide.
+/// @internal bless the maker and his water
+// clang-format on
+template <Statistics S>
+class OpMaker {
+ public:
+  /// @param[in] op the operator type
+  /// @param[in] bras the bra indices/creators
+  /// @param[in] kets the ket indices/annihilators
+  OpMaker(OpType op, std::initializer_list<IndexSpace::Type> bras,
+          std::initializer_list<IndexSpace::Type> kets);
+
+  ExprPtr operator()() const;
+
+ protected:
+  OpType op_;
+  std::vector<IndexSpace::Type> bra_spaces_;
+  std::vector<IndexSpace::Type> ket_spaces_;
+
+  OpMaker(OpType op);
+
+  const auto nbra() const { return bra_spaces_.size(); };
+  const auto nket() const { return ket_spaces_.size(); };
+};
+
+extern template class OpMaker<Statistics::FermiDirac>;
+extern template class OpMaker<Statistics::BoseEinstein>;
+
 /// \tparam QuantumNumbers a sequence of quantum numbers, must be
 /// default-initializable
 template <typename QuantumNumbers, Statistics S>

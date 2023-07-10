@@ -9,6 +9,7 @@
 
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/wolfram.hpp>
 
 namespace sequant {

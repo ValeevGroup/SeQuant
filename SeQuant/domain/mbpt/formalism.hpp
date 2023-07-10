@@ -6,83 +6,67 @@
 
 namespace sequant::mbpt {
 
-/// Whether to employ antisymmetric operators while considering two-body
-/// interactions.
-enum class TwoBodyInteraction { Antisymm, Nonsymm };
-
-/// Whether to sum over complete unoccupied orbitals.
-enum class SumOverUocc { Complete, Truncated };
-
-/// Whether to use cluster-specific virtual formalism.
-enum class CSVFormalism { CSV, NonCSV };
-
+/// @brief the MBPT formalism details
 class Formalism {
  public:
-  TwoBodyInteraction two_body_interaction() const;
+  /// Whether to employ bra/ket-(anti)symmetrized tensors in definition of
+  /// N-body operators
+  enum class NBodyInteractionTensorSymm { Yes, No };
 
-  SumOverUocc sum_over_uocc() const;
+  /// Whether to use cluster-specific virtuals.
+  enum class CSV { Yes, No };
 
-  CSVFormalism csv_formalism() const;
-
-  Formalism& set(TwoBodyInteraction);
-
-  Formalism& set(SumOverUocc);
-
-  Formalism& set(CSVFormalism);
-
-  static Formalism make_default();
-
- private:
   struct Defaults {
-    constexpr static auto two_body_interaction_ = TwoBodyInteraction::Antisymm;
-    constexpr static auto sum_over_uocc_ = SumOverUocc::Truncated;
-    constexpr static auto csv_formalism_ = CSVFormalism::NonCSV;
+    constexpr static auto nbody_interaction_tensor_symm =
+        NBodyInteractionTensorSymm::Yes;
+    constexpr static auto csv = CSV::No;
   };
 
-  TwoBodyInteraction two_body_interaction_;
+  /// @brief Construct a Formalism object
+  explicit Formalism(NBodyInteractionTensorSymm nbody_interaction_tensor_symm =
+                         Defaults::nbody_interaction_tensor_symm,
+                     CSV csv_formalism = Defaults::csv) noexcept;
 
-  SumOverUocc sum_over_uocc_;
+  /// @brief Construct a Formalism object
+  explicit Formalism(CSV csv_formalism,
+                     NBodyInteractionTensorSymm nbody_interaction_tensor_symm =
+                         Defaults::nbody_interaction_tensor_symm) noexcept;
 
-  CSVFormalism csv_formalism_;
+  NBodyInteractionTensorSymm nbody_interaction_tensor_symm() const {
+    return nbody_interaction_tensor_symm_;
+  }
+  CSV csv() const { return csv_; }
+
+ private:
+  NBodyInteractionTensorSymm nbody_interaction_tensor_symm_ =
+      Defaults::nbody_interaction_tensor_symm;
+  CSV csv_ = Defaults::csv;
 };
 
 bool operator==(Formalism const& left, Formalism const& right);
 
 bool operator!=(Formalism const& left, Formalism const& right);
 
-namespace detail {
+const Formalism& get_default_formalism();
+void set_default_formalism(const Formalism& ctx);
+void reset_default_formalism();
 
+namespace detail {
 struct FormalismResetter {
   FormalismResetter() = default;
-
-  FormalismResetter(Formalism const& previous) noexcept;
-
+  FormalismResetter(const Formalism& previous) noexcept;
   ~FormalismResetter() noexcept;
 
-  FormalismResetter(FormalismResetter const&) = delete;
-
-  FormalismResetter& operator=(FormalismResetter const&) = delete;
+  // FormalismResetter is move-only
+  FormalismResetter(const FormalismResetter&) = delete;
+  FormalismResetter& operator=(const FormalismResetter&) = delete;
 
  private:
   std::optional<Formalism> previous_;
 };
-
 }  // namespace detail
 
-/// @brief Loads defaults for Formalism @formalism
-
-/// This sets up two-body interaction (antisymmetric or non-symmetric),
-/// whether to sum over complete-unoccupieds (complete) or active unoccupieds
-/// (truncated), and whether to use cluster-specific-virtuals (eg. PNO)
-/// formalism.
-void set_default_formalism(Formalism formalism = Formalism::make_default());
-
-/// @brief Get the current Formalism instance in effect.
-Formalism const& get_default_formalism();
-
-void reset_default_formalism();
-
-detail::FormalismResetter set_scoped_default_formalism(Formalism const& f);
+detail::FormalismResetter set_scoped_default_formalism(const Formalism& ctx);
 
 }  // namespace sequant::mbpt
 

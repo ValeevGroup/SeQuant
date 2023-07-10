@@ -1,5 +1,8 @@
 #include "SeQuant/domain/mbpt/op.hpp"
+#include "SeQuant/domain/mbpt/formalism.hpp"
 
+#include "SeQuant/core/math.hpp"
+#include "SeQuant/core/op.hpp"
 #include "SeQuant/core/tensor.hpp"
 
 #include <stdexcept>
@@ -158,6 +161,93 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
 #include "SeQuant/domain/mbpt/op.ipp"
 
 namespace sequant::mbpt {
+
+template <Statistics S>
+OpMaker<S>::OpMaker(OpType op, std::initializer_list<IndexSpace::Type> bras,
+                    std::initializer_list<IndexSpace::Type> kets)
+    : op_(op),
+      bra_spaces_(bras.begin(), bras.end()),
+      ket_spaces_(kets.begin(), kets.end()) {
+  assert(nbra() > 0 || nket() > 0);
+}
+
+template <Statistics S>
+OpMaker<S>::OpMaker(OpType op) : op_(op) {}
+
+template <Statistics S>
+ExprPtr OpMaker<S>::operator()() const {
+  const bool symm = get_default_formalism().nbody_interaction_tensor_symm() ==
+                    Formalism::NBodyInteractionTensorSymm::Yes;
+  const bool csv = get_default_formalism().csv() == Formalism::CSV::Yes;
+  bool csv_bra = false;
+  bool csv_ket = false;
+  if (csv) {  // validate spaces
+    if (to_class(op_) == OpClass::ex) {
+      for (auto&& s : bra_spaces_) {
+        assert(s == IndexSpace::complete_unoccupied ||
+               s == IndexSpace::active_unoccupied);
+      }
+      csv_bra = true;
+    } else if (to_class(op_) == OpClass::deex) {
+      for (auto&& s : ket_spaces_) {
+        assert(s == IndexSpace::complete_unoccupied ||
+               s == IndexSpace::active_unoccupied);
+      }
+      csv_ket = true;
+    }
+  }
+
+  // not sure what it means to use nonsymmetric operator if nbra != nket
+  if (!symm) assert(nbra() == nket());
+
+  auto make_idx_vector = [](const auto& spacetypes) {
+    std::vector<Index> result;
+    const auto n = spacetypes.size();
+    result.reserve(n);
+    for (size_t i = 0; i != n; ++i) {
+      auto space = IndexSpace::instance(spacetypes[i]);
+      result.push_back(Index::make_tmp_index(space));
+    }
+    return result;
+  };
+
+  auto make_depidx_vector = [](const auto& spacetypes, auto&& protoidxs) {
+    const auto n = spacetypes.size();
+    std::vector<Index> result;
+    result.reserve(n);
+    for (size_t i = 0; i != n; ++i) {
+      auto space = IndexSpace::instance(spacetypes[i]);
+      result.push_back(Index::make_tmp_index(space, protoidxs, true));
+    }
+    return result;
+  };
+
+  std::vector<Index> braidxs, ketidxs;
+  if (csv_bra) {
+    ketidxs = make_idx_vector(ket_spaces_);
+    braidxs = make_depidx_vector(bra_spaces_, ketidxs);
+  } else if (csv_ket) {
+    braidxs = make_idx_vector(bra_spaces_);
+    ketidxs = make_depidx_vector(ket_spaces_, braidxs);
+  } else {
+    braidxs = make_idx_vector(bra_spaces_);
+    ketidxs = make_idx_vector(ket_spaces_);
+  }
+
+  const auto mult =
+      symm ? factorial(nbra()) * factorial(nket()) : factorial(nbra());
+  const auto opsymm =
+      symm ? (S == Statistics::FermiDirac ? Symmetry::antisymm : Symmetry::symm)
+           : Symmetry::nonsymm;
+  return ex<Constant>(rational{1, mult}) *
+         ex<Tensor>(to_wstring(op_), braidxs, ketidxs, opsymm) *
+         ex<NormalOperator<S>>(/* creators */ braidxs,
+                               /* annihilators */ ketidxs,
+                               get_default_context().vacuum());
+}
+
+template class OpMaker<Statistics::FermiDirac>;
+template class OpMaker<Statistics::BoseEinstein>;
 
 template class Operator<qns_t, Statistics::FermiDirac>;
 template class Operator<qns_t, Statistics::BoseEinstein>;

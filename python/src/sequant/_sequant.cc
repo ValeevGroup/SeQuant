@@ -63,7 +63,7 @@ ExprPtr &simplify(ExprPtr &expr) { return sequant::simplify(expr); }
 
 py::object rational_to_fraction(const rational &r) {
   py::object Fraction = py::module::import("fractions").attr("Fraction");
-  return Fraction(r.numerator(), r.denominator());
+  return Fraction(numerator(r), denominator(r));
 }
 
 std::string complex_to_string(const Complex<rational> &z) {

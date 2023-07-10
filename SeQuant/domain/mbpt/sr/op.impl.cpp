@@ -2,26 +2,26 @@
 ExprPtr T_(std::size_t Nbra, std::size_t Nket) {
   assert(Nbra > 0);
   assert(Nket > 0);
-  return make_op(OpType::t, Nbra, Nket)();
+  return OpMaker(OpType::t, Nbra, Nket)();
 }
 
 /// makes lambda deexcitation operator of bra/ket ranks @c Nbra/Nket
 ExprPtr Lambda_(std::size_t Nbra, std::size_t Nket) {
   assert(Nbra > 0);
   assert(Nket > 0);
-  return make_op(OpType::lambda, Nbra, Nket)();
+  return OpMaker(OpType::lambda, Nbra, Nket)();
 }
 
 /// makes R excitation operator of bra/ket ranks @c Nbra/Nket
 ExprPtr R_(std::size_t Nbra, std::size_t Nket) {
   assert(Nbra > 0 || Nket > 0);
-  return make_op(OpType::R, Nbra, Nket)();
+  return OpMaker(OpType::R, Nbra, Nket)();
 }
 
 /// makes L deexcitation operator of bra/ket ranks @c Nbra/Nket
 ExprPtr L_(std::size_t Nbra, std::size_t Nket) {
   assert(Nbra > 0 || Nket > 0);
-  return make_op(OpType::L, Nbra, Nket)();
+  return OpMaker(OpType::L, Nbra, Nket)();
 }
 
 namespace detail {
@@ -89,12 +89,12 @@ ExprPtr Lambda(std::size_t Nbra, std::size_t Nket) {
 ExprPtr R12(IndexSpace::Type gg_space, int ansatz) {
   assert(ansatz == 1 || ansatz == 2);
   if (ansatz == 2)
-    return make_op(
+    return OpMaker(
         OpType::R12,
         {IndexSpace::complete_unoccupied, IndexSpace::complete_unoccupied},
         {gg_space, gg_space})();
   else
-    return make_op(OpType::R12,
+    return OpMaker(OpType::R12,
                    {IndexSpace::other_unoccupied, IndexSpace::other_unoccupied},
                    {gg_space, gg_space})();
 }
@@ -103,7 +103,7 @@ ExprPtr R12(IndexSpace::Type gg_space, int ansatz) {
 ExprPtr A(std::size_t Nbra, std::size_t Nket) {
   assert(Nbra > 0);
   assert(Nket > 0);
-  return make_op(OpType::A, Nbra, Nket)();
+  return OpMaker(OpType::A, Nbra, Nket)();
 }
 
 /// makes excitation operator of all bra/ket ranks up to (and including)

@@ -36,8 +36,8 @@ inline const std::map<std::string, EqnType> str2type = {
     {"t", EqnType::t}, {"lambda", EqnType::lambda}};
 
 /// maps unoccupied basis type string to enum
-inline const std::map<std::string, mbpt::CSVFormalism> str2uocc = {
-    {"std", mbpt::CSVFormalism::NonCSV}, {"csv", mbpt::CSVFormalism::CSV}};
+inline const std::map<std::string, mbpt::Formalism::CSV> str2uocc = {
+    {"std", mbpt::Formalism::CSV::No}, {"csv", mbpt::Formalism::CSV::Yes}};
 
 // profiles evaluation of all CC equations for a given ex rank N with projection
 // ex rank PMIN .. P
@@ -78,8 +78,8 @@ class compute_cceqvec {
       // validate known sizes of some CC residuals
       // N.B. # of equations depends on whether we use symmetric or
       // antisymmetric amplitudes
-      if (mbpt::get_default_formalism().two_body_interaction() ==
-          mbpt::TwoBodyInteraction::Antisymm) {
+      if (mbpt::get_default_formalism().nbody_interaction_tensor_symm() ==
+          mbpt::Formalism::NBodyInteractionTensorSymm::Yes) {
         if (type == EqnType::t) {
           if (R == 1 && N == 1) runtime_assert(eqvec[R]->size() == 8);
           if (R == 1 && N == 2) runtime_assert(eqvec[R]->size() == 14);
@@ -139,7 +139,6 @@ int main(int argc, char* argv[]) {
       SeQuant(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
               BraKetSymmetry::conjugate, SPBasis::spinorbital));
   mbpt::set_default_convention();
-  mbpt::set_default_formalism();
 
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
@@ -154,26 +153,15 @@ int main(int argc, char* argv[]) {
   const std::string eqn_type_str = argc > 2 ? argv[2] : "t";
   const EqnType eqn_type = str2type.at(eqn_type_str);
   const std::string uocc_type_str = argc > 3 ? argv[3] : "std";
-  const mbpt::CSVFormalism uocc_type = str2uocc.at(uocc_type_str);
-  auto resetter = set_scoped_default_formalism(
-      mbpt::Formalism::make_default().set(uocc_type));
+  const mbpt::Formalism::CSV uocc_type = str2uocc.at(uocc_type_str);
+  auto resetter = set_scoped_default_formalism(mbpt::Formalism(uocc_type));
 
   // change to true to print out the resulting equations
   constexpr bool print = false;
   // change to true to print stats
   Logger::get_instance().wick_stats = false;
 
-  ranges::for_each(std::array<bool, 2>{false, true}, [=](const bool screen) {
-    ranges::for_each(
-        std::array<bool, 2>{false, true}, [=](const bool use_topology) {
-          ranges::for_each(
-              std::array<bool, 2>{false, true}, [=](const bool canonical_only) {
-                tpool.clear();
-                // comment out to run all possible combinations
-                if (screen && use_topology && canonical_only)
-                  compute_all{NMAX, eqn_type}(print, screen, use_topology, true,
-                                              canonical_only);
-              });
-        });
-  });
+  tpool.clear();
+  // comment out to run all possible combinations
+  compute_all{NMAX, eqn_type}(print);
 }

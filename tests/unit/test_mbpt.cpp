@@ -494,8 +494,8 @@ TEST_CASE("MBPT", "[mbpt]") {
   SECTION("SRSO-PNO") {
     using namespace sequant::mbpt::sr;
     using namespace sequant::mbpt;
-    auto resetter = set_scoped_default_formalism(
-        Formalism::make_default().set(CSVFormalism::CSV));
+    auto resetter =
+        set_scoped_default_formalism(Formalism(Formalism::CSV::Yes));
 
     // H2**T2**T2 -> R2
     SEQUANT_PROFILE_SINGLE("wick(H2**T2**T2 -> R2)", {
