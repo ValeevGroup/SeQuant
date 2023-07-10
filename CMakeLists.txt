@@ -263,10 +263,10 @@ set(SeQuant_src
         SeQuant/domain/mbpt/op.ipp
         SeQuant/domain/mbpt/spin.hpp
         SeQuant/domain/mbpt/spin.cpp
-        SeQuant/domain/mbpt/sr/sr.cpp
-        SeQuant/domain/mbpt/sr/sr.hpp
         SeQuant/domain/mbpt/antisymmetrizer.hpp
         SeQuant/domain/mbpt/rdm.hpp
+        SeQuant/domain/mbpt/sr.hpp
+        SeQuant/domain/mbpt/sr.cpp
         )
 
 ### optional prereqs

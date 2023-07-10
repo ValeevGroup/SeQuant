@@ -7,7 +7,7 @@
 #include "SeQuant/core/timer.hpp"
 #include "SeQuant/domain/mbpt/formalism.hpp"
 #include "SeQuant/domain/mbpt/op.hpp"
-#include "SeQuant/domain/mbpt/sr/sr.hpp"
+#include "SeQuant/domain/mbpt/sr.hpp"
 
 #include "catch.hpp"
 #include "test_config.hpp"

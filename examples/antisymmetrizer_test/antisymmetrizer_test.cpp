@@ -2,7 +2,7 @@
 #include <SeQuant/core/wick.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/rdm.hpp>
-#include <SeQuant/domain/mbpt/sr/sr.hpp>
+#include <SeQuant/domain/mbpt/sr.hpp>
 
 #include <clocale>
 #include <iostream>

@@ -9,7 +9,7 @@
 #include "SeQuant/core/bliss.hpp"
 #include "SeQuant/core/op.hpp"
 #include "SeQuant/core/tensor_network.hpp"
-#include "SeQuant/domain/mbpt/sr/sr.hpp"
+#include "SeQuant/domain/mbpt/sr.hpp"
 
 #include "SeQuant/core/timer.hpp"
 

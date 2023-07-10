@@ -11,7 +11,7 @@
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
-#include <SeQuant/domain/mbpt/sr/sr.hpp>
+#include <SeQuant/domain/mbpt/sr.hpp>
 
 namespace sequant::mbpt::sr {
 

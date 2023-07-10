@@ -143,7 +143,7 @@ class make_op {
   ExprPtr operator()() const;
 };
 
-#include "sr_op.impl.hpp"
+#include "../mbpt/sr/op.impl.hpp"
 
 ExprPtr H1();
 

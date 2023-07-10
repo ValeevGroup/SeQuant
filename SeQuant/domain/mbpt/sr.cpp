@@ -2,7 +2,7 @@
 // Created by Eduard Valeyev on 2019-02-19.
 //
 
-#include "sr.hpp"
+#include "SeQuant/domain/mbpt/sr.hpp"
 
 #include "SeQuant/core/expr.hpp"
 #include "SeQuant/core/math.hpp"
@@ -36,7 +36,7 @@ qninterval_t ncre_uocc(qns_t qns) {
   return ncre(qns, IndexSpace::active_unoccupied);
 }
 
-qninterval_t ncre(qns_t qns) { return ncre_occ(qns) + ncre_uocc(qns); }
+qninterval_t ncre(qns_t qns) { return qns[0] + qns[2]; }
 
 qninterval_t nann(qns_t qns, const IndexSpace::Type& s) {
   assert(s == IndexSpace::active_occupied ||
@@ -59,7 +59,7 @@ qninterval_t nann_uocc(qns_t qns) {
   return nann(qns, IndexSpace::active_unoccupied);
 }
 
-qninterval_t nann(qns_t qns) { return nann_occ(qns) + nann_uocc(qns); }
+qninterval_t nann(qns_t qns) { return qns[1] + qns[3]; }
 
 qns_t combine(qns_t a, qns_t b) {
   const auto ncontr_uocc =
@@ -198,7 +198,7 @@ ExprPtr make_op::operator()() const {
                         get_default_context().vacuum());
 }
 
-#include "sr_op.impl.cpp"
+#include "../mbpt/sr/op.impl.cpp"
 
 ExprPtr H1() {
   return get_default_context().vacuum() == Vacuum::Physical
