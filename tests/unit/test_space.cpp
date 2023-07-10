@@ -14,6 +14,12 @@ TEST_CASE("IndexSpace", "[elements]") {
         L"p", IndexSpace::all));  // already registered standard instances
     REQUIRE_THROWS(
         IndexSpace::register_instance(L"p_1", IndexSpace::all));  // ditto
+    // since convention does not include ALL standard spaces
+    // (see https://github.com/ValeevGroup/SeQuant/issues/97 )
+    // user can register additional instances
+    REQUIRE_NOTHROW(
+        IndexSpace::register_instance(L"m'", IndexSpace::frozen_occupied));
+    REQUIRE(IndexSpace::instance_exists(L"m'"));
   }
 
   // these are loaded in test_main.cpp
