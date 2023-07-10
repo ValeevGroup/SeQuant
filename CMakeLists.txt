@@ -267,6 +267,8 @@ set(SeQuant_src
         SeQuant/domain/mbpt/rdm.hpp
         SeQuant/domain/mbpt/sr.hpp
         SeQuant/domain/mbpt/sr.cpp
+        SeQuant/domain/mbpt/mr.cpp
+        SeQuant/domain/mbpt/mr.hpp
         )
 
 ### optional prereqs
