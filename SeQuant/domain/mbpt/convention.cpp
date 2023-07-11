@@ -116,6 +116,14 @@ void register_standard_instances() {
     IndexSpace::register_instance(declab(L"A"),
                                   IndexSpace::active_maybe_unoccupied, qnattr,
                                   do_not_throw);
+    // introduced here
+    IndexSpace::register_instance(declab(L"M"), IndexSpace::maybe_occupied,
+                                  qnattr, do_not_throw);
+    IndexSpace::register_instance(declab(L"E"), IndexSpace::maybe_unoccupied,
+                                  qnattr, do_not_throw);
+    IndexSpace::register_instance(declab(L"Δ"),
+                                  IndexSpace::complete_maybe_unoccupied, qnattr,
+                                  do_not_throw);
   }
 }
 

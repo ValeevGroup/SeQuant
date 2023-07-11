@@ -35,6 +35,9 @@ enum class Convention { QCiFS };
 /// | `u`   | IndexSpace::active                  |  origin unknown, for recent use see [DOI 10.1063/5.0067511](https://dx.doi.org/10.1063/5.0067511) |
 /// | `I`   | IndexSpace::active_maybe_occupied   |  origin unknown, for recent use see [DOI 10.1063/5.0067511](https://dx.doi.org/10.1063/5.0067511); N.B. although QCiFS uses capital letters for spin-free indices, since there is usually no need to distinguish spin-orbital from spin-free indices (the type is deduced from the context), this use of capital letters seems preferable |
 /// | `A`   | IndexSpace::active_maybe_unoccupied |  origin unknown, for recent use see [DOI 10.1063/5.0067511](https://dx.doi.org/10.1063/5.0067511); N.B. although QCiFS uses capital letters for spin-free indices, since there is usually no need to distinguish spin-orbital from spin-free indices (the type is deduced from the context), this use of capital letters seems preferable |
+/// | `M`   | IndexSpace::maybe_occupied          |  combination of of `I` for `m` |
+/// | `E`   | IndexSpace::maybe_unoccupied        |  combination of of `A` for `e` |
+/// | `Δ`   | IndexSpace::complete_maybe_unoccupied | combination of `α` and `A`; since capital Alpha looks indistinguishable from `A` use `Δ`                          |
 // clang-format on
 void set_default_convention(Convention conv = Convention::QCiFS);
 
