@@ -2,8 +2,8 @@
 // Created by Eduard Valeyev on 2019-02-19.
 //
 
-#ifndef SEQUANT_SRCC_HPP
-#define SEQUANT_SRCC_HPP
+#ifndef SEQUANT_DOMAIN_MBPT_SR_HPP
+#define SEQUANT_DOMAIN_MBPT_SR_HPP
 
 #include <limits>
 #include <utility>
@@ -235,4 +235,4 @@ extern template class Operator<sr::qns_t, Statistics::BoseEinstein>;
 }  // namespace mbpt
 }  // namespace sequant
 
-#endif  // SEQUANT_SRCC_HPP
+#endif  // SEQUANT_DOMAIN_MBPT_SR_HPP
