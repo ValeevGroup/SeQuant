@@ -53,7 +53,7 @@ struct CalcInfo {
   [[nodiscard]] container::vector<ExprPtr> exprs() const;
 
   template <typename ExprT>
-  container::vector<EvalNode<ExprT>> nodes(
+  container::vector<container::vector<EvalNode<ExprT>>> nodes(
       const container::vector<sequant::ExprPtr>& exprs) const {
     using namespace ranges::views;
     assert(exprs.size() == eqn_opts.excit);
@@ -61,22 +61,26 @@ struct CalcInfo {
            transform([this](auto&& pair) {
              return node_<ExprT>(pair.first, pair.second);
            }) |
-           ranges::to<container::vector<EvalNode<ExprT>>>;
+           ranges::to_vector;
   }
 
   template <typename ExprT>
   CacheManager<ERPtr> cache_manager_scf(
-      container::vector<EvalNode<ExprT>> const& nodes) const {
-    return optm_opts.reuse_imeds ? cache_manager(nodes)
+      container::vector<container::vector<EvalNode<ExprT>>> const& nodes)
+      const {
+    return optm_opts.reuse_imeds ? cache_manager(ranges::views::join(nodes))
                                  : CacheManager<ERPtr>::empty();
   }
 
  private:
   template <typename ExprT>
-  [[nodiscard]] EvalNode<ExprT> node_(ExprPtr const& expr, size_t rank) const {
+  [[nodiscard]] container::vector<EvalNode<ExprT>> node_(ExprPtr const& expr,
+                                                         size_t rank) const {
+    using ranges::views::transform;
     auto trimmed = opt::tail_factor(expr);
-    return to_eval_node<ExprT>(
-        optm_opts.single_term ? optimize(trimmed, IndexToSize{}) : trimmed);
+    return *trimmed | transform([st = optm_opts.single_term](auto expr) {
+      return to_eval_node<ExprT>(st ? optimize(expr, IndexToSize{}) : expr);
+    }) | ranges::to_vector;
   }
 };
 

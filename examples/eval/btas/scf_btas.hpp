@@ -126,23 +126,9 @@ class SequantEvalScfBTAS final : public SequantEvalScf {
     // todo time it
     auto const exprs = info_.exprs();
 
-    auto ns = info_.nodes<ExprT>(exprs);
-    cman_ = info_.cache_manager_scf(ns);
+    nodes_ = info_.nodes<ExprT>(exprs);
 
-    nodes_ = [this]() {
-      auto exprs = info_.exprs();
-      for (auto&& x : exprs) x = opt::tail_factor(x);
-
-      container::vector<container::vector<EvalNodeBTAS>> result;
-      for (auto&& xpr : exprs) {
-        auto inner = *xpr | ranges::views::transform([](auto&& x) {
-          auto n = to_eval_node<ExprT>(x);
-          return to_eval_node<ExprT>(x);
-        }) | ranges::to<container::vector<EvalNodeBTAS>>;
-        result.push_back(inner);
-      }
-      return result;
-    }();
+    cman_ = info_.cache_manager_scf(nodes_);
   }
 };
 

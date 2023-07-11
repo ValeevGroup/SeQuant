@@ -85,6 +85,11 @@ OptionsSCF ParseOptionsSCF::opts() const { return opts_; }
 
 void ParseOptionsSCF::update(std::string_view arg_name,
                              std::string_view value) {
+  if (arg_name == maxiter) {
+    opts_.max_iter = std::stoi(value.data());
+    return;
+  }
+
   if (arg_name != tightness) throw detail::ErrorArgNameInvalid{arg_name.data()};
 
   auto const val = keyword_parser.parse(value);
