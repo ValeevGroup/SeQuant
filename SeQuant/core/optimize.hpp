@@ -271,7 +271,7 @@ ExprPtr single_term_opt(Product const& prod, IdxToSz const& idxsz) {
       result.pop_back();
       auto p = Product{1, ExprPtrList{lexpr, rexpr}, Product::Flatten::No};
       result.push_back(
-          ex<Product>(Product{prod.scalar(), p.factors().begin(),
+          ex<Product>(Product{1, p.factors().begin(),
                               p.factors().end(), Product::Flatten::No}));
     } else {
       result.push_back(prod.at(i));
