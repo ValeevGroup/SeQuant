@@ -106,6 +106,45 @@ mbpt::mr::qns_t adjoint(mbpt::mr::qns_t);
 namespace mbpt {
 namespace mr {
 
+// clang-format off
+/// @brief makes a tensor-level fermionic many-body operator for use in single-reference methods
+
+/// A many-body operator has the following generic form:
+/// \f$ \frac{1}{P} T_{b_1 b_2 \dots b_B}^{k_1 k_2 \dots k_K} A^{b_1 b_2 \dots b_B}_{k_1 k_2 \dots k_K} \f$
+/// where \f$ \{B,K\} \f$ are number of bra/ket indices of \f$ T \f$ or, equivalently, the number of creators/annihilators
+/// of normal-ordered (w.r.t. the default, not necessarily Fermi vacuum) operator \f$ A \f$.
+/// Indices \f$ \{ b_i \} \f$ / \f$ \{ k_i \} \f$ are (active) unoccupied/occupied for (pure) excitation operators,
+/// are occupied/unoccupied for deexcitation operators; for general operators complete basis indices are assumed by default,
+/// unless overridden by user manually. \f$ P \f$ is the "normalization" factor and depends on the vacuum used to define \f$ A \f$,
+/// and indices \f$ \{ b_i \} \f$ / \f$ \{ k_i \} \f$.
+/// @note The choice of unoccupied indices/spaces can be controlled by the default Formalism:
+/// - if `get_default_formalism().sum_over_uocc() == SumOverUocc::Complete` IndexSpace::complete_unoccupied will be used instead of IndexSpace::active_unoccupied
+/// - if `get_default_formalism().csv() == CSVFormalism::CSV` will use cluster-specific (e.g., PNO) unoccupied indices
+/// @warning Tensor \f$ T \f$ will be antisymmetrized if `get_default_context().spbasis() == SPBasis::spinorbital`, else it will be particle-symmetric; the latter is only valid if # of bra and ket indices coincide.
+// clang-format on
+class OpMaker : public mbpt::OpMaker<Statistics::FermiDirac> {
+ public:
+  using base_type = mbpt::OpMaker<Statistics::FermiDirac>;
+
+  using base_type::base_type;
+
+  // clang-format off
+  /// @param[in] op the operator type:
+  /// - if @p op is a (pure) excitation operator bra/ket indices
+  ///   will be IndexSpace::active_unoccupied/IndexSpace::active_occupied,
+  /// - for (pure) deexcitation @p op bra/ket will be IndexSpace::active_occupied/IndexSpace::active_unoccupied
+  /// - for general @p op bra/ket will be IndexSpace::complete
+  /// @param[in] nbra number of bra indices/creators
+  /// @param[in] nket number of ket indices/annihilators; if not specified, will be set to @p nbra
+  // clang-format on
+  OpMaker(OpType op, std::size_t nbra,
+          std::size_t nket = std::numeric_limits<std::size_t>::max());
+
+  using base_type::operator();
+};
+
+#include "../mbpt/mr/op.impl.hpp"
+
 ExprPtr H1();
 
 ExprPtr H2();

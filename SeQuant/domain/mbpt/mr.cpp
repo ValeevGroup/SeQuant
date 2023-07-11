@@ -123,32 +123,54 @@ mbpt::mr::qns_t adjoint(mbpt::mr::qns_t qns) {
 namespace mbpt {
 namespace mr {
 
+OpMaker::OpMaker(OpType op, std::size_t nbra, std::size_t nket)
+    : base_type(op) {
+  nket = nket == std::numeric_limits<std::size_t>::max() ? nbra : nket;
+  assert(nbra > 0 || nket > 0);
+
+  const auto unocc = IndexSpace::active_maybe_unoccupied;
+  const auto occ = IndexSpace::active_maybe_occupied;
+  switch (to_class(op)) {
+    case OpClass::ex:
+      bra_spaces_ = decltype(bra_spaces_)(nbra, unocc);
+      ket_spaces_ = decltype(ket_spaces_)(nket, occ);
+      break;
+    case OpClass::deex:
+      bra_spaces_ = decltype(bra_spaces_)(nbra, occ);
+      ket_spaces_ = decltype(ket_spaces_)(nket, unocc);
+      break;
+    case OpClass::gen:
+      bra_spaces_ = decltype(bra_spaces_)(nbra, IndexSpace::complete);
+      ket_spaces_ = decltype(ket_spaces_)(nket, IndexSpace::complete);
+      break;
+  }
+}
+
+#include "../mbpt/mr/op.impl.cpp"
+
 ExprPtr H1() {
   return get_default_context().vacuum() == Vacuum::Physical
-             ? OpMaker<Statistics::FermiDirac>(
-                   OpType::h, {IndexSpace::complete}, {IndexSpace::complete})()
-             : OpMaker<Statistics::FermiDirac>(
-                   OpType::f, {IndexSpace::complete}, {IndexSpace::complete})();
+             ? OpMaker(OpType::h, 1)()
+             : OpMaker(OpType::f, 1)();
 }
 
-ExprPtr H2() {
-  return OpMaker<Statistics::FermiDirac>(
-      OpType::g, {IndexSpace::complete, IndexSpace::complete},
-      {IndexSpace::complete, IndexSpace::complete})();
-}
+ExprPtr H2() { return OpMaker(OpType::g, 2)(); }
 
-ExprPtr F() {
-  return OpMaker<Statistics::FermiDirac>(OpType::f, {IndexSpace::complete},
-                                         {IndexSpace::complete})();
-}
+ExprPtr F() { return OpMaker(OpType::f, 1)(); }
 
 ExprPtr H() { return H1() + H2(); }
 
 ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
                bool use_top) {
   FWickTheorem wick{expr};
-  wick.spinfree(false).use_topology(use_top).set_nop_connections(
-      nop_connections);
+  Logger::get_instance().wick_stats = true;
+  Logger::get_instance().wick_harness = true;
+  Logger::get_instance().wick_contract = true;
+  Logger::get_instance().wick_reduce = true;
+  wick.spinfree(false)
+      .use_topology(use_top)
+      .set_nop_connections(nop_connections)
+      .full_contractions(false);
   auto result = wick.compute();
   simplify(result);
   if (Logger::get_instance().wick_stats) {
