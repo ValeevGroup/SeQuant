@@ -324,7 +324,7 @@ class IndexSpace {
 
   /// @brief returns the instance of an IndexSpace object
   /// @param attr the space attribute
-  /// @throw bad_key if key not found
+  /// @throw bad_attr if \p attr has not been registered
   static const IndexSpace &instance(Attr attr) {
     assert(attr.is_valid());
     if (attr == Attr::null()) return null_instance();
@@ -363,6 +363,13 @@ class IndexSpace {
   /// @param base_key string key that will be used as the "base key" for this
   ///        particular space, i.e. the default used for example for
   ///        constructing temporary indices for this space
+  /// @param type the IndexSpace::Type attribute to associate \p base_key with
+  /// @param qns the IndexSpace::QuantumNumbers attribute to associate \p
+  /// base_key with
+  /// @param throw_if_already_registered if true, throws an exception if \p
+  /// base_key has already been registered
+  /// @throw bad_key if \p base_key has already been registered
+  /// and \p throw_if_already_registered is true
   static void register_instance(const std::wstring_view base_key, Type type,
                                 QuantumNumbers qn = nullqns,
                                 bool throw_if_already_registered = true) {
@@ -415,7 +422,7 @@ class IndexSpace {
 
   /// @brief returns the base key for IndexSpace objects of the given attribute
   /// @param attr the space attribute
-  /// @throw bad_key if this object has not been registered
+  /// @throw bad_attr if \p attr has not been registered
   static std::wstring base_key(Attr attr) {
     assert(attr.is_valid());
     if (attr == Attr::null()) return L"";
@@ -480,6 +487,7 @@ class IndexSpace {
   ///            the base key used to invoke `IndexSpace::register_instance()`
   ///            or a key used to invoke `IndexSpace::register_key()`
   /// @return the attribute of the IndexSpace object corresponding to @p key
+  /// @throw bad_key if \p key has not been registered
   static Attr to_attr(std::wstring_view key) {
     const auto found_it = key2attr_.find(key);
     if (found_it != key2attr_.end()) return found_it->second;
@@ -587,9 +595,9 @@ inline bool operator<(const IndexSpace &space1, const IndexSpace &space2) {
   return space1.attr() < space2.attr();
 }
 
-/// @return -1 if @c space includes no orbitals with zero occupancy, +1 if it
-/// includes only orbitals with zero occupancy,
-///         and 0 of it includes some orbitals with zero occupancy.
+/// @return -1 if @c space only include orbitals with complete occupancy, +1 if
+/// it includes no orbitals with complete occupancy,
+///         and 0 of it includes some orbitals with with complete occupancy.
 inline int occupancy_class(const IndexSpace &space) {
   const auto included_in_occupied =
       includes(IndexSpace::occupied, space.type());

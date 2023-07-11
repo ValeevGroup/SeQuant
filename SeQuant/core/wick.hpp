@@ -1260,7 +1260,7 @@ class WickTheorem {
  public:
   static bool can_contract(const Op<S> &left, const Op<S> &right,
                            Vacuum vacuum = get_default_context().vacuum()) {
-    // can only do Wick's theorem for physical vacuum (or similar)
+    // for bosons can only do Wick's theorem for physical vacuum (or similar)
     if constexpr (statistics == Statistics::BoseEinstein)
       assert(vacuum == Vacuum::Physical);
 
