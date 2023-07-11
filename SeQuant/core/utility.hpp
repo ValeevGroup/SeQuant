@@ -5,6 +5,8 @@
 #ifndef SEQUANT_UTILITY_HPP
 #define SEQUANT_UTILITY_HPP
 
+#include <memory>
+
 namespace sequant {
 
 // clang-format off
