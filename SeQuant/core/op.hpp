@@ -213,9 +213,9 @@ IndexSpace qpcreator_space(const Op<S> &op,
       return op.action() == Action::annihilate
                  ? intersection(op.index().space(),
                                 IndexSpace::instance(IndexSpace::occupied))
-                 : intersection(
-                       op.index().space(),
-                       IndexSpace::instance(IndexSpace::complete_unoccupied));
+                 : intersection(op.index().space(),
+                                IndexSpace::instance(
+                                    IndexSpace::complete_maybe_unoccupied));
     default:
       throw std::logic_error(
           "qpcreator_space: cannot handle MultiProduct vacuum");
@@ -271,9 +271,9 @@ IndexSpace qpannihilator_space(const Op<S> &op,
       return op.action() == Action::create
                  ? intersection(op.index().space(),
                                 IndexSpace::instance(IndexSpace::occupied))
-                 : intersection(
-                       op.index().space(),
-                       IndexSpace::instance(IndexSpace::complete_unoccupied));
+                 : intersection(op.index().space(),
+                                IndexSpace::instance(
+                                    IndexSpace::complete_maybe_unoccupied));
     default:
       throw std::logic_error(
           "qpcreator_space: cannot handle MultiProduct vacuum");

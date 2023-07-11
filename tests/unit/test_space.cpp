@@ -118,5 +118,6 @@ TEST_CASE("IndexSpace", "[elements]") {
     REQUIRE(occupancy_class(IndexSpace::instance(L"i")) == -1);
     REQUIRE(occupancy_class(IndexSpace::instance(L"a")) == +1);
     REQUIRE(occupancy_class(IndexSpace::instance(L"p")) == 0);
+    REQUIRE(occupancy_class(IndexSpace::instance(L"u")) == +1);
   }
 }

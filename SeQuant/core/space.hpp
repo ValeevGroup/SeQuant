@@ -602,7 +602,7 @@ inline int occupancy_class(const IndexSpace &space) {
   const auto included_in_occupied =
       includes(IndexSpace::occupied, space.type());
   const auto included_in_unoccupied =
-      includes(IndexSpace::complete_unoccupied, space.type());
+      includes(IndexSpace::complete_maybe_unoccupied, space.type());
   assert(!(included_in_occupied && included_in_unoccupied));
   if (included_in_occupied && !included_in_unoccupied)
     return -1;
