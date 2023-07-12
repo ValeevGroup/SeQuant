@@ -4,7 +4,7 @@
 
 #include "tensor_network.hpp"
 #include "bliss.hpp"
-#include "utility.hpp"
+#include "logger.hpp"
 
 namespace sequant {
 

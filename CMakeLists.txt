@@ -222,7 +222,7 @@ set(SeQuant_src
         SeQuant/core/tensor_network.hpp
         SeQuant/core/runtime.cpp
         SeQuant/core/runtime.hpp
-        SeQuant/core/utility.hpp
+        SeQuant/core/logger.hpp
         SeQuant/core/bliss.hpp
         SeQuant/core/timer.hpp
         SeQuant/core/binary_node.hpp
@@ -251,6 +251,7 @@ set(SeQuant_src
         SeQuant/core/parse/regex_sequant.hpp
         SeQuant/core/parse/regex_sequant.cpp
         SeQuant/core/utility/context.hpp
+        SeQuant/core/utility/singleton.hpp
         SeQuant/domain/mbpt/models/cc.cpp
         SeQuant/domain/mbpt/models/cc.hpp
         SeQuant/domain/eval/eval.hpp

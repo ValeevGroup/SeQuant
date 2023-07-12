@@ -24,8 +24,8 @@
 #include "expr_fwd.hpp"
 #include "hash.hpp"
 #include "latex.hpp"
+#include "logger.hpp"
 #include "meta.hpp"
-#include "utility.hpp"
 #include "wolfram.hpp"
 
 namespace sequant {

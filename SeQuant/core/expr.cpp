@@ -3,9 +3,9 @@
 //
 
 #include "expr.hpp"
+#include "logger.hpp"
 #include "tensor.hpp"
 #include "tensor_network.hpp"
-#include "utility.hpp"
 
 namespace sequant {
 

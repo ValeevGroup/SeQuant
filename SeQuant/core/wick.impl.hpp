@@ -6,8 +6,8 @@
 #define SEQUANT_WICK_IMPL_HPP
 
 #include "bliss.hpp"
+#include "logger.hpp"
 #include "tensor_network.hpp"
-#include "utility.hpp"
 
 #ifdef SEQUANT_HAS_EXECUTION_HEADER
 #include <execution>
