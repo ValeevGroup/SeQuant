@@ -250,6 +250,7 @@ set(SeQuant_src
         SeQuant/core/parse/rpn.cpp
         SeQuant/core/parse/regex_sequant.hpp
         SeQuant/core/parse/regex_sequant.cpp
+        SeQuant/core/utility/context.hpp
         SeQuant/domain/mbpt/models/cc.cpp
         SeQuant/domain/mbpt/models/cc.hpp
         SeQuant/domain/eval/eval.hpp
