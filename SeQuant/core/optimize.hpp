@@ -101,7 +101,8 @@ struct OptRes {
 };
 
 ///
-/// returns a vector of Index objects that are common in @c idxs1 and @c idxs2.
+/// returns a vector of Index objects that are common in @c idxs1 and @c idxs2
+/// that are sorted using Index:LabelCompare{}.
 ///
 /// @note I1 and I2 containers are assumed to be sorted by using
 /// Index::LabelCompare{};
@@ -140,6 +141,10 @@ container::svector<Index> diff_indices(I1 const& idxs1, I2 const& idxs2) {
 
 /// T is integral type
 /// TODO: Use C++20 <bit> header when possible
+
+///
+/// \tparam T integral type
+/// \return true if @c x has a single bit on in its bit representation.
 template <typename T>
 bool has_single_bit(T x) noexcept {
   return x != 0 && (x & (x - 1)) == 0;
