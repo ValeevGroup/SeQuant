@@ -438,7 +438,7 @@ class EvalResult {
   template <typename T,
             typename = std::enable_if_t<!std::is_convertible_v<T, EvalResult>>>
   explicit EvalResult(T&& arg) noexcept
-      : value_{std::make_any<T>(std::forward<T>(arg))} {}
+      : value_{std::make_any<std::decay_t<T>>(std::forward<T>(arg))} {}
 
   [[nodiscard]] virtual id_t type_id() const noexcept = 0;
 
