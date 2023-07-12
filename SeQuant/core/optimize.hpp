@@ -43,13 +43,13 @@ template <
     typename I, typename F,
     typename = std::enable_if_t<std::is_integral_v<I> && std::is_unsigned_v<I>>,
     typename = std::enable_if_t<std::is_invocable_v<F, I, I>>>
-void biparts(I n, F&& func) {
+void biparts(I n, F const& func) {
   if (n == 0) return;
   I const h = static_cast<I>(std::floor(n / 2.0));
   for (auto n_ = 1; n_ <= h; ++n_) {
     auto const l = n & n_;
     auto const r = (n - n_) & n;
-    if ((l | r) == n) std::invoke(std::forward<F>(func), l, r);
+    if ((l | r) == n) func(l, r);
   }
 }
 
@@ -139,12 +139,11 @@ container::svector<Index> diff_indices(I1 const& idxs1, I2 const& idxs2) {
   return result;
 }
 
-/// T is integral type
-/// TODO: Use C++20 <bit> header when possible
-
 ///
+/// TODO: Use C++20 <bit> header when possible
 /// \tparam T integral type
 /// \return true if @c x has a single bit on in its bit representation.
+///
 template <typename T>
 bool has_single_bit(T x) noexcept {
   return x != 0 && (x & (x - 1)) == 0;
@@ -275,9 +274,8 @@ ExprPtr single_term_opt(Product const& prod, IdxToSz const& idxsz) {
       auto lexpr = *result.rbegin();
       result.pop_back();
       auto p = Product{1, ExprPtrList{lexpr, rexpr}, Product::Flatten::No};
-      result.push_back(
-          ex<Product>(Product{1, p.factors().begin(),
-                              p.factors().end(), Product::Flatten::No}));
+      result.push_back(ex<Product>(Product{
+          1, p.factors().begin(), p.factors().end(), Product::Flatten::No}));
     } else {
       result.push_back(prod.at(i));
     }

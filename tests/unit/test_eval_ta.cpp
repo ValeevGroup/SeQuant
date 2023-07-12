@@ -38,7 +38,7 @@ class rand_tensor_yield {
   TA::World& world_;
   size_t const nocc_;
   size_t const nvirt_;
-  std::map<std::wstring, sequant::eval::ERPtr> label_to_tnsr_;
+  mutable std::map<std::wstring, sequant::eval::ERPtr> label_to_tnsr_;
 
  public:
   [[nodiscard]] Tensor_t make_rand_tensor(sequant::Tensor const& tnsr) const {
@@ -72,7 +72,7 @@ class rand_tensor_yield {
   rand_tensor_yield(TA::World& world, size_t noccupied, size_t nvirtual)
       : world_{world}, nocc_{noccupied}, nvirt_{nvirtual} {}
 
-  sequant::eval::ERPtr operator()(sequant::Tensor const& tnsr) {
+  sequant::eval::ERPtr operator()(sequant::Tensor const& tnsr) const {
     using result_t = sequant::eval::EvalTensorTA<Tensor_t>;
     std::wstring const label = tensor_to_key(tnsr);
     if (auto&& found = label_to_tnsr_.find(label);
@@ -92,7 +92,7 @@ class rand_tensor_yield {
 
   template <typename T,
             typename = std::enable_if_t<sequant::eval::IsEvaluable<T>>>
-  sequant::eval::ERPtr operator()(T const& node) {
+  sequant::eval::ERPtr operator()(T const& node) const {
     using namespace sequant::eval;
     if (node->result_type() == sequant::ResultType::Tensor) {
       assert(node->expr()->template is<sequant::Tensor>());

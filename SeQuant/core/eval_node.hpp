@@ -118,15 +118,15 @@ template <
     std::enable_if_t<std::is_invocable_r_v<bool, F, EvalNode<ExprT> const&>,
                      bool> = true>
 AsyCost asy_cost_impl(EvalNode<ExprT> const& node, bool exploit_symmetry,
-                      F&& pred) {
-  if (node.leaf() || !std::invoke(std::forward<F>(pred), node))
-    return AsyCost::zero();
+                      F const& pred) {
+  if (node.leaf() || !pred(node)) return AsyCost::zero();
 
   return AsyCost{exploit_symmetry ? asy_cost_single_node(node)
-                                  : asy_cost_single_node_symm_off(node)} +  //
-         asy_cost_impl(node.left(), exploit_symmetry,
-                       std::forward<F>(pred)) +                             //
-         asy_cost_impl(node.right(), exploit_symmetry, std::forward<F>(pred));
+                                  : asy_cost_single_node_symm_off(node)}  //
+         +                                                                //
+         asy_cost_impl(node.left(), exploit_symmetry, pred)               //
+         +                                                                //
+         asy_cost_impl(node.right(), exploit_symmetry, pred);
 }
 }  // namespace detail
 
@@ -202,8 +202,8 @@ template <
                      bool> = true>
 AsyCost asy_cost_symm_off(
     EvalNode<ExprT> const& node,
-    F&& pred = [](EvalNode<ExprT> const&) { return true; }) {
-  return detail::asy_cost_impl(node, false, std::forward<F>(pred));
+    F const& pred = [](EvalNode<ExprT> const&) { return true; }) {
+  return detail::asy_cost_impl(node, false, pred);
 }
 
 ///
@@ -216,8 +216,8 @@ template <
                      bool> = true>
 AsyCost asy_cost(
     EvalNode<ExprT> const& node,
-    F&& pred = [](EvalNode<ExprT> const&) { return true; }) {
-  return detail::asy_cost_impl(node, true, std::forward<F>(pred));
+    F const& pred = [](EvalNode<ExprT> const&) { return true; }) {
+  return detail::asy_cost_impl(node, true, pred);
 }
 
 }  // namespace sequant

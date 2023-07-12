@@ -103,14 +103,14 @@ template <typename NodesI,
               IsIterableOfEvaluableNodes<NodesI> &&
               std::is_invocable_r_v<bool, Pred, IteredT<NodesI> const&>>>
 CacheManager<ERPtr> cache_manager(
-    NodesI const& nodes, Pred&& pred = [](auto&&) { return true; },
+    NodesI const& nodes, Pred const& pred = [](auto&&) { return true; },
     size_t min_repeats = 2) noexcept {
   auto imed_counts = container::map<size_t, size_t>{};
 
   // counts number of times each internal node appears in
   // all of @c nodes trees
   auto imed_visitor = [&imed_counts, &pred](auto&& n) {
-    if (!std::invoke(std::forward<Pred>(pred), n)) return;
+    if (!pred(n)) return;
 
     auto&& end = imed_counts.end();
     auto&& h = n->hash_value();
@@ -172,22 +172,22 @@ class EvalExprBTAS final : public EvalExpr {
 
 template <typename NodeT, typename Le,
           std::enable_if_t<IsLeafEvaluator<NodeT, Le>, bool> = true>
-ERPtr evaluate_crust(NodeT const&, Le&&);
+ERPtr evaluate_crust(NodeT const&, Le const&);
 
 template <typename NodeT, typename Le,
           std::enable_if_t<IsLeafEvaluator<NodeT, Le>, bool> = true>
-ERPtr evaluate_crust(NodeT const&, Le&&, CacheManager<ERPtr>&);
+ERPtr evaluate_crust(NodeT const&, Le const&, CacheManager<ERPtr>&);
 
 template <typename NodeT, typename Le, typename... Args,
           std::enable_if_t<IsLeafEvaluator<NodeT, Le>, bool> = true>
-ERPtr evaluate_core(NodeT const& node, Le&& le, Args&&... args) {
+ERPtr evaluate_core(NodeT const& node, Le const& le, Args&&... args) {
   if (node.leaf()) {
-    return std::invoke(std::forward<Le>(le), node);
+    return le(node);
   } else {
-    ERPtr const left = evaluate_crust(node.left(), std::forward<Le>(le),
-                                      std::forward<Args>(args)...);
-    ERPtr const right = evaluate_crust(node.right(), std::forward<Le>(le),
-                                       std::forward<Args>(args)...);
+    ERPtr const left =
+        evaluate_crust(node.left(), le, std::forward<Args>(args)...);
+    ERPtr const right =
+        evaluate_crust(node.right(), le, std::forward<Args>(args)...);
 
     assert(left);
     assert(right);
@@ -206,20 +206,21 @@ ERPtr evaluate_core(NodeT const& node, Le&& le, Args&&... args) {
 
 template <typename NodeT, typename Le,
           std::enable_if_t<IsLeafEvaluator<NodeT, Le>, bool>>
-ERPtr evaluate_crust(NodeT const& node, Le&& le) {
-  return evaluate_core(node, std::forward<Le>(le));
+ERPtr evaluate_crust(NodeT const& node, Le const& le) {
+  return evaluate_core(node, le);
 }
 
 template <typename NodeT, typename Le,
           std::enable_if_t<IsLeafEvaluator<NodeT, Le>, bool>>
-ERPtr evaluate_crust(NodeT const& node, Le&& le, CacheManager<ERPtr>& cache) {
+ERPtr evaluate_crust(NodeT const& node, Le const& le,
+                     CacheManager<ERPtr>& cache) {
   auto const h = hash::value(*node);
   if (auto ptr = cache.access(h); ptr) {
     return *ptr;
   } else if (cache.exists(h)) {
-    return *cache.store(h, evaluate_core(node, std::forward<Le>(le), cache));
+    return *cache.store(h, evaluate_core(node, le, cache));
   } else {
-    return evaluate_core(node, std::forward<Le>(le), cache);
+    return evaluate_core(node, le, cache);
   }
 }
 
@@ -227,8 +228,8 @@ template <typename NodeT, typename Annot, typename Le, typename... Args,
           std::enable_if_t<IsLeafEvaluator<NodeT, Le>, bool> = true>
 auto evaluate(NodeT const& node,    //
               Annot const& layout,  //
-              Le&& le, Args&&... args) {
-  return evaluate_crust(node, std::forward<Le>(le), std::forward<Args>(args)...)
+              Le const& le, Args&&... args) {
+  return evaluate_crust(node, le, std::forward<Args>(args)...)
       ->permute(std::array<std::any, 2>{node->annot(), layout});
 }
 
@@ -237,16 +238,16 @@ template <typename NodesT, typename Annot, typename Le, typename... Args,
                            bool> = true>
 auto evaluate(NodesT const& nodes,  //
               Annot const& layout,  //
-              Le&& le, Args&&... args) {
+              Le const& le, Args&&... args) {
   auto iter = std::begin(nodes);
   auto end = std::end(nodes);
   assert(iter != end);
 
-  auto result = evaluate(*iter, layout, std::forward<Le>(le),
-                         std::forward<Args>(args)...);
+  auto result = evaluate(*iter, layout, le, std::forward<Args>(args)...);
+
   for (++iter; iter != end; ++iter) {
-    result->add_inplace(*evaluate(*iter, layout, std::forward<Le>(le),
-                                  std::forward<Args>(args)...));
+    result->add_inplace(
+        *evaluate(*iter, layout, le, std::forward<Args>(args)...));
   }
   return result;
 }
@@ -254,7 +255,7 @@ auto evaluate(NodesT const& nodes,  //
 template <typename NodeT, typename Annot, typename Le, typename... Args>
 auto evaluate_symm(NodeT const& node, Annot const& layout,
                    container::svector<std::array<size_t, 3>> const& perm_groups,
-                   Le&& le, Args&&... args) {
+                   Le const& le, Args&&... args) {
   if (perm_groups.empty()) {
     // asked for symmetrization without specifying particle symmetric index
     // ranges
@@ -270,13 +271,11 @@ auto evaluate_symm(NodeT const& node, Annot const& layout,
     assert(t.bra_rank() == t.ket_rank());
 
     size_t const half_rank = t.bra_rank();
-    return evaluate(node, layout, std::forward<Le>(le),
-                    std::forward<Args>(args)...)
+    return evaluate(node, layout, le, std::forward<Args>(args)...)
         ->symmetrize({{0, half_rank, half_rank}});
   }
 
-  return evaluate(node, layout, std::forward<Le>(le),
-                  std::forward<Args>(args)...)
+  return evaluate(node, layout, le, std::forward<Args>(args)...)
       ->symmetrize(perm_groups);
 }
 
@@ -286,7 +285,7 @@ auto evaluate_antisymm(
     NodeT const& node,                                             //
     Annot const& layout,                                           //
     container::svector<std::array<size_t, 3>> const& perm_groups,  //
-    Le&& le,                                                       //
+    Le const& le,                                                  //
     Args&&... args) {
   if (perm_groups.empty()) {
     // Asked for antisymmetrization without specifying particle antisymmetric
@@ -304,35 +303,31 @@ auto evaluate_antisymm(
 
     size_t const b = t.bra_rank();
     assert(b == t.ket_rank());
-    return evaluate(node, layout, std::forward<Le>(le),
-                    std::forward<Args>(args)...)
+    return evaluate(node, layout, le, std::forward<Args>(args)...)
         ->antisymmetrize({{0, b, b}});
   }
-  return evaluate(node, layout, std::forward<Le>(le),
-                  std::forward<Args>(args)...)
+  return evaluate(node, layout, le, std::forward<Args>(args)...)
       ->antisymmetrize(perm_groups);
 }
 
 template <typename NodeT, typename Le, typename... Args,
           std::enable_if_t<IsLeafEvaluator<NodeT, Le>, bool> = true>
 auto evaluate(NodeT const& node, Le&& le, Args&&... args) {
-  return evaluate_crust(node, std::forward<Le>(le),
-                        std::forward<Args>(args)...);
+  return evaluate_crust(node, le, std::forward<Args>(args)...);
 }
 
 template <typename NodesT, typename Le, typename... Args,
           std::enable_if_t<IsIterableOfEvaluableNodes<NodesT>, bool> = true>
-auto evaluate(NodesT const& nodes, Le&& le, Args&&... args) {
+auto evaluate(NodesT const& nodes, Le const& le, Args&&... args) {
   auto iter = std::begin(nodes);
   auto end = std::end(nodes);
   assert(iter != end);
 
-  auto result = evaluate(*iter,                 //
-                         std::forward<Le>(le),  //
-                         std::forward<Args>(args)...);
+  auto result = evaluate(*iter, le, std::forward<Args>(args)...);
+
   for (++iter; iter != end; ++iter) {
-    result->add_inplace(*evaluate(*iter,                 //
-                                  std::forward<Le>(le),  //
+    result->add_inplace(*evaluate(*iter,  //
+                                  le,     //
                                   std::forward<Args>(args)...));
   }
   return result;

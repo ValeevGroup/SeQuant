@@ -92,7 +92,7 @@ template <typename F,
 void antisymmetric_permutation(
     container::svector<
         std::tuple<perm_t::iterator, perm_t::iterator, size_t>> const& groups,
-    F&& call_back) {
+    F const& call_back) {
   using ranges::views::transform;
 
   auto const n = groups.size();
@@ -100,7 +100,7 @@ void antisymmetric_permutation(
 
   assert(ranges::all_of(groups, valid_particle_range));
 
-  std::forward<F>(call_back)(0);
+  call_back(0);
 
   for (int i = n - 1; i >= 0; --i) {
     auto [bra_beg, ket_beg, len] = groups[i];
@@ -118,8 +118,7 @@ void antisymmetric_permutation(
 
       for (auto ket_yn = true; ket_yn;
            ket_yn = next_permutation_parity(ket_p, ket_beg, ket_end), ++inner) {
-        if (!(outer == 0 && inner == 0))
-          std::forward<F>(call_back)((bra_p + ket_p) % 2);
+        if (!(outer == 0 && inner == 0)) call_back((bra_p + ket_p) % 2);
       }
     }
   }
@@ -129,7 +128,7 @@ template <typename F, std::enable_if_t<std::is_invocable_v<F>, bool> = true>
 void symmetric_permutation(
     container::svector<
         std::tuple<perm_t::iterator, perm_t::iterator, size_t>> const& groups,
-    F&& call_back) {
+    F const& call_back) {
   using ranges::views::transform;
 
   auto const n = groups.size();
@@ -139,7 +138,7 @@ void symmetric_permutation(
 
   auto groups_vec = groups | transform(iter_pairs) | ranges::to_vector;
 
-  std::forward<F>(call_back)();
+  call_back();
 
   // using reverse iterator (instead of indices) not allowed for some reason
   // iter from the end group
@@ -147,8 +146,7 @@ void symmetric_permutation(
     auto beg = groups_vec[i].begin();
     auto end = groups_vec[i].end();
     auto yn = std::next_permutation(beg, end);
-    for (; yn; yn = std::next_permutation(beg, end))
-      std::forward<F>(call_back)();
+    for (; yn; yn = std::next_permutation(beg, end)) call_back();
   }
 }
 
@@ -157,7 +155,7 @@ template <
     std::enable_if_t<std::is_invocable_v<F, int, perm_t const&>, bool> = true>
 void antisymmetrize_backend(size_t rank,
                             container::svector<particle_range_t> const& groups,
-                            F&& call_back) {
+                            F const& call_back) {
   using ranges::views::iota;
   auto perm = iota(size_t{0}, rank) | ranges::to<perm_t>;
 
@@ -168,17 +166,16 @@ void antisymmetrize_backend(size_t rank,
   for (auto&& g : groups) {
     groups_vec.emplace_back(beg + g[0], beg + g[1], g[2]);
   }
-  antisymmetric_permutation(groups_vec,
-                            [&call_back, &perm = std::as_const(perm)](int p) {
-                              std::forward<F>(call_back)(p, perm);
-                            });
+  antisymmetric_permutation(
+      groups_vec,
+      [&call_back, &perm = std::as_const(perm)](int p) { call_back(p, perm); });
 }
 
 template <typename F,
           std::enable_if_t<std::is_invocable_v<F, perm_t const&>, bool> = true>
 void symmetrize_backend(size_t rank,
                         container::svector<particle_range_t> const& groups,
-                        F&& call_back) {
+                        F const& call_back) {
   using ranges::views::iota;
   auto perm = iota(size_t{0}, rank) | ranges::to<perm_t>;
   auto groups_vec = container::svector<
@@ -188,10 +185,9 @@ void symmetrize_backend(size_t rank,
   for (auto&& g : groups) {
     groups_vec.emplace_back(beg + g[0], beg + g[1], g[2]);
   }
-  symmetric_permutation(groups_vec,
-                        [&call_back, &perm = std::as_const(perm)]() {
-                          std::forward<F>(call_back)(perm);
-                        });
+  symmetric_permutation(
+      groups_vec,
+      [&call_back, &perm = std::as_const(perm)]() { call_back(perm); });
 }
 
 template <typename RngOfOrdinals>

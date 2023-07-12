@@ -34,7 +34,7 @@ class DataWorldTA {
 
   container::vector<ERPtr> Ts;
 
-  container::map<size_t, ERPtr> cache_;
+  mutable container::map<size_t, ERPtr> cache_;
 
   ///
   /// Read tensor data from a file to a TA::DistArray tensor.
@@ -190,7 +190,7 @@ class DataWorldTA {
   }
 
   template <typename NodeT, typename = std::enable_if_t<IsEvaluable<NodeT>>>
-  ERPtr operator()(NodeT const& n) {
+  ERPtr operator()(NodeT const& n) const {
     using numeric_type = typename Tensor_t::numeric_type;
     if (n->result_type() == ResultType::Constant) {
       assert(n->expr()->template is<Constant>());

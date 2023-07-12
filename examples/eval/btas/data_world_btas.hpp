@@ -33,7 +33,7 @@ class DataWorldBTAS {
 
   container::vector<ERPtr> Ts;
 
-  container::map<size_t, ERPtr> cache_;
+  mutable container::map<size_t, ERPtr> cache_;
 
  public:
   DataWorldBTAS(DataInfo const& info, size_t excit)
@@ -154,7 +154,7 @@ class DataWorldBTAS {
   }
 
   template <typename NodeT, typename = std::enable_if_t<IsEvaluable<NodeT>>>
-  ERPtr operator()(NodeT const& n) {
+  ERPtr operator()(NodeT const& n) const {
     using numeric_type = typename Tensor_t::numeric_type;
     if (n->result_type() == ResultType::Constant) {
       assert(n->expr()->template is<Constant>());
