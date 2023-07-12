@@ -4,7 +4,7 @@
 
 #include "../../SeQuant/core/index.hpp"
 
-#include "../../SeQuant/core/sequant.hpp"
+#include "../../SeQuant/core/context.hpp"
 
 #include "../../SeQuant/core/wstring.hpp"
 

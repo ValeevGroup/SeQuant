@@ -1,5 +1,5 @@
 #include "SeQuant/domain/mbpt/op.hpp"
-#include "SeQuant/domain/mbpt/formalism.hpp"
+#include "SeQuant/domain/mbpt/context.hpp"
 
 #include "SeQuant/core/math.hpp"
 #include "SeQuant/core/op.hpp"
@@ -177,8 +177,8 @@ OpMaker<S>::OpMaker(OpType op) : op_(op) {}
 template <Statistics S>
 ExprPtr OpMaker<S>::operator()() const {
   const bool symm = get_default_formalism().nbody_interaction_tensor_symm() ==
-                    Formalism::NBodyInteractionTensorSymm::Yes;
-  const bool csv = get_default_formalism().csv() == Formalism::CSV::Yes;
+                    Context::NBodyInteractionTensorSymm::Yes;
+  const bool csv = get_default_formalism().csv() == Context::CSV::Yes;
   bool csv_bra = false;
   bool csv_ket = false;
   if (csv) {  // validate spaces

@@ -10,10 +10,10 @@
 #include "abstract_tensor.hpp"
 #include "algorithm.hpp"
 #include "attr.hpp"
+#include "context.hpp"
 #include "expr.hpp"
 #include "hash.hpp"
 #include "index.hpp"
-#include "sequant.hpp"
 
 namespace sequant {
 

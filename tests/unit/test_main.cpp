@@ -8,8 +8,8 @@
 #include "SeQuant/core/op.hpp"
 #include "SeQuant/core/runtime.hpp"
 #include "SeQuant/core/space.hpp"
+#include "SeQuant/domain/mbpt/context.hpp"
 #include "SeQuant/domain/mbpt/convention.hpp"
-#include "SeQuant/domain/mbpt/formalism.hpp"
 #include "catch.hpp"
 
 #ifdef SEQUANT_HAS_TILEDARRAY
@@ -28,7 +28,7 @@ int main(int argc, char* argv[]) {
   sequant::set_locale();
   sequant::detail::OpIdRegistrar op_id_registrar;
   sequant::set_default_context(
-      SeQuant(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
+      Context(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
               BraKetSymmetry::conjugate, SPBasis::spinorbital));
   mbpt::set_default_convention();
 

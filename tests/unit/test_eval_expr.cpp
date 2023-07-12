@@ -1,6 +1,6 @@
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/eval_expr.hpp>
 #include <SeQuant/core/parse_expr.hpp>
-#include <SeQuant/core/sequant.hpp>
 
 #include "catch.hpp"
 
@@ -11,7 +11,9 @@ TEST_CASE("TEST_EVAL_EXPR", "[EvalExpr]") {
   sequant::TensorCanonicalizer::register_instance(
       std::make_shared<sequant::DefaultTensorCanonicalizer>());
 
-  auto parse_expr_antisymm = [](auto const& xpr){return parse_expr(xpr, Symmetry::antisymm);};
+  auto parse_expr_antisymm = [](auto const& xpr) {
+    return parse_expr(xpr, Symmetry::antisymm);
+  };
 
   SECTION("Constructors") {
     auto t1 = parse_expr_antisymm(L"t_{i1, i2}^{a1, a2}");
@@ -46,7 +48,8 @@ TEST_CASE("TEST_EVAL_EXPR", "[EvalExpr]") {
 
     REQUIRE(c6.op() == EvalOp::Sum);
 
-    auto x2 = EvalExpr(parse_expr_antisymm(L"A_{a_1, a_2}^{i_1, i_2}")->as<Tensor>());
+    auto x2 =
+        EvalExpr(parse_expr_antisymm(L"A_{a_1, a_2}^{i_1, i_2}")->as<Tensor>());
     REQUIRE(x2.op() == EvalOp::Id);
 
     auto p2 = parse_expr_antisymm(L"A{a1,a2;i1,i2} * I{a1,a2;i1,i2}");
@@ -56,7 +59,8 @@ TEST_CASE("TEST_EVAL_EXPR", "[EvalExpr]") {
 
     REQUIRE(x5.op() == EvalOp::Antisymm);
 
-    auto p3 = parse_expr(L"S{a1,a2;i1,i2}:S * I{a1,a2;i1,i2}", Symmetry::nonsymm);
+    auto p3 =
+        parse_expr(L"S{a1,a2;i1,i2}:S * I{a1,a2;i1,i2}", Symmetry::nonsymm);
     auto const x6 = EvalExpr{p3->at(0)->as<Tensor>()};
     auto const x7 = EvalExpr{p3->at(1)->as<Tensor>()};
     auto const x8 = EvalExpr{x6, x7, EvalOp::Symm};
@@ -163,10 +167,10 @@ TEST_CASE("TEST_EVAL_EXPR", "[EvalExpr]") {
     REQUIRE(x78.tensor().symmetry() == Symmetry::nonsymm);
 
     // whole bra <-> ket contraction between symmetric and antisymmetric tensors
-    auto const t9 = parse_expr(L"g_{a1,a2}^{a3,a4}",
-                               Symmetry::antisymm)->as<Tensor>();
-    auto const t10 = parse_expr(L"t_{a3,a4}^{i1,i2}",
-                                Symmetry::symm)->as<Tensor>();
+    auto const t9 =
+        parse_expr(L"g_{a1,a2}^{a3,a4}", Symmetry::antisymm)->as<Tensor>();
+    auto const t10 =
+        parse_expr(L"t_{a3,a4}^{i1,i2}", Symmetry::symm)->as<Tensor>();
     auto const x910 = EvalExpr{EvalExpr{t9}, EvalExpr{t10}, EvalOp::Prod};
     REQUIRE(x910.tensor().symmetry() == Symmetry::symm);
   }

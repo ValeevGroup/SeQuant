@@ -9,7 +9,7 @@
 #include "SeQuant/core/op.hpp"
 #include "SeQuant/core/tensor.hpp"
 #include "SeQuant/core/wick.hpp"
-#include "SeQuant/domain/mbpt/formalism.hpp"
+#include "SeQuant/domain/mbpt/context.hpp"
 
 namespace sequant {
 namespace mbpt {
@@ -163,10 +163,6 @@ ExprPtr H() { return H1() + H2(); }
 ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
                bool use_top) {
   FWickTheorem wick{expr};
-  Logger::get_instance().wick_stats = true;
-  Logger::get_instance().wick_harness = true;
-  Logger::get_instance().wick_contract = true;
-  Logger::get_instance().wick_reduce = true;
   wick.spinfree(false)
       .use_topology(use_top)
       .set_nop_connections(nop_connections)

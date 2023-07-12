@@ -3,8 +3,8 @@
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/timer.hpp>
 #include <SeQuant/core/wick.hpp>
+#include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
-#include <SeQuant/domain/mbpt/formalism.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 
 #include <clocale>
@@ -36,8 +36,8 @@ inline const std::map<std::string, EqnType> str2type = {
     {"t", EqnType::t}, {"lambda", EqnType::lambda}};
 
 /// maps unoccupied basis type string to enum
-inline const std::map<std::string, mbpt::Formalism::CSV> str2uocc = {
-    {"std", mbpt::Formalism::CSV::No}, {"csv", mbpt::Formalism::CSV::Yes}};
+inline const std::map<std::string, mbpt::Context::CSV> str2uocc = {
+    {"std", mbpt::Context::CSV::No}, {"csv", mbpt::Context::CSV::Yes}};
 
 // profiles evaluation of all CC equations for a given ex rank N with projection
 // ex rank PMIN .. P
@@ -79,7 +79,7 @@ class compute_cceqvec {
       // N.B. # of equations depends on whether we use symmetric or
       // antisymmetric amplitudes
       if (mbpt::get_default_formalism().nbody_interaction_tensor_symm() ==
-          mbpt::Formalism::NBodyInteractionTensorSymm::Yes) {
+          mbpt::Context::NBodyInteractionTensorSymm::Yes) {
         if (type == EqnType::t) {
           if (R == 1 && N == 1) runtime_assert(eqvec[R]->size() == 8);
           if (R == 1 && N == 2) runtime_assert(eqvec[R]->size() == 14);
@@ -136,7 +136,7 @@ int main(int argc, char* argv[]) {
   std::wcerr.sync_with_stdio(true);
   sequant::detail::OpIdRegistrar op_id_registrar;
   sequant::set_default_context(
-      SeQuant(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
+      Context(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
               BraKetSymmetry::conjugate, SPBasis::spinorbital));
   mbpt::set_default_convention();
 
@@ -153,8 +153,8 @@ int main(int argc, char* argv[]) {
   const std::string eqn_type_str = argc > 2 ? argv[2] : "t";
   const EqnType eqn_type = str2type.at(eqn_type_str);
   const std::string uocc_type_str = argc > 3 ? argv[3] : "std";
-  const mbpt::Formalism::CSV uocc_type = str2uocc.at(uocc_type_str);
-  auto resetter = set_scoped_default_formalism(mbpt::Formalism(uocc_type));
+  const mbpt::Context::CSV uocc_type = str2uocc.at(uocc_type_str);
+  auto resetter = set_scoped_default_formalism(mbpt::Context(uocc_type));
 
   // change to true to print out the resulting equations
   constexpr bool print = false;

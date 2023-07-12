@@ -6,8 +6,8 @@
 
 #include <tiledarray.h>
 #include <SeQuant/core/op.hpp>
+#include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
-#include <SeQuant/domain/mbpt/formalism.hpp>
 
 #include "examples/eval/calc_info.hpp"
 #include "examples/eval/ta/scf_ta.hpp"
@@ -71,7 +71,7 @@ int main(int argc, char* argv[]) {
   detail::OpIdRegistrar op_id_registrar;
   mbpt::set_default_convention();
   sequant::set_default_context(
-      SeQuant(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
+      Context(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
               BraKetSymmetry::conjugate, SPBasis::spinorbital));
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());

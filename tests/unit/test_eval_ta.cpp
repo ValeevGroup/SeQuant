@@ -1,7 +1,7 @@
 #include "catch.hpp"
 
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/parse_expr.hpp>
-#include <SeQuant/core/sequant.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/domain/eval/eval.hpp>
 

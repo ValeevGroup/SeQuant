@@ -189,8 +189,8 @@ add_library(SeQuant-bliss
 set(SeQuant_src
         ${PROJECT_BINARY_DIR}/SeQuant/version.hpp
         SeQuant/version.cpp
-        SeQuant/core/sequant.cpp
-        SeQuant/core/sequant.hpp
+        SeQuant/core/context.cpp
+        SeQuant/core/context.hpp
         SeQuant/core/attr.hpp
         SeQuant/core/index.cpp
         SeQuant/core/index.hpp
@@ -256,10 +256,10 @@ set(SeQuant_src
         SeQuant/domain/mbpt/models/cc.hpp
         SeQuant/domain/eval/eval.hpp
         SeQuant/domain/eval/cache_manager.hpp
+        SeQuant/domain/mbpt/context.hpp
+        SeQuant/domain/mbpt/context.cpp
         SeQuant/domain/mbpt/convention.cpp
         SeQuant/domain/mbpt/convention.hpp
-        SeQuant/domain/mbpt/formalism.hpp
-        SeQuant/domain/mbpt/formalism.cpp
         SeQuant/domain/mbpt/op.cpp
         SeQuant/domain/mbpt/op.hpp
         SeQuant/domain/mbpt/op.ipp

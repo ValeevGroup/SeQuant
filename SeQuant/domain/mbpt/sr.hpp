@@ -8,8 +8,8 @@
 #include <limits>
 #include <utility>
 
+#include "SeQuant/core/context.hpp"
 #include "SeQuant/core/expr_fwd.hpp"
-#include "SeQuant/core/sequant.hpp"
 #include "SeQuant/core/space.hpp"
 #include "SeQuant/domain/mbpt/op.hpp"
 

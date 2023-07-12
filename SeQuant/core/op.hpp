@@ -12,12 +12,12 @@
 #include "abstract_tensor.hpp"
 #include "attr.hpp"
 #include "container.hpp"
+#include "context.hpp"
 #include "expr.hpp"
 #include "hash.hpp"
 #include "hugenholtz.hpp"
 #include "index.hpp"
 #include "ranges.hpp"
-#include "sequant.hpp"
 
 namespace sequant {
 

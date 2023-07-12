@@ -24,7 +24,7 @@ ExprPtr VacuumAverage(const ExprPtr& e, const Args&... args) {
 inline void __init__(py::module m) {
   sequant::mbpt::set_default_convention();
   sequant::set_default_context(
-      SeQuant(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
+      Context(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
               BraKetSymmetry::conjugate, SPBasis::spinorbital));
   sequant::TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());

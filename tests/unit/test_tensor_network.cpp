@@ -623,7 +623,7 @@ TEST_CASE("TensorNetwork", "[elements]") {
 
           auto ctx_resetter = set_scoped_default_context(
               (N > Index::min_tmp_index())
-                  ? SeQuant(get_default_context())
+                  ? Context(get_default_context())
                         .set_first_dummy_index_ordinal(N + 1)
                   : get_default_context());
 

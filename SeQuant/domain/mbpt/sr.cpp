@@ -9,7 +9,7 @@
 #include "SeQuant/core/op.hpp"
 #include "SeQuant/core/tensor.hpp"
 #include "SeQuant/core/wick.hpp"
-#include "SeQuant/domain/mbpt/formalism.hpp"
+#include "SeQuant/domain/mbpt/context.hpp"
 
 namespace sequant {
 namespace mbpt {

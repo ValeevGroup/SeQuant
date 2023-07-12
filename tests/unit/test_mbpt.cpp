@@ -5,7 +5,8 @@
 #include "SeQuant/core/op.hpp"
 #include "SeQuant/core/tensor.hpp"
 #include "SeQuant/core/timer.hpp"
-#include "SeQuant/domain/mbpt/formalism.hpp"
+#include "SeQuant/domain/mbpt/context.hpp"
+#include "SeQuant/domain/mbpt/mr.hpp"
 #include "SeQuant/domain/mbpt/op.hpp"
 #include "SeQuant/domain/mbpt/sr.hpp"
 
@@ -493,9 +494,8 @@ TEST_CASE("MBPT", "[mbpt]") {
 
   SECTION("SRSO-PNO") {
     using namespace sequant::mbpt::sr;
-    using namespace sequant::mbpt;
-    auto resetter =
-        set_scoped_default_formalism(Formalism(Formalism::CSV::Yes));
+    using sequant::mbpt::Context;
+    auto resetter = set_scoped_default_formalism(Context(Context::CSV::Yes));
 
     // H2**T2**T2 -> R2
     SEQUANT_PROFILE_SINGLE("wick(H2**T2**T2 -> R2)", {
@@ -506,5 +506,19 @@ TEST_CASE("MBPT", "[mbpt]") {
       REQUIRE(result->size() == 4);
     });
   }  // SECTION("SRSO-PNO")
+
+  SECTION("MRSO") {
+    using namespace sequant::mbpt::mr;
+
+    // H**T12 -> R2
+    SEQUANT_PROFILE_SINGLE("wick(H**T2 -> R2)", {
+      auto result = vac_av(A(2) * H() * T_(2), {{1, 2}});
+
+      {
+        std::wcout << "H*T2 -> R2 = " << to_latex_align(result, 0, 1)
+                   << std::endl;
+      }
+    });
+  }  // SECTION("MRSO")
 
 }  // TEST_CASE("MBPT")

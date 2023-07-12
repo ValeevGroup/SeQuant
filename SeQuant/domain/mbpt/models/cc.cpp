@@ -1,4 +1,4 @@
-#include <SeQuant/domain/mbpt/formalism.hpp>
+#include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 
 #include <clocale>

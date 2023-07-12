@@ -1,5 +1,5 @@
 #include <SeQuant/core/complex.hpp>
-#include <SeQuant/core/sequant.hpp>
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/tensor.hpp>
 
 #include <iostream>
