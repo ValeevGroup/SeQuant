@@ -141,7 +141,7 @@ class make_op {
           std::initializer_list<IndexSpace::Type> kets);
 
   ExprPtr operator()() const;
-};
+}; // class make_op
 
 #include "sr_op.impl.hpp"
 
@@ -176,14 +176,6 @@ ExprPtr H1();
 ExprPtr H2();
 ExprPtr H2_oo_vv();
 ExprPtr H2_vv_vv();
-
-// TODO: Implement rest of the functions
-ExprPtr H0mp();
-ExprPtr H1mp();
-
-ExprPtr F();
-ExprPtr W();
-
 ExprPtr H();
 
 /// makes particle-conserving excitation operator of rank \p K
