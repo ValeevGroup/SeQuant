@@ -10,7 +10,7 @@
 // clang-format off
 // 1. implement the one-body operator to represent perturbations
 // 2. implement the tensor/operator to represent perturbed operators
-// 3. add a ccresponse class to derive the residual equations
+// 3. add a ccresponse class to derive the residual equations [x]
 // 4. construct perturbed Hamiltonian (try first order for now)
 // 5. solve perturbed t amplitudes (try first order for now)
 // 6. solve perturbed lambda amplitudes (try first order for now)

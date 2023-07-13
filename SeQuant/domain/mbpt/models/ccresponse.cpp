@@ -6,6 +6,4 @@
 
 namespace sequant::mbpt::sr {
 
-// here, add the definitions for the functions declared in ccresponse.hpp
-
 }  // namespace sequant::mbpt::sr

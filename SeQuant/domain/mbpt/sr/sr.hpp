@@ -168,6 +168,21 @@ ExprPtr vac_av(ExprPtr expr,
                std::vector<std::pair<int, int>> nop_connections = {},
                bool use_top = true);
 
+// Functions relating to perturbation and response
+
+/// one-body perturbation operator of order \p r
+ExprPtr P(std::size_t r);
+
+/// perturbed Hamiltonian of order \p r
+ExprPtr H_p(std::size_t r);
+
+/// perturbed t amplitude of order \p r
+ExprPtr T_p(std::size_t r);
+
+/// perturbed lambda amplitude of order \p r
+ExprPtr Lambda_p(std::size_t r);
+
+
 // these produce operator-level expressions
 namespace op {
 
