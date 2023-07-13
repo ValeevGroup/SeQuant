@@ -157,7 +157,6 @@ target_braket(sequant::Tensor const& t1, sequant::Tensor const& t2) noexcept {
   auto left = zip(t1.bra(), t1.ket()) | ranges::to_vector;
   auto right = zip(t2.bra(), t2.ket()) | ranges::to_vector;
 
-next_contract:
   while (!right.empty()) {
     for (auto rr = 0; rr < right.size(); ++rr) {
       auto& [rb, rk] = right[rr];
@@ -180,6 +179,8 @@ next_contract:
       left.emplace_back(rb, rk);
       remove_item(right, rr);
     }  // rr
+  next_contract:
+      /* just point to the start of the while loop */;
   }
   // the result is now in left
 
@@ -338,7 +339,7 @@ sequant::ExprPtr make_imed(sequant::EvalExpr const& left,
 
     auto lh = hash::value(left);
     auto rh = hash::value(right);
-    auto const& left_  = lh <= rh ? left : right;
+    auto const& left_ = lh <= rh ? left : right;
     auto const& right_ = lh <= rh ? right : left;
 
     if (op == EvalOp::Sum) {

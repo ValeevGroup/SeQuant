@@ -11,16 +11,6 @@ enum class EvalOp { Id, Sum, Prod };
 enum class ResultType { Tensor, Constant };
 
 class EvalExpr {
- private:
-  EvalOp op_type_;
-  ResultType result_type_;
-  size_t hash_value_;
-  size_t id_;
-  ExprPtr expr_;
-  bool tot_;
-
-  static size_t global_id_;
-
  public:
   explicit EvalExpr(Tensor const& tnsr);
 
@@ -42,9 +32,19 @@ class EvalExpr {
 
   [[nodiscard]] std::wstring to_latex() const noexcept;
 
-  [[nodiscard]] sequant::Tensor const& as_tensor() const noexcept(false);
+  [[nodiscard]] sequant::Tensor const& as_tensor() const;
 
-  [[nodiscard]] sequant::Constant const& as_constant() const noexcept(false);
+  [[nodiscard]] sequant::Constant const& as_constant() const;
+
+ private:
+  EvalOp op_type_;
+  ResultType result_type_;
+  size_t hash_value_;
+  size_t id_;
+  ExprPtr expr_;
+  bool tot_;
+
+  static size_t global_id_;
 };
 
 }  // namespace sequant
