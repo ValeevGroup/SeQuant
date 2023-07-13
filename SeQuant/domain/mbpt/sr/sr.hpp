@@ -170,8 +170,8 @@ ExprPtr vac_av(ExprPtr expr,
 
 // Functions relating to perturbation and response
 
-/// one-body perturbation operator of order \p r
-ExprPtr P(std::size_t r);
+/// one-body perturbation operator
+ExprPtr V();
 
 /// perturbed Hamiltonian of order \p r
 ExprPtr H_p(std::size_t r);
@@ -241,6 +241,12 @@ ExprPtr vac_av(
     ExprPtr expr,
     std::vector<std::pair<std::wstring, std::wstring>> op_connections = {
         {L"h", L"t"}, {L"f", L"t"}, {L"g", L"t"}});
+
+
+// perturbation and response related operators
+/// one-body perturbation operator
+ExprPtr V();
+
 
 }  // namespace op
 

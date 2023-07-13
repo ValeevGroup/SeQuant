@@ -32,14 +32,16 @@ enum class OpType {
   R12,     //!< geminal kernel
   GR,      //!< GR kernel from f12 theory
   C,       //!< cabs singles op
-  invalid  //!< invalid operator
+  invalid,  //!< invalid operator
+  V        //!< one-body perturbation operator
 };
 
 /// maps operator types to their labels
 inline const std::map<OpType, std::wstring> optype2label{
     {OpType::h, L"h"}, {OpType::f, L"f"},      {OpType::g, L"g"},
     {OpType::t, L"t"}, {OpType::lambda, L"λ"}, {OpType::A, L"A"},
-    {OpType::L, L"L"}, {OpType::R, L"R"},      {OpType::R12, L"F"}};
+    {OpType::L, L"L"}, {OpType::R, L"R"},      {OpType::R12, L"F"},
+    {OpType::V, L"V"}};
 
 /// maps operator labels to their types
 inline const std::map<std::wstring, OpType> label2optype =
