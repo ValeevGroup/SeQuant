@@ -1,14 +1,32 @@
 #ifndef SEQUANT_OPTIMIZE_OPTIMIZE_HPP
 #define SEQUANT_OPTIMIZE_OPTIMIZE_HPP
 
-#include <ios>
-#include <iostream>
 #include <limits>
 #include <utility>
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval_node.hpp>
 #include <SeQuant/core/tensor_network.hpp>
+
+#if __cplusplus < 202002L
+
+namespace std {
+
+///
+/// \tparam T integral type
+/// \return true if @c x has a single bit on in its bit representation.
+///
+template <typename T>
+bool has_single_bit(T x) noexcept {
+  return x != 0 && (x & (x - 1)) == 0;
+}
+
+}  // namespace std
+#else
+
+#include <bit>
+
+#endif
 
 namespace sequant {
 /// Optimize an expression assuming the number of virtual orbitals
@@ -149,16 +167,6 @@ container::svector<Index> diff_indices(I1 const& idxs1, I2 const& idxs2) {
 }
 
 ///
-/// TODO: Use C++20 <bit> header when possible
-/// \tparam T integral type
-/// \return true if @c x has a single bit on in its bit representation.
-///
-template <typename T>
-bool has_single_bit(T x) noexcept {
-  return x != 0 && (x & (x - 1)) == 0;
-}
-
-///
 /// \tparam IdxToSz
 /// \param network A TensorNetwork object.
 /// \param idxsz An invocable on Index, that maps Index to its dimension.
@@ -169,6 +177,7 @@ template <typename IdxToSz,
           std::enable_if_t<std::is_invocable_r_v<size_t, IdxToSz, Index>,
                            bool> = true>
 eval_seq_t single_term_opt(TensorNetwork const& network, IdxToSz const& idxsz) {
+  using std::has_single_bit;
   // number of terms
   auto const nt = network.tensors().size();
   if (nt == 1) return eval_seq_t{0};
