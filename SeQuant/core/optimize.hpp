@@ -8,9 +8,11 @@
 #include <SeQuant/core/eval_node.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 
-#if __cplusplus < 202002L
+#if __cplusplus >= 202002L
+#include <bit>
+#endif
 
-namespace std {
+namespace {
 
 ///
 /// \tparam T integral type
@@ -18,15 +20,14 @@ namespace std {
 ///
 template <typename T>
 bool has_single_bit(T x) noexcept {
+#if __cplusplus < 202002L
   return x != 0 && (x & (x - 1)) == 0;
+#else
+  return std::has_single_bit(x);
+#endif
 }
 
-}  // namespace std
-#else
-
-#include <bit>
-
-#endif
+}  // namespace
 
 namespace sequant {
 /// Optimize an expression assuming the number of virtual orbitals
@@ -177,7 +178,6 @@ template <typename IdxToSz,
           std::enable_if_t<std::is_invocable_r_v<size_t, IdxToSz, Index>,
                            bool> = true>
 eval_seq_t single_term_opt(TensorNetwork const& network, IdxToSz const& idxsz) {
-  using std::has_single_bit;
   // number of terms
   auto const nt = network.tensors().size();
   if (nt == 1) return eval_seq_t{0};
