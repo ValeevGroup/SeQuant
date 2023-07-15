@@ -80,10 +80,6 @@ auto iter_pairs = [](auto&& tpl) {
          ranges::to_vector;
 };
 
-}  // namespace
-
-namespace {
-
 using perm_t = container::svector<size_t>;
 using particle_range_t = std::array<size_t, 3>;
 
@@ -341,28 +337,50 @@ struct EvalResult;
 
 using ERPtr = std::shared_ptr<EvalResult>;
 
+///
+/// \brief Factory function for EvalResult objects.
+///
+/// \tparam T A concrete type derived from EvalResult.
+/// \tparam Args The argument types for the constructor of T.
+/// \param args The arguments for the constructor of T.
+/// \return ERPtr object.
+///
 template <typename T, typename... Args>
 ERPtr eval_result(Args&&... args) noexcept {
   return std::make_shared<T>(std::forward<Args>(args)...);
 }
 
+///
+/// \brief A type-erased class for the result of an evaluation. An object of
+///        this class can represent a tensor (eg. TA::TArrayD,
+///        btas::Tesnor<double>, etc.) or a scalar (eg. double, complex<double>
+///        etc.).
+///
 class EvalResult {
  public:
   using id_t = size_t;
 
   virtual ~EvalResult() noexcept = default;
 
+  ///
+  /// \return Returns true if the concrete type of the object is T.
+  ///
   template <typename T>
   [[nodiscard]] bool is() const noexcept {
     return this->type_id() == id_for_type<std::decay_t<T>>();
   }
 
+  ///
+  /// \return T const& where T is the concrete type of the object.
+  ///
   template <typename T>
   [[nodiscard]] T const& as() const {
     assert(this->is<std::decay_t<T>>());
     return static_cast<T const&>(*this);
   }
 
+  ///
+  /// \brief Sum other EvalResult object with this object.
   ///
   /// @note In std::array<std::any, 3> is expected to be [l,r,res] where
   ///       the elements are the annotations for left, right and result
@@ -372,6 +390,8 @@ class EvalResult {
                                   std::array<std::any, 3> const&) const = 0;
 
   ///
+  /// \brief Perform product binary operation with this object and other.
+  ///
   /// @note In std::array<std::any, 3> is expected to be [l,r,res] where
   ///       the elements are the annotations for left, right and result
   ///       respectively.
@@ -380,14 +400,22 @@ class EvalResult {
                                    std::array<std::any, 3> const&) const = 0;
 
   ///
+  /// \brief Permute this object according to the annotations in the argument.
+  ///
   /// @note In std::array<std::any, 2> is expected to be [pre,post] where
   ///       the elements are the annotations for the eval result before
   ///       permutation and after permutation respectively.
   ///
   [[nodiscard]] virtual ERPtr permute(std::array<std::any, 2> const&) const = 0;
 
+  ///
+  /// \brief Add other EvalResult object into this object.
+  ///
   virtual void add_inplace(EvalResult const&) = 0;
 
+  ///
+  /// \brief Particle symmetrize this eval result according to the list of index
+  ///        groups.
   ///
   /// @note vector<array<size_t,3>> represents list of particle
   ///       symmetry index groups. array<size_t, 3> is expected to be
@@ -399,6 +427,9 @@ class EvalResult {
   [[nodiscard]] virtual ERPtr symmetrize(
       container::svector<std::array<size_t, 3>> const&) const = 0;
 
+  ///
+  /// \brief Particle antisymmetrize this eval result according to the list of
+  ///        index groups.
   ///
   /// @note vector<array<size_t,3>> represents list of antisymmetric index
   ///       groups. array<size_t,3> is expected to be
@@ -413,24 +444,25 @@ class EvalResult {
 
   [[nodiscard]] bool has_value() const noexcept;
 
+  ///
+  /// \return Cast the type-erased data to the type \tparam T, and return a ref.
+  ///
   template <typename T>
   [[nodiscard]] T& get() {
     assert(has_value());
     return *std::any_cast<T>(&value_);
   }
 
+  ///
+  /// \return Cast the type-erased data to the type \tparam T, and return a
+  ///         const ref.
+  ///
   template <typename T>
   [[nodiscard]] T const& get() const {
     return const_cast<EvalResult&>(*this).get<T>();
   }
 
  protected:
-  template <typename T>
-  [[nodiscard]] T& get_ref() {
-    assert(has_value());
-    return *std::any_cast<T>(&value_);
-  }
-
   template <typename T,
             typename = std::enable_if_t<!std::is_convertible_v<T, EvalResult>>>
   explicit EvalResult(T&& arg) noexcept
@@ -451,8 +483,10 @@ class EvalResult {
 };
 
 ///
-/// T is numeric type such as double
+/// \brief EvalResult for a constant value.
 ///
+/// \tparam T numeric type of the constant value (eg. double, complex<double>,
+///         etc.)
 template <typename T>
 class EvalConstant final : public EvalResult {
  public:
@@ -508,6 +542,10 @@ class EvalConstant final : public EvalResult {
   }
 };
 
+///
+/// \brief EvalResult for a tensor value of TA::DistArray type.
+/// \tparam T TA::DistArray type. Must be a specialization of TA::DistArray.
+///
 template <typename T>
 class EvalTensorTA final : public EvalResult {
  public:
@@ -570,7 +608,7 @@ class EvalTensorTA final : public EvalResult {
   }
 
   void add_inplace(EvalResult const& other) override {
-    auto& t = get_ref<T>();
+    auto& t = get<T>();
     auto const& o = other.get<T>();
 
     assert(t.trange() == o.trange());
@@ -590,6 +628,10 @@ class EvalTensorTA final : public EvalResult {
   }
 };
 
+///
+/// \brief EvalResult for a tensor value of btas::Tensor type.
+/// \tparam T btas::Tensor type. Must be a specialization of btas::Tensor.
+///
 template <typename T>
 class EvalTensorBTAS final : public EvalResult {
  public:
@@ -657,7 +699,7 @@ class EvalTensorBTAS final : public EvalResult {
   }
 
   void add_inplace(EvalResult const& other) override {
-    auto& t = get_ref<T>();
+    auto& t = get<T>();
     auto const& o = other.get<T>();
     assert(t.range() == o.range());
     t += o;

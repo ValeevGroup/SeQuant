@@ -97,6 +97,21 @@ constexpr bool IsLeafEvaluator<
             ERPtr, std::remove_reference_t<std::invoke_result_t<Le, NodeT>>>>> =
     true;
 
+///
+/// \brief Make a cache manager from an iterable of evaluable nodes.
+///
+/// \param nodes An iterable of evaluable nodes.
+///
+/// \param pred A predicate to filter nodes. By default all nodes are treated to
+///             take part in contributing to the number of repeats.
+///
+/// \param min_repeats Minimum number of repeats for a node to be cached. By
+///                    default anything repeated twice or more is cached.
+///
+/// \return A cache manager.
+///
+/// \see CacheManager
+///
 template <typename NodesI,
           typename Pred = std::function<bool(IteredT<NodesI> const&)>,
           typename = std::enable_if_t<
@@ -134,41 +149,78 @@ CacheManager<ERPtr> cache_manager(
   return CacheManager<ERPtr>{imed_counts};
 }
 
+///
+/// \brief This class extends the EvalExpr class by adding a annot() method so
+///        that it can be used to evaluate using TiledArray.
+///
 class EvalExprTA final : public EvalExpr {
  public:
   ///
-  /// annotation for TiledArray
+  /// \return String annotation for TA::DistArray.
   ///
   [[nodiscard]] std::string const& annot() const;
 
+  ///
+  /// \brief Construct an EvalExprTA from a Tensor.
+  ///
+  /// \see EvalExpr(Tensor const&).
+  ///
   explicit EvalExprTA(Tensor const&);
 
+  ///
+  /// \brief Construct an EvalExprTA from a Constant.
+  ///
+  /// \see EvalExpr(Constant const&).
+  ///
   explicit EvalExprTA(Constant const&);
 
+  ///
+  /// \brief Construct an EvalExprTA from two EvalExprTA and an EvalOp.
+  /// \see EvalExpr(EvalExpr const&, EvalExpr const&, EvalOp).
+  ///
   EvalExprTA(EvalExprTA const&, EvalExprTA const&, EvalOp);
 
  private:
   std::string annot_;
-};
+};  // class EvalExprTA
 
+///
+/// \brief This class extends the EvalExpr class by adding a annot() method so
+///        that it can be used to evaluate using BTAS.
+///
 class EvalExprBTAS final : public EvalExpr {
  public:
   using annot_t = container::svector<long>;
 
   ///
-  /// annotation for BTAS tensor
+  /// \return Annotation (container::svector<long>) for BTAS::Tensor.
   ///
   [[nodiscard]] annot_t const& annot() const noexcept;
 
+  ///
+  /// \brief Construct an EvalExprBTAS from a Tensor.
+  ///
+  /// \see EvalExpr(Tensor const&).
+  ///
   explicit EvalExprBTAS(Tensor const&) noexcept;
 
+  ///
+  /// \brief Construct an EvalExprBTAS from a Constant.
+  ///
+  /// \see EvalExpr(Constant const&).
+  ///
   explicit EvalExprBTAS(Constant const&) noexcept;
 
+  ///
+  /// \brief Construct an EvalExprBTAS from two EvalExprBTAS and an EvalOp.
+  ///
+  /// \see EvalExpr(EvalExpr const&, EvalExpr const&, EvalOp).
+  ///
   EvalExprBTAS(EvalExprBTAS const&, EvalExprBTAS const&, EvalOp) noexcept;
 
  private:
   annot_t annot_;
-};
+};  // EvalExprBTAS
 
 template <typename NodeT, typename Le,
           std::enable_if_t<IsLeafEvaluator<NodeT, Le>, bool> = true>
@@ -224,6 +276,70 @@ ERPtr evaluate_crust(NodeT const& node, Le const& le,
   }
 }
 
+///
+/// \param node An EvalNode to be evaluated.
+///
+/// \param le A leaf evaluator that takes an EvalNode and returns a tensor
+///           (TA::TArrayD, btas::Tensor<double>, etc.) or a constant (double,
+///           complex<double>, etc.).
+///
+/// \param args Optional CacheManager object passed by reference.
+///
+/// \return ERPtr to the resulting EvalResult.
+///
+/// \see EvalResult to know more about the return type.
+///
+template <typename NodeT, typename Le, typename... Args,
+          std::enable_if_t<IsLeafEvaluator<NodeT, Le>, bool> = true>
+auto evaluate(NodeT const& node, Le&& le, Args&&... args) {
+  return evaluate_crust(node, le, std::forward<Args>(args)...);
+}
+
+///
+/// \param nodes An iterable of EvalNode objects that will be evaluated turn by
+///              turn and summed up.
+///
+/// \param le A leaf evaluator that takes an EvalNode and returns a tensor
+///           (TA::TArrayD, btas::Tensor<double>, etc.) or a constant (double,
+///           complex<double>, etc.).
+///
+/// \param args Optional CacheManager object passed by reference.
+///
+/// \return ERPtr to the resulting EvalResult.
+///
+/// \see EvalResult to know more about the return type.
+///
+template <typename NodesT, typename Le, typename... Args,
+          std::enable_if_t<IsIterableOfEvaluableNodes<NodesT>, bool> = true>
+auto evaluate(NodesT const& nodes, Le const& le, Args&&... args) {
+  auto iter = std::begin(nodes);
+  auto end = std::end(nodes);
+  assert(iter != end);
+
+  auto result = evaluate(*iter, le, std::forward<Args>(args)...);
+
+  for (++iter; iter != end; ++iter) {
+    result->add_inplace(*evaluate(*iter,  //
+                                  le,     //
+                                  std::forward<Args>(args)...));
+  }
+  return result;
+}
+
+///
+/// \param node An EvalNode to be evaluated into a tensor.
+/// \param layout The layout of the resulting tensor. It is a permutation of the
+///               result of node->annot().
+/// \param le A leaf evaluator that takes an EvalNode and returns a tensor
+///           (TA::TArrayD, btas::Tensor<double>, etc.) or a constant (double,
+///           complex<double>, etc.).
+///
+/// \param args Optional CacheManager object passed by reference.
+///
+/// \return ERPtr to the resulting tensor.
+///
+/// \see EvalResult to know more about the return type.
+///
 template <typename NodeT, typename Annot, typename Le, typename... Args,
           std::enable_if_t<IsLeafEvaluator<NodeT, Le>, bool> = true>
 auto evaluate(NodeT const& node,    //
@@ -233,6 +349,23 @@ auto evaluate(NodeT const& node,    //
       ->permute(std::array<std::any, 2>{node->annot(), layout});
 }
 
+///
+/// \param nodes An iterable of EvalNode objects that will be evaluated turn by
+///              turn and summed up into a tensor.
+///
+/// \param layout The layout of the resulting tensor. It is a permutation of the
+///               result of node->annot().
+///
+/// \param le A leaf evaluator that takes an EvalNode and returns a tensor
+///           (TA::TArrayD, btas::Tensor<double>, etc.) or a constant (double,
+///           complex<double>, etc.).
+///
+/// \param args Optional CacheManager object passed by reference.
+///
+/// \return ERPtr to the resulting tensor.
+///
+/// \see EvalResult to know more about the return type.
+///
 template <typename NodesT, typename Annot, typename Le, typename... Args,
           std::enable_if_t<IsIterableOfEvaluableNodes<NodesT>,
                            bool> = true>
@@ -252,6 +385,30 @@ auto evaluate(NodesT const& nodes,  //
   return result;
 }
 
+///
+/// \param node An EvalNode or an iterable of such nodes to be evaluated into a
+///             tensor.
+///
+/// \param layout The layout of the resulting tensor. It is a permutation of the
+///               result of node->annot().
+///
+/// \param perm_groups A vector of 3-element arrays of size_t. Each array
+///                    represents a group of indices that are particle
+///                    symmetric. The first two elements of the array are the
+///                    indices of the bra and ket of the resulting tensor,
+///                    respectively, and the third element is the number of
+///                    symmetric indices in the group.
+///
+/// \param le A leaf evaluator that takes an EvalNode and returns a tensor
+///           (TA::TArrayD, btas::Tensor<double>, etc.) or a constant (double,
+///           complex<double>, etc.).
+///
+/// \param args Optional CacheManager object passed by reference.
+///
+/// \return ERPtr to the resulting tensor.
+///
+/// \see EvalResult to know more about the return type.
+///
 template <typename NodeT, typename Annot, typename Le, typename... Args>
 auto evaluate_symm(NodeT const& node, Annot const& layout,
                    container::svector<std::array<size_t, 3>> const& perm_groups,
@@ -279,6 +436,30 @@ auto evaluate_symm(NodeT const& node, Annot const& layout,
       ->symmetrize(perm_groups);
 }
 
+///
+/// \param node An EvalNode or an iterable of such nodes to be evaluated into a
+///             tensor.
+///
+/// \param layout The layout of the resulting tensor. It is a permutation of the
+///               result of node->annot().
+///
+/// \param perm_groups A vector of 3-element arrays of size_t. Each array
+///                    represents a group of indices that are particle
+///                    anti-symmetric. The first two elements of the array are
+///                    the indices of the bra and ket of the resulting tensor,
+///                    respectively, and the third element is the number of
+///                    symmetric indices in the group.
+///
+/// \param le A leaf evaluator that takes an EvalNode and returns a tensor
+///           (TA::TArrayD, btas::Tensor<double>, etc.) or a constant (double,
+///           complex<double>, etc.).
+///
+/// \param args Optional CacheManager object passed by reference.
+///
+/// \return ERPtr to the resulting tensor.
+///
+/// \see EvalResult to know more about the return type.
+///
 template <typename NodeT, typename Annot, typename Le,
           typename... Args>
 auto evaluate_antisymm(
@@ -308,29 +489,6 @@ auto evaluate_antisymm(
   }
   return evaluate(node, layout, le, std::forward<Args>(args)...)
       ->antisymmetrize(perm_groups);
-}
-
-template <typename NodeT, typename Le, typename... Args,
-          std::enable_if_t<IsLeafEvaluator<NodeT, Le>, bool> = true>
-auto evaluate(NodeT const& node, Le&& le, Args&&... args) {
-  return evaluate_crust(node, le, std::forward<Args>(args)...);
-}
-
-template <typename NodesT, typename Le, typename... Args,
-          std::enable_if_t<IsIterableOfEvaluableNodes<NodesT>, bool> = true>
-auto evaluate(NodesT const& nodes, Le const& le, Args&&... args) {
-  auto iter = std::begin(nodes);
-  auto end = std::end(nodes);
-  assert(iter != end);
-
-  auto result = evaluate(*iter, le, std::forward<Args>(args)...);
-
-  for (++iter; iter != end; ++iter) {
-    result->add_inplace(*evaluate(*iter,  //
-                                  le,     //
-                                  std::forward<Args>(args)...));
-  }
-  return result;
 }
 
 }  // namespace sequant::eval
