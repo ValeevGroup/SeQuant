@@ -98,16 +98,16 @@ class SequantEvalScfBTAS final : public SequantEvalScf {
       auto st = info_.eqn_opts.spintrace;
       auto cm = info_.optm_opts.reuse_imeds;
       if (st && cm) {
-        r = eval::evaluate_symm(n, target_indices, {}, data_world_, cman_)
+        r = evaluate_symm(n, target_indices, {}, data_world_, cman_)
                 ->template get<Tensor_t>();
       } else if (st && !cm) {
-        r = eval::evaluate_symm(n, target_indices, {}, data_world_)
+        r = evaluate_symm(n, target_indices, {}, data_world_)
                 ->template get<Tensor_t>();
       } else if (!st && cm) {
-        r = eval::evaluate_antisymm(n, target_indices, {}, data_world_, cman_)
+        r = evaluate_antisymm(n, target_indices, {}, data_world_, cman_)
                 ->template get<Tensor_t>();
       } else {
-        r = eval::evaluate_antisymm(n, target_indices, {}, data_world_)
+        r = evaluate_antisymm(n, target_indices, {}, data_world_)
                 ->template get<Tensor_t>();
       }
     }

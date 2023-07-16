@@ -15,7 +15,7 @@
 #include <memory>
 #include <utility>
 
-namespace sequant::eval {
+namespace sequant {
 
 namespace {
 std::logic_error invalid_operand(
@@ -717,6 +717,6 @@ class EvalTensorBTAS final : public EvalResult {
   }
 };
 
-}  // namespace sequant::eval
+}  // namespace sequant
 
 #endif  // SEQUANT_EVAL_RESULT_HPP

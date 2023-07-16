@@ -4,7 +4,7 @@
 #include <SeQuant/core/container.hpp>
 #include <memory>
 
-namespace sequant::eval {
+namespace sequant {
 
 ///
 /// This class implements a cache manager useful for the cases when the number
@@ -113,6 +113,10 @@ class CacheManager {
     return std::make_shared<Data>(std::move(data));
   }
 
+  ///
+  /// \brief Check if the key exists in the database: does not check if cache
+  ///        exists
+  ///
   [[nodiscard]] bool exists(key_type key) const noexcept {
     return cache_map_.find(key) != cache_map_.end();
   }
@@ -158,6 +162,6 @@ class CacheManager {
 
 };  // CacheManager
 
-}  // namespace sequant::eval
+}  // namespace sequant
 
 #endif  // SEQUANT_EVAL_CACHE_MANAGER_HPP

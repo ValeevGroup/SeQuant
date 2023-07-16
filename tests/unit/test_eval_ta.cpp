@@ -14,7 +14,7 @@
 
 namespace {
 auto eval_node(sequant::ExprPtr const& expr) {
-  return sequant::to_eval_node<sequant::eval::EvalExprTA>(expr);
+  return sequant::to_eval_node<sequant::EvalExprTA>(expr);
 }
 
 auto tensor_to_key(sequant::Tensor const& tnsr) {
@@ -38,7 +38,7 @@ class rand_tensor_yield {
   TA::World& world_;
   size_t const nocc_;
   size_t const nvirt_;
-  mutable std::map<std::wstring, sequant::eval::ERPtr> label_to_tnsr_;
+  mutable std::map<std::wstring, sequant::ERPtr> label_to_tnsr_;
 
  public:
   [[nodiscard]] Tensor_t make_rand_tensor(sequant::Tensor const& tnsr) const {
@@ -72,8 +72,8 @@ class rand_tensor_yield {
   rand_tensor_yield(TA::World& world, size_t noccupied, size_t nvirtual)
       : world_{world}, nocc_{noccupied}, nvirt_{nvirtual} {}
 
-  sequant::eval::ERPtr operator()(sequant::Tensor const& tnsr) const {
-    using result_t = sequant::eval::EvalTensorTA<Tensor_t>;
+  sequant::ERPtr operator()(sequant::Tensor const& tnsr) const {
+    using result_t = sequant::EvalTensorTA<Tensor_t>;
     std::wstring const label = tensor_to_key(tnsr);
     if (auto&& found = label_to_tnsr_.find(label);
         found != label_to_tnsr_.end()) {
@@ -83,17 +83,16 @@ class rand_tensor_yield {
     }
     Tensor_t t = make_rand_tensor(tnsr);
     auto success = label_to_tnsr_.emplace(
-        label, sequant::eval::eval_result<result_t>(std::move(t)));
+        label, sequant::eval_result<result_t>(std::move(t)));
     assert(success.second && "couldn't store tensor!");
     //    std::cout << "label = [" << sequant::to_string(label)
     //              << "] NotFound in cache. Creating.." << std::endl;
     return success.first->second;
   }
 
-  template <typename T,
-            typename = std::enable_if_t<sequant::eval::IsEvaluable<T>>>
-  sequant::eval::ERPtr operator()(T const& node) const {
-    using namespace sequant::eval;
+  template <typename T, typename = std::enable_if_t<sequant::IsEvaluable<T>>>
+  sequant::ERPtr operator()(T const& node) const {
+    using namespace sequant;
     if (node->result_type() == sequant::ResultType::Tensor) {
       assert(node->expr()->template is<sequant::Tensor>());
       return (*this)(node->as_tensor());
@@ -113,7 +112,7 @@ class rand_tensor_yield {
   /// \note The tensor should be already present in the yielder cache
   ///       otherwise throws assertion error. To avoid that use the other
   ///       overload of operator() that takes sequant::Tensor const&
-  sequant::eval::ERPtr operator()(std::wstring_view label) const {
+  sequant::ERPtr operator()(std::wstring_view label) const {
     auto&& found = label_to_tnsr_.find(label.data());
     if (found == label_to_tnsr_.end())
       found = label_to_tnsr_.find(tensor_to_key(label));
@@ -126,10 +125,10 @@ class rand_tensor_yield {
 
 TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
   using ranges::views::transform;
-  using sequant::eval::EvalExprTA;
-  using sequant::eval::evaluate;
-  using sequant::eval::evaluate_antisymm;
-  using sequant::eval::evaluate_symm;
+  using sequant::EvalExprTA;
+  using sequant::evaluate;
+  using sequant::evaluate_antisymm;
+  using sequant::evaluate_symm;
 
   using TA::TArrayD;
 
@@ -529,15 +528,12 @@ TEST_CASE("TEST_EVAL_USINT_TA_COMPLEX", "[eval]") {
     // REQUIRE(Approx(norm(zero2)) == 0);
 
     auto expr3 = parse_expr(L"g_{i1,i2,i3}^{a1,a2,a3}");
-    auto eval3 = eval_symm(expr3, "i_1,i_2,i_3,a_1,a_2,a_3", {{0,3,3}});
+    auto eval3 = eval_symm(expr3, "i_1,i_2,i_3,a_1,a_2,a_3", {{0, 3, 3}});
     auto const& arr3 = yield(L"g{i1,i2,i3;a1,a2,a3}");
     TArrayC man3;
-    man3("i,j,k,a,b,c") =   arr3("i,j,k,a,b,c")
-                          + arr3("i,k,j,a,c,b")
-                          + arr3("j,i,k,b,a,c")
-                          + arr3("j,k,i,b,c,a")
-                          + arr3("k,i,j,c,a,b")
-                          + arr3("k,j,i,c,b,a");
+    man3("i,j,k,a,b,c") = arr3("i,j,k,a,b,c") + arr3("i,k,j,a,c,b") +
+                          arr3("j,i,k,b,a,c") + arr3("j,k,i,b,c,a") +
+                          arr3("k,i,j,c,a,b") + arr3("k,j,i,c,b,a");
     REQUIRE(norm(man3) == Approx(norm(eval3)));
     TArrayC zero3;
     zero3("i,j,k,a,b,c") = eval3("i,j,k,a,b,c") - man3("i,j,k,a,b,c");

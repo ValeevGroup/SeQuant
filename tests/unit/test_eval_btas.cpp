@@ -15,7 +15,7 @@
 namespace {
 
 auto eval_node(sequant::ExprPtr const& expr) {
-  return sequant::to_eval_node<sequant::eval::EvalExprBTAS>(expr);
+  return sequant::to_eval_node<sequant::EvalExprBTAS>(expr);
 }
 
 static auto const idx_rgx = boost::wregex{L"([ia])([↑↓])?_?(\\d+)"};
@@ -38,7 +38,7 @@ class rand_tensor_yield {
  private:
   size_t const nocc_;
   size_t const nvirt_;
-  mutable std::map<std::wstring, sequant::eval::ERPtr> label_to_tnsr_;
+  mutable std::map<std::wstring, sequant::ERPtr> label_to_tnsr_;
 
  public:
   rand_tensor_yield(size_t noccupied, size_t nvirtual)
@@ -68,8 +68,8 @@ class rand_tensor_yield {
     return result;
   }
 
-  sequant::eval::ERPtr operator()(sequant::Tensor const& tnsr) const {
-    using namespace sequant::eval;
+  sequant::ERPtr operator()(sequant::Tensor const& tnsr) const {
+    using namespace sequant;
     std::wstring const label = tensor_to_key(tnsr);
     if (auto&& found = label_to_tnsr_.find(label);
         found != label_to_tnsr_.end()) {
@@ -88,10 +88,9 @@ class rand_tensor_yield {
     return success.first->second;
   }
 
-  template <typename T,
-            typename = std::enable_if_t<sequant::eval::IsEvaluable<T>>>
-  sequant::eval::ERPtr operator()(T const& node) const {
-    using namespace sequant::eval;
+  template <typename T, typename = std::enable_if_t<sequant::IsEvaluable<T>>>
+  sequant::ERPtr operator()(T const& node) const {
+    using namespace sequant;
     if (node->result_type() == sequant::ResultType::Tensor) {
       assert(node->expr()->template is<sequant::Tensor>());
       return (*this)(node->expr()->template as<sequant::Tensor>());
@@ -110,7 +109,7 @@ class rand_tensor_yield {
   /// \note The tensor should be already present in the yielder cache
   ///       otherwise throws assertion error. To avoid that use the other
   ///       overload of operator() that takes sequant::Tensor const&
-  sequant::eval::ERPtr operator()(std::wstring_view label) const {
+  sequant::ERPtr operator()(std::wstring_view label) const {
     auto&& found = label_to_tnsr_.find(label.data());
     if (found == label_to_tnsr_.end()) {
       assert(false && "attempted access of non-existent tensor!");
@@ -121,17 +120,15 @@ class rand_tensor_yield {
 
 using namespace sequant;
 
-template <
-    typename Iterable,
-    std::enable_if_t<std::is_convertible_v<eval::IteredT<Iterable>, Index>,
-                     bool> = true>
+template <typename Iterable,
+          std::enable_if_t<std::is_convertible_v<IteredT<Iterable>, Index>,
+                           bool> = true>
 container::svector<long> tidxs(Iterable const& indices) noexcept {
-  return sequant::eval::index_hash(indices) |
-         ranges::to<container::svector<long>>;
+  return sequant::index_hash(indices) | ranges::to<container::svector<long>>;
 }
 
 container::svector<long> tidxs(Tensor const& tnsr) noexcept {
-  return sequant::eval::index_hash(tnsr.const_braket()) |
+  return sequant::index_hash(tnsr.const_braket()) |
          ranges::to<container::svector<long>>;
 }
 
@@ -143,10 +140,10 @@ container::svector<long> tidxs(
   return tidxs(tnsr_p->as<Tensor>());
 }
 
-template <typename Iterable,
-          std::enable_if_t<
-              std::is_convertible_v<eval::IteredT<Iterable>, std::wstring>,
-              bool> = true>
+template <
+    typename Iterable,
+    std::enable_if_t<std::is_convertible_v<IteredT<Iterable>, std::wstring>,
+                     bool> = true>
 container::svector<long> tidxs(Iterable const& strings) noexcept {
   return tidxs(strings | ranges::views::transform(
                              [](auto const& s) { return Index{s}; }));
@@ -173,7 +170,7 @@ container::svector<long> tidxs(std::wstring const& csv) noexcept {
 TEST_CASE("TEST_EVAL_USING_BTAS", "[eval]") {
   using ranges::views::transform;
   using namespace sequant;
-  using namespace sequant::eval;
+  using namespace sequant;
 
   using BTensorD = btas::Tensor<double>;
 

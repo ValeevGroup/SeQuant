@@ -20,6 +20,9 @@
 #include <type_traits>
 
 namespace sequant {
+
+namespace {
+
 #if __cplusplus < 202002L
 template <class T>
 struct remove_cvref {
@@ -35,9 +38,8 @@ using remove_cvref = std::remove_cvref<T>;
 template <typename T>
 using remove_cvref_t = std::remove_cvref_t<T>;
 #endif
-}  // namespace sequant
 
-namespace sequant::eval {
+}  // namespace
 
 template <typename T, typename = void>
 constexpr bool IsIterable{};
@@ -491,6 +493,6 @@ auto evaluate_antisymm(
       ->antisymmetrize(perm_groups);
 }
 
-}  // namespace sequant::eval
+}  // namespace sequant
 
 #endif  // SEQUANT_EVAL_EVAL_HPP

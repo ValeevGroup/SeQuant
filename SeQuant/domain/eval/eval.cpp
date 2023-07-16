@@ -3,7 +3,7 @@
 #include <TiledArray/expressions/index_list.h>
 #include <TiledArray/expressions/permopt.h>
 
-namespace sequant::eval {
+namespace sequant {
 
 namespace {
 
@@ -95,4 +95,4 @@ EvalExprBTAS::EvalExprBTAS(EvalExprBTAS const& left,   //
   }
 }
 
-}  // namespace sequant::eval
+}  // namespace sequant
