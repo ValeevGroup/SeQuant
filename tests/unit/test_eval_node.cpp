@@ -12,7 +12,7 @@ auto validate_tensor = [](const auto& x, std::wstring_view tspec) -> bool {
 };
 
 auto eval_node(sequant::ExprPtr const& expr) {
-  return sequant::to_eval_node<sequant::EvalExpr>(expr);
+  return sequant::eval_node<sequant::EvalExpr>(expr);
 }
 
 enum struct NodePos {

@@ -79,7 +79,7 @@ struct CalcInfo {
     using ranges::views::transform;
     auto trimmed = opt::tail_factor(expr);
     return *trimmed | transform([st = optm_opts.single_term](auto expr) {
-      return to_eval_node<ExprT>(st ? optimize(expr, IndexToSize{}) : expr);
+      return eval_node<ExprT>(st ? optimize(expr, IndexToSize{}) : expr);
     }) | ranges::to_vector;
   }
 };

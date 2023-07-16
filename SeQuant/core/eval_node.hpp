@@ -13,12 +13,12 @@
 
 namespace sequant {
 
-template <typename T = EvalExpr,
+template <typename T,
           typename = std::enable_if_t<std::is_convertible_v<T, EvalExpr>>>
 using EvalNode = FullBinaryNode<T>;
 
 template <typename ExprT>
-EvalNode<ExprT> to_eval_node(ExprPtr const& expr) {
+EvalNode<ExprT> eval_node(ExprPtr const& expr) {
   using ranges::accumulate;
   using ranges::views::tail;
   using ranges::views::transform;
@@ -28,13 +28,13 @@ EvalNode<ExprT> to_eval_node(ExprPtr const& expr) {
   assert(expr->is<Sum>() || expr->is<Product>());
 
   auto subxprs = *expr | ranges::views::transform([](auto const& x) {
-    return to_eval_node<ExprT>(x);
+    return eval_node<ExprT>(x);
   }) | ranges::to_vector;
 
   if (expr->is<Product>()) {
     auto const& prod = expr->as<Product>();
     if (prod.scalar() != 1)
-      subxprs.emplace_back(to_eval_node<ExprT>(ex<Constant>(prod.scalar())));
+      subxprs.emplace_back(eval_node<ExprT>(ex<Constant>(prod.scalar())));
   }
 
   auto const op = expr->is<Sum>() ? EvalOp::Sum : EvalOp::Prod;
