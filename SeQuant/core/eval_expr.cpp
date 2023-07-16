@@ -5,19 +5,21 @@
 
 #include <cmath>
 
-size_t hash_terminal_tensor(sequant::Tensor const&) noexcept;
+namespace sequant {
 
-size_t hash_imed(sequant::EvalExpr const&, sequant::EvalExpr const&,
-                 sequant::EvalOp) noexcept;
+namespace {
 
-sequant::ExprPtr make_imed(sequant::EvalExpr const&, sequant::EvalExpr const&,
-                           sequant::EvalOp) noexcept;
+size_t hash_terminal_tensor(Tensor const&) noexcept;
 
-bool is_tot(sequant::Tensor const& t) noexcept {
-  return ranges::any_of(t.const_braket(), &sequant::Index::has_proto_indices);
+size_t hash_imed(EvalExpr const&, EvalExpr const&, EvalOp) noexcept;
+
+ExprPtr make_imed(EvalExpr const&, EvalExpr const&, EvalOp) noexcept;
+
+bool is_tot(Tensor const& t) noexcept {
+  return ranges::any_of(t.const_braket(), &Index::has_proto_indices);
 }
 
-namespace sequant {
+}  // namespace
 
 size_t EvalExpr::global_id_{};
 
@@ -59,19 +61,17 @@ ExprPtr EvalExpr::expr() const noexcept { return expr_; }
 
 bool EvalExpr::tot() const noexcept { return tot_; }
 
-std::wstring EvalExpr::to_latex() const noexcept {
-  return ::sequant::to_latex(expr_);
-}
+std::wstring EvalExpr::to_latex() const noexcept { return expr_->to_latex(); }
 
-sequant::Tensor const& EvalExpr::as_tensor() const noexcept(false) {
+Tensor const& EvalExpr::as_tensor() const noexcept(false) {
   return expr_->as<Tensor>();
 }
 
-sequant::Constant const& EvalExpr::as_constant() const noexcept(false) {
+Constant const& EvalExpr::as_constant() const noexcept(false) {
   return expr_->as<Constant>();
 }
 
-}  // namespace sequant
+namespace {
 
 ///
 /// \param bk iterable of sequant Index
@@ -82,7 +82,6 @@ sequant::Constant const& EvalExpr::as_constant() const noexcept(false) {
 ///
 template <typename T>
 size_t hash_braket(T const& bk) noexcept {
-  using namespace sequant;
   size_t h = 0;
   for (auto const& idx : bk) {
     hash::combine(h, hash::value(idx.space().type().to_int32()));
@@ -101,9 +100,7 @@ size_t hash_braket(T const& bk) noexcept {
 ///
 /// @warning O(N^2) algorithm
 ///
-size_t hash_tensor_pair_topology(sequant::Tensor const& t1,
-                                 sequant::Tensor const& t2) noexcept {
-  using namespace sequant;
+size_t hash_tensor_pair_topology(Tensor const& t1, Tensor const& t2) noexcept {
   using ranges::views::enumerate;
   size_t h = 0;
   for (auto&& [pos1, idx1] : t1.const_braket() | enumerate)
@@ -113,17 +110,15 @@ size_t hash_tensor_pair_topology(sequant::Tensor const& t1,
   return h;
 }
 
-size_t hash_terminal_tensor(sequant::Tensor const& tnsr) noexcept {
-  using namespace sequant;
+size_t hash_terminal_tensor(Tensor const& tnsr) noexcept {
   size_t h = 0;
   hash::combine(h, hash::value(tnsr.label()));
   hash::combine(h, hash_braket(tnsr.const_braket()));
   return h;
 }
 
-size_t hash_imed(sequant::EvalExpr const& left, sequant::EvalExpr const& right,
-                 sequant::EvalOp op) noexcept {
-  using namespace sequant;
+size_t hash_imed(EvalExpr const& left, EvalExpr const& right,
+                 EvalOp op) noexcept {
   size_t h = 0;
   hash::combine(h, hash::value(op));
 
@@ -140,13 +135,13 @@ size_t hash_imed(sequant::EvalExpr const& left, sequant::EvalExpr const& right,
   return h;
 }
 
-std::pair<sequant::container::svector<sequant::Index>,
-          sequant::container::svector<sequant::Index>>
-target_braket(sequant::Tensor const& t1, sequant::Tensor const& t2) noexcept {
+std::pair<container::svector<Index>,  // bra
+          container::svector<Index>   // ket
+          >
+target_braket(Tensor const& t1, Tensor const& t2) noexcept {
   using ranges::views::keys;
   using ranges::views::values;
   using ranges::views::zip;
-  using namespace sequant;
   using index_container = container::svector<Index>;
 
   auto remove_item = [](auto& vec, size_t pos) -> void {
@@ -188,10 +183,8 @@ target_braket(sequant::Tensor const& t1, sequant::Tensor const& t2) noexcept {
           values(left) | ranges::to<index_container>};
 }
 
-sequant::Symmetry tensor_symmetry_sum(sequant::EvalExpr const& left,
-                                      sequant::EvalExpr const& right) noexcept {
-  using namespace sequant;
-
+Symmetry tensor_symmetry_sum(EvalExpr const& left,
+                             EvalExpr const& right) noexcept {
   auto const& t1 = left.expr()->as<Tensor>();
   auto const& t2 = right.expr()->as<Tensor>();
 
@@ -207,10 +200,8 @@ sequant::Symmetry tensor_symmetry_sum(sequant::EvalExpr const& left,
   return Symmetry::nonsymm;
 }
 
-sequant::Symmetry tensor_symmetry_prod(
-    sequant::EvalExpr const& left, sequant::EvalExpr const& right) noexcept {
-  using namespace sequant;
-
+Symmetry tensor_symmetry_prod(EvalExpr const& left,
+                              EvalExpr const& right) noexcept {
   using index_set_t = container::set<Index, Index::LabelCompare>;
 
   // HELPER LAMBDA
@@ -260,17 +251,13 @@ sequant::Symmetry tensor_symmetry_prod(
   return imed_sym;
 }
 
-sequant::ParticleSymmetry particle_symmetry(sequant::Symmetry s) noexcept {
-  using namespace sequant;
+ParticleSymmetry particle_symmetry(Symmetry s) noexcept {
   return (s == Symmetry::symm || s == Symmetry::antisymm)
              ? ParticleSymmetry::symm
              : ParticleSymmetry::nonsymm;
 }
 
-sequant::ExprPtr make_sum(sequant::EvalExpr const& left,
-                          sequant::EvalExpr const& right) noexcept {
-  using namespace sequant;
-
+ExprPtr make_sum(EvalExpr const& left, EvalExpr const& right) noexcept {
   assert(left.expr()->is<Tensor>());
   assert(right.expr()->is<Tensor>());
 
@@ -287,10 +274,7 @@ sequant::ExprPtr make_sum(sequant::EvalExpr const& left,
   return ex<Tensor>(L"I", t1.bra(), t1.ket(), ts, bks, ps);
 }
 
-sequant::ExprPtr make_prod(sequant::EvalExpr const& left,
-                           sequant::EvalExpr const& right) noexcept {
-  using namespace sequant;
-
+ExprPtr make_prod(EvalExpr const& left, EvalExpr const& right) noexcept {
   auto const& t1 = left.expr()->as<Tensor>();
   auto const& t2 = right.expr()->as<Tensor>();
 
@@ -307,11 +291,8 @@ sequant::ExprPtr make_prod(sequant::EvalExpr const& left,
   }
 }
 
-sequant::ExprPtr make_imed(sequant::EvalExpr const& left,
-                           sequant::EvalExpr const& right,
-                           sequant::EvalOp op) noexcept {
-  using namespace sequant;
-
+ExprPtr make_imed(EvalExpr const& left, EvalExpr const& right,
+                  EvalOp op) noexcept {
   assert(op != EvalOp::Id);
 
   auto lres = left.result_type();
@@ -320,7 +301,7 @@ sequant::ExprPtr make_imed(sequant::EvalExpr const& left,
   if (lres == ResultType::Constant && rres == ResultType::Constant) {
     // scalar (+|*) scalar
 
-    return sequant::ex<sequant::Constant>(1);
+    return ex<Constant>(1);
 
   } else if (lres == ResultType::Constant && rres == ResultType::Tensor) {
     // scalar (*) tensor
@@ -351,3 +332,5 @@ sequant::ExprPtr make_imed(sequant::EvalExpr const& left,
     }
   }
 }
+}  // namespace
+}  // namespace sequant
