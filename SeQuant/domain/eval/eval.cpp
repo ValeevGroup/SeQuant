@@ -7,48 +7,37 @@ namespace sequant {
 
 namespace {
 
-///
-/// Given an iterable of Index objects, generate a string annotation
-/// that can be used for TiledArray tensor expressions.
-/// Tensor-of-tensors also supported.
-template <typename Indices>
-std::string braket_to_annot(Indices const& indices) {
-  using ranges::find;
-  using ranges::views::filter;
+template <
+    typename Iterable,
+    std::enable_if_t<!std::is_same_v<InnerOuterIndices, std::decay_t<Iterable>>,
+                     bool> = true>
+std::string indices_to_annot(Iterable const& indices) noexcept {
   using ranges::views::intersperse;
   using ranges::views::join;
+  using ranges::views::transform;
 
-  // make a comma-separated string out of an iterable of strings
-  auto add_commas = [](auto const& strs) -> std::string {
-    return strs | intersperse(",") | join | ranges::to<std::string>;
-  };
+  auto idx_label = [](Index const& idx) { return to_string(idx.label()); };
 
-  container::svector<std::string> idxs{}, pidxs{};
-  for (auto&& idx : indices) {
-    idxs.emplace_back(sequant::to_string(idx.label()));
-    for (auto&& pidx : idx.proto_indices())
-      pidxs.emplace_back(sequant::to_string(pidx.label()));
-  }
+  return indices | transform(idx_label) | intersperse(",") | join |
+         ranges::to<std::string>;
+}
 
-  if (pidxs.empty()) {
-    // not a tensor-of-tensor type expression
-    return add_commas(idxs);
+std::string indices_to_annot(InnerOuterIndices const& inout) noexcept {
+  auto const& in = inout.inner;
+  auto const& out = inout.outer;
+  if (out.empty()) {
+    return indices_to_annot(in);
   } else {
-    ranges::stable_sort(pidxs);
-    ranges::actions::unique(pidxs);
-    auto not_in_pidx = [&pidxs](auto&& l) {
-      return find(pidxs, l) == pidxs.end();
-    };
-    return add_commas(pidxs) + ";" +
-           add_commas(idxs | filter(not_in_pidx) | ranges::to<decltype(idxs)>);
+    return indices_to_annot(in) + ";" + indices_to_annot(out);
   }
 }
+
 }  // namespace
 
 std::string const& EvalExprTA::annot() const { return annot_; }
 
 EvalExprTA::EvalExprTA(Tensor const& tnsr)
-    : EvalExpr(tnsr), annot_{braket_to_annot(tnsr.braket())} {}
+    : EvalExpr(tnsr), annot_{indices_to_annot(inner_outer_indices())} {}
 
 EvalExprTA::EvalExprTA(Constant const& c) : EvalExpr(c), annot_{} {}
 
@@ -60,7 +49,7 @@ EvalExprTA::EvalExprTA(const EvalExprTA& left, const EvalExprTA& right,
   using TA::expressions::GEMMPermutationOptimizer;
 
   if (result_type() == ResultType::Tensor) {
-    annot_ = braket_to_annot(as_tensor().const_braket());
+    annot_ = indices_to_annot(inner_outer_indices());
     if (left.result_type() == right.result_type() &&
         op_type() == EvalOp::Prod && !tot()) {
       // tensor x tensor confirmed
