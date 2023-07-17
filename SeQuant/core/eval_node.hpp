@@ -13,11 +13,44 @@
 
 namespace sequant {
 
+namespace {
+
+template <typename, typename = void>
+constexpr bool IsEvalExpr{};
+
+template <typename T>
+constexpr bool
+    IsEvalExpr<T, std::enable_if_t<std::is_convertible_v<T, EvalExpr>>>{true};
+
+template <typename, typename = void>
+constexpr bool IsEvalNode{};
+
+template <typename T>
+constexpr bool IsEvalNode<FullBinaryNode<T>, std::enable_if_t<IsEvalExpr<T>>>{
+    true};
+
+template <typename T>
+constexpr bool
+    IsEvalNode<const FullBinaryNode<T>, std::enable_if_t<IsEvalExpr<T>>>{true};
+
+}  // namespace
+
 template <typename T,
           typename = std::enable_if_t<std::is_convertible_v<T, EvalExpr>>>
 using EvalNode = FullBinaryNode<T>;
 
-template <typename ExprT>
+///
+/// \brief Creates an evaluation tree from @c ExprPtr.
+///
+/// \tparam ExprT Can be @c EvalExpr or derived from it.
+///
+/// \param expr The expression to be converted to an evaluation tree.
+///
+/// \return A full-binary tree whose nodes are @c EvalExpr (or derived from it)
+///         types.
+///
+template <typename ExprT,
+          std::enable_if_t<IsEvalExpr<std::decay_t<ExprT>>, bool> = true>
 EvalNode<ExprT> eval_node(ExprPtr const& expr) {
   using ranges::accumulate;
   using ranges::views::tail;
@@ -48,6 +81,22 @@ EvalNode<ExprT> eval_node(ExprPtr const& expr) {
       });
 
   return bnode;
+}
+
+///
+/// \brief Creates an evaluation tree from Expr.
+///
+/// \tparam EvalNodeT is @c EvalNode<ExprT>, where @c ExprT is @c EvalExpr or
+/// derived.
+///
+/// \param expr The expression to be converted to an evaluation tree.
+///
+/// \return A full-binary tree whose type is @c EvalNodeT.
+///
+template <typename EvalNodeT,
+          std::enable_if_t<IsEvalNode<std::decay_t<EvalNodeT>>, bool> = true>
+EvalNodeT eval_node(ExprPtr const& expr) {
+  return eval_node<typename EvalNodeT::value_type>(expr);
 }
 
 template <typename ExprT>
