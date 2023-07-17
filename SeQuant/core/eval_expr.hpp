@@ -40,6 +40,11 @@ enum class EvalOp {
 ///
 enum class ResultType { Tensor, Constant };
 
+struct InnerOuterIndices {
+  container::svector<Index> const inner;
+  container::svector<Index> const outer;
+};
+
 ///
 /// \brief The EvalExpr class represents the object that go into the nodes of
 ///        the binary tree that is used to evaluate the sequant expressions.
@@ -124,6 +129,23 @@ class EvalExpr {
   /// \return Constant const&.
   ///
   [[nodiscard]] Constant const& as_constant() const;
+
+  ///
+  /// \brief Separates indices of a tensor into inner and outer index groups.
+  ///
+  /// \details - If the expression this object holds is a Constant, then the
+  ///            resulting inner and outer indices are empty.
+  ///          - The outer indices are empty if neither of the indices in the
+  ///            tensor's braket have at least one proto-index.
+  ///          - The proto-indices are collected, sorted using
+  ///            Index::LabelCompare, and de-duplicated to form the outer
+  ///            indices.
+  ///          - The non-proto indices make up the inner indices if they are not
+  ///            already in the outer indices.
+  ///
+  /// \return InnerOuterIndices object.
+  ///
+  [[nodiscard]] InnerOuterIndices inner_outer_indices() const noexcept;
 
  private:
   EvalOp op_type_;

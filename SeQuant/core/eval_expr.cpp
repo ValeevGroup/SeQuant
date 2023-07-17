@@ -71,6 +71,25 @@ Constant const& EvalExpr::as_constant() const noexcept(false) {
   return expr_->as<Constant>();
 }
 
+InnerOuterIndices EvalExpr::inner_outer_indices() const noexcept {
+  if (expr()->is<Constant>()) return {};
+
+  assert(expr()->is<Tensor>());
+  auto const& t = expr()->as<Tensor>();
+
+  container::svector<Index> inner;
+  container::svector<Index> outer;
+  for (auto const& idx : t.const_braket()) {
+    inner.emplace_back(idx);
+    for (auto const& pidx : idx.proto_indices()) outer.emplace_back(pidx);
+  }
+  ranges::stable_sort(outer, Index::LabelCompare{});
+  ranges::actions::unique(outer);
+  ranges::actions::remove_if(
+      inner, [&outer](Index const& i) { return ranges::contains(outer, i); });
+  return {std::move(inner), std::move(outer)};
+}
+
 namespace {
 
 ///
