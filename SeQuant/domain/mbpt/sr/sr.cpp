@@ -243,10 +243,6 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
   return result;
 }
 
-// perturbation/response related tensor level functions
-
-ExprPtr V() { return make_op(OpType::V, 1)(); }
-
 namespace op {
 
 ExprPtr H1() {
@@ -499,17 +495,6 @@ ExprPtr vac_av(
   }
   throw std::invalid_argument(
       "mpbt::sr::op::vac_av(expr): unknown expression type");
-}
-// perturbation/response related tensor level operators
-ExprPtr V() {
-  return ex<op_t>([]() -> std::wstring_view { return L"V"; },
-                  [=]() -> ExprPtr {
-                    using namespace sequant::mbpt::sr;
-                    return sr::V();
-                  },
-                  [=](qnc_t& qns) {
-                    qns = combine(qnc_t{{0, 1}, {0, 1}, {0, 1}, {0, 1}}, qns);
-                  });
 }
 
 }  // namespace op
