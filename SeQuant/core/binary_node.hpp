@@ -86,11 +86,10 @@ class FullBinaryNode {
         right_{other.right_ ? other.right_->deep_copy() : nullptr} {}
 
   FullBinaryNode& operator=(FullBinaryNode<T> const& other) {
-    data_ = other.data_;
-    if (!other.leaf()) {
-      left_.reset(new FullBinaryNode<T>{*other.left()});
-      right_.reset(new FullBinaryNode<T>{*other.right()});
-    }
+    auto temp = other.deep_copy();
+    data_ = std::move(temp->data_);
+    left_ = std::move(temp->left_);
+    right_ = std::move(temp->right_);
     return *this;
   }
 
@@ -167,34 +166,34 @@ class FullBinaryNode {
   template <typename F,
             std::enable_if_t<std::is_invocable_v<F, FullBinaryNode<T> const&>,
                              bool> = true>
-  void visit(F&& pred) const {
+  void visit(F const& pred) const {
     pred(*this);
     if (leaf()) return;
 
-    left().visit(std::forward<F>(pred));
-    right().visit(std::forward<F>(pred));
+    left().visit(pred);
+    right().visit(pred);
   }
 
   template <typename F,
             std::enable_if_t<std::is_invocable_v<F, FullBinaryNode<T> const&>,
                              bool> = true>
-  void visit_internal(F&& pred) const {
+  void visit_internal(F const& pred) const {
     if (!leaf()) {
-      left().visit_internal(std::forward<F>(pred));
+      left().visit_internal(pred);
       pred(*this);
-      right().visit_internal(std::forward<F>(pred));
+      right().visit_internal(pred);
     }
   }
 
   template <typename F,
             std::enable_if_t<std::is_invocable_v<F, FullBinaryNode<T> const&>,
                              bool> = true>
-  void visit_leaf(F&& pred) const {
+  void visit_leaf(F const& pred) const {
     if (leaf()) {
       pred(*this);
     } else {
-      left().visit_leaf(std::forward<F>(pred));
-      right().visit_leaf(std::forward<F>(pred));
+      left().visit_leaf(pred);
+      right().visit_leaf(pred);
     }
   }
 
@@ -207,22 +206,21 @@ class FullBinaryNode {
                   std::invoke_result_t<F, FullBinaryNode<T> const&> const&,
                   std::invoke_result_t<F, FullBinaryNode<T> const&> const&>,
           bool> = true>
-  auto evaluate(F&& evaluator) const {
-    if (leaf()) return evaluator(*this);
-    return evaluator(*this, left().evaluate(std::forward<F>(evaluator)),
-                     right().evaluate(std::forward<F>(evaluator)));
+  auto evaluate(F const& func) const {
+    if (leaf()) return func(*this);
+    return func(*this, left().evaluate(func), right().evaluate(func));
   }
 
  private:
   template <typename Ostream, typename F>
-  [[maybe_unused]] int digraph(Ostream& os, F&& label_gen,
+  [[maybe_unused]] int digraph(Ostream& os, F const& label_gen,
                                int count = 0) const {
     os << "node" << count << "[label=" << label_gen(*this) << "];\n";
 
     if (this->leaf()) return count;
 
-    auto lcount = left().digraph(os, std::forward<F>(label_gen), count + 1);
-    auto rcount = right().digraph(os, std::forward<F>(label_gen), lcount + 1);
+    auto lcount = left().digraph(os, label_gen, count + 1);
+    auto rcount = right().digraph(os, label_gen, lcount + 1);
     os << "node" << count << " -> "
        << "node" << count + 1 << ";\n";
     os << "node" << count << " -> "
@@ -232,7 +230,8 @@ class FullBinaryNode {
   }
 
   template <typename Ostream, typename F, typename G>
-  void tikz(Ostream& os, F&& label_gen, G&& spec_gen, size_t indent = 2) const {
+  void tikz(Ostream& os, F const& label_gen, G const& spec_gen,
+            size_t indent = 2) const {
     auto pad = [](Ostream& o, size_t i) {
       for (auto j = 0; j < i; ++j) o << " ";
     };
@@ -246,21 +245,19 @@ class FullBinaryNode {
 
     pad(os, indent);
     os << "child {";
-    left().tikz(os, std::forward<F>(label_gen), std::forward<G>(spec_gen),
-                indent + 2);
+    left().tikz(os, label_gen, spec_gen, indent + 2);
     os << "}";
     os << "\n";
 
     pad(os, indent);
     os << "child {";
-    right().tikz(os, std::forward<F>(label_gen), std::forward<G>(spec_gen),
-                 indent + 2);
+    right().tikz(os, label_gen, spec_gen, indent + 2);
     os << "}";
   }
 
  public:
   template <typename string_t, typename F>
-  string_t digraph(F&& label_gen, string_t const& graph_name = {}) const {
+  string_t digraph(F const& label_gen, string_t const& graph_name = {}) const {
     static_assert(std::is_invocable_r_v<string_t, F, FullBinaryNode<T> const&>,
                   "node label generator F(FullBinaryNode<T> const &) should "
                   "return string_t");
@@ -268,7 +265,7 @@ class FullBinaryNode {
     auto oss = std::basic_ostringstream{string_t{}};
 
     oss << "digraph " << graph_name << "{\n";
-    this->digraph(oss, std::forward<F>(label_gen), 0);
+    this->digraph(oss, label_gen, 0);
     oss << "}";
     oss.flush();
 

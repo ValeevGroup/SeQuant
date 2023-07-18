@@ -1,190 +1,166 @@
 #ifndef SEQUANT_EVAL_EXPR_HPP
 #define SEQUANT_EVAL_EXPR_HPP
 
+#include <SeQuant/core/expr_fwd.hpp>
 #include <SeQuant/core/tensor.hpp>
 
 namespace sequant {
 
-/**
- * Type of evaluation resulting into EvalExpr.
- */
+///
+/// \brief The EvalOp enum
+///
+/// \details The EvalOp enum is used to distinguish between the different binary
+///          operations that can be performed on two EvalExpr objects.
 enum class EvalOp {
-  /** Identity type evaluation. */
-  Id,
-  /** Sum type evaluation. */
-  Sum,
-  /** Product type evaluation. */
-  Prod,
-  /** Symmetrization type evaluation. */
-  Symm,
-  /** Antisymmetrization type evaluation. */
-  Antisymm,
-};  // EvalOp
 
-/**
- * An object to be stored in the binary evaluation tree nodes.
- *
- * @author Bimal Gaudel
- * @version 03 Dec, 2020
- */
+  ///
+  /// \brief Represents the identity evaluation. It is not a binary operation
+  ///        per se. An atomic tensor or an atomic constant is always evaluated
+  ///        this way.
+  Id,
+
+  ///
+  /// \brief Represents the sum of two EvalExpr objects. Such as a tensor plus
+  ///        a tensor and a constant plus a constant.
+  Sum,
+
+  ///
+  /// \brief Represents the product of two EvalExpr objects. Such as tensor
+  ///        times a tensor, a constant times a constant, or a tensor times a
+  ///        constant
+  ///        (in either order).
+  Prod
+};
+
+///
+/// \brief The ResultType enum.
+///
+/// \details Represents the type of the result of @c EvalOp on two EvalExpr
+///          objects (or, single EvalExpr object if the EvalOp is Id).
+///
+enum class ResultType { Tensor, Constant };
+
+struct InnerOuterIndices {
+  container::svector<Index> const inner;
+  container::svector<Index> const outer;
+};
+
+///
+/// \brief The EvalExpr class represents the object that go into the nodes of
+///        the binary tree that is used to evaluate the sequant expressions.
+///
+/// \details The EvalExpr class itself is not a proper node. It is rather a data
+///          that a node should hold.
+///
 class EvalExpr {
  public:
-  using hash_t = size_t;
+  ///
+  /// \brief Construct an EvalExpr object from a tensor. The EvalOp is Id.
+  ///
+  explicit EvalExpr(Tensor const& tnsr);
 
-  EvalExpr() = delete;
+  ///
+  /// \brief Construct an EvalExpr object from a constant. The EvalOp is Id.
+  ///
+  explicit EvalExpr(Constant const& c);
 
-  /**
-   * Construct EvalExpr that goes into the leaf nodes
-   * of the binary evaluation tree.
-   */
-  explicit EvalExpr(const Tensor&) noexcept;
+  ///
+  /// \brief Construct an EvalExpr object from two EvalExpr objects and an
+  ///        EvalOp. The EvalOp is either Sum or Prod.
+  ///
+  EvalExpr(EvalExpr const& left, EvalExpr const& right, EvalOp op);
 
-  /**
-   * Construct EvalExpr that goes into the internal nodes
-   * of the binary evaluation tree.
-   */
-  EvalExpr(const EvalExpr&, const EvalExpr&, EvalOp op) noexcept;
+  ///
+  /// \return The EvalOp resulting into this EvalExpr object.
+  ///
+  [[nodiscard]] EvalOp op_type() const noexcept;
 
-#ifdef DEBUG_EVAL_EXPR
-  EvalExpr(EvalExpr&&) noexcept;
+  ///
+  /// \return The ResultType of the evaluation performed on this node.
+  ///
+  [[nodiscard]] ResultType result_type() const noexcept;
 
-  EvalExpr& operator=(EvalExpr&&) noexcept;
+  ///
+  /// \brief Compute the hash value of this EvalExpr object.
+  ///
+  /// \details The hash value is computed during construction of the object
+  ///          by also looking at the hash values of the EvalExpr objects if
+  ///          passed.
+  ///
+  /// \return The hash value of this EvalExpr object.
+  ///
+  [[nodiscard]] size_t hash_value() const noexcept;
 
-  EvalExpr(EvalExpr const&) noexcept;
-
-  EvalExpr& operator=(EvalExpr const&) noexcept;
-
-  ~EvalExpr() noexcept;
-#endif
-
-  /**
-   * The unique id of this object.
-   */
+  ///
+  /// \brief Get the unique id of this EvalExpr object. Useful for tracing. Not
+  ///        used by evaluation.
+  ///
+  /// \return The unique id of this EvalExpr object.
+  ///
   [[nodiscard]] size_t id() const noexcept;
 
-  /**
-   * The store Tensor's label plus the id.
-   */
-  [[nodiscard]] std::string label(std::string_view sep = "_") const noexcept;
+  ///
+  /// \return The ExprPtr object that this EvalExpr object holds.
+  ///
+  [[nodiscard]] ExprPtr expr() const noexcept;
 
-  /**
-   * Operation type of the object.
-   */
-  [[nodiscard]] EvalOp op() const noexcept;
+  ///
+  /// \return True if this EvalExpr object contains a sequant tensor with
+  ///         proto-indices, false otherwise.
+  ///
+  [[nodiscard]] bool tot() const noexcept;
 
-  /**
-   * Hash value of the object.
-   */
-  [[nodiscard]] hash_t hash_value() const noexcept;
+  ///
+  /// \return Returns the result of calling to_latex() on the ExprPtr object
+  ///         contained by this object.
+  ///
+  [[nodiscard]] std::wstring to_latex() const noexcept;
 
-  /**
-   * Tensor expression stored by the object.
-   */
-  [[nodiscard]] const Tensor& tensor() const noexcept;
+  ///
+  /// \brief Calls to<Tensor>() on the ExprPtr object.
+  ///
+  /// \return Tensor const&.
+  ///
+  [[nodiscard]] Tensor const& as_tensor() const;
 
-  /** Factor to scale tensor by. */
-  [[nodiscard]] const Constant& scalar() const noexcept;
+  ///
+  /// \brief Calls to<Constant>() on the ExprPtr object.
+  ///
+  /// \return Constant const&.
+  ///
+  [[nodiscard]] Constant const& as_constant() const;
 
-  /** Scale the scalar prefactor by @c fac. */
-  template <typename T = std::complex<double>>
-  EvalExpr& operator*=(T fac) noexcept {
-    scalar_ *= Constant{std::move(fac)};
-    return *this;
-  }
-
-  /** Set the scalar prefactor to @c fac. */
-  template <typename T = std::complex<double>>
-  void scale(T fac) noexcept {
-    scalar_ = Constant{std::move(fac)};
-  }
-
-  friend inline bool operator==(const EvalExpr& lhs,
-                                const EvalExpr& rhs) noexcept {
-    return lhs.hash_value() == rhs.hash_value() &&
-           (lhs.tensor().to_latex() == rhs.tensor().to_latex());
-  }
+  ///
+  /// \brief Separates indices of a tensor into inner and outer index groups.
+  ///
+  /// \details - If the expression this object holds is a Constant, then the
+  ///            resulting inner and outer indices are empty.
+  ///          - The outer indices are empty if neither of the indices in the
+  ///            tensor's braket have at least one proto-index.
+  ///          - The proto-indices are collected, sorted using
+  ///            Index::LabelCompare, and de-duplicated to form the outer
+  ///            indices.
+  ///          - The non-proto indices make up the inner indices if they are not
+  ///            already in the outer indices.
+  ///
+  /// \return InnerOuterIndices object.
+  ///
+  [[nodiscard]] InnerOuterIndices inner_outer_indices() const noexcept;
 
  private:
-  using index_container_type = container::svector<Index>;
-  using braket_type = std::pair<index_container_type, index_container_type>;
+  EvalOp op_type_;
+
+  ResultType result_type_;
+
+  size_t hash_value_;
 
   size_t id_;
 
-  EvalOp op_;
+  ExprPtr expr_;
 
-  hash_t hash_;
+  bool tot_;
 
-  Tensor tensor_;
-
-  Constant scalar_{1};
-
-  static size_t global_id;
-
-  /**
-   * Infer the symmetry of the resulting tensor after summing two tensors.
-   */
-  static Symmetry infer_tensor_symmetry_sum(EvalExpr const&,
-                                            EvalExpr const&) noexcept;
-
-  /**
-   * Infer the symmetry of the resulting tensor from product of two tensors.
-   */
-  static Symmetry infer_tensor_symmetry_prod(EvalExpr const&,
-                                             EvalExpr const&) noexcept;
-
-  /**
-   * Infers the particle symmetry of a tensor.
-   *
-   * @param s The tensor symmetry of the tensor.
-   */
-  static ParticleSymmetry infer_particle_symmetry(Symmetry s) noexcept;
-
-  /**
-   * Infers the braket symmetry of a tensor based on the default sequant
-   * context.
-   */
-  static BraKetSymmetry infer_braket_symmetry() noexcept;
-
-  /**
-   * Combined hash of the index spaces of the indices in a braket.
-   */
-  static hash_t hash_braket(
-      const decltype(std::declval<Tensor>().const_braket())&) noexcept;
-
-  /**
-   * Hash a tensor based on its label and index space of braket indices.
-   */
-  static hash_t hash_terminal_tensor(const Tensor&) noexcept;
-
-  /**
-   * Hash an intermediate tensor based on the topology of braket connectivity.
-   *
-   * @param expr1 A sequant expression.
-   * @param expr2 A sequant expression.
-   *
-   * @param hash1 Hash value of expr1.
-   * @param hash2 Hash value of expr2.
-   *
-   * @param op Type of evaluation operation between @c expr1 and @c expr2.
-   */
-  static hash_t hash_imed(const EvalExpr& expr1, const EvalExpr& expr2,
-                          EvalOp op) noexcept;
-
-  /**
-   * Hash the topology of braket connectivity between a pair of tensor. The
-   * positions of the connected indices in the corresponding brakets are hashed.
-   */
-  static hash_t hash_tensor_pair_topology(const Tensor&,
-                                          const Tensor&) noexcept;
-
-  /**
-   * Figure the target braket of resulting tensor from product of a pair of
-   * tensors.
-   *
-   * @return Pair of bra and ket index containers where
-   * the first is the target bra.
-   */
-  static braket_type target_braket_prod(const Tensor&, const Tensor&) noexcept;
+  static size_t global_id_;
 };
 
 }  // namespace sequant

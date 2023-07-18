@@ -13,64 +13,101 @@
 
 namespace sequant {
 
-template <typename T = EvalExpr,
+namespace {
+
+template <typename, typename = void>
+constexpr bool IsEvalExpr{};
+
+template <typename T>
+constexpr bool
+    IsEvalExpr<T, std::enable_if_t<std::is_convertible_v<T, EvalExpr>>>{true};
+
+template <typename, typename = void>
+constexpr bool IsEvalNode{};
+
+template <typename T>
+constexpr bool IsEvalNode<FullBinaryNode<T>, std::enable_if_t<IsEvalExpr<T>>>{
+    true};
+
+template <typename T>
+constexpr bool
+    IsEvalNode<const FullBinaryNode<T>, std::enable_if_t<IsEvalExpr<T>>>{true};
+
+}  // namespace
+
+template <typename T,
           typename = std::enable_if_t<std::is_convertible_v<T, EvalExpr>>>
 using EvalNode = FullBinaryNode<T>;
 
-template <typename ExprT>
-EvalNode<ExprT> to_eval_node(ExprPtr const& expr) {
+///
+/// \brief Creates an evaluation tree from @c ExprPtr.
+///
+/// \tparam ExprT Can be @c EvalExpr or derived from it.
+///
+/// \param expr The expression to be converted to an evaluation tree.
+///
+/// \return A full-binary tree whose nodes are @c EvalExpr (or derived from it)
+///         types.
+///
+template <typename ExprT,
+          std::enable_if_t<IsEvalExpr<std::decay_t<ExprT>>, bool> = true>
+EvalNode<ExprT> eval_node(ExprPtr const& expr) {
   using ranges::accumulate;
   using ranges::views::tail;
   using ranges::views::transform;
 
-  assert(!expr->is<Constant>() &&
-         "constant type expression"
-         "not allowed in eval node");
-
   if (expr->is<Tensor>()) return EvalNode<ExprT>{ExprT{expr->as<Tensor>()}};
+  if (expr->is<Constant>()) return EvalNode<ExprT>{ExprT{expr->as<Constant>()}};
+  assert(expr->is<Sum>() || expr->is<Product>());
 
   auto subxprs = *expr | ranges::views::transform([](auto const& x) {
-    return to_eval_node<ExprT>(x);
+    return eval_node<ExprT>(x);
   }) | ranges::to_vector;
 
-  assert(expr->is<Sum>() || expr->is<Product>());
+  if (expr->is<Product>()) {
+    auto const& prod = expr->as<Product>();
+    if (prod.scalar() != 1)
+      subxprs.emplace_back(eval_node<ExprT>(ex<Constant>(prod.scalar())));
+  }
+
   auto const op = expr->is<Sum>() ? EvalOp::Sum : EvalOp::Prod;
 
   auto bnode = ranges::accumulate(
       ranges::views::tail(subxprs), std::move(*subxprs.begin()),
       [op](auto& lnode, auto& rnode) {
         auto pxpr = ExprT{*lnode, *rnode, op};
-        if (pxpr.op() == EvalOp::Prod) {
-          pxpr *= lnode->scalar();
-          pxpr *= rnode->scalar();
-
-          lnode->scale(1);
-          rnode->scale(1);
-        }
-
         return EvalNode<ExprT>(std::move(pxpr), std::move(lnode),
                                std::move(rnode));
       });
 
-  if (expr->is<Product>()) *bnode *= expr->as<Product>().scalar();
-
   return bnode;
+}
+
+///
+/// \brief Creates an evaluation tree from Expr.
+///
+/// \tparam EvalNodeT is @c EvalNode<ExprT>, where @c ExprT is @c EvalExpr or
+/// derived.
+///
+/// \param expr The expression to be converted to an evaluation tree.
+///
+/// \return A full-binary tree whose type is @c EvalNodeT.
+///
+template <typename EvalNodeT,
+          std::enable_if_t<IsEvalNode<std::decay_t<EvalNodeT>>, bool> = true>
+EvalNodeT eval_node(ExprPtr const& expr) {
+  return eval_node<typename EvalNodeT::value_type>(expr);
 }
 
 template <typename ExprT>
 ExprPtr to_expr(EvalNode<ExprT> const& node) {
-  auto const op = node->op();
+  auto const op = node->op_type();
   auto const& evxpr = *node;
 
-  if (node.leaf()) {
-    return evxpr.scalar() == Constant{1}
-               ? evxpr.tensor().clone()
-               : ex<Constant>(evxpr.scalar()) * evxpr.tensor().clone();
-  }
+  if (node.leaf()) return evxpr.expr();
 
-  if (op == EvalOp::Prod || op == EvalOp::Symm || op == EvalOp::Antisymm) {
+  if (op == EvalOp::Prod) {
     auto prod = Product{};
-    prod.scale(evxpr.scalar().value());
 
     ExprPtr lexpr = to_expr(node.left());
     ExprPtr rexpr = to_expr(node.right());
@@ -78,7 +115,15 @@ ExprPtr to_expr(EvalNode<ExprT> const& node) {
     prod.append(1, lexpr, Product::Flatten::No);
     prod.append(1, rexpr, Product::Flatten::No);
 
-    return ex<Product>(std::move(prod));
+    assert(!prod.empty());
+
+    if (prod.size() == 1 && !prod.factor(0)->is<Tensor>()) {
+      return ex<Product>(Product{prod.scalar(), prod.factor(0)->begin(),
+                                 prod.factor(0)->end(), Product::Flatten::No});
+    } else {
+      return ex<Product>(std::move(prod));
+    }
+
   } else {
     assert(op == EvalOp::Sum && "unsupported operation type");
     return ex<Sum>(Sum{to_expr(node.left()), to_expr(node.right())});
@@ -89,25 +134,16 @@ template <typename ExprT>
 ExprPtr linearize_eval_node(EvalNode<ExprT> const& node) {
   if (node.leaf()) return to_expr(node);
 
-  ExprPtr lres = to_expr(node.left());
-  ExprPtr rres = to_expr(node.right());
-  if (node->op() == EvalOp::Sum) return ex<Sum>(ExprPtrList{lres, rres});
+  ExprPtr lres = linearize_eval_node(node.left());
+  ExprPtr rres = linearize_eval_node(node.right());
 
-  if (node.left().leaf() && node.right().leaf()) {
-    return ex<Product>(node->scalar().value(), ExprPtrList{lres, rres},
-                       Product::Flatten::No);
-  } else if (!node.left().leaf() && !node.right().leaf()) {
-    return ex<Product>(node->scalar().value(), ExprPtrList{lres, rres},
-                       Product::Flatten::No);
-  } else if (node.left().leaf() && !node.right().leaf()) {
-    return ex<Product>(node->scalar().value(), ExprPtrList{lres, rres},
-                       Product::Flatten::No);
-  } else {  // (!node.left().leaf() && node.right().leaf())
-    auto& res = lres->as<Product>();
-    res.scale(node->scalar().value());
-    res.append(1, rres, Product::Flatten::No);
-    return lres;
-  }
+  assert(lres);
+  assert(rres);
+
+  if (node->op_type() == EvalOp::Sum) return ex<Sum>(ExprPtrList{lres, rres});
+  assert(node->op_type() == EvalOp::Prod);
+  return ex<Product>(
+      Product{1, ExprPtrList{lres, rres}, Product::Flatten::Yes});
 }
 
 namespace detail {
@@ -131,30 +167,26 @@ template <
     std::enable_if_t<std::is_invocable_r_v<bool, F, EvalNode<ExprT> const&>,
                      bool> = true>
 AsyCost asy_cost_impl(EvalNode<ExprT> const& node, bool exploit_symmetry,
-                      F&& pred) {
-  if (node.leaf() || !std::invoke(std::forward<F>(pred), node))
-    return AsyCost::zero();
+                      F const& pred) {
+  if (node.leaf() || !pred(node)) return AsyCost::zero();
 
   return AsyCost{exploit_symmetry ? asy_cost_single_node(node)
-                                  : asy_cost_single_node_symm_off(node)} +  //
-         asy_cost_impl(node.left(), exploit_symmetry,
-                       std::forward<F>(pred)) +  //
-         asy_cost_impl(node.right(), exploit_symmetry, std::forward<F>(pred));
+                                  : asy_cost_single_node_symm_off(node)}  //
+         +                                                                //
+         asy_cost_impl(node.left(), exploit_symmetry, pred)               //
+         +                                                                //
+         asy_cost_impl(node.right(), exploit_symmetry, pred);
 }
 }  // namespace detail
 
 template <typename ExprT>
 AsyCost asy_cost_single_node_symm_off(EvalNode<ExprT> const& node) {
-  auto factorial = [](auto x) {
-    if (x > 20)
-      throw std::runtime_error("std::intmax_t running out of precision");
-    return boost::numeric_cast<std::intmax_t>(sequant::factorial(x));
-  };
   if (node.leaf()) return AsyCost::zero();
 
-  auto bks = ranges::views::concat(node.left()->tensor().const_braket(),
-                                   node.right()->tensor().const_braket(),
-                                   node->tensor().const_braket());
+  auto bks = ranges::views::concat(
+      node.left()->expr()->template as<Tensor>().const_braket(),
+      node.right()->expr()->template as<Tensor>().const_braket(),
+      node->expr()->template as<Tensor>().const_braket());
   auto const uniques =
       bks | ranges::to<container::set<Index, Index::LabelCompare>>;
 
@@ -164,36 +196,19 @@ AsyCost asy_cost_single_node_symm_off(EvalNode<ExprT> const& node) {
 
   size_t const nvirt = uniques.size() - nocc;
 
-  switch (node->op()) {
-    case EvalOp::Symm: {
-      auto f = factorial(node->tensor().rank());
-      return AsyCost{f, nocc, nvirt};
-    }
-    case EvalOp::Antisymm: {
-      auto f = factorial(node->tensor().rank());
-      return AsyCost{f * f, nocc, nvirt};
-    }
-    default:
-      // for matrix multiplication the flops will be doubled
-      // to account for the summation ops in a `dot(row, col)` operation
-      return AsyCost{node->op() == EvalOp::Prod ? 2 : 1, nocc, nvirt};
-  }
+  return AsyCost{node->op_type() == EvalOp::Prod ? 2 : 1, nocc, nvirt};
 }
 
 template <typename ExprT>
 AsyCost asy_cost_single_node(EvalNode<ExprT> const& node) {
   auto cost = asy_cost_single_node_symm_off(node);
-  auto factorial = [](auto x) {
-    if (x > 20)
-      throw std::invalid_argument("20! cannot be represented by std::intmax_t");
-    return boost::numeric_cast<std::intmax_t>(sequant::factorial(x));
-  };
+  auto const& ptensor = node->expr()->template as<Tensor>();
   // parent node symmetry
-  auto const psym = node->tensor().symmetry();
+  auto const psym = ptensor.symmetry();
   // parent node bra symmetry
-  auto const pbrank = node->tensor().bra_rank();
+  auto const pbrank = ptensor.bra_rank();
   // parent node ket symmetry
-  auto const pkrank = node->tensor().ket_rank();
+  auto const pkrank = ptensor.ket_rank();
 
   if (psym == Symmetry::nonsymm || psym == Symmetry::invalid) {
     // do nothing
@@ -205,21 +220,17 @@ AsyCost asy_cost_single_node(EvalNode<ExprT> const& node) {
     //   doi:10.1016/j.procs.2012.04.044
     // ------
 
-    auto const op = node->op();
+    auto const op = node->op_type();
     if (op == EvalOp::Sum) {
       cost = psym == Symmetry::symm
                  ? cost / (factorial(pbrank) * factorial(pkrank))
                  : cost / factorial(pbrank);
     } else if (op == EvalOp::Prod) {
-      auto const lsym = node.left()->tensor().symmetry();
-      auto const rsym = node.right()->tensor().symmetry();
+      auto const lsym = node.left()->expr()->template as<Tensor>().symmetry();
+      auto const rsym = node.right()->expr()->template as<Tensor>().symmetry();
       cost = (lsym == rsym && lsym == Symmetry::nonsymm)
                  ? cost / factorial(pbrank)
                  : cost / (factorial(pbrank) * factorial(pkrank));
-    } else if (op == EvalOp::Symm) {
-      cost = cost / factorial(pbrank);
-    } else if (op == EvalOp::Antisymm) {
-      cost = cost / (factorial(pbrank) * factorial(pkrank));
     } else {
       assert(
           false &&
@@ -240,8 +251,8 @@ template <
                      bool> = true>
 AsyCost asy_cost_symm_off(
     EvalNode<ExprT> const& node,
-    F&& pred = [](EvalNode<ExprT> const&) { return true; }) {
-  return detail::asy_cost_impl(node, false, std::forward<F>(pred));
+    F const& pred = [](EvalNode<ExprT> const&) { return true; }) {
+  return detail::asy_cost_impl(node, false, pred);
 }
 
 ///
@@ -254,8 +265,8 @@ template <
                      bool> = true>
 AsyCost asy_cost(
     EvalNode<ExprT> const& node,
-    F&& pred = [](EvalNode<ExprT> const&) { return true; }) {
-  return detail::asy_cost_impl(node, true, std::forward<F>(pred));
+    F const& pred = [](EvalNode<ExprT> const&) { return true; }) {
+  return detail::asy_cost_impl(node, true, pred);
 }
 
 }  // namespace sequant

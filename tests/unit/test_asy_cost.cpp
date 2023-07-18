@@ -1,6 +1,8 @@
 #include "catch.hpp"
 
 #include <SeQuant/core/asy_cost.hpp>
+#include <SeQuant/core/math.hpp>
+
 #include <sstream>
 
 struct MatFlops {
@@ -16,55 +18,35 @@ struct MatFlops {
 
 TEST_CASE("TEST ASY_COST", "[AsyCost]") {
   using sequant::AsyCost;
-
-  std::wostringstream oss{};
-  auto clear = [&oss]() { oss.str(std::wstring{}); };
+  using sequant::rational;
 
   SECTION("to_text") {
-    oss << AsyCost{0, 0};
-    REQUIRE(oss.str() == L"0");
+    REQUIRE(AsyCost{0, 0}.text() == "0");
 
-    clear();
-    oss << AsyCost{};
-    REQUIRE(oss.str() == L"0");
+    REQUIRE(AsyCost{}.text() == "0");
 
-    clear();
-    oss << AsyCost{1, 0};
-    REQUIRE(oss.str() == L"O");
+    REQUIRE(AsyCost{1, 0}.text() == "O");
 
-    clear();
-    oss << AsyCost{0, 1};
-    REQUIRE(oss.str() == L"V");
+    REQUIRE(AsyCost{0, 1}.text() == "V");
 
-    clear();
-    oss << AsyCost{1, 1};
-    REQUIRE(oss.str() == L"OV");
+    REQUIRE(AsyCost{1, 1}.text() == "OV");
 
-    clear();
-    oss << AsyCost{2, 1};
-    REQUIRE(oss.str() == L"O^2V");
+    REQUIRE(AsyCost{2, 1}.text() == "O^2V");
 
-    clear();
-    oss << AsyCost{1, 2};
-    REQUIRE(oss.str() == L"OV^2");
+    REQUIRE(AsyCost{1, 2}.text() == "OV^2");
 
-    clear();
-    oss << AsyCost{2, 2};
-    REQUIRE(oss.str() == L"O^2V^2");
+    REQUIRE(AsyCost{2, 2}.text() == "O^2V^2");
 
-    clear();
-    oss << AsyCost{2, 2} + AsyCost{3, 2} + AsyCost{2, 3} + AsyCost{3, 3};
-    REQUIRE(oss.str() == L"O^3V^3 + O^2V^3 + O^3V^2 + O^2V^2");
+    auto c = AsyCost{2, 2} + AsyCost{3, 2} + AsyCost{2, 3} + AsyCost{3, 3};
+    REQUIRE(c.text() == "O^3V^3 + O^2V^3 + O^3V^2 + O^2V^2");
 
-    clear();
-    oss << AsyCost{1, 1} - AsyCost{2, 3} + AsyCost{2, 2};
-    REQUIRE(oss.str() == L"- O^2V^3 + O^2V^2 + OV");
+    c = AsyCost{1, 1} - AsyCost{2, 3} + AsyCost{2, 2};
+    REQUIRE(c.text() == "- O^2V^3 + O^2V^2 + OV");
 
-    clear();
-    oss << AsyCost{20, 1, 1};
+    REQUIRE(AsyCost{20, 1, 1}.text() == "20*OV");
 
-    REQUIRE(oss.str() == L"20*OV");
     REQUIRE(AsyCost{0, 0} == AsyCost::zero());
+
     REQUIRE(AsyCost{0, 1, 1} == AsyCost::zero());
   }
 
@@ -102,38 +84,29 @@ TEST_CASE("TEST ASY_COST", "[AsyCost]") {
   }
 
   SECTION("Fractional costs") {
-    clear();
-    oss << AsyCost{{1, 2}, 2, 4};
-    REQUIRE(oss.str() == L"1/2*O^2V^4");
+    auto c0 = AsyCost{{1, 2}, 2, 4};
+    REQUIRE(c0.text() == "1/2*O^2V^4");
 
-    auto const c1 = AsyCost{1, 2} * boost::rational<int>{2, 3};
-    clear();
-    oss << c1;
-    REQUIRE(oss.str() == L"2/3*OV^2");
+    auto const c1 = AsyCost{1, 2} * rational{2, 3};
+    REQUIRE(c1.text() == "2/3*OV^2");
 
-    auto const c2 = AsyCost{1, 2} / boost::rational<int>{2, 3};
-    clear();
-    oss << c2;
-    REQUIRE(oss.str() == L"3/2*OV^2");
+    auto const c2 = AsyCost{1, 2} / rational{2, 3};
+    REQUIRE(c2.text() == "3/2*OV^2");
 
     auto const c3 = (AsyCost{1, 2} + AsyCost{2, 4}) * 2;
-    clear();
-    oss << c3;
-    REQUIRE(oss.str() == L"2*O^2V^4 + 2*OV^2");
-
-    clear();
+    REQUIRE(c3.text() == "2*O^2V^4 + 2*OV^2");
   }
 
   SECTION("LaTeX") {
     auto cost = AsyCost{{1, 4}, 2, 3};
-    REQUIRE(cost.to_latex<std::string>() == "\\frac{1}{4}O^{2}V^{3}");
+    REQUIRE(cost.to_latex() == L"\\frac{1}{4}O^{2}V^{3}");
     cost = AsyCost{2, 3};
-    REQUIRE(cost.to_latex<std::string>() == "O^{2}V^{3}");
+    REQUIRE(cost.to_latex() == L"O^{2}V^{3}");
     cost = AsyCost{{1, 1}, 2, 3};
-    REQUIRE(cost.to_latex<std::string>() == "O^{2}V^{3}");
+    REQUIRE(cost.to_latex() == L"O^{2}V^{3}");
     cost = AsyCost{{-1, 1}, 2, 3};
-    REQUIRE(cost.to_latex<std::string>() == "- O^{2}V^{3}");
+    REQUIRE(cost.to_latex() == L"- O^{2}V^{3}");
     cost = AsyCost{{-1, 4}, 2, 3};
-    REQUIRE(cost.to_latex<std::string>() == "- \\frac{1}{4}O^{2}V^{3}");
+    REQUIRE(cost.to_latex() == L"- \\frac{1}{4}O^{2}V^{3}");
   }
 }

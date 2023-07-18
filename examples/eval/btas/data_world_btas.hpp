@@ -31,9 +31,9 @@ class DataWorldBTAS {
 
   Tensor_t F_pq;
 
-  container::vector<Tensor_t> Ts;
+  container::vector<ERPtr> Ts;
 
-  container::map<size_t, Tensor_t> cache_;
+  mutable container::map<size_t, ERPtr> cache_;
 
  public:
   DataWorldBTAS(DataInfo const& info, size_t excit)
@@ -67,8 +67,9 @@ class DataWorldBTAS {
       auto range = ::btas::Range{
           concat(repeat_n(nvirt, bk_rank), repeat_n(nocc, bk_rank)) |
           ranges::to_vector};
-      Ts.emplace_back(Tensor_t{range});
-      Ts[i].fill(0);
+      Ts.emplace_back(eval_result<EvalTensorBTAS<Tensor_t>>(Tensor_t{range}));
+      auto& t = Ts[i]->template get<Tensor_t>();
+      t.fill(0);
     }
     //--------
   }  // ctor
@@ -109,11 +110,7 @@ class DataWorldBTAS {
   Tensor_t operator()(sequant::Tensor const& tensor) const {
     using namespace ranges::views;
 
-    if (tensor.label() == L"t") {
-      auto rank = tensor.rank();
-      assert(rank <= Ts.size());
-      return std::cref(Ts[rank - 1]);
-    }
+    assert(tensor.label() != L"t");
 
     auto const r1_limits = range1_limits(tensor, nocc, nvirt);
     assert(r1_limits.size() == DataInfo::fock_rank ||
@@ -157,26 +154,49 @@ class DataWorldBTAS {
   }
 
   template <typename NodeT, typename = std::enable_if_t<IsEvaluable<NodeT>>>
-  Tensor_t operator()(NodeT const& n) {
-    if (n->tensor().label() == L"t") return (*this)(n->tensor());
+  ERPtr operator()(NodeT const& n) const {
+    using numeric_type = typename Tensor_t::numeric_type;
+    if (n->result_type() == ResultType::Constant) {
+      assert(n->expr()->template is<Constant>());
+      auto d = n->as_constant().template value<numeric_type>();
+      return eval_result<EvalConstant<numeric_type>>(d);
+    }
+
+    assert(n->result_type() == ResultType::Tensor &&
+           n->expr()->template is<Tensor>());
+
+    if (auto t = n->as_tensor(); t.label() == L"t") {
+      auto rank = t.rank();
+      assert(rank <= Ts.size());
+      return Ts[rank - 1];
+    }
     auto h = hash::value(*n);
     if (auto exists = cache_.find(h); exists != cache_.end())
       return exists->second;
     else {
-      auto stored = cache_.emplace(h, (*this)(n->tensor()));
+      auto tnsr =
+          eval_result<EvalTensorBTAS<Tensor_t>>((*this)(n->as_tensor()));
+      auto stored = cache_.emplace(h, std::move(tnsr));
       assert(stored.second && "failed to store tensor");
       return stored.first->second;
     }
   }
 
   void update_amplitudes(std::vector<Tensor_t> const& rs) {
+    using ranges::views::transform;
+    using ranges::views::zip;
+
     assert(rs.size() == Ts.size() && "Unequal number of Rs and Ts!");
 
-    for (auto&& [t, r] : ranges::views::zip(Ts, rs)) update_single_T(t, r);
+    for (auto&& [t, r] : zip(Ts | transform([](auto&& res) -> Tensor_t& {
+                               return res->template get<Tensor_t>();
+                             }),
+                             rs))
+      update_single_T(t, r);
   }
 
   Tensor_t const& amplitude(size_t excitation) const {
-    return Ts[excitation - 1];
+    return Ts[excitation - 1]->template get<Tensor_t>();
   }
 
 };  // class

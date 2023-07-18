@@ -22,12 +22,13 @@ size_t IndexToSize::operator()(Index const& idx) const {
 
 container::vector<ExprPtr> CalcInfo::exprs() const {
   auto exprs = mbpt::sr::cceqs{eqn_opts.excit, eqn_opts.excit}.t();
-  return exprs | ranges::views::tail |
-         ranges::views::transform([this](ExprPtr const& xpr) {
-           return eqn_opts.spintrace ? closed_shell_CC_spintrace(xpr) : xpr;
-         }) |
-         ranges::to<container::vector<ExprPtr>>;
+  container::vector<ExprPtr> result{};
+  for (auto r = 1; r < exprs.size(); ++r)
+    result.emplace_back(
+        eqn_opts.spintrace ? closed_shell_CC_spintrace(exprs[r], r) : exprs[r]);
+  return result;
 }
+
 CalcInfo::CalcInfo(const OptionsEquations& equation_options,
                    const OptionsOptimization& optmization_options,
                    const OptionsSCF& scf_options,
