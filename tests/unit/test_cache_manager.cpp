@@ -6,7 +6,7 @@
 
 using data_type = int;
 
-namespace sequant::eval {
+namespace sequant {
 struct TestCacheManager {};
 
 template <>
@@ -16,15 +16,15 @@ struct CacheManager<data_type>::template access_by<TestCacheManager> {
     return man.cache_map_;
   }
 };
-}  // namespace sequant::eval
+}  // namespace sequant
 
 TEST_CASE("TEST_CACHE_MANAGER", "[cache_manager]") {
   using ranges::views::concat;
   using ranges::views::zip;
-  using manager_type = sequant::eval::CacheManager<data_type>;
+  using manager_type = sequant::CacheManager<data_type>;
   using key_type = size_t;
   using count_type = size_t;
-  using tester_type = manager_type::access_by<sequant::eval::TestCacheManager>;
+  using tester_type = manager_type::access_by<sequant::TestCacheManager>;
 
   auto const tester = tester_type{};
 

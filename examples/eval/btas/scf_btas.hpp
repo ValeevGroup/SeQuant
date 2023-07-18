@@ -25,10 +25,12 @@ namespace sequant::eval::btas {
 template <typename Tensor_t>
 class SequantEvalScfBTAS final : public SequantEvalScf {
  public:
-  using ExprT = EvalExpr;
+  using ExprT = EvalExprBTAS;
+  using EvalNodeBTAS = EvalNode<ExprT>;
+
  private:
-  container::vector<EvalNode<ExprT>> nodes_;
-  CacheManager<Tensor_t const> cman_;
+  container::vector<container::vector<EvalNodeBTAS>> nodes_;
+  CacheManager<ERPtr> cman_;
   DataWorldBTAS<Tensor_t> data_world_;
 
   Tensor_t const& f_vo() const {
@@ -43,18 +45,14 @@ class SequantEvalScfBTAS final : public SequantEvalScf {
     return tnsr;
   }
 
-  double energy_spin_orbital() const {
-    auto const& T1 = data_world_.amplitude(1);
-    auto const& T2 = data_world_.amplitude(2);
-    auto const& G_vvoo = g_vvoo();
-    auto const& F_vo = f_vo();
+  double energy_spin_orbital() {
+    static const std::wstring_view energy_expr =
+        L"f{i1;a1} * t{a1;i1} + g{i1,i2;a1,a2} * "
+        L"(1/4 * t{a1,a2;i1,i2} + 1/2 t{a1;i1} * t{a2;i2})";
+    static auto const node =
+        eval_node<EvalExprBTAS>(parse_expr(energy_expr, Symmetry::antisymm));
 
-    Tensor_t temp;
-    ::btas::contract(1.0, G_vvoo, {'a', 'b', 'i', 'j'},  //
-                     T1, {'a', 'i'},                     //
-                     0.0, temp, {'b', 'j'});
-    return 0.5 * ::btas::dot(temp, T1) + 0.25 * ::btas::dot(G_vvoo, T2) +
-           ::btas::dot(F_vo, T1);
+    return evaluate(node, data_world_)->template get<double>();
   }
 
   double energy_spin_free_orbital() const {
@@ -91,26 +89,26 @@ class SequantEvalScfBTAS final : public SequantEvalScf {
       auto k = tnsr.ket() | ranges::to_vector;
       ranges::sort(b, Index::LabelCompare{});
       ranges::sort(k, Index::LabelCompare{});
-      //      std::wcout << "Sorted braket: " << sequant::to_latex(Tensor{L"I",
-      //      b, k}) << std::endl;
-      return index_hash(concat(b, k));
+      return index_hash(concat(b, k)) | ranges::to<EvalExprBTAS::annot_t>;
     };
 
     auto rs = repeat_n(Tensor_t{}, info_.eqn_opts.excit) | ranges::to_vector;
     for (auto&& [r, n] : zip(rs, nodes_)) {
-      auto const target_indices = sorted_annot(n->tensor());
-      //      std::wcout << "Root tensor: " << sequant::to_latex(n->tensor()) <<
-      //      std::endl;
+      auto const target_indices = sorted_annot((*n.begin())->as_tensor());
       auto st = info_.eqn_opts.spintrace;
       auto cm = info_.optm_opts.reuse_imeds;
       if (st && cm) {
-        r = eval::evaluate_symm(n, target_indices, data_world_, cman_);
+        r = evaluate_symm(n, target_indices, {}, data_world_, cman_)
+                ->template get<Tensor_t>();
       } else if (st && !cm) {
-        r = eval::evaluate_symm(n, target_indices, data_world_);
+        r = evaluate_symm(n, target_indices, {}, data_world_)
+                ->template get<Tensor_t>();
       } else if (!st && cm) {
-        r = eval::evaluate_antisymm(n, target_indices, data_world_, cman_);
+        r = evaluate_antisymm(n, target_indices, {}, data_world_, cman_)
+                ->template get<Tensor_t>();
       } else {
-        r = eval::evaluate_antisymm(n, target_indices, data_world_);
+        r = evaluate_antisymm(n, target_indices, {}, data_world_)
+                ->template get<Tensor_t>();
       }
     }
     data_world_.update_amplitudes(rs);
@@ -128,10 +126,9 @@ class SequantEvalScfBTAS final : public SequantEvalScf {
     // todo time it
     auto const exprs = info_.exprs();
 
-    // todo time it
     nodes_ = info_.nodes<ExprT>(exprs);
 
-    cman_ = info_.cache_manager_scf<Tensor_t const>(nodes_);
+    cman_ = info_.cache_manager_scf(nodes_);
   }
 };
 

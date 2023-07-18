@@ -27,8 +27,8 @@ class SequantEvalScfTA final : public SequantEvalScf {
   using EvalNodeTA = EvalNode<ExprT>;
 
  private:
-  container::vector<EvalNodeTA> nodes_;
-  CacheManager<Tensor_t const> cman_;
+  container::vector<container::vector<EvalNodeTA>> nodes_;
+  CacheManager<ERPtr> cman_;
   DataWorldTA<Tensor_t> data_world_;
 
   Tensor_t const& f_vo() const {
@@ -43,17 +43,14 @@ class SequantEvalScfTA final : public SequantEvalScf {
     return tnsr;
   }
 
-  double energy_spin_orbital() const {
-    auto const& T1 = data_world_.amplitude(1);
-    auto const& T2 = data_world_.amplitude(2);
-    auto const& G_vvoo = g_vvoo();
-    auto const& F_vo = f_vo();
+  double energy_spin_orbital() {
+    static const std::wstring_view energy_expr =
+        L"f{i1;a1} * t{a1;i1} + g{i1,i2;a1,a2} * "
+        L"(1/4 * t{a1,a2;i1,i2} + 1/2 t{a1;i1} * t{a2;i2})";
+    static auto const node =
+        eval_node<EvalExprTA>(parse_expr(energy_expr, Symmetry::antisymm));
 
-    Tensor_t tau_scaled{};
-    tau_scaled("a,b,i,j") = 0.25 * T2("a,b,i,j") + 0.5 * T1("a,i") * T1("b,j");
-
-    return TA::dot(F_vo("a,i"), T1("a,i")) +
-           TA::dot(G_vvoo("a,b,i,j"), tau_scaled("a,b,i,j"));
+    return evaluate(node, data_world_)->template get<double>();
   }
 
   double energy_spin_free_orbital() const {
@@ -95,20 +92,27 @@ class SequantEvalScfTA final : public SequantEvalScf {
     };
 
     auto rs = repeat_n(Tensor_t{}, info_.eqn_opts.excit) | ranges::to_vector;
+
     for (auto&& [r, n] : zip(rs, nodes_)) {
-      std::string const target_indices = tnsr_to_bk_labels_sorted(n->tensor());
+      auto const target_indices =
+          tnsr_to_bk_labels_sorted((*n.begin())->as_tensor());
       auto st = info_.eqn_opts.spintrace;
       auto cm = info_.optm_opts.reuse_imeds;
       if (st && cm) {
-        r = eval::evaluate_symm(n, target_indices, data_world_, cman_);
+        r = evaluate_symm(n, target_indices, {}, data_world_, cman_)
+                ->template get<Tensor_t>();
       } else if (st && !cm) {
-        r = eval::evaluate_symm(n, target_indices, data_world_);
+        r = evaluate_symm(n, target_indices, {}, data_world_)
+                ->template get<Tensor_t>();
       } else if (!st && cm) {
-        r = eval::evaluate_antisymm(n, target_indices, data_world_, cman_);
+        r = evaluate_antisymm(n, target_indices, {}, data_world_, cman_)
+                ->template get<Tensor_t>();
       } else {
-        r = eval::evaluate_antisymm(n, target_indices, data_world_);
+        r = evaluate_antisymm(n, target_indices, {}, data_world_)
+                ->template get<Tensor_t>();
       }
     }
+
     data_world_.update_amplitudes(rs);
     return info_.eqn_opts.spintrace ? energy_spin_free_orbital()
                                     : energy_spin_orbital();
@@ -126,10 +130,9 @@ class SequantEvalScfTA final : public SequantEvalScf {
 
     auto const exprs = info_.exprs();
 
-    auto ns = info_.nodes<ExprT>(exprs);
+    nodes_ = info_.nodes<ExprT>(exprs);
 
-    cman_ = info_.cache_manager_scf<Tensor_t const>(ns);
-    nodes_ = std::move(ns);
+    cman_ = info_.cache_manager_scf(nodes_);
   }
 };
 

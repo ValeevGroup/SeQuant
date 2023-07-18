@@ -171,6 +171,8 @@ class ParseOptionsSCF {
 
   std::string_view const tightness = "tightness";
 
+  std::string_view const maxiter   = "maxiter";
+
  public:
   [[nodiscard]] std::string help() const;
 

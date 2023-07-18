@@ -1,14 +1,33 @@
 #ifndef SEQUANT_OPTIMIZE_OPTIMIZE_HPP
 #define SEQUANT_OPTIMIZE_OPTIMIZE_HPP
 
-#include <ios>
-#include <iostream>
 #include <limits>
 #include <utility>
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval_node.hpp>
 #include <SeQuant/core/tensor_network.hpp>
+
+#if __cplusplus >= 202002L
+#include <bit>
+#endif
+
+namespace {
+
+///
+/// \tparam T integral type
+/// \return true if @c x has a single bit on in its bit representation.
+///
+template <typename T>
+bool has_single_bit(T x) noexcept {
+#if __cplusplus < 202002L
+  return x != 0 && (x & (x - 1)) == 0;
+#else
+  return std::has_single_bit(x);
+#endif
+}
+
+}  // namespace
 
 namespace sequant {
 /// Optimize an expression assuming the number of virtual orbitals
@@ -43,13 +62,13 @@ template <
     typename I, typename F,
     typename = std::enable_if_t<std::is_integral_v<I> && std::is_unsigned_v<I>>,
     typename = std::enable_if_t<std::is_invocable_v<F, I, I>>>
-void biparts(I n, F&& func) {
+void biparts(I n, F const& func) {
   if (n == 0) return;
   I const h = static_cast<I>(std::floor(n / 2.0));
   for (auto n_ = 1; n_ <= h; ++n_) {
     auto const l = n & n_;
     auto const r = (n - n_) & n;
-    if ((l | r) == n) std::invoke(std::forward<F>(func), l, r);
+    if ((l | r) == n) func(l, r);
   }
 }
 
@@ -101,10 +120,12 @@ struct OptRes {
 };
 
 ///
-/// returns a vector of Index objects that are common in @c idxs1 and @c idxs2.
+/// Returns a vector of Index objects that are common in @c idxs1 and @c idxs2
+/// that are sorted using Index:LabelCompare{}.
 ///
 /// @note I1 and I2 containers are assumed to be sorted by using
 /// Index::LabelCompare{};
+///
 template <typename I1, typename I2>
 container::svector<Index> common_indices(I1 const& idxs1, I2 const& idxs2) {
   using std::back_inserter;
@@ -112,7 +133,10 @@ container::svector<Index> common_indices(I1 const& idxs1, I2 const& idxs2) {
   using std::end;
   using std::set_intersection;
 
-  auto result = container::svector<Index>{};
+  assert(std::is_sorted(begin(idxs1), end(idxs1), Index::LabelCompare{}));
+  assert(std::is_sorted(begin(idxs2), end(idxs2), Index::LabelCompare{}));
+
+  container::svector<Index> result;
 
   set_intersection(begin(idxs1), end(idxs1), begin(idxs2), end(idxs2),
                    back_inserter(result), Index::LabelCompare{});
@@ -120,10 +144,12 @@ container::svector<Index> common_indices(I1 const& idxs1, I2 const& idxs2) {
 }
 
 ///
-/// returns a vector of Index objects that are common in @c idxs1 and @c idxs2.
+/// Returns a vector of Index objects that are common in @c idxs1 and @c idxs2
+/// that are sorted using Index::LabelCompare{}.
 ///
 /// @note I1 and I2 containers are assumed to be sorted by using
 /// Index::LabelCompare{};
+///
 template <typename I1, typename I2>
 container::svector<Index> diff_indices(I1 const& idxs1, I2 const& idxs2) {
   using std::back_inserter;
@@ -131,18 +157,14 @@ container::svector<Index> diff_indices(I1 const& idxs1, I2 const& idxs2) {
   using std::end;
   using std::set_symmetric_difference;
 
-  auto result = container::svector<Index>{};
+  assert(std::is_sorted(begin(idxs1), end(idxs1), Index::LabelCompare{}));
+  assert(std::is_sorted(begin(idxs2), end(idxs2), Index::LabelCompare{}));
+
+  container::svector<Index> result;
 
   set_symmetric_difference(begin(idxs1), end(idxs1), begin(idxs2), end(idxs2),
                            back_inserter(result), Index::LabelCompare{});
   return result;
-}
-
-/// T is integral type
-/// TODO: Use C++20 <bit> header when possible
-template <typename T>
-bool has_single_bit(T x) noexcept {
-  return x != 0 && (x & (x - 1)) == 0;
 }
 
 ///
@@ -270,9 +292,8 @@ ExprPtr single_term_opt(Product const& prod, IdxToSz const& idxsz) {
       auto lexpr = *result.rbegin();
       result.pop_back();
       auto p = Product{1, ExprPtrList{lexpr, rexpr}, Product::Flatten::No};
-      result.push_back(
-          ex<Product>(Product{prod.scalar(), p.factors().begin(),
-                              p.factors().end(), Product::Flatten::No}));
+      result.push_back(ex<Product>(Product{
+          1, p.factors().begin(), p.factors().end(), Product::Flatten::No}));
     } else {
       result.push_back(prod.at(i));
     }
