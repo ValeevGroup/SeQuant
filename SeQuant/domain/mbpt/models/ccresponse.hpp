@@ -48,10 +48,11 @@ ExprPtr pLambda1(std::size_t K);
 /// @param N coupled-cluster rank
 /// @param R order of perturbation
 class ccresponse {
-  size_t N, R;
+  size_t N, P, PMIN, R;
 
  public:
-  ccresponse(size_t n, size_t r);
+  ccresponse(size_t n, size_t p = std::numeric_limits<size_t>::max(),
+             size_t pmin = 1, size_t r = 1);
 
   // functions for deriving derive perturbed t and lambda amplitudes
   std::vector<sequant::ExprPtr> t();

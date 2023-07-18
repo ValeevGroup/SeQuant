@@ -79,6 +79,60 @@ ExprPtr pLambda1(std::size_t K) {
 
 }  // namespace op
 
-ccresponse::ccresponse(size_t n, size_t r) : N(n), R(r){};
+ccresponse::ccresponse(size_t n, size_t p, size_t pmin, size_t r)
+    : N(n),
+      P(p == std::numeric_limits<size_t>::max() ? n : p),
+      PMIN(pmin),
+      R(r) {}
 
+std::vector<sequant::ExprPtr> ccresponse::t() {
+  using namespace sequant::mbpt;
+  // Equation: <0|A (e^T V)_c|0> + <0|A (H_bar^(0) e^T^(1) V)_c|0>
+
+  // construct unperturbed H_bar (reusable code)
+  auto hbar = op::H();
+  auto H_Tk = hbar;
+  for (int64_t k = 1; k <= 4; ++k) {
+    H_Tk = simplify(ex<Constant>(rational{1, k}) * H_Tk * op::T(N));
+    hbar += H_Tk;
+  }
+
+  auto V = op::V();
+  std::vector<ExprPtr> result (P + 1);
+  for (auto p = P; p <= PMIN; p++){
+    // try without screening
+    auto eq = simplify((op::A(p) * op::T(N) * V) +
+                       (op::A(p) * hbar * op::T(N) * op::pT1(N)));
+
+    // mention connectivity here
+    result.at(p) = op::vac_av(eq);
+  }
+  return result;
+}
+
+std::vector<ExprPtr> ccresponse::lambda() {
+  using namespace sequant::mbpt;
+  // Equation: <0| (1 + Lambda^(0) (H_doublebar(1) *  e^T)_c * A|0> +
+  // <0| (Lambda^(1) (H_bar(0) *  e^T)_c * A|0>
+
+  // construct unperturbed H_bar (reusable code)
+  auto hbar = op::H();
+  auto H_Tk = hbar;
+  for (int64_t k = 1; k <= 4; ++k) {
+    H_Tk = simplify(ex<Constant>(rational{1, k}) * H_Tk * op::T(N));
+    hbar += H_Tk;
+  }
+  auto V = op::V();
+  const auto One = ex<Constant>(1);
+  std::vector<ExprPtr> result(P + 1);
+  for (auto p = P; p <= PMIN; p++) {
+    auto eq =
+        simplify((One + op::Lambda(N)) * (op::pT1_(N) * (hbar + V) * A(p)) +
+                 (op::pLambda1_(N) * hbar * op::T(N)) * A(p));
+
+    // mention connectivity here
+    result.at(p) = op::vac_av(eq);
+  }
+  return result;
+}
 }  // namespace sequant::mbpt::sr
