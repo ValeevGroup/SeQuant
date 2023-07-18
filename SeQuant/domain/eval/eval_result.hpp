@@ -29,14 +29,26 @@ std::logic_error unimplemented_method(std::string_view msg) noexcept {
                           msg.data()};
 }
 
+///
+/// \brief This class represents a triplet of annotations used in a tensor
+///        contraction or summation.
+///
+/// \tparam T Annotation type eg. TA::DistArray takes std::string.
+///
 template <typename T>
 struct Annot {
   explicit Annot(std::array<std::any, 3> const& a)
       : lannot(std::any_cast<T>(a[0])),
         rannot(std::any_cast<T>(a[1])),
         this_annot(std::any_cast<T>(a[2])) {}
+
+  /// Annotation of the left operand.
   T const lannot;
+
+  /// Annotation of the right operand.
   T const rannot;
+
+  /// Annotation of the result.
   T const this_annot;
 };
 
@@ -83,6 +95,20 @@ auto iter_pairs = [](auto&& tpl) {
 using perm_t = container::svector<size_t>;
 using particle_range_t = std::array<size_t, 3>;
 
+///
+/// \brief This function permutes the given range of antisymmetric particles
+///        in-place and calls the given callback function with the parity of the
+///        permutation.
+///
+/// \param groups A vector of antisymmetric particle ranges. Each element is a
+///               tuple of two iterators and the length of the range. An
+///               iterator and the length make up the range which is permuted
+///               until it reaches lexicographical maximum, for every
+///               permutation of the other range.
+///
+/// \param call_back A function object which is called with the parity of the
+///                  particle antisymsmetric permutation.
+///
 template <typename F,
           std::enable_if_t<std::is_invocable_v<F, int>, bool> = true>
 void antisymmetric_permutation(
@@ -120,6 +146,17 @@ void antisymmetric_permutation(
   }
 }
 
+///
+/// \brief This function permutes the given range of symmetric particles
+///        in-place and calls the given callback function.
+///
+/// \param groups A vector of symmetric particle ranges. Each element is a
+///               tuple of two iterators and the length of the range. An
+///               iterator and the length make up the range which is permuted
+///               together with the other range.
+///
+/// \param call_back A function object which is called after permutation.
+///
 template <typename F, std::enable_if_t<std::is_invocable_v<F>, bool> = true>
 void symmetric_permutation(
     container::svector<
@@ -146,6 +183,21 @@ void symmetric_permutation(
   }
 }
 
+///
+/// \brief This function implements the antisymmetrization of a tensor (eg.
+///        TA::DistArray).
+///
+/// \param rank The rank of the tensor to be antisymmetrized.
+/// \param groups A vector of particle ranges. Each element is an array of three
+///               unsigned integers. The first integer is the position of tensor
+///               index where the antisymmetric range starts in bra and the
+///               second is the corresponding position in ket. The third integer
+///               is the length of the antisymmetric range.
+///
+/// \param call_back Will be called for each antisymmetric permutation of
+///                  [0, rank) with the parity of the permutation and the
+///                  permutation itself.
+///
 template <
     typename F,
     std::enable_if_t<std::is_invocable_v<F, int, perm_t const&>, bool> = true>
@@ -167,6 +219,21 @@ void antisymmetrize_backend(size_t rank,
       [&call_back, &perm = std::as_const(perm)](int p) { call_back(p, perm); });
 }
 
+///
+/// \brief This function implements the symmetrization of a tensor (eg.
+///        TA::DistArray).
+///
+/// \param rank The rank of the tensor to be symmetrized.
+///
+/// \param groups A vector of particle ranges. Each element is an array of three
+///               unsigned integers. The first integer is the position of tensor
+///               index where the symmetric range starts in bra and the
+///               second is the corresponding position in ket. The third integer
+///               is the length of the symmetric range.
+///
+/// \param call_back Will be called for each symmetric permutation [0,rank) with
+///                  the permutation itself.
+///
 template <typename F,
           std::enable_if_t<std::is_invocable_v<F, perm_t const&>, bool> = true>
 void symmetrize_backend(size_t rank,
@@ -217,6 +284,19 @@ auto index_hash(Iterable const& bk) {
   });
 }
 
+///
+/// \brief This function implements the symmetrization of TA::DistArray.
+///
+/// \param arr The tensor to be symmetrized.
+///
+/// \param groups A vector of particle ranges. Each element is an array of three
+///               unsigned integers. The first integer is the position of tensor
+///               index where the symmetric range starts in bra and the
+///               second is the corresponding position in ket. The third integer
+///               is the length of the symmetric range.
+///
+/// \return The symmetrized TA::DistArray.
+///
 template <typename... Args>
 auto symmetrize_ta(TA::DistArray<Args...> const& arr,
                    container::svector<particle_range_t> const& groups) {
@@ -241,6 +321,19 @@ auto symmetrize_ta(TA::DistArray<Args...> const& arr,
   return result;
 }
 
+///
+/// \brief This function implements the antisymmetrization of TA::DistArray.
+///
+/// \param arr The tensor to be antisymmetrized.
+///
+/// \param groups A vector of particle ranges. Each element is an array of three
+///               unsigned integers. The first integer is the position of tensor
+///               index where the antisymmetric range starts in bra and the
+///               second is the corresponding position in ket. The third integer
+///               is the length of the symmetric range.
+///
+/// \return The antisymmetrized TA::DistArray.
+///
 template <typename... Args>
 auto antisymmetrize_ta(
     TA::DistArray<Args...> const& arr,
@@ -268,6 +361,19 @@ auto antisymmetrize_ta(
   return result;
 }
 
+///
+/// \brief This function implements the symmetrization of btas::Tensor.
+///
+/// \param arr The tensor to be symmetrized.
+///
+/// \param groups A vector of particle ranges. Each element is an array of three
+///               unsigned integers. The first integer is the position of tensor
+///               index where the symmetric range starts in bra and the
+///               second is the corresponding position in ket. The third integer
+///               is the length of the symmetric range.
+///
+/// \return The symmetrized btas::Tensor.
+///
 template <typename... Args>
 auto symmetrize_btas(btas::Tensor<Args...> const& arr,
                      container::svector<particle_range_t> const& groups) {
@@ -298,6 +404,19 @@ auto symmetrize_btas(btas::Tensor<Args...> const& arr,
   return result;
 }
 
+///
+/// \brief This function implements the antisymmetrization of btas::Tensor.
+///
+/// \param arr The tensor to be antisymmetrized.
+///
+/// \param groups A vector of particle ranges. Each element is an array of three
+///               unsigned integers. The first integer is the position of tensor
+///               index where the antisymmetric range starts in bra and the
+///               second is the corresponding position in ket. The third integer
+///               is the length of the symmetric range.
+///
+/// \return The antisymmetrized btas::Tensor.
+///
 template <typename... Args>
 auto antisymmetrize_btas(
     btas::Tensor<Args...> const& arr,
