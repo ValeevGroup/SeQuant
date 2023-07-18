@@ -63,13 +63,9 @@ bool EvalExpr::tot() const noexcept { return tot_; }
 
 std::wstring EvalExpr::to_latex() const noexcept { return expr_->to_latex(); }
 
-Tensor const& EvalExpr::as_tensor() const noexcept(false) {
-  return expr_->as<Tensor>();
-}
+Tensor const& EvalExpr::as_tensor() const { return expr_->as<Tensor>(); }
 
-Constant const& EvalExpr::as_constant() const noexcept(false) {
-  return expr_->as<Constant>();
-}
+Constant const& EvalExpr::as_constant() const { return expr_->as<Constant>(); }
 
 InnerOuterIndices EvalExpr::inner_outer_indices() const noexcept {
   if (expr()->is<Constant>()) return {};
