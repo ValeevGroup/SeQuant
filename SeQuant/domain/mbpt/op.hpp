@@ -21,19 +21,21 @@ bool is_vacuum(QuantumNumbers qns);
 
 /// enumerates the known Operator types
 enum class OpType {
-  h,       //!< 1-body Hamiltonian
-  f,       //!< Fock operator
-  g,       //!< 2-body Coulomb
-  t,       //!< cluster amplitudes
-  lambda,  //!< deexcitation cluster amplitudes
-  A,       //!< antisymmetrizer
-  L,       //!< left-hand eigenstate
-  R,       //!< right-hand eigenstate
-  R12,     //!< geminal kernel
-  GR,      //!< GR kernel from f12 theory
-  C,       //!< cabs singles op
+  h,        //!< 1-body Hamiltonian
+  f,        //!< Fock operator
+  g,        //!< 2-body Coulomb
+  t,        //!< cluster amplitudes
+  lambda,   //!< deexcitation cluster amplitudes
+  A,        //!< antisymmetrizer
+  L,        //!< left-hand eigenstate
+  R,        //!< right-hand eigenstate
+  R12,      //!< geminal kernel
+  GR,       //!< GR kernel from f12 theory
+  C,        //!< cabs singles op
   invalid,  //!< invalid operator
-  V        //!< one-body perturbation operator
+  V,        //!< one-body perturbation operator
+  t1,       //!< perrturbed cluster amplitudes
+  lambda1   //!< perturbed deexcitation cluster amplitudes
 };
 
 /// maps operator types to their labels
@@ -41,7 +43,7 @@ inline const std::map<OpType, std::wstring> optype2label{
     {OpType::h, L"h"}, {OpType::f, L"f"},      {OpType::g, L"g"},
     {OpType::t, L"t"}, {OpType::lambda, L"λ"}, {OpType::A, L"A"},
     {OpType::L, L"L"}, {OpType::R, L"R"},      {OpType::R12, L"F"},
-    {OpType::V, L"V"}};
+    {OpType::V, L"V"}, {OpType::t1, L"t1"},    {OpType::lambda1, L"λ1"}};
 
 /// maps operator labels to their types
 inline const std::map<std::wstring, OpType> label2optype =

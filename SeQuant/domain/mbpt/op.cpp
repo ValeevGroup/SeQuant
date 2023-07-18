@@ -20,7 +20,8 @@ std::vector<std::wstring> cardinal_tensor_labels() {
           L"C",        overlap_label(),
           L"a",        L"ã",
           L"b",        L"ᵬ",
-          L"E"};
+          L"E",        L"t1",
+          L"λ1"};
 }
 
 std::wstring to_wstring(OpType op) {
@@ -49,6 +50,10 @@ std::wstring to_wstring(OpType op) {
       return L"C";
     case OpType::V:
         return L"V";
+    case OpType::t1:
+      return L"t1";
+    case OpType::lambda1:
+      return L"λ1";
     default:
       throw std::invalid_argument("to_wstring(OpType op): invalid op");
   }
@@ -64,10 +69,12 @@ OpClass to_class(OpType op) {
     case OpType::t:
     case OpType::R:
     case OpType::R12:
+    case OpType::t1:
       return OpClass::ex;
     case OpType::lambda:
     case OpType::A:
     case OpType::L:
+    case OpType::lambda1:
       return OpClass::deex;
     default:
       throw std::invalid_argument("to_class(OpType op): invalid op");
