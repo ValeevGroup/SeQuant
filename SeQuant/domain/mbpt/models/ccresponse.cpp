@@ -87,8 +87,6 @@ ccresponse::ccresponse(size_t n, size_t p, size_t pmin, size_t r)
 
 std::vector<sequant::ExprPtr> ccresponse::t() {
   using namespace sequant::mbpt;
-  // Equation: <0|A (e^T V)_c|0> + <0|A (H_bar^(0) e^T^(1) V)_c|0>
-
   // construct unperturbed H_bar (reusable code)
   auto hbar = op::H();
   auto H_Tk = hbar;
@@ -96,25 +94,22 @@ std::vector<sequant::ExprPtr> ccresponse::t() {
     H_Tk = simplify(ex<Constant>(rational{1, k}) * H_Tk * op::T(N));
     hbar += H_Tk;
   }
-
-  auto V = op::V();
-  std::vector<ExprPtr> result (P + 1);
-  for (auto p = P; p <= PMIN; p++){
+  std::vector<ExprPtr> result(P + 1);
+  for (auto p = P; p <= PMIN; p++) {
     // try without screening
-    auto eq = simplify((op::A(p) * op::T(N) * V) +
+    auto eq = simplify((op::A(p) * op::T(N) * op::V()) +
                        (op::A(p) * hbar * op::T(N) * op::pT1(N)));
 
-    // mention connectivity here
-    result.at(p) = op::vac_av(eq);
+    std::vector<std::pair<std::wstring, std::wstring>> new_op_connect = {
+        {L"h", L"t"},  {L"f", L"t"},  {L"g", L"t"}, {L"h", L"t1"},
+        {L"f", L"t1"}, {L"g", L"t1"}, {L"t", L"V"}};
+    result.at(p) = op::vac_av(eq, new_op_connect);
   }
   return result;
 }
 
 std::vector<ExprPtr> ccresponse::lambda() {
   using namespace sequant::mbpt;
-  // Equation: <0| (1 + Lambda^(0) (H_doublebar(1) *  e^T)_c * A|0> +
-  // <0| (Lambda^(1) (H_bar(0) *  e^T)_c * A|0>
-
   // construct unperturbed H_bar (reusable code)
   auto hbar = op::H();
   auto H_Tk = hbar;
@@ -122,15 +117,18 @@ std::vector<ExprPtr> ccresponse::lambda() {
     H_Tk = simplify(ex<Constant>(rational{1, k}) * H_Tk * op::T(N));
     hbar += H_Tk;
   }
-  auto V = op::V();
   const auto One = ex<Constant>(1);
   std::vector<ExprPtr> result(P + 1);
   for (auto p = P; p <= PMIN; p++) {
-    auto eq =
-        simplify((One + op::Lambda(N)) * (op::pT1_(N) * (hbar + V) * A(p)) +
-                 (op::pLambda1_(N) * hbar * op::T(N)) * A(p));
+    auto eq = simplify(
+        (One + op::Lambda(N)) *
+            (op::pT1_(N) * op::T(N) * (op::H() + op::V()) * adjoint(op::A(p))) +
+        (op::pLambda1_(N) * hbar * op::T(N)) * adjoint(A(p)));
 
-    // mention connectivity here
+    std::vector<std::pair<std::wstring, std::wstring>> new_op_connect = {
+        {L"h", L"t"},  {L"f", L"t"},  {L"g", L"t"}, {L"h", L"t1"},
+        {L"f", L"t1"}, {L"g", L"t1"}, {L"h", L"A"}, {L"f", L"A"},
+        {L"g", L"A"},  {L"t1", L"A"}};
     result.at(p) = op::vac_av(eq);
   }
   return result;
