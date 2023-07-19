@@ -12,7 +12,7 @@ namespace decompositions {
 ExprPtr cumu_to_density(ExprPtr ex_) {
   assert(ex_->is<Tensor>());
   assert(ex_->as<Tensor>().rank() == 1);
-  assert(ex_->as<Tensor>().label() == L"\\lambda");
+  assert(ex_->as<Tensor>().label() == L"κ");
   auto down_0 = ex_->as<Tensor>().ket()[0];
   auto up_0 = ex_->as<Tensor>().bra()[0];
 
@@ -24,7 +24,7 @@ ExprPtr cumu_to_density(ExprPtr ex_) {
 ExprPtr cumu2_to_density(ExprPtr ex_) {
   assert(ex_->is<Tensor>());
   assert(ex_->as<Tensor>().rank() == 2);
-  assert(ex_->as<Tensor>().label() == L"\\lambda");
+  assert(ex_->as<Tensor>().label() == L"κ");
 
   auto down_0 = ex_->as<Tensor>().ket()[0];
   auto up_0 = ex_->as<Tensor>().bra()[0];
@@ -45,7 +45,7 @@ ExprPtr cumu2_to_density(ExprPtr ex_) {
 ExprPtr cumu3_to_density(ExprPtr ex_) {
   assert(ex_->is<Tensor>());
   assert(ex_->as<Tensor>().rank() == 3);
-  assert(ex_->as<Tensor>().label() == L"\\lambda");
+  assert(ex_->as<Tensor>().label() == L"κ");
 
   auto down_0 = ex_->as<Tensor>().ket()[0];
   auto up_0 = ex_->as<Tensor>().bra()[0];
@@ -54,9 +54,8 @@ ExprPtr cumu3_to_density(ExprPtr ex_) {
   auto down_2 = ex_->as<Tensor>().ket()[2];
   auto up_2 = ex_->as<Tensor>().bra()[2];
 
-  auto cumulant2 =
-      ex<Tensor>(L"\\lambda", std::initializer_list<Index>{up_1, up_2},
-                 std::initializer_list<Index>{down_1, down_2});
+  auto cumulant2 = ex<Tensor>(L"κ", std::initializer_list<Index>{up_1, up_2},
+                              std::initializer_list<Index>{down_1, down_2});
   auto density_1 = ex<Tensor>(L"γ", std::initializer_list<Index>{up_0},
                               std::initializer_list<Index>{down_0});
   auto density_2 = ex<Tensor>(L"γ", std::initializer_list<Index>{up_1},
@@ -73,8 +72,7 @@ ExprPtr cumu3_to_density(ExprPtr ex_) {
 
   for (auto&& product : temp_result->as<Sum>().summands()) {
     for (auto&& factor : product->as<Product>().factors()) {
-      if (factor->is<Tensor>() &&
-          (factor->as<Tensor>().label() == L"\\lambda") &&
+      if (factor->is<Tensor>() && (factor->as<Tensor>().label() == L"κ") &&
           (factor->as<Tensor>().rank() == 2)) {
         factor = cumu2_to_density(factor);
       }
@@ -82,7 +80,7 @@ ExprPtr cumu3_to_density(ExprPtr ex_) {
   }
   for (auto&& product : temp_result->as<Sum>().summands()) {
     for (auto&& factor : product->as<Product>().factors()) {
-      if (factor->is<Tensor>() && factor->as<Tensor>().label() == L"\\lambda" &&
+      if (factor->is<Tensor>() && factor->as<Tensor>().label() == L"κ" &&
           factor->as<Tensor>().rank() == 1) {
         factor = cumu_to_density(factor);
       }
@@ -101,9 +99,8 @@ ExprPtr one_body_sub(
 
   const auto a = ex<FNOperator>(std::initializer_list<Index>{up_0},
                                 std::initializer_list<Index>{down_0});
-  const auto cumu1 =
-      ex<Tensor>(L"\\lambda", std::initializer_list<Index>{down_0},
-                 std::initializer_list<Index>{up_0});
+  const auto cumu1 = ex<Tensor>(L"κ", std::initializer_list<Index>{down_0},
+                                std::initializer_list<Index>{up_0});
 
   auto result = a + (ex<Constant>(-1) * cumu1);
   return (result);
@@ -122,18 +119,16 @@ ExprPtr two_body_decomp(
   auto up_0 = ex_->as<FNOperator>().creators()[0].index();
   auto up_1 = ex_->as<FNOperator>().creators()[1].index();
 
-  const auto cumu1 =
-      ex<Tensor>(L"\\lambda", std::initializer_list<Index>{down_0},
-                 std::initializer_list<Index>{up_0});
-  const auto cumu2 =
-      ex<Tensor>(L"\\lambda", std::initializer_list<Index>{down_1},
-                 std::initializer_list<Index>{up_1});
+  const auto cumu1 = ex<Tensor>(L"κ", std::initializer_list<Index>{down_0},
+                                std::initializer_list<Index>{up_0});
+  const auto cumu2 = ex<Tensor>(L"κ", std::initializer_list<Index>{down_1},
+                                std::initializer_list<Index>{up_1});
   const auto a = ex<FNOperator>(std::initializer_list<Index>{up_1},
                                 std::initializer_list<Index>{down_1});
   const auto a2 = ex<FNOperator>(std::initializer_list<Index>{up_0, up_1},
                                  std::initializer_list<Index>{down_0, down_1});
   const auto double_cumu =
-      ex<Tensor>(L"\\lambda", std::initializer_list<Index>{down_0, down_1},
+      ex<Tensor>(L"κ", std::initializer_list<Index>{down_0, down_1},
                  std::initializer_list<Index>{up_0, up_1});
 
   auto term1 = cumu1 * a;
@@ -165,16 +160,15 @@ three_body_decomp(ExprPtr ex_, bool approx = true) {
 
   std::vector<Index> initial_upper{up_0, up_1, up_2};
 
-  const auto cumulant =
-      ex<Tensor>(L"\\lambda", std::initializer_list<Index>{down_0},
-                 std::initializer_list<Index>{up_0});
+  const auto cumulant = ex<Tensor>(L"κ", std::initializer_list<Index>{down_0},
+                                   std::initializer_list<Index>{up_0});
   const auto a = ex<FNOperator>(std::initializer_list<Index>{up_1, up_2},
                                 std::initializer_list<Index>{down_1, down_2});
   auto a_cumulant = cumulant * a;
 
-  auto cumulant2 = ex<Tensor>(L"\\lambda", std::initializer_list<Index>{down_1},
+  auto cumulant2 = ex<Tensor>(L"κ", std::initializer_list<Index>{down_1},
                               std::initializer_list<Index>{up_1});
-  auto cumulant3 = ex<Tensor>(L"\\lambda", std::initializer_list<Index>{down_2},
+  auto cumulant3 = ex<Tensor>(L"κ", std::initializer_list<Index>{down_2},
                               std::initializer_list<Index>{up_2});
   auto cumulant_3x = cumulant * cumulant2 * cumulant3;
 
@@ -183,7 +177,7 @@ three_body_decomp(ExprPtr ex_, bool approx = true) {
   auto a1_cumu1_cumu2 = a1 * cumulant2 * cumulant3;
 
   auto two_body_cumu =
-      ex<Tensor>(L"\\lambda", std::initializer_list<Index>{down_1, down_2},
+      ex<Tensor>(L"κ", std::initializer_list<Index>{down_1, down_2},
                  std::initializer_list<Index>{up_1, up_2});
   auto a1_cumu2 = a1 * two_body_cumu;
 
@@ -192,9 +186,9 @@ three_body_decomp(ExprPtr ex_, bool approx = true) {
                                      a1_cumu2 + cumu1_cumu2);
 
   if (!approx) {
-    auto cumu3 = ex<Tensor>(
-        L"\\lambda", std::initializer_list<Index>{down_0, down_1, down_2},
-        std::initializer_list<Index>{up_0, up_1, up_2});
+    auto cumu3 =
+        ex<Tensor>(L"κ", std::initializer_list<Index>{down_0, down_1, down_2},
+                   std::initializer_list<Index>{up_0, up_1, up_2});
 
     sum_of_terms.result = cumu3 + sum_of_terms.result;
   }
@@ -250,17 +244,17 @@ three_body_decomposition(ExprPtr _ex, int rank) {
       if (product->is<Product>()) {
         for (auto&& factor : product->as<Product>().factors()) {
           if (factor->is<Tensor>()) {
-            if (factor->as<Tensor>().label() == L"\\lambda" &&
+            if (factor->as<Tensor>().label() == L"κ" &&
                 factor->as<Tensor>().rank() == 3) {
               factor = cumu3_to_density(factor);
-            } else if (factor->as<Tensor>().label() == L"\\lambda" &&
+            } else if (factor->as<Tensor>().label() == L"κ" &&
                        factor->as<Tensor>().rank() == 2) {
               factor = cumu2_to_density(factor);
-            } else if (factor->as<Tensor>().label() == L"\\lambda" &&
+            } else if (factor->as<Tensor>().label() == L"κ" &&
                        factor->as<Tensor>().rank() == 1) {
               factor = cumu_to_density(factor);
             } else {
-              assert(factor->as<Tensor>().label() != L"\\lambda");
+              assert(factor->as<Tensor>().label() != L"κ");
             }
           }
         }
@@ -276,16 +270,16 @@ three_body_decomposition(ExprPtr _ex, int rank) {
       if (product->is<Product>()) {
         for (auto&& factor : product->as<Product>().factors()) {
           if (factor->is<Tensor>()) {
-            if (factor->as<Tensor>().label() == L"\\lambda" &&
+            if (factor->as<Tensor>().label() == L"κ" &&
                 factor->as<Tensor>().rank() > 2) {
               factor = ex<Constant>(0);
-            } else if (factor->as<Tensor>().label() == L"\\lambda" &&
+            } else if (factor->as<Tensor>().label() == L"κ" &&
                        factor->as<Tensor>().rank() == 2) {
               factor = cumu2_to_density(factor);
-            } else if (factor->as<Tensor>().label() == L"\\lambda") {
+            } else if (factor->as<Tensor>().label() == L"κ") {
               factor = cumu_to_density(factor);
             } else {
-              assert(factor->as<Tensor>().label() != L"\\lambda");
+              assert(factor->as<Tensor>().label() != L"κ");
             }
           }
         }
@@ -303,13 +297,13 @@ three_body_decomposition(ExprPtr _ex, int rank) {
       if (product->is<Product>()) {
         for (auto&& factor : product->as<Product>().factors()) {
           if (factor->is<Tensor>()) {
-            if (factor->as<Tensor>().label() == L"\\lambda" &&
+            if (factor->as<Tensor>().label() == L"κ" &&
                 factor->as<Tensor>().rank() > 1) {
               factor = ex<Constant>(0);
-            } else if (factor->as<Tensor>().label() == L"\\lambda") {
+            } else if (factor->as<Tensor>().label() == L"κ") {
               factor = cumu_to_density(factor);
             } else {
-              assert(factor->as<Tensor>().label() != L"\\lambda");
+              assert(factor->as<Tensor>().label() != L"κ");
             }
           }
         }

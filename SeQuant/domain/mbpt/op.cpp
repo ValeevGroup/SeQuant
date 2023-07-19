@@ -10,19 +10,19 @@
 namespace sequant::mbpt {
 
 std::vector<std::wstring> cardinal_tensor_labels() {
-  return {L"\\lambda", L"\\gamma",
-          L"\\Gamma",  L"A",
-          L"S",        L"P",
-          L"L",        L"λ",
-          L"h",        L"f",
-          L"g",        L"t",
-          L"R",        L"F",
-          L"X",        L"V",
-          L"Ṽ",        L"B",
-          L"U",        L"GR",
-          L"C",        overlap_label(),
-          L"a",        L"ã",
-          L"b",        L"ᵬ",
+  return {L"κ", L"γ",
+          L"Γ", L"A",
+          L"S", L"P",
+          L"L", L"λ",
+          L"h", L"f",
+          L"g", L"t",
+          L"R", L"F",
+          L"X", L"V",
+          L"Ṽ", L"B",
+          L"U", L"GR",
+          L"C", overlap_label(),
+          L"a", L"ã",
+          L"b", L"ᵬ",
           L"E"};
 }
 
