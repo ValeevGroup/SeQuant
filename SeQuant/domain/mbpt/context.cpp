@@ -38,7 +38,7 @@ void set_default_formalism(const Context& ctx) {
   sequant::detail::set_implicit_context(ctx);
 }
 
-void reset_default_context() {
+void reset_default_formalism() {
   sequant::detail::reset_implicit_context<Context>();
 }
 
