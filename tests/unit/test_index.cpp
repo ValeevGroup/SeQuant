@@ -195,6 +195,10 @@ TEST_CASE("Index", "[elements]") {
     Index a1_up(L"a↑_1", {i1, i2});
     std::wstring a1_up_str = to_latex(a1_up);
     REQUIRE(a1_up_str == L"{a↑_1^{{i_1}{i_2^{{i_3}{i_4}}}}}");
+
+    Index alpha1_up(L"α↑_1", {i1, i2});
+    std::wstring alpha1_up_str = to_latex(alpha1_up);
+    REQUIRE(alpha1_up_str == L"{\\alpha↑_1^{{i_1}{i_2^{{i_3}{i_4}}}}}");
   }
 
   SECTION("wolfram") {

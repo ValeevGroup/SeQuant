@@ -8,6 +8,8 @@
 
 #include "../../SeQuant/core/wstring.hpp"
 
+#include "../../SeQuant/core/latex.hpp"
+
 namespace sequant {
 
 const std::size_t Index::min_tmp_index() {
@@ -31,43 +33,6 @@ std::wstring Index::to_latex() const {
     }
   };
 
-  // replaces greek chars
-  auto greek_characters_to_latex = [](std::wstring& str) {
-    auto lc = {L"alpha",   L"beta", L"gamma",    L"delta", L"epsilon",
-               L"zeta",    L"eta",  L"theta",    L"iota",  L"kappa",
-               L"lambda",  L"mu",   L"nu",       L"xi",    L"",
-               L"pi",      L"rho",  L"varsigma", L"sigma", L"tau",
-               L"upsilon", L"phi",  L"chi",      L"psi",   L"omega"};
-    auto is_lc = [](wchar_t ch) {
-      return ch >= static_cast<wchar_t>(0x3B1)     // alpha
-             && ch <= static_cast<wchar_t>(0x3C9)  // omega
-          ;
-    };
-    auto is_uc = [](wchar_t ch) { return false; };
-
-    std::wstring result;
-    const auto begin = cbegin(str);
-    const auto end = cend(str);
-    for (auto it = begin; it != end; ++it) {
-      const wchar_t ch = *it;
-      const bool ch_is_lc = is_lc(ch);
-      const bool ch_is_uc = !ch_is_lc ? false : is_uc(ch);
-      if (ch_is_lc || ch_is_uc) {
-        auto* lc_c_str =
-            cbegin(lc) + (static_cast<long>(ch) - static_cast<long>(0x3B1));
-        if (wcslen(*lc_c_str) > 0) {
-          if (result.empty()) result = str.substr(0, it - begin);
-          result.push_back(L'\\');
-          result += *lc_c_str;
-        }
-      } else {
-        if (!result.empty()) result.push_back(ch);
-      }
-    }
-
-    if (!result.empty()) str = std::move(result);
-  };
-
   std::wstring result;
   result = L"{";
   result += protect_subscript(this->label());
@@ -79,8 +44,7 @@ std::wstring Index::to_latex() const {
     result += L"}";
   }
   result += L"}";
-  greek_characters_to_latex(result);
-  return result;
+  return greek_characters_to_latex(result);
 }
 
 std::string Index::ascii_label() const {

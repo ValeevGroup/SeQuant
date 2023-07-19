@@ -386,6 +386,7 @@ if (BUILD_TESTING)
             tests/unit/test_runtime.cpp
             tests/unit/test_math.cpp
             tests/unit/test_string.cpp
+            tests/unit/test_latex.cpp
             )
 
     if (TARGET tiledarray)
