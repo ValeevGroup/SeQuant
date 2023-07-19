@@ -327,26 +327,7 @@ class Expr : public std::enable_shared_from_this<Expr>,
       = 0;
 #endif
 
-  /// @tparam T Expr or a class derived from Expr
-  /// @return true if @c *this is equal to @c that
-  /// @note the derived class must implement Expr::static_equal
-  template <typename T>
-  std::enable_if_t<std::is_base_of<Expr, T>::value, bool> operator==(
-      const T &that) const {
-    if (this->type_id() != that.type_id())
-      return false;
-    else
-      return this->static_equal(static_cast<const Expr &>(that));
-  }
-
-  /// @tparam T Expr or a class derived from Expr
-  /// @return true if @c *this is equal to @c that
-  /// @note the derived class must implement Expr::static_equal
-  template <typename T>
-  std::enable_if_t<std::is_base_of<Expr, T>::value, bool> operator!=(
-      const T &that) const {
-    return !operator==(that);
-  }
+  friend inline bool operator==(const Expr &a, const Expr &b);
 
   /// @tparam T Expr or a class derived from Expr
   /// @return true if @c *this is less than @c that
@@ -571,6 +552,19 @@ struct Expr::is_shared_ptr_of_expr<ExprPtr, void> : std::true_type {};
 template <>
 struct Expr::is_shared_ptr_of_expr_or_derived<ExprPtr, void> : std::true_type {
 };
+
+/// @return true if @c a is equal to @c b
+inline bool operator==(const Expr &a, const Expr &b) {
+  if (a.type_id() != b.type_id())
+    return false;
+  else
+    return a.static_equal(b);
+}
+
+#if __cplusplus < 202002L
+/// @return true if @c a is not equal to @c b
+inline bool operator!=(const Expr &a, const Expr &b) { return !(a == b); }
+#endif  // __cplusplus < 202002L
 
 /// make an ExprPtr to a new object of type T
 /// @tparam T a class derived from Expr
