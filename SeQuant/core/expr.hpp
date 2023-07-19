@@ -5,6 +5,22 @@
 #ifndef SEQUANT_EXPR_HPP
 #define SEQUANT_EXPR_HPP
 
+#include "SeQuant/core/expr_fwd.hpp"
+
+#include "SeQuant/core/complex.hpp"
+#include "SeQuant/core/container.hpp"
+#include "SeQuant/core/hash.hpp"
+#include "SeQuant/core/latex.hpp"
+#include "SeQuant/core/logger.hpp"
+#include "SeQuant/core/meta.hpp"
+#include "SeQuant/core/rational.hpp"
+#include "SeQuant/core/wolfram.hpp"
+
+#include <range/v3/all.hpp>
+
+#include <boost/core/demangle.hpp>
+#include <boost/numeric/conversion/cast.hpp>
+
 #include <atomic>
 #include <complex>
 #include <iostream>
@@ -12,25 +28,9 @@
 #include <optional>
 #include <vector>
 
-#include <range/v3/all.hpp>
-
-#include <boost/core/demangle.hpp>
-#include <boost/numeric/conversion/cast.hpp>
-
-#include <SeQuant/core/rational.hpp>
-
-#include <SeQuant/core/complex.hpp>
-#include "container.hpp"
-#include "expr_fwd.hpp"
-#include "hash.hpp"
-#include "latex.hpp"
-#include "logger.hpp"
-#include "meta.hpp"
-#include "wolfram.hpp"
-
 namespace sequant {
 
-/// ExprPtr is a multiple-owner smart pointer to Expr
+/// @brief ExprPtr is a multiple-owner smart pointer to Expr
 
 /// It can be used mostly interchangeably with `std::shared_ptr<Expr>`, but
 /// also provides convenient mathematical operators (`+=`, etc.)
@@ -606,7 +606,9 @@ class Labeled {
   virtual std::wstring_view label() const = 0;
 };
 
-/// a scalar constant
+/// @brief a constant number
+
+/// This is represented as a complex rational number
 class Constant : public Expr {
  public:
   using scalar_type = Complex<sequant::rational>;
@@ -715,8 +717,6 @@ class Constant : public Expr {
     return value() == static_cast<const Constant &>(that).value();
   }
 };  // class Constant
-
-using ConstantPtr = std::shared_ptr<Constant>;
 
 /// @brief generalized product, i.e. a scalar times a product of zero or more
 /// terms.
@@ -1079,8 +1079,6 @@ class Product : public Expr {
   }
 };  // class Product
 
-using ProductPtr = std::shared_ptr<Product>;
-
 class CProduct : public Product {
  public:
   using Product::Product;
@@ -1098,8 +1096,6 @@ class CProduct : public Product {
   bool static_commutativity() const override { return true; }
 };  // class CProduct
 
-using CProductPtr = std::shared_ptr<CProduct>;
-
 class NCProduct : public Product {
  public:
   using Product::Product;
@@ -1115,8 +1111,6 @@ class NCProduct : public Product {
  private:
   bool static_commutativity() const override { return true; }
 };  // class NCProduct
-
-using NCProductPtr = std::shared_ptr<NCProduct>;
 
 /// @brief sum of zero or more summands
 
@@ -1381,8 +1375,6 @@ class Sum : public Expr {
       return false;
   }
 };  // class Sum
-
-using SumPtr = std::shared_ptr<Sum>;
 
 inline std::wstring to_latex(const ExprPtr &exprptr) {
   return exprptr->to_latex();

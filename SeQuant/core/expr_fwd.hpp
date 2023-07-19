@@ -8,8 +8,22 @@
 #include <memory>
 
 namespace sequant {
+
 class Expr;
 class ExprPtr;
+
+class Labeled;
+class Constant;
+using ConstantPtr = std::shared_ptr<Constant>;
+class Product;
+using ProductPtr = std::shared_ptr<Product>;
+class CProduct;
+using CProductPtr = std::shared_ptr<CProduct>;
+class NCProduct;
+using NCProductPtr = std::shared_ptr<NCProduct>;
+class Sum;
+using SumPtr = std::shared_ptr<Sum>;
+
 }  // namespace sequant
 
 #endif  // SEQUANT_SRC_SEQUANT_CORE_EXPR_WFD_H
