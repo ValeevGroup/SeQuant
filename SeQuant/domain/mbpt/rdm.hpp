@@ -16,7 +16,7 @@ ExprPtr cumu_to_density(ExprPtr ex_) {
   auto down_0 = ex_->as<Tensor>().ket()[0];
   auto up_0 = ex_->as<Tensor>().bra()[0];
 
-  auto density = ex<Tensor>(L"\\gamma", std::initializer_list<Index>{up_0},
+  auto density = ex<Tensor>(L"γ", std::initializer_list<Index>{up_0},
                             std::initializer_list<Index>{down_0});
   return density;
 }
@@ -31,12 +31,11 @@ ExprPtr cumu2_to_density(ExprPtr ex_) {
   auto down_1 = ex_->as<Tensor>().ket()[1];
   auto up_1 = ex_->as<Tensor>().bra()[1];
 
-  auto density2 =
-      ex<Tensor>(L"\\gamma", std::initializer_list<Index>{up_0, up_1},
-                 std::initializer_list<Index>{down_0, down_1});
-  auto density_1 = ex<Tensor>(L"\\gamma", std::initializer_list<Index>{up_0},
+  auto density2 = ex<Tensor>(L"γ", std::initializer_list<Index>{up_0, up_1},
+                             std::initializer_list<Index>{down_0, down_1});
+  auto density_1 = ex<Tensor>(L"γ", std::initializer_list<Index>{up_0},
                               std::initializer_list<Index>{down_0});
-  auto density_2 = ex<Tensor>(L"\\gamma", std::initializer_list<Index>{up_1},
+  auto density_2 = ex<Tensor>(L"γ", std::initializer_list<Index>{up_1},
                               std::initializer_list<Index>{down_1});
 
   auto d1_d2 = antisymmetrize(density_1 * density_2);
@@ -58,14 +57,14 @@ ExprPtr cumu3_to_density(ExprPtr ex_) {
   auto cumulant2 =
       ex<Tensor>(L"\\lambda", std::initializer_list<Index>{up_1, up_2},
                  std::initializer_list<Index>{down_1, down_2});
-  auto density_1 = ex<Tensor>(L"\\gamma", std::initializer_list<Index>{up_0},
+  auto density_1 = ex<Tensor>(L"γ", std::initializer_list<Index>{up_0},
                               std::initializer_list<Index>{down_0});
-  auto density_2 = ex<Tensor>(L"\\gamma", std::initializer_list<Index>{up_1},
+  auto density_2 = ex<Tensor>(L"γ", std::initializer_list<Index>{up_1},
                               std::initializer_list<Index>{down_1});
-  auto density_3 = ex<Tensor>(L"\\gamma", std::initializer_list<Index>{up_2},
+  auto density_3 = ex<Tensor>(L"γ", std::initializer_list<Index>{up_2},
                               std::initializer_list<Index>{down_2});
   auto density3 =
-      ex<Tensor>(L"\\gamma", std::initializer_list<Index>{up_0, up_1, up_2},
+      ex<Tensor>(L"γ", std::initializer_list<Index>{up_0, up_1, up_2},
                  std::initializer_list<Index>{down_0, down_1, down_2});
 
   auto d1_d2 =

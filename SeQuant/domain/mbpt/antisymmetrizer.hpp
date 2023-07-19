@@ -497,8 +497,7 @@ ExprPtr spin_sum(std::vector<Index> original_upper,
       std::vector<Index> new_upper;
       std::vector<Index> new_lower;
       for (auto&& factor : product->as<Product>().factors()) {
-        if (factor->is<Tensor>() &&
-            factor->as<Tensor>().label() == L"\\gamma") {
+        if (factor->is<Tensor>() && factor->as<Tensor>().label() == L"γ") {
           // prefactor = ex<Constant>(-0.5) *
           // ex<Constant>(factor->as<Tensor>().rank()) * prefactor;
           for (int i = 0; i < factor->as<Tensor>().rank(); i++) {
