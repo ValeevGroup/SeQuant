@@ -36,7 +36,7 @@ std::vector<std::wstring> cardinal_tensor_labels() {
           L"a",
           L"ã",
           L"b",
-          L"ᵬ",
+          L"b̃",
           L"E"};
 }
 

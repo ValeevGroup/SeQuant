@@ -27,7 +27,7 @@ template <>
 const container::vector<std::wstring>&
 NormalOperator<Statistics::BoseEinstein>::labels() {
   using namespace std::literals;
-  static container::vector<std::wstring> labels_{L"b"s, L"ᵬ"s};
+  static container::vector<std::wstring> labels_{L"b"s, L"b̃"s};
   return labels_;
 }
 
@@ -41,7 +41,7 @@ std::wstring_view NormalOperator<Statistics::FermiDirac>::label() const {
 template <>
 std::wstring_view NormalOperator<Statistics::BoseEinstein>::label() const {
   static const std::wstring b = L"b";
-  static const std::wstring btilde = L"ᵬ";
+  static const std::wstring btilde = L"b̃";
   return vacuum() == Vacuum::Physical ? b : btilde;
 }
 
