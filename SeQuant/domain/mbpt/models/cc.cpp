@@ -132,22 +132,18 @@ std::vector<sequant::ExprPtr> cceqs::t_pert() {
     H_Tk = simplify(ex<Constant>(rational{1, k}) * H_Tk * op::T(N));
     hbar += H_Tk;
   }
-  auto temp1 = op::H();
-  temp1 += op::T_(2);
-
-  auto temp2 = op::H1() + ex<Constant>(0);
-  temp2 += op::T_(2);
 
   // construct (V * e^T)_c = V + V * T + V * T^2/2!
-  auto Vbar = op::V() + ex<Constant>(0);
+  auto Vbar = op::V() + ex<Constant>(0);  // temp fix
   auto V_Tk = Vbar;
   for (int64_t k = 1; k <= 2; ++k) {
     V_Tk = simplify(ex<Constant>(rational{1, k}) * V_Tk * op::T(N));
     Vbar += V_Tk;
   }
 
-  // construct (H * e^T * pT1)_c = H * pT1 + H * pT1 * T + H * pT1 * T^2/2! + H * pT1 * T^3/3!
-  auto hbar_pert = (op::H() * op::pT1(N)) + ex<Constant>(0);
+  // construct (H * e^T * pT1)_c = H * pT1 + H * pT1 * T + H * pT1 * T^2/2! + H
+  // * pT1 * T^3/3!
+  auto hbar_pert = (op::H() * op::pT1(N)) + ex<Constant>(0);  // temp fix
   auto H_Tk_pert = hbar_pert;
   for (int64_t k = 1; k <= 3; ++k) {
     H_Tk_pert = simplify(ex<Constant>(rational{1, k}) * H_Tk_pert * op::T(N));
@@ -156,7 +152,6 @@ std::vector<sequant::ExprPtr> cceqs::t_pert() {
 
   std::vector<ExprPtr> result(P + 1);
   for (auto p = P; p >= PMIN; --p) {
-
     auto eq = simplify(op::A(p) * (Vbar + hbar_pert));
 
     std::vector<std::pair<std::wstring, std::wstring>> new_op_connect = {
@@ -166,34 +161,33 @@ std::vector<sequant::ExprPtr> cceqs::t_pert() {
   }
 
   return result;
-
 }
 
-//std::vector<ExprPtr> ccresponse::lambda_pert() {
-//  using namespace sequant::mbpt;
-//  // construct unperturbed H_bar (reusable code)
-//  auto hbar = op::H();
-//  auto H_Tk = hbar;
-//  for (int64_t k = 1; k <= 4; ++k) {
-//    H_Tk = simplify(ex<Constant>(rational{1, k}) * H_Tk * op::T(N));
-//    hbar += H_Tk;
-//  }
-//  const auto One = ex<Constant>(1);
-//  std::vector<ExprPtr> result(P + 1);
-//  for (auto p = P; p <= PMIN; p++) {
+// std::vector<ExprPtr> ccresponse::lambda_pert() {
+//   using namespace sequant::mbpt;
+//   // construct unperturbed H_bar (reusable code)
+//   auto hbar = op::H();
+//   auto H_Tk = hbar;
+//   for (int64_t k = 1; k <= 4; ++k) {
+//     H_Tk = simplify(ex<Constant>(rational{1, k}) * H_Tk * op::T(N));
+//     hbar += H_Tk;
+//   }
+//   const auto One = ex<Constant>(1);
+//   std::vector<ExprPtr> result(P + 1);
+//   for (auto p = P; p <= PMIN; p++) {
 //
-//    ExprPtr eq;
-//    // fix equation
+//     ExprPtr eq;
+//     // fix equation
 //
 //
-//    std::vector<std::pair<std::wstring, std::wstring>> new_op_connect = {
-//        {L"h", L"t"},  {L"f", L"t"},  {L"g", L"t"}, {L"h", L"t1"},
-//        {L"f", L"t1"}, {L"g", L"t1"}, {L"h", L"A"}, {L"f", L"A"},
-//        {L"g", L"A"},  {L"t1", L"A"}, {L"t", L"V"}, {L"t1", L"V"},
-//        {L"V", L"A"}};
-//    result.at(p) = op::vac_av(eq);
-//  }
-//  return result;
-//}
+//     std::vector<std::pair<std::wstring, std::wstring>> new_op_connect = {
+//         {L"h", L"t"},  {L"f", L"t"},  {L"g", L"t"}, {L"h", L"t1"},
+//         {L"f", L"t1"}, {L"g", L"t1"}, {L"h", L"A"}, {L"f", L"A"},
+//         {L"g", L"A"},  {L"t1", L"A"}, {L"t", L"V"}, {L"t1", L"V"},
+//         {L"V", L"A"}};
+//     result.at(p) = op::vac_av(eq);
+//   }
+//   return result;
+// }
 
 }  // namespace sequant::mbpt::sr
