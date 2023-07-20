@@ -56,5 +56,14 @@ TEST_CASE("latex", "[util]") {
     std::wstring tilde__f = L"f̃";
     REQUIRE(tilde__f.size() == 2);
     REQUIRE(diactrics_to_latex(tilde__f) == L"\\tilde{f}");
+    std::wstring grave__f = L"f̀";
+    REQUIRE(grave__f.size() == 2);
+    REQUIRE(diactrics_to_latex(grave__f) == L"\\grave{f}");
+    std::wstring acute__f = L"f́";
+    REQUIRE(acute__f.size() == 2);
+    REQUIRE(diactrics_to_latex(acute__f) == L"\\acute{f}");
+    std::wstring caron__f = L"f̌";
+    REQUIRE(caron__f.size() == 2);
+    REQUIRE(diactrics_to_latex(caron__f) == L"\\check{f}");
   }
 }

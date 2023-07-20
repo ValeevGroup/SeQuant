@@ -109,65 +109,79 @@ std::basic_string<Char, Traits, Alloc> diactrics_to_latex_impl(
     std::basic_string_view<Char, Traits> str) {
   using str_t = std::basic_string<Char, Traits, Alloc>;
 
-  // lower-case greek characters in the order of their appearance in Unicode
-  // chart https://www.unicode.org/charts/PDF/U0370.pdf
-  const std::map<str_t, str_t> lc = {
-      {SQ_STRLIT(Char, "ã"), SQ_STRLIT(Char, "\\tilde{a}")},
-      {SQ_STRLIT(Char, "ẽ"), SQ_STRLIT(Char, "\\tilde{e}")},
-      {SQ_STRLIT(Char, "ñ"), SQ_STRLIT(Char, "\\tilde{n}")},
-      {SQ_STRLIT(Char, "õ"), SQ_STRLIT(Char, "\\tilde{o}")},
-      {SQ_STRLIT(Char, "ũ"), SQ_STRLIT(Char, "\\tilde{u}")},
-      {SQ_STRLIT(Char, "ṽ"), SQ_STRLIT(Char, "\\tilde{v}")}
-  };
-  const std::map<str_t, str_t> uc = {
-      {SQ_STRLIT(Char, "Ã"), SQ_STRLIT(Char, "\\tilde{A}")},
-      {SQ_STRLIT(Char, "Ẽ"), SQ_STRLIT(Char, "\\tilde{E}")},
-      {SQ_STRLIT(Char, "Ñ"), SQ_STRLIT(Char, "\\tilde{N}")},
-      {SQ_STRLIT(Char, "Õ"), SQ_STRLIT(Char, "\\tilde{O}")},
-      {SQ_STRLIT(Char, "Ũ"), SQ_STRLIT(Char, "\\tilde{U}")},
-      {SQ_STRLIT(Char, "Ṽ"), SQ_STRLIT(Char, "\\tilde{V}")}
-  };
-
   str_t result;
   const auto begin = cbegin(str);
   const auto end = cend(str);
   /// TODO iterate over characters (graphemes)
   std::optional<Char> next_ch;
   for (auto it = begin; it != end; ++it) {
-    auto append = [&result,&str,&it,&begin](const auto& s) {
+    auto append = [&result, &str, &it, &begin](const auto& s) {
       if (result.empty()) result = str.substr(0, it - begin);
       result += s;
     };
-    auto is_ascii = [](Char c) {
-      return static_cast<unsigned int>(c) <= 0x7F;
-    };
+    auto is_ascii = [](Char c) { return static_cast<unsigned int>(c) <= 0x7F; };
 
     const Char ch = *it;
-    if (it+1 != end)
-      next_ch = *(it+1);
-    if (sizeof(Char) == 1 && ((it==begin && !is_ascii(ch)) || (next_ch && !is_ascii(*next_ch)))) {
+    if (it + 1 != end) next_ch = *(it + 1);
+    if (sizeof(Char) == 1 &&
+        ((it == begin && !is_ascii(ch)) || (next_ch && !is_ascii(*next_ch)))) {
       throw std::invalid_argument(
           "diactrics_to_latex<Char,...>(str): currently only supports "
           "non-ASCII characters in str if Char is a wide character (wchar_t, "
           "char16_t, or char32_t)");
     }
-    if (next_ch && *next_ch == static_cast<Char>(0x303)) {
-      append(SQ_STRLIT(Char, "\\tilde{"));
+    // Combining diacritics: https://www.ncbi.nlm.nih.gov/staff/beck/charents/accents.html
+    if (next_ch) {
+      // tilde
+      if (*next_ch == static_cast<Char>(0x303)) {
+        append(SQ_STRLIT(Char, "\\tilde{"));
+      }
+      // acute
+      else if (*next_ch == static_cast<Char>(0x301)) {
+        append(SQ_STRLIT(Char, "\\acute{"));
+      }
+      // grave
+      else if (*next_ch == static_cast<Char>(0x300)) {
+        append(SQ_STRLIT(Char, "\\grave{"));
+      }
+      // caron
+      else if (*next_ch == static_cast<Char>(0x30C)) {
+        append(SQ_STRLIT(Char, "\\check{"));
+      }
       append(ch);
       append(SQ_STRLIT(Char, "}"));
       it += 1;
+      continue;
     }
-    else {
-      auto lc_it = lc.find(str_t{ch});
-      if (lc_it != lc.end()) {
-        append(lc_it->second);
-      }
-      else {
-        auto uc_it = uc.find(str_t{ch});
-        if (uc_it != uc.end()) {
-          append(uc_it->second);
+
+    {    // check for combined characters
+      {  // tilde
+         // lower-case characters with tilde
+        const std::map<str_t, str_t> lc = {
+            {SQ_STRLIT(Char, "ã"), SQ_STRLIT(Char, "\\tilde{a}")},
+            {SQ_STRLIT(Char, "ẽ"), SQ_STRLIT(Char, "\\tilde{e}")},
+            {SQ_STRLIT(Char, "ñ"), SQ_STRLIT(Char, "\\tilde{n}")},
+            {SQ_STRLIT(Char, "õ"), SQ_STRLIT(Char, "\\tilde{o}")},
+            {SQ_STRLIT(Char, "ũ"), SQ_STRLIT(Char, "\\tilde{u}")},
+            {SQ_STRLIT(Char, "ṽ"), SQ_STRLIT(Char, "\\tilde{v}")}};
+        auto lc_it = lc.find(str_t{ch});
+        if (lc_it != lc.end()) {
+          append(lc_it->second);
+        } else {
+          // upper-case characters with tilde
+          const std::map<str_t, str_t> uc = {
+              {SQ_STRLIT(Char, "Ã"), SQ_STRLIT(Char, "\\tilde{A}")},
+              {SQ_STRLIT(Char, "Ẽ"), SQ_STRLIT(Char, "\\tilde{E}")},
+              {SQ_STRLIT(Char, "Ñ"), SQ_STRLIT(Char, "\\tilde{N}")},
+              {SQ_STRLIT(Char, "Õ"), SQ_STRLIT(Char, "\\tilde{O}")},
+              {SQ_STRLIT(Char, "Ũ"), SQ_STRLIT(Char, "\\tilde{U}")},
+              {SQ_STRLIT(Char, "Ṽ"), SQ_STRLIT(Char, "\\tilde{V}")}};
+          auto uc_it = uc.find(str_t{ch});
+          if (uc_it != uc.end()) {
+            append(uc_it->second);
+          }
         }
-      }
+      }  // tilde
     }
   }
 
