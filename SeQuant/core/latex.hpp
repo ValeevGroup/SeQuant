@@ -146,6 +146,9 @@ std::basic_string<Char, Traits, Alloc> diactrics_to_latex(
 /// @throw std::invalid_argument if @p Char is narrow and @p str contains
 /// non-ASCII characters
 /// @note only some combined Unicode characters are currently supported
+/// @internal useful resources
+/// - https://milde.users.sourceforge.net/LUCR/Math/unimathsymbols.pdf
+/// - https://www.unicode.org/charts/PDF/U1D400.pdf
 // chang-format on
 template <typename Char, typename Traits>
 std::basic_string<Char, Traits> utf_to_latex(
