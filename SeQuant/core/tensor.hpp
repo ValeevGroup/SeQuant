@@ -230,7 +230,7 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
               (this->label() == L"λ" && this->rank() > 1);
     result = L"{";
     if ((this->symmetry() == Symmetry::antisymm) && gt) result += L"\\bar{";
-    result += greek_characters_to_latex(this->label());
+    result += utf_to_latex(this->label());
     if ((this->symmetry() == Symmetry::antisymm) && gt) result += L"}";
     result += L"^{";
     for (const auto &i : this->ket()) result += sequant::to_latex(i);

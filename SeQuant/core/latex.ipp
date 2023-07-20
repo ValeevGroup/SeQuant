@@ -79,21 +79,26 @@ std::basic_string<Char, Traits, Alloc> greek_characters_to_latex_impl(
           "greek_characters_to_latex<Char,...>(str): currently only supports "
           "non-ASCII characters in str if Char is a wide character (wchar_t, "
           "char16_t, or char32_t)");
-    const bool ch_is_lc = is_lc(ch);
-    const bool ch_is_uc = is_uc(ch);
-    if (ch_is_lc) {
-      const auto ch_addr = static_cast<long>(ch) - static_cast<long>(0x3B1);
-      assert(ch_addr >= 0 && ch_addr < lc.size());
-      const auto& lc_str = lc[static_cast<std::size_t>(ch_addr)];
-      assert(lc_str.size() > 0);
-      append(lc_str);
-    } else if (ch_is_uc) {
-      const auto ch_addr = static_cast<long>(ch) - static_cast<long>(0x391);
-      assert(ch_addr >= 0 && ch_addr < uc.size());
-      const auto& uc_str = uc[static_cast<std::size_t>(ch_addr)];
-      assert(uc_str.size() > 0);
-      append(uc_str);
-    } else {
+
+    // skip ASCII characters
+    if (!is_ascii(ch)) {
+      if (is_lc(ch)) {
+        const auto ch_addr = static_cast<long>(ch) - static_cast<long>(0x3B1);
+        assert(ch_addr >= 0 && ch_addr < lc.size());
+        const auto& lc_str = lc[static_cast<std::size_t>(ch_addr)];
+        assert(lc_str.size() > 0);
+        append(lc_str);
+      } else if (is_uc(ch)) {
+        const auto ch_addr = static_cast<long>(ch) - static_cast<long>(0x391);
+        assert(ch_addr >= 0 && ch_addr < uc.size());
+        const auto& uc_str = uc[static_cast<std::size_t>(ch_addr)];
+        assert(uc_str.size() > 0);
+        append(uc_str);
+      }
+      else {  // pass through unknown non-ASCII characters
+        if (!result.empty()) result.push_back(ch);
+      }
+    } else {  // ASCII character
       if (!result.empty()) result.push_back(ch);
     }
   }
@@ -131,30 +136,38 @@ std::basic_string<Char, Traits, Alloc> diactrics_to_latex_impl(
           "char16_t, or char32_t)");
     }
     // Combining diacritics: https://www.ncbi.nlm.nih.gov/staff/beck/charents/accents.html
-    if (next_ch) {
-      // tilde
-      if (*next_ch == static_cast<Char>(0x303)) {
-        append(SQ_STRLIT(Char, "\\tilde{"));
+    if (next_ch && !is_ascii(*next_ch)) {
+      auto append_latex = [&](auto prefix) {
+        append(prefix);
+        append(ch);
+        append(SQ_STRLIT(Char, "}"));
+        it += 1;
+      };
+
+      switch (static_cast<std::int64_t>(*next_ch)) {
+        // tilde
+        case 0x303:
+          append_latex(SQ_STRLIT(Char, "\\tilde{"));
+          continue;
+
+        // acute
+        case 0x301:
+          append_latex(SQ_STRLIT(Char, "\\acute{"));
+          continue;
+
+        // grave
+        case 0x300:
+          append_latex(SQ_STRLIT(Char, "\\grave{"));
+          continue;
+
+        // caron
+        case 0x30C:
+          append_latex(SQ_STRLIT(Char, "\\check{"));
+          continue;
       }
-      // acute
-      else if (*next_ch == static_cast<Char>(0x301)) {
-        append(SQ_STRLIT(Char, "\\acute{"));
-      }
-      // grave
-      else if (*next_ch == static_cast<Char>(0x300)) {
-        append(SQ_STRLIT(Char, "\\grave{"));
-      }
-      // caron
-      else if (*next_ch == static_cast<Char>(0x30C)) {
-        append(SQ_STRLIT(Char, "\\check{"));
-      }
-      append(ch);
-      append(SQ_STRLIT(Char, "}"));
-      it += 1;
-      continue;
     }
 
-    {    // check for combined characters
+    if (!is_ascii(ch)) {    // check for combined characters
       {  // tilde
          // lower-case characters with tilde
         const std::map<str_t, str_t> lc = {

@@ -78,7 +78,8 @@ std::basic_string<Char, Traits, Alloc> greek_characters_to_latex_impl(
 }  // namespace detail
 
 // chang-format off
-/// replaces certain greek characters in a string with their latex equivalents
+/// replaces certain greek characters in a string with their (math-mode) LaTeX
+/// equivalents
 /// @tparam Char character type
 /// @tparam Traits character traits type
 /// @param str input string
@@ -111,7 +112,7 @@ std::basic_string<Char, Traits, Alloc> diactrics_to_latex_impl(
 }  // namespace detail
 
 // chang-format off
-/// replaces certain diactric marks with their latex equivalents
+/// replaces certain diactric marks with their (math-mode) LaTeX equivalents
 /// @tparam Char character type
 /// @tparam Traits character traits type
 /// @param str input string
@@ -119,7 +120,7 @@ std::basic_string<Char, Traits, Alloc> diactrics_to_latex_impl(
 /// @warning if @p str contains non-ASCII characters `Char` must be `wchar_t`
 /// @throw std::invalid_argument if @p Char is narrow and @p str contains
 /// non-ASCII characters
-/// @note only tilde is currently supported
+/// @note only some combined Unicode characters are currently supported
 // chang-format on
 template <typename Char, typename Traits>
 std::basic_string<Char, Traits> diactrics_to_latex(
@@ -132,6 +133,33 @@ template <typename Char, typename Traits, typename Alloc>
 std::basic_string<Char, Traits, Alloc> diactrics_to_latex(
     const std::basic_string<Char, Traits, Alloc>& str) {
   return detail::diactrics_to_latex_impl<Char, Traits, Alloc>(str);
+}
+
+// chang-format off
+/// replaces certain Unicode characters with their (math-mode) LaTeX equivalents
+/// @tparam Char character type
+/// @tparam Traits character traits type
+/// @param str input string
+/// @return @p str with some Unicode characters replaced by their LaTeX
+/// equivalents
+/// @warning if @p str contains non-ASCII characters `Char` must be `wchar_t`
+/// @throw std::invalid_argument if @p Char is narrow and @p str contains
+/// non-ASCII characters
+/// @note only some combined Unicode characters are currently supported
+// chang-format on
+template <typename Char, typename Traits>
+std::basic_string<Char, Traits> utf_to_latex(
+    const std::basic_string_view<Char, Traits>& str) {
+  // replace diacritics first since it relies on wide character structure
+  auto tmp = diactrics_to_latex(str);
+  return greek_characters_to_latex(tmp);
+}
+
+template <typename Char, typename Traits, typename Alloc>
+std::basic_string<Char, Traits, Alloc> utf_to_latex(
+    const std::basic_string<Char, Traits, Alloc>& str) {
+  auto tmp = diactrics_to_latex(str);
+  return greek_characters_to_latex(tmp);
 }
 
 }  // namespace sequant

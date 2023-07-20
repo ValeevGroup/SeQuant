@@ -42,7 +42,7 @@ TEST_CASE("latex", "[util]") {
 #endif
   }
 
-  SECTION("\\tilde") {
+  SECTION("diactrids->latex") {
     std::wstring tilde__a = L"ã";
     REQUIRE(tilde__a.size() == 2);
     REQUIRE(diactrics_to_latex(tilde__a) == L"\\tilde{a}");
@@ -65,5 +65,11 @@ TEST_CASE("latex", "[util]") {
     std::wstring caron__f = L"f̌";
     REQUIRE(caron__f.size() == 2);
     REQUIRE(diactrics_to_latex(caron__f) == L"\\check{f}");
+  }
+
+  SECTION("UTF->latex") {
+    std::wstring tilde__alpha = L"α̃";
+    REQUIRE(tilde__alpha.size() == 2);
+    REQUIRE(utf_to_latex(tilde__alpha) == L"\\tilde{\\alpha}");
   }
 }

@@ -124,7 +124,7 @@ template <Statistics S>
 std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
   using namespace sequant::mbpt;
 
-  auto lbl = std::wstring(op.label());
+  auto lbl = utf_to_latex(op.label());
   std::wstring result = L"{\\hat{" + lbl + L"}";
   auto it = label2optype.find(lbl);
   if (it != label2optype.end()) {  // handle special cases

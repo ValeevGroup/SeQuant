@@ -474,7 +474,7 @@ std::wstring to_latex(const mbpt::Operator<mbpt::sr::qns_t, S>& op) {
   using namespace sequant::mbpt;
   using namespace sequant::mbpt::sr;
 
-  auto result = L"{\\hat{" + greek_characters_to_latex(op.label()) + L"}";
+  auto result = L"{\\hat{" + utf_to_latex(op.label()) + L"}";
   auto it = label2optype.find(std::wstring(op.label()));
   OpType optype = OpType::invalid;
   if (it != label2optype.end()) {  // handle special cases

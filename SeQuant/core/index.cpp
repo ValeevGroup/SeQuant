@@ -44,7 +44,7 @@ std::wstring Index::to_latex() const {
     result += L"}";
   }
   result += L"}";
-  return greek_characters_to_latex(result);
+  return utf_to_latex(result);
 }
 
 std::string Index::ascii_label() const {
