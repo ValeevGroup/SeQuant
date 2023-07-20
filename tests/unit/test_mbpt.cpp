@@ -510,14 +510,32 @@ TEST_CASE("MBPT", "[mbpt]") {
   SECTION("MRSO") {
     using namespace sequant::mbpt::mr;
 
-    // H**T2 -> 0
-    SEQUANT_PROFILE_SINGLE("wick(H**T2 -> 0)", {
-      auto result = vac_av(H() * T_(2), {{0, 1}});
+    // H2**T2 -> 0
+    std::wcout << "H_(2) * T_(2) = " << to_latex(H_(2) * T_(2)) << std::endl;
+    SEQUANT_PROFILE_SINGLE("wick(H2**T2 -> 0)", {
+      auto result = vac_av(H_(2) * T_(2), {{0, 1}});
 
       {
-        std::wcout << "H*T2 -> 0 = " << to_latex_align(result, 0, 1)
+        std::wcout << "H2*T2 -> 0 = " << to_latex_align(result, 0, 1)
                    << std::endl;
       }
+
+      auto result_wo_top =
+          vac_av(H_(2) * T_(2), {{0, 1}}, /* use_topology = */ false);
+
+      REQUIRE(simplify(result - result_wo_top) == ex<Constant>(0));
+    });
+
+    // H2 ** T2 ** T2 -> 0
+    SEQUANT_PROFILE_SINGLE("wick(H2**T2**T2 -> 0)", {
+      // first without use of topology
+      auto result = vac_av(H_(2) * T_(2) * T_(2), {{0, 1}, {0, 2}},
+                           /* use_topology = */ false);
+      // now with topology use
+      auto result_top = vac_av(H_(2) * T_(2) * T_(2), {{0, 1}, {0, 2}},
+                               /* use_topology = */ true);
+
+      REQUIRE(simplify(result - result_top) == ex<Constant>(0));
     });
 
 #if 0

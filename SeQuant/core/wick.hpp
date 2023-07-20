@@ -70,11 +70,6 @@ class WickTheorem {
   /// @return reference to @c *this , for daisy-chaining
   WickTheorem &full_contractions(bool fc) {
     full_contractions_ = fc;
-    // if doing partial contractions want to call use_topology again to make
-    // sure the use of topology is OK
-    // TODO remove once the use of topology is supported for partial
-    // contractions
-    use_topology(use_topology_);
     return *this;
   }
   /// Controls whether next call to compute() will assume spin-free or
@@ -98,10 +93,7 @@ class WickTheorem {
   /// when fully-contracted result (i.e. the vacuum average) is sought.
   /// By default the use of topology is not enabled.
   /// @param sf if true, will utilize the topology to minimize work.
-  /// @warning currently is only supported if full contractions are requested
-  /// @sa set_nop_partitions()
   WickTheorem &use_topology(bool ut) {
-    assert(full_contractions_);
     use_topology_ = ut;
     return *this;
   }
@@ -1025,11 +1017,25 @@ class WickTheorem {
                 const auto past_op_right_partition_idx =
                     op_right_partition_idx + 1;
 
-                // skip contractions that would connect op1_partition with
+                // contract only the first free op in left partition
+                // this is ensured automatically if full_contractions_==true
+                if (!full_contractions_) {
+                  const auto left_partition_ncontr_total =
+                      state.op_partition_ncontractions[op_left_partition_idx];
+                  const auto &op_left_partition =
+                      state.wick.op_partitions_[op_left_partition_idx];
+                  const auto op_left_ord_in_partition =
+                      op_left_partition.find(op_left_input_ordinal) -
+                      op_left_partition.begin();
+                  is_unique =
+                      left_partition_ncontr_total == op_left_ord_in_partition;
+                }
+
+                // also skip contractions that would connect op1_partition with
                 // op2_partition (op1_partition<op2_partition) if there is
                 // another partition p>op2_partition that op1_partition
                 // is connected to
-                if (use_op_partition_groups &&
+                if (use_op_partition_groups && is_unique &&
                     past_op_right_partition_idx < this->op_npartitions_) {
                   const auto left_partition_ncontr_past_right_partition =
                       ranges::span<size_t>(
@@ -1048,8 +1054,7 @@ class WickTheorem {
                   }
                 }
 
-                // contract to the first free op in a partition
-                // and scale by the number of free ops
+                // contract to the first free op in the right partition
                 if (is_unique) {
                   const auto right_partition_ncontr_total =
                       state.op_partition_ncontractions[op_right_partition_idx];
@@ -1134,6 +1139,15 @@ class WickTheorem {
                       contraction_order_matrix_uptri[state.uptri_op(i, j)];
                   if (ncontr_ij > 1) result /= factorial(ncontr_ij);
                 }
+                // if partially contracted account for non-contracted ops in the
+                // partition # of currently contracted
+                const auto partition_i_ncontr =
+                    state.op_partition_ncontractions[i];
+                // # of currently non-contracted ops
+                const auto partition_i_noncontr =
+                    partition_i_size - partition_i_ncontr;
+                if (partition_i_noncontr > 1)
+                  result /= factorial(partition_i_noncontr);
               }
             }
             return result;
