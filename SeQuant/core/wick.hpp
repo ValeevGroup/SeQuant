@@ -70,6 +70,11 @@ class WickTheorem {
   /// @return reference to @c *this , for daisy-chaining
   WickTheorem &full_contractions(bool fc) {
     full_contractions_ = fc;
+    // if doing partial contractions want to call use_topology again to make
+    // sure the use of topology is OK
+    // TODO remove once the use of topology is supported for partial
+    // contractions
+    use_topology(use_topology_);
     return *this;
   }
   /// Controls whether next call to compute() will assume spin-free or
