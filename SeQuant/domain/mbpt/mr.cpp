@@ -204,10 +204,10 @@ ExprPtr F() {
                  [](auto braidxs, auto ketidxs, Symmetry opsymm) {
                    auto m1 = Index::make_tmp_index(
                        IndexSpace{IndexSpace::active,
-                                  IndexSpace::nullqns});  // all occupieds
+                                  IndexSpace::nullqns});  // actives only
                    auto m2 = Index::make_tmp_index(
                        IndexSpace{IndexSpace::active,
-                                  IndexSpace::nullqns});  // all occupieds
+                                  IndexSpace::nullqns});  // actives only
                    braidxs.push_back(m1);
                    ketidxs.push_back(m2);
                    return ex<Tensor>(to_wstring(mbpt::OpType::g), braidxs,

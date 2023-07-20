@@ -510,8 +510,6 @@ TEST_CASE("MBPT", "[mbpt]") {
   SECTION("MRSO") {
     using namespace sequant::mbpt::mr;
 
-    std::wcout << "H1=" << to_latex(H_(1)) << std::endl;
-
     // H**T2 -> 0
     SEQUANT_PROFILE_SINGLE("wick(H**T2 -> 0)", {
       auto result = vac_av(H() * T_(2), {{0, 1}});
