@@ -66,8 +66,8 @@ std::vector<ExprPtr> cceqs::t(bool screen, bool use_topology,
   return result;
 }
 
-std::vector<ExprPtr> cceqs::lambda(bool screen, bool use_topology,
-                                   bool use_connectivity, bool canonical_only) {
+std::vector<ExprPtr> cceqs::λ(bool screen, bool use_topology,
+                              bool use_connectivity, bool canonical_only) {
   // construct hbar
   auto hbar = op::H();
   auto H_Tk = hbar;

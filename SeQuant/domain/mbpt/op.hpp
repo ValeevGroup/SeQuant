@@ -12,6 +12,9 @@
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/interval.hpp>
+#include <SeQuant/core/math.hpp>
+#include <SeQuant/core/op.hpp>
+#include <SeQuant/domain/mbpt/context.hpp>
 
 namespace sequant {
 namespace mbpt {
@@ -21,25 +24,43 @@ bool is_vacuum(QuantumNumbers qns);
 
 /// enumerates the known Operator types
 enum class OpType {
-  h,       //!< 1-body Hamiltonian
-  f,       //!< Fock operator
-  g,       //!< 2-body Coulomb
-  t,       //!< cluster amplitudes
-  lambda,  //!< deexcitation cluster amplitudes
-  A,       //!< antisymmetrizer
-  L,       //!< left-hand eigenstate
-  R,       //!< right-hand eigenstate
-  R12,     //!< geminal kernel
-  GR,      //!< GR kernel from f12 theory
-  C,       //!< cabs singles op
-  invalid  //!< invalid operator
+  h,    //!< 1-body Hamiltonian
+  f,    //!< Fock operator
+  f̃,    //!< closed Fock operator (i.e. Fock operator due to fully-occupied
+        //!< orbitals)
+  g,    //!< 2-body Coulomb
+  t,    //!< cluster amplitudes
+  λ,    //!< deexcitation cluster amplitudes
+  A,    //!< antisymmetrizer
+  L,    //!< left-hand eigenstate
+  R,    //!< right-hand eigenstate
+  R12,  //!< geminal kernel
+  GR,   //!< GR kernel from f12 theory
+  C,    //!< cabs singles op
+  RDM,  //!< RDM
+  RDMCumulant,  //!< RDM cumulant
+  δ,            //!< Kronecker delta (=identity) operator
+  invalid       //!< invalid operator
 };
 
 /// maps operator types to their labels
 inline const std::map<OpType, std::wstring> optype2label{
-    {OpType::h, L"h"}, {OpType::f, L"f"},      {OpType::g, L"g"},
-    {OpType::t, L"t"}, {OpType::lambda, L"λ"}, {OpType::A, L"A"},
-    {OpType::L, L"L"}, {OpType::R, L"R"},      {OpType::R12, L"F"}};
+    {OpType::h, L"h"},
+    {OpType::f, L"f"},
+    {OpType::f̃, L"f̃"},
+    {OpType::g, L"g"},
+    {OpType::t, L"t"},
+    {OpType::λ, L"λ"},
+    {OpType::A, L"A"},
+    {OpType::L, L"L"},
+    {OpType::R, L"R"},
+    {OpType::R12, L"F"},
+    {OpType::GR, L"GR"},
+    {OpType::C, L"C"},
+    {OpType::RDM, L"γ"},
+    // see https://en.wikipedia.org/wiki/Cumulant
+    {OpType::RDMCumulant, L"κ"},
+    {OpType::δ, L"δ"}};
 
 /// maps operator labels to their types
 inline const std::map<std::wstring, OpType> label2optype =
@@ -370,10 +391,89 @@ class OpMaker {
 
   ExprPtr operator()() const;
 
+  enum class CSV { Bra, Ket, None };
+
+  /// @tparam TensorGenerator callable with signature
+  /// `TensorGenerator(range<Index>, range<Index>, Symmetry)` that returns a
+  /// Tensor with the respective bra and ket indices and of the given symmetry
+  /// @param[in] bras the bra indices/creators
+  /// @param[in] kets the ket indices/annihilators
+  /// @param[in] tensor_generator the callable that generates the tensor
+  /// @param[in] csv whether to use cluster-specific (e.g., PNO) indices
+  template <typename TensorGenerator>
+  static ExprPtr make(const container::svector<IndexSpace::Type>& bras,
+                      const container::svector<IndexSpace::Type>& kets,
+                      TensorGenerator&& tensor_generator, CSV csv = CSV::None) {
+    const bool symm =
+        mbpt::get_default_formalism().nbody_interaction_tensor_symm() ==
+        mbpt::Context::NBodyInteractionTensorSymm::Yes;
+    const auto csv_bra = csv == CSV::Bra;
+    const auto csv_ket = csv == CSV::Ket;
+
+    // not sure what it means to use nonsymmetric operator if nbra != nket
+    using ranges::size;
+    if (!symm) assert(size(bras) == size(kets));
+
+    auto make_idx_vector = [](const auto& spacetypes) {
+      std::vector<Index> result;
+      const auto n = spacetypes.size();
+      result.reserve(n);
+      for (size_t i = 0; i != n; ++i) {
+        auto space = IndexSpace::instance(spacetypes[i]);
+        result.push_back(Index::make_tmp_index(space));
+      }
+      return result;
+    };
+
+    auto make_depidx_vector = [](const auto& spacetypes, auto&& protoidxs) {
+      const auto n = spacetypes.size();
+      std::vector<Index> result;
+      result.reserve(n);
+      for (size_t i = 0; i != n; ++i) {
+        auto space = IndexSpace::instance(spacetypes[i]);
+        result.push_back(Index::make_tmp_index(space, protoidxs, true));
+      }
+      return result;
+    };
+
+    std::vector<Index> braidxs, ketidxs;
+    if (csv_bra) {
+      ketidxs = make_idx_vector(kets);
+      braidxs = make_depidx_vector(bras, ketidxs);
+    } else if (csv_ket) {
+      braidxs = make_idx_vector(bras);
+      ketidxs = make_depidx_vector(kets, braidxs);
+    } else {
+      braidxs = make_idx_vector(bras);
+      ketidxs = make_idx_vector(kets);
+    }
+
+    const auto mult = symm ? factorial(size(bras)) * factorial(size(kets))
+                           : factorial(size(bras));
+    const auto opsymm = symm ? (S == Statistics::FermiDirac ? Symmetry::antisymm
+                                                            : Symmetry::symm)
+                             : Symmetry::nonsymm;
+    return ex<Constant>(rational{1, mult}) *
+           tensor_generator(braidxs, ketidxs, opsymm) *
+           ex<NormalOperator<S>>(/* creators */ braidxs,
+                                 /* annihilators */ ketidxs,
+                                 get_default_context().vacuum());
+  }
+
+  template <typename TensorGenerator>
+  static ExprPtr make(std::initializer_list<IndexSpace::Type> bras,
+                      std::initializer_list<IndexSpace::Type> kets,
+                      TensorGenerator&& tensor_generator, CSV csv = CSV::None) {
+    container::svector<IndexSpace::Type> bra_vec(bras.begin(), bras.end());
+    container::svector<IndexSpace::Type> ket_vec(kets.begin(), kets.end());
+    return OpMaker<S>::make(
+        bra_vec, ket_vec, std::forward<TensorGenerator>(tensor_generator), csv);
+  }
+
  protected:
   OpType op_;
-  std::vector<IndexSpace::Type> bra_spaces_;
-  std::vector<IndexSpace::Type> ket_spaces_;
+  container::svector<IndexSpace::Type> bra_spaces_;
+  container::svector<IndexSpace::Type> ket_spaces_;
 
   OpMaker(OpType op);
 

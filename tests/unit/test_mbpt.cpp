@@ -510,6 +510,19 @@ TEST_CASE("MBPT", "[mbpt]") {
   SECTION("MRSO") {
     using namespace sequant::mbpt::mr;
 
+    std::wcout << "H1=" << to_latex(H_(1)) << std::endl;
+
+    // H**T2 -> 0
+    SEQUANT_PROFILE_SINGLE("wick(H**T2 -> 0)", {
+      auto result = vac_av(H() * T_(2), {{0, 1}});
+
+      {
+        std::wcout << "H*T2 -> 0 = " << to_latex_align(result, 0, 1)
+                   << std::endl;
+      }
+    });
+
+#if 0
     // H**T12 -> R2
     SEQUANT_PROFILE_SINGLE("wick(H**T2 -> R2)", {
       auto result = vac_av(A(2) * H() * T_(2), {{1, 2}});
@@ -519,6 +532,8 @@ TEST_CASE("MBPT", "[mbpt]") {
                    << std::endl;
       }
     });
+#endif
+
   }  // SECTION("MRSO")
 
 }  // TEST_CASE("MBPT")

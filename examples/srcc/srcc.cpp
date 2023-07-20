@@ -25,15 +25,15 @@ namespace {
 TimerPool<32> tpool;
 
 /// types of CC equations to solve
-enum class EqnType { t, lambda };
+enum class EqnType { t, λ };
 
 /// maps equation type to string
 inline const std::map<EqnType, std::wstring> type2str = {
-    {EqnType::t, L"t"}, {EqnType::lambda, L"lambda"}};
+    {EqnType::t, L"t"}, {EqnType::λ, L"lambda"}};
 
 /// maps equation type string to enum
-inline const std::map<std::string, EqnType> str2type = {
-    {"t", EqnType::t}, {"lambda", EqnType::lambda}};
+inline const std::map<std::string, EqnType> str2type = {{"t", EqnType::t},
+                                                        {"lambda", EqnType::λ}};
 
 /// maps unoccupied basis type string to enum
 inline const std::map<std::string, mbpt::Context::CSV> str2uocc = {
@@ -58,9 +58,9 @@ class compute_cceqvec {
         eqvec = cceqs{N, P, PMIN}.t(screen, use_topology, use_connectivity,
                                     canonical_only);
         break;
-      case EqnType::lambda:
-        eqvec = cceqs{N, P, PMIN}.lambda(screen, use_topology, use_connectivity,
-                                         canonical_only);
+      case EqnType::λ:
+        eqvec = cceqs{N, P, PMIN}.λ(screen, use_topology, use_connectivity,
+                                    canonical_only);
         break;
     }
     tpool.stop(N);

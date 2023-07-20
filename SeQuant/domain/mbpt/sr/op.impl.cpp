@@ -9,7 +9,7 @@ ExprPtr T_(std::size_t Nbra, std::size_t Nket) {
 ExprPtr Lambda_(std::size_t Nbra, std::size_t Nket) {
   assert(Nbra > 0);
   assert(Nket > 0);
-  return OpMaker(OpType::lambda, Nbra, Nket)();
+  return OpMaker(OpType::λ, Nbra, Nket)();
 }
 
 /// makes R excitation operator of bra/ket ranks @c Nbra/Nket
@@ -44,7 +44,7 @@ class op_impl {
   void operator()(ExprPtr& result) {
     if (op_ == OpType::t)
       result = result ? result + T_(nbra_, nket_) : T_(nbra_, nket_);
-    else if (op_ == OpType::lambda)
+    else if (op_ == OpType::λ)
       result = result ? result + Lambda_(nbra_, nket_) : Lambda_(nbra_, nket_);
     else if (op_ == OpType::R)
       result = result ? result + R_(nbra_, nket_) : R_(nbra_, nket_);
@@ -81,7 +81,7 @@ ExprPtr Lambda(std::size_t Nbra, std::size_t Nket) {
       Nket == std::numeric_limits<std::size_t>::max() ? Nbra : Nket;
   assert(Nket_ > 0);
   ExprPtr result;
-  detail::op_impl{OpType::lambda, Nbra, Nket_}(result);
+  detail::op_impl{OpType::λ, Nbra, Nket_}(result);
   return result;
 }
 

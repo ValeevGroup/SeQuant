@@ -5,13 +5,15 @@
 #ifndef SEQUANT_DOMAIN_MBPT_MR_HPP
 #define SEQUANT_DOMAIN_MBPT_MR_HPP
 
-#include <limits>
-#include <utility>
+#include "SeQuant/domain/mbpt/fwd.hpp"
 
 #include "SeQuant/core/context.hpp"
 #include "SeQuant/core/expr_fwd.hpp"
 #include "SeQuant/core/space.hpp"
 #include "SeQuant/domain/mbpt/op.hpp"
+
+#include <limits>
+#include <utility>
 
 namespace sequant {
 namespace mbpt {
@@ -145,13 +147,25 @@ class OpMaker : public mbpt::OpMaker<Statistics::FermiDirac> {
 
 #include "../mbpt/mr/op.impl.hpp"
 
-ExprPtr H1();
+/// @name tensor-level operators
+/// @{
 
-ExprPtr H2();
+// clang-format off
+/// @brief `k`-body contribution to the "generic" Hamiltonian (in normal order relative to the default vacuum)
+/// @param[in] k the rank of the particle interactions; only `k<=2` is
+/// supported
+// clang-format on
+ExprPtr H_(std::size_t k);
 
+/// @brief total Hamiltonian including up to `k`-body interactions
+/// @param[in] k the maximum rank of the particle interactions; only `k<=2` is
+/// supported
+ExprPtr H(std::size_t k = 2);
+
+/// @brief Fock operator
 ExprPtr F();
 
-ExprPtr H();
+/// @}
 
 /// computes the vacuum expectation value (VEV)
 
@@ -167,9 +181,17 @@ ExprPtr vac_av(ExprPtr expr,
 // these produce operator-level expressions
 namespace op {
 
-ExprPtr H1();
+// clang-format off
+/// @brief `k`-body contribution to the "generic" Hamiltonian (in normal order relative to the default vacuum)
+/// @param[in] k the rank of the particle interactions; only `k<=2` is
+/// supported
+// clang-format on
+ExprPtr H_(std::size_t k);
 
-ExprPtr H2();
+/// @brief total Hamiltonian including up to `k`-body interactions
+/// @param[in] k the maximum rank of the particle interactions; only `k<=2` is
+/// supported
+ExprPtr H(std::size_t k = 2);
 
 }  // namespace op
 

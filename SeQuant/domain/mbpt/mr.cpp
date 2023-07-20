@@ -148,17 +148,80 @@ OpMaker::OpMaker(OpType op, std::size_t nbra, std::size_t nket)
 
 #include "../mbpt/mr/op.impl.cpp"
 
-ExprPtr H1() {
-  return get_default_context().vacuum() == Vacuum::Physical
-             ? OpMaker(OpType::h, 1)()
-             : OpMaker(OpType::f, 1)();
+ExprPtr H_(std::size_t k) {
+  assert(k > 0 && k <= 2);
+  switch (k) {
+    case 1:
+      switch (get_default_context().vacuum()) {
+        case Vacuum::Physical:
+          return OpMaker(OpType::h, 1)();
+        case Vacuum::SingleProduct:
+          return OpMaker(OpType::f̃, 1)();
+        case Vacuum::MultiProduct:
+          return OpMaker(OpType::f, 1)();
+        default:
+          abort();
+      }
+
+    case 2:
+      return OpMaker(OpType::g, 2)();
+
+    default:
+      abort();
+  }
 }
 
-ExprPtr H2() { return OpMaker(OpType::g, 2)(); }
+ExprPtr H(std::size_t k) {
+  assert(k > 0 && k <= 2);
+  return k == 1 ? H_(1) : H_(1) + H_(2);
+}
 
-ExprPtr F() { return OpMaker(OpType::f, 1)(); }
-
-ExprPtr H() { return H1() + H2(); }
+ExprPtr F() {
+  switch (get_default_context().vacuum()) {
+    case Vacuum::Physical:
+      return OpMaker(OpType::h, 1)() +
+             mbpt::OpMaker<Statistics::FermiDirac>::make(
+                 {IndexSpace::complete}, {IndexSpace::complete},
+                 [](auto braidxs, auto ketidxs, Symmetry opsymm) {
+                   auto m1 = Index::make_tmp_index(
+                       IndexSpace{IndexSpace::maybe_occupied,
+                                  IndexSpace::nullqns});  // all occupieds
+                   auto m2 = Index::make_tmp_index(
+                       IndexSpace{IndexSpace::maybe_occupied,
+                                  IndexSpace::nullqns});  // all occupieds
+                   braidxs.push_back(m1);
+                   ketidxs.push_back(m2);
+                   return ex<Tensor>(to_wstring(mbpt::OpType::g), braidxs,
+                                     ketidxs, opsymm) *
+                          ex<Tensor>(to_wstring(mbpt::OpType::RDM),
+                                     IndexList{m2}, IndexList{m1},
+                                     Symmetry::nonsymm);
+                 });
+    case Vacuum::SingleProduct:
+      return OpMaker(OpType::f̃, 1)() +
+             mbpt::OpMaker<Statistics::FermiDirac>::make(
+                 {IndexSpace::complete}, {IndexSpace::complete},
+                 [](auto braidxs, auto ketidxs, Symmetry opsymm) {
+                   auto m1 = Index::make_tmp_index(
+                       IndexSpace{IndexSpace::active,
+                                  IndexSpace::nullqns});  // all occupieds
+                   auto m2 = Index::make_tmp_index(
+                       IndexSpace{IndexSpace::active,
+                                  IndexSpace::nullqns});  // all occupieds
+                   braidxs.push_back(m1);
+                   ketidxs.push_back(m2);
+                   return ex<Tensor>(to_wstring(mbpt::OpType::g), braidxs,
+                                     ketidxs, opsymm) *
+                          ex<Tensor>(to_wstring(mbpt::OpType::RDM),
+                                     IndexList{m2}, IndexList{m1},
+                                     Symmetry::nonsymm);
+                 });
+    case Vacuum::MultiProduct:
+      return OpMaker(OpType::f, 1)();
+    default:
+      abort();
+  }
+}
 
 ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
                bool use_top) {
@@ -180,29 +243,48 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
 
 namespace op {
 
-ExprPtr H1() {
-  return ex<op_t>(
-      [vacuum = get_default_context().vacuum()]() -> std::wstring_view {
-        return vacuum == Vacuum::Physical ? L"h" : L"f";
-      },
-      [=]() -> ExprPtr { return mbpt::mr::H1(); },
-      [=](qnc_t& qns) {
-        qns =
-            combine(qnc_t{{0, 1}, {0, 1}, {0, 1}, {0, 1}, {0, 1}, {0, 1}}, qns);
-      });
+ExprPtr H_(std::size_t k) {
+  assert(k > 0 && k <= 2);
+
+  switch (k) {
+    case 1:
+      return ex<op_t>(
+          [vacuum = get_default_context().vacuum()]() -> std::wstring_view {
+            switch (vacuum) {
+              case Vacuum::Physical:
+                return L"h";
+              case Vacuum::SingleProduct:
+                return L"f̃";
+              case Vacuum::MultiProduct:
+                return L"f";
+              default:
+                abort();
+            }
+          },
+          [=]() -> ExprPtr { return mbpt::mr::H_(1); },
+          [=](qnc_t& qns) {
+            qns = combine(qnc_t{{0, 1}, {0, 1}, {0, 1}, {0, 1}, {0, 1}, {0, 1}},
+                          qns);
+          });
+
+    case 2:
+      return ex<op_t>(
+          []() -> std::wstring_view { return L"g"; },
+          [=]() -> ExprPtr { return mbpt::mr::H_(2); },
+          [=](qnc_t& qns) {
+            qns = combine(qnc_t{{0, 2}, {0, 2}, {0, 2}, {0, 2}, {0, 2}, {0, 2}},
+                          qns);
+          });
+
+    default:
+      abort();
+  }
 }
 
-ExprPtr H2() {
-  return ex<op_t>(
-      []() -> std::wstring_view { return L"g"; },
-      [=]() -> ExprPtr { return mbpt::mr::H2(); },
-      [=](qnc_t& qns) {
-        qns =
-            combine(qnc_t{{0, 2}, {0, 2}, {0, 2}, {0, 2}, {0, 2}, {0, 2}}, qns);
-      });
+ExprPtr H(std::size_t k) {
+  assert(k > 0 && k <= 2);
+  return k == 1 ? H_(1) : H_(1) + H_(2);
 }
-
-ExprPtr H() { return H1() + H2(); }
 
 bool can_change_qns(const ExprPtr& op_or_op_product, const qns_t target_qns,
                     const qns_t source_qns = {}) {
@@ -360,9 +442,6 @@ std::wstring to_latex(const mbpt::Operator<mbpt::mr::qns_t, S>& op) {
   OpType optype = OpType::invalid;
   if (it != label2optype.end()) {  // handle special cases
     optype = it->second;
-    if (optype == OpType::lambda) {  // λ -> \lambda
-      result = L"{\\hat{\\lambda}";
-    }
     if (to_class(optype) == OpClass::gen) {
       result += L"}";
       return result;

@@ -10,62 +10,59 @@
 namespace sequant::mbpt {
 
 std::vector<std::wstring> cardinal_tensor_labels() {
-  return {L"κ", L"γ",
-          L"Γ", L"A",
-          L"S", L"P",
-          L"L", L"λ",
-          L"h", L"f",
-          L"g", L"t",
-          L"R", L"F",
-          L"X", L"V",
-          L"Ṽ", L"B",
-          L"U", L"GR",
-          L"C", overlap_label(),
-          L"a", L"ã",
-          L"b", L"ᵬ",
+  return {L"κ",
+          L"γ",
+          L"Γ",
+          L"A",
+          L"S",
+          L"P",
+          L"L",
+          L"λ",
+          L"h",
+          L"f",
+          L"f̃",
+          L"g",
+          L"t",
+          L"R",
+          L"F",
+          L"X",
+          L"V",
+          L"Ṽ",
+          L"B",
+          L"U",
+          L"GR",
+          L"C",
+          overlap_label(),
+          L"a",
+          L"ã",
+          L"b",
+          L"ᵬ",
           L"E"};
 }
 
 std::wstring to_wstring(OpType op) {
-  switch (op) {
-    case OpType::h:
-      return L"h";
-    case OpType::f:
-      return L"f";
-    case OpType::g:
-      return L"g";
-    case OpType::t:
-      return L"t";
-    case OpType::lambda:
-      return L"λ";
-    case OpType::A:
-      return L"A";
-    case OpType::L:
-      return L"L";
-    case OpType::R:
-      return L"R";
-    case OpType::R12:
-      return L"F";
-    case OpType::GR:
-      return L"GR";
-    case OpType::C:
-      return L"C";
-    default:
-      throw std::invalid_argument("to_wstring(OpType op): invalid op");
-  }
+  auto found_it = optype2label.find(op);
+  if (found_it != optype2label.end())
+    return found_it->second;
+  else
+    throw std::invalid_argument("to_wstring(OpType op): invalid op");
 }
 
 OpClass to_class(OpType op) {
   switch (op) {
     case OpType::h:
     case OpType::f:
+    case OpType::f̃:
     case OpType::g:
+    case OpType::RDM:
+    case OpType::RDMCumulant:
+    case OpType::δ:
       return OpClass::gen;
     case OpType::t:
     case OpType::R:
     case OpType::R12:
       return OpClass::ex;
-    case OpType::lambda:
+    case OpType::λ:
     case OpType::A:
     case OpType::L:
       return OpClass::deex;
@@ -129,9 +126,6 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
   auto it = label2optype.find(lbl);
   if (it != label2optype.end()) {  // handle special cases
     const auto optype = it->second;
-    if (optype == OpType::lambda) {  // λ -> \lambda
-      result = L"{\\hat{\\lambda}";
-    }
     if (to_class(optype) == OpClass::gen) {
       result += L"}";
       return result;
@@ -178,10 +172,10 @@ template <Statistics S>
 ExprPtr OpMaker<S>::operator()() const {
   const bool symm = get_default_formalism().nbody_interaction_tensor_symm() ==
                     Context::NBodyInteractionTensorSymm::Yes;
-  const bool csv = get_default_formalism().csv() == Context::CSV::Yes;
+  const bool do_csv = get_default_formalism().csv() == Context::CSV::Yes;
   bool csv_bra = false;
   bool csv_ket = false;
-  if (csv) {  // validate spaces
+  if (do_csv) {  // validate spaces
     if (to_class(op_) == OpClass::ex) {
       for (auto&& s : bra_spaces_) {
         assert(s == IndexSpace::complete_unoccupied ||
@@ -197,53 +191,14 @@ ExprPtr OpMaker<S>::operator()() const {
     }
   }
 
-  // not sure what it means to use nonsymmetric operator if nbra != nket
-  if (!symm) assert(nbra() == nket());
+  CSV csv = csv_bra ? CSV::Bra : (csv_ket ? CSV::Ket : CSV::None);
 
-  auto make_idx_vector = [](const auto& spacetypes) {
-    std::vector<Index> result;
-    const auto n = spacetypes.size();
-    result.reserve(n);
-    for (size_t i = 0; i != n; ++i) {
-      auto space = IndexSpace::instance(spacetypes[i]);
-      result.push_back(Index::make_tmp_index(space));
-    }
-    return result;
-  };
-
-  auto make_depidx_vector = [](const auto& spacetypes, auto&& protoidxs) {
-    const auto n = spacetypes.size();
-    std::vector<Index> result;
-    result.reserve(n);
-    for (size_t i = 0; i != n; ++i) {
-      auto space = IndexSpace::instance(spacetypes[i]);
-      result.push_back(Index::make_tmp_index(space, protoidxs, true));
-    }
-    return result;
-  };
-
-  std::vector<Index> braidxs, ketidxs;
-  if (csv_bra) {
-    ketidxs = make_idx_vector(ket_spaces_);
-    braidxs = make_depidx_vector(bra_spaces_, ketidxs);
-  } else if (csv_ket) {
-    braidxs = make_idx_vector(bra_spaces_);
-    ketidxs = make_depidx_vector(ket_spaces_, braidxs);
-  } else {
-    braidxs = make_idx_vector(bra_spaces_);
-    ketidxs = make_idx_vector(ket_spaces_);
-  }
-
-  const auto mult =
-      symm ? factorial(nbra()) * factorial(nket()) : factorial(nbra());
-  const auto opsymm =
-      symm ? (S == Statistics::FermiDirac ? Symmetry::antisymm : Symmetry::symm)
-           : Symmetry::nonsymm;
-  return ex<Constant>(rational{1, mult}) *
-         ex<Tensor>(to_wstring(op_), braidxs, ketidxs, opsymm) *
-         ex<NormalOperator<S>>(/* creators */ braidxs,
-                               /* annihilators */ ketidxs,
-                               get_default_context().vacuum());
+  return make(
+      bra_spaces_, ket_spaces_,
+      [this](const auto& braidxs, const auto& ketidxs, Symmetry opsymm) {
+        return ex<Tensor>(to_wstring(op_), braidxs, ketidxs, opsymm);
+      },
+      csv);
 }
 
 template class OpMaker<Statistics::FermiDirac>;
