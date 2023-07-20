@@ -214,6 +214,8 @@ set(SeQuant_src
         SeQuant/core/index.cpp
         SeQuant/core/index.hpp
         SeQuant/core/interval.hpp
+        SeQuant/core/latex.cpp
+        SeQuant/core/latex.ipp
         SeQuant/core/latex.hpp
         SeQuant/core/logger.hpp
         SeQuant/core/math.hpp

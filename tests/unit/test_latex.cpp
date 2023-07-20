@@ -41,4 +41,20 @@ TEST_CASE("latex", "[util]") {
 
 #endif
   }
+
+  SECTION("\\tilde") {
+    std::wstring tilde__a = L"ã";
+    REQUIRE(tilde__a.size() == 2);
+    REQUIRE(diactrics_to_latex(tilde__a) == L"\\tilde{a}");
+    std::wstring tilde_a = L"ã";
+    REQUIRE(tilde_a.size() == 1);
+    REQUIRE(diactrics_to_latex(tilde_a) == L"\\tilde{a}");
+    std::wstring tilde_A = L"Ã";
+    REQUIRE(tilde_A.size() == 1);
+    REQUIRE(diactrics_to_latex(tilde_A) == L"\\tilde{A}");
+
+    std::wstring tilde__f = L"f̃";
+    REQUIRE(tilde__f.size() == 2);
+    REQUIRE(diactrics_to_latex(tilde__f) == L"\\tilde{f}");
+  }
 }
