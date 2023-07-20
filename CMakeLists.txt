@@ -267,8 +267,6 @@ set(SeQuant_src
         SeQuant/domain/mbpt/sr/sr.hpp
         SeQuant/domain/mbpt/antisymmetrizer.hpp
         SeQuant/domain/mbpt/rdm.hpp
-        SeQuant/domain/mbpt/models/ccresponse.cpp
-        SeQuant/domain/mbpt/models/ccresponse.hpp
         )
 
 ### optional prereqs

@@ -168,6 +168,16 @@ ExprPtr vac_av(ExprPtr expr,
                std::vector<std::pair<int, int>> nop_connections = {},
                bool use_top = true);
 
+// Functions relating to perturbation and response
+
+/// one-body perturbation operator of perturbation order \p r
+ExprPtr V();
+
+ExprPtr pT1_(std::size_t Nbra,
+             std::size_t Nket = std::numeric_limits<std::size_t>::max());
+ExprPtr pLambda1_(std::size_t Nbra,
+                  std::size_t Nket = std::numeric_limits<std::size_t>::max());
+
 
 // these produce operator-level expressions
 namespace op {
@@ -196,6 +206,18 @@ ExprPtr Lambda(std::size_t K);
 
 /// makes deexcitation operator of rank \p K
 ExprPtr A(std::size_t K);
+
+// perturbation and response related operators
+/// one-body perturbation operator of first order
+ExprPtr V();
+
+/// perturbed cluster amplitudes
+ExprPtr pT1_(std::size_t K);
+ExprPtr pT1(std::size_t K);
+
+/// perturted de-excitation cluster amplitudes
+ExprPtr pLambda1_(std::size_t K);
+ExprPtr pLambda1(std::size_t K);
 
 /// @return true if \p op_or_op_product can produce determinant of excitation
 /// rank \p k when applied to reference
