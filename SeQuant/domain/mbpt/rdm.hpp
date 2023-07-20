@@ -109,7 +109,7 @@ ExprPtr one_body_sub(
 ExprPtr two_body_decomp(
     ExprPtr ex_, bool approx = false) {  // J. Chem. Phys. 132, 234107 (2010);
                                          // https://doi.org/10.1063/1.3439395
-                                         // eqn 16 for \tilde{a^{pr}_{qs}}
+                                         // eqn 16 for \tilde{a}^{pr}_{qs}
   assert(ex_->is<FNOperator>());
   assert(ex_->as<FNOperator>().rank() == 2);
 
