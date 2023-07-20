@@ -121,34 +121,57 @@ OpMaker::OpMaker(OpType op, std::size_t nbra, std::size_t nket)
 
 #include "../mbpt/sr/op.impl.cpp"
 
-ExprPtr H1() {
-  return get_default_context().vacuum() == Vacuum::Physical
-             ? OpMaker(OpType::h, 1)()
-             : OpMaker(OpType::f, 1)();
-}
-
-ExprPtr H2() { return OpMaker(OpType::g, 2)(); }
-
-ExprPtr H0mp() {
-  assert(get_default_context().vacuum() == Vacuum::SingleProduct);
-  return H1();
-}
+ExprPtr H0mp() { return F(); }
 
 ExprPtr H1mp() {
   assert(get_default_context().vacuum() == Vacuum::SingleProduct);
-  return H2();
+  return H_(2);
 }
 
-ExprPtr F() { return OpMaker(OpType::f, 1)(); }
+ExprPtr F() {
+  switch (get_default_context().vacuum()) {
+    case Vacuum::Physical:
+      abort();
+    case Vacuum::SingleProduct:
+      return OpMaker(OpType::f, 1)();
+    case Vacuum::MultiProduct:
+      abort();
+    default:
+      abort();
+  }
+}
 
 ExprPtr W() {
   assert(get_default_context().vacuum() == Vacuum::SingleProduct);
   return H1mp();
 }
 
+ExprPtr H_(std::size_t k) {
+  assert(k > 0 && k <= 2);
+  switch (k) {
+    case 1:
+      switch (get_default_context().vacuum()) {
+        case Vacuum::Physical:
+          return OpMaker(OpType::h, 1)();
+        case Vacuum::SingleProduct:
+          return OpMaker(OpType::f, 1)();
+        case Vacuum::MultiProduct:
+          abort();
+        default:
+          abort();
+      }
+
+    case 2:
+      return OpMaker(OpType::g, 2)();
+
+    default:
+      abort();
+  }
+}
+
 ExprPtr H(std::size_t k) {
   assert(k > 0 && k <= 2);
-  return k == 1 ? H1() : H1() + H2();
+  return k == 1 ? H_(1) : H_(1) + H_(2);
 }
 
 ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
@@ -168,31 +191,6 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
 }
 
 namespace op {
-
-ExprPtr H1() {
-  return ex<op_t>(
-      [vacuum = get_default_context().vacuum()]() -> std::wstring_view {
-        return vacuum == Vacuum::Physical ? L"h" : L"f";
-      },
-      [=]() -> ExprPtr {
-        using namespace sequant::mbpt::sr;
-        return sr::H1();
-      },
-      [=](qnc_t& qns) {
-        qns = combine(qnc_t{{0, 1}, {0, 1}, {0, 1}, {0, 1}}, qns);
-      });
-}
-
-ExprPtr H2() {
-  return ex<op_t>([]() -> std::wstring_view { return L"g"; },
-                  [=]() -> ExprPtr {
-                    using namespace sequant::mbpt::sr;
-                    return sr::H2();
-                  },
-                  [=](qnc_t& qns) {
-                    qns = combine(qnc_t{{0, 2}, {0, 2}, {0, 2}, {0, 2}}, qns);
-                  });
-}
 
 ExprPtr H2_oo_vv() {
   return ex<op_t>(
@@ -224,7 +222,51 @@ ExprPtr H2_vv_vv() {
       });
 }
 
-ExprPtr H() { return H1() + H2(); }
+ExprPtr H_(std::size_t k) {
+  assert(k > 0 && k <= 2);
+  switch (k) {
+    case 1:
+      return ex<op_t>(
+          [vacuum = get_default_context().vacuum()]() -> std::wstring_view {
+            switch (vacuum) {
+              case Vacuum::Physical:
+                return L"h";
+              case Vacuum::SingleProduct:
+                return L"f";
+              case Vacuum::MultiProduct:
+                abort();
+              default:
+                abort();
+            }
+          },
+          [=]() -> ExprPtr {
+            using namespace sequant::mbpt::sr;
+            return sr::H_(1);
+          },
+          [=](qnc_t& qns) {
+            qns = combine(qnc_t{{0, 1}, {0, 1}, {0, 1}, {0, 1}}, qns);
+          });
+
+    case 2:
+      return ex<op_t>(
+          []() -> std::wstring_view { return L"g"; },
+          [=]() -> ExprPtr {
+            using namespace sequant::mbpt::sr;
+            return sr::H_(2);
+          },
+          [=](qnc_t& qns) {
+            qns = combine(qnc_t{{0, 2}, {0, 2}, {0, 2}, {0, 2}}, qns);
+          });
+
+    default:
+      abort();
+  }
+}
+
+ExprPtr H(std::size_t k) {
+  assert(k > 0 && k <= 2);
+  return k == 1 ? H_(1) : H_(1) + H_(2);
+}
 
 ExprPtr T_(std::size_t K) {
   assert(K > 0);
@@ -432,15 +474,11 @@ std::wstring to_latex(const mbpt::Operator<mbpt::sr::qns_t, S>& op) {
   using namespace sequant::mbpt;
   using namespace sequant::mbpt::sr;
 
-  auto lbl = std::wstring(op.label());
-  std::wstring result = L"{\\hat{" + lbl + L"}";
-  auto it = label2optype.find(lbl);
+  auto result = L"{\\hat{" + greek_characters_to_latex(op.label()) + L"}";
+  auto it = label2optype.find(std::wstring(op.label()));
   OpType optype = OpType::invalid;
   if (it != label2optype.end()) {  // handle special cases
     optype = it->second;
-    if (optype == OpType::lambda) {  // λ -> \lambda
-      result = L"{\\hat{\\lambda}";
-    }
     if (to_class(optype) == OpClass::gen) {
       result += L"}";
       return result;

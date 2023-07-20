@@ -135,12 +135,18 @@ class OpMaker : public mbpt::OpMaker<Statistics::FermiDirac> {
 
 #include "../mbpt/sr/op.impl.hpp"
 
-ExprPtr H1();
-
-ExprPtr H2();
+/// @name tensor-level SR MBPT operators
+/// @{
 
 ExprPtr H0mp();
 ExprPtr H1mp();
+
+// clang-format off
+/// @brief `k`-body contribution to the "generic" Hamiltonian (in normal order relative to the default vacuum)
+/// @param[in] k the rank of the particle interactions; only `k<=2` is
+/// supported
+// clang-format on
+ExprPtr H_(std::size_t k);
 
 /// @brief total Hamiltonian including up to `k`-body interactions
 /// @param[in] k the maximum rank of the particle interactions; only `k<=2` is
@@ -149,9 +155,10 @@ ExprPtr H(std::size_t k = 2);
 
 /// @brief Fock operator
 ExprPtr F();
+
 ExprPtr W();
 
-ExprPtr H();
+/// @}
 
 /// computes the vacuum expectation value (VEV)
 
@@ -164,12 +171,13 @@ ExprPtr vac_av(ExprPtr expr,
                std::vector<std::pair<int, int>> nop_connections = {},
                bool use_top = true);
 
-// these produce operator-level expressions
+/// contains operator-level SR MBPT expressions
 namespace op {
 
-ExprPtr H1();
+/// @name SR MBPT operators
 
-ExprPtr H2();
+/// @{
+
 ExprPtr H2_oo_vv();
 ExprPtr H2_vv_vv();
 
@@ -180,7 +188,17 @@ ExprPtr H1mp();
 ExprPtr F();
 ExprPtr W();
 
-ExprPtr H();
+// clang-format off
+/// @brief `k`-body contribution to the "generic" Hamiltonian (in normal order relative to the default vacuum)
+/// @param[in] k the rank of the particle interactions; only `k<=2` is
+/// supported
+// clang-format on
+ExprPtr H_(std::size_t k);
+
+/// @brief total Hamiltonian including up to `k`-body interactions
+/// @param[in] k the maximum rank of the particle interactions; only `k<=2` is
+/// supported
+ExprPtr H(std::size_t k = 2);
 
 /// makes particle-conserving excitation operator of rank \p K
 ExprPtr T_(std::size_t K);
@@ -199,6 +217,8 @@ ExprPtr Lambda(std::size_t K);
 
 /// makes deexcitation operator of rank \p K
 ExprPtr A(std::size_t K);
+
+/// @}
 
 /// @return true if \p op_or_op_product can produce determinant of excitation
 /// rank \p k when applied to reference
@@ -224,7 +244,7 @@ bool lowers_rank_or_lower_to_vacuum(const ExprPtr& op_or_op_product,
 
 /// @param[in] expr input expression
 /// @param[in] op_connections list of pairs of labels of operators to be
-/// connected
+/// connected (e.g., `{{"h", "t"}, {"f", "t"}, {"g", "t"}}` will connect op::)
 /// @return the VEV
 ExprPtr vac_av(
     ExprPtr expr,

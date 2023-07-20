@@ -401,14 +401,14 @@ TEST_CASE("NBodyOp", "[mbpt]") {
   SECTION("screen") {
     using namespace sequant::mbpt::sr::op;
 
-    auto g_t2_t2 = H2() * T_(2) * T_(2);
+    auto g_t2_t2 = H_(2) * T_(2) * T_(2);
     REQUIRE(raises_vacuum_to_rank(g_t2_t2, 2));
     REQUIRE(raises_vacuum_up_to_rank(g_t2_t2, 2));
 
-    auto g_t2 = H2() * T_(2);
+    auto g_t2 = H_(2) * T_(2);
     REQUIRE(raises_vacuum_to_rank(g_t2, 3));
 
-    auto lambda2_f = Lambda_(2) * H1();
+    auto lambda2_f = Lambda_(2) * H_(1);
     REQUIRE(lowers_rank_to_vacuum(lambda2_f, 2));
 
   }  // SECTION("screen")
@@ -434,7 +434,7 @@ TEST_CASE("MBPT", "[mbpt]") {
 
     // H2**T3**T3 -> R4
     SEQUANT_PROFILE_SINGLE("wick(H2**T3**T3 -> R4)", {
-      auto result = vac_av(A(4) * H2() * T_(3) * T_(3), {{1, 2}, {1, 3}});
+      auto result = vac_av(A(4) * H_(2) * T_(3) * T_(3), {{1, 2}, {1, 3}});
 
       std::wcout << "H2**T3**T3 -> R4 = " << to_latex_align(result, 20)
                  << std::endl;
@@ -451,7 +451,7 @@ TEST_CASE("MBPT", "[mbpt]") {
       ExprPtr ref_result;
       SEQUANT_PROFILE_SINGLE("wick(H2**T2**T2**T3 -> R5)", {
         ref_result =
-            op::vac_av(op::A(5) * op::H2() * op::T_(2) * op::T_(2) * op::T_(3),
+            op::vac_av(op::A(5) * op::H_(2) * op::T_(2) * op::T_(2) * op::T_(3),
                        new_op_connect);
         REQUIRE(ref_result->size() == 7);
       });
@@ -471,7 +471,7 @@ TEST_CASE("MBPT", "[mbpt]") {
 
     // <2p1h|H2|1p> ->
     SEQUANT_PROFILE_SINGLE("wick(<2p1h|H2|1p>)", ({
-                             auto input = L_(1, 2) * H2() * R_(1, 0);
+                             auto input = L_(1, 2) * H_(2) * R_(1, 0);
                              auto result = vac_av(input);
 
                              std::wcout << "<2p1h|H2|1p> = " << to_latex(result)
@@ -499,7 +499,7 @@ TEST_CASE("MBPT", "[mbpt]") {
 
     // H2**T2**T2 -> R2
     SEQUANT_PROFILE_SINGLE("wick(H2**T2**T2 -> R2)", {
-      auto result = vac_av(A(2) * H2() * T_(2) * T_(2), {{1, 2}, {1, 3}});
+      auto result = vac_av(A(2) * H_(2) * T_(2) * T_(2), {{1, 2}, {1, 3}});
 
       std::wcout << "H2**T2**T2 -> R2 = " << to_latex_align(result, 20)
                  << std::endl;
