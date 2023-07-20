@@ -149,6 +149,7 @@ class WickTheorem {
           nop_connections_[opidx_pair.second].reset(opidx_pair.first);
         }
       }
+      nop_nconnections_total_ = nop_connections_input_.size();
       nop_connections_input_.clear();
     } else {
       ranges::for_each(op_index_pairs, [this](const auto &idxpair) {
@@ -377,6 +378,9 @@ class WickTheorem {
   /// for each operator specifies the reverse bitmask of target connections
   /// (0 = must connect)
   container::svector<std::bitset<max_input_size>> nop_connections_;
+  std::size_t nop_nconnections_total_ =
+      0;  // # of total (bidirectional) connections in nop_connections_ (i.e.
+          // not double counting 1->2 and 2->1)
   container::vector<std::pair<size_t, size_t>>
       nop_connections_input_;  // only used to cache input to
                                // set_nop_connections_
@@ -881,8 +885,9 @@ class WickTheorem {
 
     recursive_nontensor_wick(result_plus_mutex, state);
 
-    // if computing everything, include the contraction-free term
-    if (!full_contractions_) {
+    // if computing everything, and the user does not insist on some
+    // target contractions, include the contraction-free term
+    if (!full_contractions_ && nop_nconnections_total_ == 0) {
       if (count_only) {
         ++state.count;
       } else {
