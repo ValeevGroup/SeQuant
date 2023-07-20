@@ -339,7 +339,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
   }
 }
 
-TEST_CASE("TEST_EVAL_USINT_TA_COMPLEX", "[eval]") {
+TEST_CASE("TEST_EVAL_USING_TA_COMPLEX", "[eval]") {
   using TArrayC = TA::DistArray<TA::Tensor<std::complex<double>>>;
   auto norm = [](TArrayC const& tnsr) { return TA::norm2(tnsr); };
 
