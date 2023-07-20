@@ -5,35 +5,6 @@
 
 namespace sequant {
 
-namespace {
-
-template <
-    typename Iterable,
-    std::enable_if_t<!std::is_same_v<InnerOuterIndices, std::decay_t<Iterable>>,
-                     bool> = true>
-std::string indices_to_annot(Iterable const& indices) noexcept {
-  using ranges::views::intersperse;
-  using ranges::views::join;
-  using ranges::views::transform;
-
-  auto idx_label = [](Index const& idx) { return to_string(idx.label()); };
-
-  return indices | transform(idx_label) | intersperse(",") | join |
-         ranges::to<std::string>;
-}
-
-std::string indices_to_annot(InnerOuterIndices const& inout) noexcept {
-  auto const& in = inout.inner;
-  auto const& out = inout.outer;
-  if (out.empty()) {
-    return indices_to_annot(in);
-  } else {
-    return indices_to_annot(in) + ";" + indices_to_annot(out);
-  }
-}
-
-}  // namespace
-
 std::string const& EvalExprTA::annot() const { return annot_; }
 
 EvalExprTA::EvalExprTA(Tensor const& tnsr)
