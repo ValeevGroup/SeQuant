@@ -30,7 +30,9 @@ inline void __init__(py::module m) {
       std::make_shared<DefaultTensorCanonicalizer>());
 
   m.def("F", &sequant::mbpt::sr::F);
-  m.def("H", &sequant::mbpt::sr::H);
+  m.def("H", &sequant::mbpt::sr::H,
+        "H(k = 2) returns a Hamiltonian operator with up to k-body terms",
+        py::arg("k") = 2);
 
   m.def(SR_OP(A));
   m.def(SR_OP(T));

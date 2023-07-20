@@ -146,7 +146,10 @@ ExprPtr W() {
   return H1mp();
 }
 
-ExprPtr H() { return H1() + H2(); }
+ExprPtr H(std::size_t k) {
+  assert(k > 0 && k <= 2);
+  return k == 1 ? H1() : H1() + H2();
+}
 
 ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
                bool use_top) {

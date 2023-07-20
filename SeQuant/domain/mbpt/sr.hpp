@@ -142,6 +142,12 @@ ExprPtr H2();
 ExprPtr H0mp();
 ExprPtr H1mp();
 
+/// @brief total Hamiltonian including up to `k`-body interactions
+/// @param[in] k the maximum rank of the particle interactions; only `k<=2` is
+/// supported
+ExprPtr H(std::size_t k = 2);
+
+/// @brief Fock operator
 ExprPtr F();
 ExprPtr W();
 
