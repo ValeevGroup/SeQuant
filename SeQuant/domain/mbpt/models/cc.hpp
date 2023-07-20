@@ -25,6 +25,9 @@ class cceqs {
                                        bool use_topology = true,
                                        bool use_connectivity = true,
                                        bool canonical_only = true);
+
+  std::vector<sequant::ExprPtr> t_pert();
+  std::vector<sequant::ExprPtr> lambda_pert();
 };  // class cceqs
 
 }  // namespace sequant::mbpt::sr
