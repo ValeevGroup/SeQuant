@@ -566,15 +566,15 @@ class WickTheorem {
     container::vector<container::set<size_t>> nop_partitions;
 
     container::svector<size_t>
-        op_partition_cdeg_matrix_;  //!< contraction degree
-                                    //!< (number of contractions) between
-                                    //!< each topologically-equivalent group
-                                    //!< of Op<S> objects, only the upper
-                                    //!< triangle is kept
+        op_partition_cdeg_matrix;  //!< contraction degree
+                                   //!< (number of contractions) between
+                                   //!< each topologically-equivalent group
+                                   //!< of Op<S> objects, only the upper
+                                   //!< triangle is kept
 
     /// for each Op<S> partition specifies how many contractions it currently
     /// has
-    /// @note exists to avoid the need to traverse op_partition_adjacency_matrix
+    /// @note exists to avoid the need to traverse op_partition_cdeg_matrix
     container::svector<size_t> op_partition_ncontractions;
 
     container::svector<std::pair<Index, Index>>
@@ -650,8 +650,8 @@ class WickTheorem {
         // partition indices in nop_to_partition are 1-based
         // unlike nops, each op is in a partition
         const auto npartitions = wick.op_npartitions_;
-        op_partition_cdeg_matrix_.resize(ntri(npartitions));
-        ranges::fill(op_partition_cdeg_matrix_, 0);
+        op_partition_cdeg_matrix.resize(ntri(npartitions));
+        ranges::fill(op_partition_cdeg_matrix, 0);
         op_partition_ncontractions.resize(npartitions);
         ranges::fill(op_partition_ncontractions, 0);
       }
@@ -724,10 +724,10 @@ class WickTheorem {
           assert(op1_ord < op2_ord);
           assert(op1_partition_idx < op2_partition_idx);
 
-          assert(op_partition_cdeg_matrix_.size() >
+          assert(op_partition_cdeg_matrix.size() >
                  uptri_op(op1_partition_idx, op2_partition_idx));
-          op_partition_cdeg_matrix_[uptri_op(op1_partition_idx,
-                                             op2_partition_idx)] += 1;
+          op_partition_cdeg_matrix[uptri_op(op1_partition_idx,
+                                            op2_partition_idx)] += 1;
           ++op_partition_ncontractions[op1_partition_idx];
           ++op_partition_ncontractions[op2_partition_idx];
         }
@@ -829,12 +829,12 @@ class WickTheorem {
           assert(op1_ord < op2_ord);
           assert(op1_partition_idx < op2_partition_idx);
 
-          assert(op_partition_cdeg_matrix_.size() >
+          assert(op_partition_cdeg_matrix.size() >
                  uptri_op(op1_partition_idx, op2_partition_idx));
-          assert(op_partition_cdeg_matrix_[uptri_op(op1_partition_idx,
-                                                    op2_partition_idx)] > 0);
-          op_partition_cdeg_matrix_[uptri_op(op1_partition_idx,
-                                             op2_partition_idx)] -= 1;
+          assert(op_partition_cdeg_matrix[uptri_op(op1_partition_idx,
+                                                   op2_partition_idx)] > 0);
+          op_partition_cdeg_matrix[uptri_op(op1_partition_idx,
+                                            op2_partition_idx)] -= 1;
           assert(op_partition_ncontractions[op1_partition_idx] > 0);
           assert(op_partition_ncontractions[op2_partition_idx] > 0);
           --op_partition_ncontractions[op1_partition_idx];
@@ -1033,7 +1033,7 @@ class WickTheorem {
                     past_op_right_partition_idx < this->op_npartitions_) {
                   const auto left_partition_ncontr_past_right_partition =
                       ranges::span<size_t>(
-                          state.op_partition_cdeg_matrix_.data() +
+                          state.op_partition_cdeg_matrix.data() +
                               state.uptri_op(op_left_partition_idx,
                                              past_op_right_partition_idx),
                           op_npartitions_ - past_op_right_partition_idx);
@@ -1123,7 +1123,7 @@ class WickTheorem {
           auto op_permutational_degeneracy = [&]() {
             rational result = 1;
             const auto &contraction_order_matrix_uptri =
-                state.op_partition_cdeg_matrix_;
+                state.op_partition_cdeg_matrix;
             for (auto i :
                  ranges::views::iota(std::size_t{0}, op_npartitions_)) {
               const auto partition_i_size = op_partitions_[i].size();
