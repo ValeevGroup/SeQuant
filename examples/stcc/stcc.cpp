@@ -9,8 +9,6 @@
 
 #include <clocale>
 
-#include <Eigen/Eigenvalues>
-
 using namespace sequant;
 
 #define runtime_assert(tf)                                         \

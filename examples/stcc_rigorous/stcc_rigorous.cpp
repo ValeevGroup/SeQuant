@@ -8,8 +8,6 @@
 
 #include <clocale>
 
-#include <Eigen/Eigenvalues>
-
 using namespace sequant;
 
 ExprPtr symmetrize_expr(

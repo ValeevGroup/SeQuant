@@ -274,10 +274,14 @@ set(SeQuant_src
         )
 
 ### optional prereqs
+if (NOT TARGET Eigen3::Eigen)
+  # re:NO_CMAKE_PACKAGE_REGISTRY: eigen3 registers its *build* tree with the user package registry ...
+  #                               to avoid issues with wiped build directory look for installed eigen
+  find_package(Eigen3 3.0 NO_MODULE NO_CMAKE_PACKAGE_REGISTRY)
+endif()
 if (SEQUANT_EVAL_TESTS)
     include(FindOrFetchTiledArray)
 endif (SEQUANT_EVAL_TESTS)
-
 
 if (TARGET tiledarray)
     list(APPEND SeQuant_src
@@ -302,6 +306,10 @@ target_link_libraries(SeQuant PUBLIC range-v3::range-v3 Boost::regex Boost::loca
 if (TARGET tiledarray)
     target_link_libraries(SeQuant PUBLIC tiledarray)
 endif ()
+if (TARGET Eigen3::Eigen)
+    target_link_libraries(SeQuant PUBLIC Eigen3::Eigen)
+    target_compile_definitions(SeQuant PUBLIC SEQUANT_HAS_EIGEN=1)
+endif()
 if (SEQUANT_HAS_EXECUTION_HEADER_STANDALONE OR SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB)
     target_compile_definitions(SeQuant PUBLIC SEQUANT_HAS_EXECUTION_HEADER)
     if (SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB)
@@ -432,21 +440,21 @@ if (BUILD_TESTING)
             examples/${example0}/${example0}.cpp)
     target_link_libraries(${example0} SeQuant)
 
-    # Single-Reference closed-shell Coupled-Cluster equation
-    # generation (fast spin-traced)
-    set(example1 stcc)
-    add_executable(${example1} EXCLUDE_FROM_ALL
-            examples/${example1}/${example1}.cpp)
-    find_package(Eigen3 3.0 REQUIRED NO_MODULE)
-    target_link_libraries(${example1} SeQuant Eigen3::Eigen)
+    if (TARGET Eigen3::Eigen)  # these examples require Eigen for full functionality
+      # Single-Reference closed-shell Coupled-Cluster equation
+      # generation (fast spin-traced)
+      set(example1 stcc)
+      add_executable(${example1} EXCLUDE_FROM_ALL
+              examples/${example1}/${example1}.cpp)
+      target_link_libraries(${example1} SeQuant)
 
-    # Single-Reference closed-shell Coupled-Cluster equation
-    # generation (rigorous spin-traced)
-    set(example2 stcc_rigorous)
-    add_executable(${example2} EXCLUDE_FROM_ALL
+      # Single-Reference closed-shell Coupled-Cluster equation
+      # generation (rigorous spin-traced)
+      set(example2 stcc_rigorous)
+      add_executable(${example2} EXCLUDE_FROM_ALL
             examples/${example2}/${example2}.cpp)
-    find_package(Eigen3 3.0 REQUIRED NO_MODULE)
-    target_link_libraries(${example2} SeQuant Eigen3::Eigen)
+      target_link_libraries(${example2} SeQuant)
+    endif()
 
     # Single-Reference open-shell equation generation (spin-traced)
     set(example3 osstcc)
