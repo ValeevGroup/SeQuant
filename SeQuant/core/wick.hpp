@@ -1166,6 +1166,9 @@ class WickTheorem {
                 // # of currently non-contracted ops
                 const auto partition_i_noncontr =
                     partition_i_size - partition_i_ncontr;
+                // sanity check: only full contractions encountered
+                // if full_contractions_==true
+                assert(!full_contractions_ || partition_i_noncontr == 0);
                 if (partition_i_noncontr > 1)
                   result /= factorial(partition_i_noncontr);
               }
