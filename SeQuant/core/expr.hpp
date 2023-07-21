@@ -70,6 +70,12 @@ class ExprPtr : public std::shared_ptr<Expr> {
   const base_type &as_shared_ptr() const &;
   base_type &&as_shared_ptr() &&;
 
+  template <typename E, typename = std::enable_if_t<!std::is_same_v<E, Expr>>>
+  std::shared_ptr<E> as_shared_ptr() const {
+    assert(this->is<E>());
+    return std::static_pointer_cast<E>(this->as_shared_ptr());
+  }
+
   ExprPtr &operator+=(const ExprPtr &);
   ExprPtr &operator-=(const ExprPtr &);
   ExprPtr &operator*=(const ExprPtr &);
