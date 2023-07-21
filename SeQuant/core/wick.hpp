@@ -122,12 +122,27 @@ class WickTheorem {
   /// will not constrain connectivity
   /// @param op_index_pairs the list of pairs of op indices to be connected in
   /// the result
-  ///
+  /// @throw std::invalid_argument if @p op_index_pairs contains duplicates
   ///@{
 
   /// @tparam IndexPairContainer a sequence of std::pair<Integer,Integer>
   template <typename IndexPairContainer>
   WickTheorem &set_nop_connections(IndexPairContainer &&op_index_pairs) {
+    auto has_duplicates = [](const auto &op_index_pairs) {
+      const auto the_end = end(op_index_pairs);
+      for (auto it = begin(op_index_pairs); it != the_end; ++it) {
+        const auto found_dup_it = std::find(it + 1, the_end, *it);
+        if (found_dup_it != the_end) {
+          return true;
+        }
+      }
+      return false;
+    };
+    if (has_duplicates(op_index_pairs)) {
+      throw std::invalid_argument(
+          "WickTheorem::set_nop_connections(arg): arg contains duplicates");
+    }
+
     if (expr_input_ == nullptr || !nop_connections_input_.empty()) {
       for (const auto &opidx_pair : op_index_pairs) {
         if (opidx_pair.first < 0 || opidx_pair.first >= input_.size()) {
