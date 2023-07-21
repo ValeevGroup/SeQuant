@@ -6,6 +6,7 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/logger.hpp>
 
+#include <TiledArray/expressions/einsum.h>
 #include <btas/btas.h>
 #include <tiledarray.h>
 #include <range/v3/algorithm.hpp>
@@ -704,7 +705,9 @@ class EvalTensorTA final : public EvalResult {
   using EvalResult::id_t;
   using numeric_type = std::decay_t<typename T::numeric_type>;
 
-  explicit EvalTensorTA(T arr) : EvalResult{std::move(arr)} {}
+  template <typename Arr, typename = std::enable_if_t<
+                              !std::is_convertible_v<Arr, EvalTensorTA<T>>>>
+  explicit EvalTensorTA(Arr&& arr) : EvalResult{std::forward<Arr>(arr)} {}
 
  private:
   using annot_wrap = Annot<std::string>;
@@ -801,6 +804,82 @@ class EvalTensorTA final : public EvalResult {
   }
 };
 
+template <typename T, typename ToT>
+class EvalTensorOfTensorTA final : public EvalResult {
+ public:
+  using EvalResult::id_t;
+  using numeric_type = std::decay_t<typename T::numeric_type>;
+  static_assert(std::is_same_v<numeric_type, typename ToT::numeric_type>);
+
+  template <typename Arr, typename = std::enable_if_t<!std::is_convertible_v<
+                              Arr, EvalTensorOfTensorTA<T, ToT>>>>
+  explicit EvalTensorOfTensorTA(Arr&& arr)
+      : EvalResult{std::forward<Arr>(arr)} {}
+
+ private:
+  using this_t = EvalTensorOfTensorTA<T, ToT>;
+  using annot_wrap = Annot<std::string>;
+
+  [[nodiscard]] id_t type_id() const noexcept override {
+    return id_for_type<EvalTensorOfTensorTA<T, ToT>>();
+  }
+
+  [[nodiscard]] ERPtr sum(EvalResult const& other,
+                          std::array<std::any, 3> const& annot) const override {
+    assert(other.is<this_t>());
+
+    auto const a = annot_wrap{annot};
+
+    ToT result;
+    result(a.this_annot) = get<ToT>()(a.lannot) + other.get<ToT>()(a.rannot);
+    decltype(result)::wait_for_lazy_cleanup(result.world());
+    return eval_result<this_t>(std::move(result));
+  }
+
+  [[nodiscard]] ERPtr prod(
+      EvalResult const& other,
+      std::array<std::any, 3> const& annot) const override {
+    auto const a = annot_wrap{annot};
+
+    if (other.is<EvalConstant<numeric_type>>()) {
+      auto result = get<ToT>();
+      result(a.this_annot) = other.get<numeric_type>() * result(a.lannot);
+      decltype(result)::wait_for_lazy_cleanup(result.world());
+      return eval_result<this_t>(std::move(result));
+    }
+
+    assert(other.is<EvalTensorTA<T>>() || other.is<this_t>());
+
+    if (a.this_annot.empty())  // DOT product
+      return eval_result<EvalConstant<numeric_type>>(
+          TA::dot(get<ToT>()(a.lannot), other.get<ToT>()(a.rannot)));
+
+    if (other.is<EvalTensorTA<T>>()) {
+      throw std::runtime_error("Tensor * Tensor-of-Tensor not implemented yet");
+    }
+
+    ToT result = TA::einsum(get<ToT>()(a.lannot), other.get<ToT>()(a.rannot),
+                            a.this_annot);
+
+    decltype(result)::wait_for_lazy_cleanup(result.world());
+    return eval_result<this_t>(std::move(result));
+  }
+
+  [[nodiscard]] ERPtr symmetrize(
+      container::svector<std::array<size_t, 3>> const&) const override {
+    throw std::runtime_error(
+        "symmetrize not implemented yet in "
+        "EvalTensorOfTensorTA");
+  }
+
+  [[nodiscard]] ERPtr antisymmetrize(
+      container::svector<std::array<size_t, 3>> const&) const override {
+    throw std::runtime_error(
+        "antisymmetrize not implemented yet in "
+        "EvalTensorOfTensorTA");
+  }
+};
+
 ///
 /// \brief EvalResult for a tensor value of btas::Tensor type.
 /// \tparam T btas::Tensor type. Must be a specialization of btas::Tensor.
@@ -811,7 +890,9 @@ class EvalTensorBTAS final : public EvalResult {
   using EvalResult::id_t;
   using numeric_type = typename T::numeric_type;
 
-  explicit EvalTensorBTAS(T arr) : EvalResult{std::move(arr)} {}
+  template <typename Arr, typename = std::enable_if_t<
+                              !std::is_convertible_v<Arr, EvalTensorBTAS<T>>>>
+  explicit EvalTensorBTAS(Arr&& arr) : EvalResult{std::forward<Arr>(arr)} {}
 
  private:
   // TODO make it same as that used by EvalExprBTAS class from eval.hpp file
