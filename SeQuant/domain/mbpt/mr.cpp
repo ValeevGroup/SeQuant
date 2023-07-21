@@ -290,78 +290,108 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
       expand(result);
       // flatten(result);  // TODO where is flatten?
       auto project_rdm_indices_to_target = [&](ExprPtr& exptr) {
-        auto impl_for_single_tn = [&](ProductPtr& product_ptr) -> ExprPtr {
-          // compute external indices
-          container::set<Index> external_indices;
-          abort();  // not yet implemented
-
-          bool pass_mutated = false;
-          do {
-            pass_mutated = false;
-
-            // extract RDM-only and all indices
-            container::set<Index> rdm_indices;
-            std::set<Index, Index::LabelCompare> all_indices;
-            ranges::for_each(*product_ptr, [&rdm_indices,
-                                            &all_indices](const auto& factor) {
-              if (factor->template is<Tensor>()) {
-                const Tensor& tensor = factor->template as<const Tensor>();
-                ranges::for_each(
-                    tensor.braket(), [&all_indices](const Index& idx) {
-                      [[maybe_unused]] auto result = all_indices.insert(idx);
-                    });
-                if (tensor.label() == optype2label.at(OpType::RDM)) {
-                  ranges::for_each(factor->template as<const Tensor>().braket(),
-                                   [&rdm_indices](const Index& idx) {
-                                     [[maybe_unused]] auto result =
-                                         rdm_indices.insert(idx);
-                                   });
-                }
+        auto impl_for_single_tn = [&](ProductPtr& product_ptr) {
+          // enlist all indices and count their instances
+          auto for_each_index_in_tn = [](const auto& product_ptr,
+                                         const auto& op) {
+            ranges::for_each(product_ptr->factors(), [&](auto& factor) {
+              auto tensor_ptr =
+                  std::dynamic_pointer_cast<AbstractTensor>(factor);
+              if (tensor_ptr) {
+                ranges::for_each(tensor_ptr->_braket(),
+                                 [&](auto& idx) { op(idx, *tensor_ptr); });
               }
             });
+          };
 
-            // compute RDM->target replacement rules
-            container::map<Index, Index> replacement_rules;
-            abort();  // not yet implemented
+          // compute external indices
+          container::map<Index, std::size_t> indices_w_counts;
+          auto retrieve_indices_with_counts =
+              [&indices_w_counts](const auto& idx, auto& /* unused */) {
+                auto found_it = indices_w_counts.find(idx);
+                if (found_it != indices_w_counts.end()) {
+                  found_it->second++;
+                } else {
+                  indices_w_counts.emplace(idx, 1);
+                }
+              };
+          for_each_index_in_tn(product_ptr, retrieve_indices_with_counts);
 
-            if (false) {
-              std::wcout << "expr = " << expr->to_latex()
-                         << "\n  external_indices = ";
-              ranges::for_each(external_indices, [](auto& index) {
-                std::wcout << index.label() << " ";
-              });
-              std::wcout << "\n  replrules = ";
-              ranges::for_each(replacement_rules, [](auto& index) {
-                std::wcout << to_latex(index.first) << "\\to"
-                           << to_latex(index.second) << "\\,";
-              });
-              std::wcout.flush();
+          container::set<Index> external_indices =
+              indices_w_counts | ranges::views::filter([](auto& idx_cnt) {
+                auto& [idx, cnt] = idx_cnt;
+                return cnt == 1;
+              }) |
+              ranges::views::keys | ranges::to<container::set<Index>>;
+
+          // extract RDM-only and all indices
+          container::set<Index> rdm_indices;
+          std::set<Index, Index::LabelCompare> all_indices;
+          auto retrieve_rdm_and_all_indices = [&rdm_indices, &all_indices](
+                                                  const auto& idx,
+                                                  const auto& tensor) {
+            all_indices.insert(idx);
+            if (tensor._label() == optype2label.at(OpType::RDM)) {
+              rdm_indices.insert(idx);
             }
+          };
+          for_each_index_in_tn(product_ptr, retrieve_rdm_and_all_indices);
 
-            if (!replacement_rules.empty()) {
-              pass_mutated = sequant::detail::apply_index_replacement_rules(
-                  product_ptr, replacement_rules, external_indices,
-                  all_indices);
+          // compute RDM->target replacement rules
+          container::map<Index, Index> replacement_rules;
+          ranges::for_each(rdm_indices, [&](const Index& idx) {
+            const auto target_type =
+                idx.space().type().intersection(target_rdm_space_type);
+            if (target_type != IndexSpace::nulltype) {
+              Index target = Index::make_tmp_index(
+                  IndexSpace(target_type, idx.space().qns()));
+              replacement_rules.emplace(idx, target);
             }
+          });
 
-          } while (pass_mutated);  // keep reducing until stop changing
+          if (false) {
+            std::wcout << "expr = " << product_ptr->to_latex()
+                       << "\n  external_indices = ";
+            ranges::for_each(external_indices, [](auto& index) {
+              std::wcout << index.label() << " ";
+            });
+            std::wcout << "\n  replrules = ";
+            ranges::for_each(replacement_rules, [](auto& index) {
+              std::wcout << to_latex(index.first) << "\\to"
+                         << to_latex(index.second) << "\\,";
+            });
+            std::wcout.flush();
+          }
+
+          if (!replacement_rules.empty()) {
+            sequant::detail::apply_index_replacement_rules(
+                product_ptr, replacement_rules, external_indices, all_indices);
+          }
         };
 
         if (exptr.template is<Product>()) {
-          impl_for_single_tn(exptr.template as<Product>());
+          auto product_ptr = exptr.template as_shared_ptr<Product>();
+          impl_for_single_tn(product_ptr);
+          exptr = product_ptr;
         } else {
           assert(exptr.template is<Sum>());
           auto result = std::make_shared<Sum>();
           for (auto& summand : exptr.template as<Sum>().summands()) {
             assert(summand.template is<Product>());
             auto result_summand = summand.template as<Product>().clone();
-            impl_for_single_tn(result_summand.template as<Product>());
-            result->append(result_summand);
+            auto product_ptr = result_summand.template as_shared_ptr<Product>();
+            impl_for_single_tn(product_ptr);
+            result->append(product_ptr);
           }
           exptr = result;
         }
       };
       project_rdm_indices_to_target(result);
+
+      // rename dummy indices that might have been generated by
+      // project_rdm_indices_to_target
+      // + may combine terms
+      simplify(result);
     }
   }
 
