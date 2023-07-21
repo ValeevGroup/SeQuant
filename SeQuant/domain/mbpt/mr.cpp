@@ -238,6 +238,133 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
       .full_contractions(false);
   auto result = wick.compute();
   simplify(result);
+
+  // if obtained nontrivial result ...
+  if (!result.template is<Constant>()) {
+    // need pre-postprocessing unless used extended Wick theorem
+    if (get_default_context().vacuum() != Vacuum::MultiProduct) {
+      assert(get_default_context().vacuum() != Vacuum::Invalid);
+
+      // replace NormalOperator with RDM in target RDM space:
+      // - if Vacuum::Physical: IndexSpace::maybe_occupied
+      // - if Vacuum::SingleProduct: IndexSpace::active
+      const auto target_rdm_space_type =
+          get_default_context().vacuum() == Vacuum::SingleProduct
+              ? IndexSpace::active
+              : IndexSpace::maybe_occupied;
+
+      // do this in 2 steps (TODO factor out these components?)
+      // 1. replace NOPs by RDM
+      // 2. project RDM indices onto the target RDM subspace
+
+      // STEP1. replace NOPs by RDM
+      auto replace_nop_with_rdm = [](ExprPtr& exptr) {
+        auto replace = [](const auto& nop) -> ExprPtr {
+          using index_container = container::svector<Index>;
+          auto braidxs = nop.annihilators() |
+                         ranges::views::transform(
+                             [](const auto& op) { return op.index(); }) |
+                         ranges::to<index_container>();
+          auto ketidxs = nop.creators() |
+                         ranges::views::transform(
+                             [](const auto& op) { return op.index(); }) |
+                         ranges::to<index_container>();
+          assert(braidxs.size() ==
+                 ketidxs.size());  // need to handle particle # violating case?
+          const auto rank = braidxs.size();
+          return ex<Tensor>(optype2label.at(OpType::RDM), braidxs, ketidxs,
+                            rank > 1 ? Symmetry::antisymm : Symmetry::nonsymm);
+        };
+
+        if (exptr.template is<FNOperator>()) {
+          exptr = replace(exptr.template as<FNOperator>());
+        } else if (exptr.template is<BNOperator>()) {
+          exptr = replace(exptr.template as<BNOperator>());
+        }
+      };
+      result->visit(replace_nop_with_rdm, /* atoms_only = */ true);
+
+      // STEP 2: project RDM indices onto the target RDM subspace
+      // since RDM indices only make sense within a single TN expand + flatten
+      // first, then do the projection individually for each TN
+      expand(result);
+      // flatten(result);  // TODO where is flatten?
+      auto project_rdm_indices_to_target = [&](ExprPtr& exptr) {
+        auto impl_for_single_tn = [&](ProductPtr& product_ptr) -> ExprPtr {
+          // compute external indices
+          container::set<Index> external_indices;
+          abort();  // not yet implemented
+
+          bool pass_mutated = false;
+          do {
+            pass_mutated = false;
+
+            // extract RDM-only and all indices
+            container::set<Index> rdm_indices;
+            std::set<Index, Index::LabelCompare> all_indices;
+            ranges::for_each(*product_ptr, [&rdm_indices,
+                                            &all_indices](const auto& factor) {
+              if (factor->template is<Tensor>()) {
+                const Tensor& tensor = factor->template as<const Tensor>();
+                ranges::for_each(
+                    tensor.braket(), [&all_indices](const Index& idx) {
+                      [[maybe_unused]] auto result = all_indices.insert(idx);
+                    });
+                if (tensor.label() == optype2label.at(OpType::RDM)) {
+                  ranges::for_each(factor->template as<const Tensor>().braket(),
+                                   [&rdm_indices](const Index& idx) {
+                                     [[maybe_unused]] auto result =
+                                         rdm_indices.insert(idx);
+                                   });
+                }
+              }
+            });
+
+            // compute RDM->target replacement rules
+            container::map<Index, Index> replacement_rules;
+            abort();  // not yet implemented
+
+            if (false) {
+              std::wcout << "expr = " << expr->to_latex()
+                         << "\n  external_indices = ";
+              ranges::for_each(external_indices, [](auto& index) {
+                std::wcout << index.label() << " ";
+              });
+              std::wcout << "\n  replrules = ";
+              ranges::for_each(replacement_rules, [](auto& index) {
+                std::wcout << to_latex(index.first) << "\\to"
+                           << to_latex(index.second) << "\\,";
+              });
+              std::wcout.flush();
+            }
+
+            if (!replacement_rules.empty()) {
+              pass_mutated = sequant::detail::apply_index_replacement_rules(
+                  product_ptr, replacement_rules, external_indices,
+                  all_indices);
+            }
+
+          } while (pass_mutated);  // keep reducing until stop changing
+        };
+
+        if (exptr.template is<Product>()) {
+          impl_for_single_tn(exptr.template as<Product>());
+        } else {
+          assert(exptr.template is<Sum>());
+          auto result = std::make_shared<Sum>();
+          for (auto& summand : exptr.template as<Sum>().summands()) {
+            assert(summand.template is<Product>());
+            auto result_summand = summand.template as<Product>().clone();
+            impl_for_single_tn(result_summand.template as<Product>());
+            result->append(result_summand);
+          }
+          exptr = result;
+        }
+      };
+      project_rdm_indices_to_target(result);
+    }
+  }
+
   if (Logger::get_instance().wick_stats) {
     std::wcout << "WickTheorem stats: # of contractions attempted = "
                << wick.stats().num_attempted_contractions
