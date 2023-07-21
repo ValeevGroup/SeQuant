@@ -165,8 +165,8 @@ class antisymm_element {
                 .value();  // not sure what to do for imaginary part if needed
       }
 
-      else if (it->get()->is<NormalOperator<Statistics::FermiDirac>>()) {
-        auto factor = it->get()->as<NormalOperator<Statistics::FermiDirac>>();
+      else if (it->get()->is<FNOperator>()) {
+        auto factor = it->get()->as<FNOperator>();
         index_group.push_back(
             {begining_index, begining_index + factor.nannihilators()});
         begining_index += factor.nannihilators();
@@ -228,9 +228,8 @@ class antisymm_element {
             new_product->canonicalize();
           }
 
-          else if (it->get()->is<NormalOperator<Statistics::FermiDirac>>()) {
-            auto old_Nop =
-                it->get()->as<NormalOperator<Statistics::FermiDirac>>();
+          else if (it->get()->is<FNOperator>()) {
+            auto old_Nop = it->get()->as<FNOperator>();
             std::vector<Index> new_anni;
             std::vector<Index> new_crea;
             for (auto k = 0; k < old_Nop.rank(); k++) {
@@ -238,8 +237,7 @@ class antisymm_element {
               new_crea.push_back(unique_kets_list[j].second[index_label_pos]);
               index_label_pos++;
             }
-            auto new_Nop =
-                ex<NormalOperator<Statistics::FermiDirac>>(new_crea, new_anni);
+            auto new_Nop = ex<FNOperator>(new_crea, new_anni);
             new_product = new_product * new_Nop;
             // std::wcout << "product:  " << to_latex(new_product) << std::endl;
             new_product->canonicalize();
