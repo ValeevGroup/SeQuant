@@ -511,7 +511,7 @@ TEST_CASE("MBPT", "[mbpt]") {
     using namespace sequant::mbpt::mr;
 
     // H2**T2 -> 0
-    std::wcout << "H_(2) * T_(2) = " << to_latex(H_(2) * T_(2)) << std::endl;
+    // std::wcout << "H_(2) * T_(2) = " << to_latex(H_(2) * T_(2)) << std::endl;
     SEQUANT_PROFILE_SINGLE("wick(H2**T2 -> 0)", {
       auto result = vac_av(H_(2) * T_(2), {{0, 1}});
 
@@ -524,6 +524,19 @@ TEST_CASE("MBPT", "[mbpt]") {
           vac_av(H_(2) * T_(2), {{0, 1}}, /* use_topology = */ false);
 
       REQUIRE(simplify(result - result_wo_top) == ex<Constant>(0));
+
+      // now compute using physical vacuum
+      {
+        auto ctx_resetter = set_scoped_default_context(
+            Context(Vacuum::Physical, IndexSpaceMetric::Unit,
+                    BraKetSymmetry::conjugate, SPBasis::spinorbital));
+        auto result_phys = vac_av(H_(2) * T_(2), {{0, 1}});
+
+        {
+          std::wcout << "H2*T2 -> 0 using phys vacuum = "
+                     << to_latex_align(result_phys, 0, 1) << std::endl;
+        }
+      }
     });
 
     // H2 ** T2 ** T2 -> 0
