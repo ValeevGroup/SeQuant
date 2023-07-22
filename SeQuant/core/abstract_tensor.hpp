@@ -255,12 +255,25 @@ class TensorCanonicalizer {
   /// @internal what should be returned if canonicalization requires
   /// complex conjugation? Special ExprPtr type (e.g. ConjOp)? Or the actual
   /// return of the canonicalization?
+  /// @note canonicalization compared indices returned by index_comparer
   // TODO generalize for complex tensors
   virtual ExprPtr apply(AbstractTensor&) = 0;
+
+  /// @return reference to the object used to compare Index objects
+  /// @note the default is to use an object of type `std::less<Index>`
+  static const std::function<bool(const Index&, const Index&)>&
+  index_comparer();
+
+  /// @param comparer the compare object to be used by this
+  static void index_comparer(
+      std::function<bool(const Index&, const Index&)> comparer);
 
  protected:
   inline auto bra_range(AbstractTensor& t) { return t._bra_mutable(); }
   inline auto ket_range(AbstractTensor& t) { return t._ket_mutable(); }
+
+  /// the object used to compare indices
+  static std::function<bool(const Index&, const Index&)> index_comparer_;
 
  private:
   static std::pair<

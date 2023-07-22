@@ -76,6 +76,19 @@ void TensorCanonicalizer::deregister_instance(std::wstring_view label) {
   }
 }
 
+std::function<bool(const Index&, const Index&)>
+    TensorCanonicalizer::index_comparer_ = std::less<Index>{};
+
+const std::function<bool(const Index&, const Index&)>&
+TensorCanonicalizer::index_comparer() {
+  return index_comparer_;
+}
+
+void TensorCanonicalizer::index_comparer(
+    std::function<bool(const Index&, const Index&)> comparer) {
+  index_comparer_ = std::move(comparer);
+}
+
 ExprPtr NullTensorCanonicalizer::apply(AbstractTensor&) { return {}; }
 
 ExprPtr DefaultTensorCanonicalizer::apply(AbstractTensor& t) {
@@ -88,7 +101,7 @@ ExprPtr DefaultTensorCanonicalizer::apply(AbstractTensor& t) {
         is_ext ? 0 : 1);  // ext -> 0, int -> 1, so ext will come before
   });
 
-  auto result = this->apply(t, std::less<Index>{});
+  auto result = this->apply(t, this->index_comparer_);
   reset_tags(t);
 
   return result;
