@@ -5,7 +5,9 @@
 #ifndef SEQUANT_CORE_UTILITY_SINGLETON_HPP
 #define SEQUANT_CORE_UTILITY_SINGLETON_HPP
 
+#include <cassert>
 #include <memory>
+#include <stdexcept>
 #include <type_traits>
 
 namespace sequant {
