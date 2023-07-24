@@ -189,84 +189,85 @@ add_library(SeQuant-bliss
 set(SeQuant_src
         ${PROJECT_BINARY_DIR}/SeQuant/version.hpp
         SeQuant/version.cpp
-        SeQuant/core/sequant.cpp
-        SeQuant/core/sequant.hpp
-        SeQuant/core/attr.hpp
-        SeQuant/core/index.cpp
-        SeQuant/core/index.hpp
-        SeQuant/core/space.cpp
-        SeQuant/core/space.hpp
-        SeQuant/core/op.cpp
-        SeQuant/core/op.hpp
-        SeQuant/core/abstract_tensor.hpp
+
         SeQuant/core/abstract_tensor.cpp
-        SeQuant/core/tensor.cpp
-        SeQuant/core/tensor.hpp
+        SeQuant/core/abstract_tensor.hpp
+        SeQuant/core/algorithm.hpp
+        SeQuant/core/any.hpp
+        SeQuant/core/asy_cost.cpp
+        SeQuant/core/asy_cost.hpp
+        SeQuant/core/attr.hpp
+        SeQuant/core/binary_node.hpp
+        SeQuant/core/bliss.hpp
+        SeQuant/core/complex.hpp
+        SeQuant/core/container.hpp
+        SeQuant/core/eval_expr.cpp
+        SeQuant/core/eval_expr.hpp
+        SeQuant/core/eval_node.hpp
         SeQuant/core/expr.cpp
         SeQuant/core/expr.hpp
-        SeQuant/core/wick.hpp
-        SeQuant/core/ranges.hpp
-        SeQuant/core/container.hpp
-        SeQuant/core/meta.hpp
-        SeQuant/core/latex.hpp
-        SeQuant/core/wolfram.hpp
         SeQuant/core/expr_algorithm.hpp
-        SeQuant/core/wick.impl.hpp
         SeQuant/core/expr_operator.hpp
         SeQuant/core/hash.hpp
-        SeQuant/core/tag.hpp
-        SeQuant/core/any.hpp
         SeQuant/core/hugenholtz.hpp
-        SeQuant/core/algorithm.hpp
-        SeQuant/core/tensor_network.cpp
-        SeQuant/core/tensor_network.hpp
+        SeQuant/core/index.cpp
+        SeQuant/core/index.hpp
+        SeQuant/core/interval.hpp
+        SeQuant/core/latex.hpp
+        SeQuant/core/math.hpp
+        SeQuant/core/meta.hpp
+        SeQuant/core/op.cpp
+        SeQuant/core/op.hpp
+        SeQuant/core/optimize.hpp
+        SeQuant/core/optimize/fusion.cpp
+        SeQuant/core/optimize/fusion.hpp
+        SeQuant/core/optimize/optimize.cpp
+        SeQuant/core/parse/parse_expr.cpp
+        SeQuant/core/parse/regex_sequant.cpp
+        SeQuant/core/parse/regex_sequant.hpp
+        SeQuant/core/parse/rpn.cpp
+        SeQuant/core/parse/rpn.hpp
+        SeQuant/core/parse/token.cpp
+        SeQuant/core/parse/token.hpp
+        SeQuant/core/parse/token_sequant.cpp
+        SeQuant/core/parse/token_sequant.hpp
+        SeQuant/core/parse_expr.hpp
+        SeQuant/core/ranges.hpp
+        SeQuant/core/rational.hpp
         SeQuant/core/runtime.cpp
         SeQuant/core/runtime.hpp
-        SeQuant/core/utility.hpp
-        SeQuant/core/bliss.hpp
+        SeQuant/core/sequant.cpp
+        SeQuant/core/sequant.hpp
+        SeQuant/core/space.cpp
+        SeQuant/core/space.hpp
+        SeQuant/core/tag.hpp
+        SeQuant/core/tensor.cpp
+        SeQuant/core/tensor.hpp
+        SeQuant/core/tensor_network.cpp
+        SeQuant/core/tensor_network.hpp
         SeQuant/core/timer.hpp
-        SeQuant/core/binary_node.hpp
-        SeQuant/core/eval_expr.hpp
-        SeQuant/core/eval_expr.cpp
-        SeQuant/core/asy_cost.hpp
-        SeQuant/core/asy_cost.cpp
-        SeQuant/core/eval_node.hpp
-        SeQuant/core/parse_expr.hpp
-        SeQuant/core/parse/parse_expr.cpp
-        SeQuant/core/optimize.hpp
+        SeQuant/core/utility.hpp
+        SeQuant/core/wick.hpp
+        SeQuant/core/wick.impl.hpp
+        SeQuant/core/wolfram.hpp
         SeQuant/core/wstring.hpp
-        SeQuant/core/interval.hpp
-        SeQuant/core/complex.hpp
-        SeQuant/core/rational.hpp
-        SeQuant/core/math.hpp
-        SeQuant/core/optimize/optimize.cpp
-        SeQuant/core/optimize/fusion.hpp
-        SeQuant/core/optimize/fusion.cpp
-        SeQuant/core/parse/token.hpp
-        SeQuant/core/parse/token.cpp
-        SeQuant/core/parse/token_sequant.hpp
-        SeQuant/core/parse/token_sequant.cpp
-        SeQuant/core/parse/rpn.hpp
-        SeQuant/core/parse/rpn.cpp
-        SeQuant/core/parse/regex_sequant.hpp
-        SeQuant/core/parse/regex_sequant.cpp
-        SeQuant/domain/mbpt/models/cc.cpp
-        SeQuant/domain/mbpt/models/cc.hpp
-        SeQuant/domain/eval/eval.hpp
         SeQuant/domain/eval/cache_manager.hpp
+        SeQuant/domain/eval/eval.hpp
+        SeQuant/domain/mbpt/antisymmetrizer.hpp
         SeQuant/domain/mbpt/convention.cpp
         SeQuant/domain/mbpt/convention.hpp
-        SeQuant/domain/mbpt/formalism.hpp
         SeQuant/domain/mbpt/formalism.cpp
+        SeQuant/domain/mbpt/formalism.hpp
+        SeQuant/domain/mbpt/models/cc.cpp
+        SeQuant/domain/mbpt/models/cc.hpp
         SeQuant/domain/mbpt/op.cpp
         SeQuant/domain/mbpt/op.hpp
         SeQuant/domain/mbpt/op.ipp
-        SeQuant/domain/mbpt/spin.hpp
+        SeQuant/domain/mbpt/rdm.hpp
         SeQuant/domain/mbpt/spin.cpp
+        SeQuant/domain/mbpt/spin.hpp
         SeQuant/domain/mbpt/sr/sr.cpp
         SeQuant/domain/mbpt/sr/sr.hpp
-        SeQuant/domain/mbpt/antisymmetrizer.hpp
-        SeQuant/domain/mbpt/rdm.hpp
         )
 
 ### optional prereqs
@@ -279,6 +280,8 @@ if (TARGET tiledarray)
     list(APPEND SeQuant_src
             SeQuant/domain/eval/eval.hpp
             SeQuant/domain/eval/eval.cpp
+            SeQuant/domain/eval/eval_result.cpp
+            SeQuant/domain/eval/eval_result.hpp
             )
 endif ()
 

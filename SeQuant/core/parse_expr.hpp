@@ -41,7 +41,8 @@ namespace sequant {
 ///                       'g{i1, a1; i2, a2}:N' tensor with 'sequant::Symmetry::nonsymm' annotation
 /// \return SeQuant expression.
 // clang-format on
-ExprPtr parse_expr(std::wstring_view raw, Symmetry tensor_sym);
+ExprPtr parse_expr(std::wstring_view raw,
+                   Symmetry tensor_sym = Symmetry::nonsymm);
 
 ///
 /// Get a parsable string from an expression.
@@ -50,7 +51,7 @@ ExprPtr parse_expr(std::wstring_view raw, Symmetry tensor_sym);
 /// \param annot_sym Whether to add sequant::Symmetry annotation
 ///                  to each Tensor string.
 /// \return wstring of the expression.
-std::wstring deparse_expr(ExprPtr expr, bool annot_sym);
+std::wstring deparse_expr(ExprPtr expr, bool annot_sym = true);
 
 }  // namespace sequant
 
