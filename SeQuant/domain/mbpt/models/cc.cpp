@@ -134,7 +134,7 @@ std::vector<sequant::ExprPtr> cceqs::t_pert() {
   }
 
   // construct (V * e^T)_c = V + V * T + V * T^2/2!
-  auto Vbar = op::V() + ex<Constant>(0);  // temp fix
+  auto Vbar = op::V(1) + ex<Constant>(0);  // temp fix
   auto V_Tk = Vbar;
   for (int64_t k = 1; k <= 2; ++k) {
     V_Tk = simplify(ex<Constant>(rational{1, k}) * V_Tk * op::T(N));
@@ -158,6 +158,7 @@ std::vector<sequant::ExprPtr> cceqs::t_pert() {
         {L"h", L"t"},  {L"f", L"t"},  {L"g", L"t"}, {L"h", L"t1"},
         {L"f", L"t1"}, {L"g", L"t1"}, {L"V", L"t"}};
     result.at(p) = op::vac_av(eq, new_op_connect);
+    simplify(result.at(p));
   }
 
   return result;

@@ -227,7 +227,7 @@ ExprPtr W() {
 
 ExprPtr H() { return H1() + H2(); }
 
-ExprPtr V() { return make_op(OpType::V, 1)(); }
+ExprPtr V(std::size_t R) { return make_op(OpType::V, R)(); }
 
 ExprPtr pT1_(std::size_t Nbra, std::size_t Nket) {
   assert(Nbra > 0);
@@ -372,15 +372,16 @@ ExprPtr A(std::size_t K) {
                   });
 }
 
-ExprPtr V() {
-  return ex<op_t>([]() -> std::wstring_view { return L"V"; },
-                  [=]() -> ExprPtr {
-                    using namespace sequant::mbpt::sr;
-                    return sr::V();
-                  },
-                  [=](qnc_t& qns) {
-                    qns = combine(qnc_t{{0, 1}, {0, 1}, {0, 1}, {0, 1}}, qns);
-                  });
+ExprPtr V(std::size_t R) {
+  return ex<op_t>(
+      []() -> std::wstring_view { return L"V"; },
+      [=]() -> ExprPtr {
+        using namespace sequant::mbpt::sr;
+        return sr::V(R);
+      },
+      [=](qnc_t& qns) {
+        qns = combine(qnc_t{{0ul, R}, {0ul, R}, {0ul, R}, {0ul, R}}, qns);
+      });
 }
 
 ExprPtr pT1_(std::size_t K) {
