@@ -40,6 +40,9 @@ enum class OpType {
   RDM,  //!< RDM
   RDMCumulant,  //!< RDM cumulant
   δ,            //!< Kronecker delta (=identity) operator
+  V,            //!< perturbation operator
+  t1,           //!< first-order perturbed t amplitudes
+  λ1,           //!< first-order perturbed λ amplitudes
   invalid       //!< invalid operator
 };
 

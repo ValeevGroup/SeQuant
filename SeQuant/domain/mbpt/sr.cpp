@@ -174,18 +174,18 @@ ExprPtr H(std::size_t k) {
   return k == 1 ? H_(1) : H_(1) + H_(2);
 }
 
-ExprPtr V(std::size_t R) { return make_op(OpType::V, R)(); }
+ExprPtr V(std::size_t R) { return OpMaker(OpType::V, R)(); }
 
 ExprPtr pT1_(std::size_t Nbra, std::size_t Nket) {
   assert(Nbra > 0);
   assert(Nket > 0);
-  return make_op(OpType::t1, Nbra, Nket)();
+  return OpMaker(OpType::t1, Nbra, Nket)();
 }
 
 ExprPtr pLambda1_(std::size_t Nbra, std::size_t Nket) {
   assert(Nbra > 0);
   assert(Nket > 0);
-  return make_op(OpType::lambda1, Nbra, Nket)();
+  return OpMaker(OpType::λ1, Nbra, Nket)();
 }
 
 ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
