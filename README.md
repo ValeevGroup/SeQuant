@@ -47,8 +47,6 @@ To get started let's use SeQuant to apply Wick's theorem to a simple product of 
 This is achieved by the following SeQuant program:
 
 ```c++
-#include <SeQuant/core/sequant.hpp>
-#include <SeQuant/core/op.hpp>
 #include <SeQuant/core/wick.hpp>
 
 int main() {
@@ -127,10 +125,10 @@ Of course, same manipulations can be used for bosons:
 
 ### Quasiparticles
 
-In most cases we are interested using SeQuant to manipulate expressions involving operators in normal order  relative to a vacuum state with a finite number of particles, rather than with respect to the genuine vacuum with zero particles. To make such composition easier SeQuant expressions depend on SeQuant _context_, which specifies things like the vacuum type, whether the single-particle (SP) basis is orthonormal, etc. The above SeQuant program used the default context, which assumes the genuine vacuum. The active context can be examined by calling `get_default_context()`, changed via `set_default_context()`, and reset to the default via `reset_default_context()`:
+In most cases we are interested in using SeQuant to manipulate expressions involving operators in normal order  relative to a vacuum state with a finite number of particles, rather than with respect to the genuine vacuum with zero particles. To make such composition easier SeQuant expressions depend on SeQuant _context_, which specifies things like the vacuum type, whether the single-particle (SP) basis is orthonormal, etc. The above SeQuant program used the default context, which assumes the genuine vacuum. The active context can be examined by calling `get_default_context()`, changed via `set_default_context()`, and reset to the default via `reset_default_context()`:
 
 ```c++
-#include <SeQuant/core/sequant.hpp>
+#include <SeQuant/core/context.hpp>
 
 int main() {
   using namespace sequant;
@@ -138,7 +136,7 @@ int main() {
   // the default is to use genuine vacuum
   assert(get_default_context().vacuum() == Vacuum::Physical);
   // now set the context to a single product of SP states
-  set_default_context(SeQuant{Vacuum::SingleProduct, IndexSpaceMetric::Unit, BraKetSymmetry::symm});
+  set_default_context(Context{Vacuum::SingleProduct, IndexSpaceMetric::Unit, BraKetSymmetry::symm});
   assert(get_default_context().vacuum() == Vacuum::SingleProduct);
   // reset the context back to the default
   reset_default_context();
@@ -152,7 +150,7 @@ However, to deal with the single-product vacuum it is necessary to declare the `
 
 ```c++
 IndexSpace::register_instance(L"y", IndexSpace::occupied);
-IndexSpace::register_instance(L"z", IndexSpace::complete_unoccupied);
+IndexSpace::register_instance(L"z", IndexSpace::complete_maybe_unoccupied);
 ```
 
 we can evaluate Wick's theorem in single-product normal order:
@@ -181,14 +179,14 @@ Registering spaces has more benefits than being able to deal with non-genuine va
 
 ```c++
 Index y21(L"y_21");  // <- represents IndexSpace::occupied
-Index z1(L"z_1");  // <- represents IndexSpace::complete_unoccupied
+Index z1(L"z_1");  // <- represents IndexSpace::complete_maybe_unoccupied
 auto op_oo_oo = ex<FNOperator>(WstrList{L"y_1", L"y_2"}, WstrList{L"y_3", L"y_4"});
 ```
 
 To simplify index registration we provide support for a particular convention that the SeQuant developers prefer that we call the "Quantum Chemistry in Fock Space" (QCiFS), named after the [series of articles](http://doi.org/10.1063/1.444231) by Werner Kutzelnigg that introduced its essential elements. It can be loaded in 1 line:
 
 ```c++
-#include <SeQuant/core/sequant.hpp>
+#include <SeQuant/core/index.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
 int main() {
