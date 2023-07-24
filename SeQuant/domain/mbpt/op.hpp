@@ -63,7 +63,11 @@ inline const std::map<OpType, std::wstring> optype2label{
     {OpType::RDM, L"γ"},
     // see https://en.wikipedia.org/wiki/Cumulant
     {OpType::RDMCumulant, L"κ"},
-    {OpType::δ, L"δ"}};
+    {OpType::δ, L"δ"},
+    {OpType::V, L"V"},
+    {OpType::t1, L"t1"},
+    {OpType::λ1, L"λ1"}
+};
 
 /// maps operator labels to their types
 inline const std::map<std::wstring, OpType> label2optype =
