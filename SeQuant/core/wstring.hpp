@@ -79,6 +79,73 @@ std::wstring to_wstring(const std::basic_string<SourceChar, SourceTraits,
                              str_utf8.data() + str_utf8.size());
 }
 
+#define SEQUANT_CONCAT_IMPL(x, y) x##y
+/// concatenates two tokens
+#define SEQUANT_CONCAT(x, y) SEQUANT_CONCAT_IMPL(x, y)
+
+#if __cplusplus >= 202002L
+
+namespace detail {
+
+/// selects the string literal matching the code unit given by @p Char
+template <typename Char, std::size_t NChar, std::size_t NWChar,
+          std::size_t NChar8, std::size_t NChar16, std::size_t NChar32>
+constexpr decltype(auto) select_string_literal(
+    const char (&str)[NChar], const wchar_t (&wstr)[NWChar],
+    const char8_t (&u8str)[NChar8], const char16_t (&u16str)[NChar16],
+    const char32_t (&u32str)[NChar32]) {
+  if constexpr (std::is_same_v<Char, char>)
+    return str;
+  else if constexpr (std::is_same_v<Char, wchar_t>)
+    return wstr;
+  else if constexpr (std::is_same_v<Char, char8_t>)
+    return u8str;
+  else if constexpr (std::is_same_v<Char, char16_t>)
+    return u16str;
+  else if constexpr (std::is_same_v<Char, char32_t>)
+    return u32str;
+  else
+    abort();
+}
+}  // namespace detail
+
+/// @brief Converts a base string literal to the desired code unit type
+/// @param code_unit The desired code unit type; either `char` or `wchar_t`
+/// @param char_string_literal `char`-based string literal
+#define SQ_STRLIT(code_unit, char_string_literal)                  \
+  detail::select_string_literal<code_unit>(                        \
+      char_string_literal, SEQUANT_CONCAT(L, char_string_literal), \
+      SEQUANT_CONCAT(u8, char_string_literal),                     \
+      SEQUANT_CONCAT(u, char_string_literal),                      \
+      SEQUANT_CONCAT(U, char_string_literal))
+
+#else  // __cplusplus < 202002L
+
+namespace detail {
+
+/// selects the string literal matching the code unit given by @p Char
+template <typename Char, std::size_t NChar, std::size_t NWChar>
+constexpr decltype(auto) select_string_literal(const char (&str)[NChar],
+                                               const wchar_t (&wstr)[NWChar]) {
+  if constexpr (std::is_same_v<Char, char>)
+    return str;
+  else if constexpr (std::is_same_v<Char, wchar_t>)
+    return wstr;
+  else
+    abort();
+}
+
+}  // namespace detail
+
+/// @brief Converts a base string literal to the desired code unit type
+/// @param code_unit The desired code unit type; either `char` or `wchar_t`
+/// @param char_string_literal `char`-based string literal
+#define SQ_STRLIT(code_unit, char_string_literal) \
+  detail::select_string_literal<code_unit>(       \
+      char_string_literal, SEQUANT_CONCAT(L, char_string_literal))
+
+#endif  // __cplusplus < 202002L
+
 }  // namespace sequant
 
 #endif  // SEQUANT_WSTRING_HPP

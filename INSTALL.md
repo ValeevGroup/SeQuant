@@ -10,10 +10,10 @@ prerequisites:
       - [Boost.Locale](https://www.boost.org/doc/libs/master/libs/locale/doc/html/index.html)
     * [Range-V3](https://github.com/ericniebler/range-v3.git), tag d800a032132512a54c291ce55a2a43e0460591c7, *if not found, SeQuant will download and build Range-V3*
   * optional:
-    * unless CMake variable `BUILD_TESTING` is set to `FALSE`
-      * [Eigen](http://eigen.tuxfamily.org/), version 3
     * for building coupled-cluster evaluation tests:
-      * [TiledArray](https://github.com/ValeevGroup/tiledarray.git), tag b0f98d2b7ea4cae1264a9bef11642d0424ed35bf
+      * [TiledArray](https://github.com/ValeevGroup/tiledarray.git), tag e52c733e9f1400e70425d5be171a8e7cd5b56876
+    * for building `stcc*` example programs
+        * [Eigen](http://eigen.tuxfamily.org/), version 3
 
 for the impatient (from the top of the SeQuant source directory):
   * `cmake -B build -S .`

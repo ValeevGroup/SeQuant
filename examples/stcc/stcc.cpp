@@ -1,15 +1,13 @@
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/timer.hpp>
+#include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
-#include <SeQuant/domain/mbpt/formalism.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 #include <fstream>
 
 #include <clocale>
-
-#include <Eigen/Eigenvalues>
 
 using namespace sequant;
 
@@ -33,10 +31,9 @@ int main(int argc, char* argv[]) {
   std::wcerr.sync_with_stdio(true);
 
   sequant::set_default_context(
-      SeQuant(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
+      Context(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
               BraKetSymmetry::conjugate, SPBasis::spinorbital));
   mbpt::set_default_convention();
-  mbpt::set_default_formalism();
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
 
@@ -57,7 +54,8 @@ int main(int argc, char* argv[]) {
   //
   // Closed-shell spintrace (fast)
   //
-  std::cout << "\nClosed-shell coupled cluster spintrace with biorthogonal transformation:\n";
+  std::cout << "\nClosed-shell coupled cluster spintrace with biorthogonal "
+               "transformation:\n";
   std::vector<ExprPtr> cc_st_r(cc_r.size());
   for (auto i = 1; i < cc_r.size(); ++i) {
     const auto tstart = std::chrono::high_resolution_clock::now();

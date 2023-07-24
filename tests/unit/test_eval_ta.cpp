@@ -1,7 +1,7 @@
 #include "catch.hpp"
 
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/parse_expr.hpp>
-#include <SeQuant/core/sequant.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/domain/eval/eval.hpp>
 
@@ -339,7 +339,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
   }
 }
 
-TEST_CASE("TEST_EVAL_USINT_TA_COMPLEX", "[eval]") {
+TEST_CASE("TEST_EVAL_USING_TA_COMPLEX", "[eval]") {
   using TArrayC = TA::DistArray<TA::Tensor<std::complex<double>>>;
   auto norm = [](TArrayC const& tnsr) { return TA::norm2(tnsr); };
 

@@ -206,7 +206,7 @@ TEST_CASE("Op", "[elements]") {
       REQUIRE(qpannihilator_space(fcre(L"p_1"), V) ==
               IndexSpace::instance(IndexSpace::occupied));
       REQUIRE(qpannihilator_space(fann(L"p_1"), V) ==
-              IndexSpace::instance(IndexSpace::unoccupied));
+              IndexSpace::instance(IndexSpace::maybe_unoccupied));
     }
     {
       constexpr const Vacuum V = Vacuum::Physical;

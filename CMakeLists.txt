@@ -189,7 +189,6 @@ add_library(SeQuant-bliss
 set(SeQuant_src
         ${PROJECT_BINARY_DIR}/SeQuant/version.hpp
         SeQuant/version.cpp
-
         SeQuant/core/abstract_tensor.cpp
         SeQuant/core/abstract_tensor.hpp
         SeQuant/core/algorithm.hpp
@@ -201,6 +200,8 @@ set(SeQuant_src
         SeQuant/core/bliss.hpp
         SeQuant/core/complex.hpp
         SeQuant/core/container.hpp
+        SeQuant/core/context.cpp
+        SeQuant/core/context.hpp
         SeQuant/core/eval_expr.cpp
         SeQuant/core/eval_expr.hpp
         SeQuant/core/eval_node.hpp
@@ -213,7 +214,10 @@ set(SeQuant_src
         SeQuant/core/index.cpp
         SeQuant/core/index.hpp
         SeQuant/core/interval.hpp
+        SeQuant/core/latex.cpp
+        SeQuant/core/latex.ipp
         SeQuant/core/latex.hpp
+        SeQuant/core/logger.hpp
         SeQuant/core/math.hpp
         SeQuant/core/meta.hpp
         SeQuant/core/op.cpp
@@ -236,8 +240,6 @@ set(SeQuant_src
         SeQuant/core/rational.hpp
         SeQuant/core/runtime.cpp
         SeQuant/core/runtime.hpp
-        SeQuant/core/sequant.cpp
-        SeQuant/core/sequant.hpp
         SeQuant/core/space.cpp
         SeQuant/core/space.hpp
         SeQuant/core/tag.hpp
@@ -246,7 +248,8 @@ set(SeQuant_src
         SeQuant/core/tensor_network.cpp
         SeQuant/core/tensor_network.hpp
         SeQuant/core/timer.hpp
-        SeQuant/core/utility.hpp
+        SeQuant/core/utility/context.hpp
+        SeQuant/core/utility/singleton.hpp
         SeQuant/core/wick.hpp
         SeQuant/core/wick.impl.hpp
         SeQuant/core/wolfram.hpp
@@ -254,10 +257,12 @@ set(SeQuant_src
         SeQuant/domain/eval/cache_manager.hpp
         SeQuant/domain/eval/eval.hpp
         SeQuant/domain/mbpt/antisymmetrizer.hpp
+        SeQuant/domain/mbpt/context.hpp
+        SeQuant/domain/mbpt/context.cpp
         SeQuant/domain/mbpt/convention.cpp
         SeQuant/domain/mbpt/convention.hpp
-        SeQuant/domain/mbpt/formalism.cpp
-        SeQuant/domain/mbpt/formalism.hpp
+        SeQuant/domain/mbpt/mr.cpp
+        SeQuant/domain/mbpt/mr.hpp
         SeQuant/domain/mbpt/models/cc.cpp
         SeQuant/domain/mbpt/models/cc.hpp
         SeQuant/domain/mbpt/op.cpp
@@ -266,15 +271,19 @@ set(SeQuant_src
         SeQuant/domain/mbpt/rdm.hpp
         SeQuant/domain/mbpt/spin.cpp
         SeQuant/domain/mbpt/spin.hpp
-        SeQuant/domain/mbpt/sr/sr.cpp
-        SeQuant/domain/mbpt/sr/sr.hpp
+        SeQuant/domain/mbpt/sr.cpp
+        SeQuant/domain/mbpt/sr.hpp
         )
 
 ### optional prereqs
+if (NOT TARGET Eigen3::Eigen)
+  # re:NO_CMAKE_PACKAGE_REGISTRY: eigen3 registers its *build* tree with the user package registry ...
+  #                               to avoid issues with wiped build directory look for installed eigen
+  find_package(Eigen3 3.0 NO_MODULE NO_CMAKE_PACKAGE_REGISTRY)
+endif()
 if (SEQUANT_EVAL_TESTS)
     include(FindOrFetchTiledArray)
 endif (SEQUANT_EVAL_TESTS)
-
 
 if (TARGET tiledarray)
     list(APPEND SeQuant_src
@@ -299,6 +308,10 @@ target_link_libraries(SeQuant PUBLIC range-v3::range-v3 Boost::regex Boost::loca
 if (TARGET tiledarray)
     target_link_libraries(SeQuant PUBLIC tiledarray)
 endif ()
+if (TARGET Eigen3::Eigen)
+    target_link_libraries(SeQuant PUBLIC Eigen3::Eigen)
+    target_compile_definitions(SeQuant PUBLIC SEQUANT_HAS_EIGEN=1)
+endif()
 if (SEQUANT_HAS_EXECUTION_HEADER_STANDALONE OR SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB)
     target_compile_definitions(SeQuant PUBLIC SEQUANT_HAS_EXECUTION_HEADER)
     if (SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB)
@@ -382,6 +395,8 @@ if (BUILD_TESTING)
             tests/unit/test_cache_manager.cpp
             tests/unit/test_runtime.cpp
             tests/unit/test_math.cpp
+            tests/unit/test_string.cpp
+            tests/unit/test_latex.cpp
             )
 
     if (TARGET tiledarray)
@@ -427,21 +442,21 @@ if (BUILD_TESTING)
             examples/${example0}/${example0}.cpp)
     target_link_libraries(${example0} SeQuant)
 
-    # Single-Reference closed-shell Coupled-Cluster equation
-    # generation (fast spin-traced)
-    set(example1 stcc)
-    add_executable(${example1} EXCLUDE_FROM_ALL
-            examples/${example1}/${example1}.cpp)
-    find_package(Eigen3 3.0 REQUIRED NO_MODULE)
-    target_link_libraries(${example1} SeQuant Eigen3::Eigen)
+    if (TARGET Eigen3::Eigen)  # these examples require Eigen for full functionality
+      # Single-Reference closed-shell Coupled-Cluster equation
+      # generation (fast spin-traced)
+      set(example1 stcc)
+      add_executable(${example1} EXCLUDE_FROM_ALL
+              examples/${example1}/${example1}.cpp)
+      target_link_libraries(${example1} SeQuant)
 
-    # Single-Reference closed-shell Coupled-Cluster equation
-    # generation (rigorous spin-traced)
-    set(example2 stcc_rigorous)
-    add_executable(${example2} EXCLUDE_FROM_ALL
+      # Single-Reference closed-shell Coupled-Cluster equation
+      # generation (rigorous spin-traced)
+      set(example2 stcc_rigorous)
+      add_executable(${example2} EXCLUDE_FROM_ALL
             examples/${example2}/${example2}.cpp)
-    find_package(Eigen3 3.0 REQUIRED NO_MODULE)
-    target_link_libraries(${example2} SeQuant Eigen3::Eigen)
+      target_link_libraries(${example2} SeQuant)
+    endif()
 
     # Single-Reference open-shell equation generation (spin-traced)
     set(example3 osstcc)
@@ -490,8 +505,17 @@ if (BUILD_TESTING)
         target_link_libraries(${example7} SeQuant)
     endif (BTAS_SOURCE_DIR)
 
+
+    foreach (i RANGE 8 11)
+      math(EXPR s "${i} - 7") # map 8..11 -> 1..4
+      set(example${i} synopsis${s})
+      add_executable(${example${i}} EXCLUDE_FROM_ALL
+              examples/synopsis/${example${i}}.cpp)
+      target_link_libraries(${example${i}} SeQuant)
+    endforeach ()
+
     # add tests for running examples
-    set(lastexample 8)
+    set(lastexample 11)
     foreach (i RANGE ${lastexample})
         if (TARGET ${example${i}})
             add_dependencies(examples-sequant ${example${i}})

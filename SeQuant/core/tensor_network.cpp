@@ -4,7 +4,7 @@
 
 #include "tensor_network.hpp"
 #include "bliss.hpp"
-#include "utility.hpp"
+#include "logger.hpp"
 
 namespace sequant {
 
@@ -39,8 +39,8 @@ ExprPtr TensorNetwork::canonicalize(
         const auto &second = *second_ptr;
         // tensors commute if their colors are different or either one of them
         // is a c-number
-        if ((color(first) != color(second)) ||
-            is_cnumber(first) /* || is_cnumber(second) */) {
+        if ((color(first) != color(second)) || is_cnumber(first) ||
+            is_cnumber(second)) {
           const auto cardinal_tensor_labels_end = end(cardinal_tensor_labels);
           const auto first_cardinal_it =
               std::find(begin(cardinal_tensor_labels),
