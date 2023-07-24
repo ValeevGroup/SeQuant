@@ -4,7 +4,11 @@
 #include <SeQuant/core/tensor.hpp>
 #include <unordered_map>
 
+#ifdef SEQUANT_HAS_EIGEN
 #include <Eigen/Eigenvalues>
+#endif
+
+#include <range/v3/algorithm/for_each.hpp>
 
 namespace sequant {
 
@@ -987,8 +991,8 @@ ExprPtr closed_shell_CC_spintrace(const ExprPtr& expr, size_t nparticles) {
   // Biorthogonal transformation
   st_expr = biorthogonal_transform(st_expr, nparticles, ext_idxs);
 
-  auto bixs = ext_idxs | transform([](auto&& vec){return vec[0];});
-  auto kixs = ext_idxs | transform([](auto&& vec){return vec[1];});
+  auto bixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
+  auto kixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
   st_expr = ex<Tensor>(Tensor{L"S", bixs, kixs}) * st_expr;
 
   simplify(st_expr);
@@ -1405,7 +1409,7 @@ std::vector<ExprPtr> open_shell_spintrace(
 
     }  // loop over internal indices
     result.push_back(std::make_shared<Sum>(e_result));
-  }    // loop over external indices
+  }  // loop over external indices
 
   if (single_spin_case) {
     assert(result.size() == 1 &&
@@ -1887,8 +1891,9 @@ ExprPtr biorthogonal_transform(
   using sequant::container::svector;
 
   // Coefficients
-  std::vector<double> bt_coeff_vec;
+  std::vector<rational> bt_coeff_vec;
   {
+#ifdef SEQUANT_HAS_EIGEN
     using namespace Eigen;
     // Dimension of permutation matrix is n_particles!
     const auto n = boost::numeric_cast<Eigen::Index>(factorial(n_particles));
@@ -1936,8 +1941,38 @@ ExprPtr biorthogonal_transform(
 
     // Find Pseudo Inverse, get 1st row only
     MatrixXd pinv = M.completeOrthogonalDecomposition().pseudoInverse();
-    bt_coeff_vec.resize(pinv.rows());
-    VectorXd::Map(&bt_coeff_vec[0], bt_coeff_vec.size()) = pinv.row(0) * scalar;
+    std::vector<double> bt_coeff_dvec;
+    bt_coeff_dvec.resize(pinv.rows());
+    VectorXd::Map(&bt_coeff_dvec[0], bt_coeff_dvec.size()) =
+        pinv.row(0) * scalar;
+    bt_coeff_vec.reserve(bt_coeff_dvec.size());
+    ranges::for_each(bt_coeff_dvec, [&bt_coeff_vec, threshold](double c) {
+      bt_coeff_vec.emplace_back(to_rational(c, threshold));
+    });
+
+    std::cout << "n_particles = " << n_particles << "\n bt_coeff_vec = ";
+    std::copy(bt_coeff_vec.begin(), bt_coeff_vec.end(),
+              std::ostream_iterator<rational>(std::cout, " "));
+    std::cout << "\n";
+#else
+    // hardwire coefficients for n_particles = 1, 2, 3
+    switch (n_particles) {
+      case 1:
+        bt_coeff_vec = {ratio(1, 2)};
+        break;
+      case 2:
+        bt_coeff_vec = {ratio(1, 3), ratio(1, 6)};
+        break;
+      case 3:
+        bt_coeff_vec = {ratio(17, 120), ratio(-1, 120), ratio(-1, 120),
+                        ratio(-7, 120), ratio(-7, 120), ratio(-1, 120)};
+        break;
+      default:
+        throw std::runtime_error(
+            "biorthogonal_transform requires Eigen library for n_particles > "
+            "3.");
+    }
+#endif
   }
 
   // Transformation maps
@@ -1977,7 +2012,7 @@ ExprPtr biorthogonal_transform(
   Sum bt_expr{};
   auto coeff_it = bt_coeff_vec.begin();
   for (auto&& map : bt_maps) {
-    const auto v = to_rational(*coeff_it, threshold);
+    const auto v = *coeff_it;
     if (is_canonical(map))
       bt_expr.append(ex<Constant>(v) * expr->clone());
     else

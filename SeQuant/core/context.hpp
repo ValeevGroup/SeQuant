@@ -1,17 +1,17 @@
-#ifndef SEQUANT_SEQUANT_H
-#define SEQUANT_SEQUANT_H
+#ifndef SEQUANT_CORE_CONTEXT_HPP
+#define SEQUANT_CORE_CONTEXT_HPP
 
 #include "attr.hpp"
 #include "index.hpp"
 #include "space.hpp"
 
-#include <optional>
+#include "utility/context.hpp"
 
 namespace sequant {
 
 /// Specifies second quantization context, such as vacuum choice, whether index
 /// spaces are orthonormal, sizes of index spaces, etc.
-class SeQuant {
+class Context {
  public:
   struct Defaults {
     constexpr static auto vacuum = Vacuum::Physical;
@@ -26,20 +26,20 @@ class SeQuant {
   /// @param bks a BraKetSymmetry object
   /// @param spb single-particle basis (spin-free or spin-dependent)
   /// @param fdio first dummy index ordinal
-  explicit SeQuant(Vacuum vac, IndexSpaceMetric m = Defaults::metric,
+  explicit Context(Vacuum vac, IndexSpaceMetric m = Defaults::metric,
                    BraKetSymmetry bks = Defaults::braket_symmetry,
                    SPBasis spb = Defaults::spbasis,
                    std::size_t fdio = Defaults::first_dummy_index_ordinal);
 
-  /// default constructor, equivalent to SeQuant(Vacuum::Physical,
+  /// default constructor, equivalent to Context(Vacuum::Physical,
   /// IndexSpaceMetric::Unit, BraKetSymmetry::conjugate,
   /// sequant::SPBasis::spinorbital, 100)
-  SeQuant() = default;
+  Context() = default;
 
-  ~SeQuant() = default;
+  ~Context() = default;
 
-  SeQuant(const SeQuant&) = default;
-  SeQuant& operator=(const SeQuant&) = default;
+  Context(const Context&) = default;
+  Context& operator=(const Context&) = default;
 
   /// \return Vacuum of this context
   Vacuum vacuum() const;
@@ -56,23 +56,23 @@ class SeQuant {
   /// Sets the Vacuum for this context, convenient for chaining
   /// \param vacuum Vacuum
   /// \return ref to `*this`, for chaining
-  SeQuant& set(Vacuum vacuum);
+  Context& set(Vacuum vacuum);
   /// Sets the IndexSpaceMetric for this context, convenient for chaining
   /// \param metric IndexSpaceMetric
   /// \return ref to `*this`, for chaining
-  SeQuant& set(IndexSpaceMetric metric);
+  Context& set(IndexSpaceMetric metric);
   /// Sets the BraKetSymmetry for this context, convenient for chaining
   /// \param braket_symmetry BraKetSymmetry
   /// \return ref to `*this`, for chaining
-  SeQuant& set(BraKetSymmetry braket_symmetry);
+  Context& set(BraKetSymmetry braket_symmetry);
   /// Sets the SPBasis for this context, convenient for chaining
   /// \param spbasis SPBasis
   /// \return ref to `*this`, for chaining
-  SeQuant& set(SPBasis spbasis);
+  Context& set(SPBasis spbasis);
   /// Sets the first dummy index ordinal for this context, convenient for
   /// chaining \param first_dummy_index_ordinal the first dummy index ordinal
   /// \return ref to `*this`, for chaining
-  SeQuant& set_first_dummy_index_ordinal(std::size_t first_dummy_index_ordinal);
+  Context& set_first_dummy_index_ordinal(std::size_t first_dummy_index_ordinal);
 
   /// @return the IndexRegistry object
   std::shared_ptr<IndexRegistry> index_registry() const;
@@ -85,40 +85,36 @@ class SeQuant {
   std::size_t first_dummy_index_ordinal_ = Defaults::first_dummy_index_ordinal;
 };
 
-/// SeQuant object equality comparison
+/// old name of Context is a deprecated alias
+using SeQuant
+    [[deprecated("use sequant::Context instead of sequant::SeQuant")]] =
+        Context;
+
+/// Context object equality comparison
 /// \param ctx1
 /// \param ctx2
 /// \return true if \p ctx1 and \p ctx2 are equal
 /// \warning does not compare index registries
-bool operator==(const SeQuant& ctx1, const SeQuant& ctx2);
+bool operator==(const Context& ctx1, const Context& ctx2);
 
-/// SeQuant object inequality comparison
+/// Context object inequality comparison
 /// \param ctx1
 /// \param ctx2
 /// \return true if \p ctx1 and \p ctx2 are not equal
 /// \warning does not compare index registries
-bool operator!=(const SeQuant& ctx1, const SeQuant& ctx2);
+bool operator!=(const Context& ctx1, const Context& ctx2);
 
-const SeQuant& get_default_context();
-void set_default_context(const SeQuant& ctx);
+/// \name manipulation of implicit context for SeQuant
+
+/// @{
+
+const Context& get_default_context();
+void set_default_context(const Context& ctx);
 void reset_default_context();
+detail::ImplicitContextResetter<Context> set_scoped_default_context(
+    const Context& ctx);
 
-namespace detail {
-struct ContextResetter {
-  ContextResetter() = default;
-  ContextResetter(const SeQuant& previous_ctx) noexcept;
-  ~ContextResetter() noexcept;
-
-  // ContextResetter is move-only
-  ContextResetter(const ContextResetter&) = delete;
-  ContextResetter& operator=(const ContextResetter&) = delete;
-
- private:
-  std::optional<SeQuant> previous_ctx_;
-};
-}  // namespace detail
-
-detail::ContextResetter set_scoped_default_context(const SeQuant& ctx);
+///@}
 
 }  // namespace sequant
 

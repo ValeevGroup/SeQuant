@@ -5,9 +5,10 @@
 #include "SeQuant/core/op.hpp"
 #include "SeQuant/core/tensor.hpp"
 #include "SeQuant/core/timer.hpp"
-#include "SeQuant/domain/mbpt/formalism.hpp"
+#include "SeQuant/domain/mbpt/context.hpp"
+#include "SeQuant/domain/mbpt/mr.hpp"
 #include "SeQuant/domain/mbpt/op.hpp"
-#include "SeQuant/domain/mbpt/sr/sr.hpp"
+#include "SeQuant/domain/mbpt/sr.hpp"
 
 #include "catch.hpp"
 #include "test_config.hpp"
@@ -400,14 +401,14 @@ TEST_CASE("NBodyOp", "[mbpt]") {
   SECTION("screen") {
     using namespace sequant::mbpt::sr::op;
 
-    auto g_t2_t2 = H2() * T_(2) * T_(2);
+    auto g_t2_t2 = H_(2) * T_(2) * T_(2);
     REQUIRE(raises_vacuum_to_rank(g_t2_t2, 2));
     REQUIRE(raises_vacuum_up_to_rank(g_t2_t2, 2));
 
-    auto g_t2 = H2() * T_(2);
+    auto g_t2 = H_(2) * T_(2);
     REQUIRE(raises_vacuum_to_rank(g_t2, 3));
 
-    auto lambda2_f = Lambda_(2) * H1();
+    auto lambda2_f = Lambda_(2) * H_(1);
     REQUIRE(lowers_rank_to_vacuum(lambda2_f, 2));
 
   }  // SECTION("screen")
@@ -433,7 +434,7 @@ TEST_CASE("MBPT", "[mbpt]") {
 
     // H2**T3**T3 -> R4
     SEQUANT_PROFILE_SINGLE("wick(H2**T3**T3 -> R4)", {
-      auto result = vac_av(A(4) * H2() * T_(3) * T_(3), {{1, 2}, {1, 3}});
+      auto result = vac_av(A(4) * H_(2) * T_(3) * T_(3), {{1, 2}, {1, 3}});
 
       std::wcout << "H2**T3**T3 -> R4 = " << to_latex_align(result, 20)
                  << std::endl;
@@ -450,7 +451,7 @@ TEST_CASE("MBPT", "[mbpt]") {
       ExprPtr ref_result;
       SEQUANT_PROFILE_SINGLE("wick(H2**T2**T2**T3 -> R5)", {
         ref_result =
-            op::vac_av(op::A(5) * op::H2() * op::T_(2) * op::T_(2) * op::T_(3),
+            op::vac_av(op::A(5) * op::H_(2) * op::T_(2) * op::T_(2) * op::T_(3),
                        new_op_connect);
         REQUIRE(ref_result->size() == 7);
       });
@@ -470,7 +471,7 @@ TEST_CASE("MBPT", "[mbpt]") {
 
     // <2p1h|H2|1p> ->
     SEQUANT_PROFILE_SINGLE("wick(<2p1h|H2|1p>)", ({
-                             auto input = L_(1, 2) * H2() * R_(1, 0);
+                             auto input = L_(1, 2) * H_(2) * R_(1, 0);
                              auto result = vac_av(input);
 
                              std::wcout << "<2p1h|H2|1p> = " << to_latex(result)
@@ -493,18 +494,75 @@ TEST_CASE("MBPT", "[mbpt]") {
 
   SECTION("SRSO-PNO") {
     using namespace sequant::mbpt::sr;
-    using namespace sequant::mbpt;
-    auto resetter = set_scoped_default_formalism(
-        Formalism::make_default().set(CSVFormalism::CSV));
+    using sequant::mbpt::Context;
+    auto resetter = set_scoped_default_formalism(Context(Context::CSV::Yes));
 
     // H2**T2**T2 -> R2
     SEQUANT_PROFILE_SINGLE("wick(H2**T2**T2 -> R2)", {
-      auto result = vac_av(A(2) * H2() * T_(2) * T_(2), {{1, 2}, {1, 3}});
+      auto result = vac_av(A(2) * H_(2) * T_(2) * T_(2), {{1, 2}, {1, 3}});
 
       std::wcout << "H2**T2**T2 -> R2 = " << to_latex_align(result, 20)
                  << std::endl;
       REQUIRE(result->size() == 4);
     });
   }  // SECTION("SRSO-PNO")
+
+  SECTION("MRSO") {
+    using namespace sequant::mbpt::mr;
+
+    // H2**T2 -> 0
+    // std::wcout << "H_(2) * T_(2) = " << to_latex(H_(2) * T_(2)) << std::endl;
+    SEQUANT_PROFILE_SINGLE("wick(H2**T2 -> 0)", {
+      auto result = vac_av(H_(2) * T_(2), {{0, 1}});
+
+      {
+        std::wcout << "H2*T2 -> 0 = " << to_latex_align(result, 0, 1)
+                   << std::endl;
+      }
+
+      auto result_wo_top =
+          vac_av(H_(2) * T_(2), {{0, 1}}, /* use_topology = */ false);
+
+      REQUIRE(simplify(result - result_wo_top) == ex<Constant>(0));
+
+      // now compute using physical vacuum
+      {
+        auto ctx_resetter = set_scoped_default_context(
+            Context(Vacuum::Physical, IndexSpaceMetric::Unit,
+                    BraKetSymmetry::conjugate, SPBasis::spinorbital));
+        auto result_phys = vac_av(H_(2) * T_(2), {{0, 1}});
+
+        {
+          std::wcout << "H2*T2 -> 0 using phys vacuum = "
+                     << to_latex_align(result_phys, 0, 1) << std::endl;
+        }
+      }
+    });
+
+    // H2 ** T2 ** T2 -> 0
+    SEQUANT_PROFILE_SINGLE("wick(H2**T2**T2 -> 0)", {
+      // first without use of topology
+      auto result = vac_av(H_(2) * T_(2) * T_(2), {{0, 1}, {0, 2}},
+                           /* use_topology = */ false);
+      // now with topology use
+      auto result_top = vac_av(H_(2) * T_(2) * T_(2), {{0, 1}, {0, 2}},
+                               /* use_topology = */ true);
+
+      REQUIRE(simplify(result - result_top) == ex<Constant>(0));
+    });
+
+#if 0
+    // H**T12 -> R2
+    SEQUANT_PROFILE_SINGLE("wick(H**T2 -> R2)", {
+      auto result = vac_av(A(2) * H() * T_(2), {{1, 2}});
+
+      {
+        std::wcout << "H*T2 -> R2 = " << to_latex_align(result, 0, 1)
+                   << std::endl;
+      }
+    });
+#endif
+
+  }  // SECTION("MRSO")
 
 }  // TEST_CASE("MBPT")

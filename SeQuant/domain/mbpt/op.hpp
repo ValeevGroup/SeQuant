@@ -12,6 +12,9 @@
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/interval.hpp>
+#include <SeQuant/core/math.hpp>
+#include <SeQuant/core/op.hpp>
+#include <SeQuant/domain/mbpt/context.hpp>
 
 namespace sequant {
 namespace mbpt {
@@ -21,29 +24,43 @@ bool is_vacuum(QuantumNumbers qns);
 
 /// enumerates the known Operator types
 enum class OpType {
-  h,        //!< 1-body Hamiltonian
-  f,        //!< Fock operator
-  g,        //!< 2-body Coulomb
-  t,        //!< cluster amplitudes
-  lambda,   //!< deexcitation cluster amplitudes
-  A,        //!< antisymmetrizer
-  L,        //!< left-hand eigenstate
-  R,        //!< right-hand eigenstate
-  R12,      //!< geminal kernel
-  GR,       //!< GR kernel from f12 theory
-  C,        //!< cabs singles op
-  invalid,  //!< invalid operator
-  V,        //!< one-body perturbation operator
-  t1,       //!< perrturbed cluster amplitudes
-  lambda1   //!< perturbed deexcitation cluster amplitudes
+  h,    //!< 1-body Hamiltonian
+  f,    //!< Fock operator
+  f̃,    //!< closed Fock operator (i.e. Fock operator due to fully-occupied
+        //!< orbitals)
+  g,    //!< 2-body Coulomb
+  t,    //!< cluster amplitudes
+  λ,    //!< deexcitation cluster amplitudes
+  A,    //!< antisymmetrizer
+  L,    //!< left-hand eigenstate
+  R,    //!< right-hand eigenstate
+  R12,  //!< geminal kernel
+  GR,   //!< GR kernel from f12 theory
+  C,    //!< cabs singles op
+  RDM,  //!< RDM
+  RDMCumulant,  //!< RDM cumulant
+  δ,            //!< Kronecker delta (=identity) operator
+  invalid       //!< invalid operator
 };
 
 /// maps operator types to their labels
 inline const std::map<OpType, std::wstring> optype2label{
-    {OpType::h, L"h"}, {OpType::f, L"f"},      {OpType::g, L"g"},
-    {OpType::t, L"t"}, {OpType::lambda, L"λ"}, {OpType::A, L"A"},
-    {OpType::L, L"L"}, {OpType::R, L"R"},      {OpType::R12, L"F"},
-    {OpType::V, L"V"}, {OpType::t1, L"t1"},    {OpType::lambda1, L"λ1"}};
+    {OpType::h, L"h"},
+    {OpType::f, L"f"},
+    {OpType::f̃, L"f̃"},
+    {OpType::g, L"g"},
+    {OpType::t, L"t"},
+    {OpType::λ, L"λ"},
+    {OpType::A, L"A"},
+    {OpType::L, L"L"},
+    {OpType::R, L"R"},
+    {OpType::R12, L"F"},
+    {OpType::GR, L"GR"},
+    {OpType::C, L"C"},
+    {OpType::RDM, L"γ"},
+    // see https://en.wikipedia.org/wiki/Cumulant
+    {OpType::RDMCumulant, L"κ"},
+    {OpType::δ, L"δ"}};
 
 /// maps operator labels to their types
 inline const std::map<std::wstring, OpType> label2optype =
@@ -341,6 +358,131 @@ qns_t combine(qns_t, qns_t);
 mbpt::qns_t adjoint(mbpt::qns_t);
 
 namespace mbpt {
+
+// clang-format off
+/// @brief makes a tensor-level many-body operator
+
+/// A many-body operator has the following generic form:
+/// \f$ \frac{1}{P} T_{b_1 b_2 \dots b_B}^{k_1 k_2 \dots k_K} A^{b_1 b_2 \dots b_B}_{k_1 k_2 \dots k_K} \f$
+/// where \f$ \{B,K\} \f$ are number of bra/ket indices of \f$ T \f$ or, equivalently, the number of creators/annihilators
+/// of normal-ordered (w.r.t. the default vacuum) operator \f$ A \f$.
+/// Hence \f$ \{ b_i \} \f$ / \f$ \{ k_i \} \f$ are (quasi)particle creation/annihilation indices.
+/// For example, for fermionic operators relative to Fermi vacuum these are:
+/// - (pure) _excitation_: (active) unoccupied/occupied, respectively;
+/// - (pure) _deexcitation_: occupied/unoccupied, respectively;
+/// For _generic_ operators (neither excitation nor deexcitation) complete basis indices are assumed by default.
+///
+/// \f$ P \f$ is the "normalization" factor and depends on the vacuum used to define \f$ A \f$,
+/// and indices \f$ \{ b_i \} \f$ / \f$ \{ k_i \} \f$.
+/// @note The choice of computational basis can be controlled by the default Formalism:
+/// - if `get_default_formalism().sum_over_uocc() == SumOverUocc::Complete` IndexSpace::complete_unoccupied will be used instead of IndexSpace::active_unoccupied
+/// - if `get_default_formalism().csv() == CSVFormalism::CSV` will use cluster-specific (e.g., PNO) unoccupied indices
+/// @warning Tensor \f$ T \f$ will be antisymmetrized if `get_default_context().spbasis() == SPBasis::spinorbital`, else it will be particle-symmetric; the latter is only valid if # of bra and ket indices coincide.
+/// @internal bless the maker and his water
+// clang-format on
+template <Statistics S>
+class OpMaker {
+ public:
+  /// @param[in] op the operator type
+  /// @param[in] bras the bra indices/creators
+  /// @param[in] kets the ket indices/annihilators
+  OpMaker(OpType op, std::initializer_list<IndexSpace::Type> bras,
+          std::initializer_list<IndexSpace::Type> kets);
+
+  ExprPtr operator()() const;
+
+  enum class CSV { Bra, Ket, None };
+
+  /// @tparam TensorGenerator callable with signature
+  /// `TensorGenerator(range<Index>, range<Index>, Symmetry)` that returns a
+  /// Tensor with the respective bra and ket indices and of the given symmetry
+  /// @param[in] bras the bra indices/creators
+  /// @param[in] kets the ket indices/annihilators
+  /// @param[in] tensor_generator the callable that generates the tensor
+  /// @param[in] csv whether to use cluster-specific (e.g., PNO) indices
+  template <typename TensorGenerator>
+  static ExprPtr make(const container::svector<IndexSpace::Type>& bras,
+                      const container::svector<IndexSpace::Type>& kets,
+                      TensorGenerator&& tensor_generator, CSV csv = CSV::None) {
+    const bool symm =
+        mbpt::get_default_formalism().nbody_interaction_tensor_symm() ==
+        mbpt::Context::NBodyInteractionTensorSymm::Yes;
+    const auto csv_bra = csv == CSV::Bra;
+    const auto csv_ket = csv == CSV::Ket;
+
+    // not sure what it means to use nonsymmetric operator if nbra != nket
+    using ranges::size;
+    if (!symm) assert(size(bras) == size(kets));
+
+    auto make_idx_vector = [](const auto& spacetypes) {
+      std::vector<Index> result;
+      const auto n = spacetypes.size();
+      result.reserve(n);
+      for (size_t i = 0; i != n; ++i) {
+        auto space = IndexSpace::instance(spacetypes[i]);
+        result.push_back(Index::make_tmp_index(space));
+      }
+      return result;
+    };
+
+    auto make_depidx_vector = [](const auto& spacetypes, auto&& protoidxs) {
+      const auto n = spacetypes.size();
+      std::vector<Index> result;
+      result.reserve(n);
+      for (size_t i = 0; i != n; ++i) {
+        auto space = IndexSpace::instance(spacetypes[i]);
+        result.push_back(Index::make_tmp_index(space, protoidxs, true));
+      }
+      return result;
+    };
+
+    std::vector<Index> braidxs, ketidxs;
+    if (csv_bra) {
+      ketidxs = make_idx_vector(kets);
+      braidxs = make_depidx_vector(bras, ketidxs);
+    } else if (csv_ket) {
+      braidxs = make_idx_vector(bras);
+      ketidxs = make_depidx_vector(kets, braidxs);
+    } else {
+      braidxs = make_idx_vector(bras);
+      ketidxs = make_idx_vector(kets);
+    }
+
+    const auto mult = symm ? factorial(size(bras)) * factorial(size(kets))
+                           : factorial(size(bras));
+    const auto opsymm = symm ? (S == Statistics::FermiDirac ? Symmetry::antisymm
+                                                            : Symmetry::symm)
+                             : Symmetry::nonsymm;
+    return ex<Constant>(rational{1, mult}) *
+           tensor_generator(braidxs, ketidxs, opsymm) *
+           ex<NormalOperator<S>>(/* creators */ braidxs,
+                                 /* annihilators */ ketidxs,
+                                 get_default_context().vacuum());
+  }
+
+  template <typename TensorGenerator>
+  static ExprPtr make(std::initializer_list<IndexSpace::Type> bras,
+                      std::initializer_list<IndexSpace::Type> kets,
+                      TensorGenerator&& tensor_generator, CSV csv = CSV::None) {
+    container::svector<IndexSpace::Type> bra_vec(bras.begin(), bras.end());
+    container::svector<IndexSpace::Type> ket_vec(kets.begin(), kets.end());
+    return OpMaker<S>::make(
+        bra_vec, ket_vec, std::forward<TensorGenerator>(tensor_generator), csv);
+  }
+
+ protected:
+  OpType op_;
+  container::svector<IndexSpace::Type> bra_spaces_;
+  container::svector<IndexSpace::Type> ket_spaces_;
+
+  OpMaker(OpType op);
+
+  const auto nbra() const { return bra_spaces_.size(); };
+  const auto nket() const { return ket_spaces_.size(); };
+};
+
+extern template class OpMaker<Statistics::FermiDirac>;
+extern template class OpMaker<Statistics::BoseEinstein>;
 
 /// \tparam QuantumNumbers a sequence of quantum numbers, must be
 /// default-initializable

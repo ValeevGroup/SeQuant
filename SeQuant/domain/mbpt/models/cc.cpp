@@ -1,4 +1,4 @@
-#include <SeQuant/domain/mbpt/formalism.hpp>
+#include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 
 #include <clocale>
@@ -11,7 +11,7 @@
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
-#include <SeQuant/domain/mbpt/sr/sr.hpp>
+#include <SeQuant/domain/mbpt/sr.hpp>
 
 namespace sequant::mbpt::sr {
 
@@ -66,8 +66,8 @@ std::vector<ExprPtr> cceqs::t(bool screen, bool use_topology,
   return result;
 }
 
-std::vector<ExprPtr> cceqs::lambda(bool screen, bool use_topology,
-                                   bool use_connectivity, bool canonical_only) {
+std::vector<ExprPtr> cceqs::λ(bool screen, bool use_topology,
+                              bool use_connectivity, bool canonical_only) {
   // construct hbar
   auto hbar = op::H();
   auto H_Tk = hbar;

@@ -2,7 +2,7 @@
 #include <SeQuant/core/wick.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/rdm.hpp>
-#include <SeQuant/domain/mbpt/sr/sr.hpp>
+#include <SeQuant/domain/mbpt/sr.hpp>
 
 #include <clocale>
 #include <iostream>
@@ -10,9 +10,10 @@
 using namespace sequant;
 
 void try_main() {
+  using namespace sequant::mbpt;
   std::wcout << "START ANTISYMM_TEST: " << std::endl;
-  const auto cumulant =
-      ex<Tensor>(L"\\gamma", WstrList{L"a_1"}, WstrList{L"i_1"});
+  const auto cumulant = ex<Tensor>(optype2label.at(OpType::RDMCumulant),
+                                   WstrList{L"a_1"}, WstrList{L"i_1"});
   // const auto a =ex<Tensor>(L"a",WstrList{L"i_2", L"i_3"},WstrList{L"a_2",
   // L"a_3"});
   const auto a = ex<FNOperator>(
@@ -23,8 +24,10 @@ void try_main() {
   antisymmetrize _a_cumulant(a_cumulant);
   std::wcout << to_latex_align(_a_cumulant.result) << std::endl;
 
-  auto cumulant2 = ex<Tensor>(L"\\gamma", WstrList{L"a_2"}, WstrList{L"i_2"});
-  auto cumulant3 = ex<Tensor>(L"\\gamma", WstrList{L"a_3"}, WstrList{L"i_3"});
+  auto cumulant2 = ex<Tensor>(optype2label.at(OpType::RDMCumulant),
+                              WstrList{L"a_2"}, WstrList{L"i_2"});
+  auto cumulant3 = ex<Tensor>(optype2label.at(OpType::RDMCumulant),
+                              WstrList{L"a_3"}, WstrList{L"i_3"});
   auto cumulant_3x = cumulant * cumulant2 * cumulant3;
   std::wcout << "cumulant_3x " << to_latex_align(cumulant_3x) << std::endl;
   antisymmetrize _cumulant_3x(cumulant_3x);
@@ -37,8 +40,9 @@ void try_main() {
   antisymmetrize _a1_cumu1_cumu2(a1_cumu1_cumu2);
   std::wcout << to_latex_align(_a1_cumu1_cumu2.result) << std::endl;
 
-  auto two_body_cumu = ex<Tensor>(L"\\gamma", WstrList{L"a_2", L"a_3"},
-                                  WstrList{L"i_2", L"i_3"});
+  auto two_body_cumu =
+      ex<Tensor>(optype2label.at(OpType::RDMCumulant), WstrList{L"a_2", L"a_3"},
+                 WstrList{L"i_2", L"i_3"});
   auto a1_cumu2 = a1 * two_body_cumu;
   std::wcout << " a1 y2 " << to_latex_align(a1_cumu2) << std::endl;
   antisymmetrize _a1_cumu2(a1_cumu2);
@@ -49,7 +53,8 @@ void try_main() {
   antisymmetrize _cumu1_cumu2(cumu1_cumu2);
   std::wcout << to_latex_align(_cumu1_cumu2.result) << std::endl;
 
-  auto cumu3 = ex<Tensor>(L"\\gamma", WstrList{L"a_1", L"a_2", L"a_3"},
+  auto cumu3 = ex<Tensor>(optype2label.at(OpType::RDMCumulant),
+                          WstrList{L"a_1", L"a_2", L"a_3"},
                           WstrList{L"i_1", L"i_2", L"i_3"});
   std::wcout << " y3 " << to_latex_align(cumu3) << std::endl;
   antisymmetrize _cumu3(cumu3);
@@ -86,7 +91,7 @@ int main(int argc, char* argv[]) {
   std::wcout.sync_with_stdio(true);
   std::wcerr.sync_with_stdio(true);
   sequant::detail::OpIdRegistrar op_id_registrar;
-  sequant::set_default_context(SeQuant(Vacuum::Physical, IndexSpaceMetric::Unit,
+  sequant::set_default_context(Context(Vacuum::Physical, IndexSpaceMetric::Unit,
                                        BraKetSymmetry::conjugate,
                                        SPBasis::spinfree));
   mbpt::set_default_convention();

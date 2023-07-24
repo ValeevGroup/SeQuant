@@ -6,8 +6,8 @@
 #define SEQUANT_WICK_IMPL_HPP
 
 #include "bliss.hpp"
+#include "logger.hpp"
 #include "tensor_network.hpp"
-#include "utility.hpp"
 
 #ifdef SEQUANT_HAS_EXECUTION_HEADER
 #include <execution>
@@ -121,7 +121,7 @@ inline container::map<Index, Index> compute_index_replacement_rules(
         src1_it->second = proto(
             make_intersection_index(old_dst1.space(), dst.space()), dst1_proto);
       }
-      result[src2] = src1_it->second;
+      result.emplace(src2, src1_it->second);
     } else if (!has_src1_rule &&
                has_src2_rule) {  // update the existing rule for src2
       const auto &old_dst2 = src2_it->second;
@@ -130,7 +130,7 @@ inline container::map<Index, Index> compute_index_replacement_rules(
         src2_it->second = proto(
             make_intersection_index(old_dst2.space(), dst.space()), dst2_proto);
       }
-      result[src1] = src2_it->second;
+      result.emplace(src1, src2_it->second);
     } else {  // update both of the existing rules
       const auto &old_dst1 = src1_it->second;
       const auto &old_dst2 = src2_it->second;
@@ -157,8 +157,8 @@ inline container::map<Index, Index> compute_index_replacement_rules(
         new_dst = dst;
       } else
         new_dst = idxfac.make(new_dst_space);
-      result[src1] = proto(new_dst, dst1_proto);
-      result[src2] = proto(new_dst, dst2_proto);
+      result.emplace(src1, proto(new_dst, dst1_proto));
+      result.emplace(src2, proto(new_dst, dst2_proto));
     }
   };
 

@@ -2,14 +2,14 @@
 // Created by Eduard Valeyev on 2019-02-19.
 //
 
-#ifndef SEQUANT_SRCC_HPP
-#define SEQUANT_SRCC_HPP
+#ifndef SEQUANT_DOMAIN_MBPT_SR_HPP
+#define SEQUANT_DOMAIN_MBPT_SR_HPP
 
 #include <limits>
 #include <utility>
 
+#include "SeQuant/core/context.hpp"
 #include "SeQuant/core/expr_fwd.hpp"
-#include "SeQuant/core/sequant.hpp"
 #include "SeQuant/core/space.hpp"
 #include "SeQuant/domain/mbpt/op.hpp"
 
@@ -109,18 +109,15 @@ namespace sr {
 /// and indices \f$ \{ b_i \} \f$ / \f$ \{ k_i \} \f$.
 /// @note The choice of unoccupied indices/spaces can be controlled by the default Formalism:
 /// - if `get_default_formalism().sum_over_uocc() == SumOverUocc::Complete` IndexSpace::complete_unoccupied will be used instead of IndexSpace::active_unoccupied
-/// - if `get_default_formalism().csv_formalism() == CSVFormalism::CSV` will use cluster-specific (e.g., PNO) unoccupied indices
+/// - if `get_default_formalism().csv() == CSVFormalism::CSV` will use cluster-specific (e.g., PNO) unoccupied indices
 /// @warning Tensor \f$ T \f$ will be antisymmetrized if `get_default_context().spbasis() == SPBasis::spinorbital`, else it will be particle-symmetric; the latter is only valid if # of bra and ket indices coincide.
 // clang-format on
-class make_op {
-  OpType op_;
-  std::vector<IndexSpace::Type> bra_spaces_;
-  std::vector<IndexSpace::Type> ket_spaces_;
-
-  const auto nbra() const { return bra_spaces_.size(); };
-  const auto nket() const { return ket_spaces_.size(); };
-
+class OpMaker : public mbpt::OpMaker<Statistics::FermiDirac> {
  public:
+  using base_type = mbpt::OpMaker<Statistics::FermiDirac>;
+
+  using base_type::base_type;
+
   // clang-format off
   /// @param[in] op the operator type:
   /// - if @p op is a (pure) excitation operator bra/ket indices
@@ -130,32 +127,38 @@ class make_op {
   /// @param[in] nbra number of bra indices/creators
   /// @param[in] nket number of ket indices/annihilators; if not specified, will be set to @p nbra
   // clang-format on
-  make_op(OpType op, std::size_t nbra,
+  OpMaker(OpType op, std::size_t nbra,
           std::size_t nket = std::numeric_limits<std::size_t>::max());
 
-  /// @param[in] bras the bra indices/creators
-  /// @param[in] kets the ket indices/annihilators
-  /// @param[in] op the operator type
-  /// @warning this operator is only to be used for general @p op
-  make_op(OpType op, std::initializer_list<IndexSpace::Type> bras,
-          std::initializer_list<IndexSpace::Type> kets);
+  using base_type::operator();
+};
 
-  ExprPtr operator()() const;
-}; // class make_op
+#include "../mbpt/sr/op.impl.hpp"
 
-#include "sr_op.impl.hpp"
-
-ExprPtr H1();
-
-ExprPtr H2();
+/// @name tensor-level SR MBPT operators
+/// @{
 
 ExprPtr H0mp();
 ExprPtr H1mp();
 
+// clang-format off
+/// @brief `k`-body contribution to the "generic" Hamiltonian (in normal order relative to the default vacuum)
+/// @param[in] k the rank of the particle interactions; only `k<=2` is
+/// supported
+// clang-format on
+ExprPtr H_(std::size_t k);
+
+/// @brief total Hamiltonian including up to `k`-body interactions
+/// @param[in] k the maximum rank of the particle interactions; only `k<=2` is
+/// supported
+ExprPtr H(std::size_t k = 2);
+
+/// @brief Fock operator
 ExprPtr F();
+
 ExprPtr W();
 
-ExprPtr H();
+/// @}
 
 /// computes the vacuum expectation value (VEV)
 
@@ -179,15 +182,35 @@ ExprPtr pLambda1_(std::size_t Nbra,
                   std::size_t Nket = std::numeric_limits<std::size_t>::max());
 
 
+/// contains operator-level SR MBPT expressions
 // these produce operator-level expressions
 namespace op {
 
-ExprPtr H1();
+/// @name SR MBPT operators
 
-ExprPtr H2();
+/// @{
+
 ExprPtr H2_oo_vv();
 ExprPtr H2_vv_vv();
-ExprPtr H();
+
+// TODO: Implement rest of the functions
+ExprPtr H0mp();
+ExprPtr H1mp();
+
+ExprPtr F();
+ExprPtr W();
+
+// clang-format off
+/// @brief `k`-body contribution to the "generic" Hamiltonian (in normal order relative to the default vacuum)
+/// @param[in] k the rank of the particle interactions; only `k<=2` is
+/// supported
+// clang-format on
+ExprPtr H_(std::size_t k);
+
+/// @brief total Hamiltonian including up to `k`-body interactions
+/// @param[in] k the maximum rank of the particle interactions; only `k<=2` is
+/// supported
+ExprPtr H(std::size_t k = 2);
 
 /// makes particle-conserving excitation operator of rank \p K
 ExprPtr T_(std::size_t K);
@@ -206,6 +229,8 @@ ExprPtr Lambda(std::size_t K);
 
 /// makes deexcitation operator of rank \p K
 ExprPtr A(std::size_t K);
+
+/// @}
 
 // perturbation and response related operators
 /// one-body perturbation operator of order \param R
@@ -243,7 +268,7 @@ bool lowers_rank_or_lower_to_vacuum(const ExprPtr& op_or_op_product,
 
 /// @param[in] expr input expression
 /// @param[in] op_connections list of pairs of labels of operators to be
-/// connected
+/// connected (e.g., `{{"h", "t"}, {"f", "t"}, {"g", "t"}}` will connect op::)
 /// @return the VEV
 ExprPtr vac_av(
     ExprPtr expr,
@@ -260,4 +285,4 @@ extern template class Operator<sr::qns_t, Statistics::BoseEinstein>;
 }  // namespace mbpt
 }  // namespace sequant
 
-#endif  // SEQUANT_SRCC_HPP
+#endif  // SEQUANT_DOMAIN_MBPT_SR_HPP

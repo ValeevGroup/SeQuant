@@ -11,66 +11,103 @@
 #include "attr.hpp"
 #include "container.hpp"
 
+#include <range/v3/algorithm/any_of.hpp>
+
 namespace sequant {
+
+/// @brief TypeAttr denotes the type of index space.
+///
+/// This class models a host (complete) space partitioned into disjoint
+/// subspaces. To simplify implementation of set operations
+/// (intersection, union, etc.) it is encoded as a fixed-width (32) bitset.
+struct TypeAttr {
+  int32_t bitset = 0;
+
+  constexpr explicit TypeAttr(int32_t value) noexcept : bitset(value) {}
+
+  constexpr explicit operator int64_t() const {
+    return static_cast<int64_t>(bitset);
+  }
+  constexpr int32_t to_int32() const { return bitset; }
+  constexpr TypeAttr intersection(TypeAttr other) const {
+    return TypeAttr(this->to_int32() & other.to_int32());
+  }
+  constexpr TypeAttr unIon(TypeAttr other) const {
+    return TypeAttr(this->to_int32() | other.to_int32());
+  }
+
+  friend constexpr bool operator==(TypeAttr, TypeAttr);
+  friend constexpr bool operator!=(TypeAttr, TypeAttr);
+
+  /// @return true if \c other is included in this object
+  constexpr bool includes(TypeAttr other) const {
+    return intersection(other) == other;
+  }
+  /// @return true if in canonical order this object preceeds \c other
+  constexpr bool operator<(TypeAttr other) const {
+    return this->to_int32() < other.to_int32();
+  }
+
+  /// @return an invalid TypeAttr
+  static constexpr TypeAttr invalid() noexcept { return TypeAttr(0xffff); }
+};
+
+constexpr bool operator==(TypeAttr lhs, TypeAttr rhs) {
+  return lhs.to_int32() == rhs.to_int32();
+}
+
+constexpr bool operator!=(TypeAttr lhs, TypeAttr rhs) { return !(lhs == rhs); }
+
+/// denotes other quantum numbers (particle type, spin, etc.)
+struct QuantumNumbersAttr {
+  int32_t bitset = 0;
+
+  constexpr explicit QuantumNumbersAttr(int32_t value) noexcept
+      : bitset(value) {}
+  constexpr explicit operator int64_t() const {
+    return static_cast<int64_t>(bitset);
+  }
+  constexpr int32_t to_int32() const { return bitset; }
+  constexpr QuantumNumbersAttr intersection(QuantumNumbersAttr other) const {
+    return QuantumNumbersAttr(this->to_int32() & other.to_int32());
+  }
+  constexpr QuantumNumbersAttr unIon(QuantumNumbersAttr other) const {
+    return QuantumNumbersAttr(this->to_int32() | other.to_int32());
+  }
+
+  friend constexpr bool operator==(QuantumNumbersAttr, QuantumNumbersAttr);
+  friend constexpr bool operator!=(QuantumNumbersAttr, QuantumNumbersAttr);
+
+  /// @return true if \c other is included in this object
+  constexpr bool includes(QuantumNumbersAttr other) const {
+    return intersection(other) == other;
+  }
+  /// @return true if in canonical order this object preceeds \c other
+  constexpr bool operator<(QuantumNumbersAttr other) const {
+    return this->to_int32() < other.to_int32();
+  }
+
+  /// @return an invalid TypeAttr
+  static constexpr QuantumNumbersAttr invalid() noexcept {
+    return QuantumNumbersAttr(-0);
+  }
+};
+
+constexpr bool operator==(QuantumNumbersAttr lhs, QuantumNumbersAttr rhs) {
+  return lhs.to_int32() == rhs.to_int32();
+}
+
+constexpr bool operator!=(QuantumNumbersAttr lhs, QuantumNumbersAttr rhs) {
+  return !(lhs == rhs);
+}
 
 /// @brief space of Index objects
 ///
 /// IndexSpace is a set of attributes associated 1-to-1 with keys
 class IndexSpace {
  public:
-  /// @brief TypeAttr is the type of index space.
-  ///
-  /// The type is described as a set of (orthogonal) attributes; for simplicity
-  /// it is encoded as a bitset for ease of computing.
-  struct TypeAttr : std::bitset<32> {
-    constexpr explicit TypeAttr(int32_t value) noexcept
-        : std::bitset<32>(static_cast<unsigned long long>(value)) {}
-    operator int64_t() const { return static_cast<int64_t>(this->to_ulong()); }
-    int32_t to_int32() const { return static_cast<int32_t>(this->to_ulong()); }
-    TypeAttr intersection(TypeAttr other) const {
-      return TypeAttr(this->to_int32() & other.to_int32());
-    }
-    TypeAttr unIon(TypeAttr other) const {
-      return TypeAttr(this->to_int32() | other.to_int32());
-    }
-    /// @return true if \c other is included in this object
-    bool includes(TypeAttr other) const { return intersection(other) == other; }
-    /// @return true if in canonical order this object preceeds \c other
-    bool operator<(TypeAttr other) const {
-      return this->to_int32() < other.to_int32();
-    }
-
-    /// @return an invalid TypeAttr
-    static constexpr TypeAttr invalid() noexcept { return TypeAttr(0xffff); }
-  };
-  /// denotes other quantum numbers (particle type, spin, etc.)
-  struct QuantumNumbersAttr : std::bitset<32> {
-    constexpr explicit QuantumNumbersAttr(int32_t value) noexcept
-        : std::bitset<32>(static_cast<unsigned long long>(value)) {}
-    explicit operator int64_t() const {
-      return static_cast<int64_t>(this->to_ulong());
-    }
-    int32_t to_int32() const { return static_cast<int32_t>(this->to_ulong()); }
-    QuantumNumbersAttr intersection(QuantumNumbersAttr other) const {
-      return QuantumNumbersAttr(this->to_int32() & other.to_int32());
-    }
-    QuantumNumbersAttr unIon(QuantumNumbersAttr other) const {
-      return QuantumNumbersAttr(this->to_int32() | other.to_int32());
-    }
-    /// @return true if \c other is included in this object
-    bool includes(QuantumNumbersAttr other) const {
-      return intersection(other) == other;
-    }
-    /// @return true if in canonical order this object preceeds \c other
-    bool operator<(QuantumNumbersAttr other) const {
-      return this->to_int32() < other.to_int32();
-    }
-
-    /// @return an invalid TypeAttr
-    static constexpr QuantumNumbersAttr invalid() noexcept {
-      return QuantumNumbersAttr(-0);
-    }
-  };
+  using TypeAttr = sequant::TypeAttr;
+  using QuantumNumbersAttr = sequant::QuantumNumbersAttr;
 
   /// @brief Attr describes all attributes of a space (occupancy + quantum
   /// numbers)
@@ -111,7 +148,7 @@ class IndexSpace {
                   this->qns().unIon(other.qns()));
     }
 
-    /// @return true if \c other is included in this object
+    /// @return true if \p other is included in this object
     bool includes(Attr other) const {
       return this->type().includes(other.type()) &&
              this->qns().includes(other.qns());
@@ -140,43 +177,125 @@ class IndexSpace {
   using Type = TypeAttr;
   using QuantumNumbers = QuantumNumbersAttr;
 
-  /// standard space tags are predefined that helps implement set theory of
-  /// standard spaces as binary ops on bitsets
-  static Type nulltype;
-  static Type frozen_occupied;
-  static Type inactive_occupied;
-  static Type active_occupied;
-  static Type occupied;
-  static Type active_unoccupied;
-  static Type inactive_unoccupied;
-  static Type unoccupied;
-  static Type all_active;
-  static Type all;
-  static Type other_unoccupied;
-  static Type complete_unoccupied;
-  static Type complete;
-  static Type nonnulltype;
-  template <int32_t typeint>
-  static const constexpr bool is_standard_type() {
-    const Type type{typeint};
-    return (type == frozen_occupied || type == inactive_occupied ||
-            type == active_occupied || type == occupied ||
-            type == active_unoccupied || type == inactive_unoccupied ||
-            type == unoccupied || type == all_active || type == all ||
-            type == other_unoccupied || type == complete_unoccupied ||
-            type == complete || type == nulltype || type == nonnulltype);
-  }
+  /// \name default space tags
+
+  /// @{
+  // clang-format off
+  /// null space (empty subset), needed to define intersection operation
+  static constexpr Type nulltype{0};
+  /// represents any space, standard (see below) or otherwise
+  static constexpr Type nonnulltype{0x7fffffff};
+  /// @}
+
+  /// \name standard space tags
 
   /// standard space tags are predefined that helps implement set theory of
   /// standard spaces as binary ops on bitsets
-  static QuantumNumbers nullqns;  //!< no quantum numbers
-  static QuantumNumbers alpha;    //!< spin-up
-  static QuantumNumbers beta;     //!< spin-down
+  /// @{
+  // clang-format off
+  /// space of sp states that are fully occupied (i.e., non-correlated) in the reference (vacuum) state and are "frozen" in their reference form
+  static constexpr Type frozen_occupied{0b0000001};
+  /// space of sp states that are fully occupied (i.e., non-correlated) in the reference (vacuum) state but
+  /// can be rotated by mixing with the rest of non-frozen orbitals
+  static constexpr Type inactive_occupied{0b0000010};
+  /// space of sp states that are fully occupied (i.e., non-correlated) in the reference (vacuum) state but
+  /// can be correlated and rotated by mixing with the rest of non-frozen orbitals
+  static constexpr Type active_occupied{0b0000100};
+  /// space of sp states that are partially occupied (i.e., correlated, or open shells in spin-free single-determinant reference) in the reference (vacuum) state;
+  static constexpr Type active{0b0001000};
+  /// space of sp states that are fully occupied in the reference (vacuum) state
+  /// @note this is the union of IndexSpace::frozen_occupied , IndexSpace::inactive_occupied , IndexSpace::active_occupied
+  static constexpr Type occupied = IndexSpace::frozen_occupied.unIon(IndexSpace::inactive_occupied).unIon(IndexSpace::active_occupied);
+  /// space of sp states that are fully or partially occupied in the reference (vacuum) state
+  /// @note this is the union of IndexSpace::occupied and IndexSpace::active
+  static constexpr Type maybe_occupied = IndexSpace::occupied.unIon(IndexSpace::active);
+  /// space of sp states that are fully or partially occupied in the reference (vacuum) state and can be correlated
+  /// @note this is the union of IndexSpace::active_occupied and IndexSpace::active
+  static constexpr Type active_maybe_occupied = IndexSpace::active_occupied.unIon(IndexSpace::active);
+  /// space of sp states that are not used to define the reference (vacuum) state (i.e., they are unoccupied) but
+  /// can be correlated and rotated by mixing with the rest of non-frozen orbitals
+  /// @note unlike IndexSpace::other_unoccupied, these states are supported by a finite computational basis
+  static constexpr Type active_unoccupied{0b0010000};
+  /// space of sp states that are not used to define the reference (vacuum) state (i.e., they are unoccupied) but
+  /// can be rotated by mixing with the rest of non-frozen orbitals
+  /// @note unlike IndexSpace::other_unoccupied, these states are supported by a finite computational basis
+  static constexpr Type inactive_unoccupied{0b0100000};
+  /// space of sp states that are fully unoccupied in the reference (vacuum) state
+  /// @note this is the union of IndexSpace::inactive_unoccupied and IndexSpace::active_unoccupied
+  /// @note unlike IndexSpace::other_unoccupied, these states are supported by a finite computational basis
+  static constexpr Type unoccupied = IndexSpace::active_unoccupied.unIon(IndexSpace::inactive_unoccupied);
+  /// space of sp states that are fully or partially unoccupied in the reference (vacuum) state
+  /// @note this is the union of IndexSpace::unoccupied  and IndexSpace::active
+  /// @note unlike IndexSpace::other_unoccupied, these states are supported by a finite computational basis
+  static constexpr Type maybe_unoccupied = IndexSpace::unoccupied.unIon(IndexSpace::active);
+  /// space of sp states that are fully or partially unoccupied in the reference (vacuum) state and can be correlated
+  /// @note this is the union of IndexSpace::active_unoccupied and IndexSpace::active
+  static constexpr Type active_maybe_unoccupied = IndexSpace::active_unoccupied.unIon(IndexSpace::active);
+  /// space of sp states that can be correlated
+  /// @note this is the union of IndexSpace::active_occupied , IndexSpace::active_unoccupied and IndexSpace::active
+  static constexpr Type all_active = IndexSpace::active_occupied.unIon(IndexSpace::active_unoccupied).unIon(IndexSpace::active);
+  /// space of sp states represented in computational basis
+  /// @note this is the union of IndexSpace::maybe_occupied and IndexSpace::maybe_unoccupied
+  static constexpr Type all = IndexSpace::maybe_occupied.unIon(IndexSpace::maybe_unoccupied);
+  /// space of sp states that are not used to define the reference (vacuum) state (i.e., they are unoccupied) and not supported
+  /// by a supported by a finite computational basis; i.e., these states are the rest of the sp Hilbert space
+  static constexpr Type other_unoccupied{0b1000000};
+  /// set of all fully unoccupied states
+  /// @note this is a union of IndexSpace::unoccupied and IndexSpace::other_unoccupied
+  static constexpr Type complete_unoccupied = IndexSpace::unoccupied.unIon(IndexSpace::other_unoccupied);
+  /// set of arbitrary fully or partially unoccupied states
+/// @note this is a union of IndexSpace::complete_unoccupied and IndexSpace::active
+  static constexpr Type complete_maybe_unoccupied = IndexSpace::complete_unoccupied.unIon(IndexSpace::active);
+  /// union of all previous spaces
+  /// @note this is a union of IndexSpace::all and IndexSpace::other_unoccupied
+  static constexpr Type complete = IndexSpace::all.unIon(IndexSpace::other_unoccupied);
+  // clang-format on
+
+  /// list of all standard types
+  static constexpr Type standard_types[] = {frozen_occupied,
+                                            inactive_occupied,
+                                            active_occupied,
+                                            occupied,
+                                            active,
+                                            maybe_occupied,
+                                            active_maybe_occupied,
+                                            active_unoccupied,
+                                            inactive_unoccupied,
+                                            unoccupied,
+                                            maybe_unoccupied,
+                                            active_maybe_unoccupied,
+                                            all_active,
+                                            all,
+                                            other_unoccupied,
+                                            complete_unoccupied,
+                                            complete_maybe_unoccupied,
+                                            complete};
+
+  template <int32_t typeint>
+  static constexpr bool is_standard_type() {
+    return ranges::any_of(standard_types,
+                          [](const auto t) { return t == Type{typeint}; });
+  }
+  /// @}
+
+  /// \name standard quantum numbers tags
+  /// @{
+  /// no quantum numbers
+  constexpr static QuantumNumbers nullqns{0b000000};
+  /// spin-up
+  constexpr static QuantumNumbers alpha{0b000001};
+  /// spin-down
+  constexpr static QuantumNumbers beta{0b000010};
+
+  /// list of all standard quantum numbers
+  static constexpr QuantumNumbers standard_qns[] = {nullqns, alpha, beta};
+
   template <int32_t qnsint>
   static const constexpr bool is_standard_qns() {
-    const QuantumNumbers qns{qnsint};
-    return (qns == nullqns || qns == alpha || qns == beta);
+    return ranges::any_of(
+        standard_qns, [](const auto t) { return t == QuantumNumbers{qnsint}; });
   }
+  /// @}
 
   struct bad_key : std::invalid_argument {
     bad_key() : std::invalid_argument("bad key") {}
@@ -205,7 +324,7 @@ class IndexSpace {
 
   /// @brief returns the instance of an IndexSpace object
   /// @param attr the space attribute
-  /// @throw bad_key if key not found
+  /// @throw bad_attr if \p attr has not been registered
   static const IndexSpace &instance(Attr attr) {
     assert(attr.is_valid());
     if (attr == Attr::null()) return null_instance();
@@ -244,6 +363,13 @@ class IndexSpace {
   /// @param base_key string key that will be used as the "base key" for this
   ///        particular space, i.e. the default used for example for
   ///        constructing temporary indices for this space
+  /// @param type the IndexSpace::Type attribute to associate \p base_key with
+  /// @param qns the IndexSpace::QuantumNumbers attribute to associate \p
+  /// base_key with
+  /// @param throw_if_already_registered if true, throws an exception if \p
+  /// base_key has already been registered
+  /// @throw bad_key if \p base_key has already been registered
+  /// and \p throw_if_already_registered is true
   static void register_instance(const std::wstring_view base_key, Type type,
                                 QuantumNumbers qn = nullqns,
                                 bool throw_if_already_registered = true) {
@@ -296,7 +422,7 @@ class IndexSpace {
 
   /// @brief returns the base key for IndexSpace objects of the given attribute
   /// @param attr the space attribute
-  /// @throw bad_key if this object has not been registered
+  /// @throw bad_attr if \p attr has not been registered
   static std::wstring base_key(Attr attr) {
     assert(attr.is_valid());
     if (attr == Attr::null()) return L"";
@@ -361,6 +487,7 @@ class IndexSpace {
   ///            the base key used to invoke `IndexSpace::register_instance()`
   ///            or a key used to invoke `IndexSpace::register_key()`
   /// @return the attribute of the IndexSpace object corresponding to @p key
+  /// @throw bad_key if \p key has not been registered
   static Attr to_attr(std::wstring_view key) {
     const auto found_it = key2attr_.find(key);
     if (found_it != key2attr_.end()) return found_it->second;
@@ -468,14 +595,14 @@ inline bool operator<(const IndexSpace &space1, const IndexSpace &space2) {
   return space1.attr() < space2.attr();
 }
 
-/// @return -1 if @c space includes no orbitals with zero occupancy, +1 if it
-/// includes only orbitals with zero occupancy,
-///         and 0 of it includes some orbitals with zero occupancy.
+/// @return -1 if @c space only include orbitals with complete occupancy, +1 if
+/// it includes no orbitals with complete occupancy,
+///         and 0 of it includes some orbitals with with complete occupancy.
 inline int occupancy_class(const IndexSpace &space) {
   const auto included_in_occupied =
       includes(IndexSpace::occupied, space.type());
   const auto included_in_unoccupied =
-      includes(IndexSpace::complete_unoccupied, space.type());
+      includes(IndexSpace::complete_maybe_unoccupied, space.type());
   assert(!(included_in_occupied && included_in_unoccupied));
   if (included_in_occupied && !included_in_unoccupied)
     return -1;

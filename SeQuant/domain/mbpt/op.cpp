@@ -1,5 +1,8 @@
 #include "SeQuant/domain/mbpt/op.hpp"
+#include "SeQuant/domain/mbpt/context.hpp"
 
+#include "SeQuant/core/math.hpp"
+#include "SeQuant/core/op.hpp"
 #include "SeQuant/core/tensor.hpp"
 
 #include <stdexcept>
@@ -7,63 +10,55 @@
 namespace sequant::mbpt {
 
 std::vector<std::wstring> cardinal_tensor_labels() {
-  return {L"\\lambda", L"\\gamma",
-          L"\\Gamma",  L"A",
-          L"S",        L"P",
-          L"L",        L"λ",
-          L"h",        L"f",
-          L"g",        L"t",
-          L"R",        L"F",
-          L"X",        L"V",
-          L"Ṽ",        L"B",
-          L"U",        L"GR",
-          L"C",        overlap_label(),
-          L"a",        L"ã",
-          L"b",        L"ᵬ",
-          L"E",        L"t1",
-          L"λ1"};
+  return {L"κ",
+          L"γ",
+          L"Γ",
+          L"A",
+          L"S",
+          L"P",
+          L"L",
+          L"λ",
+          L"λ1"
+          L"h",
+          L"f",
+          L"f̃",
+          L"g",
+          L"t",
+          L"t1",
+          L"R",
+          L"F",
+          L"X",
+          L"V",
+          L"Ṽ",
+          L"B",
+          L"U",
+          L"GR",
+          L"C",
+          overlap_label(),
+          L"a",
+          L"ã",
+          L"b",
+          L"b̃",
+          L"E"};
 }
 
 std::wstring to_wstring(OpType op) {
-  switch (op) {
-    case OpType::h:
-      return L"h";
-    case OpType::f:
-      return L"f";
-    case OpType::g:
-      return L"g";
-    case OpType::t:
-      return L"t";
-    case OpType::lambda:
-      return L"λ";
-    case OpType::A:
-      return L"A";
-    case OpType::L:
-      return L"L";
-    case OpType::R:
-      return L"R";
-    case OpType::R12:
-      return L"F";
-    case OpType::GR:
-      return L"GR";
-    case OpType::C:
-      return L"C";
-    case OpType::V:
-        return L"V";
-    case OpType::t1:
-      return L"t1";
-    case OpType::lambda1:
-      return L"λ1";
-    default:
-      throw std::invalid_argument("to_wstring(OpType op): invalid op");
-  }
+  auto found_it = optype2label.find(op);
+  if (found_it != optype2label.end())
+    return found_it->second;
+  else
+    throw std::invalid_argument("to_wstring(OpType op): invalid op");
 }
 
 OpClass to_class(OpType op) {
   switch (op) {
     case OpType::h:
     case OpType::f:
+    case OpType::f̃:
     case OpType::g:
+    case OpType::RDM:
+    case OpType::RDMCumulant:
+    case OpType::δ:
     case OpType::V:
       return OpClass::gen;
     case OpType::t:
@@ -71,10 +66,10 @@ OpClass to_class(OpType op) {
     case OpType::R12:
     case OpType::t1:
       return OpClass::ex;
-    case OpType::lambda:
+    case OpType::λ:
     case OpType::A:
     case OpType::L:
-    case OpType::lambda1:
+    case OpType::λ1:
       return OpClass::deex;
     default:
       throw std::invalid_argument("to_class(OpType op): invalid op");
@@ -131,14 +126,11 @@ template <Statistics S>
 std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
   using namespace sequant::mbpt;
 
-  auto lbl = std::wstring(op.label());
+  auto lbl = utf_to_latex(op.label());
   std::wstring result = L"{\\hat{" + lbl + L"}";
   auto it = label2optype.find(lbl);
   if (it != label2optype.end()) {  // handle special cases
     const auto optype = it->second;
-    if (optype == OpType::lambda) {  // λ -> \lambda
-      result = L"{\\hat{\\lambda}";
-    }
     if (to_class(optype) == OpClass::gen) {
       result += L"}";
       return result;
@@ -168,6 +160,54 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
 #include "SeQuant/domain/mbpt/op.ipp"
 
 namespace sequant::mbpt {
+
+template <Statistics S>
+OpMaker<S>::OpMaker(OpType op, std::initializer_list<IndexSpace::Type> bras,
+                    std::initializer_list<IndexSpace::Type> kets)
+    : op_(op),
+      bra_spaces_(bras.begin(), bras.end()),
+      ket_spaces_(kets.begin(), kets.end()) {
+  assert(nbra() > 0 || nket() > 0);
+}
+
+template <Statistics S>
+OpMaker<S>::OpMaker(OpType op) : op_(op) {}
+
+template <Statistics S>
+ExprPtr OpMaker<S>::operator()() const {
+  const bool symm = get_default_formalism().nbody_interaction_tensor_symm() ==
+                    Context::NBodyInteractionTensorSymm::Yes;
+  const bool do_csv = get_default_formalism().csv() == Context::CSV::Yes;
+  bool csv_bra = false;
+  bool csv_ket = false;
+  if (do_csv) {  // validate spaces
+    if (to_class(op_) == OpClass::ex) {
+      for (auto&& s : bra_spaces_) {
+        assert(s == IndexSpace::complete_unoccupied ||
+               s == IndexSpace::active_unoccupied);
+      }
+      csv_bra = true;
+    } else if (to_class(op_) == OpClass::deex) {
+      for (auto&& s : ket_spaces_) {
+        assert(s == IndexSpace::complete_unoccupied ||
+               s == IndexSpace::active_unoccupied);
+      }
+      csv_ket = true;
+    }
+  }
+
+  CSV csv = csv_bra ? CSV::Bra : (csv_ket ? CSV::Ket : CSV::None);
+
+  return make(
+      bra_spaces_, ket_spaces_,
+      [this](const auto& braidxs, const auto& ketidxs, Symmetry opsymm) {
+        return ex<Tensor>(to_wstring(op_), braidxs, ketidxs, opsymm);
+      },
+      csv);
+}
+
+template class OpMaker<Statistics::FermiDirac>;
+template class OpMaker<Statistics::BoseEinstein>;
 
 template class Operator<qns_t, Statistics::FermiDirac>;
 template class Operator<qns_t, Statistics::BoseEinstein>;

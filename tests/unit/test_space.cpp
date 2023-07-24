@@ -14,6 +14,12 @@ TEST_CASE("IndexSpace", "[elements]") {
         L"p", IndexSpace::all));  // already registered standard instances
     REQUIRE_THROWS(
         IndexSpace::register_instance(L"p_1", IndexSpace::all));  // ditto
+    // since convention does not include ALL standard spaces
+    // (see https://github.com/ValeevGroup/SeQuant/issues/97 )
+    // user can register additional instances
+    REQUIRE_NOTHROW(
+        IndexSpace::register_instance(L"m'", IndexSpace::frozen_occupied));
+    REQUIRE(IndexSpace::instance_exists(L"m'"));
   }
 
   // these are loaded in test_main.cpp
@@ -101,7 +107,7 @@ TEST_CASE("IndexSpace", "[elements]") {
         intersection(IndexSpace::instance(L"a"), IndexSpace::instance(L"α'")));
 
     REQUIRE(IndexSpace::instance(L"κ") ==
-            unIon(IndexSpace::instance(L"m"), IndexSpace::instance(L"α")));
+            unIon(IndexSpace::instance(L"p"), IndexSpace::instance(L"α'")));
 
     REQUIRE(includes(IndexSpace::instance(L"κ"), IndexSpace::instance(L"m")));
     REQUIRE(!includes(IndexSpace::instance(L"m"), IndexSpace::instance(L"κ")));
@@ -112,5 +118,6 @@ TEST_CASE("IndexSpace", "[elements]") {
     REQUIRE(occupancy_class(IndexSpace::instance(L"i")) == -1);
     REQUIRE(occupancy_class(IndexSpace::instance(L"a")) == +1);
     REQUIRE(occupancy_class(IndexSpace::instance(L"p")) == 0);
+    REQUIRE(occupancy_class(IndexSpace::instance(L"u")) == +1);
   }
 }

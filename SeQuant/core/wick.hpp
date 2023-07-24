@@ -93,10 +93,7 @@ class WickTheorem {
   /// when fully-contracted result (i.e. the vacuum average) is sought.
   /// By default the use of topology is not enabled.
   /// @param sf if true, will utilize the topology to minimize work.
-  /// @warning currently is only supported if full contractions are requested
-  /// @sa set_nop_partitions()
   WickTheorem &use_topology(bool ut) {
-    assert(full_contractions_);
     use_topology_ = ut;
     return *this;
   }
@@ -125,12 +122,27 @@ class WickTheorem {
   /// will not constrain connectivity
   /// @param op_index_pairs the list of pairs of op indices to be connected in
   /// the result
-  ///
+  /// @throw std::invalid_argument if @p op_index_pairs contains duplicates
   ///@{
 
   /// @tparam IndexPairContainer a sequence of std::pair<Integer,Integer>
   template <typename IndexPairContainer>
   WickTheorem &set_nop_connections(IndexPairContainer &&op_index_pairs) {
+    auto has_duplicates = [](const auto &op_index_pairs) {
+      const auto the_end = end(op_index_pairs);
+      for (auto it = begin(op_index_pairs); it != the_end; ++it) {
+        const auto found_dup_it = std::find(it + 1, the_end, *it);
+        if (found_dup_it != the_end) {
+          return true;
+        }
+      }
+      return false;
+    };
+    if (has_duplicates(op_index_pairs)) {
+      throw std::invalid_argument(
+          "WickTheorem::set_nop_connections(arg): arg contains duplicates");
+    }
+
     if (expr_input_ == nullptr || !nop_connections_input_.empty()) {
       for (const auto &opidx_pair : op_index_pairs) {
         if (opidx_pair.first < 0 || opidx_pair.first >= input_.size()) {
@@ -152,6 +164,7 @@ class WickTheorem {
           nop_connections_[opidx_pair.second].reset(opidx_pair.first);
         }
       }
+      nop_nconnections_total_ = nop_connections_input_.size();
       nop_connections_input_.clear();
     } else {
       ranges::for_each(op_index_pairs, [this](const auto &idxpair) {
@@ -380,6 +393,9 @@ class WickTheorem {
   /// for each operator specifies the reverse bitmask of target connections
   /// (0 = must connect)
   container::svector<std::bitset<max_input_size>> nop_connections_;
+  std::size_t nop_nconnections_total_ =
+      0;  // # of total (bidirectional) connections in nop_connections_ (i.e.
+          // not double counting 1->2 and 2->1)
   container::vector<std::pair<size_t, size_t>>
       nop_connections_input_;  // only used to cache input to
                                // set_nop_connections_
@@ -561,15 +577,15 @@ class WickTheorem {
     container::vector<container::set<size_t>> nop_partitions;
 
     container::svector<size_t>
-        op_partition_cdeg_matrix_;  //!< contraction degree
-                                    //!< (number of contractions) between
-                                    //!< each topologically-equivalent group
-                                    //!< of Op<S> objects, only the upper
-                                    //!< triangle is kept
+        op_partition_cdeg_matrix;  //!< contraction degree
+                                   //!< (number of contractions) between
+                                   //!< each topologically-equivalent group
+                                   //!< of Op<S> objects, only the upper
+                                   //!< triangle is kept
 
     /// for each Op<S> partition specifies how many contractions it currently
     /// has
-    /// @note exists to avoid the need to traverse op_partition_adjacency_matrix
+    /// @note exists to avoid the need to traverse op_partition_cdeg_matrix
     container::svector<size_t> op_partition_ncontractions;
 
     container::svector<std::pair<Index, Index>>
@@ -645,8 +661,8 @@ class WickTheorem {
         // partition indices in nop_to_partition are 1-based
         // unlike nops, each op is in a partition
         const auto npartitions = wick.op_npartitions_;
-        op_partition_cdeg_matrix_.resize(ntri(npartitions));
-        ranges::fill(op_partition_cdeg_matrix_, 0);
+        op_partition_cdeg_matrix.resize(ntri(npartitions));
+        ranges::fill(op_partition_cdeg_matrix, 0);
         op_partition_ncontractions.resize(npartitions);
         ranges::fill(op_partition_ncontractions, 0);
       }
@@ -719,10 +735,10 @@ class WickTheorem {
           assert(op1_ord < op2_ord);
           assert(op1_partition_idx < op2_partition_idx);
 
-          assert(op_partition_cdeg_matrix_.size() >
+          assert(op_partition_cdeg_matrix.size() >
                  uptri_op(op1_partition_idx, op2_partition_idx));
-          op_partition_cdeg_matrix_[uptri_op(op1_partition_idx,
-                                             op2_partition_idx)] += 1;
+          op_partition_cdeg_matrix[uptri_op(op1_partition_idx,
+                                            op2_partition_idx)] += 1;
           ++op_partition_ncontractions[op1_partition_idx];
           ++op_partition_ncontractions[op2_partition_idx];
         }
@@ -824,12 +840,12 @@ class WickTheorem {
           assert(op1_ord < op2_ord);
           assert(op1_partition_idx < op2_partition_idx);
 
-          assert(op_partition_cdeg_matrix_.size() >
+          assert(op_partition_cdeg_matrix.size() >
                  uptri_op(op1_partition_idx, op2_partition_idx));
-          assert(op_partition_cdeg_matrix_[uptri_op(op1_partition_idx,
-                                                    op2_partition_idx)] > 0);
-          op_partition_cdeg_matrix_[uptri_op(op1_partition_idx,
-                                             op2_partition_idx)] -= 1;
+          assert(op_partition_cdeg_matrix[uptri_op(op1_partition_idx,
+                                                   op2_partition_idx)] > 0);
+          op_partition_cdeg_matrix[uptri_op(op1_partition_idx,
+                                            op2_partition_idx)] -= 1;
           assert(op_partition_ncontractions[op1_partition_idx] > 0);
           assert(op_partition_ncontractions[op2_partition_idx] > 0);
           --op_partition_ncontractions[op1_partition_idx];
@@ -884,8 +900,9 @@ class WickTheorem {
 
     recursive_nontensor_wick(result_plus_mutex, state);
 
-    // if computing everything, include the contraction-free term
-    if (!full_contractions_) {
+    // if computing everything, and the user does not insist on some
+    // target contractions, include the contraction-free term
+    if (!full_contractions_ && nop_nconnections_total_ == 0) {
       if (count_only) {
         ++state.count;
       } else {
@@ -1020,15 +1037,29 @@ class WickTheorem {
                 const auto past_op_right_partition_idx =
                     op_right_partition_idx + 1;
 
-                // skip contractions that would connect op1_partition with
+                // contract only the first free op in left partition
+                // this is ensured automatically if full_contractions_==true
+                if (!full_contractions_) {
+                  const auto left_partition_ncontr_total =
+                      state.op_partition_ncontractions[op_left_partition_idx];
+                  const auto &op_left_partition =
+                      state.wick.op_partitions_[op_left_partition_idx];
+                  const auto op_left_ord_in_partition =
+                      op_left_partition.find(op_left_input_ordinal) -
+                      op_left_partition.begin();
+                  is_unique =
+                      left_partition_ncontr_total == op_left_ord_in_partition;
+                }
+
+                // also skip contractions that would connect op1_partition with
                 // op2_partition (op1_partition<op2_partition) if there is
                 // another partition p>op2_partition that op1_partition
                 // is connected to
-                if (use_op_partition_groups &&
+                if (use_op_partition_groups && is_unique &&
                     past_op_right_partition_idx < this->op_npartitions_) {
                   const auto left_partition_ncontr_past_right_partition =
                       ranges::span<size_t>(
-                          state.op_partition_cdeg_matrix_.data() +
+                          state.op_partition_cdeg_matrix.data() +
                               state.uptri_op(op_left_partition_idx,
                                              past_op_right_partition_idx),
                           op_npartitions_ - past_op_right_partition_idx);
@@ -1043,8 +1074,7 @@ class WickTheorem {
                   }
                 }
 
-                // contract to the first free op in a partition
-                // and scale by the number of free ops
+                // contract to the first free op in the right partition
                 if (is_unique) {
                   const auto right_partition_ncontr_total =
                       state.op_partition_ncontractions[op_right_partition_idx];
@@ -1118,7 +1148,7 @@ class WickTheorem {
           auto op_permutational_degeneracy = [&]() {
             rational result = 1;
             const auto &contraction_order_matrix_uptri =
-                state.op_partition_cdeg_matrix_;
+                state.op_partition_cdeg_matrix;
             for (auto i :
                  ranges::views::iota(std::size_t{0}, op_npartitions_)) {
               const auto partition_i_size = op_partitions_[i].size();
@@ -1129,6 +1159,18 @@ class WickTheorem {
                       contraction_order_matrix_uptri[state.uptri_op(i, j)];
                   if (ncontr_ij > 1) result /= factorial(ncontr_ij);
                 }
+                // if partially contracted account for non-contracted ops in the
+                // partition # of currently contracted
+                const auto partition_i_ncontr =
+                    state.op_partition_ncontractions[i];
+                // # of currently non-contracted ops
+                const auto partition_i_noncontr =
+                    partition_i_size - partition_i_ncontr;
+                // sanity check: only full contractions encountered
+                // if full_contractions_==true
+                assert(!full_contractions_ || partition_i_noncontr == 0);
+                if (partition_i_noncontr > 1)
+                  result /= factorial(partition_i_noncontr);
               }
             }
             return result;
@@ -1260,7 +1302,7 @@ class WickTheorem {
  public:
   static bool can_contract(const Op<S> &left, const Op<S> &right,
                            Vacuum vacuum = get_default_context().vacuum()) {
-    // can only do Wick's theorem for physical vacuum (or similar)
+    // for bosons can only do Wick's theorem for physical vacuum (or similar)
     if constexpr (statistics == Statistics::BoseEinstein)
       assert(vacuum == Vacuum::Physical);
 

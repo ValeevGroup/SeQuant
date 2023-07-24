@@ -21,10 +21,9 @@ class cceqs {
                                   bool use_connectivity = true,
                                   bool canonical_only = true);
   /// derives λ amplitude equations
-  std::vector<sequant::ExprPtr> lambda(bool screen = false,
-                                       bool use_topology = true,
-                                       bool use_connectivity = true,
-                                       bool canonical_only = true);
+  std::vector<sequant::ExprPtr> λ(bool screen = false, bool use_topology = true,
+                                  bool use_connectivity = true,
+                                  bool canonical_only = true);
 
   std::vector<sequant::ExprPtr> t_pert();
   std::vector<sequant::ExprPtr> lambda_pert();

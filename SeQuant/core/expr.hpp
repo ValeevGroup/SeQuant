@@ -5,6 +5,22 @@
 #ifndef SEQUANT_EXPR_HPP
 #define SEQUANT_EXPR_HPP
 
+#include "SeQuant/core/expr_fwd.hpp"
+
+#include "SeQuant/core/complex.hpp"
+#include "SeQuant/core/container.hpp"
+#include "SeQuant/core/hash.hpp"
+#include "SeQuant/core/latex.hpp"
+#include "SeQuant/core/logger.hpp"
+#include "SeQuant/core/meta.hpp"
+#include "SeQuant/core/rational.hpp"
+#include "SeQuant/core/wolfram.hpp"
+
+#include <range/v3/all.hpp>
+
+#include <boost/core/demangle.hpp>
+#include <boost/numeric/conversion/cast.hpp>
+
 #include <atomic>
 #include <complex>
 #include <iostream>
@@ -12,25 +28,9 @@
 #include <optional>
 #include <vector>
 
-#include <range/v3/all.hpp>
-
-#include <boost/core/demangle.hpp>
-#include <boost/numeric/conversion/cast.hpp>
-
-#include <SeQuant/core/rational.hpp>
-
-#include <SeQuant/core/complex.hpp>
-#include "container.hpp"
-#include "expr_fwd.hpp"
-#include "hash.hpp"
-#include "latex.hpp"
-#include "meta.hpp"
-#include "utility.hpp"
-#include "wolfram.hpp"
-
 namespace sequant {
 
-/// ExprPtr is a multiple-owner smart pointer to Expr
+/// @brief ExprPtr is a multiple-owner smart pointer to Expr
 
 /// It can be used mostly interchangeably with `std::shared_ptr<Expr>`, but
 /// also provides convenient mathematical operators (`+=`, etc.)
@@ -69,6 +69,12 @@ class ExprPtr : public std::shared_ptr<Expr> {
   base_type &as_shared_ptr() &;
   const base_type &as_shared_ptr() const &;
   base_type &&as_shared_ptr() &&;
+
+  template <typename E, typename = std::enable_if_t<!std::is_same_v<E, Expr>>>
+  std::shared_ptr<E> as_shared_ptr() const {
+    assert(this->is<E>());
+    return std::static_pointer_cast<E>(this->as_shared_ptr());
+  }
 
   ExprPtr &operator+=(const ExprPtr &);
   ExprPtr &operator-=(const ExprPtr &);
@@ -327,26 +333,7 @@ class Expr : public std::enable_shared_from_this<Expr>,
       = 0;
 #endif
 
-  /// @tparam T Expr or a class derived from Expr
-  /// @return true if @c *this is equal to @c that
-  /// @note the derived class must implement Expr::static_equal
-  template <typename T>
-  std::enable_if_t<std::is_base_of<Expr, T>::value, bool> operator==(
-      const T &that) const {
-    if (this->type_id() != that.type_id())
-      return false;
-    else
-      return this->static_equal(static_cast<const Expr &>(that));
-  }
-
-  /// @tparam T Expr or a class derived from Expr
-  /// @return true if @c *this is equal to @c that
-  /// @note the derived class must implement Expr::static_equal
-  template <typename T>
-  std::enable_if_t<std::is_base_of<Expr, T>::value, bool> operator!=(
-      const T &that) const {
-    return !operator==(that);
-  }
+  friend inline bool operator==(const Expr &a, const Expr &b);
 
   /// @tparam T Expr or a class derived from Expr
   /// @return true if @c *this is less than @c that
@@ -572,6 +559,19 @@ template <>
 struct Expr::is_shared_ptr_of_expr_or_derived<ExprPtr, void> : std::true_type {
 };
 
+/// @return true if @c a is equal to @c b
+inline bool operator==(const Expr &a, const Expr &b) {
+  if (a.type_id() != b.type_id())
+    return false;
+  else
+    return a.static_equal(b);
+}
+
+#if __cplusplus < 202002L
+/// @return true if @c a is not equal to @c b
+inline bool operator!=(const Expr &a, const Expr &b) { return !(a == b); }
+#endif  // __cplusplus < 202002L
+
 /// make an ExprPtr to a new object of type T
 /// @tparam T a class derived from Expr
 /// @tparam Args a parameter pack type such that T(std::forward<Args>...) is
@@ -606,7 +606,9 @@ class Labeled {
   virtual std::wstring_view label() const = 0;
 };
 
-/// a scalar constant
+/// @brief a constant number
+
+/// This is represented as a complex rational number
 class Constant : public Expr {
  public:
   using scalar_type = Complex<sequant::rational>;
@@ -715,8 +717,6 @@ class Constant : public Expr {
     return value() == static_cast<const Constant &>(that).value();
   }
 };  // class Constant
-
-using ConstantPtr = std::shared_ptr<Constant>;
 
 /// @brief generalized product, i.e. a scalar times a product of zero or more
 /// terms.
@@ -1079,8 +1079,6 @@ class Product : public Expr {
   }
 };  // class Product
 
-using ProductPtr = std::shared_ptr<Product>;
-
 class CProduct : public Product {
  public:
   using Product::Product;
@@ -1098,8 +1096,6 @@ class CProduct : public Product {
   bool static_commutativity() const override { return true; }
 };  // class CProduct
 
-using CProductPtr = std::shared_ptr<CProduct>;
-
 class NCProduct : public Product {
  public:
   using Product::Product;
@@ -1115,8 +1111,6 @@ class NCProduct : public Product {
  private:
   bool static_commutativity() const override { return true; }
 };  // class NCProduct
-
-using NCProductPtr = std::shared_ptr<NCProduct>;
 
 /// @brief sum of zero or more summands
 
@@ -1381,8 +1375,6 @@ class Sum : public Expr {
       return false;
   }
 };  // class Sum
-
-using SumPtr = std::shared_ptr<Sum>;
 
 inline std::wstring to_latex(const ExprPtr &exprptr) {
   return exprptr->to_latex();

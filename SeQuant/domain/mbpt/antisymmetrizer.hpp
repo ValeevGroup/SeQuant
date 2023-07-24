@@ -165,8 +165,8 @@ class antisymm_element {
                 .value();  // not sure what to do for imaginary part if needed
       }
 
-      else if (it->get()->is<NormalOperator<Statistics::FermiDirac>>()) {
-        auto factor = it->get()->as<NormalOperator<Statistics::FermiDirac>>();
+      else if (it->get()->is<FNOperator>()) {
+        auto factor = it->get()->as<FNOperator>();
         index_group.push_back(
             {begining_index, begining_index + factor.nannihilators()});
         begining_index += factor.nannihilators();
@@ -228,9 +228,8 @@ class antisymm_element {
             new_product->canonicalize();
           }
 
-          else if (it->get()->is<NormalOperator<Statistics::FermiDirac>>()) {
-            auto old_Nop =
-                it->get()->as<NormalOperator<Statistics::FermiDirac>>();
+          else if (it->get()->is<FNOperator>()) {
+            auto old_Nop = it->get()->as<FNOperator>();
             std::vector<Index> new_anni;
             std::vector<Index> new_crea;
             for (auto k = 0; k < old_Nop.rank(); k++) {
@@ -238,8 +237,7 @@ class antisymm_element {
               new_crea.push_back(unique_kets_list[j].second[index_label_pos]);
               index_label_pos++;
             }
-            auto new_Nop =
-                ex<NormalOperator<Statistics::FermiDirac>>(new_crea, new_anni);
+            auto new_Nop = ex<FNOperator>(new_crea, new_anni);
             new_product = new_product * new_Nop;
             // std::wcout << "product:  " << to_latex(new_product) << std::endl;
             new_product->canonicalize();
@@ -497,15 +495,14 @@ ExprPtr spin_sum(std::vector<Index> original_upper,
       std::vector<Index> new_upper;
       std::vector<Index> new_lower;
       for (auto&& factor : product->as<Product>().factors()) {
-        if (factor->is<Tensor>() &&
-            factor->as<Tensor>().label() == L"\\gamma") {
+        if (factor->is<Tensor>() && factor->as<Tensor>().label() == L"γ") {
           // prefactor = ex<Constant>(-0.5) *
           // ex<Constant>(factor->as<Tensor>().rank()) * prefactor;
           for (int i = 0; i < factor->as<Tensor>().rank(); i++) {
             new_upper.push_back(factor->as<Tensor>().ket()[i]);
             new_lower.push_back(factor->as<Tensor>().bra()[i]);
           }
-          factor = ex<Tensor>(L"\\Gamma", factor->as<Tensor>().bra(),
+          factor = ex<Tensor>(L"Γ", factor->as<Tensor>().bra(),
                               factor->as<Tensor>().ket());
         } else if (factor->is<FNOperator>()) {
           // prefactor = ex<Constant>(-0.5) *
