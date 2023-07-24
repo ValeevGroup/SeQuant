@@ -7,6 +7,8 @@
 
 #include "../core/utility/singleton.hpp"
 
+#include <iostream>
+
 namespace sequant {
 
 /// controls logging within SeQuant components, only useful for
@@ -22,6 +24,7 @@ struct Logger : public Singleton<Logger> {
   bool canonicalize_dot = false;
   bool simplify = false;
   bool tensor_network = false;
+  std::ostream& stream = std::cout;
 
  private:
   friend class Singleton<Logger>;
