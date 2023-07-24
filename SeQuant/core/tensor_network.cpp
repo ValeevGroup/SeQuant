@@ -685,7 +685,7 @@ void TensorNetwork::init_edges() const {
   have_edges_ = true;
 }
 
-container::vector<std::pair<long, long>> TensorNetwork::factorize() {
+container::svector<std::pair<long, long>> TensorNetwork::factorize() {
   abort();  // not yet implemented
 }
 

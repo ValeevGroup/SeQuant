@@ -396,7 +396,7 @@ class WickTheorem {
   std::size_t nop_nconnections_total_ =
       0;  // # of total (bidirectional) connections in nop_connections_ (i.e.
           // not double counting 1->2 and 2->1)
-  container::vector<std::pair<size_t, size_t>>
+  container::svector<std::pair<size_t, size_t>>
       nop_connections_input_;  // only used to cache input to
                                // set_nop_connections_
 
@@ -574,7 +574,7 @@ class WickTheorem {
     /// nop_to_partition before any contractions have occurred)
     /// - when a normal operator is connected it's removed from the partition
     /// - when it is disconnected fully it's re-added to the partition
-    container::vector<container::set<size_t>> nop_partitions;
+    container::svector<container::set<size_t>> nop_partitions;
 
     container::svector<size_t>
         op_partition_cdeg_matrix;  //!< contraction degree

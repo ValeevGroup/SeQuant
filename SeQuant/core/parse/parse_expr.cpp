@@ -44,8 +44,8 @@ Index parse_pure_index(boost::wssub_match const& mo) {
   return Index{normalize_idx_label(mo)};
 }
 
-container::vector<Index> parse_pure_indices(boost::wssub_match const& mo) {
-  auto result = container::vector<Index>{};
+std::vector<Index> parse_pure_indices(boost::wssub_match const& mo) {
+  auto result = std::vector<Index>{};
   auto rgx = boost::wregex{regex_patterns::pure_index()};
   auto end = boost::wsregex_iterator{};
   for (auto iter = boost::wsregex_iterator{mo.begin(), mo.end(), rgx};
@@ -55,8 +55,8 @@ container::vector<Index> parse_pure_indices(boost::wssub_match const& mo) {
   return result;
 }
 
-container::vector<Index> parse_indices(boost::wssub_match const& mo) {
-  auto result = container::vector<Index>{};
+container::svector<Index> parse_indices(boost::wssub_match const& mo) {
+  auto result = container::svector<Index>{};
   auto rgx = boost::wregex{regex_patterns::index_capture()};
   auto end = boost::wsregex_iterator{};
   for (auto iter = boost::wsregex_iterator{mo.begin(), mo.end(), rgx};

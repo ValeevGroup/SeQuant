@@ -585,8 +585,8 @@ SECTION("Transform expression") {
         L"{ \\bigl( - {{g^{{a_2}{i_1}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}} + "
         L"{{{2}}{g^{{i_1}{a_2}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}}\\bigr) }");
 
-  std::map<Index, Index> idxmap = {{Index{L"i_1"}, Index{L"i_2"}},
-                                   {Index{L"i_2"}, Index{L"i_1"}}};
+  container::map<Index, Index> idxmap = {{Index{L"i_1"}, Index{L"i_2"}},
+                                         {Index{L"i_2"}, Index{L"i_1"}}};
   auto transformed_result = transform_expr(result, idxmap);
   REQUIRE(transformed_result->is<Sum>());
   REQUIRE(transformed_result->size() == 2);
@@ -687,8 +687,8 @@ SECTION("Closed-shell spintrace CCSD") {
           L"{ \\bigl( - {{g^{{a_2}{i_1}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}} + "
           L"{{{2}}{g^{{i_1}{a_2}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}}\\bigr) }");
 
-    std::map<Index, Index> idxmap = {{Index{L"i_1"}, Index{L"i_2"}},
-                                     {Index{L"i_2"}, Index{L"i_1"}}};
+    container::map<Index, Index> idxmap = {{Index{L"i_1"}, Index{L"i_2"}},
+                                           {Index{L"i_2"}, Index{L"i_1"}}};
     auto transformed_result = transform_expr(result, idxmap);
     REQUIRE(transformed_result->is<Sum>());
     REQUIRE(transformed_result->size() == 2);

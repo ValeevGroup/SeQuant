@@ -162,7 +162,7 @@ class HugenholtzVertex {
 
  private:
   container::svector<size_t> edge_to_group_;  // maps edge index to group idx
-  container::vector<Group>
+  container::svector<Group>
       groups_;  // group = Edge + (sorted) indices of the equivalent edges
   EdgeEquality equals_;
 };

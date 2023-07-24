@@ -711,7 +711,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
           auto extract_partitions = [](const auto &vidx2pidx,
                                        const auto npartitions,
                                        const auto &vidx_ord) {
-            container::vector<container::vector<size_t>> partitions;
+            container::svector<container::svector<size_t>> partitions;
 
             assert(npartitions > -1);
             const size_t max_pidx = npartitions;
@@ -729,7 +729,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
                   assert(vidx_ord.find(vidx) != vidx_ord.end());
                   const auto ordinal = vidx_ord.find(vidx)->second;
                   if (p_found == false) {  // first time this is found
-                    partitions.emplace_back(container::vector<size_t>{
+                    partitions.emplace_back(container::svector<size_t>{
                         static_cast<size_t>(ordinal)});
                   } else
                     partitions[partition_cnt].emplace_back(ordinal);
@@ -753,7 +753,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
           };
 
           if (!nop_vidx2pidx.empty()) {
-            container::vector<container::vector<size_t>> nop_partitions;
+            container::svector<container::svector<size_t>> nop_partitions;
 
             nop_partitions = extract_partitions(nop_vidx2pidx, nop_npartitions,
                                                 nop_vidx_ord);
@@ -814,7 +814,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
               exclude_index_vertex_pair);
 
           if (!index_vidx2pidx.empty()) {
-            container::vector<container::vector<size_t>> index_partitions;
+            container::svector<container::svector<size_t>> index_partitions;
 
             index_partitions = extract_partitions(
                 index_vidx2pidx, index_npartitions, index_vidx_ord);
