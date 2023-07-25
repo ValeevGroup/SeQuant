@@ -18,16 +18,15 @@ std::vector<std::wstring> cardinal_tensor_labels() {
           L"P",
           L"L",
           L"λ",
-          L"λ1"
+          L"Y",
           L"h",
           L"f",
           L"f̃",
           L"g",
           L"t",
-          L"t1",
+          L"X",
           L"R",
           L"F",
-          L"X",
           L"V",
           L"Ṽ",
           L"B",
@@ -64,12 +63,12 @@ OpClass to_class(OpType op) {
     case OpType::t:
     case OpType::R:
     case OpType::R12:
-    case OpType::t1:
+    case OpType::X1:
       return OpClass::ex;
     case OpType::λ:
     case OpType::A:
     case OpType::L:
-    case OpType::λ1:
+    case OpType::Y1:
       return OpClass::deex;
     default:
       throw std::invalid_argument("to_class(OpType op): invalid op");

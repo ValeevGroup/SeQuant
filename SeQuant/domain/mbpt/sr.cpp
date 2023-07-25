@@ -176,16 +176,16 @@ ExprPtr H(std::size_t k) {
 
 ExprPtr V(std::size_t R) { return OpMaker(OpType::V, R)(); }
 
-ExprPtr pT1_(std::size_t Nbra, std::size_t Nket) {
+ExprPtr X_(std::size_t Nbra, std::size_t Nket) {
   assert(Nbra > 0);
   assert(Nket > 0);
-  return OpMaker(OpType::t1, Nbra, Nket)();
+  return OpMaker(OpType::X1, Nbra, Nket)();
 }
 
-ExprPtr pLambda1_(std::size_t Nbra, std::size_t Nket) {
+ExprPtr Y_(std::size_t Nbra, std::size_t Nket) {
   assert(Nbra > 0);
   assert(Nket > 0);
-  return OpMaker(OpType::λ1, Nbra, Nket)();
+  return OpMaker(OpType::Y1, Nbra, Nket)();
 }
 
 ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
@@ -350,45 +350,45 @@ ExprPtr V(std::size_t R) {
       });
 }
 
-ExprPtr pT1_(std::size_t K) {
+ExprPtr X_(std::size_t K) {
   return ex<op_t>([]() -> std::wstring_view { return L"t1"; },
                   [=]() -> ExprPtr {
                     using namespace sequant::mbpt::sr;
-                    return sr::pT1_(K);
+                    return sr::X_(K);
                   },
                   [=](qnc_t& qns) {
                     qns = combine(qnc_t{0ul, K, K, 0ul}, qns);
                   });
 }
 
-ExprPtr pT1(std::size_t K) {
+ExprPtr X(std::size_t K) {
   assert(K > 0);
 
   ExprPtr result;
   for (auto k = 1ul; k <= K; ++k) {
-    result = k > 1 ? result + pT1_(k) : pT1_(k);
+    result = k > 1 ? result + X_(k) : X_(k);
   }
   return result;
 }
 
-ExprPtr pLambda1_(std::size_t K) {
+ExprPtr Y_(std::size_t K) {
   assert(K > 0);
   return ex<op_t>([]() -> std::wstring_view { return L"λ1"; },
                   [=]() -> ExprPtr {
                     using namespace sequant::mbpt::sr;
-                    return sr::pLambda1_(K);
+                    return sr::Y_(K);
                   },
                   [=](qnc_t& qns) {
                     qns = combine(qnc_t{K, 0ul, 0ul, K}, qns);
                   });
 }
 
-ExprPtr pLambda1(std::size_t K) {
+ExprPtr Y(std::size_t K) {
   assert(K > 0);
 
   ExprPtr result;
   for (auto k = 1ul; k <= K; ++k) {
-    result = k > 1 ? result + pLambda1_(k) : pLambda1_(k);
+    result = k > 1 ? result + Y_(k) : Y_(k);
   }
   return result;
 }

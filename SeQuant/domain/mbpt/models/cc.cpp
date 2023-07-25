@@ -122,7 +122,7 @@ std::vector<ExprPtr> cceqs::λ(bool screen, bool use_topology,
   return result;
 }
 
-std::vector<sequant::ExprPtr> cceqs::t_pert() {
+std::vector<sequant::ExprPtr> cceqs::X1() {
   using namespace sequant::mbpt;
 
   // construct unperturbed H_bar (reusable code)
@@ -143,7 +143,7 @@ std::vector<sequant::ExprPtr> cceqs::t_pert() {
 
   // construct (H * e^T * pT1)_c = H * pT1 + H * pT1 * T + H * pT1 * T^2/2! + H
   // * pT1 * T^3/3!
-  auto hbar_pert = (op::H() * op::pT1(N));
+  auto hbar_pert = (op::H() * op::X(N));
   auto H_Tk_pert = hbar_pert;
   for (int64_t k = 1; k <= 3; ++k) {
     H_Tk_pert = simplify(ex<Constant>(rational{1, k}) * H_Tk_pert * op::T(N));
@@ -155,8 +155,8 @@ std::vector<sequant::ExprPtr> cceqs::t_pert() {
     auto eq = simplify(op::A(p) * (Vbar + hbar_pert));
 
     std::vector<std::pair<std::wstring, std::wstring>> new_op_connect = {
-        {L"h", L"t"},  {L"f", L"t"},  {L"g", L"t"}, {L"h", L"t1"},
-        {L"f", L"t1"}, {L"g", L"t1"}, {L"V", L"t"}};
+        {L"h", L"t"},  {L"f", L"t"},  {L"g", L"t"}, {L"h", L"X1"},
+        {L"f", L"X1"}, {L"g", L"X1"}, {L"V", L"t"}};
     result.at(p) = op::vac_av(eq, new_op_connect);
     simplify(result.at(p));
   }
@@ -164,31 +164,8 @@ std::vector<sequant::ExprPtr> cceqs::t_pert() {
   return result;
 }
 
-// std::vector<ExprPtr> ccresponse::lambda_pert() {
-//   using namespace sequant::mbpt;
-//   // construct unperturbed H_bar (reusable code)
-//   auto hbar = op::H();
-//   auto H_Tk = hbar;
-//   for (int64_t k = 1; k <= 4; ++k) {
-//     H_Tk = simplify(ex<Constant>(rational{1, k}) * H_Tk * op::T(N));
-//     hbar += H_Tk;
-//   }
-//   const auto One = ex<Constant>(1);
-//   std::vector<ExprPtr> result(P + 1);
-//   for (auto p = P; p <= PMIN; p++) {
-//
-//     ExprPtr eq;
-//     // fix equation
-//
-//
-//     std::vector<std::pair<std::wstring, std::wstring>> new_op_connect = {
-//         {L"h", L"t"},  {L"f", L"t"},  {L"g", L"t"}, {L"h", L"t1"},
-//         {L"f", L"t1"}, {L"g", L"t1"}, {L"h", L"A"}, {L"f", L"A"},
-//         {L"g", L"A"},  {L"t1", L"A"}, {L"t", L"V"}, {L"t1", L"V"},
-//         {L"V", L"A"}};
-//     result.at(p) = op::vac_av(eq);
-//   }
-//   return result;
-// }
+ std::vector<ExprPtr> cceqs::Y1() {
+   abort(); // not implemented yet
+ }
 
 }  // namespace sequant::mbpt::sr
