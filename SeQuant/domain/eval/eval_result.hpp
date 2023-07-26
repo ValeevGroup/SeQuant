@@ -830,6 +830,8 @@ class EvalTensorOfTensorTA final : public EvalResult {
 
     auto const a = annot_wrap{annot};
 
+    log_ta(a.lannot, " + ", a.rannot, " = ", a.this_annot, "\n");
+
     ToT result;
     result(a.this_annot) = get<ToT>()(a.lannot) + other.get<ToT>()(a.rannot);
     decltype(result)::wait_for_lazy_cleanup(result.world());
@@ -843,20 +845,38 @@ class EvalTensorOfTensorTA final : public EvalResult {
 
     if (other.is<EvalConstant<numeric_type>>()) {
       auto result = get<ToT>();
-      result(a.this_annot) = other.get<numeric_type>() * result(a.lannot);
+      auto scalar = other.get<numeric_type>();
+
+      log_ta(a.lannot, " * ", scalar, " = ", a.this_annot, "\n");
+
+      result(a.this_annot) = scalar * result(a.lannot);
+
       decltype(result)::wait_for_lazy_cleanup(result.world());
       return eval_result<this_t>(std::move(result));
     }
 
-    assert(other.is<EvalTensorTA<T>>() || other.is<this_t>());
+    if (a.this_annot.empty()) {
+      // DOT product
+      assert(other.is<this_t>());
 
-    if (a.this_annot.empty())  // DOT product
-      return eval_result<EvalConstant<numeric_type>>(
-          TA::dot(get<ToT>()(a.lannot), other.get<ToT>()(a.rannot)));
+      numeric_type d =
+          TA::dot(get<ToT>()(a.lannot), other.get<ToT>()(a.rannot));
+
+      T::wait_for_lazy_cleanup(get<T>().world());
+      T::wait_for_lazy_cleanup(other.get<T>().world());
+
+      log_ta(a.lannot, " * ", a.rannot, " = ", d, "\n");
+
+      return eval_result<EvalConstant<numeric_type>>(d);
+    }
 
     if (other.is<EvalTensorTA<T>>()) {
       throw std::runtime_error("Tensor * Tensor-of-Tensor not implemented yet");
     }
+
+    assert(other.is<this_t>());
+
+    log_ta(a.lannot, " * ", a.rannot, " = ", a.this_annot, "\n");
 
     ToT result = TA::einsum(get<ToT>()(a.lannot), other.get<ToT>()(a.rannot),
                             a.this_annot);
