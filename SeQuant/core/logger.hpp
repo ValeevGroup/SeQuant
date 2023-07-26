@@ -24,6 +24,7 @@ struct Logger : public Singleton<Logger> {
   bool canonicalize_dot = false;
   bool simplify = false;
   bool tensor_network = false;
+  size_t log_level_eval = 1;
   std::ostream& stream = std::cout;
 
  private:
@@ -41,6 +42,11 @@ struct Logger : public Singleton<Logger> {
     }
   }
 };
+
+template <typename... Args>
+void write_log(Logger& l, Args const&... args) noexcept {
+  ((l.stream << args), ...);
+}
 
 }  // namespace sequant
 

@@ -4,6 +4,7 @@
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/hash.hpp>
+#include <SeQuant/core/logger.hpp>
 
 #include <btas/btas.h>
 #include <tiledarray.h>
@@ -450,6 +451,28 @@ auto antisymmetrize_btas(
   return result;
 }
 
+template <typename... Args>
+inline void log_result(Args const&... args) noexcept {
+#ifdef SEQUANT_EVAL_TRACE
+  auto& l = Logger::get_instance();
+  if (l.log_level_eval > 1) write_log(l, args...);
+#endif
+}
+
+template <typename... Args>
+inline void log_ta(Args const&... args) noexcept {
+#ifdef SEQUANT_EVAL_TRACE
+  log_result("[TA] ", args...);
+#endif
+}
+
+template <typename... Args>
+inline void log_constant(Args const&... args) noexcept {
+#ifdef SEQUANT_EVAL_TRACE
+  log_result("[CONST] ", args...);
+#endif
+}
+
 }  // namespace
 
 struct EvalResult;
@@ -619,7 +642,11 @@ class EvalConstant final : public EvalResult {
                           std::array<std::any, 3> const&) const override {
     if (other.is<EvalConstant<T>>()) {
       auto const& o = other.as<EvalConstant<T>>();
-      return eval_result<EvalConstant<T>>(value() + o.value());
+      auto s = value() + o.value();
+
+      log_constant(value(), " + ", o.value(), " = ", s, "\n");
+
+      return eval_result<EvalConstant<T>>(s);
     } else {
       throw invalid_operand();
     }
@@ -630,6 +657,10 @@ class EvalConstant final : public EvalResult {
       std::array<std::any, 3> const& maybe_empty) const override {
     if (other.is<EvalConstant<T>>()) {
       auto const& o = other.as<EvalConstant<T>>();
+      auto p = value() * o.value();
+
+      log_constant(value(), " * ", o.value(), " = ", p, "\n");
+
       return eval_result<EvalConstant<T>>(value() * o.value());
     } else {
       return other.prod(*this, maybe_empty);
@@ -641,6 +672,8 @@ class EvalConstant final : public EvalResult {
   }
 
   void add_inplace(EvalResult const& other) override {
+    assert(other.is<EvalConstant<T>>());
+    log_constant(value(), " += ", other.get<T>(), "\n");
     auto& val = get<T>();
     val += other.get<T>();
   }
@@ -685,6 +718,8 @@ class EvalTensorTA final : public EvalResult {
     assert(other.is<EvalTensorTA<T>>());
     auto const a = annot_wrap{annot};
 
+    log_ta(a.lannot, " + ", a.rannot, " = ", a.this_annot, "\n");
+
     T result;
     result(a.this_annot) = get<T>()(a.lannot) + other.get<T>()(a.rannot);
     decltype(result)::wait_for_lazy_cleanup(result.world());
@@ -698,16 +733,30 @@ class EvalTensorTA final : public EvalResult {
 
     if (other.is<EvalConstant<numeric_type>>()) {
       auto result = get<T>();
-      result(a.this_annot) = other.get<numeric_type>() * result(a.lannot);
+      auto scalar = other.get<numeric_type>();
+
+      log_ta(a.lannot, " * ", scalar, " = ", a.this_annot, "\n");
+
+      result(a.this_annot) = scalar * result(a.lannot);
+
       decltype(result)::wait_for_lazy_cleanup(result.world());
       return eval_result<EvalTensorTA<T>>(std::move(result));
     }
 
     assert(other.is<EvalTensorTA<T>>());
 
-    if (a.this_annot.empty())  // DOT product
-      return eval_result<EvalConstant<numeric_type>>(
-          TA::dot(get<T>()(a.lannot), other.get<T>()(a.rannot)));
+    if (a.this_annot.empty()) {
+      // DOT product
+      numeric_type d = TA::dot(get<T>()(a.lannot), other.get<T>()(a.rannot));
+      T::wait_for_lazy_cleanup(get<T>().world());
+      T::wait_for_lazy_cleanup(other.get<T>().world());
+
+      log_ta(a.lannot, " * ", a.rannot, " = ", d, "\n");
+
+      return eval_result<EvalConstant<numeric_type>>(d);
+    }
+
+    log_ta(a.lannot, " * ", a.rannot, " = ", a.this_annot, "\n");
 
     T result;
     result(a.this_annot) = get<T>()(a.lannot) * other.get<T>()(a.rannot);
@@ -719,6 +768,8 @@ class EvalTensorTA final : public EvalResult {
       std::array<std::any, 2> const& ann) const override {
     auto const pre_annot = std::any_cast<std::string>(ann[0]);
     auto const post_annot = std::any_cast<std::string>(ann[1]);
+
+    log_ta(pre_annot, " = ", post_annot, "\n");
 
     T result;
     result(post_annot) = get<T>()(pre_annot);
@@ -732,6 +783,9 @@ class EvalTensorTA final : public EvalResult {
 
     assert(t.trange() == o.trange());
     auto ann = TA::detail::dummy_annotation(t.trange().rank());
+
+    log_ta(ann, " += ", ann, "\n");
+
     t(ann) += o(ann);
     T::wait_for_lazy_cleanup(t.world());
   }
