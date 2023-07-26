@@ -163,7 +163,9 @@ ExprPtr H_(std::size_t k);
 ExprPtr H(std::size_t k = 2);
 
 /// @brief Fock operator
-ExprPtr F();
+/// @param use_f_tensor if true, will use Fock tensor, else will use tensors
+/// used to define `H_(1)` and `H_(2)`
+ExprPtr F(bool use_f_tensor = true);
 
 /// @}
 
