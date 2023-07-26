@@ -128,19 +128,6 @@ ExprPtr H1mp() {
   return H_(2);
 }
 
-ExprPtr F() {
-  switch (get_default_context().vacuum()) {
-    case Vacuum::Physical:
-      abort();
-    case Vacuum::SingleProduct:
-      return OpMaker(OpType::f, 1)();
-    case Vacuum::MultiProduct:
-      abort();
-    default:
-      abort();
-  }
-}
-
 ExprPtr W() {
   assert(get_default_context().vacuum() == Vacuum::SingleProduct);
   return H1mp();
@@ -172,6 +159,58 @@ ExprPtr H_(std::size_t k) {
 ExprPtr H(std::size_t k) {
   assert(k > 0 && k <= 2);
   return k == 1 ? H_(1) : H_(1) + H_(2);
+}
+
+ExprPtr F(bool use_f_tensor) {
+  if (use_f_tensor) return OpMaker(OpType::f, 1)();
+
+  // add \bar{g}^{\kappa x}_{\lambda y} \gamma^y_x with x,y in occ_space_type
+  auto make_g_contribution = [](const auto occ_space_type) {
+    return mbpt::OpMaker<Statistics::FermiDirac>::make(
+        {IndexSpace::complete}, {IndexSpace::complete},
+        [=](auto braidxs, auto ketidxs, Symmetry opsymm) {
+          auto m1 = Index::make_tmp_index(
+              IndexSpace{occ_space_type, IndexSpace::nullqns});
+          auto m2 = Index::make_tmp_index(
+              IndexSpace{occ_space_type, IndexSpace::nullqns});
+          assert(opsymm == Symmetry::antisymm || opsymm == Symmetry::nonsymm);
+          if (opsymm == Symmetry::antisymm) {
+            braidxs.push_back(m1);
+            ketidxs.push_back(m2);
+            return ex<Tensor>(to_wstring(mbpt::OpType::g), braidxs, ketidxs,
+                              Symmetry::antisymm) *
+                   ex<Tensor>(to_wstring(mbpt::OpType::δ), IndexList{m2},
+                              IndexList{m1}, Symmetry::nonsymm);
+          } else {  // opsymm == Symmetry::nonsymm
+            auto braidx_J = braidxs;
+            braidx_J.push_back(m1);
+            auto ketidxs_J = ketidxs;
+            ketidxs_J.push_back(m2);
+            auto braidx_K = braidxs;
+            braidx_K.push_back(m1);
+            auto ketidxs_K = ketidxs;
+            ketidxs_K.emplace(begin(ketidxs_K), m2);
+            return (ex<Tensor>(to_wstring(mbpt::OpType::g), braidx_J, ketidxs_J,
+                               Symmetry::nonsymm) -
+                    ex<Tensor>(to_wstring(mbpt::OpType::g), braidx_K, ketidxs_K,
+                               Symmetry::nonsymm)) *
+                   ex<Tensor>(to_wstring(mbpt::OpType::δ), IndexList{m2},
+                              IndexList{m1}, Symmetry::nonsymm);
+          }
+        });
+  };
+
+  switch (get_default_context().vacuum()) {
+    case Vacuum::Physical:
+      return OpMaker(OpType::h, 1)() +
+             make_g_contribution(IndexSpace::occupied);  // all occupieds
+    case Vacuum::SingleProduct:
+      return OpMaker(OpType::f, 1)();
+    case Vacuum::MultiProduct:
+      abort();
+    default:
+      abort();
+  }
 }
 
 ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
