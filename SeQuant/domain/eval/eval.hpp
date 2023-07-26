@@ -5,6 +5,7 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval_node.hpp>
+#include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/domain/eval/cache_manager.hpp>
 
@@ -38,6 +39,25 @@ using remove_cvref = std::remove_cvref<T>;
 template <typename T>
 using remove_cvref_t = std::remove_cvref_t<T>;
 #endif
+
+template <typename... Args>
+void log_eval(Args const&... args) noexcept {
+#ifdef SEQUANT_EVAL_TRACE
+  auto& l = Logger::get_instance();
+  if (l.log_level_eval > 0) write_log(l, "[EVAL] ", args...);
+#endif
+}
+
+std::string perm_groups_string(
+    container::svector<std::array<size_t, 3>> const& perm_groups) {
+  std::string result;
+  for (auto const& g : perm_groups)
+    result += "(" + std::to_string(g[0]) + "," + std::to_string(g[1]) + "," +
+              std::to_string(g[2]) + ") ";
+  result.pop_back();  // remove last space
+  return result;
+}
+
 }  // namespace
 
 template <typename T, typename = void>
@@ -235,12 +255,7 @@ template <typename NodeT, typename Le, typename... Args,
           std::enable_if_t<IsLeafEvaluator<NodeT, Le>, bool> = true>
 ERPtr evaluate_core(NodeT const& node, Le const& le, Args&&... args) {
   if (node.leaf()) {
-#ifdef SEQUANT_EVAL_TRACE
-    Logger::get_instance().stream << "[EVAL] "      //
-                                  << "Leaf: "       //
-                                  << node->label()  //
-                                  << std::endl;
-#endif
+    log_eval("[LEAF] ", node->label(), "\n");
     return le(node);
   } else {
     ERPtr const left =
@@ -255,29 +270,16 @@ ERPtr evaluate_core(NodeT const& node, Le const& le, Args&&... args) {
                                       node.right()->annot(), node->annot()};
 
     if (node->op_type() == EvalOp::Sum) {
-#ifdef SEQUANT_EVAL_TRACE
-      Logger::get_instance().stream << "[EVAL] "              //
-                                    << "Sum: "                //
-                                    << node.left()->label()   //
-                                    << " + "                  //
-                                    << node.right()->label()  //
-                                    << " = "                  //
-                                    << node->label()          //
-                                    << std::endl;
-#endif
+      log_eval("[SUM] ", node.left()->label(), " + ", node.right()->label(),
+               " = ", node->label(), "\n");
+
       return left->sum(*right, ann);
     } else {
       assert(node->op_type() == EvalOp::Prod);
-#ifdef SEQUANT_EVAL_TRACE
-      Logger::get_instance().stream << "[EVAL] "              //
-                                    << "Prod: "               //
-                                    << node.left()->label()   //
-                                    << " * "                  //
-                                    << node.right()->label()  //
-                                    << " = "                  //
-                                    << node->label()          //
-                                    << std::endl;
-#endif
+
+      log_eval("[PROD] ", node.left()->label(), " * ", node.right()->label(),
+               " = ", node->label(), "\n");
+
       return left->prod(*right, ann);
     }
   }
@@ -373,10 +375,9 @@ auto evaluate(NodeT const& node,    //
               Annot const& layout,  //
               Le const& le, Args&&... args) {
   auto result = evaluate_crust(node, le, std::forward<Args>(args)...);
-#ifdef SEQUANT_EVAL_TRACE
-  Logger::get_instance().stream << "[EVAL] "
-                                << "Permuting to layout" << std::endl;
-#endif
+
+  log_eval("[PERMUTE] ", node->label(), "\n");
+
   return result->permute(std::array<std::any, 2>{node->annot(), layout});
 }
 
@@ -412,13 +413,9 @@ auto evaluate(NodesT const& nodes,  //
 
   for (++iter; iter != end; ++iter) {
     auto right = evaluate(*iter, layout, le, std::forward<Args>(args)...);
-#ifdef SEQUANT_EVAL_TRACE
-    Logger::get_instance().stream << "[EVAL] "         //
-                                  << "Adding: "        //
-                                  << (*iter)->label()  //
-                                  << " to "            //
-                                  << pnode_label << std::endl;
-#endif
+
+    log_eval("[ADD_INPLACE] ", (*iter)->label(), " += ", pnode_label, "\n");
+
     result->add_inplace(*right);
   }
   return result;
@@ -473,16 +470,10 @@ auto evaluate_symm(NodeT const& node, Annot const& layout,
   }
 
   auto result = evaluate(node, layout, le, std::forward<Args>(args)...);
-#ifdef SEQUANT_EVAL_TRACE
-  auto const& groups = perm_groups.empty() ? pgs : perm_groups;
-  Logger::get_instance().stream
-      << "[EVAL] "
-      << "Symmetrizing groups (bra pos, ket pos, length): ";
-  for (auto const& g : groups)
-    Logger::get_instance().stream << "(" << g[0] << "," << g[1] << "," << g[2]
-                                  << ") ";
-  Logger::get_instance().stream << std::endl;
-#endif
+
+  log_eval("[SYMMETRIZE] (bra pos, ket pos, length) ",
+           perm_groups_string(perm_groups.empty() ? pgs : perm_groups), "\n");
+
   return result->symmetrize(perm_groups.empty() ? pgs : perm_groups);
 }
 
@@ -539,16 +530,10 @@ auto evaluate_antisymm(
   }
 
   auto result = evaluate(node, layout, le, std::forward<Args>(args)...);
-#ifdef SEQUANT_EVAL_TRACE
-  auto const& groups = perm_groups.empty() ? pgs : perm_groups;
-  Logger::get_instance().stream
-      << "[EVAL] "
-      << "Antisymmetrizing groups (bra pos, ket pos, length): ";
-  for (auto const& g : groups)
-    Logger::get_instance().stream << "(" << g[0] << "," << g[1] << "," << g[2]
-                                  << ") ";
-  Logger::get_instance().stream << std::endl;
-#endif
+
+  log_eval("[ANTISYMMETRIZE] (bra pos, ket pos, length) ",
+           perm_groups_string(perm_groups.empty() ? pgs : perm_groups), "\n");
+
   return result->antisymmetrize(perm_groups.empty() ? pgs : perm_groups);
 }
 
