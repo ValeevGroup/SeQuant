@@ -154,7 +154,9 @@ ExprPtr H_(std::size_t k);
 ExprPtr H(std::size_t k = 2);
 
 /// @brief Fock operator
-ExprPtr F();
+/// @param use_f_tensor if true, will use Fock tensor, else will use tensors
+/// used to define `H_(1)` and `H_(2)`
+ExprPtr F(bool use_f_tensor = true);
 
 ExprPtr W();
 
@@ -183,7 +185,6 @@ ExprPtr pertLambda1_(std::size_t Nbra,
 
 
 /// contains operator-level SR MBPT expressions
-// these produce operator-level expressions
 namespace op {
 
 /// @name SR MBPT operators
@@ -192,13 +193,6 @@ namespace op {
 
 ExprPtr H2_oo_vv();
 ExprPtr H2_vv_vv();
-
-
-ExprPtr H0mp();
-ExprPtr H1mp();
-
-ExprPtr F();
-ExprPtr W();
 
 // clang-format off
 /// @brief `k`-body contribution to the "generic" Hamiltonian (in normal order relative to the default vacuum)
