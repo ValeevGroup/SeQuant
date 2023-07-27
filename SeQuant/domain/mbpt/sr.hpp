@@ -176,9 +176,9 @@ ExprPtr vac_av(ExprPtr expr,
 /// one-body perturbation operator of perturbation order \param R
 ExprPtr V(std::size_t R);
 
-ExprPtr X_(std::size_t Nbra,
+ExprPtr pertT1_(std::size_t Nbra,
              std::size_t Nket = std::numeric_limits<std::size_t>::max());
-ExprPtr Y_(std::size_t Nbra,
+ExprPtr pertLambda1_(std::size_t Nbra,
                   std::size_t Nket = std::numeric_limits<std::size_t>::max());
 
 
@@ -237,12 +237,12 @@ ExprPtr A(std::size_t K);
 ExprPtr V(std::size_t R);
 
 /// perturbed cluster amplitudes
-ExprPtr X_(std::size_t K);
-ExprPtr X(std::size_t K);
+ExprPtr pertT1_(std::size_t K);
+ExprPtr pertT1(std::size_t K);
 
-/// perturted de-excitation cluster amplitudes
-ExprPtr Y_(std::size_t K);
-ExprPtr Y(std::size_t K);
+/// perturbed de-excitation cluster amplitudes
+ExprPtr pertLambda1_(std::size_t K);
+ExprPtr pertLambda1(std::size_t K);
 
 /// @return true if \p op_or_op_product can produce determinant of excitation
 /// rank \p k when applied to reference

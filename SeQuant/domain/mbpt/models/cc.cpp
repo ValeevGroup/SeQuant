@@ -122,7 +122,7 @@ std::vector<ExprPtr> cceqs::λ(bool screen, bool use_topology,
   return result;
 }
 
-std::vector<sequant::ExprPtr> cceqs::X1() {
+std::vector<sequant::ExprPtr> cceqs::pert_t1() {
   using namespace sequant::mbpt;
 
   // construct unperturbed H_bar (reusable code)
@@ -143,7 +143,7 @@ std::vector<sequant::ExprPtr> cceqs::X1() {
 
   // construct (H * e^T * pT1)_c = H * pT1 + H * pT1 * T + H * pT1 * T^2/2! + H
   // * pT1 * T^3/3!
-  auto hbar_pert = (op::H() * op::X(N));
+  auto hbar_pert = (op::H() * op::pertT1(N));
   auto H_Tk_pert = hbar_pert;
   for (int64_t k = 1; k <= 3; ++k) {
     H_Tk_pert = simplify(ex<Constant>(rational{1, k}) * H_Tk_pert * op::T(N));
@@ -155,8 +155,8 @@ std::vector<sequant::ExprPtr> cceqs::X1() {
     auto eq = simplify(op::A(p) * (Vbar + hbar_pert));
 
     std::vector<std::pair<std::wstring, std::wstring>> new_op_connect = {
-        {L"h", L"t"},  {L"f", L"t"},  {L"g", L"t"}, {L"h", L"X1"},
-        {L"f", L"X1"}, {L"g", L"X1"}, {L"V", L"t"}};
+        {L"h", L"t"},  {L"f", L"t"},  {L"g", L"t"}, {L"h", L"t¹"},
+        {L"f", L"t¹"}, {L"g", L"t¹"}, {L"V", L"t"}};
     result.at(p) = op::vac_av(eq, new_op_connect);
     simplify(result.at(p));
   }
@@ -164,8 +164,8 @@ std::vector<sequant::ExprPtr> cceqs::X1() {
   return result;
 }
 
- std::vector<ExprPtr> cceqs::Y1() {
-   abort(); // not implemented yet
+ std::vector<ExprPtr> cceqs::pert_λ1() {
+  abort(); // not implemented yet
  }
 
 }  // namespace sequant::mbpt::sr

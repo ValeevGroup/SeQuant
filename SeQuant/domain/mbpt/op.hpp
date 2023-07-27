@@ -41,10 +41,13 @@ enum class OpType {
   RDMCumulant,  //!< RDM cumulant
   δ,            //!< Kronecker delta (=identity) operator
   V,            //!< perturbation operator
-  X1,           //!< first order perturbed excitation cluster amplitudes
-  Y1,           //!< first order perturbed deexcitation cluster amplitudes
+  t_1,           //!< first order perturbed excitation cluster amplitudes
+  λ_1,           //!< first order perturbed deexcitation cluster amplitudes
   invalid       //!< invalid operator
 };
+
+// Note: "error: character <U+00B9> not allowed in an identifier t¹" while using
+// t¹ as identifier
 
 /// maps operator types to their labels
 inline const std::map<OpType, std::wstring> optype2label{
@@ -65,8 +68,8 @@ inline const std::map<OpType, std::wstring> optype2label{
     {OpType::RDMCumulant, L"κ"},
     {OpType::δ, L"δ"},
     {OpType::V, L"V"},
-    {OpType::X1, L"X1"},
-    {OpType::Y1, L"Y1"}
+    {OpType::t_1, L"t¹"},
+    {OpType::λ_1, L"λ¹"}
 };
 
 /// maps operator labels to their types

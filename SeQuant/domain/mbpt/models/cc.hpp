@@ -26,10 +26,10 @@ class cceqs {
                                   bool canonical_only = true);
 
   /// derives first-order perturbed t amplitude equations
-  std::vector<sequant::ExprPtr> X1();
+  std::vector<sequant::ExprPtr> pert_t1();
 
   /// derives first-order perturbed λ amplitude equations
-  std::vector<sequant::ExprPtr> Y1();
+  std::vector<sequant::ExprPtr> pert_λ1();
 };  // class cceqs
 
 }  // namespace sequant::mbpt::sr
