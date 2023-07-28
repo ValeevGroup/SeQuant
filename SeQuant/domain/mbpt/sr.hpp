@@ -176,7 +176,7 @@ ExprPtr vac_av(ExprPtr expr,
 // Functions relating to perturbation and response
 
 /// one-body perturbation operator of perturbation order \param R
-ExprPtr V(std::size_t R);
+ExprPtr mu(std::size_t R);
 
 ExprPtr pertT1_(std::size_t Nbra,
              std::size_t Nket = std::numeric_limits<std::size_t>::max());
@@ -228,7 +228,7 @@ ExprPtr A(std::size_t K);
 
 // perturbation and response related operators
 /// one-body perturbation operator of order \param R
-ExprPtr V(std::size_t R);
+ExprPtr mu(std::size_t R);
 
 /// perturbed cluster amplitudes
 ExprPtr pertT1_(std::size_t K);

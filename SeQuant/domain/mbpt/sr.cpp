@@ -214,7 +214,7 @@ ExprPtr F(bool use_f_tensor) {
 }
 
 // Maybe move these to sr/op.impl.cpp
-ExprPtr V(std::size_t R) { return OpMaker(OpType::V, R)(); }
+ExprPtr mu(std::size_t R) { return OpMaker(OpType::μ, R)(); }
 
 ExprPtr pertT1_(std::size_t Nbra, std::size_t Nket) {
   assert(Nbra > 0);
@@ -378,12 +378,12 @@ ExprPtr A(std::size_t K) {
                   });
 }
 
-ExprPtr V(std::size_t R) {
+ExprPtr mu(std::size_t R) {
   return ex<op_t>(
-      []() -> std::wstring_view { return L"V"; },
+      []() -> std::wstring_view { return L"μ"; },
       [=]() -> ExprPtr {
         using namespace sequant::mbpt::sr;
-        return sr::V(R);
+        return sr::mu(R);
       },
       [=](qnc_t& qns) {
         qns = combine(qnc_t{{0ul, R}, {0ul, R}, {0ul, R}, {0ul, R}}, qns);
@@ -391,7 +391,7 @@ ExprPtr V(std::size_t R) {
 }
 
 ExprPtr pertT1_(std::size_t K) {
-  return ex<op_t>([]() -> std::wstring_view { return L"t1"; },
+  return ex<op_t>([]() -> std::wstring_view { return L"t¹"; },
                   [=]() -> ExprPtr {
                     using namespace sequant::mbpt::sr;
                     return sr::pertT1_(K);
@@ -413,7 +413,7 @@ ExprPtr pertT1(std::size_t K) {
 
 ExprPtr pertLambda1_(std::size_t K) {
   assert(K > 0);
-  return ex<op_t>([]() -> std::wstring_view { return L"λ1"; },
+  return ex<op_t>([]() -> std::wstring_view { return L"λ¹"; },
                   [=]() -> ExprPtr {
                     using namespace sequant::mbpt::sr;
                     return sr::pertLambda1_(K);

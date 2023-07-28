@@ -28,6 +28,7 @@ std::vector<std::wstring> cardinal_tensor_labels() {
           L"R",
           L"F",
           L"X",
+          L"μ",
           L"V",
           L"Ṽ",
           L"B",
@@ -59,7 +60,7 @@ OpClass to_class(OpType op) {
     case OpType::RDM:
     case OpType::RDMCumulant:
     case OpType::δ:
-    case OpType::V:
+    case OpType::μ:
       return OpClass::gen;
     case OpType::t:
     case OpType::R:

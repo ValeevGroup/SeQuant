@@ -134,11 +134,11 @@ std::vector<sequant::ExprPtr> cceqs::pert_t1() {
   }
 
   // construct (V * e^T)_c = V + V * T + V * T^2/2!
-  auto Vbar = op::V(1);
-  auto V_Tk = Vbar;
+  auto mu_bar = op::mu(1);
+  auto mu_Tk = mu_bar;
   for (int64_t k = 1; k <= 2; ++k) {
-    V_Tk = simplify(ex<Constant>(rational{1, k}) * V_Tk * op::T(N));
-    Vbar += V_Tk;
+    mu_Tk = simplify(ex<Constant>(rational{1, k}) * mu_Tk * op::T(N));
+    mu_bar += mu_Tk;
   }
 
   // construct (H * e^T * pT1)_c = H * pT1 + H * pT1 * T + H * pT1 * T^2/2! + H
@@ -152,7 +152,7 @@ std::vector<sequant::ExprPtr> cceqs::pert_t1() {
 
   std::vector<ExprPtr> result(P + 1);
   for (auto p = P; p >= PMIN; --p) {
-    auto eq = simplify(op::A(p) * (Vbar + hbar_pert));
+    auto eq = simplify(op::A(p) * (mu_bar + hbar_pert));
 
     std::vector<std::pair<std::wstring, std::wstring>> new_op_connect = {
         {L"h", L"t"},  {L"f", L"t"},  {L"g", L"t"}, {L"h", L"t¹"},
