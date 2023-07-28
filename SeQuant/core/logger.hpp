@@ -24,7 +24,16 @@ struct Logger : public Singleton<Logger> {
   bool canonicalize_dot = false;
   bool simplify = false;
   bool tensor_network = false;
+
+  ///
+  /// Evaluation log verbosity level
+  ///   0: No log.
+  ///   1: Log what is being evaluated in the evaluation tree (independent
+  ///      of tensor algebra backend (TA/BTAS etc.)
+  ///   2: Also log invocation of tensor algebra backend within sequant.
+  ///
   size_t log_level_eval = 1;
+
   std::ostream& stream = std::cout;
 
  private:
