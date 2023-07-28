@@ -164,14 +164,22 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
     return bra_rank();
   }
 
-  /// @brief Convert Fock and Coulomb integrals to std::wstring formula
-  /// compatible with MPQC's integral factory DSL
+  /// @brief Convert Fock, Coulomb and perturbation integrals to std::wstring
+  /// formula compatible with MPQC's integral factory DSL
   /// @param df return density-fitted or regular integals
   /// @return formula in wstring format
-  /// @pre `rank() <= 2 && (label()=="f" || label()=="g")`
+  /// @note perturbation integrals are represented by μ operator, the type of
+  /// perturbation will be determined and corresponding integral will be
+  /// computed in MPQC
+  /// @pre `rank() <= 2 && (label()=="f" || label()=="g" || label()=="μ")`
   std::wstring to_mpqc_formula(bool df = false) const {
-    auto label = this->label();
-    assert(this->rank() <= 2 && (label == L"f" || label == L"g"));
+    const auto label = this->label();
+    assert(this->rank() <= 2 &&
+           "sequant::Tensor::to_mpqc_formula(): rank > 2 is not "
+           "supported");
+    assert((label == L"f" || label == L"g" || label == L"μ") &&
+           "sequant::Tensor::to_mpqc_formula(): unknown label");
+
     static const std::vector<std::wstring> occ_list = {L"i", L"j", L"k", L"l"};
     static const std::vector<std::wstring> uocc_list = {L"a", L"b", L"c", L"d"};
     std::vector<std::wstring> braket;
@@ -204,7 +212,7 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
 
     std::wstring result;
     std::wstring postfix = df ? L"[df]" : L"";
-    if (this->rank() == 1) {
+    if (this->rank() == 1 && this->label() == L"f") {
       if (!has_spin) {
         result = L"<" + braket[0] + L"|F|" + braket[1] + L">";
       } else {
@@ -212,6 +220,9 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
         result =
             L"<" + braket[0] + L"|F(" + spin_label + L")|" + braket[1] + L">";
       }
+    } else if (this->rank() == 1 && this->label() == L"μ") {
+      result = L"<" + braket[0] + L"|μ|" + braket[1] + L">";
+      postfix = L"";
     } else if (this->rank() == 2) {
       result = L"<" + braket[0] + L" " + braket[1] + L"|G|" + braket[2] + L" " +
                braket[3] + L">";
