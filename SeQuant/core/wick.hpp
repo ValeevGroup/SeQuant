@@ -390,6 +390,12 @@ class WickTheorem {
   mutable Stats stats_;
 
   container::set<Index> external_indices_;
+
+  container::svector<std::pair<Index, Index>>
+      input_partner_indices_;  //!< list of {cre,ann} pairs of Index objects in
+                               //!< input_ whose corresponding Op<S> objects
+                               //!< act on the same particle
+
   /// for each operator specifies the reverse bitmask of target connections
   /// (0 = must connect)
   container::svector<std::bitset<max_input_size>> nop_connections_;
@@ -462,6 +468,29 @@ class WickTheorem {
       op_to_input_ordinal_.emplace(op, op_ord);
       ++op_ord;
     });
+
+    // populates input_partner_indices_
+    {
+      // for each NormalOperator
+      for (auto &nop : input_) {
+        using ranges::views::reverse;
+        using ranges::views::zip;
+
+        // zip in reverse order to handle non-number-conserving ops (i.e.
+        // nop.creators().size() != nop.annihilators().size()) reverse after
+        // insertion to restore canonical partner index order (in the order of
+        // particle indices in the normal operators) 7/18/2022 N.B. reverse(zip)
+        // for some reason is broken, hence the ugliness
+        std::size_t ninserted = 0;
+        for (auto &&[cre, ann] :
+             zip(reverse(nop.creators()), reverse(nop.annihilators()))) {
+          input_partner_indices_.emplace_back(cre.index(), ann.index());
+          ++ninserted;
+        }
+        std::reverse(input_partner_indices_.rbegin(),
+                     input_partner_indices_.rbegin() + ninserted);
+      }
+    }
 
     return *this;
   }
@@ -538,7 +567,6 @@ class WickTheorem {
           nop_adjacency_matrix(ntri(nopseq.size()), 0),
           nop_nconnections(nopseq.size(), 0) {
       init_topological_partitions();
-      init_input_index_columns();
     }
 
     NontensorWickState(const NontensorWickState &) = delete;
@@ -550,7 +578,10 @@ class WickTheorem {
     NormalOperatorSequence<S> nopseq;  //!< current state of operator sequence
     std::size_t nopseq_size;           //!< current size of nopseq
     Product sp;                        //!< current prefactor
-    int level;                         //!< level in recursive wick call stack
+    container::svector<std::pair<Op<S>, Op<S>>>
+        contractions;  //!< current list of indices of contracted {qpann,qpcre}
+                       //!< ops
+    int level;         //!< level in recursive wick call stack
     size_t left_op_offset;  //!< where to start looking for contractions
                             //!< (ordinal in the current state of nopseq)
     bool count_only;  //!< if true, only track the total number of summands in
@@ -588,45 +619,58 @@ class WickTheorem {
     /// @note exists to avoid the need to traverse op_partition_cdeg_matrix
     container::svector<size_t> op_partition_ncontractions;
 
-    container::svector<std::pair<Index, Index>>
-        input_partner_indices;  //!< list of {cre,ann} pairs of Index objects in
-                                //!< the input whose corresponding Op<S> objects
-                                //!< act on the same particle
-
     /// "merges" partner index pair from input_index_columns with contracted
     /// Index pairs in this->sp
     auto make_target_partner_indices() const {
       // copy all pairs in the input product
-      container::svector<std::pair<Index, Index>> result(input_partner_indices);
+      container::svector<std::pair<Index, Index>> result(
+          this->wick.input_partner_indices_);
       // for every contraction so far encountered ...
-      for (auto &contr : sp) {
-        // N.B. sp is composed of 1-particle contractions
-        assert(contr->template is<Tensor>() &&
-               contr->template as<Tensor>().rank() == 1 &&
-               contr->template as<Tensor>().label() ==
-                   sequant::overlap_label());
-        const auto &contr_t = contr->template as<Tensor>();
-        const auto &bra_idx = contr_t.bra().at(0);
-        const auto &ket_idx = contr_t.ket().at(0);
-        // ... if both bra and ket indices were in the input list, "merge" their
+      for (auto &[qpann_op, qpcre_op] : contractions) {
+        // N.B. contractions contains indices of _quasiparticle_
+        // annihilators/creators which might have been in either
+        // bra (physical annihilators) or ket (physical creators) of
+        // the input nops  ... hence when matching qp indices to the
+        // input partner indices must check operator action
+        // ... if both qpann and qpcre ops were in the input list, "merge" their
         // pairs
-        auto bra_it = ranges::find_if(result, [&bra_idx](const auto &p) {
-          assert(p.first != bra_idx);
-          return p.second == bra_idx;
+        const auto *qpann_op_ptr = &qpann_op;
+        const auto *qpcre_op_ptr = &qpcre_op;
+
+        //        std::wcout << "make_target_partner_indices: qpann_op="
+        //                   << qpann_op_ptr->to_latex()
+        //                   << " qpcre_op=" << qpcre_op_ptr->to_latex() <<
+        //                   "\n";
+        auto ann_it = ranges::find_if(result, [&](const auto &p) {
+          return qpann_op_ptr->action() == Action::annihilate &&
+                     p.second == qpann_op_ptr->index() ||
+                 qpcre_op_ptr->action() == Action::annihilate &&
+                     p.second == qpcre_op_ptr->index();
         });
-        if (bra_it != result.end()) {
-          auto ket_it = ranges::find_if(result, [&ket_idx](const auto &p) {
-            assert(p.second != ket_idx);
-            return p.first == ket_idx;
+        if (ann_it != result.end()) {
+          //          std::wcout << "make_target_partner_indices: found ann_it =
+          //          {"
+          //                     << ann_it->first.to_latex() << ", "
+          //                     << ann_it->second.to_latex() << "}\n";
+          auto cre_it = ranges::find_if(result, [&](const auto &p) {
+            return qpcre_op_ptr->action() == Action::create &&
+                       p.first == qpcre_op_ptr->index() ||
+                   qpann_op_ptr->action() == Action::create &&
+                       p.first == qpann_op_ptr->index();
           });
-          if (ket_it != result.end()) {
-            assert(bra_it != ket_it);
-            if (ket_it > bra_it) {
-              bra_it->second = std::move(ket_it->second);
-              result.erase(ket_it);
-            } else {
-              ket_it->first = std::move(bra_it->first);
-              result.erase(bra_it);
+          if (cre_it != result.end()) {
+            //            std::wcout << "make_target_partner_indices: found
+            //            cre_it = {"
+            //                       << cre_it->first.to_latex() << ", "
+            //                       << cre_it->second.to_latex() << "}\n";
+            if (ann_it == cre_it) {
+              result.erase(cre_it);
+            } else if (cre_it > ann_it) {
+              ann_it->second = std::move(cre_it->second);
+              result.erase(cre_it);
+            } else {  // cre_it < ann_it
+              cre_it->first = std::move(ann_it->first);
+              result.erase(ann_it);
             }
           }
         }
@@ -668,29 +712,6 @@ class WickTheorem {
       }
     }
 
-    // populates target_particle_ops
-    void init_input_index_columns() {
-      // for each NormalOperator
-      for (auto &nop : nopseq) {
-        using ranges::views::reverse;
-        using ranges::views::zip;
-
-        // zip in reverse order to handle non-number-conserving ops (i.e.
-        // nop.creators().size() != nop.annihilators().size()) reverse after
-        // insertion to restore canonical partner index order (in the order of
-        // particle indices in the normal operators) 7/18/2022 N.B. reverse(zip)
-        // for some reason is broken, hence the ugliness
-        std::size_t ninserted = 0;
-        for (auto &&[cre, ann] :
-             zip(reverse(nop.creators()), reverse(nop.annihilators()))) {
-          input_partner_indices.emplace_back(cre.index(), ann.index());
-          ++ninserted;
-        }
-        std::reverse(input_partner_indices.rbegin(),
-                     input_partner_indices.rbegin() + ninserted);
-      }
-    }
-
     /// @brief Updates connectivity if contraction satisfies target connectivity
 
     /// If the target connectivity will be violated by this contraction, keep
@@ -700,6 +721,16 @@ class WickTheorem {
                             &target_nop_connections,
                         const Cursor &op1_cursor, const Cursor &op2_cursor) {
       assert(op1_cursor.ordinal() < op2_cursor.ordinal());
+
+      // add contraction to the grand list
+      auto register_contraction = [&]() {
+        assert(ranges::contains(this->contractions,
+                                std::make_pair(*(op1_cursor.elem_iter()),
+                                               *(op2_cursor.elem_iter()))) ==
+               false);
+        this->contractions.emplace_back(*op1_cursor.elem_iter(),
+                                        *op2_cursor.elem_iter());
+      };
 
       auto update_nop_metadata = [this](size_t nop_idx) {
         const auto nconnections = nop_nconnections[nop_idx];
@@ -752,6 +783,7 @@ class WickTheorem {
         update_nop_metadata(nop1_idx);
         update_nop_metadata(nop2_idx);
         update_op_metadata(*op1_cursor.elem_iter(), *op2_cursor.elem_iter());
+        register_contraction();
         return true;
       }
       const auto nop1_nop2_connected = nop_connections[nop1_idx].test(nop2_idx);
@@ -799,6 +831,7 @@ class WickTheorem {
       update_nop_metadata(nop2_idx);
       update_op_metadata(*op1_cursor.elem_iter(), *op2_cursor.elem_iter());
 
+      register_contraction();
       return true;
     }
 
@@ -808,6 +841,15 @@ class WickTheorem {
                                &target_nop_connections,
                            const Cursor &op1_cursor, const Cursor &op2_cursor) {
       assert(op1_cursor.ordinal() < op2_cursor.ordinal());
+
+      auto unregister_contraction = [&]() {
+        // remove contraction from the grand list
+        const auto found_contraction_it = ranges::find(
+            this->contractions, std::make_pair(*(op1_cursor.elem_iter()),
+                                               *(op2_cursor.elem_iter())));
+        assert(found_contraction_it != ranges::end(this->contractions));
+        this->contractions.erase(found_contraction_it);
+      };
 
       auto update_nop_metadata = [this](size_t nop_idx) {
         assert(nop_nconnections.at(nop_idx) > 0);
@@ -859,6 +901,7 @@ class WickTheorem {
       update_nop_metadata(nop1_idx);
       update_nop_metadata(nop2_idx);
       update_op_metadata(*op1_cursor.elem_iter(), *op2_cursor.elem_iter());
+      unregister_contraction();
       if (target_nop_connections.empty())  // if no constraints, we don't keep
                                            // track of individual connections
         return;
@@ -906,7 +949,7 @@ class WickTheorem {
       if (count_only) {
         ++state.count;
       } else {
-        auto [phase, normop] = normalize(input_, state.input_partner_indices);
+        auto [phase, normop] = normalize(input_, input_partner_indices_);
         result_plus_mutex.first->push_back(
             std::make_pair(Product(phase, {}), std::move(normop)));
       }
