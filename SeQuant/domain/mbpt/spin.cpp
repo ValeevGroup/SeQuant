@@ -452,7 +452,7 @@ ExprPtr symmetrize_expr(const Product& product) {
   auto S = Tensor{};
   if (A_is_nconserving) {
     S = Tensor(L"S", A_tensor.bra(), A_tensor.ket(), Symmetry::nonsymm);
-  } else {  // A is not nconserving
+  } else {  // A is N-nonconserving
     auto n = std::min(A_tensor.bra_rank(), A_tensor.ket_rank());
     container::svector<Index> bra_list(A_tensor.bra().begin(),
                                        A_tensor.bra().begin() + n);
@@ -820,11 +820,14 @@ ExprPtr closed_shell_spintrace(
   // operators too, by replacing empty spaces with dummy indices.
   // We are assuming all our tensors are particle number conserving here.
   // The two vectors must be permutations of each other.
-  auto count_cycles = [](container::svector<Index>& v,
-                         container::svector<Index>& v1) {
-    assert(v.size() == v1.size());
+  auto count_cycles = [](auto&& v0, const container::svector<Index>& v1) {
+    assert(v0.size() == v1.size());
+    container::svector<Index> v(std::forward<decltype(v0)>(v0));
     size_t n_cycles = 0;
-    auto dummy_idx = Index(L"p_50");
+    /// TODO use a dummy index that is less likely to appear in the expression
+    const auto dummy_idx = Index(L"p_50");
+    assert(ranges::contains(v, dummy_idx) == false);
+    assert(ranges::contains(v1, dummy_idx) == false);
     for (auto it = v.begin(); it != v.end(); ++it) {
       if (*it != dummy_idx) {
         n_cycles++;
