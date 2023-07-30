@@ -511,11 +511,16 @@ class WickTheorem {
   /// Evaluates wick_ theorem for a single NormalOperatorSequence
   /// @return the result of applying Wick's theorem
   ExprPtr compute_nopseq(const bool count_only) const {
+    // precondition 1: spin-free version only supported for physical and Fermi
+    // vacua
     if (get_default_context().spbasis() == SPBasis::spinfree &&
-        (get_default_context().vacuum() != Vacuum::Physical))
+        !(get_default_context().vacuum() == Vacuum::Physical ||
+          (S == Statistics::FermiDirac &&
+           get_default_context().vacuum() == Vacuum::SingleProduct)))
       throw std::logic_error(
           "WickTheorem::compute: spinfree=true supported only for physical "
-          "vacuum");
+          "vacuum and for Fermi facuum");
+
     // process cached nop_connections_input_, if needed
     if (!nop_connections_input_.empty())
       const_cast<WickTheorem<S> &>(*this).set_nop_connections(
@@ -634,12 +639,18 @@ class WickTheorem {
     /// @note exists to avoid the need to traverse op_partition_cdeg_matrix
     container::svector<size_t> op_partition_ncontractions;
 
-    /// "merges" partner index pair from input_index_columns with contracted
-    /// Index pairs in this->sp
+    /// "applies" this->contractions to the partner index pairs from
+    /// this->wick.input_partner_indices_ to produce the current target list of
+    /// partner indices
+    /// @return std::pair `{target_partner_indices, ncycles}`, where
+    ///         `target_partner_indices` is the current target list of
+    ///          partner indices and `ncycles` is the number of contraction
+    ///          cycles
     auto make_target_partner_indices() const {
       // copy all pairs in the input product
       container::svector<std::pair<Index, Index>> result(
           this->wick.input_partner_indices_);
+      std::size_t ncycles = 0;
       // for every contraction so far encountered ...
       for (auto &[qpann_op, qpcre_op] : contractions) {
         // N.B. contractions contains indices of _quasiparticle_
@@ -680,6 +691,7 @@ class WickTheorem {
             //                       << cre_it->second.to_latex() << "}\n";
             if (ann_it == cre_it) {
               result.erase(cre_it);
+              ncycles++;
             } else if (cre_it > ann_it) {
               ann_it->second = std::move(cre_it->second);
               result.erase(cre_it);
@@ -690,7 +702,7 @@ class WickTheorem {
           }
         }
       }
-      return result;
+      return std::make_pair(result, ncycles);
     }
 
     // populates partitions using the data from nop_topological_partition
@@ -1289,26 +1301,69 @@ class WickTheorem {
                   if (!full_contractions_ ||
                       (full_contractions_ && state.nopseq_size == 0)) {
                     if (!state.count_only) {
+                      // clang-format off
+                      // this will include:
+                      // - topological factor, i.e. op_permutational_degeneracy()
+                      // - (optional) cycle prefactor (for spin-free Fermi-vacuum wick)
+                      // - (optional) phase due to reordering the uncontracted ops to the original order
+                      // clang-format on
+                      auto scalar_prefactor = op_permutational_degeneracy();
+
                       if (full_contractions_) {
+                        // for spinfree Wick over Fermi vacuum, we need to
+                        // include extra x2 factor for each cycle
+                        if (S == Statistics::FermiDirac &&
+                            get_default_context().vacuum() ==
+                                Vacuum::SingleProduct &&
+                            get_default_context().spbasis() ==
+                                SPBasis::spinfree) {
+                          auto [target_partner_indices, ncycles] =
+                              state.make_target_partner_indices();
+                          assert(target_partner_indices
+                                     .empty());  // all ops are contracted out
+                          scalar_prefactor *= 1 << ncycles;
+                        }
+                        auto prefactor = state.sp.deep_copy().scale(
+                            std::move(scalar_prefactor));
+
                         result.second->lock();
                         //              std::wcout << "got " <<
                         //              to_latex(state.sp)
                         //              << std::endl;
                         result.first->push_back(std::make_pair(
-                            std::move(state.sp.deep_copy().scale(
-                                op_permutational_degeneracy())),
+                            std::move(prefactor),
                             std::shared_ptr<NormalOperator<S>>{}));
                         //              std::wcout << "now up to " <<
                         //              result.first->size()
                         //              << " terms" << std::endl;
                         result.second->unlock();
                       } else {
-                        auto [phase, op] = normalize(
-                            state.nopseq, state.make_target_partner_indices());
+                        auto [target_partner_indices, ncycles] =
+                            state.make_target_partner_indices();
+
+                        // for spinfree Wick over Fermi vacuum, we need to
+                        // include extra x2 factor for each cycle
+                        if (get_default_context().vacuum() ==
+                                Vacuum::SingleProduct &&
+                            get_default_context().spbasis() ==
+                                SPBasis::spinfree) {
+                          scalar_prefactor *= 1 << ncycles;
+                        }
+
+                        // restore the index pairings into as original order
+                        // as possible to make the results as simple as possible
+                        // p.s. Kutzelnigg refers to this as generalized Wick
+                        //      theorem
+                        auto [phase, op] =
+                            normalize(state.nopseq, target_partner_indices);
+                        scalar_prefactor *= phase;
+
+                        auto prefactor = state.sp.deep_copy().scale(
+                            std::move(scalar_prefactor));
+
                         result.second->lock();
                         result.first->push_back(std::make_pair(
-                            std::move(state.sp.deep_copy().scale(
-                                phase * op_permutational_degeneracy())),
+                            std::move(prefactor),
                             op->empty() ? nullptr : std::move(op)));
                         result.second->unlock();
                       }

@@ -129,6 +129,12 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
         Context{V, IndexSpaceMetric::Unit, BraKetSymmetry::conjugate,
                 SPBasis::spinorbital});
 
+    auto switch_to_spinfree_context = [&]() {
+      auto context_sf = get_default_context();
+      context_sf.set(SPBasis::spinfree);
+      return set_scoped_default_context(context_sf);
+    };
+
     // number operator
     {{auto opseq1 = FNOperatorSeq(
           {FNOperator({L"i_1"}, {}, V), FNOperator({}, {L"i_2"}, V)});
@@ -325,9 +331,7 @@ REQUIRE(to_latex(partial_contractions) ==
   // if Wick's theorem's result is in "canonical" (columns-matching-inputs ...
   // this is what Kutzelnigg calls generalized Wick's theorem) it works same
   // for spinorbital and spinfree basis for physical vacuum
-  auto context_sf = get_default_context();
-  context_sf.set(SPBasis::spinfree);
-  auto raii_tmp = set_scoped_default_context(context_sf);
+  auto raii_tmp = switch_to_spinfree_context();
   REQUIRE_NOTHROW(wick.full_contractions(false).compute());
   auto result_sf = wick.full_contractions(false).compute();
   auto result_sf_latex = to_latex(result_sf);
@@ -344,6 +348,13 @@ REQUIRE(to_latex(partial_contractions) ==
 
 SECTION("fermi vacuum") {
   constexpr Vacuum V = Vacuum::SingleProduct;
+  // default vacuum is already spin-orbital Fermi vacuum
+
+  auto switch_to_spinfree_context = [&]() {
+    auto context_sf = get_default_context();
+    context_sf.set(SPBasis::spinfree);
+    return set_scoped_default_context(context_sf);
+  };
 
   // two (pure qp) 1-body operators
   {
@@ -354,6 +365,11 @@ SECTION("fermi vacuum") {
     auto result = wick.compute();
     REQUIRE(result->is<Product>());
     REQUIRE(result->size() == 2);  // product of 2 terms
+
+    // spin-free result is simply twice the spin-orbital result
+    auto raii_tmp = switch_to_spinfree_context();
+    auto result_sf = wick.compute();
+    REQUIRE(simplify(result_sf - result * ex<Constant>(2)) == ex<Constant>(0));
   }
 
   // two (pure qp) N-nonconserving 2-body operators
@@ -411,8 +427,41 @@ SECTION("fermi vacuum") {
     auto wick = FWickTheorem{opseq};
     REQUIRE_NOTHROW(wick.compute());
     auto result = wick.compute();
+    auto result_latex = to_latex(result);
+    // std::wcout << "<" << to_latex(opseq) << "> = " << result_latex <<
+    // std::endl;
     REQUIRE(result->is<Sum>());
     REQUIRE(result->size() == 4);
+    REQUIRE(result_latex ==
+            L"{ "
+            L"\\bigl({{s^{{i_4}}_{{i_1}}}{s^{{i_3}}_{{i_2}}}{s^{{a_3}}_{{a_2}}}"
+            L"{s^{{a_4}}_{{a_1}}}} - "
+            L"{{s^{{i_4}}_{{i_1}}}{s^{{i_3}}_{{i_2}}}{s^{{a_4}}_{{a_2}}}{s^{{a_"
+            L"3}}_{{a_1}}}} - "
+            L"{{s^{{i_3}}_{{i_1}}}{s^{{i_4}}_{{i_2}}}{s^{{a_3}}_{{a_2}}}{s^{{a_"
+            L"4}}_{{a_1}}}} + "
+            L"{{s^{{i_3}}_{{i_1}}}{s^{{i_4}}_{{i_2}}}{s^{{a_4}}_{{a_2}}}{s^{{a_"
+            L"3}}_{{a_1}}}}\\bigr) }");
+
+    // in spin-free result first and fourth terms are multiplied by 4, second
+    // and third terms multiplied by 2
+    auto raii_tmp = switch_to_spinfree_context();
+    auto result_sf = wick.compute();
+    auto result_sf_latex = to_latex(result_sf);
+    // std::wcout << "<" << to_latex(opseq) << "> = " << to_latex(result_sf) <<
+    // std::endl;
+    REQUIRE(result->is<Sum>());
+    REQUIRE(result->size() == 4);
+    REQUIRE(result_sf_latex ==
+            L"{ "
+            L"\\bigl({{{4}}{s^{{i_4}}_{{i_1}}}{s^{{i_3}}_{{i_2}}}{s^{{a_3}}_{{"
+            L"a_2}}}{s^{{a_4}}_{{a_1}}}} - "
+            L"{{{2}}{s^{{i_4}}_{{i_1}}}{s^{{i_3}}_{{i_2}}}{s^{{a_4}}_{{a_2}}}{"
+            L"s^{{a_3}}_{{a_1}}}} - "
+            L"{{{2}}{s^{{i_3}}_{{i_1}}}{s^{{i_4}}_{{i_2}}}{s^{{a_3}}_{{a_2}}}{"
+            L"s^{{a_4}}_{{a_1}}}} + "
+            L"{{{4}}{s^{{i_3}}_{{i_1}}}{s^{{i_4}}_{{i_2}}}{s^{{a_4}}_{{a_2}}}{"
+            L"s^{{a_3}}_{{a_1}}}}\\bigr) }");
   }
   // two (pure qp) 3-body operators
   {
