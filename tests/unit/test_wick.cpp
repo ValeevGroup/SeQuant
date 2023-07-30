@@ -110,26 +110,37 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
                                    FNOperator({L"i_5"}, {L"i_6"})});
       REQUIRE_NOTHROW(FWickTheorem{opseq1});
       auto wick1 = FWickTheorem{opseq1};
-      REQUIRE_THROWS(wick1.spinfree(true).compute());
+
+      if (get_default_context().spbasis() == SPBasis::spinorbital) {
+        REQUIRE_NOTHROW(wick1.spinfree(false));
+        REQUIRE_THROWS_AS(wick1.spinfree(true), std::invalid_argument);
+      }
+      if (get_default_context().spbasis() == SPBasis::spinfree) {
+        REQUIRE_NOTHROW(wick1.spinfree(true));
+        REQUIRE_THROWS_AS(wick1.spinfree(false), std::invalid_argument);
+      }
     }
 
   }  // SECTION("constructors")
 
   SECTION("physical vacuum") {
     constexpr Vacuum V = Vacuum::Physical;
+    auto raii_tmp = set_scoped_default_context(
+        Context{V, IndexSpaceMetric::Unit, BraKetSymmetry::conjugate,
+                SPBasis::spinorbital});
 
     // number operator
     {{auto opseq1 = FNOperatorSeq(
           {FNOperator({L"i_1"}, {}, V), FNOperator({}, {L"i_2"}, V)});
     auto wick1 = FWickTheorem{opseq1};
-    REQUIRE_NOTHROW(wick1.spinfree(false).compute());
+    REQUIRE_NOTHROW(wick1.compute());
     // full contractions = null (N is already in normal form)
-    auto full_contractions = FWickTheorem{opseq1}.spinfree(false).compute();
+    auto full_contractions = FWickTheorem{opseq1}.compute();
     REQUIRE(full_contractions->is<Constant>());
     REQUIRE(full_contractions->as<Constant>().value<int>() == 0);
     // partial contractions = N
     auto partial_contractions =
-        FWickTheorem{opseq1}.full_contractions(false).spinfree(false).compute();
+        FWickTheorem{opseq1}.full_contractions(false).compute();
     // std::wcout << "partial_contractions=" << to_latex(partial_contractions)
     // << std::endl;
     REQUIRE(partial_contractions->is<Product>());
@@ -139,14 +150,14 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
     auto opseq1 = BNOperatorSeq(
         {BNOperator({L"i_1"}, {}, V), BNOperator({}, {L"i_2"}, V)});
     auto wick1 = BWickTheorem{opseq1};
-    REQUIRE_NOTHROW(wick1.spinfree(false).compute());
+    REQUIRE_NOTHROW(wick1.compute());
     // full contractions = null
-    auto full_contractions = BWickTheorem{opseq1}.spinfree(false).compute();
+    auto full_contractions = BWickTheorem{opseq1}.compute();
     REQUIRE(full_contractions->is<Constant>());
     REQUIRE(full_contractions->as<Constant>().value<int>() == 0);
     // partial contractions = N
     auto partial_contractions =
-        BWickTheorem{opseq1}.full_contractions(false).spinfree(false).compute();
+        BWickTheorem{opseq1}.full_contractions(false).compute();
     // std::wcout << "partial_contractions=" << to_latex(partial_contractions)
     // << std::endl;
     REQUIRE(partial_contractions->is<Product>());
@@ -158,14 +169,14 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
 {{auto opseq1 =
       FNOperatorSeq({FNOperator({}, {L"i_1"}, V), FNOperator({L"i_2"}, {}, V)});
 auto wick1 = FWickTheorem{opseq1};
-REQUIRE_NOTHROW(wick1.spinfree(false).compute());
+REQUIRE_NOTHROW(wick1.compute());
 // full contractions = delta
-auto full_contractions = FWickTheorem{opseq1}.spinfree(false).compute();
+auto full_contractions = FWickTheorem{opseq1}.compute();
 REQUIRE(full_contractions->is<Product>());
 REQUIRE(full_contractions->as<Product>().size() == 1);
 // partial contractions = delta - N
 auto partial_contractions =
-    FWickTheorem{opseq1}.full_contractions(false).spinfree(false).compute();
+    FWickTheorem{opseq1}.full_contractions(false).compute();
 // std::wcout << "partial_contractions=" << to_latex(partial_contractions) <<
 // std::endl;
 REQUIRE(partial_contractions->is<Sum>());
@@ -177,14 +188,14 @@ REQUIRE(to_latex(partial_contractions) ==
   auto opseq1 =
       BNOperatorSeq({BNOperator({}, {L"i_1"}, V), BNOperator({L"i_2"}, {}, V)});
   auto wick1 = BWickTheorem{opseq1};
-  REQUIRE_NOTHROW(wick1.spinfree(false).compute());
+  REQUIRE_NOTHROW(wick1.compute());
   // full contractions = delta
-  auto full_contractions = BWickTheorem{opseq1}.spinfree(false).compute();
+  auto full_contractions = BWickTheorem{opseq1}.compute();
   REQUIRE(full_contractions->is<Product>());
   REQUIRE(full_contractions->as<Product>().size() == 1);
   // partial contractions = delta + N
   auto partial_contractions =
-      BWickTheorem{opseq1}.full_contractions(false).spinfree(false).compute();
+      BWickTheorem{opseq1}.full_contractions(false).compute();
   // std::wcout << "partial_contractions=" << to_latex(partial_contractions) <<
   // std::endl;
   REQUIRE(partial_contractions->is<Sum>());
@@ -200,8 +211,8 @@ REQUIRE(to_latex(partial_contractions) ==
                                FNOperator({L"i_3"}, {L"i_4"}, V),
                                FNOperator({L"i_5"}, {L"i_6"}, V)});
   auto wick1 = FWickTheorem{opseq1};
-  REQUIRE_NOTHROW(wick1.spinfree(false).compute());
-  auto result = FWickTheorem{opseq1}.spinfree(false).compute();
+  REQUIRE_NOTHROW(wick1.compute());
+  auto result = FWickTheorem{opseq1}.compute();
   REQUIRE(result->is<Constant>());
   REQUIRE(result->as<Constant>().value<int>() == 0);
 }
@@ -211,8 +222,8 @@ REQUIRE(to_latex(partial_contractions) ==
   auto opseq = FNOperatorSeq({FNOperator({}, {L"i_1", L"i_2"}, V),
                               FNOperator({L"i_3", L"i_4"}, {}, V)});
   auto wick = FWickTheorem{opseq};
-  REQUIRE_NOTHROW(wick.spinfree(false).compute());
-  auto result = wick.spinfree(false).compute();
+  REQUIRE_NOTHROW(wick.compute());
+  auto result = wick.compute();
   REQUIRE(result->is<Sum>());
   REQUIRE(result->size() == 2);
 }
@@ -222,8 +233,8 @@ REQUIRE(to_latex(partial_contractions) ==
   auto opseq = FNOperatorSeq({FNOperator({}, {L"i_1", L"i_2", L"i_3"}, V),
                               FNOperator({L"i_4", L"i_5", L"i_6"}, {}, V)});
   auto wick = FWickTheorem{opseq};
-  REQUIRE_NOTHROW(wick.spinfree(false).compute());
-  auto result = wick.spinfree(false).compute();
+  REQUIRE_NOTHROW(wick.compute());
+  auto result = wick.compute();
   REQUIRE(result->is<Sum>());
   REQUIRE(result->size() == 6);
 }
@@ -234,8 +245,8 @@ REQUIRE(to_latex(partial_contractions) ==
       FNOperatorSeq({FNOperator({}, {L"i_1", L"i_2", L"i_3", L"i_4"}, V),
                      FNOperator({L"i_5", L"i_6", L"i_7", L"i_8"}, {}, V)});
   auto wick = FWickTheorem{opseq};
-  REQUIRE_NOTHROW(wick.spinfree(false).compute());
-  auto result = wick.spinfree(false).compute();
+  REQUIRE_NOTHROW(wick.compute());
+  auto result = wick.compute();
   REQUIRE(result->is<Sum>());
   REQUIRE(result->size() == 24);
 }
@@ -246,8 +257,8 @@ REQUIRE(to_latex(partial_contractions) ==
                               FNOperator({L"i_2"}, {L"i_3"}, V),
                               FNOperator({L"i_4"}, {}, V)});
   auto wick = FWickTheorem{opseq};
-  REQUIRE_NOTHROW(wick.spinfree(false).compute());
-  auto result = wick.spinfree(false).compute();
+  REQUIRE_NOTHROW(wick.compute());
+  auto result = wick.compute();
   REQUIRE(result->is<Product>());
   REQUIRE(result->size() == 2);  // product of 2 terms
 }
@@ -258,8 +269,8 @@ REQUIRE(to_latex(partial_contractions) ==
                               FNOperator({L"i_2"}, {L"i_3"}, V),
                               FNOperator({L"i_4"}, {}, V)});
   auto wick = FWickTheorem{opseq};
-  REQUIRE_NOTHROW(wick.full_contractions(false).spinfree(false).compute());
-  auto result = wick.full_contractions(false).spinfree(false).compute();
+  REQUIRE_NOTHROW(wick.full_contractions(false).compute());
+  auto result = wick.full_contractions(false).compute();
   REQUIRE(result->is<Sum>());
   REQUIRE(result->size() == 5);  // sum of 4 terms
   REQUIRE(to_latex(result) ==
@@ -276,9 +287,8 @@ REQUIRE(to_latex(partial_contractions) ==
                                FNOperator({L"i_3"}, {L"i_4"}, V),
                                FNOperator({L"i_5"}, {L"i_6"}, V)});
   auto wick1 = FWickTheorem{opseq1};
-  REQUIRE_NOTHROW(wick1.full_contractions(false).spinfree(false).compute());
-  auto result =
-      FWickTheorem{opseq1}.full_contractions(false).spinfree(false).compute();
+  REQUIRE_NOTHROW(wick1.full_contractions(false).compute());
+  auto result = FWickTheorem{opseq1}.full_contractions(false).compute();
   REQUIRE(result->is<Sum>());
   REQUIRE(result->size() == 5);
   REQUIRE(to_latex(result) ==
@@ -295,11 +305,12 @@ REQUIRE(to_latex(partial_contractions) ==
       FNOperatorSeq({FNOperator({L"i_1", L"i_2"}, {L"i_3", L"i_4"}, V),
                      FNOperator({L"i_5", L"i_6"}, {L"i_7", L"i_8"}, V)});
   auto wick = FWickTheorem{opseq};
-  REQUIRE_NOTHROW(wick.full_contractions(false).spinfree(false).compute());
-  auto result = wick.full_contractions(false).spinfree(false).compute();
+  REQUIRE_NOTHROW(wick.full_contractions(false).compute());
+  auto result = wick.full_contractions(false).compute();
+  auto result_latex = to_latex(result);
   REQUIRE(result->is<Sum>());
   REQUIRE(result->size() == 7);
-  REQUIRE(to_latex(result) ==
+  REQUIRE(result_latex ==
           L"{ "
           L"\\bigl({{s^{{i_5}}_{{i_4}}}{a^{{i_1}{i_2}{i_6}}_{{i_3}{i_7}{i_8}}}}"
           L" + "
@@ -310,6 +321,23 @@ REQUIRE(to_latex(partial_contractions) ==
           L"}} + {{s^{{i_5}}_{{i_3}}}{a^{{i_1}{i_2}{i_6}}_{{i_7}{i_4}{i_8}}}} "
           L"+ {{s^{{i_6}}_{{i_3}}}{a^{{i_1}{i_2}{i_5}}_{{i_8}{i_4}{i_7}}}} + "
           L"{{a^{{i_1}{i_2}{i_5}{i_6}}_{{i_3}{i_4}{i_7}{i_8}}}}\\bigr) }");
+
+  // if Wick's theorem's result is in "canonical" (columns-matching-inputs ...
+  // this is what Kutzelnigg calls generalized Wick's theorem) it works same
+  // for spinorbital and spinfree basis for physical vacuum
+  auto context_sf = get_default_context();
+  context_sf.set(SPBasis::spinfree);
+  auto raii_tmp = set_scoped_default_context(context_sf);
+  REQUIRE_NOTHROW(wick.full_contractions(false).compute());
+  auto result_sf = wick.full_contractions(false).compute();
+  auto result_sf_latex = to_latex(result_sf);
+  // std::wcout << "result_sf: " << to_latex(result_sf) << std::endl;
+  REQUIRE(result->is<Sum>());
+  REQUIRE(result->size() == 7);
+  auto result_sf_latex_with_E_replaced_by_a =
+      result_sf_latex | ranges::views::replace(L'E', L'a') |
+      ranges::to<std::wstring>();
+  REQUIRE(result_latex == result_sf_latex_with_E_replaced_by_a);
 }
 
 }  // SECTION("physical vacuum")
@@ -322,8 +350,8 @@ SECTION("fermi vacuum") {
     auto opseq = FNOperatorSeq(
         {FNOperator({L"i_1"}, {L"a_1"}, V), FNOperator({L"a_2"}, {L"i_2"}, V)});
     auto wick = FWickTheorem{opseq};
-    REQUIRE_NOTHROW(wick.spinfree(false).compute());
-    auto result = wick.spinfree(false).compute();
+    REQUIRE_NOTHROW(wick.compute());
+    auto result = wick.compute();
     REQUIRE(result->is<Product>());
     REQUIRE(result->size() == 2);  // product of 2 terms
   }
@@ -333,8 +361,8 @@ SECTION("fermi vacuum") {
     auto opseq = FNOperatorSeq({FNOperator({L"i_1", L"i_2"}, {L"a_1"}, V),
                                 FNOperator({L"a_2"}, {L"i_3", L"i_4"}, V)});
     auto wick = FWickTheorem{opseq};
-    REQUIRE_NOTHROW(wick.spinfree(false).compute());
-    auto result = wick.spinfree(false).compute();
+    REQUIRE_NOTHROW(wick.compute());
+    auto result = wick.compute();
     REQUIRE(result->is<Sum>());
     REQUIRE(result->size() == 2);
   }
@@ -344,8 +372,8 @@ SECTION("fermi vacuum") {
     auto opseq = FNOperatorSeq(
         {FNOperator({L"p_1"}, {L"p_2"}, V), FNOperator({L"p_3"}, {L"p_4"}, V)});
     auto wick = FWickTheorem{opseq};
-    REQUIRE_NOTHROW(wick.spinfree(false).compute());
-    auto result = wick.spinfree(false).compute();
+    REQUIRE_NOTHROW(wick.compute());
+    auto result = wick.compute();
     REQUIRE(result->is<Product>());
     REQUIRE(result->size() ==
             2 * 2);  // product of 4 terms (since each contraction of 2
@@ -360,8 +388,8 @@ SECTION("fermi vacuum") {
     auto opseq = FNOperatorSeq(
         {FNOperator({L"p_1"}, {L"p_2"}, V), FNOperator({L"p_3"}, {L"p_4"}, V)});
     auto wick = FWickTheorem{opseq};
-    REQUIRE_NOTHROW(wick.full_contractions(false).spinfree(false).compute());
-    auto result = wick.full_contractions(false).spinfree(false).compute();
+    REQUIRE_NOTHROW(wick.full_contractions(false).compute());
+    auto result = wick.full_contractions(false).compute();
     REQUIRE(result->is<Sum>());
     REQUIRE(result->size() == 4);
     REQUIRE(
@@ -381,8 +409,8 @@ SECTION("fermi vacuum") {
         FNOperatorSeq({FNOperator({L"i_1", L"i_2"}, {L"a_1", L"a_2"}, V),
                        FNOperator({L"a_3", L"a_4"}, {L"i_3", L"i_4"}, V)});
     auto wick = FWickTheorem{opseq};
-    REQUIRE_NOTHROW(wick.spinfree(false).compute());
-    auto result = wick.spinfree(false).compute();
+    REQUIRE_NOTHROW(wick.compute());
+    auto result = wick.compute();
     REQUIRE(result->is<Sum>());
     REQUIRE(result->size() == 4);
   }
@@ -392,8 +420,8 @@ SECTION("fermi vacuum") {
         {FNOperator({L"i_1", L"i_2", L"i_3"}, {L"a_1", L"a_2", L"a_3"}, V),
          FNOperator({L"a_4", L"a_5", L"a_6"}, {L"i_4", L"i_5", L"i_6"}, V)});
     auto wick = FWickTheorem{opseq};
-    REQUIRE_NOTHROW(wick.spinfree(false).compute());
-    auto result = wick.spinfree(false).compute();
+    REQUIRE_NOTHROW(wick.compute());
+    auto result = wick.compute();
     REQUIRE(result->is<Sum>());
     REQUIRE(result->size() == 36);
   }
@@ -405,8 +433,8 @@ SECTION("fermi vacuum") {
         FNOperatorSeq({FNOperator({L"p_1"}, {L"p_2"}, V),
                        FNOperator({L"p_3", L"p_4"}, {L"p_5", L"p_6"}, V)});
     auto wick = FWickTheorem{opseq};
-    REQUIRE_NOTHROW(wick.full_contractions(false).spinfree(false).compute());
-    auto result = wick.full_contractions(false).spinfree(false).compute();
+    REQUIRE_NOTHROW(wick.full_contractions(false).compute());
+    auto result = wick.full_contractions(false).compute();
     REQUIRE(result->is<Sum>());
     REQUIRE(result->size() == 9);
   }
@@ -417,8 +445,8 @@ SECTION("fermi vacuum") {
         FNOperatorSeq({FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}, V),
                        FNOperator({L"p_5", L"p_6"}, {L"p_7", L"p_8"}, V)});
     auto wick = FWickTheorem{opseq};
-    REQUIRE_NOTHROW(wick.spinfree(false).compute());
-    auto result = wick.spinfree(false).compute();
+    REQUIRE_NOTHROW(wick.compute());
+    auto result = wick.compute();
     REQUIRE(result->is<Sum>());
     REQUIRE(result->size() == 4);
   }
@@ -429,8 +457,8 @@ SECTION("fermi vacuum") {
         FNOperatorSeq({FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}, V),
                        FNOperator({L"p_5", L"p_6"}, {L"p_7", L"p_8"}, V)});
     auto wick = FWickTheorem{opseq};
-    REQUIRE_NOTHROW(wick.full_contractions(false).spinfree(false).compute());
-    auto result = wick.full_contractions(false).spinfree(false).compute();
+    REQUIRE_NOTHROW(wick.full_contractions(false).compute());
+    auto result = wick.full_contractions(false).compute();
     REQUIRE(result->is<Sum>());
     REQUIRE(result->size() == 49);  // the MK paper only gives 47 terms,
                                     // misses the 2 double-hole contractions
@@ -442,8 +470,8 @@ SECTION("fermi vacuum") {
         {FNOperator({L"p_1", L"p_2", L"p_3"}, {L"p_4", L"p_5", L"p_6"}, V),
          FNOperator({L"p_7", L"p_8", L"p_9"}, {L"p_10", L"p_11", L"p_12"}, V)});
     auto wick = FWickTheorem{opseq};
-    REQUIRE_NOTHROW(wick.spinfree(false).compute());
-    auto result = wick.spinfree(false).compute();
+    REQUIRE_NOTHROW(wick.compute());
+    auto result = wick.compute();
     REQUIRE(result->is<Sum>());
     REQUIRE(result->size() == 36);
   }
@@ -454,8 +482,8 @@ SECTION("fermi vacuum") {
         {FNOperator({L"p_1", L"p_2", L"p_3"}, {L"p_4", L"p_5"}, V),
          FNOperator({L"p_7", L"p_8"}, {L"p_10", L"p_11", L"p_12"}, V)});
     auto wick = FWickTheorem{opseq};
-    REQUIRE_NOTHROW(wick.spinfree(false).compute());
-    auto result = wick.spinfree(false).compute();
+    REQUIRE_NOTHROW(wick.compute());
+    auto result = wick.compute();
     REQUIRE(result->is<Sum>());
     REQUIRE(result->size() == 12);
   }
@@ -486,8 +514,8 @@ SECTION("fermi vacuum") {
         {FNOperator({L"p_1", L"p_2"}, {L"p_4", L"p_5"}, V),
          FNOperator({L"p_7", L"p_8"}, {L"p_10", L"p_11", L"p_12"}, V)});
     auto wick = FWickTheorem{opseq};
-    REQUIRE_NOTHROW(wick.spinfree(false).compute());
-    auto result = wick.spinfree(false).compute();
+    REQUIRE_NOTHROW(wick.compute());
+    auto result = wick.compute();
     REQUIRE(result->is<Constant>());
     REQUIRE(result->as<Constant>().value<int>() == 0);
   }
@@ -502,7 +530,7 @@ SECTION("fermi vacuum") {
              FNOperator({L"p_21", L"p_22", L"p_23", L"p_24"},
                         {L"p_25", L"p_26", L"p_27", L"p_28"}, V)});
         auto wick = FWickTheorem{opseq};
-        auto result = wick.spinfree(false).compute(true);
+        auto result = wick.compute(true);
         REQUIRE(result->is<Constant>());
         REQUIRE(result->as<Constant>().value<int>() == 576);
       })
@@ -513,8 +541,8 @@ SECTION("fermi vacuum") {
                                 FNOperator({L"p_3"}, {L"p_4"}, V),
                                 FNOperator({L"p_5"}, {L"p_6"}, V)});
     auto wick = FWickTheorem{opseq};
-    REQUIRE_NOTHROW(wick.spinfree(false).compute());
-    auto result = wick.spinfree(false).compute();
+    REQUIRE_NOTHROW(wick.compute());
+    auto result = wick.compute();
     REQUIRE(result->is<Sum>());
     REQUIRE(result->size() == 2);
   }
@@ -527,8 +555,7 @@ SECTION("fermi vacuum") {
     auto ext_indices = make_indices<std::vector<Index>>(WstrList{
         L"p_1", L"p_2", L"p_3", L"p_4", L"p_5", L"p_6", L"p_7", L"p_8"});
     auto wick1 = FWickTheorem{opseq};
-    auto result1 =
-        wick1.set_external_indices(ext_indices).spinfree(false).compute();
+    auto result1 = wick1.set_external_indices(ext_indices).compute();
     REQUIRE(result1->is<Sum>());
     REQUIRE(result1->size() == 9);
     auto wick2 = FWickTheorem{opseq};
@@ -548,7 +575,7 @@ SECTION("fermi vacuum") {
                        FNOperator({L"p_9", L"p_10"}, {L"p_11", L"p_12"}, V),
                        FNOperator({L"p_13", L"p_14"}, {L"p_15", L"p_16"}, V)});
     auto wick = FWickTheorem{opseq};
-    auto result = wick.spinfree(false).compute();
+    auto result = wick.compute();
     REQUIRE(result->is<Sum>());
     REQUIRE(result->size() == 576);
   }
@@ -560,7 +587,7 @@ SECTION("fermi vacuum") {
                        FNOperator({L"p_9", L"p_10"}, {L"p_11", L"p_12"}, V),
                        FNOperator({L"p_17", L"p_18"}, {L"p_19", L"p_20"}, V)});
     auto wick = FWickTheorem{opseq};
-    auto result = wick.spinfree(false).compute();
+    auto result = wick.compute();
     REQUIRE(result->is<Sum>());
     REQUIRE(result->size() == 80);
   }
@@ -573,7 +600,7 @@ SECTION("fermi vacuum") {
                        FNOperator({L"p_13", L"p_14"}, {L"p_15", L"p_16"}, V),
                        FNOperator({L"p_17", L"p_18"}, {L"p_19", L"p_20"}, V)});
     auto wick = FWickTheorem{opseq};
-    auto result = wick.spinfree(false).compute(true);
+    auto result = wick.compute(true);
     REQUIRE(result->is<Constant>());
     REQUIRE(result->as<Constant>().value<int>() == 4752);
   })
@@ -588,7 +615,7 @@ SECTION("fermi vacuum") {
                        FNOperator({L"p_13", L"p_14"}, {L"p_15", L"p_16"}, V),
                        FNOperator({L"p_17", L"p_18"}, {L"p_19", L"p_20"}, V)});
     auto wick = FWickTheorem{opseq};
-    auto result = wick.spinfree(false).use_topology(true).compute(true);
+    auto result = wick.use_topology(true).compute(true);
     REQUIRE(result->is<Constant>());
     REQUIRE(result->as<Constant>().value<int>() == 2088);
   })
@@ -602,7 +629,7 @@ SECTION("fermi vacuum") {
          FNOperator({L"p_17", L"p_18", L"p_19"}, {L"p_20", L"p_21", L"p_22"},
                     V)});
     auto wick = FWickTheorem{opseq};
-    auto result = wick.spinfree(false).use_topology(true).compute(true);
+    auto result = wick.use_topology(true).compute(true);
     REQUIRE(result->is<Constant>());
     REQUIRE(result->as<Constant>().value<int>() == 694);
   })
@@ -616,7 +643,7 @@ SECTION("fermi vacuum") {
                        FNOperator({L"p_21", L"p_22", L"p_23", L"p_24"},
                                   {L"p_25", L"p_26", L"p_27", L"p_28"}, V)});
     auto wick = FWickTheorem{opseq};
-    auto result = wick.spinfree(false).use_topology(true).compute(true);
+    auto result = wick.use_topology(true).compute(true);
     REQUIRE(result->is<Constant>());
     REQUIRE(result->as<Constant>().value<int>() == 28);
   })
@@ -631,7 +658,7 @@ SECTION("fermi vacuum") {
                        FNOperator({L"p_21", L"p_22", L"p_23", L"p_24"},
                                   {L"p_25", L"p_26", L"p_27", L"p_28"}, V)});
     auto wick = FWickTheorem{opseq};
-    auto result = wick.spinfree(false).use_topology(true).compute(true);
+    auto result = wick.use_topology(true).compute(true);
     REQUIRE(result->is<Constant>());
     REQUIRE(result->as<Constant>().value<int>() == 70);
   })
@@ -649,7 +676,7 @@ SECTION("fermi vacuum") {
                          FNOperator({L"p_51", L"p_52", L"p_53", L"p_54"}, {L"p_55", L"p_56", L"p_57", L"p_58"}, V)
                         });
       auto wick = FWickTheorem{opseq};
-      auto result = wick.spinfree(false).use_topology(true).compute(true);
+      auto result = wick.use_topology(true).compute(true);
     }
 #endif
 }  // SECTION("fermi vacuum")
@@ -667,7 +694,7 @@ SECTION("Expression Reduction") {
         FNOperatorSeq({FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}, V),
                        FNOperator({L"a_4", L"a_5"}, {L"i_4", L"i_5"}, V)});
     auto wick = FWickTheorem{opseq};
-    auto wick_result = wick.spinfree(false).compute();
+    auto wick_result = wick.compute();
     REQUIRE(wick_result->is<Sum>());
     REQUIRE(wick_result->size() == 4);
 
@@ -724,8 +751,7 @@ SECTION("Expression Reduction") {
                            FNOperator({L"a_4"}, {L"i_4"}, V),
                            FNOperator({L"a_5"}, {L"i_5"}, V)});
         auto wick = FWickTheorem{opseq};
-        wick.spinfree(false).use_topology(use_nop_partitions ||
-                                          use_op_partitions);
+        wick.use_topology(use_nop_partitions || use_op_partitions);
         // if (use_nop_partitions) wick.set_nop_partitions({{1, 2}});
         if (use_op_partitions) wick.set_op_partitions({{0, 1}, {2, 3}});
         auto wick_result = wick.compute();
@@ -778,7 +804,7 @@ SECTION("Expression Reduction") {
                                             Index(L"a_4", {L"i_3", L"i_4"})},
                                            IndexList{L"i_3", L"i_4"}, V)});
     auto wick = FWickTheorem{opseq};
-    auto wick_result = wick.spinfree(false).compute();
+    auto wick_result = wick.compute();
     REQUIRE(wick_result->is<Sum>());
     REQUIRE(wick_result->size() == 16);
 
@@ -924,7 +950,7 @@ SECTION("Expression Reduction") {
               ex<FNOperator>(WstrList{L"a_6", L"a_7", L"a_8"},
                              WstrList{L"i_6", L"i_7", L"i_8"}, V);
     FWickTheorem wick{P3 * H2 * T2 * T3};
-    wick.spinfree(false).use_topology(topology);
+    wick.use_topology(topology);
     if (connected_only) wick.set_nop_connections({{1, 2}, {1, 3}});
     auto wick_result = wick.compute();
 

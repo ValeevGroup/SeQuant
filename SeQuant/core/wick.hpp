@@ -71,14 +71,27 @@ class WickTheorem {
     full_contractions_ = fc;
     return *this;
   }
+
   /// Controls whether next call to compute() will assume spin-free or
   /// spin-orbital normal-ordered operators By default compute() assumes
   /// spin-orbital operators.
   /// @param sf if true, will complete full contractions only.
-  WickTheorem &spinfree(bool sf) {
-    spinfree_ = sf;
+  /// @throw std::invalid_argument if @c sf does not match the contents of
+  /// get_default_context().spbasis()
+  [[deprecated(
+      "get_default_context().spbasis() should be used to specify spin-free "
+      "basis")]] WickTheorem &
+  spinfree(bool sf) {
+    if (!((sf && get_default_context().spbasis() == SPBasis::spinfree) ||
+          (!sf && get_default_context().spbasis() == SPBasis::spinorbital))) {
+      throw std::invalid_argument(
+          "WickTheorem::spinfree(sf): sf must match the contents of "
+          "get_default_context().spbasis() (N.B. WickTheorem::spinfree() is "
+          "deprecated, no longer should be used)");
+    }
     return *this;
   }
+
   /// Controls whether:
   /// - Op's of the same type within each NormalOperator are
   /// assumed topologically equivalent, and
@@ -386,7 +399,6 @@ class WickTheorem {
 
   mutable NormalOperatorSequence<S> input_;
   bool full_contractions_ = true;
-  bool spinfree_ = false;
   bool use_topology_ = false;
   mutable Stats stats_;
 
@@ -499,9 +511,11 @@ class WickTheorem {
   /// Evaluates wick_ theorem for a single NormalOperatorSequence
   /// @return the result of applying Wick's theorem
   ExprPtr compute_nopseq(const bool count_only) const {
-    if (spinfree_)
+    if (get_default_context().spbasis() == SPBasis::spinfree &&
+        (get_default_context().vacuum() != Vacuum::Physical))
       throw std::logic_error(
-          "WickTheorem::compute: spinfree=true not yet supported");
+          "WickTheorem::compute: spinfree=true supported only for physical "
+          "vacuum");
     // process cached nop_connections_input_, if needed
     if (!nop_connections_input_.empty())
       const_cast<WickTheorem<S> &>(*this).set_nop_connections(
