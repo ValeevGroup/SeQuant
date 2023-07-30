@@ -45,7 +45,6 @@ class WickTheorem {
     init_input(input);
     assert(input.size() <= max_input_size);
     assert(input.empty() || input.vacuum() != Vacuum::Invalid);
-    assert(input.empty() || input.vacuum() != Vacuum::Invalid);
     if constexpr (statistics == Statistics::BoseEinstein) {
       assert(input.empty() || input.vacuum() == Vacuum::Physical);
     }
@@ -331,6 +330,8 @@ class WickTheorem {
   /// @return the result of applying Wick's theorem; either a Constant, a
   /// Product, or a Sum
   /// @warning this is not reentrant, but is optionally threaded internally
+  /// @throw std::logic_error if input's vacuum does not match the current
+  /// context vacuum
   ExprPtr compute(const bool count_only = false);
 
   /// Collects compute statistics
