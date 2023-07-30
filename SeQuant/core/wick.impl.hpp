@@ -404,6 +404,11 @@ struct NullNormalOperatorCanonicalizerDeregister {
 
 template <Statistics S>
 ExprPtr WickTheorem<S>::compute(const bool count_only) {
+  if (input_.vacuum() != get_default_context().vacuum())
+    throw std::logic_error(
+        "WickTheorem<S>::compute(): input vacuum "
+        "must match the default context vacuum");
+
   // this is used to detect whether this is part of compute() applied to a Sum
   static bool applied_to_sum = false;
 
