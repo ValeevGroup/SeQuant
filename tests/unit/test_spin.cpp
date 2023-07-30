@@ -1062,8 +1062,6 @@ SECTION("Closed-shell spintrace CCSDT terms") {
     result = expand_antisymm(result);
     result = closed_shell_spintrace(
         input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
-    REQUIRE(result->size() == 72);
-    simplify(result);
     REQUIRE(result->size() == 20);
   }
 
