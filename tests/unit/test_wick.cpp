@@ -5,6 +5,7 @@
 #include <iostream>
 
 #include "SeQuant/core/timer.hpp"
+#include "SeQuant/core/utility/macros.hpp"
 #include "SeQuant/core/wick.hpp"
 #include "catch.hpp"
 #include "test_config.hpp"
@@ -111,6 +112,11 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
       REQUIRE_NOTHROW(FWickTheorem{opseq1});
       auto wick1 = FWickTheorem{opseq1};
 
+      SEQUANT_PRAGMA_CLANG(diagnostic push)
+      SEQUANT_PRAGMA_CLANG(diagnostic ignored "-Wdeprecated-declarations")
+      SEQUANT_PRAGMA_GCC(diagnostic push)
+      SEQUANT_PRAGMA_GCC(diagnostic ignored "-Wdeprecated-declarations")
+
       if (get_default_context().spbasis() == SPBasis::spinorbital) {
         REQUIRE_NOTHROW(wick1.spinfree(false));
         REQUIRE_THROWS_AS(wick1.spinfree(true), std::invalid_argument);
@@ -119,6 +125,9 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
         REQUIRE_NOTHROW(wick1.spinfree(true));
         REQUIRE_THROWS_AS(wick1.spinfree(false), std::invalid_argument);
       }
+
+      SEQUANT_PRAGMA_GCC(diagnostic pop)
+      SEQUANT_PRAGMA_CLANG(diagnostic pop)
     }
 
   }  // SECTION("constructors")

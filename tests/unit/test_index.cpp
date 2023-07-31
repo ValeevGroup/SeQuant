@@ -175,7 +175,16 @@ TEST_CASE("Index", "[elements]") {
   SECTION("to_string") {
     Index alpha(L"α");
     REQUIRE(alpha.to_string() == "α");
+
+    SEQUANT_PRAGMA_CLANG(diagnostic push)
+    SEQUANT_PRAGMA_CLANG(diagnostic ignored "-Wdeprecated-declarations")
+    SEQUANT_PRAGMA_GCC(diagnostic push)
+    SEQUANT_PRAGMA_GCC(diagnostic ignored "-Wdeprecated-declarations")
+
     REQUIRE(alpha.ascii_label() == "alpha");
+
+    SEQUANT_PRAGMA_GCC(diagnostic pop)
+    SEQUANT_PRAGMA_CLANG(diagnostic pop)
   }
 
   SECTION("latex") {
