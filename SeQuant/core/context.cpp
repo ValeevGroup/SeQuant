@@ -26,8 +26,8 @@ void set_default_context(const Context& ctx) {
 
 void reset_default_context() { detail::reset_implicit_context<Context>(); }
 
-detail::ImplicitContextResetter<Context> set_scoped_default_context(
-    const Context& ctx) {
+[[nodiscard]] detail::ImplicitContextResetter<Context>
+set_scoped_default_context(const Context& ctx) {
   return detail::set_scoped_implicit_context(ctx);
 }
 

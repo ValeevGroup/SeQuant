@@ -57,8 +57,8 @@ bool operator!=(Context const& left, Context const& right);
 const Context& get_default_formalism();
 void set_default_formalism(const Context& ctx);
 void reset_default_formalism();
-detail::ImplicitContextResetter<Context> set_scoped_default_formalism(
-    const Context& ctx);
+[[nodiscard]] detail::ImplicitContextResetter<Context>
+set_scoped_default_formalism(const Context& ctx);
 
 }  // namespace sequant::mbpt
 

@@ -111,8 +111,8 @@ bool operator!=(const Context& ctx1, const Context& ctx2);
 const Context& get_default_context();
 void set_default_context(const Context& ctx);
 void reset_default_context();
-detail::ImplicitContextResetter<Context> set_scoped_default_context(
-    const Context& ctx);
+[[nodiscard]] detail::ImplicitContextResetter<Context>
+set_scoped_default_context(const Context& ctx);
 
 ///@}
 

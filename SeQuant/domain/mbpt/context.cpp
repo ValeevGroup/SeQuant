@@ -42,8 +42,8 @@ void reset_default_formalism() {
   sequant::detail::reset_implicit_context<Context>();
 }
 
-sequant::detail::ImplicitContextResetter<Context> set_scoped_default_formalism(
-    const Context& f) {
+[[nodiscard]] sequant::detail::ImplicitContextResetter<Context>
+set_scoped_default_formalism(const Context& f) {
   return sequant::detail::set_scoped_implicit_context(f);
 }
 
