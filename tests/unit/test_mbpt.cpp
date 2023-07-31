@@ -562,15 +562,6 @@ TEST_CASE("MBPT", "[mbpt]") {
 
       REQUIRE(simplify(result - result_wo_top) == ex<Constant>(0));
 
-      // try integrating spin
-      auto result_sf = closed_shell_spintrace(result);
-      {
-        std::wcout << "H2*T2 -> 0 (after spin tracing) = "
-                   << to_latex_align(result_sf, 0, 1) << std::endl
-                   << "  (total of " << result_sf->size() << " terms)"
-                   << std::endl;
-      }
-
       // now compute using physical vacuum
       {
         auto ctx_resetter = set_scoped_default_context(
@@ -581,19 +572,6 @@ TEST_CASE("MBPT", "[mbpt]") {
         {
           std::wcout << "H2*T2 -> 0 using phys vacuum = "
                      << to_latex_align(result_phys, 0, 1) << std::endl;
-        }
-      }
-
-      // now compute using (closed) Fermi vacuum + spinfree basis
-      {
-        auto ctx_resetter = set_scoped_default_context(
-            Context(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-                    BraKetSymmetry::conjugate, SPBasis::spinfree));
-        auto result_sf = vac_av(H_(2) * T_(2), {{0, 1}});
-
-        {
-          std::wcout << "H2*T2 -> 0 using Fermi vacuum + spinfree basis = "
-                     << to_latex_align(result_sf, 0, 1) << std::endl;
         }
       }
     });
@@ -627,6 +605,7 @@ TEST_CASE("MBPT", "[mbpt]") {
   SECTION("MRSF") {
     using namespace sequant::mbpt::mr;
 
+    // now compute using (closed) Fermi vacuum + spinfree basis
     auto ctx_resetter = set_scoped_default_context(
         Context(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
                 BraKetSymmetry::conjugate, SPBasis::spinfree));
