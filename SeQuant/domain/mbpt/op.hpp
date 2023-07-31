@@ -32,6 +32,7 @@ enum class OpType {
   t,    //!< cluster amplitudes
   λ,    //!< deexcitation cluster amplitudes
   A,    //!< antisymmetrizer
+  S,    //!< particle symmetrizer
   L,    //!< left-hand eigenstate
   R,    //!< right-hand eigenstate
   R12,  //!< geminal kernel
@@ -52,6 +53,7 @@ inline const std::map<OpType, std::wstring> optype2label{
     {OpType::t, L"t"},
     {OpType::λ, L"λ"},
     {OpType::A, L"A"},
+    {OpType::S, L"S"},
     {OpType::L, L"L"},
     {OpType::R, L"R"},
     {OpType::R12, L"F"},
@@ -389,7 +391,29 @@ class OpMaker {
   OpMaker(OpType op, std::initializer_list<IndexSpace::Type> bras,
           std::initializer_list<IndexSpace::Type> kets);
 
-  ExprPtr operator()() const;
+  /// @param[in] op the operator type
+  /// @param[in] bras the bra indices/creators
+  /// @param[in] kets the ket indices/annihilators
+  template <typename IndexSpaceTypeRange1, typename IndexSpaceTypeRange2>
+  OpMaker(OpType op, IndexSpaceTypeRange1&& bras, IndexSpaceTypeRange2&& kets)
+      : op_(op),
+        bra_spaces_(bras.begin(), bras.end()),
+        ket_spaces_(kets.begin(), kets.end()) {
+    assert(nbra() > 0 || nket() > 0);
+  }
+
+  // clang-format off
+  /// @param[in] dep_opt if given, controls whether bra (`*dep_opt == BraKetPos::bra`)
+  /// / ket (`*dep_opt == BraKetPos::ket`) indices
+  /// are dependent on the, respectively, ket/bra indices
+  /// (i.e., use them as protoindices);
+  /// if (`*dep_opt == BraKetPos::none`) then plain indices are used; if
+  /// \p dep_opt is not given then the default is determined by the MBPT context.
+  /// @param[in] opsymm_opt if given, controls whether (anti)symmetric
+  /// tensor is returned; if \p opsymm_opt is not given then the default is
+  /// determined by the MBPT context.
+  // clang-format off
+  ExprPtr operator()(std::optional<BraKetPos> dep_opt = {}, std::optional<Symmetry> opsymm_opt = {}) const;
 
   enum class CSV { Bra, Ket, None };
 
@@ -405,8 +429,8 @@ class OpMaker {
                       const container::svector<IndexSpace::Type>& kets,
                       TensorGenerator&& tensor_generator, CSV csv = CSV::None) {
     const bool symm =
-        mbpt::get_default_formalism().nbody_interaction_tensor_symm() ==
-        mbpt::Context::NBodyInteractionTensorSymm::Yes;
+        get_default_context().spbasis() ==
+        SPBasis::spinorbital;  // antisymmetrize if spin-orbital basis
     const auto csv_bra = csv == CSV::Bra;
     const auto csv_ket = csv == CSV::Ket;
 

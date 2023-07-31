@@ -232,8 +232,7 @@ ExprPtr F() {
 ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
                bool use_top) {
   FWickTheorem wick{expr};
-  wick.spinfree(false)
-      .use_topology(use_top)
+  wick.use_topology(use_top)
       .set_nop_connections(nop_connections)
       .full_contractions(false);
   auto result = wick.compute();

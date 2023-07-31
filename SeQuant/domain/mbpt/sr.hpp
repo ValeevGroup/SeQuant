@@ -210,8 +210,17 @@ ExprPtr Lambda_(std::size_t K);
 /// K
 ExprPtr Lambda(std::size_t K);
 
-/// makes deexcitation operator of rank \p K
-ExprPtr A(std::size_t K);
+/// makes generic bra/ket-antisymmetric excitation (if \p K > 0) or
+/// deexcitation (if \p K < 0) operator of rank `|K|`
+ExprPtr A(std::int64_t K);
+
+/// makes generic particle-symmetric excitation (if \p K > 0) or
+/// deexcitation (sif \p K < 0) operator of rank `|K|`
+ExprPtr S(std::int64_t K);
+
+/// makes projector onto excited bra (if \p K > 0) or
+/// ket (if \p K < 0) manifold of rank `|K|`
+ExprPtr P(std::int64_t K);
 
 /// @}
 

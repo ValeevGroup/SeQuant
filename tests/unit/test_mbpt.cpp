@@ -8,6 +8,7 @@
 #include "SeQuant/domain/mbpt/context.hpp"
 #include "SeQuant/domain/mbpt/mr.hpp"
 #include "SeQuant/domain/mbpt/op.hpp"
+#include "SeQuant/domain/mbpt/spin.hpp"
 #include "SeQuant/domain/mbpt/sr.hpp"
 
 #include "catch.hpp"
@@ -425,7 +426,7 @@ TEST_CASE("MBPT", "[mbpt]") {
 
     // H**T12**T12 -> R2
     SEQUANT_PROFILE_SINGLE("wick(H**T12**T12 -> R2)", {
-      auto result = vac_av(A(2) * H() * T(2) * T(2), {{1, 2}, {1, 3}});
+      auto result = vac_av(A(-2) * H() * T(2) * T(2), {{1, 2}, {1, 3}});
 
       //      std::wcout << "H*T12*T12 -> R2 = " << to_latex_align(result, 20)
       //                 << std::endl;
@@ -434,7 +435,15 @@ TEST_CASE("MBPT", "[mbpt]") {
 
     // H2**T3**T3 -> R4
     SEQUANT_PROFILE_SINGLE("wick(H2**T3**T3 -> R4)", {
-      auto result = vac_av(A(4) * H_(2) * T_(3) * T_(3), {{1, 2}, {1, 3}});
+      Logger::get_instance().wick_harness = true;
+      Logger::get_instance().wick_reduce = true;
+      Logger::get_instance().wick_topology = true;
+      Logger::get_instance().wick_contract = true;
+      auto result = vac_av(A(-4) * H_(2) * T_(3) * T_(3), {{1, 2}, {1, 3}});
+      Logger::get_instance().wick_harness = false;
+      Logger::get_instance().wick_reduce = false;
+      Logger::get_instance().wick_topology = false;
+      Logger::get_instance().wick_contract = false;
 
       std::wcout << "H2**T3**T3 -> R4 = " << to_latex_align(result, 20)
                  << std::endl;
@@ -450,15 +459,15 @@ TEST_CASE("MBPT", "[mbpt]") {
     {
       ExprPtr ref_result;
       SEQUANT_PROFILE_SINGLE("wick(H2**T2**T2**T3 -> R5)", {
-        ref_result =
-            op::vac_av(op::A(5) * op::H_(2) * op::T_(2) * op::T_(2) * op::T_(3),
-                       new_op_connect);
+        ref_result = op::vac_av(
+            op::A(-5) * op::H_(2) * op::T_(2) * op::T_(2) * op::T_(3),
+            new_op_connect);
         REQUIRE(ref_result->size() == 7);
       });
       // now computed using specific component of H2
       SEQUANT_PROFILE_SINGLE("wick(H2(oo;vv)**T2**T2**T3 -> R5)", {
         auto result = op::vac_av(
-            op::A(5) * op::H2_oo_vv() * op::T_(2) * op::T_(2) * op::T_(3),
+            op::A(-5) * op::H2_oo_vv() * op::T_(2) * op::T_(2) * op::T_(3),
             new_op_connect);
         REQUIRE(result->size() == ref_result->size());
       });
@@ -499,13 +508,41 @@ TEST_CASE("MBPT", "[mbpt]") {
 
     // H2**T2**T2 -> R2
     SEQUANT_PROFILE_SINGLE("wick(H2**T2**T2 -> R2)", {
-      auto result = vac_av(A(2) * H_(2) * T_(2) * T_(2), {{1, 2}, {1, 3}});
+      auto result = vac_av(A(-2) * H_(2) * T_(2) * T_(2), {{1, 2}, {1, 3}});
 
       std::wcout << "H2**T2**T2 -> R2 = " << to_latex_align(result, 20)
                  << std::endl;
       REQUIRE(result->size() == 4);
     });
   }  // SECTION("SRSO-PNO")
+
+  SECTION("SRSF") {
+    using namespace sequant::mbpt::sr;
+
+    auto ctx_resetter = set_scoped_default_context(
+        Context(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
+                BraKetSymmetry::conjugate, SPBasis::spinfree));
+
+    // H2 -> R2
+    SEQUANT_PROFILE_SINGLE("wick(H2 -> R2)", {
+      auto result = vac_av(S(-2) * H_(2));
+
+      {
+        std::wcout << "H2 -> R2 = " << to_latex_align(result, 0, 1)
+                   << std::endl;
+      }
+    });
+
+    // H2**T2 -> R2
+    SEQUANT_PROFILE_SINGLE("wick(H2**T2 -> R2)", {
+      auto result = vac_av(S(-2) * H_(2) * T_(2), {{1, 2}});
+
+      {
+        std::wcout << "H2**T2 -> R2 = " << to_latex_align(result, 0, 1)
+                   << std::endl;
+      }
+    });
+  }  // SECTION("SRSF")
 
   SECTION("MRSO") {
     using namespace sequant::mbpt::mr;
@@ -525,6 +562,15 @@ TEST_CASE("MBPT", "[mbpt]") {
 
       REQUIRE(simplify(result - result_wo_top) == ex<Constant>(0));
 
+      // try integrating spin
+      auto result_sf = closed_shell_spintrace(result);
+      {
+        std::wcout << "H2*T2 -> 0 (after spin tracing) = "
+                   << to_latex_align(result_sf, 0, 1) << std::endl
+                   << "  (total of " << result_sf->size() << " terms)"
+                   << std::endl;
+      }
+
       // now compute using physical vacuum
       {
         auto ctx_resetter = set_scoped_default_context(
@@ -535,6 +581,19 @@ TEST_CASE("MBPT", "[mbpt]") {
         {
           std::wcout << "H2*T2 -> 0 using phys vacuum = "
                      << to_latex_align(result_phys, 0, 1) << std::endl;
+        }
+      }
+
+      // now compute using (closed) Fermi vacuum + spinfree basis
+      {
+        auto ctx_resetter = set_scoped_default_context(
+            Context(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
+                    BraKetSymmetry::conjugate, SPBasis::spinfree));
+        auto result_sf = vac_av(H_(2) * T_(2), {{0, 1}});
+
+        {
+          std::wcout << "H2*T2 -> 0 using Fermi vacuum + spinfree basis = "
+                     << to_latex_align(result_sf, 0, 1) << std::endl;
         }
       }
     });
@@ -554,7 +613,7 @@ TEST_CASE("MBPT", "[mbpt]") {
 #if 0
     // H**T12 -> R2
     SEQUANT_PROFILE_SINGLE("wick(H**T2 -> R2)", {
-      auto result = vac_av(A(2) * H() * T_(2), {{1, 2}});
+      auto result = vac_av(A(-2) * H() * T_(2), {{1, 2}});
 
       {
         std::wcout << "H*T2 -> R2 = " << to_latex_align(result, 0, 1)
@@ -564,5 +623,30 @@ TEST_CASE("MBPT", "[mbpt]") {
 #endif
 
   }  // SECTION("MRSO")
+
+  SECTION("MRSF") {
+    using namespace sequant::mbpt::mr;
+
+    auto ctx_resetter = set_scoped_default_context(
+        Context(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
+                BraKetSymmetry::conjugate, SPBasis::spinfree));
+
+    // H2**T2 -> 0
+    std::wcout << "H_(2) * T_(2) = " << to_latex(H_(2) * T_(2)) << std::endl;
+    SEQUANT_PROFILE_SINGLE("wick(H2**T2 -> 0)", {
+      auto result = vac_av(H_(2) * T_(2), {{0, 1}});
+
+      {
+        std::wcout << "H2*T2 -> 0 = " << to_latex_align(result, 0, 1)
+                   << std::endl;
+      }
+
+      auto result_wo_top =
+          vac_av(H_(2) * T_(2), {{0, 1}}, /* use_topology = */ false);
+
+      REQUIRE(simplify(result - result_wo_top) == ex<Constant>(0));
+    });
+
+  }  // SECTION("MRSF")
 
 }  // TEST_CASE("MBPT")

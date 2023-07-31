@@ -55,11 +55,11 @@ std::vector<ExprPtr> cceqs::t(bool screen, bool use_topology,
     }
     hbar = hbar_le_p;
 
-    // 2.b multiply by A(P)
-    auto A_hbar = simplify(op::A(p) * hbar_p);
+    // 2.b project onto <p|, i.e. multiply by P(p)
+    auto P_hbar = simplify(op::P(p) * hbar_p);
 
-    // 2.c compute vacuum average
-    result.at(p) = op::vac_av(A_hbar);
+    // 2.c compute
+    result.at(p) = op::vac_av(P_hbar);
     simplify(result.at(p));
   }
 
@@ -106,9 +106,8 @@ std::vector<ExprPtr> cceqs::λ(bool screen, bool use_topology,
     }
     lhbar = hbar_le_p;  // not needed
 
-    // 2.b multiply by adjoint of A(P) on the right side
-
-    auto A_hbar = simplify(hbar_p * adjoint(op::A(p)));
+    // 2.b multiply by adjoint of P(p) (i.e., P(-p)) on the right side
+    auto hbar_P = simplify(hbar_p * op::P(-p));
 
     // temp
     std::vector<std::pair<std::wstring, std::wstring>> new_op_connect = {
@@ -116,7 +115,7 @@ std::vector<ExprPtr> cceqs::λ(bool screen, bool use_topology,
         {L"h", L"A"}, {L"f", L"A"}, {L"g", L"A"}};
 
     // 2.c compute vacuum average
-    result.at(p) = op::vac_av(A_hbar, new_op_connect);
+    result.at(p) = op::vac_av(hbar_P, new_op_connect);
     simplify(result.at(p));
   }
   return result;

@@ -57,13 +57,14 @@ OpClass to_class(OpType op) {
     case OpType::RDM:
     case OpType::RDMCumulant:
     case OpType::δ:
+    case OpType::A:
+    case OpType::S:
       return OpClass::gen;
     case OpType::t:
     case OpType::R:
     case OpType::R12:
       return OpClass::ex;
     case OpType::λ:
-    case OpType::A:
     case OpType::L:
       return OpClass::deex;
     default:
@@ -169,9 +170,8 @@ template <Statistics S>
 OpMaker<S>::OpMaker(OpType op) : op_(op) {}
 
 template <Statistics S>
-ExprPtr OpMaker<S>::operator()() const {
-  const bool symm = get_default_formalism().nbody_interaction_tensor_symm() ==
-                    Context::NBodyInteractionTensorSymm::Yes;
+ExprPtr OpMaker<S>::operator()(std::optional<BraKetPos> dep,
+                               std::optional<Symmetry> opsymm_opt) const {
   const bool do_csv = get_default_formalism().csv() == Context::CSV::Yes;
   bool csv_bra = false;
   bool csv_ket = false;
@@ -195,8 +195,10 @@ ExprPtr OpMaker<S>::operator()() const {
 
   return make(
       bra_spaces_, ket_spaces_,
-      [this](const auto& braidxs, const auto& ketidxs, Symmetry opsymm) {
-        return ex<Tensor>(to_wstring(op_), braidxs, ketidxs, opsymm);
+      [this, opsymm_opt](const auto& braidxs, const auto& ketidxs,
+                         Symmetry opsymm) {
+        return ex<Tensor>(to_wstring(op_), braidxs, ketidxs,
+                          opsymm_opt ? *opsymm_opt : opsymm);
       },
       csv);
 }
