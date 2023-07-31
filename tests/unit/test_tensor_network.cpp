@@ -155,49 +155,6 @@ TEST_CASE("TensorNetwork", "[elements]") {
     }
   }  // SECTION("canonicalizer")
 
-  // print automorphisms
-  auto print_auts =
-      [](const std::vector<std::vector<unsigned int>>& aut_generators,
-         auto&& stream, auto&& vlabels, bool use_labels) {
-        ranges::for_each(
-            aut_generators, [&stream, &vlabels, &use_labels](auto&& gen) {
-              // see bliss::print_permutation
-              auto print = [&stream, &vlabels, &use_labels](
-                               const std::vector<unsigned int>& perm) {
-                const unsigned int offset = 0;
-                const unsigned int N = perm.size();
-                for (unsigned int i = 0; i < N; i++) {
-                  unsigned int j = perm[i];
-                  if (j == i) continue;
-                  bool is_first = true;
-                  while (j != i) {
-                    if (j < i) {
-                      is_first = false;
-                      break;
-                    }
-                    j = perm[j];
-                  }
-                  if (!is_first) continue;
-                  stream << "("
-                         << (use_labels ? vlabels.at(i)
-                                        : std::to_wstring(i + offset))
-                         << ",";
-                  j = perm[i];
-                  while (j != i) {
-                    stream << (use_labels ? vlabels.at(j)
-                                          : std::to_wstring(j + offset));
-                    j = perm[j];
-                    if (j != i) stream << ",";
-                  }
-                  stream << ")";
-                }
-              };
-
-              print(gen);
-              stream << std::endl;
-            });
-      };
-
   SECTION("bliss graph") {
     Index::reset_tmp_index();
     // to generate expressions in specified (i.e., platform-independent) manner
@@ -501,7 +458,7 @@ TEST_CASE("TensorNetwork", "[elements]") {
       graph->find_automorphisms(stats, &bliss::aut_hook<decltype(save_aut)>,
                                 &save_aut);
       std::basic_ostringstream<wchar_t> oss;
-      print_auts(aut_generators, oss, vlabels, false);
+      bliss::print_auts(aut_generators, oss, decltype(vlabels){});
       REQUIRE(oss.str() ==
               L"(18,19)\n"
               "(16,17)\n"
@@ -520,7 +477,7 @@ TEST_CASE("TensorNetwork", "[elements]") {
       // change to 1 to user vertex labels rather than indices
       if (0) {
         std::basic_ostringstream<wchar_t> oss2;
-        print_auts(aut_generators, oss2, vlabels, true);
+        bliss::print_auts(aut_generators, oss2, vlabels);
         std::wcout << oss2.str() << std::endl;
       }
     }
@@ -570,7 +527,7 @@ TEST_CASE("TensorNetwork", "[elements]") {
             2);  // there are 2 generators, i1<->i2, i3<->i4
 
       std::basic_ostringstream<wchar_t> oss;
-      print_auts(aut_generators, oss, vlabels, true);
+      bliss::print_auts(aut_generators, oss, vlabels);
       CHECK(oss.str() == L"({i_3},{i_4})\n({i_1},{i_2})\n");
       // std::wcout << oss.str() << std::endl;
     }
