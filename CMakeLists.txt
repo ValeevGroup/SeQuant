@@ -249,6 +249,7 @@ set(SeQuant_src
         SeQuant/core/tensor_network.hpp
         SeQuant/core/timer.hpp
         SeQuant/core/utility/context.hpp
+        SeQuant/core/utility/macros.hpp
         SeQuant/core/utility/singleton.hpp
         SeQuant/core/wick.hpp
         SeQuant/core/wick.impl.hpp
