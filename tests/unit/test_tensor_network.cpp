@@ -38,7 +38,7 @@ TEST_CASE("TensorNetwork", "[elements]") {
     }
 
     {  // with Tensors and NormalOperators
-      auto tmp = A(2) * H_(2) * T_(2) * T_(2);
+      auto tmp = A(-2) * H_(2) * T_(2) * T_(2);
       REQUIRE_NOTHROW(TensorNetwork(tmp->as<Product>().factors()));
     }
 
@@ -161,7 +161,7 @@ TEST_CASE("TensorNetwork", "[elements]") {
     // can't use operator expression (due to unspecified order of evaluation of
     // function arguments), must use initializer list
     auto tmp = ex<Product, std::initializer_list<ExprPtr>>(
-        {A(2), H_(2), T_(2), T_(2), T_(2)});
+        {A(-2), H_(2), T_(2), T_(2), T_(2)});
     // canonicalize to avoid dependence on the implementation details of
     // mbpt::sr::make_op
     canonicalize(tmp);

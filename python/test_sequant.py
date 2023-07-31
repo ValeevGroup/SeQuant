@@ -31,8 +31,8 @@ class TestSequant(unittest.TestCase):
 
   def test_ccsd(self):
     from _sequant.mbpt import A,H,T,T_,VacuumAverage
-    ccd = VacuumAverage( A(2) * H() * T_(2) * T_(2), [(1, 2), (1, 3)] );
-    ccsd = VacuumAverage( A(2) * H() * T(2) * T(2), [(1, 2), (1, 3)] );
+    ccd = VacuumAverage( A(-2) * H() * T_(2) * T_(2), [(1, 2), (1, 3)] );
+    ccsd = VacuumAverage( A(-2) * H() * T(2) * T(2), [(1, 2), (1, 3)] );
     print (ccsd.latex)
 
     class String:

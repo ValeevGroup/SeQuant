@@ -9,11 +9,7 @@
 
 namespace sequant {
 
-enum class IndexSpaceMetric {
-  Unit,
-  General,
-  Invalid
-};
+enum class IndexSpaceMetric { Unit, General, Invalid };
 
 // clang-format off
 /// describes supported symmetries of tensorial objects with respect to permutations of particles (or columns, in tensor notation)
@@ -53,7 +49,7 @@ inline std::wstring to_wolfram(const Symmetry& symmetry) {
   return result;
 }
 
-enum class BraKetPos { bra, ket };
+enum class BraKetPos { bra, ket, none };
 
 inline std::wstring to_wolfram(BraKetPos a) {
   using namespace std::literals;
@@ -65,7 +61,9 @@ enum class Statistics { BoseEinstein, FermiDirac };
 enum class Action { create, annihilate, invalid };
 
 /// applies (Hermitian) adjoint to @c action
-inline Action adjoint(Action action) { return action == Action::create ? Action::annihilate : Action::create; }
+inline Action adjoint(Action action) {
+  return action == Action::create ? Action::annihilate : Action::create;
+}
 
 inline std::wstring to_wolfram(Action a) {
   using namespace std::literals;

@@ -647,6 +647,22 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
 
             // using each automorphism generator
             for (auto &&aut : aut_generators) {
+              // skip automorphism generators that involve vertices that are
+              // not part of vertices
+              // this prevents topology exploitation for spin-free Wick
+              // TODO learn how to compute partitions correctly for
+              //      spin-free cases
+              const auto nv = aut.size();
+              bool aut_contains_other_vertices = false;
+              for (auto v = 0; v != nv; ++v) {
+                const auto v_is_in_aut = v != aut[v];
+                if (v_is_in_aut && !vertices.contains(v)) {
+                  aut_contains_other_vertices = true;
+                  break;
+                }
+              }
+              if (aut_contains_other_vertices) continue;
+
               // update partitions
               for (auto &&[v1, ord1] : vertices) {
                 const auto v2 = aut[v1];
