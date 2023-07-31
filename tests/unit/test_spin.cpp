@@ -46,11 +46,17 @@ TEST_CASE("Spin", "[spin]") {
         Index(L"α↑_1", IndexSpace::instance(IndexSpace::complete_unoccupied,
                                             IndexSpace::alpha));
 
+    SEQUANT_PRAGMA_CLANG(diagnostic push)
+    SEQUANT_PRAGMA_CLANG(diagnostic ignored "-Wdeprecated-declarations")
+    SEQUANT_PRAGMA_GCC(diagnostic push)
+    SEQUANT_PRAGMA_GCC(diagnostic ignored "-Wdeprecated-declarations")
     REQUIRE(p1.ascii_label() == "pa_1");
     REQUIRE(p2.ascii_label() == "pb_2");
     REQUIRE(p3.ascii_label() == "pa_3");
     REQUIRE(p4.ascii_label() == "pb_4");
     REQUIRE(alpha1.ascii_label() == "alphaa_1");
+    SEQUANT_PRAGMA_GCC(diagnostic pop)
+    SEQUANT_PRAGMA_CLANG(diagnostic pop)
   }
 
   SECTION("Tensor: can_expand, spin_symm_tensor, remove_spin") {
