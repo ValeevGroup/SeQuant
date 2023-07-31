@@ -542,6 +542,15 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
           const auto &tn_edges = tn.edges();
           const auto &tn_tensors = tn.tensors();
 
+          if (Logger::get_instance().wick_topology) {
+            std::basic_ostringstream<wchar_t> oss;
+            graph->write_dot(oss, vlabels);
+            std::wcout
+                << "WickTheorem<S>::compute: colored graph produced from TN = "
+                << std::endl
+                << oss.str() << std::endl;
+          }
+
           // identify vertex indices of NormalOperator objects and Indices
           // 1. list of vertex indices corresponding to NormalOperator objects
           //    on the TN graph and their ordinals in NormalOperatorSequence
@@ -604,6 +613,14 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
 
             graph->find_automorphisms(
                 stats, &bliss::aut_hook<decltype(save_aut)>, &save_aut);
+
+            if (Logger::get_instance().wick_topology) {
+              std::basic_ostringstream<wchar_t> oss2;
+              bliss::print_auts(aut_generators, oss2, vlabels);
+              std::wcout << "WickTheorem<S>::compute: colored graph "
+                            "automorphism generators = \n"
+                         << oss2.str() << std::endl;
+            }
           }
 
           /// Use automorphisms to determine groups of topologically equivalent
