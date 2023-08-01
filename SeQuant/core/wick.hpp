@@ -1343,7 +1343,8 @@ class WickTheorem {
 
                         // for spinfree Wick over Fermi vacuum, we need to
                         // include extra x2 factor for each cycle
-                        if (get_default_context().vacuum() ==
+                        if (ncycles > 0 &&
+                            get_default_context().vacuum() ==
                                 Vacuum::SingleProduct &&
                             get_default_context().spbasis() ==
                                 SPBasis::spinfree) {
