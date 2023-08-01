@@ -1955,10 +1955,10 @@ ExprPtr biorthogonal_transform(
       bt_coeff_vec.emplace_back(to_rational(c, threshold));
     });
 
-    std::cout << "n_particles = " << n_particles << "\n bt_coeff_vec = ";
-    std::copy(bt_coeff_vec.begin(), bt_coeff_vec.end(),
-              std::ostream_iterator<rational>(std::cout, " "));
-    std::cout << "\n";
+//    std::cout << "n_particles = " << n_particles << "\n bt_coeff_vec = ";
+//    std::copy(bt_coeff_vec.begin(), bt_coeff_vec.end(),
+//              std::ostream_iterator<rational>(std::cout, " "));
+//    std::cout << "\n";
 #else
     // hardwire coefficients for n_particles = 1, 2, 3
     switch (n_particles) {
