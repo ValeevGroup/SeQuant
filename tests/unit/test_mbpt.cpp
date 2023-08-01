@@ -435,15 +435,7 @@ TEST_CASE("MBPT", "[mbpt]") {
 
     // H2**T3**T3 -> R4
     SEQUANT_PROFILE_SINGLE("wick(H2**T3**T3 -> R4)", {
-      Logger::get_instance().wick_harness = true;
-      Logger::get_instance().wick_reduce = true;
-      Logger::get_instance().wick_topology = true;
-      Logger::get_instance().wick_contract = true;
       auto result = vac_av(A(-4) * H_(2) * T_(3) * T_(3), {{1, 2}, {1, 3}});
-      Logger::get_instance().wick_harness = false;
-      Logger::get_instance().wick_reduce = false;
-      Logger::get_instance().wick_topology = false;
-      Logger::get_instance().wick_contract = false;
 
       std::wcout << "H2**T3**T3 -> R4 = " << to_latex_align(result, 20)
                  << std::endl;
