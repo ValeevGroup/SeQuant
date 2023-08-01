@@ -790,7 +790,7 @@ ExprPtr closed_shell_spintrace(
   // Symmetrize and expression
   // Partially expand the antisymmetrizer and write it in terms of S operator.
   // See symmetrize_expr(expr) function for implementation details. We want an
-  // expresison with non-symmetric tensors, hence we are partially expanding the
+  // expression with non-symmetric tensors, hence we are partially expanding the
   // antisymmetrizer (A) and fully expanding the anti-symmetric tensors to
   // non-symmetric.
   auto symm_and_expand = [](const ExprPtr& expr) {
