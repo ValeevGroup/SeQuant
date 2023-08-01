@@ -170,28 +170,29 @@ template <Statistics S>
 OpMaker<S>::OpMaker(OpType op) : op_(op) {}
 
 template <Statistics S>
-ExprPtr OpMaker<S>::operator()(std::optional<BraKetPos> dep,
+ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
                                std::optional<Symmetry> opsymm_opt) const {
-  const bool do_csv = get_default_formalism().csv() == Context::CSV::Yes;
-  bool csv_bra = false;
-  bool csv_ket = false;
-  if (do_csv) {  // validate spaces
+  bool dep_bra = false;
+  bool dep_ket = false;
+  // if not given dep, use mbpt::Context::CSV to determine whether to use
+  // dependent indices for pure (de)excitation ops
+  if (!dep && get_default_formalism().csv() == mbpt::CSV::Yes) {
     if (to_class(op_) == OpClass::ex) {
       for (auto&& s : bra_spaces_) {
         assert(s == IndexSpace::complete_unoccupied ||
                s == IndexSpace::active_unoccupied);
       }
-      csv_bra = true;
+      dep = UseDepIdx::Bra;
     } else if (to_class(op_) == OpClass::deex) {
       for (auto&& s : ket_spaces_) {
         assert(s == IndexSpace::complete_unoccupied ||
                s == IndexSpace::active_unoccupied);
       }
-      csv_ket = true;
+      dep = UseDepIdx::Ket;
+    } else {
+      dep = UseDepIdx::None;
     }
   }
-
-  CSV csv = csv_bra ? CSV::Bra : (csv_ket ? CSV::Ket : CSV::None);
 
   return make(
       bra_spaces_, ket_spaces_,
@@ -200,7 +201,7 @@ ExprPtr OpMaker<S>::operator()(std::optional<BraKetPos> dep,
         return ex<Tensor>(to_wstring(op_), braidxs, ketidxs,
                           opsymm_opt ? *opsymm_opt : opsymm);
       },
-      csv);
+      dep ? *dep : UseDepIdx::None);
 }
 
 template class OpMaker<Statistics::FermiDirac>;

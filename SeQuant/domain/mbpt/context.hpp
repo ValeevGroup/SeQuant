@@ -6,14 +6,14 @@
 
 namespace sequant::mbpt {
 
+/// Whether to use cluster-specific virtuals.
+enum class CSV { Yes, No };
+
 /// @brief details of the MBPT formalism
 ///
 /// to be used as a implicit or explicit specification of the formalism
 class Context {
  public:
-  /// Whether to use cluster-specific virtuals.
-  enum class CSV { Yes, No };
-
   struct Defaults {
     constexpr static auto csv = CSV::No;
   };

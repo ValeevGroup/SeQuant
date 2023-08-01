@@ -6,8 +6,9 @@
 #define SEQUANT_SPIN_HPP
 
 #include <SeQuant/core/tensor_network.hpp>
-#include <unordered_map>
 #include "SeQuant/core/tensor.hpp"
+
+#include <unordered_map>
 
 namespace sequant {
 
@@ -161,9 +162,10 @@ ExprPtr closed_shell_spintrace(
     const container::svector<container::svector<Index>>& ext_index_groups = {
         {}});
 
-/// @brief Generates list of external indices from Antisymmetrization (A)
-/// operator
-/// @param expr ExprPtr with spin orbital indices
+/// @brief Generates list of external indices common to all tensor networks in
+/// the expression
+/// @param expr ExprPtr (sum of) TN in spin-orbital basis, must include an
+/// (anti)symmetrizer (see OpType::A , OpType::S)
 /// @return external index groups to be used for spintracing
 container::svector<container::svector<Index>> external_indices(
     const ExprPtr& expr);
@@ -171,9 +173,11 @@ container::svector<container::svector<Index>> external_indices(
 ///
 /// @param nparticles Number of indices in bra of the target tensor. That must
 ///                   be equal to the same in the ket.
-///
-container::svector<container::svector<Index>> external_indices(
-    size_t nparticles);
+/// @deprecated not CVS-compatible, and mixes bra and ket relative to
+/// external_indices(expr) , will be deprecated
+[[deprecated("use external_indices(expr)")]] container::svector<
+    container::svector<Index>>
+external_indices(size_t nparticles);
 
 /// @brief Transforms Coupled cluster from spin orbital to spatial orbitals
 /// @details The external indices are deduced from Antisymmetrization operator

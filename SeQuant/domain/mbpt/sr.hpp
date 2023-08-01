@@ -219,7 +219,9 @@ ExprPtr A(std::int64_t K);
 ExprPtr S(std::int64_t K);
 
 /// makes projector onto excited bra (if \p K > 0) or
-/// ket (if \p K < 0) manifold of rank `|K|`
+/// ket (if \p K < 0) manifold of rank `|K|`;
+/// if using spin-free basis the manifold is particle-symmetric (@sa S(K)),
+/// else it is bra/ket-antisymmetric (@sa A(K))
 ExprPtr P(std::int64_t K);
 
 /// @}

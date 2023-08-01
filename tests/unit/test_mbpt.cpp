@@ -502,9 +502,10 @@ TEST_CASE("MBPT", "[mbpt]") {
   }  // SECTION("SRSO Fock")
 
   SECTION("SRSO-PNO") {
+    using namespace sequant::mbpt;
     using namespace sequant::mbpt::sr;
     using sequant::mbpt::Context;
-    auto resetter = set_scoped_default_formalism(Context(Context::CSV::Yes));
+    auto resetter = set_scoped_default_formalism(Context(CSV::Yes));
 
     // H2**T2**T2 -> R2
     SEQUANT_PROFILE_SINGLE("wick(H2**T2**T2 -> R2)", {

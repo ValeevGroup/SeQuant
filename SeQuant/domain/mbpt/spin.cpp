@@ -2,13 +2,14 @@
 
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/tensor.hpp>
-#include <unordered_map>
 
 #ifdef SEQUANT_HAS_EIGEN
 #include <Eigen/Eigenvalues>
 #endif
 
 #include <range/v3/algorithm/for_each.hpp>
+
+#include <unordered_map>
 
 namespace sequant {
 
@@ -785,7 +786,7 @@ ExprPtr closed_shell_spintrace(
       });
     }
   };
-  expression->visit(check_proto_index);
+  // expression->visit(check_proto_index);
 
   // Symmetrize and expression
   // Partially expand the antisymmetrizer and write it in terms of S operator.
@@ -941,24 +942,24 @@ ExprPtr closed_shell_spintrace(
 
 container::svector<container::svector<Index>> external_indices(
     const ExprPtr& expr) {
-  // Generate external index list from Antisymmetrizer
-  Tensor A{};
+  // Generate external index list from symmetrizer or antisymmetrizer
+  Tensor P{};
   for (const auto& prod : *expr) {
     if (prod->is<Product>()) {
       auto tensor = prod->as<Product>().factor(0)->as<Tensor>();
-      if (tensor.label() == L"A") {
-        A = tensor;
+      if (tensor.label() == L"A" || tensor.label() == L"S") {
+        P = tensor;
         break;
       }
     }
   }
-  assert(A.bra_rank() != 0 &&
+  assert(P.bra_rank() != 0 &&
          "Could not generate external index groups due to "
-         "absence of Anti-symmetrizer (A) operator in expression.");
-  assert(A.bra_rank() == A.ket_rank());
-  container::svector<container::svector<Index>> ext_index_groups(A.rank());
-  for (auto i = 0; i != A.rank(); ++i) {
-    ext_index_groups[i] = container::svector<Index>{A.ket()[i], A.bra()[i]};
+         "absence of (anti)symmetrizer (A or S) operator in expression.");
+  assert(P.bra_rank() == P.ket_rank());
+  container::svector<container::svector<Index>> ext_index_groups(P.rank());
+  for (auto i = 0; i != P.rank(); ++i) {
+    ext_index_groups[i] = container::svector<Index>{P.ket()[i], P.bra()[i]};
   }
   return ext_index_groups;
 }
