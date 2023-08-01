@@ -442,7 +442,7 @@ if (BUILD_TESTING)
     add_executable(${example0} EXCLUDE_FROM_ALL
             examples/${example0}/${example0}.cpp)
     target_link_libraries(${example0} SeQuant)
-    set(${example0}_cmdline_args ";3 t std so;3 t csv so;3 lambda std so;3 lambda csv so;2 t std sf")
+    set(${example0}_cmdline_args ";3 t std so;3 t csv so;3 lambda std so;3 lambda csv so;2 t std sf;;2 lambda std sf")
 
     if (TARGET Eigen3::Eigen)  # these examples require Eigen for full functionality
       # Single-Reference closed-shell Coupled-Cluster equation
