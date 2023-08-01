@@ -69,9 +69,10 @@ class compute_cceqvec {
         break;
     }
     tpool.stop(N);
+    const bool spinfree = get_default_context().spbasis() == SPBasis::spinfree;
     std::wcout << std::boolalpha << "CC equations [type=" << type2str.at(type)
-               << ",rank=" << N << ",screen=" << screen
-               << ",use_topology=" << use_topology
+               << ",rank=" << N << ",spinfree=" << spinfree
+               << ",screen=" << screen << ",use_topology=" << use_topology
                << ",use_connectivity=" << use_connectivity
                << ",canonical_only=" << canonical_only << "] computed in "
                << tpool.read(N) << " seconds" << std::endl;
@@ -147,6 +148,10 @@ class compute_cceqvec {
                      << N << " R=" << R << ":\n"
                      << "spintraced-spinfree = "
                      << to_latex_align(should_be_zero, 0, 1) << std::endl;
+        else
+          std::wcout << "Spin-free equations match spin-traced "
+                        "spin-orbital equations"
+                     << std::endl;
         runtime_assert(should_be_zero == ex<Constant>(0));
 
         // validate sizes of spin-free t equations after biorothogonal transform

@@ -110,12 +110,12 @@ std::vector<ExprPtr> cceqs::λ(bool screen, bool use_topology,
     auto hbar_P = simplify(hbar_p * op::P(-p));
 
     // temp
-    std::vector<std::pair<std::wstring, std::wstring>> new_op_connect = {
-        {L"h", L"t"}, {L"f", L"t"}, {L"g", L"t"},
-        {L"h", L"A"}, {L"f", L"A"}, {L"g", L"A"}};
+    std::vector<std::pair<std::wstring, std::wstring>> op_connect = {
+        {L"h", L"t"}, {L"f", L"t"}, {L"g", L"t"}, {L"h", L"A"}, {L"f", L"A"},
+        {L"g", L"A"}, {L"h", L"S"}, {L"f", L"S"}, {L"g", L"S"}};
 
     // 2.c compute vacuum average
-    result.at(p) = op::vac_av(hbar_P, new_op_connect);
+    result.at(p) = op::vac_av(hbar_P, op_connect);
     simplify(result.at(p));
   }
   return result;
