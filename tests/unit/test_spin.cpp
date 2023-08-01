@@ -1315,7 +1315,6 @@ SECTION("Open-shell spin-tracing") {
   const auto a2B = Index(L"a↓_2", virB);
   const auto a3B = Index(L"a↓_3", virB);
 
-  // Logger::get_instance().canonicalize = true;
   // Tensor canonicalize
   {
     auto t3 = ex<Tensor>(Tensor(L"t", {a3A, a2B, a2A}, {i1A, i2B, i3A}));
@@ -1385,7 +1384,6 @@ SECTION("Open-shell spin-tracing") {
             L"i↓_3}}_{{a↓_2}}}}");
   }
 
-  Logger::get_instance().canonicalize = false;
   // f * t3
   {
     auto input =
