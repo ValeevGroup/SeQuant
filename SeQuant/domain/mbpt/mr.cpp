@@ -231,9 +231,13 @@ ExprPtr F() {
 
 ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
                bool use_top) {
+  const auto spinorbital =
+      get_default_context().spbasis() == SPBasis::spinorbital;
+  // convention is to use different label for spin-orbital and spin-free RDM
+  const auto rdm_label = spinorbital ? optype2label.at(OpType::RDM) : L"Γ";
+
   FWickTheorem wick{expr};
-  wick.spinfree(false)
-      .use_topology(use_top)
+  wick.use_topology(use_top)
       .set_nop_connections(nop_connections)
       .full_contractions(false);
   auto result = wick.compute();
@@ -258,8 +262,8 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
       // 2. project RDM indices onto the target RDM subspace
 
       // STEP1. replace NOPs by RDM
-      auto replace_nop_with_rdm = [](ExprPtr& exptr) {
-        auto replace = [](const auto& nop) -> ExprPtr {
+      auto replace_nop_with_rdm = [&rdm_label, spinorbital](ExprPtr& exptr) {
+        auto replace = [&rdm_label, spinorbital](const auto& nop) -> ExprPtr {
           using index_container = container::svector<Index>;
           auto braidxs = nop.annihilators() |
                          ranges::views::transform(
@@ -272,8 +276,9 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
           assert(braidxs.size() ==
                  ketidxs.size());  // need to handle particle # violating case?
           const auto rank = braidxs.size();
-          return ex<Tensor>(optype2label.at(OpType::RDM), braidxs, ketidxs,
-                            rank > 1 ? Symmetry::antisymm : Symmetry::nonsymm);
+          return ex<Tensor>(
+              rdm_label, braidxs, ketidxs,
+              rank > 1 && spinorbital ? Symmetry::antisymm : Symmetry::nonsymm);
         };
 
         if (exptr.template is<FNOperator>()) {
@@ -327,11 +332,11 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
           // extract RDM-only and all indices
           container::set<Index> rdm_indices;
           std::set<Index, Index::LabelCompare> all_indices;
-          auto retrieve_rdm_and_all_indices = [&rdm_indices, &all_indices](
-                                                  const auto& idx,
-                                                  const auto& tensor) {
+          auto retrieve_rdm_and_all_indices = [&rdm_indices, &all_indices,
+                                               &rdm_label](const auto& idx,
+                                                           const auto& tensor) {
             all_indices.insert(idx);
-            if (tensor._label() == optype2label.at(OpType::RDM)) {
+            if (tensor._label() == rdm_label) {
               rdm_indices.insert(idx);
             }
           };

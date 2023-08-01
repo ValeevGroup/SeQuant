@@ -404,6 +404,11 @@ struct NullNormalOperatorCanonicalizerDeregister {
 
 template <Statistics S>
 ExprPtr WickTheorem<S>::compute(const bool count_only) {
+  if (input_.vacuum() != get_default_context().vacuum())
+    throw std::logic_error(
+        "WickTheorem<S>::compute(): input vacuum "
+        "must match the default context vacuum");
+
   // this is used to detect whether this is part of compute() applied to a Sum
   static bool applied_to_sum = false;
 
@@ -537,6 +542,15 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
           const auto &tn_edges = tn.edges();
           const auto &tn_tensors = tn.tensors();
 
+          if (Logger::get_instance().wick_topology) {
+            std::basic_ostringstream<wchar_t> oss;
+            graph->write_dot(oss, vlabels);
+            std::wcout
+                << "WickTheorem<S>::compute: colored graph produced from TN = "
+                << std::endl
+                << oss.str() << std::endl;
+          }
+
           // identify vertex indices of NormalOperator objects and Indices
           // 1. list of vertex indices corresponding to NormalOperator objects
           //    on the TN graph and their ordinals in NormalOperatorSequence
@@ -599,6 +613,14 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
 
             graph->find_automorphisms(
                 stats, &bliss::aut_hook<decltype(save_aut)>, &save_aut);
+
+            if (Logger::get_instance().wick_topology) {
+              std::basic_ostringstream<wchar_t> oss2;
+              bliss::print_auts(aut_generators, oss2, vlabels);
+              std::wcout << "WickTheorem<S>::compute: colored graph "
+                            "automorphism generators = \n"
+                         << oss2.str() << std::endl;
+            }
           }
 
           /// Use automorphisms to determine groups of topologically equivalent
@@ -625,6 +647,22 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
 
             // using each automorphism generator
             for (auto &&aut : aut_generators) {
+              // skip automorphism generators that involve vertices that are
+              // not part of vertices
+              // this prevents topology exploitation for spin-free Wick
+              // TODO learn how to compute partitions correctly for
+              //      spin-free cases
+              const auto nv = aut.size();
+              bool aut_contains_other_vertices = false;
+              for (auto v = 0; v != nv; ++v) {
+                const auto v_is_in_aut = v != aut[v];
+                if (v_is_in_aut && !vertices.contains(v)) {
+                  aut_contains_other_vertices = true;
+                  break;
+                }
+              }
+              if (aut_contains_other_vertices) continue;
+
               // update partitions
               for (auto &&[v1, ord1] : vertices) {
                 const auto v2 = aut[v1];
@@ -711,7 +749,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
           auto extract_partitions = [](const auto &vidx2pidx,
                                        const auto npartitions,
                                        const auto &vidx_ord) {
-            container::vector<container::vector<size_t>> partitions;
+            container::svector<container::svector<size_t>> partitions;
 
             assert(npartitions > -1);
             const size_t max_pidx = npartitions;
@@ -729,7 +767,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
                   assert(vidx_ord.find(vidx) != vidx_ord.end());
                   const auto ordinal = vidx_ord.find(vidx)->second;
                   if (p_found == false) {  // first time this is found
-                    partitions.emplace_back(container::vector<size_t>{
+                    partitions.emplace_back(container::svector<size_t>{
                         static_cast<size_t>(ordinal)});
                   } else
                     partitions[partition_cnt].emplace_back(ordinal);
@@ -753,7 +791,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
           };
 
           if (!nop_vidx2pidx.empty()) {
-            container::vector<container::vector<size_t>> nop_partitions;
+            container::svector<container::svector<size_t>> nop_partitions;
 
             nop_partitions = extract_partitions(nop_vidx2pidx, nop_npartitions,
                                                 nop_vidx_ord);
@@ -814,7 +852,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
               exclude_index_vertex_pair);
 
           if (!index_vidx2pidx.empty()) {
-            container::vector<container::vector<size_t>> index_partitions;
+            container::svector<container::svector<size_t>> index_partitions;
 
             index_partitions = extract_partitions(
                 index_vidx2pidx, index_npartitions, index_vidx_ord);
@@ -876,6 +914,10 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
 
 template <Statistics S>
 void WickTheorem<S>::reduce(ExprPtr &expr) const {
+  if (Logger::get_instance().wick_reduce) {
+    std::wcout << "WickTheorem<S>::reduce: input = "
+               << to_latex_align(expr, 20, 1) << std::endl;
+  }
   // there are 2 possibilities: expr is a single Product, or it's a Sum of
   // Products
   if (expr->type_id() == Expr::get_type_id<Product>()) {
@@ -898,6 +940,11 @@ void WickTheorem<S>::reduce(ExprPtr &expr) const {
         subexpr = std::make_shared<Constant>(0);
       }
     }
+  }
+
+  if (Logger::get_instance().wick_reduce) {
+    std::wcout << "WickTheorem<S>::reduce: result = "
+               << to_latex_align(expr, 20, 1) << std::endl;
   }
 }
 template <Statistics S>

@@ -5,6 +5,8 @@
 #ifndef SEQUANT_WSTRING_HPP
 #define SEQUANT_WSTRING_HPP
 
+#include "SeQuant/core/utility/macros.hpp"
+
 #include <cmath>
 #include <string>
 #include <string_view>
@@ -78,10 +80,6 @@ std::wstring to_wstring(const std::basic_string<SourceChar, SourceTraits,
   return utf_to_utf<wchar_t>(str_utf8.data(),
                              str_utf8.data() + str_utf8.size());
 }
-
-#define SEQUANT_CONCAT_IMPL(x, y) x##y
-/// concatenates two tokens
-#define SEQUANT_CONCAT(x, y) SEQUANT_CONCAT_IMPL(x, y)
 
 #if __cplusplus >= 202002L
 

@@ -99,11 +99,62 @@ ExprPtr R12(IndexSpace::Type gg_space, int ansatz) {
                    {gg_space, gg_space})();
 }
 
-/// makes deexcitation operator of bra/ket ranks @c Nbra/Nket
-ExprPtr A(std::size_t Nbra, std::size_t Nket) {
-  assert(Nbra > 0);
-  assert(Nket > 0);
-  return OpMaker(OpType::A, Nbra, Nket)();
+ExprPtr A(std::int64_t Kh, std::int64_t Kp) {
+  assert(Kh != 0);
+  if (Kp == std::numeric_limits<std::int64_t>::max()) Kp = Kh;
+  assert(Kp != 0);
+
+  // Kh and Kp should have same sign
+  assert((Kh > 0 && Kp > 0) || (Kh < 0 && Kp < 0));
+
+  container::svector<IndexSpace::Type> creators;
+  container::svector<IndexSpace::Type> annihilators;
+  if (Kh > 0)
+    for (auto i : ranges::views::iota(0, Kh))
+      annihilators.emplace_back(IndexSpace::active_occupied);
+  else
+    for (auto i : ranges::views::iota(0, -Kh))
+      creators.emplace_back(IndexSpace::active_occupied);
+  if (Kp > 0)
+    for (auto i : ranges::views::iota(0, Kp))
+      creators.emplace_back(IndexSpace::active_unoccupied);
+  else
+    for (auto i : ranges::views::iota(0, -Kp))
+      annihilators.emplace_back(IndexSpace::active_unoccupied);
+
+  std::optional<OpMaker::UseDepIdx> dep;
+  if (get_default_formalism().csv() == mbpt::CSV::Yes)
+    dep = Kh > 0 ? OpMaker::UseDepIdx::Bra : OpMaker::UseDepIdx::Ket;
+  return OpMaker(OpType::A, creators, annihilators)(dep, {Symmetry::antisymm});
+}
+
+ExprPtr S(std::int64_t Kh, std::int64_t Kp) {
+  assert(Kh != 0);
+  if (Kp == std::numeric_limits<std::int64_t>::max()) Kp = Kh;
+  assert(Kp != 0);
+
+  // Kh and Kp should have same sign
+  assert((Kh > 0 && Kp > 0) || (Kh < 0 && Kp < 0));
+
+  container::svector<IndexSpace::Type> creators;
+  container::svector<IndexSpace::Type> annihilators;
+  if (Kh > 0)
+    for (auto i : ranges::views::iota(0, Kh))
+      annihilators.emplace_back(IndexSpace::active_occupied);
+  else
+    for (auto i : ranges::views::iota(0, -Kh))
+      creators.emplace_back(IndexSpace::active_occupied);
+  if (Kp > 0)
+    for (auto i : ranges::views::iota(0, Kp))
+      creators.emplace_back(IndexSpace::active_unoccupied);
+  else
+    for (auto i : ranges::views::iota(0, -Kp))
+      annihilators.emplace_back(IndexSpace::active_unoccupied);
+
+  std::optional<OpMaker::UseDepIdx> dep;
+  if (get_default_formalism().csv() == mbpt::CSV::Yes)
+    dep = Kh > 0 ? OpMaker::UseDepIdx::Bra : OpMaker::UseDepIdx::Ket;
+  return OpMaker(OpType::S, creators, annihilators)(dep, {Symmetry::nonsymm});
 }
 
 /// makes excitation operator of all bra/ket ranks up to (and including)

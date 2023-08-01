@@ -11,6 +11,12 @@ inline bool operator==(const ExprPtr &left, const ExprPtr &right) {
   return *left == *right;
 }
 
+#if __cplusplus <= 201703L
+inline bool operator!=(const ExprPtr &left, const ExprPtr &right) {
+  return !(left == right);
+}
+#endif
+
 inline ExprPtr operator*(const ExprPtr &left, const ExprPtr &right) {
   auto left_is_product = left->is<Product>();
   auto right_is_product = right->is<Product>();

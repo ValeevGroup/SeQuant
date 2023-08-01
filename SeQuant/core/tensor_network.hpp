@@ -176,7 +176,7 @@ class TensorNetwork {
   ///         {{3,1},{2,-1},{0,-2}} encode the following respective
   ///         factorizations @c (((T0*T1)*T2)*T3) , @c ((T0*T2)*(T1*T3)) , and
   ///         @c (((T3*T1)*T2)*T0) .
-  container::vector<std::pair<long, long>> factorize();
+  container::svector<std::pair<long, long>> factorize();
 
  private:
   // source tensors and indices

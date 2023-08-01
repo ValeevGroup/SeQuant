@@ -249,6 +249,8 @@ set(SeQuant_src
         SeQuant/core/tensor_network.hpp
         SeQuant/core/timer.hpp
         SeQuant/core/utility/context.hpp
+        SeQuant/core/utility/macros.hpp
+        SeQuant/core/utility/nodiscard.hpp
         SeQuant/core/utility/singleton.hpp
         SeQuant/core/wick.hpp
         SeQuant/core/wick.impl.hpp
@@ -441,6 +443,7 @@ if (BUILD_TESTING)
     add_executable(${example0} EXCLUDE_FROM_ALL
             examples/${example0}/${example0}.cpp)
     target_link_libraries(${example0} SeQuant)
+    set(${example0}_cmdline_args ";3 t std so;3 t csv so;3 lambda std so;3 lambda csv so;2 t std sf;;2 lambda std sf")
 
     if (TARGET Eigen3::Eigen)  # these examples require Eigen for full functionality
       # Single-Reference closed-shell Coupled-Cluster equation
@@ -521,11 +524,19 @@ if (BUILD_TESTING)
             add_dependencies(examples-sequant ${example${i}})
             add_test(sequant/example/${example${i}}/build "${CMAKE_COMMAND}"
                     --build ${CMAKE_BINARY_DIR} --target ${example${i}})
-            add_test(NAME sequant/example/${example${i}}/run
-                    COMMAND ${example${i}}
-                    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/examples)
-            set_tests_properties(sequant/example/${example${i}}/run
-                    PROPERTIES DEPENDS sequant/example/${example${i}}/build)
+            if (NOT DEFINED ${example${i}}_cmdline_args)
+                set(${example${i}}_cmdline_args "")
+            endif()
+            set(${example${i}}_run_counter 0)
+            foreach (args ${${example${i}}_cmdline_args})
+                string(REPLACE " " ";" args ${args})
+                add_test(NAME sequant/example/${example${i}}/run/${${example${i}}_run_counter}
+                         COMMAND ${example${i}} ${args}
+                         WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/examples)
+                set_tests_properties(sequant/example/${example${i}}/run/${${example${i}}_run_counter}
+                         PROPERTIES DEPENDS sequant/example/${example${i}}/build)
+                math(EXPR ${example${i}}_run_counter "${${example${i}}_run_counter} + 1")
+            endforeach()
         endif ()
     endforeach ()
 

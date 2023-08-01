@@ -16,18 +16,18 @@ OpIdRegistrar::OpIdRegistrar() {
 }  // namespace detail
 
 template <>
-const container::vector<std::wstring>&
+const container::svector<std::wstring>&
 NormalOperator<Statistics::FermiDirac>::labels() {
   using namespace std::literals;
-  static container::vector<std::wstring> labels_{L"a"s, L"ã"s};
+  static container::svector<std::wstring> labels_{L"a"s, L"ã"s};
   return labels_;
 }
 
 template <>
-const container::vector<std::wstring>&
+const container::svector<std::wstring>&
 NormalOperator<Statistics::BoseEinstein>::labels() {
   using namespace std::literals;
-  static container::vector<std::wstring> labels_{L"b"s, L"b̃"s};
+  static container::svector<std::wstring> labels_{L"b"s, L"b̃"s};
   return labels_;
 }
 

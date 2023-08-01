@@ -21,7 +21,7 @@ namespace sequant {
 /// @brief particle-symmetric Tensor, i.e. permuting
 class Tensor : public Expr, public AbstractTensor, public Labeled {
  private:
-  using index_container_type = container::svector<Index, 4>;
+  using index_container_type = container::svector<Index>;
   static auto make_indices(IndexList indices) { return indices; }
   static auto make_indices(WstrList index_labels) {
     index_container_type result;

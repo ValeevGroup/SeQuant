@@ -21,13 +21,38 @@ bool is_tot(Tensor const& t) noexcept {
 
 }  // namespace
 
+template <
+    typename Iterable,
+    std::enable_if_t<!std::is_same_v<InnerOuterIndices, std::decay_t<Iterable>>,
+                     bool> = true>
+std::string indices_to_annot(Iterable const& indices) noexcept {
+  using ranges::views::intersperse;
+  using ranges::views::join;
+  using ranges::views::transform;
+
+  auto idx_label = [](Index const& idx) { return to_string(idx.label()); };
+
+  return indices | transform(idx_label) | intersperse(",") | join |
+         ranges::to<std::string>;
+}
+
+std::string indices_to_annot(InnerOuterIndices const& inout) noexcept {
+  auto const& in = inout.inner;
+  auto const& out = inout.outer;
+  if (out.empty()) {
+    return indices_to_annot(in);
+  } else {
+    return indices_to_annot(in) + ";" + indices_to_annot(out);
+  }
+}
+
 size_t EvalExpr::global_id_{};
 
 EvalExpr::EvalExpr(Tensor const& tnsr)
     : op_type_{EvalOp::Id},
       result_type_{ResultType::Tensor},
       hash_value_{hash_terminal_tensor(tnsr)},
-      id_{++global_id_},
+      id_{},
       expr_{tnsr.clone()},
       tot_{is_tot(tnsr)} {}
 
@@ -35,7 +60,7 @@ EvalExpr::EvalExpr(Constant const& c)
     : op_type_{EvalOp::Id},
       result_type_{ResultType::Constant},
       hash_value_{hash::value(c)},
-      id_{++global_id_},
+      id_{},
       expr_{c.clone()},
       tot_{false} {}
 
@@ -84,6 +109,33 @@ InnerOuterIndices EvalExpr::inner_outer_indices() const noexcept {
   ranges::actions::remove_if(
       inner, [&outer](Index const& i) { return ranges::contains(outer, i); });
   return {std::move(inner), std::move(outer)};
+}
+
+std::string EvalExpr::label() const noexcept {
+  if (op_type() == EvalOp::Id) {
+    if (expr()->is<Tensor>())
+      return to_string(as_tensor().label()) + "(" +
+             indices_to_annot(inner_outer_indices()) + ")";
+    else {
+      assert(expr()->is<Constant>());
+      auto const& c = as_constant();
+      auto real = Constant{c.value().real()}.value<double>();
+      auto imag = Constant{c.value().imag()}.value<double>();
+      assert(real != 0 || imag != 0);
+      std::string r = std::to_string(real);
+      std::string i = std::to_string(imag);
+      if (real == 0) return i;
+      if (imag == 0) return r;
+      return "(" + r + "," + i + ")";
+    }
+  } else {
+    if (expr()->is<Tensor>()) {
+      return to_string(as_tensor().label()) + to_string(id_) + "(" +
+             indices_to_annot(inner_outer_indices()) + ")";
+    } else {
+      return "C";
+    }
+  }
 }
 
 namespace {
@@ -290,6 +342,9 @@ ExprPtr make_sum(EvalExpr const& left, EvalExpr const& right) noexcept {
 }
 
 ExprPtr make_prod(EvalExpr const& left, EvalExpr const& right) noexcept {
+  assert(left.expr()->is<Tensor>());
+  assert(right.expr()->is<Tensor>());
+
   auto const& t1 = left.expr()->as<Tensor>();
   auto const& t2 = right.expr()->as<Tensor>();
 
@@ -322,13 +377,17 @@ ExprPtr make_imed(EvalExpr const& left, EvalExpr const& right,
     // scalar (*) tensor
 
     assert(op == EvalOp::Prod && "scalar + tensor not supported");
-    return right.expr()->clone();
+    auto const& t = right.expr()->as<Tensor>();
+    return ex<Tensor>(Tensor{L"I", t.bra(), t.ket(), t.symmetry(),
+                             t.braket_symmetry(), t.particle_symmetry()});
 
   } else if (lres == ResultType::Tensor && rres == ResultType::Constant) {
     // tensor (*) scalar
 
     assert(op == EvalOp::Prod && "scalar + tensor not supported");
-    return left.expr()->clone();
+    auto const& t = left.expr()->as<Tensor>();
+    return ex<Tensor>(Tensor{L"I", t.bra(), t.ket(), t.symmetry(),
+                             t.braket_symmetry(), t.particle_symmetry()});
 
   } else {
     // tensor (+|*) tensor
@@ -348,4 +407,5 @@ ExprPtr make_imed(EvalExpr const& left, EvalExpr const& right,
   }
 }
 }  // namespace
+
 }  // namespace sequant

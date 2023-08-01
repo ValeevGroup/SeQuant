@@ -40,10 +40,20 @@ enum class EvalOp {
 ///
 enum class ResultType { Tensor, Constant };
 
+///
+/// @see EvalExpr::inner_outer_indices
+///
 struct InnerOuterIndices {
   container::svector<Index> const inner;
   container::svector<Index> const outer;
 };
+
+///
+/// \param inout InnerOuterIndices object.
+/// \return String of comma-separated labels of inner indices followed by the
+///         labels of outer indices, separated by a semicolon.
+///
+std::string indices_to_annot(InnerOuterIndices const& inout) noexcept;
 
 ///
 /// \brief The EvalExpr class represents the object that go into the nodes of
@@ -146,6 +156,11 @@ class EvalExpr {
   /// \return InnerOuterIndices object.
   ///
   [[nodiscard]] InnerOuterIndices inner_outer_indices() const noexcept;
+
+  ///
+  /// \brief Get the label for this object useful for logging.
+  ///
+  [[nodiscard]] std::string label() const noexcept;
 
  private:
   EvalOp op_type_;

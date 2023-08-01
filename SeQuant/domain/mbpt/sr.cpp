@@ -216,8 +216,7 @@ ExprPtr F(bool use_f_tensor) {
 ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
                bool use_top) {
   FWickTheorem wick{expr};
-  wick.spinfree(false).use_topology(use_top).set_nop_connections(
-      nop_connections);
+  wick.use_topology(use_top).set_nop_connections(nop_connections);
   auto result = wick.compute();
   simplify(result);
   if (Logger::get_instance().wick_stats) {
@@ -351,16 +350,40 @@ ExprPtr Lambda(std::size_t K) {
   return result;
 }
 
-ExprPtr A(std::size_t K) {
-  assert(K > 0);
+ExprPtr A(std::int64_t K) {
+  assert(K != 0);
   return ex<op_t>([]() -> std::wstring_view { return L"A"; },
                   [=]() -> ExprPtr {
                     using namespace sequant::mbpt::sr;
-                    return sr::A(K);
+                    return sr::A(K, K);
                   },
                   [=](qnc_t& qns) {
-                    qns = combine(qnc_t{K, 0ul, 0ul, K}, qns);
+                    const std::size_t abs_K = std::abs(K);
+                    if (K < 0)
+                      qns = combine(qnc_t{abs_K, 0ul, 0ul, abs_K}, qns);
+                    else
+                      qns = combine(qnc_t{0ul, abs_K, abs_K, 0ul}, qns);
                   });
+}
+
+ExprPtr S(std::int64_t K) {
+  assert(K != 0);
+  return ex<op_t>([]() -> std::wstring_view { return L"S"; },
+                  [=]() -> ExprPtr {
+                    using namespace sequant::mbpt::sr;
+                    return sr::S(K, K);
+                  },
+                  [=](qnc_t& qns) {
+                    const std::size_t abs_K = std::abs(K);
+                    if (K < 0)
+                      qns = combine(qnc_t{abs_K, 0ul, 0ul, abs_K}, qns);
+                    else
+                      qns = combine(qnc_t{0ul, abs_K, abs_K, 0ul}, qns);
+                  });
+}
+
+ExprPtr P(std::int64_t K) {
+  return get_default_context().spbasis() == SPBasis::spinfree ? S(-K) : A(-K);
 }
 
 bool can_change_qns(const ExprPtr& op_or_op_product, const qns_t target_qns,

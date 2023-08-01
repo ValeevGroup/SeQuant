@@ -6,6 +6,7 @@
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
+#include <SeQuant/domain/mbpt/spin.hpp>
 
 #include <clocale>
 
@@ -36,8 +37,12 @@ inline const std::map<std::string, EqnType> str2type = {{"t", EqnType::t},
                                                         {"lambda", EqnType::λ}};
 
 /// maps unoccupied basis type string to enum
-inline const std::map<std::string, mbpt::Context::CSV> str2uocc = {
-    {"std", mbpt::Context::CSV::No}, {"csv", mbpt::Context::CSV::Yes}};
+inline const std::map<std::string, mbpt::CSV> str2uocc = {
+    {"std", mbpt::CSV::No}, {"csv", mbpt::CSV::Yes}};
+
+/// maps SPBasis type string to enum
+inline const std::map<std::string, SPBasis> str2spbasis = {
+    {"so", SPBasis::spinorbital}, {"sf", SPBasis::spinfree}};
 
 // profiles evaluation of all CC equations for a given ex rank N with projection
 // ex rank PMIN .. P
@@ -64,12 +69,49 @@ class compute_cceqvec {
         break;
     }
     tpool.stop(N);
+    const bool spinfree = get_default_context().spbasis() == SPBasis::spinfree;
     std::wcout << std::boolalpha << "CC equations [type=" << type2str.at(type)
-               << ",rank=" << N << ",screen=" << screen
-               << ",use_topology=" << use_topology
+               << ",rank=" << N << ",spinfree=" << spinfree
+               << ",screen=" << screen << ",use_topology=" << use_topology
                << ",use_connectivity=" << use_connectivity
                << ",canonical_only=" << canonical_only << "] computed in "
                << tpool.read(N) << " seconds" << std::endl;
+
+    // validate spin-free equations against spin-traced spin-orbital equations
+    std::vector<ExprPtr> eqvec_sf_ref;
+    if (get_default_context().spbasis() == SPBasis::spinfree) {
+      auto context_resetter = sequant::set_scoped_default_context(
+          Context(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
+                  BraKetSymmetry::conjugate, SPBasis::spinorbital));
+      std::vector<ExprPtr> eqvec_so;
+      switch (type) {
+        case EqnType::t:
+          eqvec_so = cceqs{N, P, PMIN}.t(screen, use_topology, use_connectivity,
+                                         canonical_only);
+          break;
+        case EqnType::λ:
+          eqvec_so = cceqs{N, P, PMIN}.λ(screen, use_topology, use_connectivity,
+                                         canonical_only);
+          break;
+      }
+
+      eqvec_sf_ref.resize(eqvec_so.size());
+      for (size_t R = PMIN; R <= P; ++R) {
+        // WARNING: external_indices(expr) and external_indices(nparticles) seem
+        // to mix bra and ket relative to each other
+        auto const ext_idxs = external_indices(eqvec_so[R]);
+        eqvec_sf_ref[R] = closed_shell_spintrace(eqvec_so[R], ext_idxs);
+        if (R == 1) {  // closed_shell_spintrace omits 1-body S
+          using ranges::views::transform;
+          auto bixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
+          auto kixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
+          auto s_tensor = ex<Tensor>(Tensor{L"S", kixs, bixs});
+          eqvec_sf_ref[R] = s_tensor * eqvec_sf_ref[R];
+          expand(eqvec_sf_ref[R]);
+        }
+      }
+    }
+
     for (size_t R = PMIN; R <= P; ++R) {
       std::wcout << "R" << R << "(expS" << N << ") has " << eqvec[R]->size()
                  << " terms:" << std::endl;
@@ -78,8 +120,7 @@ class compute_cceqvec {
       // validate known sizes of some CC residuals
       // N.B. # of equations depends on whether we use symmetric or
       // antisymmetric amplitudes
-      if (mbpt::get_default_formalism().nbody_interaction_tensor_symm() ==
-          mbpt::Context::NBodyInteractionTensorSymm::Yes) {
+      if (get_default_context().spbasis() == SPBasis::spinorbital) {
         if (type == EqnType::t) {
           if (R == 1 && N == 1) runtime_assert(eqvec[R]->size() == 8);
           if (R == 1 && N == 2) runtime_assert(eqvec[R]->size() == 14);
@@ -90,14 +131,62 @@ class compute_cceqvec {
           if (R == 4 && N == 4) runtime_assert(eqvec[R]->size() == 74);
           if (R == 5 && N == 5) runtime_assert(eqvec[R]->size() == 99);
         }
-      } else {
+      } else {  // spin-free
         if (type == EqnType::t) {
+          if (R == 1 && N == 2) runtime_assert(eqvec[R]->size() == 26);
+          if (R == 2 && N == 2) runtime_assert(eqvec[R]->size() == 110);
+          if (R == 1 && N == 3) runtime_assert(eqvec[R]->size() == 30);
+          if (R == 2 && N == 3) runtime_assert(eqvec[R]->size() == 146);
+          if (R == 3 && N == 3) runtime_assert(eqvec[R]->size() == 490);
+          if (R == 4 && N == 4) runtime_assert(eqvec[R]->size() == 2150);
+        }
+
+        // validate spin-free equations by spin-tracing spin-orbital equations
+        const auto should_be_zero = simplify(eqvec_sf_ref[R] - eqvec[R]);
+        if (should_be_zero != ex<Constant>(0))
+          std::wcout << "Spin-free equations do not match spin-traced "
+                        "spin-orbital equations: N="
+                     << N << " R=" << R << ":\n"
+                     << "spintraced-spinfree = "
+                     << to_latex_align(should_be_zero, 0, 1) << std::endl;
+        else
+          std::wcout << "Spin-free equations match spin-traced "
+                        "spin-orbital equations"
+                     << std::endl;
+        runtime_assert(should_be_zero == ex<Constant>(0));
+
+        // validate sizes of spin-free t equations after biorthogonal transform
+        if (type == EqnType::t) {
+          auto const ext_idxs = external_indices(eqvec[R]);
+
+          // Remove S operator
+          for (auto& term : eqvec[R]->expr()) {
+            if (term->is<Product>())
+              term = remove_tensor(term->as<Product>(), L"S");
+          }
+
+          // Biorthogonal transformation
+          eqvec[R] = biorthogonal_transform(eqvec[R], R, ext_idxs);
+
+          // restore the particle symmetrizer
+          auto bixs = ext_idxs | ranges::views::transform(
+                                     [](auto&& vec) { return vec[0]; });
+          auto kixs = ext_idxs | ranges::views::transform(
+                                     [](auto&& vec) { return vec[1]; });
+          // N.B. external_indices(expr) confuses bra and ket
+          eqvec[R] = ex<Tensor>(Tensor{L"S", kixs, bixs}) * eqvec[R];
+          eqvec[R] = expand(eqvec[R]);
+          simplify(eqvec[R]);
+
+          std::wcout << "biorothogonal spin-free R" << R << "(expS" << N
+                     << ") has " << eqvec[R]->size() << " terms:" << std::endl;
+          if (print) std::wcout << to_latex_align(eqvec[R], 20, 3) << std::endl;
+
           if (R == 1 && N == 2) runtime_assert(eqvec[R]->size() == 26);
           if (R == 2 && N == 2) runtime_assert(eqvec[R]->size() == 55);
           if (R == 1 && N == 3) runtime_assert(eqvec[R]->size() == 30);
           if (R == 2 && N == 3) runtime_assert(eqvec[R]->size() == 73);
-          if (R == 3 && N == 3) runtime_assert(eqvec[R]->size() == 93);
-          if (R == 4 && N == 4) runtime_assert(eqvec[R]->size() == 149);
+          if (R == 3 && N == 3) runtime_assert(eqvec[R]->size() == 490);
         }
       }
     }
@@ -134,14 +223,7 @@ int main(int argc, char* argv[]) {
   std::wcerr.imbue(std::locale("en_US.UTF-8"));
   std::wcout.sync_with_stdio(true);
   std::wcerr.sync_with_stdio(true);
-  sequant::detail::OpIdRegistrar op_id_registrar;
-  sequant::set_default_context(
-      Context(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-              BraKetSymmetry::conjugate, SPBasis::spinorbital));
-  mbpt::set_default_convention();
 
-  TensorCanonicalizer::register_instance(
-      std::make_shared<DefaultTensorCanonicalizer>());
   // set_num_threads(1);
 
 #ifndef NDEBUG
@@ -149,12 +231,26 @@ int main(int argc, char* argv[]) {
 #else
   const size_t DEFAULT_NMAX = 4;
 #endif
+
   const size_t NMAX = argc > 1 ? std::atoi(argv[1]) : DEFAULT_NMAX;
+
   const std::string eqn_type_str = argc > 2 ? argv[2] : "t";
   const EqnType eqn_type = str2type.at(eqn_type_str);
+
   const std::string uocc_type_str = argc > 3 ? argv[3] : "std";
-  const mbpt::Context::CSV uocc_type = str2uocc.at(uocc_type_str);
+  const mbpt::CSV uocc_type = str2uocc.at(uocc_type_str);
   auto resetter = set_scoped_default_formalism(mbpt::Context(uocc_type));
+
+  const std::string spbasis_str = argc > 4 ? argv[4] : "so";
+  const SPBasis spbasis = str2spbasis.at(spbasis_str);
+
+  sequant::detail::OpIdRegistrar op_id_registrar;
+  sequant::set_default_context(Context(Vacuum::SingleProduct,
+                                       IndexSpaceMetric::Unit,
+                                       BraKetSymmetry::conjugate, spbasis));
+  mbpt::set_default_convention();
+  TensorCanonicalizer::register_instance(
+      std::make_shared<DefaultTensorCanonicalizer>());
 
   // change to true to print out the resulting equations
   constexpr bool print = false;

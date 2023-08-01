@@ -3,13 +3,16 @@
 
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/sr.hpp>
+
 #include "python.h"
+
+#include <cstdint>
 
 namespace sequant::python::mbpt {
 
 template <class F>
 auto make_sr_op(F f) {
-  auto op = [f](size_t Bra) { return f(Bra); };
+  auto op = [f](std::int64_t Rank) { return f(Rank); };
   return op;
 }
 
@@ -18,8 +21,10 @@ ExprPtr VacuumAverage(const ExprPtr& e, const Args&... args) {
   return sequant::mbpt::sr::vac_av(e, args...);
 }
 
-#define SR_OP(OP) \
-#OP, [](size_t Bra) { return sequant::mbpt::sr::OP(Bra); }, py::arg("Bra")
+#define SR_OP(OP)                                                           \
+#OP, [](std::int64_t Rank) { return sequant::mbpt::sr::OP(Rank); },       \
+                                                                   py::arg( \
+                                                                       "Bra")
 
 inline void __init__(py::module m) {
   sequant::mbpt::set_default_convention();
