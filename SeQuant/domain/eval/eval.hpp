@@ -48,6 +48,37 @@ void log_eval(Args const&... args) noexcept {
 #endif
 }
 
+void log_cache_access(size_t key, CacheManager<ERPtr> const& cm) {
+#ifdef SEQUANT_EVAL_TRACE
+  auto& l = Logger::get_instance();
+  if (l.log_level_eval > 0) {
+    assert(cm.exists(key));
+    auto max_l = cm.max_life(key);
+    auto cur_l = cm.life(key);
+    write_log(l,                                    //
+              "[CACHE] Accessed key: ", key, ". ",  //
+              cur_l, "/", max_l, " lives remain.\n");
+    if (cur_l == 0) {
+      write_log(l,  //
+                "[CACHE] Released key: ", key, ".\n");
+    }
+  }
+#endif
+}
+
+void log_cache_store(size_t key, CacheManager<ERPtr> const& cm) {
+#ifdef SEQUANT_EVAL_TRACE
+  auto& l = Logger::get_instance();
+  if (l.log_level_eval > 0) {
+    assert(cm.exists(key));
+    write_log(l,  //
+              "[CACHE] Stored key: ", key, ".\n");
+    // because storing automatically implies immediately accessing it
+    log_cache_access(key, cm);
+  }
+#endif
+}
+
 std::string perm_groups_string(
     container::svector<std::array<size_t, 3>> const& perm_groups) {
   std::string result;
@@ -297,9 +328,12 @@ ERPtr evaluate_crust(NodeT const& node, Le const& le,
                      CacheManager<ERPtr>& cache) {
   auto const h = hash::value(*node);
   if (auto ptr = cache.access(h); ptr) {
+    log_cache_access(h, cache);
     return *ptr;
   } else if (cache.exists(h)) {
-    return *cache.store(h, evaluate_core(node, le, cache));
+    auto ptr = cache.store(h, evaluate_core(node, le, cache));
+    log_cache_store(h, cache);
+    return *ptr;
   } else {
     return evaluate_core(node, le, cache);
   }
