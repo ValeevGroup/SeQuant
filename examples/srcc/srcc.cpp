@@ -75,6 +75,41 @@ class compute_cceqvec {
                << ",use_connectivity=" << use_connectivity
                << ",canonical_only=" << canonical_only << "] computed in "
                << tpool.read(N) << " seconds" << std::endl;
+
+    // validate spin-free equations against spin-traced spin-orbital equations
+    std::vector<ExprPtr> eqvec_sf_ref;
+    if (get_default_context().spbasis() == SPBasis::spinfree) {
+      auto context_resetter = sequant::set_scoped_default_context(
+          Context(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
+                  BraKetSymmetry::conjugate, SPBasis::spinorbital));
+      std::vector<ExprPtr> eqvec_so;
+      switch (type) {
+        case EqnType::t:
+          eqvec_so = cceqs{N, P, PMIN}.t(screen, use_topology, use_connectivity,
+                                         canonical_only);
+          break;
+        case EqnType::λ:
+          eqvec_so = cceqs{N, P, PMIN}.λ(screen, use_topology, use_connectivity,
+                                         canonical_only);
+          break;
+      }
+
+      eqvec_sf_ref.resize(eqvec_so.size());
+      for (size_t R = PMIN; R <= P; ++R) {
+        auto const ext_idxs = external_indices(R);
+        eqvec_sf_ref[R] = closed_shell_spintrace(eqvec_so[R], ext_idxs);
+        if (R == 1) {  // closed_shell_spintrace omits 1-body S
+          using ranges::views::transform;
+          auto bixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
+          auto kixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
+          auto s_tensor = ex<Tensor>(Tensor{L"S", bixs, kixs});
+          if (type == EqnType::λ) s_tensor->adjoint();
+          eqvec_sf_ref[R] = s_tensor * eqvec_sf_ref[R];
+          expand(eqvec_sf_ref[R]);
+        }
+      }
+    }
+
     for (size_t R = PMIN; R <= P; ++R) {
       std::wcout << "R" << R << "(expS" << N << ") has " << eqvec[R]->size()
                  << " terms:" << std::endl;
@@ -94,7 +129,7 @@ class compute_cceqvec {
           if (R == 4 && N == 4) runtime_assert(eqvec[R]->size() == 74);
           if (R == 5 && N == 5) runtime_assert(eqvec[R]->size() == 99);
         }
-      } else {
+      } else {  // spin-free
         if (type == EqnType::t) {
           if (R == 1 && N == 2) runtime_assert(eqvec[R]->size() == 26);
           if (R == 2 && N == 2) runtime_assert(eqvec[R]->size() == 110);
@@ -102,41 +137,49 @@ class compute_cceqvec {
           if (R == 2 && N == 3) runtime_assert(eqvec[R]->size() == 146);
           if (R == 3 && N == 3) runtime_assert(eqvec[R]->size() == 490);
           if (R == 4 && N == 4) runtime_assert(eqvec[R]->size() == 2150);
+        }
 
-          // biorothogonal transform
-          {
-            auto const ext_idxs = external_indices(R);
+        // validate spin-free equations by spin-tracing spin-orbital equations
+        const auto should_be_zero = simplify(eqvec_sf_ref[R] - eqvec[R]);
+        if (should_be_zero != ex<Constant>(0))
+          std::wcout << "Spin-free equations do not match spin-traced "
+                        "spin-orbital equations: N="
+                     << N << " R=" << R << ":\n"
+                     << "spintraced-spinfree = "
+                     << to_latex_align(should_be_zero, 0, 1) << std::endl;
+        runtime_assert(should_be_zero == ex<Constant>(0));
 
-            // Remove S operator
-            for (auto& term : eqvec[R]->expr()) {
-              if (term->is<Product>())
-                term = remove_tensor(term->as<Product>(), L"S");
-            }
+        // validate sizes of spin-free t equations after biorothogonal transform
+        if (type == EqnType::t) {
+          auto const ext_idxs = external_indices(R);
 
-            // Biorthogonal transformation
-            eqvec[R] = biorthogonal_transform(eqvec[R], R, ext_idxs);
-
-            // restore the particle symmmetrizer
-            auto bixs = ext_idxs | ranges::views::transform(
-                                       [](auto&& vec) { return vec[0]; });
-            auto kixs = ext_idxs | ranges::views::transform(
-                                       [](auto&& vec) { return vec[1]; });
-            eqvec[R] = ex<Tensor>(Tensor{L"S", bixs, kixs}) * eqvec[R];
-            eqvec[R] = expand(eqvec[R]);
-            simplify(eqvec[R]);
-
-            std::wcout << "biorothogonal spin-free R" << R << "(expS" << N
-                       << ") has " << eqvec[R]->size()
-                       << " terms:" << std::endl;
-            if (print)
-              std::wcout << to_latex_align(eqvec[R], 20, 3) << std::endl;
-
-            if (R == 1 && N == 2) runtime_assert(eqvec[R]->size() == 26);
-            if (R == 2 && N == 2) runtime_assert(eqvec[R]->size() == 55);
-            if (R == 1 && N == 3) runtime_assert(eqvec[R]->size() == 30);
-            if (R == 2 && N == 3) runtime_assert(eqvec[R]->size() == 73);
-            if (R == 3 && N == 3) runtime_assert(eqvec[R]->size() == 490);
+          // Remove S operator
+          for (auto& term : eqvec[R]->expr()) {
+            if (term->is<Product>())
+              term = remove_tensor(term->as<Product>(), L"S");
           }
+
+          // Biorthogonal transformation
+          eqvec[R] = biorthogonal_transform(eqvec[R], R, ext_idxs);
+
+          // restore the particle symmmetrizer
+          auto bixs = ext_idxs | ranges::views::transform(
+                                     [](auto&& vec) { return vec[0]; });
+          auto kixs = ext_idxs | ranges::views::transform(
+                                     [](auto&& vec) { return vec[1]; });
+          eqvec[R] = ex<Tensor>(Tensor{L"S", bixs, kixs}) * eqvec[R];
+          eqvec[R] = expand(eqvec[R]);
+          simplify(eqvec[R]);
+
+          std::wcout << "biorothogonal spin-free R" << R << "(expS" << N
+                     << ") has " << eqvec[R]->size() << " terms:" << std::endl;
+          if (print) std::wcout << to_latex_align(eqvec[R], 20, 3) << std::endl;
+
+          if (R == 1 && N == 2) runtime_assert(eqvec[R]->size() == 26);
+          if (R == 2 && N == 2) runtime_assert(eqvec[R]->size() == 55);
+          if (R == 1 && N == 3) runtime_assert(eqvec[R]->size() == 30);
+          if (R == 2 && N == 3) runtime_assert(eqvec[R]->size() == 73);
+          if (R == 3 && N == 3) runtime_assert(eqvec[R]->size() == 490);
         }
       }
     }
