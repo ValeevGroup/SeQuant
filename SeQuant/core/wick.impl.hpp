@@ -914,6 +914,10 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
 
 template <Statistics S>
 void WickTheorem<S>::reduce(ExprPtr &expr) const {
+  if (Logger::get_instance().wick_reduce) {
+    std::wcout << "WickTheorem<S>::reduce: input = "
+               << to_latex_align(expr, 20, 1) << std::endl;
+  }
   // there are 2 possibilities: expr is a single Product, or it's a Sum of
   // Products
   if (expr->type_id() == Expr::get_type_id<Product>()) {
@@ -936,6 +940,11 @@ void WickTheorem<S>::reduce(ExprPtr &expr) const {
         subexpr = std::make_shared<Constant>(0);
       }
     }
+  }
+
+  if (Logger::get_instance().wick_reduce) {
+    std::wcout << "WickTheorem<S>::reduce: result = "
+               << to_latex_align(expr, 20, 1) << std::endl;
   }
 }
 template <Statistics S>
