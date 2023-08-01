@@ -402,20 +402,27 @@ class OpMaker {
     assert(nbra() > 0 || nket() > 0);
   }
 
+  enum class UseDepIdx {
+    /// bra/cre indices depend on ket
+    Bra,
+    /// ket/ann indices depend on bra
+    Ket,
+    /// use plain indices
+    None
+  };
+
   // clang-format off
-  /// @param[in] dep_opt if given, controls whether bra (`*dep_opt == BraKetPos::bra`)
-  /// / ket (`*dep_opt == BraKetPos::ket`) indices
+  /// @param[in] dep_opt if given, controls whether bra (`*dep_opt == UseDepIdx::Bra`)
+  /// / ket (`*dep_opt == UseDepIdx::Ket`) indices
   /// are dependent on the, respectively, ket/bra indices
   /// (i.e., use them as protoindices);
-  /// if (`*dep_opt == BraKetPos::none`) then plain indices are used; if
+  /// if (`*dep_opt == UseDepIdx::None`) then plain indices are used; if
   /// \p dep_opt is not given then the default is determined by the MBPT context.
   /// @param[in] opsymm_opt if given, controls whether (anti)symmetric
   /// tensor is returned; if \p opsymm_opt is not given then the default is
   /// determined by the MBPT context.
   // clang-format off
-  ExprPtr operator()(std::optional<BraKetPos> dep_opt = {}, std::optional<Symmetry> opsymm_opt = {}) const;
-
-  enum class CSV { Bra, Ket, None };
+  ExprPtr operator()(std::optional<UseDepIdx> dep_opt = {}, std::optional<Symmetry> opsymm_opt = {}) const;
 
   /// @tparam TensorGenerator callable with signature
   /// `TensorGenerator(range<Index>, range<Index>, Symmetry)` that returns a
@@ -423,16 +430,16 @@ class OpMaker {
   /// @param[in] bras the bra indices/creators
   /// @param[in] kets the ket indices/annihilators
   /// @param[in] tensor_generator the callable that generates the tensor
-  /// @param[in] csv whether to use cluster-specific (e.g., PNO) indices
+  /// @param[in] dep whether to use dependent indices
   template <typename TensorGenerator>
   static ExprPtr make(const container::svector<IndexSpace::Type>& bras,
                       const container::svector<IndexSpace::Type>& kets,
-                      TensorGenerator&& tensor_generator, CSV csv = CSV::None) {
+                      TensorGenerator&& tensor_generator, UseDepIdx dep = UseDepIdx::None) {
     const bool symm =
         get_default_context().spbasis() ==
         SPBasis::spinorbital;  // antisymmetrize if spin-orbital basis
-    const auto csv_bra = csv == CSV::Bra;
-    const auto csv_ket = csv == CSV::Ket;
+    const auto dep_bra = dep == UseDepIdx::Bra;
+    const auto dep_ket = dep == UseDepIdx::Ket;
 
     // not sure what it means to use nonsymmetric operator if nbra != nket
     using ranges::size;
@@ -461,10 +468,10 @@ class OpMaker {
     };
 
     std::vector<Index> braidxs, ketidxs;
-    if (csv_bra) {
+    if (dep_bra) {
       ketidxs = make_idx_vector(kets);
       braidxs = make_depidx_vector(bras, ketidxs);
-    } else if (csv_ket) {
+    } else if (dep_ket) {
       braidxs = make_idx_vector(bras);
       ketidxs = make_depidx_vector(kets, braidxs);
     } else {
@@ -487,7 +494,7 @@ class OpMaker {
   template <typename TensorGenerator>
   static ExprPtr make(std::initializer_list<IndexSpace::Type> bras,
                       std::initializer_list<IndexSpace::Type> kets,
-                      TensorGenerator&& tensor_generator, CSV csv = CSV::None) {
+                      TensorGenerator&& tensor_generator, UseDepIdx csv = UseDepIdx::None) {
     container::svector<IndexSpace::Type> bra_vec(bras.begin(), bras.end());
     container::svector<IndexSpace::Type> ket_vec(kets.begin(), kets.end());
     return OpMaker<S>::make(

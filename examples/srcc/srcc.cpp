@@ -37,8 +37,8 @@ inline const std::map<std::string, EqnType> str2type = {{"t", EqnType::t},
                                                         {"lambda", EqnType::λ}};
 
 /// maps unoccupied basis type string to enum
-inline const std::map<std::string, mbpt::Context::CSV> str2uocc = {
-    {"std", mbpt::Context::CSV::No}, {"csv", mbpt::Context::CSV::Yes}};
+inline const std::map<std::string, mbpt::CSV> str2uocc = {
+    {"std", mbpt::CSV::No}, {"csv", mbpt::CSV::Yes}};
 
 /// maps SPBasis type string to enum
 inline const std::map<std::string, SPBasis> str2spbasis = {
@@ -97,14 +97,15 @@ class compute_cceqvec {
 
       eqvec_sf_ref.resize(eqvec_so.size());
       for (size_t R = PMIN; R <= P; ++R) {
-        auto const ext_idxs = external_indices(R);
+        // WARNING: external_indices(expr) and external_indices(nparticles) seem
+        // to mix bra and ket relative to each other
+        auto const ext_idxs = external_indices(eqvec_so[R]);
         eqvec_sf_ref[R] = closed_shell_spintrace(eqvec_so[R], ext_idxs);
         if (R == 1) {  // closed_shell_spintrace omits 1-body S
           using ranges::views::transform;
           auto bixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
           auto kixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
-          auto s_tensor = ex<Tensor>(Tensor{L"S", bixs, kixs});
-          if (type == EqnType::λ) s_tensor->adjoint();
+          auto s_tensor = ex<Tensor>(Tensor{L"S", kixs, bixs});
           eqvec_sf_ref[R] = s_tensor * eqvec_sf_ref[R];
           expand(eqvec_sf_ref[R]);
         }
@@ -154,9 +155,9 @@ class compute_cceqvec {
                      << std::endl;
         runtime_assert(should_be_zero == ex<Constant>(0));
 
-        // validate sizes of spin-free t equations after biorothogonal transform
+        // validate sizes of spin-free t equations after biorthogonal transform
         if (type == EqnType::t) {
-          auto const ext_idxs = external_indices(R);
+          auto const ext_idxs = external_indices(eqvec[R]);
 
           // Remove S operator
           for (auto& term : eqvec[R]->expr()) {
@@ -167,12 +168,13 @@ class compute_cceqvec {
           // Biorthogonal transformation
           eqvec[R] = biorthogonal_transform(eqvec[R], R, ext_idxs);
 
-          // restore the particle symmmetrizer
+          // restore the particle symmetrizer
           auto bixs = ext_idxs | ranges::views::transform(
                                      [](auto&& vec) { return vec[0]; });
           auto kixs = ext_idxs | ranges::views::transform(
                                      [](auto&& vec) { return vec[1]; });
-          eqvec[R] = ex<Tensor>(Tensor{L"S", bixs, kixs}) * eqvec[R];
+          // N.B. external_indices(expr) confuses bra and ket
+          eqvec[R] = ex<Tensor>(Tensor{L"S", kixs, bixs}) * eqvec[R];
           eqvec[R] = expand(eqvec[R]);
           simplify(eqvec[R]);
 
@@ -236,7 +238,7 @@ int main(int argc, char* argv[]) {
   const EqnType eqn_type = str2type.at(eqn_type_str);
 
   const std::string uocc_type_str = argc > 3 ? argv[3] : "std";
-  const mbpt::Context::CSV uocc_type = str2uocc.at(uocc_type_str);
+  const mbpt::CSV uocc_type = str2uocc.at(uocc_type_str);
   auto resetter = set_scoped_default_formalism(mbpt::Context(uocc_type));
 
   const std::string spbasis_str = argc > 4 ? argv[4] : "so";
