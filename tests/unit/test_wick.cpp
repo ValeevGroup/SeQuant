@@ -2,13 +2,15 @@
 // Created by Eduard Valeyev on 3/23/18.
 //
 
-#include <iostream>
-
 #include "SeQuant/core/timer.hpp"
 #include "SeQuant/core/utility/macros.hpp"
+#include "SeQuant/core/utility/nodiscard.hpp"
 #include "SeQuant/core/wick.hpp"
+
 #include "catch.hpp"
 #include "test_config.hpp"
+
+#include <iostream>
 
 namespace sequant {
 struct WickAccessor {};
@@ -138,11 +140,11 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
         Context{V, IndexSpaceMetric::Unit, BraKetSymmetry::conjugate,
                 SPBasis::spinorbital});
 
-    auto switch_to_spinfree_context = [&] [[nodiscard]] () {
+    auto switch_to_spinfree_context = detail::NoDiscard([&]() {
       auto context_sf = get_default_context();
       context_sf.set(SPBasis::spinfree);
       return set_scoped_default_context(context_sf);
-    };
+    });
 
     // number operator
     {{auto opseq1 =
@@ -358,11 +360,11 @@ SECTION("fermi vacuum") {
   constexpr Vacuum V = Vacuum::SingleProduct;
   // default vacuum is already spin-orbital Fermi vacuum
 
-  auto switch_to_spinfree_context = [&] [[nodiscard]] () {
+  auto switch_to_spinfree_context = detail::NoDiscard([&]() {
     auto context_sf = get_default_context();
     context_sf.set(SPBasis::spinfree);
     return set_scoped_default_context(context_sf);
-  };
+  });
 
   // two (pure qp) 1-body operators
   {
@@ -787,11 +789,11 @@ SECTION("Expression Reduction") {
   constexpr Vacuum V = Vacuum::SingleProduct;
   // default vacuum is already spin-orbital Fermi vacuum
 
-  auto switch_to_spinfree_context = [&] [[nodiscard]] () {
+  auto switch_to_spinfree_context = detail::NoDiscard([&]() {
     auto context_sf = get_default_context();
     context_sf.set(SPBasis::spinfree);
     return set_scoped_default_context(context_sf);
-  };
+  });
 
   // 2-body ^ 2-body
   SEQUANT_PROFILE_SINGLE("wick(H2*T2)", {
