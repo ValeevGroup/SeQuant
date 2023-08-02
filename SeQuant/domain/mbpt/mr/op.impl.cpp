@@ -1,8 +1,13 @@
-/// makes excitation operator of bra/ket ranks @c Nbra/Nket
 ExprPtr T_(std::size_t Nbra, std::size_t Nket) {
   assert(Nbra > 0);
   assert(Nket > 0);
   return OpMaker(OpType::t, Nbra, Nket)();
+}
+
+ExprPtr Lambda_(std::size_t Nbra, std::size_t Nket) {
+  assert(Nbra > 0);
+  assert(Nket > 0);
+  return OpMaker(OpType::λ, Nbra, Nket)();
 }
 
 namespace detail {

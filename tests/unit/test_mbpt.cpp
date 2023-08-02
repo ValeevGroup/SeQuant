@@ -431,6 +431,14 @@ TEST_CASE("MBPT", "[mbpt]") {
       //      std::wcout << "H*T12*T12 -> R2 = " << to_latex_align(result, 20)
       //                 << std::endl;
       REQUIRE(result->size() == 15);
+
+      {  // check against op
+        auto result_op = op::vac_av(op::P(2) * op::H() * op::T(2) * op::T(2));
+        REQUIRE(result_op->size() ==
+                result->size());  // as compact as result ..
+        REQUIRE(simplify(result_op - result) ==
+                ex<Constant>(0));  // .. and equivalent to it
+      }
     });
 
     // H2**T3**T3 -> R4
@@ -608,15 +616,24 @@ TEST_CASE("MBPT", "[mbpt]") {
     SEQUANT_PROFILE_SINGLE("wick(H2**T2 -> 0)", {
       auto result = vac_av(H_(2) * T_(2), {{0, 1}});
 
-      {
-        std::wcout << "H2*T2 -> 0 = " << to_latex_align(result, 0, 1)
-                   << std::endl;
+      //      {
+      //        std::wcout << "H2*T2 -> 0 = " << to_latex_align(result, 0, 1)
+      //                   << std::endl;
+      //      }
+
+      {  // make sure get same result without use of topology
+        auto result_wo_top =
+            vac_av(H_(2) * T_(2), {{0, 1}}, /* use_topology = */ false);
+
+        REQUIRE(simplify(result - result_wo_top) == ex<Constant>(0));
       }
 
-      auto result_wo_top =
-          vac_av(H_(2) * T_(2), {{0, 1}}, /* use_topology = */ false);
+      {  // make sure get same result using operators
+        auto result_op = op::vac_av(op::H_(2) * op::T_(2));
 
-      REQUIRE(simplify(result - result_wo_top) == ex<Constant>(0));
+        REQUIRE(result_op->size() == result->size());
+        REQUIRE(simplify(result - result_op) == ex<Constant>(0));
+      }
     });
 
   }  // SECTION("MRSF")
