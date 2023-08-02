@@ -67,6 +67,25 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
               L"{{S^{{i_1}{i_2}}_{{a_1}{a_3}}}{f^{{i_3}}_{{"
               L"a_2}}}{t^{{a_2}}_{{i_2}}}{t^{{a_1}{a_3}}_{{i_1}{i_3}}}}");
     }
+    {  // Product containing Variables
+      auto q2 = ex<Variable>(L"q2");
+      q2->adjoint();
+      auto input = ex<Tensor>(L"S", WstrList{L"a_1", L"a_2"},
+                              WstrList{L"i_1", L"i_2"}, Symmetry::nonsymm) *
+                   q2 *
+                   ex<Tensor>(L"f", IndexList{{L"a_5"}}, IndexList{{L"i_5"}},
+                              Symmetry::nonsymm) *
+                   ex<Variable>(L"p") *
+                   ex<Tensor>(L"t", IndexList{{L"i_1"}}, IndexList{{L"a_5"}},
+                              Symmetry::nonsymm) *
+                   ex<Variable>(L"q1") *
+                   ex<Tensor>(L"t", WstrList{L"i_5", L"i_2"},
+                              WstrList{L"a_1", L"a_2"}, Symmetry::nonsymm);
+      canonicalize(input);
+      REQUIRE(to_latex(input) ==
+              L"{{p}{q1}{{q2}^*}{S^{{i_1}{i_2}}_{{a_1}{a_3}}}{f^{{i_3}}_{{"
+              L"a_2}}}{t^{{a_2}}_{{i_2}}}{t^{{a_1}{a_3}}_{{i_1}{i_3}}}}");
+    }
   }
 
   SECTION("sum of products") {
