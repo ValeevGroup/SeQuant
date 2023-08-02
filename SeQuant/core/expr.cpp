@@ -79,6 +79,22 @@ void Constant::adjoint() {
   reset_hash_value();
 }
 
+std::wstring_view Variable::label() const { return label_; }
+
+bool Variable::conjugated() const { return conjugated_; }
+
+std::wstring Variable::to_latex() const {
+  std::wstring result = L"{" + utf_to_latex(label_) + L"}";
+  if (conjugated_) result = L"{" + result + L"^*" + L"}";
+  return result;
+}
+
+ExprPtr Variable::clone() const {
+  return ex<Variable>(Variable(label_, conjugated_));
+}
+
+void Variable::adjoint() { conjugated_ = !conjugated_; }
+
 bool Product::is_commutative() const {
   bool result = true;
   const auto nfactors = size();
