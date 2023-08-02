@@ -18,7 +18,7 @@ namespace sequant {
 ///
 /// \param raw A tensor algebra expression. A valid expression is
 ///            a product, a sum or a mix of those including parentheses.
-///            eg. 'A{i1, a1; i2, a2}' A is the label (alphanumeric), i1, a1 are bra indices, i2, a2 are ket indices.
+///            eg. 'A{i1, a1; i2, a2}' A is the label (non-space), i1, a1 are bra indices, i2, a2 are ket indices.
 ///                'A{i_1, a_1; i_2, a_2}' same as above with alternate notation for indices
 ///                'A_{i1, a1}^{i2, a2}' same as above with alternate notation for bra and ket
 ///                'A^{i2, a2}_{i1, a1}' same as above with alternate notation for bra and ket
