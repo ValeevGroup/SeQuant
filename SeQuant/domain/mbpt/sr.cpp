@@ -449,6 +449,7 @@ ExprPtr vac_av(
           oplbl2pos;  // maps operator labels to the operator positions in the
                       // product
       int pos = 0;
+      bool ops_only = true;
       for (const auto& factor : expr.as<Product>()) {
         if (factor.is<op_t>()) {
           const auto& op = factor.as<op_t>();
@@ -462,6 +463,14 @@ ExprPtr vac_av(
           ++pos;
         } else if (factor.is<FNOperator>() || factor.is<BNOperator>()) {
           ++pos;  // skip FNOperator and BNOperator
+          ops_only = false;
+        }
+      }
+
+      // if composed of ops only, screen out products with zero VEV
+      if (ops_only) {
+        if (!can_change_qns(expr, qns_t{})) {
+          return ex<Constant>(0);
         }
       }
 
