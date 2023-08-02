@@ -435,9 +435,10 @@ bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product,
 
 ExprPtr vac_av(
     ExprPtr expr,
-    std::vector<std::pair<std::wstring, std::wstring>> op_connections) {
+    std::vector<std::pair<std::wstring, std::wstring>> op_connections,
+    bool skip_clone) {
   // use cloned expr to avoid side effects
-  expr = expr->clone();
+  if (!skip_clone) expr = expr->clone();
 
   auto vac_av_product = [&op_connections](ExprPtr expr) {
     assert(expr.is<Product>());
@@ -498,7 +499,15 @@ ExprPtr vac_av(
 
   ExprPtr result;
   if (expr.is<Product>()) {
-    return vac_av_product(expr);
+    // expand sums in a product
+    if (ranges::any_of(expr.as<Product>().factors(), [](const auto& factor) {
+          return factor.template is<Sum>();
+        })) {
+      expr = expand(expr);
+      simplify(expr);  // condense equivalent terms after expansion
+      return vac_av(expr, op_connections, /* skip_clone = */ true);
+    } else
+      return vac_av_product(expr);
   } else if (expr.is<Sum>()) {
     result = sequant::transform_reduce(
         *expr, ex<Sum>(),
@@ -506,8 +515,9 @@ ExprPtr vac_av(
           return running_total + summand;
         },
         [&op_connections](const auto& op_product) {
-          return vac_av(op_product, op_connections);
+          return vac_av(op_product, op_connections, /* skip_clone = */ true);
         });
+    simplify(result);  // combine possible equivalent summands
     return result;
   } else if (expr.is<op_t>()) {
     return ex<Constant>(

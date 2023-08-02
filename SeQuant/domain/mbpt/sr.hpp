@@ -250,12 +250,15 @@ bool lowers_rank_or_lower_to_vacuum(const ExprPtr& op_or_op_product,
 
 /// @param[in] expr input expression
 /// @param[in] op_connections list of pairs of labels of operators to be
-/// connected (e.g., `{{"h", "t"}, {"f", "t"}, {"g", "t"}}` will connect op::)
+/// connected (e.g., `{{"h", "t"}}` will ensure that each operator with
+/// label `"h"` will be connected to at least one operator with label `"t"`;
+/// the default is `{{L"h", L"t"}, {L"f", L"t"}, {L"g", L"t"}}`
+/// @param[in] skip_clone if true, will not clone the input expression
 /// @return the VEV
-ExprPtr vac_av(
-    ExprPtr expr,
-    std::vector<std::pair<std::wstring, std::wstring>> op_connections = {
-        {L"h", L"t"}, {L"f", L"t"}, {L"g", L"t"}});
+ExprPtr vac_av(ExprPtr expr,
+               std::vector<std::pair<std::wstring, std::wstring>>
+                   op_connections = {{L"h", L"t"}, {L"f", L"t"}, {L"g", L"t"}},
+               bool skip_clone = false);
 
 }  // namespace op
 
