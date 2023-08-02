@@ -236,9 +236,11 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
 
   std::wstring to_latex() const override {
     std::wstring result;
-    bool gt = (this->label() == L"g") ||
-              (this->label() == L"t" && this->rank() > 1) ||
-              (this->label() == L"λ" && this->rank() > 1);
+    std::vector<std::wstring> labels = {L"g", L"t", L"λ", L"t¹", L"λ¹"};
+    bool gt = (std::find(labels.begin(), labels.end(), this->label()) !=
+                   labels.end() &&
+               this->rank() > 1);
+
     result = L"{";
     if ((this->symmetry() == Symmetry::antisymm) && gt) result += L"\\bar{";
     result += utf_to_latex(this->label());
