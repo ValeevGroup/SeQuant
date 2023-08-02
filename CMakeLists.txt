@@ -275,6 +275,7 @@ set(SeQuant_src
         SeQuant/domain/mbpt/spin.hpp
         SeQuant/domain/mbpt/sr.cpp
         SeQuant/domain/mbpt/sr.hpp
+        SeQuant/domain/mbpt/vac_av.ipp
         )
 
 ### optional prereqs
