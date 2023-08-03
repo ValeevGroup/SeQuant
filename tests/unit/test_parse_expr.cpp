@@ -35,6 +35,8 @@ TEST_CASE("TEST_PARSE_EXPR", "[parse_expr]") {
     REQUIRE(*expr == *parse(L"+t{i1, i2; a1, a2}"));
     REQUIRE(parse(L"-t{i1;a1}")->is<Product>());
     REQUIRE(*expr == *parse(L"t{\ti1, \ti2; \na1,\t a2 \t}"));
+    REQUIRE_NOTHROW(parse(L"t⁔1{a1;i1}"));
+    REQUIRE_NOTHROW(parse(L"t¹{a1;i1}"));
   }
 
   SECTION("Tensor with symmetry annotation") {

@@ -213,14 +213,13 @@ ExprPtr parse_expr(std::wstring_view raw_expr, Symmetry symmetry) {
   boost::wsmatch match;
   auto iter = expr.begin();
   auto validate = [&iter, &match, &expr](boost::wregex const& rgx) -> bool {
-    boost::regex_search(iter, expr.end(), match, rgx);
+    auto yes = boost::regex_search(iter, expr.end(), match, rgx);
 
-    if (match.empty() || iter != match.begin()->first)
-      return false;
-    else {
+    if (yes && iter == match.begin()->first) {
       iter = match.begin()->second;
       return true;
     }
+    return false;
   };
 
   auto rpn = parse::ReversePolishNotation{};
@@ -233,13 +232,7 @@ ExprPtr parse_expr(std::wstring_view raw_expr, Symmetry symmetry) {
   };
 
   while (iter != expr.end()) {
-    if (validate(tensor_terse) || validate(tensor_exp)) {
-      add_times_if_needed();
-
-      rpn.add_operand(to_operand_tensor(match, symmetry));
-      last_token =
-          token<OperandTensor>(L"Dummy", IndexList{L"i_1"}, IndexList{L"a_1"});
-    } else if (validate(fraction)) {
+    if (validate(fraction)) {
       add_times_if_needed();
       rpn.add_operand(token<OperandConstant>(to_fraction(match)));
       last_token = token<OperandConstant>(0);  // dummy
@@ -273,6 +266,12 @@ ExprPtr parse_expr(std::wstring_view raw_expr, Symmetry symmetry) {
       if (last_token->is<Operator>()) throw_invalid_expr();
       if (!rpn.add_right_parenthesis()) throw_invalid_expr();
       last_token = token<RightParenthesis>();
+    } else if (validate(tensor_terse) || validate(tensor_exp)) {
+      add_times_if_needed();
+
+      rpn.add_operand(to_operand_tensor(match, symmetry));
+      last_token =
+          token<OperandTensor>(L"Dummy", IndexList{L"i_1"}, IndexList{L"a_1"});
     } else {
       throw_invalid_expr();
     }
