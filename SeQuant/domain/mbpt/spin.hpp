@@ -173,7 +173,7 @@ container::svector<container::svector<Index>> external_indices(
 ///
 /// @param nparticles Number of indices in bra of the target tensor. That must
 ///                   be equal to the same in the ket.
-/// @deprecated not CVS-compatible, and mixes bra and ket relative to
+/// @deprecated not CSV-compatible, and mixes bra and ket relative to
 /// external_indices(expr) , will be deprecated
 [[deprecated("use external_indices(expr)")]] container::svector<
     container::svector<Index>>
