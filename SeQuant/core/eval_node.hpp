@@ -58,6 +58,8 @@ EvalNode<ExprT> eval_node(ExprPtr const& expr) {
 
   if (expr->is<Tensor>()) return EvalNode<ExprT>{ExprT{expr->as<Tensor>()}};
   if (expr->is<Constant>()) return EvalNode<ExprT>{ExprT{expr->as<Constant>()}};
+  if (expr->is<Variable>())
+    return EvalNode<ExprT>{ExprT{expr->as<Variable>()}};
   assert(expr->is<Sum>() || expr->is<Product>());
 
   auto subxprs = *expr | ranges::views::transform([](auto const& x) {

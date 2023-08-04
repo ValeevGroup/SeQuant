@@ -19,6 +19,8 @@ bool is_tot(Tensor const& t) noexcept {
   return ranges::any_of(t.const_braket(), &Index::has_proto_indices);
 }
 
+std::wstring_view const var_label = L"C";
+
 }  // namespace
 
 template <
@@ -64,13 +66,20 @@ EvalExpr::EvalExpr(Constant const& c)
       expr_{c.clone()},
       tot_{false} {}
 
+EvalExpr::EvalExpr(Variable const& v)
+    : op_type_{EvalOp::Id},
+      result_type_{ResultType::Scalar},
+      hash_value_{hash::value(v.label())},
+      id_{},
+      expr_{v.clone()},
+      tot_{false} {}
+
 EvalExpr::EvalExpr(EvalExpr const& left, EvalExpr const& right, EvalOp op)
     : op_type_{op},
       hash_value_{hash_imed(left, right, op)},
       id_{++global_id_},
       expr_{make_imed(left, right, op)} {
-  result_type_ =
-      expr_->is<Tensor>() ? ResultType::Tensor : ResultType::Scalar;
+  result_type_ = expr_->is<Tensor>() ? ResultType::Tensor : ResultType::Scalar;
   tot_ = expr_->is<Tensor>() && is_tot(expr_->as<Tensor>());
 }
 
@@ -88,14 +97,36 @@ bool EvalExpr::tot() const noexcept { return tot_; }
 
 std::wstring EvalExpr::to_latex() const noexcept { return expr_->to_latex(); }
 
-Tensor const& EvalExpr::as_tensor() const { return expr_->as<Tensor>(); }
+bool EvalExpr::is_tensor() const noexcept {
+  return expr().is<Tensor>() && result_type() == ResultType::Tensor;
+}
 
-Constant const& EvalExpr::as_constant() const { return expr_->as<Constant>(); }
+bool EvalExpr::is_scalar() const noexcept { return !is_tensor(); }
+
+bool EvalExpr::is_constant() const noexcept {
+  return expr().is<Constant>() && result_type() == ResultType::Scalar;
+}
+
+bool EvalExpr::is_variable() const noexcept {
+  return expr().is<Variable>() && result_type() == ResultType::Scalar;
+}
+
+Tensor const& EvalExpr::as_tensor() const noexcept {
+  return expr().as<Tensor>();
+}
+
+Constant const& EvalExpr::as_constant() const noexcept {
+  return expr().as<Constant>();
+}
+
+Variable const& EvalExpr::as_variable() const noexcept {
+  return expr().as<Variable>();
+}
 
 InnerOuterIndices EvalExpr::inner_outer_indices() const noexcept {
-  if (expr()->is<Constant>()) return {};
+  if (is_scalar()) return {};
 
-  assert(expr()->is<Tensor>());
+  assert(is_tensor());
   auto const& t = expr()->as<Tensor>();
 
   container::svector<Index> inner;
@@ -112,29 +143,22 @@ InnerOuterIndices EvalExpr::inner_outer_indices() const noexcept {
 }
 
 std::string EvalExpr::label() const noexcept {
-  if (op_type() == EvalOp::Id) {
-    if (expr()->is<Tensor>())
-      return to_string(as_tensor().label()) + "(" +
-             indices_to_annot(inner_outer_indices()) + ")";
-    else {
-      assert(expr()->is<Constant>());
-      auto const& c = as_constant();
-      auto real = Constant{c.value().real()}.value<double>();
-      auto imag = Constant{c.value().imag()}.value<double>();
-      assert(real != 0 || imag != 0);
-      std::string r = std::to_string(real);
-      std::string i = std::to_string(imag);
-      if (real == 0) return i;
-      if (imag == 0) return r;
-      return "(" + r + "," + i + ")";
-    }
+  if (is_tensor())
+    return to_string(as_tensor().label()) + "(" +
+           indices_to_annot(inner_outer_indices()) + ")";
+  else if (is_constant()) {
+    auto const& c = as_constant();
+    auto real = Constant{c.value().real()}.value<double>();
+    auto imag = Constant{c.value().imag()}.value<double>();
+    assert(real != 0 || imag != 0);
+    std::string r = std::to_string(real);
+    std::string i = std::to_string(imag);
+    if (real == 0) return i;
+    if (imag == 0) return r;
+    return "(" + r + "," + i + ")";
   } else {
-    if (expr()->is<Tensor>()) {
-      return to_string(as_tensor().label()) + to_string(id_) + "(" +
-             indices_to_annot(inner_outer_indices()) + ")";
-    } else {
-      return "C";
-    }
+    assert(is_variable());
+    return to_string(as_variable().label());
   }
 }
 
@@ -325,11 +349,10 @@ ParticleSymmetry particle_symmetry(Symmetry s) noexcept {
 }
 
 ExprPtr make_sum(EvalExpr const& left, EvalExpr const& right) noexcept {
-  assert(left.expr()->is<Tensor>());
-  assert(right.expr()->is<Tensor>());
+  assert(left.is_tensor() && right.is_tensor());
 
-  auto const& t1 = left.expr()->as<Tensor>();
-  auto const& t2 = right.expr()->as<Tensor>();
+  auto const& t1 = left.as_tensor();
+  auto const& t2 = right.as_tensor();
 
   assert(t1.bra_rank() + t1.ket_rank()         //
              == t2.bra_rank() + t2.ket_rank()  //
@@ -342,16 +365,15 @@ ExprPtr make_sum(EvalExpr const& left, EvalExpr const& right) noexcept {
 }
 
 ExprPtr make_prod(EvalExpr const& left, EvalExpr const& right) noexcept {
-  assert(left.expr()->is<Tensor>());
-  assert(right.expr()->is<Tensor>());
+  assert(left.is_tensor() && right.is_tensor());
 
-  auto const& t1 = left.expr()->as<Tensor>();
-  auto const& t2 = right.expr()->as<Tensor>();
+  auto const& t1 = left.as_tensor();
+  auto const& t2 = right.as_tensor();
 
   auto [bra, ket] = target_braket(t1, t2);
   if (bra.empty() && ket.empty()) {
     // dot product
-    return ex<Constant>(1);
+    return ex<Variable>(var_label);
   } else {
     // regular tensor product
     auto ts = tensor_symmetry_prod(left, right);
@@ -371,7 +393,7 @@ ExprPtr make_imed(EvalExpr const& left, EvalExpr const& right,
   if (lres == ResultType::Scalar && rres == ResultType::Scalar) {
     // scalar (+|*) scalar
 
-    return ex<Constant>(1);
+    return ex<Variable>(var_label);
 
   } else if (lres == ResultType::Scalar && rres == ResultType::Tensor) {
     // scalar (*) tensor
@@ -384,10 +406,7 @@ ExprPtr make_imed(EvalExpr const& left, EvalExpr const& right,
   } else if (lres == ResultType::Tensor && rres == ResultType::Scalar) {
     // tensor (*) scalar
 
-    assert(op == EvalOp::Prod && "scalar + tensor not supported");
-    auto const& t = left.expr()->as<Tensor>();
-    return ex<Tensor>(Tensor{L"I", t.bra(), t.ket(), t.symmetry(),
-                             t.braket_symmetry(), t.particle_symmetry()});
+    return make_imed(right, left, op);
 
   } else {
     // tensor (+|*) tensor

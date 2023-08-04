@@ -12,6 +12,8 @@ EvalExprTA::EvalExprTA(Tensor const& tnsr)
 
 EvalExprTA::EvalExprTA(Constant const& c) : EvalExpr(c), annot_{} {}
 
+EvalExprTA::EvalExprTA(Variable const& v) : EvalExpr(v), annot_{} {}
+
 EvalExprTA::EvalExprTA(const EvalExprTA& left, const EvalExprTA& right,
                        EvalOp op)
     : EvalExpr{left, right, op} {
@@ -44,6 +46,8 @@ EvalExprBTAS::EvalExprBTAS(Tensor const& t) noexcept
     : EvalExpr{t}, annot_{index_hash(t.const_braket()) | ranges::to<annot_t>} {}
 
 EvalExprBTAS::EvalExprBTAS(Constant const& c) noexcept : EvalExpr{c} {}
+
+EvalExprBTAS::EvalExprBTAS(Variable const& v) noexcept : EvalExpr{v} {}
 
 EvalExprBTAS::EvalExprBTAS(EvalExprBTAS const& left,   //
                            EvalExprBTAS const& right,  //

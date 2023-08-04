@@ -227,6 +227,13 @@ class EvalExprTA final : public EvalExpr {
   explicit EvalExprTA(Constant const&);
 
   ///
+  /// \brief Construct an EvalExprTA from a Variable.
+  ///
+  /// \see EvalExpr(Variable const&).
+  ///
+  explicit EvalExprTA(Variable const&);
+
+  ///
   /// \brief Construct an EvalExprTA from two EvalExprTA and an EvalOp.
   /// \see EvalExpr(EvalExpr const&, EvalExpr const&, EvalOp).
   ///
@@ -262,6 +269,13 @@ class EvalExprBTAS final : public EvalExpr {
   /// \see EvalExpr(Constant const&).
   ///
   explicit EvalExprBTAS(Constant const&) noexcept;
+
+  ///
+  /// \brief Construct an EvalExprBTAS from a Variable.
+  ///
+  /// \see EvalExpr(Variable const&).
+  ///
+  explicit EvalExprBTAS(Variable const&) noexcept;
 
   ///
   /// \brief Construct an EvalExprBTAS from two EvalExprBTAS and an EvalOp.
