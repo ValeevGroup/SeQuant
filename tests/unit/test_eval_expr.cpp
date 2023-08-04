@@ -88,13 +88,13 @@ TEST_CASE("TEST_EVAL_EXPR", "[EvalExpr]") {
                 T(L"X{i1;a1}"),  //
                 T(L"Y{a1;i1}"),  //
                 EvalOp::Prod     //
-                ) == ResultType::Constant);
+                ) == ResultType::Scalar);
 
     REQUIRE(result_type(         //
                 T(L"X{i1;a1}"),  //
                 T(L"Y{a1;i1}"),  //
                 EvalOp::Prod     //
-                ) == ResultType::Constant);
+                ) == ResultType::Scalar);
 
     REQUIRE(result_type(                //
                 T(L"X{i1,i2; a3,a4}"),  //

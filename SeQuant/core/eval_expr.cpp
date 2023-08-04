@@ -58,7 +58,7 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
 
 EvalExpr::EvalExpr(Constant const& c)
     : op_type_{EvalOp::Id},
-      result_type_{ResultType::Constant},
+      result_type_{ResultType::Scalar},
       hash_value_{hash::value(c)},
       id_{},
       expr_{c.clone()},
@@ -70,7 +70,7 @@ EvalExpr::EvalExpr(EvalExpr const& left, EvalExpr const& right, EvalOp op)
       id_{++global_id_},
       expr_{make_imed(left, right, op)} {
   result_type_ =
-      expr_->is<Tensor>() ? ResultType::Tensor : ResultType::Constant;
+      expr_->is<Tensor>() ? ResultType::Tensor : ResultType::Scalar;
   tot_ = expr_->is<Tensor>() && is_tot(expr_->as<Tensor>());
 }
 
@@ -368,12 +368,12 @@ ExprPtr make_imed(EvalExpr const& left, EvalExpr const& right,
   auto lres = left.result_type();
   auto rres = right.result_type();
 
-  if (lres == ResultType::Constant && rres == ResultType::Constant) {
+  if (lres == ResultType::Scalar && rres == ResultType::Scalar) {
     // scalar (+|*) scalar
 
     return ex<Constant>(1);
 
-  } else if (lres == ResultType::Constant && rres == ResultType::Tensor) {
+  } else if (lres == ResultType::Scalar && rres == ResultType::Tensor) {
     // scalar (*) tensor
 
     assert(op == EvalOp::Prod && "scalar + tensor not supported");
@@ -381,7 +381,7 @@ ExprPtr make_imed(EvalExpr const& left, EvalExpr const& right,
     return ex<Tensor>(Tensor{L"I", t.bra(), t.ket(), t.symmetry(),
                              t.braket_symmetry(), t.particle_symmetry()});
 
-  } else if (lres == ResultType::Tensor && rres == ResultType::Constant) {
+  } else if (lres == ResultType::Tensor && rres == ResultType::Scalar) {
     // tensor (*) scalar
 
     assert(op == EvalOp::Prod && "scalar + tensor not supported");

@@ -38,7 +38,7 @@ enum class EvalOp {
 /// \details Represents the type of the result of @c EvalOp on two EvalExpr
 ///          objects (or, single EvalExpr object if the EvalOp is Id).
 ///
-enum class ResultType { Tensor, Constant };
+enum class ResultType { Tensor, Scalar };
 
 ///
 /// @see EvalExpr::inner_outer_indices
