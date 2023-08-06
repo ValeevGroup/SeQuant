@@ -31,7 +31,13 @@ std::wstring regex_patterns::look_ahead(std::wstring_view pat) {
   return L"(?="s + pat.data() + L")";
 }
 
-std::wstring regex_patterns::pure_index() { return L"[ia][↑↓]?_?\\d+"; }
+std::wstring regex_patterns::pure_index() {
+    return label().data() + L"_?\\d+"s;
+}
+
+std::wstring regex_patterns::pure_index_capture() {
+    return capture(label()) + L"_?" + capture(L"\\d+");
+}
 
 std::wstring regex_patterns::pure_indices() {
   return pure_index() + zero_or_more_non_greedy(L"," + pure_index());
@@ -56,7 +62,7 @@ std::wstring regex_patterns::index_capture() {
 
 std::wstring_view regex_patterns::indices() {
   static const std::wstring idxs =
-      index().data() + zero_or_more_non_greedy(L","s + index().data());
+      index() + zero_or_more_non_greedy(L","s + index());
   return idxs;
 }
 
@@ -83,15 +89,15 @@ std::wstring_view regex_patterns::ket_expanded_capture() {
 std::wstring_view regex_patterns::abs_real_frac() {
   static std::wstring frac =
       std::wstring{} + abs_real_num().data() +
-      capture_not(std::wstring{} + LR"(\/)" + capture(abs_real_num()).data()) +
+      capture_not(LR"(\/)"s + capture(abs_real_num())) +
       L"?";
 
-  return frac;  // guranteed numerator and optional denominator
+  return frac;  // guaranteed numerator and optional denominator
 }
 
 std::wstring_view regex_patterns::tensor_expanded() {
   static const std::wstring tensor =
-      capture(L"\\S+?") +
+      capture(label()) +
       look_ahead(L"\\S*?"s + bra_expanded_capture().data()) +
       look_ahead(L"\\S*?"s + ket_expanded_capture().data()) +
       this_or_that(L""s + bra_expanded().data() + ket_expanded().data(),
@@ -103,7 +109,7 @@ std::wstring_view regex_patterns::tensor_expanded() {
 
 std::wstring_view regex_patterns::tensor_terse() {
   static const std::wstring tensor =
-      capture(L"\\S+?") + L"\\{"s + capture(indices()) + L";" +
+      capture(label()) + L"\\{"s + capture(indices()) + L";" +
       capture(indices()) + L"\\}" + capture_not(L":" + capture(L"A|S|N")) +
       L"?";
   return tensor;

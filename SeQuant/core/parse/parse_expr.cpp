@@ -24,24 +24,11 @@ sequant::rational to_fraction(boost::wsmatch const& match) {
           denom.empty() ? 1 : std::stol(denom)};
 }
 
-// add underscore characters to a terse index string
-// so the normalized string becomes what sequant::Index constructor expects
-std::wstring normalize_idx_label(boost::wssub_match const& mo) {
-  std::wostringstream oss{};
-  wchar_t last_char = L' ';
-  for (auto x : mo) {
-    if ((std::iswalpha(last_char) && std::iswdigit(x)) ||
-        ((last_char == L'↓' || last_char == L'↑') && std::iswdigit(x)))
-      oss << L'_';
-    oss << x;
-    last_char = x;
-  }
-
-  return oss.str();
-}
-
-Index parse_pure_index(boost::wssub_match const& mo) {
-  return Index{normalize_idx_label(mo)};
+std::wstring pure_index_string(boost::wssub_match const& mo) {
+  static const boost::wregex rgx{regex_patterns::pure_index_capture()};
+  boost::wsmatch match;
+  boost::regex_match(mo.begin(), mo.end(), match, rgx);
+  return match.str(1) + L"_" + match.str(2);
 }
 
 std::vector<Index> parse_pure_indices(boost::wssub_match const& mo) {
@@ -50,7 +37,7 @@ std::vector<Index> parse_pure_indices(boost::wssub_match const& mo) {
   auto end = boost::wsregex_iterator{};
   for (auto iter = boost::wsregex_iterator{mo.begin(), mo.end(), rgx};
        iter != end; ++iter) {
-    result.emplace_back(parse_pure_index((*iter)[0]));
+    result.emplace_back(pure_index_string((*iter)[0]));
   }
   return result;
 }
@@ -68,10 +55,10 @@ container::svector<Index> parse_indices(boost::wssub_match const& mo) {
             return idx.space() == ispace;
           }))
         throw_invalid_expr();
-      result.emplace_back(Index{normalize_idx_label((*iter)[1]), ispace,
-                                std::move(proto_indices)});
+      result.emplace_back(pure_index_string((*iter)[1]), ispace,
+                          std::move(proto_indices));
     } else {
-      result.emplace_back(parse_pure_index((*iter)[1]));
+      result.emplace_back(pure_index_string((*iter)[1]));
     }
   }
   return result;
