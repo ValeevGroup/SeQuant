@@ -104,7 +104,7 @@ std::vector<ExprPtr> cceqs::λ(bool screen, bool use_topology,
         }
       }
     }
-    lhbar = hbar_le_p;  // not needed
+    lhbar = hbar_le_p;
 
     // 2.b multiply by adjoint of P(p) (i.e., P(-p)) on the right side
     auto hbar_P = simplify(hbar_p * op::P(-p));
@@ -151,20 +151,20 @@ std::vector<sequant::ExprPtr> cceqs::pert_t1() {
 
   std::vector<ExprPtr> result(P + 1);
   for (auto p = P; p >= PMIN; --p) {
-    auto eq = simplify(op::A(p) * (mu_bar + hbar_pert));
+    auto eq = simplify(op::P(p) * (mu_bar + hbar_pert));
 
-    std::vector<std::pair<std::wstring, std::wstring>> new_op_connect = {
+    std::vector<std::pair<std::wstring, std::wstring>> op_connect = {
         {L"h", L"t"},  {L"f", L"t"},  {L"g", L"t"}, {L"h", L"t¹"},
         {L"f", L"t¹"}, {L"g", L"t¹"}, {L"V", L"t"}};
-    result.at(p) = op::vac_av(eq, new_op_connect);
+    result.at(p) = op::vac_av(eq, op_connect);
     simplify(result.at(p));
   }
 
   return result;
 }
 
- std::vector<ExprPtr> cceqs::pert_λ1() {
-  abort(); // not implemented yet
- }
+std::vector<ExprPtr> cceqs::pert_λ1() {
+  abort();  // not implemented yet
+}
 
 }  // namespace sequant::mbpt::sr
