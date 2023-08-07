@@ -91,7 +91,8 @@ std::wstring_view regex_patterns::abs_real_frac() {
 
 std::wstring_view regex_patterns::tensor_expanded() {
   static const std::wstring tensor =
-      capture(L"\\w+") + look_ahead(L"\\S*?"s + bra_expanded_capture().data()) +
+      capture(L"\\S+?") +
+      look_ahead(L"\\S*?"s + bra_expanded_capture().data()) +
       look_ahead(L"\\S*?"s + ket_expanded_capture().data()) +
       this_or_that(L""s + bra_expanded().data() + ket_expanded().data(),
                    L""s + ket_expanded().data() + bra_expanded().data()) +
@@ -102,7 +103,7 @@ std::wstring_view regex_patterns::tensor_expanded() {
 
 std::wstring_view regex_patterns::tensor_terse() {
   static const std::wstring tensor =
-      capture(L"\\w+") + L"\\{"s + capture(indices()) + L";" +
+      capture(L"\\S+?") + L"\\{"s + capture(indices()) + L";" +
       capture(indices()) + L"\\}" + capture_not(L":" + capture(L"A|S|N")) +
       L"?";
   return tensor;

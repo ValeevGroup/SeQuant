@@ -592,7 +592,7 @@ class NormalOperator : public Operator<S>,
   }
 
   /// @return all possible values returned by label() for this operator type
-  static const container::vector<std::wstring> &labels();
+  static const container::svector<std::wstring> &labels();
 
   std::wstring_view label() const override;
 

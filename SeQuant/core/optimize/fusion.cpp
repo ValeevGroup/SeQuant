@@ -24,7 +24,7 @@ ExprPtr Fusion::left() const { return left_; }
 ExprPtr Fusion::right() const { return right_; }
 
 ExprPtr Fusion::fuse_left(Product const& lhs, Product const& rhs) {
-  auto fac = container::vector<ExprPtr>{};
+  auto fac = container::svector<ExprPtr>{};
 
   for (auto&& [e1, e2] : zip(lhs.factors(), rhs.factors())) {
     if (e1 == e2)
@@ -59,7 +59,7 @@ ExprPtr Fusion::fuse_left(Product const& lhs, Product const& rhs) {
 }
 
 ExprPtr Fusion::fuse_right(Product const& lhs, Product const& rhs) {
-  auto fac = container::vector<ExprPtr>{};
+  auto fac = container::svector<ExprPtr>{};
 
   for (auto&& [e1, e2] :
        zip(lhs.factors() | reverse, rhs.factors() | reverse)) {

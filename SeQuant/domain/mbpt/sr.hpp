@@ -221,8 +221,19 @@ ExprPtr Lambda_(std::size_t K);
 /// K
 ExprPtr Lambda(std::size_t K);
 
-/// makes deexcitation operator of rank \p K
-ExprPtr A(std::size_t K);
+/// makes generic bra/ket-antisymmetric excitation (if \p K > 0) or
+/// deexcitation (if \p K < 0) operator of rank `|K|`
+ExprPtr A(std::int64_t K);
+
+/// makes generic particle-symmetric excitation (if \p K > 0) or
+/// deexcitation (sif \p K < 0) operator of rank `|K|`
+ExprPtr S(std::int64_t K);
+
+/// makes projector onto excited bra (if \p K > 0) or
+/// ket (if \p K < 0) manifold of rank `|K|`;
+/// if using spin-free basis the manifold is particle-symmetric (@sa S(K)),
+/// else it is bra/ket-antisymmetric (@sa A(K))
+ExprPtr P(std::int64_t K);
 
 /// @}
 
@@ -262,12 +273,15 @@ bool lowers_rank_or_lower_to_vacuum(const ExprPtr& op_or_op_product,
 
 /// @param[in] expr input expression
 /// @param[in] op_connections list of pairs of labels of operators to be
-/// connected (e.g., `{{"h", "t"}, {"f", "t"}, {"g", "t"}}` will connect op::)
+/// connected (e.g., `{{"h", "t"}}` will ensure that each operator with
+/// label `"h"` will be connected to at least one operator with label `"t"`;
+/// the default is `{{L"h", L"t"}, {L"f", L"t"}, {L"g", L"t"}}`
+/// @param[in] skip_clone if true, will not clone the input expression
 /// @return the VEV
-ExprPtr vac_av(
-    ExprPtr expr,
-    std::vector<std::pair<std::wstring, std::wstring>> op_connections = {
-        {L"h", L"t"}, {L"f", L"t"}, {L"g", L"t"}});
+ExprPtr vac_av(ExprPtr expr,
+               std::vector<std::pair<std::wstring, std::wstring>>
+                   op_connections = {{L"h", L"t"}, {L"f", L"t"}, {L"g", L"t"}},
+               bool skip_clone = false);
 
 }  // namespace op
 

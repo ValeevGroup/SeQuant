@@ -44,7 +44,7 @@ int main(int argc, char* argv[]) {
 
   /// Make external index
   auto ext_idx_list = [](const int i_max) {
-    container::vector<container::vector<Index>> ext_idx_list;
+    container::svector<container::svector<Index>> ext_idx_list;
 
     for (size_t i = 1; i <= i_max; ++i) {
       auto label = std::to_wstring(i);
@@ -52,7 +52,7 @@ int main(int argc, char* argv[]) {
           IndexSpace::instance(IndexSpace::active_occupied), label);
       auto virt_i = Index::make_label_index(
           IndexSpace::instance(IndexSpace::active_unoccupied), label);
-      container::vector<Index> pair = {occ_i, virt_i};
+      decltype(ext_idx_list)::value_type pair = {occ_i, virt_i};
       ext_idx_list.push_back(pair);
     }
     return ext_idx_list;

@@ -7,6 +7,8 @@
 
 #include "../core/utility/singleton.hpp"
 
+#include <iostream>
+
 namespace sequant {
 
 /// controls logging within SeQuant components, only useful for
@@ -23,6 +25,17 @@ struct Logger : public Singleton<Logger> {
   bool simplify = false;
   bool tensor_network = false;
 
+  ///
+  /// Evaluation log verbosity level
+  ///   0: No log.
+  ///   1: Log what is being evaluated in the evaluation tree (independent
+  ///      of tensor algebra backend (TA/BTAS etc.)
+  ///   2: Also log invocation of tensor algebra backend within sequant.
+  ///
+  size_t log_level_eval = 1;
+
+  std::ostream& stream = std::cout;
+
  private:
   friend class Singleton<Logger>;
   Logger(int log_level = 0) {
@@ -38,6 +51,11 @@ struct Logger : public Singleton<Logger> {
     }
   }
 };
+
+template <typename... Args>
+void write_log(Logger& l, Args const&... args) noexcept {
+  ((l.stream << args), ...);
+}
 
 }  // namespace sequant
 

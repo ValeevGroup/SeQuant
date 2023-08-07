@@ -6,8 +6,9 @@
 #define SEQUANT_SPIN_HPP
 
 #include <SeQuant/core/tensor_network.hpp>
-#include <unordered_map>
 #include "SeQuant/core/tensor.hpp"
+
+#include <unordered_map>
 
 namespace sequant {
 
@@ -17,7 +18,7 @@ namespace sequant {
 /// @param scaling_factor to scale the result
 /// @return a substituted and scaled expression pointer
 ExprPtr transform_expr(const ExprPtr& expr,
-                       const std::map<Index, Index>& index_replacements,
+                       const container::map<Index, Index>& index_replacements,
                        Constant::scalar_type scaling_factor = 1);
 
 /// @brief Preserving particle symmetry, swaps bra and ket labels on all tensors
@@ -32,7 +33,7 @@ ExprPtr swap_bra_ket(const ExprPtr& expr);
 /// corresponding replacement
 /// @return expr the ExprPtr with substituted indices
 ExprPtr append_spin(ExprPtr& expr,
-                    const std::map<Index, Index>& index_replacements);
+                    const container::map<Index, Index>& index_replacements);
 
 /// @brief Removes spin label from all indices in an expression
 /// @param expr an ExprPtr with spin indices
@@ -81,7 +82,7 @@ bool has_tensor(const ExprPtr& expr, std::wstring label);
 /// @brief Generates a vector of replacement maps for Antisymmetrizer operator
 /// @param A An antisymmetrizer tensor (A) (with > 2 particle indices)
 /// @return Vector of replacement maps
-std::vector<std::map<Index, Index>> A_maps(const Tensor& A);
+container::svector<container::map<Index, Index>> A_maps(const Tensor& A);
 
 /// @brief Removes tensor with a certain label from product
 /// @param product A product expression
@@ -119,9 +120,8 @@ ExprPtr expand_A_op(const ExprPtr& expr);
 /// operator
 /// @param P A particle permutation operator (with > 2 particle indices)
 /// @return Vector of replacement maps
-std::vector<std::map<Index, Index>> P_maps(const Tensor& P,
-                                           bool keep_canonical = true,
-                                           bool pair_wise = false);
+container::svector<container::map<Index, Index>> P_maps(
+    const Tensor& P, bool keep_canonical = true, bool pair_wise = false);
 
 /// @brief Expand a product containing the particle permutation (P) operator
 /// @param A product term with/without P operator
@@ -135,7 +135,8 @@ ExprPtr expand_P_op(const Product& product, bool keep_canonical = true,
 ExprPtr expand_P_op(const ExprPtr& expr, bool keep_canonical = true,
                     bool pair_wise = true);
 
-std::vector<std::map<Index, Index>> S_replacement_maps(const Tensor& S);
+container::svector<container::map<Index, Index>> S_replacement_maps(
+    const Tensor& S);
 
 /// @brief Expand S operator
 ExprPtr S_maps(const ExprPtr& expr);
@@ -158,20 +159,25 @@ int count_cycles(const container::svector<int, 6>& vec1,
 /// @return an expression with spin integrated/adapted
 ExprPtr closed_shell_spintrace(
     const ExprPtr& expression,
-    const container::vector<container::vector<Index>>& ext_index_groups = {{}});
+    const container::svector<container::svector<Index>>& ext_index_groups = {
+        {}});
 
-/// @brief Generates list of external indices from Antisymmetrization (A)
-/// operator
-/// @param expr ExprPtr with spin orbital indices
+/// @brief Generates list of external indices common to all tensor networks in
+/// the expression
+/// @param expr ExprPtr (sum of) TN in spin-orbital basis, must include an
+/// (anti)symmetrizer (see OpType::A , OpType::S)
 /// @return external index groups to be used for spintracing
-container::vector<container::vector<Index>> external_indices(
+container::svector<container::svector<Index>> external_indices(
     const ExprPtr& expr);
 
 ///
 /// @param nparticles Number of indices in bra of the target tensor. That must
 ///                   be equal to the same in the ket.
-///
-container::vector<container::vector<Index>> external_indices(size_t nparticles);
+/// @deprecated not CVS-compatible, and mixes bra and ket relative to
+/// external_indices(expr) , will be deprecated
+[[deprecated("use external_indices(expr)")]] container::svector<
+    container::svector<Index>>
+external_indices(size_t nparticles);
 
 /// @brief Transforms Coupled cluster from spin orbital to spatial orbitals
 /// @details The external indices are deduced from Antisymmetrization operator
@@ -218,7 +224,7 @@ std::vector<ExprPtr> open_shell_P_op_vector(const Tensor& A);
 /// @return a vector of expr ptrs with spin expressions
 std::vector<ExprPtr> open_shell_spintrace(
     const ExprPtr& expr,
-    const std::vector<std::vector<Index>>& ext_index_groups,
+    const container::svector<container::svector<Index>>& ext_index_groups,
     const int single_spin_case = 0);
 
 /// @brief Transforms Coupled cluster from spin orbital to spatial orbitals
@@ -237,7 +243,7 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr);
 /// @return an expression with spin integrated/adapted
 ExprPtr spintrace(
     const ExprPtr& expression,
-    container::vector<container::vector<Index>> ext_index_groups = {{}});
+    container::svector<container::svector<Index>> ext_index_groups = {{}});
 
 /// @brief Factorize S out of terms
 /// @details Given an expression, permute indices and check if a given product
@@ -251,7 +257,8 @@ ExprPtr factorize_S(const ExprPtr& expression,
 
 ExprPtr biorthogonal_transform(
     const sequant::ExprPtr& expr, int n_particles,
-    const std::vector<std::vector<sequant::Index>>& ext_index_groups = {{}},
+    const container::svector<container::svector<sequant::Index>>&
+        ext_index_groups = {{}},
     double threshold = 1.e-12);
 
 }  // namespace sequant

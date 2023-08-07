@@ -46,11 +46,17 @@ TEST_CASE("Spin", "[spin]") {
         Index(L"α↑_1", IndexSpace::instance(IndexSpace::complete_unoccupied,
                                             IndexSpace::alpha));
 
+    SEQUANT_PRAGMA_CLANG(diagnostic push)
+    SEQUANT_PRAGMA_CLANG(diagnostic ignored "-Wdeprecated-declarations")
+    SEQUANT_PRAGMA_GCC(diagnostic push)
+    SEQUANT_PRAGMA_GCC(diagnostic ignored "-Wdeprecated-declarations")
     REQUIRE(p1.ascii_label() == "pa_1");
     REQUIRE(p2.ascii_label() == "pb_2");
     REQUIRE(p3.ascii_label() == "pa_3");
     REQUIRE(p4.ascii_label() == "pb_4");
     REQUIRE(alpha1.ascii_label() == "alphaa_1");
+    SEQUANT_PRAGMA_GCC(diagnostic pop)
+    SEQUANT_PRAGMA_CLANG(diagnostic pop)
   }
 
   SECTION("Tensor: can_expand, spin_symm_tensor, remove_spin") {
@@ -585,8 +591,8 @@ SECTION("Transform expression") {
         L"{ \\bigl( - {{g^{{a_2}{i_1}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}} + "
         L"{{{2}}{g^{{i_1}{a_2}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}}\\bigr) }");
 
-  std::map<Index, Index> idxmap = {{Index{L"i_1"}, Index{L"i_2"}},
-                                   {Index{L"i_2"}, Index{L"i_1"}}};
+  container::map<Index, Index> idxmap = {{Index{L"i_1"}, Index{L"i_2"}},
+                                         {Index{L"i_2"}, Index{L"i_1"}}};
   auto transformed_result = transform_expr(result, idxmap);
   REQUIRE(transformed_result->is<Sum>());
   REQUIRE(transformed_result->size() == 2);
@@ -687,8 +693,8 @@ SECTION("Closed-shell spintrace CCSD") {
           L"{ \\bigl( - {{g^{{a_2}{i_1}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}} + "
           L"{{{2}}{g^{{i_1}{a_2}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}}\\bigr) }");
 
-    std::map<Index, Index> idxmap = {{Index{L"i_1"}, Index{L"i_2"}},
-                                     {Index{L"i_2"}, Index{L"i_1"}}};
+    container::map<Index, Index> idxmap = {{Index{L"i_1"}, Index{L"i_2"}},
+                                           {Index{L"i_2"}, Index{L"i_1"}}};
     auto transformed_result = transform_expr(result, idxmap);
     REQUIRE(transformed_result->is<Sum>());
     REQUIRE(transformed_result->size() == 2);
@@ -1062,8 +1068,6 @@ SECTION("Closed-shell spintrace CCSDT terms") {
     result = expand_antisymm(result);
     result = closed_shell_spintrace(
         input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
-    REQUIRE(result->size() == 72);
-    simplify(result);
     REQUIRE(result->size() == 20);
   }
 
@@ -1311,7 +1315,6 @@ SECTION("Open-shell spin-tracing") {
   const auto a2B = Index(L"a↓_2", virB);
   const auto a3B = Index(L"a↓_3", virB);
 
-  // Logger::get_instance().canonicalize = true;
   // Tensor canonicalize
   {
     auto t3 = ex<Tensor>(Tensor(L"t", {a3A, a2B, a2A}, {i1A, i2B, i3A}));
@@ -1381,7 +1384,6 @@ SECTION("Open-shell spin-tracing") {
             L"i↓_3}}_{{a↓_2}}}}");
   }
 
-  Logger::get_instance().canonicalize = false;
   // f * t3
   {
     auto input =

@@ -60,6 +60,8 @@ OpClass to_class(OpType op) {
     case OpType::RDM:
     case OpType::RDMCumulant:
     case OpType::δ:
+    case OpType::A:
+    case OpType::S:
     case OpType::μ:
       return OpClass::gen;
     case OpType::t:
@@ -68,7 +70,6 @@ OpClass to_class(OpType op) {
     case OpType::t_1:
       return OpClass::ex;
     case OpType::λ:
-    case OpType::A:
     case OpType::L:
     case OpType::λ_1:
       return OpClass::deex;
@@ -175,36 +176,38 @@ template <Statistics S>
 OpMaker<S>::OpMaker(OpType op) : op_(op) {}
 
 template <Statistics S>
-ExprPtr OpMaker<S>::operator()() const {
-  const bool symm = get_default_formalism().nbody_interaction_tensor_symm() ==
-                    Context::NBodyInteractionTensorSymm::Yes;
-  const bool do_csv = get_default_formalism().csv() == Context::CSV::Yes;
-  bool csv_bra = false;
-  bool csv_ket = false;
-  if (do_csv) {  // validate spaces
+ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
+                               std::optional<Symmetry> opsymm_opt) const {
+  bool dep_bra = false;
+  bool dep_ket = false;
+  // if not given dep, use mbpt::Context::CSV to determine whether to use
+  // dependent indices for pure (de)excitation ops
+  if (!dep && get_default_formalism().csv() == mbpt::CSV::Yes) {
     if (to_class(op_) == OpClass::ex) {
       for (auto&& s : bra_spaces_) {
         assert(s == IndexSpace::complete_unoccupied ||
                s == IndexSpace::active_unoccupied);
       }
-      csv_bra = true;
+      dep = UseDepIdx::Bra;
     } else if (to_class(op_) == OpClass::deex) {
       for (auto&& s : ket_spaces_) {
         assert(s == IndexSpace::complete_unoccupied ||
                s == IndexSpace::active_unoccupied);
       }
-      csv_ket = true;
+      dep = UseDepIdx::Ket;
+    } else {
+      dep = UseDepIdx::None;
     }
   }
 
-  CSV csv = csv_bra ? CSV::Bra : (csv_ket ? CSV::Ket : CSV::None);
-
   return make(
       bra_spaces_, ket_spaces_,
-      [this](const auto& braidxs, const auto& ketidxs, Symmetry opsymm) {
-        return ex<Tensor>(to_wstring(op_), braidxs, ketidxs, opsymm);
+      [this, opsymm_opt](const auto& braidxs, const auto& ketidxs,
+                         Symmetry opsymm) {
+        return ex<Tensor>(to_wstring(op_), braidxs, ketidxs,
+                          opsymm_opt ? *opsymm_opt : opsymm);
       },
-      csv);
+      dep ? *dep : UseDepIdx::None);
 }
 
 template class OpMaker<Statistics::FermiDirac>;

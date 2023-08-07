@@ -5,6 +5,7 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval_node.hpp>
+#include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/domain/eval/cache_manager.hpp>
 
@@ -38,6 +39,55 @@ using remove_cvref = std::remove_cvref<T>;
 template <typename T>
 using remove_cvref_t = std::remove_cvref_t<T>;
 #endif
+
+template <typename... Args>
+void log_eval(Args const&... args) noexcept {
+#ifdef SEQUANT_EVAL_TRACE
+  auto& l = Logger::get_instance();
+  if (l.log_level_eval > 0) write_log(l, "[EVAL] ", args...);
+#endif
+}
+
+void log_cache_access(size_t key, CacheManager<ERPtr> const& cm) {
+#ifdef SEQUANT_EVAL_TRACE
+  auto& l = Logger::get_instance();
+  if (l.log_level_eval > 0) {
+    assert(cm.exists(key));
+    auto max_l = cm.max_life(key);
+    auto cur_l = cm.life(key);
+    write_log(l,                                    //
+              "[CACHE] Accessed key: ", key, ". ",  //
+              cur_l, "/", max_l, " lives remain.\n");
+    if (cur_l == 0) {
+      write_log(l,  //
+                "[CACHE] Released key: ", key, ".\n");
+    }
+  }
+#endif
+}
+
+void log_cache_store(size_t key, CacheManager<ERPtr> const& cm) {
+#ifdef SEQUANT_EVAL_TRACE
+  auto& l = Logger::get_instance();
+  if (l.log_level_eval > 0) {
+    assert(cm.exists(key));
+    write_log(l,  //
+              "[CACHE] Stored key: ", key, ".\n");
+    // because storing automatically implies immediately accessing it
+    log_cache_access(key, cm);
+  }
+#endif
+}
+
+std::string perm_groups_string(
+    container::svector<std::array<size_t, 3>> const& perm_groups) {
+  std::string result;
+  for (auto const& g : perm_groups)
+    result += "(" + std::to_string(g[0]) + "," + std::to_string(g[1]) + "," +
+              std::to_string(g[2]) + ") ";
+  result.pop_back();  // remove last space
+  return result;
+}
 
 }  // namespace
 
@@ -236,6 +286,7 @@ template <typename NodeT, typename Le, typename... Args,
           std::enable_if_t<IsLeafEvaluator<NodeT, Le>, bool> = true>
 ERPtr evaluate_core(NodeT const& node, Le const& le, Args&&... args) {
   if (node.leaf()) {
+    log_eval("[LEAF] ", node->label(), "\n");
     return le(node);
   } else {
     ERPtr const left =
@@ -250,9 +301,16 @@ ERPtr evaluate_core(NodeT const& node, Le const& le, Args&&... args) {
                                       node.right()->annot(), node->annot()};
 
     if (node->op_type() == EvalOp::Sum) {
+      log_eval("[SUM] ", node.left()->label(), " + ", node.right()->label(),
+               " = ", node->label(), "\n");
+
       return left->sum(*right, ann);
     } else {
       assert(node->op_type() == EvalOp::Prod);
+
+      log_eval("[PROD] ", node.left()->label(), " * ", node.right()->label(),
+               " = ", node->label(), "\n");
+
       return left->prod(*right, ann);
     }
   }
@@ -270,9 +328,12 @@ ERPtr evaluate_crust(NodeT const& node, Le const& le,
                      CacheManager<ERPtr>& cache) {
   auto const h = hash::value(*node);
   if (auto ptr = cache.access(h); ptr) {
+    log_cache_access(h, cache);
     return *ptr;
   } else if (cache.exists(h)) {
-    return *cache.store(h, evaluate_core(node, le, cache));
+    auto ptr = cache.store(h, evaluate_core(node, le, cache));
+    log_cache_store(h, cache);
+    return *ptr;
   } else {
     return evaluate_core(node, le, cache);
   }
@@ -321,10 +382,10 @@ auto evaluate(NodesT const& nodes, Le const& le, Args&&... args) {
   auto result = evaluate(*iter, le, std::forward<Args>(args)...);
 
   for (++iter; iter != end; ++iter) {
-    result->add_inplace(*evaluate(*iter,  //
-                                  le,     //
-                                  std::forward<Args>(args)...));
+    auto right = evaluate(*iter, le, std::forward<Args>(args)...);
+    result->add_inplace(*right);
   }
+
   return result;
 }
 
@@ -347,8 +408,11 @@ template <typename NodeT, typename Annot, typename Le, typename... Args,
 auto evaluate(NodeT const& node,    //
               Annot const& layout,  //
               Le const& le, Args&&... args) {
-  return evaluate_crust(node, le, std::forward<Args>(args)...)
-      ->permute(std::array<std::any, 2>{node->annot(), layout});
+  auto result = evaluate_crust(node, le, std::forward<Args>(args)...);
+
+  log_eval("[PERMUTE] ", node->label(), "\n");
+
+  return result->permute(std::array<std::any, 2>{node->annot(), layout});
 }
 
 ///
@@ -377,12 +441,16 @@ auto evaluate(NodesT const& nodes,  //
   auto iter = std::begin(nodes);
   auto end = std::end(nodes);
   assert(iter != end);
+  auto const pnode_label = (*iter)->label();
 
   auto result = evaluate(*iter, layout, le, std::forward<Args>(args)...);
 
   for (++iter; iter != end; ++iter) {
-    result->add_inplace(
-        *evaluate(*iter, layout, le, std::forward<Args>(args)...));
+    auto right = evaluate(*iter, layout, le, std::forward<Args>(args)...);
+
+    log_eval("[ADD_INPLACE] ", (*iter)->label(), " += ", pnode_label, "\n");
+
+    result->add_inplace(*right);
   }
   return result;
 }
@@ -415,9 +483,11 @@ template <typename NodeT, typename Annot, typename Le, typename... Args>
 auto evaluate_symm(NodeT const& node, Annot const& layout,
                    container::svector<std::array<size_t, 3>> const& perm_groups,
                    Le const& le, Args&&... args) {
+  container::svector<std::array<size_t, 3>> pgs;
   if (perm_groups.empty()) {
-    // asked for symmetrization without specifying particle symmetric index
-    // ranges
+    // asked for symmetrization without specifying particle
+    // symmetric index ranges assume both bra indices and ket indices are
+    // symmetric in the particle exchange
 
     ExprPtr expr_ptr{};
     if constexpr (IsIterableOfEvaluableNodes<NodeT>) {
@@ -430,12 +500,15 @@ auto evaluate_symm(NodeT const& node, Annot const& layout,
     assert(t.bra_rank() == t.ket_rank());
 
     size_t const half_rank = t.bra_rank();
-    return evaluate(node, layout, le, std::forward<Args>(args)...)
-        ->symmetrize({{0, half_rank, half_rank}});
+    pgs = {{0, half_rank, half_rank}};
   }
 
-  return evaluate(node, layout, le, std::forward<Args>(args)...)
-      ->symmetrize(perm_groups);
+  auto result = evaluate(node, layout, le, std::forward<Args>(args)...);
+
+  log_eval("[SYMMETRIZE] (bra pos, ket pos, length) ",
+           perm_groups_string(perm_groups.empty() ? pgs : perm_groups), "\n");
+
+  return result->symmetrize(perm_groups.empty() ? pgs : perm_groups);
 }
 
 ///
@@ -470,11 +543,12 @@ auto evaluate_antisymm(
     container::svector<std::array<size_t, 3>> const& perm_groups,  //
     Le const& le,                                                  //
     Args&&... args) {
+  container::svector<std::array<size_t, 3>> pgs;
   if (perm_groups.empty()) {
-    // Asked for antisymmetrization without specifying particle antisymmetric
-    // index ranges.
-    // Assume both bra indices and ket indices are antisymmetric in
-    // the particle exchange.
+    // asked for anti-symmetrization without specifying particle
+    // antisymmetric index ranges assume both bra indices and ket indices are
+    // antisymmetric in the particle exchange
+
     ExprPtr expr_ptr{};
     if constexpr (IsIterableOfEvaluableNodes<NodeT>) {
       expr_ptr = (*std::begin(node))->expr();
@@ -483,14 +557,18 @@ auto evaluate_antisymm(
     }
     assert(expr_ptr->is<Tensor>());
     auto const& t = expr_ptr->as<Tensor>();
+    assert(t.bra_rank() == t.ket_rank());
 
-    size_t const b = t.bra_rank();
-    assert(b == t.ket_rank());
-    return evaluate(node, layout, le, std::forward<Args>(args)...)
-        ->antisymmetrize({{0, b, b}});
+    size_t const half_rank = t.bra_rank();
+    pgs = {{0, half_rank, half_rank}};
   }
-  return evaluate(node, layout, le, std::forward<Args>(args)...)
-      ->antisymmetrize(perm_groups);
+
+  auto result = evaluate(node, layout, le, std::forward<Args>(args)...);
+
+  log_eval("[ANTISYMMETRIZE] (bra pos, ket pos, length) ",
+           perm_groups_string(perm_groups.empty() ? pgs : perm_groups), "\n");
+
+  return result->antisymmetrize(perm_groups.empty() ? pgs : perm_groups);
 }
 
 }  // namespace sequant

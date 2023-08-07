@@ -71,7 +71,7 @@ class TimerPool {
   {                                                            \
     sequant::TimerPool<> timer;                                \
     timer.start();                                             \
-    { (call); }                                                \
+    { call; }                                                  \
     timer.stop();                                              \
     auto elapsed_seconds = timer.read();                       \
     std::wcout << id << ": elapsed_time = " << std::scientific \
