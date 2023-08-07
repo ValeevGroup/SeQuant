@@ -663,7 +663,9 @@ class EvalConstant final : public EvalResult {
 
       return eval_result<EvalConstant<T>>(value() * o.value());
     } else {
-      return other.prod(*this, maybe_empty);
+      auto maybe_empty_ = maybe_empty;
+      std::swap(maybe_empty_[0], maybe_empty_[1]);
+      return other.prod(*this, maybe_empty_);
     }
   }
 

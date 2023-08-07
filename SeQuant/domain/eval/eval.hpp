@@ -300,7 +300,10 @@ template <typename NodeT, typename Le, typename... Args,
           std::enable_if_t<IsLeafEvaluator<NodeT, Le>, bool> = true>
 ERPtr evaluate_core(NodeT const& node, Le const& le, Args&&... args) {
   if (node.leaf()) {
-    log_eval("[LEAF] ", node->label(), "\n");
+    log_eval(node->is_constant()   ? "[CONSTANT] "
+             : node->is_variable() ? "[VARIABLE] "
+                                   : "[TENSOR] ",
+             node->label(), "\n");
     return le(node);
   } else {
     ERPtr const left =
@@ -322,7 +325,7 @@ ERPtr evaluate_core(NodeT const& node, Le const& le, Args&&... args) {
     } else {
       assert(node->op_type() == EvalOp::Prod);
 
-      log_eval("[PROD] ", node.left()->label(), " * ", node.right()->label(),
+      log_eval("[PRODUCT] ", node.left()->label(), " * ", node.right()->label(),
                " = ", node->label(), "\n");
 
       return left->prod(*right, ann);
