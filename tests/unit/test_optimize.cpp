@@ -102,5 +102,25 @@ TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
     REQUIRE(extract(res5, {0, 0}) == prod5.at(0));
     REQUIRE(extract(res5, {0, 1}) == prod5.at(2));
     REQUIRE(extract(res5, {1}) == prod5.at(1));
+
+    //
+    // single-term optimization when sequant::Variables appear in a product
+    //
+    auto prod6 = parse_expr(
+                     L"α * β * γ * "
+                     "g_{i3,i4}^{a3,a4}"      // T1
+                     " * t_{a1,a2}^{i3,i4}"   // T2
+                     " * t_{a3,a4}^{i1,i2}")  // T3
+                     ->as<Product>();
+    auto res6 = single_term_opt(prod6);
+
+    // this is the one we want to find
+    // α * β * γ * ((T1 * T3) * T2)  : 2 * O^4 * V^2  best if nvirt > nocc
+    REQUIRE(extract(res6, {0}) == prod6.at(0));
+    REQUIRE(extract(res6, {1}) == prod6.at(1));
+    REQUIRE(extract(res6, {2}) == prod6.at(2));
+    REQUIRE(extract(res6, {3, 0}) == prod6.at(3));
+    REQUIRE(extract(res6, {3, 1}) == prod6.at(5));
+    REQUIRE(extract(res6, {4}) == prod6.at(4));
   }
 }

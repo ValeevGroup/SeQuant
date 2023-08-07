@@ -19,7 +19,7 @@ bool is_tot(Tensor const& t) noexcept {
   return ranges::any_of(t.const_braket(), &Index::has_proto_indices);
 }
 
-std::wstring_view const var_label = L"C";
+std::wstring_view const var_label = L"Z";
 
 }  // namespace
 

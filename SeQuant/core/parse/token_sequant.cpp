@@ -30,6 +30,10 @@ Token::type_id_type OperandConstant::type_id() const {
   return Token::get_type_id<OperandConstant>();
 }
 
+Token::type_id_type OperandVariable::type_id() const {
+  return Token::get_type_id<OperandVariable>();
+}
+
 Token::type_id_type OperandTensor::type_id() const {
   return Token::get_type_id<OperandTensor>();
 }

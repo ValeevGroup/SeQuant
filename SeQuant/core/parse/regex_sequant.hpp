@@ -21,7 +21,7 @@ class regex_patterns {
 
   ///
   /// \brief A label cannot be a space, punctuation, or a control character.
-  ///        Also at the first character cannot be a digit.
+  ///        Also the first character cannot be a digit.
   ///
   constexpr static std::wstring_view label() {
     return L"[^[:digit:][:punct:][:space:][:cntrl:]]"
