@@ -625,28 +625,28 @@ class EvalResult {
 };
 
 ///
-/// \brief EvalResult for a constant value.
+/// \brief EvalResult for a constant or a variable value.
 ///
 /// \tparam T numeric type of the constant value (eg. double, complex<double>,
 ///         etc.)
 template <typename T>
-class EvalConstant final : public EvalResult {
+class EvalScalar final : public EvalResult {
  public:
   using EvalResult::id_t;
 
-  explicit EvalConstant(T v) noexcept : EvalResult{std::move(v)} {}
+  explicit EvalScalar(T v) noexcept : EvalResult{std::move(v)} {}
 
   [[nodiscard]] T value() const noexcept { return get<T>(); }
 
   [[nodiscard]] ERPtr sum(EvalResult const& other,
                           std::array<std::any, 3> const&) const override {
-    if (other.is<EvalConstant<T>>()) {
-      auto const& o = other.as<EvalConstant<T>>();
+    if (other.is<EvalScalar<T>>()) {
+      auto const& o = other.as<EvalScalar<T>>();
       auto s = value() + o.value();
 
       log_constant(value(), " + ", o.value(), " = ", s, "\n");
 
-      return eval_result<EvalConstant<T>>(s);
+      return eval_result<EvalScalar<T>>(s);
     } else {
       throw invalid_operand();
     }
@@ -655,13 +655,13 @@ class EvalConstant final : public EvalResult {
   [[nodiscard]] ERPtr prod(
       EvalResult const& other,
       std::array<std::any, 3> const& maybe_empty) const override {
-    if (other.is<EvalConstant<T>>()) {
-      auto const& o = other.as<EvalConstant<T>>();
+    if (other.is<EvalScalar<T>>()) {
+      auto const& o = other.as<EvalScalar<T>>();
       auto p = value() * o.value();
 
       log_constant(value(), " * ", o.value(), " = ", p, "\n");
 
-      return eval_result<EvalConstant<T>>(value() * o.value());
+      return eval_result<EvalScalar<T>>(value() * o.value());
     } else {
       auto maybe_empty_ = maybe_empty;
       std::swap(maybe_empty_[0], maybe_empty_[1]);
@@ -674,7 +674,7 @@ class EvalConstant final : public EvalResult {
   }
 
   void add_inplace(EvalResult const& other) override {
-    assert(other.is<EvalConstant<T>>());
+    assert(other.is<EvalScalar<T>>());
     log_constant(value(), " += ", other.get<T>(), "\n");
     auto& val = get<T>();
     val += other.get<T>();
@@ -692,7 +692,7 @@ class EvalConstant final : public EvalResult {
 
  private:
   [[nodiscard]] id_t type_id() const noexcept override {
-    return id_for_type<EvalConstant<T>>();
+    return id_for_type<EvalScalar<T>>();
   }
 };
 
@@ -733,7 +733,7 @@ class EvalTensorTA final : public EvalResult {
       std::array<std::any, 3> const& annot) const override {
     auto const a = annot_wrap{annot};
 
-    if (other.is<EvalConstant<numeric_type>>()) {
+    if (other.is<EvalScalar<numeric_type>>()) {
       auto result = get<T>();
       auto scalar = other.get<numeric_type>();
 
@@ -755,7 +755,7 @@ class EvalTensorTA final : public EvalResult {
 
       log_ta(a.lannot, " * ", a.rannot, " = ", d, "\n");
 
-      return eval_result<EvalConstant<numeric_type>>(d);
+      return eval_result<EvalScalar<numeric_type>>(d);
     }
 
     log_ta(a.lannot, " * ", a.rannot, " = ", a.this_annot, "\n");
@@ -840,10 +840,10 @@ class EvalTensorBTAS final : public EvalResult {
       std::array<std::any, 3> const& annot) const override {
     auto const a = annot_wrap{annot};
 
-    if (other.is<EvalConstant<numeric_type>>()) {
+    if (other.is<EvalScalar<numeric_type>>()) {
       T result;
       btas::permute(get<T>(), a.lannot, result, a.this_annot);
-      btas::scal(other.as<EvalConstant<numeric_type>>().value(), result);
+      btas::scal(other.as<EvalScalar<numeric_type>>().value(), result);
       return eval_result<EvalTensorBTAS<T>>(std::move(result));
     }
 
@@ -852,7 +852,7 @@ class EvalTensorBTAS final : public EvalResult {
     if (a.this_annot.empty()) {
       T rres;
       btas::permute(other.get<T>(), a.rannot, rres, a.lannot);
-      return eval_result<EvalConstant<numeric_type>>(btas::dot(get<T>(), rres));
+      return eval_result<EvalScalar<numeric_type>>(btas::dot(get<T>(), rres));
     }
 
     T result;

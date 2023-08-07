@@ -159,7 +159,7 @@ class DataWorldBTAS {
     if (n->result_type() == ResultType::Scalar) {
       assert(n->expr()->template is<Constant>());
       auto d = n->as_constant().template value<numeric_type>();
-      return eval_result<EvalConstant<numeric_type>>(d);
+      return eval_result<EvalScalar<numeric_type>>(d);
     }
 
     assert(n->result_type() == ResultType::Tensor &&

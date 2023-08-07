@@ -93,7 +93,7 @@ class rand_tensor_yield {
   }
 
   sequant::ERPtr operator()(sequant::Variable const& var) const {
-    using result_t = sequant::EvalConstant<numeric_t>;
+    using result_t = sequant::EvalScalar<numeric_t>;
     std::wstring const key{var.label()};
     if (auto&& found = label_to_er_.find(key); found != label_to_er_.end())
       return found->second;
@@ -114,7 +114,7 @@ class rand_tensor_yield {
 
     assert(node->is_constant());
 
-    using result_t = EvalConstant<numeric_t>;
+    using result_t = EvalScalar<numeric_t>;
 
     auto d = node->as_constant().template value<numeric_t>();
     return eval_result<result_t>(d);
