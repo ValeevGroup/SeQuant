@@ -9,13 +9,9 @@
 namespace sequant {
 
 namespace parse {
-auto throw_invalid_expr = []() {
-  throw std::runtime_error("Invalid expression!");
+auto throw_invalid_expr = [](std::string const& arg = "Invalid expression") {
+  throw std::runtime_error(arg);
 };
-
-std::wstring prune_space(std::wstring const& raw) {
-  return boost::regex_replace(raw, boost::wregex(L"[[:space:]]+"), L"");
-}
 
 sequant::rational to_fraction(boost::wsmatch const& match) {
   auto const num = match[1].str();
@@ -24,24 +20,11 @@ sequant::rational to_fraction(boost::wsmatch const& match) {
           denom.empty() ? 1 : std::stol(denom)};
 }
 
-// add underscore characters to a terse index string
-// so the normalized string becomes what sequant::Index constructor expects
-std::wstring normalize_idx_label(boost::wssub_match const& mo) {
-  std::wostringstream oss{};
-  wchar_t last_char = L' ';
-  for (auto x : mo) {
-    if ((std::iswalpha(last_char) && std::iswdigit(x)) ||
-        ((last_char == L'↓' || last_char == L'↑') && std::iswdigit(x)))
-      oss << L'_';
-    oss << x;
-    last_char = x;
-  }
-
-  return oss.str();
-}
-
-Index parse_pure_index(boost::wssub_match const& mo) {
-  return Index{normalize_idx_label(mo)};
+std::wstring pure_index_string(boost::wssub_match const& mo) {
+  static const boost::wregex rgx{regex_patterns::pure_index_capture()};
+  boost::wsmatch match;
+  boost::regex_match(mo.begin(), mo.end(), match, rgx);
+  return match.str(1) + L"_" + match.str(2);
 }
 
 std::vector<Index> parse_pure_indices(boost::wssub_match const& mo) {
@@ -50,7 +33,7 @@ std::vector<Index> parse_pure_indices(boost::wssub_match const& mo) {
   auto end = boost::wsregex_iterator{};
   for (auto iter = boost::wsregex_iterator{mo.begin(), mo.end(), rgx};
        iter != end; ++iter) {
-    result.emplace_back(parse_pure_index((*iter)[0]));
+    result.emplace_back(pure_index_string((*iter)[0]));
   }
   return result;
 }
@@ -64,14 +47,16 @@ container::svector<Index> parse_indices(boost::wssub_match const& mo) {
     if ((*iter)[2].matched) {
       auto proto_indices = parse_pure_indices((*iter)[2]);
       auto ispace = proto_indices.begin()->space();
-      if (!ranges::all_of(proto_indices, [ispace](auto const& idx) {
-            return idx.space() == ispace;
-          }))
-        throw_invalid_expr();
-      result.emplace_back(Index{normalize_idx_label((*iter)[1]), ispace,
-                                std::move(proto_indices)});
+
+      // all the proto-indices of an index belong to the same IndexSpace
+      assert(ranges::all_of(proto_indices, [ispace](auto const& idx) {
+        return idx.space() == ispace;
+      }));
+
+      result.emplace_back(pure_index_string((*iter)[1]), ispace,
+                          std::move(proto_indices));
     } else {
-      result.emplace_back(parse_pure_index((*iter)[1]));
+      result.emplace_back(pure_index_string((*iter)[1]));
     }
   }
   return result;
@@ -91,6 +76,11 @@ std::unique_ptr<Token> to_operand_tensor(boost::wsmatch const& match,
   return token<OperandTensor>(match[1].str(), parse_indices(match[2]),
                               parse_indices(match[3]), s);
 }
+
+std::unique_ptr<Token> to_operand_variable(boost::wsmatch const& match) {
+  return token<OperandVariable>(match.str());
+}
+
 }  // namespace parse
 
 namespace deparse {
@@ -197,18 +187,24 @@ ExprPtr parse_expr(std::wstring_view raw_expr, Symmetry symmetry) {
   using namespace parse;
   using pattern = regex_patterns;
 
+  auto prev_locale = std::locale{};
+  std::locale::global(std::locale::classic());
+
   static auto const tensor_exp =
       boost::wregex{pattern::tensor_expanded().data()};
   static auto const tensor_terse =
       boost::wregex{pattern::tensor_terse().data()};
+  /// matches sequant::Variable
+  static auto const variable = boost::wregex{pattern::label().data()};
   static auto const fraction = boost::wregex{pattern::abs_real_frac().data()};
   static auto const times = boost::wregex{L"\\*"};
   static auto const plus = boost::wregex{L"\\+"};
   static auto const minus = boost::wregex{L"\\-"};
   static auto const paren_left = boost::wregex{L"\\("};
   static auto const paren_right = boost::wregex{L"\\)"};
+  static auto const space = boost::wregex{L"\\s+?"};
 
-  auto const expr = parse::prune_space(raw_expr.data());
+  std::wstring const expr = raw_expr.data();
 
   boost::wsmatch match;
   auto iter = expr.begin();
@@ -232,7 +228,10 @@ ExprPtr parse_expr(std::wstring_view raw_expr, Symmetry symmetry) {
   };
 
   while (iter != expr.end()) {
-    if (validate(fraction)) {
+    if (validate(space)) {
+      // do nothing
+      // iterator is now at the non-space character
+    } else if (validate(fraction)) {
       add_times_if_needed();
       rpn.add_operand(token<OperandConstant>(to_fraction(match)));
       last_token = token<OperandConstant>(0);  // dummy
@@ -272,10 +271,17 @@ ExprPtr parse_expr(std::wstring_view raw_expr, Symmetry symmetry) {
       rpn.add_operand(to_operand_tensor(match, symmetry));
       last_token =
           token<OperandTensor>(L"Dummy", IndexList{L"i_1"}, IndexList{L"a_1"});
+    } else if (validate(variable)) {
+      add_times_if_needed();
+      rpn.add_operand(to_operand_variable(match));
+      last_token = token<OperandVariable>(L"0");  // dummy
     } else {
       throw_invalid_expr();
     }
   }
+
+  // RPN stack built. done parsing
+  std::locale::global(prev_locale);
 
   if (!rpn.close()) throw_invalid_expr();
 
@@ -287,6 +293,8 @@ ExprPtr parse_expr(std::wstring_view raw_expr, Symmetry symmetry) {
       result.push_back(t->as<OperandTensor>().clone());
     else if (t->is<OperandConstant>())
       result.push_back(t->as<OperandConstant>().clone());
+    else if (t->is<OperandVariable>())
+      result.push_back(t->as<OperandVariable>().clone());
     else if (t->is<OperatorPlusUnary>()) {
       if (result.empty()) throw_invalid_expr();
       continue;

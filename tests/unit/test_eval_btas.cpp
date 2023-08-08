@@ -96,7 +96,7 @@ class rand_tensor_yield {
       return (*this)(node->expr()->template as<sequant::Tensor>());
     }
 
-    using result_t = EvalConstant<double>;
+    using result_t = EvalScalar<double>;
 
     assert(node->expr()->template is<sequant::Constant>());
     auto d = node->as_constant().template value<double>();

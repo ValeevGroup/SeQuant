@@ -38,7 +38,7 @@ enum class EvalOp {
 /// \details Represents the type of the result of @c EvalOp on two EvalExpr
 ///          objects (or, single EvalExpr object if the EvalOp is Id).
 ///
-enum class ResultType { Tensor, Constant };
+enum class ResultType { Tensor, Scalar };
 
 ///
 /// @see EvalExpr::inner_outer_indices
@@ -70,9 +70,14 @@ class EvalExpr {
   explicit EvalExpr(Tensor const& tnsr);
 
   ///
-  /// \brief Construct an EvalExpr object from a constant. The EvalOp is Id.
+  /// \brief Construct an EvalExpr object from a Constant. The EvalOp is Id.
   ///
   explicit EvalExpr(Constant const& c);
+
+  ///
+  /// \brief Construct an EvalExpr object from a Variable. The EvalOp is Id.
+  ///
+  explicit EvalExpr(Variable const& v);
 
   ///
   /// \brief Construct an EvalExpr object from two EvalExpr objects and an
@@ -127,18 +132,48 @@ class EvalExpr {
   [[nodiscard]] std::wstring to_latex() const noexcept;
 
   ///
-  /// \brief Calls to<Tensor>() on the ExprPtr object.
+  /// \return True if the ExprPtr held by this object is Tensor and equivalently
+  ///         the result of evaluation is tensor.
   ///
-  /// \return Tensor const&.
-  ///
-  [[nodiscard]] Tensor const& as_tensor() const;
+  [[nodiscard]] bool is_tensor() const noexcept;
 
   ///
-  /// \brief Calls to<Constant>() on the ExprPtr object.
+  /// \return True if the ExprPtr held by this object is scalar(Constant, or
+  ///         Variable) and equivalently the result of evaluation is scalar.
+  ///
+  [[nodiscard]] bool is_scalar() const noexcept;
+
+  ///
+  /// \return True if ExprPtr held by this object is Constant.
+  ///
+  [[nodiscard]] bool is_constant() const noexcept;
+
+  ///
+  /// \return True if ExprPtr held by this object is Variable.
+  ///
+  [[nodiscard]] bool is_variable() const noexcept;
+
+  ///
+  /// \brief Calls to<Tensor>() on ExprPtr held by this object.
+  ///
+  /// \return Tensor const&
+  ///
+  [[nodiscard]] Tensor const& as_tensor() const noexcept;
+
+  ///
+  /// \brief Calls to<Constant>() on ExprPtr held by this object.
   ///
   /// \return Constant const&.
   ///
-  [[nodiscard]] Constant const& as_constant() const;
+  [[nodiscard]] Constant const& as_constant() const noexcept;
+
+
+  ///
+  /// \brief Calls to<Variable>() on ExprPtr held by this object.
+  ///
+  /// \return Variable const&
+  ///
+  [[nodiscard]] Variable const& as_variable() const noexcept;
 
   ///
   /// \brief Separates indices of a tensor into inner and outer index groups.

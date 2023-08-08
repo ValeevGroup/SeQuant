@@ -128,6 +128,8 @@ TEST_CASE("Expr", "[elements]") {
   SECTION("constructors") {
     REQUIRE_NOTHROW(std::make_shared<Constant>(2));
     const auto ex2 = std::make_shared<Constant>(2);
+    REQUIRE_NOTHROW(std::make_shared<Variable>(L"q"));
+    const auto ex_q = std::make_shared<Variable>(L"q");
     REQUIRE_NOTHROW(std::make_shared<VecExpr<double>>());
     const auto ex3 = std::make_shared<VecExpr<double>>();
     REQUIRE_NOTHROW(std::make_shared<VecExpr<double>>(
@@ -149,6 +151,10 @@ TEST_CASE("Expr", "[elements]") {
   SECTION("accessors") {
     {
       const auto ex = std::make_shared<Constant>(2);
+      REQUIRE(ex->is_atom());
+    }
+    {
+      const auto ex = std::make_shared<Variable>(L"q");
       REQUIRE(ex->is_atom());
     }
     {
@@ -292,6 +298,15 @@ TEST_CASE("Expr", "[elements]") {
       REQUIRE_NOTHROW(e->adjoint());
       REQUIRE(e->value() == Constant::scalar_type{1, -2});
     }
+    {  // Variable
+      const auto e = std::make_shared<Variable>(L"q");
+      REQUIRE(e->conjugated() == false);
+      REQUIRE_NOTHROW(e->adjoint());
+      REQUIRE(e->label() == L"q");
+      REQUIRE(e->conjugated() == true);
+      REQUIRE_NOTHROW(e->adjoint());
+      REQUIRE(e->conjugated() == false);
+    }
     {  // Product
       const auto e = std::make_shared<Product>();
       e->append(Constant::scalar_type{2, -1}, ex<Adjointable>());
@@ -329,7 +344,27 @@ TEST_CASE("Expr", "[elements]") {
     }
   }
 
+  SECTION("clone") {
+    {  // Variable
+      const auto e = std::make_shared<Variable>(L"q");
+      REQUIRE_NOTHROW(e->adjoint());
+      const auto e_clone = e->clone();
+      REQUIRE(e_clone.is<Variable>());
+      REQUIRE(e->label() == e_clone.as<Variable>().label());
+      REQUIRE(e->conjugated() == e_clone.as<Variable>().conjugated());
+    }
+  }  // SECTION("clone")
+
   SECTION("latex") {
+    {  // Variable
+      const auto e = std::make_shared<Variable>(L"q");
+      REQUIRE(e->to_latex() == L"{q}");
+      REQUIRE_NOTHROW(e->adjoint());
+      REQUIRE(e->to_latex() == L"{{q}^*}");
+      REQUIRE_NOTHROW(e->adjoint());
+      REQUIRE(e->to_latex() == L"{q}");
+    }
+
     Product sp0{};
     sp0.append(2, std::make_shared<Dummy>());
     REQUIRE(to_latex(sp0) == L"{{{2}}{\\text{Dummy}}}");
@@ -382,7 +417,7 @@ TEST_CASE("Expr", "[elements]") {
               "& + {\\text{Adjointable}{4}})\n"
               "\\end{align}");
     }
-  }
+  }  // SECTION("latex")
 
   SECTION("wolfram") {
     Product sp0{};

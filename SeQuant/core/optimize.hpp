@@ -280,10 +280,15 @@ void pull_scalar(sequant::ExprPtr expr) noexcept;
 template <typename IdxToSz,
           std::enable_if_t<std::is_invocable_v<IdxToSz, Index>, bool> = true>
 ExprPtr single_term_opt(Product const& prod, IdxToSz const& idxsz) {
+  using ranges::views::filter;
+  using ranges::views::reverse;
+
   if (prod.factors().size() < 3)
     return ex<Product>(Product{prod.scalar(), prod.factors().begin(),
                                prod.factors().end(), Product::Flatten::No});
-  auto seq = single_term_opt(TensorNetwork{prod}, idxsz);
+  auto const tensors =
+      prod | filter(&ExprPtr::template is<Tensor>) | ranges::to_vector;
+  auto seq = single_term_opt(TensorNetwork{tensors}, idxsz);
   auto result = container::svector<ExprPtr>{};
   for (auto i : seq)
     if (i == -1) {
@@ -295,10 +300,14 @@ ExprPtr single_term_opt(Product const& prod, IdxToSz const& idxsz) {
       result.push_back(ex<Product>(Product{
           1, p.factors().begin(), p.factors().end(), Product::Flatten::No}));
     } else {
-      result.push_back(prod.at(i));
+      result.push_back(tensors.at(i));
     }
 
-  (*result.rbegin())->as<Product>().scale(prod.scalar());
+  auto& p_ = (*result.rbegin()).as<Product>();
+  for (auto&& v : prod | reverse | filter(&Expr::template is<Variable>))
+    p_.prepend(1, v, Product::Flatten::No);
+
+  p_.scale(prod.scalar());
   return *result.rbegin();
 }
 
