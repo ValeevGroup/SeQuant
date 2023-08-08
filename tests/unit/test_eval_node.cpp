@@ -131,6 +131,40 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
         validate_tensor(node1.right().right()->as_tensor(), L"t_{a2}^{i3}"));
   }
 
+  SECTION("variable") {
+    auto prod1 = parse_expr(L"a * b * c");
+    auto node1 = eval_node(prod1);
+
+    REQUIRE(node1->op_type() == EvalOp::Prod);
+    REQUIRE(node1.left()->op_type() == EvalOp::Prod);
+
+    REQUIRE(node(node1, {}).is_variable());
+    REQUIRE(node(node1, {L}).is_variable());
+    REQUIRE(node(node1, {R}).is_variable());
+    REQUIRE(node(node1, {R}).as_variable() == Variable{L"c"});
+    REQUIRE(node(node1, {L, R}).as_variable() == Variable{L"b"});
+    REQUIRE(node(node1, {L, L}).as_variable() == Variable{L"a"});
+
+    auto sum1 = parse_expr(L"a + b + c");
+    auto node2 = eval_node(sum1);
+
+    REQUIRE(node2->op_type() == EvalOp::Sum);
+    REQUIRE(node2.left()->op_type() == EvalOp::Sum);
+
+    REQUIRE(node(node2, {}).is_variable());
+    REQUIRE(node(node2, {L}).is_variable());
+    REQUIRE(node(node2, {R}).is_variable());
+    REQUIRE(node(node2, {R}).as_variable() == Variable{L"c"});
+    REQUIRE(node(node2, {L, R}).as_variable() == Variable{L"b"});
+    REQUIRE(node(node2, {L, L}).as_variable() == Variable{L"a"});
+
+    auto prod2 = parse_expr(L"a * t{i1;a1}");
+    auto node3 = eval_node(prod2);
+    REQUIRE(validate_tensor(node(node3, {}), L"I{i1;a1}"));
+    REQUIRE(validate_tensor(node(node3, {R}), L"t{i1;a1}"));
+    REQUIRE(node(node3, {L}).as_variable() == Variable{L"a"});
+  }
+
   SECTION("to_expr") {
     const auto p1 = parse_expr_antisymm(
         L"1/16 "

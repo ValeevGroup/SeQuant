@@ -34,11 +34,14 @@ auto tensor_to_key(std::wstring_view spec) {
 
 template <typename Tensor_t>
 class rand_tensor_yield {
+ public:
+  using numeric_t = typename Tensor_t::numeric_type;
+
  private:
   TA::World& world_;
   size_t const nocc_;
   size_t const nvirt_;
-  mutable std::map<std::wstring, sequant::ERPtr> label_to_tnsr_;
+  mutable std::map<std::wstring, sequant::ERPtr> label_to_er_;
 
  public:
   [[nodiscard]] Tensor_t make_rand_tensor(sequant::Tensor const& tnsr) const {
@@ -63,8 +66,8 @@ class rand_tensor_yield {
     Tensor_t result{world_,
                     TA::TiledRange{trange_vec.begin(), trange_vec.end()}};
     result.template init_elements([](auto const&) {
-      return static_cast<typename Tensor_t::numeric_type>(std::rand()) /
-             static_cast<typename Tensor_t::numeric_type>(RAND_MAX);
+      return static_cast<numeric_t>(std::rand()) /
+             static_cast<numeric_t>(RAND_MAX);
     });
     return result;
   }
@@ -75,34 +78,45 @@ class rand_tensor_yield {
   sequant::ERPtr operator()(sequant::Tensor const& tnsr) const {
     using result_t = sequant::EvalTensorTA<Tensor_t>;
     std::wstring const label = tensor_to_key(tnsr);
-    if (auto&& found = label_to_tnsr_.find(label);
-        found != label_to_tnsr_.end()) {
+    if (auto&& found = label_to_er_.find(label); found != label_to_er_.end()) {
       //      std::cout << "label = [" << sequant::to_string(label)
       //                << "] FOUND in cache. Returning.." << std::endl;
       return found->second;
     }
     Tensor_t t = make_rand_tensor(tnsr);
-    auto success = label_to_tnsr_.emplace(
+    auto success = label_to_er_.emplace(
         label, sequant::eval_result<result_t>(std::move(t)));
-    assert(success.second && "couldn't store tensor!");
+    assert(success.second && "couldn't store ERPtr!");
     //    std::cout << "label = [" << sequant::to_string(label)
     //              << "] NotFound in cache. Creating.." << std::endl;
+    return success.first->second;
+  }
+
+  sequant::ERPtr operator()(sequant::Variable const& var) const {
+    using result_t = sequant::EvalScalar<numeric_t>;
+    std::wstring const key{var.label()};
+    if (auto&& found = label_to_er_.find(key); found != label_to_er_.end())
+      return found->second;
+    auto success = label_to_er_.emplace(
+        key,
+        sequant::eval_result<result_t>(static_cast<numeric_t>(std::rand()) /
+                                       static_cast<numeric_t>(RAND_MAX)));
+    assert(success.second && "couldn't store ERPtr!");
     return success.first->second;
   }
 
   template <typename T, typename = std::enable_if_t<sequant::IsEvaluable<T>>>
   sequant::ERPtr operator()(T const& node) const {
     using namespace sequant;
-    if (node->result_type() == sequant::ResultType::Tensor) {
-      assert(node->expr()->template is<sequant::Tensor>());
-      return (*this)(node->as_tensor());
-    }
+    if (node->is_tensor()) return (*this)(node->as_tensor());
 
-    using result_t = EvalConstant<typename Tensor_t::numeric_type>;
+    if (node->is_variable()) return (*this)(node->as_variable());
 
-    assert(node->expr()->template is<sequant::Constant>());
-    auto d =
-        node->as_constant().template value<typename Tensor_t::numeric_type>();
+    assert(node->is_constant());
+
+    using result_t = EvalScalar<numeric_t>;
+
+    auto d = node->as_constant().template value<numeric_t>();
     return eval_result<result_t>(d);
   }
 
@@ -113,11 +127,11 @@ class rand_tensor_yield {
   ///       otherwise throws assertion error. To avoid that use the other
   ///       overload of operator() that takes sequant::Tensor const&
   sequant::ERPtr operator()(std::wstring_view label) const {
-    auto&& found = label_to_tnsr_.find(label.data());
-    if (found == label_to_tnsr_.end())
-      found = label_to_tnsr_.find(tensor_to_key(label));
-    if (found == label_to_tnsr_.end())
-      throw std::runtime_error{"attempted access of non-existent tensor!"};
+    auto&& found = label_to_er_.find(label.data());
+    if (found == label_to_er_.end())
+      found = label_to_er_.find(tensor_to_key(label));
+    if (found == label_to_er_.end())
+      throw std::runtime_error{"attempted access of non-existent ERPtr!"};
     return found->second;
   }
 };
@@ -148,6 +162,11 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
   auto yield = [&yield_](std::wstring_view lbl) -> TA::TArrayD const& {
     return yield_(lbl)->get<TA::TArrayD>();
   };
+
+  auto yield_d = [&yield_](std::wstring_view lbl) ->
+      typename TA::TArrayD::numeric_type {
+        return yield_(lbl)->get<typename TA::TArrayD::numeric_type>();
+      };
 
   auto eval = [&yield_](sequant::ExprPtr const& expr,
                         std::string const& target_labels) {
@@ -232,6 +251,20 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
                               yield(L"t{a3,a4;i1,i2}")("a3,a4,i1,i2");
 
     REQUIRE(norm(man1) == Approx(norm(eval1)));
+  }
+
+  SECTION("variable at leaves") {
+    auto expr2 =
+        parse_antisymm(L"(α * 2 * t_{a1}^{i1} * β) + (3/2 * f_{i1}^{a1})");
+
+    auto sum2_eval = eval(expr2, "i_1,a_1");
+
+    auto sum2_man = TArrayD{};
+    sum2_man("i1,a1") =
+        yield_d(L"α") * 2 * yield(L"t{a1;i1}")("a1,i1") * yield_d(L"β") +
+        1.5 * yield(L"f{i1;a1}")("i1,a1");
+
+    REQUIRE(norm(sum2_man) == Approx(norm(sum2_eval)));
   }
 
   SECTION("Antisymmetrization") {
@@ -537,7 +570,6 @@ TEST_CASE("TEST_EVAL_USING_TA_COMPLEX", "[eval]") {
     REQUIRE(norm(man3) == Approx(norm(eval3)));
     TArrayC zero3;
     zero3("i,j,k,a,b,c") = eval3("i,j,k,a,b,c") - man3("i,j,k,a,b,c");
-    std::cout << "norm(zero3) = " << norm(zero3) << std::endl;
   }
 
   SECTION("Others") {

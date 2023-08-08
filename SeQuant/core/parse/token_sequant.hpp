@@ -62,6 +62,16 @@ class OperandConstant final: public Operand, public Constant {
   Token::type_id_type type_id() const override;
 };
 
+class OperandVariable final: public Operand, public Variable {
+ public:
+  using Variable::Variable;
+  using Operand::is;
+  using Operand::as;
+
+ private:
+  Token::type_id_type type_id() const override;
+};
+
 class OperandTensor final: public Operand, public Tensor {
  public:
   using Tensor::Tensor;

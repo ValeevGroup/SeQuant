@@ -608,7 +608,7 @@ class Labeled {
 
 /// @brief a constant number
 
-/// This is represented as a complex rational number
+/// This is represented as a "compile-time" complex rational number
 class Constant : public Expr {
  public:
   using scalar_type = Complex<sequant::rational>;
@@ -623,7 +623,8 @@ class Constant : public Expr {
   Constant(Constant &&) = default;
   Constant &operator=(const Constant &) = default;
   Constant &operator=(Constant &&) = default;
-  template <typename U>
+  template <typename U, typename = std::enable_if_t<
+                            !std::is_same_v<std::decay_t<U>, Constant>>>
   explicit Constant(U &&value) : value_(std::forward<U>(value)) {}
 
  private:
@@ -717,6 +718,51 @@ class Constant : public Expr {
     return value() == static_cast<const Constant &>(that).value();
   }
 };  // class Constant
+
+/// This is represented as a "run-time" complex rational number
+class Variable : public Expr, public Labeled {
+ public:
+  Variable() = delete;
+  virtual ~Variable() = default;
+  Variable(const Variable &) = default;
+  Variable(Variable &&) = default;
+  Variable &operator=(const Variable &) = default;
+  Variable &operator=(Variable &&) = default;
+  template <typename U, typename = std::enable_if_t<
+                            !std::is_same_v<std::decay_t<U>, Variable>>>
+  explicit Variable(U &&label) : label_(std::forward<U>(label)) {}
+
+  std::wstring_view label() const override;
+
+  bool conjugated() const;
+
+  std::wstring to_latex() const override;
+
+  type_id_type type_id() const override { return get_type_id<Variable>(); }
+
+  ExprPtr clone() const override;
+
+  /// @brief adjoint of a Variable is its complex conjugate
+  virtual void adjoint() override;
+
+ private:
+  std::wstring label_;
+  bool conjugated_ = false;
+
+  Variable(std::wstring label, bool conjugated)
+      : label_(std::move(label)), conjugated_(conjugated) {}
+
+  hash_type memoizing_hash() const override {
+    hash_value_ = hash::value(label_);
+    hash::combine(hash_value_.value(), conjugated_);
+    return *hash_value_;
+  }
+
+  bool static_equal(const Expr &that) const override {
+    return label_ == static_cast<const Variable &>(that).label_ &&
+           conjugated_ == static_cast<const Variable &>(that).conjugated_;
+  }
+};  // class Variable
 
 /// @brief generalized product, i.e. a scalar times a product of zero or more
 /// terms.
