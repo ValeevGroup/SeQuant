@@ -58,8 +58,7 @@ EvalNode<ExprT> eval_node(ExprPtr const& expr) {
 
   if (expr->is<Tensor>()) return EvalNode<ExprT>{ExprT{expr->as<Tensor>()}};
   if (expr->is<Constant>()) return EvalNode<ExprT>{ExprT{expr->as<Constant>()}};
-  if (expr->is<Variable>())
-    return EvalNode<ExprT>{ExprT{expr->as<Variable>()}};
+  if (expr->is<Variable>()) return EvalNode<ExprT>{ExprT{expr->as<Variable>()}};
   assert(expr->is<Sum>() || expr->is<Product>());
 
   auto subxprs = *expr | ranges::views::transform([](auto const& x) {
@@ -148,127 +147,145 @@ ExprPtr linearize_eval_node(EvalNode<ExprT> const& node) {
       Product{1, ExprPtrList{lres, rres}, Product::Flatten::Yes});
 }
 
-namespace detail {
-///
-///  \tparam F function type that takes EvalNode const& argument and returns
-///  bool.
-///
-/// \param node Node to compute asymptotic cost on.
-///
-/// \param exploit_symmetry Whether to use symmetry properties of an
-/// intermediate to get reduced cost.
-///
-/// \param pred pred is called on every node and only those nodes that return
-/// true will be used to compute cost.
-///
-/// \return Asymptotic cost of evaluation
-/// in terms of number of occupied and virtual orbitals.
-///
-template <
-    typename ExprT, typename F = std::function<bool(EvalNode<ExprT> const&)>,
-    std::enable_if_t<std::is_invocable_r_v<bool, F, EvalNode<ExprT> const&>,
-                     bool> = true>
-AsyCost asy_cost_impl(EvalNode<ExprT> const& node, bool exploit_symmetry,
-                      F const& pred) {
-  if (node.leaf() || !pred(node)) return AsyCost::zero();
+namespace {
 
-  return AsyCost{exploit_symmetry ? asy_cost_single_node(node)
-                                  : asy_cost_single_node_symm_off(node)}  //
-         +                                                                //
-         asy_cost_impl(node.left(), exploit_symmetry, pred)               //
-         +                                                                //
-         asy_cost_impl(node.right(), exploit_symmetry, pred);
-}
-}  // namespace detail
+enum NodePos { Left = 0, Right, This };
 
-template <typename ExprT>
-AsyCost asy_cost_single_node_symm_off(EvalNode<ExprT> const& node) {
-  if (node.leaf()) return AsyCost::zero();
+class ContractedIndexCount {
+ public:
+  template <typename NodeT, typename = std::enable_if_t<IsEvalNode<NodeT>>>
+  explicit ContractedIndexCount(NodeT const& n) {
+    auto const L = NodePos::Left;
+    auto const R = NodePos::Right;
+    auto const T = NodePos::This;
 
-  auto bks = ranges::views::concat(
-      node.left()->expr()->template as<Tensor>().const_braket(),
-      node.right()->expr()->template as<Tensor>().const_braket(),
-      node->expr()->template as<Tensor>().const_braket());
-  auto const uniques =
-      bks | ranges::to<container::set<Index, Index::LabelCompare>>;
+    assert(n->is_tensor() && n.left()->is_tensor() && n.right()->is_tensor());
 
-  size_t const nocc = ranges::count_if(uniques, [](auto&& idx) {
-    return idx.space() == IndexSpace::active_occupied;
-  });
+    for (auto p : {L, R, T}) {
+      auto const& t = (p == L ? n.left() : p == R ? n.right() : n)->as_tensor();
+      std::tie(occs_[p], virts_[p]) = occ_virt(t);
+      ranks_[p] = occs_[p] + virts_[p];
+    }
 
-  size_t const nvirt = uniques.size() - nocc;
+    // no. of contractions in occupied index space (always a whole number)
+    occ_ = (occs_[L] + occs_[R] - occs_[T]) / 2;
 
-  return AsyCost{node->op_type() == EvalOp::Prod ? 2 : 1, nocc, nvirt};
-}
+    // no. of contractions in virtual index space (always a whole number)
+    virt_ = (virts_[L] + virts_[R] - virts_[T]) / 2;
 
-template <typename ExprT>
-AsyCost asy_cost_single_node(EvalNode<ExprT> const& node) {
-  auto cost = asy_cost_single_node_symm_off(node);
-  auto const& ptensor = node->expr()->template as<Tensor>();
-  // parent node symmetry
-  auto const psym = ptensor.symmetry();
-  // parent node bra symmetry
-  auto const pbrank = ptensor.bra_rank();
-  // parent node ket symmetry
-  auto const pkrank = ptensor.ket_rank();
+    is_outerprod_ = ranks_[L] + ranks_[R] == ranks_[T];
+  }
 
-  if (psym == Symmetry::nonsymm || psym == Symmetry::invalid) {
-    // do nothing
-  } else {
-    // ------
-    // psym is Symmetry::symm or Symmetry::antisymm
+  [[nodiscard]] size_t occ(NodePos p) const noexcept { return occs_[p]; }
+
+  [[nodiscard]] size_t virt(NodePos p) const noexcept { return virts_[p]; }
+
+  [[nodiscard]] size_t rank(NodePos p) const noexcept { return ranks_[p]; }
+
+  [[nodiscard]] size_t occ() const noexcept { return occ_; }
+
+  [[nodiscard]] size_t virt() const noexcept { return virt_; }
+
+  [[nodiscard]] bool is_outerpod() const noexcept { return is_outerprod_; }
+
+  [[nodiscard]] size_t unique_occs() const noexcept {
+    return occ(NodePos::Left) + occ(NodePos::Right) - occ();
+  }
+
+  [[nodiscard]] size_t unique_virts() const noexcept {
+    return virt(NodePos::Left) + virt(NodePos::Right) - virt();
+  }
+
+  static std::pair<size_t, size_t> occ_virt(sequant::Tensor const& t) {
+    auto bk_rank = t.bra_rank() + t.ket_rank();
+    auto nocc =
+        ranges::count_if(t.const_braket(), [](sequant::Index const& idx) {
+          return idx.space() == sequant::IndexSpace::active_occupied;
+        });
+    auto nvirt = bk_rank - nocc;
+    return {nocc, nvirt};
+  }
+
+ private:
+  std::array<size_t, 3> occs_{0, 0, 0};
+  std::array<size_t, 3> virts_{0, 0, 0};
+  std::array<size_t, 3> ranks_{0, 0, 0};
+  size_t occ_ = 0;
+  size_t virt_ = 0;
+  bool is_outerprod_ = false;
+};
+}  // namespace
+
+struct Flops {
+  template <typename NodeT, typename = std::enable_if_t<IsEvalNode<NodeT>>>
+  [[nodiscard]] AsyCost operator()(NodeT const& n) const {
+    if (n.leaf()) return AsyCost::zero();
+    if (n->op_type() == EvalOp::Prod  //
+        && n.left()->is_tensor()      //
+        && n.right()->is_tensor()) {
+      auto const idx_count = ContractedIndexCount{n};
+      auto c = AsyCost{idx_count.unique_occs(), idx_count.unique_virts()};
+      return idx_count.is_outerpod() ? c : 2 * c;
+    } else if (n->is_tensor()) {
+      // scalar times a tensor
+      // or a tensor plus a tensor
+      auto [o, v] = ContractedIndexCount::occ_virt(n->as_tensor());
+      return AsyCost{o, v};
+    } else /* scalar (+|*) scalar */
+      return AsyCost::zero();
+  }
+};
+
+struct FlopsWithSymm {
+  template <typename NodeT, typename = std::enable_if_t<IsEvalNode<NodeT>>>
+  [[nodiscard]] AsyCost operator()(NodeT const& n) const {
+    auto cost = Flops{}(n);
+    if (n.leaf() || !(n->is_tensor()            //
+                      && n.left()->is_tensor()  //
+                      && n.right()->is_tensor()))
+      return cost;
+
+    // confirmed:
+    // left, right and this node
+    // all have tensor expression
+    auto const& t = n->as_tensor();
+    auto const tsymm = t.symmetry();
     //
+
+    // ------
     // the rules of cost reduction are taken from
     //   doi:10.1016/j.procs.2012.04.044
     // ------
-
-    auto const op = node->op_type();
-    if (op == EvalOp::Sum) {
-      cost = psym == Symmetry::symm
-                 ? cost / (factorial(pbrank) * factorial(pkrank))
-                 : cost / factorial(pbrank);
-    } else if (op == EvalOp::Prod) {
-      auto const lsym = node.left()->expr()->template as<Tensor>().symmetry();
-      auto const rsym = node.right()->expr()->template as<Tensor>().symmetry();
-      cost = (lsym == rsym && lsym == Symmetry::nonsymm)
-                 ? cost / factorial(pbrank)
-                 : cost / (factorial(pbrank) * factorial(pkrank));
-    } else {
-      assert(
-          false &&
-          "Unsupported evaluation operation for asymptotic cost computation.");
+    if (tsymm == Symmetry::symm || tsymm == Symmetry::antisymm) {
+      auto const op = n->op_type();
+      auto const tbrank = t.bra_rank();
+      auto const tkrank = t.ket_rank();
+      if (op == EvalOp::Sum)
+        cost = tsymm == Symmetry::symm
+                   ? cost / (factorial(tbrank) * factorial(tkrank))
+                   : cost / factorial(tbrank);
+      else if (op == EvalOp::Prod) {
+        auto const lsymm = n.left()->as_tensor().symmetry();
+        auto const rsymm = n.right()->as_tensor().symmetry();
+        cost = (lsymm == rsymm && lsymm == Symmetry::nonsymm)
+                   ? cost / factorial(tbrank)
+                   : cost / (factorial(tbrank) * factorial(tkrank));
+      } else
+        assert(false &&
+               "Unsupported evaluation operation for asymptotic cost "
+               "computation.");
     }
+    return cost;
   }
+};
 
-  return cost;
-}
-
-///
-/// \param pred pred is called on every node and only those nodes that return
-/// true will be used to compute cost. Default function: returns true.
-///
-template <
-    typename ExprT, typename F = std::function<bool(EvalNode<ExprT> const&)>,
-    std::enable_if_t<std::is_invocable_r_v<bool, F, EvalNode<ExprT> const&>,
-                     bool> = true>
-AsyCost asy_cost_symm_off(
-    EvalNode<ExprT> const& node,
-    F const& pred = [](EvalNode<ExprT> const&) { return true; }) {
-  return detail::asy_cost_impl(node, false, pred);
-}
-
-///
-/// \param pred pred is called on every node and only those nodes that return
-/// true will be used to compute cost. Default function: returns true.
-///
-template <
-    typename ExprT, typename F = std::function<bool(EvalNode<ExprT> const&)>,
-    std::enable_if_t<std::is_invocable_r_v<bool, F, EvalNode<ExprT> const&>,
-                     bool> = true>
-AsyCost asy_cost(
-    EvalNode<ExprT> const& node,
-    F const& pred = [](EvalNode<ExprT> const&) { return true; }) {
-  return detail::asy_cost_impl(node, true, pred);
+template <typename NodeT, typename F = Flops,
+          typename = std::enable_if_t<IsEvalNode<NodeT>>,
+          typename = std::enable_if_t<std::is_invocable_r_v<AsyCost, F, NodeT>>>
+AsyCost asy_cost(NodeT const& node, F const& cost_fn = {}) {
+  return node.leaf() ? cost_fn(node)
+                     : asy_cost(node.left(), cost_fn) +
+                           asy_cost(node.right(), cost_fn) + cost_fn(node);
 }
 
 }  // namespace sequant
