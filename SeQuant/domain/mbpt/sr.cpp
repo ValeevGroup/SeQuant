@@ -306,6 +306,17 @@ ExprPtr H(std::size_t k) {
   return k == 1 ? H_(1) : H_(1) + H_(2);
 }
 
+ExprPtr F(bool use_f_tensor) {
+  return ex<op_t>([]() -> std::wstring_view { return L"f"; },
+                  [=]() -> ExprPtr {
+                    using namespace sequant::mbpt::sr;
+                    return sr::F(use_f_tensor);
+                  },
+                  [=](qnc_t& qns) {
+                    qns = combine(qnc_t{{0, 1}, {0, 1}, {0, 1}, {0, 1}}, qns);
+                  });
+}
+
 ExprPtr T_(std::size_t K) {
   assert(K > 0);
   return ex<op_t>([]() -> std::wstring_view { return L"t"; },

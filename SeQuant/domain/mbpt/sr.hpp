@@ -195,6 +195,11 @@ ExprPtr H_(std::size_t k);
 /// supported
 ExprPtr H(std::size_t k = 2);
 
+/// @brief Fock operator
+/// @param use_f_tensor if true, will use Fock tensor, else will
+/// use `H_(1)` and `H_(2)`
+ExprPtr F(bool use_f_tensor = true);
+
 /// makes particle-conserving excitation operator of rank \p K
 ExprPtr T_(std::size_t K);
 
