@@ -156,7 +156,47 @@ std::vector<sequant::ExprPtr> cceqs::pert_t1() {
 }
 
 std::vector<ExprPtr> cceqs::pert_λ1() {
-  abort();  // not implemented yet
+  /// Eqn: <0| Λ^{(1)}(H * e^T * \tau_{mu}) |0> + <0| (1 + Λ^{(0)})( H * e^T *
+  /// e^pT1 * \tau_{mu} ) |0>
+
+  // construct unperturbed H_bar (reusable code)
+  auto hbar = op::H();
+  auto H_Tk = hbar;
+  for (int64_t k = 1; k <= 4; ++k) {
+    H_Tk = simplify(ex<Constant>(rational{1, k}) * H_Tk * op::T(N));
+    hbar += H_Tk;
+  }
+
+  // construct V_bar (including perturbed T amplitudes also)
+  auto mu_bar = op::mu(1);
+  auto mu_Tk = mu_bar;
+  for (int64_t k = 1; k <= 2; ++k) {
+    mu_Tk = simplify(ex<Constant>(rational{1, k}) * mu_Tk * op::T(N) *
+                     op::pertT1(N));
+    mu_bar += mu_Tk;
+  }
+
+  // first term
+  auto eq1 =
+      simplify(op::pertLambda1(N) * hbar); /* times excitation operator */
+
+  // second term
+  const auto One = ex<Constant>(1);
+  auto eq2 =
+      simplify((One + op::Lambda(N)) * mu_bar); /* times excitation operator */
+
+  std::vector<ExprPtr> result(P + 1);
+  for (auto p = P; p >= PMIN; --p) {
+    auto eq = simplify((eq1 + eq2) * op::P(-p));
+
+    std::vector<std::pair<std::wstring, std::wstring>> op_connect = {
+        {L"h", L"t"}, {L"f", L"t"}, {L"g", L"t"}, {L"μ", L"t"},  {L"μ", L"t¹"},
+        {L"h", L"A"}, {L"f", L"A"}, {L"g", L"A"}, {L"h", L"S"},  {L"f", L"S"},
+        {L"g", L"S"}, {L"t", L"A"}, {L"t", L"S"}, {L"t¹", L"A"}, {L"t¹", L"S"}};
+    result.at(p) = op::vac_av(eq, op_connect);
+    simplify(result.at(p));
+  }
+  return result;
 }
 
 }  // namespace sequant::mbpt::sr
