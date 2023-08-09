@@ -124,14 +124,6 @@ std::vector<ExprPtr> cceqs::λ(bool screen, bool use_topology,
 std::vector<sequant::ExprPtr> cceqs::pert_t1() {
   using namespace sequant::mbpt;
 
-  // construct unperturbed H_bar (reusable code)
-  auto hbar = op::H();
-  auto H_Tk = hbar;
-  for (int64_t k = 1; k <= 4; ++k) {
-    H_Tk = simplify(ex<Constant>(rational{1, k}) * H_Tk * op::T(N));
-    hbar += H_Tk;
-  }
-
   // construct (V * e^T)_c = V + V * T + V * T^2/2!
   auto mu_bar = op::mu(1);
   auto mu_Tk = mu_bar;
@@ -155,7 +147,7 @@ std::vector<sequant::ExprPtr> cceqs::pert_t1() {
 
     std::vector<std::pair<std::wstring, std::wstring>> op_connect = {
         {L"h", L"t"},  {L"f", L"t"},  {L"g", L"t"}, {L"h", L"t¹"},
-        {L"f", L"t¹"}, {L"g", L"t¹"}, {L"V", L"t"}};
+        {L"f", L"t¹"}, {L"g", L"t¹"}, {L"μ", L"t"}};
     result.at(p) = op::vac_av(eq, op_connect);
     simplify(result.at(p));
   }
