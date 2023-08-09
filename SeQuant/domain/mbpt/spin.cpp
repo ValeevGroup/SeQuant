@@ -434,6 +434,33 @@ ExprPtr expand_A_op(const Product& product) {
   return result;
 }
 
+ExprPtr expand_S_op(const Product& product) {
+  // check if S is present
+  if (!has_tensor(ex<Product>(product), L"S")) return ex<Product>(product);
+
+  container::svector<container::map<Index, Index>> maps;
+  if (product.factor(0)->as<Tensor>().label() == L"S")
+    maps = S_replacement_maps(product.factor(0)->as<Tensor>());
+  assert(!maps.empty());
+  Sum sum{};
+  for (auto&& map : maps) {
+    Product new_product{};
+    new_product.scale(product.scalar());
+    auto temp_product = remove_tensor(product, L"S")->as<Product>();
+    for (auto&& term : temp_product) {
+      if (term->is<Tensor>()) {
+        auto new_tensor = term->as<Tensor>();
+        new_tensor.transform_indices(map);
+        new_product.append(1, ex<Tensor>(new_tensor));
+      }
+    }
+    sum.append(ex<Product>(new_product));
+  }
+  ExprPtr result = std::make_shared<Sum>(sum);
+  remove_tags(result);
+  return result;
+}
+
 ExprPtr symmetrize_expr(const Product& product) {
   auto result = std::make_shared<Sum>();
 
@@ -550,6 +577,21 @@ ExprPtr expand_A_op(const ExprPtr& expr) {
     auto result = std::make_shared<Sum>();
     for (auto&& summand : *expr) {
       result->append(expand_A_op(summand));
+    }
+    return result;
+  } else
+    return nullptr;
+}
+
+ExprPtr expand_S_op(const ExprPtr& expr) {
+  if (expr->is<Constant>() || expr->is<Tensor>()) return expr;
+
+  if (expr->is<Product>())
+    return expand_S_op(expr->as<Product>());
+  else if (expr->is<Sum>()) {
+    auto result = std::make_shared<Sum>();
+    for (auto&& summand : *expr) {
+      result->append(expand_S_op(summand));
     }
     return result;
   } else
@@ -692,64 +734,6 @@ container::svector<container::map<Index, Index>> S_replacement_maps(
   } while (std::next_permutation(int_list.begin(), int_list.end()));
 
   return maps;
-}
-
-ExprPtr S_maps(const ExprPtr& expr) {
-  if (expr->is<Constant>() || expr->is<Tensor>()) return expr;
-
-  auto result = std::make_shared<Sum>();
-
-  // Check if S operator is present
-  if (!has_tensor(expr, L"S")) return expr;
-
-  auto reset_idx_tags = [](ExprPtr& expr) {
-    if (expr->is<Tensor>())
-      ranges::for_each(expr->as<Tensor>().const_braket(),
-                       [](const Index& idx) { idx.reset_tag(); });
-  };
-  expr->visit(reset_idx_tags);
-
-  // Lambda for applying S on products
-  auto expand_S_product = [](const Product& product) {
-    // check if S is present
-    if (!has_tensor(ex<Product>(product), L"S")) return ex<Product>(product);
-
-    container::svector<container::map<Index, Index>> maps;
-    if (product.factor(0)->as<Tensor>().label() == L"S")
-      maps = S_replacement_maps(product.factor(0)->as<Tensor>());
-    assert(!maps.empty());
-    Sum sum{};
-    for (auto&& map : maps) {
-      Product new_product{};
-      new_product.scale(product.scalar());
-      auto temp_product = remove_tensor(product, L"S")->as<Product>();
-      for (auto&& term : temp_product) {
-        if (term->is<Tensor>()) {
-          auto new_tensor = term->as<Tensor>();
-          new_tensor.transform_indices(map);
-          new_product.append(1, ex<Tensor>(new_tensor));
-        }
-      }
-      sum.append(ex<Product>(new_product));
-    }
-    ExprPtr result = std::make_shared<Sum>(sum);
-    return result;
-  };
-
-  if (expr->is<Product>()) {
-    result->append(expand_S_product(expr->as<Product>()));
-  } else if (expr->is<Sum>()) {
-    for (auto&& term : *expr) {
-      if (term->is<Product>()) {
-        result->append(expand_S_product(term->as<Product>()));
-      } else if (term->is<Tensor>() || term->is<Constant>()) {
-        result->append(term);
-      }
-    }
-  }
-
-  result->visit(reset_idx_tags);
-  return result;
 }
 
 int count_cycles(const container::svector<int>& vec1,

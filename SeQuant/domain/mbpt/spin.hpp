@@ -96,10 +96,15 @@ ExprPtr remove_tensor(const Product& product, std::wstring label);
 /// @return ExprPtr with the tensor removed
 ExprPtr remove_tensor(const ExprPtr& expr, std::wstring label);
 
-/// @brief Expand a product containing the Antisymmetrization (A) operator
-/// @param A product term with/without A operator
-/// @return an ExprPtr containing sum of expanded terms if A is present
+/// @brief Expands bra/ket antisymmetrizer (A) in a Product
+/// @param product a Product expression
+/// @return @p product with the antisymmetrizer expanded, if present
 ExprPtr expand_A_op(const Product& product);
+
+/// @brief Expand a product containing the particle symmetrization (S) operator
+/// @param product a Product expression
+/// @return @p product with the symmetrizer expanded, if present
+ExprPtr expand_S_op(const Product& product);
 
 /// @brief Write expression in terms of Symmetrizer (S operator)
 /// @param product
@@ -111,10 +116,15 @@ ExprPtr symmetrize_expr(const Product& product);
 /// @return an ExprPtr containing sum of expanded terms if A is present
 ExprPtr symmetrize_expr(const ExprPtr& expr);
 
-/// @brief Expand an expression containing the Antisymmetrization (A) operator
-/// @param expr any ExprPtr
-/// @return an ExprPtr containing sum of expanded terms if A is present
+/// @brief Expands bra/ket antisymmetrizer (A) in an expression
+/// @param expr an expression
+/// @return @p expr with the antisymmetrizer expanded, if present
 ExprPtr expand_A_op(const ExprPtr& expr);
+
+/// @brief Expands particle symmetrizer (S) in an expression
+/// @param expr an expression
+/// @return @p expr with the symmetrizer expanded, if present
+ExprPtr expand_S_op(const ExprPtr& expr);
 
 /// @brief Generates a vector of replacement maps for particle permutation
 /// operator
@@ -137,9 +147,6 @@ ExprPtr expand_P_op(const ExprPtr& expr, bool keep_canonical = true,
 
 container::svector<container::map<Index, Index>> S_replacement_maps(
     const Tensor& S);
-
-/// @brief Expand S operator
-ExprPtr S_maps(const ExprPtr& expr);
 
 /// @brief Returns the number of cycles
 /// @details Count the number of closed loops between two stacked vectors

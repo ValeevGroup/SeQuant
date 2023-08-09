@@ -381,7 +381,7 @@ SECTION("Expand Symmetrizer") {
                                   WstrList{L"a_1", L"a_2"}, Symmetry::nonsymm) *
                        ex<Tensor>(L"t", WstrList{L"a_1", L"a_2"},
                                   WstrList{L"i_1", L"i_2"}, Symmetry::antisymm);
-    auto result = S_maps(input);
+    auto result = expand_S_op(input);
     REQUIRE(result->size() == 2);
     REQUIRE(result->is<Sum>());
     REQUIRE(to_latex(result) ==
@@ -395,7 +395,7 @@ SECTION("Expand Symmetrizer") {
                    WstrList{L"a_1", L"a_2", L"a_3"}, Symmetry::nonsymm) *
         ex<Tensor>(L"t", WstrList{L"a_1", L"a_2", L"a_3"},
                    WstrList{L"i_1", L"i_2", L"i_3"}, Symmetry::antisymm);
-    auto result = S_maps(input);
+    auto result = expand_S_op(input);
     REQUIRE(result->is<Sum>());
     REQUIRE(result->size() == 6);
     REQUIRE(to_latex(result) ==
@@ -415,7 +415,7 @@ SECTION("Expand Symmetrizer") {
         ex<Tensor>(L"t", WstrList{L"a_1", L"a_2", L"a_3", L"a_4"},
                    WstrList{L"i_1", L"i_2", L"i_3", L"i_4"},
                    Symmetry::antisymm);
-    auto result = S_maps(input);
+    auto result = expand_S_op(input);
     REQUIRE(result->size() == 24);
     REQUIRE(result->is<Sum>());
     REQUIRE(to_latex(result) ==
@@ -459,7 +459,7 @@ SECTION("Expand Symmetrizer") {
         ex<Tensor>(L"t", WstrList{L"a_5"}, WstrList{L"i_1"}) *
         ex<Tensor>(L"t", WstrList{L"a_4"}, WstrList{L"i_2"}) *
         ex<Tensor>(L"t", WstrList{L"a_1", L"a_2"}, WstrList{L"i_5", L"i_3"});
-    auto result = S_maps(input);
+    auto result = expand_S_op(input);
     REQUIRE(result->is<Sum>());
     REQUIRE(result->size() == 6);
     result->canonicalize();
