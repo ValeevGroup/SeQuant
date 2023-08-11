@@ -47,9 +47,6 @@ enum class OpType {
   invalid       //!< invalid operator
 };
 
-// Note: "error: character <U+00B9> not allowed in an identifier t¹" while using
-// t¹ as identifier
-
 /// maps operator types to their labels
 inline const std::map<OpType, std::wstring> optype2label{
     {OpType::h, L"h"},

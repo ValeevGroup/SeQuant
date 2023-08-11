@@ -10,6 +10,7 @@
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
+#include <SeQuant/core/parse_expr.hpp>
 
 #include <SeQuant/domain/mbpt/sr.hpp>
 
@@ -121,6 +122,18 @@ std::vector<ExprPtr> cceqs::λ(bool screen, bool use_topology,
   return result;
 }
 
+auto make_pert_tnsr = [](const std::wstring& label, const size_t n) {
+  std::wstring bra_annot, ket_annot;
+  for (size_t i = 1; i <= n; ++i) {
+    bra_annot += L"a_" + std::to_wstring(i) + L",";
+    ket_annot += L"i_" + std::to_wstring(i) + L",";
+  }
+  bra_annot.pop_back();
+  ket_annot.pop_back();
+  auto result = label + L"{" + bra_annot + L";" + ket_annot + L"}";
+  return sequant::parse_expr(result);
+};
+
 std::vector<sequant::ExprPtr> cceqs::pert_t1() {
   using namespace sequant::mbpt;
 
@@ -150,6 +163,12 @@ std::vector<sequant::ExprPtr> cceqs::pert_t1() {
         {L"f", L"t¹"}, {L"g", L"t¹"}, {L"μ", L"t"}};
     result.at(p) = op::vac_av(eq, op_connect);
     simplify(result.at(p));
+  }
+  // add frequency scaled terms
+  auto omega = ex<Variable>(L"ω");
+  for (auto i = 1; i <= N; ++i) {
+    ExprPtr t_tnsr = make_pert_tnsr(L"t¹", i);
+    result[i] -= omega * t_tnsr;
   }
 
   return result;
@@ -196,6 +215,13 @@ std::vector<ExprPtr> cceqs::pert_λ1() {
     result.at(p) = op::vac_av(eq, op_connect);
     simplify(result.at(p));
   }
+  // add frequency scaled terms
+  auto omega = ex<Variable>(L"ω");
+  for (auto i = 1; i <= N; ++i) {
+    ExprPtr λ_tnsr = make_pert_tnsr(L"λ¹", i);
+    result[i] += omega * λ_tnsr;
+  }
+
   return result;
 }
 
