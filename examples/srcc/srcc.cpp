@@ -97,8 +97,6 @@ class compute_cceqvec {
 
       eqvec_sf_ref.resize(eqvec_so.size());
       for (size_t R = PMIN; R <= P; ++R) {
-        // WARNING: external_indices(expr) and external_indices(nparticles) seem
-        // to mix bra and ket relative to each other
         auto const ext_idxs = external_indices(eqvec_so[R]);
         eqvec_sf_ref[R] = closed_shell_spintrace(eqvec_so[R], ext_idxs);
         if (R == 1) {  // closed_shell_spintrace omits 1-body S

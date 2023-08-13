@@ -943,26 +943,10 @@ container::svector<container::svector<Index>> external_indices(
   return ext_index_groups;
 }
 
-container::svector<container::svector<Index>> external_indices(
-    size_t nparticles) {
-  container::svector<container::svector<Index>> ext_idx_list;
-
-  for (size_t i = 1; i <= nparticles; ++i) {
-    auto label = std::to_wstring(i);
-    auto occ_i = Index::make_label_index(
-        IndexSpace::instance(IndexSpace::active_occupied), label);
-    auto virt_i = Index::make_label_index(
-        IndexSpace::instance(IndexSpace::active_unoccupied), label);
-    container::svector<Index> pair = {occ_i, virt_i};
-    ext_idx_list.push_back(pair);
-  }
-  return ext_idx_list;
-}
-
 ExprPtr closed_shell_CC_spintrace(const ExprPtr& expr, size_t nparticles) {
   using ranges::views::transform;
 
-  auto const ext_idxs = external_indices(nparticles);
+  auto const ext_idxs = external_indices(expr);
   auto st_expr = closed_shell_spintrace(expr, ext_idxs);
   canonicalize(st_expr);
 

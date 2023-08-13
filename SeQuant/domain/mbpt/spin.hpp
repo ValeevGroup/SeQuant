@@ -177,14 +177,8 @@ ExprPtr closed_shell_spintrace(
 container::svector<container::svector<Index>> external_indices(
     const ExprPtr& expr);
 
-///
-/// @param nparticles Number of indices in bra of the target tensor. That must
-///                   be equal to the same in the ket.
-/// @deprecated not CSV-compatible, and mixes bra and ket relative to
-/// external_indices(expr) , will be deprecated
-[[deprecated("use external_indices(expr)")]] container::svector<
-    container::svector<Index>>
-external_indices(size_t nparticles);
+/// @brief Transforms coupled-cluster-like equations from spinorbital
+/// to spatial basis
 
 /// @brief Transforms Coupled cluster from spin orbital to spatial orbitals
 /// @details The external indices are deduced from Antisymmetrization operator
