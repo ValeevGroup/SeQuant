@@ -143,9 +143,12 @@ class OpMaker : public mbpt::OpMaker<Statistics::FermiDirac> {
           std::size_t nket = std::numeric_limits<std::size_t>::max());
 
   using base_type::operator();
+
+  constexpr static auto O = IndexSpace::active_maybe_occupied;
+  constexpr static auto U = IndexSpace::active_maybe_occupied;
 };
 
-#include "../mbpt/mr/op.impl.hpp"
+#include "../mbpt/operators/standard.hpp"
 
 /// @name tensor-level operators
 /// @{
@@ -206,9 +209,22 @@ ExprPtr T(std::size_t K);
 ExprPtr Lambda_(std::size_t K);
 
 /// makes sum of particle-conserving deexcitation operators of all ranks up to
-/// \p
-/// K
+/// \p K
 ExprPtr Lambda(std::size_t K);
+
+/// makes generic bra/ket-antisymmetric excitation (if \p K > 0) or
+/// deexcitation (if \p K < 0) operator of rank `|K|`
+ExprPtr A(std::int64_t K);
+
+/// makes generic particle-symmetric excitation (if \p K > 0) or
+/// deexcitation (sif \p K < 0) operator of rank `|K|`
+ExprPtr S(std::int64_t K);
+
+/// makes projector onto excited bra (if \p K > 0) or
+/// ket (if \p K < 0) manifold of rank `|K|`;
+/// if using spin-free basis the manifold is particle-symmetric (@sa S(K)),
+/// else it is bra/ket-antisymmetric (@sa A(K))
+ExprPtr P(std::int64_t K);
 
 /// computes the vacuum expectation value (VEV)
 

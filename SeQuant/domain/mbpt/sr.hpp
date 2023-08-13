@@ -131,9 +131,12 @@ class OpMaker : public mbpt::OpMaker<Statistics::FermiDirac> {
           std::size_t nket = std::numeric_limits<std::size_t>::max());
 
   using base_type::operator();
+
+  constexpr static auto O = IndexSpace::active_occupied;
+  constexpr static auto U = IndexSpace::active_unoccupied;
 };
 
-#include "../mbpt/sr/op.impl.hpp"
+#include "../mbpt/operators/standard.hpp"
 
 /// @name tensor-level SR MBPT operators
 /// @{

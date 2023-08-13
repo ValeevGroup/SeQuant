@@ -153,7 +153,7 @@ OpMaker::OpMaker(OpType op, std::size_t nbra, std::size_t nket)
   }
 }
 
-#include "../mbpt/mr/op.impl.cpp"
+#include "../mbpt/operators/standard.cpp"
 
 ExprPtr H_(std::size_t k) {
   assert(k > 0 && k <= 2);
@@ -564,30 +564,37 @@ ExprPtr A(std::int64_t K) {
                   });
 }
 
-// ExprPtr S(std::int64_t K) {
-//   assert(K != 0);
-//   return ex<op_t>([]() -> std::wstring_view { return L"S"; },
-//                   [=]() -> ExprPtr {
-//                     using namespace sequant::mbpt::sr;
-//                     return mr::S(K, K);
-//                   },
-//                   [=](qnc_t& qns) {
-//                     const std::size_t abs_K = std::abs(K);
-//                     if (K < 0)
-//                       qns = combine(qnc_t{{0ul,abs_K}, {0ul,0ul},
-//                       {0ul,abs_K}, {0ul,abs_K}, {0ul,0ul}, {0ul,abs_K}},
-//                       qns);
-//                     else
-//                       qns = combine(qnc_t{{0ul,0ul}, {0ul,abs_K},
-//                       {0ul,abs_K}, {0ul,abs_K}, {0ul,abs_K}, {0ul,0ul}},
-//                       qns);
-//                   });
-// }
+ExprPtr S(std::int64_t K) {
+  assert(K != 0);
+  return ex<op_t>([]() -> std::wstring_view { return L"S"; },
+                  [=]() -> ExprPtr {
+                    using namespace sequant::mbpt::sr;
+                    return mr::S(K, K);
+                  },
+                  [=](qnc_t& qns) {
+                    const std::size_t abs_K = std::abs(K);
+                    if (K < 0)
+                      qns = combine(qnc_t{{0ul, abs_K},
+                                          {0ul, 0ul},
+                                          {0ul, abs_K},
+                                          {0ul, abs_K},
+                                          {0ul, 0ul},
+                                          {0ul, abs_K}},
+                                    qns);
+                    else
+                      qns = combine(qnc_t{{0ul, 0ul},
+                                          {0ul, abs_K},
+                                          {0ul, abs_K},
+                                          {0ul, abs_K},
+                                          {0ul, abs_K},
+                                          {0ul, 0ul}},
+                                    qns);
+                  });
+}
 
-// ExprPtr P(std::int64_t K) {
-//   return get_default_context().spbasis() == SPBasis::spinfree ? S(-K) :
-//   A(-K);
-// }
+ExprPtr P(std::int64_t K) {
+  return get_default_context().spbasis() == SPBasis::spinfree ? S(-K) : A(-K);
+}
 
 bool can_change_qns(const ExprPtr& op_or_op_product, const qns_t target_qns,
                     const qns_t source_qns = {}) {

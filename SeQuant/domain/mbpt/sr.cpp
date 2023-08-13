@@ -119,7 +119,7 @@ OpMaker::OpMaker(OpType op, std::size_t nbra, std::size_t nket)
   }
 }
 
-#include "../mbpt/sr/op.impl.cpp"
+#include "../mbpt/operators/standard.cpp"
 
 ExprPtr H0mp() { return F(); }
 
