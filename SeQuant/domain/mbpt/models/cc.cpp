@@ -131,7 +131,7 @@ auto make_pert_tnsr = [](const std::wstring& label, const size_t n) {
   bra_annot.pop_back();
   ket_annot.pop_back();
   auto result = label + L"{" + bra_annot + L";" + ket_annot + L"}";
-  return sequant::parse_expr(result);
+  return sequant::parse_expr(result, Symmetry::antisymm);
 };
 
 std::vector<sequant::ExprPtr> cceqs::pert_t1() {
@@ -167,7 +167,7 @@ std::vector<sequant::ExprPtr> cceqs::pert_t1() {
   // add frequency scaled terms
   auto omega = ex<Variable>(L"ω");
   for (auto i = 1; i <= N; ++i) {
-    ExprPtr t_tnsr = make_pert_tnsr(L"t¹", i);
+    ExprPtr t_tnsr = make_pert_tnsr(optype2label.at(OpType::t_1), i);
     result[i] -= omega * t_tnsr;
   }
 
@@ -218,7 +218,7 @@ std::vector<ExprPtr> cceqs::pert_λ1() {
   // add frequency scaled terms
   auto omega = ex<Variable>(L"ω");
   for (auto i = 1; i <= N; ++i) {
-    ExprPtr λ_tnsr = make_pert_tnsr(L"λ¹", i);
+    ExprPtr λ_tnsr = make_pert_tnsr(optype2label.at(OpType::λ_1), i);
     result[i] += omega * λ_tnsr;
   }
 
