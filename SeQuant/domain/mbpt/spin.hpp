@@ -267,12 +267,9 @@ enum class BiorthogonalizationMethod {
 
 /// @brief Biorthogonalize a spin-free `<P|op1 op2 ... |0>` where `P` is
 /// an excited manifold
-ExprPtr biorthogonalize(
-    const sequant::ExprPtr& expr,
-    const container::svector<container::svector<sequant::Index>>&
-        ext_index_groups = {{}},
-    BiorthogonalizationMethod method =
-        BiorthogonalizationMethod::Pseudoinverse);
+ExprPtr biorthogonalize(sequant::ExprPtr expr,
+                        BiorthogonalizationMethod method =
+                            BiorthogonalizationMethod::Pseudoinverse);
 
 }  // namespace sequant
 

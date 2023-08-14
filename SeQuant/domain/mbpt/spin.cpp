@@ -950,19 +950,8 @@ ExprPtr closed_shell_CC_spintrace(const ExprPtr& expr, size_t nparticles) {
   auto st_expr = closed_shell_spintrace(expr, ext_idxs);
   canonicalize(st_expr);
 
-  // Remove S operator
-  for (auto& term : *st_expr) {
-    if (term->is<Product>()) term = remove_tensor(term->as<Product>(), L"S");
-  }
-
   // Biorthogonal transformation
-  st_expr = biorthogonalize(st_expr, ext_idxs);
-
-  auto bixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
-  auto kixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
-  st_expr = ex<Tensor>(Tensor{L"S", bixs, kixs}) * st_expr;
-
-  simplify(st_expr);
+  st_expr = biorthogonalize(st_expr);
 
   return st_expr;
 }
@@ -2125,19 +2114,82 @@ ExprPtr biorthogonalize_qr(
   return bt_expr;
 }
 
-ExprPtr biorthogonalize(
-    const sequant::ExprPtr& expr,
-    const container::svector<container::svector<sequant::Index>>&
-        ext_index_groups,
-    BiorthogonalizationMethod method) {
+ExprPtr biorthogonalize(sequant::ExprPtr expr,
+                        BiorthogonalizationMethod method) {
+  if (method != BiorthogonalizationMethod::Pseudoinverse &&
+      method != BiorthogonalizationMethod::QR)
+    throw std::runtime_error("Unknown biorthogonal transform method");
+
+  // if given a sum, biorthogonalize each term of the sum
+  if (expr.is<Sum>()) {
+    auto sum = expr.as<Sum>();
+    auto result_sum = std::make_shared<Sum>();
+    for (auto& summand : sum.as<Sum>().summands()) {
+      result_sum->append(biorthogonalize(summand, method));
+    }
+    // combine equivalent terms
+    auto result = simplify(std::move(result_sum));
+    return result;
+  } else if (!expr.is<Product>())
+    return expr;
+  assert(expr.is<Product>());
+
+  const auto ext_index_groups = external_indices(expr);
+
+  const auto has_S_operator =
+      ranges::any_of(expr.as<Product>().factors(), [](auto&& factor) {
+        return factor->template as<Tensor>().label() == L"S";
+      });
+
+  bool removed_S_operator =
+      false;  // if true, S is simply removed, else it was expanded
+  if (has_S_operator) {
+    switch (method) {
+      // Pseudoinverse biorothogonalizer commutes with S, hence just remove S
+      // and add it later
+      case BiorthogonalizationMethod::Pseudoinverse:
+        expr = remove_tensor(expr->as<Product>(), L"S");
+        removed_S_operator = true;
+        break;
+
+      // QR needs to expand S
+      case BiorthogonalizationMethod::QR:
+        expr = expand_S_op(expr);
+        simplify(expr);
+        break;
+    }
+  }  // has_S_operator
+
+  ExprPtr result;
   switch (method) {
     case BiorthogonalizationMethod::Pseudoinverse:
-      return biorthogonalize_pseudoinverse(expr, ext_index_groups);
+      result = biorthogonalize_pseudoinverse(expr, ext_index_groups);
+      break;
     case BiorthogonalizationMethod::QR:
-      return biorthogonalize_qr(expr, ext_index_groups);
+      result = biorthogonalize_qr(expr, ext_index_groups);
+      break;
     default:
-      throw std::runtime_error("Unknown biorthogonal transform method.");
+      throw std::runtime_error(
+          "sequant::biorthogonalize(expr, method): unknown method");  // unreachable
   }
+
+  // restore the symmetrizer, if needed
+  if (has_S_operator) {
+    // restore the particle symmetrizer
+    auto bixs = ext_index_groups |
+                ranges::views::transform([](auto&& vec) { return vec[0]; });
+    auto kixs = ext_index_groups |
+                ranges::views::transform([](auto&& vec) { return vec[1]; });
+    // N.B. external_indices(expr) confuses bra and ket
+    result = ex<Tensor>(Tensor{L"S", kixs, bixs}) * result;
+    if (!removed_S_operator) {
+      const auto np = ext_index_groups.size();
+      result *= ex<Constant>(ratio(1, factorial(np)));
+    }
+    result = expand(result);
+  }
+
+  return result;
 }
 
 }  // namespace sequant

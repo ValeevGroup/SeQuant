@@ -82,23 +82,8 @@ int main(int argc, char* argv[]) {
     cc_st_r[i] = sequant::spintrace(cc_r[i], ext_idx_list(i));
     canonicalize(cc_st_r[i]);
 
-    // Remove S operator
-    for (auto& term : *cc_st_r[i]) {
-      if (term->is<Product>()) term = remove_tensor(term->as<Product>(), L"S");
-    }
-
     // Biorthogonal transformation
-    cc_st_r[i] = biorthogonalize(cc_st_r[i], ext_idx);
-
-    // The symmetrizer operator is required for canonicalizer to give the
-    // correct result
-    if (i != 1) cc_st_r[i] = symmetrize_expr(cc_st_r[i], ext_idx);
-    simplify(cc_st_r[i]);
-
-    // Remove S operator
-    for (auto& term : *cc_st_r[i]) {
-      if (term->is<Product>()) term = remove_tensor(term->as<Product>(), L"S");
-    }
+    cc_st_r[i] = biorthogonalize(cc_st_r[i]);
 
     auto tstop = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> time_elapsed = tstop - tstart;

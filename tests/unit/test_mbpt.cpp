@@ -550,63 +550,42 @@ TEST_CASE("MBPT", "[mbpt]") {
           key2expr = {
               {L"T3 -> R3",
                {[]() { return op::P(3) * op::T_(3); },
-                L"{ \\bigl( - "
-                L"{{{\\frac{1}{15}}}{S^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}{t^{"
+                L"{ "
+                L"\\bigl({{{\\frac{1}{6}}}{S^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}"
+                L"}}{t^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}} - "
+                L"{{{\\frac{1}{15}}}{S^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}{t^{"
                 L"{i_2}{i_3}{i_1}}_{{a_1}{a_2}{a_3}}}} - "
-                L"{{{\\frac{1}{10}}}{S^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}{t^{"
-                L"{i_2}{i_1}{i_3}}_{{a_1}{a_2}{a_3}}}} + "
-                L"{{{\\frac{1}{6}}}{S^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}{t^{{"
-                L"i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}}\\bigr) }"}},
+                L"{{{\\frac{1}{10}}}{S^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}{t^{"
+                L"{i_2}{i_1}{i_3}}_{{a_1}{a_2}{a_3}}}}\\bigr) }"}},
               {L"F**T3 -> R3",
                {[]() { return op::P(3) * op::F() * op::T_(3); },
                 L"{ "
-                L"\\bigl({{{\\frac{1}{5}}}{S^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}"
+                L"\\bigl({{{\\frac{1}{5}}}{S^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}"
                 L"}}{f^{{i_3}}_{{i_4}}}{t^{{i_4}{i_1}{i_2}}_{{a_1}{a_2}{a_3}}}}"
                 L" + "
-                L"{{{\\frac{1}{2}}}{S^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}{f^{{"
+                L"{{{\\frac{1}{5}}}{S^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}{f^{{"
+                L"i_3}}_{{i_4}}}{t^{{i_1}{i_4}{i_2}}_{{a_1}{a_2}{a_3}}}} + "
+                L"{{{\\frac{1}{2}}}{S^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}{f^{{"
                 L"a_4}}_{{a_3}}}{t^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_4}}}} - "
-                L"{{{\\frac{1}{2}}}{S^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}{f^{{"
-                L"i_3}}_{{i_4}}}{t^{{i_1}{i_2}{i_4}}_{{a_1}{a_2}{a_3}}}} + "
-                L"{{{\\frac{1}{5}}}{S^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}{f^{{"
-                L"i_3}}_{{i_4}}}{t^{{i_1}{i_4}{i_2}}_{{a_1}{a_2}{a_3}}}} - "
-                L"{{{\\frac{1}{5}}}{S^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}{f^{{"
+                L"{{{\\frac{1}{5}}}{S^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}{f^{{"
                 L"a_4}}_{{a_2}}}{t^{{i_1}{i_2}{i_3}}_{{a_1}{a_3}{a_4}}}} - "
-                L"{{{\\frac{1}{5}}}{S^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}{f^{{"
+                L"{{{\\frac{1}{10}}}{S^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}{f^{"
+                L"{a_4}}_{{a_3}}}{t^{{i_2}{i_1}{i_3}}_{{a_1}{a_2}{a_4}}}} - "
+                L"{{{\\frac{1}{2}}}{S^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}{f^{{"
+                L"i_3}}_{{i_4}}}{t^{{i_1}{i_2}{i_4}}_{{a_1}{a_2}{a_3}}}} - "
+                L"{{{\\frac{1}{5}}}{S^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}{f^{{"
                 L"a_4}}_{{a_1}}}{t^{{i_1}{i_2}{i_3}}_{{a_2}{a_3}{a_4}}}} + "
-                L"{{{\\frac{1}{10}}}{S^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}{f^{"
-                L"{i_3}}_{{i_4}}}{t^{{i_2}{i_1}{i_4}}_{{a_1}{a_2}{a_3}}}} - "
-                L"{{{\\frac{1}{10}}}{S^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}{f^{"
-                L"{a_4}}_{{a_3}}}{t^{{i_2}{i_1}{i_3}}_{{a_1}{a_2}{a_4}}}}"
+                L"{{{\\frac{1}{10}}}{S^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}{f^{"
+                L"{i_3}}_{{i_4}}}{t^{{i_2}{i_1}{i_4}}_{{a_1}{a_2}{a_3}}}}"
                 L"\\bigr) }"}},
           };
 
       for (auto&& [key, make_expr_and_ref] : key2expr) {
         auto&& [make_expr, ref] = make_expr_and_ref;
         auto result = op::vac_av(make_expr());
-        {
-          std::wcout << key << " = " << to_latex_align(result, 0, 1)
-                     << std::endl;
-        }
 
         // Biorthogonal transformation
-        auto ext_indices = external_indices(result);
-
-        // Remove S operator
-        for (auto& term : *result) {
-          if (term->is<Product>())
-            term = remove_tensor(term->as<Product>(), L"S");
-        }
-
-        // Biorthogonal transformation
-        result = biorthogonalize(result, ext_indices);
-
-        auto bixs = ext_indices |
-                    ranges::views::transform([](auto&& vec) { return vec[0]; });
-        auto kixs = ext_indices |
-                    ranges::views::transform([](auto&& vec) { return vec[1]; });
-        result = ex<Tensor>(Tensor{L"S", bixs, kixs}) * result;
-        simplify(result);
-
+        result = biorthogonalize(result);
         REQUIRE(ref == to_latex(result));
       }
     }

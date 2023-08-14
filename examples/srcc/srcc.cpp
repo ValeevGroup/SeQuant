@@ -155,26 +155,8 @@ class compute_cceqvec {
 
         // validate sizes of spin-free t equations after biorthogonal transform
         if (type == EqnType::t) {
-          auto const ext_idxs = external_indices(eqvec[R]);
-
-          // Remove S operator
-          for (auto& term : eqvec[R]->expr()) {
-            if (term->is<Product>())
-              term = remove_tensor(term->as<Product>(), L"S");
-          }
-
           // Biorthogonal transformation
-          eqvec[R] = biorthogonalize(eqvec[R], ext_idxs);
-
-          // restore the particle symmetrizer
-          auto bixs = ext_idxs | ranges::views::transform(
-                                     [](auto&& vec) { return vec[0]; });
-          auto kixs = ext_idxs | ranges::views::transform(
-                                     [](auto&& vec) { return vec[1]; });
-          // N.B. external_indices(expr) confuses bra and ket
-          eqvec[R] = ex<Tensor>(Tensor{L"S", kixs, bixs}) * eqvec[R];
-          eqvec[R] = expand(eqvec[R]);
-          simplify(eqvec[R]);
+          eqvec[R] = biorthogonalize(eqvec[R]);
 
           std::wcout << "biorthogonal spin-free R" << R << "(expS" << N
                      << ") has " << eqvec[R]->size() << " terms:" << std::endl;
