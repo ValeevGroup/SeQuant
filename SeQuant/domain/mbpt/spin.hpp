@@ -180,8 +180,9 @@ container::svector<container::svector<Index>> external_indices(
 /// @brief Transforms coupled-cluster-like equations from spinorbital
 /// to spatial basis
 
-/// @brief Transforms Coupled cluster from spin orbital to spatial orbitals
-/// @details The external indices are deduced from Antisymmetrization operator
+/// expects expressions of the form `<0| op1 op2 ... |0>` where one of the
+/// operators `opI` is the antisymmetrizer (see op::A() ) or its adjoint
+/// @details The external indices are deduced from the antisymmetrizer
 /// @param expr ExprPtr with spin orbital indices
 /// @param nparticles Number of indices in bra (that must be equal
 ///                   to the same in the ket)
