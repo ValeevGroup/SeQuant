@@ -923,15 +923,17 @@ container::svector<container::svector<Index>> external_indices(
     const ExprPtr& expr) {
   // Generate external index list from symmetrizer or antisymmetrizer
   Tensor P{};
-  for (const auto& prod : *expr) {
-    if (prod->is<Product>()) {
-      auto tensor = prod->as<Product>().factor(0)->as<Tensor>();
-      if (tensor.label() == L"A" || tensor.label() == L"S") {
-        P = tensor;
-        break;
-      }
-    }
-  }
+  expr->visit(
+      [&](const auto& subexpr) {
+        if (subexpr->template is<Tensor>()) {
+          auto& as_tensor = subexpr->template as<Tensor>();
+          if (as_tensor.label() == L"A" || as_tensor.label() == L"S") {
+            if (!P)  // use the first found
+              P = as_tensor;
+          }
+        }
+      },
+      /* atoms_only */ true);
   assert(P.bra_rank() != 0 &&
          "Could not generate external index groups due to "
          "absence of (anti)symmetrizer (A or S) operator in expression.");
@@ -2134,12 +2136,12 @@ ExprPtr biorthogonalize(sequant::ExprPtr expr,
     return expr;
   assert(expr.is<Product>());
 
-  const auto ext_index_groups = external_indices(expr);
-
   const auto has_S_operator =
       ranges::any_of(expr.as<Product>().factors(), [](auto&& factor) {
         return factor->template as<Tensor>().label() == L"S";
       });
+
+  const auto ext_index_groups = external_indices(expr);
 
   bool removed_S_operator =
       false;  // if true, S is simply removed, else it was expanded
