@@ -88,7 +88,7 @@ int main(int argc, char* argv[]) {
     }
 
     // Biorthogonal transformation
-    cc_st_r[i] = biorthogonal_transform(cc_st_r[i], i, ext_idx);
+    cc_st_r[i] = biorthogonalize(cc_st_r[i], ext_idx);
 
     // The symmetrizer operator is required for canonicalizer to give the
     // correct result

@@ -256,11 +256,22 @@ ExprPtr factorize_S(const ExprPtr& expression,
                     std::initializer_list<IndexList> ext_index_groups,
                     bool fast_method = true);
 
-ExprPtr biorthogonal_transform(
-    const sequant::ExprPtr& expr, int n_particles,
+/// @brief methods for performing the biorthogonalization
+enum class BiorthogonalizationMethod {
+  /// use the pseudoinverse method
+  Pseudoinverse,
+  /// use the QR method
+  QR
+};
+
+/// @brief Biorthogonalize a spin-free `<P|op1 op2 ... |0>` where `P` is
+/// an excited manifold
+ExprPtr biorthogonalize(
+    const sequant::ExprPtr& expr,
     const container::svector<container::svector<sequant::Index>>&
         ext_index_groups = {{}},
-    double threshold = 1.e-12);
+    BiorthogonalizationMethod method =
+        BiorthogonalizationMethod::Pseudoinverse);
 
 }  // namespace sequant
 

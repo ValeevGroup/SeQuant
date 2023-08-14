@@ -956,7 +956,7 @@ ExprPtr closed_shell_CC_spintrace(const ExprPtr& expr, size_t nparticles) {
   }
 
   // Biorthogonal transformation
-  st_expr = biorthogonal_transform(st_expr, nparticles, ext_idxs);
+  st_expr = biorthogonalize(st_expr, ext_idxs);
 
   auto bixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
   auto kixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
@@ -1838,13 +1838,15 @@ ExprPtr factorize_S(const ExprPtr& expression,
   return result;
 }
 
-ExprPtr biorthogonal_transform(
-    const sequant::ExprPtr& expr, const int n_particles,
+ExprPtr biorthogonalize_pseudoinverse(
+    const sequant::ExprPtr& expr,
     const container::svector<container::svector<sequant::Index>>&
         ext_index_groups,
-    const double threshold) {
-  assert(n_particles != 0);
+    const double epsilon = 1.e-12) {
+  const bool debug = false;
+
   assert(!ext_index_groups.empty());
+  const auto n_particles = ext_index_groups.size();
 
   using sequant::container::svector;
 
@@ -1881,9 +1883,9 @@ ExprPtr biorthogonal_transform(
     // Normalization constant
     double scalar;
     {
-      auto nonZero = [&threshold](const double& d) {
+      auto nonZero = [&epsilon](const double& d) {
         using std::abs;
-        return abs(d) > threshold;
+        return abs(d) > epsilon;
       };
 
       // Solve system of equations
@@ -1904,8 +1906,8 @@ ExprPtr biorthogonal_transform(
     VectorXd::Map(&bt_coeff_dvec[0], bt_coeff_dvec.size()) =
         pinv.row(0) * scalar;
     bt_coeff_vec.reserve(bt_coeff_dvec.size());
-    ranges::for_each(bt_coeff_dvec, [&bt_coeff_vec, threshold](double c) {
-      bt_coeff_vec.emplace_back(to_rational(c, threshold));
+    ranges::for_each(bt_coeff_dvec, [&bt_coeff_vec, epsilon](double c) {
+      bt_coeff_vec.emplace_back(to_rational(c, epsilon));
     });
 
 //    std::cout << "n_particles = " << n_particles << "\n bt_coeff_vec = ";
@@ -1927,7 +1929,8 @@ ExprPtr biorthogonal_transform(
         break;
       default:
         throw std::runtime_error(
-            "biorthogonal_transform requires Eigen library for n_particles > "
+            "biorthogonalize_pseudoinverse method requires Eigen library for "
+            "n_particles > "
             "3.");
     }
 #endif
@@ -1948,38 +1951,193 @@ ExprPtr biorthogonal_transform(
       container::map<Index, Index> map;
       auto const_list_ptr = const_idx_list.begin();
       for (auto& i : idx_list) {
-        map.emplace(*const_list_ptr, i);
+        if (i != *const_list_ptr) map.emplace(*const_list_ptr, i);
         const_list_ptr++;
       }
       bt_maps.push_back(map);
     } while (std::next_permutation(idx_list.begin(), idx_list.end()));
   }
 
-  // If this assertion fails, change the threshold parameter
+  // If this assertion fails, change the epsilon parameter
   assert(bt_coeff_vec.size() == bt_maps.size());
 
-  // Checks if the replacement map is a canonical sequence
-  auto is_canonical = [](const container::map<Index, Index>& idx_map) {
-    bool canonical = true;
-    for (auto&& pair : idx_map)
-      if (pair.first != pair.second) return false;
-    return canonical;
+  // Scale transformed expressions and append
+  auto bt_expr = std::make_shared<Sum>();
+  auto coeff_it = bt_coeff_vec.begin();
+  size_t counter = 0;
+  for (auto&& map : bt_maps) {
+    const auto v = *coeff_it;
+    // N.B. can permute indices directly IFF transformation coefficients
+    // commutes with S
+    ExprPtr summand = ex<Constant>(v) * (map.empty() ? expr->clone()
+                                                     : sequant::transform_expr(
+                                                           expr->clone(), map));
+    bt_expr->append(summand);
+    coeff_it++;
+    ++counter;
+  }
+
+  return bt_expr;
+}
+
+ExprPtr biorthogonalize_qr(
+    const sequant::ExprPtr& expr,
+    const container::svector<container::svector<sequant::Index>>&
+        ext_index_groups) {
+  const bool debug = false;
+
+  assert(!ext_index_groups.empty());
+  const auto n_particles = ext_index_groups.size();
+
+  const auto epsilon = 1e-12;
+
+  using sequant::container::svector;
+
+  // Coefficients
+  std::vector<rational> bt_coeff_vec;
+  {
+#if defined(SEQUANT_HAS_EIGEN) && 0
+    using namespace Eigen;
+    // Dimension of permutation matrix is n_particles!
+    const auto n = boost::numeric_cast<Eigen::Index>(factorial(n_particles));
+
+    // Permutation matrix
+    Eigen::Matrix<double, Dynamic, Dynamic> M(n, n);
+    {
+      M.setZero();
+      size_t n_row = 0;
+      svector<int> v(n_particles), v1(n_particles);
+      std::iota(v.begin(), v.end(), 0);
+      std::iota(v1.begin(), v1.end(), 0);
+      do {
+        container::svector<double> permutation_vector;
+        do {
+          permutation_vector.push_back(
+              std::pow(-2, sequant::count_cycles(v1, v)));
+        } while (std::next_permutation(v.begin(), v.end()));
+        Eigen::VectorXd pv_eig = Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(
+            permutation_vector.data(), permutation_vector.size());
+        M.row(n_row) = pv_eig;
+        ++n_row;
+      } while (std::next_permutation(v1.begin(), v1.end()));
+      M *= std::pow(-1, n_particles);
+    }
+
+    // Find Pseudo Inverse, get 1st row only
+    auto qr = M.colPivHouseholderQr();
+    auto rank = qr.rank();
+    MatrixXd Q = qr.householderQ() * MatrixXd::Identity(n, rank);
+    std::cout << "biorothogonalize(#particles = " << n_particles
+              << ") rank = " << rank << std::endl
+              << "Q = " << Q << std::endl
+              << "R = "
+              << MatrixXd(qr.matrixR()
+                              .topLeftCorner(rank, n)
+                              .template triangularView<Upper>())
+              << std::endl
+              << "P = " << MatrixXi(qr.colsPermutation()) << std::endl;
+
+    const auto normalizer = 1. / qr.matrixR()(rank - 1, rank - 1);
+    VectorXd vd = Q.col(rank - 1) * normalizer;
+    // "rotate" so that the largest coefficient is first
+    std::rotate(vd.begin(), std::max_element(vd.begin(), vd.end()), vd.end());
+    std::cout << "vd = " << vd << std::endl;
+    bt_coeff_vec = vd | ranges::views::transform([normalizer](double e) {
+                     return to_rational(e);
+                   }) |
+                   ranges::to_vector;
+
+#else
+    // hardwire coefficients for n_particles = 1, 2, 3
+    switch (n_particles) {
+      case 1:
+        bt_coeff_vec = {ratio(1, 2)};
+        break;
+      case 2:
+        bt_coeff_vec = {ratio(1, 3), ratio(1, 6)};
+        break;
+      case 3:
+        bt_coeff_vec = {ratio(1, 8),   ratio(-1, 8),  ratio(1, 24),
+                        ratio(-1, 24), ratio(-1, 24), ratio(1, 24)};
+        break;
+      default:
+        throw std::runtime_error(
+            "biorthogonalize_qr method is not implemented for n_particles > "
+            "3.");
+    }
+#endif
+  }
+
+  // Transformation maps
+  container::svector<container::map<Index, Index>> bt_maps;
+  {
+    container::svector<Index> idx_list(ext_index_groups.size());
+
+    for (auto i = 0; i != ext_index_groups.size(); ++i) {
+      idx_list[i] = *ext_index_groups[i].begin();
+    }
+
+    const container::svector<Index> const_idx_list = idx_list;
+
+    do {
+      container::map<Index, Index> map;
+      auto const_list_ptr = const_idx_list.begin();
+      for (auto& i : idx_list) {
+        if (i != *const_list_ptr) map.emplace(*const_list_ptr, i);
+        const_list_ptr++;
+      }
+      bt_maps.push_back(map);
+    } while (std::next_permutation(idx_list.begin(), idx_list.end()));
+  }
+
+  // If this assertion fails, change the epsilon parameter
+  assert(bt_coeff_vec.size() == bt_maps.size());
+
+  // restore the particle symmetrizer
+  auto bixs = ext_index_groups |
+              ranges::views::transform([](auto&& vec) { return vec[0]; });
+  auto kixs = ext_index_groups |
+              ranges::views::transform([](auto&& vec) { return vec[1]; });
+  // N.B. external_indices(expr) confuses bra and ket
+  const auto symmetrizer = ex<Tensor>(Tensor{L"S", kixs, bixs});
+
+  auto symmetrize = [&](auto& expr) {
+    ExprPtr result = expr;
+    result = expand(result);
+    simplify(result);
+    return result;
   };
 
   // Scale transformed expressions and append
-  Sum bt_expr{};
+  auto bt_expr = std::make_shared<Sum>();
   auto coeff_it = bt_coeff_vec.begin();
+  size_t counter = 0;
   for (auto&& map : bt_maps) {
     const auto v = *coeff_it;
-    if (is_canonical(map))
-      bt_expr.append(ex<Constant>(v) * expr->clone());
-    else
-      bt_expr.append(ex<Constant>(v) *
-                     sequant::transform_expr(expr->clone(), map));
+    ExprPtr summand = ex<Constant>(v) * (map.empty() ? expr->clone()
+                                                     : sequant::transform_expr(
+                                                           expr->clone(), map));
+    bt_expr->append(summand);
     coeff_it++;
+    ++counter;
   }
-  ExprPtr result = std::make_shared<Sum>(bt_expr);
-  return result;
+
+  return bt_expr;
+}
+
+ExprPtr biorthogonalize(
+    const sequant::ExprPtr& expr,
+    const container::svector<container::svector<sequant::Index>>&
+        ext_index_groups,
+    BiorthogonalizationMethod method) {
+  switch (method) {
+    case BiorthogonalizationMethod::Pseudoinverse:
+      return biorthogonalize_pseudoinverse(expr, ext_index_groups);
+    case BiorthogonalizationMethod::QR:
+      return biorthogonalize_qr(expr, ext_index_groups);
+    default:
+      throw std::runtime_error("Unknown biorthogonal transform method.");
+  }
 }
 
 }  // namespace sequant

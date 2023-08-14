@@ -164,7 +164,7 @@ class compute_cceqvec {
           }
 
           // Biorthogonal transformation
-          eqvec[R] = biorthogonal_transform(eqvec[R], R, ext_idxs);
+          eqvec[R] = biorthogonalize(eqvec[R], ext_idxs);
 
           // restore the particle symmetrizer
           auto bixs = ext_idxs | ranges::views::transform(
@@ -176,7 +176,7 @@ class compute_cceqvec {
           eqvec[R] = expand(eqvec[R]);
           simplify(eqvec[R]);
 
-          std::wcout << "biorothogonal spin-free R" << R << "(expS" << N
+          std::wcout << "biorthogonal spin-free R" << R << "(expS" << N
                      << ") has " << eqvec[R]->size() << " terms:" << std::endl;
           if (print) std::wcout << to_latex_align(eqvec[R], 20, 3) << std::endl;
 
