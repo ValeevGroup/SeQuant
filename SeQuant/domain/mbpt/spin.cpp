@@ -340,11 +340,13 @@ container::svector<container::map<Index, Index>> A_maps(const Tensor& A) {
       container::map<Index, Index> replacement_map;
       auto A_braket_ptr = A_braket.begin();
       for (auto&& idx : bra_int_list) {
-        replacement_map.emplace(*A_braket_ptr, A.bra()[idx]);
+        if (*A_braket_ptr != A.bra()[idx])
+          replacement_map.emplace(*A_braket_ptr, A.bra()[idx]);
         A_braket_ptr++;
       }
       for (auto&& idx : ket_int_list) {
-        replacement_map.emplace(*A_braket_ptr, A.ket()[idx]);
+        if (*A_braket_ptr != A.ket()[idx])
+          replacement_map.emplace(*A_braket_ptr, A.ket()[idx]);
         A_braket_ptr++;
       }
       result.push_back(replacement_map);
@@ -499,7 +501,7 @@ ExprPtr symmetrize_expr(const Product& product) {
       container::map<Index, Index> map;
       auto list_ptr = list.begin();
       for (auto&& i : int_list) {
-        map.emplace(*list_ptr, list[i]);
+        if (*list_ptr != list[i]) map.emplace(*list_ptr, list[i]);
         list_ptr++;
       }
       result.push_back(map);
@@ -632,13 +634,15 @@ container::svector<container::map<Index, Index>> P_maps(const Tensor& P,
     container::map<Index, Index> replacement_map;
     for (auto&& i : int_list) {
       if (i < P.bra_rank()) {
-        replacement_map.emplace(*P_braket_ptr, P.bra()[i]);
+        if (*P_braket_ptr != P.bra()[i])
+          replacement_map.emplace(*P_braket_ptr, P.bra()[i]);
         P_braket_ptr++;
       }
     }
     for (auto&& i : int_list) {
       if (i < P.ket_rank()) {
-        replacement_map.emplace(*P_braket_ptr, P.ket()[i]);
+        if (*P_braket_ptr != P.ket()[i])
+          replacement_map.emplace(*P_braket_ptr, P.ket()[i]);
         P_braket_ptr++;
       }
     }
@@ -716,13 +720,13 @@ container::svector<container::map<Index, Index>> S_replacement_maps(
   container::svector<container::map<Index, Index>> maps;
   do {
     container::map<Index, Index> map;
-    auto S_bra_ptr = S.bra().begin();
-    auto S_ket_ptr = S.ket().begin();
+    auto bra_idx_it = S.bra().begin();
+    auto ket_idx_it = S.ket().begin();
     for (auto&& i : int_list) {
-      map.emplace(*S_bra_ptr, S.bra()[i]);
-      ++S_bra_ptr;
-      map.emplace(*S_ket_ptr, S.ket()[i]);
-      ++S_ket_ptr;
+      if (*bra_idx_it != S.bra()[i]) map.emplace(*bra_idx_it, S.bra()[i]);
+      ++bra_idx_it;
+      if (*ket_idx_it != S.ket()[i]) map.emplace(*ket_idx_it, S.ket()[i]);
+      ++ket_idx_it;
     }
     maps.push_back(map);
   } while (std::next_permutation(int_list.begin(), int_list.end()));
@@ -769,7 +773,7 @@ ExprPtr closed_shell_spintrace(
   };
   // expression->visit(check_proto_index);
 
-  // Symmetrize and expression
+  // Symmetrize an expression
   // Partially expand the antisymmetrizer and write it in terms of S operator.
   // See symmetrize_expr(expr) function for implementation details. We want an
   // expression with non-symmetric tensors, hence we are partially expanding the
