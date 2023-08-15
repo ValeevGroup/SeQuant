@@ -2,7 +2,7 @@
 # See https://pre-commit.com/hooks.html for more hooks
 repos:
     -   repo: https://github.com/pre-commit/pre-commit-hooks
-        rev: v2.4.0
+        rev: v4.4.0
         hooks:
             -   id: check-added-large-files
             -   id: check-case-conflict
@@ -10,7 +10,7 @@ repos:
             #    -   id: check-yaml  ... both .codecov and .travis contain duplicate keys
             -   id: end-of-file-fixer
     -   repo: https://github.com/Lucas-C/pre-commit-hooks
-        rev: v1.1.7
+        rev: v1.5.4
         hooks:
             -   id: remove-crlf
             -   id: forbid-tabs
