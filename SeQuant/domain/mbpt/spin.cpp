@@ -475,11 +475,6 @@ ExprPtr symmetrize_expr(const Product& product) {
 
   auto A_is_nconserving = A_tensor.bra_rank() == A_tensor.ket_rank();
 
-  if (A_is_nconserving && A_tensor.bra_rank() == 1)
-    return remove_tensor(product, L"A");
-
-  assert(A_tensor.rank() > 1);
-
   auto S = Tensor{};
   if (A_is_nconserving) {
     S = Tensor(L"S", A_tensor.bra(), A_tensor.ket(), Symmetry::nonsymm);
@@ -714,7 +709,6 @@ ExprPtr expand_P_op(const ExprPtr& expr, bool keep_canonical, bool pair_wise) {
 container::svector<container::map<Index, Index>> S_replacement_maps(
     const Tensor& S) {
   assert(S.label() == L"S");
-  assert(S.bra_rank() > 1);
   assert(S.bra().size() == S.ket().size());
   container::svector<int> int_list(S.bra().size());
   std::iota(std::begin(int_list), std::end(int_list), 0);

@@ -99,14 +99,6 @@ class compute_cceqvec {
       for (size_t R = PMIN; R <= P; ++R) {
         auto const ext_idxs = external_indices(eqvec_so[R]);
         eqvec_sf_ref[R] = closed_shell_spintrace(eqvec_so[R], ext_idxs);
-        if (R == 1) {  // closed_shell_spintrace omits 1-body S
-          using ranges::views::transform;
-          auto bixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
-          auto kixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
-          auto s_tensor = ex<Tensor>(Tensor{L"S", kixs, bixs});
-          eqvec_sf_ref[R] = s_tensor * eqvec_sf_ref[R];
-          expand(eqvec_sf_ref[R]);
-        }
       }
     }
 
