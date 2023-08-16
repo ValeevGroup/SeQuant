@@ -79,6 +79,10 @@ std::vector<ExprPtr> cceqs::λ(bool screen, bool use_topology,
   const auto One = ex<Constant>(1);
   auto lhbar = simplify((One + op::Lambda(N)) * hbar);
 
+  std::vector<std::pair<std::wstring, std::wstring>> op_connect = {
+      {L"h", L"t"}, {L"f", L"t"}, {L"g", L"t"}, {L"h", L"A"}, {L"f", L"A"},
+      {L"g", L"A"}, {L"h", L"S"}, {L"f", L"S"}, {L"g", L"S"}};
+
   // 2. project onto each manifold, screen, lower to tensor form and wick it
   std::vector<ExprPtr> result(P + 1);
   for (auto p = P; p >= PMIN; --p) {
@@ -108,11 +112,6 @@ std::vector<ExprPtr> cceqs::λ(bool screen, bool use_topology,
 
     // 2.b multiply by adjoint of P(p) (i.e., P(-p)) on the right side
     auto hbar_P = simplify(hbar_p * op::P(-p));
-
-    // temp
-    std::vector<std::pair<std::wstring, std::wstring>> op_connect = {
-        {L"h", L"t"}, {L"f", L"t"}, {L"g", L"t"}, {L"h", L"A"}, {L"f", L"A"},
-        {L"g", L"A"}, {L"h", L"S"}, {L"f", L"S"}, {L"g", L"S"}};
 
     // 2.c compute vacuum average
     result.at(p) = op::vac_av(hbar_P, op_connect);
