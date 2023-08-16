@@ -148,17 +148,75 @@ class compute_cceqvec {
         // validate sizes of spin-free t equations after biorthogonal transform
         if (type == EqnType::t) {
           // Biorthogonal transformation
-          eqvec[R] = biorthogonalize(eqvec[R]);
+          auto eq_biorth = biorthogonalize(
+              eqvec[R], BiorthogonalizationMethod::Pseudoinverse);
 
-          std::wcout << "biorthogonal spin-free R" << R << "(expS" << N
-                     << ") has " << eqvec[R]->size() << " terms:" << std::endl;
-          if (print) std::wcout << to_latex_align(eqvec[R], 20, 3) << std::endl;
+          std::wcout << "biorthogonal(PI) spin-free R" << R << "(expS" << N
+                     << ") has " << eq_biorth->size() << " terms:" << std::endl;
+          if (print)
+            std::wcout << to_latex_align(eq_biorth, 20, 3) << std::endl;
 
-          if (R == 1 && N == 2) runtime_assert(eqvec[R]->size() == 26);
-          if (R == 2 && N == 2) runtime_assert(eqvec[R]->size() == 55);
-          if (R == 1 && N == 3) runtime_assert(eqvec[R]->size() == 30);
-          if (R == 2 && N == 3) runtime_assert(eqvec[R]->size() == 73);
-          if (R == 3 && N == 3) runtime_assert(eqvec[R]->size() == 490);
+          // check F*T->R terms
+          if (print) {
+            auto extract_F_TR_terms = [&](const auto& expr) {
+              assert(expr.template is<Sum>());
+              auto F_TR_terms =
+                  *expr | ranges::views::filter([&](const auto& term) {
+                    return term.template is<Product>() &&
+                           ranges::any_of(
+                               *term,
+                               [](const auto& factor) {
+                                 return factor.template is<Tensor>() &&
+                                        factor.template as<Tensor>().label() ==
+                                            L"f";
+                               }) &&
+                           ranges::any_of(
+                               *term,
+                               [&](const auto& factor) {
+                                 return factor.template is<Tensor>() &&
+                                        factor.template as<Tensor>().label() ==
+                                            L"t" &&
+                                        factor.template as<Tensor>().rank() ==
+                                            R;
+                               }) &&
+                           (ranges::count_if(*term, [&](const auto& factor) {
+                              return factor.template is<Tensor>() &&
+                                     factor.template as<Tensor>().label() ==
+                                         L"t";
+                            }) == 1);
+                  }) |
+                  ranges::to_vector;
+              return ex<Sum>(F_TR_terms);
+            };
+            std::wcout << "F_TR terms (from spin-free equations): "
+                       << extract_F_TR_terms(eqvec[R]).to_latex() << std::endl;
+            std::wcout << "F_TR terms (from spin-integrated equations): "
+                       << extract_F_TR_terms(eqvec_sf_ref[R]).to_latex()
+                       << std::endl;
+            std::wcout << "F_TR terms (from biorthogonal spin-free equations): "
+                       << extract_F_TR_terms(eq_biorth).to_latex() << std::endl;
+
+            // check biorthogonal transformation variants
+            auto eq_biorth_qr =
+                biorthogonalize(eqvec[R], BiorthogonalizationMethod::QR);
+            auto F_TR_pinv_minus_qr =
+                simplify(extract_F_TR_terms(eq_biorth) -
+                         extract_F_TR_terms(eq_biorth_qr));
+            if (F_TR_pinv_minus_qr->size() > 0) {
+              std::wcout
+                  << "F_TR terms biorthogonal terms (PI minus QR) spin-free R"
+                  << R << "(expS" << N << ") has " << F_TR_pinv_minus_qr->size()
+                  << " terms:" << std::endl;
+              std::wcout << to_latex_align(F_TR_pinv_minus_qr, 20, 3)
+                         << std::endl;
+            }
+          }
+
+          if (R == 1 && N == 2) runtime_assert(eq_biorth->size() == 26);
+          if (R == 2 && N == 2) runtime_assert(eq_biorth->size() == 55);
+          if (R == 1 && N == 3) runtime_assert(eq_biorth->size() == 30);
+          if (R == 2 && N == 3) runtime_assert(eq_biorth->size() == 73);
+          if (R == 3 && N == 3) runtime_assert(eq_biorth->size() == 490);
         }
       }
     }
