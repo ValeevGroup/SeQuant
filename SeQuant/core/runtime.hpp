@@ -119,15 +119,16 @@ void for_each(SizedRange& rng, const UnaryOp& op) {
 /// using up to get_num_threads() threads.
 /// @tparam SizedRange a sized range
 /// @tparam BinaryReductionOp a function type such that
-/// `reduce(identity,map(*begin(rng)))`, where `reduce` and `identity` are
-/// objects of type `ReduceLambda` and `Identity`, respectively, is valid
+/// `reduce(identity,map(*begin(rng)))`, where `reduce`, `identity`, and `map`
+/// are objects of type `BinaryReductionOp`, `T`, and `UnaryMapOp`,
+/// respectively, is valid
 /// @tparam UnaryMapOp a function type such that `map(*begin(rng))`, where `map`
 /// is an object of type `MapLambda`, is valid
-/// @tparam T a result type of \p ReduceLambda
+/// @tparam T a return type of \p BinaryReductionOp
 /// @param rng the \p Range object
 /// @param init the initial value for reduction
-/// @param reduce the \p ReduceLambda object
-/// @param map the \p MapLambda object
+/// @param reduce the \p BinaryReductionOp object
+/// @param map the \p UnaryMapOp object
 /// @sa get_num_threads()
 template <typename SizedRange, typename T, typename BinaryReductionOp,
           typename UnaryMapOp>
