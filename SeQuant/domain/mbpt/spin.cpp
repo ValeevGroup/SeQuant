@@ -928,6 +928,10 @@ container::svector<container::svector<Index>> external_indices(
           if (as_tensor.label() == L"A" || as_tensor.label() == L"S") {
             if (!P)  // use the first found
               P = as_tensor;
+            else if (P != as_tensor)
+              throw std::invalid_argument(
+                  "external_indices(expr): multiple nonequivalent "
+                  "(anti)symmetrizers are found in expr");
           }
         }
       },
