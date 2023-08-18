@@ -575,23 +575,58 @@ TEST_CASE("MBPT", "[mbpt]") {
                 ref_qr_181plus] = make_expr_and_refs;
         auto result = op::vac_av(make_expr());
 
+        // no matter how we biorothogonalized, antisymmetricized form should be
+        // the same
+        auto validate_antisymmetrized = [key = key](const ExprPtr& expr_S) {
+          auto ext_index_groups = external_indices(expr_S);
+          const auto n = ext_index_groups.size();
+
+          std::wcout << "S(expr) = " << to_latex(expr_S) << std::endl;
+          auto expr = expand_S_op(expr_S);
+          simplify(expr);
+          std::wcout << "expanded S(expr) = " << to_latex(expr) << std::endl;
+
+          // append antisymmetrizer
+          auto bixs = ext_index_groups | ranges::views::transform(
+                                             [](auto&& vec) { return vec[0]; });
+          auto kixs = ext_index_groups | ranges::views::transform(
+                                             [](auto&& vec) { return vec[1]; });
+          // N.B. external_indices(expr) confuses bra and ket
+          const auto A = ex<Constant>(ratio(1, factorial(n) * factorial(n))) *
+                         ex<Tensor>(L"A", kixs, bixs, Symmetry::antisymm);
+          auto expr_A = A * expr;
+          expand(expr_A);
+          std::wcout << "A(expr) before simplification = " << to_latex(expr_A)
+                     << std::endl;
+          expr_A = simplify(expr_A);
+
+          std::wcout << "A(expr) = " << to_latex(expr_A) << std::endl;
+          if (key == L"T3 -> R3") {
+            REQUIRE(expr_A.template is<Product>());
+          } else {
+            REQUIRE(expr_A.template is<Sum>());
+            REQUIRE(expr_A->size() == 2);
+          }
+        };
+
         // Biorthogonal transformation
         // 1. pinv
         {
-          auto result_clone = result->clone();
-          result_clone = biorthogonalize(
-              result_clone, BiorthogonalizationMethod::Pseudoinverse);
+          auto expr = result->clone();
+          expr =
+              biorthogonalize(expr, BiorthogonalizationMethod::Pseudoinverse);
+          validate_antisymmetrized(expr);
           REQUIRE((hash_version() == hash::Impl::BoostPre181
                        ? ref_pinv_pre181
-                       : ref_pinv_181plus) == to_latex(result_clone));
+                       : ref_pinv_181plus) == to_latex(expr));
         }
         {
-          auto result_clone = result->clone();
-          result_clone =
-              biorthogonalize(result_clone, BiorthogonalizationMethod::QR);
+          auto expr = result->clone();
+          expr = biorthogonalize(expr, BiorthogonalizationMethod::QR);
+          validate_antisymmetrized(expr);
           REQUIRE((hash_version() == hash::Impl::BoostPre181
                        ? ref_qr_pre181
-                       : ref_qr_181plus) == to_latex(result_clone));
+                       : ref_qr_181plus) == to_latex(expr));
         }
       }
     }
