@@ -148,8 +148,9 @@ class compute_cceqvec {
         // validate sizes of spin-free t equations after biorthogonal transform
         if (type == EqnType::t) {
           // Biorthogonal transformation
-          auto eq_biorth = biorthogonalize(
-              eqvec[R], BiorthogonalizationMethod::Pseudoinverse);
+          constexpr auto biorthog_method =
+              BiorthogonalizationMethod::Pseudoinverse;
+          auto eq_biorth = biorthogonalize(eqvec[R], biorthog_method);
 
           std::wcout << "biorthogonal(PI) spin-free R" << R << "(expS" << N
                      << ") has " << eq_biorth->size() << " terms:" << std::endl;
@@ -216,7 +217,9 @@ class compute_cceqvec {
           if (R == 2 && N == 2) runtime_assert(eq_biorth->size() == 55);
           if (R == 1 && N == 3) runtime_assert(eq_biorth->size() == 30);
           if (R == 2 && N == 3) runtime_assert(eq_biorth->size() == 73);
-          if (R == 3 && N == 3) runtime_assert(eq_biorth->size() == 490);
+          if (biorthog_method == BiorthogonalizationMethod::Pseudoinverse) {
+            if (R == 3 && N == 3) runtime_assert(eq_biorth->size() == 490);
+          }
         }
       }
     }
