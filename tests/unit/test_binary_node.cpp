@@ -31,7 +31,7 @@ TEST_CASE("TEST BINARY_NODE", "[FullBinaryNode]") {
   SECTION("move ctor and assign") {
     auto n1{FullBinaryNode{1, 2, 3}};
     auto n2 = std::move(n1);
-    REQUIRE(n2 == FullBinaryNode{1,2,3});
+    REQUIRE(n2 == FullBinaryNode{1, 2, 3});
   }
 
   SECTION("derefence") {
@@ -248,5 +248,35 @@ TEST_CASE("TEST BINARY_NODE", "[FullBinaryNode]") {
     //                /  \
     //              2     3
     //
+  }
+
+  SECTION("visitor") {
+    using node_t = FullBinaryNode<std::string>;
+    auto const node = node_t{"C", "A", "B"};
+    REQUIRE(*node == "C");
+    REQUIRE(*node.left() == "A");
+    REQUIRE(*node.right() == "B");
+
+    std::string abc{};
+    auto visitor = [&abc](node_t const& n) { abc += *n; };
+
+    node.visit(visitor);
+    REQUIRE(abc == "ABC");
+
+    abc.clear();
+    node.visit(visitor, sequant::PreOrder{});
+    REQUIRE(abc == "CAB");
+
+    abc.clear();
+    node.visit(visitor, sequant::InOrder{});
+    REQUIRE(abc == "ACB");
+
+    abc.clear();
+    node.visit_leaf(visitor);
+    REQUIRE(abc == "AB");
+
+    abc.clear();
+    node.visit_internal(visitor);
+    REQUIRE(abc == "C");
   }
 }

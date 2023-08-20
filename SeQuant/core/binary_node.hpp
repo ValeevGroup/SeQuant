@@ -1,6 +1,7 @@
 #ifndef SEQUANT_BINARY_NODE_HPP
 #define SEQUANT_BINARY_NODE_HPP
 
+#include <iostream>
 #include <memory>
 #include <range/v3/numeric/accumulate.hpp>
 #include <sstream>
@@ -8,6 +9,77 @@
 #include <utility>
 
 namespace sequant {
+
+template <typename>
+class FullBinaryNode;
+
+/// Full-binary node visit orders.
+
+/// Visit children nodes followed by parent node.
+/// Left will be visited before right.
+struct PreOrder {};
+
+/// Visit parent node followed by children nodes.
+/// Left will be visited before right.
+struct PostOrder {};
+
+/// Visit left node then parent node followed by right node.
+struct InOrder {};
+
+namespace {
+
+/// Visit leaf nodes only.
+struct VisitLeaf {};
+
+/// Visit internal nodes only.
+struct VisitInternal {};
+
+/// Visit both leaf and internal nodes.
+struct VisitAll {};
+
+///
+/// \brief Visit a full binary node.
+///
+/// \tparam V Visitor type. Must be invocable with a FullBinaryNode<T> argument.
+/// \tparam Order Visit order.
+/// \param node Node to visit.
+/// \param f Visitor.
+/// \param lf If true, only leaf nodes will be visited.
+/// \param in If true, parent node will be visited between left and right.
+///
+template <
+    typename T, typename V, typename Order, typename NodeType,
+    typename = std::enable_if_t<std::is_invocable_v<V, FullBinaryNode<T>>>>
+void visit(FullBinaryNode<T> const& node, V const& f, Order, NodeType) {
+  static_assert(std::is_same_v<Order, PreOrder> ||
+                std::is_same_v<Order, InOrder> ||
+                std::is_same_v<Order, PostOrder> && "Unsupported visit order");
+  static_assert(std::is_same_v<NodeType, VisitLeaf> ||
+                std::is_same_v<NodeType, VisitInternal> ||
+                std::is_same_v<NodeType, VisitAll> &&
+                    "Not sure which nodes to visit");
+  if (node.leaf()) {
+    if constexpr (!std::is_same_v<NodeType, VisitInternal>) f(node);
+  } else {
+    if constexpr (std::is_same_v<Order, PreOrder> &&
+                  !std::is_same_v<NodeType, VisitLeaf>)
+      f(node);
+
+    visit(node.left(), f, Order{}, NodeType{});
+
+    if constexpr (std::is_same_v<Order, InOrder> &&
+                  !std::is_same_v<NodeType, VisitLeaf>)
+      f(node);
+
+    visit(node.right(), f, Order{}, NodeType{});
+
+    if constexpr (std::is_same_v<Order, PostOrder> &&
+                  !std::is_same_v<NodeType, VisitLeaf>)
+      f(node);
+  }
+}
+
+}  // namespace
 
 ///
 /// @brief Represents a node with data of @c T type in a full-binary tree.
@@ -163,38 +235,63 @@ class FullBinaryNode {
     *this = std::move(node);
   }
 
-  template <typename F,
+  ///
+  /// \brief Visit the tree in the order specified by the Order argument.
+  /// \tparam F Type of the visitor.
+  /// \tparam Order Type of the order. Can be PreOrder, InOrder or PostOrder.
+  ///               By default it is PostOrder. That means parent node will
+  ///               be visited after visiting left and right children in that
+  ///               order.
+  /// \param visitor Visitor to be invoked on each node.
+  ///
+  template <typename F, typename Order = PostOrder,
             std::enable_if_t<std::is_invocable_v<F, FullBinaryNode<T> const&>,
                              bool> = true>
-  void visit(F const& pred) const {
-    pred(*this);
-    if (leaf()) return;
-
-    left().visit(pred);
-    right().visit(pred);
+  void visit(F const& visitor, Order = {}) const {
+    sequant::visit(*this,    //
+                   visitor,  //
+                   Order{},  //
+                   VisitAll{});
   }
 
-  template <typename F,
+  ///
+  /// \brief Visit the internal nodes of the tree in the order specified by the
+  ///        Order argument.
+  /// \tparam F Type of the visitor.
+  /// \tparam Order Type of the order. Can be PreOrder, InOrder or PostOrder.
+  ///               By default it is PostOrder. That means parent node will
+  ///               be visited after visiting left and right children in that
+  ///               order.
+  /// \param visitor Visitor to be invoked on each node.
+  ///
+  template <typename F, typename Order = PostOrder,
             std::enable_if_t<std::is_invocable_v<F, FullBinaryNode<T> const&>,
                              bool> = true>
-  void visit_internal(F const& pred) const {
-    if (!leaf()) {
-      left().visit_internal(pred);
-      pred(*this);
-      right().visit_internal(pred);
-    }
+  void visit_internal(F const& visitor, Order = {}) const {
+    sequant::visit(*this,    //
+                   visitor,  //
+                   Order{},  //
+                   VisitInternal{});
   }
 
-  template <typename F,
+  ///
+  /// \brief Visit the leaf nodes of the tree in the order specified by the
+  ///        Order argument.
+  /// \tparam F Type of the visitor.
+  /// \tparam Order Type of the order. Can be PreOrder, InOrder or PostOrder.
+  ///               By default it is PostOrder. That means parent node will
+  ///               be visited after visiting left and right children in that
+  ///               order.
+  /// \param visitor Visitor to be invoked on each node.
+  ///
+  template <typename F, typename Order = PostOrder,
             std::enable_if_t<std::is_invocable_v<F, FullBinaryNode<T> const&>,
                              bool> = true>
-  void visit_leaf(F const& pred) const {
-    if (leaf()) {
-      pred(*this);
-    } else {
-      left().visit_leaf(pred);
-      right().visit_leaf(pred);
-    }
+  void visit_leaf(F const& visitor, Order = {}) const {
+    sequant::visit(*this,    //
+                   visitor,  //
+                   Order{},  //
+                   VisitLeaf{});
   }
 
   template <
