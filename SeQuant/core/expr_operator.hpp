@@ -18,6 +18,13 @@ inline bool operator!=(const ExprPtr &left, const ExprPtr &right) {
 #endif
 
 inline ExprPtr operator*(const ExprPtr &left, const ExprPtr &right) {
+  if (left.is<Constant>() && right.is<Constant>()) {
+    auto c_ = left->clone();
+    auto &c = c_.as<Constant>();
+    c *= right.as<Constant>();
+    return c_;
+  }
+
   auto left_is_product = left->is<Product>();
   auto right_is_product = right->is<Product>();
   if (!left_is_product && !right_is_product) {

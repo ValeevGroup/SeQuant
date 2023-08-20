@@ -6,11 +6,6 @@
 #include <boost/regex.hpp>
 #include <locale>
 
-// parse a non-symmetric tensor
-sequant::ExprPtr parse(std::wstring_view raw) {
-  return sequant::parse_expr(raw, sequant::Symmetry::nonsymm);
-}
-
 TEST_CASE("TEST_REGEX", "[parse_expr]") {
   using namespace sequant;
 
@@ -128,8 +123,8 @@ TEST_CASE("TEST_PARSE_EXPR", "[parse_expr]") {
   SECTION("Constant") {
     REQUIRE(parse_expr(L"1/2")->is<Constant>());
     REQUIRE(parse_expr(L"0/2")->is<Constant>());
-    REQUIRE(!parse_expr(L"-1/2")->is<Constant>());
-    REQUIRE(!parse_expr(L"-0/2")->is<Constant>());
+    REQUIRE(parse_expr(L"-1/2")->is<Constant>());
+    REQUIRE(parse_expr(L"-0/2")->is<Constant>());
   }
 
   SECTION("Product") {
@@ -143,7 +138,7 @@ TEST_CASE("TEST_PARSE_EXPR", "[parse_expr]") {
     REQUIRE(parse_expr(L"-1/2 * δ * t{i1;a1}") ==
             parse_expr(L"-1/2  δ  t{i1;a1}"));
     auto const prod2 = parse_expr(L"-1/2 * δ * γ * t{i1;a1}")->as<Product>();
-    REQUIRE(prod2.scalar() == rational{-1,2});
+    REQUIRE(prod2.scalar() == rational{-1, 2});
     REQUIRE(prod2.factor(0) == ex<Variable>(L"δ"));
     REQUIRE(prod2.factor(1) == ex<Variable>(L"γ"));
     REQUIRE(prod2.factor(2)->is<Tensor>());
