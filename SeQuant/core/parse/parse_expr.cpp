@@ -78,7 +78,7 @@ std::unique_ptr<Token> to_operand_tensor(boost::wsmatch const& match,
 }
 
 std::unique_ptr<Token> to_operand_variable(boost::wsmatch const& match) {
-  return token<OperandVariable>(match.str());
+  return token<OperandVariable>(match[1].str(), match[2].matched);
 }
 
 }  // namespace parse
@@ -195,7 +195,7 @@ ExprPtr parse_expr(std::wstring_view raw_expr, Symmetry symmetry) {
   static auto const tensor_terse =
       boost::wregex{pattern::tensor_terse().data()};
   /// matches sequant::Variable
-  static auto const variable = boost::wregex{pattern::label().data()};
+  static auto const variable = boost::wregex{pattern::sequant_variable()};
   static auto const fraction = boost::wregex{pattern::abs_real_frac().data()};
   static auto const times = boost::wregex{L"\\*"};
   static auto const plus = boost::wregex{L"\\+"};

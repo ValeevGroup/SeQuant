@@ -14,6 +14,8 @@ TEST_CASE("TEST_REGEX", "[parse_expr]") {
   std::locale prev_locale{};
   std::locale::global(std::locale::classic());
   auto const rgx_label = boost::wregex{parse::regex_patterns::label().data()};
+  auto const rgx_variable =
+      boost::wregex{parse::regex_patterns::sequant_variable()};
   auto const rgx_pure_index =
       boost::wregex{parse::regex_patterns::pure_index()};
   auto const rgx_index = boost::wregex{parse::regex_patterns::index_capture(),
@@ -73,10 +75,11 @@ TEST_CASE("TEST_REGEX", "[parse_expr]") {
   }
 
   SECTION("sequant::Variable") {
-    // sequant variable is just a label
+    // sequant variable is just a label followed by an optional ^*
+    // to denote if the variable is conjugated
     for (auto const& v : std::initializer_list<std::wstring>{
-             L"a", L"α", L"b", L"β", L"γ", L"λ", L"δ"})
-      REQUIRE(boost::regex_match(v, rgx_label));
+             L"a", L"α", L"b", L"β", L"γ", L"λ", L"δ", L"a^*", L"α^*", L"b^*"})
+      REQUIRE(boost::regex_match(v, rgx_variable));
   }
 }
 
