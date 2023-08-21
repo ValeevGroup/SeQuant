@@ -10,6 +10,13 @@ ExprPtr tail_factor(ExprPtr const& expr) noexcept {
 
   else if (expr->is<Product>()) {
     auto scalar = expr->as<Product>().scalar();
+    if (scalar == 1 && expr->size() == 2) {
+      // product with
+      //   -single factor that is a tensor
+      //   -scalar is just 1
+      //  will not be formed because of this block
+      return expr->at(1);
+    }
     auto facs = ranges::views::tail(*expr);
     return ex<Product>(Product{scalar, ranges::begin(facs), ranges::end(facs)});
   } else {

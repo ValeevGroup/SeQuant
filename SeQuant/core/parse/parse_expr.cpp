@@ -84,99 +84,94 @@ std::unique_ptr<Token> to_operand_variable(boost::wsmatch const& match) {
 }  // namespace parse
 
 namespace deparse {
+std::wstring deparse_pure_index(Index const& idx) {
+  return idx.label() |
+         ranges::views::filter([](wchar_t c) { return c != L'_'; }) |
+         ranges::to<std::wstring>;
+}
+
+std::wstring deparse_index(Index const& idx) {
+  using ranges::views::intersperse;
+  using ranges::views::join;
+  using ranges::views::transform;
+
+  std::wstring pure = deparse_pure_index(idx);
+  if (idx.has_proto_indices()) {
+    auto proto = idx.proto_indices() | transform(deparse_pure_index) |
+                 intersperse(L",") | join | ranges::to<std::wstring>;
+    return pure + L"<" + proto + L">";
+  } else
+    return pure;
+}
+
+template <typename IterableOfIndices>
+std::wstring deparse_indices(IterableOfIndices const& indices) {
+  using ranges::views::intersperse;
+  using ranges::views::join;
+  using ranges::views::transform;
+
+  return indices | transform(deparse_index) | intersperse(L",") | join |
+         ranges::to<std::wstring>;
+}
+
 std::wstring deparse_expr(Tensor const& tnsr, bool annot_sym) {
-  std::wstring idx_str = tnsr.label().data();
+  std::wstring result = tnsr.label().data();
+  result += L"{";
+  result += deparse_indices(tnsr.bra());
+  result += L";";
+  result += deparse_indices(tnsr.ket());
+  result += L"}";
+  auto tsym = tnsr.symmetry();
+  result += !annot_sym                   ? L""
+            : tsym == Symmetry::antisymm ? L":A"
+            : tsym == Symmetry::symm     ? L":S"
+                                         : L":N";
+  return result;
+}
 
-  auto add_idx = [&idx_str](Index const& idx) {
-    std::wstring str = idx.label().data();
-    if (idx.has_proto_indices()) {
-      str += L"<";  // begin proto-indices token
-      for (auto&& pi : idx.proto_indices()) {
-        str += pi.label().data();
-        str += L",";
-      }
-      // remove that trailing comma
-      str.pop_back();
-      str += L">";  // end proto-indices token
-    }
-    idx_str += str;
-  };
+std::wstring deparse_expr(Constant const& c) {
+  auto val = c.value<Complex<sequant::rational>>();
+  return val.im == 0
+             ? to_wstring(val.re)
+             : L"(" + to_wstring(val.re) + L"," + to_wstring(val.im) + L")";
+}
 
-  idx_str += L"{";  // open tensor bra-ket and begin bra
-  for (auto const& idx : tnsr.bra()) {
-    add_idx(idx);
-    idx_str += L",";
-  }
-  *idx_str.rbegin() = L';';  // begin ket
-  for (auto const& idx : tnsr.ket()) {
-    add_idx(idx);
-    idx_str += L",";
-  }
-
-  *idx_str.rbegin() = L'}';  // close tensor bra-ket
-  if (annot_sym) {
-    if (tnsr.symmetry() == Symmetry::antisymm)
-      idx_str += L":A";
-    else if (tnsr.symmetry() == Symmetry::symm)
-      idx_str += L":S";
-    else if (tnsr.symmetry() == Symmetry::nonsymm)
-      idx_str += L":N";
-    else
-      idx_str += L":INVALID";
-  }
-  return idx_str;
+std::wstring deparse_expr(Variable const& v) {
+  return v.label().data() +
+         (v.conjugated() ? std::wstring{L"^*"} : std::wstring{});
 }
 
 std::wstring deparse_expr(Product const& prod, bool annot_sym) {
-  auto str = std::wstring{};
+  using ranges::views::intersperse;
+  using ranges::views::join;
+  using ranges::views::transform;
 
-  auto scal = prod.scalar();
-  if (scal != Product::scalar_type{1}) {
-    std::wstring scalar_latex = Constant{scal}.to_latex();
+  std::wstring result;
+  result += prod.scalar() == 1 ? L""
+            : prod.scalar() == -1
+                ? L"-"
+                : deparse_expr(Constant{prod.scalar()}) + L" * ";
 
-    static auto const decimal_rgx =
-        boost::wregex{std::wstring{} + L"(-)?" +
-                      parse::regex_patterns::abs_real_num().data()};
+  result += prod.factors() | transform([annot_sym](ExprPtr const& f) {
+              return f.is<Sum>() || f.is<Product>()
+                         ? L"(" + deparse_expr(f, annot_sym) + L")"
+                         : deparse_expr(f, annot_sym);
+            }) |
+            intersperse(L" * ") | join | ranges::to<std::wstring>;
 
-    container::svector<std::wstring, 2> num_denom{};
-    auto const end = boost::wsregex_iterator{};
-    for (auto iter = boost::wsregex_iterator{scalar_latex.begin(),
-                                             scalar_latex.end(), decimal_rgx};
-         iter != end; ++iter) {
-      std::wstring n{};
-      if ((*iter)[1].matched) n += (*iter)[1].str() + L" ";
-      n += (*iter)[2].str();
-      num_denom.emplace_back(n);
-    }
-
-    assert(num_denom.size() == 1 || num_denom.size() == 2);
-
-    std::wstring scalar_text =
-        num_denom[0] + (num_denom.size() == 2 ? L"/" + num_denom[1] : L"");
-
-    if (scalar_text == L"- 1")
-      scalar_text.pop_back();
-    else if (scalar_text == L"1")
-      scalar_text.pop_back();
-
-    if (*scalar_text.rbegin() != L' ' && !scalar_text.empty())
-      scalar_text += L" * ";
-    str += scalar_text;
-  }
-
-  str += deparse_expr(prod.factor(0), annot_sym);
-  for (auto&& xpr : ranges::views::tail(prod.factors()))
-    str += L" * " + deparse_expr(xpr, annot_sym);
-
-  return str;
+  return result;
 }
 
 std::wstring deparse_expr(Sum const& sum, bool annot_sym) {
   auto str = deparse_expr(sum.summand(0), annot_sym);
   for (auto&& xpr : ranges::views::tail(sum.summands())) {
     auto to_app = deparse_expr(xpr, annot_sym);
-    str += (to_app.front() == L'-' ? L" " : L" + ");
-    str += to_app;
+    if (to_app.front() == L'-') {
+      str += L" - " +
+             std::wstring{std::next(std::begin(to_app)), std::end(to_app)};
+    } else {
+      str += L" + " + to_app;
+    }
   }
   return str;
 }
@@ -352,6 +347,10 @@ std::wstring deparse_expr(ExprPtr expr, bool annot_sym) {
     return deparse_expr(expr->as<Sum>(), annot_sym);
   else if (expr->is<Product>())
     return deparse_expr(expr->as<Product>(), annot_sym);
+  else if (expr->is<Constant>())
+    return deparse_expr(expr->as<Constant>());
+  else if (expr->is<Variable>())
+    return deparse_expr(expr->as<Variable>());
   else
     throw std::runtime_error("Unsupported expr type for deparse!");
 }
