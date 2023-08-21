@@ -257,26 +257,38 @@ TEST_CASE("TEST BINARY_NODE", "[FullBinaryNode]") {
     REQUIRE(*node.left() == "A");
     REQUIRE(*node.right() == "B");
 
-    std::string abc{};
-    auto visitor = [&abc](node_t const& n) { abc += *n; };
+    std::string str;
+    auto visitor = [&str](node_t const& n) { str += *n; };
 
     node.visit(visitor);
-    REQUIRE(abc == "ABC");
+    REQUIRE(str == "ABC");
 
-    abc.clear();
+    str.clear();
     node.visit(visitor, sequant::PreOrder{});
-    REQUIRE(abc == "CAB");
+    REQUIRE(str == "CAB");
 
-    abc.clear();
+    str.clear();
     node.visit(visitor, sequant::InOrder{});
-    REQUIRE(abc == "ACB");
+    REQUIRE(str == "ACB");
 
-    abc.clear();
+    str.clear();
     node.visit_leaf(visitor);
-    REQUIRE(abc == "AB");
+    REQUIRE(str == "AB");
 
-    abc.clear();
+    str.clear();
     node.visit_internal(visitor);
-    REQUIRE(abc == "C");
+    REQUIRE(str == "C");
+
+    auto not_vowel = [&str](node_t const& n) -> bool {
+      bool yn = std::string{"AEIOU"}.find(*n) == std::string::npos;
+      if (yn) str += *n;
+      return yn;
+    };
+
+    auto alphabet = node_t{"W", node_t{"E", "A", "B"}, node_t{"Z", "X", "O"}};
+
+    str.clear();
+    alphabet.visit(not_vowel);
+    REQUIRE(str == "WZX");
   }
 }

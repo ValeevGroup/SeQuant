@@ -244,14 +244,34 @@ class FullBinaryNode {
   ///               order.
   /// \param visitor Visitor to be invoked on each node.
   ///
-  template <typename F, typename Order = PostOrder,
-            std::enable_if_t<std::is_invocable_v<F, FullBinaryNode<T> const&>,
-                             bool> = true>
+  template <
+      typename F, typename Order = PostOrder,
+      std::enable_if_t<
+          std::is_void_v<std::invoke_result_t<F, FullBinaryNode<T> const&>>,
+          bool> = true>
   void visit(F const& visitor, Order = {}) const {
     sequant::visit(*this,    //
                    visitor,  //
                    Order{},  //
                    VisitAll{});
+  }
+
+  ///
+  /// \tparam F Type of the visitor.
+  /// \param visitor Visitor to be invoked on each node.
+  /// \brief Visit the children nodes only if the visitor returns true upon
+  ///        visiting the parent node.
+  /// \details This is a pre-order traversal with short-circuit behavior.
+  ///
+  template <
+      typename F,
+      std::enable_if_t<std::is_invocable_r_v<bool, F, FullBinaryNode<T> const&>,
+                       bool> = true>
+  void visit(F const& visitor) const {
+    if (visitor(*this) && !leaf()) {
+      left().visit(visitor);
+      right().visit(visitor);
+    }
   }
 
   ///
