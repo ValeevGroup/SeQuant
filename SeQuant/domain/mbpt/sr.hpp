@@ -260,6 +260,16 @@ ExprPtr vac_av(ExprPtr expr,
                    op_connections = {{L"h", L"t"}, {L"f", L"t"}, {L"g", L"t"}},
                bool skip_clone = false);
 
+/// @param[in] expr input expression
+/// @param[in] op_connections list of pairs of labels of operators
+/// to be connected
+/// @param[in] skip_clone if true, will not clone the input expression
+/// @return the resulting expression
+ExprPtr op_evaluate(ExprPtr expr,
+                    const std::vector<std::pair<std::wstring, std::wstring>>&
+                        op_connections = {},
+                    bool skip_clone = false);
+
 }  // namespace op
 
 }  // namespace sr
