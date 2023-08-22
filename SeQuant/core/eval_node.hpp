@@ -13,7 +13,21 @@
 
 namespace sequant {
 
-namespace {
+#if __cplusplus < 202002L
+template <class T>
+struct remove_cvref {
+  typedef std::remove_cv_t<::std::remove_reference_t<T>> type;
+};
+
+template <class T>
+using remove_cvref_t = typename remove_cvref<T>::type;
+#else
+template <typename T>
+using remove_cvref = std::remove_cvref<T>;
+
+template <typename T>
+using remove_cvref_t = std::remove_cvref_t<T>;
+#endif
 
 template <typename, typename = void>
 constexpr bool IsEvalExpr{};
@@ -33,11 +47,30 @@ template <typename T>
 constexpr bool
     IsEvalNode<const FullBinaryNode<T>, std::enable_if_t<IsEvalExpr<T>>>{true};
 
-}  // namespace
-
 template <typename T,
           typename = std::enable_if_t<std::is_convertible_v<T, EvalExpr>>>
 using EvalNode = FullBinaryNode<T>;
+
+template <typename T, typename = void>
+constexpr bool IsIterable{};
+
+template <typename T>
+constexpr bool IsIterable<
+    T, std::void_t<
+           decltype(std::begin(std::declval<std::remove_reference_t<T>>())),
+           decltype(std::end(std::declval<std::remove_reference_t<T>>()))>> =
+    true;
+
+template <typename I, typename = std::enable_if_t<IsIterable<I>>>
+using IteredT =
+    std::remove_reference_t<decltype(*std::begin(std::declval<I>()))>;
+
+template <typename, typename = void>
+constexpr bool IsIterableOfEvalNodes{};
+
+template <typename Iterable>
+constexpr bool IsIterableOfEvalNodes<
+    Iterable, std::enable_if_t<IsEvalNode<IteredT<Iterable>>>> = true;
 
 ///
 /// \brief Creates an evaluation tree from @c ExprPtr.
@@ -340,6 +373,61 @@ AsyCost min_storage(NodeT const& node) {
   };
   node.visit(visitor);
   return result;
+}
+
+///
+/// \brief Reorders the nodes in @c nodes such that the nodes with the hash
+///        values in @c keys appear first, and nodes containing repeated
+///        hash values appear together.
+///
+/// \param nodes A container of nodes.
+/// \param keys A container of hash values to be used for reordering that appear
+///             in one or more nodes in @c nodes.
+///
+template <
+    typename NodesT, typename KeysT,
+    typename = std::enable_if_t<IsIterableOfEvalNodes<NodesT>>,
+    typename = std::enable_if_t<std::is_convertible_v<IteredT<KeysT>, size_t>>>
+void reorder_nodes(NodesT& nodes, KeysT const& keys) {
+  using ranges::views::transform;
+
+  auto ks = keys | ranges::to<container::set<size_t>>;
+
+  // given a tree node, returns true if any of its subtree
+  // (including itself) nodes have the hash value contained in keys.
+  auto any_cached_node = [&ks](auto const& root) -> bool {
+    bool yn;
+    auto visitor = [&yn, &ks](auto const& n) {
+      yn = yn || ks.contains(hash::value(*n));
+    };
+    root.visit_internal(visitor, PreOrder{});
+    return yn;
+  };
+
+  auto noncached_begin =
+      std::partition(nodes.begin(), nodes.end(), any_cached_node);
+
+  // now all the elements in @c nodes are ordered such that cached trees
+  // appear before the non-cached ones.
+
+  auto any_with_key = [](size_t k) {
+    // given a (k)ey and a root (n)ode
+    // returns true if any of the subtree (including itself) contain node(s)
+    // with the hash value equal to k.
+    return [k](auto const& n) {
+      bool yn;
+      auto visitor = [&yn, k](auto const& n) {
+        yn = yn || (hash::value(*n) == k);
+      };
+      n.visit_internal(visitor, PreOrder{});
+      return yn;
+    };
+  };
+
+  auto kbegin = nodes.begin();
+  for (auto k : keys) {
+    kbegin = std::partition(kbegin, noncached_begin, any_with_key(k));
+  }
 }
 
 }  // namespace sequant

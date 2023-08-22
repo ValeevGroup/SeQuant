@@ -24,22 +24,6 @@ namespace sequant {
 
 namespace {
 
-#if __cplusplus < 202002L
-template <class T>
-struct remove_cvref {
-  typedef std::remove_cv_t<::std::remove_reference_t<T>> type;
-};
-
-template <class T>
-using remove_cvref_t = typename remove_cvref<T>::type;
-#else
-template <typename T>
-using remove_cvref = std::remove_cvref<T>;
-
-template <typename T>
-using remove_cvref_t = std::remove_cvref_t<T>;
-#endif
-
 template <typename... Args>
 void log_eval(Args const&... args) noexcept {
 #ifdef SEQUANT_EVAL_TRACE
@@ -89,22 +73,6 @@ std::string perm_groups_string(
   return result;
 }
 
-}  // namespace
-
-template <typename T, typename = void>
-constexpr bool IsIterable{};
-
-template <typename T>
-constexpr bool IsIterable<
-    T, std::void_t<
-           decltype(std::begin(std::declval<std::remove_reference_t<T>>())),
-           decltype(std::end(std::declval<std::remove_reference_t<T>>()))>> =
-    true;
-
-template <typename I, typename = std::enable_if_t<IsIterable<I>>>
-using IteredT =
-    std::remove_reference_t<decltype(*std::begin(std::declval<I>()))>;
-
 template <typename, typename = void>
 constexpr bool HasAnnotMethod{};
 
@@ -133,6 +101,8 @@ constexpr bool IsIterableOfEvaluableNodes{};
 template <typename Iterable>
 constexpr bool IsIterableOfEvaluableNodes<
     Iterable, std::enable_if_t<IsEvaluable<IteredT<Iterable>>>> = true;
+
+}  // namespace
 
 template <typename, typename, typename = void>
 constexpr bool IsLeafEvaluator{};
