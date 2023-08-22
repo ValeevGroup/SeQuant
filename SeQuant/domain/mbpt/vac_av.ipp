@@ -105,7 +105,7 @@ ExprPtr vac_av(
   } else if (expr.is<op_t>()) {
     return ex<Constant>(
         0);  // expectation value of a normal-ordered operator is 0
-  } else if (expr.is<Constant>()) {
+  } else if (expr.is<Constant>() || expr.is<Variable>()) {
     return expr;  // vacuum is normalized
   }
   throw std::invalid_argument(
