@@ -154,37 +154,33 @@ constexpr bool IsLeafEvaluator<
 ///
 /// \param nodes An iterable of evaluable nodes.
 ///
-/// \param pred A predicate to filter nodes. By default all nodes are treated to
-///             take part in contributing to the number of repeats.
-///
 /// \param min_repeats Minimum number of repeats for a node to be cached. By
 ///                    default anything repeated twice or more is cached.
+///
+/// \param pred A predicate to filter nodes. By default all nodes are treated to
+///             take part in contributing to the number of repeats.
 ///
 /// \return A cache manager.
 ///
 /// \see CacheManager
 ///
-template <typename NodesI,
-          typename Pred = std::function<bool(IteredT<NodesI> const&)>,
-          typename = std::enable_if_t<
-              IsIterableOfEvaluableNodes<NodesI> &&
-              std::is_invocable_r_v<bool, Pred, IteredT<NodesI> const&>>>
-CacheManager<ERPtr> cache_manager(
-    NodesI const& nodes, Pred const& pred = [](auto&&) { return true; },
-    size_t min_repeats = 2) noexcept {
+template <typename NodesI>
+CacheManager<ERPtr> cache_manager(NodesI const& nodes,
+                                  size_t min_repeats = 2) noexcept {
   auto imed_counts = container::map<size_t, size_t>{};
 
-  // counts number of times each internal node appears in
-  // all of @c nodes trees
-  auto imed_visitor = [&imed_counts, &pred](auto&& n) {
-    if (!pred(n)) return;
-
+  // visits a node and check if its hash value exists in imed_counts map
+  // if it does increase the count and return false (to signal stop visiting
+  // children nodes) otherwise returns true.
+  auto imed_visitor = [&imed_counts](auto&& n) -> bool {
     auto&& end = imed_counts.end();
-    auto&& h = n->hash_value();
-    if (auto&& found = imed_counts.find(h); found != end)
+    auto&& h = hash::value(*n);
+    if (auto&& found = imed_counts.find(h); found != end) {
       ++found->second;
-    else
+      return false;
+    } else
       imed_counts.emplace(h, 1);
+    return true;
   };  // imed_visitor
 
   // visit imeds
@@ -390,7 +386,8 @@ auto evaluate(NodeT const& node, Le&& le, Args&&... args) {
 /// \see EvalResult to know more about the return type.
 ///
 template <typename NodesT, typename Le, typename... Args,
-          std::enable_if_t<IsIterableOfEvaluableNodes<NodesT>, bool> = true>
+          std::enable_if_t<IsIterableOfEvaluableNodes<NodesT>, bool> = true,
+          std::enable_if_t<IsLeafEvaluator<IteredT<NodesT>, Le>, bool> = true>
 auto evaluate(NodesT const& nodes, Le const& le, Args&&... args) {
   auto iter = std::begin(nodes);
   auto end = std::end(nodes);
@@ -450,8 +447,8 @@ auto evaluate(NodeT const& node,    //
 /// \see EvalResult to know more about the return type.
 ///
 template <typename NodesT, typename Annot, typename Le, typename... Args,
-          std::enable_if_t<IsIterableOfEvaluableNodes<NodesT>,
-                           bool> = true>
+          std::enable_if_t<IsIterableOfEvaluableNodes<NodesT>, bool> = true,
+          std::enable_if_t<IsLeafEvaluator<IteredT<NodesT>, Le>, bool> = true>
 auto evaluate(NodesT const& nodes,  //
               Annot const& layout,  //
               Le const& le, Args&&... args) {
