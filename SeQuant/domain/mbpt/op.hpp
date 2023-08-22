@@ -428,8 +428,9 @@ class OpMaker {
   /// @param[in] opsymm_opt if given, controls whether (anti)symmetric
   /// tensor is returned; if \p opsymm_opt is not given then the default is
   /// determined by the MBPT context.
-  // clang-format off
-  ExprPtr operator()(std::optional<UseDepIdx> dep_opt = {}, std::optional<Symmetry> opsymm_opt = {}) const;
+  // clang-format on
+  ExprPtr operator()(std::optional<UseDepIdx> dep_opt = {},
+                     std::optional<Symmetry> opsymm_opt = {}) const;
 
   /// @tparam TensorGenerator callable with signature
   /// `TensorGenerator(range<Index>, range<Index>, Symmetry)` that returns a
@@ -441,7 +442,8 @@ class OpMaker {
   template <typename TensorGenerator>
   static ExprPtr make(const container::svector<IndexSpace::Type>& bras,
                       const container::svector<IndexSpace::Type>& kets,
-                      TensorGenerator&& tensor_generator, UseDepIdx dep = UseDepIdx::None) {
+                      TensorGenerator&& tensor_generator,
+                      UseDepIdx dep = UseDepIdx::None) {
     const bool symm =
         get_default_context().spbasis() ==
         SPBasis::spinorbital;  // antisymmetrize if spin-orbital basis
@@ -501,7 +503,8 @@ class OpMaker {
   template <typename TensorGenerator>
   static ExprPtr make(std::initializer_list<IndexSpace::Type> bras,
                       std::initializer_list<IndexSpace::Type> kets,
-                      TensorGenerator&& tensor_generator, UseDepIdx csv = UseDepIdx::None) {
+                      TensorGenerator&& tensor_generator,
+                      UseDepIdx csv = UseDepIdx::None) {
     container::svector<IndexSpace::Type> bra_vec(bras.begin(), bras.end());
     container::svector<IndexSpace::Type> ket_vec(kets.begin(), kets.end());
     return OpMaker<S>::make(
