@@ -8,6 +8,56 @@
 
 namespace sequant {
 
+namespace {
+
+ExprPtr times(ExprPtr const& left, ExprPtr const& right) {
+  using Flatten = Product::Flatten;
+
+  if (left.is<Product>() && right.is<Product>()) {
+    auto f = left.as<Product>().scalar() * right.as<Product>().scalar();
+    auto result =
+        Product{f, ranges::begin(*left), ranges::end(*left), Flatten::No};
+    auto new_right =
+        Product{1, ranges::begin(*right), ranges::end(*right), Flatten::No};
+    if (ranges::distance(new_right.factors()) == 1)
+      result.append(1, ranges::front(new_right.factors()), Flatten::No);
+    else
+      result.append(1, ex<Product>(std::move(new_right)), Flatten::No);
+    return ex<Product>(std::move(result));
+  }
+
+  if (left.is<Constant>() && right.is<Product>()) {
+    auto result = Product{};
+    result.scale(left.as<Constant>().value());
+    result.scale(right.as<Product>().scalar());
+    auto new_right =
+        ex<Product>(1, ranges::begin(*right), ranges::end(*right), Flatten::No);
+    result.append(1, new_right, Flatten::No);
+    return ex<Product>(std::move(result));
+  }
+
+  if (left.is<Product>()) {
+    auto new_left = Product(left->as<Product>().scalar(), ranges::begin(*left),
+                            ranges::end(*left), Flatten::No);
+    new_left.append(1, right, Flatten::No);
+    return ex<Product>(std::move(new_left));
+  }
+
+  if (right.is<Product>()) {
+    auto new_right =
+        Product(right->as<Product>().scalar(), ranges::begin(*right),
+                ranges::end(*right), Flatten::No);
+    new_right.prepend(1, left, Flatten::No);
+    return ex<Product>(std::move(new_right));
+  }
+
+  if (left->is_atom() && right->is_atom()) return left * right;
+
+  return ex<Product>(1, ExprPtrList{left, right}, Flatten::No);
+}
+
+}  // namespace
+
 namespace parse {
 auto throw_invalid_expr = [](std::string const& arg = "Invalid expression") {
   throw std::runtime_error(arg);
@@ -310,26 +360,7 @@ ExprPtr parse_expr(std::wstring_view raw_expr, Symmetry symmetry) {
       else if (t->is<OperatorMinus>())
         result.push_back(lhs_operand - rhs_operand);
       else if (t->is<OperatorTimes>()) {
-        auto prod_ptr = lhs_operand->is<Product>()
-                            ? lhs_operand
-                            : ex<Product>(1, ExprPtrList{lhs_operand});
-        auto& prod = prod_ptr->as<Product>();
-        auto append_prod = [&prod](ExprPtr lrhs) {
-          auto& p = lrhs->as<Product>();
-          prod.scale(p.scalar());
-          p.scale(1 / p.scalar());
-          if (p.size() == 1)
-            prod.append(1, p.factor(0));
-          else
-            prod.append(1, lrhs, Product::Flatten::No);
-        };
-
-        if (rhs_operand->is<Product>())
-          append_prod(rhs_operand);
-        else
-          prod.append(1, rhs_operand);
-
-        result.push_back(prod_ptr);
+        result.push_back(sequant::times(lhs_operand, rhs_operand));
       } else
         assert(false && "Unknown token type");
     }
