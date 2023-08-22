@@ -2,6 +2,7 @@
 #define SEQUANT_EVAL_CACHE_MANAGER_HPP
 
 #include <SeQuant/core/container.hpp>
+#include <range/v3/view.hpp>
 #include <memory>
 
 namespace sequant {
@@ -147,6 +148,15 @@ class CacheManager {
     auto iter = cache_map_.find(key);
     auto end = cache_map_.end();
     return iter == end ? -1 : iter->second.max_life_count();
+  }
+
+  ///
+  ///
+  [[nodiscard]] auto keys() const noexcept {
+    auto ks =
+        ranges::views::keys(cache_map_) | ranges::to<container::set<size_t>>;
+    assert(ks.size() == cache_map_.size());
+    return ks;
   }
 
   ///
