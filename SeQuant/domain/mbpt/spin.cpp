@@ -985,21 +985,31 @@ ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr) {
 
   Tensor const A = expr->at(0)->at(0)->as<Tensor>();
 
-  auto const ext_idxs = external_indices(A);
+  auto const ext_idxs =
+      [&A]() -> container::svector<container::svector<Index>> {
+    if (A.label() == L"A" || A.label() == L"S") {
+      return external_indices(A);
+    } else {
+      return {};
+    }
+  }();
+
   auto st_expr = closed_shell_spintrace(expr, ext_idxs);
   canonicalize(st_expr);
 
-  // Remove S operator
-  for (auto& term : *st_expr) {
-    if (term->is<Product>()) term = remove_tensor(term->as<Product>(), L"S");
+  if (!ext_idxs.empty()) {
+    // Remove S operator
+    for (auto& term : *st_expr) {
+      if (term->is<Product>()) term = remove_tensor(term->as<Product>(), L"S");
+    }
+
+    // Biorthogonal transformation
+    st_expr = biorthogonal_transform(st_expr, A.rank(), ext_idxs);
+
+    auto bixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
+    auto kixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
+    st_expr = ex<Tensor>(Tensor{L"S", bixs, kixs}) * st_expr;
   }
-
-  // Biorthogonal transformation
-  st_expr = biorthogonal_transform(st_expr, A.rank(), ext_idxs);
-
-  auto bixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
-  auto kixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
-  st_expr = ex<Tensor>(Tensor{L"S", bixs, kixs}) * st_expr;
 
   simplify(st_expr);
 
@@ -1012,21 +1022,31 @@ ExprPtr closed_shell_CC_spintrace_rigorous(ExprPtr const& expr) {
 
   Tensor const A = expr->at(0)->at(0)->as<Tensor>();
 
-  auto const ext_idxs = external_indices(A);
+  auto const ext_idxs =
+      [&A]() -> container::svector<container::svector<Index>> {
+    if (A.label() == L"A" || A.label() == L"S") {
+      return external_indices(A);
+    } else {
+      return {};
+    }
+  }();
+
   auto st_expr = sequant::spintrace(expr, ext_idxs);
   canonicalize(st_expr);
 
-  // Remove S operator
-  for (auto& term : *st_expr) {
-    if (term->is<Product>()) term = remove_tensor(term->as<Product>(), L"S");
+  if (!ext_idxs.empty()) {
+    // Remove S operator
+    for (auto& term : *st_expr) {
+      if (term->is<Product>()) term = remove_tensor(term->as<Product>(), L"S");
+    }
+
+    // Biorthogonal transformation
+    st_expr = biorthogonal_transform(st_expr, A.rank(), ext_idxs);
+
+    auto bixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
+    auto kixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
+    st_expr = ex<Tensor>(Tensor{L"S", bixs, kixs}) * st_expr;
   }
-
-  // Biorthogonal transformation
-  st_expr = biorthogonal_transform(st_expr, A.rank(), ext_idxs);
-
-  auto bixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
-  auto kixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
-  st_expr = ex<Tensor>(Tensor{L"S", bixs, kixs}) * st_expr;
 
   simplify(st_expr);
 
