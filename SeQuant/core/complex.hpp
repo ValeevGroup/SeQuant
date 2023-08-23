@@ -26,7 +26,7 @@ struct Complex {
             typename = std::enable_if_t<
                 std::is_arithmetic_v<A> && std::is_constructible_v<T, A> &&
                 std::is_arithmetic_v<B> && std::is_constructible_v<T, B>>>
-  constexpr Complex(A real, B imag = 0) : re{real}, im{0} {}
+  constexpr Complex(A real, B imag = 0) : re{real}, im{imag} {}
   constexpr Complex(T real, T imag = 0) : re(real), im(imag) {}
   constexpr Complex(const Complex&) = default;
   constexpr Complex(Complex&&) = default;
