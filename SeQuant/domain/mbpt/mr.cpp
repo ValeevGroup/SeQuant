@@ -614,6 +614,17 @@ using mbpt::mr::vac_av;
 
 #include "SeQuant/domain/mbpt/vac_av.ipp"
 
+ExprPtr op_evaluate(
+    ExprPtr expr,
+    std::vector<std::pair<std::wstring, std::wstring>> op_connections,
+    bool skip_clone) {
+  if (!skip_clone) expr = expr->clone();
+  simplify(expr);
+  auto result = op::vac_av(expr, op_connections);
+  simplify(result);
+  return result;
+}
+
 }  // namespace op
 
 }  // namespace mr
