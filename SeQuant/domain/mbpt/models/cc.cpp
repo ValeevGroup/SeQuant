@@ -8,8 +8,8 @@
 
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/parse_expr.hpp>
+#include <SeQuant/core/runtime.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
-#include <SeQuant/domain/mbpt/models/cc.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
 #include <SeQuant/domain/mbpt/sr.hpp>
@@ -19,15 +19,55 @@ namespace sequant::mbpt::sr {
 cceqs::cceqs(size_t n, size_t p, size_t pmin)
     : N(n), P(p == std::numeric_limits<size_t>::max() ? n : p), PMIN(pmin) {}
 
+ExprPtr cceqs::sim_transform(ExprPtr expr, size_t r) {
+  auto transform_op_op_pdt = [this, &r](const ExprPtr& expr) {
+    // TODO: find the order at which the commutator expression should truncate
+    // from op/op product
+    assert(expr.is<op_t>() || expr.is<Product>());
+    auto result = expr;
+    auto op_Tk = result;
+    for (int64_t k = 1; k <= r; ++k) {
+      op_Tk = simplify(ex<Constant>(rational{1, k}) * op_Tk * op::T(N));
+      result += op_Tk;
+    }
+    return result;
+  };
+
+  if (expr.is<op_t>()) {
+    return transform_op_op_pdt(expr);
+  } else if (expr.is<Product>()) {
+    auto& product = expr.as<Product>();
+    // Expand product as sum
+    if (ranges::any_of(product.factors(), [](const auto& factor) {
+          return factor.template is<Sum>();
+        })) {
+      expr = sequant::expand(expr);
+      simplify(expr);
+      return sim_transform(expr, r);
+    } else {
+      return transform_op_op_pdt(expr);
+    }
+  } else if (expr.is<Sum>()) {
+    auto result = sequant::transform_reduce(
+        *expr, ex<Sum>(),
+        [](const ExprPtr& running_total, const ExprPtr& summand) {
+          return running_total + summand;
+        },
+        [=](const auto& op_product) {
+          return transform_op_op_pdt(op_product);
+        });
+    return result;
+  } else if (expr.is<Constant>() || expr.is<Variable>())
+    return expr;
+  else
+    throw std::invalid_argument(
+        "cceqs::sim_transform(expr): Unsupported expression type");
+}
+
 std::vector<ExprPtr> cceqs::t(bool screen, bool use_topology,
                               bool use_connectivity, bool canonical_only) {
   // 1. construct hbar(op) in canonical form
-  auto hbar = op::H();
-  auto H_Tk = hbar;
-  for (int64_t k = 1; k <= 4; ++k) {
-    H_Tk = simplify(ex<Constant>(rational{1, k}) * H_Tk * op::T(N));
-    hbar += H_Tk;
-  }
+  auto hbar = sim_transform(op::H(), 4);
 
   // 2. project onto each manifold, screen, lower to tensor form and wick it
   std::vector<ExprPtr> result(P + 1);
@@ -70,12 +110,7 @@ std::vector<ExprPtr> cceqs::t(bool screen, bool use_topology,
 std::vector<ExprPtr> cceqs::λ(bool screen, bool use_topology,
                               bool use_connectivity, bool canonical_only) {
   // construct hbar
-  auto hbar = op::H();
-  auto H_Tk = hbar;
-  for (int64_t k = 1; k <= 3; ++k) {
-    H_Tk = simplify(ex<Constant>(rational{1, k}) * H_Tk * op::T(N));
-    hbar += H_Tk;
-  }
+  auto hbar = sim_transform(op::H(), 3);
 
   const auto One = ex<Constant>(1);
   auto lhbar = simplify((One + op::Lambda(N)) * hbar);
