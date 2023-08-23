@@ -16,6 +16,12 @@ class cceqs {
   cceqs(size_t n, size_t p = std::numeric_limits<size_t>::max(),
         size_t pmin = 1);
 
+  /// derives similarity-transformed expressions of mpbt::Operators
+  /// @param expr expression to be transformed
+  /// @param r order of truncation
+  /// @return transformed expression
+  ExprPtr sim_transform(ExprPtr expr, size_t r);
+
   /// derives t amplitude equations
   std::vector<sequant::ExprPtr> t(bool screen = true, bool use_topology = true,
                                   bool use_connectivity = true,
