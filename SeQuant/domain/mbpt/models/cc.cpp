@@ -95,12 +95,8 @@ std::vector<ExprPtr> cceqs::t(bool screen, bool use_topology,
     }
     hbar = hbar_le_p;
 
-    // 2.b project onto <p|, i.e. multiply by P(p)
-    auto P_hbar = simplify(op::P(p) * hbar_p);
-
-    // 2.c compute
-    result.at(p) = op::vac_av(P_hbar);
-    simplify(result.at(p));
+    // 2.b project onto <p|, i.e. multiply by P(p) and evaluate
+    result.at(p) = op::op_evaluate(op::P(p) * hbar_p);
   }
 
   return result;
@@ -145,12 +141,9 @@ std::vector<ExprPtr> cceqs::λ(bool screen, bool use_topology,
     }
     lhbar = hbar_le_p;
 
-    // 2.b multiply by adjoint of P(p) (i.e., P(-p)) on the right side
-    auto hbar_P = simplify(hbar_p * op::P(-p));
-
-    // 2.c compute vacuum average
-    result.at(p) = op::vac_av(hbar_P, op_connect);
-    simplify(result.at(p));
+    // 2.b multiply by adjoint of P(p) (i.e., P(-p)) on the right side and
+    // evaluate
+    result.at(p) = op::op_evaluate(hbar_p * op::P(-p), op_connect);
   }
   return result;
 }
