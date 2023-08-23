@@ -262,13 +262,14 @@ ExprPtr vac_av(ExprPtr expr,
 
 /// @param[in] expr input expression
 /// @param[in] op_connections list of pairs of labels of operators
-/// to be connected
+/// to be connected, the default is `{{L"h", L"t"}, {L"f", L"t"}, {L"g", L"t"}}`
 /// @param[in] skip_clone if true, will not clone the input expression
 /// @return the resulting expression
-ExprPtr op_evaluate(ExprPtr expr,
-                    const std::vector<std::pair<std::wstring, std::wstring>>&
-                        op_connections = {},
-                    bool skip_clone = false);
+ExprPtr op_evaluate(
+    ExprPtr expr,
+    std::vector<std::pair<std::wstring, std::wstring>> op_connections =
+        {{L"h", L"t"}, {L"f", L"t"}, {L"g", L"t"}},
+    bool skip_clone = false);
 
 }  // namespace op
 

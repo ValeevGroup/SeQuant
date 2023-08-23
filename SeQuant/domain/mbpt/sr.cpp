@@ -439,10 +439,9 @@ using mbpt::sr::vac_av;
 
 ExprPtr op_evaluate(
     ExprPtr expr,
-    const std::vector<std::pair<std::wstring, std::wstring>>& op_connections,
+    std::vector<std::pair<std::wstring, std::wstring>> op_connections,
     bool skip_clone) {
   if (!skip_clone) expr = expr->clone();
-  // TODO: Add some screening logic here
   simplify(expr);
   auto result = op::vac_av(expr, op_connections);
   simplify(result);
