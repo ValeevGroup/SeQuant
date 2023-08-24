@@ -42,10 +42,10 @@ struct VisitAll {};
 ///
 /// \tparam V Visitor type. Must be invocable with a FullBinaryNode<T> argument.
 /// \tparam Order Visit order.
+/// \tparam NodeType The type of nodes to be visited.
+///                  Can be VisitInternal, VisitLeaf, or VisitAll.
 /// \param node Node to visit.
 /// \param f Visitor.
-/// \param lf If true, only leaf nodes will be visited.
-/// \param in If true, parent node will be visited between left and right.
 ///
 template <
     typename T, typename V, typename Order, typename NodeType,
@@ -119,7 +119,7 @@ class FullBinaryNode {
   /// Construct an internal node with emtpy left and right nodes.
   ///
   /// \param d Data in the internal node.
-  FullBinaryNode(T d) : data_{std::move(d)} {}
+  explicit FullBinaryNode(T d) : data_{std::move(d)} {}
 
   ///
   /// Construct an internal node with left and right node data.
@@ -173,7 +173,7 @@ class FullBinaryNode {
 
   FullBinaryNode const& right() const { return *checked_ptr_access(right_); }
 
-  bool leaf() const { return !(left_ || right_); }
+  [[nodiscard]] bool leaf() const { return !(left_ || right_); }
 
   ///
   /// \return Returns the data stored by the node.
@@ -335,20 +335,6 @@ class FullBinaryNode {
                    visitor,  //
                    Order{},  //
                    VisitLeaf{});
-  }
-
-  template <
-      typename F,
-      std::enable_if_t<
-          std::is_invocable_v<F, FullBinaryNode<T> const&> &&
-              std::is_invocable_v<
-                  F, FullBinaryNode<T> const&,
-                  std::invoke_result_t<F, FullBinaryNode<T> const&> const&,
-                  std::invoke_result_t<F, FullBinaryNode<T> const&> const&>,
-          bool> = true>
-  auto evaluate(F const& func) const {
-    if (leaf()) return func(*this);
-    return func(*this, left().evaluate(func), right().evaluate(func));
   }
 
  private:
