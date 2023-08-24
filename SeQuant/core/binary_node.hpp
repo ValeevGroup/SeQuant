@@ -288,8 +288,8 @@ class FullBinaryNode {
   void visit_internal(F const& visitor) const {
     if (leaf()) return;
     if (visitor(*this)) {
-      left().visit(visitor);
-      right().visit(visitor);
+      left().visit_internal(visitor);
+      right().visit_internal(visitor);
     }
   }
 
