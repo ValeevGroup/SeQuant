@@ -20,7 +20,7 @@ class cceqs {
   /// @param expr expression to be transformed
   /// @param r order of truncation
   /// @return transformed expression
-  ExprPtr sim_transform(ExprPtr expr, size_t r);
+  ExprPtr sim_tr(ExprPtr expr, size_t r);
 
   /// derives t amplitude equations
   std::vector<sequant::ExprPtr> t(bool screen = true, bool use_topology = true,
