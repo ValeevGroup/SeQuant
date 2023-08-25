@@ -148,12 +148,20 @@ class compute_cceqvec {
         // validate sizes of spin-free t equations after biorthogonal transform
         if (type == EqnType::t) {
           // Biorthogonal transformation
-          constexpr auto biorthog_method =
-              BiorthogonalizationMethod::Pseudoinverse;
+          constexpr auto biorthog_method = BiorthogonalizationMethod::QR;
+          auto to_string = [](BiorthogonalizationMethod m) {
+            if (m == BiorthogonalizationMethod::Pseudoinverse)
+              return std::wstring(L"PINV");
+            else if (m == BiorthogonalizationMethod::QR)
+              return std::wstring(L"QR");
+            else
+              throw std::runtime_error("unknown biorthogonalization method");
+          };
           auto eq_biorth = biorthogonalize(eqvec[R], biorthog_method);
 
-          std::wcout << "biorthogonal(PI) spin-free R" << R << "(expS" << N
-                     << ") has " << eq_biorth->size() << " terms:" << std::endl;
+          std::wcout << "biorthogonal(" << to_string(biorthog_method)
+                     << ") spin-free R" << R << "(expS" << N << ") has "
+                     << eq_biorth->size() << " terms:" << std::endl;
           if (print)
             std::wcout << to_latex_align(eq_biorth, 20, 3) << std::endl;
 
@@ -198,10 +206,17 @@ class compute_cceqvec {
                        << extract_F_TR_terms(eq_biorth).to_latex() << std::endl;
 
             // check biorthogonal transformation variants
+            auto eq_biorth_pinv =
+                biorthog_method == BiorthogonalizationMethod::Pseudoinverse
+                    ? eq_biorth
+                    : biorthogonalize(eqvec[R],
+                                      BiorthogonalizationMethod::Pseudoinverse);
             auto eq_biorth_qr =
-                biorthogonalize(eqvec[R], BiorthogonalizationMethod::QR);
+                biorthog_method == BiorthogonalizationMethod::QR
+                    ? eq_biorth
+                    : biorthogonalize(eqvec[R], BiorthogonalizationMethod::QR);
             auto F_TR_pinv_minus_qr =
-                simplify(extract_F_TR_terms(eq_biorth) -
+                simplify(extract_F_TR_terms(eq_biorth_pinv) -
                          extract_F_TR_terms(eq_biorth_qr));
             if (F_TR_pinv_minus_qr->size() > 0) {
               std::wcout

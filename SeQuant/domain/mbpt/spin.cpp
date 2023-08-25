@@ -1980,7 +1980,7 @@ ExprPtr biorthogonalize_qr(
   const bool debug = false;
 
   assert(!ext_index_groups.empty());
-  const auto n_particles = ext_index_groups.size();
+  const auto n = ext_index_groups.size();
 
   const auto epsilon = 1e-12;
 
@@ -1991,58 +1991,180 @@ ExprPtr biorthogonalize_qr(
   {
 #if defined(SEQUANT_HAS_EIGEN) && 0
     using namespace Eigen;
-    // Dimension of permutation matrix is n_particles!
-    const auto n = boost::numeric_cast<Eigen::Index>(factorial(n_particles));
+    // Dimension of permutation matrix is n!
+    const auto np = boost::numeric_cast<Eigen::Index>(factorial(n));
 
-    // Permutation matrix
-    Eigen::Matrix<double, Dynamic, Dynamic> M(n, n);
+    // consider permuted n-body excitation operator, P_k E^{p_1 ... p_n}_{q_1
+    // ... q_n}, where P_k permutes {p_1 ... p_n} M(r,c) = <0| E^{q_1 ...
+    // q_n}_{p_1 ... p_n} (P_r)^-1 P_c E^{p_1 ... p_n}_{q_1 ... q_n} |0>
+    Eigen::Matrix<double, Dynamic, Dynamic> M(np, np);
     {
-      M.setZero();
-      size_t n_row = 0;
-      svector<int> v(n_particles), v1(n_particles);
-      std::iota(v.begin(), v.end(), 0);
-      std::iota(v1.begin(), v1.end(), 0);
-      do {
-        container::svector<double> permutation_vector;
+      // symmetric group
+      std::vector<svector<int>> S_n;
+      S_n.reserve(np);
+      {
+        svector<int> P_k(n);
+        std::iota(P_k.begin(), P_k.end(), 0);
+        std::size_t k = 0;
         do {
-          permutation_vector.push_back(
-              std::pow(-2, sequant::count_cycles(v1, v)));
-        } while (std::next_permutation(v.begin(), v.end()));
-        Eigen::VectorXd pv_eig = Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(
-            permutation_vector.data(), permutation_vector.size());
-        M.row(n_row) = pv_eig;
-        ++n_row;
-      } while (std::next_permutation(v1.begin(), v1.end()));
-      M *= std::pow(-1, n_particles);
+          //          std::cout << "P[" << k << "] = {";
+          //          ranges::copy(P_k, std::ostream_iterator<int>(std::cout,
+          //          "")); std::cout << "}" << std::endl;
+
+          S_n.emplace_back(P_k);
+          ++k;
+        } while (ranges::next_permutation(P_k));
+      }
+
+      for (std::size_t r = 0; r != np; ++r)
+        for (std::size_t c = 0; c != np; ++c) {
+          M(r, c) = std::pow(-2, sequant::count_cycles(S_n[r], S_n[c]));
+        }
+
+      M *= std::pow(-1, n);
     }
 
-    // Find Pseudo Inverse, get 1st row only
-    auto qr = M.colPivHouseholderQr();
-    auto rank = qr.rank();
-    MatrixXd Q = qr.householderQ() * MatrixXd::Identity(n, rank);
-    std::cout << "biorothogonalize(#particles = " << n_particles
-              << ") rank = " << rank << std::endl
-              << "Q = " << Q << std::endl
-              << "R = "
-              << MatrixXd(qr.matrixR()
-                              .topLeftCorner(rank, n)
-                              .template triangularView<Upper>())
-              << std::endl
-              << "P = " << MatrixXi(qr.colsPermutation()) << std::endl;
+    constexpr bool print_M = false;
+    if (print_M) {
+      // print M in Wolfram format
+      std::cout << "{";
+      for (std::size_t r = 0; r != np; ++r) {
+        std::cout << "{";
+        for (std::size_t c = 0; c != np; ++c) {
+          std::cout << M(r, c);
+          if (c != np - 1) std::cout << ",";
+        }
+        std::cout << "}";
+        if (r != np - 1) std::cout << ",";
+      }
+      std::cout << "}" << std::endl;
+    }
 
-    const auto normalizer = 1. / qr.matrixR()(rank - 1, rank - 1);
-    VectorXd vd = Q.col(rank - 1) * normalizer;
-    // "rotate" so that the largest coefficient is first
-    std::rotate(vd.begin(), std::max_element(vd.begin(), vd.end()), vd.end());
-    std::cout << "vd = " << vd << std::endl;
-    bt_coeff_vec = vd | ranges::views::transform([normalizer](double e) {
-                     return to_rational(e);
-                   }) |
-                   ranges::to_vector;
+    // compute M P = X R
+    // there are 3 ways:
+    // - the easiest way is to make X=Q computed using column-pivoted RRQR
+    //   but RRQR is not unique for rank-deficient M (i.e., n_particles>2) ...
+    // - can use LDL^t:
+    //   M = P'^t L D L^t P' or M P = P L D L^t = X R where P = P'^t, X = P L D
+    //   but this also seems to fail
+    // - can use Eigen+QR:
+    //     - eigen: M = U e U^t
+    //     - QR of U^t: U^t P = Q R => M P = U e P'^-1 Q R => X = U e Q, X^-1 =
+    //     Q^t e^-1 U^t
+    //
+    // the target LH transform is the inverse of X:
+    // - if using QR: X^-1 = X^t
+    // - if using LDLT: X^-1 = pinv(X)
+    // - if using Eigen+QR: X^-1 = Q^t e^-1 U^t
+    enum Method { QR, LDLT, EigenQR };
+    constexpr Method method = EigenQR;
+
+    Eigen::Index rank;
+    Eigen::PermutationMatrix<Eigen::Dynamic, Eigen::Dynamic> P;
+    MatrixXd X, Xinv, R;
+    switch (method) {
+      case QR: {
+        auto qr = M.colPivHouseholderQr();
+        rank = qr.rank();
+        X = qr.householderQ() * MatrixXd::Identity(np, rank);
+        Xinv = X.transpose();
+        R = qr.matrixR()
+                .topLeftCorner(rank, np)
+                .template triangularView<Upper>();
+        P = qr.colsPermutation();
+        break;
+      }
+
+      case LDLT: {
+        auto ldlt = M.ldlt();
+        VectorXd D_diag = ldlt.vectorD();
+        MatrixXd D = D_diag.asDiagonal();
+        auto epsilon = 1e-8;
+        rank = std::count_if(
+            D_diag.data(), D_diag.data() + np,
+            [epsilon](double d) { return std::abs(d) > epsilon; });
+        MatrixXd L = ldlt.matrixL();
+
+        // trim off singular parts
+        D = D.topLeftCorner(rank, rank).eval();
+        L = L.topLeftCorner(np, rank).eval();
+
+        auto Pp = ldlt.transpositionsP();
+        P = Pp;
+        P = P.transpose().eval();
+        R = L.transpose();
+        X = P * L * D;
+        Xinv = X.completeOrthogonalDecomposition().pseudoInverse();
+
+        MatrixXd should_be_M = Pp.transpose() * L * D * L.transpose() * Pp;
+        // std::cout << "LDLT: Pp^t L D L^t Pp = " << should_be_M << std::endl;
+        break;
+      }
+
+      case EigenQR: {
+        SelfAdjointEigenSolver<MatrixXd> eig(M);
+        VectorXd ev = eig.eigenvalues();
+        rank = std::count_if(ev.data(), ev.data() + np, [epsilon](double d) {
+          return std::abs(d) > epsilon;
+        });
+        MatrixXd e = ev.bottomLeftCorner(rank, 1)
+                         .asDiagonal();  // N.B. eigenvalues in increasing order
+        MatrixXd U = eig.eigenvectors();
+        U = U.topRightCorner(np, rank)
+                .eval();  // N.B. eigenvalues in increasing order
+        MatrixXd Ut = U.transpose();
+
+        // N.B. use fully-pivoted QR to make this as robust as possible
+        // note that Q includes row permutaation already:
+        // https://gitlab.com/libeigen/eigen/-/issues/1822
+        auto qr = Ut.fullPivHouseholderQr();
+        assert(rank == qr.rank());
+        MatrixXd Q = qr.matrixQ();
+        P = qr.colsPermutation();
+        X = U * e * Q;
+        Xinv = Q.transpose() * e.inverse() * Ut;
+        R = qr.matrixQR()
+                .topLeftCorner(rank, np)
+                .template triangularView<Upper>();
+        break;
+      }
+
+      default:
+        abort();  // unreachable
+    }
+
+    //    std::cout << "biorthogonalize_qr(#particles = " << n << ") rank = " <<
+    //    rank << std::endl
+    //              << "M = " << M << std::endl
+    //              << "X = " << X << std::endl
+    //              << "X^-1 = " << Xinv << std::endl
+    //              << "R = "
+    //              << R
+    //              << std::endl
+    //              << "P = " << MatrixXi(P) << std::endl
+    //              << "M*P = " << M * P << std::endl
+    //              << "X*R = " << X*R << std::endl
+    //              << "X^-1*M*P = " << Xinv*M*P << std::endl;
+
+    const auto k = std::max(0l, rank - 5);
+    const auto normalizer = 1. / R(k, k);
+    VectorXd v = Xinv.row(k) * normalizer;
+    //    std::cout << "v (before rotate) = " << v << std::endl;
+    // "rotate" so that the largest coefficient in v^t M is at the front
+    VectorXd vtM = v.transpose() * M;
+    //    std::cout << "v*M = " << vtM << std::endl;
+    auto target_col =
+        std::max_element(vtM.data(), vtM.data() + vtM.size()) - vtM.data();
+    std::rotate(v.begin(), v.begin() + target_col, v.end());
+    //    std::cout << "v = " << v << std::endl;
+
+    bt_coeff_vec =
+        v | ranges::views::transform([](double e) { return to_rational(e); }) |
+        ranges::to_vector;
 
 #else
     // hardwire coefficients for n_particles = 1, 2, 3
-    switch (n_particles) {
+    switch (n) {
       case 1:
         bt_coeff_vec = {ratio(1, 2)};
         break;
@@ -2050,13 +2172,92 @@ ExprPtr biorthogonalize_qr(
         bt_coeff_vec = {ratio(1, 3), ratio(1, 6)};
         break;
       case 3:
+        // one of Mathematica's QR vectors ... can be obtained by combining
+        // non-orthogonal eigenvectors in the 1^3 and 21 symmetry sectors vv =
+        // Eigenvectors[M];
+        // (* canonicalize the phases:
+        //  - first eigenvector corresponds to the sign representation, make its
+        //    first (identity) coeff positive
+        //  - match the sign of the first nonzero in the subsequent vectors to
+        //    the sign of the corresponding element in the first vector
+        // *)
+        // vv[[1]] *= Sign[vv[[1, 1]]]
+        // IsNonzero[x_] := Abs[x] > 0;
+        // Do[nnzpos = FirstPosition[vv[[i]], _?IsNonzero][[1]];
+        //  vv[[i]] *= Sign[vv[[i, nnzpos]]]*Sign[vv[[1, nnzpos]]], {i, 2,
+        //   nf}];
+        // i.e. vv (rows are eigenvectors) is
+        // (1     -1     -1     1     1     -1
+        // 0     -1     0     0     0     1
+        // 1     0     0     0     -1     0
+        // 1     0     0     -1     0     0
+        // 0     -1     1     0     0     0
+        // 1     1     1     1     1     1
+        //)
+
+        // Obtained in Mathematica from:
+        // v = Sum[vv[[i]]/evals[[i]], {i, rank}]
+        // v = v/((M . v)[[1]])
+        // COMPACT
         bt_coeff_vec = {ratio(1, 8),   ratio(-1, 8),  ratio(1, 24),
                         ratio(-1, 24), ratio(-1, 24), ratio(1, 24)};
         break;
+
+      case 4:
+        // v = vv[[1]] + vv[[7]] + vv[[13]]
+        bt_coeff_vec = {ratio(1, 120),
+
+                        ratio(-1, 120),
+
+                        ratio(-1, 60),
+
+                        ratio(1, 120),
+
+                        ratio(1, 60),
+
+                        ratio(-1, 120),
+
+                        ratio(0, 1),
+
+                        ratio(0, 1),
+
+                        ratio(0, 1),
+
+                        ratio(1, 120),
+
+                        ratio(-1, 60),
+
+                        ratio(1, 120),
+
+                        ratio(1, 120),
+
+                        ratio(-1, 60),
+
+                        ratio(0, 1),
+
+                        ratio(1, 120),
+
+                        ratio(1, 60),
+
+                        ratio(-1, 60),
+
+                        ratio(0, 1),
+
+                        ratio(1, 120),
+
+                        ratio(1, 120),
+
+                        ratio(-1, 60),
+
+                        ratio(-1, 120),
+
+                        ratio(1, 120)};
+        break;
+
       default:
         throw std::runtime_error(
-            "biorthogonalize_qr method is not implemented for n_particles > "
-            "3.");
+            "biorthogonalize_qr method is not implemented for n > "
+            "4.");
     }
 #endif
   }
