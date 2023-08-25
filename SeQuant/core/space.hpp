@@ -242,7 +242,7 @@ class IndexSpace {
   static constexpr Type other_unoccupied{0b1000000};
   /// a union of the other_unoccupied space and inactive_unoccupied space.
   /// @note useful when considering active unoccupied orbitals separately from frozen orbitals in F12 theory
-  static constexpr Type complete_inactive_unoccupied{0b1100000};
+  static constexpr Type complete_inactive_unoccupied = IndexSpace::other_unoccupied.unIon(IndexSpace::inactive_unoccupied);
   /// set of all fully unoccupied states
   /// @note this is a union of IndexSpace::unoccupied and IndexSpace::other_unoccupied
   static constexpr Type complete_unoccupied = IndexSpace::unoccupied.unIon(IndexSpace::other_unoccupied);
