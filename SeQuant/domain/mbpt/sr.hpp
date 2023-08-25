@@ -131,9 +131,12 @@ class OpMaker : public mbpt::OpMaker<Statistics::FermiDirac> {
           std::size_t nket = std::numeric_limits<std::size_t>::max());
 
   using base_type::operator();
+
+  constexpr static auto O = IndexSpace::active_occupied;
+  constexpr static auto U = IndexSpace::active_unoccupied;
 };
 
-#include "../mbpt/sr/op.impl.hpp"
+#include "../mbpt/operators/standard.hpp"
 
 /// @name tensor-level SR MBPT operators
 /// @{
@@ -194,6 +197,11 @@ ExprPtr H_(std::size_t k);
 /// @param[in] k the maximum rank of the particle interactions; only `k<=2` is
 /// supported
 ExprPtr H(std::size_t k = 2);
+
+/// @brief Fock operator
+/// @param use_f_tensor if true, will use Fock tensor, else will
+/// use `H_(1)` and `H_(2)`
+ExprPtr F(bool use_f_tensor = true);
 
 /// makes particle-conserving excitation operator of rank \p K
 ExprPtr T_(std::size_t K);

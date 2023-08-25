@@ -119,7 +119,7 @@ OpMaker::OpMaker(OpType op, std::size_t nbra, std::size_t nket)
   }
 }
 
-#include "../mbpt/sr/op.impl.cpp"
+#include "../mbpt/operators/standard.cpp"
 
 ExprPtr H0mp() { return F(); }
 
@@ -304,6 +304,17 @@ ExprPtr H_(std::size_t k) {
 ExprPtr H(std::size_t k) {
   assert(k > 0 && k <= 2);
   return k == 1 ? H_(1) : H_(1) + H_(2);
+}
+
+ExprPtr F(bool use_f_tensor) {
+  return ex<op_t>([]() -> std::wstring_view { return L"f"; },
+                  [=]() -> ExprPtr {
+                    using namespace sequant::mbpt::sr;
+                    return sr::F(use_f_tensor);
+                  },
+                  [=](qnc_t& qns) {
+                    qns = combine(qnc_t{{0, 1}, {0, 1}, {0, 1}, {0, 1}}, qns);
+                  });
 }
 
 ExprPtr T_(std::size_t K) {

@@ -96,10 +96,15 @@ ExprPtr remove_tensor(const Product& product, std::wstring label);
 /// @return ExprPtr with the tensor removed
 ExprPtr remove_tensor(const ExprPtr& expr, std::wstring label);
 
-/// @brief Expand a product containing the Antisymmetrization (A) operator
-/// @param A product term with/without A operator
-/// @return an ExprPtr containing sum of expanded terms if A is present
+/// @brief Expands bra/ket antisymmetrizer (A) in a Product
+/// @param product a Product expression
+/// @return @p product with the antisymmetrizer expanded, if present
 ExprPtr expand_A_op(const Product& product);
+
+/// @brief Expand a product containing the particle symmetrization (S) operator
+/// @param product a Product expression
+/// @return @p product with the symmetrizer expanded, if present
+ExprPtr expand_S_op(const Product& product);
 
 /// @brief Write expression in terms of Symmetrizer (S operator)
 /// @param product
@@ -111,10 +116,15 @@ ExprPtr symmetrize_expr(const Product& product);
 /// @return an ExprPtr containing sum of expanded terms if A is present
 ExprPtr symmetrize_expr(const ExprPtr& expr);
 
-/// @brief Expand an expression containing the Antisymmetrization (A) operator
-/// @param expr any ExprPtr
-/// @return an ExprPtr containing sum of expanded terms if A is present
+/// @brief Expands bra/ket antisymmetrizer (A) in an expression
+/// @param expr an expression
+/// @return @p expr with the antisymmetrizer expanded, if present
 ExprPtr expand_A_op(const ExprPtr& expr);
+
+/// @brief Expands particle symmetrizer (S) in an expression
+/// @param expr an expression
+/// @return @p expr with the symmetrizer expanded, if present
+ExprPtr expand_S_op(const ExprPtr& expr);
 
 /// @brief Generates a vector of replacement maps for particle permutation
 /// operator
@@ -137,9 +147,6 @@ ExprPtr expand_P_op(const ExprPtr& expr, bool keep_canonical = true,
 
 container::svector<container::map<Index, Index>> S_replacement_maps(
     const Tensor& S);
-
-/// @brief Expand S operator
-ExprPtr S_maps(const ExprPtr& expr);
 
 /// @brief Returns the number of cycles
 /// @details Count the number of closed loops between two stacked vectors
@@ -170,17 +177,12 @@ ExprPtr closed_shell_spintrace(
 container::svector<container::svector<Index>> external_indices(
     const ExprPtr& expr);
 
-///
-/// @param nparticles Number of indices in bra of the target tensor. That must
-///                   be equal to the same in the ket.
-/// @deprecated not CSV-compatible, and mixes bra and ket relative to
-/// external_indices(expr) , will be deprecated
-[[deprecated("use external_indices(expr)")]] container::svector<
-    container::svector<Index>>
-external_indices(size_t nparticles);
+/// @brief Transforms coupled-cluster-like equations from spinorbital
+/// to spatial basis
 
-/// @brief Transforms Coupled cluster from spin orbital to spatial orbitals
-/// @details The external indices are deduced from Antisymmetrization operator
+/// expects expressions of the form `<0| op1 op2 ... |0>` where one of the
+/// operators `opI` is the antisymmetrizer (see op::A() ) or its adjoint
+/// @details The external indices are deduced from the antisymmetrizer
 /// @param expr ExprPtr with spin orbital indices
 /// @param nparticles Number of indices in bra (that must be equal
 ///                   to the same in the ket)
@@ -255,11 +257,19 @@ ExprPtr factorize_S(const ExprPtr& expression,
                     std::initializer_list<IndexList> ext_index_groups,
                     bool fast_method = true);
 
-ExprPtr biorthogonal_transform(
-    const sequant::ExprPtr& expr, int n_particles,
-    const container::svector<container::svector<sequant::Index>>&
-        ext_index_groups = {{}},
-    double threshold = 1.e-12);
+/// @brief methods for performing the biorthogonalization
+enum class BiorthogonalizationMethod {
+  /// use the pseudoinverse method
+  Pseudoinverse,
+  /// use the QR method
+  QR
+};
+
+/// @brief Biorthogonalize a spin-free `<P|op1 op2 ... |0>` where `P` is
+/// an excited manifold
+ExprPtr biorthogonalize(sequant::ExprPtr expr,
+                        BiorthogonalizationMethod method =
+                            BiorthogonalizationMethod::Pseudoinverse);
 
 }  // namespace sequant
 

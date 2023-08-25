@@ -21,14 +21,16 @@ inline ExprPtr& canonicalize(ExprPtr& expr) {
 
 /// Recursively canonicalizes an Expr; like mutating canonicalize() but works
 /// for temporary expressions
-/// @param[in] expr_rv rvalue-ref-to-expression to be canonicalized
+/// @param[in,out] expr_rv entry: rvalue-ref-to-expression to be canonicalized;
+/// exit: a "moved from" state
 /// @return canonicalized form of \p expr_rv
-inline ExprPtr canonicalize(ExprPtr&& expr_rv) {
-  const auto biproduct = expr_rv->canonicalize();
+[[nodiscard]] inline ExprPtr canonicalize(ExprPtr&& expr_rv) {
+  auto expr = std::move(expr_rv);
+  const auto biproduct = expr->canonicalize();
   if (biproduct && biproduct->is<Constant>()) {
-    expr_rv = biproduct * expr_rv;
+    expr = biproduct * expr;
   }
-  return std::move(expr_rv);
+  return expr;
 }
 
 namespace detail {
@@ -445,12 +447,12 @@ inline ExprPtr& simplify(ExprPtr& expr) {
 
 /// Simplifies an Expr by a combination of expansion, canonicalization, and
 /// rapid_simplify; like mutating simplify() but works for temporary expressions
-/// @param[in] expr_rv rvalue-ref-to-expression to be simplified
+/// @param[in,out] expr_rv entry: rvalue-ref-to-expression to be simplified;
+/// exit: a "moved from" state
 /// @return simplified form of \p expr_rv
-inline ExprPtr simplify(ExprPtr&& expr_rv) {
+[[nodiscard]] inline ExprPtr simplify(ExprPtr&& expr_rv) {
   auto expr = std::move(expr_rv);
-  simplify(expr);
-  return std::move(expr);
+  return simplify(expr);
 }
 
 /// Simplifies an Expr by a combination of expansion and

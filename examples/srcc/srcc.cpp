@@ -97,18 +97,8 @@ class compute_cceqvec {
 
       eqvec_sf_ref.resize(eqvec_so.size());
       for (size_t R = PMIN; R <= P; ++R) {
-        // WARNING: external_indices(expr) and external_indices(nparticles) seem
-        // to mix bra and ket relative to each other
         auto const ext_idxs = external_indices(eqvec_so[R]);
         eqvec_sf_ref[R] = closed_shell_spintrace(eqvec_so[R], ext_idxs);
-        if (R == 1) {  // closed_shell_spintrace omits 1-body S
-          using ranges::views::transform;
-          auto bixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
-          auto kixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
-          auto s_tensor = ex<Tensor>(Tensor{L"S", kixs, bixs});
-          eqvec_sf_ref[R] = s_tensor * eqvec_sf_ref[R];
-          expand(eqvec_sf_ref[R]);
-        }
       }
     }
 
@@ -157,36 +147,94 @@ class compute_cceqvec {
 
         // validate sizes of spin-free t equations after biorthogonal transform
         if (type == EqnType::t) {
-          auto const ext_idxs = external_indices(eqvec[R]);
+          // Biorthogonal transformation
+          constexpr auto biorthog_method = BiorthogonalizationMethod::QR;
+          auto to_string = [](BiorthogonalizationMethod m) {
+            if (m == BiorthogonalizationMethod::Pseudoinverse)
+              return std::wstring(L"PINV");
+            else if (m == BiorthogonalizationMethod::QR)
+              return std::wstring(L"QR");
+            else
+              throw std::runtime_error("unknown biorthogonalization method");
+          };
+          auto eq_biorth = biorthogonalize(eqvec[R], biorthog_method);
 
-          // Remove S operator
-          for (auto& term : eqvec[R]->expr()) {
-            if (term->is<Product>())
-              term = remove_tensor(term->as<Product>(), L"S");
+          std::wcout << "biorthogonal(" << to_string(biorthog_method)
+                     << ") spin-free R" << R << "(expS" << N << ") has "
+                     << eq_biorth->size() << " terms:" << std::endl;
+          if (print)
+            std::wcout << to_latex_align(eq_biorth, 20, 3) << std::endl;
+
+          // check F*T->R terms
+          if (print) {
+            auto extract_F_TR_terms = [&](const auto& expr) {
+              assert(expr.template is<Sum>());
+              auto F_TR_terms =
+                  *expr | ranges::views::filter([&](const auto& term) {
+                    return term.template is<Product>() &&
+                           ranges::any_of(
+                               *term,
+                               [](const auto& factor) {
+                                 return factor.template is<Tensor>() &&
+                                        factor.template as<Tensor>().label() ==
+                                            L"f";
+                               }) &&
+                           ranges::any_of(
+                               *term,
+                               [&](const auto& factor) {
+                                 return factor.template is<Tensor>() &&
+                                        factor.template as<Tensor>().label() ==
+                                            L"t" &&
+                                        factor.template as<Tensor>().rank() ==
+                                            R;
+                               }) &&
+                           (ranges::count_if(*term, [&](const auto& factor) {
+                              return factor.template is<Tensor>() &&
+                                     factor.template as<Tensor>().label() ==
+                                         L"t";
+                            }) == 1);
+                  }) |
+                  ranges::to_vector;
+              return ex<Sum>(F_TR_terms);
+            };
+            std::wcout << "F_TR terms (from spin-free equations): "
+                       << extract_F_TR_terms(eqvec[R]).to_latex() << std::endl;
+            std::wcout << "F_TR terms (from spin-integrated equations): "
+                       << extract_F_TR_terms(eqvec_sf_ref[R]).to_latex()
+                       << std::endl;
+            std::wcout << "F_TR terms (from biorthogonal spin-free equations): "
+                       << extract_F_TR_terms(eq_biorth).to_latex() << std::endl;
+
+            // check biorthogonal transformation variants
+            auto eq_biorth_pinv =
+                biorthog_method == BiorthogonalizationMethod::Pseudoinverse
+                    ? eq_biorth
+                    : biorthogonalize(eqvec[R],
+                                      BiorthogonalizationMethod::Pseudoinverse);
+            auto eq_biorth_qr =
+                biorthog_method == BiorthogonalizationMethod::QR
+                    ? eq_biorth
+                    : biorthogonalize(eqvec[R], BiorthogonalizationMethod::QR);
+            auto F_TR_pinv_minus_qr =
+                simplify(extract_F_TR_terms(eq_biorth_pinv) -
+                         extract_F_TR_terms(eq_biorth_qr));
+            if (F_TR_pinv_minus_qr->size() > 0) {
+              std::wcout
+                  << "F_TR terms biorthogonal terms (PI minus QR) spin-free R"
+                  << R << "(expS" << N << ") has " << F_TR_pinv_minus_qr->size()
+                  << " terms:" << std::endl;
+              std::wcout << to_latex_align(F_TR_pinv_minus_qr, 20, 3)
+                         << std::endl;
+            }
           }
 
-          // Biorthogonal transformation
-          eqvec[R] = biorthogonal_transform(eqvec[R], R, ext_idxs);
-
-          // restore the particle symmetrizer
-          auto bixs = ext_idxs | ranges::views::transform(
-                                     [](auto&& vec) { return vec[0]; });
-          auto kixs = ext_idxs | ranges::views::transform(
-                                     [](auto&& vec) { return vec[1]; });
-          // N.B. external_indices(expr) confuses bra and ket
-          eqvec[R] = ex<Tensor>(Tensor{L"S", kixs, bixs}) * eqvec[R];
-          eqvec[R] = expand(eqvec[R]);
-          simplify(eqvec[R]);
-
-          std::wcout << "biorothogonal spin-free R" << R << "(expS" << N
-                     << ") has " << eqvec[R]->size() << " terms:" << std::endl;
-          if (print) std::wcout << to_latex_align(eqvec[R], 20, 3) << std::endl;
-
-          if (R == 1 && N == 2) runtime_assert(eqvec[R]->size() == 26);
-          if (R == 2 && N == 2) runtime_assert(eqvec[R]->size() == 55);
-          if (R == 1 && N == 3) runtime_assert(eqvec[R]->size() == 30);
-          if (R == 2 && N == 3) runtime_assert(eqvec[R]->size() == 73);
-          if (R == 3 && N == 3) runtime_assert(eqvec[R]->size() == 490);
+          if (R == 1 && N == 2) runtime_assert(eq_biorth->size() == 26);
+          if (R == 2 && N == 2) runtime_assert(eq_biorth->size() == 55);
+          if (R == 1 && N == 3) runtime_assert(eq_biorth->size() == 30);
+          if (R == 2 && N == 3) runtime_assert(eq_biorth->size() == 73);
+          if (biorthog_method == BiorthogonalizationMethod::Pseudoinverse) {
+            if (R == 3 && N == 3) runtime_assert(eq_biorth->size() == 490);
+          }
         }
       }
     }

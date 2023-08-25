@@ -1,3 +1,5 @@
+// to be included in mbpt::{mr,sr} scope
+
 /// makes excitation operator of bra/ket ranks @c Nbra/Nket
 ExprPtr T_(std::size_t Nbra, std::size_t Nket) {
   assert(Nbra > 0);
@@ -111,16 +113,15 @@ ExprPtr A(std::int64_t Kh, std::int64_t Kp) {
   container::svector<IndexSpace::Type> annihilators;
   if (Kh > 0)
     for (auto i : ranges::views::iota(0, Kh))
-      annihilators.emplace_back(IndexSpace::active_occupied);
+      annihilators.emplace_back(OpMaker::O);
   else
     for (auto i : ranges::views::iota(0, -Kh))
-      creators.emplace_back(IndexSpace::active_occupied);
+      creators.emplace_back(OpMaker::O);
   if (Kp > 0)
-    for (auto i : ranges::views::iota(0, Kp))
-      creators.emplace_back(IndexSpace::active_unoccupied);
+    for (auto i : ranges::views::iota(0, Kp)) creators.emplace_back(OpMaker::U);
   else
     for (auto i : ranges::views::iota(0, -Kp))
-      annihilators.emplace_back(IndexSpace::active_unoccupied);
+      annihilators.emplace_back(OpMaker::U);
 
   std::optional<OpMaker::UseDepIdx> dep;
   if (get_default_formalism().csv() == mbpt::CSV::Yes)
@@ -140,16 +141,15 @@ ExprPtr S(std::int64_t Kh, std::int64_t Kp) {
   container::svector<IndexSpace::Type> annihilators;
   if (Kh > 0)
     for (auto i : ranges::views::iota(0, Kh))
-      annihilators.emplace_back(IndexSpace::active_occupied);
+      annihilators.emplace_back(OpMaker::O);
   else
     for (auto i : ranges::views::iota(0, -Kh))
-      creators.emplace_back(IndexSpace::active_occupied);
+      creators.emplace_back(OpMaker::O);
   if (Kp > 0)
-    for (auto i : ranges::views::iota(0, Kp))
-      creators.emplace_back(IndexSpace::active_unoccupied);
+    for (auto i : ranges::views::iota(0, Kp)) creators.emplace_back(OpMaker::U);
   else
     for (auto i : ranges::views::iota(0, -Kp))
-      annihilators.emplace_back(IndexSpace::active_unoccupied);
+      annihilators.emplace_back(OpMaker::U);
 
   std::optional<OpMaker::UseDepIdx> dep;
   if (get_default_formalism().csv() == mbpt::CSV::Yes)

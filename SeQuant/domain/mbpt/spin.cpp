@@ -2,6 +2,7 @@
 
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/visitors.hpp>
 
 #ifdef SEQUANT_HAS_EIGEN
 #include <Eigen/Eigenvalues>
@@ -339,11 +340,13 @@ container::svector<container::map<Index, Index>> A_maps(const Tensor& A) {
       container::map<Index, Index> replacement_map;
       auto A_braket_ptr = A_braket.begin();
       for (auto&& idx : bra_int_list) {
-        replacement_map.emplace(*A_braket_ptr, A.bra()[idx]);
+        if (*A_braket_ptr != A.bra()[idx])
+          replacement_map.emplace(*A_braket_ptr, A.bra()[idx]);
         A_braket_ptr++;
       }
       for (auto&& idx : ket_int_list) {
-        replacement_map.emplace(*A_braket_ptr, A.ket()[idx]);
+        if (*A_braket_ptr != A.ket()[idx])
+          replacement_map.emplace(*A_braket_ptr, A.ket()[idx]);
         A_braket_ptr++;
       }
       result.push_back(replacement_map);
@@ -428,7 +431,36 @@ ExprPtr expand_A_op(const Product& product) {
     new_product.scale(phase);
     new_result->append(ex<Product>(new_product));
   }  // map_list
-  return new_result;
+  ExprPtr result = new_result;
+  remove_tags(result);
+  return result;
+}
+
+ExprPtr expand_S_op(const Product& product) {
+  // check if S is present
+  if (!has_tensor(ex<Product>(product), L"S")) return ex<Product>(product);
+
+  container::svector<container::map<Index, Index>> maps;
+  if (product.factor(0)->as<Tensor>().label() == L"S")
+    maps = S_replacement_maps(product.factor(0)->as<Tensor>());
+  assert(!maps.empty());
+  Sum sum{};
+  for (auto&& map : maps) {
+    Product new_product{};
+    new_product.scale(product.scalar());
+    auto temp_product = remove_tensor(product, L"S")->as<Product>();
+    for (auto&& term : temp_product) {
+      if (term->is<Tensor>()) {
+        auto new_tensor = term->as<Tensor>();
+        new_tensor.transform_indices(map);
+        new_product.append(1, ex<Tensor>(new_tensor));
+      }
+    }
+    sum.append(ex<Product>(new_product));
+  }
+  ExprPtr result = std::make_shared<Sum>(sum);
+  remove_tags(result);
+  return result;
 }
 
 ExprPtr symmetrize_expr(const Product& product) {
@@ -444,11 +476,6 @@ ExprPtr symmetrize_expr(const Product& product) {
   assert(A_tensor.label() == L"A");
 
   auto A_is_nconserving = A_tensor.bra_rank() == A_tensor.ket_rank();
-
-  if (A_is_nconserving && A_tensor.bra_rank() == 1)
-    return remove_tensor(product, L"A");
-
-  assert(A_tensor.rank() > 1);
 
   auto S = Tensor{};
   if (A_is_nconserving) {
@@ -474,7 +501,7 @@ ExprPtr symmetrize_expr(const Product& product) {
       container::map<Index, Index> map;
       auto list_ptr = list.begin();
       for (auto&& i : int_list) {
-        map.emplace(*list_ptr, list[i]);
+        if (*list_ptr != list[i]) map.emplace(*list_ptr, list[i]);
         list_ptr++;
       }
       result.push_back(map);
@@ -553,6 +580,21 @@ ExprPtr expand_A_op(const ExprPtr& expr) {
     return nullptr;
 }
 
+ExprPtr expand_S_op(const ExprPtr& expr) {
+  if (expr->is<Constant>() || expr->is<Tensor>()) return expr;
+
+  if (expr->is<Product>())
+    return expand_S_op(expr->as<Product>());
+  else if (expr->is<Sum>()) {
+    auto result = std::make_shared<Sum>();
+    for (auto&& summand : *expr) {
+      result->append(expand_S_op(summand));
+    }
+    return result;
+  } else
+    return nullptr;
+}
+
 container::svector<container::map<Index, Index>> P_maps(const Tensor& P,
                                                         bool keep_canonical,
                                                         bool pair_wise) {
@@ -592,13 +634,15 @@ container::svector<container::map<Index, Index>> P_maps(const Tensor& P,
     container::map<Index, Index> replacement_map;
     for (auto&& i : int_list) {
       if (i < P.bra_rank()) {
-        replacement_map.emplace(*P_braket_ptr, P.bra()[i]);
+        if (*P_braket_ptr != P.bra()[i])
+          replacement_map.emplace(*P_braket_ptr, P.bra()[i]);
         P_braket_ptr++;
       }
     }
     for (auto&& i : int_list) {
       if (i < P.ket_rank()) {
-        replacement_map.emplace(*P_braket_ptr, P.ket()[i]);
+        if (*P_braket_ptr != P.ket()[i])
+          replacement_map.emplace(*P_braket_ptr, P.ket()[i]);
         P_braket_ptr++;
       }
     }
@@ -669,7 +713,6 @@ ExprPtr expand_P_op(const ExprPtr& expr, bool keep_canonical, bool pair_wise) {
 container::svector<container::map<Index, Index>> S_replacement_maps(
     const Tensor& S) {
   assert(S.label() == L"S");
-  assert(S.bra_rank() > 1);
   assert(S.bra().size() == S.ket().size());
   container::svector<int> int_list(S.bra().size());
   std::iota(std::begin(int_list), std::end(int_list), 0);
@@ -677,76 +720,18 @@ container::svector<container::map<Index, Index>> S_replacement_maps(
   container::svector<container::map<Index, Index>> maps;
   do {
     container::map<Index, Index> map;
-    auto S_bra_ptr = S.bra().begin();
-    auto S_ket_ptr = S.ket().begin();
+    auto bra_idx_it = S.bra().begin();
+    auto ket_idx_it = S.ket().begin();
     for (auto&& i : int_list) {
-      map.emplace(*S_bra_ptr, S.bra()[i]);
-      ++S_bra_ptr;
-      map.emplace(*S_ket_ptr, S.ket()[i]);
-      ++S_ket_ptr;
+      if (*bra_idx_it != S.bra()[i]) map.emplace(*bra_idx_it, S.bra()[i]);
+      ++bra_idx_it;
+      if (*ket_idx_it != S.ket()[i]) map.emplace(*ket_idx_it, S.ket()[i]);
+      ++ket_idx_it;
     }
     maps.push_back(map);
   } while (std::next_permutation(int_list.begin(), int_list.end()));
 
   return maps;
-}
-
-ExprPtr S_maps(const ExprPtr& expr) {
-  if (expr->is<Constant>() || expr->is<Tensor>()) return expr;
-
-  auto result = std::make_shared<Sum>();
-
-  // Check if S operator is present
-  if (!has_tensor(expr, L"S")) return expr;
-
-  auto reset_idx_tags = [](ExprPtr& expr) {
-    if (expr->is<Tensor>())
-      ranges::for_each(expr->as<Tensor>().const_braket(),
-                       [](const Index& idx) { idx.reset_tag(); });
-  };
-  expr->visit(reset_idx_tags);
-
-  // Lambda for applying S on products
-  auto expand_S_product = [](const Product& product) {
-    // check if S is present
-    if (!has_tensor(ex<Product>(product), L"S")) return ex<Product>(product);
-
-    container::svector<container::map<Index, Index>> maps;
-    if (product.factor(0)->as<Tensor>().label() == L"S")
-      maps = S_replacement_maps(product.factor(0)->as<Tensor>());
-    assert(!maps.empty());
-    Sum sum{};
-    for (auto&& map : maps) {
-      Product new_product{};
-      new_product.scale(product.scalar());
-      auto temp_product = remove_tensor(product, L"S")->as<Product>();
-      for (auto&& term : temp_product) {
-        if (term->is<Tensor>()) {
-          auto new_tensor = term->as<Tensor>();
-          new_tensor.transform_indices(map);
-          new_product.append(1, ex<Tensor>(new_tensor));
-        }
-      }
-      sum.append(ex<Product>(new_product));
-    }
-    ExprPtr result = std::make_shared<Sum>(sum);
-    return result;
-  };
-
-  if (expr->is<Product>()) {
-    result->append(expand_S_product(expr->as<Product>()));
-  } else if (expr->is<Sum>()) {
-    for (auto&& term : *expr) {
-      if (term->is<Product>()) {
-        result->append(expand_S_product(term->as<Product>()));
-      } else if (term->is<Tensor>() || term->is<Constant>()) {
-        result->append(term);
-      }
-    }
-  }
-
-  result->visit(reset_idx_tags);
-  return result;
 }
 
 int count_cycles(const container::svector<int>& vec1,
@@ -788,7 +773,7 @@ ExprPtr closed_shell_spintrace(
   };
   // expression->visit(check_proto_index);
 
-  // Symmetrize and expression
+  // Symmetrize an expression
   // Partially expand the antisymmetrizer and write it in terms of S operator.
   // See symmetrize_expr(expr) function for implementation details. We want an
   // expression with non-symmetric tensors, hence we are partially expanding the
@@ -803,17 +788,9 @@ ExprPtr closed_shell_spintrace(
   };
   auto expr = symm_and_expand(expression);
 
-  // Index tags are cleaned prior to calling the fast canonicalizer
-  auto reset_idx_tags = [](ExprPtr& expr) {
-    if (expr->is<Tensor>())
-      ranges::for_each(expr->as<Tensor>().const_braket(),
-                       [](const Index& idx) { idx.reset_tag(); });
-  };
-
-  // Cleanup index tags
-  expr->visit(reset_idx_tags);  // This call is REQUIRED
-  expand(expr);                 // This call is REQUIRED
-  simplify(expr);  // full simplify to combine terms before count_cycles
+  remove_tags(expr);  // This call is REQUIRED
+  expand(expr);       // This call is REQUIRED
+  simplify(expr);     // full simplify to combine terms before count_cycles
 
   // Returns the number of closed loops that can be generated by traversing
   // through a bra and a ket vector that are placed vertically adjacent to each
@@ -944,15 +921,21 @@ container::svector<container::svector<Index>> external_indices(
     const ExprPtr& expr) {
   // Generate external index list from symmetrizer or antisymmetrizer
   Tensor P{};
-  for (const auto& prod : *expr) {
-    if (prod->is<Product>()) {
-      auto tensor = prod->as<Product>().factor(0)->as<Tensor>();
-      if (tensor.label() == L"A" || tensor.label() == L"S") {
-        P = tensor;
-        break;
-      }
-    }
-  }
+  expr->visit(
+      [&](const auto& subexpr) {
+        if (subexpr->template is<Tensor>()) {
+          auto& as_tensor = subexpr->template as<Tensor>();
+          if (as_tensor.label() == L"A" || as_tensor.label() == L"S") {
+            if (!P)  // use the first found
+              P = as_tensor;
+            else if (P != as_tensor)
+              throw std::invalid_argument(
+                  "external_indices(expr): multiple nonequivalent "
+                  "(anti)symmetrizers are found in expr");
+          }
+        }
+      },
+      /* atoms_only */ true);
   assert(P.bra_rank() != 0 &&
          "Could not generate external index groups due to "
          "absence of (anti)symmetrizer (A or S) operator in expression.");
@@ -964,42 +947,15 @@ container::svector<container::svector<Index>> external_indices(
   return ext_index_groups;
 }
 
-container::svector<container::svector<Index>> external_indices(
-    size_t nparticles) {
-  container::svector<container::svector<Index>> ext_idx_list;
-
-  for (size_t i = 1; i <= nparticles; ++i) {
-    auto label = std::to_wstring(i);
-    auto occ_i = Index::make_label_index(
-        IndexSpace::instance(IndexSpace::active_occupied), label);
-    auto virt_i = Index::make_label_index(
-        IndexSpace::instance(IndexSpace::active_unoccupied), label);
-    container::svector<Index> pair = {occ_i, virt_i};
-    ext_idx_list.push_back(pair);
-  }
-  return ext_idx_list;
-}
-
 ExprPtr closed_shell_CC_spintrace(const ExprPtr& expr, size_t nparticles) {
   using ranges::views::transform;
 
-  auto const ext_idxs = external_indices(nparticles);
+  auto const ext_idxs = external_indices(expr);
   auto st_expr = closed_shell_spintrace(expr, ext_idxs);
   canonicalize(st_expr);
 
-  // Remove S operator
-  for (auto& term : *st_expr) {
-    if (term->is<Product>()) term = remove_tensor(term->as<Product>(), L"S");
-  }
-
   // Biorthogonal transformation
-  st_expr = biorthogonal_transform(st_expr, nparticles, ext_idxs);
-
-  auto bixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
-  auto kixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
-  st_expr = ex<Tensor>(Tensor{L"S", bixs, kixs}) * st_expr;
-
-  simplify(st_expr);
+  st_expr = biorthogonalize(st_expr);
 
   return st_expr;
 }
@@ -1326,12 +1282,6 @@ std::vector<ExprPtr> open_shell_spintrace(
         return all_replacements;
       };
 
-  auto reset_idx_tags = [](ExprPtr& expr) {
-    if (expr->is<Tensor>())
-      ranges::for_each(expr->as<Tensor>().const_braket(),
-                       [](const Index& idx) { idx.reset_tag(); });
-  };
-
   // Internal and external index replacements are independent
   auto i_rep = spin_cases(int_index_groups);
   auto e_rep = ext_spin_cases(ext_index_groups);
@@ -1346,7 +1296,7 @@ std::vector<ExprPtr> open_shell_spintrace(
 
   // Expand 'A' operator and 'antisymm' tensors
   auto expanded_expr = expand_A_op(expr);
-  expanded_expr->visit(reset_idx_tags);
+  remove_tags(expanded_expr);
   expand(expanded_expr);
   simplify(expanded_expr);
 
@@ -1380,7 +1330,7 @@ std::vector<ExprPtr> open_shell_spintrace(
   for (auto& e : e_rep) {
     // Add spin labels to external indices
     auto spin_expr = append_spin(expanded_expr, e);
-    spin_expr->visit(reset_idx_tags);
+    remove_tags(spin_expr);
     Sum e_result{};
 
     // Loop over internal index replacement maps
@@ -1389,7 +1339,7 @@ std::vector<ExprPtr> open_shell_spintrace(
       auto spin_expr_i = append_spin(spin_expr, i);
       spin_expr_i = expand_antisymm(spin_expr_i, true);
       expand(spin_expr_i);
-      spin_expr_i->visit(reset_idx_tags);
+      remove_tags(spin_expr_i);
       Sum i_result{};
 
       if (spin_expr_i->is<Tensor>()) {
@@ -1422,7 +1372,7 @@ std::vector<ExprPtr> open_shell_spintrace(
 
   // Canonicalize and simplify all expressions
   for (auto& expression : result) {
-    expression->visit(reset_idx_tags);
+    remove_tags(expression);
     canonicalize(expression);
     rapid_simplify(expression);
   }
@@ -1486,12 +1436,6 @@ ExprPtr spintrace(
     expand(result);
     rapid_simplify(result);
     return result;
-  };
-
-  auto reset_idx_tags = [](ExprPtr& expr) {
-    if (expr->is<Tensor>())
-      ranges::for_each(expr->as<Tensor>().const_braket(),
-                       [](const Index& idx) { idx.reset_tag(); });
   };
 
   // Most important lambda of this function
@@ -1615,17 +1559,18 @@ ExprPtr spintrace(
   if (expr->is<Product>()) {
     return trace_product(expr->as<Product>());
   } else if ((expr->is<Sum>())) {
-    auto result = std::make_shared<Sum>();
+    auto sum = std::make_shared<Sum>();
     for (auto&& term : *expr) {
       if (term->is<Product>())
-        result->append(trace_product(term->as<Product>()));
+        sum->append(trace_product(term->as<Product>()));
       else if (term->is<Tensor>()) {
         auto term_as_product = ex<Constant>(1) * term;
-        result->append(trace_product(term_as_product->as<Product>()));
+        sum->append(trace_product(term_as_product->as<Product>()));
       } else
-        result->append(term);
+        sum->append(term);
     }
-    result->visit(reset_idx_tags);
+    ExprPtr result = std::move(sum);
+    remove_tags(result);
     return result;
   } else
     return nullptr;
@@ -1886,13 +1831,15 @@ ExprPtr factorize_S(const ExprPtr& expression,
   return result;
 }
 
-ExprPtr biorthogonal_transform(
-    const sequant::ExprPtr& expr, const int n_particles,
+ExprPtr biorthogonalize_pseudoinverse(
+    const sequant::ExprPtr& expr,
     const container::svector<container::svector<sequant::Index>>&
         ext_index_groups,
-    const double threshold) {
-  assert(n_particles != 0);
+    const double epsilon = 1.e-12) {
+  const bool debug = false;
+
   assert(!ext_index_groups.empty());
+  const auto n_particles = ext_index_groups.size();
 
   using sequant::container::svector;
 
@@ -1929,9 +1876,9 @@ ExprPtr biorthogonal_transform(
     // Normalization constant
     double scalar;
     {
-      auto nonZero = [&threshold](const double& d) {
+      auto nonZero = [&epsilon](const double& d) {
         using std::abs;
-        return abs(d) > threshold;
+        return abs(d) > epsilon;
       };
 
       // Solve system of equations
@@ -1952,8 +1899,8 @@ ExprPtr biorthogonal_transform(
     VectorXd::Map(&bt_coeff_dvec[0], bt_coeff_dvec.size()) =
         pinv.row(0) * scalar;
     bt_coeff_vec.reserve(bt_coeff_dvec.size());
-    ranges::for_each(bt_coeff_dvec, [&bt_coeff_vec, threshold](double c) {
-      bt_coeff_vec.emplace_back(to_rational(c, threshold));
+    ranges::for_each(bt_coeff_dvec, [&bt_coeff_vec, epsilon](double c) {
+      bt_coeff_vec.emplace_back(to_rational(c, epsilon));
     });
 
 //    std::cout << "n_particles = " << n_particles << "\n bt_coeff_vec = ";
@@ -1975,7 +1922,8 @@ ExprPtr biorthogonal_transform(
         break;
       default:
         throw std::runtime_error(
-            "biorthogonal_transform requires Eigen library for n_particles > "
+            "biorthogonalize_pseudoinverse method requires Eigen library for "
+            "n_particles > "
             "3.");
     }
 #endif
@@ -1996,37 +1944,456 @@ ExprPtr biorthogonal_transform(
       container::map<Index, Index> map;
       auto const_list_ptr = const_idx_list.begin();
       for (auto& i : idx_list) {
-        map.emplace(*const_list_ptr, i);
+        if (i != *const_list_ptr) map.emplace(*const_list_ptr, i);
         const_list_ptr++;
       }
       bt_maps.push_back(map);
     } while (std::next_permutation(idx_list.begin(), idx_list.end()));
   }
 
-  // If this assertion fails, change the threshold parameter
+  // If this assertion fails, change the epsilon parameter
   assert(bt_coeff_vec.size() == bt_maps.size());
 
-  // Checks if the replacement map is a canonical sequence
-  auto is_canonical = [](const container::map<Index, Index>& idx_map) {
-    bool canonical = true;
-    for (auto&& pair : idx_map)
-      if (pair.first != pair.second) return false;
-    return canonical;
+  // Scale transformed expressions and append
+  auto bt_expr = std::make_shared<Sum>();
+  auto coeff_it = bt_coeff_vec.begin();
+  size_t counter = 0;
+  for (auto&& map : bt_maps) {
+    const auto v = *coeff_it;
+    // N.B. can permute indices directly IFF transformation coefficients
+    // commutes with S
+    ExprPtr summand = ex<Constant>(v) * (map.empty() ? expr->clone()
+                                                     : sequant::transform_expr(
+                                                           expr->clone(), map));
+    bt_expr->append(summand);
+    coeff_it++;
+    ++counter;
+  }
+
+  return bt_expr;
+}
+
+ExprPtr biorthogonalize_qr(
+    const sequant::ExprPtr& expr,
+    const container::svector<container::svector<sequant::Index>>&
+        ext_index_groups) {
+  const bool debug = false;
+
+  assert(!ext_index_groups.empty());
+  const auto n = ext_index_groups.size();
+
+  const auto epsilon = 1e-12;
+
+  using sequant::container::svector;
+
+  // Coefficients
+  std::vector<rational> bt_coeff_vec;
+  {
+#if defined(SEQUANT_HAS_EIGEN) && 0
+    using namespace Eigen;
+    // Dimension of permutation matrix is n!
+    const auto np = boost::numeric_cast<Eigen::Index>(factorial(n));
+
+    // consider permuted n-body excitation operator, P_k E^{p_1 ... p_n}_{q_1
+    // ... q_n}, where P_k permutes {p_1 ... p_n} M(r,c) = <0| E^{q_1 ...
+    // q_n}_{p_1 ... p_n} (P_r)^-1 P_c E^{p_1 ... p_n}_{q_1 ... q_n} |0>
+    Eigen::Matrix<double, Dynamic, Dynamic> M(np, np);
+    {
+      // symmetric group
+      std::vector<svector<int>> S_n;
+      S_n.reserve(np);
+      {
+        svector<int> P_k(n);
+        std::iota(P_k.begin(), P_k.end(), 0);
+        std::size_t k = 0;
+        do {
+          //          std::cout << "P[" << k << "] = {";
+          //          ranges::copy(P_k, std::ostream_iterator<int>(std::cout,
+          //          "")); std::cout << "}" << std::endl;
+
+          S_n.emplace_back(P_k);
+          ++k;
+        } while (ranges::next_permutation(P_k));
+      }
+
+      for (std::size_t r = 0; r != np; ++r)
+        for (std::size_t c = 0; c != np; ++c) {
+          M(r, c) = std::pow(-2, sequant::count_cycles(S_n[r], S_n[c]));
+        }
+
+      M *= std::pow(-1, n);
+    }
+
+    constexpr bool print_M = false;
+    if (print_M) {
+      // print M in Wolfram format
+      std::cout << "{";
+      for (std::size_t r = 0; r != np; ++r) {
+        std::cout << "{";
+        for (std::size_t c = 0; c != np; ++c) {
+          std::cout << M(r, c);
+          if (c != np - 1) std::cout << ",";
+        }
+        std::cout << "}";
+        if (r != np - 1) std::cout << ",";
+      }
+      std::cout << "}" << std::endl;
+    }
+
+    // compute M P = X R
+    // there are 3 ways:
+    // - the easiest way is to make X=Q computed using column-pivoted RRQR
+    //   but RRQR is not unique for rank-deficient M (i.e., n_particles>2) ...
+    // - can use LDL^t:
+    //   M = P'^t L D L^t P' or M P = P L D L^t = X R where P = P'^t, X = P L D
+    //   but this also seems to fail
+    // - can use Eigen+QR:
+    //     - eigen: M = U e U^t
+    //     - QR of U^t: U^t P = Q R => M P = U e P'^-1 Q R => X = U e Q, X^-1 =
+    //     Q^t e^-1 U^t
+    //
+    // the target LH transform is the inverse of X:
+    // - if using QR: X^-1 = X^t
+    // - if using LDLT: X^-1 = pinv(X)
+    // - if using Eigen+QR: X^-1 = Q^t e^-1 U^t
+    enum Method { QR, LDLT, EigenQR };
+    constexpr Method method = EigenQR;
+
+    Eigen::Index rank;
+    Eigen::PermutationMatrix<Eigen::Dynamic, Eigen::Dynamic> P;
+    MatrixXd X, Xinv, R;
+    switch (method) {
+      case QR: {
+        auto qr = M.colPivHouseholderQr();
+        rank = qr.rank();
+        X = qr.householderQ() * MatrixXd::Identity(np, rank);
+        Xinv = X.transpose();
+        R = qr.matrixR()
+                .topLeftCorner(rank, np)
+                .template triangularView<Upper>();
+        P = qr.colsPermutation();
+        break;
+      }
+
+      case LDLT: {
+        auto ldlt = M.ldlt();
+        VectorXd D_diag = ldlt.vectorD();
+        MatrixXd D = D_diag.asDiagonal();
+        auto epsilon = 1e-8;
+        rank = std::count_if(
+            D_diag.data(), D_diag.data() + np,
+            [epsilon](double d) { return std::abs(d) > epsilon; });
+        MatrixXd L = ldlt.matrixL();
+
+        // trim off singular parts
+        D = D.topLeftCorner(rank, rank).eval();
+        L = L.topLeftCorner(np, rank).eval();
+
+        auto Pp = ldlt.transpositionsP();
+        P = Pp;
+        P = P.transpose().eval();
+        R = L.transpose();
+        X = P * L * D;
+        Xinv = X.completeOrthogonalDecomposition().pseudoInverse();
+
+        MatrixXd should_be_M = Pp.transpose() * L * D * L.transpose() * Pp;
+        // std::cout << "LDLT: Pp^t L D L^t Pp = " << should_be_M << std::endl;
+        break;
+      }
+
+      case EigenQR: {
+        SelfAdjointEigenSolver<MatrixXd> eig(M);
+        VectorXd ev = eig.eigenvalues();
+        rank = std::count_if(ev.data(), ev.data() + np, [epsilon](double d) {
+          return std::abs(d) > epsilon;
+        });
+        MatrixXd e = ev.bottomLeftCorner(rank, 1)
+                         .asDiagonal();  // N.B. eigenvalues in increasing order
+        MatrixXd U = eig.eigenvectors();
+        U = U.topRightCorner(np, rank)
+                .eval();  // N.B. eigenvalues in increasing order
+        MatrixXd Ut = U.transpose();
+
+        // N.B. use fully-pivoted QR to make this as robust as possible
+        // note that Q includes row permutaation already:
+        // https://gitlab.com/libeigen/eigen/-/issues/1822
+        auto qr = Ut.fullPivHouseholderQr();
+        assert(rank == qr.rank());
+        MatrixXd Q = qr.matrixQ();
+        P = qr.colsPermutation();
+        X = U * e * Q;
+        Xinv = Q.transpose() * e.inverse() * Ut;
+        R = qr.matrixQR()
+                .topLeftCorner(rank, np)
+                .template triangularView<Upper>();
+        break;
+      }
+
+      default:
+        abort();  // unreachable
+    }
+
+    //    std::cout << "biorthogonalize_qr(#particles = " << n << ") rank = " <<
+    //    rank << std::endl
+    //              << "M = " << M << std::endl
+    //              << "X = " << X << std::endl
+    //              << "X^-1 = " << Xinv << std::endl
+    //              << "R = "
+    //              << R
+    //              << std::endl
+    //              << "P = " << MatrixXi(P) << std::endl
+    //              << "M*P = " << M * P << std::endl
+    //              << "X*R = " << X*R << std::endl
+    //              << "X^-1*M*P = " << Xinv*M*P << std::endl;
+
+    const auto k = std::max(0l, rank - 5);
+    const auto normalizer = 1. / R(k, k);
+    VectorXd v = Xinv.row(k) * normalizer;
+    //    std::cout << "v (before rotate) = " << v << std::endl;
+    // "rotate" so that the largest coefficient in v^t M is at the front
+    VectorXd vtM = v.transpose() * M;
+    //    std::cout << "v*M = " << vtM << std::endl;
+    auto target_col =
+        std::max_element(vtM.data(), vtM.data() + vtM.size()) - vtM.data();
+    std::rotate(v.begin(), v.begin() + target_col, v.end());
+    //    std::cout << "v = " << v << std::endl;
+
+    bt_coeff_vec =
+        v | ranges::views::transform([](double e) { return to_rational(e); }) |
+        ranges::to_vector;
+
+#else
+    // hardwire coefficients for n_particles = 1, 2, 3
+    switch (n) {
+      case 1:
+        bt_coeff_vec = {ratio(1, 2)};
+        break;
+      case 2:
+        bt_coeff_vec = {ratio(1, 3), ratio(1, 6)};
+        break;
+      case 3:
+        // one of Mathematica's QR vectors ... can be obtained by combining
+        // non-orthogonal eigenvectors in the 1^3 and 21 symmetry sectors vv =
+        // Eigenvectors[M];
+        // (* canonicalize the phases:
+        //  - first eigenvector corresponds to the sign representation, make its
+        //    first (identity) coeff positive
+        //  - match the sign of the first nonzero in the subsequent vectors to
+        //    the sign of the corresponding element in the first vector
+        // *)
+        // vv[[1]] *= Sign[vv[[1, 1]]]
+        // IsNonzero[x_] := Abs[x] > 0;
+        // Do[nnzpos = FirstPosition[vv[[i]], _?IsNonzero][[1]];
+        //  vv[[i]] *= Sign[vv[[i, nnzpos]]]*Sign[vv[[1, nnzpos]]], {i, 2,
+        //   nf}];
+        // i.e. vv (rows are eigenvectors) is
+        // (1     -1     -1     1     1     -1
+        // 0     -1     0     0     0     1
+        // 1     0     0     0     -1     0
+        // 1     0     0     -1     0     0
+        // 0     -1     1     0     0     0
+        // 1     1     1     1     1     1
+        //)
+
+        // Obtained in Mathematica from:
+        // v = Sum[vv[[i]]/evals[[i]], {i, rank}]
+        // v = v/((M . v)[[1]])
+        // COMPACT
+        bt_coeff_vec = {ratio(1, 8),   ratio(-1, 8),  ratio(1, 24),
+                        ratio(-1, 24), ratio(-1, 24), ratio(1, 24)};
+        break;
+
+      case 4:
+        // v = vv[[1]] + vv[[7]] + vv[[13]]
+        bt_coeff_vec = {ratio(1, 120),
+
+                        ratio(-1, 120),
+
+                        ratio(-1, 60),
+
+                        ratio(1, 120),
+
+                        ratio(1, 60),
+
+                        ratio(-1, 120),
+
+                        ratio(0, 1),
+
+                        ratio(0, 1),
+
+                        ratio(0, 1),
+
+                        ratio(1, 120),
+
+                        ratio(-1, 60),
+
+                        ratio(1, 120),
+
+                        ratio(1, 120),
+
+                        ratio(-1, 60),
+
+                        ratio(0, 1),
+
+                        ratio(1, 120),
+
+                        ratio(1, 60),
+
+                        ratio(-1, 60),
+
+                        ratio(0, 1),
+
+                        ratio(1, 120),
+
+                        ratio(1, 120),
+
+                        ratio(-1, 60),
+
+                        ratio(-1, 120),
+
+                        ratio(1, 120)};
+        break;
+
+      default:
+        throw std::runtime_error(
+            "biorthogonalize_qr method is not implemented for n > "
+            "4.");
+    }
+#endif
+  }
+
+  // Transformation maps
+  container::svector<container::map<Index, Index>> bt_maps;
+  {
+    container::svector<Index> idx_list(ext_index_groups.size());
+
+    for (auto i = 0; i != ext_index_groups.size(); ++i) {
+      idx_list[i] = *ext_index_groups[i].begin();
+    }
+
+    const container::svector<Index> const_idx_list = idx_list;
+
+    do {
+      container::map<Index, Index> map;
+      auto const_list_ptr = const_idx_list.begin();
+      for (auto& i : idx_list) {
+        if (i != *const_list_ptr) map.emplace(*const_list_ptr, i);
+        const_list_ptr++;
+      }
+      bt_maps.push_back(map);
+    } while (std::next_permutation(idx_list.begin(), idx_list.end()));
+  }
+
+  // If this assertion fails, change the epsilon parameter
+  assert(bt_coeff_vec.size() == bt_maps.size());
+
+  // restore the particle symmetrizer
+  auto bixs = ext_index_groups |
+              ranges::views::transform([](auto&& vec) { return vec[0]; });
+  auto kixs = ext_index_groups |
+              ranges::views::transform([](auto&& vec) { return vec[1]; });
+  // N.B. external_indices(expr) confuses bra and ket
+  const auto symmetrizer = ex<Tensor>(Tensor{L"S", kixs, bixs});
+
+  auto symmetrize = [&](auto& expr) {
+    ExprPtr result = expr;
+    result = expand(result);
+    simplify(result);
+    return result;
   };
 
   // Scale transformed expressions and append
-  Sum bt_expr{};
+  auto bt_expr = std::make_shared<Sum>();
   auto coeff_it = bt_coeff_vec.begin();
+  size_t counter = 0;
   for (auto&& map : bt_maps) {
     const auto v = *coeff_it;
-    if (is_canonical(map))
-      bt_expr.append(ex<Constant>(v) * expr->clone());
-    else
-      bt_expr.append(ex<Constant>(v) *
-                     sequant::transform_expr(expr->clone(), map));
+    ExprPtr summand = ex<Constant>(v) * (map.empty() ? expr->clone()
+                                                     : sequant::transform_expr(
+                                                           expr->clone(), map));
+    bt_expr->append(summand);
     coeff_it++;
+    ++counter;
   }
-  ExprPtr result = std::make_shared<Sum>(bt_expr);
+
+  return bt_expr;
+}
+
+ExprPtr biorthogonalize(sequant::ExprPtr expr,
+                        BiorthogonalizationMethod method) {
+  if (method != BiorthogonalizationMethod::Pseudoinverse &&
+      method != BiorthogonalizationMethod::QR)
+    throw std::runtime_error("Unknown biorthogonal transform method");
+
+  // if given a sum, biorthogonalize each term of the sum
+  if (expr.is<Sum>()) {
+    auto sum = expr.as<Sum>();
+    auto result_sum = std::make_shared<Sum>();
+    for (auto& summand : sum.as<Sum>().summands()) {
+      result_sum->append(biorthogonalize(summand, method));
+    }
+    // combine equivalent terms
+    auto result = simplify(std::move(result_sum));
+    return result;
+  } else if (!expr.is<Product>())
+    return expr;
+  assert(expr.is<Product>());
+
+  const auto has_S_operator =
+      ranges::any_of(expr.as<Product>().factors(), [](auto&& factor) {
+        return factor->template as<Tensor>().label() == L"S";
+      });
+
+  const auto ext_index_groups = external_indices(expr);
+
+  bool removed_S_operator =
+      false;  // if true, S is simply removed, else it was expanded
+  if (has_S_operator) {
+    switch (method) {
+      // Pseudoinverse biorothogonalizer commutes with S, hence just remove S
+      // and add it later
+      case BiorthogonalizationMethod::Pseudoinverse:
+        expr = remove_tensor(expr->as<Product>(), L"S");
+        removed_S_operator = true;
+        break;
+
+      // QR needs to expand S
+      case BiorthogonalizationMethod::QR:
+        expr = expand_S_op(expr);
+        simplify(expr);
+        break;
+    }
+  }  // has_S_operator
+
+  ExprPtr result;
+  switch (method) {
+    case BiorthogonalizationMethod::Pseudoinverse:
+      result = biorthogonalize_pseudoinverse(expr, ext_index_groups);
+      break;
+    case BiorthogonalizationMethod::QR:
+      result = biorthogonalize_qr(expr, ext_index_groups);
+      break;
+    default:
+      throw std::runtime_error(
+          "sequant::biorthogonalize(expr, method): unknown method");  // unreachable
+  }
+
+  // restore the symmetrizer, if needed
+  if (has_S_operator) {
+    // restore the particle symmetrizer
+    auto bixs = ext_index_groups |
+                ranges::views::transform([](auto&& vec) { return vec[0]; });
+    auto kixs = ext_index_groups |
+                ranges::views::transform([](auto&& vec) { return vec[1]; });
+    // N.B. external_indices(expr) confuses bra and ket
+    result = ex<Tensor>(Tensor{L"S", kixs, bixs}) * result;
+    if (!removed_S_operator) {
+      const auto np = ext_index_groups.size();
+      result *= ex<Constant>(ratio(1, factorial(np)));
+    }
+    result = expand(result);
+  }
+
   return result;
 }
 
