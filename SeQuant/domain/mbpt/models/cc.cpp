@@ -166,12 +166,7 @@ std::vector<sequant::ExprPtr> cceqs::pert_t1() {
   using namespace sequant::mbpt;
 
   // construct (V * e^T)_c = V + V * T + V * T^2/2!
-  auto mu_bar = op::mu(1);
-  auto mu_Tk = mu_bar;
-  for (int64_t k = 1; k <= 2; ++k) {
-    mu_Tk = simplify(ex<Constant>(rational{1, k}) * mu_Tk * op::T(N));
-    mu_bar += mu_Tk;
-  }
+  auto mu_bar = sim_tr(op::mu(1), 2);
 
   // construct (H * e^T * pT1)_c = H * pT1 + H * pT1 * T + H * pT1 * T^2/2! + H
   // * pT1 * T^3/3!
@@ -188,10 +183,7 @@ std::vector<sequant::ExprPtr> cceqs::pert_t1() {
 
   std::vector<ExprPtr> result(P + 1);
   for (auto p = P; p >= PMIN; --p) {
-    auto eq = simplify(op::P(p) * (mu_bar + hbar_pert));
-
-    result.at(p) = op::vac_av(eq, op_connect);
-    simplify(result.at(p));
+    result.at(p) = op::op_evaluate(op::P(p) * (mu_bar + hbar_pert), op_connect);
   }
   // add frequency scaled terms
   auto omega = ex<Variable>(L"ω");
@@ -204,18 +196,10 @@ std::vector<sequant::ExprPtr> cceqs::pert_t1() {
 }
 
 std::vector<ExprPtr> cceqs::pert_λ1() {
-  /// Eqn: <0| Λ^{(1)}(H * e^T * \tau_{mu}) |0> + <0| (1 + Λ^{(0)})( H * e^T *
-  /// e^pT1 * \tau_{mu} ) |0>
+  // construct hbar
+  auto hbar = sim_tr(op::H(), 4);
 
-  // construct unperturbed H_bar (reusable code)
-  auto hbar = op::H();
-  auto H_Tk = hbar;
-  for (int64_t k = 1; k <= 4; ++k) {
-    H_Tk = simplify(ex<Constant>(rational{1, k}) * H_Tk * op::T(N));
-    hbar += H_Tk;
-  }
-
-  // construct V_bar (including perturbed T amplitudes also)
+  // construct mu_doublebar (including perturbed T amplitudes also)
   auto mu_bar = op::mu(1);
   auto mu_Tk = mu_bar;
   for (int64_t k = 1; k <= 2; ++k) {
@@ -240,10 +224,7 @@ std::vector<ExprPtr> cceqs::pert_λ1() {
 
   std::vector<ExprPtr> result(P + 1);
   for (auto p = P; p >= PMIN; --p) {
-    auto eq = simplify((eq1 + eq2) * op::P(-p));
-
-    result.at(p) = op::vac_av(eq, op_connect);
-    simplify(result.at(p));
+    result.at(p) = op::op_evaluate((eq1 + eq2) * op::P(-p), op_connect);
   }
   // add frequency scaled terms
   auto omega = ex<Variable>(L"ω");
