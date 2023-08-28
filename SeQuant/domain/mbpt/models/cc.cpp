@@ -19,7 +19,7 @@ namespace sequant::mbpt::sr {
 cceqs::cceqs(size_t n, size_t p, size_t pmin)
     : N(n), P(p == std::numeric_limits<size_t>::max() ? n : p), PMIN(pmin) {}
 
-ExprPtr cceqs::sim_transform(ExprPtr expr, size_t r) {
+ExprPtr cceqs::sim_tr(ExprPtr expr, size_t r) {
   auto transform_op_op_pdt = [this, &r](const ExprPtr& expr) {
     // TODO: find the order at which the commutator expression should truncate
     // from op/op product
@@ -43,7 +43,7 @@ ExprPtr cceqs::sim_transform(ExprPtr expr, size_t r) {
         })) {
       expr = sequant::expand(expr);
       simplify(expr);
-      return sim_transform(expr, r);
+      return sim_tr(expr, r);
     } else {
       return transform_op_op_pdt(expr);
     }
@@ -61,13 +61,13 @@ ExprPtr cceqs::sim_transform(ExprPtr expr, size_t r) {
     return expr;
   else
     throw std::invalid_argument(
-        "cceqs::sim_transform(expr): Unsupported expression type");
+        "cceqs::sim_tr(expr): Unsupported expression type");
 }
 
 std::vector<ExprPtr> cceqs::t(bool screen, bool use_topology,
                               bool use_connectivity, bool canonical_only) {
   // 1. construct hbar(op) in canonical form
-  auto hbar = sim_transform(op::H(), 4);
+  auto hbar = sim_tr(op::H(), 4);
 
   // 2. project onto each manifold, screen, lower to tensor form and wick it
   std::vector<ExprPtr> result(P + 1);
@@ -106,7 +106,7 @@ std::vector<ExprPtr> cceqs::t(bool screen, bool use_topology,
 std::vector<ExprPtr> cceqs::λ(bool screen, bool use_topology,
                               bool use_connectivity, bool canonical_only) {
   // construct hbar
-  auto hbar = sim_transform(op::H(), 3);
+  auto hbar = sim_tr(op::H(), 3);
 
   const auto One = ex<Constant>(1);
   auto lhbar = simplify((One + op::Lambda(N)) * hbar);

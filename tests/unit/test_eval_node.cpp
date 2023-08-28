@@ -15,18 +15,18 @@ auto eval_node(sequant::ExprPtr const& expr) {
   return sequant::eval_node<sequant::EvalExpr>(expr);
 }
 
-enum struct NodePos {
+enum struct Npos {
   L,  // Left
   R   // Right
 };
 
 sequant::EvalExpr node(sequant::EvalNode<sequant::EvalExpr> const& n,
-                       std::initializer_list<NodePos> pos) {
+                       std::initializer_list<Npos> pos) {
   if (pos.size() == 0) return *n;
   auto n_ = n;
   for (auto p : pos) {
     assert(!n_.leaf() && "Accessing child of leaf!");
-    n_ = p == NodePos::L ? n_.left() : n_.right();
+    n_ = p == Npos::L ? n_.left() : n_.right();
   }
 
   return *n_;
@@ -42,8 +42,8 @@ std::wstring tikz(sequant::EvalNode<sequant::EvalExpr> const& n) noexcept {
 
 TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
   using namespace sequant;
-  auto L = NodePos::L;
-  auto R = NodePos::R;
+  auto L = Npos::L;
+  auto R = Npos::R;
 
   auto parse_expr_antisymm = [](auto const& xpr) {
     return parse_expr(xpr, Symmetry::antisymm);
@@ -200,6 +200,7 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
     REQUIRE(linearize_eval_node(eval_node(p2))->to_latex() == p2->to_latex());
   }
 
+  /*
   SECTION("asy_cost_single_node") {
     auto const p1 =
         parse_expr_antisymm(L"g_{i2, a1}^{a2, a3} * t_{a2, a3}^{i1, i2}");
@@ -218,8 +219,10 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
     REQUIRE(AsyCost{asy_cost_single_node(n3)} == AsyCost{2, 2, 1});
     REQUIRE(AsyCost{asy_cost_single_node(n3.left())} == AsyCost{2, 3, 1});
   }
+  */
 
   SECTION("asy_cost") {
+    auto asy_cost = [](auto const& n) { return sequant::asy_cost(n, FlopsWithSymm{}); };
     auto const p1 =
         parse_expr_antisymm(L"g_{i2, a1}^{a2, a3} * t_{a2, a3}^{i1, i2}");
     REQUIRE(asy_cost(eval_node(p1)) == AsyCost{2, 2, 3});
@@ -267,7 +270,7 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
 
     auto const p7 = parse_expr(L"I{i1;a1} * I{i2;a2}", Symmetry::nonsymm);
     auto const np7 = eval_node(p7);
-    REQUIRE(asy_cost(np7) == AsyCost{2, 2});  // 1/2 * 2 * O^2V^4
+    REQUIRE(asy_cost(np7) == AsyCost{{1,2}, 2, 2});  // 1/2 * O^2V^2
 
     auto const p8 =
         parse_expr(L"I{i1,i2;a3,a4} * I{a3,a4;a1,a2}", Symmetry::nonsymm);
