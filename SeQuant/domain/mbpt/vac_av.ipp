@@ -13,6 +13,7 @@ ExprPtr vac_av(
     bool skip_clone) {
   // use cloned expr to avoid side effects
   if (!skip_clone) expr = expr->clone();
+  simplify(expr);
 
   auto vac_av_product = [&op_connections](ExprPtr expr) {
     assert(expr.is<Product>());
@@ -77,7 +78,7 @@ ExprPtr vac_av(
     expr = simplify(expr);
 
     // compute VEV
-    return vac_av(expr, connections, /* use_topology = */ true);
+    return simplify(vac_av(expr, connections, /* use_topology = */ true));
   };
 
   ExprPtr result;

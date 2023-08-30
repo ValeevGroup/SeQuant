@@ -64,7 +64,7 @@ ExprPtr cc::sim_tr(ExprPtr expr, size_t r) {
 }
 
 std::vector<ExprPtr> cc::t(bool screen, bool use_topology,
-                              bool use_connectivity, bool canonical_only) {
+                           bool use_connectivity, bool canonical_only) {
   // 1. construct hbar(op) in canonical form
   auto hbar = sim_tr(op::H(), 4);
 
@@ -95,15 +95,15 @@ std::vector<ExprPtr> cc::t(bool screen, bool use_topology,
     }
     hbar = hbar_le_p;
 
-    // 2.b project onto <p|, i.e. multiply by P(p) and evaluate
-    result.at(p) = op::op_evaluate(op::P(p) * hbar_p);
+    // 2.b project onto <p|, i.e. multiply by P(p) and compute VEV
+    result.at(p) = op::vac_av(op::P(p) * hbar_p);
   }
 
   return result;
 }
 
 std::vector<ExprPtr> cc::λ(bool screen, bool use_topology,
-                              bool use_connectivity, bool canonical_only) {
+                           bool use_connectivity, bool canonical_only) {
   // construct hbar
   auto hbar = sim_tr(op::H(), 3);
 
@@ -142,8 +142,8 @@ std::vector<ExprPtr> cc::λ(bool screen, bool use_topology,
     lhbar = hbar_le_p;
 
     // 2.b multiply by adjoint of P(p) (i.e., P(-p)) on the right side and
-    // evaluate
-    result.at(p) = op::op_evaluate(hbar_p * op::P(-p), op_connect);
+    // compute VEV
+    result.at(p) = op::vac_av(hbar_p * op::P(-p), op_connect);
   }
   return result;
 }
