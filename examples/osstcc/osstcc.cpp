@@ -42,22 +42,6 @@ int main(int argc, char* argv[]) {
 #endif
   const size_t NMAX = argc > 1 ? std::atoi(argv[1]) : DEFAULT_NMAX;
 
-  /// Make external index
-  auto ext_idx_list = [](const int i_max) {
-    container::svector<container::svector<Index>> ext_idx_list;
-
-    for (size_t i = 1; i <= i_max; ++i) {
-      auto label = std::to_wstring(i);
-      auto occ_i = Index::make_label_index(
-          IndexSpace::instance(IndexSpace::active_occupied), label);
-      auto virt_i = Index::make_label_index(
-          IndexSpace::instance(IndexSpace::active_unoccupied), label);
-      decltype(ext_idx_list)::value_type pair = {occ_i, virt_i};
-      ext_idx_list.push_back(pair);
-    }
-    return ext_idx_list;
-  };
-
   // Spin-orbital coupled cluster
   auto cc_r = sequant::mbpt::sr::cceqs{NMAX}.t();
   for (auto i = 1; i < cc_r.size(); ++i) {
@@ -72,55 +56,11 @@ int main(int argc, char* argv[]) {
             << std::endl;
   std::vector<std::vector<ExprPtr>> os_cc_st_r(cc_r.size());
   for (auto i = 1; i < cc_r.size(); ++i) {
-    const auto tstart = std::chrono::high_resolution_clock::now();
-    Tensor A =
-        cc_r[i]->as<Sum>().summand(0)->as<Product>().factors()[0]->as<Tensor>();
-    assert(A.label() == L"A");
-    auto P_vec = open_shell_P_op_vector(A);
-    auto A_vec = open_shell_A_op(A);
-    assert(P_vec.size() == i + 1);
-
-    std::vector<Sum> concat_terms(i + 1);
-    size_t n_spin_orbital_term = 0;
-    for (auto& product_term : *cc_r[i]) {
-      auto term = remove_tensor(product_term->as<Product>(), L"A");
-      std::vector<ExprPtr> os_st(i + 1);
-
-      // Apply the P operators on the product term without the A,
-      // Expand the P operators and spin-trace the expression
-      // Then apply A operator, canonicalize and remove A operator
-      for (int s = 0; s != os_st.size(); ++s) {
-        os_st.at(s) = P_vec.at(s) * term;
-        expand(os_st.at(s));
-        os_st.at(s) = expand_P_op(os_st.at(s), false, true);
-        os_st.at(s) =
-            open_shell_spintrace(os_st.at(s), ext_idx_list(i), s).at(0);
-        if (i > 2) {
-          os_st.at(s) = A_vec.at(s) * os_st.at(s);
-          simplify(os_st.at(s));
-          os_st.at(s) = remove_tensor(os_st.at(s), L"A");
-        }
-      }
-
-      for (size_t j = 0; j != os_st.size(); ++j) {
-        concat_terms.at(j).append(os_st.at(j));
-      }
-      ++n_spin_orbital_term;
-    }
-
-    // Combine spin-traced terms for the current residual
-    std::vector<ExprPtr> expr_vec;
-    std::cout << "CC R" << i << ": ";
-    for (auto& spin_case : concat_terms) {
-      auto ptr = sequant::ex<Sum>(spin_case);
-      expr_vec.push_back(ptr);
-      std::cout << ptr->size() << " ";
-    }
-
-    os_cc_st_r.at(i) = std::move(expr_vec);
-    auto tstop = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> time_elapsed = tstop - tstart;
-    printf(" time:  %5.3f sec.\n", time_elapsed.count());
+    os_cc_st_r[i] = open_shell_CC_spintrace(cc_r[i]);
+    std::cout << "CCK-" << NMAX << " R[" << i << "]  ";
+    for (auto const& x: os_cc_st_r[i])
+      std::cout << x->size() << "  ";
+    std::cout << std::endl;
   }
 
   if (NMAX == 4) {
@@ -141,4 +81,6 @@ int main(int argc, char* argv[]) {
         runtime_assert(os_cc_st_r.at(3).at(2)->size() == 209)  // T3abb
         runtime_assert(os_cc_st_r.at(3).at(3)->size() == 75)   // T3bbb
   }
+
+  return 0;
 }

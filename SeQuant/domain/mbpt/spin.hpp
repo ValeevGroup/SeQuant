@@ -162,30 +162,27 @@ ExprPtr closed_shell_spintrace(
     const container::svector<container::svector<Index>>& ext_index_groups = {
         {}});
 
-/// @brief Generates list of external indices common to all tensor networks in
-/// the expression
-/// @param expr ExprPtr (sum of) TN in spin-orbital basis, must include an
-/// (anti)symmetrizer (see OpType::A , OpType::S)
-/// @return external index groups to be used for spintracing
-container::svector<container::svector<Index>> external_indices(
-    const ExprPtr& expr);
+///
+/// \brief Given a OpType::A or OpType::S tensor, generates a list of external
+///        indices.
+/// \note The argument tensor must have a label of 'S' or 'A' do denote that
+///       it is OpType::S or OpType::A respectively.
+///
+container::svector<container::svector<Index>> external_indices(Tensor const&);
 
 ///
 /// @param nparticles Number of indices in bra of the target tensor. That must
 ///                   be equal to the same in the ket.
 /// @deprecated not CSV-compatible, and mixes bra and ket relative to
 /// external_indices(expr) , will be deprecated
-[[deprecated("use external_indices(expr)")]] container::svector<
-    container::svector<Index>>
-external_indices(size_t nparticles);
+//[[deprecated("use external_indices(expr)")]] container::svector<
+//    container::svector<Index>> external_indices(size_t nparticles);
 
 /// @brief Transforms Coupled cluster from spin orbital to spatial orbitals
 /// @details The external indices are deduced from Antisymmetrization operator
-/// @param expr ExprPtr with spin orbital indices
-/// @param nparticles Number of indices in bra (that must be equal
-///                   to the same in the ket)
+/// @param expr ExprPtr to Sum type with spin orbital indices
 /// @return an expression with spin integrated/adapted
-ExprPtr closed_shell_CC_spintrace(const ExprPtr& expr, size_t nparticles);
+ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr);
 
 /// Collect all indices from an expression
 auto index_list(const ExprPtr& expr);
@@ -228,7 +225,7 @@ std::vector<ExprPtr> open_shell_spintrace(
     const int single_spin_case = 0);
 
 /// @brief Transforms Coupled cluster from spin orbital to spatial orbitals
-/// @param expr ExprPtr with spin orbital indices
+/// @param expr ExprPtr to Sum type with spin orbital indices
 /// @return a vector of spin expressions for open-shell reference
 std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr);
 
