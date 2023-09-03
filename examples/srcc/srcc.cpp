@@ -97,9 +97,8 @@ class compute_cceqvec {
 
       eqvec_sf_ref.resize(eqvec_so.size());
       for (size_t R = PMIN; R <= P; ++R) {
-        // WARNING: external_indices(expr) and external_indices(nparticles) seem
-        // to mix bra and ket relative to each other
-        auto const ext_idxs = external_indices(eqvec_so[R]);
+        auto const ext_idxs =
+            external_indices(eqvec_so[R]->at(0)->at(0)->as<Tensor>());
         eqvec_sf_ref[R] = closed_shell_spintrace(eqvec_so[R], ext_idxs);
         if (R == 1) {  // closed_shell_spintrace omits 1-body S
           using ranges::views::transform;
@@ -157,7 +156,8 @@ class compute_cceqvec {
 
         // validate sizes of spin-free t equations after biorthogonal transform
         if (type == EqnType::t) {
-          auto const ext_idxs = external_indices(eqvec[R]);
+          auto const ext_idxs =
+              external_indices(eqvec[R]->at(0)->at(0)->as<Tensor>());
 
           // Remove S operator
           for (auto& term : eqvec[R]->expr()) {
