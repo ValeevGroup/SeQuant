@@ -162,7 +162,7 @@ auto make_pert_tnsr = [](const std::wstring& label, const size_t n) {
   return sequant::parse_expr(result, Symmetry::antisymm);
 };
 
-std::vector<sequant::ExprPtr> cceqs::pert_t1() {
+std::vector<sequant::ExprPtr> cc::pert_t1() {
   using namespace sequant::mbpt;
 
   // construct (V * e^T)_c = V + V * T + V * T^2/2!
@@ -183,7 +183,7 @@ std::vector<sequant::ExprPtr> cceqs::pert_t1() {
 
   std::vector<ExprPtr> result(P + 1);
   for (auto p = P; p >= PMIN; --p) {
-    result.at(p) = op::op_evaluate(op::P(p) * (mu_bar + hbar_pert), op_connect);
+    result.at(p) = op::vac_av(op::P(p) * (mu_bar + hbar_pert), op_connect);
   }
   // add frequency scaled terms
   auto omega = ex<Variable>(L"ω");
@@ -195,7 +195,7 @@ std::vector<sequant::ExprPtr> cceqs::pert_t1() {
   return result;
 }
 
-std::vector<ExprPtr> cceqs::pert_λ1() {
+std::vector<ExprPtr> cc::pert_λ1() {
   // construct hbar
   auto hbar = sim_tr(op::H(), 4);
 
@@ -224,7 +224,7 @@ std::vector<ExprPtr> cceqs::pert_λ1() {
 
   std::vector<ExprPtr> result(P + 1);
   for (auto p = P; p >= PMIN; --p) {
-    result.at(p) = op::op_evaluate((eq1 + eq2) * op::P(-p), op_connect);
+    result.at(p) = op::vac_av((eq1 + eq2) * op::P(-p), op_connect);
   }
   // add frequency scaled terms
   auto omega = ex<Variable>(L"ω");
