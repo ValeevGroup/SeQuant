@@ -9,11 +9,11 @@
 namespace sequant::mbpt::sr {
 
 /// derives equations of traditional coupled-cluster method
-class cceqs {
+class cc {
   size_t N, P, PMIN;
 
  public:
-  cceqs(size_t n, size_t p = std::numeric_limits<size_t>::max(),
+  cc(size_t n, size_t p = std::numeric_limits<size_t>::max(),
         size_t pmin = 1);
 
   /// derives similarity-transformed expressions of mpbt::Operators
@@ -36,7 +36,7 @@ class cceqs {
 
   /// derives first-order perturbed λ amplitude equations
   std::vector<sequant::ExprPtr> pert_λ1();
-};  // class cceqs
+};  // class cc
 
 }  // namespace sequant::mbpt::sr
 

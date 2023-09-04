@@ -77,7 +77,7 @@ ExprPtr vac_av(
     expr = simplify(expr);
 
     // compute VEV
-    return vac_av(expr, connections, /* use_topology = */ true);
+    return simplify(vac_av(expr, connections, /* use_topology = */ true));
   };
 
   ExprPtr result;

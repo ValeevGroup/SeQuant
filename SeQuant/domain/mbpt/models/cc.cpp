@@ -16,10 +16,10 @@
 
 namespace sequant::mbpt::sr {
 
-cceqs::cceqs(size_t n, size_t p, size_t pmin)
+cc::cc(size_t n, size_t p, size_t pmin)
     : N(n), P(p == std::numeric_limits<size_t>::max() ? n : p), PMIN(pmin) {}
 
-ExprPtr cceqs::sim_tr(ExprPtr expr, size_t r) {
+ExprPtr cc::sim_tr(ExprPtr expr, size_t r) {
   auto transform_op_op_pdt = [this, &r](const ExprPtr& expr) {
     // TODO: find the order at which the commutator expression should truncate
     // from op/op product
@@ -61,11 +61,11 @@ ExprPtr cceqs::sim_tr(ExprPtr expr, size_t r) {
     return expr;
   else
     throw std::invalid_argument(
-        "cceqs::sim_tr(expr): Unsupported expression type");
+        "cc::sim_tr(expr): Unsupported expression type");
 }
 
-std::vector<ExprPtr> cceqs::t(bool screen, bool use_topology,
-                              bool use_connectivity, bool canonical_only) {
+std::vector<ExprPtr> cc::t(bool screen, bool use_topology,
+                           bool use_connectivity, bool canonical_only) {
   // 1. construct hbar(op) in canonical form
   auto hbar = sim_tr(op::H(), 4);
 
@@ -96,15 +96,15 @@ std::vector<ExprPtr> cceqs::t(bool screen, bool use_topology,
     }
     hbar = hbar_le_p;
 
-    // 2.b project onto <p|, i.e. multiply by P(p) and evaluate
-    result.at(p) = op::op_evaluate(op::P(p) * hbar_p);
+    // 2.b project onto <p|, i.e. multiply by P(p) and compute VEV
+    result.at(p) = op::vac_av(op::P(p) * hbar_p);
   }
 
   return result;
 }
 
-std::vector<ExprPtr> cceqs::λ(bool screen, bool use_topology,
-                              bool use_connectivity, bool canonical_only) {
+std::vector<ExprPtr> cc::λ(bool screen, bool use_topology,
+                           bool use_connectivity, bool canonical_only) {
   // construct hbar
   auto hbar = sim_tr(op::H(), 3);
 
@@ -143,8 +143,8 @@ std::vector<ExprPtr> cceqs::λ(bool screen, bool use_topology,
     lhbar = hbar_le_p;
 
     // 2.b multiply by adjoint of P(p) (i.e., P(-p)) on the right side and
-    // evaluate
-    result.at(p) = op::op_evaluate(hbar_p * op::P(-p), op_connect);
+    // compute VEV
+    result.at(p) = op::vac_av(hbar_p * op::P(-p), op_connect);
   }
   return result;
 }
