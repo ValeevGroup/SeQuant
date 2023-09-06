@@ -149,19 +149,6 @@ std::vector<ExprPtr> cc::λ(bool screen, bool use_topology,
   return result;
 }
 
-/// Wrong
-/*auto make_pert_tnsr = [](const std::wstring& label, const size_t n) {
-  std::wstring bra_annot, ket_annot;
-  for (size_t i = 1; i <= n; ++i) {
-    bra_annot += L"a_" + std::to_wstring(i) + L",";
-    ket_annot += L"i_" + std::to_wstring(i) + L",";
-  }
-  bra_annot.pop_back();
-  ket_annot.pop_back();
-  auto result = label + L"{" + bra_annot + L";" + ket_annot + L"}";
-  // TODO: Don't hard-code antisymm
-  return sequant::parse_expr(result, Symmetry::antisymm);
-};*/
 
 std::vector<sequant::ExprPtr> cc::pert_t1() {
   using namespace sequant::mbpt;
@@ -174,6 +161,9 @@ std::vector<sequant::ExprPtr> cc::pert_t1() {
   auto hbar = sim_tr(op::H(), 3);
   auto hbar_pert = hbar * op::pertT1(N);
 
+  // things to be connected:
+  // connect t and t1 with {h,f,g}
+  // connect mu with t
   std::vector<std::pair<std::wstring, std::wstring>> op_connect = {
       {L"h", L"t"},  {L"f", L"t"},  {L"g", L"t"}, {L"h", L"t¹"},
       {L"f", L"t¹"}, {L"g", L"t¹"}, {L"μ", L"t"}};
@@ -182,12 +172,6 @@ std::vector<sequant::ExprPtr> cc::pert_t1() {
   for (auto p = P; p >= PMIN; --p) {
     result.at(p) = op::vac_av(op::P(p) * (mu_bar + hbar_pert), op_connect);
   }
-//  // add frequency scaled terms
-//  auto omega = ex<Variable>(L"ω");
-//  for (auto i = 1; i <= N; ++i) {
-//    ExprPtr t_tnsr = make_pert_tnsr(optype2label.at(OpType::t_1), i);
-//    result[i] -= omega * t_tnsr;
-//  }
 
   return result;
 }
@@ -196,40 +180,29 @@ std::vector<ExprPtr> cc::pert_λ1() {
   // construct hbar
   auto hbar = sim_tr(op::H(), 4);
 
-  // construct mu_doublebar (including perturbed T amplitudes also)
-  auto mu_bar = op::mu(1);
-  auto mu_Tk = mu_bar;
-  for (int64_t k = 1; k <= 2; ++k) {
-    mu_Tk = simplify(ex<Constant>(rational{1, k}) * mu_Tk * op::T(N) *
-                     op::pertT1(N));
-    mu_bar += mu_Tk;
-  }
-
-  // first term
-  auto eq1 =
-      simplify(op::pertLambda1(N) * hbar); /* times excitation operator */
-
-  // second term
+  // construct (V * e^T)_c = V + V * T + V * T^2/2!
+  auto mu_bar = sim_tr(op::mu(1), 2);
   const auto One = ex<Constant>(1);
-  auto eq2 =
-      simplify((One + op::Lambda(N)) * mu_bar); /* times excitation operator */
 
+  auto hbar_pert = sim_tr(op::H(), 3) * op::pertT1(N);
+
+  // equation split into 2 terms
+  auto eq1 = simplify((One + op::Lambda(N)) * (mu_bar + hbar_pert));
+  auto eq2 = simplify(op::pertLambda1(N) * hbar);
+
+  // things to be connected
+  // t and t1 with {h,f,g}
+  // projectors with {h,f,g}
+  // mu with t
   std::vector<std::pair<std::wstring, std::wstring>> op_connect = {
-      {L"h", L"t"}, {L"f", L"t"}, {L"g", L"t"}, {L"μ", L"t"},  {L"μ", L"t¹"},
-      {L"h", L"A"}, {L"f", L"A"}, {L"g", L"A"}, {L"h", L"S"},  {L"f", L"S"},
-      {L"g", L"S"}, {L"t", L"A"}, {L"t", L"S"}, {L"t¹", L"A"}, {L"t¹", L"S"}};
+      {L"μ", L"t"},  {L"h", L"t"},  {L"f", L"t"}, {L"g", L"t"}, {L"h", L"t¹"},
+      {L"f", L"t¹"}, {L"g", L"t¹"}, {L"h", L"A"}, {L"f", L"A"}, {L"g", L"A"},
+      {L"h", L"S"},  {L"f", L"S"},  {L"g", L"S"}};
 
   std::vector<ExprPtr> result(P + 1);
   for (auto p = P; p >= PMIN; --p) {
     result.at(p) = op::vac_av((eq1 + eq2) * op::P(-p), op_connect);
   }
-  // add frequency scaled terms
-//  auto omega = ex<Variable>(L"ω");
-//  for (auto i = 1; i <= N; ++i) {
-//    ExprPtr λ_tnsr = make_pert_tnsr(optype2label.at(OpType::λ_1), i);
-//    result[i] += omega * λ_tnsr;
-//  }
-
   return result;
 }
 
