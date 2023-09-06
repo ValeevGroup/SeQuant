@@ -149,7 +149,8 @@ std::vector<ExprPtr> cc::λ(bool screen, bool use_topology,
   return result;
 }
 
-auto make_pert_tnsr = [](const std::wstring& label, const size_t n) {
+/// Wrong
+/*auto make_pert_tnsr = [](const std::wstring& label, const size_t n) {
   std::wstring bra_annot, ket_annot;
   for (size_t i = 1; i <= n; ++i) {
     bra_annot += L"a_" + std::to_wstring(i) + L",";
@@ -160,7 +161,7 @@ auto make_pert_tnsr = [](const std::wstring& label, const size_t n) {
   auto result = label + L"{" + bra_annot + L";" + ket_annot + L"}";
   // TODO: Don't hard-code antisymm
   return sequant::parse_expr(result, Symmetry::antisymm);
-};
+};*/
 
 std::vector<sequant::ExprPtr> cc::pert_t1() {
   using namespace sequant::mbpt;
@@ -170,12 +171,8 @@ std::vector<sequant::ExprPtr> cc::pert_t1() {
 
   // construct (H * e^T * pT1)_c = H * pT1 + H * pT1 * T + H * pT1 * T^2/2! + H
   // * pT1 * T^3/3!
-  auto hbar_pert = (op::H() * op::pertT1(N));
-  auto H_Tk_pert = hbar_pert;
-  for (int64_t k = 1; k <= 3; ++k) {
-    H_Tk_pert = simplify(ex<Constant>(rational{1, k}) * H_Tk_pert * op::T(N));
-    hbar_pert += H_Tk_pert;
-  }
+  auto hbar = sim_tr(op::H(), 3);
+  auto hbar_pert = hbar * op::pertT1(N);
 
   std::vector<std::pair<std::wstring, std::wstring>> op_connect = {
       {L"h", L"t"},  {L"f", L"t"},  {L"g", L"t"}, {L"h", L"t¹"},
@@ -185,12 +182,12 @@ std::vector<sequant::ExprPtr> cc::pert_t1() {
   for (auto p = P; p >= PMIN; --p) {
     result.at(p) = op::vac_av(op::P(p) * (mu_bar + hbar_pert), op_connect);
   }
-  // add frequency scaled terms
-  auto omega = ex<Variable>(L"ω");
-  for (auto i = 1; i <= N; ++i) {
-    ExprPtr t_tnsr = make_pert_tnsr(optype2label.at(OpType::t_1), i);
-    result[i] -= omega * t_tnsr;
-  }
+//  // add frequency scaled terms
+//  auto omega = ex<Variable>(L"ω");
+//  for (auto i = 1; i <= N; ++i) {
+//    ExprPtr t_tnsr = make_pert_tnsr(optype2label.at(OpType::t_1), i);
+//    result[i] -= omega * t_tnsr;
+//  }
 
   return result;
 }
@@ -227,11 +224,11 @@ std::vector<ExprPtr> cc::pert_λ1() {
     result.at(p) = op::vac_av((eq1 + eq2) * op::P(-p), op_connect);
   }
   // add frequency scaled terms
-  auto omega = ex<Variable>(L"ω");
-  for (auto i = 1; i <= N; ++i) {
-    ExprPtr λ_tnsr = make_pert_tnsr(optype2label.at(OpType::λ_1), i);
-    result[i] += omega * λ_tnsr;
-  }
+//  auto omega = ex<Variable>(L"ω");
+//  for (auto i = 1; i <= N; ++i) {
+//    ExprPtr λ_tnsr = make_pert_tnsr(optype2label.at(OpType::λ_1), i);
+//    result[i] += omega * λ_tnsr;
+//  }
 
   return result;
 }
