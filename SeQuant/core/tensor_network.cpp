@@ -3,6 +3,7 @@
 //
 
 #include <SeQuant/core/tensor_network.hpp>
+#include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/attr.hpp>

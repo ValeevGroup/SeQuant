@@ -15,6 +15,7 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/wick.hpp>
+#include <SeQuant/core/tensor_canonicalizer.hpp>
 
 #include <atomic>
 #include <algorithm>

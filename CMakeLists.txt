@@ -171,7 +171,6 @@ add_library(SeQuant-bliss
 set(SeQuant_src
         ${PROJECT_BINARY_DIR}/SeQuant/version.hpp
         SeQuant/version.cpp
-        SeQuant/core/abstract_tensor.cpp
         SeQuant/core/abstract_tensor.hpp
         SeQuant/core/algorithm.hpp
         SeQuant/core/any.hpp
@@ -220,6 +219,8 @@ set(SeQuant_src
         SeQuant/core/tag.hpp
         SeQuant/core/tensor.cpp
         SeQuant/core/tensor.hpp
+        SeQuant/core/tensor_canonicalizer.cpp
+        SeQuant/core/tensor_canonicalizer.hpp
         SeQuant/core/tensor_network.cpp
         SeQuant/core/tensor_network.hpp
         SeQuant/core/timer.hpp

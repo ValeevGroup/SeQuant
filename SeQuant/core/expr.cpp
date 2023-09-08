@@ -8,6 +8,7 @@
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/tensor_network.hpp>
+#include <SeQuant/core/tensor_canonicalizer.hpp>
 
 #include <range/v3/all.hpp>
 

@@ -6,6 +6,7 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/tensor_canonicalizer.hpp>
 
 #include <regex>
 

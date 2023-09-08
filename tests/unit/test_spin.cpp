@@ -14,6 +14,7 @@
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/tensor_canonicalizer.hpp>
 
 #include "catch.hpp"
 #include "test_config.hpp"

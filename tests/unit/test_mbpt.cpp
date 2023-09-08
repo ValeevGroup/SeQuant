@@ -17,6 +17,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/tensor_canonicalizer.hpp>
 
 #include "catch.hpp"
 #include "test_config.hpp"
