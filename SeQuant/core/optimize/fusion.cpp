@@ -1,5 +1,11 @@
 #include "fusion.hpp"
-#include <range/v3/action.hpp>
+#include "SeQuant/core/complex.hpp"
+#include "SeQuant/core/container.hpp"
+#include "SeQuant/core/expr.hpp"
+#include "SeQuant/core/expr_operator.hpp"
+
+#include <range/v3/algorithm.hpp>
+#include <range/v3/iterator.hpp>
 #include <range/v3/view.hpp>
 
 namespace sequant::opt {

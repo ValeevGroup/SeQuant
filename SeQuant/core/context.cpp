@@ -1,4 +1,6 @@
 #include "SeQuant/core/context.hpp"
+#include "SeQuant/core/attr.hpp"
+#include "SeQuant/core/utility/context.hpp"
 
 namespace sequant {
 

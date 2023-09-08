@@ -3,6 +3,9 @@
 //
 
 #include "space.hpp"
+#include "container.hpp"
+
+#include <bitset>
 
 int32_t sequant::TypeAttr::used_bits = 0xffff;
 

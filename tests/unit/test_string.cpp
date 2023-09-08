@@ -6,6 +6,9 @@
 
 #include "SeQuant/core/wstring.hpp"
 
+#include <memory>
+#include <type_traits>
+
 TEST_CASE("string", "[util]") {
   using namespace sequant;
 

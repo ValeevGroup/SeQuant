@@ -8,9 +8,9 @@
 #include "SeQuant/external/bliss/utils.hh"
 
 #include <cstdio>
-#include <iostream>
-#include <numeric>
 #include <vector>
+#include <cassert>
+#include <initializer_list>
 
 constexpr const bool use_colors = true;
 

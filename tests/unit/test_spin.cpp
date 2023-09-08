@@ -4,9 +4,31 @@
 
 #include "SeQuant/core/parse_expr.hpp"
 #include "SeQuant/domain/mbpt/spin.hpp"
+#include "SeQuant/core/abstract_tensor.hpp"
+#include "SeQuant/core/attr.hpp"
+#include "SeQuant/core/container.hpp"
+#include "SeQuant/core/expr.hpp"
+#include "SeQuant/core/hash.hpp"
+#include "SeQuant/core/index.hpp"
+#include "SeQuant/core/latex.hpp"
+#include "SeQuant/core/rational.hpp"
+#include "SeQuant/core/space.hpp"
+#include "SeQuant/core/tensor.hpp"
 
 #include "catch.hpp"
 #include "test_config.hpp"
+
+#include <cassert>
+#include <cstddef>
+#include <initializer_list>
+#include <memory>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <type_traits>
+#include <vector>
+
+#include <range/v3/all.hpp>
 
 TEST_CASE("Spin", "[spin]") {
   using namespace sequant;

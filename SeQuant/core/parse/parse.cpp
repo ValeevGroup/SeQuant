@@ -8,11 +8,8 @@
 #include "semantic_actions.hpp"
 
 #include <SeQuant/core/attr.hpp>
-#include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
-#include <SeQuant/core/index.hpp>
 #include <SeQuant/core/space.hpp>
-#include <SeQuant/core/tensor.hpp>
 
 #define BOOST_SPIRIT_X3_UNICODE
 #include <boost/core/demangle.hpp>
@@ -20,13 +17,15 @@
 #include <boost/spirit/home/x3/support/utility/error_reporting.hpp>
 #include <boost/variant.hpp>
 
-#include <algorithm>
-#include <cassert>
-#include <cstdint>
+#include <cstddef>
+#include <iterator>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
 #include <functional>
 #include <iostream>
-#include <memory>
-#include <type_traits>
 
 namespace sequant {
 

@@ -3,6 +3,9 @@
 //
 
 #include "tensor.hpp"
+#include "abstract_tensor.hpp"
+#include "expr.hpp"
+#include "index.hpp"
 
 namespace sequant {
 

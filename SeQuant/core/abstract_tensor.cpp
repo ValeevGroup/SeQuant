@@ -2,7 +2,14 @@
 // Created by Eduard Valeyev on 2019-03-24.
 //
 
+#include "expr.hpp"
+#include "index.hpp"
 #include "abstract_tensor.hpp"
+#include "container.hpp"
+
+#include <regex>
+
+#include <range/v3/functional/identity.hpp>
 
 namespace sequant {
 

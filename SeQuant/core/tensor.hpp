@@ -5,16 +5,31 @@
 #ifndef SEQUANT_TENSOR_HPP
 #define SEQUANT_TENSOR_HPP
 
+#include <algorithm>
+#include <array>
+#include <cassert>
+#include <cstddef>
+#include <initializer_list>
+#include <iterator>
 #include <memory>
+#include <optional>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <type_traits>
+#include <utility>
+#include <vector>
 
 #include "abstract_tensor.hpp"
-#include "algorithm.hpp"
 #include "attr.hpp"
+#include "container.hpp"
 #include "context.hpp"
 #include "expr.hpp"
 #include "hash.hpp"
 #include "index.hpp"
 #include "latex.hpp"
+
+#include <range/v3/all.hpp>
 
 namespace sequant {
 

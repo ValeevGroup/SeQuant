@@ -1,9 +1,11 @@
 #include "catch.hpp"
 
 #include <SeQuant/core/asy_cost.hpp>
-#include <SeQuant/core/math.hpp>
+#include <SeQuant/core/rational.hpp>
 
-#include <sstream>
+#include <cstddef>
+#include <cmath>
+#include <string>
 
 struct MatFlops {
   double occ_range_size;

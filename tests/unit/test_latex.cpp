@@ -5,6 +5,10 @@
 #include "catch.hpp"
 
 #include "SeQuant/core/latex.hpp"
+#include "SeQuant/core/meta.hpp"
+
+#include <stdexcept>
+#include <string>
 
 TEST_CASE("latex", "[util]") {
   using namespace sequant;

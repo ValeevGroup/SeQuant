@@ -1,12 +1,12 @@
 //
 // Created by Eduard Valeyev on 3/20/18.
 //
-#include <iostream>
-
 #include "catch.hpp"
 
+#include "SeQuant/core/attr.hpp"
 #include "SeQuant/core/index.hpp"
 #include "SeQuant/core/latex.hpp"
+#include "SeQuant/core/wolfram.hpp"
 
 TEST_CASE("Index", "[elements][index]") {
   using namespace sequant;

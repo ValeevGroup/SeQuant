@@ -1,5 +1,16 @@
 #include "asy_cost.hpp"
+#include "container.hpp"
+#include "meta/meta.hpp"
+#include "rational.hpp"
+#include "wstring.hpp"
+
 #include <boost/numeric/conversion/cast.hpp>
+
+#include <cmath>
+#include <limits>
+
+#include <range/v3/iterator.hpp>
+#include <range/v3/view.hpp>
 
 namespace sequant {
 

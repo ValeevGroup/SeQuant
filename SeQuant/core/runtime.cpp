@@ -1,5 +1,6 @@
 #include <SeQuant/core/runtime.hpp>
 
+#include <exception>
 #include <iostream>
 #include <locale>
 

@@ -8,6 +8,7 @@
 #include "asy_cost.hpp"
 #include "binary_node.hpp"
 #include "eval_expr.hpp"
+#include "tensor.hpp"
 
 #include <SeQuant/core/math.hpp>
 

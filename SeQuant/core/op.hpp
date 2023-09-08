@@ -5,7 +5,19 @@
 #ifndef SEQUANT_CORE_OP_H
 #define SEQUANT_CORE_OP_H
 
+#include <cassert>
+#include <cstddef>
+#include <cstdint>
+#include <initializer_list>
+#include <iterator>
+#include <memory>
 #include <numeric>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <tuple>
+#include <type_traits>
+#include <utility>
 
 #include <range/v3/all.hpp>
 
@@ -18,6 +30,7 @@
 #include "hugenholtz.hpp"
 #include "index.hpp"
 #include "ranges.hpp"
+#include "space.hpp"
 
 namespace sequant {
 

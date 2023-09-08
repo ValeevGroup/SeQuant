@@ -3,13 +3,39 @@
 //
 
 #include "SeQuant/domain/mbpt/mr.hpp"
+#include "SeQuant/domain/mbpt/fwd.hpp"
 
+#include "SeQuant/core/abstract_tensor.hpp"
+#include "SeQuant/core/container.hpp"
+#include "SeQuant/core/context.hpp"
 #include "SeQuant/core/expr.hpp"
-#include "SeQuant/core/math.hpp"
+#include "SeQuant/core/expr_fwd.hpp"
+#include "SeQuant/core/index.hpp"
+#include "SeQuant/core/logger.hpp"
 #include "SeQuant/core/op.hpp"
 #include "SeQuant/core/tensor.hpp"
 #include "SeQuant/core/wick.hpp"
-#include "SeQuant/domain/mbpt/context.hpp"
+
+#include <atomic>
+#include <algorithm>
+#include <map>
+#include <cassert>
+#include <cstdlib>
+#include <iostream>
+#include <memory>
+#include <set>
+#include <stdexcept>
+
+#include "range/v3/algorithm/for_each.hpp"
+#include "range/v3/functional/identity.hpp"
+#include "range/v3/iterator/basic_iterator.hpp"
+#include "range/v3/iterator/reverse_iterator.hpp"
+#include "range/v3/range/conversion.hpp"
+#include "range/v3/view/filter.hpp"
+#include "range/v3/view/map.hpp"
+#include "range/v3/view/reverse.hpp"
+#include "range/v3/view/transform.hpp"
+#include "range/v3/view/view.hpp"
 
 namespace sequant {
 namespace mbpt {

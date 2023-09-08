@@ -1,3 +1,7 @@
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/index.hpp>
+#include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/op.hpp>
 #include <SeQuant/core/wick.hpp>
 
 int main() {

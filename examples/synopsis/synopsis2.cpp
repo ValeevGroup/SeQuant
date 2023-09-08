@@ -1,5 +1,7 @@
 #include <SeQuant/core/context.hpp>
 
+#include <cassert>
+
 int main() {
   using namespace sequant;
 

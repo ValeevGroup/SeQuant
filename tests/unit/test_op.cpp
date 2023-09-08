@@ -4,7 +4,11 @@
 
 #include "catch.hpp"
 
-#include <iostream>
+#include <algorithm>
+#include <memory>
+#include <string>
+#include <type_traits>
+#include <utility>
 
 #include "SeQuant/core/op.hpp"
 

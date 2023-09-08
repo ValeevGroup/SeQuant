@@ -10,14 +10,24 @@
 #include <boost/core/demangle.hpp>
 
 #include "algorithm.hpp"
+#include "attr.hpp"
+#include "container.hpp"
 #include "expr.hpp"
 #include "index.hpp"
 
-#include <thread>
+#include <algorithm>
+#include <cstdlib>
+#include <functional>
+#include <memory>
+#include <mutex>
+#include <ostream>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <typeinfo>
+#include <utility>
 
 namespace sequant {
-
-class TensorCanonicalizer;
 
 /// This interface class defines a Tensor concept. Object @c t of a type that
 /// meets the concept must satisfy the following:

@@ -3,9 +3,16 @@
 //
 
 #include "expr.hpp"
+#include "abstract_tensor.hpp"
+#include "algorithm.hpp"
 #include "logger.hpp"
 #include "tensor.hpp"
 #include "tensor_network.hpp"
+
+#include <range/v3/all.hpp>
+
+#include <thread>
+#include <vector>
 
 namespace sequant {
 

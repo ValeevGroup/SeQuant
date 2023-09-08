@@ -1,11 +1,20 @@
 #include "SeQuant/domain/mbpt/op.hpp"
 #include "SeQuant/domain/mbpt/context.hpp"
 
-#include "SeQuant/core/math.hpp"
-#include "SeQuant/core/op.hpp"
 #include "SeQuant/core/tensor.hpp"
+#include "SeQuant/core/expr.hpp"
+#include "SeQuant/core/interval.hpp"
+#include "SeQuant/core/op.hpp"
+#include "SeQuant/core/attr.hpp"
+#include "SeQuant/core/container.hpp"
+#include "SeQuant/core/hash.hpp"
+#include "SeQuant/core/latex.hpp"
+#include "SeQuant/core/op.hpp"
+#include "SeQuant/core/space.hpp"
 
 #include <stdexcept>
+
+#include <range/v3/view/reverse.hpp>
 
 namespace sequant::mbpt {
 

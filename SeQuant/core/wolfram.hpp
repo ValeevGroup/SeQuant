@@ -5,8 +5,11 @@
 #ifndef SEQUANT_WOLFRAM_HPP
 #define SEQUANT_WOLFRAM_HPP
 
-#include <type_traits>
 #include "meta.hpp"
+#include "wstring.hpp"
+
+#include <string>
+#include <type_traits>
 
 namespace sequant {
 

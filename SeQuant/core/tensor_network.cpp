@@ -3,8 +3,32 @@
 //
 
 #include "tensor_network.hpp"
+#include "abstract_tensor.hpp"
+#include "algorithm.hpp"
+#include "attr.hpp"
 #include "bliss.hpp"
+#include "complex.hpp"
+#include "container.hpp"
+#include "expr.hpp"
+#include "hash.hpp"
+#include "index.hpp"
+#include "latex.hpp"
 #include "logger.hpp"
+#include "tag.hpp"
+#include "wstring.hpp"
+
+#include <algorithm>
+#include <iostream>
+#include <iterator>
+#include <sstream>
+#include <type_traits>
+
+#include "range/v3/algorithm/for_each.hpp"
+#include "range/v3/algorithm/none_of.hpp"
+#include "range/v3/functional/identity.hpp"
+#include "range/v3/iterator/basic_iterator.hpp"
+#include "range/v3/view/any_view.hpp"
+#include "range/v3/view/view.hpp"
 
 namespace sequant {
 

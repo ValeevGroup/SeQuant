@@ -7,7 +7,18 @@
 
 #include "abstract_tensor.hpp"
 #include "container.hpp"
-#include "tensor.hpp"
+#include "expr.hpp"
+#include "index.hpp"
+
+#include <cassert>
+#include <cstdlib>
+#include <memory>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <tuple>
+#include <utility>
+#include <vector>
 
 // forward declarations
 namespace bliss {
