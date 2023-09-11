@@ -184,6 +184,10 @@ container::svector<container::svector<Index>> external_indices(Tensor const&);
 /// @return an expression with spin integrated/adapted
 ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr);
 
+/// \brief Same as \c closed_shell_CC_spintrace except internally uses
+///        \c sequant::spintrace instead of sequant::closed_shell_spintrace.
+ExprPtr closed_shell_CC_spintrace_rigorous(ExprPtr const& expr);
+
 /// Collect all indices from an expression
 auto index_list(const ExprPtr& expr);
 
