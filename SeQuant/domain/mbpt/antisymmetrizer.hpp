@@ -162,7 +162,7 @@ class antisymm_element {
         starting_constant *=
             it->get()
                 ->as<Constant>()
-                .value();  // not sure what to do for imaginary part if needed
+                .value();
       }
 
       else if (it->get()->is<FNOperator>()) {
@@ -275,8 +275,7 @@ class antisymmetrize {
       for (auto&& product :
            s->as<Sum>().summands()) {  // for each element in the sum
         if (product->is<Product>()) {
-          antisymm_element ele(
-              product);  // calculate the sum of all the valid permutations for
+          antisymm_element ele(product);  // calculate the sum of all the valid permutations for
                          // each term. each object here should only live until
                          // this loop ends.
           result = result + ele.result;  // append that to the final list;
