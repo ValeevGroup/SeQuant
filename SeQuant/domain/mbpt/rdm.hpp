@@ -253,9 +253,12 @@ three_body_decomp(ExprPtr ex_, bool approx = true) {
 }
 
 std::pair<ExprPtr, std::pair<std::vector<Index>, std::vector<Index>>>
-three_body_decomposition(ExprPtr _ex, int rank) {
+three_body_decomposition(ExprPtr _ex, int rank, bool fast = false) {
   std::pair<std::vector<Index>, std::vector<Index>> initial_pairing;
   if (rank == 3) {
+    if (fast) {
+    }
+    else{
     auto ex_pair = three_body_decomp(_ex);
     _ex = ex_pair.first;
     initial_pairing = ex_pair.second;
@@ -285,66 +288,71 @@ three_body_decomposition(ExprPtr _ex, int rank) {
       }
     }
     simplify(_ex);
-  } else if (rank == 2) {
-    auto ex_pair = three_body_decomp(_ex, true);
-    _ex = ex_pair.first;
-    initial_pairing = ex_pair.second;
-    simplify(_ex);
-    for (auto&& product : _ex->as<Sum>().summands()) {
-      if (product->is<Product>()) {
-        for (auto&& factor : product->as<Product>().factors()) {
-          if (factor->is<Tensor>()) {
-            if (factor->as<Tensor>().label() ==
-                    optype2label.at(OpType::RDMCumulant) &&
-                factor->as<Tensor>().rank() > 2) {
-              factor = ex<Constant>(0);
-            } else if (factor->as<Tensor>().label() ==
-                           optype2label.at(OpType::RDMCumulant) &&
-                       factor->as<Tensor>().rank() == 2) {
-              factor = cumu2_to_density(factor);
-            } else if (factor->as<Tensor>().label() ==
-                       optype2label.at(OpType::RDMCumulant)) {
-              factor = cumu_to_density(factor);
-            } else {
-              assert(factor->as<Tensor>().label() !=
-                     optype2label.at(OpType::RDMCumulant));
-            }
-          }
-        }
-      }
-    }
-    simplify(_ex);
-    // std::wcout << " cumulant replacment: " << to_latex_align(_ex,20, 7) <<
-    // std::endl;
-  } else if (rank == 1) {
-    auto ex_pair = three_body_decomp(_ex, true);
-    _ex = ex_pair.first;
-    initial_pairing = ex_pair.second;
-    simplify(_ex);
-    for (auto&& product : _ex->as<Sum>().summands()) {
-      if (product->is<Product>()) {
-        for (auto&& factor : product->as<Product>().factors()) {
-          if (factor->is<Tensor>()) {
-            if (factor->as<Tensor>().label() ==
-                    optype2label.at(OpType::RDMCumulant) &&
-                factor->as<Tensor>().rank() > 1) {
-              factor = ex<Constant>(0);
-            } else if (factor->as<Tensor>().label() ==
-                       optype2label.at(OpType::RDMCumulant)) {
-              factor = cumu_to_density(factor);
-            } else {
-              assert(factor->as<Tensor>().label() !=
-                     optype2label.at(OpType::RDMCumulant));
-            }
-          }
-        }
-      }
-    }
-    simplify(_ex);
-  } else {
-    throw "rank not supported!";
   }
-  return {_ex, initial_pairing};
+    }
+    else if (rank == 2) {
+      auto ex_pair = three_body_decomp(_ex, true);
+      _ex = ex_pair.first;
+      initial_pairing = ex_pair.second;
+      simplify(_ex);
+      for (auto&& product : _ex->as<Sum>().summands()) {
+        if (product->is<Product>()) {
+          for (auto&& factor : product->as<Product>().factors()) {
+            if (factor->is<Tensor>()) {
+              if (factor->as<Tensor>().label() ==
+                      optype2label.at(OpType::RDMCumulant) &&
+                  factor->as<Tensor>().rank() > 2) {
+                factor = ex<Constant>(0);
+              } else if (factor->as<Tensor>().label() ==
+                             optype2label.at(OpType::RDMCumulant) &&
+                         factor->as<Tensor>().rank() == 2) {
+                factor = cumu2_to_density(factor);
+              } else if (factor->as<Tensor>().label() ==
+                         optype2label.at(OpType::RDMCumulant)) {
+                factor = cumu_to_density(factor);
+              } else {
+                assert(factor->as<Tensor>().label() !=
+                       optype2label.at(OpType::RDMCumulant));
+              }
+            }
+          }
+        }
+      }
+      simplify(_ex);
+      // std::wcout << " cumulant replacment: " << to_latex_align(_ex,20, 7) <<
+      // std::endl;
+    }
+    else if (rank == 1) {
+      auto ex_pair = three_body_decomp(_ex, true);
+      _ex = ex_pair.first;
+      initial_pairing = ex_pair.second;
+      simplify(_ex);
+      for (auto&& product : _ex->as<Sum>().summands()) {
+        if (product->is<Product>()) {
+          for (auto&& factor : product->as<Product>().factors()) {
+            if (factor->is<Tensor>()) {
+              if (factor->as<Tensor>().label() ==
+                      optype2label.at(OpType::RDMCumulant) &&
+                  factor->as<Tensor>().rank() > 1) {
+                factor = ex<Constant>(0);
+              } else if (factor->as<Tensor>().label() ==
+                         optype2label.at(OpType::RDMCumulant)) {
+                factor = cumu_to_density(factor);
+              } else {
+                assert(factor->as<Tensor>().label() !=
+                       optype2label.at(OpType::RDMCumulant));
+              }
+            }
+          }
+        }
+      }
+      simplify(_ex);
+    }
+    else {
+      throw "rank not supported!";
+    }
+    return {_ex, initial_pairing};
+
 }
 
 // in general a three body substitution can be approximated with 1, 2, or 3 body
