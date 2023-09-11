@@ -83,6 +83,8 @@ void register_standard_instances() {
                                   qnattr, do_not_throw);
     IndexSpace::register_instance(declab(L"a"), IndexSpace::active_unoccupied,
                                   qnattr, do_not_throw);
+    IndexSpace::register_instance(declab(L"g"), IndexSpace::inactive_unoccupied,
+                                 qnattr, do_not_throw);
     // {α,β.../κ,𝛌...} for complete {unoccupied/any} spstates introduced in
     // DOI 10.1063/1.459921 (MP2-R12 I)
     IndexSpace::register_instance(declab(L"α"), IndexSpace::complete_unoccupied,
@@ -104,6 +106,9 @@ void register_standard_instances() {
                                   do_not_throw);
     // introduced in MPQC for GF, CT-F12, and other ad hoc uses
     IndexSpace::register_instance(declab(L"x"), IndexSpace::all_active, qnattr,
+                                  do_not_throw);
+    // used in virtual projection CT-F12 theory methods in MPQC.
+    IndexSpace::register_instance(declab(L"c"), IndexSpace::complete_inactive_unoccupied, qnattr,
                                   do_not_throw);
     // e.g. see DOI 10.1063/5.0067511
     IndexSpace::register_instance(declab(L"u"), IndexSpace::active, qnattr,
@@ -140,12 +145,14 @@ void make_default_indexregistry() {
     register_index(idxreg_ref, Index{declab(L"i")}, 100);
     register_index(idxreg_ref, Index{declab(L"I")}, 120);
     register_index(idxreg_ref, Index{declab(L"m")}, 110);
-    register_index(idxreg_ref, Index{declab(L"a")}, 1000);
+    register_index(idxreg_ref, Index{declab(L"a")}, 200);
+    register_index(idxreg_ref, Index{declab(L"g")}, 800);
     register_index(idxreg_ref, Index{declab(L"e")}, 1000);
     register_index(idxreg_ref, Index{declab(L"A")}, 1020);
-    register_index(idxreg_ref, Index{declab(L"x")}, 1120);
+    register_index(idxreg_ref, Index{declab(L"x")}, 320);
     register_index(idxreg_ref, Index{declab(L"p")}, 1130);
     register_index(idxreg_ref, Index{declab(L"α'")}, 3000);
+    register_index(idxreg_ref, Index{declab(L"c")}, 3800);
     register_index(idxreg_ref, Index{declab(L"α")}, 4000);
     register_index(idxreg_ref, Index{declab(L"κ")}, 4130);
   }
