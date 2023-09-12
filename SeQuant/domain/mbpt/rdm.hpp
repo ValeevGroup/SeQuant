@@ -271,12 +271,11 @@ three_body_decomposition(ExprPtr ex_, int rank, bool fast = false) {
 
       std::vector<Index> initial_upper{up_0, up_1, up_2};
       initial_pairing.first = initial_lower; initial_pairing.second = initial_upper;
-      // keep non-constant terms as permutation op times type of expression.
-      auto p1 = ex<Tensor>(L"P1",std::initializer_list<Index>{down_0,down_1,down_2,up_0,up_1,up_2},std::initializer_list<Index>{down_0,down_1,down_2,up_0,up_1,up_2});
-      auto p2 = ex<Tensor>(L"P2",std::initializer_list<Index>{down_0,down_1,down_2,up_0,up_1,up_2},std::initializer_list<Index>{down_0,down_1,down_2,up_0,up_1,up_2});
-      auto result =  (p1 * ex<FNOperator>(std::initializer_list<Index>{up_1,up_2},std::initializer_list<Index>{down_1,down_2}) * ex<Tensor>(optype2label.at(OpType::RDM),std::initializer_list<Index>{down_0}, std::initializer_list<Index>{up_0}))
-                    +  (ex<Constant>(-2) * p2 * ex<FNOperator>(std::initializer_list<Index>{up_0},std::initializer_list<Index>{down_0}) * ex<Tensor>(optype2label.at(OpType::RDM),std::initializer_list<Index>{down_1}, std::initializer_list<Index>{up_1}) * ex<Tensor>(optype2label.at(OpType::RDM),std::initializer_list<Index>{down_2}, std::initializer_list<Index>{up_2}))
-                    + (p1 *ex<FNOperator>(std::initializer_list<Index>{up_0},std::initializer_list<Index>{down_0}) * ex<Tensor>(optype2label.at(OpType::RDM),std::initializer_list<Index>{down_1,down_2}, std::initializer_list<Index>{up_1,up_2}));
+      // make tensors which can be decomposed into the constituent pieces later in the procedure.
+      auto DE2 = ex<Tensor>(L"DE2",std::initializer_list<Index>{down_0,down_1,down_2},std::initializer_list<Index>{up_0,up_1,up_2});
+      auto DDE = ex<Tensor>(L"DDE",std::initializer_list<Index>{down_0,down_1,down_2},std::initializer_list<Index>{up_0,up_1,up_2});
+      auto D2E =  ex<Tensor>(L"D2E",std::initializer_list<Index>{down_0,down_1,down_2},std::initializer_list<Index>{up_0,up_1,up_2});
+      auto result = DE2 + D2E - ex<Constant>(2) * DDE;
       return {result,initial_pairing};
     }
     else{
