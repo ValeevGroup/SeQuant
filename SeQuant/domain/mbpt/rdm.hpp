@@ -256,29 +256,6 @@ std::pair<ExprPtr, std::pair<std::vector<Index>, std::vector<Index>>>
 three_body_decomposition(ExprPtr ex_, int rank, bool fast = false) {
   std::pair<std::vector<Index>, std::vector<Index>> initial_pairing;
   if (rank == 3) {
-    if (fast) {
-      assert(ex_->is<FNOperator>());
-      //FNOp does not store a list of indices so I have to do this
-      auto down_0 = ex_->as<FNOperator>().annihilators()[0].index();
-      auto down_1 = ex_->as<FNOperator>().annihilators()[1].index();
-      auto down_2 = ex_->as<FNOperator>().annihilators()[2].index();
-
-      std::vector<Index> initial_lower{down_0, down_1, down_2};
-
-      auto up_0 = ex_->as<FNOperator>().creators()[0].index();
-      auto up_1 = ex_->as<FNOperator>().creators()[1].index();
-      auto up_2 = ex_->as<FNOperator>().creators()[2].index();
-
-      std::vector<Index> initial_upper{up_0, up_1, up_2};
-      initial_pairing.first = initial_lower; initial_pairing.second = initial_upper;
-      // make tensors which can be decomposed into the constituent pieces later in the procedure.
-      auto DE2 = ex<Tensor>(L"DE2",std::initializer_list<Index>{down_0,down_1,down_2},std::initializer_list<Index>{up_0,up_1,up_2});
-      auto DDE = ex<Tensor>(L"DDE",std::initializer_list<Index>{down_0,down_1,down_2},std::initializer_list<Index>{up_0,up_1,up_2});
-      auto D2E =  ex<Tensor>(L"D2E",std::initializer_list<Index>{down_0,down_1,down_2},std::initializer_list<Index>{up_0,up_1,up_2});
-      auto result = DE2 + D2E - ex<Constant>(2) * DDE;
-      return {result,initial_pairing};
-    }
-    else{
     auto ex_pair = three_body_decomp(ex_);
     ex_ = ex_pair.first;
     initial_pairing = ex_pair.second;
@@ -308,9 +285,31 @@ three_body_decomposition(ExprPtr ex_, int rank, bool fast = false) {
       }
     }
     simplify(ex_);
-  }
+
     }
     else if (rank == 2) {
+      if (fast) {
+        assert(ex_->is<FNOperator>());
+        //FNOp does not store a list of indices so I have to do this
+        auto down_0 = ex_->as<FNOperator>().annihilators()[0].index();
+        auto down_1 = ex_->as<FNOperator>().annihilators()[1].index();
+        auto down_2 = ex_->as<FNOperator>().annihilators()[2].index();
+
+        std::vector<Index> initial_lower{down_0, down_1, down_2};
+
+        auto up_0 = ex_->as<FNOperator>().creators()[0].index();
+        auto up_1 = ex_->as<FNOperator>().creators()[1].index();
+        auto up_2 = ex_->as<FNOperator>().creators()[2].index();
+
+        std::vector<Index> initial_upper{up_0, up_1, up_2};
+        initial_pairing.first = initial_lower; initial_pairing.second = initial_upper;
+        // make tensors which can be decomposed into the constituent pieces later in the procedure.
+        auto DE2 = ex<Tensor>(L"DE2",std::initializer_list<Index>{down_0,down_1,down_2},std::initializer_list<Index>{up_0,up_1,up_2});
+        auto DDE = ex<Tensor>(L"DDE",std::initializer_list<Index>{down_0,down_1,down_2},std::initializer_list<Index>{up_0,up_1,up_2});
+        auto D2E =  ex<Tensor>(L"D2E",std::initializer_list<Index>{down_0,down_1,down_2},std::initializer_list<Index>{up_0,up_1,up_2});
+        auto result = DE2 + D2E - ex<Constant>(2) * DDE;
+        return {result,initial_pairing};
+      }
       auto ex_pair = three_body_decomp(ex_, true);
       ex_ = ex_pair.first;
       initial_pairing = ex_pair.second;
