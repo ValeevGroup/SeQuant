@@ -612,3 +612,7 @@ feature_summary(WHAT ALL
 # appendix: misc details
 ###############################################################################
 SET(CMAKE_COLOR_MAKEFILE ON)
+
+if (SEQUANT_ANALYSIS)
+    add_subdirectory(${PROJECT_SOURCE_DIR}/examples/analysis)
+endif()
