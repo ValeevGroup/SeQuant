@@ -168,9 +168,18 @@ std::vector<sequant::ExprPtr> cc::pert_t1() {
       {L"h", L"t"},  {L"f", L"t"},  {L"g", L"t"}, {L"h", L"t¹"},
       {L"f", L"t¹"}, {L"g", L"t¹"}, {L"μ", L"t"}};
 
+  std::vector<std::pair<std::wstring, std::wstring>> op_connect2 = {
+      {optype2label.at(OpType::h), optype2label.at(OpType::t)},
+      {optype2label.at(OpType::f), optype2label.at(OpType::t)},
+      {optype2label.at(OpType::g), optype2label.at(OpType::t)},
+      {optype2label.at(OpType::h), optype2label.at(OpType::t_1)},
+      {optype2label.at(OpType::f), optype2label.at(OpType::t_1)},
+      {optype2label.at(OpType::g), optype2label.at(OpType::t_1)},
+      {optype2label.at(OpType::μ), optype2label.at(OpType::t)}};
+
   std::vector<ExprPtr> result(P + 1);
   for (auto p = P; p >= PMIN; --p) {
-    result.at(p) = op::vac_av(op::P(p) * (mu_bar + hbar_pert), op_connect);
+    result.at(p) = op::vac_av(op::P(p) * (mu_bar + hbar_pert), op_connect2);
   }
 
   return result;
@@ -182,9 +191,10 @@ std::vector<ExprPtr> cc::pert_λ1() {
 
   // construct (V * e^T)_c = V + V * T + V * T^2/2!
   auto mu_bar = sim_tr(op::mu(1), 2);
-  const auto One = ex<Constant>(1);
 
   auto hbar_pert = sim_tr(op::H(), 3) * op::pertT1(N);
+
+  const auto One = ex<Constant>(1);
 
   // equation split into 2 terms
   auto eq1 = simplify((One + op::Lambda(N)) * (mu_bar + hbar_pert));
@@ -197,11 +207,28 @@ std::vector<ExprPtr> cc::pert_λ1() {
   std::vector<std::pair<std::wstring, std::wstring>> op_connect = {
       {L"μ", L"t"},  {L"h", L"t"},  {L"f", L"t"}, {L"g", L"t"}, {L"h", L"t¹"},
       {L"f", L"t¹"}, {L"g", L"t¹"}, {L"h", L"A"}, {L"f", L"A"}, {L"g", L"A"},
-      {L"h", L"S"},  {L"f", L"S"},  {L"g", L"S"}};
+      {L"h", L"S"},  {L"f", L"S"},  {L"g", L"S"}, {L"μ", L"A"}, {L"μ", L"S"}};
+
+  std::vector<std::pair<std::wstring, std::wstring>> op_connect2 = {
+      {optype2label.at(OpType::h), optype2label.at(OpType::t)},
+      {optype2label.at(OpType::f), optype2label.at(OpType::t)},
+      {optype2label.at(OpType::g), optype2label.at(OpType::t)},
+      {optype2label.at(OpType::h), optype2label.at(OpType::t_1)},
+      {optype2label.at(OpType::f), optype2label.at(OpType::t_1)},
+      {optype2label.at(OpType::g), optype2label.at(OpType::t_1)},
+      {optype2label.at(OpType::μ), optype2label.at(OpType::t)},
+      {optype2label.at(OpType::h), optype2label.at(OpType::A)},
+      {optype2label.at(OpType::f), optype2label.at(OpType::A)},
+      {optype2label.at(OpType::g), optype2label.at(OpType::A)},
+      {optype2label.at(OpType::h), optype2label.at(OpType::S)},
+      {optype2label.at(OpType::f), optype2label.at(OpType::S)},
+      {optype2label.at(OpType::g), optype2label.at(OpType::S)},
+      {optype2label.at(OpType::μ), optype2label.at(OpType::A)},
+      {optype2label.at(OpType::μ), optype2label.at(OpType::S)}};
 
   std::vector<ExprPtr> result(P + 1);
   for (auto p = P; p >= PMIN; --p) {
-    result.at(p) = op::vac_av((eq1 + eq2) * op::P(-p), op_connect);
+    result.at(p) = op::vac_av((eq1 + eq2) * op::P(-p), op_connect2);
   }
   return result;
 }
