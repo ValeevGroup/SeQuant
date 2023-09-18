@@ -1,4 +1,7 @@
+#include <SeQuant/core/optimize.hpp>
 #include "algorithm.hpp"
+#include "utils.hpp"
+
 #include "cmdline.hpp"
 
 #include <clipp.h>
@@ -7,6 +10,7 @@
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 
+#include <fstream>
 #include <iostream>
 #include <locale>
 
@@ -29,13 +33,10 @@ void set_locale() {
   std::ios_base::sync_with_stdio(true);
 }
 
-void load_sequant_defaults() {
+void load_sequant() {
   using namespace sequant;
   set_locale();
   detail::OpIdRegistrar op_id_registrar;
-  sequant::set_default_context(
-      Context(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-              BraKetSymmetry::conjugate, SPBasis::spinorbital));
   mbpt::set_default_convention();
 }
 
@@ -46,7 +47,7 @@ int main(int argc, char* argv[]) {
   using namespace sequant;
 
   // initialization
-  load_sequant_defaults();
+  load_sequant();
   initialize_db();
   //
 
@@ -54,74 +55,80 @@ int main(int argc, char* argv[]) {
   doc_fmt.first_column(2);
   doc_fmt.indent_size(2);
   doc_fmt.last_column(120);
-  doc_fmt.max_flags_per_param_in_usage(1);
 
-  enum struct Command { Graph, Latex, Help, Invalid };
+  container::vector<std::string> all_args;
+  all_args.reserve(argc - 1);
+  for (auto i = 1; i < argc; ++i) all_args.emplace_back(argv[i]);
 
-  auto cmnd = Command::Invalid;
-  clipp::group sqntly;
+  // ///////////////////////////////////////
+  // Expression actions
+  // ///////////////////////////////////////
+  auto graph_cmd = cmdl::Graph{};
+  auto latex_cmd = cmdl::Latex{};
+  auto expr_cmd = cmdl::Expr{};
+  container::vector<cmdl::Command*> expr_actions{&expr_cmd, &latex_cmd,
+                                                 &graph_cmd};
+  //
 
-  auto latex_opts = LatexOpts{};
-  auto graph_opts = GraphOpts{};
-  auto cck_opts = CCkOpts{};
-  container::vector<std::string> unknowns;
+  // ///////////////////////////////////////
+  // Expression sources
+  // ///////////////////////////////////////
+  auto cck_cmd = cmdl::CCk{};
+  auto read_cmd = cmdl::Read{};
+  container::vector<cmdl::Command*> expr_sources{&cck_cmd, &read_cmd};
+  //
 
-  {
-    clipp::group latex_group, graph_group, cck_group;
+  // when asked for a command help, show help and exit
+  for (auto ptr : ranges::views::concat(expr_actions, expr_sources))
+    ptr->parse(argc, argv);
+  // done single command help
 
-    latex_opts.add_options(latex_group);
-    graph_opts.add_options(graph_group);
+  bool show_help;
+  std::string outfile;
+  container::vector<std::string> action_args, source_args;
 
-    auto latex_command = clipp::command("latex")
-                             .set(cmnd, Command::Latex)
-                             .doc("Generate latex expressions") &
-                         latex_group;
-    auto graph_command =
-        clipp::command("graph").set(cmnd, Command::Graph).doc("Generate graphs")
-        /* & graph_group //disabled for now */
-        ;
-    auto help_command = clipp::required("--help", "-h")
-                            .set(cmnd, Command::Help)
-                            .doc("Show help and exit");
+  clipp::group cli =
+      (clipp::option("-h", "--help")
+           .set(show_help)
+           .doc("Show this screen\n"
+                "run 'sqntly COMMAND --help' for more"),
+       clipp::option("--out").doc("Write output to this file") &
+           clipp::value("FILE", outfile),
+       (cmdl::one_of_cmds(expr_actions)
+                .doc("COMMAND: Action to perform on a sequant::Sum") &
+            clipp::opt_values("ARGS", action_args),
+        cmdl::one_of_cmds(expr_sources)
+                .doc("COMMAND: A source of sequant::Sum") &
+            clipp::opt_values("ARGS", source_args)));
 
-    cck_opts.add_options(cck_group);
-    cck_group.doc("Select a coupled-cluster equation");
-    sqntly.push_back(help_command |
-                     ((latex_command | graph_command), cck_group));
-  }
+  assert(cli.flags_are_prefix_free());
 
-  sqntly.push_back(clipp::any_other(unknowns));
-
-  auto parse_result = clipp::parse(argc, argv, sqntly);
-  if (cmnd == Command::Help) {
-    cout << clipp::make_man_page(sqntly, "sqntly", doc_fmt) << endl;
+  auto pr = clipp::parse(argc, argv, cli);
+  if (show_help) {
+    cout << clipp::make_man_page(cli, "sqntly", doc_fmt) << endl;
     return 0;
   }
 
-  if (!(parse_result && unknowns.empty())) {
-    cerr << "Error parsing command line arguments\n";
-    if (!unknowns.empty())
-      cerr << fmt::format("Unknown arguments: {}\n", fmt::join(unknowns, ", "));
-
-    cout << "Usage:\n"
-         << clipp::usage_lines(sqntly, "sqntly", doc_fmt) << "\n\n"
-         << "Run with '--help' for more." << endl;
-
+  clipp::parsing_result pr_action, pr_source;
+  for (auto ptr : expr_actions)
+    if (ptr->set()) pr_action = ptr->parse(action_args);
+  for (auto ptr : expr_sources)
+    if (ptr->set()) pr_source = ptr->parse(source_args);
+  if (!(pr && pr_action && pr_source)) {
+    cout << "Usage:\n";
+    cout << clipp::usage_lines(cli, "sqntly", doc_fmt) << endl;
     return 1;
   }
 
-  assert(cmnd != Command::Invalid);
-  cck_opts.sanity_check();
+  ExprPtr expr;
+  for (auto ptr : expr_sources)
+    if (ptr->set()) expr = dynamic_cast<cmdl::ExprSource const&>(*ptr).expr();
 
-  auto expr = read_cck(cck_opts, database_dir());
-  if (cmnd == Command::Graph) {
-    for (auto const& vec : cse_graph(expr.as<Sum>()))
-      cout << fmt::format("{}\n", fmt::join(vec, ","));
-  } else if (cmnd == Command::Latex) {
-    cout << to_string(to_latex_align(expr, latex_opts.lines_per_block(),
-                                     latex_opts.terms_per_line()))
-         << endl;
-  }
-
+  for (auto ptr : expr_actions)
+    if (ptr->set()) {
+      std::ofstream ofs{outfile};
+      dynamic_cast<cmdl::ExprAction const&>(*ptr).run(
+          outfile.empty() ? std::cout : ofs, expr);
+    }
   return 0;
 }

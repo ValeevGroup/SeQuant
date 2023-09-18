@@ -61,17 +61,21 @@ void set_uft8(Os& os) {
   }
 }
 
-void write_sum(Sum const& sum, std::filesystem::path const& file) {
-  auto ofs = std::wofstream{file};
-  ofs.exceptions(std::ios::badbit | std::ios::failbit);
-  set_uft8(ofs);
+void write_sum(std::ostream& os, Sum const& sum) {
+  set_uft8(os);
   try {
-    for (auto const& term : sum) ofs << deparse_expr(term) << '\n';
+    for (auto const& term : sum) os << to_string(deparse_expr(term)) << '\n';
   } catch (std::ios_base::failure const& ex) {
     std::cerr << "Caught exception: " << ex.what()
               << ", error code = " << ex.code() << std::endl;
     std::exit(1);
   }
+}
+
+void write_sum(Sum const& sum, std::filesystem::path const& file) {
+  auto ofs = std::ofstream{file};
+  ofs.exceptions(std::ios::badbit | std::ios::failbit);
+  write_sum(ofs, sum);
 }
 
 ExprPtr read_sum(std::filesystem::path const& file) {
@@ -93,8 +97,15 @@ ExprPtr read_sum(std::filesystem::path const& file) {
   }
 }
 
+Context context_cck() {
+  return Context{Vacuum::SingleProduct, IndexSpaceMetric::Unit,
+                 BraKetSymmetry::conjugate, SPBasis::spinorbital};
+}
+
 container::vector<ExprPtr> cck_equations(size_t excit) {
   using ranges::views::tail;
+
+  auto ctx = set_scoped_default_context(context_cck());
 
   auto cc_rs_ = sequant::mbpt::sr::cceqs(excit).t();
   assert(!cc_rs_[0]);
@@ -111,6 +122,7 @@ container::vector<ExprPtr> cck_equations(size_t excit,
   using ranges::views::tail;
   using ranges::views::transform;
 
+  auto ctx = set_scoped_default_context(context_cck());
   auto cc_rs_ = sequant::mbpt::sr::cceqs(excit).t();
   assert(!cc_rs_[0]);
 

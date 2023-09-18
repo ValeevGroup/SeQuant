@@ -76,25 +76,26 @@ container::set<Imed> intermediates(Sum const&);
 ///
 /// \brief Given a set of intermediates returns a map from the position of a
 ///        term to the set of positions of connected terms. Two terms are
-///        connected if they share a common intermediate. If a term is not
-///        connected to any other term, it is not included in the map.
+///        connected if they share a common intermediate.
 /// \param imeds The intermediates to analyze.
-/// \return A map from the position of a term to the set of positions of the set
-///         of connected terms.
+/// \return A map from the position of a term to the set of positions of the
+///         connected terms.
 template <typename ImedsT, typename = std::enable_if_t<
                                std::is_convertible_v<Imed, IteredT<ImedsT>>>>
 adjacency_map adjacency_set(ImedsT const& imeds) {
-  using ranges::views::filter;
   using ranges::views::tail;
 
   adjacency_map result;
-  for (auto const& im : imeds | filter(Imed::filter_count<std::greater<>>(1))) {
-    auto pos = im.pos;
-    ranges::stable_sort(pos);
-    result.emplace(pos[0], tail(pos) | ranges::to<container::set<size_t>>);
+  for (auto const& im : imeds) {
+    result.emplace(im.pos[0],
+                   tail(im.pos) | ranges::to<container::set<size_t>>);
   }
   return result;
 }
+
+// /////////////////////////////////////////////////////////////////////////////
+// Deprecated functions below
+// /////////////////////////////////////////////////////////////////////////////
 
 ///
 /// \param sum A Sum object representing a many-body equation.
@@ -103,7 +104,7 @@ adjacency_map adjacency_set(ImedsT const& imeds) {
 ///
 template <typename Pred = std::function<bool(Imed const&)>,
           typename = std::enable_if_t<std::is_invocable_r_v<bool, Pred, Imed>>>
-Sum connected_terms(
+[[deprecated]] Sum connected_terms(
     Sum const& sum, Pred const& pred = [](auto const&) { return true; }) {
   using ranges::views::filter;
   using ranges::views::transform;
@@ -127,10 +128,12 @@ Sum connected_terms(
 /// \return Adjacency matrix of the common sub-expressions graph.
 ///
 ///
-container::vector<container::vector<size_t>> cse_graph(Sum const& sum);
+[[deprecated]] container::vector<container::vector<size_t>> cse_graph(
+    Sum const& sum);
 
-void write_cse_graph(std::filesystem::path const& file,
-                     container::vector<container::vector<size_t>> const& graph);
+[[deprecated]] void write_cse_graph(
+    std::filesystem::path const& file,
+    container::vector<container::vector<size_t>> const& graph);
 
 }  // namespace sequant
 

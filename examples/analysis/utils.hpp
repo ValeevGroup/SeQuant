@@ -18,6 +18,8 @@ enum struct SpinTraceAlgorithm { Fast, Robust, Invalid, OpenShell = Invalid };
 ///
 void write_sum(Sum const& sum, std::filesystem::path const& file);
 
+void write_sum(std::ostream& os, Sum const& sum);
+
 ///
 /// \brief Read a sum of terms from a file. std::exit(1) if file cannot be read.
 ///

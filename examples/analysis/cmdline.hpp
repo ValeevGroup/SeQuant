@@ -5,26 +5,122 @@
 
 #include <clipp.h>
 
-namespace sequant {
+namespace sequant::cmdl {
+
+struct Option {
+  [[nodiscard]] virtual clipp::group group() noexcept = 0;
+
+ protected:
+  Option() = default;
+};
+
+class Command : public Option {
+ public:
+  using args_type = container::vector<std::string>;
+
+  [[nodiscard]] std::string_view name() const noexcept;
+
+  [[nodiscard]] std::string_view doc() const noexcept;
+
+  [[maybe_unused]] clipp::parsing_result parse(args_type const&);
+
+  void parse(int argc, char** argv);
+
+  [[nodiscard]] bool set() const noexcept;
+
+  void set(bool) noexcept;
+
+ protected:
+  explicit Command(std::string_view name, std::string_view doc);
+
+ private:
+  bool is_set_;
+  std::string_view name_;
+  std::string_view doc_;
+};
+
+template <typename Iterable>
+clipp::group one_of_cmds(Iterable& cmds) {
+  static_assert(std::is_same_v<decltype(**ranges::begin(cmds)), Command&>);
+  clipp::group result;
+  for (auto& cm : cmds) {
+    auto cm_grp = clipp::group(
+        clipp::command(cm->name().data()).doc(cm->doc().data()).call([&cm]() {
+          cm->set(true);
+        }));
+    result = result.empty() ? cm_grp : result | cm_grp;
+  }
+  return result;
+}
+
+struct ExprSource : public Command {
+  [[nodiscard]] virtual ExprPtr expr() const = 0;
+
+  using Command::Command;
+};
+
+struct ExprAction : public Command {
+  virtual void run(std::ostream&, ExprPtr const&) const = 0;
+
+  using Command::Command;
+};
+
+// /////////////////////////////////////////////////////////////////////////////
+// classes derived from ExprAction follow
+// /////////////////////////////////////////////////////////////////////////////
+struct Latex : public ExprAction {
+ public:
+  Latex();
+
+  void run(std::ostream&, ExprPtr const&) const override;
+
+  [[nodiscard]] clipp::group group() noexcept override;
+
+ private:
+  size_t tpl_{5};
+  size_t lpb_{0};
+};
+
+struct Graph : public ExprAction {
+ public:
+  enum struct Format { AdjSet, AdjMat, Tikz, Dot, Invalid };
+  inline static container::set<
+      std::tuple<std::string_view, std::string_view, Format>>
+      format_labels{{"set", "Adjacency set", Format::AdjSet},
+                    {"mat", "Adjacency matrix", Format::AdjMat},
+                    {"tikz", "Tikz (LaTeX)", Format::Tikz},
+                    {"dot", "Dot language", Format::Dot}};
+
+  Graph();
+
+  void run(std::ostream&, ExprPtr const&) const override;
+
+  [[nodiscard]] clipp::group group() noexcept override;
+
+  [[nodiscard]] Format format() const noexcept;
+
+ private:
+  Format format_{Format::AdjSet};
+};
+
+struct Expr : public ExprAction {
+ public:
+  Expr();
+
+  void run(std::ostream&, ExprPtr const&) const override;
+
+  [[nodiscard]] clipp::group group() noexcept override;
+};
+
+// /////////////////////////////////////////////////////////////////////////////
+// classes derived from ExprSource follow
+// /////////////////////////////////////////////////////////////////////////////
 
 enum struct OrbitalType { Spinorbital, Closedshell, Openshell };
 
-struct Options {
- protected:
-  Options() = default;
-
+class CCk : public ExprSource {
  public:
-  virtual void add_options(clipp::group&) = 0;
-};
-
-class CCkOpts : public Options {
- public:
-  inline static constexpr size_t min_excit = 2;
-  inline static constexpr size_t max_excit = 4;
-
-  CCkOpts() = default;
-
-  void add_options(clipp::group& g) override;
+  CCk();
 
   [[nodiscard]] bool optimize() const noexcept;
 
@@ -38,7 +134,12 @@ class CCkOpts : public Options {
 
   [[nodiscard]] SpinTraceAlgorithm st_algorithm() const noexcept;
 
-  void sanity_check() const;
+  [[nodiscard]] clipp::group group() noexcept override;
+
+  [[nodiscard]] ExprPtr expr() const override;
+
+  inline static constexpr size_t min_excit = 2;
+  inline static constexpr size_t max_excit = 4;
 
  private:
   bool optimize_{false};
@@ -52,33 +153,26 @@ class CCkOpts : public Options {
   OrbitalType orbital_type_{OrbitalType::Spinorbital};
 
   SpinTraceAlgorithm st_algo_{SpinTraceAlgorithm::Invalid};
+
+  [[nodiscard]] ExprPtr read(std::filesystem::path const& idir) const;
+
+  void write(std::filesystem::path const& odir) const;
 };
 
-struct LatexOpts : public Options {
+class Read : public ExprSource {
  public:
-  LatexOpts() = default;
+  Read();
 
-  void add_options(clipp::group&) override;
+  [[nodiscard]] clipp::group group() noexcept override;
 
-  [[nodiscard]] size_t terms_per_line() const noexcept;
+  [[nodiscard]] ExprPtr expr() const override;
 
-  [[nodiscard]] size_t lines_per_block() const noexcept;
+  [[nodiscard]] std::filesystem::path const& ifile() const noexcept;
 
  private:
-  size_t terms_{5};
-  size_t lines_{0};
+  std::filesystem::path ifile_{};
 };
 
-struct GraphOpts : public Options {
- public:
-  GraphOpts() = default;
-  void add_options(clipp::group&) override;
-};
-
-void write_cck(CCkOpts const& opts, std::filesystem::path const& odir);
-
-ExprPtr read_cck(CCkOpts const& opts, std::filesystem::path const& idir);
-
-}  // namespace sequant
+}  // namespace sequant::cmdl
 
 #endif  // SEQUANT_ANALYSIS_CMDLINE_HPP
