@@ -138,6 +138,8 @@ class CCk : public ExprSource {
 
   [[nodiscard]] ExprPtr expr() const override;
 
+  void sanity_check() const;
+
   inline static constexpr size_t min_excit = 2;
   inline static constexpr size_t max_excit = 4;
 

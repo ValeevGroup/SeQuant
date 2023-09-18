@@ -227,7 +227,10 @@ clipp::group CCk::group() noexcept {
   return g;
 }
 
-ExprPtr CCk::expr() const { return read(database_dir()); }
+ExprPtr CCk::expr() const {
+  sanity_check();
+  return read(database_dir());
+}
 
 void CCk::write(std::filesystem::path const& odir) const {
   assert(std::filesystem::is_directory(odir));
@@ -266,6 +269,24 @@ ExprPtr CCk::read(std::filesystem::path const& idir) const {
                      return idx.space() == IndexSpace::active_occupied ? 2 : 20;
                    })
              : read_sum(fpath);
+}
+
+void CCk::sanity_check() const {
+  if (excit() < min_excit || excit() > max_excit) {
+    std::cerr << fmt::format("CCk excitation {} not in the range [{},{}]\n",
+                             excit(), min_excit, max_excit);
+    std::exit(1);
+  }
+  if (r() < 1 || r() > excit()) {
+    std::cerr << fmt::format("CCk equation index {} not in the range [1,{}]\n",
+                             r(), excit());
+    std::exit(1);
+  }
+  if (orbital_type() == OrbitalType::Openshell && nalpha() > excit()) {
+    std::cerr << fmt::format("No. of alpha value {} not in the range [0,{}]\n",
+                             nalpha(), r());
+    std::exit(1);
+  }
 }
 
 // /////////////////////////////////////////////////////////////////////////////
