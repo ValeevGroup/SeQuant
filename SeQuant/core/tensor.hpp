@@ -390,6 +390,10 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
 
 };  // class Tensor
 
+static_assert(is_tensor_v<Tensor>,
+              "The Tensor class does not fulfill the requirements of the "
+              "Tensor interface");
+
 using TensorPtr = std::shared_ptr<Tensor>;
 
 /// make_overlap tensor label is reserved since it is used by low-level SeQuant

@@ -865,6 +865,15 @@ class NormalOperator : public Operator<S>,
   }
 };
 
+static_assert(
+    is_tensor_v<NormalOperator<Statistics::FermiDirac>>,
+    "The NormalOperator<Statistics::FermiDirac> class does not fulfill the "
+    "requirements of the Tensor interface");
+static_assert(
+    is_tensor_v<NormalOperator<Statistics::BoseEinstein>>,
+    "The NormalOperator<Statistics::BoseEinstein> class does not fulfill the "
+    "requirements of the Tensor interface");
+
 template <Statistics S>
 bool operator==(const NormalOperator<S> &op1, const NormalOperator<S> &op2) {
   using base_type = Operator<S>;

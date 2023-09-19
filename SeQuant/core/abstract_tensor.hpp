@@ -27,36 +27,15 @@
 
 #include <boost/core/demangle.hpp>
 
-
 namespace sequant {
 
-/// This interface class defines a Tensor concept. Object @c t of a type that
-/// meets the concept must satisfy the following:
-///         - @c bra(t) , @c ket(t) , and @c braket(t) are valid expressions and
-///         evaluate to a range of Index objects;
-///         - @c bra_rank(t) and @c ket_rank(t) are valid expression and return
-///         sizes of the @c bra(t) and @c ket(t) ranges, respectively;
-///         - @c symmetry(t) is a valid expression and evaluates to a Symmetry
-///         object that describes the symmetry of bra/ket of a
-///         _particle-symmetric_ @c t ;
-///         - @c braket_symmetry(t) is a valid expression and evaluates to a
-///         BraKetSymmetry object that describes the bra-ket symmetry of @c t ;
-///         - @c particle_symmetry(t) is a valid expression and evaluates to a
-///         ParticleSymmetry object that describes the symmetry of @c t with
-///         respect to permutations of particles;
-///         - @c color(t) is a valid expression and returns whether a
-///         nonnegative integer that identifies the type of a tensor; tensors
-///         with different colors can be reordered in a Product at will
-///         - @c is_cnumber(t) is a valid expression and returns whether t
-///         commutes with other tensor of same color (tensors of different
-///         colors are, for now, always assumed to commute)
-///         - @c label(t) is a valid expression and its return is convertible to
-///         a std::wstring;
-///         - @c to_latex(t) is a valid expression and its return is convertible
-///         to a std::wstring.
-/// To adapt an existing class intrusively derive it from AbstractTensor and
-/// implement all member functions. This allows to implememnt heterogeneous
-/// containers of objects that meet the Tensor concept.
+class TensorCanonicalizer;
+
+/// This interface class defines a Tensor concept. All Tensor objects must
+/// fulfill the is_tensor trait (see below). To adapt an existing class
+/// intrusively derive it from AbstractTensor and implement all member
+/// functions. This allows to implemement heterogeneous containers of objects
+/// that meet the Tensor concept.
 class AbstractTensor {
   inline auto missing_instantiation_for(const char* fn_name) const {
     std::ostringstream oss;
@@ -167,6 +146,55 @@ inline auto color(const AbstractTensor& t) { return t._color(); }
 inline auto is_cnumber(const AbstractTensor& t) { return t._is_cnumber(); }
 inline auto label(const AbstractTensor& t) { return t._label(); }
 inline auto to_latex(const AbstractTensor& t) { return t._to_latex(); }
+
+/// Type trait for checking whether a given class fulfills the Tensor interface
+/// requirements Object @c t of a type that meets the concept must satisfy the
+/// following:
+///         - @c bra(t) , @c ket(t) , and @c braket(t) are valid expressions and
+///         evaluate to a range of Index objects;
+///         - @c bra_rank(t) and @c ket_rank(t) are valid expression and return
+///         sizes of the @c bra(t) and @c ket(t) ranges, respectively;
+///         - @c symmetry(t) is a valid expression and evaluates to a Symmetry
+///         object that describes the symmetry of bra/ket of a
+///         _particle-symmetric_ @c t ;
+///         - @c braket_symmetry(t) is a valid expression and evaluates to a
+///         BraKetSymmetry object that describes the bra-ket symmetry of @c t ;
+///         - @c particle_symmetry(t) is a valid expression and evaluates to a
+///         ParticleSymmetry object that describes the symmetry of @c t with
+///         respect to permutations of particles;
+///         - @c color(t) is a valid expression and returns whether a
+///         nonnegative integer that identifies the type of a tensor; tensors
+///         with different colors can be reordered in a Product at will
+///         - @c is_cnumber(t) is a valid expression and returns whether t
+///         commutes with other tensor of same color (tensors of different
+///         colors are, for now, always assumed to commute)
+///         - @c label(t) is a valid expression and its return is convertible to
+///         a std::wstring;
+///         - @c to_latex(t) is a valid expression and its return is convertible
+///         to a std::wstring.
+template <typename T>
+struct is_tensor
+    : std::bool_constant<
+          std::is_invocable_v<decltype(bra), T> &&
+          std::is_invocable_v<decltype(ket), T> &&
+          std::is_invocable_v<decltype(braket), T> &&
+          std::is_invocable_v<decltype(bra_rank), T> &&
+          std::is_invocable_v<decltype(ket_rank), T> &&
+          std::is_invocable_v<decltype(symmetry), T> &&
+          std::is_invocable_v<decltype(braket_symmetry), T> &&
+          std::is_invocable_v<decltype(particle_symmetry), T> &&
+          std::is_invocable_v<decltype(color), T> &&
+          std::is_invocable_v<decltype(is_cnumber), T> &&
+          std::is_invocable_v<decltype(label), T> &&
+          std::is_invocable_v<
+              decltype(static_cast<std::wstring (*)(const T&)>(to_latex)), T>> {
+};
+template <typename T>
+constexpr bool is_tensor_v = is_tensor<T>::value;
+static_assert(is_tensor_v<AbstractTensor>,
+              "The AbstractTensor class does not fulfill the requirements of "
+              "the Tensor interface");
+
 /// @tparam IndexMap a {source Index -> target Index} map type; if it is not @c
 /// container::map<Index,Index>
 ///         will need to make a copy.
@@ -200,7 +228,6 @@ inline void reset_tags(AbstractTensor& t) { t._reset_tags(); }
 ///@}
 
 using AbstractTensorPtr = std::shared_ptr<AbstractTensor>;
-
 
 }  // namespace sequant
 
