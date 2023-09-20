@@ -149,26 +149,21 @@ std::vector<ExprPtr> cc::λ(bool screen, bool use_topology,
   return result;
 }
 
-
 std::vector<sequant::ExprPtr> cc::pert_t1() {
   using namespace sequant::mbpt;
 
-  // construct (V * e^T)_c = V + V * T + V * T^2/2!
+  // construct mu_bar
   auto mu_bar = sim_tr(op::mu(1), 2);
+  // construct [hbar, T(1)]
+  auto hbar_pert = sim_tr(op::H(), 3) * op::pertT1(N);
 
-  // construct (H * e^T * pT1)_c = H * pT1 + H * pT1 * T + H * pT1 * T^2/2! + H
-  // * pT1 * T^3/3!
-  auto hbar = sim_tr(op::H(), 3);
-  auto hbar_pert = hbar * op::pertT1(N);
+  // [Eq. 34, WIREs Comput Mol Sci. 2019; 9:e1406]
+  auto expr = simplify(mu_bar + hbar_pert);
 
-  // things to be connected:
+  // connectivity:
   // connect t and t1 with {h,f,g}
   // connect mu with t
   std::vector<std::pair<std::wstring, std::wstring>> op_connect = {
-      {L"h", L"t"},  {L"f", L"t"},  {L"g", L"t"}, {L"h", L"t¹"},
-      {L"f", L"t¹"}, {L"g", L"t¹"}, {L"μ", L"t"}};
-
-  std::vector<std::pair<std::wstring, std::wstring>> op_connect2 = {
       {optype2label.at(OpType::h), optype2label.at(OpType::t)},
       {optype2label.at(OpType::f), optype2label.at(OpType::t)},
       {optype2label.at(OpType::g), optype2label.at(OpType::t)},
@@ -179,37 +174,30 @@ std::vector<sequant::ExprPtr> cc::pert_t1() {
 
   std::vector<ExprPtr> result(P + 1);
   for (auto p = P; p >= PMIN; --p) {
-    result.at(p) = op::vac_av(op::P(p) * (mu_bar + hbar_pert), op_connect2);
+    result.at(p) = op::vac_av(op::P(p) * expr, op_connect);
   }
-
   return result;
 }
 
 std::vector<ExprPtr> cc::pert_λ1() {
   // construct hbar
   auto hbar = sim_tr(op::H(), 4);
-
-  // construct (V * e^T)_c = V + V * T + V * T^2/2!
+  // construct mu_bar
   auto mu_bar = sim_tr(op::mu(1), 2);
-
+  // construct [hbar, T(1)]
   auto hbar_pert = sim_tr(op::H(), 3) * op::pertT1(N);
 
+  // [Eq. 35, WIREs Comput Mol Sci. 2019; 9:e1406]
   const auto One = ex<Constant>(1);
+  auto expr = simplify((One + op::Lambda(N)) * (mu_bar + hbar_pert) +
+                       op::pertLambda1(N) * hbar);
 
-  // equation split into 2 terms
-  auto eq1 = simplify((One + op::Lambda(N)) * (mu_bar + hbar_pert));
-  auto eq2 = simplify(op::pertLambda1(N) * hbar);
-
-  // things to be connected
+  // connectivity:
   // t and t1 with {h,f,g}
   // projectors with {h,f,g}
   // mu with t
+  // mu with projectors
   std::vector<std::pair<std::wstring, std::wstring>> op_connect = {
-      {L"μ", L"t"},  {L"h", L"t"},  {L"f", L"t"}, {L"g", L"t"}, {L"h", L"t¹"},
-      {L"f", L"t¹"}, {L"g", L"t¹"}, {L"h", L"A"}, {L"f", L"A"}, {L"g", L"A"},
-      {L"h", L"S"},  {L"f", L"S"},  {L"g", L"S"}, {L"μ", L"A"}, {L"μ", L"S"}};
-
-  std::vector<std::pair<std::wstring, std::wstring>> op_connect2 = {
       {optype2label.at(OpType::h), optype2label.at(OpType::t)},
       {optype2label.at(OpType::f), optype2label.at(OpType::t)},
       {optype2label.at(OpType::g), optype2label.at(OpType::t)},
@@ -228,7 +216,7 @@ std::vector<ExprPtr> cc::pert_λ1() {
 
   std::vector<ExprPtr> result(P + 1);
   for (auto p = P; p >= PMIN; --p) {
-    result.at(p) = op::vac_av((eq1 + eq2) * op::P(-p), op_connect2);
+    result.at(p) = op::vac_av(expr * op::P(-p), op_connect);
   }
   return result;
 }
