@@ -56,3 +56,15 @@ ExprPtr R(std::size_t Nbra,
 ExprPtr R12(
     IndexSpace::Type geminal_generating_space = IndexSpace::active_occupied,
     int ansatz = 2);
+
+/// makes perturbation operator of rank @p R
+ExprPtr mu(std::size_t R);
+
+/// makes perturbed excitation operator of bra/ket ranks @c Nbra/Nket
+ExprPtr pertT1_(std::size_t Nbra,
+                std::size_t Nket = std::numeric_limits<std::size_t>::max());
+
+/// makes perturbed deexcitation operator of bra/ket ranks @c Nbra/Nket
+ExprPtr pertLambda1_(
+    std::size_t Nbra,
+    std::size_t Nket = std::numeric_limits<std::size_t>::max());

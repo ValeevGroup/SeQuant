@@ -173,17 +173,6 @@ ExprPtr vac_av(ExprPtr expr,
                std::vector<std::pair<int, int>> nop_connections = {},
                bool use_top = true);
 
-// Functions relating to perturbation and response
-
-/// one-body perturbation operator of perturbation order \param R
-ExprPtr mu(std::size_t R);
-
-ExprPtr pertT1_(std::size_t Nbra,
-             std::size_t Nket = std::numeric_limits<std::size_t>::max());
-ExprPtr pertLambda1_(std::size_t Nbra,
-                  std::size_t Nket = std::numeric_limits<std::size_t>::max());
-
-
 /// contains operator-level SR MBPT expressions
 namespace op {
 
@@ -235,19 +224,23 @@ ExprPtr S(std::int64_t K);
 /// else it is bra/ket-antisymmetric (@sa A(K))
 ExprPtr P(std::int64_t K);
 
-/// @}
-
-// perturbation and response related operators
-/// one-body perturbation operator of order \param R
+/// perturbation operator of rank \param R
 ExprPtr mu(std::size_t R);
 
-/// perturbed cluster amplitudes
+/// perturbed excitation operator of rank \p K
 ExprPtr pertT1_(std::size_t K);
+
+/// makes sum of perturbed excitation operators of all ranks up to \p
+/// K
 ExprPtr pertT1(std::size_t K);
 
-/// perturbed de-excitation cluster amplitudes
+/// perturbed deexcitation operator of rank \p K
 ExprPtr pertLambda1_(std::size_t K);
+
+/// makes sum of perturbed deexcitation operators of all ranks up to \p K
 ExprPtr pertLambda1(std::size_t K);
+
+/// @}
 
 /// @return true if \p op_or_op_product can produce determinant of excitation
 /// rank \p k when applied to reference

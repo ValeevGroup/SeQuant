@@ -213,21 +213,6 @@ ExprPtr F(bool use_f_tensor) {
   }
 }
 
-// Maybe move these to sr/op.impl.cpp
-ExprPtr mu(std::size_t R) { return OpMaker(OpType::μ, R)(); }
-
-ExprPtr pertT1_(std::size_t Nbra, std::size_t Nket) {
-  assert(Nbra > 0);
-  assert(Nket > 0);
-  return OpMaker(OpType::t_1, Nbra, Nket)();
-}
-
-ExprPtr pertLambda1_(std::size_t Nbra, std::size_t Nket) {
-  assert(Nbra > 0);
-  assert(Nket > 0);
-  return OpMaker(OpType::λ_1, Nbra, Nket)();
-}
-
 ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
                bool use_top) {
   FWickTheorem wick{expr};

@@ -24,6 +24,20 @@ ExprPtr L_(std::size_t Nbra, std::size_t Nket) {
   return OpMaker(OpType::L, Nbra, Nket)();
 }
 
+ExprPtr mu(std::size_t R) { return OpMaker(OpType::μ, R)(); }
+
+ExprPtr pertT1_(std::size_t Nbra, std::size_t Nket) {
+  assert(Nbra > 0);
+  assert(Nket > 0);
+  return OpMaker(OpType::t_1, Nbra, Nket)();
+}
+
+ExprPtr pertLambda1_(std::size_t Nbra, std::size_t Nket) {
+  assert(Nbra > 0);
+  assert(Nket > 0);
+  return OpMaker(OpType::λ_1, Nbra, Nket)();
+}
+
 namespace detail {
 
 /// constructs a sum of ops up to a given bra/ket rank
