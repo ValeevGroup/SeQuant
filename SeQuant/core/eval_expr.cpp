@@ -8,6 +8,7 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/wstring.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 
 #include <range/v3/action.hpp>
 #include <range/v3/algorithm.hpp>
@@ -23,6 +24,8 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
+#include <cmath>
+#include <tuple>
 
 namespace sequant {
 
@@ -245,6 +248,7 @@ size_t hash_imed(EvalExpr const& left, EvalExpr const& right,
   return h;
 }
 
+// TODO: Remove?
 std::pair<container::svector<Index>,  // bra
           container::svector<Index>   // ket
           >
@@ -380,7 +384,7 @@ ExprPtr make_sum(EvalExpr const& left, EvalExpr const& right) noexcept {
   auto ts = tensor_symmetry_sum(left, right);
   auto ps = particle_symmetry(ts);
   auto bks = get_default_context().braket_symmetry();
-  return ex<Tensor>(L"I", t1.bra(), t1.ket(), ts, bks, ps);
+  return ex<Tensor>(L"I", t1.bra(), t1.ket(), t1.auxiliary(), ts, bks, ps);
 }
 
 ExprPtr make_prod(EvalExpr const& left, EvalExpr const& right) noexcept {
@@ -389,8 +393,8 @@ ExprPtr make_prod(EvalExpr const& left, EvalExpr const& right) noexcept {
   auto const& t1 = left.as_tensor();
   auto const& t2 = right.as_tensor();
 
-  auto [bra, ket] = target_braket(t1, t2);
-  if (bra.empty() && ket.empty()) {
+  auto [bra, ket, auxiliary] = get_uncontracted_indices(t1, t2);
+  if (bra.empty() && ket.empty() && auxiliary.empty()) {
     // dot product
     return ex<Variable>(var_label);
   } else {
@@ -398,7 +402,8 @@ ExprPtr make_prod(EvalExpr const& left, EvalExpr const& right) noexcept {
     auto ts = tensor_symmetry_prod(left, right);
     auto ps = particle_symmetry(ts);
     auto bks = get_default_context().braket_symmetry();
-    return ex<Tensor>(L"I", bra, ket, ts, bks, ps);
+    return ex<Tensor>(L"I", std::move(bra), std::move(ket),
+                      std::move(auxiliary), ts, bks, ps);
   }
 }
 
@@ -419,8 +424,9 @@ ExprPtr make_imed(EvalExpr const& left, EvalExpr const& right,
 
     assert(op == EvalOp::Prod && "scalar + tensor not supported");
     auto const& t = right.expr()->as<Tensor>();
-    return ex<Tensor>(Tensor{L"I", t.bra(), t.ket(), t.symmetry(),
-                             t.braket_symmetry(), t.particle_symmetry()});
+    return ex<Tensor>(Tensor{L"I", t.bra(), t.ket(), t.auxiliary(),
+                             t.symmetry(), t.braket_symmetry(),
+                             t.particle_symmetry()});
 
   } else if (lres == ResultType::Tensor && rres == ResultType::Scalar) {
     // tensor (*) scalar

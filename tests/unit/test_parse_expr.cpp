@@ -74,6 +74,18 @@ ParseErrorMatcher parseErrorMatches(std::size_t offset, std::size_t length,
 
 TEST_CASE("TEST_PARSE_EXPR", "[parse_expr]") {
   using namespace sequant;
+  SECTION("Scalar tensor") {
+    auto expr = parse_expr(L"t{}");
+    REQUIRE(expr->is<Tensor>());
+    REQUIRE(expr->as<Tensor>().bra().empty());
+    REQUIRE(expr->as<Tensor>().ket().empty());
+    REQUIRE(expr->as<Tensor>().auxiliary().empty());
+
+    REQUIRE(expr == parse_expr(L"t{;}"));
+    REQUIRE(expr == parse_expr(L"t{;;}"));
+    REQUIRE(expr == parse_expr(L"t^{}_{}"));
+    REQUIRE(expr == parse_expr(L"t_{}^{}"));
+  }
   SECTION("Tensor") {
     auto expr = parse_expr(L"t{i1;a1}");
     REQUIRE(expr->is<Tensor>());
@@ -82,10 +94,12 @@ TEST_CASE("TEST_PARSE_EXPR", "[parse_expr]") {
     REQUIRE(expr->as<Tensor>().bra().at(0).label() == L"i_1");
     REQUIRE(expr->as<Tensor>().ket().size() == 1);
     REQUIRE(expr->as<Tensor>().ket().at(0) == L"a_1");
+    REQUIRE(expr->as<Tensor>().auxiliary().empty());
 
     REQUIRE(expr == parse_expr(L"t_{i1}^{a1}"));
     REQUIRE(expr == parse_expr(L"t^{a1}_{i1}"));
     REQUIRE(expr == parse_expr(L"t{i_1; a_1}"));
+    REQUIRE(expr == parse_expr(L"t{i_1; a_1;}"));
     REQUIRE(expr == parse_expr(L"t_{i_1}^{a_1}"));
 
     expr = parse_expr(L"t{i1,i2;a1,a2}");
@@ -95,6 +109,7 @@ TEST_CASE("TEST_PARSE_EXPR", "[parse_expr]") {
     REQUIRE(expr->as<Tensor>().ket().size() == 2);
     REQUIRE(expr->as<Tensor>().ket().at(0).label() == L"a_1");
     REQUIRE(expr->as<Tensor>().ket().at(1).label() == L"a_2");
+    REQUIRE(expr->as<Tensor>().auxiliary().empty());
 
     REQUIRE(expr == parse_expr(L"+t{i1, i2; a1, a2}"));
     REQUIRE(parse_expr(L"-t{i1;a1}")->is<Product>());
@@ -120,6 +135,26 @@ TEST_CASE("TEST_PARSE_EXPR", "[parse_expr]") {
     auto expr1 = parse_expr(L"t{a↓1;i↑1}");
     REQUIRE(expr1->as<Tensor>().bra().at(0).label() == L"a↓_1");
     REQUIRE(expr1->as<Tensor>().ket().at(0).label() == L"i↑_1");
+
+    // Auxiliary indices
+    expr = parse_expr(L"t{;;i1}");
+    REQUIRE(expr->is<Tensor>());
+    REQUIRE(expr->as<Tensor>().bra().empty());
+    REQUIRE(expr->as<Tensor>().ket().empty());
+    REQUIRE(expr->as<Tensor>().auxiliary().size() == 1);
+    REQUIRE(expr->as<Tensor>().auxiliary()[0].label() == L"i_1");
+
+    // All index groups at once
+    expr = parse_expr(L"t{i1,i2;a1;x1,x2}");
+    REQUIRE(expr->is<Tensor>());
+    REQUIRE(expr->as<Tensor>().bra().size() == 2);
+    REQUIRE(expr->as<Tensor>().bra().at(0).label() == L"i_1");
+    REQUIRE(expr->as<Tensor>().bra().at(1).label() == L"i_2");
+    REQUIRE(expr->as<Tensor>().ket().size() == 1);
+    REQUIRE(expr->as<Tensor>().ket().at(0).label() == L"a_1");
+    REQUIRE(expr->as<Tensor>().auxiliary().size() == 2);
+    REQUIRE(expr->as<Tensor>().auxiliary().at(0).label() == L"x_1");
+    REQUIRE(expr->as<Tensor>().auxiliary().at(1).label() == L"x_2");
   }
 
   SECTION("Tensor with symmetry annotation") {
@@ -322,7 +357,9 @@ TEST_CASE("TEST_DEPARSE_EXPR", "[parse_expr]") {
       L"-1/4 t{a_1,i_1<a_1>;a_2,i_2}:S",
       L"a + b - 4 specialVariable",
       L"variable + A{a_1;i_1}:N * B{i_1;a_1}:A",
-      L"1/2 (a + b) * c"};
+      L"1/2 (a + b) * c",
+      L"T1{}:N + T2{;;x_1}:N * T3{;;x_1}:N + T4{a_1;;x_2}:S * T5{;a_1;x_2}:S"
+  };
 
   for (const std::wstring& current : expressions) {
     ExprPtr expression = parse_expr(current);

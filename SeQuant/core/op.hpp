@@ -809,13 +809,20 @@ class NormalOperator : public Operator<S>,
            ranges::views::transform(
                [](auto &&op) -> const Index & { return op.index(); });
   }
+  AbstractTensor::const_any_view_randsz _auxiliary() const override final {
+    return {};
+  }
   AbstractTensor::const_any_view_rand _braket() const override final {
     return ranges::views::concat(annihilators(), creators()) |
            ranges::views::transform(
                [](auto &&op) -> const Index & { return op.index(); });
   }
+  AbstractTensor::const_any_view_rand _indices() const override final {
+    return _braket();
+  }
   std::size_t _bra_rank() const override final { return nannihilators(); }
   std::size_t _ket_rank() const override final { return ncreators(); }
+  std::size_t _auxiliary_rank() const override final { return 0; }
   Symmetry _symmetry() const override final {
     return (S == Statistics::FermiDirac
                 ? (get_default_context().spbasis() == SPBasis::spinorbital
@@ -862,6 +869,9 @@ class NormalOperator : public Operator<S>,
     return ranges::views::counted(this->begin(), ncreators()) |
            ranges::views::transform(
                [](auto &&op) -> Index & { return op.index(); });
+  }
+  AbstractTensor::any_view_randsz _auxiliary_mutable() override final {
+    return {};
   }
 };
 

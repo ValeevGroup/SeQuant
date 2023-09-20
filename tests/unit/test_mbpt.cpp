@@ -44,7 +44,8 @@ TEST_CASE("NBodyOp", "[mbpt]") {
 
       op_t f1([]() -> std::wstring_view { return L"f"; },
               []() -> ExprPtr {
-                return ex<Tensor>(L"f", WstrList{L"p_1"}, WstrList{L"p_2"}) *
+                return ex<Tensor>(L"f", WstrList{L"p_1"}, WstrList{L"p_2"},
+                                  WstrList{}) *
                        ex<FNOperator>(WstrList{L"p_1"}, WstrList{L"p_2"});
               },
               [](qns_t& qns) {
@@ -56,8 +57,8 @@ TEST_CASE("NBodyOp", "[mbpt]") {
       {  // exact compare
         using namespace boost::numeric::interval_lib::compare::possible;
         REQUIRE(operator==(f1(), qns_t{1, 1}));  // produces single replacement
-        REQUIRE(operator!=(f1(),
-                           qns_t{2, 2}));  // cannot produce double replacement
+        REQUIRE(operator!=
+                (f1(), qns_t{2, 2}));  // cannot produce double replacement
         REQUIRE(operator==(f1(qns_t{5, 0}), qns_t{{5, 6}, {0, 1}}));
       }
     }
@@ -69,7 +70,8 @@ TEST_CASE("NBodyOp", "[mbpt]") {
       // this is fock operator in terms of general spaces
       op_t f_gg([]() -> std::wstring_view { return L"f"; },
                 []() -> ExprPtr {
-                  return ex<Tensor>(L"f", WstrList{L"p_1"}, WstrList{L"p_2"}) *
+                  return ex<Tensor>(L"f", WstrList{L"p_1"}, WstrList{L"p_2"},
+                                    WstrList{}) *
                          ex<FNOperator>(WstrList{L"p_1"}, WstrList{L"p_2"});
                 },
                 [](qns_t& qns) {
@@ -78,7 +80,8 @@ TEST_CASE("NBodyOp", "[mbpt]") {
       // excitation part of the Fock operator
       op_t f_uo([]() -> std::wstring_view { return L"f"; },
                 []() -> ExprPtr {
-                  return ex<Tensor>(L"f", WstrList{L"a_2"}, WstrList{L"i_2"}) *
+                  return ex<Tensor>(L"f", WstrList{L"a_2"}, WstrList{L"i_2"},
+                                    WstrList{}) *
                          ex<FNOperator>(WstrList{L"a_1"}, WstrList{L"i_2"});
                 },
                 [](qns_t& qns) {

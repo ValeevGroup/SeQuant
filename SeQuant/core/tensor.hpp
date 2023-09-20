@@ -81,15 +81,16 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   // list of friends who can make Tensor objects with reserved labels
   friend ExprPtr make_overlap(const Index &bra_index, const Index &ket_index);
 
-  template <typename IndexRange1, typename IndexRange2>
+  template <typename IndexRange1, typename IndexRange2, typename IndexRange3>
   Tensor(std::wstring_view label, IndexRange1 &&bra_indices,
-         IndexRange2 &&ket_indices, reserved_tag,
-         Symmetry s = Symmetry::nonsymm,
+         IndexRange2 &&ket_indices, IndexRange3 &&auxiliary_indices,
+         reserved_tag, Symmetry s = Symmetry::nonsymm,
          BraKetSymmetry bks = get_default_context().braket_symmetry(),
          ParticleSymmetry ps = ParticleSymmetry::symm)
       : label_(label),
         bra_(make_indices(bra_indices)),
         ket_(make_indices(ket_indices)),
+        auxiliary_(make_indices(auxiliary_indices)),
         symmetry_(s),
         braket_symmetry_(bks),
         particle_symmetry_(ps) {
@@ -107,39 +108,49 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   /// to indices)
   /// @param ket_indices list of ket indices (or objects that can be converted
   /// to indices)
+  /// @param auxiliary_indices list of auxiliary indices (or objects that can be
+  /// converted to indices)
   /// @param symmetry the symmetry of bra or ket
   /// @param braket_symmetry the symmetry with respect to bra-ket exchange
-  template <typename IndexRange1, typename IndexRange2,
+  template <typename IndexRange1, typename IndexRange2, typename IndexRange3,
             typename = std::enable_if_t<
                 !meta::is_initializer_list_v<std::decay_t<IndexRange1>> &&
-                !meta::is_initializer_list_v<std::decay_t<IndexRange2>>>>
+                !meta::is_initializer_list_v<std::decay_t<IndexRange2>> &&
+                !meta::is_initializer_list_v<std::decay_t<IndexRange3>>>>
   Tensor(std::wstring_view label, IndexRange1 &&bra_indices,
-         IndexRange2 &&ket_indices, Symmetry s = Symmetry::nonsymm,
+         IndexRange2 &&ket_indices, IndexRange3 &&auxiliary_indices,
+         Symmetry s = Symmetry::nonsymm,
          BraKetSymmetry bks = get_default_context().braket_symmetry(),
          ParticleSymmetry ps = ParticleSymmetry::symm)
       : Tensor(label, std::forward<IndexRange1>(bra_indices),
-               std::forward<IndexRange2>(ket_indices), reserved_tag{}, s, bks,
-               ps) {
+               std::forward<IndexRange2>(ket_indices),
+               std::forward<IndexRange3>(auxiliary_indices), reserved_tag{}, s,
+               bks, ps) {
     assert_nonreserved_label(label_);
   }
 
   /// @tparam I1 any type convertible to Index)
   /// @tparam I2 any type convertible to Index
-  /// @note  I1 and I2 default to Index to allow empty lists
+  /// @tparam I3 any type convertible to Index
+  /// @note  I1, I2 and I3 default to Index to allow empty lists
   /// @param label the tensor label
   /// @param bra_indices list of bra indices (or objects that can be converted
   /// to indices)
   /// @param ket_indices list of ket indices (or objects that can be converted
   /// to indices)
+  /// @param auxiliary_indices list of auxiliary indices (or objects that can be
+  /// converted to indices)
   /// @param symmetry the symmetry of bra or ket
   /// @param braket_symmetry the symmetry with respect to bra-ket exchange
-  template <typename I1 = Index, typename I2 = Index>
+  template <typename I1 = Index, typename I2 = Index, typename I3 = Index>
   Tensor(std::wstring_view label, std::initializer_list<I1> bra_indices,
-         std::initializer_list<I2> ket_indices, Symmetry s = Symmetry::nonsymm,
+         std::initializer_list<I2> ket_indices,
+         std::initializer_list<I3> auxiliary_indices,
+         Symmetry s = Symmetry::nonsymm,
          BraKetSymmetry bks = get_default_context().braket_symmetry(),
          ParticleSymmetry ps = ParticleSymmetry::symm)
       : Tensor(label, make_indices(bra_indices), make_indices(ket_indices),
-               reserved_tag{}, s, bks, ps) {
+               make_indices(auxiliary_indices), reserved_tag{}, s, bks, ps) {
     assert_nonreserved_label(label_);
   }
 
@@ -154,8 +165,11 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   std::wstring_view label() const override { return label_; }
   const auto &bra() const { return bra_; }
   const auto &ket() const { return ket_; }
+  const auto &auxiliary() const { return auxiliary_; }
   /// @return joined view of the bra and ket index ranges
   auto braket() const { return ranges::views::concat(bra_, ket_); }
+  /// @return joined view of all indices of this tensor (bra, ket and auxiliary)
+  auto indices() const { return ranges::views::concat(bra_, ket_, auxiliary_); }
   /// @return view of the bra+ket index ranges
   /// @note this is to work around broken lookup rules
   auto const_braket() const { return this->braket(); }
@@ -180,6 +194,8 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   std::size_t bra_rank() const { return bra_.size(); }
   /// @return number of ket indices
   std::size_t ket_rank() const { return ket_.size(); }
+  /// @return number of auxiliary indices
+  auto auxiliary_rank() const { return auxiliary_.size(); }
   /// @return number of indices in bra/ket
   /// @throw std::logic_error if bra and ket ranks do not match
   std::size_t rank() const {
@@ -204,7 +220,20 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
     for (const auto &i : this->ket()) result += sequant::to_latex(i);
     result += L"}_{";
     for (const auto &i : this->bra()) result += sequant::to_latex(i);
-    result += L"}}";
+    result += L"}";
+    if (!this->auxiliary_.empty()) {
+      result += L"(";
+	  const index_container_type &aux = auxiliary();
+	  for (std::size_t i = 0; i < auxiliary_rank(); ++i) {
+		  result += sequant::to_latex(aux[i]);
+
+		  if (i + 1 < auxiliary_rank()) {
+			  result += L",";
+		  }
+	  }
+      result += L")";
+    }
+	result += L"}";
     return result;
   }
 
@@ -220,6 +249,9 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
     }
     for (const auto &i : this->bra()) {
       result += i.to_wolfram(BraKetPos::bra) + L",";
+    }
+    for (const auto &i : this->auxiliary()) {
+      result += i.to_wolfram(BraKetPos::none) + L",";
     }
     result = result.erase(result.size() - 1);
     result += L"]";
@@ -263,6 +295,7 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   std::wstring label_{};
   index_container_type bra_{};
   index_container_type ket_{};
+  index_container_type auxiliary_{};
   Symmetry symmetry_ = Symmetry::invalid;
   BraKetSymmetry braket_symmetry_ = BraKetSymmetry::invalid;
   ParticleSymmetry particle_symmetry_ = ParticleSymmetry::invalid;
@@ -283,6 +316,7 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
     auto val = hash::range(begin(bra()), end(bra()));
     bra_hash_value_ = val;
     hash::range(val, begin(ket()), end(ket()));
+    hash::range(val, begin(auxiliary()), end(auxiliary()));
     hash::combine(val, label_);
     hash::combine(val, symmetry_);
     hash_value_ = val;
@@ -347,11 +381,21 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
     return ranges::counted_view<const Index *>(
         ket_.empty() ? nullptr : &(ket_[0]), ket_.size());
   }
+  AbstractTensor::const_any_view_randsz _auxiliary() const override final {
+    return ranges::counted_view<const Index *>(
+        auxiliary_.empty() ? nullptr : &(auxiliary_[0]), auxiliary_.size());
+  }
   AbstractTensor::const_any_view_rand _braket() const override final {
     return braket();
   }
+  AbstractTensor::const_any_view_rand _indices() const override final {
+    return indices();
+  }
   std::size_t _bra_rank() const override final { return bra_rank(); }
   std::size_t _ket_rank() const override final { return ket_rank(); }
+  std::size_t _auxiliary_rank() const override final {
+    return auxiliary_rank();
+  }
   Symmetry _symmetry() const override final { return symmetry_; }
   BraKetSymmetry _braket_symmetry() const override final {
     return braket_symmetry_;
@@ -387,6 +431,11 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
     return ranges::counted_view<Index *>(ket_.empty() ? nullptr : &(ket_[0]),
                                          ket_.size());
   }
+  AbstractTensor::any_view_randsz _auxiliary_mutable() override final {
+    this->reset_hash_value();
+    return ranges::counted_view<Index *>(
+        auxiliary_.empty() ? nullptr : &(auxiliary_[0]), auxiliary_.size());
+  }
 
 };  // class Tensor
 
@@ -403,7 +452,7 @@ inline std::wstring overlap_label() { return L"s"; }
 inline ExprPtr make_overlap(const Index &bra_index, const Index &ket_index) {
   return ex<Tensor>(Tensor(overlap_label(), std::array<Index, 1>{{bra_index}},
                            std::array<Index, 1>{{ket_index}},
-                           Tensor::reserved_tag{}));
+                           std::array<Index, 0>{}, Tensor::reserved_tag{}));
 }
 
 }  // namespace sequant

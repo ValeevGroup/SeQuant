@@ -75,11 +75,13 @@ Index to_index(const parse::ast::Index &index,
 }
 
 template <typename PositionCache, typename Iterator>
-std::tuple<container::vector<Index>, container::vector<Index>> make_indices(
-    const parse::ast::IndexGroups &groups, const PositionCache &position_cache,
-    const Iterator &begin) {
+std::tuple<container::vector<Index>, container::vector<Index>,
+           container::vector<Index>>
+make_indices(const parse::ast::IndexGroups &groups,
+             const PositionCache &position_cache, const Iterator &begin) {
   container::vector<Index> braIndices;
   container::vector<Index> ketIndices;
+  container::vector<Index> auxiliaries;
 
   static_assert(std::is_same_v<decltype(groups.bra), decltype(groups.ket)>,
                 "Types for bra and ket indices must be equal for pointer "
@@ -101,8 +103,11 @@ std::tuple<container::vector<Index>, container::vector<Index>> make_indices(
   for (const parse::ast::Index &current : *ket) {
     ketIndices.push_back(to_index(current, position_cache, begin));
   }
+  for (const parse::ast::Index &current : groups.auxiliaries) {
+    auxiliaries.push_back(to_index(current, position_cache, begin));
+  }
 
-  return {std::move(braIndices), std::move(ketIndices)};
+  return {std::move(braIndices), std::move(ketIndices), std::move(auxiliaries)};
 }
 
 template <typename Iterator>
@@ -173,14 +178,14 @@ ExprPtr ast_to_expr(const parse::ast::NullaryValue &value,
     }
 
     ExprPtr operator()(const parse::ast::Tensor &tensor) const {
-      auto [braIndices, ketIndices] =
+      auto [braIndices, ketIndices, auxiliaries] =
           make_indices(tensor.indices, position_cache.get(), begin.get());
 
       auto [offset, length] =
           get_pos(tensor, position_cache.get(), begin.get());
 
       return ex<Tensor>(tensor.name, std::move(braIndices),
-                        std::move(ketIndices),
+                        std::move(ketIndices), std::move(auxiliaries),
                         to_symmetry(tensor.symmetry, offset + length - 1,
                                     begin.get(), default_symmetry));
     }

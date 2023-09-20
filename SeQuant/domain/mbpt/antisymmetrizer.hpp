@@ -220,7 +220,8 @@ class antisymm_element {
               new_kets.push_back(unique_kets_list[j].second[index_label_pos]);
               index_label_pos++;
             }
-            auto new_tensor = ex<Tensor>(label, new_bras, new_kets);
+            auto new_tensor =
+                ex<Tensor>(label, new_bras, new_kets, std::vector<Index>{});
             new_product = new_tensor * new_product;
             new_product->canonicalize();
           }
@@ -419,7 +420,8 @@ ExprPtr max_similarity(const std::vector<Index>& original_upper,
         }
         if (new_pairs > og_pairs) {
           factor = ex<Constant>(-1) * ex<Tensor>(factor->as<Tensor>().label(),
-                                                 current_lower, current_upper);
+                                                 current_lower, current_upper,
+                                                 std::vector<Index>{});
         }
       } else if (factor->is<FNOperator>()) {
         std::vector<Index> current_upper;
@@ -500,7 +502,8 @@ ExprPtr spin_sum(std::vector<Index> original_upper,
             new_lower.push_back(factor->as<Tensor>().bra()[i]);
           }
           factor = ex<Tensor>(L"Γ", factor->as<Tensor>().bra(),
-                              factor->as<Tensor>().ket());
+                              factor->as<Tensor>().ket(),
+                              factor->as<Tensor>().auxiliary());
         } else if (factor->is<FNOperator>()) {
           // prefactor = ex<Constant>(-0.5) *
           // ex<Constant>(factor->as<Tensor>().rank()) * prefactor;

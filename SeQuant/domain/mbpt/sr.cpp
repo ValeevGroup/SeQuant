@@ -195,9 +195,9 @@ ExprPtr F(bool use_f_tensor) {
             braidxs.push_back(m1);
             ketidxs.push_back(m2);
             return ex<Tensor>(to_wstring(mbpt::OpType::g), braidxs, ketidxs,
-                              Symmetry::antisymm) *
+                              std::vector<Index>{}, Symmetry::antisymm) *
                    ex<Tensor>(to_wstring(mbpt::OpType::δ), IndexList{m2},
-                              IndexList{m1}, Symmetry::nonsymm);
+                              IndexList{}, IndexList{m1}, Symmetry::nonsymm);
           } else {  // opsymm == Symmetry::nonsymm
             auto braidx_J = braidxs;
             braidx_J.push_back(m1);
@@ -208,11 +208,11 @@ ExprPtr F(bool use_f_tensor) {
             auto ketidxs_K = ketidxs;
             ketidxs_K.emplace(begin(ketidxs_K), m2);
             return (ex<Tensor>(to_wstring(mbpt::OpType::g), braidx_J, ketidxs_J,
-                               Symmetry::nonsymm) -
+                               std::vector<Index>{}, Symmetry::nonsymm) -
                     ex<Tensor>(to_wstring(mbpt::OpType::g), braidx_K, ketidxs_K,
-                               Symmetry::nonsymm)) *
+                               std::vector<Index>{}, Symmetry::nonsymm)) *
                    ex<Tensor>(to_wstring(mbpt::OpType::δ), IndexList{m2},
-                              IndexList{m1}, Symmetry::nonsymm);
+                              IndexList{}, IndexList{m1}, Symmetry::nonsymm);
           }
         });
   };

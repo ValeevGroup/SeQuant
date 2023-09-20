@@ -201,6 +201,7 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
       [this, opsymm_opt](const auto& braidxs, const auto& ketidxs,
                          Symmetry opsymm) {
         return ex<Tensor>(to_wstring(op_), braidxs, ketidxs,
+                          std::vector<Index>{},
                           opsymm_opt ? *opsymm_opt : opsymm);
       },
       dep ? *dep : UseDepIdx::None);

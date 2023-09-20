@@ -224,10 +224,10 @@ ExprPtr F() {
           if (opsymm == Symmetry::antisymm) {
             braidxs.push_back(m1);
             ketidxs.push_back(m2);
-            return ex<Tensor>(to_wstring(mbpt::OpType::g), braidxs, ketidxs,
+            return ex<Tensor>(to_wstring(mbpt::OpType::g), braidxs, ketidxs, std::vector<Index>{},
                               Symmetry::antisymm) *
                    ex<Tensor>(to_wstring(mbpt::OpType::RDM), IndexList{m2},
-                              IndexList{m1}, Symmetry::nonsymm);
+                              IndexList{m1}, IndexList{}, Symmetry::nonsymm);
           } else {  // opsymm == Symmetry::nonsymm
             auto braidx_J = braidxs;
             braidx_J.push_back(m1);
@@ -237,12 +237,12 @@ ExprPtr F() {
             braidx_K.push_back(m1);
             auto ketidxs_K = ketidxs;
             ketidxs_K.emplace(begin(ketidxs_K), m2);
-            return (ex<Tensor>(to_wstring(mbpt::OpType::g), braidx_J, ketidxs_J,
+            return (ex<Tensor>(to_wstring(mbpt::OpType::g), braidx_J, ketidxs_J, std::vector<Index>{},
                                Symmetry::nonsymm) -
-                    ex<Tensor>(to_wstring(mbpt::OpType::g), braidx_K, ketidxs_K,
+                    ex<Tensor>(to_wstring(mbpt::OpType::g), braidx_K, ketidxs_K, std::vector<Index>{},
                                Symmetry::nonsymm)) *
                    ex<Tensor>(to_wstring(mbpt::OpType::RDM), IndexList{m2},
-                              IndexList{m1}, Symmetry::nonsymm);
+                              IndexList{m1}, IndexList{}, Symmetry::nonsymm);
           }
         });
   };
@@ -311,7 +311,7 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
                  ketidxs.size());  // need to handle particle # violating case?
           const auto rank = braidxs.size();
           return ex<Tensor>(
-              rdm_label, braidxs, ketidxs,
+              rdm_label, braidxs, ketidxs, index_container{},
               rank > 1 && spinorbital ? Symmetry::antisymm : Symmetry::nonsymm);
         };
 

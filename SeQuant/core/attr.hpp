@@ -52,8 +52,14 @@ inline std::wstring to_wolfram(const Symmetry& symmetry) {
 enum class BraKetPos { bra, ket, none };
 
 inline std::wstring to_wolfram(BraKetPos a) {
-  using namespace std::literals;
-  return L"indexType["s + (a == BraKetPos::bra ? L"bra" : L"ket") + L"]";
+  switch (a) {
+    case BraKetPos::bra:
+      return L"indexType[bra]";
+    case BraKetPos::ket:
+      return L"indexType[ket]";
+    case BraKetPos::none:
+      return L"indexType[none]";
+  }
 }
 
 enum class Statistics { BoseEinstein, FermiDirac };

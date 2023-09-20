@@ -66,15 +66,26 @@ class AbstractTensor {
   virtual const_any_view_randsz _ket() const {
     throw missing_instantiation_for("_ket");
   }
+  /// view of a contiguous range of Index objects
+  virtual const_any_view_randsz _auxiliary() const {
+    throw missing_instantiation_for("_auxiliary");
+  }
   /// view of a not necessarily contiguous range of Index objects
   virtual const_any_view_rand _braket() const {
     throw missing_instantiation_for("_braket");
+  }
+  /// view of a not necessarily contiguous range of Index objects
+  virtual const_any_view_rand _indices() const {
+    throw missing_instantiation_for("_indices");
   }
   virtual std::size_t _bra_rank() const {
     throw missing_instantiation_for("_bra_rank");
   }
   virtual std::size_t _ket_rank() const {
     throw missing_instantiation_for("_ket_rank");
+  }
+  virtual std::size_t _auxiliary_rank() const {
+    throw missing_instantiation_for("_auxiliary_rank");
   }
   virtual Symmetry _symmetry() const {
     throw missing_instantiation_for("_symmetry");
@@ -123,6 +134,12 @@ class AbstractTensor {
   virtual any_view_randsz _ket_mutable() {
     throw missing_instantiation_for("_ket_mutable");
   }
+  /// @return mutable view of auxiliary indices
+  /// @warning this is used for mutable access, flush memoized state before
+  /// returning!
+  virtual any_view_randsz _auxiliary_mutable() {
+    throw missing_instantiation_for("_auxiliary_mutable");
+  }
 
   friend class TensorCanonicalizer;
 };
@@ -132,9 +149,14 @@ class AbstractTensor {
 /// @{
 inline auto bra(const AbstractTensor& t) { return t._bra(); }
 inline auto ket(const AbstractTensor& t) { return t._ket(); }
+inline auto auxiliary(const AbstractTensor& t) { return t._auxiliary(); }
 inline auto braket(const AbstractTensor& t) { return t._braket(); }
+inline auto indices(const AbstractTensor& t) { return t._indices(); }
 inline auto bra_rank(const AbstractTensor& t) { return t._bra_rank(); }
 inline auto ket_rank(const AbstractTensor& t) { return t._ket_rank(); }
+inline auto auxiliary_rank(const AbstractTensor& t) {
+  return t._auxiliary_rank();
+}
 inline auto symmetry(const AbstractTensor& t) { return t._symmetry(); }
 inline auto braket_symmetry(const AbstractTensor& t) {
   return t._braket_symmetry();
@@ -150,10 +172,12 @@ inline auto to_latex(const AbstractTensor& t) { return t._to_latex(); }
 /// Type trait for checking whether a given class fulfills the Tensor interface
 /// requirements Object @c t of a type that meets the concept must satisfy the
 /// following:
-///         - @c bra(t) , @c ket(t) , and @c braket(t) are valid expressions and
-///         evaluate to a range of Index objects;
-///         - @c bra_rank(t) and @c ket_rank(t) are valid expression and return
-///         sizes of the @c bra(t) and @c ket(t) ranges, respectively;
+///         - @c bra(t) , @c ket(t), @c auxiliary(t), @c braket(t) and
+///         @c indices(t) are valid expressions and evaluate to a range of Index
+///         objects;
+///         - @c bra_rank(t), @c ket_rank(t) and @c auxiliary_rank(t) are valid
+///         expression and return sizes of the @c bra(t), @c ket(t) and @c
+///         auxiliary(t) ranges, respectively;
 ///         - @c symmetry(t) is a valid expression and evaluates to a Symmetry
 ///         object that describes the symmetry of bra/ket of a
 ///         _particle-symmetric_ @c t ;
@@ -177,9 +201,12 @@ struct is_tensor
     : std::bool_constant<
           std::is_invocable_v<decltype(bra), T> &&
           std::is_invocable_v<decltype(ket), T> &&
+          std::is_invocable_v<decltype(auxiliary), T> &&
           std::is_invocable_v<decltype(braket), T> &&
+          std::is_invocable_v<decltype(indices), T> &&
           std::is_invocable_v<decltype(bra_rank), T> &&
           std::is_invocable_v<decltype(ket_rank), T> &&
+          std::is_invocable_v<decltype(auxiliary_rank), T> &&
           std::is_invocable_v<decltype(symmetry), T> &&
           std::is_invocable_v<decltype(braket_symmetry), T> &&
           std::is_invocable_v<decltype(particle_symmetry), T> &&
