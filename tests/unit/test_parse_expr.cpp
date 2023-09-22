@@ -128,8 +128,8 @@ TEST_CASE("TEST_PARSE_EXPR", "[parse_expr]") {
   SECTION("Constant") {
     REQUIRE(parse_expr(L"1/2")->is<Constant>());
     REQUIRE(parse_expr(L"0/2")->is<Constant>());
-    REQUIRE(!parse_expr(L"-1/2")->is<Constant>());
-    REQUIRE(!parse_expr(L"-0/2")->is<Constant>());
+    REQUIRE(parse_expr(L"-1/2")->is<Constant>());
+    REQUIRE(parse_expr(L"-0/2")->is<Constant>());
   }
 
   SECTION("Product") {
@@ -200,7 +200,7 @@ TEST_CASE("TEST_PARSE_EXPR", "[parse_expr]") {
 
   SECTION("Mixed") {
     auto expr = parse_expr(
-        L"1/4 g{a1,a2; i1,i2}"
+        L"0.25 g{a1,a2; i1,i2}"
         "+ 1/4 g{i3,i4; a3,a4} (t{a3;i1} * t{a4;i2}) * (t{a1;i3} * t{a2;i4})");
     REQUIRE(expr->is<Sum>());
     auto const& sum = expr->as<Sum>();

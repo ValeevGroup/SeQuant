@@ -3,7 +3,10 @@
 
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/expr_fwd.hpp>
+
 #include <string_view>
+#include <stdexcept>
+#include <string>
 
 ///
 ///  Create SeQuant expression from string input.
@@ -13,6 +16,14 @@
 ///
 
 namespace sequant {
+
+struct ParseError : std::runtime_error {
+	std::string message;
+	std::size_t line;
+	std::size_t col;
+
+	ParseError(std::string msg);
+};
 
 // clang-format off
 ///

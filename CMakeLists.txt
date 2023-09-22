@@ -226,7 +226,8 @@ set(SeQuant_src
         SeQuant/core/optimize/fusion.cpp
         SeQuant/core/optimize/fusion.hpp
         SeQuant/core/optimize/optimize.cpp
-        SeQuant/core/parse/parse_expr.cpp
+        SeQuant/core/parse/deparse.cpp
+        SeQuant/core/parse/parse.cpp
         SeQuant/core/parse/regex_sequant.cpp
         SeQuant/core/parse/regex_sequant.hpp
         SeQuant/core/parse/rpn.cpp
