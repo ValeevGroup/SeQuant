@@ -50,8 +50,8 @@ x3::rule<TensorRule, ast::Tensor> tensor{"Tensor"};
 
 // Expression structure
 x3::rule<ProductRule, ast::Product> product{"Product"};
-x3::rule<SumRule, std::vector<ast::Product>> sum{"Sum"};
-x3::rule<ExprRule, std::vector<ast::Product>> expr{"Expression"};
+x3::rule<SumRule, ast::Sum> sum{"Sum"};
+x3::rule<ExprRule, ast::Sum> expr{"Expression"};
 
 // Auxiliaries
 x3::rule<struct NameRule, std::wstring> name{"Name"};

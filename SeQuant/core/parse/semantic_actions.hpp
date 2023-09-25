@@ -46,8 +46,7 @@ auto get_val(Variant &variant) {
 struct process_addend {
   template <typename Context>
   void operator()(Context &ctx) const {
-    static_assert(
-        std::is_same_v<ctx_target_t<Context>, std::vector<ast::Product>>);
+    static_assert(std::is_same_v<ctx_target_t<Context>, ast::Sum>);
 
     using boost::fusion::at_c;
 
@@ -66,7 +65,7 @@ struct process_addend {
       prod.factors.insert(prod.factors.begin(), ast::Number(factor));
     }
 
-    x3::_val(ctx).emplace_back(std::move(prod));
+    x3::_val(ctx).summands.emplace_back(std::move(prod));
   }
 };
 
