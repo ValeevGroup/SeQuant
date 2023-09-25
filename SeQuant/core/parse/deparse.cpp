@@ -121,22 +121,53 @@ std::wstring deparse_expr(Product const& prod, bool annot_sym) {
     deparsed += deparse_scalar(scal) + L" ";
   }
 
-  deparsed += deparse_expr(prod.factor(0), annot_sym);
-  for (auto&& xpr : ranges::views::tail(prod.factors()))
-    deparsed += L" * " + deparse_expr(xpr, annot_sym);
+  for (std::size_t i = 0; i < prod.size(); ++i) {
+    const ExprPtr& current = prod[i];
+    bool parenthesize = false;
+    if (current->is<Product>() || current->is<Sum>()) {
+      parenthesize = true;
+      deparsed += L"(";
+    }
+
+    deparsed += deparse_expr(current);
+
+    if (parenthesize) {
+      deparsed += L")";
+    }
+
+    if (i + 1 < prod.size()) {
+      deparsed += L" * ";
+    }
+  }
 
   return deparsed;
 }
 
 std::wstring deparse_expr(Sum const& sum, bool annot_sym) {
-  std::wstring deparsed = deparse_expr(sum.summand(0), annot_sym);
-  for (auto&& xpr : ranges::views::tail(sum.summands())) {
-    std::wstring current = deparse_expr(xpr, annot_sym);
+  std::wstring deparsed;
 
-    if (current.front() == L'-') {
-      deparsed += L" - " + current.substr(1);
+  for (std::size_t i = 0; i < sum.size(); ++i) {
+    ExprPtr& current = sum[i];
+
+    const bool parenthesize = current->is<Sum>();
+
+    std::wstring current_deparsed = deparse_expr(current, annot_sym);
+
+    bool is_negative = false;
+    if (parenthesize) {
+      current_deparsed += L"(" + current_deparsed + L")";
     } else {
-      deparsed += L" + " + current;
+      is_negative = current_deparsed.front() == L'-';
+    }
+
+    if (i > 0) {
+      if (is_negative) {
+        deparsed += L" - " + current_deparsed.substr(1);
+      } else {
+        deparsed += L" + " + current_deparsed;
+      }
+    } else {
+      deparsed = std::move(current_deparsed);
     }
   }
   return deparsed;
