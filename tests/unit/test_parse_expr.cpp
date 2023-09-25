@@ -170,6 +170,8 @@ TEST_CASE("TEST_PARSE_EXPR", "[parse_expr]") {
     REQUIRE(*prod.factor(2)->at(0) == *parse_expr(L"t{a1;i3}"));
     REQUIRE(*prod.factor(2)->at(1) == *parse_expr(L"t{a2;i4}"));
   }
+
+  SECTION("Empty input") { REQUIRE(parse_expr(L"") == nullptr); }
 }
 
 TEST_CASE("TEST_DEPARSE_EXPR", "[parse_expr]") {

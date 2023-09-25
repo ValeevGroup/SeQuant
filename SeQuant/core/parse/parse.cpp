@@ -100,7 +100,7 @@ auto addend           = (('+' >> x3::attr(1) | '-' >> x3::attr(-1)) >> product)[
 
 auto sum_def          = x3::expect[first_addend] >> *addend;
 
-auto expr_def         = sum > x3::eoi;
+auto expr_def         = -sum > x3::eoi;
 // clang-format on
 
 BOOST_SPIRIT_DEFINE(name, number, variable, index_label, index, index_groups,
@@ -161,13 +161,21 @@ ExprPtr parse_expr(std::wstring_view input, Symmetry default_symmetry) {
       std::ref(positions))[parse::expr]];
 
   auto start = input.begin();
-  bool success =
-      x3::phrase_parse(start, input.end(), parser, x3::unicode::space, ast);
+  try {
+    bool success =
+        x3::phrase_parse(start, input.end(), parser, x3::unicode::space, ast);
 
-  if (!success || start != input.end()) {
-    // TODO: error handling
-    // See https://www.codevamping.com/2018/12/spirit-x3-error-handling/
-    throw std::runtime_error("Parsing failed");
+    if (!success || start != input.end()) {
+      // TODO: error handling
+      // See https://www.codevamping.com/2018/12/spirit-x3-error-handling/
+      throw std::runtime_error("Parsing failed");
+    }
+
+  } catch (const boost::spirit::x3::expectation_failure<iterator_type> &e) {
+    std::wcout << "Caught expectation_failure\nwhere: " << e.where()
+               << "\nwhat: " << e.what() << "\nwhich: " << e.which().data()
+               << std::endl;
+    throw;
   }
 
   return parse::transform::ast_to_expr(ast, positions, default_symmetry);
