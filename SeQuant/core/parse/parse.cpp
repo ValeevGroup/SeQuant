@@ -94,13 +94,13 @@ auto grouped          = '(' > sum > ')' | nullary;
 
 auto product_def      = grouped % -x3::lit('*');
 
-auto first_addend     = ((-x3::lit('+') >> x3::attr(1) | '-' >> x3::attr(-1)) >> product)[actions::process_addend{}];
+auto first_addend     = (('-' >> x3::attr(-1) | -x3::lit('+') >> x3::attr(1)) >> product)[actions::process_addend{}];
 
 auto addend           = (('+' >> x3::attr(1) | '-' >> x3::attr(-1)) >> product)[actions::process_addend{}];
 
-auto sum_def          = first_addend >> *addend;
+auto sum_def          = x3::expect[first_addend] >> *addend;
 
-auto expr_def         = -sum > x3::eoi;
+auto expr_def         = sum > x3::eoi;
 // clang-format on
 
 BOOST_SPIRIT_DEFINE(name, number, variable, index_label, index, index_groups,

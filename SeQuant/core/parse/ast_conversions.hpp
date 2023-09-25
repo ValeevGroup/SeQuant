@@ -7,12 +7,15 @@
 
 #include "ast.hpp"
 
-#include <SeQuant/core/index.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/index.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tensor.hpp>
-#include <SeQuant/core/expr.hpp>
 
+#include <boost/variant.hpp>
+
+#include <algorithm>
 #include <string>
 
 namespace sequant::parse::transform {
@@ -105,6 +108,21 @@ Symmetry to_symmetry(char c, const PositionCache &position_cache,
 }
 
 template <typename PositionCache>
+Constant to_constant(const parse::ast::Number &number,
+                     const PositionCache &position_cache) {
+  if (static_cast<std::int64_t>(number.numerator) == number.numerator &&
+      static_cast<std::int64_t>(number.denominator) == number.denominator) {
+    // Integer fraction
+    return Constant(
+        ::sequant::rational(static_cast<std::int64_t>(number.numerator),
+                            static_cast<std::int64_t>(number.denominator)));
+  } else {
+    // Construct from floating point value
+    return Constant(::sequant::rational(number.numerator / number.denominator));
+  }
+}
+
+template <typename PositionCache>
 ExprPtr ast_to_expr(const parse::ast::Product &product,
                     PositionCache position_cache, Symmetry default_symmetry);
 template <typename PositionCache>
@@ -141,22 +159,17 @@ ExprPtr ast_to_expr(const parse::ast::NullaryValue &value,
     }
 
     ExprPtr operator()(const parse::ast::Number &number) const {
-      if (static_cast<std::int64_t>(number.numerator) == number.numerator &&
-          static_cast<std::int64_t>(number.denominator) == number.denominator) {
-        // Integer fraction
-        return ex<Constant>(
-            ::sequant::rational(static_cast<std::int64_t>(number.numerator),
-                                static_cast<std::int64_t>(number.denominator)));
-      } else {
-        // Construct from floating point value
-        return ex<Constant>(
-            ::sequant::rational(number.numerator / number.denominator));
-      }
+      return ex<Constant>(to_constant(number, position_cache));
     }
   };
 
   return boost::apply_visitor(
       Transformer{std::ref(position_cache), std::ref(default_symmetry)}, value);
+}
+
+template <typename T, typename... Ts>
+bool holds_alternative(const boost::variant<Ts...> &v) noexcept {
+  return boost::get<T>(&v) != nullptr;
 }
 
 template <typename PositionCache>
@@ -174,13 +187,29 @@ ExprPtr ast_to_expr(const parse::ast::Product &product,
 
   std::vector<ExprPtr> factors;
   factors.reserve(product.factors.size());
-  std::transform(product.factors.begin(), product.factors.end(),
-                 std::back_inserter(factors),
-                 [&](const parse::ast::NullaryValue &value) {
-                   return ast_to_expr(value, position_cache, default_symmetry);
-                 });
+  Constant prefactor(1);
 
-  return ex<Product>(std::move(factors), Product::Flatten::No);
+  // We perform constant folding
+  for (const parse::ast::NullaryValue &value : product.factors) {
+    if (holds_alternative<parse::ast::Number>(value)) {
+      prefactor *=
+          to_constant(boost::get<parse::ast::Number>(value), position_cache);
+    } else {
+      factors.push_back(ast_to_expr(value, position_cache, default_symmetry));
+    }
+  }
+
+  if (factors.empty()) {
+    // Only constants
+    return ex<Constant>(std::move(prefactor));
+  }
+
+  if (factors.size() == 1 && prefactor.value() == 1) {
+    return factors.front();
+  }
+
+  return ex<Product>(prefactor.value(), std::move(factors),
+                     Product::Flatten::No);
 }
 
 template <typename PositionCache>
@@ -204,6 +233,6 @@ ExprPtr ast_to_expr(const parse::ast::Sum &sum, PositionCache position_cache,
   return ex<Sum>(std::move(summands));
 }
 
-}
+}  // namespace sequant::parse::transform
 
-#endif // SEQUANT_CORE_PARSE_AST_CONVERSIONS_HPP
+#endif  // SEQUANT_CORE_PARSE_AST_CONVERSIONS_HPP
