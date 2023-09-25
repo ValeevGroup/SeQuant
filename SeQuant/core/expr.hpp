@@ -810,6 +810,23 @@ class Product : public Expr {
     for (auto &&v : rng) append(1, std::forward<decltype(v)>(v), flatten_tag);
   }
 
+  /// construct a Product out of zero or more factors (multiplied by 1)
+  /// @tparam T a numeric type; it must be able to multiply Product::scalar_type
+  /// @param scalar a scalar of type T
+  /// @param rng a range of factors
+  /// @param flatten_tag if Flatten::Yes, flatten the factors
+  template <typename T, typename Range,
+            typename = std::enable_if_t<
+                meta::is_range_v<std::decay_t<Range>> &&
+                !std::is_same_v<std::remove_reference_t<Range>, ExprPtrList> &&
+                !std::is_same_v<std::remove_reference_t<Range>, Product>>>
+  explicit Product(T scalar, Range &&rng, Flatten flatten_tag = Flatten::Yes)
+      : scalar_(std::move(scalar)) {
+    using ranges::begin;
+    using ranges::end;
+    for (auto &&v : rng) append(1, std::forward<decltype(v)>(v), flatten_tag);
+  }
+
   /// construct a Product out of zero or more factors multiplied by a scalar
   /// @tparam T a numeric type; it must be able to multiply Product::scalar_type
   /// @param scalar a scalar of type T
