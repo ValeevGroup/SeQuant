@@ -123,6 +123,22 @@ TEST_CASE("TEST_PARSE_EXPR", "[parse_expr]") {
     REQUIRE(*prod3.factor(0)->at(0) == *parse_expr(L"g{i2,i3; a2,a3}"));
     REQUIRE(*prod3.factor(0)->at(1) == *parse_expr(L"t{a1,a3; i2,i3}"));
     REQUIRE(*prod3.factor(1) == *parse_expr(L"t{a2;i1}"));
+
+    auto expr4 = parse_expr(L"1/2 (a + b) * c");
+    REQUIRE(expr4->is<Product>());
+
+    const auto& prod4 = expr4->as<Product>();
+    REQUIRE(prod4.size() == 2);
+    REQUIRE(prod4.scalar() == rational{1, 2});
+    REQUIRE(prod4.factor(1)->is<Variable>());
+    REQUIRE(prod4.factor(1)->as<Variable>().label() == L"c");
+    REQUIRE(prod4.factor(0)->is<Sum>());
+    const auto& nestedSum = prod4.factor(0)->as<Sum>();
+    REQUIRE(nestedSum.size() == 2);
+    REQUIRE(nestedSum.summand(0)->is<Variable>());
+    REQUIRE(nestedSum.summand(0)->as<Variable>().label() == L"a");
+    REQUIRE(nestedSum.summand(1)->is<Variable>());
+    REQUIRE(nestedSum.summand(1)->as<Variable>().label() == L"b");
   }
 
   SECTION("Mixed") {
@@ -166,7 +182,7 @@ TEST_CASE("TEST_DEPARSE_EXPR", "[parse_expr]") {
       L"-1/4 t^{a_1, i_1<a_1>}_{a_2, i_2}:S",
       L"a + b - 4 specialVariable",
       L"t^{}_{}:S + A^{a_1}_{i_1}:N * B^{i_1}_{a_1}:A",
-  };
+      L"1/2 (a + b) * c"};
 
   for (const std::wstring& current : expressions) {
     ExprPtr expression = parse_expr(current);
