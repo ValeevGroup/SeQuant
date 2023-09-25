@@ -141,19 +141,14 @@ include(FindOrFetchRangeV3)
 # need header-only Boost + (compiled) Boost.Regex and Boost.Locale
 # NB Boost.Container is broken in v1.70
 if (NOT TARGET Boost::boost OR NOT TARGET Boost::regex OR NOT TARGET Boost::locale)
-    find_package(Boost ${SEQUANT_TRACKED_BOOST_VERSION} CONFIG COMPONENTS regex locale)
+	find_package(Boost ${SEQUANT_TRACKED_BOOST_VERSION} CONFIG COMPONENTS regex locale)
     if (Boost_VERSION_STRING VERSION_LESS ${SEQUANT_TRACKED_BOOST_VERSION} OR NOT TARGET Boost::boost OR NOT TARGET Boost::regex OR NOT TARGET Boost::locale)
-        find_package(Boost ${SEQUANT_TRACKED_BOOST_VERSION} REQUIRED COMPONENTS regex locale)
+		find_package(Boost ${SEQUANT_TRACKED_BOOST_VERSION} REQUIRED COMPONENTS regex locale)
         message(STATUS "Found Boost (version ${Boost_VERSION}) via FindBoost module")
         set(Boost_USE_CONFIG FALSE)
     else ()
         message(STATUS "Found Boost (version ${Boost_VERSION}) via CONFIG ${Boost_CONFIG}")
         set(Boost_USE_CONFIG TRUE)
-    endif ()
-    if (Boost_VERSION_MACRO EQUAL 107000)
-        message(FATAL_ERROR "Found Boost 1.70, but its Boost.Container is broken: "
-                "use any version ${SEQUANT_TRACKED_BOOST_VERSION} "
-                "or higher, other than 1.70")
     endif ()
     # Boost.Move is broken in 1.77 and 1.78 unless using c++20
     # fixed in 1.79 via https://github.com/boostorg/move/commit/78f26da1f3a5a3831e9e70efe83f9c56eef94e8c
