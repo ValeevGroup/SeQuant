@@ -26,7 +26,7 @@ std::wstring deparse_index(const Index& index) {
       deparsed += protos[i].label();
 
       if (i + 1 < protos.size()) {
-        deparsed += L", ";
+        deparsed += L",";
       }
     }
     deparsed += L">";
@@ -43,7 +43,7 @@ std::wstring deparse_indices(const Range& indices) {
     deparsed += deparse_index(indices[i]);
 
     if (i + 1 < indices.size()) {
-      deparsed += L", ";
+      deparsed += L",";
     }
   }
 
@@ -67,8 +67,8 @@ std::wstring deparse_sym(Symmetry sym) {
 }
 
 std::wstring deparse_expr(Tensor const& tensor, bool annot_sym) {
-  return std::wstring(tensor.label()) + L"^{" + deparse_indices(tensor.ket()) +
-         L"}_{" + deparse_indices(tensor.bra()) + L"}" +
+  return std::wstring(tensor.label()) + L"{" + deparse_indices(tensor.bra()) +
+         L";" + deparse_indices(tensor.ket()) + L"}" +
          (annot_sym ? std::wstring(L":") + deparse_sym(tensor.symmetry())
                     : std::wstring{});
 }
