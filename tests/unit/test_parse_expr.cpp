@@ -1,89 +1,9 @@
 #include "catch.hpp"
 
-#include <SeQuant/core/parse/regex_sequant.hpp>
 #include <SeQuant/core/parse_expr.hpp>
 #include <SeQuant/core/tensor.hpp>
-#include <boost/regex.hpp>
+
 #include <locale>
-
-// parse a non-symmetric tensor
-sequant::ExprPtr parse(std::wstring_view raw) {
-  return sequant::parse_expr(raw, sequant::Symmetry::nonsymm);
-}
-
-TEST_CASE("TEST_REGEX", "[parse_expr]") {
-  using namespace sequant;
-
-  // set up regex objects
-  // ==============
-  std::locale prev_locale{};
-  std::locale::global(std::locale::classic());
-  auto const rgx_label = boost::wregex{parse::regex_patterns::label().data()};
-  auto const rgx_pure_index =
-      boost::wregex{parse::regex_patterns::pure_index()};
-  auto const rgx_index = boost::wregex{parse::regex_patterns::index_capture(),
-                                       boost::regex::nosubs};
-  auto const rgx_tensor_exp = boost::wregex{
-      parse::regex_patterns::tensor_expanded().data(), boost::regex::nosubs};
-  auto const rgx_tensor_terse = boost::wregex{
-      parse::regex_patterns::tensor_terse().data(), boost::regex::nosubs};
-  auto const rgx_ratio = boost::wregex{
-      parse::regex_patterns::abs_real_frac().data(), boost::regex::nosubs};
-  std::locale::global(prev_locale);
-  // done setting up regex objects.
-  // --------------
-
-  SECTION("Labels") {
-    for (auto const& l : std::initializer_list<std::wstring>{
-             L"i", L"i1", L"a", L"a12", L"t⁔1", L"t¹", L"i↑", L"a↓", L"x⁺",
-             L"x⁻", L"xₐ", L"xₑ", L"x₊", L"x₋", L"x₌"})
-      REQUIRE(boost::regex_match(l, rgx_label));
-  }
-
-  SECTION("Index") {
-    // pure index
-    for (auto const& i : std::initializer_list<std::wstring>{
-             L"i1", L"i_1", L"a1", L"a_1", L"i⁺_12", L"i⁻_34", L"i↑_0",
-             L"a↓_24"}) {
-      REQUIRE(boost::regex_match(i, rgx_pure_index));
-      REQUIRE(boost::regex_match(i, rgx_index));
-    }
-
-    // index with proto indices
-    for (auto const& i : std::initializer_list<std::wstring>{
-             L"i1<a1 , a2>", L"i_1< a_1, a_2 >", L"i1 < a1,a2 >"})
-      REQUIRE(boost::regex_match(i, rgx_index));
-
-    // invalid index spec
-    for (auto const& i :
-         std::initializer_list<std::wstring>{L"i", L"a", L"i1<>", L"i_"})
-      REQUIRE(!boost::regex_match(i, rgx_index));
-  }
-
-  SECTION("Tensor") {
-    REQUIRE(boost::regex_match(L"t_{i1}^{a1}", rgx_tensor_exp));
-    REQUIRE(boost::regex_match(L"t_{i1,i2}^{a1,a2}", rgx_tensor_exp));
-    REQUIRE(boost::regex_match(L"t^{i1,i2}_{a1,a2}", rgx_tensor_exp));
-    REQUIRE(boost::regex_match(L"t{i1;a1}", rgx_tensor_terse));
-    REQUIRE(boost::regex_match(L"t{i1,i2;a1,a2}", rgx_tensor_terse));
-    REQUIRE(boost::regex_match(L"t{ i1<a1, a2>, i2<a1, a2>; a1, a2 }",
-                               rgx_tensor_terse));
-  }
-
-  SECTION("Ratio") {
-    for (auto const& r : std::initializer_list<std::wstring>{
-             L"1", L"123", L"1.", L"01.00", L"0 / 10", L"0.5/.25", L".4",
-             L".1/.2"})
-      REQUIRE(boost::regex_match(r, rgx_ratio));
-  }
-
-  SECTION("sequant::Variable") {
-    // sequant variable is just a label
-    for (auto const& v : std::initializer_list<std::wstring>{
-             L"a", L"α", L"b", L"β", L"γ", L"λ", L"δ"})
-      REQUIRE(boost::regex_match(v, rgx_label));
-  }
-}
 
 TEST_CASE("TEST_PARSE_EXPR", "[parse_expr]") {
   using namespace sequant;

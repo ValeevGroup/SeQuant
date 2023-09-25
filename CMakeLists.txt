@@ -228,14 +228,6 @@ set(SeQuant_src
         SeQuant/core/optimize/optimize.cpp
         SeQuant/core/parse/deparse.cpp
         SeQuant/core/parse/parse.cpp
-        SeQuant/core/parse/regex_sequant.cpp
-        SeQuant/core/parse/regex_sequant.hpp
-        SeQuant/core/parse/rpn.cpp
-        SeQuant/core/parse/rpn.hpp
-        SeQuant/core/parse/token.cpp
-        SeQuant/core/parse/token.hpp
-        SeQuant/core/parse/token_sequant.cpp
-        SeQuant/core/parse/token_sequant.hpp
         SeQuant/core/parse_expr.hpp
         SeQuant/core/ranges.hpp
         SeQuant/core/rational.hpp
@@ -394,8 +386,6 @@ if (BUILD_TESTING)
             tests/unit/test_eval_node.cpp
             tests/unit/test_optimize.cpp
             tests/unit/test_fusion.cpp
-            tests/unit/test_token_sequant.cpp
-            tests/unit/test_rpn.cpp
             tests/unit/test_cache_manager.cpp
             tests/unit/test_runtime.cpp
             tests/unit/test_math.cpp
