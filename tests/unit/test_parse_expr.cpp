@@ -112,8 +112,8 @@ TEST_CASE("TEST_PARSE_EXPR", "[parse_expr]") {
     REQUIRE(*expr == *parse_expr(L"+t{i1, i2; a1, a2}"));
     REQUIRE(parse_expr(L"-t{i1;a1}")->is<Product>());
     REQUIRE(*expr == *parse_expr(L"t{\ti1, \ti2; \na1,\t a2 \t}"));
-    REQUIRE_NOTHROW(parse_expr(L"t⁔1{a1;i1}"));
-    REQUIRE_NOTHROW(parse_expr(L"t¹{a1;i1}"));
+    REQUIRE_NOTHROW(parse_expr(L"α{a1;i1}"));
+    REQUIRE_NOTHROW(parse_expr(L"γ_1{a1;i1}"));
   }
 
   SECTION("Tensor with symmetry annotation") {
@@ -143,7 +143,7 @@ TEST_CASE("TEST_PARSE_EXPR", "[parse_expr]") {
     REQUIRE(parse_expr(L"-1/2 * δ * t{i1;a1}") ==
             parse_expr(L"-1/2  δ  t{i1;a1}"));
     auto const prod2 = parse_expr(L"-1/2 * δ * γ * t{i1;a1}")->as<Product>();
-    REQUIRE(prod2.scalar() == rational{-1,2});
+    REQUIRE(prod2.scalar() == rational{-1, 2});
     REQUIRE(prod2.factor(0) == ex<Variable>(L"δ"));
     REQUIRE(prod2.factor(1) == ex<Variable>(L"γ"));
     REQUIRE(prod2.factor(2)->is<Tensor>());
