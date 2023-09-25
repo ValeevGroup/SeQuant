@@ -311,6 +311,16 @@ ExprPtr single_term_opt(Product const& prod, IdxToSz const& idxsz) {
   return *result.rbegin();
 }
 
+///
+/// \brief Create clusters out of positions of terms in a sum that share common
+///        intermediates.
+///
+/// \param expr A Sum to find clusters in.
+/// \return A vector of clusters (vectors of position index of terms
+///         in \c expr).
+///
+container::vector<container::vector<size_t>> clusters(Sum const& expr);
+
 }  // namespace opt
 
 /////
@@ -334,6 +344,16 @@ ExprPtr optimize(ExprPtr const& expr, IdxToSize const& idx2size) {
   } else
     throw std::runtime_error{"Optimization attempted on unsupported Expr type"};
 }
+
+///
+/// \brief Reorder summands so that terms having common intermediates appear
+///        closer.
+///
+/// \param expr Expression to reorder.
+/// \return Expression with summands re-ordered. Returns the same expression
+///         if \c expr is not Sum.
+///
+ExprPtr reorder(ExprPtr const& expr);
 
 }  // namespace sequant
 
