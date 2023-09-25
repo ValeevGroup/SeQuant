@@ -150,15 +150,22 @@ TEST_CASE("TEST_PARSE_EXPR", "[parse_expr]") {
   }
 
   SECTION("Sum") {
-    auto expr = parse_expr(
+    auto expr1 = parse_expr(
         L"f{a1;i1}"
         "- 1/2*g{i2,a1; a2,a3}t{a2,a3; i1,i2}");
-    REQUIRE(expr->is<Sum>());
+    REQUIRE(expr1->is<Sum>());
 
-    auto const& sum = expr->as<Sum>();
-    REQUIRE(*sum.summand(0) == *parse_expr(L"f{a1;i1}"));
-    REQUIRE(*sum.summand(1) ==
+    auto const& sum1 = expr1->as<Sum>();
+    REQUIRE(*sum1.summand(0) == *parse_expr(L"f{a1;i1}"));
+    REQUIRE(*sum1.summand(1) ==
             *parse_expr(L"- 1/2 * g{i2,a1; a2,a3} * t{a2,a3; i1,i2}"));
+
+    auto expr2 = parse_expr(L"a - 4");
+    REQUIRE(expr2->is<Sum>());
+
+    auto const& sum2 = expr2->as<Sum>();
+    REQUIRE(*sum2.summand(0) == *parse_expr(L"a"));
+    REQUIRE(*sum2.summand(1) == *parse_expr(L"-4"));
   }
 
   SECTION("Parentheses") {
@@ -226,5 +233,24 @@ TEST_CASE("TEST_PARSE_EXPR", "[parse_expr]") {
     REQUIRE(prod.factor(2)->is<Product>());
     REQUIRE(*prod.factor(2)->at(0) == *parse_expr(L"t{a1;i3}"));
     REQUIRE(*prod.factor(2)->at(1) == *parse_expr(L"t{a2;i4}"));
+  }
+}
+
+TEST_CASE("TEST_DEPARSE_EXPR", "[parse_expr]") {
+  using namespace sequant;
+
+  std::vector<std::wstring> expressions = {
+      L"t^{a_1, a_2}_{a_3, a_4}:N",
+      L"42",
+      L"1/2",
+      L"-1/4 t^{a_1, i_1<a_1>}_{a_2, i_2}:S",
+      L"a + b - 4 specialVariable",
+      L"t^{}_{}:S + A^{a_1}_{i_1}:N * B^{i_1}_{a_1}:A",
+  };
+
+  for (const std::wstring& current : expressions) {
+    ExprPtr expression = parse_expr(current);
+
+    REQUIRE(deparse_expr(expression, true) == current);
   }
 }
