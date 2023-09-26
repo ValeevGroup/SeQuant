@@ -1,9 +1,7 @@
 #include <SeQuant/core/optimize.hpp>
 #include <stack>
 
-namespace sequant {
-
-namespace opt {
+namespace sequant::opt {
 
 ExprPtr tail_factor(ExprPtr const& expr) noexcept {
   if (expr->is<Tensor>())
@@ -109,18 +107,14 @@ container::vector<container::vector<size_t>> clusters(Sum const& expr) {
   return result;
 }
 
-}  // namespace opt
-
-ExprPtr reorder(ExprPtr const& expr) {
-  if (!expr->is<Sum>()) return expr;
-
+Sum reorder(Sum const& sum) {
   Sum result;
 
-  for (auto const& clstr : opt::clusters(expr->as<Sum>()))
-    for (auto p : clstr) result.append(expr->at(p));
+  for (auto const& clstr : clusters(sum))
+    for (auto p : clstr) result.append(sum.at(p));
 
-  assert(result.size() == expr->size());
-  return ex<Sum>(std::move(result));
+  assert(result.size() == sum.size());
+  return result;
 }
 
-}  // namespace sequant
+}  // namespace sequant::opt

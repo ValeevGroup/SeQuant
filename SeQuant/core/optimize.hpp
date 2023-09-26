@@ -321,6 +321,15 @@ ExprPtr single_term_opt(Product const& prod, IdxToSz const& idxsz) {
 ///
 container::vector<container::vector<size_t>> clusters(Sum const& expr);
 
+///
+/// \brief Reorder summands so that terms having common intermediates appear
+///        closer.
+///
+/// \param sum Expression to reorder.
+/// \return Expression with summands re-ordered.
+///
+Sum reorder(Sum const& sum);
+
 }  // namespace opt
 
 /////
@@ -340,20 +349,11 @@ ExprPtr optimize(ExprPtr const& expr, IdxToSize const& idx2size) {
     auto smands = *expr | transform([&idx2size](auto&& s) {
       return optimize(s, idx2size);
     }) | ranges::to_vector;
-    return ex<Sum>(Sum{smands.begin(), smands.end()});
+    auto sum = Sum{smands.begin(), smands.end()};
+    return ex<Sum>(opt::reorder(sum));
   } else
     throw std::runtime_error{"Optimization attempted on unsupported Expr type"};
 }
-
-///
-/// \brief Reorder summands so that terms having common intermediates appear
-///        closer.
-///
-/// \param expr Expression to reorder.
-/// \return Expression with summands re-ordered. Returns the same expression
-///         if \c expr is not Sum.
-///
-ExprPtr reorder(ExprPtr const& expr);
 
 }  // namespace sequant
 
