@@ -32,7 +32,7 @@ void log_eval(Args const&... args) noexcept {
 #endif
 }
 
-void log_cache_access(size_t key, CacheManager<ERPtr> const& cm) {
+void log_cache_access(size_t key, CacheManager const& cm) {
 #ifdef SEQUANT_EVAL_TRACE
   auto& l = Logger::get_instance();
   if (l.log_level_eval > 0) {
@@ -50,7 +50,7 @@ void log_cache_access(size_t key, CacheManager<ERPtr> const& cm) {
 #endif
 }
 
-void log_cache_store(size_t key, CacheManager<ERPtr> const& cm) {
+void log_cache_store(size_t key, CacheManager const& cm) {
 #ifdef SEQUANT_EVAL_TRACE
   auto& l = Logger::get_instance();
   if (l.log_level_eval > 0) {
@@ -108,7 +108,7 @@ template <typename, typename, typename = void>
 constexpr bool IsLeafEvaluator{};
 
 template <typename NodeT>
-constexpr bool IsLeafEvaluator<NodeT, CacheManager<ERPtr>, void>{};
+constexpr bool IsLeafEvaluator<NodeT, CacheManager, void>{};
 
 template <typename NodeT, typename Le>
 constexpr bool IsLeafEvaluator<
@@ -135,8 +135,8 @@ constexpr bool IsLeafEvaluator<
 /// \see CacheManager
 ///
 template <typename NodesI>
-CacheManager<ERPtr> cache_manager(NodesI const& nodes,
-                                  size_t min_repeats = 2) noexcept {
+CacheManager cache_manager(NodesI const& nodes,
+                           size_t min_repeats = 2) noexcept {
   auto imed_counts = container::map<size_t, size_t>{};
 
   // visits a node and check if its hash value exists in imed_counts map
@@ -164,7 +164,7 @@ CacheManager<ERPtr> cache_manager(NodesI const& nodes,
   };
   ranges::actions::remove_if(imed_counts, less_repeating);
 
-  return CacheManager<ERPtr>{imed_counts};
+  return CacheManager{imed_counts};
 }
 
 ///
@@ -260,7 +260,7 @@ ERPtr evaluate_crust(NodeT const&, Le const&);
 
 template <typename NodeT, typename Le,
           std::enable_if_t<IsLeafEvaluator<NodeT, Le>, bool> = true>
-ERPtr evaluate_crust(NodeT const&, Le const&, CacheManager<ERPtr>&);
+ERPtr evaluate_crust(NodeT const&, Le const&, CacheManager&);
 
 template <typename NodeT, typename Le, typename... Args,
           std::enable_if_t<IsLeafEvaluator<NodeT, Le>, bool> = true>
@@ -307,16 +307,15 @@ ERPtr evaluate_crust(NodeT const& node, Le const& le) {
 
 template <typename NodeT, typename Le,
           std::enable_if_t<IsLeafEvaluator<NodeT, Le>, bool>>
-ERPtr evaluate_crust(NodeT const& node, Le const& le,
-                     CacheManager<ERPtr>& cache) {
+ERPtr evaluate_crust(NodeT const& node, Le const& le, CacheManager& cache) {
   auto const h = hash::value(*node);
   if (auto ptr = cache.access(h); ptr) {
     log_cache_access(h, cache);
-    return *ptr;
+    return ptr;
   } else if (cache.exists(h)) {
     auto ptr = cache.store(h, evaluate_core(node, le, cache));
     log_cache_store(h, cache);
-    return *ptr;
+    return ptr;
   } else {
     return evaluate_core(node, le, cache);
   }

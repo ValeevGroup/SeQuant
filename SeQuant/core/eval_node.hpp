@@ -388,7 +388,7 @@ template <
     typename NodesT, typename KeysT,
     typename = std::enable_if_t<IsIterableOfEvalNodes<NodesT>>,
     typename = std::enable_if_t<std::is_convertible_v<IteredT<KeysT>, size_t>>>
-void reorder_nodes(NodesT& nodes, KeysT const& keys) {
+[[deprecated]] void reorder_nodes(NodesT& nodes, KeysT const& keys) {
   using ranges::views::transform;
 
   auto ks = keys | ranges::to<container::set<size_t>>;

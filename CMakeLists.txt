@@ -256,7 +256,6 @@ set(SeQuant_src
         SeQuant/core/wick.impl.hpp
         SeQuant/core/wolfram.hpp
         SeQuant/core/wstring.hpp
-        SeQuant/domain/eval/cache_manager.hpp
         SeQuant/domain/eval/eval.hpp
         SeQuant/domain/mbpt/antisymmetrizer.hpp
         SeQuant/domain/mbpt/context.hpp
@@ -290,8 +289,10 @@ endif (SEQUANT_EVAL_TESTS)
 
 if (TARGET tiledarray)
     list(APPEND SeQuant_src
-            SeQuant/domain/eval/eval.hpp
+            SeQuant/domain/eval/cache_manager.cpp
+            SeQuant/domain/eval/cache_manager.hpp
             SeQuant/domain/eval/eval.cpp
+            SeQuant/domain/eval/eval.hpp
             SeQuant/domain/eval/eval_result.cpp
             SeQuant/domain/eval/eval_result.hpp
             )
@@ -395,7 +396,6 @@ if (BUILD_TESTING)
             tests/unit/test_fusion.cpp
             tests/unit/test_token_sequant.cpp
             tests/unit/test_rpn.cpp
-            tests/unit/test_cache_manager.cpp
             tests/unit/test_runtime.cpp
             tests/unit/test_math.cpp
             tests/unit/test_string.cpp
@@ -406,6 +406,7 @@ if (BUILD_TESTING)
         list(APPEND utests_src
                 tests/unit/test_eval_ta.cpp
                 tests/unit/test_eval_btas.cpp
+                tests/unit/test_cache_manager.cpp
                 )
     endif (TARGET tiledarray)
 

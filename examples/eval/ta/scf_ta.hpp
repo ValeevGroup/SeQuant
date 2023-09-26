@@ -28,7 +28,7 @@ class SequantEvalScfTA final : public SequantEvalScf {
 
  private:
   container::vector<container::vector<EvalNodeTA>> nodes_;
-  CacheManager<ERPtr> cman_;
+  CacheManager cman_;
   DataWorldTA<Tensor_t> data_world_;
 
   Tensor_t const& f_vo() const {
