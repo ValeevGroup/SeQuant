@@ -18,11 +18,10 @@
 namespace sequant {
 
 struct ParseError : std::runtime_error {
-	std::string message;
-	std::size_t line;
-	std::size_t col;
+	std::size_t offset;
+	std::size_t length;
 
-	ParseError(std::string msg);
+	ParseError(std::size_t offset, std::size_t length, std::string message);
 };
 
 // clang-format off

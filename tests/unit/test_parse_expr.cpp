@@ -3,7 +3,51 @@
 #include <SeQuant/core/parse_expr.hpp>
 #include <SeQuant/core/tensor.hpp>
 
+#include <algorithm>
 #include <locale>
+#include <sstream>
+#include <string>
+
+struct ParseErrorMatcher : Catch::MatcherBase<sequant::ParseError> {
+  std::size_t offset;
+  std::size_t length;
+  std::string messageFragment;
+
+  ParseErrorMatcher(std::size_t offset, std::size_t length,
+                    std::string messageFragment = "")
+      : offset(offset),
+        length(length),
+        messageFragment(std::move(messageFragment)) {}
+
+  bool match(const sequant::ParseError& exception) const override {
+    if (exception.offset != offset) {
+      return false;
+    }
+    if (exception.length != length) {
+      return false;
+    }
+    if (!messageFragment.empty()) {
+      std::string message(exception.what());
+      auto iter = message.find(messageFragment);
+
+      return iter != std::string::npos;
+    }
+    return true;
+  }
+
+  std::string describe() const override {
+    return "-- expected offset " + std::to_string(offset) + " and length " +
+           std::to_string(length) +
+           (messageFragment.empty()
+                ? std::string()
+                : " and a reference to '" + messageFragment + "'");
+  }
+};
+
+ParseErrorMatcher parseErrorMatches(std::size_t offset, std::size_t length,
+                                    std::string messageFragment = "") {
+  return ParseErrorMatcher{offset, length, std::move(messageFragment)};
+}
 
 TEST_CASE("TEST_PARSE_EXPR", "[parse_expr]") {
   using namespace sequant;
@@ -172,6 +216,24 @@ TEST_CASE("TEST_PARSE_EXPR", "[parse_expr]") {
   }
 
   SECTION("Empty input") { REQUIRE(parse_expr(L"") == nullptr); }
+
+  SECTION("Error handling") {
+    SECTION("Exception type") {
+      std::vector<std::wstring> inputs = {L"t^",
+                                          L"a + + b"
+                                          L"1/t"
+                                          L"T{}"
+                                          L"T^{i1}{a1}"};
+
+      for (const std::wstring& current : inputs) {
+        REQUIRE_THROWS_AS(parse_expr(current), ParseError);
+      }
+    }
+    SECTION("Invalid index") {
+      REQUIRE_THROWS_MATCHES(parse_expr(L"t{i1<az1>;}"), ParseError,
+                             parseErrorMatches(4, 3));
+    }
+  }
 }
 
 TEST_CASE("TEST_DEPARSE_EXPR", "[parse_expr]") {

@@ -15,6 +15,7 @@
 #include <SeQuant/core/tensor.hpp>
 
 #define BOOST_SPIRIT_X3_UNICODE
+#include <boost/core/demangle.hpp>
 #include <boost/spirit/home/x3.hpp>
 #include <boost/spirit/home/x3/support/utility/error_reporting.hpp>
 #include <boost/variant.hpp>
@@ -28,6 +29,10 @@
 #include <type_traits>
 
 namespace sequant {
+
+ParseError::ParseError(std::size_t offset, std::size_t length,
+                       std::string message)
+    : std::runtime_error(std::move(message)), offset(offset), length(length) {}
 
 namespace x3 = boost::spirit::x3;
 
@@ -81,7 +86,7 @@ auto index_def        = x3::lexeme[
 						];
 
 auto index_groups_def =   L"_{" > -(index % ',') > L"}^{" > -(index % ',') > L"}" >> x3::attr(false)
-                        | L"^{" > -(index % ',') > L"}_{" > -(index % ',') > L"}" >> x3::attr(true)
+                        | x3::lexeme[x3::lit('^') > '{'] > -(index % ',') > L"}_{" > -(index % ',') > L"}" >> x3::attr(true)
                         |  '{'  > -(index % ',') > ';'    > -(index % ',') >  '}' >> x3::attr(false);
 
 auto tensor_def       = x3::lexeme[
@@ -96,9 +101,9 @@ auto product_def      = grouped % -x3::lit('*');
 
 auto first_addend     = (('-' >> x3::attr(-1) | -x3::lit('+') >> x3::attr(1)) >> product)[actions::process_addend{}];
 
-auto addend           = (('+' >> x3::attr(1) | '-' >> x3::attr(-1)) >> product)[actions::process_addend{}];
+auto addend           = (('+' >> x3::attr(1) | '-' >> x3::attr(-1)) > product)[actions::process_addend{}];
 
-auto sum_def          = x3::expect[first_addend] >> *addend;
+auto sum_def          = first_addend >> *addend;
 
 auto expr_def         = -sum > x3::eoi;
 // clang-format on
@@ -126,8 +131,7 @@ struct error_handler {
   x3::error_handler_result on_error(const Iterator &first, const Iterator &last,
                                     const Exception &e, const Context &ctx) {
     auto &error_handler = x3::get<error_handler_tag>(ctx).get();
-    std::string message = "Error! Expecting: " + e.which() + " here:";
-    error_handler(e.where(), message);
+    error_handler(e.where(), boost::core::demangle(e.which().data()));
     return x3::error_handler_result::fail;
   }
 };
@@ -146,13 +150,26 @@ struct IndexGroupRule : helpers::annotate_position, helpers::error_handler {};
 
 }  // namespace parse
 
+template <typename Iterator>
+struct ErrorHandler {
+  Iterator begin;
+
+  ErrorHandler(Iterator begin) : begin(std::move(begin)) {}
+
+  void operator()(Iterator where, std::string expected) const {
+    std::size_t offset = std::distance(begin, where);
+    throw ParseError(offset, 1,
+                     std::string("Parse failure at offset ") +
+                         std::to_string(offset) + ": expected " + expected);
+  }
+};
+
 ExprPtr parse_expr(std::wstring_view input, Symmetry default_symmetry) {
   using iterator_type = decltype(input)::iterator;
   x3::position_cache<std::vector<iterator_type>> positions(input.begin(),
                                                            input.end());
 
-  x3::error_handler<iterator_type> error_handler(input.begin(), input.end(),
-                                                 std::cerr);
+  ErrorHandler<iterator_type> error_handler(input.begin());
 
   parse::ast::Sum ast;
 
@@ -178,7 +195,7 @@ ExprPtr parse_expr(std::wstring_view input, Symmetry default_symmetry) {
     throw;
   }
 
-  return parse::transform::ast_to_expr(ast, positions, default_symmetry);
+  return parse::transform::ast_to_expr(ast, positions, input.begin(), default_symmetry);
 }
 
 }  // namespace sequant
