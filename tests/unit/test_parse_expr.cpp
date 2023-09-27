@@ -8,6 +8,17 @@
 #include <sstream>
 #include <string>
 
+namespace Catch {
+template <>
+struct StringMaker<sequant::ParseError> {
+  static std::string convert(const sequant::ParseError& error) {
+    return "ParseError{offset: " + std::to_string(error.offset) +
+           ", length: " + std::to_string(error.length) + ", what(): '" +
+           error.what() + "'}";
+  }
+};
+}  // namespace Catch
+
 struct ParseErrorMatcher : Catch::MatcherBase<sequant::ParseError> {
   std::size_t offset;
   std::size_t length;
@@ -36,11 +47,11 @@ struct ParseErrorMatcher : Catch::MatcherBase<sequant::ParseError> {
   }
 
   std::string describe() const override {
-    return "-- expected offset " + std::to_string(offset) + " and length " +
-           std::to_string(length) +
+    return "-- expected {offset: " + std::to_string(offset) +
+           ", length: " + std::to_string(length) +
            (messageFragment.empty()
-                ? std::string()
-                : " and a reference to '" + messageFragment + "'");
+                ? std::string("}")
+                : ", what() references '" + messageFragment + "'}");
   }
 };
 
@@ -229,9 +240,18 @@ TEST_CASE("TEST_PARSE_EXPR", "[parse_expr]") {
         REQUIRE_THROWS_AS(parse_expr(current), ParseError);
       }
     }
+
     SECTION("Invalid index") {
       REQUIRE_THROWS_MATCHES(parse_expr(L"t{i1<az1>;}"), ParseError,
-                             parseErrorMatches(4, 3));
+                             parseErrorMatches(5, 3, "proto"));
+      REQUIRE_THROWS_MATCHES(parse_expr(L"t{i1;az3}"), ParseError,
+                             parseErrorMatches(5, 3, "Unknown index space"));
+    }
+
+    SECTION("Invalid symmetry") {
+      REQUIRE_THROWS_MATCHES(
+          parse_expr(L"t{i1;a3}:P"), ParseError,
+          parseErrorMatches(9, 1, "Invalid symmetry specifier"));
     }
   }
 }

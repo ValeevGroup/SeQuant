@@ -182,12 +182,18 @@ ExprPtr parse_expr(std::wstring_view input, Symmetry default_symmetry) {
     bool success =
         x3::phrase_parse(start, input.end(), parser, x3::unicode::space, ast);
 
-    if (!success || start != input.end()) {
-      // TODO: error handling
-      // See https://www.codevamping.com/2018/12/spirit-x3-error-handling/
-      throw std::runtime_error("Parsing failed");
+    if (!success) {
+      // Normally, this shouldn't happen as any error should itself throw a
+      // ParseError already
+      throw ParseError(0, input.size(),
+                       "Parsing was unsuccessful for an unknown reason");
     }
-
+    if (start != input.end()) {
+      // This should also not happen as the parser requires matching EOI
+      throw ParseError(std::distance(input.begin(), start),
+                       std::distance(start, input.end()),
+                       "Couldn't parse the entire input");
+    }
   } catch (const boost::spirit::x3::expectation_failure<iterator_type> &e) {
     std::wcout << "Caught expectation_failure\nwhere: " << e.where()
                << "\nwhat: " << e.what() << "\nwhich: " << e.which().data()
@@ -195,7 +201,8 @@ ExprPtr parse_expr(std::wstring_view input, Symmetry default_symmetry) {
     throw;
   }
 
-  return parse::transform::ast_to_expr(ast, positions, input.begin(), default_symmetry);
+  return parse::transform::ast_to_expr(ast, positions, input.begin(),
+                                       default_symmetry);
 }
 
 }  // namespace sequant

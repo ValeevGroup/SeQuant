@@ -7,26 +7,37 @@
 
 #include "ast.hpp"
 
-#include <SeQuant/core/parse_expr.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/parse_expr.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tensor.hpp>
 
 #include <boost/variant.hpp>
 
 #include <algorithm>
+#include <codecvt>
+#include <locale>
 #include <string>
 #include <tuple>
 
 namespace sequant::parse::transform {
 
-template<typename AST, typename PositionCache, typename Iterator>
-std::tuple<std::size_t, std::size_t> get_pos(const AST &ast, const PositionCache &cache, const Iterator &begin) {
-	const auto range = cache.position_of(ast);
+std::string toUtf8(const std::wstring_view &str) {
+  std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
 
-	return {std::distance(begin, range.begin()), std::distance(range.begin(), range.end()) };
+  return converter.to_bytes(str.begin(), str.end());
+}
+
+template <typename AST, typename PositionCache, typename Iterator>
+std::tuple<std::size_t, std::size_t> get_pos(const AST &ast,
+                                             const PositionCache &cache,
+                                             const Iterator &begin) {
+  const auto range = cache.position_of(ast);
+
+  return {std::distance(begin, range.begin()),
+          std::distance(range.begin(), range.end())};
 }
 
 template <typename PositionCache, typename Iterator>
@@ -41,11 +52,15 @@ Index to_index(const parse::ast::Index &index,
       IndexSpace space = IndexSpace::instance(label);
       protoIndices.push_back(Index(std::move(label), std::move(space)));
     } catch (const IndexSpace::bad_key &) {
-		auto [offset, length] = get_pos(current, position_cache, begin);
-		throw ParseError(offset, length, "Unknown index space in proto index specification");
+      auto [offset, length] = get_pos(current, position_cache, begin);
+      throw ParseError(offset, length,
+                       "Unknown index space '" + toUtf8(current.label) +
+                           "' in proto index specification");
     } catch (const std::invalid_argument &e) {
-      // TODO: Report other issue
-      throw;
+      auto [offset, length] = get_pos(current, position_cache, begin);
+      throw ParseError(offset, length,
+                       "Invalid index '" + toUtf8(current.label) + "_" +
+                           std::to_string(current.id) + ": " + e.what());
     }
   }
 
@@ -55,17 +70,22 @@ Index to_index(const parse::ast::Index &index,
     IndexSpace space = IndexSpace::instance(label);
     return Index(std::move(label), std::move(space), std::move(protoIndices));
   } catch (const IndexSpace::bad_key &e) {
-    // TODO: Report invalid index space
-    throw;
+    auto [offset, length] = get_pos(index.label, position_cache, begin);
+    throw ParseError(offset, length,
+                     "Unknown index space '" + toUtf8(index.label.label) +
+                         "' in index specification");
   } catch (const std::invalid_argument &e) {
-    // TODO: Report other issue
-    throw;
+    auto [offset, length] = get_pos(index.label, position_cache, begin);
+    throw ParseError(offset, length,
+                     "Invalid index '" + toUtf8(index.label.label) + "_" +
+                         std::to_string(index.label.id) + ": " + e.what());
   }
 }
 
 template <typename PositionCache, typename Iterator>
 std::tuple<container::vector<Index>, container::vector<Index>> make_indices(
-    const parse::ast::IndexGroups &groups, const PositionCache &position_cache, const Iterator &begin) {
+    const parse::ast::IndexGroups &groups, const PositionCache &position_cache,
+    const Iterator &begin) {
   container::vector<Index> braIndices;
   container::vector<Index> ketIndices;
 
@@ -93,8 +113,8 @@ std::tuple<container::vector<Index>, container::vector<Index>> make_indices(
   return {std::move(braIndices), std::move(ketIndices)};
 }
 
-template <typename PositionCache, typename Iterator>
-Symmetry to_symmetry(char c, const PositionCache &position_cache, const Iterator &begin,
+template <typename Iterator>
+Symmetry to_symmetry(char c, std::size_t offset, const Iterator &begin,
                      Symmetry default_symmetry) {
   if (c == parse::ast::Tensor::unspecified_symmetry) {
     return default_symmetry;
@@ -112,13 +132,14 @@ Symmetry to_symmetry(char c, const PositionCache &position_cache, const Iterator
       return Symmetry::nonsymm;
   }
 
-  // TODO: report error
-  throw "Invalid";
+  throw ParseError(offset, 1,
+                   std::string("Invalid symmetry specifier '") + c + "'");
 }
 
 template <typename PositionCache, typename Iterator>
 Constant to_constant(const parse::ast::Number &number,
-                     const PositionCache &position_cache, const Iterator &begin) {
+                     const PositionCache &position_cache,
+                     const Iterator &begin) {
   if (static_cast<std::int64_t>(number.numerator) == number.numerator &&
       static_cast<std::int64_t>(number.denominator) == number.denominator) {
     // Integer fraction
@@ -133,35 +154,43 @@ Constant to_constant(const parse::ast::Number &number,
 
 template <typename PositionCache, typename Iterator>
 ExprPtr ast_to_expr(const parse::ast::Product &product,
-                    const PositionCache &position_cache, const Iterator &begin, Symmetry default_symmetry);
+                    const PositionCache &position_cache, const Iterator &begin,
+                    Symmetry default_symmetry);
 template <typename PositionCache, typename Iterator>
-ExprPtr ast_to_expr(const parse::ast::Sum &sum, const PositionCache &position_cache, const Iterator &begin,
+ExprPtr ast_to_expr(const parse::ast::Sum &sum,
+                    const PositionCache &position_cache, const Iterator &begin,
                     Symmetry default_symmetry);
 
 template <typename PositionCache, typename Iterator>
 ExprPtr ast_to_expr(const parse::ast::NullaryValue &value,
-                    const PositionCache &position_cache, const Iterator &begin, Symmetry default_symmetry) {
+                    const PositionCache &position_cache, const Iterator &begin,
+                    Symmetry default_symmetry) {
   struct Transformer {
     std::reference_wrapper<const PositionCache> position_cache;
     std::reference_wrapper<const Iterator> begin;
     std::reference_wrapper<Symmetry> default_symmetry;
 
     ExprPtr operator()(const parse::ast::Product &product) const {
-      return ast_to_expr<PositionCache>(product, position_cache.get(), begin.get(),
-                                        default_symmetry);
+      return ast_to_expr<PositionCache>(product, position_cache.get(),
+                                        begin.get(), default_symmetry);
     }
 
     ExprPtr operator()(const parse::ast::Sum &sum) const {
-      return ast_to_expr<PositionCache>(sum, position_cache.get(), begin.get(),default_symmetry);
+      return ast_to_expr<PositionCache>(sum, position_cache.get(), begin.get(),
+                                        default_symmetry);
     }
 
     ExprPtr operator()(const parse::ast::Tensor &tensor) const {
       auto [braIndices, ketIndices] =
           make_indices(tensor.indices, position_cache.get(), begin.get());
 
-      return ex<Tensor>(
-          tensor.name, std::move(braIndices), std::move(ketIndices),
-          to_symmetry(tensor.symmetry, position_cache.get(), begin.get(), default_symmetry));
+      auto [offset, length] =
+          get_pos(tensor, position_cache.get(), begin.get());
+
+      return ex<Tensor>(tensor.name, std::move(braIndices),
+                        std::move(ketIndices),
+                        to_symmetry(tensor.symmetry, offset + length - 1,
+                                    begin.get(), default_symmetry));
     }
 
     ExprPtr operator()(const parse::ast::Variable &variable) const {
@@ -169,12 +198,15 @@ ExprPtr ast_to_expr(const parse::ast::NullaryValue &value,
     }
 
     ExprPtr operator()(const parse::ast::Number &number) const {
-      return ex<Constant>(to_constant(number, position_cache.get(), begin.get()));
+      return ex<Constant>(
+          to_constant(number, position_cache.get(), begin.get()));
     }
   };
 
   return boost::apply_visitor(
-      Transformer{std::ref(position_cache), std::ref(begin), std::ref(default_symmetry)}, value);
+      Transformer{std::ref(position_cache), std::ref(begin),
+                  std::ref(default_symmetry)},
+      value);
 }
 
 template <typename T, typename... Ts>
@@ -184,12 +216,15 @@ bool holds_alternative(const boost::variant<Ts...> &v) noexcept {
 
 template <typename PositionCache, typename Iterator>
 ExprPtr ast_to_expr(const parse::ast::Product &product,
-                    const PositionCache &position_cache, const Iterator &begin, Symmetry default_symmetry) {
+                    const PositionCache &position_cache, const Iterator &begin,
+                    Symmetry default_symmetry) {
   if (product.factors.empty()) {
     // This shouldn't happen
     assert(false);
-    return {};
+    throw std::runtime_error(
+        "ast_to_expr: Reached supposed-to-be unreachable code");
   }
+
   if (product.factors.size() == 1) {
     return ast_to_expr(product.factors.front(), position_cache, begin,
                        default_symmetry);
@@ -202,10 +237,11 @@ ExprPtr ast_to_expr(const parse::ast::Product &product,
   // We perform constant folding
   for (const parse::ast::NullaryValue &value : product.factors) {
     if (holds_alternative<parse::ast::Number>(value)) {
-      prefactor *=
-          to_constant(boost::get<parse::ast::Number>(value), position_cache, begin);
+      prefactor *= to_constant(boost::get<parse::ast::Number>(value),
+                               position_cache, begin);
     } else {
-      factors.push_back(ast_to_expr(value, position_cache, begin, default_symmetry));
+      factors.push_back(
+          ast_to_expr(value, position_cache, begin, default_symmetry));
     }
   }
 
@@ -223,13 +259,15 @@ ExprPtr ast_to_expr(const parse::ast::Product &product,
 }
 
 template <typename PositionCache, typename Iterator>
-ExprPtr ast_to_expr(const parse::ast::Sum &sum, const PositionCache &position_cache, const Iterator &begin,
+ExprPtr ast_to_expr(const parse::ast::Sum &sum,
+                    const PositionCache &position_cache, const Iterator &begin,
                     Symmetry default_symmetry) {
   if (sum.summands.empty()) {
     return {};
   }
   if (sum.summands.size() == 1) {
-    return ast_to_expr(sum.summands.front(), position_cache, begin, default_symmetry);
+    return ast_to_expr(sum.summands.front(), position_cache, begin,
+                       default_symmetry);
   }
 
   std::vector<ExprPtr> summands;
