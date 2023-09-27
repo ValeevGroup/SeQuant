@@ -141,9 +141,9 @@ include(FindOrFetchRangeV3)
 # need header-only Boost + (compiled) Boost.Regex and Boost.Locale
 # NB Boost.Container is broken in v1.70
 if (NOT TARGET Boost::boost OR NOT TARGET Boost::regex OR NOT TARGET Boost::locale)
-	find_package(Boost ${SEQUANT_TRACKED_BOOST_VERSION} CONFIG COMPONENTS regex locale)
+    find_package(Boost ${SEQUANT_TRACKED_BOOST_VERSION} CONFIG COMPONENTS regex locale)
     if (Boost_VERSION_STRING VERSION_LESS ${SEQUANT_TRACKED_BOOST_VERSION} OR NOT TARGET Boost::boost OR NOT TARGET Boost::regex OR NOT TARGET Boost::locale)
-		find_package(Boost ${SEQUANT_TRACKED_BOOST_VERSION} REQUIRED COMPONENTS regex locale)
+        find_package(Boost ${SEQUANT_TRACKED_BOOST_VERSION} REQUIRED COMPONENTS regex locale)
         message(STATUS "Found Boost (version ${Boost_VERSION}) via FindBoost module")
         set(Boost_USE_CONFIG FALSE)
     else ()
