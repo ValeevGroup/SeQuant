@@ -86,7 +86,7 @@ auto index_def        = x3::lexeme[
 						];
 
 auto index_groups_def =   L"_{" > -(index % ',') > L"}^{" > -(index % ',') > L"}" >> x3::attr(false)
-                        | x3::lexeme[x3::lit('^') > '{'] > -(index % ',') > L"}_{" > -(index % ',') > L"}" >> x3::attr(true)
+                        | L"^{" > -(index % ',') > L"}_{" > -(index % ',') > L"}" >> x3::attr(true)
                         |  '{'  > -(index % ',') > ';'    > -(index % ',') >  '}' >> x3::attr(false);
 
 auto tensor_def       = x3::lexeme[
