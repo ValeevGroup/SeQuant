@@ -250,10 +250,11 @@ class ContractedIndexCount {
 
 ///
 /// \brief This function object takes an evaluation node and returns the
-///        symbolic cost of flops required for evaluation as an AsyCost object.
+///        symbolic cost of flops required for evaluation, as an AsyCost object.
 ///        @see AsyCost.
-/// \detail
-///         - The cost of evaluation of leaf nodes is assumed to be zero.
+/// \note
+///        - The cost of evaluation of leaf nodes is assumed to be zero.
+///        - Cost of evaluation of children nodes are not counted.
 ///
 struct Flops {
   template <typename NodeT, typename = std::enable_if_t<IsEvalNode<NodeT>>>
@@ -271,6 +272,31 @@ struct Flops {
       return AsyCost{occ_virt(n->as_tensor())};
     } else /* scalar (+|*) scalar */
       return AsyCost::zero();
+  }
+};
+
+///
+/// \brief This function object takes an evaluation node and returns the
+///        memory storage required to evaluate it in AsyCost form.
+/// \note
+///       - The memory requirement for non-tensor objects (eg. variables and
+///         scalar constants) are taken to be zero.
+///       - The memory requirement for evaluation of children nodes is not
+///         counted.
+///
+struct Memory {
+  template <typename NodeT, typename = std::enable_if_t<IsEvalNode<NodeT>>>
+  [[nodiscard]] AsyCost operator()(NodeT const& n) const {
+    AsyCost result;
+    auto add_cost = [&result](ExprPtr const& expr) {
+      result += expr.is<Tensor>() ? AsyCost{occ_virt(expr.as<Tensor>())}
+                                  : AsyCost::zero();
+    };
+
+    add_cost(n.left()->expr());
+    add_cost(n.right()->expr());
+    add_cost(n.expr());
+    return result;
   }
 };
 
