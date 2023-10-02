@@ -169,10 +169,22 @@ class FullBinaryNode {
 
   FullBinaryNode& operator=(FullBinaryNode<T>&&) = default;
 
+  ///
+  /// \return Left node if this is an internal node, throws otherwise.
+  ///
   FullBinaryNode const& left() const { return *checked_ptr_access(left_); }
 
+  ///
+  /// \return Right node if this is an internal node, throws otherwise.
+  ///
   FullBinaryNode const& right() const { return *checked_ptr_access(right_); }
 
+  ///
+  /// \brief Check if the object is a leaf node.
+  ///
+  /// \return True if this object represents a terminal binary node.
+  /// \note Left and right children are nullptr like
+  ///
   [[nodiscard]] bool leaf() const { return !(left_ || right_); }
 
   ///
