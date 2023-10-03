@@ -353,6 +353,7 @@ container::svector<container::map<Index, Index>> A_maps(const Tensor& A) {
 }
 
 ExprPtr remove_tensor(const Product& product, std::wstring label) {
+  // filter out tensors with specified label
   auto new_product = std::make_shared<Product>();
   new_product->scale(product.scalar());
   for (auto&& term : product) {
@@ -360,6 +361,8 @@ ExprPtr remove_tensor(const Product& product, std::wstring label) {
       auto tensor = term->as<Tensor>();
       if (tensor.label() != label) new_product->append(1, ex<Tensor>(tensor));
     }
+    else
+      new_product->append(1, term);
   }
   return new_product;
 }
@@ -375,7 +378,7 @@ ExprPtr remove_tensor(const ExprPtr& expr, std::wstring label) {
     return remove_tensor(expr->as<Product>(), label);
   else if (expr->is<Tensor>())
     return expr->as<Tensor>().label() == label ? ex<Constant>(1) : expr;
-  else if (expr->is<Constant>())
+  else if (expr->is<Constant>() || expr->is<Variable>())
     return expr;
   else
     return nullptr;
