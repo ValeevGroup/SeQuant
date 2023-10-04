@@ -4,6 +4,8 @@
 
 #include "cache_manager.hpp"
 
+#include <SeQuant/core/eval_node.hpp>
+
 namespace sequant {
 
 CacheManager::entry::entry(size_t count) noexcept
@@ -36,24 +38,24 @@ void CacheManager::entry::reset() noexcept {
   return life_c > 0 ? static_cast<int>(--life_c) : 0;
 }
 
-ERPtr CacheManager::store(CacheManager::entry &entry, ERPtr data) noexcept {
+ERPtr CacheManager::store(CacheManager::entry& entry, ERPtr data) noexcept {
   entry.store(data);
   return entry.access();
 }
 
 void CacheManager::reset() noexcept {
-  for (auto &&[k, v] : cache_map_) v.reset();
+  for (auto&& [k, v] : cache_map_) v.reset();
 }
 
 ERPtr CacheManager::access(key_type key) noexcept {
-  if (auto &&found = cache_map_.find(key); found != cache_map_.end())
+  if (auto&& found = cache_map_.find(key); found != cache_map_.end())
     return found->second.access();
 
   return nullptr;
 }
 
 ERPtr CacheManager::store(key_type key, ERPtr data) noexcept {
-  if (auto &&found = cache_map_.find(key); found != cache_map_.end())
+  if (auto&& found = cache_map_.find(key); found != cache_map_.end())
     return store(found->second, data);
   return data;
 }
@@ -79,5 +81,42 @@ container::set<size_t> CacheManager::keys() const noexcept {
 }
 
 CacheManager CacheManager::empty() noexcept { return CacheManager{{}}; }
+
+template <typename NodeT, typename = std::enable_if_t<IsEvalNode<NodeT>>>
+void max_cache(NodeT const& node,  //
+               CacheManager& cm,   //
+               AsyCost& curr,      //
+               AsyCost& max) {
+  auto const k = hash::value(*node);
+  if (auto ptr = cm.access(k); ptr) {
+    // std::cout << "[ACCESS][" << k << "]\n";
+    if (cm.life(k) == 0) {
+      curr -= Memory{}(node);
+      // std::cout << "[RELEASE][" << k << "]\n";
+    }
+    return;
+  }
+  if (!node.leaf()) {
+    max_cache(node.left(), cm, curr, max);
+    max_cache(node.right(), cm, curr, max);
+    if (cm.exists(k)) {
+      curr += Memory{}(node);
+      max = std::max(curr, max);
+      // simulate cache store
+      auto s = cm.store(k, eval_result<EvalScalar<double>>(0));
+      //      std::cout << "[STORE][" << k << "]\n";
+      //      std::cout << "[ACCESS][" << k << "]\n";
+    }
+  }
+}
+
+AsyCost peak_cache(Sum const& expr) {
+  auto const nodes = expr | ranges::views::transform(eval_node<EvalExpr>);
+  auto cm = cache_manager(nodes);
+  auto max = AsyCost::zero();
+  auto curr = AsyCost::zero();
+  for (auto const& n : nodes) max_cache(n, cm, curr, max);
+  return max;
+}
 
 }  // namespace sequant

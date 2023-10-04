@@ -295,7 +295,7 @@ struct Memory {
 
     add_cost(n.left()->expr());
     add_cost(n.right()->expr());
-    add_cost(n.expr());
+    add_cost(n->expr());
     return result;
   }
 };

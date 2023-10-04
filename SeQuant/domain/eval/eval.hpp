@@ -120,54 +120,6 @@ constexpr bool IsLeafEvaluator<
     true;
 
 ///
-/// \brief Make a cache manager from an iterable of evaluable nodes.
-///
-/// \param nodes An iterable of evaluable nodes.
-///
-/// \param min_repeats Minimum number of repeats for a node to be cached. By
-///                    default anything repeated twice or more is cached.
-///
-/// \param pred A predicate to filter nodes. By default all nodes are treated to
-///             take part in contributing to the number of repeats.
-///
-/// \return A cache manager.
-///
-/// \see CacheManager
-///
-template <typename NodesI>
-CacheManager cache_manager(NodesI const& nodes,
-                           size_t min_repeats = 2) noexcept {
-  auto imed_counts = container::map<size_t, size_t>{};
-
-  // visits a node and check if its hash value exists in imed_counts map
-  // if it does increase the count and return false (to signal stop visiting
-  // children nodes) otherwise returns true.
-  auto imed_visitor = [&imed_counts](auto&& n) -> bool {
-    auto&& end = imed_counts.end();
-    auto&& h = hash::value(*n);
-    if (auto&& found = imed_counts.find(h); found != end) {
-      ++found->second;
-      return false;
-    } else
-      imed_counts.emplace(h, 1);
-    return true;
-  };  // imed_visitor
-
-  // visit imeds
-  ranges::for_each(nodes, [&imed_visitor](auto&& tree) {
-    tree.visit_internal(imed_visitor);
-  });
-
-  // remove less repeating imeds
-  auto less_repeating = [min_repeats](auto&& pair) {
-    return pair.second < min_repeats;
-  };
-  ranges::actions::remove_if(imed_counts, less_repeating);
-
-  return CacheManager{imed_counts};
-}
-
-///
 /// \brief This class extends the EvalExpr class by adding a annot() method so
 ///        that it can be used to evaluate using TiledArray.
 ///
