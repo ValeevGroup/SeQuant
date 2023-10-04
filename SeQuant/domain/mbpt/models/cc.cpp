@@ -174,7 +174,9 @@ std::vector<sequant::ExprPtr> cc::pert_t1() {
 
   std::vector<ExprPtr> result(P + 1);
   for (auto p = P; p >= PMIN; --p) {
-    result.at(p) = op::vac_av(op::P(p) * expr, op_connect);
+    auto freq_term = ex<Variable>(L"ω") * op::P(p) * op::pertT1_(p);
+    result.at(p) =
+        op::vac_av(op::P(p) * expr, op_connect) - op::vac_av(freq_term);
   }
   return result;
 }
@@ -216,7 +218,9 @@ std::vector<ExprPtr> cc::pert_λ1() {
 
   std::vector<ExprPtr> result(P + 1);
   for (auto p = P; p >= PMIN; --p) {
-    result.at(p) = op::vac_av(expr * op::P(-p), op_connect);
+    auto freq_term = ex<Variable>(L"ω") * op::pertLambda1_(p) * op::P(-p);
+    result.at(p) =
+        op::vac_av(expr * op::P(-p), op_connect) + op::vac_av(freq_term);
   }
   return result;
 }
