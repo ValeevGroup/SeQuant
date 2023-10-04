@@ -32,6 +32,10 @@ class regex_patterns {
   /// If captured, group 2: denominator
   static std::wstring_view abs_real_frac();
 
+  /// Capture group 1: label
+  /// If captured, group 2: '^*' (without quotations)
+  static std::wstring const& sequant_variable();
+
   static std::wstring pure_index();
 
   static std::wstring pure_index_capture();

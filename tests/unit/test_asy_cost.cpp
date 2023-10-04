@@ -57,10 +57,16 @@ TEST_CASE("TEST ASY_COST", "[AsyCost]") {
     auto const c4 = AsyCost{0, 2};
 
     REQUIRE(c1 == AsyCost::zero());
+
     REQUIRE(c1 < c2);
+    REQUIRE(c1 <= c2);
+
     REQUIRE(c2 > c1);
+    REQUIRE(c2 >= c1);
+
     REQUIRE(c2 < c3);
     REQUIRE(c3 > c2);
+
     REQUIRE(c3 == c4);
 
     auto const cc1 = AsyCost{4, 1} + AsyCost{3, 2} + AsyCost{4, 2};
@@ -68,6 +74,33 @@ TEST_CASE("TEST ASY_COST", "[AsyCost]") {
     REQUIRE(cc1 < cc2);
     REQUIRE_FALSE(cc2 < cc1);
     REQUIRE(cc2 > cc1);
+  }
+
+  SECTION("Addition and subtraction") {
+    auto const c1 = AsyCost{0, 0};
+    auto const c2 = AsyCost{0, 1};
+    auto const c3 = AsyCost{1, 2};
+    REQUIRE(c1 + c2 == c2);
+    REQUIRE(c1 - c2 == -1 * c2);
+    REQUIRE((c2 + c3).text() == "OV^2 + V");
+    REQUIRE((c2 - c3).text() == "- OV^2 + V");
+    REQUIRE(c3 + c3 == 2 * c3);
+  }
+
+  SECTION("Assignments") {
+    auto c1 = AsyCost{0, 0};
+    auto c2 = AsyCost{0, 1};
+    auto c3 = AsyCost{1, 2};
+    c2 += c1;
+    REQUIRE(c2.text() == "V");
+    c2 -= c1;
+    REQUIRE(c2.text() == "V");
+    c2 += c3;
+    REQUIRE(c2.text() == "OV^2 + V");
+    c2 -= c3;
+    REQUIRE(c2.text() == "V");
+    c2 += c2;
+    REQUIRE(c2.text() == "2*V");
   }
 
   SECTION("Ops count") {

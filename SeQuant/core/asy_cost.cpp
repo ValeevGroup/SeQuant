@@ -120,6 +120,9 @@ AsyCost::AsyCost(rational count, size_t nocc, size_t nvirt)
 
 AsyCost::AsyCost(size_t nocc, size_t nvirt) : AsyCost{1, nocc, nvirt} {}
 
+AsyCost::AsyCost(std::pair<size_t, size_t> const &ov)
+    : AsyCost{ov.first, ov.second} {}
+
 double AsyCost::ops(size_t nocc, size_t nvirt) const {
   double total = 0;
   for (auto &&c : cost_) {
@@ -139,6 +142,16 @@ AsyCost const &AsyCost::max() {
 AsyCost const &AsyCost::zero() {
   static const AsyCost zero = AsyCost{AsyCostEntry::zero()};
   return zero;
+}
+
+AsyCost& AsyCost::operator+=(AsyCost const& other) {
+  *this = *this + other;
+  return *this;
+}
+
+AsyCost& AsyCost::operator-=(AsyCost const& other) {
+  *this = *this - other;
+  return *this;
 }
 
 AsyCost operator+(AsyCost const &lhs, AsyCost const &rhs) {
@@ -200,6 +213,14 @@ bool operator!=(AsyCost const &lhs, AsyCost const &rhs) {
 
 bool operator>(AsyCost const &lhs, AsyCost const &rhs) {
   return !(lhs < rhs || lhs == rhs);
+}
+
+bool operator<=(AsyCost const& lhs, AsyCost const& rhs) {
+  return lhs < rhs || lhs == rhs;
+}
+
+bool operator>=(AsyCost const& lhs, AsyCost const& rhs) {
+  return lhs > rhs || lhs == rhs;
 }
 
 std::wstring AsyCost::to_latex() const {

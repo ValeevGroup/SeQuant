@@ -32,11 +32,11 @@ std::wstring regex_patterns::look_ahead(std::wstring_view pat) {
 }
 
 std::wstring regex_patterns::pure_index() {
-    return label().data() + L"_?\\d+"s;
+  return label().data() + L"_?\\d+"s;
 }
 
 std::wstring regex_patterns::pure_index_capture() {
-    return capture(label()) + L"_?" + capture(L"\\d+");
+  return capture(label()) + L"_?" + capture(L"\\d+");
 }
 
 std::wstring regex_patterns::pure_indices() {
@@ -57,7 +57,8 @@ std::wstring regex_patterns::index() {
 }
 
 std::wstring regex_patterns::index_capture() {
-  return capture(pure_index()) + L"\\s*?" + capture_not(proto_indices_capture()) + L"?";
+  return capture(pure_index()) + L"\\s*?" +
+         capture_not(proto_indices_capture()) + L"?";
 }
 
 std::wstring_view regex_patterns::indices() {
@@ -67,38 +68,45 @@ std::wstring_view regex_patterns::indices() {
 }
 
 std::wstring_view regex_patterns::bra_expanded() {
-  static const std::wstring bra = L"_\\s*?\\{\\s*?"s + indices().data() + L"\\s*?\\}";
+  static const std::wstring bra =
+      L"_\\s*?\\{\\s*?"s + indices().data() + L"\\s*?\\}";
   return bra;
 }
 
 std::wstring_view regex_patterns::ket_expanded() {
-  static const std::wstring ket = L"\\^\\s*?\\{\\s*?"s + indices().data() + L"\\s*?\\}";
+  static const std::wstring ket =
+      L"\\^\\s*?\\{\\s*?"s + indices().data() + L"\\s*?\\}";
   return ket;
 }
 
 std::wstring_view regex_patterns::bra_expanded_capture() {
-  static const std::wstring bra = L"_\\s*?\\{\\s*?"s + capture(indices()) + L"\\s*?\\}";
+  static const std::wstring bra =
+      L"_\\s*?\\{\\s*?"s + capture(indices()) + L"\\s*?\\}";
   return bra;
 }
 
 std::wstring_view regex_patterns::ket_expanded_capture() {
-  static const std::wstring ket = L"\\^\\s*?\\{\\s*?"s + capture(indices()) + L"\\s*?\\}";
+  static const std::wstring ket =
+      L"\\^\\s*?\\{\\s*?"s + capture(indices()) + L"\\s*?\\}";
   return ket;
 }
 
 std::wstring_view regex_patterns::abs_real_frac() {
   static std::wstring frac =
       abs_real_num().data() +
-      capture_not(LR"(\s*?\/\s*?)"s + abs_real_num().data() ) +
-      L"?";
+      capture_not(LR"(\s*?\/\s*?)"s + abs_real_num().data()) + L"?";
 
   return frac;  // guaranteed numerator and optional denominator
 }
 
+std::wstring const& regex_patterns::sequant_variable() {
+  static std::wstring const var = capture(label()) + L"(\\^\\*)?";
+  return var;
+}
+
 std::wstring_view regex_patterns::tensor_expanded() {
   static const std::wstring tensor =
-      capture(label()) +
-      look_ahead(L".*?"s + bra_expanded_capture().data()) +
+      capture(label()) + look_ahead(L".*?"s + bra_expanded_capture().data()) +
       look_ahead(L".*?"s + ket_expanded_capture().data()) +
       this_or_that(L"\\s*?"s + bra_expanded().data() + ket_expanded().data(),
                    L"\\s*?"s + ket_expanded().data() + bra_expanded().data()) +
@@ -109,9 +117,9 @@ std::wstring_view regex_patterns::tensor_expanded() {
 
 std::wstring_view regex_patterns::tensor_terse() {
   static const std::wstring tensor =
-      capture(label()) + L"\\s*?\\{\\s*?"s + capture(indices()) + L"\\s*?;\\s*?" +
-      capture(indices()) + L"\\s*?\\}" + capture_not(L"\\s*?:\\s*?" + capture(L"A|S|N")) +
-      L"?";
+      capture(label()) + L"\\s*?\\{\\s*?"s + capture(indices()) +
+      L"\\s*?;\\s*?" + capture(indices()) + L"\\s*?\\}" +
+      capture_not(L"\\s*?:\\s*?" + capture(L"A|S|N")) + L"?";
   return tensor;
 }
 
