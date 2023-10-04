@@ -116,5 +116,4 @@ Sum reorder(Sum const& sum) {
   assert(result.size() == sum.size());
   return result;
 }
-
 }  // namespace sequant::opt

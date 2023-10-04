@@ -1,7 +1,10 @@
 #ifndef SEQUANT_EVAL_CACHE_MANAGER_HPP
 #define SEQUANT_EVAL_CACHE_MANAGER_HPP
 
+#include <SeQuant/core/asy_cost.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/eval_node.hpp>
+#include <SeQuant/core/expr.hpp>
 #include <SeQuant/domain/eval/eval_result.hpp>
 
 #include <memory>
@@ -44,14 +47,14 @@ class CacheManager {
 
   };  // entry
 
-  static ERPtr store(entry &entry, ERPtr data) noexcept;
+  static ERPtr store(entry& entry, ERPtr data) noexcept;
 
   container::map<key_type, entry> cache_map_;
 
  public:
   template <typename Iterable1 = container::map<size_t, size_t>>
-  explicit CacheManager(Iterable1 &&decaying) noexcept {
-    for (auto &&[k, c] : decaying) cache_map_.try_emplace(k, entry{c});
+  explicit CacheManager(Iterable1&& decaying) noexcept {
+    for (auto&& [k, c] : decaying) cache_map_.try_emplace(k, entry{c});
   }
 
   ///
@@ -108,6 +111,64 @@ class CacheManager {
   friend struct access_by;
 
 };  // CacheManager
+
+///
+/// \brief Make a cache manager from an iterable of evaluable nodes.
+///
+/// \param nodes An iterable of eval nodes.
+///
+/// \param min_repeats Minimum number of repeats for a node to be cached. By
+///                    default anything repeated twice or more is cached.
+///
+/// \return A cache manager.
+///
+/// \see CacheManager
+///
+template <typename NodesI,
+          typename = std::enable_if_t<IsIterableOfEvalNodes<NodesI>>>
+CacheManager cache_manager(NodesI const& nodes,
+                           size_t min_repeats = 2) noexcept {
+  auto imed_counts = container::map<size_t, size_t>{};
+
+  // visits a node and check if its hash value exists in imed_counts map
+  // if it does increase the count and return false (to signal stop visiting
+  // children nodes) otherwise returns true.
+  auto imed_visitor = [&imed_counts](auto&& n) -> bool {
+    auto&& end = imed_counts.end();
+    auto&& h = hash::value(*n);
+    if (auto&& found = imed_counts.find(h); found != end) {
+      ++found->second;
+      return false;
+    } else
+      imed_counts.emplace(h, 1);
+    return true;
+  };  // imed_visitor
+
+  // visit imeds
+  ranges::for_each(nodes, [&imed_visitor](auto&& tree) {
+    tree.visit_internal(imed_visitor);
+  });
+
+  // remove less repeating imeds
+  auto less_repeating = [min_repeats](auto&& pair) {
+    return pair.second < min_repeats;
+  };
+  ranges::actions::remove_if(imed_counts, less_repeating);
+
+  return CacheManager{imed_counts};
+}
+
+///
+/// \brief Estimates the peak memory required to hold the intermediates that
+///        repeat when a Sum is evaluated term by term.
+/// \note Reordering the terms in a Sum affects the peak cache memory.
+///
+/// \param expr A Sum whose terms will be evaluated by reusing intermediates.
+/// \return AsyCost object that represents the memory in terms of powers of
+///         active occupied and active unoccupied index extents of stored
+///         tensor.
+///
+AsyCost peak_cache(Sum const& expr);
 
 }  // namespace sequant
 
