@@ -16,6 +16,24 @@ ExprPtr vac_av(
 
   auto vac_av_product = [&op_connections](ExprPtr expr) {
     assert(expr.is<Product>());
+    // extract scalar and factors
+    const auto scalar = expr.as<Product>().scalar();
+    auto factors = expr.as<Product>().factors();
+    // remove Variable types from the Product temporarily
+    auto variables = factors | ranges::views::filter([](const auto& factor) {
+                       return factor.template is<Variable>();
+                     }) |
+                     ranges::to_vector;
+
+    auto factors_filtered = factors |
+                            ranges::views::filter([](const auto& factor) {
+                              return !(factor.template is<Variable>());
+                            }) |
+                            ranges::to<decltype(factors)>;
+    // construct Product with filtered factors
+    auto product =
+        ex<Product>(scalar, factors_filtered.begin(), factors_filtered.end());
+
     // compute connections
     std::vector<std::pair<int, int>> connections;
     {
@@ -24,7 +42,7 @@ ExprPtr vac_av(
                       // product
       int pos = 0;
       bool ops_only = true;
-      for (const auto& factor : expr.as<Product>()) {
+      for (const auto& factor : product.as<Product>()) {
         if (factor.is<op_t>()) {
           const auto& op = factor.as<op_t>();
           const std::wstring op_lbl = std::wstring(op.label());
@@ -43,7 +61,7 @@ ExprPtr vac_av(
 
       // if composed of ops only, screen out products with zero VEV
       if (ops_only) {
-        if (!can_change_qns(expr, qns_t{})) {
+        if (!can_change_qns(product, qns_t{})) {
           return ex<Constant>(0);
         }
       }
@@ -73,11 +91,17 @@ ExprPtr vac_av(
       };
       expr->visit(op_lowerer, /* atoms only = */ true);
     };
-    lower_to_tensor_form(expr);
-    expr = simplify(expr);
+    lower_to_tensor_form(product);
+    expr = simplify(product);
 
     // compute VEV
-    return simplify(vac_av(expr, connections, /* use_topology = */ true));
+    auto vev =
+        simplify(vac_av(product, connections, /* use_topology = */ true));
+    // restore Variable types to the Product
+    if (!variables.empty())
+      ranges::for_each(variables, [&vev](const auto& var) { vev *= var; });
+
+    return simplify(vev);
   };
 
   ExprPtr result;
