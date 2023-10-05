@@ -63,7 +63,11 @@ container::vector<container::vector<size_t>> clusters(Sum const& expr) {
 
     for (auto const& term : expr) {
       auto const node = eval_node<EvalExpr>(term);
-      node.visit_internal(visitor);
+      if (term->is_atom()) {
+        visitor(node);
+      } else {
+        node.visit_internal(visitor);
+      }
       ++pos;
     }
   }
