@@ -37,8 +37,8 @@ TEST_CASE("NBodyOp", "[mbpt]") {
       {  // exact compare
         using namespace boost::numeric::interval_lib::compare::possible;
         REQUIRE(operator==(f1(), qns_t{1, 1}));  // produces single replacement
-        REQUIRE(operator!=
-                (f1(), qns_t{2, 2}));  // cannot produce double replacement
+        REQUIRE(operator!=(f1(),
+                           qns_t{2, 2}));  // cannot produce double replacement
         REQUIRE(operator==(f1(qns_t{5, 0}), qns_t{{5, 6}, {0, 1}}));
       }
     }

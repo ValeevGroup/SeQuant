@@ -61,11 +61,11 @@ class compute_cceqvec {
     switch (type) {
       case EqnType::t:
         eqvec = cc{N, P, PMIN}.t(screen, use_topology, use_connectivity,
-                                    canonical_only);
+                                 canonical_only);
         break;
       case EqnType::λ:
         eqvec = cc{N, P, PMIN}.λ(screen, use_topology, use_connectivity,
-                                    canonical_only);
+                                 canonical_only);
         break;
     }
     tpool.stop(N);
@@ -87,11 +87,11 @@ class compute_cceqvec {
       switch (type) {
         case EqnType::t:
           eqvec_so = cc{N, P, PMIN}.t(screen, use_topology, use_connectivity,
-                                         canonical_only);
+                                      canonical_only);
           break;
         case EqnType::λ:
           eqvec_so = cc{N, P, PMIN}.λ(screen, use_topology, use_connectivity,
-                                         canonical_only);
+                                      canonical_only);
           break;
       }
 
