@@ -237,14 +237,14 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   std::wstring to_latex() const override {
     std::wstring result;
     std::vector<std::wstring> labels = {L"g", L"t", L"λ", L"t¹", L"λ¹"};
-    bool gt = (std::find(labels.begin(), labels.end(), this->label()) !=
-                   labels.end() &&
-               this->rank() > 1);
+    bool add_bar =
+        ranges::find(labels, this->label()) != labels.end() && this->rank() > 1;
 
     result = L"{";
-    if ((this->symmetry() == Symmetry::antisymm) && gt) result += L"\\bar{";
+    if ((this->symmetry() == Symmetry::antisymm) && add_bar)
+      result += L"\\bar{";
     result += utf_to_latex(this->label());
-    if ((this->symmetry() == Symmetry::antisymm) && gt) result += L"}";
+    if ((this->symmetry() == Symmetry::antisymm) && add_bar) result += L"}";
     result += L"^{";
     for (const auto &i : this->ket()) result += sequant::to_latex(i);
     result += L"}_{";
