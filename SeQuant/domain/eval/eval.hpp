@@ -24,22 +24,6 @@ namespace sequant {
 
 namespace {
 
-#if __cplusplus < 202002L
-template <class T>
-struct remove_cvref {
-  typedef std::remove_cv_t<::std::remove_reference_t<T>> type;
-};
-
-template <class T>
-using remove_cvref_t = typename remove_cvref<T>::type;
-#else
-template <typename T>
-using remove_cvref = std::remove_cvref<T>;
-
-template <typename T>
-using remove_cvref_t = std::remove_cvref_t<T>;
-#endif
-
 template <typename... Args>
 void log_eval(Args const&... args) noexcept {
 #ifdef SEQUANT_EVAL_TRACE
@@ -48,7 +32,7 @@ void log_eval(Args const&... args) noexcept {
 #endif
 }
 
-void log_cache_access(size_t key, CacheManager<ERPtr> const& cm) {
+void log_cache_access(size_t key, CacheManager const& cm) {
 #ifdef SEQUANT_EVAL_TRACE
   auto& l = Logger::get_instance();
   if (l.log_level_eval > 0) {
@@ -66,7 +50,7 @@ void log_cache_access(size_t key, CacheManager<ERPtr> const& cm) {
 #endif
 }
 
-void log_cache_store(size_t key, CacheManager<ERPtr> const& cm) {
+void log_cache_store(size_t key, CacheManager const& cm) {
 #ifdef SEQUANT_EVAL_TRACE
   auto& l = Logger::get_instance();
   if (l.log_level_eval > 0) {
@@ -88,22 +72,6 @@ std::string perm_groups_string(
   result.pop_back();  // remove last space
   return result;
 }
-
-}  // namespace
-
-template <typename T, typename = void>
-constexpr bool IsIterable{};
-
-template <typename T>
-constexpr bool IsIterable<
-    T, std::void_t<
-           decltype(std::begin(std::declval<std::remove_reference_t<T>>())),
-           decltype(std::end(std::declval<std::remove_reference_t<T>>()))>> =
-    true;
-
-template <typename I, typename = std::enable_if_t<IsIterable<I>>>
-using IteredT =
-    std::remove_reference_t<decltype(*std::begin(std::declval<I>()))>;
 
 template <typename, typename = void>
 constexpr bool HasAnnotMethod{};
@@ -134,11 +102,13 @@ template <typename Iterable>
 constexpr bool IsIterableOfEvaluableNodes<
     Iterable, std::enable_if_t<IsEvaluable<IteredT<Iterable>>>> = true;
 
+}  // namespace
+
 template <typename, typename, typename = void>
 constexpr bool IsLeafEvaluator{};
 
 template <typename NodeT>
-constexpr bool IsLeafEvaluator<NodeT, CacheManager<ERPtr>, void>{};
+constexpr bool IsLeafEvaluator<NodeT, CacheManager, void>{};
 
 template <typename NodeT, typename Le>
 constexpr bool IsLeafEvaluator<
@@ -154,37 +124,33 @@ constexpr bool IsLeafEvaluator<
 ///
 /// \param nodes An iterable of evaluable nodes.
 ///
-/// \param pred A predicate to filter nodes. By default all nodes are treated to
-///             take part in contributing to the number of repeats.
-///
 /// \param min_repeats Minimum number of repeats for a node to be cached. By
 ///                    default anything repeated twice or more is cached.
+///
+/// \param pred A predicate to filter nodes. By default all nodes are treated to
+///             take part in contributing to the number of repeats.
 ///
 /// \return A cache manager.
 ///
 /// \see CacheManager
 ///
-template <typename NodesI,
-          typename Pred = std::function<bool(IteredT<NodesI> const&)>,
-          typename = std::enable_if_t<
-              IsIterableOfEvaluableNodes<NodesI> &&
-              std::is_invocable_r_v<bool, Pred, IteredT<NodesI> const&>>>
-CacheManager<ERPtr> cache_manager(
-    NodesI const& nodes, Pred const& pred = [](auto&&) { return true; },
-    size_t min_repeats = 2) noexcept {
+template <typename NodesI>
+CacheManager cache_manager(NodesI const& nodes,
+                           size_t min_repeats = 2) noexcept {
   auto imed_counts = container::map<size_t, size_t>{};
 
-  // counts number of times each internal node appears in
-  // all of @c nodes trees
-  auto imed_visitor = [&imed_counts, &pred](auto&& n) {
-    if (!pred(n)) return;
-
+  // visits a node and check if its hash value exists in imed_counts map
+  // if it does increase the count and return false (to signal stop visiting
+  // children nodes) otherwise returns true.
+  auto imed_visitor = [&imed_counts](auto&& n) -> bool {
     auto&& end = imed_counts.end();
-    auto&& h = n->hash_value();
-    if (auto&& found = imed_counts.find(h); found != end)
+    auto&& h = hash::value(*n);
+    if (auto&& found = imed_counts.find(h); found != end) {
       ++found->second;
-    else
+      return false;
+    } else
       imed_counts.emplace(h, 1);
+    return true;
   };  // imed_visitor
 
   // visit imeds
@@ -198,7 +164,7 @@ CacheManager<ERPtr> cache_manager(
   };
   ranges::actions::remove_if(imed_counts, less_repeating);
 
-  return CacheManager<ERPtr>{imed_counts};
+  return CacheManager{imed_counts};
 }
 
 ///
@@ -294,7 +260,7 @@ ERPtr evaluate_crust(NodeT const&, Le const&);
 
 template <typename NodeT, typename Le,
           std::enable_if_t<IsLeafEvaluator<NodeT, Le>, bool> = true>
-ERPtr evaluate_crust(NodeT const&, Le const&, CacheManager<ERPtr>&);
+ERPtr evaluate_crust(NodeT const&, Le const&, CacheManager&);
 
 template <typename NodeT, typename Le, typename... Args,
           std::enable_if_t<IsLeafEvaluator<NodeT, Le>, bool> = true>
@@ -341,16 +307,15 @@ ERPtr evaluate_crust(NodeT const& node, Le const& le) {
 
 template <typename NodeT, typename Le,
           std::enable_if_t<IsLeafEvaluator<NodeT, Le>, bool>>
-ERPtr evaluate_crust(NodeT const& node, Le const& le,
-                     CacheManager<ERPtr>& cache) {
+ERPtr evaluate_crust(NodeT const& node, Le const& le, CacheManager& cache) {
   auto const h = hash::value(*node);
   if (auto ptr = cache.access(h); ptr) {
     log_cache_access(h, cache);
-    return *ptr;
+    return ptr;
   } else if (cache.exists(h)) {
     auto ptr = cache.store(h, evaluate_core(node, le, cache));
     log_cache_store(h, cache);
-    return *ptr;
+    return ptr;
   } else {
     return evaluate_core(node, le, cache);
   }
@@ -390,7 +355,8 @@ auto evaluate(NodeT const& node, Le&& le, Args&&... args) {
 /// \see EvalResult to know more about the return type.
 ///
 template <typename NodesT, typename Le, typename... Args,
-          std::enable_if_t<IsIterableOfEvaluableNodes<NodesT>, bool> = true>
+          std::enable_if_t<IsIterableOfEvaluableNodes<NodesT>, bool> = true,
+          std::enable_if_t<IsLeafEvaluator<IteredT<NodesT>, Le>, bool> = true>
 auto evaluate(NodesT const& nodes, Le const& le, Args&&... args) {
   auto iter = std::begin(nodes);
   auto end = std::end(nodes);
@@ -450,8 +416,8 @@ auto evaluate(NodeT const& node,    //
 /// \see EvalResult to know more about the return type.
 ///
 template <typename NodesT, typename Annot, typename Le, typename... Args,
-          std::enable_if_t<IsIterableOfEvaluableNodes<NodesT>,
-                           bool> = true>
+          std::enable_if_t<IsIterableOfEvaluableNodes<NodesT>, bool> = true,
+          std::enable_if_t<IsLeafEvaluator<IteredT<NodesT>, Le>, bool> = true>
 auto evaluate(NodesT const& nodes,  //
               Annot const& layout,  //
               Le const& le, Args&&... args) {

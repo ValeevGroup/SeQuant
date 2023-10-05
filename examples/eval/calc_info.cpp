@@ -25,7 +25,7 @@ container::vector<ExprPtr> CalcInfo::exprs() const {
   container::vector<ExprPtr> result{};
   for (auto r = 1; r < exprs.size(); ++r)
     result.emplace_back(
-        eqn_opts.spintrace ? closed_shell_CC_spintrace(exprs[r], r) : exprs[r]);
+        eqn_opts.spintrace ? closed_shell_CC_spintrace(exprs[r]) : exprs[r]);
   return result;
 }
 

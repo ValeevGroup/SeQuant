@@ -69,7 +69,7 @@ EvalExpr::EvalExpr(Constant const& c)
 EvalExpr::EvalExpr(Variable const& v)
     : op_type_{EvalOp::Id},
       result_type_{ResultType::Scalar},
-      hash_value_{hash::value(v.label())},
+      hash_value_{hash::value(v)},
       id_{},
       expr_{v.clone()},
       tot_{false} {}

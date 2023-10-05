@@ -31,7 +31,7 @@ TEST_CASE("TEST BINARY_NODE", "[FullBinaryNode]") {
   SECTION("move ctor and assign") {
     auto n1{FullBinaryNode{1, 2, 3}};
     auto n2 = std::move(n1);
-    REQUIRE(n2 == FullBinaryNode{1,2,3});
+    REQUIRE(n2 == FullBinaryNode{1, 2, 3});
   }
 
   SECTION("derefence") {
@@ -85,84 +85,6 @@ TEST_CASE("TEST BINARY_NODE", "[FullBinaryNode]") {
 
     auto const leaves2 = ranges::views::all(leaves);
     auto const node2 = FullBinaryNode<int>{leaves2, adder{}};
-  }
-
-  SECTION("evaluation") {
-    // doing simple arithmetic in a complicated way
-    struct arithm_val {
-      enum struct arithm_type { Id, Sum };
-
-      int val{0};
-
-      arithm_type arithm{arithm_type::Sum};
-
-      arithm_val() = default;
-
-      arithm_val(int x) : val{x}, arithm{arithm_type::Id} {}
-    };
-
-    struct arithm_binarizer {
-      arithm_val operator()(arithm_val const& av) {
-        assert(av.arithm == arithm_val::arithm_type::Id);
-        return av;
-      }
-
-      arithm_val operator()(arithm_val const& av1, arithm_val const& av2) {
-        return arithm_val{};
-      }
-    };  // arithm_binarizer
-
-    struct arithm_evaluator {
-      int operator()(FullBinaryNode<arithm_val> const& av) const {
-        return av->val;
-      }
-
-      int operator()(FullBinaryNode<arithm_val> const& av, int leval,
-                     int reval) const {
-        return leval + reval;
-      }
-    };  // arithm_evaluator
-
-    auto constexpr summands = std::array{1, 2, 3, 4, 5};
-
-    auto const node = FullBinaryNode<arithm_val>{summands, arithm_binarizer{}};
-
-    REQUIRE(node.evaluate(arithm_evaluator{}) == 15);
-
-    // another one
-    struct string_holder {
-      std::string str{};
-    };
-
-    auto constexpr words = std::array{"he", "ll", "o,", " w", "or", "ld", "!"};
-
-    struct words_binarizer {
-      string_holder operator()(std::string const& str) const {
-        return string_holder{str};
-      }
-      string_holder operator()(string_holder const& h1,
-                               string_holder const& h2) const {
-        return string_holder{};
-      }
-    };  // words_binarizer
-
-    auto const words_node =
-        FullBinaryNode<string_holder>{words, words_binarizer{}};
-
-    struct string_concat {
-      std::string operator()(FullBinaryNode<string_holder> const& node) const {
-        return node->str;
-      }
-
-      std::string operator()(FullBinaryNode<string_holder> const& node,
-                             std::string const& lstr,
-                             std::string const& rstr) const {
-        return lstr + rstr;
-      }
-    };  // string_concat
-
-    REQUIRE(words_node.evaluate(string_concat{}) ==
-            std::string{"hello, world!"});
   }
 
   SECTION("digraph generation") {
@@ -248,5 +170,47 @@ TEST_CASE("TEST BINARY_NODE", "[FullBinaryNode]") {
     //                /  \
     //              2     3
     //
+  }
+
+  SECTION("visitor") {
+    using node_t = FullBinaryNode<std::string>;
+    auto const node = node_t{"C", "A", "B"};
+    REQUIRE(*node == "C");
+    REQUIRE(*node.left() == "A");
+    REQUIRE(*node.right() == "B");
+
+    std::string str;
+    auto visitor = [&str](node_t const& n) { str += *n; };
+
+    node.visit(visitor);
+    REQUIRE(str == "ABC");
+
+    str.clear();
+    node.visit(visitor, sequant::PreOrder{});
+    REQUIRE(str == "CAB");
+
+    str.clear();
+    node.visit(visitor, sequant::InOrder{});
+    REQUIRE(str == "ACB");
+
+    str.clear();
+    node.visit_leaf(visitor);
+    REQUIRE(str == "AB");
+
+    str.clear();
+    node.visit_internal(visitor);
+    REQUIRE(str == "C");
+
+    auto not_vowel = [&str](node_t const& n) -> bool {
+      bool yn = std::string{"AEIOU"}.find(*n) == std::string::npos;
+      if (yn) str += *n;
+      return yn;
+    };
+
+    auto alphabet = node_t{"W", node_t{"E", "A", "B"}, node_t{"Z", "X", "O"}};
+
+    str.clear();
+    alphabet.visit(not_vowel);
+    REQUIRE(str == "WZX");
   }
 }

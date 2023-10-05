@@ -4,27 +4,28 @@
 
 #include "catch.hpp"
 
-using data_type = int;
-
 namespace sequant {
 struct TestCacheManager {};
 
 template <>
-template <>
-struct CacheManager<data_type>::template access_by<TestCacheManager> {
-  auto const& map(CacheManager<data_type> const& man) const {
-    return man.cache_map_;
-  }
+struct CacheManager::access_by<TestCacheManager> {
+  auto const& map(CacheManager const& man) const { return man.cache_map_; }
 };
+
 }  // namespace sequant
 
 TEST_CASE("TEST_CACHE_MANAGER", "[cache_manager]") {
   using ranges::views::concat;
   using ranges::views::zip;
-  using manager_type = sequant::CacheManager<data_type>;
+  using manager_type = sequant::CacheManager;
   using key_type = size_t;
   using count_type = size_t;
+  using data_type = sequant::ERPtr;
   using tester_type = manager_type::access_by<sequant::TestCacheManager>;
+
+  auto eval_result = [](int x) {
+    return sequant::eval_result<sequant::EvalScalar<int>>(x);
+  };
 
   auto const tester = tester_type{};
 
@@ -36,7 +37,11 @@ TEST_CASE("TEST_CACHE_MANAGER", "[cache_manager]") {
   // decaying entries repeat more than once
   auto const decaying_repeats = std::array<count_type, n_decaying>{2, 2, 4, 3};
   // arbitrary vals corresponding to decaying keys
-  auto const decaying_vals = std::array<data_type, n_decaying>{10, 11, 20, 21};
+  auto const decaying_vals =
+      std::array<data_type, n_decaying>{eval_result(10),  //
+                                        eval_result(11),  //
+                                        eval_result(20),  //
+                                        eval_result(21)};
 
   auto const man_const = manager_type(zip(decaying_keys, decaying_repeats));
 
@@ -60,7 +65,7 @@ TEST_CASE("TEST_CACHE_MANAGER", "[cache_manager]") {
                      ranges::to<sequant::container::map<key_type, data_type>>;
     for (auto&& [k, v] : kvs) {
       // NOTE: man.store() calls man.access() implicitly and
-      // returns a shared_ptr to data
+      // returns a ERPtr
       // hence, a count of lifetime is lost right here
       REQUIRE(man.store(k, v));
     }
@@ -72,8 +77,8 @@ TEST_CASE("TEST_CACHE_MANAGER", "[cache_manager]") {
       // r - 1: the lifetime count at this point
       for (auto i = r - 1; i > 1; --i) {
         auto entry = man.access(k);
-        REQUIRE(entry);  // shared_ptr<..>
-        REQUIRE(*entry == v);
+        REQUIRE(entry);  // cannot be a nullptr
+        REQUIRE(entry->get<int>() == v->get<int>());
         auto iter = map.find(k);
         REQUIRE(iter != map.end());
         REQUIRE(iter->second.life_count() == i - 1);
