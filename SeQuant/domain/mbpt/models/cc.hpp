@@ -13,11 +13,16 @@ class CC {
   size_t N, P, PMIN;
 
  public:
+  /// @brief constructor for CC class
+  /// @param n coupled cluster excitation rank
+  /// @param p projector excitation rank
+  /// @param pmin minimum projector excitation rank
   CC(size_t n, size_t p = std::numeric_limits<size_t>::max(), size_t pmin = 1);
 
-  /// derives similarity-transformed expressions of mpbt::Operators
+  /// @brief derives similarity-transformed expressions of mpbt::Operators
   /// @param expr expression to be transformed
   /// @param r order of truncation
+  /// @pre expr should be composed of mbpt::Operators
   /// @return transformed expression
   ExprPtr sim_tr(ExprPtr expr, size_t r);
 
@@ -29,7 +34,7 @@ class CC {
   std::vector<sequant::ExprPtr> λ(bool screen = false, bool use_topology = true,
                                   bool use_connectivity = true,
                                   bool canonical_only = true);
-};  // class cc
+};  // class CC
 
 }  // namespace sequant::mbpt::sr
 
