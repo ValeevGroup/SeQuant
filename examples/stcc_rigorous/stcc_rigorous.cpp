@@ -60,7 +60,7 @@ int main(int argc, char* argv[]) {
   };
 
   // Spin-orbital coupled cluster
-  auto cc_r = sequant::mbpt::sr::cc{NMAX}.t();
+  auto cc_r = sequant::mbpt::sr::CC{NMAX}.t();
   for (auto i = 1; i < cc_r.size(); ++i) {
     std::cout << "Spin-orbital CC R" << i << " size: " << cc_r[i]->size()
               << "\n";

@@ -9,11 +9,11 @@
 namespace sequant::mbpt::sr {
 
 /// derives equations of traditional coupled-cluster method
-class cc {
+class CC {
   size_t N, P, PMIN;
 
  public:
-  cc(size_t n, size_t p = std::numeric_limits<size_t>::max(), size_t pmin = 1);
+  CC(size_t n, size_t p = std::numeric_limits<size_t>::max(), size_t pmin = 1);
 
   /// derives similarity-transformed expressions of mpbt::Operators
   /// @param expr expression to be transformed

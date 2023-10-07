@@ -15,10 +15,10 @@
 
 namespace sequant::mbpt::sr {
 
-cc::cc(size_t n, size_t p, size_t pmin)
+CC::CC(size_t n, size_t p, size_t pmin)
     : N(n), P(p == std::numeric_limits<size_t>::max() ? n : p), PMIN(pmin) {}
 
-ExprPtr cc::sim_tr(ExprPtr expr, size_t r) {
+ExprPtr CC::sim_tr(ExprPtr expr, size_t r) {
   auto transform_op_op_pdt = [this, &r](const ExprPtr& expr) {
     // TODO: find the order at which the commutator expression should truncate
     // from op/op product
@@ -60,10 +60,10 @@ ExprPtr cc::sim_tr(ExprPtr expr, size_t r) {
     return expr;
   else
     throw std::invalid_argument(
-        "cc::sim_tr(expr): Unsupported expression type");
+        "CC::sim_tr(expr): Unsupported expression type");
 }
 
-std::vector<ExprPtr> cc::t(bool screen, bool use_topology,
+std::vector<ExprPtr> CC::t(bool screen, bool use_topology,
                            bool use_connectivity, bool canonical_only) {
   // 1. construct hbar(op) in canonical form
   auto hbar = sim_tr(op::H(), 4);
@@ -102,7 +102,7 @@ std::vector<ExprPtr> cc::t(bool screen, bool use_topology,
   return result;
 }
 
-std::vector<ExprPtr> cc::λ(bool screen, bool use_topology,
+std::vector<ExprPtr> CC::λ(bool screen, bool use_topology,
                            bool use_connectivity, bool canonical_only) {
   // construct hbar
   auto hbar = sim_tr(op::H(), 3);
