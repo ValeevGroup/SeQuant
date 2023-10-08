@@ -43,7 +43,7 @@ int main(int argc, char* argv[]) {
   const size_t NMAX = argc > 1 ? std::atoi(argv[1]) : DEFAULT_NMAX;
 
   // Spin-orbital coupled cluster
-  auto cc_r = sequant::mbpt::sr::cceqs{NMAX}.t();
+  auto cc_r = sequant::mbpt::sr::CC{NMAX}.t();
   for (auto i = 1; i < cc_r.size(); ++i) {
     std::cout << "Spin-orbital CC R" << i << " size: " << cc_r[i]->size()
               << "\n";
@@ -58,8 +58,7 @@ int main(int argc, char* argv[]) {
   for (auto i = 1; i < cc_r.size(); ++i) {
     os_cc_st_r[i] = open_shell_CC_spintrace(cc_r[i]);
     std::cout << "CCK-" << NMAX << " R[" << i << "]  ";
-    for (auto const& x: os_cc_st_r[i])
-      std::cout << x->size() << "  ";
+    for (auto const& x : os_cc_st_r[i]) std::cout << x->size() << "  ";
     std::cout << std::endl;
   }
 

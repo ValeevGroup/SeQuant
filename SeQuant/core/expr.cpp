@@ -20,17 +20,38 @@ ExprPtr::base_type &&ExprPtr::as_shared_ptr() && {
 }
 
 ExprPtr &ExprPtr::operator+=(const ExprPtr &other) {
-  as_shared_ptr()->operator+=(*other);
+  if (as_shared_ptr()->is<Sum>()) {
+    as_shared_ptr()->operator+=(*other);
+  } else if (as_shared_ptr()->is<Constant>() && other->is<Constant>()) {
+    *this = ex<Constant>(this->as<Constant>().value() +
+                         other->as<Constant>().value());
+  } else {
+    *this = ex<Sum>(ExprPtrList{*this, other});
+  }
   return *this;
 }
 
 ExprPtr &ExprPtr::operator-=(const ExprPtr &other) {
-  as_shared_ptr()->operator-=(*other);
+  if (as_shared_ptr()->is<Sum>()) {
+    as_shared_ptr()->operator-=(*other);
+  } else if (as_shared_ptr()->is<Constant>() && other->is<Constant>()) {
+    *this = ex<Constant>(this->as<Constant>().value() -
+                         other->as<Constant>().value());
+  } else {
+    *this = ex<Sum>(ExprPtrList{*this, ex<Product>(-1, ExprPtrList{other})});
+  }
   return *this;
 }
 
 ExprPtr &ExprPtr::operator*=(const ExprPtr &other) {
-  as_shared_ptr()->operator*=(*other);
+  if (as_shared_ptr()->is<Product>()) {
+    as_shared_ptr()->operator*=(*other);
+  } else if (as_shared_ptr()->is<Constant>() && other->is<Constant>()) {
+    *this = ex<Constant>(this->as<Constant>().value() *
+                         other->as<Constant>().value());
+  } else {
+    *this = ex<Product>(ExprPtrList{*this, other});
+  }
   return *this;
 }
 

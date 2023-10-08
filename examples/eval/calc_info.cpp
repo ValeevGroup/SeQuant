@@ -21,11 +21,11 @@ size_t IndexToSize::operator()(Index const& idx) const {
 }
 
 container::vector<ExprPtr> CalcInfo::exprs() const {
-  auto exprs = mbpt::sr::cceqs{eqn_opts.excit, eqn_opts.excit}.t();
+  auto exprs = mbpt::sr::CC{eqn_opts.excit, eqn_opts.excit}.t();
   container::vector<ExprPtr> result{};
   for (auto r = 1; r < exprs.size(); ++r)
-    result.emplace_back(
-        eqn_opts.spintrace ? closed_shell_CC_spintrace(exprs[r]) : exprs[r]);
+    result.emplace_back(eqn_opts.spintrace ? closed_shell_CC_spintrace(exprs[r])
+                                           : exprs[r]);
   return result;
 }
 

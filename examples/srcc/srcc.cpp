@@ -60,12 +60,12 @@ class compute_cceqvec {
     std::vector<ExprPtr> eqvec;
     switch (type) {
       case EqnType::t:
-        eqvec = cceqs{N, P, PMIN}.t(screen, use_topology, use_connectivity,
-                                    canonical_only);
+        eqvec = CC{N, P, PMIN}.t(screen, use_topology, use_connectivity,
+                                 canonical_only);
         break;
       case EqnType::λ:
-        eqvec = cceqs{N, P, PMIN}.λ(screen, use_topology, use_connectivity,
-                                    canonical_only);
+        eqvec = CC{N, P, PMIN}.λ(screen, use_topology, use_connectivity,
+                                 canonical_only);
         break;
     }
     tpool.stop(N);
@@ -86,12 +86,12 @@ class compute_cceqvec {
       std::vector<ExprPtr> eqvec_so;
       switch (type) {
         case EqnType::t:
-          eqvec_so = cceqs{N, P, PMIN}.t(screen, use_topology, use_connectivity,
-                                         canonical_only);
+          eqvec_so = CC{N, P, PMIN}.t(screen, use_topology, use_connectivity,
+                                      canonical_only);
           break;
         case EqnType::λ:
-          eqvec_so = cceqs{N, P, PMIN}.λ(screen, use_topology, use_connectivity,
-                                         canonical_only);
+          eqvec_so = CC{N, P, PMIN}.λ(screen, use_topology, use_connectivity,
+                                      canonical_only);
           break;
       }
 
@@ -178,7 +178,7 @@ class compute_cceqvec {
           eqvec[R] = expand(eqvec[R]);
           simplify(eqvec[R]);
 
-          std::wcout << "biorothogonal spin-free R" << R << "(expS" << N
+          std::wcout << "biorthogonal spin-free R" << R << "(expS" << N
                      << ") has " << eqvec[R]->size() << " terms:" << std::endl;
           if (print) std::wcout << to_latex_align(eqvec[R], 20, 3) << std::endl;
 
