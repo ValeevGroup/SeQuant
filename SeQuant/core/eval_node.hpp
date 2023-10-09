@@ -13,7 +13,21 @@
 
 namespace sequant {
 
-namespace {
+#if __cplusplus < 202002L
+template <class T>
+struct remove_cvref {
+  typedef std::remove_cv_t<::std::remove_reference_t<T>> type;
+};
+
+template <class T>
+using remove_cvref_t = typename remove_cvref<T>::type;
+#else
+template <typename T>
+using remove_cvref = std::remove_cvref<T>;
+
+template <typename T>
+using remove_cvref_t = std::remove_cvref_t<T>;
+#endif
 
 template <typename, typename = void>
 constexpr bool IsEvalExpr{};
@@ -33,11 +47,30 @@ template <typename T>
 constexpr bool
     IsEvalNode<const FullBinaryNode<T>, std::enable_if_t<IsEvalExpr<T>>>{true};
 
-}  // namespace
-
 template <typename T,
           typename = std::enable_if_t<std::is_convertible_v<T, EvalExpr>>>
 using EvalNode = FullBinaryNode<T>;
+
+template <typename T, typename = void>
+constexpr bool IsIterable{};
+
+template <typename T>
+constexpr bool IsIterable<
+    T, std::void_t<
+           decltype(std::begin(std::declval<std::remove_reference_t<T>>())),
+           decltype(std::end(std::declval<std::remove_reference_t<T>>()))>> =
+    true;
+
+template <typename I, typename = std::enable_if_t<IsIterable<I>>>
+using IteredT =
+    std::remove_reference_t<decltype(*std::begin(std::declval<I>()))>;
+
+template <typename, typename = void>
+constexpr bool IsIterableOfEvalNodes{};
+
+template <typename Iterable>
+constexpr bool IsIterableOfEvalNodes<
+    Iterable, std::enable_if_t<IsEvalNode<IteredT<Iterable>>>> = true;
 
 ///
 /// \brief Creates an evaluation tree from @c ExprPtr.
@@ -151,6 +184,15 @@ namespace {
 
 enum NodePos { Left = 0, Right, This };
 
+std::pair<size_t, size_t> occ_virt(Tensor const& t) {
+  auto bk_rank = t.bra_rank() + t.ket_rank();
+  auto nocc = ranges::count_if(t.const_braket(), [](Index const& idx) {
+    return idx.space() == IndexSpace::active_occupied;
+  });
+  auto nvirt = bk_rank - nocc;
+  return {nocc, nvirt};
+}
+
 class ContractedIndexCount {
  public:
   template <typename NodeT, typename = std::enable_if_t<IsEvalNode<NodeT>>>
@@ -196,16 +238,6 @@ class ContractedIndexCount {
     return virt(NodePos::Left) + virt(NodePos::Right) - virt();
   }
 
-  static std::pair<size_t, size_t> occ_virt(sequant::Tensor const& t) {
-    auto bk_rank = t.bra_rank() + t.ket_rank();
-    auto nocc =
-        ranges::count_if(t.const_braket(), [](sequant::Index const& idx) {
-          return idx.space() == sequant::IndexSpace::active_occupied;
-        });
-    auto nvirt = bk_rank - nocc;
-    return {nocc, nvirt};
-  }
-
  private:
   std::array<size_t, 3> occs_{0, 0, 0};
   std::array<size_t, 3> virts_{0, 0, 0};
@@ -216,6 +248,14 @@ class ContractedIndexCount {
 };
 }  // namespace
 
+///
+/// \brief This function object takes an evaluation node and returns the
+///        symbolic cost of flops required for evaluation, as an AsyCost object.
+///        @see AsyCost.
+/// \note
+///        - The cost of evaluation of leaf nodes is assumed to be zero.
+///        - Cost of evaluation of children nodes are not counted.
+///
 struct Flops {
   template <typename NodeT, typename = std::enable_if_t<IsEvalNode<NodeT>>>
   [[nodiscard]] AsyCost operator()(NodeT const& n) const {
@@ -229,13 +269,45 @@ struct Flops {
     } else if (n->is_tensor()) {
       // scalar times a tensor
       // or a tensor plus a tensor
-      auto [o, v] = ContractedIndexCount::occ_virt(n->as_tensor());
-      return AsyCost{o, v};
+      return AsyCost{occ_virt(n->as_tensor())};
     } else /* scalar (+|*) scalar */
       return AsyCost::zero();
   }
 };
 
+///
+/// \brief This function object takes an evaluation node and returns the
+///        memory storage required to evaluate it in AsyCost form.
+/// \note
+///       - The memory requirement for non-tensor objects (eg. variables and
+///         scalar constants) are taken to be zero.
+///       - The memory requirement for evaluation of children nodes is not
+///         counted.
+///
+struct Memory {
+  template <typename NodeT, typename = std::enable_if_t<IsEvalNode<NodeT>>>
+  [[nodiscard]] AsyCost operator()(NodeT const& n) const {
+    AsyCost result;
+    auto add_cost = [&result](ExprPtr const& expr) {
+      result += expr.is<Tensor>() ? AsyCost{occ_virt(expr.as<Tensor>())}
+                                  : AsyCost::zero();
+    };
+
+    add_cost(n.left()->expr());
+    add_cost(n.right()->expr());
+    add_cost(n->expr());
+    return result;
+  }
+};
+
+///
+/// \brief This function object takes an evaluation node and returns the
+///        symbolic cost of flops required for evaluation as an AsyCost object.
+///        @see AsyCost. If the cost can be reduced due to symmetry, it is done
+///        so.
+/// \detail
+///         - The cost of evaluation of leaf nodes is assumed to be zero.
+///
 struct FlopsWithSymm {
   template <typename NodeT, typename = std::enable_if_t<IsEvalNode<NodeT>>>
   [[nodiscard]] AsyCost operator()(NodeT const& n) const {
@@ -279,6 +351,16 @@ struct FlopsWithSymm {
   }
 };
 
+///
+/// \brief This function object takes an evaluation node and returns the cost of
+///        evaluating the node as an AsyCost object. The cost is computed by
+///        summing the cost of evaluation of children nodes and the cost of
+///        evaluation of the node itself.
+/// \param cost_fn A function object that takes an evaluation node and returns
+///                the symbolic cost of flops required for evaluation as an
+///                AsyCost object. @see AsyCost.
+/// \return The asymptotic cost of evaluating the given node.
+///
 template <typename NodeT, typename F = Flops,
           typename = std::enable_if_t<IsEvalNode<NodeT>>,
           typename = std::enable_if_t<std::is_invocable_r_v<AsyCost, F, NodeT>>>
@@ -286,6 +368,37 @@ AsyCost asy_cost(NodeT const& node, F const& cost_fn = {}) {
   return node.leaf() ? cost_fn(node)
                      : asy_cost(node.left(), cost_fn) +
                            asy_cost(node.right(), cost_fn) + cost_fn(node);
+}
+
+///
+/// \brief This function object takes an evaluation node and returns the minimum
+///        storage required for evaluating the node as an AsyCost object. The
+///        minimum storage is the largest amount of storage required for
+///        evaluating the node and its children.
+/// \return The minimum storage required for evaluating the given node.
+///
+template <typename NodeT, typename = std::enable_if_t<IsEvalNode<NodeT>>>
+AsyCost min_storage(NodeT const& node) {
+  auto result = AsyCost::zero();
+  auto visitor = [&result](NodeT const& n) {
+    auto cost = AsyCost::zero();
+    if (n.leaf() && n->is_tensor())
+      cost = AsyCost{occ_virt(n->as_tensor())};
+    else if (!n.leaf()) {
+      cost += (n.left()->is_tensor() ? AsyCost{occ_virt(n.left()->as_tensor())}
+                                     : AsyCost::zero());
+      cost +=
+          (n.right()->is_tensor() ? AsyCost{occ_virt(n.right()->as_tensor())}
+                                  : AsyCost::zero());
+      cost += (n->is_tensor() ? AsyCost{occ_virt(n->as_tensor())}
+                              : AsyCost::zero());
+    } else {
+      // do nothing
+    }
+    result = std::max(result, cost);
+  };
+  node.visit(visitor);
+  return result;
 }
 
 }  // namespace sequant

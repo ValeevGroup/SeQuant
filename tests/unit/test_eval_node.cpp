@@ -200,29 +200,30 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
     REQUIRE(linearize_eval_node(eval_node(p2))->to_latex() == p2->to_latex());
   }
 
-  /*
-  SECTION("asy_cost_single_node") {
+  SECTION("single node") {
+    auto asy_cost_single_node = FlopsWithSymm{};
     auto const p1 =
         parse_expr_antisymm(L"g_{i2, a1}^{a2, a3} * t_{a2, a3}^{i1, i2}");
-    REQUIRE(AsyCost{asy_cost_single_node(eval_node(p1))} == AsyCost{2, 2, 3});
+    REQUIRE(asy_cost_single_node(eval_node(p1)) == AsyCost{2, 2, 3});
 
     auto const p2 = parse_expr_antisymm(
         L"g_{i2,i3}^{a2,a3} * t_{a2}^{i1} * t_{a1,a3}^{i2,i3}");
     auto const n2 = eval_node(p2);
 
-    REQUIRE(AsyCost{asy_cost_single_node(n2)} == AsyCost{2, 3, 2});
-    REQUIRE(AsyCost{asy_cost_single_node(n2.left())} == AsyCost{2, 3, 2});
+    REQUIRE(asy_cost_single_node(n2) == AsyCost{2, 3, 2});
+    REQUIRE(asy_cost_single_node(n2.left()) == AsyCost{2, 3, 2});
 
     auto const p3 =
         parse_expr_antisymm(L"g_{i2,i3}^{i1,a2} * t_{a2}^{i2} * t_{a1}^{i3}");
     auto const n3 = eval_node(p3);
-    REQUIRE(AsyCost{asy_cost_single_node(n3)} == AsyCost{2, 2, 1});
-    REQUIRE(AsyCost{asy_cost_single_node(n3.left())} == AsyCost{2, 3, 1});
+    REQUIRE(asy_cost_single_node(n3) == AsyCost{2, 2, 1});
+    REQUIRE(asy_cost_single_node(n3.left()) == AsyCost{2, 3, 1});
   }
-  */
 
   SECTION("asy_cost") {
-    auto asy_cost = [](auto const& n) { return sequant::asy_cost(n, FlopsWithSymm{}); };
+    auto asy_cost = [](auto const& n) {
+      return sequant::asy_cost(n, FlopsWithSymm{});
+    };
     auto const p1 =
         parse_expr_antisymm(L"g_{i2, a1}^{a2, a3} * t_{a2, a3}^{i1, i2}");
     REQUIRE(asy_cost(eval_node(p1)) == AsyCost{2, 2, 3});
@@ -270,11 +271,29 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
 
     auto const p7 = parse_expr(L"I{i1;a1} * I{i2;a2}", Symmetry::nonsymm);
     auto const np7 = eval_node(p7);
-    REQUIRE(asy_cost(np7) == AsyCost{{1,2}, 2, 2});  // 1/2 * O^2V^2
+    REQUIRE(asy_cost(np7) == AsyCost{{1, 2}, 2, 2});  // 1/2 * O^2V^2
 
     auto const p8 =
         parse_expr(L"I{i1,i2;a3,a4} * I{a3,a4;a1,a2}", Symmetry::nonsymm);
     auto const np8 = eval_node(p8);
     REQUIRE(asy_cost(np8) == AsyCost{2, 2, 4});  // 2 * O^2V^4
+  }
+
+  SECTION("minimum storage") {
+    auto p1 = parse_expr(L"2 * g{i2,a1;a2,a3} * t{a2,a3;i2,i1}");
+    auto const n1 = eval_node(p1);
+    // evaluation happens in two steps.
+    // g and t are contracted to give an intermediate I{a1;i1}
+    // I is then scaled by 2 to give the final result I{a1;i1}
+    // - contraction of g and t requires the storage of g, plus that of t
+    //   plus that of I. Which is OV^3 + O^2V^2 + OV.
+    // - scaling of I requires OV + OV = 2 * OV.
+    // The maximum of the two steps is OV^3 + O^2V^2 + OV, which is the minimum
+    // storage requirement.
+    REQUIRE(min_storage(n1) == AsyCost{1, 3} + AsyCost{2, 2} + AsyCost{1, 1});
+
+    auto p2 = parse_expr(L"1/2 * (g{a1,a2; a3,a4} t{a3;i1}) t{a4;i2}");
+    auto const n2 = eval_node(p2);
+    REQUIRE(min_storage(n2) == AsyCost{0, 4} + AsyCost{1, 3} + AsyCost{1, 1});
   }
 }

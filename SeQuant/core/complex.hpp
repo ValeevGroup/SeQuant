@@ -44,9 +44,9 @@ struct Complex {
     std::wstring result = L"{";
     result += to_latex(this->real());
     if (this->imag() > 0) {
-      result += L" + i " + to_latex(this->imag());
+      result = L"\\bigl(" + result + L" + i " + to_latex(this->imag()) + L"\\bigr)";
     } else if (this->imag() < 0)
-      result += L" - i " + to_latex(-this->imag());
+      result = L"\\bigl(" + result + L" - i " + to_latex(-this->imag()) + L"\\bigr)";
     result += L"}";
     return result;
   }

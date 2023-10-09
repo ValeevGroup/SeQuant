@@ -95,8 +95,7 @@ ExprPtr vac_av(
     expr = simplify(product);
 
     // compute VEV
-    auto vev =
-        simplify(vac_av(product, connections, /* use_topology = */ true));
+    auto vev = vac_av(product, connections, /* use_topology = */ true);
     // restore Variable types to the Product
     if (!variables.empty())
       ranges::for_each(variables, [&vev](const auto& var) { vev *= var; });

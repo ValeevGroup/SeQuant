@@ -68,7 +68,7 @@ class AsyCost {
  private:
   container::set<AsyCostEntry> cost_;
 
-  AsyCost(AsyCostEntry);
+  explicit AsyCost(AsyCostEntry);
 
  public:
   ///
@@ -98,6 +98,15 @@ class AsyCost {
   ///
   AsyCost(size_t nocc, size_t nvirt);
 
+  ///
+  ///
+  /// \param ov A pair of size_ts.
+  ///           ov.first is the asymptotic scaling exponent in the active
+  ///           occupied orbitals.
+  ///           ov.second is that in the active unoccupied orbitals
+  ///
+  explicit AsyCost(std::pair<size_t, size_t> const &ov);
+
   AsyCost(AsyCost const &) = default;
 
   AsyCost(AsyCost &&) = default;
@@ -112,17 +121,27 @@ class AsyCost {
   /// \return Scaled asymptotic cost.
   [[nodiscard]] double ops(size_t nocc, size_t nvirt) const;
 
-  std::wstring to_latex() const;
+  [[nodiscard]] std::wstring to_latex() const;
 
-  std::string text() const;
+  [[nodiscard]] std::string text() const;
+
+  AsyCost &operator+=(AsyCost const &);
+
+  AsyCost &operator-=(AsyCost const &);
 
   friend AsyCost operator+(AsyCost const &lhs, AsyCost const &rhs);
 
   friend AsyCost operator*(AsyCost const &lhs, rational scale);
 
+  friend AsyCost operator*(rational scale, AsyCost const &lhs);
+
   friend bool operator<(AsyCost const &lhs, AsyCost const &rhs);
 
   friend bool operator==(AsyCost const &lhs, AsyCost const &rhs);
+
+  friend bool operator<=(AsyCost const &lhs, AsyCost const &rhs);
+
+  friend bool operator>=(AsyCost const &lhs, AsyCost const &rhs);
 };
 
 AsyCost operator+(AsyCost const &lhs, AsyCost const &rhs);

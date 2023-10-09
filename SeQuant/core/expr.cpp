@@ -49,9 +49,7 @@ ExprPtr &ExprPtr::operator*=(const ExprPtr &other) {
   } else if (as_shared_ptr()->is<Constant>() && other->is<Constant>()) {
     *this = ex<Constant>(this->as<Constant>().value() *
                          other->as<Constant>().value());
-  }
-
-  else {
+  } else {
     *this = ex<Product>(ExprPtrList{*this, other});
   }
   return *this;

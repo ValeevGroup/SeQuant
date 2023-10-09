@@ -10,11 +10,6 @@
 
 using namespace sequant;
 
-ExprPtr symmetrize_expr(
-    ExprPtr& expr,
-    const container::svector<container::svector<Index>>& ext_index_groups = {
-        {}});
-
 #define runtime_assert(tf)                                         \
   if (!(tf)) {                                                     \
     std::ostringstream oss;                                        \
@@ -65,7 +60,7 @@ int main(int argc, char* argv[]) {
   };
 
   // Spin-orbital coupled cluster
-  auto cc_r = sequant::mbpt::sr::cc{NMAX}.t();
+  auto cc_r = sequant::mbpt::sr::CC{NMAX}.t();
   for (auto i = 1; i < cc_r.size(); ++i) {
     std::cout << "Spin-orbital CC R" << i << " size: " << cc_r[i]->size()
               << "\n";
@@ -78,28 +73,7 @@ int main(int argc, char* argv[]) {
   std::vector<ExprPtr> cc_st_r(cc_r.size());
   for (auto i = 1; i < cc_r.size(); ++i) {
     const auto tstart = std::chrono::high_resolution_clock::now();
-    auto ext_idx = ext_idx_list(i);
-    cc_st_r[i] = sequant::spintrace(cc_r[i], ext_idx_list(i));
-    canonicalize(cc_st_r[i]);
-
-    // Remove S operator
-    for (auto& term : *cc_st_r[i]) {
-      if (term->is<Product>()) term = remove_tensor(term->as<Product>(), L"S");
-    }
-
-    // Biorthogonal transformation
-    cc_st_r[i] = biorthogonal_transform(cc_st_r[i], i, ext_idx);
-
-    // The symmetrizer operator is required for canonicalizer to give the
-    // correct result
-    if (i != 1) cc_st_r[i] = symmetrize_expr(cc_st_r[i], ext_idx);
-    simplify(cc_st_r[i]);
-
-    // Remove S operator
-    for (auto& term : *cc_st_r[i]) {
-      if (term->is<Product>()) term = remove_tensor(term->as<Product>(), L"S");
-    }
-
+    cc_st_r[i] = closed_shell_CC_spintrace_rigorous(cc_r[i]);
     auto tstop = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> time_elapsed = tstop - tstart;
     printf("CC R%d size: %lu time: %5.3f sec.\n", i, cc_st_r[i]->size(),
@@ -116,19 +90,4 @@ int main(int argc, char* argv[]) {
         runtime_assert(cc_st_r.at(2)->size() == 73)   // T2
         runtime_assert(cc_st_r.at(3)->size() == 490)  // T3
   }
-}
-
-// Generate S operator from external index list
-ExprPtr symmetrize_expr(
-    ExprPtr& expr,
-    const container::svector<container::svector<Index>>& ext_index_groups) {
-  std::decay_t<decltype(ext_index_groups)>::value_type bra_list, ket_list;
-  for (auto&& idx_group : ext_index_groups) {
-    bra_list.push_back(*idx_group.begin());
-    ket_list.push_back(*(idx_group.begin() + 1));
-  }
-
-  assert(bra_list.size() == ket_list.size());
-  auto S = Tensor(L"S", bra_list, ket_list, Symmetry::nonsymm);
-  return ex<Tensor>(S) * expr;
 }

@@ -360,8 +360,7 @@ ExprPtr remove_tensor(const Product& product, std::wstring label) {
     if (term->is<Tensor>()) {
       auto tensor = term->as<Tensor>();
       if (tensor.label() != label) new_product->append(1, ex<Tensor>(tensor));
-    }
-    else
+    } else
       new_product->append(1, term);
   }
   return new_product;
@@ -968,25 +967,25 @@ container::svector<container::svector<Index>> external_indices(
 }
 
 container::svector<container::svector<Index>> external_indices(
-    size_t nparticles) {
-  container::svector<container::svector<Index>> ext_idx_list;
+    Tensor const& t) {
+  using ranges::views::transform;
+  using ranges::views::zip;
 
-  for (size_t i = 1; i <= nparticles; ++i) {
-    auto label = std::to_wstring(i);
-    auto occ_i = Index::make_label_index(
-        IndexSpace::instance(IndexSpace::active_occupied), label);
-    auto virt_i = Index::make_label_index(
-        IndexSpace::instance(IndexSpace::active_unoccupied), label);
-    container::svector<Index> pair = {occ_i, virt_i};
-    ext_idx_list.push_back(pair);
-  }
-  return ext_idx_list;
+  assert(t.label() == L"S" || t.label() == L"A");
+  assert(t.bra_rank() == t.ket_rank());
+  return zip(t.ket(), t.bra()) | transform([](auto const& pair) {
+           return container::svector<Index>{pair.first, pair.second};
+         }) |
+         ranges::to<container::svector<container::svector<Index>>>;
 }
 
-ExprPtr closed_shell_CC_spintrace(const ExprPtr& expr, size_t nparticles) {
+ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr) {
+  assert(expr->is<Sum>());
   using ranges::views::transform;
 
-  auto const ext_idxs = external_indices(nparticles);
+  Tensor const A = expr->at(0)->at(0)->as<Tensor>();
+
+  auto const ext_idxs = external_indices(A);
   auto st_expr = closed_shell_spintrace(expr, ext_idxs);
   canonicalize(st_expr);
 
@@ -996,7 +995,34 @@ ExprPtr closed_shell_CC_spintrace(const ExprPtr& expr, size_t nparticles) {
   }
 
   // Biorthogonal transformation
-  st_expr = biorthogonal_transform(st_expr, nparticles, ext_idxs);
+  st_expr = biorthogonal_transform(st_expr, A.rank(), ext_idxs);
+
+  auto bixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
+  auto kixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
+  st_expr = ex<Tensor>(Tensor{L"S", bixs, kixs}) * st_expr;
+
+  simplify(st_expr);
+
+  return st_expr;
+}
+
+ExprPtr closed_shell_CC_spintrace_rigorous(ExprPtr const& expr) {
+  assert(expr->is<Sum>());
+  using ranges::views::transform;
+
+  Tensor const A = expr->at(0)->at(0)->as<Tensor>();
+
+  auto const ext_idxs = external_indices(A);
+  auto st_expr = sequant::spintrace(expr, ext_idxs);
+  canonicalize(st_expr);
+
+  // Remove S operator
+  for (auto& term : *st_expr) {
+    if (term->is<Product>()) term = remove_tensor(term->as<Product>(), L"S");
+  }
+
+  // Biorthogonal transformation
+  st_expr = biorthogonal_transform(st_expr, A.rank(), ext_idxs);
 
   auto bixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
   auto kixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
@@ -1433,7 +1459,48 @@ std::vector<ExprPtr> open_shell_spintrace(
 }
 
 std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
-  return open_shell_spintrace(expr, external_indices(expr));
+  Tensor A = expr->at(0)->at(0)->as<Tensor>();
+  assert(A.label() == L"A");
+  size_t const i = A.rank();
+  auto P_vec = open_shell_P_op_vector(A);
+  auto A_vec = open_shell_A_op(A);
+  assert(P_vec.size() == i + 1);
+  std::vector<Sum> concat_terms(i + 1);
+  size_t n_spin_orbital_term = 0;
+  for (auto& product_term : *expr) {
+    auto term = remove_tensor(product_term->as<Product>(), L"A");
+    std::vector<ExprPtr> os_st(i + 1);
+
+    // Apply the P operators on the product term without the A,
+    // Expand the P operators and spin-trace the expression
+    // Then apply A operator, canonicalize and remove A operator
+    for (int s = 0; s != os_st.size(); ++s) {
+      os_st.at(s) = P_vec.at(s) * term;
+      expand(os_st.at(s));
+      os_st.at(s) = expand_P_op(os_st.at(s), false, true);
+      os_st.at(s) =
+          open_shell_spintrace(os_st.at(s), external_indices(A), s).at(0);
+      if (i > 2) {
+        os_st.at(s) = A_vec.at(s) * os_st.at(s);
+        simplify(os_st.at(s));
+        os_st.at(s) = remove_tensor(os_st.at(s), L"A");
+      }
+    }
+
+    for (size_t j = 0; j != os_st.size(); ++j) {
+      concat_terms.at(j).append(os_st.at(j));
+    }
+    ++n_spin_orbital_term;
+  }
+
+  // Combine spin-traced terms for the current residual
+  std::vector<ExprPtr> expr_vec;
+  for (auto& spin_case : concat_terms) {
+    auto ptr = sequant::ex<Sum>(spin_case);
+    expr_vec.push_back(ptr);
+  }
+
+  return expr_vec;
 }
 
 ExprPtr spintrace(

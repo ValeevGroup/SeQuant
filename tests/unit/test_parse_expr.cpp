@@ -6,11 +6,6 @@
 #include <boost/regex.hpp>
 #include <locale>
 
-// parse a non-symmetric tensor
-sequant::ExprPtr parse(std::wstring_view raw) {
-  return sequant::parse_expr(raw, sequant::Symmetry::nonsymm);
-}
-
 TEST_CASE("TEST_REGEX", "[parse_expr]") {
   using namespace sequant;
 
@@ -19,6 +14,8 @@ TEST_CASE("TEST_REGEX", "[parse_expr]") {
   std::locale prev_locale{};
   std::locale::global(std::locale::classic());
   auto const rgx_label = boost::wregex{parse::regex_patterns::label().data()};
+  auto const rgx_variable =
+      boost::wregex{parse::regex_patterns::sequant_variable()};
   auto const rgx_pure_index =
       boost::wregex{parse::regex_patterns::pure_index()};
   auto const rgx_index = boost::wregex{parse::regex_patterns::index_capture(),
@@ -78,10 +75,11 @@ TEST_CASE("TEST_REGEX", "[parse_expr]") {
   }
 
   SECTION("sequant::Variable") {
-    // sequant variable is just a label
+    // sequant variable is just a label followed by an optional ^*
+    // to denote if the variable is conjugated
     for (auto const& v : std::initializer_list<std::wstring>{
-             L"a", L"α", L"b", L"β", L"γ", L"λ", L"δ"})
-      REQUIRE(boost::regex_match(v, rgx_label));
+             L"a", L"α", L"b", L"β", L"γ", L"λ", L"δ", L"a^*", L"α^*", L"b^*"})
+      REQUIRE(boost::regex_match(v, rgx_variable));
   }
 }
 
@@ -128,8 +126,8 @@ TEST_CASE("TEST_PARSE_EXPR", "[parse_expr]") {
   SECTION("Constant") {
     REQUIRE(parse_expr(L"1/2")->is<Constant>());
     REQUIRE(parse_expr(L"0/2")->is<Constant>());
-    REQUIRE(!parse_expr(L"-1/2")->is<Constant>());
-    REQUIRE(!parse_expr(L"-0/2")->is<Constant>());
+    REQUIRE(parse_expr(L"-1/2")->is<Constant>());
+    REQUIRE(parse_expr(L"-0/2")->is<Constant>());
   }
 
   SECTION("Product") {
@@ -143,7 +141,7 @@ TEST_CASE("TEST_PARSE_EXPR", "[parse_expr]") {
     REQUIRE(parse_expr(L"-1/2 * δ * t{i1;a1}") ==
             parse_expr(L"-1/2  δ  t{i1;a1}"));
     auto const prod2 = parse_expr(L"-1/2 * δ * γ * t{i1;a1}")->as<Product>();
-    REQUIRE(prod2.scalar() == rational{-1,2});
+    REQUIRE(prod2.scalar() == rational{-1, 2});
     REQUIRE(prod2.factor(0) == ex<Variable>(L"δ"));
     REQUIRE(prod2.factor(1) == ex<Variable>(L"γ"));
     REQUIRE(prod2.factor(2)->is<Tensor>());

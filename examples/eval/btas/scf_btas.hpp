@@ -30,7 +30,7 @@ class SequantEvalScfBTAS final : public SequantEvalScf {
 
  private:
   container::vector<container::vector<EvalNodeBTAS>> nodes_;
-  CacheManager<ERPtr> cman_;
+  CacheManager cman_;
   DataWorldBTAS<Tensor_t> data_world_;
 
   Tensor_t const& f_vo() const {

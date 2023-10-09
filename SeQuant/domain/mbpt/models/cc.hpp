@@ -9,16 +9,20 @@
 namespace sequant::mbpt::sr {
 
 /// derives equations of traditional coupled-cluster method
-class cc {
+class CC {
   size_t N, P, PMIN;
 
  public:
-  cc(size_t n, size_t p = std::numeric_limits<size_t>::max(),
-        size_t pmin = 1);
+  /// @brief constructor for CC class
+  /// @param n coupled cluster excitation rank
+  /// @param p projector excitation rank
+  /// @param pmin minimum projector excitation rank
+  CC(size_t n, size_t p = std::numeric_limits<size_t>::max(), size_t pmin = 1);
 
-  /// derives similarity-transformed expressions of mpbt::Operators
+  /// @brief derives similarity-transformed expressions of mpbt::Operators
   /// @param expr expression to be transformed
   /// @param r order of truncation
+  /// @pre expr should be composed of mbpt::Operators
   /// @return transformed expression
   ExprPtr sim_tr(ExprPtr expr, size_t r);
 
@@ -36,7 +40,7 @@ class cc {
 
   /// derives first-order perturbed λ amplitude equations
   std::vector<sequant::ExprPtr> pert_λ1();
-};  // class cc
+};  // class CC
 
 }  // namespace sequant::mbpt::sr
 
