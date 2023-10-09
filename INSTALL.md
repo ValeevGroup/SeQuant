@@ -8,10 +8,10 @@ prerequisites:
     * [Boost](https://www.boost.org/), version 1.67 or higher (N.B. critical bugs make the following versions unusable: 1.70, 1.77, 1.78); the following non-header-only Boost libraries are required:
       - [Boost.Regex](https://www.boost.org/doc/libs/master/libs/regex/doc/html/index.html)
       - [Boost.Locale](https://www.boost.org/doc/libs/master/libs/locale/doc/html/index.html)
-    * [Range-V3](https://github.com/ericniebler/range-v3.git), tag d800a032132512a54c291ce55a2a43e0460591c7, *if not found, SeQuant will download and build Range-V3*
+    * [Range-V3](https://github.com/ericniebler/range-v3.git), tag 0.12.0, *if not found, SeQuant will download and build Range-V3*
   * optional:
     * for building coupled-cluster evaluation tests:
-      * [TiledArray](https://github.com/ValeevGroup/tiledarray.git), tag e52c733e9f1400e70425d5be171a8e7cd5b56876
+      * [TiledArray](https://github.com/ValeevGroup/tiledarray.git), tag bd074915d4f2b479cdda2565b1808ca6f7c444ad
     * for building `stcc*` example programs
         * [Eigen](http://eigen.tuxfamily.org/), version 3
 
