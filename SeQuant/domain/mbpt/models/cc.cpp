@@ -149,7 +149,7 @@ std::vector<ExprPtr> CC::λ(bool screen, bool use_topology,
   return result;
 }
 
-std::vector<sequant::ExprPtr> cc::pert_t1() {
+std::vector<sequant::ExprPtr> CC::pert_t1() {
   using namespace sequant::mbpt;
 
   // construct mu_bar
@@ -181,7 +181,7 @@ std::vector<sequant::ExprPtr> cc::pert_t1() {
   return result;
 }
 
-std::vector<ExprPtr> cc::pert_λ1() {
+std::vector<ExprPtr> CC::pert_λ1() {
   // construct hbar
   auto hbar = sim_tr(op::H(), 4);
   // construct mu_bar
