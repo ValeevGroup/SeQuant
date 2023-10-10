@@ -240,6 +240,8 @@ set(SeQuant_src
         SeQuant/core/utility/macros.hpp
         SeQuant/core/utility/nodiscard.hpp
         SeQuant/core/utility/singleton.hpp
+        SeQuant/core/utility/string.hpp
+        SeQuant/core/utility/string.cpp
         SeQuant/core/wick.hpp
         SeQuant/core/wick.impl.hpp
         SeQuant/core/wolfram.hpp

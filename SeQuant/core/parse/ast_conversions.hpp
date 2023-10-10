@@ -13,22 +13,15 @@
 #include <SeQuant/core/parse_expr.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <boost/variant.hpp>
 
 #include <algorithm>
-#include <codecvt>
-#include <locale>
 #include <string>
 #include <tuple>
 
 namespace sequant::parse::transform {
-
-std::string toUtf8(const std::wstring_view &str) {
-  std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-
-  return converter.to_bytes(str.begin(), str.end());
-}
 
 template <typename AST, typename PositionCache, typename Iterator>
 std::tuple<std::size_t, std::size_t> get_pos(const AST &ast,
