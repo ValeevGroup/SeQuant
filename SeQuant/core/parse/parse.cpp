@@ -75,28 +75,28 @@ auto word_components = x3::unicode::alnum
 // underscores, but can not end with an underscore (to not confuse the parser
 // with tensors á la t_{…}^{…}.
 auto name_def         = x3::lexeme[
-							x3::unicode::alpha >> -( *(word_components >> &word_components) >> (word_components - '_') )
-						];
+                            x3::unicode::alpha >> -( *(word_components >> &word_components) >> (word_components - '_') )
+                        ];
 
 auto number_def       = x3::double_ >> -('/' >> x3::double_);
 
 auto variable_def     = name;
 
 auto index_label_def  = x3::lexeme[
-	   						+x3::unicode::alpha >> -x3::lit('_') >> x3::uint_
-						];
+                               +x3::unicode::alpha >> -x3::lit('_') >> x3::uint_
+                        ];
 
 auto index_def        = x3::lexeme[
-							index_label >> -('<' >> index_label % ',' >> ">")
-						];
+                            index_label >> -('<' >> index_label % ',' >> ">")
+                        ];
 
 auto index_groups_def =   L"_{" > -(index % ',') > L"}^{" > -(index % ',') > L"}" >> x3::attr(false)
                         | L"^{" > -(index % ',') > L"}_{" > -(index % ',') > L"}" >> x3::attr(true)
                         |  '{'  > -(index % ',') > ';'    > -(index % ',') >  '}' >> x3::attr(false);
 
 auto tensor_def       = x3::lexeme[
-							name >> x3::skip[index_groups] >> -(':' >> x3::upper)
-						];
+                            name >> x3::skip[index_groups] >> -(':' >> x3::upper)
+                        ];
 
 auto nullary          = number | tensor | variable;
 
