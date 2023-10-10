@@ -65,12 +65,12 @@ x3::rule<IndexRule, ast::Index> index{"Index"};
 x3::rule<IndexGroupRule, ast::IndexGroups> index_groups{"IndexGroups"};
 
 // clang-format off
-auto word_components = x3::unicode::alnum | '_';
+auto word_components = x3::unicode::alnum | '_' | L'⁔' | L'⁰' | L'¹' | L'²' | L'³' | L'⁴' | L'⁵' | L'⁶' | L'⁷' | L'⁸' | L'⁹';
 // A name begins with a letter, then can container letters, digits and
 // underscores, but can not end with an underscore (to not confuse the parser
 // with tensors á la t_{…}^{…}.
 auto name_def         = x3::lexeme[
-							x3::unicode::alpha >> -( *(word_components >> &word_components) >> x3::unicode::alnum )
+							x3::unicode::alpha >> -( *(word_components >> &word_components) >> (word_components - '_') )
 						];
 
 auto number_def       = x3::double_ >> -('/' >> x3::double_);
