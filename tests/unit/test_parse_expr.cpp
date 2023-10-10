@@ -89,6 +89,8 @@ TEST_CASE("TEST_PARSE_EXPR", "[parse_expr]") {
     REQUIRE(*expr == *parse_expr(L"t{\ti1, \ti2; \na1,\t a2 \t}"));
     REQUIRE_NOTHROW(parse_expr(L"α{a1;i1}"));
     REQUIRE_NOTHROW(parse_expr(L"γ_1{a1;i1}"));
+    REQUIRE_NOTHROW(parse_expr(L"t⁔1{a1;i1}"));
+    REQUIRE_NOTHROW(parse_expr(L"t¹{a1;i1}"));
   }
 
   SECTION("Tensor with symmetry annotation") {
