@@ -87,10 +87,26 @@ TEST_CASE("TEST_PARSE_EXPR", "[parse_expr]") {
     REQUIRE(*expr == *parse_expr(L"+t{i1, i2; a1, a2}"));
     REQUIRE(parse_expr(L"-t{i1;a1}")->is<Product>());
     REQUIRE(*expr == *parse_expr(L"t{\ti1, \ti2; \na1,\t a2 \t}"));
-    REQUIRE_NOTHROW(parse_expr(L"α{a1;i1}"));
-    REQUIRE_NOTHROW(parse_expr(L"γ_1{a1;i1}"));
-    REQUIRE_NOTHROW(parse_expr(L"t⁔1{a1;i1}"));
-    REQUIRE_NOTHROW(parse_expr(L"t¹{a1;i1}"));
+
+    // "Non-standard" tensor labels
+    REQUIRE(parse_expr(L"α{a1;i1}")->is<Tensor>());
+    REQUIRE(parse_expr(L"γ_1{a1;i1}")->is<Tensor>());
+    REQUIRE(parse_expr(L"t⁔1{a1;i1}")->is<Tensor>());
+    REQUIRE(parse_expr(L"t¹{a1;i1}")->is<Tensor>());
+    REQUIRE(parse_expr(L"t⁸{a1;i1}")->is<Tensor>());
+    REQUIRE(parse_expr(L"t⁻{a1;i1}")->is<Tensor>());
+    REQUIRE(parse_expr(L"tₐ{a1;i1}")->is<Tensor>());
+    REQUIRE(parse_expr(L"t₋{a1;i1}")->is<Tensor>());
+    REQUIRE(parse_expr(L"t₌{a1;i1}")->is<Tensor>());
+    REQUIRE(parse_expr(L"t↓{a1;i1}")->is<Tensor>());
+    REQUIRE(parse_expr(L"t↑{a1;i1}")->is<Tensor>());
+
+    // "Non-standard" index names
+    REQUIRE(parse_expr(L"t{a↓1;i↑1}")->is<Tensor>());
+    REQUIRE(parse_expr(L"t{a⁺1;i⁻1}")->is<Tensor>());
+
+    REQUIRE(*parse_expr(L"t{a↓1;i↑1}") == *parse_expr(L"t{a↓_1;i↑_1}"));
+    REQUIRE(*parse_expr(L"t{a⁺1;i⁻1}") == *parse_expr(L"t{a⁺_1;i⁻_1}"));
   }
 
   SECTION("Tensor with symmetry annotation") {
@@ -129,6 +145,9 @@ TEST_CASE("TEST_PARSE_EXPR", "[parse_expr]") {
     REQUIRE(parse_expr(L"α^*")->is<Variable>());
     REQUIRE(parse_expr(L"β^*")->is<Variable>());
     REQUIRE(parse_expr(L"b^*")->is<Variable>());
+    // Currently the conjugated "property" really just is part of the
+    // variable's name
+    REQUIRE(parse_expr(L"b^*")->as<Variable>().label() == L"b^*");
   }
 
   SECTION("Product") {
