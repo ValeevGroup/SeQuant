@@ -70,7 +70,7 @@ auto word_components = x3::unicode::alnum | '_';
 // underscores, but can not end with an underscore (to not confuse the parser
 // with tensors á la t_{…}^{…}.
 auto name_def         = x3::lexeme[
-							x3::unicode::alpha >> -( *(word_components >> &word_components) >> x3::alnum )
+							x3::unicode::alpha >> -( *(word_components >> &word_components) >> x3::unicode::alnum )
 						];
 
 auto number_def       = x3::double_ >> -('/' >> x3::double_);
