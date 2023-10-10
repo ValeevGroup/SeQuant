@@ -732,6 +732,10 @@ class Variable : public Expr, public Labeled {
                             !std::is_same_v<std::decay_t<U>, Variable>>>
   explicit Variable(U &&label) : label_(std::forward<U>(label)) {}
 
+  Variable(std::wstring label, bool conjugated)
+      : label_(std::move(label)), conjugated_(conjugated) {}
+
+
   std::wstring_view label() const override;
 
   bool conjugated() const;
@@ -748,9 +752,6 @@ class Variable : public Expr, public Labeled {
  private:
   std::wstring label_;
   bool conjugated_ = false;
-
-  Variable(std::wstring label, bool conjugated)
-      : label_(std::move(label)), conjugated_(conjugated) {}
 
   hash_type memoizing_hash() const override {
     hash_value_ = hash::value(label_);

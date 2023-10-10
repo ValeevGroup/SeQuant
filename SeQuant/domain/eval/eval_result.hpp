@@ -475,6 +475,15 @@ inline void log_constant(Args const&... args) noexcept {
 
 }  // namespace
 
+/// TA::Tensor memory use logger
+/// If TiledArray was configured with TA_TENSOR_MEM_PROFILE set this
+/// prints the current use of memory by TA::Tensor objects in host memory space
+/// to \p os .
+/// \param world the world object to use for logging
+/// \param label string to prepend to the profile
+void log_ta_tensor_host_memory_use(madness::World& world,
+                                   std::string_view label = "");
+
 struct EvalResult;
 
 using ERPtr = std::shared_ptr<EvalResult>;

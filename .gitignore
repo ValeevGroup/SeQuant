@@ -67,3 +67,6 @@ _deps
 build
 
 .clangd
+.vscode
+out
+run

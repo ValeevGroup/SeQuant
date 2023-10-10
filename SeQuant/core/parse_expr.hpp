@@ -57,6 +57,14 @@ ExprPtr parse_expr(std::wstring_view raw,
 ///
 /// Get a parsable string from an expression.
 ///
+/// An expression that has a flat structure (ie. product does not contain
+/// sum or product subexpressions) is guaranteed to be reparsable to itself so
+/// that equality comparison holds: x == parse_expr(deparse_expr(x)). For nested
+/// expressions the equality comparison is not guaranteed, however, for such
+/// an expression x, its corresponding evaluation node, eval_node(x), and
+/// the parsed evaluation node, eval_node(parse_expr(deparse_expr(x))) are
+/// equivalent.
+///
 /// \param expr Expression to stringify that can be re-parsed to itself.
 /// \param annot_sym Whether to add sequant::Symmetry annotation
 ///                  to each Tensor string.

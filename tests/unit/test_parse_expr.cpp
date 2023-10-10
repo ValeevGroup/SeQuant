@@ -107,6 +107,28 @@ TEST_CASE("TEST_PARSE_EXPR", "[parse_expr]") {
     REQUIRE(parse_expr(L"0/2")->is<Constant>());
     REQUIRE(parse_expr(L"-1/2")->is<Constant>());
     REQUIRE(parse_expr(L"-0/2")->is<Constant>());
+    REQUIRE(parse_expr(L"1")->is<Constant>());
+    REQUIRE(parse_expr(L"123")->is<Constant>());
+    REQUIRE(parse_expr(L"1.")->is<Constant>());
+    REQUIRE(parse_expr(L"01.00")->is<Constant>());
+    REQUIRE(parse_expr(L"0 / 10")->is<Constant>());
+    REQUIRE(parse_expr(L"0.5/0.25")->is<Constant>());
+    REQUIRE(parse_expr(L".4")->is<Constant>());
+  }
+
+  SECTION("Variable") {
+    // sequant variable is just a label followed by an optional ^*
+    // to denote if the variable is conjugated
+    REQUIRE(parse_expr(L"a")->is<Variable>());
+    REQUIRE(parse_expr(L"α")->is<Variable>());
+    REQUIRE(parse_expr(L"β")->is<Variable>());
+    REQUIRE(parse_expr(L"γ")->is<Variable>());
+    REQUIRE(parse_expr(L"λ")->is<Variable>());
+    REQUIRE(parse_expr(L"δ")->is<Variable>());
+    REQUIRE(parse_expr(L"a^*")->is<Variable>());
+    REQUIRE(parse_expr(L"α^*")->is<Variable>());
+    REQUIRE(parse_expr(L"β^*")->is<Variable>());
+    REQUIRE(parse_expr(L"b^*")->is<Variable>());
   }
 
   SECTION("Product") {
