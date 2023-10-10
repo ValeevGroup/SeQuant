@@ -43,8 +43,10 @@ struct Number : boost::spirit::x3::position_tagged {
 
 struct Variable : boost::spirit::x3::position_tagged {
   std::wstring name;
+  bool conjugated;
 
-  Variable(std::wstring name = {}) : name(std::move(name)) {}
+  Variable(std::wstring name = {}, bool conjugated = false)
+      : name(std::move(name)), conjugated(conjugated) {}
 
   // Required to use as a container
   using value_type = decltype(name)::value_type;
@@ -107,7 +109,7 @@ struct Sum : boost::spirit::x3::position_tagged {
 BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::IndexLabel, label, id);
 BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Index, label, protoLabels);
 BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Number, numerator, denominator);
-BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Variable, name);
+BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Variable, name, conjugated);
 BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::IndexGroups, bra, ket,
                           reverse_bra_ket);
 BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Tensor, name, indices, symmetry);

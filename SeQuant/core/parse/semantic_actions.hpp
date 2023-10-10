@@ -7,6 +7,8 @@
 
 #include "ast.hpp"
 
+#include <SeQuant/core/utility/string.hpp>
+
 #define BOOST_SPIRIT_X3_UNICODE
 #include <boost/spirit/home/x3.hpp>
 #include <boost/variant/apply_visitor.hpp>
