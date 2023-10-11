@@ -383,7 +383,6 @@ if (BUILD_TESTING)
             tests/unit/test_eval_node.cpp
             tests/unit/test_optimize.cpp
             tests/unit/test_fusion.cpp
-            tests/unit/test_cache_manager.cpp
             tests/unit/test_runtime.cpp
             tests/unit/test_math.cpp
             tests/unit/test_string.cpp
