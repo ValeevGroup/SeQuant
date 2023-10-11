@@ -84,8 +84,10 @@ auto number_def       = x3::double_ >> -('/' >> x3::double_);
 
 auto variable_def     = x3::lexeme[name >> -(x3::lit('^') >> '*' >> x3::attr(true))];
 
+auto index_name       = +(x3::unicode::alpha | L'⁺' | L'⁻' | L'↑' | L'↓');
+
 auto index_label_def  = x3::lexeme[
-                               +x3::unicode::alpha >> -x3::lit('_') >> x3::uint_
+                               index_name >> -x3::lit('_') >> x3::uint_
                         ];
 
 auto index_def        = x3::lexeme[
