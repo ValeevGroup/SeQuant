@@ -37,11 +37,23 @@ class CC {
                                   bool use_connectivity = true,
                                   bool canonical_only = true);
 
-  /// derives first-order perturbed t amplitude equations
-  std::vector<sequant::ExprPtr> pert_t1();
+  // clang-format off
+  /// @brief derives perturbed t amplitude equations
+  /// @param o order of perturbation
+  /// @param r rank of perturbation operator. r = 1 means one-body perturbation operator
+  /// @pre `r==1 && o==1`, only first order perturbation and one-body perturbation operator is supported now
+  /// @return std::vector of perturbed t amplitude equations
+  // clang-format on
+  std::vector<sequant::ExprPtr> t_pt(size_t o, size_t r);
 
-  /// derives first-order perturbed λ amplitude equations
-  std::vector<sequant::ExprPtr> pert_λ1();
+  // clang-format off
+  /// @brief derives perturbed λ amplitude equations
+  /// @param o order of perturbation
+  /// @param r rank of perturbation operator. r = 1 means one-body perturbation operator
+  /// @pre `r==1 && o==1`, only first order perturbation and one-body perturbation operator is supported now
+  /// @return std::vector of perturbed λ amplitude equations
+  // clang-format on
+  std::vector<sequant::ExprPtr> λ_pt(size_t o, size_t r);
 };  // class CC
 
 }  // namespace sequant::mbpt::sr

@@ -149,11 +149,21 @@ std::vector<ExprPtr> CC::λ(bool screen, bool use_topology,
   return result;
 }
 
-std::vector<sequant::ExprPtr> CC::pert_t1() {
-  using namespace sequant::mbpt;
+std::vector<sequant::ExprPtr> CC::t_pt(std::size_t o, std::size_t r) {
+  assert(o == 1 &&
+         "sequant::mbpt::sr::CC::t_pt(): only first-order perturbation is "
+         "supported now");
+  assert(r == 1 &&
+         "sequant::mbpt::sr::CC::t_pt(): only one-body perturbation "
+         "operator is supported now");
 
   // construct mu_bar
-  auto mu_bar = sim_tr(op::mu(1), 2);
+  const auto mu_truncate_at =
+      r == 1 ? 2
+             : 4;  // truncate mu_bar at rank 2 for one-body perturbation
+                   // operator and at rank 4 for two-body perturbation operator
+  auto mu_bar = sim_tr(op::mu(r), mu_truncate_at);
+
   // construct [hbar, T(1)]
   auto hbar_pert = sim_tr(op::H(), 3) * op::pertT1(N);
 
@@ -181,11 +191,21 @@ std::vector<sequant::ExprPtr> CC::pert_t1() {
   return result;
 }
 
-std::vector<ExprPtr> CC::pert_λ1() {
+std::vector<ExprPtr> CC::λ_pt(size_t o, size_t r) {
+  assert(o == 1 &&
+         "sequant::mbpt::sr::CC::λ_pt(): only first-order perturbation is "
+         "supported now");
+  assert(r == 1 &&
+         "sequant::mbpt::sr::CC::λ_pt(): only one-body perturbation "
+         "operator is supported now");
   // construct hbar
   auto hbar = sim_tr(op::H(), 4);
   // construct mu_bar
-  auto mu_bar = sim_tr(op::mu(1), 2);
+  const auto mu_truncate_at =
+      r == 1 ? 2
+             : 4;  // truncate mu_bar at rank 2 for one-body perturbation
+                   // operator and at rank 4 for two-body perturbation operator
+  auto mu_bar = sim_tr(op::mu(r), mu_truncate_at);
   // construct [hbar, T(1)]
   auto hbar_pert = sim_tr(op::H(), 3) * op::pertT1(N);
 
