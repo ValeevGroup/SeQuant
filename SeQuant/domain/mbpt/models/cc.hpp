@@ -26,11 +26,13 @@ class CC {
   /// @return transformed expression
   ExprPtr sim_tr(ExprPtr expr, size_t r);
 
-  /// derives t amplitude equations
+  /// @brief derives t amplitude equations
+  /// @return std::vector of t amplitude equations
   std::vector<sequant::ExprPtr> t(bool screen = true, bool use_topology = true,
                                   bool use_connectivity = true,
                                   bool canonical_only = true);
-  /// derives λ amplitude equations
+  /// @brief derives λ amplitude equations
+  /// @return std::vector of λ amplitude equations
   std::vector<sequant::ExprPtr> λ(bool screen = false, bool use_topology = true,
                                   bool use_connectivity = true,
                                   bool canonical_only = true);
