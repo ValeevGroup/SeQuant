@@ -61,10 +61,13 @@ ExprPtr R12(
 ExprPtr mu(std::size_t R);
 
 /// makes perturbed excitation operator of bra/ket ranks @c Nbra/Nket
-ExprPtr pertT1_(std::size_t Nbra,
-                std::size_t Nket = std::numeric_limits<std::size_t>::max());
+/// \param o order of perturbation
+/// \pre `o==1`, only first order perturbation is supported now
+ExprPtr T_pt_(std::size_t o, std::size_t Nbra,
+              std::size_t Nket = std::numeric_limits<std::size_t>::max());
 
 /// makes perturbed deexcitation operator of bra/ket ranks @c Nbra/Nket
-ExprPtr pertLambda1_(
-    std::size_t Nbra,
-    std::size_t Nket = std::numeric_limits<std::size_t>::max());
+/// \param o order of perturbation
+/// \pre `o==1`, only first order perturbation is supported now
+ExprPtr Λ_pt_(std::size_t o, std::size_t Nbra,
+              std::size_t Nket = std::numeric_limits<std::size_t>::max());

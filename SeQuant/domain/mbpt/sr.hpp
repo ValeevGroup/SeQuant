@@ -227,18 +227,23 @@ ExprPtr P(std::int64_t K);
 /// perturbation operator of rank \param R
 ExprPtr mu(std::size_t R);
 
-/// perturbed excitation operator of rank \p K
-ExprPtr pertT1_(std::size_t K);
+/// perturbed excitation operator of rank \p K and order \p o
+/// @pre `order==1`, only first order perturbation is supported now
+ExprPtr T_pt_(std::size_t order, std::size_t K);
 
 /// makes sum of perturbed excitation operators of all ranks up to \p
-/// K
-ExprPtr pertT1(std::size_t K);
+/// K and order \p o
+/// @pre `order==1`, only first order perturbation is supported now
+ExprPtr T_pt(std::size_t order, std::size_t K);
 
-/// perturbed deexcitation operator of rank \p K
-ExprPtr pertLambda1_(std::size_t K);
+/// perturbed deexcitation operator of rank \p K and order \p o
+/// @pre `order==1`, only first order perturbation is supported now
+ExprPtr Λ_pt_(std::size_t order, std::size_t K);
 
-/// makes sum of perturbed deexcitation operators of all ranks up to \p K
-ExprPtr pertLambda1(std::size_t K);
+/// makes sum of perturbed deexcitation operators of all ranks up to \p K and
+/// order \p o
+/// @pre `order==1`, only first order perturbation is supported now
+ExprPtr Λ_pt(std::size_t order, std::size_t K);
 
 /// @}
 

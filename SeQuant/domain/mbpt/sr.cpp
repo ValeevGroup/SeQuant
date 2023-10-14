@@ -398,45 +398,46 @@ ExprPtr mu(std::size_t R) {
       });
 }
 
-ExprPtr pertT1_(std::size_t K) {
+ExprPtr T_pt_(std::size_t order, std::size_t K) {
+  assert(K > 0);
+  assert(order == 1 && "only first order perturbation is supported now");
   return ex<op_t>([]() -> std::wstring_view { return L"t¹"; },
                   [=]() -> ExprPtr {
                     using namespace sequant::mbpt::sr;
-                    return sr::pertT1_(K);
+                    return sr::T_pt_(order, K);
                   },
                   [=](qnc_t& qns) {
                     qns = combine(qnc_t{0ul, K, K, 0ul}, qns);
                   });
 }
 
-ExprPtr pertT1(std::size_t K) {
+ExprPtr T_pt(std::size_t order, std::size_t K) {
   assert(K > 0);
-
   ExprPtr result;
   for (auto k = 1ul; k <= K; ++k) {
-    result = k > 1 ? result + pertT1_(k) : pertT1_(k);
+    result = k > 1 ? result + T_pt_(order, k) : T_pt_(order, k);
   }
   return result;
 }
 
-ExprPtr pertLambda1_(std::size_t K) {
+ExprPtr Λ_pt_(std::size_t order, std::size_t K) {
   assert(K > 0);
+  assert(order == 1 && "only first order perturbation is supported now");
   return ex<op_t>([]() -> std::wstring_view { return L"λ¹"; },
                   [=]() -> ExprPtr {
                     using namespace sequant::mbpt::sr;
-                    return sr::pertLambda1_(K);
+                    return sr::Λ_pt_(order, K);
                   },
                   [=](qnc_t& qns) {
                     qns = combine(qnc_t{K, 0ul, 0ul, K}, qns);
                   });
 }
 
-ExprPtr pertLambda1(std::size_t K) {
+ExprPtr Λ_pt(std::size_t order, std::size_t K) {
   assert(K > 0);
-
   ExprPtr result;
   for (auto k = 1ul; k <= K; ++k) {
-    result = k > 1 ? result + pertLambda1_(k) : pertLambda1_(k);
+    result = k > 1 ? result + Λ_pt_(order, k) : Λ_pt_(order, k);
   }
   return result;
 }

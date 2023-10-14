@@ -149,23 +149,24 @@ std::vector<ExprPtr> CC::λ(bool screen, bool use_topology,
   return result;
 }
 
-std::vector<sequant::ExprPtr> CC::t_pt(std::size_t o, std::size_t r) {
-  assert(o == 1 &&
+std::vector<sequant::ExprPtr> CC::t_pt(std::size_t order, std::size_t rank) {
+  assert(order == 1 &&
          "sequant::mbpt::sr::CC::t_pt(): only first-order perturbation is "
          "supported now");
-  assert(r == 1 &&
+  assert(rank == 1 &&
          "sequant::mbpt::sr::CC::t_pt(): only one-body perturbation "
          "operator is supported now");
 
   // construct mu_bar
-  const auto mu_truncate_at =
-      r == 1 ? 2
-             : 4;  // truncate mu_bar at rank 2 for one-body perturbation
-                   // operator and at rank 4 for two-body perturbation operator
-  auto mu_bar = sim_tr(op::mu(r), mu_truncate_at);
+
+  // truncate mu_bar at rank 2 for one-body perturbation
+  // operator and at rank 4 for two-body perturbation operator
+  const auto mu_truncate_at = rank == 1 ? 2 : 4;
+
+  auto mu_bar = sim_tr(op::mu(rank), mu_truncate_at);
 
   // construct [hbar, T(1)]
-  auto hbar_pert = sim_tr(op::H(), 3) * op::pertT1(N);
+  auto hbar_pert = sim_tr(op::H(), 3) * op::T_pt(order, N);
 
   // [Eq. 34, WIREs Comput Mol Sci. 2019; 9:e1406]
   auto expr = simplify(mu_bar + hbar_pert);
@@ -184,35 +185,37 @@ std::vector<sequant::ExprPtr> CC::t_pt(std::size_t o, std::size_t r) {
 
   std::vector<ExprPtr> result(P + 1);
   for (auto p = P; p >= PMIN; --p) {
-    auto freq_term = ex<Variable>(L"ω") * op::P(p) * op::pertT1_(p);
+    auto freq_term = ex<Variable>(L"ω") * op::P(p) * op::T_pt_(order, p);
     result.at(p) =
         op::vac_av(op::P(p) * expr, op_connect) - op::vac_av(freq_term);
   }
   return result;
 }
 
-std::vector<ExprPtr> CC::λ_pt(size_t o, size_t r) {
-  assert(o == 1 &&
+std::vector<ExprPtr> CC::λ_pt(size_t order, size_t rank) {
+  assert(order == 1 &&
          "sequant::mbpt::sr::CC::λ_pt(): only first-order perturbation is "
          "supported now");
-  assert(r == 1 &&
+  assert(rank == 1 &&
          "sequant::mbpt::sr::CC::λ_pt(): only one-body perturbation "
          "operator is supported now");
   // construct hbar
   auto hbar = sim_tr(op::H(), 4);
+
   // construct mu_bar
-  const auto mu_truncate_at =
-      r == 1 ? 2
-             : 4;  // truncate mu_bar at rank 2 for one-body perturbation
-                   // operator and at rank 4 for two-body perturbation operator
-  auto mu_bar = sim_tr(op::mu(r), mu_truncate_at);
+
+  // truncate mu_bar at rank 2 for one-body perturbation
+  // operator and at rank 4 for two-body perturbation operator
+  const auto mu_truncate_at = rank == 1 ? 2 : 4;
+
+  auto mu_bar = sim_tr(op::mu(rank), mu_truncate_at);
   // construct [hbar, T(1)]
-  auto hbar_pert = sim_tr(op::H(), 3) * op::pertT1(N);
+  auto hbar_pert = sim_tr(op::H(), 3) * op::T_pt(order, N);
 
   // [Eq. 35, WIREs Comput Mol Sci. 2019; 9:e1406]
   const auto One = ex<Constant>(1);
   auto expr = simplify((One + op::Lambda(N)) * (mu_bar + hbar_pert) +
-                       op::pertLambda1(N) * hbar);
+                       op::Λ_pt(order, N) * hbar);
 
   // connectivity:
   // t and t1 with {h,f,g}
@@ -238,7 +241,7 @@ std::vector<ExprPtr> CC::λ_pt(size_t o, size_t r) {
 
   std::vector<ExprPtr> result(P + 1);
   for (auto p = P; p >= PMIN; --p) {
-    auto freq_term = ex<Variable>(L"ω") * op::pertLambda1_(p) * op::P(-p);
+    auto freq_term = ex<Variable>(L"ω") * op::Λ_pt_(order, p) * op::P(-p);
     result.at(p) =
         op::vac_av(expr * op::P(-p), op_connect) + op::vac_av(freq_term);
   }

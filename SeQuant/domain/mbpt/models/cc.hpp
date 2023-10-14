@@ -39,21 +39,21 @@ class CC {
 
   // clang-format off
   /// @brief derives perturbed t amplitude equations
-  /// @param o order of perturbation
-  /// @param r rank of perturbation operator. r = 1 means one-body perturbation operator
-  /// @pre `r==1 && o==1`, only first order perturbation and one-body perturbation operator is supported now
+  /// @param order order of perturbation
+  /// @param rank rank of perturbation operator. r = 1 means one-body perturbation operator
+  /// @pre `rank==1 && order==1`, only first order perturbation and one-body perturbation operator is supported now
   /// @return std::vector of perturbed t amplitude equations
   // clang-format on
-  std::vector<sequant::ExprPtr> t_pt(size_t o, size_t r);
+  std::vector<sequant::ExprPtr> t_pt(size_t order, size_t rank);
 
   // clang-format off
   /// @brief derives perturbed λ amplitude equations
-  /// @param o order of perturbation
-  /// @param r rank of perturbation operator. r = 1 means one-body perturbation operator
-  /// @pre `r==1 && o==1`, only first order perturbation and one-body perturbation operator is supported now
+  /// @param order order of perturbation
+  /// @param rank rank of perturbation operator. r = 1 means one-body perturbation operator
+  /// @pre `rank==1 && order==1`, only first order perturbation and one-body perturbation operator is supported now
   /// @return std::vector of perturbed λ amplitude equations
   // clang-format on
-  std::vector<sequant::ExprPtr> λ_pt(size_t o, size_t r);
+  std::vector<sequant::ExprPtr> λ_pt(size_t order, size_t rank);
 };  // class CC
 
 }  // namespace sequant::mbpt::sr

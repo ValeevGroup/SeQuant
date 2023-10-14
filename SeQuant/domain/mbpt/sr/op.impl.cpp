@@ -26,13 +26,17 @@ ExprPtr L_(std::size_t Nbra, std::size_t Nket) {
 
 ExprPtr mu(std::size_t R) { return OpMaker(OpType::μ, R)(); }
 
-ExprPtr pertT1_(std::size_t Nbra, std::size_t Nket) {
+ExprPtr T_pt_(std::size_t o, std::size_t Nbra, std::size_t Nket) {
+  assert(o == 1 &&
+         "sequant::sr::T_pt_(): only supports first order perturbation");
   assert(Nbra > 0);
   assert(Nket > 0);
   return OpMaker(OpType::t_1, Nbra, Nket)();
 }
 
-ExprPtr pertLambda1_(std::size_t Nbra, std::size_t Nket) {
+ExprPtr Λ_pt_(std::size_t o, std::size_t Nbra, std::size_t Nket) {
+  assert(o == 1 &&
+         "sequant::sr::Λ_pt_(): only supports first order perturbation");
   assert(Nbra > 0);
   assert(Nket > 0);
   return OpMaker(OpType::λ_1, Nbra, Nket)();
