@@ -108,7 +108,7 @@ std::vector<ExprPtr> CC::λ(bool screen, bool use_topology,
   auto hbar = sim_tr(op::H(), 3);
 
   const auto One = ex<Constant>(1);
-  auto lhbar = simplify((One + op::Lambda(N)) * hbar);
+  auto lhbar = simplify((One + op::Λ(N)) * hbar);
 
   std::vector<std::pair<std::wstring, std::wstring>> op_connect = {
       {L"h", L"t"}, {L"f", L"t"}, {L"g", L"t"}, {L"h", L"A"}, {L"f", L"A"},
