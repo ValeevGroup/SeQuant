@@ -3,8 +3,8 @@ ExprPtr T_(std::size_t Nbra,
            std::size_t Nket = std::numeric_limits<std::size_t>::max());
 
 /// makes lambda deexcitation operator of bra/ket ranks @c Nbra/Nket
-ExprPtr Lambda_(std::size_t Nbra,
-                std::size_t Nket = std::numeric_limits<std::size_t>::max());
+ExprPtr Λ_(std::size_t Nbra,
+           std::size_t Nket = std::numeric_limits<std::size_t>::max());
 
 /// makes generic excitation (right-hand eigenvector) operator of bra/ket ranks
 /// @c Nbra/Nket
@@ -23,8 +23,8 @@ ExprPtr T(std::size_t Nbra,
 
 /// makes deexcitation operator of all bra/ket ranks up to (and including) @c
 /// Nbra/Nket
-ExprPtr Lambda(std::size_t Nbra,
-               std::size_t Nket = std::numeric_limits<std::size_t>::max());
+ExprPtr Λ(std::size_t Nbra,
+          std::size_t Nket = std::numeric_limits<std::size_t>::max());
 
 /// makes generic bra/ket-antisymmetrizer
 /// \param Kh if <0, annihilates this many holes, else creates this many

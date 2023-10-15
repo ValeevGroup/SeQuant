@@ -381,7 +381,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
     auto g_t2 = H_(2) * T_(2);
     REQUIRE(raises_vacuum_to_rank(g_t2, 3));
 
-    auto lambda2_f = Lambda_(2) * H_(1);
+    auto lambda2_f = Λ_(2) * H_(1);
     REQUIRE(lowers_rank_to_vacuum(lambda2_f, 2));
 
   }  // SECTION("screen")
