@@ -174,7 +174,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
     auto lambda1 = ex<op_t>([]() -> std::wstring_view { return L"λ"; },
                             []() -> ExprPtr {
                               using namespace sequant::mbpt::sr;
-                              return Lambda_(1);
+                              return Λ_(1);
                             },
                             [](qns_t& qns) {
                               qns += qns_t{1, 0, 0, 1};
@@ -182,7 +182,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
     auto lambda2 = ex<op_t>([]() -> std::wstring_view { return L"λ"; },
                             []() -> ExprPtr {
                               using namespace sequant::mbpt::sr;
-                              return Lambda_(2);
+                              return Λ_(2);
                             },
                             [](qns_t& qns) {
                               qns += qns_t{2, 0, 0, 2};
@@ -236,7 +236,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
     auto l1 = ex<op_t>([]() -> std::wstring_view { return L"λ"; },
                        []() -> ExprPtr {
                          using namespace sequant::mbpt::sr;
-                         return Lambda_(1);
+                         return Λ_(1);
                        },
                        [](qns_t& qns) {
                          qns += qns_t{1, 0, 0, 1};
@@ -252,7 +252,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
     auto l2 = ex<op_t>([]() -> std::wstring_view { return L"λ"; },
                        []() -> ExprPtr {
                          using namespace sequant::mbpt::sr;
-                         return Lambda_(2);
+                         return Λ_(2);
                        },
                        [](qns_t& qns) {
                          qns += qns_t{2, 0, 0, 2};
@@ -326,7 +326,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
     op_t lambda2([]() -> std::wstring_view { return L"λ"; },
                  []() -> ExprPtr {
                    using namespace sequant::mbpt::sr;
-                   return Lambda_(2);
+                   return Λ_(2);
                  },
                  [](qns_t& qns) {
                    qns += qns_t{2, 0, 0, 2};
