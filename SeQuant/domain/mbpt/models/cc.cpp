@@ -174,14 +174,11 @@ std::vector<sequant::ExprPtr> CC::t_pt(std::size_t order, std::size_t rank) {
   // connectivity:
   // connect t and t1 with {h,f,g}
   // connect mu with t
-  std::vector<std::pair<std::wstring, std::wstring>> op_connect = {
-      {optype2label.at(OpType::h), optype2label.at(OpType::t)},
-      {optype2label.at(OpType::f), optype2label.at(OpType::t)},
-      {optype2label.at(OpType::g), optype2label.at(OpType::t)},
-      {optype2label.at(OpType::h), optype2label.at(OpType::t_1)},
-      {optype2label.at(OpType::f), optype2label.at(OpType::t_1)},
-      {optype2label.at(OpType::g), optype2label.at(OpType::t_1)},
-      {optype2label.at(OpType::μ), optype2label.at(OpType::t)}};
+  std::vector<std::pair<mbpt::OpType, mbpt::OpType>> op_connect = {
+      {OpType::h, OpType::t},   {OpType::f, OpType::t},
+      {OpType::g, OpType::t},   {OpType::h, OpType::t_1},
+      {OpType::f, OpType::t_1}, {OpType::g, OpType::t_1},
+      {OpType::μ, OpType::t}};
 
   std::vector<ExprPtr> result(P + 1);
   for (auto p = P; p >= PMIN; --p) {
@@ -222,22 +219,15 @@ std::vector<ExprPtr> CC::λ_pt(size_t order, size_t rank) {
   // projectors with {h,f,g}
   // mu with t
   // mu with projectors
-  std::vector<std::pair<std::wstring, std::wstring>> op_connect = {
-      {optype2label.at(OpType::h), optype2label.at(OpType::t)},
-      {optype2label.at(OpType::f), optype2label.at(OpType::t)},
-      {optype2label.at(OpType::g), optype2label.at(OpType::t)},
-      {optype2label.at(OpType::h), optype2label.at(OpType::t_1)},
-      {optype2label.at(OpType::f), optype2label.at(OpType::t_1)},
-      {optype2label.at(OpType::g), optype2label.at(OpType::t_1)},
-      {optype2label.at(OpType::μ), optype2label.at(OpType::t)},
-      {optype2label.at(OpType::h), optype2label.at(OpType::A)},
-      {optype2label.at(OpType::f), optype2label.at(OpType::A)},
-      {optype2label.at(OpType::g), optype2label.at(OpType::A)},
-      {optype2label.at(OpType::h), optype2label.at(OpType::S)},
-      {optype2label.at(OpType::f), optype2label.at(OpType::S)},
-      {optype2label.at(OpType::g), optype2label.at(OpType::S)},
-      {optype2label.at(OpType::μ), optype2label.at(OpType::A)},
-      {optype2label.at(OpType::μ), optype2label.at(OpType::S)}};
+  std::vector<std::pair<mbpt::OpType, mbpt::OpType>> op_connect = {
+      {OpType::h, OpType::t},   {OpType::f, OpType::t},
+      {OpType::g, OpType::t},   {OpType::h, OpType::t_1},
+      {OpType::f, OpType::t_1}, {OpType::g, OpType::t_1},
+      {OpType::μ, OpType::t},   {OpType::h, OpType::A},
+      {OpType::f, OpType::A},   {OpType::g, OpType::A},
+      {OpType::h, OpType::S},   {OpType::f, OpType::S},
+      {OpType::g, OpType::S},   {OpType::μ, OpType::A},
+      {OpType::μ, OpType::S}};
 
   std::vector<ExprPtr> result(P + 1);
   for (auto p = P; p >= PMIN; --p) {
