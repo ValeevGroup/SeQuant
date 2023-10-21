@@ -109,7 +109,7 @@ std::vector<ExprPtr> CC::λ(bool screen, bool use_topology,
   auto hbar = sim_tr(op::H(), 3);
 
   const auto One = ex<Constant>(1);
-  auto lhbar = simplify((One + op::Lambda(N)) * hbar);
+  auto lhbar = simplify((One + op::Λ(N)) * hbar);
 
   std::vector<std::pair<std::wstring, std::wstring>> op_connect = {
       {L"h", L"t"}, {L"f", L"t"}, {L"g", L"t"}, {L"h", L"A"}, {L"f", L"A"},
@@ -214,7 +214,7 @@ std::vector<ExprPtr> CC::λ_pt(size_t order, size_t rank) {
 
   // [Eq. 35, WIREs Comput Mol Sci. 2019; 9:e1406]
   const auto One = ex<Constant>(1);
-  auto expr = simplify((One + op::Lambda(N)) * (mu_bar + hbar_pert) +
+  auto expr = simplify((One + op::Λ(N)) * (mu_bar + hbar_pert) +
                        op::Λ_pt(order, N) * hbar);
 
   // connectivity:

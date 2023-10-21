@@ -203,12 +203,12 @@ ExprPtr T_(std::size_t K);
 ExprPtr T(std::size_t K);
 
 /// makes particle-conserving deexcitation operator of rank \p K
-ExprPtr Lambda_(std::size_t K);
+ExprPtr Λ_(std::size_t K);
 
 /// makes sum of particle-conserving deexcitation operators of all ranks up to
 /// \p
 /// K
-ExprPtr Lambda(std::size_t K);
+ExprPtr Λ(std::size_t K);
 
 /// makes generic bra/ket-antisymmetric excitation (if \p K > 0) or
 /// deexcitation (if \p K < 0) operator of rank `|K|`

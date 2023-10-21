@@ -328,24 +328,24 @@ ExprPtr T(std::size_t K) {
   return result;
 }
 
-ExprPtr Lambda_(std::size_t K) {
+ExprPtr Λ_(std::size_t K) {
   assert(K > 0);
   return ex<op_t>([]() -> std::wstring_view { return L"λ"; },
                   [=]() -> ExprPtr {
                     using namespace sequant::mbpt::sr;
-                    return sr::Lambda_(K);
+                    return sr::Λ_(K);
                   },
                   [=](qnc_t& qns) {
                     qns = combine(qnc_t{K, 0ul, 0ul, K}, qns);
                   });
 }
 
-ExprPtr Lambda(std::size_t K) {
+ExprPtr Λ(std::size_t K) {
   assert(K > 0);
 
   ExprPtr result;
   for (auto k = 1ul; k <= K; ++k) {
-    result = k > 1 ? result + Lambda_(k) : Lambda_(k);
+    result = k > 1 ? result + Λ_(k) : Λ_(k);
   }
   return result;
 }
