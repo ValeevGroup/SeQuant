@@ -281,6 +281,17 @@ ExprPtr vac_av(ExprPtr expr,
                    op_connections = {{L"h", L"t"}, {L"f", L"t"}, {L"g", L"t"}},
                bool skip_clone = false);
 
+/// @param[in] expr input expression
+/// @param[in] op_connections list of pairs of operators to be
+/// connected (e.g., `{{OpType::h, OpType::t}}` will ensure that each
+/// `OpType::h` will be connected to at least one `OpType::t`;)
+/// @param[in] skip_clone if true, will not clone the input expression
+/// @return the VEV
+ExprPtr vac_av(
+    ExprPtr expr,
+    std::vector<std::pair<mbpt::OpType, mbpt::OpType>> op_connections,
+    bool skip_clone = false);
+
 }  // namespace op
 
 }  // namespace sr
