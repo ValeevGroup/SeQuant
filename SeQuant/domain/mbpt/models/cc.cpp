@@ -174,11 +174,13 @@ std::vector<sequant::ExprPtr> CC::t_pt(std::size_t order, std::size_t rank) {
   // connectivity:
   // connect t and t1 with {h,f,g}
   // connect mu with t
-  std::vector<std::pair<mbpt::OpType, mbpt::OpType>> op_connect = {
-      {OpType::h, OpType::t},   {OpType::f, OpType::t},
-      {OpType::g, OpType::t},   {OpType::h, OpType::t_1},
-      {OpType::f, OpType::t_1}, {OpType::g, OpType::t_1},
-      {OpType::h_1, OpType::t}};
+  auto op_connect =
+      op::concat(op::default_op_connections(),
+                 std::vector<std::pair<mbpt::OpType, mbpt::OpType>>{
+                     {OpType::h, OpType::t_1},
+                     {OpType::f, OpType::t_1},
+                     {OpType::g, OpType::t_1},
+                     {OpType::h_1, OpType::t}});
 
   std::vector<ExprPtr> result(P + 1);
   for (auto p = P; p >= PMIN; --p) {
