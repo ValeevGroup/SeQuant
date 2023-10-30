@@ -41,9 +41,9 @@ enum class OpType {
   RDM,  //!< RDM
   RDMCumulant,  //!< RDM cumulant
   δ,            //!< Kronecker delta (=identity) operator
-  μ,            //!< perturbation operator
-  t_1,           //!< first order perturbed excitation cluster amplitudes
-  λ_1,           //!< first order perturbed deexcitation cluster amplitudes
+  h_1,          //!< Hamiltonian perturbation
+  t_1,          //!< first order perturbed excitation cluster amplitudes
+  λ_1,          //!< first order perturbed deexcitation cluster amplitudes
   invalid       //!< invalid operator
 };
 
@@ -66,10 +66,9 @@ inline const std::map<OpType, std::wstring> optype2label{
     // see https://en.wikipedia.org/wiki/Cumulant
     {OpType::RDMCumulant, L"κ"},
     {OpType::δ, L"δ"},
-    {OpType::μ, L"μ"},
+    {OpType::h_1, L"μ"},
     {OpType::t_1, L"t¹"},
-    {OpType::λ_1, L"λ¹"}
-};
+    {OpType::λ_1, L"λ¹"}};
 
 /// maps operator labels to their types
 inline const std::map<std::wstring, OpType> label2optype =

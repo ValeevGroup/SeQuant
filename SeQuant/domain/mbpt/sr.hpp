@@ -224,8 +224,9 @@ ExprPtr S(std::int64_t K);
 /// else it is bra/ket-antisymmetric (@sa A(K))
 ExprPtr P(std::int64_t K);
 
-/// perturbation operator of rank \param R
-ExprPtr mu(std::size_t R);
+/// Hamiltonian perturbation of rank \param R and order \p o
+/// @pre `order==1`, only first order perturbation is supported now
+ExprPtr H_pt(std::size_t order, std::size_t R);
 
 /// perturbed excitation operator of rank \p K and order \p o
 /// @pre `order==1`, only first order perturbation is supported now

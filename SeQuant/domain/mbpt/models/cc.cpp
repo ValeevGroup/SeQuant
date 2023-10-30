@@ -157,19 +157,19 @@ std::vector<sequant::ExprPtr> CC::t_pt(std::size_t order, std::size_t rank) {
          "sequant::mbpt::sr::CC::t_pt(): only one-body perturbation "
          "operator is supported now");
 
-  // construct mu_bar
+  // construct h1_bar
 
-  // truncate mu_bar at rank 2 for one-body perturbation
+  // truncate h1_bar at rank 2 for one-body perturbation
   // operator and at rank 4 for two-body perturbation operator
-  const auto mu_truncate_at = rank == 1 ? 2 : 4;
+  const auto h1_truncate_at = rank == 1 ? 2 : 4;
 
-  auto mu_bar = sim_tr(op::mu(rank), mu_truncate_at);
+  auto h1_bar = sim_tr(op::H_pt(1, rank), h1_truncate_at);
 
   // construct [hbar, T(1)]
   auto hbar_pert = sim_tr(op::H(), 3) * op::T_pt(order, N);
 
   // [Eq. 34, WIREs Comput Mol Sci. 2019; 9:e1406]
-  auto expr = simplify(mu_bar + hbar_pert);
+  auto expr = simplify(h1_bar + hbar_pert);
 
   // connectivity:
   // connect t and t1 with {h,f,g}
@@ -178,7 +178,7 @@ std::vector<sequant::ExprPtr> CC::t_pt(std::size_t order, std::size_t rank) {
       {OpType::h, OpType::t},   {OpType::f, OpType::t},
       {OpType::g, OpType::t},   {OpType::h, OpType::t_1},
       {OpType::f, OpType::t_1}, {OpType::g, OpType::t_1},
-      {OpType::μ, OpType::t}};
+      {OpType::h_1, OpType::t}};
 
   std::vector<ExprPtr> result(P + 1);
   for (auto p = P; p >= PMIN; --p) {
@@ -199,19 +199,19 @@ std::vector<ExprPtr> CC::λ_pt(size_t order, size_t rank) {
   // construct hbar
   auto hbar = sim_tr(op::H(), 4);
 
-  // construct mu_bar
+  // construct h1_bar
 
-  // truncate mu_bar at rank 2 for one-body perturbation
+  // truncate h1_bar at rank 2 for one-body perturbation
   // operator and at rank 4 for two-body perturbation operator
-  const auto mu_truncate_at = rank == 1 ? 2 : 4;
+  const auto h1_truncate_at = rank == 1 ? 2 : 4;
 
-  auto mu_bar = sim_tr(op::mu(rank), mu_truncate_at);
+  auto h1_bar = sim_tr(op::H_pt(1, rank), h1_truncate_at);
   // construct [hbar, T(1)]
   auto hbar_pert = sim_tr(op::H(), 3) * op::T_pt(order, N);
 
   // [Eq. 35, WIREs Comput Mol Sci. 2019; 9:e1406]
   const auto One = ex<Constant>(1);
-  auto expr = simplify((One + op::Λ(N)) * (mu_bar + hbar_pert) +
+  auto expr = simplify((One + op::Λ(N)) * (h1_bar + hbar_pert) +
                        op::Λ_pt(order, N) * hbar);
 
   // connectivity:
@@ -223,11 +223,11 @@ std::vector<ExprPtr> CC::λ_pt(size_t order, size_t rank) {
       {OpType::h, OpType::t},   {OpType::f, OpType::t},
       {OpType::g, OpType::t},   {OpType::h, OpType::t_1},
       {OpType::f, OpType::t_1}, {OpType::g, OpType::t_1},
-      {OpType::μ, OpType::t},   {OpType::h, OpType::A},
+      {OpType::h_1, OpType::t}, {OpType::h, OpType::A},
       {OpType::f, OpType::A},   {OpType::g, OpType::A},
       {OpType::h, OpType::S},   {OpType::f, OpType::S},
-      {OpType::g, OpType::S},   {OpType::μ, OpType::A},
-      {OpType::μ, OpType::S}};
+      {OpType::g, OpType::S},   {OpType::h_1, OpType::A},
+      {OpType::h_1, OpType::S}};
 
   std::vector<ExprPtr> result(P + 1);
   for (auto p = P; p >= PMIN; --p) {

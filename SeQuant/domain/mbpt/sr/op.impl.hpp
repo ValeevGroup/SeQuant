@@ -58,7 +58,9 @@ ExprPtr R12(
     int ansatz = 2);
 
 /// makes perturbation operator of rank @p R
-ExprPtr mu(std::size_t R);
+/// \param o order of perturbation
+/// \pre `o==1`, only first order perturbation is supported now
+ExprPtr H_pt(std::size_t o, std::size_t R);
 
 /// makes perturbed excitation operator of bra/ket ranks @c Nbra/Nket
 /// \param o order of perturbation

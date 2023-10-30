@@ -10,36 +10,21 @@
 namespace sequant::mbpt {
 
 std::vector<std::wstring> cardinal_tensor_labels() {
-  return {L"κ",
-          L"γ",
-          L"Γ",
-          L"A",
-          L"S",
-          L"P",
-          L"L",
-          L"λ",
-          L"λ¹",
-          L"h",
-          L"f",
-          L"f̃",
-          L"g",
-          L"t",
-          L"t¹",
-          L"R",
-          L"F",
-          L"X",
-          L"μ",
-          L"V",
-          L"Ṽ",
-          L"B",
-          L"U",
-          L"GR",
-          L"C",
-          overlap_label(),
-          L"a",
-          L"ã",
-          L"b",
-          L"b̃",
+  return {L"κ",  L"γ",
+          L"Γ",  L"A",
+          L"S",  L"P",
+          L"L",  L"λ",
+          L"λ¹", L"h",
+          L"f",  L"f̃",
+          L"g",  L"t",
+          L"t¹", L"R",
+          L"F",  L"X",
+          L"μ",  L"V",
+          L"Ṽ",  L"B",
+          L"U",  L"GR",
+          L"C",  overlap_label(),
+          L"a",  L"ã",
+          L"b",  L"b̃",
           L"E"};
 }
 
@@ -62,7 +47,7 @@ OpClass to_class(OpType op) {
     case OpType::δ:
     case OpType::A:
     case OpType::S:
-    case OpType::μ:
+    case OpType::h_1:
       return OpClass::gen;
     case OpType::t:
     case OpType::R:

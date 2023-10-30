@@ -386,12 +386,14 @@ ExprPtr P(std::int64_t K) {
   return get_default_context().spbasis() == SPBasis::spinfree ? S(-K) : A(-K);
 }
 
-ExprPtr mu(std::size_t R) {
+ExprPtr H_pt(std::size_t order, std::size_t R) {
+  assert(R > 0);
+  assert(order == 1 && "only first order perturbation is supported now");
   return ex<op_t>(
-      []() -> std::wstring_view { return L"μ"; },
+      []() -> std::wstring_view { return L"h¹"; },
       [=]() -> ExprPtr {
         using namespace sequant::mbpt::sr;
-        return sr::mu(R);
+        return sr::H_pt(1, R);
       },
       [=](qnc_t& qns) {
         qns = combine(qnc_t{{0ul, R}, {0ul, R}, {0ul, R}, {0ul, R}}, qns);
