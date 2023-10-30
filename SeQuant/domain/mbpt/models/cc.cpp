@@ -111,9 +111,15 @@ std::vector<ExprPtr> CC::λ(bool screen, bool use_topology,
   const auto One = ex<Constant>(1);
   auto lhbar = simplify((One + op::Λ(N)) * hbar);
 
-  std::vector<std::pair<std::wstring, std::wstring>> op_connect = {
-      {L"h", L"t"}, {L"f", L"t"}, {L"g", L"t"}, {L"h", L"A"}, {L"f", L"A"},
-      {L"g", L"A"}, {L"h", L"S"}, {L"f", L"S"}, {L"g", L"S"}};
+  auto op_connect =
+      op::concat(op::default_op_connections(),
+                 std::vector<std::pair<mbpt::OpType, mbpt::OpType>>{
+                     {OpType::h, OpType::A},
+                     {OpType::f, OpType::A},
+                     {OpType::g, OpType::A},
+                     {OpType::h, OpType::S},
+                     {OpType::f, OpType::S},
+                     {OpType::g, OpType::S}});
 
   // 2. project onto each manifold, screen, lower to tensor form and wick it
   std::vector<ExprPtr> result(P + 1);
@@ -173,7 +179,7 @@ std::vector<sequant::ExprPtr> CC::t_pt(std::size_t order, std::size_t rank) {
 
   // connectivity:
   // connect t and t1 with {h,f,g}
-  // connect mu with t
+  // connect h1 with t
   auto op_connect =
       op::concat(op::default_op_connections(),
                  std::vector<std::pair<mbpt::OpType, mbpt::OpType>>{
@@ -219,17 +225,23 @@ std::vector<ExprPtr> CC::λ_pt(size_t order, size_t rank) {
   // connectivity:
   // t and t1 with {h,f,g}
   // projectors with {h,f,g}
-  // mu with t
-  // mu with projectors
-  std::vector<std::pair<mbpt::OpType, mbpt::OpType>> op_connect = {
-      {OpType::h, OpType::t},   {OpType::f, OpType::t},
-      {OpType::g, OpType::t},   {OpType::h, OpType::t_1},
-      {OpType::f, OpType::t_1}, {OpType::g, OpType::t_1},
-      {OpType::h_1, OpType::t}, {OpType::h, OpType::A},
-      {OpType::f, OpType::A},   {OpType::g, OpType::A},
-      {OpType::h, OpType::S},   {OpType::f, OpType::S},
-      {OpType::g, OpType::S},   {OpType::h_1, OpType::A},
-      {OpType::h_1, OpType::S}};
+  // h1 with t
+  // h1 with projectors
+  auto op_connect =
+      op::concat(op::default_op_connections(),
+                 std::vector<std::pair<mbpt::OpType, mbpt::OpType>>{
+                     {OpType::h, OpType::t_1},
+                     {OpType::f, OpType::t_1},
+                     {OpType::g, OpType::t_1},
+                     {OpType::h_1, OpType::t},
+                     {OpType::h, OpType::A},
+                     {OpType::f, OpType::A},
+                     {OpType::g, OpType::A},
+                     {OpType::h, OpType::S},
+                     {OpType::f, OpType::S},
+                     {OpType::g, OpType::S},
+                     {OpType::h_1, OpType::A},
+                     {OpType::h_1, OpType::S}});
 
   std::vector<ExprPtr> result(P + 1);
   for (auto p = P; p >= PMIN; --p) {
