@@ -2,10 +2,10 @@
 // Created by Eduard Valeyev on 8/2/23.
 //
 
+//  operator-level vac_av is same for SR and MR, to be included from {sr,mr}.cpp
+
 #ifndef SEQUANT_DOMAIN_MBPT_VAC_AV_IPP
 #define SEQUANT_DOMAIN_MBPT_VAC_AV_IPP
-
-// operator-level vac_av is same for SR and MR
 
 ExprPtr vac_av(
     ExprPtr expr,
@@ -138,14 +138,7 @@ ExprPtr vac_av(
     ExprPtr expr,
     std::vector<std::pair<mbpt::OpType, mbpt::OpType>> op_connections,
     bool skip_clone) {
-  // convert mbpt::OpType to std::wstring
-  using mbpt::optype2label;
-  std::vector<std::pair<std::wstring, std::wstring>> op_connect_wstr;
-  for (const auto& [op1, op2] : op_connections) {
-    op_connect_wstr.emplace_back(optype2label.at(op1), optype2label.at(op2));
-  }
-
-  return vac_av(expr, op_connect_wstr, skip_clone);
+  return vac_av(expr, to_label_connections(op_connections), skip_clone);
 }
 
 #endif  // SEQUANT_DOMAIN_MBPT_VAC_AV_IPP
