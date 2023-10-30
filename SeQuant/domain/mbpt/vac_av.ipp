@@ -75,10 +75,9 @@ ExprPtr vac_av(
         const auto& [dummy2, op2_indices] = *it2;
         for (const auto& op1_idx : op1_indices) {
           for (const auto& op2_idx : op2_indices) {
-            using std::min;
-            using std::max;
-            connections.emplace_back(min(op1_idx, op2_idx),
-                                     max(op1_idx, op2_idx));
+            if (op1_idx < op2_idx) {  // N.B. connections are directional
+              connections.emplace_back(op1_idx, op2_idx);
+            }
           }
         }
       }
