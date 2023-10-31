@@ -224,6 +224,28 @@ ExprPtr S(std::int64_t K);
 /// else it is bra/ket-antisymmetric (@sa A(K))
 ExprPtr P(std::int64_t K);
 
+/// Hamiltonian perturbation of rank \param R and order \p o
+/// @pre `order==1`, only first order perturbation is supported now
+ExprPtr H_pt(std::size_t order, std::size_t R);
+
+/// perturbed excitation operator of rank \p K and order \p o
+/// @pre `order==1`, only first order perturbation is supported now
+ExprPtr T_pt_(std::size_t order, std::size_t K);
+
+/// makes sum of perturbed excitation operators of all ranks up to \p
+/// K and order \p o
+/// @pre `order==1`, only first order perturbation is supported now
+ExprPtr T_pt(std::size_t order, std::size_t K);
+
+/// perturbed deexcitation operator of rank \p K and order \p o
+/// @pre `order==1`, only first order perturbation is supported now
+ExprPtr Λ_pt_(std::size_t order, std::size_t K);
+
+/// makes sum of perturbed deexcitation operators of all ranks up to \p K and
+/// order \p o
+/// @pre `order==1`, only first order perturbation is supported now
+ExprPtr Λ_pt(std::size_t order, std::size_t K);
+
 /// @}
 
 /// @return true if \p op_or_op_product can produce determinant of excitation
@@ -246,19 +268,7 @@ bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product,
 bool lowers_rank_or_lower_to_vacuum(const ExprPtr& op_or_op_product,
                                     const unsigned long k);
 
-/// computes the vacuum expectation value (VEV)
-
-/// @param[in] expr input expression
-/// @param[in] op_connections list of pairs of labels of operators to be
-/// connected (e.g., `{{"h", "t"}}` will ensure that each operator with
-/// label `"h"` will be connected to at least one operator with label `"t"`;
-/// the default is `{{L"h", L"t"}, {L"f", L"t"}, {L"g", L"t"}}`
-/// @param[in] skip_clone if true, will not clone the input expression
-/// @return the VEV
-ExprPtr vac_av(ExprPtr expr,
-               std::vector<std::pair<std::wstring, std::wstring>>
-                   op_connections = {{L"h", L"t"}, {L"f", L"t"}, {L"g", L"t"}},
-               bool skip_clone = false);
+#include "SeQuant/domain/mbpt/vac_av.hpp"
 
 }  // namespace op
 

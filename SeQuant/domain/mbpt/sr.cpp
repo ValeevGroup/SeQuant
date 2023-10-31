@@ -386,6 +386,64 @@ ExprPtr P(std::int64_t K) {
   return get_default_context().spbasis() == SPBasis::spinfree ? S(-K) : A(-K);
 }
 
+ExprPtr H_pt(std::size_t order, std::size_t R) {
+  assert(R > 0);
+  assert(order == 1 && "only first order perturbation is supported now");
+  return ex<op_t>(
+      []() -> std::wstring_view { return L"h¹"; },
+      [=]() -> ExprPtr {
+        using namespace sequant::mbpt::sr;
+        return sr::H_pt(1, R);
+      },
+      [=](qnc_t& qns) {
+        qns = combine(qnc_t{{0ul, R}, {0ul, R}, {0ul, R}, {0ul, R}}, qns);
+      });
+}
+
+ExprPtr T_pt_(std::size_t order, std::size_t K) {
+  assert(K > 0);
+  assert(order == 1 && "only first order perturbation is supported now");
+  return ex<op_t>([]() -> std::wstring_view { return L"t¹"; },
+                  [=]() -> ExprPtr {
+                    using namespace sequant::mbpt::sr;
+                    return sr::T_pt_(order, K);
+                  },
+                  [=](qnc_t& qns) {
+                    qns = combine(qnc_t{0ul, K, K, 0ul}, qns);
+                  });
+}
+
+ExprPtr T_pt(std::size_t order, std::size_t K) {
+  assert(K > 0);
+  ExprPtr result;
+  for (auto k = 1ul; k <= K; ++k) {
+    result = k > 1 ? result + T_pt_(order, k) : T_pt_(order, k);
+  }
+  return result;
+}
+
+ExprPtr Λ_pt_(std::size_t order, std::size_t K) {
+  assert(K > 0);
+  assert(order == 1 && "only first order perturbation is supported now");
+  return ex<op_t>([]() -> std::wstring_view { return L"λ¹"; },
+                  [=]() -> ExprPtr {
+                    using namespace sequant::mbpt::sr;
+                    return sr::Λ_pt_(order, K);
+                  },
+                  [=](qnc_t& qns) {
+                    qns = combine(qnc_t{K, 0ul, 0ul, K}, qns);
+                  });
+}
+
+ExprPtr Λ_pt(std::size_t order, std::size_t K) {
+  assert(K > 0);
+  ExprPtr result;
+  for (auto k = 1ul; k <= K; ++k) {
+    result = k > 1 ? result + Λ_pt_(order, k) : Λ_pt_(order, k);
+  }
+  return result;
+}
+
 bool can_change_qns(const ExprPtr& op_or_op_product, const qns_t target_qns,
                     const qns_t source_qns = {}) {
   qns_t qns = source_qns;

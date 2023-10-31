@@ -24,6 +24,29 @@ ExprPtr L_(std::size_t Nbra, std::size_t Nket) {
   return OpMaker(OpType::L, Nbra, Nket)();
 }
 
+ExprPtr H_pt(std::size_t o, std::size_t R) {
+  assert(o == 1 &&
+         "sequant::sr::H_pt(): only supports first order perturbation");
+  assert(R > 0);
+  return OpMaker(OpType::h_1, R)();
+}
+
+ExprPtr T_pt_(std::size_t o, std::size_t Nbra, std::size_t Nket) {
+  assert(o == 1 &&
+         "sequant::sr::T_pt_(): only supports first order perturbation");
+  assert(Nbra > 0);
+  assert(Nket > 0);
+  return OpMaker(OpType::t_1, Nbra, Nket)();
+}
+
+ExprPtr Λ_pt_(std::size_t o, std::size_t Nbra, std::size_t Nket) {
+  assert(o == 1 &&
+         "sequant::sr::Λ_pt_(): only supports first order perturbation");
+  assert(Nbra > 0);
+  assert(Nket > 0);
+  return OpMaker(OpType::λ_1, Nbra, Nket)();
+}
+
 namespace detail {
 
 /// constructs a sum of ops up to a given bra/ket rank

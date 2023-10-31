@@ -26,14 +26,34 @@ class CC {
   /// @return transformed expression
   ExprPtr sim_tr(ExprPtr expr, size_t r);
 
-  /// derives t amplitude equations
+  /// @brief derives t amplitude equations
+  /// @return std::vector of t amplitude equations
   std::vector<sequant::ExprPtr> t(bool screen = true, bool use_topology = true,
                                   bool use_connectivity = true,
                                   bool canonical_only = true);
-  /// derives λ amplitude equations
+  /// @brief derives λ amplitude equations
+  /// @return std::vector of λ amplitude equations
   std::vector<sequant::ExprPtr> λ(bool screen = false, bool use_topology = true,
                                   bool use_connectivity = true,
                                   bool canonical_only = true);
+
+  // clang-format off
+  /// @brief derives perturbed t amplitude equations
+  /// @param order order of perturbation
+  /// @param rank rank of perturbation operator. r = 1 means one-body perturbation operator
+  /// @pre `rank==1 && order==1`, only first order perturbation and one-body perturbation operator is supported now
+  /// @return std::vector of perturbed t amplitude equations
+  // clang-format on
+  std::vector<sequant::ExprPtr> t_pt(size_t order, size_t rank);
+
+  // clang-format off
+  /// @brief derives perturbed λ amplitude equations
+  /// @param order order of perturbation
+  /// @param rank rank of perturbation operator. r = 1 means one-body perturbation operator
+  /// @pre `rank==1 && order==1`, only first order perturbation and one-body perturbation operator is supported now
+  /// @return std::vector of perturbed λ amplitude equations
+  // clang-format on
+  std::vector<sequant::ExprPtr> λ_pt(size_t order, size_t rank);
 };  // class CC
 
 }  // namespace sequant::mbpt::sr

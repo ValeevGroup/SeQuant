@@ -56,3 +56,20 @@ ExprPtr R(std::size_t Nbra,
 ExprPtr R12(
     IndexSpace::Type geminal_generating_space = IndexSpace::active_occupied,
     int ansatz = 2);
+
+/// makes perturbation operator of rank @p R
+/// \param o order of perturbation
+/// \pre `o==1`, only first order perturbation is supported now
+ExprPtr H_pt(std::size_t o, std::size_t R);
+
+/// makes perturbed excitation operator of bra/ket ranks @c Nbra/Nket
+/// \param o order of perturbation
+/// \pre `o==1`, only first order perturbation is supported now
+ExprPtr T_pt_(std::size_t o, std::size_t Nbra,
+              std::size_t Nket = std::numeric_limits<std::size_t>::max());
+
+/// makes perturbed deexcitation operator of bra/ket ranks @c Nbra/Nket
+/// \param o order of perturbation
+/// \pre `o==1`, only first order perturbation is supported now
+ExprPtr Λ_pt_(std::size_t o, std::size_t Nbra,
+              std::size_t Nket = std::numeric_limits<std::size_t>::max());

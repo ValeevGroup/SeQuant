@@ -7,6 +7,7 @@
 #include <SeQuant/core/math.hpp>
 
 #include <SeQuant/core/op.hpp>
+#include <SeQuant/core/parse_expr.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
@@ -110,9 +111,15 @@ std::vector<ExprPtr> CC::λ(bool screen, bool use_topology,
   const auto One = ex<Constant>(1);
   auto lhbar = simplify((One + op::Λ(N)) * hbar);
 
-  std::vector<std::pair<std::wstring, std::wstring>> op_connect = {
-      {L"h", L"t"}, {L"f", L"t"}, {L"g", L"t"}, {L"h", L"A"}, {L"f", L"A"},
-      {L"g", L"A"}, {L"h", L"S"}, {L"f", L"S"}, {L"g", L"S"}};
+  auto op_connect =
+      op::concat(op::default_op_connections(),
+                 std::vector<std::pair<mbpt::OpType, mbpt::OpType>>{
+                     {OpType::h, OpType::A},
+                     {OpType::f, OpType::A},
+                     {OpType::g, OpType::A},
+                     {OpType::h, OpType::S},
+                     {OpType::f, OpType::S},
+                     {OpType::g, OpType::S}});
 
   // 2. project onto each manifold, screen, lower to tensor form and wick it
   std::vector<ExprPtr> result(P + 1);
@@ -144,6 +151,103 @@ std::vector<ExprPtr> CC::λ(bool screen, bool use_topology,
     // 2.b multiply by adjoint of P(p) (i.e., P(-p)) on the right side and
     // compute VEV
     result.at(p) = op::vac_av(hbar_p * op::P(-p), op_connect);
+  }
+  return result;
+}
+
+std::vector<sequant::ExprPtr> CC::t_pt(std::size_t order, std::size_t rank) {
+  assert(order == 1 &&
+         "sequant::mbpt::sr::CC::t_pt(): only first-order perturbation is "
+         "supported now");
+  assert(rank == 1 &&
+         "sequant::mbpt::sr::CC::t_pt(): only one-body perturbation "
+         "operator is supported now");
+
+  // construct h1_bar
+
+  // truncate h1_bar at rank 2 for one-body perturbation
+  // operator and at rank 4 for two-body perturbation operator
+  const auto h1_truncate_at = rank == 1 ? 2 : 4;
+
+  auto h1_bar = sim_tr(op::H_pt(1, rank), h1_truncate_at);
+
+  // construct [hbar, T(1)]
+  auto hbar_pert = sim_tr(op::H(), 3) * op::T_pt(order, N);
+
+  // [Eq. 34, WIREs Comput Mol Sci. 2019; 9:e1406]
+  auto expr = simplify(h1_bar + hbar_pert);
+
+  // connectivity:
+  // connect t and t1 with {h,f,g}
+  // connect h1 with t
+  auto op_connect =
+      op::concat(op::default_op_connections(),
+                 std::vector<std::pair<mbpt::OpType, mbpt::OpType>>{
+                     {OpType::h, OpType::t_1},
+                     {OpType::f, OpType::t_1},
+                     {OpType::g, OpType::t_1},
+                     {OpType::h_1, OpType::t}});
+
+  std::vector<ExprPtr> result(P + 1);
+  for (auto p = P; p >= PMIN; --p) {
+    auto freq_term = ex<Variable>(L"ω") * op::P(p) * op::T_pt_(order, p);
+    result.at(p) =
+        op::vac_av(op::P(p) * expr, op_connect) - op::vac_av(freq_term);
+  }
+  return result;
+}
+
+std::vector<ExprPtr> CC::λ_pt(size_t order, size_t rank) {
+  assert(order == 1 &&
+         "sequant::mbpt::sr::CC::λ_pt(): only first-order perturbation is "
+         "supported now");
+  assert(rank == 1 &&
+         "sequant::mbpt::sr::CC::λ_pt(): only one-body perturbation "
+         "operator is supported now");
+  // construct hbar
+  auto hbar = sim_tr(op::H(), 4);
+
+  // construct h1_bar
+
+  // truncate h1_bar at rank 2 for one-body perturbation
+  // operator and at rank 4 for two-body perturbation operator
+  const auto h1_truncate_at = rank == 1 ? 2 : 4;
+
+  auto h1_bar = sim_tr(op::H_pt(1, rank), h1_truncate_at);
+  // construct [hbar, T(1)]
+  auto hbar_pert = sim_tr(op::H(), 3) * op::T_pt(order, N);
+
+  // [Eq. 35, WIREs Comput Mol Sci. 2019; 9:e1406]
+  const auto One = ex<Constant>(1);
+  auto expr = simplify((One + op::Λ(N)) * (h1_bar + hbar_pert) +
+                       op::Λ_pt(order, N) * hbar);
+
+  // connectivity:
+  // t and t1 with {h,f,g}
+  // projectors with {h,f,g}
+  // h1 with t
+  // h1 with projectors
+  auto op_connect =
+      op::concat(op::default_op_connections(),
+                 std::vector<std::pair<mbpt::OpType, mbpt::OpType>>{
+                     {OpType::h, OpType::t_1},
+                     {OpType::f, OpType::t_1},
+                     {OpType::g, OpType::t_1},
+                     {OpType::h_1, OpType::t},
+                     {OpType::h, OpType::A},
+                     {OpType::f, OpType::A},
+                     {OpType::g, OpType::A},
+                     {OpType::h, OpType::S},
+                     {OpType::f, OpType::S},
+                     {OpType::g, OpType::S},
+                     {OpType::h_1, OpType::A},
+                     {OpType::h_1, OpType::S}});
+
+  std::vector<ExprPtr> result(P + 1);
+  for (auto p = P; p >= PMIN; --p) {
+    auto freq_term = ex<Variable>(L"ω") * op::Λ_pt_(order, p) * op::P(-p);
+    result.at(p) =
+        op::vac_av(expr * op::P(-p), op_connect) + op::vac_av(freq_term);
   }
   return result;
 }
