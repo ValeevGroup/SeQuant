@@ -2,10 +2,10 @@
 // Created by Eduard Valeyev on 8/2/23.
 //
 
+//  operator-level vac_av is same for SR and MR, to be included from {sr,mr}.cpp
+
 #ifndef SEQUANT_DOMAIN_MBPT_VAC_AV_IPP
 #define SEQUANT_DOMAIN_MBPT_VAC_AV_IPP
-
-// operator-level vac_av is same for SR and MR
 
 ExprPtr vac_av(
     ExprPtr expr,
@@ -16,6 +16,24 @@ ExprPtr vac_av(
 
   auto vac_av_product = [&op_connections](ExprPtr expr) {
     assert(expr.is<Product>());
+    // extract scalar and factors
+    const auto scalar = expr.as<Product>().scalar();
+    auto factors = expr.as<Product>().factors();
+    // remove Variable types from the Product temporarily
+    auto variables = factors | ranges::views::filter([](const auto& factor) {
+                       return factor.template is<Variable>();
+                     }) |
+                     ranges::to_vector;
+
+    auto factors_filtered = factors |
+                            ranges::views::filter([](const auto& factor) {
+                              return !(factor.template is<Variable>());
+                            }) |
+                            ranges::to<decltype(factors)>;
+    // construct Product with filtered factors
+    auto product =
+        ex<Product>(scalar, factors_filtered.begin(), factors_filtered.end());
+
     // compute connections
     std::vector<std::pair<int, int>> connections;
     {
@@ -24,7 +42,7 @@ ExprPtr vac_av(
                       // product
       int pos = 0;
       bool ops_only = true;
-      for (const auto& factor : expr.as<Product>()) {
+      for (const auto& factor : product.as<Product>()) {
         if (factor.is<op_t>()) {
           const auto& op = factor.as<op_t>();
           const std::wstring op_lbl = std::wstring(op.label());
@@ -43,7 +61,7 @@ ExprPtr vac_av(
 
       // if composed of ops only, screen out products with zero VEV
       if (ops_only) {
-        if (!can_change_qns(expr, qns_t{})) {
+        if (!can_change_qns(product, qns_t{})) {
           return ex<Constant>(0);
         }
       }
@@ -57,10 +75,9 @@ ExprPtr vac_av(
         const auto& [dummy2, op2_indices] = *it2;
         for (const auto& op1_idx : op1_indices) {
           for (const auto& op2_idx : op2_indices) {
-            using std::min;
-            using std::max;
-            connections.emplace_back(min(op1_idx, op2_idx),
-                                     max(op1_idx, op2_idx));
+            if (op1_idx < op2_idx) {  // N.B. connections are directional
+              connections.emplace_back(op1_idx, op2_idx);
+            }
           }
         }
       }
@@ -73,11 +90,16 @@ ExprPtr vac_av(
       };
       expr->visit(op_lowerer, /* atoms only = */ true);
     };
-    lower_to_tensor_form(expr);
-    expr = simplify(expr);
+    lower_to_tensor_form(product);
+    expr = simplify(product);
 
     // compute VEV
-    return vac_av(expr, connections, /* use_topology = */ true);
+    auto vev = vac_av(product, connections, /* use_topology = */ true);
+    // restore Variable types to the Product
+    if (!variables.empty())
+      ranges::for_each(variables, [&vev](const auto& var) { vev *= var; });
+
+    return simplify(vev);
   };
 
   ExprPtr result;
@@ -105,11 +127,18 @@ ExprPtr vac_av(
   } else if (expr.is<op_t>()) {
     return ex<Constant>(
         0);  // expectation value of a normal-ordered operator is 0
-  } else if (expr.is<Constant>()) {
+  } else if (expr.is<Constant>() || expr.is<Variable>()) {
     return expr;  // vacuum is normalized
   }
   throw std::invalid_argument(
       "mpbt::*::op::vac_av(expr): unknown expression type");
+}
+
+ExprPtr vac_av(
+    ExprPtr expr,
+    std::vector<std::pair<mbpt::OpType, mbpt::OpType>> op_connections,
+    bool skip_clone) {
+  return vac_av(expr, to_label_connections(op_connections), skip_clone);
 }
 
 #endif  // SEQUANT_DOMAIN_MBPT_VAC_AV_IPP

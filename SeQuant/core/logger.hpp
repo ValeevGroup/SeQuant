@@ -31,10 +31,11 @@ struct Logger : public Singleton<Logger> {
   ///   1: Log what is being evaluated in the evaluation tree (independent
   ///      of tensor algebra backend (TA/BTAS etc.)
   ///   2: Also log invocation of tensor algebra backend within sequant.
+  ///   3: Also log TiledArray memory use.
   ///
   size_t log_level_eval = 1;
 
-  std::ostream& stream = std::cout;
+  std::ostream* stream = &std::cout;
 
  private:
   friend class Singleton<Logger>;
@@ -54,7 +55,7 @@ struct Logger : public Singleton<Logger> {
 
 template <typename... Args>
 void write_log(Logger& l, Args const&... args) noexcept {
-  ((l.stream << args), ...);
+  ((*l.stream << args), ...);
 }
 
 }  // namespace sequant

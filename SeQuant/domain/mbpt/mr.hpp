@@ -203,27 +203,14 @@ ExprPtr T_(std::size_t K);
 ExprPtr T(std::size_t K);
 
 /// makes particle-conserving deexcitation operator of rank \p K
-ExprPtr Lambda_(std::size_t K);
+ExprPtr Λ_(std::size_t K);
 
 /// makes sum of particle-conserving deexcitation operators of all ranks up to
 /// \p
 /// K
-ExprPtr Lambda(std::size_t K);
+ExprPtr Λ(std::size_t K);
 
-/// computes the vacuum expectation value (VEV)
-
-/// @param[in] expr input expression
-/// @param[in] op_connections list of pairs of labels of operators to be
-/// connected (e.g., `{{"h", "t"}}` will ensure that each operator with
-/// label `"h"` will be connected to at least one operator with label `"t"`;
-/// the default is `{{L"h", L"t"}, {L"f", L"t"}, {L"f̃", L"t"}, {L"g", L"t"}}`
-/// @param[in] skip_clone if true, will not clone the input expression
-/// @return the VEV
-ExprPtr vac_av(
-    ExprPtr expr,
-    std::vector<std::pair<std::wstring, std::wstring>> op_connections =
-        {{L"h", L"t"}, {L"f", L"t"}, {L"f̃", L"t"}, {L"g", L"t"}},
-    bool skip_clone = false);
+#include "SeQuant/domain/mbpt/vac_av.hpp"
 
 }  // namespace op
 

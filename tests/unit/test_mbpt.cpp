@@ -37,8 +37,8 @@ TEST_CASE("NBodyOp", "[mbpt]") {
       {  // exact compare
         using namespace boost::numeric::interval_lib::compare::possible;
         REQUIRE(operator==(f1(), qns_t{1, 1}));  // produces single replacement
-        REQUIRE(operator!=
-                (f1(), qns_t{2, 2}));  // cannot produce double replacement
+        REQUIRE(operator!=(f1(),
+                           qns_t{2, 2}));  // cannot produce double replacement
         REQUIRE(operator==(f1(qns_t{5, 0}), qns_t{{5, 6}, {0, 1}}));
       }
     }
@@ -174,7 +174,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
     auto lambda1 = ex<op_t>([]() -> std::wstring_view { return L"λ"; },
                             []() -> ExprPtr {
                               using namespace sequant::mbpt::sr;
-                              return Lambda_(1);
+                              return Λ_(1);
                             },
                             [](qns_t& qns) {
                               qns += qns_t{1, 0, 0, 1};
@@ -182,7 +182,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
     auto lambda2 = ex<op_t>([]() -> std::wstring_view { return L"λ"; },
                             []() -> ExprPtr {
                               using namespace sequant::mbpt::sr;
-                              return Lambda_(2);
+                              return Λ_(2);
                             },
                             [](qns_t& qns) {
                               qns += qns_t{2, 0, 0, 2};
@@ -236,7 +236,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
     auto l1 = ex<op_t>([]() -> std::wstring_view { return L"λ"; },
                        []() -> ExprPtr {
                          using namespace sequant::mbpt::sr;
-                         return Lambda_(1);
+                         return Λ_(1);
                        },
                        [](qns_t& qns) {
                          qns += qns_t{1, 0, 0, 1};
@@ -252,14 +252,12 @@ TEST_CASE("NBodyOp", "[mbpt]") {
     auto l2 = ex<op_t>([]() -> std::wstring_view { return L"λ"; },
                        []() -> ExprPtr {
                          using namespace sequant::mbpt::sr;
-                         return Lambda_(2);
+                         return Λ_(2);
                        },
                        [](qns_t& qns) {
                          qns += qns_t{2, 0, 0, 2};
                        });
 
-    //    std::wcout << "to_latex(canonicalize(f * t2 * t1)) = "
-    //               << to_latex(canonicalize(f * t2 * t1)) << std::endl;
     REQUIRE(to_latex(f * t1 * t2) == to_latex(canonicalize(f * t2 * t1)));
     REQUIRE(to_latex(canonicalize(f * t1 * t2)) ==
             to_latex(canonicalize(f * t2 * t1)));
@@ -268,11 +266,6 @@ TEST_CASE("NBodyOp", "[mbpt]") {
 
     REQUIRE(to_latex(ex<Constant>(3) * f * t1 * t2) ==
             to_latex(simplify(ex<Constant>(2) * f * t2 * t1 + f * t1 * t2)));
-
-    //    std::wcout << "simplify(t1 * l1) = " << to_latex(simplify(t1 * l1))
-    //               << std::endl;
-    //    std::wcout << "simplify(l1 * t1) = " << to_latex(simplify(l1 * t1))
-    //               << std::endl;
 
     REQUIRE(to_latex(simplify(t1 * l1)) != to_latex(simplify(l1 * t1)));
     REQUIRE(to_latex(simplify(t1 * l2)) != to_latex(simplify(l2 * t1)));
@@ -291,10 +284,6 @@ TEST_CASE("NBodyOp", "[mbpt]") {
     } else {
       //      std::wcout << "to_latex(simplify(f * t * t)): "
       //                 << to_latex(simplify(f * t * t)) << std::endl;
-      //      REQUIRE(
-      //          to_latex(simplify(f * t * t)) ==
-      //          to_latex(f * t1 * t1 + f * t2 * t2 + ex<Constant>(2) * f * t1
-      //          * t2));
       REQUIRE(
           to_latex(simplify(f * t * t)) ==
           to_latex(ex<Constant>(2) * f * t1 * t2 + f * t2 * t2 + f * t1 * t1));
@@ -307,10 +296,6 @@ TEST_CASE("NBodyOp", "[mbpt]") {
     } else {
       //      std::wcout << "to_latex(simplify(f * t * t * t): "
       //                 << to_latex(simplify(f * t * t * t)) << std::endl;
-      //            REQUIRE(to_latex(simplify(f * t * t * t)) ==
-      //                    to_latex(f * t1 * t1 * t1 + ex<Constant>(3) * f * t1
-      //                    * t2 *
-      //         t2 + f * t2 * t2 * t2 + ex<Constant>(3) * f * t1 * t1 * t2));
       REQUIRE(to_latex(simplify(f * t * t * t)) ==
               to_latex(f * t2 * t2 * t2 + f * t1 * t1 * t1 +
                        ex<Constant>(3) * f * t1 * t1 * t2 +
@@ -341,7 +326,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
     op_t lambda2([]() -> std::wstring_view { return L"λ"; },
                  []() -> ExprPtr {
                    using namespace sequant::mbpt::sr;
-                   return Lambda_(2);
+                   return Λ_(2);
                  },
                  [](qns_t& qns) {
                    qns += qns_t{2, 0, 0, 2};
@@ -370,24 +355,11 @@ TEST_CASE("NBodyOp", "[mbpt]") {
     REQUIRE(adjoint(adjoint(r_1_2))() == r_1_2());
 
     // tensor_form()
-    //    REQUIRE(to_latex(simplify(adjoint(t1).tensor_form())) ==
-    //            L"{{t^{{a_1}}_{{i_1}}}{\\tilde{a}^{{i_1}}_{{a_1}}}}");
     REQUIRE((simplify(adjoint(t1).tensor_form())) ==
             (simplify(adjoint(t1.tensor_form()))));
-    //    REQUIRE(to_latex(simplify(adjoint(lambda2).tensor_form())) ==
-    //            L"{{{\\frac{1}{4}}}{\\bar{λ}^{{i_1}{i_2}}_{{a_1}{a_2}}}{\\tilde{a}^"
-    //            L"{{a_1}{a_2}}_{{i_1}{i_2}}}}");
-    //    std::wcout << "\nsimplify(adjoint(lambda2).tensor_form()): "
-    //               << to_latex(simplify(adjoint(lambda2).tensor_form()));
-    //
-    //    std::wcout << "\nsimplify(adjoint(r_1_2).tensor_form(): "
-    //               << to_latex(simplify(adjoint(r_1_2).tensor_form()));
 
     REQUIRE(simplify(adjoint(lambda2).tensor_form()) ==
             simplify(adjoint(lambda2.tensor_form())));
-    //    REQUIRE(to_latex(simplify(adjoint(r_1_2).tensor_form())) ==
-    //            L"{{{\\frac{1}{2}}}{R^{{a_1}{a_2}}_{{i_1}}}{\\tilde{a}^{"
-    //            L"\\textvisiblespace\\,{i_1}}_{{a_1}{a_2}}}}");
     REQUIRE(simplify(adjoint(r_1_2).tensor_form()) ==
             simplify(adjoint(r_1_2.tensor_form())));
 
@@ -409,7 +381,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
     auto g_t2 = H_(2) * T_(2);
     REQUIRE(raises_vacuum_to_rank(g_t2, 3));
 
-    auto lambda2_f = Lambda_(2) * H_(1);
+    auto lambda2_f = Λ_(2) * H_(1);
     REQUIRE(lowers_rank_to_vacuum(lambda2_f, 2));
 
   }  // SECTION("screen")

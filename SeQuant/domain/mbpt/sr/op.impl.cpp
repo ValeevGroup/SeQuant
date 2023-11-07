@@ -6,7 +6,7 @@ ExprPtr T_(std::size_t Nbra, std::size_t Nket) {
 }
 
 /// makes lambda deexcitation operator of bra/ket ranks @c Nbra/Nket
-ExprPtr Lambda_(std::size_t Nbra, std::size_t Nket) {
+ExprPtr Λ_(std::size_t Nbra, std::size_t Nket) {
   assert(Nbra > 0);
   assert(Nket > 0);
   return OpMaker(OpType::λ, Nbra, Nket)();
@@ -22,6 +22,29 @@ ExprPtr R_(std::size_t Nbra, std::size_t Nket) {
 ExprPtr L_(std::size_t Nbra, std::size_t Nket) {
   assert(Nbra > 0 || Nket > 0);
   return OpMaker(OpType::L, Nbra, Nket)();
+}
+
+ExprPtr H_pt(std::size_t o, std::size_t R) {
+  assert(o == 1 &&
+         "sequant::sr::H_pt(): only supports first order perturbation");
+  assert(R > 0);
+  return OpMaker(OpType::h_1, R)();
+}
+
+ExprPtr T_pt_(std::size_t o, std::size_t Nbra, std::size_t Nket) {
+  assert(o == 1 &&
+         "sequant::sr::T_pt_(): only supports first order perturbation");
+  assert(Nbra > 0);
+  assert(Nket > 0);
+  return OpMaker(OpType::t_1, Nbra, Nket)();
+}
+
+ExprPtr Λ_pt_(std::size_t o, std::size_t Nbra, std::size_t Nket) {
+  assert(o == 1 &&
+         "sequant::sr::Λ_pt_(): only supports first order perturbation");
+  assert(Nbra > 0);
+  assert(Nket > 0);
+  return OpMaker(OpType::λ_1, Nbra, Nket)();
 }
 
 namespace detail {
@@ -45,7 +68,7 @@ class op_impl {
     if (op_ == OpType::t)
       result = result ? result + T_(nbra_, nket_) : T_(nbra_, nket_);
     else if (op_ == OpType::λ)
-      result = result ? result + Lambda_(nbra_, nket_) : Lambda_(nbra_, nket_);
+      result = result ? result + Λ_(nbra_, nket_) : Λ_(nbra_, nket_);
     else if (op_ == OpType::R)
       result = result ? result + R_(nbra_, nket_) : R_(nbra_, nket_);
     else if (op_ == OpType::L)
@@ -75,7 +98,7 @@ ExprPtr T(std::size_t Nbra, std::size_t Nket) {
 
 /// makes deexcitation operator of all bra/ket ranks up to (and including)
 /// @c Nbra/Nket
-ExprPtr Lambda(std::size_t Nbra, std::size_t Nket) {
+ExprPtr Λ(std::size_t Nbra, std::size_t Nket) {
   assert(Nbra > 0 && Nbra < std::numeric_limits<std::size_t>::max());
   const auto Nket_ =
       Nket == std::numeric_limits<std::size_t>::max() ? Nbra : Nket;
