@@ -129,7 +129,7 @@ std::wstring deparse_expr(Product const& prod, bool annot_sym) {
       deparsed += L"(";
     }
 
-    deparsed += deparse_expr(current);
+    deparsed += deparse_expr(current, annot_sym);
 
     if (parenthesize) {
       deparsed += L")";
