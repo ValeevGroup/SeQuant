@@ -66,11 +66,11 @@ x3::rule<IndexGroupRule, ast::IndexGroups> index_groups{"IndexGroups"};
 
 // clang-format off
 auto word_components = x3::unicode::alnum
-                       | '_' | L'⁔'
+                       | x3::char_('_') | x3::unicode::char_(L'⁔')
                        // Superscript and Subscript block
                        | (x3::unicode::char_(0x2070, 0x209F) - x3::unicode::unassigned)
                        // These are defined in the Latin-1 Supplement block and thus need to be listed explicitly
-                       | L'¹' | L'²' | L'³'
+                       | x3::unicode::char_(L'¹') | x3::unicode::char_(L'²') | x3::unicode::char_(L'³')
                        // Arrow block
                        | (x3::unicode::char_(0x2190, 0x21FF) - x3::unicode::unassigned);
 // A name begins with a letter, then can container letters, digits and
@@ -84,7 +84,9 @@ auto number_def       = x3::double_ >> -('/' >> x3::double_);
 
 auto variable_def     = x3::lexeme[name >> -(x3::lit('^') >> '*' >> x3::attr(true))];
 
-auto index_name       = +(x3::unicode::alpha | L'⁺' | L'⁻' | L'↑' | L'↓');
+auto index_name       = +(  x3::unicode::alpha | x3::unicode::char_(L'⁺') | x3::unicode::char_(L'⁻')
+                          | x3::unicode::char_(L'↑') | x3::unicode::char_(L'↓')
+                         );
 
 auto index_label_def  = x3::lexeme[
                                index_name >> -x3::lit('_') >> x3::uint_

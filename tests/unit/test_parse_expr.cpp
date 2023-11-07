@@ -88,25 +88,26 @@ TEST_CASE("TEST_PARSE_EXPR", "[parse_expr]") {
     REQUIRE(parse_expr(L"-t{i1;a1}")->is<Product>());
     REQUIRE(*expr == *parse_expr(L"t{\ti1, \ti2; \na1,\t a2 \t}"));
 
+    // Tensor labels including underscores
+    REQUIRE(parse_expr(L"T_1{i_1;a_1}")->as<Tensor>().label() == L"T_1");
+
     // "Non-standard" tensor labels
-    REQUIRE(parse_expr(L"α{a1;i1}")->is<Tensor>());
-    REQUIRE(parse_expr(L"γ_1{a1;i1}")->is<Tensor>());
-    REQUIRE(parse_expr(L"t⁔1{a1;i1}")->is<Tensor>());
-    REQUIRE(parse_expr(L"t¹{a1;i1}")->is<Tensor>());
-    REQUIRE(parse_expr(L"t⁸{a1;i1}")->is<Tensor>());
-    REQUIRE(parse_expr(L"t⁻{a1;i1}")->is<Tensor>());
-    REQUIRE(parse_expr(L"tₐ{a1;i1}")->is<Tensor>());
-    REQUIRE(parse_expr(L"t₋{a1;i1}")->is<Tensor>());
-    REQUIRE(parse_expr(L"t₌{a1;i1}")->is<Tensor>());
-    REQUIRE(parse_expr(L"t↓{a1;i1}")->is<Tensor>());
-    REQUIRE(parse_expr(L"t↑{a1;i1}")->is<Tensor>());
+    REQUIRE(parse_expr(L"α{a1;i1}")->as<Tensor>().label() == L"α");
+    REQUIRE(parse_expr(L"γ_1{a1;i1}")->as<Tensor>().label() == L"γ_1");
+    REQUIRE(parse_expr(L"t⁔1{a1;i1}")->as<Tensor>().label() == L"t⁔1");
+    REQUIRE(parse_expr(L"t¹{a1;i1}")->as<Tensor>().label() == L"t¹");
+    REQUIRE(parse_expr(L"t⁸{a1;i1}")->as<Tensor>().label() == L"t⁸");
+    REQUIRE(parse_expr(L"t⁻{a1;i1}")->as<Tensor>().label() == L"t⁻");
+    REQUIRE(parse_expr(L"tₐ{a1;i1}")->as<Tensor>().label() == L"tₐ");
+    REQUIRE(parse_expr(L"t₋{a1;i1}")->as<Tensor>().label() == L"t₋");
+    REQUIRE(parse_expr(L"t₌{a1;i1}")->as<Tensor>().label() == L"t₌");
+    REQUIRE(parse_expr(L"t↓{a1;i1}")->as<Tensor>().label() == L"t↓");
+    REQUIRE(parse_expr(L"t↑{a1;i1}")->as<Tensor>().label() == L"t↑");
 
     // "Non-standard" index names
-    REQUIRE(parse_expr(L"t{a↓1;i↑1}")->is<Tensor>());
-    REQUIRE(parse_expr(L"t{a⁺1;i⁻1}")->is<Tensor>());
-
-    REQUIRE(*parse_expr(L"t{a↓1;i↑1}") == *parse_expr(L"t{a↓_1;i↑_1}"));
-    REQUIRE(*parse_expr(L"t{a⁺1;i⁻1}") == *parse_expr(L"t{a⁺_1;i⁻_1}"));
+    auto expr1 = parse_expr(L"t{a↓1;i↑1}");
+    REQUIRE(expr1->as<Tensor>().bra().at(0).label() == L"a↓_1");
+    REQUIRE(expr1->as<Tensor>().ket().at(0).label() == L"i↑_1");
   }
 
   SECTION("Tensor with symmetry annotation") {
