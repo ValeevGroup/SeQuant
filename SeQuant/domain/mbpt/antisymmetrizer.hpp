@@ -15,10 +15,10 @@
 
 namespace sequant {
 
-//@brief generates all unique permutations of a product where products differing
-// only by internal tensor antisymmetry are non-unique.
-// i.e. a^{i_1 i_2}_{a_1 a_2} = - a^{i_2 i_1}_{a_1 a_2}. RHS is non-unique in
-// this context.
+/// @brief generates all unique permutations of a product where products
+/// differing only by internal tensor antisymmetry are non-unique. i.e.
+/// \f$ a^{i_1 i_2}_{a_1 a_2} = - a^{i_2 i_1}_{a_1 a_2} \f$.
+/// RHS is non-unique in this context.
 class antisymm_element {
   using IndexGroup = std::pair<size_t, size_t>;
 
@@ -159,10 +159,7 @@ class antisymm_element {
           sorted_ket_indices.push_back(factor.ket()[i]);
         }
       } else if (it->get()->is<Constant>()) {
-        starting_constant *=
-            it->get()
-                ->as<Constant>()
-                .value();
+        starting_constant *= it->get()->as<Constant>().value();
       }
 
       else if (it->get()->is<FNOperator>()) {
@@ -275,7 +272,8 @@ class antisymmetrize {
       for (auto&& product :
            s->as<Sum>().summands()) {  // for each element in the sum
         if (product->is<Product>()) {
-          antisymm_element ele(product);  // calculate the sum of all the valid permutations for
+          antisymm_element ele(
+              product);  // calculate the sum of all the valid permutations for
                          // each term. each object here should only live until
                          // this loop ends.
           result = result + ele.result;  // append that to the final list;

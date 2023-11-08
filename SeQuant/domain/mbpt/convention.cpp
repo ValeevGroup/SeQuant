@@ -83,6 +83,7 @@ void register_standard_instances() {
                                   qnattr, do_not_throw);
     IndexSpace::register_instance(declab(L"a"), IndexSpace::active_unoccupied,
                                   qnattr, do_not_throw);
+    // introduced in MPQC LCAOWavefunction
     IndexSpace::register_instance(declab(L"g"), IndexSpace::inactive_unoccupied,
                                  qnattr, do_not_throw);
     // {α,β.../κ,𝛌...} for complete {unoccupied/any} spstates introduced in
