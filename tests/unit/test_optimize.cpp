@@ -123,4 +123,14 @@ TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
     REQUIRE(extract(res6, {3, 1}) == prod6.at(5));
     REQUIRE(extract(res6, {4}) == prod6.at(4));
   }
+
+  SECTION("Ensure single-value sums/products are not discarded") {
+    auto sum = ex<Sum>();
+    sum->as<Sum>().append(ex<Product>(ExprPtrList{parse_expr(L"f{a_1;i_1}")}));
+    REQUIRE(sum->as<Sum>().summand(0).as<Product>().factors().size() == 1);
+    auto optimized = optimize(sum, idx2size);
+    REQUIRE(optimized->is<Sum>());
+    REQUIRE(optimized->as<Sum>().summands().size() == 1);
+    REQUIRE(sum->as<Sum>().summand(0).as<Product>().factors().size() == 1);
+  }
 }
