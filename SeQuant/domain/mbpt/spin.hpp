@@ -257,7 +257,7 @@ ExprPtr factorize_S(const ExprPtr& expression,
                     bool fast_method = true);
 
 ExprPtr biorthogonal_transform(
-    const sequant::ExprPtr& expr, int n_particles,
+    const sequant::ExprPtr& expr,
     const container::svector<container::svector<sequant::Index>>&
         ext_index_groups = {{}},
     double threshold = 1.e-12);

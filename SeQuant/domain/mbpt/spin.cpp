@@ -944,7 +944,8 @@ ExprPtr closed_shell_spintrace(
 
 container::svector<container::svector<Index>> external_indices(
     const ExprPtr& expr) {
-  // Generate external index list from symmetrizer or antisymmetrizer
+  // Generate external index list from the projection manifold operator
+  // (symmetrizer or antisymmetrizer)
   Tensor P{};
   for (const auto& prod : *expr) {
     if (prod->is<Product>()) {
@@ -955,13 +956,17 @@ container::svector<container::svector<Index>> external_indices(
       }
     }
   }
-  assert(P.bra_rank() != 0 &&
-         "Could not generate external index groups due to "
-         "absence of (anti)symmetrizer (A or S) operator in expression.");
-  assert(P.bra_rank() == P.ket_rank());
-  container::svector<container::svector<Index>> ext_index_groups(P.rank());
-  for (auto i = 0; i != P.rank(); ++i) {
-    ext_index_groups[i] = container::svector<Index>{P.ket()[i], P.bra()[i]};
+
+  container::svector<container::svector<Index>> ext_index_groups;
+  if (P) {  // if have the projection manifold operator
+    assert(P.bra_rank() != 0 &&
+           "Could not generate external index groups due to "
+           "absence of (anti)symmetrizer (A or S) operator in expression.");
+    assert(P.bra_rank() == P.ket_rank());
+    ext_index_groups.resize(P.rank());
+    for (auto i = 0; i != P.rank(); ++i) {
+      ext_index_groups[i] = container::svector<Index>{P.ket()[i], P.bra()[i]};
+    }
   }
   return ext_index_groups;
 }
@@ -983,17 +988,7 @@ ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr) {
   assert(expr->is<Sum>());
   using ranges::views::transform;
 
-  Tensor const A = expr->at(0)->at(0)->as<Tensor>();
-
-  auto const ext_idxs =
-      [&A]() -> container::svector<container::svector<Index>> {
-    if (A.label() == L"A" || A.label() == L"S") {
-      return external_indices(A);
-    } else {
-      return {};
-    }
-  }();
-
+  auto const ext_idxs = external_indices(expr);
   auto st_expr = closed_shell_spintrace(expr, ext_idxs);
   canonicalize(st_expr);
 
@@ -1004,7 +999,7 @@ ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr) {
     }
 
     // Biorthogonal transformation
-    st_expr = biorthogonal_transform(st_expr, A.rank(), ext_idxs);
+    st_expr = biorthogonal_transform(st_expr, ext_idxs);
 
     auto bixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
     auto kixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
@@ -1020,17 +1015,7 @@ ExprPtr closed_shell_CC_spintrace_rigorous(ExprPtr const& expr) {
   assert(expr->is<Sum>());
   using ranges::views::transform;
 
-  Tensor const A = expr->at(0)->at(0)->as<Tensor>();
-
-  auto const ext_idxs =
-      [&A]() -> container::svector<container::svector<Index>> {
-    if (A.label() == L"A" || A.label() == L"S") {
-      return external_indices(A);
-    } else {
-      return {};
-    }
-  }();
-
+  auto const ext_idxs = external_indices(expr);
   auto st_expr = sequant::spintrace(expr, ext_idxs);
   canonicalize(st_expr);
 
@@ -1041,7 +1026,7 @@ ExprPtr closed_shell_CC_spintrace_rigorous(ExprPtr const& expr) {
     }
 
     // Biorthogonal transformation
-    st_expr = biorthogonal_transform(st_expr, A.rank(), ext_idxs);
+    st_expr = biorthogonal_transform(st_expr, ext_idxs);
 
     auto bixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
     auto kixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
@@ -1977,12 +1962,12 @@ ExprPtr factorize_S(const ExprPtr& expression,
 }
 
 ExprPtr biorthogonal_transform(
-    const sequant::ExprPtr& expr, const int n_particles,
+    const sequant::ExprPtr& expr,
     const container::svector<container::svector<sequant::Index>>&
         ext_index_groups,
     const double threshold) {
-  assert(n_particles != 0);
   assert(!ext_index_groups.empty());
+  const auto n_particles = ext_index_groups.size();
 
   using sequant::container::svector;
 
