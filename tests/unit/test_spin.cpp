@@ -663,20 +663,14 @@ SECTION("Closed-shell spintrace CCD") {
     const auto input = ex<Sum>(ExprPtrList{parse_expr(
         L"1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}", Symmetry::antisymm)});
     auto result = closed_shell_CC_spintrace(input);
-
-	// Canonicalize the order of the addends in the result
-	ExprPtr firstAddend;
-	ExprPtr secondAddend;
-	if (result.as<Sum>().summand(0).as<Product>().scalar() == -1) {
-		firstAddend = result.as<Sum>().summand(1);
-		secondAddend = result.as<Sum>().summand(0);
-	} else {
-		firstAddend = result.as<Sum>().summand(0);
-		secondAddend = result.as<Sum>().summand(1);
-	}
-
-	REQUIRE(*firstAddend == *parse_expr(L"2 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}", Symmetry::nonsymm));
-	REQUIRE(*secondAddend == *parse_expr(L"-g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_2,i_1}", Symmetry::nonsymm));
+    if constexpr (hash_version() == hash::Impl::BoostPre181)
+      REQUIRE(result == parse_expr(L"- g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_2,i_1} + "
+                                   L"2 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}",
+                                   Symmetry::nonsymm));
+    else
+      REQUIRE(result == parse_expr(L"2 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2} - "
+                                   L"g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_2,i_1}",
+                                   Symmetry::nonsymm));
   }
 }
 
