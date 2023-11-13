@@ -240,6 +240,9 @@ class IndexSpace {
   /// space of sp states that are not used to define the reference (vacuum) state (i.e., they are unoccupied) and not supported
   /// by a supported by a finite computational basis; i.e., these states are the rest of the sp Hilbert space
   static constexpr Type other_unoccupied{0b1000000};
+  /// a union of the IndexSpace::other_unoccupied space and IndexSpace::inactive_unoccupied space
+  /// @note useful when treating active and inactive unoccupieds differently in e.g. valence-correlated F12 theory
+  static constexpr Type complete_inactive_unoccupied = IndexSpace::other_unoccupied.unIon(IndexSpace::inactive_unoccupied);
   /// set of all fully unoccupied states
   /// @note this is a union of IndexSpace::unoccupied and IndexSpace::other_unoccupied
   static constexpr Type complete_unoccupied = IndexSpace::unoccupied.unIon(IndexSpace::other_unoccupied);
@@ -267,6 +270,7 @@ class IndexSpace {
                                             all_active,
                                             all,
                                             other_unoccupied,
+                                            complete_inactive_unoccupied,
                                             complete_unoccupied,
                                             complete_maybe_unoccupied,
                                             complete};
