@@ -115,7 +115,10 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
 
   auto lbl = utf_to_latex(op.label());
   std::wstring result = L"{\\hat{" + lbl + L"}";
-  auto it = label2optype.find(lbl);
+  // if last char is adjoint_label, remove it
+  auto base_lbl = lbl;
+  if (base_lbl.back() == adjoint_label) base_lbl.pop_back();
+  auto it = label2optype.find(base_lbl);
   if (it != label2optype.end()) {  // handle special cases
     const auto optype = it->second;
     if (to_class(optype) == OpClass::gen) {

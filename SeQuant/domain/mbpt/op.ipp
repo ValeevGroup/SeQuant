@@ -22,6 +22,15 @@ Operator<QuantumNumbers, S>::Operator(
       qn_action_(std::move(qn_action)) {}
 
 template <typename QuantumNumbers, Statistics S>
+Operator<QuantumNumbers, S>::Operator(
+    std::function<std::wstring_view()> label_generator,
+    std::function<ExprPtr()> tensor_form_generator,
+    std::function<void(QuantumNumbers&)> qn_action, bool is_adjoint)
+    : base_type(std::move(label_generator), std::move(tensor_form_generator)),
+      qn_action_(std::move(qn_action)),
+      is_adjoint_(is_adjoint) {}
+
+template <typename QuantumNumbers, Statistics S>
 Operator<QuantumNumbers, S>::~Operator() = default;
 
 template <typename QuantumNumbers, Statistics S>
@@ -106,12 +115,22 @@ bool Operator<QuantumNumbers, S>::commutes_with_atom(
 
 template <typename QuantumNumbers, Statistics S>
 void Operator<QuantumNumbers, S>::adjoint() {
+  this->is_adjoint_ = !this->is_adjoint_;  // toggle adjoint flag
+
   const auto dN = (*this)(QuantumNumbers{});
   using qnc_t = std::decay_t<decltype(dN)>;
   static_assert(std::is_same_v<QuantumNumbers, qnc_t>,
                 "mbpt::Operator::adjoint: QuantumNumbers type mismatch");
 
-  const auto lbl = this->label();
+  // grab label and update according to adjoint flag
+  auto lbl = std::wstring(this->label());
+  if (is_adjoint_) {
+    if (lbl.back() != sequant::adjoint_label)
+      lbl.push_back(sequant::adjoint_label);
+  } else {
+    if (lbl.back() == sequant::adjoint_label) lbl.pop_back();
+  }
+
   const auto tnsr = this->tensor_form();
   *this = Operator{
       [=]() -> std::wstring_view { return lbl; },  // return same label
@@ -121,7 +140,8 @@ void Operator<QuantumNumbers, S>::adjoint() {
       [=](qnc_t& qn) {
         qn += sequant::adjoint(dN);
         return qn;  // return modified qns
-      }};
+      },
+      this->is_adjoint_};
 }
 
 template <typename QuantumNumbers, Statistics S>
