@@ -265,6 +265,8 @@ set(SeQuant_src
         SeQuant/domain/mbpt/sr.hpp
         SeQuant/domain/mbpt/vac_av.ipp
         )
+set_source_files_properties(
+        SeQuant/domain/mbpt/op.cpp SeQuant/domain/mbpt/sr.cpp SeQuant/domain/mbpt/mr.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 
 ### optional prereqs
 if (NOT TARGET Eigen3::Eigen)
@@ -395,6 +397,8 @@ if (BUILD_TESTING)
                 tests/unit/test_eval_btas.cpp
                 tests/unit/test_cache_manager.cpp
                 )
+        set_source_files_properties(
+                tests/unit/test_eval_btas.cpp tests/unit/test_eval_ta.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
     endif (TARGET tiledarray)
 
     set(utests_deps SeQuant)
