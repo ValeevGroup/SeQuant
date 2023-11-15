@@ -254,9 +254,6 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
       bra_hash_value_;  // memoized byproduct of memoizing_hash()
   bool is_adjoint_ = false;
 
-  /// @brief updates the label to reflect the adjoint status
-  void toggle_adjoint_label();
-
   void validate_symmetries() {
     // (anti)symmetric bra or ket makes sense only for particle-symmetric
     // tensors
