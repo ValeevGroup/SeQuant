@@ -539,10 +539,6 @@ class Operator : public Operator<void, S> {
            std::function<ExprPtr()> tensor_form_generator,
            std::function<void(QuantumNumbers&)> qn_action);
 
-  Operator(std::function<std::wstring_view()> label_generator,
-           std::function<ExprPtr()> tensor_form_generator,
-           std::function<void(QuantumNumbers&)> qn_action, bool is_adjoint);
-
   virtual ~Operator();
 
   /// evaluates the result of applying this operator to \p qns
