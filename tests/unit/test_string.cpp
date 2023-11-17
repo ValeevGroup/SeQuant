@@ -4,7 +4,7 @@
 
 #include "catch.hpp"
 
-#include "SeQuant/core/wstring.hpp"
+#include <SeQuant/core/wstring.hpp>
 
 #include <memory>
 #include <type_traits>

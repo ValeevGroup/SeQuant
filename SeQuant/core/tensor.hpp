@@ -5,6 +5,15 @@
 #ifndef SEQUANT_TENSOR_HPP
 #define SEQUANT_TENSOR_HPP
 
+#include <SeQuant/core/abstract_tensor.hpp>
+#include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/container.hpp>
+#include <SeQuant/core/context.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/hash.hpp>
+#include <SeQuant/core/index.hpp>
+#include <SeQuant/core/latex.hpp>
+
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -19,15 +28,6 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
-
-#include "abstract_tensor.hpp"
-#include "attr.hpp"
-#include "container.hpp"
-#include "context.hpp"
-#include "expr.hpp"
-#include "hash.hpp"
-#include "index.hpp"
-#include "latex.hpp"
 
 #include <range/v3/all.hpp>
 

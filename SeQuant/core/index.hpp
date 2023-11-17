@@ -5,6 +5,15 @@
 #ifndef SEQUANT_INDEX_H
 #define SEQUANT_INDEX_H
 
+#include <SeQuant/core/container.hpp>
+#include <SeQuant/core/hash.hpp>
+#include <SeQuant/core/space.hpp>
+#include <SeQuant/core/tag.hpp>
+#include <SeQuant/core/utility/string.hpp>
+
+// Only needed due to a (likely) compiler bug in Apple Clang
+#include <SeQuant/core/attr.hpp>
+
 #include <algorithm>
 #include <atomic>
 #include <cassert>
@@ -25,15 +34,6 @@
 #include <vector>
 
 #include <range/v3/all.hpp>
-
-#include "container.hpp"
-#include "hash.hpp"
-#include "space.hpp"
-#include "utility/string.hpp"
-#include "tag.hpp"
-
-// Only needed due to a (likely) compiler bug in Apple Clang
-#include "attr.hpp"
 
 // change to 1 to make thread-safe
 #define SEQUANT_INDEX_THREADSAFE 1

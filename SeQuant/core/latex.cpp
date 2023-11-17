@@ -2,7 +2,7 @@
 // Created by Eduard Valeyev on 7/18/23.
 //
 
-#include "SeQuant/core/latex.ipp"
+#include <SeQuant/core/latex.ipp>
 
 namespace sequant::detail {
 

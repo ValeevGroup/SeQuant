@@ -2,10 +2,10 @@
 // Created by Eduard Valeyev on 2019-03-24.
 //
 
-#include "expr.hpp"
-#include "index.hpp"
-#include "abstract_tensor.hpp"
-#include "container.hpp"
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/index.hpp>
+#include <SeQuant/core/abstract_tensor.hpp>
+#include <SeQuant/core/container.hpp>
 
 #include <regex>
 

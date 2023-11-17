@@ -4,12 +4,12 @@
 
 #define CATCH_CONFIG_RUNNER
 #include <clocale>
-#include "SeQuant/core/logger.hpp"
-#include "SeQuant/core/op.hpp"
-#include "SeQuant/core/runtime.hpp"
-#include "SeQuant/core/space.hpp"
-#include "SeQuant/domain/mbpt/context.hpp"
-#include "SeQuant/domain/mbpt/convention.hpp"
+#include <SeQuant/core/logger.hpp>
+#include <SeQuant/core/op.hpp>
+#include <SeQuant/core/runtime.hpp>
+#include <SeQuant/core/space.hpp>
+#include <SeQuant/domain/mbpt/context.hpp>
+#include <SeQuant/domain/mbpt/convention.hpp>
 #include "catch.hpp"
 
 #ifdef SEQUANT_HAS_TILEDARRAY

@@ -4,13 +4,13 @@
 
 #include "catch.hpp"
 
-#include "SeQuant/core/hash.hpp"
-#include "SeQuant/core/complex.hpp"
-#include "SeQuant/core/container.hpp"
-#include "SeQuant/core/expr.hpp"
-#include "SeQuant/core/latex.hpp"
-#include "SeQuant/core/meta.hpp"
-#include "SeQuant/core/wolfram.hpp"
+#include <SeQuant/core/hash.hpp>
+#include <SeQuant/core/complex.hpp>
+#include <SeQuant/core/container.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/meta.hpp>
+#include <SeQuant/core/wolfram.hpp>
 
 #include <cstddef>
 #include <cstdint>

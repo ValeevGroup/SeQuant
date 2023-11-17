@@ -5,8 +5,8 @@
 #ifndef SEQUANT_WOLFRAM_HPP
 #define SEQUANT_WOLFRAM_HPP
 
-#include "meta.hpp"
-#include "wstring.hpp"
+#include <SeQuant/core/meta.hpp>
+#include <SeQuant/core/wstring.hpp>
 
 #include <string>
 #include <type_traits>

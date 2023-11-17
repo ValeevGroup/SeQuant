@@ -2,7 +2,7 @@
 #include <SeQuant/domain/mbpt/sr.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/runtime.hpp>
-#include "SeQuant/core/expr.hpp"
+#include <SeQuant/core/expr.hpp>
 
 #include <cassert>
 #include <cstdint>

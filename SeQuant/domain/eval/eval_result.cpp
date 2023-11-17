@@ -1,4 +1,4 @@
-#include "eval_result.hpp"
+#include <SeQuant/domain/eval/eval_result.hpp>
 
 namespace sequant {
 

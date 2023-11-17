@@ -4,8 +4,8 @@
 
 #include "catch.hpp"
 
-#include "SeQuant/core/latex.hpp"
-#include "SeQuant/core/meta.hpp"
+#include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/meta.hpp>
 
 #include <stdexcept>
 #include <string>

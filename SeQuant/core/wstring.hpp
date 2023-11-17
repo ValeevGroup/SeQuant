@@ -5,7 +5,7 @@
 #ifndef SEQUANT_WSTRING_HPP
 #define SEQUANT_WSTRING_HPP
 
-#include "SeQuant/core/utility/macros.hpp"
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <cmath>
 #include <string>

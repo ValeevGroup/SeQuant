@@ -1,13 +1,13 @@
-#include "SeQuant/core/eval_expr.hpp"
-#include "SeQuant/core/attr.hpp"
-#include "SeQuant/core/complex.hpp"
-#include "SeQuant/core/container.hpp"
-#include "SeQuant/core/context.hpp"
-#include "SeQuant/core/expr.hpp"
-#include "SeQuant/core/hash.hpp"
-#include "SeQuant/core/index.hpp"
-#include "SeQuant/core/tensor.hpp"
-#include "SeQuant/core/wstring.hpp"
+#include <SeQuant/core/eval_expr.hpp>
+#include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/complex.hpp>
+#include <SeQuant/core/container.hpp>
+#include <SeQuant/core/context.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/hash.hpp>
+#include <SeQuant/core/index.hpp>
+#include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/wstring.hpp>
 
 #include <range/v3/action.hpp>
 #include <range/v3/algorithm.hpp>

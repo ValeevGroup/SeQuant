@@ -4,8 +4,8 @@
 
 #include "catch.hpp"
 
-#include "SeQuant/external/bliss/graph.hh"
-#include "SeQuant/external/bliss/utils.hh"
+#include <SeQuant/external/bliss/graph.hh>
+#include <SeQuant/external/bliss/utils.hh>
 
 #include <cstdio>
 #include <vector>

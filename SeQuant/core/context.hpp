@@ -1,8 +1,8 @@
 #ifndef SEQUANT_CORE_CONTEXT_HPP
 #define SEQUANT_CORE_CONTEXT_HPP
 
-#include "attr.hpp"
-#include "utility/context.hpp"
+#include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/utility/context.hpp>
 
 #include <cstddef>
 #include <memory>

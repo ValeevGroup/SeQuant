@@ -2,19 +2,19 @@
 // Created by Eduard Valeyev on 2019-02-19.
 //
 
-#include "SeQuant/domain/mbpt/mr.hpp"
-#include "SeQuant/domain/mbpt/fwd.hpp"
+#include <SeQuant/domain/mbpt/mr.hpp>
+#include <SeQuant/domain/mbpt/fwd.hpp>
 
-#include "SeQuant/core/abstract_tensor.hpp"
-#include "SeQuant/core/container.hpp"
-#include "SeQuant/core/context.hpp"
-#include "SeQuant/core/expr.hpp"
-#include "SeQuant/core/expr_fwd.hpp"
-#include "SeQuant/core/index.hpp"
-#include "SeQuant/core/logger.hpp"
-#include "SeQuant/core/op.hpp"
-#include "SeQuant/core/tensor.hpp"
-#include "SeQuant/core/wick.hpp"
+#include <SeQuant/core/abstract_tensor.hpp>
+#include <SeQuant/core/container.hpp>
+#include <SeQuant/core/context.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expr_fwd.hpp>
+#include <SeQuant/core/index.hpp>
+#include <SeQuant/core/logger.hpp>
+#include <SeQuant/core/op.hpp>
+#include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/wick.hpp>
 
 #include <atomic>
 #include <algorithm>
@@ -26,16 +26,16 @@
 #include <set>
 #include <stdexcept>
 
-#include "range/v3/algorithm/for_each.hpp"
-#include "range/v3/functional/identity.hpp"
-#include "range/v3/iterator/basic_iterator.hpp"
-#include "range/v3/iterator/reverse_iterator.hpp"
-#include "range/v3/range/conversion.hpp"
-#include "range/v3/view/filter.hpp"
-#include "range/v3/view/map.hpp"
-#include "range/v3/view/reverse.hpp"
-#include "range/v3/view/transform.hpp"
-#include "range/v3/view/view.hpp"
+#include <range/v3/algorithm/for_each.hpp>
+#include <range/v3/functional/identity.hpp>
+#include <range/v3/iterator/basic_iterator.hpp>
+#include <range/v3/iterator/reverse_iterator.hpp>
+#include <range/v3/range/conversion.hpp>
+#include <range/v3/view/filter.hpp>
+#include <range/v3/view/map.hpp>
+#include <range/v3/view/reverse.hpp>
+#include <range/v3/view/transform.hpp>
+#include <range/v3/view/view.hpp>
 
 namespace sequant {
 namespace mbpt {
@@ -179,7 +179,7 @@ OpMaker::OpMaker(OpType op, std::size_t nbra, std::size_t nket)
   }
 }
 
-#include "../mbpt/mr/op.impl.cpp"
+#include <SeQuant/domain/mbpt/mr/op.impl.cpp>
 
 ExprPtr H_(std::size_t k) {
   assert(k > 0 && k <= 2);
@@ -639,7 +639,7 @@ bool can_change_qns(const ExprPtr& op_or_op_product, const qns_t target_qns,
 
 using mbpt::mr::vac_av;
 
-#include "SeQuant/domain/mbpt/vac_av.ipp"
+#include <SeQuant/domain/mbpt/vac_av.ipp>
 
 }  // namespace op
 
@@ -721,7 +721,7 @@ std::wstring to_latex(const mbpt::Operator<mbpt::mr::qns_t, S>& op) {
 
 }  // namespace sequant
 
-#include "SeQuant/domain/mbpt/op.ipp"
+#include <SeQuant/domain/mbpt/op.ipp>
 
 namespace sequant {
 namespace mbpt {

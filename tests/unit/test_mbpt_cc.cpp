@@ -2,9 +2,9 @@
 // Created by Eduard Valeyev on 2023-12-06
 //
 
-#include "SeQuant/core/expr.hpp"
-#include "SeQuant/core/timer.hpp"
-#include "SeQuant/domain/mbpt/models/cc.hpp"
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/timer.hpp>
+#include <SeQuant/domain/mbpt/models/cc.hpp>
 
 #include "catch.hpp"
 #include "test_config.hpp"

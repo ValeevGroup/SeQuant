@@ -18,13 +18,13 @@
 #include <utility>
 #include <vector>
 
-#include "SeQuant/core/attr.hpp"
-#include "SeQuant/core/expr.hpp"
-#include "SeQuant/core/hash.hpp"
-#include "SeQuant/core/interval.hpp"
-#include "SeQuant/core/latex.hpp"
-#include "SeQuant/core/space.hpp"
-#include "SeQuant/domain/mbpt/op.hpp"
+#include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/hash.hpp>
+#include <SeQuant/core/interval.hpp>
+#include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/space.hpp>
+#include <SeQuant/domain/mbpt/op.hpp>
 
 namespace sequant {
 namespace mbpt {
@@ -146,7 +146,7 @@ class OpMaker : public mbpt::OpMaker<Statistics::FermiDirac> {
   using base_type::operator();
 };
 
-#include "sr/op.impl.hpp"
+#include <SeQuant/domain/mbpt/sr/op.impl.hpp>
 
 /// @name tensor-level SR MBPT operators
 /// @{
@@ -294,7 +294,7 @@ bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product,
 bool lowers_rank_or_lower_to_vacuum(const ExprPtr& op_or_op_product,
                                     const unsigned long k);
 
-#include "SeQuant/domain/mbpt/vac_av.hpp"
+#include <SeQuant/domain/mbpt/vac_av.hpp>
 
 }  // namespace op
 

@@ -9,11 +9,11 @@
 #include <mutex>
 #include <utility>
 
-#include "SeQuant/core/math.hpp"
-#include "op.hpp"
-#include "ranges.hpp"
-#include "runtime.hpp"
-#include "tensor.hpp"
+#include <SeQuant/core/math.hpp>
+#include <SeQuant/core/op.hpp>
+#include <SeQuant/core/ranges.hpp>
+#include <SeQuant/core/runtime.hpp>
+#include <SeQuant/core/tensor.hpp>
 
 namespace sequant {
 
@@ -1484,6 +1484,6 @@ using FWickTheorem = WickTheorem<Statistics::FermiDirac>;
 
 }  // namespace sequant
 
-#include "wick.impl.hpp"
+#include <SeQuant/core/wick.impl.hpp>
 
 #endif  // SEQUANT_WICK_HPP

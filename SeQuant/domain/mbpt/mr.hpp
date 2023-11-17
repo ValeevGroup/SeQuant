@@ -5,14 +5,14 @@
 #ifndef SEQUANT_DOMAIN_MBPT_MR_HPP
 #define SEQUANT_DOMAIN_MBPT_MR_HPP
 
-#include "SeQuant/domain/mbpt/op.hpp"
+#include <SeQuant/domain/mbpt/op.hpp>
 
-#include "SeQuant/core/attr.hpp"
-#include "SeQuant/core/expr.hpp"
-#include "SeQuant/core/hash.hpp"
-#include "SeQuant/core/interval.hpp"
-#include "SeQuant/core/latex.hpp"
-#include "SeQuant/core/space.hpp"
+#include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/hash.hpp>
+#include <SeQuant/core/interval.hpp>
+#include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/space.hpp>
 
 #include <array>
 #include <cstddef>
@@ -156,7 +156,7 @@ class OpMaker : public mbpt::OpMaker<Statistics::FermiDirac> {
   using base_type::operator();
 };
 
-#include "mr/op.impl.hpp"
+#include <SeQuant/domain/mbpt/mr/op.impl.hpp>
 
 /// @name tensor-level operators
 /// @{
@@ -220,7 +220,7 @@ ExprPtr Λ_(std::size_t K);
 /// \p K
 ExprPtr Λ(std::size_t K);
 
-#include "SeQuant/domain/mbpt/vac_av.hpp"
+#include <SeQuant/domain/mbpt/vac_av.hpp>
 
 }  // namespace op
 

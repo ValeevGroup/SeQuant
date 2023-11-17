@@ -1,8 +1,8 @@
-#include "asy_cost.hpp"
-#include "container.hpp"
-#include "meta/meta.hpp"
-#include "rational.hpp"
-#include "wstring.hpp"
+#include <SeQuant/core/asy_cost.hpp>
+#include <SeQuant/core/container.hpp>
+#include <SeQuant/core/meta.hpp>
+#include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/wstring.hpp>
 
 #include <boost/numeric/conversion/cast.hpp>
 

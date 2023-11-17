@@ -5,10 +5,10 @@
 #ifndef SEQUANT_SPIN_HPP
 #define SEQUANT_SPIN_HPP
 
-#include "SeQuant/core/container.hpp"
-#include "SeQuant/core/expr.hpp"
-#include "SeQuant/core/index.hpp"
-#include "SeQuant/core/tensor.hpp"
+#include <SeQuant/core/container.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/index.hpp>
+#include <SeQuant/core/tensor.hpp>
 
 #include <cstddef>
 #include <initializer_list>

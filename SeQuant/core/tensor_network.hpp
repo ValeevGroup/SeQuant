@@ -5,10 +5,10 @@
 #ifndef SEQUANT_TENSOR_NETWORK_H
 #define SEQUANT_TENSOR_NETWORK_H
 
-#include "abstract_tensor.hpp"
-#include "container.hpp"
-#include "expr.hpp"
-#include "index.hpp"
+#include <SeQuant/core/abstract_tensor.hpp>
+#include <SeQuant/core/container.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/index.hpp>
 
 #include <cassert>
 #include <cstdlib>
