@@ -82,6 +82,8 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   }
 
  public:
+  /// constructs an uninitialized Tensor
+  /// @sa Tensor::operator bool()
   Tensor() = default;
   virtual ~Tensor();
 
@@ -124,6 +126,13 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
       : Tensor(label, make_indices(bra_indices), make_indices(ket_indices),
                reserved_tag{}, s, bks, ps) {
     assert_nonreserved_label(label_);
+  }
+
+  /// @return true if the Tensor is initialized
+  explicit operator bool() const {
+    return !label_.empty() && symmetry_ != Symmetry::invalid &&
+           braket_symmetry_ != BraKetSymmetry::invalid &&
+           particle_symmetry_ != ParticleSymmetry::invalid;
   }
 
   std::wstring_view label() const override { return label_; }

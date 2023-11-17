@@ -36,10 +36,10 @@ TEST_CASE("IndexSpace", "[elements]") {
 
   SECTION("register_key") {
     REQUIRE_NOTHROW(IndexSpace::register_key(
-        L"g",
+        L"w",
         IndexSpace::all));  // can assign additional key to a space already
                             // registered, this does not redefine base key
-    REQUIRE(IndexSpace::instance(L"g") == IndexSpace::instance(L"p"));
+    REQUIRE(IndexSpace::instance(L"w") == IndexSpace::instance(L"p"));
   }
 
   SECTION("equality") {

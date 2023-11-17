@@ -166,7 +166,7 @@ class compute_cceqvec {
           }
 
           // Biorthogonal transformation
-          eqvec[R] = biorthogonal_transform(eqvec[R], R, ext_idxs);
+          eqvec[R] = biorthogonal_transform(eqvec[R], ext_idxs);
 
           // restore the particle symmetrizer
           auto bixs = ext_idxs | ranges::views::transform(

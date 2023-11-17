@@ -150,11 +150,6 @@ if (NOT TARGET Boost::boost OR NOT TARGET Boost::regex OR NOT TARGET Boost::loca
         message(STATUS "Found Boost (version ${Boost_VERSION}) via CONFIG ${Boost_CONFIG}")
         set(Boost_USE_CONFIG TRUE)
     endif ()
-    if (Boost_VERSION_MACRO EQUAL 107000)
-        message(FATAL_ERROR "Found Boost 1.70, but its Boost.Container is broken: "
-                "use any version ${SEQUANT_TRACKED_BOOST_VERSION} "
-                "or higher, other than 1.70")
-    endif ()
     # Boost.Move is broken in 1.77 and 1.78 unless using c++20
     # fixed in 1.79 via https://github.com/boostorg/move/commit/78f26da1f3a5a3831e9e70efe83f9c56eef94e8c
     if (CMAKE_CXX_STANDARD LESS 20)
@@ -226,15 +221,8 @@ set(SeQuant_src
         SeQuant/core/optimize/fusion.cpp
         SeQuant/core/optimize/fusion.hpp
         SeQuant/core/optimize/optimize.cpp
-        SeQuant/core/parse/parse_expr.cpp
-        SeQuant/core/parse/regex_sequant.cpp
-        SeQuant/core/parse/regex_sequant.hpp
-        SeQuant/core/parse/rpn.cpp
-        SeQuant/core/parse/rpn.hpp
-        SeQuant/core/parse/token.cpp
-        SeQuant/core/parse/token.hpp
-        SeQuant/core/parse/token_sequant.cpp
-        SeQuant/core/parse/token_sequant.hpp
+        SeQuant/core/parse/deparse.cpp
+        SeQuant/core/parse/parse.cpp
         SeQuant/core/parse_expr.hpp
         SeQuant/core/ranges.hpp
         SeQuant/core/rational.hpp
@@ -252,6 +240,8 @@ set(SeQuant_src
         SeQuant/core/utility/macros.hpp
         SeQuant/core/utility/nodiscard.hpp
         SeQuant/core/utility/singleton.hpp
+        SeQuant/core/utility/string.hpp
+        SeQuant/core/utility/string.cpp
         SeQuant/core/wick.hpp
         SeQuant/core/wick.impl.hpp
         SeQuant/core/wolfram.hpp
@@ -275,6 +265,8 @@ set(SeQuant_src
         SeQuant/domain/mbpt/sr.hpp
         SeQuant/domain/mbpt/vac_av.ipp
         )
+set_source_files_properties(
+        SeQuant/domain/mbpt/op.cpp SeQuant/domain/mbpt/sr.cpp SeQuant/domain/mbpt/mr.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 
 ### optional prereqs
 if (NOT TARGET Eigen3::Eigen)
@@ -393,8 +385,6 @@ if (BUILD_TESTING)
             tests/unit/test_eval_node.cpp
             tests/unit/test_optimize.cpp
             tests/unit/test_fusion.cpp
-            tests/unit/test_token_sequant.cpp
-            tests/unit/test_rpn.cpp
             tests/unit/test_runtime.cpp
             tests/unit/test_math.cpp
             tests/unit/test_string.cpp
@@ -407,6 +397,8 @@ if (BUILD_TESTING)
                 tests/unit/test_eval_btas.cpp
                 tests/unit/test_cache_manager.cpp
                 )
+        set_source_files_properties(
+                tests/unit/test_eval_btas.cpp tests/unit/test_eval_ta.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
     endif (TARGET tiledarray)
 
     set(utests_deps SeQuant)

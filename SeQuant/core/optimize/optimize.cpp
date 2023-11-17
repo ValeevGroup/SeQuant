@@ -42,6 +42,17 @@ void pull_scalar(ExprPtr expr) noexcept {
   prod.scale(scal);
 }
 
+bool has_only_single_atom(const ExprPtr& term) {
+  if (term->is_atom()) {
+    return true;
+  }
+
+  // Recursively check that all elements in the expression tree have only a
+  // single element in them. At this point this means checking for Sum or
+  // Product objects that only have a single addend or factor respectively.
+  return term->size() == 1 && has_only_single_atom(*term->begin());
+}
+
 container::vector<container::vector<size_t>> clusters(Sum const& expr) {
   using ranges::views::tail;
   using ranges::views::transform;
@@ -63,7 +74,7 @@ container::vector<container::vector<size_t>> clusters(Sum const& expr) {
 
     for (auto const& term : expr) {
       auto const node = eval_node<EvalExpr>(term);
-      if (term->is_atom()) {
+      if (has_only_single_atom(term)) {
         visitor(node);
       } else {
         node.visit_internal(visitor);

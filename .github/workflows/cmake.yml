@@ -10,9 +10,9 @@ jobs:
       fail-fast: false
       matrix:
         build_type : [ Release, Debug ]
-        os : [ macos-latest, ubuntu-20.04 ]
+        os : [ macos-latest, ubuntu-22.04 ]
         include:
-          - os: ubuntu-20.04
+          - os: ubuntu-22.04
             cxx: /usr/bin/g++-10
           - os: macos-latest
             cxx: clang++
@@ -29,6 +29,7 @@ jobs:
         -G Ninja
         -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
         -DBUILD_SHARED_LIBS=OFF
+        -DCMAKE_UNITY_BUILD=${{ matrix.build_type == 'Debug' }}
         -DMPIEXEC_PREFLAGS='--bind-to;none;--allow-run-as-root'
         -DCMAKE_PREFIX_PATH='/usr/local/opt/boost@1.76'
         -DSEQUANT_EVAL_TESTS=ON
@@ -46,7 +47,7 @@ jobs:
       run: brew install ninja gcc@10 boost@1.76 eigen open-mpi ccache
 
     - name: Install prerequisites Ubuntu packages
-      if: ${{ matrix.os == 'ubuntu-20.04' }}
+      if: ${{ matrix.os == 'ubuntu-22.04' }}
       run: |
         sudo apt-get update
         sudo apt-get install ninja-build liblapack-dev libboost-dev libboost-locale-dev libboost-regex-dev libeigen3-dev openmpi-bin libopenmpi-dev ccache

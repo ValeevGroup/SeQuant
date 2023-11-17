@@ -2,7 +2,9 @@
 // Created by Nakul Teke on 12/20/19.
 //
 
+#include "SeQuant/core/parse_expr.hpp"
 #include "SeQuant/domain/mbpt/spin.hpp"
+
 #include "catch.hpp"
 #include "test_config.hpp"
 
@@ -652,6 +654,23 @@ SECTION("Swap bra kets") {
     REQUIRE(result->to_latex() ==
             L"{ \\bigl({f^{{i_1}}_{{i_5}}} + "
             L"{{g^{{a_5}{a_6}}_{{i_5}{i_6}}}{t^{{i_2}}_{{a_6}}}}\\bigr) }");
+  }
+}
+
+SECTION("Closed-shell spintrace CCD") {
+  // Energy expression
+  {
+    const auto input = ex<Sum>(ExprPtrList{parse_expr(
+        L"1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}", Symmetry::antisymm)});
+    auto result = closed_shell_CC_spintrace(input);
+    if constexpr (hash_version() == hash::Impl::BoostPre181)
+      REQUIRE(result == parse_expr(L"- g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_2,i_1} + "
+                                   L"2 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}",
+                                   Symmetry::nonsymm));
+    else
+      REQUIRE(result == parse_expr(L"2 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2} - "
+                                   L"g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_2,i_1}",
+                                   Symmetry::nonsymm));
   }
 }
 
