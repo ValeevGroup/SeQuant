@@ -303,16 +303,19 @@ auto symmetrize_ta(TA::DistArray<Args...> const& arr,
                    container::svector<particle_range_t> const& groups) {
   using ranges::views::iota;
 
-  auto result = TA::DistArray<Args...>{arr.world(), arr.trange()};
-  result.fill(0);
-
   size_t const rank = arr.trange().rank();
+
+  TA::DistArray<Args...> result;
 
   auto const lannot = ords_to_annot(iota(size_t{0}, rank));
 
   auto call_back = [&result, &lannot, &arr](perm_t const& perm) {
     auto const rannot = ords_to_annot(perm);
-    result(lannot) += arr(rannot);
+    if (result.is_initialized()) {
+      result(lannot) += arr(rannot);
+    } else {
+      result(lannot) = arr(rannot);
+    }
   };
 
   symmetrize_backend(rank, groups, call_back);
@@ -340,19 +343,19 @@ auto antisymmetrize_ta(
     TA::DistArray<Args...> const& arr,
     container::svector<particle_range_t> const& groups = {}) {
   using ranges::views::iota;
-  using ranges::views::transform;
-  using ranges::views::zip;
 
   size_t const rank = arr.trange().rank();
 
-  auto result = TA::DistArray<Args...>(arr.world(), arr.trange());
-  result.fill(0);
+  TA::DistArray<Args...> result;
 
   auto const lannot = ords_to_annot(iota(size_t{0}, rank));
 
   auto call_back = [&lannot, &arr, &result](int p, perm_t const& perm) {
     typename decltype(result)::numeric_type p_ = p == 0 ? 1 : -1;
-    result(lannot) += p_ * arr(ords_to_annot(perm));
+    if (result.is_initialized())
+      result(lannot) += p_ * arr(ords_to_annot(perm));
+    else
+      result(lannot) = p_ * arr(ords_to_annot(perm));
   };
 
   antisymmetrize_backend(rank, groups, call_back);
