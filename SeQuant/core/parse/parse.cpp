@@ -64,15 +64,19 @@ x3::rule<IndexLabelRule, ast::IndexLabel> index_label{"IndexLabel"};
 x3::rule<IndexRule, ast::Index> index{"Index"};
 x3::rule<IndexGroupRule, ast::IndexGroups> index_groups{"IndexGroups"};
 
+auto to_char_type = [](auto c) {
+  return static_cast<x3::unicode::char_type::char_type>(c);
+};
+
 // clang-format off
 auto word_components = x3::unicode::alnum
                        | x3::char_('_') | x3::unicode::char_(L'⁔')
                        // Superscript and Subscript block
-                       | (x3::unicode::char_(0x2070, 0x209F) - x3::unicode::unassigned)
+                       | (x3::unicode::char_(to_char_type(0x2070), to_char_type(0x209F)) - x3::unicode::unassigned)
                        // These are defined in the Latin-1 Supplement block and thus need to be listed explicitly
                        | x3::unicode::char_(L'¹') | x3::unicode::char_(L'²') | x3::unicode::char_(L'³')
                        // Arrow block
-                       | (x3::unicode::char_(0x2190, 0x21FF) - x3::unicode::unassigned);
+                       | (x3::unicode::char_(to_char_type(0x2190), to_char_type(0x21FF)) - x3::unicode::unassigned);
 // A name begins with a letter, then can container letters, digits and
 // underscores, but can not end with an underscore (to not confuse the parser
 // with tensors á la t_{…}^{…}.
