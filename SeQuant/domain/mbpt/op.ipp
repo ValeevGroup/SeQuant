@@ -47,8 +47,7 @@ QuantumNumbers& Operator<QuantumNumbers, S>::apply_to(
 }
 
 template <typename QuantumNumbers, Statistics S>
-bool Operator<QuantumNumbers, S>::static_less_than(
-    const Expr& that) const {
+bool Operator<QuantumNumbers, S>::static_less_than(const Expr& that) const {
   assert(that.is<this_type>());
   auto& that_op = that.as<this_type>();
 
@@ -85,8 +84,7 @@ bool Operator<QuantumNumbers, S>::static_less_than(
 }
 
 template <typename QuantumNumbers, Statistics S>
-bool Operator<QuantumNumbers, S>::commutes_with_atom(
-    const Expr& that) const {
+bool Operator<QuantumNumbers, S>::commutes_with_atom(const Expr& that) const {
   assert(that.is_cnumber() || that.is<this_type>());
   if (that.is_cnumber())
     return true;
@@ -113,10 +111,12 @@ void Operator<QuantumNumbers, S>::adjoint() {
 
   // grab label and update according to adjoint flag
   auto lbl = std::wstring(this->label());
-  if (!is_adjoint_ && lbl.back() != sequant::adjoint_label) {
-    lbl.push_back(sequant::adjoint_label);
-  } else if (is_adjoint_ && lbl.back() == sequant::adjoint_label) {
+  if (lbl.back() == sequant::adjoint_label) {
+    assert(is_adjoint_);
     lbl.pop_back();
+  } else {
+    assert(!is_adjoint_);
+    lbl.push_back(sequant::adjoint_label);
   }
 
   const auto tnsr = this->tensor_form();
