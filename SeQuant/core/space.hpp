@@ -246,6 +246,9 @@ class IndexSpace {
   /// set of all fully unoccupied states
   /// @note this is a union of IndexSpace::unoccupied and IndexSpace::other_unoccupied
   static constexpr Type complete_unoccupied = IndexSpace::unoccupied.unIon(IndexSpace::other_unoccupied);
+  /// a union of all unfrozen orbitals including the CABS orbitals from F12 theory
+  /// @note may be useful towards a state universal F12 geminal projector.
+  static constexpr Type complete_unfrozen = IndexSpace::complete_unoccupied.unIon(IndexSpace::active).unIon(active_occupied);
   /// set of arbitrary fully or partially unoccupied states
 /// @note this is a union of IndexSpace::complete_unoccupied and IndexSpace::active
   static constexpr Type complete_maybe_unoccupied = IndexSpace::complete_unoccupied.unIon(IndexSpace::active);
@@ -272,6 +275,7 @@ class IndexSpace {
                                             other_unoccupied,
                                             complete_inactive_unoccupied,
                                             complete_unoccupied,
+                                            complete_unfrozen,
                                             complete_maybe_unoccupied,
                                             complete};
 
