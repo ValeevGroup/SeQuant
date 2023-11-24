@@ -105,6 +105,9 @@ void register_standard_instances() {
     // introduced in MPQC LCAOWavefunction
     IndexSpace::register_instance(declab(L"e"), IndexSpace::unoccupied, qnattr,
                                   do_not_throw);
+    // introduced in MPQC for CT-F12, and other ad hoc uses
+    IndexSpace::register_instance(declab(L"g"), IndexSpace::OBS_unfrozen, qnattr,
+                                  do_not_throw);
     // introduced in MPQC for GF, CT-F12, and other ad hoc uses
     IndexSpace::register_instance(declab(L"x"), IndexSpace::all_active, qnattr,
                                   do_not_throw);

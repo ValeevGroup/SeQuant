@@ -31,6 +31,7 @@ enum class Convention { QCiFS };
 /// | \c α' | IndexSpace::other_unoccupied        |  α',β'... for orthogonal complement to OBS (CABS) introduced in [DOI 10.1016/j.cplett.2004.07.061 (CABS)](https://dx.doi.org/10.1016/j.cplett.2004.07.061)   |
 /// | `m`   | IndexSpace::occupied                |  m,n.. for all occupied (including inactive/frozen orbitals) de facto introduced in [DOI 10.1016/j.cplett.2004.07.061 (CABS)](https://dx.doi.org/10.1016/j.cplett.2004.07.061), though formally not explicitly defined so |
 /// | `e`   | IndexSpace::unoccupied              |  e,f... for all unoccupied (including inactive/frozen orbitals) used internally in MPQC LCAOWavefunction |
+/// | `g`   | IndexSpace::OBS_unfrozen            |  unfrozen orbitals in the OBS
 /// | `x`   | IndexSpace::all_active              |  used internally in MPQC for GF, CT-F12, and other ad hoc uses |
 /// | `γ`   | IndexSpace::complete_inactive_unoccupied | useful in CT-F12 with active space geminals  |
 /// | `z`   | IndexSpace::complete_unfrozen       | union of all unfrozen orbitals including the CABS orbitals. may be useful towards universal projector. |
