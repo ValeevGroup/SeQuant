@@ -113,7 +113,7 @@ void register_standard_instances() {
                                   IndexSpace::complete_inactive_unoccupied,
                                   qnattr, do_not_throw);
     // introduced here
-    IndexSpace::register_instance(declab(L"w"),
+    IndexSpace::register_instance(declab(L"z"),
                                   IndexSpace::complete_unfrozen,
                                   qnattr, do_not_throw);
     // e.g. see DOI 10.1063/5.0067511

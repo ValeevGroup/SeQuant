@@ -33,7 +33,7 @@ enum class Convention { QCiFS };
 /// | `e`   | IndexSpace::unoccupied              |  e,f... for all unoccupied (including inactive/frozen orbitals) used internally in MPQC LCAOWavefunction |
 /// | `x`   | IndexSpace::all_active              |  used internally in MPQC for GF, CT-F12, and other ad hoc uses |
 /// | `γ`   | IndexSpace::complete_inactive_unoccupied | useful in CT-F12 with active space geminals  |
-/// | `w`   | IndexSpace::complete_unfrozen       | union of all unfrozen orbitals including the CABS orbitals. may be useful towards universal projector. |
+/// | `z`   | IndexSpace::complete_unfrozen       | union of all unfrozen orbitals including the CABS orbitals. may be useful towards universal projector. |
 /// | `u`   | IndexSpace::active                  |  origin unknown, for recent use see [DOI 10.1063/5.0067511](https://dx.doi.org/10.1063/5.0067511) |
 /// | `I`   | IndexSpace::active_maybe_occupied   |  origin unknown, for recent use see [DOI 10.1063/5.0067511](https://dx.doi.org/10.1063/5.0067511); N.B. although QCiFS uses capital letters for spin-free indices, since there is usually no need to distinguish spin-orbital from spin-free indices (the type is deduced from the context), this use of capital letters seems preferable |
 /// | `A`   | IndexSpace::active_maybe_unoccupied |  origin unknown, for recent use see [DOI 10.1063/5.0067511](https://dx.doi.org/10.1063/5.0067511); N.B. although QCiFS uses capital letters for spin-free indices, since there is usually no need to distinguish spin-orbital from spin-free indices (the type is deduced from the context), this use of capital letters seems preferable |
