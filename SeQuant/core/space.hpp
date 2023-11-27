@@ -224,9 +224,6 @@ class IndexSpace {
   /// @note this is the union of IndexSpace::inactive_unoccupied and IndexSpace::active_unoccupied
   /// @note unlike IndexSpace::other_unoccupied, these states are supported by a finite computational basis
   static constexpr Type unoccupied = IndexSpace::active_unoccupied.unIon(IndexSpace::inactive_unoccupied);
-  /// all functions in the orbital basis which are not frozen core
-  /// @note not the same as all_active, as this includes inactive unoccupied orbitals.
-  static constexpr Type OBS_unfrozen = IndexSpace::active_occupied.unIon(IndexSpace::unoccupied);
   /// space of sp states that are fully or partially unoccupied in the reference (vacuum) state
   /// @note this is the union of IndexSpace::unoccupied  and IndexSpace::active
   /// @note unlike IndexSpace::other_unoccupied, these states are supported by a finite computational basis
@@ -237,6 +234,9 @@ class IndexSpace {
   /// space of sp states that can be correlated
   /// @note this is the union of IndexSpace::active_occupied , IndexSpace::active_unoccupied and IndexSpace::active
   static constexpr Type all_active = IndexSpace::active_occupied.unIon(IndexSpace::active_unoccupied).unIon(IndexSpace::active);
+  /// all functions in the orbital basis which are not frozen core
+  /// @note not the same as all_active, as this includes inactive unoccupied orbitals.
+  static constexpr Type OBS_unfrozen = IndexSpace::all_active.unIon(IndexSpace::inactive_unoccupied);
   /// space of sp states represented in computational basis
   /// @note this is the union of IndexSpace::maybe_occupied and IndexSpace::maybe_unoccupied
   static constexpr Type all = IndexSpace::maybe_occupied.unIon(IndexSpace::maybe_unoccupied);
@@ -251,7 +251,7 @@ class IndexSpace {
   static constexpr Type complete_unoccupied = IndexSpace::unoccupied.unIon(IndexSpace::other_unoccupied);
   /// a union of all unfrozen orbitals including the CABS orbitals from F12 theory
   /// @note may be useful towards a state universal F12 geminal projector.
-  static constexpr Type complete_unfrozen = IndexSpace::complete_unoccupied.unIon(active_occupied);
+  static constexpr Type complete_unfrozen = IndexSpace::complete_inactive_unoccupied.unIon(all_active);
   /// set of arbitrary fully or partially unoccupied states
 /// @note this is a union of IndexSpace::complete_unoccupied and IndexSpace::active
   static constexpr Type complete_maybe_unoccupied = IndexSpace::complete_unoccupied.unIon(IndexSpace::active);
