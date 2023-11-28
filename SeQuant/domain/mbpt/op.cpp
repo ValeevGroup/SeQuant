@@ -113,9 +113,13 @@ template <Statistics S>
 std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
   using namespace sequant::mbpt;
 
-  auto lbl = utf_to_latex(op.label());
-  std::wstring result = L"{\\hat{" + lbl + L"}";
-  auto it = label2optype.find(lbl);
+  auto result = L"{\\hat{" + utf_to_latex(op.label()) + L"}";
+
+  // check if operator has adjoint label, remove if present for base label
+  auto base_lbl = sequant::to_wstring(op.label());
+  if (base_lbl.back() == adjoint_label) base_lbl.pop_back();
+
+  auto it = label2optype.find(base_lbl);
   if (it != label2optype.end()) {  // handle special cases
     const auto optype = it->second;
     if (to_class(optype) == OpClass::gen) {

@@ -47,8 +47,7 @@ QuantumNumbers& Operator<QuantumNumbers, S>::apply_to(
 }
 
 template <typename QuantumNumbers, Statistics S>
-bool Operator<QuantumNumbers, S>::static_less_than(
-    const Expr& that) const {
+bool Operator<QuantumNumbers, S>::static_less_than(const Expr& that) const {
   assert(that.is<this_type>());
   auto& that_op = that.as<this_type>();
 
@@ -85,8 +84,7 @@ bool Operator<QuantumNumbers, S>::static_less_than(
 }
 
 template <typename QuantumNumbers, Statistics S>
-bool Operator<QuantumNumbers, S>::commutes_with_atom(
-    const Expr& that) const {
+bool Operator<QuantumNumbers, S>::commutes_with_atom(const Expr& that) const {
   assert(that.is_cnumber() || that.is<this_type>());
   if (that.is_cnumber())
     return true;
@@ -111,17 +109,27 @@ void Operator<QuantumNumbers, S>::adjoint() {
   static_assert(std::is_same_v<QuantumNumbers, qnc_t>,
                 "mbpt::Operator::adjoint: QuantumNumbers type mismatch");
 
-  const auto lbl = this->label();
+  // grab label and update according to adjoint flag
+  auto lbl = std::wstring(this->label());
+  if (lbl.back() == sequant::adjoint_label) {
+    assert(is_adjoint_);
+    lbl.pop_back();
+  } else {
+    assert(!is_adjoint_);
+    lbl.push_back(sequant::adjoint_label);
+  }
+
   const auto tnsr = this->tensor_form();
-  *this = Operator{
-      [=]() -> std::wstring_view { return lbl; },  // return same label
-      [=]() -> ExprPtr {
-        return sequant::adjoint(tnsr);  // return adjoint of tensor form
-      },
-      [=](qnc_t& qn) {
-        qn += sequant::adjoint(dN);
-        return qn;  // return modified qns
-      }};
+  *this =
+      Operator{[=]() -> std::wstring_view { return lbl; },  // label_generator
+               [=]() -> ExprPtr {
+                 return sequant::adjoint(tnsr);  // tensor_form_generator
+               },
+               [=](qnc_t& qn) {
+                 qn += sequant::adjoint(dN);
+                 return qn;  // qn_action
+               }};
+  this->is_adjoint_ = !this->is_adjoint_;  // toggle adjoint flag
 }
 
 template <typename QuantumNumbers, Statistics S>

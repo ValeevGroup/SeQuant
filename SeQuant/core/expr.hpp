@@ -596,6 +596,9 @@ using ExprPtrVector = container::svector<ExprPtr>;
 /// @return the adjoint of @p expr
 ExprPtr adjoint(const ExprPtr &expr);
 
+/// @brief the wchar used for labeling adjoints, i.e. the superscript + sign
+static const wchar_t adjoint_label = L'\u207A';
+
 /// An object with a string label that be used for defining a canonical order of
 /// expressions (defined at runtime)
 class Labeled {
@@ -734,7 +737,6 @@ class Variable : public Expr, public Labeled {
 
   Variable(std::wstring label, bool conjugated)
       : label_(std::move(label)), conjugated_(conjugated) {}
-
 
   std::wstring_view label() const override;
 

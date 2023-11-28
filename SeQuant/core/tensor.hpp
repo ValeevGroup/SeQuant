@@ -252,6 +252,7 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   ParticleSymmetry particle_symmetry_ = ParticleSymmetry::invalid;
   mutable std::optional<hash_type>
       bra_hash_value_;  // memoized byproduct of memoizing_hash()
+  bool is_adjoint_ = false;
 
   void validate_symmetries() {
     // (anti)symmetric bra or ket makes sense only for particle-symmetric

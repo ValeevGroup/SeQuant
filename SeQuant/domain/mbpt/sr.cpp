@@ -513,7 +513,12 @@ std::wstring to_latex(const mbpt::Operator<mbpt::sr::qns_t, S>& op) {
   using namespace sequant::mbpt::sr;
 
   auto result = L"{\\hat{" + utf_to_latex(op.label()) + L"}";
-  auto it = label2optype.find(std::wstring(op.label()));
+
+  // check if operator has adjoint label, remove if present for base label
+  auto base_lbl = sequant::to_wstring(op.label());
+  if (base_lbl.back() == adjoint_label) base_lbl.pop_back();
+
+  auto it = label2optype.find(std::wstring(base_lbl));
   OpType optype = OpType::invalid;
   if (it != label2optype.end()) {  // handle special cases
     optype = it->second;

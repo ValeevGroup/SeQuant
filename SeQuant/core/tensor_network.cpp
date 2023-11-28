@@ -37,6 +37,14 @@ ExprPtr TensorNetwork::canonicalize(
       [&cardinal_tensor_labels](const auto &first_ptr, const auto &second_ptr) {
         const auto &first = *first_ptr;
         const auto &second = *second_ptr;
+        // grab base label if adjoint label is present
+        auto base_label = [](const auto &t) {
+          if (label(t).back() == adjoint_label) {
+            return label(t).substr(0, label(t).size() - 1);
+          } else {
+            return label(t);
+          }
+        };
         // tensors commute if their colors are different or either one of them
         // is a c-number
         if ((color(first) != color(second)) || is_cnumber(first) ||
@@ -44,10 +52,10 @@ ExprPtr TensorNetwork::canonicalize(
           const auto cardinal_tensor_labels_end = end(cardinal_tensor_labels);
           const auto first_cardinal_it =
               std::find(begin(cardinal_tensor_labels),
-                        end(cardinal_tensor_labels), label(first));
+                        end(cardinal_tensor_labels), base_label(first));
           const auto second_cardinal_it =
               std::find(begin(cardinal_tensor_labels),
-                        end(cardinal_tensor_labels), label(second));
+                        end(cardinal_tensor_labels), base_label(second));
           const auto first_is_cardinal =
               first_cardinal_it != cardinal_tensor_labels_end;
           const auto second_is_cardinal =

@@ -538,6 +538,7 @@ class Operator : public Operator<void, S> {
   Operator(std::function<std::wstring_view()> label_generator,
            std::function<ExprPtr()> tensor_form_generator,
            std::function<void(QuantumNumbers&)> qn_action);
+
   virtual ~Operator();
 
   /// evaluates the result of applying this operator to \p qns
@@ -568,6 +569,8 @@ class Operator : public Operator<void, S> {
   bool commutes_with_atom(const Expr& that) const override;
 
   void adjoint() override;
+
+  bool is_adjoint_ = false;
 
  private:
   std::function<void(QuantumNumbers&)> qn_action_;

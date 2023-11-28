@@ -364,10 +364,19 @@ TEST_CASE("NBodyOp", "[mbpt]") {
             simplify(adjoint(r_1_2.tensor_form())));
 
     // to_latex()
-    REQUIRE(to_latex(adjoint(f).as<Expr>()) == L"{\\hat{f}}");
-    REQUIRE(to_latex(adjoint(t1).as<Expr>()) == L"{\\hat{t}^{1}}");
-    REQUIRE(to_latex(adjoint(lambda2).as<Expr>()) == L"{\\hat{\\lambda}^{2}}");
-    REQUIRE(to_latex(adjoint(r_1_2).as<Expr>()) == L"{\\hat{R}^{1,2}}");
+    REQUIRE(to_latex(adjoint(f).as<Expr>()) == L"{\\hat{f⁺}}");
+    REQUIRE(to_latex(adjoint(t1).as<Expr>()) == L"{\\hat{t⁺}^{1}}");
+    REQUIRE(to_latex(adjoint(lambda2).as<Expr>()) == L"{\\hat{\\lambda⁺}^{2}}");
+    REQUIRE(to_latex(adjoint(r_1_2).as<Expr>()) == L"{\\hat{R⁺}^{1,2}}");
+
+    // adjoint(adjoint(op)) == op
+    auto t1_adj = adjoint(t1);
+    auto r_1_2_adj = adjoint(r_1_2);
+    auto lambda2_adj = adjoint(lambda2);
+    REQUIRE(to_latex(adjoint(t1_adj).as<Expr>()) == L"{\\hat{t}_{1}}");
+    REQUIRE(to_latex(adjoint(r_1_2_adj).as<Expr>()) == L"{\\hat{R}_{1,2}}");
+    REQUIRE(to_latex(adjoint(lambda2_adj).as<Expr>()) ==
+            L"{\\hat{\\lambda}_{2}}");
 
   }  // SECTION("adjoint")
 
