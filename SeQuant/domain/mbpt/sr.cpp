@@ -350,6 +350,30 @@ ExprPtr Λ(std::size_t K) {
   return result;
 }
 
+ExprPtr R_(std::size_t Nbra, std::size_t Nket) {
+  assert(Nbra > 0 || Nket > 0);
+  return ex<op_t>([]() -> std::wstring_view { return L"R"; },
+                  [=]() -> ExprPtr {
+                    using namespace sequant::mbpt::sr;
+                    return sr::R_(Nbra, Nket);
+                  },
+                  [=](qnc_t& qns) {
+                    qns = combine(qnc_t{0ul, Nbra, Nket, 0ul}, qns);
+                  });
+}
+
+ExprPtr L_(std::size_t Nbra, std::size_t Nket) {
+  assert(Nbra > 0 || Nket > 0);
+  return ex<op_t>([]() -> std::wstring_view { return L"L"; },
+                  [=]() -> ExprPtr {
+                    using namespace sequant::mbpt::sr;
+                    return sr::L_(Nbra, Nket);
+                  },
+                  [=](qnc_t& qns) {
+                    qns = combine(qnc_t{Nbra, 0ul, 0ul, Nket}, qns);
+                  });
+}
+
 ExprPtr A(std::int64_t K) {
   assert(K != 0);
   return ex<op_t>([]() -> std::wstring_view { return L"A"; },

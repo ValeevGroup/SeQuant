@@ -210,6 +210,14 @@ ExprPtr Λ_(std::size_t K);
 /// K
 ExprPtr Λ(std::size_t K);
 
+/// makes excitation operator of all bra/ket ranks up to (and including)
+/// @c Nbra/Nket
+ExprPtr R_(std::size_t Nbra, std::size_t Nket);
+
+/// makes deexcitation operator of all bra/ket ranks up to (and including) @c
+/// Nbra/Nket
+ExprPtr L_(std::size_t Nbra, std::size_t Nket);
+
 /// makes generic bra/ket-antisymmetric excitation (if \p K > 0) or
 /// deexcitation (if \p K < 0) operator of rank `|K|`
 ExprPtr A(std::int64_t K);
