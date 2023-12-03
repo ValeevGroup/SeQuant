@@ -35,6 +35,9 @@ struct TypeAttr {
   constexpr TypeAttr unIon(TypeAttr other) const {
     return TypeAttr(this->to_int32() | other.to_int32());
   }
+  constexpr int32_t exclusionary_or(TypeAttr other) const {
+    return (this->to_int32() xor other.to_int32());
+  }
 
   friend constexpr bool operator==(TypeAttr, TypeAttr);
   friend constexpr bool operator!=(TypeAttr, TypeAttr);
@@ -146,6 +149,39 @@ class IndexSpace {
     Attr unIon(Attr other) const {
       return Attr(this->type().unIon(other.type()),
                   this->qns().unIon(other.qns()));
+    }
+
+    std::vector<Attr> excluded_spaces(Attr other) const {
+      std::vector<Attr> result;
+      std::bitset<32> bit32(this->exclusionary_or(other));
+      std::vector<std::pair<int,int>> start_stop_ranges;
+      /// TODO need to make a cleaner implementation here.
+      // std::bitset does not have an iterator, find, or fill function.
+      int temp_start = 33;
+      int temp_end = -1;
+      for(int i = 0; i < 32; i++){
+        if(bit32[i]){
+          if(i > temp_end && i < temp_start){
+            temp_start = i;
+          }
+          temp_end = i;
+        }
+        else{
+          if(temp_end > 0){
+            start_stop_ranges.push_back({temp_start,temp_end});
+            temp_start = 33;
+          }
+        }
+      }
+      for(int i = 0; i < start_stop_ranges.size(); i++){
+        std::bitset<32> new_bitspace;
+        for (int j = start_stop_ranges[i].first; j < start_stop_ranges[i].second; j++){
+          new_bitspace.set(j,true);
+        }
+        Attr new_attr(new_bitspace.to_ulong(),this->qns().to_int32());
+        result.push_back(new_attr);
+      }
+      return result;
     }
 
     /// @return true if \p other is included in this object
@@ -591,6 +627,19 @@ inline bool includes(IndexSpace::QuantumNumbers qns1,
 /// space2) == space2
 inline bool includes(const IndexSpace &space1, const IndexSpace &space2) {
   return space1.attr().includes(space2.attr());
+}
+inline bool has_non_overlapping_spaces(const IndexSpace &space1, const IndexSpace &space2){
+  if(space1.attr().exclusionary_or(space2.attr()) == 0) {return false;}
+  else{ return true;}
+}
+
+inline std::vector<IndexSpace> non_overlapping_spaces(const IndexSpace &space1, const IndexSpace &space2){
+  auto attributes = space1.attr().excluded_spaces(space2.attr());
+  std::vector<IndexSpace> result;
+  for(int i = 0; i < attributes.size(); i++){
+    result.push_back(IndexSpace::instance(attributes[i]));
+  }
+  return result;
 }
 
 /// IndexSpace are ordered by their attributes (i.e. labels do not matter one
