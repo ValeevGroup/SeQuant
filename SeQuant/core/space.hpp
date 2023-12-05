@@ -156,7 +156,7 @@ class IndexSpace {
       std::bitset<32> bit32(this->exclusionary_or(other));
       std::vector<std::pair<int,int>> start_stop_ranges;
       /// TODO need to make a cleaner implementation here.
-      // std::bitset does not have an iterator, find, or fill function.
+      // std::bitset does not have an iterator
       int temp_start = 33;
       int temp_end = -1;
       for(int i = 0; i < 32; i++){
@@ -167,7 +167,7 @@ class IndexSpace {
           temp_end = i;
         }
         else{
-          if(temp_end > 0){
+          if(temp_end > 0 && temp_start != 33){
             start_stop_ranges.push_back({temp_start,temp_end});
             temp_start = 33;
           }
@@ -175,7 +175,7 @@ class IndexSpace {
       }
       for(int i = 0; i < start_stop_ranges.size(); i++){
         std::bitset<32> new_bitspace;
-        for (int j = start_stop_ranges[i].first; j < start_stop_ranges[i].second; j++){
+        for (int j = start_stop_ranges[i].first; j <= start_stop_ranges[i].second; j++){
           new_bitspace.set(j,true);
         }
         Attr new_attr(new_bitspace.to_ulong(),this->qns().to_int32());
