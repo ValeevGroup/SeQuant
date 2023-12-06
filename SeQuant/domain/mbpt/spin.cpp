@@ -489,7 +489,6 @@ ExprPtr symmetrize_expr(const Product& product) {
   // Get phase relative to the canonical order
   // TODO factor out for reuse
   auto get_phase = [](const container::map<Index, Index>& map) {
-    bool even;
     container::svector<Index> idx_list;
     for (const auto& [key, val] : map) idx_list.push_back(val);
     IndexSwapper::thread_instance().reset();
@@ -755,7 +754,7 @@ ExprPtr closed_shell_spintrace(
     const ExprPtr& expression,
     const container::svector<container::svector<Index>>& ext_index_groups) {
   // NOT supported for Proto indices
-  auto check_proto_index = [](const ExprPtr& expr) {
+  [[maybe_unused]] auto check_proto_index = [](const ExprPtr& expr) {
     if (expr->is<Tensor>()) {
       ranges::for_each(expr->as<Tensor>().const_braket(), [](const Index& idx) {
         assert(!idx.has_proto_indices() &&
@@ -1084,7 +1083,6 @@ std::vector<ExprPtr> open_shell_A_op(const Tensor& A) {
   // Add spin label beta to index
   auto add_beta = [](const Index& idx) {
     std::wstring idx_n_ws(idx.label().substr(idx.label().rfind(L'_') + 1));
-    auto idx_type = idx.space().type();
     auto space = IndexSpace::instance(idx.space().type(), IndexSpace::beta);
     return Index::make_label_index(space, idx_n_ws);
   };
@@ -1413,7 +1411,7 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
   auto A_vec = open_shell_A_op(A);
   assert(P_vec.size() == i + 1);
   std::vector<Sum> concat_terms(i + 1);
-  size_t n_spin_orbital_term = 0;
+  [[maybe_unused]] size_t n_spin_orbital_term = 0;
   for (auto& product_term : *expr) {
     auto term = remove_tensor(product_term->as<Product>(), L"A");
     std::vector<ExprPtr> os_st(i + 1);
@@ -1716,7 +1714,7 @@ ExprPtr factorize_S(const ExprPtr& expression,
     // Check if hash1 exist in summands_hash_list
     // if(hash1 present in summands_hash_list) remove hash0, hash1
     // else continue
-    int n_symm_terms = 0;
+    [[maybe_unused]] int n_symm_terms = 0;
     auto symm_factor = factorial(S.bra_rank());
     for (auto it = expr->begin(); it != expr->end(); ++it) {
       // Exclude summand with value zero
@@ -1808,7 +1806,7 @@ ExprPtr factorize_S(const ExprPtr& expression,
     // This approach is slower because the hash values are computed on the fly.
     // Subsequently, this algorithm applies 'S' operator n^2 times
 
-    int n_symm_terms = 0;
+    [[maybe_unused]] int n_symm_terms = 0;
 
     // If a term was symmetrized, put the index in a list
     container::set<int> i_list;

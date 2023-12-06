@@ -348,7 +348,7 @@ ExprPtr TensorNetwork::canonicalize(
   }
 #endif
   bool pass_mutated = false;
-  bool mutated = false;
+  [[maybe_unused]] bool mutated = false;
   do {
     pass_mutated = false;
     for (auto &tensor : tensors_) {

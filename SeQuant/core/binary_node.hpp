@@ -52,12 +52,13 @@ template <
     typename = std::enable_if_t<std::is_invocable_v<V, FullBinaryNode<T>>>>
 void visit(FullBinaryNode<T> const& node, V const& f, Order, NodeType) {
   static_assert(std::is_same_v<Order, PreOrder> ||
-                std::is_same_v<Order, InOrder> ||
-                std::is_same_v<Order, PostOrder> && "Unsupported visit order");
+                    std::is_same_v<Order, InOrder> ||
+                    std::is_same_v<Order, PostOrder>,
+                "Unsupported visit order");
   static_assert(std::is_same_v<NodeType, VisitLeaf> ||
-                std::is_same_v<NodeType, VisitInternal> ||
-                std::is_same_v<NodeType, VisitAll> &&
-                    "Not sure which nodes to visit");
+                    std::is_same_v<NodeType, VisitInternal> ||
+                    std::is_same_v<NodeType, VisitAll>,
+                "Not sure which nodes to visit");
   if (node.leaf()) {
     if constexpr (!std::is_same_v<NodeType, VisitInternal>) f(node);
   } else {

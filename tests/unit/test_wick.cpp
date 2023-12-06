@@ -357,7 +357,6 @@ REQUIRE(to_latex(partial_contractions) ==
 }  // SECTION("physical vacuum")
 
 SECTION("fermi vacuum") {
-  constexpr Vacuum V = Vacuum::SingleProduct;
   // default vacuum is already spin-orbital Fermi vacuum
 
   auto switch_to_spinfree_context = detail::NoDiscard([&]() {
@@ -780,10 +779,6 @@ SECTION("fermi vacuum") {
     }
 #endif
 }  // SECTION("fermi vacuum")
-
-auto print = [](const auto& lead, const auto& expr) {
-  std::wcout << lead << to_latex(expr) << std::endl;
-};
 
 SECTION("Expression Reduction") {
   constexpr Vacuum V = Vacuum::SingleProduct;

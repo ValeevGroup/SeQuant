@@ -21,7 +21,6 @@ TEST_CASE("NBodyOp", "[mbpt]") {
     // tests 1-space quantum number case
     {
       using namespace sequant::mbpt;
-      using interval_t = typename qns_t::interval_t;
 
       op_t f1([]() -> std::wstring_view { return L"f"; },
               []() -> ExprPtr {

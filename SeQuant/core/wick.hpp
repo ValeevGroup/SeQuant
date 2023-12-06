@@ -300,7 +300,6 @@ class WickTheorem {
 
       // assert that every op is in a partition
       if (ranges::contains(op_partition_idx_, 0)) {
-        std::size_t idx_ord = 0;
         for (auto &&[ord, partition_idx] :
              ranges::views::enumerate(op_partition_idx_)) {
           if (partition_idx == 0) {
@@ -668,10 +667,10 @@ class WickTheorem {
         //                   << " qpcre_op=" << qpcre_op_ptr->to_latex() <<
         //                   "\n";
         auto ann_it = ranges::find_if(result, [&](const auto &p) {
-          return qpann_op_ptr->action() == Action::annihilate &&
-                     p.second == qpann_op_ptr->index() ||
-                 qpcre_op_ptr->action() == Action::annihilate &&
-                     p.second == qpcre_op_ptr->index();
+          return (qpann_op_ptr->action() == Action::annihilate &&
+                  p.second == qpann_op_ptr->index()) ||
+                 (qpcre_op_ptr->action() == Action::annihilate &&
+                  p.second == qpcre_op_ptr->index());
         });
         if (ann_it != result.end()) {
           //          std::wcout << "make_target_partner_indices: found ann_it =
@@ -679,10 +678,10 @@ class WickTheorem {
           //                     << ann_it->first.to_latex() << ", "
           //                     << ann_it->second.to_latex() << "}\n";
           auto cre_it = ranges::find_if(result, [&](const auto &p) {
-            return qpcre_op_ptr->action() == Action::create &&
-                       p.first == qpcre_op_ptr->index() ||
-                   qpann_op_ptr->action() == Action::create &&
-                       p.first == qpann_op_ptr->index();
+            return (qpcre_op_ptr->action() == Action::create &&
+                    p.first == qpcre_op_ptr->index()) ||
+                   (qpann_op_ptr->action() == Action::create &&
+                    p.first == qpann_op_ptr->index());
           });
           if (cre_it != result.end()) {
             //            std::wcout << "make_target_partner_indices: found
