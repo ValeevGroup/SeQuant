@@ -600,12 +600,18 @@ ExprPtr adjoint(const ExprPtr &expr);
 static const wchar_t adjoint_label = L'\u207A';
 
 /// An object with a string label that be used for defining a canonical order of
-/// expressions (defined at runtime)
+/// expressions (defined at runtime). These labels are not in general
+/// object-unique, i.e. 2 objects that are not equal can return same label.
 class Labeled {
  public:
   Labeled() = default;
   virtual ~Labeled() = default;
 
+  /// @return object's label. 2 objects that are not equal can return same
+  /// label, i.e. the label does not identify the object uniquely. Thus labels
+  /// can be viewed as immutable string tags that for some object types can be
+  /// used for sorting and other purposes.
+  /// @sa to_latex() for producing unique string representation
   virtual std::wstring_view label() const = 0;
 };
 

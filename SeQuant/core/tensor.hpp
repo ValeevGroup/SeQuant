@@ -135,6 +135,7 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
            particle_symmetry_ != ParticleSymmetry::invalid;
   }
 
+  /// @return "core" label of the tensor
   std::wstring_view label() const override { return label_; }
   const auto &bra() const { return bra_; }
   const auto &ket() const { return ket_; }
