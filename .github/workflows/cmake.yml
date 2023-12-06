@@ -34,6 +34,8 @@ jobs:
         -DCMAKE_PREFIX_PATH='/usr/local/opt/boost@1.76'
         -DSEQUANT_EVAL_TESTS=ON
         -DSEQUANT_USE_SYSTEM_BOOST_HASH=OFF
+        -DCMAKE_CXX_STANDARD=20
+        -DCMAKE_CXX_EXTENSIONS=OFF
     steps:
     - uses: actions/checkout@v2
 
@@ -73,6 +75,7 @@ jobs:
       # and build directories, but this is only available with CMake 3.13 and higher.  
       # The CMake binaries on the Github Actions machines are (as of this writing) 3.12
       run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE $BUILD_CONFIG
+
 
     - name: Build
       working-directory: ${{github.workspace}}/build

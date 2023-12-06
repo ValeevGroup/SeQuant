@@ -32,7 +32,8 @@ sequant::EvalExpr node(sequant::EvalNode<sequant::EvalExpr> const& n,
   return *n_;
 }
 
-std::wstring tikz(sequant::EvalNode<sequant::EvalExpr> const& n) noexcept {
+[[maybe_unused]] std::wstring tikz(
+    sequant::EvalNode<sequant::EvalExpr> const& n) noexcept {
   return n.tikz<std::wstring>(
       [](auto&& n) { return L"$" + n->expr()->to_latex() + L"$"; },
       [](auto&&) { return L""; });

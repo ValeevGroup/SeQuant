@@ -135,6 +135,7 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
            particle_symmetry_ != ParticleSymmetry::invalid;
   }
 
+  /// @return "core" label of the tensor
   std::wstring_view label() const override { return label_; }
   const auto &bra() const { return bra_; }
   const auto &ket() const { return ket_; }
@@ -161,12 +162,12 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   ParticleSymmetry particle_symmetry() const { return particle_symmetry_; }
 
   /// @return number of bra indices
-  auto bra_rank() const { return bra_.size(); }
+  std::size_t bra_rank() const { return bra_.size(); }
   /// @return number of ket indices
-  auto ket_rank() const { return ket_.size(); }
+  std::size_t ket_rank() const { return ket_.size(); }
   /// @return number of indices in bra/ket
   /// @throw std::logic_error if bra and ket ranks do not match
-  auto rank() const {
+  std::size_t rank() const {
     if (bra_rank() != ket_rank()) {
       throw std::logic_error("Tensor::rank(): bra rank != ket rank");
     }

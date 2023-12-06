@@ -26,7 +26,7 @@ ExprPtr CC::sim_tr(ExprPtr expr, size_t r) {
     assert(expr.is<op_t>() || expr.is<Product>());
     auto result = expr;
     auto op_Tk = result;
-    for (int64_t k = 1; k <= r; ++k) {
+    for (size_t k = 1; k <= r; ++k) {
       op_Tk = simplify(ex<Constant>(rational{1, k}) * op_Tk * op::T(N));
       result += op_Tk;
     }

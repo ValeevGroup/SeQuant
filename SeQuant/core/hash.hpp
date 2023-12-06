@@ -191,7 +191,7 @@ std::size_t hash_range(It begin, It end) {
       seed = begin->hash_value();
     else {
       using sequant_boost::hash_value;
-      std::size_t seed = hash_value(*begin);
+      [[maybe_unused]] std::size_t seed = hash_value(*begin);
     }
     sequant_boost::hash_range(seed, begin + 1, end);
     return seed;

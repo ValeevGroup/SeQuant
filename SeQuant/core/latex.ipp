@@ -84,13 +84,13 @@ std::basic_string<Char, Traits, Alloc> greek_characters_to_latex_impl(
     if (!is_ascii(ch)) {
       if (is_lc(ch)) {
         const auto ch_addr = static_cast<long>(ch) - static_cast<long>(0x3B1);
-        assert(ch_addr >= 0 && ch_addr < lc.size());
+        assert(ch_addr >= 0 && static_cast<std::size_t>(ch_addr) < lc.size());
         const auto& lc_str = lc[static_cast<std::size_t>(ch_addr)];
         assert(lc_str.size() > 0);
         append(lc_str);
       } else if (is_uc(ch)) {
         const auto ch_addr = static_cast<long>(ch) - static_cast<long>(0x391);
-        assert(ch_addr >= 0 && ch_addr < uc.size());
+        assert(ch_addr >= 0 && static_cast<std::size_t>(ch_addr) < uc.size());
         const auto& uc_str = uc[static_cast<std::size_t>(ch_addr)];
         assert(uc_str.size() > 0);
         append(uc_str);

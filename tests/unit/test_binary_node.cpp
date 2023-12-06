@@ -147,29 +147,29 @@ TEST_CASE("TEST BINARY_NODE", "[FullBinaryNode]") {
                          "node0 -> node2;\n"
                          "}"});
 
-    //
-    // tree from node1:
-    //              1
-    //
-    // tree from node2:
-    //              3
-    //            /   \
-    //          1      2
-    //
-    // tree from node3:
-    //              6
-    //            /   \
-    //          3       3
-    //        /   \
-    //      1      2
-    //
-    // tree from node4:
-    //              6
-    //            /   \
-    //          1      5
-    //                /  \
-    //              2     3
-    //
+    /*
+       tree from node1:
+                    1
+
+       tree from node2:
+                    3
+                  /   \
+                1      2
+
+       tree from node3:
+                    6
+                  /   \
+                3       3
+              /   \
+            1      2
+
+       tree from node4:
+                    6
+                  /   \
+                1      5
+                      /  \
+                    2     3
+    */
   }
 
   SECTION("visitor") {
