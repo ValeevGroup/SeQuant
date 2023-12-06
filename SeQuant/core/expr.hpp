@@ -735,11 +735,16 @@ class Variable : public Expr, public Labeled {
                             !std::is_same_v<std::decay_t<U>, Variable>>>
   explicit Variable(U &&label) : label_(std::forward<U>(label)) {}
 
-  Variable(std::wstring label, bool conjugated)
-      : label_(std::move(label)), conjugated_(conjugated) {}
+  Variable(std::wstring label) : label_(std::move(label)), conjugated_(false) {}
 
+  /// @return variable label
+  /// @warning conjugation does not change it
   std::wstring_view label() const override;
 
+  /// complex-conjugates this
+  void conjugate();
+
+  /// @return whether this object has been conjugated
   bool conjugated() const;
 
   std::wstring to_latex() const override;
