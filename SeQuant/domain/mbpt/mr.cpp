@@ -450,11 +450,11 @@ ExprPtr H_(std::size_t k) {
           [vacuum = get_default_context().vacuum()]() -> std::wstring_view {
             switch (vacuum) {
               case Vacuum::Physical:
-                return L"h";
+                return optype2label.at(OpType::h);
               case Vacuum::SingleProduct:
-                return L"f̃";
+                return optype2label.at(OpType::f̃);
               case Vacuum::MultiProduct:
-                return L"f";
+                return optype2label.at(OpType::f);
               default:
                 abort();
             }
@@ -467,7 +467,7 @@ ExprPtr H_(std::size_t k) {
 
     case 2:
       return ex<op_t>(
-          []() -> std::wstring_view { return L"g"; },
+          []() -> std::wstring_view { return optype2label.at(OpType::g); },
           [=]() -> ExprPtr { return mbpt::mr::H_(2); },
           [=](qnc_t& qns) {
             qns = combine(qnc_t{{0, 2}, {0, 2}, {0, 2}, {0, 2}, {0, 2}, {0, 2}},
@@ -487,7 +487,7 @@ ExprPtr H(std::size_t k) {
 ExprPtr T_(std::size_t K) {
   assert(K > 0);
   return ex<op_t>(
-      []() -> std::wstring_view { return L"t"; },
+      []() -> std::wstring_view { return optype2label.at(OpType::t); },
       [=]() -> ExprPtr {
         using namespace sequant::mbpt::sr;
         return mr::T_(K);
@@ -513,7 +513,7 @@ ExprPtr T(std::size_t K) {
 ExprPtr Λ_(std::size_t K) {
   assert(K > 0);
   return ex<op_t>(
-      []() -> std::wstring_view { return L"λ"; },
+      []() -> std::wstring_view { return optype2label.at(OpType::λ); },
       [=]() -> ExprPtr {
         using namespace sequant::mbpt::sr;
         return mr::Λ_(K);
@@ -538,30 +538,31 @@ ExprPtr Λ(std::size_t K) {
 
 ExprPtr A(std::int64_t K) {
   assert(K != 0);
-  return ex<op_t>([]() -> std::wstring_view { return L"A"; },
-                  [=]() -> ExprPtr {
-                    using namespace sequant::mbpt::sr;
-                    return mr::A(K, K);
-                  },
-                  [=](qnc_t& qns) {
-                    const std::size_t abs_K = std::abs(K);
-                    if (K < 0)
-                      qns = combine(qnc_t{{0ul, abs_K},
-                                          {0ul, 0ul},
-                                          {0ul, abs_K},
-                                          {0ul, abs_K},
-                                          {0ul, 0ul},
-                                          {0ul, abs_K}},
-                                    qns);
-                    else
-                      qns = combine(qnc_t{{0ul, 0ul},
-                                          {0ul, abs_K},
-                                          {0ul, abs_K},
-                                          {0ul, abs_K},
-                                          {0ul, abs_K},
-                                          {0ul, 0ul}},
-                                    qns);
-                  });
+  return ex<op_t>(
+      []() -> std::wstring_view { return optype2label.at(OpType::A); },
+      [=]() -> ExprPtr {
+        using namespace sequant::mbpt::sr;
+        return mr::A(K, K);
+      },
+      [=](qnc_t& qns) {
+        const std::size_t abs_K = std::abs(K);
+        if (K < 0)
+          qns = combine(qnc_t{{0ul, abs_K},
+                              {0ul, 0ul},
+                              {0ul, abs_K},
+                              {0ul, abs_K},
+                              {0ul, 0ul},
+                              {0ul, abs_K}},
+                        qns);
+        else
+          qns = combine(qnc_t{{0ul, 0ul},
+                              {0ul, abs_K},
+                              {0ul, abs_K},
+                              {0ul, abs_K},
+                              {0ul, abs_K},
+                              {0ul, 0ul}},
+                        qns);
+      });
 }
 
 // ExprPtr S(std::int64_t K) {
