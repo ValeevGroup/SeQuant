@@ -73,7 +73,7 @@ TEST_CASE("IndexSpace", "[elements]") {
     // test ordering with quantum numbers
     {
       auto i = IndexSpace::instance(L"i");
-      auto a = IndexSpace::instance(L"a");
+      [[maybe_unused]] auto a = IndexSpace::instance(L"a");
       auto iA =
           IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::alpha);
       auto iB =

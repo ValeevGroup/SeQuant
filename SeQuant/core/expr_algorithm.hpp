@@ -450,7 +450,7 @@ inline ExprPtr& simplify(ExprPtr& expr) {
 inline ExprPtr simplify(ExprPtr&& expr_rv) {
   auto expr = std::move(expr_rv);
   simplify(expr);
-  return std::move(expr);
+  return expr;
 }
 
 /// Simplifies an Expr by a combination of expansion and

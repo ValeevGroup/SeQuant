@@ -167,8 +167,6 @@ OpMaker<S>::OpMaker(OpType op) : op_(op) {}
 template <Statistics S>
 ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
                                std::optional<Symmetry> opsymm_opt) const {
-  bool dep_bra = false;
-  bool dep_ket = false;
   // if not given dep, use mbpt::Context::CSV to determine whether to use
   // dependent indices for pure (de)excitation ops
   if (!dep && get_default_formalism().csv() == mbpt::CSV::Yes) {

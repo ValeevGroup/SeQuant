@@ -100,6 +100,9 @@ auto index_def        = x3::lexeme[
                             index_label >> -('<' >> index_label % ',' >> ">")
                         ];
 
+SEQUANT_PRAGMA_GCC(diagnostic push)
+SEQUANT_PRAGMA_GCC(diagnostic ignored "-Wparentheses")
+
 auto index_groups_def =   L"_{" > -(index % ',') > L"}^{" > -(index % ',') > L"}" >> x3::attr(false)
                         | L"^{" > -(index % ',') > L"}_{" > -(index % ',') > L"}" >> x3::attr(true)
                         |  '{'  > -(index % ',') > ';'    > -(index % ',') >  '}' >> x3::attr(false);
@@ -111,6 +114,8 @@ auto tensor_def       = x3::lexeme[
 auto nullary          = number | tensor | variable;
 
 auto grouped          = '(' > sum > ')' | nullary;
+
+SEQUANT_PRAGMA_GCC(diagnostic pop)
 
 auto product_def      = grouped % -x3::lit('*');
 

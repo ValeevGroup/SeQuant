@@ -102,6 +102,8 @@ void Constant::adjoint() {
 
 std::wstring_view Variable::label() const { return label_; }
 
+void Variable::conjugate() { conjugated_ = !conjugated_; }
+
 bool Variable::conjugated() const { return conjugated_; }
 
 std::wstring Variable::to_latex() const {
@@ -110,11 +112,9 @@ std::wstring Variable::to_latex() const {
   return result;
 }
 
-ExprPtr Variable::clone() const {
-  return ex<Variable>(Variable(label_, conjugated_));
-}
+ExprPtr Variable::clone() const { return ex<Variable>(*this); }
 
-void Variable::adjoint() { conjugated_ = !conjugated_; }
+void Variable::adjoint() { conjugate(); }
 
 bool Product::is_commutative() const {
   bool result = true;
