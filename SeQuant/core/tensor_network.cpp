@@ -275,7 +275,7 @@ ExprPtr TensorNetwork::canonicalize(
                       });
           std::sort(begin(ord_orig), end(ord_orig));
           // write (potentially reordered) tensors to tensors_canonized
-          for (size_t t = 0; t != sz; ++t) {
+          for (std::ptrdiff_t t = 0; t != sz; ++t) {
             tensors_canonized.at(ord_orig[t]) = tensors_.at(ord_can[t].first);
           }
 

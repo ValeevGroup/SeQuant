@@ -372,7 +372,7 @@ class FullBinaryNode {
   void tikz(Ostream& os, F const& label_gen, G const& spec_gen,
             size_t indent = 2) const {
     auto pad = [](Ostream& o, size_t i) {
-      for (auto j = 0; j < i; ++j) o << " ";
+      for (size_t j = 0; j < i; ++j) o << " ";
     };
 
     // pad(os, indent);

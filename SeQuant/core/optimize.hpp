@@ -65,7 +65,7 @@ template <
 void biparts(I n, F const& func) {
   if (n == 0) return;
   I const h = static_cast<I>(std::floor(n / 2.0));
-  for (auto n_ = 1; n_ <= h; ++n_) {
+  for (I n_ = 1; n_ <= h; ++n_) {
     auto const l = n & n_;
     auto const r = (n - n_) & n;
     if ((l | r) == n) func(l, r);
@@ -185,7 +185,7 @@ eval_seq_t single_term_opt(TensorNetwork const& network, IdxToSz const& idxsz) {
   auto nth_tensor_indices = container::svector<container::svector<Index>>{};
   nth_tensor_indices.reserve(nt);
 
-  for (auto i = 0; i < nt; ++i) {
+  for (std::size_t i = 0; i < nt; ++i) {
     auto const& tnsr = *network.tensors().at(i);
     auto bk = container::svector<Index>{};
     bk.reserve(bra_rank(tnsr) + ket_rank(tnsr));
@@ -203,7 +203,7 @@ eval_seq_t single_term_opt(TensorNetwork const& network, IdxToSz const& idxsz) {
   // result[1<<2]
   // and so on are set
   size_t power_pos = 0;
-  for (size_t n = 1; n < (1 << nt); ++n) {
+  for (size_t n = 1; n < (1ul << nt); ++n) {
     double curr_cost = std::numeric_limits<double>::max();
     std::pair<size_t, size_t> curr_parts{0, 0};
     container::svector<Index> curr_indices{};
