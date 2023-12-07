@@ -39,7 +39,7 @@ enum class Convention { QCiFS };
 /// | `E`   | IndexSpace::maybe_unoccupied        |  combination of of `A` for `e` |
 /// | `Δ`   | IndexSpace::complete_maybe_unoccupied | combination of `α` and `A`; since capital Alpha looks indistinguishable from `A` use `Δ`                          |
 // clang-format on
-void set_default_convention(Convention conv = Convention::QCiFS);
+void set_default_convention(Convention conv = Convention::QCiFS,bool clear_registry = true);
 
 }  // namespace mbpt
 }  // namespace sequant

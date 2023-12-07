@@ -10,7 +10,6 @@
 
 TEST_CASE("Op", "[elements]") {
   using namespace sequant;
-
   SECTION("constructors") {
     REQUIRE_NOTHROW(FOp{});
 
@@ -206,7 +205,7 @@ TEST_CASE("Op", "[elements]") {
       REQUIRE(qpannihilator_space(fcre(L"p_1"), V) ==
               IndexSpace::instance(IndexSpace::occupied));
       REQUIRE(qpannihilator_space(fann(L"p_1"), V) ==
-              IndexSpace::instance(IndexSpace::maybe_unoccupied));
+              IndexSpace::instance(IndexSpace::unoccupied));
     }
     {
       constexpr const Vacuum V = Vacuum::Physical;

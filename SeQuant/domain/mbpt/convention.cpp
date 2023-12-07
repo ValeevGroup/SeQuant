@@ -5,6 +5,7 @@
 #include "convention.hpp"
 #include "SeQuant/core/index.hpp"
 #include "SeQuant/core/tensor.hpp"
+#include "SeQuant/core/context.hpp"
 #include "op.hpp"
 
 namespace sequant {
@@ -64,8 +65,8 @@ auto qndecorate(qns qn, std::wstring_view label) {
 };  // namespace
 
 /// @brief registers "standard" instances of IndexSpace objects
-void register_standard_instances() {
-  const bool do_not_throw = true;
+void register_standard_instances(sequant::Reference ref,bool do_throw = true) {
+  //const bool do_throw = true;
   for (int s = 0; s <= 2; ++s) {
     auto qnattr = s == 0 ? IndexSpace::nullqns
                          : (s == 1 ? IndexSpace::alpha : IndexSpace::beta);
@@ -75,62 +76,56 @@ void register_standard_instances() {
     // these spaces are used in Fock space methods
     // based on single-determinant references
     // p,q,r... for OBS spstates introduced in DOI 10.1063/1.444231 (QCiFS I)
-    IndexSpace::register_instance(declab(L"p"), IndexSpace::all, qnattr,
-                                  do_not_throw);
+    IndexSpace::register_instance(declab(L"p"), ref == Reference::single ? IndexSpace::all : IndexSpace::MR_all, qnattr,
+        do_throw);
     // {i,j,k.../a,b,c...} for active {occupied/unoccupied} spstates introduced
     // in DOI 10.1063/1.446736 (QCiFS III)
-    IndexSpace::register_instance(declab(L"i"), IndexSpace::active_occupied,
-                                  qnattr, do_not_throw);
-    IndexSpace::register_instance(declab(L"a"), IndexSpace::active_unoccupied,
-                                  qnattr, do_not_throw);
+    IndexSpace::register_instance(declab(L"i"), ref == Reference::single ? IndexSpace::active_occupied : IndexSpace::MR_active_occupied,
+                                  qnattr, do_throw);
+    IndexSpace::register_instance(declab(L"a"), ref == Reference::single ? IndexSpace::active_unoccupied : IndexSpace::MR_active_unoccupied,
+                                  qnattr, do_throw);
     // introduced in MPQC LCAOWavefunction
-    IndexSpace::register_instance(declab(L"g"), IndexSpace::inactive_unoccupied,
-                                  qnattr, do_not_throw);
+    IndexSpace::register_instance(declab(L"g"), ref == Reference::single ? IndexSpace::inactive_unoccupied : IndexSpace::MR_inactive_unoccupied,
+                                  qnattr, do_throw);
     // {α,β.../κ,𝛌...} for complete {unoccupied/any} spstates introduced in
     // DOI 10.1063/1.459921 (MP2-R12 I)
-    IndexSpace::register_instance(declab(L"α"), IndexSpace::complete_unoccupied,
-                                  qnattr, do_not_throw);
-    IndexSpace::register_instance(declab(L"κ"), IndexSpace::complete, qnattr,
-                                  do_not_throw);
+    IndexSpace::register_instance(declab(L"α"), ref == Reference::single ? IndexSpace::complete_unoccupied : IndexSpace::MR_complete_unoccupied,
+                                  qnattr, do_throw);
+    IndexSpace::register_instance(declab(L"κ"), ref == Reference::single ? IndexSpace::complete : IndexSpace::MR_complete, qnattr, do_throw);
     // for orthogonal complement to p introduced in
     // DOI 10.1016/j.cplett.2004.07.061 (CABS)
-    IndexSpace::register_instance(declab(L"α'"), IndexSpace::other_unoccupied,
-                                  qnattr, do_not_throw);
+    IndexSpace::register_instance(declab(L"α'"), ref == Reference::single ? IndexSpace::other_unoccupied: IndexSpace::MR_other_unoccupied,
+                                  qnattr, do_throw);
     // m,n... for all occupied (including inactive/frozen orbitals) de facto
     // introduced in [DOI 10.1016/j.cplett.2004.07.061
     // (CABS)](https://dx.doi.org/10.1016/j.cplett.2004.07.061), though formally
     // not explicitly defined so
-    IndexSpace::register_instance(declab(L"m"), IndexSpace::occupied, qnattr,
-                                  do_not_throw);
+    IndexSpace::register_instance(declab(L"m"), ref == Reference::single ? IndexSpace::occupied : IndexSpace::MR_occupied, qnattr, do_throw);
     // introduced in MPQC LCAOWavefunction
-    IndexSpace::register_instance(declab(L"e"), IndexSpace::unoccupied, qnattr,
-                                  do_not_throw);
+    IndexSpace::register_instance(declab(L"e"), ref == Reference::single ? IndexSpace::unoccupied : IndexSpace::MR_unoccupied, qnattr, do_throw);
     // introduced in MPQC for GF, CT-F12, and other ad hoc uses
     IndexSpace::register_instance(declab(L"x"), IndexSpace::all_active, qnattr,
-                                  do_not_throw);
+                                  do_throw);
     // introduced here
-    IndexSpace::register_instance(declab(L"γ"),
-                                  IndexSpace::complete_inactive_unoccupied,
-                                  qnattr, do_not_throw);
+    IndexSpace::register_instance(declab(L"γ"),IndexSpace::complete_inactive_unoccupied,
+                                  qnattr, do_throw);
     // e.g. see DOI 10.1063/5.0067511
-    IndexSpace::register_instance(declab(L"u"), IndexSpace::active, qnattr,
-                                  do_not_throw);
+    IndexSpace::register_instance(declab(L"u"), IndexSpace::MR_active, qnattr,
+                                  do_throw);
     // DOI 10.1063/5.0067511 uses I,J,K... and A,B,C... for these
     // although QCiFS uses capital letters for spin-free indices, using I/A this
     // way seems preferable
     IndexSpace::register_instance(
-        declab(L"I"), IndexSpace::active_maybe_occupied, qnattr, do_not_throw);
+        declab(L"I"), IndexSpace::MR_active_maybe_occupied, qnattr, do_throw);
     IndexSpace::register_instance(declab(L"A"),
-                                  IndexSpace::active_maybe_unoccupied, qnattr,
-                                  do_not_throw);
+                                  IndexSpace::MR_active_maybe_unoccupied, qnattr, do_throw);
     // introduced here
-    IndexSpace::register_instance(declab(L"M"), IndexSpace::maybe_occupied,
-                                  qnattr, do_not_throw);
-    IndexSpace::register_instance(declab(L"E"), IndexSpace::maybe_unoccupied,
-                                  qnattr, do_not_throw);
+    IndexSpace::register_instance(declab(L"M"), IndexSpace::MR_maybe_occupied,
+                                  qnattr, do_throw);
+    IndexSpace::register_instance(declab(L"E"), IndexSpace::MR_maybe_unoccupied,
+                                  qnattr, do_throw);
     IndexSpace::register_instance(declab(L"Δ"),
-                                  IndexSpace::complete_maybe_unoccupied, qnattr,
-                                  do_not_throw);
+                                  IndexSpace::MR_complete_maybe_unoccupied, qnattr, do_throw);
   }
 }
 
@@ -163,11 +158,14 @@ void make_default_indexregistry() {
 }  // namespace qcifs
 
 /// Loads defaults for Convention @c conv
-void set_default_convention(Convention conv) {
+void set_default_convention(Convention conv,bool clear_registry) {
+  if(clear_registry){
+    IndexSpace::clear_registry();
+  }
   switch (conv) {
     case Convention::QCiFS: {
       using namespace qcifs;
-      register_standard_instances();
+      register_standard_instances(sequant::get_default_context().reference(),!clear_registry);
       make_default_indexregistry();
       TensorCanonicalizer::set_cardinal_tensor_labels(
           mbpt::cardinal_tensor_labels());

@@ -10,6 +10,7 @@
 #include "SeQuant/domain/mbpt/op.hpp"
 #include "SeQuant/domain/mbpt/spin.hpp"
 #include "SeQuant/domain/mbpt/sr.hpp"
+#include "SeQuant/domain/mbpt/convention.hpp"
 
 #include "catch.hpp"
 #include "test_config.hpp"
@@ -528,6 +529,10 @@ TEST_CASE("MBPT", "[mbpt]") {
 
   SECTION("MRSO") {
     using namespace sequant::mbpt::mr;
+    auto ctx_resetter=sequant::set_scoped_default_context(
+        Context(Vacuum::Physical, IndexSpaceMetric::Unit,
+                BraKetSymmetry::conjugate, SPBasis::spinfree,Reference::multiple));
+    sequant::mbpt::set_default_convention();
 
     // H2**T2 -> 0
     // std::wcout << "H_(2) * T_(2) = " << to_latex(H_(2) * T_(2)) << std::endl;
@@ -548,7 +553,8 @@ TEST_CASE("MBPT", "[mbpt]") {
       {
         auto ctx_resetter = set_scoped_default_context(
             Context(Vacuum::Physical, IndexSpaceMetric::Unit,
-                    BraKetSymmetry::conjugate, SPBasis::spinorbital));
+                    BraKetSymmetry::conjugate, SPBasis::spinorbital,Reference::multiple));
+        sequant::mbpt::set_default_convention();
         auto result_phys = vac_av(H_(2) * T_(2), {{0, 1}});
 
         {
@@ -590,7 +596,8 @@ TEST_CASE("MBPT", "[mbpt]") {
     // now compute using (closed) Fermi vacuum + spinfree basis
     auto ctx_resetter = set_scoped_default_context(
         Context(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-                BraKetSymmetry::conjugate, SPBasis::spinfree));
+                BraKetSymmetry::conjugate, SPBasis::spinfree,Reference::multiple));
+    sequant::mbpt::set_default_convention();
 
     // H2**T2 -> 0
     std::wcout << "H_(2) * T_(2) = " << to_latex(H_(2) * T_(2)) << std::endl;
