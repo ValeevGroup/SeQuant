@@ -53,7 +53,7 @@ struct expand_visitor {
   bool expand_product(ExprPtr& expr) {
     auto& expr_ref = *expr;
     std::shared_ptr<Sum> result;
-    const auto nsubexpr = ranges::size(*expr);
+    const auto nsubexpr = size(expr);
     for (std::size_t i = 0; i != nsubexpr; ++i) {
       if (expr_ref[i]->is<Sum>()) {
         // make template for expr cloning to avoid cloning the Sum we are about
@@ -88,7 +88,7 @@ struct expand_visitor {
     auto& expr_ref = *expr;
     std::shared_ptr<Sum>
         result;  // will keep the result if one or more summands is expanded
-    const auto nsubexpr = ranges::size(*expr);
+    const auto nsubexpr = size(expr);
     if (Logger::get_instance().expand)
       std::wcout << "in expand_sum: expr = " << to_latex(expr) << std::endl;
     for (std::size_t i = 0; i != nsubexpr; ++i) {
@@ -132,11 +132,10 @@ struct expand_visitor {
       expr = std::static_pointer_cast<Expr>(result);
       expr_changed = true;
     }
-    if (ranges::size(*expr) == 1) {  // if sum contains 1 element, raise it
+    if (size(expr) == 1) {  // if sum contains 1 element, raise it
       expr = (*expr)[0];
       expr_changed = true;
-    } else if (ranges::size(*expr) ==
-               0) {  // if sum contains 0 elements, turn to 0
+    } else if (size(expr) == 0) {  // if sum contains 0 elements, turn to 0
       expr = ex<Constant>(0);
       expr_changed = true;
     }
@@ -327,7 +326,7 @@ struct rapid_simplify_visitor {
 
     // need to rebuild if any factor is a constant or product
     bool need_to_rebuild = false;
-    const auto nsubexpr = ranges::size(*expr);
+    const auto nsubexpr = size(expr);
     for (std::size_t i = 0; i != nsubexpr; ++i) {
       const auto expr_i_is_product = expr_ref[i]->is<Product>();
       const auto expr_i_is_constant = expr_ref[i]->is<Constant>();
@@ -342,7 +341,7 @@ struct rapid_simplify_visitor {
                          end(expr->expr()));
       expr_changed = true;
     }
-    const auto expr_size = ranges::size(*expr);
+    const auto expr_size = size(expr);
     auto expr_product = std::static_pointer_cast<Product>(expr);
     if (expr_product->scalar() ==
         0) {  // if scalar = 0, make it 0 (too aggressive?)

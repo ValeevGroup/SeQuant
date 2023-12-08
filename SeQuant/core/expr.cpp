@@ -327,8 +327,8 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
     using std::end;
     std::stable_sort(begin(summands_), end(summands_),
                      [](const auto &first, const auto &second) {
-                       const auto first_size = ranges::size(*first);
-                       const auto second_size = ranges::size(*second);
+                       const auto first_size = sequant::size(first);
+                       const auto second_size = sequant::size(second);
 
                        return (first_size == second_size)
                                   ? *first < *second

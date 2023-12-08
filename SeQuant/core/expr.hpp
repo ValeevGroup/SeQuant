@@ -1534,6 +1534,64 @@ std::decay_t<Sequence> clone(Sequence &&exprseq) {
                                 ranges::end(cloned_seq));
 }
 
+/// @param[in] expr an expression
+/// @return number of subexpressions in @p expr, i.e., 0 for atoms (Constant,
+/// Variable, Tensor, etc.), >0 for nontrivial Product or Sum
+inline std::size_t size(const Expr &expr) { return ranges::size(expr); }
+
+/// @param[in] exprptr (a pointer to) an expression
+/// @return number of subexpressions in @p exprptr , i.e., 0 if @p exprptr is
+/// null or an atom (Constant, Variable, Tensor, etc.), >0 for nontrivial
+/// Product or Sum
+inline std::size_t size(const ExprPtr &exprptr) {
+  if (exprptr)
+    return size(*exprptr);
+  else
+    return 0;
+}
+
+/// @param[in] exprptr (a pointer to) an expression
+/// @return begin iterator to the expression range
+inline decltype(auto) begin(const ExprPtr &exprptr) {
+  assert(exprptr);
+  return ranges::begin(*exprptr);
+}
+
+/// @param[in] exprptr (a pointer to) an expression
+/// @return begin iterator to the expression range
+inline decltype(auto) begin(ExprPtr &exprptr) {
+  assert(exprptr);
+  return ranges::begin(*exprptr);
+}
+
+/// @param[in] exprptr (a pointer to) an expression
+/// @return begin iterator to the expression range
+inline decltype(auto) cbegin(const ExprPtr &exprptr) {
+  assert(exprptr);
+  return ranges::cbegin(*exprptr);
+}
+
+/// @param[in] exprptr (a pointer to) an expression
+/// @return end iterator to the expression range
+inline decltype(auto) end(const ExprPtr &exprptr) {
+  assert(exprptr);
+  return ranges::end(*exprptr);
+}
+
+/// @param[in] exprptr (a pointer to) an expression
+/// @return end iterator to the expression range
+inline decltype(auto) end(ExprPtr &exprptr) {
+  assert(exprptr);
+  return ranges::end(*exprptr);
+}
+
+/// @param[in] exprptr (a pointer to) an expression
+/// @return end iterator to the expression range
+inline decltype(auto) cend(const ExprPtr &exprptr) {
+  assert(exprptr);
+  return ranges::cend(*exprptr);
+}
+
 // finish off ExprPtr members that depend on Expr
 
 template <typename T>

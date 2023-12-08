@@ -450,8 +450,7 @@ class OpMaker {
     const auto dep_ket = dep == UseDepIdx::Ket;
 
     // not sure what it means to use nonsymmetric operator if nbra != nket
-    using ranges::size;
-    if (!symm) assert(size(bras) == size(kets));
+    if (!symm) assert(ranges::size(bras) == ranges::size(kets));
 
     auto make_idx_vector = [](const auto& spacetypes) {
       std::vector<Index> result;
@@ -487,6 +486,7 @@ class OpMaker {
       ketidxs = make_idx_vector(kets);
     }
 
+    using ranges::size;
     const auto mult = symm ? factorial(size(bras)) * factorial(size(kets))
                            : factorial(size(bras));
     const auto opsymm = symm ? (S == Statistics::FermiDirac ? Symmetry::antisymm
