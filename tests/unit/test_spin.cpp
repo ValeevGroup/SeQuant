@@ -533,9 +533,20 @@ SECTION("Symmetrize expression") {
     auto result =
         factorize_S(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}}, true);
     REQUIRE(result->is<Sum>() == false);
-    REQUIRE(to_latex(result) ==
+
+    auto answer = ex<Tensor>(L"S",WstrList{L"i_3",L"i_4"},WstrList{L"a_2",L"a_1"}) * ex<Tensor>(L"g",
+                            WstrList{L"i_1", L"i_2"},WstrList{L"i_4", L"a_3"}, Symmetry::symm) *
+                     ex<Tensor>(L"t", WstrList{L"a_1"},WstrList{L"i_1"}) *
+                     ex<Tensor>(L"t", WstrList{L"a_2"},WstrList{L"i_2"}) *
+                     ex<Tensor>(L"t", WstrList{L"a_3"},WstrList{L"i_3"});
+    simplify(answer);
+    simplify(result);
+    auto equivalent = answer - result;
+    simplify(equivalent);
+    REQUIRE(equivalent == ex<Constant>(0));
+    /*REQUIRE(to_latex(result) ==
             L"{{S^{{a_2}{a_1}}_{{i_3}{i_4}}}{g^{{i_4}{a_3}}_{{i_1}{i_2}}}{t^{"
-            L"{i_1}}_{{a_1}}}{t^{{i_2}}_{{a_2}}}{t^{{i_3}}_{{a_3}}}}");
+            L"{i_1}}_{{a_1}}}{t^{{i_2}}_{{a_2}}}{t^{{i_3}}_{{a_3}}}}");*/
   }
 
   {
@@ -557,7 +568,18 @@ SECTION("Symmetrize expression") {
     auto result =
         factorize_S(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}}, true);
     REQUIRE(result->is<Sum>() == false);
-    if constexpr (hash_version() == hash::Impl::BoostPre181)
+    auto answer =  ex<Constant>(2) * ex<Tensor>(L"S", WstrList{L"i_1",L"i_2"}, WstrList{L"a_1",L"a_2"}) *
+                  ex<Tensor>(L"g",
+                             WstrList{L"i_3", L"i_4"}, WstrList{L"a_3", L"a_4"}, Symmetry::symm) *
+                  ex<Tensor>(L"t", WstrList{L"a_4"},WstrList{L"i_3"}) *
+                  ex<Tensor>(L"t", WstrList{L"a_2"}, WstrList{L"i_4"}) *
+                  ex<Tensor>(L"t", WstrList{L"a_1", L"a_3"},
+                             WstrList{L"i_1", L"i_2"});
+    auto equivalent = answer - result;
+    simplify(equivalent);
+    REQUIRE(equivalent == ex<Constant>(0));
+
+    /*if constexpr (hash_version() == hash::Impl::BoostPre181)
       REQUIRE(
           to_latex(result) ==
           L"{{{2}}{S^{{a_1}{a_2}}_{{i_1}{i_2}}}{g^{{a_3}{a_4}}_{{i_3}{i_4}}}{t^"
@@ -566,7 +588,7 @@ SECTION("Symmetrize expression") {
       REQUIRE(
           to_latex(result) ==
           L"{{{2}}{S^{{a_1}{a_2}}_{{i_1}{i_2}}}{g^{{a_3}{a_4}}_{{i_3}{i_4}}}{t^"
-          L"{{i_3}}_{{a_4}}}{t^{{i_4}}_{{a_2}}}{t^{{i_1}{i_2}}_{{a_1}{a_3}}}}");
+          L"{{i_3}}_{{a_4}}}{t^{{i_4}}_{{a_2}}}{t^{{i_1}{i_2}}_{{a_1}{a_3}}}}");*/
   }
 }
 
