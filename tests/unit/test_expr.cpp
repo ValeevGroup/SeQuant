@@ -668,6 +668,19 @@ TEST_CASE("ExprPtr", "[elements]") {
     REQUIRE_NOTHROW(ex1->to_latex());
   }
 
+  SECTION("clone") {
+    ExprPtr ex1 = ex<Constant>(1);
+    ExprPtr ex2;
+    REQUIRE_NOTHROW(ex2 = ex1.clone());
+    CHECK(ex1);
+    CHECK(ex1->as<Constant>().value() == ex2->as<Constant>().value());
+    auto ex1_ptr = ex1.get();
+    REQUIRE_NOTHROW(ex2 = std::move(ex1).clone());
+    CHECK(!ex1);
+    CHECK(ex2);
+    CHECK(ex2.get() == ex1_ptr);
+  }
+
   SECTION("iteration") {
     const auto ex1 = ex<Dummy>();
     REQUIRE(begin(*ex1) == end(*ex1));

@@ -9,6 +9,13 @@
 
 namespace sequant {
 
+ExprPtr ExprPtr::clone() const& {
+  if (!*this) return {};
+  return ExprPtr(as_shared_ptr()->clone());
+}
+
+ExprPtr ExprPtr::clone() && noexcept { return std::move(*this); }
+
 ExprPtr::base_type &ExprPtr::as_shared_ptr() & {
   return static_cast<base_type &>(*this);
 }

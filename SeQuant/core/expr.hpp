@@ -66,6 +66,13 @@ class ExprPtr : public std::shared_ptr<Expr> {
 
   ~ExprPtr() = default;
 
+  /// @return a copy of this object
+  /// @sa Expr::clone()
+  [[nodiscard]] ExprPtr clone() const&;
+  /// @return a moved copy of this object
+  /// @note this object is null after the call
+  [[nodiscard]] ExprPtr clone() && noexcept;
+
   base_type &as_shared_ptr() &;
   const base_type &as_shared_ptr() const &;
   base_type &&as_shared_ptr() &&;
