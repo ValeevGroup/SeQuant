@@ -318,12 +318,12 @@ ExprPtr T_(std::size_t K) {
                   });
 }
 
-ExprPtr T(std::size_t K) {
-  assert(K > 0);
+ExprPtr T(std::size_t K, bool skip1) {
+  assert(K > (skip1 ? 1 : 0));
 
   ExprPtr result;
-  for (auto k = 1ul; k <= K; ++k) {
-    result = k > 1 ? result + T_(k) : T_(k);
+  for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
+    result += T_(k);
   }
   return result;
 }
@@ -340,12 +340,12 @@ ExprPtr Λ_(std::size_t K) {
                   });
 }
 
-ExprPtr Λ(std::size_t K) {
-  assert(K > 0);
+ExprPtr Λ(std::size_t K, bool skip1) {
+  assert(K > (skip1 ? 1 : 0));
 
   ExprPtr result;
-  for (auto k = 1ul; k <= K; ++k) {
-    result = k > 1 ? result + Λ_(k) : Λ_(k);
+  for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
+    result += Λ_(k);
   }
   return result;
 }
@@ -413,10 +413,10 @@ ExprPtr T_pt_(std::size_t order, std::size_t K) {
                   });
 }
 
-ExprPtr T_pt(std::size_t order, std::size_t K) {
-  assert(K > 0);
+ExprPtr T_pt(std::size_t order, std::size_t K, bool skip1) {
+  assert(K > (skip1 ? 1 : 0));
   ExprPtr result;
-  for (auto k = 1ul; k <= K; ++k) {
+  for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
     result = k > 1 ? result + T_pt_(order, k) : T_pt_(order, k);
   }
   return result;
@@ -435,10 +435,10 @@ ExprPtr Λ_pt_(std::size_t order, std::size_t K) {
                   });
 }
 
-ExprPtr Λ_pt(std::size_t order, std::size_t K) {
-  assert(K > 0);
+ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1) {
+  assert(K > (skip1 ? 1 : 0));
   ExprPtr result;
-  for (auto k = 1ul; k <= K; ++k) {
+  for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
     result = k > 1 ? result + Λ_pt_(order, k) : Λ_pt_(order, k);
   }
   return result;
