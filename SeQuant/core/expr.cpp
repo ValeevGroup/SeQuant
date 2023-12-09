@@ -20,7 +20,9 @@ ExprPtr::base_type &&ExprPtr::as_shared_ptr() && {
 }
 
 ExprPtr &ExprPtr::operator+=(const ExprPtr &other) {
-  if (as_shared_ptr()->is<Sum>()) {
+  if (!*this) {
+    *this = other.clone();
+  } else if (as_shared_ptr()->is<Sum>()) {
     as_shared_ptr()->operator+=(*other);
   } else if (as_shared_ptr()->is<Constant>() && other->is<Constant>()) {
     *this = ex<Constant>(this->as<Constant>().value() +
@@ -32,7 +34,9 @@ ExprPtr &ExprPtr::operator+=(const ExprPtr &other) {
 }
 
 ExprPtr &ExprPtr::operator-=(const ExprPtr &other) {
-  if (as_shared_ptr()->is<Sum>()) {
+  if (!*this) {
+    *this = ex<Constant>(-1) * other.clone();
+  } else if (as_shared_ptr()->is<Sum>()) {
     as_shared_ptr()->operator-=(*other);
   } else if (as_shared_ptr()->is<Constant>() && other->is<Constant>()) {
     *this = ex<Constant>(this->as<Constant>().value() -
@@ -44,7 +48,9 @@ ExprPtr &ExprPtr::operator-=(const ExprPtr &other) {
 }
 
 ExprPtr &ExprPtr::operator*=(const ExprPtr &other) {
-  if (as_shared_ptr()->is<Product>()) {
+  if (!*this) {
+    *this = other.clone();
+  } else if (as_shared_ptr()->is<Product>()) {
     as_shared_ptr()->operator*=(*other);
   } else if (as_shared_ptr()->is<Constant>() && other->is<Constant>()) {
     *this = ex<Constant>(this->as<Constant>().value() *

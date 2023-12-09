@@ -77,7 +77,26 @@ class ExprPtr : public std::shared_ptr<Expr> {
   }
 
   ExprPtr &operator+=(const ExprPtr &);
+  /// in-place addition operator
+
+  /// if this is non-null, adds @c other to the contained expressions, otherwise will make this point to a clone of @c other (see Expr::clone())
+  /// @param other expression to add to this
+  /// @return reference to @c *this
+  ExprPtr &operator+=(const ExprPtr &other);
+
+  /// in-place subtraction operator
+
+  /// if this is non-null, subtracts @c other from the contained expressions, otherwise will make this point to the negative of a clone of @c other (see Expr::clone())
+  /// @param other expression to add to this
+  /// @return reference to @c *this
   ExprPtr &operator-=(const ExprPtr &);
+
+  /// in-place multiplication operator
+
+  /// if this is non-null, multiplies the contained expressions by @c other ,
+  /// otherwise will make this point to a clone of @c other (see Expr::clone())
+  /// @param other expression to add to this
+  /// @return reference to @c *this
   ExprPtr &operator*=(const ExprPtr &);
 
   /// @tparam T an Expr type

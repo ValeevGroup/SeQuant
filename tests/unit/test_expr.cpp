@@ -713,10 +713,20 @@ TEST_CASE("ExprPtr", "[elements]") {
     REQUIRE_NOTHROW(ex1 *= ex2);
     ex1 = ex<Constant>(1);
     ex1 += ex2;
-    REQUIRE(ex1 == ex<Constant>(3));
+    CHECK(ex1 == ex<Constant>(3));
     ex1 -= ex2;
-    REQUIRE(ex1 == ex<Constant>(1));
+    CHECK(ex1 == ex<Constant>(1));
     ex1 *= ex2;
-    REQUIRE(ex1 == ex<Constant>(2));
+    CHECK(ex1 == ex<Constant>(2));
+
+    ExprPtr ex3;
+    REQUIRE_NOTHROW(ex3 += ex2);
+    CHECK(ex3 == ex2);
+    ex3.reset();
+    REQUIRE_NOTHROW(ex3 -= ex2);
+    CHECK(ex3 == ex<Constant>(-1) * ex2);
+    ex3.reset();
+    REQUIRE_NOTHROW(ex3 *= ex2);
+    CHECK(ex3 == ex2);
   }
 }  // TEST_CASE("ExprPtr")
