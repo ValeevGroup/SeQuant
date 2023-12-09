@@ -68,7 +68,7 @@ class ExprPtr : public std::shared_ptr<Expr> {
 
   /// @return a copy of this object
   /// @sa Expr::clone()
-  [[nodiscard]] ExprPtr clone() const&;
+  [[nodiscard]] ExprPtr clone() const &;
   /// @return a moved copy of this object
   /// @note this object is null after the call
   [[nodiscard]] ExprPtr clone() && noexcept;
@@ -83,17 +83,34 @@ class ExprPtr : public std::shared_ptr<Expr> {
     return std::static_pointer_cast<E>(this->as_shared_ptr());
   }
 
-  ExprPtr &operator+=(const ExprPtr &);
+  /// dereference operator
+  /// @return non-const lvalue reference to the contained Expr object
+  /// @pre `this->operator bool()`
+  Expr &operator*() &;
+
+  /// dereference operator
+  /// @return const lvalue reference to the contained Expr object
+  /// @pre `this->operator bool()`
+  const Expr &operator*() const &;
+
+  /// dereference operator
+  /// @return non-const rvalue reference to the contained Expr object
+  /// @pre `this->operator bool()`
+  Expr &&operator*() &&;
+
   /// in-place addition operator
 
-  /// if this is non-null, adds @c other to the contained expressions, otherwise will make this point to a clone of @c other (see Expr::clone())
+  /// if this is non-null, adds @c other to the contained expressions, otherwise
+  /// will make this point to a clone of @c other (see Expr::clone())
   /// @param other expression to add to this
   /// @return reference to @c *this
   ExprPtr &operator+=(const ExprPtr &other);
 
   /// in-place subtraction operator
 
-  /// if this is non-null, subtracts @c other from the contained expressions, otherwise will make this point to the negative of a clone of @c other (see Expr::clone())
+  /// if this is non-null, subtracts @c other from the contained expressions,
+  /// otherwise will make this point to the negative of a clone of @c other (see
+  /// Expr::clone())
   /// @param other expression to add to this
   /// @return reference to @c *this
   ExprPtr &operator-=(const ExprPtr &);

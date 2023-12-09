@@ -9,7 +9,7 @@
 
 namespace sequant {
 
-ExprPtr ExprPtr::clone() const& {
+ExprPtr ExprPtr::clone() const & {
   if (!*this) return {};
   return ExprPtr(as_shared_ptr()->clone());
 }
@@ -24,6 +24,21 @@ const ExprPtr::base_type &ExprPtr::as_shared_ptr() const & {
 }
 ExprPtr::base_type &&ExprPtr::as_shared_ptr() && {
   return static_cast<base_type &&>(*this);
+}
+
+Expr &ExprPtr::operator*() & {
+  assert(this->operator bool());
+  return *(this->get());
+}
+
+const Expr &ExprPtr::operator*() const & {
+  assert(this->operator bool());
+  return *(this->get());
+}
+
+Expr &&ExprPtr::operator*() && {
+  assert(this->operator bool());
+  return std::move(*(this->get()));
 }
 
 ExprPtr &ExprPtr::operator+=(const ExprPtr &other) {
