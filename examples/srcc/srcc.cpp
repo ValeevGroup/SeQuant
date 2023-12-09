@@ -60,12 +60,10 @@ class compute_cceqvec {
     std::vector<ExprPtr> eqvec;
     switch (type) {
       case EqnType::t:
-        eqvec = CC{N, P, PMIN}.t(screen, use_topology, use_connectivity,
-                                 canonical_only);
+        eqvec = CC{N}.t(4, P, PMIN);
         break;
       case EqnType::λ:
-        eqvec = CC{N, P, PMIN}.λ(screen, use_topology, use_connectivity,
-                                 canonical_only);
+        eqvec = CC{N}.λ(4);
         break;
     }
     tpool.stop(N);
@@ -86,12 +84,10 @@ class compute_cceqvec {
       std::vector<ExprPtr> eqvec_so;
       switch (type) {
         case EqnType::t:
-          eqvec_so = CC{N, P, PMIN}.t(screen, use_topology, use_connectivity,
-                                      canonical_only);
+          eqvec_so = CC{N}.t(4, P, PMIN);
           break;
         case EqnType::λ:
-          eqvec_so = CC{N, P, PMIN}.λ(screen, use_topology, use_connectivity,
-                                      canonical_only);
+          eqvec_so = CC{N}.λ();
           break;
       }
 
