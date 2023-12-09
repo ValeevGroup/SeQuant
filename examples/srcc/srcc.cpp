@@ -129,6 +129,14 @@ class compute_cceqvec {
           if (R == 3 && N == 3) runtime_assert(eqvec[R]->size() == 47);
           if (R == 4 && N == 4) runtime_assert(eqvec[R]->size() == 74);
           if (R == 5 && N == 5) runtime_assert(eqvec[R]->size() == 99);
+        } else if (type == EqnType::λ) {
+          if (R == 1 && N == 1) runtime_assert(eqvec[R]->size() == 14);
+          if (R == 1 && N == 2) runtime_assert(eqvec[R]->size() == 45);
+          if (R == 2 && N == 2) runtime_assert(eqvec[R]->size() == 32);
+          if (R == 1 && N == 3) runtime_assert(eqvec[R]->size() == 83);
+          if (R == 2 && N == 3) runtime_assert(eqvec[R]->size() == 71);
+          if (R == 3 && N == 3) runtime_assert(eqvec[R]->size() == 32);
+          if (R == 1 && N == 4) runtime_assert(eqvec[R]->size() == 134);
         }
       } else {  // spin-free
         if (type == EqnType::t) {
