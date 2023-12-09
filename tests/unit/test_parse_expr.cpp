@@ -2,7 +2,7 @@
 
 #include <SeQuant/core/parse_expr.hpp>
 #include <SeQuant/core/tensor.hpp>
-
+#include "SeQuant/domain/mbpt/convention.hpp"
 #include <algorithm>
 #include <locale>
 #include <sstream>
@@ -62,6 +62,7 @@ ParseErrorMatcher parseErrorMatches(std::size_t offset, std::size_t length,
 
 TEST_CASE("TEST_PARSE_EXPR", "[parse_expr]") {
   using namespace sequant;
+  mbpt::set_default_convention();
   SECTION("Tensor") {
     auto expr = parse_expr(L"t{i1;a1}");
     REQUIRE(expr->is<Tensor>());

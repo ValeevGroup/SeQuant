@@ -4,13 +4,14 @@
 
 #include "SeQuant/core/parse_expr.hpp"
 #include "SeQuant/domain/mbpt/spin.hpp"
+#include "SeQuant/domain/mbpt/convention.hpp"
 
 #include "catch.hpp"
 #include "test_config.hpp"
 
 TEST_CASE("Spin", "[spin]") {
   using namespace sequant;
-
+  mbpt::set_default_convention();
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
 

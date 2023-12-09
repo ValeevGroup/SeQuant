@@ -2,6 +2,7 @@
 
 #include <SeQuant/core/optimize.hpp>
 #include <SeQuant/core/parse_expr.hpp>
+#include "SeQuant/domain/mbpt/convention.hpp"
 
 sequant::ExprPtr extract(sequant::ExprPtr expr,
                          std::initializer_list<size_t> const& idxs) {
@@ -13,6 +14,7 @@ sequant::ExprPtr extract(sequant::ExprPtr expr,
 
 TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
   using namespace sequant;
+  mbpt::set_default_convention();
 
   auto idx2size = [nocc = 4, nvirt = 140](Index const& idx) {
     if (idx.space() == IndexSpace::active_occupied) return nocc;

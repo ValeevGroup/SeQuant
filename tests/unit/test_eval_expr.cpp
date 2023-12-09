@@ -1,8 +1,8 @@
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/eval_expr.hpp>
 #include <SeQuant/core/parse_expr.hpp>
-
 #include "catch.hpp"
+#include "SeQuant/domain/mbpt/convention.hpp"
 
 template <typename Iterable1, typename Iterable2>
 bool same_index_labels(Iterable1 const& indices1,
@@ -34,7 +34,7 @@ TEST_CASE("TEST_EVAL_EXPR", "[EvalExpr]") {
   using namespace sequant;
   sequant::TensorCanonicalizer::register_instance(
       std::make_shared<sequant::DefaultTensorCanonicalizer>());
-
+  sequant::mbpt::set_default_convention();
   SECTION("Constructors") {
     auto t1 = parse_tensor(L"t_{i1, i2}^{a1, a2}");
 

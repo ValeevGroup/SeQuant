@@ -17,6 +17,7 @@
 
 TEST_CASE("NBodyOp", "[mbpt]") {
   using namespace sequant;
+  mbpt::set_default_convention();
 
   SECTION("constructor") {
     // tests 1-space quantum number case
@@ -400,6 +401,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
 
 TEST_CASE("MBPT", "[mbpt]") {
   using namespace sequant;
+  mbpt::set_default_convention();
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
 

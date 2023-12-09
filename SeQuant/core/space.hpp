@@ -649,7 +649,7 @@ inline bool operator<(const IndexSpace &space1, const IndexSpace &space2) {
 /// it includes no orbitals with complete occupancy,
 ///         and 0 of it includes some orbitals with with complete occupancy.
 inline int occupancy_class(const IndexSpace &space) {
-  bool MR_space = IndexSpace::instance(IndexSpace::other_unoccupied) < space;
+  bool MR_space = IndexSpace::other_unoccupied < space.attr();
   const auto included_in_occupied =
       includes(MR_space ? IndexSpace::MR_occupied : IndexSpace::occupied, space.type());
   const auto included_in_unoccupied =

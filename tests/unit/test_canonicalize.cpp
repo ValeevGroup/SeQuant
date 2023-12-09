@@ -4,9 +4,11 @@
 #include "SeQuant/core/expr_algorithm.hpp"
 #include "SeQuant/core/tensor.hpp"
 #include "catch.hpp"
+#include "SeQuant/domain/mbpt/convention.hpp"
 
 TEST_CASE("Canonicalizer", "[algorithms]") {
   using namespace sequant;
+  mbpt::set_default_convention();
 
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());

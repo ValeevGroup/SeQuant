@@ -6,6 +6,7 @@
 #include "SeQuant/core/utility/macros.hpp"
 #include "SeQuant/core/utility/nodiscard.hpp"
 #include "SeQuant/core/wick.hpp"
+#include "SeQuant/domain/mbpt/convention.hpp"
 
 #include "catch.hpp"
 #include "test_config.hpp"
@@ -33,7 +34,7 @@ auto compute_nontensor_wick(WickTheorem<Statistics::FermiDirac>& wick) {
 #if 1
 TEST_CASE("WickTheorem", "[algorithms][wick]") {
   using namespace sequant;
-
+  mbpt::set_default_convention();
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
   Index::reset_tmp_index();
