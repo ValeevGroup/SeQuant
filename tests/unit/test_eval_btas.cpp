@@ -4,7 +4,6 @@
 #include <SeQuant/core/parse_expr.hpp>
 #include <SeQuant/domain/eval/eval.hpp>
 #include <SeQuant/domain/eval/eval_result.hpp>
-#include "SeQuant/domain/mbpt/convention.hpp"
 
 #include <btas/btas.h>
 #include <btas/tensor_func.h>
@@ -14,7 +13,6 @@
 #include <vector>
 
 namespace {
-sequant::mbpt::set_default_convention();
 
 auto eval_node(sequant::ExprPtr const& expr) {
   return sequant::eval_node<sequant::EvalExprBTAS>(expr);
