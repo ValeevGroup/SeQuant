@@ -14,7 +14,7 @@
 #include <vector>
 
 namespace {
-mbpt::set_default_convention();
+sequant::mbpt::set_default_convention();
 
 auto eval_node(sequant::ExprPtr const& expr) {
   return sequant::eval_node<sequant::EvalExprBTAS>(expr);
