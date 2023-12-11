@@ -112,6 +112,13 @@ TEST_CASE("IndexSpace", "[elements]") {
     REQUIRE(includes(IndexSpace::instance(L"κ"), IndexSpace::instance(L"m")));
     REQUIRE(!includes(IndexSpace::instance(L"m"), IndexSpace::instance(L"κ")));
     REQUIRE(includes(IndexSpace::instance(L"α"), IndexSpace::instance(L"a")));
+
+    REQUIRE(sequant::has_non_overlapping_spaces(IndexSpace::instance(L"i"),IndexSpace::instance(L"p")));
+    REQUIRE(sequant::has_non_overlapping_spaces(IndexSpace::instance(L"i"),IndexSpace::instance(L"a")));
+    REQUIRE(!sequant::has_non_overlapping_spaces(IndexSpace::instance(L"i"),IndexSpace::instance(L"i")));
+
+    REQUIRE(sequant::non_overlapping_spaces(IndexSpace::instance(L"g"),IndexSpace::instance(L"α"))[0] == IndexSpace::active_unoccupied);
+    REQUIRE(sequant::non_overlapping_spaces(IndexSpace::instance(L"g"),IndexSpace::instance(L"α"))[1] == IndexSpace::other_unoccupied);
   }
 
   SECTION("occupancy_class") {
