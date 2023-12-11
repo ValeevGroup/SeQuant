@@ -22,6 +22,7 @@ struct VecExpr : public std::vector<T>, public sequant::Expr {
   using base_type = std::vector<T>;
   using base_type::begin;
   using base_type::end;
+  using base_type::size;
 
   VecExpr() = default;
   template <typename U>
@@ -199,8 +200,6 @@ TEST_CASE("Expr", "[elements]") {
   }
 
   SECTION("iteration") {
-    using ranges::size;
-
     const auto ex1 = std::make_shared<Dummy>();
     REQUIRE(begin(*ex1) == end(*ex1));
     REQUIRE(size(*ex1) == 0);
@@ -217,10 +216,10 @@ TEST_CASE("Expr", "[elements]") {
 
     const auto ex4 = std::make_shared<VecExpr<double>>(
         std::initializer_list<double>{1.0, 2.0, 3.0});
-    REQUIRE(begin(*ex4) != end(*ex4));
-    REQUIRE(size(*ex4) == 3);
-    REQUIRE(begin(ex4->expr()) == end(ex4->expr()));
-    REQUIRE(size(ex4->expr()) == 0);
+    REQUIRE(begin(*ex4) != end(*ex4));  // uses VecExpr::{begin,end}
+    REQUIRE(size(*ex4) == 3);           // uses VecExpr::size
+    REQUIRE(begin(ex4->expr()) == end(ex4->expr()));  // uses Expr::{begin,end}
+    REQUIRE(size(ex4->expr()) == 0);                  // uses Expr::{begin,end}
 
     const auto ex5_init = std::vector<std::shared_ptr<Constant>>{
         std::make_shared<Constant>(1), std::make_shared<Constant>(2),
@@ -669,6 +668,53 @@ TEST_CASE("ExprPtr", "[elements]") {
     REQUIRE_NOTHROW(ex1->to_latex());
   }
 
+  SECTION("clone") {
+    ExprPtr ex1 = ex<Constant>(1);
+    ExprPtr ex2;
+    REQUIRE_NOTHROW(ex2 = ex1.clone());
+    CHECK(ex1);
+    CHECK(ex1->as<Constant>().value() == ex2->as<Constant>().value());
+    auto ex1_ptr = ex1.get();
+    REQUIRE_NOTHROW(ex2 = std::move(ex1).clone());
+    CHECK(!ex1);
+    CHECK(ex2);
+    CHECK(ex2.get() == ex1_ptr);
+  }
+
+  SECTION("iteration") {
+    const auto ex1 = ex<Dummy>();
+    REQUIRE(begin(*ex1) == end(*ex1));
+    REQUIRE(size(*ex1) == 0);
+    REQUIRE(begin(ex1) == end(ex1));
+    REQUIRE(cbegin(ex1) == cend(ex1));
+    REQUIRE(size(ex1) == 0);
+
+    const auto ex2 = ex<Constant>(2);
+    REQUIRE(begin(*ex2) == end(*ex2));
+    REQUIRE(size(*ex2) == 0);
+    REQUIRE(begin(ex2) == end(ex2));
+    REQUIRE(size(ex2) == 0);
+
+    const auto ex3 = ex<VecExpr<double>>();
+    REQUIRE(begin(*ex3) == end(*ex3));
+    REQUIRE(size(*ex3) == 0);
+    REQUIRE(begin(ex3) == end(ex3));
+    REQUIRE(size(ex3) == 0);
+    REQUIRE(begin(ex3->expr()) == end(ex3->expr()));
+    REQUIRE(size(ex3->expr()) == 0);
+
+    const auto ex4 =
+        ex<VecExpr<double>>(std::initializer_list<double>{1.0, 2.0, 3.0});
+    CHECK(begin(*ex4) == end(*ex4));
+    CHECK(size(*ex4) == 0);
+    CHECK(begin(ex4) == end(ex4));
+    CHECK(size(ex4) == 0);
+    CHECK(begin(ex4->expr()) == end(ex4->expr()));
+    CHECK(size(ex4->expr()) == 0);
+    CHECK(begin(ex4.as<VecExpr<double>>()) != end(ex4.as<VecExpr<double>>()));
+    CHECK(size(ex4.as<VecExpr<double>>()) == 3);
+  }
+
   SECTION("operators") {
     ExprPtr ex1 = ex<Constant>(1);
     ExprPtr ex2 = ex<Constant>(2);
@@ -680,10 +726,20 @@ TEST_CASE("ExprPtr", "[elements]") {
     REQUIRE_NOTHROW(ex1 *= ex2);
     ex1 = ex<Constant>(1);
     ex1 += ex2;
-    REQUIRE(ex1 == ex<Constant>(3));
+    CHECK(ex1 == ex<Constant>(3));
     ex1 -= ex2;
-    REQUIRE(ex1 == ex<Constant>(1));
+    CHECK(ex1 == ex<Constant>(1));
     ex1 *= ex2;
-    REQUIRE(ex1 == ex<Constant>(2));
+    CHECK(ex1 == ex<Constant>(2));
+
+    ExprPtr ex3;
+    REQUIRE_NOTHROW(ex3 += ex2);
+    CHECK(ex3 == ex2);
+    ex3.reset();
+    REQUIRE_NOTHROW(ex3 -= ex2);
+    CHECK(ex3 == ex<Constant>(-1) * ex2);
+    ex3.reset();
+    REQUIRE_NOTHROW(ex3 *= ex2);
+    CHECK(ex3 == ex2);
   }
 }  // TEST_CASE("ExprPtr")

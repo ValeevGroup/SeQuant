@@ -206,8 +206,7 @@ ExprPtr T(std::size_t K);
 ExprPtr Λ_(std::size_t K);
 
 /// makes sum of particle-conserving deexcitation operators of all ranks up to
-/// \p
-/// K
+/// \p K
 ExprPtr Λ(std::size_t K);
 
 #include "SeQuant/domain/mbpt/vac_av.hpp"
