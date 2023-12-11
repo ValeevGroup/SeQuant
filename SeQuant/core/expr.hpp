@@ -41,6 +41,8 @@ class ExprPtr : public std::shared_ptr<Expr> {
   using base_type::base_type;
 
   ExprPtr() = default;
+  ExprPtr(const ExprPtr &) = default;
+  ExprPtr(ExprPtr &&) = default;
   template <typename E, typename = std::enable_if_t<
                             std::is_same_v<std::remove_const_t<E>, Expr> ||
                             std::is_base_of_v<Expr, std::remove_const_t<E>>>>
@@ -63,6 +65,9 @@ class ExprPtr : public std::shared_ptr<Expr> {
     as_shared_ptr() = std::move(other_sptr);
     return *this;
   }
+
+  ExprPtr &operator=(const ExprPtr &) = default;
+  ExprPtr &operator=(ExprPtr &&) = default;
 
   ~ExprPtr() = default;
 
