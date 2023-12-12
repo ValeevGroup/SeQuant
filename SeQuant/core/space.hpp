@@ -362,7 +362,7 @@ class IndexSpace {
     if (attr == Attr::null()) return null_instance();
     if (!instance_exists(attr)) {
       std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-      throw bad_attr(converter.to_bytes(L"Request to non-existing space: " +
+      throw bad_attr(converter.to_bytes(L"Request to non-registered space: " +
                                         sequant::to_wstring(type) + L" " +
                                         sequant::to_wstring(qns)));
     }
