@@ -195,20 +195,31 @@ ExprPtr H_(std::size_t k);
 /// supported
 ExprPtr H(std::size_t k = 2);
 
-/// makes particle-conserving excitation operator of rank \p K
+/// makes traditional cluster operator of particle rank \p K
+/// @param K the particle rank
+/// @return \f$ \frac{1}{(K!)^2}\sum t^{i_1 \dots i_K}_{a_1 \dots a_K} a_{i_1
+/// \dots i_K}^{a_1 \dots a_K} \f$
+/// @note traditional = pure-excitation
 ExprPtr T_(std::size_t K);
 
-/// makes sum of particle-conserving excitation operators of all ranks up to \p
-/// K
-ExprPtr T(std::size_t K);
+/// makes sum of T_() operators of all ranks up to \p K
+/// @param K the maximum particle rank of included cluster operators
+/// @param skip1 if true, omit 1-body cluster `T_(1)`
+/// @return sum of `T_(k)` with `k<=K`
+ExprPtr T(std::size_t K, bool skip1 = false);
 
-/// makes particle-conserving deexcitation operator of rank \p K
+/// makes ref-state left-hand eigenoperator of the CC Hamiltonian up to rank \p
+/// K
+/// @param K the particle rank
+/// @return \f$ \frac{1}{(K!)^2}\sum \lambda_{i_1 \dots i_K}^{a_1 \dots a_K}
+/// a^{i_1 \dots i_K}_{a_1 \dots a_K} \f$
 ExprPtr Λ_(std::size_t K);
 
-/// makes sum of particle-conserving deexcitation operators of all ranks up to
-/// \p
-/// K
-ExprPtr Λ(std::size_t K);
+/// makes sum of Λ_() operators of all ranks up to \p K
+/// @param K the maximum particle rank of included cluster operators
+/// @param skip1 if true, omit 1-body cluster `Λ_(1)`
+/// @return sum of `Λ_(k)` with `k<=K`
+ExprPtr Λ(std::size_t K, bool skip1 = false);
 
 /// makes excitation operator of all bra/ket ranks up to (and including)
 /// @c Nbra/Nket
@@ -236,14 +247,15 @@ ExprPtr P(std::int64_t K);
 /// @pre `order==1`, only first order perturbation is supported now
 ExprPtr H_pt(std::size_t order, std::size_t R);
 
-/// perturbed excitation operator of rank \p K and order \p o
+/// perturbed cluster operator of rank \p K and order \p o
 /// @pre `order==1`, only first order perturbation is supported now
 ExprPtr T_pt_(std::size_t order, std::size_t K);
 
-/// makes sum of perturbed excitation operators of all ranks up to \p
-/// K and order \p o
+/// makes sum of perturbed excitation operators of all ranks up to \p K and
+/// order \p o
+/// @param skip1 if true, omit 1-body cluster `T_pt_(1)`
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr T_pt(std::size_t order, std::size_t K);
+ExprPtr T_pt(std::size_t order, std::size_t K, bool skip1 = false);
 
 /// perturbed deexcitation operator of rank \p K and order \p o
 /// @pre `order==1`, only first order perturbation is supported now
@@ -251,8 +263,9 @@ ExprPtr Λ_pt_(std::size_t order, std::size_t K);
 
 /// makes sum of perturbed deexcitation operators of all ranks up to \p K and
 /// order \p o
+/// @param skip1 if true, omit 1-body cluster `T_pt_(1)`
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr Λ_pt(std::size_t order, std::size_t K);
+ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1 = false);
 
 /// @}
 

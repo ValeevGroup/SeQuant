@@ -579,7 +579,7 @@ TEST_CASE("TensorNetwork", "[elements]") {
           if (n == 0 || n > N) continue;
 
           auto ctx_resetter = set_scoped_default_context(
-              (N > Index::min_tmp_index())
+              (static_cast<std::size_t>(N) > Index::min_tmp_index())
                   ? Context(get_default_context())
                         .set_first_dummy_index_ordinal(N + 1)
                   : get_default_context());
@@ -623,7 +623,7 @@ TEST_CASE("TensorNetwork", "[elements]") {
                            : ((n == 1) ? Symmetry::symm : Symmetry::nonsymm)));
                 }) |
                 ranges::to_vector;
-            CHECK(utensors.size() == n);
+            CHECK(utensors.size() == static_cast<std::size_t>(n));
             auto dtensors = contravariant_indices | ranges::views::chunk(N) |
                             ranges::views::transform([&](const auto& idxs) {
                               return ex<Tensor>(L"d", std::vector<Index>{},

@@ -9,6 +9,13 @@
 
 namespace sequant {
 
+ExprPtr ExprPtr::clone() const & {
+  if (!*this) return {};
+  return ExprPtr(as_shared_ptr()->clone());
+}
+
+ExprPtr ExprPtr::clone() && noexcept { return std::move(*this); }
+
 ExprPtr::base_type &ExprPtr::as_shared_ptr() & {
   return static_cast<base_type &>(*this);
 }
@@ -19,8 +26,25 @@ ExprPtr::base_type &&ExprPtr::as_shared_ptr() && {
   return static_cast<base_type &&>(*this);
 }
 
+Expr &ExprPtr::operator*() & {
+  assert(this->operator bool());
+  return *(this->get());
+}
+
+const Expr &ExprPtr::operator*() const & {
+  assert(this->operator bool());
+  return *(this->get());
+}
+
+Expr &&ExprPtr::operator*() && {
+  assert(this->operator bool());
+  return std::move(*(this->get()));
+}
+
 ExprPtr &ExprPtr::operator+=(const ExprPtr &other) {
-  if (as_shared_ptr()->is<Sum>()) {
+  if (!*this) {
+    *this = other.clone();
+  } else if (as_shared_ptr()->is<Sum>()) {
     as_shared_ptr()->operator+=(*other);
   } else if (as_shared_ptr()->is<Constant>() && other->is<Constant>()) {
     *this = ex<Constant>(this->as<Constant>().value() +
@@ -32,7 +56,9 @@ ExprPtr &ExprPtr::operator+=(const ExprPtr &other) {
 }
 
 ExprPtr &ExprPtr::operator-=(const ExprPtr &other) {
-  if (as_shared_ptr()->is<Sum>()) {
+  if (!*this) {
+    *this = ex<Constant>(-1) * other.clone();
+  } else if (as_shared_ptr()->is<Sum>()) {
     as_shared_ptr()->operator-=(*other);
   } else if (as_shared_ptr()->is<Constant>() && other->is<Constant>()) {
     *this = ex<Constant>(this->as<Constant>().value() -
@@ -44,7 +70,9 @@ ExprPtr &ExprPtr::operator-=(const ExprPtr &other) {
 }
 
 ExprPtr &ExprPtr::operator*=(const ExprPtr &other) {
-  if (as_shared_ptr()->is<Product>()) {
+  if (!*this) {
+    *this = other.clone();
+  } else if (as_shared_ptr()->is<Product>()) {
     as_shared_ptr()->operator*=(*other);
   } else if (as_shared_ptr()->is<Constant>() && other->is<Constant>()) {
     *this = ex<Constant>(this->as<Constant>().value() *
@@ -102,6 +130,8 @@ void Constant::adjoint() {
 
 std::wstring_view Variable::label() const { return label_; }
 
+void Variable::conjugate() { conjugated_ = !conjugated_; }
+
 bool Variable::conjugated() const { return conjugated_; }
 
 std::wstring Variable::to_latex() const {
@@ -110,11 +140,9 @@ std::wstring Variable::to_latex() const {
   return result;
 }
 
-ExprPtr Variable::clone() const {
-  return ex<Variable>(Variable(label_, conjugated_));
-}
+ExprPtr Variable::clone() const { return ex<Variable>(*this); }
 
-void Variable::adjoint() { conjugated_ = !conjugated_; }
+void Variable::adjoint() { conjugate(); }
 
 bool Product::is_commutative() const {
   bool result = true;
@@ -327,8 +355,8 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
     using std::end;
     std::stable_sort(begin(summands_), end(summands_),
                      [](const auto &first, const auto &second) {
-                       const auto first_size = ranges::size(*first);
-                       const auto second_size = ranges::size(*second);
+                       const auto first_size = sequant::size(first);
+                       const auto second_size = sequant::size(second);
 
                        return (first_size == second_size)
                                   ? *first < *second

@@ -175,7 +175,7 @@ ExprPtr remove_spin(ExprPtr& expr) {
 
 bool spin_symm_tensor(const Tensor& tensor) {
   assert(tensor.bra_rank() == tensor.ket_rank());
-  for (auto i = 0; i != tensor.rank(); ++i) {
+  for (std::size_t i = 0; i != tensor.rank(); ++i) {
     if (tensor.bra()[i].space().qns() != tensor.ket()[i].space().qns())
       return false;
   }
@@ -489,7 +489,6 @@ ExprPtr symmetrize_expr(const Product& product) {
   // Get phase relative to the canonical order
   // TODO factor out for reuse
   auto get_phase = [](const container::map<Index, Index>& map) {
-    bool even;
     container::svector<Index> idx_list;
     for (const auto& [key, val] : map) idx_list.push_back(val);
     IndexSwapper::thread_instance().reset();
@@ -568,7 +567,7 @@ container::svector<container::map<Index, Index>> P_maps(const Tensor& P,
     // P_ij^ab -> {{i,j},{j,i},{a,b},{b,a}}
     assert(P.bra_rank() % 2 == 0 && P.ket_rank() % 2 == 0);
     container::map<Index, Index> idx_rep;
-    for (auto i = 0; i != P.const_braket().size(); i += 2) {
+    for (std::size_t i = 0; i != P.const_braket().size(); i += 2) {
       idx_rep.emplace(P.const_braket().at(i), P.const_braket().at(i + 1));
       idx_rep.emplace(P.const_braket().at(i + 1), P.const_braket().at(i));
     }
@@ -592,13 +591,13 @@ container::svector<container::map<Index, Index>> P_maps(const Tensor& P,
   do {
     auto P_braket_ptr = P_braket.begin();
     container::map<Index, Index> replacement_map;
-    for (auto&& i : int_list) {
+    for (std::size_t i : int_list) {
       if (i < P.bra_rank()) {
         replacement_map.emplace(*P_braket_ptr, P.bra()[i]);
         P_braket_ptr++;
       }
     }
-    for (auto&& i : int_list) {
+    for (std::size_t i : int_list) {
       if (i < P.ket_rank()) {
         replacement_map.emplace(*P_braket_ptr, P.ket()[i]);
         P_braket_ptr++;
@@ -755,7 +754,7 @@ ExprPtr closed_shell_spintrace(
     const ExprPtr& expression,
     const container::svector<container::svector<Index>>& ext_index_groups) {
   // NOT supported for Proto indices
-  auto check_proto_index = [](const ExprPtr& expr) {
+  [[maybe_unused]] auto check_proto_index = [](const ExprPtr& expr) {
     if (expr->is<Tensor>()) {
       ranges::for_each(expr->as<Tensor>().const_braket(), [](const Index& idx) {
         assert(!idx.has_proto_indices() &&
@@ -906,7 +905,7 @@ container::svector<container::svector<Index>> external_indices(
            "absence of (anti)symmetrizer (A or S) operator in expression.");
     assert(P.bra_rank() == P.ket_rank());
     ext_index_groups.resize(P.rank());
-    for (auto i = 0; i != P.rank(); ++i) {
+    for (std::size_t i = 0; i != P.rank(); ++i) {
       ext_index_groups[i] = container::svector<Index>{P.ket()[i], P.bra()[i]};
     }
   }
@@ -1020,7 +1019,7 @@ Tensor swap_spin(const Tensor& t) {
 
   container::svector<Index> bra(t.rank()), ket(t.rank());
 
-  for (auto i = 0; i < t.rank(); ++i) {
+  for (std::size_t i = 0; i < t.rank(); ++i) {
     bra.at(i) = spin_flipped_idx(t.bra().at(i));
     ket.at(i) = spin_flipped_idx(t.ket().at(i));
   }
@@ -1084,7 +1083,6 @@ std::vector<ExprPtr> open_shell_A_op(const Tensor& A) {
   // Add spin label beta to index
   auto add_beta = [](const Index& idx) {
     std::wstring idx_n_ws(idx.label().substr(idx.label().rfind(L'_') + 1));
-    auto idx_type = idx.space().type();
     auto space = IndexSpace::instance(idx.space().type(), IndexSpace::beta);
     return Index::make_label_index(space, idx_n_ws);
   };
@@ -1093,7 +1091,7 @@ std::vector<ExprPtr> open_shell_A_op(const Tensor& A) {
   result.at(0) = ex<Constant>(1);
   result.at(rank) = ex<Constant>(1);
 
-  for (auto i = 1; i < rank; ++i) {
+  for (std::size_t i = 1; i < rank; ++i) {
     auto spin_bra = A.bra();
     auto spin_ket = A.ket();
     std::transform(spin_bra.begin(), spin_bra.end() - i, spin_bra.begin(),
@@ -1133,7 +1131,7 @@ std::vector<ExprPtr> open_shell_P_op_vector(const Tensor& A) {
   result_vector.at(rank) = ex<Constant>(1);  // all beta
 
   // This loop generates all the remaining spin cases
-  for (auto i = 1; i < rank; ++i) {
+  for (std::size_t i = 1; i < rank; ++i) {
     container::svector<int> alpha_spin(idx.begin(), idx.end() - i);
     container::svector<int> beta_spin(idx.end() - i, idx.end());
 
@@ -1149,13 +1147,13 @@ std::vector<ExprPtr> open_shell_P_op_vector(const Tensor& A) {
 
     // The P4 terms
     if (alpha_spin.size() > 1 && beta_spin.size() > 1) {
-      for (auto a = 0; a != alpha_spin.size() - 1; ++a) {
+      for (std::size_t a = 0; a != alpha_spin.size() - 1; ++a) {
         auto i1 = alpha_spin[a];
-        for (auto b = a + 1; b != alpha_spin.size(); ++b) {
+        for (std::size_t b = a + 1; b != alpha_spin.size(); ++b) {
           auto i2 = alpha_spin[b];
-          for (auto c = 0; c != beta_spin.size() - 1; ++c) {
+          for (std::size_t c = 0; c != beta_spin.size() - 1; ++c) {
             auto i3 = beta_spin[c];
-            for (auto d = c + 1; d != beta_spin.size(); ++d) {
+            for (std::size_t d = c + 1; d != beta_spin.size(); ++d) {
               auto i4 = beta_spin[d];
               P_bra_list.emplace_back(Tensor(
                   L"P", {bra.at(i1), bra.at(i3), bra.at(i2), bra.at(i4)}, {}));
@@ -1286,12 +1284,12 @@ std::vector<ExprPtr> open_shell_spintrace(
         container::svector<container::map<Index, Index>> all_replacements;
 
         // container::svector<int> spins(idx_group.size(), 0);
-        for (auto i = 0; i <= idx_group.size(); ++i) {
+        for (std::size_t i = 0; i <= idx_group.size(); ++i) {
           container::svector<int> spins(idx_group.size(), 0);
           std::fill(spins.end() - i, spins.end(), 1);
 
           container::map<Index, Index> idx_rep;
-          for (size_t j = 0; j != idx_group.size(); ++j) {
+          for (std::size_t j = 0; j != idx_group.size(); ++j) {
             for (auto& idx : idx_group[j]) {
               auto spin_idx = add_spin_label(idx, spins[j]);
               idx_rep.emplace(idx, spin_idx);
@@ -1413,7 +1411,7 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
   auto A_vec = open_shell_A_op(A);
   assert(P_vec.size() == i + 1);
   std::vector<Sum> concat_terms(i + 1);
-  size_t n_spin_orbital_term = 0;
+  [[maybe_unused]] size_t n_spin_orbital_term = 0;
   for (auto& product_term : *expr) {
     auto term = remove_tensor(product_term->as<Product>(), L"A");
     std::vector<ExprPtr> os_st(i + 1);
@@ -1421,7 +1419,7 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
     // Apply the P operators on the product term without the A,
     // Expand the P operators and spin-trace the expression
     // Then apply A operator, canonicalize and remove A operator
-    for (int s = 0; s != os_st.size(); ++s) {
+    for (std::size_t s = 0; s != os_st.size(); ++s) {
       os_st.at(s) = P_vec.at(s) * term;
       expand(os_st.at(s));
       os_st.at(s) = expand_P_op(os_st.at(s), false, true);
@@ -1716,7 +1714,7 @@ ExprPtr factorize_S(const ExprPtr& expression,
     // Check if hash1 exist in summands_hash_list
     // if(hash1 present in summands_hash_list) remove hash0, hash1
     // else continue
-    int n_symm_terms = 0;
+    [[maybe_unused]] int n_symm_terms = 0;
     auto symm_factor = factorial(S.bra_rank());
     for (auto it = expr->begin(); it != expr->end(); ++it) {
       // Exclude summand with value zero
@@ -1778,7 +1776,7 @@ ExprPtr factorize_S(const ExprPtr& expression,
         return std::find(summands_hash_list.begin(), summands_hash_list.end(),
                          h) != summands_hash_list.end();
       };
-      auto n_hash_found = ranges::count_if(hash1_list, hash1_found);
+      std::size_t n_hash_found = ranges::count_if(hash1_list, hash1_found);
 
       if (n_hash_found == hash1_list.size()) {
         // Prepend S operator
@@ -1808,7 +1806,7 @@ ExprPtr factorize_S(const ExprPtr& expression,
     // This approach is slower because the hash values are computed on the fly.
     // Subsequently, this algorithm applies 'S' operator n^2 times
 
-    int n_symm_terms = 0;
+    [[maybe_unused]] int n_symm_terms = 0;
 
     // If a term was symmetrized, put the index in a list
     container::set<int> i_list;
@@ -1868,7 +1866,7 @@ ExprPtr factorize_S(const ExprPtr& expression,
       }
 
       for (auto&& hash0 : hash0_list) {
-        int n_matches = 0;
+        std::size_t n_matches = 0;
         container::svector<size_t> idx_vec;
         for (auto find_it = it + 1; find_it != expr->end(); ++find_it) {
           auto idx = std::distance(expr->begin(), find_it);
@@ -2003,7 +2001,7 @@ ExprPtr biorthogonal_transform(
   {
     container::svector<Index> idx_list(ext_index_groups.size());
 
-    for (auto i = 0; i != ext_index_groups.size(); ++i) {
+    for (std::size_t i = 0; i != ext_index_groups.size(); ++i) {
       idx_list[i] = *ext_index_groups[i].begin();
     }
 

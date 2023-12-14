@@ -41,6 +41,8 @@ class ExprPtr : public std::shared_ptr<Expr> {
   using base_type::base_type;
 
   ExprPtr() = default;
+  ExprPtr(const ExprPtr &) = default;
+  ExprPtr(ExprPtr &&) = default;
   template <typename E, typename = std::enable_if_t<
                             std::is_same_v<std::remove_const_t<E>, Expr> ||
                             std::is_base_of_v<Expr, std::remove_const_t<E>>>>
@@ -64,7 +66,17 @@ class ExprPtr : public std::shared_ptr<Expr> {
     return *this;
   }
 
+  ExprPtr &operator=(const ExprPtr &) = default;
+  ExprPtr &operator=(ExprPtr &&) = default;
+
   ~ExprPtr() = default;
+
+  /// @return a copy of this object
+  /// @sa Expr::clone()
+  [[nodiscard]] ExprPtr clone() const &;
+  /// @return a moved copy of this object
+  /// @note this object is null after the call
+  [[nodiscard]] ExprPtr clone() && noexcept;
 
   base_type &as_shared_ptr() &;
   const base_type &as_shared_ptr() const &;
@@ -76,8 +88,44 @@ class ExprPtr : public std::shared_ptr<Expr> {
     return std::static_pointer_cast<E>(this->as_shared_ptr());
   }
 
-  ExprPtr &operator+=(const ExprPtr &);
+  /// dereference operator
+  /// @return non-const lvalue reference to the contained Expr object
+  /// @pre `this->operator bool()`
+  Expr &operator*() &;
+
+  /// dereference operator
+  /// @return const lvalue reference to the contained Expr object
+  /// @pre `this->operator bool()`
+  const Expr &operator*() const &;
+
+  /// dereference operator
+  /// @return non-const rvalue reference to the contained Expr object
+  /// @pre `this->operator bool()`
+  Expr &&operator*() &&;
+
+  /// in-place addition operator
+
+  /// if this is non-null, adds @c other to the contained expressions, otherwise
+  /// will make this point to a clone of @c other (see Expr::clone())
+  /// @param other expression to add to this
+  /// @return reference to @c *this
+  ExprPtr &operator+=(const ExprPtr &other);
+
+  /// in-place subtraction operator
+
+  /// if this is non-null, subtracts @c other from the contained expressions,
+  /// otherwise will make this point to the negative of a clone of @c other (see
+  /// Expr::clone())
+  /// @param other expression to add to this
+  /// @return reference to @c *this
   ExprPtr &operator-=(const ExprPtr &);
+
+  /// in-place multiplication operator
+
+  /// if this is non-null, multiplies the contained expressions by @c other ,
+  /// otherwise will make this point to a clone of @c other (see Expr::clone())
+  /// @param other expression to add to this
+  /// @return reference to @c *this
   ExprPtr &operator*=(const ExprPtr &);
 
   /// @tparam T an Expr type
@@ -600,12 +648,18 @@ ExprPtr adjoint(const ExprPtr &expr);
 static const wchar_t adjoint_label = L'\u207A';
 
 /// An object with a string label that be used for defining a canonical order of
-/// expressions (defined at runtime)
+/// expressions (defined at runtime). These labels are not in general
+/// object-unique, i.e. 2 objects that are not equal can return same label.
 class Labeled {
  public:
   Labeled() = default;
   virtual ~Labeled() = default;
 
+  /// @return object's label. 2 objects that are not equal can return same
+  /// label, i.e. the label does not identify the object uniquely. Thus labels
+  /// can be viewed as immutable string tags that for some object types can be
+  /// used for sorting and other purposes.
+  /// @sa to_latex() for producing unique string representation
   virtual std::wstring_view label() const = 0;
 };
 
@@ -735,11 +789,16 @@ class Variable : public Expr, public Labeled {
                             !std::is_same_v<std::decay_t<U>, Variable>>>
   explicit Variable(U &&label) : label_(std::forward<U>(label)) {}
 
-  Variable(std::wstring label, bool conjugated)
-      : label_(std::move(label)), conjugated_(conjugated) {}
+  Variable(std::wstring label) : label_(std::move(label)), conjugated_(false) {}
 
+  /// @return variable label
+  /// @warning conjugation does not change it
   std::wstring_view label() const override;
 
+  /// complex-conjugates this
+  void conjugate();
+
+  /// @return whether this object has been conjugated
   bool conjugated() const;
 
   std::wstring to_latex() const override;
@@ -1521,6 +1580,64 @@ std::decay_t<Sequence> clone(Sequence &&exprseq) {
                     });
   return std::decay_t<Sequence>(ranges::begin(cloned_seq),
                                 ranges::end(cloned_seq));
+}
+
+/// @param[in] expr an expression
+/// @return number of subexpressions in @p expr, i.e., 0 for atoms (Constant,
+/// Variable, Tensor, etc.), >0 for nontrivial Product or Sum
+inline std::size_t size(const Expr &expr) { return ranges::size(expr); }
+
+/// @param[in] exprptr (a pointer to) an expression
+/// @return number of subexpressions in @p exprptr , i.e., 0 if @p exprptr is
+/// null or an atom (Constant, Variable, Tensor, etc.), >0 for nontrivial
+/// Product or Sum
+inline std::size_t size(const ExprPtr &exprptr) {
+  if (exprptr)
+    return size(*exprptr);
+  else
+    return 0;
+}
+
+/// @param[in] exprptr (a pointer to) an expression
+/// @return begin iterator to the expression range
+inline decltype(auto) begin(const ExprPtr &exprptr) {
+  assert(exprptr);
+  return ranges::begin(*exprptr);
+}
+
+/// @param[in] exprptr (a pointer to) an expression
+/// @return begin iterator to the expression range
+inline decltype(auto) begin(ExprPtr &exprptr) {
+  assert(exprptr);
+  return ranges::begin(*exprptr);
+}
+
+/// @param[in] exprptr (a pointer to) an expression
+/// @return begin iterator to the expression range
+inline decltype(auto) cbegin(const ExprPtr &exprptr) {
+  assert(exprptr);
+  return ranges::cbegin(*exprptr);
+}
+
+/// @param[in] exprptr (a pointer to) an expression
+/// @return end iterator to the expression range
+inline decltype(auto) end(const ExprPtr &exprptr) {
+  assert(exprptr);
+  return ranges::end(*exprptr);
+}
+
+/// @param[in] exprptr (a pointer to) an expression
+/// @return end iterator to the expression range
+inline decltype(auto) end(ExprPtr &exprptr) {
+  assert(exprptr);
+  return ranges::end(*exprptr);
+}
+
+/// @param[in] exprptr (a pointer to) an expression
+/// @return end iterator to the expression range
+inline decltype(auto) cend(const ExprPtr &exprptr) {
+  assert(exprptr);
+  return ranges::cend(*exprptr);
 }
 
 // finish off ExprPtr members that depend on Expr

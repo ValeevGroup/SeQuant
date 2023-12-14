@@ -157,16 +157,22 @@ class WickTheorem {
 
     if (expr_input_ == nullptr || !nop_connections_input_.empty()) {
       for (const auto &opidx_pair : op_index_pairs) {
-        if (opidx_pair.first < 0 || opidx_pair.first >= input_.size()) {
+        constexpr bool signed_indices =
+            std::is_signed_v<typename std::remove_reference_t<
+                decltype(op_index_pairs)>::value_type::first_type>;
+        if (static_cast<std::size_t>(opidx_pair.first) >= input_.size() ||
+            static_cast<std::size_t>(opidx_pair.second) >= input_.size()) {
           throw std::invalid_argument(
               "WickTheorem::set_nop_connections: nop index out of range");
         }
-        if (opidx_pair.second < 0 || opidx_pair.second >= input_.size()) {
-          throw std::invalid_argument(
-              "WickTheorem::set_nop_connections: nop index out of range");
+        if constexpr (signed_indices) {
+          if (opidx_pair.first < 0 || opidx_pair.second < 0) {
+            throw std::invalid_argument(
+                "WickTheorem::set_nop_connections: nop index out of range");
+          }
         }
       }
-      if (op_index_pairs.size() != 0) {
+      if (op_index_pairs.size() != 0ul) {
         nop_connections_.resize(input_.size());
         for (auto &v : nop_connections_) {
           v.set();
@@ -226,7 +232,7 @@ class WickTheorem {
     for (auto &&partition : nop_partitions) {
       for (auto &&nop_ord : partition) {
         assert(nop_ord >= 0);
-        if (nop_ord >= current_nops) {
+        if (static_cast<std::size_t>(nop_ord) >= current_nops) {
           current_nops = upsize_topological_partitions(
               nop_ord + 1, TopologicalPartitionType::NormalOperator);
         }
@@ -300,7 +306,6 @@ class WickTheorem {
 
       // assert that every op is in a partition
       if (ranges::contains(op_partition_idx_, 0)) {
-        std::size_t idx_ord = 0;
         for (auto &&[ord, partition_idx] :
              ranges::views::enumerate(op_partition_idx_)) {
           if (partition_idx == 0) {
@@ -534,7 +539,7 @@ class WickTheorem {
 
     // now compute
     auto result = compute_nontensor_wick(count_only);
-    return std::move(result);
+    return result;
   }
 
   /// carries state down the stack of recursive calls
@@ -558,8 +563,8 @@ class WickTheorem {
     static auto uptri_idx(T i, T j, U n) {
       assert(i >= 0);
       assert(j >= 0);
-      assert(i < n);
-      assert(j < n);
+      assert(i < static_cast<T>(n));
+      assert(j < static_cast<T>(n));
       assert(i < j);
       return i * (2 * n - i - 1) / 2 + j - i - 1;
     }
@@ -668,10 +673,10 @@ class WickTheorem {
         //                   << " qpcre_op=" << qpcre_op_ptr->to_latex() <<
         //                   "\n";
         auto ann_it = ranges::find_if(result, [&](const auto &p) {
-          return qpann_op_ptr->action() == Action::annihilate &&
-                     p.second == qpann_op_ptr->index() ||
-                 qpcre_op_ptr->action() == Action::annihilate &&
-                     p.second == qpcre_op_ptr->index();
+          return (qpann_op_ptr->action() == Action::annihilate &&
+                  p.second == qpann_op_ptr->index()) ||
+                 (qpcre_op_ptr->action() == Action::annihilate &&
+                  p.second == qpcre_op_ptr->index());
         });
         if (ann_it != result.end()) {
           //          std::wcout << "make_target_partner_indices: found ann_it =
@@ -679,10 +684,10 @@ class WickTheorem {
           //                     << ann_it->first.to_latex() << ", "
           //                     << ann_it->second.to_latex() << "}\n";
           auto cre_it = ranges::find_if(result, [&](const auto &p) {
-            return qpcre_op_ptr->action() == Action::create &&
-                       p.first == qpcre_op_ptr->index() ||
-                   qpann_op_ptr->action() == Action::create &&
-                       p.first == qpann_op_ptr->index();
+            return (qpcre_op_ptr->action() == Action::create &&
+                    p.first == qpcre_op_ptr->index()) ||
+                   (qpann_op_ptr->action() == Action::create &&
+                    p.first == qpann_op_ptr->index());
           });
           if (cre_it != result.end()) {
             //            std::wcout << "make_target_partner_indices: found
@@ -1110,11 +1115,11 @@ class WickTheorem {
                 // contract only the first free op in left partition
                 // this is ensured automatically if full_contractions_==true
                 if (!full_contractions_) {
-                  const auto left_partition_ncontr_total =
+                  const std::size_t left_partition_ncontr_total =
                       state.op_partition_ncontractions[op_left_partition_idx];
                   const auto &op_left_partition =
                       state.wick.op_partitions_[op_left_partition_idx];
-                  const auto op_left_ord_in_partition =
+                  const std::size_t op_left_ord_in_partition =
                       op_left_partition.find(op_left_input_ordinal) -
                       op_left_partition.begin();
                   is_unique =
@@ -1146,11 +1151,11 @@ class WickTheorem {
 
                 // contract to the first free op in the right partition
                 if (is_unique) {
-                  const auto right_partition_ncontr_total =
+                  const std::size_t right_partition_ncontr_total =
                       state.op_partition_ncontractions[op_right_partition_idx];
                   const auto &op_right_partition =
                       state.wick.op_partitions_[op_right_partition_idx];
-                  const auto op_right_ord_in_partition =
+                  const std::size_t op_right_ord_in_partition =
                       op_right_partition.find(op_right_input_ordinal) -
                       op_right_partition.begin();
                   is_unique =

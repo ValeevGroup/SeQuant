@@ -14,7 +14,7 @@
 TEST_CASE("Rational", "[elements]") {
   using namespace sequant;
 
-  auto print = [](rational r) {
+  [[maybe_unused]] auto print = [](rational r) {
     return sequant::to_wstring(numerator(r)) + L"/" +
            sequant::to_wstring(denominator(r));
   };

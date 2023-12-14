@@ -244,9 +244,9 @@ target_braket(Tensor const& t1, Tensor const& t2) noexcept {
   auto right = zip(t2.bra(), t2.ket()) | ranges::to_vector;
 
   while (!right.empty()) {
-    for (auto rr = 0; rr < right.size(); ++rr) {
+    for (std::size_t rr = 0; rr < right.size(); ++rr) {
       auto& [rb, rk] = right[rr];
-      for (auto ll = 0; ll < left.size(); ++ll) {
+      for (std::size_t ll = 0; ll < left.size(); ++ll) {
         auto& [lb, lk] = left[ll];
         if (lb == rk && rb == lk) {
           remove_item(left, ll);
@@ -313,7 +313,7 @@ Symmetry tensor_symmetry_prod(EvalExpr const& left,
         ranges::views::concat(tnsr1.const_braket(), tnsr2.const_braket()) |
         ranges::to<index_set_t>;
 
-    if (ranges::distance(uniq_idxs) ==
+    if (static_cast<std::size_t>(ranges::distance(uniq_idxs)) ==
         tnsr1.const_braket().size() + tnsr2.const_braket().size()) {
       // outer product confirmed
       return Symmetry::antisymm;

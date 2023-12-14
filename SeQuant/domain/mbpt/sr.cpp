@@ -232,7 +232,7 @@ namespace op {
 
 ExprPtr H2_oo_vv() {
   return ex<op_t>(
-      []() -> std::wstring_view { return L"g"; },
+      []() -> std::wstring_view { return optype2label.at(OpType::g); },
       [=]() -> ExprPtr {
         using namespace sequant::mbpt::sr;
         return OpMaker(
@@ -247,7 +247,7 @@ ExprPtr H2_oo_vv() {
 
 ExprPtr H2_vv_vv() {
   return ex<op_t>(
-      []() -> std::wstring_view { return L"g"; },
+      []() -> std::wstring_view { return optype2label.at(OpType::g); },
       [=]() -> ExprPtr {
         using namespace sequant::mbpt::sr;
         return OpMaker(
@@ -268,9 +268,9 @@ ExprPtr H_(std::size_t k) {
           [vacuum = get_default_context().vacuum()]() -> std::wstring_view {
             switch (vacuum) {
               case Vacuum::Physical:
-                return L"h";
+                return optype2label.at(OpType::h);
               case Vacuum::SingleProduct:
-                return L"f";
+                return optype2label.at(OpType::f);
               case Vacuum::MultiProduct:
                 abort();
               default:
@@ -287,7 +287,7 @@ ExprPtr H_(std::size_t k) {
 
     case 2:
       return ex<op_t>(
-          []() -> std::wstring_view { return L"g"; },
+          []() -> std::wstring_view { return optype2label.at(OpType::g); },
           [=]() -> ExprPtr {
             using namespace sequant::mbpt::sr;
             return sr::H_(2);
@@ -308,44 +308,46 @@ ExprPtr H(std::size_t k) {
 
 ExprPtr T_(std::size_t K) {
   assert(K > 0);
-  return ex<op_t>([]() -> std::wstring_view { return L"t"; },
-                  [=]() -> ExprPtr {
-                    using namespace sequant::mbpt::sr;
-                    return sr::T_(K);
-                  },
-                  [=](qnc_t& qns) {
-                    qns = combine(qnc_t{0ul, K, K, 0ul}, qns);
-                  });
+  return ex<op_t>(
+      []() -> std::wstring_view { return optype2label.at(OpType::t); },
+      [=]() -> ExprPtr {
+        using namespace sequant::mbpt::sr;
+        return sr::T_(K);
+      },
+      [=](qnc_t& qns) {
+        qns = combine(qnc_t{0ul, K, K, 0ul}, qns);
+      });
 }
 
-ExprPtr T(std::size_t K) {
-  assert(K > 0);
+ExprPtr T(std::size_t K, bool skip1) {
+  assert(K > (skip1 ? 1 : 0));
 
   ExprPtr result;
-  for (auto k = 1ul; k <= K; ++k) {
-    result = k > 1 ? result + T_(k) : T_(k);
+  for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
+    result += T_(k);
   }
   return result;
 }
 
 ExprPtr Λ_(std::size_t K) {
   assert(K > 0);
-  return ex<op_t>([]() -> std::wstring_view { return L"λ"; },
-                  [=]() -> ExprPtr {
-                    using namespace sequant::mbpt::sr;
-                    return sr::Λ_(K);
-                  },
-                  [=](qnc_t& qns) {
-                    qns = combine(qnc_t{K, 0ul, 0ul, K}, qns);
-                  });
+  return ex<op_t>(
+      []() -> std::wstring_view { return optype2label.at(OpType::λ); },
+      [=]() -> ExprPtr {
+        using namespace sequant::mbpt::sr;
+        return sr::Λ_(K);
+      },
+      [=](qnc_t& qns) {
+        qns = combine(qnc_t{K, 0ul, 0ul, K}, qns);
+      });
 }
 
-ExprPtr Λ(std::size_t K) {
-  assert(K > 0);
+ExprPtr Λ(std::size_t K, bool skip1) {
+  assert(K > (skip1 ? 1 : 0));
 
   ExprPtr result;
-  for (auto k = 1ul; k <= K; ++k) {
-    result = k > 1 ? result + Λ_(k) : Λ_(k);
+  for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
+    result += Λ_(k);
   }
   return result;
 }
@@ -376,34 +378,36 @@ ExprPtr L_(std::size_t Nbra, std::size_t Nket) {
 
 ExprPtr A(std::int64_t K) {
   assert(K != 0);
-  return ex<op_t>([]() -> std::wstring_view { return L"A"; },
-                  [=]() -> ExprPtr {
-                    using namespace sequant::mbpt::sr;
-                    return sr::A(K, K);
-                  },
-                  [=](qnc_t& qns) {
-                    const std::size_t abs_K = std::abs(K);
-                    if (K < 0)
-                      qns = combine(qnc_t{abs_K, 0ul, 0ul, abs_K}, qns);
-                    else
-                      qns = combine(qnc_t{0ul, abs_K, abs_K, 0ul}, qns);
-                  });
+  return ex<op_t>(
+      []() -> std::wstring_view { return optype2label.at(OpType::A); },
+      [=]() -> ExprPtr {
+        using namespace sequant::mbpt::sr;
+        return sr::A(K, K);
+      },
+      [=](qnc_t& qns) {
+        const std::size_t abs_K = std::abs(K);
+        if (K < 0)
+          qns = combine(qnc_t{abs_K, 0ul, 0ul, abs_K}, qns);
+        else
+          qns = combine(qnc_t{0ul, abs_K, abs_K, 0ul}, qns);
+      });
 }
 
 ExprPtr S(std::int64_t K) {
   assert(K != 0);
-  return ex<op_t>([]() -> std::wstring_view { return L"S"; },
-                  [=]() -> ExprPtr {
-                    using namespace sequant::mbpt::sr;
-                    return sr::S(K, K);
-                  },
-                  [=](qnc_t& qns) {
-                    const std::size_t abs_K = std::abs(K);
-                    if (K < 0)
-                      qns = combine(qnc_t{abs_K, 0ul, 0ul, abs_K}, qns);
-                    else
-                      qns = combine(qnc_t{0ul, abs_K, abs_K, 0ul}, qns);
-                  });
+  return ex<op_t>(
+      []() -> std::wstring_view { return optype2label.at(OpType::S); },
+      [=]() -> ExprPtr {
+        using namespace sequant::mbpt::sr;
+        return sr::S(K, K);
+      },
+      [=](qnc_t& qns) {
+        const std::size_t abs_K = std::abs(K);
+        if (K < 0)
+          qns = combine(qnc_t{abs_K, 0ul, 0ul, abs_K}, qns);
+        else
+          qns = combine(qnc_t{0ul, abs_K, abs_K, 0ul}, qns);
+      });
 }
 
 ExprPtr P(std::int64_t K) {
@@ -414,7 +418,7 @@ ExprPtr H_pt(std::size_t order, std::size_t R) {
   assert(R > 0);
   assert(order == 1 && "only first order perturbation is supported now");
   return ex<op_t>(
-      []() -> std::wstring_view { return L"h¹"; },
+      []() -> std::wstring_view { return optype2label.at(OpType::h_1); },
       [=]() -> ExprPtr {
         using namespace sequant::mbpt::sr;
         return sr::H_pt(1, R);
@@ -427,20 +431,21 @@ ExprPtr H_pt(std::size_t order, std::size_t R) {
 ExprPtr T_pt_(std::size_t order, std::size_t K) {
   assert(K > 0);
   assert(order == 1 && "only first order perturbation is supported now");
-  return ex<op_t>([]() -> std::wstring_view { return L"t¹"; },
-                  [=]() -> ExprPtr {
-                    using namespace sequant::mbpt::sr;
-                    return sr::T_pt_(order, K);
-                  },
-                  [=](qnc_t& qns) {
-                    qns = combine(qnc_t{0ul, K, K, 0ul}, qns);
-                  });
+  return ex<op_t>(
+      []() -> std::wstring_view { return optype2label.at(OpType::t_1); },
+      [=]() -> ExprPtr {
+        using namespace sequant::mbpt::sr;
+        return sr::T_pt_(order, K);
+      },
+      [=](qnc_t& qns) {
+        qns = combine(qnc_t{0ul, K, K, 0ul}, qns);
+      });
 }
 
-ExprPtr T_pt(std::size_t order, std::size_t K) {
-  assert(K > 0);
+ExprPtr T_pt(std::size_t order, std::size_t K, bool skip1) {
+  assert(K > (skip1 ? 1 : 0));
   ExprPtr result;
-  for (auto k = 1ul; k <= K; ++k) {
+  for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
     result = k > 1 ? result + T_pt_(order, k) : T_pt_(order, k);
   }
   return result;
@@ -449,20 +454,21 @@ ExprPtr T_pt(std::size_t order, std::size_t K) {
 ExprPtr Λ_pt_(std::size_t order, std::size_t K) {
   assert(K > 0);
   assert(order == 1 && "only first order perturbation is supported now");
-  return ex<op_t>([]() -> std::wstring_view { return L"λ¹"; },
-                  [=]() -> ExprPtr {
-                    using namespace sequant::mbpt::sr;
-                    return sr::Λ_pt_(order, K);
-                  },
-                  [=](qnc_t& qns) {
-                    qns = combine(qnc_t{K, 0ul, 0ul, K}, qns);
-                  });
+  return ex<op_t>(
+      []() -> std::wstring_view { return optype2label.at(OpType::λ_1); },
+      [=]() -> ExprPtr {
+        using namespace sequant::mbpt::sr;
+        return sr::Λ_pt_(order, K);
+      },
+      [=](qnc_t& qns) {
+        qns = combine(qnc_t{K, 0ul, 0ul, K}, qns);
+      });
 }
 
-ExprPtr Λ_pt(std::size_t order, std::size_t K) {
-  assert(K > 0);
+ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1) {
+  assert(K > (skip1 ? 1 : 0));
   ExprPtr result;
-  for (auto k = 1ul; k <= K; ++k) {
+  for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
     result = k > 1 ? result + Λ_pt_(order, k) : Λ_pt_(order, k);
   }
   return result;
