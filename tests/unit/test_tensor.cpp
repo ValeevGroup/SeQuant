@@ -3,12 +3,14 @@
 //
 
 #include "catch.hpp"
+#include "SeQuant/domain/mbpt/convention.hpp"
 
 #include <iostream>
 #include "SeQuant/core/wick.hpp"
 
 TEST_CASE("Tensor", "[elements]") {
   using namespace sequant;
+  mbpt::set_default_convention();
 
   SECTION("constructors") {
     REQUIRE_NOTHROW(Tensor{});

@@ -2,7 +2,7 @@
 
 #include <SeQuant/core/eval_node.hpp>
 #include <SeQuant/core/parse_expr.hpp>
-
+#include "SeQuant/domain/mbpt/convention.hpp"
 namespace {
 
 // validates if x is constructible from tspec using parse_expr
@@ -43,6 +43,7 @@ sequant::EvalExpr node(sequant::EvalNode<sequant::EvalExpr> const& n,
 
 TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
   using namespace sequant;
+  sequant::mbpt::set_default_convention();
   auto L = Npos::L;
   auto R = Npos::R;
 

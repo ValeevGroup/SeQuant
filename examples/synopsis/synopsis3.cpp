@@ -7,7 +7,7 @@ int main() {
                               BraKetSymmetry::symm});
 
   IndexSpace::register_instance(L"y", IndexSpace::occupied);
-  IndexSpace::register_instance(L"z", IndexSpace::complete_maybe_unoccupied);
+  IndexSpace::register_instance(L"z", IndexSpace::complete_unoccupied);
 
   IndexSpace sp;
   Index p1(L"p_1", sp), p2(L"p_2", sp), p3(L"p_3", sp), p4(L"p_4", sp);

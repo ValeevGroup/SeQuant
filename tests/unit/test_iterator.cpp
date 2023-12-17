@@ -6,11 +6,12 @@
 
 #include "SeQuant/core/op.hpp"
 #include "SeQuant/core/ranges.hpp"
+#include "SeQuant/domain/mbpt/convention.hpp"
 
 TEST_CASE("Iterators", "[elements]") {
 
   using namespace sequant;
-
+  mbpt::set_default_convention();
   SECTION("constructor") {
 
     {

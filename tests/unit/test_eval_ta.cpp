@@ -4,6 +4,7 @@
 #include <SeQuant/core/parse_expr.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/domain/eval/eval.hpp>
+#include "SeQuant/domain/mbpt/convention.hpp"
 
 #include <tiledarray.h>
 #include <boost/regex.hpp>
@@ -143,6 +144,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
   using sequant::evaluate;
   using sequant::evaluate_antisymm;
   using sequant::evaluate_symm;
+  sequant::mbpt::set_default_convention();
 
   using TA::TArrayD;
 

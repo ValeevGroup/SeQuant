@@ -7,10 +7,11 @@
 #include <iostream>
 
 #include "SeQuant/core/op.hpp"
+#include "SeQuant/domain/mbpt/convention.hpp"
 
 TEST_CASE("Op", "[elements]") {
   using namespace sequant;
-
+  sequant::mbpt::set_default_convention();
   SECTION("constructors") {
     REQUIRE_NOTHROW(FOp{});
 
@@ -194,7 +195,6 @@ TEST_CASE("Op", "[elements]") {
       REQUIRE(!is_pure_qpannihilator(fann(L"i_1"), V));
       REQUIRE(is_pure_qpannihilator(fann(L"a_1"), V));
       REQUIRE(!is_pure_qpannihilator(fann(L"p_1"), V));
-
       REQUIRE(qpannihilator_space(fann(L"i_1"), V) ==
               IndexSpace::null_instance());
       REQUIRE(qpannihilator_space(fcre(L"i_1"), V) ==
@@ -206,7 +206,7 @@ TEST_CASE("Op", "[elements]") {
       REQUIRE(qpannihilator_space(fcre(L"p_1"), V) ==
               IndexSpace::instance(IndexSpace::occupied));
       REQUIRE(qpannihilator_space(fann(L"p_1"), V) ==
-              IndexSpace::instance(IndexSpace::maybe_unoccupied));
+              IndexSpace::instance(IndexSpace::unoccupied));
     }
     {
       constexpr const Vacuum V = Vacuum::Physical;

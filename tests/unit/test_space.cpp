@@ -3,12 +3,13 @@
 //
 
 #include "catch.hpp"
+#include "SeQuant/domain/mbpt/convention.hpp"
 
 #include "SeQuant/core/space.hpp"
 
 TEST_CASE("IndexSpace", "[elements]") {
   using namespace sequant;
-
+  mbpt::set_default_convention();
   SECTION("register_instance") {
     REQUIRE_THROWS(IndexSpace::register_instance(
         L"p", IndexSpace::all));  // already registered standard instances

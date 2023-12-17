@@ -7,10 +7,11 @@
 
 #include "SeQuant/core/index.hpp"
 #include "SeQuant/core/latex.hpp"
+#include "SeQuant/domain/mbpt/convention.hpp"
 
 TEST_CASE("Index", "[elements]") {
   using namespace sequant;
-
+  mbpt::set_default_convention();
   SECTION("constructors") {
     Index i{};
 
