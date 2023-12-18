@@ -681,7 +681,7 @@ inline bool includes(const IndexSpace &space1, const IndexSpace &space2) {
   return space1.attr().includes(space2.attr());
 }
 inline bool has_non_overlapping_spaces(const IndexSpace &space1, const IndexSpace &space2){
-  if(space1.attr().exclusionary_or(space2.attr()) == 0) {return false;}
+  if(space1.attr().exclusionary_or(space2.attr()).to_int32() == 0) {return false;}
   else{ return true;}
 }
 
