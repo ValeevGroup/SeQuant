@@ -102,12 +102,21 @@ void register_standard_instances(sequant::Reference ref,bool do_throw = true) {
     // not explicitly defined so
     IndexSpace::register_instance(declab(L"m"), ref == Reference::single ? IndexSpace::occupied : IndexSpace::MR_occupied, qnattr, do_throw);
     // introduced in MPQC LCAOWavefunction
-    IndexSpace::register_instance(declab(L"e"), ref == Reference::single ? IndexSpace::unoccupied : IndexSpace::MR_unoccupied, qnattr, do_throw);
+    IndexSpace::register_instance(declab(L"e"), IndexSpace::unoccupied, qnattr,
+                                  do_throw);
+    // introduced in MPQC for CT-F12, and other ad hoc uses
+    IndexSpace::register_instance(declab(L"g"), IndexSpace::OBS_unfrozen, qnattr,
+                                  do_throw);
     // introduced in MPQC for GF, CT-F12, and other ad hoc uses
     IndexSpace::register_instance(declab(L"x"), IndexSpace::all_active, qnattr,
                                   do_throw);
     // introduced here
-    IndexSpace::register_instance(declab(L"γ"),IndexSpace::complete_inactive_unoccupied,
+    IndexSpace::register_instance(declab(L"γ"),
+                                  IndexSpace::complete_inactive_unoccupied,
+                                  qnattr, do_throw);
+    // introduced here
+    IndexSpace::register_instance(declab(L"z"),
+                                  IndexSpace::complete_unfrozen,
                                   qnattr, do_throw);
     // e.g. see DOI 10.1063/5.0067511
     IndexSpace::register_instance(declab(L"u"), IndexSpace::MR_active, qnattr,

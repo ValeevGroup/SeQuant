@@ -35,8 +35,8 @@ struct TypeAttr {
   constexpr TypeAttr unIon(TypeAttr other) const {
     return TypeAttr(this->to_int32() | other.to_int32());
   }
-  constexpr int32_t exclusionary_or(TypeAttr other) const {
-    return (this->to_int32() xor other.to_int32());
+  constexpr TypeAttr exclusionary_or(TypeAttr other) const {
+    return TypeAttr(this->to_int32() xor other.to_int32());
   }
 
   friend constexpr bool operator==(TypeAttr, TypeAttr);
@@ -153,7 +153,7 @@ class IndexSpace {
 
     std::vector<Attr> excluded_spaces(Attr other) const {
       std::vector<Attr> result;
-      std::bitset<32> bit32(this->exclusionary_or(other));
+      std::bitset<32> bit32(this->exclusionary_or(other).to_int32());
       std::vector<std::pair<int,int>> start_stop_ranges;
       /// TODO need to make a cleaner implementation here.
       // std::bitset does not have an iterator
@@ -222,6 +222,7 @@ class IndexSpace {
   /// represents any space, standard (see below) or otherwise
   static constexpr Type nonnulltype{0x7fffffff};
   /// @}
+
   /// \name standard space tags
 
   /// standard space tags are predefined that helps implement set theory of
@@ -257,6 +258,9 @@ class IndexSpace {
   /// space of sp states represented in computational basis
   /// @note this is the union of IndexSpace::maybe_occupied and IndexSpace::maybe_unoccupied
   static constexpr Type all = IndexSpace::occupied.unIon(IndexSpace::unoccupied);
+/// all functions in the orbital basis which are not frozen core
+  /// @note not the same as all_active, as this includes inactive unoccupied orbitals.
+  static constexpr Type OBS_unfrozen = all.exclusionary_or(IndexSpace::frozen_occupied);
   /// space of sp states that are not used to define the reference (vacuum) state (i.e., they are unoccupied) and not supported
   /// by a supported by a finite computational basis; i.e., these states are the rest of the sp Hilbert space
   static constexpr Type other_unoccupied{0b10000};
@@ -269,6 +273,9 @@ class IndexSpace {
   /// union of all previous spaces
   /// @note this is a union of IndexSpace::all and IndexSpace::other_unoccupied
   static constexpr Type complete = IndexSpace::all.unIon(IndexSpace::other_unoccupied);
+  /// a union of all unfrozen orbitals including the CABS orbitals from F12 theory
+  /// @note may be useful towards a state universal F12 geminal projector.
+  static constexpr Type complete_unfrozen = complete.exclusionary_or(frozen_occupied);//IndexSpace::complete_inactive_unoccupied.unIon(all_active);
 
 //multi-reference spaces
 /// space of sp states that are fully occupied (i.e., non-correlated) in the reference (vacuum) state and are "frozen" in their reference form
@@ -345,13 +352,12 @@ class IndexSpace {
                                             MR_maybe_unoccupied,
                                             MR_active_maybe_unoccupied,
                                             all_active,
+                                            OBS_unfrozen,
                                             all,
                                             other_unoccupied,
                                             complete_inactive_unoccupied,
                                             complete_unoccupied,
-                                            MR_complete_maybe_unoccupied,
-                                            complete,
-                                            MR_complete};
+                                            complete};
 
   template <int32_t typeint>
   static constexpr bool is_standard_type() {
