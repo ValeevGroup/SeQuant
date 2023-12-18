@@ -21,5 +21,5 @@ ExprPtr A(std::size_t Nbra,
 /// excitations originate from; default = IndexSpace::active_occupied
 /// @param[in] ansatz 1 or 2
 ExprPtr R12(IndexSpace::Type geminal_generating_space =
-                IndexSpace::active_maybe_occupied,
+                IndexSpace::active_occupied,
             int ansatz = 2);

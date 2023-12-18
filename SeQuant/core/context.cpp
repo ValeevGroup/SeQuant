@@ -9,6 +9,7 @@ bool operator==(const Context& ctx1, const Context& ctx2) {
     return ctx1.vacuum() == ctx2.vacuum() && ctx1.metric() == ctx2.metric() &&
            ctx1.braket_symmetry() == ctx2.braket_symmetry() &&
            ctx1.spbasis() == ctx2.spbasis() &&
+           ctx1.reference() == ctx2.reference() &&
            ctx1.first_dummy_index_ordinal() == ctx2.first_dummy_index_ordinal();
 }
 
@@ -32,17 +33,19 @@ set_scoped_default_context(const Context& ctx) {
 }
 
 Context::Context(Vacuum vac, IndexSpaceMetric m, BraKetSymmetry bks,
-                 SPBasis spb, std::size_t fdio)
+                 SPBasis spb,Reference ref, std::size_t fdio)
     : vacuum_(vac),
       metric_(m),
       braket_symmetry_(bks),
       spbasis_(spb),
+      reference_(ref),
       first_dummy_index_ordinal_(fdio) {}
 
 Vacuum Context::vacuum() const { return vacuum_; }
 IndexSpaceMetric Context::metric() const { return metric_; }
 BraKetSymmetry Context::braket_symmetry() const { return braket_symmetry_; }
 SPBasis Context::spbasis() const { return spbasis_; }
+Reference Context::reference() const {return reference_;}
 std::size_t Context::first_dummy_index_ordinal() const {
   return first_dummy_index_ordinal_;
 }

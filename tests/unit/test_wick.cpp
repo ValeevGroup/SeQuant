@@ -6,6 +6,7 @@
 #include "SeQuant/core/utility/macros.hpp"
 #include "SeQuant/core/utility/nodiscard.hpp"
 #include "SeQuant/core/wick.hpp"
+#include "SeQuant/domain/mbpt/convention.hpp"
 
 #include "catch.hpp"
 #include "test_config.hpp"
@@ -33,7 +34,7 @@ auto compute_nontensor_wick(WickTheorem<Statistics::FermiDirac>& wick) {
 #if 1
 TEST_CASE("WickTheorem", "[algorithms][wick]") {
   using namespace sequant;
-
+  mbpt::set_default_convention();
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
   Index::reset_tmp_index();
@@ -405,8 +406,8 @@ SECTION("fermi vacuum") {
             2 * 2);  // product of 4 terms (since each contraction of 2
                      // *general* indices produces 2 overlaps)
     REQUIRE(to_latex(result) ==
-            L"{{s^{{p_1}}_{{m_{102}}}}{s^{{m_{102}}}_{{p_4}}}{s^{{E_{103}}}_{"
-            L"{p_2}}}{s^{{p_3}}_{{E_{103}}}}}");
+            L"{{s^{{p_1}}_{{m_{102}}}}{s^{{m_{102}}}_{{p_4}}}{s^{{e_{103}}}_{"
+            L"{p_2}}}{s^{{p_3}}_{{e_{103}}}}}");
   }
   // two general 1-body operators, partial contractions: Eq. 21a of
   // DOI 10.1063/1.474405
@@ -423,9 +424,9 @@ SECTION("fermi vacuum") {
         L"{ \\bigl( - "
         L"{{s^{{p_1}}_{{m_{107}}}}{s^{{m_{107}}}_{{p_4}}}{\\tilde{a}^{{p_3}}_"
         L"{{p_2}}}} + "
-        L"{{s^{{p_1}}_{{m_{107}}}}{s^{{m_{107}}}_{{p_4}}}{s^{{E_{108}}}_{{p_"
-        L"2}}}{s^{{p_3}}_{{E_{108}}}}} + "
-        L"{{s^{{E_{109}}}_{{p_2}}}{s^{{p_3}}_{{E_{109}}}}{\\tilde{a}^{{p_1}}_"
+        L"{{s^{{p_1}}_{{m_{107}}}}{s^{{m_{107}}}_{{p_4}}}{s^{{e_{108}}}_{{p_"
+        L"2}}}{s^{{p_3}}_{{e_{108}}}}} + "
+        L"{{s^{{e_{109}}}_{{p_2}}}{s^{{p_3}}_{{e_{109}}}}{\\tilde{a}^{{p_1}}_"
         L"{{p_4}}}} + {{\\tilde{a}^{{p_1}{p_3}}_{{p_2}{p_4}}}}\\bigr) }");
   }
 

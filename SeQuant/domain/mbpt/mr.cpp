@@ -16,102 +16,102 @@ namespace mbpt {
 namespace mr {
 
 qninterval_t ncre(qns_t qns, const IndexSpace::Type& s) {
-  assert(s == IndexSpace::active_occupied || s == IndexSpace::active ||
-         s == IndexSpace::active_unoccupied);
-  if (s == IndexSpace::active_occupied)
+  assert(s == IndexSpace::MR_active_occupied || s == IndexSpace::MR_active ||
+         s == IndexSpace::MR_active_unoccupied);
+  if (s == IndexSpace::MR_active_occupied)
     return qns[0];
-  else if (s == IndexSpace::active)
+  else if (s == IndexSpace::MR_active)
     return qns[2];
   else  // if (s == IndexSpace::active_unoccupied)
     return qns[4];
 }
 
 qninterval_t ncre(qns_t qns, const IndexSpace& s) {
-  assert((s.type() == IndexSpace::active_occupied ||
-          s.type() == IndexSpace::active ||
-          s.type() == IndexSpace::active_unoccupied) &&
+  assert((s.type() == IndexSpace::MR_active_occupied ||
+          s.type() == IndexSpace::MR_active ||
+          s.type() == IndexSpace::MR_active_unoccupied) &&
          s.qns() == IndexSpace::nullqns);
-  if (s == IndexSpace::active_occupied)
+  if (s == IndexSpace::MR_active_occupied)
     return qns[0];
-  else if (s == IndexSpace::active)
+  else if (s == IndexSpace::MR_active)
     return qns[2];
   else  // if (s == IndexSpace::active_unoccupied)
     return qns[4];
 }
 
 qninterval_t ncre_occ(qns_t qns) {
-  return ncre(qns, IndexSpace::active_occupied);
+  return ncre(qns, IndexSpace::MR_active_occupied);
 }
 
-qninterval_t ncre_act(qns_t qns) { return ncre(qns, IndexSpace::active); }
+qninterval_t ncre_act(qns_t qns) { return ncre(qns, IndexSpace::MR_active); }
 
 qninterval_t ncre_uocc(qns_t qns) {
-  return ncre(qns, IndexSpace::active_unoccupied);
+  return ncre(qns, IndexSpace::MR_active_unoccupied);
 }
 
 qninterval_t ncre(qns_t qns) { return qns[0] + qns[2] + qns[4]; }
 
 qninterval_t nann(qns_t qns, const IndexSpace::Type& s) {
-  assert(s == IndexSpace::active_occupied || s == IndexSpace::active ||
-         s == IndexSpace::active_unoccupied);
-  if (s == IndexSpace::active_occupied)
+  assert(s == IndexSpace::MR_active_occupied || s == IndexSpace::MR_active ||
+         s == IndexSpace::MR_active_unoccupied);
+  if (s == IndexSpace::MR_active_occupied)
     return qns[1];
-  else if (s == IndexSpace::active)
+  else if (s == IndexSpace::MR_active)
     return qns[3];
   else  // if (s == IndexSpace::active_unoccupied)
     return qns[5];
 }
 
 qninterval_t nann(qns_t qns, const IndexSpace& s) {
-  assert((s.type() == IndexSpace::active_occupied ||
-          s.type() == IndexSpace::active_unoccupied) &&
+  assert((s.type() == IndexSpace::MR_active_occupied ||
+          s.type() == IndexSpace::MR_active_unoccupied) &&
          s.qns() == IndexSpace::nullqns);
-  if (s == IndexSpace::active_occupied)
+  if (s == IndexSpace::MR_active_occupied)
     return qns[1];
-  else if (s == IndexSpace::active)
+  else if (s == IndexSpace::MR_active)
     return qns[3];
   else  // if (s == IndexSpace::active_unoccupied)
     return qns[5];
 }
 
 qninterval_t nann_occ(qns_t qns) {
-  return nann(qns, IndexSpace::active_occupied);
+  return nann(qns, IndexSpace::MR_active_occupied);
 }
 
-qninterval_t nann_act(qns_t qns) { return nann(qns, IndexSpace::active); }
+qninterval_t nann_act(qns_t qns) { return nann(qns, IndexSpace::MR_active); }
 
 qninterval_t nann_uocc(qns_t qns) {
-  return nann(qns, IndexSpace::active_unoccupied);
+  return nann(qns, IndexSpace::MR_active_unoccupied);
 }
 
 qninterval_t nann(qns_t qns) { return qns[1] + qns[3] + qns[5]; }
 
 qns_t combine(qns_t a, qns_t b) {
   const auto ncontr_uocc =
-      qninterval_t{0, std::min(ncre(b, IndexSpace::active_unoccupied).upper(),
-                               nann(a, IndexSpace::active_unoccupied).upper())};
+      qninterval_t{0, std::min(ncre(b, IndexSpace::MR_active_unoccupied).upper(),
+                               nann(a, IndexSpace::MR_active_unoccupied).upper())};
   const auto ncontr_act =
-      qninterval_t{0, std::min(nann(b, IndexSpace::active).upper(),
-                               ncre(a, IndexSpace::active).upper())};
+      qninterval_t{0, std::min(nann(b, IndexSpace::MR_active).upper(),
+                               ncre(a, IndexSpace::MR_active).upper())};
   const auto ncontr_occ =
-      qninterval_t{0, std::min(nann(b, IndexSpace::active_occupied).upper(),
-                               ncre(a, IndexSpace::active_occupied).upper())};
+      qninterval_t{0, std::min(nann(b, IndexSpace::MR_active_occupied).upper(),
+                               ncre(a, IndexSpace::MR_active_occupied).upper())};
   const auto nc_occ =
-      nonnegative(ncre(a, IndexSpace::active_occupied) +
-                  ncre(b, IndexSpace::active_occupied) - ncontr_occ);
-  const auto nc_act = nonnegative(ncre(a, IndexSpace::active) +
-                                  ncre(b, IndexSpace::active) - ncontr_act);
+      nonnegative(ncre(a, IndexSpace::MR_active_occupied) +
+                  ncre(b, IndexSpace::MR_active_occupied) - ncontr_occ);
+  const auto nc_act = nonnegative(ncre(a, IndexSpace::MR_active) +
+                                  ncre(b, IndexSpace::MR_active) - ncontr_act);
   const auto nc_uocc =
-      nonnegative(ncre(a, IndexSpace::active_unoccupied) +
-                  ncre(b, IndexSpace::active_unoccupied) - ncontr_uocc);
+      nonnegative(ncre(a, IndexSpace::MR_active_unoccupied) +
+                  ncre(b, IndexSpace::MR_active_unoccupied) - ncontr_uocc);
   const auto na_occ =
-      nonnegative(nann(a, IndexSpace::active_occupied) +
-                  nann(b, IndexSpace::active_occupied) - ncontr_occ);
-  const auto na_act = nonnegative(nann(a, IndexSpace::active) +
-                                  nann(b, IndexSpace::active) - ncontr_act);
+      nonnegative(nann(a, IndexSpace::MR_active_occupied) +
+                  nann(b, IndexSpace::MR_active_occupied) - ncontr_occ);
+  const auto na_act = nonnegative(nann(a, IndexSpace::MR_active) +
+                                  nann(b, IndexSpace::MR_active) - ncontr_act);
   const auto na_uocc =
-      nonnegative(nann(a, IndexSpace::active_unoccupied) +
-                  nann(b, IndexSpace::active_unoccupied) - ncontr_uocc);
+      nonnegative(nann(a, IndexSpace::MR_active_unoccupied) +
+                  nann(b, IndexSpace::MR_active_unoccupied) - ncontr_uocc);
   return qns_t{nc_occ, na_occ, nc_act, na_act, nc_uocc, na_uocc};
 }
 
@@ -119,12 +119,12 @@ qns_t combine(qns_t a, qns_t b) {
 }  // namespace mbpt
 
 mbpt::mr::qns_t adjoint(mbpt::mr::qns_t qns) {
-  return mbpt::mr::qns_t{nann(qns, IndexSpace::active_occupied),
-                         ncre(qns, IndexSpace::active_occupied),
-                         nann(qns, IndexSpace::active),
-                         ncre(qns, IndexSpace::active),
-                         nann(qns, IndexSpace::active_unoccupied),
-                         ncre(qns, IndexSpace::active_unoccupied)};
+  return mbpt::mr::qns_t{nann(qns, IndexSpace::MR_active_occupied),
+                         ncre(qns, IndexSpace::MR_active_occupied),
+                         nann(qns, IndexSpace::MR_active),
+                         ncre(qns, IndexSpace::MR_active),
+                         nann(qns, IndexSpace::MR_active_unoccupied),
+                         ncre(qns, IndexSpace::MR_active_unoccupied)};
 }
 
 namespace mbpt {
@@ -135,8 +135,8 @@ OpMaker::OpMaker(OpType op, std::size_t nbra, std::size_t nket)
   nket = nket == std::numeric_limits<std::size_t>::max() ? nbra : nket;
   assert(nbra > 0 || nket > 0);
 
-  const auto unocc = IndexSpace::active_maybe_unoccupied;
-  const auto occ = IndexSpace::active_maybe_occupied;
+  const auto unocc = IndexSpace::MR_active_maybe_unoccupied;
+  const auto occ = IndexSpace::MR_active_maybe_occupied;
   switch (to_class(op)) {
     case OpClass::ex:
       bra_spaces_ = decltype(bra_spaces_)(nbra, unocc);
@@ -147,8 +147,8 @@ OpMaker::OpMaker(OpType op, std::size_t nbra, std::size_t nket)
       ket_spaces_ = decltype(ket_spaces_)(nket, unocc);
       break;
     case OpClass::gen:
-      bra_spaces_ = decltype(bra_spaces_)(nbra, IndexSpace::complete);
-      ket_spaces_ = decltype(ket_spaces_)(nket, IndexSpace::complete);
+      bra_spaces_ = decltype(bra_spaces_)(nbra, IndexSpace::MR_complete);
+      ket_spaces_ = decltype(ket_spaces_)(nket, IndexSpace::MR_complete);
       break;
   }
 }
@@ -223,11 +223,11 @@ ExprPtr F() {
   switch (get_default_context().vacuum()) {
     case Vacuum::Physical:
       return OpMaker(OpType::h, 1)() +
-             make_g_contribution(IndexSpace::maybe_occupied);  // all occupieds
+             make_g_contribution(IndexSpace::MR_maybe_occupied);  // all occupieds
 
     case Vacuum::SingleProduct:
       return OpMaker(OpType::f̃, 1)() +
-             make_g_contribution(IndexSpace::active);  // actives only
+             make_g_contribution(IndexSpace::MR_active);  // actives only
 
     case Vacuum::MultiProduct:
       return OpMaker(OpType::f, 1)();
@@ -261,8 +261,8 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
       // - if Vacuum::SingleProduct: IndexSpace::active
       const auto target_rdm_space_type =
           get_default_context().vacuum() == Vacuum::SingleProduct
-              ? IndexSpace::active
-              : IndexSpace::maybe_occupied;
+              ? IndexSpace::MR_active
+              : IndexSpace::MR_maybe_occupied;
 
       // do this in 2 steps (TODO factor out these components?)
       // 1. replace NOPs by RDM
@@ -410,8 +410,8 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
           TensorCanonicalizer::instance()->index_comparer();
       TensorCanonicalizer::instance()->index_comparer(
           [&](const Index& idx1, const Index& idx2) -> bool {
-            const auto idx1_active = idx1.space().type() == IndexSpace::active;
-            const auto idx2_active = idx2.space().type() == IndexSpace::active;
+            const auto idx1_active = idx1.space().type() == IndexSpace::MR_active;
+            const auto idx2_active = idx2.space().type() == IndexSpace::MR_active;
             if (idx1_active) {
               if (idx2_active)
                 return current_index_comparer(idx1, idx2);
