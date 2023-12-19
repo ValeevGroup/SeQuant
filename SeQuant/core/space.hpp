@@ -151,6 +151,16 @@ class IndexSpace {
                   this->qns().unIon(other.qns()));
     }
 
+    std::vector<Attr> irreducible_reps() const{
+      std::vector<Attr> result;
+      std::bitset<32> bit32(this->sequant::TypeAttr::to_int32());
+      for (int i =0; i < bit32.size(); i++){
+        if(bit32[i]){Attr temp(std::pow(2,i),this->qns().to_int32()); result.push_back(temp);}
+      }
+      return result;
+    }
+
+    //make a list of all excluded spaces between two index spaces that at least one of them contains.
     std::vector<Attr> excluded_spaces(Attr other) const {
       std::vector<Attr> result;
       std::bitset<32> bit32(this->exclusionary_or(other).to_int32());
