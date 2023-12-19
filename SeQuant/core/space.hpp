@@ -7,6 +7,7 @@
 
 #include <bitset>
 #include <cassert>
+#include <cmath>
 
 #include "attr.hpp"
 #include "container.hpp"
@@ -155,7 +156,7 @@ class IndexSpace {
       std::vector<Attr> result;
       std::bitset<32> bit32(this->sequant::TypeAttr::to_int32());
       for (int i =0; i < bit32.size(); i++){
-        if(bit32[i]){Attr temp(std::pow(2,i),this->qns().to_int32()); result.push_back(temp);}
+        if(bit32[i]){Attr temp(static_cast<int>(std::pow(2,i)),this->qns().to_int32()); result.push_back(temp);}
       }
       return result;
     }
