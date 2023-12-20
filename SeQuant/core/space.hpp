@@ -568,6 +568,15 @@ class IndexSpace {
     attr2basekey_.clear();
   }
 
+  //pass two index spaces and logical bit operation
+  template <class bitop>
+  bool vaild_bitop(const IndexSpace i1, const IndexSpace i2, bitop op){
+    auto bitop_int = bitop(i1.type().to_int32(), i2.type().to_int32());
+    Attr try_attribute(bitop_int,i1.qns().to_int32());
+    bool result = instance_exists(try_attribute);
+    return result;
+  }
+
  private:
   Attr attr_ = Attr::invalid();
   /// @brief constructs an instance of an IndexSpace object
