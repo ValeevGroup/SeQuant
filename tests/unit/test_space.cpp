@@ -120,6 +120,20 @@ TEST_CASE("IndexSpace", "[elements]") {
 
     REQUIRE(sequant::non_overlapping_spaces(IndexSpace::instance(L"g"),IndexSpace::instance(L"α"))[0] == IndexSpace::active_unoccupied);
     REQUIRE(sequant::non_overlapping_spaces(IndexSpace::instance(L"g"),IndexSpace::instance(L"α"))[1] == IndexSpace::other_unoccupied);
+
+     auto union_func = [](int32_t a, int32_t b){
+      return a + b;
+    };
+     auto act_occ = IndexSpace::instance(IndexSpace::active_occupied);
+    REQUIRE(!act_occ.vaild_bitop(IndexSpace::instance(IndexSpace::inactive_unoccupied),union_func));
+    REQUIRE(act_occ.vaild_bitop(IndexSpace::instance(IndexSpace::active_unoccupied),union_func));
+
+    auto intersection_func = [](int32_t a, int32_t b){
+      return a & b;
+    };
+    REQUIRE(!act_occ.vaild_bitop(IndexSpace::instance(IndexSpace::inactive_unoccupied),intersection_func));
+    REQUIRE(act_occ.vaild_bitop(IndexSpace::instance(IndexSpace::occupied),intersection_func));
+
   }
 
   SECTION("occupancy_class") {
