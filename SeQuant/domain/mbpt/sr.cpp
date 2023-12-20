@@ -352,28 +352,30 @@ ExprPtr Λ(std::size_t K, bool skip1) {
   return result;
 }
 
-ExprPtr R_(std::size_t Nbra, std::size_t Nket) {
-  assert(Nbra > 0 || Nket > 0);
-  return ex<op_t>([]() -> std::wstring_view { return L"R"; },
-                  [=]() -> ExprPtr {
-                    using namespace sequant::mbpt::sr;
-                    return sr::R_(Nbra, Nket);
-                  },
-                  [=](qnc_t& qns) {
-                    qns = combine(qnc_t{0ul, Nbra, Nket, 0ul}, qns);
-                  });
+ExprPtr R_(std::size_t K_occ, std::size_t K_uocc) {
+  assert(K_occ > 0 || K_uocc > 0);
+  return ex<op_t>(
+      []() -> std::wstring_view { return optype2label.at(OpType::R); },
+      [=]() -> ExprPtr {
+        using namespace sequant::mbpt::sr;
+        return sr::R_(K_uocc, K_occ);
+      },
+      [=](qnc_t& qns) {
+        qns = combine(qnc_t{0ul, K_occ, K_uocc, 0ul}, qns);
+      });
 }
 
-ExprPtr L_(std::size_t Nbra, std::size_t Nket) {
-  assert(Nbra > 0 || Nket > 0);
-  return ex<op_t>([]() -> std::wstring_view { return L"L"; },
-                  [=]() -> ExprPtr {
-                    using namespace sequant::mbpt::sr;
-                    return sr::L_(Nbra, Nket);
-                  },
-                  [=](qnc_t& qns) {
-                    qns = combine(qnc_t{Nbra, 0ul, 0ul, Nket}, qns);
-                  });
+ExprPtr L_(std::size_t K_occ, std::size_t K_uocc) {
+  assert(K_occ > 0 || K_uocc > 0);
+  return ex<op_t>(
+      []() -> std::wstring_view { return optype2label.at(OpType::L); },
+      [=]() -> ExprPtr {
+        using namespace sequant::mbpt::sr;
+        return sr::L_(K_occ, K_uocc);
+      },
+      [=](qnc_t& qns) {
+        qns = combine(qnc_t{K_occ, 0ul, 0ul, K_uocc}, qns);
+      });
 }
 
 ExprPtr A(std::int64_t K) {
