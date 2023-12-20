@@ -394,6 +394,34 @@ TEST_CASE("NBodyOp", "[mbpt]") {
 
   }  // SECTION("screen")
 
+  SECTION("operator") {
+    using namespace sequant::mbpt;
+
+    auto R_2 = sr::op::R_(2, 2)->as<sr::op_t>();
+    //    std::wcout << to_latex(simplify(R_2.tensor_form())) << std::endl;
+    REQUIRE(to_latex(simplify(R_2.tensor_form())) ==
+            L"{{{\\frac{1}{4}}}{R^{{i_1}{i_2}}_{{a_1}{a_2}}}{\\tilde{a}^{{a_1}{"
+            L"a_2}}_{{i_1}{i_2}}}}");
+
+    auto L_3 = sr::op::L_(3, 3)->as<sr::op_t>();
+    //    std::wcout << to_latex(simplify(L_3.tensor_form())) << std::endl;
+    REQUIRE(to_latex(simplify(L_3.tensor_form())) ==
+            L"{{{\\frac{1}{36}}}{L^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}{"
+            L"\\tilde{a}^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}}");
+
+    auto R_2_3 = sr::op::R_(2, 3)->as<sr::op_t>();
+    //    std::wcout << to_latex(simplify(R_2_3.tensor_form())) << std::endl;
+    REQUIRE(to_latex(simplify(R_2_3.tensor_form())) ==
+            L"{{{\\frac{1}{12}}}{R^{{i_1}{i_2}}_{{a_1}{a_2}{a_3}}}{\\tilde{a}^{"
+            L"{a_1}{a_2}{a_3}}_{\\textvisiblespace\\,{i_1}{i_2}}}}");
+
+    auto L_1_2 = sr::op::L_(1, 2)->as<sr::op_t>();
+    //    std::wcout << to_latex(simplify(L_1_2.tensor_form())) << std::endl;
+    REQUIRE(to_latex(simplify(L_1_2.tensor_form())) ==
+            L"{{{\\frac{1}{2}}}{L^{{a_1}{a_2}}_{{i_1}}}{\\tilde{a}^{"
+            L"\\textvisiblespace\\,{i_1}}_{{a_1}{a_2}}}}");
+  }
+
 }  // TEST_CASE("NBodyOp")
 
 TEST_CASE("MBPT", "[mbpt]") {
