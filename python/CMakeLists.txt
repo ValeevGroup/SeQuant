@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.11)
 FetchContent_Declare(
     pybind11
     GIT_REPOSITORY https://github.com/ValeevGroup/pybind11.git
-    GIT_TAG dc7bb5db9a8688374bc16651fb81c964f9d62bf1 # ValeevGroup/v2.4.3
+    GIT_TAG ValeevGroup/v2.11
 )
 FetchContent_MakeAvailable(pybind11)
 
@@ -38,7 +38,7 @@ if (BUILD_TESTING)
   # basic test
   set(test_name sequant/unit/python/basic/run)
   add_test(NAME ${test_name}
-           COMMAND ${PYTHON_EXECUTABLE} test_sequant.py
+           COMMAND ${Python_EXECUTABLE} test_sequant.py
   )
   set_tests_properties(${test_name} PROPERTIES
            WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
