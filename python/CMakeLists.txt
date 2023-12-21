@@ -1,6 +1,10 @@
 project(python-sequant)
 cmake_minimum_required(VERSION 3.11)
 
+if (NOT TARGET Python::Module)
+  find_package(Python COMPONENTS Interpreter Development REQUIRED)
+endif()
+
 FetchContent_Declare(
     pybind11
     GIT_REPOSITORY https://github.com/ValeevGroup/pybind11.git
