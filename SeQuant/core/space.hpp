@@ -20,43 +20,49 @@ namespace sequant {
 /// This class models a host (complete) space partitioned into disjoint
 /// subspaces. To simplify implementation of set operations
 /// (intersection, union, etc.) it is encoded as a fixed-width (32) bitset.
+/// By default, all bits are used, but user can disable some bits from being
+/// used for comparison
 struct TypeAttr {
+  /// @brief used_bits is a bitset of bits that are used for comparison
+  static int32_t used_bits;
   int32_t bitset = 0;
 
   constexpr explicit TypeAttr(int32_t value) noexcept : bitset(value) {}
 
-  constexpr explicit operator int64_t() const {
+  [[nodiscard]] constexpr explicit operator int64_t() const {
     return static_cast<int64_t>(bitset);
   }
-  constexpr int32_t to_int32() const { return bitset; }
-  constexpr TypeAttr intersection(TypeAttr other) const {
+  [[nodiscard]] constexpr int32_t to_int32() const { return bitset; }
+  [[nodiscard]] int32_t to_int32_used() const { return used_bits & bitset; }
+  [[nodiscard]] constexpr TypeAttr intersection(TypeAttr other) const {
     return TypeAttr(this->to_int32() & other.to_int32());
   }
-  constexpr TypeAttr unIon(TypeAttr other) const {
+  [[nodiscard]] constexpr TypeAttr unIon(TypeAttr other) const {
     return TypeAttr(this->to_int32() | other.to_int32());
   }
 
-  friend constexpr bool operator==(TypeAttr, TypeAttr);
-  friend constexpr bool operator!=(TypeAttr, TypeAttr);
+  [[nodiscard]] friend bool operator==(TypeAttr lhs, TypeAttr rhs) {
+    return lhs.to_int32_used() == rhs.to_int32_used();
+  }
+
+  [[nodiscard]] friend bool operator!=(TypeAttr lhs, TypeAttr rhs) {
+    return !(lhs == rhs);
+  }
 
   /// @return true if \c other is included in this object
-  constexpr bool includes(TypeAttr other) const {
+  [[nodiscard]] bool includes(TypeAttr other) const {
     return intersection(other) == other;
   }
   /// @return true if in canonical order this object preceeds \c other
-  constexpr bool operator<(TypeAttr other) const {
-    return this->to_int32() < other.to_int32();
+  [[nodiscard]] bool operator<(TypeAttr other) const {
+    return this->to_int32_used() < other.to_int32_used();
   }
 
   /// @return an invalid TypeAttr
-  static constexpr TypeAttr invalid() noexcept { return TypeAttr(0xffff); }
+  [[nodiscard]] static constexpr TypeAttr invalid() noexcept {
+    return TypeAttr(0xffff);
+  }
 };
-
-constexpr bool operator==(TypeAttr lhs, TypeAttr rhs) {
-  return lhs.to_int32() == rhs.to_int32();
-}
-
-constexpr bool operator!=(TypeAttr lhs, TypeAttr rhs) { return !(lhs == rhs); }
 
 /// denotes other quantum numbers (particle type, spin, etc.)
 struct QuantumNumbersAttr {
@@ -75,8 +81,14 @@ struct QuantumNumbersAttr {
     return QuantumNumbersAttr(this->to_int32() | other.to_int32());
   }
 
-  friend constexpr bool operator==(QuantumNumbersAttr, QuantumNumbersAttr);
-  friend constexpr bool operator!=(QuantumNumbersAttr, QuantumNumbersAttr);
+  friend constexpr bool operator==(QuantumNumbersAttr lhs,
+                                   QuantumNumbersAttr rhs) {
+    return lhs.to_int32() == rhs.to_int32();
+  }
+  friend constexpr bool operator!=(QuantumNumbersAttr lhs,
+                                   QuantumNumbersAttr rhs) {
+    return !(lhs == rhs);
+  }
 
   /// @return true if \c other is included in this object
   constexpr bool includes(QuantumNumbersAttr other) const {
@@ -92,14 +104,6 @@ struct QuantumNumbersAttr {
     return QuantumNumbersAttr(-0);
   }
 };
-
-constexpr bool operator==(QuantumNumbersAttr lhs, QuantumNumbersAttr rhs) {
-  return lhs.to_int32() == rhs.to_int32();
-}
-
-constexpr bool operator!=(QuantumNumbersAttr lhs, QuantumNumbersAttr rhs) {
-  return !(lhs == rhs);
-}
 
 /// @brief space of Index objects
 ///
@@ -154,10 +158,10 @@ class IndexSpace {
              this->qns().includes(other.qns());
     }
 
-    bool operator==(Attr other) const {
-      return this->type() == other.type() && this->qns() == other.qns();
+    friend bool operator==(Attr a, Attr b) {
+      return a.type() == b.type() && a.qns() == b.qns();
     }
-    bool operator!=(Attr other) const { return !(*this == other); }
+    friend bool operator!=(Attr a, Attr b) { return !(a == b); }
 
     static Attr null() noexcept { return Attr{nulltype, nullqns}; }
     static Attr invalid() noexcept {
