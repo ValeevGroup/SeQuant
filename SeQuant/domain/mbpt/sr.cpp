@@ -365,6 +365,22 @@ ExprPtr R_(std::size_t K_occ, std::size_t K_uocc) {
       });
 }
 
+ExprPtr R(std::size_t K_occ, std::size_t K_uocc) {
+  assert(K_occ > 0 || K_uocc > 0);
+  const int n_change = K_occ - K_uocc;
+  assert(-2 <= n_change && n_change <= 2);  // Max excitation rank is 2
+  ExprPtr result;
+
+  if (n_change == 0) {  // EE Case
+    for (auto k = 1ul; k <= K_occ; ++k) result += R_(k, k);
+  } else if (n_change > 0) {  // IP Case
+    for (auto k = 1ul; k <= K_occ; ++k) result += R_(k, k - n_change);
+  } else if (n_change < 0) {  // EA Case
+    for (auto k = 1ul; k <= K_uocc; ++k) result += R_(k + n_change, k);
+  }
+  return result;
+}
+
 ExprPtr L_(std::size_t K_occ, std::size_t K_uocc) {
   assert(K_occ > 0 || K_uocc > 0);
   return ex<op_t>(
@@ -376,6 +392,22 @@ ExprPtr L_(std::size_t K_occ, std::size_t K_uocc) {
       [=](qnc_t& qns) {
         qns = combine(qnc_t{K_occ, 0ul, 0ul, K_uocc}, qns);
       });
+}
+
+ExprPtr L(std::size_t K_occ, std::size_t K_uocc) {
+  assert(K_occ > 0 || K_uocc > 0);
+  const int n_change = K_occ - K_uocc;
+  assert(-2 <= n_change && n_change <= 2);  // Max de-excitation rank is 2
+  ExprPtr result;
+
+  if (n_change == 0) {
+    for (auto k = 1ul; k <= K_occ; ++k) result += L_(k, k);
+  } else if (n_change > 0) {
+    for (auto k = 1ul; k <= K_occ; ++k) result += L_(k, k - n_change);
+  } else if (n_change < 0) {
+    for (auto k = 1ul; k <= K_uocc; ++k) result += L_(k + n_change, k);
+  }
+  return result;
 }
 
 ExprPtr A(std::int64_t K) {

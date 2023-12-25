@@ -221,11 +221,21 @@ ExprPtr Λ_(std::size_t K);
 /// @return sum of `Λ_(k)` with `k<=K`
 ExprPtr Λ(std::size_t K, bool skip1 = false);
 
-/// makes generic excitation operator of bra/ket ranks @c Nbra/Nket
+/// makes generic excitation operator with \p K_occ annihilators in occupied
+/// space and \p K_unocc creators in unoccupied space
+/// \pre can produce particle non-conserving operators
 ExprPtr R_(std::size_t K_occ, std::size_t K_unocc);
 
-/// makes generic deexcitation of bra/ket ranks @c Nbra/Nket
+/// makes sum of R_() operators based on \p K_occ and \p K_unocc
+ExprPtr R(std::size_t K_occ, std::size_t K_unocc);
+
+/// makes generic deexcitation operator with \p K_occ creators in occupied space
+/// and \p K_unocc annihilators in unoccupied space
+/// \pre can produce particle non-conserving operators
 ExprPtr L_(std::size_t K_occ, std::size_t K_unocc);
+
+/// makes sum of L_() operators based on \p K_occ and \p K_unocc
+ExprPtr L(std::size_t K_occ, std::size_t K_unocc);
 
 /// makes generic bra/ket-antisymmetric excitation (if \p K > 0) or
 /// deexcitation (if \p K < 0) operator of rank `|K|`

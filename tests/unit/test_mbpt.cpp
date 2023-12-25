@@ -422,6 +422,35 @@ TEST_CASE("NBodyOp", "[mbpt]") {
             L"\\textvisiblespace\\,{i_1}}_{{a_1}{a_2}}}}");
   }
 
+  auto lower_to_tensor_form = [](ExprPtr& expr) {
+    using op_t = mbpt::Operator<mbpt::sr::qns_t>;
+    auto op_lowerer = [](ExprPtr& leaf) {
+      if (leaf.is<op_t>()) leaf = leaf.as<op_t>().tensor_form();
+    };
+    expr->visit(op_lowerer, /* atoms only = */ true);
+  };
+
+  auto R23 = mbpt::sr::op::R(2, 3);
+  lower_to_tensor_form(R23);
+  simplify(R23);
+  //  std::wcout << "R23: " << to_latex(R23) << std::endl;
+  REQUIRE(to_latex(R23) ==
+          L"{ \\bigl({{R^{}_{{a_1}}}{\\tilde{a}^{{a_1}}}} + "
+          L"{{{\\frac{1}{12}}}{R^{{i_1}{i_2}}_{{a_1}{a_2}{a_3}}}{\\tilde{a}^{{"
+          L"a_1}{a_2}{a_3}}_{\\textvisiblespace\\,{i_1}{i_2}}}} + "
+          L"{{{\\frac{1}{2}}}{R^{{i_1}}_{{a_1}{a_2}}}{\\tilde{a}^{{a_1}{a_2}}_{"
+          L"\\textvisiblespace\\,{i_1}}}}\\bigr) }");
+
+  auto L23 = mbpt::sr::op::L(2, 3);
+  lower_to_tensor_form(L23);
+  simplify(L23);
+  //  std::wcout << "L23: " << to_latex(L23) << std::endl;
+  REQUIRE(to_latex(L23) ==
+          L"{ \\bigl({{{\\frac{1}{12}}}{L^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}}}{"
+          L"\\tilde{a}^{\\textvisiblespace\\,{i_1}{i_2}}_{{a_1}{a_2}{a_3}}}} + "
+          L"{{{\\frac{1}{2}}}{L^{{a_1}{a_2}}_{{i_1}}}{\\tilde{a}^{"
+          L"\\textvisiblespace\\,{i_1}}_{{a_1}{a_2}}}} + "
+          L"{{L^{{a_1}}_{}}{\\tilde{a}_{{a_1}}}}\\bigr) }");
 }  // TEST_CASE("NBodyOp")
 
 TEST_CASE("MBPT", "[mbpt]") {
