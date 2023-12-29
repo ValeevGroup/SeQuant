@@ -1,6 +1,8 @@
 #include "eval_expr.hpp"
 #include <SeQuant/core/hash.hpp>
+#include <SeQuant/core/wstring.hpp>
 #include <range/v3/algorithm.hpp>
+#include <range/v3/functional.hpp>
 #include <range/v3/view.hpp>
 
 #include <cmath>
@@ -23,29 +25,36 @@ std::wstring_view const var_label = L"Z";
 
 }  // namespace
 
-template <
-    typename Iterable,
-    std::enable_if_t<!std::is_same_v<InnerOuterIndices, std::decay_t<Iterable>>,
-                     bool> = true>
-std::string indices_to_annot(Iterable const& indices) noexcept {
-  using ranges::views::intersperse;
-  using ranges::views::join;
-  using ranges::views::transform;
+std::string EvalExpr::braket_annot() const noexcept {
+  if (!is_tensor()) return {};
+  auto const& tnsr = as_tensor();
 
-  auto idx_label = [](Index const& idx) { return to_string(idx.label()); };
+  // select indices from @c tnsr's braket that satisfy @c pred
+  // and return their 'full_label's separated by commas
+  auto annot_group = [&tnsr](auto&& pred) -> std::string {
+    using namespace ranges::views;
+    auto full_labels = tnsr.const_braket()                 //
+                       | filter(pred)                      //
+                       | transform(&Index::full_label)     //
+                       | transform([](auto&& fl) {         //
+                           return sequant::to_string(fl);  //
+                         });
+    return full_labels                      //
+           | intersperse(std::string{","})  //
+           | join                           //
+           | ranges::to<std::string>;
+  };
 
-  return indices | transform(idx_label) | intersperse(",") | join |
-         ranges::to<std::string>;
-}
+  auto outer_annot = annot_group(     //
+      ranges::not_fn(                 //
+          &Index::has_proto_indices)  //
+  );
 
-std::string indices_to_annot(InnerOuterIndices const& inout) noexcept {
-  auto const& in = inout.inner;
-  auto const& out = inout.outer;
-  if (out.empty()) {
-    return indices_to_annot(in);
-  } else {
-    return indices_to_annot(in) + ";" + indices_to_annot(out);
-  }
+  auto inner_annot = annot_group(&Index::has_proto_indices);
+
+  return inner_annot.empty()  //
+             ? outer_annot
+             : outer_annot + ";" + inner_annot;
 }
 
 size_t EvalExpr::global_id_{};
@@ -123,29 +132,9 @@ Variable const& EvalExpr::as_variable() const noexcept {
   return expr().as<Variable>();
 }
 
-InnerOuterIndices EvalExpr::inner_outer_indices() const noexcept {
-  if (is_scalar()) return {};
-
-  assert(is_tensor());
-  auto const& t = expr()->as<Tensor>();
-
-  container::svector<Index> inner;
-  container::svector<Index> outer;
-  for (auto const& idx : t.const_braket()) {
-    inner.emplace_back(idx);
-    for (auto const& pidx : idx.proto_indices()) outer.emplace_back(pidx);
-  }
-  ranges::stable_sort(outer, Index::LabelCompare{});
-  ranges::actions::unique(outer);
-  ranges::actions::remove_if(
-      inner, [&outer](Index const& i) { return ranges::contains(outer, i); });
-  return {std::move(inner), std::move(outer)};
-}
-
 std::string EvalExpr::label() const noexcept {
   if (is_tensor())
-    return to_string(as_tensor().label()) + "(" +
-           indices_to_annot(inner_outer_indices()) + ")";
+    return to_string(as_tensor().label()) + "(" + braket_annot() + ")";
   else if (is_constant()) {
     auto const& c = as_constant();
     auto real = Constant{c.value().real()}.value<double>();

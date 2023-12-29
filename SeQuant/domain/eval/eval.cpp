@@ -7,8 +7,9 @@ namespace sequant {
 
 std::string const& EvalExprTA::annot() const { return annot_; }
 
-EvalExprTA::EvalExprTA(Tensor const& tnsr)
-    : EvalExpr(tnsr), annot_{indices_to_annot(inner_outer_indices())} {}
+EvalExprTA::EvalExprTA(Tensor const& tnsr) : EvalExpr(tnsr) {
+  annot_ = braket_annot();
+}
 
 EvalExprTA::EvalExprTA(Constant const& c) : EvalExpr(c), annot_{} {}
 
@@ -22,7 +23,7 @@ EvalExprTA::EvalExprTA(const EvalExprTA& left, const EvalExprTA& right,
   using TA::expressions::GEMMPermutationOptimizer;
 
   if (result_type() == ResultType::Tensor) {
-    annot_ = indices_to_annot(inner_outer_indices());
+    annot_ = braket_annot();
     if (left.result_type() == right.result_type() &&
         op_type() == EvalOp::Prod && !tot()) {
       // tensor x tensor confirmed
