@@ -47,9 +47,7 @@ auto random_tensor_of_tensor(TA::Range const& outer_rng,
   TA::Tensor<TA::Tensor<NumericT>> result{outer_rng};
 
   std::generate(result.begin(), result.end(),
-                [&inner_rng]() -> decltype(result)::value_type {
-                  return random_tensor<NumericT>(inner_rng);
-                });
+                [&inner_rng]() { return random_tensor<NumericT>(inner_rng); });
 
   return result;
 }
@@ -198,8 +196,6 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
 
   // tnsr is assumed to be single-tiled
   auto norm = [](TArrayD const& tnsr) { return TA::norm2(tnsr); };
-
-  std::srand(2021);
 
   auto& world = TA::get_default_world();
 
@@ -422,7 +418,6 @@ TEST_CASE("TEST_EVAL_USING_TA_COMPLEX", "[eval]") {
   using TArrayC = TA::DistArray<TA::Tensor<std::complex<double>>>;
   auto norm = [](TArrayC const& tnsr) { return TA::norm2(tnsr); };
 
-  std::srand(2023);
   const size_t nocc = 2, nvirt = 20;
   auto& world = TA::get_default_world();
 
