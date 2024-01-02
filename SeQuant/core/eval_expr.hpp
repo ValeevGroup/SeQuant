@@ -41,6 +41,21 @@ enum class EvalOp {
 enum class ResultType { Tensor, Scalar };
 
 ///
+/// \brief Represents the outer indices and the inner indices of a nested
+/// tensor.
+///
+/// \note The nested tensor is a concept that generalizes the sequant::Tensor
+/// with and without proto indices. sequant::Tensors with proto indices have
+/// outer and inner indices, whereas, those without proto indices only have
+/// outer indices.
+///
+struct NestedTensorIndices {
+  container::svector<Index> outer, inner;
+
+  explicit NestedTensorIndices(Tensor const&);
+};
+
+///
 /// \brief The EvalExpr class represents the object that go into the nodes of
 ///        the binary tree that is used to evaluate the sequant expressions.
 ///

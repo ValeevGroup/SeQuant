@@ -31,78 +31,50 @@ auto tensor_to_key(std::wstring_view spec) {
   return tensor_to_key(sequant::parse_expr(spec, sequant::Symmetry::nonsymm)
                            ->as<sequant::Tensor>());
 }
+template <typename NumericT>
+auto random_tensor(TA::Range const& rng) {
+  TA::Tensor<NumericT> result{rng};
+  std::generate(result.begin(), result.end(),
+                TA::detail::MakeRandom<NumericT>::generate_value);
+  return result;
+}
 
-template <typename Tensor_t>
+// note: all the inner tensors (elements of the outer tensor)
+//       have the same @c inner_rng
+template <typename NumericT>
+auto random_tensor_of_tensor(TA::Range const& outer_rng,
+                             TA::Range const& inner_rng) {
+  TA::Tensor<TA::Tensor<NumericT>> result{outer_rng};
+
+  std::generate(result.begin(), result.end(),
+                [&inner_rng]() -> decltype(result)::value_type {
+                  return random_tensor<NumericT>(inner_rng);
+                });
+
+  return result;
+}
+
+template <typename NumericT = double, typename TAPolicyT = TA::DensePolicy>
 class rand_tensor_yield {
- public:
-  using numeric_t = typename Tensor_t::numeric_type;
-
- private:
-  TA::World& world_;
-  size_t const nocc_;
-  size_t const nvirt_;
-  mutable std::map<std::wstring, sequant::ERPtr> label_to_er_;
+  TA::World& world;
+  size_t nocc_;
+  size_t nvirt_;
+  mutable sequant::container::map<std::wstring, sequant::ERPtr> label_to_er_;
 
  public:
-  [[nodiscard]] Tensor_t make_rand_tensor(sequant::Tensor const& tnsr) const {
-    using ranges::views::transform;
-    using sequant::IndexSpace;
-
-    assert(ranges::all_of(tnsr.const_braket(),
-                          [](auto const& idx) {
-                            return idx.space() == IndexSpace::active_occupied ||
-                                   idx.space() == IndexSpace::active_unoccupied;
-                          }) &&
-           "Unsupported IndexSpace type found while generating tensor.");
-
-    auto trange_vec =
-        tnsr.const_braket() |
-        transform([no = nocc_, nv = nvirt_](auto const& idx) {
-          return TA::TiledRange1{
-              0, idx.space() == IndexSpace::active_occupied ? no : nv};
-        }) |
-        ranges::to_vector;
-
-    Tensor_t result{world_,
-                    TA::TiledRange{trange_vec.begin(), trange_vec.end()}};
-    result.template init_elements([](auto const&) {
-      return static_cast<numeric_t>(std::rand()) /
-             static_cast<numeric_t>(RAND_MAX);
-    });
-    return result;
-  }
-
-  rand_tensor_yield(TA::World& world, size_t noccupied, size_t nvirtual)
-      : world_{world}, nocc_{noccupied}, nvirt_{nvirtual} {}
-
-  sequant::ERPtr operator()(sequant::Tensor const& tnsr) const {
-    using result_t = sequant::EvalTensorTA<Tensor_t>;
-    std::wstring const label = tensor_to_key(tnsr);
-    if (auto&& found = label_to_er_.find(label); found != label_to_er_.end()) {
-      //      std::cout << "label = [" << sequant::to_string(label)
-      //                << "] FOUND in cache. Returning.." << std::endl;
-      return found->second;
-    }
-    Tensor_t t = make_rand_tensor(tnsr);
-    auto success = label_to_er_.emplace(
-        label, sequant::eval_result<result_t>(std::move(t)));
-    assert(success.second && "couldn't store ERPtr!");
-    //    std::cout << "label = [" << sequant::to_string(label)
-    //              << "] NotFound in cache. Creating.." << std::endl;
-    return success.first->second;
-  }
+  rand_tensor_yield(TA::World& world_, size_t nocc, size_t nvirt)
+      : world{world_}, nocc_{nocc}, nvirt_{nvirt} {}
 
   sequant::ERPtr operator()(sequant::Variable const& var) const {
-    using result_t = sequant::EvalScalar<numeric_t>;
-    std::wstring const key{var.label()};
-    if (auto&& found = label_to_er_.find(key); found != label_to_er_.end())
-      return found->second;
-    auto success = label_to_er_.emplace(
-        key,
-        sequant::eval_result<result_t>(static_cast<numeric_t>(std::rand()) /
-                                       static_cast<numeric_t>(RAND_MAX)));
-    assert(success.second && "couldn't store ERPtr!");
-    return success.first->second;
+    using result_t = sequant::EvalScalar<NumericT>;
+
+    auto make_var = []() {
+      return sequant::eval_result<result_t>(
+          TA::detail::MakeRandom<NumericT>::generate_value());
+    };
+
+    return label_to_er_.try_emplace(std::wstring{var.label()}, make_var())
+        .first->second;
   }
 
   template <typename T, typename = std::enable_if_t<sequant::IsEvaluable<T>>>
@@ -114,18 +86,91 @@ class rand_tensor_yield {
 
     assert(node->is_constant());
 
-    using result_t = EvalScalar<numeric_t>;
+    using result_t = EvalScalar<NumericT>;
 
-    auto d = node->as_constant().template value<numeric_t>();
+    auto d = (node->as_constant()).template value<NumericT>();
     return eval_result<result_t>(d);
   }
 
+  sequant::ERPtr operator()(sequant::Tensor const& tnsr) const {
+    using namespace ranges::views;
+    using namespace sequant;
+
+    std::wstring const label = tensor_to_key(tnsr);
+    if (auto&& found = label_to_er_.find(label); found != label_to_er_.end()) {
+      //      std::cout << "label = [" << sequant::to_string(label)
+      //                << "] FOUND in cache. Returning.." << std::endl;
+      return found->second;
+    }
+
+    ERPtr result{nullptr};
+
+    auto make_extents = [this](auto&& ixs) -> container::svector<size_t> {
+      return ixs | transform([this](auto const& ix) -> size_t {
+               assert(ix.space() == IndexSpace::active_occupied ||
+                      ix.space() == IndexSpace::active_unoccupied);
+               return ix.space() == IndexSpace::active_occupied ? nocc_
+                                                                : nvirt_;
+             }) |
+             ranges::to<container::svector<size_t>>;
+    };
+
+    NestedTensorIndices nested{tnsr};
+
+    auto const outer_extent = make_extents(nested.outer);
+    auto const outer_tr = TA::TiledRange{outer_extent | transform([](auto&& e) {
+                                           return TA::TiledRange1{0, e};
+                                         }) |
+                                         ranges::to_vector};
+    auto const outer_r = TA::Range(outer_extent);
+
+    if (nested.inner.empty()) {
+      // regular tensor
+      using ArrayT = TA::DistArray<TA::Tensor<NumericT>, TAPolicyT>;
+      ArrayT array{world, outer_tr};
+      for (auto it = array.begin(); it != array.end(); ++it)
+        if (array.is_local(it.index()))
+          *it = world.taskq.add(random_tensor<NumericT>, it.make_range());
+      result = eval_result<EvalTensorTA<ArrayT>>(array);
+    } else {
+      // tensor of tensor
+      using ArrayT = TA::DistArray<TA::Tensor<TA::Tensor<NumericT>>, TAPolicyT>;
+
+      auto const inner_extent = make_extents(nested.inner);
+      auto const inner_r = TA::Range(inner_extent);
+
+      auto make_tile = [&inner_r](TA::Range const& orng) {
+        return random_tensor_of_tensor<NumericT>(orng, inner_r);
+      };
+
+      ArrayT array{world, outer_tr};
+
+      for (auto it = array.begin(); it != array.end(); ++it)
+        if (array.is_local(it.index()))
+          *it = world.taskq.add(make_tile, it.make_range());
+
+      result = eval_result<EvalTensorTA<ArrayT>>(array);
+    }
+
+    auto success = label_to_er_.emplace(label, result);
+    assert(success.second && "couldn't store ERPtr!");
+    //    std::cout << "label = [" << sequant::to_string(label)
+    //              << "] NotFound in cache. Creating.." << std::endl;
+    return success.first->second;
+  }
+
   ///
-  /// \param label eg. t_vvoo, f_ov
-  /// \return const ref to Tensor_t type tensor
-  /// \note The tensor should be already present in the yielder cache
-  ///       otherwise throws assertion error. To avoid that use the other
-  ///       overload of operator() that takes sequant::Tensor const&
+  /// \param label eg.
+  ///  - 't_vvoo', 'f_ov' for generic tensor key strings
+  ///  - 't{a1,a2;i1,i2}', 'f{i1;a1}' supported by sequant::parse_expr
+  ///
+  /// \return ERPtr
+  ///
+  /// \note The ERPtr should already exist in the cache otherwise throws.
+  ///       This overload is only intended to access already existing ERPtrs
+  ///       from the cache. To create a new cache entry use the
+  ///       operator()(Tesnor const&) overload.
+  ///
   sequant::ERPtr operator()(std::wstring_view label) const {
     auto&& found = label_to_er_.find(label.data());
     if (found == label_to_er_.end())
@@ -135,6 +180,7 @@ class rand_tensor_yield {
     return found->second;
   }
 };
+
 }  // namespace
 
 TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
@@ -158,7 +204,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
   auto& world = TA::get_default_world();
 
   const size_t nocc = 2, nvirt = 20;
-  auto yield_ = rand_tensor_yield<TArrayD>{world, nocc, nvirt};
+  auto yield_ = rand_tensor_yield<double, TA::DensePolicy>{world, nocc, nvirt};
   auto yield = [&yield_](std::wstring_view lbl) -> TA::TArrayD const& {
     return yield_(lbl)->get<TA::TArrayD>();
   };
@@ -380,7 +426,8 @@ TEST_CASE("TEST_EVAL_USING_TA_COMPLEX", "[eval]") {
   const size_t nocc = 2, nvirt = 20;
   auto& world = TA::get_default_world();
 
-  auto yield_ = rand_tensor_yield<TArrayC>{world, nocc, nvirt};
+  auto yield_ = rand_tensor_yield<std::complex<double>, TA::DensePolicy>{
+      world, nocc, nvirt};
 
   auto yield = [&yield_](std::wstring_view lbl) -> TArrayC const& {
     return yield_(lbl)->get<TArrayC>();

@@ -25,19 +25,41 @@ std::wstring_view const var_label = L"Z";
 
 }  // namespace
 
+NestedTensorIndices::NestedTensorIndices(const sequant::Tensor& tnsr) {
+  auto push_ix = [this](Index const& ix) {
+    if (ix.has_proto_indices())
+      inner.push_back(ix);
+    else
+      outer.push_back(ix);
+  };
+
+  for (auto const& ix : tnsr.const_braket()) {
+    push_ix(ix);
+    for (auto const& ix_proto : ix.proto_indices()) push_ix(ix_proto);
+  }
+
+  if (!inner.empty()) {
+    ranges::actions::stable_sort(outer, Index::LabelCompare{});
+    ranges::actions::unique(outer, [](Index const& ix1, Index const& ix2) {
+      return ix1.label() == ix2.label();
+    });
+  }
+}
+
 std::string EvalExpr::braket_annot() const noexcept {
   if (!is_tensor()) return {};
-  auto const& tnsr = as_tensor();
 
-  // select indices from @c tnsr's braket that satisfy @c pred
-  // and return their 'full_label's separated by commas
-  auto annot_group = [&tnsr](auto&& pred) -> std::string {
+  // given an iterable of sequant::Index objects, returns a string made
+  // of their full labels separted by comma
+  //   eg. (a_1^{i_1,i_2},a_2^{i_2,i_3}) -> "a_1i_1i_2,a_2i_2i_3"
+  //   eg. (i_1, i_2) -> "i_1,i_2"
+  auto annot = [](auto&& ixs) -> std::string {
     using namespace ranges::views;
-    auto full_labels = tnsr.const_braket()                 //
-                       | filter(pred)                      //
-                       | transform(&Index::full_label)     //
-                       | transform([](auto&& fl) {         //
-                           return sequant::to_string(fl);  //
+
+    auto full_labels = ixs                              //
+                       | transform(&Index::full_label)  //
+                       | transform([](auto&& fl) {      //
+                           return sequant::to_string(fl);
                          });
     return full_labels                      //
            | intersperse(std::string{","})  //
@@ -45,16 +67,11 @@ std::string EvalExpr::braket_annot() const noexcept {
            | ranges::to<std::string>;
   };
 
-  auto outer_annot = annot_group(     //
-      ranges::not_fn(                 //
-          &Index::has_proto_indices)  //
-  );
+  auto nested = NestedTensorIndices{as_tensor()};
 
-  auto inner_annot = annot_group(&Index::has_proto_indices);
-
-  return inner_annot.empty()  //
-             ? outer_annot
-             : outer_annot + ";" + inner_annot;
+  return nested.inner.empty()  //
+             ? annot(nested.outer)
+             : annot(nested.outer) + ";" + annot(nested.inner);
 }
 
 size_t EvalExpr::global_id_{};
