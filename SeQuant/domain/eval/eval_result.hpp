@@ -6,6 +6,7 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/logger.hpp>
 
+#include <TiledArray/einsum/tiledarray.h>
 #include <btas/btas.h>
 #include <tiledarray.h>
 #include <range/v3/algorithm.hpp>
@@ -718,7 +719,7 @@ template <typename ArrayT, typename = std::enable_if_t<TA::detail::is_tensor_v<
 class EvalTensorTA final : public EvalResult {
  public:
   using EvalResult::id_t;
-  using numeric_type = std::decay_t<typename ArrayT::numeric_type>;
+  using numeric_type = typename ArrayT::numeric_type;
 
   explicit EvalTensorTA(ArrayT arr) : EvalResult{std::move(arr)} {}
 
@@ -761,10 +762,9 @@ class EvalTensorTA final : public EvalResult {
       return eval_result<this_type>(std::move(result));
     }
 
-    assert(other.is<this_type>());
-
     if (a.this_annot.empty()) {
       // DOT product
+      assert(other.is<this_type>());
       numeric_type d =
           TA::dot(get<ArrayT>()(a.lannot), other.get<ArrayT>()(a.rannot));
       ArrayT::wait_for_lazy_cleanup(get<ArrayT>().world());
@@ -774,6 +774,15 @@ class EvalTensorTA final : public EvalResult {
 
       return eval_result<EvalScalar<numeric_type>>(d);
     }
+
+    if (!other.is<this_type>()) {
+      // potential T * ToT
+      auto annot_swap = annot;
+      std::swap(annot_swap[0], annot_swap[1]);
+      return other.prod(*this, annot_swap);
+    }
+
+    // confirmed: other.is<this_type>() is true
 
     log_ta(a.lannot, " * ", a.rannot, " = ", a.this_annot, "\n");
 
@@ -798,6 +807,8 @@ class EvalTensorTA final : public EvalResult {
   }
 
   void add_inplace(EvalResult const& other) override {
+    assert(other.is<this_type>());
+
     auto& t = get<ArrayT>();
     auto const& o = other.get<ArrayT>();
 
@@ -818,6 +829,129 @@ class EvalTensorTA final : public EvalResult {
   [[nodiscard]] ERPtr antisymmetrize(
       container::svector<std::array<size_t, 3>> const& groups) const override {
     return eval_result<this_type>(antisymmetrize_ta(get<ArrayT>(), groups));
+  }
+};
+
+template <typename ArrayT,
+          typename = std::enable_if_t<
+              TA::detail::is_tensor_of_tensor_v<typename ArrayT::value_type>>>
+class EvalTensorOfTensorTA final : public EvalResult {
+ public:
+  using EvalResult::id_t;
+  using numeric_type = typename ArrayT::numeric_type;
+
+  explicit EvalTensorOfTensorTA(ArrayT arr) : EvalResult{std::move(arr)} {}
+
+ private:
+  using this_type = EvalTensorOfTensorTA<ArrayT>;
+  using annot_wrap = Annot<std::string>;
+
+  using _inner_tensor_type = typename ArrayT::value_type::value_type;
+
+  using compatible_regular_distarray_type =
+      TA::DistArray<_inner_tensor_type, typename ArrayT::policy_type>;
+
+  // Only @c that_type type is allowed for ToT * T computation
+  using that_type = EvalTensorTA<compatible_regular_distarray_type>;
+
+  [[nodiscard]] id_t type_id() const noexcept override {
+    return id_for_type<this_type>();
+  }
+
+  [[nodiscard]] ERPtr sum(EvalResult const& other,
+                          std::array<std::any, 3> const& annot) const override {
+    assert(other.is<this_type>());
+    auto const a = annot_wrap{annot};
+
+    log_ta(a.lannot, " + ", a.rannot, " = ", a.this_annot, "\n");
+
+    ArrayT result;
+    result(a.this_annot) =
+        get<ArrayT>()(a.lannot) + other.get<ArrayT>()(a.rannot);
+    decltype(result)::wait_for_lazy_cleanup(result.world());
+    return eval_result<this_type>(std::move(result));
+  }
+
+  [[nodiscard]] ERPtr prod(
+      EvalResult const& other,
+      std::array<std::any, 3> const& annot) const override {
+    auto const a = annot_wrap{annot};
+
+    if (other.is<EvalScalar<numeric_type>>()) {
+      auto result = get<ArrayT>();
+      auto scalar = other.get<numeric_type>();
+
+      log_ta(a.lannot, " * ", scalar, " = ", a.this_annot, "\n");
+
+      result(a.this_annot) = scalar * result(a.lannot);
+
+      decltype(result)::wait_for_lazy_cleanup(result.world());
+      return eval_result<this_type>(std::move(result));
+    } else if (a.this_annot.empty()) {
+      // DOT product
+      assert(other.is<this_type>());
+      numeric_type d =
+          TA::dot(get<ArrayT>()(a.lannot), other.get<ArrayT>()(a.rannot));
+      ArrayT::wait_for_lazy_cleanup(get<ArrayT>().world());
+      ArrayT::wait_for_lazy_cleanup(other.get<ArrayT>().world());
+
+      log_ta(a.lannot, " * ", a.rannot, " = ", d, "\n");
+
+      return eval_result<EvalScalar<numeric_type>>(d);
+
+    } else if (other.is<this_type>() || other.is<that_type>()) {
+      // ToT * ToT -> ToT OR ToT * T -> ToT
+      log_ta(a.lannot, " * ", a.rannot, " = ", a.this_annot, "\n");
+      ArrayT result =
+          TA::einsum(get<ArrayT>()(a.lannot),
+                     other.get<compatible_regular_distarray_type>()(a.rannot),
+                     a.this_annot);
+      return eval_result<this_type>(std::move(result));
+    } else {
+      throw invalid_operand();
+    }
+  }
+
+  [[nodiscard]] ERPtr permute(
+      std::array<std::any, 2> const& ann) const override {
+    auto const pre_annot = std::any_cast<std::string>(ann[0]);
+    auto const post_annot = std::any_cast<std::string>(ann[1]);
+
+    log_ta(pre_annot, " = ", post_annot, "\n");
+
+    ArrayT result;
+    result(post_annot) = get<ArrayT>()(pre_annot);
+    ArrayT::wait_for_lazy_cleanup(result.world());
+    return eval_result<this_type>(std::move(result));
+  }
+
+  void add_inplace(EvalResult const& other) override {
+    assert(other.is<this_type>());
+
+    auto& t = get<ArrayT>();
+    auto const& o = other.get<ArrayT>();
+
+    assert(t.trange() == o.trange());
+    auto ann = TA::detail::dummy_annotation(t.trange().rank());
+
+    log_ta(ann, " += ", ann, "\n");
+
+    t(ann) += o(ann);
+    ArrayT::wait_for_lazy_cleanup(t.world());
+  }
+
+  [[nodiscard]] ERPtr symmetrize(
+      container::svector<std::array<size_t, 3>> const& groups) const override {
+    // todo
+    // return eval_result<this_type>(symmetrize_ta(get<ArrayT>(), groups));
+    return nullptr;
+  }
+
+  [[nodiscard]] ERPtr antisymmetrize(
+      container::svector<std::array<size_t, 3>> const& groups) const override {
+    // todo
+    // return eval_result<this_type>(antisymmetrize_ta(get<ArrayT>(), groups));
+    return nullptr;
   }
 };
 

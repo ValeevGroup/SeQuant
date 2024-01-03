@@ -147,8 +147,7 @@ class rand_tensor_yield {
         if (array.is_local(it.index()))
           *it = world.taskq.add(make_tile, it.make_range());
 
-      // todo
-      // result = eval_result<EvalTensorOfTensorTA<ArrayT>>(array);
+      result = eval_result<EvalTensorOfTensorTA<ArrayT>>(array);
     }
 
     auto success = label_to_er_.emplace(label, result);
