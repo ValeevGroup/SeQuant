@@ -898,18 +898,27 @@ class EvalTensorOfTensorTA final : public EvalResult {
       log_ta(a.lannot, " * ", a.rannot, " = ", d, "\n");
 
       return eval_result<EvalScalar<numeric_type>>(d);
+    }
 
-    } else if (other.is<this_type>() || other.is<that_type>()) {
-      // ToT * ToT -> ToT OR ToT * T -> ToT
-      log_ta(a.lannot, " * ", a.rannot, " = ", a.this_annot, "\n");
-      ArrayT result =
+    log_ta(a.lannot, " * ", a.rannot, " = ", a.this_annot, "\n");
+    ArrayT result;
+
+    if (other.is<that_type>()) {
+      // ToT * T -> ToT
+      result =
           TA::einsum(get<ArrayT>()(a.lannot),
                      other.get<compatible_regular_distarray_type>()(a.rannot),
                      a.this_annot);
-      return eval_result<this_type>(std::move(result));
+
+    } else if (other.is<this_type>()) {
+      // ToT * ToT -> ToT
+      result = TA::einsum(get<ArrayT>()(a.lannot),
+                          other.get<ArrayT>()(a.rannot), a.this_annot);
     } else {
       throw invalid_operand();
     }
+
+    return eval_result<this_type>(std::move(result));
   }
 
   [[nodiscard]] ERPtr permute(
