@@ -90,6 +90,12 @@ class CC {
   // clang-format on
   [[nodiscard]] std::vector<sequant::ExprPtr> λ_pt(size_t order, size_t rank);
 
+  /// @brief derives sigma equations for EOM-CC
+  /// @param K_occ number of operators in the occupied space
+  /// @param K_uocc number of operators in the unoccupied space
+  [[nodiscard]] std::vector<sequant::ExprPtr> eom_sigma(size_t K_occ,
+                                                        size_t K_uocc);
+
  private:
   size_t N;
   Ansatz ansatz_ = Ansatz::T;

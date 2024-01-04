@@ -275,4 +275,30 @@ std::vector<ExprPtr> CC::λ_pt(size_t order, size_t rank) {
   return result;
 }
 
+std::vector<sequant::ExprPtr> CC::eom_sigma(size_t K_occ, size_t K_uocc) {
+  // construct hbar
+  auto hbar = sim_tr(op::H(), 4);  // 3?
+
+  // construct [hbar, R]
+  auto hbar_R = hbar * op::R(K_occ, K_uocc);
+
+  // connectivity:
+  // default connections + connect R with {h,f,g}
+  const auto op_connect =
+      op::concat(op::default_op_connections(),
+                 std::vector<std::pair<mbpt::OpType, mbpt::OpType>>{
+                     {OpType::h, OpType::R},
+                     {OpType::f, OpType::R},
+                     {OpType::g, OpType::R}});
+
+  std::vector<ExprPtr> result;
+  /// Need another definition for op::P() which can handle non-particle
+  /// conserving operators
+  //  for (auto p = 1; p <= N; ++p) {
+  //    auto res = op::vac_av(op::P(p) * hbar_R, op_connect);
+  //    result.push_back(res);
+  //  }
+  return result;
+}
+
 }  // namespace sequant::mbpt::sr
