@@ -131,7 +131,7 @@ std::vector<ExprPtr> CC::λ(std::size_t commutator_rank) {
   const auto One = ex<Constant>(1);
   auto lhbar = simplify((One + op::Λ(N)) * hbar);
 
-  auto op_connect =
+  const auto op_connect =
       op::concat(op::default_op_connections(),
                  std::vector<std::pair<mbpt::OpType, mbpt::OpType>>{
                      {OpType::h, OpType::A},
@@ -201,7 +201,7 @@ std::vector<sequant::ExprPtr> CC::t_pt(std::size_t order, std::size_t rank) {
   // connectivity:
   // connect t and t1 with {h,f,g}
   // connect h1 with t
-  auto op_connect =
+  const auto op_connect =
       op::concat(op::default_op_connections(),
                  std::vector<std::pair<mbpt::OpType, mbpt::OpType>>{
                      {OpType::h, OpType::t_1},
@@ -250,7 +250,7 @@ std::vector<ExprPtr> CC::λ_pt(size_t order, size_t rank) {
   // projectors with {h,f,g}
   // h1 with t
   // h1 with projectors
-  auto op_connect =
+  const auto op_connect =
       op::concat(op::default_op_connections(),
                  std::vector<std::pair<mbpt::OpType, mbpt::OpType>>{
                      {OpType::h, OpType::t_1},
@@ -293,7 +293,7 @@ std::vector<sequant::ExprPtr> CC::eom_sigma(size_t K_occ, size_t K_uocc) {
 
   std::vector<ExprPtr> result;
   /// Need another definition for op::P() which can handle non-particle
-  /// conserving operators
+  /// conserving cases
   //  for (auto p = 1; p <= N; ++p) {
   //    auto res = op::vac_av(op::P(p) * hbar_R, op_connect);
   //    result.push_back(res);
