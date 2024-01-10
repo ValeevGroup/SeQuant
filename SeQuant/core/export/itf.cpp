@@ -507,7 +507,7 @@ std::wstring to_itf(const Tensor &tensor, bool includeIndexing = true) {
       tags += L"e";
       indices += static_cast<wchar_t>(L'a' + components.id);
     } else {
-      std::runtime_error("Encountered unhandled index space type");
+      throw std::runtime_error("Encountered unhandled index space type");
     }
   }
 
@@ -537,7 +537,7 @@ std::wstring ITFGenerator::generate() const {
       spaceLabel = L"External";
       spaceTag = L"e";
     } else {
-      std::runtime_error("Encountered unhandled index space type");
+      throw std::runtime_error("Encountered unhandled index space type");
     }
 
     itf += L"index-space: ";
