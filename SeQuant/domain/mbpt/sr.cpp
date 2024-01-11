@@ -368,7 +368,7 @@ ExprPtr R_(std::size_t K_occ, std::size_t K_uocc) {
 ExprPtr R(std::size_t K_occ, std::size_t K_uocc) {
   assert(K_occ > 0 || K_uocc > 0);
   const int n_change = K_occ - K_uocc;
-  assert(-2 <= n_change && n_change <= 2);  // Max excitation rank is 2
+  assert(-2 <= n_change && n_change <= 2);  // for now
   ExprPtr result;
 
   if (n_change == 0) {  // EE Case
@@ -397,7 +397,7 @@ ExprPtr L_(std::size_t K_occ, std::size_t K_uocc) {
 ExprPtr L(std::size_t K_occ, std::size_t K_uocc) {
   assert(K_occ > 0 || K_uocc > 0);
   const int n_change = K_occ - K_uocc;
-  assert(-2 <= n_change && n_change <= 2);  // Max de-excitation rank is 2
+  assert(-2 <= n_change && n_change <= 2);  // for now
   ExprPtr result;
 
   if (n_change == 0) {

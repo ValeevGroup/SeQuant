@@ -91,8 +91,9 @@ class CC {
   [[nodiscard]] std::vector<sequant::ExprPtr> λ_pt(size_t order, size_t rank);
 
   /// @brief derives sigma equations for EOM-CC
-  /// @param K_occ number of operators in the occupied space
-  /// @param K_uocc number of operators in the unoccupied space
+  /// @param K_occ number of operators in the occupied space in R operator
+  /// @param K_uocc number of operators in the unoccupied space in R operator
+  /// @return std::vector of equations
   [[nodiscard]] std::vector<sequant::ExprPtr> eom_sigma(size_t K_occ,
                                                         size_t K_uocc);
 
