@@ -410,20 +410,24 @@ ExprPtr L(std::size_t K_occ, std::size_t K_uocc) {
   return result;
 }
 
-ExprPtr A(std::int64_t K) {
-  assert(K != 0);
+ExprPtr A(std::int64_t Kh, std::int64_t Kp) {
+  if (Kp == std::numeric_limits<std::int64_t>::max()) Kp = Kh;
+  assert(Kh != 0 && Kp != 0);
+  assert((Kh > 0 && Kp > 0) ||
+         (Kh < 0 && Kp < 0));  // make sure that Kp and Kh are of the same sign
   return ex<op_t>(
       []() -> std::wstring_view { return optype2label.at(OpType::A); },
       [=]() -> ExprPtr {
         using namespace sequant::mbpt::sr;
-        return sr::A(K, K);
+        return sr::A(Kh, Kp);
       },
       [=](qnc_t& qns) {
-        const std::size_t abs_K = std::abs(K);
-        if (K < 0)
-          qns = combine(qnc_t{abs_K, 0ul, 0ul, abs_K}, qns);
+        const std::size_t abs_Kh = std::abs(Kh);
+        const std::size_t abs_Kp = std::abs(Kp);
+        if (Kp < 0)
+          qns = combine(qnc_t{abs_Kp, 0ul, 0ul, abs_Kh}, qns);
         else
-          qns = combine(qnc_t{0ul, abs_K, abs_K, 0ul}, qns);
+          qns = combine(qnc_t{0ul, abs_Kh, abs_Kp, 0ul}, qns);
       });
 }
 
@@ -444,8 +448,17 @@ ExprPtr S(std::int64_t K) {
       });
 }
 
-ExprPtr P(std::int64_t K) {
-  return get_default_context().spbasis() == SPBasis::spinfree ? S(-K) : A(-K);
+ExprPtr P(std::int64_t Kh, std::int64_t Kp) {
+  if (Kp == std::numeric_limits<std::int64_t>::max()) Kp = Kh;
+  if (get_default_context().spbasis() == SPBasis::spinfree) {
+    assert(Kp == Kh &&
+           "non-particle conserving cases does not work with spin-free basis");
+    const auto K = Kh;  // K = Kp = Kh
+    return S(-K);
+  } else {
+    assert(get_default_context().spbasis() == SPBasis::spinorbital);
+    return A(-Kh, -Kp);
+  }
 }
 
 ExprPtr H_pt(std::size_t order, std::size_t R) {
