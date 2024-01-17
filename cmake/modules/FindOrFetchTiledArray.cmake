@@ -26,7 +26,6 @@ else (TARGET tiledarray)
       SOURCE_DIR TILEDARRAY_SOURCE_DIR
       BINARY_DIR TILEDARRAY_BINARY_DIR
       )
-  set_property(DIRECTORY ${TILEDARRAY_SOURCE_DIR} PROPERTY EXCLUDE_FROM_ALL TRUE)
   # TA includes dependencies that are built manually, not using FetchContent, hence make sure we build them before building any SeQuant-dependent code
   add_dependencies(tiledarray External-tiledarray)
 

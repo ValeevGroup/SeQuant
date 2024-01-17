@@ -6,9 +6,10 @@
 #define SEQUANT_HASH_HPP
 
 #ifdef SEQUANT_USE_SYSTEM_BOOST_HASH
+#include <boost/version.hpp>
+#define SEQUANT_BOOST_VERSION BOOST_VERSION
 #include <boost/container_hash/hash.hpp>
 namespace sequant_boost = boost;
-#define SEQUANT_BOOST_VERSION BOOST_VERSION
 #else
 #include <SeQuant/external/boost/container_hash/hash.hpp>
 #endif
