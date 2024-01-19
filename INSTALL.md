@@ -11,7 +11,7 @@ prerequisites:
     * [Range-V3](https://github.com/ericniebler/range-v3.git), tag 0.12.0, *if not found, SeQuant will download and build Range-V3*
   * optional:
     * for building coupled-cluster evaluation tests:
-      * [TiledArray](https://github.com/ValeevGroup/tiledarray.git), tag efb852e9efa864d965fd29dff5d7bb5100694da1
+      * [TiledArray](https://github.com/ValeevGroup/tiledarray.git), tag df0b808f46cc05bfc797e85b82f1397ac3824893
     * for building `stcc*` example programs
         * [Eigen](http://eigen.tuxfamily.org/), version 3
 
