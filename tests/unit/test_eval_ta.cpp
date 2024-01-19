@@ -122,10 +122,9 @@ class rand_tensor_yield {
     NestedTensorIndices nested{tnsr};
 
     auto const outer_extent = make_extents(nested.outer);
-    auto const outer_tr = TA::TiledRange{outer_extent | transform([](auto&& e) {
-                                           return TA::TiledRange1(0, e);
-                                         }) |
-                                         ranges::to_vector};
+    auto const outer_tr = TA::TiledRange{
+        outer_extent | transform([](auto e) { return TA::TiledRange1(0, e); }) |
+        ranges::to_vector};
     auto const outer_r = TA::Range(outer_extent);
 
     if (nested.inner.empty()) {
