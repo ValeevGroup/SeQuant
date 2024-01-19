@@ -31,6 +31,7 @@ auto tensor_to_key(std::wstring_view spec) {
   return tensor_to_key(sequant::parse_expr(spec, sequant::Symmetry::nonsymm)
                            ->as<sequant::Tensor>());
 }
+
 template <typename NumericT>
 auto random_tensor(TA::Range const& rng) {
   TA::Tensor<NumericT> result{rng};
@@ -47,7 +48,7 @@ auto random_tensor_of_tensor(TA::Range const& outer_rng,
   TA::Tensor<TA::Tensor<NumericT>> result{outer_rng};
 
   std::generate(result.begin(), result.end(),
-                [&inner_rng]() { return random_tensor<NumericT>(inner_rng); });
+                [inner_rng]() { return random_tensor<NumericT>(inner_rng); });
 
   return result;
 }
@@ -60,6 +61,11 @@ class rand_tensor_yield {
   mutable sequant::container::map<std::wstring, sequant::ERPtr> label_to_er_;
 
  public:
+  using array_type = TA::DistArray<TA::Tensor<NumericT>, TAPolicyT>;
+  using array_tot_type =
+      TA::DistArray<TA::Tensor<TA::Tensor<NumericT>>, TAPolicyT>;
+  using numeric_type = NumericT;
+
   rand_tensor_yield(TA::World& world_, size_t nocc, size_t nvirt)
       : world{world_}, nocc_{nocc}, nvirt_{nvirt} {}
 
@@ -137,7 +143,7 @@ class rand_tensor_yield {
       auto const inner_extent = make_extents(nested.inner);
       auto const inner_r = TA::Range(inner_extent);
 
-      auto make_tile = [&inner_r](TA::Range const& orng) {
+      auto make_tile = [inner_r](TA::Range const& orng) {
         return random_tensor_of_tensor<NumericT>(orng, inner_r);
       };
 
@@ -154,6 +160,7 @@ class rand_tensor_yield {
     assert(success.second && "couldn't store ERPtr!");
     //    std::cout << "label = [" << sequant::to_string(label)
     //              << "] NotFound in cache. Creating.." << std::endl;
+    assert(success.first->second);
     return success.first->second;
   }
 
@@ -631,5 +638,94 @@ TEST_CASE("TEST_EVAL_USING_TA_COMPLEX", "[eval]") {
     auto eval2 = evaluate(nodes1, "i_1,i_2,a_1,a_2"s, yield_)->get<TArrayC>();
 
     REQUIRE(norm(eval1) == Approx(norm(eval2)));
+  }
+}
+
+TEST_CASE("TEST_EVAL_USING_TA_TOT", "[eval_tot]") {
+  using namespace sequant;
+
+  //
+  // eg: approx_equal("i,j;a,b", arr1, arr2)
+  // - arr1 and arr2 are DistArrays with equal TiledRange and matching Range for
+  //   the inner tensors at the corresponding tile positions.
+  // - 'i', 'j', 'a', and 'b' are dummy indices that annotate the modes of outer
+  //   and inner tensors. Why? Because TA::norm2 function is not supported for
+  //   tensor-of-tensor tiles
+  //
+  auto approx_equal = [](std::string const& annot, auto const& lhs,
+                         auto const& rhs) -> bool {
+    return Approx(lhs(annot).dot(lhs(annot))) == rhs(annot).dot(rhs(annot));
+  };
+
+  auto& world = TA::get_default_world();
+
+  size_t const nocc = 2;
+  size_t const nvirt = 3;
+
+  rand_tensor_yield<int> yield{world, nocc, nvirt};
+
+  using ArrayT = typename decltype(yield)::array_type;
+  using ArrayToT = typename decltype(yield)::array_tot_type;
+  using NumericT = typename decltype(yield)::numeric_type;
+
+  SECTION("T_times_ToT_to_ToT") {
+    constexpr std::wstring_view expr_str =
+        L"3"
+        L" * "
+        L"f{i3;i1}"
+        L" * "
+        L"t{a3<i2,i3>,a4<i2,i3>;i2,i3}";
+    auto const node = eval_node(parse_expr(expr_str));
+    std::string const target_layout{"i_1,i_2,i_3;a_3i_2i_3,a_4i_2i_3"};
+    auto result = evaluate(node, target_layout, yield)->get<ArrayToT>();
+    ArrayToT ref;
+    {
+      auto const& lhs = yield(L"f{i3;i1}")->get<ArrayT>();
+      auto const& rhs = yield(L"t{a3<i2,i3>,a4<i2,i3>;i2,i3}")->get<ArrayToT>();
+      ref = TA::einsum(lhs("i_3,i_1"), rhs("i_2,i_3;a_3i_2i_3,a_4i_2i_3"),
+                       target_layout);
+      ref(target_layout) = 3 * ref(target_layout);
+    }
+    REQUIRE(approx_equal("i,j,k;a,b", result, ref));
+  }
+
+  SECTION("ToT_times_ToT_to_ToT") {
+    constexpr std::wstring_view expr_str =
+        L"I{a4<i2,i3>,a1<i1,i2>;i1,i2}"
+        L" * "
+        L"s{a2<i1,i2>;a4<i2,i3>}";
+
+    auto const node = eval_node(parse_expr(expr_str));
+    std::string const target_layout{"i_2,i_1;a_1i_1i_2,a_2i_1i_2"};
+
+    auto result = evaluate(node, target_layout, yield)->get<ArrayToT>();
+
+    ArrayToT ref;
+    {
+      auto const& lhs = yield(L"I{a4<i2,i3>,a1<i1,i2>;i1,i2}")->get<ArrayToT>();
+      auto const& rhs = yield(L"s{a2<i1,i2>;a4<i2,i3>}")->get<ArrayToT>();
+      ref = TA::einsum(lhs("i_1,i_2,i_3;a_4i_2i_3,a_1i_1i_2"),
+                       rhs("i_1,i_2,i_3;a_2i_1i_2,a_4i_2i_3"), target_layout);
+    }
+    REQUIRE(approx_equal("i,j;a,b", result, ref));
+  }
+
+  SECTION("ToT_times_ToT_to_Scalar") {
+    constexpr std::wstring_view expr_str =
+        L"I{a1<i1,i2>,a2<i1,i2>;i1,i2}"
+        L" * "
+        L"g{i1,i2;a2<i1,i2>,a1<i1,i2>}";
+    auto const node = eval_node(parse_expr(expr_str));
+
+    auto result = evaluate(node, yield)->get<NumericT>();
+
+    NumericT ref;
+    {
+      auto const& lhs = yield(L"I{a1<i1,i2>,a2<i1,i2>;i1,i2}")->get<ArrayToT>();
+      auto const& rhs = yield(L"g{i1,i2;a2<i1,i2>,a1<i1,i2>}")->get<ArrayToT>();
+      ref = TA::dot(lhs("i_1,i_2;a_1i_1i_2,a_2i_1i_2"),
+                    rhs("i_1,i_2;a_2i_1i_2,a_1i_1i_2"));
+    }
+    REQUIRE(result == Approx(ref));
   }
 }
