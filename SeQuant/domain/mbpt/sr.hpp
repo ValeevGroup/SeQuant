@@ -221,21 +221,29 @@ ExprPtr Λ_(std::size_t K);
 /// @return sum of `Λ_(k)` with `k<=K`
 ExprPtr Λ(std::size_t K, bool skip1 = false);
 
-/// makes generic excitation operator with \p K_occ annihilators in occupied
-/// space and \p K_unocc creators in unoccupied space
-/// \pre can produce particle non-conserving operators
-ExprPtr R_(std::size_t K_occ, std::size_t K_unocc);
+/// makes generic excitation operator based on \p K_occ and \p K_uocc
+/// @param K_occ number of annihilators in occupied space
+/// @param K_uocc number of creators in unoccupied space
+/// @note can produce particle non-conserving operators
+ExprPtr R_(std::size_t K_occ, std::size_t K_uocc);
 
-/// makes sum of R_() operators based on \p K_occ and \p K_unocc
-ExprPtr R(std::size_t K_occ, std::size_t K_unocc);
+/// makes sum of R_() operators based on \p K_occ and \p K_uocc
+/// @param K_occ number of annihilators in occupied space
+/// @param K_uocc number of creators in unoccupied space
+/// @note can produce particle non-conserving operators
+ExprPtr R(std::size_t K_occ, std::size_t K_uocc);
 
-/// makes generic deexcitation operator with \p K_occ creators in occupied space
-/// and \p K_unocc annihilators in unoccupied space
-/// \pre can produce particle non-conserving operators
-ExprPtr L_(std::size_t K_occ, std::size_t K_unocc);
+/// makes generic deexcitation operator based on \p K_occ and \p K_uocc
+/// @param K_occ number of creators in occupied space
+/// @param K_uocc number of annihilators in unoccupied space
+/// @note can produce particle non-conserving operators
+ExprPtr L_(std::size_t K_occ, std::size_t K_uocc);
 
-/// makes sum of L_() operators based on \p K_occ and \p K_unocc
-ExprPtr L(std::size_t K_occ, std::size_t K_unocc);
+/// makes sum of L_() operators based on \p K_occ and \p K_uocc
+/// @param K_occ number of creators in occupied space
+/// @param K_uocc number of annihilators in unoccupied space
+/// @note can produce particle non-conserving operators
+ExprPtr L(std::size_t K_occ, std::size_t K_uocc);
 
 // clang-format off
 /// @brief makes generic bra/ket-antisymmetric excitation (if \p Kh > 0 && \p Kp > 0)
@@ -257,8 +265,8 @@ ExprPtr S(std::int64_t K);
 /// \param Kh if <0, annihilates this many holes, else creates this many
 /// \param Kp if <0, annihilates this many particles, else creates this many
 /// (default is to set \p Kp to \p Kh)
-/// @note if using spin-free basis, only supports particle-symmetric operators `K = Kh = Kp`, returns `S(K)`
-/// else supports particle non-conserving operators and returns `A(Kh, Kp)`
+/// @note if using spin-free basis, only supports particle-symmetric operators `K = Kh = Kp`, returns `S(-K)`
+/// else supports particle non-conserving operators and returns `A(-Kh, -Kp)`
 // clang-format on
 ExprPtr P(std::int64_t Kh,
           std::int64_t Kp = std::numeric_limits<std::int64_t>::max());

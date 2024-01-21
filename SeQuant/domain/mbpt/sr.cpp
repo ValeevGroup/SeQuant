@@ -366,17 +366,14 @@ ExprPtr R_(std::size_t K_occ, std::size_t K_uocc) {
 }
 
 ExprPtr R(std::size_t K_occ, std::size_t K_uocc) {
+  using boost::numeric_cast;
   assert(K_occ > 0 || K_uocc > 0);
-  const int n_change = K_occ - K_uocc;
-  assert(-2 <= n_change && n_change <= 2);  // for now
   ExprPtr result;
 
-  if (n_change == 0) {  // EE Case
-    for (auto k = 1ul; k <= K_occ; ++k) result += R_(k, k);
-  } else if (n_change > 0) {  // IP Case
-    for (auto k = 1ul; k <= K_occ; ++k) result += R_(k, k - n_change);
-  } else if (n_change < 0) {  // EA Case
-    for (auto k = 1ul; k <= K_uocc; ++k) result += R_(k + n_change, k);
+  for (auto o = numeric_cast<std::int64_t>(K_occ),
+            u = numeric_cast<std::int64_t>(K_uocc);
+       o > 0 || u > 0; --o, --u) {
+    result += R_(o, u);
   }
   return result;
 }
@@ -395,17 +392,14 @@ ExprPtr L_(std::size_t K_occ, std::size_t K_uocc) {
 }
 
 ExprPtr L(std::size_t K_occ, std::size_t K_uocc) {
+  using boost::numeric_cast;
   assert(K_occ > 0 || K_uocc > 0);
-  const int n_change = K_occ - K_uocc;
-  assert(-2 <= n_change && n_change <= 2);  // for now
   ExprPtr result;
 
-  if (n_change == 0) {
-    for (auto k = 1ul; k <= K_occ; ++k) result += L_(k, k);
-  } else if (n_change > 0) {
-    for (auto k = 1ul; k <= K_occ; ++k) result += L_(k, k - n_change);
-  } else if (n_change < 0) {
-    for (auto k = 1ul; k <= K_uocc; ++k) result += L_(k + n_change, k);
+  for (auto o = numeric_cast<std::int64_t>(K_occ),
+            u = numeric_cast<std::int64_t>(K_uocc);
+       o > 0 || u > 0; --o, --u) {
+    result += L_(o, u);
   }
   return result;
 }
