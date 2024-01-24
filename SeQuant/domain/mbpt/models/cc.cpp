@@ -299,21 +299,19 @@ std::vector<sequant::ExprPtr> CC::eom_sigma(size_t K_occ, size_t K_uocc) {
 
   // initialize result vector
   std::vector<ExprPtr> result;
-  result.resize(std::max(K_occ, K_uocc) + 1);
+  auto idx = std::max(K_occ, K_uocc);  // idx for populating the result vector
+  result.resize(idx + 1);
 
-  // TODO: See if the loop can be done in a simpler way
-  for (std::size_t i = 0; i < result.size(); ++i) {
-    std::size_t o = i < K_occ ? K_occ - i : 0;    // ops in occupied space
-    std::size_t u = i < K_uocc ? K_uocc - i : 0;  // ops in unoccupied space
-
-    if (o == 0 && u == 0) break;  // avoid the cases where both o and u are zero
-
-    // construct index for populating result vector
-    auto idx = result.size() - 1 - i;
-
+  using boost::numeric_cast;
+  for (auto o = numeric_cast<std::int64_t>(K_occ),
+            u = numeric_cast<std::int64_t>(K_uocc);
+       o > 0 || u > 0; --o, --u) {
     // project onto <o,u| (i.e., multiply by P(o,u)) and compute VEV
-    result.at(idx) = op::vac_av(hbar_R * op::R(o, u), op_connect);
+    auto res = op::vac_av(op::P(o, u) * hbar_R, op_connect);
+    result.at(idx) = res;
+    idx--;  // idx decrement
   }
+
   return result;
 }
 }  // namespace sequant::mbpt::sr
