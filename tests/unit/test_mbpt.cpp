@@ -432,6 +432,12 @@ TEST_CASE("NBodyOp", "[mbpt]") {
             L"{{{\\frac{1}{2}}}{A^{{i_1}}_{{a_1}{a_2}}}{\\tilde{a}^{{a_1}{a_2}}"
             L"_{\\textvisiblespace\\,{i_1}}}}");
 
+    auto P_1_0 = sr::op::P(1, 0)->as<sr::op_t>();
+    //    std::wcout << "P_1_0: " << to_latex(simplify(P_1_0.tensor_form()))
+    //               << std::endl;
+    REQUIRE(to_latex(simplify(P_1_0.tensor_form())) ==
+            L"{{A^{}_{{i_1}}}{\\tilde{a}^{{i_1}}}}");
+
     auto P_1_2 = sr::op::P(1, 2)->as<sr::op_t>();
     //    std::wcout << "P_1_2: " << to_latex(simplify(P_1_2.tensor_form()))
     //               << std::endl;
@@ -476,26 +482,40 @@ TEST_CASE("NBodyOp", "[mbpt]") {
               L"\\tilde{a}^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}}\\bigr) }");
     }
 
-    auto R23 = mbpt::sr::op::R(2, 3);
-    lower_to_tensor_form(R23);
-    simplify(R23);
-    //    std::wcout << "R23: " << to_latex(R23) << std::endl;
+    auto R12 = mbpt::sr::op::R(1, 2);
+    lower_to_tensor_form(R12);
+    simplify(R12);
+    //    std::wcout << "R12: " << to_latex(R12) << std::endl;
     if constexpr (hash_version() == hash::Impl::Boost181OrLater) {
-      REQUIRE(
-          to_latex(R23) ==
-          L"{ \\bigl({{R^{}_{{a_1}}}{\\tilde{a}^{{a_1}}}} + "
-          L"{{{\\frac{1}{12}}}{R^{{i_1}{i_2}}_{{a_1}{a_2}{a_3}}}{\\tilde{a}^{{"
-          L"a_1}{a_2}{a_3}}_{\\textvisiblespace\\,{i_1}{i_2}}}} + "
-          L"{{{\\frac{1}{2}}}{R^{{i_1}}_{{a_1}{a_2}}}{\\tilde{a}^{{a_1}{a_2}}_{"
-          L"\\textvisiblespace\\,{i_1}}}}\\bigr) }");
+      REQUIRE(to_latex(R12) ==
+              L"{ \\bigl({{R^{}_{{a_1}}}{\\tilde{a}^{{a_1}}}} + "
+              L"{{{\\frac{1}{2}}}{R^{{i_1}}_{{a_1}{a_2}}}{\\tilde{a}^{{a_1}{a_"
+              L"2}}_{\\textvisiblespace\\,{i_1}}}}\\bigr) }");
     } else {
       REQUIRE(
-          to_latex(R23) ==
+          to_latex(R12) ==
           L"{ \\bigl({{R^{}_{{a_1}}}{\\tilde{a}^{{a_1}}}} + "
-          L"{{{\\frac{1}{2}}}{R^{{i_1}}_{{a_1}{a_2}}}{\\tilde{a}^{{a_1}{a_2}}_{"
-          L"\\textvisiblespace\\,{i_1}}}} + "
-          L"{{{\\frac{1}{12}}}{R^{{i_1}{i_2}}_{{a_1}{a_2}{a_3}}}{\\tilde{a}^{{"
-          L"a_1}{a_2}{a_3}}_{\\textvisiblespace\\,{i_1}{i_2}}}}\\bigr) }");
+          L"{{{\\frac{1}{2}}}{R^{{i_1}}_{{a_1}{a_2}}}{\\tilde{a}^{{a_1}{a_2}}"
+          L"_{\\textvisiblespace\\,{i_1}}}}\\bigr) }");
+    }
+
+    auto R21 = mbpt::sr::op::R(2, 1);
+    lower_to_tensor_form(R21);
+    simplify(R21);
+    //    std::wcout << "R21: " << to_latex(R21) << std::endl;
+
+    if constexpr (hash_version() == hash::Impl::Boost181OrLater) {
+      REQUIRE(to_latex(R21) ==
+              L"{ "
+              L"\\bigl({{{\\frac{1}{2}}}{R^{{i_1}{i_2}}_{{a_1}}}{\\tilde{a}^{"
+              L"\\textvisiblespace\\,{a_1}}_{{i_1}{i_2}}}} + "
+              L"{{R^{{i_1}}_{}}{\\tilde{a}_{{i_1}}}}\\bigr) }");
+    } else {
+      REQUIRE(to_latex(R21) ==
+              L"{ "
+              L"\\bigl({{{\\frac{1}{2}}}{R^{{i_1}{i_2}}_{{a_1}}}{\\tilde{a}^{"
+              L"\\textvisiblespace\\,{a_1}}_{{i_1}{i_2}}}} + "
+              L"{{R^{{i_1}}_{}}{\\tilde{a}_{{i_1}}}}\\bigr) }");
     }
 
     auto L23 = mbpt::sr::op::L(2, 3);
