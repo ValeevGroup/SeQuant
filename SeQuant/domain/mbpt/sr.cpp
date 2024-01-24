@@ -406,9 +406,12 @@ ExprPtr L(std::size_t K_occ, std::size_t K_uocc) {
 
 ExprPtr A(std::int64_t Kh, std::int64_t Kp) {
   if (Kp == std::numeric_limits<std::int64_t>::max()) Kp = Kh;
-  assert(Kh != 0 && Kp != 0);
-  assert((Kh > 0 && Kp > 0) ||
-         (Kh < 0 && Kp < 0));  // make sure that Kp and Kh are of the same sign
+
+  assert(!(Kh == 0 && Kp == 0));
+  // if they are not zero, Kh and Kp should have the same sign
+  if (Kp != 0 && Kh != 0) {
+    assert((Kh > 0 && Kp > 0) || (Kh < 0 && Kp < 0));
+  }
   return ex<op_t>(
       []() -> std::wstring_view { return optype2label.at(OpType::A); },
       [=]() -> ExprPtr {
