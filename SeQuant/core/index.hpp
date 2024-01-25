@@ -705,26 +705,29 @@ class Index : public Taggable {
     assert(i1.space().attr().is_valid());
     assert(i2.space().attr().is_valid());
 
-    auto i1_Q = i1.space().qns();
-    auto i2_Q = i2.space().qns();
+    auto compare_space = [&i1, &i2]() {
+      if (i1.space() != i2.space()) {
+        return i1.space() < i2.space();
+      }
+
+      if (i1.label() != i2.label()) {
+        // TODO: This won't yield the desired result for e.g. i_2 < i_13
+        return i1.label() < i2.label();
+      }
+
+      return i1.proto_indices() < i2.proto_indices();
+    };
+
+    const auto i1_Q = i1.space().qns();
+    const auto i2_Q = i2.space().qns();
     const bool have_qns =
         i1_Q != IndexSpace::nullqns || i2_Q != IndexSpace::nullqns;
 
-    auto compare_space = [&i1, &i2]() {
-      if (i1.space() == i2.space()) {
-        if (i1.label() == i2.label()) {
-          return i1.proto_indices() < i2.proto_indices();
-        } else {
-          return i1.label() < i2.label();
-        }
-      } else {
-        return i1.space() < i2.space();
-      }
-    };
-
-    if (have_qns || (i1_Q != i2_Q)) {
+    if (have_qns || i1_Q != i2_Q) {
+      // Note that comparison of index spaces contains comparison of QNs
       return compare_space();
     }
+
     const bool have_tags = i1.tag().has_value() && i2.tag().has_value();
 
     if (!have_tags || i1.tag() == i2.tag()) {

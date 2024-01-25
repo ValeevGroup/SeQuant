@@ -344,32 +344,35 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   }
 
   bool static_less_than(const Expr &that) const override {
-    const auto &that_cast = static_cast<const Tensor &>(that);
     if (this == &that) return false;
-    if (this->label() == that_cast.label()) {
-      if (this->bra_rank() == that_cast.bra_rank()) {
-        if (this->ket_rank() == that_cast.ket_rank()) {
-          //          v1: compare hashes only
-          //          return Expr::static_less_than(that);
-          //          v2: compare fully
-          if (this->bra_hash_value() == that_cast.bra_hash_value()) {
-            return std::lexicographical_compare(
-                this->ket().begin(), this->ket().end(), that_cast.ket().begin(),
-                that_cast.ket().end());
-          } else {
-            return std::lexicographical_compare(
-                this->bra().begin(), this->bra().end(), that_cast.bra().begin(),
-                that_cast.bra().end());
-          }
-        } else {
-          return this->ket_rank() < that_cast.ket_rank();
-        }
-      } else {
-        return this->bra_rank() < that_cast.bra_rank();
-      }
-    } else {
+
+    const auto &that_cast = static_cast<const Tensor &>(that);
+    if (this->label() != that_cast.label()) {
       return this->label() < that_cast.label();
     }
+
+    if (this->bra_rank() != that_cast.bra_rank()) {
+      return this->bra_rank() < that_cast.bra_rank();
+    }
+
+    if (this->ket_rank() != that_cast.ket_rank()) {
+      return this->ket_rank() < that_cast.ket_rank();
+    }
+
+    // TODO: account for aux indices
+
+    //          v1: compare hashes only
+    //          return Expr::static_less_than(that);
+    //          v2: compare fully
+    if (this->bra_hash_value() != that_cast.bra_hash_value()) {
+      return std::lexicographical_compare(
+          this->bra().begin(), this->bra().end(), that_cast.bra().begin(),
+          that_cast.bra().end());
+    }
+
+    return std::lexicographical_compare(this->ket().begin(), this->ket().end(),
+                                        that_cast.ket().begin(),
+                                        that_cast.ket().end());
   }
 
   // these implement the AbstractTensor interface
