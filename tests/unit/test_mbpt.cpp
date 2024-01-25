@@ -452,16 +452,8 @@ TEST_CASE("NBodyOp", "[mbpt]") {
             L"{{{\\frac{1}{12}}}{A^{{a_1}{a_2}}_{{i_1}{i_2}{i_3}}}{\\tilde{a}^{"
             L"{i_1}{i_2}{i_3}}_{\\textvisiblespace\\,{a_1}{a_2}}}}");
 
-    auto lower_to_tensor_form = [](ExprPtr& expr) {
-      using op_t = mbpt::Operator<mbpt::sr::qns_t>;
-      auto op_lowerer = [](ExprPtr& leaf) {
-        if (leaf.is<op_t>()) leaf = leaf.as<op_t>().tensor_form();
-      };
-      expr->visit(op_lowerer, /* atoms only = */ true);
-    };
-
     auto R33 = mbpt::sr::op::R(3, 3);
-    lower_to_tensor_form(R33);
+    sr::op::lower_to_tensor_form(R33);
     simplify(R33);
     //    std::wcout << "R33: " << to_latex(R33) << std::endl;
     if constexpr (hash_version() == hash::Impl::Boost181OrLater) {
@@ -483,7 +475,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
     }
 
     auto R12 = mbpt::sr::op::R(1, 2);
-    lower_to_tensor_form(R12);
+    sr::op::lower_to_tensor_form(R12);
     simplify(R12);
     //    std::wcout << "R12: " << to_latex(R12) << std::endl;
     if constexpr (hash_version() == hash::Impl::Boost181OrLater) {
@@ -500,7 +492,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
     }
 
     auto R21 = mbpt::sr::op::R(2, 1);
-    lower_to_tensor_form(R21);
+    sr::op::lower_to_tensor_form(R21);
     simplify(R21);
     //    std::wcout << "R21: " << to_latex(R21) << std::endl;
 
@@ -519,7 +511,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
     }
 
     auto L23 = mbpt::sr::op::L(2, 3);
-    lower_to_tensor_form(L23);
+    sr::op::lower_to_tensor_form(L23);
     simplify(L23);
     //        std::wcout << "L23: " << to_latex(L23) << std::endl;
     if constexpr (hash_version() == hash::Impl::Boost181OrLater) {
