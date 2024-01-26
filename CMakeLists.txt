@@ -138,7 +138,7 @@ check_cxx_execution_header(SEQUANT)
 # Ranges-V3
 include(FindOrFetchRangeV3)
 
-# Boost
+# Boost will be added after defining SeQuant
 include(external/boost.cmake)
 
 # embedded bliss-0.73
@@ -361,6 +361,11 @@ if (SEQUANT_MIMALLOC)
     target_link_libraries(SeQuant PUBLIC mimalloc)
     target_compile_definitions(SeQuant PUBLIC SEQUANT_HAS_MIMALLOC=1)
 endif ()
+
+# build all of boost before SeQuant, including parts it does not use
+if (Boost_BUILT_FROM_SOURCE AND TARGET build-boost-in-SeQuant)
+    add_dependencies(SeQuant build-boost-in-SeQuant)
+endif()
 
 ### unit tests
 include(CTest)
