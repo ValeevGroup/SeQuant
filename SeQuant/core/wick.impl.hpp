@@ -403,14 +403,6 @@ struct NullNormalOperatorCanonicalizerDeregister {
 
 }  // namespace detail
 
-inline bool edges_share_origin(const TensorNetwork::Edge &e1,
-                          const TensorNetwork::Edge &e2) {
-  return e1.first_vertex() == e2.first_vertex() ||
-         e1.second_vertex() == e2.first_vertex() ||
-         e1.first_vertex() == e2.second_vertex() ||
-         e1.second_vertex() == e2.second_vertex();
-}
-
 template <Statistics S>
 ExprPtr WickTheorem<S>::compute(const bool count_only) {
   if (input_.vacuum() != get_default_context().vacuum())
@@ -545,15 +537,15 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
 
           // construct graph representation of the tensor product
           TensorNetwork tn(expr_input_->as<Product>().factors());
-          auto graph = tn.create_graph();
-          const auto n = graph.vertex_labels.size();
-          assert(graph.vertex_types.size() == n);
+          auto [graph, vlabels, vcolors, vtypes] = tn.make_bliss_graph();
+          const auto n = vlabels.size();
+          assert(vtypes.size() == n);
           const auto &tn_edges = tn.edges();
           const auto &tn_tensors = tn.tensors();
 
           if (Logger::get_instance().wick_topology) {
             std::basic_ostringstream<wchar_t> oss;
-            graph.bliss_graph->write_dot(oss, graph.vertex_labels);
+            graph->write_dot(oss, vlabels);
             std::wcout
                 << "WickTheorem<S>::compute: colored graph produced from TN = "
                 << std::endl
@@ -586,24 +578,16 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
             // NormalOperators are not reordered by canonicalization, hence the
             // ordinal can be computed by counting
             std::size_t nop_ord = 0;
-            std::size_t edge_idx = 0;
             for (size_t v = 0; v != n; ++v) {
-              if (graph.vertex_types[v] ==
-                      TensorNetwork::VertexType::TensorCore &&
-                  (std::find(nop_labels_begin, nop_labels_end,
-                             graph.vertex_labels[v]) != nop_labels_end)) {
+              if (vtypes[v] == TensorNetwork::VertexType::TensorCore &&
+                  (std::find(nop_labels_begin, nop_labels_end, vlabels[v]) !=
+                   nop_labels_end)) {
                 auto insertion_result = nop_vidx_ord.emplace(v, nop_ord++);
                 assert(insertion_result.second);
               }
-              if (graph.vertex_types[v] == TensorNetwork::VertexType::Index &&
+              if (vtypes[v] == TensorNetwork::VertexType::Index &&
                   !input_.empty()) {
-                // Underlying assumption: The order of index vertices
-                // corresponds to the order of associated edges in tn_edges
-                assert(edge_idx < tn_edges.size());
-                auto edge_it = tn_edges.begin();
-                std::advance(edge_it, edge_idx);
-
-                auto &idx = edge_it->idx();
+                auto &idx = (tn_edges.begin() + v)->idx();
                 auto idx_it_in_opseq = ranges::find_if(
                     opseq_view,
                     [&idx](const auto &v) { return v.index() == idx; });
@@ -613,8 +597,6 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
                   auto insertion_result = index_vidx_ord.emplace(v, ord);
                   assert(insertion_result.second);
                 }
-
-                edge_idx++;
               }
             }
           }
@@ -623,19 +605,19 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
           std::vector<std::vector<unsigned int>> aut_generators;
           {
             bliss::Stats stats;
-            graph.bliss_graph->set_splitting_heuristic(bliss::Graph::shs_fsm);
+            graph->set_splitting_heuristic(bliss::Graph::shs_fsm);
 
             auto save_aut = [&aut_generators](const unsigned int n,
                                               const unsigned int *aut) {
               aut_generators.emplace_back(aut, aut + n);
             };
 
-            graph.bliss_graph->find_automorphisms(
+            graph->find_automorphisms(
                 stats, &bliss::aut_hook<decltype(save_aut)>, &save_aut);
 
             if (Logger::get_instance().wick_topology) {
               std::basic_ostringstream<wchar_t> oss2;
-              bliss::print_auts(aut_generators, oss2, graph.vertex_labels);
+              bliss::print_auts(aut_generators, oss2, vlabels);
               std::wcout << "WickTheorem<S>::compute: colored graph "
                             "automorphism generators = \n"
                          << oss2.str() << std::endl;
@@ -836,37 +818,29 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
           // Index partitions are constructed to *only* include Index
           // objects attached to the bra/ket of any NormalOperator! hence
           // need to use filter in computing partitions
-          auto exclude_index_vertex_pair = [&tn_tensors, &tn_edges, &graph](size_t v1,
+          auto exclude_index_vertex_pair = [&tn_tensors, &tn_edges](size_t v1,
                                                                     size_t v2) {
-            std::size_t first_edge_idx = graph.vertex_to_index_idx(v1);
-            std::size_t second_edge_idx = graph.vertex_to_index_idx(v2);
-            assert(first_edge_idx < tn_edges.size());
-            assert(second_edge_idx < tn_edges.size());
-
-			auto edge_iter = tn_edges.begin();
-			std::advance(edge_iter, first_edge_idx);
-			const auto &edge1 = *edge_iter;
-
-			edge_iter = tn_edges.begin();
-			std::advance(edge_iter, second_edge_idx);
-			const auto &edge2 = *edge_iter;
-
-            auto connected_to_same_nop = [&tn_tensors](
-                                             const TensorNetwork::Edge &lhs,
-                                             const TensorNetwork::Edge &rhs) {
-              if (lhs.vertex_count() != 2 || rhs.vertex_count() != 2) {
-                return false;
-              }
-
-              if (edges_share_origin(lhs, rhs)) {
+            // v1 and v2 are vertex indices and also index the edges in the
+            // TensorNetwork
+            assert(v1 < tn_edges.size());
+            assert(v2 < tn_edges.size());
+            const auto &edge1 = *(tn_edges.begin() + v1);
+            const auto &edge2 = *(tn_edges.begin() + v2);
+            auto connected_to_same_nop = [&tn_tensors](int term1, int term2) {
+              if (term1 == term2 && term1 != 0) {
+                auto tensor_idx = std::abs(term1) - 1;
                 const std::shared_ptr<AbstractTensor> &tensor_ptr =
-                    tn_tensors.at(lhs.first_vertex().getTerminalIndex());
+                    tn_tensors.at(tensor_idx);
                 if (std::dynamic_pointer_cast<NormalOperator<S>>(tensor_ptr))
                   return true;
               }
               return false;
             };
-            const bool exclude = !connected_to_same_nop(edge1, edge2);
+            const bool exclude =
+                !(connected_to_same_nop(edge1.first(), edge2.first()) ||
+                  connected_to_same_nop(edge1.first(), edge2.second()) ||
+                  connected_to_same_nop(edge1.second(), edge2.first()) ||
+                  connected_to_same_nop(edge1.second(), edge2.second()));
             return exclude;
           };
 
@@ -887,16 +861,10 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
             if (Logger::get_instance().wick_topology) {
               std::wcout << "WickTheorem<S>::compute: topological index "
                             "partitions:{\n";
-              ranges::for_each(index_vidx2pidx, [&tn_edges, &graph](auto &&vidx_pidx) {
+              ranges::for_each(index_vidx2pidx, [&tn_edges](auto &&vidx_pidx) {
                 auto &&[vidx, pidx] = vidx_pidx;
-
-                auto edge_idx = graph.vertex_to_index_idx(vidx);
-                assert(edge_idx < tn_edges.size());
-
-                auto edge_it = tn_edges.begin();
-                std::advance(edge_it, edge_idx);
-                auto &idx = edge_it->idx();
-
+                assert(vidx < tn_edges.size());
+                auto &idx = (tn_edges.begin() + vidx)->idx();
                 std::wcout << "Index " << idx.full_label() << " -> partition "
                            << pidx << "\n";
               });
