@@ -7,8 +7,10 @@
 
 #include <SeQuant/core/bliss.hpp>
 #include <SeQuant/core/logger.hpp>
+#include <SeQuant/core/wick_graph.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/vertex_type.hpp>
 
 #ifdef SEQUANT_HAS_EXECUTION_HEADER
 #include <execution>
@@ -536,12 +538,12 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
                 << to_latex(expr_input_) << std::endl;
 
           // construct graph representation of the tensor product
-          TensorNetwork tn(expr_input_->as<Product>().factors());
-          auto [graph, vlabels, vcolors, vtypes] = tn.make_bliss_graph();
+          WickGraph network(expr_input_->as<Product>().factors());
+          auto [graph, vlabels, vcolors, vtypes] = network.make_bliss_graph();
           const auto n = vlabels.size();
           assert(vtypes.size() == n);
-          const auto &tn_edges = tn.edges();
-          const auto &tn_tensors = tn.tensors();
+          const auto &tn_edges = network.edges();
+          const auto &tn_tensors = network.tensors();
 
           if (Logger::get_instance().wick_topology) {
             std::basic_ostringstream<wchar_t> oss;
@@ -579,13 +581,13 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
             // ordinal can be computed by counting
             std::size_t nop_ord = 0;
             for (size_t v = 0; v != n; ++v) {
-              if (vtypes[v] == TensorNetwork::VertexType::TensorCore &&
+              if (vtypes[v] == VertexType::TensorCore &&
                   (std::find(nop_labels_begin, nop_labels_end, vlabels[v]) !=
                    nop_labels_end)) {
                 auto insertion_result = nop_vidx_ord.emplace(v, nop_ord++);
                 assert(insertion_result.second);
               }
-              if (vtypes[v] == TensorNetwork::VertexType::Index &&
+              if (vtypes[v] == VertexType::Index &&
                   !input_.empty()) {
                 auto &idx = (tn_edges.begin() + v)->idx();
                 auto idx_it_in_opseq = ranges::find_if(
@@ -821,7 +823,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
           auto exclude_index_vertex_pair = [&tn_tensors, &tn_edges](size_t v1,
                                                                     size_t v2) {
             // v1 and v2 are vertex indices and also index the edges in the
-            // TensorNetwork
+            // WickGraph
             assert(v1 < tn_edges.size());
             assert(v2 < tn_edges.size());
             const auto &edge1 = *(tn_edges.begin() + v1);

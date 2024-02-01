@@ -232,6 +232,8 @@ set(SeQuant_src
         SeQuant/core/utility/string.cpp
         SeQuant/core/wick.hpp
         SeQuant/core/wick.impl.hpp
+        SeQuant/core/wick_graph.cpp
+        SeQuant/core/wick_graph.hpp
         SeQuant/core/wolfram.hpp
         SeQuant/core/wstring.hpp
         SeQuant/domain/mbpt/antisymmetrizer.hpp
