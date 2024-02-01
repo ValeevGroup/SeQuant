@@ -45,7 +45,7 @@ TEST_CASE("Tensor", "[elements]") {
     REQUIRE(t2.ket_rank() == 1);
     REQUIRE(t2.auxiliary_rank() == 0);
     REQUIRE(t2.rank() == 1);
-    REQUIRE(t2.indices().size() == 2);
+    REQUIRE(t2.const_indices().size() == 2);
     REQUIRE(t2.symmetry() == Symmetry::nonsymm);
     REQUIRE(t2.braket_symmetry() == BraKetSymmetry::conjugate);
     REQUIRE(t2.particle_symmetry() == ParticleSymmetry::symm);
@@ -58,7 +58,7 @@ TEST_CASE("Tensor", "[elements]") {
     REQUIRE(t3.ket_rank() == 0);
     REQUIRE(t3.auxiliary_rank() == 1);
     REQUIRE_THROWS(t3.rank());
-    REQUIRE(t3.indices().size() == 2);
+    REQUIRE(t3.const_indices().size() == 2);
     REQUIRE(t3.symmetry() == Symmetry::nonsymm);
     REQUIRE(t3.braket_symmetry() == BraKetSymmetry::conjugate);
     REQUIRE(t3.particle_symmetry() == ParticleSymmetry::symm);
@@ -77,7 +77,7 @@ TEST_CASE("Tensor", "[elements]") {
     REQUIRE(t4.ket_rank() == 2);
     REQUIRE(t4.auxiliary_rank() == 1);
     REQUIRE(t4.rank() == 2);
-    REQUIRE(t4.indices().size() == 5);
+    REQUIRE(t4.const_indices().size() == 5);
     REQUIRE(t4.symmetry() == Symmetry::nonsymm);
     REQUIRE(t4.braket_symmetry() == BraKetSymmetry::symm);
     REQUIRE(t4.particle_symmetry() == ParticleSymmetry::nonsymm);

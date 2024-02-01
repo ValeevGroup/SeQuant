@@ -6,6 +6,7 @@
 
 #include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/algorithm.hpp>
+#include <SeQuant/core/wick_graph.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/bliss.hpp>
 #include <SeQuant/core/context.hpp>
@@ -45,6 +46,25 @@ std::string to_utf8(const std::wstring& wstr) {
   using convert_type = std::codecvt_utf8<wchar_t>;
   std::wstring_convert<convert_type, wchar_t> converter;
   return converter.to_bytes(wstr);
+}
+
+template <typename Container>
+std::vector<sequant::ExprPtr> to_tensors(const Container& cont) {
+  std::vector<sequant::ExprPtr> tensors;
+
+  std::transform(cont.begin(), cont.end(), std::back_inserter(tensors),
+                 [](const auto& tensor) {
+                   auto casted =
+                       std::dynamic_pointer_cast<sequant::Expr>(tensor);
+                   REQUIRE(casted != nullptr);
+                   return casted;
+                 });
+  return tensors;
+}
+
+template <typename Container>
+sequant::ExprPtr to_product(const Container& container) {
+  return sequant::ex<sequant::Product>(to_tensors(container));
 }
 
 namespace sequant {
@@ -99,8 +119,10 @@ TEST_CASE("TensorNetwork", "[elements]") {
     Vertex v4(Origin::Ket, 1, 3, Symmetry::symm);
     Vertex v5(Origin::Bra, 3, 0, Symmetry::nonsymm);
     Vertex v6(Origin::Bra, 3, 2, Symmetry::nonsymm);
+    Vertex v7(Origin::Ket, 3, 1, Symmetry::nonsymm);
+    Vertex v8(Origin::Ket, 5, 0, Symmetry::symm);
 
-    const Index dummy;
+    const Index dummy(L"a_1");
 
     Edge e1(v1, dummy);
     e1.connect_to(v4);
@@ -111,7 +133,12 @@ TEST_CASE("TensorNetwork", "[elements]") {
     Edge e4(v4, dummy);
     e4.connect_to(v6);
 
-    Edge e5(v4, dummy);
+    Edge e5(v8, dummy);
+    e5.connect_to(v6);
+    Edge e6(v8, dummy);
+    e6.connect_to(v7);
+
+    Edge e7(v4, dummy);
 
     // Due to tensor symmetries, these edges are considered equal
     REQUIRE(e1 == e2);
@@ -128,10 +155,14 @@ TEST_CASE("TensorNetwork", "[elements]") {
     REQUIRE(e3 < e4);
     REQUIRE(!(e4 < e3));
 
+    REQUIRE(!(e5 == e6));
+    REQUIRE(e5 < e6);
+    REQUIRE(!(e6 < e5));
+
     // Unconnected edges always come before fully connected ones
-    REQUIRE(!(e5 == e1));
-    REQUIRE(e5 < e1);
-    REQUIRE(!(e1 < e5));
+    REQUIRE(!(e7 == e1));
+    REQUIRE(e7 < e1);
+    REQUIRE(!(e1 < e7));
   }
 
   SECTION("constructors") {
@@ -187,11 +218,6 @@ TEST_CASE("TensorNetwork", "[elements]") {
       REQUIRE(std::dynamic_pointer_cast<Expr>(tensors[1]));
       REQUIRE(*std::dynamic_pointer_cast<Expr>(tensors[0]) == *t1);
       REQUIRE(*std::dynamic_pointer_cast<Expr>(tensors[1]) == *t2);
-
-      // index replacements performed by canonicalize() ... since canonicalize()
-      // not invoked this is empty
-      auto idxrepl = tn.idxrepl();
-      REQUIRE(idxrepl.size() == 0);
     }
   }  // SECTION("accessors")
 
@@ -215,10 +241,9 @@ TEST_CASE("TensorNetwork", "[elements]") {
       //        to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) <<
       //        std::endl;
       REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) ==
-              L"{F^{{i_1}}_{{i_2}}}");
+              L"{F^{{i_2}}_{{i_1}}}");
       REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) ==
-              L"{\\tilde{a}^{{i_2}}_{{i_1}}}");
-      REQUIRE(tn.idxrepl().size() == 2);
+              L"{\\tilde{a}^{{i_1}}_{{i_2}}}");
     }
 
     SECTION("with externals") {
@@ -255,7 +280,6 @@ TEST_CASE("TensorNetwork", "[elements]") {
 
         using named_indices_t = TensorNetwork::named_indices_t;
         named_indices_t indices{Index{L"i_17"}};
-        std::wcout << "Canonicalize " << to_latex(t1_x_t2) << std::endl;
         tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false,
                         &indices);
 
@@ -274,6 +298,115 @@ TEST_CASE("TensorNetwork", "[elements]") {
       }
     }
 
+    SECTION("particle non-conserving") {
+      const auto input1 = parse_expr(L"P{;a1,a3}");
+      const auto input2 = parse_expr(L"P{a1,a3;}");
+      const std::wstring expected1 = L"{{P^{{a_1}{a_3}}_{}}}";
+      const std::wstring expected2 = L"{{P^{}_{{a_1}{a_3}}}}";
+
+      for (int variant : {1, 2}) {
+        for (bool fast : {true, false}) {
+          TensorNetwork tn(
+              std::vector<ExprPtr>{variant == 1 ? input1 : input2});
+          tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), fast);
+          REQUIRE(tn.tensors().size() == 1);
+          auto result = ex<Product>(to_tensors(tn.tensors()));
+          REQUIRE(to_latex(result) == (variant == 1 ? expected1 : expected2));
+        }
+      }
+    }
+
+    SECTION("non-symmetric") {
+      const auto input =
+          parse_expr(L"A{i7,i3;i9,i12}:A I1{i7,i3;;x5}:N I2{;i9,i12;x5}:N")
+              .as<Product>()
+              .factors();
+      const std::wstring expected =
+          L"A{i_1,i_2;i_3,i_4}:A * I1{i_1,i_2;;x_1}:N * I2{;i_3,i_4;x_1}:N";
+
+      for (bool fast : {true, false}) {
+        TensorNetwork tn(input);
+        tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), fast);
+        const auto result = ex<Product>(to_tensors(tn.tensors()));
+        REQUIRE(deparse_expr(result) == expected);
+      }
+    }
+
+    SECTION("particle-1,2-symmetry") {
+      const std::vector<std::pair<std::wstring, std::wstring>> pairs = {
+          {L"S{i_1,i_2,i_3;a_1,a_2,a_3}:N * f{i_4;i_2}:N * "
+           L"t{a_1,a_2,a_3;i_4,i_3,i_1}:N",
+           L"S{i_1,i_2,i_3;a_1,a_2,a_3}:N * f{i_4;i_1}:N * "
+           L"t{a_1,a_2,a_3;i_2,i_3,i_4}:N"},
+          {L"Γ{u_2,u_4;u_1,u_3}:N * g{i_1,u_1;u_2,A_1}:N * "
+           L"t{u_3,A_1;u_4,i_1}:N",
+           L"Γ{u_2,u_4;u_1,u_3}:N * g{i_1,u_3;u_4,A_1}:N * "
+           L"t{u_1,A_1;u_2,i_1}:N"}};
+      for (const auto& pair : pairs) {
+        const auto first = parse_expr(pair.first).as<Product>().factors();
+        const auto second = parse_expr(pair.second).as<Product>().factors();
+
+        TensorNetworkAccessor accessor;
+        auto [first_graph, first_labels] =
+            accessor.get_canonical_bliss_graph(TensorNetwork(first));
+        auto [second_graph, second_labels] =
+            accessor.get_canonical_bliss_graph(TensorNetwork(second));
+        if (first_graph->cmp(*second_graph) != 0) {
+          std::wstringstream stream;
+          stream << "First graph:\n";
+          first_graph->write_dot(stream, first_labels, true);
+          stream << "Second graph:\n";
+          second_graph->write_dot(stream, second_labels, true);
+          stream << "Wick graph:\n";
+          auto [wick_graph, labels, d1, d2] =
+              WickGraph(first).make_bliss_graph();
+          wick_graph->write_dot(stream, labels, true);
+
+          FAIL(to_utf8(stream.str()));
+        }
+
+        TensorNetwork tn1(first);
+        TensorNetwork tn2(second);
+
+        tn1.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false);
+        tn2.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false);
+
+        REQUIRE(tn1.tensors().size() == tn2.tensors().size());
+        for (std::size_t i = 0; i < tn1.tensors().size(); ++i) {
+          auto t1 = std::dynamic_pointer_cast<Expr>(tn1.tensors()[i]);
+          auto t2 = std::dynamic_pointer_cast<Expr>(tn2.tensors()[i]);
+          REQUIRE(t1);
+          REQUIRE(t2);
+          REQUIRE(to_latex(t1) == to_latex(t2));
+        }
+      }
+    }
+
+    SECTION("miscellaneous") {
+      const std::vector<std::pair<std::wstring, std::wstring>> inputs = {
+		  {L"g{i_1,a_1;i_2,i_3}:A * I{i_2,i_3;i_1,a_1}:A", L"g{i_1,a_1;i_2,i_3}:A * I{i_2,i_3;i_1,a_1}:A"},
+		  {L"g{a_1,i_1;i_2,i_3}:A * I{i_2,i_3;i_1,a_1}:A", L"-1 g{i_1,a_1;i_2,i_3}:A * I{i_2,i_3;i_1,a_1}:A"},
+
+		  {L"g{i_1,a_1;i_2,i_3}:N * I{i_2,i_3;i_1,a_1}:N", L"g{i_1,a_1;i_2,i_3}:N * I{i_2,i_3;i_1,a_1}:N"},
+		  {L"g{a_1,i_1;i_2,i_3}:N * I{i_2,i_3;i_1,a_1}:N", L"g{i_1,a_1;i_2,i_3}:N * I{i_3,i_2;i_1,a_1}:N"},
+	  };
+
+      for (const auto& [input, expected] : inputs) {
+        const auto input_tensors = parse_expr(input).as<Product>().factors();
+
+        TensorNetwork tn(input_tensors);
+        ExprPtr factor = tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), true);
+
+		ExprPtr prod = to_product(tn.tensors());
+		if (factor) {
+			prod = ex<Product>(prod.as<Product>().scale(factor.as<Constant>().value()));
+		}
+
+		REQUIRE(deparse_expr(prod) == expected);
+      }
+    }
+
+#ifndef SEQUANT_SKIP_LONG_TESTS
     SECTION("Exhaustive SRCC example") {
       // Note: the exact canonical form written here is implementation-defined
       // and doesn't actually matter What does, is that all equivalent ways of
@@ -402,212 +535,45 @@ TEST_CASE("TensorNetwork", "[elements]") {
         } while (std::next_permutation(indices.begin(), indices.begin() + 4));
       } while (std::next_permutation(factors.begin(), factors.end()));
 
-	  // 4! (tensors) * 4! (internal indices) * 4! (external indices)
-	  REQUIRE(total_variations == 24 * 24 * 24);
+      // 4! (tensors) * 4! (internal indices) * 4! (external indices)
+      REQUIRE(total_variations == 24 * 24 * 24);
     }
-  }  // SECTION("canonicalizer")
+#endif
 
-  SECTION("bliss graph") {
-    Index::reset_tmp_index();
-    // to generate expressions in specified (i.e., platform-independent) manner
-    // can't use operator expression (due to unspecified order of evaluation of
-    // function arguments), must use initializer list
-    auto tmp = ex<Product, std::initializer_list<ExprPtr>>(
-        {A(-2), H_(2), T_(2), T_(2), T_(2)});
-    // canonicalize to avoid dependence on the implementation details of
-    // mbpt::sr::make_op
-    std::wcout << "Here it comes" << std::endl;
-    canonicalize(tmp);
-    std::wcout << "That was it" << std::endl;
-    // std::wcout << "A2*H2*T2*T2*T2 = " << to_latex(tmp) << std::endl;
-    TensorNetwork tn(tmp->as<Product>().factors());
-
-    std::wcout << "As equation: "
-               << to_latex(canonicalize(ex<Sum>(ExprPtrList{tmp})))
-               << std::endl;
-
-    // make graph
-    REQUIRE_NOTHROW(tn.create_graph());
-    TensorNetwork::Graph graph = tn.create_graph();
-
-    // create dot
-    std::basic_ostringstream<wchar_t> oss;
-    REQUIRE_NOTHROW(graph.bliss_graph->write_dot(oss, graph.vertex_labels));
-    std::wcout << ">>>>>>>>>>>>>>>> This one" << std::endl;
-    std::wcout << "oss.str() = " << std::endl << oss.str() << std::endl;
-    std::wcout << "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<" << std::endl;
-    REQUIRE(oss.str() ==
-  		  L"graph g {\n"
-  		  "v0 [label=\"{a_1}\"; color=\"#9e3,ba0\"];\n"
-  		  "v0 -- v29\n"
-  		  "v0 -- v58\n"
-  		  "v1 [label=\"{a_2}\"; color=\"#9e3,ba0\"];\n"
-  		  "v1 -- v29\n"
-  		  "v1 -- v58\n"
-  		  "v2 [label=\"{a_3}\"; color=\"#9e3,ba0\"];\n"
-  		  "v2 -- v33\n"
-  		  "v2 -- v54\n"
-  		  "v3 [label=\"{a_4}\"; color=\"#9e3,ba0\"];\n"
-  		  "v3 -- v33\n"
-  		  "v3 -- v54\n"
-  		  "v4 [label=\"{a_5}\"; color=\"#9e3,ba0\"];\n"
-  		  "v4 -- v37\n"
-  		  "v4 -- v50\n"
-  		  "v5 [label=\"{a_6}\"; color=\"#9e3,ba0\"];\n"
-  		  "v5 -- v37\n"
-  		  "v5 -- v50\n"
-  		  "v6 [label=\"{a_7}\"; color=\"#9e3,ba0\"];\n"
-  		  "v6 -- v22\n"
-  		  "v6 -- v41\n"
-  		  "v7 [label=\"{a_8}\"; color=\"#9e3,ba0\"];\n"
-  		  "v7 -- v22\n"
-  		  "v7 -- v41\n"
-  		  "v8 [label=\"{i_1}\"; color=\"#a78,ee8\"];\n"
-  		  "v8 -- v30\n"
-  		  "v8 -- v57\n"
-  		  "v9 [label=\"{i_2}\"; color=\"#a78,ee8\"];\n"
-  		  "v9 -- v30\n"
-  		  "v9 -- v57\n"
-  		  "v10 [label=\"{i_3}\"; color=\"#a78,ee8\"];\n"
-  		  "v10 -- v34\n"
-  		  "v10 -- v53\n"
-  		  "v11 [label=\"{i_4}\"; color=\"#a78,ee8\"];\n"
-  		  "v11 -- v34\n"
-  		  "v11 -- v53\n"
-  		  "v12 [label=\"{i_5}\"; color=\"#a78,ee8\"];\n"
-  		  "v12 -- v38\n"
-  		  "v12 -- v49\n"
-  		  "v13 [label=\"{i_6}\"; color=\"#a78,ee8\"];\n"
-  		  "v13 -- v38\n"
-  		  "v13 -- v49\n"
-  		  "v14 [label=\"{i_7}\"; color=\"#a78,ee8\"];\n"
-  		  "v14 -- v21\n"
-  		  "v14 -- v42\n"
-  		  "v15 [label=\"{i_8}\"; color=\"#a78,ee8\"];\n"
-  		  "v15 -- v21\n"
-  		  "v15 -- v42\n"
-  		  "v16 [label=\"{\\kappa_1}\"; color=\"#703,062\"];\n"
-  		  "v16 -- v25\n"
-  		  "v16 -- v46\n"
-  		  "v17 [label=\"{\\kappa_2}\"; color=\"#703,062\"];\n"
-  		  "v17 -- v25\n"
-  		  "v17 -- v46\n"
-  		  "v18 [label=\"{\\kappa_3}\"; color=\"#703,062\"];\n"
-  		  "v18 -- v26\n"
-  		  "v18 -- v45\n"
-  		  "v19 [label=\"{\\kappa_4}\"; color=\"#703,062\"];\n"
-  		  "v19 -- v26\n"
-  		  "v19 -- v45\n"
-  		  "v20 [label=\"A\"; color=\"#2ef,7ff\"];\n"
-  		  "v20 -- v23\n"
-  		  "v21 [label=\"bra2a\"; color=\"#eaa,2ab\"];\n"
-  		  "v21 -- v23\n"
-  		  "v22 [label=\"ket2a\"; color=\"#5a8,fd3\"];\n"
-  		  "v22 -- v23\n"
-  		  "v23 [label=\"bka\"; color=\"#2ef,7ff\"];\n"
-  		  "v24 [label=\"g\"; color=\"#96c,060\"];\n"
-  		  "v24 -- v27\n"
-  		  "v25 [label=\"bra2a\"; color=\"#eaa,2ab\"];\n"
-  		  "v25 -- v27\n"
-  		  "v26 [label=\"ket2a\"; color=\"#5a8,fd3\"];\n"
-  		  "v26 -- v27\n"
-  		  "v27 [label=\"bka\"; color=\"#96c,060\"];\n"
-  		  "v28 [label=\"t\"; color=\"#0f,016\"];\n"
-  		  "v28 -- v31\n"
-  		  "v29 [label=\"bra2a\"; color=\"#eaa,2ab\"];\n"
-  		  "v29 -- v31\n"
-  		  "v30 [label=\"ket2a\"; color=\"#5a8,fd3\"];\n"
-  		  "v30 -- v31\n"
-  		  "v31 [label=\"bka\"; color=\"#0f,016\"];\n"
-  		  "v32 [label=\"t\"; color=\"#0f,016\"];\n"
-  		  "v32 -- v35\n"
-  		  "v33 [label=\"bra2a\"; color=\"#eaa,2ab\"];\n"
-  		  "v33 -- v35\n"
-  		  "v34 [label=\"ket2a\"; color=\"#5a8,fd3\"];\n"
-  		  "v34 -- v35\n"
-  		  "v35 [label=\"bka\"; color=\"#0f,016\"];\n"
-  		  "v36 [label=\"t\"; color=\"#0f,016\"];\n"
-  		  "v36 -- v39\n"
-  		  "v37 [label=\"bra2a\"; color=\"#eaa,2ab\"];\n"
-  		  "v37 -- v39\n"
-  		  "v38 [label=\"ket2a\"; color=\"#5a8,fd3\"];\n"
-  		  "v38 -- v39\n"
-  		  "v39 [label=\"bka\"; color=\"#0f,016\"];\n"
-  		  "v40 [label=\"ã\"; color=\"#116,f93\"];\n"
-  		  "v40 -- v43\n"
-  		  "v41 [label=\"bra2a\"; color=\"#eaa,2ab\"];\n"
-  		  "v41 -- v43\n"
-  		  "v42 [label=\"ket2a\"; color=\"#5a8,fd3\"];\n"
-  		  "v42 -- v43\n"
-  		  "v43 [label=\"bka\"; color=\"#116,f93\"];\n"
-  		  "v44 [label=\"ã\"; color=\"#116,f93\"];\n"
-  		  "v44 -- v47\n"
-  		  "v45 [label=\"bra2a\"; color=\"#eaa,2ab\"];\n"
-  		  "v45 -- v47\n"
-  		  "v46 [label=\"ket2a\"; color=\"#5a8,fd3\"];\n"
-  		  "v46 -- v47\n"
-  		  "v47 [label=\"bka\"; color=\"#116,f93\"];\n"
-  		  "v48 [label=\"ã\"; color=\"#116,f93\"];\n"
-  		  "v48 -- v51\n"
-  		  "v49 [label=\"bra2a\"; color=\"#eaa,2ab\"];\n"
-  		  "v49 -- v51\n"
-  		  "v50 [label=\"ket2a\"; color=\"#5a8,fd3\"];\n"
-  		  "v50 -- v51\n"
-  		  "v51 [label=\"bka\"; color=\"#116,f93\"];\n"
-  		  "v52 [label=\"ã\"; color=\"#116,f93\"];\n"
-  		  "v52 -- v55\n"
-  		  "v53 [label=\"bra2a\"; color=\"#eaa,2ab\"];\n"
-  		  "v53 -- v55\n"
-  		  "v54 [label=\"ket2a\"; color=\"#5a8,fd3\"];\n"
-  		  "v54 -- v55\n"
-  		  "v55 [label=\"bka\"; color=\"#116,f93\"];\n"
-  		  "v56 [label=\"ã\"; color=\"#116,f93\"];\n"
-  		  "v56 -- v59\n"
-  		  "v57 [label=\"bra2a\"; color=\"#eaa,2ab\"];\n"
-  		  "v57 -- v59\n"
-  		  "v58 [label=\"ket2a\"; color=\"#5a8,fd3\"];\n"
-  		  "v58 -- v59\n"
-  		  "v59 [label=\"bka\"; color=\"#116,f93\"];\n"
-  		  "}\n");
-
-    // compute automorphism group
-    {
-      bliss::Stats stats;
-      graph.bliss_graph->set_splitting_heuristic(bliss::Graph::shs_fsm);
-
-      std::vector<std::vector<unsigned int>> aut_generators;
-      auto save_aut = [&aut_generators](const unsigned int n,
-                                        const unsigned int* aut) {
-        aut_generators.emplace_back(aut, aut + n);
+    SECTION("idempotency") {
+      const std::vector<std::wstring> inputs = {
+          L"F{i1;i8} g{i8,i9;i1,i7}",
+          L"A{i7,i3;i9,i12}:A I1{i7,i3;;x5}:N I2{;i9,i12;x5}:N",
+          L"f{i4;i1}:N t{a1,a2,a3;i2,i3,i4}:N S{i1,i2,i3;a1,a2,a3}:N",
+          L"P{a1,a3;} k{i8;i2}",
+          L"L{x6;;x2} P{;a1,a3}",
       };
-      graph.bliss_graph->find_automorphisms(
-          stats, &bliss::aut_hook<decltype(save_aut)>, &save_aut);
-      std::basic_ostringstream<wchar_t> oss;
-      bliss::print_auts(aut_generators, oss, decltype(graph.vertex_labels){});
-      REQUIRE(oss.str() ==
-              L"(18,19)\n"
-              "(16,17)\n"
-              "(6,7)\n"
-              "(14,15)\n"
-              "(0,1)\n"
-              "(8,9)\n"
-              "(2,3)\n"
-              "(4,5)\n"
-              "(10,11)\n"
-              "(12,13)\n"
-              "(2,4)(3,5)(10,12)(11,13)(32,36)(33,37)(34,38)(35,39)(48,52)(49,"
-              "53)(50,54)(51,55)\n"
-              "(0,2)(1,3)(8,10)(9,11)(28,32)(29,33)(30,34)(31,35)(52,56)(53,57)"
-              "(54,58)(55,59)\n");
-      // change to 1 to user vertex labels rather than indices
-      if (0) {
-        std::basic_ostringstream<wchar_t> oss2;
-        bliss::print_auts(aut_generators, oss2, graph.vertex_labels);
-        std::wcout << oss2.str() << std::endl;
+
+      for (const std::wstring& current : inputs) {
+        auto factors1 = parse_expr(current).as<Product>().factors();
+        auto factors2 = parse_expr(current).as<Product>().factors();
+
+        TensorNetwork reference_tn(factors1);
+        reference_tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
+                                  false);
+
+        TensorNetwork check_tn(factors2);
+        check_tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
+                              false);
+
+        REQUIRE(to_latex(to_product(reference_tn.tensors())) ==
+                to_latex(to_product(check_tn.tensors())));
+
+        for (bool fast : {true, false, true, true, false, false, true}) {
+          reference_tn.canonicalize(
+              TensorCanonicalizer::cardinal_tensor_labels(), fast);
+
+          REQUIRE(to_latex(to_product(reference_tn.tensors())) ==
+                  to_latex(to_product(check_tn.tensors())));
+        }
       }
     }
-
-  }  // SECTION("bliss graph")
+  }  // SECTION("canonicalizer")
 
   SECTION("misc1") {
     if (false) {

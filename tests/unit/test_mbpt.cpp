@@ -2,14 +2,6 @@
 // Created by Eduard Valeyev on 2019-02-19.
 //
 
-#include <SeQuant/core/op.hpp>
-#include <SeQuant/core/tensor.hpp>
-#include <SeQuant/core/timer.hpp>
-#include <SeQuant/domain/mbpt/context.hpp>
-#include <SeQuant/domain/mbpt/mr.hpp>
-#include <SeQuant/domain/mbpt/op.hpp>
-#include <SeQuant/domain/mbpt/spin.hpp>
-#include <SeQuant/domain/mbpt/sr.hpp>
 #include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/attr.hpp>
@@ -17,7 +9,16 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/op.hpp>
+#include <SeQuant/core/parse_expr.hpp>
+#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/timer.hpp>
+#include <SeQuant/domain/mbpt/context.hpp>
+#include <SeQuant/domain/mbpt/mr.hpp>
+#include <SeQuant/domain/mbpt/op.hpp>
+#include <SeQuant/domain/mbpt/spin.hpp>
+#include <SeQuant/domain/mbpt/sr.hpp>
 
 #include "catch.hpp"
 #include "test_config.hpp"
@@ -623,7 +624,9 @@ TEST_CASE("MBPT", "[mbpt]") {
         auto result_op = op::vac_av(op::H_(2) * op::T_(2));
 
         REQUIRE(result_op->size() == result->size());
-        REQUIRE(simplify(result - result_op) == ex<Constant>(0));
+		auto diff = simplify(result - result_op);
+		std::wcout << "Diff: " <<  deparse_expr(diff) << std::endl;
+        REQUIRE(diff == ex<Constant>(0));
       }
     });
 

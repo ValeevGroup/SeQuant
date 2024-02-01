@@ -9,9 +9,11 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/vertex_type.hpp>
 
 #include <cassert>
 #include <cstdlib>
+#include <iosfwd>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -19,10 +21,6 @@
 #include <tuple>
 #include <utility>
 #include <vector>
-
-#include <cassert>
-#include <iosfwd>
-#include <memory>
 
 // forward declarations
 namespace bliss {
@@ -116,7 +114,11 @@ class TensorNetwork {
         return first < other.first;
       }
 
-      return second < other.second;
+      if(second < other.second) {
+		  return second < other.second;
+	  }
+
+	  return index.space() < other.index.space();
     }
 
     bool operator==(const Edge &other) const {
@@ -137,15 +139,6 @@ class TensorNetwork {
     std::optional<Vertex> first;
     std::optional<Vertex> second;
     Index index;
-  };
-
-  enum class VertexType {
-    Index,
-    SPBundle,
-    TensorBra,
-    TensorKet,
-    TensorAux,
-    TensorCore
   };
 
   struct Graph {
@@ -221,19 +214,10 @@ class TensorNetwork {
 
   /// @brief Returns a range of external indices, i.e. those indices that do not
   /// connect tensors
-
-  /// @note The external indices are sorted by *label* (not full label) of the
-  /// corresponding value (Index)
   const auto &ext_indices() const {
     assert(have_edges_);
     return ext_indices_;
   }
-
-  /// accessor for the list of anonymous index replacements performed by the
-  /// last call to canonicalize()
-  /// @return replacements of anonymous indices performed by the last call to
-  /// canonicalize()
-  const auto &idxrepl() const { return idxrepl_; };
 
   /// @brief converts the network into a Bliss graph whose vertices are indices
   /// and tensor vertex representations
@@ -264,31 +248,13 @@ class TensorNetwork {
   // source tensors and indices
   container::svector<AbstractTensorPtr> tensors_;
 
-  struct FullLabelCompare {
-    using is_transparent = void;
-    bool operator()(const Edge &first, const Edge &second) const {
-      return first.idx().full_label() < second.idx().full_label();
-    }
-    bool operator()(const Edge &first, const std::wstring_view &second) const {
-      return first.idx().full_label() < second;
-    }
-    bool operator()(const std::wstring_view &first, const Edge &second) const {
-      return first < second.idx().full_label();
-    }
-  };
-  // Index -> Edge, sorted by full label
-  container::set<Edge, FullLabelCompare> edges_;
-  // set to true by init_edges();
+  container::vector<Edge> edges_;
   bool have_edges_ = false;
   // ext indices do not connect tensors
   // sorted by *label* (not full label) of the corresponding value (Index)
   // this ensures that proto indices are not considered and all internal indices
   // have unique labels (not full labels)
   named_indices_t ext_indices_;
-
-  // replacements of anonymous indices produced by the last call to
-  // canonicalize()
-  container::map<Index, Index> idxrepl_;
 
   /// initializes edges_ and ext_indices_
   void init_edges();

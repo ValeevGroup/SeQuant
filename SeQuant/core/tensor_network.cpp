@@ -21,10 +21,11 @@
 #include <algorithm>
 #include <iostream>
 #include <iterator>
-#include <sstream>
-#include <type_traits>
-#include <numeric>
 #include <limits>
+#include <numeric>
+#include <sstream>
+#include <string>
+#include <type_traits>
 
 #include <range/v3/algorithm/for_each.hpp>
 #include <range/v3/algorithm/none_of.hpp>
@@ -34,6 +35,17 @@
 #include <range/v3/view/view.hpp>
 
 namespace sequant {
+
+struct FullLabelIndexLocator {
+  std::wstring_view label;
+  FullLabelIndexLocator(std::wstring_view label) : label(std::move(label)) {}
+
+  bool operator()(const TensorNetwork::Edge &edge) const {
+    return edge.idx().full_label() == label;
+  }
+
+  bool operator()(const Index &idx) const { return idx.full_label() == label; }
+};
 
 bool tensors_commute(const AbstractTensor &lhs, const AbstractTensor &rhs) {
   // tensors commute if their colors are different or either one of them
@@ -75,14 +87,19 @@ struct TensorBlockCompare {
 
 /// Compares tensors based on their label and orders them according to the order
 /// of the given cardinal tensor labels. If two tensors can't be discriminated
-/// via their label, they are compared based on their tensor block (the spaces
-/// of their indices). If this doesn't discriminate the tensors, they are
-/// considered equal (note: explicit indexing is NOT compared)
+/// via their label, they are compared based on regular
+/// AbstractTensor::operator< or based on their tensor block (the spaces of
+/// their indices) - depending on the configuration. If this doesn't
+/// discriminate the tensors, they are considered equal
 template <typename CardinalLabels>
 struct CanonicalTensorCompare {
   const CardinalLabels &labels;
+  bool blocks_only;
 
-  CanonicalTensorCompare(const CardinalLabels &labels) : labels(labels) {}
+  CanonicalTensorCompare(const CardinalLabels &labels, bool blocks_only)
+      : labels(labels), blocks_only(blocks_only) {}
+
+  void set_blocks_only(bool blocks_only) { this->blocks_only = blocks_only; }
 
   bool operator()(const AbstractTensorPtr &lhs_ptr,
                   const AbstractTensorPtr &rhs_ptr) const {
@@ -114,9 +131,12 @@ struct CanonicalTensorCompare {
     }
 
     // Either both are the same cardinal tensor or none is a cardinal tensor
-    // -> Discriminate via tensor block comparison
-    TensorBlockCompare cmp;
-    return cmp(lhs, rhs);
+    if (blocks_only) {
+      TensorBlockCompare cmp;
+      return cmp(lhs, rhs);
+    } else {
+      return lhs < rhs;
+    }
   }
 };
 
@@ -149,14 +169,16 @@ bool TensorNetwork::Vertex::operator<(const Vertex &rhs) const {
   // Both vertices belong to same tensor -> they must have same symmetry
   assert(terminal_symm == rhs.terminal_symm);
 
-  // We only take the index slot into account for non-symmetric tensors
-  if (terminal_symm == Symmetry::nonsymm && index_slot != rhs.index_slot) {
-    return index_slot < rhs.index_slot;
+  if (origin != rhs.origin) {
+    return origin < rhs.origin;
   }
 
-  // Note: The ordering of index groups must be consistent with the canonical
-  // (Abstract)Tensor::operator<
-  return origin < rhs.origin;
+  // We only take the index slot into account for non-symmetric tensors
+  if (terminal_symm == Symmetry::nonsymm) {
+    return index_slot < rhs.index_slot;
+  } else {
+    return false;
+  }
 }
 
 bool TensorNetwork::Vertex::operator==(const Vertex &rhs) const {
@@ -214,33 +236,79 @@ auto permute(const ArrayLike &vector, const Permutation &perm) {
   return pvector;
 }
 
-template <typename ArrayLike, typename ReplacementMap>
-void apply_index_replacements(ArrayLike &tensors,
+template <typename ReplacementMap>
+void apply_index_replacements(AbstractTensor &tensor,
                               const ReplacementMap &replacements) {
 #ifndef NDEBUG
   // assert that tensors' indices are not tagged since going to tag indices
-  {
-    for (const auto &tensor : tensors) {
-      assert(ranges::none_of(braket(*tensor), [](const Index &idx) {
-        return idx.tag().has_value();
-      }));
-    }
-  }
+  assert(ranges::none_of(
+      indices(tensor), [](const Index &idx) { return idx.tag().has_value(); }));
 #endif
 
-  bool pass_mutated = false;
+  bool pass_mutated;
   do {
-    pass_mutated = false;
-    for (auto &tensor : tensors) {
-      pass_mutated |= transform_indices(*tensor, replacements);
-    }
+    pass_mutated = transform_indices(tensor, replacements);
   } while (pass_mutated);  // transform till stops changing
 
-  // untag transformed indices (if any)
-  {
-    for (auto &tensor : tensors) {
-      reset_tags(*tensor);
+  reset_tags(tensor);
+}
+
+template <typename ArrayLike, typename ReplacementMap>
+void apply_index_replacements(ArrayLike &tensors,
+                              const ReplacementMap &replacements) {
+  for (auto &tensor : tensors) {
+    apply_index_replacements(*tensor, replacements);
+  }
+}
+
+template <typename Container>
+void order_to_indices(Container &container) {
+  std::vector<std::size_t> indices;
+  indices.resize(container.size());
+  std::iota(indices.begin(), indices.end(), 0);
+
+  std::sort(indices.begin(), indices.end(),
+            [&container](std::size_t lhs, std::size_t rhs) {
+              return container[lhs] < container[rhs];
+            });
+  // Overwrite container contents with indices
+  std::copy(indices.begin(), indices.end(), container.begin());
+}
+
+template <bool stable, typename Container, typename Comparator>
+void sort_via_indices(Container &container, const Comparator &cmp) {
+  std::vector<std::size_t> indices;
+  indices.resize(container.size());
+  std::iota(indices.begin(), indices.end(), 0);
+
+  if constexpr (stable) {
+    std::stable_sort(indices.begin(), indices.end(), cmp);
+  } else {
+    std::sort(indices.begin(), indices.end(), cmp);
+  }
+
+  // Bring elements in container into the order given by indices
+  // (the association is container[k] = container[indices[k]])
+  // -> implementation from https://stackoverflow.com/a/838789
+
+  for (std::size_t i = 0; i < container.size(); ++i) {
+    if (indices[i] == i) {
+      // This element is already where it is supposed to be
+      continue;
     }
+
+    // Find the offset of the index pointing to i
+    // -> since we are going to change the content of the vector at position i,
+    // we have to update the index-mapping referencing i to point to the new
+    // location of the element that used to be at position i
+    std::size_t k;
+    for (k = i + 1; k < container.size(); ++k) {
+      if (indices[k] == i) {
+        break;
+      }
+    }
+    std::swap(container[i], container[indices[i]]);
+    std::swap(indices[i], indices[k]);
   }
 }
 
@@ -257,36 +325,13 @@ void TensorNetwork::canonicalize_graph(const named_indices_t &named_indices) {
   if (!have_edges_) {
     init_edges();
   }
-  // - canonize indices
-  // - canonize tensors using canonical list of indices
-  // Algorithm sketch:
-  // - to canonize indices make a graph whose vertices are the indices as
-  // well as the tensors and their terminals.
-  //   - Indices with protoindices are connected to their protoindices,
-  //   either directly or (if protoindices are symmetric) via a protoindex
-  //   vertex.
-  //   - Indices are colored by their space, which in general encodes also
-  //   the space of the protoindices.
-  //   - An anti/symmetric n-body tensor has 2 terminals, each connected to
-  //   each other + to n index vertices.
-  //   - A nonsymmetric n-body tensor has n terminals, each connected to 2
-  //   indices and 1 tensor vertex which is connected to all n terminal
-  //   indices.
-  //   - tensor vertices are colored by the label+rank+symmetry of the
-  //   tensor; terminal vertices are colored by the color of its tensor,
-  //     with the color of symm/antisymm terminals augmented by the
-  //     terminal's type (bra/ket).
-  // - canonize the graph
 
-  auto is_anonymous_index = [named_indices](const Index &idx) {
+  const auto is_anonymous_index = [named_indices](const Index &idx) {
     return named_indices.find(idx) == named_indices.end();
   };
 
   // index factory to generate anonymous indices
   IndexFactory idxfac(is_anonymous_index, 1);
-
-  // Clear any potential prior replacements
-  idxrepl_.clear();
 
   // make the graph
   Graph graph = create_graph(&named_indices);
@@ -301,123 +346,130 @@ void TensorNetwork::canonicalize_graph(const named_indices_t &named_indices) {
   // canonize the graph
   bliss::Stats stats;
   graph.bliss_graph->set_splitting_heuristic(bliss::Graph::shs_fsm);
-  const unsigned int *cl =
+  const unsigned int *canonize_perm =
       graph.bliss_graph->canonical_form(stats, nullptr, nullptr);
 
   if (Logger::get_instance().canonicalize_dot) {
     std::wcout << "Canonicalization permutation:\n";
     for (std::size_t i = 0; i < graph.vertex_labels.size(); ++i) {
-      std::wcout << i << " -> " << cl[i] << "\n";
+      std::wcout << i << " -> " << canonize_perm[i] << "\n";
     }
     std::wcout << "Canonicalized graph:\n";
-    bliss::Graph *cgraph = graph.bliss_graph->permute(cl);
+    bliss::Graph *cgraph = graph.bliss_graph->permute(canonize_perm);
     cgraph->write_dot(std::wcout, {}, true);
-    auto cvlabels = permute(graph.vertex_labels, cl);
+    auto cvlabels = permute(graph.vertex_labels, canonize_perm);
     std::wcout << "with our labels:\n";
     cgraph->write_dot(std::wcout, cvlabels);
     delete cgraph;
   }
 
-  // make anonymous index replacement list
-  {
-    // for each color make a replacement list for bringing the indices to
-    // the canonical order
-    container::set<size_t> colors;
-    // maps color to the ordinals of the corresponding indices in edges_ and
-    // their canonical ordinals collect colors and anonymous indices sorted by
-    // colors
-    container::multimap<size_t, std::pair<size_t, size_t>> color2idx;
+  container::map<std::size_t, std::size_t> tensor_idx_to_vertex;
+  container::map<std::size_t, container::svector<std::size_t, 3>>
+      tensor_idx_to_particle_order;
+  container::map<std::size_t, std::size_t> index_idx_to_vertex;
+  std::size_t tensor_idx = 0;
+  std::size_t index_idx = 0;
 
-    std::size_t idx_cnt = 0;
-    auto edge_it = edges_.begin();
-    for (std::size_t vertex = 0; vertex < graph.vertex_types.size(); ++vertex) {
-      if (graph.vertex_types[vertex] != VertexType::Index) {
+  for (std::size_t vertex = 0; vertex < graph.vertex_types.size(); ++vertex) {
+    switch (graph.vertex_types[vertex]) {
+      case VertexType::Index:
+        index_idx_to_vertex[index_idx] = vertex;
+        index_idx++;
+        break;
+      case VertexType::TensorBraKet: {
+        assert(tensor_idx > 0);
+        const std::size_t base_tensor_idx = tensor_idx - 1;
+        assert(symmetry(*tensors_.at(base_tensor_idx)) == Symmetry::nonsymm);
+        tensor_idx_to_particle_order[base_tensor_idx].push_back(
+            canonize_perm[vertex]);
+        break;
+      }
+      case VertexType::TensorCore:
+        tensor_idx_to_vertex[tensor_idx] = vertex;
+        tensor_idx++;
+        break;
+      case VertexType::TensorBra:
+      case VertexType::TensorKet:
+      case VertexType::TensorAux:
+      case VertexType::SPBundle:
+        break;
+    }
+  }
+
+  assert(index_idx_to_vertex.size() == edges_.size());
+  assert(tensor_idx_to_vertex.size() == tensors_.size());
+  assert(tensor_idx_to_particle_order.size() <= tensors_.size());
+
+  // order_to_indices(index_order);
+  for (auto &current : tensor_idx_to_particle_order) {
+    order_to_indices(current.second);
+  }
+
+  container::map<Index, Index> idxrepl;
+  // Sort edges so that their order corresponds to the order of indices in the
+  // canonical graph
+  // Use this ordering to relabel anonymous indices
+  const auto index_sorter = [&index_idx_to_vertex, &canonize_perm](
+                                std::size_t lhs_idx, std::size_t rhs_idx) {
+    const std::size_t lhs_vertex = index_idx_to_vertex.at(lhs_idx);
+    const std::size_t rhs_vertex = index_idx_to_vertex.at(rhs_idx);
+
+    return canonize_perm[lhs_vertex] < canonize_perm[rhs_vertex];
+  };
+
+  sort_via_indices<false>(edges_, index_sorter);
+
+  for (const Edge &current : edges_) {
+    const Index &idx = current.idx();
+
+    if (!is_anonymous_index(idx)) {
+      continue;
+    }
+
+    idxrepl.insert(std::make_pair(idx, idxfac.make(idx)));
+  }
+
+  apply_index_replacements(tensors_, idxrepl);
+
+  // Perform particle-1,2-swaps as indicated by the graph canonization
+  for (std::size_t i = 0; i < tensors_.size(); ++i) {
+    AbstractTensor &tensor = *tensors_[i];
+    const std::size_t num_particles =
+        std::min(bra_rank(tensor), ket_rank(tensor));
+
+    auto it = tensor_idx_to_particle_order.find(i);
+    if (it == tensor_idx_to_particle_order.end()) {
+      assert(num_particles == 0 || symmetry(*tensors_[i]) != Symmetry::nonsymm);
+      continue;
+    }
+
+    const auto &particle_order = it->second;
+    auto bra_indices = bra(tensor);
+    auto ket_indices = ket(tensor);
+
+    assert(num_particles == particle_order.size());
+
+    // Swap indices column-wise
+    idxrepl.clear();
+    for (std::size_t col = 0; col < num_particles; ++col) {
+      if (particle_order[col] == col) {
         continue;
       }
 
-      auto color = graph.vertex_colors[vertex];
-      colors.insert(color);
-
-      // We rely on the fact that the order of index vertices corresponds to
-      // the order of corresponding edges
-      assert(edge_it != edges_.end());
-      const Index &idx = edge_it->idx();
-
-      if (is_anonymous_index(idx)) {
-        color2idx.emplace(color, std::make_pair(idx_cnt, cl[vertex]));
-      }
-
-      ++idx_cnt;
-      ++edge_it;
+      idxrepl.insert(
+          std::make_pair(bra_indices[col], bra_indices[particle_order[col]]));
+      idxrepl.insert(
+          std::make_pair(ket_indices[col], ket_indices[particle_order[col]]));
     }
 
-    // for each color sort anonymous indices by canonical order
-
-    // canonically-ordered list of
-    // {index ordinal in edges_, canonical ordinal}
-    container::svector<std::pair<size_t, size_t>> idx_can;
-    for (const std::size_t color : colors) {
-      auto beg = color2idx.lower_bound(color);
-      auto end = color2idx.upper_bound(color);
-
-      const auto sz = std::distance(beg, end);
-
-      if (sz > 1) {
-        idx_can.resize(sz);
-
-        size_t cnt = 0;
-        for (auto it = beg; it != end; ++it, ++cnt) {
-          idx_can[cnt] = it->second;
-        }
-
-        using std::begin;
-        using std::end;
-        std::sort(begin(idx_can), end(idx_can),
-                  [](const std::pair<size_t, size_t> &a,
-                     const std::pair<size_t, size_t> &b) {
-                    return a.second < b.second;
-                  });
-
-        // make a replacement list by generating new indices in canonical
-        // order
-        for (auto [orig_idx, _] : idx_can) {
-          assert(orig_idx < edges_.size());
-          auto edge_it = edges_.begin();
-          std::advance(edge_it, orig_idx);
-
-          const auto &idx = edge_it->idx();
-
-          idxrepl_.emplace(std::make_pair(idx, idxfac.make(idx)));
-        }
-      } else if (sz == 1) {
-        // no need for resorting of colors with 1 index only, but still need
-        // to replace the index
-        const auto edge_it = edges_.begin() + beg->second.first;
-        const auto &idx = edge_it->idx();
-        idxrepl_.emplace(std::make_pair(idx, idxfac.make(idx)));
-      }
-      // sz == 0 is possible since some colors in colors refer to tensors
+    if (!idxrepl.empty()) {
+      apply_index_replacements(tensor, idxrepl);
     }
-  }  // index repl
-
-  // Bring tensors into canonical order, but ensure to respect commutativity!
-
-  std::vector<std::size_t> tensor_indices;
-  tensor_indices.resize(tensors_.size());
-  std::iota(tensor_indices.begin(), tensor_indices.end(), 0);
-
-  // TODO: initialize this while iterating over vertices for index (colors)
-  container::map<std::size_t, std::size_t> tensor_idx_to_vertex;
-  for (std::size_t tensor_idx = 0, vertex = 0;
-       vertex < graph.vertex_types.size(); ++vertex) {
-    if (graph.vertex_types[vertex] != VertexType::TensorCore) {
-      continue;
-    }
-    tensor_idx_to_vertex[tensor_idx] = vertex;
-    tensor_idx++;
   }
 
-  const auto tensor_sorter = [this, &cl, &tensor_idx_to_vertex](
+  // Bring tensors into canonical order (analogously to how we reordered
+  // indices), but ensure to respect commutativity!
+  const auto tensor_sorter = [this, &canonize_perm, &tensor_idx_to_vertex](
                                  std::size_t lhs_idx, std::size_t rhs_idx) {
     const AbstractTensor &lhs = *tensors_[lhs_idx];
     const AbstractTensor &rhs = *tensors_[rhs_idx];
@@ -432,23 +484,14 @@ void TensorNetwork::canonicalize_graph(const named_indices_t &named_indices) {
     // Commuting tensors are sorted based on their canonical order which is
     // given by the order of the corresponding vertices in the canonical graph
     // representation
-    return cl[lhs_vertex] < cl[rhs_vertex];
+    return canonize_perm[lhs_vertex] < canonize_perm[rhs_vertex];
   };
 
-  std::stable_sort(tensor_indices.begin(), tensor_indices.end(), tensor_sorter);
+  sort_via_indices<true>(tensors_, tensor_sorter);
 
-  assert(tensor_indices.size() == tensors_.size());
-
-  decltype(tensors_) tensors_canonized(tensors_.size());
-  for (std::size_t i = 0; i < tensors_.size(); ++i) {
-    tensors_canonized[i] = tensors_[tensor_indices[i]];
-  }
-
-  tensors_ = std::move(tensors_canonized);
-
-  // Apply the canonical reindexing
-  apply_index_replacements(tensors_, idxrepl_);
-
+  // The tensor reordering and index relabelling made the current set of edges
+  // invalid
+  edges_.clear();
   have_edges_ = false;
 
   if (Logger::get_instance().canonicalize) {
@@ -464,10 +507,6 @@ void TensorNetwork::canonicalize_graph(const named_indices_t &named_indices) {
 ExprPtr TensorNetwork::canonicalize(
     const container::vector<std::wstring> &cardinal_tensor_labels, bool fast,
     const named_indices_t *named_indices_ptr) {
-  // initialize named_indices by default to all external indices
-  const auto &named_indices =
-      named_indices_ptr == nullptr ? this->ext_indices() : *named_indices_ptr;
-
   if (Logger::get_instance().canonicalize) {
     std::wcout << "TensorNetwork::canonicalize(" << (fast ? "fast" : "slow")
                << "): input tensors\n";
@@ -481,6 +520,14 @@ ExprPtr TensorNetwork::canonicalize(
     std::wcout << std::endl;
   }
 
+  if (!have_edges_) {
+    init_edges();
+  }
+
+  // initialize named_indices by default to all external indices
+  const auto &named_indices =
+      named_indices_ptr == nullptr ? this->ext_indices() : *named_indices_ptr;
+
   if (!fast) {
     // The graph-based canonization is required in call cases in which there are
     // indistinguishable tensors present in the expression. Their order and
@@ -492,8 +539,8 @@ ExprPtr TensorNetwork::canonicalize(
   // order to properly be able to identify tensor blocks
   ExprPtr byproduct = canonicalize_individual_tensors(named_indices);
 
-  const CanonicalTensorCompare<decltype(cardinal_tensor_labels)> tensor_sorter(
-      cardinal_tensor_labels);
+  CanonicalTensorCompare<decltype(cardinal_tensor_labels)> tensor_sorter(
+      cardinal_tensor_labels, true);
 
   std::stable_sort(tensors_.begin(), tensors_.end(), tensor_sorter);
 
@@ -517,10 +564,8 @@ ExprPtr TensorNetwork::canonicalize(
     return named_indices.find(idx) == named_indices.end();
   };
 
-  // Sort edges based on the order of the tensors they connect (instead of based
-  // on their (full) label)
-  container::svector<Edge> resorted_edges(edges_.begin(), edges_.end());
-  std::stable_sort(resorted_edges.begin(), resorted_edges.end(),
+  // Sort edges based on the order of the tensors they connect
+  std::stable_sort(edges_.begin(), edges_.end(),
                    [&is_named_index](const Edge &lhs, const Edge &rhs) {
                      // Sort first by index's character (named < anonymous),
                      // then by Edge (not by Index's full label) ... this
@@ -539,35 +584,38 @@ ExprPtr TensorNetwork::canonicalize(
   // -> start reindexing anonymous indices from 1
   IndexFactory idxfac(is_anonymous_index, 1);
 
-  idxrepl_.clear();
+  container::map<Index, Index> idxrepl;
 
   // Use the new order of edges as the canonical order of indices and relabel
   // accordingly (but only anonymous indices, of course)
-  for (std::size_t i = named_indices.size(); i < resorted_edges.size(); ++i) {
-    const Index &index = resorted_edges[i].idx();
+  for (std::size_t i = named_indices.size(); i < edges_.size(); ++i) {
+    const Index &index = edges_[i].idx();
     assert(is_anonymous_index(index));
     Index replacement = idxfac.make(index);
-    idxrepl_.emplace(std::make_pair(index, replacement));
+    idxrepl.emplace(std::make_pair(index, replacement));
   }
 
   // Done computing canonical index replacement list
 
   if (Logger::get_instance().canonicalize) {
-    for (const auto &idxpair : idxrepl_) {
+    for (const auto &idxpair : idxrepl) {
       std::wcout << "TensorNetwork::canonicalize(" << (fast ? "fast" : "slow")
                  << "): replacing " << to_latex(idxpair.first) << " with "
                  << to_latex(idxpair.second) << std::endl;
     }
   }
 
-  apply_index_replacements(tensors_, idxrepl_);
+  apply_index_replacements(tensors_, idxrepl);
 
   byproduct *= canonicalize_individual_tensors(named_indices);
 
   // We assume that re-indexing did not change the canonical order of tensors
-  // If it did, then most likely the (Abstract)Tensor::operator< compares index
-  // groups in a different order than Vertex::operator<
   assert(std::is_sorted(tensors_.begin(), tensors_.end(), tensor_sorter));
+  // However, in order to produce the most aesthetically pleasing result, we now
+  // reorder tensors based on the regular AbstractTensor::operator<, which takes
+  // the explicit index labelling of tensors into account.
+  tensor_sorter.set_blocks_only(false);
+  std::stable_sort(tensors_.begin(), tensors_.end(), tensor_sorter);
 
   have_edges_ = false;
 
@@ -592,8 +640,9 @@ TensorNetwork::Graph TensorNetwork::create_graph(
   const std::size_t max_reserved_color =
       named_idx_color_start + named_indices.size() - 1;
 
-  // core, bra, ket, auxiliary
-  constexpr std::size_t num_tensor_components = 4;
+  // core, bra, ket, auxiliary and optionally (for non-symmetric tensors) a
+  // particle vertex
+  constexpr std::size_t num_tensor_components = 5;
 
   // results
   Graph graph;
@@ -637,23 +686,55 @@ TensorNetwork::Graph TensorNetwork::create_graph(
     const Symmetry tensor_sym = symmetry(tensor);
     if (tensor_sym == Symmetry::nonsymm) {
       // Create separate vertices for every index
+      // Additionally, we need particle vertices to group indices that belong to
+      // the same particle (are in the same "column" in the usual tensor
+      // notation)
+      const std::size_t num_particle_vertices =
+          std::min(bra_rank(tensor), ket_rank(tensor));
+      const bool is_part_symm =
+          particle_symmetry(tensor) == ParticleSymmetry::symm;
+      // TODO: How to handle BraKetSymmetry::conjugate?
+      const bool is_braket_symm =
+          braket_symmetry(tensor) == BraKetSymmetry::symm;
+
+      for (std::size_t i = 0; i < num_particle_vertices; ++i) {
+        graph.vertex_labels.emplace_back(L"p_" + std::to_wstring(i + 1));
+        graph.vertex_types.push_back(VertexType::TensorBraKet);
+        graph.vertex_colors.push_back(tensor_color);
+        edges.push_back(
+            std::make_pair(tensor_vertex, graph.vertex_labels.size() - 1));
+      }
+
       assert(bra_rank(tensor) <= max_rank);
       for (std::size_t i = 0; i < bra_rank(tensor); ++i) {
+        const bool is_unpaired_idx = i >= num_particle_vertices;
+        const bool color_idx = is_unpaired_idx || !is_part_symm;
+
         graph.vertex_labels.emplace_back(L"bra_" + std::to_wstring(i + 1));
         graph.vertex_types.push_back(VertexType::TensorBra);
-        graph.vertex_colors.push_back(i);
+        graph.vertex_colors.push_back(color_idx ? i : 0);
+
+        const std::size_t connect_vertex =
+            tensor_vertex + (is_unpaired_idx ? 0 : (i + 1));
+        edges.push_back(
+            std::make_pair(connect_vertex, graph.vertex_labels.size() - 1));
       }
-      edges.push_back(
-          std::make_pair(tensor_vertex, graph.vertex_labels.size() - 1));
 
       assert(ket_rank(tensor) <= max_rank);
       for (std::size_t i = 0; i < ket_rank(tensor); ++i) {
+        const bool is_unpaired_idx = i >= num_particle_vertices;
+        const bool color_idx = is_unpaired_idx || !is_part_symm;
+
         graph.vertex_labels.emplace_back(L"ket_" + std::to_wstring(i + 1));
         graph.vertex_types.push_back(VertexType::TensorKet);
-        graph.vertex_colors.push_back(max_rank + i);
+        graph.vertex_colors.push_back((color_idx ? i : 0) +
+                                      (is_braket_symm ? 0 : max_rank));
+
+        const std::size_t connect_vertex =
+            tensor_vertex + (is_unpaired_idx ? 0 : (i + 1));
+        edges.push_back(
+            std::make_pair(connect_vertex, graph.vertex_labels.size() - 1));
       }
-      edges.push_back(
-          std::make_pair(tensor_vertex, graph.vertex_labels.size() - 1));
     } else {
       // Shared set of bra/ket vertices for all indices
       std::wstring suffix = tensor_sym == Symmetry::symm ? L"_s" : L"_a";
@@ -686,8 +767,6 @@ TensorNetwork::Graph TensorNetwork::create_graph(
       edges.push_back(
           std::make_pair(tensor_vertex, graph.vertex_labels.size() - 1));
     }
-
-    // TODO: Add vertex for total or braket grouping?
   }
 
   // Now add all indices (edges) to the graph
@@ -757,26 +836,37 @@ TensorNetwork::Graph TensorNetwork::create_graph(
 
       // Store an edge connecting the index vertex to the corresponding tensor
       // vertex
-      // TODO: if we re-introduce a braket-like vertex, we have to add 1 to
-      // the tensor vertex
-      static_assert(static_cast<int>(Origin::Bra) == 1);
-      static_assert(static_cast<int>(Origin::Ket) == 2);
-      static_assert(static_cast<int>(Origin::Aux) == 3);
       const bool tensor_is_nonsymm =
           vertex.getTerminalSymmetry() == Symmetry::nonsymm;
-      // Determine the index of the vertex for the tensor component we want to
-      // connect the current index to. For (anti)symmetric tensors there
-      // exists only a single bra, ket or aux vertex per tensor and thus the
-      // origin of the index is the only factor to account for. Non-symmetric
-      // tensors on the other hand have a bra, ket or aux vertex for each
-      // individual index and thus the index's position within the bra, ket or
-      // aux group of the tensor has to be accounted for in order to selected
-      // the correct vertex to connect to. N.B. conversion from bool to int is
-      // always: true -> 1, false -> 0
-      const std::size_t tensor_component_vertex =
-          tensor_vertex + static_cast<int>(vertex.getOrigin()) +
-          tensor_is_nonsymm * vertex.getIndexSlot() *
-              (num_tensor_components - /* core */ 1);
+      const AbstractTensor &tensor = *tensors_[vertex.getTerminalIndex()];
+      std::size_t offset;
+      if (tensor_is_nonsymm) {
+        // We have to find the correct vertex to connect this index to (for
+        // non-symmetric tensors each index has its dedicated "group" vertex)
+
+        // Move off the tensor core's vertex
+        offset = 1;
+        // Move past the explicit particle vertices
+        offset += std::min(bra_rank(tensor), ket_rank(tensor));
+
+        if (vertex.getOrigin() > Origin::Bra) {
+          offset += bra_rank(tensor);
+        }
+
+        offset += vertex.getIndexSlot();
+      } else {
+        static_assert(static_cast<int>(Origin::Bra) == 1);
+        static_assert(static_cast<int>(Origin::Ket) == 2);
+        static_assert(static_cast<int>(Origin::Aux) == 3);
+        offset = static_cast<std::size_t>(vertex.getOrigin());
+      }
+
+      if (vertex.getOrigin() > Origin::Ket) {
+        offset += ket_rank(tensor);
+      }
+
+      const std::size_t tensor_component_vertex = tensor_vertex + offset;
+
       assert(tensor_component_vertex < graph.vertex_labels.size());
       edges.push_back(std::make_pair(index_vertex, tensor_component_vertex));
     }
@@ -825,9 +915,10 @@ void TensorNetwork::init_edges() {
                  << std::endl;
     }
 
-    auto it = edges_.find(idx.full_label());
+    auto it = std::find_if(edges_.begin(), edges_.end(),
+                           FullLabelIndexLocator(idx.full_label()));
     if (it == edges_.end()) {
-      edges_.emplace(Edge(std::move(vertex), idx));
+      edges_.emplace_back(std::move(vertex), idx);
     } else {
       it->connect_to(std::move(vertex));
     }
@@ -855,8 +946,11 @@ void TensorNetwork::init_edges() {
     auto aux_indices = auxiliary(tensor);
     for (std::size_t index_idx = 0; index_idx < aux_indices.size();
          ++index_idx) {
+      // Note: for the time being we don't have a way of expressing
+      // permutational symmetry of auxiliary indices so we just assume there is
+      // no such symmetry
       idx_insert(aux_indices[index_idx],
-                 Vertex(Origin::Aux, tensor_idx, index_idx, tensor_symm));
+                 Vertex(Origin::Aux, tensor_idx, index_idx, Symmetry::nonsymm));
     }
   }
 

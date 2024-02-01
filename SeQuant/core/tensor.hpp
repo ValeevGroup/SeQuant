@@ -70,6 +70,9 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   /// @return view of the bra+ket index ranges
   auto braket() { return ranges::views::concat(bra_, ket_); }
 
+  /// @return view of all indices
+  auto indices() { return ranges::views::concat(bra_, ket_, auxiliary_); }
+
   /// asserts that @p label is not reserved
   /// @note Tensor with reserved labels are constructed using friends of Tensor
   /// @param label a Tensor label candidate
@@ -173,6 +176,9 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   /// @return view of the bra+ket index ranges
   /// @note this is to work around broken lookup rules
   auto const_braket() const { return this->braket(); }
+  /// @return view of all indices
+  /// @note this is to work around broken lookup rules
+  auto const_indices() const { return this->indices(); }
   /// Returns the Symmetry object describing the symmetry of the bra and ket of
   /// the Tensor, i.e. what effect swapping indices in positions @c i  and @c j
   /// in <b>either bra or ket</em> has on the elements of the Tensor;
@@ -270,7 +276,7 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
             typename... Args>
   bool transform_indices(const Map<Index, Index, Args...> &index_map) {
     bool mutated = false;
-    ranges::for_each(braket(), [&](auto &idx) {
+    ranges::for_each(indices(), [&](auto &idx) {
       if (idx.transform(index_map)) mutated = true;
     });
     if (mutated) this->reset_hash_value();
@@ -282,7 +288,7 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   ExprPtr clone() const override { return ex<Tensor>(*this); }
 
   void reset_tags() const {
-    ranges::for_each(braket(), [](const auto &idx) { idx.reset_tag(); });
+    ranges::for_each(indices(), [](const auto &idx) { idx.reset_tag(); });
   }
 
   hash_type bra_hash_value() const {
