@@ -5,6 +5,8 @@
 #ifndef SEQUANT_ALGORITHM_HPP
 #define SEQUANT_ALGORITHM_HPP
 
+#include <SeQuant/core/meta.hpp>
+
 #include <algorithm>
 #include <functional>
 #include <iterator>
@@ -12,6 +14,10 @@
 #include <type_traits>
 
 namespace sequant {
+
+template <typename Callable, typename... Args>
+using suitable_call_operator =
+    decltype(std::declval<Callable>()(std::declval<Args>()...));
 
 /// @brief bubble sort that uses swap exclusively
 template <typename ForwardIter, typename Sentinel, typename Compare>
@@ -22,12 +28,14 @@ void bubble_sort(ForwardIter begin, Sentinel end, Compare comp) {
     swapped = false;
     auto i = begin;
     auto inext = i;
-    // iterators either dereference to a reference or to a composite of
-    // references
-    constexpr const bool iter_deref_to_ref =
-        std::is_reference_v<decltype(*(std::declval<ForwardIter>()))>;
+
+    using deref_type = decltype(*(std::declval<ForwardIter>()));
+    constexpr const bool comp_works_for_range_type =
+        meta::is_detected_v<suitable_call_operator, Compare, deref_type,
+                            deref_type>;
+
     for (++inext; inext != end; ++i, ++inext) {
-      if constexpr (iter_deref_to_ref) {
+      if constexpr (comp_works_for_range_type) {
         auto& val0 = *inext;
         auto& val1 = *i;
         if (comp(val0, val1)) {
@@ -40,11 +48,22 @@ void bubble_sort(ForwardIter begin, Sentinel end, Compare comp) {
         auto val1 = *i;
         static_assert(std::tuple_size_v<decltype(val0)> == 2,
                       "need to generalize comparer to handle tuples");
-        auto composite_compare = [](auto&& c0, auto&& c1) {
-          if (std::get<0>(c0) < std::get<0>(c1)) {  // c0[0] < c1[0]
+
+        using lhs_type = decltype(std::get<0>(val0));
+        using rhs_type = decltype(std::get<1>(val0));
+        constexpr const bool comp_works_for_tuple_entries =
+            meta::is_detected_v<suitable_call_operator, Compare, lhs_type,
+                                rhs_type>;
+        static_assert(comp_works_for_tuple_entries,
+                      "Provided comparator not suitable for entries in "
+                      "tuple-like objects (in zipped range?)");
+
+        auto composite_compare = [&comp](auto&& c0, auto&& c1) {
+          if (comp(std::get<0>(c0), std::get<0>(c1))) {  // c0[0] < c1[0]
             return true;
-          } else if (!(std::get<0>(c1) < std::get<0>(c0))) {  // c0[0] == c1[0]
-            return std::get<1>(c0) < std::get<1>(c1);
+          } else if (!comp(std::get<0>(c1),
+                           std::get<0>(c0))) {  // c0[0] == c1[0]
+            return comp(std::get<1>(c0), std::get<1>(c1));
           } else {  // c0[0] > c1[0]
             return false;
           }
