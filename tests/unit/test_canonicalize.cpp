@@ -271,8 +271,8 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
       REQUIRE(input->size() == 1);
       REQUIRE(to_latex(input) ==
               L"{ "
-              L"\\bigl({{g^{{a_3}{i_1}}_{{i_3}{i_4}}}{t^{{i_3}}_{{a_2}}}{t^{{i_"
-              L"4}{i_2}}_{{a_1}{a_3}}}}\\bigr) }");
+              L"\\bigl({{g^{{i_1}{a_3}}_{{i_3}{i_4}}}{t^{{i_4}}_{{a_2}}}{t^{{i_"
+              L"3}{i_2}}_{{a_1}{a_3}}}}\\bigr) }");
     }
 
     {  // Case 5: CCSDT R3: S3 * F * T3

@@ -391,6 +391,7 @@ TEST_CASE("TensorNetwork", "[elements]") {
 		  {L"g{a_1,i_1;i_2,i_3}:N * I{i_2,i_3;i_1,a_1}:N", L"g{i_1,a_1;i_2,i_3}:N * I{i_3,i_2;i_1,a_1}:N"},
 	  };
 
+
       for (const auto& [input, expected] : inputs) {
         const auto input_tensors = parse_expr(input).as<Product>().factors();
 
