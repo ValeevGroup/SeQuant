@@ -80,10 +80,9 @@ class TensorCanonicalizer {
   /// return of the canonicalization?
   /// @note canonicalization compared indices returned by index_comparer
   // TODO generalize for complex tensors
-  virtual ExprPtr apply(AbstractTensor&) = 0;
+  virtual ExprPtr apply(AbstractTensor&) const = 0;
 
   /// @return reference to the object used to compare Index objects
-  /// @note the default is to use an object of type `std::less<Index>`
   static const std::function<bool(const Index&, const Index&)>&
   index_comparer();
 
@@ -92,9 +91,11 @@ class TensorCanonicalizer {
       std::function<bool(const Index&, const Index&)> comparer);
 
  protected:
-  inline auto bra_range(AbstractTensor& t) { return t._bra_mutable(); }
-  inline auto ket_range(AbstractTensor& t) { return t._ket_mutable(); }
-  inline auto auxiliary_range(AbstractTensor& t) { return t._auxiliary_mutable(); }
+  inline auto bra_range(AbstractTensor& t) const { return t._bra_mutable(); }
+  inline auto ket_range(AbstractTensor& t) const { return t._ket_mutable(); }
+  inline auto auxiliary_range(AbstractTensor& t) const {
+    return t._auxiliary_mutable();
+  }
 
   /// the object used to compare indices
   static std::function<bool(const Index&, const Index&)> index_comparer_;
@@ -112,7 +113,7 @@ class NullTensorCanonicalizer : public TensorCanonicalizer {
  public:
   virtual ~NullTensorCanonicalizer() = default;
 
-  ExprPtr apply(AbstractTensor&) override;
+  ExprPtr apply(AbstractTensor&) const override;
 };
 
 class DefaultTensorCanonicalizer : public TensorCanonicalizer {
@@ -139,12 +140,12 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
   /// t.symmetry()!=Symmetry::nonsymm ),
   ///       with the external indices appearing "before" (smaller particle
   ///       indices) than the internal indices
-  ExprPtr apply(AbstractTensor& t) override;
+  ExprPtr apply(AbstractTensor& t) const override;
 
   /// Core of DefaultTensorCanonicalizer::apply, only does the canonicalization,
   /// i.e. no tagging/untagging
   template <typename Compare>
-  ExprPtr apply(AbstractTensor& t, const Compare& comp) {
+  ExprPtr apply(AbstractTensor& t, const Compare& comp) const {
     // std::wcout << "abstract tensor: " << to_latex(t) << "\n";
     auto s = symmetry(t);
     auto is_antisymm = (s == Symmetry::antisymm);
@@ -203,10 +204,10 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
         abort();
     }
 
-	// For now we treat auxiliary indices as being unrelated to one another. This makes their
-	// order insignificant, allowing us to simply sort them.
-	auto _aux = auxiliary_range(t);
-	ranges::sort(_aux, comp);
+    // For now we treat auxiliary indices as being unrelated to one another.
+    // This makes their order insignificant, allowing us to simply sort them.
+    auto _aux = auxiliary_range(t);
+    // ranges::sort(_aux, comp);
 
     ExprPtr result =
         is_antisymm ? (even == false ? ex<Constant>(-1) : nullptr) : nullptr;
@@ -215,8 +216,23 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
 
  private:
   container::map<std::wstring, Index> external_indices_;
+
+ protected:
+  void tag_indices(AbstractTensor& t) const;
 };
 
-}
+class TensorBlockCanonicalizer : public DefaultTensorCanonicalizer {
+ public:
+  TensorBlockCanonicalizer() = default;
+  ~TensorBlockCanonicalizer() = default;
 
-#endif // SEQUANT_CORE_TENSOR_CANONICALIZER_HPP
+  template <typename IndexContainer>
+  TensorBlockCanonicalizer(const IndexContainer& external_indices)
+      : DefaultTensorCanonicalizer(external_indices) {}
+
+  ExprPtr apply(AbstractTensor& t) const override;
+};
+
+}  // namespace sequant
+
+#endif  // SEQUANT_CORE_TENSOR_CANONICALIZER_HPP

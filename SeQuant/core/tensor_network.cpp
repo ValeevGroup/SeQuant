@@ -535,9 +535,9 @@ ExprPtr TensorNetwork::canonicalize(
     canonicalize_graph(named_indices);
   }
 
-  // Ensure each individual tensor is canonical with the current indexing in
-  // order to properly be able to identify tensor blocks
-  ExprPtr byproduct = canonicalize_individual_tensors(named_indices);
+  // Ensure each individual tensor is written in the way that its tensor
+  // block (== order of index spaces) is canonical
+  ExprPtr byproduct = canonicalize_individual_tensor_blocks(named_indices);
 
   CanonicalTensorCompare<decltype(cardinal_tensor_labels)> tensor_sorter(
       cardinal_tensor_labels, true);
@@ -977,20 +977,27 @@ container::svector<std::pair<long, long>> TensorNetwork::factorize() {
   abort();  // not yet implemented
 }
 
+ExprPtr TensorNetwork::canonicalize_individual_tensor_blocks(const named_indices_t &named_indices) {
+  return do_individual_canonicalization(TensorBlockCanonicalizer(named_indices));
+}
+
 ExprPtr TensorNetwork::canonicalize_individual_tensors(
     const named_indices_t &named_indices) {
+  return do_individual_canonicalization(
+      DefaultTensorCanonicalizer(named_indices));
+}
+
+ExprPtr TensorNetwork::do_individual_canonicalization(
+    const TensorCanonicalizer &canonicalizer) {
   ExprPtr byproduct = ex<Constant>(1);
 
-  // override the default canonicalizer
-  DefaultTensorCanonicalizer default_tensor_canonizer(named_indices);
   for (auto &tensor : tensors_) {
     auto nondefault_canonizer_ptr =
         TensorCanonicalizer::nondefault_instance_ptr(tensor->_label());
-    TensorCanonicalizer *tensor_canonizer = nondefault_canonizer_ptr
-                                                ? nondefault_canonizer_ptr.get()
-                                                : &default_tensor_canonizer;
+    const TensorCanonicalizer &tensor_canonizer =
+        nondefault_canonizer_ptr ? *nondefault_canonizer_ptr : canonicalizer;
 
-    auto bp = tensor_canonizer->apply(*tensor);
+    auto bp = canonicalizer.apply(*tensor);
 
     if (bp) {
       byproduct *= bp;

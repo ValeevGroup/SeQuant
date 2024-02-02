@@ -3,16 +3,161 @@
 //
 
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 
 #include <regex>
+#include <type_traits>
 
 #include <range/v3/functional/identity.hpp>
 
 namespace sequant {
+
+template <typename T>
+using get_support = decltype(std::get<0>(std::declval<T>()));
+
+template <typename T>
+constexpr bool is_tuple_like_v = meta::is_detected_v<get_support, T>;
+
+struct TensorBlockIndexComparer {
+  template <typename T>
+  bool operator()(const T& lhs, const T& rhs) const {
+    return compare<T>(lhs, rhs) < 0;
+  }
+
+  template <typename T>
+  int compare(const T& lhs, const T& rhs) const {
+    if constexpr (is_tuple_like_v<T>) {
+      static_assert(
+          std::tuple_size_v<T> == 2,
+          "TensorBlockIndexComparer can only deal with tuple-like objects "
+          "of size 2");
+      const auto& lhs_first = std::get<0>(lhs);
+      const auto& lhs_second = std::get<1>(lhs);
+      const auto& rhs_first = std::get<0>(rhs);
+      const auto& rhs_second = std::get<1>(rhs);
+
+      static_assert(std::is_same_v<std::decay_t<decltype(lhs_first)>, Index>,
+                    "TensorBlockIndexComparer can only work with indices");
+      static_assert(std::is_same_v<std::decay_t<decltype(lhs_second)>, Index>,
+                    "TensorBlockIndexComparer can only work with indices");
+      static_assert(std::is_same_v<std::decay_t<decltype(rhs_first)>, Index>,
+                    "TensorBlockIndexComparer can only work with indices");
+      static_assert(std::is_same_v<std::decay_t<decltype(rhs_second)>, Index>,
+                    "TensorBlockIndexComparer can only work with indices");
+
+      // First compare only index spaces of equivalent pairs
+      int res = compare_spaces(lhs_first, rhs_first);
+      if (res != 0) {
+        return res;
+      }
+
+      res = compare_spaces(lhs_second, rhs_second);
+      if (res != 0) {
+        return res;
+      }
+
+      // Then consider tags of equivalent pairs
+      res = compare_tags(lhs_first, rhs_first);
+      if (res != 0) {
+        return res;
+      }
+
+      res = compare_tags(lhs_second, rhs_second);
+      return res;
+    } else {
+      static_assert(std::is_same_v<std::decay_t<T>, Index>,
+                    "TensorBlockIndexComparer can only work with indices");
+
+      int res = compare_spaces(lhs, rhs);
+      if (res != 0) {
+        return res;
+      }
+
+      res = compare_tags(lhs, rhs);
+      return res;
+    }
+  }
+
+  int compare_spaces(const Index& lhs, const Index& rhs) const {
+    if (lhs.space() != rhs.space()) {
+      return lhs.space() < rhs.space() ? -1 : 1;
+    }
+
+    if (lhs.has_proto_indices() != rhs.has_proto_indices()) {
+      return lhs.has_proto_indices() ? -1 : 1;
+    }
+
+    if (lhs.proto_indices().size() != rhs.proto_indices().size()) {
+      return lhs.proto_indices().size() < rhs.proto_indices().size() ? -1 : 1;
+    }
+
+    for (std::size_t i = 0; i < lhs.proto_indices().size(); ++i) {
+      const auto& lhs_proto = lhs.proto_indices()[i];
+      const auto& rhs_proto = rhs.proto_indices()[i];
+
+      int res = compare_spaces(lhs_proto, rhs_proto);
+      if (res != 0) {
+        return res;
+      }
+    }
+
+    // Index spaces are equal
+    return 0;
+  }
+
+  int compare_tags(const Index& lhs, const Index& rhs) const {
+    if (!lhs.tag().has_value() || !rhs.tag().has_value()) {
+      // We only compare tags if both indices have a tag
+      return 0;
+    }
+
+	const int lhs_tag = lhs.tag().value<int>();
+	const int rhs_tag = rhs.tag().value<int>();
+
+	if (lhs_tag != rhs_tag) {
+		return lhs_tag < rhs_tag ? -1 : 1;
+	}
+
+	return 0;
+  }
+};
+
+struct TensorIndexComparer {
+  template <typename T>
+  bool operator()(const T& lhs, const T& rhs) const {
+    TensorBlockIndexComparer block_comp;
+
+    int res = block_comp.compare<T>(lhs, rhs);
+
+    if (res != 0) {
+      return res < 0;
+    }
+
+	// Fall back to regular index compare to break the tie
+    if constexpr (is_tuple_like_v<T>) {
+      static_assert(std::tuple_size_v<T> == 2,
+                    "TensorIndexComparer can only deal with tuple-like objects "
+                    "of size 2");
+
+      const Index& lhs_first = std::get<0>(lhs);
+      const Index& lhs_second = std::get<1>(lhs);
+      const Index& rhs_first = std::get<0>(rhs);
+      const Index& rhs_second = std::get<1>(rhs);
+
+      if (lhs_first != rhs_first) {
+        return lhs_first < rhs_first;
+      }
+
+      return lhs_second < rhs_second;
+    } else {
+      return lhs < rhs;
+    }
+  }
+};
 
 TensorCanonicalizer::~TensorCanonicalizer() = default;
 
@@ -85,7 +230,7 @@ void TensorCanonicalizer::deregister_instance(std::wstring_view label) {
 }
 
 std::function<bool(const Index&, const Index&)>
-    TensorCanonicalizer::index_comparer_ = std::less<Index>{};
+    TensorCanonicalizer::index_comparer_ = TensorIndexComparer{};
 
 const std::function<bool(const Index&, const Index&)>&
 TensorCanonicalizer::index_comparer() {
@@ -97,19 +242,40 @@ void TensorCanonicalizer::index_comparer(
   index_comparer_ = std::move(comparer);
 }
 
-ExprPtr NullTensorCanonicalizer::apply(AbstractTensor&) { return {}; }
+ExprPtr NullTensorCanonicalizer::apply(AbstractTensor&) const { return {}; }
 
-ExprPtr DefaultTensorCanonicalizer::apply(AbstractTensor& t) {
+void DefaultTensorCanonicalizer::tag_indices(AbstractTensor& t) const {
   // tag all indices as ext->true/ind->false
-  auto braket_view = braket(t);
-  ranges::for_each(braket_view, [this](auto& idx) {
+  ranges::for_each(indices(t), [this](auto& idx) {
     auto it = external_indices_.find(std::wstring(idx.label()));
     auto is_ext = it != external_indices_.end();
     idx.tag().assign(
         is_ext ? 0 : 1);  // ext -> 0, int -> 1, so ext will come before
   });
+}
 
-  auto result = this->apply(t, this->index_comparer_);
+ExprPtr DefaultTensorCanonicalizer::apply(AbstractTensor& t) const {
+  tag_indices(t);
+
+  // TODO: Shove TensorIndexComparer into this->index_comparer_ (which makes it impossible for that to be a std::function)
+  //auto result = this->apply(t, this->index_comparer_);
+  auto result = this->apply(t, TensorIndexComparer{});
+
+  reset_tags(t);
+
+  return result;
+}
+
+template <typename Callable, typename... Args>
+using suitable_call_operator =
+    decltype(std::declval<Callable>()(std::declval<Args>()...));
+
+ExprPtr TensorBlockCanonicalizer::apply(AbstractTensor& t) const {
+  tag_indices(t);
+
+  auto result =
+      DefaultTensorCanonicalizer::apply(t, TensorBlockIndexComparer{});
+
   reset_tags(t);
 
   return result;

@@ -264,9 +264,15 @@ class TensorNetwork {
   /// remains undefined.
   void canonicalize_graph(const named_indices_t &named_indices);
 
+  /// Canonicalizes every individual tensor for itself, taking into account only tensor blocks
+  /// @returns The byproduct of the canonicalizations
+  ExprPtr canonicalize_individual_tensor_blocks(const named_indices_t &named_indices);
+
   /// Canonicalizes every individual tensor for itself
   /// @returns The byproduct of the canonicalizations
   ExprPtr canonicalize_individual_tensors(const named_indices_t &named_indices);
+
+  ExprPtr do_individual_canonicalization(const TensorCanonicalizer &canonicalizer);
 };
 
 template <typename CharT, typename Traits>
