@@ -36,17 +36,22 @@ void bubble_sort(ForwardIter begin, Sentinel end, Compare comp) {
 
     for (++inext; inext != end; ++i, ++inext) {
       if constexpr (comp_works_for_range_type) {
-        auto& val0 = *inext;
-        auto& val1 = *i;
+        const auto& val0 = *inext;
+        const auto& val1 = *i;
         if (comp(val0, val1)) {
-          using std::swap;
-          swap(val1, val0);
+          // current assumption: whenever iter_wap from below does not fall back
+          // to std::iter_swap, we are handling zipped ranges where the the
+          // tuple sizes is two (even) -> thus using a non-std swap
+          // implementation won't mess with the information of whether or not an
+          // even amount of swaps has occurred.
+          using ranges::iter_swap;
+          iter_swap(i, inext);
           swapped = true;
         }
       } else {
-        auto val0 = *inext;
-        auto val1 = *i;
-        static_assert(std::tuple_size_v<decltype(val0)> == 2,
+        const auto &val0 = *inext;
+        const auto &val1 = *i;
+        static_assert(std::tuple_size_v<std::decay_t<decltype(val0)>> == 2,
                       "need to generalize comparer to handle tuples");
 
         using lhs_type = decltype(std::get<0>(val0));
