@@ -337,7 +337,7 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
               auto tensor_ptr =
                   std::dynamic_pointer_cast<AbstractTensor>(factor);
               if (tensor_ptr) {
-                ranges::for_each(tensor_ptr->_braket(),
+                ranges::for_each(tensor_ptr->_indices(),
                                  [&](auto& idx) { op(idx, *tensor_ptr); });
               }
             });

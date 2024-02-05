@@ -233,7 +233,7 @@ inline bool apply_index_replacement_rules(
       const auto &factor = *it;
       if (factor->is<Tensor>()) {
         auto &tensor = factor->as<Tensor>();
-        assert(ranges::none_of(tensor.const_braket(), [](const Index &idx) {
+        assert(ranges::none_of(tensor.const_indices(), [](const Index &idx) {
           return idx.tag().has_value();
         }));
       }
@@ -355,7 +355,7 @@ inline void reduce_wick_impl(std::shared_ptr<Product> &expr,
       std::set<Index, Index::LabelCompare> all_indices;
       ranges::for_each(*expr, [&all_indices](const auto &factor) {
         if (factor->template is<Tensor>()) {
-          ranges::for_each(factor->template as<const Tensor>().braket(),
+          ranges::for_each(factor->template as<const Tensor>().indices(),
                            [&all_indices](const Index &idx) {
                              [[maybe_unused]] auto result =
                                  all_indices.insert(idx);

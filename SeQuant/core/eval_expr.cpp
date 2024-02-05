@@ -38,7 +38,7 @@ size_t hash_imed(EvalExpr const&, EvalExpr const&, EvalOp) noexcept;
 ExprPtr make_imed(EvalExpr const&, EvalExpr const&, EvalOp) noexcept;
 
 bool is_tot(Tensor const& t) noexcept {
-  return ranges::any_of(t.const_braket(), &Index::has_proto_indices);
+  return ranges::any_of(t.const_indices(), &Index::has_proto_indices);
 }
 
 std::wstring_view const var_label = L"Z";
@@ -153,7 +153,7 @@ InnerOuterIndices EvalExpr::inner_outer_indices() const noexcept {
 
   container::svector<Index> inner;
   container::svector<Index> outer;
-  for (auto const& idx : t.const_braket()) {
+  for (auto const& idx : t.const_indices()) {
     inner.emplace_back(idx);
     for (auto const& pidx : idx.proto_indices()) outer.emplace_back(pidx);
   }
@@ -194,9 +194,9 @@ namespace {
 ///       the hash.
 ///
 template <typename T>
-size_t hash_braket(T const& bk) noexcept {
+size_t hash_indices(T const& indices) noexcept {
   size_t h = 0;
-  for (auto const& idx : bk) {
+  for (auto const& idx : indices) {
     hash::combine(h, hash::value(idx.space().type().to_int32()));
     hash::combine(h, hash::value(idx.space().qns().to_int32()));
   }
@@ -207,7 +207,7 @@ size_t hash_braket(T const& bk) noexcept {
 /// \return hash value to identify the connectivity between a pair of tensors.
 ///
 /// @note Let [(i,j)] be the list of ordered pair of index positions that are
-///       connected. i is the position in the braket of the first tensor (T1)
+///       connected. i is the position in the indices of the first tensor (T1)
 ///       and j is that of the second tensor (T2). Then this function combines
 ///       the hash values of the elements of this list.
 ///
@@ -216,8 +216,8 @@ size_t hash_braket(T const& bk) noexcept {
 size_t hash_tensor_pair_topology(Tensor const& t1, Tensor const& t2) noexcept {
   using ranges::views::enumerate;
   size_t h = 0;
-  for (auto&& [pos1, idx1] : t1.const_braket() | enumerate)
-    for (auto&& [pos2, idx2] : t2.const_braket() | enumerate)
+  for (auto&& [pos1, idx1] : t1.const_indices() | enumerate)
+    for (auto&& [pos2, idx2] : t2.const_indices() | enumerate)
       if (idx1.label() == idx2.label())
         hash::combine(h, hash::value(std::pair(pos1, pos2)));
   return h;
@@ -226,7 +226,7 @@ size_t hash_tensor_pair_topology(Tensor const& t1, Tensor const& t2) noexcept {
 size_t hash_terminal_tensor(Tensor const& tnsr) noexcept {
   size_t h = 0;
   hash::combine(h, hash::value(tnsr.label()));
-  hash::combine(h, hash_braket(tnsr.const_braket()));
+  hash::combine(h, hash_indices(tnsr.const_indices()));
   return h;
 }
 
@@ -246,55 +246,6 @@ size_t hash_imed(EvalExpr const& left, EvalExpr const& right,
     hash::combine(h, hash_tensor_pair_topology(left.expr()->as<Tensor>(),
                                                right.expr()->as<Tensor>()));
   return h;
-}
-
-// TODO: Remove?
-std::pair<container::svector<Index>,  // bra
-          container::svector<Index>   // ket
-          >
-target_braket(Tensor const& t1, Tensor const& t2) noexcept {
-  using ranges::views::keys;
-  using ranges::views::values;
-  using ranges::views::zip;
-  using index_container = container::svector<Index>;
-
-  auto remove_item = [](auto& vec, size_t pos) -> void {
-    std::swap(vec[pos], vec.back());
-    vec.pop_back();
-  };
-
-  auto left = zip(t1.bra(), t1.ket()) | ranges::to_vector;
-  auto right = zip(t2.bra(), t2.ket()) | ranges::to_vector;
-
-  while (!right.empty()) {
-    for (std::size_t rr = 0; rr < right.size(); ++rr) {
-      auto& [rb, rk] = right[rr];
-      for (std::size_t ll = 0; ll < left.size(); ++ll) {
-        auto& [lb, lk] = left[ll];
-        if (lb == rk && rb == lk) {
-          remove_item(left, ll);
-          remove_item(right, rr);
-          goto next_contract;
-        } else if (lb == rk) {
-          std::swap(lk, rk);
-          remove_item(left, ll);
-          goto next_contract;
-        } else if (lk == rb) {
-          std::swap(lb, rb);
-          remove_item(left, ll);
-          goto next_contract;
-        }
-      }  // ll
-      left.emplace_back(rb, rk);
-      remove_item(right, rr);
-    }  // rr
-  next_contract:
-      /* just point to the start of the while loop */;
-  }
-  // the result is now in left
-
-  return {keys(left) | ranges::to<index_container>,
-          values(left) | ranges::to<index_container>};
 }
 
 Symmetry tensor_symmetry_sum(EvalExpr const& left,
@@ -333,11 +284,11 @@ Symmetry tensor_symmetry_prod(EvalExpr const& left,
   if (hash::value(left) == hash::value(right)) {
     // potential outer product of the same tensor
     auto const uniq_idxs =
-        ranges::views::concat(tnsr1.const_braket(), tnsr2.const_braket()) |
+        ranges::views::concat(tnsr1.const_indices(), tnsr2.const_indices()) |
         ranges::to<index_set_t>;
 
     if (static_cast<std::size_t>(ranges::distance(uniq_idxs)) ==
-        tnsr1.const_braket().size() + tnsr2.const_braket().size()) {
+        tnsr1.const_indices().size() + tnsr2.const_indices().size()) {
       // outer product confirmed
       return Symmetry::antisymm;
     }
