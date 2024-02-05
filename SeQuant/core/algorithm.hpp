@@ -40,7 +40,7 @@ void bubble_sort(ForwardIter begin, Sentinel end, Compare comp) {
         const auto& val1 = *i;
         if (comp(val0, val1)) {
           // current assumption: whenever iter_wap from below does not fall back
-          // to std::iter_swap, we are handling zipped ranges where the the
+          // to std::iter_swap, we are handling zipped ranges where the
           // tuple sizes is two (even) -> thus using a non-std swap
           // implementation won't mess with the information of whether or not an
           // even amount of swaps has occurred.
