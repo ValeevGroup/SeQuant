@@ -18,6 +18,10 @@ namespace sequant {
 /// of that class with TensorCanonicalizer::register_instance
 class TensorCanonicalizer {
  public:
+	 using index_comparer_t = std::function<bool(const Index&, const Index&)>;
+	 using index_pair_t = std::pair<const Index, const Index>;
+	 using index_pair_comparer_t = std::function<bool(const index_pair_t &, const index_pair_t)>;
+
   virtual ~TensorCanonicalizer();
 
   /// @return ptr to the TensorCanonicalizer object, if any, that had been
@@ -83,12 +87,16 @@ class TensorCanonicalizer {
   virtual ExprPtr apply(AbstractTensor&) const = 0;
 
   /// @return reference to the object used to compare Index objects
-  static const std::function<bool(const Index&, const Index&)>&
-  index_comparer();
+  static const index_comparer_t& index_comparer();
 
   /// @param comparer the compare object to be used by this
-  static void index_comparer(
-      std::function<bool(const Index&, const Index&)> comparer);
+  static void index_comparer(index_comparer_t comparer);
+
+  /// @return reference to the object used to compare Index objects
+  static const index_pair_comparer_t& index_pair_comparer();
+
+  /// @param comparer the compare object to be used by this
+  static void index_pair_comparer( index_pair_comparer_t comparer);
 
  protected:
   inline auto bra_range(AbstractTensor& t) const { return t._bra_mutable(); }
@@ -98,7 +106,9 @@ class TensorCanonicalizer {
   }
 
   /// the object used to compare indices
-  static std::function<bool(const Index&, const Index&)> index_comparer_;
+  static index_comparer_t index_comparer_;
+  /// the object used to compare pairs of indices
+  static index_pair_comparer_t index_pair_comparer_;
 
  private:
   static std::pair<
@@ -144,8 +154,8 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
 
   /// Core of DefaultTensorCanonicalizer::apply, only does the canonicalization,
   /// i.e. no tagging/untagging
-  template <typename Compare>
-  ExprPtr apply(AbstractTensor& t, const Compare& comp) const {
+  template <typename IndexComp, typename IndexPairComp>
+  ExprPtr apply(AbstractTensor& t, const IndexComp &idxcmp, const IndexPairComp &paircmp) const {
     // std::wcout << "abstract tensor: " << to_latex(t) << "\n";
     auto s = symmetry(t);
     auto is_antisymm = (s == Symmetry::antisymm);
@@ -174,8 +184,8 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
         // std::{stable_}sort does not necessarily use swap! so must implement
         // sort outselves .. thankfully ranks will be low so can stick with
         // bubble
-        bubble_sort(begin(_bra), end(_bra), comp);
-        bubble_sort(begin(_ket), end(_ket), comp);
+        bubble_sort(begin(_bra), end(_bra), idxcmp);
+        bubble_sort(begin(_ket), end(_ket), idxcmp);
         if (is_antisymm)
           even = IndexSwapper::thread_instance().even_num_of_swaps();
         //      std::wcout << " is " << (even ? "even" : "odd") << " and
@@ -188,15 +198,15 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
         auto _bra = bra_range(t);
         auto _ket = ket_range(t);
         auto _zip_braket = zip(take(_bra, _rank), take(_ket, _rank));
-        bubble_sort(begin(_zip_braket), end(_zip_braket), comp);
+        bubble_sort(begin(_zip_braket), end(_zip_braket), paircmp);
         if (_bra_rank > _rank) {
           auto size_of_rest = _bra_rank - _rank;
           auto rest_of = counted(begin(_bra) + _rank, size_of_rest);
-          bubble_sort(begin(rest_of), end(rest_of), comp);
+          bubble_sort(begin(rest_of), end(rest_of), idxcmp);
         } else if (_ket_rank > _rank) {
           auto size_of_rest = _ket_rank - _rank;
           auto rest_of = counted(begin(_ket) + _rank, size_of_rest);
-          bubble_sort(begin(rest_of), end(rest_of), comp);
+          bubble_sort(begin(rest_of), end(rest_of), idxcmp);
         }
       } break;
 

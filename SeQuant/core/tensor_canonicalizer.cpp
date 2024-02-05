@@ -229,17 +229,24 @@ void TensorCanonicalizer::deregister_instance(std::wstring_view label) {
   }
 }
 
-std::function<bool(const Index&, const Index&)>
-    TensorCanonicalizer::index_comparer_ = TensorIndexComparer{};
+TensorCanonicalizer::index_comparer_t TensorCanonicalizer::index_comparer_ = TensorIndexComparer{};
 
-const std::function<bool(const Index&, const Index&)>&
-TensorCanonicalizer::index_comparer() {
+TensorCanonicalizer::index_pair_comparer_t TensorCanonicalizer::index_pair_comparer_ = TensorIndexComparer{};
+
+const TensorCanonicalizer::index_comparer_t& TensorCanonicalizer::index_comparer() {
   return index_comparer_;
 }
 
-void TensorCanonicalizer::index_comparer(
-    std::function<bool(const Index&, const Index&)> comparer) {
+void TensorCanonicalizer::index_comparer(index_comparer_t comparer) {
   index_comparer_ = std::move(comparer);
+}
+
+const TensorCanonicalizer::index_pair_comparer_t& TensorCanonicalizer::index_pair_comparer() {
+  return index_pair_comparer_;
+}
+
+void TensorCanonicalizer::index_pair_comparer(index_pair_comparer_t comparer) {
+  index_pair_comparer_ = std::move(comparer);
 }
 
 ExprPtr NullTensorCanonicalizer::apply(AbstractTensor&) const { return {}; }
@@ -257,9 +264,7 @@ void DefaultTensorCanonicalizer::tag_indices(AbstractTensor& t) const {
 ExprPtr DefaultTensorCanonicalizer::apply(AbstractTensor& t) const {
   tag_indices(t);
 
-  // TODO: Shove TensorIndexComparer into this->index_comparer_ (which makes it impossible for that to be a std::function)
-  //auto result = this->apply(t, this->index_comparer_);
-  auto result = this->apply(t, TensorIndexComparer{});
+  auto result = this->apply(t, this->index_comparer_, this->index_pair_comparer_);
 
   reset_tags(t);
 
@@ -274,7 +279,7 @@ ExprPtr TensorBlockCanonicalizer::apply(AbstractTensor& t) const {
   tag_indices(t);
 
   auto result =
-      DefaultTensorCanonicalizer::apply(t, TensorBlockIndexComparer{});
+      DefaultTensorCanonicalizer::apply(t, TensorBlockIndexComparer{}, TensorBlockIndexComparer{});
 
   reset_tags(t);
 
