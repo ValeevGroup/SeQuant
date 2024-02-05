@@ -150,9 +150,15 @@ TEST_CASE("Index", "[elements][index]") {
   SECTION("ordering") {
     Index i1(L"i_1");
     Index i2(L"i_2");
+    Index i3(L"i_11");
     REQUIRE(i1 < i2);
     REQUIRE(!(i2 < i1));
     REQUIRE(!(i1 < i1));
+    REQUIRE(i1 < i3);
+    REQUIRE(!(i3 < i1));
+    REQUIRE(i2 < i3);
+    REQUIRE(!(i3 < i2));
+    REQUIRE(!(i3 < i3));
     Index a1(L"a_2");
     REQUIRE(i1 < a1);
     REQUIRE(!(a1 < i1));

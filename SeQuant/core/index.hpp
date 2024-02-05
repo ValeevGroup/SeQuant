@@ -711,7 +711,12 @@ class Index : public Taggable {
       }
 
       if (i1.label() != i2.label()) {
-        // TODO: This won't yield the desired result for e.g. i_2 < i_13
+        // Note: Can't simply use label1 < label2 as that won't yield expected
+        // results for e.g. i2 < i11 (which will yield false)
+        if (i1.label().size() != i2.label().size()) {
+          return i1.label().size() < i2.label().size();
+        }
+
         return i1.label() < i2.label();
       }
 
