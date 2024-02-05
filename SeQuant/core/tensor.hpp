@@ -365,8 +365,6 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
       return this->ket_rank() < that_cast.ket_rank();
     }
 
-    // TODO: account for aux indices
-
     //          v1: compare hashes only
     //          return Expr::static_less_than(that);
     //          v2: compare fully
@@ -376,9 +374,15 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
           that_cast.bra().end());
     }
 
-    return std::lexicographical_compare(this->ket().begin(), this->ket().end(),
-                                        that_cast.ket().begin(),
-                                        that_cast.ket().end());
+    if (this->ket() != that_cast.ket()) {
+      return std::lexicographical_compare(
+          this->ket().begin(), this->ket().end(), that_cast.ket().begin(),
+          that_cast.ket().end());
+    }
+
+    return std::lexicographical_compare(
+        this->auxiliary().begin(), this->auxiliary().end(),
+        that_cast.auxiliary().begin(), that_cast.auxiliary().end());
   }
 
   // these implement the AbstractTensor interface
