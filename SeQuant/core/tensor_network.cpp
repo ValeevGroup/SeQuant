@@ -2,8 +2,6 @@
 // Created by Eduard Valeyev on 2019-02-26.
 //
 
-#include <SeQuant/core/tensor_network.hpp>
-#include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/attr.hpp>
@@ -16,6 +14,8 @@
 #include <SeQuant/core/latex.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/tag.hpp>
+#include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/wstring.hpp>
 
 #include <algorithm>
