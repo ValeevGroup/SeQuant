@@ -337,8 +337,7 @@ void TensorNetwork::canonicalize_graph(const named_indices_t &named_indices) {
   Graph graph = create_graph(&named_indices);
   // graph.bliss_graph->write_dot(std::wcout, graph.vertex_labels);
 
-  // TODO: Add logging var for this
-  if (false) {
+  if (Logger::get_instance().canonicalize_input_graph) {
     std::wcout << "Input graph for canonicalization:\n";
     graph.bliss_graph->write_dot(std::wcout, graph.vertex_labels);
   }
