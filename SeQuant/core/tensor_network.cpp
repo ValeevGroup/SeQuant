@@ -757,7 +757,7 @@ TensorNetwork::Graph TensorNetwork::create_graph(
           std::make_pair(tensor_vertex, graph.vertex_labels.size() - 1));
     }
 
-    // TODO: handle aux indices permutation symmetries
+    // TODO: handle aux indices permutation symmetries once they are supported
     // for now, auxiliary indices are considered to always be asymmetric
     for (std::size_t i = 0; i < auxiliary_rank(tensor); ++i) {
       graph.vertex_labels.emplace_back(L"aux_" + std::to_wstring(i + 1));

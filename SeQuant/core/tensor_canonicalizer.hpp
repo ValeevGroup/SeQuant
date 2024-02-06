@@ -214,9 +214,8 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
         abort();
     }
 
-    // For now we treat auxiliary indices as being unrelated to one another.
-    // This makes their order insignificant, allowing us to simply sort them.
-    auto _aux = auxiliary_range(t);
+	// TODO: Handle auxiliary index symmetries once they are introduced
+    // auto _aux = auxiliary_range(t);
     // ranges::sort(_aux, comp);
 
     ExprPtr result =
