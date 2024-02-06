@@ -18,6 +18,7 @@
 
 #include "catch.hpp"
 #include "test_config.hpp"
+#include "utils.hpp"
 
 #include <cassert>
 #include <cstddef>
@@ -278,9 +279,10 @@ TEST_CASE("Spin", "[spin]") {
     auto result = spintrace(expr);
     REQUIRE(result->is<Sum>());
     canonicalize(result);
-    REQUIRE(to_latex(result) ==
-            L"{ \\bigl( - {{g^{{p_4}{p_3}}_{{p_1}{p_2}}}} + "
-            L"{{g^{{p_3}{p_4}}_{{p_1}{p_2}}}}\\bigr) }");
+    REQUIRE(result->size() == 2);
+    REQUIRE_SUM_EQUAL(result,
+                      L"{ \\bigl({{g^{{p_3}{p_4}}_{{p_1}{p_2}}}} - "
+                      L"{{g^{{p_4}{p_3}}_{{p_1}{p_2}}}}\\bigr) }");
   }
 
   SECTION("Product") {
@@ -337,15 +339,19 @@ TEST_CASE("Spin", "[spin]") {
     expand(result);
     rapid_simplify(result);
     canonicalize(result);
-    REQUIRE(to_latex(result) ==
-            L"{ \\bigl({{f^{{a_1}}_{{i_1}}}{t^{{i_1}}_{{a_1}}}} + "
-            L"{{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{{a_1}{a_2}}}} - "
-            L"{{{\\frac{1}{2}}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_2}{i_1}}_{{"
-            L"a_1}{a_2}}}} - "
-            L"{{{\\frac{1}{2}}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_2}}_{{a_1}}}"
-            L"{t^{{i_1}}_{{a_2}}}} + "
-            L"{{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}}_{{a_1}}}{t^{{i_2}}_{{a_"
-            L"2}}}}\\bigr) }");
+    REQUIRE(result->is<Sum>());
+    REQUIRE(result->size() == 5);
+    REQUIRE_SUM_EQUAL(
+        result,
+        L"{ \\bigl( - "
+        L"{{{\\frac{1}{2}}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_2}{i_1}}_{{a_1}{"
+        L"a_2}}}} + "
+        L"{{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{{a_1}{a_2}}}} "
+        L"+ {{f^{{a_1}}_{{i_1}}}{t^{{i_1}}_{{a_1}}}} - "
+        L"{{{\\frac{1}{2}}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_2}"
+        L"}_{{a_1}}}{t^{{i_1}}_{{a_2}}}} + "
+        L"{{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}"
+        L"}_{{a_1}}}{t^{{i_2}}_{{a_2}}}}\\bigr) }");
   }  // Sum
 
   SECTION("Expand Antisymmetrizer"){// 0-body
@@ -576,21 +582,21 @@ SECTION("Expand Symmetrizer") {
     REQUIRE(result->size() == 6);
     result->canonicalize();
     rapid_simplify(result);
-    REQUIRE(
-        to_latex(result) ==
+    REQUIRE_SUM_EQUAL(
+        result,
         L"{ "
         L"\\bigl({{{4}}{g^{{a_4}{a_5}}_{{i_4}{i_5}}}{t^{{i_4}}_{{a_2}}}{t^{{"
-        L"i_3}}_{{a_4}}}{t^{{i_1}}_{{a_5}}}{t^{{i_5}{i_2}}_{{a_1}{a_3}}}} + "
-        L"{{{4}}{g^{{a_4}{a_5}}_{{i_4}{i_5}}}{t^{{i_4}}_{{a_1}}}{t^{{i_2}}_{{"
-        L"a_4}}}{t^{{i_3}}_{{a_5}}}{t^{{i_1}{i_5}}_{{a_2}{a_3}}}} + "
-        L"{{{4}}{g^{{a_4}{a_5}}_{{i_4}{i_5}}}{t^{{i_4}}_{{a_1}}}{t^{{i_3}}_{{"
-        L"a_4}}}{t^{{i_2}}_{{a_5}}}{t^{{i_5}{i_1}}_{{a_2}{a_3}}}} + "
-        L"{{{4}}{g^{{a_4}{a_5}}_{{i_4}{i_5}}}{t^{{i_5}}_{{a_3}}}{t^{{i_2}}_{{"
-        L"a_4}}}{t^{{i_1}}_{{a_5}}}{t^{{i_3}{i_4}}_{{a_1}{a_2}}}} + "
+        L"i_3}}_{{a_4}}}{t^{{i_1}}_{{a_5}}}{t^{{i_2}{i_5}}_{{a_3}{a_1}}}} + "
         L"{{{4}}{g^{{a_4}{a_5}}_{{i_4}{i_5}}}{t^{{i_4}}_{{a_3}}}{t^{{i_2}}_{{"
-        L"a_4}}}{t^{{i_1}}_{{a_5}}}{t^{{i_5}{i_3}}_{{a_1}{a_2}}}} + "
-        L"{{{4}}{g^{{a_4}{a_5}}_{{i_4}{i_5}}}{t^{{i_5}}_{{a_2}}}{t^{{i_3}}_{{"
-        L"a_4}}}{t^{{i_1}}_{{a_5}}}{t^{{i_2}{i_4}}_{{a_1}{a_3}}}}\\bigr) }");
+        L"a_4}}}{t^{{i_1}}_{{a_5}}}{t^{{i_3}{i_5}}_{{a_2}{a_1}}}} + "
+        L"{{{4}}{g^{{a_4}{a_5}}_{{i_4}{i_5}}}{t^{{i_5}}_{{a_1}}}{t^{{i_2}}_{{"
+        L"a_4}}}{t^{{i_3}}_{{a_5}}}{t^{{i_1}{i_4}}_{{a_3}{a_2}}}} + "
+        L"{{{4}}{g^{{a_4}{a_5}}_{{i_4}{i_5}}}{t^{{i_5}}_{{a_1}}}{t^{{i_3}}_{{"
+        L"a_4}}}{t^{{i_2}}_{{a_5}}}{t^{{i_1}{i_4}}_{{a_2}{a_3}}}} + "
+        L"{{{4}}{g^{{a_4}{a_5}}_{{i_4}{i_5}}}{t^{{i_4}}_{{a_2}}}{t^{{i_1}}_{{"
+        L"a_4}}}{t^{{i_3}}_{{a_5}}}{t^{{i_2}{i_5}}_{{a_1}{a_3}}}} + "
+        L"{{{4}}{g^{{a_4}{a_5}}_{{i_4}{i_5}}}{t^{{i_4}}_{{a_3}}}{t^{{i_1}}_{{"
+        L"a_4}}}{t^{{i_2}}_{{a_5}}}{t^{{i_3}{i_5}}_{{a_1}{a_2}}}}\\bigr) }");
   }
 }
 
@@ -627,7 +633,8 @@ SECTION("Symmetrize expression") {
     auto result =
         factorize_S(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}}, true);
     REQUIRE(to_latex(result) ==
-			L"{{S^{{a_1}{a_2}}_{{i_1}{i_2}}}{g^{{i_1}{a_3}}_{{i_3}{i_4}}}{t^{{i_3}}_{{a_1}}}{t^{{i_4}}_{{a_2}}}{t^{{i_2}}_{{a_3}}}}");
+            L"{{S^{{a_1}{a_2}}_{{i_1}{i_2}}}{g^{{i_1}{a_3}}_{{i_3}{i_4}}}{t^{{"
+            L"i_3}}_{{a_1}}}{t^{{i_4}}_{{a_2}}}{t^{{i_2}}_{{a_3}}}}");
   }
 
   {
@@ -652,7 +659,8 @@ SECTION("Symmetrize expression") {
     REQUIRE(result->is<Sum>() == false);
     REQUIRE(
         to_latex(result) ==
-		L"{{{2}}{S^{{a_1}{a_2}}_{{i_1}{i_2}}}{g^{{a_3}{a_4}}_{{i_3}{i_4}}}{t^{{i_4}}_{{a_2}}}{t^{{i_3}}_{{a_3}}}{t^{{i_1}{i_2}}_{{a_1}{a_4}}}}");
+        L"{{{2}}{S^{{a_1}{a_2}}_{{i_1}{i_2}}}{g^{{a_3}{a_4}}_{{i_3}{i_4}}}{t^{{"
+        L"i_4}}_{{a_2}}}{t^{{i_3}}_{{a_3}}}{t^{{i_1}{i_2}}_{{a_1}{a_4}}}}");
   }
 }
 
@@ -669,18 +677,20 @@ SECTION("Transform expression") {
   expand(result);
   rapid_simplify(result);
   canonicalize(result);
-  REQUIRE(
-      to_latex(result) ==
-      L"{ \\bigl( - {{g^{{a_2}{i_1}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}} + "
-      L"{{{2}}{g^{{i_1}{a_2}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}}\\bigr) }");
+  REQUIRE_SUM_EQUAL(
+      result,
+      L"{ \\bigl({{{2}}{g^{{a_2}{i_1}}_{{i_2}{a_1}}}{t^{{i_2}}_{{a_2}}}} - "
+      L"{{g^{{i_1}{a_2}}_{{i_2}{a_1}}}{t^{{i_2}}_{{a_2}}}}\\bigr) }");
 
   container::map<Index, Index> idxmap = {{Index{L"i_1"}, Index{L"i_2"}},
                                          {Index{L"i_2"}, Index{L"i_1"}}};
   auto transformed_result = transform_expr(result, idxmap);
-  REQUIRE(
-      to_latex(transformed_result) ==
-      L"{ \\bigl( - {{g^{{a_2}{i_2}}_{{a_1}{i_1}}}{t^{{i_1}}_{{a_2}}}} + "
-      L"{{{2}}{g^{{i_2}{a_2}}_{{a_1}{i_1}}}{t^{{i_1}}_{{a_2}}}}\\bigr) }");
+  REQUIRE(transformed_result->is<Sum>());
+  REQUIRE(transformed_result->size() == 2);
+  REQUIRE_SUM_EQUAL(
+      transformed_result,
+      L"{ \\bigl({{{2}}{g^{{a_2}{i_2}}_{{i_1}{a_1}}}{t^{{i_1}}_{{a_2}}}} - "
+      L"{{g^{{i_2}{a_2}}_{{i_1}{a_1}}}{t^{{i_1}}_{{a_2}}}}\\bigr) }");
 }
 
 SECTION("Swap bra kets") {
@@ -729,13 +739,14 @@ SECTION("Closed-shell spintrace CCD") {
   // Energy expression
   {
     {  // standard
-      const auto input = ex<Sum>(ExprPtrList{parse_expr(
-          L"1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}", Symmetry::antisymm)});
-      auto result = closed_shell_CC_spintrace(input);
-      REQUIRE(result == parse_expr(L"2 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2} - "
-                                   L"g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_2,i_1}",
-                                   Symmetry::nonsymm));
-    }
+		const auto input = ex<Sum>(ExprPtrList{parse_expr(
+			L"1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}", Symmetry::antisymm)});
+		auto result = closed_shell_CC_spintrace(input);
+		REQUIRE_SUM_EQUAL(result, to_latex(parse_expr(
+									  L"- g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_2,i_1} + "
+									  L"2 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}",
+									  Symmetry::nonsymm)));
+	}
     {  // CSV (aka PNO)
       Index i1(L"i_1", IndexSpace::instance(IndexSpace::active_occupied));
       Index i2(L"i_2", IndexSpace::instance(IndexSpace::active_occupied));
@@ -794,20 +805,20 @@ SECTION("Closed-shell spintrace CCSD") {
         ex<Constant>(rational{1, 2}) * spintrace(input, {{L"i_1", L"a_1"}});
     simplify(result);
 
-    REQUIRE(
-        to_latex(result) ==
-        L"{ \\bigl( - {{g^{{a_2}{i_1}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}} + "
-        L"{{{2}}{g^{{i_1}{a_2}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}}\\bigr) }");
+    REQUIRE_SUM_EQUAL(
+        result,
+        L"{ \\bigl({{{2}}{g^{{a_2}{i_1}}_{{i_2}{a_1}}}{t^{{i_2}}_{{a_2}}}} - "
+        L"{{g^{{i_1}{a_2}}_{{i_2}{a_1}}}{t^{{i_2}}_{{a_2}}}}\\bigr) }");
 
     container::map<Index, Index> idxmap = {{Index{L"i_1"}, Index{L"i_2"}},
                                            {Index{L"i_2"}, Index{L"i_1"}}};
     auto transformed_result = transform_expr(result, idxmap);
     REQUIRE(transformed_result->is<Sum>());
     REQUIRE(transformed_result->size() == 2);
-    REQUIRE(
-        to_latex(transformed_result) ==
-        L"{ \\bigl( - {{g^{{a_2}{i_2}}_{{a_1}{i_1}}}{t^{{i_1}}_{{a_2}}}} + "
-        L"{{{2}}{g^{{i_2}{a_2}}_{{a_1}{i_1}}}{t^{{i_1}}_{{a_2}}}}\\bigr) }");
+    REQUIRE_SUM_EQUAL(
+        transformed_result,
+        L"{ \\bigl({{{2}}{g^{{a_2}{i_2}}_{{i_1}{a_1}}}{t^{{i_1}}_{{a_2}}}} - "
+        L"{{g^{{i_2}{a_2}}_{{i_1}{a_1}}}{t^{{i_1}}_{{a_2}}}}\\bigr) }");
   }
 
   {
@@ -855,12 +866,13 @@ SECTION("Closed-shell spintrace CCSD") {
     expand(result);
     rapid_simplify(result);
     canonicalize(result);
-	REQUIRE(to_latex(result) ==
-		L"{ \\bigl( - "
-		L"{{{2}}{g^{{i_1}{a_2}}_{{i_2}{i_3}}}{t^{{i_2}{i_3}}_{{a_1}{a_2}}"
-		L"}} + "
-		L"{{g^{{i_1}{a_2}}_{{i_2}{i_3}}}{t^{{i_3}{i_2}}_{{a_1}{a_2}}}}"
-		L"\\bigr) }");
+    REQUIRE_SUM_EQUAL(
+        result,
+        L"{ \\bigl( - "
+        L"{{{2}}{g^{{i_1}{a_2}}_{{i_2}{i_3}}}{t^{{i_2}{i_3}}_{{a_1}{a_2}}"
+        L"}} + "
+        L"{{g^{{i_1}{a_2}}_{{i_2}{i_3}}}{t^{{i_3}{i_2}}_{{a_1}{a_2}}}}"
+        L"\\bigr) }");
   }
 
   {
@@ -878,11 +890,12 @@ SECTION("Closed-shell spintrace CCSD") {
     rapid_simplify(result);
     canonicalize(result);
 
-    REQUIRE(to_latex(result) ==
-            L"{ \\bigl( - "
-            L"{{g^{{a_3}{a_2}}_{{a_1}{i_2}}}{t^{{i_1}{i_2}}_{{a_2}{a_3}}}} + "
-            L"{{{2}}{g^{{a_3}{a_2}}_{{a_1}{i_2}}}{t^{{i_2}{i_1}}_{{a_2}{a_3}}"
-            L"}}\\bigr) }");
+    REQUIRE_SUM_EQUAL(result,
+                      L"{ "
+                      L"\\bigl({{{2}}{g^{{a_2}{a_3}}_{{i_2}{a_1}}}{t^{{i_1}{i_"
+                      L"2}}_{{a_3}{a_2}}}} - "
+                      L"{{g^{{a_2}{a_3}}_{{i_2}{a_1}}}{t^{{i_1}{i_2}}_{{a_2}{a_"
+                      L"3}}}}\\bigr) }");
   }
 
   {
@@ -898,10 +911,10 @@ SECTION("Closed-shell spintrace CCSD") {
     expand(result);
     rapid_simplify(result);
     canonicalize(result);
-    REQUIRE(
-        to_latex(result) ==
-        L"{ \\bigl( - {{f^{{a_2}}_{{i_2}}}{t^{{i_2}{i_1}}_{{a_1}{a_2}}}} + "
-        L"{{{2}}{f^{{a_2}}_{{i_2}}}{t^{{i_1}{i_2}}_{{a_1}{a_2}}}}\\bigr) }");
+    REQUIRE_SUM_EQUAL(
+        result,
+        L"{ \\bigl({{{2}}{f^{{a_2}}_{{i_2}}}{t^{{i_1}{i_2}}_{{a_1}{a_2}}}} - "
+        L"{{f^{{a_2}}_{{i_2}}}{t^{{i_2}{i_1}}_{{a_1}{a_2}}}}\\bigr) }");
   }
 
   {
@@ -917,10 +930,13 @@ SECTION("Closed-shell spintrace CCSD") {
     expand(result);
     rapid_simplify(result);
     canonicalize(result);
-    REQUIRE(to_latex(result) ==
-            L"{ "
-			L"\\bigl({{{2}}{g^{{a_2}{a_3}}_{{i_2}{a_1}}}{t^{{i_2}}_{{a_2}}}{t^{{i_1}}_{{a_3}}}} - "
-			L"{{g^{{a_2}{a_3}}_{{i_2}{a_1}}}{t^{{i_1}}_{{a_2}}}{t^{{i_2}}_{{a_3}}}}\\bigr) }");
+    REQUIRE_SUM_EQUAL(
+        result,
+        L"{ "
+        L"\\bigl({{{2}}{g^{{a_2}{a_3}}_{{i_2}{a_1}}}{t^{{i_2}}_{{a_2}}}{t^{"
+        L"{i_1}}_{{a_3}}}} - "
+        L"{{g^{{a_2}{a_3}}_{{i_2}{a_1}}}{t^{{i_1}}_{{a_2}}}{t^{{i_2}}_{{a_"
+        L"3}}}}\\bigr) }");
   }
 
   {
@@ -936,8 +952,13 @@ SECTION("Closed-shell spintrace CCSD") {
     expand(result);
     rapid_simplify(result);
     canonicalize(result);
-    REQUIRE(to_latex(result) ==
-            L"{ \\bigl( - {{{2}}{g^{{i_1}{a_2}}_{{i_2}{i_3}}}{t^{{i_2}}_{{a_1}}}{t^{{i_3}}_{{a_2}}}} + {{g^{{i_1}{a_2}}_{{i_2}{i_3}}}{t^{{i_3}}_{{a_1}}}{t^{{i_2}}_{{a_2}}}}\\bigr) }");
+    REQUIRE_SUM_EQUAL(
+        result,
+        L"{ \\bigl( - "
+        L"{{{2}}{g^{{i_1}{a_2}}_{{i_2}{i_3}}}{t^{{i_2}}_{{a_1}}}{t^{{i_3}}_"
+        L"{{a_2}}}} + "
+        L"{{g^{{i_1}{a_2}}_{{i_2}{i_3}}}{t^{{i_3}}_{{a_1}}}{t^{{i_2}}_{{a_"
+        L"2}}}}\\bigr) }");
   }
 
   {
@@ -953,10 +974,11 @@ SECTION("Closed-shell spintrace CCSD") {
     expand(result);
     rapid_simplify(result);
     canonicalize(result);
-    REQUIRE(to_latex(result) ==
-            L"{ \\bigl( - "
-            L"{{f^{{a_2}}_{{i_2}}}{t^{{i_2}}_{{a_1}}}{t^{{i_1}}_{{a_2}}}}"
-            L"\\bigr) }");
+    REQUIRE_SUM_EQUAL(
+        result,
+        L"{ \\bigl( - "
+        L"{{f^{{a_2}}_{{i_2}}}{t^{{i_2}}_{{a_1}}}{t^{{i_1}}_{{a_2}}}}"
+        L"\\bigr) }");
   }
 
   {
@@ -974,12 +996,12 @@ SECTION("Closed-shell spintrace CCSD") {
     expand(result);
     rapid_simplify(result);
     canonicalize(result);
-    REQUIRE(to_latex(result) ==
-            L"{ \\bigl( - "
-            L"{{{2}}{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_3}}_{{a_1}}}{t^{{"
-            L"i_2}{i_1}}_{{a_2}{a_3}}}} + "
-            L"{{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_2}}_{{a_1}}}{t^{{i_3}{"
-            L"i_1}}_{{a_2}{a_3}}}}\\bigr) }");
+    REQUIRE_SUM_EQUAL(result,
+                      L"{ "
+                      L"\\bigl({{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_2}}_{{a_1}}"
+                      L"}{t^{{i_1}{i_3}}_{{a_3}{a_2}}}} - "
+                      L"{{{2}}{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_3}}_{{a_1}}}{"
+                      L"t^{{i_1}{i_2}}_{{a_3}{a_2}}}}\\bigr) }");
   }
 
   {
@@ -997,11 +1019,14 @@ SECTION("Closed-shell spintrace CCSD") {
     expand(result);
     rapid_simplify(result);
     canonicalize(result);
-    REQUIRE(to_latex(result) ==
-            L"{ \\bigl("
-			L"{{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_1}}_{{a_2}}}{t^{{i_3}{i_2}}_{{a_1}{a_3}}}} - "
-			L"{{{2}}{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_1}}_{{a_3}}}{t^{{i_3}{i_2}}_{{a_1}{a_2}}}}"
-			L"\\bigr) }");
+    REQUIRE_SUM_EQUAL(
+        result,
+        L"{ \\bigl("
+        L"{{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_1}}_{{a_2}}}{t^{{i_3}{i_2}}_"
+        L"{{a_1}{a_3}}}} - "
+        L"{{{2}}{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_1}}_{{a_3}}}{t^{{i_3}{"
+        L"i_2}}_{{a_1}{a_2}}}}"
+        L"\\bigr) }");
   }
 
   {
@@ -1019,16 +1044,20 @@ SECTION("Closed-shell spintrace CCSD") {
     expand(result);
     rapid_simplify(result);
     canonicalize(result);
-    REQUIRE(to_latex(result) ==
-            L"{ \\bigl( - "
-            L"{{{2}}{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_2}}_{{a_3}}}{t^{{i_1}"
-            L"{i_3}}_{{a_1}{a_2}}}} + "
-            L"{{{4}}{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_2}}_{{a_2}}}{t^{{i_1}"
-            L"{i_3}}_{{a_1}{a_3}}}} - "
-            L"{{{2}}{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_2}}_{{a_2}}}{t^{{i_3}"
-            L"{i_1}}_{{a_1}{a_3}}}} + "
-            L"{{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_3}}_{{a_2}}}{t^{{i_2}{i_1}"
-            L"}_{{a_1}{a_3}}}}\\bigr) }");
+    REQUIRE_SUM_EQUAL(result,
+                      L"{ \\bigl("
+                      L"{{{4}}{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_3}}_{{a_3}}}{"
+                      L"t^{{i_1}{i_2}}_{{a_1}{a_2}}}}"
+                      L" + "
+                      L"{{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_2}}_{{a_3}}}{t^{{"
+                      L"i_3}{i_1}}_{{a_1}{a_2}}}}"
+                      L" - "
+                      L"{{{2}}{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_2}}_{{a_2}}}{"
+                      L"t^{{i_3}{i_1}}_{{a_1}{a_3}}}}"
+                      L" - "
+                      L"{{{2}}{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_3}}_{{a_2}}}{"
+                      L"t^{{i_1}{i_2}}_{{a_1}{a_3}}}}"
+                      L"\\bigr) }");
   }
 
   {
@@ -1045,12 +1074,14 @@ SECTION("Closed-shell spintrace CCSD") {
     expand(result);
     rapid_simplify(result);
     canonicalize(result);
-    REQUIRE(to_latex(result) ==
-            L"{ \\bigl( - "
-            L"{{{2}}{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_3}}_{{a_1}}}{t^{{i_2}"
-            L"}_{{a_2}}}{t^{{i_1}}_{{a_3}}}} + "
-            L"{{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_2}}_{{a_1}}}{t^{{i_3}}_{{"
-            L"a_2}}}{t^{{i_1}}_{{a_3}}}}\\bigr) }");
+    REQUIRE_SUM_EQUAL(result,
+                      L"{ "
+                      L"\\bigl( - "
+                      L"{{{2}}{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_3}}_{{a_1}}}{"
+                      L"t^{{i_2}}_{{a_2}}}{t^{{i_1}}_{{a_3}}}} + "
+                      L"{{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_3}}_{{a_1}}}{t^{{"
+                      L"i_1}}_{{a_2}}}{t^{{i_2}}_{{a_3}}}}"
+                      L"\\bigr) }");
   }
 }  // CCSD R1
 
@@ -1073,16 +1104,17 @@ SECTION("Closed-shell spintrace CCSDT terms") {
         input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
     simplify(result);
     REQUIRE(result->size() == 4);
-    REQUIRE(to_latex(result) ==
-            L"{ \\bigl( - "
-            L"{{{2}}{S^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}{f^{{i_3}}_{{i_4}}"
-            L"}{t^{{i_2}{i_1}{i_4}}_{{a_1}{a_2}{a_3}}}} + "
-            L"{{{4}}{S^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}{f^{{i_3}}_{{i_4}}"
-            L"}{t^{{i_1}{i_2}{i_4}}_{{a_1}{a_2}{a_3}}}} + "
-            L"{{{2}}{S^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}{f^{{i_3}}_{{i_4}}"
-            L"}{t^{{i_4}{i_1}{i_2}}_{{a_1}{a_2}{a_3}}}} - "
-            L"{{{4}}{S^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}{f^{{i_3}}_{{i_4}}"
-            L"}{t^{{i_1}{i_4}{i_2}}_{{a_1}{a_2}{a_3}}}}\\bigr) }");
+    REQUIRE_SUM_EQUAL(
+        result,
+        L"{ "
+        L"\\bigl({{{2}}{S^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}{f^{"
+        L"{i_3}}_{{i_4}}}{t^{{i_4}{i_1}{i_2}}_{{a_1}{a_2}{a_3}}}} - "
+        L"{{{4}}{S^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}{f^{{i_3}}_"
+        L"{{i_4}}}{t^{{i_1}{i_4}{i_2}}_{{a_1}{a_2}{a_3}}}} + "
+        L"{{{4}}{S^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}{f^{{i_3}}_{{i_4}}"
+        L"}{t^{{i_1}{i_2}{i_4}}_{{a_1}{a_2}{a_3}}}} - "
+        L"{{{2}}{S^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}{f^{{i_3}}_{{i_4}}"
+        L"}{t^{{i_2}{i_1}{i_4}}_{{a_1}{a_2}{a_3}}}}\\bigr) }");
   }
 
   {  // f * t3
@@ -1392,7 +1424,8 @@ SECTION("Open-shell spin-tracing") {
     auto ft3 = f * t3;
     ft3->canonicalize();
     REQUIRE(to_latex(ft3) ==
-			L"{{f^{{a↑_2}}_{{a↑_1}}}{t^{{i↑_1}{i↑_3}{i↓_2}}_{{a↑_3}{a↑_2}{a↓_2}}}}");
+            L"{{f^{{a↑_2}}_{{a↑_1}}}{t^{{i↑_1}{i↑_3}{i↓_2}}_{{a↑_3}{a↑_2}{a↓_2}"
+            L"}}}");
   }
 
   //  g
@@ -1470,18 +1503,20 @@ SECTION("Open-shell spin-tracing") {
     REQUIRE(to_latex(result[0]) ==
             L"{{{\\frac{1}{12}}}{f^{{a↑_4}}_{{a↑_1}}}{\\bar{t}^{{i↑_1}{i↑_2}{"
             L"i↑_3}}_{{a↑_2}{a↑_3}{a↑_4}}}}");
-    REQUIRE(to_latex(result[1]) ==
-            L"{ \\bigl( - "
-            L"{{{\\frac{1}{12}}}{f^{{a↑_3}}_{{a↑_1}}}{t^{{i↑_1}{i↑_2}{i↓_3}}_"
-            L"{{a↑_2}{a↑_3}{a↓_3}}}} + "
-            L"{{{\\frac{1}{12}}}{f^{{a↑_3}}_{{a↑_1}}}{t^{{i↑_2}{i↑_1}{i↓_3}}_"
-            L"{{a↑_2}{a↑_3}{a↓_3}}}}\\bigr) }");
-    REQUIRE(to_latex(result[2]) ==
-            L"{ \\bigl( - "
-            L"{{{\\frac{1}{12}}}{f^{{a↑_2}}_{{a↑_1}}}{t^{{i↑_1}{i↓_3}{i↓_2}}_"
-            L"{{a↑_2}{a↓_2}{a↓_3}}}} + "
-            L"{{{\\frac{1}{12}}}{f^{{a↑_2}}_{{a↑_1}}}{t^{{i↑_1}{i↓_2}{i↓_3}}_{{"
-            L"a↑_2}{a↓_2}{a↓_3}}}}\\bigr) }");
+    REQUIRE_SUM_EQUAL(
+        result[1],
+        L"{ \\bigl( - "
+        L"{{{\\frac{1}{12}}}{f^{{a↑_3}}_{{a↑_1}}}{t^{{i↑_1}{i↑_2}{i↓_3}}_"
+        L"{{a↑_2}{a↑_3}{a↓_3}}}} + "
+        L"{{{\\frac{1}{12}}}{f^{{a↑_3}}_{{a↑_1}}}{t^{{i↑_2}{i↑_1}{i↓_3}}_"
+        L"{{a↑_2}{a↑_3}{a↓_3}}}}\\bigr) }");
+    REQUIRE_SUM_EQUAL(
+        result[2],
+        L"{ \\bigl( - "
+        L"{{{\\frac{1}{12}}}{f^{{a↑_2}}_{{a↑_1}}}{t^{{i↑_1}{i↓_3}{i↓_2}}_"
+        L"{{a↑_2}{a↓_2}{a↓_3}}}} + "
+        L"{{{\\frac{1}{12}}}{f^{{a↑_2}}_{{a↑_1}}}{t^{{i↑_1}{i↓_2}{i↓_3}}_{{"
+        L"a↑_2}{a↓_2}{a↓_3}}}}\\bigr) }");
     REQUIRE(to_latex(result[3]) ==
             L"{{{\\frac{1}{12}}}{f^{{a↓_4}}_{{a↓_1}}}{\\bar{t}^{{i↓_1}{i↓_2}{"
             L"i↓_3}}_{{a↓_2}{a↓_3}{a↓_4}}}}");
