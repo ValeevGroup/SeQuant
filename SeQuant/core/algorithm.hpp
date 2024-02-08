@@ -49,8 +49,8 @@ void bubble_sort(ForwardIter begin, Sentinel end, Compare comp) {
           swapped = true;
         }
       } else {
-        const auto &val0 = *inext;
-        const auto &val1 = *i;
+        const auto& val0 = *inext;
+        const auto& val1 = *i;
         static_assert(std::tuple_size_v<std::decay_t<decltype(val0)>> == 2,
                       "need to generalize comparer to handle tuples");
 

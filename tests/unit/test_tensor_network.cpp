@@ -40,8 +40,6 @@
 
 #include <range/v3/all.hpp>
 
-// TODO: Add test cases with auxiliary indices
-
 std::string to_utf8(const std::wstring& wstr) {
   using convert_type = std::codecvt_utf8<wchar_t>;
   std::wstring_convert<convert_type, wchar_t> converter;
@@ -85,28 +83,6 @@ TEST_CASE("TensorNetwork", "[elements]") {
   using namespace sequant;
 
   using namespace sequant::mbpt::sr;
-
-  /*
-  SECTION("dummy") {
-          using Edge = TensorNetwork::Edge;
-          using Vertex = TensorNetwork::Vertex;
-          using Origin = TensorNetwork::Origin;
-
-          Vertex v1(Origin::Bra, 0, 0, Symmetry::antisymm);
-          Vertex v2(Origin::Ket, 0, 0, Symmetry::antisymm);
-          Vertex v3(Origin::Ket, 2, 0, Symmetry::antisymm);
-          Vertex v4(Origin::Ket, 1, 0, Symmetry::antisymm);
-
-          Edge e1(v1, {});
-          e1.connect_to(v3);
-
-          Edge e2(v2, {});
-          e2.connect_to(v3);
-
-          std::wcout << std::boolalpha << (e1 < e2) << " reverse " << (e2 < e1)
-  << " with self " << (e1 < e1) << std::endl; std::abort();
-  }
-  */
 
   SECTION("Edges") {
     using Vertex = TensorNetwork::Vertex;
@@ -384,26 +360,31 @@ TEST_CASE("TensorNetwork", "[elements]") {
 
     SECTION("miscellaneous") {
       const std::vector<std::pair<std::wstring, std::wstring>> inputs = {
-		  {L"g{i_1,a_1;i_2,i_3}:A * I{i_2,i_3;i_1,a_1}:A", L"g{i_1,a_1;i_2,i_3}:A * I{i_2,i_3;i_1,a_1}:A"},
-		  {L"g{a_1,i_1;i_2,i_3}:A * I{i_2,i_3;i_1,a_1}:A", L"-1 g{i_1,a_1;i_2,i_3}:A * I{i_2,i_3;i_1,a_1}:A"},
+          {L"g{i_1,a_1;i_2,i_3}:A * I{i_2,i_3;i_1,a_1}:A",
+           L"g{i_1,a_1;i_2,i_3}:A * I{i_2,i_3;i_1,a_1}:A"},
+          {L"g{a_1,i_1;i_2,i_3}:A * I{i_2,i_3;i_1,a_1}:A",
+           L"-1 g{i_1,a_1;i_2,i_3}:A * I{i_2,i_3;i_1,a_1}:A"},
 
-		  {L"g{i_1,a_1;i_2,i_3}:N * I{i_2,i_3;i_1,a_1}:N", L"g{i_1,a_1;i_2,i_3}:N * I{i_2,i_3;i_1,a_1}:N"},
-		  {L"g{a_1,i_1;i_2,i_3}:N * I{i_2,i_3;i_1,a_1}:N", L"g{i_1,a_1;i_2,i_3}:N * I{i_3,i_2;i_1,a_1}:N"},
-	  };
-
+          {L"g{i_1,a_1;i_2,i_3}:N * I{i_2,i_3;i_1,a_1}:N",
+           L"g{i_1,a_1;i_2,i_3}:N * I{i_2,i_3;i_1,a_1}:N"},
+          {L"g{a_1,i_1;i_2,i_3}:N * I{i_2,i_3;i_1,a_1}:N",
+           L"g{i_1,a_1;i_2,i_3}:N * I{i_3,i_2;i_1,a_1}:N"},
+      };
 
       for (const auto& [input, expected] : inputs) {
         const auto input_tensors = parse_expr(input).as<Product>().factors();
 
         TensorNetwork tn(input_tensors);
-        ExprPtr factor = tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), true);
+        ExprPtr factor = tn.canonicalize(
+            TensorCanonicalizer::cardinal_tensor_labels(), true);
 
-		ExprPtr prod = to_product(tn.tensors());
-		if (factor) {
-			prod = ex<Product>(prod.as<Product>().scale(factor.as<Constant>().value()));
-		}
+        ExprPtr prod = to_product(tn.tensors());
+        if (factor) {
+          prod = ex<Product>(
+              prod.as<Product>().scale(factor.as<Constant>().value()));
+        }
 
-		REQUIRE(deparse_expr(prod) == expected);
+        REQUIRE(deparse_expr(prod) == expected);
       }
     }
 

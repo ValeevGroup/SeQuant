@@ -77,17 +77,17 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
 
     REQUIRE(node(node1, {R}).as_constant() == Constant{rational{1, 16}});
 
-	REQUIRE_TENSOR_EQUAL(node(node1, {L}).as_tensor(), L"I_{a1,a2}^{i1,i2}");
+    REQUIRE_TENSOR_EQUAL(node(node1, {L}).as_tensor(), L"I_{a1,a2}^{i1,i2}");
 
-	REQUIRE_TENSOR_EQUAL(node(node1, {L, L}).as_tensor(), L"I_{a1,a2}^{a3,a4}");
+    REQUIRE_TENSOR_EQUAL(node(node1, {L, L}).as_tensor(), L"I_{a1,a2}^{a3,a4}");
 
-	REQUIRE_TENSOR_EQUAL(node(node1, {L, R}).as_tensor(), L"t_{a3,a4}^{i1,i2}");
+    REQUIRE_TENSOR_EQUAL(node(node1, {L, R}).as_tensor(), L"t_{a3,a4}^{i1,i2}");
 
     REQUIRE_TENSOR_EQUAL(node(node1, {L, L, L}).as_tensor(),
-                            L"g_{i3,i4}^{a3,a4}");
+                         L"g_{i3,i4}^{a3,a4}");
 
     REQUIRE_TENSOR_EQUAL(node(node1, {L, L, R}).as_tensor(),
-                            L"t_{a1,a2}^{i3,i4}");
+                         L"t_{a1,a2}^{i3,i4}");
 
     // 1/16 * A * (B * C)
     auto node2p = Product{p1->as<Product>().scalar(), {}};
@@ -99,22 +99,18 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
 
     REQUIRE_TENSOR_EQUAL(node(node2, {}).as_tensor(), L"I_{a1,a2}^{i1,i2}");
 
-    REQUIRE_TENSOR_EQUAL(
-        node(node2, {L}).as_tensor(), L"I_{a1,a2}^{i1,i2}");
+    REQUIRE_TENSOR_EQUAL(node(node2, {L}).as_tensor(), L"I_{a1,a2}^{i1,i2}");
 
     REQUIRE(node(node2, {R}).as_constant() == Constant{rational{1, 16}});
 
-    REQUIRE_TENSOR_EQUAL(
-        node(node2, {L, L}).as_tensor(), L"g{i3,i4; a3,a4}");
+    REQUIRE_TENSOR_EQUAL(node(node2, {L, L}).as_tensor(), L"g{i3,i4; a3,a4}");
 
     REQUIRE_TENSOR_EQUAL(node(node2, {L, R}).as_tensor(),
-                            L"I{a1,a2,a3,a4;i3,i4,i1,i2}");
+                         L"I{a1,a2,a3,a4;i3,i4,i1,i2}");
 
-    REQUIRE_TENSOR_EQUAL(
-        node(node2, {L, R, L}).as_tensor(), L"t{a1,a2;i3,i4}");
+    REQUIRE_TENSOR_EQUAL(node(node2, {L, R, L}).as_tensor(), L"t{a1,a2;i3,i4}");
 
-    REQUIRE_TENSOR_EQUAL(
-        node(node2, {L, R, R}).as_tensor(), L"t{a3,a4;i1,i2}");
+    REQUIRE_TENSOR_EQUAL(node(node2, {L, R, R}).as_tensor(), L"t{a3,a4;i1,i2}");
   }
 
   SECTION("sum") {
@@ -128,20 +124,19 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
     REQUIRE(node1.left()->op_type() == EvalOp::Sum);
     REQUIRE_TENSOR_EQUAL(node1.left()->as_tensor(), L"I^{i1,i2}_{a1,a2}");
     REQUIRE_TENSOR_EQUAL(node1.left().left()->as_tensor(),
-                            L"X^{i1,i2}_{a1,a2}");
+                         L"X^{i1,i2}_{a1,a2}");
     REQUIRE_TENSOR_EQUAL(node1.left().right()->as_tensor(),
-                            L"Y^{i1,i2}_{a1,a2}");
+                         L"Y^{i1,i2}_{a1,a2}");
 
     REQUIRE(node1.right()->op_type() == EvalOp::Prod);
-	if constexpr (hash_version() == hash::Impl::BoostPre181) {
-		REQUIRE_TENSOR_EQUAL(node1.right()->as_tensor(), L"I_{a2,a1}^{i1,i2}");
-	} else {
-		REQUIRE_TENSOR_EQUAL(node1.right()->as_tensor(), L"I_{a1,a2}^{i1,i2}");
-	}
+    if constexpr (hash_version() == hash::Impl::BoostPre181) {
+      REQUIRE_TENSOR_EQUAL(node1.right()->as_tensor(), L"I_{a2,a1}^{i1,i2}");
+    } else {
+      REQUIRE_TENSOR_EQUAL(node1.right()->as_tensor(), L"I_{a1,a2}^{i1,i2}");
+    }
     REQUIRE_TENSOR_EQUAL(node1.right().left()->as_tensor(),
-                            L"g_{i3,a1}^{i1,i2}");
-    REQUIRE_TENSOR_EQUAL(
-        node1.right().right()->as_tensor(), L"t_{a2}^{i3}");
+                         L"g_{i3,a1}^{i1,i2}");
+    REQUIRE_TENSOR_EQUAL(node1.right().right()->as_tensor(), L"t_{a2}^{i3}");
   }
 
   SECTION("variable") {

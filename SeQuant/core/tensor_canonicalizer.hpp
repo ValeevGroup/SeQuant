@@ -18,9 +18,10 @@ namespace sequant {
 /// of that class with TensorCanonicalizer::register_instance
 class TensorCanonicalizer {
  public:
-	 using index_comparer_t = std::function<bool(const Index&, const Index&)>;
-	 using index_pair_t = std::pair<const Index, const Index>;
-	 using index_pair_comparer_t = std::function<bool(const index_pair_t &, const index_pair_t)>;
+  using index_comparer_t = std::function<bool(const Index&, const Index&)>;
+  using index_pair_t = std::pair<const Index, const Index>;
+  using index_pair_comparer_t =
+      std::function<bool(const index_pair_t&, const index_pair_t)>;
 
   virtual ~TensorCanonicalizer();
 
@@ -96,7 +97,7 @@ class TensorCanonicalizer {
   static const index_pair_comparer_t& index_pair_comparer();
 
   /// @param comparer the compare object to be used by this
-  static void index_pair_comparer( index_pair_comparer_t comparer);
+  static void index_pair_comparer(index_pair_comparer_t comparer);
 
  protected:
   inline auto bra_range(AbstractTensor& t) const { return t._bra_mutable(); }
@@ -155,7 +156,8 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
   /// Core of DefaultTensorCanonicalizer::apply, only does the canonicalization,
   /// i.e. no tagging/untagging
   template <typename IndexComp, typename IndexPairComp>
-  ExprPtr apply(AbstractTensor& t, const IndexComp &idxcmp, const IndexPairComp &paircmp) const {
+  ExprPtr apply(AbstractTensor& t, const IndexComp& idxcmp,
+                const IndexPairComp& paircmp) const {
     // std::wcout << "abstract tensor: " << to_latex(t) << "\n";
     auto s = symmetry(t);
     auto is_antisymm = (s == Symmetry::antisymm);
@@ -214,7 +216,7 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
         abort();
     }
 
-	// TODO: Handle auxiliary index symmetries once they are introduced
+    // TODO: Handle auxiliary index symmetries once they are introduced
     // auto _aux = auxiliary_range(t);
     // ranges::sort(_aux, comp);
 

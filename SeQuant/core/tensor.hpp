@@ -229,17 +229,17 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
     result += L"}";
     if (!this->auxiliary_.empty()) {
       result += L"(";
-	  const index_container_type &aux = auxiliary();
-	  for (std::size_t i = 0; i < auxiliary_rank(); ++i) {
-		  result += sequant::to_latex(aux[i]);
+      const index_container_type &aux = auxiliary();
+      for (std::size_t i = 0; i < auxiliary_rank(); ++i) {
+        result += sequant::to_latex(aux[i]);
 
-		  if (i + 1 < auxiliary_rank()) {
-			  result += L",";
-		  }
-	  }
+        if (i + 1 < auxiliary_rank()) {
+          result += L",";
+        }
+      }
       result += L")";
     }
-	result += L"}";
+    result += L"}";
     return result;
   }
 

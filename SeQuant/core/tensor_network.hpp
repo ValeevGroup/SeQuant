@@ -114,11 +114,11 @@ class TensorNetwork {
         return first < other.first;
       }
 
-      if(second < other.second) {
-		  return second < other.second;
-	  }
+      if (second < other.second) {
+        return second < other.second;
+      }
 
-	  return index.space() < other.index.space();
+      return index.space() < other.index.space();
     }
 
     bool operator==(const Edge &other) const {
@@ -264,15 +264,18 @@ class TensorNetwork {
   /// remains undefined.
   void canonicalize_graph(const named_indices_t &named_indices);
 
-  /// Canonicalizes every individual tensor for itself, taking into account only tensor blocks
+  /// Canonicalizes every individual tensor for itself, taking into account only
+  /// tensor blocks
   /// @returns The byproduct of the canonicalizations
-  ExprPtr canonicalize_individual_tensor_blocks(const named_indices_t &named_indices);
+  ExprPtr canonicalize_individual_tensor_blocks(
+      const named_indices_t &named_indices);
 
   /// Canonicalizes every individual tensor for itself
   /// @returns The byproduct of the canonicalizations
   ExprPtr canonicalize_individual_tensors(const named_indices_t &named_indices);
 
-  ExprPtr do_individual_canonicalization(const TensorCanonicalizer &canonicalizer);
+  ExprPtr do_individual_canonicalization(
+      const TensorCanonicalizer &canonicalizer);
 };
 
 template <typename CharT, typename Traits>

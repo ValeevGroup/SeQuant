@@ -115,14 +115,14 @@ struct TensorBlockIndexComparer {
       return 0;
     }
 
-	const int lhs_tag = lhs.tag().value<int>();
-	const int rhs_tag = rhs.tag().value<int>();
+    const int lhs_tag = lhs.tag().value<int>();
+    const int rhs_tag = rhs.tag().value<int>();
 
-	if (lhs_tag != rhs_tag) {
-		return lhs_tag < rhs_tag ? -1 : 1;
-	}
+    if (lhs_tag != rhs_tag) {
+      return lhs_tag < rhs_tag ? -1 : 1;
+    }
 
-	return 0;
+    return 0;
   }
 };
 
@@ -137,7 +137,7 @@ struct TensorIndexComparer {
       return res < 0;
     }
 
-	// Fall back to regular index compare to break the tie
+    // Fall back to regular index compare to break the tie
     if constexpr (is_tuple_like_v<T>) {
       static_assert(std::tuple_size_v<T> == 2,
                     "TensorIndexComparer can only deal with tuple-like objects "
@@ -229,11 +229,14 @@ void TensorCanonicalizer::deregister_instance(std::wstring_view label) {
   }
 }
 
-TensorCanonicalizer::index_comparer_t TensorCanonicalizer::index_comparer_ = TensorIndexComparer{};
+TensorCanonicalizer::index_comparer_t TensorCanonicalizer::index_comparer_ =
+    TensorIndexComparer{};
 
-TensorCanonicalizer::index_pair_comparer_t TensorCanonicalizer::index_pair_comparer_ = TensorIndexComparer{};
+TensorCanonicalizer::index_pair_comparer_t
+    TensorCanonicalizer::index_pair_comparer_ = TensorIndexComparer{};
 
-const TensorCanonicalizer::index_comparer_t& TensorCanonicalizer::index_comparer() {
+const TensorCanonicalizer::index_comparer_t&
+TensorCanonicalizer::index_comparer() {
   return index_comparer_;
 }
 
@@ -241,7 +244,8 @@ void TensorCanonicalizer::index_comparer(index_comparer_t comparer) {
   index_comparer_ = std::move(comparer);
 }
 
-const TensorCanonicalizer::index_pair_comparer_t& TensorCanonicalizer::index_pair_comparer() {
+const TensorCanonicalizer::index_pair_comparer_t&
+TensorCanonicalizer::index_pair_comparer() {
   return index_pair_comparer_;
 }
 
@@ -264,7 +268,8 @@ void DefaultTensorCanonicalizer::tag_indices(AbstractTensor& t) const {
 ExprPtr DefaultTensorCanonicalizer::apply(AbstractTensor& t) const {
   tag_indices(t);
 
-  auto result = this->apply(t, this->index_comparer_, this->index_pair_comparer_);
+  auto result =
+      this->apply(t, this->index_comparer_, this->index_pair_comparer_);
 
   reset_tags(t);
 
@@ -278,8 +283,8 @@ using suitable_call_operator =
 ExprPtr TensorBlockCanonicalizer::apply(AbstractTensor& t) const {
   tag_indices(t);
 
-  auto result =
-      DefaultTensorCanonicalizer::apply(t, TensorBlockIndexComparer{}, TensorBlockIndexComparer{});
+  auto result = DefaultTensorCanonicalizer::apply(t, TensorBlockIndexComparer{},
+                                                  TensorBlockIndexComparer{});
 
   reset_tags(t);
 
