@@ -74,6 +74,8 @@ include(AddCustomTargetSubproject)
 include(FeatureSummary)
 include(CMakePackageConfigHelpers)
 
+option(SEQUANT_BUILD_BENCHMARKS "Enable building of benchmarks" OFF)
+
 ##########################
 # Standard build variables
 ##########################
@@ -571,7 +573,9 @@ else (BUILD_TESTING)
     add_custom_target_subproject(sequant check USES_TERMINAL COMMAND echo "WARNING: SeQuant testing disabled. To enable, give -DBUILD_TESTING=ON to cmake")
 endif (BUILD_TESTING)
 
-add_subdirectory(benchmarks)
+if (SEQUANT_BUILD_BENCHMARKS)
+    add_subdirectory(benchmarks)
+endif()
 
 ####### Python ########
 
