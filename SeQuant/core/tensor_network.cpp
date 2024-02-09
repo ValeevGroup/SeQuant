@@ -771,7 +771,7 @@ TensorNetwork::Graph TensorNetwork::create_graph(
   // Now add all indices (edges) to the graph
   for (const Edge &current_edge : edges_) {
     const Index &index = current_edge.idx();
-    graph.vertex_labels.push_back(index.to_latex());
+    graph.vertex_labels.push_back(std::wstring(index.label()));
     graph.vertex_types.push_back(VertexType::Index);
 
     // Assign index color
@@ -803,7 +803,7 @@ TensorNetwork::Graph TensorNetwork::create_graph(
         // Create a new vertex for this bundle of proto indices
         std::wstring spbundle_label = L"{";
         for (const Index &proto : index.proto_indices()) {
-          spbundle_label += proto.to_latex();
+          spbundle_label += proto.label();
         }
         spbundle_label += L"}";
         graph.vertex_labels.push_back(std::move(spbundle_label));
