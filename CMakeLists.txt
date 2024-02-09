@@ -543,8 +543,13 @@ if (BUILD_TESTING)
       target_link_libraries(${example${i}} SeQuant)
     endforeach ()
 
+	set(example12 "tensor_network_graphs")
+    add_executable(${example12} EXCLUDE_FROM_ALL
+            examples/${example12}/${example12}.cpp)
+    target_link_libraries(${example12} SeQuant)
+
     # add tests for running examples
-    set(lastexample 11)
+    set(lastexample 12)
     foreach (i RANGE ${lastexample})
         if (TARGET ${example${i}})
             add_dependencies(examples-sequant ${example${i}})
