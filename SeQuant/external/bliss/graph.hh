@@ -35,6 +35,7 @@ class AbstractGraph;
 #include <iterator>
 #include <optional>
 #include <vector>
+#include <locale>
 #include "bignum.hh"
 #include "heap.hh"
 #include "kqueue.hh"
@@ -693,6 +694,8 @@ class Graph : public AbstractGraph {
 
     auto int_to_rgb = [](unsigned int i) {
       std::basic_stringstream<Char> stream;
+      // Set locale of this stream to C to avoid any kind of thousands separator
+      stream.imbue(std::locale::classic());
       stream << std::setfill(Char('0')) << std::setw(6) << std::hex
              << ((i << 8) >> 8);
       return stream.str();
