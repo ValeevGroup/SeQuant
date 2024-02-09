@@ -19,6 +19,7 @@
 #include <string>
 #include <string_view>
 #include <tuple>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -153,20 +154,29 @@ class TensorNetwork {
     std::size_t vertex_to_tensor_idx(std::size_t vertex) const;
   };
 
-  /// @throw std::logic_error if exprptr_range contains a non-tensor
-  /// @note uses RTTI
-  template <typename ExprPtrRange>
-  TensorNetwork(const ExprPtrRange &exprptr_range) {
-    for (const auto &ex : exprptr_range) {
-      ExprPtr clone = ex.clone();
-      auto t = std::dynamic_pointer_cast<AbstractTensor>(clone);
-      if (t) {
-        tensors_.emplace_back(std::move(t));
-      } else {
-        throw std::logic_error(
-            "TensorNetwork::TensorNetwork: non-tensors in the given expression "
-            "range");
+  TensorNetwork(const Expr &expr) {
+    if (expr.size() > 0) {
+      for (const ExprPtr &subexpr : expr) {
+        add_expr(*subexpr);
       }
+    } else {
+      add_expr(expr);
+    }
+
+    init_edges();
+  }
+
+  TensorNetwork(const ExprPtr &expr) : TensorNetwork(*expr) {}
+
+  template <
+      typename ExprPtrRange,
+      typename = std::enable_if_t<!std::is_base_of_v<ExprPtr, ExprPtrRange> &&
+                                  !std::is_base_of_v<Expr, ExprPtrRange>>>
+  TensorNetwork(const ExprPtrRange &exprptr_range) {
+    static_assert(
+        std::is_base_of_v<ExprPtr, typename ExprPtrRange::value_type>);
+    for (const ExprPtr &current : exprptr_range) {
+      add_expr(*current);
     }
 
     init_edges();
@@ -276,6 +286,18 @@ class TensorNetwork {
 
   ExprPtr do_individual_canonicalization(
       const TensorCanonicalizer &canonicalizer);
+
+  void add_expr(const Expr &expr) {
+    ExprPtr clone = expr.clone();
+
+    auto tensor_ptr = std::dynamic_pointer_cast<AbstractTensor>(clone);
+    if (!tensor_ptr) {
+      throw std::invalid_argument(
+          "TensorNetwork::TensorNetwork: tried to add non-tensor to network");
+    }
+
+    tensors_.push_back(std::move(tensor_ptr));
+  }
 };
 
 template <typename CharT, typename Traits>
