@@ -16,7 +16,7 @@
 
 namespace sequant::mbpt::sr {
 
-CC::CC(std::size_t n, Ansatz a) : N(n), ansatz_(a) {}
+CC::CC(size_t n, Ansatz a) : N(n), ansatz_(a) {}
 
 CC::Ansatz CC::ansatz() const { return ansatz_; }
 
@@ -121,7 +121,7 @@ std::vector<ExprPtr> CC::t(size_t commutator_rank, size_t pmax, size_t pmin) {
   return result;
 }
 
-std::vector<ExprPtr> CC::λ(std::size_t commutator_rank) {
+std::vector<ExprPtr> CC::λ(size_t commutator_rank) {
   assert(commutator_rank >= 1 && "commutator rank should be >= 1");
   assert(!unitary() && "there is no need for CC::λ for unitary ansatz");
 
@@ -175,7 +175,7 @@ std::vector<ExprPtr> CC::λ(std::size_t commutator_rank) {
   return result;
 }
 
-std::vector<sequant::ExprPtr> CC::t_pt(std::size_t order, std::size_t rank) {
+std::vector<sequant::ExprPtr> CC::t_pt(size_t order, size_t rank) {
   assert(order == 1 &&
          "sequant::mbpt::sr::CC::t_pt(): only first-order perturbation is "
          "supported now");
