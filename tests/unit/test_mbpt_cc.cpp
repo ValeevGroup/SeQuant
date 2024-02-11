@@ -28,6 +28,27 @@ TEST_CASE("SR-TCC", "[mbpt/cc]") {
 
 }  // TEST_CASE("SR-TCC")
 
+TEST_CASE("EOM-CC", "[mbpt/cc]") {
+  using namespace sequant::mbpt::sr;
+
+  SECTION("EOM-CCSD") {
+    SEQUANT_PROFILE_SINGLE("EE-EOM-CCSD R", {
+      const auto N = 2;
+      const auto K_occ = 2;
+      const auto K_uocc = 2;
+      const auto sigma_eqs = CC{N}.eom_sigma(K_occ, K_uocc);
+      for (auto k = 1; k < sigma_eqs.size(); ++k) REQUIRE(sigma_eqs[k]);
+
+      if (N == 2 && K_occ == 2 && K_uocc == 2) {
+        REQUIRE(size(sigma_eqs[1]) == 21);
+        REQUIRE(size(sigma_eqs[2]) == 53);
+      }
+    });
+
+  }  // SECTION("EOM-CCSD")
+
+}  // TEST_CASE("EOM-CC")
+
 TEST_CASE("SR-UCC", "[mbpt/cc]") {
   using namespace sequant::mbpt::sr;
 
