@@ -50,11 +50,23 @@ inline std::vector<std::pair<std::wstring, std::wstring>> to_label_connections(
   return op_connect_wstr;
 }
 
-/// lowers the product of Operators to tensor form i.e., to a product of tensors
+/// @brief lowers an expression composed of Operators to tensor form
 /// @param[in] expr input expression
-/// @return the input expression with all Operators lowered to tensor form
+/// @return expression with all Operators lowered to tensor form
 /// @note mutates the input ExprPtr
 inline ExprPtr lower_to_tensor_form(ExprPtr& expr) {
+  auto op_lowerer = [](ExprPtr& leaf) {
+    if (leaf.is<op_t>()) leaf = leaf.as<op_t>().tensor_form();
+  };
+  expr->visit(op_lowerer, /* atoms only = */ true);
+  return expr;
+}
+
+///// @brief lowers an expression composed of Operators to tensor form
+///// @param[in] expr input expression
+///// @return expression with all Operators lowered to tensor form
+inline ExprPtr lower_to_tensor_form(const ExprPtr& expr_inp) {
+  auto expr = expr_inp->clone();
   auto op_lowerer = [](ExprPtr& leaf) {
     if (leaf.is<op_t>()) leaf = leaf.as<op_t>().tensor_form();
   };
