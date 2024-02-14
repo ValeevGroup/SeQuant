@@ -1,5 +1,18 @@
 # -*- mode: cmake -*-
 
+# update the Boost version that we can tolerate
+if (NOT DEFINED Boost_OLDEST_BOOST_VERSION)
+    set(Boost_OLDEST_BOOST_VERSION ${SEQUANT_OLDEST_BOOST_VERSION})
+else()
+    if (${Boost_OLDEST_BOOST_VERSION} VERSION_LESS ${SEQUANT_OLDEST_BOOST_VERSION})
+        if (DEFINED CACHE{Boost_OLDEST_BOOST_VERSION})
+            set(Boost_OLDEST_BOOST_VERSION "${SEQUANT_OLDEST_BOOST_VERSION}" CACHE STRING "Oldest Boost version to use" FORCE)
+        else()
+            set(Boost_OLDEST_BOOST_VERSION ${SEQUANT_OLDEST_BOOST_VERSION})
+        endif()
+    endif()
+endif()
+
 # Boost can be discovered by every (sub)package but only the top package can *build* it ...
 # in either case must declare the components used by SeQuant
 set(required_components
@@ -49,11 +62,3 @@ if (Boost_BUILT_FROM_SOURCE)
         endforeach()
     endif()
 endif()
-
-# Boost.Move is broken in 1.77 and 1.78 unless using c++20
-# fixed in 1.79 via https://github.com/boostorg/move/commit/78f26da1f3a5a3831e9e70efe83f9c56eef94e8c
-if (CMAKE_CXX_STANDARD LESS 20)
-    if (Boost_VERSION_MACRO GREATER_EQUAL 107700 AND Boost_VERSION_MACRO LESS 107900)
-        message(FATAL_ERROR "Found Boost 1.77 <= version < 1.79, but its Boost.Move is broken with pre-C++20: use a version older than 1.77 or newer than 1.78")
-    endif ()
-endif ()
