@@ -421,7 +421,7 @@ ExprPtr A(std::int64_t Kh, std::int64_t Kp) {
       [=](qnc_t& qns) {
         const std::size_t abs_Kh = std::abs(Kh);
         const std::size_t abs_Kp = std::abs(Kp);
-        if (Kp < 0)
+        if (Kp < 0 || Kh < 0)
           qns = combine(qnc_t{abs_Kp, 0ul, 0ul, abs_Kh}, qns);
         else
           qns = combine(qnc_t{0ul, abs_Kh, abs_Kp, 0ul}, qns);
@@ -599,6 +599,7 @@ std::wstring to_latex(const mbpt::Operator<mbpt::sr::qns_t, S>& op) {
     if (to_class(optype) == OpClass::gen) {
       result += L"}";
       return result;
+      // TODO: A(2, 1) produces \hat{A}, which has no info about ranks. Fix this
     }
   }
 
