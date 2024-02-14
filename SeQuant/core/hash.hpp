@@ -58,8 +58,8 @@ template <typename T, typename = std::void_t<>>
 struct has_boost_hash_value : std::false_type {};
 
 template <typename T>
-struct has_boost_hash_value<
-    T, std::void_t<decltype(sequant_boost::hash_value(std::declval<T>()))>>
+struct has_boost_hash_value<T, std::void_t<decltype(sequant_boost::hash_value(
+                                   std::declval<const T&>()))>>
     : std::true_type {};
 
 template <typename T, typename = std::void_t<>>
