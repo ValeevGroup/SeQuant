@@ -5,7 +5,7 @@ prerequisites:
   * mandatory:
     * CMake 3.15 or later
     * a C++17 compiler
-    * [Boost](https://www.boost.org/), version 1.67 or higher (N.B. critical bugs make the following versions unusable: 1.70, 1.77, 1.78); the following non-header-only Boost libraries are required:
+    * [Boost](https://www.boost.org/), version 1.81 or higher (N.B. older compilers _may_ work with older Boost releases). *SeQuant can download and build Boost if configured with `Boost_FETCH_IF_MISSING=ON`, but this is not recommended.* The following non-header-only Boost libraries are required, hence Boost must be configured/built:
       - [Boost.Regex](https://www.boost.org/doc/libs/master/libs/regex/doc/html/index.html)
       - [Boost.Locale](https://www.boost.org/doc/libs/master/libs/locale/doc/html/index.html)
     * [Range-V3](https://github.com/ericniebler/range-v3.git), tag 0.12.0, *if not found, SeQuant will download and build Range-V3*
@@ -20,8 +20,9 @@ for the impatient (from the top of the SeQuant source directory):
   * `cmake --build build --target check-sequant`
 
 useful CMake variables:
-  * `BUILD_TESTING` --- enables unit tests targets, e.g. `check-sequant` [default=ON]
-  * `CMAKE_CXX_COMPILER` --- specifies the C++ compiler to use
-  * `CMAKE_PREFIX_PATH` --- this semicolon-separated list specifies search paths for dependencies (Boost, Range-V3, etc.)
+  * [`BUILD_TESTING`](https://cmake.org/cmake/help/latest/module/CTest.html) --- enables unit tests targets, e.g. `check-sequant` [default=ON]
+  * [`CMAKE_CXX_COMPILER`](https://cmake.org/cmake/help/latest/variable/CMAKE_LANG_COMPILER.html#variable:CMAKE_%3CLANG%3E_COMPILER) --- specifies the C++ compiler to use
+  * [`CMAKE_PREFIX_PATH`](https://cmake.org/cmake/help/latest/variable/CMAKE_PREFIX_PATH.html) --- this semicolon-separated list specifies search paths for dependencies (Boost, Range-V3, etc.)
   * `SEQUANT_MIMALLOC` --- use [mimalloc](https://github.com/microsoft/mimalloc) for fast memory allocation
   * `SEQUANT_EVAL_TRACE` --- enables tracing of expression interpretation; especially useful in combination with TiledArray's memory tracing mechanism (configure TiledArray with `TA_TENSOR_MEM_PROFILE=ON` to enable that)
+  * `Boost_FETCH_IF_MISSING` --- if set to `ON`, SeQuant will download and build Boost if it is not found by `find_package(Boost ...)`; this is not recommended. [default=OFF]
