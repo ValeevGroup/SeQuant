@@ -97,7 +97,7 @@ TEST_CASE("Tensor", "[elements]") {
     auto t2 = Tensor(L"F", {L"i_2"}, {L"i_1"});
     size_t t2_hash;
     REQUIRE_NOTHROW(t2_hash = hash_value(t2));
-    REQUIRE_NOTHROW(t1_hash != t2_hash);
+    REQUIRE(t1_hash != t2_hash);
 
   }  // SECTION("hash")
 

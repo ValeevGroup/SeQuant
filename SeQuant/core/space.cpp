@@ -4,6 +4,8 @@
 
 #include "space.hpp"
 
+int32_t sequant::TypeAttr::used_bits = 0xffff;
+
 sequant::container::map<sequant::IndexSpace::Attr, std::wstring>
     sequant::IndexSpace::attr2basekey_{};
 sequant::container::map<std::wstring, sequant::IndexSpace::Attr,
