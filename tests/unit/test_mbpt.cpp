@@ -444,82 +444,44 @@ TEST_CASE("NBodyOp", "[mbpt]") {
     sr::op::lower_to_tensor_form(R33);
     simplify(R33);
     //    std::wcout << "R33: " << to_latex(R33) << std::endl;
-    if constexpr (hash_version() == hash::Impl::Boost181OrLater) {
-      REQUIRE(
-          to_latex(R33) ==
-          L"{ "
-          L"\\bigl({{{\\frac{1}{36}}}{R^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}{"
-          L"\\tilde{a}^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}} + "
-          L"{{R^{{i_1}}_{{a_1}}}{\\tilde{a}^{{a_1}}_{{i_1}}}} + "
-          L"{{{\\frac{1}{4}}}{R^{{i_1}{i_2}}_{{a_1}{a_2}}}{\\tilde{a}^{{a_1}{"
-          L"a_2}}_{{i_1}{i_2}}}}\\bigr) }");
-    } else {
-      REQUIRE(to_latex(R33) ==
-              L"{ \\bigl({{R^{{i_1}}_{{a_1}}}{\\tilde{a}^{{a_1}}_{{i_1}}}} + "
-              L"{{{\\frac{1}{4}}}{R^{{i_1}{i_2}}_{{a_1}{a_2}}}{\\tilde{a}^{{a_"
-              L"1}{a_2}}_{{i_1}{i_2}}}} + "
-              L"{{{\\frac{1}{36}}}{R^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}{"
-              L"\\tilde{a}^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}}\\bigr) }");
-    }
+    REQUIRE(to_latex(R33) ==
+            L"{ "
+            L"\\bigl({{{\\frac{1}{36}}}{R^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}{"
+            L"\\tilde{a}^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}} + "
+            L"{{R^{{i_1}}_{{a_1}}}{\\tilde{a}^{{a_1}}_{{i_1}}}} + "
+            L"{{{\\frac{1}{4}}}{R^{{i_1}{i_2}}_{{a_1}{a_2}}}{\\tilde{a}^{{a_1}{"
+            L"a_2}}_{{i_1}{i_2}}}}\\bigr) }");
 
     auto R12 = mbpt::sr::op::R(1, 2);
     sr::op::lower_to_tensor_form(R12);
     simplify(R12);
     //    std::wcout << "R12: " << to_latex(R12) << std::endl;
-    if constexpr (hash_version() == hash::Impl::Boost181OrLater) {
-      REQUIRE(to_latex(R12) ==
-              L"{ \\bigl({{R^{}_{{a_1}}}{\\tilde{a}^{{a_1}}}} + "
-              L"{{{\\frac{1}{2}}}{R^{{i_1}}_{{a_1}{a_2}}}{\\tilde{a}^{{a_1}{a_"
-              L"2}}_{\\textvisiblespace\\,{i_1}}}}\\bigr) }");
-    } else {
-      REQUIRE(
-          to_latex(R12) ==
-          L"{ \\bigl({{R^{}_{{a_1}}}{\\tilde{a}^{{a_1}}}} + "
-          L"{{{\\frac{1}{2}}}{R^{{i_1}}_{{a_1}{a_2}}}{\\tilde{a}^{{a_1}{a_2}}"
-          L"_{\\textvisiblespace\\,{i_1}}}}\\bigr) }");
-    }
+    REQUIRE(to_latex(R12) ==
+            L"{ \\bigl({{R^{}_{{a_1}}}{\\tilde{a}^{{a_1}}}} + "
+            L"{{{\\frac{1}{2}}}{R^{{i_1}}_{{a_1}{a_2}}}{\\tilde{a}^{{a_1}{a_"
+            L"2}}_{\\textvisiblespace\\,{i_1}}}}\\bigr) }");
 
     auto R21 = mbpt::sr::op::R(2, 1);
     sr::op::lower_to_tensor_form(R21);
     simplify(R21);
     //    std::wcout << "R21: " << to_latex(R21) << std::endl;
-
-    if constexpr (hash_version() == hash::Impl::Boost181OrLater) {
-      REQUIRE(to_latex(R21) ==
-              L"{ "
-              L"\\bigl({{{\\frac{1}{2}}}{R^{{i_1}{i_2}}_{{a_1}}}{\\tilde{a}^{"
-              L"\\textvisiblespace\\,{a_1}}_{{i_1}{i_2}}}} + "
-              L"{{R^{{i_1}}_{}}{\\tilde{a}_{{i_1}}}}\\bigr) }");
-    } else {
-      REQUIRE(to_latex(R21) ==
-              L"{ "
-              L"\\bigl({{{\\frac{1}{2}}}{R^{{i_1}{i_2}}_{{a_1}}}{\\tilde{a}^{"
-              L"\\textvisiblespace\\,{a_1}}_{{i_1}{i_2}}}} + "
-              L"{{R^{{i_1}}_{}}{\\tilde{a}_{{i_1}}}}\\bigr) }");
-    }
+    REQUIRE(to_latex(R21) ==
+            L"{ "
+            L"\\bigl({{{\\frac{1}{2}}}{R^{{i_1}{i_2}}_{{a_1}}}{\\tilde{a}^{"
+            L"\\textvisiblespace\\,{a_1}}_{{i_1}{i_2}}}} + "
+            L"{{R^{{i_1}}_{}}{\\tilde{a}_{{i_1}}}}\\bigr) }");
 
     auto L23 = mbpt::sr::op::L(2, 3);
     sr::op::lower_to_tensor_form(L23);
     simplify(L23);
     //        std::wcout << "L23: " << to_latex(L23) << std::endl;
-    if constexpr (hash_version() == hash::Impl::Boost181OrLater) {
-      REQUIRE(
-          to_latex(L23) ==
-          L"{ \\bigl({{{\\frac{1}{12}}}{L^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}}}{"
-          L"\\tilde{a}^{\\textvisiblespace\\,{i_1}{i_2}}_{{a_1}{a_2}{a_3}}}} + "
-          L"{{{\\frac{1}{2}}}{L^{{a_1}{a_2}}_{{i_1}}}{\\tilde{a}^{"
-          L"\\textvisiblespace\\,{i_1}}_{{a_1}{a_2}}}} + "
-          L"{{L^{{a_1}}_{}}{\\tilde{a}_{{a_1}}}}\\bigr) }");
-    } else {
-      REQUIRE(
-          to_latex(L23) ==
-          L"{ "
-          L"\\bigl({{{\\frac{1}{2}}}{L^{{a_1}{a_2}}_{{i_1}}}{\\tilde{a}^{"
-          L"\\textvisiblespace\\,{i_1}}_{{a_1}{a_2}}}} + "
-          L"{{L^{{a_1}}_{}}{\\tilde{a}_{{a_1}}}} + "
-          L"{{{\\frac{1}{12}}}{L^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}}}{\\tilde{a}^{"
-          L"\\textvisiblespace\\,{i_1}{i_2}}_{{a_1}{a_2}{a_3}}}}\\bigr) }");
-    }
+    REQUIRE(
+        to_latex(L23) ==
+        L"{ \\bigl({{{\\frac{1}{12}}}{L^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}}}{"
+        L"\\tilde{a}^{\\textvisiblespace\\,{i_1}{i_2}}_{{a_1}{a_2}{a_3}}}} + "
+        L"{{{\\frac{1}{2}}}{L^{{a_1}{a_2}}_{{i_1}}}{\\tilde{a}^{"
+        L"\\textvisiblespace\\,{i_1}}_{{a_1}{a_2}}}} + "
+        L"{{L^{{a_1}}_{}}{\\tilde{a}_{{a_1}}}}\\bigr) }");
 
   }  // SECTION("operators")
 
