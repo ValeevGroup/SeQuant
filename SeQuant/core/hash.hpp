@@ -14,6 +14,10 @@ namespace sequant_boost = boost;
 #include <SeQuant/external/boost/container_hash/hash.hpp>
 #endif
 
+#if SEQUANT_BOOST_VERSION < 108100
+#error "SeQuant requires Boost 1.81 or later for hashing"
+#endif
+
 #include "meta.hpp"
 
 namespace sequant {
@@ -27,17 +31,7 @@ enum class Impl { BoostPre181 = 1, Boost181OrLater = 2 };
 
 /// @return the version of hashing used by SeQuant, depends on the version of
 /// Boost
-constexpr hash::Impl hash_version() {
-#ifdef SEQUANT_USE_SYSTEM_BOOST_HASH
-#if SEQUANT_BOOST_VERSION < 108100
-  return hash::Impl::BoostPre181;
-#else
-  return hash::Impl::Boost181OrLater;
-#endif
-#else
-  return hash::Impl::Boost181OrLater;
-#endif
-}
+constexpr hash::Impl hash_version() { return hash::Impl::Boost181OrLater; }
 
 namespace detail {
 template <typename T, typename Enabler = void>
@@ -116,45 +110,7 @@ template <class T>
 inline void combine(std::size_t& seed, T const& v) {
   _<T> hasher;
 
-#ifdef SEQUANT_USE_SYSTEM_BOOST_HASH
-#if SEQUANT_BOOST_VERSION >= 108100
-  boost::hash_combine(seed, hasher(v));
-#else  // older boost workarounds
-  // in boost 1.78 hash_combine_impl implementation changed
-  // https://github.com/boostorg/container_hash/commit/21f2b5e1db1a118c83a3690055c110d0f5637da3
-  // probably no longer need these acrobatics
-  if constexpr (sizeof(std::size_t) == sizeof(boost::uint32_t) &&
-                sizeof(decltype(hasher(v))) == sizeof(boost::uint32_t)) {
-    const boost::uint32_t value = hasher(v);
-#if SEQUANT_BOOST_VERSION >= 107800
-    seed = boost::hash_detail::hash_combine_impl<32>::fn(
-        static_cast<boost::uint32_t>(seed), value);
-#else
-    // N.B. seed passed by reference
-    boost::hash_detail::hash_combine_impl(
-        reinterpret_cast<boost::uint32_t&>(seed), value);
-#endif
-    return;
-  } else if constexpr (sizeof(std::size_t) == sizeof(boost::uint64_t) &&
-                       sizeof(decltype(hasher(v))) == sizeof(boost::uint64_t)) {
-    const boost::uint64_t value = hasher(v);
-
-#if SEQUANT_BOOST_VERSION >= 107800
-    seed = boost::hash_detail::hash_combine_impl<64>::fn(
-        static_cast<boost::uint64_t>(seed), value);
-#else
-    // N.B. seed passed by reference
-    boost::hash_detail::hash_combine_impl(
-        reinterpret_cast<boost::uint64_t&>(seed), value);
-#endif
-    return;
-  } else {
-    seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-  }
-#endif  // older boost workarounds
-#else   // !defined(SEQUANT_USE_SYSTEM_BOOST_HASH)
   sequant_boost::hash_combine(seed, hasher(v));
-#endif
 
   //  assert(seed == seed_ref);
 }

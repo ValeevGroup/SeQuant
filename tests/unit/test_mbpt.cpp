@@ -276,30 +276,18 @@ TEST_CASE("NBodyOp", "[mbpt]") {
 
     auto t = t1 + t2;
 
-    if constexpr (hash_version() == hash::Impl::BoostPre181) {
-      REQUIRE(
-          to_latex(simplify(f * t * t)) ==
-          to_latex(f * t1 * t1 + f * t2 * t2 + ex<Constant>(2) * f * t1 * t2));
-    } else {
-      //      std::wcout << "to_latex(simplify(f * t * t)): "
-      //                 << to_latex(simplify(f * t * t)) << std::endl;
-      REQUIRE(
-          to_latex(simplify(f * t * t)) ==
-          to_latex(ex<Constant>(2) * f * t1 * t2 + f * t2 * t2 + f * t1 * t1));
-    }
+    //      std::wcout << "to_latex(simplify(f * t * t)): "
+    //                 << to_latex(simplify(f * t * t)) << std::endl;
+    REQUIRE(
+        to_latex(simplify(f * t * t)) ==
+        to_latex(ex<Constant>(2) * f * t1 * t2 + f * t2 * t2 + f * t1 * t1));
 
-    if constexpr (hash_version() == hash::Impl::BoostPre181) {
-      REQUIRE(to_latex(simplify(f * t * t * t)) ==
-              to_latex(ex<Constant>(3) * f * t1 * t2 * t2 + f * t2 * t2 * t2 +
-                       ex<Constant>(3) * f * t1 * t1 * t2 + f * t1 * t1 * t1));
-    } else {
-      //      std::wcout << "to_latex(simplify(f * t * t * t): "
-      //                 << to_latex(simplify(f * t * t * t)) << std::endl;
-      REQUIRE(to_latex(simplify(f * t * t * t)) ==
-              to_latex(f * t2 * t2 * t2 + f * t1 * t1 * t1 +
-                       ex<Constant>(3) * f * t1 * t1 * t2 +
-                       ex<Constant>(3) * f * t1 * t2 * t2));
-    }
+    //      std::wcout << "to_latex(simplify(f * t * t * t): "
+    //                 << to_latex(simplify(f * t * t * t)) << std::endl;
+    REQUIRE(to_latex(simplify(f * t * t * t)) ==
+            to_latex(f * t2 * t2 * t2 + f * t1 * t1 * t1 +
+                     ex<Constant>(3) * f * t1 * t1 * t2 +
+                     ex<Constant>(3) * f * t1 * t2 * t2));
 
   }  // SECTION("canonicalize")
 
