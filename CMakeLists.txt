@@ -138,26 +138,8 @@ check_cxx_execution_header(SEQUANT)
 # Ranges-V3
 include(FindOrFetchRangeV3)
 
-# need header-only Boost + (compiled) Boost.Regex and Boost.Locale
-# NB Boost.Container is broken in v1.70
-if (NOT TARGET Boost::boost OR NOT TARGET Boost::regex OR NOT TARGET Boost::locale)
-    find_package(Boost ${SEQUANT_TRACKED_BOOST_VERSION} CONFIG COMPONENTS regex locale)
-    if (Boost_VERSION_STRING VERSION_LESS ${SEQUANT_TRACKED_BOOST_VERSION} OR NOT TARGET Boost::boost OR NOT TARGET Boost::regex OR NOT TARGET Boost::locale)
-        find_package(Boost ${SEQUANT_TRACKED_BOOST_VERSION} REQUIRED COMPONENTS regex locale)
-        message(STATUS "Found Boost (version ${Boost_VERSION}) via FindBoost module")
-        set(Boost_USE_CONFIG FALSE)
-    else ()
-        message(STATUS "Found Boost (version ${Boost_VERSION}) via CONFIG ${Boost_CONFIG}")
-        set(Boost_USE_CONFIG TRUE)
-    endif ()
-    # Boost.Move is broken in 1.77 and 1.78 unless using c++20
-    # fixed in 1.79 via https://github.com/boostorg/move/commit/78f26da1f3a5a3831e9e70efe83f9c56eef94e8c
-    if (CMAKE_CXX_STANDARD LESS 20)
-        if (Boost_VERSION_MACRO GREATER_EQUAL 107700 AND Boost_VERSION_MACRO LESS 107900)
-            message(FATAL_ERROR "Found Boost 1.77 <= version < 1.79, but its Boost.Move is broken with pre-C++20: use a version older than 1.77 or newer than 1.78")
-        endif ()
-    endif ()
-endif ()
+# Boost will be added after defining SeQuant
+include(external/boost.cmake)
 
 # embedded bliss-0.73
 add_library(SeQuant-bliss
@@ -269,16 +251,25 @@ set_source_files_properties(
         SeQuant/domain/mbpt/op.cpp SeQuant/domain/mbpt/sr.cpp SeQuant/domain/mbpt/mr.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 
 ### optional prereqs
-if (NOT TARGET Eigen3::Eigen)
-  # re:NO_CMAKE_PACKAGE_REGISTRY: eigen3 registers its *build* tree with the user package registry ...
-  #                               to avoid issues with wiped build directory look for installed eigen
-  find_package(Eigen3 3.0 NO_MODULE NO_CMAKE_PACKAGE_REGISTRY)
-endif()
 if (SEQUANT_EVAL_TESTS)
     include(FindOrFetchTiledArray)
 endif (SEQUANT_EVAL_TESTS)
+if (NOT TARGET Eigen3::Eigen)
+    # use TA's Eigen, if available
+    if (TARGET TiledArray_Eigen)
+        add_library(Eigen3::Eigen ALIAS TiledArray_Eigen)
+    else()
+      # re:NO_CMAKE_PACKAGE_REGISTRY: eigen3 registers its *build* tree with the user package registry ...
+      #                               to avoid issues with wiped build directory look for installed eigen
+      find_package(Eigen3 3.0 NO_MODULE NO_CMAKE_PACKAGE_REGISTRY)
+    endif()
+endif()
+if (TARGET Eigen3::Eigen)
+    set(SEQUANT_HAS_EIGEN ON)
+    endif()
 
 if (TARGET tiledarray)
+    set(SEQUANT_HAS_TILEDARRAY ON)
     list(APPEND SeQuant_src
             SeQuant/domain/eval/cache_manager.cpp
             SeQuant/domain/eval/cache_manager.hpp
@@ -299,7 +290,19 @@ set_source_files_properties(
         "SEQUANT_GIT_REVISION=\"${SEQUANT_GIT_REVISION}\";SEQUANT_GIT_DESCRIPTION=\"${SEQUANT_GIT_DESCRIPTION}\""
 )
 
-target_link_libraries(SeQuant PUBLIC range-v3::range-v3 Boost::regex Boost::locale Boost::boost SeQuant-bliss Threads::Threads)
+target_link_libraries(SeQuant PUBLIC range-v3::range-v3 Boost::regex Boost::locale Boost::headers SeQuant-bliss Threads::Threads)
+# modularized Boost has finer grained targets than just Boost::headers
+if (Boost_IS_MODULARIZED)
+    target_link_libraries(SeQuant PUBLIC
+            Boost::container
+            Boost::container_hash
+            Boost::multiprecision
+            Boost::numeric_conversion
+            Boost::numeric_interval
+            Boost::range
+            Boost::spirit
+    )
+endif()
 if (TARGET tiledarray)
     target_link_libraries(SeQuant PUBLIC tiledarray)
 endif ()
@@ -358,6 +361,11 @@ if (SEQUANT_MIMALLOC)
     target_link_libraries(SeQuant PUBLIC mimalloc)
     target_compile_definitions(SeQuant PUBLIC SEQUANT_HAS_MIMALLOC=1)
 endif ()
+
+# build all of boost before SeQuant, including parts it does not use
+if (Boost_BUILT_FROM_SOURCE AND TARGET build-boost-in-SeQuant)
+    add_dependencies(SeQuant build-boost-in-SeQuant)
+endif()
 
 ### unit tests
 include(CTest)
@@ -498,7 +506,7 @@ if (BUILD_TESTING)
                 examples/eval/btas/data_world_btas.hpp
                 examples/eval/btas/scf_btas.hpp
                 examples/eval/btas/main.cpp)
-        target_include_directories(${example7} PUBLIC ${BTAS_SOURCE_DIR} ${Boost_INCLUDE_DIRS})
+        target_include_directories(${example7} PUBLIC ${BTAS_SOURCE_DIR})
         target_link_libraries(${example7} SeQuant)
     endif (BTAS_SOURCE_DIR)
 

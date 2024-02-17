@@ -134,17 +134,10 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
                        ex<Tensor>(L"t", IndexList{{L"p_4"}},
                                   IndexList{{L"p_2"}}, Symmetry::nonsymm);
       canonicalize(input);
-      if constexpr (hash_version() == hash::Impl::BoostPre181)
-        REQUIRE(
-            to_latex(input) ==
-            L"{ "
-            L"\\bigl({{g^{{p_2}{p_3}}_{{p_1}{p_4}}}{t^{{p_1}}_{{p_2}}}{t^{{p_"
-            L"4}}_{{p_3}}}}\\bigr) }");
-      else
-        REQUIRE(to_latex(input) ==
-                L"{ "
-                L"\\bigl({{g^{{p_1}{p_4}}_{{p_2}{p_3}}}{t^{{p_2}}_{{p_1}}}{t^{{"
-                L"p_3}}_{{p_4}}}}\\bigr) }");
+      REQUIRE(to_latex(input) ==
+              L"{ "
+              L"\\bigl({{g^{{p_1}{p_4}}_{{p_2}{p_3}}}{t^{{p_2}}_{{p_1}}}{t^{{"
+              L"p_3}}_{{p_4}}}}\\bigr) }");
     }
 
     // CASE 2: Symmetric tensors

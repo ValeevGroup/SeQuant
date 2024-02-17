@@ -488,7 +488,7 @@ inline void log_constant(Args const&... args) noexcept {
 void log_ta_tensor_host_memory_use(madness::World& world,
                                    std::string_view label = "");
 
-struct EvalResult;
+class EvalResult;
 
 using ERPtr = std::shared_ptr<EvalResult>;
 

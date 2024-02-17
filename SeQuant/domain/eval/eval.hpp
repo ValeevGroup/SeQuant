@@ -32,7 +32,7 @@ void log_eval(Args const&... args) noexcept {
 #endif
 }
 
-void log_cache_access(size_t key, CacheManager const& cm) {
+[[maybe_unused]] void log_cache_access(size_t key, CacheManager const& cm) {
 #ifdef SEQUANT_EVAL_TRACE
   auto& l = Logger::get_instance();
   if (l.log_level_eval > 0) {
@@ -50,7 +50,7 @@ void log_cache_access(size_t key, CacheManager const& cm) {
 #endif
 }
 
-void log_cache_store(size_t key, CacheManager const& cm) {
+[[maybe_unused]] void log_cache_store(size_t key, CacheManager const& cm) {
 #ifdef SEQUANT_EVAL_TRACE
   auto& l = Logger::get_instance();
   if (l.log_level_eval > 0) {

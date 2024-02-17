@@ -59,12 +59,7 @@ with open(version_cmake_path) as inf:
         tokens = line.split()
         if len(tokens) < 3:
             continue
-        if tokens[1].find('TRACKED_BOOST') != -1:
-            if tokens[1].find('PREVIOUS') != -1:
-                boost_old_version = tokens[2]
-            else:
-                boost_new_version = tokens[2]
-        elif tokens[1].find('TRACKED_TILEDARRAY') != -1:
+        if tokens[1].find('TRACKED_TILEDARRAY') != -1:
             if tokens[1].find('PREVIOUS') != -1:
                 ta_old_tag = tokens[2]
             else:
@@ -76,9 +71,6 @@ with open(version_cmake_path) as inf:
                 rangev3_new_tag = tokens[2]
 
 any_files_changed = False
-
-# Boost version in INSTALL.md
-any_files_changed |= replace_dep_id(topsrc, 'md', 'Boost', boost_old_version, boost_new_version, ', version ', ' or higher (N.B.')
 
 # replace TA tag in INSTALL.md
 any_files_changed |= replace_dep_id(topsrc, 'md', 'TiledArray', ta_old_tag, ta_new_tag, '', '')

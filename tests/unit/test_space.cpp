@@ -57,6 +57,15 @@ TEST_CASE("IndexSpace", "[elements]") {
     REQUIRE(IndexSpace::instance(L"i") == IndexSpace::nullqns);
     REQUIRE(IndexSpace::nullqns == IndexSpace::instance(L"i").qns());
     REQUIRE(IndexSpace::nullqns == IndexSpace::instance(L"i"));
+
+    // use nondefault mask
+    TypeAttr::used_bits = 0b100;
+    REQUIRE(IndexSpace::active_occupied == IndexSpace::occupied);
+    REQUIRE(IndexSpace::active_occupied != IndexSpace::inactive_occupied);
+    REQUIRE(IndexSpace::active_occupied != IndexSpace::frozen_occupied);
+    REQUIRE(IndexSpace::active_occupied == IndexSpace::all);
+    REQUIRE(IndexSpace::active_occupied == IndexSpace::all_active);
+    TypeAttr::used_bits = 0xffff;
   }
 
   SECTION("ordering") {
@@ -93,6 +102,15 @@ TEST_CASE("IndexSpace", "[elements]") {
       REQUIRE(i < iA);
       REQUIRE(i < iB);
     }
+
+    // use nondefault mask
+    TypeAttr::used_bits = 0b100;
+    REQUIRE(!(IndexSpace::active_occupied < IndexSpace::occupied));
+    REQUIRE(!(IndexSpace::inactive_occupied < IndexSpace::frozen_occupied));
+    REQUIRE(IndexSpace::inactive_occupied < IndexSpace::active_occupied);
+    REQUIRE(!(IndexSpace::active_occupied < IndexSpace::all));
+    REQUIRE(!(IndexSpace::active_occupied < IndexSpace::all_active));
+    TypeAttr::used_bits = 0xffff;
   }
 
   SECTION("set operations") {
