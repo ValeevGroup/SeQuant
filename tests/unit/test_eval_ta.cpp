@@ -23,8 +23,30 @@ auto tensor_to_key(sequant::Tensor const& tnsr) {
     return (mo[1].str() == L"i" ? L"o" : L"v") + mo[2].str();
   };
 
-  auto const tnsr_deparsed = sequant::deparse_expr(tnsr.clone(), false);
-  return boost::regex_replace(tnsr_deparsed, idx_rgx, formatter);
+  sequant::NestedTensorIndices oixs{tnsr};
+  if (oixs.inner.empty()) {
+    auto const tnsr_deparsed = sequant::deparse_expr(tnsr.clone(), false);
+    return boost::regex_replace(tnsr_deparsed, idx_rgx, formatter);
+  } else {
+    using ranges::views::intersperse;
+    using ranges::views::join;
+    using ranges::views::transform;
+    using namespace sequant;
+
+    auto ix_lbl = [&formatter](Index const& ix) -> std::wstring {
+      std::wstring lbl(ix.label().data());
+      return boost::regex_replace(lbl, idx_rgx, formatter);
+    };
+
+    auto ixs_lbl = [&ix_lbl](auto const& ixs) -> std::wstring {
+      return ixs | transform(ix_lbl) | intersperse(L",") | join |
+             ranges::to<std::wstring>;
+    };
+
+    std::wstring result(tnsr.label());
+    result += L"{" + ixs_lbl(oixs.outer) + L";" + ixs_lbl(oixs.inner) + L"}";
+    return result;
+  }
 }
 
 auto tensor_to_key(std::wstring_view spec) {
