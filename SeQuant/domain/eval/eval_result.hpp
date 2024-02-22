@@ -787,8 +787,9 @@ class EvalTensorTA final : public EvalResult {
     log_ta(a.lannot, " * ", a.rannot, " = ", a.this_annot, "\n");
 
     ArrayT result;
-    result(a.this_annot) =
-        get<ArrayT>()(a.lannot) * other.get<ArrayT>()(a.rannot);
+
+    result = TA::einsum(get<ArrayT>()(a.lannot), other.get<ArrayT>()(a.rannot),
+                        a.this_annot);
     decltype(result)::wait_for_lazy_cleanup(result.world());
     return eval_result<this_type>(std::move(result));
   }
