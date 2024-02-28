@@ -13,7 +13,7 @@
 #include "SeQuant/core/space.hpp"
 #include "SeQuant/domain/mbpt/op.hpp"
 
-namespace sequant {
+/*namespace sequant {
 namespace mbpt {
 namespace sr {
 
@@ -278,6 +278,6 @@ extern template class Operator<sr::qns_t, Statistics::FermiDirac>;
 extern template class Operator<sr::qns_t, Statistics::BoseEinstein>;
 
 }  // namespace mbpt
-}  // namespace sequant
+}  // namespace sequant*/
 
 #endif  // SEQUANT_DOMAIN_MBPT_SR_HPP

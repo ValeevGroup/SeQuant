@@ -6,7 +6,7 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/timer.hpp>
 
-namespace sequant::mbpt::sr {
+namespace sequant::mbpt {
 
 /// derives equations of traditional coupled-cluster method
 class CC {

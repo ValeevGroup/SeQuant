@@ -146,24 +146,32 @@ using BOperatorBase = BOperator<void>;
 /// For example, to operator products expressed in normal order with respect to physical vacuum it is sufficient to track
 /// the number of creators and annihilators; for operator products expressed in normal order with respect to Fermi vacuum
 /// it is sufficient to track the number of creators and annihilators in the occupied and unoccupied subspaces, etc.
-/// \tparam N the number of quantum numbers to track
+/// since the choice of space partitioning is up to the user, the base class must by a dynamic container.
 /// \tparam Tag a tag type to distinguish different instances of QuantumNumberChange<N>
 /// \tparam QNV the quantum number value type, defaults to \c std::int64_t
 // clang-format on
-template <std::size_t N, typename Tag, typename QNV = std::int64_t>
+template <typename Tag, typename QNV = std::int64_t>
 class QuantumNumberChange
-    : public std::array<boost::numeric::interval<std::make_signed_t<QNV>>, N> {
+    : public std::vector<boost::numeric::interval<std::make_signed_t<QNV>>> {
  public:
   using QNC = std::make_signed_t<QNV>;  // change in quantum numbers
   using interval_t = boost::numeric::interval<QNC>;
   using tag_t = Tag;
-  using base_type = std::array<interval_t, N>;
-  using this_type = QuantumNumberChange<N, Tag, QNV>;
+  using base_type = std::vector<boost::numeric::interval<std::make_signed_t<QNV>>>;
+  using this_type = QuantumNumberChange<Tag, QNV>;
 
-  constexpr auto size() const { return N; }
+  const std::size_t size() const {
+    if(get_default_context().vacuum() == Vacuum::Physical){return 2;}
+    else if(get_default_context().vacuum() == Vacuum::SingleProduct){
+      return get_default_context().index_space_registry()->base_spaces_label().size() * 2;
+    }
+    else{throw "vacuum not supported";}
+  }
 
   /// initializes all values with zeroes
-  QuantumNumberChange() { std::fill(this->begin(), this->end(), interval_t{}); }
+  QuantumNumberChange() {
+    this->resize(size());
+    std::fill(this->begin(), this->end(), interval_t{}); }
 
   /// constructs QuantumNumberChange from a sequence of elements convertible to
   /// QNV \tparam I the type of the initializer_list elements \param i the
@@ -171,12 +179,12 @@ class QuantumNumberChange
   template <typename I,
             typename = std::enable_if_t<std::is_convertible_v<I, interval_t>>>
   explicit QuantumNumberChange(std::initializer_list<I> i) {
-    if (i.size() == N) {
+    if (i.size() == size()) {
       std::copy(i.begin(), i.end(), this->begin());
     } else {
       throw std::runtime_error(
           "QuantumNumberChange<N>(initializer_list i): i.size() must be " +
-          std::to_string(N));
+          std::to_string(size()));
     }
   }
 
@@ -187,7 +195,7 @@ class QuantumNumberChange
                             std::initializer_list<I>, interval_t>>>
   explicit QuantumNumberChange(
       std::initializer_list<std::initializer_list<I>> i) {
-    assert(i.size() == N);
+    assert(i.size() == size());
 #ifndef NDEBUG
     if (std::find_if(i.begin(), i.end(),
                      [](const auto& ii) { return ii.size() != 2; }) != i.end())
@@ -195,14 +203,14 @@ class QuantumNumberChange
           "QuantumNumberChange<N>(initializer_list<initializer_list> i): each "
           "element of i must contain 2 elements");
 #endif
-    for (std::size_t c = 0; c != N; ++c) {
+    for (std::size_t c = 0; c != size(); ++c) {
       this->operator[](c) = interval_t{*((i.begin() + c)->begin()),
                                        *((i.begin() + c)->begin() + 1)};
     }
   }
 
   QuantumNumberChange& operator+=(const QuantumNumberChange& other) {
-    for (std::size_t c = 0; c != N; ++c) this->operator[](c) += other[c];
+    for (std::size_t c = 0; c != size(); ++c) this->operator[](c) += other[c];
     return *this;
   }
 
@@ -212,23 +220,11 @@ class QuantumNumberChange
         [](const auto& ia, const auto& ib) { return equal(ia, ib); });
   }
   bool operator!=(const this_type& b) const { return !this->operator==(b); }
-  template <typename I, std::size_t N_ = N,
-            typename = std::enable_if_t<N_ == 1 && std::is_integral_v<I>>>
-  bool operator==(I i) const {
-    return boost::numeric::interval_lib::compare::possible::operator==(
-        this->front(), static_cast<int64_t>(i));
-  }
-  template <typename I, std::size_t N_ = N,
-            typename = std::enable_if_t<N_ == 1 && std::is_integral_v<I>>>
-  bool operator!=(I i) const {
-    return !this->operator==(i);
-  }
 
   /// tests whether particular changes in quantum number change
   /// @param i an integer
   /// @return true if \p i is in `*this[0]`
-  template <typename I, std::size_t N_ = N,
-            typename = std::enable_if_t<N_ == 1 && std::is_integral_v<I>>>
+  template <typename I>
   bool in(I i) {
     return boost::numeric::in(static_cast<int64_t>(i), this->front());
   }
@@ -238,36 +234,26 @@ class QuantumNumberChange
   /// @return true if \p i is in `*this[0]`
   template <typename I, typename = std::enable_if_t<std::is_integral_v<I>>>
   bool in(std::initializer_list<I> i) {
-    assert(i.size() == N);
+    assert(i.size() == size());
     std::array<I, 4> i_arr;
     std::copy(i.begin(), i.end(), i_arr.begin());
     return this->in(i_arr);
   }
 
-  /// @param i an array of N integers
-  /// @return true if `i[k]` is in `*this[k]` for all `k`
-  template <typename I, typename = std::enable_if_t<std::is_integral_v<I>>>
-  bool in(std::array<I, N> i) {
-    for (std::size_t c = 0; c != N; ++c) {
-      if (!boost::numeric::in(static_cast<int64_t>(i[c]), this->operator[](c)))
-        return false;
-    }
-    return true;
-  }
-
   /// @param i an array of N intervals
   /// @return true if `i[k]` overlaps with `*this[k]` for all `k`
   bool overlaps_with(base_type i) {
-    for (std::size_t c = 0; c != N; ++c) {
+    for (std::size_t c = 0; c != this->size(); ++c) {
       if (!boost::numeric::overlap(i[c], this->operator[](c))) return false;
     }
     return true;
   }
 
+
   auto hash_value() const {
-    static_assert(N > 0);
+    static_assert(size() > 0);
     auto val = sequant::hash::value(this->operator[](0));
-    for (std::size_t c = 1; c != N; ++c) {
+    for (std::size_t c = 1; c != size(); ++c) {
       sequant::hash::combine(val, sequant::hash::value(this->operator[](c)));
     }
     return val;
@@ -275,32 +261,32 @@ class QuantumNumberChange
 };
 
 template <std::size_t N, typename Tag, typename QNV>
-inline bool operator==(const QuantumNumberChange<N, Tag, QNV>& a,
-                       const QuantumNumberChange<N, Tag, QNV>& b) {
+inline bool operator==(const QuantumNumberChange<Tag, QNV>& a,
+                       const QuantumNumberChange<Tag, QNV>& b) {
   return a.operator==(b);
 }
 
 template <std::size_t N, typename Tag, typename QNV>
-inline bool operator!=(const QuantumNumberChange<N, Tag, QNV>& a,
-                       const QuantumNumberChange<N, Tag, QNV>& b) {
+inline bool operator!=(const QuantumNumberChange<Tag, QNV>& a,
+                       const QuantumNumberChange<Tag, QNV>& b) {
   return !(a == b);
 }
 
 template <std::size_t N, typename Tag, typename QNV, typename I,
           typename = std::enable_if_t<N == 1 && std::is_integral_v<I>>>
-inline bool operator==(const QuantumNumberChange<N, Tag, QNV>& a, I b) {
+inline bool operator==(const QuantumNumberChange<Tag, QNV>& a, I b) {
   return a.operator==(b);
 }
 
 template <std::size_t N, typename Tag, typename QNV>
-inline bool equal(const QuantumNumberChange<N, Tag, QNV>& a,
-                  const QuantumNumberChange<N, Tag, QNV>& b) {
+inline bool equal(const QuantumNumberChange<Tag, QNV>& a,
+                  const QuantumNumberChange<Tag, QNV>& b) {
   return operator==(a, b);
 }
 
 template <std::size_t N, typename Tag, typename QNV, typename I,
           typename = std::enable_if_t<N == 1 && std::is_integral_v<I>>>
-inline bool operator!=(const QuantumNumberChange<N, Tag, QNV>& a, I b) {
+inline bool operator!=(const QuantumNumberChange<Tag, QNV>& a, I b) {
   return a.operator!=(b);
 }
 
@@ -316,7 +302,7 @@ struct qns_tag {};
 /// \note use signed integer, although could use unsigned in this case,
 /// so that can represent quantum numbers and their changes by the same type
 // clang-format on
-using qns_t = mbpt::QuantumNumberChange<2, qns_tag, std::int64_t>;
+using qns_t = mbpt::QuantumNumberChange<qns_tag, std::int64_t>;
 using qninterval_t = typename qns_t::interval_t;
 /// changes in quantum number represented by quantum numbers themselves
 using qnc_t = qns_t;
@@ -388,14 +374,14 @@ namespace mbpt {
 /// @warning Tensor \f$ T \f$ will be antisymmetrized if `get_default_context().spbasis() == SPBasis::spinorbital`, else it will be particle-symmetric; the latter is only valid if # of bra and ket indices coincide.
 /// @internal bless the maker and his water
 // clang-format on
-template <Statistics S>
+template<Statistics S>
 class OpMaker {
  public:
   /// @param[in] op the operator type
   /// @param[in] bras the bra indices/creators
   /// @param[in] kets the ket indices/annihilators
-  OpMaker(OpType op, std::initializer_list<IndexSpace::Type> bras,
-          std::initializer_list<IndexSpace::Type> kets);
+  OpMaker(OpType op, std::initializer_list<IndexSpace> bras,
+          std::initializer_list<IndexSpace> kets);
 
   /// @param[in] op the operator type
   /// @param[in] bras the bra indices/creators
@@ -407,6 +393,11 @@ class OpMaker {
         ket_spaces_(kets.begin(), kets.end()) {
     assert(nbra() > 0 || nket() > 0);
   }
+
+  OpMaker(OpType op, std::size_t Nbra, std::size_t Nket);
+
+  // construct a particle conserving operator when constructing this way.
+  OpMaker(OpType op, std::size_t nparticle);
 
   enum class UseDepIdx {
     /// bra/cre indices depend on ket
@@ -439,8 +430,8 @@ class OpMaker {
   /// @param[in] tensor_generator the callable that generates the tensor
   /// @param[in] dep whether to use dependent indices
   template <typename TensorGenerator>
-  static ExprPtr make(const container::svector<IndexSpace::Type>& bras,
-                      const container::svector<IndexSpace::Type>& kets,
+  static ExprPtr make(const container::svector<IndexSpace>& bras,
+                      const container::svector<IndexSpace>& kets,
                       TensorGenerator&& tensor_generator,
                       UseDepIdx dep = UseDepIdx::None) {
     const bool symm =
@@ -458,7 +449,7 @@ class OpMaker {
       const auto n = spacetypes.size();
       result.reserve(n);
       for (size_t i = 0; i != n; ++i) {
-        auto space = IndexSpace::instance(spacetypes[i]);
+        auto space = spacetypes[i];
         result.push_back(Index::make_tmp_index(space));
       }
       return result;
@@ -469,7 +460,7 @@ class OpMaker {
       std::vector<Index> result;
       result.reserve(n);
       for (size_t i = 0; i != n; ++i) {
-        auto space = IndexSpace::instance(spacetypes[i]);
+        auto space = spacetypes[i];
         result.push_back(Index::make_tmp_index(space, protoidxs, true));
       }
       return result;
@@ -504,16 +495,16 @@ class OpMaker {
                       std::initializer_list<IndexSpace::Type> kets,
                       TensorGenerator&& tensor_generator,
                       UseDepIdx csv = UseDepIdx::None) {
-    container::svector<IndexSpace::Type> bra_vec(bras.begin(), bras.end());
-    container::svector<IndexSpace::Type> ket_vec(kets.begin(), kets.end());
-    return OpMaker<S>::make(
+    container::svector<IndexSpace> bra_vec(bras.begin(), bras.end());
+    container::svector<IndexSpace> ket_vec(kets.begin(), kets.end());
+    return OpMaker::make(
         bra_vec, ket_vec, std::forward<TensorGenerator>(tensor_generator), csv);
   }
 
  protected:
   OpType op_;
-  container::svector<IndexSpace::Type> bra_spaces_;
-  container::svector<IndexSpace::Type> ket_spaces_;
+  container::svector<IndexSpace> bra_spaces_;
+  container::svector<IndexSpace> ket_spaces_;
 
   OpMaker(OpType op);
 
@@ -589,6 +580,47 @@ class Operator : public Operator<void, S> {
 
 extern template class Operator<qns_t, Statistics::FermiDirac>;
 extern template class Operator<qns_t, Statistics::BoseEinstein>;
+
+namespace op{
+// clang-format off
+/// @brief `k`-body contribution to the "generic" Hamiltonian (in normal order relative to the default vacuum)
+/// @param[in] k the rank of the particle interactions; only `k<=2` is
+/// supported
+// clang-format on
+ExprPtr H_(std::size_t k, bool count_vac_ops = false);
+
+/// @brief total Hamiltonian including up to `k`-body interactions
+/// @param[in] k the maximum rank of the particle interactions; only `k<=2` is
+/// supported
+ExprPtr H(std::size_t k = 2, bool count_vac_ops = false);
+
+/// fock operator implied one-body operator, optional explicit construction requires user to specify the
+/// IndexSpace corresponding to all orbitals which may have non-zero density.
+ExprPtr F(bool use_tensor = true, IndexSpace density_occupied = IndexSpace::null_instance());
+
+/// makes particle-conserving excitation operator of rank \p K
+ExprPtr T_(std::size_t K, bool count_vac_ops = false);
+
+/// makes sum of particle-conserving excitation operators of all ranks up to \p
+/// K
+ExprPtr T(std::size_t K, bool count_vac_ops = false);
+
+/// makes particle-conserving deexcitation operator of rank \p K
+ExprPtr Λ_(std::size_t K, bool count_vac_ops = false);
+
+/// makes sum of particle-conserving deexcitation operators of all ranks up to
+/// \p
+/// K
+ExprPtr Λ(std::size_t K, bool count_vac_ops = false);
+
+ExprPtr P(std::size_t K, bool count_vac_ops = false);
+
+ExprPtr A(std::size_t K, bool count_vac_ops = false);
+
+ExprPtr S(std::size_t K, bool count_vac_ops = false);
+#include "SeQuant/domain/mbpt/vac_av.hpp"
+
+} //namespace op
 
 }  // namespace mbpt
 }  // namespace sequant

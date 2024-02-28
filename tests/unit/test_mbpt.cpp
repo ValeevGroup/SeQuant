@@ -598,7 +598,7 @@ TEST_CASE("MBPT", "[mbpt]") {
     // now compute using (closed) Fermi vacuum + spinfree basis
     auto ctx_resetter = set_scoped_default_context(
         Context(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-                BraKetSymmetry::conjugate, SPBasis::spinfree,Reference::multiple));
+                BraKetSymmetry::conjugate, SPBasis::spinfree));
     sequant::mbpt::set_default_convention();
 
     // H2**T2 -> 0

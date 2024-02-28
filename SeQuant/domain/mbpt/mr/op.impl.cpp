@@ -1,4 +1,4 @@
-ExprPtr T_(std::size_t Nbra, std::size_t Nket) {
+/*ExprPtr T_(std::size_t Nbra, std::size_t Nket) {
   assert(Nbra > 0);
   assert(Nket > 0);
   return OpMaker(OpType::t, Nbra, Nket)();
@@ -54,17 +54,11 @@ ExprPtr T(std::size_t Nbra, std::size_t Nket) {
 }
 
 /// makes geminal excitation operator for ansatz @p ansatz
-ExprPtr R12(IndexSpace::Type gg_space, int ansatz) {
-  assert(ansatz == 1 || ansatz == 2);
-  if (ansatz == 2)
+ExprPtr R12(IndexSpace gg_space, IndexSpace excitation_space) {
     return OpMaker(
         OpType::R12,
-        {IndexSpace::complete_unoccupied, IndexSpace::complete_unoccupied},
+        {excitation_space, excitation_space},
         {gg_space, gg_space})();
-  else
-    return OpMaker(OpType::R12,
-                   {IndexSpace::other_unoccupied, IndexSpace::other_unoccupied},
-                   {gg_space, gg_space})();
 }
 
 /// makes deexcitation operator of bra/ket ranks @c Nbra/Nket
@@ -72,4 +66,4 @@ ExprPtr A(std::size_t Nbra, std::size_t Nket) {
   assert(Nbra > 0);
   assert(Nket > 0);
   return OpMaker(OpType::A, Nbra, Nket)();
-}
+}*/

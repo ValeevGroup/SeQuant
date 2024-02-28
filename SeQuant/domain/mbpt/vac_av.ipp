@@ -138,7 +138,7 @@ ExprPtr vac_av(
     ExprPtr expr,
     std::vector<std::pair<mbpt::OpType, mbpt::OpType>> op_connections,
     bool skip_clone) {
-  return vac_av(expr, to_label_connections(op_connections), skip_clone);
+  return vac_av(expr, op::to_label_connections(op_connections), skip_clone);
 }
 
 #endif  // SEQUANT_DOMAIN_MBPT_VAC_AV_IPP

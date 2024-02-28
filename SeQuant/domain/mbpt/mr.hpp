@@ -15,7 +15,7 @@
 #include <limits>
 #include <utility>
 
-namespace sequant {
+/*namespace sequant {
 namespace mbpt {
 namespace mr {
 
@@ -23,7 +23,7 @@ struct qns_tag;
 
 // clang-format off
 /// multireference operator algebra can be screened by tracking the number of creators and annihilators in the (active) occupied, active, and (active) unoccupied space
-/// the order of of elements is {# of occupied creators, # of occupied annihilators, # of active creators, # of active annihilators, # of unoccupied creators, # of unoccupied annihilators}
+/// the order of elements is {# of occupied creators, # of occupied annihilators, # of active creators, # of active annihilators, # of unoccupied creators, # of unoccupied annihilators}
 /// \note use signed integer, although could use unsigned in this case, so that can represent quantum numbers and their changes by the same type
 // clang-format on
 using qns_t = mbpt::QuantumNumberChange<6, qns_tag, std::int64_t>;
@@ -221,5 +221,5 @@ extern template class Operator<mr::qns_t, Statistics::BoseEinstein>;
 
 }  // namespace mbpt
 }  // namespace sequant
-
+*/
 #endif  // SEQUANT_DOMAIN_MBPT_MR_HPP

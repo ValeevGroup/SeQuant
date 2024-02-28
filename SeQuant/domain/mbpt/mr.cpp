@@ -11,107 +11,127 @@
 #include "SeQuant/core/wick.hpp"
 #include "SeQuant/domain/mbpt/context.hpp"
 
-namespace sequant {
+/*namespace sequant {
 namespace mbpt {
 namespace mr {
 
+//accessor functions instead of variables will contain accurate values at the time they are called.
+IndexSpace occupied(){return get_default_context().index_space_registry()->occupied();}
+IndexSpace complete(){return get_default_context().index_space_registry()-> complete();}
+IndexSpace active_particle_space(){return get_default_context().index_space_registry()->active_particle_space();}
+IndexSpace active_hole_space(){return get_default_context().index_space_registry()->active_hole_space();}
+IndexSpace active_space(){return get_default_context().index_space_registry()->MR_active();}
+IndexSpace active_occupied(){return get_default_context().index_space_registry()->non_overlapping_spaces(active_space(),active_particle_space())[0];}
+IndexSpace active_unoccupied(){return get_default_context().index_space_registry()->non_overlapping_spaces(active_space(),active_hole_space())[1];}
+
+
 qninterval_t ncre(qns_t qns, const IndexSpace::Type& s) {
-  assert(s == IndexSpace::MR_active_occupied || s == IndexSpace::MR_active ||
-         s == IndexSpace::MR_active_unoccupied);
-  if (s == IndexSpace::MR_active_occupied)
+  auto idx_registry = get_default_context().index_space_registry();
+  assert(s == active_occupied().type() || s == active_space().type() ||
+         s == active_unoccupied().type());
+  if (s == active_occupied().type())
     return qns[0];
-  else if (s == IndexSpace::MR_active)
+  else if (s == active_space().type())
     return qns[2];
   else  // if (s == IndexSpace::active_unoccupied)
     return qns[4];
 }
 
 qninterval_t ncre(qns_t qns, const IndexSpace& s) {
-  assert((s.type() == IndexSpace::MR_active_occupied ||
-          s.type() == IndexSpace::MR_active ||
-          s.type() == IndexSpace::MR_active_unoccupied) &&
+  auto idx_registry = get_default_context().index_space_registry();
+  assert((s.type() == active_occupied().type()||
+          s.type() == active_space().type() ||
+          s.type() == active_unoccupied().type()) &&
          s.qns() == IndexSpace::nullqns);
-  if (s == IndexSpace::MR_active_occupied)
+  if (s == active_occupied().type())
     return qns[0];
-  else if (s == IndexSpace::MR_active)
+  else if (s == active_space().type())
     return qns[2];
   else  // if (s == IndexSpace::active_unoccupied)
     return qns[4];
 }
 
 qninterval_t ncre_occ(qns_t qns) {
-  return ncre(qns, IndexSpace::MR_active_occupied);
+  auto idx_registry = get_default_context().index_space_registry();
+  return ncre(qns, active_occupied().type());
 }
 
-qninterval_t ncre_act(qns_t qns) { return ncre(qns, IndexSpace::MR_active); }
+qninterval_t ncre_act(qns_t qns) {
+  auto idx_registry = get_default_context().index_space_registry();
+  return ncre(qns, active_space().type());
+}
 
 qninterval_t ncre_uocc(qns_t qns) {
-  return ncre(qns, IndexSpace::MR_active_unoccupied);
+  auto idx_registry = get_default_context().index_space_registry();
+  return ncre(qns, active_unoccupied().type());
 }
 
 qninterval_t ncre(qns_t qns) { return qns[0] + qns[2] + qns[4]; }
 
 qninterval_t nann(qns_t qns, const IndexSpace::Type& s) {
-  assert(s == IndexSpace::MR_active_occupied || s == IndexSpace::MR_active ||
-         s == IndexSpace::MR_active_unoccupied);
-  if (s == IndexSpace::MR_active_occupied)
+  assert(s == active_occupied().type() || s == active_space().type() ||
+         s == active_unoccupied().type());
+  if (s == active_occupied().type())
     return qns[1];
-  else if (s == IndexSpace::MR_active)
+  else if (s == active_space().type())
     return qns[3];
-  else  // if (s == IndexSpace::active_unoccupied)
+  else  // if (s == active_unoccupied)
     return qns[5];
 }
 
 qninterval_t nann(qns_t qns, const IndexSpace& s) {
-  assert((s.type() == IndexSpace::MR_active_occupied ||
-          s.type() == IndexSpace::MR_active_unoccupied) &&
+  assert((s.type() == active_occupied().type() ||
+          s.type() == active_space().type()) &&
          s.qns() == IndexSpace::nullqns);
-  if (s == IndexSpace::MR_active_occupied)
+  if (s == active_occupied().type())
     return qns[1];
-  else if (s == IndexSpace::MR_active)
+  else if (s == active_space().type())
     return qns[3];
   else  // if (s == IndexSpace::active_unoccupied)
     return qns[5];
 }
 
 qninterval_t nann_occ(qns_t qns) {
-  return nann(qns, IndexSpace::MR_active_occupied);
+  return nann(qns, active_occupied().type());
 }
 
-qninterval_t nann_act(qns_t qns) { return nann(qns, IndexSpace::MR_active); }
+qninterval_t nann_act(qns_t qns) {
+  return nann(qns, active_space().type());
+}
 
 qninterval_t nann_uocc(qns_t qns) {
-  return nann(qns, IndexSpace::MR_active_unoccupied);
+  return nann(qns, active_unoccupied().type());
 }
 
 qninterval_t nann(qns_t qns) { return qns[1] + qns[3] + qns[5]; }
 
 qns_t combine(qns_t a, qns_t b) {
+  auto idx_registry = get_default_context().index_space_registry();
   const auto ncontr_uocc =
-      qninterval_t{0, std::min(ncre(b, IndexSpace::MR_active_unoccupied).upper(),
-                               nann(a, IndexSpace::MR_active_unoccupied).upper())};
+      qninterval_t{0, std::min(ncre(b, active_unoccupied().type()).upper(),
+                               nann(a, active_unoccupied().type()).upper())};
   const auto ncontr_act =
-      qninterval_t{0, std::min(nann(b, IndexSpace::MR_active).upper(),
-                               ncre(a, IndexSpace::MR_active).upper())};
+      qninterval_t{0, std::min(nann(b, active_space().type()).upper(),
+                               ncre(a, active_space().type()).upper())};
   const auto ncontr_occ =
-      qninterval_t{0, std::min(nann(b, IndexSpace::MR_active_occupied).upper(),
-                               ncre(a, IndexSpace::MR_active_occupied).upper())};
+      qninterval_t{0, std::min(nann(b, active_occupied().type()).upper(),
+                               ncre(a, active_occupied().type()).upper())};
   const auto nc_occ =
-      nonnegative(ncre(a, IndexSpace::MR_active_occupied) +
-                  ncre(b, IndexSpace::MR_active_occupied) - ncontr_occ);
-  const auto nc_act = nonnegative(ncre(a, IndexSpace::MR_active) +
-                                  ncre(b, IndexSpace::MR_active) - ncontr_act);
+      nonnegative(ncre(a, active_occupied().type()) +
+                  ncre(b, active_occupied().type()) - ncontr_occ);
+  const auto nc_act = nonnegative(ncre(a, active_space().type()) +
+                                  ncre(b, active_space().type()) - ncontr_act);
   const auto nc_uocc =
-      nonnegative(ncre(a, IndexSpace::MR_active_unoccupied) +
-                  ncre(b, IndexSpace::MR_active_unoccupied) - ncontr_uocc);
+      nonnegative(ncre(a, active_unoccupied().type()) +
+                  ncre(b, active_unoccupied().type()) - ncontr_uocc);
   const auto na_occ =
-      nonnegative(nann(a, IndexSpace::MR_active_occupied) +
-                  nann(b, IndexSpace::MR_active_occupied) - ncontr_occ);
-  const auto na_act = nonnegative(nann(a, IndexSpace::MR_active) +
-                                  nann(b, IndexSpace::MR_active) - ncontr_act);
+      nonnegative(nann(a, active_occupied().type()) +
+                  nann(b, active_occupied().type()) - ncontr_occ);
+  const auto na_act = nonnegative(nann(a, active_space().type()) +
+                                  nann(b, active_space().type()) - ncontr_act);
   const auto na_uocc =
-      nonnegative(nann(a, IndexSpace::MR_active_unoccupied) +
-                  nann(b, IndexSpace::MR_active_unoccupied) - ncontr_uocc);
+      nonnegative(nann(a, active_unoccupied().type()) +
+                  nann(b, active_unoccupied().type()) - ncontr_uocc);
   return qns_t{nc_occ, na_occ, nc_act, na_act, nc_uocc, na_uocc};
 }
 
@@ -119,12 +139,13 @@ qns_t combine(qns_t a, qns_t b) {
 }  // namespace mbpt
 
 mbpt::mr::qns_t adjoint(mbpt::mr::qns_t qns) {
-  return mbpt::mr::qns_t{nann(qns, IndexSpace::MR_active_occupied),
-                         ncre(qns, IndexSpace::MR_active_occupied),
-                         nann(qns, IndexSpace::MR_active),
-                         ncre(qns, IndexSpace::MR_active),
-                         nann(qns, IndexSpace::MR_active_unoccupied),
-                         ncre(qns, IndexSpace::MR_active_unoccupied)};
+  auto idx_registry = get_default_context().index_space_registry();
+  return mbpt::mr::qns_t{nann(qns, mbpt::mr::active_occupied().type()),
+                         ncre(qns, mbpt::mr::active_occupied().type()),
+                         nann(qns, mbpt::mr::active_space().type()),
+                         ncre(qns, mbpt::mr::active_space().type()),
+                         nann(qns, mbpt::mr::active_unoccupied().type()),
+                         ncre(qns, mbpt::mr::active_unoccupied().type())};
 }
 
 namespace mbpt {
@@ -134,9 +155,8 @@ OpMaker::OpMaker(OpType op, std::size_t nbra, std::size_t nket)
     : base_type(op) {
   nket = nket == std::numeric_limits<std::size_t>::max() ? nbra : nket;
   assert(nbra > 0 || nket > 0);
-
-  const auto unocc = IndexSpace::MR_active_maybe_unoccupied;
-  const auto occ = IndexSpace::MR_active_maybe_occupied;
+  const auto unocc = active_hole_space();
+  const auto occ = active_particle_space();
   switch (to_class(op)) {
     case OpClass::ex:
       bra_spaces_ = decltype(bra_spaces_)(nbra, unocc);
@@ -147,8 +167,8 @@ OpMaker::OpMaker(OpType op, std::size_t nbra, std::size_t nket)
       ket_spaces_ = decltype(ket_spaces_)(nket, unocc);
       break;
     case OpClass::gen:
-      bra_spaces_ = decltype(bra_spaces_)(nbra, IndexSpace::MR_complete);
-      ket_spaces_ = decltype(ket_spaces_)(nket, IndexSpace::MR_complete);
+      bra_spaces_ = decltype(bra_spaces_)(nbra, complete());
+      ket_spaces_ = decltype(ket_spaces_)(nket, complete());
       break;
   }
 }
@@ -184,15 +204,14 @@ ExprPtr H(std::size_t k) {
 }
 
 ExprPtr F() {
+  auto idx_registry = get_default_context().index_space_registry();
   // add \bar{g}^{\kappa x}_{\lambda y} \gamma^y_x with x,y in occ_space_type
-  auto make_g_contribution = [](const auto occ_space_type) {
+  auto make_g_contribution = [](const auto occ_space) {
     return mbpt::OpMaker<Statistics::FermiDirac>::make(
-        {IndexSpace::complete}, {IndexSpace::complete},
+        {complete}, {complete},
         [=](auto braidxs, auto ketidxs, Symmetry opsymm) {
-          auto m1 = Index::make_tmp_index(
-              IndexSpace{occ_space_type, IndexSpace::nullqns});
-          auto m2 = Index::make_tmp_index(
-              IndexSpace{occ_space_type, IndexSpace::nullqns});
+          auto m1 = Index::make_tmp_index(occ_space);
+          auto m2 = Index::make_tmp_index(occ_space);
           assert(opsymm == Symmetry::antisymm || opsymm == Symmetry::nonsymm);
           if (opsymm == Symmetry::antisymm) {
             braidxs.push_back(m1);
@@ -223,11 +242,11 @@ ExprPtr F() {
   switch (get_default_context().vacuum()) {
     case Vacuum::Physical:
       return OpMaker(OpType::h, 1)() +
-             make_g_contribution(IndexSpace::MR_maybe_occupied);  // all occupieds
+             make_g_contribution(idx_registry->unIon(occupied(),active_space()));  // all occupieds
 
     case Vacuum::SingleProduct:
       return OpMaker(OpType::f̃, 1)() +
-             make_g_contribution(IndexSpace::MR_active);  // actives only
+             make_g_contribution(active_space());  // actives only
 
     case Vacuum::MultiProduct:
       return OpMaker(OpType::f, 1)();
@@ -238,6 +257,7 @@ ExprPtr F() {
 
 ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
                bool use_top) {
+  auto idx_registry = get_default_context().index_space_registry();
   const auto spinorbital =
       get_default_context().spbasis() == SPBasis::spinorbital;
   // convention is to use different label for spin-orbital and spin-free RDM
@@ -261,8 +281,8 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
       // - if Vacuum::SingleProduct: IndexSpace::active
       const auto target_rdm_space_type =
           get_default_context().vacuum() == Vacuum::SingleProduct
-              ? IndexSpace::MR_active
-              : IndexSpace::MR_maybe_occupied;
+              ? active_space()
+              : idx_registry->unIon(occupied(),active_space());
 
       // do this in 2 steps (TODO factor out these components?)
       // 1. replace NOPs by RDM
@@ -294,7 +314,7 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
           exptr = replace(exptr.template as<BNOperator>());
         }
       };
-      result->visit(replace_nop_with_rdm, /* atoms_only = */ true);
+      result->visit(replace_nop_with_rdm, true);
 
       // STEP 2: project RDM indices onto the target RDM subspace
       // since RDM indices only make sense within a single TN expand + flatten
@@ -319,7 +339,7 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
           // compute external indices
           container::map<Index, std::size_t> indices_w_counts;
           auto retrieve_indices_with_counts =
-              [&indices_w_counts](const auto& idx, auto& /* unused */) {
+              [&indices_w_counts](const auto& idx,) {
                 auto found_it = indices_w_counts.find(idx);
                 if (found_it != indices_w_counts.end()) {
                   found_it->second++;
@@ -352,11 +372,9 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
           // compute RDM->target replacement rules
           container::map<Index, Index> replacement_rules;
           ranges::for_each(rdm_indices, [&](const Index& idx) {
-            const auto target_type =
-                idx.space().type().intersection(target_rdm_space_type);
-            if (target_type != IndexSpace::nulltype) {
-              Index target = Index::make_tmp_index(
-                  IndexSpace(target_type, idx.space().qns()));
+            const auto target_type = idx_registry->intersection(idx.space(),target_rdm_space_type);
+            if (target_type != idx_registry->nulltype_()) {
+              Index target = Index::make_tmp_index(target_type);
               replacement_rules.emplace(idx, target);
             }
           });
@@ -410,8 +428,8 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
           TensorCanonicalizer::instance()->index_comparer();
       TensorCanonicalizer::instance()->index_comparer(
           [&](const Index& idx1, const Index& idx2) -> bool {
-            const auto idx1_active = idx1.space().type() == IndexSpace::MR_active;
-            const auto idx2_active = idx2.space().type() == IndexSpace::MR_active;
+            const auto idx1_active = idx1.space().type() == active_space().type();
+            const auto idx2_active = idx2.space().type() == active_space().type();
             if (idx1_active) {
               if (idx2_active)
                 return current_index_comparer(idx1, idx2);
@@ -701,4 +719,4 @@ namespace mbpt {
 template class Operator<mr::qns_t, Statistics::FermiDirac>;
 template class Operator<mr::qns_t, Statistics::BoseEinstein>;
 }  // namespace mbpt
-}  // namespace sequant
+}  // namespace sequant*/

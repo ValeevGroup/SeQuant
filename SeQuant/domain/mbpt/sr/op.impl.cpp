@@ -1,5 +1,5 @@
 /// makes excitation operator of bra/ket ranks @c Nbra/Nket
-ExprPtr T_(std::size_t Nbra, std::size_t Nket) {
+/*ExprPtr T_(std::size_t Nbra, std::size_t Nket) {
   assert(Nbra > 0);
   assert(Nket > 0);
   return OpMaker(OpType::t, Nbra, Nket)();
@@ -109,17 +109,11 @@ ExprPtr Λ(std::size_t Nbra, std::size_t Nket) {
 }
 
 /// makes geminal excitation operator for ansatz @p ansatz
-ExprPtr R12(IndexSpace::Type gg_space, int ansatz) {
-  assert(ansatz == 1 || ansatz == 2);
-  if (ansatz == 2)
+ExprPtr R12(IndexSpace generating_space, IndexSpace excitation_space) {
     return OpMaker(
         OpType::R12,
-        {IndexSpace::complete_unoccupied, IndexSpace::complete_unoccupied},
-        {gg_space, gg_space})();
-  else
-    return OpMaker(OpType::R12,
-                   {IndexSpace::other_unoccupied, IndexSpace::other_unoccupied},
-                   {gg_space, gg_space})();
+        {excitation_space, excitation_space},
+        {generating_space, generating_space})();
 }
 
 ExprPtr A(std::int64_t Kh, std::int64_t Kp) {
@@ -130,20 +124,20 @@ ExprPtr A(std::int64_t Kh, std::int64_t Kp) {
   // Kh and Kp should have same sign
   assert((Kh > 0 && Kp > 0) || (Kh < 0 && Kp < 0));
 
-  container::svector<IndexSpace::Type> creators;
-  container::svector<IndexSpace::Type> annihilators;
+  container::svector<IndexSpace> creators;
+  container::svector<IndexSpace> annihilators;
   if (Kh > 0)
     for (auto i : ranges::views::iota(0, Kh))
-      annihilators.emplace_back(IndexSpace::active_occupied);
+      annihilators.emplace_back(idx_registry->active_particle_space());
   else
     for (auto i : ranges::views::iota(0, -Kh))
-      creators.emplace_back(IndexSpace::active_occupied);
+      creators.emplace_back(idx_registry->active_particle_space());
   if (Kp > 0)
     for (auto i : ranges::views::iota(0, Kp))
-      creators.emplace_back(IndexSpace::active_unoccupied);
+      creators.emplace_back(idx_registry->active_hole_space());
   else
     for (auto i : ranges::views::iota(0, -Kp))
-      annihilators.emplace_back(IndexSpace::active_unoccupied);
+      annihilators.emplace_back(idx_registry->active_hole_space());
 
   std::optional<OpMaker::UseDepIdx> dep;
   if (get_default_formalism().csv() == mbpt::CSV::Yes)
@@ -159,20 +153,20 @@ ExprPtr S(std::int64_t Kh, std::int64_t Kp) {
   // Kh and Kp should have same sign
   assert((Kh > 0 && Kp > 0) || (Kh < 0 && Kp < 0));
 
-  container::svector<IndexSpace::Type> creators;
-  container::svector<IndexSpace::Type> annihilators;
+  container::svector<IndexSpace> creators;
+  container::svector<IndexSpace> annihilators;
   if (Kh > 0)
     for (auto i : ranges::views::iota(0, Kh))
-      annihilators.emplace_back(IndexSpace::active_occupied);
+      annihilators.emplace_back(idx_registry->active_particle_space());
   else
     for (auto i : ranges::views::iota(0, -Kh))
-      creators.emplace_back(IndexSpace::active_occupied);
+      creators.emplace_back(idx_registry->active_particle_space());
   if (Kp > 0)
     for (auto i : ranges::views::iota(0, Kp))
-      creators.emplace_back(IndexSpace::active_unoccupied);
+      creators.emplace_back(idx_registry->active_hole_space());
   else
     for (auto i : ranges::views::iota(0, -Kp))
-      annihilators.emplace_back(IndexSpace::active_unoccupied);
+      annihilators.emplace_back(idx_registry->active_hole_space());
 
   std::optional<OpMaker::UseDepIdx> dep;
   if (get_default_formalism().csv() == mbpt::CSV::Yes)
@@ -202,4 +196,4 @@ ExprPtr L(std::size_t Nbra, std::size_t Nket) {
   ExprPtr result;
   detail::op_impl{OpType::L, Nbra, Nket_}(result);
   return result;
-}
+}*/

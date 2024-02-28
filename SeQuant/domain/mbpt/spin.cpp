@@ -134,10 +134,9 @@ ExprPtr remove_spin(ExprPtr& expr) {
     container::svector<Index> ket(tensor.ket().begin(), tensor.ket().end());
     {
       for (auto&& idx : ranges::views::concat(bra, ket)) {
-        auto type = idx.space().type();
         auto subscript_label = idx.label().substr(idx.label().rfind(L'_') + 1);
         std::wstring subscript(subscript_label.begin(), subscript_label.end());
-        idx = Index::make_label_index(IndexSpace(type, IndexSpace::nullqns),
+        idx = Index::make_label_index(idx.space(),
                                       subscript);
       }
     }
@@ -1015,7 +1014,7 @@ Tensor swap_spin(const Tensor& t) {
     auto label_int = idx.label().substr(idx.label().rfind(L'_') + 1);
     std::wstring label_int_ws(label_int.begin(), label_int.end());
 
-    return Index::make_label_index(IndexSpace(idx_type, qns), label_int_ws);
+    return Index::make_label_index(idx.space(), label_int_ws);
   };
 
   container::svector<Index> bra(t.rank()), ket(t.rank());
@@ -1078,14 +1077,14 @@ std::vector<ExprPtr> open_shell_A_op(const Tensor& A) {
   // Add spin label alpha to index
   auto add_alpha = [](const Index& idx) {
     std::wstring idx_n_ws(idx.label().substr(idx.label().rfind(L'_') + 1));
-    auto space = IndexSpace::instance(idx.space().type(), IndexSpace::alpha);
+    auto space = IndexSpace(idx.space().get_base_key(),idx.space().type(),IndexSpace::alpha);
     return Index::make_label_index(space, idx_n_ws);
   };
   // Add spin label beta to index
   auto add_beta = [](const Index& idx) {
     std::wstring idx_n_ws(idx.label().substr(idx.label().rfind(L'_') + 1));
     auto idx_type = idx.space().type();
-    auto space = IndexSpace::instance(idx.space().type(), IndexSpace::beta);
+    auto space = IndexSpace(idx.space().get_base_key(),idx.space().type(),IndexSpace::beta);
     return Index::make_label_index(space, idx_n_ws);
   };
 
@@ -1250,11 +1249,9 @@ std::vector<ExprPtr> open_shell_spintrace(
   auto add_spin_label = [](const Index& idx, const long int& spin_bit) {
     auto idx_n = idx.label().substr(idx.label().rfind(L'_') + 1);
     std::wstring idx_n_ws(idx_n.begin(), idx_n.end());
-
-    auto idx_type = IndexSpace::instance(idx.label()).type();
     auto space = spin_bit == 0
-                     ? IndexSpace::instance(idx_type, IndexSpace::alpha)
-                     : IndexSpace::instance(idx_type, IndexSpace::beta);
+                     ? IndexSpace(idx.space().get_base_key(),idx.space().type(), IndexSpace::alpha)
+                     : IndexSpace(idx.space().get_base_key(),idx.space().type(), IndexSpace::beta);
 
     return Index::make_label_index(space, idx_n_ws);
   };
@@ -1581,7 +1578,7 @@ ExprPtr spintrace(
           std::wstring subscript(subscript_label.begin(),
                                  subscript_label.end());
           Index spin_index =
-              Index::make_label_index(IndexSpace(type, qns), subscript);
+              Index::make_label_index(index.space(), subscript);
           index_replacements.emplace(index, spin_index);
         }
         ++index_group_count;

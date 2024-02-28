@@ -11,75 +11,80 @@
 #include "SeQuant/core/wick.hpp"
 #include "SeQuant/domain/mbpt/context.hpp"
 
-namespace sequant {
+/*namespace sequant {
 namespace mbpt {
 namespace sr {
+auto idx_registry = get_default_context().index_space_registry();
+const auto occupied = get_default_context().index_space_registry()->occupied();
+const auto complete = get_default_context().index_space_registry()-> complete();
+const auto active_particle_space = get_default_context().index_space_registry()->active_particle_space();
+const auto active_hole_space = get_default_context().index_space_registry()->active_hole_space();
 
 qninterval_t ncre(qns_t qns, const IndexSpace::Type& s) {
-  assert(s == IndexSpace::active_occupied ||
-         s == IndexSpace::active_unoccupied);
-  return s == IndexSpace::active_occupied ? qns[0] : qns[2];
+  assert(s == active_particle_space ||
+         s == active_hole_space);
+  return s == active_particle_space ? qns[0] : qns[2];
 }
 
 qninterval_t ncre(qns_t qns, const IndexSpace& s) {
-  assert((s.type() == IndexSpace::active_occupied ||
-          s.type() == IndexSpace::active_unoccupied) &&
+  assert((s.type() == active_particle_space ||
+          s.type() == active_hole_space) &&
          s.qns() == IndexSpace::nullqns);
-  return s.type() == IndexSpace::active_occupied ? qns[0] : qns[2];
+  return s.type() == active_particle_space ? qns[0] : qns[2];
 }
 
 qninterval_t ncre_occ(qns_t qns) {
-  return ncre(qns, IndexSpace::active_occupied);
+  return ncre(qns, active_particle_space);
 }
 
 qninterval_t ncre_uocc(qns_t qns) {
-  return ncre(qns, IndexSpace::active_unoccupied);
+  return ncre(qns, active_hole_space);
 }
 
 qninterval_t ncre(qns_t qns) { return qns[0] + qns[2]; }
 
 qninterval_t nann(qns_t qns, const IndexSpace::Type& s) {
-  assert(s == IndexSpace::active_occupied ||
-         s == IndexSpace::active_unoccupied);
-  return s == IndexSpace::active_occupied ? qns[1] : qns[3];
+  assert(s == active_particle_space ||
+         s == active_hole_space);
+  return s == active_particle_space ? qns[1] : qns[3];
 }
 
 qninterval_t nann(qns_t qns, const IndexSpace& s) {
-  assert((s.type() == IndexSpace::active_occupied ||
-          s.type() == IndexSpace::active_unoccupied) &&
+  assert((s.type() == active_particle_space ||
+          s.type() == active_hole_space) &&
          s.qns() == IndexSpace::nullqns);
-  return s.type() == IndexSpace::active_occupied ? qns[1] : qns[3];
+  return s.type() == active_particle_space ? qns[1] : qns[3];
 }
 
 qninterval_t nann_occ(qns_t qns) {
-  return nann(qns, IndexSpace::active_occupied);
+  return nann(qns, active_particle_space);
 }
 
 qninterval_t nann_uocc(qns_t qns) {
-  return nann(qns, IndexSpace::active_unoccupied);
+  return nann(qns, active_hole_space);
 }
 
 qninterval_t nann(qns_t qns) { return qns[1] + qns[3]; }
 
 qns_t combine(qns_t a, qns_t b) {
   const auto ncontr_uocc =
-      qninterval_t{0, std::min(ncre(b, IndexSpace::active_unoccupied).upper(),
-                               nann(a, IndexSpace::active_unoccupied).upper())};
+      qninterval_t{0, std::min(ncre(b, active_hole_space).upper(),
+                               nann(a, active_hole_space).upper())};
   const auto ncontr_occ =
-      qninterval_t{0, std::min(nann(b, IndexSpace::active_occupied).upper(),
-                               ncre(a, IndexSpace::active_occupied).upper())};
+      qninterval_t{0, std::min(nann(b, active_particle_space).upper(),
+                               ncre(a, active_particle_space).upper())};
   const auto nc_occ =
-      nonnegative(ncre(a, IndexSpace::active_occupied) +
-                  ncre(b, IndexSpace::active_occupied) - ncontr_occ);
+      nonnegative(ncre(a, active_particle_space) +
+                  ncre(b, active_particle_space) - ncontr_occ);
   const auto nc_uocc =
-      nonnegative(ncre(a, IndexSpace::active_unoccupied) +
-                  ncre(b, IndexSpace::active_unoccupied) - ncontr_uocc);
+      nonnegative(ncre(a, active_hole_space) +
+                  ncre(b, active_hole_space) - ncontr_uocc);
   const auto na_occ =
-      nonnegative(nann(a, IndexSpace::active_occupied) +
-                  nann(b, IndexSpace::active_occupied) - ncontr_occ);
+      nonnegative(nann(a, active_particle_space) +
+                  nann(b, active_particle_space) - ncontr_occ);
   const auto na_uocc =
-      nonnegative(nann(a, IndexSpace::active_unoccupied) +
-                  nann(b, IndexSpace::active_unoccupied) - ncontr_uocc);
+      nonnegative(nann(a, active_hole_space) +
+                  nann(b, active_hole_space) - ncontr_uocc);
   return qns_t{nc_occ, na_occ, nc_uocc, na_uocc};
 }
 
@@ -87,10 +92,10 @@ qns_t combine(qns_t a, qns_t b) {
 }  // namespace mbpt
 
 mbpt::sr::qns_t adjoint(mbpt::sr::qns_t qns) {
-  return mbpt::sr::qns_t{nann(qns, IndexSpace::active_occupied),
-                         ncre(qns, IndexSpace::active_occupied),
-                         nann(qns, IndexSpace::active_unoccupied),
-                         ncre(qns, IndexSpace::active_unoccupied)};
+  return mbpt::sr::qns_t{nann(qns, mbpt::sr::active_particle_space),
+                         ncre(qns, mbpt::sr::active_particle_space),
+                         nann(qns, mbpt::sr::active_hole_space),
+                         ncre(qns, mbpt::sr::active_hole_space)};
 }
 
 namespace mbpt {
@@ -101,8 +106,8 @@ OpMaker::OpMaker(OpType op, std::size_t nbra, std::size_t nket)
   nket = nket == std::numeric_limits<std::size_t>::max() ? nbra : nket;
   assert(nbra > 0 || nket > 0);
 
-  const auto unocc = IndexSpace::active_unoccupied;
-  const auto occ = IndexSpace::active_occupied;
+  const auto unocc = active_hole_space;
+  const auto occ = active_particle_space;
   switch (to_class(op)) {
     case OpClass::ex:
       bra_spaces_ = decltype(bra_spaces_)(nbra, unocc);
@@ -113,8 +118,8 @@ OpMaker::OpMaker(OpType op, std::size_t nbra, std::size_t nket)
       ket_spaces_ = decltype(ket_spaces_)(nket, unocc);
       break;
     case OpClass::gen:
-      bra_spaces_ = decltype(bra_spaces_)(nbra, IndexSpace::complete);
-      ket_spaces_ = decltype(ket_spaces_)(nket, IndexSpace::complete);
+      bra_spaces_ = decltype(bra_spaces_)(nbra, complete);
+      ket_spaces_ = decltype(ket_spaces_)(nket, complete);
       break;
   }
 }
@@ -165,14 +170,12 @@ ExprPtr F(bool use_f_tensor) {
   if (use_f_tensor) return OpMaker(OpType::f, 1)();
 
   // add \bar{g}^{\kappa x}_{\lambda y} \gamma^y_x with x,y in occ_space_type
-  auto make_g_contribution = [](const auto occ_space_type) {
+  auto make_g_contribution = [](const auto occ_space) {
     return mbpt::OpMaker<Statistics::FermiDirac>::make(
-        {IndexSpace::complete}, {IndexSpace::complete},
+        {complete}, {complete},
         [=](auto braidxs, auto ketidxs, Symmetry opsymm) {
-          auto m1 = Index::make_tmp_index(
-              IndexSpace{occ_space_type, IndexSpace::nullqns});
-          auto m2 = Index::make_tmp_index(
-              IndexSpace{occ_space_type, IndexSpace::nullqns});
+          auto m1 = Index::make_tmp_index(occ_space);
+          auto m2 = Index::make_tmp_index(occ_space);
           assert(opsymm == Symmetry::antisymm || opsymm == Symmetry::nonsymm);
           if (opsymm == Symmetry::antisymm) {
             braidxs.push_back(m1);
@@ -203,7 +206,7 @@ ExprPtr F(bool use_f_tensor) {
   switch (get_default_context().vacuum()) {
     case Vacuum::Physical:
       return OpMaker(OpType::h, 1)() +
-             make_g_contribution(IndexSpace::occupied);  // all occupieds
+             make_g_contribution(occupied);  // all occupieds
     case Vacuum::SingleProduct:
       return OpMaker(OpType::f, 1)();
     case Vacuum::MultiProduct:
@@ -237,8 +240,8 @@ ExprPtr H2_oo_vv() {
         using namespace sequant::mbpt::sr;
         return OpMaker(
             OpType::g,
-            {IndexSpace::active_occupied, IndexSpace::active_occupied},
-            {IndexSpace::active_unoccupied, IndexSpace::active_unoccupied})();
+            {active_particle_space, active_particle_space},
+            {active_hole_space, active_hole_space})();
       },
       [=](qnc_t& qns) {
         qns = combine(qnc_t{2, 0, 0, 2}, qns);
@@ -252,8 +255,8 @@ ExprPtr H2_vv_vv() {
         using namespace sequant::mbpt::sr;
         return OpMaker(
             OpType::g,
-            {IndexSpace::active_unoccupied, IndexSpace::active_unoccupied},
-            {IndexSpace::active_unoccupied, IndexSpace::active_unoccupied})();
+            {active_hole_space, active_hole_space},
+            {active_hole_space, active_hole_space})();
       },
       [=](qnc_t& qns) {
         qns = combine(qnc_t{0, 0, 2, 2}, qns);
@@ -582,4 +585,4 @@ namespace mbpt {
 template class Operator<sr::qns_t, Statistics::FermiDirac>;
 template class Operator<sr::qns_t, Statistics::BoseEinstein>;
 }  // namespace mbpt
-}  // namespace sequant
+}  // namespace sequant*/

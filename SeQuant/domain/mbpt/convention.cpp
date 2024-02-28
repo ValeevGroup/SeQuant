@@ -11,41 +11,6 @@
 namespace sequant {
 namespace mbpt {
 
-namespace {
-void register_index(IndexRegistry& reg, const Index& idx, long size) {
-  IndexSpace space = idx.space();
-  reg.make(idx, [size, space](const Index& index) -> long {
-    assert(index.space() == space);
-    const auto& proto_indices = index.proto_indices();
-    if (proto_indices.empty())
-      return size;
-    else {
-      if (proto_indices.size() == 1) {
-        assert(proto_indices[0].space().type() == IndexSpace::active_occupied);
-        if (space == IndexSpace::active_occupied)  // 1-index-specific occupied
-          return 20;
-        else if (space == IndexSpace::active_unoccupied)  // OSV or PAO?
-          return 500;
-        else if (space == IndexSpace::all)
-          return 520;
-      } else if (proto_indices.size() == 2) {
-        assert(proto_indices[1].space().type() == IndexSpace::active_occupied);
-        if (space == IndexSpace::active_occupied)
-          return 40;
-        else if (space == IndexSpace::occupied)
-          return 50;
-        else if (space == IndexSpace::active_unoccupied)  // CVS, e.g. PNO
-          return 50;
-        else if (space == IndexSpace::all)
-          return 100;
-      }
-      abort();  // what to return here by default?
-    }
-  });
-}
-}  // anonymous namespace
-
-namespace qcifs {
 
 namespace {
 enum class qns { none = 0, alpha = 1, beta = 2 };
@@ -63,124 +28,135 @@ auto qndecorate(qns qn, std::wstring_view label) {
   abort();  // unreachable
 };
 };  // namespace
+IndexSpaceRegistry make_F12_single_reference_subspaces(){
+  IndexSpaceRegistry standard_reference_registry;
 
-/// @brief registers "standard" instances of IndexSpace objects
-void register_standard_instances(sequant::Reference ref,bool do_throw = true) {
-  //const bool do_throw = true;
-  for (int s = 0; s <= 2; ++s) {
-    auto qnattr = s == 0 ? IndexSpace::nullqns
-                         : (s == 1 ? IndexSpace::alpha : IndexSpace::beta);
-    auto declab = [s](auto&& label) {
-      return qndecorate(static_cast<qns>(s), label);
-    };
-    // these spaces are used in Fock space methods
-    // based on single-determinant references
-    // p,q,r... for OBS spstates introduced in DOI 10.1063/1.444231 (QCiFS I)
-    IndexSpace::register_instance(declab(L"p"), ref == Reference::single ? IndexSpace::all : IndexSpace::MR_all, qnattr,
-        do_throw);
-    // {i,j,k.../a,b,c...} for active {occupied/unoccupied} spstates introduced
-    // in DOI 10.1063/1.446736 (QCiFS III)
-    IndexSpace::register_instance(declab(L"i"), ref == Reference::single ? IndexSpace::active_occupied : IndexSpace::MR_active_occupied,
-                                  qnattr, do_throw);
-    IndexSpace::register_instance(declab(L"a"), ref == Reference::single ? IndexSpace::active_unoccupied : IndexSpace::MR_active_unoccupied,
-                                  qnattr, do_throw);
-    // introduced in MPQC LCAOWavefunction
-    IndexSpace::register_instance(declab(L"g"), ref == Reference::single ? IndexSpace::inactive_unoccupied : IndexSpace::MR_inactive_unoccupied,
-                                  qnattr, do_throw);
-    // {α,β.../κ,𝛌...} for complete {unoccupied/any} spstates introduced in
-    // DOI 10.1063/1.459921 (MP2-R12 I)
-    IndexSpace::register_instance(declab(L"α"), ref == Reference::single ? IndexSpace::complete_unoccupied : IndexSpace::MR_complete_unoccupied,
-                                  qnattr, do_throw);
-    IndexSpace::register_instance(declab(L"κ"), ref == Reference::single ? IndexSpace::complete : IndexSpace::MR_complete, qnattr, do_throw);
-    // for orthogonal complement to p introduced in
-    // DOI 10.1016/j.cplett.2004.07.061 (CABS)
-    IndexSpace::register_instance(declab(L"α'"), ref == Reference::single ? IndexSpace::other_unoccupied: IndexSpace::MR_other_unoccupied,
-                                  qnattr, do_throw);
-    // m,n... for all occupied (including inactive/frozen orbitals) de facto
-    // introduced in [DOI 10.1016/j.cplett.2004.07.061
-    // (CABS)](https://dx.doi.org/10.1016/j.cplett.2004.07.061), though formally
-    // not explicitly defined so
-    IndexSpace::register_instance(declab(L"m"), ref == Reference::single ? IndexSpace::occupied : IndexSpace::MR_occupied, qnattr, do_throw);
-    // introduced in MPQC LCAOWavefunction
-    IndexSpace::register_instance(declab(L"e"), IndexSpace::unoccupied, qnattr,
-                                  do_throw);
-    // introduced in MPQC for CT-F12, and other ad hoc uses
-    IndexSpace::register_instance(declab(L"g"), IndexSpace::OBS_unfrozen, qnattr,
-                                  do_throw);
-    // introduced in MPQC for GF, CT-F12, and other ad hoc uses
-    IndexSpace::register_instance(declab(L"x"), IndexSpace::all_active, qnattr,
-                                  do_throw);
-    // introduced here
-    IndexSpace::register_instance(declab(L"γ"),
-                                  IndexSpace::complete_inactive_unoccupied,
-                                  qnattr, do_throw);
-    // introduced here
-    IndexSpace::register_instance(declab(L"z"),
-                                  IndexSpace::complete_unfrozen,
-                                  qnattr, do_throw);
-    // e.g. see DOI 10.1063/5.0067511
-    IndexSpace::register_instance(declab(L"u"), IndexSpace::MR_active, qnattr,
-                                  do_throw);
-    // DOI 10.1063/5.0067511 uses I,J,K... and A,B,C... for these
-    // although QCiFS uses capital letters for spin-free indices, using I/A this
-    // way seems preferable
-    IndexSpace::register_instance(
-        declab(L"I"), IndexSpace::MR_active_maybe_occupied, qnattr, do_throw);
-    IndexSpace::register_instance(declab(L"A"),
-                                  IndexSpace::MR_active_maybe_unoccupied, qnattr, do_throw);
-    // introduced here
-    IndexSpace::register_instance(declab(L"M"), IndexSpace::MR_maybe_occupied,
-                                  qnattr, do_throw);
-    IndexSpace::register_instance(declab(L"E"), IndexSpace::MR_maybe_unoccupied,
-                                  qnattr, do_throw);
-    IndexSpace::register_instance(declab(L"Δ"),
-                                  IndexSpace::MR_complete_maybe_unoccupied, qnattr, do_throw);
-  }
+  // add irreducible representations first
+  IndexSpace frozen(L"o",{0b00001});
+  standard_reference_registry.add(frozen);
+
+  IndexSpace active_occ(L"i", {0b00010});
+  standard_reference_registry.add(active_occ);
+
+  IndexSpace active_uocc(L"a", {0b00100});
+  standard_reference_registry.add(active_uocc);
+
+  IndexSpace inactive_uocc(L"g", {0b01000});
+  standard_reference_registry.add(inactive_uocc);
+
+  IndexSpace other_uocc(L"α'", {0b10000});
+  standard_reference_registry.add(other_uocc);
+
+  IndexSpace occupied(L"m", frozen.type().unIon(active_occ.attr()).to_int32());
+  standard_reference_registry.add(occupied);
+
+  IndexSpace unoccupied(L"e",active_uocc.type().unIon(inactive_uocc.type()).to_int32());
+  standard_reference_registry.add(unoccupied);
+
+  IndexSpace complete_unoccupied(L"α",unoccupied.type().unIon(other_uocc.type()).to_int32());
+  standard_reference_registry.add(complete_unoccupied);
+
+  IndexSpace all(L"p",unoccupied.type().unIon(occupied.type()).to_int32());
+  standard_reference_registry.add(all);
+
+  IndexSpace complete(L"κ",complete_unoccupied.type().unIon(occupied.type()).to_int32());
+  standard_reference_registry.add(complete);
+
+  //only neccessary for some Operator definitions
+  standard_reference_registry.assign_density_occupied(L"m");
+  standard_reference_registry.assign_complete(L"κ");
+  standard_reference_registry.assign_active_particle_space(L"i");
+  standard_reference_registry.assign_active_hole_space(L"a");
+  // neccessary for SR wick algebra
+  standard_reference_registry.assign_vacuum_occupied(L"m");
+
+  return standard_reference_registry;
 }
 
-/// @brief creates an IndexRegistry
-void make_default_indexregistry() {
-  auto idxreg = std::make_shared<IndexRegistry>();
-  auto& idxreg_ref = *idxreg;
+//Multireference supspace uses a subset of its occupied orbitals to define a vacuum occupied subspace.
+// this leaves an active space which is partially occupied/unoccupied. This definition is convenient when coupled with SR vacuum.
+IndexSpaceRegistry make_standard_multireference_subspaces(){
+  IndexSpaceRegistry multireference_registry;
 
-  for (int s = 0; s <= 2; ++s) {
-    auto declab = [s](auto&& label) {
-      return qndecorate(static_cast<qns>(s), label);
-    };
-    register_index(idxreg_ref, Index{declab(L"u")}, 20);
-    register_index(idxreg_ref, Index{declab(L"i")}, 100);
-    register_index(idxreg_ref, Index{declab(L"I")}, 120);
-    register_index(idxreg_ref, Index{declab(L"m")}, 110);
-    register_index(idxreg_ref, Index{declab(L"a")}, 200);
-    register_index(idxreg_ref, Index{declab(L"g")}, 800);
-    register_index(idxreg_ref, Index{declab(L"e")}, 1000);
-    register_index(idxreg_ref, Index{declab(L"A")}, 1020);
-    register_index(idxreg_ref, Index{declab(L"x")}, 320);
-    register_index(idxreg_ref, Index{declab(L"p")}, 1130);
-    register_index(idxreg_ref, Index{declab(L"α'")}, 3000);
-    register_index(idxreg_ref, Index{declab(L"γ")}, 3800);
-    register_index(idxreg_ref, Index{declab(L"α")}, 4000);
-    register_index(idxreg_ref, Index{declab(L"κ")}, 4130);
-  }
+  IndexSpace frozen(L"o",{0b00001});
+  multireference_registry.add(frozen);
+
+  IndexSpace unfrozen_vacuum_occupied(L"i",{0b00010});
+  multireference_registry.add(unfrozen_vacuum_occupied);
+
+  IndexSpace active(L"x",{0b00100});
+  multireference_registry.add(active);
+
+  IndexSpace active_unoccupied(L"a",{0b01000});
+  multireference_registry.add(active_unoccupied);
+
+  IndexSpace inactive_unoccupied(L"g",{0b10000});
+  multireference_registry.add(inactive_unoccupied);
+
+  IndexSpace vacuum_occupied(L"O", frozen.type().unIon(unfrozen_vacuum_occupied.type()));
+  multireference_registry.add(vacuum_occupied);
+
+  IndexSpace maybe_occupied(L"M",active.type().unIon(unfrozen_vacuum_occupied.type()).unIon(frozen.type()));
+  multireference_registry.add(maybe_occupied);
+
+  IndexSpace maybe_active_occupied(L"I", active.type().unIon(unfrozen_vacuum_occupied.type()));
+  multireference_registry.add(maybe_active_occupied);
+
+  IndexSpace maybe_unoccupied(L"E", active.type().unIon(inactive_unoccupied.type()).unIon(inactive_unoccupied.type()));
+  multireference_registry.add(maybe_unoccupied);
+
+  IndexSpace maybe_active_unoccupied(L"A", active.type().unIon(active_unoccupied.type()));
+  multireference_registry.add(maybe_active_unoccupied);
+
+  IndexSpace complete(L"p",vacuum_occupied.type().unIon(maybe_unoccupied.type()));
+  multireference_registry.add(complete);
+
+  //only neccessary for some Operator definitions
+  multireference_registry.assign_complete(L"p");
+  multireference_registry.assign_density_occupied(L"M");
+  multireference_registry.assign_active_hole_space(L"A");
+  multireference_registry.assign_active_particle_space(L"I");
+  // needed for SR wick algebra
+  multireference_registry.assign_vacuum_occupied(L"O");
+
+  return multireference_registry;
 }
 
-}  // namespace qcifs
+IndexSpaceRegistry make_standard_single_reference_subspaces(){
+  IndexSpaceRegistry standard_reference_registry;
+  IndexSpace frozen(L"o",{0b0001});
+  standard_reference_registry.add(frozen);
 
-/// Loads defaults for Convention @c conv
-void set_default_convention(Convention conv,bool clear_registry) {
-  if(clear_registry){
-    IndexSpace::clear_registry();
-  }
-  switch (conv) {
-    case Convention::QCiFS: {
-      using namespace qcifs;
-      register_standard_instances(sequant::get_default_context().reference(),!clear_registry);
-      make_default_indexregistry();
-      TensorCanonicalizer::set_cardinal_tensor_labels(
-          mbpt::cardinal_tensor_labels());
-    }
-  }
+  IndexSpace active_occ(L"i", {0b0010});
+  standard_reference_registry.add(active_occ);
+
+  IndexSpace active_uocc(L"a", {0b0100});
+  standard_reference_registry.add(active_uocc);
+
+  IndexSpace inactive_uocc(L"g", {0b1000});
+  standard_reference_registry.add(inactive_uocc);
+
+  IndexSpace occupied(L"m", frozen.type().unIon(active_occ.attr()).to_int32());
+  standard_reference_registry.add(occupied);
+
+  IndexSpace unoccupied(L"e",active_uocc.type().unIon(inactive_uocc.type()).to_int32());
+  standard_reference_registry.add(unoccupied);
+
+  IndexSpace complete(L"p",unoccupied.type().unIon(occupied.type()).to_int32());
+  standard_reference_registry.add(complete);
+
+  //only neccessary for some Operator definitions
+  standard_reference_registry.assign_density_occupied(L"m");
+  standard_reference_registry.assign_complete(L"κ");
+  standard_reference_registry.assign_active_particle_space(L"i");
+  standard_reference_registry.assign_active_hole_space(L"a");
+  // neccessary for SR wick algebra
+  standard_reference_registry.assign_vacuum_occupied(L"m");
+
+  return standard_reference_registry;
 }
+
+
 
 }  // namespace mbpt
 }  // namespace sequant

@@ -14,7 +14,7 @@
 
 #include <SeQuant/domain/mbpt/sr.hpp>
 
-namespace sequant::mbpt::sr {
+namespace sequant::mbpt {
 
 CC::CC(size_t n, size_t p, size_t pmin)
     : N(n), P(p == std::numeric_limits<size_t>::max() ? n : p), PMIN(pmin) {}
@@ -67,7 +67,7 @@ ExprPtr CC::sim_tr(ExprPtr expr, size_t r) {
 std::vector<ExprPtr> CC::t(bool screen, bool use_topology,
                            bool use_connectivity, bool canonical_only) {
   // 1. construct hbar(op) in canonical form
-  auto hbar = sim_tr(op::H(), 4);
+  auto hbar = sim_tr(op::H(screen), 4);
 
   // 2. project onto each manifold, screen, lower to tensor form and wick it
   std::vector<ExprPtr> result(P + 1);
@@ -97,7 +97,7 @@ std::vector<ExprPtr> CC::t(bool screen, bool use_topology,
     hbar = hbar_le_p;
 
     // 2.b project onto <p|, i.e. multiply by P(p) and compute VEV
-    result.at(p) = op::vac_av(op::P(p) * hbar_p);
+    result.at(p) = op::vac_av(mbpt::op::P(p,screen) * hbar_p);
   }
 
   return result;
@@ -150,7 +150,7 @@ std::vector<ExprPtr> CC::λ(bool screen, bool use_topology,
 
     // 2.b multiply by adjoint of P(p) (i.e., P(-p)) on the right side and
     // compute VEV
-    result.at(p) = op::vac_av(hbar_p * op::P(-p), op_connect);
+    result.at(p) = op::vac_av(hbar_p * op::P(-p,screen), op_connect);
   }
   return result;
 }
@@ -190,9 +190,9 @@ std::vector<sequant::ExprPtr> CC::t_pt(std::size_t order, std::size_t rank) {
 
   std::vector<ExprPtr> result(P + 1);
   for (auto p = P; p >= PMIN; --p) {
-    auto freq_term = ex<Variable>(L"ω") * op::P(p) * op::T_pt_(order, p);
+    auto freq_term = ex<Variable>(L"ω") * op::P(p,true) * op::T_pt_(order, p);
     result.at(p) =
-        op::vac_av(op::P(p) * expr, op_connect) - op::vac_av(freq_term);
+        op::vac_av(op::P(p,true) * expr, op_connect) - op::vac_av(freq_term);
   }
   return result;
 }
@@ -245,9 +245,9 @@ std::vector<ExprPtr> CC::λ_pt(size_t order, size_t rank) {
 
   std::vector<ExprPtr> result(P + 1);
   for (auto p = P; p >= PMIN; --p) {
-    auto freq_term = ex<Variable>(L"ω") * op::Λ_pt_(order, p) * op::P(-p);
+    auto freq_term = ex<Variable>(L"ω") * op::Λ_pt_(order, p) * op::P(-p,true);
     result.at(p) =
-        op::vac_av(expr * op::P(-p), op_connect) + op::vac_av(freq_term);
+        op::vac_av(expr * op::P(-p,true), op_connect) + op::vac_av(freq_term);
   }
   return result;
 }

@@ -1416,6 +1416,7 @@ class WickTheorem {
  public:
   static bool can_contract(const Op<S> &left, const Op<S> &right,
                            Vacuum vacuum = get_default_context().vacuum()) {
+    auto idx_registry = get_default_context().index_space_registry();
     // for bosons can only do Wick's theorem for physical vacuum (or similar)
     if constexpr (statistics == Statistics::BoseEinstein)
       assert(vacuum == Vacuum::Physical);
@@ -1423,14 +1424,15 @@ class WickTheorem {
     if (is_qpannihilator<S>(left, vacuum) && is_qpcreator<S>(right, vacuum)) {
       const auto qpspace_left = qpannihilator_space<S>(left, vacuum);
       const auto qpspace_right = qpcreator_space<S>(right, vacuum);
-      const auto qpspace_common = intersection(qpspace_left, qpspace_right);
-      if (qpspace_common != IndexSpace::null_instance()) return true;
+      const auto qpspace_common = idx_registry->intersection(qpspace_left, qpspace_right);
+      if (qpspace_common != idx_registry->nulltype_()) return true;
     }
     return false;
   }
 
   static ExprPtr contract(const Op<S> &left, const Op<S> &right,
                           Vacuum vacuum = get_default_context().vacuum()) {
+    auto idx_registry = get_default_context().index_space_registry();
     assert(can_contract(left, right, vacuum));
     //    assert(
     //        !left.index().has_proto_indices() &&
@@ -1443,7 +1445,7 @@ class WickTheorem {
     else {
       const auto qpspace_left = qpannihilator_space<S>(left, vacuum);
       const auto qpspace_right = qpcreator_space<S>(right, vacuum);
-      const auto qpspace_common = intersection(qpspace_left, qpspace_right);
+      const auto qpspace_common = idx_registry->intersection(qpspace_left, qpspace_right);
       const auto index_common = Index::make_tmp_index(qpspace_common);
 
       // preserve bra/ket positions of left & right

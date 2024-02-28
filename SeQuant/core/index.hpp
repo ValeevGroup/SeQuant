@@ -20,6 +20,7 @@
 #include "hash.hpp"
 #include "space.hpp"
 #include "tag.hpp"
+#include "context.hpp"
 
 // change to 1 to make thread-safe
 #define SEQUANT_INDEX_THREADSAFE 1
@@ -45,7 +46,6 @@ class Index : public Taggable {
     static std::atomic<std::size_t> index = min_tmp_index() - 1;
     return index;
   }
-
  public:
   Index() = default;
 
@@ -89,7 +89,7 @@ class Index : public Taggable {
   /// @param label the index label, does not need to be unique, but must be
   /// convertible into an IndexSpace (@sa IndexSpace::instance )
   Index(const std::wstring_view label)
-      : Index(label, IndexSpace::instance(label), {}) {
+      : Index(label,sequant::get_default_context().index_space_registry()->retrieve(label) , {}) {
     check_nontmp_label();
   }
 
@@ -97,7 +97,7 @@ class Index : public Taggable {
   /// convertible into an IndexSpace (@sa IndexSpace::instance )
   template <size_t N>
   Index(const wchar_t (&label)[N])
-      : Index(std::wstring_view(&label[0]), IndexSpace::instance(&label[0]),
+      : Index(std::wstring_view(&label[0]), sequant::get_default_context().index_space_registry()->retrieve(&label[0]),
               {}) {
     check_nontmp_label();
   }
@@ -105,7 +105,7 @@ class Index : public Taggable {
   /// @param label the index label, does not need to be unique, but must be
   /// convertible into an IndexSpace (@sa IndexSpace::instance )
   Index(const wchar_t *label)
-      : Index(std::wstring_view(label), IndexSpace::instance(label), {}) {
+      : Index(std::wstring_view(label), sequant::get_default_context().index_space_registry()->retrieve(label), {}) {
     check_nontmp_label();
   }
 
@@ -131,7 +131,7 @@ class Index : public Taggable {
       : symmetric_proto_indices_(symmetric_proto_indices) {
     if constexpr (!std::is_same_v<std::decay_t<I1>, Index>) {
       label_ = index;
-      space_ = IndexSpace::instance(label_);
+      space_ = sequant::get_default_context().index_space_registry()->retrieve(label_);
     } else {
       label_ = index.label();
       space_ = index.space();
@@ -165,7 +165,7 @@ class Index : public Taggable {
     if constexpr (!std::is_same_v<std::decay_t<I1>, Index>) {
       label_ = index;
       check_nontmp_label();
-      space_ = IndexSpace::instance(label_);
+      space_ = sequant::get_default_context().index_space_registry()->retrieve(label_);
     } else {
       label_ = index.label();
       space_ = index.space();
@@ -197,7 +197,7 @@ class Index : public Taggable {
   /// @return a unique temporary index in space @c space
   static Index make_tmp_index(const IndexSpace &space) {
     Index result;
-    result.label_ = IndexSpace::base_key(space) + L'_' +
+    result.label_ = space.get_base_key() + L'_' +
                     std::to_wstring(Index::next_tmp_index());
     result.space_ = space;
     return result;
@@ -223,7 +223,7 @@ class Index : public Taggable {
                               IndexContainer &&proto_indices,
                               bool symmetric_proto_indices = true) {
     Index result;
-    result.label_ = IndexSpace::base_key(space) + L'_' +
+    result.label_ = space.get_base_key() + L'_' +
                     std::to_wstring(Index::next_tmp_index());
     result.space_ = space;
     result.proto_indices_ = std::forward<IndexContainer>(proto_indices);
@@ -241,7 +241,7 @@ class Index : public Taggable {
   /// \return a non-unique index in space @c space with label @c subscript_label
   static Index make_label_index(const IndexSpace &space,
                                 const std::wstring &subscript_label) {
-    return Index(IndexSpace::base_key(space) + L'_' + subscript_label, space);
+    return Index(space.get_base_key() + L'_' + subscript_label, space);
   }
 
   /// @return the label as a UTF-8 encoded wide-character string
@@ -668,7 +668,7 @@ class IndexFactory {
           counter_it = counters_.find(space);
         }
       }
-      result = Index(IndexSpace::base_key(space) + L'_' +
+      result = Index(space.get_base_key() + L'_' +
                          std::to_wstring(++(counter_it->second)),
                      &space);
       valid = validator_ ? validator_(result) : true;
@@ -698,7 +698,7 @@ class IndexFactory {
           counter_it = counters_.find(space);
         }
       }
-      result = Index(Index(IndexSpace::base_key(space) + L'_' +
+      result = Index(Index(space.get_base_key() + L'_' +
                                std::to_wstring(++(counter_it->second)),
                            &space),
                      idx.proto_indices());

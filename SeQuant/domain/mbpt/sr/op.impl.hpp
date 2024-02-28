@@ -1,5 +1,5 @@
 /// makes excitation operator of bra/ket ranks @c Nbra/Nket
-ExprPtr T_(std::size_t Nbra,
+/*ExprPtr T_(std::size_t Nbra,
            std::size_t Nket = std::numeric_limits<std::size_t>::max());
 
 /// makes lambda deexcitation operator of bra/ket ranks @c Nbra/Nket
@@ -51,11 +51,11 @@ ExprPtr R(std::size_t Nbra,
 /// makes geminal excitation operator from @p geminal_generating_space for
 /// ansatz @p ansatz
 /// @param[in] geminal_generating_space the space from which the geminal
-/// excitations originate from; default = IndexSpace::active_occupied
-/// @param[in] ansatz 1 or 2
+/// excitations originate from;
+/// @param[in] excitation_space where excitations land
 ExprPtr R12(
-    IndexSpace::Type geminal_generating_space = IndexSpace::active_occupied,
-    int ansatz = 2);
+    IndexSpace geminal_generating_space,
+    IndexSpace excitation_space);
 
 /// makes perturbation operator of rank @p R
 /// \param o order of perturbation
@@ -72,4 +72,4 @@ ExprPtr T_pt_(std::size_t o, std::size_t Nbra,
 /// \param o order of perturbation
 /// \pre `o==1`, only first order perturbation is supported now
 ExprPtr Λ_pt_(std::size_t o, std::size_t Nbra,
-              std::size_t Nket = std::numeric_limits<std::size_t>::max());
+              std::size_t Nket = std::numeric_limits<std::size_t>::max());*/
