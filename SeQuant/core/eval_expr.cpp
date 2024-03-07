@@ -50,7 +50,7 @@ std::string EvalExpr::braket_annot() const noexcept {
   if (!is_tensor()) return {};
 
   // given an iterable of sequant::Index objects, returns a string made
-  // of their full labels separted by comma
+  // of their full labels separated by comma
   //   eg. (a_1^{i_1,i_2},a_2^{i_2,i_3}) -> "a_1i_1i_2,a_2i_2i_3"
   //   eg. (i_1, i_2) -> "i_1,i_2"
   auto annot = [](auto&& ixs) -> std::string {
