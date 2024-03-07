@@ -24,18 +24,21 @@ EvalExprTA::EvalExprTA(const EvalExprTA& left, const EvalExprTA& right,
 
   if (result_type() == ResultType::Tensor) {
     annot_ = braket_annot();
-    if (left.result_type() == right.result_type() &&
-        op_type() == EvalOp::Prod && !tot()) {
-      // tensor x tensor confirmed
-      auto lh = hash::value(left);
-      auto rh = hash::value(right);
-      auto const& left_ = lh <= rh ? left : right;
-      auto const& right_ = lh <= rh ? right : left;
-      annot_ = GEMMPermutationOptimizer(Tidxs{left_.annot()},  //
-                                        Tidxs{right_.annot()})
-                   .target_result_indices()
-                   .string();
-    }
+    // clang-format off
+// todo: fix the following so that it works for ToT x ToT -> T
+//    if (left.result_type() == right.result_type() &&
+//        op_type() == EvalOp::Prod && !tot()) {
+//      // tensor x tensor confirmed
+//      auto lh = hash::value(left);
+//      auto rh = hash::value(right);
+//      auto const& left_ = lh <= rh ? left : right;
+//      auto const& right_ = lh <= rh ? right : left;
+//      annot_ = GEMMPermutationOptimizer(Tidxs{left_.annot()},  //
+//                                        Tidxs{right_.annot()})
+//                   .target_result_indices()
+//                   .string();
+//    }
+    // clang-format on
   }
 }
 
