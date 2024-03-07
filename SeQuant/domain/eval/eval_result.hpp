@@ -552,7 +552,8 @@ class EvalResult {
   ///       respectively.
   ///
   [[nodiscard]] virtual ERPtr prod(EvalResult const&,
-                                   std::array<std::any, 3> const&) const = 0;
+                                   std::array<std::any, 3> const&,
+                                   TA::DeNest DeNestFlag) const = 0;
 
   ///
   /// \brief Permute this object according to the annotations in the argument.
@@ -665,9 +666,9 @@ class EvalScalar final : public EvalResult {
     }
   }
 
-  [[nodiscard]] ERPtr prod(
-      EvalResult const& other,
-      std::array<std::any, 3> const& maybe_empty) const override {
+  [[nodiscard]] ERPtr prod(EvalResult const& other,
+                           std::array<std::any, 3> const& maybe_empty,
+                           TA::DeNest DeNestFlag) const override {
     if (other.is<EvalScalar<T>>()) {
       auto const& o = other.as<EvalScalar<T>>();
       auto p = value() * o.value();
@@ -678,7 +679,7 @@ class EvalScalar final : public EvalResult {
     } else {
       auto maybe_empty_ = maybe_empty;
       std::swap(maybe_empty_[0], maybe_empty_[1]);
-      return other.prod(*this, maybe_empty_);
+      return other.prod(*this, maybe_empty_, DeNestFlag);
     }
   }
 
@@ -745,9 +746,9 @@ class EvalTensorTA final : public EvalResult {
     return eval_result<this_type>(std::move(result));
   }
 
-  [[nodiscard]] ERPtr prod(
-      EvalResult const& other,
-      std::array<std::any, 3> const& annot) const override {
+  [[nodiscard]] ERPtr prod(EvalResult const& other,
+                           std::array<std::any, 3> const& annot,
+                           TA::DeNest DeNestFlag) const override {
     auto const a = annot_wrap{annot};
 
     if (other.is<EvalScalar<numeric_type>>()) {
@@ -779,7 +780,7 @@ class EvalTensorTA final : public EvalResult {
       // potential T * ToT
       auto annot_swap = annot;
       std::swap(annot_swap[0], annot_swap[1]);
-      return other.prod(*this, annot_swap);
+      return other.prod(*this, annot_swap, DeNestFlag);
     }
 
     // confirmed: other.is<this_type>() is true
@@ -873,9 +874,9 @@ class EvalTensorOfTensorTA final : public EvalResult {
     return eval_result<this_type>(std::move(result));
   }
 
-  [[nodiscard]] ERPtr prod(
-      EvalResult const& other,
-      std::array<std::any, 3> const& annot) const override {
+  [[nodiscard]] ERPtr prod(EvalResult const& other,
+                           std::array<std::any, 3> const& annot,
+                           TA::DeNest DeNestFlag) const override {
     auto const a = annot_wrap{annot};
 
     if (other.is<EvalScalar<numeric_type>>()) {
@@ -902,24 +903,29 @@ class EvalTensorOfTensorTA final : public EvalResult {
     }
 
     log_ta(a.lannot, " * ", a.rannot, " = ", a.this_annot, "\n");
-    ArrayT result;
 
     if (other.is<that_type>()) {
       // ToT * T -> ToT
-      result =
+      auto result =
           TA::einsum(get<ArrayT>()(a.lannot),
                      other.get<compatible_regular_distarray_type>()(a.rannot),
                      a.this_annot);
+      return eval_result<this_type>(std::move(result));
 
-    } else if (other.is<this_type>()) {
+    } else if (other.is<this_type>() && DeNestFlag == TA::DeNest::True) {
+      // ToT * ToT -> T
+      auto result = TA::einsum<TA::DeNest::True>(
+          get<ArrayT>()(a.lannot), other.get<ArrayT>()(a.rannot), a.this_annot);
+      return eval_result<that_type>(std::move(result));
+
+    } else if (other.is<this_type>() && DeNestFlag == TA::DeNest::False) {
       // ToT * ToT -> ToT
-      result = TA::einsum(get<ArrayT>()(a.lannot),
-                          other.get<ArrayT>()(a.rannot), a.this_annot);
+      auto result = TA::einsum(get<ArrayT>()(a.lannot),
+                               other.get<ArrayT>()(a.rannot), a.this_annot);
+      return eval_result<this_type>(std::move(result));
     } else {
       throw invalid_operand();
     }
-
-    return eval_result<this_type>(std::move(result));
   }
 
   [[nodiscard]] ERPtr permute(
@@ -997,9 +1003,9 @@ class EvalTensorBTAS final : public EvalResult {
     return eval_result<EvalTensorBTAS<T>>(lres + rres);
   }
 
-  [[nodiscard]] ERPtr prod(
-      EvalResult const& other,
-      std::array<std::any, 3> const& annot) const override {
+  [[nodiscard]] ERPtr prod(EvalResult const& other,
+                           std::array<std::any, 3> const& annot,
+                           TA::DeNest DeNestFlag) const override {
     auto const a = annot_wrap{annot};
 
     if (other.is<EvalScalar<numeric_type>>()) {
