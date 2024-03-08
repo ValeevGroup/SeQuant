@@ -251,8 +251,6 @@ set(SeQuant_src
         SeQuant/domain/mbpt/context.cpp
         SeQuant/domain/mbpt/convention.cpp
         SeQuant/domain/mbpt/convention.hpp
-        SeQuant/domain/mbpt/mr.cpp
-        SeQuant/domain/mbpt/mr.hpp
         SeQuant/domain/mbpt/models/cc.cpp
         SeQuant/domain/mbpt/models/cc.hpp
         SeQuant/domain/mbpt/op.cpp
@@ -261,12 +259,10 @@ set(SeQuant_src
         SeQuant/domain/mbpt/rdm.hpp
         SeQuant/domain/mbpt/spin.cpp
         SeQuant/domain/mbpt/spin.hpp
-        SeQuant/domain/mbpt/sr.cpp
-        SeQuant/domain/mbpt/sr.hpp
         SeQuant/domain/mbpt/vac_av.ipp
         )
 set_source_files_properties(
-        SeQuant/domain/mbpt/op.cpp SeQuant/domain/mbpt/sr.cpp SeQuant/domain/mbpt/mr.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+        SeQuant/domain/mbpt/op.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 
 ### optional prereqs
 if (NOT TARGET Eigen3::Eigen)

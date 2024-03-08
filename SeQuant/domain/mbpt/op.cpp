@@ -64,6 +64,118 @@ OpClass to_class(OpType op) {
   }
 }
 
+qns_t excitation_type_qns(std::size_t K){
+  qnc_t result;
+  if(get_default_context().vacuum() == Vacuum::Physical){
+    result[0] = {0ul,K}; result[1] = {0ul,0ul};
+  }
+  else {
+    auto idx_registry = get_default_context().index_space_registry();
+    auto base_spaces = idx_registry->base_spaces_label();
+    for (int i = 0; i < base_spaces.size(); i++) {
+      if (!includes(idx_registry->active_hole_space().type(),
+                    base_spaces[i].first.type())) {
+        result[i * 2] = {0ul, 0ul};
+      } else {
+        result[i * 2] = {0ul, K};
+      }
+      if (!includes(idx_registry->active_particle_space().type(),
+                    base_spaces[i].first.type())) {
+        result[i * 2 + 1] = {0ul, 0ul};
+      } else {
+        result[i * 2 + 1] = {0ul, K};
+      }
+    }
+  }
+    return result;
+}
+
+qns_t deexcitation_type_qns(std::size_t K){
+  qnc_t result;
+  if(get_default_context().vacuum() == Vacuum::Physical){
+    result[0] = {0ul,0ul}; result[1] = {0ul,K};
+  }
+  else {
+    auto idx_registry = get_default_context().index_space_registry();
+    auto base_spaces = idx_registry->base_spaces_label();
+    for (int i = 0; i < base_spaces.size(); i++) {
+      if (!includes(idx_registry->active_hole_space().type(),
+                    base_spaces[i].first.type())) {
+        result[i * 2 + 1] = {0ul, 0ul};
+      } else {
+        result[i * 2 + 1] = {0ul, K};
+      }
+      if (!includes(idx_registry->active_particle_space().type(),
+                    base_spaces[i].first.type())) {
+        result[i * 2] = {0ul, 0ul};
+      } else {
+        result[i * 2] = {0ul, K};
+      }
+    }
+  }
+  return result;
+}
+
+qns_t general_type_qns(std::size_t K){
+  qnc_t result;
+  for (int i = 0; i < result.size(); i++){
+    result[i] = {0,K};
+  }
+  return result;
+}
+
+qns_t generic_excitation_qns(std::size_t particle_rank, std::size_t hole_rank,IndexSpace particle_space, IndexSpace hole_space){
+  qnc_t result;
+  if(get_default_context().vacuum() == Vacuum::Physical){
+    result[0] = {0ul,particle_rank}; result[1] = {0ul,0ul};
+  }
+  else {
+    auto idx_registry = get_default_context().index_space_registry();
+    auto base_spaces = idx_registry->base_spaces_label();
+    for (int i = 0; i < base_spaces.size(); i++) {
+      if (!includes(hole_space.type(),
+                    base_spaces[i].first.type())) {
+        result[i * 2] = {0ul, 0ul}; //creators
+      } else {
+        result[i * 2] = {0ul, hole_rank}; // creators
+      }
+      if (!includes(particle_space.type(),
+                    base_spaces[i].first.type())) {
+        result[i * 2 + 1] = {0ul, 0ul}; //annihilators
+      } else {
+        result[i * 2 + 1] = {0ul, particle_rank}; // annihilators
+      }
+    }
+  }
+  return result;
+}
+
+qns_t generic_deexcitation_qns(std::size_t particle_rank, std::size_t hole_rank,IndexSpace particle_space, IndexSpace hole_space){
+  qnc_t result;
+  if(get_default_context().vacuum() == Vacuum::Physical){
+    result[0] = {0ul,0ul}; result[1] = {0ul,hole_rank};
+  }
+  else {
+    auto idx_registry = get_default_context().index_space_registry();
+    auto base_spaces = idx_registry->base_spaces_label();
+    for (int i = 0; i < base_spaces.size(); i++) {
+      if (!includes(hole_space.type(),
+                    base_spaces[i].first.type())) {
+        result[i * 2 + 1] = {0ul, 0ul}; //annihilators
+      } else {
+        result[i * 2 + 1] = {0ul, hole_rank}; //annihilators
+      }
+      if (!includes(particle_space.type(),
+                    base_spaces[i].first.type())) {
+        result[i * 2] = {0ul, 0ul}; // creators
+      } else {
+        result[i * 2] = {0ul, particle_rank}; //creators
+      }
+    }
+  }
+  return result;
+}
+
 
 //by counting the number of contractions between indices of proper type, we can know the quantum numbers
 // of a combined result.
@@ -108,10 +220,17 @@ bool is_vacuum<qns_t>(qns_t qns) {
 namespace sequant {
 
 mbpt::qns_t adjoint(mbpt::qns_t qns) {
-  return mbpt::qns_t{nann(qns), ncre(qns)};
+  mbpt::qns_t new_qnst;
+  new_qnst.resize(qns.size());
+  auto is_even =[](int i){ return i % 2 == 0;};
+  for (int i =0; i < qns.size(); i++){
+    if(is_even(i)){new_qnst[i+1] = qns[i];}
+    else{new_qnst[i-1] = qns[i];}
+  }
+  return new_qnst;
 }
 
-template <Statistics S>
+/*template <Statistics S>
 std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
   using namespace sequant::mbpt;
 
@@ -146,7 +265,7 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
   }
   result += L"}";
   return result;
-}
+}*/
 
 }  // namespace sequant
 
@@ -167,20 +286,18 @@ template <Statistics S>
 OpMaker<S>::OpMaker(OpType op) : op_(op) {}
 
 template <Statistics S>
-OpMaker<S>::OpMaker(OpType op, std::size_t nbra, std::size_t nket){
-  nket = nket == std::numeric_limits<std::size_t>::max() ? nbra : nket;
+OpMaker<S>::OpMaker(OpType op, std::size_t nbra, std::size_t nket, IndexSpace particle_space,
+                    IndexSpace hole_space){
   assert(nbra > 0 || nket > 0);
   auto idx_registry = get_default_context().index_space_registry();
-  const auto unocc = idx_registry->active_hole_space();
-  const auto occ = idx_registry->active_particle_space();
   switch (to_class(op)) {
     case OpClass::ex:
-      bra_spaces_ = decltype(bra_spaces_)(nbra, unocc);
-      ket_spaces_ = decltype(ket_spaces_)(nket, occ);
+      bra_spaces_ = decltype(bra_spaces_)(nbra, hole_space);
+      ket_spaces_ = decltype(ket_spaces_)(nket, particle_space);
       break;
     case OpClass::deex:
-      bra_spaces_ = decltype(bra_spaces_)(nbra, occ);
-      ket_spaces_ = decltype(ket_spaces_)(nket, unocc);
+      bra_spaces_ = decltype(bra_spaces_)(nbra, particle_space);
+      ket_spaces_ = decltype(ket_spaces_)(nket, hole_space);
       break;
     case OpClass::gen:
       bra_spaces_ = decltype(bra_spaces_)(nbra, idx_registry->complete());
@@ -188,6 +305,7 @@ OpMaker<S>::OpMaker(OpType op, std::size_t nbra, std::size_t nket){
       break;
   }
 }
+
 
 template <Statistics S>
 OpMaker<S>::OpMaker(OpType op, std::size_t nparticle){
@@ -289,24 +407,18 @@ ExprPtr H_(std::size_t k, bool count_vac_ops) {
                   abort();
               }
             },
-            [=]() -> ExprPtr { return H_(1); },
+            [=]() -> ExprPtr { return H_(1,false); },
             [=](qnc_t& qns) {
-              qnc_t op_qnc_t;
-              for (int i = 0; i < op_qnc_t.size(); i++){
-                op_qnc_t[i] = {0,1};
-              }
+              qnc_t op_qnc_t = general_type_qns(1);
               qns = combine(op_qnc_t, qns);
             });
 
       case 2:
         return ex<op_t>(
             []() -> std::wstring_view { return L"g"; },
-            [=]() -> ExprPtr { return H_(2); },
+            [=]() -> ExprPtr { return H_(2,false); },
             [=](qnc_t& qns) {
-              qnc_t op_qnc_t;
-              for (int i = 0; i < op_qnc_t.size(); i++){
-                op_qnc_t[i] = {0,2};
-              }
+              qnc_t op_qnc_t = general_type_qns(2);
               qns = combine(op_qnc_t, qns);
             });
 
@@ -330,23 +442,9 @@ ExprPtr T_(std::size_t K, bool count_vac_ops) {
   }
   else {
     return ex<op_t>([]() -> std::wstring_view { return L"t"; },
-                    [=]() -> ExprPtr { return T_(K); },
+                    [=]() -> ExprPtr { return T_(K,false); },
                     [=](qnc_t& qns) {
-                      qnc_t op_qnc_t;
-                      for (int i = 0; i < base_spaces.size(); i++){
-                        if(!includes(idx_registry->active_hole_space().type(),base_spaces[i].first.type())) {
-                          op_qnc_t[i * 2] = {0ul, 0ul};
-                        }
-                        else{
-                          op_qnc_t[i * 2] = {0ul,K};
-                        }
-                        if(!includes(idx_registry->active_particle_space().type(),base_spaces[i].first.type())){
-                          op_qnc_t[i * 2 + 1] = {0ul,0ul};
-                        }
-                        else{
-                          op_qnc_t[i * 2 + 1] = {0ul,K};
-                        }
-                      }
+                      qnc_t op_qnc_t = excitation_type_qns(K);
                       qns = combine(op_qnc_t,qns);
                     });
   }
@@ -363,31 +461,15 @@ ExprPtr T(std::size_t K, bool count_vac_ops) {
 }
 
 ExprPtr Λ_(std::size_t K, bool count_vac_ops) {
-  auto idx_registry = get_default_context().index_space_registry();
-  auto base_spaces = idx_registry->base_spaces_label();
   assert(K > 0);
   if(!count_vac_ops){
     return OpMaker<Statistics::FermiDirac>(OpType::λ, K)();
   }else {
     return ex<op_t>(
         []() -> std::wstring_view { return L"λ"; },
-        [=]() -> ExprPtr { return Λ_(K); },
+        [=]() -> ExprPtr { return Λ_(K,false); },
         [=](qnc_t& qns) {
-          qnc_t op_qnc_t;
-          for (int i = 0; i < base_spaces.size(); i++) {
-            if (!includes(idx_registry->active_hole_space().type(),
-                          base_spaces[i].first.type())) {
-              op_qnc_t[i * 2 + 1] = {0ul, 0ul};
-            } else {
-              op_qnc_t[i * 2 + 1] = {0ul, K};
-            }
-            if (!includes(idx_registry->active_particle_space().type(),
-                          base_spaces[i].first.type())) {
-              op_qnc_t[i * 2] = {0ul, 0ul};
-            } else {
-              op_qnc_t[i * 2] = {0ul, K};
-            }
-          }
+          qnc_t op_qnc_t = deexcitation_type_qns(K);
           qns = combine(op_qnc_t, qns);
         });
   }
@@ -404,46 +486,67 @@ ExprPtr Λ(std::size_t K, bool count_vac_ops) {
 }
 
 
-ExprPtr F(bool use_f_tensor, IndexSpace occupied_density) {
-  if (use_f_tensor) return OpMaker<Statistics::FermiDirac>(OpType::f, 1)();
-  assert(occupied_density != IndexSpace::null_instance());
-  // add \bar{g}^{\kappa x}_{\lambda y} \gamma^y_x with x,y in occ_space_type
-  auto make_g_contribution = [](const auto occ_space) {
-    auto idx_registry = get_default_context().index_space_registry();
-    return mbpt::OpMaker<Statistics::FermiDirac>::make(
-        {idx_registry->complete()}, {idx_registry->complete()},
-        [=](auto braidxs, auto ketidxs, Symmetry opsymm) {
-          auto m1 = Index::make_tmp_index(occ_space);
-          auto m2 = Index::make_tmp_index(occ_space);
-          assert(opsymm == Symmetry::antisymm || opsymm == Symmetry::nonsymm);
-          if (opsymm == Symmetry::antisymm) {
-            braidxs.push_back(m1);
-            ketidxs.push_back(m2);
-            return ex<Tensor>(to_wstring(mbpt::OpType::g), braidxs, ketidxs,
-                              Symmetry::antisymm) *
-                   ex<Tensor>(to_wstring(mbpt::OpType::δ), IndexList{m2},
-                              IndexList{m1}, Symmetry::nonsymm);
-          } else {  // opsymm == Symmetry::nonsymm
-            auto braidx_J = braidxs;
-            braidx_J.push_back(m1);
-            auto ketidxs_J = ketidxs;
-            ketidxs_J.push_back(m2);
-            auto braidx_K = braidxs;
-            braidx_K.push_back(m1);
-            auto ketidxs_K = ketidxs;
-            ketidxs_K.emplace(begin(ketidxs_K), m2);
-            return (ex<Tensor>(to_wstring(mbpt::OpType::g), braidx_J, ketidxs_J,
-                               Symmetry::nonsymm) -
-                    ex<Tensor>(to_wstring(mbpt::OpType::g), braidx_K, ketidxs_K,
-                               Symmetry::nonsymm)) *
-                   ex<Tensor>(to_wstring(mbpt::OpType::δ), IndexList{m2},
-                              IndexList{m1}, Symmetry::nonsymm);
-          }
-        });
-  };
-  auto idx_registry = get_default_context().index_space_registry();
-  return OpMaker<Statistics::FermiDirac>(OpType::h, 1)() +
-         make_g_contribution(occupied_density);
+ExprPtr F( bool count_vac_ops, bool use_f_tensor, IndexSpace occupied_density) {
+  if (use_f_tensor) {
+    if(!count_vac_ops) {
+      return OpMaker<Statistics::FermiDirac>(OpType::f, 1)();
+    }
+    else{
+        return ex<op_t>(
+            []() -> std::wstring_view { return L"f"; },
+            [=]() -> ExprPtr { return F(false); },
+            [=](qnc_t& qns) {
+              qnc_t op_qnc_t = general_type_qns(1);
+              qns = combine(op_qnc_t, qns);
+            });
+    }
+  }
+  else {
+    if(!count_vac_ops) {
+      assert(occupied_density != IndexSpace::null_instance()); // cannot explicitly instantiate fock operator without providing an occupied indexspace
+      // add \bar{g}^{\kappa x}_{\lambda y} \gamma^y_x with x,y in occ_space_type
+      auto make_g_contribution = [](const auto occ_space) {
+        auto idx_registry = get_default_context().index_space_registry();
+        return mbpt::OpMaker<Statistics::FermiDirac>::make(
+            {idx_registry->complete()}, {idx_registry->complete()},
+            [=](auto braidxs, auto ketidxs, Symmetry opsymm) {
+              auto m1 = Index::make_tmp_index(occ_space);
+              auto m2 = Index::make_tmp_index(occ_space);
+              assert(opsymm == Symmetry::antisymm ||
+                     opsymm == Symmetry::nonsymm);
+              if (opsymm == Symmetry::antisymm) {
+                braidxs.push_back(m1);
+                ketidxs.push_back(m2);
+                return ex<Tensor>(to_wstring(mbpt::OpType::g), braidxs, ketidxs,
+                                  Symmetry::antisymm) *
+                       ex<Tensor>(to_wstring(mbpt::OpType::δ), IndexList{m2},
+                                  IndexList{m1}, Symmetry::nonsymm);
+              } else {  // opsymm == Symmetry::nonsymm
+                auto braidx_J = braidxs;
+                braidx_J.push_back(m1);
+                auto ketidxs_J = ketidxs;
+                ketidxs_J.push_back(m2);
+                auto braidx_K = braidxs;
+                braidx_K.push_back(m1);
+                auto ketidxs_K = ketidxs;
+                ketidxs_K.emplace(begin(ketidxs_K), m2);
+                return (ex<Tensor>(to_wstring(mbpt::OpType::g), braidx_J,
+                                   ketidxs_J, Symmetry::nonsymm) -
+                        ex<Tensor>(to_wstring(mbpt::OpType::g), braidx_K,
+                                   ketidxs_K, Symmetry::nonsymm)) *
+                       ex<Tensor>(to_wstring(mbpt::OpType::δ), IndexList{m2},
+                                  IndexList{m1}, Symmetry::nonsymm);
+              }
+            });
+      };
+      auto idx_registry = get_default_context().index_space_registry();
+      return OpMaker<Statistics::FermiDirac>(OpType::h, 1)() +
+             make_g_contribution(occupied_density);
+    }
+    else{
+      throw "non-tensor use with counted vac ops not yet supported";
+    }
+  }
 }
 
 
@@ -478,38 +581,10 @@ ExprPtr A(std::int64_t K, bool count_vac_ops) {
         [=](qnc_t& qns) {
           const std::size_t abs_K = std::abs(K);
           if (K < 0) {
-            qnc_t op_qnc_t;
-            for (int i = 0; i < base_spaces.size(); i++) {
-              if (!includes(idx_registry->active_hole_space().type(),
-                            base_spaces[i].first.type())) {
-                op_qnc_t[i * 2 + 1] = {0ul, 0ul};
-              } else {
-                op_qnc_t[i * 2 + 1] = {0ul, abs_K};
-              }
-              if (!includes(idx_registry->active_particle_space().type(),
-                            base_spaces[i].first.type())) {
-                op_qnc_t[i * 2] = {0ul, 0ul};
-              } else {
-                op_qnc_t[i * 2] = {0ul, abs_K};
-              }
-            }
+            qnc_t op_qnc_t= deexcitation_type_qns(abs_K);
             qns = combine(op_qnc_t, qns);
           } else {
-            qnc_t op_qnc_t;
-            for (int i = 0; i < base_spaces.size(); i++) {
-              if (!includes(idx_registry->active_hole_space().type(),
-                            base_spaces[i].first.type())) {
-                op_qnc_t[i * 2] = {0ul, 0ul};
-              } else {
-                op_qnc_t[i * 2] = {0ul, abs_K};
-              }
-              if (!includes(idx_registry->active_particle_space().type(),
-                            base_spaces[i].first.type())) {
-                op_qnc_t[i * 2 + 1] = {0ul, 0ul};
-              } else {
-                op_qnc_t[i * 2 + 1] = {0ul, abs_K};
-              }
-            }
+            qnc_t op_qnc_t = excitation_type_qns(abs_K);
             qns = combine(op_qnc_t, qns);
           }
         });
@@ -545,38 +620,10 @@ ExprPtr S(std::int64_t K,bool count_vac_ops) {
         [=](qnc_t& qns) {
           const std::size_t abs_K = std::abs(K);
           if (K < 0) {
-            qnc_t op_qnc_t;
-            for (int i = 0; i < base_spaces.size(); i++) {
-              if (!includes(idx_registry->active_hole_space().type(),
-                            base_spaces[i].first.type())) {
-                op_qnc_t[i * 2 + 1] = {0ul, 0ul};
-              } else {
-                op_qnc_t[i * 2 + 1] = {0ul, abs_K};
-              }
-              if (!includes(idx_registry->active_particle_space().type(),
-                            base_spaces[i].first.type())) {
-                op_qnc_t[i * 2] = {0ul, 0ul};
-              } else {
-                op_qnc_t[i * 2] = {0ul, abs_K};
-              }
-            }
+            qnc_t op_qnc_t = deexcitation_type_qns(abs_K);
             qns = combine(op_qnc_t, qns);
           } else {
-            qnc_t op_qnc_t;
-            for (int i = 0; i < base_spaces.size(); i++) {
-              if (!includes(idx_registry->active_hole_space().type(),
-                            base_spaces[i].first.type())) {
-                op_qnc_t[i * 2] = {0ul, 0ul};
-              } else {
-                op_qnc_t[i * 2] = {0ul, abs_K};
-              }
-              if (!includes(idx_registry->active_particle_space().type(),
-                            base_spaces[i].first.type())) {
-                op_qnc_t[i * 2 + 1] = {0ul, 0ul};
-              } else {
-                op_qnc_t[i * 2 + 1] = {0ul, abs_K};
-              }
-            }
+            qnc_t op_qnc_t = excitation_type_qns(abs_K);
             qns = combine(op_qnc_t, qns);
           }
         });
@@ -586,6 +633,158 @@ ExprPtr S(std::int64_t K,bool count_vac_ops) {
 ExprPtr P(std::int64_t K,bool count_vac_ops) {
   return get_default_context().spbasis() == SPBasis::spinfree ? S(-K,count_vac_ops) : A(-K,count_vac_ops);
 }
+
+ExprPtr H_pt(std::size_t order, std::size_t R, bool count_vac_ops) {
+  if(!count_vac_ops) {
+    assert(order == 1 &&
+           "sequant::sr::H_pt(): only supports first order perturbation");
+    assert(R > 0);
+    return OpMaker<Statistics::FermiDirac>(OpType::h_1, R)();
+  }
+  else {
+    assert(R > 0);
+    assert(order == 1 && "only first order perturbation is supported now");
+    return ex<op_t>(
+        []() -> std::wstring_view { return optype2label.at(OpType::h_1); },
+        [=]() -> ExprPtr {
+          return H_pt(order, R,false);
+        },
+        [=](qnc_t& qns) { qns = combine(general_type_qns(R), qns); });
+  }
+}
+
+ExprPtr T_pt_(std::size_t order, std::size_t K,bool count_vac_ops) {
+  if(!count_vac_ops) {
+    assert(order == 1 &&
+           "sequant::sr::T_pt_(): only supports first order perturbation");
+    return OpMaker<Statistics::FermiDirac>(OpType::t_1, K, K)();
+  }
+  else {
+    assert(K > 0);
+    assert(order == 1 && "only first order perturbation is supported now");
+    return ex<op_t>(
+        []() -> std::wstring_view { return optype2label.at(OpType::t_1); },
+        [=]() -> ExprPtr { return T_pt_(order, K, false); },
+        [=](qnc_t& qns) { qns = combine(excitation_type_qns(K), qns); });
+  }
+}
+
+ExprPtr T_pt(std::size_t order, std::size_t K, bool skip1,bool count_vac_ops) {
+  assert(K > (skip1 ? 1 : 0));
+  ExprPtr result;
+  for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
+    result = k > 1 ? result + T_pt_(order, k,count_vac_ops) : T_pt_(order, k,count_vac_ops);
+  }
+  return result;
+}
+
+ExprPtr Λ_pt_(std::size_t order, std::size_t K,bool count_vac_ops) {
+  if (!count_vac_ops) {
+    assert(order == 1 &&
+           "sequant::sr::Λ_pt_(): only supports first order perturbation");
+    return OpMaker<Statistics::FermiDirac>(OpType::λ_1, K,K)();
+  }
+  assert(K > 0);
+  assert(order == 1 && "only first order perturbation is supported now");
+  return ex<op_t>(
+      []() -> std::wstring_view { return optype2label.at(OpType::λ_1); },
+      [=]() -> ExprPtr {
+        return Λ_pt_(order, K,false);
+      },
+      [=](qnc_t& qns) {
+        qns = combine(deexcitation_type_qns(K), qns);
+      });
+}
+
+ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1,bool count_vac_ops) {
+  assert(K > (skip1 ? 1 : 0));
+  ExprPtr result;
+  for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
+    result = k > 1 ? result + Λ_pt_(order, k,count_vac_ops) : Λ_pt_(order, k, count_vac_ops);
+  }
+  return result;
+}
+
+ExprPtr R_(std::size_t Nbra, std::size_t Nket, bool count_vac_ops,IndexSpace hole_space, IndexSpace particle_space){
+ if(!count_vac_ops){
+   return OpMaker<Statistics::FermiDirac>(OpType::R,Nbra,Nket,particle_space,hole_space)();
+ }
+ else{
+   return ex<op_t>(
+       []() -> std::wstring_view { return optype2label.at(OpType::R); },
+       [=]() -> ExprPtr {
+         return R_(Nbra, Nket,false);
+       },
+       [=](qnc_t& qns) {
+         qns = combine(generic_excitation_qns(Nket,Nbra,particle_space,hole_space), qns);
+       });
+ }
+}
+
+ExprPtr L_(std::size_t Nbra, std::size_t Nket, bool count_vac_ops,IndexSpace hole_space,IndexSpace particle_space){
+  if(!count_vac_ops){
+    return OpMaker<Statistics::FermiDirac>(OpType::L,Nbra,Nket,particle_space,hole_space)();
+  }
+  else{
+    return ex<op_t>(
+        []() -> std::wstring_view { return optype2label.at(OpType::R); },
+        [=]() -> ExprPtr {
+          return L_(Nbra, Nket,false);
+        },
+        [=](qnc_t& qns) {
+          qns = combine(generic_deexcitation_qns(Nbra,Nket,particle_space,hole_space), qns);
+        });
+  }
+}
+
+bool can_change_qns(const ExprPtr& op_or_op_product, const qns_t target_qns,
+                    const qns_t source_qns = {}) {
+  qns_t qns = source_qns;
+  if (op_or_op_product.is<Product>()) {
+    const auto& op_product = op_or_op_product.as<Product>();
+    for (auto& op_ptr : ranges::views::reverse(op_product.factors())) {
+      assert(op_ptr->template is<op_t>());
+      const auto& op = op_ptr->template as<op_t>();
+      qns = op(qns);
+    }
+    return qns.overlaps_with(target_qns);
+  } else if (op_or_op_product.is<op_t>()) {
+    const auto& op = op_or_op_product.as<op_t>();
+    qns = op();
+    return qns.overlaps_with(target_qns);
+  } else
+    throw std::invalid_argument(
+        "sequant::mbpt::sr::contains_rank(op_or_op_product): op_or_op_product "
+        "must be mbpt::sr::op_t or Product thereof");
+}
+
+bool raises_vacuum_up_to_rank(const ExprPtr& op_or_op_product,
+                              const unsigned long k) {
+  assert(op_or_op_product.is<op_t>() || op_or_op_product.is<Product>());
+  return can_change_qns(op_or_op_product,
+                        excitation_type_qns(k));
+}
+
+bool lowers_rank_or_lower_to_vacuum(const ExprPtr& op_or_op_product,
+                                    const unsigned long k) {
+  assert(op_or_op_product.is<op_t>() || op_or_op_product.is<Product>());
+  return can_change_qns(op_or_op_product, qns_t{},
+                        excitation_type_qns(k));
+}
+
+bool raises_vacuum_to_rank(const ExprPtr& op_or_op_product,
+                           const unsigned long k) {
+  assert(op_or_op_product.is<op_t>() || op_or_op_product.is<Product>());
+  return can_change_qns(op_or_op_product, excitation_type_qns(k));
+}
+
+bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product,
+                           const unsigned long k) {
+  assert(op_or_op_product.is<op_t>() || op_or_op_product.is<Product>());
+  return can_change_qns(op_or_op_product, qns_t{}, excitation_type_qns(k));
+}
+
+
 }// namespace op
 ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
                bool use_top) {

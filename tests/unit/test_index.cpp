@@ -11,8 +11,8 @@
 
 TEST_CASE("Index", "[elements]") {
   using namespace sequant;
-  mbpt::set_default_convention();
   SECTION("constructors") {
+    auto idx_registry = get_default_context().index_space_registry();
     Index i{};
 
     REQUIRE_NOTHROW(
@@ -22,21 +22,21 @@ TEST_CASE("Index", "[elements]") {
 
     Index i1(L"i_1");
     REQUIRE(i1.label() == L"i_1");
-    REQUIRE(i1.space() == IndexSpace::instance(IndexSpace::active_occupied));
+    REQUIRE(i1.space() == idx_registry->retrieve(L"i_1"));
 
-    Index i2(L"i_2", IndexSpace::instance(IndexSpace::active_occupied));
+    Index i2(L"i_2", idx_registry->retrieve(L"i_1"));
     REQUIRE(i2.label() == L"i_2");
-    REQUIRE(i2.space() == IndexSpace::instance(IndexSpace::active_occupied));
+    REQUIRE(i2.space() == idx_registry->retrieve(L"i_1"));
 
     // examples with proto indices
     {
       REQUIRE_NOTHROW(Index(
-          L"i_3", IndexSpace::instance(IndexSpace::active_occupied), {i1, i2}));
-      Index i3(L"i_3", IndexSpace::instance(IndexSpace::active_occupied),
+          L"i_3", idx_registry->retrieve(L"i_3"), {i1, i2}));
+      Index i3(L"i_3", idx_registry->retrieve(L"i_3"),
                {i1, i2});
       REQUIRE(i3.label() == L"i_3");
       REQUIRE(i3.to_string() == "i_3");
-      REQUIRE(i3.space() == IndexSpace::instance(IndexSpace::active_occupied));
+      REQUIRE(i3.space() == idx_registry->retrieve(L"i_3"));
       REQUIRE(i3.has_proto_indices());
       REQUIRE(i3.proto_indices().size() == 2);
       REQUIRE(i3.proto_indices()[0] == i1);
@@ -46,7 +46,7 @@ TEST_CASE("Index", "[elements]") {
       Index i4(L"i_4", {L"i_1", L"i_2"});
       REQUIRE(i4.label() == L"i_4");
       REQUIRE(i4.to_string() == "i_4");
-      REQUIRE(i4.space() == IndexSpace::instance(IndexSpace::active_occupied));
+      REQUIRE(i4.space() == idx_registry->retrieve(L"i_4"));
       REQUIRE(i4.has_proto_indices());
       REQUIRE(i4.proto_indices().size() == 2);
       REQUIRE(i4.proto_indices()[0] == i1);
@@ -56,7 +56,7 @@ TEST_CASE("Index", "[elements]") {
       REQUIRE_NOTHROW(Index(L"i_5", {i2, i1}, false));
       Index i5(L"i_5", {i2, i1}, false);
       REQUIRE(i5.label() == L"i_5");
-      REQUIRE(i5.space() == IndexSpace::instance(IndexSpace::active_occupied));
+      REQUIRE(i5.space() == idx_registry->retrieve(L"i_5"));
       REQUIRE(i5.has_proto_indices());
       REQUIRE(i5.proto_indices().size() == 2);
       REQUIRE(i5.proto_indices()[0] == i2);
@@ -66,7 +66,7 @@ TEST_CASE("Index", "[elements]") {
       REQUIRE_NOTHROW(Index(L"i_6", {i1, i5}, false));
       Index i6(L"i_6", {i1, i5}, false);
       REQUIRE(i6.label() == L"i_6");
-      REQUIRE(i6.space() == IndexSpace::instance(IndexSpace::active_occupied));
+      REQUIRE(i6.space() == idx_registry->retrieve(L"i_6"));
       REQUIRE(i6.has_proto_indices());
       REQUIRE(i6.proto_indices().size() == 2);
       REQUIRE(i6.proto_indices()[0] == i1);
@@ -76,7 +76,7 @@ TEST_CASE("Index", "[elements]") {
       REQUIRE_NOTHROW(Index(L"i_7", {i2, i1}));
       Index i7(L"i_7", {i2, i1});
       REQUIRE(i7.label() == L"i_7");
-      REQUIRE(i7.space() == IndexSpace::instance(IndexSpace::active_occupied));
+      REQUIRE(i7.space() ==idx_registry->retrieve(L"i_7"));
       REQUIRE(i7.has_proto_indices());
       REQUIRE(i7.proto_indices().size() == 2);
       REQUIRE(i7.proto_indices()[0] == i1);  // !!
@@ -84,22 +84,10 @@ TEST_CASE("Index", "[elements]") {
 
 #ifndef NDEBUG
       REQUIRE_THROWS(Index(
-          L"i_4", IndexSpace::instance(IndexSpace::active_occupied), {i1, i1}));
+          L"i_4", idx_registry->retrieve(L"i_4"), {i1, i1}));
       REQUIRE_THROWS(Index(L"i_5", {L"i_1", L"i_1"}));
 #endif
     }
-
-    // 'g' is not a standard base key, but we can associate it with an existing
-    // space to be able to extend the index vocabulary
-#ifndef NDEBUG
-    REQUIRE_THROWS(Index{L"h"});
-#endif
-    REQUIRE_NOTHROW(IndexSpace::register_key(
-        L"h",
-        IndexSpace::all));  // can assign additional key to a space already
-                            // registered, this does not redefine base key
-    // and now ...
-    REQUIRE_NOTHROW(Index{L"h"});
   }
 
   SECTION("equality") {
@@ -125,14 +113,12 @@ TEST_CASE("Index", "[elements]") {
   }
 
   SECTION("qns ordering") {
-    auto p1A = Index(L"p↑_1",
-                     IndexSpace::instance(IndexSpace::all, IndexSpace::alpha));
-    auto p1B =
-        Index(L"p↓_1", IndexSpace::instance(IndexSpace::all, IndexSpace::beta));
-    auto p2A = Index(L"p↑_2",
-                     IndexSpace::instance(IndexSpace::all, IndexSpace::alpha));
-    auto p2B =
-        Index(L"p↓_2", IndexSpace::instance(IndexSpace::all, IndexSpace::beta));
+    IndexSpace p_upspace(L"p↑",{11},IndexSpace::alpha);
+    IndexSpace p_downspace(L"p↓",{11},IndexSpace::beta);
+    auto p1A = Index(L"p↑_1", p_upspace);
+    auto p1B = Index(L"p↓_1", p_downspace);
+    auto p2A = Index(L"p↑_2",p_upspace);
+    auto p2B = Index(L"p↓_2", p_downspace);
     REQUIRE(p1A.space().qns() == IndexSpace::alpha);
     REQUIRE(p2A.space().qns() == IndexSpace::alpha);
     REQUIRE(p1B.space().qns() == IndexSpace::beta);
@@ -174,6 +160,9 @@ TEST_CASE("Index", "[elements]") {
   }
 
   SECTION("to_string") {
+    auto old_cxt = get_default_context();
+    Context cxt(old_cxt.vacuum(),sequant::mbpt::make_F12_single_reference_subspaces(),old_cxt.metric(),old_cxt.braket_symmetry(),old_cxt.spbasis());
+    set_scoped_default_context(cxt);
     Index alpha(L"α");
     REQUIRE(alpha.to_string() == "α");
 
@@ -205,10 +194,6 @@ TEST_CASE("Index", "[elements]") {
     Index a1_up(L"a↑_1", {i1, i2});
     std::wstring a1_up_str = to_latex(a1_up);
     REQUIRE(a1_up_str == L"{a↑_1^{{i_1}{i_2^{{i_3}{i_4}}}}}");
-
-    Index alpha1_up(L"α↑_1", {i1, i2});
-    std::wstring alpha1_up_str = to_latex(alpha1_up);
-    REQUIRE(alpha1_up_str == L"{\\alpha↑_1^{{i_1}{i_2^{{i_3}{i_4}}}}}");
   }
 
   SECTION("wolfram") {
@@ -237,15 +222,6 @@ TEST_CASE("Index", "[elements]") {
     REQUIRE(Index(L"p_1").to_wolfram() ==
             L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(p\\), "
             L"\\(1\\)]\\)\",particleSpace[occupied,virtual]]");
-    REQUIRE(Index(L"α'_1").to_wolfram() ==
-            L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(α'\\), "
-            L"\\(1\\)]\\)\",particleSpace[othervirtual]]");
-    REQUIRE(Index(L"α_1").to_wolfram() ==
-            L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(α\\), "
-            L"\\(1\\)]\\)\",particleSpace[virtual,othervirtual]]");
-    REQUIRE(Index(L"κ_1").to_wolfram() ==
-            L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(κ\\), "
-            L"\\(1\\)]\\)\",particleSpace[occupied,virtual,othervirtual]]");
   }
 
 }  // TEST_CASE("Index")

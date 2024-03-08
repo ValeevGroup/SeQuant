@@ -11,7 +11,6 @@
 
 TEST_CASE("Op", "[elements]") {
   using namespace sequant;
-  sequant::mbpt::set_default_convention();
   SECTION("constructors") {
     REQUIRE_NOTHROW(FOp{});
 
@@ -195,18 +194,19 @@ TEST_CASE("Op", "[elements]") {
       REQUIRE(!is_pure_qpannihilator(fann(L"i_1"), V));
       REQUIRE(is_pure_qpannihilator(fann(L"a_1"), V));
       REQUIRE(!is_pure_qpannihilator(fann(L"p_1"), V));
+      auto idx_registry = get_default_context().index_space_registry();
       REQUIRE(qpannihilator_space(fann(L"i_1"), V) ==
-              IndexSpace::null_instance());
+              idx_registry->nulltype_());
       REQUIRE(qpannihilator_space(fcre(L"i_1"), V) ==
-              IndexSpace::instance(IndexSpace::active_occupied));
+              idx_registry->retrieve(L"i_1"));
       REQUIRE(qpannihilator_space(fcre(L"a_1"), V) ==
-              IndexSpace::null_instance());
+              idx_registry->nulltype_());
       REQUIRE(qpannihilator_space(fann(L"a_1"), V) ==
-              IndexSpace::instance(IndexSpace::active_unoccupied));
+              idx_registry->retrieve(L"a_1"));
       REQUIRE(qpannihilator_space(fcre(L"p_1"), V) ==
-              IndexSpace::instance(IndexSpace::occupied));
+              idx_registry->retrieve(L"m_1"));
       REQUIRE(qpannihilator_space(fann(L"p_1"), V) ==
-              IndexSpace::instance(IndexSpace::unoccupied));
+              idx_registry->retrieve(L"e_1"));
     }
     {
       constexpr const Vacuum V = Vacuum::Physical;

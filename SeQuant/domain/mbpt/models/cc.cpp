@@ -12,7 +12,7 @@
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
-#include <SeQuant/domain/mbpt/sr.hpp>
+#include <SeQuant/domain/mbpt/op.hpp>
 
 namespace sequant::mbpt {
 

@@ -308,43 +308,28 @@ using qninterval_t = typename qns_t::interval_t;
 using qnc_t = qns_t;
 using op_t = mbpt::Operator<qnc_t>;
 
-// clang-format off
-/// @return the number of creators in \p qns acting on space \p s
-/// @pre `(s.type()==IndexSpace::Type::active_occupied || s.type()==IndexSpace::Type::active_unoccupied)&&s.qns()==IndexSpace::null_qns`
-// clang-format on
-qninterval_t ncre(qns_t qns, IndexSpace);
-
-// clang-format off
-/// @return the number of creators in \p qns acting on space \p s
-/// @pre `s==IndexSpace::Type::active_occupied || s==IndexSpace::Type::active_unoccupied`
-// clang-format on
-qninterval_t ncre(qns_t qns, IndexSpace::Type);
-
-// clang-format off
-/// @return the total number of creators in \p qns
-// clang-format on
-qninterval_t ncre(qns_t qns);
-
-// clang-format off
-/// @return the number of annihilators in \p qns acting on space \p s
-/// @pre `(s.type()==IndexSpace::Type::active_occupied || s.type()==IndexSpace::Type::active_unoccupied)&&s.qns()==IndexSpace::null_qns`
-// clang-format on
-qninterval_t nann(qns_t qns, IndexSpace);
-
-// clang-format off
-/// @return the number of annihilators in \p qns acting on space \p s
-/// @pre `s==IndexSpace::Type::active_occupied || s==IndexSpace::Type::active_unoccupied`
-// clang-format on
-qninterval_t nann(qns_t qns, IndexSpace::Type);
-
-// clang-format off
-/// @return the total number of annihilators in \p qns
-// clang-format on
-qninterval_t nann(qns_t qns);
-
 /// combines 2 sets of quantum numbers using Wick's theorem
 qns_t combine(qns_t, qns_t);
 
+// The qns of an excitation type operator will always look the same in a given context
+// @param is the rank of the operator.
+qns_t excitation_type_qns(std::size_t);
+
+// The qns of a deexcitation type operator will always look the same in a given context
+// @param is the rank of the operator.
+qns_t deexcitation_type_qns(std::size_t);
+
+//The qns of a general type operator will always look the same in a given context
+// @//param is rank of the operator.
+qns_t general_type_qns(std::size_t);
+
+// generic quantum number function compatible with generic excitation operators with the option to choose the particle and hole space.
+qns_t generic_excitation_qns(std::size_t particle_rank, std::size_t hole_rank,IndexSpace particle_space, IndexSpace hole_space);
+
+// generic quantum number function compatible with generic deexcitation operators with the option to choose the particle and hole space.
+qns_t generic_deexcitation_qns(std::size_t particle_rank, std::size_t hole_rank,IndexSpace particle_space, IndexSpace hole_space);
+
+ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,bool use_top = true);
 }  // namespace mbpt
 
 /// @param qns the quantum numbers to adjoint
@@ -394,7 +379,7 @@ class OpMaker {
     assert(nbra() > 0 || nket() > 0);
   }
 
-  OpMaker(OpType op, std::size_t Nbra, std::size_t Nket);
+  OpMaker(OpType op, std::size_t Nbra, std::size_t Nket, IndexSpace particle_space = get_default_context().index_space_registry()->active_particle_space(), IndexSpace hole_space = get_default_context().index_space_registry()->active_hole_space());
 
   // construct a particle conserving operator when constructing this way.
   OpMaker(OpType op, std::size_t nparticle);
@@ -572,7 +557,7 @@ class Operator : public Operator<void, S> {
 
   ExprPtr clone() const override;
 
-  std::wstring to_latex() const override;
+  //std::wstring to_latex() const override;
 
   Expr::hash_type memoizing_hash() const override;
 
@@ -587,37 +572,65 @@ namespace op{
 /// @param[in] k the rank of the particle interactions; only `k<=2` is
 /// supported
 // clang-format on
-ExprPtr H_(std::size_t k, bool count_vac_ops = false);
+ExprPtr H_(std::size_t k, bool count_vac_ops = true);
 
 /// @brief total Hamiltonian including up to `k`-body interactions
 /// @param[in] k the maximum rank of the particle interactions; only `k<=2` is
 /// supported
-ExprPtr H(std::size_t k = 2, bool count_vac_ops = false);
+ExprPtr H(std::size_t k = 2, bool count_vac_ops = true);
 
 /// fock operator implied one-body operator, optional explicit construction requires user to specify the
 /// IndexSpace corresponding to all orbitals which may have non-zero density.
-ExprPtr F(bool use_tensor = true, IndexSpace density_occupied = IndexSpace::null_instance());
+ExprPtr F(bool cout_vac_ops =true, bool use_tensor = true, IndexSpace density_occupied = IndexSpace::null_instance());
 
 /// makes particle-conserving excitation operator of rank \p K
-ExprPtr T_(std::size_t K, bool count_vac_ops = false);
+ExprPtr T_(std::size_t K, bool count_vac_ops = true);
 
 /// makes sum of particle-conserving excitation operators of all ranks up to \p
 /// K
-ExprPtr T(std::size_t K, bool count_vac_ops = false);
+ExprPtr T(std::size_t K, bool count_vac_ops = true);
 
 /// makes particle-conserving deexcitation operator of rank \p K
-ExprPtr Λ_(std::size_t K, bool count_vac_ops = false);
+ExprPtr Λ_(std::size_t K, bool count_vac_ops = true);
 
 /// makes sum of particle-conserving deexcitation operators of all ranks up to
 /// \p
 /// K
-ExprPtr Λ(std::size_t K, bool count_vac_ops = false);
+ExprPtr Λ(std::size_t K, bool count_vac_ops = true);
 
-ExprPtr P(std::size_t K, bool count_vac_ops = false);
+//general excitation operator
+ExprPtr R_(std::size_t nbra, std::size_t nket, bool count_vac_ops =true,
+           IndexSpace hole_space = get_default_context().index_space_registry()->active_hole_space(),
+           IndexSpace particle_space = get_default_context().index_space_registry()->active_particle_space());
 
-ExprPtr A(std::size_t K, bool count_vac_ops = false);
+//general deexcitation operator
+ExprPtr L_(std::size_t nbra, std::size_t nket, bool count_vac_ops =true,
+           IndexSpace hole_space = get_default_context().index_space_registry()->active_hole_space(),
+           IndexSpace particle_space = get_default_context().index_space_registry()->active_particle_space());
 
-ExprPtr S(std::size_t K, bool count_vac_ops = false);
+ExprPtr P(std::size_t K, bool count_vac_ops = true);
+
+ExprPtr A(std::size_t K, bool count_vac_ops = true);
+
+ExprPtr S(std::size_t K, bool count_vac_ops = true);
+
+ExprPtr H_pt(std::size_t order, std::size_t R, bool count_vac_ops = true);
+
+ExprPtr T_pt_(std::size_t order, std::size_t K,bool count_vac_ops =true);
+
+ExprPtr T_pt(std::size_t order, std::size_t K, bool skip1 =false,bool count_vac_ops=true);
+
+ExprPtr Λ_pt_(std::size_t order, std::size_t K,bool count_vac_ops=true);
+
+ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1 = false,bool count_vac_ops=true);
+
+bool raises_vacuum_up_to_rank(const ExprPtr& op_or_op_product, const unsigned long k);
+
+bool lowers_rank_or_lower_to_vacuum(const ExprPtr& op_or_op_product,const unsigned long k);
+
+bool raises_vacuum_to_rank(const ExprPtr& op_or_op_product, const unsigned long k);
+
+bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product, const unsigned long k);
 #include "SeQuant/domain/mbpt/vac_av.hpp"
 
 } //namespace op

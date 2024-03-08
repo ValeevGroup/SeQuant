@@ -32,9 +32,7 @@ TEST_CASE("TEST_EVAL_EXPR", "[EvalExpr]") {
   using namespace std::string_literals;
   using sequant::EvalExpr;
   using namespace sequant;
-  sequant::TensorCanonicalizer::register_instance(
-      std::make_shared<sequant::DefaultTensorCanonicalizer>());
-  sequant::mbpt::set_default_convention();
+  sequant::TensorCanonicalizer::register_instance(std::make_shared<sequant::DefaultTensorCanonicalizer>());
   SECTION("Constructors") {
     auto t1 = parse_tensor(L"t_{i1, i2}^{a1, a2}");
 

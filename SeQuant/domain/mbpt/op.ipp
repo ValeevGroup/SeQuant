@@ -148,10 +148,10 @@ ExprPtr Operator<QuantumNumbers, S>::clone() const {
   return ex<this_type>(*this);
 }
 
-template <typename QuantumNumbers, Statistics S>
+/*template <typename QuantumNumbers, Statistics S>
 std::wstring Operator<QuantumNumbers, S>::to_latex() const {
   return sequant::to_latex(*this);
-}
+}*/
 
 template <typename QuantumNumbers, Statistics S>
 Expr::hash_type Operator<QuantumNumbers, S>::memoizing_hash() const {

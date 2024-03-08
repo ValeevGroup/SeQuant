@@ -28,9 +28,8 @@ int main(int argc, char* argv[]) {
   sequant::set_locale();
   sequant::detail::OpIdRegistrar op_id_registrar;
   sequant::set_default_context(
-      Context(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
+      Context(Vacuum::SingleProduct,sequant::mbpt::make_standard_single_reference_subspaces(), IndexSpaceMetric::Unit,
               BraKetSymmetry::conjugate, SPBasis::spinorbital));
-  mbpt::set_default_convention();
 
   // uncomment to enable verbose output ...
   // Logger::set_instance(1);

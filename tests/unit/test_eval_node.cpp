@@ -42,7 +42,6 @@ std::wstring tikz(sequant::EvalNode<sequant::EvalExpr> const& n) noexcept {
 
 TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
   using namespace sequant;
-  sequant::mbpt::set_default_convention();
   auto L = Npos::L;
   auto R = Npos::R;
 

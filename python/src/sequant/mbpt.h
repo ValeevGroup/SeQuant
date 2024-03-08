@@ -2,7 +2,7 @@
 #define SEQUANT_PYTHON_MBPT_H
 
 #include <SeQuant/domain/mbpt/convention.hpp>
-#include <SeQuant/domain/mbpt/sr.hpp>
+#include <SeQuant/domain/mbpt/op.hpp>
 
 #include "python.h"
 

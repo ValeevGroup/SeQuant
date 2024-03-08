@@ -11,7 +11,6 @@
 
 TEST_CASE("Spin", "[spin]") {
   using namespace sequant;
-  mbpt::set_default_convention();
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
 
@@ -27,9 +26,9 @@ TEST_CASE("Spin", "[spin]") {
     Index a1(L"a_1");
     Index a2(L"a_2");
 
-    Index i3(L"i_3", IndexSpace::instance(IndexSpace::active_occupied),
+    Index i3(L"i_3", get_default_context().index_space_registry()->retrieve(L"i_3"),
              {i1, i2});
-    Index a3(L"a_3", IndexSpace::instance(IndexSpace::active_occupied),
+    Index a3(L"a_3", get_default_context().index_space_registry()->retrieve(L"a_3"),
              {a1, a2});
 
     const auto input = ex<Tensor>(L"t", IndexList{i3}, IndexList{a3});
@@ -37,17 +36,15 @@ TEST_CASE("Spin", "[spin]") {
   }
 
   SECTION("ASCII label") {
-    auto p1 = Index(L"p↑_1",
-                    IndexSpace::instance(IndexSpace::all, IndexSpace::alpha));
-    auto p2 =
-        Index(L"p↓_2", IndexSpace::instance(IndexSpace::all, IndexSpace::beta));
-    auto p3 = Index(L"p↑_3",
-                    IndexSpace::instance(IndexSpace::all, IndexSpace::alpha));
-    auto p4 =
-        Index(L"p↓_4", IndexSpace::instance(IndexSpace::all, IndexSpace::beta));
-    auto alpha1 =
-        Index(L"α↑_1", IndexSpace::instance(IndexSpace::complete_unoccupied,
-                                            IndexSpace::alpha));
+    IndexSpace pup(L"p↑",{0b011},IndexSpace::alpha);
+    IndexSpace pdown(L"p↓", {0b011},IndexSpace::beta);
+    IndexSpace alphaup(L"α↑", {0b110}, IndexSpace::alpha);
+
+    auto p1 = Index(L"p↑_1",pup);
+    auto p2 =Index(L"p↓_2", pdown);
+    auto p3 = Index(L"p↑_3",pup);
+    auto p4 = Index(L"p↓_4", pdown);
+    auto alpha1 =Index(L"α↑_1", alphaup);
 
     SEQUANT_PRAGMA_CLANG(diagnostic push)
     SEQUANT_PRAGMA_CLANG(diagnostic ignored "-Wdeprecated-declarations")
@@ -63,14 +60,14 @@ TEST_CASE("Spin", "[spin]") {
   }
 
   SECTION("Tensor: can_expand, spin_symm_tensor, remove_spin") {
-    auto p1 = Index(L"p↑_1",
-                    IndexSpace::instance(IndexSpace::all, IndexSpace::alpha));
+    IndexSpace pup(L"p↑",{0b011},IndexSpace::alpha);
+    IndexSpace pdown(L"p↓", {0b011},IndexSpace::beta);
+    IndexSpace pnull(L"p",{0b011});
+    auto p1 = Index(L"p↑_1",pup);
     auto p2 =
-        Index(L"p↓_2", IndexSpace::instance(IndexSpace::all, IndexSpace::beta));
-    auto p3 = Index(L"p↑_3",
-                    IndexSpace::instance(IndexSpace::all, IndexSpace::alpha));
-    auto p4 =
-        Index(L"p↓_4", IndexSpace::instance(IndexSpace::all, IndexSpace::beta));
+        Index(L"p↓_2", pdown);
+    auto p3 = Index(L"p↑_3",pup);
+    auto p4 = Index(L"p↓_4", pdown);
 
     auto input = ex<Tensor>(L"t", IndexList{p1, p2}, IndexList{p3, p4});
     REQUIRE(can_expand(input->as<Tensor>()) == true);
@@ -81,8 +78,7 @@ TEST_CASE("Spin", "[spin]") {
 
     auto result = remove_spin(input);
     for (auto& i : result->as<Tensor>().const_braket())
-      REQUIRE(i.space() ==
-              IndexSpace::instance(IndexSpace::all, IndexSpace::nullqns));
+      REQUIRE(i.space() == pnull);
 
     input = ex<Tensor>(L"t", IndexList{p1, p3}, IndexList{p2, p4});
     REQUIRE(to_latex(swap_spin(input)) == L"{t^{{p↑_2}{p↑_4}}_{{p↓_1}{p↓_3}}}");
@@ -1333,14 +1329,11 @@ SECTION("Expand P operator pair-wise") {
 }
 
 SECTION("Open-shell spin-tracing") {
-  auto occA =
-      IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::alpha);
-  auto virA =
-      IndexSpace::instance(IndexSpace::active_unoccupied, IndexSpace::alpha);
-  auto occB =
-      IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::beta);
-  auto virB =
-      IndexSpace::instance(IndexSpace::active_unoccupied, IndexSpace::beta);
+
+  IndexSpace occA(L"i",{0b01},IndexSpace::alpha);
+  IndexSpace virA(L"a", {0b10}, IndexSpace::alpha);
+  IndexSpace occB(L"i", {0b01},IndexSpace::beta);
+  IndexSpace virB(L"a", {0b10}, IndexSpace::beta);
   const auto i1A = Index(L"i↑_1", occA);
   const auto i2A = Index(L"i↑_2", occA);
   const auto i3A = Index(L"i↑_3", occA);

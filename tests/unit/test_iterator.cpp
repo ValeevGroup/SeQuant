@@ -11,7 +11,6 @@
 TEST_CASE("Iterators", "[elements]") {
 
   using namespace sequant;
-  mbpt::set_default_convention();
   SECTION("constructor") {
 
     {

@@ -4,85 +4,54 @@
 
 #include "catch.hpp"
 #include "SeQuant/domain/mbpt/convention.hpp"
-
 #include "SeQuant/core/space.hpp"
 
 TEST_CASE("IndexSpace", "[elements]") {
   using namespace sequant;
-  mbpt::set_default_convention();
-  SECTION("register_instance") {
-    REQUIRE_THROWS(IndexSpace::register_instance(
-        L"p", IndexSpace::all));  // already registered standard instances
-    REQUIRE_THROWS(
-        IndexSpace::register_instance(L"p_1", IndexSpace::all));  // ditto
-    // since convention does not include ALL standard spaces
-    // (see https://github.com/ValeevGroup/SeQuant/issues/97 )
-    // user can register additional instances
-    REQUIRE_NOTHROW(
-        IndexSpace::register_instance(L"m'", IndexSpace::frozen_occupied));
-    REQUIRE(IndexSpace::instance_exists(L"m'"));
-  }
+  SECTION("registry_core_functionality"){
+    auto standard_registry = sequant::mbpt::make_standard_single_reference_subspaces();
+    REQUIRE_NOTHROW(standard_registry.retrieve(L"i"));
 
-  // these are loaded in test_main.cpp
-  SECTION("register_standard_instances") {
-    REQUIRE(IndexSpace::instance_exists(L"i"));
-    REQUIRE(IndexSpace::instance_exists(L"m"));
-    REQUIRE(IndexSpace::instance_exists(L"p"));
-    REQUIRE(IndexSpace::instance_exists(L"a_17"));
-    REQUIRE(IndexSpace::instance_exists(L"e_19"));
-    REQUIRE(IndexSpace::instance_exists(L"α_21"));
-    REQUIRE(IndexSpace::instance_exists(L"α'_32"));
-    REQUIRE(IndexSpace::instance_exists(L"κ_48"));
-  }
+    REQUIRE_NOTHROW(standard_registry.relabel(L"i",L"j"));
+    REQUIRE_THROWS(standard_registry.relabel(L"i",L"l"));
 
-  SECTION("register_key") {
-    REQUIRE_NOTHROW(IndexSpace::register_key(
-        L"w",
-        IndexSpace::all));  // can assign additional key to a space already
-                            // registered, this does not redefine base key
-    REQUIRE(IndexSpace::instance(L"w") == IndexSpace::instance(L"p"));
+    REQUIRE_NOTHROW(standard_registry.remove(L"j"));
+    IndexSpace active_occupied(L"i", {0b0010});
+    REQUIRE_NOTHROW(standard_registry.add(active_occupied));
+    REQUIRE_THROWS(standard_registry.add(active_occupied));
+    IndexSpace jactive_occupied(L"j", {0b0010});
+    REQUIRE_THROWS(standard_registry.add(jactive_occupied));
+
   }
 
   SECTION("equality") {
-    REQUIRE(IndexSpace::instance(L"i") == IndexSpace::instance(L"i"));
-    REQUIRE(IndexSpace::instance(L"i") != IndexSpace::instance(L"p"));
-
-    REQUIRE(IndexSpace::null_instance() ==
-            IndexSpace::instance(IndexSpace::null_key()));
-
-    REQUIRE(IndexSpace::instance(L"i").type() == IndexSpace::active_occupied);
-    REQUIRE(IndexSpace::instance(L"i") == IndexSpace::active_occupied);
-    REQUIRE(IndexSpace::active_occupied == IndexSpace::instance(L"i").type());
-    REQUIRE(IndexSpace::active_occupied == IndexSpace::instance(L"i"));
-    REQUIRE(IndexSpace::instance(L"i").qns() == IndexSpace::nullqns);
-    REQUIRE(IndexSpace::instance(L"i") == IndexSpace::nullqns);
-    REQUIRE(IndexSpace::nullqns == IndexSpace::instance(L"i").qns());
-    REQUIRE(IndexSpace::nullqns == IndexSpace::instance(L"i"));
+    auto standard_registry =
+        sequant::mbpt::make_standard_single_reference_subspaces();
+    REQUIRE(standard_registry.retrieve(L"i") ==
+            standard_registry.retrieve(L"i"));
+    REQUIRE(standard_registry.retrieve(L"i") !=
+            standard_registry.retrieve(L"a"));
   }
 
   SECTION("ordering") {
-    REQUIRE(!(IndexSpace::instance(L"i") < IndexSpace::instance(L"i")));
-    REQUIRE(IndexSpace::instance(L"i") < IndexSpace::instance(L"a"));
-    REQUIRE(!(IndexSpace::instance(L"a") < IndexSpace::instance(L"i")));
-    REQUIRE(IndexSpace::instance(L"i") < IndexSpace::instance(L"m"));
-    REQUIRE(!(IndexSpace::instance(L"m") < IndexSpace::instance(L"m")));
-    REQUIRE(IndexSpace::instance(L"m") < IndexSpace::instance(L"a"));
-    REQUIRE(IndexSpace::instance(L"m") < IndexSpace::instance(L"p"));
-    REQUIRE(IndexSpace::instance(L"a") < IndexSpace::instance(L"p"));
-    REQUIRE(IndexSpace::instance(L"p") < IndexSpace::instance(L"α"));
+    auto standard_registry =sequant::mbpt::make_standard_single_reference_subspaces();
+    REQUIRE(!(standard_registry.retrieve(L"i") < standard_registry.retrieve(L"i")));
+    REQUIRE(standard_registry.retrieve(L"i") < standard_registry.retrieve(L"a"));
+    REQUIRE(!(standard_registry.retrieve(L"a") < standard_registry.retrieve(L"i")));
+    REQUIRE(standard_registry.retrieve(L"i") < standard_registry.retrieve(L"m"));
+    REQUIRE(!(standard_registry.retrieve(L"m") < standard_registry.retrieve(L"m")));
+    REQUIRE(standard_registry.retrieve(L"m") < standard_registry.retrieve(L"a"));
+    REQUIRE(standard_registry.retrieve(L"m") < standard_registry.retrieve(L"p"));
+    REQUIRE(standard_registry.retrieve(L"a") < standard_registry.retrieve(L"p"));
 
     // test ordering with quantum numbers
     {
-      auto i = IndexSpace::instance(L"i");
-      auto a = IndexSpace::instance(L"a");
-      auto iA =
-          IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::alpha);
-      auto iB =
-          IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::beta);
-      auto aA = IndexSpace::instance(IndexSpace::active_unoccupied,
-                                     IndexSpace::alpha);
-      auto aB =
-          IndexSpace::instance(IndexSpace::active_unoccupied, IndexSpace::beta);
+      auto i = IndexSpace(L"i",{0b01});
+      auto a = IndexSpace(L"a",{0b10});
+      auto iA = IndexSpace(L"i",{0b01}, IndexSpace::alpha);
+      auto iB = IndexSpace(L"i",{0b01}, IndexSpace::beta);
+      auto aA = IndexSpace(L"a",{0b10},IndexSpace::alpha);
+      auto aB = IndexSpace(L"a",{0b10},IndexSpace::beta);
 
       REQUIRE(iA < aA);
       REQUIRE(iB < aB);
@@ -97,49 +66,73 @@ TEST_CASE("IndexSpace", "[elements]") {
   }
 
   SECTION("set operations") {
+    auto f12_registry = sequant::mbpt::make_F12_single_reference_subspaces();
     REQUIRE(
-        IndexSpace::instance(L"i") ==
-        intersection(IndexSpace::instance(L"i"), IndexSpace::instance(L"p")));
+        f12_registry.retrieve(L"i") ==
+        f12_registry.intersection(f12_registry.retrieve(L"i"), f12_registry.retrieve(L"p")));
     REQUIRE(
-        IndexSpace::null_instance() ==
-        intersection(IndexSpace::instance(L"a"), IndexSpace::instance(L"i")));
+        f12_registry.nulltype_() ==
+        f12_registry.intersection(f12_registry.retrieve(L"a"), f12_registry.retrieve(L"i")));
     REQUIRE(
-        IndexSpace::null_instance() ==
-        intersection(IndexSpace::instance(L"a"), IndexSpace::instance(L"α'")));
+        f12_registry.nulltype_() ==
+        f12_registry.intersection(f12_registry.retrieve(L"a"), f12_registry.retrieve(L"α'")));
 
-    REQUIRE(IndexSpace::instance(L"κ") ==
-            unIon(IndexSpace::instance(L"p"), IndexSpace::instance(L"α'")));
+    REQUIRE(f12_registry.retrieve(L"κ") ==
+            f12_registry.unIon(f12_registry.retrieve(L"p"), f12_registry.retrieve(L"α'")));
 
-    REQUIRE(includes(IndexSpace::instance(L"κ"), IndexSpace::instance(L"m")));
-    REQUIRE(!includes(IndexSpace::instance(L"m"), IndexSpace::instance(L"κ")));
-    REQUIRE(includes(IndexSpace::instance(L"α"), IndexSpace::instance(L"a")));
+    REQUIRE(includes(f12_registry.retrieve(L"κ"), f12_registry.retrieve(L"m")));
+    REQUIRE(!includes(f12_registry.retrieve(L"m"), f12_registry.retrieve(L"κ")));
+    REQUIRE(includes(f12_registry.retrieve(L"α"), f12_registry.retrieve(L"a")));
 
-    REQUIRE(sequant::has_non_overlapping_spaces(IndexSpace::instance(L"i"),IndexSpace::instance(L"p")));
-    REQUIRE(sequant::has_non_overlapping_spaces(IndexSpace::instance(L"i"),IndexSpace::instance(L"a")));
-    REQUIRE(!sequant::has_non_overlapping_spaces(IndexSpace::instance(L"i"),IndexSpace::instance(L"i")));
+    REQUIRE(f12_registry.has_non_overlapping_spaces(f12_registry.retrieve(L"i"),f12_registry.retrieve(L"p")));
+    REQUIRE(f12_registry.has_non_overlapping_spaces(f12_registry.retrieve(L"i"),f12_registry.retrieve(L"a")));
+    REQUIRE(!f12_registry.has_non_overlapping_spaces(f12_registry.retrieve(L"i"),f12_registry.retrieve(L"i")));
 
-    REQUIRE(sequant::non_overlapping_spaces(IndexSpace::instance(L"g"),IndexSpace::instance(L"α"))[0] == IndexSpace::active_unoccupied);
-    REQUIRE(sequant::non_overlapping_spaces(IndexSpace::instance(L"g"),IndexSpace::instance(L"α"))[1] == IndexSpace::other_unoccupied);
+    REQUIRE(f12_registry.non_overlapping_spaces(f12_registry.retrieve(L"g"),f12_registry.retrieve(L"α"))[0] == f12_registry.retrieve(L"a"));
+    REQUIRE(f12_registry.non_overlapping_spaces(f12_registry.retrieve(L"g"),f12_registry.retrieve(L"α"))[1] == f12_registry.retrieve(L"α'"));
 
      auto union_func = [](int32_t a, int32_t b){
       return a + b;
     };
-     auto act_occ = IndexSpace::instance(IndexSpace::active_occupied);
-    REQUIRE(!act_occ.vaild_bitop(IndexSpace::instance(IndexSpace::inactive_unoccupied),union_func));
-    REQUIRE(act_occ.vaild_bitop(IndexSpace::instance(IndexSpace::active_unoccupied),union_func));
+    REQUIRE(!f12_registry.valid_bitop(f12_registry.retrieve(L"i"),f12_registry.retrieve(L"α'"),union_func));
+    REQUIRE(f12_registry.valid_bitop(f12_registry.retrieve(L"i"),f12_registry.retrieve(L"a"),union_func));
 
     auto intersection_func = [](int32_t a, int32_t b){
       return a & b;
     };
-    REQUIRE(!act_occ.vaild_bitop(IndexSpace::instance(IndexSpace::inactive_unoccupied),intersection_func));
-    REQUIRE(act_occ.vaild_bitop(IndexSpace::instance(IndexSpace::occupied),intersection_func));
+    REQUIRE(!f12_registry.valid_bitop(f12_registry.retrieve(L"i"),f12_registry.retrieve(L"g"),intersection_func));
+    REQUIRE(f12_registry.valid_bitop(f12_registry.retrieve(L"i"),f12_registry.retrieve(L"m"),intersection_func));
 
   }
 
-  SECTION("occupancy_class") {
-    REQUIRE(occupancy_class(IndexSpace::instance(L"i")) == -1);
-    REQUIRE(occupancy_class(IndexSpace::instance(L"a")) == +1);
-    REQUIRE(occupancy_class(IndexSpace::instance(L"p")) == 0);
-    REQUIRE(occupancy_class(IndexSpace::instance(L"u")) == +1);
+  SECTION("occupancy_validation") {
+    auto standard_registry = sequant::mbpt::make_standard_single_reference_subspaces();
+    auto multireference_registry = sequant::mbpt::make_standard_multireference_subspaces();
+
+    REQUIRE(standard_registry.is_pure_occupied(standard_registry.retrieve(L"i")));
+    REQUIRE(standard_registry.is_pure_unoccupied(standard_registry.retrieve(L"a")));
+
+    REQUIRE(multireference_registry.is_pure_occupied(multireference_registry.retrieve(L"i")));
+    REQUIRE(multireference_registry.is_pure_unoccupied(multireference_registry.retrieve(L"a")));
+    REQUIRE(!multireference_registry.is_pure_occupied(multireference_registry.retrieve(L"M")));
+    REQUIRE(!multireference_registry.is_pure_unoccupied(multireference_registry.retrieve(L"E")));
+
+    REQUIRE(standard_registry.contains_occupied(standard_registry.retrieve(L"i")));
+    REQUIRE(standard_registry.contains_unoccupied(standard_registry.retrieve(L"a")));
+
+    REQUIRE(multireference_registry.contains_occupied(multireference_registry.retrieve(L"M")));
+    REQUIRE(multireference_registry.contains_unoccupied(multireference_registry.retrieve(L"E")));
+    REQUIRE(!multireference_registry.contains_occupied(multireference_registry.retrieve(L"a")));
+    REQUIRE(!multireference_registry.contains_unoccupied(multireference_registry.retrieve(L"i")));
+  }
+
+  SECTION("base_space"){
+    auto f12_registry = sequant::mbpt::make_F12_single_reference_subspaces();
+    auto f12_base_spaces = f12_registry.base_spaces_label();
+    REQUIRE(f12_base_spaces[0].second == L"o");
+    REQUIRE(f12_base_spaces[1].second == L"i");
+    REQUIRE(f12_base_spaces[2].second == L"a");
+    REQUIRE(f12_base_spaces[3].second == L"g");
+    REQUIRE(f12_base_spaces[4].second == L"α'");
   }
 }

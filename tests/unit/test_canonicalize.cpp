@@ -8,7 +8,6 @@
 
 TEST_CASE("Canonicalizer", "[algorithms]") {
   using namespace sequant;
-  mbpt::set_default_convention();
 
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());

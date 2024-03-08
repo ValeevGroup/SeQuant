@@ -10,7 +10,6 @@
 
 TEST_CASE("Tensor", "[elements]") {
   using namespace sequant;
-  mbpt::set_default_convention();
 
   SECTION("constructors") {
     REQUIRE_NOTHROW(Tensor{});

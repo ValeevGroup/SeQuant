@@ -445,7 +445,8 @@ class IndexSpaceRegistry{
   }
 
   // clear the label_space map essentially clearing the registry
-  void clear_registry(){ label_space.clear();
+  void clear_registry(){
+    label_space.clear();
     IndexSpace nulltype(L"",0,0);
     this->add(nulltype);
   }
@@ -460,18 +461,23 @@ class IndexSpaceRegistry{
   }
 
   // replace a member of the registry by passing the original label and the new space to replace it
-  void replace(std::wstring_view original_label, IndexSpace new_space){
+  void relabel(std::wstring_view original_label, std::wstring_view new_label){
+    bool found = false;
     for(auto it = label_space.begin(); it != label_space.end(); ++it){
       if(original_label == it->first){
+        auto original_attr = it->second.attr();
         label_space.erase(it);
+        IndexSpace new_space(new_label,original_attr.type(),original_attr.qns());
         label_space.insert({new_space.get_base_key(),new_space});
+        found = true;
       }
     }
+    if(!found){throw "orginal label not found!";}
   }
 
 
   //pass a function which computes a logical bit operation between two IndexSpace.type()
-  const bool vaild_bitop( const IndexSpace i1, const IndexSpace i2, const std::function<int32_t(int32_t,int32_t)> op) {
+  const bool valid_bitop( const IndexSpace i1, const IndexSpace i2, const std::function<int32_t(int32_t,int32_t)> op) {
     auto bitop_int = op(i1.type().to_int32(),i2.type().to_int32());
     auto temp_space = find_IndexSpace({bitop_int});
     return temp_space == nulltype ? false : true;
@@ -740,24 +746,6 @@ inline bool operator!=(const IndexSpace &space,
 inline bool operator!=(IndexSpace::QuantumNumbers qns,
                        const IndexSpace &space) {
   return !(qns == space);
-}
-/*inline bool operator!=(const IndexSpace &space1, const IndexSpace &space2) {
-  return !(space1 == space2);
-}*/
-inline IndexSpace::Type intersection(IndexSpace::Type type1,
-                                     IndexSpace::Type type2) {
-  return type1 == type2 ? type1 : type1.intersection(type2);
-}
-inline IndexSpace::QuantumNumbers intersection(IndexSpace::QuantumNumbers v1,
-                                               IndexSpace::QuantumNumbers v2) {
-  return v1 == v2 ? v1 : v1.intersection(v2);
-}
-inline IndexSpace::Type unIon(IndexSpace::Type type1, IndexSpace::Type type2) {
-  return type1 == type2 ? type1 : type1.unIon(type2);
-}
-inline IndexSpace::QuantumNumbers unIon(IndexSpace::QuantumNumbers qns1,
-                                        IndexSpace::QuantumNumbers qns2) {
-  return qns1 == qns2 ? qns1 : qns1.unIon(qns2);
 }
 /// @return true if type2 is included in type1, i.e. intersection(type1, type2)
 /// == type2

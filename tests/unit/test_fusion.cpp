@@ -6,7 +6,6 @@
 TEST_CASE("TEST_FUSION", "[Fusion]") {
   using sequant::opt::Fusion;
   using namespace sequant;
-  mbpt::set_default_convention();
   std::vector<std::array<std::wstring_view, 3>> fused_terms{
       {
           L"1/2 f{i3;i1}          t{a1,a2;i2,i3}",             // lhs
