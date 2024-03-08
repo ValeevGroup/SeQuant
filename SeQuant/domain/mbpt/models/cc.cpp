@@ -1,9 +1,6 @@
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 
-#include <clocale>
-#include <iostream>
-
 #include <SeQuant/core/math.hpp>
 
 #include <SeQuant/core/op.hpp>
@@ -276,7 +273,9 @@ std::vector<ExprPtr> CC::λ_pt(size_t order, size_t rank) {
 }
 
 std::vector<sequant::ExprPtr> CC::eom_sigma(size_t K_occ, size_t K_uocc) {
+  assert(ansatz_ == Ansatz::T && "unitary ansatz is not yet supported");
   assert(K_occ > 0 || K_uocc > 0);
+  assert(K_occ == K_uocc && "Only EE-EOM-CC is supported for now");
 
   if (K_occ != K_uocc)
     assert(get_default_context().spbasis() != SPBasis::spinfree &&
@@ -285,7 +284,7 @@ std::vector<sequant::ExprPtr> CC::eom_sigma(size_t K_occ, size_t K_uocc) {
   // construct hbar
   auto hbar = sim_tr(op::H(), 4);
 
-  // construct [hbar, R]
+  // hbar * R
   auto hbar_R = hbar * op::R(K_occ, K_uocc);
 
   // connectivity:
@@ -302,7 +301,6 @@ std::vector<sequant::ExprPtr> CC::eom_sigma(size_t K_occ, size_t K_uocc) {
   auto idx = std::max(K_occ, K_uocc);  // idx for populating the result vector
   result.resize(idx + 1);
 
-  // TODO: Fix bug in EA, IP cases
   using boost::numeric_cast;
   for (auto o = numeric_cast<std::int64_t>(K_occ),
             u = numeric_cast<std::int64_t>(K_uocc);
