@@ -99,6 +99,9 @@ TEST_CASE("Index", "[elements]") {
                             // registered, this does not redefine base key
     // and now ...
     REQUIRE_NOTHROW(Index{L"h"});
+
+    // copy constructor
+    REQUIRE_NOTHROW(Index(i1));
   }
 
   SECTION("equality") {
@@ -110,6 +113,10 @@ TEST_CASE("Index", "[elements]") {
     REQUIRE(i1 != i2);
     REQUIRE(i1 == i3);
     REQUIRE(!(i1 != i3));
+
+    // check copy ctor
+    Index i4(i2);
+    REQUIRE(i2 == i4);
   }
 
   SECTION("ordering") {
