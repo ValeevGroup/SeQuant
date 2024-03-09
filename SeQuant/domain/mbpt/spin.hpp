@@ -271,7 +271,8 @@ std::vector<ExprPtr> open_shell_spintrace(
 /// @return a vector of spin expressions for open-shell reference
 std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr);
 
-/// @brief Transforms an expression from spin orbital to spatial orbitals
+/// @brief Transforms an expression from spin orbital to spin-free (spatial)
+/// orbital form
 /// @details Given an expression, this function extracts all indices and adds a
 /// spin attribute to all the indices in the expression. A map is generated with
 /// all possible spin permutations and substituted in the expression. Based on
@@ -283,6 +284,8 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr);
 /// spin-free and will remove spin from all indices of the result before
 /// returning
 /// @return an expression with spin integrated/adapted
+/// @warning The result of this function is not simplified since this is a
+/// building block for more specialized spin-tracing functions
 ExprPtr spintrace(
     const ExprPtr& expression,
     container::svector<container::svector<Index>> ext_index_groups = {},
@@ -292,7 +295,7 @@ ExprPtr spintrace(
 /// @details Given an expression, permute indices and check if a given product
 /// @param expression Expression pointer
 /// @param fast_method use hash maps (memory intensive) for faster evaluation
-/// @param ext_index_groups External index groups to geenrate S operator
+/// @param ext_index_groups External index groups to generate the S operator
 /// @return ExprPtr with terms with S operator as a factor
 ExprPtr factorize_S(const ExprPtr& expression,
                     std::initializer_list<IndexList> ext_index_groups,

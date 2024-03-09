@@ -1450,21 +1450,21 @@ ExprPtr spintrace(
   };
   expression->visit(check_proto_index);
 
-  // This function must be used for tensors with spin-labelled indices only. If
+  // This function must be used for tensors with spin-specific indices only. If
   // the spin-symmetry is conserved: the tensor is expanded; else: zero is
   // returned.
   auto spin_trace_tensor = [](const Tensor& tensor) {
     return can_expand(tensor) ? expand_antisymm(tensor) : ex<Constant>(0);
   };
 
-  // This function is used to spin-trace a product terms with spin-labelled
+  // This function is used to spin-trace a product terms with spin-specific
   // indices. It checks if all tensors can be expanded and spintraces individual
   // tensors by call to the about lambda function.
   auto spin_trace_product = [&spin_trace_tensor](const Product& product) {
     Product spin_product{};
 
-    // Check if all tensors in this product can expand
-    // If NOT all tensors can expand, return zero
+    // Check if all tensors in this product can be expanded
+    // If NOT all tensors can be expanded, return zero
     if (!std::all_of(product.factors().begin(), product.factors().end(),
                      [](const auto& t) {
                        return can_expand(t->template as<Tensor>());
@@ -1528,8 +1528,12 @@ ExprPtr spintrace(
     }
 
     // EFV: generate the grand list of index groups by concatenating list of
-    // external index EFV: groups with the groups of internal indices (each
+    // external index groups with the groups of internal indices (each
     // internal index = 1 group)
+    // TODO some internal indices can be a priori placed in the same group, if
+    // they refer to the same particle of a spin-free non-antisymmetrized Tensor
+    //      so visit all Tensors in the expression and locate such groups of
+    //      internal indices before placing the rest into separate groups
     using IndexGroup = container::svector<Index>;
     container::svector<IndexGroup> index_groups;
     for (auto&& i : int_idxlist) index_groups.emplace_back(IndexGroup(1, i));
