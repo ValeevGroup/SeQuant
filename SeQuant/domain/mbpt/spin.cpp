@@ -96,7 +96,7 @@ ExprPtr swap_bra_ket(const ExprPtr& expr) {
     return nullptr;
 }
 
-ExprPtr append_spin(ExprPtr& expr,
+ExprPtr append_spin(const ExprPtr& expr,
                     const container::map<Index, Index>& index_replacements) {
   auto add_spin_to_tensor = [&index_replacements](const Tensor& tensor) {
     auto spin_tensor = std::make_shared<Tensor>(tensor);
@@ -128,7 +128,7 @@ ExprPtr append_spin(ExprPtr& expr,
     return nullptr;
 }
 
-ExprPtr remove_spin(ExprPtr& expr) {
+ExprPtr remove_spin(const ExprPtr& expr) {
   auto remove_spin_from_tensor = [](const Tensor& tensor) {
     container::svector<Index> bra(tensor.bra().begin(), tensor.bra().end());
     container::svector<Index> ket(tensor.ket().begin(), tensor.ket().end());

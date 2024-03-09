@@ -32,13 +32,13 @@ ExprPtr swap_bra_ket(const ExprPtr& expr);
 /// @param index_replacements a map of pairs containing the index and the
 /// corresponding replacement
 /// @return expr the ExprPtr with substituted indices
-ExprPtr append_spin(ExprPtr& expr,
+ExprPtr append_spin(const ExprPtr& expr,
                     const container::map<Index, Index>& index_replacements);
 
 /// @brief Removes spin label from all indices in an expression
 /// @param expr an ExprPtr with spin indices
 /// @return expr an ExprPtr with spin labels removed
-ExprPtr remove_spin(ExprPtr& expr);
+ExprPtr remove_spin(const ExprPtr& expr);
 
 /// @brief Checks the spin symmetry of a pair of indices corresponding to a
 /// particle in tensor notation
