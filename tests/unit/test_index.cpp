@@ -8,7 +8,7 @@
 #include "SeQuant/core/index.hpp"
 #include "SeQuant/core/latex.hpp"
 
-TEST_CASE("Index", "[elements]") {
+TEST_CASE("Index", "[elements][index]") {
   using namespace sequant;
 
   SECTION("constructors") {
@@ -102,6 +102,34 @@ TEST_CASE("Index", "[elements]") {
 
     // copy constructor
     REQUIRE_NOTHROW(Index(i1));
+
+    // ctor that replaces the space
+    {
+      Index j1, j2;
+      REQUIRE_NOTHROW(j1 = Index(L"j_1", IndexSpace::instance(
+                                             IndexSpace::active_unoccupied)));
+      REQUIRE_NOTHROW(
+          j2 = Index(j1, IndexSpace::instance(IndexSpace::active_occupied)));
+      REQUIRE(j1.space() == IndexSpace::active_unoccupied);
+      REQUIRE(j2.label() == j1.label());
+      REQUIRE(j2.space() == IndexSpace::active_occupied);
+
+      // same but using replace_space
+      REQUIRE_NOTHROW(
+          j1.replace_space(IndexSpace::instance(IndexSpace::active_occupied)));
+      j2 = j1.replace_space(IndexSpace::instance(IndexSpace::active_occupied));
+      REQUIRE(j2.label() == j1.label());
+      REQUIRE(j2.space() == IndexSpace::active_occupied);
+
+      // same but using replace_space
+      REQUIRE_NOTHROW(j1.replace_qns(IndexSpace::alpha));
+      j2 = j1.replace_qns(IndexSpace::alpha);
+      REQUIRE(j2.label() == j1.label());
+      REQUIRE(j2.space() == IndexSpace::active_unoccupied);
+      REQUIRE(j2.space().type() == j1.space().type());
+      REQUIRE(j2.space().qns() == IndexSpace::alpha);
+      REQUIRE(j2.space().qns() != j1.space().qns());
+    }
   }
 
   SECTION("equality") {
