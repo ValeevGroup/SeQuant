@@ -147,8 +147,8 @@ TEST_CASE("Spin", "[spin]") {
     canonicalize(result);
     REQUIRE(result->size() == 2);
     REQUIRE(to_latex(result) ==
-            L"{ \\bigl( - {{{2}}{g^{{p_4}{p_3}}_{{p_1}{p_2}}}} + "
-            L"{{{2}}{g^{{p_3}{p_4}}_{{p_1}{p_2}}}}\\bigr) }");
+            L"{ \\bigl( - {{g^{{p_4}{p_3}}_{{p_1}{p_2}}}} + "
+            L"{{g^{{p_3}{p_4}}_{{p_1}{p_2}}}}\\bigr) }");
   }
 
   SECTION("Product") {
@@ -205,17 +205,15 @@ TEST_CASE("Spin", "[spin]") {
     expand(result);
     rapid_simplify(result);
     canonicalize(result);
-    REQUIRE(result->is<Sum>());
-    REQUIRE(result->size() == 5);
-    REQUIRE(
-        to_latex(result) ==
-        L"{ \\bigl({{{2}}{f^{{a_1}}_{{i_1}}}{t^{{i_1}}_{{a_1}}}} + "
-        L"{{{2}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{{a_1}{a_2}}}} "
-        L"- {{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_2}{i_1}}_{{a_1}{a_2}}}} - "
-        L"{{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_2}}_{{a_1}}}{t^{{i_1}}_{{a_2}}"
-        L"}} + "
-        L"{{{2}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}}_{{a_1}}}{t^{{i_2}}_{{"
-        L"a_2}}}}\\bigr) }");
+    REQUIRE(to_latex(result) ==
+            L"{ \\bigl({{f^{{a_1}}_{{i_1}}}{t^{{i_1}}_{{a_1}}}} + "
+            L"{{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{{a_1}{a_2}}}} - "
+            L"{{{\\frac{1}{2}}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_2}{i_1}}_{{"
+            L"a_1}{a_2}}}} - "
+            L"{{{\\frac{1}{2}}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_2}}_{{a_1}}}"
+            L"{t^{{i_1}}_{{a_2}}}} + "
+            L"{{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}}_{{a_1}}}{t^{{i_2}}_{{a_"
+            L"2}}}}\\bigr) }");
   }  // Sum
 
   SECTION("Expand Antisymmetrizer"){// 0-body

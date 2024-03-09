@@ -198,8 +198,7 @@ std::size_t count_cycles(Seq0&& v0, const Seq1& v1) {
 /// @return an expression with spin integrated/adapted
 ExprPtr closed_shell_spintrace(
     const ExprPtr& expression,
-    const container::svector<container::svector<Index>>& ext_index_groups = {
-        {}});
+    const container::svector<container::svector<Index>>& ext_index_groups = {});
 
 ///
 /// \brief Given a OpType::A or OpType::S tensor, generates a list of external
@@ -280,10 +279,14 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr);
 /// labels removed and a sum of all non-zero expressions is returned.
 /// @param expr ExprPtr with spin orbital indices
 /// @param ext_index_groups groups of external indices
+/// @param spinfree_index_spaces if true, will assume that all index spaces are
+/// spin-free and will remove spin from all indices of the result before
+/// returning
 /// @return an expression with spin integrated/adapted
 ExprPtr spintrace(
     const ExprPtr& expression,
-    container::svector<container::svector<Index>> ext_index_groups = {{}});
+    container::svector<container::svector<Index>> ext_index_groups = {},
+    bool spinfree_index_spaces = true);
 
 /// @brief Factorize S out of terms
 /// @details Given an expression, permute indices and check if a given product
@@ -298,7 +301,7 @@ ExprPtr factorize_S(const ExprPtr& expression,
 ExprPtr biorthogonal_transform(
     const sequant::ExprPtr& expr,
     const container::svector<container::svector<sequant::Index>>&
-        ext_index_groups = {{}},
+        ext_index_groups = {},
     double threshold = 1.e-12);
 
 }  // namespace sequant

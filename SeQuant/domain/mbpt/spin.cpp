@@ -1431,7 +1431,8 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
 
 ExprPtr spintrace(
     const ExprPtr& expression,
-    container::svector<container::svector<Index>> ext_index_groups) {
+    container::svector<container::svector<Index>> ext_index_groups,
+    bool spinfree_index_spaces) {
   // Escape immediately if expression is a constant
   if (expression->is<Constant>()) {
     return expression;
