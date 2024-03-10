@@ -91,11 +91,15 @@ class CC {
   [[nodiscard]] std::vector<sequant::ExprPtr> λ_pt(size_t order = 1,
                                                    size_t rank = 1);
 
-  /// @brief derives sigma equations for EOM-CC
+  // clang-format off
+  /// @brief derives right-side sigma equations for EOM-CC
+  /// \f$ \langle \psi_{P}| \bar{H} \hat{R} |0 \rangle = \omega \langle \psi_{p}| \hat{R} |0 \rangle \f$
+  /// i.e., \f$ \bar{H} \mathbf{r} = \omega \mathbf{r} \f$
   /// @param K_occ number of operators in the occupied space in R operator
   /// @param K_uocc number of operators in the unoccupied space in R operator
-  /// @return std::vector of equations
-  [[nodiscard]] std::vector<sequant::ExprPtr> eom_sigma(size_t K_occ,
+  /// @return vector of right side sigma equations, with projector corresponding to \p K_occ and \p K_uocc; element 0 is always null
+  // clang-format on
+  [[nodiscard]] std::vector<sequant::ExprPtr> eom_right(size_t K_occ,
                                                         size_t K_uocc);
 
  private:

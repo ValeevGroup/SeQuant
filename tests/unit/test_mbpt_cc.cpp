@@ -36,7 +36,7 @@ TEST_CASE("EOM-CC", "[mbpt/cc]") {
       const auto N = 2;
       const auto K_occ = 2;
       const auto K_uocc = 2;
-      const auto sigma_eqs = CC{N}.eom_sigma(K_occ, K_uocc);
+      const auto sigma_eqs = CC{N}.eom_right(K_occ, K_uocc);
       for (auto k = 1; k < sigma_eqs.size(); ++k) REQUIRE(sigma_eqs[k]);
 
       if (N == 2 && K_occ == 2 && K_uocc == 2) {

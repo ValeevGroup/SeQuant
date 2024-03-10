@@ -272,10 +272,11 @@ std::vector<ExprPtr> CC::λ_pt(size_t order, size_t rank) {
   return result;
 }
 
-std::vector<sequant::ExprPtr> CC::eom_sigma(size_t K_occ, size_t K_uocc) {
-  assert(ansatz_ == Ansatz::T && "unitary ansatz is not yet supported");
-  assert(K_occ > 0 || K_uocc > 0);
+std::vector<sequant::ExprPtr> CC::eom_right(size_t K_occ, size_t K_uocc) {
+  assert(!unitary() && "Unitary ansatz is not yet supported");
+  assert(K_occ > 0 || K_uocc > 0 && "Unsupported excitation order");
   assert(K_occ == K_uocc && "Only EE-EOM-CC is supported for now");
+  // TODO: Debug IP and EA EOM-CC
 
   if (K_occ != K_uocc)
     assert(get_default_context().spbasis() != SPBasis::spinfree &&
@@ -302,6 +303,7 @@ std::vector<sequant::ExprPtr> CC::eom_sigma(size_t K_occ, size_t K_uocc) {
   result.resize(idx + 1);
 
   using boost::numeric_cast;
+  // start from the highest excitation order, go down to the lowest
   for (auto o = numeric_cast<std::int64_t>(K_occ),
             u = numeric_cast<std::int64_t>(K_uocc);
        o > 0 || u > 0; --o, --u) {
