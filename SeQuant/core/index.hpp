@@ -15,6 +15,7 @@
 
 #include <range/v3/all.hpp>
 
+#include "SeQuant/core/utility/string.hpp"
 #include "attr.hpp"
 #include "container.hpp"
 #include "hash.hpp"
@@ -126,9 +127,7 @@ class Index : public Taggable {
       typename IndexOrIndexLabel, typename I,
       typename = std::enable_if_t<
           (std::is_same_v<std::decay_t<IndexOrIndexLabel>, Index> ||
-           std::is_same_v<std::decay_t<IndexOrIndexLabel>, std::wstring> ||
-           std::is_same_v<std::decay_t<IndexOrIndexLabel>, std::wstring_view> ||
-           std::is_same_v<std::decay_t<IndexOrIndexLabel>, const wchar_t *>)>>
+           meta::is_wstring_convertible_v<std::decay_t<IndexOrIndexLabel>>)>>
   Index(IndexOrIndexLabel &&index, std::initializer_list<I> proto_indices,
         bool symmetric_proto_indices = true)
       : symmetric_proto_indices_(symmetric_proto_indices) {
@@ -168,9 +167,7 @@ class Index : public Taggable {
           std::is_convertible_v<std::remove_reference_t<IndexContainer>,
                                 container::vector<Index>> &&
           (std::is_same_v<std::decay_t<IndexOrIndexLabel>, Index> ||
-           std::is_same_v<std::decay_t<IndexOrIndexLabel>, std::wstring> ||
-           std::is_same_v<std::decay_t<IndexOrIndexLabel>, std::wstring_view> ||
-           std::is_same_v<std::decay_t<IndexOrIndexLabel>, const wchar_t *>)>>
+           meta::is_wstring_convertible_v<std::decay_t<IndexOrIndexLabel>>)>>
   Index(IndexOrIndexLabel &&index, IndexContainer &&proto_indices,
         bool symmetric_proto_indices = true)
       : proto_indices_(std::forward<IndexContainer>(proto_indices)),
