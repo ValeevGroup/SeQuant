@@ -63,7 +63,7 @@ void log_eval(Args const&... args) noexcept {
 #endif
 }
 
-std::string perm_groups_string(
+[[maybe_unused]] std::string perm_groups_string(
     container::svector<std::array<size_t, 3>> const& perm_groups) {
   std::string result;
   for (auto const& g : perm_groups)

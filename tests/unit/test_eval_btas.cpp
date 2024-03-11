@@ -28,7 +28,7 @@ auto tensor_to_key(sequant::Tensor const& tnsr) {
   return boost::regex_replace(tnsr_deparsed, idx_rgx, formatter);
 }
 
-auto tensor_to_key(std::wstring_view spec) {
+[[maybe_unused]] auto tensor_to_key(std::wstring_view spec) {
   return tensor_to_key(sequant::parse_expr(spec, sequant::Symmetry::nonsymm)
                            ->as<sequant::Tensor>());
 }
