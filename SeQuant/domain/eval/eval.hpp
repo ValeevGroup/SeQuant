@@ -78,7 +78,8 @@ constexpr bool HasAnnotMethod{};
 
 template <typename T>
 constexpr bool HasAnnotMethod<
-    T, std::void_t<decltype(std::declval<remove_cvref_t<T>>().annot())>> = true;
+    T, std::void_t<decltype(std::declval<meta::remove_cvref_t<T>>().annot())>> =
+    true;
 
 template <typename, typename = void>
 constexpr bool IsEvaluable{};
