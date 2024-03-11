@@ -36,9 +36,9 @@ using IndexList = std::initializer_list<Index>;
 /// between indices to be able to express
 ///       e.g. hierarchical partitioning of index spaces or hierarchical nesting
 ///       of spaces
-/// @note label has format "label_index" where "label" is a string of characters
-/// excluding '_', and "index"
-///       is an integer less than the value returned by min_tmp_label() .
+/// @note Index label can be plain (`label`) or composite (`label_ordinal`)
+/// where `label` is a string of characters excluding '_', and `ordinal` is
+/// an integer less than the value returned by min_tmp_label() .
 class Index : public Taggable {
   static auto &tmp_index_accessor() {
     // initialized so that the first call to next_tmp_index will return
