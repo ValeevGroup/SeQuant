@@ -325,6 +325,103 @@ class Index : public Taggable {
     full_label_ = result;
     return *full_label_;
   }
+
+  /// @brief makes a new label by appending a suffix to the label
+
+  /// Appends @p suffix to the label itself (if plain) or to its core (if
+  /// composite)
+  /// @param suffix a string to append to the label
+  /// @return `this->label()` with @p suffix appended
+  template <typename WS, typename = std::enable_if_t<(
+                             meta::is_wstring_convertible_v<std::decay_t<WS>>)>>
+  [[nodiscard]] std::wstring make_label_plus_suffix(WS &&suffix) const {
+    return Index::make_label_plus_suffix(this->label(),
+                                         std::forward<WS>(suffix));
+  }
+
+  /// @brief makes a new label by appending a suffix to the label
+
+  /// Appends @p suffix to the label itself (if plain) or to its core (if
+  /// composite)
+  /// @param suffix a string to append to the label
+  /// @return `this->label()` with @p suffix appended
+  template <typename WS1, typename WS2,
+            typename = std::enable_if_t<
+                (meta::is_wstring_or_view_v<std::decay_t<WS1>> &&
+                 meta::is_wstring_convertible_v<std::decay_t<WS2>>)>>
+  [[nodiscard]] static std::wstring make_label_plus_suffix(WS1 &&label,
+                                                           WS2 &&suffix) {
+    auto underscore_position = label.find(L'_');
+    std::wstring result;
+    if (underscore_position == std::wstring::npos) {
+      result = label;
+      result += suffix;
+    } else {
+      result = label.substr(0, underscore_position);
+      result += suffix;
+      result += label.substr(underscore_position);
+    }
+    return result;
+  }
+
+  /// @brief makes a new label by removing a substring from the label
+
+  /// Removes @p substr from the label itself (if plain) or from its core (if
+  /// composite)
+  /// @param substr a string to remove from the label
+  /// @return `this->label()` with @p substr removed
+  template <typename WS, typename = std::enable_if_t<(
+                             meta::is_wstring_convertible_v<std::decay_t<WS>>)>>
+  [[nodiscard]] std::wstring make_label_minus_substring(WS &&substr) const {
+    return Index::make_label_minus_substring(this->label(),
+                                             std::forward<WS>(substr));
+  }
+
+  /// @brief makes a new label by removing a substring from the label
+
+  /// Removes @p substr from the label itself (if plain) or from its core (if
+  /// composite)
+  /// @param substr a string to remove from the label
+  /// @return `this->label()` with @p substr removed
+  template <typename WS1, typename WS2,
+            typename = std::enable_if_t<
+                (meta::is_wstring_or_view_v<std::decay_t<WS1>> &&
+                 meta::is_wstring_convertible_v<std::decay_t<WS2>>)>>
+  [[nodiscard]] static std::wstring make_label_minus_substring(WS1 &&label,
+                                                               WS2 &&substr) {
+    auto underscore_position = label.find(L'_');
+    std::wstring result;
+
+    auto erase = [](auto &result, const auto &substr) {
+      auto pos = result.find(substr);
+      if (pos != std::wstring::npos) {
+        if constexpr (std::is_same_v<std::decay_t<WS2>, std::wstring> ||
+                      std::is_same_v<std::decay_t<WS2>, std::wstring_view>) {
+          result.erase(pos, substr.size());
+        } else if constexpr (std::is_same_v<std::decay_t<WS2>,
+                                            const wchar_t[]> ||
+                             std::is_same_v<std::decay_t<WS2>, wchar_t[]> ||
+                             std::is_same_v<std::decay_t<WS2>,
+                                            const wchar_t *> ||
+                             std::is_same_v<std::decay_t<WS2>, wchar_t *>) {
+          result.erase(pos, std::strlen(substr));
+        } else {
+          result.erase(pos, 1);
+        }
+      }
+    };
+
+    if (underscore_position == std::wstring::npos) {
+      result = label;
+      erase(result, substr);
+    } else {
+      result = label.substr(0, underscore_position);
+      erase(result, substr);
+      result += label.substr(underscore_position);
+    }
+    return result;
+  }
+
   /// @return the IndexSpace object
   const IndexSpace &space() const {
     assert(space_.attr().is_valid());

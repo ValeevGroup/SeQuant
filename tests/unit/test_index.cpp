@@ -222,6 +222,23 @@ TEST_CASE("Index", "[elements][index]") {
     SEQUANT_PRAGMA_CLANG(diagnostic pop)
   }
 
+  SECTION("label manipulation") {
+    Index alpha(L"α");
+    Index alpha1(L"α_1");
+    Index alpha_up(L"α↑");
+    Index alpha1_up(L"α↑_1");
+    REQUIRE_NOTHROW(alpha.make_label_plus_suffix(L'↑'));
+    REQUIRE(alpha.make_label_plus_suffix(L'↑') == L"α↑");
+    REQUIRE_NOTHROW(alpha.make_label_minus_substring(L'↑'));
+    REQUIRE(alpha.make_label_minus_substring(L'↑') == L"α");
+    REQUIRE_NOTHROW(alpha1.make_label_minus_substring(L'↑'));
+    REQUIRE(alpha1.make_label_minus_substring(L'↑') == L"α_1");
+    REQUIRE_NOTHROW(alpha_up.make_label_minus_substring(L'↑'));
+    REQUIRE(alpha_up.make_label_minus_substring(L'↑') == L"α");
+    REQUIRE_NOTHROW(alpha1_up.make_label_minus_substring(L'↑'));
+    REQUIRE(alpha1_up.make_label_minus_substring(L'↑') == L"α_1");
+  }
+
   SECTION("latex") {
     Index i1(L"i_1");
     std::wstring i1_str;
