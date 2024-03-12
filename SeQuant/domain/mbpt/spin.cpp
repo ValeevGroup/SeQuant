@@ -820,17 +820,6 @@ ExprPtr S_maps(const ExprPtr& expr) {
 ExprPtr closed_shell_spintrace(
     const ExprPtr& expression,
     const container::svector<container::svector<Index>>& ext_index_groups) {
-  // NOT supported for Proto indices
-  [[maybe_unused]] auto check_proto_index = [](const ExprPtr& expr) {
-    if (expr->is<Tensor>()) {
-      ranges::for_each(expr->as<Tensor>().const_braket(), [](const Index& idx) {
-        assert(!idx.has_proto_indices() &&
-               "Proto index not supported in spintrace call.");
-      });
-    }
-  };
-  // expression->visit(check_proto_index);
-
   // Symmetrize and expression
   // Partially expand the antisymmetrizer and write it in terms of S operator.
   // See symmetrize_expr(expr) function for implementation details. We want an
@@ -1497,18 +1486,6 @@ ExprPtr spintrace(
   if (expression->is<Constant>()) {
     return expression;
   }
-
-  // SPIN TRACE DOES NOT SUPPORT PROTO INDICES YET.
-  auto check_proto_index = [](const ExprPtr& expr) {
-    if (expr->is<Tensor>()) {
-      ranges::for_each(expr->as<Tensor>().const_braket(), [](const Index& idx) {
-        if (idx.has_proto_indices())
-          throw std::logic_error(
-              "sequant::spintrace(input): proto indices not supported");
-      });
-    }
-  };
-  expression->visit(check_proto_index);
 
   // This function must be used for tensors with spin-specific indices only. If
   // the spin-symmetry is conserved: the tensor is expanded; else: zero is

@@ -20,19 +20,29 @@ TEST_CASE("Spin", "[spin]") {
                        [](const Index& idx) { idx.reset_tag(); });
   };
 
-  SECTION("No proto") {
-    Index i1(L"i_1");
-    Index i2(L"i_2");
-    Index a1(L"a_1");
-    Index a2(L"a_2");
+  SECTION("protoindices supported") {
+    Index i1(L"i_1", IndexSpace::instance(IndexSpace::active_occupied));
+    Index a1(L"a_1", IndexSpace::instance(IndexSpace::active_unoccupied), {i1});
 
-    Index i3(L"i_3", IndexSpace::instance(IndexSpace::active_occupied),
-             {i1, i2});
-    Index a3(L"a_3", IndexSpace::instance(IndexSpace::active_occupied),
-             {a1, a2});
-
-    const auto input = ex<Tensor>(L"t", IndexList{i3}, IndexList{a3});
-    REQUIRE_THROWS_AS(spintrace(input), std::logic_error);
+    const auto expr = ex<Tensor>(L"t", IndexList{i1}, IndexList{a1}) *
+                      ex<Tensor>(L"F", IndexList{a1}, IndexList{i1});
+    REQUIRE_NOTHROW(spintrace(expr));
+    {  // assume spin-free spaces
+      auto expr_st = spintrace(expr);
+      simplify(expr_st);
+      REQUIRE(expr_st->to_latex() ==
+              L"{{{2}}{t^{{a_1^{{i_1}}}}_{{i_1}}}{F^{{i_1}}_{{a_1^{{i_1}}}}}}");
+    }
+    {  // assume spin-dependent spaces
+      auto expr_st = spintrace(expr, {}, /* assume_spin_free_spaces */ false);
+      simplify(expr_st);
+      REQUIRE(expr_st->to_latex() ==
+              L"{ "
+              L"\\bigl({{t^{{a↓_1^{{i↓_1}}}}_{{i↓_1}}}{F^{{i↓_1}}_{{a↓_1^{{i↓_"
+              L"1}}}}}} + "
+              L"{{t^{{a↑_1^{{i↑_1}}}}_{{i↑_1}}}{F^{{i↑_1}}_{{a↑_1^{{i↑_1}}}}}}"
+              L"\\bigr) }");
+    }
   }
 
   SECTION("ASCII label") {
