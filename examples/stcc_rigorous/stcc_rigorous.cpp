@@ -49,10 +49,12 @@ int main(int argc, char* argv[]) {
 
     for (size_t i = 1; i <= i_max; ++i) {
       auto label = std::to_wstring(i);
-      auto occ_i = Index::make_label_index(
-          IndexSpace::instance(IndexSpace::active_occupied), label);
-      auto virt_i = Index::make_label_index(
-          IndexSpace::instance(IndexSpace::active_unoccupied), label);
+      auto occ_space = IndexSpace::instance(IndexSpace::active_occupied);
+      auto occ_i =
+          Index(IndexSpace::base_key(occ_space) + L'_' + label, occ_space);
+      auto uocc_space = IndexSpace::instance(IndexSpace::active_unoccupied);
+      auto virt_i =
+          Index(IndexSpace::base_key(uocc_space) + L'_' + label, uocc_space);
       decltype(ext_idx_list)::value_type pair = {occ_i, virt_i};
       ext_idx_list.push_back(pair);
     }

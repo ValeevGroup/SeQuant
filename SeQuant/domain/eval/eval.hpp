@@ -63,7 +63,7 @@ void log_eval(Args const&... args) noexcept {
 #endif
 }
 
-std::string perm_groups_string(
+[[maybe_unused]] std::string perm_groups_string(
     container::svector<std::array<size_t, 3>> const& perm_groups) {
   std::string result;
   for (auto const& g : perm_groups)
@@ -78,7 +78,8 @@ constexpr bool HasAnnotMethod{};
 
 template <typename T>
 constexpr bool HasAnnotMethod<
-    T, std::void_t<decltype(std::declval<remove_cvref_t<T>>().annot())>> = true;
+    T, std::void_t<decltype(std::declval<meta::remove_cvref_t<T>>().annot())>> =
+    true;
 
 template <typename, typename = void>
 constexpr bool IsEvaluable{};
