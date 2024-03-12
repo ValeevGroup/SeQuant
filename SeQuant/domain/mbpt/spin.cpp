@@ -13,6 +13,77 @@
 
 namespace sequant {
 
+enum class SpinCase1 { Null, Alpha, Beta };
+
+namespace detail {
+
+Index make_index_with_spincase(const Index& idx, SpinCase1 sc) {
+  // sanity check: make sure have only one spin label
+  assert(!(idx.label().find(L'↑') != std::wstring::npos &&
+           idx.label().find(L'↓') != std::wstring::npos));
+
+  std::wstring label;
+
+  if (sc != SpinCase1::Null) {
+    if (sc == SpinCase1::Alpha) {
+      // this might be replacement of beta with alpha
+      if (idx.label().find(L'↓') != std::wstring::npos) {
+        label = idx.make_label_minus_substring(L'↓');
+        label = Index::make_label_plus_suffix(label, L'↑');
+      } else if (idx.label().find(L'↑') != std::wstring::npos)
+        label = idx.label();
+      else
+        label = idx.make_label_plus_suffix(L'↑');
+    } else if (sc == SpinCase1::Beta) {
+      // this might be replacement of alpha with beta
+      if (idx.label().find(L'↑') != std::wstring::npos) {
+        label = idx.make_label_minus_substring(L'↑');
+        label = Index::make_label_plus_suffix(label, L'↓');
+      } else if (idx.label().find(L'↓') != std::wstring::npos)
+        label = idx.label();
+      else
+        label = idx.make_label_plus_suffix(L'↓');
+    } else
+      abort();  // unreachable
+  } else {
+    assert(sc == SpinCase1::Null);
+    if (idx.label().find(L'↑') != std::wstring::npos)
+      label = idx.make_label_minus_substring(L'↑');
+    else if (idx.label().find(L'↓') != std::wstring::npos)
+      label = idx.make_label_minus_substring(L'↓');
+    else
+      label = idx.label();
+  }
+
+  // to preserve rest of bits first unset spin bit, then set them to the desired
+  // state
+  auto qns = idx.space()
+                 .qns()
+                 .intersection(~IndexSpace::spinmask)
+                 .unIon((sc == SpinCase1::Null
+                             ? IndexSpace::nullqns
+                             : (sc == SpinCase1::Alpha ? IndexSpace::alpha
+                                                       : IndexSpace::beta)));
+  IndexSpace space{idx.space().type(), qns};
+  auto protoindices = idx.proto_indices();
+  for (auto& pidx : protoindices) pidx = make_index_with_spincase(pidx, sc);
+  return Index{label, space, protoindices};
+}
+
+}  // namespace detail
+
+Index make_spinalpha(const Index& idx) {
+  return detail::make_index_with_spincase(idx, SpinCase1::Alpha);
+};
+
+Index make_spinbeta(const Index& idx) {
+  return detail::make_index_with_spincase(idx, SpinCase1::Beta);
+};
+
+Index make_spinnull(const Index& idx) {
+  return detail::make_index_with_spincase(idx, SpinCase1::Null);
+};
+
 ExprPtr transform_expr(const ExprPtr& expr,
                        const container::map<Index, Index>& index_replacements,
                        Constant::scalar_type scaling_factor) {

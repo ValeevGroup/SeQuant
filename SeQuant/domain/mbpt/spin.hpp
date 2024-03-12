@@ -12,6 +12,15 @@
 
 namespace sequant {
 
+// make alpha-spin idx
+[[nodiscard]] Index make_spinalpha(const Index& idx);
+
+// make beta-spin idx
+[[nodiscard]] Index make_spinbeta(const Index& idx);
+
+// make null-spin idx
+[[nodiscard]] Index make_spinnull(const Index& idx);
+
 /// @brief Applies index replacement rules to an ExprPtr
 /// @param expr ExprPtr to transform
 /// @param index_replacements index replacement map

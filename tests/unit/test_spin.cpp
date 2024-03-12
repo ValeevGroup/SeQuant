@@ -61,6 +61,107 @@ TEST_CASE("Spin", "[spin]") {
     SEQUANT_PRAGMA_CLANG(diagnostic pop)
   }
 
+  SECTION("Index: add/remove spin") {
+    auto i = Index(L"i", IndexSpace::instance(IndexSpace::active_occupied,
+                                              IndexSpace::nullqns));
+    auto i1 = Index(L"i_1", IndexSpace::instance(IndexSpace::active_occupied,
+                                                 IndexSpace::nullqns));
+    auto p =
+        Index(L"p", IndexSpace::instance(IndexSpace::all, IndexSpace::nullqns));
+    auto p1 = Index(L"p_1",
+                    IndexSpace::instance(IndexSpace::all, IndexSpace::nullqns));
+    auto p1_a = Index(L"p↑_1",
+                      IndexSpace::instance(IndexSpace::all, IndexSpace::alpha));
+    auto p2 = Index(L"p_2",
+                    IndexSpace::instance(IndexSpace::all, IndexSpace::nullqns));
+    auto p2_b =
+        Index(L"p↓_2", IndexSpace::instance(IndexSpace::all, IndexSpace::beta));
+
+    auto p_i = Index(
+        L"p", IndexSpace::instance(IndexSpace::all, IndexSpace::nullqns), {i});
+    auto p1_i =
+        Index(L"p_1",
+              IndexSpace::instance(IndexSpace::all, IndexSpace::nullqns), {i});
+    auto p_i1 = Index(
+        L"p", IndexSpace::instance(IndexSpace::all, IndexSpace::nullqns), {i1});
+    auto p1_i1 =
+        Index(L"p_1",
+              IndexSpace::instance(IndexSpace::all, IndexSpace::nullqns), {i1});
+
+    // make_spinalpha
+    {
+      // plain
+      REQUIRE_NOTHROW(make_spinalpha(p));
+      REQUIRE(make_spinalpha(p).label() == L"p↑");
+      REQUIRE(make_spinalpha(p).space() ==
+              IndexSpace::instance(IndexSpace::all, IndexSpace::alpha));
+      REQUIRE_NOTHROW(make_spinalpha(p1));
+      REQUIRE(make_spinalpha(p1) == p1_a);
+      // idempotent
+      REQUIRE_NOTHROW(make_spinalpha(p1_a));
+      REQUIRE(make_spinalpha(p1_a) == p1_a);
+      // can flip spin
+      REQUIRE_NOTHROW(make_spinalpha(p2_b));
+      REQUIRE(make_spinalpha(p2_b) == make_spinalpha(p2));
+
+      // proto
+      REQUIRE_NOTHROW(make_spinalpha(p_i));
+      REQUIRE(make_spinalpha(p_i).label() == L"p↑");
+      REQUIRE(make_spinalpha(p_i).full_label() == L"p↑i↑");
+      REQUIRE(make_spinalpha(p_i).to_latex() == L"{p↑^{{i↑}}}");
+      REQUIRE_NOTHROW(make_spinalpha(p1_i));
+      REQUIRE(make_spinalpha(p1_i).label() == L"p↑_1");
+      REQUIRE(make_spinalpha(p1_i).full_label() == L"p↑_1i↑");
+      REQUIRE(make_spinalpha(p1_i).to_latex() == L"{p↑_1^{{i↑}}}");
+      REQUIRE_NOTHROW(make_spinalpha(p_i1));
+      REQUIRE(make_spinalpha(p_i1).label() == L"p↑");
+      REQUIRE(make_spinalpha(p_i1).full_label() == L"p↑i↑_1");
+      REQUIRE(make_spinalpha(p_i1).to_latex() == L"{p↑^{{i↑_1}}}");
+      REQUIRE_NOTHROW(make_spinalpha(p1_i1));
+      REQUIRE(make_spinalpha(p1_i1).label() == L"p↑_1");
+      REQUIRE(make_spinalpha(p1_i1).full_label() == L"p↑_1i↑_1");
+      REQUIRE(make_spinalpha(p1_i1).to_latex() == L"{p↑_1^{{i↑_1}}}");
+    }
+
+    // make_spinbeta
+    {
+      REQUIRE_NOTHROW(make_spinbeta(p1));
+      REQUIRE(make_spinbeta(p2) == p2_b);
+      // idempotent
+      REQUIRE_NOTHROW(make_spinbeta(p2_b));
+      REQUIRE(make_spinbeta(p2_b) == p2_b);
+      // can flip spin
+      REQUIRE_NOTHROW(make_spinbeta(p1_a));
+      REQUIRE(make_spinbeta(p1_a) == make_spinbeta(p1));
+
+      // proto
+      // N.B. only test spin flip
+      REQUIRE_NOTHROW(make_spinbeta(make_spinalpha(p1_i1)));
+      REQUIRE(make_spinbeta(make_spinalpha(p1_i1)) == make_spinbeta((p1_i1)));
+      REQUIRE(make_spinbeta(make_spinalpha(p1_i1)) ==
+              make_spinbeta(make_spinbeta((p1_i1))));
+    }
+
+    // make spinnull
+    {
+      // plain
+      REQUIRE_NOTHROW(make_spinnull(p1_a));
+      REQUIRE(make_spinnull(p1_a) == p1);
+      REQUIRE_NOTHROW(make_spinnull(p2_b));
+      REQUIRE(make_spinnull(p2_b) == p2);
+      REQUIRE_NOTHROW(make_spinnull(p1));
+      REQUIRE(make_spinnull(p1) == p1);
+      // idempotent
+      REQUIRE_NOTHROW(make_spinnull(p2));
+      REQUIRE(make_spinnull(p2) == p2);
+
+      // proto
+      REQUIRE_NOTHROW(make_spinnull(make_spinalpha(p1_i1)));
+      REQUIRE(make_spinnull(make_spinalpha(p1_i1)) == p1_i1);
+      REQUIRE(make_spinnull(make_spinalpha(p1_i1)) == make_spinnull(p1_i1));
+    }
+  }
+
   SECTION("Tensor: can_expand, spin_symm_tensor, remove_spin") {
     auto p1 = Index(L"p↑_1",
                     IndexSpace::instance(IndexSpace::all, IndexSpace::alpha));
