@@ -1666,23 +1666,26 @@ ExprPtr spintrace(
 
   if (expr->is<Tensor>()) expr = ex<Constant>(1) * expr;
 
+  ExprPtr result;
   if (expr->is<Product>()) {
-    return trace_product(expr->as<Product>());
+    result = trace_product(expr->as<Product>());
   } else if ((expr->is<Sum>())) {
-    auto result = std::make_shared<Sum>();
+    auto result_sum = std::make_shared<Sum>();
     for (auto&& term : *expr) {
       if (term->is<Product>())
-        result->append(trace_product(term->as<Product>()));
+        result_sum->append(trace_product(term->as<Product>()));
       else if (term->is<Tensor>()) {
         auto term_as_product = ex<Constant>(1) * term;
-        result->append(trace_product(term_as_product->as<Product>()));
+        result_sum->append(trace_product(term_as_product->as<Product>()));
       } else
-        result->append(term);
+        result_sum->append(term);
+      result = result_sum;
     }
-    result->visit(reset_idx_tags);
     return result;
   } else
     return nullptr;
+  result->visit(reset_idx_tags);
+  return result;
 }  // ExprPtr spintrace
 
 ExprPtr factorize_S(const ExprPtr& expression,
