@@ -679,12 +679,41 @@ SECTION("Swap bra kets") {
 SECTION("Closed-shell spintrace CCD") {
   // Energy expression
   {
-    const auto input = ex<Sum>(ExprPtrList{parse_expr(
-        L"1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}", Symmetry::antisymm)});
-    auto result = closed_shell_CC_spintrace(input);
-    REQUIRE(result == parse_expr(L"2 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2} - "
-                                 L"g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_2,i_1}",
-                                 Symmetry::nonsymm));
+    {  // standard
+      const auto input = ex<Sum>(ExprPtrList{parse_expr(
+          L"1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}", Symmetry::antisymm)});
+      auto result = closed_shell_CC_spintrace(input);
+      REQUIRE(result == parse_expr(L"2 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2} - "
+                                   L"g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_2,i_1}",
+                                   Symmetry::nonsymm));
+    }
+    {  // CSV (aka PNO)
+      Index i1(L"i_1", IndexSpace::instance(IndexSpace::active_occupied));
+      Index i2(L"i_2", IndexSpace::instance(IndexSpace::active_occupied));
+      Index a1(L"a_1", IndexSpace::instance(IndexSpace::active_unoccupied),
+               {i1, i2});
+      Index a2(L"a_2", IndexSpace::instance(IndexSpace::active_unoccupied),
+               {i1, i2});
+      const auto pno_ccd_energy_so =
+          ex<Constant>(rational(1, 4)) *
+          ex<Tensor>(L"g", IndexList{a1, a2}, IndexList{i1, i2},
+                     Symmetry::antisymm) *
+          ex<Tensor>(L"t", IndexList{i1, i2}, IndexList{a1, a2},
+                     Symmetry::antisymm);
+
+      // why???
+      const auto pno_ccd_energy_so_as_sum =
+          ex<Sum>(ExprPtrList{pno_ccd_energy_so});
+      auto pno_ccd_energy_sf =
+          closed_shell_CC_spintrace(pno_ccd_energy_so_as_sum);
+      REQUIRE(
+          pno_ccd_energy_sf.to_latex() ==
+          L"{ "
+          L"\\bigl({{{2}}{g^{{i_1}{i_2}}_{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}"
+          L"}{t^{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}_{{i_1}{i_2}}}} - "
+          L"{{g^{{i_1}{i_2}}_{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}}{t^{{a_2^{{"
+          L"i_1}{i_2}}}{a_1^{{i_1}{i_2}}}}_{{i_1}{i_2}}}}\\bigr) }");
+    }
   }
 }
 
