@@ -367,7 +367,12 @@ approximate_size_ = other.get_approximate_size();
   }
   static std::wstring_view reduce_key(std::wstring_view key) {
     const auto underscore_position = key.rfind(L'_');
-    return key.substr(0, underscore_position);
+    if(underscore_position != -1){ // key can be reduced
+      return key.substr(0, underscore_position);
+    }
+    else{
+      return key;
+    }
   }
 
   // having approximate sizes of spaces can be helpful when optimizing evaluation order.
@@ -416,7 +421,7 @@ class IndexSpaceRegistry{
 
   //add an IndexSpace to this registry. duplicate type bitsets forbidden
   void add(IndexSpace IS){
-    if(!(find_IndexSpace(IS.type()) == nulltype)){
+    if(!(find_IndexSpace(IS) == nulltype) ){
       throw std::invalid_argument("The registry already has a TypeAttr(bitset) corresponding to the IndexSpace you are trying to add! "
           "If you are trying to replace the index use the replace(IndexSpace) function");
     }
@@ -488,7 +493,9 @@ class IndexSpaceRegistry{
   //pass a function which computes a logical bit operation between two IndexSpace.type()
   const bool valid_bitop( const IndexSpace i1, const IndexSpace i2, const std::function<int32_t(int32_t,int32_t)> op) {
     auto bitop_int = op(i1.type().to_int32(),i2.type().to_int32());
-    auto temp_space = find_IndexSpace({bitop_int});
+    bool same_qn = i1.qns() == i2.qns();
+    if(!same_qn) return false;
+    auto temp_space = find_IndexSpace({bitop_int,i1.qns()});
     return temp_space == nulltype ? false : true;
   }
 
@@ -500,8 +507,10 @@ class IndexSpaceRegistry{
       return space1;
     }
     else{
+      bool same_qns = space1.qns() == space2.qns();
+      if(!same_qns){throw std::invalid_argument("asking for the intersection of spaces with incompatible quantum number attributes.");}
       auto intersection_attr = space1.type().intersection(space2.type());
-      IndexSpace intersection_space = find_IndexSpace(intersection_attr);
+      IndexSpace intersection_space = find_IndexSpace({intersection_attr,space1.qns()});
       // the nullspace is a reasonable return value for intersection
       if(intersection_space == nulltype && intersection_attr != 0){
         throw std::invalid_argument("The resulting space is not registered in this context. Add this "
@@ -520,8 +529,10 @@ class IndexSpaceRegistry{
       return space1;
     }
     else {
+      bool same_qns = ((space1.qns() == space2.qns()) && (space1.qns() == space3.qns()));
+      if(!same_qns){throw std::invalid_argument("asking for the intersection of spaces with incompatible quantum number attributes.");}
       auto intersection_attr = space1.type().intersection(space2.type()).intersection(space3.type());
-      IndexSpace intersection_space = find_IndexSpace(intersection_attr);
+      IndexSpace intersection_space = find_IndexSpace({intersection_attr,space1.qns()});
       if(intersection_space == nulltype && intersection_attr != 0){
         throw std::invalid_argument("The resulting space is not registered in this context. Add this "
             "space to the registry with a label to use it.");
@@ -538,8 +549,10 @@ class IndexSpaceRegistry{
       return space1;
     }
     else{
+      bool same_qns = space1.qns() == space2.qns();
+      if(!same_qns){throw std::invalid_argument("asking for the intersection of spaces with incompatible quantum number attributes.");}
       auto unIontype = space1.type().unIon(space2.type());
-      IndexSpace unIonSpace = find_IndexSpace(unIontype);
+      IndexSpace unIonSpace = find_IndexSpace({unIontype,space1.qns()});
       if(unIonSpace == nulltype){
         throw std::invalid_argument("The resulting space is not registered in this context. Add this "
             "space to the registry with a label to use it.");
@@ -700,14 +713,25 @@ density_occuiped_ = label_space[label];
   }
   // find an indexspace from its type. return nullspace if not present.
   // a bit strange, but prevents an additional map that needs to be maintained
-  const IndexSpace find_IndexSpace(TypeAttr type)const{
+  const IndexSpace find_IndexSpace(IndexSpace IS)const{
     for(auto it = label_space.begin(); it != label_space.end(); it++){
-      if(it->second.type() == type){
+      if(it->second.attr() == IS.get_attr()){
         return it->second;
       }
     }
     return nulltype;
   }
+
+  // find an IndexSpace from attribute. return nullspace if not present.
+  // sometimes we wish to check whether if an antribute is in the registry
+const IndexSpace find_IndexSpace(IndexSpace::Attr attr)const{
+  for(auto it = label_space.begin(); it != label_space.end(); it++){
+    if(it->second.attr() == attr){
+      return it->second;
+    }
+  }
+  return nulltype;
+}
   IndexSpace complete_ = {L"",0,0}; // need to define to use generic operator class
   IndexSpace vacuum_occupied_ = {L"",0,0}; // needed for fermi vacuum wick application
   IndexSpace density_occuiped_ = {L"",0,0};

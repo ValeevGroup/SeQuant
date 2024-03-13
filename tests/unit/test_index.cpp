@@ -161,8 +161,8 @@ TEST_CASE("Index", "[elements]") {
 
   SECTION("to_string") {
     auto old_cxt = get_default_context();
-    Context cxt(old_cxt.vacuum(),sequant::mbpt::make_F12_single_reference_subspaces(),old_cxt.metric(),old_cxt.braket_symmetry(),old_cxt.spbasis());
-    set_scoped_default_context(cxt);
+    Context cxt(Vacuum::Physical,sequant::mbpt::make_F12_single_reference_subspaces(),old_cxt.metric(),old_cxt.braket_symmetry(),old_cxt.spbasis());
+    auto cxt_resetter = set_scoped_default_context(cxt);
     Index alpha(L"α");
     REQUIRE(alpha.to_string() == "α");
 
@@ -191,9 +191,14 @@ TEST_CASE("Index", "[elements]") {
     std::wstring a1_str = to_latex(a1);
     REQUIRE(a1_str == L"{a_1^{{i_1}{i_2^{{i_3}{i_4}}}}}");
 
+
+    // a good test of adding new indices to the registry
+    IndexSpace aup(L"a↑",get_default_context().index_space_registry()->retrieve(L"a").type(),IndexSpace::alpha);
+    get_default_context().index_space_registry()->add(aup);
     Index a1_up(L"a↑_1", {i1, i2});
     std::wstring a1_up_str = to_latex(a1_up);
     REQUIRE(a1_up_str == L"{a↑_1^{{i_1}{i_2^{{i_3}{i_4}}}}}");
+    get_default_context().index_space_registry()->remove(L"a↑");
   }
 
   /*SECTION("wolfram") {
