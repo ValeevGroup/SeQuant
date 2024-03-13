@@ -80,6 +80,9 @@ struct QuantumNumbersAttr {
   constexpr QuantumNumbersAttr unIon(QuantumNumbersAttr other) const {
     return QuantumNumbersAttr(this->to_int32() | other.to_int32());
   }
+  constexpr QuantumNumbersAttr operator~() const {
+    return QuantumNumbersAttr(~this->to_int32());
+  }
 
   friend constexpr bool operator==(QuantumNumbersAttr lhs,
                                    QuantumNumbersAttr rhs) {
@@ -287,6 +290,7 @@ class IndexSpace {
   /// @}
 
   /// \name standard quantum numbers tags
+  /// \note spin quantum number takes 2 rightmost bits
   /// @{
   /// no quantum numbers
   constexpr static QuantumNumbers nullqns{0b000000};
@@ -294,6 +298,8 @@ class IndexSpace {
   constexpr static QuantumNumbers alpha{0b000001};
   /// spin-down
   constexpr static QuantumNumbers beta{0b000010};
+  /// spin mask
+  constexpr static QuantumNumbers spinmask{0b000011};
 
   /// list of all standard quantum numbers
   static constexpr QuantumNumbers standard_qns[] = {nullqns, alpha, beta};

@@ -8,7 +8,7 @@
 #include "SeQuant/core/index.hpp"
 #include "SeQuant/core/latex.hpp"
 
-TEST_CASE("Index", "[elements]") {
+TEST_CASE("Index", "[elements][index]") {
   using namespace sequant;
 
   SECTION("constructors") {
@@ -99,6 +99,37 @@ TEST_CASE("Index", "[elements]") {
                             // registered, this does not redefine base key
     // and now ...
     REQUIRE_NOTHROW(Index{L"h"});
+
+    // copy constructor
+    REQUIRE_NOTHROW(Index(i1));
+
+    // ctor that replaces the space
+    {
+      Index j1, j2;
+      REQUIRE_NOTHROW(j1 = Index(L"j_1", IndexSpace::instance(
+                                             IndexSpace::active_unoccupied)));
+      REQUIRE_NOTHROW(
+          j2 = Index(j1, IndexSpace::instance(IndexSpace::active_occupied)));
+      REQUIRE(j1.space() == IndexSpace::active_unoccupied);
+      REQUIRE(j2.label() == j1.label());
+      REQUIRE(j2.space() == IndexSpace::active_occupied);
+
+      // same but using replace_space
+      REQUIRE_NOTHROW(
+          j1.replace_space(IndexSpace::instance(IndexSpace::active_occupied)));
+      j2 = j1.replace_space(IndexSpace::instance(IndexSpace::active_occupied));
+      REQUIRE(j2.label() == j1.label());
+      REQUIRE(j2.space() == IndexSpace::active_occupied);
+
+      // same but using replace_space
+      REQUIRE_NOTHROW(j1.replace_qns(IndexSpace::alpha));
+      j2 = j1.replace_qns(IndexSpace::alpha);
+      REQUIRE(j2.label() == j1.label());
+      REQUIRE(j2.space() == IndexSpace::active_unoccupied);
+      REQUIRE(j2.space().type() == j1.space().type());
+      REQUIRE(j2.space().qns() == IndexSpace::alpha);
+      REQUIRE(j2.space().qns() != j1.space().qns());
+    }
   }
 
   SECTION("equality") {
@@ -110,6 +141,10 @@ TEST_CASE("Index", "[elements]") {
     REQUIRE(i1 != i2);
     REQUIRE(i1 == i3);
     REQUIRE(!(i1 != i3));
+
+    // check copy ctor
+    Index i4(i2);
+    REQUIRE(i2 == i4);
   }
 
   SECTION("ordering") {
@@ -187,6 +222,23 @@ TEST_CASE("Index", "[elements]") {
     SEQUANT_PRAGMA_CLANG(diagnostic pop)
   }
 
+  SECTION("label manipulation") {
+    Index alpha(L"α");
+    Index alpha1(L"α_1");
+    Index alpha_up(L"α↑");
+    Index alpha1_up(L"α↑_1");
+    REQUIRE_NOTHROW(alpha.make_label_plus_suffix(L'↑'));
+    REQUIRE(alpha.make_label_plus_suffix(L'↑') == L"α↑");
+    REQUIRE_NOTHROW(alpha.make_label_minus_substring(L'↑'));
+    REQUIRE(alpha.make_label_minus_substring(L'↑') == L"α");
+    REQUIRE_NOTHROW(alpha1.make_label_minus_substring(L'↑'));
+    REQUIRE(alpha1.make_label_minus_substring(L'↑') == L"α_1");
+    REQUIRE_NOTHROW(alpha_up.make_label_minus_substring(L'↑'));
+    REQUIRE(alpha_up.make_label_minus_substring(L'↑') == L"α");
+    REQUIRE_NOTHROW(alpha1_up.make_label_minus_substring(L'↑'));
+    REQUIRE(alpha1_up.make_label_minus_substring(L'↑') == L"α_1");
+  }
+
   SECTION("latex") {
     Index i1(L"i_1");
     std::wstring i1_str;
@@ -208,6 +260,10 @@ TEST_CASE("Index", "[elements]") {
     Index alpha1_up(L"α↑_1", {i1, i2});
     std::wstring alpha1_up_str = to_latex(alpha1_up);
     REQUIRE(alpha1_up_str == L"{\\alpha↑_1^{{i_1}{i_2^{{i_3}{i_4}}}}}");
+
+    Index a12_up(L"a↑_12", {i1, i2});
+    std::wstring a12_up_str = to_latex(a12_up);
+    REQUIRE(a12_up_str == L"{a↑_{12}^{{i_1}{i_2^{{i_3}{i_4}}}}}");
   }
 
   SECTION("wolfram") {

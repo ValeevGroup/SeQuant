@@ -20,12 +20,14 @@
 namespace sequant {
 
 namespace {
-std::logic_error invalid_operand(
+
+[[maybe_unused]] std::logic_error invalid_operand(
     std::string_view msg = "Invalid operand for binary op") noexcept {
   return std::logic_error{msg.data()};
 }
 
-std::logic_error unimplemented_method(std::string_view msg) noexcept {
+[[maybe_unused]] std::logic_error unimplemented_method(
+    std::string_view msg) noexcept {
   using namespace std::string_literals;
   return std::logic_error{"Not implemented in this derived class: "s +
                           msg.data()};

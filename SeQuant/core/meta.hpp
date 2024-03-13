@@ -22,6 +22,24 @@ namespace meta {
 template <typename T>
 struct type_printer;
 
+///////// remove_cvref ///////////
+
+#if __cplusplus < 202002L
+template <class T>
+struct remove_cvref {
+  using type = std::remove_cv_t<::std::remove_reference_t<T>>;
+};
+
+template <class T>
+using remove_cvref_t = typename remove_cvref<T>::type;
+#else
+template <typename T>
+using remove_cvref = std::remove_cvref<T>;
+
+template <typename T>
+using remove_cvref_t = std::remove_cvref_t<T>;
+#endif
+
 ///////// is_detected ///////////
 
 struct nonesuch {
