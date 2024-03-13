@@ -140,7 +140,7 @@ inline container::map<Index, Index> compute_index_replacement_rules(
           (dst.space() != old_dst1.space() || dst.space() != old_dst2.space())
               ? idx_registry->intersection(old_dst1.space(), old_dst2.space(), dst.space())
               : dst.space();
-      if (new_dst_space == IndexSpace::null_instance()) throw zero_result{};
+      if (new_dst_space == idx_registry->nulltype_()) throw zero_result{};
       Index new_dst;
       if (new_dst_space == old_dst1.space()) {
         new_dst = old_dst1;

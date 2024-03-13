@@ -503,7 +503,7 @@ ExprPtr F( bool count_vac_ops, bool use_f_tensor, IndexSpace occupied_density) {
   }
   else {
     if(!count_vac_ops) {
-      assert(occupied_density != IndexSpace::null_instance()); // cannot explicitly instantiate fock operator without providing an occupied indexspace
+      assert(occupied_density != get_default_context().index_space_registry()->nulltype_()); // cannot explicitly instantiate fock operator without providing an occupied indexspace
       // add \bar{g}^{\kappa x}_{\lambda y} \gamma^y_x with x,y in occ_space_type
       auto make_g_contribution = [](const auto occ_space) {
         auto idx_registry = get_default_context().index_space_registry();
@@ -784,7 +784,7 @@ bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product,
   return can_change_qns(op_or_op_product, qns_t{}, excitation_type_qns(k));
 }
 
-
+#include "SeQuant/domain/mbpt/vac_av.ipp"
 }// namespace op
 ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
                bool use_top) {
@@ -1007,6 +1007,5 @@ bool can_change_qns(const ExprPtr& op_or_op_product, const qns_t target_qns,
 }
 
 
-#include "SeQuant/domain/mbpt/vac_av.ipp"
 
 }  // namespace sequant::mbpt

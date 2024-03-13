@@ -581,7 +581,7 @@ ExprPtr H(std::size_t k = 2, bool count_vac_ops = true);
 
 /// fock operator implied one-body operator, optional explicit construction requires user to specify the
 /// IndexSpace corresponding to all orbitals which may have non-zero density.
-ExprPtr F(bool cout_vac_ops =true, bool use_tensor = true, IndexSpace density_occupied = IndexSpace::null_instance());
+ExprPtr F(bool cout_vac_ops =true, bool use_tensor = true, IndexSpace density_occupied = {L"",0});
 
 /// makes particle-conserving excitation operator of rank \p K
 ExprPtr T_(std::size_t K, bool count_vac_ops = true);
@@ -608,11 +608,11 @@ ExprPtr L_(std::size_t nbra, std::size_t nket, bool count_vac_ops =true,
            IndexSpace hole_space = get_default_context().index_space_registry()->active_hole_space(),
            IndexSpace particle_space = get_default_context().index_space_registry()->active_particle_space());
 
-ExprPtr P(std::size_t K, bool count_vac_ops = true);
+ExprPtr P(std::int64_t K, bool count_vac_ops = true);
 
-ExprPtr A(std::size_t K, bool count_vac_ops = true);
+ExprPtr A(std::int64_t K, bool count_vac_ops = true);
 
-ExprPtr S(std::size_t K, bool count_vac_ops = true);
+ExprPtr S(std::int64_t K, bool count_vac_ops = true);
 
 ExprPtr H_pt(std::size_t order, std::size_t R, bool count_vac_ops = true);
 
@@ -632,9 +632,7 @@ bool raises_vacuum_to_rank(const ExprPtr& op_or_op_product, const unsigned long 
 
 bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product, const unsigned long k);
 #include "SeQuant/domain/mbpt/vac_av.hpp"
-
 } //namespace op
-
 }  // namespace mbpt
 }  // namespace sequant
 

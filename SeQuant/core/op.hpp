@@ -210,7 +210,7 @@ IndexSpace qpcreator_space(const Op<S> &op,
   switch (vacuum) {
     case Vacuum::Physical:
       return op.action() == Action::create ? op.index().space()
-                                           : IndexSpace::null_instance();
+                                           : idx_registry->nulltype_();
     case Vacuum::SingleProduct:
       return op.action() == Action::annihilate
                  ? idx_registry->intersection(op.index().space(),
@@ -268,7 +268,7 @@ IndexSpace qpannihilator_space(const Op<S> &op,
   switch (vacuum) {
     case Vacuum::Physical:
       return op.action() == Action::annihilate ? op.index().space()
-                                               : IndexSpace::null_instance();
+                                               : idx_registry->nulltype_();
     case Vacuum::SingleProduct:
       return op.action() == Action::create
                  ? idx_registry->intersection(op.index().space(),

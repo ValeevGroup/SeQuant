@@ -40,8 +40,10 @@ struct TypeAttr {
     return TypeAttr(this->to_int32() xor other.to_int32());
   }
 
-  friend bool operator==(TypeAttr, TypeAttr);
-  friend bool operator!=(TypeAttr, TypeAttr);
+  bool const operator==(const TypeAttr other) const {
+    return this->to_int32() == other.to_int32();
+  }
+  bool const operator!=(TypeAttr other) const { return !(*this == other); }
 
   /// @return true if \c other is included in this object
   const bool includes(TypeAttr other) const{
@@ -56,11 +58,7 @@ struct TypeAttr {
   static TypeAttr invalid() noexcept { return TypeAttr(0xffff); }
 };
 
- bool operator==(TypeAttr lhs, TypeAttr rhs) {
-  return lhs.to_int32() == rhs.to_int32();
-}
 
- bool operator!=(TypeAttr lhs, TypeAttr rhs) { return !(lhs == rhs); }
 
 /// denotes other quantum numbers (particle type, spin, etc.)
 struct QuantumNumbersAttr {
@@ -114,7 +112,7 @@ class IndexSpace {
   using TypeAttr = sequant::TypeAttr;
   using QuantumNumbersAttr = sequant::QuantumNumbersAttr;
 
-  IndexSpace(IndexSpace& idxspace);
+  //IndexSpace(IndexSpace& idxspace);
 
   IndexSpace(std::wstring_view base_label, TypeAttr typeattr_,QuantumNumbersAttr qnattr_ = QuantumNumbersAttr{0}, unsigned long approximate_size = 10){
     attr_ = Attr(typeattr_,qnattr_);
@@ -290,9 +288,6 @@ class IndexSpace {
   struct bad_key : std::invalid_argument {
     bad_key() : std::invalid_argument("bad key") {}
   };
-  struct bad_attr : std::invalid_argument {
-    bad_attr() : std::invalid_argument("bad attribute") {}
-  };
 
   struct KeyCompare {
     using is_transparent = void;
@@ -311,12 +306,6 @@ class IndexSpace {
   bool operator!=(IndexSpace IS)const{return !(*this == IS);}
 
 
-  /// IndexSpace needs null IndexSpace
-  static const IndexSpace &null_instance() { return null_instance_; }
-  /// the null IndexSpace is keyed by this key
-  static std::wstring null_key() { return L""; }
-
-
 
   Attr attr() const noexcept {
     assert(attr_.is_valid());
@@ -328,37 +317,49 @@ class IndexSpace {
 
 
   /// Default ctor creates space with nonnull type and null quantum numbers
-  IndexSpace() noexcept : attr_({0x7fffffff}, nullqns) {}
+  IndexSpace() {
+    attr_ = {{0x7fffffff}, nullqns};
+    base_key_ =L"";
+    approximate_size_ = 0;
+  }
 
   IndexSpace(const IndexSpace &other) {
     if (!other.attr().is_valid())
       throw std::invalid_argument(
           "IndexSpace copy ctor received invalid argument");
-    attr_ = other.attr_;
+  attr_ = other.get_attr();
+  base_key_ = other.get_base_key();
+  approximate_size_ = other.get_approximate_size();
   }
   IndexSpace(IndexSpace &&other) {
     if (!other.attr().is_valid())
       throw std::invalid_argument(
           "IndexSpace move ctor received invalid argument");
-    attr_ = other.attr_;
+    attr_ = other.get_attr();
+base_key_ = other.get_base_key();
+approximate_size_ = other.get_approximate_size();
   }
   IndexSpace &operator=(const IndexSpace &other) {
     if (!other.attr().is_valid())
       throw std::invalid_argument(
           "IndexSpace copy assignment operator received invalid argument");
-    attr_ = other.attr_;
+    attr_ = other.get_attr();
+    base_key_ = other.get_base_key();
+    approximate_size_ = other.get_approximate_size();
     return *this;
   }
   IndexSpace &operator=(IndexSpace &&other) {
     if (!other.attr().is_valid())
       throw std::invalid_argument(
           "IndexSpace move assignment operator received invalid argument");
-    attr_ = other.attr_;
+    attr_ = other.get_attr();
+    base_key_ = other.get_base_key();
+    approximate_size_ = other.get_approximate_size();
     return *this;
   }
 
 
-  Attr get_attr(){
+  const Attr get_attr()const {
     return attr_;
   }
   std::wstring get_base_key() const{
@@ -379,11 +380,10 @@ class IndexSpace {
   std::wstring base_key_;
   unsigned long approximate_size_;
   /// @brief constructs an instance of an IndexSpace object
-  explicit IndexSpace(Attr attr) noexcept : attr_(attr) {
-    assert(attr.is_valid());
-  }
+  //explicit IndexSpace(Attr attr) noexcept : attr_(attr) {
+  //  assert(attr.is_valid());
+  //}
 
-  static IndexSpace null_instance_;
 
 
   static std::wstring to_wstring(std::wstring_view key) {
@@ -400,7 +400,6 @@ class IndexSpaceRegistry{
  public:
   IndexSpaceRegistry(){
     //register nulltype
-    IndexSpace nulltype(L"",0,0);
     this->add(nulltype);
   }
 
@@ -422,7 +421,7 @@ class IndexSpaceRegistry{
           "If you are trying to replace the index use the replace(IndexSpace) function");
     }
     else {
-      label_space.insert({IS.get_base_key(), IS});
+      label_space.emplace(IS.get_base_key(), IS);
     }
   }
 
@@ -453,9 +452,15 @@ class IndexSpaceRegistry{
 
   // remove an IndexSpace by its string label
   void remove(std::wstring_view label){
-    for(auto it = label_space.begin(); it != label_space.end(); ++it){
+    auto it = label_space.begin();
+    bool found = false;
+    while(it != label_space.end() && !found){
       if(label == it->first){
         label_space.erase(it);
+        found = true;
+      }
+      if(it != label_space.end() && !found){
+        it++;
       }
     }
   }
@@ -463,13 +468,17 @@ class IndexSpaceRegistry{
   // replace a member of the registry by passing the original label and the new space to replace it
   void relabel(std::wstring_view original_label, std::wstring_view new_label){
     bool found = false;
-    for(auto it = label_space.begin(); it != label_space.end(); ++it){
-      if(original_label == it->first){
-        auto original_attr = it->second.attr();
-        label_space.erase(it);
-        IndexSpace new_space(new_label,original_attr.type(),original_attr.qns());
-        label_space.insert({new_space.get_base_key(),new_space});
-        found = true;
+    auto it = label_space.begin();
+    while(!found && it != label_space.end()){
+        if(original_label == it->first){
+          auto original_attr = it->second.attr();
+          label_space.erase(it);
+          IndexSpace new_space(new_label,original_attr.type(),original_attr.qns());
+          label_space.emplace(new_space.get_base_key(),new_space);
+          found = true;
+        }
+      if(it != label_space.end() && !found){
+        it++;
       }
     }
     if(!found){throw "orginal label not found!";}
@@ -569,17 +578,10 @@ bool is_pure_occupied(IndexSpace IS)const{
  if(IS == nulltype_()){
     return  false;
 }
-  else{
-    auto occupied_intersection = intersection(vacuum_occupied(),IS);
-    if(occupied_intersection == nulltype_()){
-  return false;
-}
-   if(occupied_intersection.type().to_int32() <= vacuum_occupied().type().to_int32()){
+   if(IS.type().to_int32() <= vacuum_occupied().type().to_int32()){
 return true;
 }
 else {return false;}
-}
-
 }
 
 // all states are unoccupied with respect to a given reference
@@ -602,16 +604,13 @@ bool contains_unoccupied(IndexSpace IS)const {
   if(IS == nulltype_()){
 return false;
 }
-if(!has_non_overlapping_spaces(IS, vacuum_occupied())){
-return true;
-}
 else{
-return vacuum_occupied().type() < non_overlapping_spaces(IS, vacuum_occupied()).back().type();
+return vacuum_occupied().type() < IS.type();
 }
 }
 
 // complete space with all possible IndexSpaces included
-IndexSpace complete()const {
+IndexSpace complete() {
   if(complete_ == nulltype){throw std::invalid_argument("complete has not been registered. please assign the complete"
 "space label by calling assign_complete(label)");
 }
@@ -654,19 +653,18 @@ else{
 return density_occuiped_;
 }
 }
-
-void assign_complete(std::wstring label){
-  if(label_space.find(label) == label_space.end()){
-  throw std::invalid_argument("label not added to registry");
-}
-complete_ = label_space[label];
-}
-
 void assign_vacuum_occupied(std::wstring label){
   if(label_space.find(label) == label_space.end()){
   throw std::invalid_argument("label not added to registry");
 }
 vacuum_occupied_ = label_space[label];
+}
+
+void assign_complete(std::wstring label){
+if(label_space.find(label) == label_space.end()){
+  throw std::invalid_argument("label not added to registry");
+}
+complete_ = label_space[label];
 }
 
 void assign_active_particle_space(std::wstring label){
@@ -693,7 +691,7 @@ density_occuiped_ = label_space[label];
 
 
  private:
-  std::map<std::wstring_view ,IndexSpace> label_space;
+  std::map<std::wstring ,IndexSpace> label_space;
   const IndexSpace nulltype= {L"",0,0};
 
   ///TODO use c++20 std::has_single_bit() when we update to this version
@@ -719,19 +717,19 @@ density_occuiped_ = label_space[label];
   IndexSpace active_hole_space_ = {L"",0,0};
 };
 
-inline bool operator==(const IndexSpace &space, IndexSpace::Type t) {
+/*inline bool operator==(const IndexSpace &space, IndexSpace::Type t) {
   return space.type() == t;
 }
 inline bool operator==(IndexSpace::Type t, const IndexSpace &space) {
   return space.type() == t;
-}
+}*/
 /*inline bool operator!=(const IndexSpace &space, IndexSpace::Type t) {
   return !(space == t);
 }*/
 /*inline bool operator!=(IndexSpace::Type t, const IndexSpace &space) {
   return !(t == space);
 }*/
-inline bool operator==(const IndexSpace &space,
+/*inline bool operator==(const IndexSpace &space,
                        IndexSpace::QuantumNumbers qns) {
   return space.qns() == qns;
 }
@@ -746,7 +744,7 @@ inline bool operator!=(const IndexSpace &space,
 inline bool operator!=(IndexSpace::QuantumNumbers qns,
                        const IndexSpace &space) {
   return !(qns == space);
-}
+}*/
 /// @return true if type2 is included in type1, i.e. intersection(type1, type2)
 /// == type2
 inline bool includes(IndexSpace::Type type1, IndexSpace::Type type2) {
@@ -772,7 +770,9 @@ inline bool operator<(const IndexSpace &space1, const IndexSpace &space2) {
 }
 
 
-std::wstring to_wolfram(const IndexSpace &space);
+/*std::wstring to_wolfram(const IndexSpace space){
+ throw std::logic_error("not implemented");
+};*/
 
 }  // namespace sequant
 

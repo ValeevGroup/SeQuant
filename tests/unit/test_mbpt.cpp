@@ -386,7 +386,7 @@ TEST_CASE("MBPT", "[mbpt]") {
     using namespace sequant::mbpt::op;
 
     auto ctx_resetter = set_scoped_default_context(
-        Context(Vacuum::SingleProduct, mbpt::make_standard_single_reference_subspaces(),IndexSpaceMetric::Unit,
+        sequant::Context(Vacuum::SingleProduct, mbpt::make_standard_single_reference_subspaces(),IndexSpaceMetric::Unit,
                 BraKetSymmetry::conjugate, SPBasis::spinfree));
 
     // H2 -> R2
@@ -413,7 +413,7 @@ TEST_CASE("MBPT", "[mbpt]") {
   SECTION("MRSO") {
     using namespace sequant::mbpt::op;
     auto ctx_resetter=sequant::set_scoped_default_context(
-        Context(Vacuum::SingleProduct,mbpt::make_standard_multireference_subspaces(), IndexSpaceMetric::Unit,
+        sequant::Context(Vacuum::SingleProduct,mbpt::make_standard_multireference_subspaces(), IndexSpaceMetric::Unit,
                 BraKetSymmetry::conjugate, SPBasis::spinorbital));
 
     // H2**T2 -> 0
@@ -434,7 +434,7 @@ TEST_CASE("MBPT", "[mbpt]") {
       // now compute using physical vacuum
       {
         auto ctx_resetter = set_scoped_default_context(
-            Context(Vacuum::Physical, mbpt::make_standard_multireference_subspaces(),IndexSpaceMetric::Unit,
+            sequant::Context(Vacuum::Physical, mbpt::make_standard_multireference_subspaces(),IndexSpaceMetric::Unit,
                     BraKetSymmetry::conjugate, SPBasis::spinorbital));
         auto result_phys = mbpt::vac_av(H_(2) * T_(2), {{0, 1}});
 
@@ -476,7 +476,7 @@ TEST_CASE("MBPT", "[mbpt]") {
 
     // now compute using (closed) Fermi vacuum + spinfree basis
     auto ctx_resetter = set_scoped_default_context(
-        Context(Vacuum::SingleProduct, mbpt::make_standard_multireference_subspaces(),IndexSpaceMetric::Unit,
+        sequant::Context(Vacuum::SingleProduct, mbpt::make_standard_multireference_subspaces(),IndexSpaceMetric::Unit,
                 BraKetSymmetry::conjugate, SPBasis::spinfree));
 
     // H2**T2 -> 0

@@ -300,7 +300,7 @@ class Index : public Taggable {
 
   std::wstring to_latex() const;
 
-  template <typename... Attrs>
+  /*template <typename... Attrs>
   std::wstring to_wolfram(Attrs &&...attrs) const {
     auto protect_subscript = [](const std::wstring_view str) {
       auto subsc_pos = str.rfind(L'_');
@@ -329,7 +329,7 @@ class Index : public Taggable {
      ...);
     result += L"]";
     return result;
-  }
+  }*/
 
   /// @param protoindex_range a range of Index objects
   /// @return the color of the protoindices

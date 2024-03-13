@@ -192,7 +192,7 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
     return result;
   }
 
-  std::wstring to_wolfram() const override {
+  /*std::wstring to_wolfram() const override {
     std::wstring result;
     result = L"SQM[OHead[\"\\!\\(\\*OverscriptBox[\\(";
     result += this->label();
@@ -208,7 +208,7 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
     result = result.erase(result.size() - 1);
     result += L"]";
     return result;
-  }
+  }*/
 
   ExprPtr canonicalize() override;
 

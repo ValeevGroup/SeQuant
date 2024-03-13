@@ -196,7 +196,7 @@ TEST_CASE("Index", "[elements]") {
     REQUIRE(a1_up_str == L"{a↑_1^{{i_1}{i_2^{{i_3}{i_4}}}}}");
   }
 
-  SECTION("wolfram") {
+  /*SECTION("wolfram") {
     Index i1(L"i_1");
     std::wstring i1_str;
     REQUIRE_NOTHROW(i1_str = i1.to_wolfram());
@@ -222,6 +222,6 @@ TEST_CASE("Index", "[elements]") {
     REQUIRE(Index(L"p_1").to_wolfram() ==
             L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(p\\), "
             L"\\(1\\)]\\)\",particleSpace[occupied,virtual]]");
-  }
+  }*/
 
 }  // TEST_CASE("Index")
