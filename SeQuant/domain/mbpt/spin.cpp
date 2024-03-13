@@ -13,6 +13,77 @@
 
 namespace sequant {
 
+enum class SpinCase1 { Null, Alpha, Beta };
+
+namespace detail {
+
+Index make_index_with_spincase(const Index& idx, SpinCase1 sc) {
+  // sanity check: make sure have only one spin label
+  assert(!(idx.label().find(L'↑') != std::wstring::npos &&
+           idx.label().find(L'↓') != std::wstring::npos));
+
+  std::wstring label;
+
+  if (sc != SpinCase1::Null) {
+    if (sc == SpinCase1::Alpha) {
+      // this might be replacement of beta with alpha
+      if (idx.label().find(L'↓') != std::wstring::npos) {
+        label = idx.make_label_minus_substring(L'↓');
+        label = Index::make_label_plus_suffix(label, L'↑');
+      } else if (idx.label().find(L'↑') != std::wstring::npos)
+        label = idx.label();
+      else
+        label = idx.make_label_plus_suffix(L'↑');
+    } else if (sc == SpinCase1::Beta) {
+      // this might be replacement of alpha with beta
+      if (idx.label().find(L'↑') != std::wstring::npos) {
+        label = idx.make_label_minus_substring(L'↑');
+        label = Index::make_label_plus_suffix(label, L'↓');
+      } else if (idx.label().find(L'↓') != std::wstring::npos)
+        label = idx.label();
+      else
+        label = idx.make_label_plus_suffix(L'↓');
+    } else
+      abort();  // unreachable
+  } else {
+    assert(sc == SpinCase1::Null);
+    if (idx.label().find(L'↑') != std::wstring::npos)
+      label = idx.make_label_minus_substring(L'↑');
+    else if (idx.label().find(L'↓') != std::wstring::npos)
+      label = idx.make_label_minus_substring(L'↓');
+    else
+      label = idx.label();
+  }
+
+  // to preserve rest of bits first unset spin bit, then set them to the desired
+  // state
+  auto qns = idx.space()
+                 .qns()
+                 .intersection(~IndexSpace::spinmask)
+                 .unIon((sc == SpinCase1::Null
+                             ? IndexSpace::nullqns
+                             : (sc == SpinCase1::Alpha ? IndexSpace::alpha
+                                                       : IndexSpace::beta)));
+  IndexSpace space{idx.space().type(), qns};
+  auto protoindices = idx.proto_indices();
+  for (auto& pidx : protoindices) pidx = make_index_with_spincase(pidx, sc);
+  return Index{label, space, protoindices};
+}
+
+}  // namespace detail
+
+Index make_spinalpha(const Index& idx) {
+  return detail::make_index_with_spincase(idx, SpinCase1::Alpha);
+};
+
+Index make_spinbeta(const Index& idx) {
+  return detail::make_index_with_spincase(idx, SpinCase1::Beta);
+};
+
+Index make_spinnull(const Index& idx) {
+  return detail::make_index_with_spincase(idx, SpinCase1::Null);
+};
+
 ExprPtr transform_expr(const ExprPtr& expr,
                        const container::map<Index, Index>& index_replacements,
                        Constant::scalar_type scaling_factor) {
@@ -96,7 +167,7 @@ ExprPtr swap_bra_ket(const ExprPtr& expr) {
     return nullptr;
 }
 
-ExprPtr append_spin(ExprPtr& expr,
+ExprPtr append_spin(const ExprPtr& expr,
                     const container::map<Index, Index>& index_replacements) {
   auto add_spin_to_tensor = [&index_replacements](const Tensor& tensor) {
     auto spin_tensor = std::make_shared<Tensor>(tensor);
@@ -128,22 +199,18 @@ ExprPtr append_spin(ExprPtr& expr,
     return nullptr;
 }
 
-ExprPtr remove_spin(ExprPtr& expr) {
+ExprPtr remove_spin(const ExprPtr& expr) {
   auto remove_spin_from_tensor = [](const Tensor& tensor) {
     container::svector<Index> bra(tensor.bra().begin(), tensor.bra().end());
     container::svector<Index> ket(tensor.ket().begin(), tensor.ket().end());
     {
       for (auto&& idx : ranges::views::concat(bra, ket)) {
-        auto type = idx.space().type();
-        auto subscript_label = idx.label().substr(idx.label().rfind(L'_') + 1);
-        std::wstring subscript(subscript_label.begin(), subscript_label.end());
-        idx = Index::make_label_index(IndexSpace(type, IndexSpace::nullqns),
-                                      subscript);
+        idx = make_spinnull(idx);
       }
     }
     Tensor result(tensor.label(), bra, ket, tensor.symmetry(),
                   tensor.braket_symmetry());
-    return std::make_shared<Tensor>(result);
+    return std::make_shared<Tensor>(std::move(result));
   };
 
   auto remove_spin_from_product =
@@ -753,17 +820,6 @@ ExprPtr S_maps(const ExprPtr& expr) {
 ExprPtr closed_shell_spintrace(
     const ExprPtr& expression,
     const container::svector<container::svector<Index>>& ext_index_groups) {
-  // NOT supported for Proto indices
-  [[maybe_unused]] auto check_proto_index = [](const ExprPtr& expr) {
-    if (expr->is<Tensor>()) {
-      ranges::for_each(expr->as<Tensor>().const_braket(), [](const Index& idx) {
-        assert(!idx.has_proto_indices() &&
-               "Proto index not supported in spintrace call.");
-      });
-    }
-  };
-  // expression->visit(check_proto_index);
-
   // Symmetrize and expression
   // Partially expand the antisymmetrizer and write it in terms of S operator.
   // See symmetrize_expr(expr) function for implementation details. We want an
@@ -1007,14 +1063,8 @@ Tensor swap_spin(const Tensor& t) {
   // Return new index where the spin-label is flipped
   auto spin_flipped_idx = [](const Index& idx) {
     assert(idx.space().qns() != IndexSpace::nullqns);
-
-    auto idx_type = idx.space().type();
-    auto qns = idx.space().qns() == IndexSpace::alpha ? IndexSpace::beta
-                                                      : IndexSpace::alpha;
-    auto label_int = idx.label().substr(idx.label().rfind(L'_') + 1);
-    std::wstring label_int_ws(label_int.begin(), label_int.end());
-
-    return Index::make_label_index(IndexSpace(idx_type, qns), label_int_ws);
+    return idx.space().qns() == IndexSpace::alpha ? make_spinbeta(idx)
+                                                  : make_spinalpha(idx);
   };
 
   container::svector<Index> bra(t.rank()), ket(t.rank());
@@ -1074,19 +1124,6 @@ std::vector<ExprPtr> open_shell_A_op(const Tensor& A) {
   assert(A.bra_rank() == A.ket_rank());
   auto rank = A.bra_rank();
 
-  // Add spin label alpha to index
-  auto add_alpha = [](const Index& idx) {
-    std::wstring idx_n_ws(idx.label().substr(idx.label().rfind(L'_') + 1));
-    auto space = IndexSpace::instance(idx.space().type(), IndexSpace::alpha);
-    return Index::make_label_index(space, idx_n_ws);
-  };
-  // Add spin label beta to index
-  auto add_beta = [](const Index& idx) {
-    std::wstring idx_n_ws(idx.label().substr(idx.label().rfind(L'_') + 1));
-    auto space = IndexSpace::instance(idx.space().type(), IndexSpace::beta);
-    return Index::make_label_index(space, idx_n_ws);
-  };
-
   std::vector<ExprPtr> result(rank + 1);
   result.at(0) = ex<Constant>(1);
   result.at(rank) = ex<Constant>(1);
@@ -1095,13 +1132,13 @@ std::vector<ExprPtr> open_shell_A_op(const Tensor& A) {
     auto spin_bra = A.bra();
     auto spin_ket = A.ket();
     std::transform(spin_bra.begin(), spin_bra.end() - i, spin_bra.begin(),
-                   add_alpha);
+                   make_spinalpha);
     std::transform(spin_ket.begin(), spin_ket.end() - i, spin_ket.begin(),
-                   add_alpha);
+                   make_spinalpha);
     std::transform(spin_bra.end() - i, spin_bra.end(), spin_bra.end() - i,
-                   add_beta);
+                   make_spinbeta);
     std::transform(spin_ket.end() - i, spin_ket.end(), spin_ket.end() - i,
-                   add_beta);
+                   make_spinbeta);
     ranges::for_each(spin_bra, [](const Index& i) { i.reset_tag(); });
     ranges::for_each(spin_ket, [](const Index& i) { i.reset_tag(); });
     result.at(i) =
@@ -1244,21 +1281,14 @@ std::vector<ExprPtr> open_shell_spintrace(
 
   assert(grand_idxlist.size() == int_idxlist.size() + ext_idxlist.size());
 
-  // Add spin label to index
-  auto add_spin_label = [](const Index& idx, const long int& spin_bit) {
-    auto idx_n = idx.label().substr(idx.label().rfind(L'_') + 1);
-    std::wstring idx_n_ws(idx_n.begin(), idx_n.end());
-
-    auto idx_type = IndexSpace::instance(idx.label()).type();
-    auto space = spin_bit == 0
-                     ? IndexSpace::instance(idx_type, IndexSpace::alpha)
-                     : IndexSpace::instance(idx_type, IndexSpace::beta);
-
-    return Index::make_label_index(space, idx_n_ws);
+  // make a spin-specific index, orientation is given by spin_bit: 0 =
+  // spin-down/beta, 1 = spin-up/alpha
+  auto make_spinspecific = [](const Index& idx, const long int& spin_bit) {
+    return spin_bit == 0 ? make_spinalpha(idx) : make_spinbeta(idx);
   };
 
   // Generate index replacement maps
-  auto spin_cases = [&add_spin_label](
+  auto spin_cases = [&make_spinspecific](
                         const container::svector<IndexGroup>& idx_group) {
     const auto ncases = pow2(idx_group.size());
     container::svector<container::map<Index, Index>> all_replacements(ncases);
@@ -1269,7 +1299,7 @@ std::vector<ExprPtr> open_shell_spintrace(
         auto spin_bit = (i << (64 - idxg - 1)) >> 63;
         assert((spin_bit == 0) || (spin_bit == 1));
         for (auto& idx : idx_group[idxg]) {
-          auto spin_idx = add_spin_label(idx, spin_bit);
+          auto spin_idx = make_spinspecific(idx, spin_bit);
           idx_rep.emplace(idx, spin_idx);
         }
       }
@@ -1280,7 +1310,7 @@ std::vector<ExprPtr> open_shell_spintrace(
 
   // External index replacement maps
   auto ext_spin_cases =
-      [&add_spin_label](const container::svector<IndexGroup>& idx_group) {
+      [&make_spinspecific](const container::svector<IndexGroup>& idx_group) {
         container::svector<container::map<Index, Index>> all_replacements;
 
         // container::svector<int> spins(idx_group.size(), 0);
@@ -1291,7 +1321,7 @@ std::vector<ExprPtr> open_shell_spintrace(
           container::map<Index, Index> idx_rep;
           for (std::size_t j = 0; j != idx_group.size(); ++j) {
             for (auto& idx : idx_group[j]) {
-              auto spin_idx = add_spin_label(idx, spins[j]);
+              auto spin_idx = make_spinspecific(idx, spins[j]);
               idx_rep.emplace(idx, spin_idx);
             }
           }
@@ -1450,39 +1480,28 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
 
 ExprPtr spintrace(
     const ExprPtr& expression,
-    container::svector<container::svector<Index>> ext_index_groups) {
+    container::svector<container::svector<Index>> ext_index_groups,
+    bool spinfree_index_spaces) {
   // Escape immediately if expression is a constant
   if (expression->is<Constant>()) {
     return expression;
   }
 
-  // SPIN TRACE DOES NOT SUPPORT PROTO INDICES YET.
-  auto check_proto_index = [](const ExprPtr& expr) {
-    if (expr->is<Tensor>()) {
-      ranges::for_each(expr->as<Tensor>().const_braket(), [](const Index& idx) {
-        if (idx.has_proto_indices())
-          throw std::logic_error(
-              "sequant::spintrace(input): proto indices not supported");
-      });
-    }
-  };
-  expression->visit(check_proto_index);
-
-  // This function must be used for tensors with spin-labelled indices only. If
+  // This function must be used for tensors with spin-specific indices only. If
   // the spin-symmetry is conserved: the tensor is expanded; else: zero is
   // returned.
   auto spin_trace_tensor = [](const Tensor& tensor) {
     return can_expand(tensor) ? expand_antisymm(tensor) : ex<Constant>(0);
   };
 
-  // This function is used to spin-trace a product terms with spin-labelled
+  // This function is used to spin-trace a product terms with spin-specific
   // indices. It checks if all tensors can be expanded and spintraces individual
   // tensors by call to the about lambda function.
   auto spin_trace_product = [&spin_trace_tensor](const Product& product) {
     Product spin_product{};
 
-    // Check if all tensors in this product can expand
-    // If NOT all tensors can expand, return zero
+    // Check if all tensors in this product can be expanded
+    // If NOT all tensors can be expanded, return zero
     if (!std::all_of(product.factors().begin(), product.factors().end(),
                      [](const auto& t) {
                        return can_expand(t->template as<Tensor>());
@@ -1511,7 +1530,8 @@ ExprPtr spintrace(
 
   // Most important lambda of this function
   auto trace_product = [&ext_index_groups, &spin_trace_tensor,
-                        &spin_trace_product](const Product& expression) {
+                        &spin_trace_product,
+                        spinfree_index_spaces](const Product& expression) {
     ExprPtr expr = std::make_shared<Product>(expression);
 
     // List of all indices in the expression
@@ -1546,8 +1566,12 @@ ExprPtr spintrace(
     }
 
     // EFV: generate the grand list of index groups by concatenating list of
-    // external index EFV: groups with the groups of internal indices (each
+    // external index groups with the groups of internal indices (each
     // internal index = 1 group)
+    // TODO some internal indices can be a priori placed in the same group, if
+    // they refer to the same particle of a spin-free non-antisymmetrized Tensor
+    //      so visit all Tensors in the expression and locate such groups of
+    //      internal indices before placing the rest into separate groups
     using IndexGroup = container::svector<Index>;
     container::svector<IndexGroup> index_groups;
     for (auto&& i : int_idxlist) index_groups.emplace_back(IndexGroup(1, i));
@@ -1570,17 +1594,9 @@ ExprPtr spintrace(
         assert(spin_bit == 0 || spin_bit == 1);
 
         for (auto&& index : index_group) {
-          auto type = index.space().type();
-          auto qns = spin_bit == 0 ? IndexSpace::alpha : IndexSpace::beta;
-
-          // This assumes index has a subscript
-          auto subscript_label =
-              index.label().substr(index.label().rfind(L'_') + 1);
-          std::wstring subscript(subscript_label.begin(),
-                                 subscript_label.end());
-          Index spin_index =
-              Index::make_label_index(IndexSpace(type, qns), subscript);
-          index_replacements.emplace(index, spin_index);
+          index_replacements.emplace(index, spin_bit == 0
+                                                ? make_spinalpha(index)
+                                                : make_spinbeta(index));
         }
         ++index_group_count;
       }
@@ -1593,12 +1609,12 @@ ExprPtr spintrace(
       // printing intermediate expressions.
       if (spin_expr->is<Tensor>()) {
         auto st_expr = spin_trace_tensor(spin_expr->as<Tensor>());
-        auto spin_removed = remove_spin(st_expr);
-        result->append(spin_removed);
+        result->append(spinfree_index_spaces ? remove_spin(st_expr) : st_expr);
       } else if (spin_expr->is<Product>()) {
         auto st_expr = spin_trace_product(spin_expr->as<Product>());
         if (st_expr->size() != 0) {
-          result->append(remove_spin(st_expr));
+          result->append(spinfree_index_spaces ? remove_spin(st_expr)
+                                               : st_expr);
         }
       } else if (spin_expr->is<Sum>()) {
         for (auto&& summand : *spin_expr) {
@@ -1610,9 +1626,9 @@ ExprPtr spintrace(
           else {
             st_expr.append(summand);
           }
-          ExprPtr SumPtr = std::make_shared<Sum>(st_expr);
-          auto spin_removed = remove_spin(SumPtr);
-          result->append(spin_removed);
+          auto st_expr_ptr = ex<Sum>(st_expr);
+          result->append(spinfree_index_spaces ? remove_spin(st_expr_ptr)
+                                               : st_expr_ptr);
         }
       } else {
         result->append(expr);
@@ -1627,23 +1643,26 @@ ExprPtr spintrace(
 
   if (expr->is<Tensor>()) expr = ex<Constant>(1) * expr;
 
+  ExprPtr result;
   if (expr->is<Product>()) {
-    return trace_product(expr->as<Product>());
+    result = trace_product(expr->as<Product>());
   } else if ((expr->is<Sum>())) {
-    auto result = std::make_shared<Sum>();
+    auto result_sum = std::make_shared<Sum>();
     for (auto&& term : *expr) {
       if (term->is<Product>())
-        result->append(trace_product(term->as<Product>()));
+        result_sum->append(trace_product(term->as<Product>()));
       else if (term->is<Tensor>()) {
         auto term_as_product = ex<Constant>(1) * term;
-        result->append(trace_product(term_as_product->as<Product>()));
+        result_sum->append(trace_product(term_as_product->as<Product>()));
       } else
-        result->append(term);
+        result_sum->append(term);
+      result = result_sum;
     }
-    result->visit(reset_idx_tags);
     return result;
   } else
     return nullptr;
+  result->visit(reset_idx_tags);
+  return result;
 }  // ExprPtr spintrace
 
 ExprPtr factorize_S(const ExprPtr& expression,
