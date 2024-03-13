@@ -7,8 +7,9 @@ namespace sequant {
 
 std::string const& EvalExprTA::annot() const { return annot_; }
 
-EvalExprTA::EvalExprTA(Tensor const& tnsr)
-    : EvalExpr(tnsr), annot_{indices_to_annot(inner_outer_indices())} {}
+EvalExprTA::EvalExprTA(Tensor const& tnsr) : EvalExpr(tnsr) {
+  annot_ = braket_annot();
+}
 
 EvalExprTA::EvalExprTA(Constant const& c) : EvalExpr(c), annot_{} {}
 
@@ -22,19 +23,22 @@ EvalExprTA::EvalExprTA(const EvalExprTA& left, const EvalExprTA& right,
   using TA::expressions::GEMMPermutationOptimizer;
 
   if (result_type() == ResultType::Tensor) {
-    annot_ = indices_to_annot(inner_outer_indices());
-    if (left.result_type() == right.result_type() &&
-        op_type() == EvalOp::Prod && !tot()) {
-      // tensor x tensor confirmed
-      auto lh = hash::value(left);
-      auto rh = hash::value(right);
-      auto const& left_ = lh <= rh ? left : right;
-      auto const& right_ = lh <= rh ? right : left;
-      annot_ = GEMMPermutationOptimizer(Tidxs{left_.annot()},  //
-                                        Tidxs{right_.annot()})
-                   .target_result_indices()
-                   .string();
-    }
+    annot_ = braket_annot();
+    // clang-format off
+// todo: fix the following so that it works for ToT x ToT -> T
+//    if (left.result_type() == right.result_type() &&
+//        op_type() == EvalOp::Prod && !tot()) {
+//      // tensor x tensor confirmed
+//      auto lh = hash::value(left);
+//      auto rh = hash::value(right);
+//      auto const& left_ = lh <= rh ? left : right;
+//      auto const& right_ = lh <= rh ? right : left;
+//      annot_ = GEMMPermutationOptimizer(Tidxs{left_.annot()},  //
+//                                        Tidxs{right_.annot()})
+//                   .target_result_indices()
+//                   .string();
+//    }
+    // clang-format on
   }
 }
 

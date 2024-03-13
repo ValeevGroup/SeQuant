@@ -246,8 +246,10 @@ ERPtr evaluate_core(NodeT const& node, Le const& le, Args&&... args) {
 
       log_eval("[PRODUCT] ", node.left()->label(), " * ", node.right()->label(),
                " = ", node->label(), "\n");
-
-      return left->prod(*right, ann);
+      auto const de_nest =
+          node.left()->tot() && node.right()->tot() && !node->tot();
+      return left->prod(*right, ann,
+                        de_nest ? TA::DeNest::True : TA::DeNest::False);
     }
   }
 }
