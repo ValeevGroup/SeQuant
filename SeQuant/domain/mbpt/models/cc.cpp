@@ -315,4 +315,50 @@ std::vector<sequant::ExprPtr> CC::eom_right(size_t K_occ, size_t K_uocc) {
 
   return result;
 }
+
+std::vector<sequant::ExprPtr> CC::eom_left(size_t K_occ, size_t K_uocc) {
+  assert(!unitary() && "Unitary ansatz is not yet supported");
+  assert(K_occ > 0 || K_uocc > 0 && "Unsupported excitation order");
+  assert(K_occ == K_uocc && "Only EE-EOM-CC is supported for now");
+
+  if (K_occ != K_uocc)
+    assert(get_default_context().spbasis() != SPBasis::spinfree &&
+           "spin-free basis does not support non particle-conserving cases");
+
+  // construct hbar
+  auto hbar = sim_tr(op::H(), 4);
+
+  // L * hbar
+  auto L_hbar = op::L(K_occ, K_uocc) * hbar;
+
+  // connectivity:
+  // default connections + connect H with projectors
+  const auto op_connect =
+      op::concat(op::default_op_connections(),
+                 std::vector<std::pair<mbpt::OpType, mbpt::OpType>>{
+                     {OpType::h, OpType::A},
+                     {OpType::f, OpType::A},
+                     {OpType::g, OpType::A},
+                     {OpType::h, OpType::S},
+                     {OpType::f, OpType::S},
+                     {OpType::g, OpType::S}});
+
+  // initialize result vector
+  std::vector<ExprPtr> result;
+  auto idx = std::max(K_occ, K_uocc);  // idx for populating the result vector
+  result.resize(idx + 1);
+
+  using boost::numeric_cast;
+  // start from the highest excitation order, go down to the lowest
+  for (auto o = numeric_cast<std::int64_t>(K_occ),
+            u = numeric_cast<std::int64_t>(K_uocc);
+       o > 0 || u > 0; --o, --u) {
+    // right project onto |o,u> (i.e., multiply by P(-o, -u)) and compute VEV
+    auto res = op::vac_av(L_hbar * op::P(-o, -u), op_connect);
+    result.at(idx) = res;
+    idx--;  // idx decrement
+  }
+
+  return result;
+}
 }  // namespace sequant::mbpt::sr
