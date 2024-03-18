@@ -123,13 +123,13 @@ ExprPtr R12(IndexSpace::Type gg_space, int ansatz) {
 }
 
 ExprPtr A(std::int64_t Kh, std::int64_t Kp) {
-  assert(Kh != 0);
   if (Kp == std::numeric_limits<std::int64_t>::max()) Kp = Kh;
-  assert(Kp != 0);
 
-  // Kh and Kp should have same sign
-  assert((Kh > 0 && Kp > 0) || (Kh < 0 && Kp < 0));
-
+  assert(!(Kh == 0 && Kp == 0));
+  // if they are not zero, Kh and Kp should have the same sign
+  if (Kh != 0 && Kp != 0) {
+    assert((Kh > 0 && Kp > 0) || (Kh < 0 && Kp < 0));
+  }
   container::svector<IndexSpace::Type> creators;
   container::svector<IndexSpace::Type> annihilators;
   if (Kh > 0) {

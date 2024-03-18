@@ -352,20 +352,79 @@ ExprPtr Λ(std::size_t K, bool skip1) {
   return result;
 }
 
-ExprPtr A(std::int64_t K) {
-  assert(K != 0);
+ExprPtr R_(std::size_t K_occ, std::size_t K_uocc) {
+  assert(K_occ > 0 || K_uocc > 0);
+  return ex<op_t>(
+      []() -> std::wstring_view { return optype2label.at(OpType::R); },
+      [=]() -> ExprPtr {
+        using namespace sequant::mbpt::sr;
+        return sr::R_(K_uocc, K_occ);
+      },
+      [=](qnc_t& qns) {
+        qns = combine(qnc_t{0ul, K_occ, K_uocc, 0ul}, qns);
+      });
+}
+
+ExprPtr R(std::size_t K_occ, std::size_t K_uocc) {
+  using boost::numeric_cast;
+  assert(K_occ > 0 || K_uocc > 0);
+  ExprPtr result;
+
+  for (auto o = numeric_cast<std::int64_t>(K_occ),
+            u = numeric_cast<std::int64_t>(K_uocc);
+       o > 0 || u > 0; --o, --u) {
+    result += R_(o, u);
+  }
+  return result;
+}
+
+ExprPtr L_(std::size_t K_occ, std::size_t K_uocc) {
+  assert(K_occ > 0 || K_uocc > 0);
+  return ex<op_t>(
+      []() -> std::wstring_view { return optype2label.at(OpType::L); },
+      [=]() -> ExprPtr {
+        using namespace sequant::mbpt::sr;
+        return sr::L_(K_occ, K_uocc);
+      },
+      [=](qnc_t& qns) {
+        qns = combine(qnc_t{K_occ, 0ul, 0ul, K_uocc}, qns);
+      });
+}
+
+ExprPtr L(std::size_t K_occ, std::size_t K_uocc) {
+  using boost::numeric_cast;
+  assert(K_occ > 0 || K_uocc > 0);
+  ExprPtr result;
+
+  for (auto o = numeric_cast<std::int64_t>(K_occ),
+            u = numeric_cast<std::int64_t>(K_uocc);
+       o > 0 || u > 0; --o, --u) {
+    result += L_(o, u);
+  }
+  return result;
+}
+
+ExprPtr A(std::int64_t Kh, std::int64_t Kp) {
+  if (Kp == std::numeric_limits<std::int64_t>::max()) Kp = Kh;
+
+  assert(!(Kh == 0 && Kp == 0));
+  // if they are not zero, Kh and Kp should have the same sign
+  if (Kp != 0 && Kh != 0) {
+    assert((Kh > 0 && Kp > 0) || (Kh < 0 && Kp < 0));
+  }
   return ex<op_t>(
       []() -> std::wstring_view { return optype2label.at(OpType::A); },
       [=]() -> ExprPtr {
         using namespace sequant::mbpt::sr;
-        return sr::A(K, K);
+        return sr::A(Kh, Kp);
       },
       [=](qnc_t& qns) {
-        const std::size_t abs_K = std::abs(K);
-        if (K < 0)
-          qns = combine(qnc_t{abs_K, 0ul, 0ul, abs_K}, qns);
+        const std::size_t abs_Kh = std::abs(Kh);
+        const std::size_t abs_Kp = std::abs(Kp);
+        if (Kp < 0 || Kh < 0)
+          qns = combine(qnc_t{abs_Kp, 0ul, 0ul, abs_Kh}, qns);
         else
-          qns = combine(qnc_t{0ul, abs_K, abs_K, 0ul}, qns);
+          qns = combine(qnc_t{0ul, abs_Kh, abs_Kp, 0ul}, qns);
       });
 }
 
@@ -386,8 +445,17 @@ ExprPtr S(std::int64_t K) {
       });
 }
 
-ExprPtr P(std::int64_t K) {
-  return get_default_context().spbasis() == SPBasis::spinfree ? S(-K) : A(-K);
+ExprPtr P(std::int64_t Kh, std::int64_t Kp) {
+  if (Kp == std::numeric_limits<std::int64_t>::max()) Kp = Kh;
+  if (get_default_context().spbasis() == SPBasis::spinfree) {
+    assert(Kp == Kh &&
+           "non-particle conserving cases does not work with spin-free basis");
+    const auto K = Kh;  // K = Kp = Kh
+    return S(-K);
+  } else {
+    assert(get_default_context().spbasis() == SPBasis::spinorbital);
+    return A(-Kh, -Kp);
+  }
 }
 
 ExprPtr H_pt(std::size_t order, std::size_t R) {
@@ -531,6 +599,7 @@ std::wstring to_latex(const mbpt::Operator<mbpt::sr::qns_t, S>& op) {
     if (to_class(optype) == OpClass::gen) {
       result += L"}";
       return result;
+      // TODO: A(2, 1) produces \hat{A}, which has no info about ranks. Fix this
     }
   }
 

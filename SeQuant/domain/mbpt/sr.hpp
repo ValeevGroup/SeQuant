@@ -221,19 +221,55 @@ ExprPtr Λ_(std::size_t K);
 /// @return sum of `Λ_(k)` with `k<=K`
 ExprPtr Λ(std::size_t K, bool skip1 = false);
 
-/// makes generic bra/ket-antisymmetric excitation (if \p K > 0) or
-/// deexcitation (if \p K < 0) operator of rank `|K|`
-ExprPtr A(std::int64_t K);
+/// makes generic excitation operator based on \p K_occ and \p K_uocc
+/// @param K_occ number of annihilators in occupied space
+/// @param K_uocc number of creators in unoccupied space
+/// @note can produce particle non-conserving operators
+ExprPtr R_(std::size_t K_occ, std::size_t K_uocc);
+
+/// makes sum of R_() operators based on \p K_occ and \p K_uocc
+/// @param K_occ number of annihilators in occupied space
+/// @param K_uocc number of creators in unoccupied space
+/// @note can produce particle non-conserving operators
+ExprPtr R(std::size_t K_occ, std::size_t K_uocc);
+
+/// makes generic deexcitation operator based on \p K_occ and \p K_uocc
+/// @param K_occ number of creators in occupied space
+/// @param K_uocc number of annihilators in unoccupied space
+/// @note can produce particle non-conserving operators
+ExprPtr L_(std::size_t K_occ, std::size_t K_uocc);
+
+/// makes sum of L_() operators based on \p K_occ and \p K_uocc
+/// @param K_occ number of creators in occupied space
+/// @param K_uocc number of annihilators in unoccupied space
+/// @note can produce particle non-conserving operators
+ExprPtr L(std::size_t K_occ, std::size_t K_uocc);
+
+// clang-format off
+/// @brief makes generic bra/ket-antisymmetric excitation (if \p Kh > 0 && \p Kp > 0)
+/// or deexcitation (if \p Kh < 0 && \p Kp < 0) operator
+/// \param Kh if <0, annihilates this many holes, else creates this many
+/// \param Kp if <0, annihilates this many particles, else creates this many
+/// (default is to set \p Kp to \p Kh)
+/// @note supports particle non-conserving operators
+// clang-format on
+ExprPtr A(std::int64_t Kh,
+          std::int64_t Kp = std::numeric_limits<std::int64_t>::max());
 
 /// makes generic particle-symmetric excitation (if \p K > 0) or
 /// deexcitation (sif \p K < 0) operator of rank `|K|`
 ExprPtr S(std::int64_t K);
 
-/// makes projector onto excited bra (if \p K > 0) or
-/// ket (if \p K < 0) manifold of rank `|K|`;
-/// if using spin-free basis the manifold is particle-symmetric (@sa S(K)),
-/// else it is bra/ket-antisymmetric (@sa A(K))
-ExprPtr P(std::int64_t K);
+// clang-format off
+/// makes projector onto excited bra (if \p Kh > 0 && \p Kp > 0) or ket (if \p Kh < 0 && \p Kp <0) manifold
+/// \param Kh if <0, annihilates this many holes, else creates this many
+/// \param Kp if <0, annihilates this many particles, else creates this many
+/// (default is to set \p Kp to \p Kh)
+/// @note if using spin-free basis, only supports particle-symmetric operators `K = Kh = Kp`, returns `S(-K)`
+/// else supports particle non-conserving operators and returns `A(-Kh, -Kp)`
+// clang-format on
+ExprPtr P(std::int64_t Kh,
+          std::int64_t Kp = std::numeric_limits<std::int64_t>::max());
 
 /// Hamiltonian perturbation of rank \param R and order \p o
 /// @pre `order==1`, only first order perturbation is supported now

@@ -1,3 +1,5 @@
+// TODO: Switch definitions to Kh, Kp instead of Nbra, Nket
+
 /// makes excitation operator of bra/ket ranks @c Nbra/Nket
 ExprPtr T_(std::size_t Nbra,
            std::size_t Nket = std::numeric_limits<std::size_t>::max());
@@ -6,13 +8,13 @@ ExprPtr T_(std::size_t Nbra,
 ExprPtr Λ_(std::size_t Nbra,
            std::size_t Nket = std::numeric_limits<std::size_t>::max());
 
-/// makes generic excitation (right-hand eigenvector) operator of bra/ket ranks
-/// @c Nbra/Nket
+/// makes generic excitation (right-hand eigenvector) operator of bra/ket tensor
+/// ranks @c Nbra/Nket
 ExprPtr R_(std::size_t Nbra,
            std::size_t Nket = std::numeric_limits<std::size_t>::max());
 
-/// makes generic deexcitation (left-hand eigenvector) of bra/ket ranks @c
-/// Nbra/Nket
+/// makes generic deexcitation (left-hand eigenvector) of bra/ket tensor ranks
+/// @c Nbra/Nket
 ExprPtr L_(std::size_t Nbra,
            std::size_t Nket = std::numeric_limits<std::size_t>::max());
 
