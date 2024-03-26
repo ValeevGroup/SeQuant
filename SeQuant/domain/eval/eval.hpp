@@ -1,14 +1,13 @@
 #ifndef SEQUANT_EVAL_EVAL_HPP
 #define SEQUANT_EVAL_EVAL_HPP
 
-#include "eval_result.hpp"
-
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval_node.hpp>
 #include <SeQuant/core/logger.hpp>
-#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/meta.hpp>
+#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/domain/eval/cache_manager.hpp>
+#include <SeQuant/domain/eval/eval_result.hpp>
 
 #include <btas/btas.h>
 #include <tiledarray.h>

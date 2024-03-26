@@ -5,19 +5,32 @@
 #ifndef SEQUANT_CORE_OP_H
 #define SEQUANT_CORE_OP_H
 
+#include <SeQuant/core/abstract_tensor.hpp>
+#include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/container.hpp>
+#include <SeQuant/core/context.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/hash.hpp>
+#include <SeQuant/core/hugenholtz.hpp>
+#include <SeQuant/core/index.hpp>
+#include <SeQuant/core/ranges.hpp>
+#include <SeQuant/core/space.hpp>
+
+#include <cassert>
+#include <cstddef>
+#include <cstdint>
+#include <initializer_list>
+#include <iterator>
+#include <memory>
 #include <numeric>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <tuple>
+#include <type_traits>
+#include <utility>
 
 #include <range/v3/all.hpp>
-
-#include "abstract_tensor.hpp"
-#include "attr.hpp"
-#include "container.hpp"
-#include "context.hpp"
-#include "expr.hpp"
-#include "hash.hpp"
-#include "hugenholtz.hpp"
-#include "index.hpp"
-#include "ranges.hpp"
 
 namespace sequant {
 

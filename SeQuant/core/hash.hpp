@@ -18,7 +18,7 @@ namespace sequant_boost = boost;
 #error "SeQuant requires Boost 1.81 or later for hashing"
 #endif
 
-#include "meta.hpp"
+#include <SeQuant/core/meta.hpp>
 
 namespace sequant {
 

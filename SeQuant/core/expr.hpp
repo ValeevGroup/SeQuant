@@ -7,28 +7,34 @@
 
 #include "SeQuant/core/expr_fwd.hpp"
 
-#include "SeQuant/core/complex.hpp"
-#include "SeQuant/core/container.hpp"
-#include "SeQuant/core/hash.hpp"
-#include "SeQuant/core/latex.hpp"
-#include "SeQuant/core/logger.hpp"
-#include "SeQuant/core/meta.hpp"
-#include "SeQuant/core/rational.hpp"
-#include "SeQuant/core/meta.hpp"
-#include "SeQuant/core/wolfram.hpp"
+#include <SeQuant/core/complex.hpp>
+#include <SeQuant/core/container.hpp>
+#include <SeQuant/core/hash.hpp>
+#include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/wolfram.hpp>
 
 #include <range/v3/all.hpp>
 
 #include <boost/core/demangle.hpp>
 #include <boost/numeric/conversion/cast.hpp>
 
+#include <algorithm>
 #include <atomic>
-#include <complex>
+#include <cassert>
+#include <cstdlib>
+#include <functional>
+#include <initializer_list>
 #include <iostream>
+#include <iterator>
 #include <memory>
 #include <optional>
+#include <stdexcept>
+#include <string>
+#include <string_view>
 #include <type_traits>
-#include <vector>
+#include <typeinfo>
+#include <utility>
 
 namespace sequant {
 
@@ -1678,8 +1684,9 @@ T &ExprPtr::as() {
 
 }  // namespace sequant
 
+
+#endif  // SEQUANT_EXPR_HPP
+
 #include "expr_operator.hpp"
 
 #include "expr_algorithm.hpp"
-
-#endif  // SEQUANT_EXPR_HPP

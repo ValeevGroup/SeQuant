@@ -2,7 +2,10 @@
 // Created by Eduard Valeyev on 3/27/18.
 //
 
-#include "space.hpp"
+#include <SeQuant/core/space.hpp>
+#include <SeQuant/core/container.hpp>
+
+#include <bitset>
 
 int32_t sequant::TypeAttr::used_bits = 0xffff;
 

@@ -3,6 +3,11 @@
 //
 
 #include <SeQuant/core/op.hpp>
+#include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/container.hpp>
+#include <SeQuant/core/expr.hpp>
+
+#include <limits>
 
 namespace sequant {
 namespace detail {

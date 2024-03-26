@@ -2,15 +2,33 @@
 // Created by Eduard Valeyev on 3/23/18.
 //
 
-#include "SeQuant/core/timer.hpp"
-#include "SeQuant/core/utility/macros.hpp"
-#include "SeQuant/core/utility/nodiscard.hpp"
-#include "SeQuant/core/wick.hpp"
+#include <SeQuant/core/timer.hpp>
+#include <SeQuant/core/abstract_tensor.hpp>
+#include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/context.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/hash.hpp>
+#include <SeQuant/core/index.hpp>
+#include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/op.hpp>
+#include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/nodiscard.hpp>
+#include <SeQuant/core/wick.hpp>
 
 #include "catch.hpp"
 #include "test_config.hpp"
 
+#include <range/v3/all.hpp>
+
 #include <iostream>
+#include <algorithm>
+#include <memory>
+#include <stdexcept>
+#include <string>
+#include <type_traits>
+#include <vector>
 
 namespace sequant {
 struct WickAccessor {};

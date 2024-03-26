@@ -2,6 +2,18 @@
 
 #include <SeQuant/core/optimize.hpp>
 #include <SeQuant/core/parse_expr.hpp>
+#include <SeQuant/core/algorithm.hpp>
+#include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/index.hpp>
+#include <SeQuant/core/space.hpp>
+
+#include <cstddef>
+#include <initializer_list>
+#include <memory>
+#include <stdexcept>
+
+#include <range/v3/all.hpp>
 
 sequant::ExprPtr extract(sequant::ExprPtr expr,
                          std::initializer_list<size_t> const& idxs) {

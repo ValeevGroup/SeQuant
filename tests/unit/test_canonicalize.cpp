@@ -1,9 +1,19 @@
-#include <iostream>
-
-#include "SeQuant/core/expr.hpp"
-#include "SeQuant/core/expr_algorithm.hpp"
-#include "SeQuant/core/tensor.hpp"
 #include "catch.hpp"
+
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/abstract_tensor.hpp>
+#include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/hash.hpp>
+#include <SeQuant/core/index.hpp>
+#include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/rational.hpp>
+
+#include <memory>
+#include <string>
+#include <type_traits>
+
+#include <range/v3/all.hpp>
 
 TEST_CASE("Canonicalizer", "[algorithms]") {
   using namespace sequant;

@@ -5,9 +5,20 @@
 #ifndef SEQUANT_TENSOR_NETWORK_H
 #define SEQUANT_TENSOR_NETWORK_H
 
-#include "abstract_tensor.hpp"
-#include "container.hpp"
-#include "tensor.hpp"
+#include <SeQuant/core/abstract_tensor.hpp>
+#include <SeQuant/core/container.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/index.hpp>
+
+#include <cassert>
+#include <cstdlib>
+#include <memory>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <tuple>
+#include <utility>
+#include <vector>
 
 // forward declarations
 namespace bliss {

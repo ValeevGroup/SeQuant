@@ -5,13 +5,17 @@
 #ifndef SEQUANT_SPACE_H
 #define SEQUANT_SPACE_H
 
-#include <bitset>
 #include <cassert>
 #include <codecvt>
+#include <cstdint>
+#include <cstdlib>
 #include <locale>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <utility>
 
-#include "attr.hpp"
-#include "container.hpp"
+#include <SeQuant/core/container.hpp>
 
 #include <range/v3/algorithm/any_of.hpp>
 
