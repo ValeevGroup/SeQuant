@@ -36,6 +36,7 @@ jobs:
         -DSEQUANT_USE_SYSTEM_BOOST_HASH=OFF
         -DCMAKE_CXX_STANDARD=20
         -DCMAKE_CXX_EXTENSIONS=OFF
+        -DSEQUANT_BUILD_BENCHMARKS=ON
     steps:
     - uses: actions/checkout@v2
 

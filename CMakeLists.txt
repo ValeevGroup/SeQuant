@@ -74,6 +74,8 @@ include(AddCustomTargetSubproject)
 include(FeatureSummary)
 include(CMakePackageConfigHelpers)
 
+option(SEQUANT_BUILD_BENCHMARKS "Enable building of benchmarks" OFF)
+
 ##########################
 # Standard build variables
 ##########################
@@ -171,7 +173,6 @@ add_library(SeQuant-bliss
 set(SeQuant_src
         ${PROJECT_BINARY_DIR}/SeQuant/version.hpp
         SeQuant/version.cpp
-        SeQuant/core/abstract_tensor.cpp
         SeQuant/core/abstract_tensor.hpp
         SeQuant/core/algorithm.hpp
         SeQuant/core/any.hpp
@@ -220,6 +221,8 @@ set(SeQuant_src
         SeQuant/core/tag.hpp
         SeQuant/core/tensor.cpp
         SeQuant/core/tensor.hpp
+        SeQuant/core/tensor_canonicalizer.cpp
+        SeQuant/core/tensor_canonicalizer.hpp
         SeQuant/core/tensor_network.cpp
         SeQuant/core/tensor_network.hpp
         SeQuant/core/timer.hpp
@@ -231,6 +234,8 @@ set(SeQuant_src
         SeQuant/core/utility/string.cpp
         SeQuant/core/wick.hpp
         SeQuant/core/wick.impl.hpp
+        SeQuant/core/wick_graph.cpp
+        SeQuant/core/wick_graph.hpp
         SeQuant/core/wolfram.hpp
         SeQuant/core/wstring.hpp
         SeQuant/domain/mbpt/antisymmetrizer.hpp
@@ -416,6 +421,7 @@ if (BUILD_TESTING)
             tests/unit/test_math.cpp
             tests/unit/test_string.cpp
             tests/unit/test_latex.cpp
+            tests/unit/test_utilities.cpp
             )
 
     if (TARGET tiledarray)
@@ -537,8 +543,13 @@ if (BUILD_TESTING)
       target_link_libraries(${example${i}} SeQuant)
     endforeach ()
 
+	set(example12 "tensor_network_graphs")
+    add_executable(${example12} EXCLUDE_FROM_ALL
+            examples/${example12}/${example12}.cpp)
+    target_link_libraries(${example12} SeQuant)
+
     # add tests for running examples
-    set(lastexample 11)
+    set(lastexample 12)
     foreach (i RANGE ${lastexample})
         if (TARGET ${example${i}})
             add_dependencies(examples-sequant ${example${i}})
@@ -566,6 +577,10 @@ if (BUILD_TESTING)
 else (BUILD_TESTING)
     add_custom_target_subproject(sequant check USES_TERMINAL COMMAND echo "WARNING: SeQuant testing disabled. To enable, give -DBUILD_TESTING=ON to cmake")
 endif (BUILD_TESTING)
+
+if (SEQUANT_BUILD_BENCHMARKS)
+    add_subdirectory(benchmarks)
+endif()
 
 ####### Python ########
 

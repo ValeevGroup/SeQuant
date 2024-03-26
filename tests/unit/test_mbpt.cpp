@@ -2,14 +2,6 @@
 // Created by Eduard Valeyev on 2019-02-19.
 //
 
-#include <SeQuant/core/op.hpp>
-#include <SeQuant/core/tensor.hpp>
-#include <SeQuant/core/timer.hpp>
-#include <SeQuant/domain/mbpt/context.hpp>
-#include <SeQuant/domain/mbpt/mr.hpp>
-#include <SeQuant/domain/mbpt/op.hpp>
-#include <SeQuant/domain/mbpt/spin.hpp>
-#include <SeQuant/domain/mbpt/sr.hpp>
 #include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/attr.hpp>
@@ -17,6 +9,16 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/op.hpp>
+#include <SeQuant/core/parse_expr.hpp>
+#include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/timer.hpp>
+#include <SeQuant/domain/mbpt/context.hpp>
+#include <SeQuant/domain/mbpt/mr.hpp>
+#include <SeQuant/domain/mbpt/op.hpp>
+#include <SeQuant/domain/mbpt/spin.hpp>
+#include <SeQuant/domain/mbpt/sr.hpp>
 
 #include "catch.hpp"
 #include "test_config.hpp"
@@ -43,7 +45,8 @@ TEST_CASE("NBodyOp", "[mbpt]") {
 
       op_t f1([]() -> std::wstring_view { return L"f"; },
               []() -> ExprPtr {
-                return ex<Tensor>(L"f", WstrList{L"p_1"}, WstrList{L"p_2"}) *
+                return ex<Tensor>(L"f", WstrList{L"p_1"}, WstrList{L"p_2"},
+                                  WstrList{}) *
                        ex<FNOperator>(WstrList{L"p_1"}, WstrList{L"p_2"});
               },
               [](qns_t& qns) {
@@ -55,8 +58,8 @@ TEST_CASE("NBodyOp", "[mbpt]") {
       {  // exact compare
         using namespace boost::numeric::interval_lib::compare::possible;
         REQUIRE(operator==(f1(), qns_t{1, 1}));  // produces single replacement
-        REQUIRE(operator!=(f1(),
-                           qns_t{2, 2}));  // cannot produce double replacement
+        REQUIRE(operator!=
+                (f1(), qns_t{2, 2}));  // cannot produce double replacement
         REQUIRE(operator==(f1(qns_t{5, 0}), qns_t{{5, 6}, {0, 1}}));
       }
     }
@@ -68,7 +71,8 @@ TEST_CASE("NBodyOp", "[mbpt]") {
       // this is fock operator in terms of general spaces
       op_t f_gg([]() -> std::wstring_view { return L"f"; },
                 []() -> ExprPtr {
-                  return ex<Tensor>(L"f", WstrList{L"p_1"}, WstrList{L"p_2"}) *
+                  return ex<Tensor>(L"f", WstrList{L"p_1"}, WstrList{L"p_2"},
+                                    WstrList{}) *
                          ex<FNOperator>(WstrList{L"p_1"}, WstrList{L"p_2"});
                 },
                 [](qns_t& qns) {
@@ -77,7 +81,8 @@ TEST_CASE("NBodyOp", "[mbpt]") {
       // excitation part of the Fock operator
       op_t f_uo([]() -> std::wstring_view { return L"f"; },
                 []() -> ExprPtr {
-                  return ex<Tensor>(L"f", WstrList{L"a_2"}, WstrList{L"i_2"}) *
+                  return ex<Tensor>(L"f", WstrList{L"a_2"}, WstrList{L"i_2"},
+                                    WstrList{}) *
                          ex<FNOperator>(WstrList{L"a_1"}, WstrList{L"i_2"});
                 },
                 [](qns_t& qns) {
@@ -619,7 +624,9 @@ TEST_CASE("MBPT", "[mbpt]") {
         auto result_op = op::vac_av(op::H_(2) * op::T_(2));
 
         REQUIRE(result_op->size() == result->size());
-        REQUIRE(simplify(result - result_op) == ex<Constant>(0));
+		auto diff = simplify(result - result_op);
+		std::wcout << "Diff: " <<  deparse_expr(diff) << std::endl;
+        REQUIRE(diff == ex<Constant>(0));
       }
     });
 

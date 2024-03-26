@@ -25,8 +25,10 @@ inline std::vector<Index> make_index(std::vector<std::wstring> labels) {
 
 std::shared_ptr<Tensor> make_tensor(std::wstring label,
                                     std::vector<std::wstring> bra,
-                                    std::vector<std::wstring> ket) {
-  return std::make_shared<Tensor>(label, make_index(bra), make_index(ket));
+                                    std::vector<std::wstring> ket,
+                                    std::vector<std::wstring> auxiliary) {
+  return std::make_shared<Tensor>(label, make_index(bra), make_index(ket),
+                                  make_index(auxiliary));
 }
 
 std::shared_ptr<Constant> make_constant(py::float_ number) {
@@ -135,9 +137,14 @@ PYBIND11_MODULE(_sequant, m) {
       .def_property_readonly("label", &Tensor::label)
       .def_property_readonly("bra", &Tensor::bra)
       .def_property_readonly("ket", &Tensor::ket)
+      .def_property_readonly("auxikiary", &Tensor::auxiliary)
       .def_property_readonly("braket", [](const Tensor &t) {
         auto braket = t.braket();
         return std::vector<Index>(braket.begin(), braket.end());
+      })
+      .def_property_readonly("indices", [](const Tensor &t) {
+        auto indices = t.indices();
+        return std::vector<Index>(indices.begin(), indices.end());
       });
 
   py::class_<Complex<rational>>(m, "zRational")

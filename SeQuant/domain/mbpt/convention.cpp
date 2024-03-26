@@ -8,6 +8,7 @@
 #include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/tensor_canonicalizer.hpp>
 
 #include <cassert>
 #include <cstdlib>

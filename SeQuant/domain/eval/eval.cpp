@@ -43,7 +43,7 @@ EvalExprBTAS::annot_t const& EvalExprBTAS::annot() const noexcept {
 }
 
 EvalExprBTAS::EvalExprBTAS(Tensor const& t) noexcept
-    : EvalExpr{t}, annot_{index_hash(t.const_braket()) | ranges::to<annot_t>} {}
+    : EvalExpr{t}, annot_{index_hash(t.const_indices()) | ranges::to<annot_t>} {}
 
 EvalExprBTAS::EvalExprBTAS(Constant const& c) noexcept : EvalExpr{c} {}
 
@@ -55,7 +55,7 @@ EvalExprBTAS::EvalExprBTAS(EvalExprBTAS const& left,   //
     : EvalExpr{left, right, op} {
   if (result_type() == ResultType::Tensor) {
     assert(!tot() && "Tensor of tensor not supported in BTAS");
-    annot_ = index_hash(as_tensor().const_braket()) | ranges::to<annot_t>;
+    annot_ = index_hash(as_tensor().const_indices()) | ranges::to<annot_t>;
   }
 }
 

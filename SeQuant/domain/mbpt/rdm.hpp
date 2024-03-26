@@ -19,9 +19,9 @@ ExprPtr cumu_to_density(ExprPtr ex_) {
   auto down_0 = ex_->as<Tensor>().ket()[0];
   auto up_0 = ex_->as<Tensor>().bra()[0];
 
-  auto density = ex<Tensor>(optype2label.at(OpType::RDM),
-                            std::initializer_list<Index>{up_0},
-                            std::initializer_list<Index>{down_0});
+  auto density = ex<Tensor>(
+      optype2label.at(OpType::RDM), std::initializer_list<Index>{up_0},
+      std::initializer_list<Index>{down_0}, std::initializer_list<Index>{});
   return density;
 }
 
@@ -38,11 +38,14 @@ ExprPtr cumu2_to_density(ExprPtr ex_) {
   const auto rdm_label = optype2label.at(OpType::RDM);
   auto density2 =
       ex<Tensor>(rdm_label, std::initializer_list<Index>{up_0, up_1},
-                 std::initializer_list<Index>{down_0, down_1});
+                 std::initializer_list<Index>{down_0, down_1},
+                 std::initializer_list<Index>{});
   auto density_1 = ex<Tensor>(rdm_label, std::initializer_list<Index>{up_0},
-                              std::initializer_list<Index>{down_0});
+                              std::initializer_list<Index>{down_0},
+                              std::initializer_list<Index>{});
   auto density_2 = ex<Tensor>(rdm_label, std::initializer_list<Index>{up_1},
-                              std::initializer_list<Index>{down_1});
+                              std::initializer_list<Index>{down_1},
+                              std::initializer_list<Index>{});
 
   auto d1_d2 = antisymmetrize(density_1 * density_2);
   return density2 + ex<Constant>(-1) * d1_d2.result;
@@ -63,16 +66,21 @@ ExprPtr cumu3_to_density(ExprPtr ex_) {
   const auto rdm_label = optype2label.at(OpType::RDM);
   auto cumulant2 = ex<Tensor>(optype2label.at(OpType::RDMCumulant),
                               std::initializer_list<Index>{up_1, up_2},
-                              std::initializer_list<Index>{down_1, down_2});
+                              std::initializer_list<Index>{down_1, down_2},
+                              std::initializer_list<Index>{});
   auto density_1 = ex<Tensor>(rdm_label, std::initializer_list<Index>{up_0},
-                              std::initializer_list<Index>{down_0});
+                              std::initializer_list<Index>{down_0},
+                              std::initializer_list<Index>{});
   auto density_2 = ex<Tensor>(rdm_label, std::initializer_list<Index>{up_1},
-                              std::initializer_list<Index>{down_1});
+                              std::initializer_list<Index>{down_1},
+                              std::initializer_list<Index>{});
   auto density_3 = ex<Tensor>(rdm_label, std::initializer_list<Index>{up_2},
-                              std::initializer_list<Index>{down_2});
+                              std::initializer_list<Index>{down_2},
+                              std::initializer_list<Index>{});
   auto density3 =
       ex<Tensor>(rdm_label, std::initializer_list<Index>{up_0, up_1, up_2},
-                 std::initializer_list<Index>{down_0, down_1, down_2});
+                 std::initializer_list<Index>{down_0, down_1, down_2},
+                 std::initializer_list<Index>{});
 
   auto d1_d2 =
       antisymmetrize(density_1 * density_2 * density_3 + density_1 * cumulant2);
@@ -113,7 +121,8 @@ ExprPtr one_body_sub(
                                 std::initializer_list<Index>{down_0});
   const auto cumu1 = ex<Tensor>(optype2label.at(OpType::RDMCumulant),
                                 std::initializer_list<Index>{down_0},
-                                std::initializer_list<Index>{up_0});
+                                std::initializer_list<Index>{up_0},
+                                std::initializer_list<Index>{});
 
   auto result = a + (ex<Constant>(-1) * cumu1);
   return (result);
@@ -134,18 +143,20 @@ ExprPtr two_body_decomp(
 
   const auto cumu1 = ex<Tensor>(optype2label.at(OpType::RDMCumulant),
                                 std::initializer_list<Index>{down_0},
-                                std::initializer_list<Index>{up_0});
+                                std::initializer_list<Index>{up_0},
+                                std::initializer_list<Index>{});
   const auto cumu2 = ex<Tensor>(optype2label.at(OpType::RDMCumulant),
                                 std::initializer_list<Index>{down_1},
-                                std::initializer_list<Index>{up_1});
+                                std::initializer_list<Index>{up_1},
+                                std::initializer_list<Index>{});
   const auto a = ex<FNOperator>(std::initializer_list<Index>{up_1},
                                 std::initializer_list<Index>{down_1});
   const auto a2 = ex<FNOperator>(std::initializer_list<Index>{up_0, up_1},
                                  std::initializer_list<Index>{down_0, down_1});
-  const auto double_cumu =
-      ex<Tensor>(optype2label.at(OpType::RDMCumulant),
-                 std::initializer_list<Index>{down_0, down_1},
-                 std::initializer_list<Index>{up_0, up_1});
+  const auto double_cumu = ex<Tensor>(
+      optype2label.at(OpType::RDMCumulant),
+      std::initializer_list<Index>{down_0, down_1},
+      std::initializer_list<Index>{up_0, up_1}, std::initializer_list<Index>{});
 
   auto term1 = cumu1 * a;
   auto term2 = cumu1 * cumu2;
@@ -178,17 +189,20 @@ three_body_decomp(ExprPtr ex_, bool approx = true) {
 
   const auto cumulant = ex<Tensor>(optype2label.at(OpType::RDMCumulant),
                                    std::initializer_list<Index>{down_0},
-                                   std::initializer_list<Index>{up_0});
+                                   std::initializer_list<Index>{up_0},
+                                   std::initializer_list<Index>{});
   const auto a = ex<FNOperator>(std::initializer_list<Index>{up_1, up_2},
                                 std::initializer_list<Index>{down_1, down_2});
   auto a_cumulant = cumulant * a;
 
   auto cumulant2 = ex<Tensor>(optype2label.at(OpType::RDMCumulant),
                               std::initializer_list<Index>{down_1},
-                              std::initializer_list<Index>{up_1});
+                              std::initializer_list<Index>{up_1},
+                              std::initializer_list<Index>{});
   auto cumulant3 = ex<Tensor>(optype2label.at(OpType::RDMCumulant),
                               std::initializer_list<Index>{down_2},
-                              std::initializer_list<Index>{up_2});
+                              std::initializer_list<Index>{up_2},
+                              std::initializer_list<Index>{});
   auto cumulant_3x = cumulant * cumulant2 * cumulant3;
 
   auto a1 = ex<FNOperator>(std::initializer_list<Index>{up_0},
@@ -197,7 +211,8 @@ three_body_decomp(ExprPtr ex_, bool approx = true) {
 
   auto two_body_cumu = ex<Tensor>(optype2label.at(OpType::RDMCumulant),
                                   std::initializer_list<Index>{down_1, down_2},
-                                  std::initializer_list<Index>{up_1, up_2});
+                                  std::initializer_list<Index>{up_1, up_2},
+                                  std::initializer_list<Index>{});
   auto a1_cumu2 = a1 * two_body_cumu;
 
   auto cumu1_cumu2 = cumulant * two_body_cumu;
@@ -208,7 +223,8 @@ three_body_decomp(ExprPtr ex_, bool approx = true) {
     auto cumu3 =
         ex<Tensor>(optype2label.at(OpType::RDMCumulant),
                    std::initializer_list<Index>{down_0, down_1, down_2},
-                   std::initializer_list<Index>{up_0, up_1, up_2});
+                   std::initializer_list<Index>{up_0, up_1, up_2},
+                   std::initializer_list<Index>{});
 
     sum_of_terms.result = cumu3 + sum_of_terms.result;
   }
@@ -304,9 +320,9 @@ three_body_decomposition(ExprPtr ex_, int rank, bool fast = false) {
         std::vector<Index> initial_upper{up_0, up_1, up_2};
         initial_pairing.first = initial_lower; initial_pairing.second = initial_upper;
         // make tensors which can be decomposed into the constituent pieces later in the procedure.
-        auto DE2 = ex<Tensor>(L"DE2",std::initializer_list<Index>{down_0,down_1,down_2},std::initializer_list<Index>{up_0,up_1,up_2});
-        auto DDE = ex<Tensor>(L"DDE",std::initializer_list<Index>{down_0,down_1,down_2},std::initializer_list<Index>{up_0,up_1,up_2});
-        auto D2E =  ex<Tensor>(L"D2E",std::initializer_list<Index>{down_0,down_1,down_2},std::initializer_list<Index>{up_0,up_1,up_2});
+        auto DE2 = ex<Tensor>(L"DE2", IndexList{down_0,down_1,down_2}, IndexList{up_0,up_1,up_2}, IndexList{});
+        auto DDE = ex<Tensor>(L"DDE", IndexList{down_0,down_1,down_2}, IndexList{up_0,up_1,up_2}, IndexList{});
+        auto D2E =  ex<Tensor>(L"D2E", IndexList{down_0,down_1,down_2}, IndexList{up_0,up_1,up_2}, IndexList{});
         auto result = DE2 + D2E - ex<Constant>(2) * DDE;
         return {result,initial_pairing};
       }

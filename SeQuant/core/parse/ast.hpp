@@ -55,12 +55,14 @@ struct Variable : boost::spirit::x3::position_tagged {
 struct IndexGroups : boost::spirit::x3::position_tagged {
   std::vector<Index> bra;
   std::vector<Index> ket;
+  std::vector<Index> auxiliaries;
   bool reverse_bra_ket;
 
   IndexGroups(std::vector<Index> bra = {}, std::vector<Index> ket = {},
-              bool reverse_bra_ket = {})
+              std::vector<Index> auxiliaries = {}, bool reverse_bra_ket = {})
       : bra(std::move(bra)),
         ket(std::move(ket)),
+        auxiliaries(std::move(auxiliaries)),
         reverse_bra_ket(reverse_bra_ket) {}
 };
 
@@ -114,7 +116,7 @@ BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Index, label, protoLabels);
 BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Number, numerator, denominator);
 BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Variable, name, conjugated);
 BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::IndexGroups, bra, ket,
-                          reverse_bra_ket);
+                          auxiliaries, reverse_bra_ket);
 BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Tensor, name, indices, symmetry);
 
 BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Product, factors);
