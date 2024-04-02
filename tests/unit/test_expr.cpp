@@ -4,9 +4,28 @@
 
 #include "catch.hpp"
 
-#include <iostream>
-#include "SeQuant/core/hash.hpp"
-#include "SeQuant/core/wick.hpp"
+#include <SeQuant/core/hash.hpp>
+#include <SeQuant/core/complex.hpp>
+#include <SeQuant/core/container.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/meta.hpp>
+#include <SeQuant/core/wolfram.hpp>
+
+#include <cstddef>
+#include <cstdint>
+#include <algorithm>
+#include <initializer_list>
+#include <iterator>
+#include <memory>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <type_traits>
+#include <utility>
+#include <vector>
+
+#include <range/v3/all.hpp>
 
 struct Dummy : public sequant::Expr {
   virtual ~Dummy() = default;

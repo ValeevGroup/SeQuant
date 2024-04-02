@@ -2,8 +2,9 @@
 #define SEQUANT_PARSE_EXPR_HPP
 
 #include <SeQuant/core/attr.hpp>
-#include <SeQuant/core/expr_fwd.hpp>
+#include <SeQuant/core/expr.hpp>
 
+#include <string>
 #include <string_view>
 #include <stdexcept>
 #include <string>

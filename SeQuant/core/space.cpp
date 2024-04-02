@@ -2,7 +2,10 @@
 // Created by Eduard Valeyev on 3/27/18.
 //
 
-#include "space.hpp"
+#include <SeQuant/core/space.hpp>
+#include <SeQuant/core/container.hpp>
+
+#include <bitset>
 
 int32_t sequant::TypeAttr::used_bits = 0xffff;
 
@@ -41,6 +44,69 @@ std::wstring to_wolfram(const IndexSpace& space) {
   result += L"]";
 
   return result;
+}
+
+std::wstring to_wstring(TypeAttr type) {
+  using TypeBitset =
+      std::bitset<sizeof(decltype(IndexSpace::TypeAttr::bitset))>;
+  if (type == IndexSpace::frozen_occupied) {
+    return L"frozen_occupied";
+  } else if (type == IndexSpace::inactive_occupied) {
+    return L"inactive_occupied";
+  } else if (type == IndexSpace::active_occupied) {
+    return L"active_occupied";
+  } else if (type == IndexSpace::occupied) {
+    return L"occupied";
+  } else if (type == IndexSpace::active) {
+    return L"active";
+  } else if (type == IndexSpace::maybe_occupied) {
+    return L"maybe_occupied";
+  } else if (type == IndexSpace::active_maybe_occupied) {
+    return L"active_maybe_occupied";
+  } else if (type == IndexSpace::active_unoccupied) {
+    return L"active_unoccupied";
+  } else if (type == IndexSpace::inactive_unoccupied) {
+    return L"inactive_unoccupied";
+  } else if (type == IndexSpace::unoccupied) {
+    return L"unoccupied";
+  } else if (type == IndexSpace::maybe_unoccupied) {
+    return L"maybe_unoccupied";
+  } else if (type == IndexSpace::active_maybe_unoccupied) {
+    return L"active_maybe_unoccupied";
+  } else if (type == IndexSpace::all_active) {
+    return L"all_active";
+  } else if (type == IndexSpace::all) {
+    return L"all";
+  } else if (type == IndexSpace::other_unoccupied) {
+    return L"other_unoccupied";
+  } else if (type == IndexSpace::complete_unoccupied) {
+    return L"complete_unoccupied";
+  } else if (type == IndexSpace::complete_maybe_unoccupied) {
+    return L"complete_maybe_unoccupied";
+  } else if (type == IndexSpace::complete) {
+    return L"complete";
+  } else {
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+    return std::wstring(L"Custom (") +
+           converter.from_bytes(TypeBitset(type.bitset).to_string()) + L")";
+  }
+}
+
+std::wstring to_wstring(QuantumNumbersAttr qns) {
+  using QNBitset =
+      std::bitset<sizeof(decltype(IndexSpace::QuantumNumbersAttr::bitset))>;
+
+  if (qns == IndexSpace::alpha) {
+    return L"↑";
+  } else if (qns == IndexSpace::beta) {
+    return L"↓";
+  } else if (qns == IndexSpace::nullqns) {
+    return L"";
+  } else {
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+    return L"Custom (" +
+           converter.from_bytes(QNBitset(qns.bitset).to_string()) + L")";
+  }
 }
 
 }  // namespace sequant

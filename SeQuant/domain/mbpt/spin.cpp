@@ -1,15 +1,45 @@
 #include <SeQuant/domain/mbpt/spin.hpp>
 
+#include <SeQuant/core/algorithm.hpp>
+#include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/expr_algorithm.hpp>
+#include <SeQuant/core/expr_operator.hpp>
 #include <SeQuant/core/math.hpp>
+#include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tensor.hpp>
 
 #ifdef SEQUANT_HAS_EIGEN
 #include <Eigen/Eigenvalues>
 #endif
 
+#include <range/v3/algorithm/any_of.hpp>
+#include <range/v3/algorithm/contains.hpp>
+#include <range/v3/algorithm/count_if.hpp>
 #include <range/v3/algorithm/for_each.hpp>
+#include <range/v3/detail/variant.hpp>
+#include <range/v3/functional/identity.hpp>
+#include <range/v3/iterator/basic_iterator.hpp>
+#include <range/v3/utility/get.hpp>
+#include <range/v3/view/concat.hpp>
+#include <range/v3/view/interface.hpp>
+#include <range/v3/view/transform.hpp>
+#include <range/v3/view/view.hpp>
 
+#include <algorithm>
+#include <cassert>
+#include <cmath>
+#include <cstdint>
+#include <cstdlib>
+#include <functional>
+#include <iterator>
+#include <memory>
+#include <new>
+#include <numeric>
+#include <stdexcept>
+#include <string_view>
 #include <unordered_map>
+#include <utility>
 
 namespace sequant {
 

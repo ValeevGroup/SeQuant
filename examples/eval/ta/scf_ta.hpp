@@ -11,10 +11,10 @@
 #include <SeQuant/core/eval_node.hpp>
 #include <SeQuant/core/parse_expr.hpp>
 
-#include "examples/eval/calc_info.hpp"
-#include "examples/eval/data_info.hpp"
-#include "examples/eval/scf.hpp"
-#include "examples/eval/ta/data_world_ta.hpp"
+#include <examples/eval/calc_info.hpp>
+#include <examples/eval/data_info.hpp>
+#include <examples/eval/scf.hpp>
+#include <examples/eval/ta/data_world_ta.hpp>
 
 #include <chrono>
 

@@ -2,14 +2,31 @@
 // Created by Eduard Valeyev on 2019-02-19.
 //
 
-#include "SeQuant/domain/mbpt/sr.hpp"
+#include <SeQuant/domain/mbpt/sr.hpp>
+#include <SeQuant/domain/mbpt/context.hpp>
 
-#include "SeQuant/core/expr.hpp"
-#include "SeQuant/core/math.hpp"
-#include "SeQuant/core/op.hpp"
-#include "SeQuant/core/tensor.hpp"
-#include "SeQuant/core/wick.hpp"
-#include "SeQuant/domain/mbpt/context.hpp"
+#include <SeQuant/core/container.hpp>
+#include <SeQuant/core/context.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/index.hpp>
+#include <SeQuant/core/logger.hpp>
+#include <SeQuant/core/op.hpp>
+#include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/wick.hpp>
+
+#include <atomic>
+#include <algorithm>
+#include <cassert>
+#include <cstdlib>
+#include <iostream>
+#include <map>
+#include <memory>
+#include <stdexcept>
+
+#include <range/v3/iterator/basic_iterator.hpp>
+#include <range/v3/iterator/reverse_iterator.hpp>
+#include <range/v3/view/reverse.hpp>
+#include <range/v3/view/view.hpp>
 
 namespace sequant {
 namespace mbpt {
@@ -119,7 +136,7 @@ OpMaker::OpMaker(OpType op, std::size_t nbra, std::size_t nket)
   }
 }
 
-#include "../mbpt/sr/op.impl.cpp"
+#include <SeQuant/domain/mbpt/sr/op.impl.cpp>
 
 ExprPtr H0mp() { return F(); }
 
@@ -499,7 +516,7 @@ bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product,
 
 using mbpt::sr::vac_av;
 
-#include "SeQuant/domain/mbpt/vac_av.ipp"
+#include <SeQuant/domain/mbpt/vac_av.ipp>
 
 }  // namespace op
 
@@ -581,7 +598,7 @@ std::wstring to_latex(const mbpt::Operator<mbpt::sr::qns_t, S>& op) {
 
 }  // namespace sequant
 
-#include "SeQuant/domain/mbpt/op.ipp"
+#include <SeQuant/domain/mbpt/op.ipp>
 
 namespace sequant {
 namespace mbpt {

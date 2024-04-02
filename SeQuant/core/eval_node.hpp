@@ -5,10 +5,10 @@
 #ifndef SEQUANT_EVAL_NODE_HPP
 #define SEQUANT_EVAL_NODE_HPP
 
-#include "asy_cost.hpp"
-#include "binary_node.hpp"
-#include "eval_expr.hpp"
-
+#include <SeQuant/core/asy_cost.hpp>
+#include <SeQuant/core/binary_node.hpp>
+#include <SeQuant/core/eval_expr.hpp>
+#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/math.hpp>
 
 namespace sequant {

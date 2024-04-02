@@ -5,8 +5,7 @@
 #ifndef SEQUANT_CORE_PARSE_SEMANTIC_ACTIONS_HPP
 #define SEQUANT_CORE_PARSE_SEMANTIC_ACTIONS_HPP
 
-#include "ast.hpp"
-
+#include <SeQuant/core/parse/ast.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #define BOOST_SPIRIT_X3_UNICODE

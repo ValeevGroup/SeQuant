@@ -1,13 +1,15 @@
 #ifndef SEQUANT_CORE_CONTEXT_HPP
 #define SEQUANT_CORE_CONTEXT_HPP
 
-#include "attr.hpp"
-#include "index.hpp"
-#include "space.hpp"
+#include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/utility/context.hpp>
 
-#include "utility/context.hpp"
+#include <cstddef>
+#include <memory>
 
 namespace sequant {
+
+class IndexRegistry;
 
 /// Specifies second quantization context, such as vacuum choice, whether index
 /// spaces are orthonormal, sizes of index spaces, etc.

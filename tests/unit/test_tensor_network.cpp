@@ -4,14 +4,36 @@
 
 #include "catch.hpp"
 
+#include <SeQuant/core/bliss.hpp>
+#include <SeQuant/core/op.hpp>
+#include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/tensor_network.hpp>
+#include <SeQuant/domain/mbpt/sr.hpp>
+#include <SeQuant/core/timer.hpp>
+#include <SeQuant/core/abstract_tensor.hpp>
+#include <SeQuant/core/algorithm.hpp>
+#include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/context.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/hash.hpp>
+#include <SeQuant/core/index.hpp>
+
 #include <iostream>
+#include <cstdlib>
+#include <algorithm>
+#include <cmath>
+#include <initializer_list>
+#include <iterator>
+#include <limits>
+#include <memory>
+#include <random>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <tuple>
+#include <vector>
 
-#include "SeQuant/core/bliss.hpp"
-#include "SeQuant/core/op.hpp"
-#include "SeQuant/core/tensor_network.hpp"
-#include "SeQuant/domain/mbpt/sr.hpp"
-
-#include "SeQuant/core/timer.hpp"
+#include <range/v3/all.hpp>
 
 TEST_CASE("TensorNetwork", "[elements]") {
   using namespace sequant;

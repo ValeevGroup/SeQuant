@@ -2,10 +2,19 @@
 // Created by Eduard Valeyev on 2019-04-01.
 //
 
-#include "convention.hpp"
-#include "SeQuant/core/index.hpp"
-#include "SeQuant/core/tensor.hpp"
-#include "op.hpp"
+#include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/op.hpp>
+
+#include <SeQuant/core/abstract_tensor.hpp>
+#include <SeQuant/core/index.hpp>
+#include <SeQuant/core/space.hpp>
+
+#include <cassert>
+#include <cstdlib>
+#include <memory>
+#include <string>
+#include <string_view>
+#include <vector>
 
 namespace sequant {
 namespace mbpt {

@@ -5,10 +5,10 @@
 #ifndef SEQUANT_EVAL_SCF_BTAS_HPP
 #define SEQUANT_EVAL_SCF_BTAS_HPP
 
-#include "examples/eval/btas/data_world_btas.hpp"
-#include "examples/eval/calc_info.hpp"
-#include "examples/eval/data_info.hpp"
-#include "examples/eval/scf.hpp"
+#include <examples/eval/btas/data_world_btas.hpp>
+#include <examples/eval/calc_info.hpp>
+#include <examples/eval/data_info.hpp>
+#include <examples/eval/scf.hpp>
 
 #include <SeQuant/domain/eval/cache_manager.hpp>
 #include <SeQuant/domain/eval/eval.hpp>

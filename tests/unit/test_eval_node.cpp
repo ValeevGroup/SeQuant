@@ -2,6 +2,23 @@
 
 #include <SeQuant/core/eval_node.hpp>
 #include <SeQuant/core/parse_expr.hpp>
+#include <SeQuant/core/asy_cost.hpp>
+#include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/binary_node.hpp>
+#include <SeQuant/core/container.hpp>
+#include <SeQuant/core/eval_expr.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/rational.hpp>
+
+#include <cassert>
+#include <initializer_list>
+#include <memory>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
+
+#include <range/v3/all.hpp>
 
 namespace {
 

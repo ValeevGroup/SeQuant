@@ -5,8 +5,8 @@
 #ifndef SEQUANT_EVAL_DATA_WORLD_TA_HPP
 #define SEQUANT_EVAL_DATA_WORLD_TA_HPP
 
-#include "examples/eval/data_info.hpp"
-#include "examples/eval/eval_utils.hpp"
+#include <examples/eval/data_info.hpp>
+#include <examples/eval/eval_utils.hpp>
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/tensor.hpp>

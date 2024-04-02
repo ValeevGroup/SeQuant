@@ -23,6 +23,8 @@ class NCProduct;
 using NCProductPtr = std::shared_ptr<NCProduct>;
 class Sum;
 using SumPtr = std::shared_ptr<Sum>;
+class Variable;
+using VariablePtr = std::shared_ptr<Variable>;
 
 }  // namespace sequant
 

@@ -1,5 +1,5 @@
-#include "SeQuant/core/utility/string.hpp"
-#include "SeQuant/core/utility/macros.hpp"
+#include <SeQuant/core/utility/string.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <codecvt>
 #include <locale>

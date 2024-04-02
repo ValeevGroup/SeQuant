@@ -8,6 +8,6 @@
 /// @brief the main namespace of the SeQuant framework
 namespace sequant {}
 
-#include "SeQuant/core/expr_fwd.hpp"
+#include <SeQuant/core/expr_fwd.hpp>
 
 #endif  // SEQUANT_CORE_FWD_HPP

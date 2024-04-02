@@ -92,6 +92,11 @@ set(SEQUANT_INSTALL_DOCDIR "${SEQUANT_INSTALL_SHAREDIR}/doc"
 set(SEQUANT_INSTALL_CMAKEDIR "lib/cmake/sequant"
         CACHE PATH "SeQuant CMAKE install directory")
 
+############################
+# Additional build variables
+############################
+option(SEQUANT_IWYU "Whether to use the include-what-you-use tool (if found)" OFF)
+
 ##########################
 # SeQuant package options
 ##########################
@@ -365,6 +370,19 @@ endif ()
 # build all of boost before SeQuant, including parts it does not use
 if (Boost_BUILT_FROM_SOURCE AND TARGET build-boost-in-SeQuant)
     add_dependencies(SeQuant build-boost-in-SeQuant)
+endif()
+
+if (SEQUANT_IWYU)
+	find_program(iwyu_path NAMES include-what-you-use iwyu)
+
+	if (iwyu_path)
+		set(iwyu_options_and_path
+			"${iwyu_path}"
+			-Xiwyu --cxx17ns
+			-Xiwyu --no_comments
+		)
+		set_property(TARGET SeQuant PROPERTY CXX_INCLUDE_WHAT_YOU_USE ${iwyu_options_and_path})
+	endif()
 endif()
 
 ### unit tests

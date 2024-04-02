@@ -1,8 +1,21 @@
+#include "catch.hpp"
+
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/eval_expr.hpp>
 #include <SeQuant/core/parse_expr.hpp>
+#include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/abstract_tensor.hpp>
+#include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/container.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/index.hpp>
 
-#include "catch.hpp"
+#include <string_view>
+#include <initializer_list>
+#include <memory>
+#include <string>
+
+#include <range/v3/all.hpp>
 
 template <typename Iterable1, typename Iterable2>
 bool same_index_labels(Iterable1 const& indices1,

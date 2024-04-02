@@ -5,19 +5,30 @@
 #ifndef SEQUANT_ABSTRACT_TENSOR_HPP
 #define SEQUANT_ABSTRACT_TENSOR_HPP
 
+#include <SeQuant/core/algorithm.hpp>
+#include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/container.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/index.hpp>
+
+#include <algorithm>
+#include <cstdlib>
+#include <functional>
+#include <memory>
+#include <mutex>
+#include <ostream>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <typeinfo>
+#include <utility>
+
 #include <range/v3/all.hpp>
 
 #include <boost/core/demangle.hpp>
 
-#include "algorithm.hpp"
-#include "expr.hpp"
-#include "index.hpp"
-
-#include <thread>
 
 namespace sequant {
-
-class TensorCanonicalizer;
 
 /// This interface class defines a Tensor concept. Object @c t of a type that
 /// meets the concept must satisfy the following:
