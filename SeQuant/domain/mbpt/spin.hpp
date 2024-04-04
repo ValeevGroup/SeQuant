@@ -5,10 +5,15 @@
 #ifndef SEQUANT_SPIN_HPP
 #define SEQUANT_SPIN_HPP
 
-#include <SeQuant/core/tensor_network.hpp>
-#include "SeQuant/core/tensor.hpp"
+#include <SeQuant/core/container.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/index.hpp>
+#include <SeQuant/core/tensor.hpp>
 
-#include <unordered_map>
+#include <cstddef>
+#include <initializer_list>
+#include <string>
+#include <vector>
 
 namespace sequant {
 

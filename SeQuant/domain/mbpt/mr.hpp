@@ -5,15 +5,26 @@
 #ifndef SEQUANT_DOMAIN_MBPT_MR_HPP
 #define SEQUANT_DOMAIN_MBPT_MR_HPP
 
-#include "SeQuant/domain/mbpt/fwd.hpp"
+#include <SeQuant/domain/mbpt/op.hpp>
 
-#include "SeQuant/core/context.hpp"
-#include "SeQuant/core/expr_fwd.hpp"
-#include "SeQuant/core/space.hpp"
-#include "SeQuant/domain/mbpt/op.hpp"
+#include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/hash.hpp>
+#include <SeQuant/core/interval.hpp>
+#include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/space.hpp>
 
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <functional>
+#include <initializer_list>
+#include <iterator>
 #include <limits>
+#include <string>
+#include <string_view>
 #include <utility>
+#include <vector>
 
 namespace sequant {
 namespace mbpt {
@@ -145,7 +156,7 @@ class OpMaker : public mbpt::OpMaker<Statistics::FermiDirac> {
   using base_type::operator();
 };
 
-#include "../mbpt/mr/op.impl.hpp"
+#include <SeQuant/domain/mbpt/mr/op.impl.hpp>
 
 /// @name tensor-level operators
 /// @{
@@ -209,7 +220,7 @@ ExprPtr Λ_(std::size_t K);
 /// \p K
 ExprPtr Λ(std::size_t K);
 
-#include "SeQuant/domain/mbpt/vac_av.hpp"
+#include <SeQuant/domain/mbpt/vac_av.hpp>
 
 }  // namespace op
 

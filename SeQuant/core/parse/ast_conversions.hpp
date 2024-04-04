@@ -5,8 +5,7 @@
 #ifndef SEQUANT_CORE_PARSE_AST_CONVERSIONS_HPP
 #define SEQUANT_CORE_PARSE_AST_CONVERSIONS_HPP
 
-#include "ast.hpp"
-
+#include <SeQuant/core/parse/ast.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>

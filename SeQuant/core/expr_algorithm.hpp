@@ -5,6 +5,9 @@
 #ifndef SEQUANT_EXPR_ALGORITHM_HPP
 #define SEQUANT_EXPR_ALGORITHM_HPP
 
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/logger.hpp>
+
 namespace sequant {
 
 /// Recursively canonicalizes an Expr and replaces it as needed

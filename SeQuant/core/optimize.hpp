@@ -1,11 +1,21 @@
 #ifndef SEQUANT_OPTIMIZE_OPTIMIZE_HPP
 #define SEQUANT_OPTIMIZE_OPTIMIZE_HPP
 
+#include <cassert>
+#include <cmath>
+#include <cstddef>
+#include <functional>
+#include <iterator>
 #include <limits>
+#include <memory>
+#include <stdexcept>
+#include <type_traits>
 #include <utility>
 
+#include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/container.hpp>
-#include <SeQuant/core/eval_node.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/index.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 
 #if __cplusplus >= 202002L
@@ -32,6 +42,8 @@ bool has_single_bit(T x) noexcept {
 namespace sequant {
 /// Optimize an expression assuming the number of virtual orbitals
 /// greater than the number of occupied orbitals.
+
+class Tensor;
 
 /// \param expr Expression to be optimized.
 /// \return EvalNode object.

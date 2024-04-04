@@ -2,10 +2,17 @@
 // Created by Eduard Valeyev on 2019-02-06.
 //
 
-#include "expr.hpp"
-#include "logger.hpp"
-#include "tensor.hpp"
-#include "tensor_network.hpp"
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/abstract_tensor.hpp>
+#include <SeQuant/core/algorithm.hpp>
+#include <SeQuant/core/logger.hpp>
+#include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/tensor_network.hpp>
+
+#include <range/v3/all.hpp>
+
+#include <thread>
+#include <vector>
 
 namespace sequant {
 

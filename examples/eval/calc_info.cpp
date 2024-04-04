@@ -3,6 +3,7 @@
 //
 
 #include "calc_info.hpp"
+
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 
 namespace sequant::eval {

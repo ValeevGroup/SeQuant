@@ -7,6 +7,12 @@
 
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/wstring.hpp>
+
+#include <cmath>
+#include <complex>
+#include <limits>
+#include <string>
+#include <string_view>
 #include <type_traits>
 
 namespace sequant {

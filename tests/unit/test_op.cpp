@@ -4,9 +4,13 @@
 
 #include "catch.hpp"
 
-#include <iostream>
+#include <algorithm>
+#include <memory>
+#include <string>
+#include <type_traits>
+#include <utility>
 
-#include "SeQuant/core/op.hpp"
+#include <SeQuant/core/op.hpp>
 
 TEST_CASE("Op", "[elements]") {
   using namespace sequant;

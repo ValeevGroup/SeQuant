@@ -4,8 +4,23 @@
 
 #include "catch.hpp"
 
-#include <iostream>
-#include "SeQuant/core/wick.hpp"
+#include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/container.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/hash.hpp>
+#include <SeQuant/core/index.hpp>
+#include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/meta.hpp>
+#include <SeQuant/core/op.hpp>
+#include <SeQuant/core/tag.hpp>
+#include <SeQuant/core/tensor.hpp>
+
+#include <cstddef>
+#include <initializer_list>
+#include <map>
+#include <string>
+#include <string_view>
+#include <type_traits>
 
 TEST_CASE("Tensor", "[elements]") {
   using namespace sequant;

@@ -1,15 +1,15 @@
-#include <SeQuant/domain/mbpt/context.hpp>
-#include <SeQuant/domain/mbpt/models/cc.hpp>
-
-#include <SeQuant/core/math.hpp>
-
-#include <SeQuant/core/op.hpp>
-#include <SeQuant/core/parse_expr.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/runtime.hpp>
-#include <SeQuant/domain/mbpt/convention.hpp>
-#include <SeQuant/domain/mbpt/spin.hpp>
-
+#include <SeQuant/domain/mbpt/models/cc.hpp>
 #include <SeQuant/domain/mbpt/sr.hpp>
+
+#include <cassert>
+#include <cstdint>
+#include <memory>
+#include <new>
+#include <stdexcept>
+#include <utility>
 
 namespace sequant::mbpt::sr {
 

@@ -1,10 +1,16 @@
 #ifndef SEQUANT_EVAL_EXPR_HPP
 #define SEQUANT_EVAL_EXPR_HPP
 
-#include <SeQuant/core/expr_fwd.hpp>
-#include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/container.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/index.hpp>
+
+#include <cstddef>
+#include <string>
 
 namespace sequant {
+
+class Tensor;
 
 ///
 /// \brief The EvalOp enum
@@ -166,7 +172,6 @@ class EvalExpr {
   /// \return Constant const&.
   ///
   [[nodiscard]] Constant const& as_constant() const noexcept;
-
 
   ///
   /// \brief Calls to<Variable>() on ExprPtr held by this object.
