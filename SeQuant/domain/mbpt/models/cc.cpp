@@ -272,7 +272,7 @@ std::vector<ExprPtr> CC::λ_pt(size_t order, size_t rank) {
   return result;
 }
 
-std::vector<sequant::ExprPtr> CC::eom_right(size_t K_occ, size_t K_uocc) {
+std::vector<sequant::ExprPtr> CC::R(size_t K_occ, size_t K_uocc) {
   assert(!unitary() && "Unitary ansatz is not yet supported");
   assert(K_occ > 0 || K_uocc > 0 && "Unsupported excitation order");
   assert(K_occ == K_uocc && "Only EE-EOM-CC is supported for now");
@@ -316,7 +316,7 @@ std::vector<sequant::ExprPtr> CC::eom_right(size_t K_occ, size_t K_uocc) {
   return result;
 }
 
-std::vector<sequant::ExprPtr> CC::eom_left(size_t K_occ, size_t K_uocc) {
+std::vector<sequant::ExprPtr> CC::L(size_t K_occ, size_t K_uocc) {
   assert(!unitary() && "Unitary ansatz is not yet supported");
   assert(K_occ > 0 || K_uocc > 0 && "Unsupported excitation order");
   assert(K_occ == K_uocc && "Only EE-EOM-CC is supported for now");
