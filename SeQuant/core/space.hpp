@@ -448,6 +448,17 @@ class IndexSpaceRegistry{
     return result;
   }
 
+  bool is_base_space(IndexSpace IS){
+      auto spaces_label = base_spaces_label();
+      bool result = false;
+      for (std::size_t i = 0; i < spaces_label.size(); i++){
+        if(IS == spaces_label[i].first){
+            result = true;
+         }
+      }
+    return result;
+  }
+
   // clear the label_space map essentially clearing the registry
   void clear_registry(){
     label_space.clear();

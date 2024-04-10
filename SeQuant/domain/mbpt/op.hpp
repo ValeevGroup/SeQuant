@@ -144,9 +144,11 @@ using BOperatorBase = BOperator<void>;
 /// tracking the quantum numbers of a many-body operator, such as the number of particles,
 /// the number of quasiparticles, the number of ops (creators/annihilators) in each subspace, etc.
 /// For example, to operator products expressed in normal order with respect to physical vacuum it is sufficient to track
-/// the number of creators and annihilators; for operator products expressed in normal order with respect to Fermi vacuum
-/// it is sufficient to track the number of creators and annihilators in the occupied and unoccupied subspaces, etc.
-/// since the choice of space partitioning is up to the user, the base class must by a dynamic container.
+/// the number of creators and annihilators; For the fermi vacuum case, the number of creators and annihilators in each
+/// subspace becomes important. the number of ops is tracked for each base space (determined by the IndexSpaceRegistry object in Context).
+/// the interval representation is necessary to dictate how many creators or annihilators could be in each subspace.
+/// this is pertinent when user defined active_hole_space or active_particle_space are NOT base spaces.
+/// since the choice of space partitioning is up to the user, the base class must be a dynamic container.
 /// \tparam Tag a tag type to distinguish different instances of QuantumNumberChange<N>
 /// \tparam QNV the quantum number value type, defaults to \c std::int64_t
 // clang-format on
@@ -221,6 +223,90 @@ class QuantumNumberChange
   }
   bool operator!=(const this_type& b) const { return !this->operator==(b); }
 
+  //determines the number of physical vacuum creators and annihilators for the active particle and
+  //hole space from the Context. for general operators this is not defined. for example: O_{e_1}^{i_1 m_1} a_{i_1 m_1}^{e_1}
+  //asking for the active particle annihilators in this example is nonsensical and will return -1.
+
+  int active_particle_creators(){
+    std::vector<boost::numeric::interval<std::make_signed_t<QNV>>> temp_this = *this;
+    auto idx_registry = get_default_context().index_space_registry();
+    auto base_spaces = idx_registry->base_spaces_label();
+    int result =0;
+    for (unsigned int i = 0; i < base_spaces.size(); i++){
+      if(idx_registry->nulltype_() != idx_registry->intersection(idx_registry->active_particle_space(),base_spaces[i].first)){
+        if(temp_this[2 * i].upper() != result){
+          if(result == 0){
+            result = temp_this[2 * i].upper();
+          }
+          else{
+            return -1;
+          }
+        }
+      }
+    }
+    return result;
+  }
+
+  int active_particle_annihilators(){
+    std::vector<boost::numeric::interval<std::make_signed_t<QNV>>> temp_this = *this;
+    auto idx_registry = get_default_context().index_space_registry();
+    auto base_spaces = idx_registry->base_spaces_label();
+    int result = 0;
+    for (unsigned int i = 0; i < base_spaces.size(); i++){
+      if(idx_registry->nulltype_() != idx_registry->intersection(idx_registry->active_particle_space(),base_spaces[i].first)){
+        if(temp_this[2 * i + 1].upper() != result){
+          if(result == 0){
+            result = temp_this[2 * i + 1].upper();
+          }
+          else{
+            return -1;
+          }
+        }
+      }
+    }
+    return result;
+  }
+
+  int active_hole_creators(){
+    std::vector<boost::numeric::interval<std::make_signed_t<QNV>>> temp_this = *this;
+    auto idx_registry = get_default_context().index_space_registry();
+    auto base_spaces = idx_registry->base_spaces_label();
+    int result =0;
+    for (unsigned int i = 0; i < base_spaces.size(); i++){
+      if(idx_registry->nulltype_() != idx_registry->intersection(idx_registry->active_hole_space(),base_spaces[i].first)){
+        if(temp_this[2 * i].upper() != result){
+          if(result == 0){
+            result = temp_this[2 * i].upper();
+          }
+          else{
+            return -1;
+          }
+        }
+      }
+    }
+    return result;
+  }
+
+  int active_hole_annihilators(){
+    std::vector<boost::numeric::interval<std::make_signed_t<QNV>>> temp_this = *this;
+    auto idx_registry = get_default_context().index_space_registry();
+    auto base_spaces = idx_registry->base_spaces_label();
+    int result =0;
+    for (unsigned int i = 0; i < base_spaces.size(); i++){
+      if(idx_registry->nulltype_() != idx_registry->intersection(idx_registry->active_hole_space(),base_spaces[i].first)){
+        if(temp_this[2 * i + 1].upper() != result){
+          if(result == 0){
+            result = temp_this[2 * i + 1].upper();
+          }
+          else{
+            return -1;
+          }
+        }
+      }
+    }
+    return result;
+  }
+
   /// tests whether particular changes in quantum number change
   /// @param i an integer
   /// @return true if \p i is in `*this[0]`
@@ -244,7 +330,9 @@ class QuantumNumberChange
   /// @return true if `i[k]` overlaps with `*this[k]` for all `k`
   bool overlaps_with(base_type i) {
     for (std::size_t c = 0; c != this->size(); ++c) {
-      if (!boost::numeric::overlap(i[c], this->operator[](c))) return false;
+      if (!boost::numeric::overlap(i[c], this->operator[](c))) {
+        return false;
+      }
     }
     return true;
   }
@@ -557,7 +645,7 @@ class Operator : public Operator<void, S> {
 
   ExprPtr clone() const override;
 
-  //std::wstring to_latex() const override;
+  std::wstring to_latex() const override;
 
   Expr::hash_type memoizing_hash() const override;
 

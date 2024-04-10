@@ -64,6 +64,9 @@ OpClass to_class(OpType op) {
   }
 }
 
+//excitation type qns will have qp creators for every space which intersects with the active hole space and
+// qp annihilators wherever there is intersection with the active particle space. the presence of additional blocks depends on  whether
+// the corresponding active hole or active particle space is a base space.
 qns_t excitation_type_qns(std::size_t K){
   qnc_t result;
   if(get_default_context().vacuum() == Vacuum::Physical){
@@ -72,18 +75,23 @@ qns_t excitation_type_qns(std::size_t K){
   else {
     auto idx_registry = get_default_context().index_space_registry();
     auto base_spaces = idx_registry->base_spaces_label();
+    //are the active qp spaces base spaces?
+    bool aps_base = idx_registry->is_base_space(idx_registry->active_particle_space());
+    bool ahs_base = idx_registry->is_base_space(idx_registry->active_hole_space());
+
+
     for (int i = 0; i < base_spaces.size(); i++) {
       if (!includes(idx_registry->active_hole_space().type(),
                     base_spaces[i].first.type())) {
         result[i * 2] = {0ul, 0ul};
       } else {
-        result[i * 2] = {0ul, K};
+        result[i * 2] = {ahs_base ? K : 0ul, K};
       }
       if (!includes(idx_registry->active_particle_space().type(),
                     base_spaces[i].first.type())) {
         result[i * 2 + 1] = {0ul, 0ul};
       } else {
-        result[i * 2 + 1] = {0ul, K};
+        result[i * 2 + 1] = {aps_base ? K : 0ul, K};
       }
     }
   }
@@ -98,18 +106,20 @@ qns_t deexcitation_type_qns(std::size_t K){
   else {
     auto idx_registry = get_default_context().index_space_registry();
     auto base_spaces = idx_registry->base_spaces_label();
+    bool aps_base = idx_registry->is_base_space(idx_registry->active_particle_space());
+    bool ahs_base = idx_registry->is_base_space(idx_registry->active_hole_space());
     for (int i = 0; i < base_spaces.size(); i++) {
       if (!includes(idx_registry->active_hole_space().type(),
                     base_spaces[i].first.type())) {
         result[i * 2 + 1] = {0ul, 0ul};
       } else {
-        result[i * 2 + 1] = {0ul, K};
+        result[i * 2 + 1] = {ahs_base ? K : 0ul, K};
       }
       if (!includes(idx_registry->active_particle_space().type(),
                     base_spaces[i].first.type())) {
         result[i * 2] = {0ul, 0ul};
       } else {
-        result[i * 2] = {0ul, K};
+        result[i * 2] = {aps_base ? K : 0ul, K};
       }
     }
   }
@@ -132,18 +142,20 @@ qns_t generic_excitation_qns(std::size_t particle_rank, std::size_t hole_rank,In
   else {
     auto idx_registry = get_default_context().index_space_registry();
     auto base_spaces = idx_registry->base_spaces_label();
+    bool aps_base = idx_registry->is_base_space(idx_registry->active_particle_space());
+    bool ahs_base = idx_registry->is_base_space(idx_registry->active_hole_space());
     for (int i = 0; i < base_spaces.size(); i++) {
       if (!includes(hole_space.type(),
                     base_spaces[i].first.type())) {
         result[i * 2] = {0ul, 0ul}; //creators
       } else {
-        result[i * 2] = {0ul, hole_rank}; // creators
+        result[i * 2] = {ahs_base ? hole_rank : 0ul, hole_rank}; // creators
       }
       if (!includes(particle_space.type(),
                     base_spaces[i].first.type())) {
         result[i * 2 + 1] = {0ul, 0ul}; //annihilators
       } else {
-        result[i * 2 + 1] = {0ul, particle_rank}; // annihilators
+        result[i * 2 + 1] = {aps_base ? particle_rank : 0ul, particle_rank}; // annihilators
       }
     }
   }
@@ -158,18 +170,20 @@ qns_t generic_deexcitation_qns(std::size_t particle_rank, std::size_t hole_rank,
   else {
     auto idx_registry = get_default_context().index_space_registry();
     auto base_spaces = idx_registry->base_spaces_label();
+    bool aps_base = idx_registry->is_base_space(idx_registry->active_particle_space());
+    bool ahs_base = idx_registry->is_base_space(idx_registry->active_hole_space());
     for (int i = 0; i < base_spaces.size(); i++) {
       if (!includes(hole_space.type(),
                     base_spaces[i].first.type())) {
         result[i * 2 + 1] = {0ul, 0ul}; //annihilators
       } else {
-        result[i * 2 + 1] = {0ul, hole_rank}; //annihilators
+        result[i * 2 + 1] = {ahs_base ? hole_rank : 0ul, hole_rank}; //annihilators
       }
       if (!includes(particle_space.type(),
                     base_spaces[i].first.type())) {
         result[i * 2] = {0ul, 0ul}; // creators
       } else {
-        result[i * 2] = {0ul, particle_rank}; //creators
+        result[i * 2] = {aps_base ? particle_rank : 0ul, particle_rank}; //creators
       }
     }
   }
@@ -230,7 +244,7 @@ mbpt::qns_t adjoint(mbpt::qns_t qns) {
   return new_qnst;
 }
 
-/*template <Statistics S>
+template <Statistics S>
 std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
   using namespace sequant::mbpt;
 
@@ -238,34 +252,65 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
 
   // check if operator has adjoint label, remove if present for base label
   auto base_lbl = sequant::to_wstring(op.label());
-  if (base_lbl.back() == adjoint_label) base_lbl.pop_back();
+  bool is_adjoint = false;
+  if (base_lbl.back() == adjoint_label) {
+    is_adjoint = true;
+    base_lbl.pop_back();
+  }
 
   auto it = label2optype.find(base_lbl);
+  OpType optype = OpType::invalid;
   if (it != label2optype.end()) {  // handle special cases
-    const auto optype = it->second;
+    optype = it->second;
     if (to_class(optype) == OpClass::gen) {
       result += L"}";
       return result;
     }
   }
-
-  // generic operator ... can only handle definite case
-  const auto dN = op();
-  if (!is_definite(ncre(dN)) || !is_definite(nann(dN))) {
-    throw std::invalid_argument(
-        "to_latex(const Operator<qns_t, S>& op): "
-        "can only handle  generic operators with definite cre/ann numbers");
+  std::wstring baseline_char = is_adjoint ? L"^" : L"_";
+  if (get_default_context().vacuum() == Vacuum::Physical) {
+    if (op()[0] == op()[1]) {  // particle conserving
+      result += L"_{" + std::to_wstring(op()[0].lower()) + L"}";
+    } else {  // non-particle conserving
+      result += L"_{" + std::to_wstring(op()[1].lower()) + L"}^{" +
+                std::to_wstring(op()[0].lower()) + L"}";
+    }
   }
-  const auto dN_total = ncre(dN).lower() - nann(dN).lower();
-  if (dN_total == 0) {  // N-conserving
-    result += L"_{" + std::to_wstring(ncre(dN).lower()) + L"}";
-  } else {  // N-nonconserving
-    result += L"_{" + std::to_wstring(nann(dN).lower()) + L"}^{" +
-              std::to_wstring(ncre(dN).lower()) + L"}";
+  else {// single product vacuum
+    int particle_ann = is_adjoint ? op().active_particle_creators() : op().active_particle_annihilators();
+    int hole_cre = is_adjoint ?  op().active_hole_annihilators() : op().active_hole_creators();
+    int particle_cre = is_adjoint ? op().active_particle_annihilators() : op().active_particle_creators();
+    int hole_ann =is_adjoint ? op().active_hole_creators() : op().active_hole_annihilators();
+    if (to_class(optype) == OpClass::ex) {
+      // TODO don't throw, just pass this to Product::to_latex()
+      if (particle_ann == -1 || hole_cre == -1)
+        throw "this expression is not expressible as operator";
+      if (particle_ann == hole_cre) {  // particle conserving
+        result += baseline_char + L"{" + std::to_wstring(particle_ann) + L"}";
+      } else {  // particle non-conserving
+        result += baseline_char + L"{" + std::to_wstring(hole_cre) + L"," +
+                  std::to_wstring(particle_ann) + L"}";
+      }
+    }
+    else if (to_class(optype) == OpClass::deex) {
+      // TODO don't throw, just pass this to Product::to_latex()
+      if(particle_cre == -1 || hole_ann == -1){
+        throw "this expression is not expressible as operator";
+      }
+      if(particle_cre == hole_ann){//q-particle conserving
+        result += baseline_char + L"{" + std::to_wstring(hole_ann) + L"}";
+      }
+      else{ // q-particle non-conserving
+        result += baseline_char + L"{" + std::to_wstring(particle_cre) + L"," + std::to_wstring(hole_ann) + L"}";
+      }
+    }
+    else {
+      throw "operator has unrecognized OpClass";
+    }
   }
   result += L"}";
   return result;
-}*/
+}
 
 }  // namespace sequant
 
@@ -288,6 +333,7 @@ OpMaker<S>::OpMaker(OpType op) : op_(op) {}
 template <Statistics S>
 OpMaker<S>::OpMaker(OpType op, std::size_t nbra, std::size_t nket, IndexSpace particle_space,
                     IndexSpace hole_space){
+  op_=op;
   assert(nbra > 0 || nket > 0);
   auto idx_registry = get_default_context().index_space_registry();
   switch (to_class(op)) {
@@ -309,6 +355,7 @@ OpMaker<S>::OpMaker(OpType op, std::size_t nbra, std::size_t nket, IndexSpace pa
 
 template <Statistics S>
 OpMaker<S>::OpMaker(OpType op, std::size_t nparticle){
+  op_=op;
   auto idx_registry = get_default_context().index_space_registry();
   const auto unocc = idx_registry->active_hole_space();
   const auto occ = idx_registry->active_particle_space();
@@ -430,7 +477,7 @@ ExprPtr H_(std::size_t k, bool count_vac_ops) {
 
 ExprPtr H(std::size_t k, bool count_vac_ops) {
   assert(k > 0 && k <= 2);
-  return k == 1 ? H_(1) : H_(1) + H_(2);
+  return k == 1 ? H_(1) : H_(1,count_vac_ops) + H_(2,count_vac_ops);
 }
 
 ExprPtr T_(std::size_t K, bool count_vac_ops) {
@@ -571,8 +618,10 @@ ExprPtr A(std::int64_t K, bool count_vac_ops) {
       for (auto i : ranges::views::iota(0, -K))
         annihilators.emplace_back(idx_registry->active_hole_space());
 
+    std::optional<OpMaker<Statistics::FermiDirac>::UseDepIdx> dep;
     if (get_default_formalism().csv() == mbpt::CSV::Yes)
-    return OpMaker<Statistics::FermiDirac>(OpType::A, creators, annihilators)(OpMaker<Statistics::FermiDirac>::UseDepIdx::None,{Symmetry::antisymm});
+      dep = K > 0 ? OpMaker<Statistics::FermiDirac>::UseDepIdx::Bra : OpMaker<Statistics::FermiDirac>::UseDepIdx::Ket;
+    return OpMaker<Statistics::FermiDirac>(OpType::A, creators, annihilators)(dep,{Symmetry::antisymm});
   }
   else {
     return ex<op_t>(
@@ -611,8 +660,11 @@ ExprPtr S(std::int64_t K,bool count_vac_ops) {
       for (auto i : ranges::views::iota(0, -K))
         annihilators.emplace_back(idx_registry->active_hole_space());
 
+    std::optional<OpMaker<Statistics::FermiDirac>::UseDepIdx> dep;
+    if (get_default_formalism().csv() == mbpt::CSV::Yes)
+      dep = K > 0 ? OpMaker<Statistics::FermiDirac>::UseDepIdx::Bra : OpMaker<Statistics::FermiDirac>::UseDepIdx::Ket;
     return OpMaker<Statistics::FermiDirac>(OpType::S, creators, annihilators)(
-        OpMaker<Statistics::FermiDirac>::UseDepIdx::None, {Symmetry::nonsymm});
+        dep, {Symmetry::nonsymm});
   } else {
     return ex<op_t>(
         []() -> std::wstring_view { return L"S"; },
@@ -727,7 +779,7 @@ ExprPtr L_(std::size_t Nbra, std::size_t Nket, bool count_vac_ops,IndexSpace hol
   }
   else{
     return ex<op_t>(
-        []() -> std::wstring_view { return optype2label.at(OpType::R); },
+        []() -> std::wstring_view { return optype2label.at(OpType::L); },
         [=]() -> ExprPtr {
           return L_(Nbra, Nket,false);
         },
