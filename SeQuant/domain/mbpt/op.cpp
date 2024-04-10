@@ -210,8 +210,8 @@ qns_t combine(qns_t a, qns_t b) {
     for (auto i = 0; i < base_spaces.size(); i++) {
       auto cre = i * 2;
       auto ann = (i * 2) + 1;
-      auto ncontr_space =
-          qninterval_t{0, std::min(b[cre].upper(), a[ann].upper())};
+      auto base_is_fermi_occupied = idx_registry->is_pure_occupied(base_spaces[i].first); // need to distinguish particle and hole contractions.
+      auto ncontr_space = base_is_fermi_occupied ? qninterval_t{0, std::min(b[ann].upper(), a[cre].upper())} : qninterval_t{0, std::min(b[cre].upper(), a[ann].upper())};
       auto nc_space = nonnegative(b[cre] + a[cre] - ncontr_space);
       auto na_space = nonnegative(b[ann] + a[ann] - ncontr_space);
       result[cre] = nc_space;
