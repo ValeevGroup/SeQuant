@@ -1,4 +1,6 @@
-#include "SeQuant/core/context.hpp"
+#include <SeQuant/core/context.hpp>
+#include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/utility/context.hpp>
 
 namespace sequant {
 
@@ -79,5 +81,5 @@ Context& Context::set_first_dummy_index_ordinal(
 }  // namespace sequant
 
 #ifdef SEQUANT_HAS_MIMALLOC
-#include "mimalloc-new-delete.h"
+#include <mimalloc-new-delete.h>
 #endif

@@ -5,7 +5,7 @@
 #ifndef SEQUANT_DOMAIN_MBPT_FWD_HPP
 #define SEQUANT_DOMAIN_MBPT_FWD_HPP
 
-#include "SeQuant/core/fwd.hpp"
+#include <SeQuant/core/fwd.hpp>
 
 #include <cstdint>
 

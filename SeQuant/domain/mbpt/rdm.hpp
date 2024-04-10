@@ -6,7 +6,7 @@
 #define SEQUANT_DOMAIN_MBPT_RDM_HPP
 
 #include <SeQuant/domain/mbpt/antisymmetrizer.hpp>
-#include "SeQuant/domain/mbpt/op.hpp"
+#include <SeQuant/domain/mbpt/op.hpp>
 
 namespace sequant {
 namespace mbpt {

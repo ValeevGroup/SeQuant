@@ -3,6 +3,19 @@
 #include <SeQuant/core/parse_expr.hpp>
 #include "catch.hpp"
 #include "SeQuant/domain/mbpt/convention.hpp"
+#include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/abstract_tensor.hpp>
+#include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/container.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/index.hpp>
+
+#include <string_view>
+#include <initializer_list>
+#include <memory>
+#include <string>
+
+#include <range/v3/all.hpp>
 
 template <typename Iterable1, typename Iterable2>
 bool same_index_labels(Iterable1 const& indices1,
@@ -32,7 +45,9 @@ TEST_CASE("TEST_EVAL_EXPR", "[EvalExpr]") {
   using namespace std::string_literals;
   using sequant::EvalExpr;
   using namespace sequant;
-  sequant::TensorCanonicalizer::register_instance(std::make_shared<sequant::DefaultTensorCanonicalizer>());
+  sequant::TensorCanonicalizer::register_instance(
+      std::make_shared<sequant::DefaultTensorCanonicalizer>());
+
   SECTION("Constructors") {
     auto t1 = parse_tensor(L"t_{i1, i2}^{a1, a2}");
 
@@ -269,43 +284,6 @@ TEST_CASE("TEST_EVAL_EXPR", "[EvalExpr]") {
 
     // sum of two nonsymmetric tensors
     REQUIRE(symmetry(imed(t5, t6)) == Symmetry::nonsymm);
-  }
-
-  SECTION("Inner and outer indices") {
-    auto same_inner_outer = [](Tensor const& t, IndexList inner,
-                               IndexList outer) -> bool {
-      auto [in, out] = EvalExpr{t}.inner_outer_indices();
-      return same_index_labels(in, inner) && same_index_labels(out, outer);
-    };
-
-    auto c1 = parse_expr(L"3/2")->as<Constant>();
-
-    REQUIRE(EvalExpr{c1}.inner_outer_indices().inner.empty());
-    REQUIRE(EvalExpr{c1}.inner_outer_indices().outer.empty());
-
-    auto f1 = parse_expr(L"f{i2;a2}")->as<Tensor>();
-    REQUIRE(same_inner_outer(f1,                              //
-                             {Index{L"i_2"}, Index{L"a_2"}},  // inner
-                             {}                               // outer
-                             ));
-
-    auto f2 = parse_expr(L"f{i2;a2<i1,i2>}")->as<Tensor>();
-    REQUIRE(same_inner_outer(f2,                             //
-                             {Index{L"a_2"}},                // inner
-                             {Index{L"i_1"}, Index{L"i_2"}}  // outer
-                             ));
-
-    auto t1 = parse_expr(L"t{a2,a3;i1,i2}")->as<Tensor>();
-    REQUIRE(same_inner_outer(
-        t1,                                                            //
-        {Index{L"a_2"}, Index{L"a_3"}, Index{L"i_1"}, Index{L"i_2"}},  // inner
-        {}                                                             // outer
-        ));
-    auto t2 = parse_expr(L"t{a2<i1,i2>,a3<i1,i2>;i1,i2}")->as<Tensor>();
-    REQUIRE(same_inner_outer(t2,                              //
-                             {Index{L"a_2"}, Index{L"a_3"}},  // inner
-                             {Index{L"i_1"}, Index{L"i_2"}}   // outer
-                             ));
   }
 
   SECTION("Debug") {

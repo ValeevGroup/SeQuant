@@ -2,11 +2,11 @@
 #define SEQUANT_ASY_COST_HPP
 
 #include <SeQuant/core/container.hpp>
-#include <SeQuant/core/math.hpp>
-#include <SeQuant/core/wstring.hpp>
-#include <range/v3/algorithm.hpp>
-#include <range/v3/view.hpp>
-#include <sstream>
+#include <SeQuant/core/rational.hpp>
+
+#include <cstddef>
+#include <string>
+#include <utility>
 
 namespace sequant {
 

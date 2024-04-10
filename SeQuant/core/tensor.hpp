@@ -5,16 +5,31 @@
 #ifndef SEQUANT_TENSOR_HPP
 #define SEQUANT_TENSOR_HPP
 
-#include <memory>
+#include <SeQuant/core/abstract_tensor.hpp>
+#include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/container.hpp>
+#include <SeQuant/core/context.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/hash.hpp>
+#include <SeQuant/core/index.hpp>
+#include <SeQuant/core/latex.hpp>
 
-#include "abstract_tensor.hpp"
-#include "algorithm.hpp"
-#include "attr.hpp"
-#include "context.hpp"
-#include "expr.hpp"
-#include "hash.hpp"
-#include "index.hpp"
-#include "latex.hpp"
+#include <algorithm>
+#include <array>
+#include <cassert>
+#include <cstddef>
+#include <initializer_list>
+#include <iterator>
+#include <memory>
+#include <optional>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <type_traits>
+#include <utility>
+#include <vector>
+
+#include <range/v3/all.hpp>
 
 namespace sequant {
 
@@ -135,6 +150,7 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
            particle_symmetry_ != ParticleSymmetry::invalid;
   }
 
+  /// @return "core" label of the tensor
   std::wstring_view label() const override { return label_; }
   const auto &bra() const { return bra_; }
   const auto &ket() const { return ket_; }
@@ -161,12 +177,12 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   ParticleSymmetry particle_symmetry() const { return particle_symmetry_; }
 
   /// @return number of bra indices
-  auto bra_rank() const { return bra_.size(); }
+  std::size_t bra_rank() const { return bra_.size(); }
   /// @return number of ket indices
-  auto ket_rank() const { return ket_.size(); }
+  std::size_t ket_rank() const { return ket_.size(); }
   /// @return number of indices in bra/ket
   /// @throw std::logic_error if bra and ket ranks do not match
-  auto rank() const {
+  std::size_t rank() const {
     if (bra_rank() != ket_rank()) {
       throw std::logic_error("Tensor::rank(): bra rank != ket rank");
     }

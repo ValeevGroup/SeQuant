@@ -5,29 +5,13 @@
 #ifndef SEQUANT_EVAL_NODE_HPP
 #define SEQUANT_EVAL_NODE_HPP
 
-#include "asy_cost.hpp"
-#include "binary_node.hpp"
-#include "eval_expr.hpp"
-
+#include <SeQuant/core/asy_cost.hpp>
+#include <SeQuant/core/binary_node.hpp>
+#include <SeQuant/core/eval_expr.hpp>
+#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/math.hpp>
 
 namespace sequant {
-
-#if __cplusplus < 202002L
-template <class T>
-struct remove_cvref {
-  typedef std::remove_cv_t<::std::remove_reference_t<T>> type;
-};
-
-template <class T>
-using remove_cvref_t = typename remove_cvref<T>::type;
-#else
-template <typename T>
-using remove_cvref = std::remove_cvref<T>;
-
-template <typename T>
-using remove_cvref_t = std::remove_cvref_t<T>;
-#endif
 
 template <typename, typename = void>
 constexpr bool IsEvalExpr{};
@@ -184,7 +168,7 @@ namespace {
 
 enum NodePos { Left = 0, Right, This };
 
-std::pair<size_t, size_t> occ_virt(Tensor const& t) {
+[[maybe_unused]] std::pair<size_t, size_t> occ_virt(Tensor const& t) {
   auto bk_rank = t.bra_rank() + t.ket_rank();
   auto nocc = ranges::count_if(t.const_braket(), [](Index const& idx) {
     return idx.space() == get_default_context().index_space_registry()->active_particle_space();

@@ -6,7 +6,8 @@
 #include "SeQuant/domain/mbpt/convention.hpp"
 #include "catch.hpp"
 
-#include "SeQuant/core/context.hpp"
+#include <SeQuant/core/context.hpp>
+#include <SeQuant/core/attr.hpp>
 
 TEST_CASE("Context", "[runtime]") {
   using namespace sequant;

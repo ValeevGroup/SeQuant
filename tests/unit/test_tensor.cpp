@@ -5,8 +5,23 @@
 #include "catch.hpp"
 #include "SeQuant/domain/mbpt/convention.hpp"
 
-#include <iostream>
-#include "SeQuant/core/wick.hpp"
+#include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/container.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/hash.hpp>
+#include <SeQuant/core/index.hpp>
+#include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/meta.hpp>
+#include <SeQuant/core/op.hpp>
+#include <SeQuant/core/tag.hpp>
+#include <SeQuant/core/tensor.hpp>
+
+#include <cstddef>
+#include <initializer_list>
+#include <map>
+#include <string>
+#include <string_view>
+#include <type_traits>
 
 TEST_CASE("Tensor", "[elements]") {
   using namespace sequant;
@@ -98,7 +113,7 @@ TEST_CASE("Tensor", "[elements]") {
     auto t2 = Tensor(L"F", {L"i_2"}, {L"i_1"});
     size_t t2_hash;
     REQUIRE_NOTHROW(t2_hash = hash_value(t2));
-    REQUIRE_NOTHROW(t1_hash != t2_hash);
+    REQUIRE(t1_hash != t2_hash);
 
   }  // SECTION("hash")
 

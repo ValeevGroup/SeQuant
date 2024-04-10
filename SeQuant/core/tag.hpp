@@ -5,8 +5,8 @@
 #ifndef SEQUANT_TAG_HPP
 #define SEQUANT_TAG_HPP
 
-#include "meta.hpp"
-#include "any.hpp"
+#include <SeQuant/core/meta.hpp>
+#include <SeQuant/core/any.hpp>
 
 namespace sequant {
 
@@ -58,7 +58,7 @@ class any_comparable {
   template <class ValueType, class... Args>
   std::enable_if_t<meta::is_less_than_comparable_v<std::decay_t<ValueType> >,
                    std::decay_t<ValueType> &>
-  emplace(Args &&... args) {
+  emplace(Args &&...args) {
     reset();
     impl_ = new impl<typename std::decay<ValueType>::type>(
         std::forward<Args>(args)...);
@@ -67,7 +67,7 @@ class any_comparable {
   template <class ValueType, class U, class... Args>
   std::enable_if_t<meta::is_less_than_comparable_v<std::decay_t<ValueType> >,
                    std::decay_t<ValueType> &>
-  emplace(std::initializer_list<U> il, Args &&... args) {
+  emplace(std::initializer_list<U> il, Args &&...args) {
     reset();
     impl_ = new impl<typename std::decay<ValueType>::type>(
         il, std::forward<Args>(args)...);
@@ -87,16 +87,28 @@ class any_comparable {
       return typeid(void);
   }
 
-  /// @return true if @c *this is less than @c other
+  /// @return true if @c a is less than @c b
+  /// @param a first object to compare
+  /// @param b second object to compare
   /// @note will check that the types match if NDEBUG is not defined.
-  bool operator<(const any_comparable &other) const {
-    return *impl_ < *other.impl_;
+  friend bool operator<(const any_comparable &a, const any_comparable &b) {
+    return *a.impl_ < *b.impl_;
   }
 
-  /// @return true if @c *this is equivalent to @c other
+  /// @return true if @c a is equivalent to @c b
+  /// @param a first object to compare
+  /// @param b second object to compare
   /// @note will check that the types match if NDEBUG is not defined.
-  bool operator==(const any_comparable &other) const {
-    return *impl_ == *other.impl_;
+  friend bool operator==(const any_comparable &a, const any_comparable &b) {
+    return *a.impl_ == *b.impl_;
+  }
+
+  /// @return true if @p a is not equivalent to @p b
+  /// @param a first object to compare
+  /// @param b second object to compare
+  /// @note will check that the types match if NDEBUG is not defined.
+  friend bool operator!=(const any_comparable &a, const any_comparable &b) {
+    return !(a == b);
   }
 
  private:
@@ -252,12 +264,29 @@ class Taggable {
   /// resets this tag
   void reset() const { tag_.reset(); }
 
-  bool operator<(const Taggable &other) const { return tag_ < other.tag_; }
-
-  bool operator==(const Taggable &other) const { return tag_ == other.tag_;}
-
  private:
   mutable any_comparable tag_;
+
+  /// @param a first object to compare
+  /// @param b second object to compare
+  /// @return true if @p a is less than @p b
+  friend bool operator<(const Taggable &a, const Taggable &b) {
+    return a.tag_ < b.tag_;
+  }
+
+  /// @param a first object to compare
+  /// @param b second object to compare
+  /// @return true if @p a is equal to @p b
+  friend bool operator==(const Taggable &a, const Taggable &b) {
+    return a.tag_ == b.tag_;
+  }
+
+  /// @param a first object to compare
+  /// @param b second object to compare
+  /// @return true if @p a is not equal to @p b
+  friend bool operator!=(const Taggable &a, const Taggable &b) {
+    return !(a == b);
+  }
 };
 
 #endif  // SEQUANT_HAS_CXX17_ANY

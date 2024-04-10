@@ -2,13 +2,12 @@
 // Created by Eduard Valeyev on 4/30/20.
 //
 
-#include "../../SeQuant/core/index.hpp"
+#include <SeQuant/core/index.hpp>
+#include <SeQuant/core/context.hpp>
+#include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/wstring.hpp>
 
-#include "../../SeQuant/core/context.hpp"
-
-#include "../../SeQuant/core/wstring.hpp"
-
-#include "../../SeQuant/core/latex.hpp"
+#include <unordered_map>
 
 namespace sequant {
 

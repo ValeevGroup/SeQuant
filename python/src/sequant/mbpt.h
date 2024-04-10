@@ -4,6 +4,10 @@
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 
+#include <SeQuant/core/abstract_tensor.hpp>
+#include <SeQuant/core/context.hpp>
+#include <SeQuant/core/expr.hpp>
+
 #include "python.h"
 
 #include <cstdint>

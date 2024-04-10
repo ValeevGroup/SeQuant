@@ -2,9 +2,33 @@
 // Created by Eduard Valeyev on 2019-02-26.
 //
 
-#include "tensor_network.hpp"
-#include "bliss.hpp"
-#include "logger.hpp"
+#include <SeQuant/core/tensor_network.hpp>
+#include <SeQuant/core/abstract_tensor.hpp>
+#include <SeQuant/core/algorithm.hpp>
+#include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/bliss.hpp>
+#include <SeQuant/core/complex.hpp>
+#include <SeQuant/core/container.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/hash.hpp>
+#include <SeQuant/core/index.hpp>
+#include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/logger.hpp>
+#include <SeQuant/core/tag.hpp>
+#include <SeQuant/core/wstring.hpp>
+
+#include <algorithm>
+#include <iostream>
+#include <iterator>
+#include <sstream>
+#include <type_traits>
+
+#include <range/v3/algorithm/for_each.hpp>
+#include <range/v3/algorithm/none_of.hpp>
+#include <range/v3/functional/identity.hpp>
+#include <range/v3/iterator/basic_iterator.hpp>
+#include <range/v3/view/any_view.hpp>
+#include <range/v3/view/view.hpp>
 
 namespace sequant {
 
@@ -275,7 +299,7 @@ ExprPtr TensorNetwork::canonicalize(
                       });
           std::sort(begin(ord_orig), end(ord_orig));
           // write (potentially reordered) tensors to tensors_canonized
-          for (size_t t = 0; t != sz; ++t) {
+          for (std::ptrdiff_t t = 0; t != sz; ++t) {
             tensors_canonized.at(ord_orig[t]) = tensors_.at(ord_can[t].first);
           }
 
@@ -348,7 +372,7 @@ ExprPtr TensorNetwork::canonicalize(
   }
 #endif
   bool pass_mutated = false;
-  bool mutated = false;
+  [[maybe_unused]] bool mutated = false;
   do {
     pass_mutated = false;
     for (auto &tensor : tensors_) {

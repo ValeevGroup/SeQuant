@@ -5,9 +5,9 @@
 #ifndef SEQUANT_WICK_IMPL_HPP
 #define SEQUANT_WICK_IMPL_HPP
 
-#include "bliss.hpp"
-#include "logger.hpp"
-#include "tensor_network.hpp"
+#include <SeQuant/core/bliss.hpp>
+#include <SeQuant/core/logger.hpp>
+#include <SeQuant/core/tensor_network.hpp>
 
 #ifdef SEQUANT_HAS_EXECUTION_HEADER
 #include <execution>
@@ -658,7 +658,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
               //      spin-free cases
               const auto nv = aut.size();
               bool aut_contains_other_vertices = false;
-              for (auto v = 0; v != nv; ++v) {
+              for (std::size_t v = 0; v != nv; ++v) {
                 const auto v_is_in_aut = v != aut[v];
                 if (v_is_in_aut && !vertices.contains(v)) {
                   aut_contains_other_vertices = true;

@@ -1,16 +1,22 @@
-#include "SeQuant/core/parse_expr.hpp"
+#include <SeQuant/core/parse_expr.hpp>
 
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/complex.hpp>
 
-#include <boost/multiprecision/cpp_int.hpp>
+#include <range/v3/all.hpp>
 
 #include <cassert>
 #include <codecvt>
 #include <locale>
 #include <string>
+#include <cstddef>
+#include <memory>
+#include <stdexcept>
+#include <utility>
+#include <vector>
 
 namespace sequant {
 
@@ -101,8 +107,16 @@ std::wstring deparse_scalar(const Constant::scalar_type& scalar) {
     }
   }
 
+  SEQUANT_PRAGMA_CLANG(diagnostic push)
+  SEQUANT_PRAGMA_CLANG(diagnostic ignored "-Wdeprecated-declarations")
+  SEQUANT_PRAGMA_GCC(diagnostic push)
+  SEQUANT_PRAGMA_GCC(diagnostic ignored "-Wdeprecated-declarations")
+
   std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
   return converter.from_bytes(deparsed);
+
+  SEQUANT_PRAGMA_CLANG(diagnostic pop)
+  SEQUANT_PRAGMA_GCC(diagnostic pop)
 }
 
 std::wstring deparse_expr(const Constant& constant) {

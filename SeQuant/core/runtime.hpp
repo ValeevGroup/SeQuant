@@ -5,16 +5,20 @@
 #ifndef SEQUANT_RUNTIME_HPP
 #define SEQUANT_RUNTIME_HPP
 
-#include <atomic>
-#include <mutex>
+#include <cstdlib>
+#include <memory>
 #include <stdexcept>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include <SeQuant/core/ranges.hpp>
 
 #ifdef SEQUANT_HAS_EXECUTION_HEADER
 #include <execution>
+#else
+#include <atomic>
+#include <mutex>
 #endif
 
 namespace sequant {

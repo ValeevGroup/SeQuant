@@ -2,6 +2,24 @@
 
 #include <SeQuant/core/eval_node.hpp>
 #include <SeQuant/core/parse_expr.hpp>
+#include <SeQuant/core/asy_cost.hpp>
+#include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/binary_node.hpp>
+#include <SeQuant/core/container.hpp>
+#include <SeQuant/core/eval_expr.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/rational.hpp>
+
+#include <cassert>
+#include <initializer_list>
+#include <memory>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
+
+#include <range/v3/all.hpp>
+
 #include "SeQuant/domain/mbpt/convention.hpp"
 namespace {
 
@@ -32,7 +50,8 @@ sequant::EvalExpr node(sequant::EvalNode<sequant::EvalExpr> const& n,
   return *n_;
 }
 
-std::wstring tikz(sequant::EvalNode<sequant::EvalExpr> const& n) noexcept {
+[[maybe_unused]] std::wstring tikz(
+    sequant::EvalNode<sequant::EvalExpr> const& n) noexcept {
   return n.tikz<std::wstring>(
       [](auto&& n) { return L"$" + n->expr()->to_latex() + L"$"; },
       [](auto&&) { return L""; });

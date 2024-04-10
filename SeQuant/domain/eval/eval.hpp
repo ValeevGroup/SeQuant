@@ -1,13 +1,13 @@
 #ifndef SEQUANT_EVAL_EVAL_HPP
 #define SEQUANT_EVAL_EVAL_HPP
 
-#include "eval_result.hpp"
-
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval_node.hpp>
 #include <SeQuant/core/logger.hpp>
+#include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/domain/eval/cache_manager.hpp>
+#include <SeQuant/domain/eval/eval_result.hpp>
 
 #include <btas/btas.h>
 #include <tiledarray.h>
@@ -32,7 +32,7 @@ void log_eval(Args const&... args) noexcept {
 #endif
 }
 
-void log_cache_access(size_t key, CacheManager const& cm) {
+[[maybe_unused]] void log_cache_access(size_t key, CacheManager const& cm) {
 #ifdef SEQUANT_EVAL_TRACE
   auto& l = Logger::get_instance();
   if (l.log_level_eval > 0) {
@@ -50,7 +50,7 @@ void log_cache_access(size_t key, CacheManager const& cm) {
 #endif
 }
 
-void log_cache_store(size_t key, CacheManager const& cm) {
+[[maybe_unused]] void log_cache_store(size_t key, CacheManager const& cm) {
 #ifdef SEQUANT_EVAL_TRACE
   auto& l = Logger::get_instance();
   if (l.log_level_eval > 0) {
@@ -63,7 +63,7 @@ void log_cache_store(size_t key, CacheManager const& cm) {
 #endif
 }
 
-std::string perm_groups_string(
+[[maybe_unused]] std::string perm_groups_string(
     container::svector<std::array<size_t, 3>> const& perm_groups) {
   std::string result;
   for (auto const& g : perm_groups)
@@ -78,7 +78,8 @@ constexpr bool HasAnnotMethod{};
 
 template <typename T>
 constexpr bool HasAnnotMethod<
-    T, std::void_t<decltype(std::declval<remove_cvref_t<T>>().annot())>> = true;
+    T, std::void_t<decltype(std::declval<meta::remove_cvref_t<T>>().annot())>> =
+    true;
 
 template <typename, typename = void>
 constexpr bool IsEvaluable{};
@@ -245,8 +246,10 @@ ERPtr evaluate_core(NodeT const& node, Le const& le, Args&&... args) {
 
       log_eval("[PRODUCT] ", node.left()->label(), " * ", node.right()->label(),
                " = ", node->label(), "\n");
-
-      return left->prod(*right, ann);
+      auto const de_nest =
+          node.left()->tot() && node.right()->tot() && !node->tot();
+      return left->prod(*right, ann,
+                        de_nest ? TA::DeNest::True : TA::DeNest::False);
     }
   }
 }

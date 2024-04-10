@@ -41,11 +41,11 @@ void bubble_sort(ForwardIter begin, Sentinel end, Compare comp) {
         static_assert(std::tuple_size_v<decltype(val0)> == 2,
                       "need to generalize comparer to handle tuples");
         auto composite_compare = [](auto&& c0, auto&& c1) {
-          if (std::get<0>(c0) < std::get<0>(c1)) {            // c0[0] < c1[1]
+          if (std::get<0>(c0) < std::get<0>(c1)) {  // c0[0] < c1[0]
             return true;
           } else if (!(std::get<0>(c1) < std::get<0>(c0))) {  // c0[0] == c1[0]
             return std::get<1>(c0) < std::get<1>(c1);
-          } else {                                            // c0[0] > c1[0]
+          } else {  // c0[0] > c1[0]
             return false;
           }
         };

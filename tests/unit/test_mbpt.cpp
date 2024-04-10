@@ -7,11 +7,25 @@
 #include "SeQuant/core/timer.hpp"
 #include "SeQuant/domain/mbpt/context.hpp"
 #include "SeQuant/domain/mbpt/op.hpp"
-#include "SeQuant/domain/mbpt/spin.hpp"
 #include "SeQuant/domain/mbpt/convention.hpp"
+#include <SeQuant/core/abstract_tensor.hpp>
+#include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/context.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/index.hpp>
+#include <SeQuant/core/latex.hpp>
 
 #include "catch.hpp"
 #include "test_config.hpp"
+
+#include <iostream>
+#include <memory>
+#include <string>
+#include <string_view>
+#include <type_traits>
+#include <utility>
+#include<vector>
+
 
 TEST_CASE("NBodyOp", "[mbpt]") {
   using namespace sequant;

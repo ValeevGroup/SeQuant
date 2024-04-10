@@ -11,7 +11,20 @@ default_op_connections() {
       {OpType::h, OpType::t},
       {OpType::f, OpType::t},
       {OpType::f̃, OpType::t},
-      {OpType::g, OpType::t}};
+      {OpType::g, OpType::t},
+      // NBs
+      // - for unitary ansatz can also connect t^+ with Hamiltonian
+      // - for exact (non-approximated) unitary ansatz will also need to connect
+      // t^+ with t;
+      //   for MR unitary ansatz can also connect t with t and t^+ with t^+ ,
+      //   but since adjoint() does not change OpType all of these are expressed
+      //   as same connection ... this points out the need to have a separate
+      //   OpType for t^+ and t, and in general the contents of OpType must be
+      //   customizable
+      {OpType::t, OpType::h},
+      {OpType::t, OpType::f},
+      {OpType::t, OpType::f̃},
+      {OpType::t, OpType::g}};
   return defaults;
 }
 

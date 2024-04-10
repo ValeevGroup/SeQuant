@@ -1,7 +1,15 @@
+#include "catch.hpp"
+
 #include <SeQuant/core/optimize/fusion.hpp>
 #include <SeQuant/core/parse_expr.hpp>
-#include "catch.hpp"
 #include "SeQuant/domain/mbpt/convention.hpp"
+#include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/expr.hpp>
+
+#include <array>
+#include <memory>
+#include <string_view>
+#include <vector>
 
 TEST_CASE("TEST_FUSION", "[Fusion]") {
   using sequant::opt::Fusion;

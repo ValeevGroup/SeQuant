@@ -16,38 +16,37 @@ set(SEQUANT_EXT_VERSION "@SEQUANT_EXT_VERSION@")
 
 @PACKAGE_INIT@
 
-if(NOT TARGET Boost::boost OR NOT TARGET Boost::regex)
-  set(Boost_USE_CONFIG @Boost_USE_CONFIG@)
-  if (Boost_USE_CONFIG)
-    set(Boost_CONFIG @Boost_CONFIG@)
-    if (NOT Boost_CONFIG OR NOT EXISTS ${Boost_CONFIG})
-      message(FATAL_ERROR "Expected Boost config file at ${Boost_CONFIG}; directory moved since SeQuant configuration?")
-    endif()
-    get_filename_component(Boost_DIR ${Boost_CONFIG} DIRECTORY)
-    find_package(Boost CONFIG QUIET REQUIRED COMPONENTS regex PATHS ${Boost_DIR} NO_DEFAULT_PATH)
-  else (Boost_USE_CONFIG)
-    set(BOOST_INCLUDEDIR @Boost_INCLUDE_DIR@)
-    set(BOOST_LIBRARYDIR @Boost_LIBRARY_DIR_RELEASE@)
-    if (NOT BOOST_LIBRARYDIR OR NOT EXISTS ${BOOST_LIBRARYDIR})
-      set(BOOST_LIBRARYDIR @Boost_LIBRARY_DIR_DEBUG@)
-    endif()
-    set(Boost_NO_SYSTEM_PATHS OFF)
-    if (BOOST_LIBRARYDIR AND BOOST_INCLUDEDIR)
-      if (EXISTS ${BOOST_LIBRARYDIR} AND EXISTS ${BOOST_INCLUDEDIR})
-        set(Boost_NO_SYSTEM_PATHS ON)
-      endif()
-    endif()
-    find_package(Boost QUIET REQUIRED COMPONENTS regex)
-  endif (Boost_USE_CONFIG)
+@Boost_CONFIG_FILE_CONTENTS@
+
+set(SEQUANT_HAS_TILEDARRAY @SEQUANT_HAS_TILEDARRAY@)
+if(SEQUANT_HAS_TILEDARRAY AND NOT TARGET tiledarray)
+  set(TiledArray_CONFIG @TiledArray_CONFIG@)
+  if (NOT TiledArray_CONFIG OR NOT EXISTS ${TiledArray_CONFIG})
+    message(FATAL_ERROR "Expected TiledArray config file at ${TiledArray_CONFIG}; directory moved since SeQuant configuration?")
+  endif()
+  get_filename_component(TiledArray_DIR ${TiledArray_CONFIG} DIRECTORY)
+  find_dependency(TiledArray CONFIG QUIET REQUIRED COMPONENTS tiledarray PATHS ${TiledArray_DIR} NO_DEFAULT_PATH)
+endif()
+
+set(SEQUANT_HAS_EIGEN @SEQUANT_HAS_EIGEN@)
+if (NOT TARGET Eigen3::Eigen AND SEQUANT_HAS_EIGEN)
+  if (TARGET TiledArray_Eigen)
+     add_library(Eigen3::Eigen ALIAS TiledArray_Eigen)
+  else()
+    get_filename_component(Eigen3_DIR "@Eigen3_CONFIG@" DIRECTORY)
+     # re:NO_CMAKE_PACKAGE_REGISTRY: eigen3 registers its *build* tree with the user package registry ...
+     #                               to avoid issues with wiped build directory look for installed eigen
+     find_package(Eigen3 3.0 CONFIG REQUIRED NO_CMAKE_PACKAGE_REGISTRY HINTS "${Eigen3_DIR}")
+  endif()
 endif()
 
 if (NOT TARGET range-v3::range-v3)
   get_filename_component(range-v3_DIR "@range-v3_CONFIG@" DIRECTORY)
-  find_package(range-v3 QUIET REQUIRED HINTS "${range-v3_DIR}")
+  find_dependency(range-v3 QUIET REQUIRED HINTS "${range-v3_DIR}")
 endif(NOT TARGET range-v3::range-v3)
 
 if (NOT TARGET Threads::Threads)
-    find_package(Threads REQUIRED)
+    find_dependency(Threads REQUIRED)
 endif (NOT TARGET Threads::Threads)
 
 # Include library IMPORT targets

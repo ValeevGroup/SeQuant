@@ -22,6 +22,24 @@ namespace meta {
 template <typename T>
 struct type_printer;
 
+///////// remove_cvref ///////////
+
+#if __cplusplus < 202002L
+template <class T>
+struct remove_cvref {
+  using type = std::remove_cv_t<::std::remove_reference_t<T>>;
+};
+
+template <class T>
+using remove_cvref_t = typename remove_cvref<T>::type;
+#else
+template <typename T>
+using remove_cvref = std::remove_cvref<T>;
+
+template <typename T>
+using remove_cvref_t = std::remove_cvref_t<T>;
+#endif
+
 ///////// is_detected ///////////
 
 struct nonesuch {
@@ -207,6 +225,26 @@ static constexpr bool is_range_v =
      is_detected_v<is_range_impl::std_end_t, T>) ||
     (is_detected_v<is_range_impl::ranges_begin_t, T> &&
      is_detected_v<is_range_impl::ranges_end_t, T>);
+
+
+/// is_same
+/// Checks whether \c T is a \c Base (is either the same class or a sub-class
+/// ignoring CV and reference qualifiers
+template <typename Base, typename T>
+using is_base_of = std::is_base_of<remove_cvref_t<Base>, remove_cvref_t<T>>;
+template <typename Base, typename T>
+constexpr bool is_base_of_v = is_base_of<Base, T>::value;
+
+/// is_same
+/// Checks whether \c T and \c U are the same type, ignoring any CV and
+/// reference qualifiers
+template <typename T, typename U>
+struct is_same
+    : std::bool_constant<std::is_same_v<remove_cvref_t<T>, remove_cvref_t<U>>> {
+};
+
+template <typename T, typename U>
+constexpr bool is_same_v = is_same<T, U>::value;
 
 }  // namespace meta
 }  // namespace sequant

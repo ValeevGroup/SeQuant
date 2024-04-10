@@ -4,17 +4,25 @@
 
 #include "catch.hpp"
 
-#include <iostream>
+#include <SeQuant/core/math.hpp>
+#include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/runtime.hpp>
+#include <SeQuant/core/wstring.hpp>
+#include <SeQuant/core/meta.hpp>
 
-#include "SeQuant/core/math.hpp"
-#include "SeQuant/core/rational.hpp"
-#include "SeQuant/core/runtime.hpp"
-#include "SeQuant/core/wstring.hpp"
+#include <iostream>
+#include <cmath>
+#include <new>
+#include <stdexcept>
+#include <string>
+#include <utility>
+
+#include <range/v3/all.hpp>
 
 TEST_CASE("Rational", "[elements]") {
   using namespace sequant;
 
-  auto print = [](rational r) {
+  [[maybe_unused]] auto print = [](rational r) {
     return sequant::to_wstring(numerator(r)) + L"/" +
            sequant::to_wstring(denominator(r));
   };

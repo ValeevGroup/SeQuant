@@ -9,8 +9,9 @@
 #include "SeQuant/core/latex.hpp"
 #include "SeQuant/domain/mbpt/convention.hpp"
 
-TEST_CASE("Index", "[elements]") {
+TEST_CASE("Index", "[elements][index]") {
   using namespace sequant;
+
   SECTION("constructors") {
     auto idx_registry = get_default_context().index_space_registry();
     Index i{};
@@ -99,6 +100,10 @@ TEST_CASE("Index", "[elements]") {
     REQUIRE(i1 != i2);
     REQUIRE(i1 == i3);
     REQUIRE(!(i1 != i3));
+
+    // check copy ctor
+    Index i4(i2);
+    REQUIRE(i2 == i4);
   }
 
   SECTION("ordering") {
@@ -177,6 +182,23 @@ TEST_CASE("Index", "[elements]") {
     SEQUANT_PRAGMA_CLANG(diagnostic pop)
   }
 
+  SECTION("label manipulation") {
+    Index alpha(L"α");
+    Index alpha1(L"α_1");
+    Index alpha_up(L"α↑");
+    Index alpha1_up(L"α↑_1");
+    REQUIRE_NOTHROW(alpha.make_label_plus_suffix(L'↑'));
+    REQUIRE(alpha.make_label_plus_suffix(L'↑') == L"α↑");
+    REQUIRE_NOTHROW(alpha.make_label_minus_substring(L'↑'));
+    REQUIRE(alpha.make_label_minus_substring(L'↑') == L"α");
+    REQUIRE_NOTHROW(alpha1.make_label_minus_substring(L'↑'));
+    REQUIRE(alpha1.make_label_minus_substring(L'↑') == L"α_1");
+    REQUIRE_NOTHROW(alpha_up.make_label_minus_substring(L'↑'));
+    REQUIRE(alpha_up.make_label_minus_substring(L'↑') == L"α");
+    REQUIRE_NOTHROW(alpha1_up.make_label_minus_substring(L'↑'));
+    REQUIRE(alpha1_up.make_label_minus_substring(L'↑') == L"α_1");
+  }
+
   SECTION("latex") {
     Index i1(L"i_1");
     std::wstring i1_str;
@@ -201,7 +223,7 @@ TEST_CASE("Index", "[elements]") {
     get_default_context().index_space_registry()->remove(L"a↑");
   }
 
-  /*SECTION("wolfram") {
+  SECTION("wolfram") {
     Index i1(L"i_1");
     std::wstring i1_str;
     REQUIRE_NOTHROW(i1_str = i1.to_wolfram());
@@ -227,6 +249,15 @@ TEST_CASE("Index", "[elements]") {
     REQUIRE(Index(L"p_1").to_wolfram() ==
             L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(p\\), "
             L"\\(1\\)]\\)\",particleSpace[occupied,virtual]]");
-  }*/
+    REQUIRE(Index(L"α'_1").to_wolfram() ==
+            L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(α'\\), "
+            L"\\(1\\)]\\)\",particleSpace[othervirtual]]");
+    REQUIRE(Index(L"α_1").to_wolfram() ==
+            L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(α\\), "
+            L"\\(1\\)]\\)\",particleSpace[virtual,othervirtual]]");
+    REQUIRE(Index(L"κ_1").to_wolfram() ==
+            L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(κ\\), "
+            L"\\(1\\)]\\)\",particleSpace[occupied,virtual,othervirtual]]");
+  }
 
 }  // TEST_CASE("Index")

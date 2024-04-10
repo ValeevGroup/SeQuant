@@ -5,12 +5,26 @@
 #ifndef SEQUANT_SPIN_HPP
 #define SEQUANT_SPIN_HPP
 
-#include <SeQuant/core/tensor_network.hpp>
-#include "SeQuant/core/tensor.hpp"
+#include <SeQuant/core/container.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/index.hpp>
+#include <SeQuant/core/tensor.hpp>
 
-#include <unordered_map>
+#include <cstddef>
+#include <initializer_list>
+#include <string>
+#include <vector>
 
 namespace sequant {
+
+// make alpha-spin idx
+[[nodiscard]] Index make_spinalpha(const Index& idx);
+
+// make beta-spin idx
+[[nodiscard]] Index make_spinbeta(const Index& idx);
+
+// make null-spin idx
+[[nodiscard]] Index make_spinnull(const Index& idx);
 
 /// @brief Applies index replacement rules to an ExprPtr
 /// @param expr ExprPtr to transform
@@ -32,13 +46,13 @@ ExprPtr swap_bra_ket(const ExprPtr& expr);
 /// @param index_replacements a map of pairs containing the index and the
 /// corresponding replacement
 /// @return expr the ExprPtr with substituted indices
-ExprPtr append_spin(ExprPtr& expr,
+ExprPtr append_spin(const ExprPtr& expr,
                     const container::map<Index, Index>& index_replacements);
 
 /// @brief Removes spin label from all indices in an expression
 /// @param expr an ExprPtr with spin indices
 /// @return expr an ExprPtr with spin labels removed
-ExprPtr remove_spin(ExprPtr& expr);
+ExprPtr remove_spin(const ExprPtr& expr);
 
 /// @brief Checks the spin symmetry of a pair of indices corresponding to a
 /// particle in tensor notation
@@ -198,8 +212,7 @@ std::size_t count_cycles(Seq0&& v0, const Seq1& v1) {
 /// @return an expression with spin integrated/adapted
 ExprPtr closed_shell_spintrace(
     const ExprPtr& expression,
-    const container::svector<container::svector<Index>>& ext_index_groups = {
-        {}});
+    const container::svector<container::svector<Index>>& ext_index_groups = {});
 
 ///
 /// \brief Given a OpType::A or OpType::S tensor, generates a list of external
@@ -272,7 +285,8 @@ std::vector<ExprPtr> open_shell_spintrace(
 /// @return a vector of spin expressions for open-shell reference
 std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr);
 
-/// @brief Transforms an expression from spin orbital to spatial orbitals
+/// @brief Transforms an expression from spin orbital to spin-free (spatial)
+/// orbital form
 /// @details Given an expression, this function extracts all indices and adds a
 /// spin attribute to all the indices in the expression. A map is generated with
 /// all possible spin permutations and substituted in the expression. Based on
@@ -280,16 +294,22 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr);
 /// labels removed and a sum of all non-zero expressions is returned.
 /// @param expr ExprPtr with spin orbital indices
 /// @param ext_index_groups groups of external indices
+/// @param spinfree_index_spaces if true, will assume that all index spaces are
+/// spin-free and will remove spin from all indices of the result before
+/// returning
 /// @return an expression with spin integrated/adapted
+/// @warning The result of this function is not simplified since this is a
+/// building block for more specialized spin-tracing functions
 ExprPtr spintrace(
     const ExprPtr& expression,
-    container::svector<container::svector<Index>> ext_index_groups = {{}});
+    container::svector<container::svector<Index>> ext_index_groups = {},
+    bool spinfree_index_spaces = true);
 
 /// @brief Factorize S out of terms
 /// @details Given an expression, permute indices and check if a given product
 /// @param expression Expression pointer
 /// @param fast_method use hash maps (memory intensive) for faster evaluation
-/// @param ext_index_groups External index groups to geenrate S operator
+/// @param ext_index_groups External index groups to generate the S operator
 /// @return ExprPtr with terms with S operator as a factor
 ExprPtr factorize_S(const ExprPtr& expression,
                     std::initializer_list<IndexList> ext_index_groups,
@@ -298,7 +318,7 @@ ExprPtr factorize_S(const ExprPtr& expression,
 ExprPtr biorthogonal_transform(
     const sequant::ExprPtr& expr,
     const container::svector<container::svector<sequant::Index>>&
-        ext_index_groups = {{}},
+        ext_index_groups = {},
     double threshold = 1.e-12);
 
 }  // namespace sequant

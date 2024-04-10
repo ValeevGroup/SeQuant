@@ -5,7 +5,7 @@
 #ifndef SEQUANT_LOGGER_HPP
 #define SEQUANT_LOGGER_HPP
 
-#include "../core/utility/singleton.hpp"
+#include <SeQuant/core/utility/singleton.hpp>
 
 #include <iostream>
 

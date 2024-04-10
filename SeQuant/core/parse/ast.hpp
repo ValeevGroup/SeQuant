@@ -85,11 +85,11 @@ using NullaryValue = boost::variant<Number, Tensor, Variable, Product, Sum>;
 struct Product : boost::spirit::x3::position_tagged {
   std::vector<NullaryValue> factors;
 
-  template <typename T>
-  Product(T value) : factors({std::move(value)}) {}
+  Product() = default;
+  explicit Product(std::vector<NullaryValue> factors);
 
-  Product(std::vector<NullaryValue> factors = {})
-      : factors(std::move(factors)) {}
+  template <typename T>
+  explicit Product(T value) : factors({std::move(value)}) {}
 
   // Required to use as a container
   using value_type = decltype(factors)::value_type;
@@ -103,6 +103,9 @@ struct Sum : boost::spirit::x3::position_tagged {
   // Required to use as a container
   using value_type = decltype(summands)::value_type;
 };
+
+Product::Product(std::vector<NullaryValue> factors)
+    : factors(std::move(factors)) {}
 
 }  // namespace sequant::parse::ast
 

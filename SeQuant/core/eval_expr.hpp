@@ -1,10 +1,16 @@
 #ifndef SEQUANT_EVAL_EXPR_HPP
 #define SEQUANT_EVAL_EXPR_HPP
 
-#include <SeQuant/core/expr_fwd.hpp>
-#include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/container.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/index.hpp>
+
+#include <cstddef>
+#include <string>
 
 namespace sequant {
+
+class Tensor;
 
 ///
 /// \brief The EvalOp enum
@@ -41,19 +47,19 @@ enum class EvalOp {
 enum class ResultType { Tensor, Scalar };
 
 ///
-/// @see EvalExpr::inner_outer_indices
+/// \brief Represents the outer indices and the inner indices of a nested
+/// tensor.
 ///
-struct InnerOuterIndices {
-  container::svector<Index> const inner;
-  container::svector<Index> const outer;
-};
+/// \note The nested tensor is a concept that generalizes the sequant::Tensor
+/// with and without proto indices. sequant::Tensors with proto indices have
+/// outer and inner indices, whereas, those without proto indices only have
+/// outer indices.
+///
+struct NestedTensorIndices {
+  container::svector<Index> outer, inner;
 
-///
-/// \param inout InnerOuterIndices object.
-/// \return String of comma-separated labels of inner indices followed by the
-///         labels of outer indices, separated by a semicolon.
-///
-std::string indices_to_annot(InnerOuterIndices const& inout) noexcept;
+  explicit NestedTensorIndices(Tensor const&);
+};
 
 ///
 /// \brief The EvalExpr class represents the object that go into the nodes of
@@ -167,7 +173,6 @@ class EvalExpr {
   ///
   [[nodiscard]] Constant const& as_constant() const noexcept;
 
-
   ///
   /// \brief Calls to<Variable>() on ExprPtr held by this object.
   ///
@@ -176,26 +181,15 @@ class EvalExpr {
   [[nodiscard]] Variable const& as_variable() const noexcept;
 
   ///
-  /// \brief Separates indices of a tensor into inner and outer index groups.
-  ///
-  /// \details - If the expression this object holds is a Constant, then the
-  ///            resulting inner and outer indices are empty.
-  ///          - The outer indices are empty if neither of the indices in the
-  ///            tensor's braket have at least one proto-index.
-  ///          - The proto-indices are collected, sorted using
-  ///            Index::LabelCompare, and de-duplicated to form the outer
-  ///            indices.
-  ///          - The non-proto indices make up the inner indices if they are not
-  ///            already in the outer indices.
-  ///
-  /// \return InnerOuterIndices object.
-  ///
-  [[nodiscard]] InnerOuterIndices inner_outer_indices() const noexcept;
-
-  ///
   /// \brief Get the label for this object useful for logging.
   ///
   [[nodiscard]] std::string label() const noexcept;
+
+  ///
+  /// \return A string usable as TiledArray annotation if is_tensor() true,
+  ///         empty string otherwise.
+  ///
+  [[nodiscard]] std::string braket_annot() const noexcept;
 
  private:
   EvalOp op_type_;
