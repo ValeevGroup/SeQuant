@@ -220,6 +220,12 @@ ExprPtr Λ_(std::size_t K);
 /// \p K
 ExprPtr Λ(std::size_t K);
 
+/// @}
+
+/// @return true if \p op_or_op_product can change quantum numbers from \p source_qns to \p target_qns
+bool can_change_qns(const ExprPtr& op_or_op_product, const qns_t target_qns,
+                    const qns_t source_qns = {});
+
 #include <SeQuant/domain/mbpt/vac_av.hpp>
 
 }  // namespace op
