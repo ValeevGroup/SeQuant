@@ -113,12 +113,15 @@ qninterval_t nann_uocc(qns_t qns) {
 qninterval_t nann(qns_t qns) { return qns[1] + qns[3] + qns[5]; }
 
 qns_t combine(qns_t a, qns_t b) {
+  // particle contractions (i.e. above Fermi level; N.B. active are above
+  // closed-shell Fermi level)
   const auto ncontr_uocc =
       qninterval_t{0, std::min(ncre(b, IndexSpace::active_unoccupied).upper(),
                                nann(a, IndexSpace::active_unoccupied).upper())};
   const auto ncontr_act =
-      qninterval_t{0, std::min(nann(b, IndexSpace::active).upper(),
-                               ncre(a, IndexSpace::active).upper())};
+      qninterval_t{0, std::min(ncre(b, IndexSpace::active).upper(),
+                               nann(a, IndexSpace::active).upper())};
+  // hole contractions (i.e. below Fermi level)
   const auto ncontr_occ =
       qninterval_t{0, std::min(nann(b, IndexSpace::active_occupied).upper(),
                                ncre(a, IndexSpace::active_occupied).upper())};
