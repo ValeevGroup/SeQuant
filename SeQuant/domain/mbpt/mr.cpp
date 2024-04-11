@@ -2,8 +2,9 @@
 // Created by Eduard Valeyev on 2019-02-19.
 //
 
-#include <SeQuant/domain/mbpt/mr.hpp>
 #include <SeQuant/domain/mbpt/fwd.hpp>
+
+#include <SeQuant/domain/mbpt/mr.hpp>
 
 #include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/container.hpp>
@@ -16,16 +17,6 @@
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/wick.hpp>
 
-#include <atomic>
-#include <algorithm>
-#include <map>
-#include <cassert>
-#include <cstdlib>
-#include <iostream>
-#include <memory>
-#include <set>
-#include <stdexcept>
-
 #include <range/v3/algorithm/for_each.hpp>
 #include <range/v3/functional/identity.hpp>
 #include <range/v3/iterator/basic_iterator.hpp>
@@ -36,6 +27,16 @@
 #include <range/v3/view/reverse.hpp>
 #include <range/v3/view/transform.hpp>
 #include <range/v3/view/view.hpp>
+
+#include <algorithm>
+#include <atomic>
+#include <cassert>
+#include <cstdlib>
+#include <iostream>
+#include <map>
+#include <memory>
+#include <set>
+#include <stdexcept>
 
 namespace sequant {
 namespace mbpt {
@@ -182,7 +183,21 @@ OpMaker::OpMaker(OpType op, std::size_t nbra, std::size_t nket)
   }
 }
 
+OpMaker::OpMaker(OpType op,
+                 const container::svector<IndexSpace::Type>& cre_spaces,
+                 const container::svector<IndexSpace::Type>& ann_spaces)
+    : base_type(op) {
+  bra_spaces_ = cre_spaces;
+  ket_spaces_ = ann_spaces;
+}
+
 #include <SeQuant/domain/mbpt/mr/op.impl.cpp>
+
+ExprPtr T_act_(std::size_t K) {
+  return OpMaker(OpType::t,
+                 container::svector<IndexSpace::Type>(K, IndexSpace::active),
+                 container::svector<IndexSpace::Type>(K, IndexSpace::active))();
+}
 
 ExprPtr H_(std::size_t k) {
   assert(k > 0 && k <= 2);
@@ -525,6 +540,22 @@ ExprPtr T_(std::size_t K) {
         qns = combine(
             qnc_t{
                 {0ul, 0ul}, {0ul, K}, {0ul, K}, {0ul, K}, {0ul, K}, {0ul, 0ul}},
+            qns);
+      });
+}
+
+ExprPtr T_act_(std::size_t K) {
+  assert(K > 0);
+  return ex<op_t>(
+      []() -> std::wstring_view { return optype2label.at(OpType::t); },
+      [=]() -> ExprPtr {
+        using namespace sequant::mbpt::sr;
+        return mr::T_act_(K);
+      },
+      [=](qnc_t& qns) {
+        qns = combine(
+            qnc_t{
+                {0ul, 0ul}, {0ul, 0ul}, {K, K}, {K, K}, {0ul, 0ul}, {0ul, 0ul}},
             qns);
       });
 }
