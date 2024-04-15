@@ -54,7 +54,7 @@ Context& Context::set(Vacuum vacuum) {
   vacuum_ = vacuum;
   return *this;
 }
-Context& Context::set_index_space_registry(IndexSpaceRegistry ISR){
+Context& Context::set(IndexSpaceRegistry ISR){
   idx_space_reg_ = std::make_shared<IndexSpaceRegistry>(ISR);
   return *this;
 }

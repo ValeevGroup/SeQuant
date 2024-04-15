@@ -206,7 +206,7 @@ class QuantumNumberChange
   /// sequence of QNV-convertible elements
   template <typename I,
             typename = std::enable_if_t<std::is_convertible_v<I, interval_t>>>
-  explicit QuantumNumberChange(std::initializer_list<I> i) {
+   explicit QuantumNumberChange(std::vector<I> i) {
     if (i.size() == size()) {
       std::copy(i.begin(), i.end(), this->begin());
     } else {
@@ -365,7 +365,7 @@ class QuantumNumberChange
 
 
   auto hash_value() const {
-    static_assert(size() > 0);
+    assert(size() > 0);
     auto val = sequant::hash::value(this->operator[](0));
     for (std::size_t c = 1; c != size(); ++c) {
       sequant::hash::combine(val, sequant::hash::value(this->operator[](c)));
@@ -680,63 +680,122 @@ class Operator : public Operator<void, S> {
 extern template class Operator<qns_t, Statistics::FermiDirac>;
 extern template class Operator<qns_t, Statistics::BoseEinstein>;
 
+namespace TensorOp{
+// clang-format off
+/// @brief `k`-body contribution to the "generic" Hamiltonian (in normal order relative to the default vacuum)
+/// @param[in] k the rank of the particle interactions; only `k<=2` is
+/// supported
+// clang-format on
+ExprPtr H_(std::size_t k);
+
+/// @brief total Hamiltonian including up to `k`-body interactions
+/// @param[in] k the maximum rank of the particle interactions; only `k<=2` is
+/// supported
+ExprPtr H(std::size_t k = 2);
+
+/// fock operator implied one-body operator, optional explicit construction requires user to specify the
+/// IndexSpace corresponding to all orbitals which may have non-zero density.
+ExprPtr F( bool use_tensor = true, IndexSpace density_occupied = {L"",0});
+
+/// makes particle-conserving excitation operator of rank \p K
+ExprPtr T_(std::size_t K);
+
+/// makes sum of particle-conserving excitation operators of all ranks up to \p
+/// K
+ExprPtr T(std::size_t K,bool skip1 =false);
+
+/// makes particle-conserving deexcitation operator of rank \p K
+ExprPtr Λ_(std::size_t K);
+
+/// makes sum of particle-conserving deexcitation operators of all ranks up to
+/// \p
+/// K
+ExprPtr Λ(std::size_t K);
+
+//general excitation operator
+ExprPtr R_(std::size_t nbra, std::size_t nket,
+           IndexSpace hole_space = get_default_context().index_space_registry()->active_hole_space(),
+           IndexSpace particle_space = get_default_context().index_space_registry()->active_particle_space());
+
+//general deexcitation operator
+ExprPtr L_(std::size_t nbra, std::size_t nket,
+           IndexSpace hole_space = get_default_context().index_space_registry()->active_hole_space(),
+           IndexSpace particle_space = get_default_context().index_space_registry()->active_particle_space());
+
+ExprPtr P(std::int64_t K);
+
+ExprPtr A(std::int64_t K);
+
+ExprPtr S(std::int64_t K);
+
+ExprPtr H_pt(std::size_t order, std::size_t R);
+
+ExprPtr T_pt_(std::size_t order, std::size_t K);
+
+ExprPtr T_pt(std::size_t order, std::size_t K, bool skip1 =false);
+
+ExprPtr Λ_pt_(std::size_t order, std::size_t K);
+
+ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1 = false);
+}
+
 namespace op{
 // clang-format off
 /// @brief `k`-body contribution to the "generic" Hamiltonian (in normal order relative to the default vacuum)
 /// @param[in] k the rank of the particle interactions; only `k<=2` is
 /// supported
 // clang-format on
-ExprPtr H_(std::size_t k, bool count_vac_ops = true);
+ExprPtr H_(std::size_t k);
 
 /// @brief total Hamiltonian including up to `k`-body interactions
 /// @param[in] k the maximum rank of the particle interactions; only `k<=2` is
 /// supported
-ExprPtr H(std::size_t k = 2, bool count_vac_ops = true);
+ExprPtr H(std::size_t k = 2);
 
 /// fock operator implied one-body operator, optional explicit construction requires user to specify the
 /// IndexSpace corresponding to all orbitals which may have non-zero density.
-ExprPtr F(bool cout_vac_ops =true, bool use_tensor = true, IndexSpace density_occupied = {L"",0});
+ExprPtr F(bool use_tensor = true, IndexSpace density_occupied = {L"",0});
 
 /// makes particle-conserving excitation operator of rank \p K
-ExprPtr T_(std::size_t K, bool count_vac_ops = true);
+ExprPtr T_(std::size_t K);
 
 /// makes sum of particle-conserving excitation operators of all ranks up to \p
 /// K
-ExprPtr T(std::size_t K, bool count_vac_ops = true);
+ExprPtr T(std::size_t K,bool skip1=false);
 
 /// makes particle-conserving deexcitation operator of rank \p K
-ExprPtr Λ_(std::size_t K, bool count_vac_ops = true);
+ExprPtr Λ_(std::size_t K);
 
 /// makes sum of particle-conserving deexcitation operators of all ranks up to
 /// \p
 /// K
-ExprPtr Λ(std::size_t K, bool count_vac_ops = true);
+ExprPtr Λ(std::size_t K);
 
 //general excitation operator
-ExprPtr R_(std::size_t nbra, std::size_t nket, bool count_vac_ops =true,
+ExprPtr R_(std::size_t nbra, std::size_t nket,
            IndexSpace hole_space = get_default_context().index_space_registry()->active_hole_space(),
            IndexSpace particle_space = get_default_context().index_space_registry()->active_particle_space());
 
 //general deexcitation operator
-ExprPtr L_(std::size_t nbra, std::size_t nket, bool count_vac_ops =true,
+ExprPtr L_(std::size_t nbra, std::size_t nket,
            IndexSpace hole_space = get_default_context().index_space_registry()->active_hole_space(),
            IndexSpace particle_space = get_default_context().index_space_registry()->active_particle_space());
 
-ExprPtr P(std::int64_t K, bool count_vac_ops = true);
+ExprPtr P(std::int64_t K);
 
-ExprPtr A(std::int64_t K, bool count_vac_ops = true);
+ExprPtr A(std::int64_t K);
 
-ExprPtr S(std::int64_t K, bool count_vac_ops = true);
+ExprPtr S(std::int64_t K);
 
-ExprPtr H_pt(std::size_t order, std::size_t R, bool count_vac_ops = true);
+ExprPtr H_pt(std::size_t order, std::size_t R);
 
-ExprPtr T_pt_(std::size_t order, std::size_t K,bool count_vac_ops =true);
+ExprPtr T_pt_(std::size_t order, std::size_t K);
 
-ExprPtr T_pt(std::size_t order, std::size_t K, bool skip1 =false,bool count_vac_ops=true);
+ExprPtr T_pt(std::size_t order, std::size_t K, bool skip1 =false);
 
-ExprPtr Λ_pt_(std::size_t order, std::size_t K,bool count_vac_ops=true);
+ExprPtr Λ_pt_(std::size_t order, std::size_t K);
 
-ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1 = false,bool count_vac_ops=true);
+ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1 = false);
 
 bool raises_vacuum_up_to_rank(const ExprPtr& op_or_op_product, const unsigned long k);
 

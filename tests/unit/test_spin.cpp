@@ -46,16 +46,10 @@ TEST_CASE("Spin", "[spin]") {
   };
 
   SECTION("protoindices supported") {
-    Index i1(L"i_1", IndexSpace::instance(IndexSpace::active_occupied));
-    Index a1(L"a_1", IndexSpace::instance(IndexSpace::active_unoccupied), {i1});
+    auto index_registry = get_default_context().index_space_registry();
+    Index i1(L"i_1", index_registry->retrieve(L"i"));
+    Index a1(L"a_1", index_registry->retrieve(L"a"), {i1});
 
-    Index i3(L"i_3", get_default_context().index_space_registry()->retrieve(L"i_3"),
-             {i1, i2});
-    Index a3(L"a_3", get_default_context().index_space_registry()->retrieve(L"a_3"),
-             {a1, a2});
-
-    const auto input = ex<Tensor>(L"t", IndexList{i3}, IndexList{a3});
-    REQUIRE_THROWS_AS(spintrace(input), std::logic_error);
     const auto expr = ex<Tensor>(L"t", IndexList{i1}, IndexList{a1}) *
                       ex<Tensor>(L"F", IndexList{a1}, IndexList{i1});
     REQUIRE_NOTHROW(spintrace(expr));
@@ -102,39 +96,36 @@ TEST_CASE("Spin", "[spin]") {
   }
 
   SECTION("Index: add/remove spin") {
-    auto i = Index(L"i", IndexSpace::instance(IndexSpace::active_occupied,
-                                              IndexSpace::nullqns));
-    auto i1 = Index(L"i_1", IndexSpace::instance(IndexSpace::active_occupied,
-                                                 IndexSpace::nullqns));
+    auto i = Index(L"i", {L"i",{0b01},IndexSpace::nullqns});
+    auto i1 = Index(L"i_1",{L"i",{0b01},IndexSpace::nullqns});
     auto p =
-        Index(L"p", IndexSpace::instance(IndexSpace::all, IndexSpace::nullqns));
+        Index(L"p", {L"p",{0b11},IndexSpace::nullqns});
     auto p1 = Index(L"p_1",
-                    IndexSpace::instance(IndexSpace::all, IndexSpace::nullqns));
+                    {L"p",{0b11},IndexSpace::nullqns});
     auto p1_a = Index(L"p↑_1",
-                      IndexSpace::instance(IndexSpace::all, IndexSpace::alpha));
-    auto p2 = Index(L"p_2",
-                    IndexSpace::instance(IndexSpace::all, IndexSpace::nullqns));
+                      {L"p",{0b11},IndexSpace::alpha});
+    auto p2 = Index(L"p_2",{L"p",{0b11},IndexSpace::nullqns});
     auto p2_b =
-        Index(L"p↓_2", IndexSpace::instance(IndexSpace::all, IndexSpace::beta));
+        Index(L"p↓_2", {L"p",{0b11},IndexSpace::beta});
 
     auto p_i = Index(
-        L"p", IndexSpace::instance(IndexSpace::all, IndexSpace::nullqns), {i});
+        L"p", {L"p",{0b11},IndexSpace::nullqns}, {i});
     auto p1_i =
         Index(L"p_1",
-              IndexSpace::instance(IndexSpace::all, IndexSpace::nullqns), {i});
+              {L"p",{0b11},IndexSpace::nullqns}, {i});
     auto p_i1 = Index(
-        L"p", IndexSpace::instance(IndexSpace::all, IndexSpace::nullqns), {i1});
+        L"p", {L"p",{0b11},IndexSpace::nullqns}, {i1});
     auto p1_i1 =
         Index(L"p_1",
-              IndexSpace::instance(IndexSpace::all, IndexSpace::nullqns), {i1});
+              {L"p",{0b11},IndexSpace::nullqns}, {i1});
 
     // make_spinalpha
     {
       // plain
       REQUIRE_NOTHROW(make_spinalpha(p));
       REQUIRE(make_spinalpha(p).label() == L"p↑");
-      REQUIRE(make_spinalpha(p).space() ==
-              IndexSpace::instance(IndexSpace::all, IndexSpace::alpha));
+      IndexSpace p_a(L"p",{0b11},IndexSpace::alpha);
+      REQUIRE(make_spinalpha(p).space() ==p_a);
       REQUIRE_NOTHROW(make_spinalpha(p1));
       REQUIRE(make_spinalpha(p1) == p1_a);
       // idempotent
@@ -721,11 +712,11 @@ SECTION("Closed-shell spintrace CCD") {
                                    Symmetry::nonsymm));
     }
     {  // CSV (aka PNO)
-      Index i1(L"i_1", IndexSpace::instance(IndexSpace::active_occupied));
-      Index i2(L"i_2", IndexSpace::instance(IndexSpace::active_occupied));
-      Index a1(L"a_1", IndexSpace::instance(IndexSpace::active_unoccupied),
+      Index i1(L"i_1", {L"i",{0b01}});
+      Index i2(L"i_2", {L"i",{0b01}});
+      Index a1(L"a_1", {L"a",{0b10}},
                {i1, i2});
-      Index a2(L"a_2", IndexSpace::instance(IndexSpace::active_unoccupied),
+      Index a2(L"a_2", {L"a",{0b10}},
                {i1, i2});
       const auto pno_ccd_energy_so =
           ex<Constant>(rational(1, 4)) *

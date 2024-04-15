@@ -306,17 +306,18 @@ TEST_CASE("MBPT", "[mbpt]") {
       std::make_shared<DefaultTensorCanonicalizer>());
 
   SECTION("SRSO") {
-    using namespace sequant::mbpt::op;
+    using namespace sequant::mbpt::TensorOp;
+
 
     // H**T12**T12 -> R2
-    SEQUANT_PROFILE_SINGLE("wick(H**T12**T12 -> R2)", {auto result = mbpt::vac_av(A(-2,false) * H(2,false) * T(2, false) * T(2,false), {{1, 2}, {1, 3}});
+    SEQUANT_PROFILE_SINGLE("wick(H**T12**T12 -> R2)", {auto result = mbpt::vac_av(A(-2) * H(2) * T(2) * T(2), {{1, 2}, {1, 3}});
 
       //      std::wcout << "H*T12*T12 -> R2 = " << to_latex_align(result, 20)
       //                 << std::endl;
       REQUIRE(result->size() == 15);
 
       {  // check against op
-        auto result_op = vac_av(P(2) * H() * T(2) * T(2));
+        auto result_op = sequant::mbpt::op::vac_av(sequant::mbpt::op::P(2) * sequant::mbpt::op::H() * sequant::mbpt::op::T(2) * sequant::mbpt::op::T(2));
         REQUIRE(result_op->size() ==
                 result->size());  // as compact as result ..
         REQUIRE(simplify(result_op - result) ==
@@ -359,12 +360,12 @@ TEST_CASE("MBPT", "[mbpt]") {
   }     // SECTION ("SRSO")
 
   SECTION("SRSO Fock") {
-    using namespace sequant::mbpt::op;
+    using namespace sequant::mbpt::TensorOp;
 
     // <2p1h|H2|1p> ->
     SEQUANT_PROFILE_SINGLE("wick(<2p1h|H2|1p>)", ({
                              auto input = L_(1, 2) * H_(2) * R_(1, 0);
-                             auto result = vac_av(input);
+                             auto result = mbpt::vac_av(input);
 
                              std::wcout << "<2p1h|H2|1p> = " << to_latex(result)
                                         << std::endl;
@@ -446,6 +447,9 @@ TEST_CASE("MBPT", "[mbpt]") {
       auto result_wo_top =
           mbpt::vac_av(H_(2) * T_(2), {{0, 1}}, /* use_topology = */ false);
 
+      auto dif = simplify(result - result_wo_top);
+      std::wcout <<"difference" << to_latex(dif) << std::endl;
+
       REQUIRE(simplify(result - result_wo_top) == ex<Constant>(0));
 
       // now compute using physical vacuum
@@ -508,7 +512,7 @@ TEST_CASE("MBPT", "[mbpt]") {
 
       {  // make sure get same result without use of topology
         auto result_wo_top =
-            mbpt::vac_av(H_(2,false) * T_(2,false), {{0, 1}}, /* use_topology = */ false);
+            mbpt::vac_av(H_(2) * T_(2), {{0, 1}}, /* use_topology = */ false);
 
         REQUIRE(simplify(result - result_wo_top) == ex<Constant>(0));
       }

@@ -8,7 +8,6 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/tensor_network.hpp>
-#include <SeQuant/domain/mbpt/sr.hpp>
 #include <SeQuant/core/timer.hpp>
 #include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/algorithm.hpp>

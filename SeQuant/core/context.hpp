@@ -2,7 +2,7 @@
 #define SEQUANT_CORE_CONTEXT_HPP
 
 #include "attr.hpp"
-#include "index.hpp"
+//#include "index.hpp"
 #include "space.hpp"
 
 #include "utility/context.hpp"
@@ -60,6 +60,10 @@ class Context {
   /// \param vacuum Vacuum
   /// \return ref to `*this`, for chaining
   Context& set(Vacuum vacuum);
+  ///sets the IndexSpaceRegistry for this context
+  /// \param IndexSpaceRegistry ISR
+  /// \return ref to '*this' for chaining
+  Context& set(IndexSpaceRegistry ISR);
   /// Sets the IndexSpaceMetric for this context, convenient for chaining
   /// \param metric IndexSpaceMetric
   /// \return ref to `*this`, for chaining
@@ -78,7 +82,6 @@ class Context {
   Context& set_first_dummy_index_ordinal(std::size_t first_dummy_index_ordinal);
 
   /// @return the IndexRegistry object
-  std::shared_ptr<IndexRegistry> index_registry() const;
 
  private:
   Vacuum vacuum_ = Defaults::vacuum;

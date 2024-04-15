@@ -274,6 +274,8 @@ class IndexSpace {
   constexpr static QuantumNumbers alpha{0b000001};
   /// spin-down
   constexpr static QuantumNumbers beta{0b000010};
+  /// spin mask
+  constexpr static QuantumNumbers spinmask{0b000011};
 
   /// list of all standard quantum numbers
   static constexpr QuantumNumbers standard_qns[] = {nullqns, alpha, beta};

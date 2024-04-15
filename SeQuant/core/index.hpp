@@ -7,12 +7,12 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/hash.hpp>
-#include <SeQuant/core/space.hpp>
+//#include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tag.hpp>
 #include <SeQuant/core/utility/string.hpp>
-
+#include <SeQuant/core/context.hpp>
 // Only needed due to a (likely) compiler bug in Apple Clang
-#include <SeQuant/core/attr.hpp>
+//#include <SeQuant/core/attr.hpp>
 
 #include <algorithm>
 #include <atomic>
@@ -35,12 +35,6 @@
 
 #include <range/v3/all.hpp>
 
-#include "attr.hpp"
-#include "container.hpp"
-#include "hash.hpp"
-#include "space.hpp"
-#include "tag.hpp"
-#include "context.hpp"
 
 // change to 1 to make thread-safe
 #define SEQUANT_INDEX_THREADSAFE 1
@@ -112,7 +106,7 @@ class Index : public Taggable {
   /// @param label the index label, does not need to be unique, but must be
   /// convertible into an IndexSpace (@sa IndexSpace::instance )
   Index(const std::wstring_view label)
-      : Index(label,sequant::get_default_context().index_space_registry()->retrieve(label) , {}) {
+      : Index(label,get_default_context().index_space_registry()->retrieve(label) , {}) {
     check_nontmp_label();
   }
 
@@ -120,7 +114,7 @@ class Index : public Taggable {
   /// convertible into an IndexSpace (@sa IndexSpace::instance )
   template <size_t N>
   Index(const wchar_t (&label)[N])
-      : Index(std::wstring_view(&label[0]), sequant::get_default_context().index_space_registry()->retrieve(&label[0]),
+      : Index(std::wstring_view(&label[0]), get_default_context().index_space_registry()->retrieve(&label[0]),
               {}) {
     check_nontmp_label();
   }
@@ -128,7 +122,7 @@ class Index : public Taggable {
   /// @param label the index label, does not need to be unique, but must be
   /// convertible into an IndexSpace (@sa IndexSpace::instance )
   Index(const wchar_t *label)
-      : Index(std::wstring_view(label), sequant::get_default_context().index_space_registry()->retrieve(label), {}) {
+      : Index(std::wstring_view(label), get_default_context().index_space_registry()->retrieve(label), {}) {
     check_nontmp_label();
   }
 
@@ -153,7 +147,7 @@ class Index : public Taggable {
       : symmetric_proto_indices_(symmetric_proto_indices) {
     if constexpr (!std::is_same_v<std::decay_t<IndexOrIndexLabel>, Index>) {
       label_ = index;
-      space_ = sequant::get_default_context().index_space_registry()->retrieve(label_);
+      space_ = get_default_context().index_space_registry()->retrieve(label_);
     } else {
       label_ = index.label();
       space_ = index.space();
@@ -195,7 +189,7 @@ class Index : public Taggable {
     if constexpr (!std::is_same_v<std::decay_t<IndexOrIndexLabel>, Index>) {
       label_ = index;
       check_nontmp_label();
-      space_ = sequant::get_default_context().index_space_registry()->retrieve(label_);
+      space_ = get_default_context().index_space_registry()->retrieve(label_);
     } else {
       label_ = index.label();
       space_ = index.space();
@@ -248,7 +242,7 @@ class Index : public Taggable {
   /// @brief constructs an Index using this object's label and proto indices (if
   /// any), its IndexSpaceType, and a new set of QuantumNumbers
   [[nodiscard]] Index replace_qns(QuantumNumbersAttr qns) const {
-    return Index(*this, IndexSpace(this->space().type(), std::move(qns)));
+    return Index(*this, IndexSpace(this->space().get_base_key(),this->space().attr(), std::move(qns)));
   }
 
   /// @return this cast to Taggable&
@@ -463,7 +457,7 @@ class Index : public Taggable {
 
   std::wstring to_latex() const;
 
-  template <typename... Attrs>
+  /*template <typename... Attrs>
   std::wstring to_wolfram(Attrs &&...attrs) const {
     auto protect_subscript = [](const std::wstring_view str) {
       auto subsc_pos = str.rfind(L'_');
@@ -492,7 +486,7 @@ class Index : public Taggable {
      ...);
     result += L"]";
     return result;
-  }
+  }*/
 
   /// @param protoindex_range a range of Index objects
   /// @return the color of the protoindices
@@ -686,7 +680,7 @@ class Index : public Taggable {
   // check for nontmp index
   Index(std::wstring_view label, const IndexSpace *space) noexcept
       : label_(label), space_(*space), proto_indices_() {}
-};
+
 
   /// @return true if @c index1 is identical to @c index2 , i.e. they belong to
   /// the same space, they have the same label, and the same proto-indices (if

@@ -93,6 +93,7 @@ bool Operator<QuantumNumbers, S>::commutes_with_atom(const Expr& that) const {
 
     // if this has annihilators/creators in same space as that has
     // creator/annihilators return false
+
     auto delta_this = (*this)();
     auto delta_that = (that_op)();
 

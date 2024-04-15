@@ -213,7 +213,7 @@ std::vector<sequant::ExprPtr> CC::t_pt(std::size_t order, std::size_t rank) {
   for (auto p = N; p >= 1; --p) {
     auto freq_term = ex<Variable>(L"ω") * op::P(p) * op::T_pt_(order, p);
     result.at(p) =
-        op::vac_av(op::P(p,true) * expr, op_connect) - op::vac_av(freq_term);
+        op::vac_av(op::P(p) * expr, op_connect) - op::vac_av(freq_term);
   }
   return result;
 }
@@ -270,7 +270,7 @@ std::vector<ExprPtr> CC::λ_pt(size_t order, size_t rank) {
   for (auto p = N; p >= 1; --p) {
     auto freq_term = ex<Variable>(L"ω") * op::Λ_pt_(order, p) * op::P(-p);
     result.at(p) =
-        op::vac_av(expr * op::P(-p,true), op_connect) + op::vac_av(freq_term);
+        op::vac_av(expr * op::P(-p), op_connect) + op::vac_av(freq_term);
   }
   return result;
 }

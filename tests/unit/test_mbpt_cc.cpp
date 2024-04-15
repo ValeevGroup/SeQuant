@@ -10,7 +10,7 @@
 #include "test_config.hpp"
 
 TEST_CASE("SR-TCC", "[mbpt/cc]") {
-  using namespace sequant::mbpt::sr;
+  using namespace sequant::mbpt;
 
   SECTION("t") {
     // TCC R1
@@ -30,7 +30,7 @@ TEST_CASE("SR-TCC", "[mbpt/cc]") {
 }  // TEST_CASE("SR-TCC")
 
 TEST_CASE("SR-UCC", "[mbpt/cc]") {
-  using namespace sequant::mbpt::sr;
+  using namespace sequant::mbpt;
 
   SECTION("t") {
     const auto N = 2;

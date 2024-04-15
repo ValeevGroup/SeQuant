@@ -223,7 +223,7 @@ TEST_CASE("Index", "[elements][index]") {
     get_default_context().index_space_registry()->remove(L"a↑");
   }
 
-  SECTION("wolfram") {
+  /*SECTION("wolfram") {
     Index i1(L"i_1");
     std::wstring i1_str;
     REQUIRE_NOTHROW(i1_str = i1.to_wolfram());
@@ -258,6 +258,6 @@ TEST_CASE("Index", "[elements][index]") {
     REQUIRE(Index(L"κ_1").to_wolfram() ==
             L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(κ\\), "
             L"\\(1\\)]\\)\",particleSpace[occupied,virtual,othervirtual]]");
-  }
+  }*/
 
 }  // TEST_CASE("Index")

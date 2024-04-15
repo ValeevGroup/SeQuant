@@ -265,8 +265,8 @@ bool is_qpannihilator(const Op<S> &op,
     case Vacuum::Physical:
       return op.action() == Action::annihilate;
     case Vacuum::SingleProduct: {
-      return (idx_registry->contains_occupied(op.index().space()) && op.action() == Action::annihilate) ||
-             (idx_registry->contains_unoccupied(op.index().space()) && op.action() == Action::create);
+      return (idx_registry->contains_occupied(op.index().space()) && op.action() == Action::create) ||
+             (idx_registry->contains_unoccupied(op.index().space()) && op.action() == Action::annihilate);
     }
     default:
       throw std::logic_error(
