@@ -377,7 +377,7 @@ TEST_CASE("MBPT", "[mbpt]") {
     SEQUANT_PROFILE_SINGLE(
         "wick(<2p1h|H2|2p1h(c)>)", ({
           auto input = L_(1, 2) * H() * R_(2, 1);
-          auto result = vac_av(input);
+          auto result = mbpt::vac_av(input);
 
           std::wcout << "<2p1h|H|2p1h(c)> = " << to_latex(result) << std::endl;
           REQUIRE(result->is<Sum>());    // sub ...
@@ -386,13 +386,13 @@ TEST_CASE("MBPT", "[mbpt]") {
   }  // SECTION("SRSO Fock")
 
   SECTION("SRSO-PNO") {
-    using namespace sequant::mbpt;
+    using namespace sequant::mbpt::TensorOp;
     using sequant::mbpt::Context;
-    auto resetter = set_scoped_default_formalism(Context(CSV::Yes));
+    auto resetter = sequant::mbpt::set_scoped_default_formalism(Context(mbpt::CSV::Yes));
 
     // H2**T2**T2 -> R2
     SEQUANT_PROFILE_SINGLE("wick(H2**T2**T2 -> R2)", {
-      auto result = vac_av(mbpt::op::A(-2) * mbpt::op::H_(2) * mbpt::op::T_(2) * mbpt::op::T_(2), {{1, 2}, {1, 3}});
+      auto result = mbpt::vac_av(A(-2) * H_(2) * T_(2) * T_(2), {{1, 2}, {1, 3}});
 
       std::wcout << "H2**T2**T2 -> R2 = " << to_latex_align(result, 20)
                  << std::endl;
@@ -401,7 +401,7 @@ TEST_CASE("MBPT", "[mbpt]") {
   }  // SECTION("SRSO-PNO")
 
   SECTION("SRSF") {
-    using namespace sequant::mbpt::op;
+    using namespace sequant::mbpt::TensorOp;
 
     auto ctx_resetter = set_scoped_default_context(
         sequant::Context(Vacuum::SingleProduct, mbpt::make_standard_single_reference_subspaces(),IndexSpaceMetric::Unit,
@@ -409,7 +409,7 @@ TEST_CASE("MBPT", "[mbpt]") {
 
     // H2 -> R2
     SEQUANT_PROFILE_SINGLE("wick(H2 -> R2)", {
-      auto result = vac_av(S(-2) * H_(2));
+      auto result = mbpt::vac_av(S(-2) * H_(2));
 
       {
         std::wcout << "H2 -> R2 = " << to_latex_align(result, 0, 1)
@@ -429,28 +429,32 @@ TEST_CASE("MBPT", "[mbpt]") {
   }  // SECTION("SRSF")
 
   SECTION("MRSO") {
-    using namespace sequant::mbpt::op;
-    auto ctx_resetter=sequant::set_scoped_default_context(
+    using namespace sequant::mbpt::TensorOp;
+    auto ctx_resetter=set_scoped_default_context(
         sequant::Context(Vacuum::SingleProduct,mbpt::make_standard_multireference_subspaces(), IndexSpaceMetric::Unit,
                 BraKetSymmetry::conjugate, SPBasis::spinorbital));
 
     // H2**T2 -> 0
     // std::wcout << "H_(2) * T_(2) = " << to_latex(H_(2) * T_(2)) << std::endl;
     SEQUANT_PROFILE_SINGLE("wick(H2**T2 -> 0)", {
-      auto result = mbpt::vac_av(H_(2) * T_(2), {{0, 1}});
-
       {
-        std::wcout << "H2*T2 -> 0 = " << to_latex_align(result, 0, 1)
-                   << std::endl;
-      }
 
-      auto result_wo_top =
-          mbpt::vac_av(H_(2) * T_(2), {{0, 1}}, /* use_topology = */ false);
+std::wcout << "multireference start" << std::endl;
+auto result = mbpt::vac_av(H_(2) * T_(2), {{0, 1}});
 
-      auto dif = simplify(result - result_wo_top);
-      std::wcout <<"difference" << to_latex(dif) << std::endl;
+{
+std::wcout << " multireference H2*T2 -> 0 = "
+           << to_latex_align(result, 0, 1) << std::endl;
+}
 
-      REQUIRE(simplify(result - result_wo_top) == ex<Constant>(0));
+auto result_wo_top =
+    mbpt::vac_av(H_(2) * T_(2), {{0, 1}}, /* use_topology = */ false);
+
+auto dif = simplify(result - result_wo_top);
+std::wcout <<" multireference topology difference" << to_latex(dif) << std::endl;
+
+REQUIRE(simplify(result - result_wo_top) == ex<Constant>(0));
+}
 
       // now compute using physical vacuum
       {
@@ -518,7 +522,7 @@ TEST_CASE("MBPT", "[mbpt]") {
       }
 
       {  // make sure get same result using operators
-        auto result_op = vac_av(H_(2) * T_(2));
+        auto result_op = mbpt::vac_av(H_(2) * T_(2));
 
         REQUIRE(result_op->size() == result->size());
         REQUIRE(simplify(result - result_op) == ex<Constant>(0));

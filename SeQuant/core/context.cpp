@@ -11,7 +11,8 @@ bool operator==(const Context& ctx1, const Context& ctx2) {
     return ctx1.vacuum() == ctx2.vacuum() && ctx1.metric() == ctx2.metric() &&
            ctx1.braket_symmetry() == ctx2.braket_symmetry() &&
            ctx1.spbasis() == ctx2.spbasis() &&
-           ctx1.first_dummy_index_ordinal() == ctx2.first_dummy_index_ordinal();
+           ctx1.first_dummy_index_ordinal() == ctx2.first_dummy_index_ordinal() &&
+           ctx1.index_space_registry() == ctx2.index_space_registry();
 }
 
 bool operator!=(const Context& ctx1, const Context& ctx2) {

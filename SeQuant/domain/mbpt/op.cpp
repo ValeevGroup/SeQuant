@@ -359,6 +359,7 @@ template <Statistics S>
 OpMaker<S>::OpMaker(OpType op, std::size_t nparticle){
   op_=op;
   auto idx_registry = get_default_context().index_space_registry();
+  auto current_context = get_default_context();
   const auto unocc = idx_registry->active_hole_space();
   const auto occ = idx_registry->active_particle_space();
   switch (to_class(op)) {
@@ -901,10 +902,15 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
   // convention is to use different label for spin-orbital and spin-free RDM
   const auto rdm_label = spinorbital ? optype2label.at(OpType::RDM) : L"Γ";
 
+  //  the hueristic to keep only full contractions during a wick procedure requires that the wave function density agree with
+  // the vacuum normal ordering occupancy.
+  bool full_contractions = (idx_registry->density_occupied() == idx_registry->vacuum_occupied())? true : false;
   FWickTheorem wick{expr};
   wick.use_topology(use_top).set_nop_connections(nop_connections);
+  wick.full_contractions(full_contractions);
   auto result = wick.compute();
   simplify(result);
+  std::wcout << "post wick: " << to_latex_align(result,20,1) << std::endl;
   if (Logger::get_instance().wick_stats) {
     std::wcout << "WickTheorem stats: # of contractions attempted = "
                << wick.stats().num_attempted_contractions

@@ -443,7 +443,7 @@ qns_t generic_excitation_qns(std::size_t particle_rank, std::size_t hole_rank,In
 // generic quantum number function compatible with generic deexcitation operators with the option to choose the particle and hole space.
 qns_t generic_deexcitation_qns(std::size_t particle_rank, std::size_t hole_rank,IndexSpace particle_space, IndexSpace hole_space);
 
-ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,bool use_top = true);
+ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections = {},bool use_top = true);
 }  // namespace mbpt
 
 /// @param qns the quantum numbers to adjoint
