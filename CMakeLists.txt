@@ -246,7 +246,7 @@ set(SeQuant_src
         SeQuant/domain/mbpt/spin.cpp
         SeQuant/domain/mbpt/spin.hpp
         SeQuant/domain/mbpt/vac_av.ipp
-        )
+        SeQuant/core/index_space_registry.h)
 set_source_files_properties(
         SeQuant/domain/mbpt/op.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 

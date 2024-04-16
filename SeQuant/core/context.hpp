@@ -3,7 +3,7 @@
 
 #include "attr.hpp"
 //#include "index.hpp"
-#include "space.hpp"
+#include "index_space_registry.h"
 
 #include "utility/context.hpp"
 

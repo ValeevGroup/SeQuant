@@ -4,7 +4,7 @@
 
 #ifndef SEQUANT_CONVENTION_HPP
 #define SEQUANT_CONVENTION_HPP
-#include "SeQuant/core/space.hpp"
+#include "SeQuant/core/index_space_registry.h"
 
 namespace sequant {
 namespace mbpt {
