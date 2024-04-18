@@ -213,7 +213,9 @@ qns_t combine(qns_t a, qns_t b) {
       auto cre = i * 2;
       auto ann = (i * 2) + 1;
       auto base_is_fermi_occupied = idx_registry->is_pure_occupied(base_spaces[i].first); // need to distinguish particle and hole contractions.
-      auto ncontr_space = base_is_fermi_occupied ? qninterval_t{0, std::min(b[ann].upper(), a[cre].upper())} : qninterval_t{0, std::min(b[cre].upper(), a[ann].upper())};
+      auto ncontr_space = base_is_fermi_occupied ? qninterval_t{0, std::min(b[ann].upper(),
+                                                                            a[cre].upper())} :
+                                                 qninterval_t{0, std::min(b[cre].upper(), a[ann].upper())};
       auto nc_space = nonnegative(b[cre] + a[cre] - ncontr_space);
       auto na_space = nonnegative(b[ann] + a[ann] - ncontr_space);
       result[cre] = nc_space;
@@ -902,7 +904,8 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
   // convention is to use different label for spin-orbital and spin-free RDM
   const auto rdm_label = spinorbital ? optype2label.at(OpType::RDM) : L"Γ";
 
-  //  the hueristic to keep only full contractions during a wick procedure requires that the wave function density agree with
+  //  the hueristic to keep only full contractions
+  // during a wick procedure requires that the wave function density agree with
   // the vacuum normal ordering occupancy.
   bool full_contractions = (idx_registry->density_occupied() == idx_registry->vacuum_occupied())? true : false;
   FWickTheorem wick{expr};
@@ -910,7 +913,7 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
   wick.full_contractions(full_contractions);
   auto result = wick.compute();
   simplify(result);
-  std::wcout << "post wick: " << to_latex_align(result,20,1) << std::endl;
+ // std::wcout << "post wick: " << to_latex_align(result,20,1) << std::endl;
   if (Logger::get_instance().wick_stats) {
     std::wcout << "WickTheorem stats: # of contractions attempted = "
                << wick.stats().num_attempted_contractions

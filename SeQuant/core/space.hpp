@@ -206,7 +206,7 @@ class IndexSpace {
           temp_end = i;
         }
         else{
-          if(temp_end > 0 && temp_start != 33){
+          if(temp_end >= 0 && temp_start != 33){
             start_stop_ranges.push_back({temp_start,temp_end});
             temp_start = 33;
           }
@@ -219,6 +219,9 @@ class IndexSpace {
         }
         Attr new_attr(new_bitspace.to_ulong(),this->qns().to_int32());
         result.push_back(new_attr);
+      }
+      if(result.empty()){// allow null result
+        result.push_back({0,0});
       }
       return result;
     }
@@ -325,34 +328,22 @@ class IndexSpace {
   }
 
   IndexSpace(const IndexSpace &other) {
-    if (!other.attr().is_valid())
-      throw std::invalid_argument(
-          "IndexSpace copy ctor received invalid argument");
   attr_ = other.get_attr();
   base_key_ = other.get_base_key();
   approximate_size_ = other.get_approximate_size();
   }
   IndexSpace(IndexSpace &&other) {
-    if (!other.attr().is_valid())
-      throw std::invalid_argument(
-          "IndexSpace move ctor received invalid argument");
      attr_ = other.get_attr();
      base_key_ = other.get_base_key();
      approximate_size_ = other.get_approximate_size();
   }
   IndexSpace &operator=(const IndexSpace &other) {
-    if (!other.attr().is_valid())
-      throw std::invalid_argument(
-          "IndexSpace copy assignment operator received invalid argument");
     attr_ = other.get_attr();
     base_key_ = other.get_base_key();
     approximate_size_ = other.get_approximate_size();
     return *this;
   }
   IndexSpace &operator=(IndexSpace &&other) {
-    if (!other.attr().is_valid())
-      throw std::invalid_argument(
-          "IndexSpace move assignment operator received invalid argument");
     attr_ = other.get_attr();
     base_key_ = other.get_base_key();
     approximate_size_ = other.get_approximate_size();

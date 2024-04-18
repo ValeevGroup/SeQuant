@@ -860,7 +860,7 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
       rapid_simplify(wick_result_2);
 
       std::wcout << L"H2*T2 = " << to_latex(wick_result_2) << std::endl;
-      std::wcout << L"H2*T2 = " << to_wolfram(wick_result_2) << std::endl;
+      //std::wcout << L"H2*T2 = " << to_wolfram(wick_result_2) << std::endl;
       REQUIRE(to_latex(wick_result_2) ==
               L"{{{4}}"
               L"{\\bar{g}^{{a_1}{a_2}}_{{i_1}{i_2}}}{\\bar{t}^{{i_1}{i_2}}_{{a_"

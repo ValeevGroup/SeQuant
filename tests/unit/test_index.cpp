@@ -183,10 +183,13 @@ TEST_CASE("Index", "[elements][index]") {
   }
 
   SECTION("label manipulation") {
-    Index alpha(L"α");
-    Index alpha1(L"α_1");
-    Index alpha_up(L"α↑");
-    Index alpha1_up(L"α↑_1");
+    auto nex_context = Context(Vacuum::SingleProduct,sequant::mbpt::make_F12_single_reference_subspaces(),IndexSpaceMetric::Unit);
+    auto context_resetter = set_scoped_default_context(nex_context);
+    auto isr = get_default_context().index_space_registry();
+    Index alpha(L"α",isr->retrieve(L"α"));
+    Index alpha1(L"α_1",isr->retrieve(L"α"));
+    Index alpha_up(L"α↑",isr->retrieve(L"α"));
+    Index alpha1_up(L"α↑_1",isr->retrieve(L"α"));
     REQUIRE_NOTHROW(alpha.make_label_plus_suffix(L'↑'));
     REQUIRE(alpha.make_label_plus_suffix(L'↑') == L"α↑");
     REQUIRE_NOTHROW(alpha.make_label_minus_substring(L'↑'));

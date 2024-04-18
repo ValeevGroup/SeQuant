@@ -472,11 +472,13 @@ REQUIRE(simplify(result - result_wo_top) == ex<Constant>(0));
 
     // H2 ** T2 ** T2 -> 0
     SEQUANT_PROFILE_SINGLE("wick(H2**T2**T2 -> 0)", {
+      auto& l = sequant::Logger::get_instance();
+      l.wick_reduce = true;
       // first without use of topology
-      auto result = mbpt::vac_av(H_(2) * T_(2) * T_(2), {{0, 1}, {0, 2}},
+      auto result = mbpt::vac_av(H_(2) * T_(2) * T_(2),{{0, 1}},
                            /* use_topology = */ false);
       // now with topology use
-      auto result_top = mbpt::vac_av(H_(2) * T_(2) * T_(2), {{0, 1}, {0, 2}},
+      auto result_top = mbpt::vac_av(H_(2) * T_(2) * T_(2), {{0, 1}},
                                /* use_topology = */ true);
 
       REQUIRE(simplify(result - result_top) == ex<Constant>(0));

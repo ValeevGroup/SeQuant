@@ -97,6 +97,7 @@ class IndexSpaceRegistry{
     }
   }
 
+
   // replace a member of the registry by passing the original label and the new space to replace it
   void relabel(std::wstring_view original_label, std::wstring_view new_label){
     bool found = false;
@@ -327,7 +328,9 @@ class IndexSpaceRegistry{
     }
     density_occuiped_ = label_space[label];
   }
-
+   std::map<std::wstring ,IndexSpace>  get_map()const{
+   return label_space;
+  }
 
  private:
   std::map<std::wstring ,IndexSpace> label_space;
@@ -367,5 +370,9 @@ class IndexSpaceRegistry{
   IndexSpace active_hole_space_ = {L"",0,0};
 
 };
+
+ inline bool operator==(const IndexSpaceRegistry& isr1, const IndexSpaceRegistry& isr2){
+  return isr1.get_map() == isr2.get_map();
+}
 }
 #endif  // SEQUANT_INDEX_SPACE_REGISTRY_H
