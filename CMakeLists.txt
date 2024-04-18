@@ -22,7 +22,7 @@ FetchContent_Declare(
 FetchContent_Declare(
         libperm
         QUIET
-        GIT_REPOSITORY git@github.com:Krzmbrzl/libPerm.git
+        GIT_REPOSITORY https://github.com/Krzmbrzl/libPerm.git
         GIT_TAG develop
 )
 FetchContent_MakeAvailable(vg_cmake_kit libperm)
