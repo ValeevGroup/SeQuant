@@ -24,13 +24,13 @@ namespace sequant {
 struct TypeAttr {
   int32_t bitset = 0;
 
-  TypeAttr(int32_t value) : bitset(value)  {}
+  TypeAttr(int32_t value) : bitset(value) {}
 
   constexpr explicit operator int64_t() const {
     return static_cast<int64_t>(bitset);
   }
-  const int32_t to_int32()  const { return bitset; }
-  const TypeAttr intersection(TypeAttr other)const {
+  const int32_t to_int32() const { return bitset; }
+  const TypeAttr intersection(TypeAttr other) const {
     return TypeAttr(this->to_int32() & other.to_int32());
   }
   const TypeAttr unIon(TypeAttr other) const {
@@ -46,19 +46,17 @@ struct TypeAttr {
   bool const operator!=(TypeAttr other) const { return !(*this == other); }
 
   /// @return true if \c other is included in this object
-  const bool includes(TypeAttr other) const{
+  const bool includes(TypeAttr other) const {
     return intersection(other) == other;
   }
   /// @return true if in canonical order this object preceeds \c other
-  bool const operator<(TypeAttr other) const{
+  bool const operator<(TypeAttr other) const {
     return this->to_int32() < other.to_int32();
   }
 
   /// @return an invalid TypeAttr
   static TypeAttr invalid() noexcept { return TypeAttr(0xffff); }
 };
-
-
 
 /// denotes other quantum numbers (particle type, spin, etc.)
 struct QuantumNumbersAttr {
@@ -75,6 +73,9 @@ struct QuantumNumbersAttr {
   }
   constexpr QuantumNumbersAttr unIon(QuantumNumbersAttr other) const {
     return QuantumNumbersAttr(this->to_int32() | other.to_int32());
+  }
+  constexpr QuantumNumbersAttr operator~() const {
+    return QuantumNumbersAttr(~this->to_int32());
   }
 
   friend constexpr bool operator==(QuantumNumbersAttr, QuantumNumbersAttr);
@@ -104,24 +105,29 @@ constexpr bool operator!=(QuantumNumbersAttr lhs, QuantumNumbersAttr rhs) {
 }
 
 /// @brief a collection of attributes which define a space or set
-/// IndexSpaces have a base_label, TypeAttr or interpretable bitset in the context of other spaces.
-/// IndexSpaces may also have QuantumNumberAttr which are differentiate spaces with different quanta such as fermionic spin
-/// IndesSpaces may additionally have an approximate size which is useful in expression optimization in the context of multiple spaces.
+/// IndexSpaces have a base_label, TypeAttr or interpretable bitset in the
+/// context of other spaces. IndexSpaces may also have QuantumNumberAttr which
+/// are differentiate spaces with different quanta such as fermionic spin
+/// IndesSpaces may additionally have an approximate size which is useful in
+/// expression optimization in the context of multiple spaces.
 class IndexSpace {
  public:
   using TypeAttr = sequant::TypeAttr;
   using QuantumNumbersAttr = sequant::QuantumNumbersAttr;
 
-  //IndexSpace(IndexSpace& idxspace);
+  // IndexSpace(IndexSpace& idxspace);
 
-  IndexSpace(std::wstring_view base_label, TypeAttr typeattr_,QuantumNumbersAttr qnattr_ = QuantumNumbersAttr{0}, unsigned long approximate_size = 10){
-    attr_ = Attr(typeattr_,qnattr_);
+  IndexSpace(std::wstring_view base_label, TypeAttr typeattr_,
+             QuantumNumbersAttr qnattr_ = QuantumNumbersAttr{0},
+             unsigned long approximate_size = 10) {
+    attr_ = Attr(typeattr_, qnattr_);
     base_key_ = base_label;
     approximate_size_ = approximate_size;
   }
 
-  IndexSpace(std::wstring_view base_label, int32_t space_bitset, int32_t qn_bitset = 0){
-    attr_ = Attr(space_bitset,qn_bitset);
+  IndexSpace(std::wstring_view base_label, int32_t space_bitset,
+             int32_t qn_bitset = 0) {
+    attr_ = Attr(space_bitset, qn_bitset);
     base_key_ = base_label;
   }
 
@@ -164,64 +170,68 @@ class IndexSpace {
                   this->qns().unIon(other.qns()));
     }
 
-    std::vector<Attr> irreducible_reps() const{
+    std::vector<Attr> irreducible_reps() const {
       std::vector<Attr> result;
       std::bitset<32> bit32(this->sequant::TypeAttr::to_int32());
-      for (int i =0; i < bit32.size(); i++){
-        if(bit32[i]){Attr temp(static_cast<int>(std::pow(2,i)),this->qns().to_int32()); result.push_back(temp);}
+      for (int i = 0; i < bit32.size(); i++) {
+        if (bit32[i]) {
+          Attr temp(static_cast<int>(std::pow(2, i)), this->qns().to_int32());
+          result.push_back(temp);
+        }
       }
       return result;
     }
 
-    //make a list of all excluded spaces between two index spaces that at least one of them contains.
+    // make a list of all excluded spaces between two index spaces that at least
+    // one of them contains.
 
     std::vector<Attr> excluded_spaces(Attr other) const {
       std::vector<Attr> result;
 
-      // if the excluded space simply forms a union of the two spaces, return the two spaces unchanged
-      // order smallest to largest
-      //TODO try and break this in unit tests
-      if(this->type().unIon(other.type()).to_int32() == this->exclusionary_or(other).to_int32()){
-        if(this->type().to_int32() < other.type().to_int32()){
+      // if the excluded space simply forms a union of the two spaces, return
+      // the two spaces unchanged order smallest to largest
+      // TODO try and break this in unit tests
+      if (this->type().unIon(other.type()).to_int32() ==
+          this->exclusionary_or(other).to_int32()) {
+        if (this->type().to_int32() < other.type().to_int32()) {
           result.push_back(*this);
           result.push_back(other);
-        }
-        else{
+        } else {
           result.push_back(other);
           result.push_back(*this);
         }
         return result;
       }
       std::bitset<32> xor_bitset(this->exclusionary_or(other).to_int32());
-      std::vector<std::pair<int,int>> start_stop_ranges;
+      std::vector<std::pair<int, int>> start_stop_ranges;
       /// TODO need to make a cleaner implementation here.
       // std::bitset does not have an iterator
       int temp_start = 33;
       int temp_end = -1;
-      for(int i = 0; i < 32; i++){
-        if(xor_bitset[i]){
-          if(i > temp_end && i < temp_start){
+      for (int i = 0; i < 32; i++) {
+        if (xor_bitset[i]) {
+          if (i > temp_end && i < temp_start) {
             temp_start = i;
           }
           temp_end = i;
-        }
-        else{
-          if(temp_end >= 0 && temp_start != 33){
-            start_stop_ranges.push_back({temp_start,temp_end});
+        } else {
+          if (temp_end >= 0 && temp_start != 33) {
+            start_stop_ranges.push_back({temp_start, temp_end});
             temp_start = 33;
           }
         }
       }
-      for(int i = 0; i < start_stop_ranges.size(); i++){
+      for (int i = 0; i < start_stop_ranges.size(); i++) {
         std::bitset<32> new_bitspace;
-        for (int j = start_stop_ranges[i].first; j <= start_stop_ranges[i].second; j++){
-          new_bitspace.set(j,true);
+        for (int j = start_stop_ranges[i].first;
+             j <= start_stop_ranges[i].second; j++) {
+          new_bitspace.set(j, true);
         }
-        Attr new_attr(new_bitspace.to_ulong(),this->qns().to_int32());
+        Attr new_attr(new_bitspace.to_ulong(), this->qns().to_int32());
         result.push_back(new_attr);
       }
-      if(result.empty()){// allow null result
-        result.push_back({0,0});
+      if (result.empty()) {  // allow null result
+        result.push_back({0, 0});
       }
       return result;
     }
@@ -270,6 +280,7 @@ class IndexSpace {
   /// @}
 
   /// \name standard quantum numbers tags
+  /// \note spin quantum number takes 2 rightmost bits
   /// @{
   /// no quantum numbers
   constexpr static QuantumNumbers nullqns{0b000000};
