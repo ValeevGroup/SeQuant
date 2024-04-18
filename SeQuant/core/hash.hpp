@@ -121,29 +121,29 @@ inline void combine(std::size_t& seed, T const& v) {
   // in boost 1.78 hash_combine_impl implementation changed
   // https://github.com/boostorg/container_hash/commit/21f2b5e1db1a118c83a3690055c110d0f5637da3
   // probably no longer need these acrobatics
-  if constexpr (sizeof(std::size_t) == sizeof(boost::uint32_t) &&
-                sizeof(decltype(hasher(v))) == sizeof(boost::uint32_t)) {
-    const boost::uint32_t value = hasher(v);
+  if constexpr (sizeof(std::size_t) == sizeof(uint32_t) &&
+                sizeof(decltype(hasher(v))) == sizeof(uint32_t)) {
+    const uint32_t value = hasher(v);
 #if SEQUANT_BOOST_VERSION >= 107800
     seed = boost::hash_detail::hash_combine_impl<32>::fn(
         static_cast<boost::uint32_t>(seed), value);
 #else
     // N.B. seed passed by reference
-    boost::hash_detail::hash_combine_impl(
-        reinterpret_cast<boost::uint32_t&>(seed), value);
+    //boost::hash_detail::hash_combine_impl(
+      //  reinterpret_cast<uint32_t&>(seed), value);
 #endif
     return;
-  } else if constexpr (sizeof(std::size_t) == sizeof(boost::uint64_t) &&
-                       sizeof(decltype(hasher(v))) == sizeof(boost::uint64_t)) {
-    const boost::uint64_t value = hasher(v);
+  } else if constexpr (sizeof(std::size_t) == sizeof(uint64_t) &&
+                       sizeof(decltype(hasher(v))) == sizeof(uint64_t)) {
+    const uint64_t value = hasher(v);
 
 #if SEQUANT_BOOST_VERSION >= 107800
     seed = boost::hash_detail::hash_combine_impl<64>::fn(
         static_cast<boost::uint64_t>(seed), value);
 #else
     // N.B. seed passed by reference
-    boost::hash_detail::hash_combine_impl(
-        reinterpret_cast<boost::uint64_t&>(seed), value);
+   // boost::hash_detail::hash_combine_impl(
+   //     reinterpret_cast<uint64_t&>(seed), value);
 #endif
     return;
   } else {

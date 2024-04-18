@@ -20,6 +20,7 @@ TEST_CASE("SR-TCC", "[mbpt/cc]") {
       REQUIRE(t_eqs.size() == N + 1);
       for (auto k = 0; k <= N; ++k) REQUIRE(t_eqs[k]);
       if (N == 2) {
+        std::wcout << t_eqs[0].to_latex() << std::endl;
         REQUIRE(size(t_eqs[0]) == 3);
         REQUIRE(size(t_eqs[1]) == 14);
       }
