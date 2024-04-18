@@ -19,7 +19,13 @@ FetchContent_Declare(
         BINARY_DIR ${${VG_CMAKE_KIT_PREFIX_DIR}}/cmake/vg-build
         SUBBUILD_DIR ${${VG_CMAKE_KIT_PREFIX_DIR}}/cmake/vg-subbuild
 )
-FetchContent_MakeAvailable(vg_cmake_kit)
+FetchContent_Declare(
+        libperm
+        QUIET
+        GIT_REPOSITORY git@github.com:Krzmbrzl/libPerm.git
+        GIT_TAG develop
+)
+FetchContent_MakeAvailable(vg_cmake_kit libperm)
 list(APPEND CMAKE_MODULE_PATH "${vg_cmake_kit_SOURCE_DIR}/modules")
 
 # Set SeQuant version
