@@ -6,14 +6,19 @@
 #define SEQUANT_HASH_HPP
 
 #ifdef SEQUANT_USE_SYSTEM_BOOST_HASH
+#include <boost/version.hpp>
+#define SEQUANT_BOOST_VERSION BOOST_VERSION
 #include <boost/container_hash/hash.hpp>
 namespace sequant_boost = boost;
-#define SEQUANT_BOOST_VERSION BOOST_VERSION
 #else
 #include <SeQuant/external/boost/container_hash/hash.hpp>
 #endif
 
-#include "meta.hpp"
+#if SEQUANT_BOOST_VERSION < 108100
+#error "SeQuant requires Boost 1.81 or later for hashing"
+#endif
+
+#include <SeQuant/core/meta.hpp>
 
 namespace sequant {
 
@@ -26,19 +31,7 @@ enum class Impl { BoostPre181 = 1, Boost181OrLater = 2 };
 
 /// @return the version of hashing used by SeQuant, depends on the version of
 /// Boost
-constexpr hash::Impl hash_version() {
-#ifdef SEQUANT_USE_SYSTEM_BOOST_HASH
-#if SEQUANT_BOOST_VERSION < 108100
-  return hash::Impl::BoostPre181;
-#else
-  return hash::Impl::Boost181OrLater;
-#endif
-#else
-  return hash::Impl::Boost181OrLater;
-#endif
-}
-
-class Expr;
+constexpr hash::Impl hash_version() { return hash::Impl::Boost181OrLater; }
 
 namespace detail {
 template <typename T, typename Enabler = void>
@@ -53,30 +46,15 @@ template <typename T>
 static constexpr bool has_hash_value_member_fn_v =
     detail::has_hash_value_member_fn_helper<T>::value;
 
-#ifdef SEQUANT_USE_SYSTEM_BOOST_HASH
-#if SEQUANT_BOOST_VERSION < 108100
-template <typename T,
-          typename = std::enable_if_t<has_hash_value_member_fn_v<T>>>
-auto hash_value(const T& obj) {
-  return obj.hash_value();
-}
-#endif
-#endif  // SEQUANT_USE_SYSTEM_BOOST_HASH
-
 namespace detail {
 
 template <typename T, typename = std::void_t<>>
 struct has_boost_hash_value : std::false_type {};
 
-#ifdef SEQUANT_USE_SYSTEM_BOOST_HASH
 template <typename T>
-struct has_boost_hash_value<
-    T, std::void_t<decltype(sequant_boost::hash_value(std::declval<T>()))>>
+struct has_boost_hash_value<T, std::void_t<decltype(sequant_boost::hash_value(
+                                   std::declval<const T&>()))>>
     : std::true_type {};
-#endif  // SEQUANT_USE_SYSTEM_BOOST_HASH
-
-template <typename T>
-constexpr bool has_boost_hash_value_v = has_boost_hash_value<const T&>::value;
 
 template <typename T, typename = std::void_t<>>
 struct has_hash_value : std::false_type {};
@@ -86,12 +64,30 @@ struct has_hash_value<
     T, std::void_t<decltype(hash_value(std::declval<const T&>()))>>
     : std::true_type {};
 
-template <typename T>
-constexpr bool has_hash_value_v = has_hash_value<T>::value;
-
 }  // namespace detail
 
-using sequant_boost::hash_value;
+template <typename T>
+constexpr bool has_boost_hash_value_v =
+    detail::has_boost_hash_value<const T&>::value;
+
+template <typename T>
+constexpr bool has_hash_value_v = detail::has_hash_value<T>::value;
+
+// hash_value specialization for types that have a hash_value member function
+template <typename T,
+          std::enable_if_t<has_hash_value_member_fn_v<T>, short> = 0>
+auto hash_value(const T& obj) {
+  return obj.hash_value();
+}
+
+// hash_value specialization that don't have a hash_value member function but
+// have an applicable boost::hash_value function
+template <typename T, std::enable_if_t<!has_hash_value_member_fn_v<T> &&
+                                           has_boost_hash_value_v<T>,
+                                       int> = 0>
+auto hash_value(const T& obj) {
+  return sequant_boost::hash_value(obj);
+}
 
 // clang-format off
 // rationale:
@@ -114,45 +110,7 @@ template <class T>
 inline void combine(std::size_t& seed, T const& v) {
   _<T> hasher;
 
-#ifdef SEQUANT_USE_SYSTEM_BOOST_HASH
-#if SEQUANT_BOOST_VERSION >= 108100
-  boost::hash_combine(seed, hasher(v));
-#else  // older boost workarounds
-  // in boost 1.78 hash_combine_impl implementation changed
-  // https://github.com/boostorg/container_hash/commit/21f2b5e1db1a118c83a3690055c110d0f5637da3
-  // probably no longer need these acrobatics
-  if constexpr (sizeof(std::size_t) == sizeof(uint32_t) &&
-                sizeof(decltype(hasher(v))) == sizeof(uint32_t)) {
-    const uint32_t value = hasher(v);
-#if SEQUANT_BOOST_VERSION >= 107800
-    seed = boost::hash_detail::hash_combine_impl<32>::fn(
-        static_cast<boost::uint32_t>(seed), value);
-#else
-    // N.B. seed passed by reference
-    //boost::hash_detail::hash_combine_impl(
-      //  reinterpret_cast<uint32_t&>(seed), value);
-#endif
-    return;
-  } else if constexpr (sizeof(std::size_t) == sizeof(uint64_t) &&
-                       sizeof(decltype(hasher(v))) == sizeof(uint64_t)) {
-    const uint64_t value = hasher(v);
-
-#if SEQUANT_BOOST_VERSION >= 107800
-    seed = boost::hash_detail::hash_combine_impl<64>::fn(
-        static_cast<boost::uint64_t>(seed), value);
-#else
-    // N.B. seed passed by reference
-   // boost::hash_detail::hash_combine_impl(
-   //     reinterpret_cast<uint64_t&>(seed), value);
-#endif
-    return;
-  } else {
-    seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-  }
-#endif  // older boost workarounds
-#else   // !defined(SEQUANT_USE_SYSTEM_BOOST_HASH)
   sequant_boost::hash_combine(seed, hasher(v));
-#endif
 
   //  assert(seed == seed_ref);
 }
@@ -186,13 +144,7 @@ inline void range(std::size_t& seed, It first, It last) {
 template <typename It>
 std::size_t hash_range(It begin, It end) {
   if (begin != end) {
-    std::size_t seed;
-    if constexpr (has_hash_value_member_fn_v<std::decay_t<decltype(*begin)>>)
-      seed = begin->hash_value();
-    else {
-      using sequant_boost::hash_value;
-      [[maybe_unused]] std::size_t seed = hash_value(*begin);
-    }
+    std::size_t seed = hash_value(*begin);
     sequant_boost::hash_range(seed, begin + 1, end);
     return seed;
   } else
@@ -206,22 +158,14 @@ void hash_range(size_t& seed, It begin, It end) {
 }
 
 template <typename T>
-struct _<
-    T, std::enable_if_t<!(detail::has_hash_value_v<T>)&&meta::is_range_v<T>>> {
+struct _<T, std::enable_if_t<!(has_hash_value_v<T>) && meta::is_range_v<T>>> {
   std::size_t operator()(T const& v) const { return range(begin(v), end(v)); }
 };
 
 template <typename T>
-struct _<T, std::enable_if_t<!(
-                !(detail::has_hash_value_v<T>)&&meta::is_range_v<T>)>> {
-  std::size_t operator()(T const& v) const {
-    if constexpr (has_hash_value_member_fn_v<T>)
-      return v.hash_value();
-    else {
-      using sequant_boost::hash_value;
-      return hash_value(v);
-    }
-  }
+struct _<T,
+         std::enable_if_t<!(!(has_hash_value_v<T>) && meta::is_range_v<T>)>> {
+  std::size_t operator()(T const& v) const { return hash_value(v); }
 };
 
 template <typename T>
