@@ -16,14 +16,15 @@ TEST_CASE("SR-TCC", "[mbpt/cc]") {
     // TCC R1
     SEQUANT_PROFILE_SINGLE("CCSD t", {
       auto& l = sequant::Logger::get_instance();
-      l.canonicalize = true;
+      // l.canonicalize = true;
       const auto N = 2;
       auto t_eqs = CC{N}.t();
       REQUIRE(t_eqs.size() == N + 1);
       for (auto k = 0; k <= N; ++k) REQUIRE(t_eqs[k]);
       if (N == 2) {
-        std::wcout << t_eqs[0].to_latex() << std::endl;
         REQUIRE(size(t_eqs[0]) == 3);
+        std::wcout << "runtime t eqs1 " << to_latex_align(t_eqs[1], 20, 2)
+                   << std::endl;
         REQUIRE(size(t_eqs[1]) == 14);
       }
     });

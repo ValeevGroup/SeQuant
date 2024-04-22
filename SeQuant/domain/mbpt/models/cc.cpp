@@ -42,12 +42,8 @@ ExprPtr CC::sim_tr(ExprPtr expr, size_t commutator_rank) {
           op::T(N, skip_singles);  // traditional SR ansatz: [O,T] = (O T)_c
       if (unitary())  // unitary SR ansatz: [O,T-T^+] = (O T)_c + (T^+ O)_c
         op_Sk_comm_w_S += adjoint(op::T(N, skip_singles)) * op_Sk;
-      std::wcout << "opskcommws presimplify "
-                 << to_latex_align(op_Sk_comm_w_S, 20, 2) << std::endl;
       op_Sk = ex<Constant>(rational{1, k}) * op_Sk_comm_w_S;
       simplify(op_Sk);
-      std::wcout << "op Skcomm w S " << to_latex_align(op_Sk, 20, 2)
-                 << std::endl;
       result += op_Sk;
     }
     return result;
