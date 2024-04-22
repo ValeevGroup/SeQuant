@@ -2,9 +2,9 @@
 // Created by Eduard Valeyev on 2019-02-06.
 //
 
-#include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/algorithm.hpp>
+#include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/tensor_network.hpp>
@@ -378,7 +378,8 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
     // ... then reduce terms whose hash values are identical
     auto first_it = begin(summands_);
     auto hash_comparer = [](const auto &first, const auto &second) {
-      return first->hash_value() == second->hash_value();
+      bool first_is_second = first->hash_value() == second->hash_value();
+      return first_is_second;
     };
     while ((first_it = std::adjacent_find(first_it, end(summands_),
                                           hash_comparer)) != end(summands_)) {

@@ -1,18 +1,18 @@
-#include <SeQuant/domain/mbpt/context.hpp>
-#include <SeQuant/domain/mbpt/models/cc.hpp>
-#include <SeQuant/domain/mbpt/op.hpp>
-#include <SeQuant/domain/mbpt/convention.hpp>
-#include <SeQuant/domain/mbpt/spin.hpp>
+#include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/runtime.hpp>
-#include <SeQuant/core/expr.hpp>
+#include <SeQuant/domain/mbpt/context.hpp>
+#include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/models/cc.hpp>
+#include <SeQuant/domain/mbpt/op.hpp>
+#include <SeQuant/domain/mbpt/spin.hpp>
 
 #include <cassert>
 #include <cstdint>
 #include <memory>
-#include <utility>
 #include <new>
 #include <stdexcept>
+#include <utility>
 
 namespace sequant::mbpt {
 
@@ -26,7 +26,7 @@ bool CC::unitary() const {
 
 ExprPtr CC::sim_tr(ExprPtr expr, size_t commutator_rank) {
   const bool skip_singles = ansatz_ == Ansatz::oT || ansatz_ == Ansatz::oU;
-
+  std::wcout << "expression: " << to_latex_align(expr, 20, 2) << std::endl;
   auto transform_op_op_pdt = [this, &commutator_rank,
                               skip_singles](const ExprPtr& expr) {
     // TODO: find the order at which the commutator expression should truncate
@@ -34,6 +34,7 @@ ExprPtr CC::sim_tr(ExprPtr expr, size_t commutator_rank) {
     assert(expr.is<op_t>() || expr.is<Product>());
     auto result = expr;
     auto op_Sk = result;
+    std::wcout << "N" << N << std::endl;
     for (size_t k = 1; k <= commutator_rank; ++k) {
       ExprPtr op_Sk_comm_w_S;
       op_Sk_comm_w_S =
@@ -41,7 +42,12 @@ ExprPtr CC::sim_tr(ExprPtr expr, size_t commutator_rank) {
           op::T(N, skip_singles);  // traditional SR ansatz: [O,T] = (O T)_c
       if (unitary())  // unitary SR ansatz: [O,T-T^+] = (O T)_c + (T^+ O)_c
         op_Sk_comm_w_S += adjoint(op::T(N, skip_singles)) * op_Sk;
-      op_Sk = simplify(ex<Constant>(rational{1, k}) * op_Sk_comm_w_S);
+      std::wcout << "opskcommws presimplify "
+                 << to_latex_align(op_Sk_comm_w_S, 20, 2) << std::endl;
+      op_Sk = ex<Constant>(rational{1, k}) * op_Sk_comm_w_S;
+      simplify(op_Sk);
+      std::wcout << "op Skcomm w S " << to_latex_align(op_Sk, 20, 2)
+                 << std::endl;
       result += op_Sk;
     }
     return result;
@@ -86,6 +92,7 @@ std::vector<ExprPtr> CC::t(size_t commutator_rank, size_t pmax, size_t pmin) {
 
   // 1. construct hbar(op) in canonical form
   auto hbar = sim_tr(op::H(), commutator_rank);
+  std::wcout << "runtime hbar: " << to_latex_align(hbar, 20, 2) << std::endl;
 
   // 2. project onto each manifold, screen, lower to tensor form and wick it
   std::vector<ExprPtr> result(pmax + 1);
@@ -113,9 +120,13 @@ std::vector<ExprPtr> CC::t(size_t commutator_rank, size_t pmax, size_t pmin) {
       }
     }
     hbar = hbar_le_p;
-
+    std::wcout << "runtime p: " << p
+               << " hbar le p: " << to_latex_align(hbar_le_p, 20, 3)
+               << std::endl;
     // 2.b project onto <p| (i.e., multiply by P(p) if p>0) and compute VEV
     result.at(p) = op::vac_av(p != 0 ? op::P(p) * hbar_p : hbar_p);
+    std::wcout << "runtime vac av: " << to_latex_align(result.at(p), 20, 2)
+               << std::endl;
   }
 
   return result;
@@ -275,4 +286,4 @@ std::vector<ExprPtr> CC::λ_pt(size_t order, size_t rank) {
   return result;
 }
 
-}  // namespace sequant::mbpt::sr
+}  // namespace sequant::mbpt
