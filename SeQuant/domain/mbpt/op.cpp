@@ -64,21 +64,24 @@ OpClass to_class(OpType op) {
   }
 }
 
-//excitation type qns will have qp creators for every space which intersects with the active hole space and
-// qp annihilators wherever there is intersection with the active particle space. the presence of additional blocks depends on  whether
-// the corresponding active hole or active particle space is a base space.
-qns_t excitation_type_qns(std::size_t K){
+// excitation type qns will have qp creators for every space which intersects
+// with the active hole space and
+//  qp annihilators wherever there is intersection with the active particle
+//  space. the presence of additional blocks depends on  whether the
+//  corresponding active hole or active particle space is a base space.
+qns_t excitation_type_qns(std::size_t K) {
   qnc_t result;
-  if(get_default_context().vacuum() == Vacuum::Physical){
-    result[0] = {0ul,K}; result[1] = {0ul,K};
-  }
-  else {
+  if (get_default_context().vacuum() == Vacuum::Physical) {
+    result[0] = {0ul, K};
+    result[1] = {0ul, K};
+  } else {
     auto idx_registry = get_default_context().index_space_registry();
     auto base_spaces = idx_registry->base_spaces_label();
-    //are the active qp spaces base spaces?
-    bool aps_base = idx_registry->is_base_space(idx_registry->active_particle_space());
-    bool ahs_base = idx_registry->is_base_space(idx_registry->active_hole_space());
-
+    // are the active qp spaces base spaces?
+    bool aps_base =
+        idx_registry->is_base_space(idx_registry->active_particle_space());
+    bool ahs_base =
+        idx_registry->is_base_space(idx_registry->active_hole_space());
 
     for (int i = 0; i < base_spaces.size(); i++) {
       if (!includes(idx_registry->active_hole_space().type(),
@@ -95,19 +98,50 @@ qns_t excitation_type_qns(std::size_t K){
       }
     }
   }
-    return result;
+  return result;
 }
 
-qns_t deexcitation_type_qns(std::size_t K){
+// sometimes we want to guarrentee that a qns has an interval from 0-K
+// regardless of the base spaces.
+qns_t interval_excitation_type_qns(std::size_t K) {
   qnc_t result;
-  if(get_default_context().vacuum() == Vacuum::Physical){
-    result[0] = {0ul,K}; result[1] = {0ul,K};
-  }
-  else {
+  if (get_default_context().vacuum() == Vacuum::Physical) {
+    result[0] = {0ul, K};
+    result[1] = {0ul, K};
+  } else {
     auto idx_registry = get_default_context().index_space_registry();
     auto base_spaces = idx_registry->base_spaces_label();
-    bool aps_base = idx_registry->is_base_space(idx_registry->active_particle_space());
-    bool ahs_base = idx_registry->is_base_space(idx_registry->active_hole_space());
+
+    for (int i = 0; i < base_spaces.size(); i++) {
+      if (!includes(idx_registry->active_hole_space().type(),
+                    base_spaces[i].first.type())) {
+        result[i * 2] = {0ul, 0ul};
+      } else {
+        result[i * 2] = {0ul, K};
+      }
+      if (!includes(idx_registry->active_particle_space().type(),
+                    base_spaces[i].first.type())) {
+        result[i * 2 + 1] = {0ul, 0ul};
+      } else {
+        result[i * 2 + 1] = {0ul, K};
+      }
+    }
+  }
+  return result;
+}
+
+qns_t deexcitation_type_qns(std::size_t K) {
+  qnc_t result;
+  if (get_default_context().vacuum() == Vacuum::Physical) {
+    result[0] = {0ul, K};
+    result[1] = {0ul, K};
+  } else {
+    auto idx_registry = get_default_context().index_space_registry();
+    auto base_spaces = idx_registry->base_spaces_label();
+    bool aps_base =
+        idx_registry->is_base_space(idx_registry->active_particle_space());
+    bool ahs_base =
+        idx_registry->is_base_space(idx_registry->active_hole_space());
     for (int i = 0; i < base_spaces.size(); i++) {
       if (!includes(idx_registry->active_hole_space().type(),
                     base_spaces[i].first.type())) {
@@ -126,104 +160,140 @@ qns_t deexcitation_type_qns(std::size_t K){
   return result;
 }
 
-qns_t general_type_qns(std::size_t K){
+// sometimes we want to guarrentee that a qns has an interval from 0-K
+// regardless of the base spaces.
+qns_t interval_deexcitation_type_qns(std::size_t K) {
   qnc_t result;
-  for (int i = 0; i < result.size(); i++){
-    result[i] = {0,K};
-  }
-  return result;
-}
-
-qns_t generic_excitation_qns(std::size_t particle_rank, std::size_t hole_rank,IndexSpace particle_space, IndexSpace hole_space){
-  qnc_t result;
-  if(get_default_context().vacuum() == Vacuum::Physical){
-    result[0] = {0ul,hole_rank}; result[1] = {0ul,particle_rank};
-  }
-  else {
+  if (get_default_context().vacuum() == Vacuum::Physical) {
+    result[0] = {0ul, K};
+    result[1] = {0ul, K};
+  } else {
     auto idx_registry = get_default_context().index_space_registry();
     auto base_spaces = idx_registry->base_spaces_label();
-    bool aps_base = idx_registry->is_base_space(idx_registry->active_particle_space());
-    bool ahs_base = idx_registry->is_base_space(idx_registry->active_hole_space());
     for (int i = 0; i < base_spaces.size(); i++) {
-      if (!includes(hole_space.type(),
+      if (!includes(idx_registry->active_hole_space().type(),
                     base_spaces[i].first.type())) {
-        result[i * 2] = {0ul, 0ul}; //creators
+        result[i * 2 + 1] = {0ul, 0ul};
       } else {
-        result[i * 2] = {ahs_base ? hole_rank : 0ul, hole_rank}; // creators
+        result[i * 2 + 1] = {0ul, K};
       }
-      if (!includes(particle_space.type(),
+      if (!includes(idx_registry->active_particle_space().type(),
                     base_spaces[i].first.type())) {
-        result[i * 2 + 1] = {0ul, 0ul}; //annihilators
+        result[i * 2] = {0ul, 0ul};
       } else {
-        result[i * 2 + 1] = {aps_base ? particle_rank : 0ul, particle_rank}; // annihilators
+        result[i * 2] = {0ul, K};
       }
     }
   }
   return result;
 }
 
-qns_t generic_deexcitation_qns(std::size_t particle_rank, std::size_t hole_rank,IndexSpace particle_space, IndexSpace hole_space){
+qns_t general_type_qns(std::size_t K) {
   qnc_t result;
-  if(get_default_context().vacuum() == Vacuum::Physical){
-    result[0] = {0ul,particle_rank}; result[1] = {0ul,hole_rank};
+  for (int i = 0; i < result.size(); i++) {
+    result[i] = {0, K};
   }
-  else {
+  return result;
+}
+
+qns_t generic_excitation_qns(std::size_t particle_rank, std::size_t hole_rank,
+                             IndexSpace particle_space, IndexSpace hole_space) {
+  qnc_t result;
+  if (get_default_context().vacuum() == Vacuum::Physical) {
+    result[0] = {0ul, hole_rank};
+    result[1] = {0ul, particle_rank};
+  } else {
     auto idx_registry = get_default_context().index_space_registry();
     auto base_spaces = idx_registry->base_spaces_label();
-    bool aps_base = idx_registry->is_base_space(idx_registry->active_particle_space());
-    bool ahs_base = idx_registry->is_base_space(idx_registry->active_hole_space());
+    bool aps_base =
+        idx_registry->is_base_space(idx_registry->active_particle_space());
+    bool ahs_base =
+        idx_registry->is_base_space(idx_registry->active_hole_space());
     for (int i = 0; i < base_spaces.size(); i++) {
-      if (!includes(hole_space.type(),
-                    base_spaces[i].first.type())) {
-        result[i * 2 + 1] = {0ul, 0ul}; //annihilators
+      if (!includes(hole_space.type(), base_spaces[i].first.type())) {
+        result[i * 2] = {0ul, 0ul};  // creators
       } else {
-        result[i * 2 + 1] = {ahs_base ? hole_rank : 0ul, hole_rank}; //annihilators
+        result[i * 2] = {ahs_base ? hole_rank : 0ul, hole_rank};  // creators
       }
-      if (!includes(particle_space.type(),
-                    base_spaces[i].first.type())) {
-        result[i * 2] = {0ul, 0ul}; // creators
+      if (!includes(particle_space.type(), base_spaces[i].first.type())) {
+        result[i * 2 + 1] = {0ul, 0ul};  // annihilators
       } else {
-        result[i * 2] = {aps_base ? particle_rank : 0ul, particle_rank}; //creators
+        result[i * 2 + 1] = {aps_base ? particle_rank : 0ul,
+                             particle_rank};  // annihilators
       }
     }
   }
   return result;
 }
 
+qns_t generic_deexcitation_qns(std::size_t particle_rank, std::size_t hole_rank,
+                               IndexSpace particle_space,
+                               IndexSpace hole_space) {
+  qnc_t result;
+  if (get_default_context().vacuum() == Vacuum::Physical) {
+    result[0] = {0ul, particle_rank};
+    result[1] = {0ul, hole_rank};
+  } else {
+    auto idx_registry = get_default_context().index_space_registry();
+    auto base_spaces = idx_registry->base_spaces_label();
+    bool aps_base =
+        idx_registry->is_base_space(idx_registry->active_particle_space());
+    bool ahs_base =
+        idx_registry->is_base_space(idx_registry->active_hole_space());
+    for (int i = 0; i < base_spaces.size(); i++) {
+      if (!includes(hole_space.type(), base_spaces[i].first.type())) {
+        result[i * 2 + 1] = {0ul, 0ul};  // annihilators
+      } else {
+        result[i * 2 + 1] = {ahs_base ? hole_rank : 0ul,
+                             hole_rank};  // annihilators
+      }
+      if (!includes(particle_space.type(), base_spaces[i].first.type())) {
+        result[i * 2] = {0ul, 0ul};  // creators
+      } else {
+        result[i * 2] = {aps_base ? particle_rank : 0ul,
+                         particle_rank};  // creators
+      }
+    }
+  }
+  return result;
+}
 
-//by counting the number of contractions between indices of proper type, we can know the quantum numbers
-// of a combined result.
+// by counting the number of contractions between indices of proper type, we can
+// know the quantum numbers
+//  of a combined result.
 qns_t combine(qns_t a, qns_t b) {
   assert(a.size() == b.size());
   qns_t result;
 
-  if(get_default_context().vacuum() ==Vacuum::Physical) {
+  if (get_default_context().vacuum() == Vacuum::Physical) {
     qns_t result;
-    const auto ncontr =
-        qninterval_t{0, std::min(b[0].upper(), a[1].upper())};
+    const auto ncontr = qninterval_t{0, std::min(b[0].upper(), a[1].upper())};
     const auto nc = nonnegative(a[0] + b[0] - ncontr);
     const auto na = nonnegative(a[1] + b[1] - ncontr);
-    result[0] = nc; result[1] = na;
+    result[0] = nc;
+    result[1] = na;
     return result;
-  }
-  else if(get_default_context().vacuum() == Vacuum::SingleProduct) {
+  } else if (get_default_context().vacuum() == Vacuum::SingleProduct) {
     auto idx_registry = get_default_context().index_space_registry();
     auto base_spaces = idx_registry->base_spaces_label();
     for (auto i = 0; i < base_spaces.size(); i++) {
       auto cre = i * 2;
       auto ann = (i * 2) + 1;
-      auto base_is_fermi_occupied = idx_registry->is_pure_occupied(base_spaces[i].first); // need to distinguish particle and hole contractions.
-      auto ncontr_space = base_is_fermi_occupied ? qninterval_t{0, std::min(b[ann].upper(),
-                                                                            a[cre].upper())} :
-                                                 qninterval_t{0, std::min(b[cre].upper(), a[ann].upper())};
+      auto base_is_fermi_occupied = idx_registry->is_pure_occupied(
+          base_spaces[i]
+              .first);  // need to distinguish particle and hole contractions.
+      auto ncontr_space =
+          base_is_fermi_occupied
+              ? qninterval_t{0, std::min(b[ann].upper(), a[cre].upper())}
+              : qninterval_t{0, std::min(b[cre].upper(), a[ann].upper())};
       auto nc_space = nonnegative(b[cre] + a[cre] - ncontr_space);
       auto na_space = nonnegative(b[ann] + a[ann] - ncontr_space);
       result[cre] = nc_space;
       result[ann] = na_space;
     }
     return result;
-  }
-  else{ throw "unsupported vacuum context.";
+  } else {
+    throw "unsupported vacuum context.";
   }
 }
 
@@ -240,10 +310,13 @@ namespace sequant {
 mbpt::qns_t adjoint(mbpt::qns_t qns) {
   mbpt::qns_t new_qnst;
   new_qnst.resize(qns.size());
-  auto is_even =[](int i){ return i % 2 == 0;};
-  for (int i =0; i < qns.size(); i++){
-    if(is_even(i)){new_qnst[i+1] = qns[i];}
-    else{new_qnst[i-1] = qns[i];}
+  auto is_even = [](int i) { return i % 2 == 0; };
+  for (int i = 0; i < qns.size(); i++) {
+    if (is_even(i)) {
+      new_qnst[i + 1] = qns[i];
+    } else {
+      new_qnst[i - 1] = qns[i];
+    }
   }
   return new_qnst;
 }
@@ -279,12 +352,15 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
       result += L"_{" + std::to_wstring(op()[1].lower()) + L"}^{" +
                 std::to_wstring(op()[0].lower()) + L"}";
     }
-  }
-  else {// single product vacuum
-    int particle_ann = is_adjoint ? op().active_particle_creators() : op().active_particle_annihilators();
-    int hole_cre = is_adjoint ?  op().active_hole_annihilators() : op().active_hole_creators();
-    int particle_cre = is_adjoint ? op().active_particle_annihilators() : op().active_particle_creators();
-    int hole_ann =is_adjoint ? op().active_hole_creators() : op().active_hole_annihilators();
+  } else {  // single product vacuum
+    int particle_ann = is_adjoint ? op().active_particle_creators()
+                                  : op().active_particle_annihilators();
+    int hole_cre = is_adjoint ? op().active_hole_annihilators()
+                              : op().active_hole_creators();
+    int particle_cre = is_adjoint ? op().active_particle_annihilators()
+                                  : op().active_particle_creators();
+    int hole_ann = is_adjoint ? op().active_hole_creators()
+                              : op().active_hole_annihilators();
     if (to_class(optype) == OpClass::ex) {
       // TODO don't throw, just pass this to Product::to_latex()
       if (particle_ann == -1 || hole_cre == -1)
@@ -295,20 +371,18 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
         result += baseline_char + L"{" + std::to_wstring(hole_cre) + L"," +
                   std::to_wstring(particle_ann) + L"}";
       }
-    }
-    else if (to_class(optype) == OpClass::deex) {
+    } else if (to_class(optype) == OpClass::deex) {
       // TODO don't throw, just pass this to Product::to_latex()
-      if(particle_cre == -1 || hole_ann == -1){
+      if (particle_cre == -1 || hole_ann == -1) {
         throw "this expression is not expressible as operator";
       }
-      if(particle_cre == hole_ann){//q-particle conserving
+      if (particle_cre == hole_ann) {  // q-particle conserving
         result += baseline_char + L"{" + std::to_wstring(hole_ann) + L"}";
+      } else {  // q-particle non-conserving
+        result += baseline_char + L"{" + std::to_wstring(particle_cre) + L"," +
+                  std::to_wstring(hole_ann) + L"}";
       }
-      else{ // q-particle non-conserving
-        result += baseline_char + L"{" + std::to_wstring(particle_cre) + L"," + std::to_wstring(hole_ann) + L"}";
-      }
-    }
-    else {
+    } else {
       throw "operator has unrecognized OpClass";
     }
   }
@@ -335,9 +409,9 @@ template <Statistics S>
 OpMaker<S>::OpMaker(OpType op) : op_(op) {}
 
 template <Statistics S>
-OpMaker<S>::OpMaker(OpType op, std::size_t nbra, std::size_t nket, IndexSpace particle_space,
-                    IndexSpace hole_space){
-  op_=op;
+OpMaker<S>::OpMaker(OpType op, std::size_t nbra, std::size_t nket,
+                    IndexSpace particle_space, IndexSpace hole_space) {
+  op_ = op;
   assert(nbra > 0 || nket > 0);
   auto idx_registry = get_default_context().index_space_registry();
   switch (to_class(op)) {
@@ -356,10 +430,9 @@ OpMaker<S>::OpMaker(OpType op, std::size_t nbra, std::size_t nket, IndexSpace pa
   }
 }
 
-
 template <Statistics S>
-OpMaker<S>::OpMaker(OpType op, std::size_t nparticle){
-  op_=op;
+OpMaker<S>::OpMaker(OpType op, std::size_t nparticle) {
+  op_ = op;
   auto idx_registry = get_default_context().index_space_registry();
   auto current_context = get_default_context();
   const auto unocc = idx_registry->active_hole_space();
@@ -418,8 +491,8 @@ template class OpMaker<Statistics::BoseEinstein>;
 template class Operator<qns_t, Statistics::FermiDirac>;
 template class Operator<qns_t, Statistics::BoseEinstein>;
 
-namespace TensorOp{
-ExprPtr H_(std::size_t k){
+namespace TensorOp {
+ExprPtr H_(std::size_t k) {
   assert(k > 0 && k <= 2);
   switch (k) {
     case 1:
@@ -442,18 +515,20 @@ ExprPtr H_(std::size_t k){
   }
 }
 
-
-ExprPtr H(std::size_t k){
+ExprPtr H(std::size_t k) {
   assert(k > 0 && k <= 2);
   return k == 1 ? TensorOp::H_(1) : TensorOp::H_(1) + TensorOp::H_(2);
 }
 
-ExprPtr F( bool use_tensor, IndexSpace density_occupied){
-  if(use_tensor){
+ExprPtr F(bool use_tensor, IndexSpace density_occupied) {
+  if (use_tensor) {
     return OpMaker<Statistics::FermiDirac>(OpType::f, 1)();
-  }
-  else{// explicit density matrix construction
-    assert(density_occupied != get_default_context().index_space_registry()->nulltype_()); // cannot explicitly instantiate fock operator without providing an occupied indexspace
+  } else {  // explicit density matrix construction
+    assert(density_occupied !=
+           get_default_context()
+               .index_space_registry()
+               ->nulltype_());  // cannot explicitly instantiate fock operator
+                                // without providing an occupied indexspace
     // add \bar{g}^{\kappa x}_{\lambda y} \gamma^y_x with x,y in occ_space_type
     auto make_g_contribution = [](const auto occ_space) {
       auto idx_registry = get_default_context().index_space_registry();
@@ -462,8 +537,7 @@ ExprPtr F( bool use_tensor, IndexSpace density_occupied){
           [=](auto braidxs, auto ketidxs, Symmetry opsymm) {
             auto m1 = Index::make_tmp_index(occ_space);
             auto m2 = Index::make_tmp_index(occ_space);
-            assert(opsymm == Symmetry::antisymm ||
-                   opsymm == Symmetry::nonsymm);
+            assert(opsymm == Symmetry::antisymm || opsymm == Symmetry::nonsymm);
             if (opsymm == Symmetry::antisymm) {
               braidxs.push_back(m1);
               ketidxs.push_back(m2);
@@ -495,12 +569,11 @@ ExprPtr F( bool use_tensor, IndexSpace density_occupied){
   }
 }
 
-ExprPtr T_(std::size_t K){
-  return OpMaker<Statistics::FermiDirac>(OpType::t,K)();
+ExprPtr T_(std::size_t K) {
+  return OpMaker<Statistics::FermiDirac>(OpType::t, K)();
 }
 
-
-ExprPtr T(std::size_t K, bool skip1){
+ExprPtr T(std::size_t K, bool skip1) {
   assert(K > (skip1 ? 1 : 0));
   ExprPtr result;
   for (auto k = skip1 ? 2ul : 1ul; k <= K; ++k) {
@@ -509,11 +582,11 @@ ExprPtr T(std::size_t K, bool skip1){
   return result;
 }
 
-ExprPtr Λ_(std::size_t K){
+ExprPtr Λ_(std::size_t K) {
   return OpMaker<Statistics::FermiDirac>(OpType::λ, K)();
 }
 
-ExprPtr Λ(std::size_t K){
+ExprPtr Λ(std::size_t K) {
   assert(K > 0);
 
   ExprPtr result;
@@ -523,26 +596,27 @@ ExprPtr Λ(std::size_t K){
   return result;
 }
 
-ExprPtr R_(std::size_t nbra, std::size_t nket,
-           IndexSpace hole_space,
-           IndexSpace particle_space){
-  return OpMaker<Statistics::FermiDirac>(OpType::R,nbra,nket,particle_space,hole_space)();
+ExprPtr R_(std::size_t nbra, std::size_t nket, IndexSpace hole_space,
+           IndexSpace particle_space) {
+  return OpMaker<Statistics::FermiDirac>(OpType::R, nbra, nket, particle_space,
+                                         hole_space)();
 }
 
-ExprPtr L_(std::size_t nbra, std::size_t nket,
-           IndexSpace hole_space,
-           IndexSpace particle_space){
-  return OpMaker<Statistics::FermiDirac>(OpType::L,nbra,nket,particle_space,hole_space)();
+ExprPtr L_(std::size_t nbra, std::size_t nket, IndexSpace hole_space,
+           IndexSpace particle_space) {
+  return OpMaker<Statistics::FermiDirac>(OpType::L, nbra, nket, particle_space,
+                                         hole_space)();
 }
 
-ExprPtr P(std::int64_t K){
-  return get_default_context().spbasis() == SPBasis::spinfree ? TensorOp::S(-K) : TensorOp::A(-K);
+ExprPtr P(std::int64_t K) {
+  return get_default_context().spbasis() == SPBasis::spinfree ? TensorOp::S(-K)
+                                                              : TensorOp::A(-K);
 }
 
-ExprPtr A(std::int64_t K){
+ExprPtr A(std::int64_t K) {
   auto idx_registry = get_default_context().index_space_registry();
   auto base_spaces = idx_registry->base_spaces_label();
-  assert(K!= 0);
+  assert(K != 0);
   container::svector<IndexSpace> creators;
   container::svector<IndexSpace> annihilators;
   if (K > 0)
@@ -560,114 +634,116 @@ ExprPtr A(std::int64_t K){
 
   std::optional<OpMaker<Statistics::FermiDirac>::UseDepIdx> dep;
   if (get_default_formalism().csv() == mbpt::CSV::Yes)
-    dep = K > 0 ? OpMaker<Statistics::FermiDirac>::UseDepIdx::Bra : OpMaker<Statistics::FermiDirac>::UseDepIdx::Ket;
-  return OpMaker<Statistics::FermiDirac>(OpType::A, creators, annihilators)(dep,{Symmetry::antisymm});
+    dep = K > 0 ? OpMaker<Statistics::FermiDirac>::UseDepIdx::Bra
+                : OpMaker<Statistics::FermiDirac>::UseDepIdx::Ket;
+  return OpMaker<Statistics::FermiDirac>(OpType::A, creators, annihilators)(
+      dep, {Symmetry::antisymm});
 }
 
-ExprPtr S(std::int64_t K){
+ExprPtr S(std::int64_t K) {
   auto idx_registry = get_default_context().index_space_registry();
   auto base_spaces = idx_registry->base_spaces_label();
   assert(K != 0);
-    container::svector<IndexSpace> creators;
-    container::svector<IndexSpace> annihilators;
-    if (K > 0)
-      for (auto i : ranges::views::iota(0, K))
-        annihilators.emplace_back(idx_registry->active_particle_space());
-    else
-      for (auto i : ranges::views::iota(0, -K))
-        creators.emplace_back(idx_registry->active_particle_space());
-    if (K > 0)
-      for (auto i : ranges::views::iota(0, K))
-        creators.emplace_back(idx_registry->active_hole_space());
-    else
-      for (auto i : ranges::views::iota(0, -K))
-        annihilators.emplace_back(idx_registry->active_hole_space());
+  container::svector<IndexSpace> creators;
+  container::svector<IndexSpace> annihilators;
+  if (K > 0)
+    for (auto i : ranges::views::iota(0, K))
+      annihilators.emplace_back(idx_registry->active_particle_space());
+  else
+    for (auto i : ranges::views::iota(0, -K))
+      creators.emplace_back(idx_registry->active_particle_space());
+  if (K > 0)
+    for (auto i : ranges::views::iota(0, K))
+      creators.emplace_back(idx_registry->active_hole_space());
+  else
+    for (auto i : ranges::views::iota(0, -K))
+      annihilators.emplace_back(idx_registry->active_hole_space());
 
-    std::optional<OpMaker<Statistics::FermiDirac>::UseDepIdx> dep;
-    if (get_default_formalism().csv() == mbpt::CSV::Yes)
-      dep = K > 0 ? OpMaker<Statistics::FermiDirac>::UseDepIdx::Bra : OpMaker<Statistics::FermiDirac>::UseDepIdx::Ket;
-    return OpMaker<Statistics::FermiDirac>(OpType::S, creators, annihilators)(
-        dep, {Symmetry::nonsymm});
-
+  std::optional<OpMaker<Statistics::FermiDirac>::UseDepIdx> dep;
+  if (get_default_formalism().csv() == mbpt::CSV::Yes)
+    dep = K > 0 ? OpMaker<Statistics::FermiDirac>::UseDepIdx::Bra
+                : OpMaker<Statistics::FermiDirac>::UseDepIdx::Ket;
+  return OpMaker<Statistics::FermiDirac>(OpType::S, creators, annihilators)(
+      dep, {Symmetry::nonsymm});
 }
 
-ExprPtr H_pt(std::size_t order, std::size_t R){
+ExprPtr H_pt(std::size_t order, std::size_t R) {
   assert(order == 1 &&
          "sequant::sr::H_pt(): only supports first order perturbation");
   assert(R > 0);
   return OpMaker<Statistics::FermiDirac>(OpType::h_1, R)();
 }
 
-ExprPtr T_pt_(std::size_t order, std::size_t K){
+ExprPtr T_pt_(std::size_t order, std::size_t K) {
   assert(order == 1 &&
          "sequant::sr::T_pt_(): only supports first order perturbation");
   return OpMaker<Statistics::FermiDirac>(OpType::t_1, order, K)();
 }
 
-ExprPtr T_pt(std::size_t order, std::size_t K, bool skip1){
+ExprPtr T_pt(std::size_t order, std::size_t K, bool skip1) {
   assert(K > (skip1 ? 1 : 0));
   ExprPtr result;
   for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
-    result = k > 1 ? result + TensorOp::T_pt_(order, k) : TensorOp::T_pt_(order, k);
+    result =
+        k > 1 ? result + TensorOp::T_pt_(order, k) : TensorOp::T_pt_(order, k);
   }
   return result;
 }
 
-ExprPtr Λ_pt_(std::size_t order, std::size_t K){
+ExprPtr Λ_pt_(std::size_t order, std::size_t K) {
   assert(order == 1 &&
          "sequant::sr::Λ_pt_(): only supports first order perturbation");
-  return OpMaker<Statistics::FermiDirac>(OpType::λ_1, order,K)();
+  return OpMaker<Statistics::FermiDirac>(OpType::λ_1, order, K)();
 }
 
-ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1){
+ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1) {
   assert(K > (skip1 ? 1 : 0));
   ExprPtr result;
   for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
-    result = k > 1 ? result + TensorOp::Λ_pt_(order, k) : TensorOp::Λ_pt_(order, k);
+    result =
+        k > 1 ? result + TensorOp::Λ_pt_(order, k) : TensorOp::Λ_pt_(order, k);
   }
   return result;
 }
 
-}
+}  // namespace TensorOp
 
 namespace op {
 
 ExprPtr H_(std::size_t k) {
   assert(k > 0 && k <= 2);
-    switch (k) {
-      case 1:
-        return ex<op_t>(
-            [vacuum = get_default_context().vacuum()]() -> std::wstring_view {
-              switch (vacuum) {
-                case Vacuum::Physical:
-                  return L"h";
-                case Vacuum::SingleProduct:
-                  return L"f";
-                case Vacuum::MultiProduct:
-                  return L"f";
-                default:
-                  abort();
-              }
-            },
-            [=]() -> ExprPtr { return TensorOp::H_(1); },
-            [=](qnc_t& qns) {
-              qnc_t op_qnc_t = general_type_qns(1);
-              qns = combine(op_qnc_t, qns);
-            });
+  switch (k) {
+    case 1:
+      return ex<op_t>(
+          [vacuum = get_default_context().vacuum()]() -> std::wstring_view {
+            switch (vacuum) {
+              case Vacuum::Physical:
+                return L"h";
+              case Vacuum::SingleProduct:
+                return L"f";
+              case Vacuum::MultiProduct:
+                return L"f";
+              default:
+                abort();
+            }
+          },
+          [=]() -> ExprPtr { return TensorOp::H_(1); },
+          [=](qnc_t& qns) {
+            qnc_t op_qnc_t = general_type_qns(1);
+            qns = combine(op_qnc_t, qns);
+          });
 
-      case 2:
-        return ex<op_t>(
-            []() -> std::wstring_view { return L"g"; },
-            [=]() -> ExprPtr { return TensorOp::H_(2); },
-            [=](qnc_t& qns) {
-              qnc_t op_qnc_t = general_type_qns(2);
-              qns = combine(op_qnc_t, qns);
-            });
+    case 2:
+      return ex<op_t>([]() -> std::wstring_view { return L"g"; },
+                      [=]() -> ExprPtr { return TensorOp::H_(2); },
+                      [=](qnc_t& qns) {
+                        qnc_t op_qnc_t = general_type_qns(2);
+                        qns = combine(op_qnc_t, qns);
+                      });
 
-      default:
-        abort();
-    }
-
+    default:
+      abort();
+  }
 }
 
 ExprPtr H(std::size_t k) {
@@ -677,15 +753,15 @@ ExprPtr H(std::size_t k) {
 
 ExprPtr T_(std::size_t K) {
   assert(K > 0);
-    return ex<op_t>([]() -> std::wstring_view { return L"t"; },
-                    [=]() -> ExprPtr { return TensorOp::T_(K); },
-                    [=](qnc_t& qns) {
-                      qnc_t op_qnc_t = excitation_type_qns(K);
-                      qns = combine(op_qnc_t,qns);
-                    });
+  return ex<op_t>([]() -> std::wstring_view { return L"t"; },
+                  [=]() -> ExprPtr { return TensorOp::T_(K); },
+                  [=](qnc_t& qns) {
+                    qnc_t op_qnc_t = excitation_type_qns(K);
+                    qns = combine(op_qnc_t, qns);
+                  });
 }
 
-ExprPtr T(std::size_t K,bool skip1) {
+ExprPtr T(std::size_t K, bool skip1) {
   assert(K > (skip1 ? 1 : 0));
   ExprPtr result;
   for (auto k = skip1 ? 2ul : 1ul; k <= K; ++k) {
@@ -696,13 +772,12 @@ ExprPtr T(std::size_t K,bool skip1) {
 
 ExprPtr Λ_(std::size_t K) {
   assert(K > 0);
-    return ex<op_t>(
-        []() -> std::wstring_view { return L"λ"; },
-        [=]() -> ExprPtr { return TensorOp::Λ_(K); },
-        [=](qnc_t& qns) {
-          qnc_t op_qnc_t = deexcitation_type_qns(K);
-          qns = combine(op_qnc_t, qns);
-        });
+  return ex<op_t>([]() -> std::wstring_view { return L"λ"; },
+                  [=]() -> ExprPtr { return TensorOp::Λ_(K); },
+                  [=](qnc_t& qns) {
+                    qnc_t op_qnc_t = deexcitation_type_qns(K);
+                    qns = combine(op_qnc_t, qns);
+                  });
 }
 
 ExprPtr Λ(std::size_t K) {
@@ -714,81 +789,75 @@ ExprPtr Λ(std::size_t K) {
   return result;
 }
 
-
-ExprPtr F( bool use_f_tensor, IndexSpace occupied_density) {
+ExprPtr F(bool use_f_tensor, IndexSpace occupied_density) {
   if (use_f_tensor) {
-        return ex<op_t>(
-            []() -> std::wstring_view { return L"f"; },
-            [=]() -> ExprPtr { return TensorOp::F(true,occupied_density); },
-            [=](qnc_t& qns) {
-              qnc_t op_qnc_t = general_type_qns(1);
-              qns = combine(op_qnc_t, qns);
-            });
-  }
-  else {
-      throw "non-tensor use at operator level not yet supported";
+    return ex<op_t>(
+        []() -> std::wstring_view { return L"f"; },
+        [=]() -> ExprPtr { return TensorOp::F(true, occupied_density); },
+        [=](qnc_t& qns) {
+          qnc_t op_qnc_t = general_type_qns(1);
+          qns = combine(op_qnc_t, qns);
+        });
+  } else {
+    throw "non-tensor use at operator level not yet supported";
   }
 }
-
 
 ExprPtr A(std::int64_t K) {
   auto idx_registry = get_default_context().index_space_registry();
   auto base_spaces = idx_registry->base_spaces_label();
   assert(K != 0);
-    return ex<op_t>(
-        []() -> std::wstring_view { return L"A"; },
-        [=]() -> ExprPtr { return TensorOp::A(K); },
-        [=](qnc_t& qns) {
-          const std::size_t abs_K = std::abs(K);
-          if (K < 0) {
-            qnc_t op_qnc_t= deexcitation_type_qns(abs_K);
-            qns = combine(op_qnc_t, qns);
-          } else {
-            qnc_t op_qnc_t = excitation_type_qns(abs_K);
-            qns = combine(op_qnc_t, qns);
-          }
-        });
+  return ex<op_t>([]() -> std::wstring_view { return L"A"; },
+                  [=]() -> ExprPtr { return TensorOp::A(K); },
+                  [=](qnc_t& qns) {
+                    const std::size_t abs_K = std::abs(K);
+                    if (K < 0) {
+                      qnc_t op_qnc_t = deexcitation_type_qns(abs_K);
+                      qns = combine(op_qnc_t, qns);
+                    } else {
+                      qnc_t op_qnc_t = excitation_type_qns(abs_K);
+                      qns = combine(op_qnc_t, qns);
+                    }
+                  });
 }
 
 ExprPtr S(std::int64_t K) {
   assert(K != 0);
-    return ex<op_t>(
-        []() -> std::wstring_view { return L"S"; },
-        [=]() -> ExprPtr { return TensorOp::S(K); },
-        [=](qnc_t& qns) {
-          const std::size_t abs_K = std::abs(K);
-          if (K < 0) {
-            qnc_t op_qnc_t = deexcitation_type_qns(abs_K);
-            qns = combine(op_qnc_t, qns);
-          } else {
-            qnc_t op_qnc_t = excitation_type_qns(abs_K);
-            qns = combine(op_qnc_t, qns);
-          }
-        });
+  return ex<op_t>([]() -> std::wstring_view { return L"S"; },
+                  [=]() -> ExprPtr { return TensorOp::S(K); },
+                  [=](qnc_t& qns) {
+                    const std::size_t abs_K = std::abs(K);
+                    if (K < 0) {
+                      qnc_t op_qnc_t = deexcitation_type_qns(abs_K);
+                      qns = combine(op_qnc_t, qns);
+                    } else {
+                      qnc_t op_qnc_t = excitation_type_qns(abs_K);
+                      qns = combine(op_qnc_t, qns);
+                    }
+                  });
 }
 
 ExprPtr P(std::int64_t K) {
-  return get_default_context().spbasis() == SPBasis::spinfree ? op::S(-K) : op::A(-K);
+  return get_default_context().spbasis() == SPBasis::spinfree ? op::S(-K)
+                                                              : op::A(-K);
 }
 
 ExprPtr H_pt(std::size_t order, std::size_t R) {
-    assert(R > 0);
-    assert(order == 1 && "only first order perturbation is supported now");
-    return ex<op_t>(
-        []() -> std::wstring_view { return optype2label.at(OpType::h_1); },
-        [=]() -> ExprPtr {
-          return TensorOp::H_pt(order, R);
-        },
-        [=](qnc_t& qns) { qns = combine(general_type_qns(R), qns); });
+  assert(R > 0);
+  assert(order == 1 && "only first order perturbation is supported now");
+  return ex<op_t>(
+      []() -> std::wstring_view { return optype2label.at(OpType::h_1); },
+      [=]() -> ExprPtr { return TensorOp::H_pt(order, R); },
+      [=](qnc_t& qns) { qns = combine(general_type_qns(R), qns); });
 }
 
 ExprPtr T_pt_(std::size_t order, std::size_t K) {
-    assert(K > 0);
-    assert(order == 1 && "only first order perturbation is supported now");
-    return ex<op_t>(
-        []() -> std::wstring_view { return optype2label.at(OpType::t_1); },
-        [=]() -> ExprPtr { return TensorOp::T_pt_(order, K); },
-        [=](qnc_t& qns) { qns = combine(excitation_type_qns(K), qns); });
+  assert(K > 0);
+  assert(order == 1 && "only first order perturbation is supported now");
+  return ex<op_t>(
+      []() -> std::wstring_view { return optype2label.at(OpType::t_1); },
+      [=]() -> ExprPtr { return TensorOp::T_pt_(order, K); },
+      [=](qnc_t& qns) { qns = combine(excitation_type_qns(K), qns); });
 }
 
 ExprPtr T_pt(std::size_t order, std::size_t K, bool skip1) {
@@ -805,12 +874,8 @@ ExprPtr Λ_pt_(std::size_t order, std::size_t K) {
   assert(order == 1 && "only first order perturbation is supported now");
   return ex<op_t>(
       []() -> std::wstring_view { return optype2label.at(OpType::λ_1); },
-      [=]() -> ExprPtr {
-        return TensorOp::Λ_pt_(order, K);
-      },
-      [=](qnc_t& qns) {
-        qns = combine(deexcitation_type_qns(K), qns);
-      });
+      [=]() -> ExprPtr { return TensorOp::Λ_pt_(order, K); },
+      [=](qnc_t& qns) { qns = combine(deexcitation_type_qns(K), qns); });
 }
 
 ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1) {
@@ -822,27 +887,32 @@ ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1) {
   return result;
 }
 
-ExprPtr R_(std::size_t Nbra, std::size_t Nket,IndexSpace hole_space, IndexSpace particle_space){
-   return ex<op_t>(
-       []() -> std::wstring_view { return optype2label.at(OpType::R); },
-       [=]() -> ExprPtr {
-         return TensorOp::R_(Nbra, Nket,hole_space,particle_space);
-       },
-       [=](qnc_t& qns) {
-         qns = combine(generic_excitation_qns(Nket,Nbra,particle_space,hole_space), qns);
-       });
+ExprPtr R_(std::size_t Nbra, std::size_t Nket, IndexSpace hole_space,
+           IndexSpace particle_space) {
+  return ex<op_t>(
+      []() -> std::wstring_view { return optype2label.at(OpType::R); },
+      [=]() -> ExprPtr {
+        return TensorOp::R_(Nbra, Nket, hole_space, particle_space);
+      },
+      [=](qnc_t& qns) {
+        qns = combine(
+            generic_excitation_qns(Nket, Nbra, particle_space, hole_space),
+            qns);
+      });
 }
 
-ExprPtr L_(std::size_t Nbra, std::size_t Nket,IndexSpace hole_space,IndexSpace particle_space){
-    return ex<op_t>(
-        []() -> std::wstring_view { return optype2label.at(OpType::L); },
-        [=]() -> ExprPtr {
-          return TensorOp::L_(Nbra, Nket,hole_space,particle_space);
-        },
-        [=](qnc_t& qns) {
-          qns = combine(generic_deexcitation_qns(Nbra,Nket,particle_space,hole_space), qns);
-        });
-
+ExprPtr L_(std::size_t Nbra, std::size_t Nket, IndexSpace hole_space,
+           IndexSpace particle_space) {
+  return ex<op_t>(
+      []() -> std::wstring_view { return optype2label.at(OpType::L); },
+      [=]() -> ExprPtr {
+        return TensorOp::L_(Nbra, Nket, hole_space, particle_space);
+      },
+      [=](qnc_t& qns) {
+        qns = combine(
+            generic_deexcitation_qns(Nbra, Nket, particle_space, hole_space),
+            qns);
+      });
 }
 
 bool can_change_qns(const ExprPtr& op_or_op_product, const qns_t target_qns,
@@ -869,15 +939,15 @@ bool can_change_qns(const ExprPtr& op_or_op_product, const qns_t target_qns,
 bool raises_vacuum_up_to_rank(const ExprPtr& op_or_op_product,
                               const unsigned long k) {
   assert(op_or_op_product.is<op_t>() || op_or_op_product.is<Product>());
-  return can_change_qns(op_or_op_product,
-                        excitation_type_qns(k));
+
+  return can_change_qns(op_or_op_product, interval_excitation_type_qns(k));
 }
 
 bool lowers_rank_or_lower_to_vacuum(const ExprPtr& op_or_op_product,
                                     const unsigned long k) {
   assert(op_or_op_product.is<op_t>() || op_or_op_product.is<Product>());
   return can_change_qns(op_or_op_product, qns_t{},
-                        excitation_type_qns(k));
+                        interval_excitation_type_qns(k));
 }
 
 bool raises_vacuum_to_rank(const ExprPtr& op_or_op_product,
@@ -893,7 +963,7 @@ bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product,
 }
 
 #include "SeQuant/domain/mbpt/vac_av.ipp"
-}// namespace op
+}  // namespace op
 
 ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
                bool use_top) {
@@ -907,27 +977,37 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
   //  the hueristic to keep only full contractions
   // during a wick procedure requires that the wave function density agree with
   // the vacuum normal ordering occupancy.
-  bool full_contractions = (idx_registry->density_occupied() == idx_registry->vacuum_occupied())? true : false;
+  bool full_contractions =
+      (idx_registry->density_occupied() == idx_registry->vacuum_occupied())
+          ? true
+          : false;
   FWickTheorem wick{expr};
   wick.use_topology(use_top).set_nop_connections(nop_connections);
   wick.full_contractions(full_contractions);
   auto result = wick.compute();
   simplify(result);
- // std::wcout << "post wick: " << to_latex_align(result,20,1) << std::endl;
+  // std::wcout << "post wick: " << to_latex_align(result,20,1) << std::endl;
   if (Logger::get_instance().wick_stats) {
     std::wcout << "WickTheorem stats: # of contractions attempted = "
                << wick.stats().num_attempted_contractions
                << " # of useful contractions = "
                << wick.stats().num_useful_contractions << std::endl;
   }
-  // only need to handle the special case where the dense(at least partially occupied) states, contain addtional functions to the vacuum_occupied.
-  // including a density occupied partition using a "single-reference" method will replace FNOPs with RDMs. i.e. "multi-reference" RDM replacment rules
+  // only need to handle the special case where the dense(at least partially
+  // occupied) states, contain addtional functions to the vacuum_occupied.
+  // including a density occupied partition using a "single-reference" method
+  // will replace FNOPs with RDMs. i.e. "multi-reference" RDM replacment rules
   // work in the limit of one reference.
-  if(idx_registry->density_occupied() == idx_registry->nulltype_() || !idx_registry->has_non_overlapping_spaces(idx_registry->density_occupied(),idx_registry->vacuum_occupied())) {
+  if (idx_registry->density_occupied() == idx_registry->nulltype_() ||
+      !idx_registry->has_non_overlapping_spaces(
+          idx_registry->density_occupied(), idx_registry->vacuum_occupied())) {
     return result;
-  }
-  else{
-    const auto target_rdm_space_type = get_default_context().vacuum() == Vacuum::SingleProduct ? idx_registry->intersection(idx_registry->active_particle_space(),idx_registry->active_hole_space()) : idx_registry->density_occupied();
+  } else {
+    const auto target_rdm_space_type =
+        get_default_context().vacuum() == Vacuum::SingleProduct
+            ? idx_registry->intersection(idx_registry->active_particle_space(),
+                                         idx_registry->active_hole_space())
+            : idx_registry->density_occupied();
 
     // STEP1. replace NOPs by RDM
     auto replace_nop_with_rdm = [&rdm_label, spinorbital](ExprPtr& exptr) {
@@ -968,8 +1048,7 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
         auto for_each_index_in_tn = [](const auto& product_ptr,
                                        const auto& op) {
           ranges::for_each(product_ptr->factors(), [&](auto& factor) {
-            auto tensor_ptr =
-                std::dynamic_pointer_cast<AbstractTensor>(factor);
+            auto tensor_ptr = std::dynamic_pointer_cast<AbstractTensor>(factor);
             if (tensor_ptr) {
               ranges::for_each(tensor_ptr->_braket(),
                                [&](auto& idx) { op(idx, *tensor_ptr); });
@@ -979,15 +1058,15 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
 
         // compute external indices
         container::map<Index, std::size_t> indices_w_counts;
-        auto retrieve_indices_with_counts =
-            [&indices_w_counts](const auto& idx, auto&) {
-              auto found_it = indices_w_counts.find(idx);
-              if (found_it != indices_w_counts.end()) {
-                found_it->second++;
-              } else {
-                indices_w_counts.emplace(idx, 1);
-              }
-            };
+        auto retrieve_indices_with_counts = [&indices_w_counts](const auto& idx,
+                                                                auto&) {
+          auto found_it = indices_w_counts.find(idx);
+          if (found_it != indices_w_counts.end()) {
+            found_it->second++;
+          } else {
+            indices_w_counts.emplace(idx, 1);
+          }
+        };
         for_each_index_in_tn(product_ptr, retrieve_indices_with_counts);
 
         container::set<Index> external_indices =
@@ -1013,7 +1092,8 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
         // compute RDM->target replacement rules
         container::map<Index, Index> replacement_rules;
         ranges::for_each(rdm_indices, [&](const Index& idx) {
-          const auto target_type = idx_registry->intersection(idx.space(),target_rdm_space_type);
+          const auto target_type =
+              idx_registry->intersection(idx.space(), target_rdm_space_type);
           if (target_type != idx_registry->nulltype_()) {
             Index target = Index::make_tmp_index(target_type);
             replacement_rules.emplace(idx, target);
@@ -1069,7 +1149,9 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
         TensorCanonicalizer::instance()->index_comparer();
     TensorCanonicalizer::instance()->index_comparer(
         [&](const Index& idx1, const Index& idx2) -> bool {
-          auto active_space = idx_registry->intersection(idx_registry->active_particle_space(),idx_registry->active_hole_space());
+          auto active_space =
+              idx_registry->intersection(idx_registry->active_particle_space(),
+                                         idx_registry->active_hole_space());
           const auto idx1_active = idx1.space().type() == active_space.type();
           const auto idx2_active = idx2.space().type() == active_space.type();
           if (idx1_active) {
@@ -1088,18 +1170,15 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
     TensorCanonicalizer::instance()->index_comparer(
         std::move(current_index_comparer));
 
-
-
-if (Logger::get_instance().wick_stats) {
-  std::wcout << "WickTheorem stats: # of contractions attempted = "
-             << wick.stats().num_attempted_contractions
-             << " # of useful contractions = "
-             << wick.stats().num_useful_contractions << std::endl;
-}
-return result;
-}
+    if (Logger::get_instance().wick_stats) {
+      std::wcout << "WickTheorem stats: # of contractions attempted = "
+                 << wick.stats().num_attempted_contractions
+                 << " # of useful contractions = "
+                 << wick.stats().num_useful_contractions << std::endl;
+    }
+    return result;
   }
-
+}
 
 bool can_change_qns(const ExprPtr& op_or_op_product, const qns_t target_qns,
                     const qns_t source_qns = {}) {
@@ -1121,7 +1200,5 @@ bool can_change_qns(const ExprPtr& op_or_op_product, const qns_t target_qns,
         "sequant::mbpt::sr::contains_rank(op_or_op_product): op_or_op_product "
         "must be mbpt::sr::op_t or Product thereof");
 }
-
-
 
 }  // namespace sequant::mbpt

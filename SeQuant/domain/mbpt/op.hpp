@@ -23,12 +23,12 @@
 #include <vector>
 
 #include <SeQuant/core/attr.hpp>
-#include <SeQuant/core/interval.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/interval.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/rational.hpp>
@@ -185,28 +185,36 @@ class QuantumNumberChange
   using QNC = std::make_signed_t<QNV>;  // change in quantum numbers
   using interval_t = boost::numeric::interval<QNC>;
   using tag_t = Tag;
-  using base_type = std::vector<boost::numeric::interval<std::make_signed_t<QNV>>>;
+  using base_type =
+      std::vector<boost::numeric::interval<std::make_signed_t<QNV>>>;
   using this_type = QuantumNumberChange<Tag, QNV>;
 
   const std::size_t size() const {
-    if(get_default_context().vacuum() == Vacuum::Physical){return 2;}
-    else if(get_default_context().vacuum() == Vacuum::SingleProduct){
-      return get_default_context().index_space_registry()->base_spaces_label().size() * 2;
+    if (get_default_context().vacuum() == Vacuum::Physical) {
+      return 2;
+    } else if (get_default_context().vacuum() == Vacuum::SingleProduct) {
+      return get_default_context()
+                 .index_space_registry()
+                 ->base_spaces_label()
+                 .size() *
+             2;
+    } else {
+      throw "vacuum not supported";
     }
-    else{throw "vacuum not supported";}
   }
 
   /// initializes all values with zeroes
   QuantumNumberChange() {
     this->resize(size());
-    std::fill(this->begin(), this->end(), interval_t{}); }
+    std::fill(this->begin(), this->end(), interval_t{});
+  }
 
   /// constructs QuantumNumberChange from a sequence of elements convertible to
   /// QNV \tparam I the type of the initializer_list elements \param i the
   /// sequence of QNV-convertible elements
   template <typename I,
             typename = std::enable_if_t<std::is_convertible_v<I, interval_t>>>
-   explicit QuantumNumberChange(std::vector<I> i) {
+  explicit QuantumNumberChange(std::vector<I> i) {
     if (i.size() == size()) {
       std::copy(i.begin(), i.end(), this->begin());
     } else {
@@ -249,62 +257,26 @@ class QuantumNumberChange
   }
   bool operator!=(const this_type& b) const { return !this->operator==(b); }
 
-  //determines the number of physical vacuum creators and annihilators for the active particle and
-  //hole space from the Context. for general operators this is not defined. for example: O_{e_1}^{i_1 m_1} a_{i_1 m_1}^{e_1}
-  //asking for the active particle annihilators in this example is nonsensical and will return -1.
+  // determines the number of physical vacuum creators and annihilators for the
+  // active particle and hole space from the Context. for general operators this
+  // is not defined. for example: O_{e_1}^{i_1 m_1} a_{i_1 m_1}^{e_1} asking for
+  // the active particle annihilators in this example is nonsensical and will
+  // return -1.
 
-  int active_particle_creators(){
-    std::vector<boost::numeric::interval<std::make_signed_t<QNV>>> temp_this = *this;
-    auto idx_registry = get_default_context().index_space_registry();
-    auto base_spaces = idx_registry->base_spaces_label();
-    int result =0;
-    for (unsigned int i = 0; i < base_spaces.size(); i++){
-      if(idx_registry->nulltype_() != idx_registry->intersection(idx_registry->active_particle_space(),base_spaces[i].first)){
-        if(temp_this[2 * i].upper() != result){
-          if(result == 0){
-            result = temp_this[2 * i].upper();
-          }
-          else{
-            return -1;
-          }
-        }
-      }
-    }
-    return result;
-  }
-
-  int active_particle_annihilators(){
-    std::vector<boost::numeric::interval<std::make_signed_t<QNV>>> temp_this = *this;
+  int active_particle_creators() {
+    std::vector<boost::numeric::interval<std::make_signed_t<QNV>>> temp_this =
+        *this;
     auto idx_registry = get_default_context().index_space_registry();
     auto base_spaces = idx_registry->base_spaces_label();
     int result = 0;
-    for (unsigned int i = 0; i < base_spaces.size(); i++){
-      if(idx_registry->nulltype_() != idx_registry->intersection(idx_registry->active_particle_space(),base_spaces[i].first)){
-        if(temp_this[2 * i + 1].upper() != result){
-          if(result == 0){
-            result = temp_this[2 * i + 1].upper();
-          }
-          else{
-            return -1;
-          }
-        }
-      }
-    }
-    return result;
-  }
-
-  int active_hole_creators(){
-    std::vector<boost::numeric::interval<std::make_signed_t<QNV>>> temp_this = *this;
-    auto idx_registry = get_default_context().index_space_registry();
-    auto base_spaces = idx_registry->base_spaces_label();
-    int result =0;
-    for (unsigned int i = 0; i < base_spaces.size(); i++){
-      if(idx_registry->nulltype_() != idx_registry->intersection(idx_registry->active_hole_space(),base_spaces[i].first)){
-        if(temp_this[2 * i].upper() != result){
-          if(result == 0){
+    for (unsigned int i = 0; i < base_spaces.size(); i++) {
+      if (idx_registry->nulltype_() !=
+          idx_registry->intersection(idx_registry->active_particle_space(),
+                                     base_spaces[i].first)) {
+        if (temp_this[2 * i].upper() != result) {
+          if (result == 0) {
             result = temp_this[2 * i].upper();
-          }
-          else{
+          } else {
             return -1;
           }
         }
@@ -313,18 +285,64 @@ class QuantumNumberChange
     return result;
   }
 
-  int active_hole_annihilators(){
-    std::vector<boost::numeric::interval<std::make_signed_t<QNV>>> temp_this = *this;
+  int active_particle_annihilators() {
+    std::vector<boost::numeric::interval<std::make_signed_t<QNV>>> temp_this =
+        *this;
     auto idx_registry = get_default_context().index_space_registry();
     auto base_spaces = idx_registry->base_spaces_label();
-    int result =0;
-    for (unsigned int i = 0; i < base_spaces.size(); i++){
-      if(idx_registry->nulltype_() != idx_registry->intersection(idx_registry->active_hole_space(),base_spaces[i].first)){
-        if(temp_this[2 * i + 1].upper() != result){
-          if(result == 0){
+    int result = 0;
+    for (unsigned int i = 0; i < base_spaces.size(); i++) {
+      if (idx_registry->nulltype_() !=
+          idx_registry->intersection(idx_registry->active_particle_space(),
+                                     base_spaces[i].first)) {
+        if (temp_this[2 * i + 1].upper() != result) {
+          if (result == 0) {
             result = temp_this[2 * i + 1].upper();
+          } else {
+            return -1;
           }
-          else{
+        }
+      }
+    }
+    return result;
+  }
+
+  int active_hole_creators() {
+    std::vector<boost::numeric::interval<std::make_signed_t<QNV>>> temp_this =
+        *this;
+    auto idx_registry = get_default_context().index_space_registry();
+    auto base_spaces = idx_registry->base_spaces_label();
+    int result = 0;
+    for (unsigned int i = 0; i < base_spaces.size(); i++) {
+      if (idx_registry->nulltype_() !=
+          idx_registry->intersection(idx_registry->active_hole_space(),
+                                     base_spaces[i].first)) {
+        if (temp_this[2 * i].upper() != result) {
+          if (result == 0) {
+            result = temp_this[2 * i].upper();
+          } else {
+            return -1;
+          }
+        }
+      }
+    }
+    return result;
+  }
+
+  int active_hole_annihilators() {
+    std::vector<boost::numeric::interval<std::make_signed_t<QNV>>> temp_this =
+        *this;
+    auto idx_registry = get_default_context().index_space_registry();
+    auto base_spaces = idx_registry->base_spaces_label();
+    int result = 0;
+    for (unsigned int i = 0; i < base_spaces.size(); i++) {
+      if (idx_registry->nulltype_() !=
+          idx_registry->intersection(idx_registry->active_hole_space(),
+                                     base_spaces[i].first)) {
+        if (temp_this[2 * i + 1].upper() != result) {
+          if (result == 0) {
+            result = temp_this[2 * i + 1].upper();
+          } else {
             return -1;
           }
         }
@@ -362,7 +380,6 @@ class QuantumNumberChange
     }
     return true;
   }
-
 
   auto hash_value() const {
     assert(size() > 0);
@@ -425,25 +442,43 @@ using op_t = mbpt::Operator<qnc_t>;
 /// combines 2 sets of quantum numbers using Wick's theorem
 qns_t combine(qns_t, qns_t);
 
-// The qns of an excitation type operator will always look the same in a given context
+// The qns of an excitation type operator will always look the same in a given
+// context
 // @param is the rank of the operator.
-qns_t excitation_type_qns(std::size_t);
+qns_t excitation_type_qns(std::size_t k);
 
-// The qns of a deexcitation type operator will always look the same in a given context
+// sometimes we want to guarrentee that a qns has an interval from 0-K
+// regardless of the base spaces.
+qns_t interval_excitation_type_qns(std::size_t k);
+
+// The qns of a deexcitation type operator will always look the same in a given
+// context
 // @param is the rank of the operator.
-qns_t deexcitation_type_qns(std::size_t);
+qns_t deexcitation_type_qns(std::size_t k);
 
-//The qns of a general type operator will always look the same in a given context
-// @//param is rank of the operator.
-qns_t general_type_qns(std::size_t);
+// sometimes we want to guarrentee that a qns has an interval from 0-K
+// regardless of the base spaces.
+qns_t interval_deexcitation_type_qns(std::size_t k);
 
-// generic quantum number function compatible with generic excitation operators with the option to choose the particle and hole space.
-qns_t generic_excitation_qns(std::size_t particle_rank, std::size_t hole_rank,IndexSpace particle_space, IndexSpace hole_space);
+// The qns of a general type operator will always look the same in a given
+// context
+//  @//param is rank of the operator.
+qns_t general_type_qns(std::size_t k);
 
-// generic quantum number function compatible with generic deexcitation operators with the option to choose the particle and hole space.
-qns_t generic_deexcitation_qns(std::size_t particle_rank, std::size_t hole_rank,IndexSpace particle_space, IndexSpace hole_space);
+// generic quantum number function compatible with generic excitation operators
+// with the option to choose the particle and hole space.
+qns_t generic_excitation_qns(std::size_t particle_rank, std::size_t hole_rank,
+                             IndexSpace particle_space, IndexSpace hole_space);
 
-ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections = {},bool use_top = true);
+// generic quantum number function compatible with generic deexcitation
+// operators with the option to choose the particle and hole space.
+qns_t generic_deexcitation_qns(std::size_t particle_rank, std::size_t hole_rank,
+                               IndexSpace particle_space,
+                               IndexSpace hole_space);
+
+ExprPtr vac_av(ExprPtr expr,
+               std::vector<std::pair<int, int>> nop_connections = {},
+               bool use_top = true);
 }  // namespace mbpt
 
 /// @param qns the quantum numbers to adjoint
@@ -473,7 +508,7 @@ namespace mbpt {
 /// @warning Tensor \f$ T \f$ will be antisymmetrized if `get_default_context().spbasis() == SPBasis::spinorbital`, else it will be particle-symmetric; the latter is only valid if # of bra and ket indices coincide.
 /// @internal bless the maker and his water
 // clang-format on
-template<Statistics S>
+template <Statistics S>
 class OpMaker {
  public:
   /// @param[in] op the operator type
@@ -493,7 +528,12 @@ class OpMaker {
     assert(nbra() > 0 || nket() > 0);
   }
 
-  OpMaker(OpType op, std::size_t Nbra, std::size_t Nket, IndexSpace particle_space = get_default_context().index_space_registry()->active_particle_space(), IndexSpace hole_space = get_default_context().index_space_registry()->active_hole_space());
+  OpMaker(
+      OpType op, std::size_t Nbra, std::size_t Nket,
+      IndexSpace particle_space =
+          get_default_context().index_space_registry()->active_particle_space(),
+      IndexSpace hole_space =
+          get_default_context().index_space_registry()->active_hole_space());
 
   // construct a particle conserving operator when constructing this way.
   OpMaker(OpType op, std::size_t nparticle);
@@ -596,8 +636,8 @@ class OpMaker {
                       UseDepIdx csv = UseDepIdx::None) {
     container::svector<IndexSpace> bra_vec(bras.begin(), bras.end());
     container::svector<IndexSpace> ket_vec(kets.begin(), kets.end());
-    return OpMaker::make(
-        bra_vec, ket_vec, std::forward<TensorGenerator>(tensor_generator), csv);
+    return OpMaker::make(bra_vec, ket_vec,
+                         std::forward<TensorGenerator>(tensor_generator), csv);
   }
 
  protected:
@@ -680,7 +720,7 @@ class Operator : public Operator<void, S> {
 extern template class Operator<qns_t, Statistics::FermiDirac>;
 extern template class Operator<qns_t, Statistics::BoseEinstein>;
 
-namespace TensorOp{
+namespace TensorOp {
 // clang-format off
 /// @brief `k`-body contribution to the "generic" Hamiltonian (in normal order relative to the default vacuum)
 /// @param[in] k the rank of the particle interactions; only `k<=2` is
@@ -693,16 +733,17 @@ ExprPtr H_(std::size_t k);
 /// supported
 ExprPtr H(std::size_t k = 2);
 
-/// fock operator implied one-body operator, optional explicit construction requires user to specify the
-/// IndexSpace corresponding to all orbitals which may have non-zero density.
-ExprPtr F( bool use_tensor = true, IndexSpace density_occupied = {L"",0});
+/// fock operator implied one-body operator, optional explicit construction
+/// requires user to specify the IndexSpace corresponding to all orbitals which
+/// may have non-zero density.
+ExprPtr F(bool use_tensor = true, IndexSpace density_occupied = {L"", 0});
 
 /// makes particle-conserving excitation operator of rank \p K
 ExprPtr T_(std::size_t K);
 
 /// makes sum of particle-conserving excitation operators of all ranks up to \p
 /// K
-ExprPtr T(std::size_t K,bool skip1 =false);
+ExprPtr T(std::size_t K, bool skip1 = false);
 
 /// makes particle-conserving deexcitation operator of rank \p K
 ExprPtr Λ_(std::size_t K);
@@ -712,15 +753,21 @@ ExprPtr Λ_(std::size_t K);
 /// K
 ExprPtr Λ(std::size_t K);
 
-//general excitation operator
-ExprPtr R_(std::size_t nbra, std::size_t nket,
-           IndexSpace hole_space = get_default_context().index_space_registry()->active_hole_space(),
-           IndexSpace particle_space = get_default_context().index_space_registry()->active_particle_space());
+// general excitation operator
+ExprPtr R_(
+    std::size_t nbra, std::size_t nket,
+    IndexSpace hole_space =
+        get_default_context().index_space_registry()->active_hole_space(),
+    IndexSpace particle_space =
+        get_default_context().index_space_registry()->active_particle_space());
 
-//general deexcitation operator
-ExprPtr L_(std::size_t nbra, std::size_t nket,
-           IndexSpace hole_space = get_default_context().index_space_registry()->active_hole_space(),
-           IndexSpace particle_space = get_default_context().index_space_registry()->active_particle_space());
+// general deexcitation operator
+ExprPtr L_(
+    std::size_t nbra, std::size_t nket,
+    IndexSpace hole_space =
+        get_default_context().index_space_registry()->active_hole_space(),
+    IndexSpace particle_space =
+        get_default_context().index_space_registry()->active_particle_space());
 
 ExprPtr P(std::int64_t K);
 
@@ -732,14 +779,14 @@ ExprPtr H_pt(std::size_t order, std::size_t R);
 
 ExprPtr T_pt_(std::size_t order, std::size_t K);
 
-ExprPtr T_pt(std::size_t order, std::size_t K, bool skip1 =false);
+ExprPtr T_pt(std::size_t order, std::size_t K, bool skip1 = false);
 
 ExprPtr Λ_pt_(std::size_t order, std::size_t K);
 
 ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1 = false);
-}
+}  // namespace TensorOp
 
-namespace op{
+namespace op {
 // clang-format off
 /// @brief `k`-body contribution to the "generic" Hamiltonian (in normal order relative to the default vacuum)
 /// @param[in] k the rank of the particle interactions; only `k<=2` is
@@ -752,16 +799,17 @@ ExprPtr H_(std::size_t k);
 /// supported
 ExprPtr H(std::size_t k = 2);
 
-/// fock operator implied one-body operator, optional explicit construction requires user to specify the
-/// IndexSpace corresponding to all orbitals which may have non-zero density.
-ExprPtr F(bool use_tensor = true, IndexSpace density_occupied = {L"",0});
+/// fock operator implied one-body operator, optional explicit construction
+/// requires user to specify the IndexSpace corresponding to all orbitals which
+/// may have non-zero density.
+ExprPtr F(bool use_tensor = true, IndexSpace density_occupied = {L"", 0});
 
 /// makes particle-conserving excitation operator of rank \p K
 ExprPtr T_(std::size_t K);
 
 /// makes sum of particle-conserving excitation operators of all ranks up to \p
 /// K
-ExprPtr T(std::size_t K,bool skip1=false);
+ExprPtr T(std::size_t K, bool skip1 = false);
 
 /// makes particle-conserving deexcitation operator of rank \p K
 ExprPtr Λ_(std::size_t K);
@@ -771,15 +819,21 @@ ExprPtr Λ_(std::size_t K);
 /// K
 ExprPtr Λ(std::size_t K);
 
-//general excitation operator
-ExprPtr R_(std::size_t nbra, std::size_t nket,
-           IndexSpace hole_space = get_default_context().index_space_registry()->active_hole_space(),
-           IndexSpace particle_space = get_default_context().index_space_registry()->active_particle_space());
+// general excitation operator
+ExprPtr R_(
+    std::size_t nbra, std::size_t nket,
+    IndexSpace hole_space =
+        get_default_context().index_space_registry()->active_hole_space(),
+    IndexSpace particle_space =
+        get_default_context().index_space_registry()->active_particle_space());
 
-//general deexcitation operator
-ExprPtr L_(std::size_t nbra, std::size_t nket,
-           IndexSpace hole_space = get_default_context().index_space_registry()->active_hole_space(),
-           IndexSpace particle_space = get_default_context().index_space_registry()->active_particle_space());
+// general deexcitation operator
+ExprPtr L_(
+    std::size_t nbra, std::size_t nket,
+    IndexSpace hole_space =
+        get_default_context().index_space_registry()->active_hole_space(),
+    IndexSpace particle_space =
+        get_default_context().index_space_registry()->active_particle_space());
 
 ExprPtr P(std::int64_t K);
 
@@ -791,21 +845,25 @@ ExprPtr H_pt(std::size_t order, std::size_t R);
 
 ExprPtr T_pt_(std::size_t order, std::size_t K);
 
-ExprPtr T_pt(std::size_t order, std::size_t K, bool skip1 =false);
+ExprPtr T_pt(std::size_t order, std::size_t K, bool skip1 = false);
 
 ExprPtr Λ_pt_(std::size_t order, std::size_t K);
 
 ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1 = false);
 
-bool raises_vacuum_up_to_rank(const ExprPtr& op_or_op_product, const unsigned long k);
+bool raises_vacuum_up_to_rank(const ExprPtr& op_or_op_product,
+                              const unsigned long k);
 
-bool lowers_rank_or_lower_to_vacuum(const ExprPtr& op_or_op_product,const unsigned long k);
+bool lowers_rank_or_lower_to_vacuum(const ExprPtr& op_or_op_product,
+                                    const unsigned long k);
 
-bool raises_vacuum_to_rank(const ExprPtr& op_or_op_product, const unsigned long k);
+bool raises_vacuum_to_rank(const ExprPtr& op_or_op_product,
+                           const unsigned long k);
 
-bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product, const unsigned long k);
+bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product,
+                           const unsigned long k);
 #include "SeQuant/domain/mbpt/vac_av.hpp"
-} //namespace op
+}  // namespace op
 }  // namespace mbpt
 }  // namespace sequant
 
