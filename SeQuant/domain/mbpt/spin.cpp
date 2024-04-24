@@ -94,7 +94,7 @@ Index make_index_with_spincase(const Index& idx, SpinCase1 sc) {
                              ? IndexSpace::nullqns
                              : (sc == SpinCase1::Alpha ? IndexSpace::alpha
                                                        : IndexSpace::beta)));
-  IndexSpace space{idx.space().get_base_key(), idx.space().type(), qns};
+  IndexSpace space{idx.space().get_qnfree_key(), idx.space().type(), qns};
   auto protoindices = idx.proto_indices();
   for (auto& pidx : protoindices) pidx = make_index_with_spincase(pidx, sc);
   return Index{label, space, protoindices};

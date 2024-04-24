@@ -115,29 +115,41 @@ class IndexSpace {
   using TypeAttr = sequant::TypeAttr;
   using QuantumNumbersAttr = sequant::QuantumNumbersAttr;
 
+  std::wstring add_spin_label(QuantumNumbersAttr qna) {
+    if (qna.to_int32() == 2) {  // spin down
+      return L"↓";
+    } else if (qna.to_int32() == 1) {  // spin up
+      return L"↑";
+    } else {
+      return L"";
+    }
+  }
+
   // IndexSpace(IndexSpace& idxspace);
 
-  IndexSpace(std::wstring_view base_label, TypeAttr typeattr_,
+  IndexSpace(std::wstring type_label, TypeAttr typeattr_,
              QuantumNumbersAttr qnattr_ = QuantumNumbersAttr{0},
              unsigned long approximate_size = 10) {
     attr_ = Attr(typeattr_, qnattr_);
-    base_key_ = base_label;
+    qnfree_key_ = type_label;
+    base_key_ = type_label + add_spin_label(qnattr_);
     approximate_size_ = approximate_size;
   }
 
-  IndexSpace(std::wstring_view base_label, int32_t space_bitset,
+  IndexSpace(std::wstring type_label, int32_t space_bitset,
              int32_t qn_bitset = 0) {
     attr_ = Attr(space_bitset, qn_bitset);
-    base_key_ = base_label;
+    base_key_ = type_label;
+    qnfree_key_ = type_label;
   }
 
   /// @brief Attr describes all attributes of a space (occupancy + quantum
   /// numbers)
   struct Attr : TypeAttr, QuantumNumbersAttr {
     Attr(TypeAttr type, QuantumNumbersAttr qns) noexcept
-        : TypeAttr(type), QuantumNumbersAttr(qns){};
+        : TypeAttr(type), QuantumNumbersAttr(qns) {};
     Attr(int32_t type, int32_t qns) noexcept
-        : TypeAttr(type), QuantumNumbersAttr(qns){};
+        : TypeAttr(type), QuantumNumbersAttr(qns) {};
     //    explicit Attr(int64_t value) : TypeAttr((value & 0xffffffff00000000)
     //    >> 32), QuantumNumbersAttr(value & 0x00000000ffffffff) {}
     Attr(const Attr &) = default;
@@ -317,7 +329,7 @@ class IndexSpace {
       return a < b;
     }
   };
-  bool operator==(IndexSpace IS)const{return this->type() == IS.type() && this->get_base_key() == IS.get_base_key() && this->qns() == IS.qns() ? true : false;}
+  bool operator==(IndexSpace IS)const{return this->type() == IS.type() && this->get_base_key() == IS.get_base_key() && this->qns() == IS.qns() && this->get_qnfree_key() == IS.get_qnfree_key() ? true : false;}
 
   bool operator!=(IndexSpace IS)const{return !(*this == IS);}
 
@@ -336,28 +348,33 @@ class IndexSpace {
     attr_ = {{0x7fffffff}, nullqns};
     base_key_ =L"";
     approximate_size_ = 0;
+    qnfree_key_ = L"";
   }
 
   IndexSpace(const IndexSpace &other) {
   attr_ = other.get_attr();
   base_key_ = other.get_base_key();
   approximate_size_ = other.get_approximate_size();
+  qnfree_key_ = other.get_qnfree_key();
   }
   IndexSpace(IndexSpace &&other) {
      attr_ = other.get_attr();
      base_key_ = other.get_base_key();
      approximate_size_ = other.get_approximate_size();
+     qnfree_key_ = other.get_qnfree_key();
   }
   IndexSpace &operator=(const IndexSpace &other) {
     attr_ = other.get_attr();
     base_key_ = other.get_base_key();
     approximate_size_ = other.get_approximate_size();
+    qnfree_key_ = other.get_qnfree_key();
     return *this;
   }
   IndexSpace &operator=(IndexSpace &&other) {
     attr_ = other.get_attr();
     base_key_ = other.get_base_key();
     approximate_size_ = other.get_approximate_size();
+    qnfree_key_ = other.get_qnfree_key();
     return *this;
   }
 
@@ -382,11 +399,15 @@ class IndexSpace {
   unsigned long get_approximate_size() const {
     return approximate_size_;
   }
+  std::wstring get_qnfree_key() const {
+    return qnfree_key_;
+}
 
  private:
   Attr attr_ = Attr::invalid();
   std::wstring base_key_;
   std::size_t approximate_size_;
+  std::wstring qnfree_key_; // useful to have access to a key related to typeattr only.
   /// @brief constructs an instance of an IndexSpace object
   //explicit IndexSpace(Attr attr) noexcept : attr_(attr) {
   //  assert(attr.is_valid());
