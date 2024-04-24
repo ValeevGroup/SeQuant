@@ -23,8 +23,6 @@ TEST_CASE("SR-TCC", "[mbpt/cc]") {
       for (auto k = 0; k <= N; ++k) REQUIRE(t_eqs[k]);
       if (N == 2) {
         REQUIRE(size(t_eqs[0]) == 3);
-        std::wcout << "runtime t eqs1 " << to_latex_align(t_eqs[1], 20, 2)
-                   << std::endl;
         REQUIRE(size(t_eqs[1]) == 14);
       }
     });
