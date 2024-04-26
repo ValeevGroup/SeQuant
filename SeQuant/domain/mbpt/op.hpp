@@ -69,8 +69,8 @@ enum class OpType {
   RDMCumulant,  //!< RDM cumulant
   δ,            //!< Kronecker delta (=identity) operator
   h_1,          //!< Hamiltonian perturbation
-  t_1,          //!< first order perturbed excitation cluster amplitudes
-  λ_1,          //!< first order perturbed deexcitation cluster amplitudes
+  t_1,          //!< first order perturbed excitation cluster operator
+  λ_1,          //!< first order perturbed deexcitation cluster operator
   invalid       //!< invalid operator
 };
 
