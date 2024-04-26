@@ -57,6 +57,9 @@ ExprPtr R12(
     IndexSpace::Type geminal_generating_space = IndexSpace::active_occupied,
     int ansatz = 2);
 
+/// makes a general operator op of rank @p R
+ExprPtr Ω(std::size_t r);
+
 /// makes perturbation operator of rank @p R
 /// \param o order of perturbation
 /// \pre `o==1`, only first order perturbation is supported now

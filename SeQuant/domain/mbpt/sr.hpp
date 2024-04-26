@@ -208,6 +208,10 @@ ExprPtr H_(std::size_t k);
 /// supported
 ExprPtr H(std::size_t k = 2);
 
+/// @brief a general operator of rank \p R
+/// @param[in] R the rank of the operator
+ExprPtr Ω(std::size_t r);
+
 /// makes traditional cluster operator of particle rank \p K
 /// @param K the particle rank
 /// @return \f$ \frac{1}{(K!)^2}\sum t^{i_1 \dots i_K}_{a_1 \dots a_K} a_{i_1

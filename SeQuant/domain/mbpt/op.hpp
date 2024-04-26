@@ -54,6 +54,7 @@ enum class OpType {
   f,    //!< Fock operator
   f̃,    //!< closed Fock operator (i.e. Fock operator due to fully-occupied
         //!< orbitals)
+  Ω,    //!< a general operator
   g,    //!< 2-body Coulomb
   t,    //!< cluster amplitudes
   λ,    //!< deexcitation cluster amplitudes
@@ -78,6 +79,7 @@ inline const std::map<OpType, std::wstring> optype2label{
     {OpType::h, L"h"},
     {OpType::f, L"f"},
     {OpType::f̃, L"f̃"},
+    {OpType::Ω, L"Ω"},
     {OpType::g, L"g"},
     {OpType::t, L"t"},
     {OpType::λ, L"λ"},

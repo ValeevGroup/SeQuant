@@ -323,6 +323,19 @@ ExprPtr H(std::size_t k) {
   return k == 1 ? H_(1) : H_(1) + H_(2);
 }
 
+ExprPtr Ω(std::size_t r) {
+  assert(r > 0);
+  return ex<op_t>(
+      []() -> std::wstring_view { return optype2label.at(OpType::Ω); },
+      [=]() -> ExprPtr {
+        using namespace sequant::mbpt::sr;
+        return sr::Ω(r);
+      },
+      [=](qnc_t& qns) {
+        qns = combine(qnc_t{{0ul, r}, {0ul, r}, {0ul, r}, {0ul, r}}, qns);
+      });
+}
+
 ExprPtr T_(std::size_t K) {
   assert(K > 0);
   return ex<op_t>(

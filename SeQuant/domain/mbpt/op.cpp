@@ -56,6 +56,7 @@ OpClass to_class(OpType op) {
     case OpType::A:
     case OpType::S:
     case OpType::h_1:
+    case OpType::Ω:
       return OpClass::gen;
     case OpType::t:
     case OpType::R:

@@ -24,6 +24,11 @@ ExprPtr L_(std::size_t Nbra, std::size_t Nket) {
   return OpMaker(OpType::L, Nbra, Nket)();
 }
 
+ExprPtr Ω(std::size_t r) {
+  assert(r > 0);
+  return OpMaker(OpType::Ω, r)();
+}
+
 ExprPtr H_pt(std::size_t o, std::size_t R) {
   assert(o == 1 &&
          "sequant::sr::H_pt(): only supports first order perturbation");
