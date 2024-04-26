@@ -1242,6 +1242,10 @@ TEST_CASE("Spin", "[spin]") {
     expanded_A = expand_A_op(expanded_A);
     expanded_A->visit(reset_idx_tags);
     simplify(expanded_A);
+    auto dif = p6_result - expanded_A;
+    simplify(dif);
+    std::wcout << "p6" << to_latex_align(p6_result, 20, 2) << std::endl;
+    std::wcout << "dif" << to_latex_align(dif, 20, 2) << std::endl;
     assert(to_latex(p6_result) == to_latex(p7_result));
     assert(to_latex(p6_result) == to_latex(expanded_A));
   }
@@ -1480,7 +1484,6 @@ TEST_CASE("Spin", "[spin]") {
       auto result = open_shell_spintrace(
           input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
       REQUIRE(result[0]->size() == 3);
-
       auto A3_aaa =
           Tensor(L"A", {i1A, i2A, i3A}, {a1A, a2A, a3A}, Symmetry::antisymm);
       auto result2 = ex<Tensor>(A3_aaa) * result[0];
