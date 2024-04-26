@@ -46,7 +46,7 @@ jobs:
 
     - name: Install prerequisite MacOS packages
       if: ${{ matrix.os == 'macos-latest' }}
-      run: brew install ninja gcc@10 boost@1.76 eigen open-mpi ccache
+      run: brew install ninja gcc@11 boost@1.76 eigen open-mpi ccache
 
     - name: Install prerequisites Ubuntu packages
       if: ${{ matrix.os == 'ubuntu-22.04' }}
