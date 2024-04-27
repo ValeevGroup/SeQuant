@@ -5,9 +5,12 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/optimize.hpp>
+#include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/tensor.hpp>
 
 #include <SeQuant/domain/mbpt/spin.hpp>
+
+#include <spdlog/spdlog.h>
 
 using namespace sequant;
 
@@ -50,12 +53,16 @@ ExprPtr postProcess(const ExprPtr &expression, const IndexSpaceMeta &spaceMeta, 
 	}
 
 	processed = simplify(processed);
+	if (options.spintrace != SpinTracing::None) {
+		spdlog::debug("Expression after spintracing:\n{}", toUtf8(deparse(processed)));
+	}
 
 	switch (options.transform) {
 		case ProjectionTransformation::None:
 			break;
 		case ProjectionTransformation::Biorthogonal:
 			processed = simplify(biorthogonal_transform(processed, externals));
+			spdlog::debug("Expression after biorthogonal transformation:\n{}", toUtf8(deparse(processed)));
 			break;
 	}
 

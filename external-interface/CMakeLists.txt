@@ -7,11 +7,17 @@ FetchContent_Declare(
 	GIT_SHALLOW    ON
 )
 FetchContent_Declare(
+	spdlog
+	GIT_REPOSITORY https://github.com/gabime/spdlog.git
+	GIT_TAG        v1.13.0
+	GIT_SHALLOW    ON
+)
+FetchContent_Declare(
 	json
 	URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
 )
 
-FetchContent_MakeAvailable(cli11 json)
+FetchContent_MakeAvailable(cli11 json spdlog)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")
 
@@ -27,4 +33,5 @@ target_link_libraries(external_interface
 		nlohmann_json::nlohmann_json
 		CLI11::CLI11
 		Boost::headers
+		spdlog::spdlog
 )
