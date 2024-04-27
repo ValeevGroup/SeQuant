@@ -153,7 +153,7 @@ std::optional< ExprPtr > popTensor(ExprPtr &expression, std::wstring_view label)
 		Product result;
 		result.scale(expression.as< Product >().scalar());
 
-		for (ExprPtr &factor : expression.as< Product >()) {
+		for (ExprPtr &factor : expression.as< Product >().factors()) {
 			std::optional< ExprPtr > popped = popTensor(factor, label);
 			if (!tensor.has_value()) {
 				tensor = popped;
@@ -161,7 +161,7 @@ std::optional< ExprPtr > popTensor(ExprPtr &expression, std::wstring_view label)
 			assert(!popped.has_value() || tensor == popped);
 
 			if (!factor.is< Constant >() || !factor.as< Constant >().is_zero()) {
-				result.append(1, std::move(factor));
+				result.append(1, std::move(factor), Product::Flatten::No);
 			}
 		}
 
