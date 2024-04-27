@@ -125,8 +125,7 @@ void generateITF(const json &blocks, std::string_view out_file, const IndexSpace
 			std::ifstream in(input_file);
 			const std::string input(std::istreambuf_iterator< char >(in), {});
 
-			const std::wstring transcoded_input = toUtf16(input);
-			sequant::ExprPtr expression         = sequant::parse_expr(transcoded_input);
+			sequant::ExprPtr expression = sequant::parse_expr(toUtf16(input), Symmetry::antisymm);
 
 			ProcessingOptions options = extractProcessingOptions(current_result);
 
