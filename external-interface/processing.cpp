@@ -61,7 +61,12 @@ ExprPtr postProcess(const ExprPtr &expression, const IndexSpaceMeta &spaceMeta, 
 		case ProjectionTransformation::None:
 			break;
 		case ProjectionTransformation::Biorthogonal:
-			processed = simplify(biorthogonal_transform(processed, externals));
+			// TODO: pop S tensor first?
+			std::optional< ExprPtr > symmetrizer = popTensor(processed, L"S");
+			processed                            = simplify(biorthogonal_transform(processed, externals));
+			if (symmetrizer) {
+				processed = ex< Product >(ExprPtrList{ symmetrizer.value(), processed }, Product::Flatten::No);
+			}
 			spdlog::debug("Expression after biorthogonal transformation:\n{}", toUtf8(deparse(processed)));
 			break;
 	}
