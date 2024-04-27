@@ -165,7 +165,7 @@ std::optional< ExprPtr > popTensor(ExprPtr &expression, std::wstring_view label)
 			}
 		}
 
-		if (result.size() > 1) {
+		if (result.size() > 1 || (result.size() == 1 && result.scalar() != 1)) {
 			expression.as< Product >() = std::move(result);
 		} else if (result.size() == 1) {
 			expression = std::move(result.factor(0));
