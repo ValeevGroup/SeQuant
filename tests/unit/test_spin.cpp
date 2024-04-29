@@ -188,6 +188,12 @@ TEST_CASE("Spin", "[spin]") {
     IndexSpace pup(L"p", {0b011}, IndexSpace::alpha);
     IndexSpace pdown(L"p", {0b011}, IndexSpace::beta);
     IndexSpace pnull(L"p", {0b011});
+    IndexSpaceRegistry pspin;
+    pspin.add(pup);
+    pspin.add(pdown);
+    pspin.add(pnull);
+    Context new_cxt(Vacuum::SingleProduct, pspin);
+    auto cxt_resetter = set_scoped_default_context(new_cxt);
     auto p1 = Index(L"p↑_1", pup);
     auto p2 = Index(L"p↓_2", pdown);
     auto p3 = Index(L"p↑_3", pup);
@@ -605,7 +611,7 @@ TEST_CASE("Spin", "[spin]") {
                        ex<Tensor>(L"t", WstrList{L"a_1"}, WstrList{L"i_4"}) *
                        ex<Tensor>(L"t", WstrList{L"a_3"}, WstrList{L"i_1"});
       auto result =
-          factorize_S(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}}, true);
+          factorize_S(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}}, false);
       REQUIRE(to_latex(result) ==
               L"{{S^{{a_2}{a_1}}_{{i_3}{i_4}}}{g^{{i_4}{a_3}}_{{i_1}{i_2}}}{t^{"
               L"{i_1}}_{{a_1}}}{t^{{i_2}}_{{a_2}}}{t^{{i_3}}_{{a_3}}}}");
@@ -1313,10 +1319,23 @@ TEST_CASE("Spin", "[spin]") {
   }
 
   SECTION("Open-shell spin-tracing") {
+    // make a minimal spinorbital indexregistry and change the context
     IndexSpace occA(L"i", {0b01}, IndexSpace::alpha);
     IndexSpace virA(L"a", {0b10}, IndexSpace::alpha);
     IndexSpace occB(L"i", {0b01}, IndexSpace::beta);
     IndexSpace virB(L"a", {0b10}, IndexSpace::beta);
+    IndexSpace occN(L"i", {0b01}, IndexSpace::nullqns);
+    IndexSpace virN(L"a", {0b10}, IndexSpace::nullqns);
+    IndexSpaceRegistry minimal_spinorbit;
+    minimal_spinorbit.add(occA);
+    minimal_spinorbit.add(virA);
+    minimal_spinorbit.add(occB);
+    minimal_spinorbit.add(virB);
+    minimal_spinorbit.add(occN);
+    minimal_spinorbit.add(virN);
+    Context new_cxt(Vacuum::SingleProduct, minimal_spinorbit);
+    auto ctx_resetter = set_scoped_default_context(new_cxt);
+
     const auto i1A = Index(L"i↑_1", occA);
     const auto i2A = Index(L"i↑_2", occA);
     const auto i3A = Index(L"i↑_3", occA);
