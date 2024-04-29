@@ -96,8 +96,7 @@ bool has_tensor(const ExprPtr& expr, std::wstring label);
 /// @brief Generates a vector of replacement maps for Antisymmetrizer operator
 /// @param A An antisymmetrizer tensor (A) (with > 2 particle indices)
 /// @return Vector of replacement maps
-container::svector<container::map<Index, Index, sequant::Index::LabelCompare>>
-A_maps(const Tensor& A);
+container::svector<container::map<Index, Index>> A_maps(const Tensor& A);
 
 /// @brief Removes tensor with a certain label from product
 /// @param product A product expression

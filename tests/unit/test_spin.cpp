@@ -1248,10 +1248,6 @@ TEST_CASE("Spin", "[spin]") {
     expanded_A = expand_A_op(expanded_A);
     expanded_A->visit(reset_idx_tags);
     simplify(expanded_A);
-    auto dif = p6_result - expanded_A;
-    simplify(dif);
-    std::wcout << "p6" << to_latex_align(p6_result, 20, 2) << std::endl;
-    std::wcout << "dif" << to_latex_align(dif, 20, 2) << std::endl;
     assert(to_latex(p6_result) == to_latex(p7_result));
     assert(to_latex(p6_result) == to_latex(expanded_A));
   }

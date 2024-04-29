@@ -569,13 +569,6 @@ class Index : public Taggable {
     if (this_is_tagged) {
       assert(this->tag().value<int>() == 0);
     } else {  // only try replacing this if not already tagged
-      for (auto it = index_map.begin(); it != index_map.end(); ++it) {
-        LabelCompare comp;
-        bool test_comp_ab = comp(it->first, it->second);
-        bool test_comp_ba = comp(it->second, it->first);
-        std::wcout << "Key: " << it->first.label() << std::endl;
-        std::wcout << "Value: " << it->second.label() << std::endl;
-      }
       auto it = index_map.find(*this);
       if (it != index_map.end()) {
         *this = it->second;

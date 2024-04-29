@@ -420,23 +420,20 @@ bool has_tensor(const ExprPtr& expr, std::wstring label) {
     return false;
 }
 
-container::svector<container::map<Index, Index, sequant::Index::LabelCompare>>
-A_maps(const Tensor& A) {
+container::svector<container::map<Index, Index>> A_maps(const Tensor& A) {
   assert(A.label() == L"A");
   assert(A.bra_rank() > 1);
   assert(A.bra().size() == A.ket().size());
   container::svector<int> bra_int_list(A.bra().size());
   std::iota(std::begin(bra_int_list), std::end(bra_int_list), 0);
   auto ket_int_list = bra_int_list;
-  container::svector<container::map<Index, Index, sequant::Index::LabelCompare>>
-      result;
+  container::svector<container::map<Index, Index>> result;
   container::svector<Index> A_braket(A.const_braket().begin(),
                                      A.const_braket().end());
 
   do {
     do {
-      container::map<Index, Index, sequant::Index::LabelCompare>
-          replacement_map;
+      container::map<Index, Index> replacement_map;
       auto A_braket_ptr = A_braket.begin();
       for (auto&& idx : bra_int_list) {
         replacement_map.emplace(*A_braket_ptr, A.bra()[idx]);
@@ -487,8 +484,7 @@ ExprPtr expand_A_op(const Product& product) {
   bool has_A_operator = false;
 
   // Check A and build replacement map
-  container::svector<container::map<Index, Index, sequant::Index::LabelCompare>>
-      map_list;
+  container::svector<container::map<Index, Index>> map_list;
   for (auto& term : product) {
     if (term->is<Tensor>()) {
       auto A = term->as<Tensor>();
@@ -510,12 +506,7 @@ ExprPtr expand_A_op(const Product& product) {
     int phase;
     {
       container::svector<Index> transformed_list;
-      std::wcout << "new map: " << std::endl;
-      for (const auto& [key, val] : map) {
-        std::wcout << "key: " << key.label() << "val: " << val.label()
-                   << std::endl;
-        transformed_list.push_back(val);
-      }
+      for (const auto& [key, val] : map) transformed_list.push_back(val);
 
       IndexSwapper::thread_instance().reset();
       bubble_sort(std::begin(transformed_list), std::end(transformed_list),
@@ -1884,8 +1875,13 @@ ExprPtr factorize_S(const ExprPtr& expression,
       while (std::find(i_list.begin(), i_list.end(),
                        std::distance(expr->begin(), it)) != i_list.end())
         ++it;
-
+      std::wcout << "distance traveled: " << std::distance(expr->begin(), it)
+                 << std::endl;
+      std::wcout << "distance to end: " << std::distance(expr->end(), it)
+                 << std::endl;
+      std::wcout << "i_List size " << i_list.size() << std::endl;
       // Clone the summand
+      std::wcout << to_latex_align(*it, 20, 1) << std::endl;
       auto new_product = (*it)->clone();
 
       // hash value of summand
