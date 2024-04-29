@@ -7,12 +7,13 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/hash.hpp>
-//#include <SeQuant/core/space.hpp>
+#include <iostream>
+// #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/tag.hpp>
 #include <SeQuant/core/utility/string.hpp>
-#include <SeQuant/core/context.hpp>
 // Only needed due to a (likely) compiler bug in Apple Clang
-//#include <SeQuant/core/attr.hpp>
+// #include <SeQuant/core/attr.hpp>
 
 #include <algorithm>
 #include <atomic>
@@ -34,7 +35,6 @@
 #include <vector>
 
 #include <range/v3/all.hpp>
-
 
 // change to 1 to make thread-safe
 #define SEQUANT_INDEX_THREADSAFE 1
@@ -106,7 +106,9 @@ class Index : public Taggable {
   /// @param label the index label, does not need to be unique, but must be
   /// convertible into an IndexSpace (@sa IndexSpace::instance )
   Index(const std::wstring_view label)
-      : Index(label,get_default_context().index_space_registry()->retrieve(label) , {}) {
+      : Index(label,
+              get_default_context().index_space_registry()->retrieve(label),
+              {}) {
     check_nontmp_label();
   }
 
@@ -114,7 +116,8 @@ class Index : public Taggable {
   /// convertible into an IndexSpace (@sa IndexSpace::instance )
   template <size_t N>
   Index(const wchar_t (&label)[N])
-      : Index(std::wstring_view(&label[0]), get_default_context().index_space_registry()->retrieve(&label[0]),
+      : Index(std::wstring_view(&label[0]),
+              get_default_context().index_space_registry()->retrieve(&label[0]),
               {}) {
     check_nontmp_label();
   }
@@ -122,7 +125,9 @@ class Index : public Taggable {
   /// @param label the index label, does not need to be unique, but must be
   /// convertible into an IndexSpace (@sa IndexSpace::instance )
   Index(const wchar_t *label)
-      : Index(std::wstring_view(label), get_default_context().index_space_registry()->retrieve(label), {}) {
+      : Index(std::wstring_view(label),
+              get_default_context().index_space_registry()->retrieve(label),
+              {}) {
     check_nontmp_label();
   }
 
@@ -242,7 +247,8 @@ class Index : public Taggable {
   /// @brief constructs an Index using this object's label and proto indices (if
   /// any), its IndexSpaceType, and a new set of QuantumNumbers
   [[nodiscard]] Index replace_qns(QuantumNumbersAttr qns) const {
-    return Index(*this, IndexSpace(this->space().get_base_key(),this->space().attr(), std::move(qns)));
+    return Index(*this, IndexSpace(this->space().get_base_key(),
+                                   this->space().attr(), std::move(qns)));
   }
 
   /// @return this cast to Taggable&
@@ -268,8 +274,8 @@ class Index : public Taggable {
   /// @return a unique temporary index in space @c space
   static Index make_tmp_index(const IndexSpace &space) {
     Index result;
-    result.label_ = space.get_base_key() + L'_' +
-                    std::to_wstring(Index::next_tmp_index());
+    result.label_ =
+        space.get_base_key() + L'_' + std::to_wstring(Index::next_tmp_index());
     result.space_ = space;
     return result;
   }
@@ -294,8 +300,8 @@ class Index : public Taggable {
                               IndexContainer &&proto_indices,
                               bool symmetric_proto_indices = true) {
     Index result;
-    result.label_ = space.get_base_key() + L'_' +
-                    std::to_wstring(Index::next_tmp_index());
+    result.label_ =
+        space.get_base_key() + L'_' + std::to_wstring(Index::next_tmp_index());
     result.space_ = space;
     result.proto_indices_ = std::forward<IndexContainer>(proto_indices);
     result.symmetric_proto_indices_ = symmetric_proto_indices;
@@ -563,6 +569,13 @@ class Index : public Taggable {
     if (this_is_tagged) {
       assert(this->tag().value<int>() == 0);
     } else {  // only try replacing this if not already tagged
+      for (auto it = index_map.begin(); it != index_map.end(); ++it) {
+        LabelCompare comp;
+        bool test_comp_ab = comp(it->first, it->second);
+        bool test_comp_ba = comp(it->second, it->first);
+        std::wcout << "Key: " << it->first.label() << std::endl;
+        std::wcout << "Value: " << it->second.label() << std::endl;
+      }
       auto it = index_map.find(*this);
       if (it != index_map.end()) {
         *this = it->second;
@@ -680,7 +693,6 @@ class Index : public Taggable {
   // check for nontmp index
   Index(std::wstring_view label, const IndexSpace *space) noexcept
       : label_(label), space_(*space), proto_indices_() {}
-
 
   /// @return true if @c index1 is identical to @c index2 , i.e. they belong to
   /// the same space, they have the same label, and the same proto-indices (if
@@ -829,9 +841,9 @@ class IndexFactory {
           counter_it = counters_.find(space);
         }
       }
-      result = Index(space.get_base_key() + L'_' +
-                         std::to_wstring(++(counter_it->second)),
-                     &space);
+      result = Index(
+          space.get_base_key() + L'_' + std::to_wstring(++(counter_it->second)),
+          &space);
       valid = validator_ ? validator_(result) : true;
     } while (!valid);
     return result;
