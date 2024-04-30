@@ -10,6 +10,7 @@
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/op.hpp>
 #include "catch.hpp"
 
 #ifdef SEQUANT_HAS_TILEDARRAY
@@ -30,7 +31,7 @@ int main(int argc, char* argv[]) {
   sequant::set_default_context(
       Context(Vacuum::SingleProduct,sequant::mbpt::make_standard_single_reference_subspaces(), IndexSpaceMetric::Unit,
               BraKetSymmetry::conjugate, SPBasis::spinorbital));
-
+  TensorCanonicalizer::set_cardinal_tensor_labels(sequant::mbpt::cardinal_tensor_labels());
   // uncomment to enable verbose output ...
   // Logger::set_instance(1);
   // ... or can instead selectively set/unset particular logging flags
