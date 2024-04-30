@@ -310,14 +310,11 @@ TEST_CASE("TEST_PARSE_EXPR", "[parse_expr]") {
       }
     }
 
-    /// TODO think about how to handle this better, obviously trying to make an
-    /// unregistered IndexSpace will throw
-    ///  in IndexSpaceRegistry and never make it to parsing.
     SECTION("Invalid index") {
-      /* REQUIRE_THROWS_MATCHES(parse_expr(L"t{i1<az1>;}"), ParseError,
-                              parseErrorMatches(5, 3, "proto"));
-       REQUIRE_THROWS_MATCHES(parse_expr(L"t{i1;az3}"), ParseError,
-                              parseErrorMatches(5, 3, "Unknown index space"));*/
+      REQUIRE_THROWS_MATCHES(parse_expr(L"t{i1<az1>;}"), ParseError,
+                             parseErrorMatches(5, 3, "proto"));
+      REQUIRE_THROWS_MATCHES(parse_expr(L"t{i1;az3}"), ParseError,
+                             parseErrorMatches(5, 3, "Unknown index space"));
     }
 
     SECTION("Invalid symmetry") {
