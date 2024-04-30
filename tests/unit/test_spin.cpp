@@ -56,18 +56,19 @@ TEST_CASE("Spin", "[spin]") {
     {  // assume spin-free spaces
       auto expr_st = spintrace(expr);
       simplify(expr_st);
-      std::wcout << to_latex_align(expr_st) << std::endl;
       REQUIRE(expr_st->to_latex() ==
-              L"{{{2}}{F^{{i_1}}_{{a_1^{{i_1}}}}}{t^{{a_1^{{i_1}}}}_{{i_1}}}}");
+              L"{{{2}}{t^{{a_1^{{i_1}}}}_{{i_1}}}{F^{{i_1}}_{{a_1^{{i_1}}}}}}");
     }
     {  // assume spin-dependent spaces
       auto expr_st = spintrace(expr, {}, /* assume_spin_free_spaces */ false);
       simplify(expr_st);
+      std::wcout << expr_st->to_latex() << std::endl;
       REQUIRE(expr_st->to_latex() ==
               L"{ "
-              L"\\bigl({{F^{{i↑_1}}_{{a↑_1^{{i↑_1}}}}}{t^{{a↑_1^{{i↑_1}}}}_{{"
-              L"i↑_1}}}} + "
-              L"{{F^{{i↓_1}}_{{a↓_1^{{i↓_1}}}}}{t^{{a↓_1^{{i↓_1}}}}_{{i↓_1}}}}"
+              L"\\bigl({{t^{{a↓_1^{{i↓_1}}}}_{{i↓_1}}}{F^{{i↓_1}}_{{a↓_1^{{i↓_"
+              L"1}}}}}}"
+              L" + "
+              L"{{t^{{a↑_1^{{i↑_1}}}}_{{i↑_1}}}{F^{{i↑_1}}_{{a↑_1^{{i↑_1}}}}}}"
               L"\\bigr) }");
     }
   }
@@ -583,7 +584,9 @@ TEST_CASE("Spin", "[spin]") {
   }
 
   SECTION("Symmetrize expression") {
-    auto new_cxt = Context(Vacuum::SingleProduct,sequant::mbpt::make_standard_single_reference_subspaces_v1());
+    auto new_cxt =
+        Context(Vacuum::SingleProduct,
+                sequant::mbpt::make_standard_single_reference_subspaces_v1());
     auto cxt_restter = set_scoped_default_context(new_cxt);
     {
       // g * t1 + g * t1
@@ -612,8 +615,7 @@ TEST_CASE("Spin", "[spin]") {
                        ex<Tensor>(L"t", WstrList{L"a_2"}, WstrList{L"i_3"}) *
                        ex<Tensor>(L"t", WstrList{L"a_1"}, WstrList{L"i_4"}) *
                        ex<Tensor>(L"t", WstrList{L"a_3"}, WstrList{L"i_1"});
-      auto result =
-          factorize_S(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}});
+      auto result = factorize_S(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}});
       REQUIRE(to_latex(result) ==
               L"{{S^{{a_2}{a_1}}_{{i_3}{i_4}}}{g^{{i_4}{a_3}}_{{i_1}{i_2}}}{t^{"
               L"{i_1}}_{{a_1}}}{t^{{i_2}}_{{a_2}}}{t^{{i_3}}_{{a_3}}}}");
