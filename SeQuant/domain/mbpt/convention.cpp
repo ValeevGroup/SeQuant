@@ -182,6 +182,9 @@ IndexSpaceRegistry make_standard_single_reference_subspaces_v1() {
   IndexSpace active_occ(L"i", 0b0000100);
   standard_reference_registry.add(active_occ);
 
+  IndexSpace inactive_occupied{L"n", 0b0000010};
+  standard_reference_registry.add(inactive_occupied);
+
   IndexSpace active_uocc(L"a", 0b0010000);
   standard_reference_registry.add(active_uocc);
 
@@ -194,13 +197,15 @@ IndexSpaceRegistry make_standard_single_reference_subspaces_v1() {
   IndexSpace unoccupied(L"e", 0b0110000);
   standard_reference_registry.add(unoccupied);
 
-  IndexSpace complete(L"p",
-                      unoccupied.type().unIon(occupied.type()).to_int32());
+  IndexSpace all(L"p", unoccupied.type().unIon(occupied.type()).to_int32());
+  standard_reference_registry.add(all);
+
+  IndexSpace complete(L"κ", 0b1111111);
   standard_reference_registry.add(complete);
 
   // only neccessary for some Operator definitions
   standard_reference_registry.assign_density_occupied(L"m");
-  standard_reference_registry.assign_complete(L"p");
+  standard_reference_registry.assign_complete(L"κ");
   standard_reference_registry.assign_active_particle_space(L"i");
   standard_reference_registry.assign_active_hole_space(L"a");
   // neccessary for SR wick algebra

@@ -183,6 +183,10 @@ TEST_CASE("TensorNetwork", "[elements]") {
   }  // SECTION("canonicalizer")
 
   SECTION("bliss graph") {
+    auto new_cxt =
+        Context(Vacuum::SingleProduct,
+                sequant::mbpt::make_standard_single_reference_subspaces_v1());
+    auto cxt_restter = set_scoped_default_context(new_cxt);
     Index::reset_tmp_index();
     // to generate expressions in specified (i.e., platform-independent) manner
     // can't use operator expression (due to unspecified order of evaluation of
@@ -354,18 +358,19 @@ TEST_CASE("TensorNetwork", "[elements]") {
       REQUIRE(oss.str() ==
               L"(18,19)\n"
               "(16,17)\n"
-              "(14,15)\n"
               "(6,7)\n"
-              "(8,9)\n"
+              "(14,15)\n"
               "(0,1)\n"
-              "(10,11)\n"
-              "(12,13)\n"
+              "(8,9)\n"
               "(2,3)\n"
               "(4,5)\n"
+              "(10,11)\n"
+              "(12,13)\n"
               "(2,4)(3,5)(10,12)(11,13)(32,36)(33,37)(34,38)(35,39)(48,52)(49,"
               "53)(50,54)(51,55)\n"
               "(0,2)(1,3)(8,10)(9,11)(28,32)(29,33)(30,34)(31,35)(52,56)(53,57)"
               "(54,58)(55,59)\n");
+
       /*REQUIRE(oss.str() ==
               L"(18,19)\n"
               "(16,17)\n"
