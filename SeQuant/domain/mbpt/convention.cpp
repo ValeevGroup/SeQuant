@@ -27,6 +27,27 @@ auto qndecorate(qns qn, std::wstring_view label) {
   abort();  // unreachable
 };
 };  // namespace
+
+IndexSpaceRegistry make_minimal_single_reference_subspaces() {
+  IndexSpaceRegistry minimal_reference_registry;
+
+  IndexSpace occupied(L"i", 0b01);
+  minimal_reference_registry.add(occupied);
+
+  IndexSpace unoccupied(L"a", 0b10);
+  minimal_reference_registry.add(unoccupied);
+
+  IndexSpace all(L"p", 0b11);
+  minimal_reference_registry.add(all);
+
+  minimal_reference_registry.assign_density_occupied(L"i");
+  minimal_reference_registry.assign_complete(L"p");
+  minimal_reference_registry.assign_vacuum_occupied(L"i");
+  minimal_reference_registry.assign_active_particle_space(L"i");
+  minimal_reference_registry.assign_active_hole_space(L"a");
+
+  return minimal_reference_registry;
+}
 IndexSpaceRegistry make_F12_single_reference_subspaces() {
   IndexSpaceRegistry standard_reference_registry;
 
