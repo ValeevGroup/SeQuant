@@ -1875,13 +1875,7 @@ ExprPtr factorize_S(const ExprPtr& expression,
       while (std::find(i_list.begin(), i_list.end(),
                        std::distance(expr->begin(), it)) != i_list.end())
         ++it;
-      std::wcout << "distance traveled: " << std::distance(expr->begin(), it)
-                 << std::endl;
-      std::wcout << "distance to end: " << std::distance(expr->end(), it)
-                 << std::endl;
-      std::wcout << "i_List size " << i_list.size() << std::endl;
       // Clone the summand
-      std::wcout << to_latex_align(*it, 20, 1) << std::endl;
       auto new_product = (*it)->clone();
 
       // hash value of summand
