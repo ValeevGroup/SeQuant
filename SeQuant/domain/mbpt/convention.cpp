@@ -182,8 +182,11 @@ IndexSpaceRegistry make_standard_single_reference_subspaces_v1() {
   IndexSpace active_occ(L"i", 0b0000100);
   standard_reference_registry.add(active_occ);
 
-  IndexSpace inactive_occupied{L"n", 0b0000010};
+  IndexSpace inactive_occupied(L"n", 0b0000010);
   standard_reference_registry.add(inactive_occupied);
+
+  IndexSpace active{L"u", 0b0001000};
+  standard_reference_registry.add(active);
 
   IndexSpace active_uocc(L"a", 0b0010000);
   standard_reference_registry.add(active_uocc);
@@ -197,11 +200,24 @@ IndexSpaceRegistry make_standard_single_reference_subspaces_v1() {
   IndexSpace unoccupied(L"e", 0b0110000);
   standard_reference_registry.add(unoccupied);
 
-  IndexSpace all(L"p", unoccupied.type().unIon(occupied.type()).to_int32());
+  IndexSpace other_unoccupied(L"α'", 0b1000000);
+  standard_reference_registry.add(other_unoccupied);
+
+  IndexSpace all_active(
+      L"x", active_occ.type().unIon(active.type()).unIon(active_uocc.type()));
+  standard_reference_registry.add(all_active);
+
+  IndexSpace all(L"p", unoccupied.type().unIon(occupied.type()));
   standard_reference_registry.add(all);
 
   IndexSpace complete(L"κ", 0b1111111);
   standard_reference_registry.add(complete);
+
+  IndexSpace maybe_occupied(L"M", active.type().unIon(occupied.type()));
+  standard_reference_registry.add(maybe_occupied);
+
+  IndexSpace maybe_unoccupied(L"E", active.type().unIon(unoccupied.type()));
+  standard_reference_registry.add(maybe_unoccupied);
 
   // only neccessary for some Operator definitions
   standard_reference_registry.assign_density_occupied(L"m");
