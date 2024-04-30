@@ -583,6 +583,8 @@ TEST_CASE("Spin", "[spin]") {
   }
 
   SECTION("Symmetrize expression") {
+    auto new_cxt = Context(Vacuum::SingleProduct,sequant::mbpt::make_standard_single_reference_subspaces_v1());
+    auto cxt_restter = set_scoped_default_context(new_cxt);
     {
       // g * t1 + g * t1
       auto input = ex<Tensor>(L"g", WstrList{L"a_1", L"a_2"},

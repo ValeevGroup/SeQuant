@@ -285,7 +285,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
     auto sr_registry = sequant::mbpt::make_standard_single_reference_subspaces();
     auto old_context = get_default_context();
     sequant::Context new_context(old_context.vacuum(),sr_registry,old_context.metric(),old_context.braket_symmetry(),old_context.spbasis(),old_context.first_dummy_index_ordinal());
-    set_default_context(new_context);
+    auto cxt_resetter = set_scoped_default_context(new_context);
     auto g_t2_t2 = H_(2) * T_(2) * T_(2);
     REQUIRE(raises_vacuum_to_rank(g_t2_t2, 2));
     REQUIRE(raises_vacuum_up_to_rank(g_t2_t2, 2));
