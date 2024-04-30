@@ -12,6 +12,8 @@
 #include "attr.hpp"
 #include "container.hpp"
 
+#include <SeQuant/core/utility/string.hpp>
+
 #include <range/v3/algorithm/any_of.hpp>
 
 namespace sequant {
@@ -307,6 +309,9 @@ class IndexSpace {
 
   struct bad_key : std::invalid_argument {
     bad_key() : std::invalid_argument("bad key") {}
+    bad_key(const char* key) : std::invalid_argument(std::string("bad key: ") + key) {}
+    bad_key(const std::wstring& key) : std::invalid_argument(std::string("bad key: ") + sequant::toUtf8(key)) {}
+    bad_key(const std::wstring_view key) : std::invalid_argument(std::string("bad key: ") + sequant::toUtf8(key)) {}
   };
 
   struct KeyCompare {

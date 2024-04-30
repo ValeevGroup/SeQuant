@@ -34,9 +34,7 @@ class IndexSpaceRegistry {
         return it->second;
       }
     }
-    throw std::invalid_argument(
-        "The label you are trying to retrieve has not been registered");
-    return label_space.at(L"");
+    throw IndexSpace::bad_key(label);
   }
 
   // add an IndexSpace to this registry. duplicate type bitsets forbidden
