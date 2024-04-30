@@ -32,19 +32,19 @@ IndexSpaceRegistry make_F12_single_reference_subspaces(){
   IndexSpaceRegistry standard_reference_registry;
 
   // add irreducible representations first
-  IndexSpace frozen(L"o",{0b00001});
+  IndexSpace frozen(L"o", 0b00001);
   standard_reference_registry.add(frozen);
 
-  IndexSpace active_occ(L"i", {0b00010});
+  IndexSpace active_occ(L"i", 0b00010);
   standard_reference_registry.add(active_occ);
 
-  IndexSpace active_uocc(L"a", {0b00100});
+  IndexSpace active_uocc(L"a", 0b00100);
   standard_reference_registry.add(active_uocc);
 
-  IndexSpace inactive_uocc(L"g", {0b01000});
+  IndexSpace inactive_uocc(L"g", 0b01000);
   standard_reference_registry.add(inactive_uocc);
 
-  IndexSpace other_uocc(L"α'", {0b10000});
+  IndexSpace other_uocc(L"α'", 0b10000);
   standard_reference_registry.add(other_uocc);
 
   IndexSpace occupied(L"m", frozen.type().unIon(active_occ.attr()).to_int32());
@@ -81,19 +81,19 @@ IndexSpaceRegistry make_F12_single_reference_subspaces(){
 IndexSpaceRegistry make_standard_multireference_subspaces(){
   IndexSpaceRegistry multireference_registry;
 
-  IndexSpace frozen(L"o",{0b00001});
+  IndexSpace frozen(L"o", 0b00001);
   multireference_registry.add(frozen);
 
-  IndexSpace unfrozen_vacuum_occupied(L"i",{0b00010});
+  IndexSpace unfrozen_vacuum_occupied(L"i", 0b00010);
   multireference_registry.add(unfrozen_vacuum_occupied);
 
-  IndexSpace active(L"x",{0b00100});
+  IndexSpace active(L"x", 0b00100);
   multireference_registry.add(active);
 
-  IndexSpace active_unoccupied(L"a",{0b01000});
+  IndexSpace active_unoccupied(L"a", 0b01000);
   multireference_registry.add(active_unoccupied);
 
-  IndexSpace inactive_unoccupied(L"g",{0b10000});
+  IndexSpace inactive_unoccupied(L"g", 0b10000);
   multireference_registry.add(inactive_unoccupied);
 
   IndexSpace vacuum_occupied(L"O", frozen.type().unIon(unfrozen_vacuum_occupied.type()));
@@ -127,16 +127,16 @@ IndexSpaceRegistry make_standard_multireference_subspaces(){
 
 IndexSpaceRegistry make_standard_single_reference_subspaces(){
   IndexSpaceRegistry standard_reference_registry;
-  IndexSpace frozen(L"o",{0b0001});
+  IndexSpace frozen(L"o", 0b0001);
   standard_reference_registry.add(frozen);
 
-  IndexSpace active_occ(L"i", {0b0010});
+  IndexSpace active_occ(L"i", 0b0010);
   standard_reference_registry.add(active_occ);
 
-  IndexSpace active_uocc(L"a", {0b0100});
+  IndexSpace active_uocc(L"a", 0b0100);
   standard_reference_registry.add(active_uocc);
 
-  IndexSpace inactive_uocc(L"g", {0b1000});
+  IndexSpace inactive_uocc(L"g", 0b1000);
   standard_reference_registry.add(inactive_uocc);
 
   IndexSpace occupied(L"m", frozen.type().unIon(active_occ.attr()).to_int32());

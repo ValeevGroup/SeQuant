@@ -24,7 +24,7 @@ namespace sequant {
 struct TypeAttr {
   int32_t bitset = 0;
 
-  TypeAttr(int32_t value) : bitset(value) {}
+  constexpr TypeAttr(int32_t value) noexcept : bitset(value) {}
 
   constexpr explicit operator int64_t() const {
     return static_cast<int64_t>(bitset);
@@ -62,8 +62,7 @@ struct TypeAttr {
 struct QuantumNumbersAttr {
   int32_t bitset = 0;
 
-  constexpr explicit QuantumNumbersAttr(int32_t value) noexcept
-      : bitset(value) {}
+  constexpr QuantumNumbersAttr(int32_t value) noexcept : bitset(value) {}
   constexpr explicit operator int64_t() const {
     return static_cast<int64_t>(bitset);
   }
@@ -136,20 +135,13 @@ class IndexSpace {
     approximate_size_ = approximate_size;
   }
 
-  IndexSpace(std::wstring type_label, int32_t space_bitset,
-             int32_t qn_bitset = 0) {
-    attr_ = Attr(space_bitset, qn_bitset);
-    base_key_ = type_label;
-    qnfree_key_ = type_label;
-  }
-
   /// @brief Attr describes all attributes of a space (occupancy + quantum
   /// numbers)
   struct Attr : TypeAttr, QuantumNumbersAttr {
     Attr(TypeAttr type, QuantumNumbersAttr qns) noexcept
-        : TypeAttr(type), QuantumNumbersAttr(qns) {};
+        : TypeAttr(type), QuantumNumbersAttr(qns){};
     Attr(int32_t type, int32_t qns) noexcept
-        : TypeAttr(type), QuantumNumbersAttr(qns) {};
+        : TypeAttr(type), QuantumNumbersAttr(qns){};
     //    explicit Attr(int64_t value) : TypeAttr((value & 0xffffffff00000000)
     //    >> 32), QuantumNumbersAttr(value & 0x00000000ffffffff) {}
     Attr(const Attr &) = default;
