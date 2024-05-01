@@ -280,7 +280,7 @@ class IndexSpaceRegistry {
     }
   }
 
-  // complete space with all possible IndexSpaces included
+  // complete space with all possible IndexSpaces included. used to generate generic operators.
   IndexSpace complete() {
     if (complete_ == nulltype) {
       throw std::invalid_argument(
@@ -291,7 +291,7 @@ class IndexSpaceRegistry {
   }
 
   // occupied with respect to vacuum reference!! defining the occupied orbitals
-  // in the Fermi vacuum is absolutely essential.
+  // in the Fermi vacuum is absolutely essential for SingleProduct Vacuum evaluations.
   IndexSpace vacuum_occupied() const {
     if (vacuum_occupied_ == nulltype) {
       throw std::invalid_argument(
@@ -302,7 +302,7 @@ class IndexSpaceRegistry {
   }
 
   // space where active particles can reside, in Single Reference case this is
-  // usually active_occupied. Multireference will also include an active space.
+  // usually active_occupied. Multi-reference will also include an active space.
   IndexSpace active_particle_space() const {
     if (active_particle_space_ == nulltype) {
       throw std::invalid_argument(
@@ -313,7 +313,7 @@ class IndexSpaceRegistry {
   }
 
   // space where all active holes can reside, in Single Reference case this is
-  // usually active_unoccupied. Multireference will also include an active
+  // usually active_unoccupied. Multi-reference will also include an active
   // space.
   IndexSpace active_hole_space() const {
     if (active_hole_space_ == nulltype) {
@@ -324,7 +324,7 @@ class IndexSpaceRegistry {
       return active_hole_space_;
   }
 
-  // needed to compute densites in physical vacuum.
+  // needed to compute densities in physical vacuum.
   IndexSpace density_occupied() const {
     if (density_occuiped_ == nulltype_()) {
       throw std::invalid_argument(
@@ -379,7 +379,7 @@ class IndexSpaceRegistry {
   bool has_single_bit(std::uint32_t bits) {
     return bits & (((bool)(bits & (bits - 1))) - 1);
   }
-  // find an indexspace from its type. return nullspace if not present.
+  // find an IndexSpace from its type. return nullspace if not present.
   // a bit strange, but prevents an additional map that needs to be maintained
   const IndexSpace find_IndexSpace(IndexSpace IS) const {
     for (auto it = label_space.begin(); it != label_space.end(); it++) {
@@ -391,7 +391,7 @@ class IndexSpaceRegistry {
   }
 
   // find an IndexSpace from attribute. return nullspace if not present.
-  // sometimes we wish to check whether if an antribute is in the registry
+  // sometimes we wish to check whether if an attribute is in the registry
   const IndexSpace find_IndexSpace(IndexSpace::Attr attr) const {
     for (auto it = label_space.begin(); it != label_space.end(); it++) {
       if (it->second.attr() == attr) {
@@ -406,7 +406,7 @@ class IndexSpaceRegistry {
       L"", 0, 0};  // needed for fermi vacuum wick application
   IndexSpace density_occuiped_ = {L"", 0, 0};
   // both needed to make excitation and de-excitation operators. not
-  // neccessarily exclusionary in the case of multi-reference context.
+  // necessarily equivalent in the case of multi-reference context.
   IndexSpace active_particle_space_ = {L"", 0, 0};
   IndexSpace active_hole_space_ = {L"", 0, 0};
 };
