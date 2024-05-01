@@ -4,15 +4,18 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/wick.hpp>
+#include <SeQuant/domain/mbpt/convention.hpp>
 
 int main() {
   using namespace sequant;
 
-  set_default_context(Context{Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-                              BraKetSymmetry::symm});
+  set_default_context(
+      Context{Vacuum::SingleProduct,
+              sequant::mbpt::make_F12_single_reference_subspaces(),
+              IndexSpaceMetric::Unit, BraKetSymmetry::symm});
 
-  IndexSpace::register_instance(L"y", IndexSpace::occupied);
-  IndexSpace::register_instance(L"z", IndexSpace::complete_unoccupied);
+  get_default_context().index_space_registry()->relabel(L"i", L"y");
+  get_default_context().index_space_registry()->relabel(L"α", L"z");
 
   IndexSpace sp;
   Index p1(L"p_1", sp), p2(L"p_2", sp), p3(L"p_3", sp), p4(L"p_4", sp);
@@ -28,7 +31,7 @@ int main() {
              << std::endl;
 
   Index y21(L"y_21");  // <- represents IndexSpace::occupied
-  Index z1(L"z_1");    // <- represents IndexSpace::complete_maybe_unoccupied
+  Index z1(L"z_1");    // <- represents IndexSpace::complete_unoccupied
   auto op_oo_oo =
       ex<FNOperator>(WstrList{L"y_1", L"y_2"}, WstrList{L"y_3", L"y_4"});
 

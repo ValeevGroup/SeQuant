@@ -16,6 +16,10 @@ enum class Convention { QCiFS };
 // This is minimal partitioning is sufficient for computing expectation values of Coupled-Cluster type operators.
 IndexSpaceRegistry make_minimal_single_reference_subspaces();
 
+//Example case which creates spin containing IndexSpaces.
+// This registry assumes that any expectation values of operators are taken prior to spintracing.
+IndexSpaceRegistry make_minimal_single_reference_spinorbital_supspaces();
+
 //A registry containing a common partitioning for single reference F12 calculations.
 // notably, this set contains an other_unoccupied space, α', commonly used to construct an approximately complete representation
 IndexSpaceRegistry make_F12_single_reference_subspaces();

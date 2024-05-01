@@ -28,6 +28,44 @@ auto qndecorate(qns qn, std::wstring_view label) {
 };
 };  // namespace
 
+IndexSpaceRegistry make_minimal_single_reference_spinorbital_supspaces() {
+  IndexSpaceRegistry minimal_spinorbit_reference_registry;
+  IndexSpace occupied(L"i", 0b01);
+  minimal_spinorbit_reference_registry.add(occupied);
+
+  IndexSpace occupied_alpha(L"i", 0b01, IndexSpace::alpha);
+  minimal_spinorbit_reference_registry.add(occupied_alpha);
+
+  IndexSpace occupied_beta(L"i", 0b01, IndexSpace::beta);
+  minimal_spinorbit_reference_registry.add(occupied_beta);
+
+  IndexSpace unoccupied(L"a", 0b10);
+  minimal_spinorbit_reference_registry.add(unoccupied);
+
+  IndexSpace unoccupied_alpha(L"a", 0b10, IndexSpace::alpha);
+  minimal_spinorbit_reference_registry.add(unoccupied_alpha);
+
+  IndexSpace unoccupied_beta(L"a", 0b10, IndexSpace::beta);
+  minimal_spinorbit_reference_registry.add(unoccupied_beta);
+
+  IndexSpace all(L"p", 0b11);
+  minimal_spinorbit_reference_registry.add(all);
+
+  IndexSpace all_alpha(L"p", 0b11, IndexSpace::alpha);
+  minimal_spinorbit_reference_registry.add(all_alpha);
+
+  IndexSpace all_beta(L"p", 0b11, IndexSpace::beta);
+  minimal_spinorbit_reference_registry.add(all_beta);
+
+  minimal_spinorbit_reference_registry.assign_density_occupied(L"i");
+  minimal_spinorbit_reference_registry.assign_complete(L"p");
+  minimal_spinorbit_reference_registry.assign_vacuum_occupied(L"i");
+  minimal_spinorbit_reference_registry.assign_active_particle_space(L"i");
+  minimal_spinorbit_reference_registry.assign_active_hole_space(L"a");
+
+  return minimal_spinorbit_reference_registry;
+}
+
 IndexSpaceRegistry make_minimal_single_reference_subspaces() {
   IndexSpaceRegistry minimal_reference_registry;
 
