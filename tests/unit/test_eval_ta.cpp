@@ -131,13 +131,15 @@ class rand_tensor_yield {
     }
 
     ERPtr result{nullptr};
+    auto idx_registry = get_default_context().index_space_registry();
 
-    auto make_extents = [this](auto&& ixs) -> container::svector<size_t> {
-      return ixs | transform([this](auto const& ix) -> size_t {
-               assert(ix.space() == IndexSpace::active_occupied ||
-                      ix.space() == IndexSpace::active_unoccupied);
-               return ix.space() == IndexSpace::active_occupied ? nocc_
-                                                                : nvirt_;
+    auto make_extents =
+        [this, &idx_registry](auto&& ixs) -> container::svector<size_t> {
+      return ixs | transform([this, &idx_registry](auto const& ix) -> size_t {
+               assert(ix.space() == idx_registry->retrieve(L"i") ||
+                      ix.space() == idx_registry->retrieve(L"a"));
+               return ix.space() == idx_registry->retrieve(L"i") ? nocc_
+                                                                 : nvirt_;
              }) |
              ranges::to<container::svector<size_t>>;
     };
@@ -221,7 +223,6 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
   using sequant::evaluate;
   using sequant::evaluate_antisymm;
   using sequant::evaluate_symm;
-  sequant::mbpt::set_default_convention();
 
   using TA::TArrayD;
 
