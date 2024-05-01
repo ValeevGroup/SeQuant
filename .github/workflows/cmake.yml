@@ -31,7 +31,7 @@ jobs:
         -DBUILD_SHARED_LIBS=OFF
         -DCMAKE_UNITY_BUILD=${{ matrix.build_type == 'Debug' }}
         -DMPIEXEC_PREFLAGS='--bind-to;none;--allow-run-as-root'
-        -DCMAKE_PREFIX_PATH='/usr/local/opt/boost@1.76'
+        -DCMAKE_PREFIX_PATH='/usr/local/opt/boost'
         -DSEQUANT_EVAL_TESTS=ON
         -DSEQUANT_USE_SYSTEM_BOOST_HASH=OFF
         -DCMAKE_CXX_STANDARD=20
@@ -46,7 +46,7 @@ jobs:
 
     - name: Install prerequisite MacOS packages
       if: ${{ matrix.os == 'macos-latest' }}
-      run: brew install ninja gcc@10 boost@1.76 eigen open-mpi ccache
+      run: brew install ninja boost eigen open-mpi ccache
 
     - name: Install prerequisites Ubuntu packages
       if: ${{ matrix.os == 'ubuntu-22.04' }}
