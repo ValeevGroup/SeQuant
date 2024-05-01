@@ -59,8 +59,8 @@ class rand_tensor_yield {
            "Unsupported IndexSpace type found while generating tensor.");
 
     auto rng = btas::Range{
-        tnsr.const_braket() | transform([this](auto const& idx) {
-          return idx.space() == IndexSpace::active_occupied ? nocc_ : nvirt_;
+        tnsr.const_braket() | transform([this, &idx_registry](auto const& idx) {
+          return idx.space() == idx_registry->retrieve(L"i") ? nocc_ : nvirt_;
         }) |
         ranges::to_vector};
 
