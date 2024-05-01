@@ -122,10 +122,52 @@ Of course, same manipulations can be used for bosons:
                              .compute())
              << std::endl;
 ```
+### Register your relevant spaces
+In scientific writing, it is common to index mathematical objects such as tensors and operators. These indices in a network of tensors encode a graph structure which can be used to deduce which modes of each tensor can be contracted. It is also common for these indices to indicate a block structure of a tensor in a subspace.
+![](doc/images/fia.svg).
+Most chemists would recognize the labeling of this tensor as the off-diagonal occupied, unoccupied block of the fock matrix. To understand this however, requires knowledge of what i and a mean. In other words, the labels i and a only have meaning in a context.
+SeQuant now allows/requires the user to define the base labels and the set theoretics for the context they are in.
+
+```c++
+#include <SeQuant/core/context.hpp>
+#include <SeQuant/domain/mbpt/convention.hpp>
+
+int main() {
+  using namespace sequant;
+      IndexSpaceRegistry sample_ISR;
+
+  IndexSpace x_space(L"x", 0b001);
+  sample_ISR.add(x_space);
+
+  IndexSpace y_space(L"y", 0b010);
+  sample_ISR.add(y_space);
+
+  IndexSpace z_space(L"z", 0b100);
+  sample_ISR.add(z_space);
+
+  IndexSpace xy_space(L"xy", 0b011);
+  sample_ISR.add(xy_space);
+
+  IndexSpace yz_space(L"yz", 0b110);
+  sample_ISR.add(yz_space);
+
+  IndexSpace xyz_space(L"xyz", 0b111);
+  sample_ISR.add(xyz_space);
+
+  assert(sample_ISR.unIon(z_space,y_space) == yz_space);
+  assert(sample_ISR.intersection(xy_space,x_space) == x_space);
+  
+  Context new_cxt(Vacuum::SingleProduct,sample_ISR);
+  set_default_context(new_cxt);
+}
+```
+The above sample registry outlines the set theoreitcs for  indices x, y, and z using unsigned ints conveniently written as bitsets.
+Notice that not all possible combinations need to be registered. It is the task of the user to predict any and all spaces that they may 
+encounter in their context. Notice that `unIon()` and `intersection()` are part of the `IndexSpaceRegistry` class. This is because these operations should never produce an unregistered `IndexSpace`(except the `nulltype()`).
 
 ### Quasiparticles
 
-In most cases we are interested in using SeQuant to manipulate expressions involving operators in normal order  relative to a vacuum state with a finite number of particles, rather than with respect to the genuine vacuum with zero particles. To make such composition easier SeQuant expressions depend on SeQuant _context_, which specifies things like the vacuum type, whether the single-particle (SP) basis is orthonormal, etc. The above SeQuant program used the default context, which assumes the genuine vacuum. The active context can be examined by calling `get_default_context()`, changed via `set_default_context()`, and reset to the default via `reset_default_context()`:
+In most cases we are interested in using SeQuant to manipulate expressions involving operators in normal order relative to a vacuum state with a finite number of particles, rather than with respect to the genuine vacuum with zero particles. To make such composition easier SeQuant expressions depend on SeQuant _context_, which specifies things like the vacuum type, whether the single-particle (SP) basis is orthonormal, etc. The above SeQuant program used the default context, which assumes the genuine vacuum. The active context can be examined by calling `get_default_context()`, changed via `set_default_context()`, and reset to the default via `reset_default_context()`:
 
 ```c++
 #include <SeQuant/core/context.hpp>
@@ -146,12 +188,13 @@ int main() {
 }
 ```
 
-However, to deal with the single-product vacuum it is necessary to declare the `IndexSpace` objects that will represent SP states included (_occupied_) in the vacuum state and excluded from (_unoccupied_ in) the vacuum state. Since there is no convention for labeling such states SeQuant demands such choices to be specified explicitly, e.g., by declaring
-
+However, to deal with the single-product vacuum it is necessary to specify which registered `IndexSpace` corresponds to vacuum occupied. This is because the definition of quasiparticle creators and annihilators depends on the operator's action on the single-product vacuum.
 ```c++
-IndexSpace::register_instance(L"y", IndexSpace::occupied);
-IndexSpace::register_instance(L"z", IndexSpace::complete_maybe_unoccupied);
+sample_ISR.assign_vacuum_occupied(L"x");
 ```
+Please keep in mind that at various points it is implied that spaces that vacuum occupied spaces are smaller
+than states that are unoccupied.
+
 
 we can evaluate Wick's theorem in single-product normal order:
 
@@ -175,30 +218,7 @@ produces
 - the tilde in `ã` denotes normal order with respect to single-product vacuum, and
 - Einstein summation convention is implied, i.e., indices that appear twice in a given product are summed over.
 
-Registering spaces has more benefits than being able to deal with non-genuine vacuum; it can also  simplify composition. By registering an index space we associate it with a given base index. This allows to subsequently map index labels to the registered spaces in constructors of indices and operators:
 
-```c++
-Index y21(L"y_21");  // <- represents IndexSpace::occupied
-Index z1(L"z_1");  // <- represents IndexSpace::complete_maybe_unoccupied
-auto op_oo_oo = ex<FNOperator>(WstrList{L"y_1", L"y_2"}, WstrList{L"y_3", L"y_4"});
-```
-
-To simplify index registration we provide support for a particular convention that the SeQuant developers prefer that we call the "Quantum Chemistry in Fock Space" (QCiFS), named after the [series of articles](http://doi.org/10.1063/1.444231) by Werner Kutzelnigg that introduced its essential elements. It can be loaded in 1 line:
-
-```c++
-#include <SeQuant/core/index.hpp>
-#include <SeQuant/domain/mbpt/convention.hpp>
-
-int main() {
-  // load the QCiFS convention
-  mbpt::set_default_convention(); // =mbpt::set_default_convention(mbpt::Convention::QCiFS)
-  
-  Index i1(L"i_1"); // active occupied
-  Index a1(L"a_1"); // active unoccupied
-  Index p1(L"p_1"); // any state in computational basis
-  // etc.
-}
-```
 
 # Developers
 

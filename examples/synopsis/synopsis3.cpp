@@ -17,7 +17,7 @@ int main() {
   get_default_context().index_space_registry()->relabel(L"i", L"y");
   get_default_context().index_space_registry()->relabel(L"α", L"z");
 
-  IndexSpace sp;
+  IndexSpace sp = get_default_context().index_space_registry()->retrieve(L"p");
   Index p1(L"p_1", sp), p2(L"p_2", sp), p3(L"p_3", sp), p4(L"p_4", sp);
 
   auto cp1 = fcrex(p1), cp2 = fcrex(p2);
