@@ -91,10 +91,10 @@ int main(int argc, char* argv[]) {
   std::wcout.sync_with_stdio(true);
   std::wcerr.sync_with_stdio(true);
   sequant::detail::OpIdRegistrar op_id_registrar;
-  sequant::set_default_context(Context(Vacuum::Physical, IndexSpaceMetric::Unit,
+  sequant::set_default_context(Context(Vacuum::Physical, sequant::mbpt::make_minimal_single_reference_subspaces(),IndexSpaceMetric::Unit,
                                        BraKetSymmetry::conjugate,
                                        SPBasis::spinfree));
-  mbpt::set_default_convention();
+  //mbpt::set_default_convention();
 
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
