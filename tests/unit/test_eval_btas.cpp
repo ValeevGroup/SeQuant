@@ -48,11 +48,13 @@ class rand_tensor_yield {
     using ranges::views::repeat_n;
     using ranges::views::transform;
     using sequant::IndexSpace;
+    auto idx_registry = sequant::get_default_context().index_space_registry();
 
     assert(ranges::all_of(tnsr.const_braket(),
-                          [](auto const& idx) {
-                            return idx.space() == IndexSpace::active_occupied ||
-                                   idx.space() == IndexSpace::active_unoccupied;
+                          [&idx_registry](auto const& idx) {
+                            return idx.space() ==
+                                       idx_registry->retrieve(L"i") ||
+                                   idx.space() == idx_registry->retrieve(L"a");
                           }) &&
            "Unsupported IndexSpace type found while generating tensor.");
 
