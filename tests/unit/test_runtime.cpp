@@ -17,7 +17,7 @@ TEST_CASE("Context", "[runtime]") {
 
   // basic set_default_context test
   CHECK_NOTHROW(
-      set_default_context(Context(Vacuum::SingleProduct,mbpt::make_standard_single_reference_subspaces(), IndexSpaceMetric::Unit,
+      set_default_context(Context(Vacuum::SingleProduct, mbpt::make_sr_subspaces(), IndexSpaceMetric::Unit,
                                   BraKetSymmetry::symm, SPBasis::spinfree)));
   CHECK(get_default_context().vacuum() == Vacuum::SingleProduct);
   CHECK(get_default_context().metric() == IndexSpaceMetric::Unit);
@@ -40,15 +40,15 @@ TEST_CASE("Context", "[runtime]") {
   {
     // if we do not save the resetter context is reset back immediately
     CHECK_NOTHROW(set_scoped_default_context(
-        Context(Vacuum::SingleProduct,mbpt::make_standard_single_reference_subspaces(), IndexSpaceMetric::Unit,
+        Context(Vacuum::SingleProduct, mbpt::make_sr_subspaces(), IndexSpaceMetric::Unit,
                 BraKetSymmetry::symm, SPBasis::spinfree)));
     CHECK(get_default_context() == initial_ctx);
 
     auto resetter = set_scoped_default_context(
-        Context(Vacuum::SingleProduct, mbpt::make_standard_single_reference_subspaces(),IndexSpaceMetric::Unit,
+        Context(Vacuum::SingleProduct, mbpt::make_sr_subspaces(),IndexSpaceMetric::Unit,
                 BraKetSymmetry::symm, SPBasis::spinfree));
     CHECK(get_default_context() ==
-          Context(Vacuum::SingleProduct,mbpt::make_standard_single_reference_subspaces(), IndexSpaceMetric::Unit,
+          Context(Vacuum::SingleProduct, mbpt::make_sr_subspaces(), IndexSpaceMetric::Unit,
                   BraKetSymmetry::symm, SPBasis::spinfree));
   }
   // leaving scope resets the context back

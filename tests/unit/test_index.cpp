@@ -163,8 +163,7 @@ TEST_CASE("Index", "[elements][index]") {
 
   SECTION("to_string") {
     auto old_cxt = get_default_context();
-    Context cxt(Vacuum::Physical,
-                sequant::mbpt::make_F12_single_reference_subspaces(),
+    Context cxt(Vacuum::Physical, sequant::mbpt::make_F12_sr_subspaces(),
                 old_cxt.metric(), old_cxt.braket_symmetry(), old_cxt.spbasis());
     auto cxt_resetter = set_scoped_default_context(cxt);
     Index alpha(L"α");
@@ -183,8 +182,7 @@ TEST_CASE("Index", "[elements][index]") {
 
   SECTION("label manipulation") {
     auto nex_context =
-        Context(Vacuum::SingleProduct,
-                sequant::mbpt::make_F12_single_reference_subspaces(),
+        Context(Vacuum::SingleProduct, sequant::mbpt::make_F12_sr_subspaces(),
                 IndexSpaceMetric::Unit);
     auto context_resetter = set_scoped_default_context(nex_context);
     auto isr = get_default_context().index_space_registry();

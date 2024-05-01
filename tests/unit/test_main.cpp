@@ -29,7 +29,7 @@ int main(int argc, char* argv[]) {
   sequant::set_locale();
   sequant::detail::OpIdRegistrar op_id_registrar;
   sequant::set_default_context(
-      Context(Vacuum::SingleProduct,sequant::mbpt::make_standard_single_reference_subspaces(), IndexSpaceMetric::Unit,
+      Context(Vacuum::SingleProduct, sequant::mbpt::make_sr_subspaces(), IndexSpaceMetric::Unit,
               BraKetSymmetry::conjugate, SPBasis::spinorbital));
   TensorCanonicalizer::set_cardinal_tensor_labels(sequant::mbpt::cardinal_tensor_labels());
   // uncomment to enable verbose output ...

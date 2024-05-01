@@ -146,7 +146,7 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
   SECTION("physical vacuum") {
     constexpr Vacuum V = Vacuum::Physical;
     auto raii_tmp = set_scoped_default_context(
-        Context{V,sequant::mbpt::make_standard_single_reference_subspaces(), IndexSpaceMetric::Unit, BraKetSymmetry::conjugate,
+        Context{V, sequant::mbpt::make_sr_subspaces(), IndexSpaceMetric::Unit, BraKetSymmetry::conjugate,
                 SPBasis::spinorbital});
 
     auto switch_to_spinfree_context = detail::NoDiscard([&]() {

@@ -9,7 +9,7 @@
 TEST_CASE("IndexSpace", "[elements]") {
   using namespace sequant;
   SECTION("registry_core_functionality"){
-    auto standard_registry = sequant::mbpt::make_standard_single_reference_subspaces();
+    auto standard_registry = sequant::mbpt::make_sr_subspaces();
     REQUIRE_NOTHROW(standard_registry.retrieve(L"i"));
 
     REQUIRE_NOTHROW(standard_registry.relabel(L"i",L"j"));
@@ -25,8 +25,7 @@ TEST_CASE("IndexSpace", "[elements]") {
   }
 
   SECTION("equality") {
-    auto standard_registry =
-        sequant::mbpt::make_standard_single_reference_subspaces();
+    auto standard_registry = sequant::mbpt::make_sr_subspaces();
     REQUIRE(standard_registry.retrieve(L"i") ==
             standard_registry.retrieve(L"i"));
     REQUIRE(standard_registry.retrieve(L"i") !=
@@ -34,7 +33,7 @@ TEST_CASE("IndexSpace", "[elements]") {
   }
 
   SECTION("ordering") {
-    auto standard_registry =sequant::mbpt::make_standard_single_reference_subspaces();
+    auto standard_registry = sequant::mbpt::make_sr_subspaces();
     REQUIRE(!(standard_registry.retrieve(L"i") < standard_registry.retrieve(L"i")));
     REQUIRE(standard_registry.retrieve(L"i") < standard_registry.retrieve(L"a"));
     REQUIRE(!(standard_registry.retrieve(L"a") < standard_registry.retrieve(L"i")));
@@ -66,7 +65,7 @@ TEST_CASE("IndexSpace", "[elements]") {
   }
 
   SECTION("set operations") {
-    auto f12_registry = sequant::mbpt::make_F12_single_reference_subspaces();
+    auto f12_registry = sequant::mbpt::make_F12_sr_subspaces();
     REQUIRE(
         f12_registry.retrieve(L"i") ==
         f12_registry.intersection(f12_registry.retrieve(L"i"), f12_registry.retrieve(L"p")));
@@ -106,8 +105,8 @@ TEST_CASE("IndexSpace", "[elements]") {
   }
 
   SECTION("occupancy_validation") {
-    auto standard_registry = sequant::mbpt::make_standard_single_reference_subspaces();
-    auto multireference_registry = sequant::mbpt::make_standard_multireference_subspaces();
+    auto standard_registry = sequant::mbpt::make_sr_subspaces();
+    auto multireference_registry = sequant::mbpt::make_mr_subspaces();
 
     REQUIRE(standard_registry.is_pure_occupied(standard_registry.retrieve(L"i")));
     REQUIRE(standard_registry.is_pure_unoccupied(standard_registry.retrieve(L"a")));
@@ -127,7 +126,7 @@ TEST_CASE("IndexSpace", "[elements]") {
   }
 
   SECTION("base_space"){
-    auto f12_registry = sequant::mbpt::make_F12_single_reference_subspaces();
+    auto f12_registry = sequant::mbpt::make_F12_sr_subspaces();
     auto f12_base_spaces = f12_registry.base_spaces_label();
     REQUIRE(f12_base_spaces[0].second == L"o");
     REQUIRE(f12_base_spaces[1].second == L"i");

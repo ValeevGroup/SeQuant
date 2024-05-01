@@ -11,7 +11,7 @@ int main() {
 
   set_default_context(
       Context{Vacuum::SingleProduct,
-              sequant::mbpt::make_F12_single_reference_subspaces(),
+                              sequant::mbpt::make_F12_sr_subspaces(),
               IndexSpaceMetric::Unit, BraKetSymmetry::symm});
 
   get_default_context().index_space_registry()->relabel(L"i", L"y");

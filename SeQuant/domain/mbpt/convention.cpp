@@ -28,7 +28,7 @@ auto qndecorate(qns qn, std::wstring_view label) {
 };
 };  // namespace
 
-IndexSpaceRegistry make_minimal_single_reference_spinorbital_supspaces() {
+IndexSpaceRegistry make_min_sr_so_supspaces() {
   IndexSpaceRegistry minimal_spinorbit_reference_registry;
   IndexSpace occupied(L"i", 0b01);
   minimal_spinorbit_reference_registry.add(occupied);
@@ -66,7 +66,7 @@ IndexSpaceRegistry make_minimal_single_reference_spinorbital_supspaces() {
   return minimal_spinorbit_reference_registry;
 }
 
-IndexSpaceRegistry make_minimal_single_reference_subspaces() {
+IndexSpaceRegistry make_min_sr_subspaces() {
   IndexSpaceRegistry minimal_reference_registry;
 
   IndexSpace occupied(L"i", 0b01);
@@ -86,7 +86,7 @@ IndexSpaceRegistry make_minimal_single_reference_subspaces() {
 
   return minimal_reference_registry;
 }
-IndexSpaceRegistry make_F12_single_reference_subspaces() {
+IndexSpaceRegistry make_F12_sr_subspaces() {
   IndexSpaceRegistry standard_reference_registry;
 
   // add irreducible representations first
@@ -142,7 +142,7 @@ IndexSpaceRegistry make_F12_single_reference_subspaces() {
 // vacuum occupied subspace.
 //  this leaves an active space which is partially occupied/unoccupied. This
 //  definition is convenient when coupled with SR vacuum.
-IndexSpaceRegistry make_standard_multireference_subspaces() {
+IndexSpaceRegistry make_mr_subspaces() {
   IndexSpaceRegistry multireference_registry;
 
   IndexSpace frozen(L"o", 0b00001);
@@ -197,7 +197,7 @@ IndexSpaceRegistry make_standard_multireference_subspaces() {
   return multireference_registry;
 }
 
-IndexSpaceRegistry make_standard_single_reference_subspaces() {
+IndexSpaceRegistry make_sr_subspaces() {
   IndexSpaceRegistry standard_reference_registry;
   IndexSpace frozen(L"o", 0b0001);
   standard_reference_registry.add(frozen);
@@ -233,7 +233,7 @@ IndexSpaceRegistry make_standard_single_reference_subspaces() {
   return standard_reference_registry;
 }
 
-IndexSpaceRegistry make_standard_single_reference_subspaces_v1() {
+IndexSpaceRegistry make_legacy_subspaces() {
   IndexSpaceRegistry standard_reference_registry;
   IndexSpace frozen(L"o", 0b0000001);
   standard_reference_registry.add(frozen);

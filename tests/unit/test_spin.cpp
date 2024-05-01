@@ -585,8 +585,7 @@ TEST_CASE("Spin", "[spin]") {
 
   SECTION("Symmetrize expression") {
     auto new_cxt =
-        Context(Vacuum::SingleProduct,
-                sequant::mbpt::make_standard_single_reference_subspaces_v1());
+        Context(Vacuum::SingleProduct, sequant::mbpt::make_legacy_subspaces());
     auto cxt_restter = set_scoped_default_context(new_cxt);
     {
       // g * t1 + g * t1

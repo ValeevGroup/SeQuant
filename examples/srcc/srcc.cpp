@@ -80,8 +80,7 @@ class compute_cceqvec {
     if (get_default_context().spbasis() == SPBasis::spinfree) {
       auto context_resetter =
           sequant::set_scoped_default_context(sequant::Context(
-              Vacuum::SingleProduct,
-              make_minimal_single_reference_spinorbital_supspaces(),
+              Vacuum::SingleProduct, make_min_sr_so_supspaces(),
               IndexSpaceMetric::Unit, BraKetSymmetry::conjugate,
               SPBasis::spinorbital));
       std::vector<ExprPtr> eqvec_so;
@@ -253,7 +252,7 @@ int main(int argc, char* argv[]) {
 
   sequant::detail::OpIdRegistrar op_id_registrar;
   sequant::set_default_context(sequant::Context(
-      Vacuum::SingleProduct, make_minimal_single_reference_subspaces(),
+      Vacuum::SingleProduct, make_min_sr_subspaces(),
       IndexSpaceMetric::Unit, BraKetSymmetry::conjugate, spbasis));
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
