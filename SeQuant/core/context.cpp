@@ -37,11 +37,11 @@ set_scoped_default_context(const Context& ctx) {
 Context::Context(Vacuum vac, IndexSpaceRegistry isr, IndexSpaceMetric m, BraKetSymmetry bks,
                  SPBasis spb, std::size_t fdio)
     : vacuum_(vac),
-      idx_space_reg_(std::make_shared<IndexSpaceRegistry>(isr)),
       metric_(m),
       braket_symmetry_(bks),
       spbasis_(spb),
-      first_dummy_index_ordinal_(fdio) {}
+      first_dummy_index_ordinal_(fdio),
+      idx_space_reg_(std::make_shared<IndexSpaceRegistry>(isr)) {}
 
 Vacuum Context::vacuum() const { return vacuum_; }
 std::shared_ptr<IndexSpaceRegistry> Context::index_space_registry() const {return idx_space_reg_;};
