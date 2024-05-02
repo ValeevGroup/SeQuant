@@ -368,16 +368,16 @@ if (Boost_BUILT_FROM_SOURCE AND TARGET build-boost-in-SeQuant)
 endif()
 
 if (SEQUANT_IWYU)
-	find_program(iwyu_path NAMES include-what-you-use iwyu)
+    find_program(iwyu_path NAMES include-what-you-use iwyu)
 
-	if (iwyu_path)
-		set(iwyu_options_and_path
-			"${iwyu_path}"
-			-Xiwyu --cxx17ns
-			-Xiwyu --no_comments
-		)
-		set_property(TARGET SeQuant PROPERTY CXX_INCLUDE_WHAT_YOU_USE ${iwyu_options_and_path})
-	endif()
+    if (iwyu_path)
+        set(iwyu_options_and_path
+            "${iwyu_path}"
+            -Xiwyu --cxx17ns
+            -Xiwyu --no_comments
+        )
+        set_property(TARGET SeQuant PROPERTY CXX_INCLUDE_WHAT_YOU_USE ${iwyu_options_and_path})
+    endif()
 endif()
 
 ### unit tests
