@@ -1,5 +1,5 @@
-#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/utility/context.hpp>
 
 namespace sequant {
@@ -11,7 +11,8 @@ bool operator==(const Context& ctx1, const Context& ctx2) {
     return ctx1.vacuum() == ctx2.vacuum() && ctx1.metric() == ctx2.metric() &&
            ctx1.braket_symmetry() == ctx2.braket_symmetry() &&
            ctx1.spbasis() == ctx2.spbasis() &&
-           ctx1.first_dummy_index_ordinal() == ctx2.first_dummy_index_ordinal() &&
+           ctx1.first_dummy_index_ordinal() ==
+               ctx2.first_dummy_index_ordinal() &&
            *ctx1.index_space_registry() == *ctx2.index_space_registry();
 }
 
@@ -34,8 +35,8 @@ set_scoped_default_context(const Context& ctx) {
   return detail::set_scoped_implicit_context(ctx);
 }
 
-Context::Context(Vacuum vac, IndexSpaceRegistry isr, IndexSpaceMetric m, BraKetSymmetry bks,
-                 SPBasis spb, std::size_t fdio)
+Context::Context(Vacuum vac, IndexSpaceRegistry isr, IndexSpaceMetric m,
+                 BraKetSymmetry bks, SPBasis spb, std::size_t fdio)
     : vacuum_(vac),
       metric_(m),
       braket_symmetry_(bks),
@@ -44,7 +45,9 @@ Context::Context(Vacuum vac, IndexSpaceRegistry isr, IndexSpaceMetric m, BraKetS
       idx_space_reg_(std::make_shared<IndexSpaceRegistry>(isr)) {}
 
 Vacuum Context::vacuum() const { return vacuum_; }
-std::shared_ptr<IndexSpaceRegistry> Context::index_space_registry() const {return idx_space_reg_;};
+std::shared_ptr<IndexSpaceRegistry> Context::index_space_registry() const {
+  return idx_space_reg_;
+}
 IndexSpaceMetric Context::metric() const { return metric_; }
 BraKetSymmetry Context::braket_symmetry() const { return braket_symmetry_; }
 SPBasis Context::spbasis() const { return spbasis_; }
@@ -55,7 +58,7 @@ Context& Context::set(Vacuum vacuum) {
   vacuum_ = vacuum;
   return *this;
 }
-Context& Context::set(IndexSpaceRegistry ISR){
+Context& Context::set(IndexSpaceRegistry ISR) {
   idx_space_reg_ = std::make_shared<IndexSpaceRegistry>(ISR);
   return *this;
 }
@@ -77,7 +80,6 @@ Context& Context::set_first_dummy_index_ordinal(
   first_dummy_index_ordinal_ = first_dummy_index_ordinal;
   return *this;
 }
-
 
 }  // namespace sequant
 
