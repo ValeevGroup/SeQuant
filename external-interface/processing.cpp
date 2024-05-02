@@ -65,7 +65,8 @@ ExprPtr postProcess(const ExprPtr &expression, const IndexSpaceMeta &spaceMeta, 
 			std::optional< ExprPtr > symmetrizer = popTensor(processed, L"S");
 			processed                            = simplify(biorthogonal_transform(processed, externals));
 			if (symmetrizer) {
-				processed = ex< Product >(ExprPtrList{ symmetrizer.value(), processed }, Product::Flatten::No);
+				processed =
+					simplify(ex< Product >(ExprPtrList{ symmetrizer.value(), processed }, Product::Flatten::No));
 			}
 			spdlog::debug("Expression after biorthogonal transformation:\n{}", toUtf8(deparse(processed)));
 			break;
