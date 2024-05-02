@@ -19,13 +19,7 @@ FetchContent_Declare(
         BINARY_DIR ${${VG_CMAKE_KIT_PREFIX_DIR}}/cmake/vg-build
         SUBBUILD_DIR ${${VG_CMAKE_KIT_PREFIX_DIR}}/cmake/vg-subbuild
 )
-FetchContent_Declare(
-        libperm
-        QUIET
-        GIT_REPOSITORY https://github.com/Krzmbrzl/libPerm.git
-        GIT_TAG develop
-)
-FetchContent_MakeAvailable(vg_cmake_kit libperm)
+FetchContent_MakeAvailable(vg_cmake_kit)
 list(APPEND CMAKE_MODULE_PATH "${vg_cmake_kit_SOURCE_DIR}/modules")
 
 # Set SeQuant version
@@ -151,6 +145,9 @@ include(FindOrFetchRangeV3)
 
 # Boost will be added after defining SeQuant
 include(external/boost.cmake)
+
+# LibPerm
+include(FindOrFetchLibPerm)
 
 # embedded bliss-0.73
 add_library(SeQuant-bliss
