@@ -2,8 +2,7 @@
 #define SEQUANT_CORE_CONTEXT_HPP
 
 #include "attr.hpp"
-//#include "index.hpp"
-#include "index_space_registry.h"
+#include "index_space_registry.hpp"
 
 #include "utility/context.hpp"
 
@@ -27,7 +26,8 @@ class Context {
   /// @param bks a BraKetSymmetry object
   /// @param spb single-particle basis (spin-free or spin-dependent)
   /// @param fdio first dummy index ordinal
-  explicit Context(Vacuum vac, IndexSpaceRegistry isr, IndexSpaceMetric m = Defaults::metric,
+  explicit Context(Vacuum vac, IndexSpaceRegistry isr,
+                   IndexSpaceMetric m = Defaults::metric,
                    BraKetSymmetry bks = Defaults::braket_symmetry,
                    SPBasis spb = Defaults::spbasis,
                    std::size_t fdio = Defaults::first_dummy_index_ordinal);
@@ -60,9 +60,9 @@ class Context {
   /// \param vacuum Vacuum
   /// \return ref to `*this`, for chaining
   Context& set(Vacuum vacuum);
-  ///sets the IndexSpaceRegistry for this context
-  /// \param IndexSpaceRegistry ISR
-  /// \return ref to '*this' for chaining
+  /// sets the IndexSpaceRegistry for this context
+  ///  \param IndexSpaceRegistry ISR
+  ///  \return ref to '*this' for chaining
   Context& set(IndexSpaceRegistry ISR);
   /// Sets the IndexSpaceMetric for this context, convenient for chaining
   /// \param metric IndexSpaceMetric
@@ -89,7 +89,8 @@ class Context {
   BraKetSymmetry braket_symmetry_ = Defaults::braket_symmetry;
   SPBasis spbasis_ = Defaults::spbasis;
   std::size_t first_dummy_index_ordinal_ = Defaults::first_dummy_index_ordinal;
-  std::shared_ptr<IndexSpaceRegistry> idx_space_reg_ = std::make_shared<IndexSpaceRegistry>();
+  std::shared_ptr<IndexSpaceRegistry> idx_space_reg_ =
+      std::make_shared<IndexSpaceRegistry>();
 };
 
 /// old name of Context is a deprecated alias

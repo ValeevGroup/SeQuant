@@ -31,8 +31,7 @@ enum class BraKetSymmetry { symm, conjugate, nonsymm, invalid };
 /// describes type of single-particle basis
 enum class SPBasis { spinorbital, spinfree };
 
-
-/*inline std::wstring to_wolfram(const Symmetry& symmetry) {
+inline std::wstring to_wolfram(const Symmetry& symmetry) {
   std::wstring result;
   switch (symmetry) {
     case Symmetry::symm:
@@ -48,14 +47,14 @@ enum class SPBasis { spinorbital, spinfree };
       abort();
   }
   return result;
-}*/
+}
 
 enum class BraKetPos { bra, ket, none };
 
-/*inline std::wstring to_wolfram(BraKetPos a) {
+inline std::wstring to_wolfram(BraKetPos a) {
   using namespace std::literals;
   return L"indexType["s + (a == BraKetPos::bra ? L"bra" : L"ket") + L"]";
-}*/
+}
 
 enum class Statistics { BoseEinstein, FermiDirac };
 

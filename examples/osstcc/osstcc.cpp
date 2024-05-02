@@ -29,7 +29,7 @@ int main(int argc, char* argv[]) {
   std::wcerr.sync_with_stdio(true);
 
   sequant::set_default_context(Context(
-      Vacuum::SingleProduct, mbpt::make_min_sr_so_supspaces(),
+      Vacuum::SingleProduct, mbpt::make_min_sr_so_subspaces(),
       IndexSpaceMetric::Unit, BraKetSymmetry::conjugate, SPBasis::spinorbital));
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());

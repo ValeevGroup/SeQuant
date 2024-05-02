@@ -78,11 +78,10 @@ class compute_cceqvec {
     // validate spin-free equations against spin-traced spin-orbital equations
     std::vector<ExprPtr> eqvec_sf_ref;
     if (get_default_context().spbasis() == SPBasis::spinfree) {
-      auto context_resetter =
-          sequant::set_scoped_default_context(sequant::Context(
-              Vacuum::SingleProduct, make_min_sr_so_supspaces(),
-              IndexSpaceMetric::Unit, BraKetSymmetry::conjugate,
-              SPBasis::spinorbital));
+      auto context_resetter = sequant::set_scoped_default_context(
+          sequant::Context(Vacuum::SingleProduct, make_min_sr_so_subspaces(),
+                           IndexSpaceMetric::Unit, BraKetSymmetry::conjugate,
+                           SPBasis::spinorbital));
       std::vector<ExprPtr> eqvec_so;
       switch (type) {
         case EqnType::t:
@@ -252,8 +251,8 @@ int main(int argc, char* argv[]) {
 
   sequant::detail::OpIdRegistrar op_id_registrar;
   sequant::set_default_context(sequant::Context(
-      Vacuum::SingleProduct, make_min_sr_subspaces(),
-      IndexSpaceMetric::Unit, BraKetSymmetry::conjugate, spbasis));
+      Vacuum::SingleProduct, make_min_sr_subspaces(), IndexSpaceMetric::Unit,
+      BraKetSymmetry::conjugate, spbasis));
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
 

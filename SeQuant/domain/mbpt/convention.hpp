@@ -4,7 +4,8 @@
 
 #ifndef SEQUANT_CONVENTION_HPP
 #define SEQUANT_CONVENTION_HPP
-#include "SeQuant/core/index_space_registry.h"
+
+#include "SeQuant/core/index_space_registry.hpp"
 
 namespace sequant {
 namespace mbpt {
@@ -18,7 +19,7 @@ IndexSpaceRegistry make_min_sr_subspaces();
 
 //Example case which creates spin containing IndexSpaces.
 // This registry assumes that any expectation values of operators are taken prior to spintracing.
-IndexSpaceRegistry make_min_sr_so_supspaces();
+IndexSpaceRegistry make_min_sr_so_subspaces();
 
 //A registry containing a common partitioning for single reference F12 calculations.
 // notably, this set contains an other_unoccupied space, α', commonly used to construct an approximately complete representation
