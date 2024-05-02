@@ -278,9 +278,12 @@ template <Statistics S>
 IndexSpace qpannihilator_space(const Op<S> &op,
                                Vacuum vacuum = get_default_context().vacuum()) {
   auto idx_registry = get_default_context().index_space_registry();
-  bool is_pure_occ = idx_registry->is_pure_occupied(op.index().space());
-  auto not_occupied = is_pure_occ ? idx_registry->nulltype_() : idx_registry->non_overlapping_spaces(idx_registry->vacuum_occupied(),op.index().space()).back();
-
+  bool is_pure_occ = false;
+  IndexSpace not_occupied;
+  if( vacuum == Vacuum::SingleProduct){
+    is_pure_occ = idx_registry->is_pure_occupied(op.index().space());
+    not_occupied = is_pure_occ ? idx_registry->nulltype_() : idx_registry->non_overlapping_spaces(idx_registry->vacuum_occupied(),op.index().space()).back();
+  }
   switch (vacuum) {
     case Vacuum::Physical:
       return op.action() == Action::annihilate ? op.index().space()
