@@ -387,17 +387,39 @@ TEST_CASE("NBodyOp", "[mbpt]") {
   }  // SECTION("adjoint")
 
   SECTION("screen") {
-    using namespace sequant::mbpt::sr::op;
+    // SR
+    {
+      using namespace sequant::mbpt::sr::op;
+      using sequant::mbpt::sr::qns_t;
 
-    auto g_t2_t2 = H_(2) * T_(2) * T_(2);
-    REQUIRE(raises_vacuum_to_rank(g_t2_t2, 2));
-    REQUIRE(raises_vacuum_up_to_rank(g_t2_t2, 2));
+      auto g_t2_t2 = H_(2) * T_(2) * T_(2);
+      REQUIRE(!can_change_qns(g_t2_t2, qns_t{0, 0, 0, 0}));
+      REQUIRE(raises_vacuum_up_to_rank(g_t2_t2, 2));
 
-    auto g_t2 = H_(2) * T_(2);
-    REQUIRE(raises_vacuum_to_rank(g_t2, 3));
+      auto g_t2 = H_(2) * T_(2);
+      REQUIRE(raises_vacuum_to_rank(g_t2, 3));
 
-    auto lambda2_f = Λ_(2) * H_(1);
-    REQUIRE(lowers_rank_to_vacuum(lambda2_f, 2));
+      auto lambda2_f = Λ_(2) * H_(1);
+      REQUIRE(lowers_rank_to_vacuum(lambda2_f, 2));
+    }
+
+    // MR
+    {
+      using namespace sequant::mbpt::mr::op;
+      using sequant::mbpt::mr::qns_t;
+
+      auto g_t2 = H_(2) * T_(2);
+      REQUIRE(can_change_qns(g_t2, qns_t{0, 0, 0, 0, 0, 0}));
+      REQUIRE(can_change_qns(g_t2, qns_t{0, 0, 4, 4, 0, 0}));
+
+      auto g_t2_t2 = H_(2) * T_(2) * T_(2);
+      // unlike SR, this can produce vacuum since T2^2 can combine ij -> uv and
+      // uv -> ab to produce a double excitation
+      REQUIRE(can_change_qns(g_t2_t2, qns_t{0, 0, 0, 0, 0, 0}));
+
+      auto g_t2a_t2a = H_(2) * T_act_(2) * T_act_(2);
+      REQUIRE(can_change_qns(g_t2a_t2a, qns_t{0, 0, 0, 0, 0, 0}));
+    }
 
   }  // SECTION("screen")
 

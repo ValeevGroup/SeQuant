@@ -536,7 +536,7 @@ ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1) {
 }
 
 bool can_change_qns(const ExprPtr& op_or_op_product, const qns_t target_qns,
-                    const qns_t source_qns = {}) {
+                    const qns_t source_qns) {
   qns_t qns = source_qns;
   if (op_or_op_product.is<Product>()) {
     const auto& op_product = op_or_op_product.as<Product>();
