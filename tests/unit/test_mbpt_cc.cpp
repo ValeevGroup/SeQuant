@@ -37,16 +37,44 @@ TEST_CASE("EOM-CC", "[mbpt/cc]") {
       const auto N = 2;
       const auto K_occ = 2;
       const auto K_uocc = 2;
-      const auto sigma_eqs = CC{N}.R(K_occ, K_uocc);
-      for (auto k = 1; k < sigma_eqs.size(); ++k) REQUIRE(sigma_eqs[k]);
+      const auto eqs = CC{N}.R(K_occ, K_uocc);
+      for (auto k = 1; k < eqs.size(); ++k) REQUIRE(eqs[k]);
 
       if (N == 2 && K_occ == 2 && K_uocc == 2) {
-        REQUIRE(size(sigma_eqs[1]) == 21);
-        REQUIRE(size(sigma_eqs[2]) == 53);
+        REQUIRE(size(eqs[1]) == 21);
+        REQUIRE(size(eqs[2]) == 53);
       }
     });
 
+    SEQUANT_PROFILE_SINGLE("EE-EOM-CCSD L", {
+      const auto N = 2;
+      const auto K_occ = 2;
+      const auto K_uocc = 2;
+      const auto eqs = CC{N}.L(K_occ, K_uocc);
+      for (auto k = 1; k < eqs.size(); ++k) REQUIRE(eqs[k]);
+
+      if (N == 2 && K_occ == 2 && K_uocc == 2) {
+        REQUIRE(size(eqs[1]) == 43);
+        REQUIRE(size(eqs[2]) == 31);
+      }
+    });
   }  // SECTION("EOM-CCSD")
+
+  SECTION("EOM-CCSDT") {
+    SEQUANT_PROFILE_SINGLE("EE-EOM-CCSDT R", {
+      const auto N = 3;
+      const auto K_occ = 3;
+      const auto K_uocc = 3;
+      const auto eqs = CC{N}.R(K_occ, K_uocc);
+      for (auto k = 1; k < eqs.size(); ++k) REQUIRE(eqs[k]);
+
+      if (N == 3 && K_occ == 3 && K_uocc == 3) {
+        REQUIRE(size(eqs[1]) == 22);
+        REQUIRE(size(eqs[2]) == 62);
+        REQUIRE(size(eqs[3]) == 99);
+      }
+    });
+  }  // SECTION("EOM-CCSDT")
 
 }  // TEST_CASE("EOM-CC")
 
