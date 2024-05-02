@@ -2,8 +2,8 @@
 // Created by Conner Masteran on 4/16/24.
 //
 
-#ifndef SEQUANT_INDEX_SPACE_REGISTRY_H
-#define SEQUANT_INDEX_SPACE_REGISTRY_H
+#ifndef SEQUANT_INDEX_SPACE_REGISTRY_HPP
+#define SEQUANT_INDEX_SPACE_REGISTRY_HPP
 
 #include "space.hpp"
 
@@ -280,7 +280,8 @@ class IndexSpaceRegistry {
     }
   }
 
-  // complete space with all possible IndexSpaces included. used to generate generic operators.
+  // complete space with all possible IndexSpaces included. used to generate
+  // generic operators.
   IndexSpace complete() {
     if (complete_ == nulltype) {
       throw std::invalid_argument(
@@ -291,7 +292,8 @@ class IndexSpaceRegistry {
   }
 
   // occupied with respect to vacuum reference!! defining the occupied orbitals
-  // in the Fermi vacuum is absolutely essential for SingleProduct Vacuum evaluations.
+  // in the Fermi vacuum is absolutely essential for SingleProduct Vacuum
+  // evaluations.
   IndexSpace vacuum_occupied() const {
     if (vacuum_occupied_ == nulltype) {
       throw std::invalid_argument(
@@ -416,4 +418,4 @@ inline bool operator==(const IndexSpaceRegistry &isr1,
   return isr1.get_map() == isr2.get_map();
 }
 }  // namespace sequant
-#endif  // SEQUANT_INDEX_SPACE_REGISTRY_H
+#endif  // SEQUANT_INDEX_SPACE_REGISTRY_HPP

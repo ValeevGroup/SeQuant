@@ -2,8 +2,7 @@
 #define SEQUANT_CORE_CONTEXT_HPP
 
 #include "attr.hpp"
-//#include "index.hpp"
-#include "index_space_registry.h"
+#include "index_space_registry.hpp"
 
 #include "utility/context.hpp"
 
