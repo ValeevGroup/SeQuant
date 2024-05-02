@@ -280,8 +280,9 @@ std::vector<sequant::ExprPtr> CC::R(std::size_t K_occ, std::size_t K_uocc) {
   // TODO: Debug IP and EA EOM-CC
 
   if (K_occ != K_uocc)
-    assert(get_default_context().spbasis() != SPBasis::spinfree &&
-           "spin-free basis does not support non particle-conserving cases");
+    assert(
+        get_default_context().spbasis() != SPBasis::spinfree &&
+        "spin-free basis does not yet support non particle-conserving cases");
 
   // construct hbar
   auto hbar = sim_tr(op::H(), 4);
@@ -300,18 +301,17 @@ std::vector<sequant::ExprPtr> CC::R(std::size_t K_occ, std::size_t K_uocc) {
 
   // initialize result vector
   std::vector<ExprPtr> result;
-  auto idx = std::max(K_occ, K_uocc);  // idx for populating the result vector
+  auto idx = std::max(K_occ, K_uocc);  // index for populating the result vector
   result.resize(idx + 1);
 
   using boost::numeric_cast;
-  // start from the highest excitation order, go down to the lowest
+  // start from the highest excitation order, go down to the lowest possible
   for (auto o = numeric_cast<std::int64_t>(K_occ),
             u = numeric_cast<std::int64_t>(K_uocc);
        o > 0 || u > 0; --o, --u) {
     // project onto <o,u| (i.e., multiply by P(o,u)) and compute VEV
-    auto res = op::vac_av(op::P(o, u) * hbar_R, op_connect);
-    result.at(idx) = res;
-    idx--;  // idx decrement
+    result.at(idx) = op::vac_av(op::P(o, u) * hbar_R, op_connect);
+    idx--;  // index decrement
   }
 
   return result;
@@ -346,18 +346,17 @@ std::vector<sequant::ExprPtr> CC::L(std::size_t K_occ, std::size_t K_uocc) {
 
   // initialize result vector
   std::vector<ExprPtr> result;
-  auto idx = std::max(K_occ, K_uocc);  // idx for populating the result vector
+  auto idx = std::max(K_occ, K_uocc);  // index for populating the result vector
   result.resize(idx + 1);
 
   using boost::numeric_cast;
-  // start from the highest excitation order, go down to the lowest
+  // start from the highest excitation order, go down to the lowest possible
   for (auto o = numeric_cast<std::int64_t>(K_occ),
             u = numeric_cast<std::int64_t>(K_uocc);
        o > 0 || u > 0; --o, --u) {
     // right project onto |o,u> (i.e., multiply by P(-o, -u)) and compute VEV
-    auto res = op::vac_av(L_hbar * op::P(-o, -u), op_connect);
-    result.at(idx) = res;
-    idx--;  // idx decrement
+    result.at(idx) = op::vac_av(L_hbar * op::P(-o, -u), op_connect);
+    idx--;  // index decrement
   }
 
   return result;

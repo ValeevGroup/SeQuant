@@ -466,7 +466,8 @@ ExprPtr P(std::int64_t Kh, std::int64_t Kp) {
   if (Kp == std::numeric_limits<std::int64_t>::max()) Kp = Kh;
   if (get_default_context().spbasis() == SPBasis::spinfree) {
     assert(Kp == Kh &&
-           "non-particle conserving cases does not work with spin-free basis");
+           "Only particle number conserving cases are supported with spinfree "
+           "basis for now");
     const auto K = Kh;  // K = Kp = Kh
     return S(-K);
   } else {
@@ -616,7 +617,6 @@ std::wstring to_latex(const mbpt::Operator<mbpt::sr::qns_t, S>& op) {
     if (to_class(optype) == OpClass::gen) {
       result += L"}";
       return result;
-      // TODO: A(2, 1) produces \hat{A}, which has no info about ranks. Fix this
     }
   }
 
@@ -669,9 +669,7 @@ std::wstring to_latex(const mbpt::Operator<mbpt::sr::qns_t, S>& op) {
 
 #include <SeQuant/domain/mbpt/op.ipp>
 
-namespace sequant {
-namespace mbpt {
+namespace sequant::mbpt {
 template class Operator<sr::qns_t, Statistics::FermiDirac>;
 template class Operator<sr::qns_t, Statistics::BoseEinstein>;
-}  // namespace mbpt
-}  // namespace sequant
+}  // namespace sequant::mbpt
