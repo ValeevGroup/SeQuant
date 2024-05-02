@@ -5,13 +5,13 @@
 #include "catch.hpp"
 
 #include <SeQuant/core/math.hpp>
+#include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/wstring.hpp>
-#include <SeQuant/core/meta.hpp>
 
-#include <iostream>
 #include <cmath>
+#include <iostream>
 #include <new>
 #include <stdexcept>
 #include <string>

@@ -7,10 +7,10 @@
 #include <SeQuant/external/bliss/graph.hh>
 #include <SeQuant/external/bliss/utils.hh>
 
-#include <cstdio>
-#include <vector>
 #include <cassert>
+#include <cstdio>
 #include <initializer_list>
+#include <vector>
 
 constexpr const bool use_colors = true;
 

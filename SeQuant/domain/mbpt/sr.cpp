@@ -2,8 +2,8 @@
 // Created by Eduard Valeyev on 2019-02-19.
 //
 
-#include <SeQuant/domain/mbpt/sr.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
+#include <SeQuant/domain/mbpt/sr.hpp>
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/context.hpp>
@@ -14,8 +14,8 @@
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/wick.hpp>
 
-#include <atomic>
 #include <algorithm>
+#include <atomic>
 #include <cassert>
 #include <cstdlib>
 #include <iostream>

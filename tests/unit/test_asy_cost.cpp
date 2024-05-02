@@ -3,8 +3,8 @@
 #include <SeQuant/core/asy_cost.hpp>
 #include <SeQuant/core/rational.hpp>
 
-#include <cstddef>
 #include <cmath>
+#include <cstddef>
 #include <string>
 
 struct MatFlops {
