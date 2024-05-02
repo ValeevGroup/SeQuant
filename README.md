@@ -124,8 +124,8 @@ Of course, same manipulations can be used for bosons:
 ```
 ### Register your relevant spaces
 In scientific writing, it is common to index mathematical objects such as tensors and operators. These indices in a network of tensors encode a graph structure which can be used to deduce which modes of each tensor can be contracted. It is also common for these indices to indicate a block structure of a tensor in a subspace.
-![](doc/images/fia.svg).
-Most chemists would recognize the labeling of this tensor as the off-diagonal occupied, unoccupied block of the fock matrix. To understand this however, requires knowledge of what i and a mean. In other words, the labels i and a only have meaning in a context.
+![](doc/images/fia.svg)
+Most chemists would recognize the labeling of this tensor as the off-diagonal occupied, unoccupied block of the fock matrix. To understand this however, requires knowledge of what `i` and `a` mean. In other words, the labels `i` and `a` only have meaning in a context.
 SeQuant now allows/requires the user to define the base labels and the set theoretics for the context they are in.
 
 ```c++
@@ -164,6 +164,9 @@ int main() {
 The above sample registry outlines the set theoreitcs for  indices x, y, and z using unsigned ints conveniently written as bitsets.
 Notice that not all possible combinations need to be registered. It is the task of the user to predict any and all spaces that they may 
 encounter in their context. Notice that `unIon()` and `intersection()` are part of the `IndexSpaceRegistry` class. This is because these operations should never produce an unregistered `IndexSpace`(except the `nulltype()`).
+SeQuant of course provides a number of common partitionings common for chemistry.
+```c++
+```
 
 ### Quasiparticles
 
@@ -192,8 +195,8 @@ However, to deal with the single-product vacuum it is necessary to specify which
 ```c++
 sample_ISR.assign_vacuum_occupied(L"x");
 ```
-Please keep in mind that at various points it is implied that spaces that vacuum occupied spaces are smaller
-than states that are unoccupied.
+Please keep in mind that at various points it is implied that spaces included in vacuum occupied have smaller `typeattr`(bitset/ unsigned int)
+than those spaces with `typeattr` outside of this range.
 
 
 we can evaluate Wick's theorem in single-product normal order:
