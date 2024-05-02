@@ -13,7 +13,7 @@
 
 namespace sequant::mbpt::sr {
 
-CC::CC(size_t n, Ansatz a) : N(n), ansatz_(a) {}
+CC::CC(std::size_t n, Ansatz a) : N(n), ansatz_(a) {}
 
 CC::Ansatz CC::ansatz() const { return ansatz_; }
 
@@ -21,7 +21,7 @@ bool CC::unitary() const {
   return ansatz_ == Ansatz::U || ansatz_ == Ansatz::oU;
 }
 
-ExprPtr CC::sim_tr(ExprPtr expr, size_t commutator_rank) {
+ExprPtr CC::sim_tr(ExprPtr expr, std::size_t commutator_rank) {
   const bool skip_singles = ansatz_ == Ansatz::oT || ansatz_ == Ansatz::oU;
 
   auto transform_op_op_pdt = [this, &commutator_rank,
@@ -31,7 +31,7 @@ ExprPtr CC::sim_tr(ExprPtr expr, size_t commutator_rank) {
     assert(expr.is<op_t>() || expr.is<Product>());
     auto result = expr;
     auto op_Sk = result;
-    for (size_t k = 1; k <= commutator_rank; ++k) {
+    for (std::size_t k = 1; k <= commutator_rank; ++k) {
       ExprPtr op_Sk_comm_w_S;
       op_Sk_comm_w_S =
           op_Sk *
@@ -75,8 +75,9 @@ ExprPtr CC::sim_tr(ExprPtr expr, size_t commutator_rank) {
         "CC::sim_tr(expr): Unsupported expression type");
 }
 
-std::vector<ExprPtr> CC::t(size_t commutator_rank, size_t pmax, size_t pmin) {
-  pmax = (pmax == std::numeric_limits<size_t>::max() ? N : pmax);
+std::vector<ExprPtr> CC::t(std::size_t commutator_rank, std::size_t pmax,
+                           std::size_t pmin) {
+  pmax = (pmax == std::numeric_limits<std::size_t>::max() ? N : pmax);
 
   assert(commutator_rank >= 1 && "commutator rank should be >= 1");
   assert(pmax >= pmin && "pmax should be >= pmin");
@@ -118,7 +119,7 @@ std::vector<ExprPtr> CC::t(size_t commutator_rank, size_t pmax, size_t pmin) {
   return result;
 }
 
-std::vector<ExprPtr> CC::λ(size_t commutator_rank) {
+std::vector<ExprPtr> CC::λ(std::size_t commutator_rank) {
   assert(commutator_rank >= 1 && "commutator rank should be >= 1");
   assert(!unitary() && "there is no need for CC::λ for unitary ansatz");
 
@@ -172,7 +173,7 @@ std::vector<ExprPtr> CC::λ(size_t commutator_rank) {
   return result;
 }
 
-std::vector<sequant::ExprPtr> CC::t_pt(size_t order, size_t rank) {
+std::vector<sequant::ExprPtr> CC::t_pt(std::size_t order, size_t rank) {
   assert(order == 1 &&
          "sequant::mbpt::sr::CC::t_pt(): only first-order perturbation is "
          "supported now");
@@ -215,7 +216,7 @@ std::vector<sequant::ExprPtr> CC::t_pt(size_t order, size_t rank) {
   return result;
 }
 
-std::vector<ExprPtr> CC::λ_pt(size_t order, size_t rank) {
+std::vector<ExprPtr> CC::λ_pt(std::size_t order, size_t rank) {
   assert(order == 1 &&
          "sequant::mbpt::sr::CC::λ_pt(): only first-order perturbation is "
          "supported now");
@@ -272,7 +273,7 @@ std::vector<ExprPtr> CC::λ_pt(size_t order, size_t rank) {
   return result;
 }
 
-std::vector<sequant::ExprPtr> CC::R(size_t K_occ, size_t K_uocc) {
+std::vector<sequant::ExprPtr> CC::R(std::size_t K_occ, std::size_t K_uocc) {
   assert(!unitary() && "Unitary ansatz is not yet supported");
   assert(K_occ > 0 || K_uocc > 0 && "Unsupported excitation order");
   assert(K_occ == K_uocc && "Only EE-EOM-CC is supported for now");
@@ -316,7 +317,7 @@ std::vector<sequant::ExprPtr> CC::R(size_t K_occ, size_t K_uocc) {
   return result;
 }
 
-std::vector<sequant::ExprPtr> CC::L(size_t K_occ, size_t K_uocc) {
+std::vector<sequant::ExprPtr> CC::L(std::size_t K_occ, std::size_t K_uocc) {
   assert(!unitary() && "Unitary ansatz is not yet supported");
   assert(K_occ > 0 || K_uocc > 0 && "Unsupported excitation order");
   assert(K_occ == K_uocc && "Only EE-EOM-CC is supported for now");
