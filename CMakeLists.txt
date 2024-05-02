@@ -195,6 +195,7 @@ set(SeQuant_src
         SeQuant/core/hugenholtz.hpp
         SeQuant/core/index.cpp
         SeQuant/core/index.hpp
+        SeQuant/core/index_space_registry.h
         SeQuant/core/interval.hpp
         SeQuant/core/latex.cpp
         SeQuant/core/latex.ipp
@@ -245,8 +246,7 @@ set(SeQuant_src
         SeQuant/domain/mbpt/rdm.hpp
         SeQuant/domain/mbpt/spin.cpp
         SeQuant/domain/mbpt/spin.hpp
-        SeQuant/domain/mbpt/vac_av.ipp
-        SeQuant/core/index_space_registry.h)
+        SeQuant/domain/mbpt/vac_av.ipp)
 set_source_files_properties(
         SeQuant/domain/mbpt/op.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 
