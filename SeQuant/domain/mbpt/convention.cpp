@@ -28,7 +28,7 @@ auto qndecorate(qns qn, std::wstring_view label) {
 };
 };  // namespace
 
-IndexSpaceRegistry make_min_sr_so_supspaces() {
+IndexSpaceRegistry make_min_sr_so_subspaces() {
   IndexSpaceRegistry minimal_spinorbit_reference_registry;
   IndexSpace occupied(L"i", 0b01);
   minimal_spinorbit_reference_registry.add(occupied);
@@ -127,12 +127,12 @@ IndexSpaceRegistry make_F12_sr_subspaces() {
       L"κ", complete_unoccupied.type().unIon(occupied.type()).to_int32());
   standard_reference_registry.add(complete);
 
-  // only neccessary for some Operator definitions
+  // only necessary for some Operator definitions
   standard_reference_registry.assign_density_occupied(L"m");
   standard_reference_registry.assign_complete(L"κ");
   standard_reference_registry.assign_active_particle_space(L"i");
   standard_reference_registry.assign_active_hole_space(L"a");
-  // neccessary for SR wick algebra
+  // necessary for SR wick algebra
   standard_reference_registry.assign_vacuum_occupied(L"m");
 
   return standard_reference_registry;
@@ -186,7 +186,7 @@ IndexSpaceRegistry make_mr_subspaces() {
                       vacuum_occupied.type().unIon(maybe_unoccupied.type()));
   multireference_registry.add(complete);
 
-  // only neccessary for some Operator definitions
+  // only necessary for some Operator definitions
   multireference_registry.assign_complete(L"p");
   multireference_registry.assign_density_occupied(L"M");
   multireference_registry.assign_active_hole_space(L"A");
@@ -222,12 +222,12 @@ IndexSpaceRegistry make_sr_subspaces() {
                       unoccupied.type().unIon(occupied.type()).to_int32());
   standard_reference_registry.add(complete);
 
-  // only neccessary for some Operator definitions
+  // only necessary for some Operator definitions
   standard_reference_registry.assign_density_occupied(L"m");
   standard_reference_registry.assign_complete(L"p");
   standard_reference_registry.assign_active_particle_space(L"i");
   standard_reference_registry.assign_active_hole_space(L"a");
-  // neccessary for SR wick algebra
+  // necessary for SR wick algebra
   standard_reference_registry.assign_vacuum_occupied(L"m");
 
   return standard_reference_registry;
@@ -278,12 +278,12 @@ IndexSpaceRegistry make_legacy_subspaces() {
   IndexSpace maybe_unoccupied(L"E", active.type().unIon(unoccupied.type()));
   standard_reference_registry.add(maybe_unoccupied);
 
-  // only neccessary for some Operator definitions
+  // only necessary for some Operator definitions
   standard_reference_registry.assign_density_occupied(L"m");
   standard_reference_registry.assign_complete(L"κ");
   standard_reference_registry.assign_active_particle_space(L"i");
   standard_reference_registry.assign_active_hole_space(L"a");
-  // neccessary for SR wick algebra
+  // necessary for SR wick algebra
   standard_reference_registry.assign_vacuum_occupied(L"m");
 
   return standard_reference_registry;
