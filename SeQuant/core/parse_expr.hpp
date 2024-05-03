@@ -4,10 +4,9 @@
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/expr.hpp>
 
-#include <string>
-#include <string_view>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 
 ///
 ///  Create SeQuant expression from string input.
@@ -19,10 +18,10 @@
 namespace sequant {
 
 struct ParseError : std::runtime_error {
-	std::size_t offset;
-	std::size_t length;
+  std::size_t offset;
+  std::size_t length;
 
-	ParseError(std::size_t offset, std::size_t length, std::string message);
+  ParseError(std::size_t offset, std::size_t length, std::string message);
 };
 
 // clang-format off

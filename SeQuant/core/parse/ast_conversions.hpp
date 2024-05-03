@@ -5,10 +5,10 @@
 #ifndef SEQUANT_CORE_PARSE_AST_CONVERSIONS_HPP
 #define SEQUANT_CORE_PARSE_AST_CONVERSIONS_HPP
 
-#include <SeQuant/core/parse/ast.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/parse/ast.hpp>
 #include <SeQuant/core/parse_expr.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tensor.hpp>

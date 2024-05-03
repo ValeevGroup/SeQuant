@@ -17,8 +17,8 @@
 #define SEQUANT_HAS_CXX17_ANY
 #endif  //  10.14 or later
 #endif  // have macos version
-//#else   // libc++ on macos
-//#define SEQUANT_HAS_CXX17_ANY
+// #else   // libc++ on macos
+// #define SEQUANT_HAS_CXX17_ANY
 #endif  // libc++ on macos
 #endif  // c++17
 

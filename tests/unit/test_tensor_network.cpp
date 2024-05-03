@@ -2,27 +2,27 @@
 // Created by Eduard Valeyev on 3/23/18.
 //
 
-#include "catch.hpp"
+#include <catch2/catch_test_macros.hpp>
 
-#include <SeQuant/core/bliss.hpp>
-#include <SeQuant/core/op.hpp>
-#include <SeQuant/core/tensor.hpp>
-#include <SeQuant/core/tensor_network.hpp>
-#include <SeQuant/domain/mbpt/sr.hpp>
-#include <SeQuant/core/timer.hpp>
 #include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/bliss.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/op.hpp>
+#include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/tensor_network.hpp>
+#include <SeQuant/core/timer.hpp>
+#include <SeQuant/domain/mbpt/sr.hpp>
 
-#include <iostream>
-#include <cstdlib>
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <initializer_list>
+#include <iostream>
 #include <iterator>
 #include <limits>
 #include <memory>
