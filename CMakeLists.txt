@@ -548,8 +548,8 @@ if (BUILD_TESTING)
                 set(${example${i}}_cmdline_args "")
             endif()
             set(${example${i}}_run_counter 0)
-            foreach (args ${${example${i}}_cmdline_args})
-                string(REPLACE " " ";" args ${args})
+            foreach (args "${${example${i}}_cmdline_args}")
+                string(REPLACE " " ";" args "${args}")
                 add_test(NAME sequant/example/${example${i}}/run/${${example${i}}_run_counter}
                          COMMAND ${example${i}} ${args}
                          WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/examples)
