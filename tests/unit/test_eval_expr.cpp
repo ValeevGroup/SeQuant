@@ -18,15 +18,6 @@
 
 #include <range/v3/all.hpp>
 
-template <typename Iterable1, typename Iterable2>
-bool same_index_labels(Iterable1 const& indices1,
-                       Iterable2 const& indices2) noexcept {
-  return ranges::equal(indices1, indices2,
-                       [](auto const& idx1, auto const& idx2) {
-                         return idx1.label() == idx2.label();
-                       });
-}
-
 namespace sequant {
 Tensor parse_tensor(std::wstring_view tnsr, Symmetry s = Symmetry::nonsymm) {
   return parse_expr(tnsr, s)->as<Tensor>();
@@ -36,9 +27,6 @@ Constant parse_constant(std::wstring_view c) {
   return parse_expr(c)->as<Constant>();
 }
 
-// Variable parse_variable(std::string_view v) {
-//   //
-// }
 }  // namespace sequant
 
 TEST_CASE("TEST_EVAL_EXPR", "[EvalExpr]") {
