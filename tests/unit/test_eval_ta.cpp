@@ -359,7 +359,9 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
     TArrayD zero1;
     zero1("0,1,2,3") = man1("0,1,2,3") - eval1("0,1,2,3");
 
-    REQUIRE(Catch::Approx(norm(zero1)) == 0);
+    // https://github.com/catchorg/Catch2/issues/1444
+    REQUIRE(norm(zero1) == Catch::Approx(0).margin(
+                               100 * std::numeric_limits<double>::epsilon()));
 
     // partial antisymmetrization
 
