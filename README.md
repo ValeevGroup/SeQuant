@@ -164,9 +164,8 @@ int main() {
 The above sample registry outlines the set theoreitcs for  indices x, y, and z using unsigned ints conveniently written as bitsets.
 Notice that not all possible combinations need to be registered. It is the task of the user to predict any and all spaces that they may 
 encounter in their context. Notice that `unIon()` and `intersection()` are part of the `IndexSpaceRegistry` class. This is because these operations should never produce an unregistered `IndexSpace`(except the `nulltype()`).
-SeQuant of course provides a number of common partitionings common for chemistry.
-```c++
-```
+SeQuant of course provides a number of common partitionings common for chemistry. These are located in `SeQuant/domain/mbpt/convention.hpp`.
+
 
 ### Quasiparticles
 
@@ -221,6 +220,7 @@ produces
 - the tilde in `ã` denotes normal order with respect to single-product vacuum, and
 - Einstein summation convention is implied, i.e., indices that appear twice in a given product are summed over.
 
+### Operators
 
 
 # Developers
