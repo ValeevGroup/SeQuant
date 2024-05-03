@@ -15,7 +15,7 @@
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
-#include "catch.hpp"
+#include <catch2/catch_test_macros.hpp>
 #include "test_config.hpp"
 
 #include <cassert>

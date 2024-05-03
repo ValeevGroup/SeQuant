@@ -393,6 +393,9 @@ include(CTest)
 
 if (BUILD_TESTING)
 
+    # need catch2
+    include(FindOrFetchCatch2)
+
     set(utests_src
             tests/unit/test_space.cpp
             tests/unit/test_index.cpp
@@ -431,12 +434,11 @@ if (BUILD_TESTING)
                 tests/unit/test_eval_btas.cpp tests/unit/test_eval_ta.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
     endif (TARGET tiledarray)
 
-    set(utests_deps SeQuant)
+    set(utests_deps SeQuant Catch2::Catch2)
 
     set(unit_test_executable unit_tests-sequant)
     add_executable(${unit_test_executable} EXCLUDE_FROM_ALL
             tests/unit/test_main.cpp
-            tests/unit/catch.hpp
             tests/unit/test_config.hpp
             ${utests_src})
     target_link_libraries(${unit_test_executable} ${utests_deps})

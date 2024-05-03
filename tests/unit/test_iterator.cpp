@@ -2,7 +2,7 @@
 // Created by Eduard Valeyev on 3/24/18.
 //
 
-#include "catch.hpp"
+#include <catch2/catch_test_macros.hpp>
 
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/op.hpp>

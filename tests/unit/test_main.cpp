@@ -3,18 +3,21 @@
 //
 
 #define CATCH_CONFIG_RUNNER
+#include <catch2/catch_session.hpp>
+#include <catch2/catch_test_macros.hpp>
+
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
-#include <clocale>
-#include "catch.hpp"
 
 #ifdef SEQUANT_HAS_TILEDARRAY
 #include <tiledarray.h>
 #endif
+
+#include <clocale>
 
 int main(int argc, char* argv[]) {
   using namespace std;
