@@ -1,11 +1,11 @@
 #include <catch2/catch_test_macros.hpp>
 
-#include <SeQuant/core/optimize.hpp>
-#include <SeQuant/core/parse_expr.hpp>
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/optimize.hpp>
+#include <SeQuant/core/parse_expr.hpp>
 #include <SeQuant/core/space.hpp>
 
 #include <cstddef>

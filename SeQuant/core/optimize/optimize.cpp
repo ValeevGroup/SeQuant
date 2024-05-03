@@ -1,11 +1,11 @@
+#include <SeQuant/core/binary_node.hpp>
+#include <SeQuant/core/complex.hpp>
+#include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval_expr.hpp>
 #include <SeQuant/core/eval_node.hpp>
 #include <SeQuant/core/expr.hpp>
-#include <SeQuant/core/optimize.hpp>
 #include <SeQuant/core/hash.hpp>
-#include <SeQuant/core/binary_node.hpp>
-#include <SeQuant/core/container.hpp>
-#include <SeQuant/core/complex.hpp>
+#include <SeQuant/core/optimize.hpp>
 
 #include <range/v3/iterator/basic_iterator.hpp>
 #include <range/v3/range/access.hpp>
@@ -13,11 +13,11 @@
 #include <range/v3/view/transform.hpp>
 #include <range/v3/view/view.hpp>
 
-#include <memory>
-#include <stack>
+#include <algorithm>
 #include <cassert>
 #include <cstddef>
-#include <algorithm>
+#include <memory>
+#include <stack>
 #include <utility>
 #include <vector>
 

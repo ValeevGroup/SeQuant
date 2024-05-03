@@ -4,8 +4,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/context.hpp>
 
 TEST_CASE("Context", "[runtime]") {
   using namespace sequant;

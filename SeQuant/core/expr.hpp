@@ -40,7 +40,6 @@ namespace sequant {
 
 namespace {
 
-
 template <typename T>
 constexpr bool is_an_expr_v = meta::is_base_of_v<Expr, T>;
 template <typename T>
@@ -1683,7 +1682,6 @@ T &ExprPtr::as() {
 }
 
 }  // namespace sequant
-
 
 #endif  // SEQUANT_EXPR_HPP
 

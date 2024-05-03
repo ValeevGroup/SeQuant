@@ -55,12 +55,12 @@ auto range1_limits(sequant::Tensor const& tensor, size_t nocc, size_t nvirt) {
   static auto const ao = sequant::IndexSpace::active_occupied;
   static auto const au = sequant::IndexSpace::active_unoccupied;
   return tensor.const_braket() |
-  ranges::views::transform([nocc, nvirt](auto const& idx) {
-    const auto& sp = idx.space();
-    assert(sp == ao || sp == au);
+         ranges::views::transform([nocc, nvirt](auto const& idx) {
+           const auto& sp = idx.space();
+           assert(sp == ao || sp == au);
 
-    return sp == ao ? nocc : nvirt;
-  });
+           return sp == ao ? nocc : nvirt;
+         });
 }
 
 template <typename Tensor_t>

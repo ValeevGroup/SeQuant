@@ -1,19 +1,19 @@
 #include <catch2/catch_test_macros.hpp>
 
-#include <SeQuant/core/context.hpp>
-#include <SeQuant/core/eval_expr.hpp>
-#include <SeQuant/core/parse_expr.hpp>
-#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/context.hpp>
+#include <SeQuant/core/eval_expr.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/parse_expr.hpp>
+#include <SeQuant/core/tensor.hpp>
 
-#include <string_view>
 #include <initializer_list>
 #include <memory>
 #include <string>
+#include <string_view>
 
 #include <range/v3/all.hpp>
 

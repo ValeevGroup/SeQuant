@@ -3,8 +3,8 @@
 #include <SeQuant/core/binary_node.hpp>
 
 #include <array>
-#include <string>
 #include <cstddef>
+#include <string>
 #include <utility>
 
 #include <range/v3/all.hpp>

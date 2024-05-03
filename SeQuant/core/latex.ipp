@@ -65,13 +65,11 @@ std::basic_string<Char, Traits, Alloc> greek_characters_to_latex_impl(
   const auto end = cend(str);
   /// TODO iterate over characters (graphemes)
   for (auto it = begin; it != end; ++it) {
-    auto append = [&result,&str,&it,&begin](const auto& s) {
+    auto append = [&result, &str, &it, &begin](const auto& s) {
       if (result.empty()) result = str.substr(0, it - begin);
       result += s;
     };
-    auto is_ascii = [](Char c) {
-      return static_cast<unsigned int>(c) <= 0x7F;
-    };
+    auto is_ascii = [](Char c) { return static_cast<unsigned int>(c) <= 0x7F; };
 
     const Char ch = *it;
     if (sizeof(Char) == 1 && !is_ascii(ch))
@@ -94,8 +92,7 @@ std::basic_string<Char, Traits, Alloc> greek_characters_to_latex_impl(
         const auto& uc_str = uc[static_cast<std::size_t>(ch_addr)];
         assert(uc_str.size() > 0);
         append(uc_str);
-      }
-      else {  // pass through unknown non-ASCII characters
+      } else {  // pass through unknown non-ASCII characters
         if (!result.empty()) result.push_back(ch);
       }
     } else {  // ASCII character
@@ -135,7 +132,8 @@ std::basic_string<Char, Traits, Alloc> diactrics_to_latex_impl(
           "non-ASCII characters in str if Char is a wide character (wchar_t, "
           "char16_t, or char32_t)");
     }
-    // Combining diacritics: https://www.ncbi.nlm.nih.gov/staff/beck/charents/accents.html
+    // Combining diacritics:
+    // https://www.ncbi.nlm.nih.gov/staff/beck/charents/accents.html
     if (next_ch && !is_ascii(*next_ch)) {
       auto append_latex = [&](auto prefix) {
         append(prefix);
@@ -167,9 +165,9 @@ std::basic_string<Char, Traits, Alloc> diactrics_to_latex_impl(
       }
     }
 
-    if (!is_ascii(ch)) {    // check for combined characters
-      {  // tilde
-         // lower-case characters with tilde
+    if (!is_ascii(ch)) {  // check for combined characters
+      {                   // tilde
+                          // lower-case characters with tilde
         const std::map<str_t, str_t> lc = {
             {SQ_STRLIT(Char, "ã"), SQ_STRLIT(Char, "\\tilde{a}")},
             {SQ_STRLIT(Char, "ẽ"), SQ_STRLIT(Char, "\\tilde{e}")},

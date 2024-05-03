@@ -1,20 +1,20 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
-#include <SeQuant/core/parse_expr.hpp>
-#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/parse_expr.hpp>
 #include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/tensor.hpp>
 
 #include <algorithm>
+#include <cstddef>
 #include <locale>
+#include <memory>
 #include <sstream>
 #include <string>
-#include <cstddef>
-#include <memory>
 #include <string_view>
 #include <utility>
 #include <vector>
