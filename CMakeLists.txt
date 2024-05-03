@@ -146,6 +146,9 @@ include(FindOrFetchRangeV3)
 # Boost will be added after defining SeQuant
 include(external/boost.cmake)
 
+# LibPerm
+include(FindOrFetchLibPerm)
+
 # embedded bliss-0.73
 add_library(SeQuant-bliss
         SeQuant/external/bliss/defs.cc

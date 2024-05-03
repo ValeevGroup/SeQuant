@@ -5,6 +5,7 @@
 #include <SeQuant/core/wstring.hpp>
 
 #include <boost/multiprecision/cpp_int.hpp>
+#include <boost/numeric/conversion/cast.hpp>
 
 #include <memory>
 #include <mutex>
