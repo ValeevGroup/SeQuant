@@ -9,10 +9,9 @@
 int main() {
   using namespace sequant;
 
-  set_default_context(
-      Context{Vacuum::SingleProduct,
+  set_default_context(Context{Vacuum::SingleProduct,
                               sequant::mbpt::make_F12_sr_subspaces(),
-              IndexSpaceMetric::Unit, BraKetSymmetry::symm});
+                              IndexSpaceMetric::Unit, BraKetSymmetry::symm});
 
   get_default_context().index_space_registry()->relabel(L"i", L"y");
   get_default_context().index_space_registry()->relabel(L"α", L"z");

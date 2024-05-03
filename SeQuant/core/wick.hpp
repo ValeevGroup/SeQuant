@@ -1430,7 +1430,8 @@ class WickTheorem {
     if (is_qpannihilator<S>(left, vacuum) && is_qpcreator<S>(right, vacuum)) {
       const auto qpspace_left = qpannihilator_space<S>(left, vacuum);
       const auto qpspace_right = qpcreator_space<S>(right, vacuum);
-      const auto qpspace_common = idx_registry->intersection(qpspace_left, qpspace_right);
+      const auto qpspace_common =
+          idx_registry->intersection(qpspace_left, qpspace_right);
       if (qpspace_common != idx_registry->nulltype_()) return true;
     }
     return false;
@@ -1451,7 +1452,8 @@ class WickTheorem {
     else {
       const auto qpspace_left = qpannihilator_space<S>(left, vacuum);
       const auto qpspace_right = qpcreator_space<S>(right, vacuum);
-      const auto qpspace_common = idx_registry->intersection(qpspace_left, qpspace_right);
+      const auto qpspace_common =
+          idx_registry->intersection(qpspace_left, qpspace_right);
       const auto index_common = Index::make_tmp_index(qpspace_common);
 
       // preserve bra/ket positions of left & right

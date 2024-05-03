@@ -158,13 +158,12 @@ void hash_range(size_t& seed, It begin, It end) {
 }
 
 template <typename T>
-struct _<T, std::enable_if_t<!(has_hash_value_v<T>) && meta::is_range_v<T>>> {
+struct _<T, std::enable_if_t<!(has_hash_value_v<T>)&&meta::is_range_v<T>>> {
   std::size_t operator()(T const& v) const { return range(begin(v), end(v)); }
 };
 
 template <typename T>
-struct _<T,
-         std::enable_if_t<!(!(has_hash_value_v<T>) && meta::is_range_v<T>)>> {
+struct _<T, std::enable_if_t<!(!(has_hash_value_v<T>)&&meta::is_range_v<T>)>> {
   std::size_t operator()(T const& v) const { return hash_value(v); }
 };
 
