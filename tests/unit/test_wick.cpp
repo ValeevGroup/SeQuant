@@ -2,19 +2,29 @@
 // Created by Eduard Valeyev on 3/23/18.
 //
 
-#include "SeQuant/core/timer.hpp"
-#include "SeQuant/core/utility/macros.hpp"
-#include "SeQuant/core/utility/nodiscard.hpp"
-#include "SeQuant/core/wick.hpp"
-#include "SeQuant/domain/mbpt/convention.hpp"
+#include <SeQuant/core/abstract_tensor.hpp>
+#include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/context.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/hash.hpp>
+#include <SeQuant/core/index.hpp>
+#include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/op.hpp>
+#include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/timer.hpp>
+#include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/nodiscard.hpp>
+#include <SeQuant/core/wick.hpp>
+#include <SeQuant/domain/mbpt/convention.hpp>
 
-#include "catch.hpp"
+#include <catch2/catch_test_macros.hpp>
 #include "test_config.hpp"
 
 #include <range/v3/all.hpp>
 
-#include <iostream>
 #include <algorithm>
+#include <iostream>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -146,8 +156,8 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
   SECTION("physical vacuum") {
     constexpr Vacuum V = Vacuum::Physical;
     auto raii_tmp = set_scoped_default_context(
-        Context{V, sequant::mbpt::make_sr_subspaces(), IndexSpaceMetric::Unit, BraKetSymmetry::conjugate,
-                SPBasis::spinorbital});
+        Context{V, sequant::mbpt::make_sr_subspaces(), IndexSpaceMetric::Unit,
+                BraKetSymmetry::conjugate, SPBasis::spinorbital});
 
     auto switch_to_spinfree_context = detail::NoDiscard([&]() {
       auto context_sf = get_default_context();
@@ -412,41 +422,41 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
       REQUIRE(result->size() == 2);
     }
 
-  // two general 1-body operators
-  {
-    auto opseq = FNOperatorSeq(
-        {FNOperator({L"p_1"}, {L"p_2"}), FNOperator({L"p_3"}, {L"p_4"})});
-    auto wick = FWickTheorem{opseq};
-    REQUIRE_NOTHROW(wick.compute());
-    auto result = wick.compute();
-    REQUIRE(result->is<Product>());
-    REQUIRE(result->size() ==
-            2 * 2);  // product of 4 terms (since each contraction of 2
-                     // *general* indices produces 2 overlaps)
-    REQUIRE(to_latex(result) ==
-            L"{{s^{{p_1}}_{{m_{102}}}}{s^{{m_{102}}}_{{p_4}}}{s^{{e_{103}}}_{"
-            L"{p_2}}}{s^{{p_3}}_{{e_{103}}}}}");
-  }
-  // two general 1-body operators, partial contractions: Eq. 21a of
-  // DOI 10.1063/1.474405
-  {
-    auto opseq = FNOperatorSeq(
-        {FNOperator({L"p_1"}, {L"p_2"}), FNOperator({L"p_3"}, {L"p_4"})});
-    auto wick = FWickTheorem{opseq};
-    REQUIRE_NOTHROW(wick.full_contractions(false).compute());
-    auto result = wick.full_contractions(false).compute();
-    REQUIRE(result->is<Sum>());
-    REQUIRE(result->size() == 4);
-    REQUIRE(
-        to_latex(result) ==
-        L"{ \\bigl( - "
-        L"{{s^{{p_1}}_{{m_{107}}}}{s^{{m_{107}}}_{{p_4}}}{\\tilde{a}^{{p_3}}_"
-        L"{{p_2}}}} + "
-        L"{{s^{{p_1}}_{{m_{107}}}}{s^{{m_{107}}}_{{p_4}}}{s^{{e_{108}}}_{{p_"
-        L"2}}}{s^{{p_3}}_{{e_{108}}}}} + "
-        L"{{s^{{e_{109}}}_{{p_2}}}{s^{{p_3}}_{{e_{109}}}}{\\tilde{a}^{{p_1}}_"
-        L"{{p_4}}}} + {{\\tilde{a}^{{p_1}{p_3}}_{{p_2}{p_4}}}}\\bigr) }");
-  }
+    // two general 1-body operators
+    {
+      auto opseq = FNOperatorSeq(
+          {FNOperator({L"p_1"}, {L"p_2"}), FNOperator({L"p_3"}, {L"p_4"})});
+      auto wick = FWickTheorem{opseq};
+      REQUIRE_NOTHROW(wick.compute());
+      auto result = wick.compute();
+      REQUIRE(result->is<Product>());
+      REQUIRE(result->size() ==
+              2 * 2);  // product of 4 terms (since each contraction of 2
+                       // *general* indices produces 2 overlaps)
+      REQUIRE(to_latex(result) ==
+              L"{{s^{{p_1}}_{{m_{102}}}}{s^{{m_{102}}}_{{p_4}}}{s^{{e_{103}}}_{"
+              L"{p_2}}}{s^{{p_3}}_{{e_{103}}}}}");
+    }
+    // two general 1-body operators, partial contractions: Eq. 21a of
+    // DOI 10.1063/1.474405
+    {
+      auto opseq = FNOperatorSeq(
+          {FNOperator({L"p_1"}, {L"p_2"}), FNOperator({L"p_3"}, {L"p_4"})});
+      auto wick = FWickTheorem{opseq};
+      REQUIRE_NOTHROW(wick.full_contractions(false).compute());
+      auto result = wick.full_contractions(false).compute();
+      REQUIRE(result->is<Sum>());
+      REQUIRE(result->size() == 4);
+      REQUIRE(
+          to_latex(result) ==
+          L"{ \\bigl( - "
+          L"{{s^{{p_1}}_{{m_{107}}}}{s^{{m_{107}}}_{{p_4}}}{\\tilde{a}^{{p_3}}_"
+          L"{{p_2}}}} + "
+          L"{{s^{{p_1}}_{{m_{107}}}}{s^{{m_{107}}}_{{p_4}}}{s^{{e_{108}}}_{{p_"
+          L"2}}}{s^{{p_3}}_{{e_{108}}}}} + "
+          L"{{s^{{e_{109}}}_{{p_2}}}{s^{{p_3}}_{{e_{109}}}}{\\tilde{a}^{{p_1}}_"
+          L"{{p_4}}}} + {{\\tilde{a}^{{p_1}{p_3}}_{{p_2}{p_4}}}}\\bigr) }");
+    }
 
     // two (pure qp) 2-body operators
     {
@@ -860,7 +870,7 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
       rapid_simplify(wick_result_2);
 
       std::wcout << L"H2*T2 = " << to_latex(wick_result_2) << std::endl;
-      //std::wcout << L"H2*T2 = " << to_wolfram(wick_result_2) << std::endl;
+      // std::wcout << L"H2*T2 = " << to_wolfram(wick_result_2) << std::endl;
       REQUIRE(to_latex(wick_result_2) ==
               L"{{{4}}"
               L"{\\bar{g}^{{a_1}{a_2}}_{{i_1}{i_2}}}{\\bar{t}^{{i_1}{i_2}}_{{a_"

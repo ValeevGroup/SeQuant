@@ -138,7 +138,8 @@ inline container::map<Index, Index> compute_index_replacement_rules(
       const auto &old_dst2 = src2_it->second;
       const auto new_dst_space =
           (dst.space() != old_dst1.space() || dst.space() != old_dst2.space())
-              ? idx_registry->intersection(old_dst1.space(), old_dst2.space(), dst.space())
+              ? idx_registry->intersection(old_dst1.space(), old_dst2.space(),
+                                           dst.space())
               : dst.space();
       if (new_dst_space == idx_registry->nulltype_()) throw zero_result{};
       Index new_dst;
@@ -183,7 +184,8 @@ inline container::map<Index, Index> compute_index_replacement_rules(
         const auto ket_is_ext = ranges::find(external_indices, ket) !=
                                 ranges::end(external_indices);
 
-        const auto intersection_space = idx_registry->intersection(bra.space(), ket.space());
+        const auto intersection_space =
+            idx_registry->intersection(bra.space(), ket.space());
 
         // if overlap's indices are from non-overlapping spaces, return zero
         if (intersection_space == idx_registry->nulltype_()) {

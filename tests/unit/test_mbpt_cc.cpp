@@ -6,7 +6,7 @@
 #include <SeQuant/core/timer.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 
-#include "catch.hpp"
+#include <catch2/catch_test_macros.hpp>
 #include "test_config.hpp"
 
 TEST_CASE("SR-TCC", "[mbpt/cc]") {

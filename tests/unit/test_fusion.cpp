@@ -1,10 +1,10 @@
-#include "catch.hpp"
+#include <catch2/catch_test_macros.hpp>
 
-#include <SeQuant/core/optimize/fusion.hpp>
-#include <SeQuant/core/parse_expr.hpp>
-#include "SeQuant/domain/mbpt/convention.hpp"
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/optimize/fusion.hpp>
+#include <SeQuant/core/parse_expr.hpp>
+#include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <array>
 #include <memory>

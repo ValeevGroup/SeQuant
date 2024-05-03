@@ -2,7 +2,7 @@
 #include <iostream>
 #include <range/v3/view.hpp>
 
-#include "catch.hpp"
+#include <catch2/catch_test_macros.hpp>
 
 namespace sequant {
 struct TestCacheManager {};

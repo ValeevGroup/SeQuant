@@ -2,9 +2,10 @@
 // Created by Eduard Valeyev on 3/20/18.
 //
 
-#include "SeQuant/core/space.hpp"
-#include "SeQuant/domain/mbpt/convention.hpp"
-#include "catch.hpp"
+#include <catch2/catch_test_macros.hpp>
+
+#include <SeQuant/core/space.hpp>
+#include <SeQuant/domain/mbpt/convention.hpp>
 
 TEST_CASE("IndexSpace", "[elements]") {
   using namespace sequant;

@@ -98,6 +98,6 @@ class CC {
   Ansatz ansatz_ = Ansatz::T;
 };  // class CC
 
-}  // namespace sequant::mbpt::sr
+}  // namespace sequant::mbpt
 
 #endif  // SEQUANT_DOMAIN_MBPT_MODELS_CC_HPP

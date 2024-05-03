@@ -15,7 +15,7 @@
 #include "SeQuant/domain/mbpt/convention.hpp"
 #include "SeQuant/domain/mbpt/op.hpp"
 
-#include "catch.hpp"
+#include <catch2/catch_test_macros.hpp>
 #include "test_config.hpp"
 
 #include <iostream>
@@ -363,7 +363,7 @@ TEST_CASE("MBPT", "[mbpt]") {
       });
     }
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
-  }  // SECTION ("SRSO")
+  }     // SECTION ("SRSO")
 
   SECTION("SRSO Fock") {
     using namespace sequant::mbpt::TensorOp;
@@ -481,8 +481,6 @@ REQUIRE(simplify(result - result_wo_top) == ex<Constant>(0));
 
 // H2 ** T2 ** T2 -> 0
 SEQUANT_PROFILE_SINGLE("wick(H2**T2**T2 -> 0)", {
-  auto& l = sequant::Logger::get_instance();
-  l.wick_reduce = true;
   // first without use of topology
   auto result = mbpt::vac_av(H_(2) * T_(2) * T_(2), {{0, 1}},
                              /* use_topology = */ false);

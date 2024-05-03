@@ -1,8 +1,20 @@
-#include "catch.hpp"
+#include <catch2/catch_test_macros.hpp>
 
+#include <SeQuant/core/algorithm.hpp>
+#include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/index.hpp>
 #include <SeQuant/core/optimize.hpp>
 #include <SeQuant/core/parse_expr.hpp>
-#include "SeQuant/domain/mbpt/convention.hpp"
+#include <SeQuant/core/space.hpp>
+#include <SeQuant/domain/mbpt/convention.hpp>
+
+#include <cstddef>
+#include <initializer_list>
+#include <memory>
+#include <stdexcept>
+
+#include <range/v3/all.hpp>
 
 sequant::ExprPtr extract(sequant::ExprPtr expr,
                          std::initializer_list<size_t> const& idxs) {
@@ -15,7 +27,7 @@ sequant::ExprPtr extract(sequant::ExprPtr expr,
 TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
   using namespace sequant;
   auto idx_registry = get_default_context().index_space_registry();
-  auto idx2size = [nocc = 4, nvirt = 140,idx_registry](Index const& idx) {
+  auto idx2size = [nocc = 4, nvirt = 140, idx_registry](Index const& idx) {
     if (idx.space() == idx_registry->retrieve(L"i")) return nocc;
     if (idx.space() == idx_registry->retrieve(L"a"))
       return nvirt;
