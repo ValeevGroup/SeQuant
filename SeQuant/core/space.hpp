@@ -126,6 +126,19 @@ class IndexSpace {
     }
   }
 
+  bool has_spin_decoration(std::wstring label) {
+    const auto up = label.rfind(L'↑');
+    const auto down = label.rfind(L'↓');
+    if (up != -1) {
+      return true;
+    }
+    if (down != -1) {
+      return true;
+    } else {
+      return false;
+    }
+  }
+
   // IndexSpace(IndexSpace& idxspace);
 
   IndexSpace(std::wstring type_label, TypeAttr typeattr_,
@@ -133,6 +146,9 @@ class IndexSpace {
              unsigned long approximate_size = 10) {
     attr_ = Attr(typeattr_, qnattr_);
     qnfree_key_ = type_label;
+    if (has_spin_decoration(type_label)) {
+      throw "↓ and ↑ are reserved wchars";
+    }
     base_key_ = type_label + add_spin_label(qnattr_);
     approximate_size_ = approximate_size;
   }
@@ -141,9 +157,9 @@ class IndexSpace {
   /// numbers)
   struct Attr : TypeAttr, QuantumNumbersAttr {
     Attr(TypeAttr type, QuantumNumbersAttr qns) noexcept
-        : TypeAttr(type), QuantumNumbersAttr(qns){};
+        : TypeAttr(type), QuantumNumbersAttr(qns) {};
     Attr(int32_t type, int32_t qns) noexcept
-        : TypeAttr(type), QuantumNumbersAttr(qns){};
+        : TypeAttr(type), QuantumNumbersAttr(qns) {};
     //    explicit Attr(int64_t value) : TypeAttr((value & 0xffffffff00000000)
     //    >> 32), QuantumNumbersAttr(value & 0x00000000ffffffff) {}
     Attr(const Attr &) = default;
