@@ -1,7 +1,7 @@
 //
 // Created by Eduard Valeyev on 3/20/18.
 //
-#include "catch.hpp"
+#include <catch2/catch_test_macros.hpp>
 
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/index.hpp>
