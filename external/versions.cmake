@@ -1,7 +1,7 @@
 # for each dependency track both current and previous id (the variable for the latter must contain PREVIOUS)
 # to be able to auto-update them
 
-set(SEQUANT_TRACKED_VGCMAKEKIT_TAG 533e4097415a4e9878b42fd4ffd58b95c9253587)
+set(SEQUANT_TRACKED_VGCMAKEKIT_TAG 76773f375c7c429ce57d034512bc8e8ffc4c66c8)
 
 set(SEQUANT_TRACKED_RANGEV3_TAG 0.12.0)
 set(SEQUANT_TRACKED_RANGEV3_PREVIOUS_TAG d800a032132512a54c291ce55a2a43e0460591c7)

@@ -434,7 +434,7 @@ if (BUILD_TESTING)
                 tests/unit/test_eval_btas.cpp tests/unit/test_eval_ta.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
     endif (TARGET tiledarray)
 
-    set(utests_deps SeQuant Catch2)
+    set(utests_deps SeQuant Catch2::Catch2)
 
     set(unit_test_executable unit_tests-sequant)
     add_executable(${unit_test_executable} EXCLUDE_FROM_ALL
