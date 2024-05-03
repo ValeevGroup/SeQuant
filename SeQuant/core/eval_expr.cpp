@@ -44,22 +44,15 @@ std::wstring_view const var_label = L"Z";
 
 NestedTensorIndices::NestedTensorIndices(const sequant::Tensor& tnsr) {
   auto push_ix = [this](Index const& ix) {
-    if (ix.has_proto_indices())
+    if (ix.has_proto_indices() && !ranges::contains(inner, ix))
       inner.push_back(ix);
-    else
+    else if (!ranges::contains(outer, ix))
       outer.push_back(ix);
   };
 
   for (auto const& ix : tnsr.const_braket()) {
     push_ix(ix);
     for (auto const& ix_proto : ix.proto_indices()) push_ix(ix_proto);
-  }
-
-  if (!inner.empty()) {
-    ranges::actions::stable_sort(outer, Index::LabelCompare{});
-    ranges::actions::unique(outer, [](Index const& ix1, Index const& ix2) {
-      return ix1.label() == ix2.label();
-    });
   }
 }
 
