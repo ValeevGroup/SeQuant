@@ -1,4 +1,5 @@
-#include "catch.hpp"
+#include <catch2/catch_approx.hpp>
+#include <catch2/catch_test_macros.hpp>
 
 #include <SeQuant/core/optimize.hpp>
 #include <SeQuant/core/parse_expr.hpp>
@@ -215,7 +216,7 @@ TEST_CASE("TEST_EVAL_USING_BTAS", "[eval]") {
     auto man1 = yield(L"t{v;o}");
     man1 += BTensorD{btas::permute(yield(L"f{o;v}"), {1, 0})};
 
-    REQUIRE(norm(eval1) == Approx(norm(man1)));
+    REQUIRE(norm(eval1) == Catch::Approx(norm(man1)));
 
     auto expr2 = parse_antisymm(L"2 * t_{a1}^{i1} + 3/2 * f_{i1}^{a1}");
     auto const tidx2 = tidxs(expr2, {0, 0});
@@ -227,7 +228,7 @@ TEST_CASE("TEST_EVAL_USING_BTAS", "[eval]") {
     btas::scal(1.5, temp);
     man2 += temp;
 
-    REQUIRE(norm(eval2) == Approx(norm(man2)));
+    REQUIRE(norm(eval2) == Catch::Approx(norm(man2)));
   }
 
   SECTION("Product") {
@@ -246,7 +247,7 @@ TEST_CASE("TEST_EVAL_USING_BTAS", "[eval]") {
     auto const& t2 = yield(L"t{v,v;o,o}");
     btas::contract(0.5, g, {12, 14, 72, 74}, t2, {71, 72, 11, 12}, 0.0, man1,
                    {11, 14, 71, 74});
-    REQUIRE(norm(eval1) == Approx(norm(man1)));
+    REQUIRE(norm(eval1) == Catch::Approx(norm(man1)));
 
     auto expr2 = parse_antisymm(
         L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a1,a3}^{i3,i4} * t_{a2,a4}^{ i1, i2}");
@@ -258,7 +259,7 @@ TEST_CASE("TEST_EVAL_USING_BTAS", "[eval]") {
                    {71, 74});
     btas::contract(-0.25, temp, {71, 74}, t2, {72, 74, 11, 12}, 0.0, man2,
                    {11, 12, 71, 72});
-    REQUIRE(norm(eval2) == Approx(norm(man2)));
+    REQUIRE(norm(eval2) == Catch::Approx(norm(man2)));
   }
 
   SECTION("Summation and Product") {
@@ -285,7 +286,7 @@ TEST_CASE("TEST_EVAL_USING_BTAS", "[eval]") {
     man1 += temp2;
     temp1.clear();
     temp2.clear();
-    REQUIRE(norm(eval1) == Approx(norm(man1)));
+    REQUIRE(norm(eval1) == Catch::Approx(norm(man1)));
   }
 
   SECTION("Antisymmetrization") {
@@ -316,7 +317,7 @@ TEST_CASE("TEST_EVAL_USING_BTAS", "[eval]") {
 
     btas::scal(0.5, man1);
 
-    REQUIRE(norm(eval1) == Approx(norm(man1)));
+    REQUIRE(norm(eval1) == Catch::Approx(norm(man1)));
   }
 
   SECTION("Symmetrization") {
@@ -335,7 +336,7 @@ TEST_CASE("TEST_EVAL_USING_BTAS", "[eval]") {
     man1 += BTensorD{permute(g, {1, 0, 3, 2})};
     btas::scal(0.5, man1);
 
-    REQUIRE(norm(eval1) == Approx(norm(man1)));
+    REQUIRE(norm(eval1) == Catch::Approx(norm(man1)));
   }
 
   SECTION("Others") {
@@ -355,6 +356,6 @@ TEST_CASE("TEST_EVAL_USING_BTAS", "[eval]") {
 
     auto const eval2 = evaluate(nodes1, tidx1, yield_)->get<BTensorD>();
 
-    REQUIRE(norm(eval1) == Approx(norm(eval1)));
+    REQUIRE(norm(eval1) == Catch::Approx(norm(eval1)));
   }
 }

@@ -1,14 +1,14 @@
-#include "catch.hpp"
-#include "SeQuant/domain/mbpt/convention.hpp"
+#include <catch2/catch_test_macros.hpp>
 
-#include <SeQuant/core/expr.hpp>
-#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/latex.hpp>
 #include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/tensor.hpp>
+#include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <memory>
 #include <string>

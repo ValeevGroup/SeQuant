@@ -2,8 +2,7 @@
 // Created by Eduard Valeyev on 3/23/18.
 //
 
-#include "catch.hpp"
-#include "SeQuant/domain/mbpt/convention.hpp"
+#include <catch2/catch_test_macros.hpp>
 
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
@@ -15,6 +14,7 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/tag.hpp>
 #include <SeQuant/core/tensor.hpp>
+#include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <cstddef>
 #include <initializer_list>

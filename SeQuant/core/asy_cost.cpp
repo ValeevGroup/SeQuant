@@ -155,12 +155,12 @@ AsyCost const &AsyCost::zero() {
   return zero;
 }
 
-AsyCost& AsyCost::operator+=(AsyCost const& other) {
+AsyCost &AsyCost::operator+=(AsyCost const &other) {
   *this = *this + other;
   return *this;
 }
 
-AsyCost& AsyCost::operator-=(AsyCost const& other) {
+AsyCost &AsyCost::operator-=(AsyCost const &other) {
   *this = *this - other;
   return *this;
 }
@@ -226,11 +226,11 @@ bool operator>(AsyCost const &lhs, AsyCost const &rhs) {
   return !(lhs < rhs || lhs == rhs);
 }
 
-bool operator<=(AsyCost const& lhs, AsyCost const& rhs) {
+bool operator<=(AsyCost const &lhs, AsyCost const &rhs) {
   return lhs < rhs || lhs == rhs;
 }
 
-bool operator>=(AsyCost const& lhs, AsyCost const& rhs) {
+bool operator>=(AsyCost const &lhs, AsyCost const &rhs) {
   return lhs > rhs || lhs == rhs;
 }
 

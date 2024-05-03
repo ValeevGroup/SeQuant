@@ -2,14 +2,12 @@
 // Created by Eduard Valeyev on 3/24/18.
 //
 
-#include "catch.hpp"
+#include <catch2/catch_test_macros.hpp>
 
-#include "SeQuant/core/op.hpp"
-#include "SeQuant/core/ranges.hpp"
-#include "SeQuant/domain/mbpt/convention.hpp"
+#include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/ranges.hpp>
-#include <SeQuant/core/algorithm.hpp>
+#include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <algorithm>
 #include <initializer_list>
@@ -19,19 +17,18 @@
 #include <range/v3/all.hpp>
 
 TEST_CASE("Iterators", "[elements]") {
-
   using namespace sequant;
 
   SECTION("constructor") {
-
     {
       REQUIRE_NOTHROW(flattened_rangenest<FNOperatorSeq>{});
       [[maybe_unused]] auto rng0 = flattened_rangenest<FNOperatorSeq>{};
     }
 
     {
-      auto opseq1 = FNOperatorSeq{{FNOperator({L"i_1", L"i_3"}, {L"i_2", L"i_4"}),
-                                   FNOperator({L"i_5"}, {L"i_6"})}};
+      auto opseq1 =
+          FNOperatorSeq{{FNOperator({L"i_1", L"i_3"}, {L"i_2", L"i_4"}),
+                         FNOperator({L"i_5"}, {L"i_6"})}};
 
       REQUIRE_NOTHROW(flattened_rangenest<FNOperatorSeq>{&opseq1});
       auto rng1 = flattened_rangenest<FNOperatorSeq>{&opseq1};
@@ -76,11 +73,11 @@ TEST_CASE("Iterators", "[elements]") {
 
     // flatten recursively
     {
-      auto opseq1 = std::vector<FNOperatorSeq>{FNOperatorSeq{{FNOperator({L"i_1", L"i_3"}, {L"i_2", L"i_4"}),
-                                                              FNOperator({L"i_5"}, {L"i_6"})}},
-                                               FNOperatorSeq{{FNOperator({L"i_7"}, {L"i_8"}),
-                                                              FNOperator({L"i_9"}, {L"i_10"})}}
-      };
+      auto opseq1 = std::vector<FNOperatorSeq>{
+          FNOperatorSeq{{FNOperator({L"i_1", L"i_3"}, {L"i_2", L"i_4"}),
+                         FNOperator({L"i_5"}, {L"i_6"})}},
+          FNOperatorSeq{{FNOperator({L"i_7"}, {L"i_8"}),
+                         FNOperator({L"i_9"}, {L"i_10"})}}};
 
       auto rng1 = flattened_rangenest<decltype(opseq1)>{&opseq1};
       auto rng2 = flattened_rangenest<decltype(rng1)>{&rng1};
@@ -142,8 +139,6 @@ TEST_CASE("Iterators", "[elements]") {
       REQUIRE(it2 == end(rng2));
       REQUIRE(ranges::get_cursor(end(rng2)).ordinal() == 10);
     }
-
   }
-
 
 }  // TEST_CASE("Iterators")

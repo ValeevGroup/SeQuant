@@ -1,4 +1,5 @@
-#include "catch.hpp"
+#include <catch2/catch_approx.hpp>
+#include <catch2/catch_test_macros.hpp>
 
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/parse_expr.hpp>
@@ -276,7 +277,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
     sum1_man("i1,a1") =
         yield(L"t{a1;i1}")("a1,i1") + yield(L"f{i1;a1}")("i1,a1");
 
-    REQUIRE(norm(sum1_man) == Approx(norm(sum1_eval)));
+    REQUIRE(norm(sum1_man) == Catch::Approx(norm(sum1_eval)));
 
     auto expr2 = parse_antisymm(L"2 * t_{a1}^{i1} + 3/2 * f_{i1}^{a1}");
 
@@ -286,7 +287,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
     sum2_man("i1,a1") =
         2 * yield(L"t{a1;i1}")("a1,i1") + 1.5 * yield(L"f{i1;a1}")("i1,a1");
 
-    REQUIRE(norm(sum2_man) == Approx(norm(sum2_eval)));
+    REQUIRE(norm(sum2_man) == Catch::Approx(norm(sum2_eval)));
   }
 
   SECTION("product") {
@@ -298,7 +299,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
                                yield(L"g{i2,i4;a2,a4}")("i2,i4,a2,a4") *
                                yield(L"t{a1,a2;i1,i2}")("a1,a2,i1,i2");
 
-    REQUIRE(norm(prod1_man) == Approx(norm(prod1_eval)));
+    REQUIRE(norm(prod1_man) == Catch::Approx(norm(prod1_eval)));
 
     auto expr2 = parse_antisymm(
         L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{ i3, i4}");
@@ -310,7 +311,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
                                yield(L"t{a2,a4;i1,i2}")("a2,a4,i1,i2") *
                                yield(L"t{a1,a3;i3,i4}")("a1,a3,i3,i4");
 
-    REQUIRE(norm(prod2_man) == Approx(norm(prod2_eval)));
+    REQUIRE(norm(prod2_man) == Catch::Approx(norm(prod2_eval)));
   }
 
   SECTION("sum and product") {
@@ -328,7 +329,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
                               yield(L"t{a1,a2;i3,i4}")("a1,a2,i3,i4") *
                               yield(L"t{a3,a4;i1,i2}")("a3,a4,i1,i2");
 
-    REQUIRE(norm(man1) == Approx(norm(eval1)));
+    REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
   }
 
   SECTION("variable at leaves") {
@@ -342,7 +343,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
         yield_d(L"α") * 2 * yield(L"t{a1;i1}")("a1,i1") * yield_d(L"β") +
         1.5 * yield(L"f{i1;a1}")("i1,a1");
 
-    REQUIRE(norm(sum2_man) == Approx(norm(sum2_eval)));
+    REQUIRE(norm(sum2_man) == Catch::Approx(norm(sum2_eval)));
   }
 
   SECTION("Antisymmetrization") {
@@ -356,13 +357,14 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
 
     man1("0,1,2,3") = 0.5 * man1("0,1,2,3");
 
-    REQUIRE(norm(man1) == Approx(norm(eval1)));
+    REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
 
     TArrayD zero1;
     zero1("0,1,2,3") = man1("0,1,2,3") - eval1("0,1,2,3");
 
-    // todo: Approx(0.0) == 0 fails. probably update catch2 version
-    // REQUIRE(Approx(norm(zero1)) == 0);
+    // https://github.com/catchorg/Catch2/issues/1444
+    REQUIRE(norm(zero1) == Catch::Approx(0).margin(
+                               100 * std::numeric_limits<double>::epsilon()));
 
     // partial antisymmetrization
 
@@ -377,7 +379,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
     man2("0,1,2,3,4,5") = arr2("0,1,2,3,4,5") - arr2("0,1,2,4,3,5") +
                           arr2("1,0,2,4,3,5") - arr2("1,0,2,3,4,5");
 
-    REQUIRE(norm(man2) == Approx(norm(eval2)));
+    REQUIRE(norm(man2) == Catch::Approx(norm(eval2)));
 
     TArrayD zero2;
     zero2("0,1,2,3,4,5") = man2("0,1,2,3,4,5") - eval2("0,1,2,3,4,5");
@@ -394,7 +396,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
     man1("0,1,2,3") = arr1("0,1,2,3") + arr1("1,0,3,2");
     man1("0,1,2,3") = 0.5 * man1("0,1,2,3");
 
-    REQUIRE(norm(man1) == Approx(norm(eval1)));
+    REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
 
     TArrayD zero1;
     zero1("0,1,2,3") = man1("0,1,2,3") - eval1("0,1,2,3");
@@ -420,7 +422,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
     man2("i,j,k,l,a,b,c,d") = arr2("i,j,k,l,a,b,c,d") +
                               arr2("i,j,l,k,a,b,d,c") + arr2("j,i,k,l,b,a,c,d");
 
-    REQUIRE(norm(man2) == Approx(norm(eval2)));
+    REQUIRE(norm(man2) == Catch::Approx(norm(eval2)));
 
     TArrayD zero2;
     zero2("i,j,k,l,a,b,c,d") =
@@ -446,7 +448,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
     auto eval2 =
         evaluate(nodes1, "i_1,i_2,a_1,a_2"s, yield_)->get<TA::TArrayD>();
 
-    REQUIRE(norm(eval1) == Approx(norm(eval2)));
+    REQUIRE(norm(eval1) == Catch::Approx(norm(eval2)));
   }
 }
 
@@ -498,7 +500,7 @@ TEST_CASE("TEST_EVAL_USING_TA_COMPLEX", "[eval]") {
         yield(L"t{a1;i1}")("a1,i1") + yield(L"f{i1;a1}")("i1,a1");
 
     // todo:
-    REQUIRE(norm(sum1_man) == Approx(norm(sum1_eval)));
+    REQUIRE(norm(sum1_man) == Catch::Approx(norm(sum1_eval)));
 
     auto expr2 = parse_expr(L"2 * t_{a1}^{i1} + 3/2 * f_{i1}^{a1}");
 
@@ -508,7 +510,7 @@ TEST_CASE("TEST_EVAL_USING_TA_COMPLEX", "[eval]") {
     sum2_man("i1,a1") = std::complex<double>{2} * yield(L"t{a1;i1}")("a1,i1") +
                         std::complex<double>{1.5} * yield(L"f{i1;a1}")("i1,a1");
 
-    REQUIRE(norm(sum2_man) == Approx(norm(sum2_eval)));
+    REQUIRE(norm(sum2_man) == Catch::Approx(norm(sum2_eval)));
   }
 
   SECTION("product") {
@@ -520,7 +522,7 @@ TEST_CASE("TEST_EVAL_USING_TA_COMPLEX", "[eval]") {
                                yield(L"g{i2,i4;a2,a4}")("i2,i4,a2,a4") *
                                yield(L"t{a1,a2;i1,i2}")("a1,a2,i1,i2");
 
-    REQUIRE(norm(prod1_man) == Approx(norm(prod1_eval)));
+    REQUIRE(norm(prod1_man) == Catch::Approx(norm(prod1_eval)));
 
     auto expr2 = parse_expr(
         L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{ i3, i4}");
@@ -532,7 +534,7 @@ TEST_CASE("TEST_EVAL_USING_TA_COMPLEX", "[eval]") {
                                yield(L"t{a2,a4;i1,i2}")("a2,a4,i1,i2") *
                                yield(L"t{a1,a3;i3,i4}")("a1,a3,i3,i4");
 
-    REQUIRE(norm(prod2_man) == Approx(norm(prod2_eval)));
+    REQUIRE(norm(prod2_man) == Catch::Approx(norm(prod2_eval)));
   }
 
   SECTION("sum and product") {
@@ -552,7 +554,7 @@ TEST_CASE("TEST_EVAL_USING_TA_COMPLEX", "[eval]") {
                               yield(L"t{a1,a2;i3,i4}")("a1,a2,i3,i4") *
                               yield(L"t{a3,a4;i1,i2}")("a3,a4,i1,i2");
 
-    REQUIRE(norm(man1) == Approx(norm(eval1)));
+    REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
   }
 
   SECTION("Antisymmetrization") {
@@ -566,12 +568,12 @@ TEST_CASE("TEST_EVAL_USING_TA_COMPLEX", "[eval]") {
 
     man1("0,1,2,3") = std::complex<double>{0.5} * man1("0,1,2,3");
 
-    REQUIRE(norm(man1) == Approx(norm(eval1)));
+    REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
 
     TArrayC zero1;
     zero1("0,1,2,3") = man1("0,1,2,3") - eval1("0,1,2,3");
 
-    // todo: Approx(0.0) == 0 fails. probably update catch2 version
+    // todo: Catch::Approx(0.0) == 0 fails. probably update catch2 version
     // REQUIRE(Approx(norm(zero1)) == 0);
 
     // partial antisymmetrization
@@ -587,7 +589,7 @@ TEST_CASE("TEST_EVAL_USING_TA_COMPLEX", "[eval]") {
     man2("0,1,2,3,4,5") = arr2("0,1,2,3,4,5") - arr2("0,1,2,4,3,5") +
                           arr2("1,0,2,4,3,5") - arr2("1,0,2,3,4,5");
 
-    REQUIRE(norm(man2) == Approx(norm(eval2)));
+    REQUIRE(norm(man2) == Catch::Approx(norm(eval2)));
 
     TArrayC zero2;
     zero2("0,1,2,3,4,5") = man2("0,1,2,3,4,5") - eval2("0,1,2,3,4,5");
@@ -604,7 +606,7 @@ TEST_CASE("TEST_EVAL_USING_TA_COMPLEX", "[eval]") {
     man1("0,1,2,3") = arr1("0,1,2,3") + arr1("1,0,3,2");
     man1("0,1,2,3") = 0.5 * man1("0,1,2,3");
 
-    REQUIRE(norm(man1) == Approx(norm(eval1)));
+    REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
 
     TArrayC zero1;
     zero1("0,1,2,3") = man1("0,1,2,3") - eval1("0,1,2,3");
@@ -630,7 +632,7 @@ TEST_CASE("TEST_EVAL_USING_TA_COMPLEX", "[eval]") {
     man2("i,j,k,l,a,b,c,d") = arr2("i,j,k,l,a,b,c,d") +
                               arr2("i,j,l,k,a,b,d,c") + arr2("j,i,k,l,b,a,c,d");
 
-    REQUIRE(norm(man2) == Approx(norm(eval2)));
+    REQUIRE(norm(man2) == Catch::Approx(norm(eval2)));
 
     TArrayC zero2;
     zero2("i,j,k,l,a,b,c,d") =
@@ -645,7 +647,7 @@ TEST_CASE("TEST_EVAL_USING_TA_COMPLEX", "[eval]") {
     man3("i,j,k,a,b,c") = arr3("i,j,k,a,b,c") + arr3("i,k,j,a,c,b") +
                           arr3("j,i,k,b,a,c") + arr3("j,k,i,b,c,a") +
                           arr3("k,i,j,c,a,b") + arr3("k,j,i,c,b,a");
-    REQUIRE(norm(man3) == Approx(norm(eval3)));
+    REQUIRE(norm(man3) == Catch::Approx(norm(eval3)));
     TArrayC zero3;
     zero3("i,j,k,a,b,c") = eval3("i,j,k,a,b,c") - man3("i,j,k,a,b,c");
   }
@@ -666,7 +668,7 @@ TEST_CASE("TEST_EVAL_USING_TA_COMPLEX", "[eval]") {
 
     auto eval2 = evaluate(nodes1, "i_1,i_2,a_1,a_2"s, yield_)->get<TArrayC>();
 
-    REQUIRE(norm(eval1) == Approx(norm(eval2)));
+    REQUIRE(norm(eval1) == Catch::Approx(norm(eval2)));
   }
 }
 
@@ -683,7 +685,8 @@ TEST_CASE("TEST_EVAL_USING_TA_TOT", "[eval_tot]") {
   //
   auto approx_equal = [](std::string const& annot, auto const& lhs,
                          auto const& rhs) -> bool {
-    return Approx(lhs(annot).dot(lhs(annot))) == rhs(annot).dot(rhs(annot));
+    return Catch::Approx(lhs(annot).dot(lhs(annot))) ==
+           rhs(annot).dot(rhs(annot));
   };
 
   auto& world = TA::get_default_world();
@@ -755,6 +758,6 @@ TEST_CASE("TEST_EVAL_USING_TA_TOT", "[eval_tot]") {
       ref = TA::dot(lhs("i_1,i_2;a_1i_1i_2,a_2i_1i_2"),
                     rhs("i_1,i_2;a_2i_1i_2,a_1i_1i_2"));
     }
-    REQUIRE(result == Approx(ref));
+    REQUIRE(result == Catch::Approx(ref));
   }
 }

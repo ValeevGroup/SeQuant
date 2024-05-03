@@ -226,7 +226,6 @@ static constexpr bool is_range_v =
     (is_detected_v<is_range_impl::ranges_begin_t, T> &&
      is_detected_v<is_range_impl::ranges_end_t, T>);
 
-
 /// is_same
 /// Checks whether \c T is a \c Base (is either the same class or a sub-class
 /// ignoring CV and reference qualifiers

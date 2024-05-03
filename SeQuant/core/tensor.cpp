@@ -2,10 +2,10 @@
 // Created by Eduard Valeyev on 2019-01-30.
 //
 
-#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/tensor.hpp>
 
 namespace sequant {
 
