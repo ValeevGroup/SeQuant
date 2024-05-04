@@ -105,12 +105,14 @@ constexpr bool operator!=(QuantumNumbersAttr lhs, QuantumNumbersAttr rhs) {
   return !(lhs == rhs);
 }
 
-/// @brief a collection of attributes which define a space or set
-/// IndexSpaces have a base_label, TypeAttr or interpretable bitset in the
-/// context of other spaces. IndexSpaces may also have QuantumNumberAttr which
-/// are differentiate spaces with different quanta such as fermionic spin
-/// IndesSpaces may additionally have an approximate size which is useful in
-/// expression optimization in the context of multiple spaces.
+/// @brief a collection of attributes which define a space of (1-particle)
+/// states
+///
+/// IndexSpace has a base_label, TypeAttr or interpretable bitset in the
+/// context of other spaces. IndexSpace may also have QuantumNumberAttr which
+/// differentiate spaces with different quanta, such as spin projection quantum
+/// numbers. IndexSpace may additionally have an approximate size which is
+/// useful in expression optimization in the context of multiple spaces.
 class IndexSpace {
  public:
   using TypeAttr = sequant::TypeAttr;
@@ -157,9 +159,9 @@ class IndexSpace {
   /// numbers)
   struct Attr : TypeAttr, QuantumNumbersAttr {
     Attr(TypeAttr type, QuantumNumbersAttr qns) noexcept
-        : TypeAttr(type), QuantumNumbersAttr(qns) {};
+        : TypeAttr(type), QuantumNumbersAttr(qns){};
     Attr(int32_t type, int32_t qns) noexcept
-        : TypeAttr(type), QuantumNumbersAttr(qns) {};
+        : TypeAttr(type), QuantumNumbersAttr(qns){};
     //    explicit Attr(int64_t value) : TypeAttr((value & 0xffffffff00000000)
     //    >> 32), QuantumNumbersAttr(value & 0x00000000ffffffff) {}
     Attr(const Attr &) = default;
