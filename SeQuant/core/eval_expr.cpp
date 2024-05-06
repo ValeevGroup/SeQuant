@@ -43,17 +43,19 @@ std::wstring_view const var_label = L"Z";
 }  // namespace
 
 NestedTensorIndices::NestedTensorIndices(const sequant::Tensor& tnsr) {
-  auto push_ix = [this](Index const& ix) {
-    if (ix.has_proto_indices() && !ranges::contains(inner, ix))
-      inner.push_back(ix);
-    else if (!ranges::contains(outer, ix))
-      outer.push_back(ix);
+  using ranges::views::join;
+  using ranges::views::transform;
+
+  auto append_unique = [](auto& cont, auto const& el) {
+    if (! ranges::contains(cont, el)) cont.emplace_back(el);
   };
 
-  for (auto const& ix : tnsr.const_braket()) {
-    push_ix(ix);
-    for (auto const& ix_proto : ix.proto_indices()) push_ix(ix_proto);
-  }
+  for (Index const& ix : tnsr.const_braket())
+    append_unique(ix.has_proto_indices() ? inner : outer, ix);
+
+  for (Index const& ix :
+       tnsr.const_braket() | transform(&Index::proto_indices) | join)
+    append_unique(outer, ix);
 }
 
 std::string EvalExpr::braket_annot() const noexcept {
