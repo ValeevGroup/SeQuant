@@ -734,7 +734,7 @@ TEST_CASE("TEST_EVAL_USING_TA_TOT", "[eval_tot]") {
     {
       auto const& lhs = yield(L"I{a4<i2,i3>,a1<i1,i2>;i1,i2}")->get<ArrayToT>();
       auto const& rhs = yield(L"s{a2<i1,i2>;a4<i2,i3>}")->get<ArrayToT>();
-      ref = TA::einsum(lhs("i_2,i_3,i_1;a_4i_2i_3,a_1i_1i_2"),
+      ref = TA::einsum(lhs("i_1,i_2,i_3;a_4i_2i_3,a_1i_1i_2"),
                        rhs("i_1,i_2,i_3;a_2i_1i_2,a_4i_2i_3"), target_layout);
     }
     REQUIRE(approx_equal("i,j;a,b", result, ref));
