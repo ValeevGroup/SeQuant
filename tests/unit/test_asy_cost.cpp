@@ -1,10 +1,10 @@
-#include "catch.hpp"
+#include <catch2/catch_test_macros.hpp>
 
 #include <SeQuant/core/asy_cost.hpp>
 #include <SeQuant/core/rational.hpp>
 
-#include <cstddef>
 #include <cmath>
+#include <cstddef>
 #include <string>
 
 struct MatFlops {

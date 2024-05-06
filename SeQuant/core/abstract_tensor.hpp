@@ -27,7 +27,6 @@
 
 #include <boost/core/demangle.hpp>
 
-
 namespace sequant {
 
 /// This interface class defines a Tensor concept. Object @c t of a type that

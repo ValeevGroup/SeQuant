@@ -2,8 +2,6 @@
 // Created by Nakul Teke on 12/20/19.
 //
 
-#include <SeQuant/core/parse_expr.hpp>
-#include <SeQuant/domain/mbpt/spin.hpp>
 #include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
@@ -11,11 +9,13 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/parse_expr.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tensor.hpp>
+#include <SeQuant/domain/mbpt/spin.hpp>
 
-#include "catch.hpp"
+#include <catch2/catch_test_macros.hpp>
 #include "test_config.hpp"
 
 #include <cassert>
