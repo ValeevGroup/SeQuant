@@ -13,7 +13,7 @@ namespace mbpt {
 
 namespace {
 enum class qns { none = 0, alpha = 1, beta = 2 };
-auto qndecorate(qns qn, std::wstring_view label) {
+auto qndecorate(qns qn, std::wstring label) {
   switch (static_cast<int>(qn)) {
     case 0:
       return std::wstring(label);
@@ -28,40 +28,36 @@ auto qndecorate(qns qn, std::wstring_view label) {
 };
 };  // namespace
 
+void add_fermi_spin(IndexSpaceRegistry &isr) {
+  auto copy_reg = isr.get_map();
+  for (auto it = copy_reg.begin(); it != copy_reg.end();) {
+    IndexSpace spin_up(qndecorate(qns::alpha, it->first), it->second.type(),
+                       0b01, it->second.get_approximate_size());
+    IndexSpace spin_down(qndecorate(qns::beta, it->first), it->second.type(),
+                         0b10, it->second.get_approximate_size());
+    isr.add(spin_up);
+    isr.add(spin_down);
+  }
+}
 IndexSpaceRegistry make_min_sr_so_subspaces() {
   IndexSpaceRegistry minimal_spinorbit_reference_registry;
+
   IndexSpace occupied(L"i", 0b01);
   minimal_spinorbit_reference_registry.add(occupied);
-
-  IndexSpace occupied_alpha(L"i", 0b01, IndexSpace::alpha);
-  minimal_spinorbit_reference_registry.add(occupied_alpha);
-
-  IndexSpace occupied_beta(L"i", 0b01, IndexSpace::beta);
-  minimal_spinorbit_reference_registry.add(occupied_beta);
 
   IndexSpace unoccupied(L"a", 0b10);
   minimal_spinorbit_reference_registry.add(unoccupied);
 
-  IndexSpace unoccupied_alpha(L"a", 0b10, IndexSpace::alpha);
-  minimal_spinorbit_reference_registry.add(unoccupied_alpha);
-
-  IndexSpace unoccupied_beta(L"a", 0b10, IndexSpace::beta);
-  minimal_spinorbit_reference_registry.add(unoccupied_beta);
-
   IndexSpace all(L"p", 0b11);
   minimal_spinorbit_reference_registry.add(all);
-
-  IndexSpace all_alpha(L"p", 0b11, IndexSpace::alpha);
-  minimal_spinorbit_reference_registry.add(all_alpha);
-
-  IndexSpace all_beta(L"p", 0b11, IndexSpace::beta);
-  minimal_spinorbit_reference_registry.add(all_beta);
 
   minimal_spinorbit_reference_registry.assign_density_occupied(L"i");
   minimal_spinorbit_reference_registry.assign_complete(L"p");
   minimal_spinorbit_reference_registry.assign_vacuum_occupied(L"i");
   minimal_spinorbit_reference_registry.assign_active_particle_space(L"i");
   minimal_spinorbit_reference_registry.assign_active_hole_space(L"a");
+
+  add_fermi_spin(minimal_spinorbit_reference_registry);
 
   return minimal_spinorbit_reference_registry;
 }

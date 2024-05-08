@@ -27,12 +27,6 @@ TEST_CASE("IndexSpace", "[elements]") {
         jactive_occupied));  // cannot add a space with duplicate attr
 
     auto spinlabeled_registry = sequant::mbpt::make_min_sr_so_subspaces();
-    REQUIRE_NOTHROW(spinlabeled_registry.relabel(
-        L"p↑", L"k"));  // grab the original label by base_key and the new one
-                        // by the qnfree_key.
-    REQUIRE_THROWS(spinlabeled_registry.relabel(
-        L"p↓", L"k↓"));  // up and down arrows are not allowed during space
-                         // construction.
   }
 
   SECTION("equality") {
@@ -66,10 +60,10 @@ TEST_CASE("IndexSpace", "[elements]") {
     {
       auto i = IndexSpace(L"i", {0b01});
       auto a = IndexSpace(L"a", {0b10});
-      auto iA = IndexSpace(L"i", {0b01}, IndexSpace::alpha);
-      auto iB = IndexSpace(L"i", {0b01}, IndexSpace::beta);
-      auto aA = IndexSpace(L"a", {0b10}, IndexSpace::alpha);
-      auto aB = IndexSpace(L"a", {0b10}, IndexSpace::beta);
+      auto iA = IndexSpace(L"i", {0b01}, 0b01);
+      auto iB = IndexSpace(L"i", {0b01}, 0b10);
+      auto aA = IndexSpace(L"a", {0b10}, 0b01);
+      auto aB = IndexSpace(L"a", {0b10}, 0b10);
 
       REQUIRE(iA < aA);
       REQUIRE(iB < aB);

@@ -714,8 +714,6 @@ class Index : public Taggable {
 
     auto i1_Q = i1.space().qns();
     auto i2_Q = i2.space().qns();
-    const bool have_qns =
-        i1_Q != IndexSpace::nullqns || i2_Q != IndexSpace::nullqns;
 
     auto compare_space = [&i1, &i2]() {
       if (i1.space() == i2.space()) {
@@ -729,7 +727,7 @@ class Index : public Taggable {
       }
     };
 
-    if (have_qns || (i1_Q != i2_Q)) {
+    if ((i1_Q != i2_Q)) {
       return compare_space();
     }
     const bool have_tags = i1.tag().has_value() && i2.tag().has_value();

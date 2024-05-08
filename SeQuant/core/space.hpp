@@ -26,20 +26,20 @@ namespace sequant {
 struct TypeAttr {
   int32_t bitset = 0;
 
-  constexpr TypeAttr(int32_t value) noexcept : bitset(value) {}
+  TypeAttr(int32_t value) noexcept : bitset(value) {}
 
-  constexpr explicit operator int64_t() const {
-    return static_cast<int64_t>(bitset);
-  }
+  explicit operator int64_t() const { return static_cast<int64_t>(bitset); }
   const int32_t to_int32() const { return bitset; }
-  const TypeAttr intersection(TypeAttr other) const {
-    return TypeAttr(this->to_int32() & other.to_int32());
-  }
+
+  TypeAttr(const TypeAttr &other) { bitset = other.to_int32(); }
   const TypeAttr unIon(TypeAttr other) const {
     return TypeAttr(this->to_int32() | other.to_int32());
   }
   const TypeAttr exclusionary_or(TypeAttr other) const {
     return TypeAttr(this->to_int32() xor other.to_int32());
+  }
+  const TypeAttr intersection(TypeAttr other) const {
+    return TypeAttr(this->to_int32() & other.to_int32());
   }
 
   bool const operator==(const TypeAttr other) const {
@@ -64,44 +64,42 @@ struct TypeAttr {
 struct QuantumNumbersAttr {
   int32_t bitset = 0;
 
-  constexpr QuantumNumbersAttr(int32_t value) noexcept : bitset(value) {}
-  constexpr explicit operator int64_t() const {
-    return static_cast<int64_t>(bitset);
-  }
-  constexpr int32_t to_int32() const { return bitset; }
-  constexpr QuantumNumbersAttr intersection(QuantumNumbersAttr other) const {
+  QuantumNumbersAttr(int32_t value) noexcept : bitset(value) {}
+  explicit operator int64_t() const { return static_cast<int64_t>(bitset); }
+  int32_t to_int32() const { return bitset; }
+  QuantumNumbersAttr intersection(QuantumNumbersAttr other) const {
     return QuantumNumbersAttr(this->to_int32() & other.to_int32());
   }
-  constexpr QuantumNumbersAttr unIon(QuantumNumbersAttr other) const {
+  QuantumNumbersAttr unIon(QuantumNumbersAttr other) const {
     return QuantumNumbersAttr(this->to_int32() | other.to_int32());
   }
-  constexpr QuantumNumbersAttr operator~() const {
+  QuantumNumbersAttr operator~() const {
     return QuantumNumbersAttr(~this->to_int32());
   }
 
-  friend constexpr bool operator==(QuantumNumbersAttr, QuantumNumbersAttr);
-  friend constexpr bool operator!=(QuantumNumbersAttr, QuantumNumbersAttr);
+  friend bool operator==(QuantumNumbersAttr, QuantumNumbersAttr);
+  friend bool operator!=(QuantumNumbersAttr, QuantumNumbersAttr);
 
   /// @return true if \c other is included in this object
-  constexpr bool includes(QuantumNumbersAttr other) const {
+  bool includes(QuantumNumbersAttr other) const {
     return intersection(other) == other;
   }
   /// @return true if in canonical order this object preceeds \c other
-  constexpr bool operator<(QuantumNumbersAttr other) const {
+  bool operator<(QuantumNumbersAttr other) const {
     return this->to_int32() < other.to_int32();
   }
 
   /// @return an invalid TypeAttr
-  static constexpr QuantumNumbersAttr invalid() noexcept {
+  static QuantumNumbersAttr invalid() noexcept {
     return QuantumNumbersAttr(-0);
   }
 };
 
-constexpr bool operator==(QuantumNumbersAttr lhs, QuantumNumbersAttr rhs) {
+bool operator==(QuantumNumbersAttr lhs, QuantumNumbersAttr rhs) {
   return lhs.to_int32() == rhs.to_int32();
 }
 
-constexpr bool operator!=(QuantumNumbersAttr lhs, QuantumNumbersAttr rhs) {
+bool operator!=(QuantumNumbersAttr lhs, QuantumNumbersAttr rhs) {
   return !(lhs == rhs);
 }
 
@@ -118,40 +116,13 @@ class IndexSpace {
   using TypeAttr = sequant::TypeAttr;
   using QuantumNumbersAttr = sequant::QuantumNumbersAttr;
 
-  std::wstring add_spin_label(QuantumNumbersAttr qna) {
-    if (qna.to_int32() == 2) {  // spin down
-      return L"↓";
-    } else if (qna.to_int32() == 1) {  // spin up
-      return L"↑";
-    } else {
-      return L"";
-    }
-  }
-
-  bool has_spin_decoration(std::wstring label) {
-    const auto up = label.rfind(L'↑');
-    const auto down = label.rfind(L'↓');
-    if (up != -1) {
-      return true;
-    }
-    if (down != -1) {
-      return true;
-    } else {
-      return false;
-    }
-  }
-
   // IndexSpace(IndexSpace& idxspace);
 
   IndexSpace(std::wstring type_label, TypeAttr typeattr_,
              QuantumNumbersAttr qnattr_ = QuantumNumbersAttr{0},
              unsigned long approximate_size = 10) {
     attr_ = Attr(typeattr_, qnattr_);
-    qnfree_key_ = type_label;
-    if (has_spin_decoration(type_label)) {
-      throw "↓ and ↑ are reserved wchars";
-    }
-    base_key_ = type_label + add_spin_label(qnattr_);
+    base_key_ = type_label;
     approximate_size_ = approximate_size;
   }
 
@@ -271,7 +242,7 @@ class IndexSpace {
     }
     bool operator!=(Attr other) const { return !(*this == other); }
 
-    static Attr null() noexcept { return Attr{0, nullqns}; }
+    static Attr null() noexcept { return Attr{0, 0}; }
     static Attr invalid() noexcept {
       return Attr{TypeAttr::invalid(), QuantumNumbersAttr::invalid()};
     }
@@ -307,22 +278,21 @@ class IndexSpace {
   /// \note spin quantum number takes 2 rightmost bits
   /// @{
   /// no quantum numbers
-  constexpr static QuantumNumbers nullqns{0b000000};
   /// spin-up
-  constexpr static QuantumNumbers alpha{0b000001};
+  //constexpr static QuantumNumbers alpha{0b000001};
   /// spin-down
-  constexpr static QuantumNumbers beta{0b000010};
+  //constexpr static QuantumNumbers beta{0b000010};
   /// spin mask
-  constexpr static QuantumNumbers spinmask{0b000011};
+  //constexpr static QuantumNumbers spinmask{0b000011};
 
   /// list of all standard quantum numbers
-  static constexpr QuantumNumbers standard_qns[] = {nullqns, alpha, beta};
+  //static constexpr QuantumNumbers standard_qns[] = {nullqns, alpha, beta};
 
-  template <int32_t qnsint>
+  /*template <int32_t qnsint>
   static const constexpr bool is_standard_qns() {
     return ranges::any_of(
         standard_qns, [](const auto t) { return t == QuantumNumbers{qnsint}; });
-  }
+  }*/
   /// @}
 
   struct bad_key : std::invalid_argument {
@@ -344,7 +314,7 @@ class IndexSpace {
       return a < b;
     }
   };
-  bool operator==(IndexSpace IS)const{return this->type() == IS.type() && this->get_base_key() == IS.get_base_key() && this->qns() == IS.qns() && this->get_qnfree_key() == IS.get_qnfree_key() ? true : false;}
+  bool operator==(IndexSpace IS)const{return this->type() == IS.type() && this->get_base_key() == IS.get_base_key() && this->qns() == IS.qns()  ? true : false;}
 
   bool operator!=(IndexSpace IS)const{return !(*this == IS);}
 
@@ -360,36 +330,31 @@ class IndexSpace {
 
   /// Default ctor creates space with nonnull type and null quantum numbers
   IndexSpace() {
-    attr_ = {{0x7fffffff}, nullqns};
+    attr_ = {{0x7fffffff}, 0b00};
     base_key_ =L"";
     approximate_size_ = 0;
-    qnfree_key_ = L"";
   }
 
   IndexSpace(const IndexSpace &other) {
   attr_ = other.get_attr();
   base_key_ = other.get_base_key();
   approximate_size_ = other.get_approximate_size();
-  qnfree_key_ = other.get_qnfree_key();
   }
   IndexSpace(IndexSpace &&other) {
      attr_ = other.get_attr();
      base_key_ = other.get_base_key();
      approximate_size_ = other.get_approximate_size();
-     qnfree_key_ = other.get_qnfree_key();
   }
   IndexSpace &operator=(const IndexSpace &other) {
     attr_ = other.get_attr();
     base_key_ = other.get_base_key();
     approximate_size_ = other.get_approximate_size();
-    qnfree_key_ = other.get_qnfree_key();
     return *this;
   }
   IndexSpace &operator=(IndexSpace &&other) {
     attr_ = other.get_attr();
     base_key_ = other.get_base_key();
     approximate_size_ = other.get_approximate_size();
-    qnfree_key_ = other.get_qnfree_key();
     return *this;
   }
 
@@ -414,19 +379,12 @@ class IndexSpace {
   unsigned long get_approximate_size() const {
     return approximate_size_;
   }
-  std::wstring get_qnfree_key() const {
-    return qnfree_key_;
-}
+
 
  private:
   Attr attr_ = Attr::invalid();
   std::wstring base_key_;
   std::size_t approximate_size_;
-  std::wstring qnfree_key_; // useful to have access to a key related to typeattr only.
-  /// @brief constructs an instance of an IndexSpace object
-  //explicit IndexSpace(Attr attr) noexcept : attr_(attr) {
-  //  assert(attr.is_valid());
-  //}
 
 
 

@@ -116,16 +116,16 @@ TEST_CASE("Index", "[elements][index]") {
   }
 
   SECTION("qns ordering") {
-    IndexSpace p_upspace(L"p", {11}, IndexSpace::alpha);
-    IndexSpace p_downspace(L"p", {11}, IndexSpace::beta);
+    IndexSpace p_upspace(L"p", {11}, 0b01);
+    IndexSpace p_downspace(L"p", {11}, 0b10);
     auto p1A = Index(L"p↑_1", p_upspace);
     auto p1B = Index(L"p↓_1", p_downspace);
     auto p2A = Index(L"p↑_2", p_upspace);
     auto p2B = Index(L"p↓_2", p_downspace);
-    REQUIRE(p1A.space().qns() == IndexSpace::alpha);
-    REQUIRE(p2A.space().qns() == IndexSpace::alpha);
-    REQUIRE(p1B.space().qns() == IndexSpace::beta);
-    REQUIRE(p2B.space().qns() == IndexSpace::beta);
+    REQUIRE(p1A.space().qns() == 0b01);
+    REQUIRE(p2A.space().qns() == 0b01);
+    REQUIRE(p1B.space().qns() == 0b10);
+    REQUIRE(p2B.space().qns() == 0b10);
     REQUIRE(p1A < p1B);
     REQUIRE(p2A < p1B);
     REQUIRE(p1A < p2A);
@@ -221,7 +221,7 @@ TEST_CASE("Index", "[elements][index]") {
     IndexSpace aup(
         L"a",
         get_default_context().index_space_registry()->retrieve(L"a").type(),
-        IndexSpace::alpha);
+        0b01);
     get_default_context().index_space_registry()->add(aup);
     Index a1_up(L"a↑_1", {i1, i2});
     std::wstring a1_up_str = to_latex(a1_up);

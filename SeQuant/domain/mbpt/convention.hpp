@@ -12,6 +12,12 @@ namespace mbpt {
 
 enum class Convention { QCiFS };
 
+///@brief decorate IndexSpace labels with spin
+std::wstring decorate_label(std::wstring label, bool up);
+
+///@brief add fermionic spin spaces to registry
+void add_fermi_spin(IndexSpaceRegistry &isr);
+
 // clang-format off
 // most "simple" models only need reference to 2 base spaces, occupied and unoccupied.
 // This is minimal partitioning is sufficient for computing expectation values of Coupled-Cluster type operators.

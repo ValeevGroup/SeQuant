@@ -116,11 +116,7 @@ class IndexSpaceRegistry {
 
   /// @brief replace the label of an existing IndexSpace in the registry
   /// @param original_label the original base_key of a space
-  /// @param new_label the new chosen @c qn_free_key
-  /// @warning IndexSpaceRegistry does not know about spin decoration.
-  /// Therefore looking for the original label should include the spin
-  /// decoration The new_label should not include spin decoration as a new
-  /// IndexSpace is constructed with this label.
+  /// @param new_label the new chosen @c base_key
   void relabel(std::wstring original_label, std::wstring new_label) {
     bool found = false;
     auto it = label_space.begin();
