@@ -247,7 +247,7 @@ class Index : public Taggable {
   /// @brief constructs an Index using this object's label and proto indices (if
   /// any), its IndexSpaceType, and a new set of QuantumNumbers
   [[nodiscard]] Index replace_qns(QuantumNumbersAttr qns) const {
-    return Index(*this, IndexSpace(this->space().get_base_key(),
+    return Index(*this, IndexSpace(this->space().base_key(),
                                    this->space().attr(), std::move(qns)));
   }
 
@@ -275,7 +275,7 @@ class Index : public Taggable {
   static Index make_tmp_index(const IndexSpace &space) {
     Index result;
     result.label_ =
-        space.get_base_key() + L'_' + std::to_wstring(Index::next_tmp_index());
+        space.base_key() + L'_' + std::to_wstring(Index::next_tmp_index());
     result.space_ = space;
     return result;
   }
@@ -301,7 +301,7 @@ class Index : public Taggable {
                               bool symmetric_proto_indices = true) {
     Index result;
     result.label_ =
-        space.get_base_key() + L'_' + std::to_wstring(Index::next_tmp_index());
+        space.base_key() + L'_' + std::to_wstring(Index::next_tmp_index());
     result.space_ = space;
     result.proto_indices_ = std::forward<IndexContainer>(proto_indices);
     result.symmetric_proto_indices_ = symmetric_proto_indices;
@@ -310,10 +310,45 @@ class Index : public Taggable {
     return result;
   }
 
+  /// @param label an Index label (e.g., returned by Index::label())
+  /// @return @p label split into base and ordinal parts; the ordinal part is
+  /// empty, if missing
+  static std::pair<std::wstring_view, std::wstring_view> make_split_label(
+      std::wstring_view label) {
+    auto underscore_position = label.find(L'_');
+    if (underscore_position == std::wstring::npos)
+      return {label, {}};
+    else
+      return {{label.data(), underscore_position},
+              {label.begin() + underscore_position + 1, label.end()}};
+  }
+
+  /// @param label an Index label (e.g., returned by Index::label())
+  /// @return @p label split into base and ordinal parts; the ordinal part is
+  /// empty, if missing
+  static std::wstring make_merged_label(std::wstring_view base_label,
+                                        std::wstring_view ordinal_label) {
+    if (ordinal_label.empty())
+      return std::wstring(base_label);
+    else {
+      auto result = std::wstring(base_label) + L'_';
+      result.append(ordinal_label);
+      return result;
+    }
+  }
+
   /// @return the label as a UTF-8 encoded wide-character string
+  /// @note label format is `base` or `base_ordinal`
   /// @warning this does not include the proto index labels, use
   /// Index::full_label() instead
   std::wstring_view label() const { return label_; }
+
+  /// @return the label split into base and ordinal parts; the ordinal part is
+  /// empty, if missing
+  /// @warning this does not include the proto index labels
+  std::pair<std::wstring_view, std::wstring_view> split_label() const {
+    return make_split_label(this->label());
+  }
 
   /// @return A string label representable in ASCII encoding
   /// @warning not to be used with proto indices
@@ -374,7 +409,7 @@ class Index : public Taggable {
     auto underscore_position = label.find(L'_');
     std::wstring result;
     if (underscore_position == std::wstring::npos) {
-      result = label;
+      result = std::forward<WS1>(label);
       result += suffix;
     } else {
       result = label.substr(0, underscore_position);
@@ -432,7 +467,7 @@ class Index : public Taggable {
     };
 
     if (underscore_position == std::wstring::npos) {
-      result = label;
+      result = std::forward<WS1>(label);
       erase(result, substr);
     } else {
       result = label.substr(0, underscore_position);
@@ -833,7 +868,7 @@ class IndexFactory {
         }
       }
       result = Index(
-          space.get_base_key() + L'_' + std::to_wstring(++(counter_it->second)),
+          space.base_key() + L'_' + std::to_wstring(++(counter_it->second)),
           &space);
       valid = validator_ ? validator_(result) : true;
     } while (!valid);
@@ -862,7 +897,7 @@ class IndexFactory {
           counter_it = counters_.find(space);
         }
       }
-      result = Index(Index(space.get_base_key() + L'_' +
+      result = Index(Index(space.base_key() + L'_' +
                                std::to_wstring(++(counter_it->second)),
                            &space),
                      idx.proto_indices());

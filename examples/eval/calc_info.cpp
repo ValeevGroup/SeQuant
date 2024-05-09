@@ -9,7 +9,7 @@
 namespace sequant::eval {
 
 size_t IndexToSize::operator()(Index const& idx) const {
-  return idx.space().get_approximate_size();
+  return idx.space().approximate_size();
 }
 
 container::vector<ExprPtr> CalcInfo::exprs() const {

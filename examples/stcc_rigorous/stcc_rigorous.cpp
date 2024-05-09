@@ -49,9 +49,9 @@ int main(int argc, char* argv[]) {
     for (size_t i = 1; i <= i_max; ++i) {
       auto label = std::to_wstring(i);
       auto occ_space = idx_registry->retrieve(L"i");
-      auto occ_i = Index(occ_space.get_base_key() + L'_' + label, occ_space);
+      auto occ_i = Index(occ_space.base_key() + L'_' + label, occ_space);
       auto uocc_space = idx_registry->retrieve(L"a");
-      auto virt_i = Index(uocc_space.get_base_key() + L'_' + label, uocc_space);
+      auto virt_i = Index(uocc_space.base_key() + L'_' + label, uocc_space);
       decltype(ext_idx_list)::value_type pair = {occ_i, virt_i};
       ext_idx_list.push_back(pair);
     }

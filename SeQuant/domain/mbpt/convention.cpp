@@ -8,36 +8,29 @@
 #include "SeQuant/core/tensor.hpp"
 #include "op.hpp"
 
+#include <SeQuant/domain/mbpt/spin.hpp>
+
 namespace sequant {
 namespace mbpt {
 
-namespace {
-enum class qns { none = 0, alpha = 1, beta = 2 };
-auto qndecorate(qns qn, std::wstring label) {
-  switch (static_cast<int>(qn)) {
-    case 0:
-      return std::wstring(label);
-    case 1:
-      return std::wstring(label) + L"↑";
-    case 2:
-      return std::wstring(label) + L"↓";
-    default:
-      assert(false && "invalid quantum number");
+void add_fermi_spin(IndexSpaceRegistry& isr) {
+  IndexSpaceRegistry result;
+  for (auto&& space : isr) {
+    if (space.base_key() != L"") {
+      IndexSpace spin_any(space.base_key(), space.type(), Spin::any,
+                          space.approximate_size());
+      IndexSpace spin_up(spinannotation_add(space.base_key(), Spin::alpha),
+                         space.type(), Spin::alpha, space.approximate_size());
+      IndexSpace spin_down(spinannotation_add(space.base_key(), Spin::beta),
+                           space.type(), Spin::beta, space.approximate_size());
+      result.add(spin_any);
+      result.add(spin_up);
+      result.add(spin_down);
+    }
   }
-  abort();  // unreachable
-};
-};  // namespace
-
-void add_fermi_spin(IndexSpaceRegistry &isr) {
-  auto copy_reg = isr.get_map();
-  for (auto it = copy_reg.begin(); it != copy_reg.end();) {
-    IndexSpace spin_up(qndecorate(qns::alpha, it->first), it->second.type(),
-                       0b01, it->second.get_approximate_size());
-    IndexSpace spin_down(qndecorate(qns::beta, it->first), it->second.type(),
-                         0b10, it->second.get_approximate_size());
-    isr.add(spin_up);
-    isr.add(spin_down);
-  }
+  result.reference_occupied_space(isr.reference_occupied_space());
+  result.vacuum_occupied_space(isr.vacuum_occupied_space());
+  isr = std::move(result);
 }
 IndexSpaceRegistry make_min_sr_so_subspaces() {
   IndexSpaceRegistry minimal_spinorbit_reference_registry;
@@ -51,11 +44,11 @@ IndexSpaceRegistry make_min_sr_so_subspaces() {
   IndexSpace all(L"p", 0b11);
   minimal_spinorbit_reference_registry.add(all);
 
-  minimal_spinorbit_reference_registry.assign_density_occupied(L"i");
-  minimal_spinorbit_reference_registry.assign_complete(L"p");
-  minimal_spinorbit_reference_registry.assign_vacuum_occupied(L"i");
-  minimal_spinorbit_reference_registry.assign_active_particle_space(L"i");
-  minimal_spinorbit_reference_registry.assign_active_hole_space(L"a");
+  minimal_spinorbit_reference_registry.reference_occupied_space(occupied);
+  minimal_spinorbit_reference_registry.complete_space(all);
+  minimal_spinorbit_reference_registry.vacuum_occupied_space(occupied);
+  minimal_spinorbit_reference_registry.active_particle_space(occupied);
+  minimal_spinorbit_reference_registry.active_hole_space(unoccupied);
 
   add_fermi_spin(minimal_spinorbit_reference_registry);
 
@@ -74,11 +67,11 @@ IndexSpaceRegistry make_min_sr_subspaces() {
   IndexSpace all(L"p", 0b11);
   minimal_reference_registry.add(all);
 
-  minimal_reference_registry.assign_density_occupied(L"i");
-  minimal_reference_registry.assign_complete(L"p");
-  minimal_reference_registry.assign_vacuum_occupied(L"i");
-  minimal_reference_registry.assign_active_particle_space(L"i");
-  minimal_reference_registry.assign_active_hole_space(L"a");
+  minimal_reference_registry.reference_occupied_space(occupied);
+  minimal_reference_registry.complete_space(all);
+  minimal_reference_registry.vacuum_occupied_space(occupied);
+  minimal_reference_registry.active_particle_space(occupied);
+  minimal_reference_registry.active_hole_space(unoccupied);
 
   return minimal_reference_registry;
 }
@@ -124,12 +117,12 @@ IndexSpaceRegistry make_F12_sr_subspaces() {
   standard_reference_registry.add(complete);
 
   // only necessary for some Operator definitions
-  standard_reference_registry.assign_density_occupied(L"m");
-  standard_reference_registry.assign_complete(L"κ");
-  standard_reference_registry.assign_active_particle_space(L"i");
-  standard_reference_registry.assign_active_hole_space(L"a");
+  standard_reference_registry.reference_occupied_space(occupied);
+  standard_reference_registry.complete_space(complete);
+  standard_reference_registry.active_particle_space(active_occ);
+  standard_reference_registry.active_hole_space(active_uocc);
   // necessary for SR wick algebra
-  standard_reference_registry.assign_vacuum_occupied(L"m");
+  standard_reference_registry.vacuum_occupied_space(occupied);
 
   return standard_reference_registry;
 }
@@ -183,12 +176,12 @@ IndexSpaceRegistry make_mr_subspaces() {
   multireference_registry.add(complete);
 
   // only necessary for some Operator definitions
-  multireference_registry.assign_complete(L"p");
-  multireference_registry.assign_density_occupied(L"M");
-  multireference_registry.assign_active_hole_space(L"A");
-  multireference_registry.assign_active_particle_space(L"I");
+  multireference_registry.complete_space(complete);
+  multireference_registry.reference_occupied_space(maybe_occupied);
+  multireference_registry.active_hole_space(maybe_active_unoccupied);
+  multireference_registry.active_particle_space(maybe_active_occupied);
   // needed for SR wick algebra
-  multireference_registry.assign_vacuum_occupied(L"O");
+  multireference_registry.vacuum_occupied_space(vacuum_occupied);
 
   return multireference_registry;
 }
@@ -219,12 +212,14 @@ IndexSpaceRegistry make_sr_subspaces() {
   standard_reference_registry.add(complete);
 
   // only necessary for some Operator definitions
-  standard_reference_registry.assign_density_occupied(L"m");
-  standard_reference_registry.assign_complete(L"p");
-  standard_reference_registry.assign_active_particle_space(L"i");
-  standard_reference_registry.assign_active_hole_space(L"a");
+  standard_reference_registry.reference_occupied_space(occupied);
+  standard_reference_registry.complete_space(complete);
+  standard_reference_registry.active_particle_space(active_occ);
+  standard_reference_registry.active_hole_space(active_uocc);
   // necessary for SR wick algebra
-  standard_reference_registry.assign_vacuum_occupied(L"m");
+  standard_reference_registry.vacuum_occupied_space(occupied);
+
+  add_fermi_spin(standard_reference_registry);
 
   return standard_reference_registry;
 }
@@ -275,12 +270,12 @@ IndexSpaceRegistry make_legacy_subspaces() {
   standard_reference_registry.add(maybe_unoccupied);
 
   // only necessary for some Operator definitions
-  standard_reference_registry.assign_density_occupied(L"m");
-  standard_reference_registry.assign_complete(L"κ");
-  standard_reference_registry.assign_active_particle_space(L"i");
-  standard_reference_registry.assign_active_hole_space(L"a");
+  standard_reference_registry.reference_occupied_space(occupied);
+  standard_reference_registry.complete_space(complete);
+  standard_reference_registry.active_particle_space(active_occ);
+  standard_reference_registry.active_hole_space(active_uocc);
   // necessary for SR wick algebra
-  standard_reference_registry.assign_vacuum_occupied(L"m");
+  standard_reference_registry.vacuum_occupied_space(occupied);
 
   return standard_reference_registry;
 }

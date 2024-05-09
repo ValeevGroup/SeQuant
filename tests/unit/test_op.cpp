@@ -200,12 +200,10 @@ TEST_CASE("Op", "[elements]") {
       REQUIRE(is_pure_qpannihilator(fann(L"a_1"), V));
       REQUIRE(!is_pure_qpannihilator(fann(L"p_1"), V));
       auto idx_registry = get_default_context().index_space_registry();
-      REQUIRE(qpannihilator_space(fann(L"i_1"), V) ==
-              idx_registry->nulltype_());
+      REQUIRE(qpannihilator_space(fann(L"i_1"), V) == idx_registry->nullspace);
       REQUIRE(qpannihilator_space(fcre(L"i_1"), V) ==
               idx_registry->retrieve(L"i_1"));
-      REQUIRE(qpannihilator_space(fcre(L"a_1"), V) ==
-              idx_registry->nulltype_());
+      REQUIRE(qpannihilator_space(fcre(L"a_1"), V) == idx_registry->nullspace);
       REQUIRE(qpannihilator_space(fann(L"a_1"), V) ==
               idx_registry->retrieve(L"a_1"));
       REQUIRE(qpannihilator_space(fcre(L"p_1"), V) ==

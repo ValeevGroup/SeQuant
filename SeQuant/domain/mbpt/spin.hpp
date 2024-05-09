@@ -2,8 +2,8 @@
 // Created by Eduard Valeyev on 2019-02-27.
 //
 
-#ifndef SEQUANT_SPIN_HPP
-#define SEQUANT_SPIN_HPP
+#ifndef SEQUANT_DOMAIN_MBPT_SPIN_HPP
+#define SEQUANT_DOMAIN_MBPT_SPIN_HPP
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
@@ -17,6 +17,95 @@
 
 namespace sequant {
 
+namespace mbpt {
+
+/// quantum numbers tags related to spin
+/// \note spin quantum number takes 2 rightmost bits
+enum class Spin : QuantumNumbersAttr::bitset_t {
+  alpha = 0b000001,
+  beta = 0b000010,
+  any = 0b000011,  // both bits set so that overlap and union work as expected
+                   // (any & alpha = alpha, alpha | beta = any)
+  free = any,      // syntax sugar
+  spinmask = 0b000011  // coincides with any
+};
+
+// Spin is a scoped enum, hence not implicitly convertible to
+// QuantumNumbersAttr::bitset_t
+static_assert(
+    !std::is_convertible_v<sequant::mbpt::Spin, QuantumNumbersAttr::bitset_t>);
+// QuantumNumbersAttr::bitset_t cannot be constructed from Spin
+static_assert(!std::is_constructible_v<QuantumNumbersAttr::bitset_t,
+                                       sequant::mbpt::Spin>);
+// but Spin can be cast to QuantumNumbersAttr::bitset_t
+static_assert(meta::is_statically_castable_v<sequant::mbpt::Spin,
+                                             QuantumNumbersAttr::bitset_t>);
+// Spin cannot be cast to nonsense ...
+static_assert(
+    !meta::is_statically_castable_v<sequant::mbpt::Spin, std::string>);
+
+inline Spin operator~(Spin s) {
+  return static_cast<Spin>(~(static_cast<QuantumNumbersAttr::bitset_t>(s)));
+}
+inline Spin operator|(Spin s1, Spin s2) {
+  return static_cast<Spin>(static_cast<QuantumNumbersAttr::bitset_t>(s1) |
+                           static_cast<QuantumNumbersAttr::bitset_t>(s2));
+}
+inline Spin operator&(Spin s1, Spin s2) {
+  return static_cast<Spin>(static_cast<QuantumNumbersAttr::bitset_t>(s1) &
+                           static_cast<QuantumNumbersAttr::bitset_t>(s2));
+}
+
+/// converts QuantumNumbersAttr to Spin
+/// @note this filters out all bits not used in Spin
+inline Spin to_spin(const QuantumNumbersAttr& t) {
+  return static_cast<Spin>(static_cast<Spin>(t.to_int32()) & Spin::spinmask);
+}
+
+/// removes spin annotation in QuantumNumbersAttr by unsetting the bits used by
+/// Spin
+inline QuantumNumbersAttr spinannotation_remove(const QuantumNumbersAttr& t) {
+  return t.intersection(QuantumNumbersAttr(~Spin::spinmask));
+}
+
+/// removes spin annotation, if any
+template <typename WS, typename = std::enable_if_t<
+                           meta::is_wstring_or_view_v<std::decay_t<WS>>>>
+std::wstring spinannotation_remove(WS&& label) {
+  auto [base, orbital] = Index::make_split_label(label);
+  if (base.back() == L'↑' || base.back() == L'↓') {
+    base.remove_suffix(1);
+  }
+  return Index::make_merged_label(base, orbital);
+}
+
+/// adds spin annotation to IndexSpace base label or Index (full) label
+template <typename WS, typename = std::enable_if_t<
+                           meta::is_wstring_or_view_v<std::decay_t<WS>>>>
+std::wstring spinannotation_add(WS&& label, Spin s) {
+  auto [base, ordinal] = Index::make_split_label(label);
+  switch (s) {
+    case Spin::any:
+      return std::wstring(label);
+    case Spin::alpha:
+      return Index::make_merged_label(std::wstring(base) + L"↑", ordinal);
+    case Spin::beta:
+      return Index::make_merged_label(std::wstring(base) + L"↓", ordinal);
+    default:
+      assert(false && "invalid quantum number");
+  }
+}
+
+/// replaces spin annotation to
+template <typename WS, typename = std::enable_if_t<
+                           meta::is_wstring_or_view_v<std::decay_t<WS>>>>
+std::wstring spinannotation_replacе(WS&& label, Spin s) {
+  auto label_sf = spinannotation_remove(std::forward<WS>(label));
+  return spinannotation_add(label_sf, s);
+}
+
+}  // namespace mbpt
+
 // make alpha-spin idx
 [[nodiscard]] Index make_spinalpha(const Index& idx);
 
@@ -24,7 +113,7 @@ namespace sequant {
 [[nodiscard]] Index make_spinbeta(const Index& idx);
 
 // make null-spin idx
-[[nodiscard]] Index make_spinnull(const Index& idx);
+[[nodiscard]] Index make_spinfree(const Index& idx);
 
 /// @brief Applies index replacement rules to an ExprPtr
 /// @param expr ExprPtr to transform
@@ -323,4 +412,4 @@ ExprPtr biorthogonal_transform(
 
 }  // namespace sequant
 
-#endif  // SEQUANT_SPIN_HPP
+#endif  // SEQUANT_DOMAIN_MBPT_SPIN_HPP

@@ -9,7 +9,9 @@
 #include <SeQuant/core/parse_expr.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/tensor.hpp>
+
 #include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/spin.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -79,17 +81,17 @@ TEST_CASE("TEST_PARSE_EXPR", "[parse_expr]") {
   using namespace sequant;
   // use a minimal spinbasis registry
   IndexSpaceRegistry minimal_sp;
-  IndexSpace inull(L"i", {0b01}, IndexSpace::nullqns);
+  IndexSpace inull(L"i", 0b01, mbpt::Spin::any);
   minimal_sp.add(inull);
-  IndexSpace iup(L"i", {0b01}, IndexSpace::alpha);
+  IndexSpace iup(L"i", 0b01, mbpt::Spin::alpha);
   minimal_sp.add(iup);
-  IndexSpace idown(L"i", {0b01}, IndexSpace::beta);
+  IndexSpace idown(L"i", 0b01, mbpt::Spin::beta);
   minimal_sp.add(idown);
-  IndexSpace anull(L"a", {0b10}, IndexSpace::nullqns);
+  IndexSpace anull(L"a", 0b10, mbpt::Spin::any);
   minimal_sp.add(anull);
-  IndexSpace aup(L"a", {0b10}, IndexSpace::alpha);
+  IndexSpace aup(L"a", {0b10}, mbpt::Spin::alpha);
   minimal_sp.add(aup);
-  IndexSpace adown(L"a", {0b10}, IndexSpace::beta);
+  IndexSpace adown(L"a", {0b10}, mbpt::Spin::beta);
   minimal_sp.add(adown);
   Context new_cxt(Vacuum::SingleProduct, minimal_sp);
   auto ctx_resetter = set_scoped_default_context(new_cxt);

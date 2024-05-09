@@ -45,7 +45,12 @@ Context::Context(Vacuum vac, IndexSpaceRegistry isr, IndexSpaceMetric m,
       idx_space_reg_(std::make_shared<IndexSpaceRegistry>(isr)) {}
 
 Vacuum Context::vacuum() const { return vacuum_; }
-std::shared_ptr<IndexSpaceRegistry> Context::index_space_registry() const {
+std::shared_ptr<const IndexSpaceRegistry> Context::index_space_registry()
+    const {
+  return idx_space_reg_;
+}
+std::shared_ptr<IndexSpaceRegistry> Context::mutable_index_space_registry()
+    const {
   return idx_space_reg_;
 }
 IndexSpaceMetric Context::metric() const { return metric_; }

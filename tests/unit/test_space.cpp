@@ -12,12 +12,7 @@ TEST_CASE("IndexSpace", "[elements]") {
   SECTION("registry_core_functionality") {
     auto standard_registry = sequant::mbpt::make_sr_subspaces();
     REQUIRE_NOTHROW(standard_registry.retrieve(L"i"));
-
-    REQUIRE_NOTHROW(standard_registry.relabel(L"i", L"j"));
-    REQUIRE_THROWS(standard_registry.relabel(
-        L"i", L"l"));  // cannot relabel a removed entry
-
-    REQUIRE_NOTHROW(standard_registry.remove(L"j"));
+    REQUIRE_NOTHROW(standard_registry.remove(L"i"));
     IndexSpace active_occupied(L"i", {0b0010});
     REQUIRE_NOTHROW(standard_registry.add(active_occupied));
     REQUIRE_THROWS(standard_registry.add(
@@ -58,12 +53,12 @@ TEST_CASE("IndexSpace", "[elements]") {
 
     // test ordering with quantum numbers
     {
-      auto i = IndexSpace(L"i", {0b01});
-      auto a = IndexSpace(L"a", {0b10});
-      auto iA = IndexSpace(L"i", {0b01}, 0b01);
-      auto iB = IndexSpace(L"i", {0b01}, 0b10);
-      auto aA = IndexSpace(L"a", {0b10}, 0b01);
-      auto aB = IndexSpace(L"a", {0b10}, 0b10);
+      auto i = IndexSpace(L"i", 0b01);
+      auto a = IndexSpace(L"a", 0b10);
+      auto iA = IndexSpace(L"i", 0b01, 0b01);
+      auto iB = IndexSpace(L"i", 0b01, 0b10);
+      auto aA = IndexSpace(L"a", 0b10, 0b01);
+      auto aB = IndexSpace(L"a", 0b10, 0b10);
 
       REQUIRE(iA < aA);
       REQUIRE(iB < aB);
@@ -82,10 +77,10 @@ TEST_CASE("IndexSpace", "[elements]") {
     REQUIRE(f12_registry.retrieve(L"i") ==
             f12_registry.intersection(f12_registry.retrieve(L"i"),
                                       f12_registry.retrieve(L"p")));
-    REQUIRE(f12_registry.nulltype_() ==
+    REQUIRE(f12_registry.nullspace ==
             f12_registry.intersection(f12_registry.retrieve(L"a"),
                                       f12_registry.retrieve(L"i")));
-    REQUIRE(f12_registry.nulltype_() ==
+    REQUIRE(f12_registry.nullspace ==
             f12_registry.intersection(f12_registry.retrieve(L"a"),
                                       f12_registry.retrieve(L"α'")));
 
@@ -161,11 +156,11 @@ TEST_CASE("IndexSpace", "[elements]") {
 
   SECTION("base_space") {
     auto f12_registry = sequant::mbpt::make_F12_sr_subspaces();
-    auto f12_base_spaces = f12_registry.base_spaces_label();
-    REQUIRE(f12_base_spaces[0].second == L"o");
-    REQUIRE(f12_base_spaces[1].second == L"i");
-    REQUIRE(f12_base_spaces[2].second == L"a");
-    REQUIRE(f12_base_spaces[3].second == L"g");
-    REQUIRE(f12_base_spaces[4].second == L"α'");
+    auto f12_base_spaces = f12_registry.base_spaces();
+    REQUIRE(f12_base_spaces[0].base_key() == L"o");
+    REQUIRE(f12_base_spaces[1].base_key() == L"i");
+    REQUIRE(f12_base_spaces[2].base_key() == L"a");
+    REQUIRE(f12_base_spaces[3].base_key() == L"g");
+    REQUIRE(f12_base_spaces[4].base_key() == L"α'");
   }
 }

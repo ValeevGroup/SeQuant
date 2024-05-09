@@ -163,7 +163,7 @@ int main() {
 ```
 The above sample registry outlines the set theoreitcs for  indices x, y, and z using unsigned ints conveniently written as bitsets.
 Notice that not all possible combinations need to be registered. It is the task of the user to predict any and all spaces that they may 
-encounter in their context. Notice that `unIon()` and `intersection()` are part of the `IndexSpaceRegistry` class. This is because these operations should never produce an unregistered `IndexSpace`(except the `nulltype()`).
+encounter in their context. Notice that `unIon()` and `intersection()` are part of the `IndexSpaceRegistry` class. This is because these operations should never produce an unregistered `IndexSpace`(except the `nullspace()`).
 SeQuant of course provides a number of common partitionings common for chemistry. These are located in `SeQuant/domain/mbpt/convention.hpp`.
 
 
@@ -192,7 +192,7 @@ int main() {
 
 However, to deal with the single-product vacuum it is necessary to specify which registered `IndexSpace` corresponds to vacuum occupied. This is because the definition of quasiparticle creators and annihilators depends on the operator's action on the single-product vacuum.
 ```c++
-sample_ISR.assign_vacuum_occupied(L"x");
+sample_ISR.vacuum_occupied_space(L"x");
 ```
 Please keep in mind that at various points it is implied that spaces included in vacuum occupied have smaller `typeattr`(bitset/ unsigned int)
 than those spaces with `typeattr` outside of this range.

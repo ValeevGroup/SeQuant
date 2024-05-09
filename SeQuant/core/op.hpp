@@ -226,14 +226,17 @@ IndexSpace qpcreator_space(const Op<S> &op,
   switch (vacuum) {
     case Vacuum::Physical:
       return op.action() == Action::create ? op.index().space()
-                                           : idx_registry->nulltype_();
+                                           : idx_registry->nullspace;
     case Vacuum::SingleProduct:
       return op.action() == Action::annihilate
-                 ? idx_registry->intersection(op.index().space(),
-                                              idx_registry->vacuum_occupied())
+                 ? idx_registry->intersection(
+                       op.index().space(), idx_registry->vacuum_occupied_space(
+                                               op.index().space().qns()))
                  : idx_registry
-                       ->non_overlapping_spaces(op.index().space(),
-                                                idx_registry->vacuum_occupied())
+                       ->non_overlapping_spaces(
+                           op.index().space(),
+                           idx_registry->vacuum_occupied_space(
+                               op.index().space().qns()))
                        .back();
     default:
       throw std::logic_error(
@@ -291,21 +294,23 @@ IndexSpace qpannihilator_space(const Op<S> &op,
   IndexSpace not_occupied;
   if (vacuum == Vacuum::SingleProduct) {
     is_pure_occ = idx_registry->is_pure_occupied(op.index().space());
-    not_occupied = is_pure_occ ? idx_registry->nulltype_()
+    not_occupied = is_pure_occ ? idx_registry->nullspace
                                : idx_registry
                                      ->non_overlapping_spaces(
-                                         idx_registry->vacuum_occupied(),
+                                         idx_registry->vacuum_occupied_space(
+                                             op.index().space().qns()),
                                          op.index().space())
                                      .back();
   }
   switch (vacuum) {
     case Vacuum::Physical:
       return op.action() == Action::annihilate ? op.index().space()
-                                               : idx_registry->nulltype_();
+                                               : idx_registry->nullspace;
     case Vacuum::SingleProduct:
       return op.action() == Action::create
-                 ? idx_registry->intersection(op.index().space(),
-                                              idx_registry->vacuum_occupied())
+                 ? idx_registry->intersection(
+                       op.index().space(), idx_registry->vacuum_occupied_space(
+                                               op.index().space().qns()))
                  : not_occupied;
     default:
       throw std::logic_error(
@@ -793,7 +798,7 @@ class NormalOperator : public Operator<S>,
         const auto qpspace_right = qpcreator_space<S>(right, vacuum_);
         const auto qpspace_common =
             idx_registry->intersection(qpspace_left, qpspace_right);
-        if (qpspace_common != idx_registry->nulltype_()) return true;
+        if (qpspace_common != idx_registry->nullspace) return true;
       }
       return false;
     };

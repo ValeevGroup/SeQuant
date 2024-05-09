@@ -72,9 +72,9 @@ TEST_CASE("Spin", "[spin]") {
   }
 
   SECTION("ASCII label") {
-    IndexSpace pup(L"p", {0b011}, IndexSpace::alpha);
-    IndexSpace pdown(L"p", {0b011}, IndexSpace::beta);
-    IndexSpace alphaup(L"α", {0b110}, IndexSpace::alpha);
+    IndexSpace pup(L"p", 0b011, mbpt::Spin::alpha);
+    IndexSpace pdown(L"p", 0b011, mbpt::Spin::beta);
+    IndexSpace alphaup(L"α", 0b110, mbpt::Spin::alpha);
 
     auto p1 = Index(L"p↑_1", pup);
     auto p2 = Index(L"p↓_2", pdown);
@@ -96,25 +96,25 @@ TEST_CASE("Spin", "[spin]") {
   }
 
   SECTION("Index: add/remove spin") {
-    auto i = Index(L"i", {L"i", {0b01}, IndexSpace::nullqns});
-    auto i1 = Index(L"i_1", {L"i", {0b01}, IndexSpace::nullqns});
-    auto p = Index(L"p", {L"p", {0b11}, IndexSpace::nullqns});
-    auto p1 = Index(L"p_1", {L"p", {0b11}, IndexSpace::nullqns});
-    auto p1_a = Index(L"p↑_1", {L"p", {0b11}, IndexSpace::alpha});
-    auto p2 = Index(L"p_2", {L"p", {0b11}, IndexSpace::nullqns});
-    auto p2_b = Index(L"p↓_2", {L"p", {0b11}, IndexSpace::beta});
+    auto i = Index(L"i", {L"i", {0b01}, mbpt::Spin::any});
+    auto i1 = Index(L"i_1", {L"i", {0b01}, mbpt::Spin::any});
+    auto p = Index(L"p", {L"p", {0b11}, mbpt::Spin::any});
+    auto p1 = Index(L"p_1", {L"p", {0b11}, mbpt::Spin::any});
+    auto p1_a = Index(L"p↑_1", {L"p↑", {0b11}, mbpt::Spin::alpha});
+    auto p2 = Index(L"p_2", {L"p", {0b11}, mbpt::Spin::any});
+    auto p2_b = Index(L"p↓_2", {L"p↓", {0b11}, mbpt::Spin::beta});
 
-    auto p_i = Index(L"p", {L"p", {0b11}, IndexSpace::nullqns}, {i});
-    auto p1_i = Index(L"p_1", {L"p", {0b11}, IndexSpace::nullqns}, {i});
-    auto p_i1 = Index(L"p", {L"p", {0b11}, IndexSpace::nullqns}, {i1});
-    auto p1_i1 = Index(L"p_1", {L"p", {0b11}, IndexSpace::nullqns}, {i1});
+    auto p_i = Index(L"p", {L"p", {0b11}, mbpt::Spin::any}, {i});
+    auto p1_i = Index(L"p_1", {L"p", {0b11}, mbpt::Spin::any}, {i});
+    auto p_i1 = Index(L"p", {L"p", {0b11}, mbpt::Spin::any}, {i1});
+    auto p1_i1 = Index(L"p_1", {L"p", {0b11}, mbpt::Spin::any}, {i1});
 
     // make_spinalpha
     {
       // plain
       REQUIRE_NOTHROW(make_spinalpha(p));
       REQUIRE(make_spinalpha(p).label() == L"p↑");
-      IndexSpace p_a(L"p", {0b11}, IndexSpace::alpha);
+      IndexSpace p_a(L"p↑", {0b11}, mbpt::Spin::alpha);
       REQUIRE(make_spinalpha(p).space() == p_a);
       REQUIRE_NOTHROW(make_spinalpha(p1));
       REQUIRE(make_spinalpha(p1) == p1_a);
@@ -166,26 +166,26 @@ TEST_CASE("Spin", "[spin]") {
     // make spinnull
     {
       // plain
-      REQUIRE_NOTHROW(make_spinnull(p1_a));
-      REQUIRE(make_spinnull(p1_a) == p1);
-      REQUIRE_NOTHROW(make_spinnull(p2_b));
-      REQUIRE(make_spinnull(p2_b) == p2);
-      REQUIRE_NOTHROW(make_spinnull(p1));
-      REQUIRE(make_spinnull(p1) == p1);
+      REQUIRE_NOTHROW(make_spinfree(p1_a));
+      REQUIRE(make_spinfree(p1_a) == p1);
+      REQUIRE_NOTHROW(make_spinfree(p2_b));
+      REQUIRE(make_spinfree(p2_b) == p2);
+      REQUIRE_NOTHROW(make_spinfree(p1));
+      REQUIRE(make_spinfree(p1) == p1);
       // idempotent
-      REQUIRE_NOTHROW(make_spinnull(p2));
-      REQUIRE(make_spinnull(p2) == p2);
+      REQUIRE_NOTHROW(make_spinfree(p2));
+      REQUIRE(make_spinfree(p2) == p2);
 
       // proto
-      REQUIRE_NOTHROW(make_spinnull(make_spinalpha(p1_i1)));
-      REQUIRE(make_spinnull(make_spinalpha(p1_i1)) == p1_i1);
-      REQUIRE(make_spinnull(make_spinalpha(p1_i1)) == make_spinnull(p1_i1));
+      REQUIRE_NOTHROW(make_spinfree(make_spinalpha(p1_i1)));
+      REQUIRE(make_spinfree(make_spinalpha(p1_i1)) == p1_i1);
+      REQUIRE(make_spinfree(make_spinalpha(p1_i1)) == make_spinfree(p1_i1));
     }
   }
 
   SECTION("Tensor: can_expand, spin_symm_tensor, remove_spin") {
-    IndexSpace pup(L"p", {0b011}, IndexSpace::alpha);
-    IndexSpace pdown(L"p", {0b011}, IndexSpace::beta);
+    IndexSpace pup(L"p", {0b011}, mbpt::Spin::alpha);
+    IndexSpace pdown(L"p", {0b011}, mbpt::Spin::beta);
     IndexSpace pnull(L"p", {0b011});
     IndexSpaceRegistry pspin;
     pspin.add(pup);
@@ -1305,12 +1305,12 @@ SECTION("Expand P operator pair-wise") {
 
 SECTION("Open-shell spin-tracing") {
   // make a minimal spinorbital indexregistry and change the context
-  IndexSpace occA(L"i", {0b01}, IndexSpace::alpha);
-  IndexSpace virA(L"a", {0b10}, IndexSpace::alpha);
-  IndexSpace occB(L"i", {0b01}, IndexSpace::beta);
-  IndexSpace virB(L"a", {0b10}, IndexSpace::beta);
-  IndexSpace occN(L"i", {0b01}, IndexSpace::nullqns);
-  IndexSpace virN(L"a", {0b10}, IndexSpace::nullqns);
+  IndexSpace occA(L"i", {0b01}, mbpt::Spin::alpha);
+  IndexSpace virA(L"a", {0b10}, mbpt::Spin::alpha);
+  IndexSpace occB(L"i", {0b01}, mbpt::Spin::beta);
+  IndexSpace virB(L"a", {0b10}, mbpt::Spin::beta);
+  IndexSpace occN(L"i", {0b01}, mbpt::Spin::any);
+  IndexSpace virN(L"a", {0b10}, mbpt::Spin::any);
   IndexSpaceRegistry minimal_spinorbit;
   minimal_spinorbit.add(occA);
   minimal_spinorbit.add(virA);

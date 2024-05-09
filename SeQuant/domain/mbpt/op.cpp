@@ -76,22 +76,22 @@ qns_t excitation_type_qns(std::size_t K) {
     result[1] = {0ul, K};
   } else {
     auto idx_registry = get_default_context().index_space_registry();
-    auto base_spaces = idx_registry->base_spaces_label();
+    auto base_spaces = idx_registry->base_spaces();
     // are the active qp spaces base spaces?
-    bool aps_base =
-        idx_registry->is_base_space(idx_registry->active_particle_space());
+    bool aps_base = idx_registry->is_base_space(
+        idx_registry->active_particle_space(Spin::any));
     bool ahs_base =
-        idx_registry->is_base_space(idx_registry->active_hole_space());
+        idx_registry->is_base_space(idx_registry->active_hole_space(Spin::any));
 
     for (int i = 0; i < base_spaces.size(); i++) {
-      if (!includes(idx_registry->active_hole_space().type(),
-                    base_spaces[i].first.type())) {
+      if (!includes(idx_registry->active_hole_space(Spin::any).type(),
+                    base_spaces[i].type())) {
         result[i * 2] = {0ul, 0ul};
       } else {
         result[i * 2] = {ahs_base ? K : 0ul, K};
       }
-      if (!includes(idx_registry->active_particle_space().type(),
-                    base_spaces[i].first.type())) {
+      if (!includes(idx_registry->active_particle_space(Spin::any).type(),
+                    base_spaces[i].type())) {
         result[i * 2 + 1] = {0ul, 0ul};
       } else {
         result[i * 2 + 1] = {aps_base ? K : 0ul, K};
@@ -110,17 +110,17 @@ qns_t interval_excitation_type_qns(std::size_t K) {
     result[1] = {0ul, K};
   } else {
     auto idx_registry = get_default_context().index_space_registry();
-    auto base_spaces = idx_registry->base_spaces_label();
+    auto base_spaces = idx_registry->base_spaces();
 
     for (int i = 0; i < base_spaces.size(); i++) {
-      if (!includes(idx_registry->active_hole_space().type(),
-                    base_spaces[i].first.type())) {
+      if (!includes(idx_registry->active_hole_space(Spin::any).type(),
+                    base_spaces[i].type())) {
         result[i * 2] = {0ul, 0ul};
       } else {
         result[i * 2] = {0ul, K};
       }
-      if (!includes(idx_registry->active_particle_space().type(),
-                    base_spaces[i].first.type())) {
+      if (!includes(idx_registry->active_particle_space(Spin::any).type(),
+                    base_spaces[i].type())) {
         result[i * 2 + 1] = {0ul, 0ul};
       } else {
         result[i * 2 + 1] = {0ul, K};
@@ -137,20 +137,20 @@ qns_t deexcitation_type_qns(std::size_t K) {
     result[1] = {0ul, K};
   } else {
     auto idx_registry = get_default_context().index_space_registry();
-    auto base_spaces = idx_registry->base_spaces_label();
-    bool aps_base =
-        idx_registry->is_base_space(idx_registry->active_particle_space());
+    auto base_spaces = idx_registry->base_spaces();
+    bool aps_base = idx_registry->is_base_space(
+        idx_registry->active_particle_space(Spin::any));
     bool ahs_base =
-        idx_registry->is_base_space(idx_registry->active_hole_space());
+        idx_registry->is_base_space(idx_registry->active_hole_space(Spin::any));
     for (int i = 0; i < base_spaces.size(); i++) {
-      if (!includes(idx_registry->active_hole_space().type(),
-                    base_spaces[i].first.type())) {
+      if (!includes(idx_registry->active_hole_space(Spin::any).type(),
+                    base_spaces[i].type())) {
         result[i * 2 + 1] = {0ul, 0ul};
       } else {
         result[i * 2 + 1] = {ahs_base ? K : 0ul, K};
       }
-      if (!includes(idx_registry->active_particle_space().type(),
-                    base_spaces[i].first.type())) {
+      if (!includes(idx_registry->active_particle_space(Spin::any).type(),
+                    base_spaces[i].type())) {
         result[i * 2] = {0ul, 0ul};
       } else {
         result[i * 2] = {aps_base ? K : 0ul, K};
@@ -169,16 +169,16 @@ qns_t interval_deexcitation_type_qns(std::size_t K) {
     result[1] = {0ul, K};
   } else {
     auto idx_registry = get_default_context().index_space_registry();
-    auto base_spaces = idx_registry->base_spaces_label();
+    auto base_spaces = idx_registry->base_spaces();
     for (int i = 0; i < base_spaces.size(); i++) {
-      if (!includes(idx_registry->active_hole_space().type(),
-                    base_spaces[i].first.type())) {
+      if (!includes(idx_registry->active_hole_space(Spin::any).type(),
+                    base_spaces[i].type())) {
         result[i * 2 + 1] = {0ul, 0ul};
       } else {
         result[i * 2 + 1] = {0ul, K};
       }
-      if (!includes(idx_registry->active_particle_space().type(),
-                    base_spaces[i].first.type())) {
+      if (!includes(idx_registry->active_particle_space(Spin::any).type(),
+                    base_spaces[i].type())) {
         result[i * 2] = {0ul, 0ul};
       } else {
         result[i * 2] = {0ul, K};
@@ -204,18 +204,18 @@ qns_t generic_excitation_qns(std::size_t particle_rank, std::size_t hole_rank,
     result[1] = {0ul, particle_rank};
   } else {
     auto idx_registry = get_default_context().index_space_registry();
-    auto base_spaces = idx_registry->base_spaces_label();
-    bool aps_base =
-        idx_registry->is_base_space(idx_registry->active_particle_space());
+    auto base_spaces = idx_registry->base_spaces();
+    bool aps_base = idx_registry->is_base_space(
+        idx_registry->active_particle_space(Spin::any));
     bool ahs_base =
-        idx_registry->is_base_space(idx_registry->active_hole_space());
+        idx_registry->is_base_space(idx_registry->active_hole_space(Spin::any));
     for (int i = 0; i < base_spaces.size(); i++) {
-      if (!includes(hole_space.type(), base_spaces[i].first.type())) {
+      if (!includes(hole_space.type(), base_spaces[i].type())) {
         result[i * 2] = {0ul, 0ul};  // creators
       } else {
         result[i * 2] = {ahs_base ? hole_rank : 0ul, hole_rank};  // creators
       }
-      if (!includes(particle_space.type(), base_spaces[i].first.type())) {
+      if (!includes(particle_space.type(), base_spaces[i].type())) {
         result[i * 2 + 1] = {0ul, 0ul};  // annihilators
       } else {
         result[i * 2 + 1] = {aps_base ? particle_rank : 0ul,
@@ -235,19 +235,19 @@ qns_t generic_deexcitation_qns(std::size_t particle_rank, std::size_t hole_rank,
     result[1] = {0ul, hole_rank};
   } else {
     auto idx_registry = get_default_context().index_space_registry();
-    auto base_spaces = idx_registry->base_spaces_label();
-    bool aps_base =
-        idx_registry->is_base_space(idx_registry->active_particle_space());
+    auto base_spaces = idx_registry->base_spaces();
+    bool aps_base = idx_registry->is_base_space(
+        idx_registry->active_particle_space(Spin::any));
     bool ahs_base =
-        idx_registry->is_base_space(idx_registry->active_hole_space());
+        idx_registry->is_base_space(idx_registry->active_hole_space(Spin::any));
     for (int i = 0; i < base_spaces.size(); i++) {
-      if (!includes(hole_space.type(), base_spaces[i].first.type())) {
+      if (!includes(hole_space.type(), base_spaces[i].type())) {
         result[i * 2 + 1] = {0ul, 0ul};  // annihilators
       } else {
         result[i * 2 + 1] = {ahs_base ? hole_rank : 0ul,
                              hole_rank};  // annihilators
       }
-      if (!includes(particle_space.type(), base_spaces[i].first.type())) {
+      if (!includes(particle_space.type(), base_spaces[i].type())) {
         result[i * 2] = {0ul, 0ul};  // creators
       } else {
         result[i * 2] = {aps_base ? particle_rank : 0ul,
@@ -275,13 +275,13 @@ qns_t combine(qns_t a, qns_t b) {
     return result;
   } else if (get_default_context().vacuum() == Vacuum::SingleProduct) {
     auto idx_registry = get_default_context().index_space_registry();
-    auto base_spaces = idx_registry->base_spaces_label();
+    auto base_spaces = idx_registry->base_spaces();
     for (auto i = 0; i < base_spaces.size(); i++) {
       auto cre = i * 2;
       auto ann = (i * 2) + 1;
       auto base_is_fermi_occupied = idx_registry->is_pure_occupied(
-          base_spaces[i]
-              .first);  // need to distinguish particle and hole contractions.
+          base_spaces[i]);  // need to distinguish particle and hole
+                            // contractions.
       auto ncontr_space =
           base_is_fermi_occupied
               ? qninterval_t{0, std::min(b[ann].upper(), a[cre].upper())}
@@ -424,8 +424,10 @@ OpMaker<S>::OpMaker(OpType op, std::size_t nbra, std::size_t nket,
       ket_spaces_ = decltype(ket_spaces_)(nket, hole_space);
       break;
     case OpClass::gen:
-      bra_spaces_ = decltype(bra_spaces_)(nbra, idx_registry->complete());
-      ket_spaces_ = decltype(ket_spaces_)(nket, idx_registry->complete());
+      bra_spaces_ =
+          decltype(bra_spaces_)(nbra, idx_registry->complete_space(Spin::any));
+      ket_spaces_ =
+          decltype(ket_spaces_)(nket, idx_registry->complete_space(Spin::any));
       break;
   }
 }
@@ -435,8 +437,8 @@ OpMaker<S>::OpMaker(OpType op, std::size_t nparticle) {
   op_ = op;
   auto idx_registry = get_default_context().index_space_registry();
   auto current_context = get_default_context();
-  const auto unocc = idx_registry->active_hole_space();
-  const auto occ = idx_registry->active_particle_space();
+  const auto unocc = idx_registry->active_hole_space(Spin::any);
+  const auto occ = idx_registry->active_particle_space(Spin::any);
   switch (to_class(op)) {
     case OpClass::ex:
       bra_spaces_ = decltype(bra_spaces_)(nparticle, unocc);
@@ -447,8 +449,10 @@ OpMaker<S>::OpMaker(OpType op, std::size_t nparticle) {
       ket_spaces_ = decltype(ket_spaces_)(nparticle, unocc);
       break;
     case OpClass::gen:
-      bra_spaces_ = decltype(bra_spaces_)(nparticle, idx_registry->complete());
-      ket_spaces_ = decltype(ket_spaces_)(nparticle, idx_registry->complete());
+      bra_spaces_ = decltype(bra_spaces_)(
+          nparticle, idx_registry->complete_space(Spin::any));
+      ket_spaces_ = decltype(ket_spaces_)(
+          nparticle, idx_registry->complete_space(Spin::any));
       break;
   }
 }
@@ -520,20 +524,21 @@ ExprPtr H(std::size_t k) {
   return k == 1 ? TensorOp::H_(1) : TensorOp::H_(1) + TensorOp::H_(2);
 }
 
-ExprPtr F(bool use_tensor, IndexSpace density_occupied) {
+ExprPtr F(bool use_tensor, IndexSpace reference_occupied) {
   if (use_tensor) {
     return OpMaker<Statistics::FermiDirac>(OpType::f, 1)();
   } else {  // explicit density matrix construction
-    assert(density_occupied !=
+    assert(reference_occupied !=
            get_default_context()
                .index_space_registry()
-               ->nulltype_());  // cannot explicitly instantiate fock operator
-                                // without providing an occupied indexspace
+               ->nullspace);  // cannot explicitly instantiate fock operator
+                              // without providing an occupied indexspace
     // add \bar{g}^{\kappa x}_{\lambda y} \gamma^y_x with x,y in occ_space_type
     auto make_g_contribution = [](const auto occ_space) {
       auto idx_registry = get_default_context().index_space_registry();
       return mbpt::OpMaker<Statistics::FermiDirac>::make(
-          {idx_registry->complete()}, {idx_registry->complete()},
+          {idx_registry->complete_space(Spin::any)},
+          {idx_registry->complete_space(Spin::any)},
           [=](auto braidxs, auto ketidxs, Symmetry opsymm) {
             auto m1 = Index::make_tmp_index(occ_space);
             auto m2 = Index::make_tmp_index(occ_space);
@@ -565,7 +570,7 @@ ExprPtr F(bool use_tensor, IndexSpace density_occupied) {
     };
     auto idx_registry = get_default_context().index_space_registry();
     return OpMaker<Statistics::FermiDirac>(OpType::h, 1)() +
-           make_g_contribution(density_occupied);
+           make_g_contribution(reference_occupied);
   }
 }
 
@@ -615,22 +620,22 @@ ExprPtr P(std::int64_t K) {
 
 ExprPtr A(std::int64_t K) {
   auto idx_registry = get_default_context().index_space_registry();
-  auto base_spaces = idx_registry->base_spaces_label();
+  auto base_spaces = idx_registry->base_spaces();
   assert(K != 0);
   container::svector<IndexSpace> creators;
   container::svector<IndexSpace> annihilators;
   if (K > 0)
-    for (auto i : ranges::views::iota(0, K))
-      annihilators.emplace_back(idx_registry->active_particle_space());
+    for ([[maybe_unused]] auto i : ranges::views::iota(0, K))
+      annihilators.emplace_back(idx_registry->active_particle_space(Spin::any));
   else
-    for (auto i : ranges::views::iota(0, -K))
-      creators.emplace_back(idx_registry->active_particle_space());
+    for ([[maybe_unused]] auto i : ranges::views::iota(0, -K))
+      creators.emplace_back(idx_registry->active_particle_space(Spin::any));
   if (K > 0)
-    for (auto i : ranges::views::iota(0, K))
-      creators.emplace_back(idx_registry->active_hole_space());
+    for ([[maybe_unused]] auto i : ranges::views::iota(0, K))
+      creators.emplace_back(idx_registry->active_hole_space(Spin::any));
   else
-    for (auto i : ranges::views::iota(0, -K))
-      annihilators.emplace_back(idx_registry->active_hole_space());
+    for ([[maybe_unused]] auto i : ranges::views::iota(0, -K))
+      annihilators.emplace_back(idx_registry->active_hole_space(Spin::any));
 
   std::optional<OpMaker<Statistics::FermiDirac>::UseDepIdx> dep;
   if (get_default_formalism().csv() == mbpt::CSV::Yes)
@@ -642,22 +647,22 @@ ExprPtr A(std::int64_t K) {
 
 ExprPtr S(std::int64_t K) {
   auto idx_registry = get_default_context().index_space_registry();
-  auto base_spaces = idx_registry->base_spaces_label();
+  auto base_spaces = idx_registry->base_spaces();
   assert(K != 0);
   container::svector<IndexSpace> creators;
   container::svector<IndexSpace> annihilators;
   if (K > 0)
-    for (auto i : ranges::views::iota(0, K))
-      annihilators.emplace_back(idx_registry->active_particle_space());
+    for ([[maybe_unused]] auto i : ranges::views::iota(0, K))
+      annihilators.emplace_back(idx_registry->active_particle_space(Spin::any));
   else
-    for (auto i : ranges::views::iota(0, -K))
-      creators.emplace_back(idx_registry->active_particle_space());
+    for ([[maybe_unused]] auto i : ranges::views::iota(0, -K))
+      creators.emplace_back(idx_registry->active_particle_space(Spin::any));
   if (K > 0)
-    for (auto i : ranges::views::iota(0, K))
-      creators.emplace_back(idx_registry->active_hole_space());
+    for ([[maybe_unused]] auto i : ranges::views::iota(0, K))
+      creators.emplace_back(idx_registry->active_hole_space(Spin::any));
   else
-    for (auto i : ranges::views::iota(0, -K))
-      annihilators.emplace_back(idx_registry->active_hole_space());
+    for ([[maybe_unused]] auto i : ranges::views::iota(0, -K))
+      annihilators.emplace_back(idx_registry->active_hole_space(Spin::any));
 
   std::optional<OpMaker<Statistics::FermiDirac>::UseDepIdx> dep;
   if (get_default_formalism().csv() == mbpt::CSV::Yes)
@@ -805,7 +810,7 @@ ExprPtr F(bool use_f_tensor, IndexSpace occupied_density) {
 
 ExprPtr A(std::int64_t K) {
   auto idx_registry = get_default_context().index_space_registry();
-  auto base_spaces = idx_registry->base_spaces_label();
+  auto base_spaces = idx_registry->base_spaces();
   assert(K != 0);
   return ex<op_t>([]() -> std::wstring_view { return L"A"; },
                   [=]() -> ExprPtr { return TensorOp::A(K); },
@@ -977,10 +982,10 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
   //  the hueristic to keep only full contractions
   // during a wick procedure requires that the wave function density agree with
   // the vacuum normal ordering occupancy.
-  bool full_contractions =
-      (idx_registry->density_occupied() == idx_registry->vacuum_occupied())
-          ? true
-          : false;
+  bool full_contractions = (idx_registry->reference_occupied_space() ==
+                            idx_registry->vacuum_occupied_space())
+                               ? true
+                               : false;
   FWickTheorem wick{expr};
   wick.use_topology(use_top).set_nop_connections(nop_connections);
   wick.full_contractions(full_contractions);
@@ -994,20 +999,22 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
                << wick.stats().num_useful_contractions << std::endl;
   }
   // only need to handle the special case where the dense(at least partially
-  // occupied) states, contain addtional functions to the vacuum_occupied.
+  // occupied) states, contain additional functions to the vacuum_occupied.
   // including a density occupied partition using a "single-reference" method
-  // will replace FNOPs with RDMs. i.e. "multi-reference" RDM replacment rules
+  // will replace FNOPs with RDMs. i.e. "multi-reference" RDM replacement rules
   // work in the limit of one reference.
-  if (idx_registry->density_occupied() == idx_registry->nulltype_() ||
+  if (idx_registry->reference_occupied_space() == IndexSpace::Type{} ||
       !idx_registry->has_non_overlapping_spaces(
-          idx_registry->density_occupied(), idx_registry->vacuum_occupied())) {
+          idx_registry->reference_occupied_space(Spin::any),
+          idx_registry->vacuum_occupied_space(Spin::any))) {
     return result;
   } else {
     const auto target_rdm_space_type =
         get_default_context().vacuum() == Vacuum::SingleProduct
-            ? idx_registry->intersection(idx_registry->active_particle_space(),
-                                         idx_registry->active_hole_space())
-            : idx_registry->density_occupied();
+            ? idx_registry->intersection(
+                  idx_registry->active_particle_space(Spin::any),
+                  idx_registry->active_hole_space(Spin::any))
+            : idx_registry->reference_occupied_space(Spin::any);
 
     // STEP1. replace NOPs by RDM
     auto replace_nop_with_rdm = [&rdm_label, spinorbital](ExprPtr& exptr) {
@@ -1094,7 +1101,7 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
         ranges::for_each(rdm_indices, [&](const Index& idx) {
           const auto target_type =
               idx_registry->intersection(idx.space(), target_rdm_space_type);
-          if (target_type != idx_registry->nulltype_()) {
+          if (target_type != idx_registry->nullspace) {
             Index target = Index::make_tmp_index(target_type);
             replacement_rules.emplace(idx, target);
           }
@@ -1149,9 +1156,9 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
         TensorCanonicalizer::instance()->index_comparer();
     TensorCanonicalizer::instance()->index_comparer(
         [&](const Index& idx1, const Index& idx2) -> bool {
-          auto active_space =
-              idx_registry->intersection(idx_registry->active_particle_space(),
-                                         idx_registry->active_hole_space());
+          auto active_space = idx_registry->intersection(
+              idx_registry->active_particle_space(Spin::any),
+              idx_registry->active_hole_space(Spin::any));
           const auto idx1_active = idx1.space().type() == active_space.type();
           const auto idx2_active = idx2.space().type() == active_space.type();
           if (idx1_active) {

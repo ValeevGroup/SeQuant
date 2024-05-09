@@ -1425,14 +1425,12 @@ class WickTheorem {
     // for bosons can only do Wick's theorem for physical vacuum (or similar)
     if constexpr (statistics == Statistics::BoseEinstein)
       assert(vacuum == Vacuum::Physical);
-    bool qp_left = is_qpannihilator<S>(left, vacuum);
-    bool qp_right = is_qpcreator<S>(right, vacuum);
     if (is_qpannihilator<S>(left, vacuum) && is_qpcreator<S>(right, vacuum)) {
       const auto qpspace_left = qpannihilator_space<S>(left, vacuum);
       const auto qpspace_right = qpcreator_space<S>(right, vacuum);
       const auto qpspace_common =
           idx_registry->intersection(qpspace_left, qpspace_right);
-      if (qpspace_common != idx_registry->nulltype_()) return true;
+      if (qpspace_common != idx_registry->nullspace) return true;
     }
     return false;
   }

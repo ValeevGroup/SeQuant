@@ -44,8 +44,10 @@ class Context {
 
   /// \return Vacuum of this context
   Vacuum vacuum() const;
+  /// @return a constant pointer to the IndexSpaceRegistry for this context.
+  std::shared_ptr<const IndexSpaceRegistry> index_space_registry() const;
   /// @return a pointer to the IndexSpaceRegistry for this context.
-  std::shared_ptr<IndexSpaceRegistry> index_space_registry() const;
+  std::shared_ptr<IndexSpaceRegistry> mutable_index_space_registry() const;
   /// \return IndexSpaceMetric of this context
   IndexSpaceMetric metric() const;
   /// \return BraKetSymmetry of this context

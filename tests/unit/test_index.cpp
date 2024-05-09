@@ -218,15 +218,14 @@ TEST_CASE("Index", "[elements][index]") {
     REQUIRE(a1_str == L"{a_1^{{i_1}{i_2^{{i_3}{i_4}}}}}");
 
     // a good test of adding new indices to the registry
-    IndexSpace aup(
-        L"a",
-        get_default_context().index_space_registry()->retrieve(L"a").type(),
-        0b01);
-    get_default_context().index_space_registry()->add(aup);
-    Index a1_up(L"a↑_1", {i1, i2});
-    std::wstring a1_up_str = to_latex(a1_up);
-    REQUIRE(a1_up_str == L"{a↑_1^{{i_1}{i_2^{{i_3}{i_4}}}}}");
-    get_default_context().index_space_registry()->remove(L"a↑");
+    IndexSpace ar(
+        L"a→",
+        get_default_context().index_space_registry()->retrieve(L"a").type());
+    get_default_context().mutable_index_space_registry()->add(ar);
+    Index a1_r(L"a→_1", {i1, i2});
+    std::wstring a1_r_str = to_latex(a1_r);
+    REQUIRE(a1_r_str == L"{a→_1^{{i_1}{i_2^{{i_3}{i_4}}}}}");
+    get_default_context().mutable_index_space_registry()->remove(L"a→");
   }
 
   /*SECTION("wolfram") {
