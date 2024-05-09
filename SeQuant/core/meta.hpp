@@ -245,6 +245,34 @@ struct is_same
 template <typename T, typename U>
 constexpr bool is_same_v = is_same<T, U>::value;
 
+/// is_statically_castable checks if a static_cast from From to To is possible
+/// N.B. is_statically_castable_v<From, To>  != is_constructible<To,From>
+///      see https://stackoverflow.com/a/16944130 for why this is
+///      not called is_explicitly_convertible
+
+template <typename From, typename To>
+struct is_statically_castable {
+  template <typename T>
+  static void f(T);
+
+  template <typename F, typename T>
+  static constexpr auto test(int)
+      -> decltype(f(static_cast<T>(std::declval<F>())), true) {
+    return true;
+  }
+
+  template <typename F, typename T>
+  static constexpr auto test(...) -> bool {
+    return false;
+  }
+
+  static bool const value = test<From, To>(0);
+};
+
+template <typename From, typename To>
+constexpr bool is_statically_castable_v =
+    is_statically_castable<From, To>::value;
+
 }  // namespace meta
 }  // namespace sequant
 
