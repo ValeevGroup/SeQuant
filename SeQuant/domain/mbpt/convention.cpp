@@ -30,6 +30,9 @@ void add_fermi_spin(IndexSpaceRegistry& isr) {
   }
   result.reference_occupied_space(isr.reference_occupied_space());
   result.vacuum_occupied_space(isr.vacuum_occupied_space());
+  result.active_particle_space(isr.active_particle_space());
+  result.active_hole_space(isr.active_hole_space());
+  result.complete_space(isr.complete_space());
   isr = std::move(result);
 }
 IndexSpaceRegistry make_min_sr_so_subspaces() {
