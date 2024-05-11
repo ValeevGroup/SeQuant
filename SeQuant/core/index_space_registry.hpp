@@ -70,6 +70,8 @@ class IndexSpaceRegistry {
 
   /// @brief add an IndexSpace to this registry.
   /// @param IS an IndexSpace
+  /// @throw std::invalid_argument if trying to add an IndexSpace with that
+  /// existing base key or attr.
   void add(const IndexSpace& IS) {
     auto it = spaces.find(IS.base_key());
     if (it != spaces.end()) {

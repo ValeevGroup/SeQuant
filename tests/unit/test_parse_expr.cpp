@@ -80,19 +80,8 @@ ParseErrorMatcher parseErrorMatches(std::size_t offset, std::size_t length,
 TEST_CASE("TEST_PARSE_EXPR", "[parse_expr]") {
   using namespace sequant;
   // use a minimal spinbasis registry
-  IndexSpaceRegistry minimal_sp;
-  IndexSpace inull(L"i", 0b01, mbpt::Spin::any);
-  minimal_sp.add(inull);
-  IndexSpace iup(L"i", 0b01, mbpt::Spin::alpha);
-  minimal_sp.add(iup);
-  IndexSpace idown(L"i", 0b01, mbpt::Spin::beta);
-  minimal_sp.add(idown);
-  IndexSpace anull(L"a", 0b10, mbpt::Spin::any);
-  minimal_sp.add(anull);
-  IndexSpace aup(L"a", {0b10}, mbpt::Spin::alpha);
-  minimal_sp.add(aup);
-  IndexSpace adown(L"a", {0b10}, mbpt::Spin::beta);
-  minimal_sp.add(adown);
+  IndexSpaceRegistry minimal_sp = mbpt::make_min_sr_subspaces();
+  mbpt::add_fermi_spin(minimal_sp);
   Context new_cxt(Vacuum::SingleProduct, minimal_sp);
   auto ctx_resetter = set_scoped_default_context(new_cxt);
   SECTION("Tensor") {
