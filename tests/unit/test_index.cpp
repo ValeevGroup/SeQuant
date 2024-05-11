@@ -105,6 +105,7 @@ TEST_CASE("Index", "[elements][index]") {
   }
 
   SECTION("ordering") {
+    // compare by qns, then tag, then space, then label, then proto indices
     Index i1(L"i_1");
     Index i2(L"i_2");
     REQUIRE(i1 < i2);
@@ -113,11 +114,23 @@ TEST_CASE("Index", "[elements][index]") {
     Index a1(L"a_2");
     REQUIRE(i1 < a1);
     REQUIRE(!(a1 < i1));
-  }
 
-  SECTION("qns ordering") {
-    IndexSpace p_upspace(L"p", {11}, 0b01);
-    IndexSpace p_downspace(L"p", {11}, 0b10);
+    // tags override rest, but ignored if defined for one and not the other
+    i2.tag().assign(1);
+    REQUIRE(i1 < i2);
+    i1.tag().assign(2);
+    REQUIRE(!(i1 < i2));
+    REQUIRE(i2 < i1);
+    a1.tag().assign(1);
+    REQUIRE(!(i1 < a1));
+    REQUIRE(a1 < i1);
+    REQUIRE(i2 < a1);
+    a1.tag().reset().assign(0);
+    REQUIRE(a1 < i2);
+
+    // qns override rest
+    IndexSpace p_upspace(L"p", 0b11, 0b01);
+    IndexSpace p_downspace(L"p", 0b11, 0b10);
     auto p1A = Index(L"p↑_1", p_upspace);
     auto p1B = Index(L"p↓_1", p_downspace);
     auto p2A = Index(L"p↑_2", p_upspace);
@@ -130,6 +143,16 @@ TEST_CASE("Index", "[elements][index]") {
     REQUIRE(p2A < p1B);
     REQUIRE(p1A < p2A);
     REQUIRE(p1B < p2B);
+    REQUIRE(!(p1B < p1A));
+    REQUIRE(!(p1B < p2A));
+    REQUIRE(!(p2A < p1A));
+    REQUIRE(!(p2B < p1B));
+    REQUIRE(!(p1A < p1A));
+    REQUIRE(!(p1B < p1B));
+    p2A.tag().assign(1);
+    REQUIRE(p1A < p2A);
+    p1A.tag().assign(2);
+    REQUIRE(p2A < p1A);
   }
 
   SECTION("hashing") {

@@ -762,15 +762,16 @@ class Index : public Taggable {
       }
     };
 
-    if ((i1_Q != i2_Q)) {
-      return compare_space();
-    }
-    const bool have_tags = i1.tag().has_value() && i2.tag().has_value();
+    if (i1_Q == i2_Q) {
+      const bool have_tags = i1.tag().has_value() && i2.tag().has_value();
 
-    if (!have_tags || i1.tag() == i2.tag()) {
-      return compare_space();
+      if (!have_tags || i1.tag() == i2.tag()) {
+        return compare_space();
+      } else {
+        return i1.tag() < i2.tag();
+      }
     } else {
-      return i1.tag() < i2.tag();
+      return i1_Q < i2_Q;
     }
   }
 
