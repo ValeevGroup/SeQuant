@@ -184,19 +184,10 @@ TEST_CASE("Spin", "[spin]") {
   }
 
   SECTION("Tensor: can_expand, spin_symm_tensor, remove_spin") {
-    IndexSpace pup(L"p", {0b011}, mbpt::Spin::alpha);
-    IndexSpace pdown(L"p", {0b011}, mbpt::Spin::beta);
-    IndexSpace pnull(L"p", {0b011});
-    IndexSpaceRegistry pspin;
-    pspin.add(pup);
-    pspin.add(pdown);
-    pspin.add(pnull);
-    Context new_cxt(Vacuum::SingleProduct, pspin);
-    auto cxt_resetter = set_scoped_default_context(new_cxt);
-    auto p1 = Index(L"p↑_1", pup);
-    auto p2 = Index(L"p↓_2", pdown);
-    auto p3 = Index(L"p↑_3", pup);
-    auto p4 = Index(L"p↓_4", pdown);
+    auto p1 = Index(L"p↑_1");
+    auto p2 = Index(L"p↓_2");
+    auto p3 = Index(L"p↑_3");
+    auto p4 = Index(L"p↓_4");
 
     auto input = ex<Tensor>(L"t", IndexList{p1, p2}, IndexList{p3, p4});
     REQUIRE(can_expand(input->as<Tensor>()) == true);
@@ -207,7 +198,7 @@ TEST_CASE("Spin", "[spin]") {
 
     auto result = remove_spin(input);
     for (auto& i : result->as<Tensor>().const_braket())
-      REQUIRE(i.space() == pnull);
+      REQUIRE(i.space().base_key() == L"p");
 
     input = ex<Tensor>(L"t", IndexList{p1, p3}, IndexList{p2, p4});
     REQUIRE(to_latex(swap_spin(input)) == L"{t^{{p↑_2}{p↑_4}}_{{p↓_1}{p↓_3}}}");
