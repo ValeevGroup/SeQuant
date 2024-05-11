@@ -277,6 +277,8 @@ IndexSpaceRegistry make_legacy_subspaces() {
   // necessary for SR wick algebra
   standard_reference_registry.vacuum_occupied_space(occupied);
 
+  add_fermi_spin(standard_reference_registry);
+
   return standard_reference_registry;
 }
 
