@@ -35,28 +35,6 @@ void add_fermi_spin(IndexSpaceRegistry& isr) {
   result.complete_space(isr.complete_space());
   isr = std::move(result);
 }
-IndexSpaceRegistry make_min_sr_so_subspaces() {
-  IndexSpaceRegistry minimal_spinorbit_reference_registry;
-
-  IndexSpace occupied(L"i", 0b01);
-  minimal_spinorbit_reference_registry.add(occupied);
-
-  IndexSpace unoccupied(L"a", 0b10);
-  minimal_spinorbit_reference_registry.add(unoccupied);
-
-  IndexSpace all(L"p", 0b11);
-  minimal_spinorbit_reference_registry.add(all);
-
-  minimal_spinorbit_reference_registry.reference_occupied_space(occupied);
-  minimal_spinorbit_reference_registry.complete_space(all);
-  minimal_spinorbit_reference_registry.vacuum_occupied_space(occupied);
-  minimal_spinorbit_reference_registry.active_particle_space(occupied);
-  minimal_spinorbit_reference_registry.active_hole_space(unoccupied);
-
-  add_fermi_spin(minimal_spinorbit_reference_registry);
-
-  return minimal_spinorbit_reference_registry;
-}
 
 IndexSpaceRegistry make_min_sr_subspaces() {
   IndexSpaceRegistry minimal_reference_registry;

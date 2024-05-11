@@ -79,7 +79,7 @@ class compute_cceqvec {
     std::vector<ExprPtr> eqvec_sf_ref;
     if (get_default_context().spbasis() == SPBasis::spinfree) {
       auto context_resetter = sequant::set_scoped_default_context(
-          sequant::Context(Vacuum::SingleProduct, make_min_sr_so_subspaces(),
+          sequant::Context(Vacuum::SingleProduct, make_min_sr_subspaces(),
                            IndexSpaceMetric::Unit, BraKetSymmetry::conjugate,
                            SPBasis::spinorbital));
       std::vector<ExprPtr> eqvec_so;

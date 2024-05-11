@@ -18,31 +18,37 @@ std::wstring decorate_label(std::wstring label, bool up);
 ///@brief add fermionic spin spaces to registry
 void add_fermi_spin(IndexSpaceRegistry &isr);
 
-// clang-format off
-// most "simple" models only need reference to 2 base spaces, occupied and unoccupied.
-// This is minimal partitioning is sufficient for computing expectation values of Coupled-Cluster type operators.
+/// @name built-in definitions of IndexSpace
+/// @{
+
+/// Most standard models only need 2 base spaces, occupied and unoccupied.
+/// This is minimal partitioning is sufficient for computing expectation values
+/// of Coupled-Cluster type operators.
 IndexSpaceRegistry make_min_sr_subspaces();
 
-//Example case which creates spin containing IndexSpaces.
-// This registry assumes that any expectation values of operators are taken prior to spintracing.
-IndexSpaceRegistry make_min_sr_so_subspaces();
-
-//A registry containing a common partitioning for single reference F12 calculations.
-// notably, this set contains an other_unoccupied space, α', commonly used to construct an approximately complete representation
+/// Common partitioning for single reference F12 calculations.
+/// notably, this set contains an other_unoccupied space, α', commonly used to
+/// construct an approximately complete representation
 IndexSpaceRegistry make_F12_sr_subspaces();
 
-//This multireference partitioning contains an active space, x, which is assumed to have partial density
-// although it is considered unoccupied with respect to a SingleProduct Vacuum. This leads to a variety of additional
-// composite spaces with may or may not be occupied.
+/// Multireference partitioning contains an active space, x, which is assumed to
+/// have partial density although it is considered unoccupied with respect to a
+/// SingleProduct Vacuum. This leads to a variety of additional composite spaces
+/// with may or may not be occupied.
 IndexSpaceRegistry make_mr_subspaces();
 
-// This partitioning is a somewhat 'standard' choice of partitioning orbitals in a single reference.
-// contains frozen_core, active_occupied, active_unoccupied, and inactive_unoccupied orbitals as base spaces.
+/// 'Standard' choice of partitioning orbitals in a single reference.
+/// Includes frozen_core, active_occupied, active_unoccupied, and
+/// inactive_unoccupied orbitals as base spaces.
 IndexSpaceRegistry make_sr_subspaces();
 
-// This is a legacy partitioning similar to previous versions of SeQuant which had compile time hard coded partitioning.
-// This is useful when verifying previously obtained results which have been canonicalized in this context.
+/// Legacy partitioning similar to previous versions of SeQuant which had
+/// compile time hard coded partitioning. This is useful when verifying
+/// previously obtained results which have been canonicalized in this context.
 IndexSpaceRegistry make_legacy_subspaces();
+
+/// @}
+
 }  // namespace mbpt
 }  // namespace sequant
 
