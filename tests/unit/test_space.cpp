@@ -6,6 +6,7 @@
 
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/spin.hpp>
 
 TEST_CASE("IndexSpace", "[elements]") {
   using namespace sequant;
@@ -157,10 +158,15 @@ TEST_CASE("IndexSpace", "[elements]") {
   SECTION("base_space") {
     auto f12_registry = sequant::mbpt::make_F12_sr_subspaces();
     auto f12_base_spaces = f12_registry.base_spaces();
-    REQUIRE(f12_base_spaces[0].base_key() == L"o");
-    REQUIRE(f12_base_spaces[1].base_key() == L"i");
-    REQUIRE(f12_base_spaces[2].base_key() == L"a");
-    REQUIRE(f12_base_spaces[3].base_key() == L"g");
-    REQUIRE(f12_base_spaces[4].base_key() == L"α'");
+    auto f12_base_spaces_sf = f12_base_spaces |
+                              ranges::views::filter([](const auto& space) {
+                                return space.qns() == mbpt::Spin::any;
+                              }) |
+                              ranges::to_vector;
+    REQUIRE(f12_base_spaces_sf[0].base_key() == L"o");
+    REQUIRE(f12_base_spaces_sf[1].base_key() == L"i");
+    REQUIRE(f12_base_spaces_sf[2].base_key() == L"a");
+    REQUIRE(f12_base_spaces_sf[3].base_key() == L"g");
+    REQUIRE(f12_base_spaces_sf[4].base_key() == L"α'");
   }
 }

@@ -73,6 +73,8 @@ IndexSpaceRegistry make_min_sr_subspaces() {
   minimal_reference_registry.active_particle_space(occupied);
   minimal_reference_registry.active_hole_space(unoccupied);
 
+  add_fermi_spin(minimal_reference_registry);
+
   return minimal_reference_registry;
 }
 IndexSpaceRegistry make_F12_sr_subspaces() {
@@ -123,6 +125,8 @@ IndexSpaceRegistry make_F12_sr_subspaces() {
   standard_reference_registry.active_hole_space(active_uocc);
   // necessary for SR wick algebra
   standard_reference_registry.vacuum_occupied_space(occupied);
+
+  add_fermi_spin(standard_reference_registry);
 
   return standard_reference_registry;
 }
@@ -182,6 +186,8 @@ IndexSpaceRegistry make_mr_subspaces() {
   multireference_registry.active_particle_space(maybe_active_occupied);
   // needed for SR wick algebra
   multireference_registry.vacuum_occupied_space(vacuum_occupied);
+
+  add_fermi_spin(multireference_registry);
 
   return multireference_registry;
 }
