@@ -738,6 +738,10 @@ SECTION("Closed-shell spintrace CCD") {
 }
 
 SECTION("Closed-shell spintrace CCSD") {
+  auto new_cxt =
+      Context(Vacuum::SingleProduct, sequant::mbpt::make_legacy_subspaces());
+  auto ctx_resetter = set_scoped_default_context(new_cxt);
+
   // These terms from CCSD R1 equations
   {
     // A * f
@@ -1304,38 +1308,26 @@ SECTION("Expand P operator pair-wise") {
 }
 
 SECTION("Open-shell spin-tracing") {
-  // make a minimal spinorbital indexregistry and change the context
-  IndexSpace occA(L"i", {0b01}, mbpt::Spin::alpha);
-  IndexSpace virA(L"a", {0b10}, mbpt::Spin::alpha);
-  IndexSpace occB(L"i", {0b01}, mbpt::Spin::beta);
-  IndexSpace virB(L"a", {0b10}, mbpt::Spin::beta);
-  IndexSpace occN(L"i", {0b01}, mbpt::Spin::any);
-  IndexSpace virN(L"a", {0b10}, mbpt::Spin::any);
-  IndexSpaceRegistry minimal_spinorbit;
-  minimal_spinorbit.add(occA);
-  minimal_spinorbit.add(virA);
-  minimal_spinorbit.add(occB);
-  minimal_spinorbit.add(virB);
-  minimal_spinorbit.add(occN);
-  minimal_spinorbit.add(virN);
-  Context new_cxt(Vacuum::SingleProduct, minimal_spinorbit);
+  // checks depend on the legacy subspaces
+  auto new_cxt =
+      Context(Vacuum::SingleProduct, sequant::mbpt::make_legacy_subspaces());
   auto ctx_resetter = set_scoped_default_context(new_cxt);
 
-  const auto i1A = Index(L"i↑_1", occA);
-  const auto i2A = Index(L"i↑_2", occA);
-  const auto i3A = Index(L"i↑_3", occA);
-  const auto i4A = Index(L"i↑_4", occA);
-  const auto i5A = Index(L"i↑_5", occA);
-  const auto i1B = Index(L"i↓_1", occB);
-  const auto i2B = Index(L"i↓_2", occB);
-  const auto i3B = Index(L"i↓_3", occB);
+  const auto i1A = Index(L"i↑_1");
+  const auto i2A = Index(L"i↑_2");
+  const auto i3A = Index(L"i↑_3");
+  const auto i4A = Index(L"i↑_4");
+  const auto i5A = Index(L"i↑_5");
+  const auto i1B = Index(L"i↓_1");
+  const auto i2B = Index(L"i↓_2");
+  const auto i3B = Index(L"i↓_3");
 
-  const auto a1A = Index(L"a↑_1", virA);
-  const auto a2A = Index(L"a↑_2", virA);
-  const auto a3A = Index(L"a↑_3", virA);
-  const auto a1B = Index(L"a↓_1", virB);
-  const auto a2B = Index(L"a↓_2", virB);
-  const auto a3B = Index(L"a↓_3", virB);
+  const auto a1A = Index(L"a↑_1");
+  const auto a2A = Index(L"a↑_2");
+  const auto a3A = Index(L"a↑_3");
+  const auto a1B = Index(L"a↓_1");
+  const auto a2B = Index(L"a↓_2");
+  const auto a3B = Index(L"a↓_3");
 
   // Tensor canonicalize
   {
@@ -1344,8 +1336,8 @@ SECTION("Open-shell spin-tracing") {
     auto ft3 = f * t3;
     ft3->canonicalize();
     REQUIRE(to_latex(ft3) ==
-            L"{{f^{{a↑_2}}_{{a↑_1}}}{t^{{i↑_3}{i↑_1}{i↓_2}}_{{a↑_2}{a↑_3}{a↓_"
-            L"2}}}}");
+            L"{{f^{{a↑_2}}_{{a↑_1}}}{t^{{i↑_1}{i↑_3}{i↓_2}}_{{a↑_3}{a↑_2}{a↓_2}"
+            L"}}}");
   }
 
   //  g
@@ -1396,13 +1388,13 @@ SECTION("Open-shell spin-tracing") {
         open_shell_spintrace(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}});
     REQUIRE(result.size() == 3);
     REQUIRE(to_latex(result[0]) ==
-            L"{{{\\frac{1}{2}}}{\\bar{g}^{{i↑_1}{i↑_2}}_{{i↑_3}{a↑_1}}}{t^{{"
+            L"{{{-\\frac{1}{2}}}{\\bar{g}^{{i↑_1}{i↑_2}}_{{a↑_1}{i↑_3}}}{t^{{"
             L"i↑_3}}_{{a↑_2}}}}");
     REQUIRE(to_latex(result[1]) ==
             L"{{{-\\frac{1}{2}}}{g^{{i↑_1}{i↓_2}}_{{a↑_1}{i↓_1}}}{t^{{i↓_1}}_"
             L"{{a↓_2}}}}");
     REQUIRE(to_latex(result[2]) ==
-            L"{{{\\frac{1}{2}}}{\\bar{g}^{{i↓_1}{i↓_2}}_{{i↓_3}{a↓_1}}}{t^{{"
+            L"{{{-\\frac{1}{2}}}{\\bar{g}^{{i↓_1}{i↓_2}}_{{a↓_1}{i↓_3}}}{t^{{"
             L"i↓_3}}_{{a↓_2}}}}");
   }
 
