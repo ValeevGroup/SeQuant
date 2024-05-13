@@ -280,7 +280,7 @@ auto index_hash(Iterable const& bk) {
     // The BTAS expects index types to be long by default.
     // There is no straight-forward way to turn the default.
     // Hence, here we explicitly cast the size_t values to long
-    // Which is a potentailly narrowing conversion leading to
+    // Which is a potentially narrowing conversion leading to
     // integral overflow. Hence, the values in the returned
     // container are mixed negative and positive integers (long type)
     //
