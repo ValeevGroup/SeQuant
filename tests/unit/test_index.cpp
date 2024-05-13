@@ -24,9 +24,10 @@ TEST_CASE("Index", "[elements][index]") {
 
     Index i1(L"i_1");
     REQUIRE(i1.label() == L"i_1");
-    REQUIRE(i1.space() == idx_registry->retrieve(L"i_1"));
+    REQUIRE(i1.space() == idx_registry->retrieve(L"i"));
 
-    Index i2(L"i_2", idx_registry->retrieve(L"i_1"));
+    Index i2(L"i_2",
+             idx_registry->retrieve(L'i'));  // N.B. using retrieve(char)
     REQUIRE(i2.label() == L"i_2");
     REQUIRE(i2.space() == idx_registry->retrieve(L"i_1"));
 
@@ -86,6 +87,29 @@ TEST_CASE("Index", "[elements][index]") {
       REQUIRE_THROWS(Index(L"i_4", idx_registry->retrieve(L"i_4"), {i1, i1}));
       REQUIRE_THROWS(Index(L"i_5", {L"i_1", L"i_1"}));
 #endif
+    }
+
+    // can use bytestrings also
+    {
+      Index i1("i_1");
+      REQUIRE(i1.label() == L"i_1");
+      REQUIRE(i1.space() == idx_registry->retrieve("i"));
+
+      Index i2('i');
+      REQUIRE(i2.label() == L"i");
+      REQUIRE(i2.space() == idx_registry->retrieve("i"));
+
+      // to make things interesting use F12 registry with greek letters
+      Context cxt(Vacuum::Physical, sequant::mbpt::make_F12_sr_subspaces(),
+                  get_default_context().metric(),
+                  get_default_context().braket_symmetry(),
+                  get_default_context().spbasis());
+      auto cxt_resetter = set_scoped_default_context(cxt);
+      Index α("α_2",
+              get_default_context().index_space_registry()->retrieve("α"));
+      REQUIRE(α.label() == L"α_2");
+      REQUIRE(α.space() ==
+              get_default_context().index_space_registry()->retrieve("α_1"));
     }
   }
 

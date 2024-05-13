@@ -22,7 +22,9 @@ TEST_CASE("IndexSpace", "[elements]") {
     REQUIRE_THROWS(standard_registry.add(
         jactive_occupied));  // cannot add a space with duplicate attr
 
-    auto spinlabeled_registry = sequant::mbpt::make_min_sr_subspaces();
+    // can use bytestrings too
+    REQUIRE_NOTHROW(standard_registry.retrieve("a"));  // N.B. string
+    REQUIRE_NOTHROW(standard_registry.remove('a'));    // N.B. char
   }
 
   SECTION("equality") {

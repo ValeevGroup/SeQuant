@@ -143,15 +143,6 @@ container::svector<long> tidxs(
   return tidxs(tnsr_p->as<Tensor>());
 }
 
-template <
-    typename Iterable,
-    std::enable_if_t<std::is_convertible_v<IteredT<Iterable>, std::wstring>,
-                     bool> = true>
-container::svector<long> tidxs(Iterable const& strings) noexcept {
-  return tidxs(strings | ranges::views::transform(
-                             [](auto const& s) { return Index{s}; }));
-}
-
 auto terse_index = [](std::wstring const& spec) {
   auto formatter = [](boost::wsmatch mo) -> std::wstring {
     return mo[1].str() + mo[2].str() + L"_" + mo[3].str();

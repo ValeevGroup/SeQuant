@@ -69,7 +69,10 @@ std::wstring toUtf16(std::string_view str);
 
 template <typename S, typename = meta::EnableIfAnyStringConvertible<S>>
 std::basic_string_view<meta::char_t<S>> to_basic_string_view(S &&str) {
-  return str;
+  if constexpr (meta::is_char_v<std::remove_reference_t<S>>)
+    return {&str, 1};
+  else
+    return str;
 }
 
 }  // namespace sequant

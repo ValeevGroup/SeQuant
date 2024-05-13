@@ -4,6 +4,7 @@
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/hash.hpp>
+#include <SeQuant/core/index.hpp>
 #include <SeQuant/core/logger.hpp>
 
 #include <TiledArray/einsum/tiledarray.h>
@@ -284,7 +285,7 @@ auto index_hash(Iterable const& bk) {
     // integral overflow. Hence, the values in the returned
     // container are mixed negative and positive integers (long type)
     //
-    return static_cast<long>(sequant::hash::value(idx.label()));
+    return static_cast<long>(sequant::hash::value(Index{idx}.label()));
   });
 }
 

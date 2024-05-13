@@ -19,8 +19,10 @@ namespace sequant {
 
 /// Converts integral type to its std::wstring representation
 template <typename T>
-std::enable_if_t<std::is_integral_v<std::decay_t<T>>, std::wstring> to_wstring(
-    T&& t) {
+std::enable_if_t<std::is_integral_v<std::decay_t<T>> &&
+                     !meta::is_char_v<std::remove_reference_t<T>>,
+                 std::wstring>
+to_wstring(T&& t) {
   return std::to_wstring(t);
 }
 

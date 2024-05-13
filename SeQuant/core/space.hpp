@@ -13,6 +13,7 @@
 #include "container.hpp"
 
 #include <SeQuant/core/utility/string.hpp>
+#include <SeQuant/core/wstring.hpp>
 
 #include <range/v3/algorithm/any_of.hpp>
 
@@ -144,11 +145,12 @@ class IndexSpace {
   using TypeAttr = sequant::TypeAttr;
   using QuantumNumbersAttr = sequant::QuantumNumbersAttr;
 
-  IndexSpace(std::wstring type_label, TypeAttr typeattr,
+  template <typename S, typename = meta::EnableIfAnyStringConvertible<S>>
+  IndexSpace(S &&type_label, TypeAttr typeattr,
              QuantumNumbersAttr qnattr = QuantumNumbersAttr{0},
              unsigned long approximate_size = 10)
       : attr_(typeattr, qnattr),
-        base_key_(type_label),
+        base_key_(sequant::to_wstring(std::forward<S>(type_label))),
         approximate_size_(approximate_size) {}
 
   /// @brief Attr describes all attributes of a space (occupancy + quantum
@@ -289,14 +291,10 @@ class IndexSpace {
   /// IndexSpace::base_key() or Index::label()
   struct bad_key : std::invalid_argument {
     bad_key() : std::invalid_argument("bad key") {}
-    bad_key(const char *key)
-        : std::invalid_argument(std::string("bad key: ") + key) {}
-    bad_key(const std::wstring &key)
+    template <typename S, typename = meta::EnableIfAnyStringConvertible<S>>
+    bad_key(S &&key)
         : std::invalid_argument(std::string("bad key: ") +
-                                sequant::toUtf8(key)) {}
-    bad_key(const std::wstring_view key)
-        : std::invalid_argument(std::string("bad key: ") +
-                                sequant::toUtf8(key)) {}
+                                sequant::to_string(key)) {}
   };
 
   struct KeyCompare {
@@ -361,6 +359,14 @@ class IndexSpace {
       return key.substr(0, underscore_position);
     } else {
       return key;
+    }
+  }
+  static std::wstring reduce_key(std::string_view key) {
+    const auto underscore_position = key.rfind(L'_');
+    if (underscore_position != std::string::npos) {  // key can be reduced
+      return sequant::to_wstring(key.substr(0, underscore_position));
+    } else {
+      return sequant::to_wstring(key);
     }
   }
 
