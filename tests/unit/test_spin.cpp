@@ -565,7 +565,8 @@ SECTION("Expand Symmetrizer") {
 
 SECTION("Symmetrize expression") {
   auto new_cxt =
-      Context(Vacuum::SingleProduct, sequant::mbpt::make_legacy_subspaces());
+      Context(Vacuum::SingleProduct,
+              sequant::mbpt::make_legacy_subspaces(/* ignore_spin= */ true));
   auto ctx_resetter = set_scoped_default_context(new_cxt);
   {
     // g * t1 + g * t1
@@ -730,7 +731,8 @@ SECTION("Closed-shell spintrace CCD") {
 
 SECTION("Closed-shell spintrace CCSD") {
   auto new_cxt =
-      Context(Vacuum::SingleProduct, sequant::mbpt::make_legacy_subspaces());
+      Context(Vacuum::SingleProduct,
+              sequant::mbpt::make_legacy_subspaces(/* ignore_spin = */ true));
   auto ctx_resetter = set_scoped_default_context(new_cxt);
 
   // These terms from CCSD R1 equations
@@ -769,8 +771,8 @@ SECTION("Closed-shell spintrace CCSD") {
     auto transformed_result = transform_expr(result, idxmap);
     REQUIRE(
         to_latex(transformed_result) ==
-        L"{ \\bigl( - {{g^{{a_2}{i_2}}_{{a_1}{i_1}}}{t^{{i_1}}_{{a_2}}}} + "
-        L"{{{2}}{g^{{i_2}{a_2}}_{{a_1}{i_1}}}{t^{{i_1}}_{{a_2}}}}\\bigr) }");
+        L"{ \\bigl( - {{g^{{a_2}{i_1}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}} + "
+        L"{{{2}}{g^{{i_1}{a_2}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}}\\bigr) }");
   }
 
   {
@@ -879,10 +881,10 @@ SECTION("Closed-shell spintrace CCSD") {
     canonicalize(result);
     REQUIRE(to_latex(result) ==
             L"{ "
-            L"\\bigl({{{2}}{g^{{a_3}{a_2}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}{"
-            L"t^{{i_1}}_{{a_3}}}} - "
-            L"{{g^{{a_3}{a_2}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_3}}}{t^{{i_1}}_{{"
-            L"a_2}}}}\\bigr) }");
+            L"\\bigl({{{2}}{g^{{a_3}{a_2}}_{{a_1}{i_2}}}{t^{{i_1}}_{{a_3}}}{t^{"
+            L"{i_2}}_{{a_2}}}} - "
+            L"{{g^{{a_3}{a_2}}_{{a_1}{i_2}}}{t^{{i_1}}_{{a_2}}}{t^{{i_2}}_{{a_"
+            L"3}}}}\\bigr) }");
   }
 
   {

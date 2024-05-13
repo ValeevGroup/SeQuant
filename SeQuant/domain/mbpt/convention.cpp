@@ -211,7 +211,7 @@ IndexSpaceRegistry make_sr_subspaces() {
   return standard_reference_registry;
 }
 
-IndexSpaceRegistry make_legacy_subspaces() {
+IndexSpaceRegistry make_legacy_subspaces(bool ignore_spin) {
   IndexSpaceRegistry standard_reference_registry;
   IndexSpace frozen(L"o", 0b0000001);
   standard_reference_registry.add(frozen);
@@ -264,7 +264,7 @@ IndexSpaceRegistry make_legacy_subspaces() {
   // necessary for SR wick algebra
   standard_reference_registry.vacuum_occupied_space(occupied);
 
-  add_fermi_spin(standard_reference_registry);
+  if (!ignore_spin) add_fermi_spin(standard_reference_registry);
 
   return standard_reference_registry;
 }

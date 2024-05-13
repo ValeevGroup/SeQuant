@@ -80,9 +80,7 @@ ParseErrorMatcher parseErrorMatches(std::size_t offset, std::size_t length,
 TEST_CASE("TEST_PARSE_EXPR", "[parse_expr]") {
   using namespace sequant;
   // use a minimal spinbasis registry
-  IndexSpaceRegistry minimal_sp = mbpt::make_min_sr_subspaces();
-  mbpt::add_fermi_spin(minimal_sp);
-  Context new_cxt(Vacuum::SingleProduct, minimal_sp);
+  Context new_cxt(Vacuum::SingleProduct, mbpt::make_min_sr_subspaces());
   auto ctx_resetter = set_scoped_default_context(new_cxt);
   SECTION("Tensor") {
     auto expr = parse_expr(L"t{i1;a1}");

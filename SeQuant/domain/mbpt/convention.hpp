@@ -45,7 +45,9 @@ IndexSpaceRegistry make_sr_subspaces();
 /// Legacy partitioning similar to previous versions of SeQuant which had
 /// compile time hard coded partitioning. This is useful when verifying
 /// previously obtained results which have been canonicalized in this context.
-IndexSpaceRegistry make_legacy_subspaces();
+/// @param ignore_spin if true, do not add spin-specific spaces, and do not use
+/// Spin::any as IndexSpace::QuantumNumbers for spin-free space
+IndexSpaceRegistry make_legacy_subspaces(bool ignore_spin = false);
 
 /// @}
 
