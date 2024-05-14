@@ -21,7 +21,6 @@
 template <typename Iterable1, typename Iterable2>
 bool same_index_labels(Iterable1 const& indices1,
                        Iterable2 const& indices2) noexcept {
-  using Index = sequant::Index;
   return ranges::equal(indices1, indices2,
                        [](auto const& idx1, auto const& idx2) {
                          return idx1.label() == idx2.label();

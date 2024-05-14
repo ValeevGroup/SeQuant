@@ -255,7 +255,7 @@ bool can_expand(const Tensor& tensor) {
   if (tensor.bra_rank() != tensor.ket_rank()) return false;
 
   // indices must have specific spin
-  auto all_have_spin = std::all_of(
+  [[maybe_unused]] auto all_have_spin = std::all_of(
       tensor.const_braket().begin(), tensor.const_braket().end(),
       [](const auto& idx) {
         auto idx_spin = mbpt::to_spin(idx.space().qns());
@@ -1441,7 +1441,7 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
   auto A_vec = open_shell_A_op(A);
   assert(P_vec.size() == i + 1);
   std::vector<Sum> concat_terms(i + 1);
-  size_t n_spin_orbital_term = 0;
+  [[maybe_unused]] size_t n_spin_orbital_term = 0;
   for (auto& product_term : *expr) {
     auto term = remove_tensor(product_term->as<Product>(), L"A");
     std::vector<ExprPtr> os_st(i + 1);
