@@ -7,7 +7,25 @@
 
 #include "space.hpp"
 
+#include <boost/hana.hpp>
+#include <boost/hana/ext/std/integral_constant.hpp>
+
 namespace sequant {
+
+inline namespace space_tags {
+struct IsVacuumOccupied {};
+struct IsReferenceOccupied {};
+struct IsComplete {};
+struct IsHole {};
+struct IsParticle {};
+
+constexpr auto is_vacuum_occupied = IsVacuumOccupied{};
+constexpr auto is_reference_occupied = IsReferenceOccupied{};
+constexpr auto is_complete = IsComplete{};
+constexpr auto is_hole = IsHole{};
+constexpr auto is_particle = IsParticle{};
+
+}  // namespace space_tags
 
 /// @brief set of known IndexSpace objects
 
@@ -69,6 +87,9 @@ class IndexSpaceRegistry {
     return *it;
   }
 
+  /// @name adding IndexSpace objects to the registry
+  /// @{
+
   /// @brief add an IndexSpace to this registry.
   /// @param IS an IndexSpace
   /// @return reference to `this`
@@ -99,6 +120,81 @@ class IndexSpaceRegistry {
     return *this;
   }
 
+  template <typename S, typename... OptionalArgs,
+            typename = meta::EnableIfAnyStringConvertible<S>>
+  IndexSpaceRegistry& add(S&& type_label, IndexSpace::Type type,
+                          OptionalArgs&&... args) {
+    auto h_args = boost::hana::make_tuple(args...);
+    auto h_types = boost::hana::to<boost::hana::tuple_tag>(
+        boost::hana::tuple_t<std::remove_reference_t<OptionalArgs>...>);
+
+    // process IndexSpace::QuantumNumbers, set to default is not given
+    auto h_qns = boost::hana::filter(h_args, [](auto arg) {
+      return boost::hana::type_c<decltype(arg)> ==
+             boost::hana::type_c<IndexSpace::QuantumNumbers>;
+    });
+    constexpr auto nqns = boost::hana::size(h_qns);
+    static_assert(
+        nqns == boost::hana::size_c<0> || nqns == boost::hana::size_c<1>,
+        "IndexSpaceRegistry::add: only one IndexSpace::QuantumNumbers argument "
+        "is allowed");
+    constexpr auto have_qns = nqns == boost::hana::size_c<1>;
+    IndexSpace::QuantumNumbersAttr qns;
+    if constexpr (have_qns) {
+      qns = boost::hana::at_c<0>(h_qns);
+    }
+
+    // process approximate_size, set to default is not given
+    auto h_ints = boost::hana::filter(h_args, [](auto arg) {
+      return boost::hana::traits::is_integral(boost::hana::decltype_(arg));
+    });
+    constexpr auto nints = boost::hana::size(h_ints);
+    static_assert(
+        nints == boost::hana::size_c<0> || nints == boost::hana::size_c<1>,
+        "IndexSpaceRegistry::add: only one integral argument is allowed");
+    constexpr auto have_approximate_size = nints == boost::hana::size_c<1>;
+    unsigned long approximate_size = 10;
+    if constexpr (have_approximate_size) {
+      approximate_size = boost::hana::at_c<0>(h_ints);
+    }
+
+    // make space
+    IndexSpace space(std::forward<S>(type_label), type, qns, approximate_size);
+    this->add(space);
+
+    // process non-integer tags
+    auto h_nonints = boost::hana::filter(h_args, [](auto arg) {
+      return !boost::hana::traits::is_integral(
+          boost::hana::type_c<decltype(arg)>);
+    });
+    boost::hana::for_each(h_nonints, [this, &type](auto arg) {
+      if constexpr (boost::hana::type_c<decltype(arg)> ==
+                    boost::hana::type_c<space_tags::IsVacuumOccupied>) {
+        this->vacuum_occupied_space(type);
+      } else if constexpr (boost::hana::type_c<decltype(arg)> ==
+                           boost::hana::type_c<
+                               space_tags::IsReferenceOccupied>) {
+        this->reference_occupied_space(type);
+      } else if constexpr (boost::hana::type_c<decltype(arg)> ==
+                           boost::hana::type_c<space_tags::IsComplete>) {
+        this->complete_space(type);
+      } else if constexpr (boost::hana::type_c<decltype(arg)> ==
+                           boost::hana::type_c<space_tags::IsHole>) {
+        this->active_hole_space(type);
+      } else if constexpr (boost::hana::type_c<decltype(arg)> ==
+                           boost::hana::type_c<space_tags::IsParticle>) {
+        this->active_particle_space(type);
+      } else {
+        static_assert(meta::always_false<decltype(arg)>::value,
+                      "IndexSpaceRegistry::add: unknown tag");
+      }
+    });
+
+    return *this;
+  }
+
+  /// @}
+
   /// @brief removes an IndexSpace associated with `IS.base_key()` from this
   /// @param IS an IndexSpace
   /// @return reference to `this`
@@ -108,6 +204,15 @@ class IndexSpaceRegistry {
       spaces.erase(IS);
     }
     return *this;
+  }
+
+  /// @brief equivalent to `remove(this->retrieve(label))`
+  /// @param label space label
+  /// @return reference to `this`
+  template <typename S, typename = meta::EnableIfAnyStringConvertible<S>>
+  IndexSpaceRegistry& remove(S&& label) {
+    auto&& IS = this->retrieve(std::forward<S>(label));
+    return this->remove(IS);
   }
 
   /// @brief replaces an IndexSpace registered in the registry under
@@ -153,17 +258,6 @@ class IndexSpaceRegistry {
   IndexSpaceRegistry& clear_registry() {
     spaces.clear();
     return this->add(nullspace);
-  }
-
-  /// @brief remove an IndexSpace by its string label
-  /// @return reference to `this`
-  template <typename S, typename = meta::EnableIfAnyStringConvertible<S>>
-  IndexSpaceRegistry& remove(S&& label) {
-    auto it = spaces.find(IndexSpace::reduce_key(to_basic_string_view(label)));
-    if (it != spaces.end()) {
-      spaces.erase(it);
-    }
-    return *this;
   }
 
   ///@brief Is the result of a binary operation null or not registered return

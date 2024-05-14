@@ -11,9 +11,9 @@ int main() {
 
   set_default_context(
       Context{Vacuum::SingleProduct, IndexSpaceRegistry{}
-                                         .add(IndexSpace(L"y", 0b01))
-                                         .add(IndexSpace(L"z", 0b10))
-                                         .add(IndexSpace(L"p", 0b11))});
+                                         .add(L"y", 0b01, is_vacuum_occupied)
+                                         .add(L"z", 0b10)
+                                         .add(L"p", 0b11)});
 
   IndexSpace sp = get_default_context().index_space_registry()->retrieve(L"p");
   Index p1(L"p_1", sp), p2(L"p_2", sp), p3(L"p_3", sp), p4(L"p_4", sp);

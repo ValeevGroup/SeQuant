@@ -22,6 +22,10 @@ namespace meta {
 template <typename T>
 struct type_printer;
 
+/// always_false<T>::value is always false
+template <typename T>
+struct always_false : std::false_type {};
+
 ///////// remove_cvref ///////////
 
 #if __cplusplus < 202002L
