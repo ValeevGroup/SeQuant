@@ -7,7 +7,25 @@
 
 #include "space.hpp"
 
+#include <boost/hana.hpp>
+#include <boost/hana/ext/std/integral_constant.hpp>
+
 namespace sequant {
+
+inline namespace space_tags {
+struct IsVacuumOccupied {};
+struct IsReferenceOccupied {};
+struct IsComplete {};
+struct IsHole {};
+struct IsParticle {};
+
+constexpr auto is_vacuum_occupied = IsVacuumOccupied{};
+constexpr auto is_reference_occupied = IsReferenceOccupied{};
+constexpr auto is_complete = IsComplete{};
+constexpr auto is_hole = IsHole{};
+constexpr auto is_particle = IsParticle{};
+
+}  // namespace space_tags
 
 /// @brief set of known IndexSpace objects
 
@@ -19,30 +37,51 @@ namespace sequant {
 /// provide complete set of unions/intersects of the base spaces to
 /// cover all possible IndexSpace objects that can be generated in their
 /// program.
+///
+/// Registry contains 2 parts: set of IndexSpace objects (managed by a
+/// `std::shared_ptr`, see IndexSpaceRegistry::spaces()) and specification of
+/// various spaces (vacuum, reference, complete, etc.). Copy semantics is thus
+/// partially shallow, with spaces shared between copies. This allows to have
+/// multiple registries share same set of spaces but have different
+/// specifications of vacuum, reference, etc.; this is useful for providing
+/// different contexts for fermions and bosons, for example.
+///
 /// @note  @c IndexSpaces with @c typeattr corresponding to occupied indices
 /// will always be lower than typeattr corresponding to unoccupied orbitals.
 class IndexSpaceRegistry {
  public:
-  IndexSpaceRegistry() {
+  IndexSpaceRegistry()
+      : spaces_(
+            std::make_shared<std::set<IndexSpace, IndexSpace::KeyCompare>>()) {
     // register nullspace
     this->add(nullspace);
   }
+
+  /// constructs an IndexSpaceRegistry from an existing set of IndexSpace
+  /// objects
+  IndexSpaceRegistry(
+      std::shared_ptr<std::set<IndexSpace, IndexSpace::KeyCompare>> spaces)
+      : spaces_(std::move(spaces)) {}
 
   IndexSpaceRegistry(const IndexSpaceRegistry& other) = default;
   IndexSpaceRegistry(IndexSpaceRegistry&& other) = default;
   IndexSpaceRegistry& operator=(const IndexSpaceRegistry& other) = default;
   IndexSpaceRegistry& operator=(IndexSpaceRegistry&& other) = default;
 
-  decltype(auto) begin() const { return spaces.begin(); }
-  decltype(auto) end() const { return spaces.end(); }
+  const auto& spaces() const { return spaces_; }
+
+  decltype(auto) begin() const { return spaces_->begin(); }
+  decltype(auto) end() const { return spaces_->end(); }
 
   /// @brief retrieve an IndexSpace from the registry by the label
   /// @param label can be numbered or the @c base_key
   /// @return IndexSpace associated with that key
   /// @throw IndexSpace::bad_key if matching space is not found
-  const IndexSpace& retrieve(std::wstring_view label) const {
-    auto it = spaces.find(IndexSpace::reduce_key(label));
-    if (it == spaces.end()) {
+  template <typename S, typename = meta::EnableIfAnyStringConvertible<S>>
+  const IndexSpace& retrieve(S&& label) const {
+    auto it =
+        spaces_->find(IndexSpace::reduce_key(to_basic_string_view(label)));
+    if (it == spaces_->end()) {
       throw IndexSpace::bad_key(label);
     }
     return *it;
@@ -56,10 +95,10 @@ class IndexSpaceRegistry {
   /// @throw std::invalid_argument if matching space is not found
   const IndexSpace& retrieve(const IndexSpace::Type& type,
                              const IndexSpace::QuantumNumbers& qns) const {
-    auto it = std::find_if(spaces.begin(), spaces.end(), [&](const auto& is) {
-      return is.type() == type && is.qns() == qns;
-    });
-    if (it == spaces.end()) {
+    auto it = std::find_if(
+        spaces_->begin(), spaces_->end(),
+        [&](const auto& is) { return is.type() == type && is.qns() == qns; });
+    if (it == spaces_->end()) {
       throw std::invalid_argument(
           "IndexSpaceRegistry::retrieve(type,qn): missing { IndexSpace::Type=" +
           std::to_string(type.to_int32()) + " , IndexSpace::QuantumNumbers=" +
@@ -68,13 +107,17 @@ class IndexSpaceRegistry {
     return *it;
   }
 
+  /// @name adding IndexSpace objects to the registry
+  /// @{
+
   /// @brief add an IndexSpace to this registry.
   /// @param IS an IndexSpace
+  /// @return reference to `this`
   /// @throw std::invalid_argument if trying to add an IndexSpace with that
   /// existing base key or attr.
-  void add(const IndexSpace& IS) {
-    auto it = spaces.find(IS.base_key());
-    if (it != spaces.end()) {
+  IndexSpaceRegistry& add(const IndexSpace& IS) {
+    auto it = spaces_->find(IS.base_key());
+    if (it != spaces_->end()) {
       throw std::invalid_argument(
           "IndexSpaceRegistry::add(is): already have an IndexSpace associated "
           "with is.base_key(); if you are trying to replace the IndexSpace use "
@@ -83,35 +126,192 @@ class IndexSpaceRegistry {
 #ifndef NDEBUG
       // make sure there are no duplicate IndexSpaces whose attribute is
       // IS.attr()
-      if (std::find_if(spaces.begin(), spaces.end(), [&IS](auto&& is) {
+      if (std::find_if(spaces_->begin(), spaces_->end(), [&IS](auto&& is) {
             return IS.attr() == is.attr();
-          }) != spaces.end()) {
+          }) != spaces_->end()) {
         throw std::invalid_argument(
             "IndexSpaceRegistry::add(is): already have an IndexSpace "
             "associated with is.attr(); if you are trying to replace the "
             "IndexSpace use IndexSpaceRegistry::replace(is)");
       }
 #endif
-      spaces.emplace(IS);
+      spaces_->emplace(IS);
     }
+    return *this;
   }
+
+  template <typename S, typename... OptionalArgs,
+            typename = meta::EnableIfAnyStringConvertible<S>>
+  IndexSpaceRegistry& add(S&& type_label, IndexSpace::Type type,
+                          OptionalArgs&&... args) {
+    auto h_args = boost::hana::make_tuple(args...);
+
+    // process IndexSpace::QuantumNumbers, set to default is not given
+    auto h_qns = boost::hana::filter(h_args, [](auto arg) {
+      return boost::hana::type_c<decltype(arg)> ==
+             boost::hana::type_c<IndexSpace::QuantumNumbers>;
+    });
+    constexpr auto nqns = boost::hana::size(h_qns);
+    static_assert(
+        nqns == boost::hana::size_c<0> || nqns == boost::hana::size_c<1>,
+        "IndexSpaceRegistry::add: only one IndexSpace::QuantumNumbers argument "
+        "is allowed");
+    constexpr auto have_qns = nqns == boost::hana::size_c<1>;
+    IndexSpace::QuantumNumbersAttr qns;
+    if constexpr (have_qns) {
+      qns = boost::hana::at_c<0>(h_qns);
+    }
+
+    // process approximate_size, set to default is not given
+    auto h_ints = boost::hana::filter(h_args, [](auto arg) {
+      return boost::hana::traits::is_integral(boost::hana::decltype_(arg));
+    });
+    constexpr auto nints = boost::hana::size(h_ints);
+    static_assert(
+        nints == boost::hana::size_c<0> || nints == boost::hana::size_c<1>,
+        "IndexSpaceRegistry::add: only one integral argument is allowed");
+    constexpr auto have_approximate_size = nints == boost::hana::size_c<1>;
+    unsigned long approximate_size = 10;
+    if constexpr (have_approximate_size) {
+      approximate_size = boost::hana::at_c<0>(h_ints);
+    }
+
+    // make space
+    IndexSpace space(std::forward<S>(type_label), type, qns, approximate_size);
+    this->add(space);
+
+    // process non-integer tags
+    auto h_nonints = boost::hana::filter(h_args, [](auto arg) {
+      return !boost::hana::traits::is_integral(
+          boost::hana::type_c<decltype(arg)>);
+    });
+    boost::hana::for_each(h_nonints, [this, &type](auto arg) {
+      if constexpr (boost::hana::type_c<decltype(arg)> ==
+                    boost::hana::type_c<space_tags::IsVacuumOccupied>) {
+        this->vacuum_occupied_space(type);
+      } else if constexpr (boost::hana::type_c<decltype(arg)> ==
+                           boost::hana::type_c<
+                               space_tags::IsReferenceOccupied>) {
+        this->reference_occupied_space(type);
+      } else if constexpr (boost::hana::type_c<decltype(arg)> ==
+                           boost::hana::type_c<space_tags::IsComplete>) {
+        this->complete_space(type);
+      } else if constexpr (boost::hana::type_c<decltype(arg)> ==
+                           boost::hana::type_c<space_tags::IsHole>) {
+        this->active_hole_space(type);
+      } else if constexpr (boost::hana::type_c<decltype(arg)> ==
+                           boost::hana::type_c<space_tags::IsParticle>) {
+        this->active_particle_space(type);
+      } else {
+        static_assert(meta::always_false<decltype(arg)>::value,
+                      "IndexSpaceRegistry::add: unknown tag");
+      }
+    });
+
+    return *this;
+  }
+
+  template <typename S, typename IndexSpaceOrLabel, typename... OptionalArgs,
+            typename = meta::EnableIfAnyStringConvertible<S>,
+            typename = std::enable_if_t<
+                (std::is_same_v<std::decay_t<IndexSpaceOrLabel>, IndexSpace> ||
+                 meta::is_basic_string_convertible_v<
+                     std::decay_t<IndexSpaceOrLabel>>)>>
+  IndexSpaceRegistry& add_union(
+      S&& type_label, std::initializer_list<IndexSpaceOrLabel> components,
+      OptionalArgs&&... args) {
+    assert(components.size() > 1);
+
+    auto h_args = boost::hana::make_tuple(args...);
+
+    // make space
+    IndexSpace::Attr space_attr;
+    unsigned long approximate_size = 10;
+    long count = 0;
+    for (auto&& component : components) {
+      const IndexSpace* component_ptr;
+      if constexpr (std::is_same_v<std::decay_t<IndexSpaceOrLabel>,
+                                   IndexSpace>) {
+        component_ptr = &component;
+      } else {
+        component_ptr = &(this->retrieve(component));
+      }
+      if (count == 0)
+        space_attr = component_ptr->attr();
+      else
+        space_attr = space_attr.unIon(component_ptr->attr());
+      approximate_size +=
+          component_ptr->approximate_size();  // this assumes that every
+                                              // component is a base space
+
+      ++count;
+    }
+    IndexSpace space(std::forward<S>(type_label), space_attr.type(),
+                     space_attr.qns(), approximate_size);
+    this->add(space);
+    auto type = space.type();
+
+    // process non-integer tags
+    auto h_nonints = boost::hana::filter(h_args, [](auto arg) {
+      return !boost::hana::traits::is_integral(
+          boost::hana::type_c<decltype(arg)>);
+    });
+    boost::hana::for_each(h_nonints, [this, &type](auto arg) {
+      if constexpr (boost::hana::type_c<decltype(arg)> ==
+                    boost::hana::type_c<space_tags::IsVacuumOccupied>) {
+        this->vacuum_occupied_space(type);
+      } else if constexpr (boost::hana::type_c<decltype(arg)> ==
+                           boost::hana::type_c<
+                               space_tags::IsReferenceOccupied>) {
+        this->reference_occupied_space(type);
+      } else if constexpr (boost::hana::type_c<decltype(arg)> ==
+                           boost::hana::type_c<space_tags::IsComplete>) {
+        this->complete_space(type);
+      } else if constexpr (boost::hana::type_c<decltype(arg)> ==
+                           boost::hana::type_c<space_tags::IsHole>) {
+        this->active_hole_space(type);
+      } else if constexpr (boost::hana::type_c<decltype(arg)> ==
+                           boost::hana::type_c<space_tags::IsParticle>) {
+        this->active_particle_space(type);
+      } else {
+        static_assert(meta::always_false<decltype(arg)>::value,
+                      "IndexSpaceRegistry::add: unknown tag");
+      }
+    });
+
+    return *this;
+  }
+
+  /// @}
 
   /// @brief removes an IndexSpace associated with `IS.base_key()` from this
   /// @param IS an IndexSpace
-  void remove(const IndexSpace& IS) {
-    auto it = spaces.find(IS.base_key());
-    if (it != spaces.end()) {
-      spaces.erase(IS);
+  /// @return reference to `this`
+  IndexSpaceRegistry& remove(const IndexSpace& IS) {
+    auto it = spaces_->find(IS.base_key());
+    if (it != spaces_->end()) {
+      spaces_->erase(IS);
     }
+    return *this;
+  }
+
+  /// @brief equivalent to `remove(this->retrieve(label))`
+  /// @param label space label
+  /// @return reference to `this`
+  template <typename S, typename = meta::EnableIfAnyStringConvertible<S>>
+  IndexSpaceRegistry& remove(S&& label) {
+    auto&& IS = this->retrieve(std::forward<S>(label));
+    return this->remove(IS);
   }
 
   /// @brief replaces an IndexSpace registered in the registry under
   /// IS.base_key()
   ///        with @p IS
   /// @param IS an IndexSpace
-  void replace(const IndexSpace& IS) {
+  /// @return reference to `this`
+  IndexSpaceRegistry& replace(const IndexSpace& IS) {
     this->remove(IS);
-    this->add(IS);
+    return this->add(IS);
   }
 
   /// @brief returns the list of base IndexSpace objects in the order of
@@ -123,7 +323,7 @@ class IndexSpaceRegistry {
     std::vector<IndexSpace> result;
     // if the registered instance has a single bit true, it is a base space.
     //  std::map should order this new map via IndexSpace.
-    for (auto&& space : spaces) {
+    for (auto&& space : *spaces_) {
       if (has_single_bit(space.type().to_int32())) {
         result.push_back(space);
       }
@@ -143,17 +343,10 @@ class IndexSpaceRegistry {
   }
 
   /// @brief clear the IndexSpaceRegistry map
-  void clear_registry() {
-    spaces.clear();
-    this->add(nullspace);
-  }
-
-  /// @brief remove an IndexSpace by its string label
-  void remove(std::wstring_view label) {
-    auto it = spaces.find(IndexSpace::reduce_key(label));
-    if (it != spaces.end()) {
-      spaces.erase(it);
-    }
+  /// @return reference to `this`
+  IndexSpaceRegistry& clear_registry() {
+    spaces_->clear();
+    return this->add(nullspace);
   }
 
   ///@brief Is the result of a binary operation null or not registered return
@@ -345,31 +538,50 @@ class IndexSpaceRegistry {
   /// @{
 
   /// @param t an IndexSpace::Type specifying which base spaces have nonzero
-  /// occupancy in
+  ///          occupancy in
   ///          the vacuum wave function by default (i.e. for any quantum number
   ///          choice); to specify occupied space per specific QN set use the
   ///          other overload
-  void vacuum_occupied_space(const IndexSpace::Type& s) {
-    std::get<0>(vacocc_) = s;
+  /// @return reference to `this`
+  IndexSpaceRegistry& vacuum_occupied_space(const IndexSpace::Type& t) {
+    throw_if_missing(t, "vacuum_occupied_space");
+    std::get<0>(vacocc_) = t;
+    return *this;
   }
 
   /// @param qn2type for each quantum number specifies which base spaces have
-  /// nonzero occupancy in
-  ///          the reference wave function
-  void vacuum_occupied_space(
+  ///                nonzero occupancy in the reference wave function
+  /// @return reference to `this`
+  IndexSpaceRegistry& vacuum_occupied_space(
       std::map<IndexSpace::QuantumNumbers, IndexSpace::Type> qn2type) {
     throw_if_missing_any(qn2type, "vacuum_occupied_space");
     std::get<1>(vacocc_) = std::move(qn2type);
+    return *this;
   }
 
-  /// convenience overload, quantum numbers of @p s are ignored
-  void vacuum_occupied_space(const IndexSpace& s) {
-    vacuum_occupied_space(s.type());
+  /// equivalent to `vacuum_occupied_space(s.type())`
+  /// @note QuantumNumbers attribute of `s` ignored
+  /// @param s an IndexSpace
+  /// @return reference to `this`
+  IndexSpaceRegistry& vacuum_occupied_space(const IndexSpace& s) {
+    return vacuum_occupied_space(s.type());
+  }
+
+  /// equivalent to `vacuum_occupied_space(retrieve(l).type())`
+  /// @param l label of a known IndexSpace
+  /// @return reference to `this`
+  template <typename S, typename = meta::EnableIfAnyStringConvertible<S>>
+  IndexSpaceRegistry& vacuum_occupied_space(S&& l) {
+    return vacuum_occupied_space(this->retrieve(std::forward<S>(l)).type());
   }
 
   /// @return the space occupied in vacuum state for any set of quantum numbers
-  const IndexSpace::Type& vacuum_occupied_space() const {
+  /// @throw std::invalid_argument if @p nulltype_ok is false and
+  /// vacuum_occupied_space had not been specified
+  const IndexSpace::Type& vacuum_occupied_space(
+      bool nulltype_ok = false) const {
     if (std::get<0>(vacocc_) == nulltype) {
+      if (nulltype_ok) return nulltype;
       throw std::invalid_argument(
           "vacuum occupied space has not been specified, invoke "
           "vacuum_occupied_space(IndexSpace::Type) or "
@@ -406,28 +618,48 @@ class IndexSpaceRegistry {
   ///          the reference wave function by default (i.e., for any choice of
   ///          quantum numbers); to specify occupied space per specific QN set
   ///          use the other overload
-  void reference_occupied_space(const IndexSpace::Type& s) {
-    std::get<0>(refocc_) = s;
+  /// @return reference to `this`
+  IndexSpaceRegistry& reference_occupied_space(const IndexSpace::Type& t) {
+    throw_if_missing(t, "reference_occupied_space");
+    std::get<0>(refocc_) = t;
+    return *this;
   }
 
   /// @param qn2type for each quantum number specifies which base spaces have
   /// nonzero occupancy in
   ///          the reference wave function
-  void reference_occupied_space(
+  /// @return reference to `this`
+  IndexSpaceRegistry& reference_occupied_space(
       std::map<IndexSpace::QuantumNumbers, IndexSpace::Type> qn2type) {
     throw_if_missing_any(qn2type, "reference_occupied_space");
     std::get<1>(refocc_) = std::move(qn2type);
+    return *this;
   }
 
-  /// convenience overload, quantum numbers of @p s are ignored
-  void reference_occupied_space(const IndexSpace s) {
-    reference_occupied_space(s.type());
+  /// equivalent to `reference_occupied_space(s.type())`
+  /// @note QuantumNumbers attribute of `s` ignored
+  /// @param s an IndexSpace
+  /// @return reference to `this`
+  IndexSpaceRegistry& reference_occupied_space(const IndexSpace& s) {
+    return reference_occupied_space(s.type());
+  }
+
+  /// equivalent to `reference_occupied_space(retrieve(l).type())`
+  /// @param l label of a known IndexSpace
+  /// @return reference to `this`
+  template <typename S, typename = meta::EnableIfAnyStringConvertible<S>>
+  IndexSpaceRegistry& reference_occupied_space(S&& l) {
+    return reference_occupied_space(this->retrieve(std::forward<S>(l)).type());
   }
 
   /// @return the space occupied in reference state for any set of quantum
   /// numbers
-  const IndexSpace::Type& reference_occupied_space() const {
+  /// @throw std::invalid_argument if @p nulltype_ok is false and
+  /// reference_occupied_space had not been specified
+  const IndexSpace::Type& reference_occupied_space(
+      bool nulltype_ok = false) const {
     if (std::get<0>(refocc_) == nulltype) {
+      if (nulltype_ok) return nulltype;
       throw std::invalid_argument(
           "reference occupied space has not been specified, invoke "
           "reference_occupied_space(IndexSpace::Type) or "
@@ -459,23 +691,44 @@ class IndexSpaceRegistry {
   /// @param t an IndexSpace::Type specifying the complete Hilbert space;
   ///          to specify occupied space per specific QN set use the other
   ///          overload
-  void complete_space(const IndexSpace::Type& s) { std::get<0>(complete_) = s; }
+  IndexSpaceRegistry& complete_space(const IndexSpace::Type& s) {
+    throw_if_missing(s, "complete_space");
+    std::get<0>(complete_) = s;
+    return *this;
+  }
 
   /// @param qn2type for each quantum number specifies which base spaces have
   /// nonzero occupancy in
   ///          the reference wave function
-  void complete_space(
+  IndexSpaceRegistry& complete_space(
       std::map<IndexSpace::QuantumNumbers, IndexSpace::Type> qn2type) {
     throw_if_missing_any(qn2type, "complete_space");
     std::get<1>(complete_) = std::move(qn2type);
+    return *this;
   }
 
-  /// convenience overload, quantum numbers of @p s are ignored
-  void complete_space(const IndexSpace& s) { complete_space(s.type()); }
+  /// equivalent to `complete_space(s.type())`
+  /// @note QuantumNumbers attribute of `s` ignored
+  /// @param s an IndexSpace
+  /// @return reference to `this`
+  IndexSpaceRegistry& complete_space(const IndexSpace& s) {
+    return complete_space(s.type());
+  }
+
+  /// equivalent to `complete_space(retrieve(l).type())`
+  /// @param l label of a known IndexSpace
+  /// @return reference to `this`
+  template <typename S, typename = meta::EnableIfAnyStringConvertible<S>>
+  IndexSpaceRegistry& complete_space(S&& l) {
+    return complete_space(this->retrieve(std::forward<S>(l)).type());
+  }
 
   /// @return the complete Hilbert space for any set of quantum numbers
-  const IndexSpace::Type& complete_space() const {
+  /// @throw std::invalid_argument if @p nulltype_ok is false and complete_space
+  /// had not been specified
+  const IndexSpace::Type& complete_space(bool nulltype_ok = false) const {
     if (std::get<0>(complete_) == nulltype) {
+      if (nulltype_ok) return nulltype;
       throw std::invalid_argument(
           "complete space has not been specified, call "
           "complete_space(IndexSpace::Type)");
@@ -504,24 +757,43 @@ class IndexSpaceRegistry {
   /// @param t an IndexSpace::Type specifying where holes can be created;
   ///          to specify hole space per specific QN set use the other
   ///          overload
-  void active_hole_space(const IndexSpace::Type& s) {
-    std::get<0>(active_hole_space_) = s;
+  IndexSpaceRegistry& active_hole_space(const IndexSpace::Type& t) {
+    throw_if_missing(t, "active_hole_space");
+    std::get<0>(active_hole_space_) = t;
+    return *this;
   }
 
   /// @param qn2type for each quantum number specifies the space in which holes
   /// can be created
-  void active_hole_space(
+  IndexSpaceRegistry& active_hole_space(
       std::map<IndexSpace::QuantumNumbers, IndexSpace::Type> qn2type) {
     throw_if_missing_any(qn2type, "active_hole_space");
     std::get<1>(active_hole_space_) = std::move(qn2type);
+    return *this;
   }
 
-  /// convenience overload, quantum numbers of @p s are ignored
-  void active_hole_space(const IndexSpace& s) { active_hole_space(s.type()); }
+  /// equivalent to `active_hole_space(s.type())`
+  /// @note QuantumNumbers attribute of `s` ignored
+  /// @param s an IndexSpace
+  /// @return reference to `this`
+  IndexSpaceRegistry& active_hole_space(const IndexSpace& s) {
+    return active_hole_space(s.type());
+  }
+
+  /// equivalent to `active_hole_space(retrieve(l).type())`
+  /// @param l label of a known IndexSpace
+  /// @return reference to `this`
+  template <typename S, typename = meta::EnableIfAnyStringConvertible<S>>
+  IndexSpaceRegistry& active_hole_space(S&& l) {
+    return active_hole_space(this->retrieve(std::forward<S>(l)).type());
+  }
 
   /// @return default space in which holes can be created
-  const IndexSpace::Type& active_hole_space() const {
+  /// @throw std::invalid_argument if @p nulltype_ok is false and
+  /// active_hole_space had not been specified
+  const IndexSpace::Type& active_hole_space(bool nulltype_ok = false) const {
     if (std::get<0>(active_hole_space_) == nulltype) {
+      if (nulltype_ok) return nulltype;
       throw std::invalid_argument(
           "active hole space has not been specified, invoke "
           "active_hole_space(IndexSpace::Type) or "
@@ -554,26 +826,44 @@ class IndexSpaceRegistry {
   /// @param t an IndexSpace::Type specifying where particles can be created;
   ///          to specify particle space per specific QN set use the other
   ///          overload
-  void active_particle_space(const IndexSpace::Type& s) {
-    std::get<0>(active_particle_space_) = s;
+  IndexSpaceRegistry& active_particle_space(const IndexSpace::Type& t) {
+    throw_if_missing(t, "active_particle_space");
+    std::get<0>(active_particle_space_) = t;
+    return *this;
   }
 
   /// @param qn2type for each quantum number specifies the space in which
   /// particles can be created
-  void active_particle_space(
+  IndexSpaceRegistry& active_particle_space(
       std::map<IndexSpace::QuantumNumbers, IndexSpace::Type> qn2type) {
     throw_if_missing_any(qn2type, "active_particle_space");
     std::get<1>(active_particle_space_) = std::move(qn2type);
+    return *this;
   }
 
-  /// convenience overload, quantum numbers of @p s are ignored
-  void active_particle_space(const IndexSpace& s) {
-    active_particle_space(s.type());
+  /// equivalent to `active_hole_space(s.type())`
+  /// @note QuantumNumbers attribute of `s` ignored
+  /// @param s an IndexSpace
+  /// @return reference to `this`
+  IndexSpaceRegistry& active_particle_space(const IndexSpace& s) {
+    return active_particle_space(s.type());
+  }
+
+  /// equivalent to `active_hole_space(retrieve(l).type())`
+  /// @param l label of a known IndexSpace
+  /// @return reference to `this`
+  template <typename S, typename = meta::EnableIfAnyStringConvertible<S>>
+  IndexSpaceRegistry& active_particle_space(S&& l) {
+    return active_particle_space(this->retrieve(std::forward<S>(l)).type());
   }
 
   /// @return default space in which particles can be created
-  const IndexSpace::Type& active_particle_space() const {
+  /// @throw std::invalid_argument if @p nulltype_ok is false and
+  /// active_particle_space had not been specified
+  const IndexSpace::Type& active_particle_space(
+      bool nulltype_ok = false) const {
     if (std::get<0>(active_particle_space_) == nulltype) {
+      if (nulltype_ok) return nulltype;
       throw std::invalid_argument(
           "active particle space has not been specified, invoke "
           "active_particle_space(IndexSpace::Type) or "
@@ -602,7 +892,7 @@ class IndexSpaceRegistry {
 
  private:
   // N.B. need transparent comparator, see https://stackoverflow.com/a/35525806
-  std::set<IndexSpace, IndexSpace::KeyCompare> spaces;
+  std::shared_ptr<std::set<IndexSpace, IndexSpace::KeyCompare>> spaces_;
 
   const static IndexSpace::Type nulltype;
 
@@ -614,7 +904,7 @@ class IndexSpaceRegistry {
   ///@brief find an IndexSpace from its type. return nullspace if not present.
   ///@param find the IndexSpace via it's @c attr
   const IndexSpace& find_by_attr(const IndexSpace::Attr& attr) const {
-    for (auto&& space : spaces) {
+    for (auto&& space : *spaces_) {
       if (space.attr() == attr) {
         return space;
       }
@@ -625,7 +915,7 @@ class IndexSpaceRegistry {
   void throw_if_missing(const IndexSpace::Type& t,
                         const IndexSpace::QuantumNumbers& qn,
                         std::string call_context = "") {
-    for (auto&& space : spaces) {
+    for (auto&& space : *spaces_) {
       if (space.type() == t && space.qns() == qn) {
         return;
       }
@@ -637,11 +927,24 @@ class IndexSpaceRegistry {
         " } combination");
   }
 
+  // same as above, but ignoring qn
+  void throw_if_missing(const IndexSpace::Type& t,
+                        std::string call_context = "") {
+    for (auto&& space : *spaces_) {
+      if (space.type() == t) {
+        return;
+      }
+    }
+    throw std::invalid_argument(call_context + ": missing { IndexSpace::Type=" +
+                                std::to_string(t.to_int32()) +
+                                " , any IndexSpace::QuantumNumbers } space");
+  }
+
   void throw_if_missing_any(
       const std::map<IndexSpace::QuantumNumbers, IndexSpace::Type>& qn2type,
       std::string call_context = "") {
     std::map<IndexSpace::QuantumNumbers, IndexSpace::Type> qn2type_found;
-    for (auto&& space : spaces) {
+    for (auto&& space : *spaces_) {
       for (auto&& [qn, t] : qn2type) {
         if (space.type() == t && space.qns() == qn) {
           auto [it, found] = qn2type_found.try_emplace(qn, t);
@@ -698,7 +1001,7 @@ class IndexSpaceRegistry {
 
   friend bool operator==(const IndexSpaceRegistry& isr1,
                          const IndexSpaceRegistry& isr2) {
-    return isr1.spaces == isr2.spaces;
+    return *isr1.spaces_ == *isr2.spaces_;
   }
 };
 

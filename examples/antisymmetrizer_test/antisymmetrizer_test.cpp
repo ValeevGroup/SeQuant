@@ -92,7 +92,7 @@ int main(int argc, char* argv[]) {
   std::wcerr.sync_with_stdio(true);
   sequant::detail::OpIdRegistrar op_id_registrar;
   sequant::set_default_context(Context(
-      Vacuum::Physical, sequant::mbpt::make_min_sr_subspaces(),
+      sequant::mbpt::make_min_sr_spaces(), Vacuum::Physical,
       IndexSpaceMetric::Unit, BraKetSymmetry::conjugate, SPBasis::spinfree));
   // mbpt::set_default_convention();
 

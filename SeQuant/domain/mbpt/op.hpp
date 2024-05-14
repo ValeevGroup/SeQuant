@@ -218,8 +218,9 @@ class QuantumNumberChange
   }
 
   /// constructs QuantumNumberChange from a sequence of elements convertible to
-  /// QNV \tparam I the type of the initializer_list elements \param i the
-  /// sequence of QNV-convertible elements
+  /// QNV
+  /// \tparam I the type of the initializer_list elements
+  /// \param i the sequence of QNV-convertible elements
   template <typename I,
             typename = std::enable_if_t<std::is_convertible_v<I, interval_t>>>
   explicit QuantumNumberChange(std::vector<I> i) {
@@ -233,8 +234,9 @@ class QuantumNumberChange
   }
 
   /// constructs QuantumNumberChange from a sequence of elements convertible to
-  /// QNV \tparam I the type of the initializer_list elements \param i the
-  /// sequence of QNV-convertible elements
+  /// QNV
+  /// \tparam I the type of the initializer_list elements
+  /// \param i the sequence of QNV-convertible elements
   template <typename I, typename = std::enable_if_t<std::is_convertible_v<
                             std::initializer_list<I>, interval_t>>>
   explicit QuantumNumberChange(
@@ -274,15 +276,14 @@ class QuantumNumberChange
   int active_particle_creators() {
     std::vector<boost::numeric::interval<std::make_signed_t<QNV>>> temp_this =
         *this;
-    auto idx_registry = get_default_context().index_space_registry();
-    auto base_spaces = idx_registry->base_spaces();
+    const auto& isr = get_default_context().index_space_registry();
+    const auto base_spaces = isr->base_spaces();
     int result = 0;
     for (unsigned int i = 0; i < base_spaces.size(); i++) {
       const auto& base_space = base_spaces[i];
       const auto intersect_type =
           base_space.attr()
-              .intersection(
-                  idx_registry->active_particle_space(base_space.qns()).attr())
+              .intersection(isr->active_particle_space(base_space.qns()).attr())
               .type();
       if (IndexSpace::Type{} != intersect_type) {
         if (temp_this[2 * i].upper() != result) {
@@ -300,15 +301,14 @@ class QuantumNumberChange
   int active_particle_annihilators() {
     std::vector<boost::numeric::interval<std::make_signed_t<QNV>>> temp_this =
         *this;
-    auto idx_registry = get_default_context().index_space_registry();
-    auto base_spaces = idx_registry->base_spaces();
+    const auto& isr = get_default_context().index_space_registry();
+    auto base_spaces = isr->base_spaces();
     int result = 0;
     for (unsigned int i = 0; i < base_spaces.size(); i++) {
       const auto& base_space = base_spaces[i];
       const auto intersect_type =
           base_space.attr()
-              .intersection(
-                  idx_registry->active_particle_space(base_space.qns()).attr())
+              .intersection(isr->active_particle_space(base_space.qns()).attr())
               .type();
       if (IndexSpace::Type{} != intersect_type) {
         if (temp_this[2 * i + 1].upper() != result) {
@@ -326,15 +326,14 @@ class QuantumNumberChange
   int active_hole_creators() {
     std::vector<boost::numeric::interval<std::make_signed_t<QNV>>> temp_this =
         *this;
-    auto idx_registry = get_default_context().index_space_registry();
-    auto base_spaces = idx_registry->base_spaces();
+    const auto& isr = get_default_context().index_space_registry();
+    auto base_spaces = isr->base_spaces();
     int result = 0;
     for (unsigned int i = 0; i < base_spaces.size(); i++) {
       const auto& base_space = base_spaces[i];
       const auto intersect_type =
           base_space.attr()
-              .intersection(
-                  idx_registry->active_hole_space(base_space.qns()).attr())
+              .intersection(isr->active_hole_space(base_space.qns()).attr())
               .type();
       if (IndexSpace::Type{} != intersect_type) {
         if (temp_this[2 * i].upper() != result) {
@@ -352,15 +351,14 @@ class QuantumNumberChange
   int active_hole_annihilators() {
     std::vector<boost::numeric::interval<std::make_signed_t<QNV>>> temp_this =
         *this;
-    auto idx_registry = get_default_context().index_space_registry();
-    auto base_spaces = idx_registry->base_spaces();
+    const auto& isr = get_default_context().index_space_registry();
+    auto base_spaces = isr->base_spaces();
     int result = 0;
     for (unsigned int i = 0; i < base_spaces.size(); i++) {
       const auto& base_space = base_spaces[i];
       const auto intersect_type =
           base_space.attr()
-              .intersection(
-                  idx_registry->active_hole_space(base_space.qns()).attr())
+              .intersection(isr->active_hole_space(base_space.qns()).attr())
               .type();
       if (IndexSpace::Type{} != intersect_type) {
         if (temp_this[2 * i + 1].upper() != result) {

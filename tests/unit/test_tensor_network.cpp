@@ -183,9 +183,8 @@ TEST_CASE("TensorNetwork", "[elements]") {
   }  // SECTION("canonicalizer")
 
   SECTION("bliss graph") {
-    auto new_cxt =
-        Context(Vacuum::SingleProduct, sequant::mbpt::make_legacy_subspaces());
-    auto ctx_resetter = set_scoped_default_context(new_cxt);
+    auto ctx_resetter = set_scoped_default_context(
+        Context(sequant::mbpt::make_legacy_spaces(), Vacuum::SingleProduct));
     Index::reset_tmp_index();
     // to generate expressions in specified (i.e., platform-independent) manner
     // can't use operator expression (due to unspecified order of evaluation of

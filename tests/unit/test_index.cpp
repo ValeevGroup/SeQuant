@@ -14,7 +14,7 @@ TEST_CASE("Index", "[elements][index]") {
   using namespace sequant;
 
   SECTION("constructors") {
-    auto idx_registry = get_default_context().index_space_registry();
+    const auto& isr = get_default_context().index_space_registry();
     Index i{};
 
     REQUIRE_NOTHROW(
@@ -24,19 +24,20 @@ TEST_CASE("Index", "[elements][index]") {
 
     Index i1(L"i_1");
     REQUIRE(i1.label() == L"i_1");
-    REQUIRE(i1.space() == idx_registry->retrieve(L"i_1"));
+    REQUIRE(i1.space() == isr->retrieve(L"i"));
 
-    Index i2(L"i_2", idx_registry->retrieve(L"i_1"));
+    Index i2(L"i_2",
+             isr->retrieve(L'i'));  // N.B. using retrieve(char)
     REQUIRE(i2.label() == L"i_2");
-    REQUIRE(i2.space() == idx_registry->retrieve(L"i_1"));
+    REQUIRE(i2.space() == isr->retrieve(L"i_1"));
 
     // examples with proto indices
     {
-      REQUIRE_NOTHROW(Index(L"i_3", idx_registry->retrieve(L"i_3"), {i1, i2}));
-      Index i3(L"i_3", idx_registry->retrieve(L"i_3"), {i1, i2});
+      REQUIRE_NOTHROW(Index(L"i_3", isr->retrieve(L"i_3"), {i1, i2}));
+      Index i3(L"i_3", isr->retrieve(L"i_3"), {i1, i2});
       REQUIRE(i3.label() == L"i_3");
       REQUIRE(i3.to_string() == "i_3");
-      REQUIRE(i3.space() == idx_registry->retrieve(L"i_3"));
+      REQUIRE(i3.space() == isr->retrieve(L"i_3"));
       REQUIRE(i3.has_proto_indices());
       REQUIRE(i3.proto_indices().size() == 2);
       REQUIRE(i3.proto_indices()[0] == i1);
@@ -46,7 +47,7 @@ TEST_CASE("Index", "[elements][index]") {
       Index i4(L"i_4", {L"i_1", L"i_2"});
       REQUIRE(i4.label() == L"i_4");
       REQUIRE(i4.to_string() == "i_4");
-      REQUIRE(i4.space() == idx_registry->retrieve(L"i_4"));
+      REQUIRE(i4.space() == isr->retrieve(L"i_4"));
       REQUIRE(i4.has_proto_indices());
       REQUIRE(i4.proto_indices().size() == 2);
       REQUIRE(i4.proto_indices()[0] == i1);
@@ -56,7 +57,7 @@ TEST_CASE("Index", "[elements][index]") {
       REQUIRE_NOTHROW(Index(L"i_5", {i2, i1}, false));
       Index i5(L"i_5", {i2, i1}, false);
       REQUIRE(i5.label() == L"i_5");
-      REQUIRE(i5.space() == idx_registry->retrieve(L"i_5"));
+      REQUIRE(i5.space() == isr->retrieve(L"i_5"));
       REQUIRE(i5.has_proto_indices());
       REQUIRE(i5.proto_indices().size() == 2);
       REQUIRE(i5.proto_indices()[0] == i2);
@@ -66,7 +67,7 @@ TEST_CASE("Index", "[elements][index]") {
       REQUIRE_NOTHROW(Index(L"i_6", {i1, i5}, false));
       Index i6(L"i_6", {i1, i5}, false);
       REQUIRE(i6.label() == L"i_6");
-      REQUIRE(i6.space() == idx_registry->retrieve(L"i_6"));
+      REQUIRE(i6.space() == isr->retrieve(L"i_6"));
       REQUIRE(i6.has_proto_indices());
       REQUIRE(i6.proto_indices().size() == 2);
       REQUIRE(i6.proto_indices()[0] == i1);
@@ -76,16 +77,39 @@ TEST_CASE("Index", "[elements][index]") {
       REQUIRE_NOTHROW(Index(L"i_7", {i2, i1}));
       Index i7(L"i_7", {i2, i1});
       REQUIRE(i7.label() == L"i_7");
-      REQUIRE(i7.space() == idx_registry->retrieve(L"i_7"));
+      REQUIRE(i7.space() == isr->retrieve(L"i_7"));
       REQUIRE(i7.has_proto_indices());
       REQUIRE(i7.proto_indices().size() == 2);
       REQUIRE(i7.proto_indices()[0] == i1);  // !!
       REQUIRE(i7.proto_indices()[1] == i2);  // !!
 
 #ifndef NDEBUG
-      REQUIRE_THROWS(Index(L"i_4", idx_registry->retrieve(L"i_4"), {i1, i1}));
+      REQUIRE_THROWS(Index(L"i_4", isr->retrieve(L"i_4"), {i1, i1}));
       REQUIRE_THROWS(Index(L"i_5", {L"i_1", L"i_1"}));
 #endif
+    }
+
+    // can use bytestrings also
+    {
+      Index i1("i_1");
+      REQUIRE(i1.label() == L"i_1");
+      REQUIRE(i1.space() == isr->retrieve("i"));
+
+      Index i2('i');
+      REQUIRE(i2.label() == L"i");
+      REQUIRE(i2.space() == isr->retrieve("i"));
+
+      // to make things interesting use F12 registry with greek letters
+      Context cxt(sequant::mbpt::make_F12_sr_spaces(), Vacuum::Physical,
+                  get_default_context().metric(),
+                  get_default_context().braket_symmetry(),
+                  get_default_context().spbasis());
+      auto cxt_resetter = set_scoped_default_context(cxt);
+      Index α("α_2",
+              get_default_context().index_space_registry()->retrieve("α"));
+      REQUIRE(α.label() == L"α_2");
+      REQUIRE(α.space() ==
+              get_default_context().index_space_registry()->retrieve("α_1"));
     }
   }
 
@@ -187,7 +211,7 @@ TEST_CASE("Index", "[elements][index]") {
 
   SECTION("to_string") {
     auto old_cxt = get_default_context();
-    Context cxt(Vacuum::Physical, sequant::mbpt::make_F12_sr_subspaces(),
+    Context cxt(sequant::mbpt::make_F12_sr_spaces(), Vacuum::Physical,
                 old_cxt.metric(), old_cxt.braket_symmetry(), old_cxt.spbasis());
     auto cxt_resetter = set_scoped_default_context(cxt);
     Index alpha(L"α");
@@ -205,11 +229,9 @@ TEST_CASE("Index", "[elements][index]") {
   }
 
   SECTION("label manipulation") {
-    auto nex_context =
-        Context(Vacuum::SingleProduct, sequant::mbpt::make_F12_sr_subspaces(),
-                IndexSpaceMetric::Unit);
-    auto context_resetter = set_scoped_default_context(nex_context);
-    auto isr = get_default_context().index_space_registry();
+    auto context_resetter = set_scoped_default_context(
+        Context(sequant::mbpt::make_F12_sr_spaces(), Vacuum::SingleProduct));
+    const auto& isr = get_default_context().index_space_registry();
     Index alpha(L"α", isr->retrieve(L"α"));
     Index alpha1(L"α_1", isr->retrieve(L"α"));
     Index alpha_up(L"α↑", isr->retrieve(L"α"));

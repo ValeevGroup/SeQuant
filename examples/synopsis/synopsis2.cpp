@@ -10,7 +10,7 @@ int main() {
   // make default IndexSpaceRegistry
   IndexSpaceRegistry ISR;
   // now set the context to a single product of SP states
-  set_default_context(Context{Vacuum::SingleProduct, ISR,
+  set_default_context(Context{ISR, Vacuum::SingleProduct,
                               IndexSpaceMetric::Unit, BraKetSymmetry::symm});
   assert(get_default_context().vacuum() == Vacuum::SingleProduct);
   // reset the context back to the default

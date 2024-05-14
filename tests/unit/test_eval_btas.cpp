@@ -49,19 +49,18 @@ class rand_tensor_yield {
     using ranges::views::repeat_n;
     using ranges::views::transform;
     using sequant::IndexSpace;
-    auto idx_registry = sequant::get_default_context().index_space_registry();
+    const auto& isr = sequant::get_default_context().index_space_registry();
 
     assert(ranges::all_of(tnsr.const_braket(),
-                          [&idx_registry](auto const& idx) {
-                            return idx.space() ==
-                                       idx_registry->retrieve(L"i") ||
-                                   idx.space() == idx_registry->retrieve(L"a");
+                          [&isr](auto const& idx) {
+                            return idx.space() == isr->retrieve(L"i") ||
+                                   idx.space() == isr->retrieve(L"a");
                           }) &&
            "Unsupported IndexSpace type found while generating tensor.");
 
     auto rng = btas::Range{
-        tnsr.const_braket() | transform([this, &idx_registry](auto const& idx) {
-          return idx.space() == idx_registry->retrieve(L"i") ? nocc_ : nvirt_;
+        tnsr.const_braket() | transform([this, &isr](auto const& idx) {
+          return idx.space() == isr->retrieve(L"i") ? nocc_ : nvirt_;
         }) |
         ranges::to_vector};
 
@@ -141,15 +140,6 @@ container::svector<long> tidxs(
   for (auto i : tnsr_coords) tnsr_p = tnsr_p->at(i);
   assert(tnsr_p->is<Tensor>());
   return tidxs(tnsr_p->as<Tensor>());
-}
-
-template <
-    typename Iterable,
-    std::enable_if_t<std::is_convertible_v<IteredT<Iterable>, std::wstring>,
-                     bool> = true>
-container::svector<long> tidxs(Iterable const& strings) noexcept {
-  return tidxs(strings | ranges::views::transform(
-                             [](auto const& s) { return Index{s}; }));
 }
 
 auto terse_index = [](std::wstring const& spec) {

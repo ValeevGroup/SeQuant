@@ -13,6 +13,7 @@
 #include "container.hpp"
 
 #include <SeQuant/core/utility/string.hpp>
+#include <SeQuant/core/wstring.hpp>
 
 #include <range/v3/algorithm/any_of.hpp>
 
@@ -30,11 +31,12 @@ struct TypeAttr {
   /// default ctor creates a null TypeAttr
   constexpr TypeAttr() noexcept = default;
 
-  constexpr TypeAttr(bitset_t value) noexcept : bitset(value) {}
+  explicit constexpr TypeAttr(bitset_t value) noexcept : bitset(value) {}
 
   template <typename T,
             typename = std::enable_if_t<
-                meta::is_statically_castable_v<std::decay_t<T>, bitset_t>>>
+                meta::is_statically_castable_v<std::decay_t<T>, bitset_t> &&
+                !std::is_same_v<std::decay_t<T>, bool>>>
   constexpr TypeAttr(T &&value) noexcept
       : bitset(static_cast<bitset_t>(std::forward<T>(value))) {}
 
@@ -83,11 +85,13 @@ struct QuantumNumbersAttr {
   /// default ctor creates a null QuantumNumbersAttr
   constexpr QuantumNumbersAttr() noexcept = default;
 
-  constexpr QuantumNumbersAttr(int32_t value) noexcept : bitset(value) {}
+  explicit constexpr QuantumNumbersAttr(bitset_t value) noexcept
+      : bitset(value) {}
 
   template <typename QN,
             typename = std::enable_if_t<
-                meta::is_statically_castable_v<std::decay_t<QN>, bitset_t>>>
+                meta::is_statically_castable_v<std::decay_t<QN>, bitset_t> &&
+                !std::is_same_v<std::decay_t<QN>, bool>>>
   constexpr QuantumNumbersAttr(QN &&value) noexcept
       : bitset(static_cast<bitset_t>(std::forward<QN>(value))) {}
 
@@ -144,11 +148,12 @@ class IndexSpace {
   using TypeAttr = sequant::TypeAttr;
   using QuantumNumbersAttr = sequant::QuantumNumbersAttr;
 
-  IndexSpace(std::wstring type_label, TypeAttr typeattr,
+  template <typename S, typename = meta::EnableIfAnyStringConvertible<S>>
+  IndexSpace(S &&type_label, TypeAttr typeattr,
              QuantumNumbersAttr qnattr = QuantumNumbersAttr{0},
              unsigned long approximate_size = 10)
       : attr_(typeattr, qnattr),
-        base_key_(type_label),
+        base_key_(sequant::to_wstring(std::forward<S>(type_label))),
         approximate_size_(approximate_size) {}
 
   /// @brief Attr describes all attributes of a space (occupancy + quantum
@@ -158,8 +163,7 @@ class IndexSpace {
         : TypeAttr(type), QuantumNumbersAttr(qns){};
     Attr(int32_t type, int32_t qns) noexcept
         : TypeAttr(type), QuantumNumbersAttr(qns){};
-    //    explicit Attr(int64_t value) : TypeAttr((value & 0xffffffff00000000)
-    //    >> 32), QuantumNumbersAttr(value & 0x00000000ffffffff) {}
+    Attr() = default;
     Attr(const Attr &) = default;
     Attr(Attr &&) = default;
     Attr &operator=(const Attr &) = default;
@@ -289,14 +293,10 @@ class IndexSpace {
   /// IndexSpace::base_key() or Index::label()
   struct bad_key : std::invalid_argument {
     bad_key() : std::invalid_argument("bad key") {}
-    bad_key(const char *key)
-        : std::invalid_argument(std::string("bad key: ") + key) {}
-    bad_key(const std::wstring &key)
+    template <typename S, typename = meta::EnableIfAnyStringConvertible<S>>
+    bad_key(S &&key)
         : std::invalid_argument(std::string("bad key: ") +
-                                sequant::toUtf8(key)) {}
-    bad_key(const std::wstring_view key)
-        : std::invalid_argument(std::string("bad key: ") +
-                                sequant::toUtf8(key)) {}
+                                sequant::to_string(key)) {}
   };
 
   struct KeyCompare {
@@ -361,6 +361,14 @@ class IndexSpace {
       return key.substr(0, underscore_position);
     } else {
       return key;
+    }
+  }
+  static std::wstring reduce_key(std::string_view key) {
+    const auto underscore_position = key.rfind(L'_');
+    if (underscore_position != std::string::npos) {  // key can be reduced
+      return sequant::to_wstring(key.substr(0, underscore_position));
+    } else {
+      return sequant::to_wstring(key);
     }
   }
 

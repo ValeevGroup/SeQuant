@@ -44,9 +44,9 @@ TEST_CASE("Spin", "[spin]") {
   };
 
   SECTION("protoindices supported") {
-    auto index_registry = get_default_context().index_space_registry();
-    Index i1(L"i_1", index_registry->retrieve(L"i"));
-    Index a1(L"a_1", index_registry->retrieve(L"a"), {i1});
+    const auto& isr = get_default_context().index_space_registry();
+    Index i1(L"i_1", isr->retrieve(L"i"));
+    Index a1(L"a_1", isr->retrieve(L"a"), {i1});
 
     const auto expr = ex<Tensor>(L"t", IndexList{i1}, IndexList{a1}) *
                       ex<Tensor>(L"F", IndexList{a1}, IndexList{i1});
@@ -96,25 +96,25 @@ TEST_CASE("Spin", "[spin]") {
   }
 
   SECTION("Index: add/remove spin") {
-    auto i = Index(L"i", {L"i", {0b01}, mbpt::Spin::any});
-    auto i1 = Index(L"i_1", {L"i", {0b01}, mbpt::Spin::any});
-    auto p = Index(L"p", {L"p", {0b11}, mbpt::Spin::any});
-    auto p1 = Index(L"p_1", {L"p", {0b11}, mbpt::Spin::any});
-    auto p1_a = Index(L"p↑_1", {L"p↑", {0b11}, mbpt::Spin::alpha});
-    auto p2 = Index(L"p_2", {L"p", {0b11}, mbpt::Spin::any});
-    auto p2_b = Index(L"p↓_2", {L"p↓", {0b11}, mbpt::Spin::beta});
+    auto i = Index(L"i", {L"i", 0b01, mbpt::Spin::any});
+    auto i1 = Index(L"i_1", {L"i", 0b01, mbpt::Spin::any});
+    auto p = Index(L"p", {L"p", 0b11, mbpt::Spin::any});
+    auto p1 = Index(L"p_1", {L"p", 0b11, mbpt::Spin::any});
+    auto p1_a = Index(L"p↑_1", {L"p↑", 0b11, mbpt::Spin::alpha});
+    auto p2 = Index(L"p_2", {L"p", 0b11, mbpt::Spin::any});
+    auto p2_b = Index(L"p↓_2", {L"p↓", 0b11, mbpt::Spin::beta});
 
-    auto p_i = Index(L"p", {L"p", {0b11}, mbpt::Spin::any}, {i});
-    auto p1_i = Index(L"p_1", {L"p", {0b11}, mbpt::Spin::any}, {i});
-    auto p_i1 = Index(L"p", {L"p", {0b11}, mbpt::Spin::any}, {i1});
-    auto p1_i1 = Index(L"p_1", {L"p", {0b11}, mbpt::Spin::any}, {i1});
+    auto p_i = Index(L"p", {L"p", 0b11, mbpt::Spin::any}, {i});
+    auto p1_i = Index(L"p_1", {L"p", 0b11, mbpt::Spin::any}, {i});
+    auto p_i1 = Index(L"p", {L"p", 0b11, mbpt::Spin::any}, {i1});
+    auto p1_i1 = Index(L"p_1", {L"p", 0b11, mbpt::Spin::any}, {i1});
 
     // make_spinalpha
     {
       // plain
       REQUIRE_NOTHROW(make_spinalpha(p));
       REQUIRE(make_spinalpha(p).label() == L"p↑");
-      IndexSpace p_a(L"p↑", {0b11}, mbpt::Spin::alpha);
+      IndexSpace p_a(L"p↑", 0b11, mbpt::Spin::alpha);
       REQUIRE(make_spinalpha(p).space() == p_a);
       REQUIRE_NOTHROW(make_spinalpha(p1));
       REQUIRE(make_spinalpha(p1) == p1_a);
@@ -564,9 +564,9 @@ SECTION("Expand Symmetrizer") {
 }
 
 SECTION("Symmetrize expression") {
-  auto new_cxt =
-      Context(Vacuum::SingleProduct, sequant::mbpt::make_legacy_subspaces());
-  auto ctx_resetter = set_scoped_default_context(new_cxt);
+  auto ctx_resetter = set_scoped_default_context(
+      Context(sequant::mbpt::make_legacy_spaces(/* ignore_spin= */ true),
+              Vacuum::SingleProduct));
   {
     // g * t1 + g * t1
     auto input = ex<Tensor>(L"g", WstrList{L"a_1", L"a_2"},
@@ -700,10 +700,10 @@ SECTION("Closed-shell spintrace CCD") {
                                    Symmetry::nonsymm));
     }
     {  // CSV (aka PNO)
-      Index i1(L"i_1", {L"i", {0b01}});
-      Index i2(L"i_2", {L"i", {0b01}});
-      Index a1(L"a_1", {L"a", {0b10}}, {i1, i2});
-      Index a2(L"a_2", {L"a", {0b10}}, {i1, i2});
+      Index i1(L"i_1", {L"i", 0b01});
+      Index i2(L"i_2", {L"i", 0b01});
+      Index a1(L"a_1", {L"a", 0b10}, {i1, i2});
+      Index a2(L"a_2", {L"a", 0b10}, {i1, i2});
       const auto pno_ccd_energy_so =
           ex<Constant>(rational(1, 4)) *
           ex<Tensor>(L"g", IndexList{a1, a2}, IndexList{i1, i2},
@@ -729,9 +729,9 @@ SECTION("Closed-shell spintrace CCD") {
 }
 
 SECTION("Closed-shell spintrace CCSD") {
-  auto new_cxt =
-      Context(Vacuum::SingleProduct, sequant::mbpt::make_legacy_subspaces());
-  auto ctx_resetter = set_scoped_default_context(new_cxt);
+  auto ctx_resetter = set_scoped_default_context(
+      Context(sequant::mbpt::make_legacy_spaces(/* ignore_spin = */ true),
+              Vacuum::SingleProduct));
 
   // These terms from CCSD R1 equations
   {
@@ -769,8 +769,8 @@ SECTION("Closed-shell spintrace CCSD") {
     auto transformed_result = transform_expr(result, idxmap);
     REQUIRE(
         to_latex(transformed_result) ==
-        L"{ \\bigl( - {{g^{{a_2}{i_2}}_{{a_1}{i_1}}}{t^{{i_1}}_{{a_2}}}} + "
-        L"{{{2}}{g^{{i_2}{a_2}}_{{a_1}{i_1}}}{t^{{i_1}}_{{a_2}}}}\\bigr) }");
+        L"{ \\bigl( - {{g^{{a_2}{i_1}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}} + "
+        L"{{{2}}{g^{{i_1}{a_2}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}}\\bigr) }");
   }
 
   {
@@ -879,10 +879,10 @@ SECTION("Closed-shell spintrace CCSD") {
     canonicalize(result);
     REQUIRE(to_latex(result) ==
             L"{ "
-            L"\\bigl({{{2}}{g^{{a_3}{a_2}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}{"
-            L"t^{{i_1}}_{{a_3}}}} - "
-            L"{{g^{{a_3}{a_2}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_3}}}{t^{{i_1}}_{{"
-            L"a_2}}}}\\bigr) }");
+            L"\\bigl({{{2}}{g^{{a_3}{a_2}}_{{a_1}{i_2}}}{t^{{i_1}}_{{a_3}}}{t^{"
+            L"{i_2}}_{{a_2}}}} - "
+            L"{{g^{{a_3}{a_2}}_{{a_1}{i_2}}}{t^{{i_1}}_{{a_2}}}{t^{{i_2}}_{{a_"
+            L"3}}}}\\bigr) }");
   }
 
   {
@@ -1300,9 +1300,8 @@ SECTION("Expand P operator pair-wise") {
 
 SECTION("Open-shell spin-tracing") {
   // checks depend on the legacy subspaces
-  auto new_cxt =
-      Context(Vacuum::SingleProduct, sequant::mbpt::make_legacy_subspaces());
-  auto ctx_resetter = set_scoped_default_context(new_cxt);
+  auto ctx_resetter = set_scoped_default_context(
+      Context(sequant::mbpt::make_legacy_spaces(), Vacuum::SingleProduct));
 
   const auto i1A = Index(L"i↑_1");
   const auto i2A = Index(L"i↑_2");

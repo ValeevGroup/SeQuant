@@ -22,6 +22,10 @@ namespace meta {
 template <typename T>
 struct type_printer;
 
+/// always_false<T>::value is always false
+template <typename T>
+struct always_false : std::false_type {};
+
 ///////// remove_cvref ///////////
 
 #if __cplusplus < 202002L
@@ -114,6 +118,22 @@ template <class T>
 struct is_complex<sequant::Complex<T>> : std::true_type {};
 template <class T>
 static constexpr bool is_complex_v = is_complex<T>::value;
+
+/// Evaluates to true if ``T`` is a character type
+template <typename T>
+struct is_char : std::false_type {};
+template <>
+struct is_char<char> : std::true_type {};
+template <>
+struct is_char<wchar_t> : std::true_type {};
+template <>
+struct is_char<char8_t> : std::true_type {};
+template <>
+struct is_char<char16_t> : std::true_type {};
+template <>
+struct is_char<char32_t> : std::true_type {};
+template <class T>
+static constexpr bool is_char_v = is_char<T>::value;
 
 ///////// is_less_than_comparable /////////
 

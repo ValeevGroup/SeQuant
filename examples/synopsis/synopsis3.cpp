@@ -9,12 +9,11 @@
 int main() {
   using namespace sequant;
 
-  set_default_context(Context{Vacuum::SingleProduct,
-                              sequant::mbpt::make_F12_sr_subspaces(),
-                              IndexSpaceMetric::Unit, BraKetSymmetry::symm});
-
-  get_default_context().index_space_registry()->relabel(L"i", L"y");
-  get_default_context().index_space_registry()->relabel(L"α", L"z");
+  set_default_context(Context{IndexSpaceRegistry{}
+                                  .add(L"y", 0b01, is_vacuum_occupied)
+                                  .add(L"z", 0b10)
+                                  .add(L"p", 0b11),
+                              Vacuum::SingleProduct});
 
   IndexSpace sp = get_default_context().index_space_registry()->retrieve(L"p");
   Index p1(L"p_1", sp), p2(L"p_2", sp), p3(L"p_3", sp), p4(L"p_4", sp);

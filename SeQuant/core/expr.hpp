@@ -1151,7 +1151,6 @@ class Product : public Expr {
         });
     Product result(this->scalar(), ExprPtrList{});
     ranges::for_each(cloned_factors, [&](const auto &cloned_factor) {
-      if (cloned_factor.template is<Product>()) std::cout << "";
       result.append(1, std::move(cloned_factor), Flatten::No);
     });
     return result;
