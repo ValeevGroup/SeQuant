@@ -98,7 +98,7 @@ qns_t excitation_type_qns(std::size_t K) {
   return result;
 }
 
-// sometimes we want to guarrentee that a qns has an interval from 0-K
+// sometimes we want to guarantee that a qns has an interval from 0-K
 // regardless of the base spaces.
 qns_t interval_excitation_type_qns(std::size_t K) {
   qnc_t result;
@@ -153,7 +153,7 @@ qns_t deexcitation_type_qns(std::size_t K) {
   return result;
 }
 
-// sometimes we want to guarrentee that a qns has an interval from 0-K
+// sometimes we want to guarantee that a qns has an interval from 0-K
 // regardless of the base spaces.
 qns_t interval_deexcitation_type_qns(std::size_t K) {
   qnc_t result;
@@ -402,12 +402,12 @@ OpMaker<S>::OpMaker(OpType op, std::size_t nbra, std::size_t nket,
   const auto& isr = get_default_context().index_space_registry();
   switch (to_class(op)) {
     case OpClass::ex:
-      bra_spaces_ = decltype(bra_spaces_)(nbra, hole_space);
-      ket_spaces_ = decltype(ket_spaces_)(nket, particle_space);
-      break;
-    case OpClass::deex:
       bra_spaces_ = decltype(bra_spaces_)(nbra, particle_space);
       ket_spaces_ = decltype(ket_spaces_)(nket, hole_space);
+      break;
+    case OpClass::deex:
+      bra_spaces_ = decltype(bra_spaces_)(nbra, hole_space);
+      ket_spaces_ = decltype(ket_spaces_)(nket, particle_space);
       break;
     case OpClass::gen:
       bra_spaces_ = decltype(bra_spaces_)(nbra, isr->complete_space(Spin::any));
@@ -421,16 +421,16 @@ OpMaker<S>::OpMaker(OpType op, std::size_t nparticle) {
   op_ = op;
   const auto& isr = get_default_context().index_space_registry();
   auto current_context = get_default_context();
-  const auto occ = isr->hole_space(Spin::any);
-  const auto unocc = isr->particle_space(Spin::any);
+  const auto hole_space = isr->hole_space(Spin::any);
+  const auto particle_space = isr->particle_space(Spin::any);
   switch (to_class(op)) {
     case OpClass::ex:
-      bra_spaces_ = decltype(bra_spaces_)(nparticle, unocc);
-      ket_spaces_ = decltype(ket_spaces_)(nparticle, occ);
+      bra_spaces_ = decltype(bra_spaces_)(nparticle, particle_space);
+      ket_spaces_ = decltype(ket_spaces_)(nparticle, hole_space);
       break;
     case OpClass::deex:
-      bra_spaces_ = decltype(bra_spaces_)(nparticle, occ);
-      ket_spaces_ = decltype(ket_spaces_)(nparticle, unocc);
+      bra_spaces_ = decltype(bra_spaces_)(nparticle, hole_space);
+      ket_spaces_ = decltype(ket_spaces_)(nparticle, particle_space);
       break;
     case OpClass::gen:
       bra_spaces_ =
@@ -608,18 +608,18 @@ ExprPtr A(std::int64_t K) {
   assert(K != 0);
   container::svector<IndexSpace> creators;
   container::svector<IndexSpace> annihilators;
-  if (K > 0)
+  if (K > 0)  // ex
     for ([[maybe_unused]] auto i : ranges::views::iota(0, K))
-      annihilators.emplace_back(isr->particle_space(Spin::any));
-  else
-    for ([[maybe_unused]] auto i : ranges::views::iota(0, -K))
-      creators.emplace_back(isr->particle_space(Spin::any));
-  if (K > 0)
-    for ([[maybe_unused]] auto i : ranges::views::iota(0, K))
-      creators.emplace_back(isr->hole_space(Spin::any));
-  else
-    for ([[maybe_unused]] auto i : ranges::views::iota(0, -K))
       annihilators.emplace_back(isr->hole_space(Spin::any));
+  else  // deex
+    for ([[maybe_unused]] auto i : ranges::views::iota(0, -K))
+      creators.emplace_back(isr->hole_space(Spin::any));
+  if (K > 0)  // ex
+    for ([[maybe_unused]] auto i : ranges::views::iota(0, K))
+      creators.emplace_back(isr->particle_space(Spin::any));
+  else  // deex
+    for ([[maybe_unused]] auto i : ranges::views::iota(0, -K))
+      annihilators.emplace_back(isr->particle_space(Spin::any));
 
   std::optional<OpMaker<Statistics::FermiDirac>::UseDepIdx> dep;
   if (get_default_formalism().csv() == mbpt::CSV::Yes)
@@ -635,18 +635,18 @@ ExprPtr S(std::int64_t K) {
   assert(K != 0);
   container::svector<IndexSpace> creators;
   container::svector<IndexSpace> annihilators;
-  if (K > 0)
+  if (K > 0)  // ex
     for ([[maybe_unused]] auto i : ranges::views::iota(0, K))
-      annihilators.emplace_back(isr->particle_space(Spin::any));
-  else
-    for ([[maybe_unused]] auto i : ranges::views::iota(0, -K))
-      creators.emplace_back(isr->particle_space(Spin::any));
-  if (K > 0)
-    for ([[maybe_unused]] auto i : ranges::views::iota(0, K))
-      creators.emplace_back(isr->hole_space(Spin::any));
-  else
-    for ([[maybe_unused]] auto i : ranges::views::iota(0, -K))
       annihilators.emplace_back(isr->hole_space(Spin::any));
+  else  // deex
+    for ([[maybe_unused]] auto i : ranges::views::iota(0, -K))
+      creators.emplace_back(isr->hole_space(Spin::any));
+  if (K > 0)  // ex
+    for ([[maybe_unused]] auto i : ranges::views::iota(0, K))
+      creators.emplace_back(isr->particle_space(Spin::any));
+  else  // deex
+    for ([[maybe_unused]] auto i : ranges::views::iota(0, -K))
+      annihilators.emplace_back(isr->particle_space(Spin::any));
 
   std::optional<OpMaker<Statistics::FermiDirac>::UseDepIdx> dep;
   if (get_default_formalism().csv() == mbpt::CSV::Yes)
@@ -963,7 +963,7 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
   // convention is to use different label for spin-orbital and spin-free RDM
   const auto rdm_label = spinorbital ? optype2label.at(OpType::RDM) : L"Γ";
 
-  //  the hueristic to keep only full contractions
+  //  the heuristic to keep only full contractions
   // during a wick procedure requires that the wave function density agree with
   // the vacuum normal ordering occupancy.
   bool full_contractions =

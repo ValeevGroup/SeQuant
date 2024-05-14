@@ -469,7 +469,7 @@ qns_t combine(qns_t, qns_t);
 // @param is the rank of the operator.
 qns_t excitation_type_qns(std::size_t k);
 
-// sometimes we want to guarrentee that a qns has an interval from 0-K
+// sometimes we want to guarantee that a qns has an interval from 0-K
 // regardless of the base spaces.
 qns_t interval_excitation_type_qns(std::size_t k);
 
@@ -478,7 +478,7 @@ qns_t interval_excitation_type_qns(std::size_t k);
 // @param is the rank of the operator.
 qns_t deexcitation_type_qns(std::size_t k);
 
-// sometimes we want to guarrentee that a qns has an interval from 0-K
+// sometimes we want to guarantee that a qns has an interval from 0-K
 // regardless of the base spaces.
 qns_t interval_deexcitation_type_qns(std::size_t k);
 
