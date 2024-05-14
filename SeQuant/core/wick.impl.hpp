@@ -50,9 +50,9 @@ inline container::map<Index, Index> compute_index_replacement_rules(
   // computes an index in intersection of space1 and space2
   auto make_intersection_index = [&idxfac](const IndexSpace &space1,
                                            const IndexSpace &space2) {
-    auto idx_registry = sequant::get_default_context().index_space_registry();
-    const auto intersection_space = idx_registry->intersection(space1, space2);
-    if (intersection_space == idx_registry->nullspace) throw zero_result{};
+    const auto &isr = sequant::get_default_context().index_space_registry();
+    const auto intersection_space = isr->intersection(space1, space2);
+    if (intersection_space == isr->nullspace) throw zero_result{};
     return idxfac.make(intersection_space);
   };
 
@@ -93,7 +93,7 @@ inline container::map<Index, Index> compute_index_replacement_rules(
   // dst2 and dst
   auto add_rules = [&result, &idxfac, &proto, &make_intersection_index](
                        const Index &src1, const Index &src2, const Index &dst) {
-    auto idx_registry = get_default_context().index_space_registry();
+    const auto &isr = get_default_context().index_space_registry();
     // are there replacement rules already for src{1,2}?
     auto src1_it = result.find(src1);
     auto src2_it = result.find(src2);
@@ -138,10 +138,10 @@ inline container::map<Index, Index> compute_index_replacement_rules(
       const auto &old_dst2 = src2_it->second;
       const auto new_dst_space =
           (dst.space() != old_dst1.space() || dst.space() != old_dst2.space())
-              ? idx_registry->intersection(old_dst1.space(), old_dst2.space(),
-                                           dst.space())
+              ? isr->intersection(old_dst1.space(), old_dst2.space(),
+                                  dst.space())
               : dst.space();
-      if (new_dst_space == idx_registry->nullspace) throw zero_result{};
+      if (new_dst_space == isr->nullspace) throw zero_result{};
       Index new_dst;
       if (new_dst_space == old_dst1.space()) {
         new_dst = old_dst1;
@@ -165,7 +165,7 @@ inline container::map<Index, Index> compute_index_replacement_rules(
     }
   };
 
-  auto idx_registry = get_default_context().index_space_registry();
+  const auto &isr = get_default_context().index_space_registry();
   /// this makes the list of replacements ... we do not mutate the expressions
   /// to keep the information about which indices are related
   for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
@@ -185,10 +185,10 @@ inline container::map<Index, Index> compute_index_replacement_rules(
                                 ranges::end(external_indices);
 
         const auto intersection_space =
-            idx_registry->intersection(bra.space(), ket.space());
+            isr->intersection(bra.space(), ket.space());
 
         // if overlap's indices are from non-overlapping spaces, return zero
-        if (intersection_space == idx_registry->nullspace) {
+        if (intersection_space == isr->nullspace) {
           throw zero_result{};
         }
 
@@ -221,7 +221,7 @@ inline bool apply_index_replacement_rules(
     const container::map<Index, Index> &const_replrules,
     const container::set<Index> &external_indices,
     std::set<Index, Index::LabelCompare> &all_indices) {
-  auto idx_registry = get_default_context().index_space_registry();
+  const auto &isr = get_default_context().index_space_registry();
   // to be able to use map[]
   auto &replrules = const_cast<container::map<Index, Index> &>(const_replrules);
 
@@ -269,7 +269,7 @@ inline bool apply_index_replacement_rules(
 
 #ifndef NDEBUG
             const auto intersection_space =
-                idx_registry->intersection(bra.space(), ket.space());
+                isr->intersection(bra.space(), ket.space());
 #endif
 
             if (!bra_is_ext && !ket_is_ext) {  // int + int

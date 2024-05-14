@@ -21,9 +21,8 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
 
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
-  auto new_cxt =
-      Context(Vacuum::SingleProduct, sequant::mbpt::make_legacy_subspaces());
-  auto ctx_resetter = set_scoped_default_context(new_cxt);
+  auto ctx_resetter = set_scoped_default_context(
+      Context(sequant::mbpt::make_legacy_spaces(), Vacuum::SingleProduct));
 
   SECTION("Tensors") {
     {

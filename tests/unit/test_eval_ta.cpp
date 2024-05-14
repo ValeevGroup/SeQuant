@@ -132,15 +132,13 @@ class rand_tensor_yield {
     }
 
     ERPtr result{nullptr};
-    auto idx_registry = get_default_context().index_space_registry();
+    const auto& isr = get_default_context().index_space_registry();
 
-    auto make_extents =
-        [this, &idx_registry](auto&& ixs) -> container::svector<size_t> {
-      return ixs | transform([this, &idx_registry](auto const& ix) -> size_t {
-               assert(ix.space() == idx_registry->retrieve(L"i") ||
-                      ix.space() == idx_registry->retrieve(L"a"));
-               return ix.space() == idx_registry->retrieve(L"i") ? nocc_
-                                                                 : nvirt_;
+    auto make_extents = [this, &isr](auto&& ixs) -> container::svector<size_t> {
+      return ixs | transform([this, &isr](auto const& ix) -> size_t {
+               assert(ix.space() == isr->retrieve(L"i") ||
+                      ix.space() == isr->retrieve(L"a"));
+               return ix.space() == isr->retrieve(L"i") ? nocc_ : nvirt_;
              }) |
              ranges::to<container::svector<size_t>>;
     };

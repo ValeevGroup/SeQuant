@@ -31,11 +31,12 @@ struct TypeAttr {
   /// default ctor creates a null TypeAttr
   constexpr TypeAttr() noexcept = default;
 
-  constexpr TypeAttr(bitset_t value) noexcept : bitset(value) {}
+  explicit constexpr TypeAttr(bitset_t value) noexcept : bitset(value) {}
 
   template <typename T,
             typename = std::enable_if_t<
-                meta::is_statically_castable_v<std::decay_t<T>, bitset_t>>>
+                meta::is_statically_castable_v<std::decay_t<T>, bitset_t> &&
+                !std::is_same_v<std::decay_t<T>, bool>>>
   constexpr TypeAttr(T &&value) noexcept
       : bitset(static_cast<bitset_t>(std::forward<T>(value))) {}
 
@@ -84,11 +85,13 @@ struct QuantumNumbersAttr {
   /// default ctor creates a null QuantumNumbersAttr
   constexpr QuantumNumbersAttr() noexcept = default;
 
-  constexpr QuantumNumbersAttr(int32_t value) noexcept : bitset(value) {}
+  explicit constexpr QuantumNumbersAttr(bitset_t value) noexcept
+      : bitset(value) {}
 
   template <typename QN,
             typename = std::enable_if_t<
-                meta::is_statically_castable_v<std::decay_t<QN>, bitset_t>>>
+                meta::is_statically_castable_v<std::decay_t<QN>, bitset_t> &&
+                !std::is_same_v<std::decay_t<QN>, bool>>>
   constexpr QuantumNumbersAttr(QN &&value) noexcept
       : bitset(static_cast<bitset_t>(std::forward<QN>(value))) {}
 

@@ -30,8 +30,8 @@ int main(int argc, char* argv[]) {
   std::wcerr.sync_with_stdio(true);
 
   sequant::set_default_context(Context(
-      Vacuum::SingleProduct, mbpt::make_min_sr_subspaces(),
-      IndexSpaceMetric::Unit, BraKetSymmetry::conjugate, SPBasis::spinorbital));
+      mbpt::make_min_sr_spaces(), Vacuum::SingleProduct, IndexSpaceMetric::Unit,
+      BraKetSymmetry::conjugate, SPBasis::spinorbital));
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
 
@@ -45,12 +45,12 @@ int main(int argc, char* argv[]) {
   /// Make external index
   auto ext_idx_list = [](const int i_max) {
     container::svector<container::svector<Index>> ext_idx_list;
-    auto idx_registry = get_default_context().index_space_registry();
+    const auto& isr = get_default_context().index_space_registry();
     for (size_t i = 1; i <= i_max; ++i) {
       auto label = std::to_wstring(i);
-      auto occ_space = idx_registry->retrieve(L"i");
+      auto occ_space = isr->retrieve(L"i");
       auto occ_i = Index(occ_space.base_key() + L'_' + label, occ_space);
-      auto uocc_space = idx_registry->retrieve(L"a");
+      auto uocc_space = isr->retrieve(L"a");
       auto virt_i = Index(uocc_space.base_key() + L'_' + label, uocc_space);
       decltype(ext_idx_list)::value_type pair = {occ_i, virt_i};
       ext_idx_list.push_back(pair);

@@ -279,10 +279,10 @@ TEST_CASE("NBodyOp", "[mbpt]") {
 
   SECTION("screen") {
     using namespace sequant::mbpt::op;
-    auto sr_registry = sequant::mbpt::make_sr_subspaces();
+    auto sr_registry = sequant::mbpt::make_sr_spaces();
     auto old_context = get_default_context();
     sequant::Context new_context(
-        old_context.vacuum(), sr_registry, old_context.metric(),
+        sr_registry, old_context.vacuum(), old_context.metric(),
         old_context.braket_symmetry(), old_context.spbasis(),
         old_context.first_dummy_index_ordinal());
     auto cxt_resetter = set_scoped_default_context(new_context);
@@ -409,8 +409,8 @@ TEST_CASE("MBPT", "[mbpt]") {
     using namespace sequant::mbpt::TensorOp;
 
     auto ctx_resetter = set_scoped_default_context(sequant::Context(
-        Vacuum::SingleProduct, mbpt::make_sr_subspaces(),
-        IndexSpaceMetric::Unit, BraKetSymmetry::conjugate, SPBasis::spinfree));
+        mbpt::make_sr_spaces(), Vacuum::SingleProduct, IndexSpaceMetric::Unit,
+        BraKetSymmetry::conjugate, SPBasis::spinfree));
 
     // H2 -> R2
     SEQUANT_PROFILE_SINGLE("wick(H2 -> R2)", {
@@ -435,10 +435,9 @@ TEST_CASE("MBPT", "[mbpt]") {
 
   SECTION("MRSO") {
     using namespace sequant::mbpt::TensorOp;
-    auto ctx_resetter = set_scoped_default_context(
-        sequant::Context(Vacuum::SingleProduct, mbpt::make_mr_subspaces(),
-                         IndexSpaceMetric::Unit, BraKetSymmetry::conjugate,
-                         SPBasis::spinorbital));
+    auto ctx_resetter = set_scoped_default_context(sequant::Context(
+        mbpt::make_mr_spaces(), Vacuum::SingleProduct, IndexSpaceMetric::Unit,
+        BraKetSymmetry::conjugate, SPBasis::spinorbital));
 
     // H2**T2 -> 0
     // std::wcout << "H_(2) * T_(2) = " << to_latex(H_(2) * T_(2)) << std::endl;
@@ -465,7 +464,7 @@ REQUIRE(simplify(result - result_wo_top) == ex<Constant>(0));
   // now compute using physical vacuum
   {
     auto ctx_resetter = set_scoped_default_context(sequant::Context(
-        Vacuum::Physical, mbpt::make_mr_subspaces(), IndexSpaceMetric::Unit,
+        mbpt::make_mr_spaces(), Vacuum::Physical, IndexSpaceMetric::Unit,
         BraKetSymmetry::conjugate, SPBasis::spinorbital));
     auto result_phys = mbpt::vac_av(H_(2) * T_(2), {{0, 1}});
 
@@ -507,7 +506,7 @@ SECTION("MRSF") {
 
   // now compute using (closed) Fermi vacuum + spinfree basis
   auto ctx_resetter = set_scoped_default_context(sequant::Context(
-      Vacuum::SingleProduct, mbpt::make_mr_subspaces(), IndexSpaceMetric::Unit,
+      mbpt::make_mr_spaces(), Vacuum::SingleProduct, IndexSpaceMetric::Unit,
       BraKetSymmetry::conjugate, SPBasis::spinfree));
 
   // H2**T2 -> 0

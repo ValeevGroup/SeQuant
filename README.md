@@ -157,7 +157,7 @@ int main() {
   assert(sample_ISR.unIon(z_space,y_space) == yz_space);
   assert(sample_ISR.intersection(xy_space,x_space) == x_space);
   
-  Context new_cxt(Vacuum::SingleProduct,sample_ISR);
+  Context new_cxt(sample_ISR, Vacuum::SingleProduct);
   set_default_context(new_cxt);
 }
 ```
