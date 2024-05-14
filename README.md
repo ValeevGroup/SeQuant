@@ -164,7 +164,7 @@ int main() {
 The above sample registry outlines the set theoreitcs for  indices x, y, and z using unsigned ints conveniently written as bitsets.
 Notice that not all possible combinations need to be registered. It is the task of the user to predict any and all spaces that they may 
 encounter in their context. Notice that `unIon()` and `intersection()` are part of the `IndexSpaceRegistry` class. This is because these operations should never produce an unregistered `IndexSpace`(except the `nullspace()`).
-SeQuant of course provides a number of common partitionings common for chemistry. These are located in `SeQuant/domain/mbpt/convention.hpp`.
+SeQuant of course provides a number of partitionings common for chemistry. These are located in `SeQuant/domain/mbpt/convention.hpp`.
 
 
 ### Quasiparticles
@@ -220,9 +220,24 @@ produces
 - the tilde in `ã` denotes normal order with respect to single-product vacuum, and
 - Einstein summation convention is implied, i.e., indices that appear twice in a given product are summed over.
 
-### Operators
+## Operators
+In the domain of Many Body Perturbation Theory (MBPT), there are a variety of common operators (`mbpt::Operator)`which 
+are recognizable to chemists. For example: `H`, `f`, `T1`, `T2`, etc... More generally, operators are 
+defined as some `Tensor` times a normal ordered operator sequence (`NormalOperator<Statistics::FermiDirac>`). These operators are meant 
+provide an easy way to construct expressions common to chemistry.
+Perhaps even more importantly, algebra at the higher level of operators is often 
+more efficient. For example in the screening procedure for Wick's Theorem.
 
-
+ Unfortunately, even within chemistry, there is no way to uniquely define many of the common operators. 
+for example: `T1` in a multi-reference framework may look different from `T1` in a single-reference
+picture. In fact, in order to define an excitation or deexcitation operator, we need to know where active(mobile) particles and holes come from.
+Thus, in order for an `IndexSpaceRegistry` to be compatible with operator construction requires the user to choose which spaces contain active particles and
+which contain active holes.
+```c++
+sample_ISR.active_particle_space(xy_space);
+sample_ISR.active_hole_space(yz_space);
+```
+Notice that there is no requirement that the two spaces are orthogonal.
 # Developers
 
 `SeQuant` is developed by the Valeev group at Virginia Tech.
