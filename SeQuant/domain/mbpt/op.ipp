@@ -154,7 +154,7 @@ ExprPtr Operator<QuantumNumbers, S>::clone() const {
 // conversely \hat{R}_1_2 implies the that only one particle is annihilated followed by two holes being created.
 // The rule being, that for non-particle conserving operators, the first position indicates where the quasiparticle is going to and the second position indicates where it comes from.
 // for the case of adjoint operators, the adjoint is represented by the symbol ⁺ and superscripting the quasi-particle numbers. for example: hat{R⁺}^{1,2}}
-// For operators in which one or more quasi-particles has only partial coverage in the active_particle_space or active_hole_space, this notation is unsuitable, and we default to
+// For operators in which one or more quasi-particles has only partial coverage in the particle_space or hole_space, this notation is unsuitable, and we default to
 // level printing of the operator.
 template <typename QuantumNumbers, Statistics S>
 std::wstring Operator<QuantumNumbers, S>::to_latex() const {

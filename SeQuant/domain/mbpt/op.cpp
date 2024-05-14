@@ -78,17 +78,16 @@ qns_t excitation_type_qns(std::size_t K) {
     const auto& isr = get_default_context().index_space_registry();
     auto base_spaces = isr->base_spaces();
     // are the active qp spaces base spaces?
-    bool aps_base = isr->is_base_space(isr->active_particle_space(Spin::any));
-    bool ahs_base = isr->is_base_space(isr->active_hole_space(Spin::any));
+    bool aps_base = isr->is_base_space(isr->particle_space(Spin::any));
+    bool ahs_base = isr->is_base_space(isr->hole_space(Spin::any));
 
     for (int i = 0; i < base_spaces.size(); i++) {
-      if (!includes(isr->active_hole_space(Spin::any).type(),
-                    base_spaces[i].type())) {
+      if (!includes(isr->hole_space(Spin::any).type(), base_spaces[i].type())) {
         result[i * 2] = {0ul, 0ul};
       } else {
         result[i * 2] = {ahs_base ? K : 0ul, K};
       }
-      if (!includes(isr->active_particle_space(Spin::any).type(),
+      if (!includes(isr->particle_space(Spin::any).type(),
                     base_spaces[i].type())) {
         result[i * 2 + 1] = {0ul, 0ul};
       } else {
@@ -111,13 +110,12 @@ qns_t interval_excitation_type_qns(std::size_t K) {
     auto base_spaces = isr->base_spaces();
 
     for (int i = 0; i < base_spaces.size(); i++) {
-      if (!includes(isr->active_hole_space(Spin::any).type(),
-                    base_spaces[i].type())) {
+      if (!includes(isr->hole_space(Spin::any).type(), base_spaces[i].type())) {
         result[i * 2] = {0ul, 0ul};
       } else {
         result[i * 2] = {0ul, K};
       }
-      if (!includes(isr->active_particle_space(Spin::any).type(),
+      if (!includes(isr->particle_space(Spin::any).type(),
                     base_spaces[i].type())) {
         result[i * 2 + 1] = {0ul, 0ul};
       } else {
@@ -136,16 +134,15 @@ qns_t deexcitation_type_qns(std::size_t K) {
   } else {
     const auto& isr = get_default_context().index_space_registry();
     auto base_spaces = isr->base_spaces();
-    bool aps_base = isr->is_base_space(isr->active_particle_space(Spin::any));
-    bool ahs_base = isr->is_base_space(isr->active_hole_space(Spin::any));
+    bool aps_base = isr->is_base_space(isr->particle_space(Spin::any));
+    bool ahs_base = isr->is_base_space(isr->hole_space(Spin::any));
     for (int i = 0; i < base_spaces.size(); i++) {
-      if (!includes(isr->active_hole_space(Spin::any).type(),
-                    base_spaces[i].type())) {
+      if (!includes(isr->hole_space(Spin::any).type(), base_spaces[i].type())) {
         result[i * 2 + 1] = {0ul, 0ul};
       } else {
         result[i * 2 + 1] = {ahs_base ? K : 0ul, K};
       }
-      if (!includes(isr->active_particle_space(Spin::any).type(),
+      if (!includes(isr->particle_space(Spin::any).type(),
                     base_spaces[i].type())) {
         result[i * 2] = {0ul, 0ul};
       } else {
@@ -167,13 +164,12 @@ qns_t interval_deexcitation_type_qns(std::size_t K) {
     const auto& isr = get_default_context().index_space_registry();
     auto base_spaces = isr->base_spaces();
     for (int i = 0; i < base_spaces.size(); i++) {
-      if (!includes(isr->active_hole_space(Spin::any).type(),
-                    base_spaces[i].type())) {
+      if (!includes(isr->hole_space(Spin::any).type(), base_spaces[i].type())) {
         result[i * 2 + 1] = {0ul, 0ul};
       } else {
         result[i * 2 + 1] = {0ul, K};
       }
-      if (!includes(isr->active_particle_space(Spin::any).type(),
+      if (!includes(isr->particle_space(Spin::any).type(),
                     base_spaces[i].type())) {
         result[i * 2] = {0ul, 0ul};
       } else {
@@ -201,8 +197,8 @@ qns_t generic_excitation_qns(std::size_t particle_rank, std::size_t hole_rank,
   } else {
     const auto& isr = get_default_context().index_space_registry();
     auto base_spaces = isr->base_spaces();
-    bool aps_base = isr->is_base_space(isr->active_particle_space(Spin::any));
-    bool ahs_base = isr->is_base_space(isr->active_hole_space(Spin::any));
+    bool aps_base = isr->is_base_space(isr->particle_space(Spin::any));
+    bool ahs_base = isr->is_base_space(isr->hole_space(Spin::any));
     for (int i = 0; i < base_spaces.size(); i++) {
       if (!includes(hole_space.type(), base_spaces[i].type())) {
         result[i * 2] = {0ul, 0ul};  // creators
@@ -230,8 +226,8 @@ qns_t generic_deexcitation_qns(std::size_t particle_rank, std::size_t hole_rank,
   } else {
     const auto& isr = get_default_context().index_space_registry();
     auto base_spaces = isr->base_spaces();
-    bool aps_base = isr->is_base_space(isr->active_particle_space(Spin::any));
-    bool ahs_base = isr->is_base_space(isr->active_hole_space(Spin::any));
+    bool aps_base = isr->is_base_space(isr->particle_space(Spin::any));
+    bool ahs_base = isr->is_base_space(isr->hole_space(Spin::any));
     for (int i = 0; i < base_spaces.size(); i++) {
       if (!includes(hole_space.type(), base_spaces[i].type())) {
         result[i * 2 + 1] = {0ul, 0ul};  // annihilators
@@ -345,14 +341,12 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
                 std::to_wstring(op()[0].lower()) + L"}";
     }
   } else {  // single product vacuum
-    int particle_ann = is_adjoint ? op().active_particle_creators()
-                                  : op().active_particle_annihilators();
-    int hole_cre = is_adjoint ? op().active_hole_annihilators()
-                              : op().active_hole_creators();
-    int particle_cre = is_adjoint ? op().active_particle_annihilators()
-                                  : op().active_particle_creators();
-    int hole_ann = is_adjoint ? op().active_hole_creators()
-                              : op().active_hole_annihilators();
+    int particle_ann =
+        is_adjoint ? op().ncre_particles() : op().nann_particles();
+    int hole_cre = is_adjoint ? op().nann_holes() : op().ncre_holes();
+    int particle_cre =
+        is_adjoint ? op().nann_particles() : op().ncre_particles();
+    int hole_ann = is_adjoint ? op().ncre_holes() : op().nann_holes();
     if (to_class(optype) == OpClass::ex) {
       // TODO don't throw, just pass this to Product::to_latex()
       if (particle_ann == -1 || hole_cre == -1)
@@ -427,8 +421,8 @@ OpMaker<S>::OpMaker(OpType op, std::size_t nparticle) {
   op_ = op;
   const auto& isr = get_default_context().index_space_registry();
   auto current_context = get_default_context();
-  const auto occ = isr->active_hole_space(Spin::any);
-  const auto unocc = isr->active_particle_space(Spin::any);
+  const auto occ = isr->hole_space(Spin::any);
+  const auto unocc = isr->particle_space(Spin::any);
   switch (to_class(op)) {
     case OpClass::ex:
       bra_spaces_ = decltype(bra_spaces_)(nparticle, unocc);
@@ -616,16 +610,16 @@ ExprPtr A(std::int64_t K) {
   container::svector<IndexSpace> annihilators;
   if (K > 0)
     for ([[maybe_unused]] auto i : ranges::views::iota(0, K))
-      annihilators.emplace_back(isr->active_particle_space(Spin::any));
+      annihilators.emplace_back(isr->particle_space(Spin::any));
   else
     for ([[maybe_unused]] auto i : ranges::views::iota(0, -K))
-      creators.emplace_back(isr->active_particle_space(Spin::any));
+      creators.emplace_back(isr->particle_space(Spin::any));
   if (K > 0)
     for ([[maybe_unused]] auto i : ranges::views::iota(0, K))
-      creators.emplace_back(isr->active_hole_space(Spin::any));
+      creators.emplace_back(isr->hole_space(Spin::any));
   else
     for ([[maybe_unused]] auto i : ranges::views::iota(0, -K))
-      annihilators.emplace_back(isr->active_hole_space(Spin::any));
+      annihilators.emplace_back(isr->hole_space(Spin::any));
 
   std::optional<OpMaker<Statistics::FermiDirac>::UseDepIdx> dep;
   if (get_default_formalism().csv() == mbpt::CSV::Yes)
@@ -643,16 +637,16 @@ ExprPtr S(std::int64_t K) {
   container::svector<IndexSpace> annihilators;
   if (K > 0)
     for ([[maybe_unused]] auto i : ranges::views::iota(0, K))
-      annihilators.emplace_back(isr->active_particle_space(Spin::any));
+      annihilators.emplace_back(isr->particle_space(Spin::any));
   else
     for ([[maybe_unused]] auto i : ranges::views::iota(0, -K))
-      creators.emplace_back(isr->active_particle_space(Spin::any));
+      creators.emplace_back(isr->particle_space(Spin::any));
   if (K > 0)
     for ([[maybe_unused]] auto i : ranges::views::iota(0, K))
-      creators.emplace_back(isr->active_hole_space(Spin::any));
+      creators.emplace_back(isr->hole_space(Spin::any));
   else
     for ([[maybe_unused]] auto i : ranges::views::iota(0, -K))
-      annihilators.emplace_back(isr->active_hole_space(Spin::any));
+      annihilators.emplace_back(isr->hole_space(Spin::any));
 
   std::optional<OpMaker<Statistics::FermiDirac>::UseDepIdx> dep;
   if (get_default_formalism().csv() == mbpt::CSV::Yes)
@@ -999,8 +993,8 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
   } else {
     const auto target_rdm_space_type =
         get_default_context().vacuum() == Vacuum::SingleProduct
-            ? isr->intersection(isr->active_particle_space(Spin::any),
-                                isr->active_hole_space(Spin::any))
+            ? isr->intersection(isr->particle_space(Spin::any),
+                                isr->hole_space(Spin::any))
             : isr->reference_occupied_space(Spin::any);
 
     // STEP1. replace NOPs by RDM
@@ -1143,9 +1137,8 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
         TensorCanonicalizer::instance()->index_comparer();
     TensorCanonicalizer::instance()->index_comparer(
         [&](const Index& idx1, const Index& idx2) -> bool {
-          auto active_space =
-              isr->intersection(isr->active_particle_space(Spin::any),
-                                isr->active_hole_space(Spin::any));
+          auto active_space = isr->intersection(isr->particle_space(Spin::any),
+                                                isr->hole_space(Spin::any));
           const auto idx1_active = idx1.space().type() == active_space.type();
           const auto idx2_active = idx2.space().type() == active_space.type();
           if (idx1_active) {

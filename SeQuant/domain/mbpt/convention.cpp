@@ -53,8 +53,8 @@ void add_fermi_spin(std::shared_ptr<IndexSpaceRegistry>& isr) {
   const bool nulltype_ok = true;
   result->reference_occupied_space(isr->reference_occupied_space(nulltype_ok));
   result->vacuum_occupied_space(isr->vacuum_occupied_space(nulltype_ok));
-  result->active_particle_space(isr->active_particle_space(nulltype_ok));
-  result->active_hole_space(isr->active_hole_space(nulltype_ok));
+  result->particle_space(isr->particle_space(nulltype_ok));
+  result->hole_space(isr->hole_space(nulltype_ok));
   result->complete_space(isr->complete_space(nulltype_ok));
   isr = std::move(result);
 }
@@ -168,15 +168,15 @@ make_fermi_and_bose_spaces() {
   auto fermi_isr = std::make_shared<IndexSpaceRegistry>(isr->spaces());
   fermi_isr->vacuum_occupied_space(L"i");
   fermi_isr->reference_occupied_space(L"i");
-  fermi_isr->active_hole_space(L"i");
-  fermi_isr->active_particle_space(L"a");
+  fermi_isr->hole_space(L"i");
+  fermi_isr->particle_space(L"a");
   fermi_isr->complete_space(L"p");
 
   auto bose_isr = std::make_shared<IndexSpaceRegistry>(isr->spaces());
   bose_isr->vacuum_occupied_space(IndexSpaceRegistry::nullspace);
   bose_isr->reference_occupied_space(IndexSpaceRegistry::nullspace);
-  bose_isr->active_hole_space(IndexSpaceRegistry::nullspace);
-  bose_isr->active_particle_space(L"β");
+  bose_isr->hole_space(IndexSpaceRegistry::nullspace);
+  bose_isr->particle_space(L"β");
   bose_isr->complete_space(L"β");
 
   return std::make_pair(std::move(fermi_isr), std::move(bose_isr));

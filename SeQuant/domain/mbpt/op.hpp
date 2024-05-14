@@ -181,7 +181,7 @@ using BOperatorBase = BOperator<void>;
 /// the number of creators and annihilators; For the fermi vacuum case, the number of creators and annihilators in each
 /// subspace becomes important. the number of ops is tracked for each base space (determined by the IndexSpaceRegistry object in Context).
 /// the interval representation is necessary to dictate how many creators or annihilators could be in each subspace.
-/// this is pertinent when user defined active_hole_space or active_particle_space are NOT base spaces.
+/// this is pertinent when user defined hole_space or particle_space are NOT base spaces.
 /// since the choice of space partitioning is up to the user, the base class must be a dynamic container.
 /// \tparam Tag a tag type to distinguish different instances of QuantumNumberChange<N>
 /// \tparam QNV the quantum number value type, defaults to \c std::int64_t
@@ -227,7 +227,7 @@ class QuantumNumberChange
     if (i.size() == size()) {
       std::copy(i.begin(), i.end(), this->begin());
     } else {
-      throw std::runtime_error(
+      throw std::invalid_argument(
           "QuantumNumberChange<N>(initializer_list i): i.size() must be " +
           std::to_string(size()));
     }
@@ -245,7 +245,7 @@ class QuantumNumberChange
 #ifndef NDEBUG
     if (std::find_if(i.begin(), i.end(),
                      [](const auto& ii) { return ii.size() != 2; }) != i.end())
-      throw std::runtime_error(
+      throw std::invalid_argument(
           "QuantumNumberChange<N>(initializer_list<initializer_list> i): each "
           "element of i must contain 2 elements");
 #endif
@@ -273,7 +273,7 @@ class QuantumNumberChange
   // the active particle annihilators in this example is nonsense and will
   // return -1.
 
-  int active_particle_creators() {
+  int ncre_particles() {
     std::vector<boost::numeric::interval<std::make_signed_t<QNV>>> temp_this =
         *this;
     const auto& isr = get_default_context().index_space_registry();
@@ -283,7 +283,7 @@ class QuantumNumberChange
       const auto& base_space = base_spaces[i];
       const auto intersect_type =
           base_space.attr()
-              .intersection(isr->active_particle_space(base_space.qns()).attr())
+              .intersection(isr->particle_space(base_space.qns()).attr())
               .type();
       if (IndexSpace::Type{} != intersect_type) {
         if (temp_this[2 * i].upper() != result) {
@@ -298,7 +298,7 @@ class QuantumNumberChange
     return result;
   }
 
-  int active_particle_annihilators() {
+  int nann_particles() {
     std::vector<boost::numeric::interval<std::make_signed_t<QNV>>> temp_this =
         *this;
     const auto& isr = get_default_context().index_space_registry();
@@ -308,7 +308,7 @@ class QuantumNumberChange
       const auto& base_space = base_spaces[i];
       const auto intersect_type =
           base_space.attr()
-              .intersection(isr->active_particle_space(base_space.qns()).attr())
+              .intersection(isr->particle_space(base_space.qns()).attr())
               .type();
       if (IndexSpace::Type{} != intersect_type) {
         if (temp_this[2 * i + 1].upper() != result) {
@@ -323,7 +323,7 @@ class QuantumNumberChange
     return result;
   }
 
-  int active_hole_creators() {
+  int ncre_holes() {
     std::vector<boost::numeric::interval<std::make_signed_t<QNV>>> temp_this =
         *this;
     const auto& isr = get_default_context().index_space_registry();
@@ -333,7 +333,7 @@ class QuantumNumberChange
       const auto& base_space = base_spaces[i];
       const auto intersect_type =
           base_space.attr()
-              .intersection(isr->active_hole_space(base_space.qns()).attr())
+              .intersection(isr->hole_space(base_space.qns()).attr())
               .type();
       if (IndexSpace::Type{} != intersect_type) {
         if (temp_this[2 * i].upper() != result) {
@@ -348,7 +348,7 @@ class QuantumNumberChange
     return result;
   }
 
-  int active_hole_annihilators() {
+  int nann_holes() {
     std::vector<boost::numeric::interval<std::make_signed_t<QNV>>> temp_this =
         *this;
     const auto& isr = get_default_context().index_space_registry();
@@ -358,7 +358,7 @@ class QuantumNumberChange
       const auto& base_space = base_spaces[i];
       const auto intersect_type =
           base_space.attr()
-              .intersection(isr->active_hole_space(base_space.qns()).attr())
+              .intersection(isr->hole_space(base_space.qns()).attr())
               .type();
       if (IndexSpace::Type{} != intersect_type) {
         if (temp_this[2 * i + 1].upper() != result) {
@@ -553,10 +553,10 @@ class OpMaker {
   OpMaker(OpType op, std::size_t Nbra, std::size_t Nket,
           IndexSpace particle_space = get_default_context()
                                           .index_space_registry()
-                                          ->active_particle_space(Spin::any),
+                                          ->particle_space(Spin::any),
           IndexSpace hole_space = get_default_context()
                                       .index_space_registry()
-                                      ->active_hole_space(Spin::any));
+                                      ->hole_space(Spin::any));
 
   // construct a particle conserving operator when constructing this way.
   OpMaker(OpType op, std::size_t nparticle);
@@ -780,19 +780,19 @@ ExprPtr Λ(std::size_t K);
 ExprPtr R_(std::size_t nbra, std::size_t nket,
            IndexSpace hole_space = get_default_context()
                                        .index_space_registry()
-                                       ->active_hole_space(Spin::any),
+                                       ->hole_space(Spin::any),
            IndexSpace particle_space = get_default_context()
                                            .index_space_registry()
-                                           ->active_particle_space(Spin::any));
+                                           ->particle_space(Spin::any));
 
 // general deexcitation operator
 ExprPtr L_(std::size_t nbra, std::size_t nket,
            IndexSpace hole_space = get_default_context()
                                        .index_space_registry()
-                                       ->active_hole_space(Spin::any),
+                                       ->hole_space(Spin::any),
            IndexSpace particle_space = get_default_context()
                                            .index_space_registry()
-                                           ->active_particle_space(Spin::any));
+                                           ->particle_space(Spin::any));
 
 ExprPtr P(std::int64_t K);
 
@@ -848,19 +848,19 @@ ExprPtr Λ(std::size_t K);
 ExprPtr R_(std::size_t nbra, std::size_t nket,
            IndexSpace hole_space = get_default_context()
                                        .index_space_registry()
-                                       ->active_hole_space(Spin::any),
+                                       ->hole_space(Spin::any),
            IndexSpace particle_space = get_default_context()
                                            .index_space_registry()
-                                           ->active_particle_space(Spin::any));
+                                           ->particle_space(Spin::any));
 
 // general deexcitation operator
 ExprPtr L_(std::size_t nbra, std::size_t nket,
            IndexSpace hole_space = get_default_context()
                                        .index_space_registry()
-                                       ->active_hole_space(Spin::any),
+                                       ->hole_space(Spin::any),
            IndexSpace particle_space = get_default_context()
                                            .index_space_registry()
-                                           ->active_particle_space(Spin::any));
+                                           ->particle_space(Spin::any));
 
 ExprPtr P(std::int64_t K);
 

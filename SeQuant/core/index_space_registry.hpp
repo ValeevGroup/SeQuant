@@ -198,10 +198,10 @@ class IndexSpaceRegistry {
         this->complete_space(type);
       } else if constexpr (boost::hana::type_c<decltype(arg)> ==
                            boost::hana::type_c<space_tags::IsHole>) {
-        this->active_hole_space(type);
+        this->hole_space(type);
       } else if constexpr (boost::hana::type_c<decltype(arg)> ==
                            boost::hana::type_c<space_tags::IsParticle>) {
-        this->active_particle_space(type);
+        this->particle_space(type);
       } else {
         static_assert(meta::always_false<decltype(arg)>::value,
                       "IndexSpaceRegistry::add: unknown tag");
@@ -269,10 +269,10 @@ class IndexSpaceRegistry {
         this->complete_space(type);
       } else if constexpr (boost::hana::type_c<decltype(arg)> ==
                            boost::hana::type_c<space_tags::IsHole>) {
-        this->active_hole_space(type);
+        this->hole_space(type);
       } else if constexpr (boost::hana::type_c<decltype(arg)> ==
                            boost::hana::type_c<space_tags::IsParticle>) {
-        this->active_particle_space(type);
+        this->particle_space(type);
       } else {
         static_assert(meta::always_false<decltype(arg)>::value,
                       "IndexSpaceRegistry::add: unknown tag");
@@ -757,62 +757,61 @@ class IndexSpaceRegistry {
   /// @param t an IndexSpace::Type specifying where holes can be created;
   ///          to specify hole space per specific QN set use the other
   ///          overload
-  IndexSpaceRegistry& active_hole_space(const IndexSpace::Type& t) {
-    throw_if_missing(t, "active_hole_space");
-    std::get<0>(active_hole_space_) = t;
+  IndexSpaceRegistry& hole_space(const IndexSpace::Type& t) {
+    throw_if_missing(t, "hole_space");
+    std::get<0>(hole_space_) = t;
     return *this;
   }
 
   /// @param qn2type for each quantum number specifies the space in which holes
   /// can be created
-  IndexSpaceRegistry& active_hole_space(
+  IndexSpaceRegistry& hole_space(
       std::map<IndexSpace::QuantumNumbers, IndexSpace::Type> qn2type) {
-    throw_if_missing_any(qn2type, "active_hole_space");
-    std::get<1>(active_hole_space_) = std::move(qn2type);
+    throw_if_missing_any(qn2type, "hole_space");
+    std::get<1>(hole_space_) = std::move(qn2type);
     return *this;
   }
 
-  /// equivalent to `active_hole_space(s.type())`
+  /// equivalent to `hole_space(s.type())`
   /// @note QuantumNumbers attribute of `s` ignored
   /// @param s an IndexSpace
   /// @return reference to `this`
-  IndexSpaceRegistry& active_hole_space(const IndexSpace& s) {
-    return active_hole_space(s.type());
+  IndexSpaceRegistry& hole_space(const IndexSpace& s) {
+    return hole_space(s.type());
   }
 
-  /// equivalent to `active_hole_space(retrieve(l).type())`
+  /// equivalent to `hole_space(retrieve(l).type())`
   /// @param l label of a known IndexSpace
   /// @return reference to `this`
   template <typename S, typename = meta::EnableIfAnyStringConvertible<S>>
-  IndexSpaceRegistry& active_hole_space(S&& l) {
-    return active_hole_space(this->retrieve(std::forward<S>(l)).type());
+  IndexSpaceRegistry& hole_space(S&& l) {
+    return hole_space(this->retrieve(std::forward<S>(l)).type());
   }
 
   /// @return default space in which holes can be created
   /// @throw std::invalid_argument if @p nulltype_ok is false and
-  /// active_hole_space had not been specified
-  const IndexSpace::Type& active_hole_space(bool nulltype_ok = false) const {
-    if (std::get<0>(active_hole_space_) == nulltype) {
+  /// hole_space had not been specified
+  const IndexSpace::Type& hole_space(bool nulltype_ok = false) const {
+    if (std::get<0>(hole_space_) == nulltype) {
       if (nulltype_ok) return nulltype;
       throw std::invalid_argument(
           "active hole space has not been specified, invoke "
-          "active_hole_space(IndexSpace::Type) or "
-          "active_hole_space(std::map<IndexSpace::QuantumNumbers,IndexSpace::"
+          "hole_space(IndexSpace::Type) or "
+          "hole_space(std::map<IndexSpace::QuantumNumbers,IndexSpace::"
           "Type>)");
     } else
-      return std::get<0>(active_hole_space_);
+      return std::get<0>(hole_space_);
   }
 
   /// @param qn the quantum numbers of the space
   /// @return the space in which holes can be created for the given set of
   /// quantum numbers
-  const IndexSpace& active_hole_space(
-      const IndexSpace::QuantumNumbers& qn) const {
-    auto it = std::get<1>(active_hole_space_).find(qn);
-    if (it != std::get<1>(active_hole_space_).end()) {
+  const IndexSpace& hole_space(const IndexSpace::QuantumNumbers& qn) const {
+    auto it = std::get<1>(hole_space_).find(qn);
+    if (it != std::get<1>(hole_space_).end()) {
       return this->retrieve(it->second, qn);
     } else {
-      return this->retrieve(this->active_hole_space(), qn);
+      return this->retrieve(this->hole_space(), qn);
     }
   }
 
@@ -826,63 +825,61 @@ class IndexSpaceRegistry {
   /// @param t an IndexSpace::Type specifying where particles can be created;
   ///          to specify particle space per specific QN set use the other
   ///          overload
-  IndexSpaceRegistry& active_particle_space(const IndexSpace::Type& t) {
-    throw_if_missing(t, "active_particle_space");
-    std::get<0>(active_particle_space_) = t;
+  IndexSpaceRegistry& particle_space(const IndexSpace::Type& t) {
+    throw_if_missing(t, "particle_space");
+    std::get<0>(particle_space_) = t;
     return *this;
   }
 
   /// @param qn2type for each quantum number specifies the space in which
   /// particles can be created
-  IndexSpaceRegistry& active_particle_space(
+  IndexSpaceRegistry& particle_space(
       std::map<IndexSpace::QuantumNumbers, IndexSpace::Type> qn2type) {
-    throw_if_missing_any(qn2type, "active_particle_space");
-    std::get<1>(active_particle_space_) = std::move(qn2type);
+    throw_if_missing_any(qn2type, "particle_space");
+    std::get<1>(particle_space_) = std::move(qn2type);
     return *this;
   }
 
-  /// equivalent to `active_hole_space(s.type())`
+  /// equivalent to `particle_space(s.type())`
   /// @note QuantumNumbers attribute of `s` ignored
   /// @param s an IndexSpace
   /// @return reference to `this`
-  IndexSpaceRegistry& active_particle_space(const IndexSpace& s) {
-    return active_particle_space(s.type());
+  IndexSpaceRegistry& particle_space(const IndexSpace& s) {
+    return particle_space(s.type());
   }
 
-  /// equivalent to `active_hole_space(retrieve(l).type())`
+  /// equivalent to `particle_space(retrieve(l).type())`
   /// @param l label of a known IndexSpace
   /// @return reference to `this`
   template <typename S, typename = meta::EnableIfAnyStringConvertible<S>>
-  IndexSpaceRegistry& active_particle_space(S&& l) {
-    return active_particle_space(this->retrieve(std::forward<S>(l)).type());
+  IndexSpaceRegistry& particle_space(S&& l) {
+    return particle_space(this->retrieve(std::forward<S>(l)).type());
   }
 
   /// @return default space in which particles can be created
   /// @throw std::invalid_argument if @p nulltype_ok is false and
-  /// active_particle_space had not been specified
-  const IndexSpace::Type& active_particle_space(
-      bool nulltype_ok = false) const {
-    if (std::get<0>(active_particle_space_) == nulltype) {
+  /// particle_space had not been specified
+  const IndexSpace::Type& particle_space(bool nulltype_ok = false) const {
+    if (std::get<0>(particle_space_) == nulltype) {
       if (nulltype_ok) return nulltype;
       throw std::invalid_argument(
           "active particle space has not been specified, invoke "
-          "active_particle_space(IndexSpace::Type) or "
-          "active_particle_space(std::map<IndexSpace::QuantumNumbers,"
+          "particle_space(IndexSpace::Type) or "
+          "particle_space(std::map<IndexSpace::QuantumNumbers,"
           "IndexSpace::Type>)");
     } else
-      return std::get<0>(active_particle_space_);
+      return std::get<0>(particle_space_);
   }
 
   /// @param qn the quantum numbers of the space
   /// @return the space in which particles can be created for the given set of
   /// quantum numbers
-  const IndexSpace& active_particle_space(
-      const IndexSpace::QuantumNumbers& qn) const {
-    auto it = std::get<1>(active_particle_space_).find(qn);
-    if (it != std::get<1>(active_particle_space_).end()) {
+  const IndexSpace& particle_space(const IndexSpace::QuantumNumbers& qn) const {
+    auto it = std::get<1>(particle_space_).find(qn);
+    if (it != std::get<1>(particle_space_).end()) {
       return this->retrieve(it->second, qn);
     } else {
-      return this->retrieve(this->active_particle_space(), qn);
+      return this->retrieve(this->particle_space(), qn);
     }
   }
 
@@ -994,10 +991,10 @@ class IndexSpaceRegistry {
   // necessarily equivalent in the case of multi-reference context.
   std::tuple<IndexSpace::Type,
              std::map<IndexSpace::QuantumNumbers, IndexSpace::Type>>
-      active_particle_space_ = {nulltype, {}};
+      particle_space_ = {nulltype, {}};
   std::tuple<IndexSpace::Type,
              std::map<IndexSpace::QuantumNumbers, IndexSpace::Type>>
-      active_hole_space_ = {nulltype, {}};
+      hole_space_ = {nulltype, {}};
 
   friend bool operator==(const IndexSpaceRegistry& isr1,
                          const IndexSpaceRegistry& isr2) {
