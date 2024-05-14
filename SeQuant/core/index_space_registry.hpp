@@ -125,8 +125,6 @@ class IndexSpaceRegistry {
   IndexSpaceRegistry& add(S&& type_label, IndexSpace::Type type,
                           OptionalArgs&&... args) {
     auto h_args = boost::hana::make_tuple(args...);
-    auto h_types = boost::hana::to<boost::hana::tuple_tag>(
-        boost::hana::tuple_t<std::remove_reference_t<OptionalArgs>...>);
 
     // process IndexSpace::QuantumNumbers, set to default is not given
     auto h_qns = boost::hana::filter(h_args, [](auto arg) {
@@ -161,6 +159,77 @@ class IndexSpaceRegistry {
     // make space
     IndexSpace space(std::forward<S>(type_label), type, qns, approximate_size);
     this->add(space);
+
+    // process non-integer tags
+    auto h_nonints = boost::hana::filter(h_args, [](auto arg) {
+      return !boost::hana::traits::is_integral(
+          boost::hana::type_c<decltype(arg)>);
+    });
+    boost::hana::for_each(h_nonints, [this, &type](auto arg) {
+      if constexpr (boost::hana::type_c<decltype(arg)> ==
+                    boost::hana::type_c<space_tags::IsVacuumOccupied>) {
+        this->vacuum_occupied_space(type);
+      } else if constexpr (boost::hana::type_c<decltype(arg)> ==
+                           boost::hana::type_c<
+                               space_tags::IsReferenceOccupied>) {
+        this->reference_occupied_space(type);
+      } else if constexpr (boost::hana::type_c<decltype(arg)> ==
+                           boost::hana::type_c<space_tags::IsComplete>) {
+        this->complete_space(type);
+      } else if constexpr (boost::hana::type_c<decltype(arg)> ==
+                           boost::hana::type_c<space_tags::IsHole>) {
+        this->active_hole_space(type);
+      } else if constexpr (boost::hana::type_c<decltype(arg)> ==
+                           boost::hana::type_c<space_tags::IsParticle>) {
+        this->active_particle_space(type);
+      } else {
+        static_assert(meta::always_false<decltype(arg)>::value,
+                      "IndexSpaceRegistry::add: unknown tag");
+      }
+    });
+
+    return *this;
+  }
+
+  template <typename S, typename IndexSpaceOrLabel, typename... OptionalArgs,
+            typename = meta::EnableIfAnyStringConvertible<S>,
+            typename = std::enable_if_t<
+                (std::is_same_v<std::decay_t<IndexSpaceOrLabel>, IndexSpace> ||
+                 meta::is_basic_string_convertible_v<
+                     std::decay_t<IndexSpaceOrLabel>>)>>
+  IndexSpaceRegistry& add_union(
+      S&& type_label, std::initializer_list<IndexSpaceOrLabel> components,
+      OptionalArgs&&... args) {
+    assert(components.size() > 1);
+
+    auto h_args = boost::hana::make_tuple(args...);
+
+    // make space
+    IndexSpace::Attr space_attr;
+    unsigned long approximate_size = 10;
+    long count = 0;
+    for (auto&& component : components) {
+      const IndexSpace* component_ptr;
+      if constexpr (std::is_same_v<std::decay_t<IndexSpaceOrLabel>,
+                                   IndexSpace>) {
+        component_ptr = &component;
+      } else {
+        component_ptr = &(this->retrieve(component));
+      }
+      if (count == 0)
+        space_attr = component_ptr->attr();
+      else
+        space_attr = space_attr.unIon(component_ptr->attr());
+      approximate_size +=
+          component_ptr->approximate_size();  // this assumes that every
+                                              // component is a base space
+
+      ++count;
+    }
+    IndexSpace space(std::forward<S>(type_label), space_attr.type(),
+                     space_attr.qns(), approximate_size);
+    this->add(space);
+    auto type = space.type();
 
     // process non-integer tags
     auto h_nonints = boost::hana::filter(h_args, [](auto arg) {

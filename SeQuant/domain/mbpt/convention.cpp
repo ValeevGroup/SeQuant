@@ -117,60 +117,23 @@ IndexSpaceRegistry make_F12_sr_subspaces() {
 //  this leaves an active space which is partially occupied/unoccupied. This
 //  definition is convenient when coupled with SR vacuum.
 IndexSpaceRegistry make_mr_subspaces() {
-  IndexSpaceRegistry multireference_registry;
+  IndexSpaceRegistry rg;
 
-  IndexSpace frozen(L"o", 0b00001);
-  multireference_registry.add(frozen);
+  rg.add(L"o", 0b00001)
+      .add(L"i", 0b00010)
+      .add(L"x", 0b00100)
+      .add(L"a", 0b01000)
+      .add(L"g", 0b10000)
+      .add_union(L"O", {L"o", L"i"}, is_vacuum_occupied)
+      .add_union(L"M", {L"o", L"i", L"x"}, is_reference_occupied)
+      .add_union(L"I", {L"i", L"x"}, is_hole)
+      .add_union(L"E", {L"x", L"a", L"g"})
+      .add_union(L"A", {L"x", L"a"}, is_particle)
+      .add_union(L"p", {L"M", L"E"}, is_complete);
 
-  IndexSpace unfrozen_vacuum_occupied(L"i", 0b00010);
-  multireference_registry.add(unfrozen_vacuum_occupied);
+  add_fermi_spin(rg);
 
-  IndexSpace active(L"x", 0b00100);
-  multireference_registry.add(active);
-
-  IndexSpace active_unoccupied(L"a", 0b01000);
-  multireference_registry.add(active_unoccupied);
-
-  IndexSpace inactive_unoccupied(L"g", 0b10000);
-  multireference_registry.add(inactive_unoccupied);
-
-  IndexSpace vacuum_occupied(
-      L"O", frozen.type().unIon(unfrozen_vacuum_occupied.type()));
-  multireference_registry.add(vacuum_occupied);
-
-  IndexSpace maybe_occupied(L"M", active.type()
-                                      .unIon(unfrozen_vacuum_occupied.type())
-                                      .unIon(frozen.type()));
-  multireference_registry.add(maybe_occupied);
-
-  IndexSpace maybe_active_occupied(
-      L"I", active.type().unIon(unfrozen_vacuum_occupied.type()));
-  multireference_registry.add(maybe_active_occupied);
-
-  IndexSpace maybe_unoccupied(L"E", active.type()
-                                        .unIon(active_unoccupied.type())
-                                        .unIon(inactive_unoccupied.type()));
-  multireference_registry.add(maybe_unoccupied);
-
-  IndexSpace maybe_active_unoccupied(
-      L"A", active.type().unIon(active_unoccupied.type()));
-  multireference_registry.add(maybe_active_unoccupied);
-
-  IndexSpace complete(L"p",
-                      vacuum_occupied.type().unIon(maybe_unoccupied.type()));
-  multireference_registry.add(complete);
-
-  // only necessary for some Operator definitions
-  multireference_registry.complete_space(complete);
-  multireference_registry.reference_occupied_space(maybe_occupied);
-  multireference_registry.active_hole_space(maybe_active_unoccupied);
-  multireference_registry.active_particle_space(maybe_active_occupied);
-  // needed for SR wick algebra
-  multireference_registry.vacuum_occupied_space(vacuum_occupied);
-
-  add_fermi_spin(multireference_registry);
-
-  return multireference_registry;
+  return rg;
 }
 
 IndexSpaceRegistry make_sr_subspaces() {

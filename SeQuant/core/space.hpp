@@ -160,8 +160,7 @@ class IndexSpace {
         : TypeAttr(type), QuantumNumbersAttr(qns){};
     Attr(int32_t type, int32_t qns) noexcept
         : TypeAttr(type), QuantumNumbersAttr(qns){};
-    //    explicit Attr(int64_t value) : TypeAttr((value & 0xffffffff00000000)
-    //    >> 32), QuantumNumbersAttr(value & 0x00000000ffffffff) {}
+    Attr() = default;
     Attr(const Attr &) = default;
     Attr(Attr &&) = default;
     Attr &operator=(const Attr &) = default;
