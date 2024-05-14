@@ -13,6 +13,28 @@
 namespace sequant {
 namespace mbpt {
 
+void load(Convention conv) {
+  IndexSpaceRegistry isr;
+  switch (conv) {
+    case Convention::Minimal:
+      isr = make_min_sr_subspaces();
+      break;
+    case Convention::SR:
+      isr = make_sr_subspaces();
+      break;
+    case Convention::MR:
+      isr = make_mr_subspaces();
+      break;
+    case Convention::F12:
+      isr = make_F12_sr_subspaces();
+      break;
+    case Convention::QCiFS:
+      isr = make_legacy_subspaces();
+      break;
+  }
+  set_default_context(Context{Vacuum::SingleProduct, isr});
+}
+
 void add_fermi_spin(IndexSpaceRegistry& isr) {
   IndexSpaceRegistry result;
   for (auto&& space : isr) {

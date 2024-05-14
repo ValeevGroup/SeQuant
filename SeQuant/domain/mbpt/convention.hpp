@@ -10,7 +10,18 @@
 namespace sequant {
 namespace mbpt {
 
-enum class Convention { QCiFS };
+/// @brief Conventions for partitioning the single-particle Hilbert space
+enum class Convention {
+  Minimal,  //!< occupied/hole + unoccupied/unoccupied + their union
+  SR,       //!< single determinant reference: occupied (frozen + active) +
+            //!< unoccupied (active + frozen)
+  MR,    //!< multi determinant reference: occupied (frozen + active) + active +
+         //!< unoccupied (active + frozen)
+  F12,   //!< SR + complement from complete basis, used for F12 methods
+  QCiFS  //!< ``Quantum Chemistry in Fock Space'' = superset of above
+};
+
+void load(Convention conv = Convention::Minimal);
 
 ///@brief decorate IndexSpace labels with spin
 std::wstring decorate_label(std::wstring label, bool up);
