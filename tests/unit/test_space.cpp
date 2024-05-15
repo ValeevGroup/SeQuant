@@ -131,7 +131,14 @@ TEST_CASE("IndexSpace", "[elements]") {
 
   SECTION("base_space") {
     auto isr = sequant::mbpt::make_F12_sr_spaces();
-    auto f12_base_spaces = isr->base_spaces();
+    const auto& f12_base_space_types = isr->base_space_types();
+    REQUIRE(f12_base_space_types.size() == 5);
+    REQUIRE(f12_base_space_types[0] == 0b00001);
+    REQUIRE(f12_base_space_types[1] == 0b00010);
+    REQUIRE(f12_base_space_types[2] == 0b00100);
+    REQUIRE(f12_base_space_types[3] == 0b01000);
+    REQUIRE(f12_base_space_types[4] == 0b10000);
+    const auto& f12_base_spaces = isr->base_spaces();
     auto f12_base_spaces_sf = f12_base_spaces |
                               ranges::views::filter([](const auto& space) {
                                 return space.qns() == mbpt::Spin::any;

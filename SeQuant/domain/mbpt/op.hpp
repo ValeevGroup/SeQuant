@@ -223,14 +223,11 @@ class QuantumNumberChange
   /// \param i the sequence of QNV-convertible elements
   template <typename I,
             typename = std::enable_if_t<std::is_convertible_v<I, interval_t>>>
-  explicit QuantumNumberChange(std::vector<I> i) {
-    if (i.size() == size()) {
-      std::copy(i.begin(), i.end(), this->begin());
-    } else {
-      throw std::invalid_argument(
-          "QuantumNumberChange<N>(initializer_list i): i.size() must be " +
-          std::to_string(size()));
-    }
+  explicit QuantumNumberChange(const std::vector<I>& i)
+      : QuantumNumberChange() {
+    assert(i.size() == size());
+    this->resize(size());
+    std::copy(i.begin(), i.end(), this->begin());
   }
 
   /// constructs QuantumNumberChange from a sequence of elements convertible to
@@ -242,6 +239,7 @@ class QuantumNumberChange
   explicit QuantumNumberChange(
       std::initializer_list<std::initializer_list<I>> i) {
     assert(i.size() == size());
+    this->resize(size());
 #ifndef NDEBUG
     if (std::find_if(i.begin(), i.end(),
                      [](const auto& ii) { return ii.size() != 2; }) != i.end())
@@ -273,12 +271,11 @@ class QuantumNumberChange
   // the active particle annihilators in this example is nonsense and will
   // return -1.
 
-  int ncre_particles() {
-    std::vector<boost::numeric::interval<std::make_signed_t<QNV>>> temp_this =
-        *this;
+  interval_t ncre_particles() {
+    const auto& qnvec = this->base();
     const auto& isr = get_default_context().index_space_registry();
-    const auto base_spaces = isr->base_spaces();
-    int result = 0;
+    const auto& base_spaces = isr->base_spaces();
+    interval_t result = 0;
     for (unsigned int i = 0; i < base_spaces.size(); i++) {
       const auto& base_space = base_spaces[i];
       const auto intersect_type =
@@ -286,24 +283,17 @@ class QuantumNumberChange
               .intersection(isr->particle_space(base_space.qns()).attr())
               .type();
       if (IndexSpace::Type{} != intersect_type) {
-        if (temp_this[2 * i].upper() != result) {
-          if (result == 0) {
-            result = temp_this[2 * i].upper();
-          } else {
-            return -1;
-          }
-        }
+        result += qnvec[2 * i];
       }
     }
     return result;
   }
 
-  int nann_particles() {
-    std::vector<boost::numeric::interval<std::make_signed_t<QNV>>> temp_this =
-        *this;
+  interval_t nann_particles() {
+    const auto& qnvec = this->base();
     const auto& isr = get_default_context().index_space_registry();
-    auto base_spaces = isr->base_spaces();
-    int result = 0;
+    const auto& base_spaces = isr->base_spaces();
+    interval_t result = 0;
     for (unsigned int i = 0; i < base_spaces.size(); i++) {
       const auto& base_space = base_spaces[i];
       const auto intersect_type =
@@ -311,24 +301,17 @@ class QuantumNumberChange
               .intersection(isr->particle_space(base_space.qns()).attr())
               .type();
       if (IndexSpace::Type{} != intersect_type) {
-        if (temp_this[2 * i + 1].upper() != result) {
-          if (result == 0) {
-            result = temp_this[2 * i + 1].upper();
-          } else {
-            return -1;
-          }
-        }
+        result += qnvec[2 * i + 1];
       }
     }
     return result;
   }
 
-  int ncre_holes() {
-    std::vector<boost::numeric::interval<std::make_signed_t<QNV>>> temp_this =
-        *this;
+  interval_t ncre_holes() {
+    const auto& qnvec = this->base();
     const auto& isr = get_default_context().index_space_registry();
-    auto base_spaces = isr->base_spaces();
-    int result = 0;
+    const auto& base_spaces = isr->base_spaces();
+    interval_t result = 0;
     for (unsigned int i = 0; i < base_spaces.size(); i++) {
       const auto& base_space = base_spaces[i];
       const auto intersect_type =
@@ -336,24 +319,17 @@ class QuantumNumberChange
               .intersection(isr->hole_space(base_space.qns()).attr())
               .type();
       if (IndexSpace::Type{} != intersect_type) {
-        if (temp_this[2 * i].upper() != result) {
-          if (result == 0) {
-            result = temp_this[2 * i].upper();
-          } else {
-            return -1;
-          }
-        }
+        result += qnvec[2 * i];
       }
     }
     return result;
   }
 
-  int nann_holes() {
-    std::vector<boost::numeric::interval<std::make_signed_t<QNV>>> temp_this =
-        *this;
+  interval_t nann_holes() {
+    const auto& qnvec = this->base();
     const auto& isr = get_default_context().index_space_registry();
-    auto base_spaces = isr->base_spaces();
-    int result = 0;
+    const auto& base_spaces = isr->base_spaces();
+    interval_t result = 0;
     for (unsigned int i = 0; i < base_spaces.size(); i++) {
       const auto& base_space = base_spaces[i];
       const auto intersect_type =
@@ -361,13 +337,7 @@ class QuantumNumberChange
               .intersection(isr->hole_space(base_space.qns()).attr())
               .type();
       if (IndexSpace::Type{} != intersect_type) {
-        if (temp_this[2 * i + 1].upper() != result) {
-          if (result == 0) {
-            result = temp_this[2 * i + 1].upper();
-          } else {
-            return -1;
-          }
-        }
+        result += qnvec[2 * i + 1];
       }
     }
     return result;
@@ -411,6 +381,9 @@ class QuantumNumberChange
     }
     return val;
   }
+
+ private:
+  auto& base() { return static_cast<base_type&>(*this); }
 };
 
 template <std::size_t N, typename Tag, typename QNV>
@@ -467,20 +440,24 @@ qns_t combine(qns_t, qns_t);
 // The qns of an excitation type operator will always look the same in a given
 // context
 // @param is the rank of the operator.
-qns_t excitation_type_qns(std::size_t k);
+qns_t excitation_type_qns(std::size_t k,
+                          IndexSpace::QuantumNumbers SQN = Spin::any);
 
 // sometimes we want to guarantee that a qns has an interval from 0-K
 // regardless of the base spaces.
-qns_t interval_excitation_type_qns(std::size_t k);
+qns_t interval_excitation_type_qns(std::size_t k,
+                                   IndexSpace::QuantumNumbers SQN = Spin::any);
 
 // The qns of a deexcitation type operator will always look the same in a given
 // context
 // @param is the rank of the operator.
-qns_t deexcitation_type_qns(std::size_t k);
+qns_t deexcitation_type_qns(std::size_t k,
+                            IndexSpace::QuantumNumbers SQN = Spin::any);
 
 // sometimes we want to guarantee that a qns has an interval from 0-K
 // regardless of the base spaces.
-qns_t interval_deexcitation_type_qns(std::size_t k);
+qns_t interval_deexcitation_type_qns(
+    std::size_t k, IndexSpace::QuantumNumbers SQN = Spin::any);
 
 // The qns of a general type operator will always look the same in a given
 // context
@@ -490,13 +467,14 @@ qns_t general_type_qns(std::size_t k);
 // generic quantum number function compatible with generic excitation operators
 // with the option to choose the particle and hole space.
 qns_t generic_excitation_qns(std::size_t particle_rank, std::size_t hole_rank,
-                             IndexSpace particle_space, IndexSpace hole_space);
+                             IndexSpace particle_space, IndexSpace hole_space,
+                             IndexSpace::QuantumNumbers SQN = Spin::any);
 
 // generic quantum number function compatible with generic deexcitation
 // operators with the option to choose the particle and hole space.
 qns_t generic_deexcitation_qns(std::size_t particle_rank, std::size_t hole_rank,
-                               IndexSpace particle_space,
-                               IndexSpace hole_space);
+                               IndexSpace particle_space, IndexSpace hole_space,
+                               IndexSpace::QuantumNumbers SQN = Spin::any);
 
 ExprPtr vac_av(ExprPtr expr,
                std::vector<std::pair<int, int>> nop_connections = {},

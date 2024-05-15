@@ -69,8 +69,8 @@ struct TypeAttr {
     return intersection(other) == other;
   }
   /// @return true if in canonical order this object preceeds \c other
-  constexpr bool operator<(TypeAttr other) const {
-    return this->to_int32() < other.to_int32();
+  friend constexpr bool operator<(TypeAttr a, TypeAttr b) {
+    return a.to_int32() < b.to_int32();
   }
 
   /// @return an invalid TypeAttr
