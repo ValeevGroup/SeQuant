@@ -134,16 +134,16 @@ std::shared_ptr<IndexSpaceRegistry> make_legacy_spaces(bool ignore_spin) {
 
   isr->add(L"o", 0b0000001)
       .add(L"n", 0b0000010)
-      .add(L"i", 0b0000100)
+      .add(L"i", 0b0000100, is_hole)
       .add(L"u", 0b0001000)
-      .add(L"a", 0b0010000)
+      .add(L"a", 0b0010000, is_particle)
       .add(L"g", 0b0100000)
       .add(L"α'", 0b1000000)
       .add_union(L"m", {L"o", L"n", L"i"}, is_vacuum_occupied,
                  is_reference_occupied)
-      .add_union(L"M", {L"m", L"u"}, is_hole)
+      .add_union(L"M", {L"m", L"u"})
       .add_union(L"e", {L"a", L"g"})
-      .add_union(L"E", {L"u", L"e"}, is_particle)
+      .add_union(L"E", {L"u", L"e"})
       .add_union(L"x", {L"i", L"u", L"a"})
       .add_union(L"p", {L"m", L"x", L"e"})
       .add_union(L"κ", {L"p", L"α'"}, is_complete);
