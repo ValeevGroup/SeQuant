@@ -2,13 +2,13 @@
 // Created by Eduard Valeyev on 2019-04-01.
 //
 
-#include "convention.hpp"
+#include "SeQuant/domain/mbpt/convention.hpp"
+#include <SeQuant/domain/mbpt/spin.hpp>
+#include "SeQuant/domain/mbpt/op.hpp"
+
 #include "SeQuant/core/context.hpp"
 #include "SeQuant/core/index.hpp"
 #include "SeQuant/core/tensor.hpp"
-#include "op.hpp"
-
-#include <SeQuant/domain/mbpt/spin.hpp>
 
 namespace sequant {
 namespace mbpt {
@@ -32,7 +32,7 @@ void load(Convention conv) {
       isr = make_legacy_spaces();
       break;
   }
-  set_default_context(Context{isr, Vacuum::SingleProduct});
+  set_default_context(sequant::Context(isr, Vacuum::SingleProduct));
 }
 
 void add_fermi_spin(std::shared_ptr<IndexSpaceRegistry>& isr) {
