@@ -119,8 +119,8 @@ class IndexSpaceRegistry {
   /// @brief add an IndexSpace to this registry.
   /// @param IS an IndexSpace
   /// @return reference to `this`
-  /// @throw std::invalid_argument if trying to add an IndexSpace with that
-  /// existing base key or attr.
+  /// @throw std::invalid_argument if `IS.base_key()` or `IS.attr()` matches
+  /// an already registered IndexSpace
   IndexSpaceRegistry& add(const IndexSpace& IS) {
     auto it = spaces_->find(IS.base_key());
     if (it != spaces_->end()) {
@@ -129,18 +129,15 @@ class IndexSpaceRegistry {
           "with is.base_key(); if you are trying to replace the IndexSpace use "
           "IndexSpaceRegistry::replace(is)");
     } else {
-#ifndef NDEBUG
       // make sure there are no duplicate IndexSpaces whose attribute is
       // IS.attr()
-      if (std::find_if(spaces_->begin(), spaces_->end(), [&IS](auto&& is) {
-            return IS.attr() == is.attr();
-          }) != spaces_->end()) {
+      if (ranges::any_of(*spaces_,
+                         [&IS](auto&& is) { return IS.attr() == is.attr(); })) {
         throw std::invalid_argument(
             "IndexSpaceRegistry::add(is): already have an IndexSpace "
             "associated with is.attr(); if you are trying to replace the "
             "IndexSpace use IndexSpaceRegistry::replace(is)");
       }
-#endif
       spaces_->emplace(IS);
     }
 
