@@ -7,6 +7,12 @@
 
 #include "space.hpp"
 
+#include <range/v3/algorithm/sort.hpp>
+#include <range/v3/range/conversion.hpp>
+#include <range/v3/view/filter.hpp>
+#include <range/v3/view/transform.hpp>
+#include <range/v3/view/unique.hpp>
+
 #include <boost/hana.hpp>
 #include <boost/hana/ext/std/integral_constant.hpp>
 
@@ -70,8 +76,8 @@ class IndexSpaceRegistry {
 
   const auto& spaces() const { return spaces_; }
 
-  decltype(auto) begin() const { return spaces_->begin(); }
-  decltype(auto) end() const { return spaces_->end(); }
+  decltype(auto) begin() const { return spaces_->cbegin(); }
+  decltype(auto) end() const { return spaces_->cend(); }
 
   /// @brief retrieve an IndexSpace from the registry by the label
   /// @param label can be numbered or the @c base_key
@@ -137,7 +143,8 @@ class IndexSpaceRegistry {
 #endif
       spaces_->emplace(IS);
     }
-    return *this;
+
+    return clear_memoized_data_and_return_this();
   }
 
   template <typename S, typename... OptionalArgs,
@@ -208,7 +215,7 @@ class IndexSpaceRegistry {
       }
     });
 
-    return *this;
+    return clear_memoized_data_and_return_this();
   }
 
   template <typename S, typename IndexSpaceOrLabel, typename... OptionalArgs,
@@ -279,7 +286,7 @@ class IndexSpaceRegistry {
       }
     });
 
-    return *this;
+    return clear_memoized_data_and_return_this();
   }
 
   /// @}
@@ -292,7 +299,7 @@ class IndexSpaceRegistry {
     if (it != spaces_->end()) {
       spaces_->erase(IS);
     }
-    return *this;
+    return clear_memoized_data_and_return_this();
   }
 
   /// @brief equivalent to `remove(this->retrieve(label))`
@@ -314,32 +321,57 @@ class IndexSpaceRegistry {
     return this->add(IS);
   }
 
-  /// @brief returns the list of base IndexSpace objects in the order of
-  /// increasing @c typeattr
+  /// @brief returns the list of _basis_ IndexSpace::Type objects
 
-  /// An IndexSpace object is base if it has a single bit set in its @c
-  /// typeattr.
-  std::vector<IndexSpace> base_spaces() const {
-    std::vector<IndexSpace> result;
-    // if the registered instance has a single bit true, it is a base space.
-    //  std::map should order this new map via IndexSpace.
-    for (auto&& space : *spaces_) {
-      if (has_single_bit(space.type().to_int32())) {
-        result.push_back(space);
-      }
+  /// A base IndexSpace::Type object has 1 bit in its bitstring.
+  /// @sa IndexSpaceRegistry::is_base
+  /// @return (memoized) set of base IndexSpace::Type objects, sorted in
+  /// increasing order
+  const std::vector<IndexSpace::Type>& base_space_types() const {
+    if (!base_space_types_) {
+      auto types = *spaces_ | ranges::views::transform([](const auto& s) {
+        return s.type();
+      }) | ranges::views::filter([](const auto& t) { return is_base(t); }) |
+                   ranges::views::unique | ranges::to_vector;
+      ranges::sort(types, [](auto t1, auto t2) { return t1 < t2; });
+      base_space_types_ = std::move(types);
     }
-    std::sort(result.begin(), result.end(),
-              [](auto&& a, auto&& b) -> bool { return a.type() < b.type(); });
-    return result;
+    return *base_space_types_;
   }
 
-  /// @brief does the space have only one bit set
+  /// @brief returns the list of _basis_ IndexSpace objects
+
+  /// A base IndexSpace object has 1 bit in its type() bitstring.
+  /// @sa IndexSpaceRegistry::is_base
+  /// @return (memoized) set of base IndexSpace objects, sorted in the order of
+  /// increasing type()
+  const std::vector<IndexSpace>& base_spaces() const {
+    if (!base_spaces_) {
+      auto spaces =
+          *spaces_ |
+          ranges::views::filter([](const auto& s) { return is_base(s); }) |
+          ranges::views::unique | ranges::to_vector;
+      ranges::sort(spaces,
+                   [](auto s1, auto s2) { return s1.type() < s2.type(); });
+      base_spaces_ = std::move(spaces);
+    }
+    return *base_spaces_;
+  }
+
+  /// @brief checks if an IndexSpace is in the basis
   /// @param IS IndexSpace
-  /// @note list of all base spaces is computed each time. Otherwise, a separate
-  /// list would need to be maintained for every mutation of the registry. This
-  /// seems safer.
-  static bool is_base_space(const IndexSpace& IS) {
+  /// @return true if @p IS is in the basis
+  /// @sa base_spaces
+  static bool is_base(const IndexSpace& IS) {
     return has_single_bit(IS.type().to_int32());
+  }
+
+  /// @brief checks if an IndexSpace::Type is in the basis
+  /// @param t IndexSpace::Type
+  /// @return true if @p t is in the basis
+  /// @sa space_type_basis
+  static bool is_base(const IndexSpace::Type& t) {
+    return has_single_bit(t.to_int32());
   }
 
   /// @brief clear the IndexSpaceRegistry map
@@ -483,7 +515,7 @@ class IndexSpaceRegistry {
     return result;
   }
 
-  ///@brief do two spaces have non-overlaping bitsets.
+  ///@brief do two spaces have non-overlapping bitsets.
   /// @note does not probe the registry for these spaces
   bool has_non_overlapping_spaces(const IndexSpace& space1,
                                   const IndexSpace& space2) const {
@@ -678,7 +710,7 @@ class IndexSpaceRegistry {
     if (it != std::get<1>(refocc_).end()) {
       return retrieve(it->second, qn);
     } else {
-      return retrieve(this->vacuum_occupied_space(), qn);
+      return retrieve(this->reference_occupied_space(), qn);
     }
   }
 
@@ -890,6 +922,15 @@ class IndexSpaceRegistry {
  private:
   // N.B. need transparent comparator, see https://stackoverflow.com/a/35525806
   std::shared_ptr<std::set<IndexSpace, IndexSpace::KeyCompare>> spaces_;
+
+  // memoized data
+  mutable std::optional<std::vector<IndexSpace::Type>> base_space_types_;
+  mutable std::optional<std::vector<IndexSpace>> base_spaces_;
+  IndexSpaceRegistry& clear_memoized_data_and_return_this() {
+    base_space_types_.reset();
+    base_spaces_.reset();
+    return *this;
+  }
 
   const static IndexSpace::Type nulltype;
 
