@@ -79,14 +79,14 @@ std::shared_ptr<IndexSpaceRegistry> make_mr_spaces() {
 
   isr->add(L"o", 0b00001)
       .add(L"i", 0b00010)
-      .add(L"x", 0b00100)
+      .add(L"u", 0b00100)
       .add(L"a", 0b01000)
       .add(L"g", 0b10000)
       .add_union(L"O", {L"o", L"i"}, is_vacuum_occupied)
-      .add_union(L"M", {L"o", L"i", L"x"}, is_reference_occupied)
-      .add_union(L"I", {L"i", L"x"}, is_hole)
-      .add_union(L"E", {L"x", L"a", L"g"})
-      .add_union(L"A", {L"x", L"a"}, is_particle)
+      .add_union(L"M", {L"o", L"i", L"u"}, is_reference_occupied)
+      .add_union(L"I", {L"i", L"u"}, is_hole)
+      .add_union(L"E", {L"u", L"a", L"g"})
+      .add_union(L"A", {L"u", L"a"}, is_particle)
       .add_union(L"p", {L"M", L"E"}, is_complete);
 
   add_fermi_spin(isr);
