@@ -218,12 +218,14 @@ class IndexSpaceRegistry {
     IndexSpace space(std::forward<S>(type_label), type, qns, approximate_size);
     this->add(space);
 
-    // process non-integer tags
-    auto h_nonints = boost::hana::filter(h_args, [](auto arg) {
+    // process attribute tags
+    auto h_attributes = boost::hana::filter(h_args, [](auto arg) {
       return !boost::hana::traits::is_integral(
-          boost::hana::type_c<decltype(arg)>);
+                 boost::hana::type_c<decltype(arg)>) &&
+             boost::hana::type_c<decltype(arg)> !=
+                 boost::hana::type_c<IndexSpace::QuantumNumbers>;
     });
-    process_attribute_tags(h_nonints, type);
+    process_attribute_tags(h_attributes, type);
 
     return clear_memoized_data_and_return_this();
   }
@@ -278,12 +280,14 @@ class IndexSpaceRegistry {
     this->add(space);
     auto type = space.type();
 
-    // process non-integer tags
-    auto h_nonints = boost::hana::filter(h_args, [](auto arg) {
+    // process attribute tags
+    auto h_attributes = boost::hana::filter(h_args, [](auto arg) {
       return !boost::hana::traits::is_integral(
-          boost::hana::type_c<decltype(arg)>);
+                 boost::hana::type_c<decltype(arg)>) &&
+             boost::hana::type_c<decltype(arg)> !=
+                 boost::hana::type_c<IndexSpace::QuantumNumbers>;
     });
-    process_attribute_tags(h_nonints, type);
+    process_attribute_tags(h_attributes, type);
 
     return clear_memoized_data_and_return_this();
   }
@@ -353,12 +357,14 @@ class IndexSpaceRegistry {
     this->add(space);
     auto type = space.type();
 
-    // process non-integer tags
-    auto h_nonints = boost::hana::filter(h_args, [](auto arg) {
+    // process attribute tags
+    auto h_attributes = boost::hana::filter(h_args, [](auto arg) {
       return !boost::hana::traits::is_integral(
-          boost::hana::type_c<decltype(arg)>);
+                 boost::hana::type_c<decltype(arg)>) &&
+             boost::hana::type_c<decltype(arg)> !=
+                 boost::hana::type_c<IndexSpace::QuantumNumbers>;
     });
-    process_attribute_tags(h_nonints, type);
+    process_attribute_tags(h_attributes, type);
 
     return clear_memoized_data_and_return_this();
   }
