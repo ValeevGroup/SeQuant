@@ -138,8 +138,9 @@ inline container::map<Index, Index> compute_index_replacement_rules(
       const auto &old_dst2 = src2_it->second;
       const auto new_dst_space =
           (dst.space() != old_dst1.space() || dst.space() != old_dst2.space())
-              ? isr->intersection(old_dst1.space(), old_dst2.space(),
-                                  dst.space())
+              ? isr->intersection(
+                    isr->intersection(old_dst1.space(), old_dst2.space()),
+                    dst.space())
               : dst.space();
       if (new_dst_space == isr->nullspace) throw zero_result{};
       Index new_dst;
