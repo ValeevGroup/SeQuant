@@ -144,8 +144,9 @@ struct QuantumNumbersAttr {
 /// IndexSpace has a base_label, TypeAttr or interpretable bitset in the
 /// context of other spaces. IndexSpace may also have QuantumNumberAttr which
 /// differentiate spaces with different quanta, such as spin projection quantum
-/// numbers. IndexSpace may additionally have an approximate size which is
-/// useful in expression optimization in the context of multiple spaces.
+/// numbers. IndexSpace may additionally have an approximate extent which is
+/// useful in symbolic manipulation of indexed expressions, such as
+/// tensor network evaluation.
 class IndexSpace {
  public:
   using TypeAttr = sequant::TypeAttr;
