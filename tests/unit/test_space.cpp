@@ -32,19 +32,35 @@ TEST_CASE("IndexSpace", "[elements]") {
     auto isr = std::make_shared<IndexSpaceRegistry>();
 
     // same as make_sr_spaces, but no spin
-    isr->add(L"o", 0b0001)
-        .add(L"i", 0b0010, is_hole)
-        .add(L"a", 0b0100, is_particle)
-        .add(L"g", 0b1000)
-        .add_union(L"m", {L"o", L"i"}, is_vacuum_occupied,
-                   is_reference_occupied)
-        .add_union(L"e", {L"a", L"g"})
-        .add_unIon(L"p", {L"m", L"e"}, is_complete);  // unIon
+    REQUIRE_NOTHROW(
+        isr->add(L"o", 0b0001, 3)       // approximate size
+            .add("i", 0b0010, is_hole)  // N.B. narrow string
+            .add(L'a', 0b0100, is_particle, QuantumNumbersAttr{},
+                 50)  // N.B. wchar_t + explicit quantum numbers + size
+            .add('g', 0b1000)
+            .add_union(L"m", {L"o", L"i"}, is_vacuum_occupied,
+                       is_reference_occupied)
+            .add_union(L"e", {L"a", L"g"})
+            .add_unIon(L"p", {L"m", L"e"}, is_complete)  // N.B. unIon
+    );
+    REQUIRE(isr->retrieve(L"o").approximate_size() == 3);
+    REQUIRE(isr->retrieve(L"m").type().to_int32() == 0b0011);
+    REQUIRE(isr->retrieve(L"m").approximate_size() ==
+            isr->retrieve(L"o").approximate_size() +
+                isr->retrieve(L"i").approximate_size());
     REQUIRE(isr->retrieve(L"p").type().to_int32() == 0b1111);
-    isr->add_union(L"iag", {L"i", L"a", L"g"})
-        .add_union(L"oia", {L"o", L"i", L"a"})
-        .add_intersection(L"x", {L"oia", L"iag"});
+    REQUIRE(isr->retrieve(L"p").approximate_size() ==
+            isr->retrieve(L"m").approximate_size() +
+                isr->retrieve(L"e").approximate_size());
+    REQUIRE(isr->retrieve(L"p").approximate_size() == 73);
+    REQUIRE_NOTHROW(
+        isr->add_union(L"iag", {L"i", L"a", L"g"})
+            .add_union(L"oia", {"o", "i", "a"})  // N.B. narrow strings
+            .add_intersection(L"x", {L"oia", L"iag"}));
     REQUIRE(isr->retrieve(L"x").type().to_int32() == 0b0110);
+    REQUIRE(isr->retrieve(L"x").approximate_size() ==
+            isr->retrieve(L"i").approximate_size() +
+                isr->retrieve(L"a").approximate_size());
   }
 
   SECTION("equality") {
