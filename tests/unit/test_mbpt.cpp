@@ -199,31 +199,21 @@ TEST_CASE("NBodyOp", "[mbpt]") {
 
     auto t = t1 + t2;
 
-    if constexpr (hash_version() == hash::Impl::BoostPre181) {
-      REQUIRE(
-          to_latex(simplify(f * t * t)) ==
-          to_latex(ex<Constant>(2) * f * t1 * t2 + f * t1 * t1 + f * t2 * t2));
-    } else {
+    {
       //      std::wcout << "to_latex(simplify(f * t * t)): "
       //                 << to_latex(simplify(f * t * t)) << std::endl;
-      /// TODO verify that canonicalize results may change between builds as
-      /// long as results are equivalent. Is there some reason it needs to be in
-      /// this order?
-      REQUIRE(
+      CHECK(
           to_latex(simplify(f * t * t)) ==
-          to_latex(f * t1 * t1 + ex<Constant>(2) * f * t1 * t2 + f * t2 * t2));
+          to_latex(f * t2 * t2 + ex<Constant>(2) * f * t1 * t2 + f * t1 * t1));
     }
 
-    if constexpr (hash_version() == hash::Impl::BoostPre181) {
-      REQUIRE(to_latex(simplify(f * t * t * t)) ==
-              to_latex(f * t1 * t1 * t1 + ex<Constant>(3) * f * t1 * t2 * t2 +
-                       f * t2 * t2 * t2 + ex<Constant>(3) * f * t1 * t1 * t2));
-    } else {
+    {
       //      std::wcout << "to_latex(simplify(f * t * t * t): "
       //                 << to_latex(simplify(f * t * t * t)) << std::endl;
-      REQUIRE(to_latex(simplify(f * t * t * t)) ==
-              to_latex(ex<Constant>(3) * f * t1 * t1 * t2 + f * t1 * t1 * t1 +
-                       f * t2 * t2 * t2 + ex<Constant>(3) * f * t1 * t2 * t2));
+      CHECK(to_latex(simplify(f * t * t * t)) ==
+            to_latex(f * t1 * t1 * t1 + f * t2 * t2 * t2 +
+                     ex<Constant>(3) * f * t1 * t2 * t2 +
+                     ex<Constant>(3) * f * t1 * t1 * t2));
     }
 
   }  // SECTION("canonicalize")
@@ -502,7 +492,7 @@ SEQUANT_PROFILE_SINGLE("wick(H2**T2**T2 -> 0)", {
 }  // SECTION("MRSO")
 
 SECTION("MRSF") {
-  using namespace sequant::mbpt::op;
+  using namespace sequant::mbpt::TensorOp;
 
   // now compute using (closed) Fermi vacuum + spinfree basis
   auto ctx_resetter = set_scoped_default_context(sequant::Context(
@@ -514,10 +504,10 @@ SECTION("MRSF") {
   SEQUANT_PROFILE_SINGLE("wick(H2**T2 -> 0)", {
     auto result = mbpt::vac_av(H_(2) * T_(2), {{0, 1}});
 
-    //      {
-    //        std::wcout << "H2*T2 -> 0 = " << to_latex_align(result, 0, 1)
-    //                   << std::endl;
-    //      }
+    //          {
+    //            std::wcout << "H2*T2 -> 0 = " << to_latex_align(result, 0, 1)
+    //                       << std::endl;
+    //          }
 
     {  // make sure get same result without use of topology
       auto result_wo_top =
@@ -527,7 +517,7 @@ SECTION("MRSF") {
     }
 
     {  // make sure get same result using operators
-      auto result_op = mbpt::vac_av(H_(2) * T_(2));
+      auto result_op = mbpt::op::vac_av(mbpt::op::H_(2) * mbpt::op::T_(2));
 
       REQUIRE(result_op->size() == result->size());
       REQUIRE(simplify(result - result_op) == ex<Constant>(0));

@@ -172,7 +172,7 @@ enum NodePos { Left = 0, Right, This };
   auto bk_rank = t.bra_rank() + t.ket_rank();
   auto nocc = ranges::count_if(t.const_braket(), [](Index const& idx) {
     return idx.space() ==
-           get_default_context().index_space_registry()->active_particle_space(
+           get_default_context().index_space_registry()->hole_space(
                idx.space().qns());
   });
   auto nvirt = bk_rank - nocc;

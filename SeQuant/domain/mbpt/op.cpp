@@ -69,114 +69,121 @@ OpClass to_class(OpType op) {
 //  qp annihilators wherever there is intersection with the active particle
 //  space. the presence of additional blocks depends on  whether the
 //  corresponding active hole or active particle space is a base space.
-qns_t excitation_type_qns(std::size_t K) {
+qns_t excitation_type_qns(std::size_t K, const IndexSpace::QuantumNumbers SQN) {
   qnc_t result;
   if (get_default_context().vacuum() == Vacuum::Physical) {
     result[0] = {0ul, K};
     result[1] = {0ul, K};
   } else {
     const auto& isr = get_default_context().index_space_registry();
-    auto base_spaces = isr->base_spaces();
+    const auto& base_spaces = isr->base_spaces();
     // are the active qp spaces base spaces?
-    bool aps_base = isr->is_base_space(isr->active_particle_space(Spin::any));
-    bool ahs_base = isr->is_base_space(isr->active_hole_space(Spin::any));
+    bool aps_base = isr->is_base(isr->particle_space(SQN));
+    bool ahs_base = isr->is_base(isr->hole_space(SQN));
 
     for (int i = 0; i < base_spaces.size(); i++) {
-      if (!includes(isr->active_hole_space(Spin::any).type(),
-                    base_spaces[i].type())) {
-        result[i * 2] = {0ul, 0ul};
-      } else {
-        result[i * 2] = {ahs_base ? K : 0ul, K};
-      }
-      if (!includes(isr->active_particle_space(Spin::any).type(),
-                    base_spaces[i].type())) {
-        result[i * 2 + 1] = {0ul, 0ul};
-      } else {
-        result[i * 2 + 1] = {aps_base ? K : 0ul, K};
-      }
-    }
-  }
-  return result;
-}
+      const auto& base_space = base_spaces[i];
+      result[i * 2] = {0ul, 0ul};
+      result[i * 2 + 1] = {0ul, 0ul};
+      if (base_space.qns() != SQN) continue;
 
-// sometimes we want to guarrentee that a qns has an interval from 0-K
-// regardless of the base spaces.
-qns_t interval_excitation_type_qns(std::size_t K) {
-  qnc_t result;
-  if (get_default_context().vacuum() == Vacuum::Physical) {
-    result[0] = {0ul, K};
-    result[1] = {0ul, K};
-  } else {
-    const auto& isr = get_default_context().index_space_registry();
-    auto base_spaces = isr->base_spaces();
-
-    for (int i = 0; i < base_spaces.size(); i++) {
-      if (!includes(isr->active_hole_space(Spin::any).type(),
-                    base_spaces[i].type())) {
-        result[i * 2] = {0ul, 0ul};
-      } else {
-        result[i * 2] = {0ul, K};
-      }
-      if (!includes(isr->active_particle_space(Spin::any).type(),
-                    base_spaces[i].type())) {
-        result[i * 2 + 1] = {0ul, 0ul};
-      } else {
-        result[i * 2 + 1] = {0ul, K};
-      }
-    }
-  }
-  return result;
-}
-
-qns_t deexcitation_type_qns(std::size_t K) {
-  qnc_t result;
-  if (get_default_context().vacuum() == Vacuum::Physical) {
-    result[0] = {0ul, K};
-    result[1] = {0ul, K};
-  } else {
-    const auto& isr = get_default_context().index_space_registry();
-    auto base_spaces = isr->base_spaces();
-    bool aps_base = isr->is_base_space(isr->active_particle_space(Spin::any));
-    bool ahs_base = isr->is_base_space(isr->active_hole_space(Spin::any));
-    for (int i = 0; i < base_spaces.size(); i++) {
-      if (!includes(isr->active_hole_space(Spin::any).type(),
-                    base_spaces[i].type())) {
-        result[i * 2 + 1] = {0ul, 0ul};
-      } else {
-        result[i * 2 + 1] = {ahs_base ? K : 0ul, K};
-      }
-      if (!includes(isr->active_particle_space(Spin::any).type(),
-                    base_spaces[i].type())) {
-        result[i * 2] = {0ul, 0ul};
-      } else {
+      // ex -> creators in particle space
+      if (includes(isr->particle_space(SQN).type(), base_space.type())) {
         result[i * 2] = {aps_base ? K : 0ul, K};
       }
+      // ex -> annihilators in hole space
+      if (includes(isr->hole_space(SQN).type(), base_space.type())) {
+        result[i * 2 + 1] = {ahs_base ? K : 0ul, K};
+      }
     }
   }
   return result;
 }
 
-// sometimes we want to guarrentee that a qns has an interval from 0-K
+// sometimes we want to guarantee that a qns has an interval from 0-K
 // regardless of the base spaces.
-qns_t interval_deexcitation_type_qns(std::size_t K) {
+qns_t interval_excitation_type_qns(std::size_t K,
+                                   const IndexSpace::QuantumNumbers SQN) {
   qnc_t result;
   if (get_default_context().vacuum() == Vacuum::Physical) {
     result[0] = {0ul, K};
     result[1] = {0ul, K};
   } else {
     const auto& isr = get_default_context().index_space_registry();
-    auto base_spaces = isr->base_spaces();
+    const auto& base_spaces = isr->base_spaces();
+
     for (int i = 0; i < base_spaces.size(); i++) {
-      if (!includes(isr->active_hole_space(Spin::any).type(),
-                    base_spaces[i].type())) {
-        result[i * 2 + 1] = {0ul, 0ul};
-      } else {
+      const auto& base_space = base_spaces[i];
+      result[i * 2] = {0ul, 0ul};
+      result[i * 2 + 1] = {0ul, 0ul};
+      if (base_space.qns() != SQN) continue;
+
+      // ex -> creators in particle space
+      if (includes(isr->particle_space(SQN).type(), base_space.type())) {
+        result[i * 2] = {0ul, K};
+      }
+      // ex -> annihilators in hole space
+      if (includes(isr->hole_space(SQN).type(), base_space.type())) {
         result[i * 2 + 1] = {0ul, K};
       }
-      if (!includes(isr->active_particle_space(Spin::any).type(),
-                    base_spaces[i].type())) {
-        result[i * 2] = {0ul, 0ul};
-      } else {
+    }
+  }
+  return result;
+}
+
+qns_t deexcitation_type_qns(std::size_t K,
+                            const IndexSpace::QuantumNumbers SQN) {
+  qnc_t result;
+  if (get_default_context().vacuum() == Vacuum::Physical) {
+    result[0] = {0ul, K};
+    result[1] = {0ul, K};
+  } else {
+    const auto& isr = get_default_context().index_space_registry();
+    const auto& base_spaces = isr->base_spaces();
+    bool aps_base = isr->is_base(isr->particle_space(SQN));
+    bool ahs_base = isr->is_base(isr->hole_space(SQN));
+    for (int i = 0; i < base_spaces.size(); i++) {
+      const auto& base_space = base_spaces[i];
+      result[i * 2] = {0ul, 0ul};
+      result[i * 2 + 1] = {0ul, 0ul};
+      if (base_space.qns() != SQN) continue;
+
+      // deex -> annihilators in particle space
+      if (includes(isr->particle_space(SQN).type(), base_space.type())) {
+        result[i * 2 + 1] = {aps_base ? K : 0ul, K};
+      }
+      // deex -> creators in hole space
+      if (includes(isr->hole_space(SQN).type(), base_space.type())) {
+        result[i * 2] = {ahs_base ? K : 0ul, K};
+      }
+    }
+  }
+  return result;
+}
+
+// sometimes we want to guarantee that a qns has an interval from 0-K
+// regardless of the base spaces.
+qns_t interval_deexcitation_type_qns(std::size_t K,
+                                     const IndexSpace::QuantumNumbers SQN) {
+  qnc_t result;
+  if (get_default_context().vacuum() == Vacuum::Physical) {
+    result[0] = {0ul, K};
+    result[1] = {0ul, K};
+  } else {
+    const auto& isr = get_default_context().index_space_registry();
+    const auto& base_spaces = isr->base_spaces();
+    for (int i = 0; i < base_spaces.size(); i++) {
+      const auto& base_space = base_spaces[i];
+      result[i * 2] = {0ul, 0ul};
+      result[i * 2 + 1] = {0ul, 0ul};
+      if (base_space.qns() != SQN) continue;
+
+      // deex -> annihilators in particle space
+      if (includes(isr->particle_space(SQN).type(), base_space.type())) {
+        result[i * 2 + 1] = {0ul, K};
+      }
+      // deex -> creators in hole space
+      if (includes(isr->hole_space(SQN).type(), base_space.type())) {
         result[i * 2] = {0ul, K};
       }
     }
@@ -193,27 +200,32 @@ qns_t general_type_qns(std::size_t K) {
 }
 
 qns_t generic_excitation_qns(std::size_t particle_rank, std::size_t hole_rank,
-                             IndexSpace particle_space, IndexSpace hole_space) {
+                             IndexSpace particle_space, IndexSpace hole_space,
+                             const IndexSpace::QuantumNumbers SQN) {
   qnc_t result;
   if (get_default_context().vacuum() == Vacuum::Physical) {
     result[0] = {0ul, hole_rank};
     result[1] = {0ul, particle_rank};
   } else {
     const auto& isr = get_default_context().index_space_registry();
-    auto base_spaces = isr->base_spaces();
-    bool aps_base = isr->is_base_space(isr->active_particle_space(Spin::any));
-    bool ahs_base = isr->is_base_space(isr->active_hole_space(Spin::any));
+    const auto& base_spaces = isr->base_spaces();
+    bool aps_base = isr->is_base(isr->particle_space(SQN));
+    bool ahs_base = isr->is_base(isr->hole_space(SQN));
     for (int i = 0; i < base_spaces.size(); i++) {
-      if (!includes(hole_space.type(), base_spaces[i].type())) {
-        result[i * 2] = {0ul, 0ul};  // creators
-      } else {
-        result[i * 2] = {ahs_base ? hole_rank : 0ul, hole_rank};  // creators
+      const auto& base_space = base_spaces[i];
+      result[i * 2] = {0ul, 0ul};
+      result[i * 2 + 1] = {0ul, 0ul};
+      if (base_space.qns() != SQN) continue;
+
+      // ex -> creators in particle space
+      if (includes(particle_space.type(), base_space.type())) {
+        result[i * 2] = {aps_base ? particle_rank : 0ul,
+                         particle_rank};  // creators
       }
-      if (!includes(particle_space.type(), base_spaces[i].type())) {
-        result[i * 2 + 1] = {0ul, 0ul};  // annihilators
-      } else {
-        result[i * 2 + 1] = {aps_base ? particle_rank : 0ul,
-                             particle_rank};  // annihilators
+      // ex -> annihilators in hole space
+      if (includes(hole_space.type(), base_space.type())) {
+        result[i * 2 + 1] = {ahs_base ? hole_rank : 0ul,
+                             hole_rank};  // annihilators
       }
     }
   }
@@ -221,29 +233,31 @@ qns_t generic_excitation_qns(std::size_t particle_rank, std::size_t hole_rank,
 }
 
 qns_t generic_deexcitation_qns(std::size_t particle_rank, std::size_t hole_rank,
-                               IndexSpace particle_space,
-                               IndexSpace hole_space) {
+                               IndexSpace particle_space, IndexSpace hole_space,
+                               const IndexSpace::QuantumNumbers SQN) {
   qnc_t result;
   if (get_default_context().vacuum() == Vacuum::Physical) {
     result[0] = {0ul, particle_rank};
     result[1] = {0ul, hole_rank};
   } else {
     const auto& isr = get_default_context().index_space_registry();
-    auto base_spaces = isr->base_spaces();
-    bool aps_base = isr->is_base_space(isr->active_particle_space(Spin::any));
-    bool ahs_base = isr->is_base_space(isr->active_hole_space(Spin::any));
+    const auto& base_spaces = isr->base_spaces();
+    bool aps_base = isr->is_base(isr->particle_space(SQN));
+    bool ahs_base = isr->is_base(isr->hole_space(SQN));
     for (int i = 0; i < base_spaces.size(); i++) {
-      if (!includes(hole_space.type(), base_spaces[i].type())) {
-        result[i * 2 + 1] = {0ul, 0ul};  // annihilators
-      } else {
-        result[i * 2 + 1] = {ahs_base ? hole_rank : 0ul,
-                             hole_rank};  // annihilators
+      const auto& base_space = base_spaces[i];
+      result[i * 2] = {0ul, 0ul};
+      result[i * 2 + 1] = {0ul, 0ul};
+      if (base_space.qns() != SQN) continue;
+
+      // deex -> creators in hole space
+      if (includes(hole_space.type(), base_space.type())) {
+        result[i * 2] = {ahs_base ? hole_rank : 0ul, hole_rank};  // creators
       }
-      if (!includes(particle_space.type(), base_spaces[i].type())) {
-        result[i * 2] = {0ul, 0ul};  // creators
-      } else {
-        result[i * 2] = {aps_base ? particle_rank : 0ul,
-                         particle_rank};  // creators
+      // deex -> annihilators in particle space
+      if (includes(particle_space.type(), base_space.type())) {
+        result[i * 2 + 1] = {aps_base ? particle_rank : 0ul,
+                             particle_rank};  // annihilators
       }
     }
   }
@@ -267,7 +281,7 @@ qns_t combine(qns_t a, qns_t b) {
     return result;
   } else if (get_default_context().vacuum() == Vacuum::SingleProduct) {
     const auto& isr = get_default_context().index_space_registry();
-    auto base_spaces = isr->base_spaces();
+    const auto& base_spaces = isr->base_spaces();
     for (auto i = 0; i < base_spaces.size(); i++) {
       auto cre = i * 2;
       auto ann = (i * 2) + 1;
@@ -345,37 +359,45 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
                 std::to_wstring(op()[0].lower()) + L"}";
     }
   } else {  // single product vacuum
-    int particle_ann = is_adjoint ? op().active_particle_creators()
-                                  : op().active_particle_annihilators();
-    int hole_cre = is_adjoint ? op().active_hole_annihilators()
-                              : op().active_hole_creators();
-    int particle_cre = is_adjoint ? op().active_particle_annihilators()
-                                  : op().active_particle_creators();
-    int hole_ann = is_adjoint ? op().active_hole_creators()
-                              : op().active_hole_annihilators();
-    if (to_class(optype) == OpClass::ex) {
-      // TODO don't throw, just pass this to Product::to_latex()
-      if (particle_ann == -1 || hole_cre == -1)
-        throw "this expression is not expressible as operator";
-      if (particle_ann == hole_cre) {  // particle conserving
-        result += baseline_char + L"{" + std::to_wstring(particle_ann) + L"}";
-      } else {  // particle non-conserving
-        result += baseline_char + L"{" + std::to_wstring(hole_cre) + L"," +
-                  std::to_wstring(particle_ann) + L"}";
+    auto nann_p = is_adjoint ? op().ncre_particles() : op().nann_particles();
+    auto ncre_h = is_adjoint ? op().nann_holes() : op().ncre_holes();
+    auto ncre_p = is_adjoint ? op().nann_particles() : op().ncre_particles();
+    auto nann_h = is_adjoint ? op().ncre_holes() : op().nann_holes();
+
+    if (!is_definite(nann_p) || !is_definite(ncre_h) || !is_definite(ncre_p) ||
+        !is_definite(nann_h)) {
+      throw std::invalid_argument(
+          "to_latex(const Operator<qns_t, S>& op): "
+          "can only handle generic operators with definite cre/ann numbers");
+    }
+
+    // pure quasiparticle creator/annihilator?
+    const auto qprank_cre = ncre_p.lower() + nann_h.lower();
+    const auto qprank_ann = nann_p.lower() + ncre_h.lower();
+    const auto qppure = qprank_cre == 0 || qprank_ann == 0;
+    if (qppure) {
+      if (qprank_cre) {
+        if (ncre_p.lower() == nann_h.lower()) {  // q-particle conserving
+          result +=
+              baseline_char + L"{" + std::to_wstring(nann_h.lower()) + L"}";
+        } else {  // particle non-conserving
+          result += baseline_char + L"{" + std::to_wstring(nann_h.lower()) +
+                    L"," + std::to_wstring(ncre_p.lower()) + L"}";
+        }
+      } else {
+        if (ncre_h.lower() == nann_p.lower()) {  // q-particle conserving
+          result +=
+              baseline_char + L"{" + std::to_wstring(ncre_h.lower()) + L"}";
+        } else {  // q-particle non-conserving
+          result += baseline_char + L"{" + std::to_wstring(ncre_h.lower()) +
+                    L"," + std::to_wstring(nann_p.lower()) + L"}";
+        }
       }
-    } else if (to_class(optype) == OpClass::deex) {
-      // TODO don't throw, just pass this to Product::to_latex()
-      if (particle_cre == -1 || hole_ann == -1) {
-        throw "this expression is not expressible as operator";
-      }
-      if (particle_cre == hole_ann) {  // q-particle conserving
-        result += baseline_char + L"{" + std::to_wstring(hole_ann) + L"}";
-      } else {  // q-particle non-conserving
-        result += baseline_char + L"{" + std::to_wstring(particle_cre) + L"," +
-                  std::to_wstring(hole_ann) + L"}";
-      }
-    } else {
-      throw "operator has unrecognized OpClass";
+    } else {  // not pure qp creator/annihilator
+      result += L"_{" + std::to_wstring(nann_h.lower()) + L"," +
+                std::to_wstring(ncre_p.lower()) + L"}^{" +
+                std::to_wstring(ncre_h.lower()) + L"," +
+                std::to_wstring(nann_p.lower()) + L"}";
     }
   }
   result += L"}";
@@ -408,12 +430,12 @@ OpMaker<S>::OpMaker(OpType op, std::size_t nbra, std::size_t nket,
   const auto& isr = get_default_context().index_space_registry();
   switch (to_class(op)) {
     case OpClass::ex:
-      bra_spaces_ = decltype(bra_spaces_)(nbra, hole_space);
-      ket_spaces_ = decltype(ket_spaces_)(nket, particle_space);
-      break;
-    case OpClass::deex:
       bra_spaces_ = decltype(bra_spaces_)(nbra, particle_space);
       ket_spaces_ = decltype(ket_spaces_)(nket, hole_space);
+      break;
+    case OpClass::deex:
+      bra_spaces_ = decltype(bra_spaces_)(nbra, hole_space);
+      ket_spaces_ = decltype(ket_spaces_)(nket, particle_space);
       break;
     case OpClass::gen:
       bra_spaces_ = decltype(bra_spaces_)(nbra, isr->complete_space(Spin::any));
@@ -427,16 +449,16 @@ OpMaker<S>::OpMaker(OpType op, std::size_t nparticle) {
   op_ = op;
   const auto& isr = get_default_context().index_space_registry();
   auto current_context = get_default_context();
-  const auto occ = isr->active_hole_space(Spin::any);
-  const auto unocc = isr->active_particle_space(Spin::any);
+  const auto hole_space = isr->hole_space(Spin::any);
+  const auto particle_space = isr->particle_space(Spin::any);
   switch (to_class(op)) {
     case OpClass::ex:
-      bra_spaces_ = decltype(bra_spaces_)(nparticle, unocc);
-      ket_spaces_ = decltype(ket_spaces_)(nparticle, occ);
+      bra_spaces_ = decltype(bra_spaces_)(nparticle, particle_space);
+      ket_spaces_ = decltype(ket_spaces_)(nparticle, hole_space);
       break;
     case OpClass::deex:
-      bra_spaces_ = decltype(bra_spaces_)(nparticle, occ);
-      ket_spaces_ = decltype(ket_spaces_)(nparticle, unocc);
+      bra_spaces_ = decltype(bra_spaces_)(nparticle, hole_space);
+      ket_spaces_ = decltype(ket_spaces_)(nparticle, particle_space);
       break;
     case OpClass::gen:
       bra_spaces_ =
@@ -610,22 +632,22 @@ ExprPtr P(std::int64_t K) {
 
 ExprPtr A(std::int64_t K) {
   const auto& isr = get_default_context().index_space_registry();
-  auto base_spaces = isr->base_spaces();
+  const auto& base_spaces = isr->base_spaces();
   assert(K != 0);
   container::svector<IndexSpace> creators;
   container::svector<IndexSpace> annihilators;
-  if (K > 0)
+  if (K > 0)  // ex
     for ([[maybe_unused]] auto i : ranges::views::iota(0, K))
-      annihilators.emplace_back(isr->active_particle_space(Spin::any));
-  else
+      annihilators.emplace_back(isr->hole_space(Spin::any));
+  else  // deex
     for ([[maybe_unused]] auto i : ranges::views::iota(0, -K))
-      creators.emplace_back(isr->active_particle_space(Spin::any));
-  if (K > 0)
+      creators.emplace_back(isr->hole_space(Spin::any));
+  if (K > 0)  // ex
     for ([[maybe_unused]] auto i : ranges::views::iota(0, K))
-      creators.emplace_back(isr->active_hole_space(Spin::any));
-  else
+      creators.emplace_back(isr->particle_space(Spin::any));
+  else  // deex
     for ([[maybe_unused]] auto i : ranges::views::iota(0, -K))
-      annihilators.emplace_back(isr->active_hole_space(Spin::any));
+      annihilators.emplace_back(isr->particle_space(Spin::any));
 
   std::optional<OpMaker<Statistics::FermiDirac>::UseDepIdx> dep;
   if (get_default_formalism().csv() == mbpt::CSV::Yes)
@@ -637,22 +659,22 @@ ExprPtr A(std::int64_t K) {
 
 ExprPtr S(std::int64_t K) {
   const auto& isr = get_default_context().index_space_registry();
-  auto base_spaces = isr->base_spaces();
+  const auto& base_spaces = isr->base_spaces();
   assert(K != 0);
   container::svector<IndexSpace> creators;
   container::svector<IndexSpace> annihilators;
-  if (K > 0)
+  if (K > 0)  // ex
     for ([[maybe_unused]] auto i : ranges::views::iota(0, K))
-      annihilators.emplace_back(isr->active_particle_space(Spin::any));
-  else
+      annihilators.emplace_back(isr->hole_space(Spin::any));
+  else  // deex
     for ([[maybe_unused]] auto i : ranges::views::iota(0, -K))
-      creators.emplace_back(isr->active_particle_space(Spin::any));
-  if (K > 0)
+      creators.emplace_back(isr->hole_space(Spin::any));
+  if (K > 0)  // ex
     for ([[maybe_unused]] auto i : ranges::views::iota(0, K))
-      creators.emplace_back(isr->active_hole_space(Spin::any));
-  else
+      creators.emplace_back(isr->particle_space(Spin::any));
+  else  // deex
     for ([[maybe_unused]] auto i : ranges::views::iota(0, -K))
-      annihilators.emplace_back(isr->active_hole_space(Spin::any));
+      annihilators.emplace_back(isr->particle_space(Spin::any));
 
   std::optional<OpMaker<Statistics::FermiDirac>::UseDepIdx> dep;
   if (get_default_formalism().csv() == mbpt::CSV::Yes)
@@ -800,7 +822,7 @@ ExprPtr F(bool use_f_tensor, IndexSpace occupied_density) {
 
 ExprPtr A(std::int64_t K) {
   const auto& isr = get_default_context().index_space_registry();
-  auto base_spaces = isr->base_spaces();
+  const auto& base_spaces = isr->base_spaces();
   assert(K != 0);
   return ex<op_t>([]() -> std::wstring_view { return L"A"; },
                   [=]() -> ExprPtr { return TensorOp::A(K); },
@@ -969,7 +991,7 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
   // convention is to use different label for spin-orbital and spin-free RDM
   const auto rdm_label = spinorbital ? optype2label.at(OpType::RDM) : L"Γ";
 
-  //  the hueristic to keep only full contractions
+  //  the heuristic to keep only full contractions
   // during a wick procedure requires that the wave function density agree with
   // the vacuum normal ordering occupancy.
   bool full_contractions =
@@ -999,8 +1021,8 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
   } else {
     const auto target_rdm_space_type =
         get_default_context().vacuum() == Vacuum::SingleProduct
-            ? isr->intersection(isr->active_particle_space(Spin::any),
-                                isr->active_hole_space(Spin::any))
+            ? isr->intersection(isr->particle_space(Spin::any),
+                                isr->hole_space(Spin::any))
             : isr->reference_occupied_space(Spin::any);
 
     // STEP1. replace NOPs by RDM
@@ -1143,9 +1165,8 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
         TensorCanonicalizer::instance()->index_comparer();
     TensorCanonicalizer::instance()->index_comparer(
         [&](const Index& idx1, const Index& idx2) -> bool {
-          auto active_space =
-              isr->intersection(isr->active_particle_space(Spin::any),
-                                isr->active_hole_space(Spin::any));
+          auto active_space = isr->intersection(isr->particle_space(Spin::any),
+                                                isr->hole_space(Spin::any));
           const auto idx1_active = idx1.space().type() == active_space.type();
           const auto idx2_active = idx2.space().type() == active_space.type();
           if (idx1_active) {
