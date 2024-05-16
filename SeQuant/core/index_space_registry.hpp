@@ -413,17 +413,17 @@ class IndexSpaceRegistry {
     return *base_spaces_;
   }
 
-  /// @brief checks if an IndexSpace is in the basis
+  /// @brief checks if an IndexSpace is a base space
   /// @param IS IndexSpace
-  /// @return true if @p IS is in the basis
+  /// @return true if @p IS is a base space
   /// @sa base_spaces
   static bool is_base(const IndexSpace& IS) {
     return has_single_bit(IS.type().to_int32());
   }
 
-  /// @brief checks if an IndexSpace::Type is in the basis
+  /// @brief checks if an IndexSpace::Type is a base space
   /// @param t IndexSpace::Type
-  /// @return true if @p t is in the basis
+  /// @return true if @p t is a base space
   /// @sa space_type_basis
   static bool is_base(const IndexSpace::Type& t) {
     return has_single_bit(t.to_int32());
@@ -517,6 +517,39 @@ class IndexSpaceRegistry {
       } else {
         return intersection_space;
       }
+    }
+  }
+
+  ///@brief is a union between spaces eligible and registered
+  ///@param space1
+  ///@param space2
+  ///@return bool
+  bool valid_unIon(const IndexSpace& space1, const IndexSpace& space2) const {
+    // check typeattr
+    if (!space1.type().includes(space2.type()) &&
+        space1.qns() == space2.qns()) {
+      // union possible
+      auto union_type = space1.type().unIon(space2.type());
+      IndexSpace::Attr union_attr{union_type, space1.qns()};
+      if (find_by_attr(union_attr) ==
+          nullspace) {  // possible but not registered
+        return false;
+      } else
+        return true;
+    }
+    // check qn
+    else if (!space1.qns().includes(space2.qns()) &&
+             space1.type() == space2.type()) {
+      // union possible
+      auto union_qn = space1.qns().unIon(space2.qns());
+      IndexSpace::Attr union_attr{space1.type(), union_qn};
+      if (find_by_attr(union_attr) ==
+          nullspace) {  // possible but not registered
+        return false;
+      } else
+        return true;
+    } else {  // union not mathematically allowed.
+      return false;
     }
   }
 
@@ -994,7 +1027,7 @@ class IndexSpaceRegistry {
     return bits & (((bool)(bits & (bits - 1))) - 1);
   }
 
-  ///@brief find an IndexSpace from its type. return nullspace if not present.
+  ///@brief find an IndexSpace from its attr. return nullspace if not present.
   ///@param find the IndexSpace via it's @c attr
   const IndexSpace& find_by_attr(const IndexSpace::Attr& attr) const {
     for (auto&& space : *spaces_) {

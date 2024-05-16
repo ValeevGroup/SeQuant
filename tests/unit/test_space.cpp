@@ -126,6 +126,12 @@ TEST_CASE("IndexSpace", "[elements]") {
                               intersection_func));
     REQUIRE(isr->valid_bitop(isr->retrieve(L"i"), isr->retrieve(L"m"),
                              intersection_func));
+
+    REQUIRE(isr->valid_unIon(isr->retrieve(L"i"), isr->retrieve(L"a")));
+    REQUIRE(isr->valid_unIon(isr->retrieve(L"i↑"), isr->retrieve(L"i↓")));
+    REQUIRE(!isr->valid_unIon(isr->retrieve(L"i↑"), isr->retrieve(L"i↑")));
+    REQUIRE(!isr->valid_unIon(isr->retrieve(L"p"), isr->retrieve(L"a")));
+    REQUIRE(!isr->valid_unIon(isr->retrieve(L"p↑"), isr->retrieve(L"a↓")));
   }
 
   SECTION("occupancy_validation") {
