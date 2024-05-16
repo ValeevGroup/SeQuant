@@ -126,7 +126,7 @@ Of course, same manipulations can be used for bosons:
 In scientific writing, it is common to index mathematical objects such as tensors and operators. These indices in a network of tensors encode a graph structure which can be used to deduce which modes of each tensor can be contracted. It is also common for these indices to indicate a block structure of a tensor in a subspace.
 ![](doc/images/fia.svg)
 Most chemists would recognize the labeling of this tensor as the off-diagonal occupied, unoccupied block of the fock matrix. To understand this however, requires knowledge of what `i` and `a` mean. In other words, the labels `i` and `a` only have meaning in a context.
-SeQuant now allows/requires the user to define the base labels and the set theoretics for the context they are in.
+SeQuant now allows/requires the user to define custom vocabulary of index labels. It also supports set theoretic operations for the spaces and ability to implicitly "load" the vocabulary into the default context.
 
 ```c++
 #include <SeQuant/core/context.hpp>
@@ -134,34 +134,25 @@ SeQuant now allows/requires the user to define the base labels and the set theor
 
 int main() {
   using namespace sequant;
-      IndexSpaceRegistry sample_ISR;
+  IndexSpaceRegistry isr;
 
-  IndexSpace x_space(L"x", 0b001);
-  sample_ISR.add(x_space);
+  isr.add(L"x", 0b001)
+     .add(L"y", 0b010)
+     .add(L"z", 0b100)
+     .add(L"xy", 0b011)                  // union of x and y
+     .add_union(L"yz", {L"y", L"z"})     // union of y and z, explicit
+     .add_union(L"xyz", {L"xy", L"yz"}); // union of x, y, and z
 
-  IndexSpace y_space(L"y", 0b010);
-  sample_ISR.add(y_space);
-
-  IndexSpace z_space(L"z", 0b100);
-  sample_ISR.add(z_space);
-
-  IndexSpace xy_space(L"xy", 0b011);
-  sample_ISR.add(xy_space);
-
-  IndexSpace yz_space(L"yz", 0b110);
-  sample_ISR.add(yz_space);
-
-  IndexSpace xyz_space(L"xyz", 0b111);
-  sample_ISR.add(xyz_space);
-
-  assert(sample_ISR.unIon(z_space,y_space) == yz_space);
-  assert(sample_ISR.intersection(xy_space,x_space) == x_space);
+  assert(isr.unIon(L"x", L"y") == isr.retrieve(L"xy"));
+  assert(isr.intersection(L"xyz", L"y") == isr.retrieve(L"y"));
   
-  Context new_cxt(sample_ISR, Vacuum::SingleProduct);
+  // use the registry in global context to streamline composition
+  Context new_cxt(std::move(isr), Vacuum::SingleProduct);
   set_default_context(new_cxt);
+  Index xy1(L"xy_1");  // now can use space labels to define indices
 }
 ```
-The above sample registry outlines the set theoreitcs for  indices x, y, and z using unsigned ints conveniently written as bitsets.
+The above sample registry outlines the set theoretics for indices x, y, and z using unsigned ints conveniently written as bitsets.
 Notice that not all possible combinations need to be registered. It is the task of the user to predict any and all spaces that they may 
 encounter in their context. Notice that `unIon()` and `intersection()` are part of the `IndexSpaceRegistry` class. This is because these operations should never produce an unregistered `IndexSpace`(except the `nullspace()`).
 SeQuant of course provides a number of common partitionings common for chemistry. These are located in `SeQuant/domain/mbpt/convention.hpp`.
