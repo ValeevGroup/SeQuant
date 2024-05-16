@@ -1,4 +1,5 @@
-#include "catch.hpp"
+#include <catch2/catch_approx.hpp>
+#include <catch2/catch_test_macros.hpp>
 
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/parse_expr.hpp>
@@ -23,8 +24,30 @@ auto tensor_to_key(sequant::Tensor const& tnsr) {
     return (mo[1].str() == L"i" ? L"o" : L"v") + mo[2].str();
   };
 
-  auto const tnsr_deparsed = sequant::deparse_expr(tnsr.clone(), false);
-  return boost::regex_replace(tnsr_deparsed, idx_rgx, formatter);
+  sequant::NestedTensorIndices oixs{tnsr};
+  if (oixs.inner.empty()) {
+    auto const tnsr_deparsed = sequant::deparse_expr(tnsr.clone(), false);
+    return boost::regex_replace(tnsr_deparsed, idx_rgx, formatter);
+  } else {
+    using ranges::views::intersperse;
+    using ranges::views::join;
+    using ranges::views::transform;
+    using namespace sequant;
+
+    auto ix_lbl = [&formatter](Index const& ix) -> std::wstring {
+      std::wstring lbl(ix.label().data());
+      return boost::regex_replace(lbl, idx_rgx, formatter);
+    };
+
+    auto ixs_lbl = [&ix_lbl](auto const& ixs) -> std::wstring {
+      return ixs | transform(ix_lbl) | intersperse(L",") | join |
+             ranges::to<std::wstring>;
+    };
+
+    std::wstring result(tnsr.label());
+    result += L"{" + ixs_lbl(oixs.outer) + L";" + ixs_lbl(oixs.inner) + L"}";
+    return result;
+  }
 }
 
 auto tensor_to_key(std::wstring_view spec) {
@@ -32,77 +55,53 @@ auto tensor_to_key(std::wstring_view spec) {
                            ->as<sequant::Tensor>());
 }
 
-template <typename Tensor_t>
+template <typename NumericT>
+auto random_tensor(TA::Range const& rng) {
+  TA::Tensor<NumericT> result{rng};
+  std::generate(result.begin(), result.end(),
+                TA::detail::MakeRandom<NumericT>::generate_value);
+  return result;
+}
+
+// note: all the inner tensors (elements of the outer tensor)
+//       have the same @c inner_rng
+template <typename NumericT>
+auto random_tensor_of_tensor(TA::Range const& outer_rng,
+                             TA::Range const& inner_rng) {
+  TA::Tensor<TA::Tensor<NumericT>> result{outer_rng};
+
+  std::generate(result.begin(), result.end(),
+                [inner_rng]() { return random_tensor<NumericT>(inner_rng); });
+
+  return result;
+}
+
+template <typename NumericT = double, typename TAPolicyT = TA::DensePolicy>
 class rand_tensor_yield {
- public:
-  using numeric_t = typename Tensor_t::numeric_type;
-
- private:
-  TA::World& world_;
-  size_t const nocc_;
-  size_t const nvirt_;
-  mutable std::map<std::wstring, sequant::ERPtr> label_to_er_;
+  TA::World& world;
+  size_t nocc_;
+  size_t nvirt_;
+  mutable sequant::container::map<std::wstring, sequant::ERPtr> label_to_er_;
 
  public:
-  [[nodiscard]] Tensor_t make_rand_tensor(sequant::Tensor const& tnsr) const {
-    using ranges::views::transform;
-    using sequant::IndexSpace;
+  using array_type = TA::DistArray<TA::Tensor<NumericT>, TAPolicyT>;
+  using array_tot_type =
+      TA::DistArray<TA::Tensor<TA::Tensor<NumericT>>, TAPolicyT>;
+  using numeric_type = NumericT;
 
-    assert(ranges::all_of(tnsr.const_braket(),
-                          [](auto const& idx) {
-                            return idx.space() == IndexSpace::active_occupied ||
-                                   idx.space() == IndexSpace::active_unoccupied;
-                          }) &&
-           "Unsupported IndexSpace type found while generating tensor.");
-
-    auto trange_vec =
-        tnsr.const_braket() |
-        transform([no = nocc_, nv = nvirt_](auto const& idx) {
-          return TA::TiledRange1{
-              0, idx.space() == IndexSpace::active_occupied ? no : nv};
-        }) |
-        ranges::to_vector;
-
-    Tensor_t result{world_,
-                    TA::TiledRange{trange_vec.begin(), trange_vec.end()}};
-    result.template init_elements([](auto const&) {
-      return static_cast<numeric_t>(std::rand()) /
-             static_cast<numeric_t>(RAND_MAX);
-    });
-    return result;
-  }
-
-  rand_tensor_yield(TA::World& world, size_t noccupied, size_t nvirtual)
-      : world_{world}, nocc_{noccupied}, nvirt_{nvirtual} {}
-
-  sequant::ERPtr operator()(sequant::Tensor const& tnsr) const {
-    using result_t = sequant::EvalTensorTA<Tensor_t>;
-    std::wstring const label = tensor_to_key(tnsr);
-    if (auto&& found = label_to_er_.find(label); found != label_to_er_.end()) {
-      //      std::cout << "label = [" << sequant::to_string(label)
-      //                << "] FOUND in cache. Returning.." << std::endl;
-      return found->second;
-    }
-    Tensor_t t = make_rand_tensor(tnsr);
-    auto success = label_to_er_.emplace(
-        label, sequant::eval_result<result_t>(std::move(t)));
-    assert(success.second && "couldn't store ERPtr!");
-    //    std::cout << "label = [" << sequant::to_string(label)
-    //              << "] NotFound in cache. Creating.." << std::endl;
-    return success.first->second;
-  }
+  rand_tensor_yield(TA::World& world_, size_t nocc, size_t nvirt)
+      : world{world_}, nocc_{nocc}, nvirt_{nvirt} {}
 
   sequant::ERPtr operator()(sequant::Variable const& var) const {
-    using result_t = sequant::EvalScalar<numeric_t>;
-    std::wstring const key{var.label()};
-    if (auto&& found = label_to_er_.find(key); found != label_to_er_.end())
-      return found->second;
-    auto success = label_to_er_.emplace(
-        key,
-        sequant::eval_result<result_t>(static_cast<numeric_t>(std::rand()) /
-                                       static_cast<numeric_t>(RAND_MAX)));
-    assert(success.second && "couldn't store ERPtr!");
-    return success.first->second;
+    using result_t = sequant::EvalScalar<NumericT>;
+
+    auto make_var = []() {
+      return sequant::eval_result<result_t>(
+          TA::detail::MakeRandom<NumericT>::generate_value());
+    };
+
+    return label_to_er_.try_emplace(std::wstring{var.label()}, make_var())
+        .first->second;
   }
 
   template <typename T, typename = std::enable_if_t<sequant::IsEvaluable<T>>>
@@ -114,18 +113,96 @@ class rand_tensor_yield {
 
     assert(node->is_constant());
 
-    using result_t = EvalScalar<numeric_t>;
+    using result_t = EvalScalar<NumericT>;
 
-    auto d = node->as_constant().template value<numeric_t>();
+    auto d = (node->as_constant()).template value<NumericT>();
     return eval_result<result_t>(d);
   }
 
+  sequant::ERPtr operator()(sequant::Tensor const& tnsr) const {
+    using namespace ranges::views;
+    using namespace sequant;
+
+    std::wstring const label = tensor_to_key(tnsr);
+    if (auto&& found = label_to_er_.find(label); found != label_to_er_.end()) {
+      //      std::cout << "label = [" << sequant::to_string(label)
+      //                << "] FOUND in cache. Returning.." << std::endl;
+      return found->second;
+    }
+
+    ERPtr result{nullptr};
+
+    auto make_extents = [this](auto&& ixs) -> container::svector<size_t> {
+      return ixs | transform([this](auto const& ix) -> size_t {
+               assert(ix.space() == IndexSpace::active_occupied ||
+                      ix.space() == IndexSpace::active_unoccupied);
+               return ix.space() == IndexSpace::active_occupied ? nocc_
+                                                                : nvirt_;
+             }) |
+             ranges::to<container::svector<size_t>>;
+    };
+
+    NestedTensorIndices nested{tnsr};
+
+    auto const outer_extent = make_extents(nested.outer);
+
+    auto const outer_tr = [&outer_extent]() {
+      container::vector<TA::TiledRange1> tr1s;
+      tr1s.reserve(outer_extent.size());
+      for (auto e : outer_extent) tr1s.emplace_back(TA::TiledRange1(0, e));
+      return TA::TiledRange(tr1s.begin(), tr1s.end());
+    }();
+
+    auto const outer_r = TA::Range(outer_extent);
+
+    if (nested.inner.empty()) {
+      // regular tensor
+      using ArrayT = TA::DistArray<TA::Tensor<NumericT>, TAPolicyT>;
+      ArrayT array{world, outer_tr};
+      for (auto it = array.begin(); it != array.end(); ++it)
+        if (array.is_local(it.index()))
+          *it = world.taskq.add(random_tensor<NumericT>, it.make_range());
+      result = eval_result<EvalTensorTA<ArrayT>>(array);
+    } else {
+      // tensor of tensor
+      using ArrayT = TA::DistArray<TA::Tensor<TA::Tensor<NumericT>>, TAPolicyT>;
+
+      auto const inner_extent = make_extents(nested.inner);
+      auto const inner_r = TA::Range(inner_extent);
+
+      auto make_tile = [inner_r](TA::Range const& orng) {
+        return random_tensor_of_tensor<NumericT>(orng, inner_r);
+      };
+
+      ArrayT array{world, outer_tr};
+
+      for (auto it = array.begin(); it != array.end(); ++it)
+        if (array.is_local(it.index()))
+          *it = world.taskq.add(make_tile, it.make_range());
+
+      result = eval_result<EvalTensorOfTensorTA<ArrayT>>(array);
+    }
+
+    auto success = label_to_er_.emplace(label, result);
+    assert(success.second && "couldn't store ERPtr!");
+    //    std::cout << "label = [" << sequant::to_string(label)
+    //              << "] NotFound in cache. Creating.." << std::endl;
+    assert(success.first->second);
+    return success.first->second;
+  }
+
   ///
-  /// \param label eg. t_vvoo, f_ov
-  /// \return const ref to Tensor_t type tensor
-  /// \note The tensor should be already present in the yielder cache
-  ///       otherwise throws assertion error. To avoid that use the other
-  ///       overload of operator() that takes sequant::Tensor const&
+  /// \param label eg.
+  ///  - 't_vvoo', 'f_ov' for generic tensor key strings
+  ///  - 't{a1,a2;i1,i2}', 'f{i1;a1}' supported by sequant::parse_expr
+  ///
+  /// \return ERPtr
+  ///
+  /// \note The ERPtr should already exist in the cache otherwise throws.
+  ///       This overload is only intended to access already existing ERPtrs
+  ///       from the cache. To create a new cache entry use the
+  ///       operator()(Tesnor const&) overload.
+  ///
   sequant::ERPtr operator()(std::wstring_view label) const {
     auto&& found = label_to_er_.find(label.data());
     if (found == label_to_er_.end())
@@ -135,6 +212,7 @@ class rand_tensor_yield {
     return found->second;
   }
 };
+
 }  // namespace
 
 TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
@@ -153,12 +231,10 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
   // tnsr is assumed to be single-tiled
   auto norm = [](TArrayD const& tnsr) { return TA::norm2(tnsr); };
 
-  std::srand(2021);
-
   auto& world = TA::get_default_world();
 
   const size_t nocc = 2, nvirt = 20;
-  auto yield_ = rand_tensor_yield<TArrayD>{world, nocc, nvirt};
+  auto yield_ = rand_tensor_yield<double, TA::DensePolicy>{world, nocc, nvirt};
   auto yield = [&yield_](std::wstring_view lbl) -> TA::TArrayD const& {
     return yield_(lbl)->get<TA::TArrayD>();
   };
@@ -198,7 +274,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
     sum1_man("i1,a1") =
         yield(L"t{a1;i1}")("a1,i1") + yield(L"f{i1;a1}")("i1,a1");
 
-    REQUIRE(norm(sum1_man) == Approx(norm(sum1_eval)));
+    REQUIRE(norm(sum1_man) == Catch::Approx(norm(sum1_eval)));
 
     auto expr2 = parse_antisymm(L"2 * t_{a1}^{i1} + 3/2 * f_{i1}^{a1}");
 
@@ -208,7 +284,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
     sum2_man("i1,a1") =
         2 * yield(L"t{a1;i1}")("a1,i1") + 1.5 * yield(L"f{i1;a1}")("i1,a1");
 
-    REQUIRE(norm(sum2_man) == Approx(norm(sum2_eval)));
+    REQUIRE(norm(sum2_man) == Catch::Approx(norm(sum2_eval)));
   }
 
   SECTION("product") {
@@ -220,7 +296,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
                                yield(L"g{i2,i4;a2,a4}")("i2,i4,a2,a4") *
                                yield(L"t{a1,a2;i1,i2}")("a1,a2,i1,i2");
 
-    REQUIRE(norm(prod1_man) == Approx(norm(prod1_eval)));
+    REQUIRE(norm(prod1_man) == Catch::Approx(norm(prod1_eval)));
 
     auto expr2 = parse_antisymm(
         L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{ i3, i4}");
@@ -232,7 +308,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
                                yield(L"t{a2,a4;i1,i2}")("a2,a4,i1,i2") *
                                yield(L"t{a1,a3;i3,i4}")("a1,a3,i3,i4");
 
-    REQUIRE(norm(prod2_man) == Approx(norm(prod2_eval)));
+    REQUIRE(norm(prod2_man) == Catch::Approx(norm(prod2_eval)));
   }
 
   SECTION("sum and product") {
@@ -250,7 +326,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
                               yield(L"t{a1,a2;i3,i4}")("a1,a2,i3,i4") *
                               yield(L"t{a3,a4;i1,i2}")("a3,a4,i1,i2");
 
-    REQUIRE(norm(man1) == Approx(norm(eval1)));
+    REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
   }
 
   SECTION("variable at leaves") {
@@ -264,7 +340,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
         yield_d(L"α") * 2 * yield(L"t{a1;i1}")("a1,i1") * yield_d(L"β") +
         1.5 * yield(L"f{i1;a1}")("i1,a1");
 
-    REQUIRE(norm(sum2_man) == Approx(norm(sum2_eval)));
+    REQUIRE(norm(sum2_man) == Catch::Approx(norm(sum2_eval)));
   }
 
   SECTION("Antisymmetrization") {
@@ -278,13 +354,14 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
 
     man1("0,1,2,3") = 0.5 * man1("0,1,2,3");
 
-    REQUIRE(norm(man1) == Approx(norm(eval1)));
+    REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
 
     TArrayD zero1;
     zero1("0,1,2,3") = man1("0,1,2,3") - eval1("0,1,2,3");
 
-    // todo: Approx(0.0) == 0 fails. probably update catch2 version
-    // REQUIRE(Approx(norm(zero1)) == 0);
+    // https://github.com/catchorg/Catch2/issues/1444
+    REQUIRE(norm(zero1) == Catch::Approx(0).margin(
+                               100 * std::numeric_limits<double>::epsilon()));
 
     // partial antisymmetrization
 
@@ -299,7 +376,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
     man2("0,1,2,3,4,5") = arr2("0,1,2,3,4,5") - arr2("0,1,2,4,3,5") +
                           arr2("1,0,2,4,3,5") - arr2("1,0,2,3,4,5");
 
-    REQUIRE(norm(man2) == Approx(norm(eval2)));
+    REQUIRE(norm(man2) == Catch::Approx(norm(eval2)));
 
     TArrayD zero2;
     zero2("0,1,2,3,4,5") = man2("0,1,2,3,4,5") - eval2("0,1,2,3,4,5");
@@ -316,7 +393,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
     man1("0,1,2,3") = arr1("0,1,2,3") + arr1("1,0,3,2");
     man1("0,1,2,3") = 0.5 * man1("0,1,2,3");
 
-    REQUIRE(norm(man1) == Approx(norm(eval1)));
+    REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
 
     TArrayD zero1;
     zero1("0,1,2,3") = man1("0,1,2,3") - eval1("0,1,2,3");
@@ -342,7 +419,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
     man2("i,j,k,l,a,b,c,d") = arr2("i,j,k,l,a,b,c,d") +
                               arr2("i,j,l,k,a,b,d,c") + arr2("j,i,k,l,b,a,c,d");
 
-    REQUIRE(norm(man2) == Approx(norm(eval2)));
+    REQUIRE(norm(man2) == Catch::Approx(norm(eval2)));
 
     TArrayD zero2;
     zero2("i,j,k,l,a,b,c,d") =
@@ -368,7 +445,7 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
     auto eval2 =
         evaluate(nodes1, "i_1,i_2,a_1,a_2"s, yield_)->get<TA::TArrayD>();
 
-    REQUIRE(norm(eval1) == Approx(norm(eval2)));
+    REQUIRE(norm(eval1) == Catch::Approx(norm(eval2)));
   }
 }
 
@@ -376,11 +453,11 @@ TEST_CASE("TEST_EVAL_USING_TA_COMPLEX", "[eval]") {
   using TArrayC = TA::DistArray<TA::Tensor<std::complex<double>>>;
   auto norm = [](TArrayC const& tnsr) { return TA::norm2(tnsr); };
 
-  std::srand(2023);
   const size_t nocc = 2, nvirt = 20;
   auto& world = TA::get_default_world();
 
-  auto yield_ = rand_tensor_yield<TArrayC>{world, nocc, nvirt};
+  auto yield_ = rand_tensor_yield<std::complex<double>, TA::DensePolicy>{
+      world, nocc, nvirt};
 
   auto yield = [&yield_](std::wstring_view lbl) -> TArrayC const& {
     return yield_(lbl)->get<TArrayC>();
@@ -420,7 +497,7 @@ TEST_CASE("TEST_EVAL_USING_TA_COMPLEX", "[eval]") {
         yield(L"t{a1;i1}")("a1,i1") + yield(L"f{i1;a1}")("i1,a1");
 
     // todo:
-    REQUIRE(norm(sum1_man) == Approx(norm(sum1_eval)));
+    REQUIRE(norm(sum1_man) == Catch::Approx(norm(sum1_eval)));
 
     auto expr2 = parse_expr(L"2 * t_{a1}^{i1} + 3/2 * f_{i1}^{a1}");
 
@@ -430,7 +507,7 @@ TEST_CASE("TEST_EVAL_USING_TA_COMPLEX", "[eval]") {
     sum2_man("i1,a1") = std::complex<double>{2} * yield(L"t{a1;i1}")("a1,i1") +
                         std::complex<double>{1.5} * yield(L"f{i1;a1}")("i1,a1");
 
-    REQUIRE(norm(sum2_man) == Approx(norm(sum2_eval)));
+    REQUIRE(norm(sum2_man) == Catch::Approx(norm(sum2_eval)));
   }
 
   SECTION("product") {
@@ -442,7 +519,7 @@ TEST_CASE("TEST_EVAL_USING_TA_COMPLEX", "[eval]") {
                                yield(L"g{i2,i4;a2,a4}")("i2,i4,a2,a4") *
                                yield(L"t{a1,a2;i1,i2}")("a1,a2,i1,i2");
 
-    REQUIRE(norm(prod1_man) == Approx(norm(prod1_eval)));
+    REQUIRE(norm(prod1_man) == Catch::Approx(norm(prod1_eval)));
 
     auto expr2 = parse_expr(
         L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{ i3, i4}");
@@ -454,7 +531,7 @@ TEST_CASE("TEST_EVAL_USING_TA_COMPLEX", "[eval]") {
                                yield(L"t{a2,a4;i1,i2}")("a2,a4,i1,i2") *
                                yield(L"t{a1,a3;i3,i4}")("a1,a3,i3,i4");
 
-    REQUIRE(norm(prod2_man) == Approx(norm(prod2_eval)));
+    REQUIRE(norm(prod2_man) == Catch::Approx(norm(prod2_eval)));
   }
 
   SECTION("sum and product") {
@@ -474,7 +551,7 @@ TEST_CASE("TEST_EVAL_USING_TA_COMPLEX", "[eval]") {
                               yield(L"t{a1,a2;i3,i4}")("a1,a2,i3,i4") *
                               yield(L"t{a3,a4;i1,i2}")("a3,a4,i1,i2");
 
-    REQUIRE(norm(man1) == Approx(norm(eval1)));
+    REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
   }
 
   SECTION("Antisymmetrization") {
@@ -488,12 +565,12 @@ TEST_CASE("TEST_EVAL_USING_TA_COMPLEX", "[eval]") {
 
     man1("0,1,2,3") = std::complex<double>{0.5} * man1("0,1,2,3");
 
-    REQUIRE(norm(man1) == Approx(norm(eval1)));
+    REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
 
     TArrayC zero1;
     zero1("0,1,2,3") = man1("0,1,2,3") - eval1("0,1,2,3");
 
-    // todo: Approx(0.0) == 0 fails. probably update catch2 version
+    // todo: Catch::Approx(0.0) == 0 fails. probably update catch2 version
     // REQUIRE(Approx(norm(zero1)) == 0);
 
     // partial antisymmetrization
@@ -509,7 +586,7 @@ TEST_CASE("TEST_EVAL_USING_TA_COMPLEX", "[eval]") {
     man2("0,1,2,3,4,5") = arr2("0,1,2,3,4,5") - arr2("0,1,2,4,3,5") +
                           arr2("1,0,2,4,3,5") - arr2("1,0,2,3,4,5");
 
-    REQUIRE(norm(man2) == Approx(norm(eval2)));
+    REQUIRE(norm(man2) == Catch::Approx(norm(eval2)));
 
     TArrayC zero2;
     zero2("0,1,2,3,4,5") = man2("0,1,2,3,4,5") - eval2("0,1,2,3,4,5");
@@ -526,7 +603,7 @@ TEST_CASE("TEST_EVAL_USING_TA_COMPLEX", "[eval]") {
     man1("0,1,2,3") = arr1("0,1,2,3") + arr1("1,0,3,2");
     man1("0,1,2,3") = 0.5 * man1("0,1,2,3");
 
-    REQUIRE(norm(man1) == Approx(norm(eval1)));
+    REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
 
     TArrayC zero1;
     zero1("0,1,2,3") = man1("0,1,2,3") - eval1("0,1,2,3");
@@ -552,7 +629,7 @@ TEST_CASE("TEST_EVAL_USING_TA_COMPLEX", "[eval]") {
     man2("i,j,k,l,a,b,c,d") = arr2("i,j,k,l,a,b,c,d") +
                               arr2("i,j,l,k,a,b,d,c") + arr2("j,i,k,l,b,a,c,d");
 
-    REQUIRE(norm(man2) == Approx(norm(eval2)));
+    REQUIRE(norm(man2) == Catch::Approx(norm(eval2)));
 
     TArrayC zero2;
     zero2("i,j,k,l,a,b,c,d") =
@@ -567,7 +644,7 @@ TEST_CASE("TEST_EVAL_USING_TA_COMPLEX", "[eval]") {
     man3("i,j,k,a,b,c") = arr3("i,j,k,a,b,c") + arr3("i,k,j,a,c,b") +
                           arr3("j,i,k,b,a,c") + arr3("j,k,i,b,c,a") +
                           arr3("k,i,j,c,a,b") + arr3("k,j,i,c,b,a");
-    REQUIRE(norm(man3) == Approx(norm(eval3)));
+    REQUIRE(norm(man3) == Catch::Approx(norm(eval3)));
     TArrayC zero3;
     zero3("i,j,k,a,b,c") = eval3("i,j,k,a,b,c") - man3("i,j,k,a,b,c");
   }
@@ -588,6 +665,96 @@ TEST_CASE("TEST_EVAL_USING_TA_COMPLEX", "[eval]") {
 
     auto eval2 = evaluate(nodes1, "i_1,i_2,a_1,a_2"s, yield_)->get<TArrayC>();
 
-    REQUIRE(norm(eval1) == Approx(norm(eval2)));
+    REQUIRE(norm(eval1) == Catch::Approx(norm(eval2)));
+  }
+}
+
+TEST_CASE("TEST_EVAL_USING_TA_TOT", "[eval_tot]") {
+  using namespace sequant;
+
+  //
+  // eg: approx_equal("i,j;a,b", arr1, arr2)
+  // - arr1 and arr2 are DistArrays with equal TiledRange and matching Range for
+  //   the inner tensors at the corresponding tile positions.
+  // - 'i', 'j', 'a', and 'b' are dummy indices that annotate the modes of outer
+  //   and inner tensors. Why? Because TA::norm2 function is not supported for
+  //   tensor-of-tensor tiles
+  //
+  auto approx_equal = [](std::string const& annot, auto const& lhs,
+                         auto const& rhs) -> bool {
+    return Catch::Approx(lhs(annot).dot(lhs(annot))) ==
+           rhs(annot).dot(rhs(annot));
+  };
+
+  auto& world = TA::get_default_world();
+
+  size_t const nocc = 2;
+  size_t const nvirt = 3;
+
+  rand_tensor_yield<int> yield{world, nocc, nvirt};
+
+  using ArrayT = typename decltype(yield)::array_type;
+  using ArrayToT = typename decltype(yield)::array_tot_type;
+  using NumericT = typename decltype(yield)::numeric_type;
+
+  SECTION("T_times_ToT_to_ToT") {
+    constexpr std::wstring_view expr_str =
+        L"3"
+        L" * "
+        L"f{i3;i1}"
+        L" * "
+        L"t{a3<i2,i3>,a4<i2,i3>;i2,i3}";
+    auto const node = eval_node(parse_expr(expr_str));
+    std::string const target_layout{"i_1,i_2,i_3;a_3i_2i_3,a_4i_2i_3"};
+    auto result = evaluate(node, target_layout, yield)->get<ArrayToT>();
+    ArrayToT ref;
+    {
+      auto const& lhs = yield(L"f{i3;i1}")->get<ArrayT>();
+      auto const& rhs = yield(L"t{a3<i2,i3>,a4<i2,i3>;i2,i3}")->get<ArrayToT>();
+      ref = TA::einsum(lhs("i_3,i_1"), rhs("i_2,i_3;a_3i_2i_3,a_4i_2i_3"),
+                       target_layout);
+      ref(target_layout) = 3 * ref(target_layout);
+    }
+    REQUIRE(approx_equal("i,j,k;a,b", result, ref));
+  }
+
+  SECTION("ToT_times_ToT_to_ToT") {
+    constexpr std::wstring_view expr_str =
+        L"I{a4<i2,i3>,a1<i1,i2>;i1,i2}"
+        L" * "
+        L"s{a2<i1,i2>;a4<i2,i3>}";
+
+    auto const node = eval_node(parse_expr(expr_str));
+    std::string const target_layout{"i_2,i_1;a_1i_1i_2,a_2i_1i_2"};
+
+    auto result = evaluate(node, target_layout, yield)->get<ArrayToT>();
+
+    ArrayToT ref;
+    {
+      auto const& lhs = yield(L"I{a4<i2,i3>,a1<i1,i2>;i1,i2}")->get<ArrayToT>();
+      auto const& rhs = yield(L"s{a2<i1,i2>;a4<i2,i3>}")->get<ArrayToT>();
+      ref = TA::einsum(lhs("i_1,i_2,i_3;a_4i_2i_3,a_1i_1i_2"),
+                       rhs("i_1,i_2,i_3;a_2i_1i_2,a_4i_2i_3"), target_layout);
+    }
+    REQUIRE(approx_equal("i,j;a,b", result, ref));
+  }
+
+  SECTION("ToT_times_ToT_to_Scalar") {
+    constexpr std::wstring_view expr_str =
+        L"I{a1<i1,i2>,a2<i1,i2>;i1,i2}"
+        L" * "
+        L"g{i1,i2;a2<i1,i2>,a1<i1,i2>}";
+    auto const node = eval_node(parse_expr(expr_str));
+
+    auto result = evaluate(node, yield)->get<NumericT>();
+
+    NumericT ref;
+    {
+      auto const& lhs = yield(L"I{a1<i1,i2>,a2<i1,i2>;i1,i2}")->get<ArrayToT>();
+      auto const& rhs = yield(L"g{i1,i2;a2<i1,i2>,a1<i1,i2>}")->get<ArrayToT>();
+      ref = TA::dot(lhs("i_1,i_2;a_1i_1i_2,a_2i_1i_2"),
+                    rhs("i_1,i_2;a_2i_1i_2,a_1i_1i_2"));
+    }
+    REQUIRE(result == Catch::Approx(ref));
   }
 }

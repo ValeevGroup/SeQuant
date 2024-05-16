@@ -1,4 +1,5 @@
-#include "catch.hpp"
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_all.hpp>
 
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/parse_expr.hpp>
@@ -41,15 +42,14 @@ TEST_CASE("TEST GET_UNCONCTRACTED_INDICES", "[utilities]") {
 
   SECTION("partial_contraction") {
     auto [bra, ket, aux] = get_uncontracted_indices<std::vector<Index>>(
-        parse_tensor(L"t{i1,i2;a1,a2;x1,x2}"), parse_tensor(L"t{a1;i2;x2}")
-	);
+        parse_tensor(L"t{i1,i2;a1,a2;x1,x2}"), parse_tensor(L"t{a1;i2;x2}"));
 
     std::vector<Index> expectedBra = {Index(L"i_1")};
     std::vector<Index> expectedKet = {Index(L"a_2")};
     std::vector<Index> expectedAux = {Index(L"x_1")};
 
-    REQUIRE_THAT(bra, Catch::UnorderedEquals(expectedBra));
-    REQUIRE_THAT(ket, Catch::UnorderedEquals(expectedKet));
-    REQUIRE_THAT(aux, Catch::UnorderedEquals(expectedAux));
+    REQUIRE_THAT(bra, Catch::Matchers::UnorderedEquals(expectedBra));
+    REQUIRE_THAT(ket, Catch::Matchers::UnorderedEquals(expectedKet));
+    REQUIRE_THAT(aux, Catch::Matchers::UnorderedEquals(expectedAux));
   }
 }

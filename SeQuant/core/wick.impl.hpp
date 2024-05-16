@@ -7,10 +7,10 @@
 
 #include <SeQuant/core/bliss.hpp>
 #include <SeQuant/core/logger.hpp>
-#include <SeQuant/core/wick_graph.hpp>
-#include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/vertex_type.hpp>
+#include <SeQuant/core/wick_graph.hpp>
 
 #ifdef SEQUANT_HAS_EXECUTION_HEADER
 #include <execution>
@@ -587,8 +587,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
                 auto insertion_result = nop_vidx_ord.emplace(v, nop_ord++);
                 assert(insertion_result.second);
               }
-              if (vtypes[v] == VertexType::Index &&
-                  !input_.empty()) {
+              if (vtypes[v] == VertexType::Index && !input_.empty()) {
                 auto &idx = (tn_edges.begin() + v)->idx();
                 auto idx_it_in_opseq = ranges::find_if(
                     opseq_view,

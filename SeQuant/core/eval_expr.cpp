@@ -1,14 +1,14 @@
-#include <SeQuant/core/eval_expr.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/context.hpp>
+#include <SeQuant/core/eval_expr.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/tensor.hpp>
-#include <SeQuant/core/wstring.hpp>
 #include <SeQuant/core/utility/indices.hpp>
+#include <SeQuant/core/wstring.hpp>
 
 #include <range/v3/action.hpp>
 #include <range/v3/algorithm.hpp>
@@ -18,14 +18,14 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <iterator>
 #include <memory>
 #include <string_view>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 #include <vector>
-#include <cmath>
-#include <tuple>
 
 namespace sequant {
 
@@ -45,29 +45,53 @@ std::wstring_view const var_label = L"Z";
 
 }  // namespace
 
-template <
-    typename Iterable,
-    std::enable_if_t<!std::is_same_v<InnerOuterIndices, std::decay_t<Iterable>>,
-                     bool> = true>
-std::string indices_to_annot(Iterable const& indices) noexcept {
-  using ranges::views::intersperse;
-  using ranges::views::join;
-  using ranges::views::transform;
+NestedTensorIndices::NestedTensorIndices(const sequant::Tensor& tnsr) {
+  auto push_ix = [this](Index const& ix) {
+    if (ix.has_proto_indices())
+      inner.push_back(ix);
+    else
+      outer.push_back(ix);
+  };
 
-  auto idx_label = [](Index const& idx) { return to_string(idx.label()); };
+  for (auto const& ix : tnsr.const_braket()) {
+    push_ix(ix);
+    for (auto const& ix_proto : ix.proto_indices()) push_ix(ix_proto);
+  }
 
-  return indices | transform(idx_label) | intersperse(",") | join |
-         ranges::to<std::string>;
+  if (!inner.empty()) {
+    ranges::actions::stable_sort(outer, Index::LabelCompare{});
+    ranges::actions::unique(outer, [](Index const& ix1, Index const& ix2) {
+      return ix1.label() == ix2.label();
+    });
+  }
 }
 
-std::string indices_to_annot(InnerOuterIndices const& inout) noexcept {
-  auto const& in = inout.inner;
-  auto const& out = inout.outer;
-  if (out.empty()) {
-    return indices_to_annot(in);
-  } else {
-    return indices_to_annot(in) + ";" + indices_to_annot(out);
-  }
+std::string EvalExpr::braket_annot() const noexcept {
+  if (!is_tensor()) return {};
+
+  // given an iterable of sequant::Index objects, returns a string made
+  // of their full labels separated by comma
+  //   eg. (a_1^{i_1,i_2},a_2^{i_2,i_3}) -> "a_1i_1i_2,a_2i_2i_3"
+  //   eg. (i_1, i_2) -> "i_1,i_2"
+  auto annot = [](auto&& ixs) -> std::string {
+    using namespace ranges::views;
+
+    auto full_labels = ixs                              //
+                       | transform(&Index::full_label)  //
+                       | transform([](auto&& fl) {      //
+                           return sequant::to_string(fl);
+                         });
+    return full_labels                      //
+           | intersperse(std::string{","})  //
+           | join                           //
+           | ranges::to<std::string>;
+  };
+
+  auto nested = NestedTensorIndices{as_tensor()};
+
+  return nested.inner.empty()  //
+             ? annot(nested.outer)
+             : annot(nested.outer) + ";" + annot(nested.inner);
 }
 
 size_t EvalExpr::global_id_{};
@@ -145,29 +169,9 @@ Variable const& EvalExpr::as_variable() const noexcept {
   return expr().as<Variable>();
 }
 
-InnerOuterIndices EvalExpr::inner_outer_indices() const noexcept {
-  if (is_scalar()) return {};
-
-  assert(is_tensor());
-  auto const& t = expr()->as<Tensor>();
-
-  container::svector<Index> inner;
-  container::svector<Index> outer;
-  for (auto const& idx : t.const_indices()) {
-    inner.emplace_back(idx);
-    for (auto const& pidx : idx.proto_indices()) outer.emplace_back(pidx);
-  }
-  ranges::stable_sort(outer, Index::LabelCompare{});
-  ranges::actions::unique(outer);
-  ranges::actions::remove_if(
-      inner, [&outer](Index const& i) { return ranges::contains(outer, i); });
-  return {std::move(inner), std::move(outer)};
-}
-
 std::string EvalExpr::label() const noexcept {
   if (is_tensor())
-    return to_string(as_tensor().label()) + "(" +
-           indices_to_annot(inner_outer_indices()) + ")";
+    return to_string(as_tensor().label()) + "(" + braket_annot() + ")";
   else if (is_constant()) {
     auto const& c = as_constant();
     auto real = Constant{c.value().real()}.value<double>();

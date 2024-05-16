@@ -61,7 +61,7 @@ auto do_wick(bool use_nop_partitions, bool use_op_partitions) {
 
 static void BM_wick(benchmark::State &state) {
   for (auto _ : state) {
-	  benchmark::DoNotOptimize(do_wick(state.range(0), state.range(1)));
+    benchmark::DoNotOptimize(do_wick(state.range(0), state.range(1)));
   }
 }
 

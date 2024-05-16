@@ -2,8 +2,6 @@
 // Created by Nakul Teke on 12/20/19.
 //
 
-#include <SeQuant/core/parse_expr.hpp>
-#include <SeQuant/domain/mbpt/spin.hpp>
 #include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
@@ -11,12 +9,14 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/parse_expr.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/domain/mbpt/spin.hpp>
 
-#include "catch.hpp"
+#include <catch2/catch_test_macros.hpp>
 #include "test_config.hpp"
 #include "utils.hpp"
 
@@ -48,8 +48,9 @@ TEST_CASE("Spin", "[spin]") {
     Index i1(L"i_1", IndexSpace::instance(IndexSpace::active_occupied));
     Index a1(L"a_1", IndexSpace::instance(IndexSpace::active_unoccupied), {i1});
 
-    const auto expr = ex<Tensor>(L"t", IndexList{i1}, IndexList{a1}, IndexList{}) *
-                      ex<Tensor>(L"F", IndexList{a1}, IndexList{i1}, IndexList{});
+    const auto expr =
+        ex<Tensor>(L"t", IndexList{i1}, IndexList{a1}, IndexList{}) *
+        ex<Tensor>(L"F", IndexList{a1}, IndexList{i1}, IndexList{});
     REQUIRE_NOTHROW(spintrace(expr));
     {  // assume spin-free spaces
       auto expr_st = spintrace(expr);
@@ -739,14 +740,15 @@ SECTION("Closed-shell spintrace CCD") {
   // Energy expression
   {
     {  // standard
-		const auto input = ex<Sum>(ExprPtrList{parse_expr(
-			L"1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}", Symmetry::antisymm)});
-		auto result = closed_shell_CC_spintrace(input);
-		REQUIRE_SUM_EQUAL(result, to_latex(parse_expr(
-									  L"- g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_2,i_1} + "
-									  L"2 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}",
-									  Symmetry::nonsymm)));
-	}
+      const auto input = ex<Sum>(ExprPtrList{parse_expr(
+          L"1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}", Symmetry::antisymm)});
+      auto result = closed_shell_CC_spintrace(input);
+      REQUIRE_SUM_EQUAL(
+          result,
+          to_latex(parse_expr(L"- g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_2,i_1} + "
+                              L"2 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}",
+                              Symmetry::nonsymm)));
+    }
     {  // CSV (aka PNO)
       Index i1(L"i_1", IndexSpace::instance(IndexSpace::active_occupied));
       Index i2(L"i_2", IndexSpace::instance(IndexSpace::active_occupied));
@@ -756,10 +758,10 @@ SECTION("Closed-shell spintrace CCD") {
                {i1, i2});
       const auto pno_ccd_energy_so =
           ex<Constant>(rational(1, 4)) *
-          ex<Tensor>(L"g", IndexList{a1, a2}, IndexList{i1, i2},
-                     IndexList{}, Symmetry::antisymm) *
-          ex<Tensor>(L"t", IndexList{i1, i2}, IndexList{a1, a2},
-                     IndexList{}, Symmetry::antisymm);
+          ex<Tensor>(L"g", IndexList{a1, a2}, IndexList{i1, i2}, IndexList{},
+                     Symmetry::antisymm) *
+          ex<Tensor>(L"t", IndexList{i1, i2}, IndexList{a1, a2}, IndexList{},
+                     Symmetry::antisymm);
 
       // why???
       const auto pno_ccd_energy_so_as_sum =

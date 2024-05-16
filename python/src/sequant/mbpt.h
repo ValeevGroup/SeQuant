@@ -26,10 +26,9 @@ ExprPtr VacuumAverage(const ExprPtr& e, const Args&... args) {
   return sequant::mbpt::sr::vac_av(e, args...);
 }
 
-#define SR_OP(OP)                                                           \
-#OP, [](std::int64_t Rank) { return sequant::mbpt::sr::OP(Rank); },       \
-                                                                   py::arg( \
-                                                                       "Bra")
+#define SR_OP(OP)                                                     \
+  #OP, [](std::int64_t Rank) { return sequant::mbpt::sr::OP(Rank); }, \
+      py::arg("Bra")
 
 inline void __init__(py::module m) {
   sequant::mbpt::set_default_convention();

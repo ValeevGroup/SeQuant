@@ -9,10 +9,8 @@
 namespace sequant {
 
 std::tuple<std::shared_ptr<bliss::Graph>, std::vector<std::wstring>,
-           std::vector<std::size_t>,
-           std::vector<VertexType>>
-WickGraph::make_bliss_graph(
-    const named_indices_t *named_indices_ptr) const {
+           std::vector<std::size_t>, std::vector<VertexType>>
+WickGraph::make_bliss_graph(const named_indices_t *named_indices_ptr) const {
   // must call init_edges() prior to calling this
   if (edges_.empty()) {
     init_edges();

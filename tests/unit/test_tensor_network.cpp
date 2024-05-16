@@ -2,11 +2,10 @@
 // Created by Eduard Valeyev on 3/23/18.
 //
 
-#include "catch.hpp"
+#include <catch2/catch_test_macros.hpp>
 
 #include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/algorithm.hpp>
-#include <SeQuant/core/wick_graph.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/bliss.hpp>
 #include <SeQuant/core/context.hpp>
@@ -19,15 +18,18 @@
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/timer.hpp>
+#include <SeQuant/core/wick_graph.hpp>
 #include <SeQuant/domain/mbpt/sr.hpp>
 
-#include <iostream>
-#include <cstdlib>
 #include <algorithm>
 #include <cmath>
+#include <codecvt>
+#include <cstdlib>
 #include <initializer_list>
+#include <iostream>
 #include <iterator>
 #include <limits>
+#include <locale>
 #include <memory>
 #include <random>
 #include <sstream>
@@ -35,8 +37,6 @@
 #include <string>
 #include <tuple>
 #include <vector>
-#include <codecvt>
-#include <locale>
 
 #include <range/v3/all.hpp>
 

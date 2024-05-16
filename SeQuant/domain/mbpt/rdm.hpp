@@ -302,92 +302,93 @@ three_body_decomposition(ExprPtr ex_, int rank, bool fast = false) {
     }
     simplify(ex_);
 
+  } else if (rank == 2) {
+    if (fast) {
+      assert(ex_->is<FNOperator>());
+      // FNOp does not store a list of indices so I have to do this
+      auto down_0 = ex_->as<FNOperator>().annihilators()[0].index();
+      auto down_1 = ex_->as<FNOperator>().annihilators()[1].index();
+      auto down_2 = ex_->as<FNOperator>().annihilators()[2].index();
+
+      std::vector<Index> initial_lower{down_0, down_1, down_2};
+
+      auto up_0 = ex_->as<FNOperator>().creators()[0].index();
+      auto up_1 = ex_->as<FNOperator>().creators()[1].index();
+      auto up_2 = ex_->as<FNOperator>().creators()[2].index();
+
+      std::vector<Index> initial_upper{up_0, up_1, up_2};
+      initial_pairing.first = initial_lower;
+      initial_pairing.second = initial_upper;
+      // make tensors which can be decomposed into the constituent pieces later
+      // in the procedure.
+      auto DE2 = ex<Tensor>(L"DE2", IndexList{down_0, down_1, down_2},
+                            IndexList{up_0, up_1, up_2}, IndexList{});
+      auto DDE = ex<Tensor>(L"DDE", IndexList{down_0, down_1, down_2},
+                            IndexList{up_0, up_1, up_2}, IndexList{});
+      auto D2E = ex<Tensor>(L"D2E", IndexList{down_0, down_1, down_2},
+                            IndexList{up_0, up_1, up_2}, IndexList{});
+      auto result = DE2 + D2E - ex<Constant>(2) * DDE;
+      return {result, initial_pairing};
     }
-    else if (rank == 2) {
-      if (fast) {
-        assert(ex_->is<FNOperator>());
-        //FNOp does not store a list of indices so I have to do this
-        auto down_0 = ex_->as<FNOperator>().annihilators()[0].index();
-        auto down_1 = ex_->as<FNOperator>().annihilators()[1].index();
-        auto down_2 = ex_->as<FNOperator>().annihilators()[2].index();
-
-        std::vector<Index> initial_lower{down_0, down_1, down_2};
-
-        auto up_0 = ex_->as<FNOperator>().creators()[0].index();
-        auto up_1 = ex_->as<FNOperator>().creators()[1].index();
-        auto up_2 = ex_->as<FNOperator>().creators()[2].index();
-
-        std::vector<Index> initial_upper{up_0, up_1, up_2};
-        initial_pairing.first = initial_lower; initial_pairing.second = initial_upper;
-        // make tensors which can be decomposed into the constituent pieces later in the procedure.
-        auto DE2 = ex<Tensor>(L"DE2", IndexList{down_0,down_1,down_2}, IndexList{up_0,up_1,up_2}, IndexList{});
-        auto DDE = ex<Tensor>(L"DDE", IndexList{down_0,down_1,down_2}, IndexList{up_0,up_1,up_2}, IndexList{});
-        auto D2E =  ex<Tensor>(L"D2E", IndexList{down_0,down_1,down_2}, IndexList{up_0,up_1,up_2}, IndexList{});
-        auto result = DE2 + D2E - ex<Constant>(2) * DDE;
-        return {result,initial_pairing};
-      }
-      auto ex_pair = three_body_decomp(ex_, true);
-      ex_ = ex_pair.first;
-      initial_pairing = ex_pair.second;
-      simplify(ex_);
-      for (auto&& product : ex_->as<Sum>().summands()) {
-        if (product->is<Product>()) {
-          for (auto&& factor : product->as<Product>().factors()) {
-            if (factor->is<Tensor>()) {
-              if (factor->as<Tensor>().label() ==
-                      optype2label.at(OpType::RDMCumulant) &&
-                  factor->as<Tensor>().rank() > 2) {
-                factor = ex<Constant>(0);
-              } else if (factor->as<Tensor>().label() ==
-                             optype2label.at(OpType::RDMCumulant) &&
-                         factor->as<Tensor>().rank() == 2) {
-                factor = cumu2_to_density(factor);
-              } else if (factor->as<Tensor>().label() ==
-                         optype2label.at(OpType::RDMCumulant)) {
-                factor = cumu_to_density(factor);
-              } else {
-                assert(factor->as<Tensor>().label() !=
-                       optype2label.at(OpType::RDMCumulant));
-              }
+    auto ex_pair = three_body_decomp(ex_, true);
+    ex_ = ex_pair.first;
+    initial_pairing = ex_pair.second;
+    simplify(ex_);
+    for (auto&& product : ex_->as<Sum>().summands()) {
+      if (product->is<Product>()) {
+        for (auto&& factor : product->as<Product>().factors()) {
+          if (factor->is<Tensor>()) {
+            if (factor->as<Tensor>().label() ==
+                    optype2label.at(OpType::RDMCumulant) &&
+                factor->as<Tensor>().rank() > 2) {
+              factor = ex<Constant>(0);
+            } else if (factor->as<Tensor>().label() ==
+                           optype2label.at(OpType::RDMCumulant) &&
+                       factor->as<Tensor>().rank() == 2) {
+              factor = cumu2_to_density(factor);
+            } else if (factor->as<Tensor>().label() ==
+                       optype2label.at(OpType::RDMCumulant)) {
+              factor = cumu_to_density(factor);
+            } else {
+              assert(factor->as<Tensor>().label() !=
+                     optype2label.at(OpType::RDMCumulant));
             }
           }
         }
       }
-      simplify(ex_);
-      // std::wcout << " cumulant replacment: " << to_latex_align(_ex,20, 7) <<
-      // std::endl;
     }
-    else if (rank == 1) {
-      auto ex_pair = three_body_decomp(ex_, true);
-      ex_ = ex_pair.first;
-      initial_pairing = ex_pair.second;
-      simplify(ex_);
-      for (auto&& product : ex_->as<Sum>().summands()) {
-        if (product->is<Product>()) {
-          for (auto&& factor : product->as<Product>().factors()) {
-            if (factor->is<Tensor>()) {
-              if (factor->as<Tensor>().label() ==
-                      optype2label.at(OpType::RDMCumulant) &&
-                  factor->as<Tensor>().rank() > 1) {
-                factor = ex<Constant>(0);
-              } else if (factor->as<Tensor>().label() ==
-                         optype2label.at(OpType::RDMCumulant)) {
-                factor = cumu_to_density(factor);
-              } else {
-                assert(factor->as<Tensor>().label() !=
-                       optype2label.at(OpType::RDMCumulant));
-              }
+    simplify(ex_);
+    // std::wcout << " cumulant replacment: " << to_latex_align(_ex,20, 7) <<
+    // std::endl;
+  } else if (rank == 1) {
+    auto ex_pair = three_body_decomp(ex_, true);
+    ex_ = ex_pair.first;
+    initial_pairing = ex_pair.second;
+    simplify(ex_);
+    for (auto&& product : ex_->as<Sum>().summands()) {
+      if (product->is<Product>()) {
+        for (auto&& factor : product->as<Product>().factors()) {
+          if (factor->is<Tensor>()) {
+            if (factor->as<Tensor>().label() ==
+                    optype2label.at(OpType::RDMCumulant) &&
+                factor->as<Tensor>().rank() > 1) {
+              factor = ex<Constant>(0);
+            } else if (factor->as<Tensor>().label() ==
+                       optype2label.at(OpType::RDMCumulant)) {
+              factor = cumu_to_density(factor);
+            } else {
+              assert(factor->as<Tensor>().label() !=
+                     optype2label.at(OpType::RDMCumulant));
             }
           }
         }
       }
-      simplify(ex_);
     }
-    else {
-      throw "rank not supported!";
-    }
-    return {ex_, initial_pairing};
-
+    simplify(ex_);
+  } else {
+    throw "rank not supported!";
+  }
+  return {ex_, initial_pairing};
 }
 
 // in general a three body substitution can be approximated with 1, 2, or 3 body
@@ -404,14 +405,17 @@ ExprPtr three_body_substitution(ExprPtr& input, int rank, bool fast = false) {
   if (input == ex<Constant>(0)) {
     return input;
   }
-  if(fast){
+  if (fast) {
     assert(rank == 2);
     if (input->is<Sum>()) {
       for (auto&& product : input->as<Sum>().summands()) {
         if (product->is<Product>()) {
           for (auto&& factor : product->as<Product>().factors()) {
-            if (factor->is<FNOperator>() && (factor->as<FNOperator>().rank() ==3)) {  // find the 3-body terms
-              auto fac_pair = decompositions::three_body_decomposition(factor,rank,fast);  // decompose that term and replace the existing term.
+            if (factor->is<FNOperator>() && (factor->as<FNOperator>().rank() ==
+                                             3)) {  // find the 3-body terms
+              auto fac_pair = decompositions::three_body_decomposition(
+                  factor, rank,
+                  fast);  // decompose that term and replace the existing term.
               factor = fac_pair.first;
             }
           }
@@ -419,27 +423,26 @@ ExprPtr three_body_substitution(ExprPtr& input, int rank, bool fast = false) {
       }
       simplify(input);
       return input;
-    }
-    else if (input->is<Product>()) {
+    } else if (input->is<Product>()) {
       for (auto&& factor : input->as<Product>().factors()) {
         if (factor->is<FNOperator>() &&
             (factor->as<FNOperator>().rank() == 3)) {  // find the 3-body terms
           auto fac_pair = decompositions::three_body_decomposition(
-              factor,
-              rank,fast);  // decompose that term and replace the existing term.
+              factor, rank,
+              fast);  // decompose that term and replace the existing term.
           factor = fac_pair.first;
         }
       }
       simplify(input);
       return input;
-    }
-    else if (input->is<FNOperator>()) {
+    } else if (input->is<FNOperator>()) {
       auto fac_pair = decompositions::three_body_decomposition(
-          input, rank,fast);  // decompose that term and replace the existing term.
+          input, rank,
+          fast);  // decompose that term and replace the existing term.
       input = fac_pair.first;
       simplify(input);
       return input;
-      }
+    }
   }
   std::pair<std::vector<Index>, std::vector<Index>> initial_pairing;
   if (input->is<Sum>()) {

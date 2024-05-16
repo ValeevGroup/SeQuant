@@ -1,11 +1,11 @@
-#include "catch.hpp"
+#include <catch2/catch_test_macros.hpp>
 
-#include <SeQuant/core/optimize.hpp>
-#include <SeQuant/core/parse_expr.hpp>
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/optimize.hpp>
+#include <SeQuant/core/parse_expr.hpp>
 #include <SeQuant/core/space.hpp>
 
 #include <cstddef>
@@ -28,10 +28,9 @@ TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
 
   auto idx2size = [nocc = 10, nvirt = 140, nact = 4](Index const& idx) {
     if (idx.space() == IndexSpace::active_occupied) return nocc;
-    if (idx.space() == IndexSpace::active_unoccupied)
-      return nvirt;
+    if (idx.space() == IndexSpace::active_unoccupied) return nvirt;
     if (idx.space() == IndexSpace::all_active)
-        return nact;
+      return nact;
     else
       throw std::runtime_error("Unsupported IndexSpace type encountered");
   };
@@ -141,21 +140,24 @@ TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
     // single-term optimization including tensors with auxiliary indices
     //
     auto prod7 = parse_expr(
-            L"DF{a_1;a_3;x_1} " // T1
-            "DF{a_2;i_1;x_1} " // T2
-            "t{a_3;i_2}" // T3
-            )->as<Product>();
+                     L"DF{a_1;a_3;x_1} "  // T1
+                     "DF{a_2;i_1;x_1} "   // T2
+                     "t{a_3;i_2}"         // T3
+                     )
+                     ->as<Product>();
     auto res7 = single_term_opt(prod7);
 
     // this is the one we want to find
-    // (T1 T3) T2: V^2 O^1 A^1 + V^2 O^2 A^1 best if nvirt > nocc and nvirt > nact
+    // (T1 T3) T2: V^2 O^1 A^1 + V^2 O^2 A^1 best if nvirt > nocc and nvirt >
+    // nact
     REQUIRE(extract(res7, {0, 0}) == prod7.at(0));
     REQUIRE(extract(res7, {0, 1}) == prod7.at(2));
     REQUIRE(extract(res7, {1}) == prod7.at(1));
 
     auto prod8 = parse_expr(
-                L"T1{i_1;i_2;x_1,x_2,x_3,x_4} T2{i_2;i_1;x_5,x_6,x_7,x_8} T3{i_3;;x_1,x_2,x_3,x_4} T4{i_4;;x_5,x_6,x_7,x_8}"
-            )->as<Product>();
+                     L"T1{i_1;i_2;x_1,x_2,x_3,x_4} T2{i_2;i_1;x_5,x_6,x_7,x_8} "
+                     L"T3{i_3;;x_1,x_2,x_3,x_4} T4{i_4;;x_5,x_6,x_7,x_8}")
+                     ->as<Product>();
     auto res8 = single_term_opt(prod8);
 
     // this is the one we want to find

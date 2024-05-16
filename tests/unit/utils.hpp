@@ -25,8 +25,8 @@
   REQUIRE(to_latex(sum) == std::wstring(str))
 
 #define REQUIRE_TENSOR_EQUAL(tensor, spec) \
-  REQUIRE(sequant::to_latex(tensor) ==    \
-          sequant::to_latex(              \
+  REQUIRE(sequant::to_latex(tensor) ==     \
+          sequant::to_latex(               \
               sequant::parse_expr(spec, sequant::Symmetry::antisymm)));
 
 #endif

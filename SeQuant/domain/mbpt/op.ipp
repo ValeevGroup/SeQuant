@@ -5,9 +5,8 @@
 #ifndef SEQUANT_DOMAIN_MBPT_OP_IPP
 #define SEQUANT_DOMAIN_MBPT_OP_IPP
 
-#include <SeQuant/domain/mbpt/op.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
-
+#include <SeQuant/domain/mbpt/op.hpp>
 
 namespace sequant {
 namespace mbpt {

@@ -2,12 +2,12 @@
 // Created by Robert Adam on 2023-09-20
 //
 
-#include <SeQuant/core/parse_expr.hpp>
+#include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/parse/ast.hpp>
 #include <SeQuant/core/parse/ast_conversions.hpp>
 #include <SeQuant/core/parse/semantic_actions.hpp>
-#include <SeQuant/core/attr.hpp>
-#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/parse_expr.hpp>
 #include <SeQuant/core/space.hpp>
 
 #define BOOST_SPIRIT_X3_UNICODE
@@ -17,14 +17,14 @@
 #include <boost/variant.hpp>
 
 #include <cstddef>
+#include <functional>
+#include <iostream>
 #include <iterator>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
-#include <functional>
-#include <iostream>
 
 namespace sequant {
 

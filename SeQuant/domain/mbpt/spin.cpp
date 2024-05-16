@@ -124,7 +124,7 @@ ExprPtr transform_expr(const ExprPtr& expr,
   auto transform_tensor = [&index_replacements](const Tensor& tensor) {
     auto result = std::make_shared<Tensor>(tensor);
     result->transform_indices(index_replacements);
-	reset_tags(*result);
+    reset_tags(*result);
     return result;
   };
 
@@ -1733,7 +1733,7 @@ ExprPtr factorize_S(const ExprPtr& expression,
          const container::map<Index, Index>& replacement_map) {
         auto result = std::make_shared<Tensor>(tensor);
         result->transform_indices(replacement_map);
-		reset_tags(*result);
+        reset_tags(*result);
         return result;
       };
 

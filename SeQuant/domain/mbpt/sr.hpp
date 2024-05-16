@@ -274,6 +274,11 @@ ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1 = false);
 
 /// @}
 
+/// @return true if \p op_or_op_product can change quantum numbers from \p
+/// source_qns to \p target_qns
+bool can_change_qns(const ExprPtr& op_or_op_product, const qns_t target_qns,
+                    const qns_t source_qns = {});
+
 /// @return true if \p op_or_op_product can produce determinant of excitation
 /// rank \p k when applied to reference
 bool raises_vacuum_to_rank(const ExprPtr& op_or_op_product,

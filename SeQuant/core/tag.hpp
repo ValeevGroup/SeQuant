@@ -5,8 +5,8 @@
 #ifndef SEQUANT_TAG_HPP
 #define SEQUANT_TAG_HPP
 
-#include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/any.hpp>
+#include <SeQuant/core/meta.hpp>
 
 namespace sequant {
 

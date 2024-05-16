@@ -976,8 +976,10 @@ container::svector<std::pair<long, long>> TensorNetwork::factorize() {
   abort();  // not yet implemented
 }
 
-ExprPtr TensorNetwork::canonicalize_individual_tensor_blocks(const named_indices_t &named_indices) {
-  return do_individual_canonicalization(TensorBlockCanonicalizer(named_indices));
+ExprPtr TensorNetwork::canonicalize_individual_tensor_blocks(
+    const named_indices_t &named_indices) {
+  return do_individual_canonicalization(
+      TensorBlockCanonicalizer(named_indices));
 }
 
 ExprPtr TensorNetwork::canonicalize_individual_tensors(

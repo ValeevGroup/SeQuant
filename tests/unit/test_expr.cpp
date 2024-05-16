@@ -2,19 +2,19 @@
 // Created by Eduard Valeyev on 3/23/18.
 //
 
-#include "catch.hpp"
+#include <catch2/catch_test_macros.hpp>
 
-#include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/latex.hpp>
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/wolfram.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <algorithm>
 #include <initializer_list>
 #include <iterator>
 #include <memory>
