@@ -61,7 +61,7 @@ class IndexSpaceRegistry {
       : spaces_(std::make_shared<
                 container::set<IndexSpace, IndexSpace::KeyCompare>>()) {
     // register nullspace
-    this->add(nullspace);
+    this->add(IndexSpace::null);
   }
 
   /// constructs an IndexSpaceRegistry from an existing set of IndexSpace
@@ -458,7 +458,7 @@ class IndexSpaceRegistry {
   /// @return reference to `this`
   IndexSpaceRegistry& clear_registry() {
     spaces_->clear();
-    return this->add(nullspace);
+    return this->add(IndexSpace::null);
   }
 
   /// @brief Is the result of a binary operation null or not registered return
@@ -477,7 +477,7 @@ class IndexSpaceRegistry {
     bool same_qn = i1.qns() == i2.qns();
     if (!same_qn) return false;
     auto& temp_space = find_by_attr({bitop_int, i1.qns()});
-    return temp_space == nullspace ? false : true;
+    return temp_space == IndexSpace::null ? false : true;
   }
 
   /// @brief return the resulting space corresponding to a bitwise intersection
@@ -492,50 +492,17 @@ class IndexSpaceRegistry {
     if (space1 == space2) {
       return space1;
     } else {
+      const auto target_qns = space1.qns().intersection(space2.qns());
       bool same_qns = space1.qns() == space2.qns();
-      if (!same_qns) {  // spaces with different quantum numbers do not
-                        // intersect.
-        return nullspace;
+      if (!target_qns && !same_qns) {  // spaces with different quantum numbers
+                                       // do not intersect.
+        return IndexSpace::null;
       }
       auto intersection_attr = space1.type().intersection(space2.type());
       const IndexSpace& intersection_space =
           find_by_attr({intersection_attr, space1.qns()});
       // the nullspace is a reasonable return value for intersection
-      if (intersection_space == nullspace && intersection_attr) {
-        throw std::invalid_argument(
-            "The resulting space is not registered in this context. Add this "
-            "space to the registry with a label to use it.");
-      } else {
-        return intersection_space;
-      }
-    }
-  }
-
-  ///@brief return the resulting space corresponding to a bitwise intersection
-  /// between two spaces.
-  /// @param space1
-  /// @param space2
-  /// @param space3
-  /// @return the resulting space after intesection
-  /// @note can return nullspace
-  /// @note throw invalid_argument if the bitwise result is not registered
-  const IndexSpace& intersection(const IndexSpace& space1,
-                                 const IndexSpace& space2,
-                                 const IndexSpace& space3) const {
-    if (space1 == space2 && space1 == space3) {
-      return space1;
-    } else {
-      bool same_qns =
-          ((space1.qns() == space2.qns()) && (space1.qns() == space3.qns()));
-      if (!same_qns) {  // spaces with different quantum numbers do not
-                        // intersect.
-        return nullspace;
-      }
-      auto intersection_attr =
-          space1.type().intersection(space2.type()).intersection(space3.type());
-      const IndexSpace& intersection_space =
-          find_by_attr({intersection_attr, space1.qns()});
-      if (intersection_space == nullspace && intersection_attr) {
+      if (intersection_space == IndexSpace::null && intersection_attr) {
         throw std::invalid_argument(
             "The resulting space is not registered in this context. Add this "
             "space to the registry with a label to use it.");
@@ -563,7 +530,7 @@ class IndexSpaceRegistry {
       }
       auto unIontype = space1.type().unIon(space2.type());
       const IndexSpace& unIonSpace = find_by_attr({unIontype, space1.qns()});
-      if (unIonSpace == nullspace) {
+      if (unIonSpace == IndexSpace::null) {
         throw std::invalid_argument(
             "The resulting space is not registered in this context. Add this "
             "space to the registry with a label to use it.");
@@ -585,7 +552,7 @@ class IndexSpaceRegistry {
     std::vector<IndexSpace> result;
     for (int i = 0; i < attributes.size(); i++) {
       auto excluded_space = find_by_attr(attributes[i]);
-      if (excluded_space == nullspace) {
+      if (excluded_space == IndexSpace::null) {
         throw std::invalid_argument(
             "The resulting space is not registered in this context. Add this "
             "space to the registry with a label to use it.");
@@ -599,14 +566,14 @@ class IndexSpaceRegistry {
   /// @note does not probe the registry for these spaces
   bool has_non_overlapping_spaces(const IndexSpace& space1,
                                   const IndexSpace& space2) const {
-    return space1.type().exclusionary_or(space2.type()).to_int32() != 0;
+    return space1.type().xOr(space2.type()).to_int32() != 0;
   }
 
   ///@brief an @c IndexSpace is occupied with respect to the fermi vacuum or a
   /// subset of that space
   /// @note only makes sense to ask this if in a SingleProduct vacuum context.
   bool is_pure_occupied(const IndexSpace& IS) const {
-    if (IS == nullspace) {
+    if (!IS) {
       return false;
     }
     if (IS.type().to_int32() <=
@@ -621,18 +588,17 @@ class IndexSpaceRegistry {
   ///@note again, this only makes sense to ask if in a SingleProduct vacuum
   /// context.
   bool is_pure_unoccupied(const IndexSpace& IS) const {
-    if (IS == nullspace) {
+    if (!IS) {
       return false;
     } else {
-      return IS.type().intersection(vacuum_occupied_space(IS.qns()).type()) ==
-             nulltype;
+      return !IS.type().intersection(vacuum_occupied_space(IS.qns()).type());
     }
   }
 
   ///@brief some states are fermi vacuum occupied
   bool contains_occupied(const IndexSpace& IS) const {
     return IS.type().intersection(vacuum_occupied_space(IS.qns()).type()) !=
-           nulltype;
+           IndexSpace::Type::null;
   }
 
   ///@brief some states are fermi vacuum unoccupied
@@ -692,8 +658,8 @@ class IndexSpaceRegistry {
   /// vacuum_occupied_space had not been specified
   const IndexSpace::Type& vacuum_occupied_space(
       bool nulltype_ok = false) const {
-    if (std::get<0>(vacocc_) == nulltype) {
-      if (nulltype_ok) return nulltype;
+    if (!std::get<0>(vacocc_)) {
+      if (nulltype_ok) return IndexSpace::Type::null;
       throw std::invalid_argument(
           "vacuum occupied space has not been specified, invoke "
           "vacuum_occupied_space(IndexSpace::Type) or "
@@ -770,8 +736,8 @@ class IndexSpaceRegistry {
   /// reference_occupied_space had not been specified
   const IndexSpace::Type& reference_occupied_space(
       bool nulltype_ok = false) const {
-    if (std::get<0>(refocc_) == nulltype) {
-      if (nulltype_ok) return nulltype;
+    if (!std::get<0>(refocc_)) {
+      if (nulltype_ok) return IndexSpace::Type::null;
       throw std::invalid_argument(
           "reference occupied space has not been specified, invoke "
           "reference_occupied_space(IndexSpace::Type) or "
@@ -839,8 +805,8 @@ class IndexSpaceRegistry {
   /// @throw std::invalid_argument if @p nulltype_ok is false and complete_space
   /// had not been specified
   const IndexSpace::Type& complete_space(bool nulltype_ok = false) const {
-    if (std::get<0>(complete_) == nulltype) {
-      if (nulltype_ok) return nulltype;
+    if (!std::get<0>(complete_)) {
+      if (nulltype_ok) return IndexSpace::Type::null;
       throw std::invalid_argument(
           "complete space has not been specified, call "
           "complete_space(IndexSpace::Type)");
@@ -904,8 +870,8 @@ class IndexSpaceRegistry {
   /// @throw std::invalid_argument if @p nulltype_ok is false and
   /// hole_space had not been specified
   const IndexSpace::Type& hole_space(bool nulltype_ok = false) const {
-    if (std::get<0>(hole_space_) == nulltype) {
-      if (nulltype_ok) return nulltype;
+    if (!std::get<0>(hole_space_)) {
+      if (nulltype_ok) return IndexSpace::Type::null;
       throw std::invalid_argument(
           "active hole space has not been specified, invoke "
           "hole_space(IndexSpace::Type) or "
@@ -972,8 +938,8 @@ class IndexSpaceRegistry {
   /// @throw std::invalid_argument if @p nulltype_ok is false and
   /// particle_space had not been specified
   const IndexSpace::Type& particle_space(bool nulltype_ok = false) const {
-    if (std::get<0>(particle_space_) == nulltype) {
-      if (nulltype_ok) return nulltype;
+    if (!std::get<0>(particle_space_)) {
+      if (nulltype_ok) return IndexSpace::Type::null;
       throw std::invalid_argument(
           "active particle space has not been specified, invoke "
           "particle_space(IndexSpace::Type) or "
@@ -997,8 +963,6 @@ class IndexSpaceRegistry {
 
   /// @}
 
-  const static IndexSpace nullspace;
-
  private:
   // N.B. need transparent comparator, see https://stackoverflow.com/a/35525806
   std::shared_ptr<container::set<IndexSpace, IndexSpace::KeyCompare>> spaces_;
@@ -1011,8 +975,6 @@ class IndexSpaceRegistry {
     base_spaces_.reset();
     return *this;
   }
-
-  const static IndexSpace::Type nulltype;
 
   /// TODO use c++20 std::has_single_bit() when we update to this version
   static bool has_single_bit(std::uint32_t bits) {
@@ -1027,7 +989,7 @@ class IndexSpaceRegistry {
         return space;
       }
     }
-    return nullspace;
+    return IndexSpace::null;
   }
 
   void throw_if_missing(const IndexSpace::Type& t,
@@ -1096,26 +1058,26 @@ class IndexSpaceRegistry {
   // defines active bits in TypeAttr; used by general operators in mbpt/op
   std::tuple<IndexSpace::Type,
              std::map<IndexSpace::QuantumNumbers, IndexSpace::Type>>
-      complete_ = {nulltype, {}};
+      complete_ = {{}, {}};
 
   // used for fermi vacuum wick application
   std::tuple<IndexSpace::Type,
              std::map<IndexSpace::QuantumNumbers, IndexSpace::Type>>
-      vacocc_ = {nulltype, {}};
+      vacocc_ = {{}, {}};
 
   // used for MR MBPT to take average over multiconfiguration reference
   std::tuple<IndexSpace::Type,
              std::map<IndexSpace::QuantumNumbers, IndexSpace::Type>>
-      refocc_ = {nulltype, {}};
+      refocc_ = {{}, {}};
 
   // both needed to make excitation and de-excitation operators. not
   // necessarily equivalent in the case of multi-reference context.
   std::tuple<IndexSpace::Type,
              std::map<IndexSpace::QuantumNumbers, IndexSpace::Type>>
-      particle_space_ = {nulltype, {}};
+      particle_space_ = {{}, {}};
   std::tuple<IndexSpace::Type,
              std::map<IndexSpace::QuantumNumbers, IndexSpace::Type>>
-      hole_space_ = {nulltype, {}};
+      hole_space_ = {{}, {}};
 
   // Boost.Hana snippet to process attribute tag arguments
   template <typename ArgsHanaTuple>
@@ -1176,9 +1138,6 @@ class IndexSpaceRegistry {
     return *isr1.spaces_ == *isr2.spaces_;
   }
 };
-
-inline const IndexSpace IndexSpaceRegistry::nullspace{L"", 0, 0};
-inline const IndexSpace::Type IndexSpaceRegistry::nulltype{0};
 
 }  // namespace sequant
 #endif  // SEQUANT_INDEX_SPACE_REGISTRY_HPP

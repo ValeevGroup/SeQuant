@@ -19,6 +19,8 @@
 
 namespace sequant {
 
+struct QuantumNumbersAttr;
+
 /// @brief TypeAttr denotes the type of index space.
 ///
 /// This class models a host (complete) space partitioned into disjoint
@@ -31,12 +33,18 @@ struct TypeAttr {
   /// default ctor creates a null TypeAttr
   constexpr TypeAttr() noexcept = default;
 
+  /// the null object
+  const static TypeAttr null;
+
   explicit constexpr TypeAttr(bitset_t value) noexcept : bitset(value) {}
 
+  /// construct TypeAddr from things that can be cast to bitset_t, but exclude
+  /// bool and QUantumNumbersAttr
   template <typename T,
             typename = std::enable_if_t<
                 meta::is_statically_castable_v<std::decay_t<T>, bitset_t> &&
-                !std::is_same_v<std::decay_t<T>, bool>>>
+                !std::is_same_v<std::decay_t<T>, bool> &&
+                !std::is_same_v<std::decay_t<T>, QuantumNumbersAttr>>>
   constexpr TypeAttr(T &&value) noexcept
       : bitset(static_cast<bitset_t>(std::forward<T>(value))) {}
 
@@ -46,14 +54,14 @@ struct TypeAttr {
   constexpr explicit operator bitset_t() const { return bitset; }
   constexpr int32_t to_int32() const { return bitset; }
 
-  /// @return true if this object is non-null
+  /// @return true if this object is non-null (i.e. has any bits set)
   constexpr explicit operator bool() const { return bitset != 0; }
 
   constexpr TypeAttr(const TypeAttr &other) { bitset = other.to_int32(); }
   constexpr const TypeAttr unIon(TypeAttr other) const {
     return TypeAttr(this->to_int32() | other.to_int32());
   }
-  constexpr const TypeAttr exclusionary_or(TypeAttr other) const {
+  constexpr const TypeAttr xOr(TypeAttr other) const {
     return TypeAttr(this->to_int32() xor other.to_int32());
   }
   constexpr const TypeAttr intersection(TypeAttr other) const {
@@ -75,10 +83,9 @@ struct TypeAttr {
   friend constexpr bool operator<(TypeAttr a, TypeAttr b) {
     return a.to_int32() < b.to_int32();
   }
-
-  /// @return an invalid TypeAttr
-  constexpr static TypeAttr invalid() noexcept { return TypeAttr(0xffff); }
 };
+
+inline const TypeAttr TypeAttr::null;
 
 /// denotes other quantum numbers (particle type, spin, etc.)
 struct QuantumNumbersAttr {
@@ -86,7 +93,10 @@ struct QuantumNumbersAttr {
   bitset_t bitset = 0;
 
   /// default ctor creates a null QuantumNumbersAttr
+  /// @post `static_cast<bool>(*this) == false`
   constexpr QuantumNumbersAttr() noexcept = default;
+
+  const static QuantumNumbersAttr null;
 
   explicit constexpr QuantumNumbersAttr(bitset_t value) noexcept
       : bitset(value) {}
@@ -103,6 +113,10 @@ struct QuantumNumbersAttr {
   }
   constexpr explicit operator bitset_t() const { return bitset; }
   constexpr int32_t to_int32() const { return bitset; }
+
+  /// @return true if this object is non-null (i.e. has any bits set)
+  constexpr explicit operator bool() const { return bitset != 0; }
+
   constexpr QuantumNumbersAttr intersection(QuantumNumbersAttr other) const {
     return QuantumNumbersAttr(this->to_int32() & other.to_int32());
   }
@@ -131,12 +145,9 @@ struct QuantumNumbersAttr {
                                   QuantumNumbersAttr rhs) {
     return lhs.to_int32() < rhs.to_int32();
   }
-
-  /// @return an invalid TypeAttr
-  constexpr static QuantumNumbersAttr invalid() noexcept {
-    return QuantumNumbersAttr(-0);
-  }
 };
+
+inline const QuantumNumbersAttr QuantumNumbersAttr::null;
 
 /// @brief a collection of attributes which define a space of (1-particle)
 /// states
@@ -152,14 +163,6 @@ class IndexSpace {
   using TypeAttr = sequant::TypeAttr;
   using QuantumNumbersAttr = sequant::QuantumNumbersAttr;
 
-  template <typename S, typename = meta::EnableIfAnyStringConvertible<S>>
-  IndexSpace(S &&type_label, TypeAttr typeattr,
-             QuantumNumbersAttr qnattr = QuantumNumbersAttr{0},
-             unsigned long approximate_size = 10)
-      : attr_(typeattr, qnattr),
-        base_key_(sequant::to_wstring(std::forward<S>(type_label))),
-        approximate_size_(approximate_size) {}
-
   /// @brief Attr describes all attributes of a space (occupancy + quantum
   /// numbers)
   struct Attr : TypeAttr, QuantumNumbersAttr {
@@ -167,11 +170,16 @@ class IndexSpace {
         : TypeAttr(type), QuantumNumbersAttr(qns){};
     Attr(int32_t type, int32_t qns) noexcept
         : TypeAttr(type), QuantumNumbersAttr(qns){};
+
+    /// @brief default ctor creates a null Attr
+    /// @post `static_cast<bool>(*this) == false`
     Attr() = default;
     Attr(const Attr &) = default;
     Attr(Attr &&) = default;
     Attr &operator=(const Attr &) = default;
     Attr &operator=(Attr &&) = default;
+
+    const static Attr null;
 
     const TypeAttr &type() const {
       return static_cast<const TypeAttr &>(*this);
@@ -184,9 +192,14 @@ class IndexSpace {
       return static_cast<QuantumNumbersAttr &>(*this);
     }
 
-    explicit operator int64_t() const {
+    constexpr explicit operator int64_t() const {
       return (static_cast<int64_t>(this->type()) << 32) +
              static_cast<int64_t>(this->qns());
+    }
+
+    /// @return true if either `type()` or `qns()` is non-null
+    constexpr explicit operator bool() const {
+      return static_cast<bool>(this->type()) || static_cast<bool>(this->qns());
     }
 
     Attr intersection(Attr other) const {
@@ -220,7 +233,7 @@ class IndexSpace {
       // the two spaces unchanged order smallest to largest
       // TODO try and break this in unit tests
       if (this->type().unIon(other.type()).to_int32() ==
-          this->exclusionary_or(other).to_int32()) {
+          this->xOr(other).to_int32()) {
         if (this->type().to_int32() < other.type().to_int32()) {
           result.push_back(*this);
           result.push_back(other);
@@ -230,7 +243,7 @@ class IndexSpace {
         }
         return result;
       }
-      std::bitset<32> xor_bitset(this->exclusionary_or(other).to_int32());
+      std::bitset<32> xor_bitset(this->xOr(other).to_int32());
       std::vector<std::pair<int, int>> start_stop_ranges;
       /// TODO need to make a cleaner implementation here.
       // std::bitset does not have an iterator
@@ -274,12 +287,6 @@ class IndexSpace {
       return this->type() == other.type() && this->qns() == other.qns();
     }
     bool operator!=(Attr other) const { return !(*this == other); }
-
-    static Attr null() noexcept { return Attr{0, 0}; }
-    static Attr invalid() noexcept {
-      return Attr{TypeAttr::invalid(), QuantumNumbersAttr::invalid()};
-    }
-    bool is_valid() const noexcept { return *this != Attr::invalid(); }
 
     /// Attr objects are ordered by quantum numbers, then by type
     bool operator<(Attr other) const {
@@ -339,19 +346,23 @@ class IndexSpace {
 
   bool operator!=(IndexSpace IS) const { return !(*this == IS); }
 
-  Attr attr() const noexcept {
-    assert(attr_.is_valid());
-    return attr_;
-  }
+  Attr attr() const noexcept { return attr_; }
   Type type() const noexcept { return attr().type(); }
   QuantumNumbers qns() const noexcept { return attr().qns(); }
 
-  /// Default ctor creates space with nonnull type and null quantum numbers
-  IndexSpace() {
-    attr_ = {0x7fffffff, 0b00};
-    base_key_ = L"";
-    approximate_size_ = 0;
-  }
+  /// Default ctor creates null space (with null label, type and quantum
+  /// numbers)
+  constexpr IndexSpace() noexcept {}
+
+  const static IndexSpace null;
+
+  template <typename S, typename = meta::EnableIfAnyStringConvertible<S>>
+  IndexSpace(S &&type_label, TypeAttr typeattr,
+             QuantumNumbersAttr qnattr = QuantumNumbersAttr{0},
+             unsigned long approximate_size = 10)
+      : attr_(typeattr, qnattr),
+        base_key_(sequant::to_wstring(std::forward<S>(type_label))),
+        approximate_size_(approximate_size) {}
 
   IndexSpace(const IndexSpace &other) = default;
   IndexSpace(IndexSpace &&other) = default;
@@ -380,7 +391,7 @@ class IndexSpace {
   unsigned long approximate_size() const { return approximate_size_; }
 
  private:
-  Attr attr_ = Attr::invalid();
+  Attr attr_;
   std::wstring base_key_;
   std::size_t approximate_size_;
 
@@ -388,6 +399,9 @@ class IndexSpace {
     return std::wstring(key.begin(), key.end());
   }
 };
+
+inline const IndexSpace IndexSpace::null;
+inline const IndexSpace::Attr IndexSpace::Attr::null;
 
 /// @return true if type2 is included in type1, i.e. intersection(type1, type2)
 /// == type2

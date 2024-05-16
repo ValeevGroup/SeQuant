@@ -481,10 +481,7 @@ class Index : public Taggable {
   }
 
   /// @return the IndexSpace object
-  const IndexSpace &space() const {
-    assert(space_.attr().is_valid());
-    return space_;
-  }
+  const IndexSpace &space() const { return space_; }
 
   /// @return true if this index has proto indices
   bool has_proto_indices() const { return !proto_indices_.empty(); }
@@ -747,8 +744,6 @@ class Index : public Taggable {
   /// for both), then by space, then by label, then by protoindices (if any)
   friend bool operator<(const Index &i1, const Index &i2) {
     // compare qns, tags and spaces in that sequence
-    assert(i1.space().attr().is_valid());
-    assert(i2.space().attr().is_valid());
 
     auto i1_Q = i1.space().qns();
     auto i2_Q = i2.space().qns();
