@@ -89,6 +89,10 @@ TEST_CASE("IndexSpace", "[elements]") {
     auto isr = sequant::mbpt::make_F12_sr_spaces();
     REQUIRE(isr->retrieve(L"i") ==
             isr->intersection(isr->retrieve(L"i"), isr->retrieve(L"p")));
+    REQUIRE(isr->intersection(isr->retrieve(L"p↑"), isr->retrieve(L"p↓")) ==
+            isr->nullspace);
+    REQUIRE(isr->intersection(isr->retrieve(L"i↑"), isr->retrieve(L"p")) ==
+            isr->retrieve(L"i↑"));
     REQUIRE(isr->nullspace ==
             isr->intersection(isr->retrieve(L"a"), isr->retrieve(L"i")));
     REQUIRE(isr->nullspace ==
@@ -115,17 +119,7 @@ TEST_CASE("IndexSpace", "[elements]") {
                                         isr->retrieve(L"α"))[1] ==
             isr->retrieve(L"α'"));
 
-    auto union_func = [](int32_t a, int32_t b) { return a + b; };
-    REQUIRE(!isr->valid_bitop(isr->retrieve(L"i"), isr->retrieve(L"α'"),
-                              union_func));
-    REQUIRE(
-        isr->valid_bitop(isr->retrieve(L"i"), isr->retrieve(L"a"), union_func));
-
-    auto intersection_func = [](int32_t a, int32_t b) { return a & b; };
-    REQUIRE(!isr->valid_bitop(isr->retrieve(L"i"), isr->retrieve(L"g"),
-                              intersection_func));
-    REQUIRE(isr->valid_bitop(isr->retrieve(L"i"), isr->retrieve(L"m"),
-                             intersection_func));
+    REQUIRE(isr->valid_intersection(isr->retrieve(L"i"), isr->retrieve(L"p")));
 
     REQUIRE(isr->valid_unIon(isr->retrieve(L"i"), isr->retrieve(L"a")));
     REQUIRE(isr->valid_unIon(isr->retrieve(L"i↑"), isr->retrieve(L"i↓")));

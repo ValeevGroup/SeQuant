@@ -436,30 +436,28 @@ class IndexSpaceRegistry {
     return this->add(nullspace);
   }
 
-  /// @brief Is the result of a binary operation null or not registered return
-  /// false.
-  /// a user may wish to know if an operation returns a space they have
-  /// registered.
-  /// @param i1 IndexSpace
-  /// @param i2 IndexSpace
-  /// @param op a function which takes two int32 as arguments and returns an
-  /// int32
-  /// @note IndexSpaces must have the same @c QuantumNumberAttr to be a valid
-  /// bitop
-  bool valid_bitop(const IndexSpace& i1, const IndexSpace& i2,
-                   const std::function<int32_t(int32_t, int32_t)>& op) {
-    auto bitop_int = op(i1.type().to_int32(), i2.type().to_int32());
-    bool same_qn = i1.qns() == i2.qns();
-    if (!same_qn) return false;
-    auto& temp_space = find_by_attr({bitop_int, i1.qns()});
-    return temp_space == nullspace ? false : true;
+  ///@brief is the intersection space registered
+  ///@param space1
+  ///@param space2
+  ///@return true if registered
+  ///@note intersection is always allowed
+  bool valid_intersection(const IndexSpace& space1,
+                          const IndexSpace& space2) const {
+    auto result_attr = space1.attr().intersection(space2.attr());
+    // nullspace is a valid intersection result
+    if (find_by_attr(result_attr) != nullspace ||
+        result_attr.type() == nullspace.type() ||
+        result_attr.qns() == nullspace.qns())
+      return true;
+    else
+      return false;
   }
 
   /// @brief return the resulting space corresponding to a bitwise intersection
   /// between two spaces.
   /// @param space1
   /// @param space2
-  /// @return the resulting space after intesection
+  /// @return the resulting space after intersection
   /// @note can return nullspace
   /// @note throw invalid_argument if the bitwise result is not registered
   const IndexSpace& intersection(const IndexSpace& space1,
@@ -467,50 +465,20 @@ class IndexSpaceRegistry {
     if (space1 == space2) {
       return space1;
     } else {
-      bool same_qns = space1.qns() == space2.qns();
-      if (!same_qns) {  // spaces with different quantum numbers do not
-                        // intersect.
+      auto type_intersection = space1.type().intersection(space2.type());
+      auto qns_intersection = space1.qns().intersection(space2.qns());
+      if (type_intersection == TypeAttr(0) ||
+          qns_intersection ==
+              QuantumNumbersAttr(0)) {  // if either type or qns do not
+                                        // intersect, resulting space is null
+                                        // intersect.
         return nullspace;
       }
-      auto intersection_attr = space1.type().intersection(space2.type());
-      const IndexSpace& intersection_space =
-          find_by_attr({intersection_attr, space1.qns()});
-      // the nullspace is a reasonable return value for intersection
-      if (intersection_space == nullspace && intersection_attr != 0) {
-        throw std::invalid_argument(
-            "The resulting space is not registered in this context. Add this "
-            "space to the registry with a label to use it.");
-      } else {
-        return intersection_space;
-      }
-    }
-  }
 
-  ///@brief return the resulting space corresponding to a bitwise intersection
-  /// between two spaces.
-  /// @param space1
-  /// @param space2
-  /// @param space3
-  /// @return the resulting space after intesection
-  /// @note can return nullspace
-  /// @note throw invalid_argument if the bitwise result is not registered
-  const IndexSpace& intersection(const IndexSpace& space1,
-                                 const IndexSpace& space2,
-                                 const IndexSpace& space3) const {
-    if (space1 == space2 && space1 == space3) {
-      return space1;
-    } else {
-      bool same_qns =
-          ((space1.qns() == space2.qns()) && (space1.qns() == space3.qns()));
-      if (!same_qns) {  // spaces with different quantum numbers do not
-                        // intersect.
-        return nullspace;
-      }
-      auto intersection_attr =
-          space1.type().intersection(space2.type()).intersection(space3.type());
+      // check the registry
       const IndexSpace& intersection_space =
-          find_by_attr({intersection_attr, space1.qns()});
-      if (intersection_space == nullspace && intersection_attr != 0) {
+          find_by_attr({type_intersection, qns_intersection});
+      if (intersection_space == nullspace) {
         throw std::invalid_argument(
             "The resulting space is not registered in this context. Add this "
             "space to the registry with a label to use it.");
@@ -523,7 +491,7 @@ class IndexSpaceRegistry {
   ///@brief is a union between spaces eligible and registered
   ///@param space1
   ///@param space2
-  ///@return bool
+  ///@return true if space is constructable and registered
   bool valid_unIon(const IndexSpace& space1, const IndexSpace& space2) const {
     // check typeattr
     if (!space1.type().includes(space2.type()) &&
