@@ -144,6 +144,19 @@ class IndexSpaceRegistry {
     return clear_memoized_data_and_return_this();
   }
 
+  /// @brief add an IndexSpace to this registry.
+  /// @param type_label a label that will denote the space type,
+  ///                   must be convertible to a std::string
+  /// @param type an IndexSpace::Type
+  /// @param args optional arguments consisting of a mix of zero or more of
+  /// the following:
+  ///   - IndexSpace::QuantumNumbers
+  ///   - approximate size of the space (unsigned long)
+  ///   - any of { is_vacuum_occupied , is_reference_occupied , is_complete ,
+  ///   is_hole , is_particle }
+  /// @return reference to `this`
+  /// @throw std::invalid_argument if `type_label` or `type` matches
+  /// an already registered IndexSpace
   template <typename S, typename... OptionalArgs,
             typename = meta::EnableIfAnyStringConvertible<S>>
   IndexSpaceRegistry& add(S&& type_label, IndexSpace::Type type,
@@ -189,39 +202,27 @@ class IndexSpaceRegistry {
       return !boost::hana::traits::is_integral(
           boost::hana::type_c<decltype(arg)>);
     });
-    boost::hana::for_each(h_nonints, [this, &type](auto arg) {
-      if constexpr (boost::hana::type_c<decltype(arg)> ==
-                    boost::hana::type_c<space_tags::IsVacuumOccupied>) {
-        this->vacuum_occupied_space(type);
-      } else if constexpr (boost::hana::type_c<decltype(arg)> ==
-                           boost::hana::type_c<
-                               space_tags::IsReferenceOccupied>) {
-        this->reference_occupied_space(type);
-      } else if constexpr (boost::hana::type_c<decltype(arg)> ==
-                           boost::hana::type_c<space_tags::IsComplete>) {
-        this->complete_space(type);
-      } else if constexpr (boost::hana::type_c<decltype(arg)> ==
-                           boost::hana::type_c<space_tags::IsHole>) {
-        this->hole_space(type);
-      } else if constexpr (boost::hana::type_c<decltype(arg)> ==
-                           boost::hana::type_c<space_tags::IsParticle>) {
-        this->particle_space(type);
-      } else {
-        static_assert(meta::always_false<decltype(arg)>::value,
-                      "IndexSpaceRegistry::add: unknown tag");
-      }
-    });
+    process_attribute_tags(h_nonints, type);
 
     return clear_memoized_data_and_return_this();
   }
 
+  /// @brief add a union of IndexSpace objects to this registry.
+  /// @param type_label a label that will denote the space type,
+  ///                   must be convertible to a std::string
+  /// @param components sequence of IndexSpace objects or labels (known to this)
+  /// whose union will be known by @p type_label
+  /// @param args optional arguments consisting of a mix of zero or more of
+  /// { is_vacuum_occupied , is_reference_occupied , is_complete , is_hole ,
+  /// is_particle }
+  /// @return reference to `this`
   template <typename S, typename IndexSpaceOrLabel, typename... OptionalArgs,
             typename = meta::EnableIfAnyStringConvertible<S>,
             typename = std::enable_if_t<
                 (std::is_same_v<std::decay_t<IndexSpaceOrLabel>, IndexSpace> ||
                  meta::is_basic_string_convertible_v<
                      std::decay_t<IndexSpaceOrLabel>>)>>
-  IndexSpaceRegistry& add_union(
+  IndexSpaceRegistry& add_unIon(
       S&& type_label, std::initializer_list<IndexSpaceOrLabel> components,
       OptionalArgs&&... args) {
     assert(components.size() > 1);
@@ -232,6 +233,10 @@ class IndexSpaceRegistry {
     IndexSpace::Attr space_attr;
     unsigned long approximate_size = 10;
     long count = 0;
+    if (components.size() <= 1) {
+      throw std::invalid_argument(
+          "IndexSpaceRegistry::add_union: must have at least two components");
+    }
     for (auto&& component : components) {
       const IndexSpace* component_ptr;
       if constexpr (std::is_same_v<std::decay_t<IndexSpaceOrLabel>,
@@ -244,12 +249,10 @@ class IndexSpaceRegistry {
         space_attr = component_ptr->attr();
       else
         space_attr = space_attr.unIon(component_ptr->attr());
-      approximate_size +=
-          component_ptr->approximate_size();  // this assumes that every
-                                              // component is a base space
-
       ++count;
     }
+    // TODO compute approximate_size
+
     IndexSpace space(std::forward<S>(type_label), space_attr.type(),
                      space_attr.qns(), approximate_size);
     this->add(space);
@@ -260,28 +263,83 @@ class IndexSpaceRegistry {
       return !boost::hana::traits::is_integral(
           boost::hana::type_c<decltype(arg)>);
     });
-    boost::hana::for_each(h_nonints, [this, &type](auto arg) {
-      if constexpr (boost::hana::type_c<decltype(arg)> ==
-                    boost::hana::type_c<space_tags::IsVacuumOccupied>) {
-        this->vacuum_occupied_space(type);
-      } else if constexpr (boost::hana::type_c<decltype(arg)> ==
-                           boost::hana::type_c<
-                               space_tags::IsReferenceOccupied>) {
-        this->reference_occupied_space(type);
-      } else if constexpr (boost::hana::type_c<decltype(arg)> ==
-                           boost::hana::type_c<space_tags::IsComplete>) {
-        this->complete_space(type);
-      } else if constexpr (boost::hana::type_c<decltype(arg)> ==
-                           boost::hana::type_c<space_tags::IsHole>) {
-        this->hole_space(type);
-      } else if constexpr (boost::hana::type_c<decltype(arg)> ==
-                           boost::hana::type_c<space_tags::IsParticle>) {
-        this->particle_space(type);
+    process_attribute_tags(h_nonints, type);
+
+    return clear_memoized_data_and_return_this();
+  }
+
+  /// alias to add_unIon
+  template <typename S, typename IndexSpaceOrLabel, typename... OptionalArgs,
+            typename = meta::EnableIfAnyStringConvertible<S>,
+            typename = std::enable_if_t<
+                (std::is_same_v<std::decay_t<IndexSpaceOrLabel>, IndexSpace> ||
+                 meta::is_basic_string_convertible_v<
+                     std::decay_t<IndexSpaceOrLabel>>)>>
+  IndexSpaceRegistry& add_union(
+      S&& type_label, std::initializer_list<IndexSpaceOrLabel> components,
+      OptionalArgs&&... args) {
+    return this->add_unIon(std::forward<S>(type_label), components,
+                           std::forward<OptionalArgs>(args)...);
+  }
+
+  /// @brief add a union of IndexSpace objects to this registry.
+  /// @param type_label a label that will denote the space type,
+  ///                   must be convertible to a std::string
+  /// @param components sequence of IndexSpace objects or labels (known to this)
+  /// whose intersection will be known by @p type_label
+  /// @param args optional arguments consisting of a mix of zero or more of
+  /// { is_vacuum_occupied , is_reference_occupied , is_complete , is_hole ,
+  /// is_particle }
+  /// @return reference to `this`
+  template <typename S, typename IndexSpaceOrLabel, typename... OptionalArgs,
+            typename = meta::EnableIfAnyStringConvertible<S>,
+            typename = std::enable_if_t<
+                (std::is_same_v<std::decay_t<IndexSpaceOrLabel>, IndexSpace> ||
+                 meta::is_basic_string_convertible_v<
+                     std::decay_t<IndexSpaceOrLabel>>)>>
+  IndexSpaceRegistry& add_intersection(
+      S&& type_label, std::initializer_list<IndexSpaceOrLabel> components,
+      OptionalArgs&&... args) {
+    assert(components.size() > 1);
+
+    auto h_args = boost::hana::make_tuple(args...);
+
+    // make space
+    IndexSpace::Attr space_attr;
+    unsigned long approximate_size = 10;
+    long count = 0;
+    if (components.size() <= 1) {
+      throw std::invalid_argument(
+          "IndexSpaceRegistry::add_intersection: must have at least two "
+          "components");
+    }
+    for (auto&& component : components) {
+      const IndexSpace* component_ptr;
+      if constexpr (std::is_same_v<std::decay_t<IndexSpaceOrLabel>,
+                                   IndexSpace>) {
+        component_ptr = &component;
       } else {
-        static_assert(meta::always_false<decltype(arg)>::value,
-                      "IndexSpaceRegistry::add: unknown tag");
+        component_ptr = &(this->retrieve(component));
       }
+      if (count == 0)
+        space_attr = component_ptr->attr();
+      else
+        space_attr = space_attr.intersection(component_ptr->attr());
+      ++count;
+    }
+    // TODO compute approximate_size
+
+    IndexSpace space(std::forward<S>(type_label), space_attr.type(),
+                     space_attr.qns(), approximate_size);
+    this->add(space);
+    auto type = space.type();
+
+    // process non-integer tags
+    auto h_nonints = boost::hana::filter(h_args, [](auto arg) {
+      return !boost::hana::traits::is_integral(
+          boost::hana::type_c<decltype(arg)>);
     });
+    process_attribute_tags(h_nonints, type);
 
     return clear_memoized_data_and_return_this();
   }
@@ -378,7 +436,7 @@ class IndexSpaceRegistry {
     return this->add(nullspace);
   }
 
-  ///@brief Is the result of a binary operation null or not registered return
+  /// @brief Is the result of a binary operation null or not registered return
   /// false.
   /// a user may wish to know if an operation returns a space they have
   /// registered.
@@ -397,7 +455,7 @@ class IndexSpaceRegistry {
     return temp_space == nullspace ? false : true;
   }
 
-  ///@brief return the resulting space corresponding to a bitwise intersection
+  /// @brief return the resulting space corresponding to a bitwise intersection
   /// between two spaces.
   /// @param space1
   /// @param space2
@@ -1033,6 +1091,35 @@ class IndexSpaceRegistry {
   std::tuple<IndexSpace::Type,
              std::map<IndexSpace::QuantumNumbers, IndexSpace::Type>>
       hole_space_ = {nulltype, {}};
+
+  // Boost.Hana snippet to process attribute tag arguments
+  template <typename ArgsHanaTuple>
+  void process_attribute_tags(ArgsHanaTuple h_tuple,
+                              const IndexSpace::Type& type) {
+    boost::hana::for_each(h_tuple, [this, &type](auto arg) {
+      if constexpr (boost::hana::type_c<decltype(arg)> ==
+                    boost::hana::type_c<space_tags::IsVacuumOccupied>) {
+        this->vacuum_occupied_space(type);
+      } else if constexpr (boost::hana::type_c<decltype(arg)> ==
+                           boost::hana::type_c<
+                               space_tags::IsReferenceOccupied>) {
+        this->reference_occupied_space(type);
+      } else if constexpr (boost::hana::type_c<decltype(arg)> ==
+                           boost::hana::type_c<space_tags::IsComplete>) {
+        this->complete_space(type);
+      } else if constexpr (boost::hana::type_c<decltype(arg)> ==
+                           boost::hana::type_c<space_tags::IsHole>) {
+        this->hole_space(type);
+      } else if constexpr (boost::hana::type_c<decltype(arg)> ==
+                           boost::hana::type_c<space_tags::IsParticle>) {
+        this->particle_space(type);
+      } else {
+        static_assert(meta::always_false<decltype(arg)>::value,
+                      "IndexSpaceRegistry::add{,_union,_intersect}: unknown "
+                      "attribute tag");
+      }
+    });
+  }
 
   friend bool operator==(const IndexSpaceRegistry& isr1,
                          const IndexSpaceRegistry& isr2) {
