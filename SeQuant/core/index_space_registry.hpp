@@ -57,8 +57,8 @@ constexpr auto is_particle = IsParticle{};
 class IndexSpaceRegistry {
  public:
   IndexSpaceRegistry()
-      : spaces_(
-            std::make_shared<std::set<IndexSpace, IndexSpace::KeyCompare>>()) {
+      : spaces_(std::make_shared<
+                container::set<IndexSpace, IndexSpace::KeyCompare>>()) {
     // register nullspace
     this->add(nullspace);
   }
@@ -66,7 +66,8 @@ class IndexSpaceRegistry {
   /// constructs an IndexSpaceRegistry from an existing set of IndexSpace
   /// objects
   IndexSpaceRegistry(
-      std::shared_ptr<std::set<IndexSpace, IndexSpace::KeyCompare>> spaces)
+      std::shared_ptr<container::set<IndexSpace, IndexSpace::KeyCompare>>
+          spaces)
       : spaces_(std::move(spaces)) {}
 
   IndexSpaceRegistry(const IndexSpaceRegistry& other) = default;
@@ -976,7 +977,7 @@ class IndexSpaceRegistry {
 
  private:
   // N.B. need transparent comparator, see https://stackoverflow.com/a/35525806
-  std::shared_ptr<std::set<IndexSpace, IndexSpace::KeyCompare>> spaces_;
+  std::shared_ptr<container::set<IndexSpace, IndexSpace::KeyCompare>> spaces_;
 
   // memoized data
   mutable std::optional<std::vector<IndexSpace::Type>> base_space_types_;
