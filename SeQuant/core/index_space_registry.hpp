@@ -8,6 +8,7 @@
 #include "space.hpp"
 
 #include <range/v3/algorithm/sort.hpp>
+#include <range/v3/numeric/accumulate.hpp>
 #include <range/v3/range/conversion.hpp>
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/transform.hpp>
@@ -110,6 +111,25 @@ class IndexSpaceRegistry {
           "IndexSpaceRegistry::retrieve(type,qn): missing { IndexSpace::Type=" +
           std::to_string(type.to_int32()) + " , IndexSpace::QuantumNumbers=" +
           std::to_string(qns.to_int32()) + " } combination");
+    }
+    return *it;
+  }
+
+  /// @brief retrieve an IndexSpace from the registry by the IndexSpace::Attr
+  /// @param space_attr an IndexSpace::Attr
+  /// @return IndexSpace associated with that key.
+  /// @throw std::invalid_argument if matching space is not found
+  const IndexSpace& retrieve(const IndexSpace::Attr& space_attr) const {
+    auto it = std::find_if(
+        spaces_->begin(), spaces_->end(),
+        [&space_attr](const IndexSpace& s) { return s.attr() == space_attr; });
+    using std::cend;
+    if (it == cend(*spaces_)) {
+      throw std::invalid_argument(
+          "IndexSpaceRegistry::retrieve(attr): missing { IndexSpace::Type=" +
+          std::to_string(space_attr.type().to_int32()) +
+          " , IndexSpace::QuantumNumbers=" +
+          std::to_string(space_attr.qns().to_int32()) + " } combination");
     }
     return *it;
   }
@@ -232,7 +252,6 @@ class IndexSpaceRegistry {
 
     // make space
     IndexSpace::Attr space_attr;
-    unsigned long approximate_size = 10;
     long count = 0;
     if (components.size() <= 1) {
       throw std::invalid_argument(
@@ -252,7 +271,7 @@ class IndexSpaceRegistry {
         space_attr = space_attr.unIon(component_ptr->attr());
       ++count;
     }
-    // TODO compute approximate_size
+    const auto approximate_size = compute_approximate_size(space_attr);
 
     IndexSpace space(std::forward<S>(type_label), space_attr.type(),
                      space_attr.qns(), approximate_size);
@@ -307,7 +326,6 @@ class IndexSpaceRegistry {
 
     // make space
     IndexSpace::Attr space_attr;
-    unsigned long approximate_size = 10;
     long count = 0;
     if (components.size() <= 1) {
       throw std::invalid_argument(
@@ -328,7 +346,7 @@ class IndexSpaceRegistry {
         space_attr = space_attr.intersection(component_ptr->attr());
       ++count;
     }
-    // TODO compute approximate_size
+    const auto approximate_size = compute_approximate_size(space_attr);
 
     IndexSpace space(std::forward<S>(type_label), space_attr.type(),
                      space_attr.qns(), approximate_size);
@@ -1120,6 +1138,31 @@ class IndexSpaceRegistry {
                       "attribute tag");
       }
     });
+  }
+
+  /// @brief computes the approximate size of the space
+
+  /// for a base space return its extent, for a composite space compute as a sum
+  /// of extents of base subspaces
+  /// @param s an IndexSpace object
+  /// @return the approximate size of the space
+  unsigned long compute_approximate_size(
+      const IndexSpace::Attr& space_attr) const {
+    if (is_base(space_attr.type())) {
+      return this->retrieve(space_attr).approximate_size();
+    } else {
+      // compute_approximate_size is used when populating the registry
+      // so don't use base_spaces() here
+      unsigned long size = ranges::accumulate(
+          *spaces_ | ranges::views::filter([&space_attr](auto& s) {
+            return s.qns() == space_attr.qns() && is_base(s) &&
+                   space_attr.type().intersection(s.type());
+          }),
+          0ul, [](unsigned long size, const IndexSpace& s) {
+            return size + s.approximate_size();
+          });
+      return size;
+    }
   }
 
   friend bool operator==(const IndexSpaceRegistry& isr1,
