@@ -28,7 +28,7 @@ void SequantEvalScf::scf(std::basic_ostream<wchar_t>& log) {
   size_t const norm_precision = 10;
   size_t const norm_print_width = double_print_width;
 
-  static std::wstring const header_str = [this, iter_print_width]() {
+  static std::wstring const header_str = [iter_print_width]() {
     auto oss = std::wostringstream{};
 
     oss << std::setw(iter_print_width) << std::right << "Iter"
@@ -59,8 +59,6 @@ void SequantEvalScf::scf(std::basic_ostream<wchar_t>& log) {
         << std::endl;
   };
 
-  auto t_beg_scf = HRC::now();
-
   if (info_.log_opts.level > 0) log << header_str << std::endl;
 
   double ediff = 0;
@@ -88,7 +86,6 @@ void SequantEvalScf::scf(std::basic_ostream<wchar_t>& log) {
       log_iter(iter, energy_, ediff, norm_diff, t_beg_iter, t_end_iter);
   } while (!converged_ && iter < info_.scf_opts.max_iter);
   //  reset_cache_all();
-  auto t_end_scf = HRC::now();
   if (info_.log_opts.level > 0)
     log << std::wstring(20, L'-') << "\n"
         << "Delta(CC) = " << std::setprecision(double_precision)

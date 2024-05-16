@@ -43,7 +43,7 @@ int main(int argc, char* argv[]) {
   const size_t NMAX = argc > 1 ? std::atoi(argv[1]) : DEFAULT_NMAX;
 
   /// Make external index
-  auto ext_idx_list = [](const int i_max) {
+  [[maybe_unused]] auto ext_idx_list = [](const int i_max) {
     container::svector<container::svector<Index>> ext_idx_list;
     const auto& isr = get_default_context().index_space_registry();
     for (size_t i = 1; i <= i_max; ++i) {

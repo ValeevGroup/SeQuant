@@ -632,7 +632,6 @@ ExprPtr P(std::int64_t K) {
 
 ExprPtr A(std::int64_t K) {
   const auto& isr = get_default_context().index_space_registry();
-  const auto& base_spaces = isr->base_spaces();
   assert(K != 0);
   container::svector<IndexSpace> creators;
   container::svector<IndexSpace> annihilators;
@@ -659,7 +658,6 @@ ExprPtr A(std::int64_t K) {
 
 ExprPtr S(std::int64_t K) {
   const auto& isr = get_default_context().index_space_registry();
-  const auto& base_spaces = isr->base_spaces();
   assert(K != 0);
   container::svector<IndexSpace> creators;
   container::svector<IndexSpace> annihilators;
@@ -822,7 +820,6 @@ ExprPtr F(bool use_f_tensor, IndexSpace occupied_density) {
 
 ExprPtr A(std::int64_t K) {
   const auto& isr = get_default_context().index_space_registry();
-  const auto& base_spaces = isr->base_spaces();
   assert(K != 0);
   return ex<op_t>([]() -> std::wstring_view { return L"A"; },
                   [=]() -> ExprPtr { return TensorOp::A(K); },
