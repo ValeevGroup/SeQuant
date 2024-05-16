@@ -61,6 +61,10 @@ TEST_CASE("IndexSpace", "[elements]") {
     REQUIRE(isr->retrieve(L"x").approximate_size() ==
             isr->retrieve(L"i").approximate_size() +
                 isr->retrieve(L"a").approximate_size());
+    REQUIRE(isr->vacuum_occupied_space(IndexSpace::QuantumNumbers::null) ==
+            isr->retrieve(L"m"));
+    REQUIRE(isr->vacuum_unoccupied_space(IndexSpace::QuantumNumbers::null) ==
+            isr->retrieve(L"e"));
   }
 
   SECTION("equality") {

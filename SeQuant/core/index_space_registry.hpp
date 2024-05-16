@@ -603,11 +603,8 @@ class IndexSpaceRegistry {
 
   ///@brief some states are fermi vacuum unoccupied
   bool contains_unoccupied(const IndexSpace& IS) const {
-    if (IS == nullspace) {
-      return false;
-    } else {
-      return vacuum_occupied_space(IS.qns()).type() < IS.type();
-    }
+    return IS.type().intersection(vacuum_unoccupied_space(IS.qns()).type()) !=
+           IndexSpace::Type::null;
   }
 
   /// @name  specifies which spaces have nonzero occupancy in the vacuum wave
@@ -826,6 +823,16 @@ class IndexSpaceRegistry {
   }
 
   /// @}
+
+  /// @return the space that is unoccupied in the vacuum state
+  const IndexSpace& vacuum_unoccupied_space(
+      const IndexSpace::QuantumNumbers& qn) const {
+    auto complete_type = this->complete_space(qn).type();
+    auto vacocc_type = this->vacuum_occupied_space(qn).type();
+    auto vacuocc_type =
+        complete_type.xOr(vacocc_type).intersection(complete_type);
+    return this->retrieve(vacuocc_type, qn);
+  }
 
   /// @name specifies in which space holes can be created successfully from the
   /// reference wave function
