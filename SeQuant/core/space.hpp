@@ -44,7 +44,10 @@ struct TypeAttr {
     return static_cast<int64_t>(bitset);
   }
   constexpr explicit operator bitset_t() const { return bitset; }
-  constexpr const int32_t to_int32() const { return bitset; }
+  constexpr int32_t to_int32() const { return bitset; }
+
+  /// @return true if this object is non-null
+  constexpr explicit operator bool() const { return bitset != 0; }
 
   constexpr TypeAttr(const TypeAttr &other) { bitset = other.to_int32(); }
   constexpr const TypeAttr unIon(TypeAttr other) const {

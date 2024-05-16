@@ -476,7 +476,7 @@ class IndexSpaceRegistry {
       const IndexSpace& intersection_space =
           find_by_attr({intersection_attr, space1.qns()});
       // the nullspace is a reasonable return value for intersection
-      if (intersection_space == nullspace && intersection_attr != 0) {
+      if (intersection_space == nullspace && intersection_attr) {
         throw std::invalid_argument(
             "The resulting space is not registered in this context. Add this "
             "space to the registry with a label to use it.");
@@ -510,7 +510,7 @@ class IndexSpaceRegistry {
           space1.type().intersection(space2.type()).intersection(space3.type());
       const IndexSpace& intersection_space =
           find_by_attr({intersection_attr, space1.qns()});
-      if (intersection_space == nullspace && intersection_attr != 0) {
+      if (intersection_space == nullspace && intersection_attr) {
         throw std::invalid_argument(
             "The resulting space is not registered in this context. Add this "
             "space to the registry with a label to use it.");
