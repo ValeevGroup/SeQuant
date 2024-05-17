@@ -461,30 +461,26 @@ class IndexSpaceRegistry {
     return this->add(IndexSpace::null);
   }
 
-  /// @brief Is the result of a binary operation null or not registered return
-  /// false.
-  /// a user may wish to know if an operation returns a space they have
-  /// registered.
-  /// @param i1 IndexSpace
-  /// @param i2 IndexSpace
-  /// @param op a function which takes two int32 as arguments and returns an
-  /// int32
-  /// @note IndexSpaces must have the same @c QuantumNumberAttr to be a valid
-  /// bitop
-  bool valid_bitop(const IndexSpace& i1, const IndexSpace& i2,
-                   const std::function<int32_t(int32_t, int32_t)>& op) {
-    auto bitop_int = op(i1.type().to_int32(), i2.type().to_int32());
-    bool same_qn = i1.qns() == i2.qns();
-    if (!same_qn) return false;
-    auto& temp_space = find_by_attr({bitop_int, i1.qns()});
-    return temp_space == IndexSpace::null ? false : true;
+  ///@brief is the intersection space registered
+  ///@param space1
+  ///@param space2
+  ///@return true if registered
+  ///@note intersection is always allowed
+  bool valid_intersection(const IndexSpace& space1,
+                          const IndexSpace& space2) const {
+    auto result_attr = space1.attr().intersection(space2.attr());
+    // nullspace is a valid intersection result
+    if (find_by_attr(result_attr) || !result_attr.type() || !result_attr.qns())
+      return true;
+    else
+      return false;
   }
 
   /// @brief return the resulting space corresponding to a bitwise intersection
   /// between two spaces.
   /// @param space1
   /// @param space2
-  /// @return the resulting space after intesection
+  /// @return the resulting space after intersection
   /// @note can return nullspace
   /// @note throw invalid_argument if the bitwise result is not registered
   const IndexSpace& intersection(const IndexSpace& space1,
@@ -498,6 +494,8 @@ class IndexSpaceRegistry {
                                        // do not intersect.
         return IndexSpace::null;
       }
+
+      // check the registry
       auto intersection_attr = space1.type().intersection(space2.type());
       const IndexSpace& intersection_space =
           find_by_attr({intersection_attr, space1.qns()});
@@ -509,6 +507,37 @@ class IndexSpaceRegistry {
       } else {
         return intersection_space;
       }
+    }
+  }
+
+  ///@brief is a union between spaces eligible and registered
+  ///@param space1
+  ///@param space2
+  ///@return true if space is constructable and registered
+  bool valid_unIon(const IndexSpace& space1, const IndexSpace& space2) const {
+    // check typeattr
+    if (!space1.type().includes(space2.type()) &&
+        space1.qns() == space2.qns()) {
+      // union possible
+      auto union_type = space1.type().unIon(space2.type());
+      IndexSpace::Attr union_attr{union_type, space1.qns()};
+      if (!find_by_attr(union_attr)) {  // possible but not registered
+        return false;
+      } else
+        return true;
+    }
+    // check qn
+    else if (!space1.qns().includes(space2.qns()) &&
+             space1.type() == space2.type()) {
+      // union possible
+      auto union_qn = space1.qns().unIon(space2.qns());
+      IndexSpace::Attr union_attr{space1.type(), union_qn};
+      if (!find_by_attr(union_attr)) {  // possible but not registered
+        return false;
+      } else
+        return true;
+    } else {  // union not mathematically allowed.
+      return false;
     }
   }
 
@@ -988,8 +1017,8 @@ class IndexSpaceRegistry {
     return bits & (((bool)(bits & (bits - 1))) - 1);
   }
 
-  ///@brief find an IndexSpace from its type. return nullspace if not present.
-  ///@param find the IndexSpace via it's @c attr
+  /// @brief find an IndexSpace from its attr. return nullspace if not present.
+  /// @param find the IndexSpace via it's @c attr
   const IndexSpace& find_by_attr(const IndexSpace::Attr& attr) const {
     for (auto&& space : *spaces_) {
       if (space.attr() == attr) {

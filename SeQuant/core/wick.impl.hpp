@@ -52,7 +52,7 @@ inline container::map<Index, Index> compute_index_replacement_rules(
                                            const IndexSpace &space2) {
     const auto &isr = sequant::get_default_context().index_space_registry();
     const auto intersection_space = isr->intersection(space1, space2);
-    if (intersection_space == isr->nullspace) throw zero_result{};
+    if (!intersection_space) throw zero_result{};
     return idxfac.make(intersection_space);
   };
 
@@ -142,7 +142,7 @@ inline container::map<Index, Index> compute_index_replacement_rules(
                     isr->intersection(old_dst1.space(), old_dst2.space()),
                     dst.space())
               : dst.space();
-      if (new_dst_space == isr->nullspace) throw zero_result{};
+      if (!new_dst_space) throw zero_result{};
       Index new_dst;
       if (new_dst_space == old_dst1.space()) {
         new_dst = old_dst1;
@@ -189,7 +189,7 @@ inline container::map<Index, Index> compute_index_replacement_rules(
             isr->intersection(bra.space(), ket.space());
 
         // if overlap's indices are from non-overlapping spaces, return zero
-        if (intersection_space == isr->nullspace) {
+        if (!intersection_space) {
           throw zero_result{};
         }
 
