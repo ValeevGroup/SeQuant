@@ -93,6 +93,7 @@ std::wstring spinannotation_add(WS&& label, Spin s) {
       return Index::make_merged_label(std::wstring(base) + L"↓", ordinal);
     default:
       assert(false && "invalid quantum number");
+      abort();
   }
 }
 
