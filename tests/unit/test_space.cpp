@@ -31,11 +31,12 @@ TEST_CASE("IndexSpace", "[elements]") {
   SECTION("registry construction") {
     auto isr = std::make_shared<IndexSpaceRegistry>();
 
-    // same as make_sr_spaces, but no spin
+    // similar make_sr_spaces, but no spin AND occupied and unoccupied bits are
+    // NOT contiguous!
     REQUIRE_NOTHROW(
         isr->add(L"o", 0b0001, 3)       // approximate size
-            .add("i", 0b0010, is_hole)  // N.B. narrow string
-            .add(L'a', 0b0100, is_particle, QuantumNumbersAttr{},
+            .add("i", 0b0100, is_hole)  // N.B. narrow string
+            .add(L'a', 0b0010, is_particle, QuantumNumbersAttr{},
                  50)  // N.B. wchar_t + explicit quantum numbers + size
             .add('g', 0b1000)
             .add_union(L"m", {L"o", L"i"}, is_vacuum_occupied,
@@ -44,7 +45,7 @@ TEST_CASE("IndexSpace", "[elements]") {
             .add_unIon(L"p", {L"m", L"e"}, is_complete)  // N.B. unIon
     );
     REQUIRE(isr->retrieve(L"o").approximate_size() == 3);
-    REQUIRE(isr->retrieve(L"m").type().to_int32() == 0b0011);
+    REQUIRE(isr->retrieve(L"m").type().to_int32() == 0b0101);
     REQUIRE(isr->retrieve(L"m").approximate_size() ==
             isr->retrieve(L"o").approximate_size() +
                 isr->retrieve(L"i").approximate_size());
