@@ -171,6 +171,8 @@ class Operator<void, S> : public Expr, public Labeled {
 using FOperatorBase = FOperator<void>;
 using BOperatorBase = BOperator<void>;
 
+struct default_qns_tag {};
+
 // clang-format off
 /// tracks changes in \c N quantum numbers
 
@@ -186,34 +188,34 @@ using BOperatorBase = BOperator<void>;
 /// \tparam Tag a tag type to distinguish different instances of QuantumNumberChange<N>
 /// \tparam QNV the quantum number value type, defaults to \c std::int64_t
 // clang-format on
-template <typename Tag, typename QNV = std::int64_t>
+template <typename QNV = std::int64_t, typename Tag = default_qns_tag>
 class QuantumNumberChange
-    : public std::vector<boost::numeric::interval<std::make_signed_t<QNV>>> {
+    : public container::svector<
+          boost::numeric::interval<std::make_signed_t<QNV>>, 8> {
  public:
   using QNC = std::make_signed_t<QNV>;  // change in quantum numbers
   using interval_t = boost::numeric::interval<QNC>;
-  using tag_t = Tag;
   using base_type =
-      std::vector<boost::numeric::interval<std::make_signed_t<QNV>>>;
-  using this_type = QuantumNumberChange<Tag, QNV>;
+      container::svector<boost::numeric::interval<std::make_signed_t<QNV>>, 8>;
+  using this_type = QuantumNumberChange<QNV, Tag>;
 
   const std::size_t size() const {
     if (get_default_context().vacuum() == Vacuum::Physical) {
       return 2;
     } else if (get_default_context().vacuum() == Vacuum::SingleProduct) {
-      return get_default_context()
-                 .index_space_registry()
-                 ->base_spaces()
-                 .size() *
-             2;
+      const auto& isr = get_default_context().index_space_registry();
+      const auto& isr_base_spaces = isr->base_spaces();
+      assert(isr_base_spaces.size() > 0);
+      return isr_base_spaces.size() * 2;
     } else {
-      throw "vacuum not supported";
+      throw std::logic_error("unknown Vacuum type");
     }
   }
 
   /// initializes all values with zeroes
   QuantumNumberChange() {
-    this->resize(size());
+    this->resize(this->size());
+    assert(this->base().size() != 0);
     std::fill(this->begin(), this->end(), interval_t{});
   }
 
@@ -226,7 +228,6 @@ class QuantumNumberChange
   explicit QuantumNumberChange(const std::vector<I>& i)
       : QuantumNumberChange() {
     assert(i.size() == size());
-    this->resize(size());
     std::copy(i.begin(), i.end(), this->begin());
   }
 
@@ -237,9 +238,9 @@ class QuantumNumberChange
   template <typename I, typename = std::enable_if_t<std::is_convertible_v<
                             std::initializer_list<I>, interval_t>>>
   explicit QuantumNumberChange(
-      std::initializer_list<std::initializer_list<I>> i) {
+      std::initializer_list<std::initializer_list<I>> i)
+      : QuantumNumberChange() {
     assert(i.size() == size());
-    this->resize(size());
 #ifndef NDEBUG
     if (std::find_if(i.begin(), i.end(),
                      [](const auto& ii) { return ii.size() != 2; }) != i.end())
@@ -416,11 +417,6 @@ inline bool operator!=(const QuantumNumberChange<Tag, QNV>& a, I b) {
   return a.operator!=(b);
 }
 
-//////////////////////// define "ovearloadable" typedefs for the physical vacuum
-/// case
-
-struct qns_tag {};
-
 // clang-format off
 /// algebra of operators normal order with respect to physical vacuum
 /// can be screened by tracking the number of creators and annihilators.
@@ -428,7 +424,7 @@ struct qns_tag {};
 /// \note use signed integer, although could use unsigned in this case,
 /// so that can represent quantum numbers and their changes by the same type
 // clang-format on
-using qns_t = mbpt::QuantumNumberChange<qns_tag, std::int64_t>;
+using qns_t = mbpt::QuantumNumberChange<>;
 using qninterval_t = typename qns_t::interval_t;
 /// changes in quantum number represented by quantum numbers themselves
 using qnc_t = qns_t;
