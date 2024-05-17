@@ -223,10 +223,11 @@ class QuantumNumberChange
   /// QNV
   /// \tparam I the type of the initializer_list elements
   /// \param i the sequence of QNV-convertible elements
-  template <typename I,
-            typename = std::enable_if_t<std::is_convertible_v<I, interval_t>>>
-  explicit QuantumNumberChange(const std::vector<I>& i)
-      : QuantumNumberChange() {
+  template <typename I, typename Range,
+            typename = std::enable_if_t<
+                meta::is_range_v<std::remove_reference_t<Range>> &&
+                std::is_convertible_v<I, interval_t>>>
+  explicit QuantumNumberChange(Range&& i) : QuantumNumberChange() {
     assert(i.size() == size());
     std::copy(i.begin(), i.end(), this->begin());
   }
@@ -580,7 +581,7 @@ class OpMaker {
     if (!symm) assert(ranges::size(bras) == ranges::size(kets));
 
     auto make_idx_vector = [](const auto& spacetypes) {
-      std::vector<Index> result;
+      container::svector<Index> result;
       const auto n = spacetypes.size();
       result.reserve(n);
       for (size_t i = 0; i != n; ++i) {
@@ -592,7 +593,7 @@ class OpMaker {
 
     auto make_depidx_vector = [](const auto& spacetypes, auto&& protoidxs) {
       const auto n = spacetypes.size();
-      std::vector<Index> result;
+      container::svector<Index> result;
       result.reserve(n);
       for (size_t i = 0; i != n; ++i) {
         auto space = spacetypes[i];
@@ -601,7 +602,7 @@ class OpMaker {
       return result;
     };
 
-    std::vector<Index> braidxs, ketidxs;
+    container::svector<Index> braidxs, ketidxs;
     if (dep_bra) {
       ketidxs = make_idx_vector(kets);
       braidxs = make_depidx_vector(bras, ketidxs);

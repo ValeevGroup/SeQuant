@@ -567,6 +567,7 @@ ExprPtr F(bool use_tensor, IndexSpace reference_occupied) {
               auto braidx_K = braidxs;
               braidx_K.push_back(m1);
               auto ketidxs_K = ketidxs;
+              using std::begin;
               ketidxs_K.emplace(begin(ketidxs_K), m2);
               return (ex<Tensor>(to_wstring(mbpt::OpType::g), braidx_J,
                                  ketidxs_J, Symmetry::nonsymm) -

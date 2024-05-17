@@ -71,6 +71,11 @@ class Index : public Taggable {
   }
 
  public:
+  /// protoindices cannot be represented by small_vector because it does not
+  /// accept incomplete types, see
+  /// https://www.boost.org/doc/libs/master/doc/html/container/main_features.html#container.main_features.containers_of_incomplete_types
+  /// N.B. hard-coding alignment should lift this restriction but it seems that
+  /// alignof is still invoked (for no good reason)
   using index_vector = container::vector<Index>;
 
   Index() = default;
@@ -295,18 +300,21 @@ class Index : public Taggable {
   /// @param symmetric_proto_indices if true, proto_indices can be permuted at
   ///  will and will always be sorted
   /// @return a unique temporary index in space @c space
-  template <
-      typename IndexContainer,
-      typename = std::enable_if_t<std::is_convertible_v<
-          std::remove_reference_t<IndexContainer>, container::vector<Index>>>>
+  template <typename IndexRange, typename = std::enable_if_t<meta::is_range_v<
+                                     std::remove_reference_t<IndexRange>>>>
   static Index make_tmp_index(const IndexSpace &space,
-                              IndexContainer &&proto_indices,
+                              IndexRange &&proto_indices,
                               bool symmetric_proto_indices = true) {
     Index result;
     result.label_ =
         space.base_key() + L'_' + std::to_wstring(Index::next_tmp_index());
     result.space_ = space;
-    result.proto_indices_ = std::forward<IndexContainer>(proto_indices);
+    if constexpr (std::is_convertible_v<std::remove_reference_t<IndexRange>,
+                                        Index::index_vector>) {
+      result.proto_indices_ = std::forward<IndexRange>(proto_indices);
+    } else {
+      result.proto_indices_ = proto_indices | ranges::to<Index::index_vector>;
+    }
     result.symmetric_proto_indices_ = symmetric_proto_indices;
     result.canonicalize_proto_indices();
     result.check_for_duplicate_proto_indices();
