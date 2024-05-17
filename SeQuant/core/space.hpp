@@ -181,11 +181,11 @@ class IndexSpace {
 
     const static Attr null;
 
-    const TypeAttr &type() const {
+    constexpr const TypeAttr &type() const {
       return static_cast<const TypeAttr &>(*this);
     }
     TypeAttr &type() { return static_cast<TypeAttr &>(*this); }
-    const QuantumNumbersAttr &qns() const {
+    constexpr const QuantumNumbersAttr &qns() const {
       return static_cast<const QuantumNumbersAttr &>(*this);
     }
     QuantumNumbersAttr &qns() {
@@ -198,7 +198,7 @@ class IndexSpace {
     }
 
     /// @return true if either `type()` or `qns()` is non-null
-    constexpr explicit operator bool() const {
+    explicit operator bool() const {
       return static_cast<bool>(this->type()) || static_cast<bool>(this->qns());
     }
 
@@ -352,7 +352,7 @@ class IndexSpace {
 
   /// Default ctor creates null space (with null label, type and quantum
   /// numbers)
-  constexpr IndexSpace() noexcept {}
+  IndexSpace() noexcept {}
 
   const static IndexSpace null;
 
