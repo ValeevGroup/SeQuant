@@ -5,7 +5,7 @@
 #ifndef SEQUANT_INDEX_SPACE_REGISTRY_HPP
 #define SEQUANT_INDEX_SPACE_REGISTRY_HPP
 
-#include "space.hpp"
+#include <SeQuant/core/space.hpp>
 
 #include <range/v3/algorithm/sort.hpp>
 #include <range/v3/numeric/accumulate.hpp>
@@ -16,6 +16,8 @@
 
 #include <boost/hana.hpp>
 #include <boost/hana/ext/std/integral_constant.hpp>
+
+#include <mutex>
 
 namespace sequant {
 
@@ -71,10 +73,38 @@ class IndexSpaceRegistry {
           spaces)
       : spaces_(std::move(spaces)) {}
 
-  IndexSpaceRegistry(const IndexSpaceRegistry& other) = default;
-  IndexSpaceRegistry(IndexSpaceRegistry&& other) = default;
-  IndexSpaceRegistry& operator=(const IndexSpaceRegistry& other) = default;
-  IndexSpaceRegistry& operator=(IndexSpaceRegistry&& other) = default;
+  IndexSpaceRegistry(const IndexSpaceRegistry& other)
+      : spaces_(other.spaces_),
+        vacocc_(other.vacocc_),
+        refocc_(other.refocc_),
+        complete_(other.complete_),
+        hole_space_(other.hole_space_),
+        particle_space_(other.particle_space_) {}
+  IndexSpaceRegistry(IndexSpaceRegistry&& other)
+      : spaces_(std::move(other.spaces_)),
+        vacocc_(std::move(other.vacocc_)),
+        refocc_(std::move(other.refocc_)),
+        complete_(std::move(other.complete_)),
+        hole_space_(std::move(other.hole_space_)),
+        particle_space_(std::move(other.particle_space_)) {}
+  IndexSpaceRegistry& operator=(const IndexSpaceRegistry& other) {
+    spaces_ = other.spaces_;
+    vacocc_ = other.vacocc_;
+    refocc_ = other.refocc_;
+    complete_ = other.complete_;
+    hole_space_ = other.hole_space_;
+    particle_space_ = other.particle_space_;
+    return *this;
+  }
+  IndexSpaceRegistry& operator=(IndexSpaceRegistry&& other) {
+    spaces_ = std::move(other.spaces_);
+    vacocc_ = std::move(other.vacocc_);
+    refocc_ = std::move(other.refocc_);
+    complete_ = std::move(other.complete_);
+    hole_space_ = std::move(other.hole_space_);
+    particle_space_ = std::move(other.particle_space_);
+    return *this;
+  }
 
   const auto& spaces() const { return spaces_; }
 
@@ -414,7 +444,11 @@ class IndexSpaceRegistry {
       }) | ranges::views::filter([](const auto& t) { return is_base(t); }) |
                    ranges::views::unique | ranges::to_vector;
       ranges::sort(types, [](auto t1, auto t2) { return t1 < t2; });
-      base_space_types_ = std::move(types);
+      std::scoped_lock guard{mtx_memoized_};
+      if (!base_space_types_) {
+        base_space_types_ =
+            std::make_shared<std::vector<IndexSpace::Type>>(std::move(types));
+      }
     }
     return *base_space_types_;
   }
@@ -433,7 +467,11 @@ class IndexSpaceRegistry {
           ranges::views::unique | ranges::to_vector;
       ranges::sort(spaces,
                    [](auto s1, auto s2) { return s1.type() < s2.type(); });
-      base_spaces_ = std::move(spaces);
+      std::scoped_lock guard{mtx_memoized_};
+      if (!base_spaces_) {
+        base_spaces_ =
+            std::make_shared<std::vector<IndexSpace>>(std::move(spaces));
+      }
     }
     return *base_spaces_;
   }
@@ -1001,9 +1039,12 @@ class IndexSpaceRegistry {
   std::shared_ptr<container::set<IndexSpace, IndexSpace::KeyCompare>> spaces_;
 
   // memoized data
-  mutable std::optional<std::vector<IndexSpace::Type>> base_space_types_;
-  mutable std::optional<std::vector<IndexSpace>> base_spaces_;
+  mutable std::shared_ptr<std::vector<IndexSpace::Type>> base_space_types_;
+  mutable std::shared_ptr<std::vector<IndexSpace>> base_spaces_;
+  mutable std::recursive_mutex
+      mtx_memoized_;  // used to update the memoized data
   IndexSpaceRegistry& clear_memoized_data_and_return_this() {
+    std::scoped_lock guard{mtx_memoized_};
     base_space_types_.reset();
     base_spaces_.reset();
     return *this;
@@ -1088,11 +1129,6 @@ class IndexSpaceRegistry {
   // having to pass these around in every call N.B. default and QN-specific
   // space selections merged into single tuple
 
-  // defines active bits in TypeAttr; used by general operators in mbpt/op
-  std::tuple<IndexSpace::Type,
-             std::map<IndexSpace::QuantumNumbers, IndexSpace::Type>>
-      complete_ = {{}, {}};
-
   // used for fermi vacuum wick application
   std::tuple<IndexSpace::Type,
              std::map<IndexSpace::QuantumNumbers, IndexSpace::Type>>
@@ -1103,14 +1139,19 @@ class IndexSpaceRegistry {
              std::map<IndexSpace::QuantumNumbers, IndexSpace::Type>>
       refocc_ = {{}, {}};
 
+  // defines active bits in TypeAttr; used by general operators in mbpt/op
+  std::tuple<IndexSpace::Type,
+             std::map<IndexSpace::QuantumNumbers, IndexSpace::Type>>
+      complete_ = {{}, {}};
+
   // both needed to make excitation and de-excitation operators. not
   // necessarily equivalent in the case of multi-reference context.
   std::tuple<IndexSpace::Type,
              std::map<IndexSpace::QuantumNumbers, IndexSpace::Type>>
-      particle_space_ = {{}, {}};
+      hole_space_ = {{}, {}};
   std::tuple<IndexSpace::Type,
              std::map<IndexSpace::QuantumNumbers, IndexSpace::Type>>
-      hole_space_ = {{}, {}};
+      particle_space_ = {{}, {}};
 
   // Boost.Hana snippet to process attribute tag arguments
   template <typename ArgsHanaTuple>
