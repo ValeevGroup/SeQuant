@@ -461,19 +461,16 @@ class IndexSpaceRegistry {
     return this->add(IndexSpace::null);
   }
 
-  ///@brief is the intersection space registered
-  ///@param space1
-  ///@param space2
-  ///@return true if registered
-  ///@note intersection is always allowed
+  /// @brief is the intersection space registered
+  /// @param space1
+  /// @param space2
+  /// @return true if registered
+  /// @note intersection is always allowed
   bool valid_intersection(const IndexSpace& space1,
                           const IndexSpace& space2) const {
     auto result_attr = space1.attr().intersection(space2.attr());
     // nullspace is a valid intersection result
-    if (find_by_attr(result_attr) || !result_attr.type() || !result_attr.qns())
-      return true;
-    else
-      return false;
+    return !result_attr || find_by_attr(result_attr);
   }
 
   /// @brief return the resulting space corresponding to a bitwise intersection
@@ -510,10 +507,10 @@ class IndexSpaceRegistry {
     }
   }
 
-  ///@brief is a union between spaces eligible and registered
-  ///@param space1
-  ///@param space2
-  ///@return true if space is constructable and registered
+  /// @brief is a union between spaces eligible and registered
+  /// @param space1
+  /// @param space2
+  /// @return true if space is constructable and registered
   bool valid_unIon(const IndexSpace& space1, const IndexSpace& space2) const {
     // check typeattr
     if (!space1.type().includes(space2.type()) &&

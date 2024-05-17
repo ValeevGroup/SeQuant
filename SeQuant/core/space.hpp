@@ -356,6 +356,8 @@ class IndexSpace {
 
   const static IndexSpace null;
 
+  explicit operator bool() const { return *this != null; }
+
   template <typename S, typename = meta::EnableIfAnyStringConvertible<S>>
   IndexSpace(S &&type_label, TypeAttr typeattr,
              QuantumNumbersAttr qnattr = QuantumNumbersAttr{0},

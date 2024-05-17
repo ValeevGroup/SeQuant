@@ -540,12 +540,9 @@ ExprPtr H(std::size_t k) {
 ExprPtr F(bool use_tensor, IndexSpace reference_occupied) {
   if (use_tensor) {
     return OpMaker<Statistics::FermiDirac>(OpType::f, 1)();
-  } else {  // explicit density matrix construction
-    assert(reference_occupied !=
-           get_default_context()
-               .index_space_registry()
-               ->nullspace);  // cannot explicitly instantiate fock operator
-                              // without providing an occupied indexspace
+  } else {                       // explicit density matrix construction
+    assert(reference_occupied);  // cannot explicitly instantiate fock operator
+                                 // without providing an occupied indexspace
     // add \bar{g}^{\kappa x}_{\lambda y} \gamma^y_x with x,y in occ_space_type
     auto make_g_contribution = [](const auto occ_space) {
       const auto& isr = get_default_context().index_space_registry();
@@ -1107,7 +1104,7 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
         ranges::for_each(rdm_indices, [&](const Index& idx) {
           const auto target_type =
               isr->intersection(idx.space(), target_rdm_space_type);
-          if (target_type != isr->nullspace) {
+          if (target_type) {
             Index target = Index::make_tmp_index(target_type);
             replacement_rules.emplace(idx, target);
           }

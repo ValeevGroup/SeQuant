@@ -173,9 +173,9 @@ make_fermi_and_bose_spaces() {
   fermi_isr->complete_space(L"p");
 
   auto bose_isr = std::make_shared<IndexSpaceRegistry>(isr->spaces());
-  bose_isr->vacuum_occupied_space(IndexSpaceRegistry::nullspace);
-  bose_isr->reference_occupied_space(IndexSpaceRegistry::nullspace);
-  bose_isr->hole_space(IndexSpaceRegistry::nullspace);
+  bose_isr->vacuum_occupied_space(IndexSpace::null);
+  bose_isr->reference_occupied_space(IndexSpace::null);
+  bose_isr->hole_space(IndexSpace::null);
   bose_isr->particle_space(L"β");
   bose_isr->complete_space(L"β");
 

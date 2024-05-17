@@ -1430,7 +1430,7 @@ class WickTheorem {
       const auto qpspace_right = qpcreator_space<S>(right, vacuum);
       const auto qpspace_common =
           isr->intersection(qpspace_left, qpspace_right);
-      if (qpspace_common != isr->nullspace) return true;
+      if (qpspace_common) return true;
     }
     return false;
   }

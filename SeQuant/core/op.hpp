@@ -226,7 +226,7 @@ IndexSpace qpcreator_space(const Op<S> &op,
   switch (vacuum) {
     case Vacuum::Physical:
       return op.action() == Action::create ? op.index().space()
-                                           : isr->nullspace;
+                                           : IndexSpace::null;
     case Vacuum::SingleProduct:
       return op.action() == Action::annihilate
                  ? isr->intersection(
@@ -294,7 +294,7 @@ IndexSpace qpannihilator_space(const Op<S> &op,
     is_pure_occ = isr->is_pure_occupied(op.index().space());
     not_occupied =
         is_pure_occ
-            ? isr->nullspace
+            ? IndexSpace::null
             : isr->non_overlapping_spaces(
                      isr->vacuum_occupied_space(op.index().space().qns()),
                      op.index().space())
@@ -303,7 +303,7 @@ IndexSpace qpannihilator_space(const Op<S> &op,
   switch (vacuum) {
     case Vacuum::Physical:
       return op.action() == Action::annihilate ? op.index().space()
-                                               : isr->nullspace;
+                                               : IndexSpace::null;
     case Vacuum::SingleProduct:
       return op.action() == Action::create
                  ? isr->intersection(
@@ -795,7 +795,7 @@ class NormalOperator : public Operator<S>,
         const auto qpspace_right = qpcreator_space<S>(right, vacuum_);
         const auto qpspace_common =
             isr->intersection(qpspace_left, qpspace_right);
-        if (qpspace_common != isr->nullspace) return true;
+        if (qpspace_common) return true;
       }
       return false;
     };
