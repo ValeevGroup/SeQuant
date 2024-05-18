@@ -496,10 +496,6 @@ inline bool operator<(const IndexSpace &space1, const IndexSpace &space2) {
   return space1.attr() < space2.attr();
 }
 
-/*std::wstring to_wolfram(const IndexSpace space){
- throw std::logic_error("not implemented");
-};*/
-
 }  // namespace sequant
 
 #endif  // SEQUANT_SPACE_H
