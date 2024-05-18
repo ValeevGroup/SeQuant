@@ -121,18 +121,41 @@ class IndexSpaceRegistry {
   decltype(auto) begin() const { return spaces_->cbegin(); }
   decltype(auto) end() const { return spaces_->cend(); }
 
+  /// @brief retrieve a pointer to IndexSpace from the registry by the label
+  /// @param label can be numbered or the @c base_key
+  /// @return pointer to IndexSpace associated with that key, or nullptr if not
+  /// found
+  template <typename S, typename = meta::EnableIfAnyStringConvertible<S>>
+  const IndexSpace* retrieve_ptr(S&& label) const {
+    auto it =
+        spaces_->find(IndexSpace::reduce_key(to_basic_string_view(label)));
+    return it != spaces_->end() ? &(*it) : nullptr;
+  }
+
   /// @brief retrieve an IndexSpace from the registry by the label
   /// @param label can be numbered or the @c base_key
   /// @return IndexSpace associated with that key
   /// @throw IndexSpace::bad_key if matching space is not found
   template <typename S, typename = meta::EnableIfAnyStringConvertible<S>>
   const IndexSpace& retrieve(S&& label) const {
-    auto it =
-        spaces_->find(IndexSpace::reduce_key(to_basic_string_view(label)));
-    if (it == spaces_->end()) {
+    if (const auto* ptr = retrieve_ptr(std::forward<S>(label))) {
+      return *ptr;
+    } else
       throw IndexSpace::bad_key(label);
-    }
-    return *it;
+  }
+
+  /// @brief retrieve a pointer to IndexSpace from the registry by its type and
+  /// quantum numbers
+  /// @param type IndexSpace::Type
+  /// @param qns IndexSpace::QuantumNumbers
+  /// @return pointer to the IndexSpace associated with that key, or nullptr if
+  /// not found
+  const IndexSpace* retrieve_ptr(const IndexSpace::Type& type,
+                                 const IndexSpace::QuantumNumbers& qns) const {
+    auto it = std::find_if(
+        spaces_->begin(), spaces_->end(),
+        [&](const auto& is) { return is.type() == type && is.qns() == qns; });
+    return it != spaces_->end() ? &(*it) : nullptr;
   }
 
   /// @brief retrieve an IndexSpace from the registry by its type and quantum
@@ -143,16 +166,25 @@ class IndexSpaceRegistry {
   /// @throw std::invalid_argument if matching space is not found
   const IndexSpace& retrieve(const IndexSpace::Type& type,
                              const IndexSpace::QuantumNumbers& qns) const {
-    auto it = std::find_if(
-        spaces_->begin(), spaces_->end(),
-        [&](const auto& is) { return is.type() == type && is.qns() == qns; });
-    if (it == spaces_->end()) {
+    if (const auto* ptr = retrieve_ptr(type, qns)) {
+      return *ptr;
+    } else
       throw std::invalid_argument(
           "IndexSpaceRegistry::retrieve(type,qn): missing { IndexSpace::Type=" +
           std::to_string(type.to_int32()) + " , IndexSpace::QuantumNumbers=" +
           std::to_string(qns.to_int32()) + " } combination");
-    }
-    return *it;
+  }
+
+  /// @brief retrieve pointer to the IndexSpace from the registry by the
+  /// IndexSpace::Attr
+  /// @param space_attr an IndexSpace::Attr
+  /// @return pointer to the IndexSpace associated with that key, or nullptr if
+  /// not found
+  const IndexSpace* retrieve_ptr(const IndexSpace::Attr& space_attr) const {
+    auto it = std::find_if(
+        spaces_->begin(), spaces_->end(),
+        [&space_attr](const IndexSpace& s) { return s.attr() == space_attr; });
+    return it != spaces_->end() ? &(*it) : nullptr;
   }
 
   /// @brief retrieve an IndexSpace from the registry by the IndexSpace::Attr
@@ -160,18 +192,14 @@ class IndexSpaceRegistry {
   /// @return IndexSpace associated with that key.
   /// @throw std::invalid_argument if matching space is not found
   const IndexSpace& retrieve(const IndexSpace::Attr& space_attr) const {
-    auto it = std::find_if(
-        spaces_->begin(), spaces_->end(),
-        [&space_attr](const IndexSpace& s) { return s.attr() == space_attr; });
-    using std::cend;
-    if (it == cend(*spaces_)) {
+    if (const auto* ptr = retrieve_ptr(space_attr)) {
+      return *ptr;
+    } else
       throw std::invalid_argument(
           "IndexSpaceRegistry::retrieve(attr): missing { IndexSpace::Type=" +
           std::to_string(space_attr.type().to_int32()) +
           " , IndexSpace::QuantumNumbers=" +
           std::to_string(space_attr.qns().to_int32()) + " } combination");
-    }
-    return *it;
   }
 
   /// @name adding IndexSpace objects to the registry
@@ -504,9 +532,9 @@ class IndexSpaceRegistry {
 
   /// @brief clear the contents of *this
   /// @return reference to `this`
-  IndexSpaceRegistry& clear_registry() {
-    spaces_->clear();
-    return this->add(IndexSpace::null);
+  IndexSpaceRegistry& clear() {
+    *this = IndexSpaceRegistry{};
+    return *this;
   }
 
   /// @brief queries if the intersection space is registered
@@ -516,8 +544,7 @@ class IndexSpaceRegistry {
   bool valid_intersection(const IndexSpace& space1,
                           const IndexSpace& space2) const {
     auto result_attr = space1.attr().intersection(space2.attr());
-    // nullspace is a valid intersection result
-    return !result_attr || find_by_attr(result_attr);
+    return retrieve_ptr(result_attr);
   }
 
   /// @brief return the resulting space corresponding to a bitwise intersection
