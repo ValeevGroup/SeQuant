@@ -662,13 +662,6 @@ class IndexSpaceRegistry {
     return result;
   }
 
-  /// @brief do two spaces have non-overlapping bitsets.
-  /// @note does not probe the registry for these spaces
-  bool has_non_overlapping_spaces(const IndexSpace& space1,
-                                  const IndexSpace& space2) const {
-    return space1.type().xOr(space2.type()).to_int32() != 0;
-  }
-
   /// @brief an @c IndexSpace is occupied with respect to the fermi vacuum or a
   /// subset of that space
   /// @note only makes sense to ask this if in a SingleProduct vacuum context.

@@ -1010,8 +1010,8 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
   // will replace FNOPs with RDMs. i.e. "multi-reference" RDM replacement rules
   // work in the limit of one reference.
   if (isr->reference_occupied_space() == IndexSpace::Type{} ||
-      !isr->has_non_overlapping_spaces(isr->reference_occupied_space(Spin::any),
-                                       isr->vacuum_occupied_space(Spin::any))) {
+      isr->reference_occupied_space(Spin::any) ==
+          isr->vacuum_occupied_space(Spin::any)) {
     return result;
   } else {
     const auto target_rdm_space_type =
