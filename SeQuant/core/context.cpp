@@ -97,7 +97,7 @@ Context::Context(IndexSpaceRegistry isr, Vacuum vac, IndexSpaceMetric m,
 
 Context::Context(Vacuum vac, IndexSpaceMetric m, BraKetSymmetry bks,
                  SPBasis spb, std::size_t fdio)
-    : idx_space_reg_(std::make_shared<IndexSpaceRegistry>()),
+    : idx_space_reg_{},
       vacuum_(vac),
       metric_(m),
       braket_symmetry_(bks),

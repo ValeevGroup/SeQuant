@@ -129,9 +129,12 @@ class Index : public Taggable {
             typename = std::enable_if_t<meta::is_basic_string_convertible_v<
                 std::remove_reference_t<String>>>>
   Index(String &&label)
-      : Index(std::forward<String>(label),
-              get_default_context().index_space_registry()->retrieve(label),
-              {}) {
+      : Index(
+            std::forward<String>(label),
+            get_default_context().index_space_registry()
+                ? get_default_context().index_space_registry()->retrieve(label)
+                : IndexSpace::null,
+            {}) {
     check_nontmp_label();
   }
 

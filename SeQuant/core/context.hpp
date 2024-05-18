@@ -61,9 +61,11 @@ class Context {
                    SPBasis spb = Defaults::spbasis,
                    std::size_t fdio = Defaults::first_dummy_index_ordinal);
 
-  /// default constructor, equivalent to Context({}, Vacuum::Physical,
+  /// default constructor, equivalent to Context(Vacuum::Physical,
   /// IndexSpaceMetric::Unit, BraKetSymmetry::conjugate,
   /// sequant::SPBasis::spinorbital, 100)
+  /// @warning default constructor does not create an IndexSpaceRegistry, thus
+  /// `this->index_space_registry()` will return nullptr
   Context() = default;
 
   ~Context() = default;
@@ -73,9 +75,12 @@ class Context {
 
   /// \return Vacuum of this context
   Vacuum vacuum() const;
-  /// @return a constant pointer to the IndexSpaceRegistry for this context.
+  /// @return a constant pointer to the IndexSpaceRegistry for this context
+  /// @warning can be null when user did not provide one to Context (i.e., it
+  /// was default constructed)
   std::shared_ptr<const IndexSpaceRegistry> index_space_registry() const;
   /// @return a pointer to the IndexSpaceRegistry for this context.
+  /// @throw std::logic_error if the IndexSpaceRegistry is null
   std::shared_ptr<IndexSpaceRegistry> mutable_index_space_registry() const;
   /// \return IndexSpaceMetric of this context
   IndexSpaceMetric metric() const;
@@ -115,8 +120,7 @@ class Context {
   /// @return the IndexRegistry object
 
  private:
-  std::shared_ptr<IndexSpaceRegistry> idx_space_reg_ =
-      std::make_shared<IndexSpaceRegistry>();
+  std::shared_ptr<IndexSpaceRegistry> idx_space_reg_ = nullptr;
   Vacuum vacuum_ = Defaults::vacuum;
   IndexSpaceMetric metric_ = Defaults::metric;
   BraKetSymmetry braket_symmetry_ = Defaults::braket_symmetry;

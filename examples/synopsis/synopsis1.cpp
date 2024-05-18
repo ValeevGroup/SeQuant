@@ -7,8 +7,7 @@
 int main() {
   using namespace sequant;
 
-  IndexSpace sp;
-  Index p1(L"p_1", sp), p2(L"p_2", sp), p3(L"p_3", sp), p4(L"p_4", sp);
+  Index p1(L"p_1"), p2(L"p_2"), p3(L"p_3"), p4(L"p_4");
 
   auto cp1 = fcrex(p1), cp2 = fcrex(p2);
   auto ap3 = fannx(p3), ap4 = fannx(p4);
@@ -20,7 +19,7 @@ int main() {
                              .compute())
              << std::endl;
 
-  Index p5(L"p_5", sp), p6(L"p_6", sp), p7(L"p_7", sp);
+  Index p5(L"p_5"), p6(L"p_6"), p7(L"p_7");
   auto nop1 = ex<FNOperator>(std::array{p1, p2}, std::array{p3, p4});
   auto nop2 = ex<FNOperator>(std::array{p5}, std::array{p6, p7});
 

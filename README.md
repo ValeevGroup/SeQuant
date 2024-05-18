@@ -3,11 +3,16 @@ SeQuant: second quantization toolkit in C++
 
 # Synopsis
 
-`SeQuant` is a framework for performing symbolic algebra designed specifically
-for the algebra of second quantization in quantum many-body physics.
-More abstractly it can symbolically transform and numerically
-evaluate (with an appropriate external tensor backend) general
+`SeQuant` is a framework for performing symbolic algebra of tensors over scalar fields (regular tensors) and over
+operator fields (tensor operators in, e.g., quantum many-body physics).
+In addition to symbolic manipulation it can numerically  evaluate
+(with an appropriate external tensor backend) general
 tensor algebra expressions.
+
+Computer algebra systems (CAS) like SeQuant are typically implemented within generic CAS like Mathematica or Maple, or
+using high-level languages like Python. In fact, version 1 of SeQuant was written in Mathematica. However, the
+performance of high-level languages not sufficient for practical use cases.
+SeQuant is written in C++ and is designed to be as efficient as possible without loss of generality.
 
 # Installation
 
@@ -52,8 +57,7 @@ This is achieved by the following SeQuant program:
 int main() {
   using namespace sequant;
 
-  IndexSpace sp;
-  Index p1(L"p_1", sp), p2(L"p_2", sp), p3(L"p_3", sp), p4(L"p_4", sp);
+  Index p1(L"p_1"), p2(L"p_2"), p3(L"p_3"), p4(L"p_4");
 
   auto cp1 = fcrex(p1), cp2 = fcrex(p2);
   auto ap3 = fannx(p3), ap4 = fannx(p4);
@@ -229,6 +233,7 @@ sample_ISR.active_particle_space(xy_space);
 sample_ISR.active_hole_space(yz_space);
 ```
 Notice that there is no requirement that the two spaces are orthogonal.
+
 # Developers
 
-`SeQuant` is developed by the Valeev group at Virginia Tech.
+`SeQuant` is developed by the Valeev Research Group in the Department of Chemistry at Virginia Tech.
