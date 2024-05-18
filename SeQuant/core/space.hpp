@@ -58,7 +58,10 @@ struct TypeAttr {
   constexpr explicit operator bool() const { return bitset != 0; }
 
   constexpr TypeAttr(const TypeAttr &other) { bitset = other.to_int32(); }
-  constexpr const TypeAttr unIon(TypeAttr other) const {
+
+  /// @return union of `*this` and @p other, i.e. `*this` AND @p other
+  /// @note equivalent to `this->to_int32() | other.to_int32()`
+  constexpr TypeAttr unIon(TypeAttr other) const {
     return TypeAttr(this->to_int32() | other.to_int32());
   }
   constexpr const TypeAttr xOr(TypeAttr other) const {
@@ -83,7 +86,7 @@ struct TypeAttr {
   friend constexpr bool operator<(TypeAttr a, TypeAttr b) {
     return a.to_int32() < b.to_int32();
   }
-};
+};  // struct TypeAttr
 
 inline const TypeAttr TypeAttr::null;
 
@@ -145,7 +148,7 @@ struct QuantumNumbersAttr {
                                   QuantumNumbersAttr rhs) {
     return lhs.to_int32() < rhs.to_int32();
   }
-};
+};  // struct QuantumNumbersAttr
 
 inline const QuantumNumbersAttr QuantumNumbersAttr::null;
 
@@ -296,7 +299,7 @@ class IndexSpace {
         return this->qns() < other.qns();
       }
     }
-  };
+  };  // struct Attr
   using Type = TypeAttr;
   using QuantumNumbers = QuantumNumbersAttr;
 
@@ -400,7 +403,7 @@ class IndexSpace {
   static std::wstring to_wstring(std::wstring_view key) {
     return std::wstring(key.begin(), key.end());
   }
-};
+};  // class IndexSpace
 
 inline const IndexSpace IndexSpace::null;
 inline const IndexSpace::Attr IndexSpace::Attr::null;

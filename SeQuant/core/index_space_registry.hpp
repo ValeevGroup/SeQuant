@@ -59,6 +59,9 @@ constexpr auto is_particle = IsParticle{};
 /// will always be lower than typeattr corresponding to unoccupied orbitals.
 class IndexSpaceRegistry {
  public:
+  /// default constructor creates a registry containing only IndexSpace::null
+  /// @note null space is registered so we don't have to handle it as a corner
+  /// case in retrieve() and other methods
   IndexSpaceRegistry()
       : spaces_(std::make_shared<
                 container::set<IndexSpace, IndexSpace::KeyCompare>>()) {
@@ -73,6 +76,7 @@ class IndexSpaceRegistry {
           spaces)
       : spaces_(std::move(spaces)) {}
 
+  /// copy constructor
   IndexSpaceRegistry(const IndexSpaceRegistry& other)
       : spaces_(other.spaces_),
         vacocc_(other.vacocc_),
@@ -80,6 +84,8 @@ class IndexSpaceRegistry {
         complete_(other.complete_),
         hole_space_(other.hole_space_),
         particle_space_(other.particle_space_) {}
+
+  /// move constructor
   IndexSpaceRegistry(IndexSpaceRegistry&& other)
       : spaces_(std::move(other.spaces_)),
         vacocc_(std::move(other.vacocc_)),
@@ -87,6 +93,8 @@ class IndexSpaceRegistry {
         complete_(std::move(other.complete_)),
         hole_space_(std::move(other.hole_space_)),
         particle_space_(std::move(other.particle_space_)) {}
+
+  /// copy assignment operator
   IndexSpaceRegistry& operator=(const IndexSpaceRegistry& other) {
     spaces_ = other.spaces_;
     vacocc_ = other.vacocc_;
@@ -96,6 +104,8 @@ class IndexSpaceRegistry {
     particle_space_ = other.particle_space_;
     return *this;
   }
+
+  /// move assignment operator
   IndexSpaceRegistry& operator=(IndexSpaceRegistry&& other) {
     spaces_ = std::move(other.spaces_);
     vacocc_ = std::move(other.vacocc_);
@@ -492,18 +502,17 @@ class IndexSpaceRegistry {
     return has_single_bit(t.to_int32());
   }
 
-  /// @brief clear the IndexSpaceRegistry map
+  /// @brief clear the contents of *this
   /// @return reference to `this`
   IndexSpaceRegistry& clear_registry() {
     spaces_->clear();
     return this->add(IndexSpace::null);
   }
 
-  /// @brief is the intersection space registered
+  /// @brief queries if the intersection space is registered
   /// @param space1
   /// @param space2
-  /// @return true if registered
-  /// @note intersection is always allowed
+  /// @return true if `space1.intersection(space2)` is registered
   bool valid_intersection(const IndexSpace& space1,
                           const IndexSpace& space2) const {
     auto result_attr = space1.attr().intersection(space2.attr());
@@ -626,14 +635,14 @@ class IndexSpaceRegistry {
     return result;
   }
 
-  ///@brief do two spaces have non-overlapping bitsets.
+  /// @brief do two spaces have non-overlapping bitsets.
   /// @note does not probe the registry for these spaces
   bool has_non_overlapping_spaces(const IndexSpace& space1,
                                   const IndexSpace& space2) const {
     return space1.type().xOr(space2.type()).to_int32() != 0;
   }
 
-  ///@brief an @c IndexSpace is occupied with respect to the fermi vacuum or a
+  /// @brief an @c IndexSpace is occupied with respect to the fermi vacuum or a
   /// subset of that space
   /// @note only makes sense to ask this if in a SingleProduct vacuum context.
   bool is_pure_occupied(const IndexSpace& IS) const {
@@ -648,8 +657,8 @@ class IndexSpaceRegistry {
     }
   }
 
-  ///@brief all states are unoccupied in the fermi vacuum
-  ///@note again, this only makes sense to ask if in a SingleProduct vacuum
+  /// @brief all states are unoccupied in the fermi vacuum
+  /// @note again, this only makes sense to ask if in a SingleProduct vacuum
   /// context.
   bool is_pure_unoccupied(const IndexSpace& IS) const {
     if (!IS) {
@@ -659,13 +668,13 @@ class IndexSpaceRegistry {
     }
   }
 
-  ///@brief some states are fermi vacuum occupied
+  /// @brief some states are fermi vacuum occupied
   bool contains_occupied(const IndexSpace& IS) const {
     return IS.type().intersection(vacuum_occupied_space(IS.qns()).type()) !=
            IndexSpace::Type::null;
   }
 
-  ///@brief some states are fermi vacuum unoccupied
+  /// @brief some states are fermi vacuum unoccupied
   bool contains_unoccupied(const IndexSpace& IS) const {
     return IS.type().intersection(vacuum_unoccupied_space(IS.qns()).type()) !=
            IndexSpace::Type::null;
@@ -1211,7 +1220,7 @@ class IndexSpaceRegistry {
                          const IndexSpaceRegistry& isr2) {
     return *isr1.spaces_ == *isr2.spaces_;
   }
-};
+};  // class IndexSpaceRegistry
 
 }  // namespace sequant
 #endif  // SEQUANT_INDEX_SPACE_REGISTRY_HPP
