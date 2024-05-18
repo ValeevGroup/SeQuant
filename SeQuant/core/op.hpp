@@ -232,10 +232,9 @@ IndexSpace qpcreator_space(const Op<S> &op,
                  ? isr->intersection(
                        op.index().space(),
                        isr->vacuum_occupied_space(op.index().space().qns()))
-                 : isr->non_overlapping_spaces(
-                          op.index().space(),
-                          isr->vacuum_occupied_space(op.index().space().qns()))
-                       .back();
+                 : isr->intersection(
+                       op.index().space(),
+                       isr->vacuum_unoccupied_space(op.index().space().qns()));
     default:
       throw std::logic_error(
           "qpcreator_space: cannot handle MultiProduct vacuum");
@@ -288,18 +287,6 @@ template <Statistics S>
 IndexSpace qpannihilator_space(const Op<S> &op,
                                Vacuum vacuum = get_default_context().vacuum()) {
   const auto &isr = get_default_context().index_space_registry();
-  bool is_pure_occ = false;
-  IndexSpace not_occupied;
-  if (vacuum == Vacuum::SingleProduct) {
-    is_pure_occ = isr->is_pure_occupied(op.index().space());
-    not_occupied =
-        is_pure_occ
-            ? IndexSpace::null
-            : isr->non_overlapping_spaces(
-                     isr->vacuum_occupied_space(op.index().space().qns()),
-                     op.index().space())
-                  .back();
-  }
   switch (vacuum) {
     case Vacuum::Physical:
       return op.action() == Action::annihilate ? op.index().space()
@@ -309,7 +296,9 @@ IndexSpace qpannihilator_space(const Op<S> &op,
                  ? isr->intersection(
                        op.index().space(),
                        isr->vacuum_occupied_space(op.index().space().qns()))
-                 : not_occupied;
+                 : isr->intersection(
+                       op.index().space(),
+                       isr->vacuum_unoccupied_space(op.index().space().qns()));
     default:
       throw std::logic_error(
           "qpcreator_space: cannot handle MultiProduct vacuum");

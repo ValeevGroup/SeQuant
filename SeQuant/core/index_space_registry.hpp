@@ -639,28 +639,6 @@ class IndexSpaceRegistry {
       }
     }
   }
-  /// @brief which spaces result from XOR bitwise operation of two spaces. Only
-  /// keep connected spaces.
-  /// @param space1
-  /// @param space2
-  /// @return a list of spaces
-  /// @note nullspace is not a valid return
-  /// @note finding unregistered @c typeattr will throw
-  std::vector<IndexSpace> non_overlapping_spaces(
-      const IndexSpace& space1, const IndexSpace& space2) const {
-    auto attributes = space1.attr().excluded_spaces(space2.attr());
-    std::vector<IndexSpace> result;
-    for (int i = 0; i < attributes.size(); i++) {
-      auto excluded_space = find_by_attr(attributes[i]);
-      if (excluded_space == IndexSpace::null) {
-        throw std::invalid_argument(
-            "The resulting space is not registered in this context. Add this "
-            "space to the registry with a label to use it.");
-      }
-      result.push_back(excluded_space);
-    }
-    return result;
-  }
 
   /// @brief an @c IndexSpace is occupied with respect to the fermi vacuum or a
   /// subset of that space

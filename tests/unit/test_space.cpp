@@ -123,13 +123,6 @@ TEST_CASE("IndexSpace", "[elements]") {
     REQUIRE(!includes(isr->retrieve(L"m"), isr->retrieve(L"κ")));
     REQUIRE(includes(isr->retrieve(L"α"), isr->retrieve(L"a")));
 
-    REQUIRE(isr->non_overlapping_spaces(isr->retrieve(L"g"),
-                                        isr->retrieve(L"α"))[0] ==
-            isr->retrieve(L"a"));
-    REQUIRE(isr->non_overlapping_spaces(isr->retrieve(L"g"),
-                                        isr->retrieve(L"α"))[1] ==
-            isr->retrieve(L"α'"));
-
     REQUIRE(isr->valid_intersection(isr->retrieve(L"i"), isr->retrieve(L"p")));
 
     REQUIRE(isr->valid_unIon(isr->retrieve(L"i"), isr->retrieve(L"a")));
