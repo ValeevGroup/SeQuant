@@ -64,12 +64,37 @@ struct TypeAttr {
   constexpr TypeAttr unIon(TypeAttr other) const {
     return TypeAttr(this->to_int32() | other.to_int32());
   }
-  constexpr const TypeAttr xOr(TypeAttr other) const {
-    return TypeAttr(this->to_int32() xor other.to_int32());
+
+  /// @return union of @p a and @p b, i.e. @p a AND @p b
+  friend constexpr TypeAttr operator|(const TypeAttr a, const TypeAttr b) {
+    return a.unIon(b);
   }
+
+  /// @return `*this` XOR @p other
+  /// @note equivalent to `this->to_int32() ^ other.to_inte32()`
+  constexpr const TypeAttr xOr(TypeAttr other) const {
+    return TypeAttr(this->to_int32() ^ other.to_int32());
+  }
+
+  /// @return @p a XOR @p b
+  friend constexpr TypeAttr operator^(const TypeAttr a, const TypeAttr b) {
+    return a.xOr(b);
+  }
+
+  /// @return intersection of `*this` AND @p other
+  /// @note equivalent to `this->to_int32() & other.to_inte32()`
   constexpr const TypeAttr intersection(TypeAttr other) const {
     return TypeAttr(this->to_int32() & other.to_int32());
   }
+
+  /// @return intersection of @p a AND @p b
+  friend constexpr TypeAttr operator&(const TypeAttr a, const TypeAttr b) {
+    return a.intersection(b);
+  }
+
+  /// @return complement of `*this`
+  /// @note equivalent to `~this->to_int32()`
+  constexpr TypeAttr operator~() const { return ~this->to_int32(); }
 
   friend constexpr bool operator==(const TypeAttr lhs, const TypeAttr rhs) {
     return lhs.to_int32() == rhs.to_int32();
@@ -120,15 +145,45 @@ struct QuantumNumbersAttr {
   /// @return true if this object is non-null (i.e. has any bits set)
   constexpr explicit operator bool() const { return bitset != 0; }
 
-  constexpr QuantumNumbersAttr intersection(QuantumNumbersAttr other) const {
-    return QuantumNumbersAttr(this->to_int32() & other.to_int32());
+  /// @return `*this` XOR @p other
+  /// @note equivalent to `this->to_int32() ^ other.to_inte32()`
+  constexpr QuantumNumbersAttr xOr(QuantumNumbersAttr other) const {
+    return QuantumNumbersAttr(this->to_int32() ^ other.to_int32());
   }
+
+  /// @return @p a XOR @p b
+  friend constexpr QuantumNumbersAttr operator^(const QuantumNumbersAttr a,
+                                                const QuantumNumbersAttr b) {
+    return a.xOr(b);
+  }
+
+  /// @return union of `*this` and @p other, i.e. `*this` AND @p other
+  /// @note equivalent to `this->to_int32() | other.to_int32()`
   constexpr QuantumNumbersAttr unIon(QuantumNumbersAttr other) const {
     return QuantumNumbersAttr(this->to_int32() | other.to_int32());
   }
-  constexpr QuantumNumbersAttr operator~() const {
-    return QuantumNumbersAttr(~this->to_int32());
+
+  /// @return union of @p a and @p b, i.e. @p a AND @p b
+  friend constexpr QuantumNumbersAttr operator|(const QuantumNumbersAttr a,
+                                                const QuantumNumbersAttr b) {
+    return a.unIon(b);
   }
+
+  /// @return intersection of `*this` AND @p other
+  /// @note equivalent to `this->to_int32() & other.to_inte32()`
+  constexpr QuantumNumbersAttr intersection(QuantumNumbersAttr other) const {
+    return QuantumNumbersAttr(this->to_int32() & other.to_int32());
+  }
+
+  /// @return intersection of @p a AND @p b
+  friend constexpr QuantumNumbersAttr operator&(const QuantumNumbersAttr a,
+                                                const QuantumNumbersAttr b) {
+    return a.intersection(b);
+  }
+
+  /// @return complement of `*this`
+  /// @note equivalent to `~this->to_int32()`
+  constexpr QuantumNumbersAttr operator~() const { return ~this->to_int32(); }
 
   friend constexpr bool operator==(QuantumNumbersAttr lhs,
                                    QuantumNumbersAttr rhs) {
@@ -205,14 +260,26 @@ class IndexSpace {
       return static_cast<bool>(this->type()) || static_cast<bool>(this->qns());
     }
 
+    /// union of Attr = union of TypeAttr and union of QuantumNumbersAttr
+    /// @return union of `*this` and @p other, i.e. `*this` AND @p other
+    Attr unIon(Attr other) const {
+      return {this->type().unIon(other.type()), this->qns().unIon(other.qns())};
+    }
+
+    /// @return union of @p a and @p b
+    /// @sa Attr::unIon
+    friend Attr operator|(Attr a, Attr b) { return a.unIon(b); }
+
+    /// intersection of Attr = intersection of TypeAttr and intersection of
+    /// QuantumNumbersAttr
+    /// @return intersection of `*this` AND @p other
     Attr intersection(Attr other) const {
       return Attr(this->type().intersection(other.type()),
                   this->qns().intersection(other.qns()));
     }
-    Attr unIon(Attr other) const {
-      return Attr(this->type().unIon(other.type()),
-                  this->qns().unIon(other.qns()));
-    }
+    /// @return intersection of @p a and @p b
+    /// @sa Attr::intersection
+    friend Attr operator&(Attr a, Attr b) { return a.intersection(b); }
 
     std::vector<Attr> irreducible_reps() const {
       std::vector<Attr> result;
@@ -232,11 +299,9 @@ class IndexSpace {
     std::vector<Attr> excluded_spaces(Attr other) const {
       std::vector<Attr> result;
 
-      // if the excluded space simply forms a union of the two spaces, return
-      // the two spaces unchanged order smallest to largest
-      // TODO try and break this in unit tests
-      if (this->type().unIon(other.type()).to_int32() ==
-          this->xOr(other).to_int32()) {
+      // if the 2 spaces do not overlap
+      // return the two spaces as is, smallest to largest
+      if (!this->type().intersection(other.type())) {
         if (this->type().to_int32() < other.type().to_int32()) {
           result.push_back(*this);
           result.push_back(other);
@@ -246,7 +311,7 @@ class IndexSpace {
         }
         return result;
       }
-      std::bitset<32> xor_bitset(this->xOr(other).to_int32());
+      std::bitset<32> xor_bitset(this->type().xOr(other.type()).to_int32());
       std::vector<std::pair<int, int>> start_stop_ranges;
       /// TODO need to make a cleaner implementation here.
       // std::bitset does not have an iterator
