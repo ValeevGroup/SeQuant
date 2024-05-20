@@ -133,7 +133,7 @@ class Index : public Taggable {
             std::forward<String>(label),
             get_default_context().index_space_registry()
                 ? get_default_context().index_space_registry()->retrieve(label)
-                : IndexSpace::null,
+                : Index::default_space,
             {}) {
     check_nontmp_label();
   }
@@ -696,6 +696,8 @@ class Index : public Taggable {
 
   mutable std::optional<std::wstring> full_label_;
 
+  const static IndexSpace default_space;
+
   /// sorts proto_indices_ if symmetric_proto_indices_
   inline void canonicalize_proto_indices();
 
@@ -785,6 +787,9 @@ class Index : public Taggable {
   }
 
 };  // class Index
+
+inline const IndexSpace Index::default_space{
+    L"", IndexSpace::Type::reserved, IndexSpace::QuantumNumbers::reserved};
 
 void Index::check_for_duplicate_proto_indices() {
 #ifndef NDEBUG
