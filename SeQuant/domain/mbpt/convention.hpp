@@ -12,7 +12,7 @@ namespace mbpt {
 
 /// @brief Conventions for partitioning the single-particle Hilbert space
 enum class Convention {
-  Minimal,  //!< occupied/hole + unoccupied/unoccupied + their union
+  Minimal,  //!< occupied/hole + unoccupied/particle + their union
   SR,       //!< single determinant reference: occupied (frozen + active) +
             //!< unoccupied (active + frozen)
   MR,    //!< multi determinant reference: occupied (frozen + active) + active +

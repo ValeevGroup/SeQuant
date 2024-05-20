@@ -527,9 +527,9 @@ if (BUILD_TESTING)
         target_link_libraries(${example7} SeQuant)
     endif (BTAS_SOURCE_DIR)
 
-
-    foreach (i RANGE 8 12)
-      math(EXPR s "${i} - 7") # map 8..12 -> 1..5
+    set(lastexample 13)
+    foreach (i RANGE 8 ${lastexample})
+      math(EXPR s "${i} - 7") # map 8..13 -> 1..6
       set(example${i} synopsis${s})
       add_executable(${example${i}} EXCLUDE_FROM_ALL
               examples/synopsis/${example${i}}.cpp)
@@ -537,7 +537,6 @@ if (BUILD_TESTING)
     endforeach ()
 
     # add tests for running examples
-    set(lastexample 12)
     foreach (i RANGE ${lastexample})
         if (TARGET ${example${i}})
             add_dependencies(examples-sequant ${example${i}})
