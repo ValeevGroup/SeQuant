@@ -71,7 +71,7 @@ struct TypeAttr {
   }
 
   /// @return `*this` XOR @p other
-  /// @note equivalent to `this->to_int32() ^ other.to_inte32()`
+  /// @note equivalent to `this->to_int32() ^ other.to_int32()`
   constexpr const TypeAttr xOr(TypeAttr other) const {
     return TypeAttr(this->to_int32() ^ other.to_int32());
   }
@@ -82,7 +82,7 @@ struct TypeAttr {
   }
 
   /// @return intersection of `*this` AND @p other
-  /// @note equivalent to `this->to_int32() & other.to_inte32()`
+  /// @note equivalent to `this->to_int32() & other.to_int32()`
   constexpr const TypeAttr intersection(TypeAttr other) const {
     return TypeAttr(this->to_int32() & other.to_int32());
   }
@@ -146,7 +146,7 @@ struct QuantumNumbersAttr {
   constexpr explicit operator bool() const { return bitset != 0; }
 
   /// @return `*this` XOR @p other
-  /// @note equivalent to `this->to_int32() ^ other.to_inte32()`
+  /// @note equivalent to `this->to_int32() ^ other.to_int32()`
   constexpr QuantumNumbersAttr xOr(QuantumNumbersAttr other) const {
     return QuantumNumbersAttr(this->to_int32() ^ other.to_int32());
   }
@@ -170,7 +170,7 @@ struct QuantumNumbersAttr {
   }
 
   /// @return intersection of `*this` AND @p other
-  /// @note equivalent to `this->to_int32() & other.to_inte32()`
+  /// @note equivalent to `this->to_int32() & other.to_int32()`
   constexpr QuantumNumbersAttr intersection(QuantumNumbersAttr other) const {
     return QuantumNumbersAttr(this->to_int32() & other.to_int32());
   }
