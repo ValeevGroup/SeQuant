@@ -19,34 +19,44 @@
 
 namespace sequant {
 
-struct QuantumNumbersAttr;
+struct QuantumNumbersAttr;  // used to constrain TypeAttr ctor
+
+class Index;  // friend of TypeAttr
 
 /// @brief TypeAttr denotes the type of index space.
 ///
 /// This class models a host (complete) space partitioned into disjoint
 /// subspaces. To simplify implementation of set operations
 /// (intersection, union, etc.) it is encoded as a fixed-width (32) bitset.
-struct TypeAttr {
+class TypeAttr {
+ public:
   using bitset_t = int32_t;
-  bitset_t bitset = 0;
 
   /// default ctor creates a null TypeAttr
   constexpr TypeAttr() noexcept = default;
 
-  /// the null object
+  /// the null TypeAttr
   const static TypeAttr null;
 
-  explicit constexpr TypeAttr(bitset_t value) noexcept : bitset(value) {}
+  /// @brief Constructs from a bitset representation
+
+  /// @warning first (most significant) bit is reserved for internal use
+  /// @param bitset bitset representation of this Type
+  /// @pre `(bitset & make_reserved().bitset) == null.bitset`
+  explicit constexpr TypeAttr(bitset_t bitset) noexcept : bitset(bitset) {
+    assert((this->bitset & reserved.bitset) == null.bitset);
+  }
 
   /// construct TypeAddr from things that can be cast to bitset_t, but exclude
-  /// bool and QUantumNumbersAttr
+  /// bool and QuantumNumbersAttr
   template <typename T,
             typename = std::enable_if_t<
                 meta::is_statically_castable_v<std::decay_t<T>, bitset_t> &&
                 !std::is_same_v<std::decay_t<T>, bool> &&
-                !std::is_same_v<std::decay_t<T>, QuantumNumbersAttr>>>
+                !std::is_same_v<std::decay_t<T>, QuantumNumbersAttr> &&
+                !std::is_same_v<std::decay_t<T>, TypeAttr>>>
   constexpr TypeAttr(T &&value) noexcept
-      : bitset(static_cast<bitset_t>(std::forward<T>(value))) {}
+      : TypeAttr(static_cast<bitset_t>(std::forward<T>(value))) {}
 
   constexpr explicit operator int64_t() const {
     return static_cast<int64_t>(bitset);
@@ -111,28 +121,55 @@ struct TypeAttr {
   friend constexpr bool operator<(TypeAttr a, TypeAttr b) {
     return a.to_int32() < b.to_int32();
   }
+
+ private:
+  bitset_t bitset = 0;
+
+  friend class Index;
+
+  /// first (most significant) bit reserved for creating default space used by
+  /// Index that is distinct from the null space
+  const static TypeAttr reserved;
+
+  /// makes reserved object
+  static TypeAttr make_reserved() {
+    TypeAttr result;
+    result.bitset = 0x80000000;
+    return result;
+  }
 };  // struct TypeAttr
 
 inline const TypeAttr TypeAttr::null;
+inline const TypeAttr TypeAttr::reserved = TypeAttr::make_reserved();
 
 /// denotes other quantum numbers (particle type, spin, etc.)
-struct QuantumNumbersAttr {
+class QuantumNumbersAttr {
+ public:
   using bitset_t = int32_t;
-  bitset_t bitset = 0;
 
   /// default ctor creates a null QuantumNumbersAttr
   /// @post `static_cast<bool>(*this) == false`
   constexpr QuantumNumbersAttr() noexcept = default;
 
+  /// the null TypeAttr
   const static QuantumNumbersAttr null;
 
+  /// @brief Constructs from a bitset representation
+
+  /// @warning first (most significant) bit is reserved for internal use
+  /// @param bitset bitset representation of this Type
+  /// @pre `(bitset & make_reserved().bitset) == null.bitset`
   explicit constexpr QuantumNumbersAttr(bitset_t value) noexcept
-      : bitset(value) {}
+      : bitset(value) {
+    assert((this->bitset & reserved.bitset) == null.bitset);
+  }
 
   template <typename QN,
             typename = std::enable_if_t<
                 meta::is_statically_castable_v<std::decay_t<QN>, bitset_t> &&
-                !std::is_same_v<std::decay_t<QN>, bool>>>
+                !std::is_same_v<std::decay_t<QN>, bool> &&
+                !std::is_same_v<std::decay_t<QN>, TypeAttr> &&
+                !std::is_same_v<std::decay_t<QN>, QuantumNumbersAttr>>>
   constexpr QuantumNumbersAttr(QN &&value) noexcept
       : bitset(static_cast<bitset_t>(std::forward<QN>(value))) {}
 
@@ -203,9 +240,27 @@ struct QuantumNumbersAttr {
                                   QuantumNumbersAttr rhs) {
     return lhs.to_int32() < rhs.to_int32();
   }
+
+ private:
+  bitset_t bitset = 0;
+
+  friend class Index;
+
+  /// first (most significant) bit reserved for creating default space used by
+  /// Index that is distinct from the null space
+  const static QuantumNumbersAttr reserved;
+
+  /// makes reserved object
+  static QuantumNumbersAttr make_reserved() {
+    QuantumNumbersAttr result;
+    result.bitset = 0x80000000;
+    return result;
+  }
 };  // struct QuantumNumbersAttr
 
 inline const QuantumNumbersAttr QuantumNumbersAttr::null;
+inline const QuantumNumbersAttr QuantumNumbersAttr::reserved =
+    QuantumNumbersAttr::make_reserved();
 
 /// @brief a collection of attributes which define a space of (1-particle)
 /// states
