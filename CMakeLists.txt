@@ -190,6 +190,8 @@ set(SeQuant_src
         SeQuant/core/eval_expr.cpp
         SeQuant/core/eval_expr.hpp
         SeQuant/core/eval_node.hpp
+        SeQuant/core/export/itf.cpp
+        SeQuant/core/export/itf.hpp
         SeQuant/core/expr.cpp
         SeQuant/core/expr.hpp
         SeQuant/core/expr_algorithm.hpp
@@ -227,6 +229,7 @@ set(SeQuant_src
         SeQuant/core/tensor_network.hpp
         SeQuant/core/timer.hpp
         SeQuant/core/utility/context.hpp
+        SeQuant/core/utility/indices.hpp
         SeQuant/core/utility/macros.hpp
         SeQuant/core/utility/nodiscard.hpp
         SeQuant/core/utility/singleton.hpp
@@ -422,6 +425,8 @@ if (BUILD_TESTING)
             tests/unit/test_math.cpp
             tests/unit/test_string.cpp
             tests/unit/test_latex.cpp
+            tests/unit/test_utilities.cpp
+            tests/unit/test_export.cpp
             )
 
     if (TARGET tiledarray)
