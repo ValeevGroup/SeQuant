@@ -122,7 +122,10 @@ std::shared_ptr<IndexSpaceRegistry> make_F12_sr_spaces() {
       .add_union(L"e", {L"a", L"g"})
       .add_union(L"x", {L"i", L"a"})
       .add_union(L"p", {L"m", L"e"})
+      .add_unIon(L"h", {L"x", L"g"})
+      .add_unIon(L"c", {L"g", L"α'"})
       .add_union(L"α", {L"e", L"α'"})
+      .add_union(L"H", {L"i", L"α"})
       .add_union(L"κ", {L"p", L"α'"}, is_complete);
   add_fermi_spin(isr);
 
