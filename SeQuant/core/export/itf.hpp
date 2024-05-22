@@ -5,6 +5,7 @@
 #ifndef SEQUANT_CORE_EXPORT_ITF_HPP
 #define SEQUANT_CORE_EXPORT_ITF_HPP
 
+#include <SeQuant/core/export/utils.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/tensor.hpp>
 
@@ -46,14 +47,6 @@ struct CodeBlock {
 };
 
 namespace detail {
-
-/// Comparator that identifies Tensors only by their "block", which is defined
-/// by its name, the amount of its indices as well as the space these indices
-/// belong to. Note that it explicitly does not depend on the explicit index
-/// labelling.
-struct TensorBlockCompare {
-  bool operator()(const Tensor &lhs, const Tensor &rhs) const;
-};
 
 /// Replaces one- and two-electron integrals in the given expression with
 /// versions that use the index ordering and tensor naming as expected in ITF

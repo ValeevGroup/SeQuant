@@ -204,8 +204,16 @@ set(SeQuant_src
         SeQuant/core/eval_expr.cpp
         SeQuant/core/eval_expr.hpp
         SeQuant/core/eval_node.hpp
+        SeQuant/core/export/context.cpp
+        SeQuant/core/export/context.hpp
+        SeQuant/core/export/export.hpp
+        SeQuant/core/export/generator.hpp
         SeQuant/core/export/itf.cpp
         SeQuant/core/export/itf.hpp
+        SeQuant/core/export/text_generator.cpp
+        SeQuant/core/export/text_generator.hpp
+        SeQuant/core/export/utils.cpp
+        SeQuant/core/export/utils.hpp
         SeQuant/core/expr.cpp
         SeQuant/core/expr.hpp
         SeQuant/core/expr_algorithm.hpp

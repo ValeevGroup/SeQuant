@@ -277,6 +277,17 @@ class FullBinaryNode {
   [[nodiscard]] bool leaf() const { return !(left_ || right_); }
 
   ///
+  /// \return Size of the tree rooted at this node
+  ///
+  [[nodiscard]] std::size_t size() const {
+    if (leaf()) {
+      return 1;
+    }
+
+    return left().size() + right().size() + 1;
+  }
+
+  ///
   /// \return Returns the data stored by the node.
   T const& operator*() const { return data_; }
 
