@@ -122,9 +122,15 @@ class rand_tensor_yield {
 
 using namespace sequant;
 
-template <typename Iterable,
-          std::enable_if_t<std::is_convertible_v<IteredT<Iterable>, Index>,
-                           bool> = true>
+template <
+    typename Iterable,
+    std::enable_if_t<
+        std::is_convertible_v<sequant::meta::range_value_t<Iterable>, Index> &&
+            !sequant::meta::is_statically_castable_v<
+                Iterable const&, std::wstring>  // prefer the ctor taking the
+                                                // std::wstring
+        ,
+        bool> = true>
 container::svector<long> tidxs(Iterable const& indices) noexcept {
   return sequant::index_hash(indices) | ranges::to<container::svector<long>>;
 }

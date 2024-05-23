@@ -8,9 +8,8 @@
 #include <complex>
 #include <memory>
 #include <range/v3/range/access.hpp>
+#include <range/v3/range/traits.hpp>
 #include <type_traits>
-
-#include <range/v3/range/access.hpp>
 
 namespace sequant {
 
@@ -245,6 +244,11 @@ static constexpr bool is_range_v =
      is_detected_v<is_range_impl::std_end_t, T>) ||
     (is_detected_v<is_range_impl::ranges_begin_t, T> &&
      is_detected_v<is_range_impl::ranges_end_t, T>);
+
+template <typename R,
+          typename =
+              std::enable_if_t<meta::is_range_v<std::remove_reference_t<R>>>>
+using range_value_t = ranges::range_value_t<std::remove_reference_t<R>>;
 
 /// is_same
 /// Checks whether \c T is a \c Base (is either the same class or a sub-class
