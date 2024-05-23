@@ -131,6 +131,8 @@ template <>
 struct is_char<char16_t> : std::true_type {};
 template <>
 struct is_char<char32_t> : std::true_type {};
+template <typename T>
+struct is_char<const T> : is_char<T> {};
 template <class T>
 static constexpr bool is_char_v = is_char<T>::value;
 
