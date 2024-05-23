@@ -474,10 +474,10 @@ class NormalOperator : public Operator<S>,
   /// indices, see the class documentation for more info).
   template <typename IndexSequence1, typename IndexSequence2,
             typename = std::enable_if_t<
-                std::is_same_v<
-                    typename std::decay_t<IndexSequence1>::value_type, Index> &&
-                std::is_same_v<
-                    typename std::decay_t<IndexSequence2>::value_type, Index>>>
+                meta::is_statically_castable_v<
+                    meta::range_value_t<IndexSequence1>, Index> &&
+                meta::is_statically_castable_v<
+                    meta::range_value_t<IndexSequence1>, Index>>>
   NormalOperator(IndexSequence1 &&creator_indices,
                  IndexSequence2 &&annihilator_indices,
                  Vacuum v = get_default_context().vacuum())
