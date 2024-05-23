@@ -19,7 +19,7 @@
 
 namespace sequant {
 
-struct QuantumNumbersAttr;  // used to constrain TypeAttr ctor
+class QuantumNumbersAttr;  // used to constrain TypeAttr ctor
 
 class Index;  // friend of TypeAttr
 
