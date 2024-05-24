@@ -119,11 +119,17 @@ class WickTheorem {
                                         decltype(external_indices_)>)
       external_indices_ = std::forward<IndexContainer>(external_indices);
     else {
-      ranges::for_each(std::forward<IndexContainer>(external_indices),
-                       [this](auto &&v) {
-                         auto result = this->external_indices_.emplace(v);
-                         assert(result.second);
-                       });
+      ranges::for_each(
+          std::forward<IndexContainer>(external_indices), [this](auto &&v) {
+            auto [it, inserted] = this->external_indices_.emplace(v);
+            if (!inserted) {
+              std::wstringstream ss;
+              ss << L"WickTheorem::set_external_indices: "
+                    L"external index " +
+                        to_latex(Index(v)) + L" repeated";
+              throw std::invalid_argument(to_string(ss.str()));
+            }
+          });
     }
     return *this;
   }
