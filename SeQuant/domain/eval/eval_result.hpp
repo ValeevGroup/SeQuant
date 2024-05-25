@@ -753,6 +753,18 @@ class EvalTensorTA final : public EvalResult {
                            TA::DeNest DeNestFlag) const override {
     auto const a = annot_wrap{annot};
 
+    // Lambda to catch Infinity norms
+    auto catch_inf_norm = [](const ArrayT& array) {
+      if constexpr (!TA::is_dense_v<typename ArrayT::policy_type>) {
+        auto tile_norms = array.shape().tile_norms();
+        for (auto const& norm : tile_norms) {
+          if (std::isinf(norm) || std::isnan(norm)) {
+            throw std::runtime_error("Infinity norm detected");
+          }
+        }
+      }
+    };
+
     if (other.is<EvalScalar<numeric_type>>()) {
       auto result = get<ArrayT>();
       auto scalar = other.get<numeric_type>();
@@ -760,12 +772,15 @@ class EvalTensorTA final : public EvalResult {
       log_ta(a.lannot, " * ", scalar, " = ", a.this_annot, "\n");
 
       result(a.this_annot) = scalar * result(a.lannot);
+      catch_inf_norm(result);
 
       decltype(result)::wait_for_lazy_cleanup(result.world());
       return eval_result<this_type>(std::move(result));
     }
 
     if (a.this_annot.empty()) {
+      catch_inf_norm(get<ArrayT>());
+      catch_inf_norm(other.get<ArrayT>());
       // DOT product
       assert(other.is<this_type>());
       numeric_type d =
@@ -779,6 +794,8 @@ class EvalTensorTA final : public EvalResult {
     }
 
     if (!other.is<this_type>()) {
+      catch_inf_norm(get<ArrayT>());
+      catch_inf_norm(other.get<ArrayT>());
       // potential T * ToT
       auto annot_swap = annot;
       std::swap(annot_swap[0], annot_swap[1]);
@@ -793,6 +810,7 @@ class EvalTensorTA final : public EvalResult {
 
     result = TA::einsum(get<ArrayT>()(a.lannot), other.get<ArrayT>()(a.rannot),
                         a.this_annot);
+    catch_inf_norm(result);
     decltype(result)::wait_for_lazy_cleanup(result.world());
     return eval_result<this_type>(std::move(result));
   }
@@ -968,7 +986,8 @@ class EvalTensorOfTensorTA final : public EvalResult {
   [[nodiscard]] ERPtr antisymmetrize(
       container::svector<std::array<size_t, 3>> const& groups) const override {
     // todo
-    // return eval_result<this_type>(antisymmetrize_ta(get<ArrayT>(), groups));
+    // return eval_result<this_type>(antisymmetrize_ta(get<ArrayT>(),
+    // groups));
     return nullptr;
   }
 };
