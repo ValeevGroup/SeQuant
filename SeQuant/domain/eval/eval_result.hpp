@@ -765,6 +765,14 @@ class EvalTensorTA final : public EvalResult {
       }
     };
 
+    // check this and other
+    auto array1 = get<ArrayT>();
+    catch_inf_norm(array1);
+    if (other.is<this_type>()) {
+      auto array2 = other.get<ArrayT>();
+      catch_inf_norm(array2);
+    }
+
     if (other.is<EvalScalar<numeric_type>>()) {
       auto result = get<ArrayT>();
       auto scalar = other.get<numeric_type>();
@@ -779,8 +787,6 @@ class EvalTensorTA final : public EvalResult {
     }
 
     if (a.this_annot.empty()) {
-      catch_inf_norm(get<ArrayT>());
-      catch_inf_norm(other.get<ArrayT>());
       // DOT product
       assert(other.is<this_type>());
       numeric_type d =
@@ -794,8 +800,6 @@ class EvalTensorTA final : public EvalResult {
     }
 
     if (!other.is<this_type>()) {
-      catch_inf_norm(get<ArrayT>());
-      catch_inf_norm(other.get<ArrayT>());
       // potential T * ToT
       auto annot_swap = annot;
       std::swap(annot_swap[0], annot_swap[1]);
