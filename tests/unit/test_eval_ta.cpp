@@ -132,7 +132,7 @@ class rand_tensor_yield {
     }
 
     ERPtr result{nullptr};
-    const auto& isr = get_default_context().index_space_registry();
+    auto isr = get_default_context().index_space_registry();
 
     auto make_extents = [this, &isr](auto&& ixs) -> container::svector<size_t> {
       return ixs | transform([this, &isr](auto const& ix) -> size_t {

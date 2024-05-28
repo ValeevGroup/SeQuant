@@ -49,7 +49,7 @@ class rand_tensor_yield {
     using ranges::views::repeat_n;
     using ranges::views::transform;
     using sequant::IndexSpace;
-    const auto& isr = sequant::get_default_context().index_space_registry();
+    auto isr = sequant::get_default_context().index_space_registry();
 
     assert(ranges::all_of(tnsr.const_braket(),
                           [&isr](auto const& idx) {

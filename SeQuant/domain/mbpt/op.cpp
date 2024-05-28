@@ -75,7 +75,7 @@ qns_t excitation_type_qns(std::size_t K, const IndexSpace::QuantumNumbers SQN) {
     result[0] = {0ul, K};
     result[1] = {0ul, K};
   } else {
-    const auto& isr = get_default_context().index_space_registry();
+    auto isr = get_default_context().index_space_registry();
     const auto& base_spaces = isr->base_spaces();
     // are the active qp spaces base spaces?
     bool aps_base = isr->is_base(isr->particle_space(SQN));
@@ -109,7 +109,7 @@ qns_t interval_excitation_type_qns(std::size_t K,
     result[0] = {0ul, K};
     result[1] = {0ul, K};
   } else {
-    const auto& isr = get_default_context().index_space_registry();
+    auto isr = get_default_context().index_space_registry();
     const auto& base_spaces = isr->base_spaces();
 
     for (int i = 0; i < base_spaces.size(); i++) {
@@ -138,7 +138,7 @@ qns_t deexcitation_type_qns(std::size_t K,
     result[0] = {0ul, K};
     result[1] = {0ul, K};
   } else {
-    const auto& isr = get_default_context().index_space_registry();
+    auto isr = get_default_context().index_space_registry();
     const auto& base_spaces = isr->base_spaces();
     bool aps_base = isr->is_base(isr->particle_space(SQN));
     bool ahs_base = isr->is_base(isr->hole_space(SQN));
@@ -170,7 +170,7 @@ qns_t interval_deexcitation_type_qns(std::size_t K,
     result[0] = {0ul, K};
     result[1] = {0ul, K};
   } else {
-    const auto& isr = get_default_context().index_space_registry();
+    auto isr = get_default_context().index_space_registry();
     const auto& base_spaces = isr->base_spaces();
     for (int i = 0; i < base_spaces.size(); i++) {
       const auto& base_space = base_spaces[i];
@@ -207,7 +207,7 @@ qns_t generic_excitation_qns(std::size_t particle_rank, std::size_t hole_rank,
     result[0] = {0ul, hole_rank};
     result[1] = {0ul, particle_rank};
   } else {
-    const auto& isr = get_default_context().index_space_registry();
+    auto isr = get_default_context().index_space_registry();
     const auto& base_spaces = isr->base_spaces();
     bool aps_base = isr->is_base(isr->particle_space(SQN));
     bool ahs_base = isr->is_base(isr->hole_space(SQN));
@@ -240,7 +240,7 @@ qns_t generic_deexcitation_qns(std::size_t particle_rank, std::size_t hole_rank,
     result[0] = {0ul, particle_rank};
     result[1] = {0ul, hole_rank};
   } else {
-    const auto& isr = get_default_context().index_space_registry();
+    auto isr = get_default_context().index_space_registry();
     const auto& base_spaces = isr->base_spaces();
     bool aps_base = isr->is_base(isr->particle_space(SQN));
     bool ahs_base = isr->is_base(isr->hole_space(SQN));
@@ -280,7 +280,7 @@ qns_t combine(qns_t a, qns_t b) {
     result[1] = na;
     return result;
   } else if (get_default_context().vacuum() == Vacuum::SingleProduct) {
-    const auto& isr = get_default_context().index_space_registry();
+    auto isr = get_default_context().index_space_registry();
     const auto& base_spaces = isr->base_spaces();
     for (auto i = 0; i < base_spaces.size(); i++) {
       auto cre = i * 2;
@@ -427,7 +427,7 @@ OpMaker<S>::OpMaker(OpType op, std::size_t nbra, std::size_t nket,
                     IndexSpace particle_space, IndexSpace hole_space) {
   op_ = op;
   assert(nbra > 0 || nket > 0);
-  const auto& isr = get_default_context().index_space_registry();
+  auto isr = get_default_context().index_space_registry();
   switch (to_class(op)) {
     case OpClass::ex:
       bra_spaces_ = decltype(bra_spaces_)(nbra, particle_space);
@@ -447,7 +447,7 @@ OpMaker<S>::OpMaker(OpType op, std::size_t nbra, std::size_t nket,
 template <Statistics S>
 OpMaker<S>::OpMaker(OpType op, std::size_t nparticle) {
   op_ = op;
-  const auto& isr = get_default_context().index_space_registry();
+  auto isr = get_default_context().index_space_registry();
   auto current_context = get_default_context();
   const auto hole_space = isr->hole_space(Spin::any);
   const auto particle_space = isr->particle_space(Spin::any);
@@ -472,8 +472,7 @@ OpMaker<S>::OpMaker(OpType op, std::size_t nparticle) {
 template <Statistics S>
 ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
                                std::optional<Symmetry> opsymm_opt) const {
-  const auto& isr =
-      get_default_context(Statistics::FermiDirac).index_space_registry();
+  auto isr = get_default_context(Statistics::FermiDirac).index_space_registry();
   // if not given dep, use mbpt::Context::CSV to determine whether to use
   // dependent indices for pure (de)excitation ops
   if (!dep && get_default_formalism().csv() == mbpt::CSV::Yes) {
@@ -545,7 +544,7 @@ ExprPtr F(bool use_tensor, IndexSpace reference_occupied) {
                                  // without providing an occupied indexspace
     // add \bar{g}^{\kappa x}_{\lambda y} \gamma^y_x with x,y in occ_space_type
     auto make_g_contribution = [](const auto occ_space) {
-      const auto& isr = get_default_context().index_space_registry();
+      auto isr = get_default_context().index_space_registry();
       return mbpt::OpMaker<Statistics::FermiDirac>::make(
           {isr->complete_space(Spin::any)}, {isr->complete_space(Spin::any)},
           [=](auto braidxs, auto ketidxs, Symmetry opsymm) {
@@ -578,7 +577,7 @@ ExprPtr F(bool use_tensor, IndexSpace reference_occupied) {
             }
           });
     };
-    const auto& isr = get_default_context().index_space_registry();
+    auto isr = get_default_context().index_space_registry();
     return OpMaker<Statistics::FermiDirac>(OpType::h, 1)() +
            make_g_contribution(reference_occupied);
   }
@@ -629,7 +628,7 @@ ExprPtr P(std::int64_t K) {
 }
 
 ExprPtr A(std::int64_t K) {
-  const auto& isr = get_default_context().index_space_registry();
+  auto isr = get_default_context().index_space_registry();
   assert(K != 0);
   container::svector<IndexSpace> creators;
   container::svector<IndexSpace> annihilators;
@@ -655,7 +654,7 @@ ExprPtr A(std::int64_t K) {
 }
 
 ExprPtr S(std::int64_t K) {
-  const auto& isr = get_default_context().index_space_registry();
+  auto isr = get_default_context().index_space_registry();
   assert(K != 0);
   container::svector<IndexSpace> creators;
   container::svector<IndexSpace> annihilators;
@@ -817,7 +816,7 @@ ExprPtr F(bool use_f_tensor, IndexSpace occupied_density) {
 }
 
 ExprPtr A(std::int64_t K) {
-  const auto& isr = get_default_context().index_space_registry();
+  auto isr = get_default_context().index_space_registry();
   assert(K != 0);
   return ex<op_t>([]() -> std::wstring_view { return L"A"; },
                   [=]() -> ExprPtr { return TensorOp::A(K); },
@@ -980,7 +979,7 @@ bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product,
 ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
                bool use_top) {
   simplify(expr);
-  const auto& isr = get_default_context().index_space_registry();
+  auto isr = get_default_context().index_space_registry();
   const auto spinorbital =
       get_default_context().spbasis() == SPBasis::spinorbital;
   // convention is to use different label for spin-orbital and spin-free RDM

@@ -199,7 +199,7 @@ TEST_CASE("Op", "[elements]") {
       REQUIRE(!is_pure_qpannihilator(fann(L"i_1"), V));
       REQUIRE(is_pure_qpannihilator(fann(L"a_1"), V));
       REQUIRE(!is_pure_qpannihilator(fann(L"p_1"), V));
-      const auto& isr = get_default_context().index_space_registry();
+      auto isr = get_default_context().index_space_registry();
       REQUIRE(!qpannihilator_space(fann(L"i_1"), V));
       REQUIRE(qpannihilator_space(fcre(L"i_1"), V) == isr->retrieve(L"i_1"));
       REQUIRE(!qpannihilator_space(fcre(L"a_1"), V));

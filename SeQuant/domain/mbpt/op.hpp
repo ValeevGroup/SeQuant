@@ -203,7 +203,7 @@ class QuantumNumberChange
     if (get_default_context().vacuum() == Vacuum::Physical) {
       return 2;
     } else if (get_default_context().vacuum() == Vacuum::SingleProduct) {
-      const auto& isr = get_default_context().index_space_registry();
+      auto isr = get_default_context().index_space_registry();
       const auto& isr_base_spaces = isr->base_spaces();
       assert(isr_base_spaces.size() > 0);
       return isr_base_spaces.size() * 2;
@@ -275,7 +275,7 @@ class QuantumNumberChange
 
   interval_t ncre_particles() {
     const auto& qnvec = this->base();
-    const auto& isr = get_default_context().index_space_registry();
+    auto isr = get_default_context().index_space_registry();
     const auto& base_spaces = isr->base_spaces();
     interval_t result = 0;
     for (unsigned int i = 0; i < base_spaces.size(); i++) {
@@ -293,7 +293,7 @@ class QuantumNumberChange
 
   interval_t nann_particles() {
     const auto& qnvec = this->base();
-    const auto& isr = get_default_context().index_space_registry();
+    auto isr = get_default_context().index_space_registry();
     const auto& base_spaces = isr->base_spaces();
     interval_t result = 0;
     for (unsigned int i = 0; i < base_spaces.size(); i++) {
@@ -311,7 +311,7 @@ class QuantumNumberChange
 
   interval_t ncre_holes() {
     const auto& qnvec = this->base();
-    const auto& isr = get_default_context().index_space_registry();
+    auto isr = get_default_context().index_space_registry();
     const auto& base_spaces = isr->base_spaces();
     interval_t result = 0;
     for (unsigned int i = 0; i < base_spaces.size(); i++) {
@@ -329,7 +329,7 @@ class QuantumNumberChange
 
   interval_t nann_holes() {
     const auto& qnvec = this->base();
-    const auto& isr = get_default_context().index_space_registry();
+    auto isr = get_default_context().index_space_registry();
     const auto& base_spaces = isr->base_spaces();
     interval_t result = 0;
     for (unsigned int i = 0; i < base_spaces.size(); i++) {

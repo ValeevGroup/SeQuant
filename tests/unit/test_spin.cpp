@@ -44,7 +44,7 @@ TEST_CASE("Spin", "[spin]") {
   };
 
   SECTION("protoindices supported") {
-    const auto& isr = get_default_context().index_space_registry();
+    auto isr = get_default_context().index_space_registry();
     Index i1(L"i_1", isr->retrieve(L"i"));
     Index a1(L"a_1", isr->retrieve(L"a"), {i1});
 

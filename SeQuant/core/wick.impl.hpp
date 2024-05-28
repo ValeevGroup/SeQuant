@@ -50,7 +50,7 @@ inline container::map<Index, Index> compute_index_replacement_rules(
   // computes an index in intersection of space1 and space2
   auto make_intersection_index = [&idxfac](const IndexSpace &space1,
                                            const IndexSpace &space2) {
-    const auto &isr = sequant::get_default_context().index_space_registry();
+    auto isr = sequant::get_default_context(S).index_space_registry();
     const auto intersection_space = isr->intersection(space1, space2);
     if (!intersection_space) throw zero_result{};
     return idxfac.make(intersection_space);
@@ -93,7 +93,7 @@ inline container::map<Index, Index> compute_index_replacement_rules(
   // dst2 and dst
   auto add_rules = [&result, &idxfac, &proto, &make_intersection_index](
                        const Index &src1, const Index &src2, const Index &dst) {
-    const auto &isr = get_default_context().index_space_registry();
+    auto isr = get_default_context(S).index_space_registry();
     // are there replacement rules already for src{1,2}?
     auto src1_it = result.find(src1);
     auto src2_it = result.find(src2);
@@ -166,7 +166,7 @@ inline container::map<Index, Index> compute_index_replacement_rules(
     }
   };
 
-  const auto &isr = get_default_context().index_space_registry();
+  auto isr = get_default_context(S).index_space_registry();
   /// this makes the list of replacements ... we do not mutate the expressions
   /// to keep the information about which indices are related
   for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {

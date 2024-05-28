@@ -14,7 +14,7 @@ TEST_CASE("Index", "[elements][index]") {
   using namespace sequant;
 
   SECTION("constructors") {
-    const auto& isr = get_default_context().index_space_registry();
+    auto isr = get_default_context().index_space_registry();
     Index i{};
 
     REQUIRE_NOTHROW(
@@ -231,7 +231,7 @@ TEST_CASE("Index", "[elements][index]") {
   SECTION("label manipulation") {
     auto context_resetter = set_scoped_default_context(
         Context(sequant::mbpt::make_F12_sr_spaces(), Vacuum::SingleProduct));
-    const auto& isr = get_default_context().index_space_registry();
+    auto isr = get_default_context().index_space_registry();
     Index alpha(L"α", isr->retrieve(L"α"));
     Index alpha1(L"α_1", isr->retrieve(L"α"));
     Index alpha_up(L"α↑", isr->retrieve(L"α"));

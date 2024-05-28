@@ -26,7 +26,7 @@ sequant::ExprPtr extract(sequant::ExprPtr expr,
 
 TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
   using namespace sequant;
-  const auto& isr = get_default_context().index_space_registry();
+  auto isr = get_default_context().index_space_registry();
   auto idx2size = [nocc = 4, nvirt = 140, isr](Index const& idx) {
     if (idx.space() == isr->retrieve(L"i")) return nocc;
     if (idx.space() == isr->retrieve(L"a"))
