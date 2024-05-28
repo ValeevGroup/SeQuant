@@ -126,7 +126,7 @@ class IndexSpaceRegistry {
   /// Index::label() )
   /// @return pointer to IndexSpace associated with that key, or nullptr if not
   /// found
-  template <typename S, typename = meta::EnableIfAnyStringConvertible<S>>
+  template <typename S, typename = meta::EnableIfAllBasicStringConvertible<S>>
   const IndexSpace* retrieve_ptr(S&& label) const {
     auto it =
         spaces_->find(IndexSpace::reduce_key(to_basic_string_view(label)));
@@ -138,7 +138,7 @@ class IndexSpaceRegistry {
   /// Index::label() )
   /// @return IndexSpace associated with that key
   /// @throw IndexSpace::bad_key if matching space is not found
-  template <typename S, typename = meta::EnableIfAnyStringConvertible<S>>
+  template <typename S, typename = meta::EnableIfAllBasicStringConvertible<S>>
   const IndexSpace& retrieve(S&& label) const {
     if (const auto* ptr = retrieve_ptr(std::forward<S>(label))) {
       return *ptr;
@@ -208,7 +208,7 @@ class IndexSpaceRegistry {
   /// @param label a @c base_key of an IndexSpace, or a label of an Index (see
   /// Index::label() )
   /// @return true, if an IndexSpace with key @p label is registered
-  template <typename S, typename = meta::EnableIfAnyStringConvertible<S>>
+  template <typename S, typename = meta::EnableIfAllBasicStringConvertible<S>>
   bool contains(S&& label) const {
     return this->retrieve_ptr(std::forward<S>(label));
   }
@@ -281,7 +281,7 @@ class IndexSpaceRegistry {
   /// @throw std::invalid_argument if `type_label` or `type` matches
   /// an already registered IndexSpace
   template <typename S, typename... OptionalArgs,
-            typename = meta::EnableIfAnyStringConvertible<S>>
+            typename = meta::EnableIfAllBasicStringConvertible<S>>
   IndexSpaceRegistry& add(S&& type_label, IndexSpace::Type type,
                           OptionalArgs&&... args) {
     auto h_args = boost::hana::make_tuple(args...);
@@ -342,7 +342,7 @@ class IndexSpaceRegistry {
   /// is_particle }
   /// @return reference to `this`
   template <typename S, typename IndexSpaceOrLabel, typename... OptionalArgs,
-            typename = meta::EnableIfAnyStringConvertible<S>,
+            typename = meta::EnableIfAllBasicStringConvertible<S>,
             typename = std::enable_if_t<
                 (std::is_same_v<std::decay_t<IndexSpaceOrLabel>, IndexSpace> ||
                  meta::is_basic_string_convertible_v<
@@ -396,7 +396,7 @@ class IndexSpaceRegistry {
 
   /// alias to add_unIon
   template <typename S, typename IndexSpaceOrLabel, typename... OptionalArgs,
-            typename = meta::EnableIfAnyStringConvertible<S>,
+            typename = meta::EnableIfAllBasicStringConvertible<S>,
             typename = std::enable_if_t<
                 (std::is_same_v<std::decay_t<IndexSpaceOrLabel>, IndexSpace> ||
                  meta::is_basic_string_convertible_v<
@@ -418,7 +418,7 @@ class IndexSpaceRegistry {
   /// is_particle }
   /// @return reference to `this`
   template <typename S, typename IndexSpaceOrLabel, typename... OptionalArgs,
-            typename = meta::EnableIfAnyStringConvertible<S>,
+            typename = meta::EnableIfAllBasicStringConvertible<S>,
             typename = std::enable_if_t<
                 (std::is_same_v<std::decay_t<IndexSpaceOrLabel>, IndexSpace> ||
                  meta::is_basic_string_convertible_v<
@@ -487,7 +487,7 @@ class IndexSpaceRegistry {
   /// @brief equivalent to `remove(this->retrieve(label))`
   /// @param label space label
   /// @return reference to `this`
-  template <typename S, typename = meta::EnableIfAnyStringConvertible<S>>
+  template <typename S, typename = meta::EnableIfAllBasicStringConvertible<S>>
   IndexSpaceRegistry& remove(S&& label) {
     auto&& IS = this->retrieve(std::forward<S>(label));
     return this->remove(IS);
@@ -750,7 +750,7 @@ class IndexSpaceRegistry {
   /// equivalent to `vacuum_occupied_space(retrieve(l).type())`
   /// @param l label of a known IndexSpace
   /// @return reference to `this`
-  template <typename S, typename = meta::EnableIfAnyStringConvertible<S>>
+  template <typename S, typename = meta::EnableIfAllBasicStringConvertible<S>>
   IndexSpaceRegistry& vacuum_occupied_space(S&& l) {
     return vacuum_occupied_space(this->retrieve(std::forward<S>(l)).type());
   }
@@ -827,7 +827,7 @@ class IndexSpaceRegistry {
   /// equivalent to `reference_occupied_space(retrieve(l).type())`
   /// @param l label of a known IndexSpace
   /// @return reference to `this`
-  template <typename S, typename = meta::EnableIfAnyStringConvertible<S>>
+  template <typename S, typename = meta::EnableIfAllBasicStringConvertible<S>>
   IndexSpaceRegistry& reference_occupied_space(S&& l) {
     return reference_occupied_space(this->retrieve(std::forward<S>(l)).type());
   }
@@ -898,7 +898,7 @@ class IndexSpaceRegistry {
   /// equivalent to `complete_space(retrieve(l).type())`
   /// @param l label of a known IndexSpace
   /// @return reference to `this`
-  template <typename S, typename = meta::EnableIfAnyStringConvertible<S>>
+  template <typename S, typename = meta::EnableIfAllBasicStringConvertible<S>>
   IndexSpaceRegistry& complete_space(S&& l) {
     return complete_space(this->retrieve(std::forward<S>(l)).type());
   }
@@ -973,7 +973,7 @@ class IndexSpaceRegistry {
   /// equivalent to `hole_space(retrieve(l).type())`
   /// @param l label of a known IndexSpace
   /// @return reference to `this`
-  template <typename S, typename = meta::EnableIfAnyStringConvertible<S>>
+  template <typename S, typename = meta::EnableIfAllBasicStringConvertible<S>>
   IndexSpaceRegistry& hole_space(S&& l) {
     return hole_space(this->retrieve(std::forward<S>(l)).type());
   }
@@ -1041,7 +1041,7 @@ class IndexSpaceRegistry {
   /// equivalent to `particle_space(retrieve(l).type())`
   /// @param l label of a known IndexSpace
   /// @return reference to `this`
-  template <typename S, typename = meta::EnableIfAnyStringConvertible<S>>
+  template <typename S, typename = meta::EnableIfAllBasicStringConvertible<S>>
   IndexSpaceRegistry& particle_space(S&& l) {
     return particle_space(this->retrieve(std::forward<S>(l)).type());
   }

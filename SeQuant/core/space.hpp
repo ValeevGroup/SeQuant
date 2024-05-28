@@ -363,7 +363,7 @@ class IndexSpace {
   /// IndexSpace::base_key() or Index::label()
   struct bad_key : std::invalid_argument {
     bad_key() : std::invalid_argument("bad key") {}
-    template <typename S, typename = meta::EnableIfAnyStringConvertible<S>>
+    template <typename S, typename = meta::EnableIfAllBasicStringConvertible<S>>
     bad_key(S &&key)
         : std::invalid_argument(std::string("bad key: ") +
                                 sequant::to_string(key)) {}
@@ -417,7 +417,7 @@ class IndexSpace {
 
   explicit operator bool() const { return *this != null; }
 
-  template <typename S, typename = meta::EnableIfAnyStringConvertible<S>>
+  template <typename S, typename = meta::EnableIfAllBasicStringConvertible<S>>
   IndexSpace(S &&type_label, TypeAttr typeattr,
              QuantumNumbersAttr qnattr = QuantumNumbersAttr{0},
              unsigned long approximate_size = 10)
