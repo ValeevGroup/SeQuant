@@ -122,7 +122,8 @@ class IndexSpaceRegistry {
   decltype(auto) end() const { return spaces_->cend(); }
 
   /// @brief retrieve a pointer to IndexSpace from the registry by the label
-  /// @param label can be numbered or the @c base_key
+  /// @param label a @c base_key of an IndexSpace, or a label of an Index (see
+  /// Index::label() )
   /// @return pointer to IndexSpace associated with that key, or nullptr if not
   /// found
   template <typename S, typename = meta::EnableIfAnyStringConvertible<S>>
@@ -133,7 +134,8 @@ class IndexSpaceRegistry {
   }
 
   /// @brief retrieve an IndexSpace from the registry by the label
-  /// @param label can be numbered or the @c base_key
+  /// @param label a @c base_key of an IndexSpace, or a label of an Index (see
+  /// Index::label() )
   /// @return IndexSpace associated with that key
   /// @throw IndexSpace::bad_key if matching space is not found
   template <typename S, typename = meta::EnableIfAnyStringConvertible<S>>
@@ -200,6 +202,38 @@ class IndexSpaceRegistry {
           std::to_string(space_attr.type().to_int32()) +
           " , IndexSpace::QuantumNumbers=" +
           std::to_string(space_attr.qns().to_int32()) + " } combination");
+  }
+
+  /// queries presence of a registered IndexSpace
+  /// @param label a @c base_key of an IndexSpace, or a label of an Index (see
+  /// Index::label() )
+  /// @return true, if an IndexSpace with key @p label is registered
+  template <typename S, typename = meta::EnableIfAnyStringConvertible<S>>
+  bool contains(S&& label) const {
+    return this->retrieve_ptr(std::forward<S>(label));
+  }
+
+  /// queries presence of a registered IndexSpace
+  /// @param space an IndexSpace object
+  /// @return true, if an IndexSpace with key `{type,qns}` is registered
+  bool contains(const IndexSpace& space) const {
+    return this->retrieve_ptr(space.type(), space.qns());
+  }
+
+  /// queries presence of a registered IndexSpace
+  /// @param type an IndexSpace::Type object
+  /// @param qns an IndexSpace::QuantumNumbers object
+  /// @return true, if an IndexSpace with key `{type,qns}` is registered
+  bool contains(const IndexSpace::Type& type,
+                const IndexSpace::QuantumNumbers& qns) const {
+    return this->retrieve_ptr(type, qns);
+  }
+
+  /// queries presence of a registered IndexSpace
+  /// @param space_attr an IndexSpace::Attr object
+  /// @return true, if an IndexSpace with key @p space_attr is registered
+  bool contains(const IndexSpace::Attr& space_attr) const {
+    return this->retrieve_ptr(space_attr);
   }
 
   /// @name adding IndexSpace objects to the registry
