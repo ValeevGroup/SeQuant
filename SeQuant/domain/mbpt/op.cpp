@@ -1126,7 +1126,8 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
 
         if (!replacement_rules.empty()) {
           sequant::detail::apply_index_replacement_rules(
-              product_ptr, replacement_rules, external_indices, all_indices);
+              product_ptr, replacement_rules, external_indices, all_indices,
+              isr);
         }
       };
 

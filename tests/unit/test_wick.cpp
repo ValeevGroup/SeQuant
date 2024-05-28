@@ -127,9 +127,9 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
     REQUIRE_NOTHROW(BWickTheorem{BNOperatorSeq{}});
 
     {
-      auto opseq1 = FNOperatorSeq({FNOperator({L"i_1"}, {L"i_2"}),
-                                   FNOperator({L"i_3"}, {L"i_4"}),
-                                   FNOperator({L"i_5"}, {L"i_6"})});
+      auto opseq1 = ex<FNOperatorSeq>(FNOperator({L"i_1"}, {L"i_2"}),
+                                      FNOperator({L"i_3"}, {L"i_4"}),
+                                      FNOperator({L"i_5"}, {L"i_6"}));
       REQUIRE_NOTHROW(FWickTheorem{opseq1});
       auto wick1 = FWickTheorem{opseq1};
 
@@ -168,8 +168,8 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
     // number operator
     {
       {
-        auto opseq1 =
-            FNOperatorSeq({FNOperator({L"i_1"}, {}), FNOperator({}, {L"i_2"})});
+        auto opseq1 = ex<FNOperatorSeq>(FNOperator({L"i_1"}, {}),
+                                        FNOperator({}, {L"i_2"}));
         auto wick1 = FWickTheorem{opseq1};
         REQUIRE_NOTHROW(wick1.compute());
         // full contractions = null (N is already in normal form)
@@ -186,8 +186,8 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
         REQUIRE(partial_contractions->as<Product>().size() == 1);
       }
       {
-        auto opseq1 =
-            BNOperatorSeq({BNOperator({L"i_1"}, {}), BNOperator({}, {L"i_2"})});
+        auto opseq1 = ex<BNOperatorSeq>(BNOperator({L"i_1"}, {}),
+                                        BNOperator({}, {L"i_2"}));
         auto wick1 = BWickTheorem{opseq1};
         REQUIRE_NOTHROW(wick1.compute());
         // full contractions = null
@@ -208,8 +208,8 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
     // hole number operator
     {
       {
-        auto opseq1 =
-            FNOperatorSeq({FNOperator({}, {L"i_1"}), FNOperator({L"i_2"}, {})});
+        auto opseq1 = ex<FNOperatorSeq>(FNOperator({}, {L"i_1"}),
+                                        FNOperator({L"i_2"}, {}));
         auto wick1 = FWickTheorem{opseq1};
         REQUIRE_NOTHROW(wick1.compute());
         // full contractions = delta
@@ -228,8 +228,8 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
             L"{ \\bigl({{s^{{i_2}}_{{i_1}}}} - {{a^{{i_2}}_{{i_1}}}}\\bigr) }");
       }
       {
-        auto opseq1 =
-            BNOperatorSeq({BNOperator({}, {L"i_1"}), BNOperator({L"i_2"}, {})});
+        auto opseq1 = ex<BNOperatorSeq>(BNOperator({}, {L"i_1"}),
+                                        BNOperator({L"i_2"}, {}));
         auto wick1 = BWickTheorem{opseq1};
         REQUIRE_NOTHROW(wick1.compute());
         // full contractions = delta
@@ -251,9 +251,9 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
 
     // three 1-body operators
     {
-      auto opseq1 = FNOperatorSeq({FNOperator({L"i_1"}, {L"i_2"}),
-                                   FNOperator({L"i_3"}, {L"i_4"}),
-                                   FNOperator({L"i_5"}, {L"i_6"})});
+      auto opseq1 = ex<FNOperatorSeq>(FNOperator({L"i_1"}, {L"i_2"}),
+                                      FNOperator({L"i_3"}, {L"i_4"}),
+                                      FNOperator({L"i_5"}, {L"i_6"}));
       auto wick1 = FWickTheorem{opseq1};
       REQUIRE_NOTHROW(wick1.compute());
       auto result = FWickTheorem{opseq1}.compute();
@@ -263,8 +263,8 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
 
     // two 2-body operators
     {
-      auto opseq = FNOperatorSeq(
-          {FNOperator({}, {L"i_1", L"i_2"}), FNOperator({L"i_3", L"i_4"}, {})});
+      auto opseq = ex<FNOperatorSeq>(FNOperator({}, {L"i_1", L"i_2"}),
+                                     FNOperator({L"i_3", L"i_4"}, {}));
       auto wick = FWickTheorem{opseq};
       REQUIRE_NOTHROW(wick.compute());
       auto result = wick.compute();
@@ -274,8 +274,8 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
 
     // two 3-body operators
     {
-      auto opseq = FNOperatorSeq({FNOperator({}, {L"i_1", L"i_2", L"i_3"}),
-                                  FNOperator({L"i_4", L"i_5", L"i_6"}, {})});
+      auto opseq = ex<FNOperatorSeq>(FNOperator({}, {L"i_1", L"i_2", L"i_3"}),
+                                     FNOperator({L"i_4", L"i_5", L"i_6"}, {}));
       auto wick = FWickTheorem{opseq};
       REQUIRE_NOTHROW(wick.compute());
       auto result = wick.compute();
@@ -286,8 +286,8 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
     // two 4-body operators
     {
       auto opseq =
-          FNOperatorSeq({FNOperator({}, {L"i_1", L"i_2", L"i_3", L"i_4"}),
-                         FNOperator({L"i_5", L"i_6", L"i_7", L"i_8"}, {})});
+          ex<FNOperatorSeq>(FNOperator({}, {L"i_1", L"i_2", L"i_3", L"i_4"}),
+                            FNOperator({L"i_5", L"i_6", L"i_7", L"i_8"}, {}));
       auto wick = FWickTheorem{opseq};
       REQUIRE_NOTHROW(wick.compute());
       auto result = wick.compute();
@@ -297,9 +297,9 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
 
     // 1/2 * 1 * 1/2 body ops, full contraction
     {
-      auto opseq = FNOperatorSeq({FNOperator({}, {L"i_1"}),
-                                  FNOperator({L"i_2"}, {L"i_3"}),
-                                  FNOperator({L"i_4"}, {})});
+      auto opseq = ex<FNOperatorSeq>(FNOperator({}, {L"i_1"}),
+                                     FNOperator({L"i_2"}, {L"i_3"}),
+                                     FNOperator({L"i_4"}, {}));
       auto wick = FWickTheorem{opseq};
       REQUIRE_NOTHROW(wick.compute());
       auto result = wick.compute();
@@ -309,9 +309,9 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
 
     // 1/2 * 1 * 1/2 body ops, partial contraction
     {
-      auto opseq = FNOperatorSeq({FNOperator({}, {L"i_1"}),
-                                  FNOperator({L"i_2"}, {L"i_3"}),
-                                  FNOperator({L"i_4"}, {})});
+      auto opseq = ex<FNOperatorSeq>(FNOperator({}, {L"i_1"}),
+                                     FNOperator({L"i_2"}, {L"i_3"}),
+                                     FNOperator({L"i_4"}, {}));
       auto wick = FWickTheorem{opseq};
       REQUIRE_NOTHROW(wick.full_contractions(false).compute());
       auto result = wick.full_contractions(false).compute();
@@ -327,9 +327,9 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
 
     // three 1-body operators, partial contraction
     {
-      auto opseq1 = FNOperatorSeq({FNOperator({L"i_1"}, {L"i_2"}),
-                                   FNOperator({L"i_3"}, {L"i_4"}),
-                                   FNOperator({L"i_5"}, {L"i_6"})});
+      auto opseq1 = ex<FNOperatorSeq>(FNOperator({L"i_1"}, {L"i_2"}),
+                                      FNOperator({L"i_3"}, {L"i_4"}),
+                                      FNOperator({L"i_5"}, {L"i_6"}));
       auto wick1 = FWickTheorem{opseq1};
       REQUIRE_NOTHROW(wick1.full_contractions(false).compute());
       auto result = FWickTheorem{opseq1}.full_contractions(false).compute();
@@ -346,8 +346,8 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
     // two 2-body operators, partial contraction: Eq. 9b of DOI 10.1063/1.474405
     {
       auto opseq =
-          FNOperatorSeq({FNOperator({L"i_1", L"i_2"}, {L"i_3", L"i_4"}),
-                         FNOperator({L"i_5", L"i_6"}, {L"i_7", L"i_8"})});
+          ex<FNOperatorSeq>(FNOperator({L"i_1", L"i_2"}, {L"i_3", L"i_4"}),
+                            FNOperator({L"i_5", L"i_6"}, {L"i_7", L"i_8"}));
       auto wick = FWickTheorem{opseq};
       REQUIRE_NOTHROW(wick.full_contractions(false).compute());
       auto result = wick.full_contractions(false).compute();
@@ -396,8 +396,8 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
 
     // two (pure qp) 1-body operators
     {
-      auto opseq = FNOperatorSeq(
-          {FNOperator({L"i_1"}, {L"a_1"}), FNOperator({L"a_2"}, {L"i_2"})});
+      auto opseq = ex<FNOperatorSeq>(FNOperator({L"i_1"}, {L"a_1"}),
+                                     FNOperator({L"a_2"}, {L"i_2"}));
       auto wick = FWickTheorem{opseq};
       REQUIRE_NOTHROW(wick.compute());
       auto result = wick.compute();
@@ -413,8 +413,8 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
 
     // two (pure qp) N-nonconserving 2-body operators
     {
-      auto opseq = FNOperatorSeq({FNOperator({L"i_1", L"i_2"}, {L"a_1"}),
-                                  FNOperator({L"a_2"}, {L"i_3", L"i_4"})});
+      auto opseq = ex<FNOperatorSeq>(FNOperator({L"i_1", L"i_2"}, {L"a_1"}),
+                                     FNOperator({L"a_2"}, {L"i_3", L"i_4"}));
       auto wick = FWickTheorem{opseq};
       REQUIRE_NOTHROW(wick.compute());
       auto result = wick.compute();
@@ -424,8 +424,8 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
 
     // two general 1-body operators
     {
-      auto opseq = FNOperatorSeq(
-          {FNOperator({L"p_1"}, {L"p_2"}), FNOperator({L"p_3"}, {L"p_4"})});
+      auto opseq = ex<FNOperatorSeq>(FNOperator({L"p_1"}, {L"p_2"}),
+                                     FNOperator({L"p_3"}, {L"p_4"}));
       auto wick = FWickTheorem{opseq};
       REQUIRE_NOTHROW(wick.compute());
       auto result = wick.compute();
@@ -440,8 +440,8 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
     // two general 1-body operators, partial contractions: Eq. 21a of
     // DOI 10.1063/1.474405
     {
-      auto opseq = FNOperatorSeq(
-          {FNOperator({L"p_1"}, {L"p_2"}), FNOperator({L"p_3"}, {L"p_4"})});
+      auto opseq = ex<FNOperatorSeq>(FNOperator({L"p_1"}, {L"p_2"}),
+                                     FNOperator({L"p_3"}, {L"p_4"}));
       auto wick = FWickTheorem{opseq};
       REQUIRE_NOTHROW(wick.full_contractions(false).compute());
       auto result = wick.full_contractions(false).compute();
@@ -461,8 +461,8 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
     // two (pure qp) 2-body operators
     {
       auto opseq =
-          FNOperatorSeq({FNOperator({L"i_1", L"i_2"}, {L"a_1", L"a_2"}),
-                         FNOperator({L"a_3", L"a_4"}, {L"i_3", L"i_4"})});
+          ex<FNOperatorSeq>(FNOperator({L"i_1", L"i_2"}, {L"a_1", L"a_2"}),
+                            FNOperator({L"a_3", L"a_4"}, {L"i_3", L"i_4"}));
       auto wick = FWickTheorem{opseq};
       REQUIRE_NOTHROW(wick.compute());
       auto result = wick.compute();
@@ -507,9 +507,9 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
     }
     // two (pure qp) 3-body operators
     {
-      auto opseq = FNOperatorSeq(
-          {FNOperator({L"i_1", L"i_2", L"i_3"}, {L"a_1", L"a_2", L"a_3"}),
-           FNOperator({L"a_4", L"a_5", L"a_6"}, {L"i_4", L"i_5", L"i_6"})});
+      auto opseq = ex<FNOperatorSeq>(
+          FNOperator({L"i_1", L"i_2", L"i_3"}, {L"a_1", L"a_2", L"a_3"}),
+          FNOperator({L"a_4", L"a_5", L"a_6"}, {L"i_4", L"i_5", L"i_6"}));
       auto wick = FWickTheorem{opseq};
       REQUIRE_NOTHROW(wick.compute());
       auto result = wick.compute();
@@ -521,8 +521,8 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
     // contraction: Eq. 9 of DOI 10.1063/1.474405
     {
       auto opseq =
-          FNOperatorSeq({FNOperator({L"p_1"}, {L"p_2"}),
-                         FNOperator({L"p_3", L"p_4"}, {L"p_5", L"p_6"})});
+          ex<FNOperatorSeq>(FNOperator({L"p_1"}, {L"p_2"}),
+                            FNOperator({L"p_3", L"p_4"}, {L"p_5", L"p_6"}));
       auto wick = FWickTheorem{opseq};
       REQUIRE_NOTHROW(wick.full_contractions(false).compute());
       auto result = wick.full_contractions(false).compute();
@@ -533,8 +533,8 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
     // two general 2-body operators
     {
       auto opseq =
-          FNOperatorSeq({FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}),
-                         FNOperator({L"p_5", L"p_6"}, {L"p_7", L"p_8"})});
+          ex<FNOperatorSeq>(FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}),
+                            FNOperator({L"p_5", L"p_6"}, {L"p_7", L"p_8"}));
       auto wick = FWickTheorem{opseq};
       REQUIRE_NOTHROW(wick.compute());
       auto result = wick.compute();
@@ -545,8 +545,8 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
     // DOI 10.1063/1.474405
     {
       auto opseq =
-          FNOperatorSeq({FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}),
-                         FNOperator({L"p_5", L"p_6"}, {L"p_7", L"p_8"})});
+          ex<FNOperatorSeq>(FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}),
+                            FNOperator({L"p_5", L"p_6"}, {L"p_7", L"p_8"}));
       auto wick = FWickTheorem{opseq};
       REQUIRE_NOTHROW(wick.full_contractions(false).compute());
       auto result = wick.full_contractions(false).compute();
@@ -557,8 +557,8 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
     // one general 2-body operator and one 2-body excitation operator
     {
       auto opseq =
-          FNOperatorSeq({FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}),
-                         FNOperator({L"a_3", L"a_4"}, {L"i_3", L"i_4"})});
+          ex<FNOperatorSeq>(FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}),
+                            FNOperator({L"a_3", L"a_4"}, {L"i_3", L"i_4"}));
       auto wick = FWickTheorem{opseq};
       REQUIRE_NOTHROW(wick.compute());
       auto result = wick.compute();
@@ -603,9 +603,9 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
 
     // two general 3-body operators
     {
-      auto opseq = FNOperatorSeq(
-          {FNOperator({L"p_1", L"p_2", L"p_3"}, {L"p_4", L"p_5", L"p_6"}),
-           FNOperator({L"p_7", L"p_8", L"p_9"}, {L"p_10", L"p_11", L"p_12"})});
+      auto opseq = ex<FNOperatorSeq>(
+          FNOperator({L"p_1", L"p_2", L"p_3"}, {L"p_4", L"p_5", L"p_6"}),
+          FNOperator({L"p_7", L"p_8", L"p_9"}, {L"p_10", L"p_11", L"p_12"}));
       auto wick = FWickTheorem{opseq};
       REQUIRE_NOTHROW(wick.compute());
       auto result = wick.compute();
@@ -615,9 +615,9 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
 
     // two N-nonconserving operators
     {
-      auto opseq = FNOperatorSeq(
-          {FNOperator({L"p_1", L"p_2", L"p_3"}, {L"p_4", L"p_5"}),
-           FNOperator({L"p_7", L"p_8"}, {L"p_10", L"p_11", L"p_12"})});
+      auto opseq = ex<FNOperatorSeq>(
+          FNOperator({L"p_1", L"p_2", L"p_3"}, {L"p_4", L"p_5"}),
+          FNOperator({L"p_7", L"p_8"}, {L"p_10", L"p_11", L"p_12"}));
       auto wick = FWickTheorem{opseq};
       REQUIRE_NOTHROW(wick.compute());
       auto result = wick.compute();
@@ -646,9 +646,9 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
 
     // odd number of ops -> full contraction is 0
     {
-      auto opseq = FNOperatorSeq(
-          {FNOperator({L"p_1", L"p_2"}, {L"p_4", L"p_5"}),
-           FNOperator({L"p_7", L"p_8"}, {L"p_10", L"p_11", L"p_12"})});
+      auto opseq = ex<FNOperatorSeq>(
+          FNOperator({L"p_1", L"p_2"}, {L"p_4", L"p_5"}),
+          FNOperator({L"p_7", L"p_8"}, {L"p_10", L"p_11", L"p_12"}));
       auto wick = FWickTheorem{opseq};
       REQUIRE_NOTHROW(wick.compute());
       auto result = wick.compute();
@@ -660,11 +660,11 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
     SEQUANT_PROFILE_SINGLE(
         "wick(4^4)",
         {
-          auto opseq =
-              FNOperatorSeq({FNOperator({L"p_1", L"p_2", L"p_3", L"p_4"},
-                                        {L"p_5", L"p_6", L"p_7", L"p_8"}),
-                             FNOperator({L"p_21", L"p_22", L"p_23", L"p_24"},
-                                        {L"p_25", L"p_26", L"p_27", L"p_28"})});
+          auto opseq = ex<FNOperatorSeq>(
+              FNOperator({L"p_1", L"p_2", L"p_3", L"p_4"},
+                         {L"p_5", L"p_6", L"p_7", L"p_8"}),
+              FNOperator({L"p_21", L"p_22", L"p_23", L"p_24"},
+                         {L"p_25", L"p_26", L"p_27", L"p_28"}));
           auto wick = FWickTheorem{opseq};
           auto result = wick.compute(true);
           REQUIRE(result->is<Constant>());
@@ -673,9 +673,9 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
 
     // three general 1-body operators
     {
-      auto opseq = FNOperatorSeq({FNOperator({L"p_1"}, {L"p_2"}),
-                                  FNOperator({L"p_3"}, {L"p_4"}),
-                                  FNOperator({L"p_5"}, {L"p_6"})});
+      auto opseq = ex<FNOperatorSeq>(FNOperator({L"p_1"}, {L"p_2"}),
+                                     FNOperator({L"p_3"}, {L"p_4"}),
+                                     FNOperator({L"p_5"}, {L"p_6"}));
       auto wick = FWickTheorem{opseq};
       REQUIRE_NOTHROW(wick.compute());
       auto result = wick.compute();
@@ -685,9 +685,9 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
 
     // 4 general 1-body operators
     {
-      auto opseq = FNOperatorSeq(
-          {FNOperator({L"p_1"}, {L"p_2"}), FNOperator({L"p_3"}, {L"p_4"}),
-           FNOperator({L"p_5"}, {L"p_6"}), FNOperator({L"p_7"}, {L"p_8"})});
+      auto opseq = ex<FNOperatorSeq>(
+          FNOperator({L"p_1"}, {L"p_2"}), FNOperator({L"p_3"}, {L"p_4"}),
+          FNOperator({L"p_5"}, {L"p_6"}), FNOperator({L"p_7"}, {L"p_8"}));
       auto ext_indices = make_indices<std::vector<Index>>(WstrList{
           L"p_1", L"p_2", L"p_3", L"p_4", L"p_5", L"p_6", L"p_7", L"p_8"});
       auto wick1 = FWickTheorem{opseq};
@@ -705,10 +705,10 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
     // 4-body ^ 2-body ^ 2-body
     {
       auto opseq =
-          FNOperatorSeq({FNOperator({L"p_1", L"p_2", L"p_3", L"p_4"},
-                                    {L"p_5", L"p_6", L"p_7", L"p_8"}),
-                         FNOperator({L"p_9", L"p_10"}, {L"p_11", L"p_12"}),
-                         FNOperator({L"p_13", L"p_14"}, {L"p_15", L"p_16"})});
+          ex<FNOperatorSeq>(FNOperator({L"p_1", L"p_2", L"p_3", L"p_4"},
+                                       {L"p_5", L"p_6", L"p_7", L"p_8"}),
+                            FNOperator({L"p_9", L"p_10"}, {L"p_11", L"p_12"}),
+                            FNOperator({L"p_13", L"p_14"}, {L"p_15", L"p_16"}));
       auto wick = FWickTheorem{opseq};
       auto result = wick.compute();
       REQUIRE(result->is<Sum>());
@@ -718,9 +718,9 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
     // 2-body ^ 2-body ^ 2-body
     {
       auto opseq =
-          FNOperatorSeq({FNOperator({L"p_1", L"p_2"}, {L"p_5", L"p_6"}),
-                         FNOperator({L"p_9", L"p_10"}, {L"p_11", L"p_12"}),
-                         FNOperator({L"p_17", L"p_18"}, {L"p_19", L"p_20"})});
+          ex<FNOperatorSeq>(FNOperator({L"p_1", L"p_2"}, {L"p_5", L"p_6"}),
+                            FNOperator({L"p_9", L"p_10"}, {L"p_11", L"p_12"}),
+                            FNOperator({L"p_17", L"p_18"}, {L"p_19", L"p_20"}));
       auto wick = FWickTheorem{opseq};
       auto result = wick.compute();
       REQUIRE(result->is<Sum>());
@@ -730,10 +730,10 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
     // 2-body ^ 2-body ^ 2-body ^ 2-body
     SEQUANT_PROFILE_SINGLE("wick(2^2^2^2)", {
       auto opseq =
-          FNOperatorSeq({FNOperator({L"p_1", L"p_2"}, {L"p_5", L"p_6"}),
-                         FNOperator({L"p_9", L"p_10"}, {L"p_11", L"p_12"}),
-                         FNOperator({L"p_13", L"p_14"}, {L"p_15", L"p_16"}),
-                         FNOperator({L"p_17", L"p_18"}, {L"p_19", L"p_20"})});
+          ex<FNOperatorSeq>(FNOperator({L"p_1", L"p_2"}, {L"p_5", L"p_6"}),
+                            FNOperator({L"p_9", L"p_10"}, {L"p_11", L"p_12"}),
+                            FNOperator({L"p_13", L"p_14"}, {L"p_15", L"p_16"}),
+                            FNOperator({L"p_17", L"p_18"}, {L"p_19", L"p_20"}));
       auto wick = FWickTheorem{opseq};
       auto result = wick.compute(true);
       REQUIRE(result->is<Constant>());
@@ -744,11 +744,11 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
     // 4-body ^ 2-body ^ 2-body ^ 2-body
     SEQUANT_PROFILE_SINGLE("wick(4^2^2^2)", {
       auto opseq =
-          FNOperatorSeq({FNOperator({L"p_1", L"p_2", L"p_3", L"p_4"},
-                                    {L"p_5", L"p_6", L"p_7", L"p_8"}),
-                         FNOperator({L"p_9", L"p_10"}, {L"p_11", L"p_12"}),
-                         FNOperator({L"p_13", L"p_14"}, {L"p_15", L"p_16"}),
-                         FNOperator({L"p_17", L"p_18"}, {L"p_19", L"p_20"})});
+          ex<FNOperatorSeq>(FNOperator({L"p_1", L"p_2", L"p_3", L"p_4"},
+                                       {L"p_5", L"p_6", L"p_7", L"p_8"}),
+                            FNOperator({L"p_9", L"p_10"}, {L"p_11", L"p_12"}),
+                            FNOperator({L"p_13", L"p_14"}, {L"p_15", L"p_16"}),
+                            FNOperator({L"p_17", L"p_18"}, {L"p_19", L"p_20"}));
       auto wick = FWickTheorem{opseq};
       auto result = wick.use_topology(true).compute(true);
       REQUIRE(result->is<Constant>());
@@ -757,12 +757,12 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
 
     // 3-body ^ 2-body ^ 2-body ^ 3-body
     SEQUANT_PROFILE_SINGLE("wick(3^2^2^3)", {
-      auto opseq = FNOperatorSeq(
-          {FNOperator({L"p_1", L"p_2", L"p_3"}, {L"p_5", L"p_6", L"p_7"}),
-           FNOperator({L"p_9", L"p_10"}, {L"p_11", L"p_12"}),
-           FNOperator({L"p_13", L"p_14"}, {L"p_15", L"p_16"}),
-           FNOperator({L"p_17", L"p_18", L"p_19"}, {L"p_20", L"p_21", L"p_22"},
-                      V)});
+      auto opseq = ex<FNOperatorSeq>(
+          FNOperator({L"p_1", L"p_2", L"p_3"}, {L"p_5", L"p_6", L"p_7"}),
+          FNOperator({L"p_9", L"p_10"}, {L"p_11", L"p_12"}),
+          FNOperator({L"p_13", L"p_14"}, {L"p_15", L"p_16"}),
+          FNOperator({L"p_17", L"p_18", L"p_19"}, {L"p_20", L"p_21", L"p_22"},
+                     V));
       auto wick = FWickTheorem{opseq};
       auto result = wick.use_topology(true).compute(true);
       REQUIRE(result->is<Constant>());
@@ -772,11 +772,11 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
     // 4-body ^ 2-body ^ 4-body
     SEQUANT_PROFILE_SINGLE("wick(4^2^4)", {
       auto opseq =
-          FNOperatorSeq({FNOperator({L"p_1", L"p_2", L"p_3", L"p_4"},
-                                    {L"p_5", L"p_6", L"p_7", L"p_8"}),
-                         FNOperator({L"p_9", L"p_10"}, {L"p_11", L"p_12"}),
-                         FNOperator({L"p_21", L"p_22", L"p_23", L"p_24"},
-                                    {L"p_25", L"p_26", L"p_27", L"p_28"})});
+          ex<FNOperatorSeq>(FNOperator({L"p_1", L"p_2", L"p_3", L"p_4"},
+                                       {L"p_5", L"p_6", L"p_7", L"p_8"}),
+                            FNOperator({L"p_9", L"p_10"}, {L"p_11", L"p_12"}),
+                            FNOperator({L"p_21", L"p_22", L"p_23", L"p_24"},
+                                       {L"p_25", L"p_26", L"p_27", L"p_28"}));
       auto wick = FWickTheorem{opseq};
       auto result = wick.use_topology(true).compute(true);
       REQUIRE(result->is<Constant>());
@@ -786,12 +786,12 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
     // 4-body ^ 4-body ^ 4-body
     SEQUANT_PROFILE_SINGLE("wick(4^4^4)", {
       auto opseq =
-          FNOperatorSeq({FNOperator({L"p_1", L"p_2", L"p_3", L"p_4"},
-                                    {L"p_5", L"p_6", L"p_7", L"p_8"}),
-                         FNOperator({L"p_11", L"p_12", L"p_13", L"p_14"},
-                                    {L"p_15", L"p_16", L"p_17", L"p_18"}),
-                         FNOperator({L"p_21", L"p_22", L"p_23", L"p_24"},
-                                    {L"p_25", L"p_26", L"p_27", L"p_28"})});
+          ex<FNOperatorSeq>(FNOperator({L"p_1", L"p_2", L"p_3", L"p_4"},
+                                       {L"p_5", L"p_6", L"p_7", L"p_8"}),
+                            FNOperator({L"p_11", L"p_12", L"p_13", L"p_14"},
+                                       {L"p_15", L"p_16", L"p_17", L"p_18"}),
+                            FNOperator({L"p_21", L"p_22", L"p_23", L"p_24"},
+                                       {L"p_25", L"p_26", L"p_27", L"p_28"}));
       auto wick = FWickTheorem{opseq};
       auto result = wick.use_topology(true).compute(true);
       REQUIRE(result->is<Constant>());
@@ -803,13 +803,13 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
     // impossible: 4-body ^ 4-body ^ 4-body ^ 4-body ^ 4-body ^ 4-body
     {
       auto opseq =
-          FNOperatorSeq({FNOperator({L"p_1", L"p_2", L"p_3", L"p_4"}, {L"p_5", L"p_6", L"p_7", L"p_8"}),
+          ex<FNOperatorSeq>(FNOperator({L"p_1", L"p_2", L"p_3", L"p_4"}, {L"p_5", L"p_6", L"p_7", L"p_8"}),
                          FNOperator({L"p_11", L"p_12", L"p_13", L"p_14"}, {L"p_15", L"p_16", L"p_17", L"p_18"}),
                          FNOperator({L"p_21", L"p_22", L"p_23", L"p_24"}, {L"p_25", L"p_26", L"p_27", L"p_28"}),
                          FNOperator({L"p_31", L"p_32", L"p_33", L"p_34"}, {L"p_35", L"p_36", L"p_37", L"p_38"}),
                          FNOperator({L"p_41", L"p_42", L"p_43", L"p_44"}, {L"p_45", L"p_46", L"p_47", L"p_48"}),
                          FNOperator({L"p_51", L"p_52", L"p_53", L"p_54"}, {L"p_55", L"p_56", L"p_57", L"p_58"})
-                        });
+                        );
       auto wick = FWickTheorem{opseq};
       auto result = wick.use_topology(true).compute(true);
     }
@@ -829,8 +829,8 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
     // 2-body ^ 2-body
     SEQUANT_PROFILE_SINGLE("wick(H2*T2)", {
       auto opseq =
-          FNOperatorSeq({FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}),
-                         FNOperator({L"a_4", L"a_5"}, {L"i_4", L"i_5"})});
+          ex<FNOperatorSeq>(FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}),
+                            FNOperator({L"a_4", L"a_5"}, {L"i_4", L"i_5"}));
       auto wick = FWickTheorem{opseq};
       auto wick_result = wick.compute();
       REQUIRE(wick_result->is<Sum>());
@@ -921,9 +921,9 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
           std::wostringstream oss;
           oss << "use_op_partitions=" << use_op_partitions << "}: H2*T1*T1 = ";
 
-          auto opseq = FNOperatorSeq(
-              {FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}),
-               FNOperator({L"a_4"}, {L"i_4"}), FNOperator({L"a_5"}, {L"i_5"})});
+          auto opseq = ex<FNOperatorSeq>(
+              FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}),
+              FNOperator({L"a_4"}, {L"i_4"}), FNOperator({L"a_5"}, {L"i_5"}));
           auto wick = FWickTheorem{opseq};
           wick.use_topology(use_nop_partitions || use_op_partitions);
           // if (use_nop_partitions) wick.set_nop_partitions({{1, 2}});
@@ -970,14 +970,15 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
 
     // 2=body ^ 1-body ^ 2-body with dependent (PNO) indices
     SEQUANT_PROFILE_SINGLE("wick(P2*H1*T2)", {
-      auto opseq = FNOperatorSeq({FNOperator(IndexList{L"i_1", L"i_2"},
-                                             {Index(L"a_1", {L"i_1", L"i_2"}),
-                                              Index(L"a_2", {L"i_1", L"i_2"})},
-                                             V),
-                                  FNOperator({L"p_1"}, {L"p_2"}),
-                                  FNOperator({Index(L"a_3", {L"i_3", L"i_4"}),
-                                              Index(L"a_4", {L"i_3", L"i_4"})},
-                                             IndexList{L"i_3", L"i_4"})});
+      auto opseq =
+          ex<FNOperatorSeq>(FNOperator(IndexList{L"i_1", L"i_2"},
+                                       {Index(L"a_1", {L"i_1", L"i_2"}),
+                                        Index(L"a_2", {L"i_1", L"i_2"})},
+                                       V),
+                            FNOperator({L"p_1"}, {L"p_2"}),
+                            FNOperator({Index(L"a_3", {L"i_3", L"i_4"}),
+                                        Index(L"a_4", {L"i_3", L"i_4"})},
+                                       IndexList{L"i_3", L"i_4"}));
       auto wick = FWickTheorem{opseq};
       auto wick_result = wick.compute();
       REQUIRE(wick_result->is<Sum>());
@@ -1029,17 +1030,17 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
               << use_op_partitions << "}: P2*H2*T2*T2(PNO) = ";
 
           auto opseq =
-              FNOperatorSeq({FNOperator(IndexList{L"i_1", L"i_2"},
-                                        {Index(L"a_1", {L"i_1", L"i_2"}),
-                                         Index(L"a_2", {L"i_1", L"i_2"})},
-                                        V),
-                             FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}),
-                             FNOperator({Index(L"a_3", {L"i_3", L"i_4"}),
-                                         Index(L"a_4", {L"i_3", L"i_4"})},
-                                        IndexList{L"i_3", L"i_4"}),
-                             FNOperator({Index(L"a_5", {L"i_5", L"i_6"}),
-                                         Index(L"a_6", {L"i_5", L"i_6"})},
-                                        IndexList{L"i_5", L"i_6"})});
+              ex<FNOperatorSeq>(FNOperator(IndexList{L"i_1", L"i_2"},
+                                           {Index(L"a_1", {L"i_1", L"i_2"}),
+                                            Index(L"a_2", {L"i_1", L"i_2"})},
+                                           V),
+                                FNOperator({L"p_1", L"p_2"}, {L"p_3", L"p_4"}),
+                                FNOperator({Index(L"a_3", {L"i_3", L"i_4"}),
+                                            Index(L"a_4", {L"i_3", L"i_4"})},
+                                           IndexList{L"i_3", L"i_4"}),
+                                FNOperator({Index(L"a_5", {L"i_5", L"i_6"}),
+                                            Index(L"a_6", {L"i_5", L"i_6"})},
+                                           IndexList{L"i_5", L"i_6"}));
           auto wick = FWickTheorem{opseq};
           wick.set_nop_connections({{1, 2}, {1, 3}}).use_topology(true);
 
