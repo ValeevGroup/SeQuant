@@ -583,11 +583,11 @@ class IndexSpaceRegistry {
 
   /// @brief return the resulting space corresponding to a bitwise intersection
   /// between two spaces.
-  /// @param space1
-  /// @param space2
-  /// @return the resulting space after intersection
+  /// @param space1 a registered IndexSpace
+  /// @param space2 a registered IndexSpace
+  /// @return the intersection of @p space1 and @p space2
   /// @note can return nullspace
-  /// @note throw invalid_argument if the bitwise result is not registered
+  /// @note throw invalid_argument if the nonnull intersection is not registered
   const IndexSpace& intersection(const IndexSpace& space1,
                                  const IndexSpace& space2) const {
     if (space1 == space2) {
@@ -613,6 +613,22 @@ class IndexSpaceRegistry {
         return intersection_space;
       }
     }
+  }
+
+  /// @param space1_key base key of a registered IndexSpace
+  /// @param space2_key base key of a registered IndexSpace
+  /// @return the intersection of @p space1 and @p space2
+  /// @note can return nullspace
+  /// @note throw invalid_argument if the nonnull intersection is not registered
+  template <typename S1, typename S2,
+            typename = meta::EnableIfAllBasicStringConvertible<S1, S2>>
+  const IndexSpace& intersection(S1&& space1_key, S2&& space2_key) const {
+    if (!contains(space1_key) || !contains(space2_key))
+      throw std::invalid_argument(
+          "IndexSpaceRegistry::intersection(s1,s2): s1 and s2 must both be "
+          "registered");
+    return this->intersection(this->retrieve(std::forward<S1>(space1_key)),
+                              this->retrieve(std::forward<S2>(space2_key)));
   }
 
   /// @brief is a union between spaces eligible and registered
@@ -653,25 +669,46 @@ class IndexSpaceRegistry {
   /// @note never returns nullspace
   const IndexSpace& unIon(const IndexSpace& space1,
                           const IndexSpace& space2) const {
+    if (!contains(space1) || !contains(space2))
+      throw std::invalid_argument(
+          "IndexSpaceRegistry::unIon(s1,s2): s1 and s2 must both be "
+          "registered");
+
     if (space1 == space2) {
       return space1;
     } else {
       bool same_qns = space1.qns() == space2.qns();
       if (!same_qns) {
         throw std::invalid_argument(
-            "asking for the intersection of spaces with incompatible quantum "
-            "number attributes.");
+            "IndexSpaceRegistry::unIon(s1,s2): s1 and s2 must have identical "
+            "quantum number attributes.");
       }
       auto unIontype = space1.type().unIon(space2.type());
       const IndexSpace& unIonSpace = find_by_attr({unIontype, space1.qns()});
       if (unIonSpace == IndexSpace::null) {
         throw std::invalid_argument(
-            "The resulting space is not registered in this context. Add this "
-            "space to the registry with a label to use it.");
+            "IndexSpaceRegistry::unIon(s1,s2): the result is not registered, "
+            "must register first.");
       } else {
         return unIonSpace;
       }
     }
+  }
+
+  /// @param space1_key base key of a registered IndexSpace
+  /// @param space2_key base key of a registered IndexSpace
+  /// @return the union of two spaces.
+  /// @note can only return registered spaces
+  /// @note never returns nullspace
+  template <typename S1, typename S2,
+            typename = meta::EnableIfAllBasicStringConvertible<S1, S2>>
+  const IndexSpace& unIon(S1&& space1_key, S2&& space2_key) const {
+    if (!contains(space1_key) || !contains(space2_key))
+      throw std::invalid_argument(
+          "IndexSpaceRegistry::unIon(s1,s2): s1 and s2 must both be "
+          "registered");
+    return this->unIon(this->retrieve(std::forward<S1>(space1_key)),
+                       this->retrieve(std::forward<S2>(space2_key)));
   }
 
   /// @brief an @c IndexSpace is occupied with respect to the fermi vacuum or a
