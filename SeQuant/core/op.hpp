@@ -918,6 +918,16 @@ class NormalOperatorSequence : public container::svector<NormalOperator<S>>,
   /// constructs an empty sequence
   NormalOperatorSequence() : vacuum_(get_default_context().vacuum()) {}
 
+  /// constructs from a parameter pack
+  template <typename... NOps,
+            typename = std::enable_if_t<
+                (std::is_convertible_v<NOps, NormalOperator<S>> && ...)>>
+  NormalOperatorSequence(NOps &&...operators)
+      : base_type({std::forward<NOps>(operators)...}) {
+    check_vacuum();
+  }
+
+  /// constructs from an initializer list
   NormalOperatorSequence(std::initializer_list<NormalOperator<S>> operators)
       : base_type(operators) {
     check_vacuum();
