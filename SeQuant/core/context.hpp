@@ -28,7 +28,8 @@ class Context {
   /// @param bks a BraKetSymmetry object
   /// @param spb single-particle basis (spin-free or spin-dependent)
   /// @param fdio first dummy index ordinal
-  explicit Context(std::shared_ptr<IndexSpaceRegistry> isr_sptr, Vacuum vac,
+  explicit Context(std::shared_ptr<IndexSpaceRegistry> isr_sptr,
+                   Vacuum vac = Defaults::vacuum,
                    IndexSpaceMetric m = Defaults::metric,
                    BraKetSymmetry bks = Defaults::braket_symmetry,
                    SPBasis spb = Defaults::spbasis,
@@ -42,7 +43,7 @@ class Context {
   /// @param bks a BraKetSymmetry object
   /// @param spb single-particle basis (spin-free or spin-dependent)
   /// @param fdio first dummy index ordinal
-  explicit Context(IndexSpaceRegistry isr, Vacuum vac,
+  explicit Context(IndexSpaceRegistry isr, Vacuum vac = Defaults::vacuum,
                    IndexSpaceMetric m = Defaults::metric,
                    BraKetSymmetry bks = Defaults::braket_symmetry,
                    SPBasis spb = Defaults::spbasis,
