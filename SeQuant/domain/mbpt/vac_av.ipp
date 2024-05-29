@@ -94,7 +94,7 @@ ExprPtr vac_av(
     expr = simplify(product);
 
     // compute VEV
-    auto vev = mbpt::vac_av(product, connections, /* use_topology = */ true);
+    auto vev = tensor::vac_av(product, connections, /* use_topology = */ true);
     // restore Variable types to the Product
     if (!variables.empty())
       ranges::for_each(variables, [&vev](const auto& var) { vev *= var; });
@@ -131,14 +131,14 @@ ExprPtr vac_av(
     return expr;  // vacuum is normalized
   }
   throw std::invalid_argument(
-      "mpbt::*::op::vac_av(expr): unknown expression type");
+      "mpbt::*::vac_av(expr): unknown expression type");
 }
 
 ExprPtr vac_av(
     ExprPtr expr,
     std::vector<std::pair<mbpt::OpType, mbpt::OpType>> op_connections,
     bool skip_clone) {
-  return vac_av(expr, op::to_label_connections(op_connections), skip_clone);
+  return vac_av(expr, to_label_connections(op_connections), skip_clone);
 }
 
 #endif  // SEQUANT_DOMAIN_MBPT_VAC_AV_IPP

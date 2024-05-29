@@ -36,10 +36,9 @@ ExprPtr CC::sim_tr(ExprPtr expr, size_t commutator_rank) {
     for (size_t k = 1; k <= commutator_rank; ++k) {
       ExprPtr op_Sk_comm_w_S;
       op_Sk_comm_w_S =
-          op_Sk *
-          op::T(N, skip_singles);  // traditional SR ansatz: [O,T] = (O T)_c
+          op_Sk * T(N, skip_singles);  // traditional SR ansatz: [O,T] = (O T)_c
       if (unitary())  // unitary SR ansatz: [O,T-T^+] = (O T)_c + (T^+ O)_c
-        op_Sk_comm_w_S += adjoint(op::T(N, skip_singles)) * op_Sk;
+        op_Sk_comm_w_S += adjoint(T(N, skip_singles)) * op_Sk;
       op_Sk = ex<Constant>(rational{1, k}) * op_Sk_comm_w_S;
       simplify(op_Sk);
       result += op_Sk;
@@ -85,7 +84,7 @@ std::vector<ExprPtr> CC::t(size_t commutator_rank, size_t pmax, size_t pmin) {
   assert(pmax >= pmin && "pmax should be >= pmin");
 
   // 1. construct hbar(op) in canonical form
-  auto hbar = sim_tr(op::H(), commutator_rank);
+  auto hbar = sim_tr(H(), commutator_rank);
 
   // 2. project onto each manifold, screen, lower to tensor form and wick it
   std::vector<ExprPtr> result(pmax + 1);
@@ -98,12 +97,12 @@ std::vector<ExprPtr> CC::t(size_t commutator_rank, size_t pmax, size_t pmin) {
         hbar_le_p;  // keeps products that can produce excitations rank <=p
     for (auto& term : *hbar) {
       assert(term->is<Product>() || term->is<op_t>());
-      if (op::raises_vacuum_up_to_rank(term, p)) {
+      if (raises_vacuum_up_to_rank(term, p)) {
         if (!hbar_le_p)
           hbar_le_p = std::make_shared<Sum>(ExprPtrList{term});
         else
           hbar_le_p->append(term);
-        if (op::raises_vacuum_to_rank(term, p)) {
+        if (raises_vacuum_to_rank(term, p)) {
           if (!hbar_p)
             hbar_p = std::make_shared<Sum>(ExprPtrList{term});
           else
@@ -113,7 +112,7 @@ std::vector<ExprPtr> CC::t(size_t commutator_rank, size_t pmax, size_t pmin) {
     }
     hbar = hbar_le_p;
     // 2.b project onto <p| (i.e., multiply by P(p) if p>0) and compute VEV
-    result.at(p) = op::vac_av(p != 0 ? op::P(p) * hbar_p : hbar_p);
+    result.at(p) = vac_av(p != 0 ? P(p) * hbar_p : hbar_p);
   }
 
   return result;
@@ -124,20 +123,19 @@ std::vector<ExprPtr> CC::λ(std::size_t commutator_rank) {
   assert(!unitary() && "there is no need for CC::λ for unitary ansatz");
 
   // construct hbar
-  auto hbar = sim_tr(op::H(), commutator_rank - 1);
+  auto hbar = sim_tr(H(), commutator_rank - 1);
 
   const auto One = ex<Constant>(1);
-  auto lhbar = simplify((One + op::Λ(N)) * hbar);
+  auto lhbar = simplify((One + Λ(N)) * hbar);
 
-  auto op_connect =
-      op::concat(op::default_op_connections(),
-                 std::vector<std::pair<mbpt::OpType, mbpt::OpType>>{
-                     {OpType::h, OpType::A},
-                     {OpType::f, OpType::A},
-                     {OpType::g, OpType::A},
-                     {OpType::h, OpType::S},
-                     {OpType::f, OpType::S},
-                     {OpType::g, OpType::S}});
+  auto op_connect = concat(default_op_connections(),
+                           std::vector<std::pair<mbpt::OpType, mbpt::OpType>>{
+                               {OpType::h, OpType::A},
+                               {OpType::f, OpType::A},
+                               {OpType::g, OpType::A},
+                               {OpType::h, OpType::S},
+                               {OpType::f, OpType::S},
+                               {OpType::g, OpType::S}});
 
   // 2. project onto each manifold, screen, lower to tensor form and wick it
   std::vector<ExprPtr> result(N + 1);
@@ -151,12 +149,12 @@ std::vector<ExprPtr> CC::λ(std::size_t commutator_rank) {
     for (auto& term : *lhbar) {  // pick terms from lhbar
       assert(term->is<Product>() || term->is<op_t>());
 
-      if (op::lowers_rank_or_lower_to_vacuum(term, p)) {
+      if (lowers_rank_or_lower_to_vacuum(term, p)) {
         if (!hbar_le_p)
           hbar_le_p = std::make_shared<Sum>(ExprPtrList{term});
         else
           hbar_le_p->append(term);
-        if (op::lowers_rank_to_vacuum(term, p)) {
+        if (lowers_rank_to_vacuum(term, p)) {
           if (!hbar_p)
             hbar_p = std::make_shared<Sum>(ExprPtrList{term});
           else
@@ -168,7 +166,7 @@ std::vector<ExprPtr> CC::λ(std::size_t commutator_rank) {
 
     // 2.b multiply by adjoint of P(p) (i.e., P(-p)) on the right side and
     // compute VEV
-    result.at(p) = op::vac_av(hbar_p * op::P(-p), op_connect);
+    result.at(p) = vac_av(hbar_p * P(-p), op_connect);
   }
   return result;
 }
@@ -188,10 +186,10 @@ std::vector<sequant::ExprPtr> CC::t_pt(std::size_t order, std::size_t rank) {
   // operator and at rank 4 for two-body perturbation operator
   const auto h1_truncate_at = rank == 1 ? 2 : 4;
 
-  auto h1_bar = sim_tr(op::H_pt(1, rank), h1_truncate_at);
+  auto h1_bar = sim_tr(H_pt(1, rank), h1_truncate_at);
 
   // construct [hbar, T(1)]
-  auto hbar_pert = sim_tr(op::H(), 3) * op::T_pt(order, N);
+  auto hbar_pert = sim_tr(H(), 3) * T_pt(order, N);
 
   // [Eq. 34, WIREs Comput Mol Sci. 2019; 9:e1406]
   auto expr = simplify(h1_bar + hbar_pert);
@@ -199,19 +197,17 @@ std::vector<sequant::ExprPtr> CC::t_pt(std::size_t order, std::size_t rank) {
   // connectivity:
   // connect t and t1 with {h,f,g}
   // connect h1 with t
-  auto op_connect =
-      op::concat(op::default_op_connections(),
-                 std::vector<std::pair<mbpt::OpType, mbpt::OpType>>{
-                     {OpType::h, OpType::t_1},
-                     {OpType::f, OpType::t_1},
-                     {OpType::g, OpType::t_1},
-                     {OpType::h_1, OpType::t}});
+  auto op_connect = concat(default_op_connections(),
+                           std::vector<std::pair<mbpt::OpType, mbpt::OpType>>{
+                               {OpType::h, OpType::t_1},
+                               {OpType::f, OpType::t_1},
+                               {OpType::g, OpType::t_1},
+                               {OpType::h_1, OpType::t}});
 
   std::vector<ExprPtr> result(N + 1);
   for (auto p = N; p >= 1; --p) {
-    auto freq_term = ex<Variable>(L"ω") * op::P(p) * op::T_pt_(order, p);
-    result.at(p) =
-        op::vac_av(op::P(p) * expr, op_connect) - op::vac_av(freq_term);
+    auto freq_term = ex<Variable>(L"ω") * P(p) * T_pt_(order, p);
+    result.at(p) = vac_av(P(p) * expr, op_connect) - vac_av(freq_term);
   }
   return result;
 }
@@ -226,7 +222,7 @@ std::vector<ExprPtr> CC::λ_pt(size_t order, size_t rank) {
   assert(ansatz_ == Ansatz::T && "unitary ansatz is not yet supported");
 
   // construct hbar
-  auto hbar = sim_tr(op::H(), 4);
+  auto hbar = sim_tr(H(), 4);
 
   // construct h1_bar
 
@@ -234,41 +230,39 @@ std::vector<ExprPtr> CC::λ_pt(size_t order, size_t rank) {
   // operator and at rank 4 for two-body perturbation operator
   const auto h1_truncate_at = rank == 1 ? 2 : 4;
 
-  auto h1_bar = sim_tr(op::H_pt(1, rank), h1_truncate_at);
+  auto h1_bar = sim_tr(H_pt(1, rank), h1_truncate_at);
   // construct [hbar, T(1)]
-  auto hbar_pert = sim_tr(op::H(), 3) * op::T_pt(order, N);
+  auto hbar_pert = sim_tr(H(), 3) * T_pt(order, N);
 
   // [Eq. 35, WIREs Comput Mol Sci. 2019; 9:e1406]
   const auto One = ex<Constant>(1);
-  auto expr = simplify((One + op::Λ(N)) * (h1_bar + hbar_pert) +
-                       op::Λ_pt(order, N) * hbar);
+  auto expr =
+      simplify((One + Λ(N)) * (h1_bar + hbar_pert) + Λ_pt(order, N) * hbar);
 
   // connectivity:
   // t and t1 with {h,f,g}
   // projectors with {h,f,g}
   // h1 with t
   // h1 with projectors
-  auto op_connect =
-      op::concat(op::default_op_connections(),
-                 std::vector<std::pair<mbpt::OpType, mbpt::OpType>>{
-                     {OpType::h, OpType::t_1},
-                     {OpType::f, OpType::t_1},
-                     {OpType::g, OpType::t_1},
-                     {OpType::h_1, OpType::t},
-                     {OpType::h, OpType::A},
-                     {OpType::f, OpType::A},
-                     {OpType::g, OpType::A},
-                     {OpType::h, OpType::S},
-                     {OpType::f, OpType::S},
-                     {OpType::g, OpType::S},
-                     {OpType::h_1, OpType::A},
-                     {OpType::h_1, OpType::S}});
+  auto op_connect = concat(default_op_connections(),
+                           std::vector<std::pair<mbpt::OpType, mbpt::OpType>>{
+                               {OpType::h, OpType::t_1},
+                               {OpType::f, OpType::t_1},
+                               {OpType::g, OpType::t_1},
+                               {OpType::h_1, OpType::t},
+                               {OpType::h, OpType::A},
+                               {OpType::f, OpType::A},
+                               {OpType::g, OpType::A},
+                               {OpType::h, OpType::S},
+                               {OpType::f, OpType::S},
+                               {OpType::g, OpType::S},
+                               {OpType::h_1, OpType::A},
+                               {OpType::h_1, OpType::S}});
 
   std::vector<ExprPtr> result(N + 1);
   for (auto p = N; p >= 1; --p) {
-    auto freq_term = ex<Variable>(L"ω") * op::Λ_pt_(order, p) * op::P(-p);
-    result.at(p) =
-        op::vac_av(expr * op::P(-p), op_connect) + op::vac_av(freq_term);
+    auto freq_term = ex<Variable>(L"ω") * Λ_pt_(order, p) * P(-p);
+    result.at(p) = vac_av(expr * P(-p), op_connect) + vac_av(freq_term);
   }
   return result;
 }

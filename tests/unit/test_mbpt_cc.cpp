@@ -37,7 +37,7 @@ TEST_CASE("SR-UCC", "[mbpt/cc]") {
   SECTION("t") {
     const auto N = 2;
     const std::size_t C = 3;
-    CC::Ansatz ansatz = CC::U;
+    CC::Ansatz ansatz = CC::Ansatz::U;
 
     // oUCC energy, up to third commutator
     auto t_eqs = CC{N, ansatz}.t(C);

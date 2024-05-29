@@ -507,7 +507,9 @@ template class OpMaker<Statistics::BoseEinstein>;
 template class Operator<qns_t, Statistics::FermiDirac>;
 template class Operator<qns_t, Statistics::BoseEinstein>;
 
-namespace TensorOp {
+inline namespace op {
+
+namespace tensor {
 ExprPtr H_(std::size_t k) {
   assert(k > 0 && k <= 2);
   switch (k) {
@@ -533,7 +535,7 @@ ExprPtr H_(std::size_t k) {
 
 ExprPtr H(std::size_t k) {
   assert(k > 0 && k <= 2);
-  return k == 1 ? TensorOp::H_(1) : TensorOp::H_(1) + TensorOp::H_(2);
+  return k == 1 ? tensor::H_(1) : tensor::H_(1) + tensor::H_(2);
 }
 
 ExprPtr F(bool use_tensor, IndexSpace reference_occupied) {
@@ -591,7 +593,7 @@ ExprPtr T(std::size_t K, bool skip1) {
   assert(K > (skip1 ? 1 : 0));
   ExprPtr result;
   for (auto k = skip1 ? 2ul : 1ul; k <= K; ++k) {
-    result += TensorOp::T_(k);
+    result += tensor::T_(k);
   }
   return result;
 }
@@ -605,7 +607,7 @@ ExprPtr Λ(std::size_t K) {
 
   ExprPtr result;
   for (auto k = 1ul; k <= K; ++k) {
-    result = k > 1 ? result + TensorOp::Λ_(k) : TensorOp::Λ_(k);
+    result = k > 1 ? result + tensor::Λ_(k) : tensor::Λ_(k);
   }
   return result;
 }
@@ -623,8 +625,8 @@ ExprPtr L_(std::size_t nbra, std::size_t nket, IndexSpace hole_space,
 }
 
 ExprPtr P(std::int64_t K) {
-  return get_default_context().spbasis() == SPBasis::spinfree ? TensorOp::S(-K)
-                                                              : TensorOp::A(-K);
+  return get_default_context().spbasis() == SPBasis::spinfree ? tensor::S(-K)
+                                                              : tensor::A(-K);
 }
 
 ExprPtr A(std::int64_t K) {
@@ -696,8 +698,7 @@ ExprPtr T_pt(std::size_t order, std::size_t K, bool skip1) {
   assert(K > (skip1 ? 1 : 0));
   ExprPtr result;
   for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
-    result =
-        k > 1 ? result + TensorOp::T_pt_(order, k) : TensorOp::T_pt_(order, k);
+    result = k > 1 ? result + tensor::T_pt_(order, k) : tensor::T_pt_(order, k);
   }
   return result;
 }
@@ -712,15 +713,12 @@ ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1) {
   assert(K > (skip1 ? 1 : 0));
   ExprPtr result;
   for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
-    result =
-        k > 1 ? result + TensorOp::Λ_pt_(order, k) : TensorOp::Λ_pt_(order, k);
+    result = k > 1 ? result + tensor::Λ_pt_(order, k) : tensor::Λ_pt_(order, k);
   }
   return result;
 }
 
-}  // namespace TensorOp
-
-namespace op {
+}  // namespace tensor
 
 ExprPtr H_(std::size_t k) {
   assert(k > 0 && k <= 2);
@@ -739,7 +737,7 @@ ExprPtr H_(std::size_t k) {
                 abort();
             }
           },
-          [=]() -> ExprPtr { return TensorOp::H_(1); },
+          [=]() -> ExprPtr { return tensor::H_(1); },
           [=](qnc_t& qns) {
             qnc_t op_qnc_t = general_type_qns(1);
             qns = combine(op_qnc_t, qns);
@@ -747,7 +745,7 @@ ExprPtr H_(std::size_t k) {
 
     case 2:
       return ex<op_t>([]() -> std::wstring_view { return L"g"; },
-                      [=]() -> ExprPtr { return TensorOp::H_(2); },
+                      [=]() -> ExprPtr { return tensor::H_(2); },
                       [=](qnc_t& qns) {
                         qnc_t op_qnc_t = general_type_qns(2);
                         qns = combine(op_qnc_t, qns);
@@ -760,13 +758,13 @@ ExprPtr H_(std::size_t k) {
 
 ExprPtr H(std::size_t k) {
   assert(k > 0 && k <= 2);
-  return k == 1 ? op::H_(1) : op::H_(1) + op::H_(2);
+  return k == 1 ? H_(1) : H_(1) + H_(2);
 }
 
 ExprPtr T_(std::size_t K) {
   assert(K > 0);
   return ex<op_t>([]() -> std::wstring_view { return L"t"; },
-                  [=]() -> ExprPtr { return TensorOp::T_(K); },
+                  [=]() -> ExprPtr { return tensor::T_(K); },
                   [=](qnc_t& qns) {
                     qnc_t op_qnc_t = excitation_type_qns(K);
                     qns = combine(op_qnc_t, qns);
@@ -777,7 +775,7 @@ ExprPtr T(std::size_t K, bool skip1) {
   assert(K > (skip1 ? 1 : 0));
   ExprPtr result;
   for (auto k = skip1 ? 2ul : 1ul; k <= K; ++k) {
-    result += op::T_(k);
+    result += T_(k);
   }
   return result;
 }
@@ -785,7 +783,7 @@ ExprPtr T(std::size_t K, bool skip1) {
 ExprPtr Λ_(std::size_t K) {
   assert(K > 0);
   return ex<op_t>([]() -> std::wstring_view { return L"λ"; },
-                  [=]() -> ExprPtr { return TensorOp::Λ_(K); },
+                  [=]() -> ExprPtr { return tensor::Λ_(K); },
                   [=](qnc_t& qns) {
                     qnc_t op_qnc_t = deexcitation_type_qns(K);
                     qns = combine(op_qnc_t, qns);
@@ -796,7 +794,7 @@ ExprPtr Λ(std::size_t K) {
   assert(K > 0);
   ExprPtr result;
   for (auto k = 1ul; k <= K; ++k) {
-    result = k > 1 ? result + op::Λ_(k) : op::Λ_(k);
+    result = k > 1 ? result + Λ_(k) : Λ_(k);
   }
   return result;
 }
@@ -805,7 +803,7 @@ ExprPtr F(bool use_f_tensor, IndexSpace occupied_density) {
   if (use_f_tensor) {
     return ex<op_t>(
         []() -> std::wstring_view { return L"f"; },
-        [=]() -> ExprPtr { return TensorOp::F(true, occupied_density); },
+        [=]() -> ExprPtr { return tensor::F(true, occupied_density); },
         [=](qnc_t& qns) {
           qnc_t op_qnc_t = general_type_qns(1);
           qns = combine(op_qnc_t, qns);
@@ -819,7 +817,7 @@ ExprPtr A(std::int64_t K) {
   auto isr = get_default_context().index_space_registry();
   assert(K != 0);
   return ex<op_t>([]() -> std::wstring_view { return L"A"; },
-                  [=]() -> ExprPtr { return TensorOp::A(K); },
+                  [=]() -> ExprPtr { return tensor::A(K); },
                   [=](qnc_t& qns) {
                     const std::size_t abs_K = std::abs(K);
                     if (K < 0) {
@@ -835,7 +833,7 @@ ExprPtr A(std::int64_t K) {
 ExprPtr S(std::int64_t K) {
   assert(K != 0);
   return ex<op_t>([]() -> std::wstring_view { return L"S"; },
-                  [=]() -> ExprPtr { return TensorOp::S(K); },
+                  [=]() -> ExprPtr { return tensor::S(K); },
                   [=](qnc_t& qns) {
                     const std::size_t abs_K = std::abs(K);
                     if (K < 0) {
@@ -849,8 +847,7 @@ ExprPtr S(std::int64_t K) {
 }
 
 ExprPtr P(std::int64_t K) {
-  return get_default_context().spbasis() == SPBasis::spinfree ? op::S(-K)
-                                                              : op::A(-K);
+  return get_default_context().spbasis() == SPBasis::spinfree ? S(-K) : A(-K);
 }
 
 ExprPtr H_pt(std::size_t order, std::size_t R) {
@@ -858,7 +855,7 @@ ExprPtr H_pt(std::size_t order, std::size_t R) {
   assert(order == 1 && "only first order perturbation is supported now");
   return ex<op_t>(
       []() -> std::wstring_view { return optype2label.at(OpType::h_1); },
-      [=]() -> ExprPtr { return TensorOp::H_pt(order, R); },
+      [=]() -> ExprPtr { return tensor::H_pt(order, R); },
       [=](qnc_t& qns) { qns = combine(general_type_qns(R), qns); });
 }
 
@@ -867,7 +864,7 @@ ExprPtr T_pt_(std::size_t order, std::size_t K) {
   assert(order == 1 && "only first order perturbation is supported now");
   return ex<op_t>(
       []() -> std::wstring_view { return optype2label.at(OpType::t_1); },
-      [=]() -> ExprPtr { return TensorOp::T_pt_(order, K); },
+      [=]() -> ExprPtr { return tensor::T_pt_(order, K); },
       [=](qnc_t& qns) { qns = combine(excitation_type_qns(K), qns); });
 }
 
@@ -875,7 +872,7 @@ ExprPtr T_pt(std::size_t order, std::size_t K, bool skip1) {
   assert(K > (skip1 ? 1 : 0));
   ExprPtr result;
   for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
-    result = k > 1 ? result + op::T_pt_(order, k) : op::T_pt_(order, k);
+    result = k > 1 ? result + T_pt_(order, k) : T_pt_(order, k);
   }
   return result;
 }
@@ -885,7 +882,7 @@ ExprPtr Λ_pt_(std::size_t order, std::size_t K) {
   assert(order == 1 && "only first order perturbation is supported now");
   return ex<op_t>(
       []() -> std::wstring_view { return optype2label.at(OpType::λ_1); },
-      [=]() -> ExprPtr { return TensorOp::Λ_pt_(order, K); },
+      [=]() -> ExprPtr { return tensor::Λ_pt_(order, K); },
       [=](qnc_t& qns) { qns = combine(deexcitation_type_qns(K), qns); });
 }
 
@@ -893,7 +890,7 @@ ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1) {
   assert(K > (skip1 ? 1 : 0));
   ExprPtr result;
   for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
-    result = k > 1 ? result + op::Λ_pt_(order, k) : op::Λ_pt_(order, k);
+    result = k > 1 ? result + Λ_pt_(order, k) : Λ_pt_(order, k);
   }
   return result;
 }
@@ -903,7 +900,7 @@ ExprPtr R_(std::size_t Nbra, std::size_t Nket, IndexSpace hole_space,
   return ex<op_t>(
       []() -> std::wstring_view { return optype2label.at(OpType::R); },
       [=]() -> ExprPtr {
-        return TensorOp::R_(Nbra, Nket, hole_space, particle_space);
+        return tensor::R_(Nbra, Nket, hole_space, particle_space);
       },
       [=](qnc_t& qns) {
         qns = combine(
@@ -917,7 +914,7 @@ ExprPtr L_(std::size_t Nbra, std::size_t Nket, IndexSpace hole_space,
   return ex<op_t>(
       []() -> std::wstring_view { return optype2label.at(OpType::L); },
       [=]() -> ExprPtr {
-        return TensorOp::L_(Nbra, Nket, hole_space, particle_space);
+        return tensor::L_(Nbra, Nket, hole_space, particle_space);
       },
       [=](qnc_t& qns) {
         qns = combine(
@@ -974,7 +971,8 @@ bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product,
 }
 
 #include "SeQuant/domain/mbpt/vac_av.ipp"
-}  // namespace op
+
+namespace tensor {
 
 ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
                bool use_top) {
@@ -985,12 +983,19 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
   // convention is to use different label for spin-orbital and spin-free RDM
   const auto rdm_label = spinorbital ? optype2label.at(OpType::RDM) : L"Γ";
 
-  //  the heuristic to keep only full contractions
-  // during a wick procedure requires that the wave function density agree with
-  // the vacuum normal ordering occupancy.
+  // only need full contractions if don't have any density outside of
+  // the orbitals occupied in the vacuum
   bool full_contractions =
       (isr->reference_occupied_space() == isr->vacuum_occupied_space()) ? true
                                                                         : false;
+  // N.B. reference < vacuum is not yet supported
+  if (isr->reference_occupied_space().intersection(
+          isr->vacuum_occupied_space()) != isr->vacuum_occupied_space()) {
+    throw std::invalid_argument(
+        "mbpt::tensor::vac_av: vacuum occupied orbitals must be same as or "
+        "subset of the reference orbital set.");
+  }
+
   FWickTheorem wick{expr};
   wick.use_topology(use_top).set_nop_connections(nop_connections);
   wick.full_contractions(full_contractions);
@@ -1189,6 +1194,9 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
     return result;
   }
 }
+
+}  // namespace tensor
+}  // namespace op
 
 bool can_change_qns(const ExprPtr& op_or_op_product, const qns_t target_qns,
                     const qns_t source_qns = {}) {

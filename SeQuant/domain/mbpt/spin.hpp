@@ -5,6 +5,8 @@
 #ifndef SEQUANT_DOMAIN_MBPT_SPIN_HPP
 #define SEQUANT_DOMAIN_MBPT_SPIN_HPP
 
+#include <SeQuant/domain/mbpt/fwd.hpp>
+
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>

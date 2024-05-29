@@ -14,7 +14,7 @@ namespace sequant::mbpt {
 /// CC is a derivation engine for the coupled-cluster method
 class CC {
  public:
-  enum Ansatz {
+  enum class Ansatz {
     /// traditional ansatz
     T,
     /// traditional orbital-optimized (singles-free) ansatz

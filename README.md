@@ -388,7 +388,7 @@ auto t2_1 =
 auto c_htt = ex<Constant>(rational(1, 4)) * commutator(commutator(H, t2_0), t2_1);
 ```
 
-This is too error-prone for making complex expressions. A better way is to represent $\hat{t}_2$ by an object that generates tensor form with unique dummy indices generated on the fly. in SeQuant such MBPT _operators_ live in `mbpt::op` namespace. The entire CCD amplitude equation is evaluated as follows:
+This is too error-prone for making complex expressions. A better way is to represent $\hat{t}_2$ by an object that generates tensor form with unique dummy indices generated on the fly. in SeQuant such MBPT _operators_ live in `mbpt` namespace. The entire CCD amplitude equation is evaluated as follows:
 
 ```c++
 #include <SeQuant/core/context.hpp>
@@ -405,11 +405,10 @@ inline auto commutator(auto op1, auto op2) {
 int main() {
   using namespace sequant;
   using namespace sequant::mbpt;
-  using namespace sequant::mbpt::op;
   set_default_context(Context(make_min_sr_spaces(), Vacuum::SingleProduct));
 
   auto hbar = H(2) + commutator(H(2), T_(2)) + ex<Constant>(rational(1,2)) * commutator(commutator(H(2), T_(2)), T_(2));
-  auto ccd_eq = op::vac_av(P(2) * hbar);
+  auto ccd_eq = vac_av(P(2) * hbar);
   std::wcout << "<" << to_latex(P(2) * hbar) << "> = " << to_latex(ccd_eq) << std::endl;
 
   return 0;

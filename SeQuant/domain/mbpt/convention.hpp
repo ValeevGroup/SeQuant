@@ -5,6 +5,8 @@
 #ifndef SEQUANT_CONVENTION_HPP
 #define SEQUANT_CONVENTION_HPP
 
+#include <SeQuant/domain/mbpt/fwd.hpp>
+
 #include "SeQuant/core/index_space_registry.hpp"
 
 namespace sequant {

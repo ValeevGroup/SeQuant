@@ -10,7 +10,6 @@ inline auto commutator(auto op1, auto op2) { return op1 * op2 - op2 * op1; }
 int main() {
   using namespace sequant;
   using namespace sequant::mbpt;
-  using namespace sequant::mbpt::op;
   set_default_context(Context(make_min_sr_spaces(), Vacuum::SingleProduct));
 
   auto hbar =

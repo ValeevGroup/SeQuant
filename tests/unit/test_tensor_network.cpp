@@ -43,7 +43,7 @@
 
 TEST_CASE("TensorNetwork", "[elements]") {
   using namespace sequant;
-  using namespace sequant::mbpt::TensorOp;
+  using namespace sequant::mbpt::tensor;
 
   SECTION("constructors") {
     {  // with Tensors

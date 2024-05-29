@@ -5,6 +5,8 @@
 #ifndef SEQUANT_DOMAIN_MBPT_OP_HPP
 #define SEQUANT_DOMAIN_MBPT_OP_HPP
 
+#include <SeQuant/domain/mbpt/fwd.hpp>
+
 #include <SeQuant/domain/mbpt/spin.hpp>
 
 #include <SeQuant/core/attr.hpp>
@@ -473,9 +475,14 @@ qns_t generic_deexcitation_qns(std::size_t particle_rank, std::size_t hole_rank,
                                IndexSpace particle_space, IndexSpace hole_space,
                                IndexSpace::QuantumNumbers SQN = Spin::any);
 
+inline namespace op {
+namespace tensor {
 ExprPtr vac_av(ExprPtr expr,
                std::vector<std::pair<int, int>> nop_connections = {},
                bool use_top = true);
+}  // namespace tensor
+}  // namespace op
+
 }  // namespace mbpt
 
 /// @param qns the quantum numbers to adjoint
@@ -718,7 +725,8 @@ class Operator : public Operator<void, S> {
 extern template class Operator<qns_t, Statistics::FermiDirac>;
 extern template class Operator<qns_t, Statistics::BoseEinstein>;
 
-namespace TensorOp {
+inline namespace op {
+namespace tensor {
 // clang-format off
 /// @brief `k`-body contribution to the "generic" Hamiltonian (in normal order relative to the default vacuum)
 /// @param[in] k the rank of the particle interactions; only `k<=2` is
@@ -784,9 +792,10 @@ ExprPtr T_pt(std::size_t order, std::size_t K, bool skip1 = false);
 ExprPtr Λ_pt_(std::size_t order, std::size_t K);
 
 ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1 = false);
-}  // namespace TensorOp
+}  // namespace tensor
+}  // namespace op
 
-namespace op {
+inline namespace op {
 // clang-format off
 /// @brief `k`-body contribution to the "generic" Hamiltonian (in normal order relative to the default vacuum)
 /// @param[in] k the rank of the particle interactions; only `k<=2` is
