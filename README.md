@@ -3,7 +3,7 @@ SeQuant: second quantization toolkit in C++
 
 # Synopsis
 
-`SeQuant` is a framework for performing symbolic algebra of tensors over scalar fields (regular tensors) and over
+SeQuant is a framework for performing symbolic algebra of tensors over scalar fields (regular tensors) and over
 operator fields (tensor operators in, e.g., quantum many-body physics).
 In addition to symbolic manipulation it can numerically  evaluate
 (with an appropriate external tensor backend) general
@@ -157,10 +157,10 @@ Note the mixed use of narrow- (`""`) and wide-character (`L""`) strings. SeQuant
 
 ### Register Index Spaces
 
-Tensor expressions annotated by [abstract indices](https://en.wikipedia.org/wiki/Abstract_index_notation) are common. In some contexts all tensor modes refer to the same range or underlying vector space (as in all examples shown so far); then there is no need to distinguish modes of different types. But in some contexts indices carry important semantic meaning. For example, the energy expression in the coupled-cluster method,
+Tensor expressions annotated by [abstract indices](https://en.wikipedia.org/wiki/Abstract_index_notation) are common. In some contexts all tensor modes refer to the same range or underlying vector space (as in all examples shown so far); then there is no need to distinguish modes of different types. But in some contexts indices carry important semantic meaning. For example, the energy expression in the [coupled-cluster method](https://doi.org/10.1017/CBO9780511596834),
 
 $$
-E_\mathrm{CC} =  F^{a_1}_{i_1} t^{i_1}_{a_1} + \frac{1}{4} \bar{g}^{a_1 a_2}_{i_1 i_2} (t^{i_1 i_2}_{a_1 a_2} + 2 t^{i_1}_{a_1} t^{i_2}_{a_2})
+E_\mathrm{CC} =  F^{a_1}_ {i_1} t^{i_1}_ {a_1} + \frac{1}{4} \bar{g}^{a_1 a_2}_ {i_1 i_2} (t^{i_1 i_2}_ {a_1 a_2} + 2 t^{i_1}_ {a_1} t^{i_2}_ {a_2})
 $$
 
 contains tensors with 2 types of modes, denoted by $i$ and $a$, that represent single-particle (SP) states occupied and unoccupied in the reference state, respectively. To simplify symbolic manipulation of such expressions SeQuant allows to define a custom vocabulary of index spaces and to define their set-theoretic relationships. The following example illustrates the full space denoted by $p$ partitioned into occupied $i$ and unoccupied $a$ base subspaces:
@@ -228,7 +228,7 @@ Notice that the set-theoretic operations are only partially automated. It is the
 
 ### Quasiparticles
 
-In most cases we are interested in using SeQuant to manipulate expressions involving operators in normal order relative to a vacuum state with a finite number of particles, rather than with respect to the genuine vacuum with zero particles. TThe choice of vacuum state as well as other related traits (whether the SP states are orthonormal, etc.) is defined by the implicit global context. The SeQuant programs until now used the genuine vacuum. The active context can be examined by calling `get_default_context()`, changed via `set_default_context()`, and reset to the default via `reset_default_context()`:
+In most cases we are interested in using SeQuant to manipulate expressions involving operators in normal order relative to a vacuum state with a finite number of particles, rather than with respect to the genuine vacuum with zero particles. The choice of vacuum state as well as other related traits (whether the SP states are orthonormal, etc.) is defined by the implicit global context. The SeQuant programs until now used the genuine vacuum. The active context can be examined by calling `get_default_context()`, changed via `set_default_context()`, and reset to the default via `reset_default_context()`:
 
 ```c++
 #include <SeQuant/core/context.hpp>
@@ -316,10 +316,16 @@ Note that:
 ## Operators
 
 Development of SeQuant is primarily motivated by the perturbative many-body methods, collectively referred to here as Many-Body Perturbation Theory (MBPT). Examples of such methods include the [coupled-cluster (CC) method](https://doi.org/10.1017/CBO9780511596834) and [GW](https://doi.org/10.1103/PhysRev.139.A796). The typical use case is to compute canonical forms of products of operators. For example, consider the coupled-cluster doubles (CCD) method.
-_Amplitudes_ $t^{i_1 i_2}_{a_1 a_2}$ of the cluster operator, $\hat{t} \equiv \hat{t}_2 = \frac{1}{4} t^{i_1 i_2}_{a_1 a_2} a_{i_1 i_2}^{a_1 a_2}$, are determined by solving the CCD equations:
+_Amplitudes_ $t^{i_1 i_2}_ {a_1 a_2}$ of the cluster operator,
 
 $$
-\forall i_1, i_2, a_1, a_2: \quad 0 = \langle0\vert a^{i_1 i_2}_{a_1 a_2} \exp(-\hat{t}_2) \hat{H} \exp(\hat{t}_2) \vert 0 \rangle = \langle0\vert a^{i_1 i_2}_{a_1 a_2} \bigl( \hat{H} + [\hat{H}, \hat{t}_2] + \frac{1}{2} [[\hat{H}, \hat{t}_2], \hat{t}_2] \bigr) \vert 0 \rangle.
+\hat{t} \equiv \hat{t}_ 2 = \frac{1}{4} t^{i_1 i_2}_ {a_1 a_2} a_ {i_1 i_2}^{a_1 a_2},
+$$
+
+are determined by solving the CCD equations:
+
+$$
+\forall i_1, i_2, a_1, a_2: \quad 0 = \langle0\vert a^{i_1 i_2}_ {a_1 a_2} \exp(-\hat{t}_ 2) \hat{H} \exp(\hat{t}_ 2) \vert 0 \rangle = \langle0\vert a^{i_1 i_2}_ {a_1 a_2} \bigl( \hat{H} + [\hat{H}, \hat{t}_ 2] + \frac{1}{2} [[\hat{H}, \hat{t}_ 2], \hat{t}_ 2] \bigr) \vert 0 \rangle.
 $$
 
 A pedestrian way to compose such expression is to define a cluster operator object using SeQuant tensors and normal-ordered operators:
@@ -430,7 +436,7 @@ $$
 $$
 
 $$
-+ {{{\frac{1}{2}}}{A^{{a_1}{a_2}}_ {{i_1}{i_2}}}{\bar{g}^{{a_3}{a_4}}_ {{i_3}{i_4}}}{\bar{t}^{{i_1}{i_3}}_ {{a_1}{a_3}}}{\bar{t}^{{i_2}{i_4}}_ {{a_2}{a_4}}}}\bigr)
+ ~ + {{{\frac{1}{2}}}{A^{{a_1}{a_2}}_ {{i_1}{i_2}}}{\bar{g}^{{a_3}{a_4}}_ {{i_3}{i_4}}}{\bar{t}^{{i_1}{i_3}}_ {{a_1}{a_3}}}{\bar{t}^{{i_2}{i_4}}_ {{a_2}{a_4}}}}\bigr)
 $$
 
 The use of MBPT operators rather than their tensor-level forms not only solves problems with the reuse of dummy indices, but also allows to implement additional optimizations such as algebraic simplifications of complex operator expressions and avoiding evaluation of operator products whose vacuum expectation values are guaranteed to vanish. This allows very efficient derivation of complex equations, e.g. CC equations through CCSDTQ are derived in a fraction of a second on a  laptop:
@@ -457,4 +463,8 @@ R4(expS4) has 74 terms:
 
 # Developers
 
-`SeQuant` is developed by the Valeev Research Group in the Department of Chemistry at Virginia Tech.
+SeQuant is developed by the [Valeev Research Group](https://valeevgroup.github.io) in the Department of Chemistry at Virginia Tech.
+
+# Acknowledgement
+
+Development of SeQuant has been possible thanks to the support of the US National Science Foundation (award 2217081) and the US Department of Energy (awards DE-SC0022327 and DE-SC0022263)
