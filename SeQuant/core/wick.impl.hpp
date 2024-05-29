@@ -282,7 +282,8 @@ inline bool apply_index_replacement_rules(
 #endif
               erase_it = true;
             } else if (bra_is_ext && !ket_is_ext) {  // ext + int
-              if (includes(ket.space(), bra.space())) {
+              if (isr->intersection(ket.space(), bra.space()) !=
+                  IndexSpace::null) {
 #ifndef NDEBUG
                 if (replrules.find(ket) != replrules.end())
                   assert(replrules[ket].space() == bra.space());
@@ -295,7 +296,8 @@ inline bool apply_index_replacement_rules(
 #endif
               }
             } else if (!bra_is_ext && ket_is_ext) {  // int + ext
-              if (includes(bra.space(), ket.space())) {
+              if (isr->intersection(bra.space(), ket.space()) !=
+                  IndexSpace::null) {
 #ifndef NDEBUG
                 if (replrules.find(bra) != replrules.end())
                   assert(replrules[bra].space() == ket.space());
