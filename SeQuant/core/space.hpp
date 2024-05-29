@@ -449,7 +449,7 @@ class IndexSpace {
   }
 
   /// @return approximate size of a space
-  unsigned long approximate_size() const { return approximate_size_; }
+  std::size_t approximate_size() const { return approximate_size_; }
 
  private:
   Attr attr_;
