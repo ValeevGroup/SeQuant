@@ -54,9 +54,6 @@ constexpr auto is_particle = IsParticle{};
 /// multiple registries share same set of spaces but have different
 /// specifications of vacuum, reference, etc.; this is useful for providing
 /// different contexts for fermions and bosons, for example.
-///
-/// @note  @c IndexSpaces with @c typeattr corresponding to occupied indices
-/// will always be lower than typeattr corresponding to unoccupied orbitals.
 class IndexSpaceRegistry {
  public:
   /// default constructor creates a registry containing only IndexSpace::null
@@ -1128,9 +1125,9 @@ class IndexSpaceRegistry {
     return *this;
   }
 
-  /// TODO use c++20 std::has_single_bit() when we update to this version
+  ///@brief true if has one and only one bit set.
   static bool has_single_bit(std::uint32_t bits) {
-    return bits & (((bool)(bits & (bits - 1))) - 1);
+    return bits && !(bits & (bits - 1));
   }
 
   /// @brief find an IndexSpace from its attr. return nullspace if not present.
