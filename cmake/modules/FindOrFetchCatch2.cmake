@@ -4,6 +4,7 @@ if (NOT TARGET Catch2::Catch2)
     VRGFindOrFetchPackage(Catch2 "https://github.com/catchorg/Catch2.git" "${SEQUANT_TRACKED_CATCH2_TAG}"
             ADD_SUBDIR
             CONFIG_SUBDIR
+            FIND_PACKAGE_ARGS 3
     )
     if (TARGET Catch2 AND NOT TARGET Catch2::Catch2)
         add_library(Catch2::Catch2 ALIAS Catch2)
