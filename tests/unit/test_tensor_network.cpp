@@ -32,14 +32,14 @@
 #include <tuple>
 #include <vector>
 
-#include "SeQuant/core/bliss.hpp"
-#include "SeQuant/core/op.hpp"
-#include "SeQuant/core/tensor_network.hpp"
-#include "SeQuant/domain/mbpt/convention.hpp"
-#include "SeQuant/domain/mbpt/op.hpp"
+#include <SeQuant/core/bliss.hpp>
+#include <SeQuant/core/op.hpp>
+#include <SeQuant/core/tensor_network.hpp>
+#include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/op.hpp>
 
+#include <SeQuant/core/timer.hpp>
 #include <range/v3/all.hpp>
-#include "SeQuant/core/timer.hpp"
 
 TEST_CASE("TensorNetwork", "[elements]") {
   using namespace sequant;

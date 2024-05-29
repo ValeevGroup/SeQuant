@@ -1,10 +1,10 @@
-#include "SeQuant/domain/mbpt/op.hpp"
-#include "SeQuant/domain/mbpt/context.hpp"
+#include <SeQuant/domain/mbpt/context.hpp>
+#include <SeQuant/domain/mbpt/op.hpp>
 
-#include "SeQuant/core/math.hpp"
-#include "SeQuant/core/op.hpp"
-#include "SeQuant/core/tensor.hpp"
-#include "SeQuant/core/wick.hpp"
+#include <SeQuant/core/math.hpp>
+#include <SeQuant/core/op.hpp>
+#include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/wick.hpp>
 
 #include <stdexcept>
 
@@ -406,7 +406,7 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
 
 }  // namespace sequant
 
-#include "SeQuant/domain/mbpt/op.ipp"
+#include <SeQuant/domain/mbpt/op.ipp>
 
 namespace sequant::mbpt {
 
@@ -970,7 +970,7 @@ bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product,
   return can_change_qns(op_or_op_product, qns_t{}, excitation_type_qns(k));
 }
 
-#include "SeQuant/domain/mbpt/vac_av.ipp"
+#include <SeQuant/domain/mbpt/vac_av.ipp>
 
 namespace tensor {
 

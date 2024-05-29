@@ -5,7 +5,7 @@
 #include <SeQuant/core/parse_expr.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/domain/eval/eval.hpp>
-#include "SeQuant/domain/mbpt/convention.hpp"
+#include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <tiledarray.h>
 #include <boost/regex.hpp>

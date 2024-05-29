@@ -1,10 +1,9 @@
 #ifndef SEQUANT_CORE_CONTEXT_HPP
 #define SEQUANT_CORE_CONTEXT_HPP
 
-#include "attr.hpp"
-#include "index_space_registry.hpp"
-
-#include "utility/context.hpp"
+#include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/index_space_registry.hpp>
+#include <SeQuant/core/utility/context.hpp>
 
 namespace sequant {
 

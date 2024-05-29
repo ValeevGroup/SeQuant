@@ -2,13 +2,13 @@
 // Created by Eduard Valeyev on 2019-04-01.
 //
 
-#include "SeQuant/domain/mbpt/convention.hpp"
+#include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/op.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
-#include "SeQuant/domain/mbpt/op.hpp"
 
-#include "SeQuant/core/context.hpp"
-#include "SeQuant/core/index.hpp"
-#include "SeQuant/core/tensor.hpp"
+#include <SeQuant/core/context.hpp>
+#include <SeQuant/core/index.hpp>
+#include <SeQuant/core/tensor.hpp>
 
 namespace sequant {
 namespace mbpt {

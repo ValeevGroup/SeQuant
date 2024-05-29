@@ -9,9 +9,8 @@
 #include <cassert>
 #include <cmath>
 
-#include "attr.hpp"
-#include "container.hpp"
-
+#include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/container.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/core/wstring.hpp>
 

@@ -20,7 +20,7 @@
 
 #include <range/v3/all.hpp>
 
-#include "SeQuant/domain/mbpt/convention.hpp"
+#include <SeQuant/domain/mbpt/convention.hpp>
 namespace {
 
 // validates if x is constructible from tspec using parse_expr

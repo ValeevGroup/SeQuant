@@ -873,7 +873,7 @@ bool raises_vacuum_to_rank(const ExprPtr& op_or_op_product,
 
 bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product,
                            const unsigned long k);
-#include "SeQuant/domain/mbpt/vac_av.hpp"
+#include <SeQuant/domain/mbpt/vac_av.hpp>
 }  // namespace op
 }  // namespace mbpt
 }  // namespace sequant

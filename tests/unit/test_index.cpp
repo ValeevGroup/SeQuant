@@ -4,9 +4,9 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <SeQuant/core/index.hpp>
+#include <SeQuant/core/latex.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
-#include "SeQuant/core/index.hpp"
-#include "SeQuant/core/latex.hpp"
 
 #include <iostream>
 

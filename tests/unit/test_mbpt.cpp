@@ -8,12 +8,12 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/latex.hpp>
-#include "SeQuant/core/op.hpp"
-#include "SeQuant/core/tensor.hpp"
-#include "SeQuant/core/timer.hpp"
-#include "SeQuant/domain/mbpt/context.hpp"
-#include "SeQuant/domain/mbpt/convention.hpp"
-#include "SeQuant/domain/mbpt/op.hpp"
+#include <SeQuant/core/op.hpp>
+#include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/timer.hpp>
+#include <SeQuant/domain/mbpt/context.hpp>
+#include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/op.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 #include "test_config.hpp"

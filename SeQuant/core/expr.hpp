@@ -5,7 +5,7 @@
 #ifndef SEQUANT_EXPR_HPP
 #define SEQUANT_EXPR_HPP
 
-#include "SeQuant/core/expr_fwd.hpp"
+#include <SeQuant/core/expr_fwd.hpp>
 
 #include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/container.hpp>
@@ -1717,6 +1717,6 @@ T &ExprPtr::as() {
 
 #endif  // SEQUANT_EXPR_HPP
 
-#include "expr_operator.hpp"
+#include <SeQuant/core/expr_operator.hpp>
 
-#include "expr_algorithm.hpp"
+#include <SeQuant/core/expr_algorithm.hpp>

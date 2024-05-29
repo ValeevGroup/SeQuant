@@ -2,10 +2,10 @@
 // Created by Robert Adam on 2023-09-20
 //
 
-#include "SeQuant/core/parse/ast.hpp"
-#include "SeQuant/core/parse/ast_conversions.hpp"
-#include "SeQuant/core/parse/semantic_actions.hpp"
-#include "SeQuant/core/parse_expr.hpp"
+#include <SeQuant/core/parse/ast.hpp>
+#include <SeQuant/core/parse/ast_conversions.hpp>
+#include <SeQuant/core/parse/semantic_actions.hpp>
+#include <SeQuant/core/parse_expr.hpp>
 
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>

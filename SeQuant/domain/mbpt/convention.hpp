@@ -7,7 +7,7 @@
 
 #include <SeQuant/domain/mbpt/fwd.hpp>
 
-#include "SeQuant/core/index_space_registry.hpp"
+#include <SeQuant/core/index_space_registry.hpp>
 
 namespace sequant {
 namespace mbpt {
