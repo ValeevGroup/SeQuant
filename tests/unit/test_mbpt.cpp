@@ -152,7 +152,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
   }  // SECTION("constructor")
 
   SECTION("to_latex") {
-    using qns_t = mbpt::qns_t;
+    using qns_t [[maybe_unused]] = mbpt::qns_t;
     using namespace sequant::mbpt::op;
     auto f = F();
     auto t1 = T(1);
@@ -173,7 +173,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
   }  // SECTION("to_latex")
 
   SECTION("canonicalize") {
-    using qns_t = mbpt::qns_t;
+    using qns_t [[maybe_unused]] = mbpt::qns_t;
     using namespace sequant::mbpt::op;
     auto f = F();
     auto t1 = T_(1);
