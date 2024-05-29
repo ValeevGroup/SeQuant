@@ -378,8 +378,7 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
     // ... then reduce terms whose hash values are identical
     auto first_it = begin(summands_);
     auto hash_comparer = [](const auto &first, const auto &second) {
-      bool first_is_second = first->hash_value() == second->hash_value();
-      return first_is_second;
+      return first->hash_value() == second->hash_value();
     };
     while ((first_it = std::adjacent_find(first_it, end(summands_),
                                           hash_comparer)) != end(summands_)) {
