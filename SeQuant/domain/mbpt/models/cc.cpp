@@ -283,19 +283,19 @@ std::vector<sequant::ExprPtr> CC::R(std::size_t K_occ, std::size_t K_uocc) {
         "spin-free basis does not yet support non particle-conserving cases");
 
   // construct hbar
-  auto hbar = sim_tr(op::H(), 4);
+  auto hbar = sim_tr(H(), 4);
 
   // hbar * R
-  auto hbar_R = hbar * op::R(K_occ, K_uocc);
+  auto hbar_R = hbar * R(K_occ, K_uocc);
 
   // connectivity:
   // default connections + connect R with {h,f,g}
   const auto op_connect =
-      op::concat(op::default_op_connections(),
-                 std::vector<std::pair<mbpt::OpType, mbpt::OpType>>{
-                     {OpType::h, OpType::R},
-                     {OpType::f, OpType::R},
-                     {OpType::g, OpType::R}});
+      concat(default_op_connections(),
+             std::vector<std::pair<mbpt::OpType, mbpt::OpType>>{
+                 {OpType::h, OpType::R},
+                 {OpType::f, OpType::R},
+                 {OpType::g, OpType::R}});
 
   // initialize result vector
   std::vector<ExprPtr> result;
@@ -308,7 +308,7 @@ std::vector<sequant::ExprPtr> CC::R(std::size_t K_occ, std::size_t K_uocc) {
             u = numeric_cast<std::int64_t>(K_uocc);
        o > 0 || u > 0; --o, --u) {
     // project onto <o,u| (i.e., multiply by P(o,u)) and compute VEV
-    result.at(idx) = op::vac_av(op::P(o, u) * hbar_R, op_connect);
+    result.at(idx) = vac_av(P(o, u) * hbar_R, op_connect);
     idx--;  // index decrement
   }
 
@@ -325,22 +325,22 @@ std::vector<sequant::ExprPtr> CC::L(std::size_t K_occ, std::size_t K_uocc) {
            "spin-free basis does not support non particle-conserving cases");
 
   // construct hbar
-  auto hbar = sim_tr(op::H(), 4);
+  auto hbar = sim_tr(H(), 4);
 
   // L * hbar
-  auto L_hbar = op::L(K_occ, K_uocc) * hbar;
+  auto L_hbar = L(K_occ, K_uocc) * hbar;
 
   // connectivity:
   // default connections + connect H with projectors
   const auto op_connect =
-      op::concat(op::default_op_connections(),
-                 std::vector<std::pair<mbpt::OpType, mbpt::OpType>>{
-                     {OpType::h, OpType::A},
-                     {OpType::f, OpType::A},
-                     {OpType::g, OpType::A},
-                     {OpType::h, OpType::S},
-                     {OpType::f, OpType::S},
-                     {OpType::g, OpType::S}});
+      concat(default_op_connections(),
+             std::vector<std::pair<mbpt::OpType, mbpt::OpType>>{
+                 {OpType::h, OpType::A},
+                 {OpType::f, OpType::A},
+                 {OpType::g, OpType::A},
+                 {OpType::h, OpType::S},
+                 {OpType::f, OpType::S},
+                 {OpType::g, OpType::S}});
 
   // initialize result vector
   std::vector<ExprPtr> result;
@@ -353,7 +353,7 @@ std::vector<sequant::ExprPtr> CC::L(std::size_t K_occ, std::size_t K_uocc) {
             u = numeric_cast<std::int64_t>(K_uocc);
        o > 0 || u > 0; --o, --u) {
     // right project onto |o,u> (i.e., multiply by P(-o, -u)) and compute VEV
-    result.at(idx) = op::vac_av(L_hbar * op::P(-o, -u), op_connect);
+    result.at(idx) = vac_av(L_hbar * P(-o, -u), op_connect);
     idx--;  // index decrement
   }
 
