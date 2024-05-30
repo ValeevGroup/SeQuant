@@ -63,7 +63,7 @@ $$
 
 This is achieved by the following SeQuant program:
 
-```c++
+```cxx
 #include <SeQuant/core/wick.hpp>
 
 int main() {
@@ -103,7 +103,7 @@ $$
 
 $s^p_q \equiv \langle q | p \rangle$ denotes inner products ("overlaps") of 1-particle states. Wick's theorem can of course be applied directly to products of normal composite operators, e.g,
 
-```c++
+```cxx
   auto nop1 = ex<FNOperator>(std::array{p1, p2}, std::array{p3, p4});
   auto nop2 = ex<FNOperator>(std::array{p5}, std::array{p6, p7});
 
@@ -134,7 +134,7 @@ $$
 
 where $b$ denotes normal bosonic operators constructed analogously with the normal fermionic operators $a$, is obtained via
 
-```c++
+```cxx
   auto nop3 = ex<BNOperator>(std::array{p1, p2}, std::array{p3, p4});
   auto nop4 = ex<BNOperator>(std::array{p5, p6}, std::array{p7});
 
@@ -147,7 +147,7 @@ where $b$ denotes normal bosonic operators constructed analogously with the norm
 
 Tensor and operator constructors can take arbitrary (uniform) sequences of objects that can be converted to `Index`; all of the following are equivalent:
 
-```c++
+```cxx
 auto nop1 = ex<FNOperator>(std::array{p1, p2}, std::array{p3, p4});
 auto nop1 = ex<FNOperator>(std::vector{p1, p2}, std::array{L"p3", L"p4"});
 auto nop1 = ex<FNOperator>(std::set{"p1", "p2"}, std::vector{L"p3", L"p4"});
@@ -165,7 +165,7 @@ $$
 
 contains tensors with 2 types of modes, denoted by $i$ and $a$, that represent single-particle (SP) states occupied and unoccupied in the reference state, respectively. To simplify symbolic manipulation of such expressions SeQuant allows to define a custom vocabulary of index spaces and to define their set-theoretic relationships. The following example illustrates the full space denoted by $p$ partitioned into occupied $i$ and unoccupied $a$ base subspaces:
 
-```c++
+```cxx
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/index.hpp>
 
@@ -199,7 +199,7 @@ int main() {
 
 This and other vocabularies commonly used in quantum many-body context are supported out-of-the-box by SeQuant; their definition is in `SeQuant/domain/mbpt/convention.hpp`. The previous example is equivalent to the following:
 
-```c++
+```cxx
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
@@ -230,7 +230,7 @@ Notice that the set-theoretic operations are only partially automated. It is the
 
 In most cases we are interested in using SeQuant to manipulate expressions involving operators in normal order relative to a vacuum state with a finite number of particles, rather than with respect to the genuine vacuum with zero particles. The choice of vacuum state as well as other related traits (whether the SP states are orthonormal, etc.) is defined by the implicit global context. The SeQuant programs until now used the genuine vacuum. The active context can be examined by calling `get_default_context()`, changed via `set_default_context()`, and reset to the default via `reset_default_context()`:
 
-```c++
+```cxx
 #include <SeQuant/core/context.hpp>
 
 int main() {
@@ -251,19 +251,19 @@ int main() {
 
 However, to deal with the single-product vacuum it is necessary to register at least one space and announce it as occupied in the vacuum state:
 
-```c++
+```cxx
 isr.add(L"y", 0b01).vacuum_occupied_space(L"i");
 ```
 
 or, shorter,
 
-```c++
+```cxx
 isr.add(L"y", 0b01, is_vacuum_occupied);
 ```
 
 It is also necessary to specify the _complete_ space (union of all base spaces) so that the the space of unoccupied SP states can be determined:
 
-```c++
+```cxx
 isr.add(L"y", 0b01, is_vacuum_occupied)
    .add(L"z", 0b10)
    .add(L"p", 0b11, is_complete);
@@ -272,7 +272,7 @@ isr.add(L"y", 0b01, is_vacuum_occupied)
 
 The Wick's theorem code itself is independent of the choice of vacuum:
 
-```c++
+```cxx
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/wick.hpp>
 
@@ -330,7 +330,7 @@ $$
 
 A pedestrian way to compose such expression is to define a cluster operator object using SeQuant tensors and normal-ordered operators:
 
-```c++
+```cxx
 auto t2 =
       ex<Constant>(rational(1, 4)) *
       ex<Tensor>(L"t", std::array{L"a_1", L"a_2"}, std::array{L"i_1", L"i_2"},
@@ -340,7 +340,7 @@ auto t2 =
 
 The normal-ordered Hamiltonian is defined similarly as a sum of 1- and 2-body contributions:
 
-```c++
+```cxx
 auto H = ex<Tensor>(L"f", std::array{L"p_1"}, std::array{L"p_2"},
                     Symmetry::nonsymm) *
          ex<FNOperator>(std::array{L"p_1"}, std::array{L"p_2"})
@@ -356,7 +356,7 @@ Note that the compact definition of the Hamiltonian is due to the use of the uni
 
 Commutator of the Hamiltonian and cluster operator is trivially composed:
 
-```c++
+```cxx
 inline auto commutator(auto op1, auto op2) {
   return simplify(op1 * op2 - op2 * op1);
 }
@@ -369,7 +369,7 @@ Note the use of `simplify` to rewrite an expression in a simpler form. Its role 
 Unfortunately, we immediately run into the limitation of the "pedestrian" approach. Namely,
 the double commutator cannot be correctly obtained as
 
-```c++
+```cxx
 auto c_htt = ex<Constant>(rational(1, 2)) * commutator(commutator(H, t2), t2);
 ```
 
@@ -378,7 +378,7 @@ due to the explicit use of specific dummy indices in the definition of `t2`. Usi
 The issue is actually not the reuse of the same of operator object, but the reuse of dummy indices. A straightforward, but brittle, solution is to ensure that each dummy index is only used once. E.g., 
 to use $\hat{t}_2$ more than once in an expression we must make several versions of it, each with a separate set of dummy indices:
 
-```c++
+```cxx
 auto t2_0 =
       ex<Constant>(rational(1, 4)) *
       ex<Tensor>(L"t", std::array{L"a_1", L"a_2"}, std::array{L"i_1", L"i_2"},
@@ -396,7 +396,7 @@ auto c_htt = ex<Constant>(rational(1, 4)) * commutator(commutator(H, t2_0), t2_1
 
 This is too error-prone for making complex expressions. A better way is to represent $\hat{t}_2$ by an object that generates tensor form with unique dummy indices generated on the fly. in SeQuant such MBPT _operators_ live in `mbpt` namespace. The entire CCD amplitude equation is evaluated as follows:
 
-```c++
+```cxx
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/tensor.hpp>

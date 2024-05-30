@@ -902,7 +902,7 @@ class IndexSpaceRegistry {
   /// @note needed for creating general operators in mbpt/op
   /// @{
 
-  /// @param t an IndexSpace::Type specifying the complete Hilbert space;
+  /// @param s an IndexSpace::Type specifying the complete Hilbert space;
   ///          to specify occupied space per specific QN set use the other
   ///          overload
   IndexSpaceRegistry& complete_space(const IndexSpace::Type& s) {

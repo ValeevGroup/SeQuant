@@ -80,8 +80,8 @@ class HugenholtzVertex {
   }
 
   /// Group accessor
-  /// @param group_idx the group ordinal index
-  /// @return the group whose ordinal index is group_idx
+  /// @param grp_idx the group ordinal index
+  /// @return the group whose ordinal index is @p group_idx
   const auto& group_at(size_t grp_idx) const { return groups_.at(grp_idx); }
 
   /// Group size accessor

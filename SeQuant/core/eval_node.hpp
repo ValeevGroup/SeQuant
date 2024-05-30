@@ -278,8 +278,7 @@ struct Memory {
 ///        symbolic cost of flops required for evaluation as an AsyCost object.
 ///        @see AsyCost. If the cost can be reduced due to symmetry, it is done
 ///        so.
-/// \detail
-///         - The cost of evaluation of leaf nodes is assumed to be zero.
+/// \note The cost of evaluation of leaf nodes is assumed to be zero.
 ///
 struct FlopsWithSymm {
   template <typename NodeT, typename = std::enable_if_t<IsEvalNode<NodeT>>>
@@ -329,6 +328,7 @@ struct FlopsWithSymm {
 ///        evaluating the node as an AsyCost object. The cost is computed by
 ///        summing the cost of evaluation of children nodes and the cost of
 ///        evaluation of the node itself.
+/// \param node The evaluation node whose cost to be evaluated
 /// \param cost_fn A function object that takes an evaluation node and returns
 ///                the symbolic cost of flops required for evaluation as an
 ///                AsyCost object. @see AsyCost.

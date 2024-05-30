@@ -97,7 +97,7 @@ class Context {
   /// \return ref to `*this`, for chaining
   Context& set(Vacuum vacuum);
   /// sets the IndexSpaceRegistry for this context
-  /// \param IndexSpaceRegistry ISR
+  /// \param ISR an IndexSpaceRegistry
   /// \return ref to '*this' for chaining
   Context& set(IndexSpaceRegistry ISR);
   /// Sets the IndexSpaceMetric for this context, convenient for chaining
@@ -116,8 +116,6 @@ class Context {
   /// chaining \param first_dummy_index_ordinal the first dummy index ordinal
   /// \return ref to `*this`, for chaining
   Context& set_first_dummy_index_ordinal(std::size_t first_dummy_index_ordinal);
-
-  /// @return the IndexRegistry object
 
  private:
   std::shared_ptr<IndexSpaceRegistry> idx_space_reg_ = nullptr;
@@ -158,6 +156,7 @@ bool operator!=(const Context& ctx1, const Context& ctx2);
 const Context& get_default_context(Statistics s = Statistics::Arbitrary);
 
 /// @brief sets default Context for the given Statistics
+/// @param ctx Context object
 /// @param s Statistics
 void set_default_context(const Context& ctx,
                          Statistics s = Statistics::Arbitrary);

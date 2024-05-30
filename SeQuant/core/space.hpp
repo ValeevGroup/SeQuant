@@ -157,9 +157,9 @@ class QuantumNumbersAttr {
 
   /// @warning first (most significant) bit is reserved for internal use
   /// @param bitset bitset representation of this Type
-  /// @pre `(bitset & make_reserved().bitset) == null.bitset`
-  explicit constexpr QuantumNumbersAttr(bitset_t value) noexcept
-      : bitset(value) {
+  /// @pre `(bitset & make_reserved().bitset()) == null.bitset()`
+  explicit constexpr QuantumNumbersAttr(bitset_t bitset) noexcept
+      : bitset(bitset) {
     assert((this->bitset & reserved.bitset) == null.bitset);
   }
 

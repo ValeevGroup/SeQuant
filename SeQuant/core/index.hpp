@@ -83,7 +83,7 @@ class Index : public Taggable {
   /// @param label the label, does not need to be unique
   /// @param space (a const ref to) the IndexSpace object that specifies to this
   /// space this object belongs
-  /// @param proto_index labels of proto indices (all must be unique,
+  /// @param proto_indices labels of proto indices (all must be unique,
   /// i.e. duplicates are not allowed)
   /// @param symmetric_proto_indices if true, proto_indices can be permuted at
   /// will and will always be sorted
@@ -104,7 +104,7 @@ class Index : public Taggable {
   /// @param label the label, does not need to be unique
   /// @param space (a const ref to) the IndexSpace object that specifies to this
   /// space this object belongs
-  /// @param proto_index labels of proto indices (all must be unique,
+  /// @param proto_indices labels of proto indices (all must be unique,
   /// i.e. duplicates are not allowed)
   /// @param symmetric_proto_indices if true, proto_indices can be permuted at
   /// will and will always be sorted
@@ -145,7 +145,8 @@ class Index : public Taggable {
   /// viewed/converted to a string (i.e.,
   /// `meta::is_basic_string_convertible_v<std::decay_t<IndexOrIndexLabel>>==true`)
   /// @tparam I either Index or a type that can be converted to Index
-  /// @param label the label, does not need to be unique
+  /// @param index_or_index_label an Index or a label, does not need to be
+  /// unique
   /// @param proto_indices list of proto indices, or their labels (all must be
   /// unique, i.e. duplicates are not allowed)
   /// @param symmetric_proto_indices if true, proto_indices can be permuted at
@@ -155,15 +156,16 @@ class Index : public Taggable {
                 (std::is_same_v<std::decay_t<IndexOrIndexLabel>, Index> ||
                  meta::is_basic_string_convertible_v<
                      std::decay_t<IndexOrIndexLabel>>)>>
-  Index(IndexOrIndexLabel &&index, std::initializer_list<I> proto_indices,
+  Index(IndexOrIndexLabel &&index_or_index_label,
+        std::initializer_list<I> proto_indices,
         bool symmetric_proto_indices = true)
       : symmetric_proto_indices_(symmetric_proto_indices) {
     if constexpr (!std::is_same_v<std::decay_t<IndexOrIndexLabel>, Index>) {
-      label_ = index;
+      label_ = index_or_index_label;
       space_ = get_default_context().index_space_registry()->retrieve(label_);
     } else {
-      label_ = index.label();
-      space_ = index.space();
+      label_ = index_or_index_label.label();
+      space_ = index_or_index_label.space();
     }
     if constexpr (!std::is_same_v<std::decay_t<I>, Index>) {
       if (proto_indices.size() != 0) {
@@ -184,7 +186,8 @@ class Index : public Taggable {
   /// @tparam IndexOrIndexLabel either Index or a type that can be
   /// viewed/converted to a string (i.e.,
   /// `meta::is_basic_string_convertible_v<std::decay_t<IndexOrIndexLabel>>==true`)
-  /// @param label the label, does not need to be unique
+  /// @param index_or_index_label an Index or a label, does not need to be
+  /// unique
   /// @param proto_indices list of proto indices (all must be unique,
   /// i.e. duplicates are not allowed)
   /// @param symmetric_proto_indices if true, proto_indices can be permuted at
@@ -196,17 +199,17 @@ class Index : public Taggable {
                                 container::vector<Index>> &&
           (std::is_same_v<std::decay_t<IndexOrIndexLabel>, Index> ||
            meta::is_wstring_convertible_v<std::decay_t<IndexOrIndexLabel>>)>>
-  Index(IndexOrIndexLabel &&index, IndexContainer &&proto_indices,
-        bool symmetric_proto_indices = true)
+  Index(IndexOrIndexLabel &&index_or_index_label,
+        IndexContainer &&proto_indices, bool symmetric_proto_indices = true)
       : proto_indices_(std::forward<IndexContainer>(proto_indices)),
         symmetric_proto_indices_(symmetric_proto_indices) {
     if constexpr (!std::is_same_v<std::decay_t<IndexOrIndexLabel>, Index>) {
-      label_ = index;
+      label_ = index_or_index_label;
       check_nontmp_label();
       space_ = get_default_context().index_space_registry()->retrieve(label_);
     } else {
-      label_ = index.label();
-      space_ = index.space();
+      label_ = index_or_index_label.label();
+      space_ = index_or_index_label.space();
     }
     canonicalize_proto_indices();
     check_for_duplicate_proto_indices();
@@ -218,11 +221,9 @@ class Index : public Taggable {
   /// @tparam IndexOrIndexLabel either Index or a type that can be
   /// viewed/converted to a string (i.e.,
   /// `meta::is_basic_string_convertible_v<std::decay_t<IndexOrIndexLabel>>==true`)
-  /// @param[in] index an Index object
-  /// @param space an IndexSpace object
-  /// @param label the label, does not need to be unique
-  /// @param space (a const ref to) the IndexSpace object that specifies to this
-  /// space this object belongs
+  /// @param[in] index_or_index_label an Index object or a label
+  /// @param space (a const ref to) the IndexSpace object that specifies the
+  /// space to which ths object refers to
   template <typename IndexOrIndexLabel>
   Index(IndexOrIndexLabel &&index_or_index_label, IndexSpace space) {
     if constexpr (std::is_same_v<IndexOrIndexLabel, Index>) {
@@ -250,7 +251,8 @@ class Index : public Taggable {
 
   /// @brief constructs an Index using this object's label and proto indices (if
   /// any) and a new IndexSpace
-  /// @param space an IndexSpace object
+  /// @param space (a const ref to) the IndexSpace object that specifies the
+  /// space to which ths object refers to
   [[nodiscard]] Index replace_space(IndexSpace space) const {
     return Index(*this, std::move(space));
   }
@@ -337,9 +339,9 @@ class Index : public Taggable {
               {label.begin() + underscore_position + 1, label.end()}};
   }
 
-  /// @param label an Index label (e.g., returned by Index::label())
-  /// @return @p label split into base and ordinal parts; the ordinal part is
-  /// empty, if missing
+  /// @param base_label base part of an Index label
+  /// @param ordinal_label ordinal part of an Index label
+  /// @return @p base_label and @p ordinal_label merged
   static std::wstring make_merged_label(std::wstring_view base_label,
                                         std::wstring_view ordinal_label) {
     if (ordinal_label.empty())
@@ -410,8 +412,9 @@ class Index : public Taggable {
 
   /// @brief makes a new label by appending a suffix to the label
 
-  /// Appends @p suffix to the label itself (if plain) or to its core (if
+  /// Appends @p suffix to @p label itself (if plain) or to its core (if
   /// composite)
+  /// @param label the label to append the suffix to
   /// @param suffix a string to append to the label
   /// @return `this->label()` with @p suffix appended
   template <typename WS1, typename WS2,
@@ -448,8 +451,9 @@ class Index : public Taggable {
 
   /// @brief makes a new label by removing a substring from the label
 
-  /// Removes @p substr from the label itself (if plain) or from its core (if
+  /// Removes @p substr from @p label itself (if plain) or from its core (if
   /// composite)
+  /// @param label the label to remove the substring from
   /// @param substr a string to remove from the label
   /// @return `this->label()` with @p substr removed
   template <typename WS1, typename WS2,
@@ -853,6 +857,7 @@ class IndexFactory {
   IndexFactory() = default;
   /// @tparam IndexValidator IndexValidator(const Index&) -> bool is valid and
   /// returns true generated index is valid
+  /// @param validator a validator for the generated indices
   /// @param min_index start indexing indices for each space with this value;
   /// must be greater than 0; the default is to use Index::min_tmp_index()
   template <typename IndexValidator>
@@ -937,7 +942,7 @@ class IndexFactory {
 
 /// @brief hashing function
 
-/// @paramp[in] idx a const reference to an Index object
+/// @param[in] idx a const reference to an Index object
 /// @return the hash value of the object referred to by idx
 inline auto hash_value(const Index &idx) {
   const auto &proto_indices = idx.proto_indices();
@@ -956,45 +961,6 @@ auto make_indices(WstrList index_labels = {}) {
   }
   return result;
 }
-
-class IndexRegistry {
- public:
-  using Record =
-      std::tuple<std::function<long(const Index &)>>;  // index record = {sizer}
-
-  IndexRegistry() = default;
-
-  /// updates an existing entry, or creates a new one if it does not exist
-  template <typename... Args>
-  void update(const Index &idx, Args &&...args) {
-    auto it = registry_.find(idx);
-    if (it != registry_.end()) {
-      registry_.erase(it);
-    }
-    auto insertion_result =
-        registry_.try_emplace(idx, std::forward<Args>(args)...);
-  }
-  /// creates a new entry
-  template <typename... Args>
-  void make(const Index &idx, Args &&...args) {
-    auto insertion_result =
-        registry_.try_emplace(idx, std::forward<Args>(args)...);
-    assert(insertion_result.second);
-  }
-
-  /// retrieves the pointer to the Record object for Index @idx , or nullptr if
-  /// not found
-  const Record *retrieve(const Index &idx) const {
-    auto result = registry_.find(idx);
-    if (result != registry_.end())
-      return &(result->second);
-    else
-      return nullptr;
-  }
-
- private:
-  container::map<Index, Record> registry_;
-};
 
 }  // namespace sequant
 
