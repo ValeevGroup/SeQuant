@@ -11,6 +11,7 @@
 #include <SeQuant/core/latex.hpp>
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/wolfram.hpp>
+#include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -144,7 +145,6 @@ struct latex_visitor {
 
 TEST_CASE("Expr", "[elements]") {
   using namespace sequant;
-
   SECTION("constructors") {
     REQUIRE_NOTHROW(std::make_shared<Constant>(2));
     const auto ex2 = std::make_shared<Constant>(2);

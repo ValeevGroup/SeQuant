@@ -107,8 +107,9 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   /// to indices)
   /// @param ket_indices list of ket indices (or objects that can be converted
   /// to indices)
-  /// @param symmetry the symmetry of bra or ket
-  /// @param braket_symmetry the symmetry with respect to bra-ket exchange
+  /// @param s the symmetry of bra or ket
+  /// @param bks the symmetry with respect to bra-ket exchange
+  /// @param ps the symmetry under exchange of particles
   template <typename IndexRange1, typename IndexRange2,
             typename = std::enable_if_t<
                 !meta::is_initializer_list_v<std::decay_t<IndexRange1>> &&
@@ -131,8 +132,9 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   /// to indices)
   /// @param ket_indices list of ket indices (or objects that can be converted
   /// to indices)
-  /// @param symmetry the symmetry of bra or ket
-  /// @param braket_symmetry the symmetry with respect to bra-ket exchange
+  /// @param s the symmetry of bra or ket
+  /// @param bks the symmetry with respect to bra-ket exchange
+  /// @param ps the symmetry under exchange of particles
   template <typename I1 = Index, typename I2 = Index>
   Tensor(std::wstring_view label, std::initializer_list<I1> bra_indices,
          std::initializer_list<I2> ket_indices, Symmetry s = Symmetry::nonsymm,
@@ -161,7 +163,7 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   auto const_braket() const { return this->braket(); }
   /// Returns the Symmetry object describing the symmetry of the bra and ket of
   /// the Tensor, i.e. what effect swapping indices in positions @c i  and @c j
-  /// in <b>either bra or ket</em> has on the elements of the Tensor;
+  /// in <em>either bra or ket</em> has on the elements of the Tensor;
   /// Tensor's are <em>always assumed</em> to be particle-symmetric, i.e.
   /// swapping indices in positions @c i and @c j in <b>both bra and ket</b>;
   /// The allowed values are Symmetry::symm, Symmetry::antisymm, and
@@ -205,24 +207,6 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
     result += L"}_{";
     for (const auto &i : this->bra()) result += sequant::to_latex(i);
     result += L"}}";
-    return result;
-  }
-
-  std::wstring to_wolfram() const override {
-    std::wstring result;
-    result = L"SQM[OHead[\"\\!\\(\\*OverscriptBox[\\(";
-    result += this->label();
-    result += L"\\), \\(_\\)]\\)\",";
-    result += sequant::to_wolfram(this->symmetry());
-    result += L"],";
-    for (const auto &i : this->ket()) {
-      result += i.to_wolfram(BraKetPos::ket) + L",";
-    }
-    for (const auto &i : this->bra()) {
-      result += i.to_wolfram(BraKetPos::bra) + L",";
-    }
-    result = result.erase(result.size() - 1);
-    result += L"]";
     return result;
   }
 

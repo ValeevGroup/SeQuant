@@ -1,8 +1,7 @@
 //
 // Created by Eduard Valeyev on 2023-10-30.
 //
-
-//  operator-level vac_av is same for SR and MR, to be included from {sr,mr}.hpp
+using namespace sequant::mbpt;
 
 /// defines the default op connections
 inline std::vector<std::pair<mbpt::OpType, mbpt::OpType>>

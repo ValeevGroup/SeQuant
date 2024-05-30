@@ -16,7 +16,6 @@
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/timer.hpp>
-#include <SeQuant/domain/mbpt/sr.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -33,12 +32,18 @@
 #include <tuple>
 #include <vector>
 
+#include <SeQuant/core/bliss.hpp>
+#include <SeQuant/core/op.hpp>
+#include <SeQuant/core/tensor_network.hpp>
+#include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/op.hpp>
+
+#include <SeQuant/core/timer.hpp>
 #include <range/v3/all.hpp>
 
 TEST_CASE("TensorNetwork", "[elements]") {
   using namespace sequant;
-
-  using namespace sequant::mbpt::sr;
+  using namespace sequant::mbpt::tensor;
 
   SECTION("constructors") {
     {  // with Tensors
@@ -178,6 +183,8 @@ TEST_CASE("TensorNetwork", "[elements]") {
   }  // SECTION("canonicalizer")
 
   SECTION("bliss graph") {
+    auto ctx_resetter = set_scoped_default_context(
+        Context(sequant::mbpt::make_legacy_spaces(), Vacuum::SingleProduct));
     Index::reset_tmp_index();
     // to generate expressions in specified (i.e., platform-independent) manner
     // can't use operator expression (due to unspecified order of evaluation of
@@ -197,67 +204,67 @@ TEST_CASE("TensorNetwork", "[elements]") {
     // create dot
     std::basic_ostringstream<wchar_t> oss;
     REQUIRE_NOTHROW(graph->write_dot(oss, vlabels));
-    std::wcout << "oss.str() = " << std::endl << oss.str() << std::endl;
+    // std::wcout << "oss.str() = " << std::endl << oss.str() << std::endl;
     REQUIRE(oss.str() ==
             L"graph g {\n"
-            "v0 [label=\"{a_1}\"; color=\"#9e3,ba0\"];\n"
+            "v0 [label=\"{a_1}\"; color=\"#64f,acf\"];\n"
             "v0 -- v29\n"
             "v0 -- v58\n"
-            "v1 [label=\"{a_2}\"; color=\"#9e3,ba0\"];\n"
+            "v1 [label=\"{a_2}\"; color=\"#64f,acf\"];\n"
             "v1 -- v29\n"
             "v1 -- v58\n"
-            "v2 [label=\"{a_3}\"; color=\"#9e3,ba0\"];\n"
+            "v2 [label=\"{a_3}\"; color=\"#64f,acf\"];\n"
             "v2 -- v33\n"
             "v2 -- v54\n"
-            "v3 [label=\"{a_4}\"; color=\"#9e3,ba0\"];\n"
+            "v3 [label=\"{a_4}\"; color=\"#64f,acf\"];\n"
             "v3 -- v33\n"
             "v3 -- v54\n"
-            "v4 [label=\"{a_5}\"; color=\"#9e3,ba0\"];\n"
+            "v4 [label=\"{a_5}\"; color=\"#64f,acf\"];\n"
             "v4 -- v37\n"
             "v4 -- v50\n"
-            "v5 [label=\"{a_6}\"; color=\"#9e3,ba0\"];\n"
+            "v5 [label=\"{a_6}\"; color=\"#64f,acf\"];\n"
             "v5 -- v37\n"
             "v5 -- v50\n"
-            "v6 [label=\"{a_7}\"; color=\"#9e3,ba0\"];\n"
+            "v6 [label=\"{a_7}\"; color=\"#64f,acf\"];\n"
             "v6 -- v22\n"
             "v6 -- v41\n"
-            "v7 [label=\"{a_8}\"; color=\"#9e3,ba0\"];\n"
+            "v7 [label=\"{a_8}\"; color=\"#64f,acf\"];\n"
             "v7 -- v22\n"
             "v7 -- v41\n"
-            "v8 [label=\"{i_1}\"; color=\"#a78,ee8\"];\n"
+            "v8 [label=\"{i_1}\"; color=\"#9c2,a20\"];\n"
             "v8 -- v30\n"
             "v8 -- v57\n"
-            "v9 [label=\"{i_2}\"; color=\"#a78,ee8\"];\n"
+            "v9 [label=\"{i_2}\"; color=\"#9c2,a20\"];\n"
             "v9 -- v30\n"
             "v9 -- v57\n"
-            "v10 [label=\"{i_3}\"; color=\"#a78,ee8\"];\n"
+            "v10 [label=\"{i_3}\"; color=\"#9c2,a20\"];\n"
             "v10 -- v34\n"
             "v10 -- v53\n"
-            "v11 [label=\"{i_4}\"; color=\"#a78,ee8\"];\n"
+            "v11 [label=\"{i_4}\"; color=\"#9c2,a20\"];\n"
             "v11 -- v34\n"
             "v11 -- v53\n"
-            "v12 [label=\"{i_5}\"; color=\"#a78,ee8\"];\n"
+            "v12 [label=\"{i_5}\"; color=\"#9c2,a20\"];\n"
             "v12 -- v38\n"
             "v12 -- v49\n"
-            "v13 [label=\"{i_6}\"; color=\"#a78,ee8\"];\n"
+            "v13 [label=\"{i_6}\"; color=\"#9c2,a20\"];\n"
             "v13 -- v38\n"
             "v13 -- v49\n"
-            "v14 [label=\"{i_7}\"; color=\"#a78,ee8\"];\n"
+            "v14 [label=\"{i_7}\"; color=\"#9c2,a20\"];\n"
             "v14 -- v21\n"
             "v14 -- v42\n"
-            "v15 [label=\"{i_8}\"; color=\"#a78,ee8\"];\n"
+            "v15 [label=\"{i_8}\"; color=\"#9c2,a20\"];\n"
             "v15 -- v21\n"
             "v15 -- v42\n"
-            "v16 [label=\"{\\kappa_1}\"; color=\"#703,062\"];\n"
+            "v16 [label=\"{\\kappa_1}\"; color=\"#712,6de\"];\n"
             "v16 -- v25\n"
             "v16 -- v46\n"
-            "v17 [label=\"{\\kappa_2}\"; color=\"#703,062\"];\n"
+            "v17 [label=\"{\\kappa_2}\"; color=\"#712,6de\"];\n"
             "v17 -- v25\n"
             "v17 -- v46\n"
-            "v18 [label=\"{\\kappa_3}\"; color=\"#703,062\"];\n"
+            "v18 [label=\"{\\kappa_3}\"; color=\"#712,6de\"];\n"
             "v18 -- v26\n"
             "v18 -- v45\n"
-            "v19 [label=\"{\\kappa_4}\"; color=\"#703,062\"];\n"
+            "v19 [label=\"{\\kappa_4}\"; color=\"#712,6de\"];\n"
             "v19 -- v26\n"
             "v19 -- v45\n"
             "v20 [label=\"A\"; color=\"#518,020\"];\n"
@@ -347,20 +354,21 @@ TEST_CASE("TensorNetwork", "[elements]") {
       std::basic_ostringstream<wchar_t> oss;
       bliss::print_auts(aut_generators, oss, decltype(vlabels){});
       REQUIRE(oss.str() ==
-              L"(18,19)\n"
-              "(16,17)\n"
+              L"(14,15)\n"
               "(6,7)\n"
-              "(14,15)\n"
-              "(0,1)\n"
+              "(18,19)\n"
+              "(16,17)\n"
               "(8,9)\n"
-              "(2,3)\n"
-              "(4,5)\n"
+              "(0,1)\n"
               "(10,11)\n"
               "(12,13)\n"
+              "(2,3)\n"
+              "(4,5)\n"
               "(2,4)(3,5)(10,12)(11,13)(32,36)(33,37)(34,38)(35,39)(48,52)(49,"
               "53)(50,54)(51,55)\n"
               "(0,2)(1,3)(8,10)(9,11)(28,32)(29,33)(30,34)(31,35)(52,56)(53,57)"
               "(54,58)(55,59)\n");
+
       // change to 1 to user vertex labels rather than indices
       if (0) {
         std::basic_ostringstream<wchar_t> oss2;

@@ -3,13 +3,11 @@
 
 int main() {
   using namespace sequant;
+  using namespace sequant::mbpt;
+  load(Convention::Minimal);
 
-  // load the QCiFS convention
-  mbpt::
-      set_default_convention();  // =mbpt::set_default_convention(mbpt::Convention::QCiFS)
-
-  Index i1(L"i_1");  // active occupied
-  Index a1(L"a_1");  // active unoccupied
+  Index i1(L"i_1");  // (active) occupied/hole
+  Index a1(L"a_1");  // (active) unoccupied/particle
   Index p1(L"p_1");  // any state in computational basis
   // etc.
 }

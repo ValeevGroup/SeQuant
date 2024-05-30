@@ -29,10 +29,9 @@ int main(int argc, char* argv[]) {
   std::wcout.sync_with_stdio(true);
   std::wcerr.sync_with_stdio(true);
 
-  sequant::set_default_context(
-      Context(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-              BraKetSymmetry::conjugate, SPBasis::spinorbital));
-  mbpt::set_default_convention();
+  sequant::set_default_context(Context(
+      mbpt::make_min_sr_spaces(), Vacuum::SingleProduct, IndexSpaceMetric::Unit,
+      BraKetSymmetry::conjugate, SPBasis::spinorbital));
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
 
@@ -44,17 +43,15 @@ int main(int argc, char* argv[]) {
   const size_t NMAX = argc > 1 ? std::atoi(argv[1]) : DEFAULT_NMAX;
 
   /// Make external index
-  auto ext_idx_list = [](const int i_max) {
+  [[maybe_unused]] auto ext_idx_list = [](const int i_max) {
     container::svector<container::svector<Index>> ext_idx_list;
-
+    auto isr = get_default_context().index_space_registry();
     for (size_t i = 1; i <= i_max; ++i) {
       auto label = std::to_wstring(i);
-      auto occ_space = IndexSpace::instance(IndexSpace::active_occupied);
-      auto occ_i =
-          Index(IndexSpace::base_key(occ_space) + L'_' + label, occ_space);
-      auto uocc_space = IndexSpace::instance(IndexSpace::active_unoccupied);
-      auto virt_i =
-          Index(IndexSpace::base_key(uocc_space) + L'_' + label, uocc_space);
+      auto occ_space = isr->retrieve(L"i");
+      auto occ_i = Index(occ_space.base_key() + L'_' + label, occ_space);
+      auto uocc_space = isr->retrieve(L"a");
+      auto virt_i = Index(uocc_space.base_key() + L'_' + label, uocc_space);
       decltype(ext_idx_list)::value_type pair = {occ_i, virt_i};
       ext_idx_list.push_back(pair);
     }
@@ -62,7 +59,7 @@ int main(int argc, char* argv[]) {
   };
 
   // Spin-orbital coupled cluster
-  auto cc_r = sequant::mbpt::sr::CC{NMAX}.t();
+  auto cc_r = sequant::mbpt::CC{NMAX}.t();
   for (auto i = 1; i < cc_r.size(); ++i) {
     std::cout << "Spin-orbital CC R" << i << " size: " << cc_r[i]->size()
               << "\n";

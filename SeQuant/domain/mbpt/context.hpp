@@ -2,6 +2,8 @@
 #ifndef SEQUANT_DOMAIN_MBPT_CONTEXT_HPP
 #define SEQUANT_DOMAIN_MBPT_CONTEXT_HPP
 
+#include <SeQuant/domain/mbpt/fwd.hpp>
+
 #include <SeQuant/core/utility/context.hpp>
 
 namespace sequant::mbpt {

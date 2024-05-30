@@ -9,12 +9,12 @@ namespace sequant {
 class ExprPtr;
 }
 
-namespace sequant::mbpt::sr {
+namespace sequant::mbpt {
 
 /// CC is a derivation engine for the coupled-cluster method
 class CC {
  public:
-  enum Ansatz {
+  enum class Ansatz {
     /// traditional ansatz
     T,
     /// traditional orbital-optimized (singles-free) ansatz
@@ -119,6 +119,6 @@ class CC {
   Ansatz ansatz_ = Ansatz::T;
 };  // class CC
 
-}  // namespace sequant::mbpt::sr
+}  // namespace sequant::mbpt
 
 #endif  // SEQUANT_DOMAIN_MBPT_MODELS_CC_HPP
