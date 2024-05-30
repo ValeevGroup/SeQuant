@@ -957,45 +957,6 @@ auto make_indices(WstrList index_labels = {}) {
   return result;
 }
 
-class IndexRegistry {
- public:
-  using Record =
-      std::tuple<std::function<long(const Index &)>>;  // index record = {sizer}
-
-  IndexRegistry() = default;
-
-  /// updates an existing entry, or creates a new one if it does not exist
-  template <typename... Args>
-  void update(const Index &idx, Args &&...args) {
-    auto it = registry_.find(idx);
-    if (it != registry_.end()) {
-      registry_.erase(it);
-    }
-    auto insertion_result =
-        registry_.try_emplace(idx, std::forward<Args>(args)...);
-  }
-  /// creates a new entry
-  template <typename... Args>
-  void make(const Index &idx, Args &&...args) {
-    auto insertion_result =
-        registry_.try_emplace(idx, std::forward<Args>(args)...);
-    assert(insertion_result.second);
-  }
-
-  /// retrieves the pointer to the Record object for Index @idx , or nullptr if
-  /// not found
-  const Record *retrieve(const Index &idx) const {
-    auto result = registry_.find(idx);
-    if (result != registry_.end())
-      return &(result->second);
-    else
-      return nullptr;
-  }
-
- private:
-  container::map<Index, Record> registry_;
-};
-
 }  // namespace sequant
 
 #endif  // SEQUANT_INDEX_H
