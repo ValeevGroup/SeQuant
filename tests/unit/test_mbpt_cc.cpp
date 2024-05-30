@@ -10,11 +10,13 @@
 #include "test_config.hpp"
 
 TEST_CASE("SR-TCC", "[mbpt/cc]") {
-  using namespace sequant::mbpt::sr;
+  using namespace sequant::mbpt;
 
   SECTION("t") {
     // TCC R1
     SEQUANT_PROFILE_SINGLE("CCSD t", {
+      [[maybe_unused]] auto& l = sequant::Logger::get_instance();
+      // l.canonicalize = true;
       const auto N = 2;
       auto t_eqs = CC{N}.t();
       REQUIRE(t_eqs.size() == N + 1);
@@ -30,12 +32,12 @@ TEST_CASE("SR-TCC", "[mbpt/cc]") {
 }  // TEST_CASE("SR-TCC")
 
 TEST_CASE("SR-UCC", "[mbpt/cc]") {
-  using namespace sequant::mbpt::sr;
+  using namespace sequant::mbpt;
 
   SECTION("t") {
     const auto N = 2;
     const std::size_t C = 3;
-    CC::Ansatz ansatz = CC::U;
+    CC::Ansatz ansatz = CC::Ansatz::U;
 
     // oUCC energy, up to third commutator
     auto t_eqs = CC{N, ansatz}.t(C);

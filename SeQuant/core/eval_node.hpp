@@ -35,26 +35,13 @@ template <typename T,
           typename = std::enable_if_t<std::is_convertible_v<T, EvalExpr>>>
 using EvalNode = FullBinaryNode<T>;
 
-template <typename T, typename = void>
-constexpr bool IsIterable{};
-
-template <typename T>
-constexpr bool IsIterable<
-    T, std::void_t<
-           decltype(std::begin(std::declval<std::remove_reference_t<T>>())),
-           decltype(std::end(std::declval<std::remove_reference_t<T>>()))>> =
-    true;
-
-template <typename I, typename = std::enable_if_t<IsIterable<I>>>
-using IteredT =
-    std::remove_reference_t<decltype(*std::begin(std::declval<I>()))>;
-
 template <typename, typename = void>
 constexpr bool IsIterableOfEvalNodes{};
 
 template <typename Iterable>
 constexpr bool IsIterableOfEvalNodes<
-    Iterable, std::enable_if_t<IsEvalNode<IteredT<Iterable>>>> = true;
+    Iterable, std::enable_if_t<IsEvalNode<meta::range_value_t<Iterable>>>> =
+    true;
 
 ///
 /// \brief Creates an evaluation tree from @c ExprPtr.
@@ -171,7 +158,9 @@ enum NodePos { Left = 0, Right, This };
 [[maybe_unused]] std::pair<size_t, size_t> occ_virt(Tensor const& t) {
   auto bk_rank = t.bra_rank() + t.ket_rank();
   auto nocc = ranges::count_if(t.const_braket(), [](Index const& idx) {
-    return idx.space() == IndexSpace::active_occupied;
+    return idx.space() ==
+           get_default_context().index_space_registry()->hole_space(
+               idx.space().qns());
   });
   auto nvirt = bk_rank - nocc;
   return {nocc, nvirt};

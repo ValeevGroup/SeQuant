@@ -8,9 +8,8 @@
 #include <complex>
 #include <memory>
 #include <range/v3/range/access.hpp>
+#include <range/v3/range/traits.hpp>
 #include <type_traits>
-
-#include <range/v3/range/access.hpp>
 
 namespace sequant {
 
@@ -21,6 +20,10 @@ namespace meta {
 
 template <typename T>
 struct type_printer;
+
+/// always_false<T>::value is always false
+template <typename T>
+struct always_false : std::false_type {};
 
 ///////// remove_cvref ///////////
 
@@ -114,6 +117,24 @@ template <class T>
 struct is_complex<sequant::Complex<T>> : std::true_type {};
 template <class T>
 static constexpr bool is_complex_v = is_complex<T>::value;
+
+/// Evaluates to true if ``T`` is a character type
+template <typename T>
+struct is_char : std::false_type {};
+template <>
+struct is_char<char> : std::true_type {};
+template <>
+struct is_char<wchar_t> : std::true_type {};
+template <>
+struct is_char<char8_t> : std::true_type {};
+template <>
+struct is_char<char16_t> : std::true_type {};
+template <>
+struct is_char<char32_t> : std::true_type {};
+template <typename T>
+struct is_char<const T> : is_char<T> {};
+template <class T>
+static constexpr bool is_char_v = is_char<T>::value;
 
 ///////// is_less_than_comparable /////////
 
@@ -226,6 +247,11 @@ static constexpr bool is_range_v =
     (is_detected_v<is_range_impl::ranges_begin_t, T> &&
      is_detected_v<is_range_impl::ranges_end_t, T>);
 
+template <typename R,
+          typename =
+              std::enable_if_t<meta::is_range_v<std::remove_reference_t<R>>>>
+using range_value_t = ranges::range_value_t<std::remove_reference_t<R>>;
+
 /// is_same
 /// Checks whether \c T is a \c Base (is either the same class or a sub-class
 /// ignoring CV and reference qualifiers
@@ -244,6 +270,34 @@ struct is_same
 
 template <typename T, typename U>
 constexpr bool is_same_v = is_same<T, U>::value;
+
+/// is_statically_castable checks if a static_cast from From to To is possible
+/// N.B. is_statically_castable_v<From, To>  != is_constructible<To,From>
+///      see https://stackoverflow.com/a/16944130 for why this is
+///      not called is_explicitly_convertible
+
+template <typename From, typename To>
+struct is_statically_castable {
+  template <typename T>
+  static void f(T);
+
+  template <typename F, typename T>
+  static constexpr auto test(int)
+      -> decltype(f(static_cast<T>(std::declval<F>())), true) {
+    return true;
+  }
+
+  template <typename F, typename T>
+  static constexpr auto test(...) -> bool {
+    return false;
+  }
+
+  static bool const value = test<From, To>(0);
+};
+
+template <typename From, typename To>
+constexpr bool is_statically_castable_v =
+    is_statically_castable<From, To>::value;
 
 }  // namespace meta
 }  // namespace sequant

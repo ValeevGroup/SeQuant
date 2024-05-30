@@ -29,8 +29,6 @@ struct NoCacheAmplitudeTensor {
 };
 
 struct IndexToSize {
-  static const size_t nocc;
-  static const size_t nvirt;
   size_t operator()(Index const& idx) const;
 };
 

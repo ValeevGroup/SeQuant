@@ -15,14 +15,13 @@ namespace sequant {
 /// components of SeQuant
 namespace mbpt {
 
-/// @brief the namespace of the MBPT formalisms with respect to the single
-/// determinant reference (SR) vacuum
-namespace sr {}
+/// @brief the namespace containing MBPT operators
+inline namespace op {
 
-/// @brief the namespace of the MBPT formalisms with respect to the multi
-/// determinant reference (MR) wave function
-namespace mr {}
+/// @brief the namespace containing tensor form of MBPT operators
+namespace tensor {}
 
+}  // namespace op
 }  // namespace mbpt
 }  // namespace sequant
 

@@ -1,4 +1,4 @@
-#include "fusion.hpp"
+#include <SeQuant/core/optimize/fusion.hpp>
 
 #include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/container.hpp>

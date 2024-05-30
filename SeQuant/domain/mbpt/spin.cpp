@@ -43,75 +43,36 @@
 
 namespace sequant {
 
-enum class SpinCase1 { Null, Alpha, Beta };
-
 namespace detail {
 
-Index make_index_with_spincase(const Index& idx, SpinCase1 sc) {
+Index make_index_with_spincase(const Index& idx, mbpt::Spin s) {
   // sanity check: make sure have only one spin label
   assert(!(idx.label().find(L'↑') != std::wstring::npos &&
            idx.label().find(L'↓') != std::wstring::npos));
 
-  std::wstring label;
-
-  if (sc != SpinCase1::Null) {
-    if (sc == SpinCase1::Alpha) {
-      // this might be replacement of beta with alpha
-      if (idx.label().find(L'↓') != std::wstring::npos) {
-        label = idx.make_label_minus_substring(L'↓');
-        label = Index::make_label_plus_suffix(label, L'↑');
-      } else if (idx.label().find(L'↑') != std::wstring::npos)
-        label = idx.label();
-      else
-        label = idx.make_label_plus_suffix(L'↑');
-    } else if (sc == SpinCase1::Beta) {
-      // this might be replacement of alpha with beta
-      if (idx.label().find(L'↑') != std::wstring::npos) {
-        label = idx.make_label_minus_substring(L'↑');
-        label = Index::make_label_plus_suffix(label, L'↓');
-      } else if (idx.label().find(L'↓') != std::wstring::npos)
-        label = idx.label();
-      else
-        label = idx.make_label_plus_suffix(L'↓');
-    } else
-      abort();  // unreachable
-  } else {
-    assert(sc == SpinCase1::Null);
-    if (idx.label().find(L'↑') != std::wstring::npos)
-      label = idx.make_label_minus_substring(L'↑');
-    else if (idx.label().find(L'↓') != std::wstring::npos)
-      label = idx.make_label_minus_substring(L'↓');
-    else
-      label = idx.label();
-  }
-
   // to preserve rest of bits first unset spin bit, then set them to the desired
   // state
-  auto qns = idx.space()
-                 .qns()
-                 .intersection(~IndexSpace::spinmask)
-                 .unIon((sc == SpinCase1::Null
-                             ? IndexSpace::nullqns
-                             : (sc == SpinCase1::Alpha ? IndexSpace::alpha
-                                                       : IndexSpace::beta)));
-  IndexSpace space{idx.space().type(), qns};
+  auto qns = mbpt::spinannotation_remove(idx.space().qns()).unIon(s);
+  IndexSpace space{mbpt::spinannotation_replacе(idx.space().base_key(), s),
+                   idx.space().type(), qns};
   auto protoindices = idx.proto_indices();
-  for (auto& pidx : protoindices) pidx = make_index_with_spincase(pidx, sc);
-  return Index{label, space, protoindices};
+  for (auto& pidx : protoindices) pidx = make_index_with_spincase(pidx, s);
+  return Index{mbpt::spinannotation_replacе(idx.label(), s), space,
+               protoindices};
 }
 
 }  // namespace detail
 
 Index make_spinalpha(const Index& idx) {
-  return detail::make_index_with_spincase(idx, SpinCase1::Alpha);
+  return detail::make_index_with_spincase(idx, mbpt::Spin::alpha);
 };
 
 Index make_spinbeta(const Index& idx) {
-  return detail::make_index_with_spincase(idx, SpinCase1::Beta);
+  return detail::make_index_with_spincase(idx, mbpt::Spin::beta);
 };
 
-Index make_spinnull(const Index& idx) {
-  return detail::make_index_with_spincase(idx, SpinCase1::Null);
+Index make_spinfree(const Index& idx) {
+  return detail::make_index_with_spincase(idx, mbpt::Spin::any);
 };
 
 ExprPtr transform_expr(const ExprPtr& expr,
@@ -235,7 +196,7 @@ ExprPtr remove_spin(const ExprPtr& expr) {
     container::svector<Index> ket(tensor.ket().begin(), tensor.ket().end());
     {
       for (auto&& idx : ranges::views::concat(bra, ket)) {
-        idx = make_spinnull(idx);
+        idx = make_spinfree(idx);
       }
     }
     Tensor result(tensor.label(), bra, ket, tensor.symmetry(),
@@ -293,15 +254,23 @@ bool can_expand(const Tensor& tensor) {
          "can_expand(Tensor) failed.");
   if (tensor.bra_rank() != tensor.ket_rank()) return false;
 
-  // indices with non-qns are not allowed
+  // indices must have specific spin
+  [[maybe_unused]] auto all_have_spin = std::all_of(
+      tensor.const_braket().begin(), tensor.const_braket().end(),
+      [](const auto& idx) {
+        auto idx_spin = mbpt::to_spin(idx.space().qns());
+        return idx_spin == mbpt::Spin::alpha || idx_spin == mbpt::Spin::beta;
+      });
   assert(std::all_of(tensor.const_braket().begin(), tensor.const_braket().end(),
                      [](const auto& idx) {
-                       return idx.space().qns() != IndexSpace::nullqns;
+                       auto idx_spin = mbpt::to_spin(idx.space().qns());
+                       return idx_spin == mbpt::Spin::alpha ||
+                              idx_spin == mbpt::Spin::beta;
                      }));
 
   // count alpha indices in bra
   auto is_alpha = [](const Index& idx) {
-    return idx.space().qns() == IndexSpace::alpha;
+    return mbpt::to_spin(idx.space().qns()) == mbpt::Spin::alpha;
   };
 
   // count alpha indices in bra
@@ -1080,21 +1049,22 @@ auto index_list(const ExprPtr& expr) {
 }
 
 Tensor swap_spin(const Tensor& t) {
-  auto is_null_qns = [](const Index& i) {
-    return i.space().qns() == IndexSpace::nullqns;
+  auto is_any_spin = [](const Index& i) {
+    return mbpt::to_spin(i.space().qns()) == mbpt::Spin::any;
   };
 
   // Return tensor if there are no spin labels
   if (std::all_of(t.const_braket().begin(), t.const_braket().end(),
-                  is_null_qns)) {
+                  is_any_spin)) {
     return t;
   }
 
   // Return new index where the spin-label is flipped
   auto spin_flipped_idx = [](const Index& idx) {
-    assert(idx.space().qns() != IndexSpace::nullqns);
-    return idx.space().qns() == IndexSpace::alpha ? make_spinbeta(idx)
-                                                  : make_spinalpha(idx);
+    assert(mbpt::to_spin(idx.space().qns()) != mbpt::Spin::any);
+    return mbpt::to_spin(idx.space().qns()) == mbpt::Spin::alpha
+               ? make_spinbeta(idx)
+               : make_spinalpha(idx);
   };
 
   container::svector<Index> bra(t.rank()), ket(t.rank());
@@ -1526,7 +1496,7 @@ ExprPtr spintrace(
 
   // This function is used to spin-trace a product terms with spin-specific
   // indices. It checks if all tensors can be expanded and spintraces individual
-  // tensors by call to the about lambda function.
+  // tensors by call to the spin_trace_tensor lambda.
   auto spin_trace_product = [&spin_trace_tensor](const Product& product) {
     Product spin_product{};
 
@@ -1875,7 +1845,6 @@ ExprPtr factorize_S(const ExprPtr& expression,
       while (std::find(i_list.begin(), i_list.end(),
                        std::distance(expr->begin(), it)) != i_list.end())
         ++it;
-
       // Clone the summand
       auto new_product = (*it)->clone();
 

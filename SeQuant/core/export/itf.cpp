@@ -24,14 +24,11 @@ std::wstring to_itf(const itf::CodeBlock &block) {
 
 namespace itf {
 
-// TODO: Get rid of hard-coded index assignments
-static IndexSpace::Type occ = IndexSpace::active_occupied;
-static IndexSpace::Type virt = IndexSpace::active_unoccupied;
-
 struct IndexTypeComparer {
   bool operator()(const IndexSpace::Type &lhs,
                   const IndexSpace::Type &rhs) const {
-    assert(occ < virt);
+    assert(get_default_context().index_space_registry()->retrieve("i").type() <
+           get_default_context().index_space_registry()->retrieve("a").type());
     return lhs < rhs;
   }
 };
@@ -279,10 +276,20 @@ bool isExceptionalJ(const Container &braIndices, const Container &ketIndices) {
   assert(ketIndices.size() == 2);
   // integrals with 3 external (virtual) indices ought to be converted to
   // J-integrals
-  return braIndices[0].space().type() == virt &&
-         braIndices[1].space().type() == virt &&
-         ketIndices[0].space().type() == virt &&
-         ketIndices[1].space().type() != virt;
+  return braIndices[0].space().type() == get_default_context()
+                                             .index_space_registry()
+                                             ->retrieve("a")
+                                             .type() &&
+         braIndices[1].space().type() == get_default_context()
+                                             .index_space_registry()
+                                             ->retrieve("a")
+                                             .type() &&
+         ketIndices[0].space().type() == get_default_context()
+                                             .index_space_registry()
+                                             ->retrieve("a")
+                                             .type() &&
+         ketIndices[1].space().type() !=
+             get_default_context().index_space_registry()->retrieve("a").type();
 }
 
 void two_electron_integral_remapper(
@@ -500,10 +507,14 @@ std::wstring to_itf(const Tensor &tensor, bool includeIndexing = true) {
 
     assert(components.id <= 7);
 
-    if (components.space.type() == IndexSpace::active_occupied) {
+    if (components.space.type() ==
+        get_default_context().index_space_registry()->retrieve("i").type()) {
       tags += L"c";
       indices += static_cast<wchar_t>(L'i' + components.id);
-    } else if (components.space.type() == IndexSpace::active_unoccupied) {
+    } else if (components.space.type() == get_default_context()
+                                              .index_space_registry()
+                                              ->retrieve("a")
+                                              .type()) {
       tags += L"e";
       indices += static_cast<wchar_t>(L'a' + components.id);
     } else {
@@ -528,11 +539,15 @@ std::wstring ITFGenerator::generate() const {
     wchar_t baseLabel;
     std::wstring spaceLabel;
     std::wstring spaceTag;
-    if (iter->first.type() == IndexSpace::active_occupied) {
+    if (iter->first.type() ==
+        get_default_context().index_space_registry()->retrieve("i").type()) {
       baseLabel = L'i';
       spaceLabel = L"Closed";
       spaceTag = L"c";
-    } else if (iter->first.type() == IndexSpace::active_unoccupied) {
+    } else if (iter->first.type() == get_default_context()
+                                         .index_space_registry()
+                                         ->retrieve("a")
+                                         .type()) {
       baseLabel = L'a';
       spaceLabel = L"External";
       spaceTag = L"e";

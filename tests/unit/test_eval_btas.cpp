@@ -49,17 +49,18 @@ class rand_tensor_yield {
     using ranges::views::repeat_n;
     using ranges::views::transform;
     using sequant::IndexSpace;
+    auto isr = sequant::get_default_context().index_space_registry();
 
     assert(ranges::all_of(tnsr.const_braket(),
-                          [](auto const& idx) {
-                            return idx.space() == IndexSpace::active_occupied ||
-                                   idx.space() == IndexSpace::active_unoccupied;
+                          [&isr](auto const& idx) {
+                            return idx.space() == isr->retrieve(L"i") ||
+                                   idx.space() == isr->retrieve(L"a");
                           }) &&
            "Unsupported IndexSpace type found while generating tensor.");
 
     auto rng = btas::Range{
-        tnsr.const_braket() | transform([this](auto const& idx) {
-          return idx.space() == IndexSpace::active_occupied ? nocc_ : nvirt_;
+        tnsr.const_braket() | transform([this, &isr](auto const& idx) {
+          return idx.space() == isr->retrieve(L"i") ? nocc_ : nvirt_;
         }) |
         ranges::to_vector};
 
@@ -121,9 +122,15 @@ class rand_tensor_yield {
 
 using namespace sequant;
 
-template <typename Iterable,
-          std::enable_if_t<std::is_convertible_v<IteredT<Iterable>, Index>,
-                           bool> = true>
+template <
+    typename Iterable,
+    std::enable_if_t<
+        std::is_convertible_v<sequant::meta::range_value_t<Iterable>, Index> &&
+            !sequant::meta::is_statically_castable_v<
+                Iterable const&, std::wstring>  // prefer the ctor taking the
+                                                // std::wstring
+        ,
+        bool> = true>
 container::svector<long> tidxs(Iterable const& indices) noexcept {
   return sequant::index_hash(indices) | ranges::to<container::svector<long>>;
 }
@@ -139,15 +146,6 @@ container::svector<long> tidxs(
   for (auto i : tnsr_coords) tnsr_p = tnsr_p->at(i);
   assert(tnsr_p->is<Tensor>());
   return tidxs(tnsr_p->as<Tensor>());
-}
-
-template <
-    typename Iterable,
-    std::enable_if_t<std::is_convertible_v<IteredT<Iterable>, std::wstring>,
-                     bool> = true>
-container::svector<long> tidxs(Iterable const& strings) noexcept {
-  return tidxs(strings | ranges::views::transform(
-                             [](auto const& s) { return Index{s}; }));
 }
 
 auto terse_index = [](std::wstring const& spec) {

@@ -21,6 +21,7 @@ set(required_components
         container_hash
         core
         fusion
+        hana
         locale
         multiprecision
         #          numeric_conversion

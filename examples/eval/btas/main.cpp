@@ -50,10 +50,9 @@ int main(int argc, char* argv[]) {
 
   using namespace sequant;
   detail::OpIdRegistrar op_id_registrar;
-  sequant::set_default_context(
-      Context(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-              BraKetSymmetry::conjugate, SPBasis::spinorbital));
-  mbpt::set_default_convention();
+  sequant::set_default_context(Context(
+      mbpt::make_min_sr_spaces(), Vacuum::SingleProduct, IndexSpaceMetric::Unit,
+      BraKetSymmetry::conjugate, SPBasis::spinorbital));
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
 

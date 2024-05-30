@@ -11,7 +11,7 @@
 #include <clocale>
 
 using namespace sequant;
-using namespace sequant::mbpt::sr;
+using namespace sequant::mbpt;
 
 namespace {
 
@@ -79,8 +79,9 @@ class compute_cceqvec {
     std::vector<ExprPtr> eqvec_sf_ref;
     if (get_default_context().spbasis() == SPBasis::spinfree) {
       auto context_resetter = sequant::set_scoped_default_context(
-          Context(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-                  BraKetSymmetry::conjugate, SPBasis::spinorbital));
+          sequant::Context(make_min_sr_spaces(), Vacuum::SingleProduct,
+                           IndexSpaceMetric::Unit, BraKetSymmetry::conjugate,
+                           SPBasis::spinorbital));
       std::vector<ExprPtr> eqvec_so;
       switch (type) {
         case EqnType::t:
@@ -110,7 +111,7 @@ class compute_cceqvec {
     for (size_t R = PMIN; R <= P; ++R) {
       std::wcout << "R" << R << "(expS" << N << ") has " << eqvec[R]->size()
                  << " terms:" << std::endl;
-      if (print) std::wcout << to_latex_align(eqvec[R], 20, 3) << std::endl;
+      if (print) std::wcout << to_latex_align(eqvec[R], 20, 1) << std::endl;
 
       // validate known sizes of some CC residuals
       // N.B. # of equations depends on whether we use symmetric or
@@ -184,7 +185,7 @@ class compute_cceqvec {
 
           std::wcout << "biorthogonal spin-free R" << R << "(expS" << N
                      << ") has " << eqvec[R]->size() << " terms:" << std::endl;
-          if (print) std::wcout << to_latex_align(eqvec[R], 20, 3) << std::endl;
+          if (print) std::wcout << to_latex_align(eqvec[R], 20, 1) << std::endl;
 
           if (R == 1 && N == 2) runtime_assert(eqvec[R]->size() == 26);
           if (R == 2 && N == 2) runtime_assert(eqvec[R]->size() == 55);
@@ -248,16 +249,16 @@ int main(int argc, char* argv[]) {
   const std::string spbasis_str = argc > 4 ? argv[4] : "so";
   const SPBasis spbasis = str2spbasis.at(spbasis_str);
 
+  const std::string print_str = argc > 5 ? argv[5] : "noprint";
+  const bool print = print_str == "print";
+
   sequant::detail::OpIdRegistrar op_id_registrar;
-  sequant::set_default_context(Context(Vacuum::SingleProduct,
-                                       IndexSpaceMetric::Unit,
-                                       BraKetSymmetry::conjugate, spbasis));
-  mbpt::set_default_convention();
+  sequant::set_default_context(sequant::Context(
+      make_min_sr_spaces(), Vacuum::SingleProduct, IndexSpaceMetric::Unit,
+      BraKetSymmetry::conjugate, spbasis));
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
 
-  // change to true to print out the resulting equations
-  constexpr bool print = false;
   // change to true to print stats
   Logger::get_instance().wick_stats = false;
 

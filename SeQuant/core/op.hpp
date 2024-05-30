@@ -183,13 +183,15 @@ bool is_annihilator(const Op<S> &op) {
 template <Statistics S>
 bool is_pure_qpcreator(const Op<S> &op,
                        Vacuum vacuum = get_default_context().vacuum()) {
+  const auto &isr = get_default_context().index_space_registry();
   switch (vacuum) {
     case Vacuum::Physical:
       return op.action() == Action::create;
     case Vacuum::SingleProduct: {
-      const auto occ_class = occupancy_class(op.index().space());
-      return (occ_class < 0 && op.action() == Action::annihilate) ||
-             (occ_class > 0 && op.action() == Action::create);
+      return (isr->is_pure_occupied(op.index().space()) &&
+              op.action() == Action::annihilate) ||
+             (isr->is_pure_unoccupied(op.index().space()) &&
+              op.action() == Action::create);
     }
     default:
       throw std::logic_error(
@@ -202,13 +204,15 @@ bool is_pure_qpcreator(const Op<S> &op,
 template <Statistics S>
 bool is_qpcreator(const Op<S> &op,
                   Vacuum vacuum = get_default_context().vacuum()) {
+  const auto &isr = get_default_context().index_space_registry();
   switch (vacuum) {
     case Vacuum::Physical:
       return op.action() == Action::create;
     case Vacuum::SingleProduct: {
-      const auto occ_class = occupancy_class(op.index().space());
-      return (occ_class <= 0 && op.action() == Action::annihilate) ||
-             (occ_class >= 0 && op.action() == Action::create);
+      return (isr->contains_occupied(op.index().space()) &&
+              op.action() == Action::annihilate) ||
+             (isr->contains_unoccupied(op.index().space()) &&
+              op.action() == Action::create);
     }
     default:
       throw std::logic_error("is_qpcreator: cannot handle MultiProduct vacuum");
@@ -218,17 +222,19 @@ bool is_qpcreator(const Op<S> &op,
 template <Statistics S>
 IndexSpace qpcreator_space(const Op<S> &op,
                            Vacuum vacuum = get_default_context().vacuum()) {
+  const auto &isr = get_default_context().index_space_registry();
   switch (vacuum) {
     case Vacuum::Physical:
       return op.action() == Action::create ? op.index().space()
-                                           : IndexSpace::null_instance();
+                                           : IndexSpace::null;
     case Vacuum::SingleProduct:
       return op.action() == Action::annihilate
-                 ? intersection(op.index().space(),
-                                IndexSpace::instance(IndexSpace::occupied))
-                 : intersection(op.index().space(),
-                                IndexSpace::instance(
-                                    IndexSpace::complete_maybe_unoccupied));
+                 ? isr->intersection(
+                       op.index().space(),
+                       isr->vacuum_occupied_space(op.index().space().qns()))
+                 : isr->intersection(
+                       op.index().space(),
+                       isr->vacuum_unoccupied_space(op.index().space().qns()));
     default:
       throw std::logic_error(
           "qpcreator_space: cannot handle MultiProduct vacuum");
@@ -240,13 +246,15 @@ IndexSpace qpcreator_space(const Op<S> &op,
 template <Statistics S>
 bool is_pure_qpannihilator(const Op<S> &op,
                            Vacuum vacuum = get_default_context().vacuum()) {
+  const auto &isr = get_default_context().index_space_registry();
   switch (vacuum) {
     case Vacuum::Physical:
       return op.action() == Action::annihilate;
     case Vacuum::SingleProduct: {
-      const auto occ_class = occupancy_class(op.index().space());
-      return (occ_class > 0 && op.action() == Action::annihilate) ||
-             (occ_class < 0 && op.action() == Action::create);
+      return (isr->is_pure_unoccupied(op.index().space()) &&
+              op.action() == Action::annihilate) ||
+             (isr->is_pure_occupied(op.index().space()) &&
+              op.action() == Action::create);
     }
     default:
       throw std::logic_error(
@@ -259,13 +267,15 @@ bool is_pure_qpannihilator(const Op<S> &op,
 template <Statistics S>
 bool is_qpannihilator(const Op<S> &op,
                       Vacuum vacuum = get_default_context().vacuum()) {
+  const auto &isr = get_default_context().index_space_registry();
   switch (vacuum) {
     case Vacuum::Physical:
       return op.action() == Action::annihilate;
     case Vacuum::SingleProduct: {
-      const auto occ_class = occupancy_class(op.index().space());
-      return (occ_class >= 0 && op.action() == Action::annihilate) ||
-             (occ_class <= 0 && op.action() == Action::create);
+      return (isr->contains_occupied(op.index().space()) &&
+              op.action() == Action::create) ||
+             (isr->contains_unoccupied(op.index().space()) &&
+              op.action() == Action::annihilate);
     }
     default:
       throw std::logic_error(
@@ -276,17 +286,19 @@ bool is_qpannihilator(const Op<S> &op,
 template <Statistics S>
 IndexSpace qpannihilator_space(const Op<S> &op,
                                Vacuum vacuum = get_default_context().vacuum()) {
+  const auto &isr = get_default_context().index_space_registry();
   switch (vacuum) {
     case Vacuum::Physical:
       return op.action() == Action::annihilate ? op.index().space()
-                                               : IndexSpace::null_instance();
+                                               : IndexSpace::null;
     case Vacuum::SingleProduct:
       return op.action() == Action::create
-                 ? intersection(op.index().space(),
-                                IndexSpace::instance(IndexSpace::occupied))
-                 : intersection(op.index().space(),
-                                IndexSpace::instance(
-                                    IndexSpace::complete_maybe_unoccupied));
+                 ? isr->intersection(
+                       op.index().space(),
+                       isr->vacuum_occupied_space(op.index().space().qns()))
+                 : isr->intersection(
+                       op.index().space(),
+                       isr->vacuum_unoccupied_space(op.index().space().qns()));
     default:
       throw std::logic_error(
           "qpcreator_space: cannot handle MultiProduct vacuum");
@@ -462,10 +474,10 @@ class NormalOperator : public Operator<S>,
   /// indices, see the class documentation for more info).
   template <typename IndexSequence1, typename IndexSequence2,
             typename = std::enable_if_t<
-                std::is_same_v<
-                    typename std::decay_t<IndexSequence1>::value_type, Index> &&
-                std::is_same_v<
-                    typename std::decay_t<IndexSequence2>::value_type, Index>>>
+                meta::is_statically_castable_v<
+                    meta::range_value_t<IndexSequence1>, Index> &&
+                meta::is_statically_castable_v<
+                    meta::range_value_t<IndexSequence1>, Index>>>
   NormalOperator(IndexSequence1 &&creator_indices,
                  IndexSequence2 &&annihilator_indices,
                  Vacuum v = get_default_context().vacuum())
@@ -763,14 +775,16 @@ class NormalOperator : public Operator<S>,
   template <Statistics>
   friend class Operator;
   bool commutes_with_atom(const Expr &that) const override {
+    const auto &isr = get_default_context().index_space_registry();
     // same as WickTheorem::can_contract
-    auto can_contract = [this](const Op<S> &left, const Op<S> &right) {
+    auto can_contract = [this, &isr](const Op<S> &left, const Op<S> &right) {
       if (is_qpannihilator<S>(left, vacuum_) &&
           is_qpcreator<S>(right, vacuum_)) {
         const auto qpspace_left = qpannihilator_space<S>(left, vacuum_);
         const auto qpspace_right = qpcreator_space<S>(right, vacuum_);
-        const auto qpspace_common = intersection(qpspace_left, qpspace_right);
-        if (qpspace_common != IndexSpace::null_instance()) return true;
+        const auto qpspace_common =
+            isr->intersection(qpspace_left, qpspace_right);
+        if (qpspace_common) return true;
       }
       return false;
     };
@@ -904,6 +918,16 @@ class NormalOperatorSequence : public container::svector<NormalOperator<S>>,
   /// constructs an empty sequence
   NormalOperatorSequence() : vacuum_(get_default_context().vacuum()) {}
 
+  /// constructs from a parameter pack
+  template <typename... NOps,
+            typename = std::enable_if_t<
+                (std::is_convertible_v<NOps, NormalOperator<S>> && ...)>>
+  NormalOperatorSequence(NOps &&...operators)
+      : base_type({std::forward<NOps>(operators)...}) {
+    check_vacuum();
+  }
+
+  /// constructs from an initializer list
   NormalOperatorSequence(std::initializer_list<NormalOperator<S>> operators)
       : base_type(operators) {
     check_vacuum();
