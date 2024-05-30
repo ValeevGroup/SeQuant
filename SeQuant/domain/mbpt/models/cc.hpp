@@ -102,8 +102,8 @@ class CC {
   /// @param K_uocc number of operators in the unoccupied space in R operator
   /// @return vector of right side sigma equations, with projector corresponding to \p K_occ and \p K_uocc; element 0 is always null
   // clang-format on
-  [[nodiscard]] std::vector<sequant::ExprPtr> R(std::size_t K_occ,
-                                                std::size_t K_uocc);
+  [[nodiscard]] std::vector<sequant::ExprPtr> eom_r(std::size_t K_occ,
+                                                    std::size_t K_uocc);
 
   // clang-format off
   /// @brief derives left-side sigma equations for EOM-CC
@@ -111,8 +111,8 @@ class CC {
   /// @param K_uocc number of operators in the unoccupied space in L operator
   /// @return vector of left side sigma equations, with projector corresponding to \p K_occ and \p K_uocc; element 0 is always null
   // clang-format on
-  [[nodiscard]] std::vector<sequant::ExprPtr> L(std::size_t K_occ,
-                                                std::size_t K_uocc);
+  [[nodiscard]] std::vector<sequant::ExprPtr> eom_l(std::size_t K_occ,
+                                                    std::size_t K_uocc);
 
  private:
   std::size_t N;
