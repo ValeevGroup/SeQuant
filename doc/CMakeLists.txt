@@ -5,4 +5,10 @@ if(DOXYGEN_FOUND)
     COMMAND ${DOXYGEN_EXECUTABLE} ${PROJECT_BINARY_DIR}/doc/Doxyfile
     SOURCES ${PROJECT_BINARY_DIR}/doc/Doxyfile)
   add_custom_target_subproject(sequant doc DEPENDS html-sequant)
+
+  # if DOT found obtain DOXYGEN_DOT_PATH
+  if (DOXYGEN_DOT_EXECUTABLE)
+    get_filename_component(DOXYGEN_DOT_DIRECTORY ${DOXYGEN_DOT_EXECUTABLE} DIRECTORY)
+    file(TO_NATIVE_PATH ${DOXYGEN_DOT_DIRECTORY} DOXYGEN_DOT_PATH)
+  endif()
 endif()
