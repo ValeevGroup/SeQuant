@@ -336,7 +336,7 @@ class Index : public Taggable {
       return {label, {}};
     else
       return {{label.data(), underscore_position},
-              {label.begin() + underscore_position + 1, label.end()}};
+              {label.begin() + underscore_position + 1}};
   }
 
   /// @param base_label base part of an Index label
