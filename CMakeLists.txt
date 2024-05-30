@@ -1,9 +1,20 @@
 cmake_minimum_required(VERSION 3.15.0) # need list(PREPEND for toolchains
 
+# Preload versions/tags of all dependencies ====================================
+include(external/versions.cmake)
+
+###############################################################################
+# CMake defaults to address key pain points
+###############################################################################
+
+# safety net for dev workflow: accidental install will not affect FindOrFetch*
+if (NOT DEFINED CACHE{CMAKE_FIND_NO_INSTALL_PREFIX})
+    set(CMAKE_FIND_NO_INSTALL_PREFIX ON CACHE BOOL "Whether find_* commands will search CMAKE_INSTALL_PREFIX and CMAKE_STAGING_PREFIX; see https://cmake.org/cmake/help/latest/variable/CMAKE_FIND_NO_INSTALL_PREFIX.html#variable:CMAKE_FIND_NO_INSTALL_PREFIX")
+endif()
+
 ###############################################################################
 # Bring ValeevGroup cmake toolkit
 ###############################################################################
-include(external/versions.cmake)
 include(FetchContent)
 if (DEFINED PROJECT_BINARY_DIR)
     set(VG_CMAKE_KIT_PREFIX_DIR PROJECT_BINARY_DIR)
