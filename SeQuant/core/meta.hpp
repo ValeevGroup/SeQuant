@@ -125,8 +125,10 @@ template <>
 struct is_char<char> : std::true_type {};
 template <>
 struct is_char<wchar_t> : std::true_type {};
+#if __cplusplus >= 202002L
 template <>
 struct is_char<char8_t> : std::true_type {};
+#endif
 template <>
 struct is_char<char16_t> : std::true_type {};
 template <>
