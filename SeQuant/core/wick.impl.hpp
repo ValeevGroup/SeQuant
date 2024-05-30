@@ -685,20 +685,20 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
             }
           }
 
-          /// Use automorphisms to determine groups of topologically equivalent
-          /// NormalOperator and Op objects.
-          /// @param vertices maps vertex indices of the objects to their
-          ///        ordinals in the sequence of such objects within
-          ///        the NormalOperatorSequence
-          /// @param nontrivial_partitions_only if true, only partitions with
-          /// more than one element, are reported, else even trivial
-          /// partitions with a single partition will be reported
-          /// @param vertex_pair_exclude a callable that accepts 2 vertex
-          /// indices and returns true if the automorphism of this pair
-          /// of indices is to be ignored
-          /// @return the \c {vertex_to_partition_idx,npartitions} pair in
-          /// which \c vertex_to_partition_idx maps vertex indices that are
-          /// part of nontrivial partitions to their (1-based) partition indices
+          // Use automorphisms to determine groups of topologically equivalent
+          // NormalOperator and Op objects.
+          // @param vertices maps vertex indices of the objects to their
+          //        ordinals in the sequence of such objects within
+          //        the NormalOperatorSequence
+          // @param nontrivial_partitions_only if true, only partitions with
+          // more than one element, are reported, else even trivial
+          // partitions with a single partition will be reported
+          // @param vertex_pair_exclude a callable that accepts 2 vertex
+          // indices and returns true if the automorphism of this pair
+          // of indices is to be ignored
+          // @return the \c {vertex_to_partition_idx,npartitions} pair in
+          // which \c vertex_to_partition_idx maps vertex indices that are
+          // part of nontrivial partitions to their (1-based) partition indices
           auto compute_partitions = [&aut_generators](
                                         const container::map<size_t, size_t>
                                             &vertices,
@@ -798,16 +798,16 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
               nop_vidx_ord, /* nontrivial_partitions_only = */ true,
               do_not_skip_elements);
 
-          /// converts vertex ordinal to partition key map into a sequence of
-          /// partitions, each composed of the corresponding ordinals of the
-          /// vertices in the vertex_list sequence
-          /// @param vidx2pidx a map from vertex index (in TN) to its
-          ///        (1-based) partition index
-          /// @param npartitions the total number of partitions
-          /// @param vidx_ord ordered sequence of vertex indices, object
-          /// with vertex index `vidx` will be mapped to ordinal
-          /// `vidx_ord[vidx]`
-          /// @return sequence of partitions, sorted by the smallest ordinal
+          // converts vertex ordinal to partition key map into a sequence of
+          // partitions, each composed of the corresponding ordinals of the
+          // vertices in the vertex_list sequence
+          // @param vidx2pidx a map from vertex index (in TN) to its
+          //        (1-based) partition index
+          // @param npartitions the total number of partitions
+          // @param vidx_ord ordered sequence of vertex indices, object
+          // with vertex index `vidx` will be mapped to ordinal
+          // `vidx_ord[vidx]`
+          // @return sequence of partitions, sorted by the smallest ordinal
           auto extract_partitions = [](const auto &vidx2pidx,
                                        const auto npartitions,
                                        const auto &vidx_ord) {

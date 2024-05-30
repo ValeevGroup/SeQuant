@@ -254,7 +254,7 @@ class TensorCanonicalizer {
     return cardinal_tensor_labels_accessor();
   }
 
-  /// @param cardinal_tensor_labels a list of Tensor labels with lexicographic
+  /// @param labels a list of Tensor labels with lexicographic
   /// preference (in order)
   static void set_cardinal_tensor_labels(
       const container::vector<std::wstring>& labels) {

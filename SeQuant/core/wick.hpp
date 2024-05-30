@@ -17,13 +17,14 @@
 
 namespace sequant {
 
-/// @brief extracts external indices of a product expression
+/// @brief extracts external indices of an expanded expression
 
 /// External indices appear only once in an expression
-/// @param product a Product
+/// @param expr an expression
 /// @return external indices
-/// @pre product has been expanded
-/// @throw std::invalid_argument if one of product's factors is a sum
+/// @pre @p expr has been expanded (i.e. cannot contain a Sum as a
+/// subexpression)
+/// @throw std::invalid_argument if any of @p expr subexpressions is a Sum
 inline container::set<Index> extract_external_indices(const Expr &expr);
 
 /// Applies Wick's theorem to a sequence of normal-ordered operators.
@@ -83,7 +84,7 @@ class WickTheorem {
   /// Controls whether next call to compute() will full contractions only or all
   /// (including partial) contractions. By default compute() generates full
   /// contractions only.
-  /// @param sf if false, will evaluate all contractions.
+  /// @param fc if false, will evaluate all contractions.
   /// @return reference to @c *this , for daisy-chaining
   WickTheorem &full_contractions(bool fc) {
     full_contractions_ = fc;
@@ -122,7 +123,7 @@ class WickTheorem {
   /// This is useful to to eliminate the topologically-equivalent contractions
   /// when fully-contracted result (i.e. the vacuum average) is sought.
   /// By default the use of topology is not enabled.
-  /// @param sf if true, will utilize the topology to minimize work.
+  /// @param ut if true, will utilize the topology to minimize work.
   WickTheorem &use_topology(bool ut) {
     use_topology_ = ut;
     return *this;
@@ -130,9 +131,9 @@ class WickTheorem {
 
   /// Specifies the external indices; by default assume all indices are summed
   /// over
-  /// @param ext_inds external (nonsummed) indices
-  /// @throw if WickTheorem::set_external_indices or WickTheorem::compute had
-  /// already been invoked
+  /// @param external_indices external (nonsummed) indices
+  /// @throw std::logic_error if WickTheorem::set_external_indices or
+  /// WickTheorem::compute had already been invoked
   template <typename IndexContainer>
   WickTheorem &set_external_indices(IndexContainer &&external_indices) {
     if (external_indices_.has_value())
@@ -254,7 +255,8 @@ class WickTheorem {
   ///           not mentioned in @c op_partitions) will be completed in
   ///           compute_nopseq().
   ///
-  ///@{
+
+  /// @{
 
   /// @tparam IndexListContainer a sequence of sequences of Integer types
   template <typename IndexListContainer>
@@ -285,7 +287,8 @@ class WickTheorem {
     return this->set_nop_partitions<const decltype(nop_partitions) &>(
         nop_partitions);
   }
-  ///@}
+
+  /// @}
 
   /// @name specifiers of partitions composed of topologically-equivalent
   ///       normal operators
@@ -1529,8 +1532,8 @@ class WickTheorem {
     }
   }
 
-  /// @param[in,out] on input, Wick's theorem result, on output the result of
-  /// reducing the overlaps
+  /// @param[in,out] expr on input, Wick's theorem result, on output the result
+  /// of reducing the overlaps
   void reduce(ExprPtr &expr) const;
 };
 

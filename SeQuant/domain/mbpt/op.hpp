@@ -487,7 +487,7 @@ ExprPtr vac_av(ExprPtr expr,
 
 /// @param qns the quantum numbers to adjoint
 /// @return the adjoint of \p qns
-mbpt::qns_t adjoint(mbpt::qns_t);
+mbpt::qns_t adjoint(mbpt::qns_t qns);
 
 namespace mbpt {
 
@@ -683,9 +683,11 @@ class Operator : public Operator<void, S> {
   QuantumNumbers operator()(const QuantumNumbers& qns = {}) const;
 
   /// evaluates the result of applying this operator to initializer-list-encoded
-  /// \p qns \param qns the quantum numbers of the state to which this operator
+  /// \p qns
+  /// \param qns the quantum numbers of the state to which this operator
   /// is applied; if not provided, the default-constructed \c QuantumNumbers are
-  /// used \return the quantum numbers after applying this operator to \p qns
+  /// used
+  /// \return the quantum numbers after applying this operator to \p qns
   template <typename I, typename = std::enable_if_t<std::is_integral_v<I>>>
   QuantumNumbers operator()(std::initializer_list<I> qns) const {
     QuantumNumbers result(qns);
@@ -696,7 +698,8 @@ class Operator : public Operator<void, S> {
   /// evaluates the result of applying this operator to \p qns
   /// \param[in,out] qns the quantum numbers of the state to which this operator
   /// is applied; on return contains the quantum numbers after applying this
-  /// operator \return a reference to `*this`
+  /// operator
+  /// \return a reference to `*this`
   virtual QuantumNumbers& apply_to(QuantumNumbers& qns) const;
 
   bool static_less_than(const Expr& that) const override;

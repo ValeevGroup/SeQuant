@@ -101,7 +101,7 @@ struct Sum : boost::spirit::x3::position_tagged {
 
   Sum() noexcept = default;
 
-  Sum(decltype(summands) summands);
+  Sum(std::vector<Product> summands);
 
   // Required to use as a container
   using value_type = decltype(summands)::value_type;
@@ -113,7 +113,7 @@ Product::Product(T value) : factors({std::move(value)}) {}
 Product::Product(std::vector<NullaryValue> factors)
     : factors(std::move(factors)) {}
 
-Sum::Sum(decltype(Sum::summands) summands) : summands(std::move(summands)) {}
+Sum::Sum(std::vector<Product> summands) : summands(std::move(summands)) {}
 
 }  // namespace sequant::parse::ast
 
