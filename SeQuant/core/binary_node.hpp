@@ -14,17 +14,57 @@ template <typename>
 class FullBinaryNode;
 
 /// Full-binary node visit orders.
+enum class TreeTraversal {
+  None = 0,
+  PreOrder = 0b001,
+  PostOrder = 0b010,
+  InOrder = 0b100,
 
-/// Visit parent node followed by children nodes.
-/// Left will be visited before right.
-struct PreOrder {};
+  PreAndPostOrder = PreOrder | PostOrder,
+  PreAndInOrder = PreOrder | InOrder,
+  PostAndInOrder = PostOrder | InOrder,
 
-/// Visit children nodes followed by parent node.
-/// Left will be visited before right.
-struct PostOrder {};
+  Any = PreOrder | PostOrder | InOrder,
+};
 
-/// Visit left node then parent node followed by right node.
-struct InOrder {};
+constexpr TreeTraversal operator|(TreeTraversal lhs, TreeTraversal rhs) {
+  return static_cast<TreeTraversal>(
+      static_cast<std::underlying_type_t<TreeTraversal>>(lhs) |
+      static_cast<std::underlying_type_t<TreeTraversal>>(rhs));
+}
+
+constexpr TreeTraversal operator&(TreeTraversal lhs, TreeTraversal rhs) {
+  return static_cast<TreeTraversal>(
+      static_cast<std::underlying_type_t<TreeTraversal>>(lhs) &
+      static_cast<std::underlying_type_t<TreeTraversal>>(rhs));
+}
+
+#define TRAVERSAL_TO_TEMPLATE_ARG(order, functionName, functionArgs) \
+  switch (order) {                                                   \
+    case TreeTraversal::None:                                        \
+      break;                                                         \
+    case TreeTraversal::PreOrder:                                    \
+      functionName<TreeTraversal::PreOrder> functionArgs;            \
+      break;                                                         \
+    case TreeTraversal::PostOrder:                                   \
+      functionName<TreeTraversal::PostOrder> functionArgs;           \
+      break;                                                         \
+    case TreeTraversal::InOrder:                                     \
+      functionName<TreeTraversal::InOrder> functionArgs;             \
+      break;                                                         \
+    case TreeTraversal::PreAndPostOrder:                             \
+      functionName<TreeTraversal::PreAndPostOrder> functionArgs;     \
+      break;                                                         \
+    case TreeTraversal::PreAndInOrder:                               \
+      functionName<TreeTraversal::PreAndInOrder> functionArgs;       \
+      break;                                                         \
+    case TreeTraversal::PostAndInOrder:                              \
+      functionName<TreeTraversal::PostAndInOrder> functionArgs;      \
+      break;                                                         \
+    case TreeTraversal::Any:                                         \
+      functionName<TreeTraversal::Any> functionArgs;                 \
+      break;                                                         \
+  }
 
 namespace {
 
@@ -40,43 +80,76 @@ struct VisitAll {};
 ///
 /// \brief Visit a full binary node.
 ///
-/// \tparam V Visitor type. Must be invocable with a FullBinaryNode<T> argument.
-/// \tparam Order Visit order.
-/// \tparam NodeType The type of nodes to be visited.
+/// \tparam Order The kinds of tree traversals the visitor shall be notified
+/// about \tparam V Visitor type. Must be invocable with a FullBinaryNode<T>
+/// argument. Optionally, can take a second argument of type TreeTraversal which
+/// indicates the context of the visitor invocation. Can optionally return a
+/// value convertible to bool to indicate whether subtree exploration for the
+/// current node shall proceed. \tparam NodeType The type of nodes to be
+/// visited.
 ///                  Can be VisitInternal, VisitLeaf, or VisitAll.
 /// \param node Node to visit.
 /// \param f Visitor.
 ///
-template <
-    typename T, typename V, typename Order, typename NodeType,
-    typename = std::enable_if_t<std::is_invocable_v<V, FullBinaryNode<T>>>>
-void visit(FullBinaryNode<T> const& node, V const& f, Order, NodeType) {
-  static_assert(std::is_same_v<Order, PreOrder> ||
-                    std::is_same_v<Order, InOrder> ||
-                    std::is_same_v<Order, PostOrder>,
-                "Unsupported visit order");
+template <TreeTraversal order, typename T, typename V, typename NodeType>
+void visit(FullBinaryNode<T> const& node, V const& f, NodeType) {
+  using Node = FullBinaryNode<T>;
   static_assert(std::is_same_v<NodeType, VisitLeaf> ||
                     std::is_same_v<NodeType, VisitInternal> ||
                     std::is_same_v<NodeType, VisitAll>,
                 "Not sure which nodes to visit");
+  const auto invoke = [](const V& f, const Node& node,
+                         TreeTraversal context) -> bool {
+    if constexpr (std::is_invocable_v<decltype(f), decltype(node),
+                                      decltype(context)>) {
+      using result_type =
+          std::invoke_result_t<decltype(f), decltype(node), decltype(context)>;
+      if constexpr (std::is_same_v<result_type, void>) {
+        f(node, context);
+        return true;
+      } else {
+        return static_cast<bool>(f(node, context));
+      }
+    } else {
+      static_assert(
+          std::is_invocable_v<decltype(f), decltype(node)>,
+          "Visitor must be a (const) callable that takes a FullBinaryNode<T> "
+          "and optionally a TreeTraversal argument");
+      using result_type = std::invoke_result_t<decltype(f), decltype(node)>;
+      if constexpr (std::is_same_v<result_type, void>) {
+        f(node);
+        return true;
+      } else {
+        return f(node);
+      }
+    }
+  };
+
   if (node.leaf()) {
-    if constexpr (!std::is_same_v<NodeType, VisitInternal>) f(node);
+    if constexpr (!std::is_same_v<NodeType, VisitInternal>) {
+      invoke(f, node, TreeTraversal::Any);
+    }
   } else {
-    if constexpr (std::is_same_v<Order, PreOrder> &&
-                  !std::is_same_v<NodeType, VisitLeaf>)
-      f(node);
+    if constexpr ((order & TreeTraversal::PreOrder) ==
+                      TreeTraversal::PreOrder &&
+                  !std::is_same_v<NodeType, VisitLeaf>) {
+      if (!invoke(f, node, TreeTraversal::PreOrder)) return;
+    }
 
-    visit(node.left(), f, Order{}, NodeType{});
+    visit<order>(node.left(), f, NodeType{});
 
-    if constexpr (std::is_same_v<Order, InOrder> &&
-                  !std::is_same_v<NodeType, VisitLeaf>)
-      f(node);
+    if constexpr ((order & TreeTraversal::InOrder) == TreeTraversal::InOrder &&
+                  !std::is_same_v<NodeType, VisitLeaf>) {
+      if (!invoke(f, node, TreeTraversal::InOrder)) return;
+    }
 
-    visit(node.right(), f, Order{}, NodeType{});
+    visit<order>(node.right(), f, NodeType{});
 
-    if constexpr (std::is_same_v<Order, PostOrder> &&
-                  !std::is_same_v<NodeType, VisitLeaf>)
-      f(node);
+    if constexpr ((order & TreeTraversal::PostOrder) ==
+                      TreeTraversal::PostOrder &&
+                  !std::is_same_v<NodeType, VisitLeaf>) {
+      if (!invoke(f, node, TreeTraversal::PostOrder)) return;
+    }
   }
 }
 
@@ -249,105 +322,52 @@ class FullBinaryNode {
   }
 
   ///
-  /// \brief Visit the tree in the order specified by the Order argument.
+  /// \brief Visit the tree in the order specified by the order argument.
   /// \tparam F Type of the visitor.
-  /// \tparam Order Type of the order. Can be PreOrder, InOrder or PostOrder.
-  ///               By default it is PostOrder. That means parent node will
-  ///               be visited after visiting left and right children in that
-  ///               order.
-  /// \param visitor Visitor to be invoked on each node.
+  /// \param visitor Visitor to be invoked on each node. The visitor can
+  /// optionally return a value convertible to bool to indicate whether the
+  /// subtree of the current node shall be explored.
+  /// \param order Tree traversal order(s) to invoke the visitor for.
   ///
-  template <
-      typename F, typename Order = PostOrder,
-      std::enable_if_t<
-          std::is_void_v<std::invoke_result_t<F, FullBinaryNode<T> const&>>,
-          bool> = true>
-  void visit(F const& visitor, Order = {}) const {
-    sequant::visit(*this,    //
-                   visitor,  //
-                   Order{},  //
-                   VisitAll{});
-  }
-
-  ///
-  /// \tparam F Type of the visitor.
-  /// \param visitor Visitor to be invoked on each node.
-  /// \brief Visit the children nodes only if the visitor returns true upon
-  ///        visiting the parent node.
-  /// \details This is a pre-order traversal with short-circuit behavior.
-  ///
-  template <
-      typename F,
-      std::enable_if_t<std::is_invocable_r_v<bool, F, FullBinaryNode<T> const&>,
-                       bool> = true>
-  void visit(F const& visitor) const {
-    if (visitor(*this) && !leaf()) {
-      left().visit(visitor);
-      right().visit(visitor);
-    }
-  }
-
-  ///
-  /// \tparam F Type of the visitor.
-  /// \param visitor Visitor to be invoked on each node.
-  /// \brief Visit the children nodes only if the visitor returns true upon
-  ///        visiting the parent node, and current node is not a leaf node.
-  /// \details This is a pre-order traversal with short-circuit behavior.
-  ///
-  template <
-      typename F,
-      std::enable_if_t<std::is_invocable_r_v<bool, F, FullBinaryNode<T> const&>,
-                       bool> = true>
-  void visit_internal(F const& visitor) const {
-    if (leaf()) return;
-    if (visitor(*this)) {
-      left().visit_internal(visitor);
-      right().visit_internal(visitor);
-    }
+  template <typename F>
+  void visit(F const& visitor,
+             TreeTraversal order = TreeTraversal::PreOrder) const {
+    TRAVERSAL_TO_TEMPLATE_ARG(order, sequant::visit,
+                              (*this, visitor, VisitAll{}));
   }
 
   ///
   /// \brief Visit the internal nodes of the tree in the order specified by the
-  ///        Order argument.
+  /// order argument.
   /// \tparam F Type of the visitor.
-  /// \tparam Order Type of the order. Can be PreOrder, InOrder or PostOrder.
-  ///               By default it is PostOrder. That means parent node will
-  ///               be visited after visiting left and right children in that
-  ///               order.
-  /// \param visitor Visitor to be invoked on each node.
+  /// \param visitor Visitor to
+  /// be invoked on each node. The visitor can optionally return a value
+  /// convertible to bool to indicate whether the subtree of the current node
+  /// shall be explored.
+  /// \param order Tree traversal order(s) to invoke the visitor for.
   ///
-  template <
-      typename F, typename Order = PostOrder,
-      std::enable_if_t<
-          std::is_void_v<std::invoke_result_t<F, FullBinaryNode<T> const&>>,
-          bool> = true>
-  void visit_internal(F const& visitor, Order = {}) const {
-    sequant::visit(*this,    //
-                   visitor,  //
-                   Order{},  //
-                   VisitInternal{});
+  template <typename F>
+  void visit_internal(F const& visitor,
+                      TreeTraversal order = TreeTraversal::PreOrder) const {
+    TRAVERSAL_TO_TEMPLATE_ARG(order, sequant::visit,
+                              (*this, visitor, VisitInternal{}));
   }
 
   ///
   /// \brief Visit the leaf nodes of the tree in the order specified by the
-  ///        Order argument.
+  /// order argument.
   /// \tparam F Type of the visitor.
-  /// \tparam Order Type of the order. Can be PreOrder, InOrder or PostOrder.
-  ///               By default it is PostOrder. That means parent node will
-  ///               be visited after visiting left and right children in that
-  ///               order.
-  /// \param visitor Visitor to be invoked on each node.
+  /// \param visitor Visitor to
+  /// be invoked on each node. The visitor can optionally return a value
+  /// convertible to bool to indicate whether the subtree of the current node
+  /// shall be explored.
+  /// \param order Tree traversal order(s) to invoke the visitor for.
   ///
-  template <
-      typename F, typename Order = PostOrder,
-      std::enable_if_t<
-          std::is_void_v<std::invoke_result_t<F, FullBinaryNode<T> const&>>,
-          bool> = true>
-  void visit_leaf(F const& visitor, Order = {}) const {
-    sequant::visit(*this,    //
-                   visitor,  //
-                   Order{},  //
-                   VisitLeaf{});
+  template <typename F>
+  void visit_leaf(F const& visitor,
+                  TreeTraversal order = TreeTraversal::PreOrder) const {
+    TRAVERSAL_TO_TEMPLATE_ARG(order, sequant::visit,
+                              (*this, visitor, VisitLeaf{}));
   }
 
  private:
@@ -433,5 +453,7 @@ bool operator==(FullBinaryNode<T> const& lhs, FullBinaryNode<U> const& rhs) {
 }
 
 }  // namespace sequant
+
+#undef TRAVERSAL_TO_TEMPLATE_ARG
 
 #endif  // SEQUANT_BINARY_NODE_HPP

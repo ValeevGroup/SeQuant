@@ -13,6 +13,7 @@ TEST_CASE("TEST BINARY_NODE", "[FullBinaryNode]") {
   using ranges::views::iota;
   using ranges::views::take;
   using sequant::FullBinaryNode;
+  using sequant::TreeTraversal;
 
   SECTION("construction") {
     REQUIRE_NOTHROW(FullBinaryNode{0});
@@ -178,43 +179,110 @@ TEST_CASE("TEST BINARY_NODE", "[FullBinaryNode]") {
 
   SECTION("visitor") {
     using node_t = FullBinaryNode<std::string>;
+    /*
+                 C
+               /   \
+             A       B
+    */
     auto const node = node_t{"C", "A", "B"};
     REQUIRE(*node == "C");
     REQUIRE(*node.left() == "A");
     REQUIRE(*node.right() == "B");
 
-    std::string str;
-    auto visitor = [&str](node_t const& n) { str += *n; };
+    std::string str1;
+    std::string str2;
+    auto visitor = [&str1](node_t const& n) { str1 += *n; };
+    SECTION("single order") {
+      auto extended_visitor = [&str2](node_t const& n, TreeTraversal) {
+        str2 += *n;
+      };
 
-    node.visit(visitor);
-    REQUIRE(str == "ABC");
+      node.visit(visitor, TreeTraversal::PostOrder);
+      node.visit(extended_visitor, TreeTraversal::PostOrder);
+      REQUIRE(str1 == "ABC");
+      REQUIRE(str1 == str2);
 
-    str.clear();
-    node.visit(visitor, sequant::PreOrder{});
-    REQUIRE(str == "CAB");
+      str1.clear();
+      str2.clear();
+      node.visit(visitor, TreeTraversal::PreOrder);
+      node.visit(extended_visitor, TreeTraversal::PreOrder);
+      REQUIRE(str1 == "CAB");
+      REQUIRE(str1 == str2);
 
-    str.clear();
-    node.visit(visitor, sequant::InOrder{});
-    REQUIRE(str == "ACB");
+      str1.clear();
+      str2.clear();
+      node.visit(visitor, TreeTraversal::InOrder);
+      node.visit(extended_visitor, TreeTraversal::InOrder);
+      REQUIRE(str1 == "ACB");
+      REQUIRE(str1 == str2);
 
-    str.clear();
-    node.visit_leaf(visitor);
-    REQUIRE(str == "AB");
+      str1.clear();
+      str2.clear();
+      node.visit_leaf(visitor);
+      node.visit_leaf(extended_visitor);
+      REQUIRE(str1 == "AB");
+      REQUIRE(str1 == str2);
 
-    str.clear();
-    node.visit_internal(visitor);
-    REQUIRE(str == "C");
+      str1.clear();
+      str2.clear();
+      node.visit_internal(visitor);
+      node.visit_internal(extended_visitor);
+      REQUIRE(str1 == "C");
+      REQUIRE(str1 == str2);
 
-    auto not_vowel = [&str](node_t const& n) -> bool {
-      bool yn = std::string{"AEIOU"}.find(*n) == std::string::npos;
-      if (yn) str += *n;
-      return yn;
-    };
+      auto not_vowel = [&str1](node_t const& n) -> bool {
+        bool yn = std::string{"AEIOU"}.find(*n) == std::string::npos;
+        if (yn) str1 += *n;
+        return yn;
+      };
+      auto extended_not_vowel = [&str2](node_t const& n,
+                                        TreeTraversal) -> bool {
+        bool yn = std::string{"AEIOU"}.find(*n) == std::string::npos;
+        if (yn) str2 += *n;
+        return yn;
+      };
 
-    auto alphabet = node_t{"W", node_t{"E", "A", "B"}, node_t{"Z", "X", "O"}};
+      auto alphabet = node_t{"W", node_t{"E", "A", "B"}, node_t{"Z", "X", "O"}};
 
-    str.clear();
-    alphabet.visit(not_vowel);
-    REQUIRE(str == "WZX");
+      str1.clear();
+      str2.clear();
+      alphabet.visit(not_vowel);
+      alphabet.visit(extended_not_vowel);
+      REQUIRE(str1 == "WZX");
+      REQUIRE(str1 == str2);
+    }
+    SECTION("multi order") {
+      auto extended_visitor = [&str2](node_t const& n, TreeTraversal context) {
+        if (context == TreeTraversal::PreOrder) {
+          str2 += "Pre";
+        } else if (context == TreeTraversal::PostOrder) {
+          str2 += "Post";
+        } else if (context == TreeTraversal::InOrder) {
+          str2 += "In";
+        } else if (context == TreeTraversal::Any) {
+          str2 += "Any";
+        } else {
+          str2 += "Invalid";
+        }
+
+        str2 += *n;
+      };
+
+      node.visit(extended_visitor, TreeTraversal::PreAndPostOrder);
+      REQUIRE(str2 == "PreCAnyAAnyBPostC");
+      str2.clear();
+
+      node.visit(extended_visitor, TreeTraversal::PreAndInOrder);
+      REQUIRE(str2 == "PreCAnyAInCAnyB");
+      str2.clear();
+
+      node.visit(extended_visitor, TreeTraversal::PostAndInOrder);
+      REQUIRE(str2 == "AnyAInCAnyBPostC");
+      str2.clear();
+
+      node.visit(extended_visitor, TreeTraversal::Any);
+      REQUIRE(str2 == "PreCAnyAInCAnyBPostC");
+      str2.clear();
+    }
   }
 }
