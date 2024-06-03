@@ -342,6 +342,7 @@ auto evaluate(NodesT const& nodes, Le const& le, Args&&... args) {
 /// \see EvalResult to know more about the return type.
 ///
 template <typename NodeT, typename Annot, typename Le, typename... Args,
+          std::enable_if_t<IsEvaluable<NodeT>, bool> = true,
           std::enable_if_t<IsLeafEvaluator<NodeT, Le>, bool> = true>
 auto evaluate(NodeT const& node,    //
               Annot const& layout,  //
