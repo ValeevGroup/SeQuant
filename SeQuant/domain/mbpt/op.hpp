@@ -78,8 +78,8 @@ enum class OpType {
   RDMCumulant,  //!< RDM cumulant
   δ,            //!< Kronecker delta (=identity) operator
   h_1,          //!< Hamiltonian perturbation
-  t_1,          //!< first order perturbed excitation cluster amplitudes
-  λ_1,          //!< first order perturbed deexcitation cluster amplitudes
+  t_1,          //!< first order perturbed excitation cluster operator
+  λ_1,          //!< first order perturbed deexcitation cluster operator
   invalid       //!< invalid operator
 };
 
@@ -176,17 +176,17 @@ using BOperatorBase = BOperator<void>;
 struct default_qns_tag {};
 
 // clang-format off
-/// tracks changes in \c N quantum numbers
+/// Tracks changes in \c N quantum numbers
 
-/// implements the concept of a quantum number change; this is useful for
+/// Implements the concept of a quantum number change; this is useful for
 /// tracking the quantum numbers of a many-body operator, such as the number of particles,
 /// the number of quasiparticles, the number of ops (creators/annihilators) in each subspace, etc.
 /// For example, to operator products expressed in normal order with respect to physical vacuum it is sufficient to track
 /// the number of creators and annihilators; For the fermi vacuum case, the number of creators and annihilators in each
 /// subspace becomes important. the number of ops is tracked for each base space (determined by the IndexSpaceRegistry object in Context).
-/// the interval representation is necessary to dictate how many creators or annihilators could be in each subspace.
-/// this is pertinent when user defined hole_space or particle_space are NOT base spaces.
-/// since the choice of space partitioning is up to the user, the base class must be a dynamic container.
+/// The interval representation is necessary to dictate how many creators or annihilators could be in each subspace.
+/// This is pertinent when user defined hole_space or particle_space are NOT base spaces.
+/// Since the choice of space partitioning is up to the user, the base class must be a dynamic container.
 /// \tparam Tag a tag type to distinguish different instances of QuantumNumberChange<N>
 /// \tparam QNV the quantum number value type, defaults to \c std::int64_t
 // clang-format on
@@ -275,6 +275,8 @@ class QuantumNumberChange
   // the active particle annihilators in this example is nonsense and will
   // return -1.
 
+  /// @brief determines the number of creators in the particle space defined in
+  /// the current context
   interval_t ncre_particles() {
     const auto& qnvec = this->base();
     auto isr = get_default_context().index_space_registry();
@@ -293,6 +295,8 @@ class QuantumNumberChange
     return result;
   }
 
+  /// @brief determines the number of annihilators in the particle space defined
+  /// in the current context
   interval_t nann_particles() {
     const auto& qnvec = this->base();
     auto isr = get_default_context().index_space_registry();
@@ -311,6 +315,8 @@ class QuantumNumberChange
     return result;
   }
 
+  /// @brief determines the number of creators in the hole space defined in the
+  /// current context
   interval_t ncre_holes() {
     const auto& qnvec = this->base();
     auto isr = get_default_context().index_space_registry();
@@ -329,6 +335,8 @@ class QuantumNumberChange
     return result;
   }
 
+  /// @brief determines the number of annihilators in the hole space defined in
+  /// the current context
   interval_t nann_holes() {
     const auto& qnvec = this->base();
     auto isr = get_default_context().index_space_registry();
@@ -436,41 +444,55 @@ using op_t = mbpt::Operator<qnc_t>;
 /// combines 2 sets of quantum numbers using Wick's theorem
 qns_t combine(qns_t, qns_t);
 
-// The qns of an excitation type operator will always look the same in a given
-// context
-// @param is the rank of the operator.
+/// @brief Constructs quantum numbers for an excitation operator based on the
+/// defined context
+/// @param k the rank of the operator
+/// @param SQN the spin quantum number
 qns_t excitation_type_qns(std::size_t k,
                           IndexSpace::QuantumNumbers SQN = Spin::any);
 
-// sometimes we want to guarantee that a qns has an interval from 0-K
-// regardless of the base spaces.
+/// @brief Constructs quantum numbers for an excitation operator based on the
+/// defined context. Sometimes we want to guarantee that a qns has an interval
+/// from 0 to \p k regardless of base spaces
+/// @param k the rank of the operator, QN has the interval from 0 to \p k
+/// @param SQN the spin quantum number
 qns_t interval_excitation_type_qns(std::size_t k,
                                    IndexSpace::QuantumNumbers SQN = Spin::any);
 
-// The qns of a deexcitation type operator will always look the same in a given
-// context
-// @param is the rank of the operator.
+/// @brief Constructs quantum numbers for an deexcitation operator based on the
+/// defined context
+/// @param k the rank of the operator
+/// @param SQN the spin quantum number
 qns_t deexcitation_type_qns(std::size_t k,
                             IndexSpace::QuantumNumbers SQN = Spin::any);
 
-// sometimes we want to guarantee that a qns has an interval from 0-K
-// regardless of the base spaces.
+/// @brief Constructs quantum numbers for an deexcitation operator based on the
+/// defined context. Sometimes we want to guarantee that a qns has an interval
+/// from 0 to \p k regardless of base spaces
+/// @param k the rank of the operator, QN has the interval from 0 to \p k
+/// @param SQN the spin quantum number
 qns_t interval_deexcitation_type_qns(
     std::size_t k, IndexSpace::QuantumNumbers SQN = Spin::any);
 
-// The qns of a general type operator will always look the same in a given
-// context
-//  @//param is rank of the operator.
+/// @brief Constructs quantum numbers for a general operator based on the
+/// defined context
+/// @param k the rank of the operator
 qns_t general_type_qns(std::size_t k);
 
-// generic quantum number function compatible with generic excitation operators
-// with the option to choose the particle and hole space.
+/// @brief Constructs quantum numbers for a generic excitation operator
+/// @param particle_rank number of operators in the particle space
+/// @param hole_rank number operators in the hole space
+/// @param particle_space particle space within the defined context
+/// @param hole_space hole space within the defined context
 qns_t generic_excitation_qns(std::size_t particle_rank, std::size_t hole_rank,
                              IndexSpace particle_space, IndexSpace hole_space,
                              IndexSpace::QuantumNumbers SQN = Spin::any);
 
-// generic quantum number function compatible with generic deexcitation
-// operators with the option to choose the particle and hole space.
+/// @brief Constructs quantum numbers for a generic deexcitation operator
+/// @param particle_rank number of operators in the particle space
+/// @param hole_rank number operators in the hole space
+/// @param particle_space particle space within the defined context
+/// @param hole_space hole space within the defined context
 qns_t generic_deexcitation_qns(std::size_t particle_rank, std::size_t hole_rank,
                                IndexSpace particle_space, IndexSpace hole_space,
                                IndexSpace::QuantumNumbers SQN = Spin::any);
@@ -737,29 +759,30 @@ namespace tensor {
 // clang-format on
 ExprPtr H_(std::size_t k);
 
-/// @brief total Hamiltonian including up to `k`-body interactions
+/// @brief Total Hamiltonian including up to `k`-body interactions
 /// @param[in] k the maximum rank of the particle interactions; only `k<=2` is
 /// supported
 ExprPtr H(std::size_t k = 2);
 
-/// fock operator implied one-body operator, optional explicit construction
-/// requires user to specify the IndexSpace corresponding to all orbitals which
-/// may have non-zero density.
+/// @brief Fock operator implied one-body operator, optional explicit
+/// construction requires user to specify the IndexSpace corresponding to all
+/// orbitals which may have non-zero density.
 ExprPtr F(bool use_tensor = true, IndexSpace reference_occupied = {L"", 0});
 
-/// makes particle-conserving excitation operator of rank \p K
+/// Makes particle-conserving excitation operator of rank \p K based on the
+/// defined context
 ExprPtr T_(std::size_t K);
 
-/// makes sum of particle-conserving excitation operators of all ranks up to \p
-/// K
+/// Makes sum of particle-conserving excitation operators of all ranks up to \p
+/// K based on the defined context
 ExprPtr T(std::size_t K, bool skip1 = false);
 
-/// makes particle-conserving deexcitation operator of rank \p K
+/// Makes particle-conserving deexcitation operator of rank \p K based on the
+/// defined context
 ExprPtr Λ_(std::size_t K);
 
-/// makes sum of particle-conserving deexcitation operators of all ranks up to
-/// \p
-/// K
+/// Makes sum of particle-conserving deexcitation operators of all ranks up to
+/// \p K based on the defined context
 ExprPtr Λ(std::size_t K);
 
 // general excitation operator
@@ -786,14 +809,34 @@ ExprPtr A(std::int64_t K);
 
 ExprPtr S(std::int64_t K);
 
+/// @brief Makes perturbation operator of rank \p R
+/// \param order order of perturbation
+/// \pre `order==1`, only first order perturbation is supported now
 ExprPtr H_pt(std::size_t order, std::size_t R);
 
+/// @brief Makes perturbed particle-conserving excitation operator of rank \p K
+/// @param order order of perturbation
+/// @pre `order==1`, only first order perturbation is supported now
 ExprPtr T_pt_(std::size_t order, std::size_t K);
 
+/// @brief Makes sum of perturbed particle-conserving excitation operators up to
+/// rank \p K
+/// @param order order of perturbation
+/// @param skip1 if true, skips single excitations
+/// @pre `order==1`, only first order perturbation is supported now
 ExprPtr T_pt(std::size_t order, std::size_t K, bool skip1 = false);
 
+/// @brief Makes perturbed particle-conserving deexcitation operator of rank \p
+/// K
+/// @param order order of perturbation
+/// @pre `order==1`, only first order perturbation is supported now
 ExprPtr Λ_pt_(std::size_t order, std::size_t K);
 
+/// @brief Makes sum of perturbed particle-conserving deexcitation operators up
+/// to rank \p K
+/// @param order order of perturbation
+/// @param skip1 if true, skips single deexcitations
+/// @pre `order==1`, only first order perturbation is supported now
 ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1 = false);
 }  // namespace tensor
 }  // namespace op
