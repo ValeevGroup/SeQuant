@@ -175,10 +175,10 @@ std::vector<ExprPtr> CC::λ(std::size_t commutator_rank) {
 
 std::vector<sequant::ExprPtr> CC::t_pt(std::size_t order, size_t rank) {
   assert(order == 1 &&
-         "sequant::mbpt::sr::CC::t_pt(): only first-order perturbation is "
+         "sequant::mbpt::CC::t_pt(): only first-order perturbation is "
          "supported now");
   assert(rank == 1 &&
-         "sequant::mbpt::sr::CC::t_pt(): only one-body perturbation "
+         "sequant::mbpt::CC::t_pt(): only one-body perturbation "
          "operator is supported now");
   assert(ansatz_ == Ansatz::T && "unitary ansatz is not yet supported");
 
@@ -217,10 +217,10 @@ std::vector<sequant::ExprPtr> CC::t_pt(std::size_t order, size_t rank) {
 
 std::vector<ExprPtr> CC::λ_pt(std::size_t order, size_t rank) {
   assert(order == 1 &&
-         "sequant::mbpt::sr::CC::λ_pt(): only first-order perturbation is "
+         "sequant::mbpt::CC::λ_pt(): only first-order perturbation is "
          "supported now");
   assert(rank == 1 &&
-         "sequant::mbpt::sr::CC::λ_pt(): only one-body perturbation "
+         "sequant::mbpt::CC::λ_pt(): only one-body perturbation "
          "operator is supported now");
   assert(ansatz_ == Ansatz::T && "unitary ansatz is not yet supported");
 

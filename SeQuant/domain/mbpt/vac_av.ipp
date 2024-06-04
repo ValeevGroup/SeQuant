@@ -84,7 +84,7 @@ ExprPtr vac_av(
     }
 
     // lower to tensor form
-    op::lower_to_tensor_form(product);
+    lower_to_tensor_form(product);
     simplify(product);
 
     // compute VEV
