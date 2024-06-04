@@ -2,6 +2,9 @@
 // Created by Nakul Teke on 12/20/19.
 //
 
+#include <catch2/catch_test_macros.hpp>
+#include "test_config.hpp"
+
 #include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
@@ -13,10 +16,8 @@
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tensor.hpp>
+#include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
-
-#include <catch2/catch_test_macros.hpp>
-#include "test_config.hpp"
 
 #include <cassert>
 #include <cstddef>
@@ -43,8 +44,9 @@ TEST_CASE("Spin", "[spin]") {
   };
 
   SECTION("protoindices supported") {
-    Index i1(L"i_1", IndexSpace::instance(IndexSpace::active_occupied));
-    Index a1(L"a_1", IndexSpace::instance(IndexSpace::active_unoccupied), {i1});
+    auto isr = get_default_context().index_space_registry();
+    Index i1(L"i_1", isr->retrieve(L"i"));
+    Index a1(L"a_1", isr->retrieve(L"a"), {i1});
 
     const auto expr = ex<Tensor>(L"t", IndexList{i1}, IndexList{a1}) *
                       ex<Tensor>(L"F", IndexList{a1}, IndexList{i1});
@@ -58,27 +60,27 @@ TEST_CASE("Spin", "[spin]") {
     {  // assume spin-dependent spaces
       auto expr_st = spintrace(expr, {}, /* assume_spin_free_spaces */ false);
       simplify(expr_st);
+      std::wcout << expr_st->to_latex() << std::endl;
       REQUIRE(expr_st->to_latex() ==
               L"{ "
               L"\\bigl({{t^{{a↓_1^{{i↓_1}}}}_{{i↓_1}}}{F^{{i↓_1}}_{{a↓_1^{{i↓_"
-              L"1}}}}}} + "
+              L"1}}}}}}"
+              L" + "
               L"{{t^{{a↑_1^{{i↑_1}}}}_{{i↑_1}}}{F^{{i↑_1}}_{{a↑_1^{{i↑_1}}}}}}"
               L"\\bigr) }");
     }
   }
 
   SECTION("ASCII label") {
-    auto p1 = Index(L"p↑_1",
-                    IndexSpace::instance(IndexSpace::all, IndexSpace::alpha));
-    auto p2 =
-        Index(L"p↓_2", IndexSpace::instance(IndexSpace::all, IndexSpace::beta));
-    auto p3 = Index(L"p↑_3",
-                    IndexSpace::instance(IndexSpace::all, IndexSpace::alpha));
-    auto p4 =
-        Index(L"p↓_4", IndexSpace::instance(IndexSpace::all, IndexSpace::beta));
-    auto alpha1 =
-        Index(L"α↑_1", IndexSpace::instance(IndexSpace::complete_unoccupied,
-                                            IndexSpace::alpha));
+    IndexSpace pup(L"p", 0b011, mbpt::Spin::alpha);
+    IndexSpace pdown(L"p", 0b011, mbpt::Spin::beta);
+    IndexSpace alphaup(L"α", 0b110, mbpt::Spin::alpha);
+
+    auto p1 = Index(L"p↑_1", pup);
+    auto p2 = Index(L"p↓_2", pdown);
+    auto p3 = Index(L"p↑_3", pup);
+    auto p4 = Index(L"p↓_4", pdown);
+    auto alpha1 = Index(L"α↑_1", alphaup);
 
     SEQUANT_PRAGMA_CLANG(diagnostic push)
     SEQUANT_PRAGMA_CLANG(diagnostic ignored "-Wdeprecated-declarations")
@@ -94,39 +96,26 @@ TEST_CASE("Spin", "[spin]") {
   }
 
   SECTION("Index: add/remove spin") {
-    auto i = Index(L"i", IndexSpace::instance(IndexSpace::active_occupied,
-                                              IndexSpace::nullqns));
-    auto i1 = Index(L"i_1", IndexSpace::instance(IndexSpace::active_occupied,
-                                                 IndexSpace::nullqns));
-    auto p =
-        Index(L"p", IndexSpace::instance(IndexSpace::all, IndexSpace::nullqns));
-    auto p1 = Index(L"p_1",
-                    IndexSpace::instance(IndexSpace::all, IndexSpace::nullqns));
-    auto p1_a = Index(L"p↑_1",
-                      IndexSpace::instance(IndexSpace::all, IndexSpace::alpha));
-    auto p2 = Index(L"p_2",
-                    IndexSpace::instance(IndexSpace::all, IndexSpace::nullqns));
-    auto p2_b =
-        Index(L"p↓_2", IndexSpace::instance(IndexSpace::all, IndexSpace::beta));
+    auto i = Index(L"i", {L"i", 0b01, mbpt::Spin::any});
+    auto i1 = Index(L"i_1", {L"i", 0b01, mbpt::Spin::any});
+    auto p = Index(L"p", {L"p", 0b11, mbpt::Spin::any});
+    auto p1 = Index(L"p_1", {L"p", 0b11, mbpt::Spin::any});
+    auto p1_a = Index(L"p↑_1", {L"p↑", 0b11, mbpt::Spin::alpha});
+    auto p2 = Index(L"p_2", {L"p", 0b11, mbpt::Spin::any});
+    auto p2_b = Index(L"p↓_2", {L"p↓", 0b11, mbpt::Spin::beta});
 
-    auto p_i = Index(
-        L"p", IndexSpace::instance(IndexSpace::all, IndexSpace::nullqns), {i});
-    auto p1_i =
-        Index(L"p_1",
-              IndexSpace::instance(IndexSpace::all, IndexSpace::nullqns), {i});
-    auto p_i1 = Index(
-        L"p", IndexSpace::instance(IndexSpace::all, IndexSpace::nullqns), {i1});
-    auto p1_i1 =
-        Index(L"p_1",
-              IndexSpace::instance(IndexSpace::all, IndexSpace::nullqns), {i1});
+    auto p_i = Index(L"p", {L"p", 0b11, mbpt::Spin::any}, {i});
+    auto p1_i = Index(L"p_1", {L"p", 0b11, mbpt::Spin::any}, {i});
+    auto p_i1 = Index(L"p", {L"p", 0b11, mbpt::Spin::any}, {i1});
+    auto p1_i1 = Index(L"p_1", {L"p", 0b11, mbpt::Spin::any}, {i1});
 
     // make_spinalpha
     {
       // plain
       REQUIRE_NOTHROW(make_spinalpha(p));
       REQUIRE(make_spinalpha(p).label() == L"p↑");
-      REQUIRE(make_spinalpha(p).space() ==
-              IndexSpace::instance(IndexSpace::all, IndexSpace::alpha));
+      IndexSpace p_a(L"p↑", 0b11, mbpt::Spin::alpha);
+      REQUIRE(make_spinalpha(p).space() == p_a);
       REQUIRE_NOTHROW(make_spinalpha(p1));
       REQUIRE(make_spinalpha(p1) == p1_a);
       // idempotent
@@ -177,32 +166,28 @@ TEST_CASE("Spin", "[spin]") {
     // make spinnull
     {
       // plain
-      REQUIRE_NOTHROW(make_spinnull(p1_a));
-      REQUIRE(make_spinnull(p1_a) == p1);
-      REQUIRE_NOTHROW(make_spinnull(p2_b));
-      REQUIRE(make_spinnull(p2_b) == p2);
-      REQUIRE_NOTHROW(make_spinnull(p1));
-      REQUIRE(make_spinnull(p1) == p1);
+      REQUIRE_NOTHROW(make_spinfree(p1_a));
+      REQUIRE(make_spinfree(p1_a) == p1);
+      REQUIRE_NOTHROW(make_spinfree(p2_b));
+      REQUIRE(make_spinfree(p2_b) == p2);
+      REQUIRE_NOTHROW(make_spinfree(p1));
+      REQUIRE(make_spinfree(p1) == p1);
       // idempotent
-      REQUIRE_NOTHROW(make_spinnull(p2));
-      REQUIRE(make_spinnull(p2) == p2);
+      REQUIRE_NOTHROW(make_spinfree(p2));
+      REQUIRE(make_spinfree(p2) == p2);
 
       // proto
-      REQUIRE_NOTHROW(make_spinnull(make_spinalpha(p1_i1)));
-      REQUIRE(make_spinnull(make_spinalpha(p1_i1)) == p1_i1);
-      REQUIRE(make_spinnull(make_spinalpha(p1_i1)) == make_spinnull(p1_i1));
+      REQUIRE_NOTHROW(make_spinfree(make_spinalpha(p1_i1)));
+      REQUIRE(make_spinfree(make_spinalpha(p1_i1)) == p1_i1);
+      REQUIRE(make_spinfree(make_spinalpha(p1_i1)) == make_spinfree(p1_i1));
     }
   }
 
   SECTION("Tensor: can_expand, spin_symm_tensor, remove_spin") {
-    auto p1 = Index(L"p↑_1",
-                    IndexSpace::instance(IndexSpace::all, IndexSpace::alpha));
-    auto p2 =
-        Index(L"p↓_2", IndexSpace::instance(IndexSpace::all, IndexSpace::beta));
-    auto p3 = Index(L"p↑_3",
-                    IndexSpace::instance(IndexSpace::all, IndexSpace::alpha));
-    auto p4 =
-        Index(L"p↓_4", IndexSpace::instance(IndexSpace::all, IndexSpace::beta));
+    auto p1 = Index(L"p↑_1");
+    auto p2 = Index(L"p↓_2");
+    auto p3 = Index(L"p↑_3");
+    auto p4 = Index(L"p↓_4");
 
     auto input = ex<Tensor>(L"t", IndexList{p1, p2}, IndexList{p3, p4});
     REQUIRE(can_expand(input->as<Tensor>()) == true);
@@ -213,8 +198,7 @@ TEST_CASE("Spin", "[spin]") {
 
     auto result = remove_spin(input);
     for (auto& i : result->as<Tensor>().const_braket())
-      REQUIRE(i.space() ==
-              IndexSpace::instance(IndexSpace::all, IndexSpace::nullqns));
+      REQUIRE(i.space().base_key() == L"p");
 
     input = ex<Tensor>(L"t", IndexList{p1, p3}, IndexList{p2, p4});
     REQUIRE(to_latex(swap_spin(input)) == L"{t^{{p↑_2}{p↑_4}}_{{p↓_1}{p↓_3}}}");
@@ -262,6 +246,8 @@ TEST_CASE("Spin", "[spin]") {
   SECTION("Constant") {
     auto exprPtr = ex<Constant>(rational{1, 4});
     auto result = spintrace(exprPtr);
+    REQUIRE(result->is<Constant>());
+    REQUIRE(result->is_atom());
     REQUIRE(to_latex(result) == L"{{{\\frac{1}{4}}}}");
     REQUIRE(to_latex(swap_spin(exprPtr)) == L"{{{\\frac{1}{4}}}}");
   }
@@ -392,6 +378,8 @@ TEST_CASE("Spin", "[spin]") {
           ex<Tensor>(L"t", WstrList{L"a_3"}, WstrList{L"i_1"}) *
           ex<Tensor>(L"t", WstrList{L"a_4"}, WstrList{L"i_2"});
   result = expand_A_op(input);
+  REQUIRE(result->is<Sum>());
+  REQUIRE(result->size() == 4);
   REQUIRE(to_latex(result) ==
           L"{ "
           L"\\bigl({{{\\frac{1}{4}}}{\\bar{g}^{{a_3}{a_4}}_{{a_1}{a_2}}}{t^"
@@ -576,6 +564,9 @@ SECTION("Expand Symmetrizer") {
 }
 
 SECTION("Symmetrize expression") {
+  auto ctx_resetter = set_scoped_default_context(
+      Context(sequant::mbpt::make_legacy_spaces(/* ignore_spin= */ true),
+              Vacuum::SingleProduct));
   {
     // g * t1 + g * t1
     auto input = ex<Tensor>(L"g", WstrList{L"a_1", L"a_2"},
@@ -603,8 +594,7 @@ SECTION("Symmetrize expression") {
                      ex<Tensor>(L"t", WstrList{L"a_2"}, WstrList{L"i_3"}) *
                      ex<Tensor>(L"t", WstrList{L"a_1"}, WstrList{L"i_4"}) *
                      ex<Tensor>(L"t", WstrList{L"a_3"}, WstrList{L"i_1"});
-    auto result =
-        factorize_S(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}}, true);
+    auto result = factorize_S(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}});
     REQUIRE(to_latex(result) ==
             L"{{S^{{a_2}{a_1}}_{{i_3}{i_4}}}{g^{{i_4}{a_3}}_{{i_1}{i_2}}}{t^{"
             L"{i_1}}_{{a_1}}}{t^{{i_2}}_{{a_2}}}{t^{{i_3}}_{{a_3}}}}");
@@ -710,12 +700,10 @@ SECTION("Closed-shell spintrace CCD") {
                                    Symmetry::nonsymm));
     }
     {  // CSV (aka PNO)
-      Index i1(L"i_1", IndexSpace::instance(IndexSpace::active_occupied));
-      Index i2(L"i_2", IndexSpace::instance(IndexSpace::active_occupied));
-      Index a1(L"a_1", IndexSpace::instance(IndexSpace::active_unoccupied),
-               {i1, i2});
-      Index a2(L"a_2", IndexSpace::instance(IndexSpace::active_unoccupied),
-               {i1, i2});
+      Index i1(L"i_1", {L"i", 0b01});
+      Index i2(L"i_2", {L"i", 0b01});
+      Index a1(L"a_1", {L"a", 0b10}, {i1, i2});
+      Index a2(L"a_2", {L"a", 0b10}, {i1, i2});
       const auto pno_ccd_energy_so =
           ex<Constant>(rational(1, 4)) *
           ex<Tensor>(L"g", IndexList{a1, a2}, IndexList{i1, i2},
@@ -728,18 +716,23 @@ SECTION("Closed-shell spintrace CCD") {
           ex<Sum>(ExprPtrList{pno_ccd_energy_so});
       auto pno_ccd_energy_sf =
           closed_shell_CC_spintrace(pno_ccd_energy_so_as_sum);
-      REQUIRE(
-          pno_ccd_energy_sf.to_latex() ==
-          L"{ "
-          L"\\bigl({{{2}}{g^{{i_1}{i_2}}_{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}"
-          L"}{t^{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}_{{i_1}{i_2}}}} - "
-          L"{{g^{{i_1}{i_2}}_{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}}{t^{{a_2^{{"
-          L"i_1}{i_2}}}{a_1^{{i_1}{i_2}}}}_{{i_1}{i_2}}}}\\bigr) }");
+      REQUIRE(pno_ccd_energy_sf.to_latex() ==
+              L"{ "
+              L"\\bigl({{{2}}{g^{{i_1}{i_2}}_{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{"
+              L"i_2}}}}"
+              L"}{t^{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}_{{i_1}{i_2}}}} - "
+              L"{{g^{{i_1}{i_2}}_{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}}{t^{{"
+              L"a_2^{{"
+              L"i_1}{i_2}}}{a_1^{{i_1}{i_2}}}}_{{i_1}{i_2}}}}\\bigr) }");
     }
   }
 }
 
 SECTION("Closed-shell spintrace CCSD") {
+  auto ctx_resetter = set_scoped_default_context(
+      Context(sequant::mbpt::make_legacy_spaces(/* ignore_spin = */ true),
+              Vacuum::SingleProduct));
+
   // These terms from CCSD R1 equations
   {
     // A * f
@@ -776,8 +769,8 @@ SECTION("Closed-shell spintrace CCSD") {
     auto transformed_result = transform_expr(result, idxmap);
     REQUIRE(
         to_latex(transformed_result) ==
-        L"{ \\bigl( - {{g^{{a_2}{i_2}}_{{a_1}{i_1}}}{t^{{i_1}}_{{a_2}}}} + "
-        L"{{{2}}{g^{{i_2}{a_2}}_{{a_1}{i_1}}}{t^{{i_1}}_{{a_2}}}}\\bigr) }");
+        L"{ \\bigl( - {{g^{{a_2}{i_1}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}} + "
+        L"{{{2}}{g^{{i_1}{a_2}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}}\\bigr) }");
   }
 
   {
@@ -886,10 +879,10 @@ SECTION("Closed-shell spintrace CCSD") {
     canonicalize(result);
     REQUIRE(to_latex(result) ==
             L"{ "
-            L"\\bigl({{{2}}{g^{{a_3}{a_2}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}{"
-            L"t^{{i_1}}_{{a_3}}}} - "
-            L"{{g^{{a_3}{a_2}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_3}}}{t^{{i_1}}_{{"
-            L"a_2}}}}\\bigr) }");
+            L"\\bigl({{{2}}{g^{{a_3}{a_2}}_{{a_1}{i_2}}}{t^{{i_1}}_{{a_3}}}{t^{"
+            L"{i_2}}_{{a_2}}}} - "
+            L"{{g^{{a_3}{a_2}}_{{a_1}{i_2}}}{t^{{i_1}}_{{a_2}}}{t^{{i_2}}_{{a_"
+            L"3}}}}\\bigr) }");
   }
 
   {
@@ -1306,29 +1299,25 @@ SECTION("Expand P operator pair-wise") {
 }
 
 SECTION("Open-shell spin-tracing") {
-  auto occA =
-      IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::alpha);
-  auto virA =
-      IndexSpace::instance(IndexSpace::active_unoccupied, IndexSpace::alpha);
-  auto occB =
-      IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::beta);
-  auto virB =
-      IndexSpace::instance(IndexSpace::active_unoccupied, IndexSpace::beta);
-  const auto i1A = Index(L"i↑_1", occA);
-  const auto i2A = Index(L"i↑_2", occA);
-  const auto i3A = Index(L"i↑_3", occA);
-  const auto i4A = Index(L"i↑_4", occA);
-  const auto i5A = Index(L"i↑_5", occA);
-  const auto i1B = Index(L"i↓_1", occB);
-  const auto i2B = Index(L"i↓_2", occB);
-  const auto i3B = Index(L"i↓_3", occB);
+  // checks depend on the legacy subspaces
+  auto ctx_resetter = set_scoped_default_context(
+      Context(sequant::mbpt::make_legacy_spaces(), Vacuum::SingleProduct));
 
-  const auto a1A = Index(L"a↑_1", virA);
-  const auto a2A = Index(L"a↑_2", virA);
-  const auto a3A = Index(L"a↑_3", virA);
-  const auto a1B = Index(L"a↓_1", virB);
-  const auto a2B = Index(L"a↓_2", virB);
-  const auto a3B = Index(L"a↓_3", virB);
+  const auto i1A = Index(L"i↑_1");
+  const auto i2A = Index(L"i↑_2");
+  const auto i3A = Index(L"i↑_3");
+  const auto i4A = Index(L"i↑_4");
+  const auto i5A = Index(L"i↑_5");
+  const auto i1B = Index(L"i↓_1");
+  const auto i2B = Index(L"i↓_2");
+  const auto i3B = Index(L"i↓_3");
+
+  const auto a1A = Index(L"a↑_1");
+  const auto a2A = Index(L"a↑_2");
+  const auto a3A = Index(L"a↑_3");
+  const auto a1B = Index(L"a↓_1");
+  const auto a2B = Index(L"a↓_2");
+  const auto a3B = Index(L"a↓_3");
 
   // Tensor canonicalize
   {
@@ -1337,8 +1326,8 @@ SECTION("Open-shell spin-tracing") {
     auto ft3 = f * t3;
     ft3->canonicalize();
     REQUIRE(to_latex(ft3) ==
-            L"{{f^{{a↑_2}}_{{a↑_1}}}{t^{{i↑_3}{i↑_1}{i↓_2}}_{{a↑_2}{a↑_3}{a↓_"
-            L"2}}}}");
+            L"{{f^{{a↑_2}}_{{a↑_1}}}{t^{{i↑_1}{i↑_3}{i↓_2}}_{{a↑_3}{a↑_2}{a↓_2}"
+            L"}}}");
   }
 
   //  g
@@ -1389,13 +1378,13 @@ SECTION("Open-shell spin-tracing") {
         open_shell_spintrace(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}});
     REQUIRE(result.size() == 3);
     REQUIRE(to_latex(result[0]) ==
-            L"{{{\\frac{1}{2}}}{\\bar{g}^{{i↑_1}{i↑_2}}_{{i↑_3}{a↑_1}}}{t^{{"
+            L"{{{-\\frac{1}{2}}}{\\bar{g}^{{i↑_1}{i↑_2}}_{{a↑_1}{i↑_3}}}{t^{{"
             L"i↑_3}}_{{a↑_2}}}}");
     REQUIRE(to_latex(result[1]) ==
             L"{{{-\\frac{1}{2}}}{g^{{i↑_1}{i↓_2}}_{{a↑_1}{i↓_1}}}{t^{{i↓_1}}_"
             L"{{a↓_2}}}}");
     REQUIRE(to_latex(result[2]) ==
-            L"{{{\\frac{1}{2}}}{\\bar{g}^{{i↓_1}{i↓_2}}_{{i↓_3}{a↓_1}}}{t^{{"
+            L"{{{-\\frac{1}{2}}}{\\bar{g}^{{i↓_1}{i↓_2}}_{{a↓_1}{i↓_3}}}{t^{{"
             L"i↓_3}}_{{a↓_2}}}}");
   }
 
@@ -1475,7 +1464,6 @@ SECTION("Open-shell spin-tracing") {
     auto result = open_shell_spintrace(
         input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
     REQUIRE(result[0]->size() == 3);
-
     auto A3_aaa =
         Tensor(L"A", {i1A, i2A, i3A}, {a1A, a2A, a3A}, Symmetry::antisymm);
     auto result2 = ex<Tensor>(A3_aaa) * result[0];

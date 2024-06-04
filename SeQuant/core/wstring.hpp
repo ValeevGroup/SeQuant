@@ -6,6 +6,7 @@
 #define SEQUANT_WSTRING_HPP
 
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <cmath>
 #include <string>
@@ -18,8 +19,10 @@ namespace sequant {
 
 /// Converts integral type to its std::wstring representation
 template <typename T>
-std::enable_if_t<std::is_integral_v<std::decay_t<T>>, std::wstring> to_wstring(
-    T&& t) {
+std::enable_if_t<std::is_integral_v<std::decay_t<T>> &&
+                     !meta::is_char_v<std::remove_reference_t<T>>,
+                 std::wstring>
+to_wstring(T&& t) {
   return std::to_wstring(t);
 }
 
@@ -36,49 +39,36 @@ to_wstring(T&& t) {
 
 /// @brief (potentially) narrowing character converter.
 ///
-/// Converts a UTF-8 encoded std::basic_string_view<Char> to a UTF-8 encoded
+/// Converts a UTF-8 encoded string (C or C++) to a UTF-8 encoded
 /// std::string
-template <typename Char, typename Traits>
-std::string to_string(
-    const std::basic_string_view<Char, Traits>& str_utf8_view) {
+template <typename S, typename = meta::EnableIfAllBasicStringConvertible<S>>
+std::string to_string(S&& str_utf8) {
+  auto str_utf8_view = to_basic_string_view(std::forward<S>(str_utf8));
   using boost::locale::conv::utf_to_utf;
   return utf_to_utf<char>(str_utf8_view.data(),
                           str_utf8_view.data() + str_utf8_view.size());
 }
 
-/// @brief (potentially) narrowing character converter.
-///
-/// Converts a UTF-8 encoded std::basic_string_view<Char> to a UTF-8 encoded
-/// std::string
-template <typename Char, typename Traits, typename Allocator>
-std::string to_string(
-    const std::basic_string<Char, Traits, Allocator>& str_utf8) {
-  using boost::locale::conv::utf_to_utf;
-  return utf_to_utf<char>(str_utf8.data(), str_utf8.data() + str_utf8.size());
+/// Optimized to_string for std::string
+inline std::string to_string(std::string&& str_utf8) {
+  return std::move(str_utf8);
 }
 
 /// @brief (potentially) narrowing character converter.
 ///
 /// Converts a UTF-8 encoded std::basic_string_view<Char> to a UTF-8 encoded
 /// std::wstring
-template <typename SourceChar, typename SourceTraits>
-std::wstring to_wstring(
-    const std::basic_string_view<SourceChar, SourceTraits>& str_utf8_view) {
+template <typename S, typename = meta::EnableIfAllBasicStringConvertible<S>>
+std::wstring to_wstring(S&& str_utf8) {
+  auto str_utf8_view = to_basic_string_view(std::forward<S>(str_utf8));
   using boost::locale::conv::utf_to_utf;
   return utf_to_utf<wchar_t>(str_utf8_view.data(),
                              str_utf8_view.data() + str_utf8_view.size());
 }
 
-/// @brief (potentially) narrowing character converter.
-///
-/// Converts a UTF-8 encoded std::basic_string_view<Char> to a UTF-8 encoded
-/// std::wstring
-template <typename SourceChar, typename SourceTraits, typename SourceAllocator>
-std::wstring to_wstring(const std::basic_string<SourceChar, SourceTraits,
-                                                SourceAllocator>& str_utf8) {
-  using boost::locale::conv::utf_to_utf;
-  return utf_to_utf<wchar_t>(str_utf8.data(),
-                             str_utf8.data() + str_utf8.size());
+/// Optimized to_wstring for std::wstring
+inline std::wstring to_wstring(std::wstring&& str_utf8) {
+  return std::move(str_utf8);
 }
 
 #if __cplusplus >= 202002L

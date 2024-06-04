@@ -18,14 +18,14 @@ EvalExprTA::EvalExprTA(Variable const& v) : EvalExpr(v), annot_{} {}
 EvalExprTA::EvalExprTA(const EvalExprTA& left, const EvalExprTA& right,
                        EvalOp op)
     : EvalExpr{left, right, op} {
-  using Tidxs = TA::expressions::IndexList;
   using TA::expressions::BipartiteIndexList;
   using TA::expressions::GEMMPermutationOptimizer;
 
   if (result_type() == ResultType::Tensor) {
     annot_ = braket_annot();
     // clang-format off
-// todo: fix the following so that it works for ToT x ToT -> T
+// TODO: fix the following so that it works for ToT x ToT -> T
+//    using Tidxs = TA::expressions::IndexList;
 //    if (left.result_type() == right.result_type() &&
 //        op_type() == EvalOp::Prod && !tot()) {
 //      // tensor x tensor confirmed

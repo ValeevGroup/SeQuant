@@ -84,7 +84,7 @@ void parallel_do(Lambda&& lambda) {
 /// @c op(std::advance(begin(rng) + task_id)) where @c task_id is an integer in
 ///        @c [0,size(rng)) . @c op(t1) will be commenced not
 /// after @c op(t2) if @c t1<t2 .
-/// @node The load is balanced dynamically.
+/// @note The load is balanced dynamically.
 /// @sa get_num_threads()
 template <typename SizedRange, typename UnaryOp>
 void for_each(SizedRange& rng, const UnaryOp& op) {

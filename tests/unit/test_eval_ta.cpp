@@ -5,6 +5,7 @@
 #include <SeQuant/core/parse_expr.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/domain/eval/eval.hpp>
+#include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <tiledarray.h>
 #include <boost/regex.hpp>
@@ -131,13 +132,13 @@ class rand_tensor_yield {
     }
 
     ERPtr result{nullptr};
+    auto isr = get_default_context().index_space_registry();
 
-    auto make_extents = [this](auto&& ixs) -> container::svector<size_t> {
-      return ixs | transform([this](auto const& ix) -> size_t {
-               assert(ix.space() == IndexSpace::active_occupied ||
-                      ix.space() == IndexSpace::active_unoccupied);
-               return ix.space() == IndexSpace::active_occupied ? nocc_
-                                                                : nvirt_;
+    auto make_extents = [this, &isr](auto&& ixs) -> container::svector<size_t> {
+      return ixs | transform([this, &isr](auto const& ix) -> size_t {
+               assert(ix.space() == isr->retrieve(L"i") ||
+                      ix.space() == isr->retrieve(L"a"));
+               return ix.space() == isr->retrieve(L"i") ? nocc_ : nvirt_;
              }) |
              ranges::to<container::svector<size_t>>;
     };

@@ -101,7 +101,8 @@ constexpr bool IsIterableOfEvaluableNodes{};
 
 template <typename Iterable>
 constexpr bool IsIterableOfEvaluableNodes<
-    Iterable, std::enable_if_t<IsEvaluable<IteredT<Iterable>>>> = true;
+    Iterable, std::enable_if_t<IsEvaluable<meta::range_value_t<Iterable>>>> =
+    true;
 
 }  // namespace
 
@@ -311,7 +312,8 @@ auto evaluate(NodeT const& node, Le&& le, Args&&... args) {
 ///
 template <typename NodesT, typename Le, typename... Args,
           std::enable_if_t<IsIterableOfEvaluableNodes<NodesT>, bool> = true,
-          std::enable_if_t<IsLeafEvaluator<IteredT<NodesT>, Le>, bool> = true>
+          std::enable_if_t<IsLeafEvaluator<meta::range_value_t<NodesT>, Le>,
+                           bool> = true>
 auto evaluate(NodesT const& nodes, Le const& le, Args&&... args) {
   auto iter = std::begin(nodes);
   auto end = std::end(nodes);
@@ -373,7 +375,8 @@ auto evaluate(NodeT const& node,    //
 ///
 template <typename NodesT, typename Annot, typename Le, typename... Args,
           std::enable_if_t<IsIterableOfEvaluableNodes<NodesT>, bool> = true,
-          std::enable_if_t<IsLeafEvaluator<IteredT<NodesT>, Le>, bool> = true>
+          std::enable_if_t<IsLeafEvaluator<meta::range_value_t<NodesT>, Le>,
+                           bool> = true>
 auto evaluate(NodesT const& nodes,  //
               Annot const& layout,  //
               Le const& le, Args&&... args) {

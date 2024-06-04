@@ -55,7 +55,7 @@ class Op {
   void adjoint() { action_ = sequant::adjoint(action_); }
 
   static std::wstring core_label() {
-    return get_default_context().spbasis() == SPBasis::spinorbital
+    return get_default_context(S).spbasis() == SPBasis::spinorbital
                ? (S == Statistics::FermiDirac ? L"a" : L"b")
                : L"E";
   }
@@ -122,7 +122,7 @@ inline bool operator<(const Op<S1> &op1, const Op<S2> &op2) {
 /// @brief hashing function
 
 /// @tparam S a Statistics value specifying the operator statistics
-/// @paramp[in] op a const reference to an Op<S> object
+/// @param[in] op a const reference to an `Op<S>` object
 /// @return the hash value of the object referred to by @c op
 template <Statistics S>
 inline auto hash_value(const Op<S> &op) {
@@ -182,14 +182,16 @@ bool is_annihilator(const Op<S> &op) {
 /// given vacuum, false otherwise
 template <Statistics S>
 bool is_pure_qpcreator(const Op<S> &op,
-                       Vacuum vacuum = get_default_context().vacuum()) {
+                       Vacuum vacuum = get_default_context(S).vacuum()) {
+  const auto &isr = get_default_context(S).index_space_registry();
   switch (vacuum) {
     case Vacuum::Physical:
       return op.action() == Action::create;
     case Vacuum::SingleProduct: {
-      const auto occ_class = occupancy_class(op.index().space());
-      return (occ_class < 0 && op.action() == Action::annihilate) ||
-             (occ_class > 0 && op.action() == Action::create);
+      return (isr->is_pure_occupied(op.index().space()) &&
+              op.action() == Action::annihilate) ||
+             (isr->is_pure_unoccupied(op.index().space()) &&
+              op.action() == Action::create);
     }
     default:
       throw std::logic_error(
@@ -201,14 +203,16 @@ bool is_pure_qpcreator(const Op<S> &op,
 /// vacuum, false otherwise
 template <Statistics S>
 bool is_qpcreator(const Op<S> &op,
-                  Vacuum vacuum = get_default_context().vacuum()) {
+                  Vacuum vacuum = get_default_context(S).vacuum()) {
+  const auto &isr = get_default_context(S).index_space_registry();
   switch (vacuum) {
     case Vacuum::Physical:
       return op.action() == Action::create;
     case Vacuum::SingleProduct: {
-      const auto occ_class = occupancy_class(op.index().space());
-      return (occ_class <= 0 && op.action() == Action::annihilate) ||
-             (occ_class >= 0 && op.action() == Action::create);
+      return (isr->contains_occupied(op.index().space()) &&
+              op.action() == Action::annihilate) ||
+             (isr->contains_unoccupied(op.index().space()) &&
+              op.action() == Action::create);
     }
     default:
       throw std::logic_error("is_qpcreator: cannot handle MultiProduct vacuum");
@@ -217,18 +221,20 @@ bool is_qpcreator(const Op<S> &op,
 
 template <Statistics S>
 IndexSpace qpcreator_space(const Op<S> &op,
-                           Vacuum vacuum = get_default_context().vacuum()) {
+                           Vacuum vacuum = get_default_context(S).vacuum()) {
+  const auto &isr = get_default_context(S).index_space_registry();
   switch (vacuum) {
     case Vacuum::Physical:
       return op.action() == Action::create ? op.index().space()
-                                           : IndexSpace::null_instance();
+                                           : IndexSpace::null;
     case Vacuum::SingleProduct:
       return op.action() == Action::annihilate
-                 ? intersection(op.index().space(),
-                                IndexSpace::instance(IndexSpace::occupied))
-                 : intersection(op.index().space(),
-                                IndexSpace::instance(
-                                    IndexSpace::complete_maybe_unoccupied));
+                 ? isr->intersection(
+                       op.index().space(),
+                       isr->vacuum_occupied_space(op.index().space().qns()))
+                 : isr->intersection(
+                       op.index().space(),
+                       isr->vacuum_unoccupied_space(op.index().space().qns()));
     default:
       throw std::logic_error(
           "qpcreator_space: cannot handle MultiProduct vacuum");
@@ -239,14 +245,16 @@ IndexSpace qpcreator_space(const Op<S> &op,
 /// the given vacuum, false otherwise
 template <Statistics S>
 bool is_pure_qpannihilator(const Op<S> &op,
-                           Vacuum vacuum = get_default_context().vacuum()) {
+                           Vacuum vacuum = get_default_context(S).vacuum()) {
+  const auto &isr = get_default_context(S).index_space_registry();
   switch (vacuum) {
     case Vacuum::Physical:
       return op.action() == Action::annihilate;
     case Vacuum::SingleProduct: {
-      const auto occ_class = occupancy_class(op.index().space());
-      return (occ_class > 0 && op.action() == Action::annihilate) ||
-             (occ_class < 0 && op.action() == Action::create);
+      return (isr->is_pure_unoccupied(op.index().space()) &&
+              op.action() == Action::annihilate) ||
+             (isr->is_pure_occupied(op.index().space()) &&
+              op.action() == Action::create);
     }
     default:
       throw std::logic_error(
@@ -258,14 +266,16 @@ bool is_pure_qpannihilator(const Op<S> &op,
 /// given vacuum, false otherwise
 template <Statistics S>
 bool is_qpannihilator(const Op<S> &op,
-                      Vacuum vacuum = get_default_context().vacuum()) {
+                      Vacuum vacuum = get_default_context(S).vacuum()) {
+  const auto &isr = get_default_context(S).index_space_registry();
   switch (vacuum) {
     case Vacuum::Physical:
       return op.action() == Action::annihilate;
     case Vacuum::SingleProduct: {
-      const auto occ_class = occupancy_class(op.index().space());
-      return (occ_class >= 0 && op.action() == Action::annihilate) ||
-             (occ_class <= 0 && op.action() == Action::create);
+      return (isr->contains_occupied(op.index().space()) &&
+              op.action() == Action::create) ||
+             (isr->contains_unoccupied(op.index().space()) &&
+              op.action() == Action::annihilate);
     }
     default:
       throw std::logic_error(
@@ -274,19 +284,21 @@ bool is_qpannihilator(const Op<S> &op,
 };
 
 template <Statistics S>
-IndexSpace qpannihilator_space(const Op<S> &op,
-                               Vacuum vacuum = get_default_context().vacuum()) {
+IndexSpace qpannihilator_space(
+    const Op<S> &op, Vacuum vacuum = get_default_context(S).vacuum()) {
+  const auto &isr = get_default_context(S).index_space_registry();
   switch (vacuum) {
     case Vacuum::Physical:
       return op.action() == Action::annihilate ? op.index().space()
-                                               : IndexSpace::null_instance();
+                                               : IndexSpace::null;
     case Vacuum::SingleProduct:
       return op.action() == Action::create
-                 ? intersection(op.index().space(),
-                                IndexSpace::instance(IndexSpace::occupied))
-                 : intersection(op.index().space(),
-                                IndexSpace::instance(
-                                    IndexSpace::complete_maybe_unoccupied));
+                 ? isr->intersection(
+                       op.index().space(),
+                       isr->vacuum_occupied_space(op.index().space().qns()))
+                 : isr->intersection(
+                       op.index().space(),
+                       isr->vacuum_unoccupied_space(op.index().space().qns()));
     default:
       throw std::logic_error(
           "qpcreator_space: cannot handle MultiProduct vacuum");
@@ -371,8 +383,8 @@ class Operator : public container::svector<Op<S>>, public Expr {
 
   bool commutes_with_atom(const Expr &that) const override {
     bool result = true;
-    /// does not commute with Operator<S>
-    /// TODO implement checks of commutativity with Operator<S>
+    // does not commute with Operator<S>
+    // TODO implement checks of commutativity with Operator<S>
     if (that.is<Operator<S>>()) {
       result = false;
     } else if (that.is<NormalOperator<S>>()) {
@@ -453,22 +465,25 @@ class NormalOperator : public Operator<S>,
   using base_type::operator[];
 
   /// constructs an identity operator
-  NormalOperator(Vacuum v = get_default_context().vacuum()) {}
+  NormalOperator(Vacuum v = get_default_context(S).vacuum()) {}
 
-  /// @tparam IndexSequence1 type representing a sequence of indices
-  /// @tparam IndexSequence2 type representing a sequence of indices
-  /// @param creators sequence of creator indices
-  /// @param annihilators sequence of annihilator indices (in order of particle
-  /// indices, see the class documentation for more info).
+  /// @tparam IndexSequence1 type representing a sequence of Index objects or
+  /// objects that can be statically cast into Index
+  /// @tparam IndexSequence2 type representing a sequence of Index objects or
+  /// objects that can be statically cast into Index
+  /// @param creator_indices sequence of creator indices
+  /// @param annihilator_indices sequence of annihilator indices (in order of
+  /// particle indices, see the class documentation for more info).
+  /// @param v vacuum state with respect to which the operator is normal-ordered
   template <typename IndexSequence1, typename IndexSequence2,
             typename = std::enable_if_t<
-                std::is_same_v<
-                    typename std::decay_t<IndexSequence1>::value_type, Index> &&
-                std::is_same_v<
-                    typename std::decay_t<IndexSequence2>::value_type, Index>>>
+                meta::is_statically_castable_v<
+                    meta::range_value_t<IndexSequence1>, Index> &&
+                meta::is_statically_castable_v<
+                    meta::range_value_t<IndexSequence1>, Index>>>
   NormalOperator(IndexSequence1 &&creator_indices,
                  IndexSequence2 &&annihilator_indices,
-                 Vacuum v = get_default_context().vacuum())
+                 Vacuum v = get_default_context(S).vacuum())
       : Operator<S>{}, vacuum_(v), ncreators_(creator_indices.size()) {
     this->reserve(creator_indices.size() + annihilator_indices.size());
     for (const auto &i : creator_indices) {
@@ -479,15 +494,16 @@ class NormalOperator : public Operator<S>,
     }
   }
 
-  /// @tparam OpSequence1 type representing a sequence of Op<S> objects
-  /// @tparam OpSequence2 type representing a sequence of Op<S> objects
+  /// @tparam OpSequence1 type representing a sequence of `Op<S>` objects
+  /// @tparam OpSequence2 type representing a sequence of `Op<S>` objects
   /// @param creators sequence of creators
   /// @param annihilators sequence of annihilators (in order of particle
   /// indices, see the class documentation for more info).
+  /// @param v vacuum state with respect to which the operator is normal-ordered
   template <typename OpSequence1, typename OpSequence2>
   NormalOperator(
       OpSequence1 &&creators, OpSequence2 &&annihilators,
-      Vacuum v = get_default_context().vacuum(),
+      Vacuum v = get_default_context(S).vacuum(),
       std::enable_if_t<
           !std::is_same_v<std::decay_t<OpSequence1>, NormalOperator> &&
           !std::is_same_v<std::decay_t<OpSequence2>, NormalOperator> &&
@@ -510,14 +526,15 @@ class NormalOperator : public Operator<S>,
                                              ranges::crend(annihilators));
   }
 
-  /// @param creators initializer_list of creator indices
-  /// @param annihilators initializer_list of annihilator indices (in order of
-  /// particle indices, see the class documentation for more info).
+  /// @param creator_indices initializer_list of creator indices
+  /// @param annihilator_indices initializer_list of annihilator indices (in
+  /// order of particle indices, see the class documentation for more info).
+  /// @param v vacuum state with respect to which the operator is normal-ordered
   template <typename I, typename = std::enable_if_t<
                             !std::is_same_v<std::decay_t<I>, Op<S>>>>
   NormalOperator(std::initializer_list<I> creator_indices,
                  std::initializer_list<I> annihilator_indices,
-                 Vacuum v = get_default_context().vacuum())
+                 Vacuum v = get_default_context(S).vacuum())
       : Operator<S>{}, vacuum_(v), ncreators_(creator_indices.size()) {
     this->reserve(creator_indices.size() + annihilator_indices.size());
     for (const auto &i : creator_indices) {
@@ -531,9 +548,10 @@ class NormalOperator : public Operator<S>,
   /// @param creators initializer_list of creators
   /// @param annihilators initializer_list of annihilators (in order of particle
   /// indices, see the class documentation for more info).
+  /// @param v vacuum state with respect to which the operator is normal-ordered
   NormalOperator(std::initializer_list<Op<S>> creators,
                  std::initializer_list<Op<S>> annihilators,
-                 Vacuum v = get_default_context().vacuum())
+                 Vacuum v = get_default_context(S).vacuum())
       : Operator<S>{}, vacuum_(v), ncreators_(std::size(creators)) {
     for (const auto &op : creators) {
       assert(op.action() == Action::create);
@@ -763,14 +781,16 @@ class NormalOperator : public Operator<S>,
   template <Statistics>
   friend class Operator;
   bool commutes_with_atom(const Expr &that) const override {
+    const auto &isr = get_default_context(S).index_space_registry();
     // same as WickTheorem::can_contract
-    auto can_contract = [this](const Op<S> &left, const Op<S> &right) {
+    auto can_contract = [this, &isr](const Op<S> &left, const Op<S> &right) {
       if (is_qpannihilator<S>(left, vacuum_) &&
           is_qpcreator<S>(right, vacuum_)) {
         const auto qpspace_left = qpannihilator_space<S>(left, vacuum_);
         const auto qpspace_right = qpcreator_space<S>(right, vacuum_);
-        const auto qpspace_common = intersection(qpspace_left, qpspace_right);
-        if (qpspace_common != IndexSpace::null_instance()) return true;
+        const auto qpspace_common =
+            isr->intersection(qpspace_left, qpspace_right);
+        if (qpspace_common) return true;
       }
       return false;
     };
@@ -818,7 +838,7 @@ class NormalOperator : public Operator<S>,
   std::size_t _ket_rank() const override final { return ncreators(); }
   Symmetry _symmetry() const override final {
     return (S == Statistics::FermiDirac
-                ? (get_default_context().spbasis() == SPBasis::spinorbital
+                ? (get_default_context(S).spbasis() == SPBasis::spinorbital
                        ? Symmetry::antisymm
                        : Symmetry::nonsymm)
                 : (Symmetry::symm));
@@ -902,8 +922,18 @@ class NormalOperatorSequence : public container::svector<NormalOperator<S>>,
   using base_type::operator[];
 
   /// constructs an empty sequence
-  NormalOperatorSequence() : vacuum_(get_default_context().vacuum()) {}
+  NormalOperatorSequence() : vacuum_(get_default_context(S).vacuum()) {}
 
+  /// constructs from a parameter pack
+  template <typename... NOps,
+            typename = std::enable_if_t<
+                (std::is_convertible_v<NOps, NormalOperator<S>> && ...)>>
+  NormalOperatorSequence(NOps &&...operators)
+      : base_type({std::forward<NOps>(operators)...}) {
+    check_vacuum();
+  }
+
+  /// constructs from an initializer list
   NormalOperatorSequence(std::initializer_list<NormalOperator<S>> operators)
       : base_type(operators) {
     check_vacuum();
@@ -914,9 +944,9 @@ class NormalOperatorSequence : public container::svector<NormalOperator<S>>,
   operator const base_type &() const & { return *this; }
   operator base_type &&() && { return *this; }
 
-  /// @return the total number of Op<S> objects in this
-  /// @warning not to be confused with NormalOperatorSequence::size() that
-  /// returns the number of NormalOperator<S> objects
+  /// @return the total number of `Op<S>` objects in this
+  /// @warning not to be confused with `NormalOperatorSequence<S>::size()` that
+  /// returns the number of `NormalOperator<S>` objects
   auto opsize() const {
     size_t opsz = 0;
     for (auto &&nop : *this) {
@@ -1022,12 +1052,12 @@ struct OpIdRegistrar {
 
 /// converts NormalOperatorSequence to NormalOperator
 /// @tparam S Statistics
-/// @param[in] opseq a NormalOperatorSequence<S> object
-/// @param[in] target_partner_indices ptr to sequence of Index pairs whose Op<S>
-/// will act on same particle, if possible; if null, will not be used
+/// @param[in] opseq a `NormalOperatorSequence<S>` object
+/// @param[in] target_partner_indices ptr to sequence of Index pairs whose
+/// `Op<S>` will act on same particle, if possible; if null, will not be used
 /// @return @c {phase,normal_operator} , where @c phase is +1 or -1, and @c
-/// normal_operator is a NormalOperator<S>
-/// @note will try to ensure that Op<S> objects for each there is a pairs of
+/// normal_operator is a `NormalOperator<S>` object
+/// @note will try to ensure that `Op<S>` objects for each there is a pairs of
 /// Indices in @p target_index_columns will act on the same particle in the
 /// result
 template <Statistics S = Statistics::FermiDirac>

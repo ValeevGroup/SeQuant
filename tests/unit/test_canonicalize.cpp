@@ -8,6 +8,7 @@
 #include <SeQuant/core/latex.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/tensor.hpp>
+#include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <memory>
 #include <string>
@@ -20,6 +21,8 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
 
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
+  auto ctx_resetter = set_scoped_default_context(
+      Context(sequant::mbpt::make_legacy_spaces(), Vacuum::SingleProduct));
 
   SECTION("Tensors") {
     {

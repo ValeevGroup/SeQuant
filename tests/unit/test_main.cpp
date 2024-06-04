@@ -12,6 +12,7 @@
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/op.hpp>
 
 #ifdef SEQUANT_HAS_TILEDARRAY
 #include <tiledarray.h>
@@ -30,11 +31,11 @@ int main(int argc, char* argv[]) {
   std::wcerr.precision(std::numeric_limits<double>::max_digits10);
   sequant::set_locale();
   sequant::detail::OpIdRegistrar op_id_registrar;
-  sequant::set_default_context(
-      Context(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-              BraKetSymmetry::conjugate, SPBasis::spinorbital));
-  mbpt::set_default_convention();
-
+  sequant::set_default_context(Context(
+      sequant::mbpt::make_sr_spaces(), Vacuum::SingleProduct,
+      IndexSpaceMetric::Unit, BraKetSymmetry::conjugate, SPBasis::spinorbital));
+  TensorCanonicalizer::set_cardinal_tensor_labels(
+      sequant::mbpt::cardinal_tensor_labels());
   // uncomment to enable verbose output ...
   // Logger::set_instance(1);
   // ... or can instead selectively set/unset particular logging flags
