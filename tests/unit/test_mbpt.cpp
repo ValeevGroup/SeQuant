@@ -347,7 +347,7 @@ TEST_CASE("MBPT", "[mbpt]") {
       });
     }
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
-  }     // SECTION ("SRSO")
+  }  // SECTION ("SRSO")
 
   SECTION("SRSO Fock") {
     using namespace sequant::mbpt::tensor;
@@ -378,8 +378,8 @@ TEST_CASE("MBPT", "[mbpt]") {
   SECTION("SRSO-PNO") {
     using namespace sequant::mbpt::tensor;
     using sequant::mbpt::Context;
-    auto resetter =
-        sequant::mbpt::set_scoped_default_formalism(Context(mbpt::CSV::Yes));
+    auto mbpt_ctx =
+        sequant::mbpt::set_scoped_default_mbpt_context(Context(mbpt::CSV::Yes));
 
     // H2**T2**T2 -> R2
     SEQUANT_PROFILE_SINGLE("wick(H2**T2**T2 -> R2)", {
