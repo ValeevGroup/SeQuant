@@ -126,11 +126,6 @@ class Context {
   std::size_t first_dummy_index_ordinal_ = Defaults::first_dummy_index_ordinal;
 };
 
-/// old name of Context is a deprecated alias
-using SeQuant
-    [[deprecated("use sequant::Context instead of sequant::SeQuant")]] =
-        Context;
-
 /// Context object equality comparison
 /// \param ctx1
 /// \param ctx2

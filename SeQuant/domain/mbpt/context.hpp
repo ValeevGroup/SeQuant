@@ -29,11 +29,6 @@ class Context {
   CSV csv_ = Defaults::csv;
 };
 
-/// old name of Context is a deprecated alias
-using Formalism [[deprecated(
-    "use sequant::mbpt::Context instead of sequant::mbpt::Formalism")]] =
-    Context;
-
 bool operator==(Context const& left, Context const& right);
 
 bool operator!=(Context const& left, Context const& right);
