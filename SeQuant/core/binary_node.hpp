@@ -241,7 +241,20 @@ class FullBinaryNode {
 
   FullBinaryNode(FullBinaryNode<T>&&) = default;
 
-  FullBinaryNode& operator=(FullBinaryNode<T>&&) = default;
+  FullBinaryNode& operator=(FullBinaryNode<T>&& node) {
+    data_ = std::move(node.data_);
+
+    // We have to save a temporary copy of these, in case the node we're moving
+    // from is pointed to (and thus owned) by either left_.
+    // If we don't do this, overwriting of the owning pointer leads to deleting
+    // node, in which case subsequent accesses to it are invalid.
+    auto left_tmp = std::move(left_);
+
+    left_ = std::move(node.left_);
+    right_ = std::move(node.right_);
+
+    return *this;
+  }
 
   ///
   /// \return Left node if this is an internal node, throws otherwise.

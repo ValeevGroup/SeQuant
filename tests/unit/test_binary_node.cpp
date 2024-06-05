@@ -92,6 +92,32 @@ TEST_CASE("TEST BINARY_NODE", "[FullBinaryNode]") {
     auto const node2 = FullBinaryNode<int>{leaves2, adder{}};
   }
 
+  SECTION("reconnect") {
+    auto subtree1 = FullBinaryNode<int>{3, 2, 1};
+    auto subtree2 = FullBinaryNode<int>{7, subtree1, FullBinaryNode<int>(4)};
+    auto tree = FullBinaryNode<int>{13, subtree2, FullBinaryNode<int>(5)};
+
+    REQUIRE(*tree == 13);
+    REQUIRE(*tree.left() == 7);
+    REQUIRE(*tree.left().left() == 3);
+    REQUIRE(*tree.left().left().left() == 2);
+    REQUIRE(*tree.left().left().right() == 1);
+    REQUIRE(*tree.left().right() == 4);
+    REQUIRE(*tree.right() == 5);
+
+    tree.left() = std::move(tree.left().left());
+
+    REQUIRE(*tree == 13);
+    REQUIRE(*tree.left() == 3);
+    REQUIRE(*tree.left().left() == 2);
+    REQUIRE(*tree.left().right() == 1);
+    REQUIRE(*tree.right() == 5);
+    REQUIRE(!tree.left().leaf());
+    REQUIRE(tree.left().left().leaf());
+    REQUIRE(tree.left().right().leaf());
+    REQUIRE(tree.right().leaf());
+  }
+
   SECTION("digraph generation") {
     auto take_nums = [](size_t count, int from = 1) {
       return iota(from) | take(count);
