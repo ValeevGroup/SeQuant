@@ -12,29 +12,20 @@ bool operator!=(Context const& left, Context const& right) {
   return !(left == right);
 }
 
-namespace detail {
-
-Context& default_formalism_instance() {
-  static Context instance_;
-  return instance_;
-}
-
-}  // namespace detail
-
-const Context& get_default_formalism() {
+const Context& get_default_mbpt_context() {
   return sequant::detail::get_implicit_context<Context>();
 }
 
-void set_default_formalism(const Context& ctx) {
+void set_default_mbpt_context(const Context& ctx) {
   sequant::detail::set_implicit_context(ctx);
 }
 
-void reset_default_formalism() {
+void reset_default_mbpt_context() {
   sequant::detail::reset_implicit_context<Context>();
 }
 
 [[nodiscard]] sequant::detail::ImplicitContextResetter<Context>
-set_scoped_default_formalism(const Context& f) {
+set_scoped_default_mbpt_context(const Context& f) {
   return sequant::detail::set_scoped_implicit_context(f);
 }
 

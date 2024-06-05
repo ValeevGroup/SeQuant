@@ -475,7 +475,7 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
   auto isr = get_default_context(Statistics::FermiDirac).index_space_registry();
   // if not given dep, use mbpt::Context::CSV to determine whether to use
   // dependent indices for pure (de)excitation ops
-  if (!dep && get_default_formalism().csv() == mbpt::CSV::Yes) {
+  if (!dep && get_default_mbpt_context().csv() == mbpt::CSV::Yes) {
     if (to_class(op_) == OpClass::ex) {
       for (auto&& s : bra_spaces_) {
         assert(isr->contains_unoccupied(s));
@@ -648,7 +648,7 @@ ExprPtr A(std::int64_t K) {
       annihilators.emplace_back(isr->particle_space(Spin::any));
 
   std::optional<OpMaker<Statistics::FermiDirac>::UseDepIdx> dep;
-  if (get_default_formalism().csv() == mbpt::CSV::Yes)
+  if (get_default_mbpt_context().csv() == mbpt::CSV::Yes)
     dep = K > 0 ? OpMaker<Statistics::FermiDirac>::UseDepIdx::Bra
                 : OpMaker<Statistics::FermiDirac>::UseDepIdx::Ket;
   return OpMaker<Statistics::FermiDirac>(OpType::A, creators, annihilators)(
@@ -674,7 +674,7 @@ ExprPtr S(std::int64_t K) {
       annihilators.emplace_back(isr->particle_space(Spin::any));
 
   std::optional<OpMaker<Statistics::FermiDirac>::UseDepIdx> dep;
-  if (get_default_formalism().csv() == mbpt::CSV::Yes)
+  if (get_default_mbpt_context().csv() == mbpt::CSV::Yes)
     dep = K > 0 ? OpMaker<Statistics::FermiDirac>::UseDepIdx::Bra
                 : OpMaker<Statistics::FermiDirac>::UseDepIdx::Ket;
   return OpMaker<Statistics::FermiDirac>(OpType::S, creators, annihilators)(

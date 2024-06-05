@@ -244,7 +244,7 @@ int main(int argc, char* argv[]) {
 
   const std::string uocc_type_str = argc > 3 ? argv[3] : "std";
   const mbpt::CSV uocc_type = str2uocc.at(uocc_type_str);
-  auto resetter = set_scoped_default_formalism(mbpt::Context(uocc_type));
+  auto mbpt_ctx = set_scoped_default_mbpt_context(mbpt::Context(uocc_type));
 
   const std::string spbasis_str = argc > 4 ? argv[4] : "so";
   const SPBasis spbasis = str2spbasis.at(spbasis_str);
