@@ -849,29 +849,28 @@ inline namespace op {
 // clang-format on
 ExprPtr H_(std::size_t k);
 
-/// @brief total Hamiltonian including up to `k`-body interactions
+/// @brief Total Hamiltonian including up to `k`-body interactions
 /// @param[in] k the maximum rank of the particle interactions; only `k<=2` is
 /// supported
 ExprPtr H(std::size_t k = 2);
 
-/// fock operator implied one-body operator, optional explicit construction
-/// requires user to specify the IndexSpace corresponding to all orbitals which
-/// may have non-zero density.
+/// @brief Fock operator implied one-body operator, optional explicit
+/// construction requires user to specify the IndexSpace corresponding to all
+/// orbitals which may have non-zero density.
 ExprPtr F(bool use_tensor = true, IndexSpace reference_occupied = {L"", 0});
 
-/// makes particle-conserving excitation operator of rank \p K
+/// Makes particle-conserving excitation operator of rank \p K
 ExprPtr T_(std::size_t K);
 
-/// makes sum of particle-conserving excitation operators of all ranks up to \p
+/// Makes sum of particle-conserving excitation operators of all ranks up to \p
 /// K
 ExprPtr T(std::size_t K, bool skip1 = false);
 
-/// makes particle-conserving deexcitation operator of rank \p K
+/// Makes particle-conserving deexcitation operator of rank \p K
 ExprPtr Λ_(std::size_t K);
 
-/// makes sum of particle-conserving deexcitation operators of all ranks up to
-/// \p
-/// K
+/// Makes sum of particle-conserving deexcitation operators of all ranks up to
+/// \p K
 ExprPtr Λ(std::size_t K);
 
 // general excitation operator

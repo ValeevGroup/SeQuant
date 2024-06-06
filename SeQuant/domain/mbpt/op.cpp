@@ -64,11 +64,10 @@ OpClass to_class(OpType op) {
   }
 }
 
-// excitation type qns will have qp creators for every space which intersects
-// with the active hole space and
-//  qp annihilators wherever there is intersection with the active particle
-//  space. the presence of additional blocks depends on  whether the
-//  corresponding active hole or active particle space is a base space.
+// Excitation type QNs will have quasiparticle annihilators in every space which
+// intersects with the active hole space. The active particle space will have
+// quasiparticle creators. The presence of additional blocks depends on whether
+// the corresponding active hole or active particle space is a base space.
 qns_t excitation_type_qns(std::size_t K, const IndexSpace::QuantumNumbers SQN) {
   qnc_t result;
   if (get_default_context().vacuum() == Vacuum::Physical) {
@@ -100,8 +99,6 @@ qns_t excitation_type_qns(std::size_t K, const IndexSpace::QuantumNumbers SQN) {
   return result;
 }
 
-// sometimes we want to guarantee that a qns has an interval from 0-K
-// regardless of the base spaces.
 qns_t interval_excitation_type_qns(std::size_t K,
                                    const IndexSpace::QuantumNumbers SQN) {
   qnc_t result;
@@ -161,8 +158,6 @@ qns_t deexcitation_type_qns(std::size_t K,
   return result;
 }
 
-// sometimes we want to guarantee that a qns has an interval from 0-K
-// regardless of the base spaces.
 qns_t interval_deexcitation_type_qns(std::size_t K,
                                      const IndexSpace::QuantumNumbers SQN) {
   qnc_t result;
@@ -264,9 +259,8 @@ qns_t generic_deexcitation_qns(std::size_t particle_rank, std::size_t hole_rank,
   return result;
 }
 
-// by counting the number of contractions between indices of proper type, we can
-// know the quantum numbers
-//  of a combined result.
+// By counting the number of contractions between indices of proper type, we can
+// know the quantum numbers of a combined result.
 qns_t combine(qns_t a, qns_t b) {
   assert(a.size() == b.size());
   qns_t result;
