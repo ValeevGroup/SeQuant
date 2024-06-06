@@ -131,6 +131,8 @@ size_t EvalExpr::id() const noexcept { return id_; }
 
 ExprPtr EvalExpr::expr() const noexcept { return expr_; }
 
+void EvalExpr::set_expr(ExprPtr expr) { expr_ = std::move(expr); }
+
 bool EvalExpr::tot() const noexcept { return tot_; }
 
 std::wstring EvalExpr::to_latex() const noexcept { return expr_->to_latex(); }

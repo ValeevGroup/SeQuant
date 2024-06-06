@@ -125,6 +125,8 @@ class EvalExpr {
   ///
   [[nodiscard]] ExprPtr expr() const noexcept;
 
+  void set_expr(ExprPtr expr);
+
   ///
   /// \return True if this EvalExpr object contains a sequant tensor with
   ///         proto-indices, false otherwise.
