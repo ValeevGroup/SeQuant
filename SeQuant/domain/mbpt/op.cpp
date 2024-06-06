@@ -606,14 +606,14 @@ ExprPtr Λ(std::size_t K) {
   return result;
 }
 
-ExprPtr R_(std::size_t nbra, std::size_t nket, IndexSpace hole_space,
-           IndexSpace particle_space) {
+ExprPtr R_(std::size_t nbra, std::size_t nket, IndexSpace particle_space,
+           IndexSpace hole_space) {
   return OpMaker<Statistics::FermiDirac>(OpType::R, nbra, nket, particle_space,
                                          hole_space)();
 }
 
-ExprPtr L_(std::size_t nbra, std::size_t nket, IndexSpace hole_space,
-           IndexSpace particle_space) {
+ExprPtr L_(std::size_t nbra, std::size_t nket, IndexSpace particle_space,
+           IndexSpace hole_space) {
   return OpMaker<Statistics::FermiDirac>(OpType::L, nbra, nket, particle_space,
                                          hole_space)();
 }
@@ -889,30 +889,30 @@ ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1) {
   return result;
 }
 
-ExprPtr R_(std::size_t Nbra, std::size_t Nket, IndexSpace hole_space,
-           IndexSpace particle_space) {
+ExprPtr R_(std::size_t nbra, std::size_t nket, IndexSpace particle_space,
+           IndexSpace hole_space) {
   return ex<op_t>(
       []() -> std::wstring_view { return optype2label.at(OpType::R); },
       [=]() -> ExprPtr {
-        return tensor::R_(Nbra, Nket, hole_space, particle_space);
+        return tensor::R_(nket, nbra, particle_space, hole_space);
       },
       [=](qnc_t& qns) {
         qns = combine(
-            generic_excitation_qns(Nket, Nbra, particle_space, hole_space),
+            generic_excitation_qns(nket, nbra, particle_space, hole_space),
             qns);
       });
 }
 
-ExprPtr L_(std::size_t Nbra, std::size_t Nket, IndexSpace hole_space,
-           IndexSpace particle_space) {
+ExprPtr L_(std::size_t nbra, std::size_t nket, IndexSpace particle_space,
+           IndexSpace hole_space) {
   return ex<op_t>(
       []() -> std::wstring_view { return optype2label.at(OpType::L); },
       [=]() -> ExprPtr {
-        return tensor::L_(Nbra, Nket, hole_space, particle_space);
+        return tensor::L_(nbra, nket, particle_space, hole_space);
       },
       [=](qnc_t& qns) {
         qns = combine(
-            generic_deexcitation_qns(Nbra, Nket, particle_space, hole_space),
+            generic_deexcitation_qns(nbra, nket, particle_space, hole_space),
             qns);
       });
 }

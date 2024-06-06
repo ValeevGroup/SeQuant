@@ -785,23 +785,29 @@ ExprPtr Λ_(std::size_t K);
 /// \p K based on the defined context
 ExprPtr Λ(std::size_t K);
 
-// general excitation operator
-ExprPtr R_(std::size_t nbra, std::size_t nket,
-           IndexSpace hole_space = get_default_context()
-                                       .index_space_registry()
-                                       ->hole_space(Spin::any),
-           IndexSpace particle_space = get_default_context()
-                                           .index_space_registry()
-                                           ->particle_space(Spin::any));
+/// @brief Makes generic excitation operator
+/// @param nbra number of operators in bra space
+/// @param nket number of operators in ket space
+/// @param particle_space IndexSpace corresponding to the particle space
+/// @param hole_space IndexSpace corresponding to the hole space
+ExprPtr R_(
+    std::size_t nbra, std::size_t nket,
+    IndexSpace particle_space =
+        get_default_context().index_space_registry()->particle_space(Spin::any),
+    IndexSpace hole_space =
+        get_default_context().index_space_registry()->hole_space(Spin::any));
 
-// general deexcitation operator
-ExprPtr L_(std::size_t nbra, std::size_t nket,
-           IndexSpace hole_space = get_default_context()
-                                       .index_space_registry()
-                                       ->hole_space(Spin::any),
-           IndexSpace particle_space = get_default_context()
-                                           .index_space_registry()
-                                           ->particle_space(Spin::any));
+/// @brief Makes generic deexcitation operator
+/// @param nbra number of operators in bra space
+/// @param nket number of operators in ket space
+/// @param particle_space IndexSpace corresponding to the particle space
+/// @param hole_space IndexSpace corresponding to the hole space
+ExprPtr L_(
+    std::size_t nbra, std::size_t nket,
+    IndexSpace particle_space =
+        get_default_context().index_space_registry()->particle_space(Spin::any),
+    IndexSpace hole_space =
+        get_default_context().index_space_registry()->hole_space(Spin::any));
 
 ExprPtr P(std::int64_t K);
 
@@ -873,23 +879,32 @@ ExprPtr Λ_(std::size_t K);
 /// \p K
 ExprPtr Λ(std::size_t K);
 
-// general excitation operator
-ExprPtr R_(std::size_t nbra, std::size_t nket,
-           IndexSpace hole_space = get_default_context()
-                                       .index_space_registry()
-                                       ->hole_space(Spin::any),
-           IndexSpace particle_space = get_default_context()
-                                           .index_space_registry()
-                                           ->particle_space(Spin::any));
+/// @brief Makes generic excitation operator
+/// @param nbra number of operators in bra space
+/// @param nket number of operators in ket space
+/// @param particle_space IndexSpace corresponding to the particle space
+/// @param hole_space IndexSpace corresponding to the hole space
+ExprPtr R_(
+    std::size_t nbra, std::size_t nket,
+    IndexSpace particle_space =
+        get_default_context().index_space_registry()->particle_space(Spin::any),
+    IndexSpace hole_space =
+        get_default_context().index_space_registry()->hole_space(Spin::any));
 
-// general deexcitation operator
-ExprPtr L_(std::size_t nbra, std::size_t nket,
-           IndexSpace hole_space = get_default_context()
-                                       .index_space_registry()
-                                       ->hole_space(Spin::any),
-           IndexSpace particle_space = get_default_context()
-                                           .index_space_registry()
-                                           ->particle_space(Spin::any));
+/// @brief Makes generic deexcitation operator
+/// @param nbra number of operators in bra space
+/// @param nket number of operators in ket space
+/// @param particle_space IndexSpace corresponding to the particle space
+/// @param hole_space IndexSpace corresponding to the hole space
+
+ExprPtr L_(
+    std::size_t nbra, std::size_t nket,
+    IndexSpace particle_space =
+        get_default_context().index_space_registry()->particle_space(Spin::any),
+    IndexSpace hole_space =
+        get_default_context().index_space_registry()->hole_space(Spin::any));
+
+
 
 ExprPtr P(std::int64_t K);
 
