@@ -554,6 +554,11 @@ class OpMaker {
     assert(nbra() > 0 || nket() > 0);
   }
 
+  /// @param[in] op the operator type
+  /// @param[in] Nbra number of bra indices/creators
+  /// @param[in] Nket number of ket indices/annihilators
+  /// @param[in] particle_space IndexSpace corresponding to particle_space
+  /// @param[in] hole_space IndexSpace corresponding to hole_space
   OpMaker(OpType op, std::size_t Nbra, std::size_t Nket,
           IndexSpace particle_space = get_default_context()
                                           .index_space_registry()
@@ -562,7 +567,9 @@ class OpMaker {
                                       .index_space_registry()
                                       ->hole_space(Spin::any));
 
-  // construct a particle conserving operator when constructing this way.
+  /// For constructing particle number conserving operators
+  /// @param[in] op the operator type
+  /// @param[i] nparticle rank of the operator
   OpMaker(OpType op, std::size_t nparticle);
 
   enum class UseDepIdx {

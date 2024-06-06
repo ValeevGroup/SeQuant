@@ -440,9 +440,9 @@ OpMaker<S>::OpMaker(OpType op, std::size_t nbra, std::size_t nket,
 
 template <Statistics S>
 OpMaker<S>::OpMaker(OpType op, std::size_t nparticle) {
+  assert(nparticle > 0);
   op_ = op;
   auto isr = get_default_context().index_space_registry();
-  auto current_context = get_default_context();
   const auto hole_space = isr->hole_space(Spin::any);
   const auto particle_space = isr->particle_space(Spin::any);
   switch (to_class(op)) {
