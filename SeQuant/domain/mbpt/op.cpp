@@ -917,6 +917,34 @@ ExprPtr L_(std::size_t nbra, std::size_t nket, IndexSpace particle_space,
       });
 }
 
+ExprPtr R(std::size_t nbra, std::size_t nket, IndexSpace particle_space,
+          IndexSpace hole_space) {
+  using boost::numeric_cast;
+  assert(nbra > 0 || nket > 0);
+  ExprPtr result;
+
+  for (auto nb = numeric_cast<std::int64_t>(nbra),
+            nk = numeric_cast<std::int64_t>(nket);
+       nb > 0 || nk > 0; --nb, --nk) {
+    result += R_(nb, nk, particle_space, hole_space);
+  }
+  return result;
+}
+
+ExprPtr L(std::size_t nbra, std::size_t nket, IndexSpace particle_space,
+          IndexSpace hole_space) {
+  using boost::numeric_cast;
+  assert(nbra > 0 || nket > 0);
+  ExprPtr result;
+
+  for (auto nb = numeric_cast<std::int64_t>(nbra),
+            nk = numeric_cast<std::int64_t>(nket);
+       nb > 0 || nk > 0; --nb, --nk) {
+    result += L_(nb, nk, particle_space, hole_space);
+  }
+  return result;
+}
+
 bool can_change_qns(const ExprPtr& op_or_op_product, const qns_t target_qns,
                     const qns_t source_qns = {}) {
   qns_t qns = source_qns;
