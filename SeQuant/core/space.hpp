@@ -279,9 +279,9 @@ class IndexSpace {
   /// numbers)
   struct Attr : TypeAttr, QuantumNumbersAttr {
     Attr(TypeAttr type, QuantumNumbersAttr qns) noexcept
-        : TypeAttr(type), QuantumNumbersAttr(qns){};
+        : TypeAttr(type), QuantumNumbersAttr(qns) {};
     Attr(int32_t type, int32_t qns) noexcept
-        : TypeAttr(type), QuantumNumbersAttr(qns){};
+        : TypeAttr(type), QuantumNumbersAttr(qns) {};
 
     /// @brief default ctor creates a null Attr
     /// @post `static_cast<bool>(*this) == false`
@@ -449,6 +449,9 @@ class IndexSpace {
 
   /// @return approximate size of a space
   std::size_t approximate_size() const { return approximate_size_; }
+
+  /// Set the approximate size of a space.
+  void approximate_size(size_t n) { approximate_size_ = n; }
 
  private:
   Attr attr_;

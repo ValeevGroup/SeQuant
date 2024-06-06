@@ -157,4 +157,10 @@ Sum reorder(Sum const& sum) {
 }
 
 }  // namespace opt
+
+ExprPtr optimize(ExprPtr const& expr) {
+  return optimize(
+      expr, [](Index const& ix) { return ix.space().approximate_size(); });
+}
+
 }  // namespace sequant

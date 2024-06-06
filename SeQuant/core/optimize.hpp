@@ -344,10 +344,10 @@ Sum reorder(Sum const& sum);
 
 }  // namespace opt
 
-/////
-///// \param expr  Expression to be optimized.
-///// \param idxsz An invocable object that maps an Index object to size.
-///// \return Optimized expression for lower evaluation cost.
+///
+/// \param expr  Expression to be optimized.
+/// \param idxsz An invocable object that maps an Index object to size.
+/// \return Optimized expression for lower evaluation cost.
 template <typename IdxToSize,
           typename =
               std::enable_if_t<std::is_invocable_r_v<size_t, IdxToSize, Index>>>
@@ -366,6 +366,14 @@ ExprPtr optimize(ExprPtr const& expr, IdxToSize const& idx2size) {
   } else
     throw std::runtime_error{"Optimization attempted on unsupported Expr type"};
 }
+
+///
+/// Optimize the expression using IndexSpace::aproximate_size() for reference
+/// index extent.
+///
+/// \param expr  Expression to be optimized.
+/// \return Optimized expression for lower evaluation cost.
+ExprPtr optimize(ExprPtr const& expr);
 
 }  // namespace sequant
 
