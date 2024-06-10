@@ -816,9 +816,11 @@ ExprPtr L_(
     IndexSpace hole_space =
         get_default_context().index_space_registry()->hole_space(Spin::any));
 
-ExprPtr P(std::int64_t K);
+ExprPtr P(std::int64_t Kp,
+          std::int64_t Kh = std::numeric_limits<std::int64_t>::max());
 
-ExprPtr A(std::int64_t K);
+ExprPtr A(std::int64_t Kp,
+          std::int64_t Kh = std::numeric_limits<std::int64_t>::max());
 
 ExprPtr S(std::int64_t K);
 
@@ -935,9 +937,11 @@ ExprPtr L(
     IndexSpace hole_space =
         get_default_context().index_space_registry()->hole_space(Spin::any));
 
-ExprPtr P(std::int64_t K);
+ExprPtr P(std::int64_t Kp,
+          std::int64_t Kh = std::numeric_limits<std::int64_t>::max());
 
-ExprPtr A(std::int64_t K);
+ExprPtr A(std::int64_t Kp,
+          std::int64_t Kh = std::numeric_limits<std::int64_t>::max());
 
 ExprPtr S(std::int64_t K);
 

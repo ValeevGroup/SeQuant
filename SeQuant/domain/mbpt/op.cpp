@@ -618,33 +618,48 @@ ExprPtr L_(std::size_t nbra, std::size_t nket, IndexSpace particle_space,
                                          hole_space)();
 }
 
-ExprPtr P(std::int64_t K) {
-  return get_default_context().spbasis() == SPBasis::spinfree ? tensor::S(-K)
-                                                              : tensor::A(-K);
+ExprPtr P(std::int64_t Kp, std::int64_t Kh) {
+  if (Kh == std::numeric_limits<std::int64_t>::max()) Kh = Kp;
+
+  if (Kh != Kp)
+    assert(
+        get_default_context().spbasis() != SPBasis::spinfree &&
+        "Spinfree basis does not support non-particle conserving projectors");
+  return get_default_context().spbasis() == SPBasis::spinfree
+             ? tensor::S(-Kp /* Kh == Kp */)
+             : tensor::A(-Kp, -Kh);
 }
 
-ExprPtr A(std::int64_t K) {
+ExprPtr A(std::int64_t Kp, std::int64_t Kh) {
+  // particle number conserving
+  if (Kh == std::numeric_limits<std::int64_t>::max()) Kh = Kp;
+
+  assert(!(Kh == 0 && Kp == 0));
+  // if they are not zero, Kh and Kp should have the same sign
+  if (Kh != 0 && Kp != 0) {
+    assert((Kh > 0 && Kp > 0) || (Kh < 0 && Kp < 0));
+  }
+
   auto isr = get_default_context().index_space_registry();
-  assert(K != 0);
   container::svector<IndexSpace> creators;
   container::svector<IndexSpace> annihilators;
-  if (K > 0)  // ex
-    for ([[maybe_unused]] auto i : ranges::views::iota(0, K))
+  if (Kh > 0)  // ex
+    for ([[maybe_unused]] auto i : ranges::views::iota(0, Kh))
       annihilators.emplace_back(isr->hole_space(Spin::any));
   else  // deex
-    for ([[maybe_unused]] auto i : ranges::views::iota(0, -K))
+    for ([[maybe_unused]] auto i : ranges::views::iota(0, -Kh))
       creators.emplace_back(isr->hole_space(Spin::any));
-  if (K > 0)  // ex
-    for ([[maybe_unused]] auto i : ranges::views::iota(0, K))
+  if (Kp > 0)  // ex
+    for ([[maybe_unused]] auto i : ranges::views::iota(0, Kp))
       creators.emplace_back(isr->particle_space(Spin::any));
   else  // deex
-    for ([[maybe_unused]] auto i : ranges::views::iota(0, -K))
+    for ([[maybe_unused]] auto i : ranges::views::iota(0, -Kp))
       annihilators.emplace_back(isr->particle_space(Spin::any));
 
   std::optional<OpMaker<Statistics::FermiDirac>::UseDepIdx> dep;
   if (get_default_formalism().csv() == mbpt::CSV::Yes)
-    dep = K > 0 ? OpMaker<Statistics::FermiDirac>::UseDepIdx::Bra
-                : OpMaker<Statistics::FermiDirac>::UseDepIdx::Ket;
+    dep = Kh > 0 ? OpMaker<Statistics::FermiDirac>::UseDepIdx::Bra
+                 : OpMaker<Statistics::FermiDirac>::UseDepIdx::Ket;
   return OpMaker<Statistics::FermiDirac>(OpType::A, creators, annihilators)(
       dep, {Symmetry::antisymm});
 }
@@ -807,18 +822,30 @@ ExprPtr F(bool use_f_tensor, IndexSpace occupied_density) {
   }
 }
 
-ExprPtr A(std::int64_t K) {
+ExprPtr A(std::int64_t Kp, std::int64_t Kh) {
+  // particle conserving
+  if (Kh == std::numeric_limits<std::int64_t>::max()) Kh = Kp;
+  assert(!(Kh == 0 && Kp == 0));
+  // if they are not zero, Kh and Kp should have the same sign
+  if (Kp != 0 && Kh != 0) {
+    assert((Kh > 0 && Kp > 0) || (Kh < 0 && Kp < 0));
+  }
+
   auto isr = get_default_context().index_space_registry();
-  assert(K != 0);
+  auto particle_space = isr->particle_space(Spin::any);
+  auto hole_space = isr->hole_space(Spin::any);
   return ex<op_t>([]() -> std::wstring_view { return L"A"; },
-                  [=]() -> ExprPtr { return tensor::A(K); },
+                  [=]() -> ExprPtr { return tensor::A(Kp, Kh); },
                   [=](qnc_t& qns) {
-                    const std::size_t abs_K = std::abs(K);
-                    if (K < 0) {
-                      qnc_t op_qnc_t = deexcitation_type_qns(abs_K);
+                    const std::size_t abs_Kp = std::abs(Kp);
+                    const std::size_t abs_Kh = std::abs(Kh);
+                    if (Kp < 0) {
+                      qnc_t op_qnc_t = generic_deexcitation_qns(
+                          abs_Kp, abs_Kh, particle_space, hole_space);
                       qns = combine(op_qnc_t, qns);
                     } else {
-                      qnc_t op_qnc_t = excitation_type_qns(abs_K);
+                      qnc_t op_qnc_t = generic_excitation_qns(
+                          abs_Kp, abs_Kh, particle_space, hole_space);
                       qns = combine(op_qnc_t, qns);
                     }
                   });
@@ -840,8 +867,18 @@ ExprPtr S(std::int64_t K) {
                   });
 }
 
-ExprPtr P(std::int64_t K) {
-  return get_default_context().spbasis() == SPBasis::spinfree ? S(-K) : A(-K);
+ExprPtr P(std::int64_t Kp, std::int64_t Kh) {
+  if (Kh == std::numeric_limits<std::int64_t>::max()) Kh = Kp;
+  if (get_default_context().spbasis() == SPBasis::spinfree) {
+    assert(Kp == Kh &&
+           "Only particle number conserving cases are supported with spinfree "
+           "basis for now");
+    const auto K = Kh;  // K = Kp = Kh
+    return S(-K);
+  } else {
+    assert(get_default_context().spbasis() == SPBasis::spinorbital);
+    return A(-Kp, -Kh);
+  }
 }
 
 ExprPtr H_pt(std::size_t order, std::size_t R) {
