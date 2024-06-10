@@ -32,14 +32,14 @@ TEST_CASE("SR-TCC", "[mbpt/cc]") {
 }  // TEST_CASE("SR-TCC")
 
 TEST_CASE("EOM-CC", "[mbpt/cc]") {
-  using namespace sequant::mbpt::sr;
+  using namespace sequant::mbpt;
 
   SECTION("EOM-CCSD") {
     SEQUANT_PROFILE_SINGLE("EE-EOM-CCSD R", {
       const auto N = 2;
       const auto K_occ = 2;
       const auto K_uocc = 2;
-      const auto eqs = CC{N}.R(K_occ, K_uocc);
+      const auto eqs = CC{N}.eom_r(K_occ, K_uocc);
       for (auto k = 1; k < eqs.size(); ++k) REQUIRE(eqs[k]);
 
       if (N == 2 && K_occ == 2 && K_uocc == 2) {
@@ -52,7 +52,7 @@ TEST_CASE("EOM-CC", "[mbpt/cc]") {
       const auto N = 2;
       const auto K_occ = 2;
       const auto K_uocc = 2;
-      const auto eqs = CC{N}.L(K_occ, K_uocc);
+      const auto eqs = CC{N}.eom_l(K_occ, K_uocc);
       for (auto k = 1; k < eqs.size(); ++k) REQUIRE(eqs[k]);
 
       if (N == 2 && K_occ == 2 && K_uocc == 2) {
@@ -67,7 +67,7 @@ TEST_CASE("EOM-CC", "[mbpt/cc]") {
       const auto N = 3;
       const auto K_occ = 3;
       const auto K_uocc = 3;
-      const auto eqs = CC{N}.R(K_occ, K_uocc);
+      const auto eqs = CC{N}.eom_r(K_occ, K_uocc);
       for (auto k = 1; k < eqs.size(); ++k) REQUIRE(eqs[k]);
 
       if (N == 3 && K_occ == 3 && K_uocc == 3) {
