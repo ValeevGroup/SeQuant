@@ -8,10 +8,6 @@
 
 namespace sequant::eval {
 
-size_t IndexToSize::operator()(Index const& idx) const {
-  return idx.space().approximate_size();
-}
-
 container::vector<ExprPtr> CalcInfo::exprs() const {
   auto exprs = mbpt::CC{eqn_opts.excit}.t();
   container::vector<ExprPtr> result{};

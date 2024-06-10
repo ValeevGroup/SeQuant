@@ -342,8 +342,6 @@ container::vector<container::vector<size_t>> clusters(Sum const& expr);
 ///
 Sum reorder(Sum const& sum);
 
-}  // namespace opt
-
 ///
 /// \param expr  Expression to be optimized.
 /// \param idxsz An invocable object that maps an Index object to size.
@@ -366,6 +364,8 @@ ExprPtr optimize(ExprPtr const& expr, IdxToSize const& idx2size) {
   } else
     throw std::runtime_error{"Optimization attempted on unsupported Expr type"};
 }
+
+}  // namespace opt
 
 ///
 /// Optimize the expression using IndexSpace::aproximate_size() for reference

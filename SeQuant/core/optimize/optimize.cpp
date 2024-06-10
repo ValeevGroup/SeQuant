@@ -159,7 +159,7 @@ Sum reorder(Sum const& sum) {
 }  // namespace opt
 
 ExprPtr optimize(ExprPtr const& expr) {
-  return optimize(
+  return opt::optimize(
       expr, [](Index const& ix) { return ix.space().approximate_size(); });
 }
 
