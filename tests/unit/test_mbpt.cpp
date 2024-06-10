@@ -319,30 +319,30 @@ TEST_CASE("NBodyOp", "[mbpt]") {
             L"{{{\\frac{1}{2}}}{L^{{a_1}{a_2}}_{{i_1}}}{\\tilde{a}^{"
             L"\\textvisiblespace\\,{i_1}}_{{a_1}{a_2}}}}");
 
-    auto A_1_2 = A(1, 2)->as<op_t>();
+    auto A_2_1 = A(2, 1)->as<op_t>();
     //    std::wcout << "A_1_2: " << to_latex(simplify(A_1_2.tensor_form()))
     //               << std::endl;
-    REQUIRE(to_latex(simplify(A_1_2.tensor_form())) ==
+    REQUIRE(to_latex(simplify(A_2_1.tensor_form())) ==
             L"{{{\\frac{1}{2}}}{A^{{i_1}}_{{a_1}{a_2}}}{\\tilde{a}^{{a_1}{a_2}}"
             L"_{\\textvisiblespace\\,{i_1}}}}");
 
-    auto P_1_0 = P(1, 0)->as<op_t>();
-    //    std::wcout << "P_1_0: " << to_latex(simplify(P_1_0.tensor_form()))
+    auto P_0_1 = P(0, 1)->as<op_t>();
+    //    std::wcout << "P_0_1: " << to_latex(simplify(P_1_0.tensor_form()))
     //               << std::endl;
-    REQUIRE(to_latex(simplify(P_1_0.tensor_form())) ==
+    REQUIRE(to_latex(simplify(P_0_1.tensor_form())) ==
             L"{{A^{}_{{i_1}}}{\\tilde{a}^{{i_1}}}}");
 
-    auto P_1_2 = P(1, 2)->as<op_t>();
-    //    std::wcout << "P_1_2: " << to_latex(simplify(P_1_2.tensor_form()))
+    auto P_2_1 = P(2, 1)->as<op_t>();
+    //    std::wcout << "P_2_1: " << to_latex(simplify(P_1_2.tensor_form()))
     //               << std::endl;
-    REQUIRE(to_latex(simplify(P_1_2.tensor_form())) ==
+    REQUIRE(to_latex(simplify(P_2_1.tensor_form())) ==
             L"{{{\\frac{1}{2}}}{A^{{a_1}{a_2}}_{{i_1}}}{\\tilde{a}^{"
             L"\\textvisiblespace\\,{i_1}}_{{a_1}{a_2}}}}");
 
-    auto P_3_2 = P(3, 2)->as<op_t>();
-    //    std::wcout << "P_3_2: " << to_latex(simplify(P_3_2.tensor_form()))
+    auto P_2_3 = P(2, 3)->as<op_t>();
+    //    std::wcout << "P_2_3: " << to_latex(simplify(P_3_2.tensor_form()))
     //               << std::endl;
-    REQUIRE(to_latex(simplify(P_3_2.tensor_form())) ==
+    REQUIRE(to_latex(simplify(P_2_3.tensor_form())) ==
             L"{{{\\frac{1}{12}}}{A^{{a_1}{a_2}}_{{i_1}{i_2}{i_3}}}{\\tilde{a}^{"
             L"{i_1}{i_2}{i_3}}_{\\textvisiblespace\\,{a_1}{a_2}}}}");
 
