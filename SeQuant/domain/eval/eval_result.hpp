@@ -753,27 +753,6 @@ class EvalTensorTA final : public EvalResult {
                            std::array<std::any, 3> const& annot,
                            TA::DeNest DeNestFlag) const override {
     auto const a = annot_wrap{annot};
-
-    // Lambda to catch Infinity norms
-    auto catch_inf_norm = [](const ArrayT& array) {
-      if constexpr (!TA::is_dense_v<typename ArrayT::policy_type>) {
-        auto tile_norms = array.shape().tile_norms();
-        for (auto const& norm : tile_norms) {
-          if (std::isinf(norm) || std::isnan(norm)) {
-            throw std::runtime_error("Infinity norm detected");
-          }
-        }
-      }
-    };
-
-    // check this and other
-    auto array1 = get<ArrayT>();
-    catch_inf_norm(array1);
-    if (other.is<this_type>()) {
-      auto array2 = other.get<ArrayT>();
-      catch_inf_norm(array2);
-    }
-
     if (other.is<EvalScalar<numeric_type>>()) {
       auto result = get<ArrayT>();
       auto scalar = other.get<numeric_type>();
@@ -781,7 +760,6 @@ class EvalTensorTA final : public EvalResult {
       log_ta(a.lannot, " * ", scalar, " = ", a.this_annot, "\n");
 
       result(a.this_annot) = scalar * result(a.lannot);
-      catch_inf_norm(result);
 
       decltype(result)::wait_for_lazy_cleanup(result.world());
       return eval_result<this_type>(std::move(result));
@@ -815,7 +793,6 @@ class EvalTensorTA final : public EvalResult {
 
     result = TA::einsum(get<ArrayT>()(a.lannot), other.get<ArrayT>()(a.rannot),
                         a.this_annot);
-    catch_inf_norm(result);
     decltype(result)::wait_for_lazy_cleanup(result.world());
     return eval_result<this_type>(std::move(result));
   }
