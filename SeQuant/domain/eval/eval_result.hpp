@@ -753,6 +753,7 @@ class EvalTensorTA final : public EvalResult {
                            std::array<std::any, 3> const& annot,
                            TA::DeNest DeNestFlag) const override {
     auto const a = annot_wrap{annot};
+
     if (other.is<EvalScalar<numeric_type>>()) {
       auto result = get<ArrayT>();
       auto scalar = other.get<numeric_type>();
@@ -968,8 +969,7 @@ class EvalTensorOfTensorTA final : public EvalResult {
   [[nodiscard]] ERPtr antisymmetrize(
       container::svector<std::array<size_t, 3>> const& groups) const override {
     // todo
-    // return eval_result<this_type>(antisymmetrize_ta(get<ArrayT>(),
-    // groups));
+    // return eval_result<this_type>(antisymmetrize_ta(get<ArrayT>(), groups));
     return nullptr;
   }
 };
