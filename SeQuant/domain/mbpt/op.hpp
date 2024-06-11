@@ -970,22 +970,65 @@ ExprPtr L(
     IndexSpace hole_space =
         get_default_context().index_space_registry()->hole_space(Spin::any));
 
+// clang-format off
+/// makes projector onto excited bra (if \p Kp > 0 && \p Kh > 0) or ket (if \p Kp < 0 && \p Kh <0) manifold
+/// @param Kp if <0, annihilates this many particles, else creates this many
+/// @param Kh if <0, annihilates this many holes, else creates this many
+/// (default is to set \p Kh to \p Kp)
+/// @note if using spin-free basis, only supports particle-symmetric operators `K = Kh = Kp`, returns `S(-K)`
+/// else supports particle non-conserving operators and returns `A(-Kp, -Kh)`
+// clang-format on
 ExprPtr P(std::int64_t Kp,
           std::int64_t Kh = std::numeric_limits<std::int64_t>::max());
 
+// clang-format off
+/// @brief makes generic bra/ket-antisymmetric excitation (if \p Kp > 0 && \p Kh > 0)
+/// or deexcitation (if \p Kp < 0 && \p Kh < 0) operator
+/// @param Kp if <0, annihilates this many particles, else creates this many
+/// @param Kh if <0, annihilates this many holes, else creates this many
+/// (default is to set \p Kh to \p Kp)
+/// @note supports particle non-conserving operators
+// clang-format on
 ExprPtr A(std::int64_t Kp,
           std::int64_t Kh = std::numeric_limits<std::int64_t>::max());
 
+/// @brief makes generic particle-symmetric excitation (if \p K > 0) or
+/// deexcitation (if \p K < 0) operator of rank `|K|`
 ExprPtr S(std::int64_t K);
 
+/// @brief Makes perturbation operator of rank \p R
+/// @param order order of perturbation
+/// @param R rank of the operator,`R = 1` implies one-body perturbation
+/// @pre `order==1`, only first order perturbation is supported now
 ExprPtr H_pt(std::size_t order, std::size_t R);
 
+/// @brief Makes perturbed particle-conserving excitation operator of rank \p K
+/// @param order order of perturbation
+/// @param K rank of the excitation operator
+/// @pre `order==1`, only first order perturbation is supported now
 ExprPtr T_pt_(std::size_t order, std::size_t K);
 
+/// @brief Makes sum of perturbed particle-conserving excitation operators up to
+/// rank \p K
+/// @param order order of perturbation
+/// @param K rank up to which the sum is to be formed
+/// @param skip1 if true, skips single excitations
+/// @pre `order==1`, only first order perturbation is supported now
 ExprPtr T_pt(std::size_t order, std::size_t K, bool skip1 = false);
 
+/// @brief Makes perturbed particle-conserving deexcitation operator of
+/// rank \p K
+/// @param order order of perturbation
+/// @param K rank of the deexcitation operator
+/// @pre `order==1`, only first order perturbation is supported now
 ExprPtr Λ_pt_(std::size_t order, std::size_t K);
 
+/// @brief Makes sum of perturbed particle-conserving deexcitation operators up
+/// to rank \p K
+/// @param order order of perturbation
+/// @param K rank up to which the sum is to be formed
+/// @param skip1 if true, skips single deexcitations
+/// @pre `order==1`, only first order perturbation is supported now
 ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1 = false);
 
 bool raises_vacuum_up_to_rank(const ExprPtr& op_or_op_product,
