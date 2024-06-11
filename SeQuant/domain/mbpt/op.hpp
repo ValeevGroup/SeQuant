@@ -758,6 +758,16 @@ extern template class Operator<qns_t, Statistics::FermiDirac>;
 extern template class Operator<qns_t, Statistics::BoseEinstein>;
 
 inline namespace op {
+// clang-format off
+// TODO: Cleanup the vocabulary here.
+// At certain places, we use `Nbra` and `Nket` to denote operator ranks, but this is not appropritate for operators whose bra and ket spaces changes with input. For example P and A operators.
+// For P and A, I have now used `Kp` and `Kh` which denote number of operators in particle and hole spaces respectively.
+// Two possibilities:
+// 1. Use `Nbra` and 'Nket` with `bra_space` and `ket_space` as arguments, and change all the definitions accordingly.
+// Example: `O(nbra, nket, bra_space, ket_space)`
+// 2. Switch to a `particle_rank` and `hole_rank` vocabulary. I think this is more general. This would also require changes in definitions.
+// Example: `O(particle_rank, hole_rank, particle_space, hole_space)`
+// clang-format on
 namespace tensor {
 // clang-format off
 /// @brief `k`-body contribution to the "generic" Hamiltonian (in normal order relative to the default vacuum)
