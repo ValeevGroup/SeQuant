@@ -113,9 +113,6 @@ class EvalExpr {
   [[nodiscard]] size_t hash_value() const noexcept;
 
   ///
-  /// \brief Get the unique id of this EvalExpr object. Useful for tracing. Not
-  ///        used by evaluation.
-  ///
   /// \return The unique id of this EvalExpr object.
   ///
   [[nodiscard]] size_t id() const noexcept;
