@@ -347,7 +347,7 @@ TEST_CASE("MBPT", "[mbpt]") {
       });
     }
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
-  }  // SECTION ("SRSO")
+  }     // SECTION ("SRSO")
 
   SECTION("SRSO Fock") {
     using namespace sequant::mbpt::tensor;
