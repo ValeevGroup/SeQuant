@@ -47,7 +47,7 @@ NestedTensorIndices::NestedTensorIndices(const sequant::Tensor& tnsr) {
   using ranges::views::transform;
 
   auto append_unique = [](auto& cont, auto const& el) {
-    if (! ranges::contains(cont, el)) cont.emplace_back(el);
+    if (!ranges::contains(cont, el)) cont.emplace_back(el);
   };
 
   for (Index const& ix : tnsr.const_braket())
