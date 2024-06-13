@@ -176,7 +176,7 @@ class IndexSpaceRegistry {
   /// @return pointer to the IndexSpace associated with that key, or nullptr if
   /// not found
   IndexSpace* retrieve_ptr(const IndexSpace::Type& type,
-                                 const IndexSpace::QuantumNumbers& qns) {
+                           const IndexSpace::QuantumNumbers& qns) {
     auto it = std::find_if(
         spaces_->begin(), spaces_->end(),
         [&](const auto& is) { return is.type() == type && is.qns() == qns; });

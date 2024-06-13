@@ -40,12 +40,11 @@ TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
   }
 
   auto single_term_opt = [](Product const& prod) {
-    return opt::single_term_opt(
-        prod, [](Index const& ix) {
-          auto lbl = to_string(ix.label());
-          auto sz  = ix.space().approximate_size();
-          return ix.space().approximate_size();
-        });
+    return opt::single_term_opt(prod, [](Index const& ix) {
+      auto lbl = to_string(ix.label());
+      auto sz = ix.space().approximate_size();
+      return ix.space().approximate_size();
+    });
   };
 
   auto parse_expr_antisymm = [](auto const& xpr) {

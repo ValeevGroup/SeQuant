@@ -279,9 +279,9 @@ class IndexSpace {
   /// numbers)
   struct Attr : TypeAttr, QuantumNumbersAttr {
     Attr(TypeAttr type, QuantumNumbersAttr qns) noexcept
-        : TypeAttr(type), QuantumNumbersAttr(qns) {};
+        : TypeAttr(type), QuantumNumbersAttr(qns){};
     Attr(int32_t type, int32_t qns) noexcept
-        : TypeAttr(type), QuantumNumbersAttr(qns) {};
+        : TypeAttr(type), QuantumNumbersAttr(qns){};
 
     /// @brief default ctor creates a null Attr
     /// @post `static_cast<bool>(*this) == false`
