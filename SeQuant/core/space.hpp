@@ -393,12 +393,12 @@ class IndexSpace {
     }
   };
 
-  bool operator==(IndexSpace const &IS) const {
-    return this->type() == IS.type() && this->qns() == IS.qns() &&
-           this->base_key() == IS.base_key();
-  }
-
-  bool operator!=(IndexSpace const &IS) const { return !(*this == IS); }
+  friend constexpr bool operator==(IndexSpace const &,
+                                   IndexSpace const &) noexcept;
+  friend constexpr bool operator!=(IndexSpace const &,
+                                   IndexSpace const &) noexcept;
+  friend constexpr bool operator<(IndexSpace const &,
+                                  IndexSpace const &) noexcept;
 
   Attr attr() const noexcept { return attr_; }
   Type type() const noexcept { return attr().type(); }
@@ -481,8 +481,28 @@ inline bool includes(const IndexSpace &space1, const IndexSpace &space2) {
 
 /// IndexSpace are ordered by their attributes (i.e. labels do not matter one
 /// bit)
-inline bool operator<(const IndexSpace &space1, const IndexSpace &space2) {
+[[nodiscard]] inline constexpr bool operator<(
+    const IndexSpace &space1, const IndexSpace &space2) noexcept {
   return space1.attr() < space2.attr();
+}
+
+///
+/// IndexSpace are equal if they have equal @c IndexSpace::type(),
+/// @c IndexSpace::qns(), and @c IndexSpace::base_key().
+///
+[[nodiscard]] inline constexpr bool operator==(
+    IndexSpace const &space1, IndexSpace const &space2) noexcept {
+  return space1.type() == space2.type() && space1.qns() == space2.qns() &&
+         space1.base_key() == space2.base_key();
+}
+
+///
+/// IndexSpace are equal if they have equal @c IndexSpace::type(),
+/// @c IndexSpace::qns(), and @c IndexSpace::base_key().
+///
+[[nodiscard]] inline constexpr bool operator!=(
+    IndexSpace const &space1, IndexSpace const &space2) noexcept {
+  return !(space1 == space2);
 }
 
 }  // namespace sequant
