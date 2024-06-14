@@ -169,20 +169,6 @@ class IndexSpaceRegistry {
     return it != spaces_->end() ? &(*it) : nullptr;
   }
 
-  /// @brief retrieve a pointer to IndexSpace from the registry by its type and
-  /// quantum numbers
-  /// @param type IndexSpace::Type
-  /// @param qns IndexSpace::QuantumNumbers
-  /// @return pointer to the IndexSpace associated with that key, or nullptr if
-  /// not found
-  IndexSpace* retrieve_ptr(const IndexSpace::Type& type,
-                           const IndexSpace::QuantumNumbers& qns) {
-    auto it = std::find_if(
-        spaces_->begin(), spaces_->end(),
-        [&](const auto& is) { return is.type() == type && is.qns() == qns; });
-    return it != spaces_->end() ? &(*it) : nullptr;
-  }
-
   /// @brief retrieve an IndexSpace from the registry by its type and quantum
   /// numbers
   /// @param type IndexSpace::Type
