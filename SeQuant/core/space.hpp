@@ -392,14 +392,13 @@ class IndexSpace {
       return a < b;
     }
   };
-  bool operator==(IndexSpace IS) const {
-    return this->type() == IS.type() && this->base_key() == IS.base_key() &&
-                   this->qns() == IS.qns()
-               ? true
-               : false;
+
+  bool operator==(IndexSpace const &IS) const {
+    return this->type() == IS.type() && this->qns() == IS.qns() &&
+           this->base_key() == IS.base_key();
   }
 
-  bool operator!=(IndexSpace IS) const { return !(*this == IS); }
+  bool operator!=(IndexSpace const &IS) const { return !(*this == IS); }
 
   Attr attr() const noexcept { return attr_; }
   Type type() const noexcept { return attr().type(); }
