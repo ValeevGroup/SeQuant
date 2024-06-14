@@ -293,11 +293,11 @@ class IndexSpace {
     constexpr const TypeAttr &type() const {
       return static_cast<const TypeAttr &>(*this);
     }
-    TypeAttr &type() { return static_cast<TypeAttr &>(*this); }
+    constexpr TypeAttr &type() { return static_cast<TypeAttr &>(*this); }
     constexpr const QuantumNumbersAttr &qns() const {
       return static_cast<const QuantumNumbersAttr &>(*this);
     }
-    QuantumNumbersAttr &qns() {
+    constexpr QuantumNumbersAttr &qns() {
       return static_cast<QuantumNumbersAttr &>(*this);
     }
 
@@ -338,13 +338,13 @@ class IndexSpace {
              this->qns().includes(other.qns());
     }
 
-    bool operator==(Attr other) const {
+    constexpr bool operator==(Attr other) const {
       return this->type() == other.type() && this->qns() == other.qns();
     }
-    bool operator!=(Attr other) const { return !(*this == other); }
+    constexpr bool operator!=(Attr other) const { return !(*this == other); }
 
     /// Attr objects are ordered by quantum numbers, then by type
-    bool operator<(Attr other) const {
+    constexpr bool operator<(Attr other) const {
       if (this->qns() == other.qns()) {
         return this->type() < other.type();
       } else {
@@ -352,6 +352,7 @@ class IndexSpace {
       }
     }
   };  // struct Attr
+
   using Type = TypeAttr;
   using QuantumNumbers = QuantumNumbersAttr;
 
@@ -400,8 +401,8 @@ class IndexSpace {
   friend constexpr bool operator<(IndexSpace const &,
                                   IndexSpace const &) noexcept;
 
-  Attr attr() const noexcept { return attr_; }
-  Type type() const noexcept { return attr().type(); }
+  constexpr Attr attr() const noexcept { return attr_; }
+  constexpr Type type() const noexcept { return attr().type(); }
   QuantumNumbers qns() const noexcept { return attr().qns(); }
 
   /// Default ctor creates null space (with null label, type and quantum
