@@ -272,9 +272,6 @@ inline const QuantumNumbersAttr QuantumNumbersAttr::reserved =
 /// tensor network evaluation.
 class IndexSpace {
  public:
-  using TypeAttr = sequant::TypeAttr;
-  using QuantumNumbersAttr = sequant::QuantumNumbersAttr;
-
   /// @brief Attr describes all attributes of a space (occupancy + quantum
   /// numbers)
   struct Attr : TypeAttr, QuantumNumbersAttr {

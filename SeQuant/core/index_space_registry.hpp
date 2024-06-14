@@ -306,7 +306,7 @@ class IndexSpaceRegistry {
         "IndexSpaceRegistry::add: only one IndexSpace::QuantumNumbers argument "
         "is allowed");
     constexpr auto have_qns = nqns == boost::hana::size_c<1>;
-    IndexSpace::QuantumNumbersAttr qns;
+    IndexSpace::QuantumNumbers qns;
     if constexpr (have_qns) {
       qns = boost::hana::at_c<0>(h_qns);
     }
