@@ -691,7 +691,7 @@ ExprPtr H_pt(std::size_t order, std::size_t R) {
 ExprPtr T_pt_(std::size_t order, std::size_t K) {
   assert(order == 1 &&
          "sequant::sr::T_pt_(): only supports first order perturbation");
-  return OpMaker<Statistics::FermiDirac>(OpType::t_1, order, K)();
+  return OpMaker<Statistics::FermiDirac>(OpType::t_1, K)();
 }
 
 ExprPtr T_pt(std::size_t order, std::size_t K, bool skip1) {
@@ -706,7 +706,7 @@ ExprPtr T_pt(std::size_t order, std::size_t K, bool skip1) {
 ExprPtr Λ_pt_(std::size_t order, std::size_t K) {
   assert(order == 1 &&
          "sequant::sr::Λ_pt_(): only supports first order perturbation");
-  return OpMaker<Statistics::FermiDirac>(OpType::λ_1, order, K)();
+  return OpMaker<Statistics::FermiDirac>(OpType::λ_1, K)();
 }
 
 ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1) {
