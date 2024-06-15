@@ -1,11 +1,11 @@
-SeQuant: second quantization toolkit in C++
-===========================================
+SeQuant: symbolic tensor algebra in C++
+=======================================
 
 # Synopsis
 
 SeQuant is a framework for performing symbolic algebra of tensors over scalar fields (regular tensors) and over
 operator fields (tensor operators in, e.g., quantum many-body physics).
-In addition to symbolic manipulation it can numerically  evaluate
+In addition to symbolic manipulation it can numerically evaluate
 (with an appropriate external tensor backend) general
 tensor algebra expressions.
 
