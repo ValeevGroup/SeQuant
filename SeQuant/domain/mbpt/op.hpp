@@ -528,9 +528,8 @@ namespace mbpt {
 ///
 /// \f$ P \f$ is the "normalization" factor and depends on the vacuum used to define \f$ A \f$,
 /// and indices \f$ \{ b_i \} \f$ / \f$ \{ k_i \} \f$.
-/// @note The choice of computational basis can be controlled by the default Formalism:
-/// - if `get_default_formalism().sum_over_uocc() == SumOverUocc::Complete` IndexSpace::complete_unoccupied will be used instead of IndexSpace::active_unoccupied
-/// - if `get_default_formalism().csv() == CSVFormalism::CSV` will use cluster-specific (e.g., PNO) unoccupied indices
+/// @note The choice of computational basis can be controlled by the default Context.
+///       See `SeQuant/core/context.hpp` and `SeQuant/mbpt/context.hpp`
 /// @warning Tensor \f$ T \f$ will be antisymmetrized if `get_default_context().spbasis() == SPBasis::spinorbital`, else it will be particle-symmetric; the latter is only valid if # of bra and ket indices coincide.
 /// @internal bless the maker and his water
 // clang-format on

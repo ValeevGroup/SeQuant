@@ -481,8 +481,8 @@ TEST_CASE("MBPT", "[mbpt]") {
   SECTION("SRSO-PNO") {
     using namespace sequant::mbpt::tensor;
     using sequant::mbpt::Context;
-    auto resetter =
-        sequant::mbpt::set_scoped_default_formalism(Context(mbpt::CSV::Yes));
+    auto mbpt_ctx =
+        sequant::mbpt::set_scoped_default_mbpt_context(Context(mbpt::CSV::Yes));
 
     // H2**T2**T2 -> R2
     SEQUANT_PROFILE_SINGLE("wick(H2**T2**T2 -> R2)", {

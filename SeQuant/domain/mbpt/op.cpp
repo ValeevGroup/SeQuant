@@ -469,7 +469,7 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
   auto isr = get_default_context(Statistics::FermiDirac).index_space_registry();
   // if not given dep, use mbpt::Context::CSV to determine whether to use
   // dependent indices for pure (de)excitation ops
-  if (!dep && get_default_formalism().csv() == mbpt::CSV::Yes) {
+  if (!dep && get_default_mbpt_context().csv() == mbpt::CSV::Yes) {
     if (to_class(op_) == OpClass::ex) {
       for (auto&& s : bra_spaces_) {
         assert(isr->contains_unoccupied(s));
@@ -657,7 +657,7 @@ ExprPtr A(std::int64_t Kp, std::int64_t Kh) {
       annihilators.emplace_back(isr->particle_space(Spin::any));
 
   std::optional<OpMaker<Statistics::FermiDirac>::UseDepIdx> dep;
-  if (get_default_formalism().csv() == mbpt::CSV::Yes)
+  if (get_default_mbpt_context().csv() == mbpt::CSV::Yes)
     dep = Kh > 0 ? OpMaker<Statistics::FermiDirac>::UseDepIdx::Bra
                  : OpMaker<Statistics::FermiDirac>::UseDepIdx::Ket;
   return OpMaker<Statistics::FermiDirac>(OpType::A, creators, annihilators)(
@@ -683,7 +683,7 @@ ExprPtr S(std::int64_t K) {
       annihilators.emplace_back(isr->particle_space(Spin::any));
 
   std::optional<OpMaker<Statistics::FermiDirac>::UseDepIdx> dep;
-  if (get_default_formalism().csv() == mbpt::CSV::Yes)
+  if (get_default_mbpt_context().csv() == mbpt::CSV::Yes)
     dep = K > 0 ? OpMaker<Statistics::FermiDirac>::UseDepIdx::Bra
                 : OpMaker<Statistics::FermiDirac>::UseDepIdx::Ket;
   return OpMaker<Statistics::FermiDirac>(OpType::S, creators, annihilators)(
@@ -700,7 +700,7 @@ ExprPtr H_pt(std::size_t order, std::size_t R) {
 ExprPtr T_pt_(std::size_t order, std::size_t K) {
   assert(order == 1 &&
          "sequant::sr::T_pt_(): only supports first order perturbation");
-  return OpMaker<Statistics::FermiDirac>(OpType::t_1, order, K)();
+  return OpMaker<Statistics::FermiDirac>(OpType::t_1, K)();
 }
 
 ExprPtr T_pt(std::size_t order, std::size_t K, bool skip1) {
@@ -715,7 +715,7 @@ ExprPtr T_pt(std::size_t order, std::size_t K, bool skip1) {
 ExprPtr Λ_pt_(std::size_t order, std::size_t K) {
   assert(order == 1 &&
          "sequant::sr::Λ_pt_(): only supports first order perturbation");
-  return OpMaker<Statistics::FermiDirac>(OpType::λ_1, order, K)();
+  return OpMaker<Statistics::FermiDirac>(OpType::λ_1, K)();
 }
 
 ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1) {

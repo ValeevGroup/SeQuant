@@ -28,10 +28,6 @@ struct NoCacheAmplitudeTensor {
   }
 };
 
-struct IndexToSize {
-  size_t operator()(Index const& idx) const;
-};
-
 struct CalcInfo {
   OptionsEquations const eqn_opts;
 
@@ -77,7 +73,7 @@ struct CalcInfo {
     using ranges::views::transform;
     auto trimmed = opt::tail_factor(expr);
     return *trimmed | transform([st = optm_opts.single_term](auto expr) {
-      return eval_node<ExprT>(st ? optimize(expr, IndexToSize{}) : expr);
+      return eval_node<ExprT>(st ? optimize(expr) : expr);
     }) | ranges::to_vector;
   }
 };
