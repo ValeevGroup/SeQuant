@@ -187,6 +187,30 @@ set_scoped_default_context(const Context& ctx);
 
 ///@}
 
+/// \name Particle and Hole space accessors
+/// Syntax sugar for accessing particle and hole spaces in the current context
+
+///@{
+
+/// @brief returns the particle space defined in the current context
+/// @param qn QuantumNumbers of the space
+/// @return IndexSpace object representing the particle space
+[[nodiscard]] IndexSpace get_particle_space(
+    const IndexSpace::QuantumNumbers& qn);
+
+/// @brief returns the hole space defined in the current context
+/// @param qn QuantumNumbers of the space
+/// @return IndexSpace object representing the hole space
+[[nodiscard]] IndexSpace get_hole_space(const IndexSpace::QuantumNumbers& qn);
+
+/// @brief returns the complete space defined in the current context
+/// @param qn QuantumNumbers of the space
+/// @return IndexSpace object representing the complete space
+[[nodiscard]] IndexSpace get_complete_space(
+    const IndexSpace::QuantumNumbers& qn);
+
+///@}
+
 }  // namespace sequant
 
 #endif
