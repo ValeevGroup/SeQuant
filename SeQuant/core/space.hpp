@@ -272,9 +272,6 @@ inline const QuantumNumbersAttr QuantumNumbersAttr::reserved =
 /// tensor network evaluation.
 class IndexSpace {
  public:
-  using TypeAttr = sequant::TypeAttr;
-  using QuantumNumbersAttr = sequant::QuantumNumbersAttr;
-
   /// @brief Attr describes all attributes of a space (occupancy + quantum
   /// numbers)
   struct Attr : TypeAttr, QuantumNumbersAttr {
@@ -296,11 +293,11 @@ class IndexSpace {
     constexpr const TypeAttr &type() const {
       return static_cast<const TypeAttr &>(*this);
     }
-    TypeAttr &type() { return static_cast<TypeAttr &>(*this); }
+    constexpr TypeAttr &type() { return static_cast<TypeAttr &>(*this); }
     constexpr const QuantumNumbersAttr &qns() const {
       return static_cast<const QuantumNumbersAttr &>(*this);
     }
-    QuantumNumbersAttr &qns() {
+    constexpr QuantumNumbersAttr &qns() {
       return static_cast<QuantumNumbersAttr &>(*this);
     }
 
@@ -341,13 +338,13 @@ class IndexSpace {
              this->qns().includes(other.qns());
     }
 
-    bool operator==(Attr other) const {
+    constexpr bool operator==(Attr other) const {
       return this->type() == other.type() && this->qns() == other.qns();
     }
-    bool operator!=(Attr other) const { return !(*this == other); }
+    constexpr bool operator!=(Attr other) const { return !(*this == other); }
 
     /// Attr objects are ordered by quantum numbers, then by type
-    bool operator<(Attr other) const {
+    constexpr bool operator<(Attr other) const {
       if (this->qns() == other.qns()) {
         return this->type() < other.type();
       } else {
@@ -355,6 +352,7 @@ class IndexSpace {
       }
     }
   };  // struct Attr
+
   using Type = TypeAttr;
   using QuantumNumbers = QuantumNumbersAttr;
 
@@ -395,17 +393,16 @@ class IndexSpace {
       return a < b;
     }
   };
-  bool operator==(IndexSpace IS) const {
-    return this->type() == IS.type() && this->base_key() == IS.base_key() &&
-                   this->qns() == IS.qns()
-               ? true
-               : false;
-  }
 
-  bool operator!=(IndexSpace IS) const { return !(*this == IS); }
+  friend constexpr bool operator==(IndexSpace const &,
+                                   IndexSpace const &) noexcept;
+  friend constexpr bool operator!=(IndexSpace const &,
+                                   IndexSpace const &) noexcept;
+  friend constexpr bool operator<(IndexSpace const &,
+                                  IndexSpace const &) noexcept;
 
-  Attr attr() const noexcept { return attr_; }
-  Type type() const noexcept { return attr().type(); }
+  constexpr Attr attr() const noexcept { return attr_; }
+  constexpr Type type() const noexcept { return attr().type(); }
   QuantumNumbers qns() const noexcept { return attr().qns(); }
 
   /// Default ctor creates null space (with null label, type and quantum
@@ -450,6 +447,9 @@ class IndexSpace {
   /// @return approximate size of a space
   std::size_t approximate_size() const { return approximate_size_; }
 
+  /// Set the approximate size of a space.
+  void approximate_size(size_t n) { approximate_size_ = n; }
+
  private:
   Attr attr_;
   std::wstring base_key_;
@@ -482,8 +482,28 @@ inline bool includes(const IndexSpace &space1, const IndexSpace &space2) {
 
 /// IndexSpace are ordered by their attributes (i.e. labels do not matter one
 /// bit)
-inline bool operator<(const IndexSpace &space1, const IndexSpace &space2) {
+[[nodiscard]] inline constexpr bool operator<(
+    const IndexSpace &space1, const IndexSpace &space2) noexcept {
   return space1.attr() < space2.attr();
+}
+
+///
+/// IndexSpace are equal if they have equal @c IndexSpace::type(),
+/// @c IndexSpace::qns(), and @c IndexSpace::base_key().
+///
+[[nodiscard]] inline constexpr bool operator==(
+    IndexSpace const &space1, IndexSpace const &space2) noexcept {
+  return space1.type() == space2.type() && space1.qns() == space2.qns() &&
+         space1.base_key() == space2.base_key();
+}
+
+///
+/// IndexSpace are equal if they have equal @c IndexSpace::type(),
+/// @c IndexSpace::qns(), and @c IndexSpace::base_key().
+///
+[[nodiscard]] inline constexpr bool operator!=(
+    IndexSpace const &space1, IndexSpace const &space2) noexcept {
+  return !(space1 == space2);
 }
 
 }  // namespace sequant

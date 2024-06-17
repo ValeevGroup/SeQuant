@@ -130,6 +130,18 @@ class IndexSpaceRegistry {
     return it != spaces_->end() ? &(*it) : nullptr;
   }
 
+  /// @brief retrieve a pointer to IndexSpace from the registry by the label
+  /// @param label a @c base_key of an IndexSpace, or a label of an Index (see
+  /// Index::label() )
+  /// @return pointer to IndexSpace associated with that key, or nullptr if not
+  /// found
+  template <typename S, typename = meta::EnableIfAllBasicStringConvertible<S>>
+  IndexSpace* retrieve_ptr(S&& label) {
+    auto it =
+        spaces_->find(IndexSpace::reduce_key(to_basic_string_view(label)));
+    return it != spaces_->end() ? &(*it) : nullptr;
+  }
+
   /// @brief retrieve an IndexSpace from the registry by the label
   /// @param label a @c base_key of an IndexSpace, or a label of an Index (see
   /// Index::label() )
@@ -294,7 +306,7 @@ class IndexSpaceRegistry {
         "IndexSpaceRegistry::add: only one IndexSpace::QuantumNumbers argument "
         "is allowed");
     constexpr auto have_qns = nqns == boost::hana::size_c<1>;
-    IndexSpace::QuantumNumbersAttr qns;
+    IndexSpace::QuantumNumbers qns;
     if constexpr (have_qns) {
       qns = boost::hana::at_c<0>(h_qns);
     }

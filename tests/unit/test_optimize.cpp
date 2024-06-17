@@ -26,17 +26,25 @@ sequant::ExprPtr extract(sequant::ExprPtr expr,
 
 TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
   using namespace sequant;
-  auto isr = get_default_context().index_space_registry();
-  auto idx2size = [nocc = 4, nvirt = 140, isr](Index const& idx) {
-    if (idx.space() == isr->retrieve(L"i")) return nocc;
-    if (idx.space() == isr->retrieve(L"a"))
-      return nvirt;
-    else
-      throw std::runtime_error("Unsupported IndexSpace type encountered");
-  };
 
-  auto single_term_opt = [&idx2size](Product const& prod) {
-    return opt::single_term_opt(prod, idx2size);
+  // for optimization tests, set occupied and unoccupied index extents
+  {
+    auto reg = get_default_context().mutable_index_space_registry();
+    auto occ = reg->retrieve_ptr(L"i");
+    auto uocc = reg->retrieve_ptr(L"a");
+    assert(occ);
+    assert(uocc);
+    occ->approximate_size(10);
+    uocc->approximate_size(100);
+    assert(uocc->approximate_size() == 100);
+  }
+
+  auto single_term_opt = [](Product const& prod) {
+    return opt::single_term_opt(prod, [](Index const& ix) {
+      auto lbl = to_string(ix.label());
+      auto sz = ix.space().approximate_size();
+      return ix.space().approximate_size();
+    });
   };
 
   auto parse_expr_antisymm = [](auto const& xpr) {
@@ -141,7 +149,7 @@ TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
     auto sum = ex<Sum>();
     sum->as<Sum>().append(ex<Product>(ExprPtrList{parse_expr(L"f{a_1;i_1}")}));
     REQUIRE(sum->as<Sum>().summand(0).as<Product>().factors().size() == 1);
-    auto optimized = optimize(sum, idx2size);
+    auto optimized = optimize(sum);
     REQUIRE(optimized->is<Sum>());
     REQUIRE(optimized->as<Sum>().summands().size() == 1);
     REQUIRE(sum->as<Sum>().summand(0).as<Product>().factors().size() == 1);
