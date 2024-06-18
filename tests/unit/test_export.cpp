@@ -6,6 +6,8 @@
 #include <SeQuant/core/optimize.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
+#include <SeQuant/domain/mbpt/spin.hpp>
+
 #include <SeQuant/core/export/itf.hpp>
 #include <SeQuant/core/parse.hpp>
 
@@ -373,7 +375,89 @@ TEST_CASE("Export capabilities", "[exports]") {
         REQUIRE(generator.get_generated_code() == expected);
       }
     }
+    SECTION("sum") {
+      SECTION("trivial") {
+        auto tree = eval_node<EvalExpr>(parse_expr(L"A{a1;i1} + B{a1;i1}"));
+
+        export_expression(tree, generator);
+
+        std::string expected =
+            "Declare index i_1\n"
+            "Declare index a_1\n"
+            "\n"
+            "Declare tensor A[a_1, i_1]\n"
+            "Declare tensor B[a_1, i_1]\n"
+            "Declare tensor I[a_1, i_1]\n"
+            "\n"
+            "Create I[a_1, i_1] and initialize to zero\n"
+            "Load A[a_1, i_1]\n"
+            "Load B[a_1, i_1]\n"
+            "Compute I[a_1, i_1] += A[a_1, i_1] + B[a_1, i_1]\n"
+            "Unload B[a_1, i_1]\n"
+            "Unload A[a_1, i_1]\n"
+            "Persist I[a_1, i_1]\n";
+
+        REQUIRE(generator.get_generated_code() == expected);
+      }
+      SECTION("sum of binaries") {
+        auto tree = eval_node<EvalExpr>(
+            parse_expr(L"A{a1;i1} B{a2;i2} + A{a1;i1} B{a2;i2}"));
+
+        export_expression(tree, generator);
+
+        std::string expected =
+            "Declare index i_1\n"
+            "Declare index a_1\n"
+            "\n"
+            "Declare tensor A[a_1, i_1]\n"
+            "Declare tensor B[a_2, i_2]\n"
+            "Declare tensor I[a_1, a_2, i_1, i_3]\n"
+            "\n"
+            "Create I[a_1, a_2, i_1, i_2] and initialize to zero\n"
+            "Load A[a_1, i_1]\n"
+            "Load B[a_2, i_2]\n"
+            "Compute I[a_1, a_2, i_1, i_2] += A[a_1, i_1] B[a_2, i_2]\n"
+            "Unload B[a_2, i_2]\n"
+            "Unload A[a_1, i_1]\n"
+            // TODO: there is some unload/load pairs that could be removed
+            "Load A[a_1, i_1]\n"
+            "Load B[a_2, i_2]\n"
+            "Compute I[a_1, a_2, i_1, i_2] += A[a_1, i_1] B[a_2, i_2]\n"
+            "Unload B[a_2, i_2]\n"
+            "Unload A[a_1, i_1]\n"
+            "Persist I[a_1, a_2, i_1, i_2]\n";
+
+        REQUIRE(generator.get_generated_code() == expected);
+      }
+    }
   }
+
+  // SECTION("CCD") {
+  //  auto residual = parse_expr(
+  //      L"+ 1/4 A{i1,i2;e1,e2} g{e1,e2;i1,i2} - 1/2 A{i1,i2;e1,e2} f{i3;i2} "
+  //      L"T2{e1,e2;i1,i3} + 1/2 A{i1,i2;e1,e2} f{e2;e3} T2{e1,e3;i1,i2} + 1/2
+  //      " L"1/4 A{i1,i2;e1,e2} g{i3,i4;i1,i2} T2{e1,e2;i3,i4} + A{i1,i2;e1,e2}
+  //      " L"g{i3,e2;e3,i2} T2{e1,e3;i1,i3} + 1/2 1/4 A{i1,i2;e1,e2} "
+  //      L"g{e1,e2;e3,e4} T2{e3,e4;i1,i2} + 1/2 1/2 A{i1,i2;e1,e2} "
+  //      L"g{i3,i4;e3,e4} T2{e3,e4;i2,i3} T2{e1,e2;i1,i4} + 1/4 1/4 "
+  //      L"A{i1,i2;e1,e2} g{i3,i4;e3,e4} T2{e3,e4;i1,i2} T2{e1,e2;i3,i4} + 1/2
+  //      " L"1/2 A{i1,i2;e1,e2} g{i3,i4;e3,e4} T2{e2,e3;i3,i4} T2{e1,e4;i1,i2}
+  //      + " L"1/2 A{i1,i2;e1,e2} g{i3,i4;e3,e4} T2{e1,e3;i1,i3}
+  //      T2{e2,e4;i2,i4}");
+
+  //  residual = simplify(closed_shell_CC_spintrace_rigorous(residual));
+
+  //  residual = optimize(residual);
+
+  //  auto tree = eval_node<EvalExpr>(residual);
+
+  //  TextGenerator generator;
+  //  TextGeneratorContext context;
+  //  export_expression(tree, generator, context);
+
+  //  std::cout << "Generated code for the CCD residual:\n" <<
+  //  generator.get_generated_code() << std::endl;
+  //}
 
   SECTION("remap_integrals") {
     using namespace sequant::itf::detail;
