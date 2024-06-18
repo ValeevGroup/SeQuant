@@ -604,59 +604,58 @@ ExprPtr Λ(std::size_t K) {
   return result;
 }
 
-ExprPtr R_(std::size_t nbra, std::size_t nket, IndexSpace particle_space,
+ExprPtr R_(std::size_t nann, std::size_t ncre, IndexSpace particle_space,
            IndexSpace hole_space) {
-  return OpMaker<Statistics::FermiDirac>(OpType::R, nbra, nket, particle_space,
+  return OpMaker<Statistics::FermiDirac>(OpType::R, ncre, nann, particle_space,
                                          hole_space)();
 }
 
-ExprPtr L_(std::size_t nbra, std::size_t nket, IndexSpace particle_space,
+ExprPtr L_(std::size_t nann, std::size_t ncre, IndexSpace particle_space,
            IndexSpace hole_space) {
-  return OpMaker<Statistics::FermiDirac>(OpType::L, nbra, nket, particle_space,
+  return OpMaker<Statistics::FermiDirac>(OpType::L, ncre, nann, particle_space,
                                          hole_space)();
 }
 
-ExprPtr P(std::int64_t Kp, std::int64_t Kh) {
-  if (Kh == std::numeric_limits<std::int64_t>::max()) Kh = Kp;
+ExprPtr P(std::int64_t nh, std::int64_t np) {
+  if (np == std::numeric_limits<std::int64_t>::max()) np = nh;
 
-  if (Kh != Kp)
+  if (np != nh)
     assert(
         get_default_context().spbasis() != SPBasis::spinfree &&
         "Spinfree basis does not support non-particle conserving projectors");
   return get_default_context().spbasis() == SPBasis::spinfree
-             ? tensor::S(-Kp /* Kh == Kp */)
-             : tensor::A(-Kp, -Kh);
+             ? tensor::S(-nh /* nh == np */)
+             : tensor::A(-nh, -np);
 }
 
-ExprPtr A(std::int64_t Kp, std::int64_t Kh) {
+ExprPtr A(std::int64_t nh, std::int64_t np) {
   // particle number conserving
-  if (Kh == std::numeric_limits<std::int64_t>::max()) Kh = Kp;
+  if (np == std::numeric_limits<std::int64_t>::max()) np = nh;
 
-  assert(!(Kh == 0 && Kp == 0));
+  assert(!(np == 0 && nh == 0));
   // if they are not zero, Kh and Kp should have the same sign
-  if (Kh != 0 && Kp != 0) {
-    assert((Kh > 0 && Kp > 0) || (Kh < 0 && Kp < 0));
+  if (np != 0 && nh != 0) {
+    assert((np > 0 && nh > 0) || (np < 0 && nh < 0));
   }
 
-  auto isr = get_default_context().index_space_registry();
   container::svector<IndexSpace> creators;
   container::svector<IndexSpace> annihilators;
-  if (Kh > 0)  // ex
-    for ([[maybe_unused]] auto i : ranges::views::iota(0, Kh))
-      annihilators.emplace_back(isr->hole_space(Spin::any));
+  if (np > 0)  // ex
+    for ([[maybe_unused]] auto i : ranges::views::iota(0, np))
+      annihilators.emplace_back(get_hole_space(Spin::any));
   else  // deex
-    for ([[maybe_unused]] auto i : ranges::views::iota(0, -Kh))
-      creators.emplace_back(isr->hole_space(Spin::any));
-  if (Kp > 0)  // ex
-    for ([[maybe_unused]] auto i : ranges::views::iota(0, Kp))
-      creators.emplace_back(isr->particle_space(Spin::any));
+    for ([[maybe_unused]] auto i : ranges::views::iota(0, -np))
+      creators.emplace_back(get_hole_space(Spin::any));
+  if (nh > 0)  // ex
+    for ([[maybe_unused]] auto i : ranges::views::iota(0, nh))
+      creators.emplace_back(get_particle_space(Spin::any));
   else  // deex
-    for ([[maybe_unused]] auto i : ranges::views::iota(0, -Kp))
-      annihilators.emplace_back(isr->particle_space(Spin::any));
+    for ([[maybe_unused]] auto i : ranges::views::iota(0, -nh))
+      annihilators.emplace_back(get_particle_space(Spin::any));
 
   std::optional<OpMaker<Statistics::FermiDirac>::UseDepIdx> dep;
   if (get_default_mbpt_context().csv() == mbpt::CSV::Yes)
-    dep = Kh > 0 ? OpMaker<Statistics::FermiDirac>::UseDepIdx::Bra
+    dep = np > 0 ? OpMaker<Statistics::FermiDirac>::UseDepIdx::Bra
                  : OpMaker<Statistics::FermiDirac>::UseDepIdx::Ket;
   return OpMaker<Statistics::FermiDirac>(OpType::A, creators, annihilators)(
       dep, {Symmetry::antisymm});
