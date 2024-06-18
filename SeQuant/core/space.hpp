@@ -18,6 +18,14 @@
 
 namespace sequant {
 
+namespace bitset {
+using type = int32_t;
+constexpr type reserved = 0x80000000;
+constexpr type null = 0x00000000;
+}  // namespace bitset
+
+using bitset_t = bitset::type;
+
 class QuantumNumbersAttr;  // used to constrain TypeAttr ctor
 
 class Index;  // friend of TypeAttr
@@ -29,10 +37,6 @@ class Index;  // friend of TypeAttr
 /// (intersection, union, etc.) it is encoded as a fixed-width (32) bitset.
 class TypeAttr {
  public:
-  using bitset_t = int32_t;
-  static constexpr bitset_t reserved_bitset = 0x80000000;
-  static constexpr bitset_t null_bitset = 0;
-
   /// default ctor creates a null TypeAttr
   constexpr TypeAttr() noexcept = default;
 
@@ -45,8 +49,7 @@ class TypeAttr {
   /// @param bitset bitset representation of this Type
   /// @pre `(bitset & make_reserved().bitset) == null.bitset`
   explicit constexpr TypeAttr(bitset_t bitset) noexcept : bitset(bitset) {
-    assert(this->bitset == reserved_bitset);
-    assert((this->bitset & reserved_bitset) == null_bitset);
+    assert((this->bitset & bitset::reserved) == bitset::null);
   }
 
   /// construct TypeAddr from things that can be cast to bitset_t, but exclude
@@ -147,8 +150,6 @@ inline const TypeAttr TypeAttr::reserved = TypeAttr::make_reserved();
 /// denotes other quantum numbers (particle type, spin, etc.)
 class QuantumNumbersAttr {
  public:
-  using bitset_t = int32_t;
-
   /// default ctor creates a null QuantumNumbersAttr
   /// @post `static_cast<bool>(*this) == false`
   constexpr QuantumNumbersAttr() noexcept = default;
@@ -163,7 +164,7 @@ class QuantumNumbersAttr {
   /// @pre `(bitset & make_reserved().bitset()) == null.bitset()`
   explicit constexpr QuantumNumbersAttr(bitset_t bitset) noexcept
       : bitset(bitset) {
-    assert((this->bitset & TypeAttr::reserved_bitset) == TypeAttr::null_bitset);
+    assert((this->bitset & bitset::reserved) == bitset::null);
   }
 
   template <typename QN,
@@ -244,7 +245,7 @@ class QuantumNumbersAttr {
   }
 
  private:
-  bitset_t bitset = TypeAttr::null_bitset;
+  bitset_t bitset = bitset::null;
 
   friend class Index;
 
@@ -255,7 +256,7 @@ class QuantumNumbersAttr {
   /// makes reserved object
   static QuantumNumbersAttr make_reserved() {
     QuantumNumbersAttr result;
-    result.bitset = TypeAttr::reserved_bitset;
+    result.bitset = bitset::reserved;
     return result;
   }
 };  // struct QuantumNumbersAttr
