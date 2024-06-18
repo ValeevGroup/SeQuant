@@ -191,6 +191,7 @@ std::wstring deparse_expr(Sum const& sum, bool annot_sym) {
 
 std::wstring deparse_expr(ExprPtr expr, bool annot_sym) {
   if (!expr) return {};
+  
   using namespace details;
   if (expr->is<Tensor>())
     return deparse_expr(expr->as<Tensor>(), annot_sym);
