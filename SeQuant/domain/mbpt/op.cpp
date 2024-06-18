@@ -405,12 +405,12 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
 namespace sequant::mbpt {
 
 template <Statistics S>
-OpMaker<S>::OpMaker(OpType op, std::initializer_list<IndexSpace> bras,
-                    std::initializer_list<IndexSpace> kets)
+OpMaker<S>::OpMaker(OpType op, std::initializer_list<IndexSpace> cre_list,
+                    std::initializer_list<IndexSpace> ann_list)
     : op_(op),
-      bra_spaces_(bras.begin(), bras.end()),
-      ket_spaces_(kets.begin(), kets.end()) {
-  assert(nbra() > 0 || nket() > 0);
+      cre_spaces_(cre_list.begin(), cre_list.end()),
+      ann_spaces_(ann_list.begin(), ann_list.end()) {
+  assert(ncre() > 0 || nann() > 0);
 }
 
 template <Statistics S>
@@ -421,19 +421,18 @@ OpMaker<S>::OpMaker(OpType op, std::size_t nbra, std::size_t nket,
                     IndexSpace particle_space, IndexSpace hole_space) {
   op_ = op;
   assert(nbra > 0 || nket > 0);
-  auto isr = get_default_context().index_space_registry();
   switch (to_class(op)) {
     case OpClass::ex:
-      bra_spaces_ = decltype(bra_spaces_)(nbra, particle_space);
-      ket_spaces_ = decltype(ket_spaces_)(nket, hole_space);
+      cre_spaces_ = decltype(cre_spaces_)(nbra, particle_space);
+      ann_spaces_ = decltype(ann_spaces_)(nket, hole_space);
       break;
     case OpClass::deex:
-      bra_spaces_ = decltype(bra_spaces_)(nbra, hole_space);
-      ket_spaces_ = decltype(ket_spaces_)(nket, particle_space);
+      cre_spaces_ = decltype(cre_spaces_)(nbra, hole_space);
+      ann_spaces_ = decltype(ann_spaces_)(nket, particle_space);
       break;
     case OpClass::gen:
-      bra_spaces_ = decltype(bra_spaces_)(nbra, isr->complete_space(Spin::any));
-      ket_spaces_ = decltype(ket_spaces_)(nket, isr->complete_space(Spin::any));
+      cre_spaces_ = decltype(cre_spaces_)(nbra, get_complete_space(Spin::any));
+      ann_spaces_ = decltype(ann_spaces_)(nket, get_complete_space(Spin::any));
       break;
   }
 }
@@ -442,23 +441,22 @@ template <Statistics S>
 OpMaker<S>::OpMaker(OpType op, std::size_t nparticle) {
   assert(nparticle > 0);
   op_ = op;
-  auto isr = get_default_context().index_space_registry();
-  const auto hole_space = isr->hole_space(Spin::any);
-  const auto particle_space = isr->particle_space(Spin::any);
+  const auto hole_space = get_hole_space(Spin::any);
+  const auto particle_space = get_particle_space(Spin::any);
   switch (to_class(op)) {
     case OpClass::ex:
-      bra_spaces_ = decltype(bra_spaces_)(nparticle, particle_space);
-      ket_spaces_ = decltype(ket_spaces_)(nparticle, hole_space);
+      cre_spaces_ = decltype(cre_spaces_)(nparticle, particle_space);
+      ann_spaces_ = decltype(ann_spaces_)(nparticle, hole_space);
       break;
     case OpClass::deex:
-      bra_spaces_ = decltype(bra_spaces_)(nparticle, hole_space);
-      ket_spaces_ = decltype(ket_spaces_)(nparticle, particle_space);
+      cre_spaces_ = decltype(cre_spaces_)(nparticle, hole_space);
+      ann_spaces_ = decltype(ann_spaces_)(nparticle, particle_space);
       break;
     case OpClass::gen:
-      bra_spaces_ =
-          decltype(bra_spaces_)(nparticle, isr->complete_space(Spin::any));
-      ket_spaces_ =
-          decltype(ket_spaces_)(nparticle, isr->complete_space(Spin::any));
+      cre_spaces_ =
+          decltype(cre_spaces_)(nparticle, get_complete_space(Spin::any));
+      ann_spaces_ =
+          decltype(ann_spaces_)(nparticle, get_complete_space(Spin::any));
       break;
   }
 }
@@ -471,12 +469,12 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
   // dependent indices for pure (de)excitation ops
   if (!dep && get_default_mbpt_context().csv() == mbpt::CSV::Yes) {
     if (to_class(op_) == OpClass::ex) {
-      for (auto&& s : bra_spaces_) {
+      for (auto&& s : cre_spaces_) {
         assert(isr->contains_unoccupied(s));
       }
       dep = UseDepIdx::Bra;
     } else if (to_class(op_) == OpClass::deex) {
-      for (auto&& s : ket_spaces_) {
+      for (auto&& s : ann_spaces_) {
         assert(isr->contains_unoccupied(s));
       }
       dep = UseDepIdx::Ket;
@@ -486,10 +484,10 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
   }
 
   return make(
-      bra_spaces_, ket_spaces_,
-      [this, opsymm_opt](const auto& braidxs, const auto& ketidxs,
+      cre_spaces_, ann_spaces_,
+      [this, opsymm_opt](const auto& creidxs, const auto& annidxs,
                          Symmetry opsymm) {
-        return ex<Tensor>(to_wstring(op_), braidxs, ketidxs,
+        return ex<Tensor>(to_wstring(op_), creidxs, annidxs,
                           opsymm_opt ? *opsymm_opt : opsymm);
       },
       dep ? *dep : UseDepIdx::None);

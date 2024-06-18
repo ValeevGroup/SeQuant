@@ -537,34 +537,31 @@ template <Statistics S>
 class OpMaker {
  public:
   /// @param[in] op the operator type
-  /// @param[in] bras the bra indices/creators
-  /// @param[in] kets the ket indices/annihilators
-  OpMaker(OpType op, std::initializer_list<IndexSpace> bras,
-          std::initializer_list<IndexSpace> kets);
+  /// @param[in] cre_list list of creator indices
+  /// @param[in] ann_list list of annihilator indices
+  OpMaker(OpType op, std::initializer_list<IndexSpace> cre_list,
+          std::initializer_list<IndexSpace> ann_list);
 
   /// @param[in] op the operator type
-  /// @param[in] bras the bra indices/creators
-  /// @param[in] kets the ket indices/annihilators
+  /// @param[in] cre_list list of creator indices
+  /// @param[in] ann_list list of annihilator indices
   template <typename IndexSpaceTypeRange1, typename IndexSpaceTypeRange2>
-  OpMaker(OpType op, IndexSpaceTypeRange1&& bras, IndexSpaceTypeRange2&& kets)
+  OpMaker(OpType op, IndexSpaceTypeRange1&& cre_list,
+          IndexSpaceTypeRange2&& ann_list)
       : op_(op),
-        bra_spaces_(bras.begin(), bras.end()),
-        ket_spaces_(kets.begin(), kets.end()) {
-    assert(nbra() > 0 || nket() > 0);
+        cre_spaces_(cre_list.begin(), cre_list.end()),
+        ann_spaces_(ann_list.begin(), ann_list.end()) {
+    assert(ncre() > 0 || nann() > 0);
   }
 
   /// @param[in] op the operator type
-  /// @param[in] Nbra number of bra indices/creators
-  /// @param[in] Nket number of ket indices/annihilators
+  /// @param[in] ncre number of bra indices/creators
+  /// @param[in] nann number of ket indices/annihilators
   /// @param[in] particle_space IndexSpace corresponding to particle_space
   /// @param[in] hole_space IndexSpace corresponding to hole_space
-  OpMaker(OpType op, std::size_t Nbra, std::size_t Nket,
-          IndexSpace particle_space = get_default_context()
-                                          .index_space_registry()
-                                          ->particle_space(Spin::any),
-          IndexSpace hole_space = get_default_context()
-                                      .index_space_registry()
-                                      ->hole_space(Spin::any));
+  OpMaker(OpType op, std::size_t ncre, std::size_t nann,
+          IndexSpace particle_space = get_particle_space(Spin::any),
+          IndexSpace hole_space = get_hole_space(Spin::any));
 
   /// For constructing particle number conserving operators
   /// @param[in] op the operator type
@@ -596,14 +593,15 @@ class OpMaker {
 
   /// @tparam TensorGenerator callable with signature
   /// `TensorGenerator(range<Index>, range<Index>, Symmetry)` that returns a
-  /// Tensor with the respective bra and ket indices and of the given symmetry
-  /// @param[in] bras the bra indices/creators
-  /// @param[in] kets the ket indices/annihilators
+  /// Tensor with the respective bra/cre and ket/ann indices and of the given
+  /// symmetry
+  /// @param[in] creators creator indices
+  /// @param[in] annihilators annihilator indices
   /// @param[in] tensor_generator the callable that generates the tensor
   /// @param[in] dep whether to use dependent indices
   template <typename TensorGenerator>
-  static ExprPtr make(const container::svector<IndexSpace>& bras,
-                      const container::svector<IndexSpace>& kets,
+  static ExprPtr make(const container::svector<IndexSpace>& creators,
+                      const container::svector<IndexSpace>& annihilators,
                       TensorGenerator&& tensor_generator,
                       UseDepIdx dep = UseDepIdx::None) {
     const bool symm =
@@ -613,7 +611,7 @@ class OpMaker {
     const auto dep_ket = dep == UseDepIdx::Ket;
 
     // not sure what it means to use nonsymmetric operator if nbra != nket
-    if (!symm) assert(ranges::size(bras) == ranges::size(kets));
+    if (!symm) assert(ranges::size(creators) == ranges::size(annihilators));
 
     auto make_idx_vector = [](const auto& spacetypes) {
       container::svector<Index> result;
@@ -637,51 +635,53 @@ class OpMaker {
       return result;
     };
 
-    container::svector<Index> braidxs, ketidxs;
+    container::svector<Index> creidxs, annidxs;
     if (dep_bra) {
-      ketidxs = make_idx_vector(kets);
-      braidxs = make_depidx_vector(bras, ketidxs);
+      annidxs = make_idx_vector(annihilators);
+      creidxs = make_depidx_vector(creators, annidxs);
     } else if (dep_ket) {
-      braidxs = make_idx_vector(bras);
-      ketidxs = make_depidx_vector(kets, braidxs);
+      creidxs = make_idx_vector(creators);
+      annidxs = make_depidx_vector(annihilators, creidxs);
     } else {
-      braidxs = make_idx_vector(bras);
-      ketidxs = make_idx_vector(kets);
+      creidxs = make_idx_vector(creators);
+      annidxs = make_idx_vector(annihilators);
     }
 
     using ranges::size;
-    const auto mult = symm ? factorial(size(bras)) * factorial(size(kets))
-                           : factorial(size(bras));
+    const auto mult =
+        symm ? factorial(size(creators)) * factorial(size(annihilators))
+             : factorial(size(creators));
     const auto opsymm = symm ? (S == Statistics::FermiDirac ? Symmetry::antisymm
                                                             : Symmetry::symm)
                              : Symmetry::nonsymm;
     return ex<Constant>(rational{1, mult}) *
-           tensor_generator(braidxs, ketidxs, opsymm) *
-           ex<NormalOperator<S>>(/* creators */ braidxs,
-                                 /* annihilators */ ketidxs,
+           tensor_generator(creidxs, annidxs, opsymm) *
+           ex<NormalOperator<S>>(/* creators */ creidxs,
+                                 /* annihilators */ annidxs,
                                  get_default_context().vacuum());
   }
 
   template <typename TensorGenerator>
-  static ExprPtr make(std::initializer_list<IndexSpace::Type> bras,
-                      std::initializer_list<IndexSpace::Type> kets,
+  static ExprPtr make(std::initializer_list<IndexSpace::Type> creators,
+                      std::initializer_list<IndexSpace::Type> annihilators,
                       TensorGenerator&& tensor_generator,
                       UseDepIdx csv = UseDepIdx::None) {
-    container::svector<IndexSpace> bra_vec(bras.begin(), bras.end());
-    container::svector<IndexSpace> ket_vec(kets.begin(), kets.end());
-    return OpMaker::make(bra_vec, ket_vec,
+    container::svector<IndexSpace> cre_vec(creators.begin(), creators.end());
+    container::svector<IndexSpace> ann_vec(annihilators.begin(),
+                                           annihilators.end());
+    return OpMaker::make(cre_vec, ann_vec,
                          std::forward<TensorGenerator>(tensor_generator), csv);
   }
 
  protected:
   OpType op_;
-  container::svector<IndexSpace> bra_spaces_;
-  container::svector<IndexSpace> ket_spaces_;
+  container::svector<IndexSpace> cre_spaces_;
+  container::svector<IndexSpace> ann_spaces_;
 
   OpMaker(OpType op);
 
-  const auto nbra() const { return bra_spaces_.size(); };
-  const auto nket() const { return ket_spaces_.size(); };
+  [[nodiscard]] const auto ncre() const { return cre_spaces_.size(); };
+  [[nodiscard]] const auto nann() const { return ann_spaces_.size(); };
 };
 
 extern template class OpMaker<Statistics::FermiDirac>;
