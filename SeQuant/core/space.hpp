@@ -30,6 +30,8 @@ class Index;  // friend of TypeAttr
 class TypeAttr {
  public:
   using bitset_t = int32_t;
+  static constexpr bitset_t reserved_bitset = 0x80000000;
+  static constexpr bitset_t null_bitset = 0;
 
   /// default ctor creates a null TypeAttr
   constexpr TypeAttr() noexcept = default;
@@ -43,7 +45,8 @@ class TypeAttr {
   /// @param bitset bitset representation of this Type
   /// @pre `(bitset & make_reserved().bitset) == null.bitset`
   explicit constexpr TypeAttr(bitset_t bitset) noexcept : bitset(bitset) {
-    assert((this->bitset & reserved.bitset) == null.bitset);
+    assert(this->bitset == reserved_bitset);
+    assert((this->bitset & reserved_bitset) == null_bitset);
   }
 
   /// construct TypeAddr from things that can be cast to bitset_t, but exclude
@@ -160,7 +163,7 @@ class QuantumNumbersAttr {
   /// @pre `(bitset & make_reserved().bitset()) == null.bitset()`
   explicit constexpr QuantumNumbersAttr(bitset_t bitset) noexcept
       : bitset(bitset) {
-    assert((this->bitset & reserved.bitset) == null.bitset);
+    assert((this->bitset & TypeAttr::reserved_bitset) == TypeAttr::null_bitset);
   }
 
   template <typename QN,
@@ -241,7 +244,7 @@ class QuantumNumbersAttr {
   }
 
  private:
-  bitset_t bitset = 0;
+  bitset_t bitset = TypeAttr::null_bitset;
 
   friend class Index;
 
@@ -252,7 +255,7 @@ class QuantumNumbersAttr {
   /// makes reserved object
   static QuantumNumbersAttr make_reserved() {
     QuantumNumbersAttr result;
-    result.bitset = 0x80000000;
+    result.bitset = TypeAttr::reserved_bitset;
     return result;
   }
 };  // struct QuantumNumbersAttr
