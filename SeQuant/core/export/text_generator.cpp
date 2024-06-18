@@ -190,9 +190,9 @@ std::string TextGenerator::stringify(const Expr &expr) const {
       if (i + 1 < sum.size()) {
         repr += " + ";
       }
-
-      return repr;
     }
+
+    return repr;
   }
 
   throw std::runtime_error(
