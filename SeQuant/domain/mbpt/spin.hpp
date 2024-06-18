@@ -23,7 +23,7 @@ namespace mbpt {
 
 /// quantum numbers tags related to spin
 /// \note spin quantum number takes 2 rightmost bits
-enum class Spin : QuantumNumbersAttr::bitset_t {
+enum class Spin : bitset_t {
   alpha = 0b000001,
   beta = 0b000010,
   any = 0b000011,  // both bits set so that overlap and union work as expected
@@ -34,28 +34,25 @@ enum class Spin : QuantumNumbersAttr::bitset_t {
 
 // Spin is a scoped enum, hence not implicitly convertible to
 // QuantumNumbersAttr::bitset_t
-static_assert(
-    !std::is_convertible_v<sequant::mbpt::Spin, QuantumNumbersAttr::bitset_t>);
+static_assert(!std::is_convertible_v<sequant::mbpt::Spin, bitset_t>);
 // QuantumNumbersAttr::bitset_t cannot be constructed from Spin
-static_assert(!std::is_constructible_v<QuantumNumbersAttr::bitset_t,
-                                       sequant::mbpt::Spin>);
+static_assert(!std::is_constructible_v<bitset_t, sequant::mbpt::Spin>);
 // but Spin can be cast to QuantumNumbersAttr::bitset_t
-static_assert(meta::is_statically_castable_v<sequant::mbpt::Spin,
-                                             QuantumNumbersAttr::bitset_t>);
+static_assert(meta::is_statically_castable_v<sequant::mbpt::Spin, bitset_t>);
 // Spin cannot be cast to nonsense ...
 static_assert(
     !meta::is_statically_castable_v<sequant::mbpt::Spin, std::string>);
 
 inline Spin operator~(Spin s) {
-  return static_cast<Spin>(~(static_cast<QuantumNumbersAttr::bitset_t>(s)));
+  return static_cast<Spin>(~(static_cast<bitset_t>(s)));
 }
 inline Spin operator|(Spin s1, Spin s2) {
-  return static_cast<Spin>(static_cast<QuantumNumbersAttr::bitset_t>(s1) |
-                           static_cast<QuantumNumbersAttr::bitset_t>(s2));
+  return static_cast<Spin>(static_cast<bitset_t>(s1) |
+                           static_cast<bitset_t>(s2));
 }
 inline Spin operator&(Spin s1, Spin s2) {
-  return static_cast<Spin>(static_cast<QuantumNumbersAttr::bitset_t>(s1) &
-                           static_cast<QuantumNumbersAttr::bitset_t>(s2));
+  return static_cast<Spin>(static_cast<bitset_t>(s1) &
+                           static_cast<bitset_t>(s2));
 }
 
 /// converts QuantumNumbersAttr to Spin
