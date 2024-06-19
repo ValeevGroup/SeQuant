@@ -271,13 +271,13 @@ std::vector<ExprPtr> CC::λ_pt(std::size_t order, size_t rank) {
   return result;
 }
 
-std::vector<sequant::ExprPtr> CC::eom_r(std::size_t K_occ, std::size_t K_uocc) {
+std::vector<sequant::ExprPtr> CC::eom_r(std::size_t nann, std::size_t ncre) {
   assert(!unitary() && "Unitary ansatz is not yet supported");
-  assert(K_occ > 0 || K_uocc > 0 && "Unsupported excitation order");
-  assert(K_occ == K_uocc && "Only EE-EOM-CC is supported for now");
+  assert(nann > 0 || ncre > 0 && "Unsupported excitation order");
+  assert(nann == ncre && "Only EE-EOM-CC is supported for now");
   // TODO: Debug IP and EA EOM-CC
 
-  if (K_occ != K_uocc)
+  if (nann != ncre)
     assert(
         get_default_context().spbasis() != SPBasis::spinfree &&
         "spin-free basis does not yet support non particle-conserving cases");
@@ -286,7 +286,7 @@ std::vector<sequant::ExprPtr> CC::eom_r(std::size_t K_occ, std::size_t K_uocc) {
   auto hbar = sim_tr(H(), 4);
 
   // hbar * R
-  auto hbar_R = hbar * R(K_occ, K_uocc);
+  auto hbar_R = hbar * R(nann, ncre);
 
   // connectivity:
   // default connections + connect R with {h,f,g}
@@ -299,28 +299,28 @@ std::vector<sequant::ExprPtr> CC::eom_r(std::size_t K_occ, std::size_t K_uocc) {
 
   // initialize result vector
   std::vector<ExprPtr> result;
-  auto idx = std::max(K_occ, K_uocc);  // index for populating the result vector
+  auto idx = std::max(nann, ncre);  // index for populating the result vector
   result.resize(idx + 1);
 
   using boost::numeric_cast;
   // start from the highest excitation order, go down to the lowest possible
-  for (auto o = numeric_cast<std::int64_t>(K_occ),
-            u = numeric_cast<std::int64_t>(K_uocc);
-       o > 0 || u > 0; --o, --u) {
-    // project onto <o,u| (i.e., multiply by P(o,u)) and compute VEV
-    result.at(idx) = vac_av(P(o, u) * hbar_R, op_connect);
+  for (auto na = numeric_cast<std::int64_t>(nann),
+            nc = numeric_cast<std::int64_t>(ncre);
+       na > 0 || nc > 0; --na, --nc) {
+    // project with <nann, ncre| (i.e., multiply P(nann, ncre)) and compute VEV
+    result.at(idx) = vac_av(P(na, nc) * hbar_R, op_connect);
     idx--;  // index decrement
   }
 
   return result;
 }
 
-std::vector<sequant::ExprPtr> CC::eom_l(std::size_t K_occ, std::size_t K_uocc) {
+std::vector<sequant::ExprPtr> CC::eom_l(std::size_t nann, std::size_t ncre) {
   assert(!unitary() && "Unitary ansatz is not yet supported");
-  assert(K_occ > 0 || K_uocc > 0 && "Unsupported excitation order");
-  assert(K_occ == K_uocc && "Only EE-EOM-CC is supported for now");
+  assert(nann > 0 || ncre > 0 && "Unsupported excitation order");
+  assert(nann == ncre && "Only EE-EOM-CC is supported for now");
 
-  if (K_occ != K_uocc)
+  if (nann != ncre)
     assert(get_default_context().spbasis() != SPBasis::spinfree &&
            "spin-free basis does not support non particle-conserving cases");
 
@@ -328,7 +328,7 @@ std::vector<sequant::ExprPtr> CC::eom_l(std::size_t K_occ, std::size_t K_uocc) {
   auto hbar = sim_tr(H(), 4);
 
   // L * hbar
-  auto L_hbar = L(K_occ, K_uocc) * hbar;
+  auto L_hbar = L(nann, ncre) * hbar;
 
   // connectivity:
   // default connections + connect H with projectors
@@ -344,16 +344,17 @@ std::vector<sequant::ExprPtr> CC::eom_l(std::size_t K_occ, std::size_t K_uocc) {
 
   // initialize result vector
   std::vector<ExprPtr> result;
-  auto idx = std::max(K_occ, K_uocc);  // index for populating the result vector
+  auto idx = std::max(nann, ncre);  // index for populating the result vector
   result.resize(idx + 1);
 
   using boost::numeric_cast;
   // start from the highest excitation order, go down to the lowest possible
-  for (auto o = numeric_cast<std::int64_t>(K_occ),
-            u = numeric_cast<std::int64_t>(K_uocc);
-       o > 0 || u > 0; --o, --u) {
-    // right project onto |o,u> (i.e., multiply by P(-o, -u)) and compute VEV
-    result.at(idx) = vac_av(L_hbar * P(-o, -u), op_connect);
+  for (auto na = numeric_cast<std::int64_t>(nann),
+            nc = numeric_cast<std::int64_t>(ncre);
+       na > 0 || nc > 0; --na, --nc) {
+    // right project with |nann,ncre> (i.e., multiply P(-nann, -ncre)) and
+    // compute VEV
+    result.at(idx) = vac_av(L_hbar * P(-na, -nc), op_connect);
     idx--;  // index decrement
   }
 
