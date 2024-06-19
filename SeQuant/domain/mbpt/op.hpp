@@ -904,75 +904,61 @@ ExprPtr Λ_(std::size_t K);
 ExprPtr Λ(std::size_t K);
 
 /// @brief Makes generic excitation operator
-/// @param nbra number of operators in bra space
-/// @param nket number of operators in ket space
+/// @param nann number of annihilators
+/// @param ncre number of creators
 /// @param particle_space IndexSpace corresponding to the particle space
 /// @param hole_space IndexSpace corresponding to the hole space
-ExprPtr R_(
-    std::size_t nbra, std::size_t nket,
-    IndexSpace particle_space =
-        get_default_context().index_space_registry()->particle_space(Spin::any),
-    IndexSpace hole_space =
-        get_default_context().index_space_registry()->hole_space(Spin::any));
+ExprPtr R_(std::size_t nann, std::size_t ncre,
+           IndexSpace particle_space = get_particle_space(Spin::any),
+           IndexSpace hole_space = get_hole_space(Spin::any));
 
 /// @brief Makes generic deexcitation operator
-/// @param nbra number of operators in bra space
-/// @param nket number of operators in ket space
+/// @param nann number of annihilators
+/// @param ncre number of creators
 /// @param particle_space IndexSpace corresponding to the particle space
 /// @param hole_space IndexSpace corresponding to the hole space
+ExprPtr L_(std::size_t nann, std::size_t ncre,
+           IndexSpace particle_space = get_particle_space(Spin::any),
+           IndexSpace hole_space = get_hole_space(Spin::any));
 
-ExprPtr L_(
-    std::size_t nbra, std::size_t nket,
-    IndexSpace particle_space =
-        get_default_context().index_space_registry()->particle_space(Spin::any),
-    IndexSpace hole_space =
-        get_default_context().index_space_registry()->hole_space(Spin::any));
-
-/// @brief Makes sum of generic excitation operators
-/// @param nbra number of operators in bra space
-/// @param nket number of operators in ket space
+/// @brief Makes sum of generic excitation operators upto rank \p nann \p ncre
+/// @param nann number of annihililators
+/// @param ncre number of creators
 /// @param particle_space IndexSpace corresponding to the particle space
 /// @param hole_space IndexSpace corresponding to the hole space
-ExprPtr R(
-    std::size_t nbra, std::size_t nket,
-    IndexSpace particle_space =
-        get_default_context().index_space_registry()->particle_space(Spin::any),
-    IndexSpace hole_space =
-        get_default_context().index_space_registry()->hole_space(Spin::any));
+ExprPtr R(std::size_t nann, std::size_t ncre,
+          IndexSpace particle_space = get_particle_space(Spin::any),
+          IndexSpace hole_space = get_hole_space(Spin::any));
 
-/// @brief Makes sum of generic deexcitation operators
-/// @param nbra number of operators in bra space
-/// @param nket number of operators in ket space
+/// @brief Makes sum of generic deexcitation operators upto rank \p nann \p ncre
+/// @param nann number of annihilators
+/// @param ncre number of creators
 /// @param particle_space IndexSpace corresponding to the particle space
 /// @param hole_space IndexSpace corresponding to the hole space
-ExprPtr L(
-    std::size_t nbra, std::size_t nket,
-    IndexSpace particle_space =
-        get_default_context().index_space_registry()->particle_space(Spin::any),
-    IndexSpace hole_space =
-        get_default_context().index_space_registry()->hole_space(Spin::any));
+ExprPtr L(std::size_t nann, std::size_t ncre,
+          IndexSpace particle_space = get_particle_space(Spin::any),
+          IndexSpace hole_space = get_hole_space(Spin::any));
 
 // clang-format off
-/// makes projector onto excited bra (if \p Kp > 0 && \p Kh > 0) or ket (if \p Kp < 0 && \p Kh <0) manifold
-/// @param Kp if <0, annihilates this many particles, else creates this many
-/// @param Kh if <0, annihilates this many holes, else creates this many
-/// (default is to set \p Kh to \p Kp)
+/// makes projector onto excited bra (if \p np > 0 && \p nh > 0) or ket (if \p np < 0 && \p nh <0) manifold
+/// @param nh number operators in hole space. If \p nh > 0 creators, else annihilators
+/// @param np number of operators in particle space. If \p np > 0 creators, else annihilators
+/// (default is to set \p nh to \p np)
 /// @note if using spin-free basis, only supports particle-symmetric operators `K = Kh = Kp`, returns `S(-K)`
-/// else supports particle non-conserving operators and returns `A(-Kp, -Kh)`
+/// else supports particle non-conserving operators and returns `A(-nh, -np)`
 // clang-format on
-ExprPtr P(std::int64_t Kp,
-          std::int64_t Kh = std::numeric_limits<std::int64_t>::max());
+ExprPtr P(std::int64_t nh,
+          std::int64_t np = std::numeric_limits<std::int64_t>::max());
 
 // clang-format off
-/// @brief makes generic bra/ket-antisymmetric excitation (if \p Kp > 0 && \p Kh > 0)
-/// or deexcitation (if \p Kp < 0 && \p Kh < 0) operator
-/// @param Kp if <0, annihilates this many particles, else creates this many
-/// @param Kh if <0, annihilates this many holes, else creates this many
-/// (default is to set \p Kh to \p Kp)
+/// @brief makes generic bra/ket-antisymmetric excitation (if \p nh > 0 && \p np > 0) or deexcitation (if \p nh < 0 && \p np < 0) operator
+/// @param nh number operators in hole space. If \p nh < 0 creators, else annihilators
+/// @param np number of operators in particle space. If \p np < 0 creators, else annihilators
+/// (default is to set \p np to \p nh)
 /// @note supports particle non-conserving operators
 // clang-format on
-ExprPtr A(std::int64_t Kp,
-          std::int64_t Kh = std::numeric_limits<std::int64_t>::max());
+ExprPtr A(std::int64_t nh,
+          std::int64_t np = std::numeric_limits<std::int64_t>::max());
 
 /// @brief makes generic particle-symmetric excitation (if \p K > 0) or
 /// deexcitation (if \p K < 0) operator of rank `|K|`

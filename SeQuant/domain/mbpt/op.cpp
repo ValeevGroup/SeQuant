@@ -819,30 +819,30 @@ ExprPtr F(bool use_f_tensor, IndexSpace occupied_density) {
   }
 }
 
-ExprPtr A(std::int64_t Kp, std::int64_t Kh) {
+ExprPtr A(std::int64_t nh, std::int64_t np) {
   // particle conserving
-  if (Kh == std::numeric_limits<std::int64_t>::max()) Kh = Kp;
-  assert(!(Kh == 0 && Kp == 0));
+  if (np == std::numeric_limits<std::int64_t>::max()) np = nh;
+  assert(!(nh == 0 && np == 0));
   // if they are not zero, Kh and Kp should have the same sign
-  if (Kp != 0 && Kh != 0) {
-    assert((Kh > 0 && Kp > 0) || (Kh < 0 && Kp < 0));
+  if (nh != 0 && np != 0) {
+    assert((nh > 0 && np > 0) || (nh < 0 && np < 0));
   }
 
   auto isr = get_default_context().index_space_registry();
   auto particle_space = isr->particle_space(Spin::any);
   auto hole_space = isr->hole_space(Spin::any);
   return ex<op_t>([]() -> std::wstring_view { return L"A"; },
-                  [=]() -> ExprPtr { return tensor::A(Kp, Kh); },
+                  [=]() -> ExprPtr { return tensor::A(nh, np); },
                   [=](qnc_t& qns) {
-                    const std::size_t abs_Kp = std::abs(Kp);
-                    const std::size_t abs_Kh = std::abs(Kh);
-                    if (Kp < 0) {
+                    const std::size_t abs_nh = std::abs(nh);
+                    const std::size_t abs_np = std::abs(np);
+                    if (np < 0) {
                       qnc_t op_qnc_t = generic_deexcitation_qns(
-                          abs_Kp, abs_Kh, particle_space, hole_space);
+                          abs_np, abs_nh, particle_space, hole_space);
                       qns = combine(op_qnc_t, qns);
                     } else {
                       qnc_t op_qnc_t = generic_excitation_qns(
-                          abs_Kp, abs_Kh, particle_space, hole_space);
+                          abs_np, abs_nh, particle_space, hole_space);
                       qns = combine(op_qnc_t, qns);
                     }
                   });
@@ -864,17 +864,17 @@ ExprPtr S(std::int64_t K) {
                   });
 }
 
-ExprPtr P(std::int64_t Kp, std::int64_t Kh) {
-  if (Kh == std::numeric_limits<std::int64_t>::max()) Kh = Kp;
+ExprPtr P(std::int64_t nh, std::int64_t np) {
+  if (np == std::numeric_limits<std::int64_t>::max()) np = nh;
   if (get_default_context().spbasis() == SPBasis::spinfree) {
-    assert(Kp == Kh &&
+    assert(nh == np &&
            "Only particle number conserving cases are supported with spinfree "
            "basis for now");
-    const auto K = Kh;  // K = Kp = Kh
+    const auto K = np;  // K = np = nh
     return S(-K);
   } else {
     assert(get_default_context().spbasis() == SPBasis::spinorbital);
-    return A(-Kp, -Kh);
+    return A(-nh, -np);
   }
 }
 
@@ -923,58 +923,62 @@ ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1) {
   return result;
 }
 
-ExprPtr R_(std::size_t nbra, std::size_t nket, IndexSpace particle_space,
+ExprPtr R_(std::size_t nann, std::size_t ncre, IndexSpace particle_space,
            IndexSpace hole_space) {
   return ex<op_t>(
       []() -> std::wstring_view { return optype2label.at(OpType::R); },
       [=]() -> ExprPtr {
-        return tensor::R_(nket, nbra, particle_space, hole_space);
+        return tensor::R_(nann, ncre, particle_space, hole_space);
       },
       [=](qnc_t& qns) {
+        // ex -> creators in particle_space, annihilators in hole_space
         qns = combine(
-            generic_excitation_qns(nket, nbra, particle_space, hole_space),
+            generic_excitation_qns(/*particle_rank*/ ncre, /*hole_rank*/ nann,
+                                   particle_space, hole_space),
             qns);
       });
 }
 
-ExprPtr L_(std::size_t nbra, std::size_t nket, IndexSpace particle_space,
+ExprPtr L_(std::size_t nann, std::size_t ncre, IndexSpace particle_space,
            IndexSpace hole_space) {
   return ex<op_t>(
       []() -> std::wstring_view { return optype2label.at(OpType::L); },
       [=]() -> ExprPtr {
-        return tensor::L_(nbra, nket, particle_space, hole_space);
+        return tensor::L_(nann, ncre, particle_space, hole_space);
       },
       [=](qnc_t& qns) {
-        qns = combine(
-            generic_deexcitation_qns(nbra, nket, particle_space, hole_space),
-            qns);
+        // deex -> creators in hole_space, annihilators in particle_space
+        qns = combine(generic_deexcitation_qns(
+                          /*particle_rank*/ nann, /*hole_rank*/ ncre,
+                          particle_space, hole_space),
+                      qns);
       });
 }
 
-ExprPtr R(std::size_t nbra, std::size_t nket, IndexSpace particle_space,
+ExprPtr R(std::size_t nann, std::size_t ncre, IndexSpace particle_space,
           IndexSpace hole_space) {
   using boost::numeric_cast;
-  assert(nbra > 0 || nket > 0);
+  assert(nann > 0 || ncre > 0);
   ExprPtr result;
 
-  for (auto nb = numeric_cast<std::int64_t>(nbra),
-            nk = numeric_cast<std::int64_t>(nket);
-       nb > 0 || nk > 0; --nb, --nk) {
-    result += R_(nb, nk, particle_space, hole_space);
+  for (auto na = numeric_cast<std::int64_t>(nann),
+            nc = numeric_cast<std::int64_t>(ncre);
+       na > 0 || nc > 0; --na, --nc) {
+    result += R_(na, nc, particle_space, hole_space);
   }
   return result;
 }
 
-ExprPtr L(std::size_t nbra, std::size_t nket, IndexSpace particle_space,
+ExprPtr L(std::size_t nann, std::size_t ncre, IndexSpace particle_space,
           IndexSpace hole_space) {
   using boost::numeric_cast;
-  assert(nbra > 0 || nket > 0);
+  assert(nann > 0 || ncre > 0);
   ExprPtr result;
 
-  for (auto nb = numeric_cast<std::int64_t>(nbra),
-            nk = numeric_cast<std::int64_t>(nket);
-       nb > 0 || nk > 0; --nb, --nk) {
-    result += L_(nb, nk, particle_space, hole_space);
+  for (auto na = numeric_cast<std::int64_t>(nann),
+            nc = numeric_cast<std::int64_t>(ncre);
+       na > 0 || nc > 0; --na, --nc) {
+    result += L_(na, nc, particle_space, hole_space);
   }
   return result;
 }
