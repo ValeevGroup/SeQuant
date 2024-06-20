@@ -109,6 +109,28 @@ class GenerationVisitor {
     }
   }
 
+  void drop(const Expr &expr) {
+    if (expr.is<Tensor>()) {
+      const Tensor &tensor = expr.as<Tensor>();
+
+      assert(m_tensorUses[tensor] > 0);
+      m_tensorUses[tensor]--;
+
+      if (m_tensorUses[tensor] == 0) {
+        m_generator.unload(tensor, m_ctx);
+      }
+    } else if (expr.is<Variable>()) {
+      const Variable &variable = expr.as<Variable>();
+
+      assert(m_variableUses[variable] > 0);
+      m_variableUses[variable]--;
+
+      if (m_variableUses[variable] == 0) {
+        m_generator.unload(variable, m_ctx);
+      }
+    }
+  }
+
   void process_computation(const EvalNode<NodeData> &node) {
     assert(node->op_type() != EvalOp::Id);
     assert(!node.leaf());
@@ -121,10 +143,29 @@ class GenerationVisitor {
             ex<Product>(ExprPtrList{node.left()->expr(), node.right()->expr()},
                         Product::Flatten::No);
         break;
-      case EvalOp::Sum:
-        expression =
-            ex<Sum>(ExprPtrList{node.left()->expr(), node.right()->expr()});
+      case EvalOp::Sum: {
+        const bool leftSame = node.left()->expr() == node->expr();
+        const bool rightSame = node.right()->expr() == node->expr();
+        if (leftSame && rightSame) {
+          // This is of the form S = S + S
+          // which should only happen in case the preprocessing step has
+          // flushed down the summation to lower nodes, turning the current
+          // node into a no-op (only needed to keep the binary tree connected).
+          return;
+        } else if (leftSame) {
+          // This is of the form S = S + A
+          // However, we always imply += semantics and therefore we reinterpret
+          // this as S += A meaning that the actual expression is only A
+          expression = node.right()->expr();
+        } else if (rightSame) {
+          // See above
+          expression = node.left()->expr();
+        } else {
+          expression =
+              ex<Sum>(ExprPtrList{node.left()->expr(), node.right()->expr()});
+        }
         break;
+      }
       case EvalOp::Id:
         throw std::runtime_error(
             "Computation must not consist of an ID operation");
@@ -143,12 +184,21 @@ class GenerationVisitor {
 
           if (current->is<Variable>()) {
             variables.push_back(current->as<Variable>());
-            m_generator.load(variables.back(), m_ctx);
+            if (m_variableUses[variables.back()] == 0) {
+              m_generator.load(variables.back(), m_ctx);
+            }
+
+            m_variableUses[variables.back()]++;
           }
         }
       } else if (iter->second->template is<Variable>()) {
         variables.push_back(iter->second->template as<Variable>());
-        m_generator.load(variables.back(), m_ctx);
+
+        if (m_variableUses[variables.back()] == 0) {
+          m_generator.load(variables.back(), m_ctx);
+        }
+
+        m_variableUses[variables.back()]++;
       }
 
       expression = iter->second * expression;
@@ -165,28 +215,12 @@ class GenerationVisitor {
 
     // Drop loaded variables
     for (auto iter = variables.rbegin(); iter != variables.rend(); ++iter) {
-      m_generator.unload(*iter, m_ctx);
+      drop(*iter);
     }
 
-    // Drop used leaf tensors
-    assert(node.left()->is_tensor());
-    assert(node.right()->is_tensor());
-    const Tensor &lhs = node.left()->as_tensor();
-    const Tensor &rhs = node.right()->as_tensor();
-
-    assert(m_tensorUses[rhs] > 0);
-    m_tensorUses[rhs]--;
-
-    if (m_tensorUses[rhs] == 0) {
-      m_generator.unload(rhs, m_ctx);
-    }
-
-    assert(m_tensorUses[lhs] > 0);
-    m_tensorUses[lhs]--;
-
-    if (m_tensorUses[lhs] == 0) {
-      m_generator.unload(lhs, m_ctx);
-    }
+    // Drop used leaf elements
+    drop(*node.right()->expr());
+    drop(*node.left()->expr());
   }
 
  private:
@@ -207,6 +241,8 @@ struct PreprocessResult {
 
   std::map<Tensor, std::size_t, TensorBlockCompare> tensorReferences;
   std::map<Variable, bool> usedVariables;
+  std::set<Tensor, TensorBlockCompare> summedTensors;
+  std::set<Variable> summedVariables;
 };
 
 template <typename T>
@@ -277,7 +313,14 @@ bool prune_scalar(EvalNode<T> &node, EvalNode<T> &parent,
 template <typename T>
 void preprocess(EvalNode<T> &tree, PreprocessResult &result, ExportContext &ctx,
                 EvalNode<T> *parent = nullptr) {
-  while (!tree.leaf() && prune_scalar(tree.left(), tree, result)) {
+  // Pruning can only be done if
+  // - tree is not a leaf (if we prune that, the tree has vanished)
+  // - pruning the tree does NOT turn it into a single-leaf tree
+  // - if it does turn it into a leaf, then parent must be non-zero
+  //   (so we can store the scalar factor on that)
+  while (!tree.leaf() &&
+         (parent || !tree.left().leaf() || !tree.right().leaf()) &&
+         prune_scalar(tree.left(), tree, result)) {
     // In case the pruning led to tree becoming a leaf, we have to move the
     // pruned scalar factor out to its parent in order to be properly accounted
     // for (as leafs only get loaded and never computed)
@@ -289,7 +332,9 @@ void preprocess(EvalNode<T> &tree, PreprocessResult &result, ExportContext &ctx,
       result.scalarFactors[(*parent)->id()] = std::move(factor);
     }
   }
-  while (!tree.leaf() && prune_scalar(tree.right(), tree, result)) {
+  while (!tree.leaf() &&
+         (parent || !tree.left().leaf() || !tree.right().leaf()) &&
+         prune_scalar(tree.right(), tree, result)) {
     if (auto iter = result.scalarFactors.find(tree->id());
         iter != result.scalarFactors.end() && tree.leaf()) {
       assert(parent);
@@ -312,14 +357,16 @@ void preprocess(EvalNode<T> &tree, PreprocessResult &result, ExportContext &ctx,
       ctx.setLoadStrategy(tensor, LoadStrategy::Load);
       ctx.setZeroStrategy(tensor, ZeroStrategy::NeverZero);
     } else {
-      auto iter = result.tensorReferences.find(tensor);
+      const auto iter = result.tensorReferences.find(tensor);
+      const bool isSumTensor =
+          result.summedTensors.find(tensor) != result.summedTensors.end();
 
-      if (iter != result.tensorReferences.end()) {
+      if (!isSumTensor && iter != result.tensorReferences.end()) {
         assert(!tree.leaf());
         if (iter->second > 0) {
-          // This tensor is already in use -> can't use it as a result tensor as
-          // that would overwrite the currently used instance -> need to rename
-          // the result tensor
+          // This tensor is already in use -> can't use it as a result tensor
+          // as that would overwrite the currently used instance -> need to
+          // rename the result tensor
           tree->set_expr(ex<Tensor>(
               std::wstring(tensor.label()) + std::to_wstring(renameCounter++),
               tensor.bra(), tensor.ket(), tensor.symmetry(),
@@ -347,7 +394,10 @@ void preprocess(EvalNode<T> &tree, PreprocessResult &result, ExportContext &ctx,
       tree->set_expr(variable.shared_from_this());
     }
 
-    if (result.usedVariables[variable]) {
+    const bool isSummedVariable =
+        result.summedVariables.find(variable) != result.summedVariables.end();
+
+    if (!isSummedVariable && result.usedVariables[variable]) {
       assert(!tree.leaf());
 
       tree->set_expr(ex<Variable>(std::wstring(variable.label()) +
@@ -364,6 +414,29 @@ void preprocess(EvalNode<T> &tree, PreprocessResult &result, ExportContext &ctx,
 
   if (tree.leaf()) {
     return;
+  }
+
+  if (tree->op_type() == EvalOp::Sum) {
+    // We don't want to explicitly encode addition of non-leaf
+    // nodes in the tree as that could lead to unnecessary intermediates
+    // being created. Instead, we flush the top-most result of the
+    // addition downwards, making use of the += semantic that is assumed
+    // for all computations.
+    if (!tree.left().leaf()) {
+      tree.left()->set_expr(tree->expr());
+    }
+    if (!tree.right().leaf()) {
+      tree.right()->set_expr(tree->expr());
+    }
+
+    if (tree->is_tensor()) {
+      result.summedTensors.insert(tree->as_tensor());
+    } else if (tree->is_variable()) {
+      result.summedVariables.insert(tree->as_variable());
+    }
+
+    // TODO: mark fully flushed results explicitly as only existing for
+    // tree connectivity reasons.
   }
 
   if (tree.left().size() < tree.right().size()) {

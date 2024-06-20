@@ -140,6 +140,27 @@ TEST_CASE("Export capabilities", "[exports]") {
         REQUIRE(generator.get_generated_code() == expected);
       }
     }
+    SECTION("scalar * tensor") {
+      ExprPtr expr = parse_expr(L"42 * A{a1;i1}");
+      auto tree = eval_node<EvalExpr>(expr);
+
+      export_expression(tree, generator);
+
+      std::string expected =
+          "Declare index i_1\n"
+          "Declare index a_1\n"
+          "\n"
+          "Declare tensor A[a_1, i_1]\n"
+          "Declare tensor I[a_1, i_1]\n"
+          "\n"
+          "Create I[a_1, i_1] and initialize to zero\n"
+          "Load A[a_1, i_1]\n"
+          "Compute I[a_1, i_1] += 42 A[a_1, i_1]\n"
+          "Unload A[a_1, i_1]\n"
+          "Persist I[a_1, i_1]\n";
+
+      REQUIRE(generator.get_generated_code() == expected);
+    }
     SECTION("constant scalar factor") {
       ExprPtr expr = parse_expr(L"5 * A{a2;i2} B{i2;a1}");
       auto tree = eval_node<EvalExpr>(expr);
@@ -376,7 +397,7 @@ TEST_CASE("Export capabilities", "[exports]") {
       }
     }
     SECTION("sum") {
-      SECTION("trivial") {
+      SECTION("unary + unary") {
         auto tree = eval_node<EvalExpr>(parse_expr(L"A{a1;i1} + B{a1;i1}"));
 
         export_expression(tree, generator);
@@ -399,9 +420,70 @@ TEST_CASE("Export capabilities", "[exports]") {
 
         REQUIRE(generator.get_generated_code() == expected);
       }
-      SECTION("sum of binaries") {
+      SECTION("binary + binary") {
         auto tree = eval_node<EvalExpr>(
             parse_expr(L"A{a1;i1} B{a2;i2} + A{a1;i1} B{a2;i2}"));
+
+        export_expression(tree, generator);
+
+        std::string expected =
+            "Declare index i_1\n"
+            "Declare index i_2\n"
+            "Declare index a_1\n"
+            "Declare index a_2\n"
+            "\n"
+            "Declare tensor A[a_1, i_1]\n"
+            "Declare tensor B[a_2, i_2]\n"
+            "Declare tensor I[a_2, a_1, i_2, i_1]\n"
+            "\n"
+            "Create I[a_2, a_1, i_2, i_1] and initialize to zero\n"
+            "Load A[a_1, i_1]\n"
+            "Load B[a_2, i_2]\n"
+            "Compute I[a_2, a_1, i_2, i_1] += A[a_1, i_1] B[a_2, i_2]\n"
+            "Unload B[a_2, i_2]\n"
+            "Unload A[a_1, i_1]\n"
+            // TODO: there is some unload/load pairs that could be removed
+            "Load A[a_1, i_1]\n"
+            "Load B[a_2, i_2]\n"
+            "Compute I[a_2, a_1, i_2, i_1] += A[a_1, i_1] B[a_2, i_2]\n"
+            "Unload B[a_2, i_2]\n"
+            "Unload A[a_1, i_1]\n"
+            "Persist I[a_2, a_1, i_2, i_1]\n";
+
+        REQUIRE(generator.get_generated_code() == expected);
+      }
+      SECTION("binary + unary") {
+        auto tree =
+            eval_node<EvalExpr>(parse_expr(L"A{a1;i2} B{i2;i1} + C{a1;i1}"));
+
+        export_expression(tree, generator);
+
+        std::string expected =
+            "Declare index i_1\n"
+            "Declare index i_2\n"
+            "Declare index a_1\n"
+            "\n"
+            "Declare tensor A[a_1, i_2]\n"
+            "Declare tensor B[i_2, i_1]\n"
+            "Declare tensor C[a_1, i_1]\n"
+            "Declare tensor I[a_1, i_1]\n"
+            "\n"
+            "Create I[a_1, i_1] and initialize to zero\n"
+            "Load A[a_1, i_2]\n"
+            "Load B[i_2, i_1]\n"
+            "Compute I[a_1, i_1] += A[a_1, i_2] B[i_2, i_1]\n"
+            "Unload B[i_2, i_1]\n"
+            "Unload A[a_1, i_2]\n"
+            "Load C[a_1, i_1]\n"
+            "Compute I[a_1, i_1] += C[a_1, i_1]\n"
+            "Unload C[a_1, i_1]\n"
+            "Persist I[a_1, i_1]\n";
+
+        REQUIRE(generator.get_generated_code() == expected);
+      }
+      SECTION("unary + unary + unary") {
+        auto tree =
+            eval_node<EvalExpr>(parse_expr(L"A{a1;i1} + B{a1;i1} + C{a1;i1}"));
 
         export_expression(tree, generator);
 
@@ -410,54 +492,27 @@ TEST_CASE("Export capabilities", "[exports]") {
             "Declare index a_1\n"
             "\n"
             "Declare tensor A[a_1, i_1]\n"
-            "Declare tensor B[a_2, i_2]\n"
-            "Declare tensor I[a_1, a_2, i_1, i_3]\n"
+            "Declare tensor B[a_1, i_1]\n"
+            "Declare tensor C[a_1, i_1]\n"
+            "Declare tensor I[a_1, i_1]\n"
             "\n"
-            "Create I[a_1, a_2, i_1, i_2] and initialize to zero\n"
+            "Create I[a_1, i_1] and initialize to zero\n"
             "Load A[a_1, i_1]\n"
-            "Load B[a_2, i_2]\n"
-            "Compute I[a_1, a_2, i_1, i_2] += A[a_1, i_1] B[a_2, i_2]\n"
-            "Unload B[a_2, i_2]\n"
+            "Load B[a_1, i_1]\n"
+            // TODO: Doing I += A and I += B separately would reduce
+            // the amount of tensors that have to be loaded simultaneously
+            "Compute I[a_1, i_1] += A[a_1, i_1] + B[a_1, i_1]\n"
+            "Unload B[a_1, i_1]\n"
             "Unload A[a_1, i_1]\n"
-            // TODO: there is some unload/load pairs that could be removed
-            "Load A[a_1, i_1]\n"
-            "Load B[a_2, i_2]\n"
-            "Compute I[a_1, a_2, i_1, i_2] += A[a_1, i_1] B[a_2, i_2]\n"
-            "Unload B[a_2, i_2]\n"
-            "Unload A[a_1, i_1]\n"
-            "Persist I[a_1, a_2, i_1, i_2]\n";
+            "Load C[a_1, i_1]\n"
+            "Compute I[a_1, i_1] += C[a_1, i_1]\n"
+            "Unload C[a_1, i_1]\n"
+            "Persist I[a_1, i_1]\n";
 
         REQUIRE(generator.get_generated_code() == expected);
       }
     }
   }
-
-  // SECTION("CCD") {
-  //  auto residual = parse_expr(
-  //      L"+ 1/4 A{i1,i2;e1,e2} g{e1,e2;i1,i2} - 1/2 A{i1,i2;e1,e2} f{i3;i2} "
-  //      L"T2{e1,e2;i1,i3} + 1/2 A{i1,i2;e1,e2} f{e2;e3} T2{e1,e3;i1,i2} + 1/2
-  //      " L"1/4 A{i1,i2;e1,e2} g{i3,i4;i1,i2} T2{e1,e2;i3,i4} + A{i1,i2;e1,e2}
-  //      " L"g{i3,e2;e3,i2} T2{e1,e3;i1,i3} + 1/2 1/4 A{i1,i2;e1,e2} "
-  //      L"g{e1,e2;e3,e4} T2{e3,e4;i1,i2} + 1/2 1/2 A{i1,i2;e1,e2} "
-  //      L"g{i3,i4;e3,e4} T2{e3,e4;i2,i3} T2{e1,e2;i1,i4} + 1/4 1/4 "
-  //      L"A{i1,i2;e1,e2} g{i3,i4;e3,e4} T2{e3,e4;i1,i2} T2{e1,e2;i3,i4} + 1/2
-  //      " L"1/2 A{i1,i2;e1,e2} g{i3,i4;e3,e4} T2{e2,e3;i3,i4} T2{e1,e4;i1,i2}
-  //      + " L"1/2 A{i1,i2;e1,e2} g{i3,i4;e3,e4} T2{e1,e3;i1,i3}
-  //      T2{e2,e4;i2,i4}");
-
-  //  residual = simplify(closed_shell_CC_spintrace_rigorous(residual));
-
-  //  residual = optimize(residual);
-
-  //  auto tree = eval_node<EvalExpr>(residual);
-
-  //  TextGenerator generator;
-  //  TextGeneratorContext context;
-  //  export_expression(tree, generator, context);
-
-  //  std::cout << "Generated code for the CCD residual:\n" <<
-  //  generator.get_generated_code() << std::endl;
-  //}
 
   SECTION("remap_integrals") {
     using namespace sequant::itf::detail;
