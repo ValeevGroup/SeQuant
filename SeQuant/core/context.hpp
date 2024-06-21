@@ -187,7 +187,7 @@ set_scoped_default_context(const Context& ctx);
 
 ///@}
 
-/// \name Particle and Hole space accessors
+/// \name particle, hole and complete space accessors
 /// Syntax sugar for accessing particle and hole spaces in the current context
 
 ///@{
