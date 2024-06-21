@@ -28,7 +28,7 @@ class CC {
   /// @brief constructs CC engine
   /// @param N coupled cluster excitation rank
   /// @param ansatz the type of CC ansatz
-  CC(std::size_t N, Ansatz ansatz = Ansatz::T);
+  CC(size_t N, Ansatz ansatz = Ansatz::T);
 
   /// @return the type of ansatz
   Ansatz ansatz() const;
@@ -41,7 +41,7 @@ class CC {
   /// @param r order of truncation
   /// @pre expr should be composed of mbpt::Operators
   /// @return transformed expression
-  ExprPtr sim_tr(ExprPtr expr, std::size_t r);
+  ExprPtr sim_tr(ExprPtr expr, size_t r);
 
   /// @brief derives t amplitude equations, \f$ \langle P|\bar{H}|0 \rangle = 0
   /// \f$
@@ -57,10 +57,9 @@ class CC {
   /// equation
   ///   \f$ \langle k |\bar{H}|0 \rangle = 0 \f$ for `k` in the [\p pmin,\p
   ///   pmax] range, and null value otherwise
-  [[nodiscard]] std::vector<sequant::ExprPtr> t(
-      std::size_t commutator_rank = 4,
-      std::size_t pmax = std::numeric_limits<std::size_t>::max(),
-      std::size_t pmin = 0);
+  [[nodiscard]] std::vector<ExprPtr> t(
+      size_t commutator_rank = 4,
+      size_t pmax = std::numeric_limits<size_t>::max(), size_t pmin = 0);
 
   /// @brief derives λ amplitude equations,
   /// \f$ \langle 0| (1 + \hat{\Lambda}) \frac{d \bar{H}}{d \hat{T}_P} |0
@@ -73,8 +72,7 @@ class CC {
   ///   \f$ \langle 0| (1 + \hat{\Lambda}) \frac{d \bar{H}}{d \hat{T}_k} |0
   ///   \rangle = 0 \f$ for `k` in
   /// the [1,N] range; element 0 is always null
-  [[nodiscard]] std::vector<sequant::ExprPtr> λ(
-      std::size_t commutator_rank = 4);
+  [[nodiscard]] std::vector<ExprPtr> λ(size_t commutator_rank = 4);
 
   // clang-format off
   /// @brief derives perturbed t amplitude equations
@@ -83,8 +81,7 @@ class CC {
   /// @pre `rank==1 && order==1`, only first order perturbation and one-body perturbation operator is supported now
   /// @return std::vector of perturbed t amplitude equations
   // clang-format on
-  [[nodiscard]] std::vector<sequant::ExprPtr> t_pt(std::size_t order = 1,
-                                                   std::size_t rank = 1);
+  [[nodiscard]] std::vector<ExprPtr> t_pt(size_t order = 1, size_t rank = 1);
 
   // clang-format off
   /// @brief derives perturbed λ amplitude equations
@@ -93,23 +90,22 @@ class CC {
   /// @pre `rank==1 && order==1`, only first order perturbation and one-body perturbation operator is supported now
   /// @return std::vector of perturbed λ amplitude equations
   // clang-format on
-  [[nodiscard]] std::vector<sequant::ExprPtr> λ_pt(std::size_t order = 1,
-                                                   std::size_t rank = 1);
+  [[nodiscard]] std::vector<ExprPtr> λ_pt(size_t order = 1, size_t rank = 1);
 
   /// @brief derives right-side sigma equations for EOM-CC
   /// @param nann number of annihilators in R operator
   /// @param ncre number of creators in R operator
   /// @return vector of right side sigma equations, element 0 is always null
-  [[nodiscard]] std::vector<ExprPtr> eom_r(std::size_t nann, std::size_t ncre);
+  [[nodiscard]] std::vector<ExprPtr> eom_r(size_t nann, size_t ncre);
 
   /// @brief derives left-side sigma equations for EOM-CC
   /// @param nann number of annihilators in R operator
   /// @param ncre number of creators in R operator
   /// @return vector of left side sigma equations, element 0 is always null
-  [[nodiscard]] std::vector<ExprPtr> eom_l(std::size_t nann, std::size_t ncre);
+  [[nodiscard]] std::vector<ExprPtr> eom_l(size_t nann, size_t ncre);
 
  private:
-  std::size_t N;
+  size_t N;
   Ansatz ansatz_ = Ansatz::T;
 };  // class CC
 
