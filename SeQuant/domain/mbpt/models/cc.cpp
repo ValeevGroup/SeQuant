@@ -307,8 +307,8 @@ std::vector<sequant::ExprPtr> CC::eom_r(std::size_t nann, std::size_t ncre) {
   for (auto na = numeric_cast<std::int64_t>(nann),
             nc = numeric_cast<std::int64_t>(ncre);
        na > 0 || nc > 0; --na, --nc) {
-    // project with <nann, ncre| (i.e., multiply P(nann, ncre)) and compute VEV
-    result.at(idx) = vac_av(P(na, nc) * hbar_R, op_connect);
+    // project with <ncre, nann| (i.e., multiply P(ncre, nann)) and compute VEV
+    result.at(idx) = vac_av(P(nc, na) * hbar_R, op_connect);
     idx--;  // index decrement
   }
 
@@ -352,9 +352,9 @@ std::vector<sequant::ExprPtr> CC::eom_l(std::size_t nann, std::size_t ncre) {
   for (auto na = numeric_cast<std::int64_t>(nann),
             nc = numeric_cast<std::int64_t>(ncre);
        na > 0 || nc > 0; --na, --nc) {
-    // right project with |nann,ncre> (i.e., multiply P(-nann, -ncre)) and
+    // right project with |ncre,nann> (i.e., multiply P(-ncre, -nann)) and
     // compute VEV
-    result.at(idx) = vac_av(L_hbar * P(-na, -nc), op_connect);
+    result.at(idx) = vac_av(L_hbar * P(-nc, -na), op_connect);
     idx--;  // index decrement
   }
 
