@@ -305,9 +305,9 @@ TEST_CASE("Export capabilities", "[exports]") {
             "Declare tensor E[i_2, a_3]\n"
             "Declare tensor I[i_1, i_2]\n"
             "Declare tensor I[i_1, a_3]\n"
-            "Declare tensor I[i_1, i_3, a_3, i_4]\n"
+            "Declare tensor I[i_1, i_3, i_4, a_3]\n"
             "\n"
-            "Create I[i_1, i_3, a_3, i_4] and initialize to zero\n"
+            "Create I[i_1, i_3, i_4, a_3] and initialize to zero\n"
             "Create I[i_1, a_3] and initialize to zero\n"
             "Create I[i_1, i_2] and initialize to zero\n"
             "Load A[a_1, i_2]\n"
@@ -327,10 +327,10 @@ TEST_CASE("Export capabilities", "[exports]") {
             "Compute I[i_3, i_4] += C[a_2, i_4] D[i_3, a_2]\n"
             "Unload D[i_3, a_2]\n"
             "Unload C[a_2, i_4]\n"
-            "Compute I[i_1, i_3, a_3, i_4] += I[i_1, a_3] I[i_3, i_4]\n"
+            "Compute I[i_1, i_3, i_4, a_3] += I[i_1, a_3] I[i_3, i_4]\n"
             "Unload I[i_3, i_4]\n"
             "Unload I[i_1, a_3]\n"
-            "Persist I[i_1, i_3, a_3, i_4]\n";
+            "Persist I[i_1, i_3, i_4, a_3]\n";
 
         REQUIRE(generator.get_generated_code() == expected);
       }
@@ -434,21 +434,21 @@ TEST_CASE("Export capabilities", "[exports]") {
             "\n"
             "Declare tensor A[a_1, i_1]\n"
             "Declare tensor B[a_2, i_2]\n"
-            "Declare tensor I[a_2, a_1, i_2, i_1]\n"
+            "Declare tensor I[a_1, a_2, i_1, i_2]\n"
             "\n"
-            "Create I[a_2, a_1, i_2, i_1] and initialize to zero\n"
+            "Create I[a_1, a_2, i_1, i_2] and initialize to zero\n"
             "Load A[a_1, i_1]\n"
             "Load B[a_2, i_2]\n"
-            "Compute I[a_2, a_1, i_2, i_1] += A[a_1, i_1] B[a_2, i_2]\n"
+            "Compute I[a_1, a_2, i_1, i_2] += A[a_1, i_1] B[a_2, i_2]\n"
             "Unload B[a_2, i_2]\n"
             "Unload A[a_1, i_1]\n"
             // TODO: there is some unload/load pairs that could be removed
             "Load A[a_1, i_1]\n"
             "Load B[a_2, i_2]\n"
-            "Compute I[a_2, a_1, i_2, i_1] += A[a_1, i_1] B[a_2, i_2]\n"
+            "Compute I[a_1, a_2, i_1, i_2] += A[a_1, i_1] B[a_2, i_2]\n"
             "Unload B[a_2, i_2]\n"
             "Unload A[a_1, i_1]\n"
-            "Persist I[a_2, a_1, i_2, i_1]\n";
+            "Persist I[a_1, a_2, i_1, i_2]\n";
 
         REQUIRE(generator.get_generated_code() == expected);
       }

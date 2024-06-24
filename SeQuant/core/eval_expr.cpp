@@ -271,24 +271,32 @@ target_braket(Tensor const& t1, Tensor const& t2) noexcept {
       ranges::to<idx_container>();
 
   // combine free bra indices
-  const auto result_bra = concat(t1.bra() | filter([&](const auto& idx) {
-                                   return !contains(contracted_indices, idx);
-                                 }),
-                                 t2.bra() | filter([&](const auto& idx) {
-                                   return !contains(contracted_indices, idx);
-                                 })) |
-                          ranges::to<idx_container>();
+  auto result_bra = concat(t1.bra() | filter([&](const auto& idx) {
+                             return !contains(contracted_indices, idx);
+                           }),
+                           t2.bra() | filter([&](const auto& idx) {
+                             return !contains(contracted_indices, idx);
+                           })) |
+                    ranges::to<idx_container>();
 
   // combine free ket indices
-  const auto result_ket = concat(t1.ket() | filter([&](const auto& idx) {
-                                   return !contains(contracted_indices, idx);
-                                 }),
-                                 t2.ket() | filter([&](const auto& idx) {
-                                   return !contains(contracted_indices, idx);
-                                 })) |
-                          ranges::to<idx_container>();
+  auto result_ket = concat(t1.ket() | filter([&](const auto& idx) {
+                             return !contains(contracted_indices, idx);
+                           }),
+                           t2.ket() | filter([&](const auto& idx) {
+                             return !contains(contracted_indices, idx);
+                           })) |
+                    ranges::to<idx_container>();
 
-  return std::make_pair(result_bra, result_ket);
+  // We are generating an index sequence for an intermediate.
+  // Since an intermediate is an object that we make up,
+  // we can choose the indexing however we please.
+  // By sorting bra and ket indices, we ensure that intermediates
+  // with the same indices share the exact same indexing.
+  std::sort(result_bra.begin(), result_bra.end());
+  std::sort(result_ket.begin(), result_ket.end());
+
+  return {std::move(result_bra), std::move(result_ket)};
 }
 
 Symmetry tensor_symmetry_sum(EvalExpr const& left,

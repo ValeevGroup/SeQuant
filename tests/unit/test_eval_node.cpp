@@ -116,7 +116,7 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
         validate_tensor(node(node2, {L, L}).as_tensor(), L"g{i3,i4; a3,a4}"));
 
     REQUIRE(validate_tensor(node(node2, {L, R}).as_tensor(),
-                            L"I{a1,a2,a3,a4;i3,i4,i1,i2}"));
+                            L"I{a1,a2,a3,a4;i1,i2,i3,i4}"));
 
     REQUIRE(
         validate_tensor(node(node2, {L, R, L}).as_tensor(), L"t{a1,a2;i3,i4}"));
@@ -141,9 +141,7 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
                             L"Y^{i1,i2}_{a1,a2}"));
 
     REQUIRE(node1.right()->op_type() == EvalOp::Prod);
-    REQUIRE(
-        (validate_tensor(node1.right()->as_tensor(), L"I_{a2,a1}^{i1,i2}") ||
-         validate_tensor(node1.right()->as_tensor(), L"I_{a1,a2}^{i2,i1}")));
+    REQUIRE(validate_tensor(node1.right()->as_tensor(), L"I_{a1,a2}^{i1,i2}"));
     REQUIRE(validate_tensor(node1.right().left()->as_tensor(),
                             L"g_{i3,a1}^{i1,i2}"));
     REQUIRE(
