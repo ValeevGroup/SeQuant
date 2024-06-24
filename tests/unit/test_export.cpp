@@ -511,6 +511,43 @@ TEST_CASE("Export capabilities", "[exports]") {
 
         REQUIRE(generator.get_generated_code() == expected);
       }
+      SECTION("sum of index perms") {
+        auto tree = eval_node<EvalExpr>(
+            parse_expr(L"-1 g{a_2,i_3;a_3,i_1} * t{a_1,a_3;i_3,i_2} + "
+                       L"2 g{a_1,i_3;i_1,a_3} * t{a_2,a_3;i_2,i_3}"));
+
+        export_expression(tree, generator);
+
+        std::string expected =
+            "Declare index i_1\n"
+            "Declare index i_2\n"
+            "Declare index i_3\n"
+            "Declare index a_1\n"
+            "Declare index a_2\n"
+            "Declare index a_3\n"
+            "\n"
+            "Declare tensor I[a_1, a_2, i_1, i_2]\n"
+            "Declare tensor g[a_1, i_3, i_1, a_3]\n"
+            "Declare tensor g[a_2, i_3, a_3, i_1]\n"
+            "Declare tensor t[a_1, a_3, i_3, i_2]\n"
+            "\n"
+            "Create I[a_1, a_2, i_1, i_2] and initialize to zero\n"
+            "Load g[a_2, i_3, a_3, i_1]\n"
+            "Load t[a_1, a_3, i_3, i_2]\n"
+            "Compute I[a_1, a_2, i_1, i_2] += -1 g[a_2, i_3, a_3, i_1] "
+            "t[a_1, a_3, i_3, i_2]\n"
+            "Unload t[a_1, a_3, i_3, i_2]\n"
+            "Unload g[a_2, i_3, a_3, i_1]\n"
+            "Load g[a_1, i_3, i_1, a_3]\n"
+            "Load t[a_2, a_3, i_2, i_3]\n"
+            "Compute I[a_1, a_2, i_1, i_2] += 2 g[a_1, i_3, i_1, a_3] "
+            "t[a_2, a_3, i_2, i_3]\n"
+            "Unload t[a_2, a_3, i_2, i_3]\n"
+            "Unload g[a_1, i_3, i_1, a_3]\n"
+            "Persist I[a_1, a_2, i_1, i_2]\n";
+
+        REQUIRE(generator.get_generated_code() == expected);
+      }
     }
   }
 
