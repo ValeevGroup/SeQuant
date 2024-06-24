@@ -1,3 +1,4 @@
+#include "format_support.hpp"
 #include "processing.hpp"
 #include "utils.hpp"
 
@@ -133,13 +134,13 @@ void generateITF(const json &blocks, std::string_view out_file, const IndexSpace
 
 			sequant::ExprPtr expression = sequant::parse_expr(toUtf16(input), Symmetry::antisymm);
 
-			spdlog::debug("Initial equation is:\n{}", toUtf8(deparse(expression)));
+			spdlog::debug("Initial equation is:\n{}", expression);
 
 			ProcessingOptions options = extractProcessingOptions(current_result);
 
 			expression = postProcess(expression, spaceMeta, options);
 
-			spdlog::debug("Fully processed equation is:\n{}", toUtf8(deparse(expression)));
+			spdlog::debug("Fully processed equation is:\n{}", expression);
 
 			std::wstring resultName = toUtf16(current_result.at("name").get< std::string >());
 
@@ -147,14 +148,14 @@ void generateITF(const json &blocks, std::string_view out_file, const IndexSpace
 				std::optional< ExprPtr > symmetrizer = popTensor(expression, L"S");
 				assert(symmetrizer.has_value());
 
-				spdlog::debug("After popping S tensor:\n{}", toUtf8(deparse(expression)));
+				spdlog::debug("After popping S tensor:\n{}", expression);
 
 				IndexGroups externals = get_unique_indices(symmetrizer.value());
 				results.push_back(toItfResult(resultName + L"u", expression, context, false));
 
 				ExprPtr symmetrization = generateResultSymmetrization(resultName + L"u", externals);
 
-				spdlog::debug("Result symmetrization via {}", toUtf8(deparse(symmetrization)));
+				spdlog::debug("Result symmetrization via\n{}", symmetrization);
 
 				results.push_back(
 					toItfResult(resultName, std::move(symmetrization), context, current_result.value("import", true)));

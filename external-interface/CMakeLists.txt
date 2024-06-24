@@ -9,13 +9,15 @@ FetchContent_Declare(
 FetchContent_Declare(
 	spdlog
 	GIT_REPOSITORY https://github.com/gabime/spdlog.git
-	GIT_TAG        v1.13.0
+	GIT_TAG        v1.15.1
 	GIT_SHALLOW    ON
 )
 FetchContent_Declare(
 	json
 	URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
 )
+
+set(SPDLOG_USE_STD_FORMAT OFF CACHE "" INTERNAL FORCE)
 
 FetchContent_MakeAvailable(cli11 json spdlog)
 

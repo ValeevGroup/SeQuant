@@ -1,11 +1,11 @@
 #include "processing.hpp"
+#include "format_support.hpp"
 #include "utils.hpp"
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/optimize.hpp>
-#include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/tensor.hpp>
 
 #include <SeQuant/domain/mbpt/spin.hpp>
@@ -54,7 +54,7 @@ ExprPtr postProcess(const ExprPtr &expression, const IndexSpaceMeta &spaceMeta, 
 
 	processed = simplify(processed);
 	if (options.spintrace != SpinTracing::None) {
-		spdlog::debug("Expression after spintracing:\n{}", toUtf8(deparse(processed)));
+		spdlog::debug("Expression after spintracing:\n{}", processed);
 	}
 
 	switch (options.transform) {
@@ -68,7 +68,7 @@ ExprPtr postProcess(const ExprPtr &expression, const IndexSpaceMeta &spaceMeta, 
 				processed =
 					simplify(ex< Product >(ExprPtrList{ symmetrizer.value(), processed }, Product::Flatten::No));
 			}
-			spdlog::debug("Expression after biorthogonal transformation:\n{}", toUtf8(deparse(processed)));
+			spdlog::debug("Expression after biorthogonal transformation:\n{}", processed);
 			break;
 	}
 
