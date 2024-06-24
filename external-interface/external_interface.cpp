@@ -245,7 +245,7 @@ int main(int argc, char **argv) {
 	CLI::App app("Interface for reading in equations generated outside of SeQuant");
 	argv = app.ensure_utf8(argv);
 
-	std::string driver;
+	std::filesystem::path driver;
 	app.add_option("--driver", driver, "Path to the JSON file used to drive the processing")->required();
 	bool verbose = false;
 	app.add_flag("--verbose", verbose, "Whether to enable verbose output");
@@ -253,8 +253,17 @@ int main(int argc, char **argv) {
 	CLI11_PARSE(app, argc, argv);
 
 	if (!std::filesystem::exists(driver)) {
-		throw std::runtime_error("Specified driver file '" + driver + "' does not exist");
+		throw std::runtime_error("Specified driver file '" + driver.string() + "' does not exist");
+	} else if (!std::filesystem::is_regular_file(driver)) {
+		throw std::runtime_error("Specified driver file '" + driver.string() + "' is not a file");
 	}
+
+	// Change directory to where the driver file is located so that all relative
+	// paths specified in it resolve to be relative to the driver file.
+	// Before that, we have to get the absolute driver path though (or else the
+	// relative path will no longer work)
+	driver = std::filesystem::absolute(driver);
+	std::filesystem::current_path(driver.parent_path());
 
 	if (verbose) {
 		spdlog::set_level(spdlog::level::debug);
