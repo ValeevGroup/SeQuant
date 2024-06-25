@@ -662,22 +662,21 @@ ExprPtr A(std::int64_t nh, std::int64_t np) {
 }
 
 ExprPtr S(std::int64_t K) {
-  auto isr = get_default_context().index_space_registry();
   assert(K != 0);
   container::svector<IndexSpace> creators;
   container::svector<IndexSpace> annihilators;
   if (K > 0)  // ex
     for ([[maybe_unused]] auto i : ranges::views::iota(0, K))
-      annihilators.emplace_back(isr->hole_space(Spin::any));
+      annihilators.emplace_back(get_hole_space(Spin::any));
   else  // deex
     for ([[maybe_unused]] auto i : ranges::views::iota(0, -K))
-      creators.emplace_back(isr->hole_space(Spin::any));
+      creators.emplace_back(get_hole_space(Spin::any));
   if (K > 0)  // ex
     for ([[maybe_unused]] auto i : ranges::views::iota(0, K))
-      creators.emplace_back(isr->particle_space(Spin::any));
+      creators.emplace_back(get_particle_space(Spin::any));
   else  // deex
     for ([[maybe_unused]] auto i : ranges::views::iota(0, -K))
-      annihilators.emplace_back(isr->particle_space(Spin::any));
+      annihilators.emplace_back(get_particle_space(Spin::any));
 
   std::optional<OpMaker<Statistics::FermiDirac>::UseDepIdx> dep;
   if (get_default_mbpt_context().csv() == mbpt::CSV::Yes)
@@ -828,9 +827,8 @@ ExprPtr A(std::int64_t nh, std::int64_t np) {
     assert((nh > 0 && np > 0) || (nh < 0 && np < 0));
   }
 
-  auto isr = get_default_context().index_space_registry();
-  auto particle_space = isr->particle_space(Spin::any);
-  auto hole_space = isr->hole_space(Spin::any);
+  auto particle_space = get_particle_space(Spin::any);
+  auto hole_space = get_hole_space(Spin::any);
   return ex<op_t>([]() -> std::wstring_view { return L"A"; },
                   [=]() -> ExprPtr { return tensor::A(nh, np); },
                   [=](qnc_t& qns) {
