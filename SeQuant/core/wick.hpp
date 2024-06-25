@@ -17,6 +17,16 @@
 
 namespace sequant {
 
+/// @brief extracts external indices of an expanded expression
+
+/// External indices appear only once in an expression
+/// @param expr an expression
+/// @return external indices
+/// @pre @p expr has been expanded (i.e. cannot contain a Sum as a
+/// subexpression)
+/// @throw std::invalid_argument if any of @p expr subexpressions is a Sum
+inline container::set<Index> extract_external_indices(const Expr &expr);
+
 /// Applies Wick's theorem to a sequence of normal-ordered operators.
 ///
 /// @tparam S particle statistics
@@ -41,16 +51,25 @@ class WickTheorem {
   WickTheorem &operator=(const WickTheorem &) = default;
 
  public:
-  explicit WickTheorem(const NormalOperatorSequence<S> &input) {
+  explicit WickTheorem(
+      const std::shared_ptr<NormalOperatorSequence<S>> &input) {
     init_input(input);
-    assert(input.size() <= max_input_size);
-    assert(input.empty() || input.vacuum() != Vacuum::Invalid);
+    assert(input_->size() <= max_input_size);
+    assert(input_->empty() || input_->vacuum() != Vacuum::Invalid);
     if constexpr (statistics == Statistics::BoseEinstein) {
-      assert(input.empty() || input.vacuum() == Vacuum::Physical);
+      assert(input_->empty() || input_->vacuum() == Vacuum::Physical);
     }
   }
+  explicit WickTheorem(const NormalOperatorSequence<S> &input)
+      : WickTheorem(std::make_shared<NormalOperatorSequence<S>>(input)) {}
 
-  explicit WickTheorem(ExprPtr expr_input) : expr_input_(expr_input) {}
+  explicit WickTheorem(ExprPtr expr_input) {
+    if (expr_input->is<NormalOperatorSequence<S>>()) {
+      *this = WickTheorem(
+          expr_input.template as_shared_ptr<NormalOperatorSequence<S>>());
+    } else
+      expr_input_ = std::move(expr_input);
+  }
 
   /// constructs WickTheorem from @c other with expression input set to @c
   /// expr_input
@@ -65,7 +84,7 @@ class WickTheorem {
   /// Controls whether next call to compute() will full contractions only or all
   /// (including partial) contractions. By default compute() generates full
   /// contractions only.
-  /// @param sf if false, will evaluate all contractions.
+  /// @param fc if false, will evaluate all contractions.
   /// @return reference to @c *this , for daisy-chaining
   WickTheorem &full_contractions(bool fc) {
     full_contractions_ = fc;
@@ -104,7 +123,7 @@ class WickTheorem {
   /// This is useful to to eliminate the topologically-equivalent contractions
   /// when fully-contracted result (i.e. the vacuum average) is sought.
   /// By default the use of topology is not enabled.
-  /// @param sf if true, will utilize the topology to minimize work.
+  /// @param ut if true, will utilize the topology to minimize work.
   WickTheorem &use_topology(bool ut) {
     use_topology_ = ut;
     return *this;
@@ -112,18 +131,33 @@ class WickTheorem {
 
   /// Specifies the external indices; by default assume all indices are summed
   /// over
-  /// @param ext_inds external (nonsummed) indices
+  /// @param external_indices external (nonsummed) indices
+  /// @throw std::logic_error if WickTheorem::set_external_indices or
+  /// WickTheorem::compute had already been invoked
   template <typename IndexContainer>
   WickTheorem &set_external_indices(IndexContainer &&external_indices) {
-    if constexpr (std::is_convertible_v<IndexContainer,
-                                        decltype(external_indices_)>)
+    if (external_indices_.has_value())
+      throw std::logic_error(
+          "WickTheorem::set_external_indices invoked but external indices have "
+          "already been set/computed");
+
+    if constexpr (std::is_convertible_v<
+                      IndexContainer,
+                      typename decltype(external_indices_)::value_type>)
       external_indices_ = std::forward<IndexContainer>(external_indices);
     else {
-      ranges::for_each(std::forward<IndexContainer>(external_indices),
-                       [this](auto &&v) {
-                         auto result = this->external_indices_.emplace(v);
-                         assert(result.second);
-                       });
+      external_indices_ = typename decltype(external_indices_)::value_type{};
+      ranges::for_each(
+          std::forward<IndexContainer>(external_indices), [this](auto &&v) {
+            auto [it, inserted] = this->external_indices_->emplace(v);
+            if (!inserted) {
+              std::wstringstream ss;
+              ss << L"WickTheorem::set_external_indices: "
+                    L"external index " +
+                        to_latex(Index(v)) + L" repeated";
+              throw std::invalid_argument(to_string(ss.str()));
+            }
+          });
     }
     return *this;
   }
@@ -160,8 +194,8 @@ class WickTheorem {
         constexpr bool signed_indices =
             std::is_signed_v<typename std::remove_reference_t<
                 decltype(op_index_pairs)>::value_type::first_type>;
-        if (static_cast<std::size_t>(opidx_pair.first) >= input_.size() ||
-            static_cast<std::size_t>(opidx_pair.second) >= input_.size()) {
+        if (static_cast<std::size_t>(opidx_pair.first) >= input_->size() ||
+            static_cast<std::size_t>(opidx_pair.second) >= input_->size()) {
           throw std::invalid_argument(
               "WickTheorem::set_nop_connections: nop index out of range");
         }
@@ -173,7 +207,7 @@ class WickTheorem {
         }
       }
       if (op_index_pairs.size() != 0ul) {
-        nop_connections_.resize(input_.size());
+        nop_connections_.resize(input_->size());
         for (auto &v : nop_connections_) {
           v.set();
         }
@@ -221,7 +255,8 @@ class WickTheorem {
   ///           not mentioned in @c op_partitions) will be completed in
   ///           compute_nopseq().
   ///
-  ///@{
+
+  /// @{
 
   /// @tparam IndexListContainer a sequence of sequences of Integer types
   template <typename IndexListContainer>
@@ -252,7 +287,8 @@ class WickTheorem {
     return this->set_nop_partitions<const decltype(nop_partitions) &>(
         nop_partitions);
   }
-  ///@}
+
+  /// @}
 
   /// @name specifiers of partitions composed of topologically-equivalent
   ///       normal operators
@@ -292,13 +328,13 @@ class WickTheorem {
 
     bool done = false;
     while (!done) {
-      op_partition_idx_.resize(input_.opsize());
+      op_partition_idx_.resize(input_->opsize());
       ranges::fill(op_partition_idx_, 0);
       for (auto &&[partition_idx, partition] :
            ranges::views::enumerate(op_partitions_)) {
         for (auto &&op_ord : partition) {
           assert(op_ord >= 0);
-          assert(op_ord < input_.opsize());
+          assert(op_ord < input_->opsize());
           assert(op_partition_idx_[op_ord] == 0);
           op_partition_idx_[op_ord] = partition_idx + 1;
         }
@@ -334,7 +370,7 @@ class WickTheorem {
 
   /// makes a default set of partitions with each Op is in its own partition
   auto &make_default_op_partitions() const {
-    return set_op_partitions(ranges::views::iota(0ul, input_.opsize()) |
+    return set_op_partitions(ranges::views::iota(0ul, input_->opsize()) |
                              ranges::views::transform([](const std::size_t v) {
                                return std::array<std::size_t, 1>{{v}};
                              }) |
@@ -344,13 +380,16 @@ class WickTheorem {
 
   /// Computes and returns the result
   /// @param count_only if true, will return the total number of terms, as a
-  /// Constant.
+  /// Constant; the default is false.
+  /// @param skip_input_canonicalization whether to skip initial
+  /// canonicalization of the input expression; the default is false.
   /// @return the result of applying Wick's theorem; either a Constant, a
   /// Product, or a Sum
   /// @warning this is not reentrant, but is optionally threaded internally
   /// @throw std::logic_error if input's vacuum does not match the current
   /// context vacuum
-  ExprPtr compute(const bool count_only = false);
+  ExprPtr compute(bool count_only = false,
+                  bool skip_input_canonicalization = false);
 
   /// Collects compute statistics
   class Stats {
@@ -402,12 +441,14 @@ class WickTheorem {
   // set this is mutated by compute
   mutable ExprPtr expr_input_;
 
-  mutable NormalOperatorSequence<S> input_;
+  mutable std::shared_ptr<NormalOperatorSequence<S>> input_;
   bool full_contractions_ = true;
   bool use_topology_ = false;
   mutable Stats stats_;
 
-  container::set<Index> external_indices_;
+  mutable std::optional<container::set<Index>>
+      external_indices_;  // lack of external indices != all indices are
+                          // internal
 
   container::svector<std::pair<Index, Index>>
       input_partner_indices_;  //!< list of {cre,ann} pairs of Index objects in
@@ -473,15 +514,22 @@ class WickTheorem {
 
   /// initializes input_
   /// @param nopseq the NormalOperatorSequence to initialize input_ with
-  WickTheorem &init_input(const NormalOperatorSequence<S> &nopseq) {
+  WickTheorem &init_input(
+      const std::shared_ptr<NormalOperatorSequence<S>> &nopseq) {
     input_ = nopseq;
+
+    if (input_->vacuum() != get_default_context(S).vacuum())
+      throw std::logic_error(
+          "WickTheorem<S>::init_input(): input vacuum "
+          "must match the default context vacuum");
 
     // need to be able to look up ordinals of ops in the input expression to
     // make index partitions usable
     using nopseq_view_type = flattened_rangenest<NormalOperatorSequence<S>>;
-    auto nopseq_view = nopseq_view_type(&input_);
+    auto nopseq_view = nopseq_view_type(input_.get());
     std::size_t op_ord = 0;
-    op_to_input_ordinal_.reserve(input_.opsize());
+    op_to_input_ordinal_.clear();
+    op_to_input_ordinal_.reserve(input_->opsize());
     ranges::for_each(nopseq_view, [&](const auto &op) {
       op_to_input_ordinal_.emplace(op, op_ord);
       ++op_ord;
@@ -489,8 +537,9 @@ class WickTheorem {
 
     // populates input_partner_indices_
     {
+      input_partner_indices_.clear();
       // for each NormalOperator
-      for (auto &nop : input_) {
+      for (auto &nop : *input_) {
         using ranges::views::reverse;
         using ranges::views::zip;
 
@@ -526,15 +575,20 @@ class WickTheorem {
           "WickTheorem::compute: spinfree=true supported only for physical "
           "vacuum and for Fermi facuum");
 
+    // deduce external indices, if needed
+    if (!external_indices_) {
+      external_indices_ = extract_external_indices(*input_);
+    }
+
     // process cached nop_connections_input_, if needed
     if (!nop_connections_input_.empty())
       const_cast<WickTheorem<S> &>(*this).set_nop_connections(
           nop_connections_input_);
     // size nop_topological_partition_ to match input_, if needed
-    upsize_topological_partitions(input_.size(),
+    upsize_topological_partitions(input_->size(),
                                   TopologicalPartitionType::NormalOperator);
     // initialize op partitions, if not done so
-    if (input_.opsize() > 0 && op_npartitions_ == 0)
+    if (input_->opsize() > 0 && op_npartitions_ == 0)
       make_default_op_partitions();
 
     // now compute
@@ -957,7 +1011,7 @@ class WickTheorem {
         result;      //!< current value of the result
     std::mutex mtx;  // used in critical sections updating the result
     auto result_plus_mutex = std::make_pair(&result, &mtx);
-    NontensorWickState state(*this, input_);
+    NontensorWickState state(*this, *input_);
     state.count_only = count_only;
     // TODO extract index->particle maps
 
@@ -981,7 +1035,7 @@ class WickTheorem {
       if (count_only) {
         ++state.count;
       } else {
-        auto [phase, normop] = normalize(input_, input_partner_indices_);
+        auto [phase, normop] = normalize(*input_, input_partner_indices_);
         result_plus_mutex.first->push_back(
             std::make_pair(Product(phase, {}), std::move(normop)));
       }
@@ -1043,7 +1097,8 @@ class WickTheorem {
                                      left_op_offset);  // left op to contract
 
     // optimization: can't contract fully if first op is not a qp annihilator
-    if (full_contractions_ && !is_qpannihilator(*op_left_iter, input_.vacuum()))
+    if (full_contractions_ &&
+        !is_qpannihilator(*op_left_iter, input_->vacuum()))
       return;
 
     const auto op_left_iter_fence =
@@ -1165,7 +1220,7 @@ class WickTheorem {
                     // old code assumes bra/ket of each NormalOperator forms
                     // a single partition
                     const auto nop_right_input =
-                        input_.at(op_right_cursor.range_ordinal());
+                        input_->at(op_right_cursor.range_ordinal());
                     const auto op_right_ord_in_nop_input =
                         ranges::find(nop_right_input, *op_right_it) -
                         ranges::begin(nop_right_input);
@@ -1253,7 +1308,7 @@ class WickTheorem {
 
           // check if can contract these indices and
           // check connectivity constraints (if needed)
-          if (can_contract(*op_left_iter, *op_right_iter, input_.vacuum())) {
+          if (can_contract(*op_left_iter, *op_right_iter, input_->vacuum())) {
             auto &&[is_unique, nop_top_degen] = is_topologically_unique();
             if (is_unique) {
               if (state.connect(nop_connections_,
@@ -1284,7 +1339,7 @@ class WickTheorem {
                 Product sp_copy = state.sp;
                 state.sp.append(
                     static_cast<int64_t>(nop_top_degen) * phase,
-                    contract(*op_left_iter, *op_right_iter, input_.vacuum()));
+                    contract(*op_left_iter, *op_right_iter, input_->vacuum()));
 
                 // update the stats
                 ++stats_.num_attempted_contractions;
@@ -1421,21 +1476,23 @@ class WickTheorem {
  public:
   static bool can_contract(const Op<S> &left, const Op<S> &right,
                            Vacuum vacuum = get_default_context().vacuum()) {
+    const auto &isr = get_default_context().index_space_registry();
     // for bosons can only do Wick's theorem for physical vacuum (or similar)
     if constexpr (statistics == Statistics::BoseEinstein)
       assert(vacuum == Vacuum::Physical);
-
     if (is_qpannihilator<S>(left, vacuum) && is_qpcreator<S>(right, vacuum)) {
       const auto qpspace_left = qpannihilator_space<S>(left, vacuum);
       const auto qpspace_right = qpcreator_space<S>(right, vacuum);
-      const auto qpspace_common = intersection(qpspace_left, qpspace_right);
-      if (qpspace_common != IndexSpace::null_instance()) return true;
+      const auto qpspace_common =
+          isr->intersection(qpspace_left, qpspace_right);
+      if (qpspace_common) return true;
     }
     return false;
   }
 
   static ExprPtr contract(const Op<S> &left, const Op<S> &right,
                           Vacuum vacuum = get_default_context().vacuum()) {
+    const auto &isr = get_default_context().index_space_registry();
     assert(can_contract(left, right, vacuum));
     //    assert(
     //        !left.index().has_proto_indices() &&
@@ -1448,7 +1505,8 @@ class WickTheorem {
     else {
       const auto qpspace_left = qpannihilator_space<S>(left, vacuum);
       const auto qpspace_right = qpcreator_space<S>(right, vacuum);
-      const auto qpspace_common = intersection(qpspace_left, qpspace_right);
+      const auto qpspace_common =
+          isr->intersection(qpspace_left, qpspace_right);
       const auto index_common = Index::make_tmp_index(qpspace_common);
 
       // preserve bra/ket positions of left & right
@@ -1474,8 +1532,8 @@ class WickTheorem {
     }
   }
 
-  /// @param[in,out] on input, Wick's theorem result, on output the result of
-  /// reducing the overlaps
+  /// @param[in,out] expr on input, Wick's theorem result, on output the result
+  /// of reducing the overlaps
   void reduce(ExprPtr &expr) const;
 };
 

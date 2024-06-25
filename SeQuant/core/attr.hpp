@@ -79,7 +79,13 @@ inline std::wstring to_wolfram(BraKetPos a) {
   }
 }
 
-enum class Statistics { BoseEinstein, FermiDirac };
+enum class Statistics {
+  Null,
+  FermiDirac,
+  BoseEinstein,
+  Arbitrary,
+  Invalid = Null
+};
 
 enum class Action { create, annihilate, invalid };
 

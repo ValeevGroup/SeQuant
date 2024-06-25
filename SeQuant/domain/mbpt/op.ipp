@@ -94,6 +94,7 @@ bool Operator<QuantumNumbers, S>::commutes_with_atom(const Expr& that) const {
 
     // if this has annihilators/creators in same space as that has
     // creator/annihilators return false
+
     auto delta_this = (*this)();
     auto delta_that = (that_op)();
 
@@ -149,6 +150,19 @@ ExprPtr Operator<QuantumNumbers, S>::clone() const {
   return ex<this_type>(*this);
 }
 
+// Expresses general operators in human interpretable form. for example:
+// \hat{T}_2 is a particle conserving 2-body excitation operator a non-particle
+// conserving operator \hat{R}_2_1 implies that two particles are created
+// followed by a single hole creation. conversely \hat{R}_1_2 implies the that
+// only one particle is annihilated followed by two holes being created. The
+// rule being, that for non-particle conserving operators, the first position
+// indicates where the quasiparticle is going to and the second position
+// indicates where it comes from. for the case of adjoint operators, the adjoint
+// is represented by the symbol ⁺ and superscripting the quasi-particle numbers.
+// for example: hat{R⁺}^{1,2}} For operators in which one or more
+// quasi-particles has only partial coverage in the particle_space or
+// hole_space, this notation is unsuitable, and we default to level printing of
+// the operator.
 template <typename QuantumNumbers, Statistics S>
 std::wstring Operator<QuantumNumbers, S>::to_latex() const {
   return sequant::to_latex(*this);

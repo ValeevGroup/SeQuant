@@ -90,7 +90,7 @@ class antisymm_element {
 
     int total_swaps = 0;  // even # swaps produces positive and odd # of swaps
                           // produce negative
-    int counter = 0;
+    [[maybe_unused]] int counter = 0;
 
     bool do_next_perm = true;
 
@@ -263,7 +263,7 @@ class antisymm_element {
   ExprPtr result;
 };
 
-//@brief simple class to call antisymm_element on only products
+/// @brief simple class to call antisymm_element on only products
 class antisymmetrize {
  public:
   ExprPtr result = ex<Constant>(0);

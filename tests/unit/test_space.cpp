@@ -5,92 +5,94 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/spin.hpp>
 
 TEST_CASE("IndexSpace", "[elements]") {
   using namespace sequant;
 
-  SECTION("register_instance") {
-    REQUIRE_THROWS(IndexSpace::register_instance(
-        L"p", IndexSpace::all));  // already registered standard instances
-    REQUIRE_THROWS(
-        IndexSpace::register_instance(L"p_1", IndexSpace::all));  // ditto
-    // since convention does not include ALL standard spaces
-    // (see https://github.com/ValeevGroup/SeQuant/issues/97 )
-    // user can register additional instances
+  SECTION("registry synopsis") {
+    auto sr_isr = sequant::mbpt::make_sr_spaces();
+    REQUIRE_NOTHROW(sr_isr->retrieve(L"i"));
+    REQUIRE_NOTHROW(sr_isr->remove(L"i"));
+    IndexSpace active_occupied(L"i", 0b0010);
+    REQUIRE_NOTHROW(sr_isr->add(active_occupied));
+    REQUIRE_THROWS(sr_isr->add(
+        active_occupied));  // cannot add a space that is already present
+    IndexSpace jactive_occupied(L"j", 0b0010);
+    REQUIRE_THROWS(sr_isr->add(
+        jactive_occupied));  // cannot add a space with duplicate attr
+
+    // can use bytestrings too
+    REQUIRE_NOTHROW(sr_isr->retrieve("a"));  // N.B. string
+    REQUIRE_NOTHROW(sr_isr->remove('a'));    // N.B. char
+  }
+
+  SECTION("registry construction") {
+    auto isr = std::make_shared<IndexSpaceRegistry>();
+
+    // similar make_sr_spaces, but no spin AND occupied and unoccupied bits are
+    // NOT contiguous!
     REQUIRE_NOTHROW(
-        IndexSpace::register_instance(L"m'", IndexSpace::frozen_occupied));
-    REQUIRE(IndexSpace::instance_exists(L"m'"));
-  }
-
-  // these are loaded in test_main.cpp
-  SECTION("register_standard_instances") {
-    REQUIRE(IndexSpace::instance_exists(L"i"));
-    REQUIRE(IndexSpace::instance_exists(L"m"));
-    REQUIRE(IndexSpace::instance_exists(L"p"));
-    REQUIRE(IndexSpace::instance_exists(L"a_17"));
-    REQUIRE(IndexSpace::instance_exists(L"e_19"));
-    REQUIRE(IndexSpace::instance_exists(L"α_21"));
-    REQUIRE(IndexSpace::instance_exists(L"α'_32"));
-    REQUIRE(IndexSpace::instance_exists(L"κ_48"));
-  }
-
-  SECTION("register_key") {
-    REQUIRE_NOTHROW(IndexSpace::register_key(
-        L"w",
-        IndexSpace::all));  // can assign additional key to a space already
-                            // registered, this does not redefine base key
-    REQUIRE(IndexSpace::instance(L"w") == IndexSpace::instance(L"p"));
+        isr->add(L"o", 0b0001, 3)       // approximate size
+            .add("i", 0b0100, is_hole)  // N.B. narrow string
+            .add(L'a', 0b0010, is_particle, QuantumNumbersAttr{},
+                 50)  // N.B. wchar_t + explicit quantum numbers + size
+            .add('g', 0b1000)
+            .add_union(L"m", {L"o", L"i"}, is_vacuum_occupied,
+                       is_reference_occupied)
+            .add_union(L"e", {L"a", L"g"})
+            .add_unIon(L"p", {L"m", L"e"}, is_complete)  // N.B. unIon
+    );
+    REQUIRE(isr->retrieve(L"o").approximate_size() == 3);
+    REQUIRE(isr->retrieve(L"m").type().to_int32() == 0b0101);
+    REQUIRE(isr->retrieve(L"m").approximate_size() ==
+            isr->retrieve(L"o").approximate_size() +
+                isr->retrieve(L"i").approximate_size());
+    REQUIRE(isr->retrieve(L"p").type().to_int32() == 0b1111);
+    REQUIRE(isr->retrieve(L"p").approximate_size() ==
+            isr->retrieve(L"m").approximate_size() +
+                isr->retrieve(L"e").approximate_size());
+    REQUIRE(isr->retrieve(L"p").approximate_size() == 73);
+    REQUIRE_NOTHROW(
+        isr->add_union(L"iag", {L"i", L"a", L"g"})
+            .add_union(L"oia", {"o", "i", "a"})  // N.B. narrow strings
+            .add_intersection(L"x", {L"oia", L"iag"}));
+    REQUIRE(isr->retrieve(L"x").type().to_int32() == 0b0110);
+    REQUIRE(isr->retrieve(L"x").approximate_size() ==
+            isr->retrieve(L"i").approximate_size() +
+                isr->retrieve(L"a").approximate_size());
+    REQUIRE(isr->vacuum_occupied_space(IndexSpace::QuantumNumbers::null) ==
+            isr->retrieve(L"m"));
+    REQUIRE(isr->vacuum_unoccupied_space(IndexSpace::QuantumNumbers::null) ==
+            isr->retrieve(L"e"));
   }
 
   SECTION("equality") {
-    REQUIRE(IndexSpace::instance(L"i") == IndexSpace::instance(L"i"));
-    REQUIRE(IndexSpace::instance(L"i") != IndexSpace::instance(L"p"));
-
-    REQUIRE(IndexSpace::null_instance() ==
-            IndexSpace::instance(IndexSpace::null_key()));
-
-    REQUIRE(IndexSpace::instance(L"i").type() == IndexSpace::active_occupied);
-    REQUIRE(IndexSpace::instance(L"i") == IndexSpace::active_occupied);
-    REQUIRE(IndexSpace::active_occupied == IndexSpace::instance(L"i").type());
-    REQUIRE(IndexSpace::active_occupied == IndexSpace::instance(L"i"));
-    REQUIRE(IndexSpace::instance(L"i").qns() == IndexSpace::nullqns);
-    REQUIRE(IndexSpace::instance(L"i") == IndexSpace::nullqns);
-    REQUIRE(IndexSpace::nullqns == IndexSpace::instance(L"i").qns());
-    REQUIRE(IndexSpace::nullqns == IndexSpace::instance(L"i"));
-
-    // use nondefault mask
-    TypeAttr::used_bits = 0b100;
-    REQUIRE(IndexSpace::active_occupied == IndexSpace::occupied);
-    REQUIRE(IndexSpace::active_occupied != IndexSpace::inactive_occupied);
-    REQUIRE(IndexSpace::active_occupied != IndexSpace::frozen_occupied);
-    REQUIRE(IndexSpace::active_occupied == IndexSpace::all);
-    REQUIRE(IndexSpace::active_occupied == IndexSpace::all_active);
-    TypeAttr::used_bits = 0xffff;
+    auto sr_isr = sequant::mbpt::make_sr_spaces();
+    REQUIRE(sr_isr->retrieve(L"i") == sr_isr->retrieve(L"i"));
+    REQUIRE(sr_isr->retrieve(L"i") != sr_isr->retrieve(L"a"));
   }
 
   SECTION("ordering") {
-    REQUIRE(!(IndexSpace::instance(L"i") < IndexSpace::instance(L"i")));
-    REQUIRE(IndexSpace::instance(L"i") < IndexSpace::instance(L"a"));
-    REQUIRE(!(IndexSpace::instance(L"a") < IndexSpace::instance(L"i")));
-    REQUIRE(IndexSpace::instance(L"i") < IndexSpace::instance(L"m"));
-    REQUIRE(!(IndexSpace::instance(L"m") < IndexSpace::instance(L"m")));
-    REQUIRE(IndexSpace::instance(L"m") < IndexSpace::instance(L"a"));
-    REQUIRE(IndexSpace::instance(L"m") < IndexSpace::instance(L"p"));
-    REQUIRE(IndexSpace::instance(L"a") < IndexSpace::instance(L"p"));
-    REQUIRE(IndexSpace::instance(L"p") < IndexSpace::instance(L"α"));
+    auto sr_isr = sequant::mbpt::make_sr_spaces();
+    REQUIRE(!(sr_isr->retrieve(L"i") < sr_isr->retrieve(L"i")));
+    REQUIRE(sr_isr->retrieve(L"i") < sr_isr->retrieve(L"a"));
+    REQUIRE(!(sr_isr->retrieve(L"a") < sr_isr->retrieve(L"i")));
+    REQUIRE(sr_isr->retrieve(L"i") < sr_isr->retrieve(L"m"));
+    REQUIRE(!(sr_isr->retrieve(L"m") < sr_isr->retrieve(L"m")));
+    REQUIRE(sr_isr->retrieve(L"m") < sr_isr->retrieve(L"a"));
+    REQUIRE(sr_isr->retrieve(L"m") < sr_isr->retrieve(L"p"));
+    REQUIRE(sr_isr->retrieve(L"a") < sr_isr->retrieve(L"p"));
 
     // test ordering with quantum numbers
     {
-      auto i = IndexSpace::instance(L"i");
-      [[maybe_unused]] auto a = IndexSpace::instance(L"a");
-      auto iA =
-          IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::alpha);
-      auto iB =
-          IndexSpace::instance(IndexSpace::active_occupied, IndexSpace::beta);
-      auto aA = IndexSpace::instance(IndexSpace::active_unoccupied,
-                                     IndexSpace::alpha);
-      auto aB =
-          IndexSpace::instance(IndexSpace::active_unoccupied, IndexSpace::beta);
+      auto i = IndexSpace(L"i", 0b01);
+      auto a = IndexSpace(L"a", 0b10);
+      auto iA = IndexSpace(L"i", 0b01, 0b01);
+      auto iB = IndexSpace(L"i", 0b01, 0b10);
+      auto aA = IndexSpace(L"a", 0b10, 0b01);
+      auto aB = IndexSpace(L"a", 0b10, 0b10);
 
       REQUIRE(iA < aA);
       REQUIRE(iB < aB);
@@ -102,40 +104,74 @@ TEST_CASE("IndexSpace", "[elements]") {
       REQUIRE(i < iA);
       REQUIRE(i < iB);
     }
-
-    // use nondefault mask
-    TypeAttr::used_bits = 0b100;
-    REQUIRE(!(IndexSpace::active_occupied < IndexSpace::occupied));
-    REQUIRE(!(IndexSpace::inactive_occupied < IndexSpace::frozen_occupied));
-    REQUIRE(IndexSpace::inactive_occupied < IndexSpace::active_occupied);
-    REQUIRE(!(IndexSpace::active_occupied < IndexSpace::all));
-    REQUIRE(!(IndexSpace::active_occupied < IndexSpace::all_active));
-    TypeAttr::used_bits = 0xffff;
   }
 
   SECTION("set operations") {
-    REQUIRE(
-        IndexSpace::instance(L"i") ==
-        intersection(IndexSpace::instance(L"i"), IndexSpace::instance(L"p")));
-    REQUIRE(
-        IndexSpace::null_instance() ==
-        intersection(IndexSpace::instance(L"a"), IndexSpace::instance(L"i")));
-    REQUIRE(
-        IndexSpace::null_instance() ==
-        intersection(IndexSpace::instance(L"a"), IndexSpace::instance(L"α'")));
+    auto isr = sequant::mbpt::make_F12_sr_spaces();
+    REQUIRE(isr->retrieve(L"i") ==
+            isr->intersection(isr->retrieve(L"i"), isr->retrieve(L"p")));
+    REQUIRE(!isr->intersection(isr->retrieve(L"p↑"), isr->retrieve(L"p↓")));
+    REQUIRE(isr->intersection(isr->retrieve(L"i↑"), isr->retrieve(L"p")) ==
+            isr->retrieve(L"i↑"));
+    REQUIRE(!isr->intersection(isr->retrieve(L"a"), isr->retrieve(L"i")));
+    REQUIRE(!isr->intersection(isr->retrieve(L"a"), isr->retrieve(L"α'")));
 
-    REQUIRE(IndexSpace::instance(L"κ") ==
-            unIon(IndexSpace::instance(L"p"), IndexSpace::instance(L"α'")));
+    REQUIRE(isr->retrieve(L"κ") ==
+            isr->unIon(isr->retrieve(L"p"), isr->retrieve(L"α'")));
 
-    REQUIRE(includes(IndexSpace::instance(L"κ"), IndexSpace::instance(L"m")));
-    REQUIRE(!includes(IndexSpace::instance(L"m"), IndexSpace::instance(L"κ")));
-    REQUIRE(includes(IndexSpace::instance(L"α"), IndexSpace::instance(L"a")));
+    REQUIRE(includes(isr->retrieve(L"κ"), isr->retrieve(L"m")));
+    REQUIRE(!includes(isr->retrieve(L"m"), isr->retrieve(L"κ")));
+    REQUIRE(includes(isr->retrieve(L"α"), isr->retrieve(L"a")));
+
+    REQUIRE(isr->valid_intersection(isr->retrieve(L"i"), isr->retrieve(L"p")));
+
+    REQUIRE(isr->valid_unIon(isr->retrieve(L"i"), isr->retrieve(L"a")));
+    REQUIRE(isr->valid_unIon(isr->retrieve(L"i↑"), isr->retrieve(L"i↓")));
+    REQUIRE(!isr->valid_unIon(isr->retrieve(L"i↑"), isr->retrieve(L"i↑")));
+    REQUIRE(!isr->valid_unIon(isr->retrieve(L"p"), isr->retrieve(L"a")));
+    REQUIRE(!isr->valid_unIon(isr->retrieve(L"p↑"), isr->retrieve(L"a↓")));
   }
 
-  SECTION("occupancy_class") {
-    REQUIRE(occupancy_class(IndexSpace::instance(L"i")) == -1);
-    REQUIRE(occupancy_class(IndexSpace::instance(L"a")) == +1);
-    REQUIRE(occupancy_class(IndexSpace::instance(L"p")) == 0);
-    REQUIRE(occupancy_class(IndexSpace::instance(L"u")) == +1);
+  SECTION("occupancy_validation") {
+    auto sr_isr = sequant::mbpt::make_sr_spaces();
+    auto mr_isr = sequant::mbpt::make_mr_spaces();
+
+    REQUIRE(sr_isr->is_pure_occupied(sr_isr->retrieve(L"i")));
+    REQUIRE(sr_isr->is_pure_unoccupied(sr_isr->retrieve(L"a")));
+
+    REQUIRE(mr_isr->is_pure_occupied(mr_isr->retrieve(L"i")));
+    REQUIRE(mr_isr->is_pure_unoccupied(mr_isr->retrieve(L"a")));
+    REQUIRE(!mr_isr->is_pure_occupied(mr_isr->retrieve(L"I")));
+    // REQUIRE(!mr_isr->is_pure_unoccupied(mr_isr->retrieve(L"E")));
+
+    REQUIRE(sr_isr->contains_occupied(sr_isr->retrieve(L"i")));
+    REQUIRE(sr_isr->contains_unoccupied(sr_isr->retrieve(L"a")));
+
+    REQUIRE(mr_isr->contains_occupied(mr_isr->retrieve(L"M")));
+    REQUIRE(mr_isr->contains_unoccupied(mr_isr->retrieve(L"E")));
+    REQUIRE(!mr_isr->contains_occupied(mr_isr->retrieve(L"a")));
+    REQUIRE(!mr_isr->contains_unoccupied(mr_isr->retrieve(L"i")));
+  }
+
+  SECTION("base_space") {
+    auto isr = sequant::mbpt::make_F12_sr_spaces();
+    const auto& f12_base_space_types = isr->base_space_types();
+    REQUIRE(f12_base_space_types.size() == 5);
+    REQUIRE(f12_base_space_types[0] == 0b00001);
+    REQUIRE(f12_base_space_types[1] == 0b00010);
+    REQUIRE(f12_base_space_types[2] == 0b00100);
+    REQUIRE(f12_base_space_types[3] == 0b01000);
+    REQUIRE(f12_base_space_types[4] == 0b10000);
+    const auto& f12_base_spaces = isr->base_spaces();
+    auto f12_base_spaces_sf = f12_base_spaces |
+                              ranges::views::filter([](const auto& space) {
+                                return space.qns() == mbpt::Spin::any;
+                              }) |
+                              ranges::to_vector;
+    REQUIRE(f12_base_spaces_sf[0].base_key() == L"o");
+    REQUIRE(f12_base_spaces_sf[1].base_key() == L"i");
+    REQUIRE(f12_base_spaces_sf[2].base_key() == L"a");
+    REQUIRE(f12_base_spaces_sf[3].base_key() == L"g");
+    REQUIRE(f12_base_spaces_sf[4].base_key() == L"α'");
   }
 }

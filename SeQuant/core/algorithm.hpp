@@ -53,7 +53,6 @@ void bubble_sort(ForwardIter begin, Sentinel end, Compare comp) {
         const auto& val1 = *i;
         static_assert(std::tuple_size_v<std::decay_t<decltype(val0)>> == 2,
                       "need to generalize comparer to handle tuples");
-
         using lhs_type = decltype(std::get<0>(val0));
         using rhs_type = decltype(std::get<1>(val0));
         constexpr const bool comp_works_for_tuple_entries =

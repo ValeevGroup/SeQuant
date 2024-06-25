@@ -7,6 +7,7 @@
 #include <SeQuant/core/optimize.hpp>
 #include <SeQuant/core/parse_expr.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <cstddef>
 #include <initializer_list>
@@ -26,17 +27,27 @@ sequant::ExprPtr extract(sequant::ExprPtr expr,
 TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
   using namespace sequant;
 
-  auto idx2size = [nocc = 10, nvirt = 140, nact = 4](Index const& idx) {
-    if (idx.space() == IndexSpace::active_occupied) return nocc;
-    if (idx.space() == IndexSpace::active_unoccupied) return nvirt;
-    if (idx.space() == IndexSpace::all_active)
-      return nact;
-    else
-      throw std::runtime_error("Unsupported IndexSpace type encountered");
-  };
+  // for optimization tests, set index space sizes
+  {
+    auto reg = get_default_context().mutable_index_space_registry();
+    auto occ = reg->retrieve_ptr(L"i");
+    auto uocc = reg->retrieve_ptr(L"a");
+    auto aux = reg->retrieve_ptr(L"x");
+    assert(occ);
+    assert(uocc);
+    assert(aux);
+    occ->approximate_size(10);
+    uocc->approximate_size(100);
+    aux->approximate_size(4);
+    assert(uocc->approximate_size() == 100);
+  }
 
-  auto single_term_opt = [&idx2size](Product const& prod) {
-    return opt::single_term_opt(prod, idx2size);
+  auto single_term_opt = [](Product const& prod) {
+    return opt::single_term_opt(prod, [](Index const& ix) {
+      auto lbl = to_string(ix.label());
+      auto sz = ix.space().approximate_size();
+      return ix.space().approximate_size();
+    });
   };
 
   auto parse_expr_antisymm = [](auto const& xpr) {
@@ -172,7 +183,7 @@ TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
     auto sum = ex<Sum>();
     sum->as<Sum>().append(ex<Product>(ExprPtrList{parse_expr(L"f{a_1;i_1}")}));
     REQUIRE(sum->as<Sum>().summand(0).as<Product>().factors().size() == 1);
-    auto optimized = optimize(sum, idx2size);
+    auto optimized = optimize(sum);
     REQUIRE(optimized->is<Sum>());
     REQUIRE(optimized->as<Sum>().summands().size() == 1);
     REQUIRE(sum->as<Sum>().summand(0).as<Product>().factors().size() == 1);

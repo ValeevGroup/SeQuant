@@ -3,6 +3,7 @@
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/tensor_network.hpp>
+#include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <cassert>
@@ -49,7 +50,9 @@ void print_help() {
 
 int main(int argc, char **argv) {
   set_locale();
-  mbpt::set_default_convention();
+  sequant::set_default_context(Context(
+      mbpt::make_sr_spaces(), Vacuum::SingleProduct, IndexSpaceMetric::Unit,
+      BraKetSymmetry::conjugate, SPBasis::spinorbital));
 
   bool use_named_indices = true;
   const TensorNetwork::named_indices_t empty_named_indices;

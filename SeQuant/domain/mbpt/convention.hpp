@@ -5,41 +5,70 @@
 #ifndef SEQUANT_CONVENTION_HPP
 #define SEQUANT_CONVENTION_HPP
 
+#include <SeQuant/domain/mbpt/fwd.hpp>
+
+#include <SeQuant/core/index_space_registry.hpp>
+
 namespace sequant {
 namespace mbpt {
 
-enum class Convention { QCiFS };
+/// @brief Conventions for partitioning the single-particle Hilbert space
+enum class Convention {
+  Minimal,  //!< occupied/hole + unoccupied/particle + their union
+  SR,       //!< single determinant reference: occupied (frozen + active) +
+            //!< unoccupied (active + frozen)
+  MR,    //!< multi determinant reference: occupied (frozen + active) + active +
+         //!< unoccupied (active + frozen)
+  F12,   //!< SR + complement from complete basis, used for F12 methods
+  QCiFS  //!< ``Quantum Chemistry in Fock Space'' = superset of above
+};
 
-// clang-format off
-/// @brief Loads defaults for Convention @c conv
+void load(Convention conv = Convention::Minimal);
 
-/// This registers IndexSpace objects standard for the chosen convention,
-/// updates default context's IndexRegistry object, and
-/// updates TensorCanonicalizer cardinal labels
-/// @warning should be only called once
-/// @param conv convention to load; the only supported convention at the moment
-///        is QCiFS
-/// @note The QCiFS convention introduced the following definitions:
-///
-/// | Label | Space                               | Comment                                                                                                                                                      |
-/// |-------|-------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------|
-/// | `p`   | IndexSpace::all                     |  p,q,r... for OBS spstates introduced in [DOI 10.1063/1.444231 (QCiFS I)](https://dx.doi.org/10.1063/1.444231)                                               |
-/// | `i`   | IndexSpace::active_occupied         |  i,j,k... for active occupied spstates introduced in [DOI 10.1063/1.446736 (QCiFS III)](https://dx.doi.org/10.1063/1.446736)                                 |
-/// | `a`   | IndexSpace::active_unoccupied       |  a,b,c... for active unoccupied spstates introduced in [DOI 10.1063/1.446736 (QCiFS III)](https://dx.doi.org/10.1063/1.446736)                               |
-/// | `α`   | IndexSpace::complete_unoccupied     |  α,β... for complete unoccupied spstates introduced in [DOI 10.1063/1.459921 (MP2-R12 I)](https://dx.doi.org/10.1063/1.459921)                               |
-/// | `κ`   | IndexSpace::complete                |  κ,𝛌... for complete spstates introduced in [DOI 10.1063/1.459921 (MP2-R12 I)](https://dx.doi.org/10.1063/1.459921)                                          |
-/// | \c α' | IndexSpace::other_unoccupied        |  α',β'... for orthogonal complement to OBS (CABS) introduced in [DOI 10.1016/j.cplett.2004.07.061 (CABS)](https://dx.doi.org/10.1016/j.cplett.2004.07.061)   |
-/// | `m`   | IndexSpace::occupied                |  m,n.. for all occupied (including inactive/frozen orbitals) de facto introduced in [DOI 10.1016/j.cplett.2004.07.061 (CABS)](https://dx.doi.org/10.1016/j.cplett.2004.07.061), though formally not explicitly defined so |
-/// | `e`   | IndexSpace::unoccupied              |  e,f... for all unoccupied (including inactive/frozen orbitals) used internally in MPQC LCAOWavefunction |
-/// | `x`   | IndexSpace::all_active              |  used internally in MPQC for GF, CT-F12, and other ad hoc uses |
-/// | `u`   | IndexSpace::active                  |  origin unknown, for recent use see [DOI 10.1063/5.0067511](https://dx.doi.org/10.1063/5.0067511) |
-/// | `I`   | IndexSpace::active_maybe_occupied   |  origin unknown, for recent use see [DOI 10.1063/5.0067511](https://dx.doi.org/10.1063/5.0067511); N.B. although QCiFS uses capital letters for spin-free indices, since there is usually no need to distinguish spin-orbital from spin-free indices (the type is deduced from the context), this use of capital letters seems preferable |
-/// | `A`   | IndexSpace::active_maybe_unoccupied |  origin unknown, for recent use see [DOI 10.1063/5.0067511](https://dx.doi.org/10.1063/5.0067511); N.B. although QCiFS uses capital letters for spin-free indices, since there is usually no need to distinguish spin-orbital from spin-free indices (the type is deduced from the context), this use of capital letters seems preferable |
-/// | `M`   | IndexSpace::maybe_occupied          |  combination of of `I` for `m` |
-/// | `E`   | IndexSpace::maybe_unoccupied        |  combination of of `A` for `e` |
-/// | `Δ`   | IndexSpace::complete_maybe_unoccupied | combination of `α` and `A`; since capital Alpha looks indistinguishable from `A` use `Δ`                          |
-// clang-format on
-void set_default_convention(Convention conv = Convention::QCiFS);
+/// @brief decorate IndexSpace labels with spin
+std::wstring decorate_label(std::wstring label, bool up);
+
+/// @brief add fermionic spin spaces to registry
+void add_fermi_spin(std::shared_ptr<IndexSpaceRegistry>& isr);
+
+/// @name built-in definitions of IndexSpace
+/// @{
+
+/// Most standard models only need 2 base spaces, occupied and unoccupied.
+/// This is minimal partitioning is sufficient for computing expectation values
+/// of Coupled-Cluster type operators.
+std::shared_ptr<IndexSpaceRegistry> make_min_sr_spaces();
+
+/// Common partitioning for single reference F12 calculations.
+/// notably, this set contains an other_unoccupied space, α', commonly used to
+/// construct an approximately complete representation
+std::shared_ptr<IndexSpaceRegistry> make_F12_sr_spaces();
+
+/// Multireference partitioning contains an active space, x, which is assumed to
+/// have partial density although it is considered unoccupied with respect to a
+/// SingleProduct Vacuum. This leads to a variety of additional composite spaces
+/// with may or may not be occupied.
+std::shared_ptr<IndexSpaceRegistry> make_mr_spaces();
+
+/// 'Standard' choice of partitioning orbitals in a single reference.
+/// Includes frozen_core, active_occupied, active_unoccupied, and
+/// inactive_unoccupied orbitals as base spaces.
+std::shared_ptr<IndexSpaceRegistry> make_sr_spaces();
+
+/// Legacy partitioning similar to previous versions of SeQuant which had
+/// compile time hard coded partitioning. This is useful when verifying
+/// previously obtained results which have been canonicalized in this context.
+/// @param ignore_spin if true, do not add spin-specific spaces, and do not use
+/// Spin::any as IndexSpace::QuantumNumbers for spin-free space
+std::shared_ptr<IndexSpaceRegistry> make_legacy_spaces(
+    bool ignore_spin = false);
+
+/// make fermi and bose space registries for multicomponent models
+std::pair<std::shared_ptr<IndexSpaceRegistry>,
+          std::shared_ptr<IndexSpaceRegistry>>
+make_fermi_and_bose_spaces();
+
+/// @}
 
 }  // namespace mbpt
 }  // namespace sequant

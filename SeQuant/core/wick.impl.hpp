@@ -36,7 +36,8 @@ struct zero_result : public std::exception {};
 ///     index representing intersection of spaces of I and J, !!keep the delta!!
 /// @throw zero_result if @c product is zero for any reason, e.g. because
 ///        it includes an overlap of 2 indices from nonoverlapping spaces
-inline container::map<Index, Index> compute_index_replacement_rules(
+template <Statistics S>
+container::map<Index, Index> compute_index_replacement_rules(
     std::shared_ptr<Product> &product,
     const container::set<Index> &external_indices,
     const std::set<Index, Index::LabelCompare> &all_indices) {
@@ -53,8 +54,9 @@ inline container::map<Index, Index> compute_index_replacement_rules(
   // computes an index in intersection of space1 and space2
   auto make_intersection_index = [&idxfac](const IndexSpace &space1,
                                            const IndexSpace &space2) {
-    const auto intersection_space = intersection(space1, space2);
-    if (intersection_space == IndexSpace::null_instance()) throw zero_result{};
+    auto isr = sequant::get_default_context(S).index_space_registry();
+    const auto intersection_space = isr->intersection(space1, space2);
+    if (!intersection_space) throw zero_result{};
     return idxfac.make(intersection_space);
   };
 
@@ -95,6 +97,7 @@ inline container::map<Index, Index> compute_index_replacement_rules(
   // dst2 and dst
   auto add_rules = [&result, &idxfac, &proto, &make_intersection_index](
                        const Index &src1, const Index &src2, const Index &dst) {
+    auto isr = get_default_context(S).index_space_registry();
     // are there replacement rules already for src{1,2}?
     auto src1_it = result.find(src1);
     auto src2_it = result.find(src2);
@@ -139,9 +142,11 @@ inline container::map<Index, Index> compute_index_replacement_rules(
       const auto &old_dst2 = src2_it->second;
       const auto new_dst_space =
           (dst.space() != old_dst1.space() || dst.space() != old_dst2.space())
-              ? intersection(old_dst1.space(), old_dst2.space(), dst.space())
+              ? isr->intersection(
+                    isr->intersection(old_dst1.space(), old_dst2.space()),
+                    dst.space())
               : dst.space();
-      if (new_dst_space == IndexSpace::null_instance()) throw zero_result{};
+      if (!new_dst_space) throw zero_result{};
       Index new_dst;
       if (new_dst_space == old_dst1.space()) {
         new_dst = old_dst1;
@@ -165,6 +170,7 @@ inline container::map<Index, Index> compute_index_replacement_rules(
     }
   };
 
+  auto isr = get_default_context(S).index_space_registry();
   /// this makes the list of replacements ... we do not mutate the expressions
   /// to keep the information about which indices are related
   for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
@@ -183,10 +189,11 @@ inline container::map<Index, Index> compute_index_replacement_rules(
         const auto ket_is_ext = ranges::find(external_indices, ket) !=
                                 ranges::end(external_indices);
 
-        const auto intersection_space = intersection(bra.space(), ket.space());
+        const auto intersection_space =
+            isr->intersection(bra.space(), ket.space());
 
         // if overlap's indices are from non-overlapping spaces, return zero
-        if (intersection_space == IndexSpace::null_instance()) {
+        if (!intersection_space) {
           throw zero_result{};
         }
 
@@ -218,7 +225,8 @@ inline bool apply_index_replacement_rules(
     std::shared_ptr<Product> &product,
     const container::map<Index, Index> &const_replrules,
     const container::set<Index> &external_indices,
-    std::set<Index, Index::LabelCompare> &all_indices) {
+    std::set<Index, Index::LabelCompare> &all_indices,
+    const std::shared_ptr<const IndexSpaceRegistry> &isr) {
   // to be able to use map[]
   auto &replrules = const_cast<container::map<Index, Index> &>(const_replrules);
 
@@ -266,7 +274,7 @@ inline bool apply_index_replacement_rules(
 
 #ifndef NDEBUG
             const auto intersection_space =
-                intersection(bra.space(), ket.space());
+                isr->intersection(bra.space(), ket.space());
 #endif
 
             if (!bra_is_ext && !ket_is_ext) {  // int + int
@@ -277,7 +285,8 @@ inline bool apply_index_replacement_rules(
 #endif
               erase_it = true;
             } else if (bra_is_ext && !ket_is_ext) {  // ext + int
-              if (includes(ket.space(), bra.space())) {
+              if (isr->intersection(ket.space(), bra.space()) !=
+                  IndexSpace::null) {
 #ifndef NDEBUG
                 if (replrules.find(ket) != replrules.end())
                   assert(replrules[ket].space() == bra.space());
@@ -290,7 +299,8 @@ inline bool apply_index_replacement_rules(
 #endif
               }
             } else if (!bra_is_ext && ket_is_ext) {  // int + ext
-              if (includes(bra.space(), ket.space())) {
+              if (isr->intersection(bra.space(), ket.space()) !=
+                  IndexSpace::null) {
 #ifndef NDEBUG
                 if (replrules.find(bra) != replrules.end())
                   assert(replrules[bra].space() == ket.space());
@@ -344,9 +354,10 @@ inline bool apply_index_replacement_rules(
 /// If using orthonormal representation, resolves Kronecker deltas (=overlaps
 /// between indices in orthonormal spaces) in summations
 /// @throw zero_result if @c expr is zero
-inline void reduce_wick_impl(std::shared_ptr<Product> &expr,
-                             const container::set<Index> &external_indices) {
-  if (get_default_context().metric() == IndexSpaceMetric::Unit) {
+template <Statistics S>
+void reduce_wick_impl(std::shared_ptr<Product> &expr,
+                      const container::set<Index> &external_indices) {
+  if (get_default_context(S).metric() == IndexSpaceMetric::Unit) {
     bool pass_mutated = false;
     do {
       pass_mutated = false;
@@ -363,8 +374,8 @@ inline void reduce_wick_impl(std::shared_ptr<Product> &expr,
         }
       });
 
-      const auto replacement_rules =
-          compute_index_replacement_rules(expr, external_indices, all_indices);
+      const auto replacement_rules = compute_index_replacement_rules<S>(
+          expr, external_indices, all_indices);
 
       if (Logger::get_instance().wick_reduce) {
         std::wcout << "reduce_wick_impl(expr, external_indices):\n  expr = "
@@ -381,8 +392,9 @@ inline void reduce_wick_impl(std::shared_ptr<Product> &expr,
       }
 
       if (!replacement_rules.empty()) {
+        auto isr = get_default_context(S).index_space_registry();
         pass_mutated = apply_index_replacement_rules(
-            expr, replacement_rules, external_indices, all_indices);
+            expr, replacement_rules, external_indices, all_indices, isr);
       }
 
       if (Logger::get_instance().wick_reduce) {
@@ -405,16 +417,39 @@ struct NullNormalOperatorCanonicalizerDeregister {
 
 }  // namespace detail
 
+inline container::set<Index> extract_external_indices(const Expr &expr) {
+  if (ranges::any_of(expr, [](auto &e) { return e.template is<Sum>(); }))
+    throw std::invalid_argument(
+        "extract_external_indices(expr): expr must be expanded (i.e. no "
+        "subexpression can be a Sum)");
+
+  container::map<Index, int64_t> idx_counter;
+  auto visitor = [&idx_counter](const auto &expr) {
+    auto expr_as_abstract_tensor =
+        std::dynamic_pointer_cast<AbstractTensor>(expr);
+    if (expr_as_abstract_tensor) {
+      ranges::for_each(expr_as_abstract_tensor->_braket(),
+                       [&idx_counter](const auto &v) {
+                         auto it = idx_counter.find(v);
+                         if (it == idx_counter.end()) {
+                           idx_counter.emplace(v, 1);
+                         } else {
+                           it->second++;
+                         }
+                       });
+    }
+  };
+  expr.visit(visitor);
+
+  return idx_counter |
+         ranges::views::filter([](const auto &v) { return v.second == 1; }) |
+         ranges::views::transform([](const auto &v) { return v.first; }) |
+         ranges::to<container::set<Index>>;
+}
+
 template <Statistics S>
-ExprPtr WickTheorem<S>::compute(const bool count_only) {
-  if (input_.vacuum() != get_default_context().vacuum())
-    throw std::logic_error(
-        "WickTheorem<S>::compute(): input vacuum "
-        "must match the default context vacuum");
-
-  // this is used to detect whether this is part of compute() applied to a Sum
-  static bool applied_to_sum = false;
-
+ExprPtr WickTheorem<S>::compute(const bool count_only,
+                                const bool skip_input_canonicalization) {
   // need to avoid recanonicalization of operators produced by WickTheorem
   // by rapid canonicalization to avoid undoing all the good
   // the NormalOperator<S>::normalize did ... use RAII
@@ -451,20 +486,38 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
                  << to_latex_align(expr_input_) << std::endl;
     // if sum, canonicalize and apply to each summand ...
     if (expr_input_->is<Sum>()) {
-      assert(applied_to_sum == false);
-      applied_to_sum = true;
-
-      // initial full canonicalization
-      canonicalize(expr_input_);
-      assert(!expr_input_->as<Sum>().empty());
+      if (!skip_input_canonicalization) {
+        // initial full canonicalization
+        canonicalize(expr_input_);
+        assert(!expr_input_->as<Sum>().empty());
+      }
 
       // NOW disable canonicalization of normal operators
+      // N.B. even if skipped initial input canonicalization need to disable
+      // subsequent nop canonicalization
       disable_nop_canonicalization();
 
       // parallelize over summands
       auto result = std::make_shared<Sum>();
       std::mutex result_mtx;  // serializes updates of result
       auto summands = expr_input_->as<Sum>().summands();
+
+      // find external_indices if don't have them
+      if (!external_indices_) {
+        ranges::find_if(summands, [this](const auto &summand) {
+          if (summand.template is<Sum>())  // summands must not be a Sum
+            throw std::invalid_argument(
+                "WickTheorem<S>::compute(expr): expr is a Sum with one of the "
+                "summands also a Sum, WickTheorem can only accept a fully "
+                "expanded Sum");
+          else if (summand.template is<Product>()) {
+            external_indices_ = extract_external_indices(
+                *(summand.template as_shared_ptr<Product>()));
+            return true;
+          } else
+            return false;
+        });
+      }
 
       if (Logger::get_instance().wick_harness)
         std::wcout << "WickTheorem<S>::compute: input (after canonicalize) has "
@@ -474,7 +527,8 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
       auto wick_task = [&result, &result_mtx, this,
                         &count_only](const ExprPtr &input) {
         WickTheorem wt(input->clone(), *this);
-        auto task_result = wt.compute(count_only);
+        auto task_result = wt.compute(
+            count_only, /* definitely skip input canonicalization */ true);
         stats() += wt.stats();
         if (task_result) {
           std::scoped_lock<std::mutex> lock(result_mtx);
@@ -492,21 +546,29 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
       if (result->summands().size() == 1)
         result_expr = std::move(result->summands()[0]);
 
-      assert(applied_to_sum == true);
-      applied_to_sum = false;
-
       return result_expr;
     }
     // ... else if a product, find NormalOperatorSequence, if any, and compute
     // ...
     else if (expr_input_->is<Product>()) {
-      if (!applied_to_sum) {  // no need to canonicalize if this is part of
-                              // compute() on a Sum
+      if (!skip_input_canonicalization) {  // canonicalize, unless told to skip
         auto canon_byproduct = expr_input_->rapid_canonicalize();
         assert(canon_byproduct ==
                nullptr);  // canonicalization of Product always returns nullptr
-        // NOW disable canonicalization of normal operators
-        disable_nop_canonicalization();
+      }
+      // NOW disable canonicalization of normal operators
+      // N.B. even if skipped initial input canonicalization need to disable
+      // subsequent nop canonicalization
+      disable_nop_canonicalization();
+
+      // find external_indices if don't have them
+      if (!external_indices_) {
+        external_indices_ =
+            extract_external_indices(*(expr_input_.as_shared_ptr<Product>()));
+      } else {
+        assert(
+            extract_external_indices(*(expr_input_.as_shared_ptr<Product>())) ==
+            *external_indices_);
       }
 
       // split off NormalOperators into input_
@@ -518,10 +580,10 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
         // extract into prefactor and op sequence
         ExprPtr prefactor =
             ex<CProduct>(expr_input_->as<Product>().scalar(), ExprPtrList{});
-        decltype(input_) nopseq;
+        auto nopseq = std::make_shared<NormalOperatorSequence<S>>();
         for (const auto &factor : *expr_input_) {
           if (factor->template is<NormalOperator<S>>()) {
-            nopseq.push_back(factor->template as<NormalOperator<S>>());
+            nopseq->push_back(factor->template as<NormalOperator<S>>());
           } else {
             assert(factor->is_cnumber());
             *prefactor *= *factor;
@@ -573,7 +635,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
 
             using opseq_view_type =
                 flattened_rangenest<NormalOperatorSequence<S>>;
-            auto opseq_view = opseq_view_type(&input_);
+            auto opseq_view = opseq_view_type(input_.get());
             const auto opseq_view_begin = ranges::begin(opseq_view);
             const auto opseq_view_end = ranges::end(opseq_view);
 
@@ -587,7 +649,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
                 auto insertion_result = nop_vidx_ord.emplace(v, nop_ord++);
                 assert(insertion_result.second);
               }
-              if (vtypes[v] == VertexType::Index && !input_.empty()) {
+              if (vtypes[v] == VertexType::Index && !input_->empty()) {
                 auto &idx = (tn_edges.begin() + v)->idx();
                 auto idx_it_in_opseq = ranges::find_if(
                     opseq_view,
@@ -625,20 +687,20 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
             }
           }
 
-          /// Use automorphisms to determine groups of topologically equivalent
-          /// NormalOperator and Op objects.
-          /// @param vertices maps vertex indices of the objects to their
-          ///        ordinals in the sequence of such objects within
-          ///        the NormalOperatorSequence
-          /// @param nontrivial_partitions_only if true, only partitions with
-          /// more than one element, are reported, else even trivial
-          /// partitions with a single partition will be reported
-          /// @param vertex_pair_exclude a callable that accepts 2 vertex
-          /// indices and returns true if the automorphism of this pair
-          /// of indices is to be ignored
-          /// @return the \c {vertex_to_partition_idx,npartitions} pair in
-          /// which \c vertex_to_partition_idx maps vertex indices that are
-          /// part of nontrivial partitions to their (1-based) partition indices
+          // Use automorphisms to determine groups of topologically equivalent
+          // NormalOperator and Op objects.
+          // @param vertices maps vertex indices of the objects to their
+          //        ordinals in the sequence of such objects within
+          //        the NormalOperatorSequence
+          // @param nontrivial_partitions_only if true, only partitions with
+          // more than one element, are reported, else even trivial
+          // partitions with a single partition will be reported
+          // @param vertex_pair_exclude a callable that accepts 2 vertex
+          // indices and returns true if the automorphism of this pair
+          // of indices is to be ignored
+          // @return the \c {vertex_to_partition_idx,npartitions} pair in
+          // which \c vertex_to_partition_idx maps vertex indices that are
+          // part of nontrivial partitions to their (1-based) partition indices
           auto compute_partitions = [&aut_generators](
                                         const container::map<size_t, size_t>
                                             &vertices,
@@ -738,16 +800,16 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
               nop_vidx_ord, /* nontrivial_partitions_only = */ true,
               do_not_skip_elements);
 
-          /// converts vertex ordinal to partition key map into a sequence of
-          /// partitions, each composed of the corresponding ordinals of the
-          /// vertices in the vertex_list sequence
-          /// @param vidx2pidx a map from vertex index (in TN) to its
-          ///        (1-based) partition index
-          /// @param npartitions the total number of partitions
-          /// @param vidx_ord ordered sequence of vertex indices, object
-          /// with vertex index `vidx` will be mapped to ordinal
-          /// `vidx_ord[vidx]`
-          /// @return sequence of partitions, sorted by the smallest ordinal
+          // converts vertex ordinal to partition key map into a sequence of
+          // partitions, each composed of the corresponding ordinals of the
+          // vertices in the vertex_list sequence
+          // @param vidx2pidx a map from vertex index (in TN) to its
+          //        (1-based) partition index
+          // @param npartitions the total number of partitions
+          // @param vidx_ord ordered sequence of vertex indices, object
+          // with vertex index `vidx` will be mapped to ordinal
+          // `vidx_ord[vidx]`
+          // @return sequence of partitions, sorted by the smallest ordinal
           auto extract_partitions = [](const auto &vidx2pidx,
                                        const auto npartitions,
                                        const auto &vidx_ord) {
@@ -876,7 +938,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
           }
         }
 
-        if (!input_.empty()) {
+        if (!input_->empty()) {
           if (Logger::get_instance().wick_contract) {
             std::wcout
                 << "WickTheorem<S>::compute: input to compute_nopseq = {\n";
@@ -900,10 +962,13 @@ ExprPtr WickTheorem<S>::compute(const bool count_only) {
       } else {  // product does not include ops
         return expr_input_;
       }
-    }
+    }  // expr_input_->is<Product>()
     // ... else if NormalOperatorSequence already, compute ...
     else if (expr_input_->is<NormalOperatorSequence<S>>()) {
-      init_input(expr_input_->as<NormalOperatorSequence<S>>());
+      abort();  // expr_input_ should no longer be nonnull if constructed with
+                // an expression that's a NormalOperatorSequence<S>
+      init_input(
+          expr_input_.template as_shared_ptr<NormalOperatorSequence<S>>());
       // NB no simplification possible for a bare product w/ full contractions
       // ... partial contractions will need simplification
       return compute_nopseq(count_only);
@@ -925,7 +990,8 @@ void WickTheorem<S>::reduce(ExprPtr &expr) const {
   if (expr->type_id() == Expr::get_type_id<Product>()) {
     auto expr_cast = std::static_pointer_cast<Product>(expr);
     try {
-      detail::reduce_wick_impl(expr_cast, external_indices_);
+      assert(external_indices_);
+      detail::reduce_wick_impl<S>(expr_cast, *external_indices_);
       expr = expr_cast;
     } catch (detail::zero_result &) {
       expr = std::make_shared<Constant>(0);
@@ -936,7 +1002,8 @@ void WickTheorem<S>::reduce(ExprPtr &expr) const {
       assert(subexpr->is<Product>());
       auto subexpr_cast = std::static_pointer_cast<Product>(subexpr);
       try {
-        detail::reduce_wick_impl(subexpr_cast, external_indices_);
+        assert(external_indices_);
+        detail::reduce_wick_impl<S>(subexpr_cast, *external_indices_);
         subexpr = subexpr_cast;
       } catch (detail::zero_result &) {
         subexpr = std::make_shared<Constant>(0);

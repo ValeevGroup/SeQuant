@@ -2,6 +2,8 @@
 #ifndef SEQUANT_DOMAIN_MBPT_CONTEXT_HPP
 #define SEQUANT_DOMAIN_MBPT_CONTEXT_HPP
 
+#include <SeQuant/domain/mbpt/fwd.hpp>
+
 #include <SeQuant/core/utility/context.hpp>
 
 namespace sequant::mbpt {
@@ -27,20 +29,17 @@ class Context {
   CSV csv_ = Defaults::csv;
 };
 
-/// old name of Context is a deprecated alias
-using Formalism [[deprecated(
-    "use sequant::mbpt::Context instead of sequant::mbpt::Formalism")]] =
-    Context;
-
 bool operator==(Context const& left, Context const& right);
 
 bool operator!=(Context const& left, Context const& right);
 
-const Context& get_default_formalism();
-void set_default_formalism(const Context& ctx);
-void reset_default_formalism();
+const Context& get_default_mbpt_context();
+
+void set_default_mbpt_context(const Context& ctx);
+
+void reset_default_mbpt_context();
 [[nodiscard]] detail::ImplicitContextResetter<Context>
-set_scoped_default_formalism(const Context& ctx);
+set_scoped_default_mbpt_context(const Context& ctx);
 
 }  // namespace sequant::mbpt
 

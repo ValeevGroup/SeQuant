@@ -14,6 +14,7 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/tag.hpp>
 #include <SeQuant/core/tensor.hpp>
+#include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <cstddef>
 #include <initializer_list>

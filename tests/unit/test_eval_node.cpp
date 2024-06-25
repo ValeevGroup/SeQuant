@@ -9,6 +9,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/parse_expr.hpp>
 #include <SeQuant/core/rational.hpp>
+#include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <cassert>
 #include <initializer_list>
@@ -129,11 +130,7 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
                          L"Y^{i1,i2}_{a1,a2}");
 
     REQUIRE(node1.right()->op_type() == EvalOp::Prod);
-    if constexpr (hash_version() == hash::Impl::BoostPre181) {
-      REQUIRE_TENSOR_EQUAL(node1.right()->as_tensor(), L"I_{a2,a1}^{i1,i2}");
-    } else {
-      REQUIRE_TENSOR_EQUAL(node1.right()->as_tensor(), L"I_{a1,a2}^{i1,i2}");
-    }
+    REQUIRE_TENSOR_EQUAL(node1.right()->as_tensor(), L"I_{a2,a1}^{i1,i2}");
     REQUIRE_TENSOR_EQUAL(node1.right().left()->as_tensor(),
                          L"g_{i3,a1}^{i1,i2}");
     REQUIRE_TENSOR_EQUAL(node1.right().right()->as_tensor(), L"t_{a2}^{i3}");

@@ -5,7 +5,7 @@
 #ifndef SEQUANT_EXPR_HPP
 #define SEQUANT_EXPR_HPP
 
-#include "SeQuant/core/expr_fwd.hpp"
+#include <SeQuant/core/expr_fwd.hpp>
 
 #include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/container.hpp>
@@ -251,6 +251,21 @@ class Expr : public std::enable_shared_from_this<Expr>,
   ///       - the default implementation throws an exception
   virtual ExprPtr clone() const;
 
+  /// like Expr::shared_from_this, but returns ExprPtr
+  /// @return a shared_ptr to this object wrapped into ExprPtr
+  /// @throw std::bad_weak_ptr if this object is not managed by a shared_ptr
+  ExprPtr exprptr_from_this() {
+    return static_cast<ExprPtr>(this->shared_from_this());
+  }
+
+  /// like Expr::shared_from_this, but returns ExprPtr
+  /// @return a shared_ptr to this object wrapped into ExprPtr
+  /// @throw std::bad_weak_ptr if this object is not managed by a shared_ptr
+  ExprPtr exprptr_from_this() const {
+    return static_cast<const ExprPtr>(
+        std::const_pointer_cast<Expr>(this->shared_from_this()));
+  }
+
   /// Canonicalizes @c this and returns the biproduct of canonicalization (e.g.
   /// phase)
   /// @return the biproduct of canonicalization, or @c nullptr if no biproduct
@@ -281,26 +296,13 @@ class Expr : public std::enable_shared_from_this<Expr>,
   // clang-format on
   template <typename Visitor>
   bool visit(Visitor &&visitor, const bool atoms_only = false) {
-    for (auto &subexpr_ptr : expr()) {
-      const auto subexpr_is_an_atom = subexpr_ptr->is_atom();
-      const auto need_to_visit_subexpr = !atoms_only || subexpr_is_an_atom;
-      bool visited = false;
-      if (!subexpr_is_an_atom)  // if not a leaf, recur into it
-        visited =
-            subexpr_ptr->visit(std::forward<Visitor>(visitor), atoms_only);
-      // call on the subexpression itself, if not yet done so
-      if (need_to_visit_subexpr && !visited) visitor(subexpr_ptr);
-    }
-    // can only visit itself here if visitor(const ExprPtr&) is valid
-    bool this_visited = false;
-    if constexpr (std::is_invocable_r_v<void, std::remove_reference_t<Visitor>,
-                                        const ExprPtr &>) {
-      if (!atoms_only || this->is_atom()) {
-        visitor(shared_from_this());
-        this_visited = true;
-      }
-    }
-    return this_visited;
+    return visit_impl(*this, std::forward<Visitor>(visitor), atoms_only);
+  }
+
+  /// const version of visit
+  template <typename Visitor>
+  bool visit(Visitor &&visitor, const bool atoms_only = false) const {
+    return visit_impl(*this, std::forward<Visitor>(visitor), atoms_only);
   }
 
   auto begin_subexpr() { return range_type::begin(); }
@@ -312,6 +314,7 @@ class Expr : public std::enable_shared_from_this<Expr>,
   auto end_subexpr() const { return range_type::end(); }
 
   Expr &expr() { return *this; }
+  const Expr &expr() const { return *this; }
 
   template <typename T, typename Enabler = void>
   struct is_shared_ptr_of_expr : std::false_type {};
@@ -509,6 +512,36 @@ class Expr : public std::enable_shared_from_this<Expr>,
 
  private:
   friend ranges::range_access;
+
+  template <typename E, typename Visitor,
+            typename =
+                std::enable_if_t<std::is_same_v<meta::remove_cvref_t<E>, Expr>>>
+  static bool visit_impl(E &&expr, Visitor &&visitor, const bool atoms_only) {
+    if (expr.weak_from_this().use_count() == 0)
+      throw std::invalid_argument(
+          "Expr::visit: cannot visit expressions not managed by shared_ptr");
+    for (auto &subexpr_ptr : expr.expr()) {
+      const auto subexpr_is_an_atom = subexpr_ptr->is_atom();
+      const auto need_to_visit_subexpr = !atoms_only || subexpr_is_an_atom;
+      bool visited = false;
+      if (!subexpr_is_an_atom)  // if not a leaf, recur into it
+        visited = visit_impl(*subexpr_ptr, std::forward<Visitor>(visitor),
+                             atoms_only);
+      // call on the subexpression itself, if not yet done so
+      if (need_to_visit_subexpr && !visited) visitor(subexpr_ptr);
+    }
+    // N.B. can only visit itself if visitor is nonmutating!
+    bool this_visited = false;
+    if constexpr (std::is_invocable_r_v<void, std::remove_reference_t<Visitor>,
+                                        const ExprPtr &>) {
+      if (!atoms_only || expr.is_atom()) {
+        const ExprPtr this_exprptr = expr.exprptr_from_this();
+        visitor(this_exprptr);
+        this_visited = true;
+      }
+    }
+    return this_visited;
+  }
 
  protected:
   Expr(Expr &&) = default;
@@ -1151,7 +1184,6 @@ class Product : public Expr {
         });
     Product result(this->scalar(), ExprPtrList{});
     ranges::for_each(cloned_factors, [&](const auto &cloned_factor) {
-      if (cloned_factor.template is<Product>()) std::cout << "";
       result.append(1, std::move(cloned_factor), Flatten::No);
     });
     return result;
@@ -1685,6 +1717,6 @@ T &ExprPtr::as() {
 
 #endif  // SEQUANT_EXPR_HPP
 
-#include "expr_operator.hpp"
+#include <SeQuant/core/expr_operator.hpp>
 
-#include "expr_algorithm.hpp"
+#include <SeQuant/core/expr_algorithm.hpp>

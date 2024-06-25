@@ -8,21 +8,8 @@
 
 namespace sequant::eval {
 
-const size_t IndexToSize::nocc = 10;
-
-const size_t IndexToSize::nvirt = 10;
-
-size_t IndexToSize::operator()(Index const& idx) const {
-  if (idx.space() == IndexSpace::active_occupied)
-    return nocc;
-  else if (idx.space() == IndexSpace::active_unoccupied)
-    return nvirt;
-  else
-    throw std::runtime_error("Unsupported IndexSpace type encountered");
-}
-
 container::vector<ExprPtr> CalcInfo::exprs() const {
-  auto exprs = mbpt::sr::CC{eqn_opts.excit}.t();
+  auto exprs = mbpt::CC{eqn_opts.excit}.t();
   container::vector<ExprPtr> result{};
   for (auto r = 1; r < exprs.size(); ++r)
     result.emplace_back(eqn_opts.spintrace ? closed_shell_CC_spintrace(exprs[r])

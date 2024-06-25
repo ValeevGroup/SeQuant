@@ -1,6 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
 
-#include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/optimize/fusion.hpp>
 #include <SeQuant/core/parse_expr.hpp>
@@ -10,7 +9,7 @@
 #include <string_view>
 #include <vector>
 
-TEST_CASE("TEST_FUSION", "[Fusion]") {
+TEST_CASE("TEST_FUSION", "[optimize]") {
   using sequant::opt::Fusion;
   using namespace sequant;
   std::vector<std::array<std::wstring_view, 3>> fused_terms{
@@ -22,7 +21,7 @@ TEST_CASE("TEST_FUSION", "[Fusion]") {
 
       {L"1/8 g{a1,a2;a3,a4} t{a3,a4;i1,i2}",
        L"1/4 g{a1,a2;a3,a4} t{a3;i1} t{a4;i2}",
-       L"g{a1,a2;a3,a4}(1/8 t{a3,a4;i1,i2} + 1/4 t{a3;i1} t{a4;i2})"},
+       L"1/8 g{a1,a2;a3,a4}(t{a3,a4;i1,i2} + 2 t{a3;i1} t{a4;i2})"},
 
       {L"1/4 g{a1,a2;a3,a4} t{a3;i1} t{a4;i2}",
        L"1/4 g{i3,i4;a3,a4} t{a1;i3} t{a2;i4} t{a3;i1} t{a4;i2}",
@@ -31,13 +30,20 @@ TEST_CASE("TEST_FUSION", "[Fusion]") {
 
       {L"1/8 g{i3,i4;a3,a4} t{a1;i3} t{a2;i4} t{a3,a4;i1,i2}",
        L"1/4 g{i3,i4;a3,a4} t{a1;i3} t{a2;i4} t{a3;i1} t{a4;i2}",
-       L"g{i3,i4;a3,a4} t{a1;i3} t{a2;i4} "
-       L"                      (1/8 t{a3,a4;i1,i2} + 1/4 t{a3;i1} t{a4;i2})"}};
+       L"1/8 g{i3,i4;a3,a4} t{a1;i3} t{a2;i4} "
+       L"                      (t{a3,a4;i1,i2} + 2 t{a3;i1} t{a4;i2})"},
+
+      {L"-1/8 g{i3,i4;a3,a4} t{a1;i3} t{a2;i4} t{a3,a4;i1,i2}",
+       L"-1/4 g{i3,i4;a3,a4} t{a1;i3} t{a2;i4} t{a3;i1} t{a4;i2}",
+       L"-1/8 g{i3,i4;a3,a4} t{a1;i3} t{a2;i4} "
+       L"                      (t{a3,a4;i1,i2} + 2 t{a3;i1} t{a4;i2})"}
+
+  };
 
   for (auto&& [l, r, f] : fused_terms) {
-    auto const le = parse_expr(l, Symmetry::nonsymm);
-    auto const re = parse_expr(r, Symmetry::nonsymm);
-    auto const fe = parse_expr(f, Symmetry::nonsymm);
+    auto const le = parse_expr(l);
+    auto const re = parse_expr(r);
+    auto const fe = parse_expr(f);
     auto fu = Fusion{le->as<Product>(), re->as<Product>()};
     REQUIRE((fu.left() || fu.right()));
 

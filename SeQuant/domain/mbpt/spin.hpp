@@ -2,8 +2,10 @@
 // Created by Eduard Valeyev on 2019-02-27.
 //
 
-#ifndef SEQUANT_SPIN_HPP
-#define SEQUANT_SPIN_HPP
+#ifndef SEQUANT_DOMAIN_MBPT_SPIN_HPP
+#define SEQUANT_DOMAIN_MBPT_SPIN_HPP
+
+#include <SeQuant/domain/mbpt/fwd.hpp>
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
@@ -17,6 +19,93 @@
 
 namespace sequant {
 
+namespace mbpt {
+
+/// quantum numbers tags related to spin
+/// \note spin quantum number takes 2 rightmost bits
+enum class Spin : bitset_t {
+  alpha = 0b000001,
+  beta = 0b000010,
+  any = 0b000011,  // both bits set so that overlap and union work as expected
+                   // (any & alpha = alpha, alpha | beta = any)
+  free = any,      // syntax sugar
+  spinmask = 0b000011  // coincides with any
+};
+
+// Spin is a scoped enum, hence not implicitly convertible to
+// QuantumNumbersAttr::bitset_t
+static_assert(!std::is_convertible_v<sequant::mbpt::Spin, bitset_t>);
+// QuantumNumbersAttr::bitset_t cannot be constructed from Spin
+static_assert(!std::is_constructible_v<bitset_t, sequant::mbpt::Spin>);
+// but Spin can be cast to QuantumNumbersAttr::bitset_t
+static_assert(meta::is_statically_castable_v<sequant::mbpt::Spin, bitset_t>);
+// Spin cannot be cast to nonsense ...
+static_assert(
+    !meta::is_statically_castable_v<sequant::mbpt::Spin, std::string>);
+
+inline Spin operator~(Spin s) {
+  return static_cast<Spin>(~(static_cast<bitset_t>(s)));
+}
+inline Spin operator|(Spin s1, Spin s2) {
+  return static_cast<Spin>(static_cast<bitset_t>(s1) |
+                           static_cast<bitset_t>(s2));
+}
+inline Spin operator&(Spin s1, Spin s2) {
+  return static_cast<Spin>(static_cast<bitset_t>(s1) &
+                           static_cast<bitset_t>(s2));
+}
+
+/// converts QuantumNumbersAttr to Spin
+/// @note this filters out all bits not used in Spin
+inline Spin to_spin(const QuantumNumbersAttr& t) {
+  return static_cast<Spin>(static_cast<Spin>(t.to_int32()) & Spin::spinmask);
+}
+
+/// removes spin annotation in QuantumNumbersAttr by unsetting the bits used by
+/// Spin
+inline QuantumNumbersAttr spinannotation_remove(const QuantumNumbersAttr& t) {
+  return t.intersection(QuantumNumbersAttr(~Spin::spinmask));
+}
+
+/// removes spin annotation, if any
+template <typename WS, typename = std::enable_if_t<
+                           meta::is_wstring_or_view_v<std::decay_t<WS>>>>
+std::wstring spinannotation_remove(WS&& label) {
+  auto [base, orbital] = Index::make_split_label(label);
+  if (base.back() == L'↑' || base.back() == L'↓') {
+    base.remove_suffix(1);
+  }
+  return Index::make_merged_label(base, orbital);
+}
+
+/// adds spin annotation to IndexSpace base label or Index (full) label
+template <typename WS, typename = std::enable_if_t<
+                           meta::is_wstring_or_view_v<std::decay_t<WS>>>>
+std::wstring spinannotation_add(WS&& label, Spin s) {
+  auto [base, ordinal] = Index::make_split_label(label);
+  switch (s) {
+    case Spin::any:
+      return std::wstring(label);
+    case Spin::alpha:
+      return Index::make_merged_label(std::wstring(base) + L"↑", ordinal);
+    case Spin::beta:
+      return Index::make_merged_label(std::wstring(base) + L"↓", ordinal);
+    default:
+      assert(false && "invalid quantum number");
+      abort();
+  }
+}
+
+/// replaces spin annotation to
+template <typename WS, typename = std::enable_if_t<
+                           meta::is_wstring_or_view_v<std::decay_t<WS>>>>
+std::wstring spinannotation_replacе(WS&& label, Spin s) {
+  auto label_sf = spinannotation_remove(std::forward<WS>(label));
+  return spinannotation_add(label_sf, s);
+}
+
+}  // namespace mbpt
+
 // make alpha-spin idx
 [[nodiscard]] Index make_spinalpha(const Index& idx);
 
@@ -24,7 +113,7 @@ namespace sequant {
 [[nodiscard]] Index make_spinbeta(const Index& idx);
 
 // make null-spin idx
-[[nodiscard]] Index make_spinnull(const Index& idx);
+[[nodiscard]] Index make_spinfree(const Index& idx);
 
 /// @brief Applies index replacement rules to an ExprPtr
 /// @param expr ExprPtr to transform
@@ -81,9 +170,10 @@ bool can_expand(const Tensor& tensor);
 /// @return an ExprPtr containing the sum of expanded terms, if antisymmetric
 ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm = false);
 
-// TODO: Correct this function
-/// @brief expands all antisymmetric tensors in a product
-/// @param expr an expression pointer to expand
+/// @brief expands all antisymmetric tensors in an expression
+/// @param expr an expression to expand
+/// @param skip_spinsymm is true, will not expand tensors whose indices all have
+/// same spin [default=false]
 /// @return an expression pointer with expanded tensors as a sum
 ExprPtr expand_antisymm(const ExprPtr& expr, bool skip_spinsymm = false);
 
@@ -93,7 +183,8 @@ ExprPtr expand_antisymm(const ExprPtr& expr, bool skip_spinsymm = false);
 /// @return true if tensor with given label is found
 bool has_tensor(const ExprPtr& expr, std::wstring label);
 
-/// @brief Generates a vector of replacement maps for Antisymmetrizer operator
+/// @brief Generates a vector of replacement maps for antisymmetrization (A)
+/// tensor
 /// @param A An antisymmetrizer tensor (A) (with > 2 particle indices)
 /// @return Vector of replacement maps
 container::svector<container::map<Index, Index>> A_maps(const Tensor& A);
@@ -110,8 +201,8 @@ ExprPtr remove_tensor(const Product& product, std::wstring label);
 /// @return ExprPtr with the tensor removed
 ExprPtr remove_tensor(const ExprPtr& expr, std::wstring label);
 
-/// @brief Expand a product containing the Antisymmetrization (A) operator
-/// @param A product term with/without A operator
+/// @brief Expand a product containing the antisymmetrization (A) tensor
+/// @param product a Product that may or may not include the antisymmetrizer
 /// @return an ExprPtr containing sum of expanded terms if A is present
 ExprPtr expand_A_op(const Product& product);
 
@@ -120,30 +211,30 @@ ExprPtr expand_A_op(const Product& product);
 /// @return expression pointer with Symmstrizer operator
 ExprPtr symmetrize_expr(const Product& product);
 
-/// @brief Expand an expression containing the Antisymmetrization (A) operator
+/// @brief Expand an expression containing the antisymmetrization (A) tensor
 /// @param expr any ExprPtr
 /// @return an ExprPtr containing sum of expanded terms if A is present
 ExprPtr symmetrize_expr(const ExprPtr& expr);
 
-/// @brief Expand an expression containing the Antisymmetrization (A) operator
+/// @brief Expand an expression containing the antisymmetrization (A) tensor
 /// @param expr any ExprPtr
 /// @return an ExprPtr containing sum of expanded terms if A is present
 ExprPtr expand_A_op(const ExprPtr& expr);
 
 /// @brief Generates a vector of replacement maps for particle permutation
 /// operator
-/// @param P A particle permutation operator (with > 2 particle indices)
+/// @param P a particle permutation operator (with > 2 particle indices)
 /// @return Vector of replacement maps
 container::svector<container::map<Index, Index>> P_maps(
     const Tensor& P, bool keep_canonical = true, bool pair_wise = false);
 
-/// @brief Expand a product containing the particle permutation (P) operator
-/// @param A product term with/without P operator
+/// @brief Expand a product containing the particle permutation (P) tensor
+/// @param product a Product that may or may not contain P tensor
 /// @return an ExprPtr containing sum of expanded terms if P is present
 ExprPtr expand_P_op(const Product& product, bool keep_canonical = true,
                     bool pair_wise = true);
 
-/// @brief Expand an expression containing the particle permutation (P) operator
+/// @brief Expand an expression containing the particle permutation (P) tensor
 /// @param expr any ExprPtr
 /// @return an ExprPtr containing sum of expanded terms if P is present
 ExprPtr expand_P_op(const ExprPtr& expr, bool keep_canonical = true,
@@ -163,7 +254,7 @@ ExprPtr S_maps(const ExprPtr& expr);
 /// @tparam Seq1 (reference to) a container type
 /// @param v0 first sequence; if passed as an rvalue reference, it is moved from
 /// @param[in] v1 second sequence
-/// @param \p v0 is a permutation of \p v1
+/// @pre \p v0 is a permutation of \p v1
 /// @return the number of cycles
 template <typename Seq0, typename Seq1>
 std::size_t count_cycles(Seq0&& v0, const Seq1& v1) {
@@ -211,7 +302,7 @@ std::size_t count_cycles(Seq0&& v0, const Seq1& v1) {
 /// @param ext_index_groups groups of external indices
 /// @return an expression with spin integrated/adapted
 ExprPtr closed_shell_spintrace(
-    const ExprPtr& expression,
+    const ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_index_groups = {});
 
 ///
@@ -221,14 +312,6 @@ ExprPtr closed_shell_spintrace(
 ///       it is OpType::S or OpType::A respectively.
 ///
 container::svector<container::svector<Index>> external_indices(Tensor const&);
-
-///
-/// @param nparticles Number of indices in bra of the target tensor. That must
-///                   be equal to the same in the ket.
-/// @deprecated not CSV-compatible, and mixes bra and ket relative to
-/// external_indices(expr) , will be deprecated
-//[[deprecated("use external_indices(expr)")]] container::svector<
-//    container::svector<Index>> external_indices(size_t nparticles);
 
 /// @brief Transforms Coupled cluster from spin orbital to spatial orbitals
 /// @details The external indices are deduced from Antisymmetrization operator
@@ -301,7 +384,7 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr);
 /// @warning The result of this function is not simplified since this is a
 /// building block for more specialized spin-tracing functions
 ExprPtr spintrace(
-    const ExprPtr& expression,
+    const ExprPtr& expr,
     container::svector<container::svector<Index>> ext_index_groups = {},
     bool spinfree_index_spaces = true);
 
@@ -323,4 +406,4 @@ ExprPtr biorthogonal_transform(
 
 }  // namespace sequant
 
-#endif  // SEQUANT_SPIN_HPP
+#endif  // SEQUANT_DOMAIN_MBPT_SPIN_HPP

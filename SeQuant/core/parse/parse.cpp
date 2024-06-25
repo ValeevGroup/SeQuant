@@ -2,13 +2,17 @@
 // Created by Robert Adam on 2023-09-20
 //
 
-#include <SeQuant/core/attr.hpp>
-#include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/parse/ast.hpp>
 #include <SeQuant/core/parse/ast_conversions.hpp>
 #include <SeQuant/core/parse/semantic_actions.hpp>
 #include <SeQuant/core/parse_expr.hpp>
+
+#include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/container.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/index.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/tensor.hpp>
 
 #define BOOST_SPIRIT_X3_UNICODE
 #include <boost/core/demangle.hpp>
@@ -16,15 +20,13 @@
 #include <boost/spirit/home/x3/support/utility/error_reporting.hpp>
 #include <boost/variant.hpp>
 
-#include <cstddef>
+#include <algorithm>
+#include <cassert>
+#include <cstdint>
 #include <functional>
 #include <iostream>
-#include <iterator>
-#include <stdexcept>
-#include <string>
-#include <string_view>
-#include <utility>
-#include <vector>
+#include <memory>
+#include <type_traits>
 
 namespace sequant {
 
@@ -98,9 +100,6 @@ auto index_def        = x3::lexeme[
                             index_label >> -('<' >> index_label % ',' >> ">")
                         ];
 
-SEQUANT_PRAGMA_GCC(diagnostic push)
-SEQUANT_PRAGMA_GCC(diagnostic ignored "-Wparentheses")
-
 const std::vector<ast::Index> noIndices;
 auto index_groups_def =   L"_{" > -(index % ',') > L"}^{" > -(index % ',')  > L"}" >> x3::attr(noIndices) >> x3::attr(false)
                         | L"^{" > -(index % ',') > L"}_{" > -(index % ',')  > L"}" >> x3::attr(noIndices) >> x3::attr(true)
@@ -113,8 +112,6 @@ auto tensor_def       = x3::lexeme[
 auto nullary          = number | tensor | variable;
 
 auto grouped          = '(' > sum > ')' | nullary;
-
-SEQUANT_PRAGMA_GCC(diagnostic pop)
 
 auto product_def      = grouped % -x3::lit('*');
 

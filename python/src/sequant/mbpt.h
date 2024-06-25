@@ -2,7 +2,7 @@
 #define SEQUANT_PYTHON_MBPT_H
 
 #include <SeQuant/domain/mbpt/convention.hpp>
-#include <SeQuant/domain/mbpt/sr.hpp>
+#include <SeQuant/domain/mbpt/op.hpp>
 
 #include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/context.hpp>
@@ -32,9 +32,6 @@ ExprPtr VacuumAverage(const ExprPtr& e, const Args&... args) {
 
 inline void __init__(py::module m) {
   sequant::mbpt::set_default_convention();
-  sequant::set_default_context(
-      Context(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-              BraKetSymmetry::conjugate, SPBasis::spinorbital));
   sequant::TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
 

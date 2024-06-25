@@ -241,11 +241,16 @@ class Taggable {
   Taggable() noexcept : tag_{} { assert(!has_value()); }
 
   /// tags this object with tag @c t
+  /// @param t tag to assign
+  /// @return reference to this (for chaining)
+  /// @pre `!this->has_value()`
+  /// @post `this->value() == t`
   template <typename T>
-  void assign(const T &t) const {
+  const Taggable &assign(const T &t) const {
     assert(!tag_.has_value());
     tag_ = t;
     assert(tag_.has_value());
+    return *this;
   }
 
   /// @return this tag's value
@@ -262,7 +267,11 @@ class Taggable {
   bool has_value() const { return tag_.has_value(); }
 
   /// resets this tag
-  void reset() const { tag_.reset(); }
+  /// @return reference to this (for chaining)
+  const Taggable &reset() const {
+    tag_.reset();
+    return *this;
+  }
 
  private:
   mutable any_comparable tag_;

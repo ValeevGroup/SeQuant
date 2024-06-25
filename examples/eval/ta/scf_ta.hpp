@@ -126,8 +126,6 @@ class SequantEvalScfTA final : public SequantEvalScf {
     assert(info_.eqn_opts.excit >= 2 &&
            "At least double excitation (CCSD) is required!");
 
-    using HRC = std::chrono::high_resolution_clock;
-
     auto const exprs = info_.exprs();
 
     nodes_ = info_.nodes<ExprT>(exprs);

@@ -51,12 +51,23 @@ int main(int argc, char* argv[]) {
 
   using namespace sequant;
   detail::OpIdRegistrar op_id_registrar;
-  sequant::set_default_context(
-      Context(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-              BraKetSymmetry::conjugate, SPBasis::spinorbital));
-  mbpt::set_default_convention();
+  sequant::set_default_context(Context(
+      mbpt::make_min_sr_spaces(), Vacuum::SingleProduct, IndexSpaceMetric::Unit,
+      BraKetSymmetry::conjugate, SPBasis::spinorbital));
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
+
+  // for optimization tests, set occupied and unoccupied index extents
+  {
+    auto reg = get_default_context().mutable_index_space_registry();
+    auto occ = reg->retrieve_ptr(L"i");
+    auto uocc = reg->retrieve_ptr(L"a");
+    assert(occ);
+    assert(uocc);
+    occ->approximate_size(10);
+    uocc->approximate_size(100);
+    assert(uocc->approximate_size() == 100);
+  }
 
   std::string calc_config = argc > 1 ? argv[1] : "calc.inp";
   std::string fock_file = argc > 2 ? argv[2] : "fock_so.dat";

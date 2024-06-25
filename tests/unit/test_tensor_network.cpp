@@ -19,7 +19,6 @@
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/timer.hpp>
 #include <SeQuant/core/wick_graph.hpp>
-#include <SeQuant/domain/mbpt/sr.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -38,6 +37,13 @@
 #include <tuple>
 #include <vector>
 
+#include <SeQuant/core/bliss.hpp>
+#include <SeQuant/core/op.hpp>
+#include <SeQuant/core/tensor_network.hpp>
+#include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/op.hpp>
+
+#include <SeQuant/core/timer.hpp>
 #include <range/v3/all.hpp>
 
 std::string to_utf8(const std::wstring& wstr) {
@@ -81,8 +87,11 @@ class TensorNetworkAccessor {
 
 TEST_CASE("TensorNetwork", "[elements]") {
   using namespace sequant;
+  using namespace sequant::mbpt::tensor;
 
-  using namespace sequant::mbpt::sr;
+  sequant::set_default_context(Context(
+      mbpt::make_sr_spaces(), Vacuum::SingleProduct, IndexSpaceMetric::Unit,
+      BraKetSymmetry::conjugate, SPBasis::spinorbital));
 
   SECTION("Edges") {
     using Vertex = TensorNetwork::Vertex;
@@ -314,10 +323,10 @@ TEST_CASE("TensorNetwork", "[elements]") {
            L"t{a_1,a_2,a_3;i_4,i_3,i_1}:N",
            L"S{i_1,i_2,i_3;a_1,a_2,a_3}:N * f{i_4;i_1}:N * "
            L"t{a_1,a_2,a_3;i_2,i_3,i_4}:N"},
-          {L"Γ{u_2,u_4;u_1,u_3}:N * g{i_1,u_1;u_2,A_1}:N * "
-           L"t{u_3,A_1;u_4,i_1}:N",
-           L"Γ{u_2,u_4;u_1,u_3}:N * g{i_1,u_3;u_4,A_1}:N * "
-           L"t{u_1,A_1;u_2,i_1}:N"}};
+          {L"Γ{o_2,o_4;o_1,o_3}:N * g{i_1,o_1;o_2,e_1}:N * "
+           L"t{o_3,e_1;o_4,i_1}:N",
+           L"Γ{o_2,o_4;o_1,o_3}:N * g{i_1,o_3;o_4,e_1}:N * "
+           L"t{o_1,e_1;o_2,i_1}:N"}};
       for (const auto& pair : pairs) {
         const auto first = parse_expr(pair.first).as<Product>().factors();
         const auto second = parse_expr(pair.second).as<Product>().factors();
