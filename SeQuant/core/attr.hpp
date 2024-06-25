@@ -5,6 +5,7 @@
 #ifndef SEQUANT_ATTR_HPP
 #define SEQUANT_ATTR_HPP
 
+#include <cassert>
 #include <string>
 
 namespace sequant {
@@ -49,11 +50,33 @@ inline std::wstring to_wolfram(const Symmetry& symmetry) {
   return result;
 }
 
+inline std::wstring to_wstring(Symmetry sym) {
+  switch (sym) {
+    case Symmetry::symm:
+      return L"symmetric";
+    case Symmetry::antisymm:
+      return L"antisymmetric";
+    case Symmetry::nonsymm:
+      return L"nonsymmetric";
+    case Symmetry::invalid:
+      return L"invalid";
+  }
+
+  assert(false);
+  std::abort();
+}
+
 enum class BraKetPos { bra, ket, none };
 
 inline std::wstring to_wolfram(BraKetPos a) {
-  using namespace std::literals;
-  return L"indexType["s + (a == BraKetPos::bra ? L"bra" : L"ket") + L"]";
+  switch (a) {
+    case BraKetPos::bra:
+      return L"indexType[bra]";
+    case BraKetPos::ket:
+      return L"indexType[ket]";
+    case BraKetPos::none:
+      return L"indexType[none]";
+  }
 }
 
 enum class Statistics {

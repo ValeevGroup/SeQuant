@@ -44,7 +44,8 @@ Tensor generateResultTensor(ExprPtr expr) {
   // to the result of the expression
   IndexGroups externals = get_unique_indices(expr);
 
-  return Tensor(L"Result", std::move(externals.bra), std::move(externals.ket));
+  return Tensor(L"Result", std::move(externals.bra), std::move(externals.ket),
+                std::move(externals.aux));
 }
 
 Result::Result(ExprPtr expression, bool importResultTensor)
@@ -125,6 +126,9 @@ std::vector<Contraction> to_contractions(const Product &product,
       intermediateIndices.insert(intermediateIndices.end(),
                                  intermediateIndexGroups.ket.begin(),
                                  intermediateIndexGroups.ket.end());
+      intermediateIndices.insert(intermediateIndices.end(),
+                                 intermediateIndexGroups.aux.begin(),
+                                 intermediateIndexGroups.aux.end());
       std::sort(intermediateIndices.begin(), intermediateIndices.end(),
                 [](const Index &lhs, const Index &rhs) {
                   IndexTypeComparer cmp;
@@ -145,7 +149,8 @@ std::vector<Contraction> to_contractions(const Product &product,
       // There is no notion of bra and ket for intermediates, so we dump all
       // indices in the bra for now
       Tensor intermediate(intermediateName.data(),
-                          std::move(intermediateIndices), std::vector<Index>{});
+                          std::move(intermediateIndices), std::vector<Index>{},
+                          std::vector<Index>{});
 
       std::vector<Contraction> intermediateContractions =
           to_contractions(factor, intermediate);
@@ -252,6 +257,7 @@ void one_electron_integral_remapper(
 
   auto braIndices = tensor.bra();
   auto ketIndices = tensor.ket();
+  assert(tensor.auxiliary().empty());
 
   IndexTypeComparer cmp;
 
@@ -266,8 +272,8 @@ void one_electron_integral_remapper(
     std::swap(braIndices[0], ketIndices[0]);
   }
 
-  expr =
-      ex<Tensor>(tensor.label(), std::move(braIndices), std::move(ketIndices));
+  expr = ex<Tensor>(tensor.label(), std::move(braIndices),
+                    std::move(ketIndices), tensor.auxiliary());
 }
 
 template <typename Container>
@@ -311,6 +317,7 @@ void two_electron_integral_remapper(
   // Copy indices as we might have to mutate them
   auto braIndices = tensor.bra();
   auto ketIndices = tensor.ket();
+  assert(tensor.auxiliary().empty());
 
   IndexTypeComparer cmp;
 
@@ -401,7 +408,7 @@ void two_electron_integral_remapper(
   }
 
   expr = ex<Tensor>(std::move(tensorLabel), std::move(braIndices),
-                    std::move(ketIndices));
+                    std::move(ketIndices), tensor.auxiliary());
 }
 
 void integral_remapper(ExprPtr &expr, std::wstring_view oneElectronIntegralName,

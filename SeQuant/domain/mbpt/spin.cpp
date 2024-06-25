@@ -85,8 +85,7 @@ ExprPtr transform_expr(const ExprPtr& expr,
   auto transform_tensor = [&index_replacements](const Tensor& tensor) {
     auto result = std::make_shared<Tensor>(tensor);
     result->transform_indices(index_replacements);
-    ranges::for_each(result->const_braket(),
-                     [](const Index& idx) { idx.reset_tag(); });
+    reset_tags(*result);
     return result;
   };
 
@@ -126,9 +125,9 @@ ExprPtr swap_bra_ket(const ExprPtr& expr) {
 
   // Lambda for tensor
   auto tensor_swap = [](const Tensor& tensor) {
-    auto result =
-        Tensor(tensor.label(), tensor.ket(), tensor.bra(), tensor.symmetry(),
-               tensor.braket_symmetry(), tensor.particle_symmetry());
+    auto result = Tensor(tensor.label(), tensor.ket(), tensor.bra(),
+                         tensor.auxiliary(), tensor.symmetry(),
+                         tensor.braket_symmetry(), tensor.particle_symmetry());
     return ex<Tensor>(result);
   };
 
@@ -199,8 +198,8 @@ ExprPtr remove_spin(const ExprPtr& expr) {
         idx = make_spinfree(idx);
       }
     }
-    Tensor result(tensor.label(), bra, ket, tensor.symmetry(),
-                  tensor.braket_symmetry());
+    Tensor result(tensor.label(), bra, ket, tensor.auxiliary(),
+                  tensor.symmetry(), tensor.braket_symmetry());
     return std::make_shared<Tensor>(std::move(result));
   };
 
@@ -289,8 +288,8 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
   // Return non-symmetric tensor if rank is 1
   if (tensor.bra_rank() == 1) {
     Tensor new_tensor(tensor.label(), tensor.bra(), tensor.ket(),
-                      Symmetry::nonsymm, tensor.braket_symmetry(),
-                      tensor.particle_symmetry());
+                      tensor.auxiliary(), Symmetry::nonsymm,
+                      tensor.braket_symmetry(), tensor.particle_symmetry());
     return std::make_shared<Tensor>(new_tensor);
   }
 
@@ -319,8 +318,8 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
     container::set<Index> ket_list(tensor.ket().begin(), tensor.ket().end());
     auto expr_sum = std::make_shared<Sum>();
     do {
-      auto new_tensor =
-          Tensor(tensor.label(), bra_list, ket_list, Symmetry::nonsymm);
+      auto new_tensor = Tensor(tensor.label(), bra_list, ket_list,
+                               tensor.auxiliary(), Symmetry::nonsymm);
 
       if (spin_symm_tensor(new_tensor)) {
         auto new_tensor_product = std::make_shared<Product>();
@@ -520,14 +519,16 @@ ExprPtr symmetrize_expr(const Product& product) {
 
   auto S = Tensor{};
   if (A_is_nconserving) {
-    S = Tensor(L"S", A_tensor.bra(), A_tensor.ket(), Symmetry::nonsymm);
+    S = Tensor(L"S", A_tensor.bra(), A_tensor.ket(), A_tensor.auxiliary(),
+               Symmetry::nonsymm);
   } else {  // A is N-nonconserving
     auto n = std::min(A_tensor.bra_rank(), A_tensor.ket_rank());
     container::svector<Index> bra_list(A_tensor.bra().begin(),
                                        A_tensor.bra().begin() + n);
     container::svector<Index> ket_list(A_tensor.ket().begin(),
                                        A_tensor.ket().begin() + n);
-    S = Tensor(L"S", bra_list, ket_list, Symmetry::nonsymm);
+    S = Tensor(L"S", bra_list, ket_list, A_tensor.auxiliary(),
+               Symmetry::nonsymm);
   }
 
   // Generate replacement maps from a list of Index type (could be a bra or a
@@ -767,9 +768,7 @@ ExprPtr S_maps(const ExprPtr& expr) {
   if (!has_tensor(expr, L"S")) return expr;
 
   auto reset_idx_tags = [](ExprPtr& expr) {
-    if (expr->is<Tensor>())
-      ranges::for_each(expr->as<Tensor>().const_braket(),
-                       [](const Index& idx) { idx.reset_tag(); });
+    if (expr->is<Tensor>()) reset_tags(expr.as<Tensor>());
   };
   expr->visit(reset_idx_tags);
 
@@ -836,9 +835,7 @@ ExprPtr closed_shell_spintrace(
 
   // Index tags are cleaned prior to calling the fast canonicalizer
   auto reset_idx_tags = [](ExprPtr& expr) {
-    if (expr->is<Tensor>())
-      ranges::for_each(expr->as<Tensor>().const_braket(),
-                       [](const Index& idx) { idx.reset_tag(); });
+    if (expr->is<Tensor>()) reset_tags(expr.as<Tensor>());
   };
 
   // Cleanup index tags
@@ -999,7 +996,8 @@ ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr) {
 
     auto bixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
     auto kixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
-    st_expr = ex<Tensor>(Tensor{L"S", bixs, kixs}) * st_expr;
+    st_expr =
+        ex<Tensor>(Tensor{L"S", bixs, kixs, std::vector<Index>{}}) * st_expr;
   }
 
   simplify(st_expr);
@@ -1026,7 +1024,8 @@ ExprPtr closed_shell_CC_spintrace_rigorous(ExprPtr const& expr) {
 
     auto bixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
     auto kixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
-    st_expr = ex<Tensor>(Tensor{L"S", bixs, kixs}) * st_expr;
+    st_expr =
+        ex<Tensor>(Tensor{L"S", bixs, kixs, std::vector<Index>{}}) * st_expr;
   }
 
   simplify(st_expr);
@@ -1077,6 +1076,7 @@ Tensor swap_spin(const Tensor& t) {
   return {t.label(),
           bra,
           ket,
+          t.auxiliary(),
           t.symmetry(),
           t.braket_symmetry(),
           t.particle_symmetry()};
@@ -1116,7 +1116,8 @@ ExprPtr merge_tensors(const Tensor& O1, const Tensor& O2) {
   assert(O1.symmetry() == O2.symmetry());
   auto bra = ranges::views::concat(O1.bra(), O2.bra());
   auto ket = ranges::views::concat(O1.ket(), O2.ket());
-  return ex<Tensor>(Tensor(O1.label(), bra, ket, O1.symmetry()));
+  auto aux = ranges::views::concat(O1.auxiliary(), O2.auxiliary());
+  return ex<Tensor>(Tensor(O1.label(), bra, ket, aux, O1.symmetry()));
 }
 
 std::vector<ExprPtr> open_shell_A_op(const Tensor& A) {
@@ -1141,8 +1142,8 @@ std::vector<ExprPtr> open_shell_A_op(const Tensor& A) {
                    make_spinbeta);
     ranges::for_each(spin_bra, [](const Index& i) { i.reset_tag(); });
     ranges::for_each(spin_ket, [](const Index& i) { i.reset_tag(); });
-    result.at(i) =
-        ex<Tensor>(Tensor(L"A", spin_bra, spin_ket, Symmetry::antisymm));
+    result.at(i) = ex<Tensor>(
+        Tensor(L"A", spin_bra, spin_ket, A.auxiliary(), Symmetry::antisymm));
     // std::wcout << to_latex(result.at(i)) << " ";
   }
   // std::wcout << "\n" << std::endl;
@@ -1176,8 +1177,8 @@ std::vector<ExprPtr> open_shell_P_op_vector(const Tensor& A) {
     for (auto& j : alpha_spin) {
       for (auto& k : beta_spin) {
         if (!alpha_spin.empty() && !beta_spin.empty()) {
-          P_bra_list.emplace_back(Tensor(L"P", {bra.at(j), bra.at(k)}, {}));
-          P_ket_list.emplace_back(Tensor(L"P", {}, {ket.at(j), ket.at(k)}));
+          P_bra_list.emplace_back(Tensor(L"P", {bra.at(j), bra.at(k)}, {}, {}));
+          P_ket_list.emplace_back(Tensor(L"P", {}, {ket.at(j), ket.at(k)}, {}));
         }
       }
     }
@@ -1192,10 +1193,12 @@ std::vector<ExprPtr> open_shell_P_op_vector(const Tensor& A) {
             auto i3 = beta_spin[c];
             for (std::size_t d = c + 1; d != beta_spin.size(); ++d) {
               auto i4 = beta_spin[d];
-              P_bra_list.emplace_back(Tensor(
-                  L"P", {bra.at(i1), bra.at(i3), bra.at(i2), bra.at(i4)}, {}));
-              P_ket_list.emplace_back(Tensor(
-                  L"P", {}, {ket.at(i1), ket.at(i3), ket.at(i2), ket.at(i4)}));
+              P_bra_list.emplace_back(
+                  Tensor(L"P", {bra.at(i1), bra.at(i3), bra.at(i2), bra.at(i4)},
+                         {}, {}));
+              P_ket_list.emplace_back(
+                  Tensor(L"P", {},
+                         {ket.at(i1), ket.at(i3), ket.at(i2), ket.at(i4)}, {}));
             }
           }
         }
@@ -1331,9 +1334,7 @@ std::vector<ExprPtr> open_shell_spintrace(
       };
 
   auto reset_idx_tags = [](ExprPtr& expr) {
-    if (expr->is<Tensor>())
-      ranges::for_each(expr->as<Tensor>().const_braket(),
-                       [](const Index& idx) { idx.reset_tag(); });
+    if (expr->is<Tensor>()) reset_tags(expr.as<Tensor>());
   };
 
   // Internal and external index replacements are independent
@@ -1523,9 +1524,7 @@ ExprPtr spintrace(
   };
 
   auto reset_idx_tags = [](ExprPtr& expr) {
-    if (expr->is<Tensor>())
-      ranges::for_each(expr->as<Tensor>().const_braket(),
-                       [](const Index& idx) { idx.reset_tag(); });
+    if (expr->is<Tensor>()) reset_tags(expr.as<Tensor>());
   };
 
   // Most important lambda of this function
@@ -1688,7 +1687,8 @@ ExprPtr factorize_S(const ExprPtr& expression,
       ket_list.push_back(*it);
     });
     assert(bra_list.size() == ket_list.size());
-    S = Tensor(L"S", bra_list, ket_list, Symmetry::nonsymm);
+    S = Tensor(L"S", bra_list, ket_list, container::svector<Index>{},
+               Symmetry::nonsymm);
   }
 
   // For any order CC residual equation:
@@ -1703,8 +1703,7 @@ ExprPtr factorize_S(const ExprPtr& expression,
          const container::map<Index, Index>& replacement_map) {
         auto result = std::make_shared<Tensor>(tensor);
         result->transform_indices(replacement_map);
-        ranges::for_each(result->const_braket(),
-                         [](const Index& idx) { idx.reset_tag(); });
+        reset_tags(*result);
         return result;
       };
 

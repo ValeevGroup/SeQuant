@@ -130,8 +130,7 @@ ExprPtr vac_av(
   } else if (expr.is<Constant>() || expr.is<Variable>()) {
     return expr;  // vacuum is normalized
   }
-  throw std::invalid_argument(
-      "mpbt::*::vac_av(expr): unknown expression type");
+  throw std::invalid_argument("mpbt::*::vac_av(expr): unknown expression type");
 }
 
 ExprPtr vac_av(

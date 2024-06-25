@@ -79,7 +79,8 @@ TEST_CASE("Itf export", "[exports]") {
           ExprPtr integralExpr = ex<Tensor>(
               L"g",
               std::vector<Index>{indices[indexPerm[0]], indices[indexPerm[1]]},
-              std::vector<Index>{indices[indexPerm[2]], indices[indexPerm[3]]});
+              std::vector<Index>{indices[indexPerm[2]], indices[indexPerm[3]]},
+              std::vector<Index>{});
 
           auto transformed = integralExpr;
           remap_integrals(transformed);
@@ -105,7 +106,8 @@ TEST_CASE("Itf export", "[exports]") {
           ExprPtr integralExpr = ex<Tensor>(
               L"g",
               std::vector<Index>{indices[indexPerm[0]], indices[indexPerm[1]]},
-              std::vector<Index>{indices[indexPerm[2]], indices[indexPerm[3]]});
+              std::vector<Index>{indices[indexPerm[2]], indices[indexPerm[3]]},
+              std::vector<Index>{});
 
           auto transformed = integralExpr;
           remap_integrals(transformed);
@@ -131,7 +133,8 @@ TEST_CASE("Itf export", "[exports]") {
           ExprPtr integralExpr = ex<Tensor>(
               L"g",
               std::vector<Index>{indices[indexPerm[0]], indices[indexPerm[1]]},
-              std::vector<Index>{indices[indexPerm[2]], indices[indexPerm[3]]});
+              std::vector<Index>{indices[indexPerm[2]], indices[indexPerm[3]]},
+              std::vector<Index>{});
 
           auto transformed = integralExpr;
           remap_integrals(transformed);
@@ -159,7 +162,8 @@ TEST_CASE("Itf export", "[exports]") {
           ExprPtr integralExpr = ex<Tensor>(
               L"g",
               std::vector<Index>{indices[indexPerm[0]], indices[indexPerm[1]]},
-              std::vector<Index>{indices[indexPerm[2]], indices[indexPerm[3]]});
+              std::vector<Index>{indices[indexPerm[2]], indices[indexPerm[3]]},
+              std::vector<Index>{});
 
           auto transformed = integralExpr;
           remap_integrals(transformed);
@@ -185,7 +189,8 @@ TEST_CASE("Itf export", "[exports]") {
           ExprPtr integralExpr = ex<Tensor>(
               L"g",
               std::vector<Index>{indices[indexPerm[0]], indices[indexPerm[1]]},
-              std::vector<Index>{indices[indexPerm[2]], indices[indexPerm[3]]});
+              std::vector<Index>{indices[indexPerm[2]], indices[indexPerm[3]]},
+              std::vector<Index>{});
 
           auto transformed = integralExpr;
           remap_integrals(transformed);

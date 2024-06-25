@@ -12,10 +12,11 @@ using namespace sequant;
 void try_main() {
   using namespace sequant::mbpt;
   std::wcout << "START ANTISYMM_TEST: " << std::endl;
-  const auto cumulant = ex<Tensor>(optype2label.at(OpType::RDMCumulant),
-                                   WstrList{L"a_1"}, WstrList{L"i_1"});
+  const auto cumulant =
+      ex<Tensor>(optype2label.at(OpType::RDMCumulant), WstrList{L"a_1"},
+                 WstrList{L"i_1"}, WstrList{});
   // const auto a =ex<Tensor>(L"a",WstrList{L"i_2", L"i_3"},WstrList{L"a_2",
-  // L"a_3"});
+  // L"a_3"}, WstrList{});
   const auto a = ex<FNOperator>(
       std::initializer_list<Index>({Index(L"i_2"), Index(L"i_3")}),
       std::initializer_list<Index>({Index(L"a_2"), Index(L"a_3")}));
@@ -25,9 +26,9 @@ void try_main() {
   std::wcout << to_latex_align(_a_cumulant.result) << std::endl;
 
   auto cumulant2 = ex<Tensor>(optype2label.at(OpType::RDMCumulant),
-                              WstrList{L"a_2"}, WstrList{L"i_2"});
+                              WstrList{L"a_2"}, WstrList{L"i_2"}, WstrList{});
   auto cumulant3 = ex<Tensor>(optype2label.at(OpType::RDMCumulant),
-                              WstrList{L"a_3"}, WstrList{L"i_3"});
+                              WstrList{L"a_3"}, WstrList{L"i_3"}, WstrList{});
   auto cumulant_3x = cumulant * cumulant2 * cumulant3;
   std::wcout << "cumulant_3x " << to_latex_align(cumulant_3x) << std::endl;
   antisymmetrize _cumulant_3x(cumulant_3x);
@@ -42,7 +43,7 @@ void try_main() {
 
   auto two_body_cumu =
       ex<Tensor>(optype2label.at(OpType::RDMCumulant), WstrList{L"a_2", L"a_3"},
-                 WstrList{L"i_2", L"i_3"});
+                 WstrList{L"i_2", L"i_3"}, WstrList{});
   auto a1_cumu2 = a1 * two_body_cumu;
   std::wcout << " a1 y2 " << to_latex_align(a1_cumu2) << std::endl;
   antisymmetrize _a1_cumu2(a1_cumu2);
@@ -55,7 +56,7 @@ void try_main() {
 
   auto cumu3 = ex<Tensor>(optype2label.at(OpType::RDMCumulant),
                           WstrList{L"a_1", L"a_2", L"a_3"},
-                          WstrList{L"i_1", L"i_2", L"i_3"});
+                          WstrList{L"i_1", L"i_2", L"i_3"}, WstrList{});
   std::wcout << " y3 " << to_latex_align(cumu3) << std::endl;
   antisymmetrize _cumu3(cumu3);
   std::wcout << to_latex_align(_cumu3.result) << std::endl;

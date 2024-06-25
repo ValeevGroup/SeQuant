@@ -73,10 +73,24 @@ std::wstring deparse_sym(Symmetry sym) {
 }
 
 std::wstring deparse_expr(Tensor const& tensor, bool annot_sym) {
-  return std::wstring(tensor.label()) + L"{" + deparse_indices(tensor.bra()) +
-         L";" + deparse_indices(tensor.ket()) + L"}" +
-         (annot_sym ? std::wstring(L":") + deparse_sym(tensor.symmetry())
-                    : std::wstring{});
+  std::wstring deparsed(tensor.label());
+  deparsed += L"{" + deparse_indices(tensor.bra());
+  if (tensor.ket_rank() > 0) {
+    deparsed += L";" + deparse_indices(tensor.ket());
+  }
+  if (tensor.auxiliary_rank() > 0) {
+    if (tensor.ket_rank() == 0) {
+      deparsed += L";";
+    }
+    deparsed += L";" + deparse_indices(tensor.auxiliary());
+  }
+  deparsed += L"}";
+
+  if (annot_sym) {
+    deparsed += L":" + deparse_sym(tensor.symmetry());
+  }
+
+  return deparsed;
 }
 
 std::wstring deparse_scalar(const Constant::scalar_type& scalar) {
