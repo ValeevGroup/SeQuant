@@ -288,6 +288,109 @@ TEST_CASE("NBodyOp", "[mbpt]") {
 
   }  // SECTION("screen")
 
+  SECTION("operators") {
+    using namespace sequant::mbpt;
+
+    auto R_2 = R_(2, 2)->as<op_t>();
+    //    std::wcout << "R_2: " << to_latex(simplify(R_2.tensor_form())) <<
+    //    std::endl;
+    REQUIRE(to_latex(simplify(R_2.tensor_form())) ==
+            L"{{{\\frac{1}{4}}}{R^{{i_1}{i_2}}_{{a_1}{a_2}}}{\\tilde{a}^{{a_1}{"
+            L"a_2}}_{{i_1}{i_2}}}}");
+
+    auto L_3 = L_(3, 3)->as<op_t>();
+    //    std::wcout << "L_3: " << to_latex(simplify(L_3.tensor_form())) <<
+    //    std::endl;
+    REQUIRE(to_latex(simplify(L_3.tensor_form())) ==
+            L"{{{\\frac{1}{36}}}{L^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}{"
+            L"\\tilde{a}^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}}");
+
+    auto R_2_3 = R_(2, 3)->as<op_t>();
+    //    std::wcout << "R_2_3: " << to_latex(simplify(R_2_3.tensor_form())) <<
+    //    std::endl;
+    REQUIRE(to_latex(simplify(R_2_3.tensor_form())) ==
+            L"{{{\\frac{1}{12}}}{R^{{i_1}{i_2}}_{{a_1}{a_2}{a_3}}}{\\tilde{a}^{"
+            L"{a_1}{a_2}{a_3}}_{\\textvisiblespace\\,{i_1}{i_2}}}}");
+
+    auto L_1_2 = L_(1, 2)->as<op_t>();
+    // std::wcout << "L_(1,2): " << to_latex(simplify(L_1_2.tensor_form())) <<
+    // std::endl;
+    REQUIRE(to_latex(simplify(L_1_2.tensor_form())) ==
+            L"{{{\\frac{1}{2}}}{L^{{a_1}}_{{i_1}{i_2}}}{\\tilde{a}^{{i_1}{i_2}}"
+            L"_{\\textvisiblespace\\,{a_1}}}}");
+
+    auto A_2_1 = A(2, 1)->as<op_t>();
+    //    std::wcout << "A_1_2: " << to_latex(simplify(A_1_2.tensor_form()))
+    //               << std::endl;
+    REQUIRE(to_latex(simplify(A_2_1.tensor_form())) ==
+            L"{{{\\frac{1}{2}}}{A^{{i_1}}_{{a_1}{a_2}}}{\\tilde{a}^{{a_1}{a_2}}"
+            L"_{\\textvisiblespace\\,{i_1}}}}");
+
+    auto P_0_1 = P(0, 1)->as<op_t>();
+    //    std::wcout << "P_0_1: " << to_latex(simplify(P_1_0.tensor_form()))
+    //               << std::endl;
+    REQUIRE(to_latex(simplify(P_0_1.tensor_form())) ==
+            L"{{A^{}_{{i_1}}}{\\tilde{a}^{{i_1}}}}");
+
+    auto P_2_1 = P(2, 1)->as<op_t>();
+    //    std::wcout << "P_2_1: " << to_latex(simplify(P_1_2.tensor_form()))
+    //               << std::endl;
+    REQUIRE(to_latex(simplify(P_2_1.tensor_form())) ==
+            L"{{{\\frac{1}{2}}}{A^{{a_1}{a_2}}_{{i_1}}}{\\tilde{a}^{"
+            L"\\textvisiblespace\\,{i_1}}_{{a_1}{a_2}}}}");
+
+    auto P_2_3 = P(2, 3)->as<op_t>();
+    //    std::wcout << "P_2_3: " << to_latex(simplify(P_3_2.tensor_form()))
+    //               << std::endl;
+    REQUIRE(to_latex(simplify(P_2_3.tensor_form())) ==
+            L"{{{\\frac{1}{12}}}{A^{{a_1}{a_2}}_{{i_1}{i_2}{i_3}}}{\\tilde{a}^{"
+            L"{i_1}{i_2}{i_3}}_{\\textvisiblespace\\,{a_1}{a_2}}}}");
+
+    auto R33 = R(3, 3);
+    lower_to_tensor_form(R33);
+    simplify(R33);
+    //    std::wcout << "R33: " << to_latex(R33) << std::endl;
+    REQUIRE(to_latex(R33) ==
+            L"{ "
+            L"\\bigl({{{\\frac{1}{36}}}{R^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}{"
+            L"\\tilde{a}^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}} + "
+            L"{{R^{{i_1}}_{{a_1}}}{\\tilde{a}^{{a_1}}_{{i_1}}}} + "
+            L"{{{\\frac{1}{4}}}{R^{{i_1}{i_2}}_{{a_1}{a_2}}}{\\tilde{a}^{{a_1}{"
+            L"a_2}}_{{i_1}{i_2}}}}\\bigr) }");
+
+    auto R12 = R(1, 2);
+    lower_to_tensor_form(R12);
+    simplify(R12);
+    //    std::wcout << "R12: " << to_latex(R12) << std::endl;
+    REQUIRE(to_latex(R12) ==
+            L"{ \\bigl({{R^{}_{{a_1}}}{\\tilde{a}^{{a_1}}}} + "
+            L"{{{\\frac{1}{2}}}{R^{{i_1}}_{{a_1}{a_2}}}{\\tilde{a}^{{a_1}{a_"
+            L"2}}_{\\textvisiblespace\\,{i_1}}}}\\bigr) }");
+
+    auto R21 = R(2, 1);
+    lower_to_tensor_form(R21);
+    simplify(R21);
+    //    std::wcout << "R21: " << to_latex(R21) << std::endl;
+    REQUIRE(to_latex(R21) ==
+            L"{ "
+            L"\\bigl({{{\\frac{1}{2}}}{R^{{i_1}{i_2}}_{{a_1}}}{\\tilde{a}^{"
+            L"\\textvisiblespace\\,{a_1}}_{{i_1}{i_2}}}} + "
+            L"{{R^{{i_1}}_{}}{\\tilde{a}_{{i_1}}}}\\bigr) }");
+
+    auto L23 = L(2, 3);
+    lower_to_tensor_form(L23);
+    simplify(L23);
+    // std::wcout << "L23: " << to_latex(L23) << std::endl;
+    REQUIRE(to_latex(L23) ==
+            L"{ "
+            L"\\bigl({{{\\frac{1}{12}}}{L^{{a_1}{a_2}}_{{i_1}{i_2}{i_3}}}{"
+            L"\\tilde{a}^{{i_1}{i_2}{i_3}}_{\\textvisiblespace\\,{a_1}{a_2}}}} "
+            L"+ {{L^{}_{{i_1}}}{\\tilde{a}^{{i_1}}}} + "
+            L"{{{\\frac{1}{2}}}{L^{{a_1}}_{{i_1}{i_2}}}{\\tilde{a}^{{i_1}{i_2}}"
+            L"_{\\textvisiblespace\\,{a_1}}}}\\bigr) }");
+
+  }  // SECTION("operators")
+
 }  // TEST_CASE("NBodyOp")
 
 TEST_CASE("MBPT", "[mbpt]") {

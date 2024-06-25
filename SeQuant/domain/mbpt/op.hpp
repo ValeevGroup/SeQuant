@@ -78,8 +78,8 @@ enum class OpType {
   RDMCumulant,  //!< RDM cumulant
   δ,            //!< Kronecker delta (=identity) operator
   h_1,          //!< Hamiltonian perturbation
-  t_1,          //!< first order perturbed excitation cluster amplitudes
-  λ_1,          //!< first order perturbed deexcitation cluster amplitudes
+  t_1,          //!< first order perturbed excitation cluster operator
+  λ_1,          //!< first order perturbed deexcitation cluster operator
   invalid       //!< invalid operator
 };
 
@@ -176,17 +176,17 @@ using BOperatorBase = BOperator<void>;
 struct default_qns_tag {};
 
 // clang-format off
-/// tracks changes in \c N quantum numbers
+/// Tracks changes in \c N quantum numbers
 
-/// implements the concept of a quantum number change; this is useful for
+/// Implements the concept of a quantum number change; this is useful for
 /// tracking the quantum numbers of a many-body operator, such as the number of particles,
 /// the number of quasiparticles, the number of ops (creators/annihilators) in each subspace, etc.
 /// For example, to operator products expressed in normal order with respect to physical vacuum it is sufficient to track
 /// the number of creators and annihilators; For the fermi vacuum case, the number of creators and annihilators in each
 /// subspace becomes important. the number of ops is tracked for each base space (determined by the IndexSpaceRegistry object in Context).
-/// the interval representation is necessary to dictate how many creators or annihilators could be in each subspace.
-/// this is pertinent when user defined hole_space or particle_space are NOT base spaces.
-/// since the choice of space partitioning is up to the user, the base class must be a dynamic container.
+/// The interval representation is necessary to dictate how many creators or annihilators could be in each subspace.
+/// This is pertinent when user defined hole_space or particle_space are NOT base spaces.
+/// Since the choice of space partitioning is up to the user, the base class must be a dynamic container.
 /// \tparam Tag a tag type to distinguish different instances of QuantumNumberChange<N>
 /// \tparam QNV the quantum number value type, defaults to \c std::int64_t
 // clang-format on
@@ -275,6 +275,8 @@ class QuantumNumberChange
   // the active particle annihilators in this example is nonsense and will
   // return -1.
 
+  /// @brief determines the number of creators in the particle space defined in
+  /// the current context
   interval_t ncre_particles() {
     const auto& qnvec = this->base();
     auto isr = get_default_context().index_space_registry();
@@ -293,6 +295,8 @@ class QuantumNumberChange
     return result;
   }
 
+  /// @brief determines the number of annihilators in the particle space defined
+  /// in the current context
   interval_t nann_particles() {
     const auto& qnvec = this->base();
     auto isr = get_default_context().index_space_registry();
@@ -311,6 +315,8 @@ class QuantumNumberChange
     return result;
   }
 
+  /// @brief determines the number of creators in the hole space defined in the
+  /// current context
   interval_t ncre_holes() {
     const auto& qnvec = this->base();
     auto isr = get_default_context().index_space_registry();
@@ -329,6 +335,8 @@ class QuantumNumberChange
     return result;
   }
 
+  /// @brief determines the number of annihilators in the hole space defined in
+  /// the current context
   interval_t nann_holes() {
     const auto& qnvec = this->base();
     auto isr = get_default_context().index_space_registry();
@@ -436,41 +444,55 @@ using op_t = mbpt::Operator<qnc_t>;
 /// combines 2 sets of quantum numbers using Wick's theorem
 qns_t combine(qns_t, qns_t);
 
-// The qns of an excitation type operator will always look the same in a given
-// context
-// @param is the rank of the operator.
+/// @brief Constructs quantum numbers for an excitation operator based on the
+/// defined context
+/// @param k the rank of the operator
+/// @param SQN the spin quantum number
 qns_t excitation_type_qns(std::size_t k,
                           IndexSpace::QuantumNumbers SQN = Spin::any);
 
-// sometimes we want to guarantee that a qns has an interval from 0-K
-// regardless of the base spaces.
+/// @brief Constructs quantum numbers for an excitation operator based on the
+/// defined context. Sometimes we want to guarantee that a qns has an interval
+/// from 0 to \p k regardless of base spaces
+/// @param k the rank of the operator, QN has the interval from 0 to \p k
+/// @param SQN the spin quantum number
 qns_t interval_excitation_type_qns(std::size_t k,
                                    IndexSpace::QuantumNumbers SQN = Spin::any);
 
-// The qns of a deexcitation type operator will always look the same in a given
-// context
-// @param is the rank of the operator.
+/// @brief Constructs quantum numbers for an deexcitation operator based on the
+/// defined context
+/// @param k the rank of the operator
+/// @param SQN the spin quantum number
 qns_t deexcitation_type_qns(std::size_t k,
                             IndexSpace::QuantumNumbers SQN = Spin::any);
 
-// sometimes we want to guarantee that a qns has an interval from 0-K
-// regardless of the base spaces.
+/// @brief Constructs quantum numbers for an deexcitation operator based on the
+/// defined context. Sometimes we want to guarantee that a qns has an interval
+/// from 0 to \p k regardless of base spaces
+/// @param k the rank of the operator, QN has the interval from 0 to \p k
+/// @param SQN the spin quantum number
 qns_t interval_deexcitation_type_qns(
     std::size_t k, IndexSpace::QuantumNumbers SQN = Spin::any);
 
-// The qns of a general type operator will always look the same in a given
-// context
-//  @//param is rank of the operator.
+/// @brief Constructs quantum numbers for a general operator based on the
+/// defined context
+/// @param k the rank of the operator
 qns_t general_type_qns(std::size_t k);
 
-// generic quantum number function compatible with generic excitation operators
-// with the option to choose the particle and hole space.
+/// @brief Constructs quantum numbers for a generic excitation operator
+/// @param particle_rank number of operators in the particle space
+/// @param hole_rank number operators in the hole space
+/// @param particle_space particle space within the defined context
+/// @param hole_space hole space within the defined context
 qns_t generic_excitation_qns(std::size_t particle_rank, std::size_t hole_rank,
                              IndexSpace particle_space, IndexSpace hole_space,
                              IndexSpace::QuantumNumbers SQN = Spin::any);
 
-// generic quantum number function compatible with generic deexcitation
-// operators with the option to choose the particle and hole space.
+/// @brief Constructs quantum numbers for a generic deexcitation operator
+/// @param particle_rank number of operators in the particle space
+/// @param hole_rank number operators in the hole space
+/// @param particle_space particle space within the defined context
+/// @param hole_space hole space within the defined context
 qns_t generic_deexcitation_qns(std::size_t particle_rank, std::size_t hole_rank,
                                IndexSpace particle_space, IndexSpace hole_space,
                                IndexSpace::QuantumNumbers SQN = Spin::any);
@@ -515,31 +537,35 @@ template <Statistics S>
 class OpMaker {
  public:
   /// @param[in] op the operator type
-  /// @param[in] bras the bra indices/creators
-  /// @param[in] kets the ket indices/annihilators
-  OpMaker(OpType op, std::initializer_list<IndexSpace> bras,
-          std::initializer_list<IndexSpace> kets);
+  /// @param[in] cre_list list of creator indices
+  /// @param[in] ann_list list of annihilator indices
+  OpMaker(OpType op, std::initializer_list<IndexSpace> cre_list,
+          std::initializer_list<IndexSpace> ann_list);
 
   /// @param[in] op the operator type
-  /// @param[in] bras the bra indices/creators
-  /// @param[in] kets the ket indices/annihilators
+  /// @param[in] cre_list list of creator indices
+  /// @param[in] ann_list list of annihilator indices
   template <typename IndexSpaceTypeRange1, typename IndexSpaceTypeRange2>
-  OpMaker(OpType op, IndexSpaceTypeRange1&& bras, IndexSpaceTypeRange2&& kets)
+  OpMaker(OpType op, IndexSpaceTypeRange1&& cre_list,
+          IndexSpaceTypeRange2&& ann_list)
       : op_(op),
-        bra_spaces_(bras.begin(), bras.end()),
-        ket_spaces_(kets.begin(), kets.end()) {
-    assert(nbra() > 0 || nket() > 0);
+        cre_spaces_(cre_list.begin(), cre_list.end()),
+        ann_spaces_(ann_list.begin(), ann_list.end()) {
+    assert(ncre() > 0 || nann() > 0);
   }
 
-  OpMaker(OpType op, std::size_t Nbra, std::size_t Nket,
-          IndexSpace particle_space = get_default_context()
-                                          .index_space_registry()
-                                          ->particle_space(Spin::any),
-          IndexSpace hole_space = get_default_context()
-                                      .index_space_registry()
-                                      ->hole_space(Spin::any));
+  /// @param[in] op the operator type
+  /// @param[in] ncre number of bra indices/creators
+  /// @param[in] nann number of ket indices/annihilators
+  /// @param[in] particle_space IndexSpace corresponding to particle_space
+  /// @param[in] hole_space IndexSpace corresponding to hole_space
+  OpMaker(OpType op, std::size_t ncre, std::size_t nann,
+          IndexSpace particle_space = get_particle_space(Spin::any),
+          IndexSpace hole_space = get_hole_space(Spin::any));
 
-  // construct a particle conserving operator when constructing this way.
+  /// For constructing particle number conserving operators
+  /// @param[in] op the operator type
+  /// @param[i] nparticle rank of the operator
   OpMaker(OpType op, std::size_t nparticle);
 
   enum class UseDepIdx {
@@ -567,14 +593,15 @@ class OpMaker {
 
   /// @tparam TensorGenerator callable with signature
   /// `TensorGenerator(range<Index>, range<Index>, Symmetry)` that returns a
-  /// Tensor with the respective bra and ket indices and of the given symmetry
-  /// @param[in] bras the bra indices/creators
-  /// @param[in] kets the ket indices/annihilators
+  /// Tensor with the respective bra/cre and ket/ann indices and of the given
+  /// symmetry
+  /// @param[in] creators creator indices
+  /// @param[in] annihilators annihilator indices
   /// @param[in] tensor_generator the callable that generates the tensor
   /// @param[in] dep whether to use dependent indices
   template <typename TensorGenerator>
-  static ExprPtr make(const container::svector<IndexSpace>& bras,
-                      const container::svector<IndexSpace>& kets,
+  static ExprPtr make(const container::svector<IndexSpace>& creators,
+                      const container::svector<IndexSpace>& annihilators,
                       TensorGenerator&& tensor_generator,
                       UseDepIdx dep = UseDepIdx::None) {
     const bool symm =
@@ -584,7 +611,7 @@ class OpMaker {
     const auto dep_ket = dep == UseDepIdx::Ket;
 
     // not sure what it means to use nonsymmetric operator if nbra != nket
-    if (!symm) assert(ranges::size(bras) == ranges::size(kets));
+    if (!symm) assert(ranges::size(creators) == ranges::size(annihilators));
 
     auto make_idx_vector = [](const auto& spacetypes) {
       container::svector<Index> result;
@@ -608,51 +635,53 @@ class OpMaker {
       return result;
     };
 
-    container::svector<Index> braidxs, ketidxs;
+    container::svector<Index> creidxs, annidxs;
     if (dep_bra) {
-      ketidxs = make_idx_vector(kets);
-      braidxs = make_depidx_vector(bras, ketidxs);
+      annidxs = make_idx_vector(annihilators);
+      creidxs = make_depidx_vector(creators, annidxs);
     } else if (dep_ket) {
-      braidxs = make_idx_vector(bras);
-      ketidxs = make_depidx_vector(kets, braidxs);
+      creidxs = make_idx_vector(creators);
+      annidxs = make_depidx_vector(annihilators, creidxs);
     } else {
-      braidxs = make_idx_vector(bras);
-      ketidxs = make_idx_vector(kets);
+      creidxs = make_idx_vector(creators);
+      annidxs = make_idx_vector(annihilators);
     }
 
     using ranges::size;
-    const auto mult = symm ? factorial(size(bras)) * factorial(size(kets))
-                           : factorial(size(bras));
+    const auto mult =
+        symm ? factorial(size(creators)) * factorial(size(annihilators))
+             : factorial(size(creators));
     const auto opsymm = symm ? (S == Statistics::FermiDirac ? Symmetry::antisymm
                                                             : Symmetry::symm)
                              : Symmetry::nonsymm;
     return ex<Constant>(rational{1, mult}) *
-           tensor_generator(braidxs, ketidxs, opsymm) *
-           ex<NormalOperator<S>>(/* creators */ braidxs,
-                                 /* annihilators */ ketidxs,
+           tensor_generator(creidxs, annidxs, opsymm) *
+           ex<NormalOperator<S>>(/* creators */ creidxs,
+                                 /* annihilators */ annidxs,
                                  get_default_context().vacuum());
   }
 
   template <typename TensorGenerator>
-  static ExprPtr make(std::initializer_list<IndexSpace::Type> bras,
-                      std::initializer_list<IndexSpace::Type> kets,
+  static ExprPtr make(std::initializer_list<IndexSpace::Type> creators,
+                      std::initializer_list<IndexSpace::Type> annihilators,
                       TensorGenerator&& tensor_generator,
                       UseDepIdx csv = UseDepIdx::None) {
-    container::svector<IndexSpace> bra_vec(bras.begin(), bras.end());
-    container::svector<IndexSpace> ket_vec(kets.begin(), kets.end());
-    return OpMaker::make(bra_vec, ket_vec,
+    container::svector<IndexSpace> cre_vec(creators.begin(), creators.end());
+    container::svector<IndexSpace> ann_vec(annihilators.begin(),
+                                           annihilators.end());
+    return OpMaker::make(cre_vec, ann_vec,
                          std::forward<TensorGenerator>(tensor_generator), csv);
   }
 
  protected:
   OpType op_;
-  container::svector<IndexSpace> bra_spaces_;
-  container::svector<IndexSpace> ket_spaces_;
+  container::svector<IndexSpace> cre_spaces_;
+  container::svector<IndexSpace> ann_spaces_;
 
   OpMaker(OpType op);
 
-  const auto nbra() const { return bra_spaces_.size(); };
-  const auto nket() const { return ket_spaces_.size(); };
+  [[nodiscard]] const auto ncre() const { return cre_spaces_.size(); };
+  [[nodiscard]] const auto nann() const { return ann_spaces_.size(); };
 };
 
 extern template class OpMaker<Statistics::FermiDirac>;
@@ -736,63 +765,108 @@ namespace tensor {
 // clang-format on
 ExprPtr H_(std::size_t k);
 
-/// @brief total Hamiltonian including up to `k`-body interactions
+/// @brief Total Hamiltonian including up to `k`-body interactions
 /// @param[in] k the maximum rank of the particle interactions; only `k<=2` is
 /// supported
 ExprPtr H(std::size_t k = 2);
 
-/// fock operator implied one-body operator, optional explicit construction
-/// requires user to specify the IndexSpace corresponding to all orbitals which
-/// may have non-zero density.
+/// @brief Fock operator implied one-body operator, optional explicit
+/// construction requires user to specify the IndexSpace corresponding to all
+/// orbitals which may have non-zero density.
 ExprPtr F(bool use_tensor = true, IndexSpace reference_occupied = {L"", 0});
 
-/// makes particle-conserving excitation operator of rank \p K
+/// Makes particle-conserving excitation operator of rank \p K based on the
+/// defined context
 ExprPtr T_(std::size_t K);
 
-/// makes sum of particle-conserving excitation operators of all ranks up to \p
-/// K
+/// Makes sum of particle-conserving excitation operators of all ranks up to \p
+/// K based on the defined context
 ExprPtr T(std::size_t K, bool skip1 = false);
 
-/// makes particle-conserving deexcitation operator of rank \p K
+/// Makes particle-conserving deexcitation operator of rank \p K based on the
+/// defined context
 ExprPtr Λ_(std::size_t K);
 
-/// makes sum of particle-conserving deexcitation operators of all ranks up to
-/// \p
-/// K
+/// Makes sum of particle-conserving deexcitation operators of all ranks up to
+/// \p K based on the defined context
 ExprPtr Λ(std::size_t K);
 
-// general excitation operator
-ExprPtr R_(std::size_t nbra, std::size_t nket,
-           IndexSpace hole_space = get_default_context()
-                                       .index_space_registry()
-                                       ->hole_space(Spin::any),
-           IndexSpace particle_space = get_default_context()
-                                           .index_space_registry()
-                                           ->particle_space(Spin::any));
+/// @brief Makes generic excitation operator
+/// @param nann number of annihilators
+/// @param ncre number of creators
+/// @param particle_space IndexSpace corresponding to the particle space
+/// @param hole_space IndexSpace corresponding to the hole space
+ExprPtr R_(std::size_t nann, std::size_t ncre,
+           IndexSpace particle_space = get_particle_space(Spin::any),
+           IndexSpace hole_space = get_hole_space(Spin::any));
 
-// general deexcitation operator
-ExprPtr L_(std::size_t nbra, std::size_t nket,
-           IndexSpace hole_space = get_default_context()
-                                       .index_space_registry()
-                                       ->hole_space(Spin::any),
-           IndexSpace particle_space = get_default_context()
-                                           .index_space_registry()
-                                           ->particle_space(Spin::any));
+/// @brief Makes generic deexcitation operator
+/// @param nann number of annihilators
+/// @param ncre number of creators
+/// @param particle_space IndexSpace corresponding to the particle space
+/// @param hole_space IndexSpace corresponding to the hole space
+ExprPtr L_(std::size_t nann, std::size_t ncre,
+           IndexSpace particle_space = get_particle_space(Spin::any),
+           IndexSpace hole_space = get_hole_space(Spin::any));
 
-ExprPtr P(std::int64_t K);
+// clang-format off
+/// makes projector onto excited bra (if \p np > 0 && \p nh > 0) or ket (if \p np < 0 && \p nh <0) manifold
+/// @param nh number operators in hole space. If \p nh > 0 creators, else annihilators
+/// @param np number of operators in particle space. If \p np > 0 creators, else annihilators
+/// (default is to set \p nh to \p np)
+/// @note if using spin-free basis, only supports particle-symmetric operators `K = Kh = Kp`, returns `S(-K)`
+/// else supports particle non-conserving operators and returns `A(-nh, -np)`
+// clang-format on
+ExprPtr P(std::int64_t nh,
+          std::int64_t np = std::numeric_limits<std::int64_t>::max());
 
-ExprPtr A(std::int64_t K);
+// clang-format off
+/// @brief makes generic bra/ket-antisymmetric excitation (if \p nh > 0 && \p np > 0) or deexcitation (if \p nh < 0 && \p np < 0) operator
+/// @param nh number operators in hole space. If \p nh < 0 creators, else annihilators
+/// @param np number of operators in particle space. If \p np < 0 creators, else annihilators
+/// (default is to set \p np to \p nh)
+/// @note supports particle non-conserving operators
+// clang-format on
+ExprPtr A(std::int64_t nh,
+          std::int64_t np = std::numeric_limits<std::int64_t>::max());
 
+/// @brief makes generic particle-symmetric excitation (if \p K > 0) or
+/// deexcitation (if \p K < 0) operator of rank `|K|`
 ExprPtr S(std::int64_t K);
 
+/// @brief Makes perturbation operator of rank \p R
+/// @param order order of perturbation
+/// @param R rank of the operator,`R = 1` implies one-body perturbation
+/// @pre `order==1`, only first order perturbation is supported now
 ExprPtr H_pt(std::size_t order, std::size_t R);
 
+/// @brief Makes perturbed particle-conserving excitation operator of rank \p K
+/// @param order order of perturbation
+/// @param K rank of the excitation operator
+/// @pre `order==1`, only first order perturbation is supported now
 ExprPtr T_pt_(std::size_t order, std::size_t K);
 
+/// @brief Makes sum of perturbed particle-conserving excitation operators up to
+/// rank \p K
+/// @param order order of perturbation
+/// @param K rank up to which the sum is to be formed
+/// @param skip1 if true, skips single excitations
+/// @pre `order==1`, only first order perturbation is supported now
 ExprPtr T_pt(std::size_t order, std::size_t K, bool skip1 = false);
 
+/// @brief Makes perturbed particle-conserving deexcitation operator of
+/// rank \p K
+/// @param order order of perturbation
+/// @param K rank of the deexcitation operator
+/// @pre `order==1`, only first order perturbation is supported now
 ExprPtr Λ_pt_(std::size_t order, std::size_t K);
 
+/// @brief Makes sum of perturbed particle-conserving deexcitation operators up
+/// to rank \p K
+/// @param order order of perturbation
+/// @param K rank up to which the sum is to be formed
+/// @param skip1 if true, skips single deexcitations
+/// @pre `order==1`, only first order perturbation is supported now
 ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1 = false);
 }  // namespace tensor
 }  // namespace op
@@ -805,63 +879,124 @@ inline namespace op {
 // clang-format on
 ExprPtr H_(std::size_t k);
 
-/// @brief total Hamiltonian including up to `k`-body interactions
+/// @brief Total Hamiltonian including up to `k`-body interactions
 /// @param[in] k the maximum rank of the particle interactions; only `k<=2` is
 /// supported
 ExprPtr H(std::size_t k = 2);
 
-/// fock operator implied one-body operator, optional explicit construction
-/// requires user to specify the IndexSpace corresponding to all orbitals which
-/// may have non-zero density.
+/// @brief Fock operator implied one-body operator, optional explicit
+/// construction requires user to specify the IndexSpace corresponding to all
+/// orbitals which may have non-zero density.
 ExprPtr F(bool use_tensor = true, IndexSpace reference_occupied = {L"", 0});
 
-/// makes particle-conserving excitation operator of rank \p K
+/// Makes particle-conserving excitation operator of rank \p K
 ExprPtr T_(std::size_t K);
 
-/// makes sum of particle-conserving excitation operators of all ranks up to \p
+/// Makes sum of particle-conserving excitation operators of all ranks up to \p
 /// K
 ExprPtr T(std::size_t K, bool skip1 = false);
 
-/// makes particle-conserving deexcitation operator of rank \p K
+/// Makes particle-conserving deexcitation operator of rank \p K
 ExprPtr Λ_(std::size_t K);
 
-/// makes sum of particle-conserving deexcitation operators of all ranks up to
-/// \p
-/// K
+/// Makes sum of particle-conserving deexcitation operators of all ranks up to
+/// \p K
 ExprPtr Λ(std::size_t K);
 
-// general excitation operator
-ExprPtr R_(std::size_t nbra, std::size_t nket,
-           IndexSpace hole_space = get_default_context()
-                                       .index_space_registry()
-                                       ->hole_space(Spin::any),
-           IndexSpace particle_space = get_default_context()
-                                           .index_space_registry()
-                                           ->particle_space(Spin::any));
+/// @brief Makes generic excitation operator
+/// @param nann number of annihilators
+/// @param ncre number of creators
+/// @param particle_space IndexSpace corresponding to the particle space
+/// @param hole_space IndexSpace corresponding to the hole space
+ExprPtr R_(std::size_t nann, std::size_t ncre,
+           IndexSpace particle_space = get_particle_space(Spin::any),
+           IndexSpace hole_space = get_hole_space(Spin::any));
 
-// general deexcitation operator
-ExprPtr L_(std::size_t nbra, std::size_t nket,
-           IndexSpace hole_space = get_default_context()
-                                       .index_space_registry()
-                                       ->hole_space(Spin::any),
-           IndexSpace particle_space = get_default_context()
-                                           .index_space_registry()
-                                           ->particle_space(Spin::any));
+/// @brief Makes generic deexcitation operator
+/// @param nann number of annihilators
+/// @param ncre number of creators
+/// @param particle_space IndexSpace corresponding to the particle space
+/// @param hole_space IndexSpace corresponding to the hole space
+ExprPtr L_(std::size_t nann, std::size_t ncre,
+           IndexSpace particle_space = get_particle_space(Spin::any),
+           IndexSpace hole_space = get_hole_space(Spin::any));
 
-ExprPtr P(std::int64_t K);
+/// @brief Makes sum of generic excitation operators upto rank \p nann \p ncre
+/// @param nann number of annihililators
+/// @param ncre number of creators
+/// @param particle_space IndexSpace corresponding to the particle space
+/// @param hole_space IndexSpace corresponding to the hole space
+ExprPtr R(std::size_t nann, std::size_t ncre,
+          IndexSpace particle_space = get_particle_space(Spin::any),
+          IndexSpace hole_space = get_hole_space(Spin::any));
 
-ExprPtr A(std::int64_t K);
+/// @brief Makes sum of generic deexcitation operators upto rank \p nann \p ncre
+/// @param nann number of annihilators
+/// @param ncre number of creators
+/// @param particle_space IndexSpace corresponding to the particle space
+/// @param hole_space IndexSpace corresponding to the hole space
+ExprPtr L(std::size_t nann, std::size_t ncre,
+          IndexSpace particle_space = get_particle_space(Spin::any),
+          IndexSpace hole_space = get_hole_space(Spin::any));
 
+// clang-format off
+/// makes projector onto excited bra (if \p np > 0 && \p nh > 0) or ket (if \p np < 0 && \p nh <0) manifold
+/// @param nh number operators in hole space. If \p nh > 0 creators, else annihilators
+/// @param np number of operators in particle space. If \p np > 0 creators, else annihilators
+/// (default is to set \p nh to \p np)
+/// @note if using spin-free basis, only supports particle-symmetric operators `K = Kh = Kp`, returns `S(-K)`
+/// else supports particle non-conserving operators and returns `A(-nh, -np)`
+// clang-format on
+ExprPtr P(std::int64_t nh,
+          std::int64_t np = std::numeric_limits<std::int64_t>::max());
+
+// clang-format off
+/// @brief makes generic bra/ket-antisymmetric excitation (if \p nh > 0 && \p np > 0) or deexcitation (if \p nh < 0 && \p np < 0) operator
+/// @param nh number operators in hole space. If \p nh < 0 creators, else annihilators
+/// @param np number of operators in particle space. If \p np < 0 creators, else annihilators
+/// (default is to set \p np to \p nh)
+/// @note supports particle non-conserving operators
+// clang-format on
+ExprPtr A(std::int64_t nh,
+          std::int64_t np = std::numeric_limits<std::int64_t>::max());
+
+/// @brief makes generic particle-symmetric excitation (if \p K > 0) or
+/// deexcitation (if \p K < 0) operator of rank `|K|`
 ExprPtr S(std::int64_t K);
 
+/// @brief Makes perturbation operator of rank \p R
+/// @param order order of perturbation
+/// @param R rank of the operator,`R = 1` implies one-body perturbation
+/// @pre `order==1`, only first order perturbation is supported now
 ExprPtr H_pt(std::size_t order, std::size_t R);
 
+/// @brief Makes perturbed particle-conserving excitation operator of rank \p K
+/// @param order order of perturbation
+/// @param K rank of the excitation operator
+/// @pre `order==1`, only first order perturbation is supported now
 ExprPtr T_pt_(std::size_t order, std::size_t K);
 
+/// @brief Makes sum of perturbed particle-conserving excitation operators up to
+/// rank \p K
+/// @param order order of perturbation
+/// @param K rank up to which the sum is to be formed
+/// @param skip1 if true, skips single excitations
+/// @pre `order==1`, only first order perturbation is supported now
 ExprPtr T_pt(std::size_t order, std::size_t K, bool skip1 = false);
 
+/// @brief Makes perturbed particle-conserving deexcitation operator of
+/// rank \p K
+/// @param order order of perturbation
+/// @param K rank of the deexcitation operator
+/// @pre `order==1`, only first order perturbation is supported now
 ExprPtr Λ_pt_(std::size_t order, std::size_t K);
 
+/// @brief Makes sum of perturbed particle-conserving deexcitation operators up
+/// to rank \p K
+/// @param order order of perturbation
+/// @param K rank up to which the sum is to be formed
+/// @param skip1 if true, skips single deexcitations
+/// @pre `order==1`, only first order perturbation is supported now
 ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1 = false);
 
 bool raises_vacuum_up_to_rank(const ExprPtr& op_or_op_product,
