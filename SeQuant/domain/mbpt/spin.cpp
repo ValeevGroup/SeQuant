@@ -495,6 +495,12 @@ ExprPtr expand_A_op(const Product& product) {
     new_product.scale(phase);
     new_result->append(ex<Product>(new_product));
   }  // map_list
+
+  auto reset_idx_tags = [](ExprPtr& expr) {
+    if (expr->is<Tensor>()) reset_tags(expr.as<Tensor>());
+  };
+  new_result->visit(reset_idx_tags, true);
+
   return new_result;
 }
 
