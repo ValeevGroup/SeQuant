@@ -456,12 +456,12 @@ ExprPtr expand_A_op(const Product& product) {
   for (auto& term : product) {
     if (term->is<Tensor>()) {
       auto A = term->as<Tensor>();
-      if ((A.label() == L"A") && (A.bra().size() > 1)) {
+      if (A.label() == L"A" && A.bra_rank() <= 1 && A.ket_rank() <= 1) {
+        return remove_tensor(product, L"A");
+      } else if ((A.label() == L"A")) {
         has_A_operator = true;
         map_list = A_maps(A);
         break;
-      } else if ((A.label() == L"A") && (A.bra().size() == 1)) {
-        return remove_tensor(product, L"A");
       }
     }
   }
