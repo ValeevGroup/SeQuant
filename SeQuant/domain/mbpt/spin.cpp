@@ -391,30 +391,29 @@ bool has_tensor(const ExprPtr& expr, std::wstring label) {
 
 container::svector<container::map<Index, Index>> A_maps(const Tensor& A) {
   assert(A.label() == L"A");
-  assert(A.bra_rank() > 1);
-  assert(A.bra().size() == A.ket().size());
-  container::svector<int> bra_int_list(A.bra().size());
-  std::iota(std::begin(bra_int_list), std::end(bra_int_list), 0);
-  auto ket_int_list = bra_int_list;
+
+  container::svector<std::size_t> bra_indices(A.bra_rank());
+  container::svector<std::size_t> ket_indices(A.ket_rank());
+  std::iota(bra_indices.begin(), bra_indices.end(), 0);
+  std::iota(ket_indices.begin(), ket_indices.end(), 0);
+
   container::svector<container::map<Index, Index>> result;
-  container::svector<Index> A_braket(A.const_braket().begin(),
-                                     A.const_braket().end());
 
   do {
     do {
-      container::map<Index, Index> replacement_map;
-      auto A_braket_ptr = A_braket.begin();
-      for (auto&& idx : bra_int_list) {
-        replacement_map.emplace(*A_braket_ptr, A.bra()[idx]);
-        A_braket_ptr++;
+      container::map<Index, Index> current_replacements;
+
+      for (std::size_t i = 0; i < bra_indices.size(); ++i) {
+        current_replacements.emplace(A.bra()[i], A.bra()[bra_indices[i]]);
       }
-      for (auto&& idx : ket_int_list) {
-        replacement_map.emplace(*A_braket_ptr, A.ket()[idx]);
-        A_braket_ptr++;
+      for (std::size_t i = 0; i < ket_indices.size(); ++i) {
+        current_replacements.emplace(A.ket()[i], A.ket()[ket_indices[i]]);
       }
-      result.push_back(replacement_map);
-    } while (std::next_permutation(bra_int_list.begin(), bra_int_list.end()));
-  } while (std::next_permutation(ket_int_list.begin(), ket_int_list.end()));
+
+      result.push_back(std::move(current_replacements));
+    } while (std::next_permutation(bra_indices.begin(), bra_indices.end()));
+  } while (std::next_permutation(ket_indices.begin(), ket_indices.end()));
+
   return result;
 }
 
