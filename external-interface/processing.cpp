@@ -41,6 +41,12 @@ ExprPtr postProcess(const ExprPtr &expression, const IndexSpaceMeta &spaceMeta, 
 
 	container::svector< container::svector< Index > > externals = getExternalIndexPairs(processed);
 
+	if (options.expand_symmetrizer) {
+		spdlog::debug("Fully expanding all antisymmetrizers before spintracing...");
+		processed = simplify(expand_A_op(processed));
+		spdlog::debug("Expanded expression:\n{}", processed);
+	}
+
 	switch (options.spintrace) {
 		case SpinTracing::None:
 			break;

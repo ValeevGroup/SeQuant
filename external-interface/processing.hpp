@@ -23,6 +23,7 @@ struct ProcessingOptions {
 	SpinTracing spintrace              = SpinTracing::Rigorous;
 	ProjectionTransformation transform = ProjectionTransformation::None;
 	bool factorize_to_binary           = true;
+	bool expand_symmetrizer            = false;
 };
 
 sequant::ExprPtr postProcess(const sequant::ExprPtr &expression, const IndexSpaceMeta &space_meta,

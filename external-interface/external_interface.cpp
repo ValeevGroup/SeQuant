@@ -94,6 +94,10 @@ ProcessingOptions extractProcessingOptions(const json &details) {
 		options.factorize_to_binary = details.at("optimize").get< bool >();
 	}
 
+	if (details.contains("expand_symmetrizer")) {
+		options.expand_symmetrizer = details.at("expand_symmetrizer").get< bool >();
+	}
+
 	return options;
 }
 
