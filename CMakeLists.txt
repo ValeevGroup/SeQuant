@@ -212,6 +212,10 @@ set(SeQuant_src
         SeQuant/core/export/itf.cpp
         SeQuant/core/export/itf.hpp
         SeQuant/core/export/text_generator.hpp
+        SeQuant/core/export/julia_tensoroperationsgen.hpp
+        SeQuant/core/export/julia_tensoroperationsgen.cpp
+        SeQuant/core/export/julia_tensorkitgen.hpp
+        SeQuant/core/export/julia_itensorgen.hpp
         SeQuant/core/export/utils.cpp
         SeQuant/core/export/utils.hpp
         SeQuant/core/expr.cpp
