@@ -17,7 +17,7 @@ struct StringMaker<sequant::ExprPtr> {
     using convert_type = std::codecvt_utf8<wchar_t>;
     std::wstring_convert<convert_type, wchar_t> converter;
 
-    return converter.to_bytes(sequant::deparse_expr(expr, false));
+    return converter.to_bytes(sequant::deparse(expr, false));
   }
 };
 

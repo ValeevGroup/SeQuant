@@ -335,6 +335,6 @@ TEST_CASE("deparse", "[parse]") {
   for (const std::wstring& current : expressions) {
     ExprPtr expression = parse_expr(current);
 
-    REQUIRE(deparse_expr(expression, true) == current);
+    REQUIRE(deparse(expression, true) == current);
   }
 }
