@@ -3,6 +3,10 @@
 set -e
 set -u
 
+# Taken from https://stackoverflow.com/a/246128
+script_dir="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+repo_root="$script_dir/../../"
+
 # these are the versions of clang-format that are supported required
 # should be ordered from oldest to newest to make sure the newest is picked
 supported_clang_format_versions="17"
@@ -61,7 +65,7 @@ if [[ $have_supported_clang_format_version -eq 0 ]]; then
   fi
 
   # use docker to run clang-format
-  mount_path=$(readlink -f "$HOME")
+  mount_path="$repo_root"
 
   # convert file names in the arguments to relative paths
   args=""
