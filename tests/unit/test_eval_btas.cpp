@@ -25,7 +25,7 @@ auto tensor_to_key(sequant::Tensor const& tnsr) {
     return (mo[1].str() == L"i" ? L"o" : L"v") + mo[2].str();
   };
 
-  auto const tnsr_deparsed = sequant::deparse_expr(tnsr.clone(), false);
+  auto const tnsr_deparsed = sequant::deparse(tnsr.clone(), false);
   return boost::regex_replace(tnsr_deparsed, idx_rgx, formatter);
 }
 
