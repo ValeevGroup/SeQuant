@@ -6,6 +6,7 @@
 #include <SeQuant/core/expr_operator.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/result_expr.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tensor.hpp>
 
@@ -1007,6 +1008,16 @@ ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr) {
   return st_expr;
 }
 
+ResultExpr closed_shell_spintrace(ResultExpr expr) {
+  expr.expression() = closed_shell_spintrace(
+      expr.expression(),
+      expr.index_particle_grouping<container::svector<Index>>());
+
+  expr.set_symmetry(Symmetry::nonsymm);
+
+  return expr;
+}
+
 ExprPtr closed_shell_CC_spintrace_rigorous(ExprPtr const& expr) {
   assert(expr->is<Sum>());
   using ranges::views::transform;
@@ -1664,6 +1675,17 @@ ExprPtr spintrace(
   result->visit(reset_idx_tags);
   return result;
 }  // ExprPtr spintrace
+
+ResultExpr spintrace(ResultExpr expr, bool spinfree_index_spaces) {
+  expr.expression() =
+      spintrace(expr.expression(),
+                expr.index_particle_grouping<container::svector<Index>>(),
+                spinfree_index_spaces);
+
+  expr.set_symmetry(Symmetry::nonsymm);
+
+  return expr;
+}
 
 ExprPtr factorize_S(const ExprPtr& expression,
                     std::initializer_list<IndexList> ext_index_groups,

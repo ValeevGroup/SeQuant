@@ -10,6 +10,7 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/parse/ast.hpp>
+#include <SeQuant/core/result_expr.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/utility/string.hpp>
@@ -156,54 +157,53 @@ ExprPtr ast_to_expr(const parse::ast::Sum &sum,
                     Symmetry default_symmetry);
 
 template <typename PositionCache, typename Iterator>
+struct Transformer {
+  std::reference_wrapper<const PositionCache> position_cache;
+  std::reference_wrapper<const Iterator> begin;
+  std::reference_wrapper<Symmetry> default_symmetry;
+
+  ExprPtr operator()(const parse::ast::Product &product) const {
+    return ast_to_expr<PositionCache>(product, position_cache.get(),
+                                      begin.get(), default_symmetry);
+  }
+
+  ExprPtr operator()(const parse::ast::Sum &sum) const {
+    return ast_to_expr<PositionCache>(sum, position_cache.get(), begin.get(),
+                                      default_symmetry);
+  }
+
+  ExprPtr operator()(const parse::ast::Tensor &tensor) const {
+    auto [braIndices, ketIndices] =
+        make_indices(tensor.indices, position_cache.get(), begin.get());
+
+    auto [offset, length] = get_pos(tensor, position_cache.get(), begin.get());
+
+    return ex<Tensor>(tensor.name, std::move(braIndices), std::move(ketIndices),
+                      to_symmetry(tensor.symmetry, offset + length - 1,
+                                  begin.get(), default_symmetry));
+  }
+
+  ExprPtr operator()(const parse::ast::Variable &variable) const {
+    if (variable.conjugated) {
+      return ex<Variable>(variable.name + L"^*");
+    } else {
+      return ex<Variable>(variable.name);
+    }
+  }
+
+  ExprPtr operator()(const parse::ast::Number &number) const {
+    return ex<Constant>(to_constant(number, position_cache.get(), begin.get()));
+  }
+};
+
+template <typename PositionCache, typename Iterator>
 ExprPtr ast_to_expr(const parse::ast::NullaryValue &value,
                     const PositionCache &position_cache, const Iterator &begin,
                     Symmetry default_symmetry) {
-  struct Transformer {
-    std::reference_wrapper<const PositionCache> position_cache;
-    std::reference_wrapper<const Iterator> begin;
-    std::reference_wrapper<Symmetry> default_symmetry;
-
-    ExprPtr operator()(const parse::ast::Product &product) const {
-      return ast_to_expr<PositionCache>(product, position_cache.get(),
-                                        begin.get(), default_symmetry);
-    }
-
-    ExprPtr operator()(const parse::ast::Sum &sum) const {
-      return ast_to_expr<PositionCache>(sum, position_cache.get(), begin.get(),
-                                        default_symmetry);
-    }
-
-    ExprPtr operator()(const parse::ast::Tensor &tensor) const {
-      auto [braIndices, ketIndices] =
-          make_indices(tensor.indices, position_cache.get(), begin.get());
-
-      auto [offset, length] =
-          get_pos(tensor, position_cache.get(), begin.get());
-
-      return ex<Tensor>(tensor.name, std::move(braIndices),
-                        std::move(ketIndices),
-                        to_symmetry(tensor.symmetry, offset + length - 1,
-                                    begin.get(), default_symmetry));
-    }
-
-    ExprPtr operator()(const parse::ast::Variable &variable) const {
-      if (variable.conjugated) {
-        return ex<Variable>(variable.name + L"^*");
-      } else {
-        return ex<Variable>(variable.name);
-      }
-    }
-
-    ExprPtr operator()(const parse::ast::Number &number) const {
-      return ex<Constant>(
-          to_constant(number, position_cache.get(), begin.get()));
-    }
-  };
-
   return boost::apply_visitor(
-      Transformer{std::ref(position_cache), std::ref(begin),
-                  std::ref(default_symmetry)},
+      Transformer<PositionCache, Iterator>{std::ref(position_cache),
+                                           std::ref(begin),
+                                           std::ref(default_symmetry)},
       value);
 }
 
@@ -277,6 +277,29 @@ ExprPtr ast_to_expr(const parse::ast::Sum &sum,
       });
 
   return ex<Sum>(std::move(summands));
+}
+
+template <typename PositionCache, typename Iterator>
+ResultExpr ast_to_result(const parse::ast::ResultExpr &result,
+                         const PositionCache &position_cache,
+                         const Iterator &begin, Symmetry default_symmetry) {
+  ExprPtr lhs = std::visit(
+      Transformer<PositionCache, Iterator>{std::ref(position_cache),
+                                           std::ref(begin),
+                                           std::ref(default_symmetry)},
+      result.lhs);
+  ExprPtr rhs =
+      ast_to_expr(result.rhs, position_cache, begin, default_symmetry);
+
+  if (lhs.is<Tensor>()) {
+    return {std::move(lhs.as<Tensor>()), std::move(rhs)};
+  } else if (lhs.is<Variable>()) {
+    return {std::move(lhs.as<Variable>()), std::move(rhs)};
+  } else {
+    auto [offset, length] = get_pos(result.lhs, position_cache, begin);
+    throw ParseError(offset, length,
+                     "LHS of a ResultExpr must be a Tensor or a Variable");
+  }
 }
 
 }  // namespace sequant::parse::transform

@@ -4,6 +4,7 @@
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/result_expr.hpp>
 #include <SeQuant/core/tensor.hpp>
 
 #include <stdexcept>
@@ -56,6 +57,9 @@ struct ParseError : std::runtime_error {
 ExprPtr parse_expr(std::wstring_view raw,
                    Symmetry tensor_sym = Symmetry::nonsymm);
 
+ResultExpr parse_result_expr(std::wstring_view raw,
+                             Symmetry tensor_sym = Symmetry::nonsymm);
+
 ///
 /// Get a parsable string from an expression.
 ///
@@ -71,6 +75,7 @@ ExprPtr parse_expr(std::wstring_view raw,
 /// \param annot_sym Whether to add sequant::Symmetry annotation
 ///                  to each Tensor string.
 /// \return wstring of the expression.
+std::wstring deparse(const ResultExpr &expr, bool annot_sym = true);
 std::wstring deparse(const ExprPtr &expr, bool annot_sym = true);
 std::wstring deparse(const Expr &expr, bool annot_sym = true);
 std::wstring deparse(const Product &product, bool annot_sym);
