@@ -189,7 +189,7 @@ std::wstring deparse_expr(Sum const& sum, bool annot_sym) {
 
 }  // namespace details
 
-std::wstring deparse_expr(ExprPtr expr, bool annot_sym) {
+std::wstring deparse_expr(const ExprPtr& expr, bool annot_sym) {
   if (!expr) return {};
 
   using namespace details;

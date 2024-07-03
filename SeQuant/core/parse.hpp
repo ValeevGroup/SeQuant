@@ -69,7 +69,7 @@ ExprPtr parse_expr(std::wstring_view raw,
 /// \param annot_sym Whether to add sequant::Symmetry annotation
 ///                  to each Tensor string.
 /// \return wstring of the expression.
-std::wstring deparse_expr(ExprPtr expr, bool annot_sym = true);
+std::wstring deparse_expr(const ExprPtr &expr, bool annot_sym = true);
 
 }  // namespace sequant
 
