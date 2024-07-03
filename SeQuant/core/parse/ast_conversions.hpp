@@ -8,8 +8,8 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/parse/ast.hpp>
-#include <SeQuant/core/parse_expr.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/utility/string.hpp>
