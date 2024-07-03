@@ -1360,4 +1360,36 @@ SECTION("Open-shell spin-tracing") {
     REQUIRE(result2[1]->size() == 24);
   }
 }
+
+SECTION("ResultExpr") {
+  SECTION("closed_shell") {
+    ResultExpr result = parse_result_expr(
+        L"R{i1,i2,i3;a1,a2,a3}:A = 1/12 * A{i1,i2,i3;a1,a2,a3}:A f{i4;i1} "
+        L"t{a1,a2,a3;i2,i3,i4}:A");
+
+    const ExprPtr expected = closed_shell_spintrace(
+        result.expression().clone(),
+        {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
+
+    ResultExpr traced = closed_shell_spintrace(result);
+
+    REQUIRE(traced.expression() == expected);
+    REQUIRE(traced.symmetry() == Symmetry::nonsymm);
+    REQUIRE(traced.particle_symmetry() == ParticleSymmetry::symm);
+  }
+  SECTION("rigorous") {
+    ResultExpr result = parse_result_expr(
+        L"R{i1,i2;e1,e2}:A = 1/4 A{i1,i2;e1,e2}:A g{i3,i4;e3,e4}:A "
+        L"t{e3,e4;i2,i3}:A t{e1,e2;i1,i4}:A");
+
+    const ExprPtr expected = spintrace(result.expression().clone(),
+                                       {{L"i_1", L"e_1"}, {L"i_2", L"e_2"}});
+
+    ResultExpr traced = spintrace(result);
+
+    REQUIRE(traced.expression() == expected);
+    REQUIRE(traced.symmetry() == Symmetry::nonsymm);
+    REQUIRE(traced.particle_symmetry() == ParticleSymmetry::symm);
+  }
+}
 }

@@ -10,6 +10,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/result_expr.hpp>
 #include <SeQuant/core/tensor.hpp>
 
 #include <cassert>
@@ -304,6 +305,8 @@ ExprPtr closed_shell_spintrace(
     const ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_index_groups = {});
 
+ResultExpr closed_shell_spintrace(ResultExpr expr);
+
 ///
 /// \brief Given a OpType::A or OpType::S tensor, generates a list of external
 ///        indices.
@@ -388,6 +391,8 @@ ExprPtr spintrace(
     const ExprPtr& expr,
     container::svector<container::svector<Index>> ext_index_groups = {},
     bool spinfree_index_spaces = true);
+
+ResultExpr spintrace(ResultExpr expr, bool spinfree_index_spaces = true);
 
 /// @brief Factorize S out of terms
 /// @details Given an expression, permute indices and check if a given product
