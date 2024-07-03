@@ -1,5 +1,8 @@
 #!/bin/bash
 
+set -e
+set -u
+
 # these are the versions of clang-format that are supported required
 # should be ordered from oldest to newest to make sure the newest is picked
 supported_clang_format_versions="17"
