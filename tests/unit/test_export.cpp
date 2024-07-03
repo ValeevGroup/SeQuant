@@ -1,7 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <SeQuant/core/export/itf.hpp>
-#include <SeQuant/core/parse_expr.hpp>
+#include <SeQuant/core/parse.hpp>
 
 #include <codecvt>
 #include <locale>

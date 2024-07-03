@@ -1,4 +1,4 @@
-#include <SeQuant/core/parse_expr.hpp>
+#include <SeQuant/core/parse.hpp>
 
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/complex.hpp>

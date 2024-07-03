@@ -1,5 +1,5 @@
-#ifndef SEQUANT_PARSE_EXPR_HPP
-#define SEQUANT_PARSE_EXPR_HPP
+#ifndef SEQUANT_PARSE_HPP
+#define SEQUANT_PARSE_HPP
 
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/expr.hpp>
@@ -73,4 +73,4 @@ std::wstring deparse_expr(ExprPtr expr, bool annot_sym = true);
 
 }  // namespace sequant
 
-#endif  // SEQUANT_PARSE_EXPR_HPP
+#endif  // SEQUANT_PARSE_HPP
