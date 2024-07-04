@@ -1,5 +1,5 @@
 #include <SeQuant/core/bliss.hpp>
-#include <SeQuant/core/parse_expr.hpp>
+#include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/tensor_network.hpp>
@@ -59,7 +59,7 @@ int main(int argc, char **argv) {
 
   if (argc <= 1) {
     print_help();
-    return 1;
+    return 0;
   }
 
   for (std::size_t i = 1; i < static_cast<std::size_t>(argc); ++i) {
