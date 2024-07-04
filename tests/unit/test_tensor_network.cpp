@@ -482,8 +482,8 @@ TEST_CASE("TensorNetwork", "[elements]") {
             const auto [current_graph, current_graph_labels] =
                 accessor.get_canonical_bliss_graph(tn);
             if (current_graph->cmp(*canonical_graph) != 0) {
-              std::wcout << "Canonical graph for "
-                         << deparse(ex<Product>(copy)) << ":\n";
+              std::wcout << "Canonical graph for " << deparse(ex<Product>(copy))
+                         << ":\n";
               current_graph->write_dot(std::wcout, current_graph_labels);
               std::wcout << std::endl;
             }
