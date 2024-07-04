@@ -85,8 +85,7 @@ ExprPtr transform_expr(const ExprPtr& expr,
   auto transform_tensor = [&index_replacements](const Tensor& tensor) {
     auto result = std::make_shared<Tensor>(tensor);
     result->transform_indices(index_replacements);
-    ranges::for_each(result->const_braket(),
-                     [](const Index& idx) { idx.reset_tag(); });
+    result->reset_tags();
     return result;
   };
 
@@ -772,9 +771,7 @@ ExprPtr S_maps(const ExprPtr& expr) {
   if (!has_tensor(expr, L"S")) return expr;
 
   auto reset_idx_tags = [](ExprPtr& expr) {
-    if (expr->is<Tensor>())
-      ranges::for_each(expr->as<Tensor>().const_braket(),
-                       [](const Index& idx) { idx.reset_tag(); });
+    if (expr->is<Tensor>()) expr->as<Tensor>().reset_tags();
   };
   expr->visit(reset_idx_tags);
 
@@ -841,9 +838,7 @@ ExprPtr closed_shell_spintrace(
 
   // Index tags are cleaned prior to calling the fast canonicalizer
   auto reset_idx_tags = [](ExprPtr& expr) {
-    if (expr->is<Tensor>())
-      ranges::for_each(expr->as<Tensor>().const_braket(),
-                       [](const Index& idx) { idx.reset_tag(); });
+    if (expr->is<Tensor>()) expr->as<Tensor>().reset_tags();
   };
 
   // Cleanup index tags
@@ -1336,9 +1331,7 @@ std::vector<ExprPtr> open_shell_spintrace(
       };
 
   auto reset_idx_tags = [](ExprPtr& expr) {
-    if (expr->is<Tensor>())
-      ranges::for_each(expr->as<Tensor>().const_braket(),
-                       [](const Index& idx) { idx.reset_tag(); });
+    if (expr->is<Tensor>()) expr->as<Tensor>().reset_tags();
   };
 
   // Internal and external index replacements are independent
@@ -1528,9 +1521,7 @@ ExprPtr spintrace(
   };
 
   auto reset_idx_tags = [](ExprPtr& expr) {
-    if (expr->is<Tensor>())
-      ranges::for_each(expr->as<Tensor>().const_braket(),
-                       [](const Index& idx) { idx.reset_tag(); });
+    if (expr->is<Tensor>()) expr->as<Tensor>().reset_tags();
   };
 
   // Most important lambda of this function
@@ -1708,8 +1699,7 @@ ExprPtr factorize_S(const ExprPtr& expression,
          const container::map<Index, Index>& replacement_map) {
         auto result = std::make_shared<Tensor>(tensor);
         result->transform_indices(replacement_map);
-        ranges::for_each(result->const_braket(),
-                         [](const Index& idx) { idx.reset_tag(); });
+        result->reset_tags();
         return result;
       };
 
