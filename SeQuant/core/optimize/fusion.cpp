@@ -49,12 +49,13 @@ ExprPtr Fusion::fuse_left(Product const& lhs, Product const& rhs) {
   auto lsmand_prod = Product{lsmand.begin(), lsmand.end()};
   auto rsmand_prod = Product{rsmand.begin(), rsmand.end()};
 
-  if (lhs.scalar() == rhs.scalar())
-    fac_prod.scale(lhs.scalar());
-  else {
-    lsmand_prod.scale(lhs.scalar());
-    rsmand_prod.scale(rhs.scalar());
-  }
+  assert(lhs.scalar().imag().is_zero() && rhs.scalar().imag().is_zero() &&
+         "Complex valued gcd not supported");
+  auto scalars_fused = fuse_scalar(lhs.scalar().real(), rhs.scalar().real());
+
+  fac_prod.scale(scalars_fused.at(0));
+  lsmand_prod.scale(scalars_fused.at(1));
+  rsmand_prod.scale(scalars_fused.at(2));
 
   // f (a + b)
 
@@ -86,12 +87,13 @@ ExprPtr Fusion::fuse_right(Product const& lhs, Product const& rhs) {
   auto lsmand_prod = Product{lsmand.begin(), lsmand.end()};
   auto rsmand_prod = Product{rsmand.begin(), rsmand.end()};
 
-  if (lhs.scalar() == rhs.scalar())
-    fac_prod.scale(lhs.scalar());
-  else {
-    lsmand_prod.scale(lhs.scalar());
-    rsmand_prod.scale(rhs.scalar());
-  }
+  assert(lhs.scalar().imag().is_zero() && rhs.scalar().imag().is_zero() &&
+         "Complex valued gcd not supported");
+  auto scalars_fused = fuse_scalar(lhs.scalar().real(), rhs.scalar().real());
+
+  fac_prod.scale(scalars_fused.at(0));
+  lsmand_prod.scale(scalars_fused.at(1));
+  rsmand_prod.scale(scalars_fused.at(2));
 
   // (a + b) f
 
@@ -100,6 +102,31 @@ ExprPtr Fusion::fuse_right(Product const& lhs, Product const& rhs) {
   auto f = lift_tensor(fac_prod);
 
   return ex<Product>(ExprPtrList{ex<Sum>(ExprPtrList{a, b}), f});
+}
+
+rational Fusion::gcd_rational(rational const& left, rational const& right) {
+  auto&& r1 = left.real();
+  auto&& r2 = right.real();
+  auto&& n1 = numerator(r1);
+  auto&& d1 = denominator(r1);
+  auto&& n2 = numerator(r2);
+  auto&& d2 = denominator(r2);
+
+  auto num = gcd(n1 * d2, n2 * d1);
+  return {num, d1 * d2};
+}
+
+std::array<rational, 3> Fusion::fuse_scalar(rational const& left,
+                                            rational const& right) {
+  auto fused = gcd_rational(left, right);
+  rational left_fused = left / fused;
+  rational right_fused = right / fused;
+  if (left < 0 && right < 0) {
+    fused *= -1;
+    left_fused *= -1;
+    right_fused *= -1;
+  }
+  return {fused, left_fused, right_fused};
 }
 
 }  // namespace sequant::opt

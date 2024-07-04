@@ -6,7 +6,7 @@
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/parse_expr.hpp>
+#include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/tensor.hpp>
 
@@ -77,7 +77,7 @@ ParseErrorMatcher parseErrorMatches(std::size_t offset, std::size_t length,
   return ParseErrorMatcher{offset, length, std::move(messageFragment)};
 }
 
-TEST_CASE("TEST_PARSE_EXPR", "[parse_expr]") {
+TEST_CASE("parse_expr", "[parse]") {
   using namespace sequant;
   // use a minimal spinbasis registry
   auto ctx_resetter = set_scoped_default_context(
@@ -320,7 +320,7 @@ TEST_CASE("TEST_PARSE_EXPR", "[parse_expr]") {
   }
 }
 
-TEST_CASE("TEST_DEPARSE_EXPR", "[parse_expr]") {
+TEST_CASE("deparse", "[parse]") {
   using namespace sequant;
 
   std::vector<std::wstring> expressions = {
@@ -335,6 +335,6 @@ TEST_CASE("TEST_DEPARSE_EXPR", "[parse_expr]") {
   for (const std::wstring& current : expressions) {
     ExprPtr expression = parse_expr(current);
 
-    REQUIRE(deparse_expr(expression, true) == current);
+    REQUIRE(deparse(expression, true) == current);
   }
 }

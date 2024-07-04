@@ -1,8 +1,10 @@
-#ifndef SEQUANT_PARSE_EXPR_HPP
-#define SEQUANT_PARSE_EXPR_HPP
+#ifndef SEQUANT_PARSE_HPP
+#define SEQUANT_PARSE_HPP
 
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/index.hpp>
+#include <SeQuant/core/tensor.hpp>
 
 #include <stdexcept>
 #include <string>
@@ -69,8 +71,15 @@ ExprPtr parse_expr(std::wstring_view raw,
 /// \param annot_sym Whether to add sequant::Symmetry annotation
 ///                  to each Tensor string.
 /// \return wstring of the expression.
-std::wstring deparse_expr(ExprPtr expr, bool annot_sym = true);
+std::wstring deparse(const ExprPtr &expr, bool annot_sym = true);
+std::wstring deparse(const Expr &expr, bool annot_sym = true);
+std::wstring deparse(const Product &product, bool annot_sym);
+std::wstring deparse(const Sum &sum, bool annot_sym);
+std::wstring deparse(const Tensor &tensor, bool annot_sym = true);
+std::wstring deparse(const Variable &variable);
+std::wstring deparse(const Constant &constant);
+std::wstring deparse(const Index &index);
 
 }  // namespace sequant
 
-#endif  // SEQUANT_PARSE_EXPR_HPP
+#endif  // SEQUANT_PARSE_HPP

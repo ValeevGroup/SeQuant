@@ -2,7 +2,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <SeQuant/core/context.hpp>
-#include <SeQuant/core/parse_expr.hpp>
+#include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/domain/eval/eval.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -27,7 +27,7 @@ auto tensor_to_key(sequant::Tensor const& tnsr) {
 
   sequant::NestedTensorIndices oixs{tnsr};
   if (oixs.inner.empty()) {
-    auto const tnsr_deparsed = sequant::deparse_expr(tnsr.clone(), false);
+    auto const tnsr_deparsed = sequant::deparse(tnsr.clone(), false);
     return boost::regex_replace(tnsr_deparsed, idx_rgx, formatter);
   } else {
     using ranges::views::intersperse;
