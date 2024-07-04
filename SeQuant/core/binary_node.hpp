@@ -247,11 +247,13 @@ class FullBinaryNode {
   /// \return Left node if this is an internal node, throws otherwise.
   ///
   FullBinaryNode const& left() const { return *checked_ptr_access(left_); }
+  FullBinaryNode& left() { return *checked_ptr_access(left_); }
 
   ///
   /// \return Right node if this is an internal node, throws otherwise.
   ///
   FullBinaryNode const& right() const { return *checked_ptr_access(right_); }
+  FullBinaryNode& right() { return *checked_ptr_access(right_); }
 
   ///
   /// \brief Check if the object is a leaf node.
