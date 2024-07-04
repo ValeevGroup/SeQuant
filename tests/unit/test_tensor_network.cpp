@@ -13,7 +13,7 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/op.hpp>
-#include <SeQuant/core/parse_expr.hpp>
+#include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network.hpp>
@@ -313,7 +313,7 @@ TEST_CASE("TensorNetwork", "[elements]") {
         TensorNetwork tn(input);
         tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), fast);
         const auto result = ex<Product>(to_tensors(tn.tensors()));
-        REQUIRE(deparse_expr(result) == expected);
+        REQUIRE(deparse(result) == expected);
       }
     }
 
@@ -393,7 +393,7 @@ TEST_CASE("TensorNetwork", "[elements]") {
               prod.as<Product>().scale(factor.as<Constant>().value()));
         }
 
-        REQUIRE(deparse_expr(prod) == expected);
+        REQUIRE(deparse(prod) == expected);
       }
     }
 
@@ -483,7 +483,7 @@ TEST_CASE("TensorNetwork", "[elements]") {
                 accessor.get_canonical_bliss_graph(tn);
             if (current_graph->cmp(*canonical_graph) != 0) {
               std::wcout << "Canonical graph for "
-                         << deparse_expr(ex<Product>(copy)) << ":\n";
+                         << deparse(ex<Product>(copy)) << ":\n";
               current_graph->write_dot(std::wcout, current_graph_labels);
               std::wcout << std::endl;
             }
@@ -515,10 +515,10 @@ TEST_CASE("TensorNetwork", "[elements]") {
                 std::wstring equality =
                     actual[i] == expected[i] ? L" == " : L" != ";
 
-                sstream << deparse_expr(actual[i]) << equality
-                        << deparse_expr(expected[i]) << "\n";
+                sstream << deparse(actual[i]) << equality
+                        << deparse(expected[i]) << "\n";
               }
-              sstream << "\nInput was " << deparse_expr(ex<Product>(factors))
+              sstream << "\nInput was " << deparse(ex<Product>(factors))
                       << "\n";
               FAIL(to_utf8(sstream.str()));
             }

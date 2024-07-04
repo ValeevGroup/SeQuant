@@ -9,7 +9,7 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/latex.hpp>
 #include <SeQuant/core/op.hpp>
-#include <SeQuant/core/parse_expr.hpp>
+#include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/timer.hpp>

@@ -15,7 +15,7 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval_node.hpp>
-#include <SeQuant/core/parse_expr.hpp>
+#include <SeQuant/core/parse.hpp>
 
 #include <btas/btas.h>
 #include <memory>

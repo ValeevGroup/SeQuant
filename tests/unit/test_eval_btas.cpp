@@ -2,7 +2,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <SeQuant/core/optimize.hpp>
-#include <SeQuant/core/parse_expr.hpp>
+#include <SeQuant/core/parse.hpp>
 #include <SeQuant/domain/eval/eval.hpp>
 #include <SeQuant/domain/eval/eval_result.hpp>
 
@@ -25,7 +25,7 @@ auto tensor_to_key(sequant::Tensor const& tnsr) {
     return (mo[1].str() == L"i" ? L"o" : L"v") + mo[2].str();
   };
 
-  auto const tnsr_deparsed = sequant::deparse_expr(tnsr.clone(), false);
+  auto const tnsr_deparsed = sequant::deparse(tnsr.clone(), false);
   return boost::regex_replace(tnsr_deparsed, idx_rgx, formatter);
 }
 

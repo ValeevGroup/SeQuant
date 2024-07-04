@@ -226,7 +226,7 @@ set(SeQuant_src
         SeQuant/core/optimize/optimize.cpp
         SeQuant/core/parse/deparse.cpp
         SeQuant/core/parse/parse.cpp
-        SeQuant/core/parse_expr.hpp
+        SeQuant/core/parse.hpp
         SeQuant/core/ranges.hpp
         SeQuant/core/rational.hpp
         SeQuant/core/runtime.cpp
@@ -421,7 +421,7 @@ if (BUILD_TESTING)
             tests/unit/test_spin.cpp
             tests/unit/test_canonicalize.cpp
             tests/unit/test_expr.cpp
-            tests/unit/test_parse_expr.cpp
+            tests/unit/test_parse.cpp
             tests/unit/test_eval_expr.cpp
             tests/unit/test_binary_node.cpp
             tests/unit/test_asy_cost.cpp
