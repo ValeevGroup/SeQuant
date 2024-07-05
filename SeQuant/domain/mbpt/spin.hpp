@@ -12,6 +12,7 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/tensor.hpp>
 
+#include <cassert>
 #include <cstddef>
 #include <initializer_list>
 #include <string>
@@ -58,6 +59,7 @@ inline Spin operator&(Spin s1, Spin s2) {
 /// converts QuantumNumbersAttr to Spin
 /// @note this filters out all bits not used in Spin
 inline Spin to_spin(const QuantumNumbersAttr& t) {
+  assert((t.to_int32() & static_cast<int>(Spin::spinmask)) != 0);
   return static_cast<Spin>(static_cast<Spin>(t.to_int32()) & Spin::spinmask);
 }
 
