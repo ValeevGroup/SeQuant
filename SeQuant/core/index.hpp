@@ -762,32 +762,39 @@ class Index : public Taggable {
   friend bool operator<(const Index &i1, const Index &i2) {
     // compare qns, tags and spaces in that sequence
 
-    auto i1_Q = i1.space().qns();
-    auto i2_Q = i2.space().qns();
-
     auto compare_space = [&i1, &i2]() {
-      if (i1.space() == i2.space()) {
-        if (i1.label() == i2.label()) {
-          return i1.proto_indices() < i2.proto_indices();
-        } else {
-          return i1.label() < i2.label();
-        }
-      } else {
+      if (i1.space() != i2.space()) {
         return i1.space() < i2.space();
       }
+
+      if (i1.label() != i2.label()) {
+        // Note: Can't simply use label1 < label2 as that won't yield expected
+        // results for e.g. i2 < i11 (which will yield false)
+        if (i1.label().size() != i2.label().size()) {
+          return i1.label().size() < i2.label().size();
+        }
+
+        return i1.label() < i2.label();
+      }
+
+      return i1.proto_indices() < i2.proto_indices();
     };
+
+    const auto i1_Q = i1.space().qns();
+    const auto i2_Q = i2.space().qns();
 
     if (i1_Q == i2_Q) {
       const bool have_tags = i1.tag().has_value() && i2.tag().has_value();
 
       if (!have_tags || i1.tag() == i2.tag()) {
+        // Note that comparison of index spaces contains comparison of QNs
         return compare_space();
-      } else {
-        return i1.tag() < i2.tag();
       }
-    } else {
-      return i1_Q < i2_Q;
+
+      return i1.tag() < i2.tag();
     }
+
+    return i1_Q < i2_Q;
   }
 
 };  // class Index
