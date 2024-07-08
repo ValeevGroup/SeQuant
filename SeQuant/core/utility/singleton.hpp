@@ -54,8 +54,7 @@ class Singleton {
     const auto result_ptr = instance_accessor();
     if (result_ptr != nullptr) return result_ptr;
     if constexpr (derived_is_default_constructible) {
-      set_instance();
-      return instance_accessor();
+      return set_default_instance();
     } else
       throw std::logic_error(
           "sequant::Singleton: is not default-constructible and set_instance() "
@@ -70,7 +69,7 @@ class Singleton {
     const auto result_ptr = instance_accessor();
     if (result_ptr != nullptr) return result_ptr;
     if constexpr (derived_is_default_constructible) {
-      return set_instance();
+      return set_default_instance();
     } else
       return nullptr;
   }
@@ -100,6 +99,17 @@ class Singleton {
   static auto& instance_mutex() {
     static std::mutex mtx;
     return mtx;
+  }
+
+ private:
+  /// Constructs a default-constructed instance. If called from multiple threads
+  /// only the first call will construct the instance.
+  static std::shared_ptr<Derived> set_default_instance() {
+    std::scoped_lock lock(instance_mutex());
+    if (!instance_accessor()) {
+      instance_accessor() = std::move(std::shared_ptr<Derived>(new Derived));
+    }
+    return instance_accessor();
   }
 };
 
