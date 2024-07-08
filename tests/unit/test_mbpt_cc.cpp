@@ -15,8 +15,8 @@ TEST_CASE("SR-TCC", "[mbpt/cc]") {
   SECTION("t") {
     // TCC R1
     SEQUANT_PROFILE_SINGLE("CCSD t", {
-      [[maybe_unused]] auto& l = sequant::Logger::get_instance();
-      // l.canonicalize = true;
+      [[maybe_unused]] auto l = sequant::Logger::instance();
+      // l->canonicalize = true;
       const auto N = 2;
       auto t_eqs = CC{N}.t();
       REQUIRE(t_eqs.size() == N + 1);

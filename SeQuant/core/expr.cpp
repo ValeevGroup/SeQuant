@@ -172,7 +172,7 @@ ExprPtr Product::canonicalize_impl(bool rapid) {
     }
   });
 
-  if (Logger::get_instance().canonicalize) {
+  if (Logger::instance()->canonicalize) {
     std::wcout << "Product canonicalization(" << (rapid ? "fast" : "slow")
                << ") input: " << to_latex() << std::endl;
   }
@@ -275,7 +275,7 @@ ExprPtr Product::canonicalize_impl(bool rapid) {
 
   // TODO evaluate product of Tensors (turn this into Products of Products)
 
-  if (Logger::get_instance().canonicalize)
+  if (Logger::instance()->canonicalize)
     std::wcout << "Product canonicalization(" << (rapid ? "fast" : "slow")
                << ") result: " << to_latex() << std::endl;
 
@@ -333,7 +333,7 @@ void Sum::adjoint() {
 }
 
 ExprPtr Sum::canonicalize_impl(bool multipass) {
-  if (Logger::get_instance().canonicalize)
+  if (Logger::instance()->canonicalize)
     std::wcout << "Sum::canonicalize_impl: input = "
                << to_latex_align(shared_from_this()) << std::endl;
 
@@ -352,7 +352,7 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
       }
     };
 
-    if (Logger::get_instance().canonicalize)
+    if (Logger::instance()->canonicalize)
       std::wcout << "Sum::canonicalize_impl (pass=" << pass
                  << "): after canonicalizing summands = "
                  << to_latex_align(shared_from_this()) << std::endl;
@@ -370,7 +370,7 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
                                   : first_size < second_size;
                      });
 
-    if (Logger::get_instance().canonicalize)
+    if (Logger::instance()->canonicalize)
       std::wcout << "Sum::canonicalize_impl (pass=" << pass
                  << "): after hash-sorting summands = "
                  << to_latex_align(shared_from_this()) << std::endl;
@@ -417,7 +417,7 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
       reduce_range(first_it, plast_it);
     }
 
-    if (Logger::get_instance().canonicalize)
+    if (Logger::instance()->canonicalize)
       std::wcout << "Sum::canonicalize_impl (pass=" << pass
                  << "): after reducing summands = "
                  << to_latex_align(shared_from_this()) << std::endl;
