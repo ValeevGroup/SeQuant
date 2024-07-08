@@ -79,9 +79,18 @@ class Singleton {
   /// @tparam Args a parameter pack type
   /// @param args a parameter pack
   /// @return shared_ptr to the newly-created instance
+  /// @throw std::logic_error if the instance has already been constructed
   template <typename... Args>
   static std::shared_ptr<Derived> set_instance(Args&&... args) {
+    //    WARNING: can't check constructibility since the ctor may be private
+    //    static_assert(std::is_constructible_v<Derived, Args...>,
+    //                  "sequant::Singleton::set_instance: Derived is not
+    //                  constructible with Args");
     std::scoped_lock lock(instance_mutex());
+    if (instance_accessor() != nullptr)
+      throw std::logic_error(
+          "sequant::Singleton::set_instance: instance has already been "
+          "constructed");
     instance_accessor() = std::move(
         std::shared_ptr<Derived>(new Derived(std::forward<Args>(args)...)));
     return instance_accessor();
