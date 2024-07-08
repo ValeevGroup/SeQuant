@@ -41,6 +41,15 @@ TEST_CASE("get_unique_indices", "[utilities]") {
     REQUIRE(indices.ket.empty());
     REQUIRE(indices == get_unique_indices(expression->as<Constant>()));
   }
+  SECTION("Variable") {
+    auto const expression = ex<Variable>(L"x");
+
+    auto const indices = get_unique_indices(expression);
+
+    REQUIRE(indices.bra.empty());
+    REQUIRE(indices.ket.empty());
+    REQUIRE(indices == get_unique_indices(expression->as<Variable>()));
+  }
   SECTION("Tensor") {
     auto expression = parse_expr(L"t{i1;a1,a2}");
 
