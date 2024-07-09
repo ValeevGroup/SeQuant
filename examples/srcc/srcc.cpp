@@ -260,7 +260,7 @@ int main(int argc, char* argv[]) {
       std::make_shared<DefaultTensorCanonicalizer>());
 
   // change to true to print stats
-  Logger::get_instance().wick_stats = false;
+  Logger::instance()->wick_stats = false;
 
   tpool.clear();
   // comment out to run all possible combinations
