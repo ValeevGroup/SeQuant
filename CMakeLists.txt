@@ -211,7 +211,6 @@ set(SeQuant_src
         SeQuant/core/export/generator.hpp
         SeQuant/core/export/itf.cpp
         SeQuant/core/export/itf.hpp
-        SeQuant/core/export/text_generator.cpp
         SeQuant/core/export/text_generator.hpp
         SeQuant/core/export/utils.cpp
         SeQuant/core/export/utils.hpp
