@@ -1060,7 +1060,7 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
   auto result = wick.compute();
   simplify(result);
   // std::wcout << "post wick: " << to_latex_align(result,20,1) << std::endl;
-  if (Logger::get_instance().wick_stats) {
+  if (Logger::instance()->wick_stats) {
     std::wcout << "WickTheorem stats: # of contractions attempted = "
                << wick.stats().num_attempted_contractions
                << " # of useful contractions = "
@@ -1243,7 +1243,7 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
     TensorCanonicalizer::instance()->index_comparer(
         std::move(current_index_comparer));
 
-    if (Logger::get_instance().wick_stats) {
+    if (Logger::instance()->wick_stats) {
       std::wcout << "WickTheorem stats: # of contractions attempted = "
                  << wick.stats().num_attempted_contractions
                  << " # of useful contractions = "

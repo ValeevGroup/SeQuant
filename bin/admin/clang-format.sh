@@ -1,5 +1,12 @@
 #!/bin/bash
 
+set -e
+set -u
+
+# Taken from https://stackoverflow.com/a/246128
+script_dir="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+repo_root="$(realpath "$script_dir/../../" )"
+
 # these are the versions of clang-format that are supported required
 # should be ordered from oldest to newest to make sure the newest is picked
 supported_clang_format_versions="17"
@@ -58,7 +65,7 @@ if [[ $have_supported_clang_format_version -eq 0 ]]; then
   fi
 
   # use docker to run clang-format
-  mount_path=$(readlink -f "$HOME")
+  mount_path="$repo_root"
 
   # convert file names in the arguments to relative paths
   args=""
@@ -68,24 +75,8 @@ if [[ $have_supported_clang_format_version -eq 0 ]]; then
       args="$args $i"
       continue
     fi
-    abs_file_path=$(readlink -f "$i")
-    if [[ "X$abs_file_path" = "X" ]]; then
-      echo "ERROR: given file $i is not found"
-      exit 1
-    fi
 
-    dir=$(dirname $abs_file_path)
-    file_path_relative_to_project_root=$(basename $abs_file_path)
-    while [[ "$dir" != "$mount_path" && "$dir" != "/" ]]; do
-      file_path_relative_to_project_root="$(basename $dir)/$file_path_relative_to_project_root"
-      dir=$(dirname $dir)
-      #echo "dir=$dir file_path_relative_to_project_root=$file_path_relative_to_project_root"
-    done
-    if [[ "$dir" == "/" ]]; then
-      echo "ERROR: given file $i (absolute path $abs_file_path) is not under \$HOME=$mount_path, cannot use docker-based clang-format in this case"
-      exit 1
-    fi
-    args="$args /hostHOME/$file_path_relative_to_project_root"
+    args="$args /hostHOME/$(realpath --relative-to="$mount_path" $i )"
   done
   docker run --platform linux/x86_64 -v $mount_path:/hostHOME xianpengshen/clang-tools:$preferred_clang_format_version clang-format $args
 else

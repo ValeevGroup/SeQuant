@@ -11,6 +11,7 @@
 #include <iostream>
 #include <locale>
 #include <string>
+#include <thread>
 
 namespace Catch {
 
@@ -18,7 +19,7 @@ namespace Catch {
 // for custom types but not for sequant::Index.
 template <>
 struct StringMaker<sequant::Index> {
-  static std::string convert(const sequant::Index &idx) {
+  static std::string convert(const sequant::Index& idx) {
     using convert_type = std::codecvt_utf8<wchar_t>;
     std::wstring_convert<convert_type, wchar_t> converter;
 
@@ -40,6 +41,15 @@ TEST_CASE("get_unique_indices", "[utilities]") {
     REQUIRE(indices.bra.empty());
     REQUIRE(indices.ket.empty());
     REQUIRE(indices == get_unique_indices(expression->as<Constant>()));
+  }
+  SECTION("Variable") {
+    auto const expression = ex<Variable>(L"x");
+
+    auto const indices = get_unique_indices(expression);
+
+    REQUIRE(indices.bra.empty());
+    REQUIRE(indices.ket.empty());
+    REQUIRE(indices == get_unique_indices(expression->as<Variable>()));
   }
   SECTION("Tensor") {
     auto expression = parse_expr(L"t{i1;a1,a2}");
@@ -106,5 +116,65 @@ TEST_CASE("get_unique_indices", "[utilities]") {
     REQUIRE_THAT(indices.ket,
                  UnorderedEquals(std::vector<Index>{{L"a_1"}, {L"a_2"}}));
     REQUIRE(indices == get_unique_indices(expression->as<Sum>()));
+  }
+}
+
+namespace sequant::singleton {
+
+enum Tag { EnableDefaultCtor, DisableDefaultCtor };
+template <Tag T>
+class S : public sequant::Singleton<S<T>> {
+ public:
+  int s() const { return s_; }
+
+ private:
+  friend class sequant::Singleton<S>;
+
+  template <Tag U = T, typename = std::enable_if_t<U == EnableDefaultCtor>>
+  S() {}
+
+  S(int s) : s_(s) {}
+
+  int s_ = 0;
+};
+
+}  // namespace sequant::singleton
+
+TEST_CASE("Singleton", "[utilities]") {
+  using namespace sequant;
+  using namespace sequant::singleton;
+  // default-constructible Singleton
+  {
+    std::vector<std::thread> threads;
+    for (int c = 0; c != 5; ++c)
+      threads.emplace_back([]() {
+        CHECK(Singleton<S<EnableDefaultCtor>>::instance()->s() == 0);
+      });
+    for (auto&& thr : threads) thr.join();
+    CHECK_THROWS_AS(Singleton<S<EnableDefaultCtor>>::set_instance(1),
+                    std::logic_error);
+    CHECK(Singleton<S<EnableDefaultCtor>>::instance()->s() == 0);
+  }
+  // non-default-constructible Singleton
+  {
+    {
+      std::vector<std::thread> threads;
+      for (int c = 0; c != 5; ++c)
+        threads.emplace_back([]() {
+          CHECK_THROWS_AS(Singleton<S<DisableDefaultCtor>>::instance()->s(),
+                          std::logic_error);
+        });
+      for (auto&& thr : threads) thr.join();
+    }
+    CHECK_NOTHROW(Singleton<S<DisableDefaultCtor>>::set_instance(1));
+    {
+      std::vector<std::thread> threads;
+      for (int c = 0; c != 5; ++c)
+        threads.emplace_back([]() {
+          CHECK(Singleton<S<DisableDefaultCtor>>::instance()->s() == 1);
+        });
+      for (auto&& thr : threads) thr.join();
+    }
+    CHECK(Singleton<S<DisableDefaultCtor>>::instance()->s() == 1);
   }
 }
