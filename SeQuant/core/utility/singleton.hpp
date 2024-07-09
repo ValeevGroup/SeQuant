@@ -15,6 +15,8 @@ namespace sequant {
 
 // clang-format off
 /// @brief Singleton base class
+/// Singleton is a CRTP base class that provides a thread-safe way to create an immutable singleton object.
+///
 /// To create a singleton class @c A do:
 /// \code
 /// class A : Singleton<A> {
@@ -25,10 +27,12 @@ namespace sequant {
 /// \endcode
 /// Here's how to use it:
 /// \code
-/// A::set_instance(Args...);  // this creates the first instance of A, if A is not default-constructible, otherwise can skip this
-/// std::shared_ptr<A> the_instance_ref = A::instance();      // throws if the instance of A had not been created
-/// std::shared_ptr<A> the_instance_ptr = A::instance_ptr();  // returns nullptr if the instance of A had not been created
-/// ... use the_instance_ref or the_instance_ptr ...
+/// // optional: create the instance of A
+/// A::set_instance(Args...);  // this call-once method creates the instance of A; if A is default-constructible, can skip this as the instance will be created by first call to instance()
+/// // access the instance of A
+/// std::shared_ptr<A> the_instance_ptr = A::instance();      // throws if A is not default-constructible or A::set_instance() had not been called to create the instance
+/// // ... or ...
+/// std::shared_ptr<A> the_instance_ptr = A::instance_ptr();  // alternative to A::instance(), instead of throwing, returns nullptr
 /// // the instance of A will be destroyed with other static-linkage objects
 /// \endcode
 /// Singleton is thread-safe, in that multiple threads can call `A::instance()`, even if `A::set_instance()` has not been called yet.
