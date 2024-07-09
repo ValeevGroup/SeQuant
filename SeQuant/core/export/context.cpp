@@ -31,8 +31,13 @@ StrategyPair::StrategyPair(ZeroStrategy zero) : StrategyPair() {
   this->zero = zero;
 }
 
-ExportContext::ExportContext(StrategyMap map)
-    : m_tensorStrategies(std::move(map)) {}
+ExportContext::ExportContext(TensorStrategyMap tensorMap,
+                             VariableStrategyMap variableMap)
+    : m_tensorStrategies(std::move(tensorMap)),
+      m_variableStrategies(std::move(variableMap)) {}
+
+ExportContext::ExportContext(VariableStrategyMap map)
+    : m_variableStrategies(std::move(map)) {}
 
 ExportContext::~ExportContext() = default;
 
@@ -40,6 +45,12 @@ LoadStrategy ExportContext::loadStrategy(const Tensor &tensor) const {
   auto iter = m_tensorStrategies.find(tensor);
   return iter == m_tensorStrategies.end() ? LoadStrategy::Create
                                           : iter->second.load;
+}
+
+LoadStrategy ExportContext::loadStrategy(const Variable &variable) const {
+  auto iter = m_variableStrategies.find(variable);
+  return iter == m_variableStrategies.end() ? LoadStrategy::Create
+                                            : iter->second.load;
 }
 
 void ExportContext::setLoadStrategy(const Tensor &tensor,
@@ -53,10 +64,27 @@ void ExportContext::setLoadStrategy(const Tensor &tensor,
   }
 }
 
+void ExportContext::setLoadStrategy(const Variable &variable,
+                                    LoadStrategy strategy) {
+  auto iter = m_variableStrategies.find(variable);
+
+  if (iter == m_variableStrategies.end()) {
+    m_variableStrategies[variable] = StrategyPair(strategy);
+  } else {
+    iter->second.load = strategy;
+  }
+}
+
 ZeroStrategy ExportContext::zeroStrategy(const Tensor &tensor) const {
   auto iter = m_tensorStrategies.find(tensor);
   return iter == m_tensorStrategies.end() ? ZeroStrategy::ZeroOnCreate
                                           : iter->second.zero;
+}
+
+ZeroStrategy ExportContext::zeroStrategy(const Variable &variable) const {
+  auto iter = m_variableStrategies.find(variable);
+  return iter == m_variableStrategies.end() ? ZeroStrategy::ZeroOnCreate
+                                            : iter->second.zero;
 }
 
 void ExportContext::setZeroStrategy(const Tensor &tensor,
@@ -65,6 +93,17 @@ void ExportContext::setZeroStrategy(const Tensor &tensor,
 
   if (iter == m_tensorStrategies.end()) {
     m_tensorStrategies[tensor] = StrategyPair(strategy);
+  } else {
+    iter->second.zero = strategy;
+  }
+}
+
+void ExportContext::setZeroStrategy(const Variable &variable,
+                                    ZeroStrategy strategy) {
+  auto iter = m_variableStrategies.find(variable);
+
+  if (iter == m_variableStrategies.end()) {
+    m_variableStrategies[variable] = StrategyPair(strategy);
   } else {
     iter->second.zero = strategy;
   }

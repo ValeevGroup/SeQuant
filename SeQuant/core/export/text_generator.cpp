@@ -99,8 +99,13 @@ void TextGenerator::create(const Variable &variable, bool zero_init,
   m_generated += "\n";
 }
 
-void TextGenerator::load(const Variable &variable, const Context &ctx) {
-  m_generated += "Load " + represent(variable) + "\n";
+void TextGenerator::load(const Variable &variable, bool set_to_zero,
+                         const Context &ctx) {
+  m_generated += "Load " + represent(variable);
+  if (set_to_zero) {
+    m_generated += " and set it to zero";
+  }
+  m_generated += "\n";
 }
 
 void TextGenerator::set_to_zero(const Variable &variable, const Context &ctx) {

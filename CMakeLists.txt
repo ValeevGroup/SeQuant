@@ -206,6 +206,7 @@ set(SeQuant_src
         SeQuant/core/eval_node.hpp
         SeQuant/core/export/context.cpp
         SeQuant/core/export/context.hpp
+        SeQuant/core/export/export.cpp
         SeQuant/core/export/export.hpp
         SeQuant/core/export/generator.hpp
         SeQuant/core/export/itf.cpp

@@ -38,23 +38,31 @@ struct StrategyPair {
 
 class ExportContext {
  public:
-  using StrategyMap = std::map<Tensor, StrategyPair, TensorBlockCompare>;
+  using TensorStrategyMap = std::map<Tensor, StrategyPair, TensorBlockCompare>;
+  using VariableStrategyMap = std::map<Variable, StrategyPair>;
 
   ExportContext() = default;
-  ExportContext(StrategyMap map);
+  ExportContext(TensorStrategyMap tensorMap,
+                VariableStrategyMap variableMap = {});
+  ExportContext(VariableStrategyMap map);
   virtual ~ExportContext();
 
   virtual LoadStrategy loadStrategy(const Tensor &tensor) const;
+  virtual LoadStrategy loadStrategy(const Variable &variable) const;
   virtual void setLoadStrategy(const Tensor &tensor, LoadStrategy strategy);
+  virtual void setLoadStrategy(const Variable &variable, LoadStrategy strategy);
 
   virtual ZeroStrategy zeroStrategy(const Tensor &tensor) const;
+  virtual ZeroStrategy zeroStrategy(const Variable &variable) const;
   virtual void setZeroStrategy(const Tensor &tensor, ZeroStrategy strategy);
+  virtual void setZeroStrategy(const Variable &variable, ZeroStrategy strategy);
 
   virtual bool rewrite(Tensor &tensor) const;
   virtual bool rewrite(Variable &variable) const;
 
  private:
-  StrategyMap m_tensorStrategies;
+  TensorStrategyMap m_tensorStrategies;
+  VariableStrategyMap m_variableStrategies;
 };
 
 }  // namespace sequant

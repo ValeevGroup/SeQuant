@@ -74,7 +74,7 @@ TEST_CASE("Export capabilities", "[exports]") {
             "Declare tensor A[a_1, i_1]\n"
             "Declare tensor B[i_1, a_1]\n"
             "\n"
-            "Load Z\n"
+            "Create Z and initialize to zero\n"
             "Load A[a_1, i_1]\n"
             "Load B[i_1, a_1]\n"
             "Compute Z += A[a_1, i_1] B[i_1, a_1]\n"
@@ -545,6 +545,39 @@ TEST_CASE("Export capabilities", "[exports]") {
             "Unload t[a_2, a_3, i_2, i_3]\n"
             "Unload g[a_1, i_3, i_1, a_3]\n"
             "Persist I[a_1, a_2, i_1, i_2]\n";
+
+        REQUIRE(generator.get_generated_code() == expected);
+      }
+      SECTION("dot + dot") {
+        auto tree = eval_node<EvalExpr>(
+            parse_expr(L"2 g{i_1,i_2;a_1,a_2} * t{a_1,a_2;i_1,i_2} - "
+                       L"g{i_1,i_2;a_1,a_2} * t{a_1,a_2;i_2,i_1}"));
+
+        export_expression(tree, generator);
+
+        std::string expected =
+            "Declare index i_1\n"
+            "Declare index i_2\n"
+            "Declare index a_1\n"
+            "Declare index a_2\n"
+            "\n"
+            "Declare variable Z\n"
+            "\n"
+            "Declare tensor g[i_1, i_2, a_1, a_2]\n"
+            "Declare tensor t[a_1, a_2, i_1, i_2]\n"
+            "\n"
+            "Create Z and initialize to zero\n"
+            "Load g[i_1, i_2, a_1, a_2]\n"
+            "Load t[a_1, a_2, i_1, i_2]\n"
+            "Compute Z += 2 g[i_1, i_2, a_1, a_2] t[a_1, a_2, i_1, i_2]\n"
+            "Unload t[a_1, a_2, i_1, i_2]\n"
+            "Unload g[i_1, i_2, a_1, a_2]\n"
+            "Load g[i_1, i_2, a_1, a_2]\n"
+            "Load t[a_1, a_2, i_2, i_1]\n"
+            "Compute Z += -1 g[i_1, i_2, a_1, a_2] t[a_1, a_2, i_2, i_1]\n"
+            "Unload t[a_1, a_2, i_2, i_1]\n"
+            "Unload g[i_1, i_2, a_1, a_2]\n"
+            "Persist Z\n";
 
         REQUIRE(generator.get_generated_code() == expected);
       }

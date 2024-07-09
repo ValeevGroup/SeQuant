@@ -12,11 +12,13 @@
 #include <optional>
 #include <stack>
 #include <stdexcept>
+#include <tuple>
+#include <type_traits>
 #include <unordered_map>
 
 namespace sequant {
 
-namespace {
+namespace details {
 template <typename NodeData, typename Context>
 class GenerationVisitor {
  public:
@@ -64,48 +66,68 @@ class GenerationVisitor {
     }
   }
 
+  template <typename ExprType>
+  void load_or_create(const ExprType &expr, const bool isLeaf) {
+    static_assert(
+        std::is_same_v<ExprType, Tensor> || std::is_same_v<ExprType, Variable>,
+        "This function currently only works for tensors and variables");
+
+    const LoadStrategy loadStrategy = m_ctx.loadStrategy(expr);
+    const ZeroStrategy zeroStrategy = m_ctx.zeroStrategy(expr);
+
+    const auto [usedExprBefore,
+                alreadyLoaded] = [&]() -> std::tuple<bool, bool> {
+      if constexpr (std::is_same_v<ExprType, Tensor>) {
+        auto iter = m_tensorUses.find(expr);
+        bool usedExprBefore = iter != m_tensorUses.end();
+        bool alreadyLoaded = usedExprBefore && iter->second > 0;
+
+        m_tensorUses[expr]++;
+
+        return {usedExprBefore, alreadyLoaded};
+      } else {
+        auto iter = m_variableUses.find(expr);
+        bool usedExprBefore = iter != m_variableUses.end();
+        bool alreadyLoaded = usedExprBefore && iter->second > 0;
+
+        m_variableUses[expr]++;
+
+        return {usedExprBefore, alreadyLoaded};
+      }
+    }();
+
+    const bool create =
+        !isLeaf && !usedExprBefore && loadStrategy == LoadStrategy::Create;
+    const bool load = !create && !alreadyLoaded;
+    const bool zeroCreate = !!(zeroStrategy & ZeroStrategy::ZeroOnCreate);
+    const bool zeroLoad = !!(zeroStrategy & ZeroStrategy::ZeroOnLoad);
+    const bool zeroReuse = !!(zeroStrategy & ZeroStrategy::ZeroOnReuse);
+
+    if (create) {
+      m_generator.create(expr, zeroCreate, m_ctx);
+    } else if (load) {
+      m_generator.load(expr, zeroLoad, m_ctx);
+    } else if (zeroReuse) {
+      assert(alreadyLoaded);
+      m_generator.set_to_zero(expr, m_ctx);
+    }
+  }
+
   void load_or_create(const EvalNode<NodeData> &node) {
-    if (node->is_tensor()) {
-      const Tensor &tensor = node->as_tensor();
-
-      const LoadStrategy loadStrategy = m_ctx.loadStrategy(tensor);
-      const ZeroStrategy zeroStrategy = m_ctx.zeroStrategy(tensor);
-
-      const auto iter = m_tensorUses.find(tensor);
-      const bool usedTensorBefore = iter != m_tensorUses.end();
-      const bool isLeaf = node.leaf();
-      const bool alreadyLoaded = usedTensorBefore && iter->second > 0;
-      const bool create =
-          !isLeaf && !usedTensorBefore && loadStrategy == LoadStrategy::Create;
-      const bool load = !create && !alreadyLoaded;
-      const bool zeroCreate = !!(zeroStrategy & ZeroStrategy::ZeroOnCreate);
-      const bool zeroLoad = !!(zeroStrategy & ZeroStrategy::ZeroOnLoad);
-      const bool zeroReuse = !!(zeroStrategy & ZeroStrategy::ZeroOnReuse);
-
-      m_tensorUses[tensor]++;
-
-      if (create) {
-        m_generator.create(tensor, zeroCreate, m_ctx);
-      } else if (load) {
-        m_generator.load(tensor, zeroLoad, m_ctx);
-      } else if (zeroReuse) {
-        assert(alreadyLoaded);
-        m_generator.set_to_zero(tensor, m_ctx);
-      }
-    } else if (node->is_variable()) {
-      const Variable &variable = node->as_variable();
-
-      if (m_variableUses[variable] == 0) {
-        m_generator.load(variable, m_ctx);
-      }
-
-      m_variableUses[variable]++;
-    } else if (node->is_constant()) {
+    if (node->is_constant()) {
       // Constants don't need to be loaded/created
-    } else {
+      return;
+    }
+    if (!node->is_tensor() && !node->is_variable()) {
       throw std::runtime_error(
           "Unexpected expression type in "
           "GenerationVisitor::load_or_create");
+    }
+
+    if (node->is_tensor()) {
+      load_or_create<Tensor>(node->as_tensor(), node.leaf());
+    } else {
+      load_or_create<Variable>(node->as_variable(), node.leaf());
     }
   }
 
@@ -185,7 +207,7 @@ class GenerationVisitor {
           if (current->is<Variable>()) {
             variables.push_back(current->as<Variable>());
             if (m_variableUses[variables.back()] == 0) {
-              m_generator.load(variables.back(), m_ctx);
+              m_generator.load(variables.back(), false, m_ctx);
             }
 
             m_variableUses[variables.back()]++;
@@ -195,7 +217,7 @@ class GenerationVisitor {
         variables.push_back(iter->second->template as<Variable>());
 
         if (m_variableUses[variables.back()] == 0) {
-          m_generator.load(variables.back(), m_ctx);
+          m_generator.load(variables.back(), false, m_ctx);
         }
 
         m_variableUses[variables.back()]++;
@@ -240,7 +262,7 @@ struct PreprocessResult {
   std::set<Variable> variables;
 
   std::map<Tensor, std::size_t, TensorBlockCompare> tensorReferences;
-  std::map<Variable, bool> usedVariables;
+  std::map<Variable, std::size_t> variableReferences;
   std::set<Tensor, TensorBlockCompare> summedTensors;
   std::set<Variable> summedVariables;
 };
@@ -288,6 +310,83 @@ bool prune_scalar(EvalNode<T> &node, EvalNode<T> &parent,
   result.scalarFactors[parent->id()] = std::move(factor);
 
   return true;
+}
+
+void rename(Tensor &tensor, std::size_t counter);
+void rename(Variable &variable, std::size_t counter);
+
+template <typename ExprType, typename Node>
+void preprocess(ExprType expr, ExportContext &ctx, Node &node,
+                PreprocessResult &result) {
+  static_assert(
+      std::is_same_v<ExprType, Tensor> || std::is_same_v<ExprType, Variable>,
+      "This function currently only works for tensors and variables");
+
+  bool storeExpr = false;
+
+  storeExpr |= ctx.rewrite(expr);
+
+  if (node.leaf()) {
+    // Anything but loading doesn't make sense for leaf nodes
+    ctx.setLoadStrategy(expr, LoadStrategy::Load);
+    ctx.setZeroStrategy(expr, ZeroStrategy::NeverZero);
+  } else {
+    const auto [usedBefore, currentlyLoaded,
+                isSumExpr] = [&]() -> std::tuple<bool, bool, bool> {
+      if constexpr (std::is_same_v<ExprType, Tensor>) {
+        auto iter = result.tensorReferences.find(expr);
+        const bool usedBefore = iter != result.tensorReferences.end();
+        const bool currentlyLoaded = usedBefore && iter->second > 0;
+        const bool isSum =
+            result.summedTensors.find(expr) != result.summedTensors.end();
+
+        return {usedBefore, currentlyLoaded, isSum};
+      } else {
+        auto iter = result.variableReferences.find(expr);
+        const bool usedBefore = iter != result.variableReferences.end();
+        const bool currentlyLoaded = usedBefore && iter->second > 0;
+        const bool isSum =
+            result.summedVariables.find(expr) != result.summedVariables.end();
+
+        return {usedBefore, currentlyLoaded, isSum};
+      }
+    }();
+
+    // Special handling for result objects that have been used before
+    // However, for any object that is the result of a sum,
+    // we don't want this special behavior.
+    if (!isSumExpr && usedBefore) {
+      assert(!node.leaf());
+
+      if (currentlyLoaded) {
+        // This expr is currently in use -> can't use it as a result as that
+        // would overwrite the currently used value -> need to rename expr
+        static std::size_t renameCounter = 2;
+        rename(expr, renameCounter++);
+        storeExpr = true;
+      } else {
+        // This expr is reused to store a new result -> set it to zero before
+        // adding new result
+        ctx.setZeroStrategy(expr, ZeroStrategy::AlwaysZero);
+      }
+    }
+  }
+
+  if (storeExpr) {
+    node->set_expr(ex<ExprType>(expr));
+  }
+
+  if constexpr (std::is_same_v<ExprType, Tensor>) {
+    result.tensors.insert(expr);
+    const auto &indices = expr.const_braket();
+    result.indices.insert(indices.begin(), indices.end());
+
+    result.tensorReferences[expr]++;
+  } else {
+    result.variables.insert(expr);
+
+    result.variableReferences[expr]++;
+  }
 }
 
 ///
@@ -344,72 +443,10 @@ void preprocess(EvalNode<T> &tree, PreprocessResult &result, ExportContext &ctx,
     }
   }
 
-  static std::size_t renameCounter = 2;
   if (tree->is_tensor()) {
-    Tensor tensor = tree->as_tensor();
-
-    if (ctx.rewrite(tensor)) {
-      tree->set_expr(tensor.shared_from_this());
-    }
-
-    if (tree.leaf()) {
-      // Anything but loading doesn't make sense for leaf nodes
-      ctx.setLoadStrategy(tensor, LoadStrategy::Load);
-      ctx.setZeroStrategy(tensor, ZeroStrategy::NeverZero);
-    } else {
-      const auto iter = result.tensorReferences.find(tensor);
-      const bool isSumTensor =
-          result.summedTensors.find(tensor) != result.summedTensors.end();
-
-      if (!isSumTensor && iter != result.tensorReferences.end()) {
-        assert(!tree.leaf());
-        if (iter->second > 0) {
-          // This tensor is already in use -> can't use it as a result tensor
-          // as that would overwrite the currently used instance -> need to
-          // rename the result tensor
-          tree->set_expr(ex<Tensor>(
-              std::wstring(tensor.label()) + std::to_wstring(renameCounter++),
-              tensor.bra(), tensor.ket(), tensor.symmetry(),
-              tensor.braket_symmetry(), tensor.particle_symmetry()));
-          tensor = tree->as_tensor();
-        } else {
-          // This tensor is reused -> need to zero out previous values when
-          // reusing it to hold a new result
-          ctx.setZeroStrategy(tensor, ZeroStrategy::ZeroOnLoad |
-                                          ZeroStrategy::ZeroOnReuse |
-                                          ZeroStrategy::ZeroOnCreate);
-        }
-      }
-    }
-
-    result.tensors.insert(tensor);
-    const auto &indices = tensor.const_braket();
-    result.indices.insert(indices.begin(), indices.end());
-
-    result.tensorReferences[tensor]++;
+    preprocess<Tensor>(tree->as_tensor(), ctx, tree, result);
   } else if (tree->is_variable()) {
-    Variable variable = tree->as_variable();
-
-    if (ctx.rewrite(variable)) {
-      tree->set_expr(variable.shared_from_this());
-    }
-
-    const bool isSummedVariable =
-        result.summedVariables.find(variable) != result.summedVariables.end();
-
-    if (!isSummedVariable && result.usedVariables[variable]) {
-      assert(!tree.leaf());
-
-      tree->set_expr(ex<Variable>(std::wstring(variable.label()) +
-                                  std::to_wstring(renameCounter++)));
-      assert(tree->expr());
-
-      variable = tree->as_variable();
-    }
-
-    result.variables.insert(variable);
-
-    result.usedVariables[variable] = true;
+    preprocess<Variable>(tree->as_variable(), ctx, tree, result);
   }
 
   if (tree.leaf()) {
@@ -452,23 +489,27 @@ void preprocess(EvalNode<T> &tree, PreprocessResult &result, ExportContext &ctx,
     assert(result.tensorReferences[tensor] > 0);
     result.tensorReferences[tensor]--;
   } else if (tree.left()->is_variable()) {
-    result.usedVariables[tree.left()->as_variable()] = false;
+    const Variable &variable = tree.left()->as_variable();
+    assert(result.variableReferences[variable] > 0);
+    result.variableReferences[variable]--;
   }
   if (tree.right()->is_tensor()) {
     const Tensor &tensor = tree.right()->as_tensor();
     assert(result.tensorReferences[tensor] > 0);
     result.tensorReferences[tensor]--;
   } else if (tree.right()->is_variable()) {
-    result.usedVariables[tree.right()->as_variable()] = false;
+    const Variable &variable = tree.right()->as_variable();
+    assert(result.variableReferences[variable] > 0);
+    result.variableReferences[variable]--;
   }
 }
 
-}  // namespace
+}  // namespace details
 
 template <typename T, typename Context>
 void export_expression(EvalNode<T> expression, Generator<Context> &generator,
                        Context ctx = {}) {
-  PreprocessResult result;
+  details::PreprocessResult result;
   preprocess(expression, result, ctx);
 
   if (Logger::instance().export_equations) {
@@ -506,7 +547,8 @@ void export_expression(EvalNode<T> expression, Generator<Context> &generator,
     generator.insert_blank_lines(1, ctx);
   }
 
-  GenerationVisitor<T, Context> visitor(generator, ctx, result.scalarFactors);
+  details::GenerationVisitor<T, Context> visitor(generator, ctx,
+                                                 result.scalarFactors);
   expression.visit(
       [&visitor](const FullBinaryNode<T> &node, TreeTraversal context) {
         visitor(node, context);

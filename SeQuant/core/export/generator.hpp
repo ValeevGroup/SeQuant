@@ -43,7 +43,8 @@ class Generator {
 
   virtual void create(const Variable &variable, bool zero_init,
                       const Context &ctx = {}) = 0;
-  virtual void load(const Variable &variable, const Context &ctx = {}) = 0;
+  virtual void load(const Variable &variable, bool set_to_zero,
+                    const Context &ctx = {}) = 0;
   virtual void set_to_zero(const Variable &variable,
                            const Context &ctx = {}) = 0;
   virtual void unload(const Variable &variable, const Context &ctx = {}) = 0;

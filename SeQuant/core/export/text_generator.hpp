@@ -33,7 +33,8 @@ class TextGenerator : public Generator<TextGeneratorContext> {
 
   void create(const Variable &variable, bool zero_init,
               const Context &ctx = {}) override;
-  void load(const Variable &variable, const Context &ctx = {}) override;
+  void load(const Variable &variable, bool set_to_zero,
+            const Context &ctx = {}) override;
   void set_to_zero(const Variable &variable, const Context &ctx = {}) override;
   void unload(const Variable &variable, const Context &ctx = {}) override;
   void destroy(const Variable &variable, const Context &ctx = {}) override;
