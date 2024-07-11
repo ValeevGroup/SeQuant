@@ -127,6 +127,9 @@ add_feature_info(EVAL_TRACE SEQUANT_EVAL_TRACE "Trace expression interpretation"
 option(SEQUANT_USE_SYSTEM_BOOST_HASH "Use system Boost for hashing? Set to OFF to make hashing independent of Boost, thus value-portable" ON)
 add_feature_info(SEQUANT_USE_SYSTEM_BOOST_HASH SEQUANT_USE_SYSTEM_BOOST_HASH "SeQuant uses system Boost for hashing (thus results depend on the Boost version)")
 
+option(SEQUANT_BUILD_DOCS "Build SeQuant documentation using Doxygen and Sphinx" OFF)
+add_feature_info(BUILD_DOCS SEQUANT_BUILD_DOCS "Build SeQuant documentation. Doxygen and Sphinx are required.")
+
 ##########################
 # Prerequisites
 ##########################
@@ -592,8 +595,9 @@ if (SEQUANT_PYTHON)
 endif ()
 
 ####### DOCS ########
-
-add_subdirectory(doc)
+if (SEQUANT_BUILD_DOCS)
+    add_subdirectory(doc)
+endif ()
 
 
 ##########################
