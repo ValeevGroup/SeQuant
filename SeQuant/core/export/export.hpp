@@ -263,6 +263,8 @@ struct PreprocessResult {
 
   std::map<Tensor, std::size_t, TensorBlockCompare> tensorReferences;
   std::map<Variable, std::size_t> variableReferences;
+
+  std::size_t renameCounter = 2;
 };
 
 template <typename T>
@@ -361,8 +363,7 @@ void preprocess(ExprType expr, ExportContext &ctx, Node &node,
       if (currentlyLoaded) {
         // This expr is currently in use -> can't use it as a result as that
         // would overwrite the currently used value -> need to rename expr
-        static std::size_t renameCounter = 2;
-        rename(expr, renameCounter++);
+        rename(expr, result.renameCounter++);
         storeExpr = true;
       } else {
         // This expr is reused to store a new result -> set it to zero before
