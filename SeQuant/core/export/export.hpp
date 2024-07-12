@@ -263,8 +263,6 @@ struct PreprocessResult {
 
   std::map<Tensor, std::size_t, TensorBlockCompare> tensorReferences;
   std::map<Variable, std::size_t> variableReferences;
-  std::set<Tensor, TensorBlockCompare> summedTensors;
-  std::set<Variable> summedVariables;
 };
 
 template <typename T>
@@ -317,7 +315,7 @@ void rename(Variable &variable, std::size_t counter);
 
 template <typename ExprType, typename Node>
 void preprocess(ExprType expr, ExportContext &ctx, Node &node,
-                PreprocessResult &result) {
+                const Node *parent, PreprocessResult &result) {
   static_assert(
       std::is_same_v<ExprType, Tensor> || std::is_same_v<ExprType, Variable>,
       "This function currently only works for tensors and variables");
@@ -331,31 +329,33 @@ void preprocess(ExprType expr, ExportContext &ctx, Node &node,
     ctx.setLoadStrategy(expr, LoadStrategy::Load);
     ctx.setZeroStrategy(expr, ZeroStrategy::NeverZero);
   } else {
-    const auto [usedBefore, currentlyLoaded,
-                isSumExpr] = [&]() -> std::tuple<bool, bool, bool> {
+    const auto [usedBefore, currentlyLoaded] = [&]() -> std::tuple<bool, bool> {
       if constexpr (std::is_same_v<ExprType, Tensor>) {
         auto iter = result.tensorReferences.find(expr);
         const bool usedBefore = iter != result.tensorReferences.end();
         const bool currentlyLoaded = usedBefore && iter->second > 0;
-        const bool isSum =
-            result.summedTensors.find(expr) != result.summedTensors.end();
 
-        return {usedBefore, currentlyLoaded, isSum};
+        return {usedBefore, currentlyLoaded};
       } else {
         auto iter = result.variableReferences.find(expr);
         const bool usedBefore = iter != result.variableReferences.end();
         const bool currentlyLoaded = usedBefore && iter->second > 0;
-        const bool isSum =
-            result.summedVariables.find(expr) != result.summedVariables.end();
 
-        return {usedBefore, currentlyLoaded, isSum};
+        return {usedBefore, currentlyLoaded};
       }
     }();
+
+    // If this result is going to be summed, we don't do any special result
+    // reuse handling as we instead rely on the += semantics that allows us to
+    // keep adding sub-results to the final sum without the need for explicit
+    // intermediates for each step of the summation.
+    // Also, we don't want to mess with the final result tensor.
+    const bool handleReuse = parent && (*parent)->op_type() != EvalOp::Sum;
 
     // Special handling for result objects that have been used before
     // However, for any object that is the result of a sum,
     // we don't want this special behavior.
-    if (!isSumExpr && usedBefore) {
+    if (handleReuse && usedBefore) {
       assert(!node.leaf());
 
       if (currentlyLoaded) {
@@ -444,9 +444,9 @@ void preprocess(EvalNode<T> &tree, PreprocessResult &result, ExportContext &ctx,
   }
 
   if (tree->is_tensor()) {
-    preprocess<Tensor>(tree->as_tensor(), ctx, tree, result);
+    preprocess<Tensor>(tree->as_tensor(), ctx, tree, parent, result);
   } else if (tree->is_variable()) {
-    preprocess<Variable>(tree->as_variable(), ctx, tree, result);
+    preprocess<Variable>(tree->as_variable(), ctx, tree, parent, result);
   }
 
   if (tree.leaf()) {
@@ -464,12 +464,6 @@ void preprocess(EvalNode<T> &tree, PreprocessResult &result, ExportContext &ctx,
     }
     if (!tree.right().leaf()) {
       tree.right()->set_expr(tree->expr());
-    }
-
-    if (tree->is_tensor()) {
-      result.summedTensors.insert(tree->as_tensor());
-    } else if (tree->is_variable()) {
-      result.summedVariables.insert(tree->as_variable());
     }
 
     // TODO: mark fully flushed results explicitly as only existing for

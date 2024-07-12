@@ -582,6 +582,44 @@ TEST_CASE("Export capabilities", "[exports]") {
         REQUIRE(generator.get_generated_code() == expected);
       }
     }
+    SECTION("Intermediate with same shape as summation result") {
+      auto tree = eval_node<EvalExpr>(
+          parse_expr(L"A{a1;i1} B{i1;i2} + ( A{a1;i1} B{i1;i3} ) C{i3;i2}"));
+
+      export_expression(tree, generator);
+
+      std::string expected =
+          "Declare index i_1\n"
+          "Declare index i_2\n"
+          "Declare index i_3\n"
+          "Declare index a_1\n"
+          "\n"
+          "Declare tensor A[a_1, i_1]\n"
+          "Declare tensor B[i_1, i_3]\n"
+          "Declare tensor C[i_3, i_2]\n"
+          "Declare tensor I[a_1, i_2]\n"
+          "Declare tensor I3[a_1, i_3]\n"
+          "\n"
+          "Create I[a_1, i_2] and initialize to zero\n"
+          "Create I3[a_1, i_3] and initialize to zero\n"
+          "Load A[a_1, i_1]\n"
+          "Load B[i_1, i_3]\n"
+          "Compute I3[a_1, i_3] += A[a_1, i_1] B[i_1, i_3]\n"
+          "Unload B[i_1, i_3]\n"
+          "Unload A[a_1, i_1]\n"
+          "Load C[i_3, i_2]\n"
+          "Compute I[a_1, i_2] += I3[a_1, i_3] C[i_3, i_2]\n"
+          "Unload C[i_3, i_2]\n"
+          "Unload I3[a_1, i_3]\n"
+          "Load A[a_1, i_1]\n"
+          "Load B[i_1, i_2]\n"
+          "Compute I[a_1, i_2] += A[a_1, i_1] B[i_1, i_2]\n"
+          "Unload B[i_1, i_2]\n"
+          "Unload A[a_1, i_1]\n"
+          "Persist I[a_1, i_2]\n";
+
+      REQUIRE(generator.get_generated_code() == expected);
+    }
   }
 
   SECTION("remap_integrals") {
