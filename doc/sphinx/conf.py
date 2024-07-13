@@ -67,3 +67,11 @@ html_theme_options = {
     "includehidden": True,
     "titles_only": False,
 }
+
+html_context = {
+    "display_github": True,
+    "github_user": "ajay-mk",
+    "github_repo": "SeQuant",
+    "github_version": "master",
+    "conf_py_path": "/doc/sphinx/"
+}
