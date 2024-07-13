@@ -21,8 +21,19 @@ extensions = [
     'sphinx.ext.inheritance_diagram',
     'breathe',
     "sphinx.ext.graphviz",
-    "myst_parser"
+    "myst_parser",
+    "exhale"
 ]
+
+exhale_args = {
+    "containmentFolder": "./api",
+    "rootFileName": "library_root.rst",
+    "doxygenStripFromPath": "..",
+    "rootFileTitle": "Library API",
+    "createTreeView": False,
+}
+
+primary_domain = "cpp"
 
 myst_enable_extensions = [
     "amsmath",
@@ -45,7 +56,7 @@ latex_engine = 'lualatex'
 breathe_default_project = "SeQuant"
 
 templates_path = ['_templates']
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
+exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', "/external/*"]
 
 
 
@@ -58,7 +69,7 @@ html_theme = 'sphinx_rtd_theme'
 html_theme_options = {
     "display_version": True,
     "prev_next_buttons_location": "bottom",
-    "style_external_links": True,
+    "style_external_links": False,
     "vcs_pageview_mode": "",
     # Toc options
     "collapse_navigation": False,
