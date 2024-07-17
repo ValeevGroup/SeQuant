@@ -29,12 +29,12 @@ case "${unameOut}" in
     ;;
 esac
 
-path_to_clang_format=`which clang-format`
+path_to_clang_format="$( which clang-format || true )"
 have_supported_clang_format_version=0
 if [[ "X$path_to_clang_format" != "X" ]]; then
 
   # check clang-format version
-  clang_format_version=`clang-format --version | sed 's/.* version //' | awk -F'[.]' '{print $1}'`
+  clang_format_version="$( $path_to_clang_format --version | sed 's/.* version //' | awk -F'[.]' '{print $1}' )"
 
   #echo "supported_clang_format_versions=\"$supported_clang_format_versions\" clang_format_version=$clang_format_version"
 
@@ -48,18 +48,22 @@ if [[ "X$path_to_clang_format" != "X" ]]; then
 fi
 
 if [[ $have_supported_clang_format_version -eq 0 ]]; then
-  echo "WARNING: found clang-format with unsupported version $clang_format_version (supported versions: $supported_clang_format_versions)"
+  if [[ -z "${clang_format_version:-}" ]]; then
+    echo "No clang-format installed locally"
+  else
+    echo "WARNING: found clang-format with unsupported version $clang_format_version (supported versions: $supported_clang_format_versions)"
+  fi
 
   # look for docker
-  path_to_docker=`which docker`
+  path_to_docker="$( which docker || true )"
   if [[ "X$path_to_docker" = "X" ]]; then
     echo "ERROR: docker is not found either, PATH=$PATH, install one of supported clang-format versions (any of these: $supported_clang_format_versions) or install docker"
+    echo "Note: sudo apt install docker installs the wrong thing though!"
     exit 1
   fi
 
   # if docker up?
-  docker info >/dev/null 2>&1
-  if [[ $? -ne 0 ]]; then
+  if [ "$path_to_docker" info > /dev/null 2>&1 ]; then
     echo "ERROR: docker is found but not running, start it"
     exit 1
   fi
@@ -78,8 +82,8 @@ if [[ $have_supported_clang_format_version -eq 0 ]]; then
 
     args="$args /hostHOME/$(realpath --relative-to="$mount_path" $i )"
   done
-  docker run --platform linux/x86_64 -v $mount_path:/hostHOME xianpengshen/clang-tools:$preferred_clang_format_version clang-format $args
+  "$path_to_docker" run --platform linux/x86_64 -v $mount_path:/hostHOME xianpengshen/clang-tools:$preferred_clang_format_version clang-format $args
 else
   #echo "found $path_to_clang_format with required version $clang_format_version"
-  clang-format $*
+  "$path_to_clang_format" $*
 fi
