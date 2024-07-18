@@ -38,7 +38,7 @@ ExprPtr TensorNetwork::canonicalize(
   ExprPtr canon_biproduct = ex<Constant>(1);
   container::svector<Edge> idx_terminals_sorted;  // to avoid memory allocs
 
-  if (Logger::instance()->canonicalize) {
+  if (Logger::instance().canonicalize) {
     std::wcout << "TensorNetwork::canonicalize(" << (fast ? "fast" : "slow")
                << "): input tensors\n";
     size_t cnt = 0;
@@ -99,7 +99,7 @@ ExprPtr TensorNetwork::canonicalize(
           return false;
       });
 
-  if (Logger::instance()->canonicalize) {
+  if (Logger::instance().canonicalize) {
     std::wcout << "TensorNetwork::canonicalize(" << (fast ? "fast" : "slow")
                << "): tensors after initial sort\n";
     size_t cnt = 0;
@@ -175,7 +175,7 @@ ExprPtr TensorNetwork::canonicalize(
     graph->set_splitting_heuristic(bliss::Graph::shs_fsm);
     const unsigned int *cl = graph->canonical_form(stats, nullptr, nullptr);
 
-    if (Logger::instance()->canonicalize_dot) {
+    if (Logger::instance().canonicalize_dot) {
       bliss::Graph *cgraph = graph->permute(cl);
       auto cvlabels = permute(vlabels, cl);
       cgraph->write_dot(std::wcout, cvlabels);
@@ -353,7 +353,7 @@ ExprPtr TensorNetwork::canonicalize(
     }
   }  // canonical index replacement list computed
 
-  if (Logger::instance()->canonicalize) {
+  if (Logger::instance().canonicalize) {
     for (const auto &idxpair : idxrepl) {
       std::wcout << "TensorNetwork::canonicalize(" << (fast ? "fast" : "slow")
                  << "): replacing " << to_latex(idxpair.first) << " with "
@@ -670,7 +670,7 @@ void TensorNetwork::init_edges() const {
   if (have_edges_) return;
 
   auto idx_insert = [this](const Index &idx, int tensor_idx, int pos) {
-    if (Logger::instance()->tensor_network) {
+    if (Logger::instance().tensor_network) {
       std::wcout << "TensorNetwork::init_edges: idx=" << to_latex(idx)
                  << " attached to tensor " << std::abs(tensor_idx) << "'s "
                  << ((tensor_idx > 0) ? "bra" : "ket") << " at position " << pos
@@ -705,7 +705,7 @@ void TensorNetwork::init_edges() const {
   for (const auto &terminals : edges_) {
     assert(terminals.size() != 0);
     if (terminals.size() == 1) {  // external?
-      if (Logger::instance()->tensor_network) {
+      if (Logger::instance().tensor_network) {
         std::wcout << "idx " << to_latex(terminals.idx()) << " is external"
                    << std::endl;
       }
