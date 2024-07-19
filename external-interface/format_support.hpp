@@ -30,8 +30,8 @@ template<> struct fmt::formatter< sequant::Index > : fmt::formatter< std::string
 template<> struct fmt::formatter< sequant::Tensor > : fmt::formatter< std::string_view > {
 	template< typename FormatContext >
 	auto format(const sequant::Tensor &tensor, FormatContext &ctx) const -> decltype(ctx.out()) {
-		return fmt::format_to(ctx.out(), "{}[{};{}]", sequant::toUtf8(tensor.label()), fmt::join(tensor.bra(), ", "),
-						 fmt::join(tensor.ket(), ", "));
+		return fmt::format_to(ctx.out(), "{}[{};{};{}]", sequant::toUtf8(tensor.label()), fmt::join(tensor.bra(), ", "),
+						 fmt::join(tensor.ket(), ", "), fmt::join(tensor.aux(), ", "));
 	}
 };
 
