@@ -281,7 +281,7 @@ int main(int argc, char **argv) {
 	try {
 		std::ifstream in(driver);
 		json driver_info;
-		in >> driver_info;
+		driver_info = json::parse(in, /*callback*/ nullptr, /*allow_exceptions*/ true, /*skip_comments*/ true);
 
 		process(driver_info, spaceMeta);
 	} catch (const std::exception &e) {
