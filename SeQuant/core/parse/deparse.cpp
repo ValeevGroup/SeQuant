@@ -97,6 +97,7 @@ std::wstring deparse_scalar(const Constant::scalar_type& scalar) {
 
 std::wstring deparse(const ExprPtr& expr, bool annot_sym) {
   using namespace details;
+  if (!expr) return {};
   if (expr->is<Tensor>())
     return deparse(expr->as<Tensor>(), annot_sym);
   else if (expr->is<Sum>())
